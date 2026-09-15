@@ -1,4 +1,5 @@
 #nullable enable
+using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using StarMark.Abstractions;
 using StarMark.Core.Search;
@@ -29,6 +30,11 @@ if (args.Length >= 2 && args[0] == "bookmarks")
 if (args.Length >= 1 && args[0] == "everything")
 {
     await EverythingModeAsync(args.Length >= 2 ? args[1] : "*.txt");
+    return;
+}
+if (args.Length >= 1 && args[0] == "tray")
+{
+    TraySmokeCheck();
     return;
 }
 
@@ -113,6 +119,21 @@ static void BookmarkParseSelfCheck()
     if (entries[1].FolderPaths.Count != 1 || entries[1].FolderPaths[0] != "AI") throw new Exception("嵌套书签文件夹路径错误");
     if (entries[0].BookmarkedAt <= 0) throw new Exception("date_added 转换失败");
     Console.WriteLine("Bookmark parse: ok");
+}
+
+// ===== 托盘/全局热键宿主（tray） =====
+static void TraySmokeCheck()
+{
+    Trace.Listeners.Add(new TextWriterTraceListener(Console.Out));
+    using var host = new StarMark.Integrations.SystemTray.TrayHost();
+    Console.WriteLine($"Tray host available: {host.IsAvailable}");
+    if (!host.IsAvailable) throw new Exception("托盘宿主初始化失败");
+
+    var ok = host.TryRegisterHotKey();
+    Console.WriteLine($"Hotkey registered (Ctrl+Alt+Space): {ok}");
+    host.ShowBalloon("SmokeTest", "托盘冒烟自检");
+    Console.WriteLine("Tray balloon modify: ok");
+    Console.WriteLine("DONE");
 }
 
 // ===== Everything 真实查询（everything [query]） =====

@@ -3,6 +3,8 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using Microsoft.UI.Windowing;
+using StarMark.Integrations.SystemTray;
 using StarMark.UI.Helpers;
 using StarMark.UI.ViewModels;
 using StarMark.UI.Views;
@@ -19,6 +21,9 @@ public sealed partial class MainWindow : Window
     private DispatcherTimer? _debounceTimer;
     private readonly SettingsStore _settings = new();
     private ThemePreference _themePref;
+    private TrayHost? _trayHost;
+    private bool _allowExit;
+    private bool _balloonShown;
 
     public MainWindow()
     {
@@ -33,8 +38,67 @@ public sealed partial class MainWindow : Window
 
         _ = ViewModel.LoadCountsAsync();
 
+        // 托盘常驻 + 全局热键
+        if (_settings.LoadEnableTray())
+        {
+            _trayHost = new TrayHost();
+            _trayHost.ShowRequested += ShowMainWindow;
+            _trayHost.ExitRequested += ExitApp;
+            if (_settings.LoadEnableGlobalHotKey())
+                _trayHost.TryRegisterHotKey();
+            AppWindow.Closing += OnAppWindowClosing;
+            Closed += (_, _) =>
+            {
+                _trayHost?.Dispose();
+                _trayHost = null;
+            };
+        }
+
         // 默认选中搜索页（触发 SelectionChanged → 导航）
         NavView.SelectedItem = NavView.MenuItems[0];
+    }
+
+    private IntPtr MainHwnd => WinRT.Interop.WindowNative.GetWindowHandle(this);
+
+    private void ShowMainWindow()
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            try
+            {
+                TrayHost.ShowAndFocus(MainHwnd);
+            }
+            catch { }
+        });
+    }
+
+    private void ExitApp()
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            _allowExit = true;
+            _trayHost?.Dispose();
+            _trayHost = null;
+            Microsoft.UI.Xaml.Application.Current.Exit();
+        });
+    }
+
+    private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        if (_allowExit || _trayHost == null || !_settings.LoadMinimizeToTray())
+            return;
+
+        args.Cancel = true;
+        try
+        {
+            TrayHost.HideToTray(MainHwnd);
+            if (!_balloonShown && _trayHost.HotKeyRegistered)
+            {
+                _trayHost.ShowBalloon("StarMark 正在后台运行", "Ctrl+Alt+Space 随时呼出窗口");
+                _balloonShown = true;
+            }
+        }
+        catch { }
     }
 
     // ===== 主题切换 =====

@@ -19,33 +19,76 @@ public enum ThemePreference
 public sealed class SettingsStore
 {
     private readonly string _path;
-    private sealed class SettingsData { public int Theme { get; set; } }
+    private sealed class SettingsData
+    {
+        public int Theme { get; set; }
+        public bool? EnableTray { get; set; }
+        public bool? EnableGlobalHotKey { get; set; }
+        public bool? MinimizeToTray { get; set; }
+    }
 
     public SettingsStore(string? path = null) => _path = path ?? ResolveSettingsPath();
 
-    public ThemePreference LoadTheme()
+    private SettingsData? Load()
     {
         try
         {
             if (File.Exists(_path))
-            {
-                var data = JsonSerializer.Deserialize<SettingsData>(File.ReadAllText(_path));
-                if (data != null && Enum.IsDefined(typeof(ThemePreference), data.Theme))
-                    return (ThemePreference)data.Theme;
-            }
+                return JsonSerializer.Deserialize<SettingsData>(File.ReadAllText(_path));
         }
         catch { }
-        return ThemePreference.Default;
+        return null;
     }
 
-    public void SaveTheme(ThemePreference pref)
+    private void Save(SettingsData data)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            File.WriteAllText(_path, JsonSerializer.Serialize(new SettingsData { Theme = (int)pref }));
+            File.WriteAllText(_path, JsonSerializer.Serialize(data));
         }
         catch { }
+    }
+
+    public ThemePreference LoadTheme() => Load() is { } d && Enum.IsDefined(typeof(ThemePreference), d.Theme)
+        ? (ThemePreference)d.Theme
+        : ThemePreference.Default;
+
+    public void SaveTheme(ThemePreference pref)
+    {
+        var d = Load() ?? new SettingsData();
+        d.Theme = (int)pref;
+        Save(d);
+    }
+
+    /// <summary>托盘常驻总开关（默认开启）。</summary>
+    public bool LoadEnableTray() => Load() is { } d ? d.EnableTray ?? true : true;
+
+    public void SaveEnableTray(bool enabled)
+    {
+        var d = Load() ?? new SettingsData();
+        d.EnableTray = enabled;
+        Save(d);
+    }
+
+    /// <summary>全局呼出热键开关（默认开启，Ctrl+Alt+Space）。</summary>
+    public bool LoadEnableGlobalHotKey() => Load() is { } d ? d.EnableGlobalHotKey ?? true : true;
+
+    public void SaveEnableGlobalHotKey(bool enabled)
+    {
+        var d = Load() ?? new SettingsData();
+        d.EnableGlobalHotKey = enabled;
+        Save(d);
+    }
+
+    /// <summary>关闭按钮最小化到托盘（默认开启）。</summary>
+    public bool LoadMinimizeToTray() => Load() is { } d ? d.MinimizeToTray ?? true : true;
+
+    public void SaveMinimizeToTray(bool enabled)
+    {
+        var d = Load() ?? new SettingsData();
+        d.MinimizeToTray = enabled;
+        Save(d);
     }
 
     public static string ResolveSettingsPath()
