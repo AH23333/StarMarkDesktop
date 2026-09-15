@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="StarMark.UI.Views.ActivityPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:controls="using:StarMark.UI.Controls"
+    xmlns:helpers="using:StarMark.UI.Helpers"
+    xmlns:viewModels="using:StarMark.UI.ViewModels"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <helpers:BoolToVisibilityConverter x:Key="BoolToVis"/>
+    </Page.Resources>
+
+    <ScrollViewer Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12,12,12,16"
+                  VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Activities}">
+                <ItemsRepeater.Layout>
+                    <StackLayout Spacing="6"/>
+                </ItemsRepeater.Layout>
+                <ItemsRepeater.ItemTemplate>
+                    <DataTemplate x:DataType="viewModels:ItemCardViewModel">
+                        <controls:ItemCard ViewModel="{x:Bind}"
+                                           OpenRequested="Card_OpenRequested"
+                                           EditNoteRequested="Card_EditNoteRequested"
+                                           EditTagsRequested="Card_EditTagsRequested"
+                                           HideRequested="Card_HideRequested"/>
+                    </DataTemplate>
+                </ItemsRepeater.ItemTemplate>
+            </ItemsRepeater>
+
+            <TextBlock Text="{x:Bind ViewModel.EmptyHint}" Style="{StaticResource MutedText}"
+                       HorizontalAlignment="Center" Margin="0,40,0,16"
+                       Visibility="{x:Bind ViewModel.HasItems, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

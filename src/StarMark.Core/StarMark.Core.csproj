@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <Platforms>x64</Platforms>
+    <RootNamespace>StarMark.Core</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\StarMark.Abstractions\StarMark.Abstractions.csproj" />
+    <ProjectReference Include="..\StarMark.Data\StarMark.Data.csproj" />
+    <ProjectReference Include="..\StarMark.Integrations\StarMark.Integrations.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <Platforms>x64;AnyCPU</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>StarMark.SmokeTest</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\StarMark.Core\StarMark.Core.csproj" />
+    <ProjectReference Include="..\..\src\StarMark.Integrations\StarMark.Integrations.csproj" />
+    <ProjectReference Include="..\..\src\StarMark.Data\StarMark.Data.csproj" />
+    <ProjectReference Include="..\..\src\StarMark.Abstractions\StarMark.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

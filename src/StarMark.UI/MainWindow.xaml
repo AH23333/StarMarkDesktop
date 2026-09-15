@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="StarMark.UI.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:StarMark.UI"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    Title="StarMark">
+
+    <Grid x:Name="RootGrid" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 顶栏 -->
+        <Border Grid.Row="0" Background="{ThemeResource LayerFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+            <Grid Padding="16,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+                    <TextBlock Text="★" FontSize="18" Foreground="{ThemeResource SystemFillColorCautionBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="StarMark" Style="{StaticResource TitleText}" FontSize="16"/>
+                </StackPanel>
+
+                <!-- 状态指示器 -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
+                    <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="{ThemeResource SystemFillColorSuccessBrush}"/>
+                    <TextBlock x:Name="StatusText" Style="{StaticResource MutedText}" Text="索引就绪"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                    <Button x:Name="SyncButton" Style="{StaticResource SecondaryButton}" Click="SyncButton_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <ProgressRing x:Name="SyncProgress" Width="12" Height="12" IsActive="False" Visibility="Collapsed"/>
+                            <TextBlock Text="同步"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="ThemeButton" Style="{StaticResource SecondaryButton}" Click="ThemeButton_Click">
+                        <FontIcon x:Name="ThemeIcon" Glyph="&#xE895;" FontSize="14"/>
+                    </Button>
+                    <Button x:Name="SettingsButton" Style="{StaticResource SecondaryButton}" Content="⚙" Click="SettingsButton_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 搜索框 -->
+        <Border Grid.Row="1" Padding="16,10,16,4">
+            <TextBox x:Name="SearchBox"
+                     PlaceholderText="搜索本地文件、GitHub Stars、书签..."
+                     CornerRadius="8"
+                     Padding="12,9"
+                     FontSize="14"
+                     TextChanging="SearchBox_TextChanging"/>
+        </Border>
+
+        <!-- 工具栏 -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="16,6,16,2" Spacing="8">
+            <ComboBox x:Name="SortCombo" MinWidth="90" SelectedIndex="0"
+                      SelectionChanged="SortCombo_SelectionChanged">
+                <ComboBoxItem Content="相关性" Tag="relevance"/>
+                <ComboBoxItem Content="最近" Tag="recent"/>
+                <ComboBoxItem Content="Stars 数" Tag="stars"/>
+                <ComboBoxItem Content="名称" Tag="name"/>
+            </ComboBox>
+
+            <!-- 来源分段控件 -->
+            <Border BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4">
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="SourceAll" Content="全部" Click="SourceFilter_Click" Tag="all"
+                            Background="Transparent" BorderThickness="0" Padding="10,4"
+                            Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                    <Button x:Name="SourceStar" Content="⭐" Click="SourceFilter_Click" Tag="star"
+                            Background="Transparent" BorderThickness="0" Padding="10,4"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    <Button x:Name="SourceBookmark" Content="🔖" Click="SourceFilter_Click" Tag="bookmark"
+                            Background="Transparent" BorderThickness="0" Padding="10,4"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </Border>
+
+            <CheckBox x:Name="ShowHiddenCheck" Content="显示隐藏" Click="ShowHidden_Click" FontSize="12" VerticalAlignment="Center"/>
+        </StackPanel>
+
+        <!-- NavigationView 页面导航 -->
+        <NavigationView x:Name="NavView" Grid.Row="3" PaneDisplayMode="Top" IsBackButtonVisible="Collapsed"
+                        IsSettingsVisible="False" IsPaneToggleButtonVisible="False"
+                        SelectionChanged="NavView_SelectionChanged">
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="搜索" Tag="search">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE721;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="文件夹" Tag="tree">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE838;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="标签" Tag="tags">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8EC;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="动态" Tag="activity">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE823;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="隐藏" Tag="hidden">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE7B3;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <Frame x:Name="ContentFrame"/>
+        </NavigationView>
+    </Grid>
+</Window>
