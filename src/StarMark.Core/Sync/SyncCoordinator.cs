@@ -30,11 +30,13 @@ public sealed class SyncCoordinator
         var sw = Stopwatch.StartNew();
         var results = new List<SourceSyncResult>();
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        StarLog.Info($"同步开始，共 {_sources.Count} 个源");
 
         foreach (var source in _sources)
         {
             if (!source.IsAvailable)
             {
+                StarLog.Warn($"源 {source.SourceId} 不可用（未配置或依赖未运行）");
                 results.Add(new SourceSyncResult
                 {
                     SourceId = source.SourceId,
@@ -53,6 +55,7 @@ public sealed class SyncCoordinator
                 {
                     await _repository.UpsertAsync(items, ct);
                 }
+                StarLog.Info($"源 {source.SourceId} 拉取 {items.Count} 条");
                 results.Add(new SourceSyncResult
                 {
                     SourceId = source.SourceId,
@@ -64,6 +67,7 @@ public sealed class SyncCoordinator
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
+                StarLog.Error($"源 {source.SourceId} 同步失败: {ex.Message}");
                 results.Add(new SourceSyncResult
                 {
                     SourceId = source.SourceId,
@@ -76,6 +80,7 @@ public sealed class SyncCoordinator
         }
 
         sw.Stop();
+        StarLog.Info($"同步结束，耗时 {sw.ElapsedMilliseconds}ms，失败 {results.Count(r => !r.Success)} 源");
         return new SyncSummary
         {
             StartedAt = now,

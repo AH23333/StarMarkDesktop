@@ -23,6 +23,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\StarMark.Abstractions\StarMark.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\StarMark.Integrations\StarMark.Integrations.csproj" />
+    <ProjectReference Include="..\..\src\StarMark.Data\StarMark.Data.csproj" />
+    <ProjectReference Include="..\..\src\StarMark.Core\StarMark.Core.csproj" />
   </ItemGroup>
 
 </Project>
