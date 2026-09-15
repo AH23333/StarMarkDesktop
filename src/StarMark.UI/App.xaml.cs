@@ -76,9 +76,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            var logPath = System.IO.Path.Combine(AppContext.BaseDirectory, "starmark-startup.log");
-            System.IO.File.AppendAllText(logPath,
-                $"[{DateTimeOffset.Now:O}] 种子数据失败: {ex}{Environment.NewLine}");
+            StarMark.Abstractions.StarLog.Error("种子数据失败", ex);
         }
 
         // 3. 显示主窗口

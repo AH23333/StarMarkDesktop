@@ -42,6 +42,11 @@ if (args.Length >= 1 && args[0] == "ditto")
     await DittoCheckAsync();
     return;
 }
+if (args.Length >= 1 && args[0] == "log")
+{
+    LogCheck();
+    return;
+}
 
 await SmokeModeAsync();
 
@@ -124,6 +129,22 @@ static void BookmarkParseSelfCheck()
     if (entries[1].FolderPaths.Count != 1 || entries[1].FolderPaths[0] != "AI") throw new Exception("嵌套书签文件夹路径错误");
     if (entries[0].BookmarkedAt <= 0) throw new Exception("date_added 转换失败");
     Console.WriteLine("Bookmark parse: ok");
+}
+
+// ===== 统一日志（log） =====
+static void LogCheck()
+{
+    StarMark.Abstractions.StarLog.Info("smoke-log-write");
+    StarMark.Abstractions.StarLog.Warn("smoke-log-warn");
+    var file = StarMark.Abstractions.StarLog.CurrentLogFile;
+    Console.WriteLine($"Log file: {file}");
+    if (!System.IO.File.Exists(file)) throw new Exception("日志文件未创建");
+    var content = System.IO.File.ReadAllText(file);
+    if (!content.Contains("smoke-log-write")) throw new Exception("日志未写入 INFO 行");
+    if (!content.Contains("smoke-log-warn")) throw new Exception("日志未写入 WARN 行");
+    Console.WriteLine($"Log size: {content.Length} bytes");
+    Console.WriteLine("Log: ok");
+    Console.WriteLine("DONE");
 }
 
 // ===== Ditto 剪贴板源（ditto） =====

@@ -1,5 +1,4 @@
 ﻿#nullable enable
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace StarMark.Integrations.SystemTray;
@@ -65,7 +64,7 @@ public sealed class TrayHost : IDisposable
                 0, 0, 0, 0, NativeMethods.HWND_MESSAGE, IntPtr.Zero, hInstance, IntPtr.Zero);
             if (_hwnd == IntPtr.Zero)
             {
-                Trace.WriteLine($"[TrayHost] 消息窗口创建失败, error={Marshal.GetLastWin32Error()}");
+                StarMark.Abstractions.StarLog.Error($"[TrayHost] 消息窗口创建失败, error={Marshal.GetLastWin32Error()}");
                 return;
             }
 
@@ -77,7 +76,7 @@ public sealed class TrayHost : IDisposable
         }
         catch (Exception ex)
         {
-            Trace.WriteLine($"[TrayHost] 初始化失败: {ex.Message}");
+            StarMark.Abstractions.StarLog.Error($"[TrayHost] 初始化失败: {ex.Message}");
         }
     }
 
@@ -89,7 +88,7 @@ public sealed class TrayHost : IDisposable
         if (_hotKeyRegistered) return true;
         _hotKeyRegistered = NativeMethods.RegisterHotKey(_hwnd, HotKeyId, modifiers, vk);
         if (!_hotKeyRegistered)
-            Trace.WriteLine("[TrayHost] RegisterHotKey 失败（可能被其他程序占用）");
+            StarMark.Abstractions.StarLog.Warn("[TrayHost] RegisterHotKey 失败（可能被其他程序占用）");
         return _hotKeyRegistered;
     }
 
@@ -112,7 +111,7 @@ public sealed class TrayHost : IDisposable
         }
         else
         {
-            Trace.WriteLine("[TrayHost] NIM_ADD 失败");
+            StarMark.Abstractions.StarLog.Error("[TrayHost] NIM_ADD 失败");
         }
     }
 
