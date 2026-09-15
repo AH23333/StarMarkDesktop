@@ -38,7 +38,8 @@ public static class BookmarksFileParser
         var result = new List<BookmarkEntry>();
         if (string.IsNullOrWhiteSpace(json)) return result;
 
-        using var doc = JsonDocument.Parse(json);
+        using var doc = ParseSafe(json);
+        if (doc is null) return result;
         if (!doc.RootElement.TryGetProperty("roots", out var roots) ||
             roots.ValueKind != JsonValueKind.Object) return result;
 
@@ -48,6 +49,19 @@ public static class BookmarksFileParser
                 WalkNode(root.Value, new List<string>(), result, isRoot: true);
         }
         return result;
+    }
+
+    /// <summary>损坏的 JSON 视为空书签集合（不向同步链路抛异常）。</summary>
+    private static JsonDocument? ParseSafe(string json)
+    {
+        try
+        {
+            return JsonDocument.Parse(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static void WalkNode(JsonElement node, List<string> ancestors, List<BookmarkEntry> result, bool isRoot = false)
