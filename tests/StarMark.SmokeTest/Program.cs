@@ -37,6 +37,11 @@ if (args.Length >= 1 && args[0] == "tray")
     TraySmokeCheck();
     return;
 }
+if (args.Length >= 1 && args[0] == "ditto")
+{
+    await DittoCheckAsync();
+    return;
+}
 
 await SmokeModeAsync();
 
@@ -119,6 +124,114 @@ static void BookmarkParseSelfCheck()
     if (entries[1].FolderPaths.Count != 1 || entries[1].FolderPaths[0] != "AI") throw new Exception("嵌套书签文件夹路径错误");
     if (entries[0].BookmarkedAt <= 0) throw new Exception("date_added 转换失败");
     Console.WriteLine("Bookmark parse: ok");
+}
+
+// ===== Ditto 剪贴板源（ditto） =====
+static async Task DittoCheckAsync()
+{
+    var dbPath = Path.Combine(Path.GetTempPath(), "starmark-ditto-test.db");
+    if (File.Exists(dbPath)) File.Delete(dbPath);
+
+    // 1. 构造合成 DittoDB（对照 Ditto 源码 schema）
+    using (var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={dbPath}"))
+    {
+        conn.Open();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = """
+                CREATE TABLE Main(
+                  lID INTEGER PRIMARY KEY AUTOINCREMENT,
+                  lDate INTEGER, mText TEXT, lShortCut INTEGER, lDontAutoDelete INTEGER,
+                  CRC INTEGER, bIsGroup INTEGER, lParentID INTEGER, QuickPasteText TEXT,
+                  clipOrder REAL, clipGroupOrder REAL, globalShortCut INTEGER,
+                  lastPasteDate INTEGER, stickyClipOrder REAL, stickyClipGroupOrder REAL,
+                  MoveToGroupShortCut INTEGER, GlobalMoveToGroupShortCut INTEGER);
+                CREATE TABLE Data(
+                  lID INTEGER PRIMARY KEY AUTOINCREMENT,
+                  lParentID INTEGER, strClipBoardFormat TEXT, ooData BLOB);
+                """;
+            cmd.ExecuteNonQuery();
+        }
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        InsertClip(conn, lID: 1, date: now, text: "Hello StarMark 剪贴板集成测试", isGroup: 0);
+        InsertClip(conn, lID: 2, date: now - 10, text: "C:\\Data\\demo\\读我.txt", isGroup: 0);
+
+        // 文本格式原始数据（UTF-16LE）
+        using (var d1 = conn.CreateCommand())
+        {
+            d1.CommandText = "INSERT INTO Data (lParentID, strClipBoardFormat, ooData) VALUES (1, 'CF_UNICODETEXT', $b)";
+            d1.Parameters.AddWithValue("$b", System.Text.Encoding.Unicode.GetBytes("Hello StarMark 剪贴板集成测试"));
+            d1.ExecuteNonQuery();
+        }
+
+        // 文件格式 DROPFILES（宽字符）
+        using (var d2 = conn.CreateCommand())
+        {
+            var hdrop = BuildDropFiles("C:\\Data\\demo\\读我.txt");
+            d2.CommandText = "INSERT INTO Data (lParentID, strClipBoardFormat, ooData) VALUES (2, 'CF_HDROP', $b)";
+            d2.Parameters.AddWithValue("$b", hdrop);
+            d2.ExecuteNonQuery();
+        }
+
+        // 分组节点（bIsGroup=1）应被跳过
+        InsertClip(conn, lID: 3, date: now - 20, text: "分组: 常用", isGroup: 1);
+    }
+
+    // 2. FetchAsync 全量拉取
+    var source = new StarMark.Integrations.Ditto.DittoSource(dbPath);
+    Console.WriteLine($"Ditto IsAvailable: {source.IsAvailable}");
+    var items = await source.FetchAsync(new StarMark.Abstractions.SyncContext(), CancellationToken.None);
+    foreach (var it in items)
+        Console.WriteLine($"  [{it.Type}] {it.Title} | {it.Subtitle} | uri={it.Uri}");
+    if (items.Count != 2) throw new Exception($"Ditto 应返回 2 条非分组记录，实际 {items.Count}");
+    if (items.Any(i => i.SourceId == "ditto:3")) throw new Exception("分组节点不应被导入");
+
+    var textItem = items.First(i => i.SourceId == "ditto:1");
+    Console.WriteLine($"  Fetch textItem.Title = {textItem.Title}");
+    if (textItem.Title != "Hello StarMark 剪贴板集成测试") throw new Exception("文本剪贴板标题解析错误");
+
+    var fileItem = items.First(i => i.SourceId == "ditto:2");
+    Console.WriteLine($"  Fetch fileItem.Title = {fileItem.Title}");
+    if (fileItem.Uri != "file:///C:/Data/demo/读我.txt") throw new Exception($"CF_HDROP 文件路径解析错误: {fileItem.Uri}");
+
+    // 3. SearchAsync 实时检索
+    var hits = await source.SearchAsync("StarMark", new StarMark.Abstractions.SearchFilter { MaxResults = 10 }, CancellationToken.None);
+    Console.WriteLine($"  Search 'StarMark': {hits.Count} 条");
+    if (hits.All(h => h.SourceId != "ditto:1")) throw new Exception("实时检索未命中剪贴板文本");
+
+    for (int i = 0; i < 5; i++)
+    {
+        try { if (File.Exists(dbPath)) File.Delete(dbPath); break; }
+        catch { System.Threading.Thread.Sleep(150); }
+    }
+    Console.WriteLine("Ditto: ok");
+    Console.WriteLine("DONE");
+}
+
+static void InsertClip(Microsoft.Data.Sqlite.SqliteConnection conn, long lID, long date, string text, int isGroup)
+{
+    using var cmd = conn.CreateCommand();
+    cmd.CommandText = """
+        INSERT INTO Main (lID, lDate, mText, lShortCut, lDontAutoDelete, CRC, bIsGroup, lParentID, QuickPasteText,
+                          clipOrder, clipGroupOrder, globalShortCut, lastPasteDate)
+        VALUES ($id, $date, $text, 0, 0, 0, $isGroup, 0, '', 0, 0, 0, $date)
+        """;
+    cmd.Parameters.AddWithValue("$id", lID);
+    cmd.Parameters.AddWithValue("$date", date);
+    cmd.Parameters.AddWithValue("$text", text);
+    cmd.Parameters.AddWithValue("$isGroup", isGroup);
+    cmd.ExecuteNonQuery();
+}
+
+static byte[] BuildDropFiles(string path)
+{
+    var body = System.Text.Encoding.Unicode.GetBytes(path + "\0");
+    var buffer = new byte[20 + body.Length + 2]; // 头部 + 路径 + 结束双 NUL
+    Array.Copy(body, 0, buffer, 20, body.Length);
+    BitConverter.GetBytes(20u).CopyTo(buffer, 0);      // pFiles
+    BitConverter.GetBytes(1u).CopyTo(buffer, 16);      // fWide = true
+    return buffer;
 }
 
 // ===== 托盘/全局热键宿主（tray） =====

@@ -47,6 +47,10 @@ public partial class App : Application
         services.AddSingleton<StarMark.Integrations.Bookmarks.EdgeBookmarksSource>();
         services.AddSingleton<StarMark.Abstractions.IItemSource>(sp => sp.GetRequiredService<StarMark.Integrations.Bookmarks.EdgeBookmarksSource>());
 
+        // Ditto 剪贴板源（直读 DittoDB.db）
+        services.AddSingleton<StarMark.Integrations.Ditto.DittoSource>();
+        services.AddSingleton<StarMark.Abstractions.IItemSource>(sp => sp.GetRequiredService<StarMark.Integrations.Ditto.DittoSource>());
+
         // 应用服务层
         services.AddSingleton<StarMark.Core.Search.SearchService>();
         services.AddSingleton<StarMark.Core.Sync.SyncCoordinator>();
