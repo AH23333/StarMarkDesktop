@@ -46,17 +46,17 @@
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel>
-            <ItemsRepeater ItemsSource="{x:Bind ViewModel.RootNodes}">
+            <ItemsRepeater ItemsSource="{x:Bind ViewModel.VisibleNodes}">
                 <ItemsRepeater.Layout>
                     <StackLayout Spacing="8"/>
                 </ItemsRepeater.Layout>
                 <ItemsRepeater.ItemTemplate>
-                    <DataTemplate x:DataType="viewModels:FolderNodeViewModel">
+                    <DataTemplate x:DataType="viewModels:FolderPathNodeViewModel">
                         <StackPanel>
                             <Button Command="{x:Bind ToggleCommand}"
                                     Background="Transparent" BorderThickness="0" HorizontalAlignment="Stretch"
                                     HorizontalContentAlignment="Left" FontSize="14" FontWeight="SemiBold"
-                                    Padding="0,6">
+                                    Padding="0,6" Margin="{x:Bind Indent, Mode=OneWay}">
                                 <Button.Content>
                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                         <TextBlock Text="{x:Bind Chevron, Mode=OneWay}" FontSize="10" VerticalAlignment="Center"/>

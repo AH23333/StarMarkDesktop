@@ -1,17 +1,22 @@
 #nullable enable
 using System.Collections.ObjectModel;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StarMark.Abstractions;
+using Microsoft.UI.Xaml;
 
 namespace StarMark.UI.ViewModels;
 
 /// <summary>
-/// 文件夹树页面 ViewModel。对应浏览器扩展收藏夹树浏览。
+/// 文件夹树页面 ViewModel。真实嵌套文件夹树：
+/// 书签 → ExtraJson.BookmarkMeta.FolderPaths（'/' 分隔）；文件 → file:// 目录；GitHub/剪贴板 → 伪根分组。
+/// 采用扁平化渲染：深度(Depth)缩进 + 逐级展开，子文件夹作为独立节点插入列表。
 /// </summary>
 public partial class FolderTreePageViewModel : ObservableObject
 {
     private readonly IItemRepository _repository;
+    private FolderPathNodeViewModel? _root;
 
     [ObservableProperty] private string _currentSort = "recent";
     [ObservableProperty] private string _currentSource = "all";
@@ -19,8 +24,7 @@ public partial class FolderTreePageViewModel : ObservableObject
     [ObservableProperty] private bool _isLoading = true;
     [ObservableProperty] private string _emptyHint = string.Empty;
 
-    public ObservableCollection<FolderNodeViewModel> RootNodes { get; } = new();
-    public ObservableCollection<ItemCardViewModel> FlatResults { get; } = new();
+    public ObservableCollection<FolderPathNodeViewModel> VisibleNodes { get; } = new();
 
     public FolderTreePageViewModel(IItemRepository repository)
     {
@@ -31,8 +35,7 @@ public partial class FolderTreePageViewModel : ObservableObject
     private async Task LoadAsync()
     {
         IsLoading = true;
-        RootNodes.Clear();
-        FlatResults.Clear();
+        VisibleNodes.Clear();
 
         try
         {
@@ -44,20 +47,12 @@ public partial class FolderTreePageViewModel : ObservableObject
                 Limit = 500,
             };
             var items = await _repository.GetAllAsync(filter, CancellationToken.None);
+            var itemList = items.ToList();
 
-            // 按 type 分组构建树节点
-            var stars = items.Where(i => i.Type == ItemType.GitHubStar).ToList();
-            var bookmarks = items.Where(i => i.Type == ItemType.Bookmark).ToList();
-            var files = items.Where(i => i.Type == ItemType.File).ToList();
-
-            if (stars.Count > 0)
-                RootNodes.Add(new FolderNodeViewModel("⭐ GitHub Stars", stars));
-            if (bookmarks.Count > 0)
-                RootNodes.Add(new FolderNodeViewModel("🔖 浏览器书签", bookmarks));
-            if (files.Count > 0)
-                RootNodes.Add(new FolderNodeViewModel("📄 本地文件", files));
-
-            EmptyHint = RootNodes.Count == 0 ? "暂无条目，请先同步数据" : string.Empty;
+            _root = new FolderPathNodeViewModel("ROOT");
+            BuildTree(_root, itemList);
+            RebuildVisible();
+            EmptyHint = _root.Children.Count == 0 ? "暂无条目，请先同步数据" : string.Empty;
         }
         catch (Exception ex)
         {
@@ -69,32 +64,128 @@ public partial class FolderTreePageViewModel : ObservableObject
         }
     }
 
+    private void BuildTree(FolderPathNodeViewModel root, List<Item> items)
+    {
+        foreach (var item in items)
+        {
+            var path = item.Type switch
+            {
+                ItemType.Bookmark => BookmarkSegments(item),
+                ItemType.File => FileSegments(item),
+                ItemType.GitHubStar => new[] { "⭐ GitHub Stars" },
+                ItemType.Clipboard => new[] { "📋 剪贴板" },
+                _ => new[] { "其他" },
+            };
+
+            var node = root;
+            for (int i = 0; i < path.Length; i++)
+                node = node.GetOrAddChild(path[i]);
+
+            var list = (node.Items as List<Item>)!;
+            list.Add(item);
+        }
+    }
+
+    private static string[] BookmarkSegments(Item item)
+    {
+        var fallback = "其他书签";
+        if (string.IsNullOrWhiteSpace(item.ExtraJson)) return new[] { fallback };
+        try
+        {
+            var meta = JsonSerializer.Deserialize<BookmarkMeta>(item.ExtraJson);
+            if (meta?.FolderPaths is { Count: > 0 } paths)
+            {
+                var first = paths[0].Trim('/');
+                if (!string.IsNullOrEmpty(first))
+                    return first.Split('/').Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
+            }
+        }
+        catch { }
+        return new[] { fallback };
+    }
+
+    private static string[] FileSegments(Item item)
+    {
+        if (!string.IsNullOrWhiteSpace(item.Uri) && item.Uri.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var local = new Uri(item.Uri).LocalPath.TrimStart('\\').Trim('/');
+                var segs = local.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+                if (segs.Length >= 2)
+                {
+                    // 去掉文件名，保留目录层级（盘符 "C:" 做根）
+                    return segs.Take(segs.Length - 1).ToArray();
+                }
+            }
+            catch { }
+        }
+        return new[] { "其他文件" };
+    }
+
+    private void RebuildVisible()
+    {
+        VisibleNodes.Clear();
+        if (_root == null) return;
+        foreach (var child in _root.Children)
+            AppendVisible(child, 0);
+    }
+
+    private void AppendVisible(FolderPathNodeViewModel node, int depth)
+    {
+        node.Depth = depth;
+        VisibleNodes.Add(node);
+        if (!node.IsExpanded) return;
+        foreach (var child in node.Children)
+            AppendVisible(child, depth + 1);
+    }
+
     partial void OnCurrentSortChanged(string value) => _ = LoadAsync();
     partial void OnCurrentSourceChanged(string value) => _ = LoadAsync();
     partial void OnShowHiddenChanged(bool value) => _ = LoadAsync();
 }
 
 /// <summary>
-/// 文件夹树节点。对应浏览器扩展 FolderNode。
+/// 文件夹树节点。对应浏览器扩展 FolderNode，支持任意深度嵌套。
 /// </summary>
-public partial class FolderNodeViewModel : ObservableObject
+public partial class FolderPathNodeViewModel : ObservableObject
 {
     public string Name { get; }
+    public List<FolderPathNodeViewModel> Children { get; } = new();
     public IReadOnlyList<Item> Items { get; }
     public ObservableCollection<ItemCardViewModel> VisibleItems { get; } = new();
 
     [ObservableProperty] private bool _isExpanded;
+    [ObservableProperty] private int _depth;
 
-    public int TotalCount => Items.Count;
+    public int TotalCount => Items.Count + Children.Sum(c => c.TotalCount);
 
     public string Chevron => IsExpanded ? "▾" : "▸";
 
-    public FolderNodeViewModel(string name, IReadOnlyList<Item> items)
+    public Thickness Indent => new(Depth * 18, 0, 0, 0);
+
+    public FolderPathNodeViewModel(string name)
     {
         Name = name;
-        Items = items;
-        // 默认显示前 50 条
-        foreach (var item in items.Take(50))
+        Items = new List<Item>();
+    }
+
+    internal List<Item> ItemList => (List<Item>)Items;
+
+    public FolderPathNodeViewModel GetOrAddChild(string segment)
+    {
+        var existing = Children.Find(c => c.Name == segment);
+        if (existing != null) return existing;
+        var child = new FolderPathNodeViewModel(segment);
+        Children.Add(child);
+        return child;
+    }
+
+    /// <summary>填充本节点条目（惰性，首次展开时调用）。</summary>
+    public void HydrateItems()
+    {
+        if (VisibleItems.Count > 0) return;
+        foreach (var item in Items.Take(30))
             VisibleItems.Add(new ItemCardViewModel(item));
     }
 
@@ -102,6 +193,9 @@ public partial class FolderNodeViewModel : ObservableObject
     private void Toggle()
     {
         IsExpanded = !IsExpanded;
+        if (IsExpanded)
+            HydrateItems();
         OnPropertyChanged(nameof(Chevron));
+        OnPropertyChanged(nameof(Indent));
     }
 }
