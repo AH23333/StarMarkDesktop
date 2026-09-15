@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="StarMark.SmokeTest" />
+    <InternalsVisibleTo Include="StarMark.Tests" />
   </ItemGroup>
 
 </Project>

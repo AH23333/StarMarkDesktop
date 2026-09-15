@@ -165,6 +165,8 @@ internal static class EverythingInterop
     /// <summary>解析 Everything CSV 输出的一行（Name,Path,Size,Date Modified,Date Created）。</summary>
     internal static Item? ParseCsvLine(string line, RequestFlags flags)
     {
+        if (string.IsNullOrWhiteSpace(line)) return null;
+
         // 简易 CSV 解析（不含引号转义字段——文件路径不会包含逗号本身，但可能包含引号）
         var fields = ParseCsvLineSimple(line);
         if (fields.Count == 0) return null;
