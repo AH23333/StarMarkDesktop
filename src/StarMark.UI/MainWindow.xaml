@@ -12,6 +12,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -89,8 +90,15 @@
             <CheckBox x:Name="ShowHiddenCheck" Content="显示隐藏" Click="ShowHidden_Click" FontSize="12" VerticalAlignment="Center"/>
         </StackPanel>
 
+        <!-- 全局通知栏 -->
+        <InfoBar x:Name="SyncInfoBar" Grid.Row="3"
+                 IsOpen="False" IsClosable="True"
+                 Margin="16,4,16,4"
+                 CornerRadius="8"
+                 CloseButtonClick="InfoBar_Close"/>
+
         <!-- NavigationView 页面导航 -->
-        <NavigationView x:Name="NavView" Grid.Row="3" PaneDisplayMode="Top" IsBackButtonVisible="Collapsed"
+        <NavigationView x:Name="NavView" Grid.Row="4" PaneDisplayMode="Top" IsBackButtonVisible="Collapsed"
                         IsSettingsVisible="False" IsPaneToggleButtonVisible="False"
                         SelectionChanged="NavView_SelectionChanged">
             <NavigationView.MenuItems>

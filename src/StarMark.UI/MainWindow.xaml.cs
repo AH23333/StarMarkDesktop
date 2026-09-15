@@ -232,6 +232,7 @@ public sealed partial class MainWindow : Window
         SyncProgress.Visibility = Visibility.Visible;
         StatusDot.Fill = (SolidColorBrush)Application.Current.Resources["SystemFillColorCautionBrush"];
         StatusText.Text = "同步中...";
+        SyncInfoBar.IsOpen = false;
 
         try
         {
@@ -240,7 +241,9 @@ public sealed partial class MainWindow : Window
             if (syncCoordinator != null)
             {
                 var summary = await syncCoordinator.SyncAllAsync(CancellationToken.None);
-                StatusText.Text = summary.FormatText();
+                var text = summary.FormatText();
+                StatusText.Text = text;
+                ShowInfoBar(InfoBarSeverity.Success, "索引同步完成", string.Empty, 6500);
             }
             StatusDot.Fill = (SolidColorBrush)Application.Current.Resources["SystemFillColorSuccessBrush"];
             await ViewModel.LoadCountsAsync();
@@ -249,6 +252,7 @@ public sealed partial class MainWindow : Window
         {
             StatusText.Text = $"同步失败: {ex.Message}";
             StatusDot.Fill = (SolidColorBrush)Application.Current.Resources["SystemFillColorCautionBrush"];
+            ShowInfoBar(InfoBarSeverity.Error, "同步失败", ex.Message);
         }
         finally
         {
@@ -256,6 +260,22 @@ public sealed partial class MainWindow : Window
             SyncProgress.IsActive = false;
             SyncProgress.Visibility = Visibility.Collapsed;
         }
+    }
+
+    private void ShowInfoBar(InfoBarSeverity severity, string title, string message, int autoCloseMs = -1)
+    {
+        SyncInfoBar.Severity = severity;
+        SyncInfoBar.Title = title;
+        SyncInfoBar.Message = message;
+        SyncInfoBar.IsOpen = true;
+        if (autoCloseMs > 0)
+            _ = System.Threading.Tasks.Task.Delay(autoCloseMs).ContinueWith(_ =>
+                DispatcherQueue.TryEnqueue(() => SyncInfoBar.IsOpen = false));
+    }
+
+    private void InfoBar_Close(InfoBar sender, object args)
+    {
+        sender.IsOpen = false;
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
