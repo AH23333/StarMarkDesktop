@@ -17,7 +17,7 @@
     <ScrollViewer Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12,12,12,16"
                   VerticalScrollBarVisibility="Auto">
         <StackPanel>
-            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Activities}">
+            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Activities, Mode=OneWay}">
                 <ItemsRepeater.Layout>
                     <StackLayout Spacing="6"/>
                 </ItemsRepeater.Layout>
@@ -34,9 +34,9 @@
                 </ItemsRepeater.ItemTemplate>
             </ItemsRepeater>
 
-            <TextBlock Text="{x:Bind ViewModel.EmptyHint}" Style="{StaticResource MutedText}"
-                       HorizontalAlignment="Center" Margin="0,40,0,16"
-                       Visibility="{x:Bind ViewModel.HasItems, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+<TextBlock Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}" Style="{StaticResource MutedText}"
+                           HorizontalAlignment="Center" Margin="0,40,0,16"
+                           Visibility="{x:Bind ViewModel.HasItems, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
         </StackPanel>
     </ScrollViewer>
 </Page>

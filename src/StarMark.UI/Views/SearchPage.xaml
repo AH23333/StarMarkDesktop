@@ -19,10 +19,10 @@
             <StackPanel>
             <!-- 加载状态 -->
             <ProgressBar IsIndeterminate="True"
-                         Visibility="{x:Bind ViewModel.IsSearching, Converter={StaticResource BoolToVis}}"
+                         Visibility="{x:Bind ViewModel.IsSearching, Mode=OneWay, Converter={StaticResource BoolToVis}}"
                          Height="2" Margin="0,0,0,8"/>
 
-            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Results}">
+            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Results, Mode=OneWay}">
                     <ItemsRepeater.Layout>
                         <StackLayout Spacing="6"/>
                     </ItemsRepeater.Layout>
@@ -41,9 +41,9 @@
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
 
-                <TextBlock Text="{x:Bind ViewModel.EmptyHint}" Style="{StaticResource MutedText}"
+                <TextBlock Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}" Style="{StaticResource MutedText}"
                            HorizontalAlignment="Center" Margin="0,40,0,16"
-                           Visibility="{x:Bind ViewModel.HasResults, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+                           Visibility="{x:Bind ViewModel.HasResults, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
             </StackPanel>
         </ScrollViewer>
     </Grid>

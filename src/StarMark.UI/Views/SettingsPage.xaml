@@ -67,8 +67,8 @@
                 <Button Content="返回" Click="Back_Click" Style="{StaticResource SecondaryButton}"/>
             </StackPanel>
 
-            <TextBlock Text="{x:Bind ViewModel.SaveErrorMessage}" Foreground="{ThemeResource SystemFillColorCautionBrush}"
-                       FontSize="12" Visibility="{x:Bind ViewModel.HasSaveError, Converter={StaticResource BoolToVis}}"/>
+            <TextBlock Text="{x:Bind ViewModel.SaveErrorMessage, Mode=OneWay}" Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                       FontSize="12" Visibility="{x:Bind ViewModel.HasSaveError, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
 
             <TextBlock Text="提示：托盘/热键与 GitHub 配置在下次启动后生效；主题立即生效。" Style="{StaticResource MutedText}"/>
         </StackPanel>

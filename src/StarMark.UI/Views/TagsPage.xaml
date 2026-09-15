@@ -22,9 +22,9 @@
 
         <!-- 标签筛选栏 -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8"
-                    Visibility="{x:Bind ViewModel.HasActiveFilter, Converter={StaticResource BoolToVis}}"
+                    Visibility="{x:Bind ViewModel.HasActiveFilter, Mode=OneWay, Converter={StaticResource BoolToVis}}"
                     Margin="0,0,0,10">
-            <TextBlock Text="{x:Bind ViewModel.ActiveFilterText}"
+            <TextBlock Text="{x:Bind ViewModel.ActiveFilterText, Mode=OneWay}"
                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
             <Button Content="清除" Click="ClearFilters_Click"
                     Style="{StaticResource SecondaryButton}" Padding="6,2"/>
@@ -33,7 +33,7 @@
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <!-- 标签云 -->
             <StackPanel>
-                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Tags}">
+                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Tags, Mode=OneWay}">
                     <ItemsRepeater.Layout>
                         <UniformGridLayout Orientation="Horizontal"
                                            MaximumRowsOrColumns="4"
@@ -43,8 +43,8 @@
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="viewModels:TagItemViewModel">
                             <Button Click="Tag_Click" Padding="8,3" CornerRadius="12"
-                                    Background="{x:Bind IsSelected, Converter={StaticResource TagSelected}}"
-                                    BorderBrush="{x:Bind IsSelected, Converter={StaticResource TagSelected}, ConverterParameter='border'}"
+                                    Background="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource TagSelected}}"
+                                    BorderBrush="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource TagSelected}, ConverterParameter='border'}"
                                     BorderThickness="1"
                                     Tag="{x:Bind Name}">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
@@ -57,14 +57,14 @@
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
 
-                <TextBlock Text="{x:Bind ViewModel.EmptyHint}" Style="{StaticResource MutedText}"
+                <TextBlock Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}" Style="{StaticResource MutedText}"
                            HorizontalAlignment="Center" Margin="0,40,0,16"/>
 
                 <!-- 筛选结果 -->
                 <TextBlock Text="筛选结果" FontSize="13" FontWeight="SemiBold" Margin="0,16,0,8"
-                           Visibility="{x:Bind ViewModel.HasActiveFilter, Converter={StaticResource BoolToVis}}"/>
-                <ItemsRepeater ItemsSource="{x:Bind ViewModel.FilteredResults}"
-                               Visibility="{x:Bind ViewModel.HasActiveFilter, Converter={StaticResource BoolToVis}}">
+                           Visibility="{x:Bind ViewModel.HasActiveFilter, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                <ItemsRepeater ItemsSource="{x:Bind ViewModel.FilteredResults, Mode=OneWay}"
+                               Visibility="{x:Bind ViewModel.HasActiveFilter, Mode=OneWay, Converter={StaticResource BoolToVis}}">
                     <ItemsRepeater.Layout>
                         <StackLayout Spacing="6"/>
                     </ItemsRepeater.Layout>

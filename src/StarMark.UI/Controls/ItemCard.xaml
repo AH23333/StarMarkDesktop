@@ -32,34 +32,34 @@
         <StackPanel>
             <!-- 标题行 -->
             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                <TextBlock Text="{x:Bind ViewModel.SourceIcon}" FontSize="13" VerticalAlignment="Center"/>
-                <TextBlock Text="{x:Bind ViewModel.Title}" Margin="7,0,0,0"
+                <TextBlock Text="{x:Bind ViewModel.SourceIcon, Mode=OneWay}" FontSize="13" VerticalAlignment="Center"/>
+                <TextBlock Text="{x:Bind ViewModel.Title, Mode=OneWay}" Margin="7,0,0,0"
                            FontSize="13" FontWeight="SemiBold"
                            TextTrimming="CharacterEllipsis"
                            VerticalAlignment="Center"
                            Tapped="Title_Tapped"
                            ToolTipService.ToolTip="{Binding Uri}"/>
-                <TextBlock Text="{x:Bind ViewModel.RelativeTime}" Margin="8,0,0,0"
+                <TextBlock Text="{x:Bind ViewModel.RelativeTime, Mode=OneWay}" Margin="8,0,0,0"
                            FontSize="11" Style="{StaticResource MutedText}"
                            HorizontalAlignment="Right"/>
             </StackPanel>
 
             <!-- 副标题 -->
-            <TextBlock Text="{x:Bind ViewModel.Subtitle}" FontSize="11"
+            <TextBlock Text="{x:Bind ViewModel.Subtitle, Mode=OneWay}" FontSize="11"
                        Style="{StaticResource MutedText}"
                        TextTrimming="CharacterEllipsis"
-                       Visibility="{x:Bind ViewModel.HasSubtitle, Converter={StaticResource BoolToVis}}"/>
+                       Visibility="{x:Bind ViewModel.HasSubtitle, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
 
             <!-- 描述 -->
-            <TextBlock Text="{x:Bind ViewModel.Description}" FontSize="12"
+            <TextBlock Text="{x:Bind ViewModel.Description, Mode=OneWay}" FontSize="12"
                        Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                        TextWrapping="Wrap" MaxHeight="40"
                        Margin="0,2,0,0"
-                       Visibility="{x:Bind ViewModel.HasDescription, Converter={StaticResource BoolToVis}}"/>
+                       Visibility="{x:Bind ViewModel.HasDescription, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
 
             <!-- 标签行：点击芯片快速移除 ＋ 快速添加 -->
             <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Spacing="4">
-                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Tags}">
+                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Tags, Mode=OneWay}">
                     <ItemsRepeater.Layout>
                         <StackLayout Orientation="Horizontal" Spacing="4"/>
                     </ItemsRepeater.Layout>
@@ -92,15 +92,15 @@
             </StackPanel>
 
             <!-- Stars 数 -->
-            <TextBlock Text="{x:Bind ViewModel.StarsText}" FontSize="11"
+            <TextBlock Text="{x:Bind ViewModel.StarsText, Mode=OneWay}" FontSize="11"
                        Style="{StaticResource MutedText}" Margin="0,4,0,0"
-                       Visibility="{x:Bind ViewModel.HasStars, Converter={StaticResource BoolToVis}}"/>
+                       Visibility="{x:Bind ViewModel.HasStars, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
 
             <!-- 笔记行 -->
-            <TextBlock Text="{x:Bind ViewModel.Notes}" FontSize="11"
+            <TextBlock Text="{x:Bind ViewModel.Notes, Mode=OneWay}" FontSize="11"
                        Foreground="{ThemeResource SystemFillColorCautionBrush}"
                        TextWrapping="Wrap" Margin="0,4,0,0"
-                       Visibility="{x:Bind ViewModel.HasNotes, Converter={StaticResource BoolToVis}}"/>
+                       Visibility="{x:Bind ViewModel.HasNotes, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
 
             <!-- 操作栏：预览 / 笔记 / 标签 / 隐藏 -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0" Spacing="4">

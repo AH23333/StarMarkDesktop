@@ -78,7 +78,57 @@ public sealed partial class MainWindow : Window
                     sp.ViewModel.Query = startQuery;
             });
         }
+
+        // 开发辅助：状态转储 + 脚本化搜索/清空（STARMARK_DIAG / STARMARK_SIM_*），用于复现 UI 缺陷并留文本证据
+        var diagPath = Environment.GetEnvironmentVariable("STARMARK_DIAG");
+        var simQuery = Environment.GetEnvironmentVariable("STARMARK_SIM_QUERY");
+        if (!string.IsNullOrWhiteSpace(diagPath))
+        {
+            var simOn = !string.IsNullOrWhiteSpace(simQuery);
+            var diagTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
+            diagTimer.Tick += (_, _) =>
+            {
+                static string F(object? o) => o?.ToString() ?? "null";
+                var lines = new System.Text.StringBuilder();
+                lines.AppendLine($"[tick {DateTime.Now:HH:mm:ss.fff}] page={ViewModel.CurrentPageTag} searchbox=[{SearchBox.Text}]");
+                if (ContentFrame.Content is SearchPage sp)
+                {
+                    lines.AppendLine($"  SEARCH: query=[{sp.ViewModel.Query}] empty=[{sp.ViewModel.EmptyHint}] " +
+                                     $"results={sp.ViewModel.Results.Count} has={sp.ViewModel.HasResults} busy={sp.ViewModel.IsSearching}");
+                }
+                if (ContentFrame.Content is FolderTreePage tp)
+                {
+                    var roots = tp.ViewModel.Roots;
+                    lines.AppendLine($"  TREE: roots={roots.Count} empty=[{tp.ViewModel.EmptyHint}]");
+                    foreach (var r in roots.Take(12))
+                    {
+                        lines.AppendLine($"    - {r.Name} (total={r.TotalCount} own={r.Items.Count} sub={r.Children.Count})");
+                        foreach (var c in tp.ViewModel.Hydrate(r).Take(6))
+                            lines.AppendLine($"        card[{r.Name}]: {c.Type} | {c.Title}");
+                        if (r.Children.Count > 0)
+                            foreach (var ch in r.Children)
+                                foreach (var c in tp.ViewModel.Hydrate(ch).Take(3))
+                                    lines.AppendLine($"        card[{r.Name}/{ch.Name}]: {c.Type} | {c.Title}");
+                    }
+                }
+                if (simOn)
+                {
+                    var probe = SearchBox.Text;
+                    if (probe == string.Empty)
+                        SearchBox.Text = simQuery;      // 第1次：输入查询
+                    else if (probe == simQuery && _diagSimStep == 0)
+                    {
+                        _diagSimStep = 1;
+                        SearchBox.Text = string.Empty;  // 第2次：清空搜索栏
+                    }
+                }
+                System.IO.File.AppendAllText(diagPath, lines.ToString());
+            };
+            diagTimer.Start();
+        }
     }
+
+    private int _diagSimStep;
 
     private IntPtr MainHwnd => WinRT.Interop.WindowNative.GetWindowHandle(this);
 

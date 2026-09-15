@@ -19,14 +19,15 @@
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0"
-                   Text="{x:Bind ViewModel.EmptyHint}"
+                   Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}"
                    Style="{StaticResource MutedText}"
                    HorizontalAlignment="Center" Margin="12,40,12,16"
-                   Visibility="{x:Bind ViewModel.HasEmptyHint, Converter={StaticResource BoolToVis}}"/>
+                   Visibility="{x:Bind ViewModel.HasEmptyHint, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
 
-        <!-- 树节点内容在代码中构建（文件夹头 / ItemCard），惰性挂载词条 -->
-        <TreeView x:Name="FolderTree" Grid.Row="1"
-                  Padding="12,6,12,12"
-                  Expanding="FolderTree_Expanding"/>
+        <!-- 文件夹手风琴列表：层级在代码中构建（头部 + 惰性卡片区），
+             不用 TreeViewItem 容器（其 Presenter 固定行高会压扁 ItemCard）。 -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="12,6,12,12">
+            <StackPanel x:Name="FolderRoot" Spacing="2"/>
+        </ScrollViewer>
     </Grid>
 </Page>

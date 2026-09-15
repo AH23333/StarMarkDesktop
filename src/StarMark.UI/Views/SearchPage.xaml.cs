@@ -22,8 +22,9 @@ public sealed partial class SearchPage : Page
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        if (!string.IsNullOrWhiteSpace(ViewModel.Query))
-            ViewModel.SearchCommand.Execute(null);
+        // 不再在此自动重跑搜索：进入搜索页时全局搜索框会立即设置 ViewModel.Query，
+        // 由 OnQueryChanged 触发搜索。此前用单例 VM 里残留的旧 Query 重搜，
+        // 正是「清空搜索栏后仍闪现上一条搜索”未找到“」的根因。
     }
 
     private async void Card_OpenRequested(object sender, long itemId)

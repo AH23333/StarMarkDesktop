@@ -12,7 +12,7 @@ namespace StarMark.UI.ViewModels;
 /// </summary>
 public partial class FolderTreePageViewModel : ObservableObject
 {
-    private const int MaxItemsPerFolder = 30;
+    public const int MaxItemsPerFolder = 30;
 
     private readonly IItemRepository _repository;
 
