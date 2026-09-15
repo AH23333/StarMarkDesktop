@@ -13,6 +13,20 @@
     </UserControl.Resources>
 
     <Border Style="{StaticResource Card}">
+        <Border.Transitions>
+            <TransitionCollection>
+                <EntranceThemeTransition FromVerticalOffset="14" IsStaggeringEnabled="False"/>
+            </TransitionCollection>
+        </Border.Transitions>
+        <Border.ContextFlyout>
+            <MenuFlyout>
+                <MenuFlyoutItem Text="打开" Click="Menu_Open"/>
+                <MenuFlyoutItem Text="编辑笔记" Click="EditNote_Click"/>
+                <MenuFlyoutItem Text="编辑标签" Click="EditTags_Click"/>
+                <MenuFlyoutSeparator/>
+                <MenuFlyoutItem Text="隐藏" Click="Hide_Click"/>
+            </MenuFlyout>
+        </Border.ContextFlyout>
         <StackPanel>
             <!-- 标题行：来源 badge + 标题 + 右键菜单 -->
             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">

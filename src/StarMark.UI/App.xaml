@@ -14,6 +14,7 @@
             <helpers:BoolToVisibilityConverter x:Key="BoolToVis"/>
             <helpers:InverseBoolConverter x:Key="InverseBool"/>
             <helpers:ContainedTagColorConverter x:Key="ContainedTagColor"/>
+            <helpers:TagSelectedBrushConverter x:Key="TagSelected"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

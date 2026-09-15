@@ -42,8 +42,9 @@
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="viewModels:TagItemViewModel">
                             <Button Click="Tag_Click" Padding="8,3" CornerRadius="12"
-                                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="1"
+                                    Background="{x:Bind IsSelected, Converter={StaticResource TagSelected}}"
+                                    BorderBrush="{x:Bind IsSelected, Converter={StaticResource TagSelected}, ConverterParameter='border'}"
+                                    BorderThickness="1"
                                     Tag="{x:Bind Name}">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <TextBlock Text="{x:Bind FormattedName}" FontSize="12"

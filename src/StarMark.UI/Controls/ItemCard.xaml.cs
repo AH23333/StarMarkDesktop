@@ -49,6 +49,12 @@ public sealed partial class ItemCard : UserControl
             OpenRequested?.Invoke(this, ViewModel.Id);
     }
 
+    private void Menu_Open(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel != null)
+            OpenRequested?.Invoke(this, ViewModel.Id);
+    }
+
     private void EditNote_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel != null)
