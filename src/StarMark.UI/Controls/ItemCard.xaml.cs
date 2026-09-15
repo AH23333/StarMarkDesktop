@@ -55,6 +55,25 @@ public sealed partial class ItemCard : UserControl
             OpenRequested?.Invoke(this, ViewModel.Id);
     }
 
+    private async void Preview_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel == null || XamlRoot == null) return;
+
+        var vm = ViewModel;
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = vm.Title.Length <= 40 ? vm.Title : vm.Title[..40] + "…",
+            Content = new PreviewHost { ViewModel = vm },
+            PrimaryButtonText = "打开",
+            CloseButtonText = "关闭",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+            OpenRequested?.Invoke(this, vm.Id);
+    }
+
     private void EditNote_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel != null)

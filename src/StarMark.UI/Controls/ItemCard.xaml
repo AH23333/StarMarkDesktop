@@ -21,6 +21,7 @@
         <Border.ContextFlyout>
             <MenuFlyout>
                 <MenuFlyoutItem Text="打开" Click="Menu_Open"/>
+                <MenuFlyoutItem Text="预览" Click="Preview_Click"/>
                 <MenuFlyoutItem Text="编辑笔记" Click="EditNote_Click"/>
                 <MenuFlyoutItem Text="编辑标签" Click="EditTags_Click"/>
                 <MenuFlyoutSeparator/>
@@ -82,6 +83,8 @@
 
             <!-- 操作栏：编辑标签 / 编辑笔记 / 隐藏 -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0" Spacing="4">
+                <Button Content="🔎" Padding="4,2" Style="{StaticResource MiniIconButton}"
+                        ToolTipService.ToolTip="预览（QuickLook）" Click="Preview_Click"/>
                 <Button Content="📝" Padding="4,2" Style="{StaticResource MiniIconButton}"
                         ToolTipService.ToolTip="编辑笔记" Click="EditNote_Click"/>
                 <Button Content="🏷" Padding="4,2" Style="{StaticResource MiniIconButton}"
