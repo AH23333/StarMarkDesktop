@@ -17,9 +17,9 @@
         </Grid.RowDefinitions>
 
         <!-- 顶栏 -->
-        <Border Grid.Row="0" Background="{ThemeResource LayerFillColorDefaultBrush}"
+        <Border x:Name="TopBar" Grid.Row="0" Background="{ThemeResource LayerFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
-            <Grid Padding="16,10">
+            <Grid Padding="16,8,150,8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>

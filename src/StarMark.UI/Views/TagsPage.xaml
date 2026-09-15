@@ -35,9 +35,10 @@
             <StackPanel>
                 <ItemsRepeater ItemsSource="{x:Bind ViewModel.Tags}">
                     <ItemsRepeater.Layout>
-                        <UniformGridLayout ItemsStretch="None"
+                        <UniformGridLayout Orientation="Horizontal"
+                                           MaximumRowsOrColumns="4"
                                            MinColumnSpacing="6" MinRowSpacing="6"
-                                           MaximumRowsOrColumns="0"/>
+                                           ItemsStretch="None"/>
                     </ItemsRepeater.Layout>
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="viewModels:TagItemViewModel">

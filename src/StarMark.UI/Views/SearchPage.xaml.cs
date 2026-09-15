@@ -22,18 +22,24 @@ public sealed partial class SearchPage : Page
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        // 从主窗口搜索框传入的查询词由 MainWindow 直接设置 ViewModel.Query
+        if (!string.IsNullOrWhiteSpace(ViewModel.Query))
+            ViewModel.SearchCommand.Execute(null);
     }
 
-    private void Card_OpenRequested(object sender, long itemId)
+    private async void Card_OpenRequested(object sender, long itemId)
         => ItemCardActions.Open(this.XamlRoot, itemId);
 
-    private void Card_EditNoteRequested(object sender, ViewModels.ItemCardViewModel vm)
+    private async void Card_EditNoteRequested(object sender, ViewModels.ItemCardViewModel vm)
         => ItemCardActions.EditNote(this.XamlRoot, vm);
 
-    private void Card_EditTagsRequested(object sender, ViewModels.ItemCardViewModel vm)
+    private async void Card_EditTagsRequested(object sender, ViewModels.ItemCardViewModel vm)
         => ItemCardActions.EditTags(this.XamlRoot, vm);
 
-    private void Card_HideRequested(object sender, ViewModels.ItemCardViewModel vm)
-        => ItemCardActions.ToggleHidden(this.XamlRoot, vm);
+    private async void Card_HideRequested(object sender, ViewModels.ItemCardViewModel vm)
+    {
+        var wasHidden = vm.IsHidden;
+        var nowHidden = await ItemCardActions.ToggleHidden(this.XamlRoot, vm);
+        if (!wasHidden && nowHidden && !ViewModel.ShowHidden)
+            ViewModel.RemoveItem(vm.Id);
+    }
 }

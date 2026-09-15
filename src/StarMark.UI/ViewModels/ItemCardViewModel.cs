@@ -20,12 +20,16 @@ public partial class ItemCardViewModel : ObservableObject
     public string Uri => _item.Uri;
     public string? Description => _item.Description;
     public long? StarsCount => _item.StarsCount;
-    public bool IsHidden => _item.Hidden;
+    [ObservableProperty] private bool _isHidden;
     public string? Notes => _item.Notes;
     public IReadOnlyList<string> Tags => _item.Tags;
     public ItemType Type => _item.Type;
     public string Source => _item.Source;
     public long UpdatedAt => _item.UpdatedAt;
+
+    public string HideMenuText => IsHidden ? "显示" : "隐藏";
+
+    partial void OnIsHiddenChanged(bool value) => OnPropertyChanged(nameof(HideMenuText));
 
     public string SourceIcon => Type switch
     {
@@ -49,7 +53,14 @@ public partial class ItemCardViewModel : ObservableObject
     public ItemCardViewModel(Item item)
     {
         _item = item;
+        IsHidden = item.Hidden;
     }
+
+    public void SetHidden(bool value) => IsHidden = value;
+
+    public void ApplyNotes(string? notes) { _item.Notes = notes; OnPropertyChanged(nameof(Notes)); OnPropertyChanged(nameof(HasNotes)); }
+
+    public void ApplyTags(IReadOnlyList<string> tags) { _item.Tags = tags.ToList(); OnPropertyChanged(nameof(Tags)); }
 
     [RelayCommand]
     private async Task OpenAsync()

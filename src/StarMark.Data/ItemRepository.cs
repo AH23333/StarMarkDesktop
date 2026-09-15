@@ -61,7 +61,7 @@ public sealed class ItemRepository : IItemRepository
         cmd.Parameters.AddWithValue("@type_filter", (object?)filter.Type?.ToString().ToLowerInvariant() ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@stars_min", (object?)filter.StarsMin ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@date_from", (object?)filter.DateFrom ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@include_hidden", 0);
+        cmd.Parameters.AddWithValue("@include_hidden", filter.IncludeHidden ? 1 : 0);
 
         var items = new List<Item>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);

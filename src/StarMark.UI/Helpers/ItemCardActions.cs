@@ -50,7 +50,9 @@ public static class ItemCardActions
         if (await dialog.ShowAsync() == ContentDialogResult.Primary)
         {
             var box = (TextBox)dialog.Content;
-            await GetRepo().SetNoteAsync(vm.Id, box.Text.Trim(), CancellationToken.None);
+            var text = box.Text.Trim();
+            await GetRepo().SetNoteAsync(vm.Id, text, CancellationToken.None);
+            vm.ApplyNotes(string.IsNullOrWhiteSpace(text) ? null : text);
         }
     }
 
@@ -80,15 +82,19 @@ public static class ItemCardActions
             foreach (var tag in current)
                 await repo.RemoveTagAsync(vm.Id, tag, CancellationToken.None);
             var tags = box.Text.Split(new[] { ',', '，', ' ', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(t => t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase);
+                .Select(t => t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             foreach (var tag in tags)
                 await repo.AddTagAsync(vm.Id, tag, CancellationToken.None);
+            vm.ApplyTags(tags);
         }
     }
 
-    public static async void ToggleHidden(XamlRoot xamlRoot, ItemCardViewModel vm)
+    public static async Task<bool> ToggleHidden(XamlRoot xamlRoot, ItemCardViewModel vm)
     {
         var repo = GetRepo();
-        await repo.SetHiddenAsync(vm.Id, !vm.IsHidden, CancellationToken.None);
+        var newState = !vm.IsHidden;
+        await repo.SetHiddenAsync(vm.Id, newState, CancellationToken.None);
+        vm.SetHidden(newState);
+        return newState;
     }
 }

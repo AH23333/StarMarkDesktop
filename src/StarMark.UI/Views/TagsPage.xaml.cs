@@ -28,17 +28,19 @@ public sealed partial class TagsPage : Page
     {
         base.OnNavigatedTo(e);
         ViewModel.LoadCommand.Execute(null);
+        if (ViewModel.HasActiveFilter)
+            ViewModel.ApplyFilterCommand.Execute(null);
     }
 
-    private async void Tag_Click(object sender, RoutedEventArgs e)
+    private void Tag_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button btn && btn.Tag is string tagName)
-            await ViewModel.ToggleTagCommand.ExecuteAsync(tagName);
+            _ = ViewModel.ToggleTagCommand.ExecuteAsync(tagName);
     }
 
-    private async void ClearFilters_Click(object sender, RoutedEventArgs e)
+    private void ClearFilters_Click(object sender, RoutedEventArgs e)
     {
-        await ViewModel.ClearFiltersCommand.ExecuteAsync(null);
+        _ = ViewModel.ClearFiltersCommand.ExecuteAsync(null);
     }
 
     private void Card_OpenRequested(object sender, long itemId)
@@ -50,6 +52,9 @@ public sealed partial class TagsPage : Page
     private void Card_EditTagsRequested(object sender, ViewModels.ItemCardViewModel vm)
         => ItemCardActions.EditTags(this.XamlRoot, vm);
 
-    private void Card_HideRequested(object sender, ViewModels.ItemCardViewModel vm)
-        => ItemCardActions.ToggleHidden(this.XamlRoot, vm);
+    private async void Card_HideRequested(object sender, ViewModels.ItemCardViewModel vm)
+    {
+        await ItemCardActions.ToggleHidden(this.XamlRoot, vm);
+        ViewModel.FilteredResults.Remove(vm);
+    }
 }

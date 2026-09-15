@@ -54,6 +54,7 @@ public partial class SearchPageViewModel : ObservableObject
             MaxResults = 100,
             IncludeSize = true,
             IncludeDate = true,
+            IncludeHidden = ShowHidden,
         };
 
         try
@@ -80,8 +81,14 @@ public partial class SearchPageViewModel : ObservableObject
         }
     }
 
+    public void RemoveItem(long id) { Results.FirstOrDefault(r => r.Id == id)?.Let(_ => Results.Remove(_)); }
+
     partial void OnQueryChanged(string value)
     {
         _ = SearchAsync();
     }
+
+    partial void OnShowHiddenChanged(bool value) { _ = SearchAsync(); }
 }
+
+internal static class EnumerableEx { public static void Let<T>(this T? item, Action<T> action) where T : class { if (item != null) action(item); } }

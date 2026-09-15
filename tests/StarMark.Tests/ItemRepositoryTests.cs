@@ -118,6 +118,25 @@ public sealed class ItemRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task SearchAsync_IncludeHidden_ReturnsHiddenItems()
+    {
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.File, Source = "test", SourceId = "n1", Title = "alpha visible doc" },
+        }, CancellationToken.None);
+        var hidden = new Item { Type = ItemType.File, Source = "test", SourceId = "n2", Title = "alpha secret doc" };
+        await repo.UpsertAsync(new[] { hidden }, CancellationToken.None);
+        await repo.SetHiddenAsync(hidden.Id, true, CancellationToken.None);
+
+        var without = await repo.SearchAsync("alpha", new SearchFilter { MaxResults = 10 }, CancellationToken.None);
+        Assert.DoesNotContain(without.Items, i => i.Id == hidden.Id);
+
+        var with = await repo.SearchAsync("alpha", new SearchFilter { MaxResults = 10, IncludeHidden = true }, CancellationToken.None);
+        Assert.Contains(with.Items, i => i.Id == hidden.Id);
+    }
+
+    [Fact]
     public async Task SearchService_MergesResults()
     {
         var repo = new ItemRepository(_factory);

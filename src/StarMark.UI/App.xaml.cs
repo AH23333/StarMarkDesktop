@@ -1,6 +1,7 @@
 #nullable enable
 using Microsoft.UI.Xaml;
 using Microsoft.Extensions.DependencyInjection;
+using StarMark.Abstractions;
 using StarMark.UI.ViewModels;
 
 namespace StarMark.UI;
@@ -12,11 +13,22 @@ public partial class App : Application
 {
     public static IServiceProvider Services { get; private set; } = null!;
 
+    public static MainWindow? MainWindow { get; private set; }
+
     private Window? _window;
 
     public App()
     {
         InitializeComponent();
+        // 全局未处理异常：写入 StarLog 便于诊断
+        UnhandledException += (_, e) =>
+        {
+            StarLog.Error($"UI 未处理异常: {e.Exception}");
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            StarLog.Error($"非 UI 线程未处理异常: {e.ExceptionObject}");
+        };
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -57,11 +69,12 @@ public partial class App : Application
 
         // ViewModel 层
         services.AddSingleton<MainViewModel>();
-        services.AddTransient<SearchPageViewModel>();
+        services.AddSingleton<SearchPageViewModel>();
         services.AddTransient<FolderTreePageViewModel>();
         services.AddTransient<TagsPageViewModel>();
         services.AddTransient<ActivityPageViewModel>();
         services.AddTransient<HiddenPageViewModel>();
+        services.AddTransient<SettingsPageViewModel>();
 
         Services = services.BuildServiceProvider();
 
@@ -81,6 +94,7 @@ public partial class App : Application
 
         // 3. 显示主窗口
         _window = new MainWindow();
+        MainWindow = _window as StarMark.UI.MainWindow;
         _window.Activate();
     }
 }

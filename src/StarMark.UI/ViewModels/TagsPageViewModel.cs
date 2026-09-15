@@ -83,6 +83,7 @@ public partial class TagsPageViewModel : ObservableObject
         await Task.CompletedTask;
     }
 
+    [RelayCommand]
     private async Task ApplyFilterAsync()
     {
         FilteredResults.Clear();

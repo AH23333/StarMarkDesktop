@@ -25,7 +25,8 @@
                 <MenuFlyoutItem Text="编辑笔记" Click="EditNote_Click"/>
                 <MenuFlyoutItem Text="编辑标签" Click="EditTags_Click"/>
                 <MenuFlyoutSeparator/>
-                <MenuFlyoutItem Text="隐藏" Click="Hide_Click"/>
+                <MenuFlyoutItem Click="Hide_Click"
+                                Text="{x:Bind ViewModel.HideMenuText, Mode=OneWay}"/>
             </MenuFlyout>
         </Border.ContextFlyout>
         <StackPanel>

@@ -4,6 +4,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using Microsoft.UI.Windowing;
+using Microsoft.UI;
+using Windows.Graphics;
 using StarMark.Integrations.SystemTray;
 using StarMark.UI.Helpers;
 using StarMark.UI.ViewModels;
@@ -30,6 +32,8 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         ViewModel = (App.Services.GetService(typeof(MainViewModel)) as MainViewModel)
             ?? throw new InvalidOperationException("MainViewModel 未注册");
+
+        SetupImmersiveTitleBar();
 
         // 恢复并应用上次主题偏好
         _themePref = _settings.LoadTheme();
@@ -59,6 +63,33 @@ public sealed partial class MainWindow : Window
     }
 
     private IntPtr MainHwnd => WinRT.Interop.WindowNative.GetWindowHandle(this);
+
+    /// <summary>Win11 风格沉浸式标题栏：内容扩展到标题栏区域，标题栏按钮透明融合。</summary>
+    private void SetupImmersiveTitleBar()
+    {
+        var titleBar = AppWindow.TitleBar;
+        titleBar.ExtendsContentIntoTitleBar = true;
+        titleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
+        titleBar.ButtonBackgroundColor = Colors.Transparent;
+        titleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
+        titleBar.ButtonHoverBackgroundColor = Colors.Transparent;
+        titleBar.ButtonPressedBackgroundColor = Colors.Transparent;
+
+        ApplyDragRects();
+        SizeChanged += (_, _) => ApplyDragRects();
+    }
+
+    private void ApplyDragRects()
+    {
+        // 拖拽区 = 顶栏全宽，但留出右侧系统窗口按钮区域（约 138px）
+        var width = AppWindow.Size.Width;
+        var height = TopBar.ActualHeight > 0 ? (int)TopBar.ActualHeight : 52;
+        var dragW = Math.Max(0, width - 140);
+        AppWindow.TitleBar.SetDragRectangles(new RectInt32[]
+        {
+            new() { X = 0, Y = 0, Width = dragW, Height = height },
+        });
+    }
 
     private void ShowMainWindow()
     {
@@ -144,6 +175,12 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    public void NavigateTo(string tag)
+    {
+        NavView.SelectedItem = null;
+        NavigateToPage(tag);
+    }
+
     private void NavigateToPage(string tag, object? param = null)
     {
         var pageType = tag switch
@@ -153,6 +190,7 @@ public sealed partial class MainWindow : Window
             "tags" => typeof(TagsPage),
             "activity" => typeof(ActivityPage),
             "hidden" => typeof(HiddenPage),
+            "settings" => typeof(SettingsPage),
             _ => typeof(SearchPage),
         };
         ContentFrame.Navigate(pageType, param);
@@ -217,7 +255,14 @@ public sealed partial class MainWindow : Window
 
     private void ShowHidden_Click(object sender, RoutedEventArgs e)
     {
-        // 由子页面处理
+        if (ContentFrame.Content is SearchPage sp)
+        {
+            sp.ViewModel.ShowHidden = ShowHiddenCheck.IsChecked == true;
+        }
+        else if (ContentFrame.Content is FolderTreePage ftp)
+        {
+            ftp.ViewModel.ShowHidden = ShowHiddenCheck.IsChecked == true;
+        }
     }
 
     private void SyncButton_Click(object sender, RoutedEventArgs e)
@@ -280,6 +325,14 @@ public sealed partial class MainWindow : Window
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        StatusText.Text = "设置页面待实现";
+        ViewModel.CurrentPageTag = "settings";
+        NavView.SelectedItem = null;
+        ContentFrame.Navigate(typeof(SettingsPage));
+    }
+
+    public void RefreshThemeIcon(ThemePreference pref)
+    {
+        _themePref = pref;
+        UpdateThemeIcon();
     }
 }

@@ -56,4 +56,7 @@ public sealed class SearchFilter
 
     /// <summary>偏移量（分页）。</summary>
     public int Offset { get; init; }
+
+    /// <summary>是否包含隐藏条目（默认排除）。</summary>
+    public bool IncludeHidden { get; init; }
 }

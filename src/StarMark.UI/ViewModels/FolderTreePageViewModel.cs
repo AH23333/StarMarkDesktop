@@ -90,7 +90,8 @@ public partial class FolderTreePageViewModel : ObservableObject
     {
         node.Depth = depth;
         VisibleNodes.Add(node);
-        if (!node.IsExpanded) return;
+        if (node.IsExpanded)
+            node.HydrateItems();
         foreach (var child in node.Children)
             AppendVisible(child, depth + 1);
     }
@@ -110,7 +111,7 @@ public partial class FolderPathNodeViewModel : ObservableObject
     public IReadOnlyList<Item> Items { get; }
     public ObservableCollection<ItemCardViewModel> VisibleItems { get; } = new();
 
-    [ObservableProperty] private bool _isExpanded;
+    [ObservableProperty] private bool _isExpanded = true;
     [ObservableProperty] private int _depth;
 
     public int TotalCount => Items.Count + Children.Sum(c => c.TotalCount);

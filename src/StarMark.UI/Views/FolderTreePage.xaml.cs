@@ -41,7 +41,11 @@ public sealed partial class FolderTreePage : Page
     {
         if (sender is Button btn && btn.Tag is string tag)
         {
-            ViewModel.CurrentSource = tag;
+            ViewModel.CurrentSource = tag switch
+            {
+                "star" => "githubstar",
+                _ => tag,
+            };
             var accent = (SolidColorBrush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"];
             var muted = (SolidColorBrush)Application.Current.Resources["TextFillColorSecondaryBrush"];
             foreach (var b in new[] { TreeSourceAll, TreeSourceStar, TreeSourceBookmark })
@@ -59,6 +63,11 @@ public sealed partial class FolderTreePage : Page
     private void Card_EditTagsRequested(object sender, ViewModels.ItemCardViewModel vm)
         => ItemCardActions.EditTags(this.XamlRoot, vm);
 
-    private void Card_HideRequested(object sender, ViewModels.ItemCardViewModel vm)
-        => ItemCardActions.ToggleHidden(this.XamlRoot, vm);
+    private async void Card_HideRequested(object sender, ViewModels.ItemCardViewModel vm)
+    {
+        var nowHidden = await ItemCardActions.ToggleHidden(this.XamlRoot, vm);
+        if (nowHidden)
+            foreach (var node in ViewModel.VisibleNodes)
+                if (node.VisibleItems.Remove(vm)) break;
+    }
 }
