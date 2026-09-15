@@ -1,6 +1,5 @@
 #nullable enable
 using System.Collections.ObjectModel;
-using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StarMark.Abstractions;
@@ -68,14 +67,7 @@ public partial class FolderTreePageViewModel : ObservableObject
     {
         foreach (var item in items)
         {
-            var path = item.Type switch
-            {
-                ItemType.Bookmark => BookmarkSegments(item),
-                ItemType.File => FileSegments(item),
-                ItemType.GitHubStar => new[] { "⭐ GitHub Stars" },
-                ItemType.Clipboard => new[] { "📋 剪贴板" },
-                _ => new[] { "其他" },
-            };
+            var path = FolderPathUtil.GetSegments(item);
 
             var node = root;
             for (int i = 0; i < path.Length; i++)
@@ -84,43 +76,6 @@ public partial class FolderTreePageViewModel : ObservableObject
             var list = (node.Items as List<Item>)!;
             list.Add(item);
         }
-    }
-
-    private static string[] BookmarkSegments(Item item)
-    {
-        var fallback = "其他书签";
-        if (string.IsNullOrWhiteSpace(item.ExtraJson)) return new[] { fallback };
-        try
-        {
-            var meta = JsonSerializer.Deserialize<BookmarkMeta>(item.ExtraJson);
-            if (meta?.FolderPaths is { Count: > 0 } paths)
-            {
-                var first = paths[0].Trim('/');
-                if (!string.IsNullOrEmpty(first))
-                    return first.Split('/').Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
-            }
-        }
-        catch { }
-        return new[] { fallback };
-    }
-
-    private static string[] FileSegments(Item item)
-    {
-        if (!string.IsNullOrWhiteSpace(item.Uri) && item.Uri.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
-        {
-            try
-            {
-                var local = new Uri(item.Uri).LocalPath.TrimStart('\\').Trim('/');
-                var segs = local.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
-                if (segs.Length >= 2)
-                {
-                    // 去掉文件名，保留目录层级（盘符 "C:" 做根）
-                    return segs.Take(segs.Length - 1).ToArray();
-                }
-            }
-            catch { }
-        }
-        return new[] { "其他文件" };
     }
 
     private void RebuildVisible()
