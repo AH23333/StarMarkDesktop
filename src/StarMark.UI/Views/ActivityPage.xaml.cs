@@ -40,4 +40,10 @@ public sealed partial class ActivityPage : Page
 
     private void Card_HideRequested(object sender, ViewModels.ItemCardViewModel vm)
         => ItemCardActions.ToggleHidden(this.XamlRoot, vm);
+
+    private void Card_TagRemoveRequested(object sender, (ViewModels.ItemCardViewModel VM, string Tag) e)
+        => ItemCardActions.RemoveTag(this.XamlRoot, e.VM, e.Tag);
+
+    private void Card_TagAddRequested(object sender, ViewModels.ItemCardViewModel vm)
+        => ItemCardActions.AddTag(this.XamlRoot, vm);
 }

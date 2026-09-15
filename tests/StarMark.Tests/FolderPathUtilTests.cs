@@ -12,17 +12,31 @@ namespace StarMark.Tests;
 public sealed class FolderPathUtilTests
 {
     [Fact]
-    public void Bookmark_NestedFolderPath_SplitsSegments()
+    public void Bookmark_MultiLevelPathArray_EachElementIsLevel()
     {
         var item = new Item
         {
             Type = ItemType.Bookmark,
             ExtraJson = JsonSerializer.Serialize(new BookmarkMeta
             {
-                FolderPaths = new List<string> { "书签栏/技术/AI" },
+                FolderPaths = new List<string> { "书签栏", "技术", "AI" },
             }),
         };
         Assert.Equal(new[] { "书签栏", "技术", "AI" }, FolderPathUtil.BookmarkSegments(item));
+    }
+
+    [Fact]
+    public void Bookmark_SlashInFolderName_IsNotSplit()
+    {
+        var item = new Item
+        {
+            Type = ItemType.Bookmark,
+            ExtraJson = JsonSerializer.Serialize(new BookmarkMeta
+            {
+                FolderPaths = new List<string> { "AI/LLM 资料" },
+            }),
+        };
+        Assert.Equal(new[] { "AI/LLM 资料" }, FolderPathUtil.BookmarkSegments(item));
     }
 
     [Fact]

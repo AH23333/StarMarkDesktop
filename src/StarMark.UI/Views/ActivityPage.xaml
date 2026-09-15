@@ -27,7 +27,9 @@
                                            OpenRequested="Card_OpenRequested"
                                            EditNoteRequested="Card_EditNoteRequested"
                                            EditTagsRequested="Card_EditTagsRequested"
-                                           HideRequested="Card_HideRequested"/>
+                                           HideRequested="Card_HideRequested"
+                                           TagRemoveRequested="Card_TagRemoveRequested"
+                                           TagAddRequested="Card_TagAddRequested"/>
                     </DataTemplate>
                 </ItemsRepeater.ItemTemplate>
             </ItemsRepeater>

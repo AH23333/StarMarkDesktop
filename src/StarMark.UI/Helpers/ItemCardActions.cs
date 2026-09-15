@@ -97,4 +97,38 @@ public static class ItemCardActions
         vm.SetHidden(newState);
         return newState;
     }
+
+    public static async void RemoveTag(XamlRoot xamlRoot, ItemCardViewModel vm, string tag)
+    {
+        try
+        {
+            await GetRepo().RemoveTagAsync(vm.Id, tag, CancellationToken.None);
+            vm.ApplyTags(vm.Tags.Where(t => !string.Equals(t, tag, StringComparison.OrdinalIgnoreCase)).ToArray());
+        }
+        catch { }
+    }
+
+    public static async void AddTag(XamlRoot xamlRoot, ItemCardViewModel vm)
+    {
+        var box = new TextBox
+        {
+            PlaceholderText = "标签名称，如 ai、llm",
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        var dialog = new ContentDialog
+        {
+            Title = "快速添加标签",
+            PrimaryButtonText = "添加",
+            CloseButtonText = "取消",
+            XamlRoot = xamlRoot,
+            DefaultButton = ContentDialogButton.Primary,
+            Content = box,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        var name = box.Text.Trim();
+        if (string.IsNullOrEmpty(name)) return;
+        var repo = GetRepo();
+        await repo.AddTagAsync(vm.Id, name, CancellationToken.None);
+        vm.ApplyTags(vm.Tags.Concat(new[] { name }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+    }
 }

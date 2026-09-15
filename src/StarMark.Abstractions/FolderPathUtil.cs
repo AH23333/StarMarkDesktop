@@ -36,9 +36,10 @@ public static class FolderPathUtil
             var meta = JsonSerializer.Deserialize<BookmarkMeta>(item.ExtraJson);
             if (meta?.FolderPaths is { Count: > 0 } paths)
             {
-                var first = paths[0].Trim('/');
-                if (!string.IsNullOrEmpty(first))
-                    return first.Split('/').Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
+                // FolderPaths 数组本身即层级（每个元素 = 一级文件夹名），
+                // 不再按 '/' 自动切分——文件夹名含 '/' 时不应被拆出错误层级。
+                var segs = paths.Select(p => p.Trim()).Where(s => !string.IsNullOrEmpty(s) && s.Trim('/').Length > 0).ToArray();
+                if (segs.Length > 0) return segs;
             }
         }
         catch { }
@@ -63,4 +64,15 @@ public static class FolderPathUtil
         }
         return new[] { OtherFileGroup };
     }
+
+    /// <summary>伪根/兜底分组的显示优先级（越靠前越先展示），普通文件夹排在最后。</summary>
+    public static int RootOrder(string segment) => segment switch
+    {
+        GitHubGroup => 0,
+        ClipboardGroup => 1,
+        OtherBookmarkGroup => 2,
+        OtherFileGroup => 3,
+        OtherGroup => 4,
+        _ => 100,
+    };
 }

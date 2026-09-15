@@ -14,7 +14,7 @@
         <helpers:BoolToVisibilityConverter x:Key="BoolToVis"/>
     </Page.Resources>
 
-    <Grid Background="{StaticResource AppBackgroundBrush}" Padding="12,12,12,16">
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12,12,12,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -74,7 +74,9 @@
                                                OpenRequested="Card_OpenRequested"
                                                EditNoteRequested="Card_EditNoteRequested"
                                                EditTagsRequested="Card_EditTagsRequested"
-                                               HideRequested="Card_HideRequested"/>
+                                               HideRequested="Card_HideRequested"
+                                               TagRemoveRequested="Card_TagRemoveRequested"
+                                               TagAddRequested="Card_TagAddRequested"/>
                         </DataTemplate>
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>

@@ -1,6 +1,7 @@
 #nullable enable
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using StarMark.UI.Helpers;
 using StarMark.UI.ViewModels;
 
 namespace StarMark.UI.Views;
@@ -32,4 +33,10 @@ public sealed partial class HiddenPage : Page
     {
         await ViewModel.RestoreCommand.ExecuteAsync(vm);
     }
+
+    private void Card_TagRemoveRequested(object sender, (ViewModels.ItemCardViewModel VM, string Tag) e)
+        => ItemCardActions.RemoveTag(this.XamlRoot, e.VM, e.Tag);
+
+    private void Card_TagAddRequested(object sender, ViewModels.ItemCardViewModel vm)
+        => ItemCardActions.AddTag(this.XamlRoot, vm);
 }

@@ -30,7 +30,7 @@
             </MenuFlyout>
         </Border.ContextFlyout>
         <StackPanel>
-            <!-- 标题行：来源 badge + 标题 + 右键菜单 -->
+            <!-- 标题行 -->
             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                 <TextBlock Text="{x:Bind ViewModel.SourceIcon}" FontSize="13" VerticalAlignment="Center"/>
                 <TextBlock Text="{x:Bind ViewModel.Title}" Margin="7,0,0,0"
@@ -57,19 +57,39 @@
                        Margin="0,2,0,0"
                        Visibility="{x:Bind ViewModel.HasDescription, Converter={StaticResource BoolToVis}}"/>
 
-            <!-- 标签行（可点击筛选/跳转） -->
-            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Tags}" Margin="0,4,0,0">
-                <ItemsRepeater.Layout>
-                    <StackLayout Orientation="Horizontal"/>
-                </ItemsRepeater.Layout>
-                <ItemsRepeater.ItemTemplate>
-                    <DataTemplate x:DataType="x:String">
-                        <Button Content="{Binding}" Background="Transparent" BorderThickness="0"
-                                Padding="6,1" Margin="0,0,4,0" FontSize="11"
-                                Foreground="{Binding Converter={StaticResource ContainedTagColor}}"/>
-                    </DataTemplate>
-                </ItemsRepeater.ItemTemplate>
-            </ItemsRepeater>
+            <!-- 标签行：点击芯片快速移除 ＋ 快速添加 -->
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Spacing="4">
+                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Tags}">
+                    <ItemsRepeater.Layout>
+                        <StackLayout Orientation="Horizontal" Spacing="4"/>
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <Button Click="Tag_Chip_Click"
+                                    Tag="{Binding}"
+                                    Padding="6,1" CornerRadius="10"
+                                    Background="{StaticResource CardBackgroundFillColorSecondaryBrush}"
+                                    BorderThickness="0">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{Binding}" FontSize="11"
+                                               Foreground="{Binding Converter={StaticResource ContainedTagColor}}"/>
+                                    <TextBlock Text="✕" FontSize="8" Opacity="0.5"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+
+                <Button Click="Tag_Add_Click" Padding="4,1" CornerRadius="10"
+                        ToolTipService.ToolTip="添加标签"
+                        Background="Transparent"
+                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        BorderThickness="1">
+                    <TextBlock Text="＋ 标签" FontSize="10"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </Button>
+            </StackPanel>
 
             <!-- Stars 数 -->
             <TextBlock Text="{x:Bind ViewModel.StarsText}" FontSize="11"
@@ -82,7 +102,7 @@
                        TextWrapping="Wrap" Margin="0,4,0,0"
                        Visibility="{x:Bind ViewModel.HasNotes, Converter={StaticResource BoolToVis}}"/>
 
-            <!-- 操作栏：编辑标签 / 编辑笔记 / 隐藏 -->
+            <!-- 操作栏：预览 / 笔记 / 标签 / 隐藏 -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0" Spacing="4">
                 <Button Content="🔎" Padding="4,2" Style="{StaticResource MiniIconButton}"
                         ToolTipService.ToolTip="预览（QuickLook）" Click="Preview_Click"/>

@@ -57,4 +57,16 @@ public sealed partial class TagsPage : Page
         await ItemCardActions.ToggleHidden(this.XamlRoot, vm);
         ViewModel.FilteredResults.Remove(vm);
     }
+
+    private void Card_TagRemoveRequested(object sender, (ViewModels.ItemCardViewModel VM, string Tag) e)
+    {
+        ItemCardActions.RemoveTag(this.XamlRoot, e.VM, e.Tag);
+        ViewModel.LoadCommand.Execute(null);
+    }
+
+    private void Card_TagAddRequested(object sender, ViewModels.ItemCardViewModel vm)
+    {
+        ItemCardActions.AddTag(this.XamlRoot, vm);
+        ViewModel.LoadCommand.Execute(null);
+    }
 }

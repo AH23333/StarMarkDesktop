@@ -25,7 +25,9 @@
                     <DataTemplate x:DataType="viewModels:ItemCardViewModel">
                         <Grid>
                             <controls:ItemCard ViewModel="{x:Bind}" Opacity="0.55"
-                                               HideRequested="Card_RestoreRequested"/>
+                                                   HideRequested="Card_RestoreRequested"
+                                                   TagRemoveRequested="Card_TagRemoveRequested"
+                                                   TagAddRequested="Card_TagAddRequested"/>
                             <Rectangle Fill="Transparent" IsHitTestVisible="False"/>
                         </Grid>
                     </DataTemplate>

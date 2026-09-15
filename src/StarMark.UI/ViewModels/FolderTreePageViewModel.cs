@@ -3,19 +3,18 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StarMark.Abstractions;
-using Microsoft.UI.Xaml;
 
 namespace StarMark.UI.ViewModels;
 
 /// <summary>
-/// 文件夹树页面 ViewModel。真实嵌套文件夹树：
-/// 书签 → ExtraJson.BookmarkMeta.FolderPaths（'/' 分隔）；文件 → file:// 目录；GitHub/剪贴板 → 伪根分组。
-/// 采用扁平化渲染：深度(Depth)缩进 + 逐级展开，子文件夹作为独立节点插入列表。
+/// 文件夹页面 ViewModel。构建语义文件夹树（书签 → FolderPaths 层级；文件 → file:// 目录；GitHub/剪贴板 → 伪根）。
+/// 渲染层用 TreeView 按需展开 + 惰性挂载条目，缩进/展开/虚拟化交给控件。
 /// </summary>
 public partial class FolderTreePageViewModel : ObservableObject
 {
+    private const int MaxItemsPerFolder = 30;
+
     private readonly IItemRepository _repository;
-    private FolderPathNodeViewModel? _root;
 
     [ObservableProperty] private string _currentSort = "recent";
     [ObservableProperty] private string _currentSource = "all";
@@ -23,7 +22,14 @@ public partial class FolderTreePageViewModel : ObservableObject
     [ObservableProperty] private bool _isLoading = true;
     [ObservableProperty] private string _emptyHint = string.Empty;
 
-    public ObservableCollection<FolderPathNodeViewModel> VisibleNodes { get; } = new();
+    public bool HasEmptyHint => !string.IsNullOrEmpty(EmptyHint);
+
+    partial void OnEmptyHintChanged(string value) => OnPropertyChanged(nameof(HasEmptyHint));
+
+    public ObservableCollection<FolderPathNodeViewModel> Roots { get; } = new();
+
+    /// <summary>在 Roots 加载完毕后触发，通知页面重建 TreeView。</summary>
+    public event Action? RootsReady;
 
     public FolderTreePageViewModel(IItemRepository repository)
     {
@@ -34,7 +40,7 @@ public partial class FolderTreePageViewModel : ObservableObject
     private async Task LoadAsync()
     {
         IsLoading = true;
-        VisibleNodes.Clear();
+        Roots.Clear();
 
         try
         {
@@ -42,16 +48,25 @@ public partial class FolderTreePageViewModel : ObservableObject
             {
                 Sort = CurrentSort,
                 IncludeHidden = ShowHidden,
-                TypeFilter = CurrentSource == "all" ? null : CurrentSource,
-                Limit = 500,
+                TypeFilter = CurrentSource switch { "all" => null, "star" => "githubstar", _ => CurrentSource },
+                Limit = 2000,
             };
             var items = await _repository.GetAllAsync(filter, CancellationToken.None);
-            var itemList = items.ToList();
 
-            _root = new FolderPathNodeViewModel("ROOT");
-            BuildTree(_root, itemList);
-            RebuildVisible();
-            EmptyHint = _root.Children.Count == 0 ? "暂无条目，请先同步数据" : string.Empty;
+            var nodeMap = new Dictionary<string, FolderPathNodeViewModel>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in items)
+            {
+                var path = FolderPathUtil.GetSegments(item);
+                var node = GetOrCreateNode(nodeMap, path);
+                node.Items.Add(item);
+            }
+
+            foreach (var root in nodeMap.Values.Where(n => n.Parent == null)
+                                             .OrderBy(n => n.RootOrder)
+                                             .ThenBy(n => n.Name, StringComparer.OrdinalIgnoreCase))
+                Roots.Add(root);
+
+            EmptyHint = Roots.Count == 0 ? "暂无条目，请先同步数据" : string.Empty;
         }
         catch (Exception ex)
         {
@@ -61,40 +76,34 @@ public partial class FolderTreePageViewModel : ObservableObject
         {
             IsLoading = false;
         }
+
+        RootsReady?.Invoke();
     }
 
-    private void BuildTree(FolderPathNodeViewModel root, List<Item> items)
+    /// <summary>按路径链逐级创建/复用节点，作为树根列表返回最顶层节点。</summary>
+    private static FolderPathNodeViewModel GetOrCreateNode(Dictionary<string, FolderPathNodeViewModel> nodeMap, string[] path)
     {
-        foreach (var item in items)
+        FolderPathNodeViewModel? parent = null;
+        foreach (var segment in path)
         {
-            var path = FolderPathUtil.GetSegments(item);
+            if (parent == null)
+            {
+                if (!nodeMap.TryGetValue(segment, out var root))
+                {
+                    root = new FolderPathNodeViewModel(segment, null);
+                    nodeMap[segment] = root;
+                }
+                parent = root;
+                continue;
+            }
 
-            var node = root;
-            for (int i = 0; i < path.Length; i++)
-                node = node.GetOrAddChild(path[i]);
-
-            var list = (node.Items as List<Item>)!;
-            list.Add(item);
+            parent = parent.GetOrAddChild(segment);
         }
+        return parent!;
     }
 
-    private void RebuildVisible()
-    {
-        VisibleNodes.Clear();
-        if (_root == null) return;
-        foreach (var child in _root.Children)
-            AppendVisible(child, 0);
-    }
-
-    private void AppendVisible(FolderPathNodeViewModel node, int depth)
-    {
-        node.Depth = depth;
-        VisibleNodes.Add(node);
-        if (node.IsExpanded)
-            node.HydrateItems();
-        foreach (var child in node.Children)
-            AppendVisible(child, depth + 1);
-    }
+    public IReadOnlyList<ItemCardViewModel> Hydrate(FolderPathNodeViewModel node)
+        => node.Items.Take(MaxItemsPerFolder).Select(i => new ItemCardViewModel(i)).ToList();
 
     partial void OnCurrentSortChanged(string value) => _ = LoadAsync();
     partial void OnCurrentSourceChanged(string value) => _ = LoadAsync();
@@ -102,56 +111,31 @@ public partial class FolderTreePageViewModel : ObservableObject
 }
 
 /// <summary>
-/// 文件夹树节点。对应浏览器扩展 FolderNode，支持任意深度嵌套。
+/// 文件夹树节点（语义层）。Name + 子文件夹 + 词条。
 /// </summary>
-public partial class FolderPathNodeViewModel : ObservableObject
+public sealed class FolderPathNodeViewModel
 {
     public string Name { get; }
+    public FolderPathNodeViewModel? Parent { get; }
     public List<FolderPathNodeViewModel> Children { get; } = new();
-    public IReadOnlyList<Item> Items { get; }
-    public ObservableCollection<ItemCardViewModel> VisibleItems { get; } = new();
-
-    [ObservableProperty] private bool _isExpanded = true;
-    [ObservableProperty] private int _depth;
+    public List<Item> Items { get; } = new();
 
     public int TotalCount => Items.Count + Children.Sum(c => c.TotalCount);
 
-    public string Chevron => IsExpanded ? "▾" : "▸";
+    public int RootOrder => FolderPathUtil.RootOrder(Name);
 
-    public Thickness Indent => new(Depth * 18, 0, 0, 0);
-
-    public FolderPathNodeViewModel(string name)
+    public FolderPathNodeViewModel(string name, FolderPathNodeViewModel? parent)
     {
         Name = name;
-        Items = new List<Item>();
+        Parent = parent;
     }
-
-    internal List<Item> ItemList => (List<Item>)Items;
 
     public FolderPathNodeViewModel GetOrAddChild(string segment)
     {
         var existing = Children.Find(c => c.Name == segment);
         if (existing != null) return existing;
-        var child = new FolderPathNodeViewModel(segment);
+        var child = new FolderPathNodeViewModel(segment, this);
         Children.Add(child);
         return child;
-    }
-
-    /// <summary>填充本节点条目（惰性，首次展开时调用）。</summary>
-    public void HydrateItems()
-    {
-        if (VisibleItems.Count > 0) return;
-        foreach (var item in Items.Take(30))
-            VisibleItems.Add(new ItemCardViewModel(item));
-    }
-
-    [RelayCommand]
-    private void Toggle()
-    {
-        IsExpanded = !IsExpanded;
-        if (IsExpanded)
-            HydrateItems();
-        OnPropertyChanged(nameof(Chevron));
-        OnPropertyChanged(nameof(Indent));
     }
 }

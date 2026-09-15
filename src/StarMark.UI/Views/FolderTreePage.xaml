@@ -5,89 +5,28 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:controls="using:StarMark.UI.Controls"
     xmlns:helpers="using:StarMark.UI.Helpers"
-    xmlns:viewModels="using:StarMark.UI.ViewModels"
     mc:Ignorable="d">
 
     <Page.Resources>
         <helpers:BoolToVisibilityConverter x:Key="BoolToVis"/>
     </Page.Resources>
 
-    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12,12,12,16">
-        <!-- 工具栏：来源分段 + 排序 -->
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,10">
-            <ComboBox x:Name="SortCombo" SelectedIndex="0" MinWidth="90"
-                      SelectionChanged="SortCombo_SelectionChanged">
-                <ComboBoxItem Content="最近" Tag="recent"/>
-                <ComboBoxItem Content="Stars 数" Tag="stars"/>
-                <ComboBoxItem Content="名称" Tag="name"/>
-            </ComboBox>
+        <TextBlock Grid.Row="0"
+                   Text="{x:Bind ViewModel.EmptyHint}"
+                   Style="{StaticResource MutedText}"
+                   HorizontalAlignment="Center" Margin="12,40,12,16"
+                   Visibility="{x:Bind ViewModel.HasEmptyHint, Converter={StaticResource BoolToVis}}"/>
 
-            <Border BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4">
-                <StackPanel Orientation="Horizontal">
-                    <Button x:Name="TreeSourceAll" Content="全部" Tag="all" Click="TreeSource_Click"
-                            Background="Transparent" BorderThickness="0" Padding="8,4"
-                            Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
-                    <Button x:Name="TreeSourceStar" Content="⭐" Tag="star" Click="TreeSource_Click"
-                            Background="Transparent" BorderThickness="0" Padding="8,4"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    <Button x:Name="TreeSourceBookmark" Content="🔖" Tag="bookmark" Click="TreeSource_Click"
-                            Background="Transparent" BorderThickness="0" Padding="8,4"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </Border>
-        </StackPanel>
-
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
-            <ItemsRepeater ItemsSource="{x:Bind ViewModel.VisibleNodes}">
-                <ItemsRepeater.Layout>
-                    <StackLayout Spacing="8"/>
-                </ItemsRepeater.Layout>
-                <ItemsRepeater.ItemTemplate>
-                    <DataTemplate x:DataType="viewModels:FolderPathNodeViewModel">
-                        <StackPanel>
-                            <Button Command="{x:Bind ToggleCommand}"
-                                    Background="Transparent" BorderThickness="0" HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Left" FontSize="14" FontWeight="SemiBold"
-                                    Padding="0,6" Margin="{x:Bind Indent, Mode=OneWay}">
-                                <Button.Content>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="{x:Bind Chevron, Mode=OneWay}" FontSize="10" VerticalAlignment="Center"/>
-                                        <TextBlock Text="{x:Bind Name}" VerticalAlignment="Center"/>
-                                        <TextBlock Text="{x:Bind TotalCount}" Style="{StaticResource MutedText}"
-                                                   VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button.Content>
-                            </Button>
-                            <ItemsRepeater ItemsSource="{x:Bind VisibleItems}" Visibility="{x:Bind IsExpanded, Converter={StaticResource BoolToVis}, Mode=OneWay}">
-                                <ItemsRepeater.Layout>
-                                    <StackLayout Spacing="6"/>
-                                </ItemsRepeater.Layout>
-                                <ItemsRepeater.ItemTemplate>
-                                    <DataTemplate x:DataType="viewModels:ItemCardViewModel">
-                                        <controls:ItemCard ViewModel="{x:Bind}"
-                                                           OpenRequested="Card_OpenRequested"
-                                                           EditNoteRequested="Card_EditNoteRequested"
-                                                           EditTagsRequested="Card_EditTagsRequested"
-                                                           HideRequested="Card_HideRequested"/>
-                                    </DataTemplate>
-                                </ItemsRepeater.ItemTemplate>
-                            </ItemsRepeater>
-                        </StackPanel>
-                    </DataTemplate>
-                </ItemsRepeater.ItemTemplate>
-            </ItemsRepeater>
-
-            <TextBlock Text="{x:Bind ViewModel.EmptyHint}" Style="{StaticResource MutedText}"
-                       HorizontalAlignment="Center" Margin="0,40,0,16"/>
-            </StackPanel>
-        </ScrollViewer>
+        <!-- 树节点内容在代码中构建（文件夹头 / ItemCard），惰性挂载词条 -->
+        <TreeView x:Name="FolderTree" Grid.Row="1"
+                  Padding="12,6,12,12"
+                  Expanding="FolderTree_Expanding"/>
     </Grid>
 </Page>

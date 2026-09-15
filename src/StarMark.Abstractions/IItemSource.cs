@@ -59,4 +59,7 @@ public sealed class SearchFilter
 
     /// <summary>是否包含隐藏条目（默认排除）。</summary>
     public bool IncludeHidden { get; init; }
+
+    /// <summary>排序：relevance(默认，按 FTS 相关度) / recent / stars / name。</summary>
+    public string? Sort { get; init; }
 }

@@ -30,6 +30,13 @@ public sealed class ItemRepository : IItemRepository
         using var conn = _factory.Open();
         // 阶段 1：FTS5 MATCH 先缩小文本范围（命中倒排索引，毫秒级）
         // 阶段 2：JOIN 主表做数值过滤 + 完整字段 hydration
+        var orderBy = filter.Sort switch
+        {
+            "stars" => "i.stars_count DESC NULLS LAST, MIN(f.rank)",
+            "name" => "i.title COLLATE NOCASE ASC, MIN(f.rank)",
+            "recent" => "i.updated_at DESC, MIN(f.rank)",
+            _ => "MIN(f.rank)",
+        };
         var sql = @"
             WITH fts_hits AS (
                 SELECT rowid, bm25(items_fts) AS rank
@@ -51,7 +58,7 @@ public sealed class ItemRepository : IItemRepository
               AND (@date_from IS NULL OR i.updated_at >= @date_from)
               AND (@include_hidden = 1 OR i.hidden = 0)
             GROUP BY i.id
-            ORDER BY MIN(f.rank);";
+            ORDER BY " + orderBy + ";";
 
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;

@@ -70,7 +70,7 @@ public partial class App : Application
         // ViewModel 层
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<SearchPageViewModel>();
-        services.AddTransient<FolderTreePageViewModel>();
+        services.AddSingleton<FolderTreePageViewModel>();
         services.AddTransient<TagsPageViewModel>();
         services.AddTransient<ActivityPageViewModel>();
         services.AddTransient<HiddenPageViewModel>();

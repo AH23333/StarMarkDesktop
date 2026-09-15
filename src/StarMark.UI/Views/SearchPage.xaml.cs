@@ -42,4 +42,10 @@ public sealed partial class SearchPage : Page
         if (!wasHidden && nowHidden && !ViewModel.ShowHidden)
             ViewModel.RemoveItem(vm.Id);
     }
+
+    private void Card_TagRemoveRequested(object sender, (ViewModels.ItemCardViewModel VM, string Tag) e)
+        => ItemCardActions.RemoveTag(this.XamlRoot, e.VM, e.Tag);
+
+    private void Card_TagAddRequested(object sender, ViewModels.ItemCardViewModel vm)
+        => ItemCardActions.AddTag(this.XamlRoot, vm);
 }

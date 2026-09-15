@@ -37,7 +37,7 @@
                     <TextBlock x:Name="StatusText" Style="{StaticResource MutedText}" Text="索引就绪"/>
                 </StackPanel>
 
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                <StackPanel x:Name="TopBarButtons" Grid.Column="2" Orientation="Horizontal" Spacing="6">
                     <Button x:Name="SyncButton" Style="{StaticResource SecondaryButton}" Click="SyncButton_Click">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <ProgressRing x:Name="SyncProgress" Width="12" Height="12" IsActive="False" Visibility="Collapsed"/>
@@ -63,27 +63,24 @@
         </Border>
 
         <!-- 工具栏 -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="16,6,16,2" Spacing="8">
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="16,6,16,2" Spacing="8" VerticalAlignment="Center">
             <ComboBox x:Name="SortCombo" MinWidth="90" SelectedIndex="0"
                       SelectionChanged="SortCombo_SelectionChanged">
-                <ComboBoxItem Content="相关性" Tag="relevance"/>
                 <ComboBoxItem Content="最近" Tag="recent"/>
                 <ComboBoxItem Content="Stars 数" Tag="stars"/>
                 <ComboBoxItem Content="名称" Tag="name"/>
             </ComboBox>
 
-            <!-- 来源分段控件 -->
-            <Border BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4">
+            <!-- 来源分段控件（唯一一处，全局生效） -->
+            <Border x:Name="SourceGroup"
+                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4">
                 <StackPanel Orientation="Horizontal">
                     <Button x:Name="SourceAll" Content="全部" Click="SourceFilter_Click" Tag="all"
-                            Background="Transparent" BorderThickness="0" Padding="10,4"
-                            Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                            Background="Transparent" BorderThickness="0" Padding="10,4"/>
                     <Button x:Name="SourceStar" Content="⭐" Click="SourceFilter_Click" Tag="star"
-                            Background="Transparent" BorderThickness="0" Padding="10,4"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            Background="Transparent" BorderThickness="0" Padding="10,4"/>
                     <Button x:Name="SourceBookmark" Content="🔖" Click="SourceFilter_Click" Tag="bookmark"
-                            Background="Transparent" BorderThickness="0" Padding="10,4"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            Background="Transparent" BorderThickness="0" Padding="10,4"/>
                 </StackPanel>
             </Border>
 
@@ -102,11 +99,6 @@
                         IsSettingsVisible="False" IsPaneToggleButtonVisible="False"
                         SelectionChanged="NavView_SelectionChanged">
             <NavigationView.MenuItems>
-                <NavigationViewItem Content="搜索" Tag="search">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE721;"/>
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
                 <NavigationViewItem Content="文件夹" Tag="tree">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE838;"/>

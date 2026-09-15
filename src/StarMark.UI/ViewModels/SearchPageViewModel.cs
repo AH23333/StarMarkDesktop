@@ -55,6 +55,13 @@ public partial class SearchPageViewModel : ObservableObject
             IncludeSize = true,
             IncludeDate = true,
             IncludeHidden = ShowHidden,
+            Type = CurrentSource switch
+            {
+                "star" => ItemType.GitHubStar,
+                "bookmark" => ItemType.Bookmark,
+                _ => null,
+            },
+            Sort = CurrentSort,
         };
 
         try
@@ -89,6 +96,10 @@ public partial class SearchPageViewModel : ObservableObject
     }
 
     partial void OnShowHiddenChanged(bool value) { _ = SearchAsync(); }
+
+    partial void OnCurrentSourceChanged(string value) { _ = SearchAsync(); }
+
+    partial void OnCurrentSortChanged(string value) { _ = SearchAsync(); }
 }
 
 internal static class EnumerableEx { public static void Let<T>(this T? item, Action<T> action) where T : class { if (item != null) action(item); } }

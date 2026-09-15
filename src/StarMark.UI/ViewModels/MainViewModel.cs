@@ -16,7 +16,7 @@ public partial class MainViewModel : ObservableObject
     private readonly SyncCoordinator _syncCoordinator;
     private readonly IItemRepository _repository;
 
-    [ObservableProperty] private string _currentPageTag = "search";
+    [ObservableProperty] private string _currentPageTag = "tree";
     [ObservableProperty] private string _statusText = "索引就绪";
     [ObservableProperty] private string _statusDotBrush = "StatusOkBrush";
     [ObservableProperty] private bool _isSyncing;

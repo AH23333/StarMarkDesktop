@@ -34,6 +34,7 @@ public sealed partial class MainWindow : Window
             ?? throw new InvalidOperationException("MainViewModel 未注册");
 
         SetupImmersiveTitleBar();
+        SetSourceButtonsHighlight("all");
 
         // 恢复并应用上次主题偏好
         _themePref = _settings.LoadTheme();
@@ -58,8 +59,25 @@ public sealed partial class MainWindow : Window
             };
         }
 
-        // 默认选中搜索页（触发 SelectionChanged → 导航）
-        NavView.SelectedItem = NavView.MenuItems[0];
+        // 默认选中文件夹页（触发 SelectionChanged → 导航）
+        var startTag = Environment.GetEnvironmentVariable("STARMARK_START_PAGE");
+        var startIndex = startTag switch { "tags" => 1, "tree" => 0, _ => 0 };
+        NavView.SelectedItem = NavView.MenuItems[startIndex];
+
+        // 开发辅助：启动即搜索（STARMARK_START_QUERY），用于冒烟渲染卡片
+        var startQuery = Environment.GetEnvironmentVariable("STARMARK_START_QUERY");
+        if (!string.IsNullOrWhiteSpace(startQuery))
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                ViewModel.CurrentPageTag = "search";
+                NavView.SelectedItem = null;
+                ContentFrame.Navigate(typeof(SearchPage));
+                PushToolbarToContent();
+                if (ContentFrame.Content is SearchPage sp)
+                    sp.ViewModel.Query = startQuery;
+            });
+        }
     }
 
     private IntPtr MainHwnd => WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -81,10 +99,13 @@ public sealed partial class MainWindow : Window
 
     private void ApplyDragRects()
     {
-        // 拖拽区 = 顶栏全宽，但留出右侧系统窗口按钮区域（约 138px）
+        // 拖拽区 = 顶栏中段（logo + 状态），右侧留给交互按钮与系统窗口按钮。
+        // 此前拖拽区覆盖到 width-140，把同步/主题/设置按钮整块吞掉 → 顶部功能失效。
         var width = AppWindow.Size.Width;
         var height = TopBar.ActualHeight > 0 ? (int)TopBar.ActualHeight : 52;
-        var dragW = Math.Max(0, width - 140);
+        var buttonsRightPad = 150;                       // 顶栏右侧 padding（避开系统窗口按钮）
+        var buttonsWidth = TopBarButtons.ActualWidth > 0 ? TopBarButtons.ActualWidth : 150;
+        var dragW = Math.Max(0, width - buttonsRightPad - (int)buttonsWidth - 8);
         AppWindow.TitleBar.SetDragRectangles(new RectInt32[]
         {
             new() { X = 0, Y = 0, Width = dragW, Height = height },
@@ -172,6 +193,7 @@ public sealed partial class MainWindow : Window
         {
             ViewModel.CurrentPageTag = tag;
             NavigateToPage(tag);
+            PushToolbarToContent();
         }
     }
 
@@ -179,6 +201,7 @@ public sealed partial class MainWindow : Window
     {
         NavView.SelectedItem = null;
         NavigateToPage(tag);
+        PushToolbarToContent();
     }
 
     private void NavigateToPage(string tag, object? param = null)
@@ -210,18 +233,13 @@ public sealed partial class MainWindow : Window
 
             if (!string.IsNullOrWhiteSpace(q) && ViewModel.CurrentPageTag != "search")
             {
-                // 切换到搜索页并把查询词传给新页面 ViewModel
+                // 顶部搜索框常驻：输入自动切到搜索页（搜索页不在导航菜单内）
                 ViewModel.CurrentPageTag = "search";
-                foreach (var mi in NavView.MenuItems)
-                {
-                    if (mi is NavigationViewItem ni && ni.Tag as string == "search")
-                    {
-                        NavView.SelectedItem = ni;
-                        break;
-                    }
-                }
+                NavView.SelectedItem = null;
                 DispatcherQueue.TryEnqueue(() =>
                 {
+                    ContentFrame.Navigate(typeof(SearchPage));
+                    PushToolbarToContent();
                     if (ContentFrame.Content is SearchPage sp)
                         sp.ViewModel.Query = q;
                 });
@@ -234,36 +252,71 @@ public sealed partial class MainWindow : Window
         _debounceTimer.Start();
     }
 
-    // ===== 工具栏事件 =====
+    // ===== 工具栏事件（全局唯一：排序、来源、显示隐藏）=====
 
     private void SortCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // 由子页面各自处理
+        if (SortCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+            PushToolbarToContent();
     }
+
+    private string _currentSource = "all";
 
     private void SourceFilter_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.Tag is string tag)
-        {
-            var accent = (SolidColorBrush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"];
-            var muted = (SolidColorBrush)Application.Current.Resources["TextFillColorSecondaryBrush"];
-            foreach (var b in new[] { SourceAll, SourceStar, SourceBookmark })
-                b.Foreground = muted;
-            btn.Foreground = accent;
-        }
+        if (sender is not Button btn || btn.Tag is not string tag) return;
+        _currentSource = tag;
+        SetSourceButtonsHighlight(tag);
+        PushToolbarToContent();
     }
 
     private void ShowHidden_Click(object sender, RoutedEventArgs e)
     {
-        if (ContentFrame.Content is SearchPage sp)
+        PushToolbarToContent();
+    }
+
+    private void SetSourceButtonsHighlight(string source)
+    {
+        var accent = (SolidColorBrush)Application.Current.Resources["AccentFillColorDefaultBrush"];
+        var muted = (SolidColorBrush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        var white = new SolidColorBrush(Colors.White);
+        foreach (var (btn, tag) in new[] { (SourceAll, "all"), (SourceStar, "star"), (SourceBookmark, "bookmark") })
         {
-            sp.ViewModel.ShowHidden = ShowHiddenCheck.IsChecked == true;
-        }
-        else if (ContentFrame.Content is FolderTreePage ftp)
-        {
-            ftp.ViewModel.ShowHidden = ShowHiddenCheck.IsChecked == true;
+            var selected = tag == source;
+            btn.Background = selected ? accent : new SolidColorBrush(Colors.Transparent);
+            btn.Foreground = selected ? white : muted;
         }
     }
+
+    /// <summary>把全局工具栏状态下发到当前页面（搜索/文件夹页），并触发重新查询。</summary>
+    private void PushToolbarToContent()
+    {
+        // XAML 解析期间（如 SortCombo 初始 SelectedIndex）相关控件可能尚未创建
+        if (ContentFrame == null || ShowHiddenCheck == null) return;
+        if (ContentFrame.Content is not Page page) return;
+        var source = CurrentSourceTag();
+        var sort = CurrentSortTag();
+        var hidden = ShowHiddenCheck.IsChecked == true;
+
+        switch (page)
+        {
+            case SearchPage sp:
+                sp.ViewModel.CurrentSource = source;
+                sp.ViewModel.CurrentSort = sort;
+                sp.ViewModel.ShowHidden = hidden;
+                break;
+            case FolderTreePage ftp:
+                ftp.ViewModel.CurrentSource = source;
+                ftp.ViewModel.CurrentSort = sort;
+                ftp.ViewModel.ShowHidden = hidden;
+                break;
+        }
+    }
+
+    private string CurrentSourceTag() => _currentSource;
+
+    private string CurrentSortTag()
+        => SortCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag ? tag : "recent";
 
     private void SyncButton_Click(object sender, RoutedEventArgs e)
     {
@@ -328,6 +381,7 @@ public sealed partial class MainWindow : Window
         ViewModel.CurrentPageTag = "settings";
         NavView.SelectedItem = null;
         ContentFrame.Navigate(typeof(SettingsPage));
+        PushToolbarToContent();
     }
 
     public void RefreshThemeIcon(ThemePreference pref)
