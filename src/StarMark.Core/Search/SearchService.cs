@@ -82,19 +82,53 @@ public sealed class SearchService
             }
         }
 
-        // 截断到 MaxResults
-        if (merged.Count > filter.MaxResults)
+        // 语言筛选（SQL 侧已过滤已入库条目；此处兜底过滤实时源返回的条目）。
+        if (!string.IsNullOrEmpty(filter.Language))
         {
-            merged = merged.Take(filter.MaxResults).ToList();
+            merged = merged.Where(i => string.Equals(GetLanguage(i), filter.Language, StringComparison.OrdinalIgnoreCase))
+                           .ToList();
+        }
+
+        // 结果分段（对应扩展 selectors.ts:56-107 的 isStrong 规则）：
+        //   精确匹配 = title 以关键词开头（不分大小写）或 URI 包含关键词。
+        //   精确段在前、相关段在后，段内保持原排序（FTS 相关度 / 用户所选排序）。
+        var keywordTrimmed = keyword.Trim();
+        var exact = new List<Item>();
+        var related = new List<Item>();
+        foreach (var item in merged)
+        {
+            var isStrong = item.Title.StartsWith(keywordTrimmed, StringComparison.OrdinalIgnoreCase)
+                           || (!string.IsNullOrEmpty(item.Uri) && item.Uri.Contains(keywordTrimmed, StringComparison.OrdinalIgnoreCase));
+            (isStrong ? exact : related).Add(item);
+        }
+        var ordered = exact.Concat(related).ToList();
+
+        // 截断到 MaxResults
+        if (ordered.Count > filter.MaxResults)
+        {
+            ordered = ordered.Take(filter.MaxResults).ToList();
         }
 
         sw.Stop();
         return new SearchResult
         {
-            Items = merged,
-            Total = merged.Count,
+            Items = ordered,
+            Total = ordered.Count,
             ElapsedMs = sw.ElapsedMilliseconds,
+            ExactCount = Math.Min(exact.Count, ordered.Count),
         };
+    }
+
+    /// <summary>取条目主语言（仅 GitHubStar 有值）。供语言筛选兜底使用。</summary>
+    private static string? GetLanguage(Item item)
+    {
+        if (item.Type != ItemType.GitHubStar || string.IsNullOrEmpty(item.ExtraJson)) return null;
+        try
+        {
+            var meta = System.Text.Json.JsonSerializer.Deserialize<GitHubStarMeta>(item.ExtraJson);
+            return string.IsNullOrEmpty(meta?.Language) ? null : meta.Language;
+        }
+        catch (System.Text.Json.JsonException) { return null; }
     }
 
     private static async Task<SearchResult> SafeAwait(Task<SearchResult> task, CancellationToken ct)

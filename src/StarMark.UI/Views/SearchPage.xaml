@@ -58,7 +58,44 @@
                          Visibility="{x:Bind ViewModel.IsSearching, Mode=OneWay, Converter={StaticResource BoolToVis}}"
                          Height="2" Margin="0,0,0,8"/>
 
-            <ItemsRepeater x:Name="ResultsRepeater" ItemsSource="{x:Bind ViewModel.Results, Mode=OneWay}">
+            <!-- 语言筛选维度（P2-7）：GitHubStar 主语言，选项由最近一次未过滤搜索聚合 -->
+            <ComboBox ItemsSource="{x:Bind ViewModel.AvailableLanguages, Mode=OneWay}"
+                      SelectedItem="{x:Bind ViewModel.CurrentLanguage, Mode=TwoWay}"
+                      MinWidth="120" Margin="0,0,0,8" FontSize="12"
+                      PlaceholderText="语言：全部"
+                      Visibility="{x:Bind ViewModel.HasResults, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+
+            <!-- 结果分段（P2-7）：精确匹配段在前，相关结果段在后，段内保持原排序 -->
+            <TextBlock Text="{x:Bind ViewModel.ExactHeader, Mode=OneWay}" FontSize="12"
+                       FontWeight="SemiBold" Opacity="0.75" Margin="2,2,0,6"
+                       Visibility="{x:Bind ViewModel.HasExact, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+            <ItemsRepeater x:Name="ExactRepeater" ItemsSource="{x:Bind ViewModel.ExactResults, Mode=OneWay}">
+                    <ItemsRepeater.Layout>
+                        <StackLayout Spacing="6"/>
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="viewModels:ItemCardViewModel">
+                            <Grid>
+                                <controls:ItemCard x:Name="Card" ViewModel="{x:Bind}"
+                                                   OpenRequested="Card_OpenRequested"
+                                                   EditNoteRequested="Card_EditNoteRequested"
+                                                   EditTagsRequested="Card_EditTagsRequested"
+                                                   HideRequested="Card_HideRequested"
+                                                   PinRequested="Card_PinRequested"
+                                                   CopyLinkRequested="Card_CopyLinkRequested"
+                                                   OpenLocationRequested="Card_OpenLocationRequested"
+                                                   TagFilterRequested="Card_TagFilterRequested"
+                                                   TagRemoveRequested="Card_TagRemoveRequested"
+                                                   TagAddRequested="Card_TagAddRequested"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+
+            <TextBlock Text="{x:Bind ViewModel.RelatedHeader, Mode=OneWay}" FontSize="12"
+                       FontWeight="SemiBold" Opacity="0.75" Margin="2,10,0,6"
+                       Visibility="{x:Bind ViewModel.HasRelated, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+            <ItemsRepeater x:Name="RelatedRepeater" ItemsSource="{x:Bind ViewModel.RelatedResults, Mode=OneWay}">
                     <ItemsRepeater.Layout>
                         <StackLayout Spacing="6"/>
                     </ItemsRepeater.Layout>

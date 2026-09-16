@@ -66,6 +66,10 @@ public sealed class ItemRepository : IItemRepository
             "stars" => "i.stars_count DESC NULLS LAST, MIN(f.rank)",
             "name" => "i.title COLLATE NOCASE ASC, MIN(f.rank)",
             "recent" => "i.updated_at DESC, MIN(f.rank)",
+            // 最近 Star：GitHubStar 用 extra_json 的 starredAt（无则退回 updated_at）。
+            "starred" => "COALESCE(CAST(json_extract(i.extra_json, '$.StarredAt') AS INTEGER), i.updated_at) DESC, MIN(f.rank)",
+            // 最近收藏：条目入库时间。
+            "collected" => "i.created_at DESC, MIN(f.rank)",
             _ => "MIN(f.rank)",
         };
         var sql = @"
@@ -87,6 +91,7 @@ public sealed class ItemRepository : IItemRepository
             WHERE (@type_filter IS NULL OR i.type = @type_filter)
               AND (@stars_min IS NULL OR i.stars_count >= @stars_min)
               AND (@date_from IS NULL OR i.updated_at >= @date_from)
+              AND (@lang IS NULL OR json_extract(i.extra_json, '$.Language') = @lang)
               AND (@include_hidden = 1 OR i.hidden = 0)"
             + BuildTagClause(filter.Tags, "i") + @"
             GROUP BY i.id
@@ -100,6 +105,7 @@ public sealed class ItemRepository : IItemRepository
         cmd.Parameters.AddWithValue("@type_filter", (object?)filter.Type?.ToString().ToLowerInvariant() ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@stars_min", (object?)filter.StarsMin ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@date_from", (object?)filter.DateFrom ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@lang", (object?)filter.Language ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@include_hidden", filter.IncludeHidden ? 1 : 0);
         BindTagParams(cmd, filter.Tags);
 

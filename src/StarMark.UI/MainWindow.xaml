@@ -73,6 +73,8 @@
             <ComboBox x:Name="SortCombo" MinWidth="90" SelectedIndex="0"
                       SelectionChanged="SortCombo_SelectionChanged">
                 <ComboBoxItem Content="最近" Tag="recent"/>
+                <ComboBoxItem Content="最近 Star" Tag="starred"/>
+                <ComboBoxItem Content="最近收藏" Tag="collected"/>
                 <ComboBoxItem Content="Stars 数" Tag="stars"/>
                 <ComboBoxItem Content="名称" Tag="name"/>
             </ComboBox>

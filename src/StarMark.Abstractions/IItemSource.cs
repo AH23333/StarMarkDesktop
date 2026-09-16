@@ -60,8 +60,14 @@ public sealed class SearchFilter
     /// <summary>是否包含隐藏条目（默认排除）。</summary>
     public bool IncludeHidden { get; init; }
 
-    /// <summary>排序：relevance(默认，按 FTS 相关度) / recent / stars / name。</summary>
+    /// <summary>排序：relevance(默认，按 FTS 相关度) / recent / starred(最近 Star) / collected(最近收藏) / stars / name。</summary>
     public string? Sort { get; init; }
+
+    /// <summary>
+    /// 语言筛选（GitHubStar 主语言，取 extra_json 的 Language 字段）。
+    /// null/空表示不过滤。对齐扩展搜索工具栏的语言维度，见对比方案 P2-7。
+    /// </summary>
+    public string? Language { get; init; }
 
     /// <summary>
     /// 标签过滤（AND 语义）：条目必须同时具备这里列出的全部标签。

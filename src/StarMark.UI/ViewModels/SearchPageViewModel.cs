@@ -37,6 +37,27 @@ public partial class SearchPageViewModel : ObservableObject
 
     public ObservableCollection<ItemCardViewModel> Results { get; } = new();
 
+    // ───────── 结果分段（P2-7，对齐扩展「精确匹配 / 相关结果」两段）─────────
+    // 与 Results 持有同一批 VM 实例（分区展示），键盘导航仍走扁平 Results。
+
+    /// <summary>精确匹配段：标题以关键词开头或 URI 包含关键词。</summary>
+    public ObservableCollection<ItemCardViewModel> ExactResults { get; } = new();
+
+    /// <summary>相关结果段：其余命中。</summary>
+    public ObservableCollection<ItemCardViewModel> RelatedResults { get; } = new();
+
+    [ObservableProperty] private bool _hasExact;
+    [ObservableProperty] private bool _hasRelated;
+    [ObservableProperty] private string _exactHeader = "精确匹配";
+    [ObservableProperty] private string _relatedHeader = "相关结果";
+
+    // ───────── 语言筛选维度（P2-7，GitHubStar 主语言）─────────
+
+    [ObservableProperty] private string _currentLanguage = string.Empty;
+
+    /// <summary>语言下拉可选项：由最近一次（未按语言过滤的）搜索结果聚合而来。</summary>
+    public ObservableCollection<string> AvailableLanguages { get; } = new();
+
     public ItemCardViewModel? SelectedItem
         => SelectedIndex >= 0 && SelectedIndex < Results.Count ? Results[SelectedIndex] : null;
 
@@ -67,11 +88,19 @@ public partial class SearchPageViewModel : ObservableObject
     public void Reset()
     {
         Results.Clear();
+        ExactResults.Clear();
+        RelatedResults.Clear();
+        HasExact = false;
+        HasRelated = false;
         ClearSelection();
         HasResults = false;
         IsSearching = false;
         StatusText = string.Empty;
         EmptyHint = "输入关键词开始搜索";
+        // 语言筛选与选项一并复位，避免残留过滤让下次搜索静默变窄。
+        if (CurrentLanguage.Length > 0)
+            CurrentLanguage = string.Empty; // 触发 OnCurrentLanguageChanged → 幂等空查询
+        AvailableLanguages.Clear();
         // 标签过滤一并无条件清空：否则下次进入搜索页会按上次残留的标签直接出结果。
         // 先清标签再清 Query，避免中间态触发一次带标签的空查询。
         if (ActiveTags.Count > 0)
@@ -120,6 +149,7 @@ public partial class SearchPageViewModel : ObservableObject
                 _ => null,
             },
             Sort = CurrentSort,
+            Language = string.IsNullOrEmpty(CurrentLanguage) ? null : CurrentLanguage,
             Tags = ActiveTags.Count > 0 ? ActiveTags.Select(t => t.Name).ToArray() : null,
         };
 
@@ -129,12 +159,36 @@ public partial class SearchPageViewModel : ObservableObject
             if (token.IsCancellationRequested) return;
 
             Results.Clear();
+            ExactResults.Clear();
+            RelatedResults.Clear();
             var keyword = Query.Trim();
-            foreach (var item in result.Items)
+            for (var i = 0; i < result.Items.Count; i++)
             {
-                var vm = new ItemCardViewModel(item);
+                var vm = new ItemCardViewModel(result.Items[i]);
                 vm.HighlightQuery = keyword;
                 Results.Add(vm);
+                // 分段：Items 前 ExactCount 条为精确匹配，其余为相关结果
+                if (i < result.ExactCount) ExactResults.Add(vm); else RelatedResults.Add(vm);
+            }
+            HasExact = ExactResults.Count > 0;
+            HasRelated = RelatedResults.Count > 0;
+            ExactHeader = $"精确匹配 ({ExactResults.Count})";
+            RelatedHeader = $"相关结果 ({RelatedResults.Count})";
+
+            // 语言下拉选项：仅在「未按语言过滤」时重建，避免过滤后列表塌缩成单项
+            if (string.IsNullOrEmpty(CurrentLanguage))
+            {
+                AvailableLanguages.Clear();
+                foreach (var lang in result.Items
+                             .Where(it => it.Type == ItemType.GitHubStar && !string.IsNullOrEmpty(it.ExtraJson))
+                             .Select(it => TryGetLanguage(it))
+                             .Where(l => l is not null)
+                             .Distinct(StringComparer.OrdinalIgnoreCase)
+                             .OrderBy(l => l, StringComparer.OrdinalIgnoreCase)
+                             .Cast<string>())
+                {
+                    AvailableLanguages.Add(lang);
+                }
             }
 
             ClearSelection();
@@ -157,7 +211,18 @@ public partial class SearchPageViewModel : ObservableObject
         }
     }
 
-    public void RemoveItem(long id) { Results.FirstOrDefault(r => r.Id == id)?.Let(_ => Results.Remove(_)); }
+    public void RemoveItem(long id)
+    {
+        var vm = Results.FirstOrDefault(r => r.Id == id);
+        if (vm is null) return;
+        Results.Remove(vm);
+        ExactResults.Remove(vm);
+        RelatedResults.Remove(vm);
+        HasExact = ExactResults.Count > 0;
+        HasRelated = RelatedResults.Count > 0;
+        ExactHeader = $"精确匹配 ({ExactResults.Count})";
+        RelatedHeader = $"相关结果 ({RelatedResults.Count})";
+    }
 
     partial void OnQueryChanged(string value)
     {
@@ -169,6 +234,20 @@ public partial class SearchPageViewModel : ObservableObject
     partial void OnCurrentSourceChanged(string value) { _ = SearchAsync(); }
 
     partial void OnCurrentSortChanged(string value) { _ = SearchAsync(); }
+
+    partial void OnCurrentLanguageChanged(string value) { _ = SearchAsync(); }
+
+    /// <summary>解析条目主语言（仅 GitHubStar）。供语言下拉聚合。</summary>
+    private static string? TryGetLanguage(Item it)
+    {
+        if (string.IsNullOrEmpty(it.ExtraJson)) return null;
+        try
+        {
+            var meta = System.Text.Json.JsonSerializer.Deserialize<StarMark.Abstractions.GitHubStarMeta>(it.ExtraJson);
+            return string.IsNullOrEmpty(meta?.Language) ? null : meta.Language;
+        }
+        catch (System.Text.Json.JsonException) { return null; }
+    }
 
     // ───────── 标签过滤（AND 语义，对齐扩展 tagFilters + 吸顶 banner）─────────
 
@@ -208,5 +287,3 @@ public partial class TagFilterChip : ObservableObject
 
     public TagFilterChip(string name) => Name = name;
 }
-
-internal static class EnumerableEx { public static void Let<T>(this T? item, Action<T> action) where T : class { if (item != null) action(item); } }

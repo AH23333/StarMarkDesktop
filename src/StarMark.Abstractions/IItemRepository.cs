@@ -11,6 +11,10 @@ public sealed class SearchResult
     public required IReadOnlyList<Item> Items { get; init; }
     public int Total { get; init; }
     public long ElapsedMs { get; init; }
+
+    /// <summary>精确匹配条数（Items 前 ExactCount 条为「精确匹配」，其余为「相关结果」）。
+    /// 对应扩展 selectors.ts 的 isStrong 分段，见对比方案 P2-7。</summary>
+    public int ExactCount { get; init; }
 }
 
 /// <summary>仓储接口。供 ItemRepository 实现，UI/AppService 调用。</summary>

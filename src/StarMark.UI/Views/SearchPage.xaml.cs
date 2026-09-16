@@ -39,7 +39,12 @@ public sealed partial class SearchPage : Page
         if (index < 0) return;
         try
         {
-            var element = ResultsRepeater.GetOrCreateElement(index);
+            // 分段布局：扁平索引映射到「精确匹配 / 相关结果」两段的局部索引
+            var exactCount = ViewModel.ExactResults.Count;
+            var (repeater, localIndex) = index < exactCount
+                ? (ExactRepeater, index)
+                : (RelatedRepeater, index - exactCount);
+            var element = repeater.GetOrCreateElement(localIndex);
             element.StartBringIntoView();
         }
         catch (Exception ex)
