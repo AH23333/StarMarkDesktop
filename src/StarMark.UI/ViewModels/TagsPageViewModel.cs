@@ -20,7 +20,9 @@ public partial class TagsPageViewModel : ObservableObject
     public ObservableCollection<ItemCardViewModel> FilteredResults { get; } = new();
 
     [ObservableProperty] private bool _hasActiveFilter;
-    [ObservableProperty] private string _activeFilterText = string.Empty;
+
+    /// <summary>当前生效的标签筛选（chip，可单个移除）。对齐扩展 tag-banner。</summary>
+    public ObservableCollection<TagFilterChip> ActiveFilterChips { get; } = new();
 
     private List<string> _activeFilters = new();
 
@@ -60,9 +62,7 @@ public partial class TagsPageViewModel : ObservableObject
             _activeFilters.Add(tagName);
 
         HasActiveFilter = _activeFilters.Count > 0;
-        ActiveFilterText = _activeFilters.Count > 0
-            ? string.Join(", ", _activeFilters.Select(t => $"#{t}"))
-            : string.Empty;
+        SyncFilterChips();
 
         // 刷新标签选中状态
         foreach (var tag in Tags)
@@ -76,7 +76,7 @@ public partial class TagsPageViewModel : ObservableObject
     {
         _activeFilters.Clear();
         HasActiveFilter = false;
-        ActiveFilterText = string.Empty;
+        SyncFilterChips();
         foreach (var tag in Tags)
             tag.IsSelected = false;
         FilteredResults.Clear();
@@ -107,12 +107,19 @@ public partial class TagsPageViewModel : ObservableObject
         }
     }
 
+    private void SyncFilterChips()
+    {
+        ActiveFilterChips.Clear();
+        foreach (var t in _activeFilters)
+            ActiveFilterChips.Add(new TagFilterChip(t));
+    }
+
     /// <summary>卡片标签点击：以单个标签作为筛选条件（导航参数传入）。</summary>
     public async Task FilterByTagAsync(string tagName)
     {
         _activeFilters = new List<string> { tagName };
         HasActiveFilter = true;
-        ActiveFilterText = $"#{tagName}";
+        SyncFilterChips();
         foreach (var tag in Tags)
             tag.IsSelected = tag.Name == tagName;
         await ApplyFilterAsync();

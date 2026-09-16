@@ -12,6 +12,7 @@
 
     <Page.Resources>
         <helpers:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <helpers:ContainedTagColorConverter x:Key="ContainedTagColor"/>
     </Page.Resources>
 
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12,12,12,16">
@@ -20,12 +21,30 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- 标签筛选栏 -->
+        <!-- 标签筛选栏：当前生效的标签以 chip 展示，可单个 ✕ 移除或一键清除（对齐扩展 tag-banner） -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8"
                     Visibility="{x:Bind ViewModel.HasActiveFilter, Mode=OneWay, Converter={StaticResource BoolToVis}}"
                     Margin="0,0,0,10">
-            <TextBlock Text="{x:Bind ViewModel.ActiveFilterText, Mode=OneWay}"
-                       Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+            <TextBlock Text="标签筛选" FontSize="11" Style="{StaticResource MutedText}" VerticalAlignment="Center"/>
+            <ItemsRepeater ItemsSource="{x:Bind ViewModel.ActiveFilterChips, Mode=OneWay}">
+                <ItemsRepeater.Layout>
+                    <StackLayout Orientation="Horizontal" Spacing="4"/>
+                </ItemsRepeater.Layout>
+                <ItemsRepeater.ItemTemplate>
+                    <DataTemplate x:DataType="viewModels:TagFilterChip">
+                        <Button Click="RemoveFilterChip_Click" Tag="{x:Bind Name}"
+                                Padding="8,2" CornerRadius="10" BorderThickness="0"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                ToolTipService.ToolTip="移除该标签筛选">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="{x:Bind Name}" FontSize="11"
+                                           Foreground="{x:Bind Name, Converter={StaticResource ContainedTagColor}}"/>
+                                <TextBlock Text="✕" FontSize="8" Opacity="0.55" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </DataTemplate>
+                </ItemsRepeater.ItemTemplate>
+            </ItemsRepeater>
             <Button Content="清除" Click="ClearFilters_Click"
                     Style="{StaticResource SecondaryButton}" Padding="6,2"/>
         </StackPanel>

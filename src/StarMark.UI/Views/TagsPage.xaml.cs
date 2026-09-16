@@ -51,6 +51,12 @@ public sealed partial class TagsPage : Page
         _ = ViewModel.ClearFiltersCommand.ExecuteAsync(null);
     }
 
+    private void RemoveFilterChip_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string tagName })
+            _ = ViewModel.ToggleTagCommand.ExecuteAsync(tagName);
+    }
+
     private void Card_OpenRequested(object sender, long itemId)
         => ItemCardActions.Open(this.XamlRoot, itemId);
 
