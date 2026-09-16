@@ -63,6 +63,12 @@ public interface IItemRepository
     /// <summary>读取最近的活动事件（活动时间线）。见扩展对比方案 P1-3。</summary>
     Task<IReadOnlyList<ActivityRecord>> GetActivityAsync(int limit, CancellationToken ct);
 
+    /// <summary>读取同步状态键值（sync_state 表）。见扩展对比方案 P1-4。</summary>
+    Task<string?> GetSyncStateAsync(string key, CancellationToken ct);
+
+    /// <summary>写入同步状态键值（sync_state 表，幂等 upsert）。见扩展对比方案 P1-4。</summary>
+    Task SetSyncStateAsync(string key, string value, CancellationToken ct);
+
     /// <summary>获取用户置顶条目（桌面快捷启动组件），按更新时间倒序。</summary>
     Task<IReadOnlyList<Item>> GetPinnedAsync(int limit, CancellationToken ct);
 }

@@ -1,4 +1,6 @@
 #nullable enable
+using System.Net;
+using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -25,11 +27,14 @@ public sealed class GitHubClient : IDisposable
     private readonly HttpClient _http;
     private readonly GitHubOptions _options;
 
-    public GitHubClient(GitHubOptions options)
+    /// <summary>条件请求缓存的 ETag（P1-4）。非 null 时首页请求带 If-None-Match，命中 304 直接短路整轮拉取。</summary>
+    public string? CachedETag { get; set; }
+
+    public GitHubClient(GitHubOptions options, HttpClient? http = null)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
 
-        _http = new HttpClient();
+        _http = http ?? new HttpClient();
         _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         if (!string.IsNullOrEmpty(_options.Token))
@@ -54,8 +59,26 @@ public sealed class GitHubClient : IDisposable
         if (!IsConfigured) return Array.Empty<GitHubStarApiModel>();
 
         var url = $"{ApiBase}/user/starred?per_page={_options.PageSize}&page={page}";
-        var resp = await _http.GetAsync(url, ct);
-        resp.EnsureSuccessStatusCode();
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        // P1-4 条件请求：仅首页带 If-None-Match，命中 304 可省掉整轮拉取
+        if (page == 1 && !string.IsNullOrEmpty(CachedETag))
+        {
+            req.Headers.IfNoneMatch.Add(new EntityTagHeaderValue(CachedETag));
+        }
+
+        using var resp = await _http.SendAsync(req, ct);
+
+        // P1-4 命中 304：内容未变，返回空（调用方据此短路整轮拉取）
+        if (resp.StatusCode == HttpStatusCode.NotModified)
+            return Array.Empty<GitHubStarApiModel>();
+
+        // P1-4 错误分类：把 401/403/429 从通用 Exception 里分出来
+        if (!resp.IsSuccessStatusCode)
+            throw Classify(resp);
+
+        // 仅在首页持久化 ETag（分页场景以首页为准），供下次条件请求
+        if (page == 1 && resp.Headers.ETag is { } etag)
+            CachedETag = etag.Tag;
 
         var list = await resp.Content.ReadFromJsonAsync<List<GitHubStarApiModel>>(JsonOpts, ct)
                    ?? new List<GitHubStarApiModel>();
@@ -102,6 +125,65 @@ public sealed class GitHubClient : IDisposable
     }
 
     public void Dispose() => _http.Dispose();
+
+    /// <summary>P1-4 把非成功响应分类为可操作的错误类型。</summary>
+    private static GitHubApiException Classify(HttpResponseMessage resp)
+    {
+        var status = resp.StatusCode;
+        // 403 且限流剩余为 0 视为限流（GitHub 常以 403 返回限流）
+        var remaining = resp.Headers.TryGetValues("X-RateLimit-Remaining", out var vals)
+            ? vals.FirstOrDefault() : null;
+        var isRateLimited = status == HttpStatusCode.TooManyRequests
+                            || (status == HttpStatusCode.Forbidden && remaining == "0");
+
+        var kind = status switch
+        {
+            HttpStatusCode.Unauthorized => GitHubErrorKind.Auth,
+            _ when isRateLimited => GitHubErrorKind.RateLimit,
+            HttpStatusCode.Forbidden => GitHubErrorKind.Forbidden,
+            _ when (int)status >= 500 => GitHubErrorKind.Server,
+            _ => GitHubErrorKind.Unknown,
+        };
+
+        var message = kind switch
+        {
+            GitHubErrorKind.Auth => "GitHub 令牌无效或已过期，请在设置中重新配置 Token（需 public_repo 或 read:user 范围）",
+            GitHubErrorKind.RateLimit => "GitHub API 触发限流，请稍后再试（通常 1 小时后自动恢复）",
+            GitHubErrorKind.Forbidden => "GitHub 拒绝访问，可能 Token 权限不足（需 public_repo 范围）",
+            GitHubErrorKind.Server => "GitHub 服务端异常，请稍后重试",
+            _ => $"GitHub 请求失败（{(int)status} {status}）",
+        };
+        return new GitHubApiException(kind, message, status);
+    }
+}
+
+/// <summary>P1-4 GitHub 同步错误分类，供 UI 给出可操作文案。</summary>
+public enum GitHubErrorKind
+{
+    Unknown,
+    /// <summary>401：Token 无效/过期。</summary>
+    Auth,
+    /// <summary>限流（429 或 403 且 X-RateLimit-Remaining:0）。</summary>
+    RateLimit,
+    /// <summary>403：权限不足（如 Token 缺少 public_repo 范围）。</summary>
+    Forbidden,
+    /// <summary>5xx 服务端异常。</summary>
+    Server,
+}
+
+/// <summary>P1-4 携带分类信息的 GitHub API 异常。</summary>
+public sealed class GitHubApiException : Exception
+{
+    public GitHubErrorKind Kind { get; }
+    public System.Net.HttpStatusCode? StatusCode { get; }
+
+    public GitHubApiException(GitHubErrorKind kind, string message,
+        System.Net.HttpStatusCode? status = null, Exception? inner = null)
+        : base(message, inner)
+    {
+        Kind = kind;
+        StatusCode = status;
+    }
 }
 
 /// <summary>

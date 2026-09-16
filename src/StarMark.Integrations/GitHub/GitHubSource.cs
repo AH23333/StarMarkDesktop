@@ -16,11 +16,13 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
 {
     private readonly GitHubClient _client;
     private readonly GitHubOptions _options;
+    private readonly IItemRepository _repository;
     private bool _disposed;
 
-    public GitHubSource(GitHubOptions options)
+    public GitHubSource(GitHubOptions options, IItemRepository repository)
     {
         _options = options;
+        _repository = repository;
         _client = new GitHubClient(options);
     }
 
@@ -32,17 +34,29 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
 
     /// <summary>
     /// 全量拉取 starred 列表。
-    /// 对应技术文档 §4.7 sync_state：此处 last_synced_at 写入 DB 的 sync_state 表。
-    /// 当前 MVP 直接返回 Item 列表，由 SyncCoordinator 统一调度 upsert 与状态写入。
+    /// 对应技术文档 §4.7 sync_state（P1-4 兑现）：此处把 etag + last_synced_at 写入 DB 的 sync_state 表。
+    /// 同步策略：
+    ///   - 拉取前载入上次 ETag，用于条件请求（命中 304 省掉整轮拉取）
+    ///   - 拉取后回写最新 ETag 与 last_synced_at 检查点
     /// </summary>
     public async Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
     {
         if (!IsAvailable) return Array.Empty<Item>();
 
+        // P1-4：载入上次 ETag，用于条件请求（命中 304 直接短路整轮拉取）
+        var priorEtag = await _repository.GetSyncStateAsync("github:etag", ct);
+        if (!string.IsNullOrEmpty(priorEtag)) _client.CachedETag = priorEtag;
+
         var repos = await _client.GetAllStarredAsync(ct);
+
+        // P1-4：兑现注释——落 etag + last_synced_at 到 sync_state
+        if (!string.IsNullOrEmpty(_client.CachedETag))
+            await _repository.SetSyncStateAsync("github:etag", _client.CachedETag, ct);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        await _repository.SetSyncStateAsync("github:last_synced_at", now.ToString(), ct);
+
         if (repos.Count == 0) return Array.Empty<Item>();
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var items = new List<Item>(repos.Count);
         foreach (var repo in repos)
         {

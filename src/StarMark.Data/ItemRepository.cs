@@ -619,6 +619,32 @@ public sealed class ItemRepository : IItemRepository
         return list;
     }
 
+    // ===== 同步状态（扩展对比方案 P1-4）=====
+
+    /// <summary>读取 sync_state 键值；不存在返回 null。</summary>
+    public async Task<string?> GetSyncStateAsync(string key, CancellationToken ct)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT value FROM sync_state WHERE key = @key;";
+        cmd.Parameters.AddWithValue("@key", key);
+        var obj = await cmd.ExecuteScalarAsync(ct);
+        return obj == null || obj == DBNull.Value ? null : (string?)obj;
+    }
+
+    /// <summary>幂等写入 sync_state 键值（用于 ETag / last_synced_at 等检查点）。</summary>
+    public async Task SetSyncStateAsync(string key, string value, CancellationToken ct)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            INSERT INTO sync_state(key, value) VALUES(@key, @value)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;";
+        cmd.Parameters.AddWithValue("@key", key);
+        cmd.Parameters.AddWithValue("@value", value);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
     private static async Task UpsertTagLink(SqliteConnection conn, long itemId, string tagName, CancellationToken ct)
     {
         long tagId;

@@ -1,6 +1,7 @@
 #nullable enable
 using System.Diagnostics;
 using StarMark.Abstractions;
+using StarMark.Integrations.GitHub;
 
 namespace StarMark.Core.Sync;
 
@@ -65,6 +66,27 @@ public sealed class SyncCoordinator
                 });
             }
             catch (OperationCanceledException) { throw; }
+            catch (GitHubApiException gex)
+            {
+                StarLog.Error($"源 {source.SourceId} 同步失败（{gex.Kind}）: {gex.Message}");
+                var kind = gex.Kind switch
+                {
+                    GitHubErrorKind.Auth => SourceSyncErrorKind.Auth,
+                    GitHubErrorKind.RateLimit => SourceSyncErrorKind.RateLimit,
+                    GitHubErrorKind.Forbidden => SourceSyncErrorKind.Forbidden,
+                    GitHubErrorKind.Server => SourceSyncErrorKind.Server,
+                    _ => SourceSyncErrorKind.Unknown,
+                };
+                results.Add(new SourceSyncResult
+                {
+                    SourceId = source.SourceId,
+                    DisplayName = source.DisplayName,
+                    Success = false,
+                    PulledCount = 0,
+                    Error = gex.Message,
+                    ErrorKind = kind,
+                });
+            }
             catch (Exception ex)
             {
                 StarLog.Error($"源 {source.SourceId} 同步失败: {ex.Message}");
@@ -75,6 +97,7 @@ public sealed class SyncCoordinator
                     Success = false,
                     PulledCount = 0,
                     Error = ex.Message,
+                    ErrorKind = SourceSyncErrorKind.Unknown,
                 });
             }
         }
@@ -111,6 +134,20 @@ public sealed class SyncSummary
     }
 }
 
+/// <summary>同步错误分类（P1-4），供设置页/同步状态给出可操作文案。</summary>
+public enum SourceSyncErrorKind
+{
+    Unknown,
+    /// <summary>鉴权失败（Token 无效/过期）。</summary>
+    Auth,
+    /// <summary>API 限流。</summary>
+    RateLimit,
+    /// <summary>权限不足（403）。</summary>
+    Forbidden,
+    /// <summary>服务端异常（5xx）。</summary>
+    Server,
+}
+
 /// <summary>单个源的同步结果。</summary>
 public sealed class SourceSyncResult
 {
@@ -119,4 +156,6 @@ public sealed class SourceSyncResult
     public bool Success { get; init; }
     public int PulledCount { get; init; }
     public string? Error { get; init; }
+    /// <summary>P1-4 错误分类，便于 UI 给出针对性引导。</summary>
+    public SourceSyncErrorKind ErrorKind { get; init; } = SourceSyncErrorKind.Unknown;
 }
