@@ -24,6 +24,7 @@
                 <ItemsRepeater.ItemTemplate>
                     <DataTemplate x:DataType="viewModels:ActivityItemViewModel">
                         <Button Background="Transparent" HorizontalAlignment="Stretch" Padding="0"
+                                HorizontalContentAlignment="Stretch"
                                 Click="Activity_Click" Tag="{x:Bind Uri}">
                             <Grid ColumnDefinitions="4,*,Auto" Padding="10,8" HorizontalAlignment="Stretch">
                                 <Border Grid.Column="0" CornerRadius="2"
