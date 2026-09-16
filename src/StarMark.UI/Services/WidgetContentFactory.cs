@@ -47,7 +47,7 @@ public sealed class WidgetContentFactory
     {
         var factory = new WidgetContentFactory();
         factory.Register(WidgetKind.QuickLaunch, w => new QuickLaunchWidget(w.Storage, w.Repository, w.Manager));
-        factory.Register(WidgetKind.Todo, w => w.BuildTodo());
+        factory.Register(WidgetKind.Todo, w => new TodoWidget(w.Storage));
         factory.Register(WidgetKind.QuickNote, w => w.BuildQuickNote());
         factory.Register(WidgetKind.Clock, w => w.BuildClock());
         factory.Register(WidgetKind.Search, w => new SearchWidget(w.Repository));

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="StarMark.UI.Views.TodoWidget"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:StarMark.UI.ViewModels"
+    xmlns:local="using:StarMark.UI.Views">
+
+    <UserControl.Resources>
+        <!-- 已完成条目视觉：置灰 + 删除线（等价原 code-behind 的 0.45 / Strikethrough） -->
+        <local:DoneOpacityConverter x:Key="DoneOpacity"/>
+        <local:DoneDecorationConverter x:Key="DoneDecoration"/>
+    </UserControl.Resources>
+
+    <StackPanel Padding="12,8,12,12" Spacing="4">
+        <TextBox x:Name="InputBox" PlaceholderText="添加待办，回车确认…" FontSize="12"
+                 KeyDown="InputBox_KeyDown"/>
+
+        <!-- 注意：ItemsRepeater 内部必须用 x:Bind（不能用 {Binding}），否则不报错但静默失效 -->
+        <ItemsRepeater ItemsSource="{x:Bind ViewModel.Todos, Mode=OneWay}">
+            <ItemsRepeater.ItemTemplate>
+                <DataTemplate x:DataType="vm:TodoRow">
+                    <Grid Margin="0,1,0,1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <CheckBox IsChecked="{x:Bind Done, Mode=OneTime}" MinWidth="28"
+                                  VerticalAlignment="Center"
+                                  Click="TodoCheck_Click" Tag="{x:Bind Id}"/>
+                        <TextBlock Grid.Column="1" Text="{x:Bind Text}" FontSize="12"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                   Opacity="{x:Bind Done, Mode=OneTime, Converter={StaticResource DoneOpacity}}"
+                                   TextDecorations="{x:Bind Done, Mode=OneTime, Converter={StaticResource DoneDecoration}}"/>
+                        <Button Grid.Column="2" Content="✕" FontSize="9" Padding="5,3,5,3"
+                                Background="Transparent" BorderThickness="0"
+                                Click="DeleteTodo_Click" Tag="{x:Bind Id}"/>
+                    </Grid>
+                </DataTemplate>
+            </ItemsRepeater.ItemTemplate>
+        </ItemsRepeater>
+    </StackPanel>
+</UserControl>
