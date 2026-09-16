@@ -26,13 +26,20 @@ internal static class WindowInterop
     public const uint WS_EX_TOOLWINDOW = 0x00000080;
     public const uint WS_EX_TOPMOST = 0x00000008;
 
+    public static readonly IntPtr HWND_TOP = IntPtr.Zero;
+    public static readonly IntPtr HWND_BOTTOM = new(1);
     public static readonly IntPtr HWND_TOPMOST = new(-1);
     public static readonly IntPtr HWND_NOTOPMOST = new(-2);
+
+    /// <summary>设置窗口所有者（DeskBox 用它把组件挂到桌面图标层）。</summary>
+    public const int GWLP_HWNDPARENT = -8;
 
     public const uint SWP_NOMOVE = 0x0002;
     public const uint SWP_NOSIZE = 0x0001;
     public const uint SWP_NOACTIVATE = 0x0010;
     public const uint SWP_FRAMECHANGED = 0x0020;
+    public const uint SWP_NOOWNERZORDER = 0x0200;
+    public const uint SWP_SHOWWINDOW = 0x0040;
 
     public const int SW_SHOW = 5;
     public const int SW_RESTORE = 9;
@@ -86,7 +93,37 @@ internal static class WindowInterop
     public static extern bool GetMonitorInfoW(IntPtr hMonitor, ref MONITORINFO lpmi);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    public static extern IntPtr FindWindowW(string? lpClassName, string lpWindowName);
+    public static extern IntPtr FindWindowW(string? lpClassName, string? lpWindowName);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr FindWindowExW(
+        IntPtr hWndParent, IntPtr hWndChildAfter, string? lpszClass, string? lpszWindow);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassNameW(IntPtr hWnd, System.Text.StringBuilder lpClassName, int nMaxCount);
+
+    /// <summary>窗口是否处于 topmost 层（用于决定回落时插入到哪一层）。</summary>
+    public static bool IsWindowTopMost(IntPtr hWnd) =>
+        ((uint)GetWindowLong(hWnd, GWL_EXSTYLE).ToInt64() & WS_EX_TOPMOST) != 0;
+
+    /// <summary>取窗口类名，用于查找 SHELLDLL_DefView / WorkerW。</summary>
+    public static string GetClassName(IntPtr hWnd)
+    {
+        var sb = new System.Text.StringBuilder(256);
+        return GetClassNameW(hWnd, sb, sb.Capacity) > 0 ? sb.ToString() : string.Empty;
+    }
 
     [DllImport("user32.dll")]
     public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);

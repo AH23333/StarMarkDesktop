@@ -122,19 +122,13 @@ public sealed class WidgetStorage
         return Path.Combine(appData, "StarMark", "widgets.json");
     }
 
-    /// <summary>全部组件类型（设置页 / 托盘菜单遍历用）。</summary>
+    /// <summary>全部组件类型（设置页 / 托盘菜单遍历用），来源为 <see cref="WidgetRegistry"/>。</summary>
     public static IReadOnlyList<WidgetKind> AllKinds { get; } =
-        Enum.GetValues<WidgetKind>();
+        WidgetRegistry.Default.GetWindowDescriptors().Select(d => d.Kind).ToArray();
 
-    public static string KindTitle(WidgetKind kind) => kind switch
-    {
-        WidgetKind.QuickLaunch => "★ 快捷启动",
-        WidgetKind.Clock => "🕒 时钟",
-        WidgetKind.Todo => "✅ 待办",
-        WidgetKind.QuickNote => "📝 随记",
-        WidgetKind.Search => "🔍 快捷搜索",
-        _ => "组件",
-    };
+    /// <summary>组件展示名（含图标）；未知类型回退为类型名。</summary>
+    public static string KindTitle(WidgetKind kind) =>
+        WidgetRegistry.Default.TryGet(kind, out var d) ? d.DisplayTitle : kind.ToString();
 
     /// <summary>取某组件的窗口配置（无记录时按类型给默认尺寸并级联摆放）。</summary>
     public WidgetConfig GetConfig(WidgetStoreData data, WidgetKind kind, int index)
@@ -151,25 +145,14 @@ public sealed class WidgetStorage
     }
 
     /// <summary>默认尺寸（DIP 逻辑像素，窗口首次创建时按显示器 DPI 换算为物理像素）。</summary>
-    public static int DefaultWidth(WidgetKind kind) => kind switch
-    {
-        WidgetKind.Clock => 220,
-        WidgetKind.Search => 300,
-        WidgetKind.Todo => 300,
-        WidgetKind.QuickNote => 300,
-        _ => 320,
-    };
+    public static int DefaultWidth(WidgetKind kind) =>
+        WidgetRegistry.Default.TryGet(kind, out var d) ? d.DefaultWidth : 320;
 
-    public static int DefaultHeight(WidgetKind kind) => kind switch
-    {
-        WidgetKind.Clock => 150,
-        WidgetKind.Search => 130,
-        WidgetKind.Todo => 380,
-        WidgetKind.QuickNote => 340,
-        _ => 460,
-    };
+    public static int DefaultHeight(WidgetKind kind) =>
+        WidgetRegistry.Default.TryGet(kind, out var d) ? d.DefaultHeight : 400;
 
-    public static bool IsResizable(WidgetKind kind) => kind is not WidgetKind.Clock;
+    public static bool IsResizable(WidgetKind kind) =>
+        !WidgetRegistry.Default.TryGet(kind, out var d) || d.IsResizable;
 
     public WidgetStoreData Load()
     {

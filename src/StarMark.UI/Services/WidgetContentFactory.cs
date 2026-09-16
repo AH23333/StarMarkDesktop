@@ -1,0 +1,56 @@
+#nullable enable
+using System;
+using System.Collections.Generic;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using StarMark.Core.Widgets;
+using StarMark.UI.Views;
+
+namespace StarMark.UI.Services;
+
+/// <summary>
+/// 组件内容工厂：负责"某种组件的内容长什么样"，窗口宿主只负责承载。
+/// 移植自 DeskBox <c>Services/WidgetContentFactory.cs</c> 的分层思路——
+/// 元数据在 <see cref="WidgetRegistry"/>，创建逻辑在工厂，生命周期与层级在窗口/管理器。
+/// 新增组件只需在此注册一个委托，不必修改 <c>WidgetWindow</c>。
+/// </summary>
+public sealed class WidgetContentFactory
+{
+    private readonly Dictionary<WidgetKind, Func<WidgetWindow, UIElement>> _builders = new();
+
+    public static WidgetContentFactory Default { get; } = CreateDefault();
+
+    public void Register(WidgetKind kind, Func<WidgetWindow, UIElement> builder)
+    {
+        _builders[kind] = builder;
+    }
+
+    public bool CanBuild(WidgetKind kind) => _builders.ContainsKey(kind);
+
+    public UIElement Build(WidgetKind kind, WidgetWindow host)
+    {
+        if (_builders.TryGetValue(kind, out var builder))
+        {
+            return builder(host);
+        }
+
+        string title = WidgetRegistry.Default.TryGet(kind, out var d) ? d.Title : kind.ToString();
+        return new TextBlock
+        {
+            Text = $"「{title}」暂未实现",
+            Margin = new Thickness(16),
+            Opacity = 0.6,
+        };
+    }
+
+    private static WidgetContentFactory CreateDefault()
+    {
+        var factory = new WidgetContentFactory();
+        factory.Register(WidgetKind.QuickLaunch, w => w.BuildQuickLaunch());
+        factory.Register(WidgetKind.Todo, w => w.BuildTodo());
+        factory.Register(WidgetKind.QuickNote, w => w.BuildQuickNote());
+        factory.Register(WidgetKind.Clock, w => w.BuildClock());
+        factory.Register(WidgetKind.Search, w => w.BuildSearch());
+        return factory;
+    }
+}

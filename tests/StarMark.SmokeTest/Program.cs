@@ -581,16 +581,23 @@ static void WidgetsCheck()
         var r3 = store.Load();
         Check(r3.Enabled.Count == 0 && store.GetConfig(r3, StarMark.Core.Widgets.WidgetKind.QuickLaunch, 0).Width == 320, "损坏文件回退默认值");
 
-        // 7. 吸附：目标右缘 500，候选左缘 514 → 贴合到 508（间距 8）
+        // 7. 吸附（DeskBox WidgetSnapCalculator 语义）
         var work = new Windows.Graphics.RectInt32(0, 0, 1920, 1040);
         var target = new Windows.Graphics.RectInt32(300, 100, 200, 300);
-        var proposed = new Windows.Graphics.RectInt32(514, 120, 200, 200);
-        var snapped = StarMark.Core.Widgets.WidgetSnapping.SnapMove(proposed, new[] { target }, work, 24, 8);
+        // 目标右缘 500 → 贴合位 508；候选左缘 514（偏差 6）
+        var snapped = StarMark.Core.Widgets.WidgetSnapCalculator.SnapMove(
+            new Windows.Graphics.RectInt32(514, 120, 200, 200), new[] { target }, work, 8, 24);
         Check(snapped.X == 508, "边缘贴合吸附");
-        // 垂直投影不重叠且相距过远 → 不吸附
-        var far = new Windows.Graphics.RectInt32(305, 500, 200, 200);
-        var farSnapped = StarMark.Core.Widgets.WidgetSnapping.SnapMove(far, new[] { target }, work, 24, 8);
-        Check(farSnapped.X == 305, "投影门限外不吸附");
+        // 偏差 52 > 阈值 24 → 不吸附
+        var far = StarMark.Core.Widgets.WidgetSnapCalculator.SnapMove(
+            new Windows.Graphics.RectInt32(560, 120, 200, 200), new[] { target }, work, 8, 24);
+        Check(far.X == 560, "阈值外不吸附");
+        // 屏幕边缘：计算器零间隙吸附，留白由 InsetWorkArea 提供
+        var edge = StarMark.Core.Widgets.WidgetSnapCalculator.SnapMove(
+            new Windows.Graphics.RectInt32(4, 100, 200, 200),
+            System.Array.Empty<Windows.Graphics.RectInt32>(),
+            StarMark.Core.Widgets.WidgetSnapCalculator.InsetWorkArea(work, 8), 8, 24);
+        Check(edge.X == 8, "屏幕边缘留白吸附");
 
         Console.WriteLine("Widgets: ok");
     }

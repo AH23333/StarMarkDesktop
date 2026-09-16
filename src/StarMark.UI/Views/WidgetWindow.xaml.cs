@@ -44,6 +44,17 @@ public sealed partial class WidgetWindow : Window
     private WindowInterop.POINT _gestureStart;
     private RectInt32 _gestureStartRect;
 
+    // 吸附会话状态：一次拖动内只采集一次候选目标与 DPI 缩放后的阈值，
+    // 并保留上一帧的吸附结果做 sticky 迟滞（DeskBox ResizeGuideOverlayService 同款做法）。
+    private WidgetSnapTarget[] _snapTargets = Array.Empty<WidgetSnapTarget>();
+    private RectInt32? _snapWorkArea;
+    private int _snapSpacing = WidgetSnapCalculator.DefaultSpacing;
+    private int _snapEngage = WidgetSnapCalculator.DefaultEngageThreshold;
+    private int _snapRelease = WidgetSnapCalculator.DefaultReleaseThreshold;
+    private WidgetSnapMatch? _stickyHorizontal;
+    private WidgetSnapMatch? _stickyVertical;
+    private bool _layerAttached;
+
     public WidgetKind Kind => _kind;
     public bool IsVisible => AppWindow.IsVisible;
 
@@ -97,10 +108,26 @@ public sealed partial class WidgetWindow : Window
         }
 
         AppWindow.Show();
+        AttachToDesktopLayer();
         ApplyTopmost();
         if (_kind == WidgetKind.Clock) UpdateClockTimer();
         if (_kind == WidgetKind.Search) ActivateSearchBox();
     }
+
+    /// <summary>
+    /// 挂载到桌面图标层，使组件真正"贴在桌面上"：
+    /// 位于所有应用窗口之下、桌面图标之上，Win+D 与点击桌面都不会挤走它。
+    /// 挂载失败时静默降级为普通窗口（DeskBox 同样的 best-effort 策略）。
+    /// </summary>
+    private void AttachToDesktopLayer()
+    {
+        if (_layerAttached) return;
+        _layerAttached = WidgetLayerService.AttachToDesktopLayer(WindowInterop.GetHwnd(this));
+    }
+
+    /// <summary>拖动/交互开始时瞬态浮起，避免被其他组件或窗口遮挡。</summary>
+    private void RaiseTransient() =>
+        WidgetLayerService.RaiseTransient(WindowInterop.GetHwnd(this));
 
     /// <summary>临时隐藏（实例保留，托盘/设置可一键恢复）。</summary>
     public void HideTemporary()
@@ -285,6 +312,9 @@ public sealed partial class WidgetWindow : Window
     private void WidgetWindow_Closed(object sender, WindowEventArgs args)
     {
         _clockTimer?.Stop();
+        // 必须先脱离桌面层，否则会残留指向 SHELLDLL_DefView 的悬挂所有者
+        WidgetLayerService.DetachFromDesktopLayer(WindowInterop.GetHwnd(this));
+        _layerAttached = false;
         if (_kind == WidgetKind.QuickLaunch) _manager.LinksChanged -= OnLinksChanged;
     }
 
@@ -297,6 +327,8 @@ public sealed partial class WidgetWindow : Window
 
         WindowInterop.GetCursorPos(out _gestureStart);
         _gestureStartRect = WindowInterop.GetWindowRect(this);
+        BeginSnapSession();
+        RaiseTransient();
         _dragging = true;
         DragBar.CapturePointer(e.Pointer);
         e.Handled = true;
@@ -311,9 +343,18 @@ public sealed partial class WidgetWindow : Window
             _gestureStartRect.Y + pt.Y - _gestureStart.Y,
             _gestureStartRect.Width, _gestureStartRect.Height);
 
-        var snapped = WidgetSnapping.SnapMove(
-            proposed, _manager.GetOtherBounds(_kind), WindowInterop.GetWorkArea(this));
-        AppWindow.MoveAndResize(snapped);
+        var result = WidgetSnapCalculator.ResolveMove(
+            proposed,
+            _snapTargets,
+            _snapWorkArea,
+            _snapSpacing,
+            _snapEngage,
+            _snapRelease,
+            _stickyHorizontal,
+            _stickyVertical);
+        _stickyHorizontal = result.HorizontalMatch;
+        _stickyVertical = result.VerticalMatch;
+        AppWindow.MoveAndResize(result.Bounds);
         e.Handled = true;
     }
 
@@ -321,9 +362,42 @@ public sealed partial class WidgetWindow : Window
     {
         if (!_dragging) return;
         _dragging = false;
+        EndSnapSession();
         try { DragBar.ReleasePointerCapture(e.Pointer); } catch { }
         PersistBounds();
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// 开始一次吸附会话：一次性采集候选目标并按 DPI 换算阈值。
+    /// 对应 DeskBox ResizeGuideOverlayService.BeginDrag 的会话准备。
+    /// </summary>
+    private void BeginSnapSession()
+    {
+        var scale = WindowInterop.GetScale(this);
+        var others = _manager.GetOtherBounds(_kind);
+        var targets = new WidgetSnapTarget[others.Count];
+        for (int i = 0; i < others.Count; i++) targets[i] = new WidgetSnapTarget(others[i]);
+
+        _snapTargets = targets;
+        _snapWorkArea = WidgetSnapCalculator.InsetWorkArea(
+            WindowInterop.GetWorkArea(this),
+            (int)Math.Round(WidgetSnapCalculator.DefaultScreenMargin * scale));
+        _snapSpacing = (int)Math.Round(WidgetSnapCalculator.DefaultSpacing * scale);
+        _snapEngage = Math.Max(1, (int)Math.Round(WidgetSnapCalculator.DefaultEngageThreshold * scale));
+        _snapRelease = Math.Max(
+            _snapEngage,
+            (int)Math.Round(WidgetSnapCalculator.DefaultReleaseThreshold * scale));
+        _stickyHorizontal = null;
+        _stickyVertical = null;
+    }
+
+    private void EndSnapSession()
+    {
+        _snapTargets = Array.Empty<WidgetSnapTarget>();
+        _snapWorkArea = null;
+        _stickyHorizontal = null;
+        _stickyVertical = null;
     }
 
     // ───────────────────────── 右下角缩放 ─────────────────────────
@@ -371,29 +445,14 @@ public sealed partial class WidgetWindow : Window
 
     // ───────────────────────── 内容构建 ─────────────────────────
 
-    public static string KindGlyph(WidgetKind kind) => kind switch
-    {
-        WidgetKind.QuickLaunch => "★",
-        WidgetKind.Clock => "🕒",
-        WidgetKind.Todo => "✅",
-        WidgetKind.QuickNote => "📝",
-        WidgetKind.Search => "🔍",
-        _ => "▦",
-    };
+    /// <summary>组件图标；来源为 <see cref="WidgetRegistry"/>，避免各处重复 switch。</summary>
+    public static string KindGlyph(WidgetKind kind) =>
+        WidgetRegistry.Default.TryGet(kind, out var d) ? d.Glyph : "▦";
 
     private void BuildContent()
     {
-        UIElement content = _kind switch
-        {
-            WidgetKind.QuickLaunch => BuildQuickLaunch(),
-            WidgetKind.Todo => BuildTodo(),
-            WidgetKind.QuickNote => BuildQuickNote(),
-            WidgetKind.Clock => BuildClock(),
-            WidgetKind.Search => BuildSearch(),
-            _ => new TextBlock { Text = "未知组件" },
-        };
         ContentHost.Children.Clear();
-        ContentHost.Children.Add(content);
+        ContentHost.Children.Add(WidgetContentFactory.Default.Build(_kind, this));
     }
 
     /// <summary>按窗口当前主题从应用级主题字典解析组件画笔。</summary>
@@ -403,7 +462,7 @@ public sealed partial class WidgetWindow : Window
 
     // ── 快捷启动格 ──
 
-    private UIElement BuildQuickLaunch()
+    internal UIElement BuildQuickLaunch()
     {
         var panel = new StackPanel { Padding = new Thickness(12, 8, 12, 12), Spacing = 6 };
 
@@ -760,7 +819,7 @@ public sealed partial class WidgetWindow : Window
 
     // ── 待办 ──
 
-    private UIElement BuildTodo()
+    internal UIElement BuildTodo()
     {
         var panel = new StackPanel { Padding = new Thickness(12, 8, 12, 12), Spacing = 4 };
         var input = new TextBox { PlaceholderText = "添加待办，回车确认…", FontSize = 12 };
@@ -850,7 +909,7 @@ public sealed partial class WidgetWindow : Window
 
     // ── 随记 ──
 
-    private UIElement BuildQuickNote()
+    internal UIElement BuildQuickNote()
     {
         var panel = new StackPanel { Padding = new Thickness(12, 8, 12, 12), Spacing = 6 };
         var box = new TextBox
@@ -942,7 +1001,7 @@ public sealed partial class WidgetWindow : Window
     private TextBlock? _clockTime;
     private TextBlock? _clockDate;
 
-    private UIElement BuildClock()
+    internal UIElement BuildClock()
     {
         var panel = new StackPanel
         {
@@ -998,7 +1057,7 @@ public sealed partial class WidgetWindow : Window
 
     private TextBox? _searchBox;
 
-    private UIElement BuildSearch()
+    internal UIElement BuildSearch()
     {
         var panel = new StackPanel { Padding = new Thickness(12, 10, 12, 12), Spacing = 8 };
         _searchBox = new TextBox
