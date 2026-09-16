@@ -8,6 +8,7 @@
     xmlns:helpers="using:StarMark.UI.Helpers"
     xmlns:viewModels="using:StarMark.UI.ViewModels"
     xmlns:ab="using:StarMark.Abstractions.Insights"
+    xmlns:diag="using:StarMark.Core.Diagnostics"
     mc:Ignorable="d">
 
     <Page.Resources>

@@ -21,6 +21,7 @@ public partial class SettingsPageViewModel : ObservableObject
 {
     private readonly SettingsStore _settings;
     private readonly IItemRepository? _repository;
+    private readonly StarMark.Core.Diagnostics.DiagnosticsService? _diagnostics;
 
     [ObservableProperty] private int _themeIndex;
     [ObservableProperty] private bool _enableTray = true;
