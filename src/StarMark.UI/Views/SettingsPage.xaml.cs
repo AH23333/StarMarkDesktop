@@ -24,10 +24,10 @@ public sealed partial class SettingsPage : Page
     public SettingsPage()
     {
         InitializeComponent();
-        ViewModel = (App.Services.GetService(typeof(SettingsPageViewModel)) as SettingsPageViewModel)
-            ?? new SettingsPageViewModel();
+        ViewModel = App.Services.GetRequiredService<SettingsPageViewModel>();
         _backup = App.Services.GetRequiredService<BackupService>();
         ViewModel.LoadFromStore();
+        _ = ViewModel.LoadHealthAsync();
         BuildWidgetRows();
     }
 
@@ -35,6 +35,7 @@ public sealed partial class SettingsPage : Page
     {
         base.OnNavigatedTo(e);
         ViewModel.LoadFromStore();
+        _ = ViewModel.LoadHealthAsync();
         BuildWidgetRows();
     }
 

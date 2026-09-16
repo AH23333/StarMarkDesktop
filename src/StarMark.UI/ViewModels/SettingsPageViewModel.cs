@@ -1,7 +1,15 @@
 #nullable enable
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Xaml.Media;
+using StarMark.Abstractions;
+using StarMark.Abstractions.Insights;
+using StarMark.Core.Insights;
 using StarMark.UI.Helpers;
+using Windows.UI;
 
 namespace StarMark.UI.ViewModels;
 
@@ -12,6 +20,7 @@ namespace StarMark.UI.ViewModels;
 public partial class SettingsPageViewModel : ObservableObject
 {
     private readonly SettingsStore _settings;
+    private readonly IItemRepository? _repository;
 
     [ObservableProperty] private int _themeIndex;
     [ObservableProperty] private bool _enableTray = true;
@@ -32,6 +41,12 @@ public partial class SettingsPageViewModel : ObservableObject
         _settings = new SettingsStore();
     }
 
+    /// <summary>带仓储的构造函数（DI 注入），用于加载收藏健康度报告。</summary>
+    public SettingsPageViewModel(IItemRepository repository) : this()
+    {
+        _repository = repository;
+    }
+
     public void LoadFromStore()
     {
         var github = StarMark.Integrations.GitHub.GitHubOptions.Load();
@@ -46,6 +61,79 @@ public partial class SettingsPageViewModel : ObservableObject
         MinimizeToTray = _settings.LoadMinimizeToTray();
         GithubToken = github.Token ?? string.Empty;
         GithubUsername = github.Username ?? string.Empty;
+    }
+
+    // ===== 收藏健康度（P2-6）=====
+    [ObservableProperty] private HealthReport _healthReport = new();
+    [ObservableProperty] private bool _isHealthLoading;
+    [ObservableProperty] private bool _hasHealthError;
+    [ObservableProperty] private string _healthError = string.Empty;
+    [ObservableProperty] private string _scoreText = "—";
+    [ObservableProperty] private string _scoreGrade = string.Empty;
+    [ObservableProperty] private Brush _scoreBrush = new SolidColorBrush(Color.FromArgb(255, 16, 124, 16));
+    [ObservableProperty] private string _scoreSummary = string.Empty;
+    [ObservableProperty] private string _languageSummary = string.Empty;
+    [ObservableProperty] private string _duplicateSummary = string.Empty;
+    [ObservableProperty] private string _tagSummary = string.Empty;
+    [ObservableProperty] private List<HealthTrendBar> _trendBars = new();
+
+    /// <summary>拉取全部条目并构建健康度报告（P2-6）。本地聚合，零网络。</summary>
+    public async Task LoadHealthAsync()
+    {
+        if (_repository is null) return;
+        IsHealthLoading = true;
+        HealthError = string.Empty;
+        HasHealthError = false;
+        try
+        {
+            var items = await _repository.GetAllAsync(
+                new BrowseFilter { IncludeHidden = false, Limit = int.MaxValue }, CancellationToken.None);
+            HealthReport = InsightsService.BuildHealthReport(items);
+            RefreshHealthView();
+        }
+        catch (Exception ex)
+        {
+            HasHealthError = true;
+            HealthError = $"健康度计算失败：{ex.Message}";
+            StarLog.Error($"健康度计算失败: {ex}");
+        }
+        finally { IsHealthLoading = false; }
+    }
+
+    private void RefreshHealthView()
+    {
+        var r = HealthReport;
+        ScoreText = r.Score.ToString();
+        ScoreGrade = r.Score >= 80 ? "健康" : r.Score >= 50 ? "一般，可优化" : "需整理";
+        ScoreBrush = r.Score >= 80
+            ? new SolidColorBrush(Color.FromArgb(255, 16, 124, 16))   // 绿
+            : r.Score >= 50
+                ? new SolidColorBrush(Color.FromArgb(255, 214, 137, 16)) // 琥珀
+                : new SolidColorBrush(Color.FromArgb(255, 196, 43, 28));  // 红
+
+        ScoreSummary = r.Factors.Count == 0
+            ? "收藏整理良好，继续保持"
+            : "待优化：" + string.Join("、", r.Factors.Select(f => f.Label));
+
+        LanguageSummary = r.LanguageTop.Count == 0
+            ? "（无）"
+            : string.Join(" · ", r.LanguageTop.Take(5).Select(s => $"{s.Language} {s.Count}"));
+        DuplicateSummary = r.DuplicateTop.Count == 0
+            ? "（无）"
+            : string.Join("、", r.DuplicateTop.Take(5).Select(d => $"{d.Title}（{d.Count}）"));
+        TagSummary = r.TagHistogram.Count == 0
+            ? "（无）"
+            : string.Join(" · ", r.TagHistogram.Take(5).Select(t => $"{t.Tag} {t.Count}"));
+
+        var max = r.NewTrend.Count == 0 ? 0 : r.NewTrend.Max(t => t.Count);
+        TrendBars = r.NewTrend
+            .Select(t => new HealthTrendBar
+            {
+                Count = t.Count,
+                DateLabel = t.Date,
+                Height = max > 0 && t.Count > 0 ? Math.Max(3, t.Count * 80.0 / max) : 0,
+            })
+            .ToList();
     }
 
     [RelayCommand]
@@ -90,4 +178,12 @@ public partial class SettingsPageViewModel : ObservableObject
             StarMark.Abstractions.StarLog.Error($"设置保存失败: {ex}");
         }
     }
+}
+
+/// <summary>健康度趋势柱状图的单根柱（P2-6）。高度已按最大值归一化。</summary>
+public sealed class HealthTrendBar
+{
+    public double Height { get; init; }
+    public int Count { get; init; }
+    public string DateLabel { get; init; } = string.Empty;
 }

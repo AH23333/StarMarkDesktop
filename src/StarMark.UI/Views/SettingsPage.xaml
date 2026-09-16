@@ -7,6 +7,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:helpers="using:StarMark.UI.Helpers"
     xmlns:viewModels="using:StarMark.UI.ViewModels"
+    xmlns:ab="using:StarMark.Abstractions.Insights"
     mc:Ignorable="d">
 
     <Page.Resources>
@@ -93,6 +94,73 @@
                     </StackPanel>
                     <TextBlock Text="{x:Bind ViewModel.BackupStatus, Mode=OneWay}"
                                Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 收藏健康度（P2-6） -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="收藏健康度" Style="{StaticResource SettingTitle}"/>
+                    <TextBlock Text="本地聚合，零网络。把「收藏夹腐败」变成可行动清单。" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+
+                    <!-- 评分 + 扣分明细 -->
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16" VerticalAlignment="Center">
+                        <StackPanel Grid.Column="0" HorizontalAlignment="Center" Spacing="2">
+                            <TextBlock Text="{x:Bind ViewModel.ScoreText, Mode=OneWay}"
+                                       FontSize="44" FontWeight="Bold" Foreground="{x:Bind ViewModel.ScoreBrush, Mode=OneWay}"/>
+                            <TextBlock Text="{x:Bind ViewModel.ScoreGrade, Mode=OneWay}" FontSize="12" HorizontalAlignment="Center" Style="{StaticResource MutedText}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                            <TextBlock Text="{x:Bind ViewModel.ScoreSummary, Mode=OneWay}" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+                            <ItemsControl ItemsSource="{x:Bind ViewModel.HealthReport.Factors, Mode=OneWay}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="ab:HealthFactor">
+                                        <TextBlock Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap">
+                                            <Run Text="• "/><Run Text="{x:Bind Label}"/><Run Text="： -"/><Run Text="{x:Bind Deduction}"/><Run Text=" 分（"/><Run Text="{x:Bind Detail}"/><Run Text="）"/>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- 近 14 天新增趋势（自绘柱状图） -->
+                    <TextBlock Text="近 14 天新增" Style="{StaticResource SettingTitle}" Margin="0,4,0,0"/>
+                    <ItemsRepeater ItemsSource="{x:Bind ViewModel.TrendBars, Mode=OneWay}" HorizontalAlignment="Stretch">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Orientation="Horizontal" Spacing="3"/>
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="viewModels:HealthTrendBar">
+                                <StackPanel Width="28" VerticalAlignment="Bottom" Spacing="2">
+                                    <Rectangle Height="{x:Bind Height}" Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                               MinHeight="1" RadiusX="2" RadiusY="2" HorizontalAlignment="Stretch"/>
+                                    <TextBlock Text="{x:Bind DateLabel}" FontSize="9" HorizontalAlignment="Center"
+                                               Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+
+                    <!-- 概要 -->
+                    <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap">
+                        <Run Text="语言 Top："/><Run Text="{x:Bind ViewModel.LanguageSummary, Mode=OneWay}"/>
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap">
+                        <Run Text="独立域名："/><Run Text="{x:Bind ViewModel.HealthReport.DistinctDomains, Mode=OneWay}"/>
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap">
+                        <Run Text="疑似重复 Top："/><Run Text="{x:Bind ViewModel.DuplicateSummary, Mode=OneWay}"/>
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap">
+                        <Run Text="标签 Top："/><Run Text="{x:Bind ViewModel.TagSummary, Mode=OneWay}"/>
+                    </TextBlock>
+
+                    <ProgressRing Width="20" Height="20" IsActive="{x:Bind ViewModel.IsHealthLoading, Mode=OneWay}"
+                                  Visibility="{x:Bind ViewModel.IsHealthLoading, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                    <TextBlock Text="{x:Bind ViewModel.HealthError, Mode=OneWay}"
+                               Foreground="{ThemeResource SystemFillColorCautionBrush}" FontSize="12"
+                               Visibility="{x:Bind ViewModel.HasHealthError, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 </StackPanel>
             </Border>
 
