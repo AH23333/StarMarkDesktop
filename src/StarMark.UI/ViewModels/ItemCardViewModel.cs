@@ -78,6 +78,9 @@ public partial class ItemCardViewModel : ObservableObject
     {
         _item = item;
         IsHidden = item.Hidden;
+        // 置顶状态必须从条目映射：否则置顶条目在主窗口永远显示为未置顶，
+        // 「置顶/取消置顶」菜单点击只会再次写入 pinned=1，永远无法取消置顶。
+        IsPinned = item.Pinned;
     }
 
     public void SetHidden(bool value) => IsHidden = value;
