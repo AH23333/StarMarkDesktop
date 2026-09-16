@@ -5,13 +5,13 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:controls="using:StarMark.UI.Controls"
     xmlns:helpers="using:StarMark.UI.Helpers"
     xmlns:viewModels="using:StarMark.UI.ViewModels"
     mc:Ignorable="d">
 
     <Page.Resources>
         <helpers:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <helpers:IsRemovalToBrushConverter x:Key="IsRemovalToBrush"/>
     </Page.Resources>
 
     <ScrollViewer Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12,12,12,16"
@@ -22,25 +22,32 @@
                     <StackLayout Spacing="6"/>
                 </ItemsRepeater.Layout>
                 <ItemsRepeater.ItemTemplate>
-                    <DataTemplate x:DataType="viewModels:ItemCardViewModel">
-                        <controls:ItemCard ViewModel="{x:Bind}"
-                                           OpenRequested="Card_OpenRequested"
-                                           EditNoteRequested="Card_EditNoteRequested"
-                                           EditTagsRequested="Card_EditTagsRequested"
-                                           HideRequested="Card_HideRequested"
-                                           PinRequested="Card_PinRequested"
-                                           CopyLinkRequested="Card_CopyLinkRequested"
-                                           OpenLocationRequested="Card_OpenLocationRequested"
-                                           TagFilterRequested="Card_TagFilterRequested"
-                                           TagRemoveRequested="Card_TagRemoveRequested"
-                                           TagAddRequested="Card_TagAddRequested"/>
+                    <DataTemplate x:DataType="viewModels:ActivityItemViewModel">
+                        <Button Background="Transparent" HorizontalAlignment="Stretch" Padding="0"
+                                Click="Activity_Click" Tag="{x:Bind Uri}">
+                            <Grid ColumnDefinitions="4,*,Auto" Padding="10,8" HorizontalAlignment="Stretch">
+                                <Border Grid.Column="0" CornerRadius="2"
+                                        Background="{x:Bind IsRemoval, Converter={StaticResource IsRemovalToBrush}}"/>
+                                <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Bind KindLabel}"
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               Foreground="{x:Bind IsRemoval, Converter={StaticResource IsRemovalToBrush}}"/>
+                                    <TextBlock Text="{x:Bind Title}"
+                                               Style="{StaticResource BodyTextBlockStyle}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="{x:Bind AtText}"
+                                           Style="{StaticResource MutedText}"
+                                           VerticalAlignment="Center" Margin="10,0,0,0"/>
+                            </Grid>
+                        </Button>
                     </DataTemplate>
                 </ItemsRepeater.ItemTemplate>
             </ItemsRepeater>
 
-<TextBlock Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}" Style="{StaticResource MutedText}"
-                           HorizontalAlignment="Center" Margin="0,40,0,16"
-                           Visibility="{x:Bind ViewModel.HasItems, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+            <TextBlock Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}" Style="{StaticResource MutedText}"
+                       HorizontalAlignment="Center" Margin="0,40,0,16"
+                       Visibility="{x:Bind ViewModel.HasItems, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
         </StackPanel>
     </ScrollViewer>
 </Page>

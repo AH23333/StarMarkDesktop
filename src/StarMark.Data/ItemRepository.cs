@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using StarMark.Abstractions;
+using ActivityKind = StarMark.Abstractions.ActivityKind;
 
 namespace StarMark.Data;
 
@@ -438,8 +439,13 @@ public sealed class ItemRepository : IItemRepository
 
     private static async Task UpsertOne(SqliteConnection conn, Item item, CancellationToken ct)
     {
+        // URL 归一化：http(s) 源的 source_id 归一为标准形，避免同一资源的不同变体
+        // 分裂成多条记录（见扩展对比方案 P1-5）。幂等：非 http(s)（file:// 等）原样返回。
+        item.SourceId = StarMark.Abstractions.UriNormalizer.Normalize(item.SourceId);
+
         // 用户状态（hidden / pinned / notes）是本地编辑，源侧同步不应覆盖。
         // 先读旧值合并进 item：既保住状态，又让 search_text 计算包含用户笔记。
+        bool isNew = true;
         using (var existing = conn.CreateCommand())
         {
             existing.CommandText = @"
@@ -450,6 +456,7 @@ public sealed class ItemRepository : IItemRepository
             await using var reader = await existing.ExecuteReaderAsync(ct);
             if (await reader.ReadAsync(ct))
             {
+                isNew = false;
                 item.Hidden = reader.GetInt64(0) != 0;
                 item.Notes = reader.IsDBNull(1) ? null : reader.GetString(1);
                 item.Pinned = !reader.IsDBNull(2) && reader.GetInt64(2) != 0;
@@ -521,6 +528,95 @@ public sealed class ItemRepository : IItemRepository
                 await UpsertTagLink(conn, item.Id, tagName, ct);
             }
         }
+
+        // 活动流：仅当本条是「新插入」才记录新增事件（扩展对比方案 P1-3）。
+        // 已存在的条目每次同步走 UPDATE 分支，不重复记活动；主体后续被同步移除时
+        // 由同步对账分支记录移除事件（同方法外的写入点）。
+        if (isNew && item.Id > 0)
+        {
+            var kind = item.Type switch
+            {
+                ItemType.GitHubStar => ActivityKind.StarAdd,
+                ItemType.Bookmark => ActivityKind.BookmarkAdd,
+                ItemType.File => ActivityKind.FileAdd,
+                ItemType.Clipboard => ActivityKind.ClipAdd,
+                _ => ActivityKind.ItemDelete,
+            };
+            await LogActivityOnConnection(conn, kind, $"{item.Source}:{item.SourceId}", item.Title, item.Uri, ct);
+        }
+    }
+
+    // ===== 活动流（扩展对比方案 P1-3）=====
+
+    /// <summary>写入一条活动事件。插入后裁剪环形缓冲，仅保留最近 500 条（>500 删最旧）。</summary>
+    public async Task LogActivityAsync(ActivityKind kind, string? itemKey, string title, string? uri, CancellationToken ct)
+    {
+        using var conn = _factory.Open();
+        await LogActivityOnConnection(conn, kind, itemKey, title, uri, ct);
+    }
+
+    /// <summary>在给定连接上写入活动事件（供 <see cref="UpsertOne"/> 在已有事务内复用连接）。</summary>
+    private static async Task LogActivityOnConnection(SqliteConnection conn, ActivityKind kind, string? itemKey, string title, string? uri, CancellationToken ct)
+    {
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"
+                INSERT INTO activity(at, kind, item_key, title, uri)
+                VALUES(@at, @kind, @item_key, @title, @uri);";
+            cmd.Parameters.AddWithValue("@at", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            cmd.Parameters.AddWithValue("@kind", kind.ToString().ToLowerInvariant());
+            cmd.Parameters.AddWithValue("@item_key", (object?)itemKey ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@title", title);
+            cmd.Parameters.AddWithValue("@uri", (object?)uri ?? DBNull.Value);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+
+        // 环形缓冲：仅保留最近 500 条
+        using (var countCmd = conn.CreateCommand())
+        {
+            countCmd.CommandText = "SELECT COUNT(*) - 500 FROM activity;";
+            var overflow = Convert.ToInt64(await countCmd.ExecuteScalarAsync(ct));
+            if (overflow > 0)
+            {
+                using var prune = conn.CreateCommand();
+                prune.CommandText = @"
+                    DELETE FROM activity
+                    WHERE id IN (
+                        SELECT id FROM activity ORDER BY at ASC, id ASC LIMIT @n
+                    );";
+                prune.Parameters.AddWithValue("@n", overflow);
+                await prune.ExecuteNonQueryAsync(ct);
+            }
+        }
+    }
+
+    /// <summary>读取最近的活动事件，按时间倒序。</summary>
+    public async Task<IReadOnlyList<ActivityRecord>> GetActivityAsync(int limit, CancellationToken ct)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT id, at, kind, item_key, title, uri
+            FROM activity
+            ORDER BY at DESC, id DESC
+            LIMIT @limit;";
+        cmd.Parameters.AddWithValue("@limit", limit);
+        var list = new List<ActivityRecord>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            list.Add(new ActivityRecord
+            {
+                Id = reader.GetInt64(0),
+                At = reader.GetInt64(1),
+                Kind = Enum.TryParse<ActivityKind>(reader.GetString(2), ignoreCase: true, out var k)
+                    ? k : ActivityKind.ItemDelete,
+                ItemKey = reader.IsDBNull(3) ? null : reader.GetString(3),
+                Title = reader.GetString(4),
+                Uri = reader.IsDBNull(5) ? null : reader.GetString(5),
+            });
+        }
+        return list;
     }
 
     private static async Task UpsertTagLink(SqliteConnection conn, long itemId, string tagName, CancellationToken ct)

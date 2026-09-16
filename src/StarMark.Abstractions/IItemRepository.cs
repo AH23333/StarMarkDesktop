@@ -57,6 +57,12 @@ public interface IItemRepository
     /// <summary>获取最近更新的条目（活动时间线）。</summary>
     Task<IReadOnlyList<Item>> GetRecentAsync(int limit, CancellationToken ct);
 
+    /// <summary>记录一条活动事件（新增 / 移除条目等）。环形缓冲仅保留最近 500 条。见扩展对比方案 P1-3。</summary>
+    Task LogActivityAsync(ActivityKind kind, string? itemKey, string title, string? uri, CancellationToken ct);
+
+    /// <summary>读取最近的活动事件（活动时间线）。见扩展对比方案 P1-3。</summary>
+    Task<IReadOnlyList<ActivityRecord>> GetActivityAsync(int limit, CancellationToken ct);
+
     /// <summary>获取用户置顶条目（桌面快捷启动组件），按更新时间倒序。</summary>
     Task<IReadOnlyList<Item>> GetPinnedAsync(int limit, CancellationToken ct);
 }

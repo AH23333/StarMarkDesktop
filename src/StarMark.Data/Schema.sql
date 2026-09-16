@@ -137,3 +137,19 @@ CREATE TABLE IF NOT EXISTS sync_state (
     key             TEXT PRIMARY KEY,
     value           TEXT NOT NULL
 );
+
+-- ============================================================
+-- 活动流（扩展对比方案 P1-3）
+-- 记录「新增 / 移除条目」等事件，主体从 items 消失后仍可读。
+-- kind 存储 ActivityKind 的小写名（staradd / bookmarkremove ...）。
+-- ============================================================
+CREATE TABLE IF NOT EXISTS activity (
+    id          INTEGER PRIMARY KEY,
+    at          INTEGER NOT NULL,                -- Unix 秒
+    kind        TEXT    NOT NULL,
+    item_key    TEXT,                             -- source:source_id，用于回查（若存在）
+    title       TEXT    NOT NULL DEFAULT '',
+    uri         TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_activity_at ON activity(at DESC);

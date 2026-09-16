@@ -17,7 +17,7 @@ public partial class ActivityPageViewModel : ObservableObject
     [ObservableProperty] private string _emptyHint = string.Empty;
     [ObservableProperty] private bool _hasItems;
 
-    public ObservableCollection<ItemCardViewModel> Activities { get; } = new();
+    public ObservableCollection<ActivityItemViewModel> Activities { get; } = new();
 
     public ActivityPageViewModel(IItemRepository repository)
     {
@@ -31,9 +31,11 @@ public partial class ActivityPageViewModel : ObservableObject
         Activities.Clear();
         try
         {
-            var items = await _repository.GetRecentAsync(200, CancellationToken.None);
-            foreach (var item in items)
-                Activities.Add(new ItemCardViewModel(item));
+            // 真·活动流：读 activity 表（新增/移除事件），而非「最近更新的 200 条条目」。
+            // 见扩展对比方案 P1-3。
+            var records = await _repository.GetActivityAsync(200, CancellationToken.None);
+            foreach (var rec in records)
+                Activities.Add(new ActivityItemViewModel(rec));
             HasItems = Activities.Count > 0;
             EmptyHint = Activities.Count == 0 ? "暂无活动记录" : string.Empty;
         }

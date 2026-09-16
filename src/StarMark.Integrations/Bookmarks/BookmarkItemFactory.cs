@@ -12,6 +12,10 @@ public static class BookmarkItemFactory
         var domain = TryGetDomain(e.Url);
         var added = e.BookmarkedAt > 0 ? e.BookmarkedAt : now;
 
+        // URL 归一化：同源不同变体（尾斜杠 / utm 参数 / 默认端口 / GitHub tab 查询）
+        // 统一为同一 source_id，避免重复条目分裂标签与笔记（扩展对比方案 P1-5）。
+        var normalizedUrl = StarMark.Abstractions.UriNormalizer.Normalize(e.Url);
+
         var meta = new BookmarkMeta
         {
             FolderPaths = e.FolderPaths,
@@ -25,10 +29,10 @@ public static class BookmarkItemFactory
         {
             Type = ItemType.Bookmark,
             Source = sourceId,
-            SourceId = e.Url,
+            SourceId = normalizedUrl,
             Title = string.IsNullOrWhiteSpace(e.Title) ? e.Url : e.Title,
             Subtitle = domain,
-            Uri = e.Url,
+            Uri = normalizedUrl,
             CreatedAt = added,
             UpdatedAt = added,
             SyncedAt = now,

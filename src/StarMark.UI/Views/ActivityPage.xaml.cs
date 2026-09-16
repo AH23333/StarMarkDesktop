@@ -1,6 +1,9 @@
 #nullable enable
+using System;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using StarMark.Abstractions;
 using StarMark.UI.Helpers;
 using StarMark.UI.ViewModels;
 
@@ -18,9 +21,9 @@ public sealed partial class ActivityPage : Page
         ViewModel.LoadCommand.Execute(null);
     }
 
-    private static StarMark.Abstractions.IItemRepository GetRepo()
-        => App.Services.GetService(typeof(StarMark.Abstractions.IItemRepository))
-            as StarMark.Abstractions.IItemRepository
+    private static IItemRepository GetRepo()
+        => App.Services.GetService(typeof(IItemRepository))
+            as IItemRepository
             ?? throw new InvalidOperationException("IItemRepository 未注册");
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -29,33 +32,16 @@ public sealed partial class ActivityPage : Page
         ViewModel.LoadCommand.Execute(null);
     }
 
-    private void Card_OpenRequested(object? sender, long itemId)
-        => ItemCardActions.Open(this.XamlRoot, itemId);
-
-    private void Card_EditNoteRequested(object? sender, ViewModels.ItemCardViewModel vm)
-        => ItemCardActions.EditNote(this.XamlRoot, vm);
-
-    private void Card_EditTagsRequested(object? sender, ViewModels.ItemCardViewModel vm)
-        => ItemCardActions.EditTags(this.XamlRoot, vm);
-
-    private void Card_HideRequested(object? sender, ViewModels.ItemCardViewModel vm)
-        => _ = ItemCardActions.ToggleHidden(this.XamlRoot, vm);
-
-    private void Card_PinRequested(object? sender, ViewModels.ItemCardViewModel vm)
-        => ItemCardActions.TogglePin(vm);
-
-    private void Card_CopyLinkRequested(object? sender, ViewModels.ItemCardViewModel vm)
-        => ItemCardActions.CopyUri(vm);
-
-    private void Card_OpenLocationRequested(object? sender, ViewModels.ItemCardViewModel vm)
-        => ItemCardActions.OpenLocation(vm);
-
-    private void Card_TagFilterRequested(object? sender, (ViewModels.ItemCardViewModel VM, string Tag) e)
-        => App.MainWindow?.NavigateTo("tags", e.Tag);
-
-    private void Card_TagRemoveRequested(object? sender, (ViewModels.ItemCardViewModel VM, string Tag) e)
-        => ItemCardActions.RemoveTag(this.XamlRoot, e.VM, e.Tag);
-
-    private void Card_TagAddRequested(object? sender, ViewModels.ItemCardViewModel vm)
-        => ItemCardActions.AddTag(this.XamlRoot, vm);
+    private async void Activity_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string uri } || string.IsNullOrEmpty(uri)) return;
+        try
+        {
+            await Windows.System.Launcher.LaunchUriAsync(new Uri(uri));
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"活动条目打开失败: {uri} ({ex.Message})");
+        }
+    }
 }
