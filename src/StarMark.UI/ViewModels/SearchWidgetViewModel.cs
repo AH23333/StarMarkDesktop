@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using StarMark.Abstractions;
+using StarMark.Core.Search;
 
 namespace StarMark.UI.ViewModels;
 
@@ -37,6 +38,7 @@ public sealed record SearchResultItem(long Id, string Title, string Subtitle, st
 public sealed class SearchWidgetViewModel
 {
     private readonly IItemRepository? _repo;
+    private readonly SearchService? _search;
 
     public ObservableCollection<TagChip> Tags { get; } = new();
     public ObservableCollection<SearchResultItem> Results { get; } = new();
@@ -47,9 +49,10 @@ public sealed class SearchWidgetViewModel
 
     public bool HasResults => Results.Count > 0;
 
-    public SearchWidgetViewModel(IItemRepository? repo)
+    public SearchWidgetViewModel(IItemRepository? repo, SearchService? search = null)
     {
         _repo = repo;
+        _search = search;
     }
 
     /// <summary>加载全部标签（按命中数倒序，最多展示前 60 个，避免超长标签云卡顿）。</summary>
@@ -87,9 +90,29 @@ public sealed class SearchWidgetViewModel
     public async Task RunSearchAsync()
     {
         Results.Clear();
-        if (_repo is null) return;
         var selected = Tags.Where(t => t.Selected).Select(t => t.Name).ToList();
         var q = (Query ?? string.Empty).Trim();
+
+        // 统一搜索编排（与主窗口 SearchPage 同源）：FTS5 + Everything 实时源合并去重，
+        // 未入库的本地文件（Everything 虚拟条目）由此可达；
+        // 空关键词 + 标签退化为按标签浏览（SearchService 内部同规则）。
+        if (_search is not null)
+        {
+            try
+            {
+                var result = await _search.SearchAsync(q, new SearchFilter { Tags = selected, MaxResults = 200 }, CancellationToken.None);
+                foreach (var it in result.Items)
+                    Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type)));
+            }
+            catch (Exception ex)
+            {
+                StarMark.Abstractions.StarLog.Error("桌面搜索失败", ex);
+            }
+            return;
+        }
+
+        // 兜底：无 SearchService 时退回仓库直查（仅 FTS / 标签浏览，无实时源）
+        if (_repo is null) return;
         try
         {
             IReadOnlyList<Item> items;
