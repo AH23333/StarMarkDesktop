@@ -72,7 +72,7 @@ public sealed class ActivityRepositoryTests : IDisposable
         await repo.UpsertAsync(new[] { item }, CancellationToken.None);   // 二次为更新，不记活动
 
         var acts = await repo.GetActivityAsync(100, CancellationToken.None);
-        Assert.Single(acts.Where(a => a.Kind == ActivityKind.BookmarkAdd));
+        Assert.Single(acts, a => a.Kind == ActivityKind.BookmarkAdd);
     }
 
     [Fact]
