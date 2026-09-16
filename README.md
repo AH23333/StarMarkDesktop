@@ -46,7 +46,8 @@
 - **跨源统一搜索** — 一个搜索框，同时搜本地文件、GitHub Stars、浏览器书签、剪贴板历史。FTS5 全文索引 + bm25 排序，毫秒级响应。
 - **本地优先** — 所有数据存在本地 SQLite，不依赖云同步，不需要账号。GitHub PAT 仅用于拉取你自己的 starred 列表。
 - **标签 + 笔记统一** — 给任何条目（不论来自哪个源）打标签、写笔记。笔记本身参与全文搜索。
-- **热键呼出** — 全局热键（Phase 2）随时呼出搜索窗口，类似 Spotlight / PowerToys Run。
+- **热键呼出** — 全局热键 `Ctrl+Alt+Space` 随时呼出主窗口，类似 Spotlight / PowerToys Run；常驻系统托盘。
+- **桌面小组件** — 对标 DeskBox 的独立无边框组件：★ 快捷启动（置顶条目 + 自定义入口，支持拖入文件/网址、从条目卡片发送）、🕒 时钟、✅ 待办、📝 随记、🔍 快捷搜索。设置页/托盘自由增减，窗口可拖动、边缘吸附、缩放、置顶，位置与状态持久化。
 - **集成现有工具** — 复用 Everything 的索引能力、复用 Ditto 的剪贴板历史、复用 TagSpaces 的标签库，不重新发明轮子。
 - **规则引擎** — 自动给新条目打标签、自动归档（Phase 3）。例如"所有 Rust repo 自动加 `rust` 标签"。
 
@@ -141,20 +142,53 @@ Token 仅需 `public_repo` 或 `read:user` 范围（只读 starred 列表，无�
 
 ### 4. 运行
 
-```bash
-# 方式一：直接启动 exe
-.\src\StarMark.UI\bin\x64\Debug\net9.0-windows10.0.19041.0\StarMark.UI.exe
+推荐通过 IDE 或 dotnet CLI 启动（会自动完成构建）：
 
-# 方式二：dotnet run
+```bash
+# 方式一（推荐）：Visual Studio 中打开 StarMark.sln，选择 StarMark.UI 为启动项目后 F5
+# 方式二：命令行
 dotnet run --project src\StarMark.UI\StarMark.UI.csproj -p:Platform=x64
 ```
+
+直接双击输出目录的 `src\StarMark.UI\bin\x64\Debug\net9.0-windows10.0.19041.0\StarMark.UI.exe`
+也能运行（解包自包含部署，不依赖已安装的 Windows App Runtime），但它只是**构建产物**，
+不是规范的开发入口：改代码后需要重新生成，且不会附加调试器。仅用于快速手工验证。
+
+> **单实例**：应用通过命名互斥体 `Local\StarMark.Desktop.SingleInstance` 保证只运行一个实例；
+> 再次启动会自动唤起已在运行的主窗口（含最小化到托盘的情况）后退出新进程。
+> 因此调试时如果已有实例在运行（包括你手动双击启动的），F5 只会把旧窗口唤到前台——
+> 调试前请先从托盘菜单「退出」旧实例。
+>
+> **托盘图标**：Windows 11 上首次运行图标可能进入任务栏右下角的溢出区，
+> 可将其拖拽到任务栏常驻区。
 
 首次启动会：
 1. 在 `%APPDATA%\StarMark\starmark.db` 创建 SQLite schema
 2. 写入种子数据（用于开发期验证）
-3. 显示主窗口，搜索框可立即使用
+3. 显示主窗口，搜索框可立即使用（全新安装默认不显示任何桌面组件，由用户自行添加）
 
 点击顶栏 **"同步"** 按钮触发 GitHub Stars 拉取（需先配置 Token）。
+
+## 桌面组件
+
+桌面组件是一组独立的无边框小窗（对标 [DeskBox](https://github.com/Tianyu199509/DeskBox) 的 Widgets 模型），
+数据保存在 `%APPDATA%\StarMark\widgets.json`（与 settings.json 同目录，可用 `STARMARK_SETTINGS_PATH` / `STARMARK_DB_PATH` 改目录）。
+
+| 组件 | 内容 |
+|------|------|
+| ★ 快捷启动 | 数据库中已**置顶**的条目（最多 8 条）＋用户自定义入口；可把文件、文件夹、网址、文本直接**拖入**窗口，也可在条目卡片右键「发送到桌面 · 快捷启动」，或用窗口内 ＋ 表单手动添加 |
+| 🕒 时钟 | 日期与秒级时钟（仅可见时计时） |
+| ✅ 待办 | 增、勾选完成、删除；未完成在前 |
+| 📝 随记 | 随手记录，`Ctrl+Enter` 保存 |
+| 🔍 快捷搜索 | 输入回车后唤起主窗口并直接搜索 |
+
+通用能力：
+
+- **添加/移除**：设置页「桌面组件」卡片逐组件开关；托盘右键「桌面组件」子菜单逐项勾选；主窗口顶栏组件按钮（▣ 图标）同款菜单；组件标题栏 ＋ 也可管理。
+- **隐藏 vs 移除**：标题栏「—」是临时隐藏（实例保活，托盘/设置可一键恢复）；「✕」是停用并从启用集合移除。
+- **拖动 / 吸附**：按住标题栏拖动，组件之间会边缘对齐/贴合（留 8px 间距），靠近屏幕边缘也会吸附；阈值 24px、垂直投影需重叠，避免远处窗口乱吸。
+- **缩放 / 置顶**：右下角拖拽调整大小（时钟固定尺寸）；图钉按钮或双击标题栏切换置顶，置顶状态按组件持久化。
+- 全新安装默认不显示任何组件；旧版单面板若开启了「开机显示」，升级后自动迁移为启用全部五种组件。
 
 ## 配置
 
@@ -210,10 +244,16 @@ StarMarkDesktop/
 │   │       └── GitHubSource.cs        # IItemSource 实现
 │   ├── StarMark.Core/                 # 应用服务层
 │   │   ├── Search/SearchService.cs    # 跨源搜索编排 + 去重
-│   │   └── Sync/SyncCoordinator.cs    # 同步协调器
+│   │   ├── Sync/SyncCoordinator.cs    # 同步协调器
+│   │   └── Widgets/                   # 桌面组件纯逻辑（无 UI 依赖，可单测）
+│   │       ├── WidgetStorage.cs       # widgets.json v2：启用集合/窗口配置/待办/随记/入口 + v1 迁移
+│   │       └── WidgetSnapping.cs      # 边缘吸附算法（物理像素纯函数）
 │   └── StarMark.UI/                   # WinUI 3 桌面端
-│       ├── App.xaml(.cs)              # DI 容器 + 迁移 + 种子数据
-│       ├── MainWindow.xaml(.cs)       # 主窗口（搜索框/工具栏/卡片）
+│       ├── App.xaml(.cs)              # DI 容器 + 迁移 + 种子数据 + 单实例
+│       ├── MainWindow.xaml(.cs)       # 主窗口（搜索框/工具栏/卡片/托盘入口）
+│       ├── Services/WidgetManager.cs  # 组件窗口生命周期（启用/显隐/吸附支持/入口数据）
+│       ├── Views/WidgetWindow.xaml(.cs) # 单个组件的无边框亚克力窗口
+│       ├── Helpers/WindowInterop.cs   # 无边框/置顶/圆角/工作区/拖动所需 Win32
 │       ├── SeedData.cs                # 首次启动种子数据
 │       ├── Themes/StarMarkTheme.xaml  # 主题色板（移植自浏览器扩展）
 │       └── app.manifest               # DPI / Windows 版本声明
@@ -282,7 +322,9 @@ dotnet publish src\StarMark.UI\StarMark.UI.csproj -c Release -p:Platform=x64
 - [x] **GitHub Stars 同步**（本迭代完成）
 - [x] **SyncCoordinator + 同步按钮接线**（本迭代完成）
 - [x] WinUI 3 主窗口（搜索框 + 工具栏 + 卡片列表）
-- [ ] 托盘常驻 + 全局热键呼出
+- [x] 托盘常驻 + 全局热键呼出（设置页即时生效）
+- [x] DeskBox 式桌面组件（五种独立窗口：增减/吸附/置顶/缩放/快捷入口）
+- [x] 单实例（重复启动唤起已有窗口）
 - [ ] 接通 Everything 真实查询（CLI 路径已可用，需测试）
 
 ### Phase 2（集成扩展）
