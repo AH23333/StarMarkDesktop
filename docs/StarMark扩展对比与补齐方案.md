@@ -388,6 +388,8 @@ isStrong = title.startsWith(needle) || url.includes(needle)
 
 建议在设置页末尾加一组只读信息：各源 `IsAvailable`、上次同步时间与条数、FTS 索引行数、DB 文件路径与体积、schema 版本。**这是排查用户报障时最省沟通成本的一屏。**
 
+> **✅ 2026-09-16 已落地：** `Core/Diagnostics/DiagnosticsService.cs`（只读聚合：DB 路径/体积（含 WAL）、Schema 版本、分类型条目计数、FTS 索引行数、活动记录数、各源 IsAvailable、上次 GitHub 同步时间与 ETag——后者直接读取 P1-4 落库的 sync_state）。设置页末尾新增「诊断」卡片，`ItemsRepeater` 逐行渲染；DI 注册 + 2 例测试。
+
 ### P2-9 增量统计
 
 扩展用单行 `meta` 表维护 `AppMeta{total, stars, bookmarks, hidden, tagged, tags: Record<string,number>}`，由 `applyItemDelta()` 增量更新，侧栏计数零扫描。Desktop 每次聚合都全表扫。
@@ -656,7 +658,7 @@ Desktop 是 `NavigationView PaneDisplayMode="Top"`（`MainWindow.xaml:103`），
 第五轮 · 产品感（约 2 天）
 ├─ P2-6  InsightsService 健康度 + 设置页区块  【✅ 2026-09-16 已落地】
 ├─ P2-7  结果分段（精确 / 相关）+ 语言筛选 + 排序维度  【✅ 2026-09-16 已落地】
-└─ P2-8  诊断区块
+└─ P2-8  诊断区块  【✅ 2026-09-16 已落地】
 
 按需 / 暂缓
 ├─ P2-9   增量统计（条目过万再做）
