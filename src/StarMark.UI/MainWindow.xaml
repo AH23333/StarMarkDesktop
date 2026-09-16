@@ -92,6 +92,11 @@
                 </StackPanel>
             </Border>
 
+            <!-- 语言筛选：常态显示（对齐扩展工具栏），选项由搜索页结果聚合；全部 = 不过滤 -->
+            <ComboBox x:Name="LanguageCombo" MinWidth="116" FontSize="12"
+                      PlaceholderText="语言：全部"
+                      SelectionChanged="LanguageCombo_SelectionChanged"/>
+
             <CheckBox x:Name="ShowHiddenCheck" Content="显示隐藏" Click="ShowHidden_Click" FontSize="12" VerticalAlignment="Center"/>
         </StackPanel>
 

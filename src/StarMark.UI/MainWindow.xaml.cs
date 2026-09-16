@@ -438,16 +438,58 @@ public sealed partial class MainWindow : Window
                 sp.ViewModel.CurrentSource = source;
                 sp.ViewModel.CurrentSort = sort;
                 sp.ViewModel.ShowHidden = hidden;
+                HookLanguageOptions(sp.ViewModel);
+                SyncLanguageCombo(sp.ViewModel);
                 break;
             case FolderTreePage ftp:
                 ftp.ViewModel.CurrentSource = source;
                 ftp.ViewModel.CurrentSort = sort;
                 ftp.ViewModel.ShowHidden = hidden;
+                SyncLanguageCombo(null);
                 break;
         }
     }
 
     private string CurrentSourceTag() => _currentSource;
+
+    // ───────── 语言筛选（常态显示于工具栏；选项由搜索页结果聚合）─────────
+
+    private const string LanguageAllItem = "语言：全部";
+    private bool _syncingLanguageCombo;
+    private bool _languageHooked;
+
+    private void LanguageCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncingLanguageCombo) return;
+        if (ContentFrame?.Content is not SearchPage sp) return;
+        var selected = LanguageCombo.SelectedItem as string;
+        sp.ViewModel.CurrentLanguage = selected is null || selected == LanguageAllItem
+            ? string.Empty
+            : selected;
+    }
+
+    private void HookLanguageOptions(SearchPageViewModel vm)
+    {
+        if (_languageHooked) return;
+        _languageHooked = true;
+        // SearchPageViewModel 是单例：选项集合变化（每次搜索后重建）时同步下拉框
+        vm.AvailableLanguages.CollectionChanged += (_, _) => SyncLanguageCombo(vm);
+    }
+
+    /// <summary>把搜索页聚合出的语言选项同步到工具栏下拉框（null/空 = 回到「语言：全部」）。</summary>
+    private void SyncLanguageCombo(SearchPageViewModel? vm)
+    {
+        _syncingLanguageCombo = true;
+        try
+        {
+            var items = new List<string> { LanguageAllItem };
+            if (vm is not null) items.AddRange(vm.AvailableLanguages);
+            LanguageCombo.ItemsSource = items;
+            var current = vm?.CurrentLanguage ?? string.Empty;
+            LanguageCombo.SelectedIndex = string.IsNullOrEmpty(current) ? 0 : items.IndexOf(current);
+        }
+        finally { _syncingLanguageCombo = false; }
+    }
 
     private string CurrentSortTag()
         => SortCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag ? tag : "recent";

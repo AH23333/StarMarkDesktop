@@ -128,10 +128,8 @@ public partial class SearchPageViewModel : ObservableObject
 
         if (string.IsNullOrWhiteSpace(Query) && ActiveTags.Count == 0)
         {
-            Results.Clear();
-            ClearSelection();
-            HasResults = false;
-            EmptyHint = "输入关键词开始搜索";
+            // 空关键词 + 无标签 → 浏览模式：展示最近条目（对齐扩展：清空搜索框回到浏览列表而非空白）
+            await LoadBrowseAsync(token);
             return;
         }
         // 空关键词 + 已选标签 → 不提前返回：SearchService 会退化为「按标签浏览」
@@ -203,6 +201,63 @@ public partial class SearchPageViewModel : ObservableObject
                     : $"未找到与 \"{keyword}\" 相关的条目")
                 : string.Empty;
             StatusText = $"命中 {result.Items.Count} 条 · {result.ElapsedMs}ms";
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            StatusText = $"错误: {ex.Message}";
+        }
+        finally
+        {
+            IsSearching = false;
+        }
+    }
+
+    /// <summary>
+    /// 浏览模式：无关键词、无标签时展示最近条目（工具栏的来源 / 排序 / 隐藏状态同样生效）。
+    /// 对齐扩展：清空搜索框后回到浏览列表，而不是留一页空白。
+    /// </summary>
+    private async Task LoadBrowseAsync(CancellationToken token)
+    {
+        IsSearching = true;
+        StatusText = "加载中...";
+        Results.Clear();
+        ExactResults.Clear();
+        RelatedResults.Clear();
+        ClearSelection();
+        try
+        {
+            var source = CurrentSource switch
+            {
+                "star" => "githubstar",
+                "bookmark" => "bookmark",
+                _ => null,
+            };
+            var filter = new BrowseFilter
+            {
+                Sort = CurrentSort,
+                TypeFilter = source,
+                IncludeHidden = ShowHidden,
+                Limit = 100,
+            };
+            var items = _repo is not null
+                ? await _repo.GetAllAsync(filter, token)
+                : Array.Empty<Item>();
+            if (token.IsCancellationRequested) return;
+
+            foreach (var it in items)
+            {
+                var vm = new ItemCardViewModel(it);
+                Results.Add(vm);
+                RelatedResults.Add(vm);
+            }
+            HasExact = false;
+            HasRelated = Results.Count > 0;
+            ExactHeader = "精确匹配";
+            RelatedHeader = $"最近条目 ({Results.Count})";
+            HasResults = Results.Count > 0;
+            EmptyHint = Results.Count == 0 ? "没有可展示的条目" : string.Empty;
+            StatusText = $"最近 {Results.Count} 条";
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)

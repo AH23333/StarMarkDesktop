@@ -104,12 +104,7 @@
                          Visibility="{x:Bind ViewModel.IsSearching, Mode=OneWay, Converter={StaticResource BoolToVis}}"
                          Height="2" Margin="0,0,0,8"/>
 
-            <!-- 语言筛选维度（P2-7）：GitHubStar 主语言，选项由最近一次未过滤搜索聚合 -->
-            <ComboBox ItemsSource="{x:Bind ViewModel.AvailableLanguages, Mode=OneWay}"
-                      SelectedItem="{x:Bind ViewModel.CurrentLanguage, Mode=TwoWay}"
-                      MinWidth="120" Margin="0,0,0,8" FontSize="12"
-                      PlaceholderText="语言：全部"
-                      Visibility="{x:Bind ViewModel.HasResults, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+            <!-- 语言筛选已上移至主窗口工具栏（常态显示，与 全部/star/书签 同排） -->
 
             <!-- 结果分段（P2-7）：精确匹配段在前，相关结果段在后，段内保持原排序 -->
             <TextBlock Text="{x:Bind ViewModel.ExactHeader, Mode=OneWay}" FontSize="12"
