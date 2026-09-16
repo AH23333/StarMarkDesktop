@@ -50,7 +50,7 @@ public sealed class WidgetContentFactory
         factory.Register(WidgetKind.Todo, w => w.BuildTodo());
         factory.Register(WidgetKind.QuickNote, w => w.BuildQuickNote());
         factory.Register(WidgetKind.Clock, w => w.BuildClock());
-        factory.Register(WidgetKind.Search, w => w.BuildSearch());
+        factory.Register(WidgetKind.Search, w => new SearchWidget(w.Repository));
         return factory;
     }
 }

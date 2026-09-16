@@ -8,7 +8,7 @@ using StarMark.Core.Widgets;
 namespace StarMark.UI.ViewModels;
 
 /// <summary>快捷启动格中的「置顶条目」行（来自 StarMark 数据库 Pinned=1）。</summary>
-public sealed record QuickLaunchPinned(string Title, string Uri, string Emoji);
+public sealed record QuickLaunchPinned(long Id, string Title, string Uri, string Emoji);
 
 /// <summary>快捷启动格中的「快捷入口」行（用户自定义，存于 widgets.json）。</summary>
 public sealed record QuickLaunchLink(long Id, string Title, string Uri);
@@ -46,12 +46,29 @@ public sealed class QuickLaunchWidgetViewModel
         {
             var items = await _repo.GetPinnedAsync(8, CancellationToken.None);
             foreach (var it in items)
-                Pinned.Add(new QuickLaunchPinned(it.Title, it.Uri, EmojiFor(it.Type)));
+                Pinned.Add(new QuickLaunchPinned(it.Id, it.Title, it.Uri, EmojiFor(it.Type)));
         }
         catch (Exception ex)
         {
             StarMark.Abstractions.StarLog.Error("加载置顶条目失败", ex);
         }
+    }
+
+    /// <summary>取消置顶：写库后增量刷新置顶集合（R3，不重建整棵 UI）。</summary>
+    public async Task UnpinAsync(long id)
+    {
+        if (_repo is not null)
+        {
+            try
+            {
+                await _repo.SetPinnedAsync(id, false, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                StarMark.Abstractions.StarLog.Error("取消置顶失败", ex);
+            }
+        }
+        await ReloadPinnedAsync();
     }
 
     public void ReloadLinks()

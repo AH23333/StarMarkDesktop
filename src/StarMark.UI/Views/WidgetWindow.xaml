@@ -55,7 +55,9 @@
             <ScrollViewer x:Name="ContentScroll" Grid.Row="1" Padding="0"
                           HorizontalScrollBarVisibility="Disabled"
                           VerticalScrollBarVisibility="Auto">
-                <Grid x:Name="ContentHost"/>
+                <!-- 用 StackPanel 作直接子元素，ScrollViewer 才能可靠按内容高度滚动
+                     （Grid 子元素会被拉伸到视口高度并被裁剪，导致链接过多时被遮挡）。 -->
+                <StackPanel x:Name="ContentHost" Spacing="0"/>
             </ScrollViewer>
 
             <!-- 右下角缩放手柄 -->

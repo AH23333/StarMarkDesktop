@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Input;
 using Windows.System;
 using StarMark.Abstractions;
 using StarMark.Core.Widgets;
+using StarMark.UI.Helpers;
 using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
 
@@ -53,7 +54,12 @@ public sealed partial class QuickLaunchWidget : UserControl
 
     private async void PinnedOpen_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: string uri }) await OpenUriAsync(uri);
+        if (sender is Button { Tag: string uri }) await LauncherEx.OpenAsync(uri);
+    }
+
+    private async void PinnedUnpin_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: long id }) await ViewModel.UnpinAsync(id);
     }
 
     // ── 快捷入口 ──
@@ -69,7 +75,7 @@ public sealed partial class QuickLaunchWidget : UserControl
 
     private async void LinkOpen_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: string uri }) await OpenUriAsync(uri);
+        if (sender is Button { Tag: string uri }) await LauncherEx.OpenAsync(uri);
     }
 
     private async void LinkRemove_Click(object sender, RoutedEventArgs e)
@@ -98,18 +104,5 @@ public sealed partial class QuickLaunchWidget : UserControl
         await _manager.AddLinkAsync(name, parsed.AbsoluteUri);
         AddNameBox.Text = AddUriBox.Text = string.Empty;
         AddForm.Visibility = Visibility.Collapsed;
-    }
-
-    private static async Task OpenUriAsync(string uri)
-    {
-        try
-        {
-            if (Uri.TryCreate(uri, UriKind.Absolute, out var parsed))
-                await Launcher.LaunchUriAsync(parsed);
-        }
-        catch (Exception ex)
-        {
-            StarLog.Error($"打开快捷入口失败: {uri}", ex);
-        }
     }
 }

@@ -114,7 +114,6 @@ public sealed partial class WidgetWindow : Window
         AttachToDesktopLayer();
         ApplyTopmost();
         if (_kind == WidgetKind.Clock) UpdateClockTimer();
-        if (_kind == WidgetKind.Search) ActivateSearchBox();
     }
 
     /// <summary>
@@ -805,35 +804,6 @@ public sealed partial class WidgetWindow : Window
 
     // ── 快捷搜索 ──
 
-    private TextBox? _searchBox;
-
-    internal UIElement BuildSearch()
-    {
-        var panel = new StackPanel { Padding = new Thickness(12, 10, 12, 12), Spacing = 8 };
-        _searchBox = new TextBox
-        {
-            PlaceholderText = "输入关键词，回车搜索 StarMark…",
-            FontSize = 13,
-            Padding = new Thickness(8, 6, 8, 6),
-        };
-        var btn = new Button
-        {
-            Content = "搜索",
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Padding = new Thickness(8, 5, 8, 5),
-        };
-        void Submit()
-        {
-            var q = _searchBox.Text.Trim();
-            _manager.RequestGlobalSearch(q);
-            _searchBox.Text = string.Empty;
-        }
-        btn.Click += (_, _) => Submit();
-        _searchBox.KeyDown += (_, k) => { if (k.Key == VirtualKey.Enter) Submit(); };
-        panel.Children.Add(_searchBox);
-        panel.Children.Add(btn);
-        return panel;
-    }
-
-    private void ActivateSearchBox() => _searchBox?.Focus(FocusState.Programmatic);
+    // 搜索组件已迁移至 SearchWidget（XAML + ViewModel + 标签 chip 多选，R2 试点），
+    // 由 WidgetContentFactory 直接构造；不再需要本类内的 BuildSearch / ActivateSearchBox。
 }
