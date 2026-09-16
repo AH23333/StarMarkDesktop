@@ -247,7 +247,9 @@ StarMarkDesktop/
 │   │   ├── Sync/SyncCoordinator.cs    # 同步协调器
 │   │   └── Widgets/                   # 桌面组件纯逻辑（无 UI 依赖，可单测）
 │   │       ├── WidgetStorage.cs       # widgets.json v2：启用集合/窗口配置/待办/随记/入口 + v1 迁移
-│   │       └── WidgetSnapping.cs      # 边缘吸附算法（物理像素纯函数）
+│   │       ├── WidgetSnapCalculator.cs # 边缘吸附算法（移植 DeskBox，含 sticky 迟滞）
+│   │       ├── WidgetDescriptor.cs    # 组件类型描述符 + 注册表（唯一事实来源）
+│   │       └── WidgetZOrderPolicy.cs  # 空闲期 Z 序策略（纯函数）
 │   └── StarMark.UI/                   # WinUI 3 桌面端
 │       ├── App.xaml(.cs)              # DI 容器 + 迁移 + 种子数据 + 单实例
 │       ├── MainWindow.xaml(.cs)       # 主窗口（搜索框/工具栏/卡片/托盘入口）

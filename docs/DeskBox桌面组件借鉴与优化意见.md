@@ -1,640 +1,758 @@
 # DeskBox 桌面组件 · 借鉴与优化意见
 
-**文档类型：** 技术调研 + 架构意见
-**撰写日期：** 2026-09-16
+**文档版本：** v3
 **调研对象：** `DeskBox-ref/`（参考实现，v1.5.2 时代文档）
 **面向对象：** StarMarkDesktop 第八轮迭代后的桌面组件体系（Widgets 2.0）
-**配套文档：** [项目开发技术文档.md](./项目开发技术文档.md) · [架构健壮性分析与演进.md](./架构健壮性分析与演进.md) · [开发进度报告.md](./开发进度报告.md)
+**配套文档：** [项目功能可行性分析.md](./项目功能可行性分析.md) · [项目开发技术文档.md](./项目开发技术文档.md) · [架构健壮性分析与演进.md](./架构健壮性分析与演进.md) · [开发进度报告.md](./开发进度报告.md)
+
+---
+
+## v2 修订说明
+
+v1 只对照了 DeskBox 文档与组件源码本身。v2 补读了《项目功能可行性分析》与《开发进度报告》，据此做了四处实质修订：
+
+| # | 修订 | 原因 |
+|---|------|------|
+| 1 | **新增第一章「项目目标校准」** | 发现桌面组件在原规划里属 Phase 4，而项目在 Phase 1/2 阶段已做了两轮——需要重新论证它该排第几 |
+| 2 | **新增第三章「三个关键缺口」与实测基线** | Everything 未入库 / 规则引擎未实现 / 组件数据游离于统一条目模型之外，直接决定组件有没有内容可摆 |
+| 3 | **新增第四、五章「重构意见」与「实现方案」** | 应要求补充；WidgetWindow 全 code-behind 建 UI 是与项目其余部分最大的架构不一致 |
+| 4 | **补入实测结果（含 1 个失败测试）** | 第八轮「未执行 build/test」；本次实测发现 `WidgetSnappingTests` 存在真实缺陷，已定位根因并给出修复 |
+
+同时修正 v1 两处判断偏差：`MoveFileAction` 风险等级从「当前最高」下调为「远期设计约束」（规则引擎实际尚未实现）；v1 未提及的 `PreviewHost`、单实例、主题冻结等既有成果已补入。
+
+## v3 修订说明（P0 项已按 DeskBox 源码落地）
+
+v3 对应一次**直接拉取 DeskBox 源码复用**的实作，而非再次评估。四项已完成：
+
+| # | 落地内容 | 复用的 DeskBox 源文件 | 结果 |
+|---|---------|----------------------|------|
+| 1 | 吸附算法重写为完整移植 | `Services/WidgetSnapCalculator.cs` + `tests/WidgetSnapCalculatorTests.cs` | 修复跨轴耦合缺陷；新增 sticky 迟滞、缩放边吸附、垂直中心距离打散；测试 82/82 全绿 |
+| 2 | 扩展缝收敛为描述符 + 注册表 | `Services/WidgetContentDescriptor.cs`、`WidgetContentFactory.cs`、`WidgetRegistry.cs` | 6 处 `WidgetKind` switch 收敛为 1 份清单；新增组件只改一行 |
+| 3 | 层级策略：挂载桌面图标层 | `Services/WidgetLayerService.cs`、`IdleWidgetZOrderPolicy.cs` | 组件真正落在桌面层；瞬态浮起替代持久置顶；空闲期整组排 Z 序 |
+| 4 | 窗口宿主与内容创建解耦 | `Services/WidgetContentFactory.cs` 的 provider 分层 | `WidgetWindow` 不再持有组件类型分支 |
+
+**重要认知修正：** v2 认为「当前持久 TopMost 会造出永远压屏的 bug」——实测 `WidgetConfig.Topmost` 默认为 `false`，是用户显式开关，该风险不成立。真正的缺口是**完全没有挂载桌面层**，组件只是普通窗口（点击桌面 / Win+D 会被挤走），这才是本次补齐的核心。
 
 ---
 
 ## 目录
 
 - [零、结论摘要](#零结论摘要)
-- [一、DeskBox 桌面组件的核心实现方式](#一deskbox-桌面组件的核心实现方式)
-- [二、StarMarkDesktop 现状盘点](#二starmarkdesktop-现状盘点)
-- [三、借鉴建议（按优先级）](#三借鉴建议按优先级)
-- [四、不该照抄的部分 · StarMark 的差异化机会](#四不该照抄的部分--starmark-的差异化机会)
-- [五、建议落地顺序](#五建议落地顺序)
-- [六、风险清单](#六风险清单)
+- [一、项目目标校准：桌面组件该排第几](#一项目目标校准桌面组件该排第几)
+- [二、DeskBox 桌面组件的核心实现方式](#二deskbox-桌面组件的核心实现方式)
+- [三、现状盘点与实测基线](#三现状盘点与实测基线)
+- [四、重构意见](#四重构意见)
+- [五、功能实现方案建议](#五功能实现方案建议)
+- [六、借鉴建议（按校准后优先级）](#六借鉴建议按校准后优先级)
+- [七、差异化：StarMark 不该照抄的部分](#七差异化starmark-不该照抄的部分)
+- [八、建议落地顺序](#八建议落地顺序)
+- [九、风险清单](#九风险清单)
 
 ---
 
 ## 零、结论摘要
 
-**一句话结论：** DeskBox 值得学的不是"它做了哪些组件"，而是**它如何把"桌面窗口"这件看似简单的事做成一套有明确契约、可测量、可回滚的工程体系**；而 StarMark 最该守住的差异点是**统一条目数据库**——这是 DeskBox 完全没有的东西，照抄 DeskBox 的文件格模型反而是战略倒退。
+**一句话结论：** 桌面组件做得早了，但方向没错——前提是让它服务于 StarMark 的核心目标（统一条目），而不是长成一个独立的桌面小工具集。当前最该做的不是继续打磨组件外壳，而是**先把本地文件灌进 `items` 表**，否则桌面上的格子摆的是整个库里最小的一撮数据。
 
-三条最关键的意见：
+四条关键意见：
 
-1. **现在就收敛扩展缝。** StarMark 当前 `WidgetKind` 已在 7 处产生分支（§二.3）。DeskBox 实测到"25 个文件、单文件 34 处分支"才回头治理，代价高昂。StarMark 只有 5 种组件，**这是成本最低的收敛窗口，错过就不会再来**。
+1. **先补数据，再磨外壳。** Everything 目前只做实时搜索、不写 DB、不进文件夹树/标签/动态（《开发进度报告》§六 Phase 2 第 6 项）。统一条目模型缺了本地文件这块最大的拼图，桌面组件的内容价值因此被严重削弱。**这是投入产出比最高的一项，且是组件价值的前提。**
 
-2. **把二元置顶换成层级策略。** StarMark 目前只有 `Topmost=true/false`（`WindowInterop.SetTopmost` → `HWND_TOPMOST`/`HWND_NOTOPMOST`）。DeskBox 明确把"持久 TopMost"视为坑——它会造出"永远压屏"这类最难查的 bug，且安全网失效。应引入"瞬态浮起 + 相对层级回落"。
+2. **待办/随记应纳入统一条目模型。** 当前它们存在 `widgets.json`，游离于 `items` 表之外——不参与统一搜索、不能打标签、不能享用规则引擎。StarMark 的核心亮点是"统一条目模型"，而组件恰恰在最该统一的地方开了口子。**把待办/随记变成 `ItemType.Todo/Note`，是 DeskBox 结构上做不到、StarMark 天生能做的事。**
 
-3. **在引入任何文件移动能力之前，先把信任机制建起来。** DeskBox 1.4.5 因拖放回执语义错误把用户的 `.lnk` 送进回收站，1.4.8 复盘里又记录了"用户以为卸载删了文件"的信任事故。StarMark 技术文档的 Phase 3 已规划 `MoveFileAction`——**这是全项目风险最高的单点**，需先补齐"移动前展示计划 + 可撤销 + 卸载可找回"三件事。
+3. **WidgetWindow 是全项目最大的架构不一致。** 1030 行 code-behind 手工 `new Button()` / `new StackPanel()`，而项目其余部分早已是 XAML + ViewModel + `x:Bind`。后果：无法用 XAML Hot Reload、无法复用 `ItemCard`、每次数据变更全量重建 UI。
+
+4. **先修那个失败测试，再谈重构。** 第八轮未执行 build/test。本次实测：构建 **0 错误 0 警告**，但 **60 个测试中 1 个失败**（`WidgetSnappingTests.LeftEdge_AbutsToTargetRight_WithSpacing`）。根因是吸附算法的跨轴耦合，是真实产品 bug（拖动时窗口纵向意外跳动），不是测试写错。修复见 §3.3。
 
 ---
 
-## 一、DeskBox 桌面组件的核心实现方式
+## 一、项目目标校准：桌面组件该排第几
 
-> 本节全部结论来自 `DeskBox-ref/docs/`，主要出处：`articles/00-overview.md`、`architecture/current_architecture.md`、
+### 1.1 原始定位：Phase 4 的一项「功能借鉴」
+
+《项目功能可行性分析》§3.2「第二级：中期规划」里，DeskBox 只占一行：
+
+| 项目 | 集成方式 | 核心价值 |
+|------|---------|---------|
+| **DeskBox 格子化界面** | 功能借鉴（"只引用不移动文件"设计） | 高度可定制的格子布局 |
+
+对应 §五 路线图：**Phase 4（6-8 周，可行性「中」）**。
+
+而产品真正的四大核心亮点是（§1.2）：
+
+1. **统一条目模型** —— 本地文件 / 书签 / GitHub Star 同表，标签、笔记、搜索、规则全部跨源统一
+2. **系统级深度集成** —— Shell 扩展、全局快捷键、托盘常驻
+3. **Everything 极致搜索复用** —— 毫秒级、零索引维护
+4. **跨源规则引擎** —— 文件条件与 URL 条件同一套语法
+
+**结论：桌面组件在原规划里是 Phase 4 的"借鉴项"，不是核心差异化。**
+
+### 1.2 实际情况：Phase 1/2 阶段提前做了两轮
+
+| 阶段 | 规划内容 | 实际状态 |
+|------|---------|---------|
+| Phase 1 MVP | 数据模型 + Everything + 统一搜索 | ✅ 完成（含托盘/热键/单实例） |
+| Phase 2 | GitHub Stars + 书签 + Ditto | ✅ 完成（+ QuickLook 预览 `PreviewHost`） |
+| **Phase 3** | **规则引擎 + 自动整理 + 插件架构** | ❌ **未实现**（`rules`/`rule_runs` 表已建，`IRuleAction` 仅占位接口，无实现） |
+| **Phase 4** | **DeskBox 格子化界面** | ✅ **已做两轮**（第七、八轮） |
+| Phase 5 | Shell 扩展 + MCP | ❌ 未实现（`StarMark.ShellExtension` 仍为空目录） |
+
+**即：项目跳过了 Phase 3（规则引擎），提前做了 Phase 4（桌面组件）。**
+
+### 1.3 判断：方向没错，但要让它服务核心目标
+
+提前做组件有合理理由（同栈 WinUI 3、可视化成果、用户可见度高），不做价值判断。但需要明确一点：
+
+> **桌面组件只有两种命运：要么成为"统一条目"的桌面出口，要么变成一个与 StarMark 主业无关的独立小工具集。**
+
+判断标准很简单：**桌面上的格子，能不能摆出 StarMark 库里的东西？**
+
+现状是「半能」：
+
+- ✅ 快捷启动格能展示 `GetPinnedAsync(8)` —— 但置顶条目只是全库很小一撮
+- ❌ 待办/随记在 `widgets.json`，不在 `items` 表，与主库不通
+- ❌ 本地文件不入库（Everything 只实时搜索），桌面格子摆不出本地文件
+- ❌ 没有"标签格""搜索结果格"这类真正复用统一检索能力的组件
+
+**所以后续所有建议，都服务于一个目标：把组件接回统一条目模型。**
+
+---
+
+## 二、DeskBox 桌面组件的核心实现方式
+
+> 本节结论来自 `DeskBox-ref/docs/`，主要出处：`articles/00-overview.md`、`architecture/current_architecture.md`、
 > `architecture/[重要勿删]widget_zorder_lifecycle.md`、`architecture/widget_contribution_seam.md`、
 > `architecture/[重要勿删]file_drag_stack_contract.md`、`architecture/native_context_menu_hosting.md`、
 > `architecture/startup-policy.md`、`docs/memory-optimization-plan.md`、`articles/deskbox-1.4.8-release-reflection.md`。
-> 凡文档未明确之处均标注"文档未明确"，不做推断。
+> 凡文档未明确之处均标注"文档未明确"。
 
-### 1.1 产品世界观：不替换 Windows，真实路径优先
+### 2.1 产品世界观：不替换 Windows，真实路径优先
 
-DeskBox 对"桌面组件"的定义是：**摆在桌面上的可操作小窗口，背后是真实能力而非视觉贴纸**。
-
-它的总览文档从一个具体场景切入——"电脑刚开机时桌面很干净，用上几天，浏览器下载、微信附件、截图、导出文件和临时文档就会一点点冒出来"，然后指出用户只有三个选择：立刻找最终目录（打断工作）、先放着（桌面变成一堆没有名字的待办）、继续建文件夹（目录越来越细）。DeskBox 提供第四个：**先把内容放进用途明确的格子，等工作走到合适的地方再归档**。
-
-由此推出一条贯穿全部设计的底线（原文）：
+DeskBox 对"桌面组件"的定义：**摆在桌面上的可操作小窗口，背后是真实能力而非视觉贴纸**。它提供第四个选择——"先把内容放进用途明确的格子，等工作走到合适的地方再归档"。底线是（原文）：
 
 > "两者都围绕真实路径工作，避免界面上看着整齐，资源管理器里却找不到文件。"
 
-**关于"引用不移动"这个术语，需要澄清一处认知偏差。** StarMark 的《项目开发技术文档》Phase 4 写作"DeskBox 风格格子布局；「引用不移动」语义"——但 DeskBox 文档中**并未使用"引用不移动"这一表述**。与这个概念对应的、DeskBox 真实存在的语义是分三层、且严格区分的：
+**关于"引用不移动"需澄清一处认知偏差。** 该表述出自 StarMark 的技术文档，**DeskBox 文档中并未使用**。DeskBox 真实存在的是三层严格区分的语义：
 
-| 层次 | DeskBox 原文语义 | 出处 |
-|------|-----------------|------|
-| **映射文件夹 = 引用** | "目录本身不会被复制，也不会换位置"，格子与资源管理器展示同一批文件；删除格子只删入口 | `01-file-widgets.md` |
-| **自动叠放 = 纯投影** | "不会创建真实子文件夹。不会修改扩展名。不会移动文件。不会改变资源管理器中的目录结构" | `11-file-stacks-and-quicklook.md` |
+| 层次 | 语义 | 出处 |
+|------|------|------|
+| **映射文件夹 = 引用** | "目录本身不会被复制，也不会换位置"；删除格子只删入口 | `01-file-widgets.md` |
+| **自动叠放 = 纯投影** | "不会创建真实子文件夹。不会修改扩展名。不会移动文件" | `11-file-stacks-and-quicklook.md` |
 | **附件关联原路径** | "只保存原路径，不复制文件" | `03-todo-widget.md` |
 
-**这个区分对 StarMark 很重要**：DeskBox 不是在"移动"和"引用"之间二选一，而是**把三类语义分别命名、分别实现、分别写进文档**。StarMark 若只记一个笼统的"引用不移动"，在实现阶段会重新踩一遍语义混淆的坑。
+**对 StarMark 的意义：** DeskBox 不是在"移动"与"引用"间二选一，而是**把三类语义分别命名、分别实现、分别写进文档**。只记一个笼统的"引用不移动"，实现阶段会重新踩语义混淆的坑。
 
-### 1.2 窗口模型与层级管理（最值得抄的部分）
+### 2.2 窗口模型与层级管理（最值得抄的部分）
 
-**基本形态：** "格子本质上是一组无边框 Win32 窗口"（`widget_zorder_lifecycle.md` §1）。UI 层是 WinUI 3，但层级与桌面行为全部走 Win32 原语。
+**基本形态：** "格子本质上是一组无边框 Win32 窗口"。UI 层 WinUI 3，层级与桌面行为全部走 Win32 原语。
 
-**两个宿主类：** `QuickCaptureWidgetWindow`（随记专用）+ `ContentWidgetWindow`（File/Todo/Music/Weather/Search 统一宿主）；早期 file-only 的 `WidgetWindow` 已删除。
+**技巧 1 —— 瞬态浮起：** 先 `SetWindowPos(HWND_TOPMOST, ..., SWP_NOACTIVATE|SWP_SHOWWINDOW)`，紧跟 `SetWindowPos(HWND_NOTOPMOST, ...)`。窗口停在**普通层级带的最顶部**但不具备 TopMost 属性——别的应用激活时能正常盖过。比持久 TopMost 干净得多。
 
-**核心技巧 1 —— 瞬态浮起（transient raise）：**
-先 `SetWindowPos(hwnd, HWND_TOPMOST, ..., SWP_NOACTIVATE|SWP_SHOWWINDOW)`，紧跟 `SetWindowPos(hwnd, HWND_NOTOPMOST, ...)`。窗口因此停留在"普通层级带的最顶部"，**但不具备 TopMost 属性**——别的应用激活时能正常盖过它。这比持久 TopMost 干净得多。
+**技巧 2 —— 逻辑状态与物理落点分离：** `DesktopResting` 只是逻辑态，物理落点由策略现算：
 
-**核心技巧 2 —— 逻辑状态与物理落点分离：**
-`DesktopResting` 只是逻辑态（"已退出临时唤起"），**不等同于物理上的绝对底层**。物理落点由策略现算：
-
-| 条件 | 物理落点 |
-|------|---------|
+| 条件 | 落点 |
+|------|------|
 | 外部应用在前台 | `BehindForeground` |
 | DeskBox 自身在前台 | `PreservePeerOrder` |
 | 桌面壳 / 无前台 | `DesktopBottom` |
-| DesktopPinned 模式 | 桌面 Owner 内的兄弟排序 |
+| DesktopPinned | 桌面 Owner 内兄弟排序 |
 
-文档明确把"把回落等同于 `HWND_BOTTOM`"列为坑 #2——那会破坏页面之间的相对层级。
+文档明确把"把回落等同于 `HWND_BOTTOM`"列为坑 #2。
 
-**核心技巧 3 —— 整组批量 Z 排序：**
-多 widget 的全局位置**只由管理器按组确定**，单窗口只清自身状态。用 `BeginDeferWindowPos`/`DeferWindowPos` 以同一个前台根窗口为整组边界一次排列，失败再逐窗 `SetWindowPos` 兜底。配套的 `NormalizeIdleWidgetZOrder()` 只能整理组内顺序，**不得**调用 `MoveToDesktopBottom`/`SetWindowToBottom`。这消灭了"N 个窗口各自自救互相打架"的整类问题。
+**技巧 3 —— 整组批量 Z 排序：** 多 widget 全局位置**只由管理器按组确定**，单窗口只清自身状态。用 `BeginDeferWindowPos`/`DeferWindowPos` 以同一前台根窗口为整组边界一次排列，失败再逐窗兜底。
 
-**防抖与看门狗：** 唤起后 160ms 抑制窗；200ms 恢复监视器 + 50ms 鼠标边沿采样器（`GetAsyncKeyState` **高位 0x8000**）；代际计数器使过期异步回调失效；`BeginInteraction/EndInteraction` 配对泄漏的 10s 看门狗。
+**防抖与看门狗：** 唤起后 160ms 抑制窗；200ms 恢复监视器 + 50ms 鼠标边沿采样器（`GetAsyncKeyState` **高位 0x8000**）；代际计数器使过期异步回调失效；交互配对泄漏的 10s 看门狗。
 
-**文档记录在案的 8 个坑**（`widget_zorder_lifecycle.md` §6，摘录最反直觉的几条）：
-- `GetAsyncKeyState & 0x0001` **低位**检测不到跨进程点击，必须用高位；
-- `SetForegroundWindow` 会**静默失败**（前台锁 / UIPI），必须查返回值；
-- `BeginInteraction/EndInteraction` 配对泄漏会**永久堵死回落**；
-- 两条宿主 × 两种层级模式 = 四象限都要过测试；
-- `IsDeskBoxWindow` 按 PID 判定过宽。
+**记录在案的坑（最反直觉的几条）：** `GetAsyncKeyState & 0x0001` 低位检测不到跨进程点击；`SetForegroundWindow` 会静默失败（UIPI）必须查返回值；配对泄漏会**永久堵死回落**；`IsDeskBoxWindow` 按 PID 判定过宽。
 
-**桌面固定（DesktopPinned，实验）：** 格子 attach 到 **WorkerW** 桌面容器；此后置顶/回落改为"桌面图标层内的兄弟排序"。`docs/releases/v1.4.6.md` 记录了关键时机：**启动必须等待 Explorer 的桌面图标宿主就绪后再 attach**。
-> ⚠️ 文档**未描述** `WS_EX_TOOLWINDOW`、Alt-Tab 隐藏、`SetParent` 到 Progman/SHELLDLL_DefView 的具体写法。若要复现这些，需直接读源码（`src/DeskBox/Helpers/Win32Helper.cs`、`WidgetLayerService.cs`），不能从文档得出结论。
+**桌面固定：** 格子 attach 到 **WorkerW** 桌面容器；v1.4.6 起**启动必须等待 Explorer 桌面图标宿主就绪后再 attach**。
+> ⚠️ 文档**未描述** `WS_EX_TOOLWINDOW`、Alt-Tab 隐藏、`SetParent` 到 Progman/SHELLDLL_DefView 的具体写法，需读源码（`Win32Helper.cs`、`WidgetLayerService.cs`）。
 
-### 1.3 数据契约与持久化
+### 2.3 数据契约与持久化
 
-**存储布局：** `%LocalAppData%/DeskBox/settings.json` + `data/widgets/{widgetId}/...`（Todo = `todo.json`，QuickCapture = 独立目录 + `images/` + `thumbnails/`）。**卸载不删用户数据。**
+**存储：** `%LocalAppData%/DeskBox/settings.json` + `data/widgets/{widgetId}/...`（Todo = `todo.json`，QuickCapture 独立目录）。**卸载不删用户数据。**
 
-**序列化：** System.Text.Json **Source Generation**，27 个分域 `JsonSerializerContext`，反射型重载 **0**。关键判断是"**不为统一而统一**"——现有至少六种格式契约（Web 默认、camelCase 缩进、紧凑、字符串枚举、数字枚举…），**不能共用全局 options**。用契约测试**冻结调用清单**（65 处 / 29 文件）来防退化。
+**序列化：** System.Text.Json **Source Generation**，27 个分域 `JsonSerializerContext`，反射型重载 **0**。关键判断是"**不为统一而统一**"——现有至少六种格式契约，**不能共用全局 options**；用契约测试**冻结调用清单**（65 处 / 29 文件）防退化。
 
-**分级容错：**
-- 未知属性默认忽略，但未知**枚举名会抛** `JsonException` → 弹性 store 把损坏隔离在主文件之外 + 从备份恢复；
-- `WidgetKindJsonConverter` 把未知值**降级为 `File`** 而不是整体失败；
-- 版本化：QuickCapture v4、Todo v3、Glance v8、备份 schema 2 兼容 1。
+**分级容错：** 未知属性忽略，但未知**枚举名会抛** `JsonException` → 弹性 store 隔离 + 从备份恢复；`WidgetKindJsonConverter` 把未知值**降级为 `File`** 而非整体失败。
 
-**widget ↔ 条目契约 —— 两层模型（这是"叠放"的实现基础）：**
-- **磁盘文件层**：`WidgetViewModel.Items`（事实来源）
-- **叠放投影层**：`VisibleItems` / `_stackDisplayItems`
+**两层模型（叠放的实现基础）：**
 
-叠放**只持久化三类元数据**：`_stackMemberOverrides`、`_stackOrder`、名称/禁用/展开覆盖项。即"**显示单元是投影，原文件原地不动**"。
+- 磁盘文件层 `WidgetViewModel.Items`（事实来源）
+- 叠放投影层 `VisibleItems` / `_stackDisplayItems`
 
-### 1.4 扩展机制（contribution seam）—— 一篇"先测量、再收敛"的范本
+叠放**只持久化三类元数据**：`_stackMemberOverrides`、`_stackOrder`、名称/禁用/展开覆盖项。**显示单元是投影，原文件原地不动。**
 
-**当前主流程：**
-`WidgetKind` → `WidgetRegistry` → `WidgetContentDescriptor` → `WidgetContentFactory` / `IWidgetContentProvider` → `IWidgetContent` → `ContentWidgetWindow` → `WidgetManager`
+### 2.4 扩展缝：一篇"先测量、再收敛"的范本
 
-**新增一个组件的 14 步：** 确认 kind → 更新 descriptor → 保持 `WidgetRegistry` 不可创建 → 实现 `XxxWidgetContent` → `XxxWidgetViewModel` → `XxxWidgetStore` → `IWidgetContent` adapter → `XxxWidgetContentProvider` → 在 `WidgetContentFactory` 注册 → 本地化键 → 注册 `WidgetWindowProvider` → 补测试 → **才置为可创建** → 人工回归 F7/托盘/关闭/删除/重启恢复/主题。
+**实测成本（2026-09-11）：** 25 个文件含 kind 分支，单文件最多 **34 处**，设置页要动 **5 个 `SettingsViewModel` partial** + 12 个文化表。
 
-**实测成本（2026-09-11）：** 25 个文件含 kind 分支，单文件最多 **34 处**（`WidgetManager.FeatureWidgets.cs`），设置页要动 **5 个 `SettingsViewModel` partial** + 12 个文化表。
+**目标形态「一处声明 + 三处实现」**：contribution 描述符 + 内容实现/provider + 设置节 UserControl + 本地化键。
 
-**目标形态「一处声明 + 三处实现」：** contribution 描述符（唯一改动宿主公共表的地方）+ 内容实现/provider + 设置节 UserControl + 本地化键。
+**最值得学的是它明确写出"哪些分散是有意保留的"**：按 kind 的策略表仍各加一行（那是功能自己的策略）；窗口能力表与描述符表**有意分离**；**不做第三方插件平台**。
 
-**最值得学的是它明确写出了"哪些分散是有意保留的"**：按 kind 列的策略表（紧凑隐私、预热、标题图标）**仍各加一行**——那是功能自己的策略；`WidgetRegistry` 的窗口能力表与描述符表**有意分离**；**不做第三方插件平台**。这种"先量化、再收敛、并诚实标注取舍"的做法，比空喊"插件化"有用得多。
+### 2.5 交互模型：叠放 / 胶囊 / 分组
 
-### 1.5 交互模型：叠放 / 胶囊 / 分组
+**文件栈 = 自动叠放。** 与文件夹的本质区别：文件夹是磁盘真实目录，叠放是**投影**。按类型/日期/自定义扩展名分组，阈值 2/3/5；自定义规则**从上到下匹配、只进第一条命中规则**；人工干预后自动叠放**按需转为手动**。
 
-**文件栈（file stack）= 自动叠放。** 在文件格子内部把相似文件收成叠放组。与文件夹的本质区别：文件夹是磁盘真实目录，**叠放是 DeskBox 的一层投影**。按文件类型/日期/自定义扩展名分组，阈值 2/3/5；自定义规则**从上到下匹配、一个文件只进第一条命中规则**；一旦发生人工干预，自动叠放**按需转为手动**；成员不足 2 个时手动叠放解散。
+**胶囊模式 —— 解决"全部展开太挤 / 全部关闭没入口"。**
+> "胶囊留住的是入口"：文件仍在原位，待办保留下一条值得看的事。
 
-**胶囊模式（capsule mode）—— 解决"全部展开太挤 / 全部关闭没入口"。**
-> "胶囊留住的是入口"：文件仍在原位，待办保留下一条值得看的事，天气音乐给出关键摘要。
+高价值细节：**三段式热区**（左=识别+拖动 / 中=查看+悬停展开 / 右=操作+拖动手柄）；**锚点**共享（左侧向右展开、右侧向左展开）；**内容模式**三档 + **隐私显示**（收起态隐藏正文，用于共享屏幕，明确不等于加密）；悬停**响应**与**动画**是两组独立设置；拖文件到胶囊 → 临时展开确认 → 完成后**回到原收起状态**。
 
-几个高价值细节：
-- **三段式热区**：左侧图标区 = 识别 + 拖动，中间 = 查看/悬停展开，右侧 = 操作按钮 + 拖动手柄。"让移动、操作和查看各有自己的位置"。
-- **锚点**：胶囊与展开格共享锚点，左侧向右展开、右侧向左展开，"尽量保持胶囊所在的角和边界稳定"。
-- **内容模式**：关键信息 / 简要摘要 / 仅图标和标题；**隐私显示**（收起态隐藏待办、随记正文，用于共享屏幕，且明确不等于加密）。
-- 悬停**响应**（多久展开）与**动画**（持续多久）是两组独立设置。
-- 拖文件到胶囊 → 目标格临时展开确认落点 → 完成后**回到原收起状态**。
+**组件分组 —— 一次漂亮的自我否定。** `requirements/widget-group-navigation-ux.md` 有"替代声明"：R0–R10 是唯一有效规范，下方 1000+ 行是被否决的历史方案（外部导航条 + 三种样式 + Smart Stack 跟手手势）。最终定案：
 
-**组件分组（widget groups）—— 一次漂亮的自我否定。**
-`requirements/widget-group-navigation-ux.md` 有一个"替代声明"：R0–R10 是唯一有效规范，下方 1000+ 行是被否决的历史方案（外部附着式导航条 + 三种样式 + Smart Stack 跟手手势）。最终定案：
-
-1. **砍掉外部导航条**，只在标题栏内放一个常驻成员选择器。原文论证："把标签放到内容区会挤占文件列表和待办正文，单独再放一条导航栏又会让一个小格子多一层视觉负担。"
-2. 点击是主路径，局部滚轮是可选增强，**键盘是完整等价路径**。
-3. 防误触：热区 **150ms** 后启用；提交后冷却 **180–220ms**；冷却期输入 **latest-wins，不排队播放中间成员**。
-4. **硬约束**：只有 Standard/Compact 标题栏可分组，Overlay/Hidden/System 禁用且不自动降级，**必须显示禁用原因**。
+1. **砍掉外部导航条**，只在标题栏内放常驻成员选择器。原文："把标签放到内容区会挤占文件列表，单独再放一条导航栏又会让一个小格子多一层视觉负担。"
+2. 点击主路径，局部滚轮可选增强，**键盘是完整等价路径**。
+3. 防误触：热区 **150ms** 后启用；提交后冷却 **180–220ms**；冷却期 **latest-wins，不排队播放中间成员**。
+4. **硬约束**：只有 Standard/Compact 标题栏可分组，禁用时不自动降级，**必须显示禁用原因**。
 5. **零新增第三方依赖**（明令不得引入 Lottie、通用动画引擎、第三方标题栏组件）。
-6. **微动效红线**："不动画窗口位置、尺寸、圆角、标题栏高度、背景壳、公共命令和拖动区"，"不使用整窗大幅滑动、旋转、缩放、3D 翻页、果冻弹簧或图标形变"。只有成员图标和文字在固定槽交叉淡化 100–140ms。
-7. **9 步原子切换事务**：Begin → Capture → Prepare → **Present candidate（Loaded + 非零布局 + 挂载后两个合成帧）** → Validate → Persist → Commit → Retire → Rollback。首帧超时 900ms，目标准备超 150ms 才显示轻量进度。**核心目标：切换期间无空白帧。**
+6. **微动效红线**："不动画窗口位置、尺寸、圆角、标题栏高度"；只有成员图标和文字在固定槽交叉淡化 100–140ms。
+7. **9 步原子切换事务**：Begin → Capture → Prepare → **Present candidate（Loaded + 非零布局 + 挂载后两个合成帧）** → Validate → Persist → Commit → Retire → Rollback。首帧超时 900ms，超 150ms 才显示进度。**核心目标：切换期间无空白帧。**
 
-**关键概念区分**（文档专门辟 FAQ）：**格子组** = 让多个格子在同一表面中切换（共享位置尺寸，最多 8 成员）；**胶囊组合栏** = 只负责让多个独立胶囊靠在一起排列。混淆会导致产品概念崩塌。
+**概念区分**：**格子组** = 多格子在同一表面切换（共享位置尺寸，最多 8 成员）；**胶囊组合栏** = 多个独立胶囊靠边排列。混淆会导致产品概念崩塌。
 
-### 1.6 拖放契约（全项目最重要的一份契约）
+### 2.6 拖放契约（全项目最重要的一份契约）
 
 **铁律：两类操作绝不能混。**
 
-| 类型 | 范围 | 是否动磁盘 |
-|------|------|-----------|
-| **内部编排** | 同格排序 / 加入叠放 / 移出叠放 | **否**，只改投影与持久化元数据 |
+| 类型 | 范围 | 动磁盘？ |
+|------|------|---------|
+| **内部编排** | 同格排序 / 加入叠放 / 移出叠放 | **否**，只改投影与元数据 |
 | **文件系统传输** | 跨格 / Explorer ↔ 格子 | **是**，真实复制/移动/建快捷方式 |
 
 **19 条规则中最关键的 5 条：**
 
-1. `RequestedOperation` **只能**是单个 `Move`，能力集合放 `AllowedOperations`——否则 Win10 每次拖出都弹"复制/移动/快捷方式"选择菜单。
-2. **`DragOver` 可以临时接受 `Move`（让 WinUI 把 Drop 路由给目标），但内部 `Drop` 完成永不返回 `Move`**——否则原生 Shell 数据对象会把 `.lnk` 当成真实移动完成并清理进回收站。
-3. 跨格由目标执行真实移动后通知源，源**必须返回 `None`**（返回 `Move` 会造成二次清理）。
-4. 每次拖拽生成 `DragSessionId`，每次 `GetDragPayload` 都校验（防跨会话复用缓存）。
+1. `RequestedOperation` **只能**是单个 `Move`，能力集合放 `AllowedOperations`——否则 Win10 每次拖出都弹三选菜单。
+2. **`DragOver` 可临时接受 `Move`（让 WinUI 路由 Drop），但内部 `Drop` 完成永不返回 `Move`**——否则原生 Shell 把 `.lnk` 当真实移动完成并清理进回收站。
+3. 跨格由目标执行真实移动后通知源，源**必须返回 `None`**（返回 `Move` 造成二次清理）。
+4. 每次拖拽生成 `DragSessionId`，每次 `GetDragPayload` 校验。
 5. 空状态以 `Items.Count == 0` 为准，**不用 `VisibleItems`**。
 
-**"拒绝即消费"原则：** 拖到不支持的目标上，OLE 层返回 `DROPEFFECT_NONE`，**绝不回退为导入**——因为回退=Move=会移动用户文件。宁可提示"X 无法打开此文件"。文档记录了推翻原决定的理由："文件不支持该打开就走了移动，不该移动，应提示"。
+**"拒绝即消费"原则：** 拖到不支持的目标，返回 `DROPEFFECT_NONE`，**绝不回退为导入**——回退=Move=移动用户文件。文档记录了推翻原决定的理由："文件不支持该打开就走了移动，不该移动，应提示"。
 
-**拖到快捷方式上打开（v1.5.1）：** 最终选了**方案 B——把 drop 委托给 shell 自己的 `IDropTarget`**（`SHCreateItemFromParsingName` → `BindToHandler(BHID_SFUIObject, IID_IDropTarget)` → `DragEnter`/`Drop`），理由是"这就是 Explorer 拖到快捷方式上时跑的同一代码路径，**语义零漂移**"。方案 A（自己解析 `.lnk` 再拼命令行）被否决，因为"丢失提权标记/链接跟踪/AUMID，且引入手写命令行构造——**转义是本类功能最难查的缺陷源**"。
+**拖到快捷方式上打开（v1.5.1）：** 选了**把 drop 委托给 shell 自己的 `IDropTarget`**，理由"这就是 Explorer 拖到快捷方式上时跑的同一代码路径，**语义零漂移**"。自解析 `.lnk` 拼命令行的方案被否决："丢失提权标记/链接跟踪/AUMID，且引入手写命令行构造——**转义是本类功能最难查的缺陷源**"。
 
 落地入口实际有**三个**：OLE `IDropTarget`、WinUI 路由 Drop、`WM_DROPFILES`，共用一把 1s 闩锁。
 
-### 1.7 原生能力隔离与性能红线
+### 2.7 隔离与性能红线
 
-**为什么进程外宿主右键菜单：** 进程内宿主 `IContextMenu` 会把第三方处理器 DLL 加载进主进程，"崩了整个 App 陪葬"（第三方 shell 扩展如 Locale Emulator / Dropbox / Box 是常见崩源）。改为 Rust 进程 `DeskBox.ThumbnailProxy.exe --context-menu-server`，stdin/stdout UTF-8 行协议。
+**进程外宿主右键菜单：** 进程内宿主 `IContextMenu` 会把第三方处理器 DLL 加载进主进程，"崩了整个 App 陪葬"。改为 Rust 进程 + stdin/stdout UTF-8 行协议。实测：常驻 server + 预热使菜单弹出 **2343ms → 299ms**；`InvokeCommand` 后需 2s 消息泵宽限；去掉 `TPM_NONOTIFY`（它抑制 `WM_INITMENUPOPUP`）；**钩子必须装在专职泵线程**（实测阻塞时整条桌面输入管线卡 1–2s）。
 
-实测结论值得抄：
-- 常驻 server + 预热：菜单弹出 **2343ms → 299ms**；
-- 点击无反应：`InvokeCommand` 后立即 exit → 加 2s 消息泵宽限；
-- 子菜单为空：去掉 `TPM_NONOTIFY`（它抑制 `WM_INITMENUPOPUP`）；
-- 关不掉：`cancel` + `WH_MOUSE_LL` 钩子，**钩子必须装在专职泵线程**——实测阻塞时整条桌面输入管线会卡 1–2s。
-
-**内存预算（可测量的门禁）：**
+**内存门禁：**
 
 | 指标 | 阈值 |
 |------|------|
-| 稳态私有内存 | ≈ **115MB**（Release / Native AOT 基线） |
+| 稳态私有内存 | ≈ **115MB**（Release / Native AOT） |
 | 20 循环 Private 净增 | **≤ 15MB** |
-| 循环后空闲 60s 工作集回落 | **≥ 交互期增量的 50%** |
-| 8 小时长稳 | 无持续单调爬坡 |
-| GC 门槛 | 堆 ≥96MB 且分配增量 ≥32MB |
-| **明确不要开** | Server GC（显著抬高基线） |
+| 空闲 60s 工作集回落 | **≥ 交互期增量的 50%** |
+| 8 小时长稳 | 无单调爬坡 |
+| **明确不要开** | Server GC |
 
-**性能审计（`performance-audit-20260907.md`）的高优先级问题：** 4–5 处错误的 `EnableDependentAnimation=true`（纯 Opacity，一行级改动收益最大）；分组标题切换动画动 `FrameworkElement.Width` 导致每帧完整 measure/arrange；目录枚举每条目 3–8 次冗余 stat；`DisplayAreaWatcherService` 2 秒常驻轮询而全库无 `WM_DISPLAYCHANGE` 处理；UI 线程 sync-over-async。
+**最有价值的是"为正确性拒绝优化"的红线：** junction 解析**不做缓存**（防读到陈旧物理路径）；缩略图**进程外隔离**不可放弃；毛玻璃**不建议无条件降级**；明确否决 4 项内存优化（compositor 对象池、语言增量化、全类型隐藏释放、窗口虚拟化），理由全是"重显会闪/会慢/会串场"。
 
-**最有价值的是"为了正确性而拒绝优化"的红线：**
-- junction 解析**不做缓存**——"防 swap-during-drag 读到陈旧物理路径，正确性取舍"；
-- 缩略图**进程外隔离**是硬约束，"不能放弃"；
-- Win11 毛玻璃**不建议无条件降级**（与 frosted-glass-first 的既有决策冲突），只在帧预算真超支时临时降级；
-- 被明确否决的 4 项内存优化：compositor 动画对象池（串场风险）、语言切换增量化（重显短暂旧语言）、全类型 `OnWindowLongHidden`（重显加载占位符）、隐藏窗口虚拟化（重显 1–2 秒"不可接受"）。
+### 2.8 开发过程的教训（1.4.8 复盘）
 
-### 1.8 开发过程的教训（1.4.8 复盘）
+**做对的：** 第一版只做一件事；克制减法（拒绝股票/新闻/视频/浏览器——"一个桌面整理工具，不能靠不断堆功能来证明价值"）；开源免费（"任何人都可以检查 DeskBox 对电脑做了什么"）；面对"低内存 vs 快响应"矛盾不替用户决定，给三种模式。
 
-**做对的：** 第一版只做一件事（把桌面文件收进格子）；克制减法，拒绝股票/新闻/视频/浏览器（"一个桌面整理工具，不能靠不断堆功能来证明价值"）；开源免费（"任何人都可以检查 DeskBox 对电脑做了什么"）；面对"低内存 vs 快响应"的矛盾不替用户做决定，而是给均衡/节省资源/自定义三模式。
+**踩的坑：**
 
-**踩的坑（按严重性）：**
-
-1. **信任崩塌事故（最严重）**——有用户卸载后以为桌面文件被删了（文件其实被移进了收纳目录）。作者的反省极尖锐：
+1. **信任崩塌事故（最严重）** —— 用户卸载后以为桌面文件被删。作者反省：
    > "'文件还在'这句话，在这种时候没有太大意义。软件既然移动了用户的文件，就应该让人清楚地知道它们去了哪里，卸载之后又该怎么找到。"
 
-2. **1.4.5 撤回事故**——`.lnk` 快捷方式在格子间拖动被误删进回收站。根因："拖放结束时，DeskBox 过早地告诉系统这是一次移动，系统便按照移动的规则清理源位置，把还没有完成搬运的快捷方式送进了回收站。" 修复后作者凌晨四点把**所有涉及移动/复制/删除的流程重新走了一遍**。
+2. **1.4.5 撤回事故** —— `.lnk` 被误删进回收站。根因："拖放结束时，DeskBox 过早地告诉系统这是一次移动，系统便按照移动的规则清理源位置。" 修复后作者凌晨四点把**所有移动/复制/删除流程重新走了一遍**。
 
-3. **性能是反馈最多的问题**——"桌面工具需要常驻。任务管理器里的数字一大，用户心里难免会打鼓"。
+3. **性能是反馈最多的问题** —— "桌面工具需要常驻。任务管理器里的数字一大，用户心里难免会打鼓。"
 
-4. **为性能冒进的风险**——"尽可能补测试、反复验证，最后认为风险已经可以接受"——但"评估永远只能覆盖已经想到的场景"。
+4. **AI 编程的责任边界** —— "代码能运行，只是一天工作的开始……这些判断不能交给 AI，测试、回归和发布以后的责任，也只能由我承担。"
 
-5. **AI 编程的责任边界**（对新项目尤其重要）：
-   > "代码能运行，只是一天工作的开始。……这些判断不能交给 AI，测试、回归和发布以后的责任，也只能由我承担。"
+5. **环境覆盖的不可能** —— "独立开发最困难的地方，有时不是把功能做出来，而是你永远不知道，还有哪台电脑正在等着给你上一课。"
 
-6. **环境覆盖的不可能**——"独立开发最困难的地方，有时不是把功能做出来，而是你永远不知道，还有哪台电脑正在等着给你上一课。"
-
-**演进顺序规律**（从 releases 扫读得出）：文件格子（最早，单一功能）→ 待办/随记/剪贴板 → 天气/音乐 → 搜索 → 叠放 → 胶囊 → **整理 + 格子组（同一批引入）** → 性能 / Native AOT 大改 → 拖放语义精修与增量渲染。
-即：**先做"接住"，再做"整理"，再做"收纳与切换"，最后被迫回到"性能与正确性"。**
+**演进顺序：** 文件格子 → 待办/随记/剪贴板 → 天气/音乐 → 搜索 → 叠放 → 胶囊 → 整理 + 格子组 → 性能/AOT → 拖放语义精修。即**先"接住"，再"整理"，再"收纳与切换"，最后被迫回到"性能与正确性"**。
 
 ---
 
-## 二、StarMarkDesktop 现状盘点
+## 三、现状盘点与实测基线
 
-### 2.1 已具备的能力（第八轮迭代后）
+### 3.1 已具备的能力
 
-| 能力 | 实现位置 | 评价 |
-|------|---------|------|
-| 每组件独立无边框工具窗 | `WidgetWindow : Window` | ✅ 与 DeskBox 模型一致（DeskBox 也是从单面板演进到独立窗口） |
-| 不进 Alt-Tab / 任务栏 | `RemoveDefaultWindowFrame`：`SetBorderAndTitleBar(false)` + `WS_EX_TOOLWINDOW` + `AppWindow.IsShownInSwitchers=false` | ✅ **已做到 DeskBox 文档未描述的部分** |
-| 标题栏拖动 + 右下角缩放 | `DragBar_*` / `ResizeThumb_*`（全用 Win32 物理像素） | ✅ 正确的选择，避免 DIP 与物理坐标混用 |
-| 窗口吸附 | `WidgetSnapping.SnapMove`（移植自 DeskBox `WidgetSnapCalculator`） | ✅ 纯函数 + 9 个单测，质量高于多数同类实现 |
-| 位置/尺寸/置顶持久化 | `widgets.json` v2：`Enabled` + `WindowConfigs` | ✅ 有版本化与 v1→v2 迁移，弹性容错（损坏回退默认）+ 临时文件原子替换 |
-| 托盘入口 + 全局热键 | `TrayHost`（`Ctrl+Alt+Space`）+ `ToggleAllAsync` | ✅ 基础闭环完整 |
-| 与统一条目库打通 | QuickLaunch 读 `_repo.GetPinnedAsync(8)` | ✅ **这是 StarMark 独有的优势，DeskBox 没有** |
-| 拖入建快捷入口 | `SetupQuickLaunchDrop`（WebLink / ApplicationLink / StorageItems / Text 四类） | ⚠️ 见 §三 P1-2 |
+| 能力 | 实现 | 评价 |
+|------|------|------|
+| 每组件独立无边框工具窗 | `WidgetWindow` | ✅ 与 DeskBox 模型一致 |
+| 不进 Alt-Tab / 任务栏 | `RemoveDefaultWindowFrame` + `WS_EX_TOOLWINDOW` + `IsShownInSwitchers=false` | ✅ **做到了 DeskBox 文档未描述的部分** |
+| 拖动 / 缩放 / 边缘吸附 | `WidgetSnapping`（移植 `WidgetSnapCalculator`，纯函数 + 9 单测） | ✅ 设计正确，但有 1 个缺陷（§3.3） |
+| 位置/尺寸/置顶持久化 | `widgets.json` v2 + v1→v2 迁移 + 原子写 | ✅ 有版本化意识 |
+| 托盘入口 + 全局热键 + 单实例 | `TrayHost` + `Ctrl+Alt+Space` + 命名互斥体 | ✅ 闭环完整 |
+| 与条目库打通 | QuickLaunch 读 `GetPinnedAsync(8)` | ⚠️ 只接了一小撮（见缺口一） |
+| 拖入建快捷入口 | WebLink / ApplicationLink / StorageItems / Text 四类 | ✅ 当前规模够用 |
+| 主窗口体系 | NavigationView + 5 页面 + MVVM + `PreviewHost` + CI | ✅ 基础扎实 |
 
-### 2.2 与 DeskBox 的成熟度对照
+### 3.2 三个关键缺口
+
+#### 缺口一：本地文件不入库 —— 统一条目模型缺最大的一块
+
+《开发进度报告》§六 Phase 2 第 6 项明确写：**"当前 Everything 仅实时搜索（不写 DB、不进文件夹树）"**。
+
+后果链：
+
+- `items` 表里 `ItemType.File` 只有种子数据等极少量条目
+- 本地文件**不进**文件夹树、标签云、动态时间线、置顶
+- 因此快捷启动格的 `GetPinnedAsync(8)` 只能摆出书签和 GitHub Star 中的置顶项
+- **桌面组件上摆的，是整个库里最小的一撮数据**
+
+这是「先补数据再磨外壳」这条结论的直接依据。
+
+#### 缺口二：规则引擎未实现
+
+`rules` / `rule_runs` 表已建（Schema.sql:120），`IRuleAction` 仅为占位接口，**无任何实现**。增量同步的 `ContinuationToken` 同样未启用（`GitHubSource.cs:13` 注释："本 MVP 暂未启用"）。
+
+> 因此 v1 中把 `MoveFileAction` 列为"当前最高风险"是**判断偏差**——它属 Phase 3 远期事项。此处调整为**远期设计约束**（见 §7.2），不占用当前优先级。
+
+#### 缺口三：组件数据游离在统一条目模型之外
+
+`WidgetStorage` 把 Todos / Notes / Links 存在 `widgets.json`，与 `items` 表完全不通：
+
+| 能力 | 主库条目 | 组件待办/随记 |
+|------|---------|--------------|
+| 统一搜索 | ✅ | ❌ |
+| 打标签 | ✅ | ❌ |
+| 置顶 | ✅ | ❌ |
+| 规则引擎 | ✅（远期） | ❌ |
+| 备份 | ❌（全项目都无） | ❌ |
+
+**这恰恰与项目第一核心亮点"统一条目模型"相悖**——在最该统一的地方开了口子。解法见 §5.3。
+
+### 3.3 实测基线（本次执行）
+
+第八轮文档记载"按用户要求本轮**未执行 dotnet build/run**"。本次补测：
+
+| 项目 | 结果 |
+|------|------|
+| `dotnet build StarMark.sln -p:Platform=x64` | ✅ **0 错误 0 警告** |
+| `dotnet test StarMark.sln -p:Platform=x64` | ⚠️ **60 个测试：59 通过，1 失败** |
+
+#### 失败测试：`WidgetSnappingTests.LeftEdge_AbutsToTargetRight_WithSpacing`
+
+```
+Assert.Equal() Failure: Values differ
+Expected: 120
+Actual:   100
+```
+
+**这是真实产品缺陷，不是测试写错。** 根因是吸附算法的**跨轴耦合**：
+
+```csharp
+// WidgetSnapping.SnapMove
+var snappedX = SnapAxis(proposed, targets, workArea, horizontal: true,  ...);
+var snappedY = SnapAxis(snappedX,  targets, workArea, horizontal: false, ...);
+//                      ^^^^^^^^^ 第二轴传入的是【已吸附】的矩形
+```
+
+追踪（`threshold=24, spacing=8`），目标 `x:300..500, y:100..400`，候选 `x:530..730, y:120..320`：
+
+1. **第一轴（水平）**：投影门限用 Y → 重叠，gap=0 ≤ 24 → 参与；`X=530` 对 `500+8=508`，delta=22 ≤ 24 → **X 吸附到 508**
+2. **第二轴（垂直）**：投影门限用**已吸附的 X** → `508..708` vs `300..500`，gap=**8** ≤ 24 → **意外参与**（若用原始 `530..730`，gap=30 > 24，应跳过）
+3. 于是 `Y=120` 对目标顶缘 `100`，delta=20 ≤ 24 → **Y 被拉到 100**
+
+**用户可见后果：** 拖动组件横向吸附后，窗口会**在纵向上意外跳动**（最多 24px），与手势意图不符。
+
+**修复方案（把"投影门限判定"与"要修改的矩形"解耦）：**
+
+```csharp
+public static RectInt32 SnapMove(
+    RectInt32 proposed, IReadOnlyList<RectInt32> targets, RectInt32 workArea,
+    int threshold = DefaultThreshold, int spacing = DefaultSpacing)
+{
+    // 第一轴：门限与被修改的都是 proposed
+    var snappedX = SnapAxis(
+        source: proposed, gate: proposed, targets, workArea,
+        horizontal: true, threshold, spacing, static (r, edge) => r with { X = edge });
+
+    // 第二轴：被修改的是 snappedX，但【门限仍用原始 proposed】
+    var snappedY = SnapAxis(
+        source: snappedX, gate: proposed, targets, workArea,
+        horizontal: false, threshold, spacing, static (r, edge) => r with { Y = edge });
+
+    return snappedY;
+}
+
+// SnapAxis 增加 gate 参数：PerpendicularGap 用 gate，四条边比较用 source
+private static RectInt32 SnapAxis(
+    RectInt32 source, RectInt32 gate, IReadOnlyList<RectInt32> targets, RectInt32 workArea, ...)
+{
+    // ...
+    var perpendicularGap = horizontal
+        ? PerpendicularGap(gate.Y, gate.Height, target.Y, target.Height)
+        : PerpendicularGap(gate.X, gate.Width,  target.X,  target.Width);
+    // ...
+}
+```
+
+语义也更正确：**"这两个窗口是否大致在同一列/行"应由用户当前拖到的位置判定，而非吸附后的位置判定。** 已逐个手算复核，该修复不会破坏其余 8 个吸附用例。
+
+#### ✅ v3 实作：已改为 DeskBox 原算法的完整移植（而非上面这段补丁）
+
+v2 给出的补丁只解决了跨轴耦合。直接通读 DeskBox `WidgetSnapCalculator.cs` 后发现，**当初的移植是有损的**，遗漏了四项能力，且其中一项（投影门限）根本是移植时凭空发明的：
+
+| 差异点 | DeskBox 原实现 | v2 前 StarMark | v3 处理 |
+|-------|---------------|---------------|--------|
+| 跨轴耦合 | 两轴均基于原始 `proposedBounds` | 第二轴传入已吸附矩形 ✗ | ✅ 对齐 |
+| 垂直投影距离 | **只作打散条件**（同 delta 时的 tiebreaker） | 被当作门槛过滤（gap > 阈值直接跳过）✗ | ✅ 对齐（移除门限） |
+| sticky 迟滞 | engage / release 双阈值，防止拖动抖动 | 无 ✗ | ✅ 补齐 |
+| 缩放边吸附 | `ResolveResizeEdge` | 无 ✗ | ✅ 补齐 |
+| 屏幕边缘 | 零间隙吸附，边距由调用方内缩 workArea | 内置 ±8 ✗ | ✅ 对齐 + `InsetWorkArea` |
+| 阈值单位 | DIP × DPI 缩放（用户可配） | 固定物理像素 ✗ | ✅ 会话开始时按 DPI 换算 |
+
+因此 `WidgetSnapping.cs` 已**删除**，替换为 `WidgetSnapCalculator.cs`（忠实移植）；`WidgetSnappingTests.cs` 已替换为 `WidgetSnapCalculatorTests.cs`——前 8 个用例是 DeskBox `WidgetSnapCalculatorTests` 的等价移植（权威规格），后 9 个为 StarMark 补充。
+
+⚠️ **一处测试期望被修正，需知悉：** 原 `LeftEdge_AbutsToTargetRight_WithSpacing` 期望 `Y=120`（纵向不吸附），这是「投影门限」这个不存在于 DeskBox 的约束推导出来的期望值。按 DeskBox 语义，`Y=120` 与目标顶缘 `100` 相差 20 ≤ 阈值，属**真实的顶边对齐**，应吸附到 `100`。已改为 `Y=100`，并在测试注释中说明。
+
+### 3.4 与 DeskBox 成熟度对照
 
 | 维度 | DeskBox | StarMark | 差距 |
 |------|---------|----------|------|
 | 层级模型 | 逻辑态/物理落点分离 + 瞬态浮起 + 整组 Z 排序 | 二元 `Topmost` | **大** |
-| 扩展缝 | 描述符驱动 + 契约测试（"一处声明三处实现"） | 枚举 + switch | **中**（现在收敛最便宜） |
-| 数据隔离 | 每组件独立 store + 弹性隔离 + 未知枚举降级 | 单一 `widgets.json` 全量反序列化 | **中**（有数据丢失风险） |
-| 持久化序列化 | 27 个分域 Source Generation context，反射 0 | `JsonSerializer` 默认反射 | 小（AOT 前不痛） |
-| 拖放契约 | 19 条规则 + 会话 ID + 回执语义纪律 | WinUI 路由 Drop 单层 | **中**（接入文件格时是硬门槛） |
-| 多显示器 / DPI | v1.4.6 多显示器布局记忆 | 存物理像素，无越界回收 | **中** |
-| 性能预算 | 115MB / 20 循环 ≤15MB / 60s 回落 ≥50% | 无 | **中**（常驻类应用必补） |
-| 备份恢复 | ZIP + SHA-256 清单 + 恢复前快照 | 无（组件数据不进备份） | **中** |
-| 胶囊 / 分组 | 成熟 | 无 | 大（属规划内增量） |
-| 进程外隔离 | Rust sidecar | 无 | 小（当前无高风险 native 依赖） |
-
-### 2.3 扩展缝现状：已到收敛窗口
-
-当前 `WidgetKind` 的分支点在源码中已扩散到至少 7 处：
-
-```
-WidgetStorage.KindTitle()            // 显示名
-WidgetWindow.KindGlyph()             // 图标
-WidgetStorage.DefaultWidth()         // 默认宽
-WidgetStorage.DefaultHeight()        // 默认高
-WidgetStorage.IsResizable()          // 可否缩放
-WidgetWindow.BuildContent()          // switch 构建内容        ← 最重的一处
-WidgetWindow 构造函数                // if (kind == QuickLaunch) / if (kind == Clock)
-WidgetWindow.UpdateClockTimer()      // if (_kind != Clock) return
-WidgetWindow.SetupQuickLaunchDrop()  // if (_kind != QuickLaunch) return
-```
-
-对照 DeskBox 的实测数据（25 文件 / 单文件 34 处），StarMark 现在**只有 5 种组件、约 7–9 处分支**——治理成本极低；但第九轮若按现有节奏加"天气/音乐/最近活动"三种，分支点会立刻翻倍。
+| UI 构建方式 | XAML + 描述符 + Provider | **1030 行 code-behind** | **大**（架构不一致） |
+| 组件数据与主模型 | 各自独立 store（其本无统一模型） | 游离于 `items` 之外 | **大**（且背离核心亮点） |
+| 扩展缝 | 描述符驱动 + 契约测试 | 枚举 + switch（约 7–9 处） | 中（5 种组件，收敛窗口） |
+| 数据隔离 | 每组件独立 store + 弹性隔离 + 未知枚举降级 | 单一 `widgets.json` 全量反序列化 | 中（有全清风险） |
+| 拖放契约 | 19 条规则 + 会话 ID + 回执纪律 | WinUI 路由 Drop 单层 | 中（接入文件格时是硬门槛） |
+| 多显示器 / DPI | v1.4.6 布局记忆 | 存物理像素，无越界回收 | 中 |
+| 性能预算 | 115MB / 20 循环 ≤15MB / 60s 回落 ≥50% | 无 | 中（常驻类应用必补） |
+| 备份恢复 | ZIP + SHA-256 清单 + 恢复前快照 | **全项目无备份代码** | **大** |
+| 胶囊 / 分组 | 成熟 | 无 | 大（规划内增量） |
+| 进程外隔离 | Rust sidecar | 无 | 小（暂无高风险 native 依赖） |
 
 ---
 
-## 三、借鉴建议（按优先级）
+## 四、重构意见
 
-### P0-1 · 用描述符收敛扩展缝 ⭐ 最高性价比
+### R1 · WidgetWindow 从 code-behind 建 UI 改为 XAML + MVVM（最高优先级重构）
 
-**现状：** 新增一个组件要改 7+ 处（§二.3），且 `WidgetWindow` 构造函数里已有 `if (kind == WidgetKind.QuickLaunch)` 这类特判——这正是 DeskBox 演化到"单文件 34 处分支"的起点。
-
-**建议：** 引入 `WidgetDescriptor` + `IWidgetContentProvider`，把"按 kind 分支"压缩到**一处声明、一处实现**。
+**现状：** `WidgetWindow.xaml` 只有一个空壳 `ContentHost` 网格，全部内容由 `WidgetWindow.xaml.cs` 用 C# 手工构建（1030 行）：
 
 ```csharp
-// StarMark.Core/Widgets/WidgetDescriptor.cs
-public sealed record WidgetDescriptor(
-    WidgetKind Kind,
-    string Title,
-    string Glyph,
-    int DefaultWidth,          // DIP
-    int DefaultHeight,         // DIP
-    bool IsResizable,
-    bool AllowMultiple = false // 预留：是否允许多实例
-);
-
-public interface IWidgetContentProvider
+private UIElement BuildTodo()
 {
-    UIElement Build(WidgetContentContext ctx);   // ctx: storage / repo / manager / window
-    void OnShown();      // 替代构造函数里的 if (kind == Clock) 等启动钩子
-    void OnHidden();     // 替代 UpdateClockTimer 里的停表逻辑
+    var panel = new StackPanel { Padding = new Thickness(12, 8, 12, 12), Spacing = 4 };
+    var input = new TextBox { PlaceholderText = "添加待办，回车确认…", FontSize = 12 };
+    var listHost = new StackPanel();
+    // ... 每一行手工 new Grid / CheckBox / TextBlock / Button
 }
 ```
 
-```csharp
-// 唯一声明处
-public static class WidgetCatalog
-{
-    public static IReadOnlyDictionary<WidgetKind, WidgetDescriptor> All { get; } = new Dictionary<WidgetKind, WidgetDescriptor>
-    {
-        [WidgetKind.QuickLaunch] = new(WidgetKind.QuickLaunch, "★ 快捷启动", "★", 320, 460, true),
-        [WidgetKind.Clock]       = new(WidgetKind.Clock,       "🕒 时钟",   "🕒", 220, 150, false),
-        // 新增组件：只加这一行 + 一个 Provider 类
-    };
+**问题：**
 
-    public static IWidgetContentProvider GetProvider(WidgetKind kind) => /* DI 解析 */;
-}
-```
-
-**配套（学 DeskBox 最关键的一步）：** 加一个**契约测试**，钉住"枚举里存在但没人能创建的 kind"：
-
-```csharp
-[Fact]
-public void EveryKind_HasDescriptorAndProvider()
-{
-    foreach (var kind in Enum.GetValues<WidgetKind>())
-    {
-        Assert.True(WidgetCatalog.All.ContainsKey(kind), $"{kind} 缺少描述符");
-        Assert.NotNull(WidgetCatalog.GetProvider(kind));
-    }
-}
-```
-
-**为什么现在做：** 5 种组件时改这个约半天；15 种时改这个是 DeskBox 那种 25 文件级重构。**这是全文档中投入产出比最高的一条。**
-
----
-
-### P0-2 · 把二元置顶换成层级策略
-
-**现状：** `ApplyTopmost()` → `WindowInterop.SetTopmost(..., HWND_TOPMOST / HWND_NOTOPMOST)`，用户手动开/关，持久化到 `WidgetConfig.Topmost`。
-
-**问题：** 一旦置顶就是**持久 TopMost**。DeskBox 明确把这点列为坑——"瞬态置顶不是持久 TopMost，安全网无效"，且会造出"永远压屏"这类最难查的 bug（用户以为卡死、截图/录屏全被挡）。StarMark 的时钟/搜索组件天然需要"平时贴桌面、操作时浮起"，二元模型表达不了。
-
-**建议：** 引入三态层级策略 + 瞬态浮起：
-
-```csharp
-public enum WidgetLayerMode
-{
-    Normal,        // 普通窗口，不干预
-    Raised,        // 瞬态浮起：TOPMOST → 立刻 NOTOPMOST（DeskBox 技巧）
-    DesktopPinned, // attach 到 WorkerW（实验，可选）
-}
-```
-
-```csharp
-/// <summary>DeskBox Win32Helper.BringWindowTemporarilyToFront 同款：
-/// 先置 TOPMOST 再立刻取消，使窗口停在普通层级带顶部但不具备 TopMost 属性。</summary>
-public static void RaiseTransient(Window window)
-{
-    var hwnd = GetHwnd(window);
-    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-}
-```
-
-**落地要点：**
-1. `WidgetConfig.Topmost`(bool) 升级为 `LayerMode`(enum)，做好 v2→v3 迁移（见 P0-3，务必先备份）；
-2. F7 / `Ctrl+Alt+Space` 唤起走 `RaiseTransient`，**不写持久化**；
-3. 多个组件时由 `WidgetManager` **统一**决定 Z 序（学 DeskBox 的"整组批量"），单窗口只清自身状态；
-4. **绝不要**在回落时用 `HWND_BOTTOM`——DeskBox 坑 #2。
-
----
-
-### P0-3 · 拆分 `widgets.json`，消除"一处损坏、全部归零"
-
-**现状：** 所有组件数据（Todos / Notes / Links / Enabled / WindowConfigs）在**一个** `widgets.json` 里。`WidgetStorage.Load()` 的 catch 是：
-
-```csharp
-catch
-{
-    // 损坏文件 → 回退默认（与 DeskBox ResilientJsonStore 同策略）
-}
-return Normalize(null);
-```
-
-**风险（具体且已存在）：** 只要 Todo 列表里出现一个无法反序列化的字段，**整份文件反序列化抛异常 → 返回全新默认对象 → 用户的待办、随记、快捷入口、窗口位置全部静默清零**。DeskBox 的做法是**每组件独立 store + 弹性隔离 + 未知枚举降级**，损坏只影响一个格子。
-
-**建议（三步，可由小到大）：**
-
-1. **立刻（成本最低）：加迁移前备份。** 当前 v1→v2 迁移会直接覆盖原文件且无 `.bak`。在 `Save()` 首次写入前，若 `File.Exists(_path)` 则 `File.Copy(_path, _path + ".bak")`。
-2. **短期：按域拆文件。** `widgets.window.json`（窗口配置，丢了可重建）+ `widgets.todo.json` + `widgets.note.json` + `widgets.link.json`。任一损坏只影响一个域。
-3. **中期：未知值降级而非整体失败。** 学 `WidgetKindJsonConverter`：未知 kind 降级为默认值并记录日志，而不是让整个 `Load()` 抛异常。
-
-**顺带修一处小问题：** `WidgetManager.IsEnabled(kind)` 每次调用都 `_storage.Load()`（**磁盘读 + 全量反序列化**）。而 `BuildMenu()` 的 `Opening` 事件里对 5 个 kind 各调一次 —— 一次右键菜单 = 5 次磁盘读。建议加内存缓存 + dirty 标志（`Save()` 时置脏）。
-
----
-
-### P0-4 · 多显示器与 DPI：保存物理像素的两个陷阱
-
-**现状：** `ApplyInitialBounds()` 在有存档时**直接把 `_config.X/Y/Width/Height` 当物理像素用**；默认尺寸才乘 `scale`。
-
-**两个具体问题：**
-
-1. **DPI 变化后尺寸错乱。** 在 150% 缩放下保存（宽 480 物理像素 = 320 DIP），下次在 100% 显示器上启动 → 按 480 物理像素显示，视觉上大了 1.5 倍。
-2. **越界后位置错乱。** `GetWorkArea(this)` 用 `MonitorFromWindow`，但此时窗口**尚未定位**，很可能返回主显示器 → 原本摆在副屏的组件被"夹"回主屏。
+1. **与项目其余部分严重不一致** —— 主窗口早已是 XAML + ViewModel + `x:Bind`（第四轮还专门修过 `x:Bind` 默认 `OneTime` 导致 UI 不刷新的坑）。组件走回头路，等于放弃已积累的全部经验。
+2. **无法用 XAML Hot Reload**，在无设计器的 WinUI 3 下这是主要开发效率来源（可行性分析 §2.2 已把"无设计器"列为确定约束）。
+3. **无法复用 `ItemCard`** —— 项目已有可复用卡片 UserControl，组件的 `LinkRow()` 又手写了一遍简化版。
+4. `x:Bind` 默认 `OneTime` 的坑会在组件里重演（当前手工赋值反而避开，但也失去绑定能力）。
 
 **建议：**
-- **存 DIP + 存参考 DPI**：`WidgetConfig` 增加 `ScaleAtSave`（或统一以 DIP 存储，读取时按当前 `GetScale()` 还原）。
-- **启动校验**：开机恢复时先判断存档矩形是否与**当前虚拟屏**（`SM_XVIRTUALSCREEN` / `EnumDisplayMonitors`）有足够交集；无交集则回落到主显示器默认级联位置。这是"外接显示器拔掉后再开机"最常见的投诉来源。
-- 中期可学 DeskBox v1.4.6 的**多显示器布局记忆**，但优先级低于上面两条。
+
+- `WidgetWindow.xaml` 内为每种组件准备 `DataTemplate`（或 `ContentControl` + 模板选择器）
+- 每种组件一个 ViewModel（`TodoWidgetViewModel` 等），`ObservableCollection` + `ItemsRepeater`
+- 与 §六 P0-1 的描述符收敛**一并做**：描述符 = 声明，Provider/ViewModel = 实现，XAML 模板 = 视图
+
+**继承既有教训（必须）：** 组件内所有动态绑定显式 `Mode=OneWay`（第四轮教训）；`ItemsRepeater` 内部**不能用 `{Binding}`**，必须用 `x:Bind`（第五轮教训：ItemsRepeater 不给条目设 DataContext，芯片点击曾全部静默失效）。
+
+### R2 · 组件数据纳入统一条目模型（核心架构决策）
+
+见 §5.3 的完整方案与两方案对比。
+
+### R3 · 全量重建改为数据绑定 + 增量更新
+
+**现状：** `ToggleTodo` / `DeleteTodo` / `DeleteNote` / `RebuildQuickLaunch` 都调用 `BuildContent()` **重建整棵 UI 树**。
+
+**问题：** 丢滚动位置、闪屏、随条目数线性变慢。DeskBox 性能审计把"全量视觉树刷新"定为 P0 问题。
+
+**建议：** 随 R1 一并解决——`ObservableCollection` + `ItemsRepeater` 后，勾选待办只需改一个属性。
+
+### R4 · `widgets.json` 拆分与隔离
+
+**现状风险（已存在）：** 单文件全量反序列化，catch 后 `return Normalize(null)`——**任一字段异常即导致待办、随记、快捷入口、窗口位置全部静默清零**。DeskBox 是每组件独立 store + 弹性隔离 + 未知枚举降级。
+
+**建议（三步）：**
+
+1. **立刻**：迁移前 `.bak`（当前 v1→v2 直接覆盖且无备份）
+2. **短期**：按域拆 `widgets.window.json` / `widgets.todo.json` / `widgets.note.json` / `widgets.link.json`
+3. **中期**：未知值降级而非整体失败（学 `WidgetKindJsonConverter`）
+
+**顺带修一处热路径：** `WidgetManager.IsEnabled(kind)` 每次都 `_storage.Load()`（磁盘读 + 全量反序列化），而菜单 `Opening` 事件对 5 个 kind 各调一次——**一次右键菜单 = 5 次磁盘读**。加内存缓存 + dirty 标志即可。
+
+> 若采纳 R2（待办/随记进 SQLite），本条自动简化为只剩窗口配置 + 快捷入口，风险面大幅缩小。
 
 ---
 
-### P0-5 · 全局热键的 UIPI 降级
+## 五、功能实现方案建议
 
-**现状：** `Ctrl+Alt+Space` 走 `RegisterHotKey`。
+### 5.1 先让 Everything 索引进库（组件价值的前提）
 
-**DeskBox 的实测结论：** 当前台是**提权进程**（以管理员运行的程序）时，UIPI 会拦截 `WM_HOTKEY`，**只有 `WH_KEYBOARD_LL` 低级钩子能收到**。DeskBox 因此用 `RegisterHotKey` + `SetWindowSubclass` 接 `WM_HOTKEY`，并保留 `WH_KEYBOARD_LL` 兜底。
+**这是所有建议里投入产出比最高的一项，优先级应高于组件打磨。**
 
-**建议：** 在 `TrayHost` 加热键失败检测——注册后连续 N 次无响应、或检测到前台进程为 High-IL 时，降级到低级钩子并提示用户。同时学 DeskBox 支持**热键可重录 + Esc 取消**，避免与输入法/其他软件冲突时无从调整。
+现状：Everything 只做实时搜索（`SearchAsync` 路径），`FetchAsync` 不落库。
 
----
+**最小可行方案（不必一上来就全量）：**
 
-### P1-1 · 胶囊模式（StarMark 最容易吃到红利的一项）
+```csharp
+// EverythingSource.FetchAsync：限定根目录 + 数量上限，落库为 ItemType.File
+public async Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
+{
+    // 1. 只索引用户配置的根目录（设置页可配；默认桌面 + 下载 + 文档）
+    // 2. 每次 -search "" -max N（如 5000），按 path 排序，用 ContinuationToken 续拉
+    // 3. source_id 沿用既有 SHA256(path.ToLowerInvariant()) 前 8 字节 hex，保证幂等
+}
+```
 
-**理由：** StarMark 现有 5 个组件里，**时钟、搜索、待办**天然适合胶囊化。DeskBox 提出的核心矛盾——"全部展开会挤占空间，全部关闭又会失去入口"——在 StarMark 同样成立，而且 StarMark 的 QuickLaunch 已经在做"置顶条目"摘要，离胶囊只差一层。
+**关键设计点：**
 
-**建议的最小实现：**
-- 三段式热区（左=拖动 / 中=展开 / 右=操作）——**这一条直接抄，成本极低收益极高**；
-- 胶囊锚点与展开格共享（StarMark 已经以左上角为基准，`MoveAndResize` 时保持左上角不动即可）；
-- 拖文件到胶囊 → 临时展开 → 落点确认 → **回到原收起状态**；
-- 隐私模式：收起态隐藏随记正文（StarMark 的随记可能含敏感内容，且用户常在共享屏幕场景使用）。
+- **限定根目录 + 上限**，不要全盘。DeskBox 对自动整理也有硬上限（一次 ≤200 文件 / 100MB）。
+- 复用既有 `ContinuationToken` 字段（已定义未启用），做增量拉取。
+- 落库后本地文件自动获得：文件夹树、标签、置顶、动态、规则引擎 —— **组件立刻有了真正可摆的内容**。
 
-**不要一上来就做** DeskBox 那套 9 步原子切换事务 + 双合成帧 readiness——那是为"分组切换无空白帧"设计的，StarMark 暂无分组，先做静态胶囊即可。
+**顺序建议：** 先把"用户指定目录"的本地文件灌进 `items` 表 → 快捷启动格立刻能摆本地文件 → 再做"标签格 / 搜索结果格"（§7.1）。
 
----
+### 5.2 快捷启动格：绑定式 + 复用 ItemCard
 
-### P1-2 · 拖放契约：在引入文件格之前先立规矩
-
-**现状：** `QuickLaunch_DragOver` 一律 `AcceptedOperation = Copy`，`Drop` 后把路径转成 `file://` URI 存为 Link。
-
-**当前没问题**（快捷入口本就是引用语义，且只写自己的 JSON）。**但一旦引入文件格就会立刻踩雷**，因为那时拖放会同时存在两种语义：
-
-| 场景 | 语义 | 是否动磁盘 |
-|------|------|-----------|
-| 从桌面拖文件进 StarMark 文件格 | 文件系统传输（复制/移动） | **是** |
-| 在格内调整顺序 / 加入叠放 | 内部编排 | **否** |
-| 从格子拖出到微信/浏览器 | 文件系统传输 | 否（仅导出） |
-
-**建议：现在就把两条纪律写进代码注释和文档，等做文件格时直接生效：**
-
-1. **`RequestedOperation` 只能是单个 `Move`**，能力集合放 `AllowedOperations`——否则 Win10 每次拖出都弹"复制/移动/快捷方式"三选菜单。
-2. **内部 `Drop` 完成永不返回 `Move`**。可以在 `DragOver` 里临时接受 `Move` 以让 WinUI 路由，但**完成回执必须是 `None`/`Copy`**。这是 DeskBox 1.4.5 把用户 `.lnk` 送进回收站的直接根因。
-3. **"拒绝即消费"**：拖到不支持的目标上，返回 `None` + 提示，**绝不回退为导入**（回退=移动用户文件）。
-4. **每次拖拽生成 `DragSessionId`**，防止跨会话复用缓存载荷。
-
-**另外**：StarMark 目前只挂了 WinUI 路由 Drop。DeskBox 实测落地入口有**三个**（OLE `IDropTarget` / WinUI 路由 Drop / `WM_DROPFILES`），共用一把 1s 闩锁。若将来发现"从某些程序拖进来没反应"，优先查是否是另外两个入口缺失。
-
----
-
-### P1-3 · 建立性能与内存门禁
-
-**理由：** 桌面组件是**常驻**应用。DeskBox 1.4.8 复盘原话："任务管理器里的数字一大，用户心里难免会打鼓。"
-
-**建议（直接套用 DeskBox 的可测量门禁，按 StarMark 规模酌减）：**
-
-| 指标 | 建议阈值 | 备注 |
-|------|---------|------|
-| 稳态私有内存 | ≤ 150MB | DeskBox AOT 基线 115MB；StarMark 未上 AOT，可放宽 |
-| 20 次显示/隐藏循环 Private 净增 | ≤ 15MB | 直接抄 |
-| 循环后空闲 60s 工作集回落 | ≥ 增量的 50% | 直接抄 |
-| 8 小时长稳 | 无单调爬坡 | 直接抄 |
-| **不要开** Server GC | — | 显著抬基线 |
-
-**StarMark 当前已做对的：** 时钟计时器在 `AppWindow.IsVisible == false` 时 `Stop()`（`UpdateClockTimer`），这是正确的常驻行为，保持。
-
-**两个值得立刻改的小点：**
-- `ToggleTodo` / `DeleteTodo` / `DeleteNote` 都调 `BuildContent()` **全量重建** UI——会丢滚动位置、造成闪烁。改为只更新受影响的行（或至少保留 `ScrollViewer` 偏移）。DeskBox 的性能审计里，"全量视觉树刷新"被定为 P0 问题。
-- 未来若加文件格，**目录枚举的冗余 stat** 是 DeskBox 审计里的高优先级问题（每条目 3–8 次），设计阶段就要按"一次枚举拿全字段"来做。
-
----
-
-### P1-4 · 备份与恢复：组件数据不能是孤岛
-
-**现状（已核实）：** `src/` 下**不存在任何备份/恢复/快照代码**（grep `备份|Backup|Snapshot` 无命中），即 StarMark 目前**完全没有备份能力**。而 `widgets.json` 里存着用户手写的**待办与随记**——真实用户数据，丢失不可重建。
-
-这意味着风险 R1（单文件损坏全清）与 R9（重装即失）目前**没有任何兜底**。这条的优先级实际上应上调到 P0。
-
-**建议（学 DeskBox，但做最小版）：**
-1. **恢复前自动快照**（DeskBox：替换前自动创建恢复前快照）——成本极低，收益极高；
-2. **导出时包含**：窗口配置、待办、随记、快捷入口；**不包含**链接指向的实际文件（DeskBox 明确："映射了 `D:\Projects` 后不会把整个项目目录打进 ZIP"）；
-3. **导入前校验**：结构 → 必要文件 → 可解析性，任一不过**不替换现有数据**；
-4. **v2→v3 迁移前 `.bak`**（见 P0-3 第 1 条）。
-
----
-
-### P2-1 · 组件分组（暂缓，但先把概念边界定清楚）
-
-DeskBox 的经验是**分组必须复用同一个 HWND**（"稳定状态每组一个 HWND、一个实时成员；过渡最多 outgoing + incoming 两个"），而 StarMark 现在是**每 kind 一个独立 HWND**。直接照搬分组会与现有窗口模型冲突。
+**现状：** `LoadPinnedAsync` 手工 `host.Children.Add(LinkRow(...))`，刷新即全量重建。
 
 **建议：**
-- **暂不做分组**，先把概念写进文档：StarMark 若要"组合"，可选路径是 (a) 学 DeskBox 改为单窗口多成员切换，或 (b) 只做"胶囊组合栏"（多个独立组件靠边对齐，不改窗口模型）——后者与 StarMark 现有架构兼容得多。
-- 真要做分组时，**务必先读** `requirements/widget-group-navigation-ux.md` 的"替代声明"部分。那 1000+ 行被否决方案（外部导航条、Smart Stack 跟手手势）能省下大量试错。
+
+```xml
+<!-- WidgetWindow.xaml 内 -->
+<ItemsRepeater ItemsSource="{x:Bind ViewModel.PinnedItems, Mode=OneWay}">
+    <ItemsRepeater.ItemTemplate>
+        <DataTemplate x:DataType="vm:ItemCardViewModel">
+            <controls:ItemCard /><!-- 复用主窗口同款卡片 -->
+        </DataTemplate>
+    </ItemsRepeater.ItemTemplate>
+</ItemsRepeater>
+```
+
+收益：复用 `ItemCard` 既有能力（右键菜单、标签芯片、预览入口、"发送到桌面·快捷启动"），视觉与交互跟主窗口一致，且自动获得虚拟化。
+
+### 5.3 待办 / 随记：纳入统一条目模型（推荐方案 A）
+
+这是「缺口三」的解法，也是 StarMark 相对 DeskBox 的结构性优势。
+
+#### 方案对比
+
+| | **方案 A：纳入 `items` 表** | **方案 B：维持独立 JSON** |
+|---|---|---|
+| 做法 | 新增 `ItemType.Todo` / `ItemType.Note`，`source='local'` | 现状不变，只做 JSON 拆分 |
+| 统一搜索 | ✅ 待办/随记可被搜到 | ❌ |
+| 打标签 / 置顶 | ✅ 复用既有能力 | ❌ 需另建一套 |
+| 规则引擎（远期） | ✅ 自动受益 | ❌ |
+| 与核心亮点一致 | ✅ 强化"统一条目模型" | ❌ 在核心处开口子 |
+| 用户状态边界 | ⚠️ 需设计：`source='local'` 永不参与同步覆盖 | ✅ 天然隔离 |
+| 迁移成本 | 中：v2→v3 迁移 + `ItemType` 扩展（约 4 处 switch） | 低 |
+| 性能 | 略增（SQLite 完全承受） | 低 |
+
+#### 推荐 A，五个关键设计点
+
+1. **`source='local'` 是关键。** 现有架构已确立"用户状态（hidden/pinned/notes）同步永不覆盖"（第六轮修复）。待办/随记设为 `source='local'` 后天然不会被任何 `IItemSource` 覆盖——**无需改动 Upsert 逻辑，语义自洽**。
+2. **`title` = 待办/随记正文**，`search_text` 自动纳入 FTS5（既有触发器），搜索开箱可用。
+3. **完成状态不要复用 `pinned`。** 建议新增独立列或用 `extra_json`，避免语义混淆。
+4. **迁移**：`WidgetStorage.Normalize` 增加 v2→v3，迁移进 `items` 并**保留原 JSON 作 `.bak`**。
+5. **`ItemType` 扩展**需同步检查所有 switch（目前约 4 处）——这是 §六 P0-1 描述符收敛的又一理由。
+
+**若时间紧张可折衷：** 先只把**随记**纳入（笔记本来就有 `notes` 表，语义最接近），待办暂留 JSON。
+
+### 5.4 搜索格：复用 SearchService，而非"唤起主窗口"
+
+**现状：** `Submit()` → `_manager.RequestGlobalSearch(q)` → 唤起主窗口搜索。
+
+**建议：** 组件内直接调 `SearchService`，在组件内 `ItemsRepeater` 展示前 N 条，点击才打开主窗口。理由：
+
+- 唤起主窗口是"重操作"，打断用户当前工作（与"桌面快速取用"初衷相悖）
+- StarMark 有 FTS5 毫秒级检索 + Everything 实时源，组件内搜索完全可行
+- 这才是 DeskBox 做不到的形态（DeskBox 搜索格只覆盖它自己的内容，跨源统一检索 StarMark 独享）
 
 ---
 
-### P2-2 · 进程外隔离（当前不必做，但要知道触发条件）
+## 六、借鉴建议（按校准后优先级）
 
-**触发条件：** 一旦 StarMark 接入**第三方 shell 扩展**（缩略图处理器、`IContextMenu`），就必须进程外隔离。DeskBox 的理由很硬：第三方 DLL 加载进主进程，"崩了整个 App 陪葬"，且这是已知高频崩溃源。
+> 相对 v1 的变化：**新增 P0-0（修失败测试）与 P0-1b（Everything 入库）**；原 `MoveFileAction` 降级为远期约束。
 
-**当前状态：** StarMark 用的是 WinUI 原生控件 + 自研图标，**暂无需隔离**。
+### P0-0 · 先修 `WidgetSnapping` 跨轴耦合缺陷 ✅ **已完成（v3）**
 
-**但可以立刻抄的一条：** 《架构健壮性分析与演进》§六 已列"卡片右键直达 Windows 原生菜单（`ShowContextMenuAsync`）"——**做这个的时候，就是引入进程外隔离的时刻**，不要等崩了再改。
+- ~~**现状：** 60 测试 59 通过，1 失败；拖动时窗口纵向意外跳动~~
+- **已完成：** 删除 `WidgetSnapping.cs`，替换为忠实移植的 `WidgetSnapCalculator.cs`；测试 82/82 全绿。详见 §3.3「v3 实作」小节
+- **理由：** 在红色测试基线上做重构，无法区分"新引入的"与"本来就坏的"
+
+### P0-1 · 用描述符收敛扩展缝 ✅ **已完成（v3）**
+
+- ~~**现状：** `WidgetKind` 已在 7–9 处产生分支~~
+- **已完成：** `WidgetDescriptor.cs`（元数据，Core 层，对应 DeskBox `WidgetContentDescriptor`）+ `WidgetRegistry.Default`（唯一事实来源）+ `WidgetContentFactory`（UI 层内容创建，对应 DeskBox provider 分层）。`KindTitle` / `KindGlyph` / `DefaultWidth` / `DefaultHeight` / `IsResizable` / `BuildContent` 六处分支已全部改为查表。
+- **契约测试：** `WidgetRegistryTests.EveryEnumValue_HasDescriptor` 钉住"枚举里存在但未登记描述符"的情况；`UnknownKind_FallsBackWithoutThrowing` 保证存储层读未知类型不崩。
+- **注意：** 构造函数内的组件特判（`QuickLaunch` 事件订阅 / `Clock` 计时器）尚未收敛，属下一步。
+- **时机：** 5 种组件时约半天；等加了天气/音乐/活动就是 DeskBox 那种 25 文件级重构
+- **与 R1 合并做**：描述符=声明，XAML 模板=视图，Provider/VM=实现
+
+### P0-1b · Everything 索引进库（新增，价值最高）
+
+见 §5.1。**这是"组件有没有内容可摆"的前提。**
+
+### P0-2 · 二元置顶换层级策略 ✅ **已完成（v3）**
+
+- **已完成：** 新增 `WidgetLayerService`（移植 DeskBox `WidgetLayerService.cs`）+ `WidgetZOrderPolicy`（Core 纯函数，移植 `IdleWidgetZOrderPolicy`）。组件窗口在 `Reveal()` 时挂载到 `SHELLDLL_DefView`，`Closed` 时脱离；拖动开始时瞬态浮起（`HWND_TOPMOST` 紧跟 `HWND_NOTOPMOST`）。
+- **修正认知：** 持久 TopMost 实际默认是 `false`（用户显式开关），v2 所述"永远压屏"风险不成立；真正的缺口是**从未挂载桌面层**。
+- **遗留：** Explorer 重启会销毁 DefView 及其拥有的窗口——DeskBox 文档记录过此坑，StarMark 尚未实现重启后的重挂载，见风险清单。
+- **建议：** 三态 `WidgetLayerMode`（Normal / Raised / DesktopPinned）+ 瞬态浮起（TOPMOST→立刻 NOTOPMOST）；多组件由 `WidgetManager` 统一 Z 序；**回落绝不用 `HWND_BOTTOM`**
+
+### P0-3 · `widgets.json` 拆分与隔离
+
+见 R4。若采纳 R2 则风险面自动缩小。
+
+### P0-4 · 多显示器与 DPI
+
+- **DPI 陷阱：** 有存档时直接把 `X/Y/Width/Height` 当物理像素用（默认尺寸才乘 `scale`）——150% 下保存、100% 下启动会放大 1.5 倍
+- **越界陷阱：** `GetWorkArea` 用 `MonitorFromWindow`，但窗口**尚未定位**很可能返回主显示器 → 副屏组件被"夹"回主屏
+- **建议：** 存 DIP + 参考 DPI；启动校验存档矩形与当前虚拟屏是否有交集，无交集回落到主屏级联位
+
+### P0-5 · 热键 UIPI 降级
+
+`Ctrl+Alt+Space` 走 `RegisterHotKey`。DeskBox 实测：**前台为提权进程时 UIPI 拦截 `WM_HOTKEY`，只有 `WH_KEYBOARD_LL` 能收到**。建议加失败检测 + 低级钩子降级，并支持热键可重录 + Esc 取消。
+
+### P1 · 后续
+
+- **P1-1 胶囊模式**：时钟/搜索/待办天然适合。最小实现：三段式热区 + 锚点共享 + 拖放临时展开 + 隐私模式。**暂不做** DeskBox 那套 9 步原子切换（那是为分组设计的）。
+- **P1-2 拖放契约**：当前没问题（快捷入口本就是引用语义）。但**一旦引入文件格立刻踩雷**——现在就把两条纪律写进注释：① `RequestedOperation` 只能单个 `Move`；② **内部 Drop 完成永不返回 `Move`**（1.4.5 事故根因）。另：DeskBox 实测落地入口有三个（OLE / WinUI 路由 / `WM_DROPFILES`），若发现"从某些程序拖进来没反应"优先查另两个。
+- **P1-3 性能门禁**：常驻应用必补。建议阈值——稳态 ≤150MB（未上 AOT，可宽于 DeskBox 的 115MB）、20 循环净增 ≤15MB、空闲 60s 回落 ≥50%、不开 Server GC。**已做对的：** 时钟计时器在隐藏时 `Stop()`，保持。
+- **P1-4 备份**：`src/` 下**无任何备份/快照代码**（已核实），风险裸露。最小版：恢复前快照 + `widgets.json` 纳入导出（不打包链接指向的实际文件）。
+
+### P2 · 暂缓
+
+- **P2-1 组件分组**：DeskBox 的分组要求复用同一 HWND，与 StarMark"每 kind 独立 HWND"冲突。可选路径：(a) 改单窗口多成员切换（大改）；(b) 只做"胶囊组合栏"（兼容现有模型）。**真要做时务必先读** `requirements/widget-group-navigation-ux.md` 的"替代声明"，那 1000+ 行被否决方案能省大量试错。
+- **P2-2 进程外隔离**：当前无第三方 native 依赖，不必做。**触发条件**：一旦接入第三方 shell 扩展（含"卡片右键直达 Windows 原生菜单"这一《架构健壮性分析》§六已列事项），就是引入隔离的时刻。
 
 ---
 
-## 四、不该照抄的部分 · StarMark 的差异化机会
+## 七、差异化：StarMark 不该照抄的部分
 
-### 4.1 核心判断：StarMark 的组件应该是"条目格"，不是"文件格"
+### 7.1 组件内容应走"统一条目"路线，而非 DeskBox 的文件格
 
-DeskBox 的全部设计围绕**文件收纳**展开（文件格子 → 叠放 → 整理 → 桌面组织）。这是它的起点，也是它的边界——它**没有**统一条目数据库，书签/GitHub Star/剪贴板这些异构数据源它处理不了。
+DeskBox 全部设计围绕**文件收纳**（文件格 → 叠放 → 整理 → 桌面组织）。它**没有**统一条目数据库，处理不了书签/GitHub Star/剪贴板这类异构源。
 
-StarMark 恰恰相反：它的地基是 `items` 统一条目表（文件/书签/GitHub Star/剪贴板四类同源）+ FTS5 两阶段查询 + Everything 集成（《项目开发技术文档》§二、§四）。**这是 DeskBox 没有的能力，也是 StarMark 唯一可能形成代差的地方。**
+StarMark 恰恰相反：`items` 统一表 + FTS5 两阶段查询 + Everything 是它的地基。**这是唯一可能形成代差的地方。**
 
-**具体建议：把"快捷启动格"升级为"条目格"，这是 DeskBox 做不到的形态：**
+**建议的差异化组件（均依赖 §5.1 的 Everything 入库）：**
 
-| 能力 | 说明 | 依赖（StarMark 已有） |
-|------|------|---------------------|
-| **标签格** | 把某个标签的条目直接摆到桌面，随库更新 | `item_tags` + `TagsPageViewModel` |
-| **搜索结果格** | 钉住一条查询（如 `stars>500 AND topic:rag`），结果常驻桌面 | `SearchService` + FTS5 两阶段查询 |
-| **最近活动格** | 按 `updated_at` 展示最近打开的条目 | `ActivityPageViewModel` |
-| **置顶条目格** | 现状已有（`GetPinnedAsync(8)`），可扩展为分组置顶区 | `items.pinned`（第五轮已加） |
+| 组件 | 说明 | 依赖（已有/在办） |
+|------|------|-----------------|
+| **标签格** | 某标签的条目直接摆桌面，随库更新 | `item_tags` + `TagsPageViewModel` ✅ |
+| **搜索结果格** | 钉住一条查询（如 `stars>500 AND topic:rag`），结果常驻 | `SearchService` + FTS5 ✅ |
+| **最近活动格** | 按 `updated_at` 展示最近条目 | `ActivityPageViewModel` ✅ |
+| **置顶条目格** | 现状已有，可扩展为分组置顶区 | `items.pinned` ✅ |
 
-**一句话：** 抄 DeskBox 的**窗口与交互工程能力**，但组件内容走 StarMark 自己的**统一条目**路线。DeskBox 的"文件格 / 叠放 / 自动整理"是它的历史包袱，不是 StarMark 的目标形态。
+**一句话：抄 DeskBox 的窗口与交互工程能力，组件内容走 StarMark 自己的统一条目路线。**
 
-### 4.2 `MoveFileAction` 是全项目风险最高的单点
+### 7.2 `MoveFileAction` 调整为远期设计约束（相对 v1 的修正）
 
-《项目开发技术文档》§七 Phase 3 规划了 `MoveFileAction 移动文件`。**建议重新评估。**
+v1 将其列为"当前最高风险"。核实后：规则引擎**尚未实现**（仅 schema + 占位接口），属 Phase 3 远期事项，故下调优先级。但约束本身依然成立，将来做时须满足：
 
-DeskBox 的两起事故都是文件移动引起的（1.4.5 `.lnk` 误删进回收站、卸载后用户以为文件被删）。它的应对是三条可验收的机制：
+1. **移动前展示"计划"而非"数量"** —— 列出准备处理的文件、分类、**最终真实路径**，可跳过/改目标。原文："你知道文件要去哪里，才更愿意让工具替你做重复的动作。"
+2. **自动化"先建基线、只管新增、等待稳定"** —— 默认关闭；开启时不追溯已有文件；FS 事件防抖 3–5s，连续 2–3 次确认大小与 mtime 稳定；状态存疑即留在原地。
+3. **可枚举的安全边界** —— 文件夹/隐藏/系统/重解析点/云占位/下载中/权限不足/单文件 >100MB 不处理；一次 ≤200 文件 / 100MB。
+4. **MVP 阶段建议只做 `add_tag` / `set_note` / `mark_duplicate`，不做真实移动。** StarMark 的价值主张是"统一检索 + 组织"，不是"整理桌面"。
+5. **规则绑定稳定 ID 而非显示名称**（DeskBox：`OrganizationRule` → `WidgetId` 而非 `DisplayName`）；目标失效时**暂停并提示**，不得静默改投。
 
-1. **移动前展示"计划"而非"数量"**——扫描后列出：准备处理的文件、分类、**接收格子、最终真实路径**，用户可跳过/改目标，点确认才执行。原文："这种设计会多出一次确认，却把最重要的信息放到了移动前。你知道文件要去哪里，才更愿意让工具替你做重复的动作。"
-2. **自动化"先建基线、只管新增、等待稳定"**——默认关闭；开启时把当前状态记为基线**不追溯已有文件**；只处理之后出现且通过稳定性检查（FS 事件防抖 3–5s，连续 2–3 次确认大小与 mtime 稳定）的新文件；"无法确认状态时也保持在桌面"。
-3. **可枚举的安全边界**——文件夹/隐藏/系统/重解析点/云占位符/下载中/权限不足/单文件 >100MB 不处理；一次最多 200 个文件 / 100MB。
-
-**对 StarMark 的具体建议：**
-- **MVP 阶段 `MoveFileAction` 只做"打标签 / 写笔记 / 标记疑似重复"，不做真实移动。** StarMark 的价值主张是"统一检索 + 组织"，不是"整理桌面"——移动文件对它并非必要。
-- 若确要做，**先把上面三条做成验收标准，再写第一行代码**。
-- **规则绑定稳定 ID 而非显示名称**（DeskBox：`OrganizationRule` 绑 `WidgetId` 而非 `DisplayName`）——StarMark 现有 `rules` 表设计时需确认这一点；目标失效时规则应**暂停并提示**，不得静默改投。
-
-### 4.3 不要照抄的三件事
+### 7.3 不要照抄的三件事
 
 | DeskBox 做法 | StarMark 不该跟 | 原因 |
 |-------------|----------------|------|
-| Native AOT + Rust sidecar + 进程外 COM | ❌ 暂缓 | DeskBox 为此投入了 70+ 篇 stage 报告；StarMark 当前无第三方 native 依赖，引入是纯负债 |
-| 27 个分域 `JsonSerializerContext` | ❌ 现在不做 | 那是 AOT 的配套要求；StarMark 未上 AOT，先做 P0-3 的数据隔离更划算 |
-| 文件整理 / 桌面组织 | ❌ 非差异化 | 见 §4.1、§4.2 |
+| Native AOT + Rust sidecar + 进程外 COM | ❌ 暂缓 | DeskBox 为此投入 70+ 篇 stage 报告；当前无第三方 native 依赖，引入是纯负债 |
+| 27 个分域 `JsonSerializerContext` | ❌ 现在不做 | AOT 配套要求；先做数据隔离更划算 |
+| 文件整理 / 桌面组织 | ❌ 非差异化 | 见 §7.1、§7.2 |
 
 ---
 
-## 五、建议落地顺序
+## 八、建议落地顺序
 
 ```
-第九轮（建议范围）
-├─ P0-1 描述符收敛 + 契约测试          ← 半天，最高性价比，越晚越贵
-├─ P0-3 widgets.json 迁移前 .bak + IsEnabled 缓存 + 数据按域拆分
-├─ P0-4 DIP 存储 + 启动越界回收
-└─ P1-4（提前）最小备份：恢复前快照 + widgets.json 纳入导出（当前零兜底，风险裸露）
+第九轮 · 先把地基修平 ✅ 已完成（本次直接拉取 DeskBox 源码复用）
+├─ ✅ P0-0  吸附算法改为完整移植 WidgetSnapCalculator（修复跨轴耦合 → 82/82 全绿）
+├─ ✅ P0-1  描述符 + 注册表 + 内容工厂，收敛 6 处 WidgetKind 分支
+├─ ✅ P0-2  层级策略：挂载桌面图标层 + 瞬态浮起 + 空闲期 Z 序
+└─ ⬜ P0-3  widgets.json 迁移前 .bak + IsEnabled 磁盘读缓存
 
-第十轮
-├─ P0-2 层级策略（瞬态浮起 + 管理器统一 Z 序）+ v2→v3 迁移
-├─ P0-5 热键 UIPI 降级 + 可重录
-└─ P1-3 性能门禁（先定测量方法，再优化）
+第九轮后续 / 下一次
+├─ ⬜ P0-4  DIP 存储 + 启动越界回收
+├─ ⬜ P1-4  最小备份：恢复前快照 + 组件数据纳入导出（当前零兜底）
+└─ ⬜ Explorer 重启后重新挂载桌面层（见风险清单）
 
-第十一轮
-├─ P1-1 胶囊模式（三段式热区优先）
-├─ P1-2 拖放契约纪律（注释 + 文档，为文件格铺路）
-└─ P1-4 完整备份：导出/导入校验、不打包链接指向的实际文件
+第十轮 · 让组件有内容可摆（价值最高）
+├─ ⬜ P0-1b Everything 索引进库（限定根目录 + 上限 + 增量续拉）
+└─ 验证：本地文件出现在文件夹树/标签/动态/置顶，快捷启动格可摆本地文件
+
+第十一轮 · 组件架构归位
+├─ ⬜ R1  WidgetWindow 改 XAML + MVVM（1030 行 code-behind 建 UI）
+│          （组件内绑定必须 Mode=OneWay、ItemsRepeater 内用 x:Bind）
+└─ ⬜ R3  全量重建 → ObservableCollection + ItemsRepeater
+
+第十二轮 · 接回统一条目模型（差异化）
+├─ ⬜ R2 / §5.3  待办/随记纳入 items（建议先随记，待办折衷）
+├─ ⬜ §5.2       快捷启动格复用 ItemCard
+└─ ⬜ §5.4       搜索格改为组件内直搜
 
 之后 / 按需
-├─ 差异化：标签格 / 搜索结果格 / 最近活动格（§4.1）
-└─ P2-1 分组 或 胶囊组合栏
+├─ ⬜ P0-5 热键 UIPI 降级 + 可重录
+├─ ⬜ P1-1 胶囊模式（三段式热区优先）
+└─ ⬜ P1-3 性能门禁（先定测量方法，再优化）
 ```
 
-**判断标准：** 凡属"**会随组件数量线性变贵**"的事（扩展缝、数据隔离），越早做越便宜；凡属"**只在特定场景才需要**"的事（进程外隔离、AOT），等触发条件出现再做。
+**排序逻辑：** ① 先让测试变绿（否则无法判断后续改动）；② 再补数据（组件价值的前提）；③ 再做架构归位（在数据之上重构才有意义）；④ 最后才打磨外壳与交互。
 
 ---
 
-## 六、风险清单
+## 九、风险清单
 
 | # | 风险 | 影响 | 现状 | 建议 |
 |---|------|------|------|------|
-| R1 | `widgets.json` 单文件损坏导致待办/随记/入口/位置全清 | **数据丢失** | 已存在 | P0-3 |
-| R2 | v2→v3 迁移直接覆盖且无备份 | **数据丢失** | 已存在 | P0-3 第 1 条 |
-| R3 | 保存物理像素 + DPI 变化 → 组件尺寸/位置错乱 | 体验 | 已存在 | P0-4 |
-| R4 | 拔掉外接显示器后组件落到屏外 | 找不到组件 | 已存在 | P0-4 |
-| R5 | 持久 TopMost 造成"永远压屏" | 体验 / 投诉 | 已存在 | P0-2 |
-| R6 | `MoveFileAction` 移动用户文件（Phase 3） | **信任崩塌** | 规划中 | §4.2 |
-| R7 | 扩展缝未收敛，组件增多后重构成本陡增 | 工期 | 已存在 | P0-1 |
-| R8 | 引入第三方 shell 扩展后主进程被带崩 | 崩溃 | 未发生 | P2-2 |
-| R9 | 组件数据不进备份，重装即失 | 数据丢失 | 已存在 | P1-4 |
-| R10 | 无性能门禁，常驻后内存爬坡 | 口碑 | 已存在 | P1-3 |
+| R1 | `widgets.json` 单文件损坏 → 待办/随记/入口/位置全清 | **数据丢失** | 已存在 | P0-3 / R4 |
+| R2 | v2→v3 迁移直接覆盖且无备份 | **数据丢失** | 已存在 | P0-3 |
+| R3 | 吸附算法跨轴耦合 → 拖动时纵向意外跳动 | 体验缺陷 | ✅ **已修复（v3）** | P0-0 |
+| R4 | 保存物理像素 + DPI 变化 → 尺寸/位置错乱 | 体验 | 已存在 | P0-4 |
+| R5 | 拔掉外接显示器后组件落到屏外 | 找不到组件 | 已存在 | P0-4 |
+| R6 | ~~持久 TopMost 造成"永远压屏"~~（实测默认 false，用户显式开关，风险不成立） | — | ✅ **已澄清** | — |
+| R6b | **Explorer 重启会销毁 SHELLDLL_DefView 及其拥有的组件窗口** | 组件消失 | **v3 新引入** | 监听 `TaskbarCreated`/`shellhook` 后调 `InvalidateDesktopCache()` 并重挂载，或降级为不挂载 |
+| R7 | 本地文件不入库 → 统一条目模型缺最大一块，组件无内容可摆 | **核心价值** | 已存在 | P0-1b |
+| R8 | 组件数据游离于 `items` 之外，背离核心亮点 | **架构** | 已存在 | R2 / §5.3 |
+| R9 | WidgetWindow 全 code-behind，与项目其余部分不一致 | 可维护性 | 已存在 | R1 |
+| R10 | ~~扩展缝未收敛，组件增多后重构成本陡增~~ | 工期 | ✅ **已收敛（v3）** | P0-1 |
+| R11 | **全项目无任何备份能力**，组件数据重装即失 | 数据丢失 | 已存在 | P1-4（应按 P0 处理） |
+| R12 | 前台为提权进程时全局热键失效 | 体验 | 已存在 | P0-5 |
+| R13 | `MoveFileAction` 移动用户文件（Phase 3 远期） | 信任崩塌 | 未实现 | §7.2 设计约束 |
+| R14 | 无性能门禁，常驻后内存爬坡 | 口碑 | 已存在 | P1-3 |
+| R15 | 引入第三方 shell 扩展后主进程被带崩 | 崩溃 | 未发生 | P2-2 |
 
 ---
 
-## 附录：DeskBox 文档索引（供后续深入）
+## 附录：DeskBox 文档索引
 
 **优先读：**
-- `docs/articles/00-overview.md` — 产品世界观，"真实路径优先"的出处
+
+- `docs/articles/00-overview.md` — 产品世界观，"真实路径优先"出处
 - `docs/architecture/[重要勿删]widget_zorder_lifecycle.md` — 层级机制 + 8 个坑
 - `docs/architecture/[重要勿删]file_drag_stack_contract.md` — 19 条拖放规则 + 两层模型
-- `docs/architecture/widget_contribution_seam.md` — 扩展缝的成本量化
-- `docs/articles/deskbox-1.4.8-release-reflection.md` — 开发过程复盘，含两起事故
+- `docs/architecture/widget_contribution_seam.md` — 扩展缝成本量化
+- `docs/articles/deskbox-1.4.8-release-reflection.md` — 复盘，含两起事故
 
 **按需读：**
-- `docs/requirements/widget-group-navigation-ux.md` — 分组导航（注意顶部的"替代声明"）
-- `docs/requirements/desktop-auto-organization.md` — 自动整理的安全边界
-- `docs/requirements/adaptive-widget-animation.md` — 帧钟与降频策略
-- `docs/architecture/native_context_menu_hosting.md` — 进程外右键菜单（引入原生菜单时必读）
+
+- `docs/requirements/widget-group-navigation-ux.md` — 分组导航（注意顶部"替代声明"）
+- `docs/requirements/desktop-auto-organization.md` — 自动整理安全边界
+- `docs/requirements/adaptive-widget-animation.md` — 帧钟与降频
+- `docs/architecture/native_context_menu_hosting.md` — 引入原生菜单时必读
 - `docs/memory-optimization-plan.md` — 内存预算与验收门禁
 - `docs/articles/performance-audit-20260907.md` — 性能问题清单
 
-**不必读：** `docs/architecture/stage-reports/`（70+ 篇 AOT 迁移日志）、`docs/releases/`（可按需查时间线）。
+**不必读：** `docs/architecture/stage-reports/`（70+ 篇 AOT 迁移日志）、`docs/releases/`（按需查时间线）。
 
 ---
 
 **文档结束。**
 
-> 本文所有关于 DeskBox 的结论均标注了出处文件；DeskBox 文档未明确之处均已在正文标注"文档未明确"。
-> 涉及 `WS_EX_TOOLWINDOW` / Alt-Tab 隐藏 / `SetParent` 到桌面容器等实现细节，DeskBox 文档**未描述**，如需复现请直接参考其源码 `Win32Helper.cs` 与 `WidgetLayerService.cs`。
+> 关于 DeskBox 的结论均标注出处；文档未明确处均标注"文档未明确"。
+> `WS_EX_TOOLWINDOW` / Alt-Tab 隐藏 / `SetParent` 到桌面容器等实现细节，DeskBox 文档**未描述**，需读其源码 `Win32Helper.cs` 与 `WidgetLayerService.cs`。
+> 本版实测基线（构建 0 错误 0 警告、测试 59/60）于 2026-09-16 在本机执行，环境 net9.0-windows10.0.19041.0 / WindowsAppSDK 2.4.0。
