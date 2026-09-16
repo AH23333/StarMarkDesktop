@@ -1,4 +1,5 @@
 #nullable enable
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using StarMark.Abstractions;
@@ -73,12 +74,28 @@ public sealed partial class SearchPage : Page
     private void Card_OpenLocationRequested(object sender, ViewModels.ItemCardViewModel vm)
         => ItemCardActions.OpenLocation(vm);
 
+    /// <summary>
+    /// 卡片标签点击：在搜索页内叠加标签过滤，而不是跳去标签页。
+    /// 原实现 NavigateTo("tags") 会丢掉当前关键词、且只能选一个标签；
+    /// 现在与关键词组合成「搜 X 且带 #ai」的 AND 过滤，对齐扩展侧边栏行为。
+    /// </summary>
     private void Card_TagFilterRequested(object sender, (ViewModels.ItemCardViewModel VM, string Tag) e)
-        => App.MainWindow?.NavigateTo("tags", e.Tag);
+        => ViewModel.AddTagFilter(e.Tag);
 
     private void Card_TagRemoveRequested(object sender, (ViewModels.ItemCardViewModel VM, string Tag) e)
         => ItemCardActions.RemoveTag(this.XamlRoot, e.VM, e.Tag);
 
     private void Card_TagAddRequested(object sender, ViewModels.ItemCardViewModel vm)
         => ItemCardActions.AddTag(this.XamlRoot, vm);
+
+    // ───────── 吸顶标签筛选条 ─────────
+
+    private void TagFilterChip_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string tag })
+            ViewModel.RemoveTagFilter(tag);
+    }
+
+    private void ClearTagFilters_Click(object sender, RoutedEventArgs e)
+        => ViewModel.ClearTagFilters();
 }

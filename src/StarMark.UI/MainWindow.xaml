@@ -13,6 +13,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -99,7 +100,10 @@
                  CornerRadius="8"
                  CloseButtonClick="InfoBar_Close"/>
 
-        <!-- NavigationView 页面导航 -->
+        <!-- 页面导航。ContentFrame 已移出 NavigationView：
+             搜索态需要整条折叠（Visibility=Collapsed），若 Frame 仍是 NavView 的 Content，
+             折叠后顶部会空出一截。现在 NavView 独占一行（Auto），折叠时该行塌缩为 0，
+             内容区自然上移填满 —— 对应浏览器扩展「搜索时用 toolbar 整行替换 tabs」。 -->
         <NavigationView x:Name="NavView" Grid.Row="4" PaneDisplayMode="Top" IsBackButtonVisible="Collapsed"
                         IsSettingsVisible="False" IsPaneToggleButtonVisible="False"
                         SelectionChanged="NavView_SelectionChanged">
@@ -125,8 +129,8 @@
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
             </NavigationView.MenuItems>
-
-            <Frame x:Name="ContentFrame"/>
         </NavigationView>
+
+        <Frame x:Name="ContentFrame" Grid.Row="5"/>
     </Grid>
 </Window>

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="StarMark.UI.Controls.TagEditor"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:StarMark.UI.Helpers">
+
+    <UserControl.Resources>
+        <local:ContainedTagColorConverter x:Key="TagColor"/>
+        <local:BoolToVisibilityConverter x:Key="BoolToVis"/>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <!-- 已选标签：点 chip 即移除（对齐扩展 tag-chip-row 的 ✕） -->
+        <ItemsRepeater x:Name="ChipRepeater" ItemsSource="{x:Bind Tags, Mode=OneWay}">
+            <ItemsRepeater.Layout>
+                <StackLayout Orientation="Horizontal" Spacing="4"/>
+            </ItemsRepeater.Layout>
+            <ItemsRepeater.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                    <Button Click="Chip_Click" Tag="{x:Bind}" Padding="8,2"
+                            CornerRadius="10" BorderThickness="0"
+                            Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                            ToolTipService.ToolTip="点击移除">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Text="{x:Bind}" FontSize="12"
+                                       Foreground="{x:Bind Converter={StaticResource TagColor}}"/>
+                            <TextBlock Text="✕" FontSize="9" Opacity="0.55" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </DataTemplate>
+            </ItemsRepeater.ItemTemplate>
+        </ItemsRepeater>
+
+        <!-- 输入：逗号 / 空格 / 回车 提交为一个标签；空输入按退格删除最后一个 chip -->
+        <TextBox x:Name="InputBox"
+                 Margin="0,8,0,0"
+                 PlaceholderText="输入标签，逗号或回车分隔"
+                 TextChanged="InputBox_TextChanged"
+                 KeyDown="InputBox_KeyDown"/>
+
+        <!-- 历史标签建议：点击即追加（对齐扩展 suggest-row，上限 24） -->
+        <StackPanel x:Name="SuggestPanel" Margin="0,6,0,0" Spacing="4"
+                    Visibility="{x:Bind HasSuggestions, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+            <TextBlock Text="建议" FontSize="11" Style="{StaticResource MutedText}"/>
+            <ItemsRepeater x:Name="SuggestRepeater" ItemsSource="{x:Bind Suggestions, Mode=OneWay}">
+                <ItemsRepeater.Layout>
+                    <StackLayout Orientation="Horizontal" Spacing="4"/>
+                </ItemsRepeater.Layout>
+                <ItemsRepeater.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                        <Button Click="Suggest_Click" Tag="{x:Bind}" Padding="8,2"
+                                CornerRadius="10" BorderThickness="0"
+                                Background="Transparent"
+                                ToolTipService.ToolTip="添加此标签">
+                            <TextBlock FontSize="12"
+                                       Foreground="{x:Bind Converter={StaticResource TagColor}}">
+                                <Run Text="+"/><Run Text="{x:Bind}"/>
+                            </TextBlock>
+                        </Button>
+                    </DataTemplate>
+                </ItemsRepeater.ItemTemplate>
+            </ItemsRepeater>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

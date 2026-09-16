@@ -189,6 +189,7 @@ public sealed partial class MainWindow : Window
     {
         ViewModel.CurrentPageTag = "settings";
         NavView.SelectedItem = null;
+        SetNavVisible(false);
         if (ContentFrame.Content is not SettingsPage)
             ContentFrame.Navigate(typeof(SettingsPage));
         PushToolbarToContent();
@@ -204,6 +205,7 @@ public sealed partial class MainWindow : Window
             ViewModel.Query = query;
             ViewModel.CurrentPageTag = "search";
             NavView.SelectedItem = null;
+            SetNavVisible(false);
             ContentFrame.Navigate(typeof(SearchPage));
             PushToolbarToContent();
             if (ContentFrame.Content is SearchPage sp)
@@ -280,6 +282,14 @@ public sealed partial class MainWindow : Window
 
     // ===== 导航 =====
 
+    /// <summary>
+    /// 搜索态折叠整条导航栏，浏览态恢复。
+    /// 浏览器扩展是「搜索时用 toolbar 整行替换 tabs」，不留空白；
+    /// 这里靠 NavView 独占 Grid 的一行（Height=Auto）+ Collapsed 实现同样效果。
+    /// </summary>
+    private void SetNavVisible(bool visible)
+        => NavView.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+
     private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs? args)
     {
         // 编程触发（初始选择）时 args 为 null，直接读 SelectedItem
@@ -287,6 +297,7 @@ public sealed partial class MainWindow : Window
         if (item.Tag is string tag)
         {
             ViewModel.CurrentPageTag = tag;
+            SetNavVisible(true);
             NavigateToPage(tag);
             PushToolbarToContent();
         }
@@ -295,6 +306,7 @@ public sealed partial class MainWindow : Window
     public void NavigateTo(string tag, object? param = null)
     {
         NavView.SelectedItem = null;
+        SetNavVisible(tag is not ("search" or "settings"));
         NavigateToPage(tag, param);
         PushToolbarToContent();
     }
@@ -331,6 +343,7 @@ public sealed partial class MainWindow : Window
                 // 顶部搜索框常驻：输入自动切到搜索页（搜索页不在导航菜单内）
                 ViewModel.CurrentPageTag = "search";
                 NavView.SelectedItem = null;
+                SetNavVisible(false);
                 DispatcherQueue.TryEnqueue(() =>
                 {
                     ContentFrame.Navigate(typeof(SearchPage));
@@ -342,6 +355,8 @@ public sealed partial class MainWindow : Window
             else if (ContentFrame.Content is SearchPage sp)
             {
                 sp.ViewModel.Query = q;
+                // 清空关键词后恢复导航栏，否则用户被困在搜索页无法切回浏览页
+                if (string.IsNullOrWhiteSpace(q)) SetNavVisible(true);
             }
         };
         _debounceTimer.Start();

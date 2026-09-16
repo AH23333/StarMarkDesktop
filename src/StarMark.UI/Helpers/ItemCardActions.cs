@@ -122,12 +122,12 @@ public static class ItemCardActions
     {
         try
         {
-            var box = new TextBox
+            var repo = GetRepo();
+            var editor = new Controls.TagEditor
             {
-                Text = string.Join(", ", vm.Tags),
-                PlaceholderText = "逗号分隔多个标签，如: ai, llm",
-                Margin = new Thickness(0, 8, 0, 0),
+                AllTags = (await repo.GetAllTagsAsync(CancellationToken.None)).Select(t => t.Name).ToList(),
             };
+            editor.SetTags(vm.Tags);
 
             var dialog = new ContentDialog
             {
@@ -136,21 +136,23 @@ public static class ItemCardActions
                 CloseButtonText = "取消",
                 XamlRoot = xamlRoot,
                 DefaultButton = ContentDialogButton.Primary,
-                Content = box,
+                Content = editor,
             };
 
-            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-            {
-                var repo = GetRepo();
-                var current = await repo.GetTagsForItemAsync(vm.Id, CancellationToken.None);
-                foreach (var tag in current)
-                    await repo.RemoveTagAsync(vm.Id, tag, CancellationToken.None);
-                var tags = box.Text.Split(new[] { ',', '，', ' ', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(t => t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                foreach (var tag in tags)
-                    await repo.AddTagAsync(vm.Id, tag, CancellationToken.None);
-                vm.ApplyTags(tags);
-            }
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+            // 差集写库：只删真正减少的、只加真正新增的。
+            // 原实现是「全删再全加」的 N+1 往返，标签多时可感知卡顿，且会 churn tags 表。
+            var desired = editor.Tags.ToList();
+            var current = await repo.GetTagsForItemAsync(vm.Id, CancellationToken.None);
+
+            foreach (var tag in current.Where(c => !desired.Contains(c, StringComparer.OrdinalIgnoreCase)))
+                await repo.RemoveTagAsync(vm.Id, tag, CancellationToken.None);
+            foreach (var tag in desired.Where(d => !current.Contains(d, StringComparer.OrdinalIgnoreCase)))
+                await repo.AddTagAsync(vm.Id, tag, CancellationToken.None);
+
+            if (desired.Count > 0 || current.Count > 0)
+                vm.ApplyTags(desired);
         }
         catch (Exception ex)
         {
@@ -180,15 +182,20 @@ public static class ItemCardActions
         }
     }
 
+    /// <summary>
+    /// 快速添加标签。与 <see cref="EditTags"/> 共用 TagEditor，因此同样享有
+    /// 历史标签建议（避免把 ai 打成 AI 造成同义标签分裂）。
+    /// </summary>
     public static async void AddTag(XamlRoot xamlRoot, ItemCardViewModel vm)
     {
         try
         {
-            var box = new TextBox
+            var repo = GetRepo();
+            var editor = new Controls.TagEditor
             {
-                PlaceholderText = "标签名称，如 ai、llm",
-                Margin = new Thickness(0, 8, 0, 0),
+                AllTags = (await repo.GetAllTagsAsync(CancellationToken.None)).Select(t => t.Name).ToList(),
             };
+
             var dialog = new ContentDialog
             {
                 Title = "快速添加标签",
@@ -196,14 +203,18 @@ public static class ItemCardActions
                 CloseButtonText = "取消",
                 XamlRoot = xamlRoot,
                 DefaultButton = ContentDialogButton.Primary,
-                Content = box,
+                Content = editor,
             };
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
-            var name = box.Text.Trim();
-            if (string.IsNullOrEmpty(name)) return;
-            var repo = GetRepo();
-            await repo.AddTagAsync(vm.Id, name, CancellationToken.None);
-            vm.ApplyTags(vm.Tags.Concat(new[] { name }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+
+            var desired = editor.Tags.ToList();
+            if (desired.Count == 0) return;
+
+            var current = await repo.GetTagsForItemAsync(vm.Id, CancellationToken.None);
+            foreach (var tag in desired.Where(d => !current.Contains(d, StringComparer.OrdinalIgnoreCase)))
+                await repo.AddTagAsync(vm.Id, tag, CancellationToken.None);
+
+            vm.ApplyTags(current.Concat(desired).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
         }
         catch (Exception ex)
         {

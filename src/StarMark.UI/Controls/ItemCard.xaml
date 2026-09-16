@@ -44,11 +44,13 @@
                 <TextBlock Text="📌" FontSize="11" Margin="6,0,0,0" VerticalAlignment="Center"
                            ToolTipService.ToolTip="已置顶"
                            Visibility="{x:Bind ViewModel.IsPinned, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                <TextBlock Text="{x:Bind ViewModel.Title, Mode=OneWay}" Margin="7,0,0,0"
+                <!-- 标题走 Inlines 以支持搜索命中高亮（Segments 为空时退化为单段普通文本） -->
+                <TextBlock Margin="7,0,0,0"
                            FontSize="13" FontWeight="SemiBold"
                            TextTrimming="CharacterEllipsis"
                            VerticalAlignment="Center"
                            Tapped="Title_Tapped"
+                           local:HighlightHelper.Segments="{x:Bind ViewModel.TitleSegments, Mode=OneWay}"
                            ToolTipService.ToolTip="{x:Bind ViewModel.Uri, Mode=OneWay}"/>
                 <TextBlock Text="{x:Bind ViewModel.RelativeTime, Mode=OneWay}" Margin="8,0,0,0"
                            FontSize="11" Style="{StaticResource MutedText}"
@@ -56,9 +58,10 @@
             </StackPanel>
 
             <!-- 副标题 -->
-            <TextBlock Text="{x:Bind ViewModel.Subtitle, Mode=OneWay}" FontSize="11"
+            <TextBlock FontSize="11"
                        Style="{StaticResource MutedText}"
                        TextTrimming="CharacterEllipsis"
+                       local:HighlightHelper.Segments="{x:Bind ViewModel.SubtitleSegments, Mode=OneWay}"
                        Visibility="{x:Bind ViewModel.HasSubtitle, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
 
             <!-- 描述 -->

@@ -62,4 +62,14 @@ public sealed class SearchFilter
 
     /// <summary>排序：relevance(默认，按 FTS 相关度) / recent / stars / name。</summary>
     public string? Sort { get; init; }
+
+    /// <summary>
+    /// 标签过滤（AND 语义）：条目必须同时具备这里列出的全部标签。
+    /// null 或空集合表示不过滤。对齐浏览器扩展 search-worker 的
+    /// <c>opts.tags.every(t =&gt; item.tags.includes(t))</c>。
+    /// </summary>
+    public IReadOnlyList<string>? Tags { get; init; }
+
+    /// <summary>是否有生效的标签过滤。</summary>
+    public bool HasTags => Tags is { Count: > 0 };
 }

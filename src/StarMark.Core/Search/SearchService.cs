@@ -31,17 +31,35 @@ public sealed class SearchService
     {
         if (string.IsNullOrWhiteSpace(keyword))
         {
-            return new SearchResult { Items = Array.Empty<Item>(), Total = 0, ElapsedMs = 0 };
+            // 无关键词 + 有标签过滤 → 退化为「按标签浏览」，与扩展浏览态的 tagFilters 行为一致。
+            // 否则维持原语义：空查询不返回内容（桌面端浏览由文件夹/标签/动态/隐藏四个页面承担）。
+            if (!filter.HasTags)
+                return new SearchResult { Items = Array.Empty<Item>(), Total = 0, ElapsedMs = 0 };
+
+            var browsed = await _repository.GetAllAsync(new BrowseFilter
+            {
+                TagFilters = filter.Tags,
+                TypeFilter = filter.Type?.ToString().ToLowerInvariant(),
+                IncludeHidden = filter.IncludeHidden,
+                Sort = filter.Sort ?? "recent",
+                Limit = filter.MaxResults,
+            }, ct);
+            return new SearchResult { Items = browsed, Total = browsed.Count, ElapsedMs = 0 };
         }
 
         var sw = Stopwatch.StartNew();
 
         // 并行：SQLite FTS5 查询 + 所有实时源（Everything 等）查询
         var ftsTask = _repository.SearchAsync(keyword, filter, ct);
-        var realTimeTasks = _realTimeSources
-            .Where(s => s.IsAvailable)
-            .Select(s => s.SearchAsync(keyword, filter, ct))
-            .ToList();
+
+        // 标签过滤下必须跳过实时源：Everything 返回的本地文件是「虚拟条目」，未入库因而无标签，
+        // 参与合并会让「带 ai 标签」的筛选结果里混进一堆无标签文件。
+        var realTimeTasks = filter.HasTags
+            ? new List<Task<IReadOnlyList<Item>>>()
+            : _realTimeSources
+                .Where(s => s.IsAvailable)
+                .Select(s => s.SearchAsync(keyword, filter, ct))
+                .ToList();
 
         // 等所有源完成（即使部分失败也返回已成功部分）
         var ftsResult = await SafeAwait(ftsTask, ct);

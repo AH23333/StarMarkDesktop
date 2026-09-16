@@ -27,6 +27,14 @@ public partial class SearchPageViewModel : ObservableObject
     /// <summary>键盘导航当前选中索引（↑↓）；-1 = 未选中。</summary>
     [ObservableProperty] private int _selectedIndex = -1;
 
+    /// <summary>
+    /// 当前生效的标签过滤（AND 语义：条目须同时具备全部标签）。
+    /// 对齐浏览器扩展侧边栏的 tagFilters + 吸顶 tag-banner。
+    /// </summary>
+    public ObservableCollection<TagFilterChip> ActiveTags { get; } = new();
+
+    [ObservableProperty] private bool _hasActiveTags;
+
     public ObservableCollection<ItemCardViewModel> Results { get; } = new();
 
     public ItemCardViewModel? SelectedItem
@@ -64,6 +72,13 @@ public partial class SearchPageViewModel : ObservableObject
         IsSearching = false;
         StatusText = string.Empty;
         EmptyHint = "输入关键词开始搜索";
+        // 标签过滤一并无条件清空：否则下次进入搜索页会按上次残留的标签直接出结果。
+        // 先清标签再清 Query，避免中间态触发一次带标签的空查询。
+        if (ActiveTags.Count > 0)
+        {
+            ActiveTags.Clear();
+            HasActiveTags = false;
+        }
         if (Query.Length > 0)
             Query = string.Empty; // 触发 OnQueryChanged → SearchAsync 空查询分支（幂等）
     }
@@ -105,6 +120,7 @@ public partial class SearchPageViewModel : ObservableObject
                 _ => null,
             },
             Sort = CurrentSort,
+            Tags = ActiveTags.Count > 0 ? ActiveTags.Select(t => t.Name).ToArray() : null,
         };
 
         try
@@ -113,12 +129,21 @@ public partial class SearchPageViewModel : ObservableObject
             if (token.IsCancellationRequested) return;
 
             Results.Clear();
+            var keyword = Query.Trim();
             foreach (var item in result.Items)
-                Results.Add(new ItemCardViewModel(item));
+            {
+                var vm = new ItemCardViewModel(item);
+                vm.HighlightQuery = keyword;
+                Results.Add(vm);
+            }
 
             ClearSelection();
             HasResults = Results.Count > 0;
-            EmptyHint = Results.Count == 0 ? $"未找到与 \"{Query.Trim()}\" 相关的条目" : string.Empty;
+            EmptyHint = Results.Count == 0
+                ? (ActiveTags.Count > 0
+                    ? $"没有同时带 {string.Join(" + ", ActiveTags.Select(t => "#" + t.Name))} 的条目"
+                    : $"未找到与 \"{keyword}\" 相关的条目")
+                : string.Empty;
             StatusText = $"命中 {result.Items.Count} 条 · {result.ElapsedMs}ms";
         }
         catch (OperationCanceledException) { }
@@ -144,6 +169,44 @@ public partial class SearchPageViewModel : ObservableObject
     partial void OnCurrentSourceChanged(string value) { _ = SearchAsync(); }
 
     partial void OnCurrentSortChanged(string value) { _ = SearchAsync(); }
+
+    // ───────── 标签过滤（AND 语义，对齐扩展 tagFilters + 吸顶 banner）─────────
+
+    /// <summary>追加一个标签过滤条件。已存在则忽略（避免重复 AND 同一标签）。</summary>
+    public void AddTagFilter(string tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag)) return;
+        if (ActiveTags.Any(t => string.Equals(t.Name, tag, StringComparison.OrdinalIgnoreCase))) return;
+        ActiveTags.Add(new TagFilterChip(tag));
+        HasActiveTags = true;
+        _ = SearchAsync();
+    }
+
+    public void RemoveTagFilter(string tag)
+    {
+        var chip = ActiveTags.FirstOrDefault(t => string.Equals(t.Name, tag, StringComparison.OrdinalIgnoreCase));
+        if (chip is null) return;
+        ActiveTags.Remove(chip);
+        HasActiveTags = ActiveTags.Count > 0;
+        _ = SearchAsync();
+    }
+
+    /// <summary>清空全部标签过滤；清空后若无关键词则不展示任何内容（回到初始空态）。</summary>
+    public void ClearTagFilters()
+    {
+        if (ActiveTags.Count == 0) return;
+        ActiveTags.Clear();
+        HasActiveTags = false;
+        _ = SearchAsync();
+    }
+}
+
+/// <summary>吸顶标签筛选条上的一枚标签（带 ✕ 可移除）。</summary>
+public partial class TagFilterChip : ObservableObject
+{
+    public string Name { get; }
+
+    public TagFilterChip(string name) => Name = name;
 }
 
 internal static class EnumerableEx { public static void Let<T>(this T? item, Action<T> action) where T : class { if (item != null) action(item); } }

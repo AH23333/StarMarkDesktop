@@ -22,6 +22,36 @@ public sealed class ItemRepository : IItemRepository
         _factory = factory;
     }
 
+    // ===== 标签 AND 过滤辅助 =====
+
+    /// <summary>
+    /// 生成标签 AND 过滤的 SQL 片段。每个标签一个 EXISTS 子查询（可走 idx_item_tags_tag），
+    /// 语义为「必须同时具备全部标签」，对齐浏览器扩展的 <c>opts.tags.every(...)</c>。
+    /// </summary>
+    /// <param name="tags">标签集合；空集合返回空串。</param>
+    /// <param name="itemAlias">items 表别名。</param>
+    private static string BuildTagClause(IReadOnlyList<string>? tags, string itemAlias)
+    {
+        if (tags is not { Count: > 0 }) return string.Empty;
+        var sb = new StringBuilder();
+        for (int i = 0; i < tags.Count; i++)
+        {
+            sb.Append(" AND EXISTS (SELECT 1 FROM item_tags itf").Append(i)
+              .Append(" JOIN tags tf").Append(i).Append(" ON tf").Append(i).Append(".id = itf").Append(i).Append(".tag_id")
+              .Append(" WHERE itf").Append(i).Append(".item_id = ").Append(itemAlias).Append(".id")
+              .Append(" AND tf").Append(i).Append(".name = @tagfilter").Append(i).Append(')');
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>绑定 <see cref="BuildTagClause"/> 生成的参数。标签为空时不添加任何参数。</summary>
+    private static void BindTagParams(SqliteCommand cmd, IReadOnlyList<string>? tags)
+    {
+        if (tags is not { Count: > 0 }) return;
+        for (int i = 0; i < tags.Count; i++)
+            cmd.Parameters.AddWithValue($"@tagfilter{i}", tags[i]);
+    }
+
     // ===== 搜索（两阶段查询）=====
 
     public async Task<SearchResult> SearchAsync(string keyword, SearchFilter filter, CancellationToken ct)
@@ -56,7 +86,8 @@ public sealed class ItemRepository : IItemRepository
             WHERE (@type_filter IS NULL OR i.type = @type_filter)
               AND (@stars_min IS NULL OR i.stars_count >= @stars_min)
               AND (@date_from IS NULL OR i.updated_at >= @date_from)
-              AND (@include_hidden = 1 OR i.hidden = 0)
+              AND (@include_hidden = 1 OR i.hidden = 0)"
+            + BuildTagClause(filter.Tags, "i") + @"
             GROUP BY i.id
             ORDER BY " + orderBy + ";";
 
@@ -69,6 +100,7 @@ public sealed class ItemRepository : IItemRepository
         cmd.Parameters.AddWithValue("@stars_min", (object?)filter.StarsMin ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@date_from", (object?)filter.DateFrom ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@include_hidden", filter.IncludeHidden ? 1 : 0);
+        BindTagParams(cmd, filter.Tags);
 
         var items = new List<Item>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -293,12 +325,9 @@ public sealed class ItemRepository : IItemRepository
         if (!string.IsNullOrEmpty(filter.TypeFilter))
             where.Add("i.type = @type_filter");
 
-        var tagJoin = "";
-        if (filter.TagFilters?.Count > 0)
-        {
-            tagJoin = "JOIN item_tags it ON it.item_id = i.id JOIN tags t ON t.id = it.tag_id";
-            where.Add($"t.name IN ({string.Join(",", filter.TagFilters.Select((_, i) => $"@tag{i}"))})");
-        }
+        // 标签过滤：AND 语义（必须同时具备全部标签）。
+        // 原实现用 `JOIN + t.name IN (...) + GROUP BY` 实际是 OR —— 多选标签时结果反而变多，
+        // 与「多选收窄」的预期相反，已改为与搜索一致的 EXISTS 逐条判定。
 
         var orderBy = filter.Sort switch
         {
@@ -314,8 +343,8 @@ public sealed class ItemRepository : IItemRepository
                    (SELECT GROUP_CONCAT(t2.name, ',') FROM item_tags it2
                     JOIN tags t2 ON t2.id = it2.tag_id
                     WHERE it2.item_id = i.id) AS tag_names
-            FROM items i {tagJoin}
-            WHERE {string.Join(" AND ", where)}
+            FROM items i
+            WHERE {string.Join(" AND ", where)}{BuildTagClause(filter.TagFilters, "i")}
             GROUP BY i.id
             ORDER BY {orderBy}
             LIMIT @limit;";
@@ -326,11 +355,7 @@ public sealed class ItemRepository : IItemRepository
         cmd.Parameters.AddWithValue("@limit", filter.Limit);
         if (!string.IsNullOrEmpty(filter.TypeFilter))
             cmd.Parameters.AddWithValue("@type_filter", filter.TypeFilter);
-        if (filter.TagFilters?.Count > 0)
-        {
-            for (int i = 0; i < filter.TagFilters.Count; i++)
-                cmd.Parameters.AddWithValue($"@tag{i}", filter.TagFilters[i]);
-        }
+        BindTagParams(cmd, filter.TagFilters);
 
         var items = new List<Item>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);

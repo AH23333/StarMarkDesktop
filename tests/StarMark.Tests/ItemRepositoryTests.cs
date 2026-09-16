@@ -102,6 +102,57 @@ public sealed class ItemRepositoryTests : IDisposable
         Assert.Equal(item.Id, search.Items[0].Id);
     }
 
+    /// <summary>
+    /// 标签过滤必须是 AND：原实现用 `JOIN + t.name IN(...) + GROUP BY` 实际是 OR，
+    /// 多选标签时结果反而变多，与「多选收窄」的预期相反。此用例钉死 AND 语义。
+    /// </summary>
+    [Fact]
+    public async Task BrowseFilter_TagsAreAndSemantics()
+    {
+        var repo = new ItemRepository(_factory);
+        var both = new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "a1", Title = "Both", Uri = "https://both.com" };
+        var onlyAi = new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "a2", Title = "OnlyAi", Uri = "https://onlyai.com" };
+        var onlyRust = new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "a3", Title = "OnlyRust", Uri = "https://onlyrust.com" };
+        await repo.UpsertAsync(new[] { both, onlyAi, onlyRust }, CancellationToken.None);
+
+        await repo.AddTagAsync(both.Id, "ai", CancellationToken.None);
+        await repo.AddTagAsync(both.Id, "rust", CancellationToken.None);
+        await repo.AddTagAsync(onlyAi.Id, "ai", CancellationToken.None);
+        await repo.AddTagAsync(onlyRust.Id, "rust", CancellationToken.None);
+
+        // 单个标签：命中 2 条（both + onlyX）
+        var one = await repo.GetAllAsync(new BrowseFilter { TagFilters = new[] { "ai" }, Limit = 50 }, CancellationToken.None);
+        Assert.Equal(2, one.Count);
+
+        // 两个标签 AND：只剩同时带 ai 与 rust 的那一条
+        var two = await repo.GetAllAsync(new BrowseFilter { TagFilters = new[] { "ai", "rust" }, Limit = 50 }, CancellationToken.None);
+        Assert.Single(two);
+        Assert.Equal("Both", two[0].Title);
+    }
+
+    /// <summary>搜索同样支持标签 AND 过滤，且与关键词叠加。</summary>
+    [Fact]
+    public async Task SearchFilter_TagsCombineWithKeywordAsAnd()
+    {
+        var repo = new ItemRepository(_factory);
+        var hit = new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "k1", Title = "Rust 异步编程", Uri = "https://rust-async.com" };
+        var decoy = new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "k2", Title = "Rust 入门", Uri = "https://rust-intro.com" };
+        await repo.UpsertAsync(new[] { hit, decoy }, CancellationToken.None);
+
+        await repo.AddTagAsync(hit.Id, "async", CancellationToken.None);
+        await repo.AddTagAsync(decoy.Id, "beginner", CancellationToken.None);
+
+        // 仅关键词：两条都匹配
+        var byKeyword = await repo.SearchAsync("Rust", new SearchFilter { MaxResults = 10 }, CancellationToken.None);
+        Assert.Equal(2, byKeyword.Items.Count);
+
+        // 关键词 + 标签：只剩同时满足的一条
+        var combined = await repo.SearchAsync("Rust",
+            new SearchFilter { MaxResults = 10, Tags = new[] { "async" } }, CancellationToken.None);
+        Assert.Single(combined.Items);
+        Assert.Equal("Rust 异步编程", combined.Items[0].Title);
+    }
+
     [Fact]
     public async Task Upsert_PreservesUserState()
     {

@@ -12,11 +12,47 @@
 
     <Page.Resources>
         <helpers:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <helpers:ContainedTagColorConverter x:Key="ContainedTagColor"/>
     </Page.Resources>
 
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12,12,12,16">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel>
+            <!-- 吸顶标签筛选条：当前生效的标签过滤常驻可见，可单个 ✕ 撤销或一键清空。
+                 对齐浏览器扩展 .tag-banner（position: sticky; top:0）。
+                 缺了它，用户筛选后会困惑「为什么只剩这几条」。 -->
+            <Border x:Name="TagBanner"
+                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8"
+                    Padding="10,6" Margin="0,0,0,8"
+                    Visibility="{x:Bind ViewModel.HasActiveTags, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="标签筛选" FontSize="11" Style="{StaticResource MutedText}"
+                               VerticalAlignment="Center" Margin="0,0,2,0"/>
+                    <ItemsRepeater ItemsSource="{x:Bind ViewModel.ActiveTags, Mode=OneWay}">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Orientation="Horizontal" Spacing="4"/>
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="viewModels:TagFilterChip">
+                                <Button Click="TagFilterChip_Click" Tag="{x:Bind Name}"
+                                        Padding="8,2" CornerRadius="10" BorderThickness="0"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        ToolTipService.ToolTip="移除该标签筛选">
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <TextBlock Text="{x:Bind Name}" FontSize="11"
+                                                   Foreground="{x:Bind Name, Converter={StaticResource ContainedTagColor}}"/>
+                                        <TextBlock Text="✕" FontSize="8" Opacity="0.55" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                    <Button Click="ClearTagFilters_Click" Padding="8,2" FontSize="11"
+                            ToolTipService.ToolTip="清除全部标签筛选">清除</Button>
+                </StackPanel>
+            </Border>
             <!-- 加载状态 -->
             <ProgressBar IsIndeterminate="True"
                          Visibility="{x:Bind ViewModel.IsSearching, Mode=OneWay, Converter={StaticResource BoolToVis}}"

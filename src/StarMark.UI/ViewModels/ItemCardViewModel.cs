@@ -25,6 +25,20 @@ public partial class ItemCardViewModel : ObservableObject
 
     /// <summary>键盘导航时的选中高亮（搜索结果 ↑↓ 选择）。</summary>
     [ObservableProperty] private bool _isKeyboardSelected;
+
+    /// <summary>
+    /// 搜索关键词。设置后 <see cref="TitleSegments"/> / <see cref="SubtitleSegments"/>
+    /// 会按命中位置切分，供卡片做字段高亮。留空表示不高亮（浏览态卡片）。
+    /// </summary>
+    [ObservableProperty] private string _highlightQuery = string.Empty;
+    partial void OnHighlightQueryChanged(string value)
+    {
+        OnPropertyChanged(nameof(TitleSegments));
+        OnPropertyChanged(nameof(SubtitleSegments));
+    }
+
+    public IReadOnlyList<Core.Text.TextSegment> TitleSegments => Core.Text.Highlighter.Split(Title, HighlightQuery);
+    public IReadOnlyList<Core.Text.TextSegment> SubtitleSegments => Core.Text.Highlighter.Split(Subtitle, HighlightQuery);
     public string? Notes => _item.Notes;
     public IReadOnlyList<string> Tags => _item.Tags;
     public ItemType Type => _item.Type;
