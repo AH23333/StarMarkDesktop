@@ -46,7 +46,7 @@ public sealed class WidgetContentFactory
     private static WidgetContentFactory CreateDefault()
     {
         var factory = new WidgetContentFactory();
-        factory.Register(WidgetKind.QuickLaunch, w => w.BuildQuickLaunch());
+        factory.Register(WidgetKind.QuickLaunch, w => new QuickLaunchWidget(w.Storage, w.Repository, w.Manager));
         factory.Register(WidgetKind.Todo, w => w.BuildTodo());
         factory.Register(WidgetKind.QuickNote, w => w.BuildQuickNote());
         factory.Register(WidgetKind.Clock, w => w.BuildClock());
