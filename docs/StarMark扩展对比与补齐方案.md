@@ -18,7 +18,7 @@
 | P1-3 | 「动态」页是假的 | `ActivityPageViewModel` 实为 `GetRecentAsync(200)`，无法表达「取消 Star」这类已消失事件 | **已落地**（2026-09-16）：`activity` 表 + 新增事件写入点 + 500 条环形裁剪；活动页改读 `activity` 表 |
 | P1-4 | 同步无检查点 / 无 ETag / 无限流 | `sync_state` 表只存 `schema_version`；`GitHubSource` 注释里的 `last_synced_at` 从未写入 |
 | P1-5 | 书签 URL 未归一化 | `BookmarkItemFactory` 直接 `SourceId = e.Url`，同页多变体必成多条 | **已落地**（2026-09-16）：`UriNormalizer` 纯函数 + 入库前归一 + 存量去重迁移 v4（按归一键合并标签/笔记） |
-| P2-6 | 无洞察 / 健康度 | 全库无 `Insight`/`Health`/`Statistic` |
+| P2-6 | 无洞察 / 健康度 | 全库无 `Insight`/`Health`/`Statistic` | **已落地**（2026-09-16）：`InsightsService.BuildHealthReport` 纯函数（扣分制 100 起，重复/未打标签/长期未整理）+ 设置页「收藏健康度」区块（评分+颜色阈值+自绘近 14 天柱状图+语言/域名/重复/标签概要） |
 | P2-7 | 无结果分段 / 无字段高亮 / 搜索态导航留白 | 结果平铺 100 条无结构；命中位置无视觉提示；搜索时导航条空占一截 |
 | — | ✅ 已有 120ms 输入防抖 | `MainWindow.xaml.cs:322`（v1 曾误判为缺失，已更正） |
 | **P1-A** | 无多标签 AND 搜索 | `SearchFilter` 无 `Tags` 字段；搜索页无法按标签过滤，点标签会跳页且只能选一个 |
@@ -654,7 +654,7 @@ Desktop 是 `NavigationView PaneDisplayMode="Top"`（`MainWindow.xaml:103`），
 └─ 实现 D  ContentFrame 移出 NavigationView，搜索态折叠（P2-7）
 
 第五轮 · 产品感（约 2 天）
-├─ P2-6  InsightsService 健康度 + 设置页区块
+├─ P2-6  InsightsService 健康度 + 设置页区块  【✅ 2026-09-16 已落地】
 ├─ P2-7  结果分段（精确 / 相关）
 └─ P2-8  诊断区块
 
