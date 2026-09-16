@@ -1,7 +1,6 @@
 #nullable enable
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Dispatching;
-using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -9,8 +8,6 @@ using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Graphics;
-using Windows.System;
-using Windows.UI.Core;
 using StarMark.Abstractions;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
@@ -569,94 +566,8 @@ public sealed partial class WidgetWindow : Window
     // 待办组件已迁移至 TodoWidget（XAML + ViewModel + ItemsRepeater，R3 收尾），
     // 由 WidgetContentFactory 直接构造；不再需要本类内的 BuildTodo / ToggleTodo / DeleteTodo。
 
-    // ── 随记 ──
-
-    internal UIElement BuildQuickNote()
-    {
-        var panel = new StackPanel { Padding = new Thickness(12, 8, 12, 12), Spacing = 6 };
-        var box = new TextBox
-        {
-            PlaceholderText = "随手记一笔，Ctrl+Enter 保存…",
-            AcceptsReturn = true,
-            TextWrapping = TextWrapping.Wrap,
-            MinHeight = 70,
-            FontSize = 12,
-        };
-        var saveBtn = new Button { Content = "保存随记", HorizontalAlignment = HorizontalAlignment.Right, Padding = new Thickness(12, 3, 12, 3) };
-        var listHost = new StackPanel();
-        panel.Children.Add(box);
-        panel.Children.Add(saveBtn);
-        panel.Children.Add(listHost);
-
-        void Reload()
-        {
-            listHost.Children.Clear();
-            var data = _storage.Load();
-            foreach (var note in data.Notes.Take(30))
-            {
-                var card = new Border
-                {
-                    Background = WidgetBrush("WidgetSubtleFillBrush"),
-                    CornerRadius = new CornerRadius(6),
-                    Padding = new Thickness(8, 6, 8, 6),
-                    Margin = new Thickness(0, 0, 0, 5),
-                };
-                var grid = new Grid();
-                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var text = new TextBlock { Text = note.Text, FontSize = 11, TextWrapping = TextWrapping.Wrap };
-                var del = new Button
-                {
-                    Content = "✕", FontSize = 9, Padding = new Thickness(5, 3, 5, 3),
-                    Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-                    BorderThickness = new Thickness(0),
-                    VerticalAlignment = VerticalAlignment.Top,
-                };
-                var id = note.Id;
-                del.Click += (_, _) => DeleteNote(id);
-                Grid.SetColumn(text, 0);
-                Grid.SetColumn(del, 1);
-                grid.Children.Add(text);
-                grid.Children.Add(del);
-                card.Child = grid;
-                listHost.Children.Add(card);
-            }
-        }
-
-        void Save()
-        {
-            if (string.IsNullOrWhiteSpace(box.Text)) return;
-            var data = _storage.Load();
-            data.Notes.Insert(0, new QuickNoteItem
-            {
-                Id = WidgetStorage.NewId(),
-                Text = box.Text.Trim(),
-                CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            });
-            _storage.Save(data);
-            box.Text = string.Empty;
-            Reload();
-        }
-
-        saveBtn.Click += (_, _) => Save();
-        box.KeyDown += (_, k) =>
-        {
-            var ctrl = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control)
-                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-            if (ctrl && k.Key == VirtualKey.Enter) Save();
-        };
-
-        Reload();
-        return panel;
-    }
-
-    private void DeleteNote(long id)
-    {
-        var data = _storage.Load();
-        data.Notes.RemoveAll(n => n.Id == id);
-        _storage.Save(data);
-        BuildContent();
-    }
+    // 随记组件已迁移至 QuickNoteWidget（XAML + ViewModel + ItemsRepeater，R3 收尾），
+    // 由 WidgetContentFactory 直接构造；不再需要本类内的 BuildQuickNote / DeleteNote。
 
     // ── 时钟 ──
 
