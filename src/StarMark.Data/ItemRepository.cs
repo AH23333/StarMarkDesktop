@@ -462,7 +462,9 @@ public sealed class ItemRepository : IItemRepository
         if (!string.IsNullOrEmpty(item.Description)) searchText.Append(item.Description).Append(' ');
         if (!string.IsNullOrEmpty(item.Notes)) searchText.Append(item.Notes).Append(' ');
         if (item.Tags.Count > 0) searchText.Append(string.Join(' ', item.Tags));
-        item.SearchText = searchText.ToString();
+        // CJK 展开：unicode61 把连续中文视为单个 token，不展开则中文子串查询全部落空。
+        // 详见 CjkTokenizer 类注释。只影响索引列，不影响任何展示文本。
+        item.SearchText = StarMark.Abstractions.Text.CjkTokenizer.ExpandForIndex(searchText.ToString());
 
         // UPSERT（基于 source+source_id 唯一索引）；UPDATE 集不包含 hidden/pinned/notes
         using var cmd = conn.CreateCommand();
@@ -593,20 +595,27 @@ public sealed class ItemRepository : IItemRepository
     /// </summary>
     private static string BuildFtsQuery(string keyword)
     {
-        if (string.IsNullOrWhiteSpace(keyword)) return string.Empty;
-        var parts = keyword.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var tokens = StarMark.Abstractions.Text.CjkTokenizer.SplitForQuery(keyword);
+        if (tokens.Count == 0) return string.Empty;
+
         var sb = new StringBuilder();
-        foreach (var p in parts)
+        foreach (var t in tokens)
         {
-            if (sb.Length > 0) sb.Append(' ');
-            // 简单转义：含特殊字符的词加引号
-            if (p.Any(c => !char.IsLetterOrDigit(c)))
+            if (sb.Length > 0) sb.Append(' ');   // 空格 = FTS5 隐式 AND
+
+            if (StarMark.Abstractions.Text.CjkTokenizer.ContainsCjk(t))
             {
-                sb.Append('"').Append(p.Replace("\"", "\"\"")).Append('"');
+                // CJK 词元已是完整的二元组，加 '*' 会造成过度匹配；且不含 FTS5 特殊字符
+                sb.Append(t);
+            }
+            else if (t.Any(c => !char.IsLetterOrDigit(c)))
+            {
+                // 简单转义：含特殊字符的词加引号
+                sb.Append('"').Append(t.Replace("\"", "\"\"")).Append('"');
             }
             else
             {
-                sb.Append(p).Append('*');  // 前缀匹配
+                sb.Append(t).Append('*');  // 前缀匹配
             }
         }
         return sb.ToString();

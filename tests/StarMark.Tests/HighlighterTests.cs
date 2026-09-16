@@ -71,7 +71,7 @@ public class HighlighterTests
     public void OnlyFirstOccurrenceIsHighlighted()
     {
         var segs = Highlighter.Split("aa-bb-aa", "aa");
-        Assert.Single(segs.Where(s => s.IsMatch));
+        Assert.Single(segs, s => s.IsMatch);
         Assert.Equal("[aa]-bb-aa", Render("aa-bb-aa", "aa"));
     }
 

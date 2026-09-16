@@ -39,7 +39,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_items_source ON items(source, source_id);
 -- ============================================================
 -- FTS5 外部内容表（§4.2 关键架构）
 -- content='items' 指示 FTS5 不自己存文本，通过 rowid 回查 items 表
--- tokenize='porter unicode61' 兼顾英文词干还原与中文按字分词
+-- tokenize='porter unicode61'：英文词干还原。
+-- 注意：unicode61 并不按字切分中文，它把一段连续 CJK 视为【一个】token，
+-- 因此中文检索必须由写入侧展开补偿——见 StarMark.Abstractions.Text.CjkTokenizer。
+-- 不要依赖本行分词器处理中文，也不要换成 trigram（实测 2 字词全灭）。
 -- ============================================================
 CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(
     title,

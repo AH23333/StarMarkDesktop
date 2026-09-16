@@ -13,7 +13,7 @@
 
 | | 差距 | 判定依据 |
 |---|---|---|
-| **P0-1** | 中文全文检索大面积失效 | **实测**：现分词器下 8 个中文查询 **5 个漏召回** |
+| **P0-1** | 中文全文检索大面积失效 | **实测**：现分词器下 8 个中文查询 **5 个漏召回**；**已修复**（2026-09-16，见 §1.5） |
 | **P0-2** | 备份能力为零 | `src/` 全库检索无 `Backup`/`Restore` 实现；`notes` 表、`widgets.json` 无兜底 |
 | P1-3 | 「动态」页是假的 | `ActivityPageViewModel` 实为 `GetRecentAsync(200)`，无法表达「取消 Star」这类已消失事件 |
 | P1-4 | 同步无检查点 / 无 ETag / 无限流 | `sync_state` 表只存 `schema_version`；`GitHubSource` 注释里的 `last_synced_at` 从未写入 |
@@ -133,6 +133,36 @@ public static string Expand(string? text)
 5. 修正 `Schema.sql:42` 那句错误注释
 
 **成本：** 约半天 + 一次重建。**风险：** 索引体积膨胀（二元组约 2×），1 万条条目量级下可忽略。
+
+### 1.5 实装记录（2026-09-16，已完成）
+
+**落地位置**（与 §1.4 的步骤一一对应，仅一处按实测调整）：
+
+1. `StarMark.Abstractions/Text/CjkTokenizer.cs` —— 纯函数，**放在 Abstractions 而非 Core**：
+   `Core` 依赖 `Data`，若放 Core 则 `Data` 反向依赖会成环；`FolderPathUtil` 已有先例
+2. `ItemRepository.UpsertAsync`：`item.SearchText = CjkTokenizer.ExpandForIndex(...)`
+3. `ItemRepository.BuildFtsQuery` 改为 `CjkTokenizer.SplitForQuery` + 逐词元转义；
+   CJK 词元**不加 `*`**（已是完整二元组，加前缀通配会过度匹配）
+4. `MigrationRunner` 新增 **v3**：按与 Upsert 同口径重算存量 `search_text`，再
+   `INSERT INTO items_fts(items_fts) VALUES('rebuild')` 从外部内容表重灌索引
+5. `Schema.sql:42` 的错误注释已改写，并加注「不要换 trigram（实测 2 字词全灭）」
+
+**与方案的一处偏离：不发送「整串」token。**
+§1.3 的方案是「整串 + 单字 + 相邻二元组」。实装时去掉了整串，理由有二：
+① 查询侧从不发整串（见铁律），故整串对召回**零贡献**，只占索引空间；
+② 对 2 字串，整串与二元组**完全重复**，会虚增词频、轻微扭曲 bm25 排序。
+（`ExpandForIndex_DoesNotEmitWholeRun` 用例钉死此约束。）
+
+**回归测试**（`tests/StarMark.Tests/CjkSearchTests.cs`，13 例）：
+- 分词器：CJK 判定（中日韩）、展开产物、非 CJK 原样保留、长串不爆
+- **查询侧铁律**：`SplitForQuery("笔记工具")` 必须恰好是 `["笔记","记工","工具"]`，
+  断言 `DoesNotContain("笔记工具")` —— 整串一旦回到查询侧，4 字以上查询立刻全灭
+- 端到端：`Theory` 覆盖 8 个中文子查询（中间子串 / 尾部子串 / 跨词边界 / 4 字 / 2 字词 /
+  跨两条命中），全部断言精确结果集；另有无匹配、英文前缀、特殊字符三组
+- 迁移：`MigrateV3_RebuildsLegacySearchText` 先把 `search_text` 还原成未展开形态、
+  版本退回 2、重建索引，断言「笔记」**查不到**；执行 v3 后断言**查得到**
+
+测试 **93 → 113 通过，0 警告 0 错误**。
 
 ---
 
@@ -594,8 +624,8 @@ Desktop 是 `NavigationView PaneDisplayMode="Top"`（`MainWindow.xaml:103`），
 
 ```
 第一轮 · 修地基（约 2 天）
-├─ P0-1  中文检索：CjkTokenizer + BuildFtsQuery + 一次性 rebuild   ← 最高性价比
-└─ P0-2  备份：明文导出/导入 + 导入前快照 + 校验和（加密留到第二轮）
+├─ P0-1  中文检索：CjkTokenizer + BuildFtsQuery + 一次性 rebuild   ✅ 已完成
+└─ P0-2  备份：明文导出/导入 + 导入前快照 + 校验和（加密留到第二轮）  ← 下一个
 
 第二轮 · 数据正确性（约 1.5 天）
 ├─ P1-3  真·活动流：activity 表 + 3 处写入点 + 500 条裁剪

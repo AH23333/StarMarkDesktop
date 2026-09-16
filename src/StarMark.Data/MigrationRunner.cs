@@ -30,11 +30,12 @@ public sealed class MigrationRunner
         // Schema.sql 只保证"表存在"，列级演进靠版本化迁移（v1 建库，v2 起 ALTER）。
         var version = ReadSchemaVersion(conn);
         if (version < 2) MigrateV2(conn);
+        if (version < 3) MigrateV3(conn);
 
         WriteSchemaVersion(conn, CurrentVersion);
     }
 
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     private static int ReadSchemaVersion(Microsoft.Data.Sqlite.SqliteConnection conn)
     {
@@ -51,6 +52,60 @@ public sealed class MigrationRunner
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "ALTER TABLE items ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;";
         cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// v3：重算 items.search_text 并重建 FTS 索引。
+    /// </summary>
+    /// <remarks>
+    /// 存量行的 search_text 未经 CJK 展开，中文子串查询会全部落空（unicode61 把连续
+    /// 中文当作单个 token）。此处按与 UpsertAsync 相同的口径（title + description +
+    /// notes + 标签名）重算，再执行 FTS5 的 'rebuild' 从外部内容表重新灌索引。
+    /// 幂等：重复执行结果一致。
+    /// </remarks>
+    private static void MigrateV3(Microsoft.Data.Sqlite.SqliteConnection conn)
+    {
+        var rows = new List<(long Id, string Text)>();
+        using (var sel = conn.CreateCommand())
+        {
+            sel.CommandText = @"
+                SELECT i.id,
+                       COALESCE(i.title, '') || ' ' ||
+                       COALESCE(i.description, '') || ' ' ||
+                       COALESCE(i.notes, '') || ' ' ||
+                       COALESCE((SELECT GROUP_CONCAT(t.name, ' ') FROM item_tags it
+                                 JOIN tags t ON t.id = it.tag_id
+                                 WHERE it.item_id = i.id), '')
+                FROM items i;";
+            using var reader = sel.ExecuteReader();
+            while (reader.Read())
+            {
+                string raw = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+                rows.Add((reader.GetInt64(0), StarMark.Abstractions.Text.CjkTokenizer.ExpandForIndex(raw)));
+            }
+        }
+
+        using var tx = conn.BeginTransaction();
+        using (var upd = conn.CreateCommand())
+        {
+            upd.CommandText = "UPDATE items SET search_text = @t WHERE id = @id;";
+            var pId = upd.Parameters.Add("@id", Microsoft.Data.Sqlite.SqliteType.Integer);
+            var pText = upd.Parameters.Add("@t", Microsoft.Data.Sqlite.SqliteType.Text);
+            foreach (var (id, text) in rows)
+            {
+                pId.Value = id;
+                pText.Value = text;
+                upd.ExecuteNonQuery();
+            }
+        }
+
+        // 外部内容表（content='items'）必须从源表重灌索引
+        using (var rebuild = conn.CreateCommand())
+        {
+            rebuild.CommandText = "INSERT INTO items_fts(items_fts) VALUES('rebuild');";
+            rebuild.ExecuteNonQuery();
+        }
+        tx.Commit();
     }
 
     private static bool ColumnExists(Microsoft.Data.Sqlite.SqliteConnection conn, string table, string column)
