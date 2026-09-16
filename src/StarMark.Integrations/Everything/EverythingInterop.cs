@@ -134,19 +134,44 @@ internal static class EverythingInterop
         }
     }
 
-    private static string? FindEverythingExecutable()
+    private static string? _cachedExecutable;
+
+    /// <summary>
+    /// 定位 Everything 主程序：缓存 → 运行中窗口反查进程路径 → 注册表 → 常见安装目录 → PATH。
+    /// 覆盖：默认安装、每用户安装、便携版、非默认路径（只要在运行就能反查到）。
+    /// </summary>
+    internal static string? FindEverythingExecutable()
     {
-        // Everything 1.4 主程序路径候选
+        if (_cachedExecutable is not null && File.Exists(_cachedExecutable)) return _cachedExecutable;
+
+        // 1) Everything 正在运行：从其任务栏通知窗口反查进程路径（最可靠，覆盖任意安装位置）
+        var hwnd = FindWindowW(EverythingWindowClass, null);
+        if (hwnd != IntPtr.Zero)
+        {
+            var fromWindow = TryGetProcessPathFromWindow(hwnd);
+            if (fromWindow is not null) return _cachedExecutable = fromWindow;
+        }
+
+        // 2) 注册表：安装程序写入的卸载信息 / App Paths
+        foreach (var candidate in EnumerateRegistryCandidates())
+        {
+            if (File.Exists(candidate)) return _cachedExecutable = candidate;
+        }
+
+        // 3) 常见安装目录（含每用户安装与便携版常见位置）
         var candidates = new[]
         {
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Everything", "Everything.exe"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Everything", "Everything.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Everything", "Everything.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Everything", "Everything.exe"),
         };
         foreach (var p in candidates)
         {
-            if (File.Exists(p)) return p;
+            if (File.Exists(p)) return _cachedExecutable = p;
         }
-        // PATH 中查找
+
+        // 4) PATH 中查找
         var pathEnv = Environment.GetEnvironmentVariable("PATH");
         if (pathEnv != null)
         {
@@ -155,12 +180,78 @@ internal static class EverythingInterop
                 try
                 {
                     var full = Path.Combine(dir, "Everything.exe");
-                    if (File.Exists(full)) return full;
+                    if (File.Exists(full)) return _cachedExecutable = full;
                 }
                 catch { /* ignore */ }
             }
         }
         return null;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, uint dwProcessId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(IntPtr hObject);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool QueryFullProcessImageNameW(IntPtr hProcess, uint dwFlags, System.Text.StringBuilder lpExeName, ref uint lpdwSize);
+
+    /// <summary>从窗口句柄反查所属进程的可执行文件路径（Everything 在运行时最可靠的定位方式）。</summary>
+    private static string? TryGetProcessPathFromWindow(IntPtr hwnd)
+    {
+        try
+        {
+            if (GetWindowThreadProcessId(hwnd, out var pid) == 0 || pid == 0) return null;
+            const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+            var hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+            if (hProcess == IntPtr.Zero) return null;
+            try
+            {
+                var sb = new System.Text.StringBuilder(1024);
+                uint size = 1024;
+                return QueryFullProcessImageNameW(hProcess, 0, sb, ref size) ? sb.ToString() : null;
+            }
+            finally { CloseHandle(hProcess); }
+        }
+        catch { return null; }
+    }
+
+    /// <summary>从注册表枚举 Everything 可能的安装位置（卸载信息 InstallLocation / DisplayIcon / App Paths）。</summary>
+    private static System.Collections.Generic.List<string> EnumerateRegistryCandidates()
+    {
+        var result = new System.Collections.Generic.List<string>();
+        string[] keys =
+        {
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Everything",
+            @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Everything",
+            @"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\Everything.exe",
+        };
+        foreach (var key in keys)
+        {
+            foreach (var root in new[] { Microsoft.Win32.Registry.LocalMachine, Microsoft.Win32.Registry.CurrentUser })
+            {
+                try
+                {
+                    using var k = root.OpenSubKey(key);
+                    if (k is null) continue;
+                    var install = k.GetValue("InstallLocation") as string;
+                    if (!string.IsNullOrWhiteSpace(install))
+                        result.Add(Path.Combine(install, "Everything.exe"));
+                    var displayIcon = k.GetValue("DisplayIcon") as string;
+                    if (!string.IsNullOrWhiteSpace(displayIcon))
+                        result.Add(displayIcon.Split(',')[0]);
+                    var defaultValue = k.GetValue(null) as string;
+                    if (!string.IsNullOrWhiteSpace(defaultValue))
+                        result.Add(defaultValue);
+                }
+                catch { /* ignore */ }
+            }
+        }
+        return result;
     }
 
     /// <summary>解析 Everything CSV 输出的一行（Name,Path,Size,Date Modified,Date Created）。</summary>

@@ -139,4 +139,52 @@ public sealed class EverythingSource : IItemSource
         }
         return _queue.QueryAsync(query, filter, ct);
     }
+
+    private const string InstallerUrl = "https://www.voidtools.com/Everything-1.4.1.1028.x64-Setup.exe";
+
+    /// <summary>
+    /// 确保本机有可用的 Everything（用户要求：探测不到时默认安装）。
+    /// 全部探测手段落空时，下载 voidtools 官方安装包静默安装（NSIS /S，需要提权时由 UAC 弹窗交用户确认），
+    /// 完成后重新探测；失败（离线 / 用户取消）仅记录日志并降级为无本地文件实时搜索，不影响应用其余功能。
+    /// 返回探测/安装后的最终可用状态。
+    /// </summary>
+    public async Task<bool> EnsureEverythingInstalledAsync()
+    {
+        try
+        {
+            if (EverythingInterop.FindEverythingExecutable() is not null) return true;
+
+            StarLog.Info("未检测到 Everything：开始自动安装（voidtools 官方 1.4 安装包，静默模式）…");
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StarMark", "downloads");
+            Directory.CreateDirectory(dir);
+            var installer = Path.Combine(dir, "Everything-1.4.1.1028.x64-Setup.exe");
+            if (!File.Exists(installer))
+            {
+                using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+                var bytes = await http.GetByteArrayAsync(InstallerUrl);
+                await File.WriteAllBytesAsync(installer, bytes);
+            }
+
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = installer,
+                Arguments = "/S",
+                UseShellExecute = true,
+            };
+            using var proc = System.Diagnostics.Process.Start(psi);
+            if (proc is not null) await proc.WaitForExitAsync();
+
+            var found = EverythingInterop.FindEverythingExecutable() is not null;
+            StarLog.Info(found
+                ? "Everything 自动安装完成并已识别。"
+                : "Everything 自动安装执行完毕，但仍未探测到 Everything.exe。");
+            return found;
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("Everything 自动安装失败（离线 / 用户取消 UAC 属正常情况，降级为无本地文件实时搜索）", ex);
+            return false;
+        }
+    }
 }
