@@ -16,14 +16,17 @@ public sealed partial class SearchPage : Page
     {
         InitializeComponent();
         ViewModel = (App.Services.GetService(typeof(SearchPageViewModel)) as SearchPageViewModel)
-            ?? new SearchPageViewModel(App.Services.GetService(typeof(StarMark.Core.Search.SearchService))
-                as StarMark.Core.Search.SearchService
-                ?? throw new InvalidOperationException("SearchService 未注册"));
+            ?? new SearchPageViewModel(
+                App.Services.GetService(typeof(StarMark.Core.Search.SearchService)) as StarMark.Core.Search.SearchService
+                    ?? throw new InvalidOperationException("SearchService 未注册"),
+                App.Services.GetService(typeof(IItemRepository)) as IItemRepository);
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        // 标签筛选选择器数据：每次进入页面静默刷新（命中数保持新鲜，选中态从 ActiveTags 回填）。
+        _ = ViewModel.LoadAllTagsAsync();
         // 不再在此自动重跑搜索：进入搜索页时全局搜索框会立即设置 ViewModel.Query，
         // 由 OnQueryChanged 触发搜索。此前用单例 VM 里残留的旧 Query 重搜，
         // 正是「清空搜索栏后仍闪现上一条搜索”未找到“」的根因。
@@ -103,4 +106,21 @@ public sealed partial class SearchPage : Page
 
     private void ClearTagFilters_Click(object sender, RoutedEventArgs e)
         => ViewModel.ClearTagFilters();
+
+    // ───────── 标签筛选选择器 ─────────
+
+    private void TagPickerToggle_Click(object sender, RoutedEventArgs e)
+    {
+        var open = TagPickerPanel.Visibility == Visibility.Visible;
+        TagPickerPanel.Visibility = open ? Visibility.Collapsed : Visibility.Visible;
+        TagPickerToggle.IsChecked = !open;
+        if (!open && ViewModel.AllTags.Count == 0)
+            _ = ViewModel.LoadAllTagsAsync();
+    }
+
+    private void PickerTag_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string tag })
+            ViewModel.ToggleTagFilter(tag);
+    }
 }

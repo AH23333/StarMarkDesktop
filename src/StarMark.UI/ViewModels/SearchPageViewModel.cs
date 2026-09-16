@@ -13,6 +13,7 @@ namespace StarMark.UI.ViewModels;
 public partial class SearchPageViewModel : ObservableObject
 {
     private readonly SearchService _searchService;
+    private readonly IItemRepository? _repo;
     private CancellationTokenSource? _searchCts;
 
     [ObservableProperty] private string _query = string.Empty;
@@ -112,9 +113,10 @@ public partial class SearchPageViewModel : ObservableObject
             Query = string.Empty; // 触发 OnQueryChanged → SearchAsync 空查询分支（幂等）
     }
 
-    public SearchPageViewModel(SearchService searchService)
+    public SearchPageViewModel(SearchService searchService, IItemRepository? repo = null)
     {
         _searchService = searchService;
+        _repo = repo;
     }
 
     [RelayCommand]
@@ -124,7 +126,7 @@ public partial class SearchPageViewModel : ObservableObject
         _searchCts = new CancellationTokenSource();
         var token = _searchCts.Token;
 
-        if (string.IsNullOrWhiteSpace(Query))
+        if (string.IsNullOrWhiteSpace(Query) && ActiveTags.Count == 0)
         {
             Results.Clear();
             ClearSelection();
@@ -132,6 +134,8 @@ public partial class SearchPageViewModel : ObservableObject
             EmptyHint = "输入关键词开始搜索";
             return;
         }
+        // 空关键词 + 已选标签 → 不提前返回：SearchService 会退化为「按标签浏览」
+        // （与桌面组件同一规则），让主界面也能不输关键词、纯靠标签组合过滤。
 
         IsSearching = true;
         StatusText = "搜索中...";
@@ -258,6 +262,10 @@ public partial class SearchPageViewModel : ObservableObject
         if (ActiveTags.Any(t => string.Equals(t.Name, tag, StringComparison.OrdinalIgnoreCase))) return;
         ActiveTags.Add(new TagFilterChip(tag));
         HasActiveTags = true;
+        // 选择器里的同名 chip 同步选中态（未加载时忽略）。
+        // 注意不能用 ?.Selected = ...（null 条件赋值是 C# 14 预览特性，本项目 LangVersion 不支持）。
+        var pickerChip = AllTags.FirstOrDefault(t => string.Equals(t.Name, tag, StringComparison.OrdinalIgnoreCase));
+        if (pickerChip is not null) pickerChip.Selected = true;
         _ = SearchAsync();
     }
 
@@ -267,6 +275,8 @@ public partial class SearchPageViewModel : ObservableObject
         if (chip is null) return;
         ActiveTags.Remove(chip);
         HasActiveTags = ActiveTags.Count > 0;
+        var pickerChip = AllTags.FirstOrDefault(t => string.Equals(t.Name, tag, StringComparison.OrdinalIgnoreCase));
+        if (pickerChip is not null) pickerChip.Selected = false;
         _ = SearchAsync();
     }
 
@@ -276,7 +286,40 @@ public partial class SearchPageViewModel : ObservableObject
         if (ActiveTags.Count == 0) return;
         ActiveTags.Clear();
         HasActiveTags = false;
+        foreach (var t in AllTags) t.Selected = false;
         _ = SearchAsync();
+    }
+
+    /// <summary>标签选择器点选：已选则移除、未选则追加（多选 AND）。</summary>
+    public void ToggleTagFilter(string tag)
+    {
+        if (ActiveTags.Any(t => string.Equals(t.Name, tag, StringComparison.OrdinalIgnoreCase)))
+            RemoveTagFilter(tag);
+        else
+            AddTagFilter(tag);
+    }
+
+    // ───────── 标签选择器（主界面多标签筛选，对齐桌面组件标签云交互）─────────
+
+    /// <summary>全部标签（名称 + 命中数 + 选中态），供搜索页标签选择器铺开。</summary>
+    public ObservableCollection<TagChip> AllTags { get; } = new();
+
+    /// <summary>加载全部标签（按命中数倒序，最多 200 个）；已生效的 ActiveTags 同步为选中。</summary>
+    public async Task LoadAllTagsAsync()
+    {
+        if (_repo is null) return;
+        try
+        {
+            var tags = await _repo.GetAllTagsAsync(CancellationToken.None);
+            AllTags.Clear();
+            foreach (var (name, count) in tags.Take(200))
+                AllTags.Add(new TagChip(name, count,
+                    ActiveTags.Any(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase))));
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("加载标签筛选列表失败", ex);
+        }
     }
 }
 
