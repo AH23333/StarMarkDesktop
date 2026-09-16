@@ -77,8 +77,11 @@
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
 
+                <!-- 空态提示仅在浏览态（未选标签）显示：
+                     否则空文本 + 40/16 边距会在筛选结果上方留出大片空白 -->
                 <TextBlock Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}" Style="{StaticResource MutedText}"
-                           HorizontalAlignment="Center" Margin="0,40,0,16"/>
+                           HorizontalAlignment="Center" Margin="0,40,0,16"
+                           Visibility="{x:Bind ViewModel.HasActiveFilter, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
 
                 <!-- 筛选结果 -->
                 <TextBlock Text="筛选结果" FontSize="13" FontWeight="SemiBold" Margin="0,16,0,8"
