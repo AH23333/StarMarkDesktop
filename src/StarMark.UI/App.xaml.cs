@@ -41,6 +41,28 @@ public partial class App : Application
         };
     }
 
+    /// <summary>
+    /// 启动期异常的兜底弹窗：避免在 OnLaunched 抛错时进程静默退出、用户看到"双击无反应"。
+    /// 用 Win32 MessageBox（不依赖任何 XAML 窗口，启动早期即可用）。
+    /// </summary>
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int MessageBoxW(IntPtr hWnd, string text, string caption, uint type);
+
+    private static void ShowStartupError(Exception ex)
+    {
+        try { StarLog.Error("启动失败", ex); } catch { }
+        try
+        {
+            var logPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "StarMark", "logs");
+            MessageBoxW(IntPtr.Zero,
+                $"StarMark 启动失败：\n\n{ex.GetType().Name}: {ex.Message}\n\n详细日志见：\n{logPath}",
+                "StarMark 启动错误", 0x10 /* MB_ICONERROR */);
+        }
+        catch { }
+    }
+
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         // 单实例：再次启动时唤起已有主窗口并退出新进程
@@ -117,27 +139,36 @@ public partial class App : Application
 
         Services = services.BuildServiceProvider();
 
-        // 应用级主题（必须在首个窗口创建前设置）
-        ThemeManager.ApplyAppLevelTheme(new SettingsStore().LoadTheme());
-
-        // 2. 执行数据库迁移
-        Services.GetRequiredService<StarMark.Data.MigrationRunner>().EnsureSchema();
-
-        // 2.1 种子数据
         try
         {
-            var repo = Services.GetRequiredService<IItemRepository>();
-            Task.Run(() => SeedData.SeedIfEmptyAsync(repo, CancellationToken.None)).GetAwaiter().GetResult();
+            // 应用级主题（必须在首个窗口创建前设置）
+            ThemeManager.ApplyAppLevelTheme(new SettingsStore().LoadTheme());
+
+            // 2. 执行数据库迁移
+            Services.GetRequiredService<StarMark.Data.MigrationRunner>().EnsureSchema();
+
+            // 2.1 种子数据
+            try
+            {
+                var repo = Services.GetRequiredService<IItemRepository>();
+                Task.Run(() => SeedData.SeedIfEmptyAsync(repo, CancellationToken.None)).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                StarLog.Error("种子数据失败", ex);
+            }
+
+            // 3. 显示主窗口
+            _window = new MainWindow();
+            MainWindow = _window as StarMark.UI.MainWindow;
+            _window.Activate();
         }
         catch (Exception ex)
         {
-            StarLog.Error("种子数据失败", ex);
+            // 启动期异常若静默吞掉，用户会看到"双击无反应"。弹窗定位问题后退出。
+            ShowStartupError(ex);
+            Environment.Exit(1);
         }
-
-        // 3. 显示主窗口
-        _window = new MainWindow();
-        MainWindow = _window as StarMark.UI.MainWindow;
-        _window.Activate();
     }
 
     /// <summary>唤起已有实例的主窗口（按窗口标题查找，组件窗口标题不同不会误匹配）。</summary>

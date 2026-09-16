@@ -174,7 +174,9 @@ public sealed class MigrationRunner
                     using (var upd = conn.CreateCommand())
                     {
                         upd.CommandText = "UPDATE items SET notes = @n WHERE id = @id;";
-                        upd.Parameters.AddWithValue("@n", dup.Notes);
+                        // dup.Notes 可能为 null：Microsoft.Data.Sqlite 对 Value=null 的参数是
+                        // 抛 "Value must be set."，必须显式传 DBNull.Value 表示 SQL NULL。
+                        upd.Parameters.AddWithValue("@n", (object?)dup.Notes ?? DBNull.Value);
                         upd.Parameters.AddWithValue("@id", keeper.Id);
                         upd.ExecuteNonQuery();
                         keeper.Notes = dup.Notes;
