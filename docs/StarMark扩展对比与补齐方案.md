@@ -15,9 +15,9 @@
 |---|---|---|
 | **P0-1** | 中文全文检索大面积失效 | **实测**：现分词器下 8 个中文查询 **5 个漏召回**；**已修复**（2026-09-16，见 §1.5） |
 | **P0-2** | 备份能力为零 | `src/` 全库检索无 `Backup`/`Restore` 实现；`notes` 表、`widgets.json` 无兜底 |
-| P1-3 | 「动态」页是假的 | `ActivityPageViewModel` 实为 `GetRecentAsync(200)`，无法表达「取消 Star」这类已消失事件 |
+| P1-3 | 「动态」页是假的 | `ActivityPageViewModel` 实为 `GetRecentAsync(200)`，无法表达「取消 Star」这类已消失事件 | **已落地**（2026-09-16）：`activity` 表 + 新增事件写入点 + 500 条环形裁剪；活动页改读 `activity` 表 |
 | P1-4 | 同步无检查点 / 无 ETag / 无限流 | `sync_state` 表只存 `schema_version`；`GitHubSource` 注释里的 `last_synced_at` 从未写入 |
-| P1-5 | 书签 URL 未归一化 | `BookmarkItemFactory` 直接 `SourceId = e.Url`，同页多变体必成多条 |
+| P1-5 | 书签 URL 未归一化 | `BookmarkItemFactory` 直接 `SourceId = e.Url`，同页多变体必成多条 | **已落地**（2026-09-16）：`UriNormalizer` 纯函数 + 入库前归一 + 存量去重迁移 v4（按归一键合并标签/笔记） |
 | P2-6 | 无洞察 / 健康度 | 全库无 `Insight`/`Health`/`Statistic` |
 | P2-7 | 无结果分段 / 无字段高亮 / 搜索态导航留白 | 结果平铺 100 条无结构；命中位置无视觉提示；搜索时导航条空占一截 |
 | — | ✅ 已有 120ms 输入防抖 | `MainWindow.xaml.cs:322`（v1 曾误判为缺失，已更正） |
@@ -333,6 +333,13 @@ SourceId = e.Url,     // 原样入库，无归一化
 **方案：** 新建 `UriNormalizer`（纯函数，可单测），在 `MapItem` 入库前归一；同时写一次性迁移脚本，把已存在的重复项按归一化键合并（保留最早 `created_at`，合并 `tags`，非空 `notes` 冲突时保留较长者并留日志）。
 
 **成本：** 半天。**建议：** 与 P1-3 的 activity 改造一起做，都动 `Upsert` 路径。
+
+### 实装记录（2026-09-16）
+
+- `StarMark.Abstractions/UriNormalizer.cs` 纯函数：去 `#hash`、默认端口清零、host 小写、删 11 个追踪参数、GitHub `pathname` 收窄到 `/{owner}/{repo}` 且 `tab=` 时清空 query、去尾斜杠；仅对 http(s) 生效，file:// 等原样返回，幂等
+- `BookmarkItemFactory.MapItem` 入库前对 `SourceId`/`Uri` 归一
+- `ItemRepository.UpsertOne` 顶部也对 `SourceId` 归一（所有 http(s) 源统一受益，幂等）
+- 一次性迁移 `MigrationRunner.MigrateV4`（schema v4）：按 `(source, 归一化 key)` 分组，每组保留最早 `created_at` 条目，合并标签（`INSERT OR IGNORE`）与笔记（非空冲突保留较长者），删除其余并把 keeper 的 `source_id` 归一到标准键；幂等
 
 ---
 
