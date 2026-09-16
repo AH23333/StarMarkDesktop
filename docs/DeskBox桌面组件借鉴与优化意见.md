@@ -688,9 +688,9 @@ v1 将其列为"当前最高风险"。核实后：规则引擎**尚未实现**�
 └─ 验证：本地文件出现在文件夹树/标签/动态/置顶，快捷启动格可摆本地文件
 
 第十一轮 · 组件架构归位
-├─ 🔵 R1  WidgetWindow 改 XAML + MVVM（增量试点：快捷启动格已落地 2026-09-16；Search 搜索组件已落地 2026-09-16；待推广至 Todo/QuickNote/Clock）
+├─ ✅ R1  WidgetWindow 改 XAML + MVVM（快捷启动格 2026-09-16；Search 2026-09-16；Todo/QuickNote/Clock 2026-09-17 全部迁移完成，组件重构收官）
 │          （组件内绑定必须 Mode=OneWay、ItemsRepeater 内用 x:Bind；QuickLaunch 试点已验证）
-├─ 🔵 R3  全量重建 → ObservableCollection + ItemsRepeater（快捷启动格 LinksChanged 增量刷新已落地 2026-09-16；Search 同模式落地 2026-09-16）
+├─ ✅ R3  全量重建 → ObservableCollection + ItemsRepeater（快捷启动格 LinksChanged 增量刷新 2026-09-16；Search 同模式 2026-09-16；Todo/QuickNote/Clock 同模式落地 2026-09-17）
 └─ ✅ 多标签 AND 搜索桌面版：Search 组件改为 XAML + ViewModel，关键词 + 标签 chip 多选（AND）内联结果，空关键词+标签退化为按标签浏览（2026-09-16）
 
 第十二轮后续 · 快捷启动格交互补强（2026-09-16 已修）
@@ -726,7 +726,7 @@ v1 将其列为"当前最高风险"。核实后：规则引擎**尚未实现**�
 | R6b | **Explorer 重启会销毁 SHELLDLL_DefView 及其拥有的组件窗口** | 组件消失 | **v3 新引入** | 监听 `TaskbarCreated`/`shellhook` 后调 `InvalidateDesktopCache()` 并重挂载，或降级为不挂载 |
 | R7 | 本地文件不入库 → 统一条目模型缺最大一块，组件无内容可摆 | **核心价值** | 已解决（2026-09-16） | P0-1b |
 | R8 | 组件数据游离于 `items` 之外，背离核心亮点 | **架构** | 已存在 | R2 / §5.3 |
-| R9 | WidgetWindow 全 code-behind，与项目其余部分不一致 | 可维护性 | 已存在 | R1 |
+| R9 | ~~WidgetWindow 全 code-behind，与项目其余部分不一致~~ | 可维护性 | ✅ **已解决（R3 组件重构收官，2026-09-17）** | R1 ✅ |
 | R10 | ~~扩展缝未收敛，组件增多后重构成本陡增~~ | 工期 | ✅ **已收敛（v3）** | P0-1 |
 | R11 | ~~全项目无任何备份能力~~，组件数据重装即失 | 数据丢失 | ✅ **已通过 P1-4 备份恢复解决（2026-09-16）** | P1-4 ✅ |
 | R12 | 前台为提权进程时全局热键失效 | 体验 | 已存在 | P0-5 |
