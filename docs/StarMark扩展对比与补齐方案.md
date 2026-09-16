@@ -288,11 +288,11 @@ VALIDATE → FETCH_PAGES → RECONCILE → TAG_INDEX → DONE
 
 | 项 | 扩展 | Desktop |
 |---|---|---|
-| ETag / 304 条件请求 | ✅ | ❌ `GitHubClient` 无任何条件请求头 |
-| 限流处理 | ✅ 解析 `Retry-After` 并分类 | ❌ 无 429/403 分支 |
-| 401 识别 | ✅ | ❌ 一律当普通异常 |
-| 分页上限 | 200 页 | `maxPages = 50`（`GitHubClient.cs:78`） |
-| 断点续跑 | ✅ 每页落检查点 | ❌ |
+| ETag / 304 条件请求 | ✅ | ✅（第一步已落地）`GitHubClient.GetStarredPageAsync` 首页带 `If-None-Match`，命中 304 直接返回空短路整轮拉取 |
+| 限流处理 | ✅ 解析 `Retry-After` 并分类 | ✅（第一步已落地）429 / 403+X-RateLimit-Remaining:0 分类为 `RateLimit`；未解析 `Retry-After` |
+| 401 识别 | ✅ | ✅（第一步已落地）401 分类为 `Auth`，`SyncCoordinator` 给 UI 可操作文案 |
+| 分页上限 | 200 页 | `maxPages = 50`（`GitHubClient.cs`） |
+| 断点续跑 | ✅ 每页落检查点 | ❌（第二步阶段机未做） |
 
 ### 4.4 建议：分两步，先做低成本高收益的
 
@@ -306,6 +306,12 @@ request.Headers.TryAddWithoutValidation("If-None-Match", etag);
 ```
 
 GitHub 限额 5000 次/小时，一个 5000 Star 的账号全量拉取要 50 次请求；带 ETag 的增量轮询在无变化时**只花 1 次**。这是投入产出比最高的一项。
+
+**第一步实现记录（2026-09-16，已合并）**：
+- `GitHubClient`：新增 `CachedETag` 属性与可选 `HttpClient? http = null` 构造函数参数；`GetStarredPageAsync` 仅首页带 `If-None-Match`，命中 `304 NotModified` 返回空短路整轮；非成功响应经 `Classify` 分类为 `GitHubErrorKind`（Auth / RateLimit / Forbidden / Server / Unknown），`403 + X-RateLimit-Remaining:0` 归为限流；首页 `ETag` 响应头回写 `CachedETag`。
+- `GitHubSource`：构造函数注入 `IItemRepository`；`FetchAsync` 拉取前载入 `github:etag`，拉取后回写 `github:etag` 与 `github:last_synced_at`（Unix 秒），兑现原注释。
+- `SyncCoordinator`：新增 `SourceSyncErrorKind` 枚举与 `SourceSyncResult.ErrorKind`；`catch (GitHubApiException)` 映射为可操作中文文案（更新 Token / 等待限流恢复 / 检查权限等）。
+- 测试：`GitHubClientTests`（8 例）覆盖 304 短路、ETag 捕获、401/429/403 限流/403 权限/5xx 分类、条件请求头下发。全量测试 147 例通过。
 
 **第二步（约 2 天）**——把 `SyncCoordinator` 改成阶段机，`sync_state` 存 `JsonSerializer` 化的检查点。桌面端不像 MV3 的 Service Worker 会被系统杀掉，紧迫性低于扩展，可以缓。
 
@@ -639,7 +645,7 @@ Desktop 是 `NavigationView PaneDisplayMode="Top"`（`MainWindow.xaml:103`），
 └─ P1-5  UriNormalizer + 存量重复项合并迁移
 
 第三轮 · 同步质量（约 0.5 天，可独立提前）
-└─ P1-4  第一步：ETag/304 + 401/429 分类 + last_synced_at 落库
+└─ P1-4  第一步：ETag/304 + 401/429 分类 + last_synced_at 落库  【✅ 2026-09-16 已落地】
 
 第四轮 · 交互补齐（第二轮审查，约 2 天）
 ├─ 实现 A  多标签 AND 搜索 + 吸顶标签筛选条          （P1-A）
