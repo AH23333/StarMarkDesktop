@@ -36,6 +36,7 @@ public sealed partial class SettingsPage : Page
         base.OnNavigatedTo(e);
         ViewModel.LoadFromStore();
         _ = ViewModel.LoadHealthAsync();
+        _ = ViewModel.LoadDiagnosticsAsync();
         BuildWidgetRows();
     }
 

@@ -164,6 +164,36 @@
                 </StackPanel>
             </Border>
 
+            <!-- 诊断（P2-8）：只读信息，排查报障时最省沟通成本的一屏 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,8,0,0">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="诊断" Style="{StaticResource SettingTitle}"/>
+                    <ItemsRepeater ItemsSource="{x:Bind ViewModel.DiagnosticEntries, Mode=OneWay}">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Spacing="4"/>
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="diag:DiagnosticEntry">
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{x:Bind Label}" Style="{StaticResource MutedText}"/>
+                                    <TextBlock Grid.Column="1" Text="{x:Bind Value}" FontSize="12"
+                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                    <TextBlock Text="{x:Bind ViewModel.DiagnosticsError, Mode=OneWay}"
+                               Foreground="{ThemeResource SystemFillColorCautionBrush}" FontSize="12"
+                               Visibility="{x:Bind ViewModel.HasDiagnosticsError, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                </StackPanel>
+            </Border>
+
             <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
                 <Button Content="保存设置" Style="{StaticResource SecondaryButton}"
                         Click="Save_Click"/>

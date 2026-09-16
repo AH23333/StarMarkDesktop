@@ -41,10 +41,11 @@ public partial class SettingsPageViewModel : ObservableObject
         _settings = new SettingsStore();
     }
 
-    /// <summary>带仓储的构造函数（DI 注入），用于加载收藏健康度报告。</summary>
-    public SettingsPageViewModel(IItemRepository repository) : this()
+    /// <summary>带仓储的构造函数（DI 注入），用于加载收藏健康度报告与诊断信息。</summary>
+    public SettingsPageViewModel(IItemRepository repository, StarMark.Core.Diagnostics.DiagnosticsService? diagnostics = null) : this()
     {
         _repository = repository;
+        _diagnostics = diagnostics;
     }
 
     public void LoadFromStore()
@@ -134,6 +135,31 @@ public partial class SettingsPageViewModel : ObservableObject
                 Height = max > 0 && t.Count > 0 ? Math.Max(3, t.Count * 80.0 / max) : 0,
             })
             .ToList();
+    }
+
+    // ===== 诊断（P2-8）=====
+    public System.Collections.ObjectModel.ObservableCollection<StarMark.Core.Diagnostics.DiagnosticEntry> DiagnosticEntries { get; }
+        = new();
+    [ObservableProperty] private bool _hasDiagnosticsError;
+    [ObservableProperty] private string _diagnosticsError = string.Empty;
+
+    /// <summary>采集只读诊断信息（P2-8）。本地查询，零网络。</summary>
+    public async Task LoadDiagnosticsAsync()
+    {
+        if (_diagnostics is null) return;
+        HasDiagnosticsError = false;
+        try
+        {
+            var entries = await _diagnostics.CollectAsync(CancellationToken.None);
+            DiagnosticEntries.Clear();
+            foreach (var e in entries) DiagnosticEntries.Add(e);
+        }
+        catch (Exception ex)
+        {
+            HasDiagnosticsError = true;
+            DiagnosticsError = $"诊断信息采集失败：{ex.Message}";
+            StarLog.Error($"诊断信息采集失败: {ex}");
+        }
     }
 
     [RelayCommand]

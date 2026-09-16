@@ -90,6 +90,7 @@ public partial class App : Application
         // 应用服务层
         services.AddSingleton<StarMark.Core.Search.SearchService>();
         services.AddSingleton<StarMark.Core.Sync.SyncCoordinator>();
+        services.AddSingleton<StarMark.Core.Diagnostics.DiagnosticsService>();
 
         // 桌面组件（DeskBox 式独立小组件）
         services.AddSingleton<WidgetStorage>();
