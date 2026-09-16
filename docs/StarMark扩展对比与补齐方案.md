@@ -670,6 +670,8 @@ Desktop 是 `NavigationView PaneDisplayMode="Top"`（`MainWindow.xaml:103`），
 
 **与既有计划的衔接：**《DeskBox桌面组件借鉴与优化意见.md》给的第十轮是「Everything 索引进库」。本文件的 P0-1 应当**排在它之前**——如果中文检索是坏的，把更多本地文件灌进 `items` 只会放大这个问题。
 
+> **✅ 2026-09-16 已落地：** DeskBox 文档的 **P0-1b Everything 索引进库**（`EverythingSource.FetchAsync` 遍历配置根目录按路径限定查询 Everything、带上限、source_id 幂等入库为 `ItemType.File`；设置页新增「本地文件索引」分组可配根目录与上限）。本地文件自此进入统一条目模型——文件夹树/标签/置顶/动态/组件均可用。详见 DeskBox 文档 P0-1b 实装记录。
+
 ---
 
 ## 附录：本次审查的可复现依据

@@ -589,9 +589,11 @@ public async Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationT
 - **时机：** 5 种组件时约半天；等加了天气/音乐/活动就是 DeskBox 那种 25 文件级重构
 - **与 R1 合并做**：描述符=声明，XAML 模板=视图，Provider/VM=实现
 
-### P0-1b · Everything 索引进库（新增，价值最高）
+### P0-1b · Everything 索引进库（新增，价值最高）✅ **已实装（2026-09-16）**
 
 见 §5.1。**这是"组件有没有内容可摆"的前提。**
+
+**实装记录：** `EverythingSource.FetchAsync` 不再返回空——遍历 `FileIndexOptions.Roots`（默认桌面/下载/文档，设置页可配），以根目录路径作为 Everything 查询词（命中其下含子目录全部文件），每目录上限 `MaxCount`（默认 5000，CLI `-limit` 硬限已放开到 20000）；`source_id` 沿用 `SHA256(path.ToLowerInvariant())` 前 8 字节 hex 保证幂等，`SyncCoordinator` 自动 `UpsertAsync` 入库为 `ItemType.File`。Everything 未运行或根目录不存在时安全返回空。`SearchService` 已按 `Uri` 去重，入库后实时源与 FTS 结果不重复；带标签筛选时实时源虽被跳过，但已入库文件可正常参与标签筛选。设置页新增「本地文件索引」分组（根目录多行 + 每目录上限）。新增 `EverythingSourceTests` 4 例锁定 source_id 契约与空根行为。
 
 ### P0-2 · 二元置顶换层级策略 ✅ **已完成（v3）**
 
@@ -682,7 +684,7 @@ v1 将其列为"当前最高风险"。核实后：规则引擎**尚未实现**�
 └─ ⬜ Explorer 重启后重新挂载桌面层（见风险清单）
 
 第十轮 · 让组件有内容可摆（价值最高）
-├─ ⬜ P0-1b Everything 索引进库（限定根目录 + 上限 + 增量续拉）
+├─ ✅ P0-1b Everything 索引进库（限定根目录 + 上限 + 增量续拉）
 └─ 验证：本地文件出现在文件夹树/标签/动态/置顶，快捷启动格可摆本地文件
 
 第十一轮 · 组件架构归位
@@ -716,7 +718,7 @@ v1 将其列为"当前最高风险"。核实后：规则引擎**尚未实现**�
 | R5 | 拔掉外接显示器后组件落到屏外 | 找不到组件 | 已存在 | P0-4 |
 | R6 | ~~持久 TopMost 造成"永远压屏"~~（实测默认 false，用户显式开关，风险不成立） | — | ✅ **已澄清** | — |
 | R6b | **Explorer 重启会销毁 SHELLDLL_DefView 及其拥有的组件窗口** | 组件消失 | **v3 新引入** | 监听 `TaskbarCreated`/`shellhook` 后调 `InvalidateDesktopCache()` 并重挂载，或降级为不挂载 |
-| R7 | 本地文件不入库 → 统一条目模型缺最大一块，组件无内容可摆 | **核心价值** | 已存在 | P0-1b |
+| R7 | 本地文件不入库 → 统一条目模型缺最大一块，组件无内容可摆 | **核心价值** | 已解决（2026-09-16） | P0-1b |
 | R8 | 组件数据游离于 `items` 之外，背离核心亮点 | **架构** | 已存在 | R2 / §5.3 |
 | R9 | WidgetWindow 全 code-behind，与项目其余部分不一致 | 可维护性 | 已存在 | R1 |
 | R10 | ~~扩展缝未收敛，组件增多后重构成本陡增~~ | 工期 | ✅ **已收敛（v3）** | P0-1 |
