@@ -26,7 +26,39 @@ public sealed class MigrationRunner
         // Schema.sql 中所有 CREATE 语句均为 IF NOT EXISTS，可幂等执行
         cmd.CommandText = sql;
         cmd.ExecuteNonQuery();
-        WriteSchemaVersion(conn, 1);
+
+        // Schema.sql 只保证"表存在"，列级演进靠版本化迁移（v1 建库，v2 起 ALTER）。
+        var version = ReadSchemaVersion(conn);
+        if (version < 2) MigrateV2(conn);
+
+        WriteSchemaVersion(conn, CurrentVersion);
+    }
+
+    public const int CurrentVersion = 2;
+
+    private static int ReadSchemaVersion(Microsoft.Data.Sqlite.SqliteConnection conn)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT value FROM sync_state WHERE key = 'schema_version';";
+        var obj = cmd.ExecuteScalar();
+        return int.TryParse(obj?.ToString(), out var v) ? v : 1;
+    }
+
+    /// <summary>v2：items.pinned（用户置顶）。ALTER 仅在列缺失时执行，幂等。</summary>
+    private static void MigrateV2(Microsoft.Data.Sqlite.SqliteConnection conn)
+    {
+        if (ColumnExists(conn, "items", "pinned")) return;
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "ALTER TABLE items ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;";
+        cmd.ExecuteNonQuery();
+    }
+
+    private static bool ColumnExists(Microsoft.Data.Sqlite.SqliteConnection conn, string table, string column)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = @col;";
+        cmd.Parameters.AddWithValue("@col", column);
+        return Convert.ToInt64(cmd.ExecuteScalar()) > 0;
     }
 
     private static string LoadEmbeddedSchema()

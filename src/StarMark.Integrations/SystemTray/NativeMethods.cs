@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using System.Runtime.InteropServices;
 
 namespace StarMark.Integrations.SystemTray;
@@ -24,8 +24,16 @@ internal static class NativeMethods
     public const int TPM_RIGHTBUTTON = 0x0002;
     public const int TPM_RETURNCMD = 0x0100;
     public const int MF_STRING = 0x0000;
+    public const int MF_POPUP = 0x0010;
+    public const int MF_SEPARATOR = 0x0800;
+    public const int MF_CHECKED = 0x0008;
     public const int IDM_SHOW = 1001;
     public const int IDM_EXIT = 1002;
+    public const int IDM_WIDGETS = 1003;
+    public const int IDM_SETTINGS = 1004;
+    public const int IDM_WIDGET_BASE = 1100;
+    public const int IDM_WIDGET_SHOWALL = 1110;
+    public const int IDM_WIDGET_HIDEALL = 1111;
 
     // 热键修饰符
     public const uint MOD_ALT = 0x0001;
@@ -177,7 +185,7 @@ internal static class NativeMethods
     public static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
 
     [DllImport("user32.dll")]
-    public static extern bool GetCursorPos(ref POINT lpPoint);
+    public static extern bool GetCursorPos(out POINT lpPoint);
 
     [DllImport("user32.dll")]
     public static extern bool DestroyIcon(IntPtr hIcon);
@@ -186,7 +194,7 @@ internal static class NativeMethods
     public static extern IntPtr CreateDIBSection(IntPtr hdc, ref BITMAPINFO pbmi, uint usage, out IntPtr ppvBits, IntPtr hSection, uint dwOffset);
 
     [DllImport("gdi32.dll")]
-    public static extern IntPtr CreateBitmap(int nWidth, int nHeight, uint cPlanes, uint cBitsPerPel, ref byte lpvBits);
+    public static extern IntPtr CreateBitmap(int nWidth, int nHeight, uint cPlanes, uint cBitsPerPel, byte[]? lpvBits);
 
     [DllImport("gdi32.dll")]
     public static extern bool DeleteObject(IntPtr hObject);

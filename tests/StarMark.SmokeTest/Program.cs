@@ -47,6 +47,11 @@ if (args.Length >= 1 && args[0] == "log")
     LogCheck();
     return;
 }
+if (args.Length >= 1 && args[0] == "widgets")
+{
+    WidgetsCheck();
+    return;
+}
 
 await SmokeModeAsync();
 
@@ -260,12 +265,13 @@ static void TraySmokeCheck()
 {
     Trace.Listeners.Add(new TextWriterTraceListener(Console.Out));
     using var host = new StarMark.Integrations.SystemTray.TrayHost();
-    Console.WriteLine($"Tray host available: {host.IsAvailable}");
-    if (!host.IsAvailable) throw new Exception("托盘宿主初始化失败");
+    var ok = host.Initialize(registerHotkey: false);
+    Console.WriteLine($"Tray host available: {ok}");
+    if (!ok) throw new Exception("托盘宿主初始化失败");
 
-    var ok = host.TryRegisterHotKey();
-    Console.WriteLine($"Hotkey registered (Ctrl+Alt+Space): {ok}");
-    host.ShowBalloon("SmokeTest", "托盘冒烟自检");
+    host.RegisterGlobalHotKey();
+    Console.WriteLine("Hotkey register requested (Ctrl+Alt+Space)");
+    host.ShowNotification("SmokeTest", "托盘冒烟自检");
     Console.WriteLine("Tray balloon modify: ok");
     Console.WriteLine("DONE");
 }
@@ -522,4 +528,80 @@ static async Task SeedAsync(IItemRepository repo)
     };
     await repo.UpsertAsync(items, CancellationToken.None);
     if (items[0].Id > 0) await repo.AddTagAsync(items[0].Id, "favorite", CancellationToken.None);
+}
+
+// ===== 桌面组件存储与吸附无头验证 =====
+// 检查点：默认空启用 / 启用集合与窗口配置持久化 / 待办·随记·入口规范化 / v1 迁移 / 损坏容错 / 吸附
+static void WidgetsCheck()
+{
+    var path = Path.Combine(Path.GetTempPath(), $"starmark_widgets_{Guid.NewGuid():N}.json");
+    try
+    {
+        var store = new StarMark.Core.Widgets.WidgetStorage(path);
+
+        // 1. 缺失文件 → 全新安装默认不启用任何组件，默认尺寸正确
+        var d = store.Load();
+        var defaultCfg = store.GetConfig(d, StarMark.Core.Widgets.WidgetKind.QuickLaunch, 0);
+        Check(d.Version == 2 && d.Enabled.Count == 0 && defaultCfg.Width == 320 && d.Todos.Count == 0, "缺失文件回退默认配置");
+
+        // 2. 启用集合与窗口配置（含置顶）持久化
+        d.Enabled.Add(StarMark.Core.Widgets.WidgetKind.Clock);
+        d.Enabled.Add(StarMark.Core.Widgets.WidgetKind.QuickLaunch);
+        d.WindowConfigs[StarMark.Core.Widgets.WidgetKind.Clock.ToString()] = new StarMark.Core.Widgets.WidgetConfig
+        {
+            X = 300, Y = 200, Width = 260, Height = 180, Topmost = true,
+        };
+        store.Save(d);
+        var r1 = store.Load();
+        Check(r1.Enabled.Count == 2 && r1.WindowConfigs[StarMark.Core.Widgets.WidgetKind.Clock.ToString()].X == 300
+            && r1.WindowConfigs[StarMark.Core.Widgets.WidgetKind.Clock.ToString()].Topmost, "启用集合/窗口位置/置顶持久化");
+
+        // 3. 待办与随记持久化与排序
+        r1.Todos.Add(new StarMark.Core.Widgets.TodoItem { Id = 1, Text = "写周报", CreatedAt = 100 });
+        r1.Todos.Add(new StarMark.Core.Widgets.TodoItem { Id = 2, Text = "已完成的", Done = true, CreatedAt = 200 });
+        r1.Notes.Insert(0, new StarMark.Core.Widgets.QuickNoteItem { Id = 3, Text = "随记内容", CreatedAt = 300 });
+        store.Save(r1);
+        var r2 = store.Load();
+        Check(r2.Todos.Count == 2 && r2.Todos[0].Text == "写周报", "未完成待办排前");
+        Check(r2.Notes.Count == 1 && r2.Notes[0].Text == "随记内容", "随记持久化");
+
+        // 4. 空文本被 Normalize 剔除
+        r2.Todos.Add(new StarMark.Core.Widgets.TodoItem { Text = "   " });
+        store.Save(r2);
+        Check(store.Load().Todos.Count == 2, "空文本待办被剔除");
+
+        // 5. v1 单面板（ShowOnStartup=true）迁移为全部组件启用
+        File.WriteAllText(path, "{\"Version\":1,\"Config\":{\"X\":10,\"Y\":20,\"Width\":320,\"Height\":620,\"ShowOnStartup\":true},\"ShowOnStartup\":true,\"Todos\":[],\"Notes\":[]}");
+        var legacy = store.Load();
+        Check(legacy.Version == 2 && legacy.Enabled.Count == 5
+            && legacy.WindowConfigs[StarMark.Core.Widgets.WidgetKind.QuickLaunch.ToString()].X == 10, "v1 面板迁移为全部组件");
+
+        // 6. 损坏 JSON → 回退默认且不抛异常
+        File.WriteAllText(path, "{corrupted!!!");
+        var r3 = store.Load();
+        Check(r3.Enabled.Count == 0 && store.GetConfig(r3, StarMark.Core.Widgets.WidgetKind.QuickLaunch, 0).Width == 320, "损坏文件回退默认值");
+
+        // 7. 吸附：目标右缘 500，候选左缘 514 → 贴合到 508（间距 8）
+        var work = new Windows.Graphics.RectInt32(0, 0, 1920, 1040);
+        var target = new Windows.Graphics.RectInt32(300, 100, 200, 300);
+        var proposed = new Windows.Graphics.RectInt32(514, 120, 200, 200);
+        var snapped = StarMark.Core.Widgets.WidgetSnapping.SnapMove(proposed, new[] { target }, work, 24, 8);
+        Check(snapped.X == 508, "边缘贴合吸附");
+        // 垂直投影不重叠且相距过远 → 不吸附
+        var far = new Windows.Graphics.RectInt32(305, 500, 200, 200);
+        var farSnapped = StarMark.Core.Widgets.WidgetSnapping.SnapMove(far, new[] { target }, work, 24, 8);
+        Check(farSnapped.X == 305, "投影门限外不吸附");
+
+        Console.WriteLine("Widgets: ok");
+    }
+    finally
+    {
+        try { File.Delete(path); } catch { }
+    }
+
+    static void Check(bool cond, string name)
+    {
+        if (!cond) throw new InvalidOperationException($"WidgetsCheck FAIL: {name}");
+        Console.WriteLine($"  ok - {name}");
+    }
 }

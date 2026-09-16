@@ -47,6 +47,10 @@
                     <Button x:Name="ThemeButton" Style="{StaticResource SecondaryButton}" Click="ThemeButton_Click">
                         <FontIcon x:Name="ThemeIcon" Glyph="&#xE895;" FontSize="14"/>
                     </Button>
+                    <Button x:Name="WidgetsButton" Style="{StaticResource SecondaryButton}"
+                            ToolTipService.ToolTip="桌面组件" Click="WidgetsButton_Click">
+                        <FontIcon Glyph="&#xE710;" FontSize="14"/>
+                    </Button>
                     <Button x:Name="SettingsButton" Style="{StaticResource SecondaryButton}" Content="⚙" Click="SettingsButton_Click"/>
                 </StackPanel>
             </Grid>
@@ -55,11 +59,12 @@
         <!-- 搜索框 -->
         <Border Grid.Row="1" Padding="16,10,16,4">
             <TextBox x:Name="SearchBox"
-                     PlaceholderText="搜索本地文件、GitHub Stars、书签..."
+                     PlaceholderText="搜索本地文件、GitHub Stars、书签...  (↑↓ 选择 · Enter 打开 · Ctrl+Enter 位置)"
                      CornerRadius="8"
                      Padding="12,9"
                      FontSize="14"
-                     TextChanging="SearchBox_TextChanging"/>
+                     TextChanging="SearchBox_TextChanging"
+                     KeyDown="SearchBox_KeyDown"/>
         </Border>
 
         <!-- 工具栏 -->
@@ -99,22 +104,22 @@
                         IsSettingsVisible="False" IsPaneToggleButtonVisible="False"
                         SelectionChanged="NavView_SelectionChanged">
             <NavigationView.MenuItems>
-                <NavigationViewItem Content="文件夹" Tag="tree">
+                <NavigationViewItem x:Name="NavTreeItem" Content="文件夹" Tag="tree">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE838;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem Content="标签" Tag="tags">
+                <NavigationViewItem x:Name="NavTagsItem" Content="标签" Tag="tags">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE8EC;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem Content="动态" Tag="activity">
+                <NavigationViewItem x:Name="NavActivityItem" Content="动态" Tag="activity">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE823;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem Content="隐藏" Tag="hidden">
+                <NavigationViewItem x:Name="NavHiddenItem" Content="隐藏" Tag="hidden">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE7B3;"/>
                     </NavigationViewItem.Icon>

@@ -73,8 +73,11 @@ public sealed class Item
     /// <summary>扩展字段（语言、Topic、浏览器、剪贴板类型等）。JSON 文本。</summary>
     public string? ExtraJson { get; set; }
 
-    /// <summary>敏感条目隐藏。对应原扩展 <c>StarItem.hidden</c>。</summary>
+    /// <summary>敏感条目隐藏。对应原扩展 <c>StarItem.hidden</c>。用户状态：同步不覆盖。</summary>
     public bool Hidden { get; set; }
+
+    /// <summary>用户置顶（deskbox 式快速访问）。用户状态：同步不覆盖。</summary>
+    public bool Pinned { get; set; }
 
     public string? Notes { get; set; }
 

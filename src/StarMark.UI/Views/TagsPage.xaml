@@ -31,9 +31,10 @@
         </StackPanel>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <!-- 标签云 -->
             <StackPanel>
-                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Tags, Mode=OneWay}">
+                <!-- 标签云：选中标签后隐藏（与插件一致，仅显示筛选栏 + 结果），清除后恢复 -->
+                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Tags, Mode=OneWay}"
+                               Visibility="{x:Bind ViewModel.HasActiveFilter, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
                     <ItemsRepeater.Layout>
                         <UniformGridLayout Orientation="Horizontal"
                                            MaximumRowsOrColumns="4"
@@ -49,7 +50,7 @@
                                     Tag="{x:Bind Name}">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <TextBlock Text="{x:Bind FormattedName}" FontSize="12"
-                                               Foreground="{Binding Name, Converter={StaticResource ContainedTagColor}}"/>
+                                               Foreground="{x:Bind Name, Converter={StaticResource ContainedTagColor}}"/>
                                     <TextBlock Text="{x:Bind Count}" FontSize="11" Style="{StaticResource MutedText}"/>
                                 </StackPanel>
                             </Button>
@@ -75,6 +76,10 @@
                                                EditNoteRequested="Card_EditNoteRequested"
                                                EditTagsRequested="Card_EditTagsRequested"
                                                HideRequested="Card_HideRequested"
+                                               PinRequested="Card_PinRequested"
+                                               CopyLinkRequested="Card_CopyLinkRequested"
+                                               OpenLocationRequested="Card_OpenLocationRequested"
+                                               TagFilterRequested="Card_TagFilterRequested"
                                                TagRemoveRequested="Card_TagRemoveRequested"
                                                TagAddRequested="Card_TagAddRequested"/>
                         </DataTemplate>

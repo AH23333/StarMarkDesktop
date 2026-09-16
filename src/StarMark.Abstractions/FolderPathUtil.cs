@@ -11,6 +11,7 @@ public static class FolderPathUtil
 {
     public const string GitHubGroup = "⭐ GitHub Stars";
     public const string ClipboardGroup = "📋 剪贴板";
+    public const string PinnedGroup = "📌 已置顶";
     public const string OtherGroup = "其他";
     public const string OtherBookmarkGroup = "其他书签";
     public const string OtherFileGroup = "其他文件";
@@ -68,6 +69,7 @@ public static class FolderPathUtil
     /// <summary>伪根/兜底分组的显示优先级（越靠前越先展示），普通文件夹排在最后。</summary>
     public static int RootOrder(string segment) => segment switch
     {
+        PinnedGroup => -1,
         GitHubGroup => 0,
         ClipboardGroup => 1,
         OtherBookmarkGroup => 2,

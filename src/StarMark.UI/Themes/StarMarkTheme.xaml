@@ -10,8 +10,57 @@
         与成熟的 Windows 桌面应用观感一致。
     -->
 
+    <!--
+        代码侧主题画笔调色板：应用级 RequestedTheme 启动后冻结，运行期切主题只改窗口根
+        元素，代码里 Application.Current.Resources[key] 会解析出错误的（深色）画笔。
+        这里提供显式 Light/Default 双主题画笔，供 Helpers/ThemeBrush 按 ActualTheme 解析，
+        XAML 中也可用 {ThemeResource AppXxx} 引用。
+    -->
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="AppAccentBrush" Color="#0067C0"/>
+            <SolidColorBrush x:Key="AppAccentSoftBrush" Color="#1A0067C0"/>
+            <SolidColorBrush x:Key="AppMutedBrush" Color="#5C000000"/>
+            <SolidColorBrush x:Key="AppSuccessBrush" Color="#0F7B0F"/>
+            <SolidColorBrush x:Key="AppCautionBrush" Color="#9D5D00"/>
+            <!-- 桌面组件窗口（WidgetWindow）专用画笔 -->
+            <SolidColorBrush x:Key="WidgetBackgroundBrush" Color="#D9FAFAFA"/>
+            <SolidColorBrush x:Key="WidgetChromeBrush" Color="#0F000000"/>
+            <SolidColorBrush x:Key="WidgetBorderBrush" Color="#29000000"/>
+            <SolidColorBrush x:Key="WidgetDropHintBrush" Color="#330067C0"/>
+            <SolidColorBrush x:Key="WidgetSubtleFillBrush" Color="#0F000000"/>
+            <SolidColorBrush x:Key="WidgetDividerBrush" Color="#14000000"/>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Default">
+            <SolidColorBrush x:Key="AppAccentBrush" Color="#4CC2FF"/>
+            <SolidColorBrush x:Key="AppAccentSoftBrush" Color="#2E4CC2FF"/>
+            <SolidColorBrush x:Key="AppMutedBrush" Color="#FFFFFFC5"/>
+            <SolidColorBrush x:Key="AppSuccessBrush" Color="#6CCB5F"/>
+            <SolidColorBrush x:Key="AppCautionBrush" Color="#FCE100"/>
+            <!-- 桌面组件窗口（WidgetWindow）专用画笔 -->
+            <SolidColorBrush x:Key="WidgetBackgroundBrush" Color="#D92B2B2B"/>
+            <SolidColorBrush x:Key="WidgetChromeBrush" Color="#1FFFFFFF"/>
+            <SolidColorBrush x:Key="WidgetBorderBrush" Color="#29FFFFFF"/>
+            <SolidColorBrush x:Key="WidgetDropHintBrush" Color="#334CC2FF"/>
+            <SolidColorBrush x:Key="WidgetSubtleFillBrush" Color="#1FFFFFFF"/>
+            <SolidColorBrush x:Key="WidgetDividerBrush" Color="#14FFFFFF"/>
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
     <!-- 字体栈 -->
     <FontFamily x:Key="DefaultFontFamily">Segoe UI, PingFang SC, Microsoft YaHei</FontFamily>
+
+    <!-- 桌面组件标题栏按钮 -->
+    <Style x:Key="WidgetChromeButton" TargetType="Button">
+        <Setter Property="Width" Value="28"/>
+        <Setter Property="Height" Value="28"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="FontSize" Value="11"/>
+    </Style>
 
     <!-- 文本样式 -->
     <Style x:Key="BodyText" TargetType="TextBlock">

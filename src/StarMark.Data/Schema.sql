@@ -25,8 +25,9 @@ CREATE TABLE IF NOT EXISTS items (
     updated_at      INTEGER NOT NULL,
     synced_at       INTEGER,
     extra_json      TEXT,                              -- 扩展字段 JSON
-    hidden          INTEGER NOT NULL DEFAULT 0,        -- 0/1
-    notes           TEXT
+    hidden          INTEGER NOT NULL DEFAULT 0,        -- 0/1 用户状态，同步不覆盖
+    pinned          INTEGER NOT NULL DEFAULT 0,        -- 0/1 用户置顶，同步不覆盖（v2 迁移列）
+    notes           TEXT                               -- 用户状态，同步不覆盖
 );
 
 CREATE INDEX IF NOT EXISTS idx_items_type_source ON items(type, source);

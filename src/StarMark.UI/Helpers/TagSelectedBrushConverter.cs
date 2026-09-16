@@ -23,14 +23,18 @@ public sealed class TagSelectedBrushConverter : IValueConverter
         var selected = value is bool b && b;
         if (!selected)
         {
+            // 未选中：卡片底/分割线在深浅色间差异很小，走应用级资源即可
             return parameter as string == "border"
                 ? Resolve("DividerStrokeColorDefaultBrush", new SolidColorBrush(Colors.Gray))!
                 : Resolve("CardBackgroundFillColorDefaultBrush", new SolidColorBrush(Colors.Transparent))!;
         }
 
+        // 选中：半透明强调色底 + 强调色边框，按当前实际主题解析（应用级主题
+        // 启动后冻结，浅色模式下会解析出深色画笔）；统一用 ThemeBrush 调色板
+        var dark = ThemeManager.IsAppDark();
         return parameter as string == "border"
-            ? Resolve("AccentFillColorDefaultBrush", new SolidColorBrush(Colors.CornflowerBlue))!
-            : Resolve("AccentFillColorSecondaryBrush", new SolidColorBrush(Colors.CornflowerBlue))!;
+            ? ThemeBrush.Resolve(dark, "AppAccentBrush") ?? new SolidColorBrush(Colors.CornflowerBlue)
+            : ThemeBrush.Resolve(dark, "AppAccentSoftBrush") ?? new SolidColorBrush(Colors.CornflowerBlue);
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, string language)

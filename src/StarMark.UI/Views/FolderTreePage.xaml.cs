@@ -26,6 +26,8 @@ public sealed partial class FolderTreePage : Page
         ViewModel = (App.Services.GetService(typeof(FolderTreePageViewModel)) as FolderTreePageViewModel)
             ?? new FolderTreePageViewModel(GetRepo());
         ViewModel.RootsReady += OnRootsReady;
+        // 主题切换会改变代码构建处的主题画笔解析，需重建以刷新颜色
+        ActualThemeChanged += (_, _) => RebuildTree();
     }
 
     private static StarMark.Abstractions.IItemRepository GetRepo()
@@ -58,6 +60,9 @@ public sealed partial class FolderTreePage : Page
     {
         var body = new StackPanel { Spacing = 2, Visibility = Visibility.Collapsed };
         bool built = false;
+        var itemsPanel = new StackPanel { Spacing = 2 };
+        Button? expandBtn = null;
+        int loaded = 0;
 
         var header = new Button
         {
@@ -88,31 +93,59 @@ public sealed partial class FolderTreePage : Page
             }
         };
 
+        void RenderItems()
+        {
+            itemsPanel.Children.Clear();
+            var entryPad = 6 + (depth + 1) * 18;
+            int shown = 0;
+            foreach (var vm in ViewModel.HydrateRange(node, 0, loaded))
+            {
+                var wrap = new StackPanel { Padding = new Thickness(entryPad, 4, 0, 0) };
+                wrap.Children.Add(CreateCard(vm));
+                itemsPanel.Children.Add(wrap);
+                shown++;
+            }
+            var remaining = node.Items.Count - loaded;
+            if (remaining > 0)
+            {
+                if (expandBtn == null)
+                {
+                    expandBtn = new Button
+                    {
+                        Margin = new Thickness(entryPad, 8, 0, 4),
+                        Padding = new Thickness(12, 4, 12, 4),
+                        BorderThickness = new Thickness(0),
+                        FontSize = 11,
+                        Style = (Style)Application.Current.Resources["SecondaryButton"],
+                    };
+                    expandBtn.Click += (_, _) =>
+                    {
+                        loaded = Math.Min(node.Items.Count, loaded + FolderTreePageViewModel.ExpandMoreStep);
+                        RenderItems();
+                        StarLog.Info($"ExpandMore: {node.Name} loaded={loaded}/{node.Items.Count}");
+                    };
+                    body.Children.Add(expandBtn);
+                }
+                expandBtn.Content = $"展开更多（剩余 {remaining} 条）";
+            }
+            else if (expandBtn != null)
+            {
+                body.Children.Remove(expandBtn);
+                expandBtn = null;
+            }
+        }
+
         void BuildOnce()
         {
             if (built) return;
             built = true;
             try
             {
-                var entryPad = 6 + (depth + 1) * 18;
                 foreach (var child in node.Children)
                     body.Children.Add(BuildFolder(child, depth + 1));
-                foreach (var vm in ViewModel.Hydrate(node))
-                {
-                    var wrap = new StackPanel { Padding = new Thickness(entryPad, 4, 0, 0) };
-                    wrap.Children.Add(CreateCard(vm));
-                    body.Children.Add(wrap);
-                }
-                if (node.Items.Count > FolderTreePageViewModel.MaxItemsPerFolder)
-                {
-                    body.Children.Add(new TextBlock
-                    {
-                        Text = $"… 还有 {node.Items.Count - FolderTreePageViewModel.MaxItemsPerFolder} 条（按需加载上限）",
-                        Style = (Style)Application.Current.Resources["MutedText"],
-                        FontSize = 11,
-                        Margin = new Thickness(entryPad, 8, 0, 4),
-                    });
-                }
+                body.Children.Add(itemsPanel);
+                loaded = Math.Min(FolderTreePageViewModel.MaxItemsPerFolder, node.Items.Count);
+                RenderItems();
             }
             catch (Exception ex)
             {
@@ -127,15 +160,18 @@ public sealed partial class FolderTreePage : Page
         return full;
     }
 
-    private static StackPanel BuildHeaderContent(FolderPathNodeViewModel node, bool expanded)
+    private StackPanel BuildHeaderContent(FolderPathNodeViewModel node, bool expanded)
     {
+        // 按页面 ActualTheme 解析画笔（应用级主题启动后冻结，浅色模式下
+        // Application.Current.Resources 会解析出深色画笔 → 白字白底）
+        var muted = ThemeBrush.For(this.ActualTheme, "AppMutedBrush");
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
         row.Children.Add(new FontIcon
         {
             Glyph = expanded ? "\uE70D" : "\uE76C",
             FontSize = 10,
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            Foreground = muted,
         });
         row.Children.Add(new TextBlock
         {
@@ -155,7 +191,7 @@ public sealed partial class FolderTreePage : Page
         {
             Text = $"({node.TotalCount})",
             FontSize = 11,
-            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            Foreground = muted,
             VerticalAlignment = VerticalAlignment.Center,
         });
         return row;
@@ -170,30 +206,50 @@ public sealed partial class FolderTreePage : Page
         card.EditNoteRequested += Card_EditNoteRequested;
         card.EditTagsRequested += Card_EditTagsRequested;
         card.HideRequested += Card_HideRequested;
+        card.PinRequested += Card_PinRequested;
+        card.CopyLinkRequested += Card_CopyLinkRequested;
+        card.OpenLocationRequested += Card_OpenLocationRequested;
+        card.TagFilterRequested += Card_TagFilterRequested;
         card.TagRemoveRequested += Card_TagRemoveRequested;
         card.TagAddRequested += Card_TagAddRequested;
         return card;
     }
 
-    private void Card_OpenRequested(object sender, long itemId)
+    private void Card_OpenRequested(object? sender, long itemId)
         => ItemCardActions.Open(this.XamlRoot, itemId);
 
-    private void Card_EditNoteRequested(object sender, ItemCardViewModel vm)
+    private void Card_EditNoteRequested(object? sender, ItemCardViewModel vm)
         => ItemCardActions.EditNote(this.XamlRoot, vm);
 
-    private void Card_EditTagsRequested(object sender, ItemCardViewModel vm)
+    private void Card_EditTagsRequested(object? sender, ItemCardViewModel vm)
         => ItemCardActions.EditTags(this.XamlRoot, vm);
 
-    private async void Card_HideRequested(object sender, ItemCardViewModel vm)
+    private async void Card_HideRequested(object? sender, ItemCardViewModel vm)
     {
         var nowHidden = await ItemCardActions.ToggleHidden(this.XamlRoot, vm);
         if (nowHidden)
             _ = ViewModel.LoadCommand.ExecuteAsync(null);
     }
 
-    private void Card_TagRemoveRequested(object sender, (ItemCardViewModel VM, string Tag) e)
+    private void Card_PinRequested(object? sender, ItemCardViewModel vm)
+    {
+        ItemCardActions.TogglePin(vm);
+        // 置顶影响浏览排序，稍后重载（给切换动画留一拍）
+        _ = Task.Delay(150).ContinueWith(_ => DispatcherQueue.TryEnqueue(() => _ = ViewModel.LoadCommand.ExecuteAsync(null)));
+    }
+
+    private void Card_CopyLinkRequested(object? sender, ItemCardViewModel vm)
+        => ItemCardActions.CopyUri(vm);
+
+    private void Card_OpenLocationRequested(object? sender, ItemCardViewModel vm)
+        => ItemCardActions.OpenLocation(vm);
+
+    private void Card_TagFilterRequested(object? sender, (ItemCardViewModel VM, string Tag) e)
+        => App.MainWindow?.NavigateTo("tags", e.Tag);
+
+    private void Card_TagRemoveRequested(object? sender, (ItemCardViewModel VM, string Tag) e)
         => ItemCardActions.RemoveTag(this.XamlRoot, e.VM, e.Tag);
 
-    private void Card_TagAddRequested(object sender, ItemCardViewModel vm)
+    private void Card_TagAddRequested(object? sender, ItemCardViewModel vm)
         => ItemCardActions.AddTag(this.XamlRoot, vm);
 }

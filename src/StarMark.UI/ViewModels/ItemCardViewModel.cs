@@ -21,6 +21,10 @@ public partial class ItemCardViewModel : ObservableObject
     public string? Description => _item.Description;
     public long? StarsCount => _item.StarsCount;
     [ObservableProperty] private bool _isHidden;
+    [ObservableProperty] private bool _isPinned;
+
+    /// <summary>键盘导航时的选中高亮（搜索结果 ↑↓ 选择）。</summary>
+    [ObservableProperty] private bool _isKeyboardSelected;
     public string? Notes => _item.Notes;
     public IReadOnlyList<string> Tags => _item.Tags;
     public ItemType Type => _item.Type;
@@ -28,8 +32,14 @@ public partial class ItemCardViewModel : ObservableObject
     public long UpdatedAt => _item.UpdatedAt;
 
     public string HideMenuText => IsHidden ? "显示" : "隐藏";
+    public string PinMenuText => IsPinned ? "取消置顶" : "置顶";
 
     partial void OnIsHiddenChanged(bool value) => OnPropertyChanged(nameof(HideMenuText));
+    partial void OnIsPinnedChanged(bool value) => OnPropertyChanged(nameof(PinMenuText));
+
+    /// <summary>是否可“打开所在位置”（仅本地文件条目）。</summary>
+    public bool HasOpenLocation
+        => Type == ItemType.File && Uri.StartsWith("file://", StringComparison.OrdinalIgnoreCase);
 
     public string SourceIcon => Type switch
     {
@@ -57,6 +67,8 @@ public partial class ItemCardViewModel : ObservableObject
     }
 
     public void SetHidden(bool value) => IsHidden = value;
+
+    public void SetPinned(bool value) => IsPinned = value;
 
     public void ApplyNotes(string? notes) { _item.Notes = notes; OnPropertyChanged(nameof(Notes)); OnPropertyChanged(nameof(HasNotes)); }
 

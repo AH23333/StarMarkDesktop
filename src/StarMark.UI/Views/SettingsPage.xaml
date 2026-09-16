@@ -50,6 +50,20 @@
                 </StackPanel>
             </Border>
 
+            <!-- 桌面组件 -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="桌面组件" Style="{StaticResource SettingTitle}"/>
+                    <TextBlock Text="在桌面添加独立小组件：快捷启动、时钟、待办、随记、快捷搜索。组件可拖动、边缘吸附、置顶、缩放；标题栏 ✕ 只是移除，随时可在此或托盘菜单重新添加。"
+                               Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+                    <StackPanel x:Name="WidgetRows" Spacing="2" Margin="0,2,0,0"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
+                        <Button x:Name="WidgetShowAllButton" Content="全部显示" Style="{StaticResource SecondaryButton}" Click="WidgetShowAll_Click"/>
+                        <Button x:Name="WidgetHideAllButton" Content="全部隐藏" Style="{StaticResource SecondaryButton}" Click="WidgetHideAll_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <!-- GitHub -->
             <Border Style="{StaticResource Card}">
                 <StackPanel Spacing="8">
@@ -70,7 +84,7 @@
             <TextBlock Text="{x:Bind ViewModel.SaveErrorMessage, Mode=OneWay}" Foreground="{ThemeResource SystemFillColorCautionBrush}"
                        FontSize="12" Visibility="{x:Bind ViewModel.HasSaveError, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
 
-            <TextBlock Text="提示：托盘/热键与 GitHub 配置在下次启动后生效；主题立即生效。" Style="{StaticResource MutedText}"/>
+            <TextBlock Text="提示：托盘/热键设置即时生效；GitHub 配置保存后下次同步生效。" Style="{StaticResource MutedText}"/>
         </StackPanel>
     </ScrollViewer>
 </Page>

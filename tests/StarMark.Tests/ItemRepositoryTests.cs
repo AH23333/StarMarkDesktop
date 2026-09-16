@@ -89,17 +89,61 @@ public sealed class ItemRepositoryTests : IDisposable
         var tags = await repo.GetTagsForItemAsync(item.Id, CancellationToken.None);
         Assert.Contains("AI", tags);
 
-        // Upsert rebuilds tag list — tag from source authoritative
+        // Upsert 合并式：源侧标签加入，用户手动添加的标签不因同步丢失
         item.Tags = new System.Collections.Generic.List<string> { "DevTools" };
         await repo.UpsertAsync(new[] { item }, CancellationToken.None);
         var afterUpsert = await repo.GetTagsForItemAsync(item.Id, CancellationToken.None);
         Assert.Contains("DevTools", afterUpsert);
-        Assert.DoesNotContain("AI", afterUpsert);
+        Assert.Contains("AI", afterUpsert);
 
         // Search includes "DevTools" in search_text
         var search = await repo.SearchAsync("DevTools", new SearchFilter { MaxResults = 10 }, CancellationToken.None);
         Assert.Single(search.Items);
         Assert.Equal(item.Id, search.Items[0].Id);
+    }
+
+    [Fact]
+    public async Task Upsert_PreservesUserState()
+    {
+        var repo = new ItemRepository(_factory);
+        var item = new Item { Type = ItemType.File, Source = "test", SourceId = "u1", Title = "v1" };
+        await repo.UpsertAsync(new[] { item }, CancellationToken.None);
+        await repo.SetNoteAsync(item.Id, "用户笔记", CancellationToken.None);
+        await repo.SetHiddenAsync(item.Id, true, CancellationToken.None);
+        await repo.SetPinnedAsync(item.Id, true, CancellationToken.None);
+
+        // 模拟同步：同 source+source_id 的新实例（Hidden/Notes/Pinned 均为默认值）
+        var synced = new Item { Type = ItemType.File, Source = "test", SourceId = "u1", Title = "v2" };
+        await repo.UpsertAsync(new[] { synced }, CancellationToken.None);
+        Assert.Equal(item.Id, synced.Id);
+
+        var fetched = await repo.GetByIdAsync(item.Id, CancellationToken.None);
+        Assert.NotNull(fetched);
+        Assert.Equal("v2", fetched!.Title);                       // 源侧字段更新
+        Assert.Equal("用户笔记", fetched.Notes);                  // 用户笔记保留
+        Assert.True(fetched.Hidden);                              // 隐藏状态保留
+        Assert.True(fetched.Pinned);                              // 置顶状态保留
+    }
+
+    [Fact]
+    public async Task SetPinned_BrowseSortsPinnedFirst()
+    {
+        var repo = new ItemRepository(_factory);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var a = new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "p1", Title = "older", UpdatedAt = now };
+        var b = new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "p2", Title = "newer", UpdatedAt = now + 10 };
+        await repo.UpsertAsync(new[] { a }, CancellationToken.None);
+        await repo.UpsertAsync(new[] { b }, CancellationToken.None);
+
+        // 默认最近排序：newer 在前
+        var before = await repo.GetAllAsync(new BrowseFilter { Sort = "recent", Limit = 10 }, CancellationToken.None);
+        Assert.Equal("newer", before[0].Title);
+
+        // 置顶 older 后：older 稳定居首
+        await repo.SetPinnedAsync(a.Id, true, CancellationToken.None);
+        var after = await repo.GetAllAsync(new BrowseFilter { Sort = "recent", Limit = 10 }, CancellationToken.None);
+        Assert.Equal("older", after[0].Title);
+        Assert.True(after[0].Pinned);
     }
 
     [Fact]

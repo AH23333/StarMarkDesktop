@@ -21,7 +21,14 @@
         <Border.ContextFlyout>
             <MenuFlyout>
                 <MenuFlyoutItem Text="打开" Click="Menu_Open"/>
+                <MenuFlyoutItem Text="打开所在位置" Click="Menu_OpenLocation"
+                                Visibility="{x:Bind ViewModel.HasOpenLocation, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                <MenuFlyoutItem Text="复制链接/路径" Click="Menu_CopyLink"/>
                 <MenuFlyoutItem Text="预览" Click="Preview_Click"/>
+                <MenuFlyoutSeparator/>
+                <MenuFlyoutItem Click="Pin_Click"
+                                Text="{x:Bind ViewModel.PinMenuText, Mode=OneWay}"/>
+                <MenuFlyoutItem Text="发送到桌面 · 快捷启动" Click="SendToWidget_Click"/>
                 <MenuFlyoutItem Text="编辑笔记" Click="EditNote_Click"/>
                 <MenuFlyoutItem Text="编辑标签" Click="EditTags_Click"/>
                 <MenuFlyoutSeparator/>
@@ -29,16 +36,20 @@
                                 Text="{x:Bind ViewModel.HideMenuText, Mode=OneWay}"/>
             </MenuFlyout>
         </Border.ContextFlyout>
+        <Grid>
         <StackPanel>
             <!-- 标题行 -->
             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                 <TextBlock Text="{x:Bind ViewModel.SourceIcon, Mode=OneWay}" FontSize="13" VerticalAlignment="Center"/>
+                <TextBlock Text="📌" FontSize="11" Margin="6,0,0,0" VerticalAlignment="Center"
+                           ToolTipService.ToolTip="已置顶"
+                           Visibility="{x:Bind ViewModel.IsPinned, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <TextBlock Text="{x:Bind ViewModel.Title, Mode=OneWay}" Margin="7,0,0,0"
                            FontSize="13" FontWeight="SemiBold"
                            TextTrimming="CharacterEllipsis"
                            VerticalAlignment="Center"
                            Tapped="Title_Tapped"
-                           ToolTipService.ToolTip="{Binding Uri}"/>
+                           ToolTipService.ToolTip="{x:Bind ViewModel.Uri, Mode=OneWay}"/>
                 <TextBlock Text="{x:Bind ViewModel.RelativeTime, Mode=OneWay}" Margin="8,0,0,0"
                            FontSize="11" Style="{StaticResource MutedText}"
                            HorizontalAlignment="Right"/>
@@ -57,7 +68,7 @@
                        Margin="0,2,0,0"
                        Visibility="{x:Bind ViewModel.HasDescription, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
 
-            <!-- 标签行：点击芯片快速移除 ＋ 快速添加 -->
+            <!-- 标签行：点击标签查看该标签条目 ＋ ✕ 快速移除 ＋ 快速添加 -->
             <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Spacing="4">
                 <ItemsRepeater ItemsSource="{x:Bind ViewModel.Tags, Mode=OneWay}">
                     <ItemsRepeater.Layout>
@@ -65,18 +76,27 @@
                     </ItemsRepeater.Layout>
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="x:String">
-                            <Button Click="Tag_Chip_Click"
-                                    Tag="{Binding}"
-                                    Padding="6,1" CornerRadius="10"
-                                    Background="{StaticResource CardBackgroundFillColorSecondaryBrush}"
-                                    BorderThickness="0">
-                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <TextBlock Text="{Binding}" FontSize="11"
-                                               Foreground="{Binding Converter={StaticResource ContainedTagColor}}"/>
-                                    <TextBlock Text="✕" FontSize="8" Opacity="0.5"
-                                               VerticalAlignment="Center"/>
+                            <Border CornerRadius="10"
+                                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                                <StackPanel Orientation="Horizontal" Spacing="2">
+                                    <!-- ItemsRepeater 不设置 DataContext，{Binding} 会解析到卡片 VM
+                                         导致 Tag 永远不是 string、点击筛选/移除全部失效；必须用 x:Bind -->
+                                    <Button Click="Tag_Chip_Click"
+                                            Tag="{x:Bind}"
+                                            Padding="6,1" Background="Transparent" BorderThickness="0"
+                                            ToolTipService.ToolTip="查看该标签的全部条目">
+                                        <TextBlock Text="{x:Bind}" FontSize="11"
+                                                   Foreground="{x:Bind Converter={StaticResource ContainedTagColor}}"/>
+                                    </Button>
+                                    <Button Click="Tag_Remove_Click"
+                                            Tag="{x:Bind}"
+                                            Padding="3,1" Background="Transparent" BorderThickness="0"
+                                            ToolTipService.ToolTip="移除标签">
+                                        <TextBlock Text="✕" FontSize="8" Opacity="0.5"
+                                                   VerticalAlignment="Center"/>
+                                    </Button>
                                 </StackPanel>
-                            </Button>
+                            </Border>
                         </DataTemplate>
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
@@ -102,7 +122,7 @@
                        TextWrapping="Wrap" Margin="0,4,0,0"
                        Visibility="{x:Bind ViewModel.HasNotes, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
 
-            <!-- 操作栏：预览 / 笔记 / 标签 / 隐藏 -->
+            <!-- 操作栏：预览 / 笔记 / 标签 / 置顶 / 复制 / 隐藏 -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0" Spacing="4">
                 <Button Content="🔎" Padding="4,2" Style="{StaticResource MiniIconButton}"
                         ToolTipService.ToolTip="预览（QuickLook）" Click="Preview_Click"/>
@@ -110,9 +130,20 @@
                         ToolTipService.ToolTip="编辑笔记" Click="EditNote_Click"/>
                 <Button Content="🏷" Padding="4,2" Style="{StaticResource MiniIconButton}"
                         ToolTipService.ToolTip="编辑标签" Click="EditTags_Click"/>
+                <Button Content="📌" Padding="4,2" Style="{StaticResource MiniIconButton}"
+                        ToolTipService.ToolTip="置顶（浏览视图排最前）" Click="Pin_Click"/>
+                <Button Content="⧉" Padding="4,2" Style="{StaticResource MiniIconButton}"
+                        ToolTipService.ToolTip="复制链接/路径" Click="Menu_CopyLink"/>
                 <Button Content="👁" Padding="4,2" Style="{StaticResource MiniIconButton}"
                         ToolTipService.ToolTip="隐藏" Click="Hide_Click"/>
             </StackPanel>
         </StackPanel>
+
+        <!-- 键盘导航选中指示条（↑↓ 选择时显示在卡片左缘） -->
+        <Border Width="3" HorizontalAlignment="Left" VerticalAlignment="Stretch"
+                CornerRadius="2,0,0,2"
+                Background="{ThemeResource AccentFillColorDefaultBrush}"
+                Visibility="{x:Bind ViewModel.IsKeyboardSelected, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+        </Grid>
     </Border>
 </UserControl>

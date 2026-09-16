@@ -100,7 +100,22 @@ public partial class TagsPageViewModel : ObservableObject
             foreach (var item in items)
                 FilteredResults.Add(new ItemCardViewModel(item));
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // 静默吞掉会让「按标签查看」看起来完全失效，至少留下日志可查
+            StarMark.Abstractions.StarLog.Error("标签筛选失败", ex);
+        }
+    }
+
+    /// <summary>卡片标签点击：以单个标签作为筛选条件（导航参数传入）。</summary>
+    public async Task FilterByTagAsync(string tagName)
+    {
+        _activeFilters = new List<string> { tagName };
+        HasActiveFilter = true;
+        ActiveFilterText = $"#{tagName}";
+        foreach (var tag in Tags)
+            tag.IsSelected = tag.Name == tagName;
+        await ApplyFilterAsync();
     }
 }
 

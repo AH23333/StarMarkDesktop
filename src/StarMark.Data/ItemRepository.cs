@@ -47,7 +47,7 @@ public sealed class ItemRepository : IItemRepository
             )
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
-                   i.synced_at, i.extra_json, i.hidden, i.notes,
+                   i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
                    (SELECT GROUP_CONCAT(t.name, ',') FROM item_tags it
                     JOIN tags t ON t.id = it.tag_id
                     WHERE it.item_id = i.id) AS tag_names
@@ -62,7 +62,7 @@ public sealed class ItemRepository : IItemRepository
 
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
-        var keywordParam = cmd.Parameters.AddWithValue("@keyword", BuildFtsQuery(keyword));
+        cmd.Parameters.AddWithValue("@keyword", BuildFtsQuery(keyword));
         cmd.Parameters.AddWithValue("@limit", filter.MaxResults);
         cmd.Parameters.AddWithValue("@offset", filter.Offset);
         cmd.Parameters.AddWithValue("@type_filter", (object?)filter.Type?.ToString().ToLowerInvariant() ?? DBNull.Value);
@@ -81,7 +81,7 @@ public sealed class ItemRepository : IItemRepository
         using var countCmd = conn.CreateCommand();
         countCmd.CommandText = @"
             SELECT COUNT(*) FROM items_fts WHERE items_fts MATCH @keyword;";
-        countCmd.Parameters.Add(keywordParam);
+        countCmd.Parameters.AddWithValue("@keyword", BuildFtsQuery(keyword));
         var totalObj = await countCmd.ExecuteScalarAsync(ct);
         var total = totalObj is long v ? (int)v : 0;
 
@@ -102,7 +102,7 @@ public sealed class ItemRepository : IItemRepository
         cmd.CommandText = @"
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
-                   i.synced_at, i.extra_json, i.hidden, i.notes,
+                   i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
                    (SELECT GROUP_CONCAT(t.name, ',') FROM item_tags it
                     JOIN tags t ON t.id = it.tag_id
                     WHERE it.item_id = i.id) AS tag_names
@@ -236,13 +236,26 @@ public sealed class ItemRepository : IItemRepository
     {
         using var conn = _factory.Open();
         using var cmd = conn.CreateCommand();
-        // 更新 notes 字段；同步重建 search_text（笔记参与全文搜索）
+        // 更新 notes 字段；同步重建 search_text（笔记 + 标签都参与全文搜索）
         cmd.CommandText = @"
             UPDATE items
             SET notes = @content,
-                search_text = title || ' ' || COALESCE(description, '') || ' ' || @content
+                search_text = title || ' ' || COALESCE(description, '') || ' ' || @content || ' ' ||
+                    COALESCE((SELECT GROUP_CONCAT(t2.name, ' ') FROM item_tags it2
+                              JOIN tags t2 ON t2.id = it2.tag_id
+                              WHERE it2.item_id = items.id), '')
             WHERE id = @id;";
         cmd.Parameters.AddWithValue("@content", content);
+        cmd.Parameters.AddWithValue("@id", itemId);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task SetPinnedAsync(long itemId, bool pinned, CancellationToken ct)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE items SET pinned = @pinned WHERE id = @id";
+        cmd.Parameters.AddWithValue("@pinned", pinned ? 1 : 0);
         cmd.Parameters.AddWithValue("@id", itemId);
         await cmd.ExecuteNonQueryAsync(ct);
     }
@@ -289,15 +302,15 @@ public sealed class ItemRepository : IItemRepository
 
         var orderBy = filter.Sort switch
         {
-            "stars" => "i.stars_count DESC NULLS LAST",
-            "name" => "i.title COLLATE NOCASE ASC",
-            "recent" or _ => "i.updated_at DESC",
+            "stars" => "i.pinned DESC, i.stars_count DESC NULLS LAST",
+            "name" => "i.pinned DESC, i.title COLLATE NOCASE ASC",
+            "recent" or _ => "i.pinned DESC, i.updated_at DESC",
         };
 
         var sql = $@"
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
-                   i.synced_at, i.extra_json, i.hidden, i.notes,
+                   i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
                    (SELECT GROUP_CONCAT(t2.name, ',') FROM item_tags it2
                     JOIN tags t2 ON t2.id = it2.tag_id
                     WHERE it2.item_id = i.id) AS tag_names
@@ -333,7 +346,7 @@ public sealed class ItemRepository : IItemRepository
         cmd.CommandText = @"
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
-                   i.synced_at, i.extra_json, i.hidden, i.notes,
+                   i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
                    (SELECT GROUP_CONCAT(t.name, ',') FROM item_tags it
                     JOIN tags t ON t.id = it.tag_id
                     WHERE it.item_id = i.id) AS tag_names
@@ -362,7 +375,7 @@ public sealed class ItemRepository : IItemRepository
         cmd.CommandText = @"
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
-                   i.synced_at, i.extra_json, i.hidden, i.notes,
+                   i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
                    (SELECT GROUP_CONCAT(t.name, ',') FROM item_tags it
                     JOIN tags t ON t.id = it.tag_id
                     WHERE it.item_id = i.id) AS tag_names
@@ -376,10 +389,48 @@ public sealed class ItemRepository : IItemRepository
         return items;
     }
 
+    public async Task<IReadOnlyList<Item>> GetPinnedAsync(int limit, CancellationToken ct)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
+                   i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
+                   i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
+                   (SELECT GROUP_CONCAT(t.name, ',') FROM item_tags it
+                    JOIN tags t ON t.id = it.tag_id
+                    WHERE it.item_id = i.id) AS tag_names
+            FROM items i WHERE i.hidden = 0 AND i.pinned = 1
+            ORDER BY i.updated_at DESC LIMIT @limit;";
+        cmd.Parameters.AddWithValue("@limit", limit);
+        var items = new List<Item>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            items.Add(MapItem(reader));
+        return items;
+    }
     // ===== 内部辅助 =====
 
     private static async Task UpsertOne(SqliteConnection conn, Item item, CancellationToken ct)
     {
+        // 用户状态（hidden / pinned / notes）是本地编辑，源侧同步不应覆盖。
+        // 先读旧值合并进 item：既保住状态，又让 search_text 计算包含用户笔记。
+        using (var existing = conn.CreateCommand())
+        {
+            existing.CommandText = @"
+                SELECT hidden, notes, pinned FROM items
+                WHERE source = @src AND source_id = @sid LIMIT 1;";
+            existing.Parameters.AddWithValue("@src", item.Source);
+            existing.Parameters.AddWithValue("@sid", (object?)item.SourceId ?? DBNull.Value);
+            await using var reader = await existing.ExecuteReaderAsync(ct);
+            if (await reader.ReadAsync(ct))
+            {
+                item.Hidden = reader.GetInt64(0) != 0;
+                item.Notes = reader.IsDBNull(1) ? null : reader.GetString(1);
+                item.Pinned = !reader.IsDBNull(2) && reader.GetInt64(2) != 0;
+            }
+        }
+
         // 搜索文本 = title + description + notes + tags（标签参与全文搜索）
         var searchText = new StringBuilder();
         searchText.Append(item.Title).Append(' ');
@@ -388,8 +439,7 @@ public sealed class ItemRepository : IItemRepository
         if (item.Tags.Count > 0) searchText.Append(string.Join(' ', item.Tags));
         item.SearchText = searchText.ToString();
 
-        // UPSERT（INSERT OR REPLACE：基于 source+source_id 唯一索引）
-        // 若已存在则保留 id 并更新字段
+        // UPSERT（基于 source+source_id 唯一索引）；UPDATE 集不包含 hidden/pinned/notes
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
             INSERT INTO items (type, source, source_id, title, subtitle, uri,
@@ -409,9 +459,7 @@ public sealed class ItemRepository : IItemRepository
                 file_size = excluded.file_size,
                 updated_at = excluded.updated_at,
                 synced_at = excluded.synced_at,
-                extra_json = excluded.extra_json,
-                hidden = excluded.hidden,
-                notes = excluded.notes
+                extra_json = excluded.extra_json
             RETURNING id;";
         cmd.Parameters.AddWithValue("@type", item.Type.ToString().ToLowerInvariant());
         cmd.Parameters.AddWithValue("@source", item.Source);
@@ -436,19 +484,11 @@ public sealed class ItemRepository : IItemRepository
             item.Id = newId;
         }
 
-        // 持久化 Tags 列表（与 AddTagAsync 同样幂等：INSERT OR IGNORE）
-        // 标签同步也是一次性的：每次 Upsert 重建 item_tags 关联，保证与最新 Tags 一致
+        // 标签同步：合并而非清空重建。保留用户手动添加/移除以外的影响最小化——
+        // 源侧标签 INSERT OR IGNORE；用户标签保留。删除仅针对源侧已不再声明的标签
+        // 无法区分归属，MVP 折衷：源侧声明标签始终存在，用户标签不因同步丢失（见 §十一）。
         if (item.Tags.Count > 0 && item.Id > 0)
         {
-            // 清除旧关联（不包括用户后续手动 AddTagAsync 添加的标签会丢失——
-            // 这里仅同步源侧声明的标签；为简化 MVP，Upsert 视为权威覆盖）
-            using (var clearCmd = conn.CreateCommand())
-            {
-                clearCmd.CommandText = "DELETE FROM item_tags WHERE item_id = @id";
-                clearCmd.Parameters.AddWithValue("@id", item.Id);
-                await clearCmd.ExecuteNonQueryAsync(ct);
-            }
-
             foreach (var tagName in item.Tags.Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 await UpsertTagLink(conn, item.Id, tagName, ct);
@@ -505,13 +545,15 @@ public sealed class ItemRepository : IItemRepository
             SyncedAt = reader.IsDBNull(12) ? null : reader.GetInt64(12),
             ExtraJson = reader.IsDBNull(13) ? null : reader.GetString(13),
             Hidden = reader.GetInt32(14) != 0,
-            Notes = reader.IsDBNull(15) ? null : reader.GetString(15),
+            // SELECT 列序：14 = hidden，15 = pinned，16 = notes，17 = tag_names
+            Pinned = reader.FieldCount > 15 && !reader.IsDBNull(15) && reader.GetInt64(15) != 0,
+            Notes = reader.FieldCount > 16 && !reader.IsDBNull(16) ? reader.GetString(16) : null,
         };
 
         // 标签：逗号分隔的字符串 → List<string>
-        if (reader.FieldCount > 16 && !reader.IsDBNull(16))
+        if (reader.FieldCount > 17 && !reader.IsDBNull(17))
         {
-            var tagStr = reader.GetString(16);
+            var tagStr = reader.GetString(17);
             if (!string.IsNullOrEmpty(tagStr))
             {
                 item.Tags = tagStr.Split(',').ToList();

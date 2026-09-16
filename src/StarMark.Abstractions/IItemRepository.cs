@@ -51,8 +51,14 @@ public interface IItemRepository
     /// <summary>设置条目隐藏状态。</summary>
     Task SetHiddenAsync(long itemId, bool hidden, CancellationToken ct);
 
+    /// <summary>设置条目置顶状态（用户状态，同步不覆盖）。</summary>
+    Task SetPinnedAsync(long itemId, bool pinned, CancellationToken ct);
+
     /// <summary>获取最近更新的条目（活动时间线）。</summary>
     Task<IReadOnlyList<Item>> GetRecentAsync(int limit, CancellationToken ct);
+
+    /// <summary>获取用户置顶条目（桌面快捷启动组件），按更新时间倒序。</summary>
+    Task<IReadOnlyList<Item>> GetPinnedAsync(int limit, CancellationToken ct);
 }
 
 /// <summary>浏览过滤器（非搜索模式）。</summary>

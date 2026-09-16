@@ -14,6 +14,9 @@ public partial class FolderTreePageViewModel : ObservableObject
 {
     public const int MaxItemsPerFolder = 30;
 
+    /// <summary>每次「展开更多」追加的条目数。</summary>
+    public const int ExpandMoreStep = 50;
+
     private readonly IItemRepository _repository;
 
     [ObservableProperty] private string _currentSort = "recent";
@@ -54,8 +57,10 @@ public partial class FolderTreePageViewModel : ObservableObject
             var items = await _repository.GetAllAsync(filter, CancellationToken.None);
 
             var nodeMap = new Dictionary<string, FolderPathNodeViewModel>(StringComparer.OrdinalIgnoreCase);
+            var pinnedItems = new List<Item>();
             foreach (var item in items)
             {
+                if (item.Pinned) pinnedItems.Add(item);
                 var path = FolderPathUtil.GetSegments(item);
                 var node = GetOrCreateNode(nodeMap, path);
                 node.Items.Add(item);
@@ -65,6 +70,15 @@ public partial class FolderTreePageViewModel : ObservableObject
                                              .OrderBy(n => n.RootOrder)
                                              .ThenBy(n => n.Name, StringComparer.OrdinalIgnoreCase))
                 Roots.Add(root);
+
+            // 置顶伪根：聚合所有置顶条目，置顶后才有的可见入口（排序 RootOrder=-1 稳居首位）
+            if (pinnedItems.Count > 0)
+            {
+                var pinnedRoot = new FolderPathNodeViewModel(FolderPathUtil.PinnedGroup, null);
+                foreach (var item in pinnedItems)
+                    pinnedRoot.Items.Add(item);
+                Roots.Insert(0, pinnedRoot);
+            }
 
             EmptyHint = Roots.Count == 0 ? "暂无条目，请先同步数据" : string.Empty;
         }
@@ -103,7 +117,10 @@ public partial class FolderTreePageViewModel : ObservableObject
     }
 
     public IReadOnlyList<ItemCardViewModel> Hydrate(FolderPathNodeViewModel node)
-        => node.Items.Take(MaxItemsPerFolder).Select(i => new ItemCardViewModel(i)).ToList();
+        => HydrateRange(node, 0, MaxItemsPerFolder);
+
+    public IReadOnlyList<ItemCardViewModel> HydrateRange(FolderPathNodeViewModel node, int skip, int take)
+        => node.Items.Skip(skip).Take(take).Select(i => new ItemCardViewModel(i)).ToList();
 
     partial void OnCurrentSortChanged(string value) => _ = LoadAsync();
     partial void OnCurrentSourceChanged(string value) => _ = LoadAsync();

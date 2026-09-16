@@ -22,7 +22,7 @@
                          Visibility="{x:Bind ViewModel.IsSearching, Mode=OneWay, Converter={StaticResource BoolToVis}}"
                          Height="2" Margin="0,0,0,8"/>
 
-            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Results, Mode=OneWay}">
+            <ItemsRepeater x:Name="ResultsRepeater" ItemsSource="{x:Bind ViewModel.Results, Mode=OneWay}">
                     <ItemsRepeater.Layout>
                         <StackLayout Spacing="6"/>
                     </ItemsRepeater.Layout>
@@ -34,6 +34,10 @@
                                                    EditNoteRequested="Card_EditNoteRequested"
                                                    EditTagsRequested="Card_EditTagsRequested"
                                                    HideRequested="Card_HideRequested"
+                                                   PinRequested="Card_PinRequested"
+                                                   CopyLinkRequested="Card_CopyLinkRequested"
+                                                   OpenLocationRequested="Card_OpenLocationRequested"
+                                                   TagFilterRequested="Card_TagFilterRequested"
                                                    TagRemoveRequested="Card_TagRemoveRequested"
                                                    TagAddRequested="Card_TagAddRequested"/>
                             </Grid>

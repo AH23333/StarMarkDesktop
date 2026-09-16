@@ -29,14 +29,17 @@ public sealed partial class HiddenPage : Page
         ViewModel.LoadCommand.Execute(null);
     }
 
-    private async void Card_RestoreRequested(object sender, ViewModels.ItemCardViewModel vm)
+    private async void Card_RestoreRequested(object? sender, ViewModels.ItemCardViewModel vm)
     {
         await ViewModel.RestoreCommand.ExecuteAsync(vm);
     }
 
-    private void Card_TagRemoveRequested(object sender, (ViewModels.ItemCardViewModel VM, string Tag) e)
+    private void Card_TagFilterRequested(object? sender, (ViewModels.ItemCardViewModel VM, string Tag) e)
+        => App.MainWindow?.NavigateTo("tags", e.Tag);
+
+    private void Card_TagRemoveRequested(object? sender, (ViewModels.ItemCardViewModel VM, string Tag) e)
         => ItemCardActions.RemoveTag(this.XamlRoot, e.VM, e.Tag);
 
-    private void Card_TagAddRequested(object sender, ViewModels.ItemCardViewModel vm)
+    private void Card_TagAddRequested(object? sender, ViewModels.ItemCardViewModel vm)
         => ItemCardActions.AddTag(this.XamlRoot, vm);
 }

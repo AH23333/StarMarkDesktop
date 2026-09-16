@@ -1,6 +1,7 @@
 #nullable enable
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using StarMark.Abstractions;
 using StarMark.UI.Helpers;
 using StarMark.UI.ViewModels;
 
@@ -27,13 +28,32 @@ public sealed partial class SearchPage : Page
         // 正是「清空搜索栏后仍闪现上一条搜索”未找到“」的根因。
     }
 
-    private async void Card_OpenRequested(object sender, long itemId)
+    /// <summary>键盘 ↑↓ 移动选中项，并把选中卡片滚入视野。</summary>
+    public void MoveKeyboardSelection(int delta)
+    {
+        if (ViewModel.Results.Count == 0) return;
+        ViewModel.MoveSelection(delta);
+        if (ViewModel.SelectedItem is not { } selected) return;
+        var index = ViewModel.Results.IndexOf(selected);
+        if (index < 0) return;
+        try
+        {
+            var element = ResultsRepeater.GetOrCreateElement(index);
+            element.StartBringIntoView();
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("键盘导航滚动失败", ex);
+        }
+    }
+
+    private void Card_OpenRequested(object sender, long itemId)
         => ItemCardActions.Open(this.XamlRoot, itemId);
 
-    private async void Card_EditNoteRequested(object sender, ViewModels.ItemCardViewModel vm)
+    private void Card_EditNoteRequested(object sender, ViewModels.ItemCardViewModel vm)
         => ItemCardActions.EditNote(this.XamlRoot, vm);
 
-    private async void Card_EditTagsRequested(object sender, ViewModels.ItemCardViewModel vm)
+    private void Card_EditTagsRequested(object sender, ViewModels.ItemCardViewModel vm)
         => ItemCardActions.EditTags(this.XamlRoot, vm);
 
     private async void Card_HideRequested(object sender, ViewModels.ItemCardViewModel vm)
@@ -43,6 +63,18 @@ public sealed partial class SearchPage : Page
         if (!wasHidden && nowHidden && !ViewModel.ShowHidden)
             ViewModel.RemoveItem(vm.Id);
     }
+
+    private void Card_PinRequested(object sender, ViewModels.ItemCardViewModel vm)
+        => ItemCardActions.TogglePin(vm);
+
+    private void Card_CopyLinkRequested(object sender, ViewModels.ItemCardViewModel vm)
+        => ItemCardActions.CopyUri(vm);
+
+    private void Card_OpenLocationRequested(object sender, ViewModels.ItemCardViewModel vm)
+        => ItemCardActions.OpenLocation(vm);
+
+    private void Card_TagFilterRequested(object sender, (ViewModels.ItemCardViewModel VM, string Tag) e)
+        => App.MainWindow?.NavigateTo("tags", e.Tag);
 
     private void Card_TagRemoveRequested(object sender, (ViewModels.ItemCardViewModel VM, string Tag) e)
         => ItemCardActions.RemoveTag(this.XamlRoot, e.VM, e.Tag);

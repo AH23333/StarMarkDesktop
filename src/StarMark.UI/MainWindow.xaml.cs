@@ -2,12 +2,16 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Navigation;
 using Microsoft.UI.Windowing;
 using Microsoft.UI;
+using Windows.Foundation;
 using Windows.Graphics;
+using WinRT.Interop;
+using StarMark.Abstractions;
+using StarMark.Core.Widgets;
 using StarMark.Integrations.SystemTray;
 using StarMark.UI.Helpers;
+using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
 using StarMark.UI.Views;
 
@@ -15,6 +19,7 @@ namespace StarMark.UI;
 
 /// <summary>
 /// 主窗口。NavigationView 骨架，搜索框始终可见，顶部工具栏，页面切换，主题切换。
+/// 同时承载系统托盘与桌面组件（DeskBox 式独立小组件）的入口。
 /// </summary>
 public sealed partial class MainWindow : Window
 {
@@ -26,12 +31,19 @@ public sealed partial class MainWindow : Window
     private TrayHost? _trayHost;
     private bool _allowExit;
     private bool _balloonShown;
+    private readonly WidgetManager _widgetManager;
+    private MenuFlyout? _widgetsMenu;
+    private int _diagSimStep;
 
     public MainWindow()
     {
         InitializeComponent();
         ViewModel = (App.Services.GetService(typeof(MainViewModel)) as MainViewModel)
             ?? throw new InvalidOperationException("MainViewModel 未注册");
+        _widgetManager = (App.Services.GetService(typeof(WidgetManager)) as WidgetManager)
+            ?? throw new InvalidOperationException("WidgetManager 未注册");
+        _widgetManager.Initialize(DispatcherQueue);
+        _widgetManager.GlobalSearchRequested += SearchFromWidget;
 
         SetupImmersiveTitleBar();
         SetSourceButtonsHighlight("all");
@@ -44,25 +56,20 @@ public sealed partial class MainWindow : Window
         _ = ViewModel.LoadCountsAsync();
 
         // 托盘常驻 + 全局热键
-        if (_settings.LoadEnableTray())
-        {
-            _trayHost = new TrayHost();
-            _trayHost.ShowRequested += ShowMainWindow;
-            _trayHost.ExitRequested += ExitApp;
-            if (_settings.LoadEnableGlobalHotKey())
-                _trayHost.TryRegisterHotKey();
-            AppWindow.Closing += OnAppWindowClosing;
-            Closed += (_, _) =>
-            {
-                _trayHost?.Dispose();
-                _trayHost = null;
-            };
-        }
+        if (_settings.LoadEnableTray()) CreateTray(registerHotkey: _settings.LoadEnableGlobalHotKey());
+        AppWindow.Closing += OnAppWindowClosing;
 
         // 默认选中文件夹页（触发 SelectionChanged → 导航）
         var startTag = Environment.GetEnvironmentVariable("STARMARK_START_PAGE");
         var startIndex = startTag switch { "tags" => 1, "tree" => 0, _ => 0 };
         NavView.SelectedItem = NavView.MenuItems[startIndex];
+
+        // 启动时恢复已启用的桌面组件
+        DispatcherQueue.TryEnqueue(async () =>
+        {
+            try { await _widgetManager.RestoreOnStartupAsync(); }
+            catch (Exception ex) { StarLog.Error("恢复桌面组件失败", ex); }
+        });
 
         // 开发辅助：启动即搜索（STARMARK_START_QUERY），用于冒烟渲染卡片
         var startQuery = Environment.GetEnvironmentVariable("STARMARK_START_QUERY");
@@ -79,58 +86,130 @@ public sealed partial class MainWindow : Window
             });
         }
 
-        // 开发辅助：状态转储 + 脚本化搜索/清空（STARMARK_DIAG / STARMARK_SIM_*），用于复现 UI 缺陷并留文本证据
-        var diagPath = Environment.GetEnvironmentVariable("STARMARK_DIAG");
-        var simQuery = Environment.GetEnvironmentVariable("STARMARK_SIM_QUERY");
-        if (!string.IsNullOrWhiteSpace(diagPath))
+        SetupDiag();
+    }
+
+    private IntPtr MainHwnd => WindowNative.GetWindowHandle(this);
+
+    // ───────────────────────── 托盘 ─────────────────────────
+
+    private void CreateTray(bool registerHotkey)
+    {
+        if (_trayHost is not null) return;
+        _trayHost = new TrayHost();
+        _trayHost.IsWidgetEnabled = i => _widgetManager.IsEnabled((WidgetKind)i);
+        _trayHost.ShowRequested += () => DispatcherQueue.TryEnqueue(() => Present(false));
+        _trayHost.ExitRequested += () => DispatcherQueue.TryEnqueue(ExitApp);
+        _trayHost.WidgetsToggleRequested += () => DispatcherQueue.TryEnqueue(() => _ = _widgetManager.ToggleAllAsync());
+        _trayHost.WidgetToggleRequested += i => DispatcherQueue.TryEnqueue(() =>
         {
-            var simOn = !string.IsNullOrWhiteSpace(simQuery);
-            var diagTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
-            diagTimer.Tick += (_, _) =>
-            {
-                static string F(object? o) => o?.ToString() ?? "null";
-                var lines = new System.Text.StringBuilder();
-                lines.AppendLine($"[tick {DateTime.Now:HH:mm:ss.fff}] page={ViewModel.CurrentPageTag} searchbox=[{SearchBox.Text}]");
-                if (ContentFrame.Content is SearchPage sp)
-                {
-                    lines.AppendLine($"  SEARCH: query=[{sp.ViewModel.Query}] empty=[{sp.ViewModel.EmptyHint}] " +
-                                     $"results={sp.ViewModel.Results.Count} has={sp.ViewModel.HasResults} busy={sp.ViewModel.IsSearching}");
-                }
-                if (ContentFrame.Content is FolderTreePage tp)
-                {
-                    var roots = tp.ViewModel.Roots;
-                    lines.AppendLine($"  TREE: roots={roots.Count} empty=[{tp.ViewModel.EmptyHint}]");
-                    foreach (var r in roots.Take(12))
-                    {
-                        lines.AppendLine($"    - {r.Name} (total={r.TotalCount} own={r.Items.Count} sub={r.Children.Count})");
-                        foreach (var c in tp.ViewModel.Hydrate(r).Take(6))
-                            lines.AppendLine($"        card[{r.Name}]: {c.Type} | {c.Title}");
-                        if (r.Children.Count > 0)
-                            foreach (var ch in r.Children)
-                                foreach (var c in tp.ViewModel.Hydrate(ch).Take(3))
-                                    lines.AppendLine($"        card[{r.Name}/{ch.Name}]: {c.Type} | {c.Title}");
-                    }
-                }
-                if (simOn)
-                {
-                    var probe = SearchBox.Text;
-                    if (probe == string.Empty)
-                        SearchBox.Text = simQuery;      // 第1次：输入查询
-                    else if (probe == simQuery && _diagSimStep == 0)
-                    {
-                        _diagSimStep = 1;
-                        SearchBox.Text = string.Empty;  // 第2次：清空搜索栏
-                    }
-                }
-                System.IO.File.AppendAllText(diagPath, lines.ToString());
-            };
-            diagTimer.Start();
+            var kind = (WidgetKind)i;
+            _ = _widgetManager.SetEnabledAsync(kind, !_widgetManager.IsEnabled(kind));
+        });
+        _trayHost.ShowAllWidgetsRequested += () => DispatcherQueue.TryEnqueue(() => _ = _widgetManager.ShowAllAsync());
+        _trayHost.HideAllWidgetsRequested += () => DispatcherQueue.TryEnqueue(() => _ = _widgetManager.HideAllAsync());
+        _trayHost.SettingsRequested += () => DispatcherQueue.TryEnqueue(() => Present(true));
+        _trayHost.Initialize(registerHotkey);
+    }
+
+    private void DisposeTray()
+    {
+        _trayHost?.Dispose();
+        _trayHost = null;
+    }
+
+    /// <summary>设置页保存后调用：托盘/热键即时生效，无需重启。</summary>
+    public void ApplyTraySettings()
+    {
+        var trayEnabled = _settings.LoadEnableTray();
+        var hotkeyEnabled = _settings.LoadEnableGlobalHotKey();
+        if (trayEnabled)
+        {
+            CreateTray(registerHotkey: false);
+            if (hotkeyEnabled) _trayHost?.RegisterGlobalHotKey();
+            else _trayHost?.UnregisterGlobalHotKey();
+        }
+        else
+        {
+            DisposeTray();
         }
     }
 
-    private int _diagSimStep;
+    private async void ExitApp()
+    {
+        _allowExit = true;
+        try { await _widgetManager.ShutdownAllAsync(); }
+        catch (Exception ex) { StarLog.Error("关闭桌面组件失败", ex); }
+        DisposeTray();
+        Application.Current.Exit();
+    }
 
-    private IntPtr MainHwnd => WinRT.Interop.WindowNative.GetWindowHandle(this);
+    private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        if (_allowExit) return;
+
+        if (_trayHost != null && _settings.LoadMinimizeToTray())
+        {
+            // 最小化到托盘：主窗口隐藏，组件继续保留
+            args.Cancel = true;
+            try
+            {
+                AppWindow.Hide();
+                if (!_balloonShown)
+                {
+                    _trayHost.ShowNotification("StarMark 正在后台运行", "Ctrl+Alt+Space 随时呼出窗口");
+                    _balloonShown = true;
+                }
+            }
+            catch { }
+            return;
+        }
+
+        // 真正退出：取消默认关闭流程，统一关停组件/托盘后结束进程，
+        // 避免组件窗口（WS_EX_TOOLWINDOW）残留导致进程孤儿化
+        args.Cancel = true;
+        ExitApp();
+    }
+
+    /// <summary>唤起并前置主窗口；settings=true 时直接打开设置页。</summary>
+    public void Present(bool settings)
+    {
+        try
+        {
+            if (!AppWindow.IsVisible) AppWindow.Show();
+            Activate();
+            WindowInterop.ShowWindow(MainHwnd, WindowInterop.SW_RESTORE);
+            WindowInterop.SetForegroundWindow(MainHwnd);
+            if (settings) OpenSettingsPage();
+        }
+        catch (Exception ex) { StarLog.Error("唤起主窗口失败", ex); }
+    }
+
+    private void OpenSettingsPage()
+    {
+        ViewModel.CurrentPageTag = "settings";
+        NavView.SelectedItem = null;
+        if (ContentFrame.Content is not SettingsPage)
+            ContentFrame.Navigate(typeof(SettingsPage));
+        PushToolbarToContent();
+    }
+
+    private void SearchFromWidget(string query)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            Present(false);
+            SearchBox.Text = query;
+            if (string.IsNullOrWhiteSpace(query)) return;
+            ViewModel.Query = query;
+            ViewModel.CurrentPageTag = "search";
+            NavView.SelectedItem = null;
+            ContentFrame.Navigate(typeof(SearchPage));
+            PushToolbarToContent();
+            if (ContentFrame.Content is SearchPage sp)
+                sp.ViewModel.Query = query;
+        });
+    }
 
     /// <summary>Win11 风格沉浸式标题栏：内容扩展到标题栏区域，标题栏按钮透明融合。</summary>
     private void SetupImmersiveTitleBar()
@@ -150,7 +229,6 @@ public sealed partial class MainWindow : Window
     private void ApplyDragRects()
     {
         // 拖拽区 = 顶栏中段（logo + 状态），右侧留给交互按钮与系统窗口按钮。
-        // 此前拖拽区覆盖到 width-140，把同步/主题/设置按钮整块吞掉 → 顶部功能失效。
         var width = AppWindow.Size.Width;
         var height = TopBar.ActualHeight > 0 ? (int)TopBar.ActualHeight : 52;
         var buttonsRightPad = 150;                       // 顶栏右侧 padding（避开系统窗口按钮）
@@ -160,47 +238,6 @@ public sealed partial class MainWindow : Window
         {
             new() { X = 0, Y = 0, Width = dragW, Height = height },
         });
-    }
-
-    private void ShowMainWindow()
-    {
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            try
-            {
-                TrayHost.ShowAndFocus(MainHwnd);
-            }
-            catch { }
-        });
-    }
-
-    private void ExitApp()
-    {
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            _allowExit = true;
-            _trayHost?.Dispose();
-            _trayHost = null;
-            Microsoft.UI.Xaml.Application.Current.Exit();
-        });
-    }
-
-    private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
-    {
-        if (_allowExit || _trayHost == null || !_settings.LoadMinimizeToTray())
-            return;
-
-        args.Cancel = true;
-        try
-        {
-            TrayHost.HideToTray(MainHwnd);
-            if (!_balloonShown && _trayHost.HotKeyRegistered)
-            {
-                _trayHost.ShowBalloon("StarMark 正在后台运行", "Ctrl+Alt+Space 随时呼出窗口");
-                _balloonShown = true;
-            }
-        }
-        catch { }
     }
 
     // ===== 主题切换 =====
@@ -234,11 +271,19 @@ public sealed partial class MainWindow : Window
         });
     }
 
+    public void RefreshThemeIcon(ThemePreference pref)
+    {
+        _themePref = pref;
+        ThemeManager.Apply(this, pref);
+        UpdateThemeIcon();
+    }
+
     // ===== 导航 =====
 
-    private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs? args)
     {
-        if (args.SelectedItem is not NavigationViewItem item) return;
+        // 编程触发（初始选择）时 args 为 null，直接读 SelectedItem
+        if (NavView.SelectedItem is not NavigationViewItem item) return;
         if (item.Tag is string tag)
         {
             ViewModel.CurrentPageTag = tag;
@@ -247,10 +292,10 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    public void NavigateTo(string tag)
+    public void NavigateTo(string tag, object? param = null)
     {
         NavView.SelectedItem = null;
-        NavigateToPage(tag);
+        NavigateToPage(tag, param);
         PushToolbarToContent();
     }
 
@@ -302,12 +347,35 @@ public sealed partial class MainWindow : Window
         _debounceTimer.Start();
     }
 
+    private void SearchBox_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (ContentFrame.Content is not SearchPage sp || sp.ViewModel.Results.Count == 0) return;
+        switch (e.Key)
+        {
+            case Windows.System.VirtualKey.Down:
+                sp.MoveKeyboardSelection(1);
+                e.Handled = true;
+                break;
+            case Windows.System.VirtualKey.Up:
+                sp.MoveKeyboardSelection(-1);
+                e.Handled = true;
+                break;
+            case Windows.System.VirtualKey.Enter when sp.ViewModel.SelectedItem is { } selected:
+                var ctrl = Microsoft.UI.Input.InputKeyboardSource
+                    .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
+                    .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+                if (ctrl) ItemCardActions.OpenLocation(selected);
+                else ItemCardActions.Open(SearchBox.XamlRoot, selected.Id);
+                e.Handled = true;
+                break;
+        }
+    }
+
     // ===== 工具栏事件（全局唯一：排序、来源、显示隐藏）=====
 
     private void SortCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (SortCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag)
-            PushToolbarToContent();
+        PushToolbarToContent();
     }
 
     private string _currentSource = "all";
@@ -322,6 +390,7 @@ public sealed partial class MainWindow : Window
 
     private void ShowHidden_Click(object sender, RoutedEventArgs e)
     {
+        // 复选框只是当前页过滤器；隐藏页由导航菜单“隐藏”进入
         PushToolbarToContent();
     }
 
@@ -368,12 +437,9 @@ public sealed partial class MainWindow : Window
     private string CurrentSortTag()
         => SortCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag ? tag : "recent";
 
-    private void SyncButton_Click(object sender, RoutedEventArgs e)
-    {
-        _ = DoSyncAsync();
-    }
+    private void SyncButton_Click(object sender, RoutedEventArgs e) => _ = DoSyncAsync();
 
-    private async System.Threading.Tasks.Task DoSyncAsync()
+    private async Task DoSyncAsync()
     {
         SyncButton.IsEnabled = false;
         SyncProgress.IsActive = true;
@@ -417,26 +483,106 @@ public sealed partial class MainWindow : Window
         SyncInfoBar.Message = message;
         SyncInfoBar.IsOpen = true;
         if (autoCloseMs > 0)
-            _ = System.Threading.Tasks.Task.Delay(autoCloseMs).ContinueWith(_ =>
+            _ = Task.Delay(autoCloseMs).ContinueWith(_ =>
                 DispatcherQueue.TryEnqueue(() => SyncInfoBar.IsOpen = false));
     }
 
-    private void InfoBar_Close(InfoBar sender, object args)
+    private void InfoBar_Close(InfoBar sender, object args) => sender.IsOpen = false;
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs e) => OpenSettingsPage();
+
+    // ===== 桌面组件顶栏入口 =====
+
+    private void WidgetsButton_Click(object sender, RoutedEventArgs e)
     {
-        sender.IsOpen = false;
+        _widgetsMenu ??= BuildWidgetsMenu();
+        _widgetsMenu.ShowAt(WidgetsButton, new Point(0, WidgetsButton.ActualHeight));
     }
 
-    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    private MenuFlyout BuildWidgetsMenu()
     {
-        ViewModel.CurrentPageTag = "settings";
-        NavView.SelectedItem = null;
-        ContentFrame.Navigate(typeof(SettingsPage));
-        PushToolbarToContent();
+        var menu = new MenuFlyout();
+        foreach (var kind in WidgetStorage.AllKinds)
+        {
+            var item = new ToggleMenuFlyoutItem { Text = WidgetStorage.KindTitle(kind) };
+            var captured = kind;
+            item.Click += (_, _) =>
+                _ = _widgetManager.SetEnabledAsync(captured, !_widgetManager.IsEnabled(captured));
+            menu.Items.Add(item);
+        }
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var showAll = new MenuFlyoutItem { Text = "全部显示" };
+        showAll.Click += (_, _) => _ = _widgetManager.ShowAllAsync();
+        var hideAll = new MenuFlyoutItem { Text = "全部隐藏" };
+        hideAll.Click += (_, _) => _ = _widgetManager.HideAllAsync();
+        menu.Items.Add(showAll);
+        menu.Items.Add(hideAll);
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var toggle = new MenuFlyoutItem { Text = "显示/隐藏全部组件" };
+        toggle.Click += (_, _) => _ = _widgetManager.ToggleAllAsync();
+        menu.Items.Add(toggle);
+        var manage = new MenuFlyoutItem { Text = "在设置中管理…" };
+        manage.Click += (_, _) => OpenSettingsPage();
+        menu.Items.Add(manage);
+
+        menu.Opening += (_, _) =>
+        {
+            for (var i = 0; i < WidgetStorage.AllKinds.Count; i++)
+            {
+                if (menu.Items[i] is ToggleMenuFlyoutItem t)
+                    t.IsChecked = _widgetManager.IsEnabled(WidgetStorage.AllKinds[i]);
+            }
+        };
+        return menu;
     }
 
-    public void RefreshThemeIcon(ThemePreference pref)
+    // ===== 开发辅助：状态转储（STARMARK_DIAG / STARMARK_SIM_*）=====
+
+    private void SetupDiag()
     {
-        _themePref = pref;
-        UpdateThemeIcon();
+        var diagPath = Environment.GetEnvironmentVariable("STARMARK_DIAG");
+        var simQuery = Environment.GetEnvironmentVariable("STARMARK_SIM_QUERY");
+        if (string.IsNullOrWhiteSpace(diagPath)) return;
+
+        var simOn = !string.IsNullOrWhiteSpace(simQuery);
+        var diagTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
+        diagTimer.Tick += (_, _) =>
+        {
+            var lines = new System.Text.StringBuilder();
+            lines.AppendLine($"[tick {DateTime.Now:HH:mm:ss.fff}] page={ViewModel.CurrentPageTag} searchbox=[{SearchBox.Text}]");
+            if (ContentFrame.Content is SearchPage sp)
+            {
+                lines.AppendLine($"  SEARCH: query=[{sp.ViewModel.Query}] empty=[{sp.ViewModel.EmptyHint}] " +
+                                 $"results={sp.ViewModel.Results.Count} has={sp.ViewModel.HasResults} busy={sp.ViewModel.IsSearching}");
+            }
+            if (ContentFrame.Content is FolderTreePage tp)
+            {
+                var roots = tp.ViewModel.Roots;
+                lines.AppendLine($"  TREE: roots={roots.Count} empty=[{tp.ViewModel.EmptyHint}]");
+                foreach (var r in roots.Take(12))
+                {
+                    lines.AppendLine($"    - {r.Name} (total={r.TotalCount} own={r.Items.Count} sub={r.Children.Count})");
+                    foreach (var c in tp.ViewModel.Hydrate(r).Take(6))
+                        lines.AppendLine($"        card[{r.Name}]: {c.Type} | {c.Title}");
+                    if (r.Children.Count > 0)
+                        foreach (var ch in r.Children)
+                            foreach (var c in tp.ViewModel.Hydrate(ch).Take(3))
+                                lines.AppendLine($"        card[{r.Name}/{ch.Name}]: {c.Type} | {c.Title}");
+                }
+            }
+            if (simOn)
+            {
+                var probe = SearchBox.Text;
+                if (probe == string.Empty)
+                    SearchBox.Text = simQuery!;      // 第1次：输入查询
+                else if (probe == simQuery && _diagSimStep == 0)
+                {
+                    _diagSimStep = 1;
+                    SearchBox.Text = string.Empty;  // 第2次：清空搜索栏
+                }
+            }
+            System.IO.File.AppendAllText(diagPath!, lines.ToString());
+        };
+        diagTimer.Start();
     }
 }

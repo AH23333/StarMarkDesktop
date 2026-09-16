@@ -10,10 +10,12 @@ public static class TagColorHelper
 {
     public static Windows.UI.Color GetTagColor(string tag)
     {
+        // 浅色模式下背景偏白，亮度取低值保证可读性；深色模式取高值。
+        var light = ThemeManager.IsAppDark() ? 0.58 : 0.42;
         uint h = 0;
         foreach (var c in tag) h = (h * 31 + c) & 0xFFFFFFFF;
         var hue = h % 360;
-        return HslToColor(hue, 0.7, 0.6);
+        return HslToColor(hue, 0.72, light);
     }
 
     public static Windows.UI.Color HslToColor(double h, double s, double l)

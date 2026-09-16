@@ -24,7 +24,49 @@ public partial class SearchPageViewModel : ObservableObject
     [ObservableProperty] private string _currentSource = "all";
     [ObservableProperty] private bool _showHidden;
 
+    /// <summary>键盘导航当前选中索引（↑↓）；-1 = 未选中。</summary>
+    [ObservableProperty] private int _selectedIndex = -1;
+
     public ObservableCollection<ItemCardViewModel> Results { get; } = new();
+
+    public ItemCardViewModel? SelectedItem
+        => SelectedIndex >= 0 && SelectedIndex < Results.Count ? Results[SelectedIndex] : null;
+
+    /// <summary>↑/↓ 移动键盘选中项。</summary>
+    public void MoveSelection(int delta)
+    {
+        if (Results.Count == 0) return;
+        SetSelectedIndex(Math.Clamp(SelectedIndex + delta, 0, Results.Count - 1));
+    }
+
+    public void SetSelectedIndex(int index)
+    {
+        if (Results.Count == 0) return;
+        if (SelectedIndex >= 0 && SelectedIndex < Results.Count)
+            Results[SelectedIndex].IsKeyboardSelected = false;
+        SelectedIndex = Math.Clamp(index, 0, Results.Count - 1);
+        Results[SelectedIndex].IsKeyboardSelected = true;
+    }
+
+    public void ClearSelection()
+    {
+        if (SelectedItem is { } old) old.IsKeyboardSelected = false;
+        SelectedIndex = -1;
+    }
+
+    /// <summary>重置搜索页：清掉查询词与全部结果（离开搜索态时调用，
+    /// 保证下次进入搜索页不会闪现上次的搜索结果）。</summary>
+    public void Reset()
+    {
+        Results.Clear();
+        ClearSelection();
+        HasResults = false;
+        IsSearching = false;
+        StatusText = string.Empty;
+        EmptyHint = "输入关键词开始搜索";
+        if (Query.Length > 0)
+            Query = string.Empty; // 触发 OnQueryChanged → SearchAsync 空查询分支（幂等）
+    }
 
     public SearchPageViewModel(SearchService searchService)
     {
@@ -41,6 +83,7 @@ public partial class SearchPageViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(Query))
         {
             Results.Clear();
+            ClearSelection();
             HasResults = false;
             EmptyHint = "输入关键词开始搜索";
             return;
@@ -73,6 +116,7 @@ public partial class SearchPageViewModel : ObservableObject
             foreach (var item in result.Items)
                 Results.Add(new ItemCardViewModel(item));
 
+            ClearSelection();
             HasResults = Results.Count > 0;
             EmptyHint = Results.Count == 0 ? $"未找到与 \"{Query.Trim()}\" 相关的条目" : string.Empty;
             StatusText = $"命中 {result.Items.Count} 条 · {result.ElapsedMs}ms";
