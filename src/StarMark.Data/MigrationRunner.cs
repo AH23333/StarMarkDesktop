@@ -36,7 +36,7 @@ public sealed class MigrationRunner
         WriteSchemaVersion(conn, CurrentVersion);
     }
 
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 
     private static int ReadSchemaVersion(Microsoft.Data.Sqlite.SqliteConnection conn)
     {
