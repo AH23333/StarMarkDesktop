@@ -688,9 +688,15 @@ v1 将其列为"当前最高风险"。核实后：规则引擎**尚未实现**�
 └─ 验证：本地文件出现在文件夹树/标签/动态/置顶，快捷启动格可摆本地文件
 
 第十一轮 · 组件架构归位
-├─ 🔵 R1  WidgetWindow 改 XAML + MVVM（增量试点：快捷启动格已落地，2026-09-16；待推广至 Todo/QuickNote/Clock/Search）
+├─ 🔵 R1  WidgetWindow 改 XAML + MVVM（增量试点：快捷启动格已落地 2026-09-16；Search 搜索组件已落地 2026-09-16；待推广至 Todo/QuickNote/Clock）
 │          （组件内绑定必须 Mode=OneWay、ItemsRepeater 内用 x:Bind；QuickLaunch 试点已验证）
-└─ 🔵 R3  全量重建 → ObservableCollection + ItemsRepeater（快捷启动格 LinksChanged 增量刷新已落地，2026-09-16）
+├─ 🔵 R3  全量重建 → ObservableCollection + ItemsRepeater（快捷启动格 LinksChanged 增量刷新已落地 2026-09-16；Search 同模式落地 2026-09-16）
+└─ ✅ 多标签 AND 搜索桌面版：Search 组件改为 XAML + ViewModel，关键词 + 标签 chip 多选（AND）内联结果，空关键词+标签退化为按标签浏览（2026-09-16）
+
+第十二轮后续 · 快捷启动格交互补强（2026-09-16 已修）
+├─ ✅ 链接过多被遮挡：ContentHost 由 Grid 改为 StackPanel，外层 ScrollViewer 可靠按内容滚动
+├─ ✅ 已置顶条目取消置顶：置顶行加 ✕ 按钮 → SetPinnedAsync(id,false) + 增量刷新
+└─ ✅ 拖入文件/文件夹无法打开：LauncherEx.OpenAsync 对 file:// 改用 LaunchFileAsync / LaunchFolderAsync（LaunchUriAsync 对 file:// 静默失效）
 
 第十二轮 · 接回统一条目模型（差异化）
 ├─ ⬜ R2 / §5.3  待办/随记纳入 items（建议先随记，待办折衷）
