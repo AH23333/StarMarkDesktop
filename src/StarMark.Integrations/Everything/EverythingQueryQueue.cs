@@ -1,6 +1,7 @@
 #nullable enable
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Runtime.Versioning;
 using StarMark.Abstractions;
 
@@ -138,6 +139,64 @@ public sealed class EverythingSource : IItemSource
             return Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
         }
         return _queue.QueryAsync(query, filter, ct);
+    }
+
+    private const string SdkZipUrl = "https://www.voidtools.com/Everything-SDK.zip";
+
+    /// <summary>
+    /// 确保 Everything SDK DLL 可用：应用目录 / 缓存目录缺失时，从 voidtools 下载官方 SDK zip
+    /// 并提取 x64 DLL 到缓存目录（%LOCALAPPDATA%\StarMark\sdk），然后加载。
+    /// 注意：SDK 是 IPC 包装，Everything 主程序仍需在后台运行；主程序未安装时的自动安装见
+    /// <see cref="EnsureEverythingInstalledAsync"/>。
+    /// </summary>
+    public async Task<bool> EnsureSdkReadyAsync()
+    {
+        if (EverythingInterop.EnsureSdkLoaded()) return true;
+        try
+        {
+            StarLog.Info("未找到 Everything64.dll：开始下载官方 Everything SDK…");
+            var sdkPath = EverythingInterop.SdkDllPath;
+            var sdkDir = Path.GetDirectoryName(sdkPath)!;
+            Directory.CreateDirectory(sdkDir);
+            var zip = Path.Combine(sdkDir, "Everything-SDK.zip");
+            if (!File.Exists(zip))
+            {
+                using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+                var bytes = await http.GetByteArrayAsync(SdkZipUrl);
+                await File.WriteAllBytesAsync(zip, bytes);
+            }
+
+            using var archive = ZipFile.OpenRead(zip);
+            var entry = archive.Entries.FirstOrDefault(e =>
+                string.Equals(e.Name, "Everything64.dll", StringComparison.OrdinalIgnoreCase));
+            if (entry is null)
+            {
+                StarLog.Error("Everything SDK zip 中未找到 Everything64.dll。");
+                return false;
+            }
+
+            using var src = entry.Open();
+            using var dst = File.Create(sdkPath);
+            src.CopyTo(dst);
+
+            StarLog.Info("Everything SDK 下载完成。");
+            return EverythingInterop.EnsureSdkLoaded();
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("Everything SDK 下载/加载失败（离线时属正常，降级为无本地文件实时搜索）", ex);
+            return false;
+        }
+    }
+
+    /// <summary>启动时的 Everything 就绪流程：SDK DLL → （主程序未运行时）自动安装主程序。</summary>
+    public async Task EnsureReadyAsync()
+    {
+        await EnsureSdkReadyAsync();
+        if (!EverythingInterop.IsRunning())
+        {
+            await EnsureEverythingInstalledAsync();
+        }
     }
 
     private const string InstallerUrl = "https://www.voidtools.com/Everything-1.4.1.1028.x64-Setup.exe";

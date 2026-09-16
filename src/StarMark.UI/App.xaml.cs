@@ -139,13 +139,13 @@ public partial class App : Application
 
         Services = services.BuildServiceProvider();
 
-        // Everything 未检测到时后台自动安装（用户要求默认安装；内部已兜底，失败静默降级）
+        // Everything 就绪流程：SDK DLL 缺失自动下载；主程序未运行时自动安装（用户要求默认安装；失败静默降级）
         _ = Task.Run(async () =>
         {
             try
             {
                 await Services.GetRequiredService<StarMark.Integrations.Everything.EverythingSource>()
-                    .EnsureEverythingInstalledAsync();
+                    .EnsureReadyAsync();
             }
             catch { /* 内部已兜底 */ }
         });

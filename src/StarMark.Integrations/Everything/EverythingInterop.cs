@@ -19,36 +19,116 @@ internal static class EverythingInterop
     [Flags]
     public enum RequestFlags : uint
     {
+        // 数值 = 官方 SDK 头文件 include/Everything.h 的 EVERYTHING_REQUEST_* 常量（1.4）
         FileName        = 0x00000001,
         Path            = 0x00000002,
         FullPath        = 0x00000004,
-        Size            = 0x00000040,
-        DateModified    = 0x00000100,
-        DateCreated     = 0x00000200,
+        Size            = 0x00000010,
+        DateModified    = 0x00000040,
+        DateCreated     = 0x00000020,
     }
 
-    // ===== Everything IPC 窗口消息 =====
+    // ===== Everything 主程序窗口检测 =====
     private const string EverythingWindowClass = "EVERYTHING_TASKBAR_NOTIFICATION";
-    private const int Everything_WM_COPYDATA_GLOBAL = 0;
-    private const int Everything_WM_COPYDATA = 0x004A;
-    // Everything 1.4 的 IPC 消息 ID
-    private const int EVERYTHING_IPC_COPYDATA_QUERYW = 18;
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr FindWindowW(string lpClassName, string? lpWindowName);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern IntPtr SendMessageW(IntPtr hWnd, uint Msg, IntPtr wParam, ref COPYDATASTRUCT lParam);
+    // ===== Everything SDK（Everything64.dll）P/Invoke =====
+    // SDK 是官方 IPC 包装（内部 SendMessageTimeout，官方注明线程安全）；需要 Everything 主程序在后台运行。
+    private static bool _sdkLoaded;
+    private static Exception? _sdkLoadError;
+    private static readonly object SdkLoadGate = new();
 
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint RegisterWindowMessageW([MarshalAs(UnmanagedType.LPWStr)] string lpString);
+    [DllImport("Everything64.dll", CharSet = CharSet.Unicode, SetLastError = false)]
+    private static extern void Everything_SetSearchW(string lpString);
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct COPYDATASTRUCT
+    [DllImport("Everything64.dll", SetLastError = false)]
+    private static extern void Everything_SetMax(uint dwMax);
+
+    [DllImport("Everything64.dll", SetLastError = false)]
+    private static extern void Everything_SetRequestFlags(uint dwRequestFlags);
+
+    [DllImport("Everything64.dll", SetLastError = false)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool Everything_QueryW([MarshalAs(UnmanagedType.Bool)] bool bWait);
+
+    [DllImport("Everything64.dll", SetLastError = false)]
+    private static extern void Everything_Reset();
+
+    [DllImport("Everything64.dll", SetLastError = false)]
+    private static extern uint Everything_GetNumResults();
+
+    [DllImport("Everything64.dll", CharSet = CharSet.Unicode, SetLastError = false)]
+    private static extern uint Everything_GetResultFullPathNameW(uint dwIndex, System.Text.StringBuilder wbuf, uint wbufSizeInWchars);
+
+    [DllImport("Everything64.dll", SetLastError = false)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool Everything_GetResultSize(uint dwIndex, out long lpSize);
+
+    [DllImport("Everything64.dll", SetLastError = false)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool Everything_GetResultDateModified(uint dwIndex, out long lpDateModified);
+
+    [DllImport("Everything64.dll", SetLastError = false)]
+    private static extern uint Everything_GetLastError();
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr LoadLibraryW(string lpLibFileName);
+
+    /// <summary>SDK DLL 缓存位置：%LOCALAPPDATA%\StarMark\sdk\Everything64.dll。</summary>
+    internal static string SdkDllPath
     {
-        public IntPtr dwData;
-        public int cbData;
-        public IntPtr lpData;
+        get
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StarMark", "sdk");
+            return Path.Combine(dir, "Everything64.dll");
+        }
+    }
+
+    /// <summary>
+    /// 加载 Everything64.dll：查找顺序为应用目录 → SDK 缓存目录。
+    /// 用 NativeLibrary 预加载后，后续按模块名的 DllImport 即解析到该模块。
+    /// </summary>
+    public static bool EnsureSdkLoaded()
+    {
+        if (_sdkLoaded) return true;
+        lock (SdkLoadGate)
+        {
+            if (_sdkLoaded) return true;
+            if (_sdkLoadError is not null) return false;
+            try
+            {
+                var candidates = new[]
+                {
+                    Path.Combine(AppContext.BaseDirectory, "Everything64.dll"),
+                    SdkDllPath,
+                };
+                var path = candidates.FirstOrDefault(File.Exists);
+                if (path is null)
+                {
+                    _sdkLoadError = new FileNotFoundException("Everything64.dll 未找到（SDK 尚未下载）");
+                    return false;
+                }
+
+                if (!System.Runtime.InteropServices.NativeLibrary.TryLoad(path, out _))
+                {
+                    _sdkLoadError = new InvalidOperationException($"Everything64.dll 加载失败：{path}");
+                    StarLog.Error(_sdkLoadError.Message);
+                    return false;
+                }
+
+                _sdkLoaded = true;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _sdkLoadError = ex;
+                StarLog.Error("加载 Everything SDK 失败", ex);
+                return false;
+            }
+        }
     }
 
     /// <summary>检测 Everything 主程序是否运行。</summary>
@@ -59,79 +139,64 @@ internal static class EverythingInterop
     }
 
     /// <summary>
-    /// 查询文件。1.4 IPC 通过 WM_COPYDATA 同步发送，结果通过 SendMessage 收件箱窗口接收。
-    /// 此实现为简化版：直接调用 Everything SDK 的 GetResult 函数。
-    /// 完整实现需在程序内注册隐藏窗口作为收件箱，处理 WM_COPYDATA_RESPONSE 消息。
+    /// 通过 Everything SDK DLL（Everything64.dll，IPC）查询文件。
+    /// 无窗口、无子进程——替换原 "everything.exe -search" GUI 子进程占位实现
+    /// （该实现每次查询都会把 Everything 主窗口弹到前台，导致用户无法正常使用）。
+    /// SDK 为阻塞式 IPC（内部 SendMessageTimeout，线程安全），由 EverythingQueryQueue 串行化调用。
     /// </summary>
     public static IReadOnlyList<Item> Query(
         string query, RequestFlags flags, int maxResults, CancellationToken ct)
     {
-        // Phase 1 MVP：暂用 Everything CLI 子进程方式（everything.exe -search ... -sort-... -limit ...）
-        // 作为 1.4 IPC 实现占位。完整 IPC 实现需要注册收件箱窗口，留待 Phase 1 后续迭代。
-        return QueryViaCli(query, flags, maxResults, ct);
-    }
+        if (!EnsureSdkLoaded()) return Array.Empty<Item>();
 
-    /// <summary>
-    /// 通过 Everything 命令行接口（CLI）查询。
-    /// 调用 everything.exe -search &lt;query&gt; -sort-ascending -limit N -csv 输出 CSV 解析。
-    /// 这是 MVP 阶段的稳妥方案：不依赖 IPC，不依赖第三方包，Everything 主程序运行即可。
-    /// </summary>
-    private static IReadOnlyList<Item> QueryViaCli(
-        string query, RequestFlags flags, int maxResults, CancellationToken ct)
-    {
-        var everythingExe = FindEverythingExecutable();
-        if (everythingExe == null) return Array.Empty<Item>();
+        Everything_Reset();
+        Everything_SetRequestFlags((uint)flags);
+        Everything_SetMax((uint)Math.Min(maxResults, 20000));
+        Everything_SetSearchW(query);
 
-        var sb = new StringBuilder();
-        sb.Append("-search \"").Append(query.Replace("\"", "\"\"")).Append("\" ");
-        // 入库场景（P0-1b）需要较大上限（默认 5000）；实时搜索传 100 不受影响。
-        sb.Append("-limit ").Append(Math.Min(maxResults, 20000)).Append(' ');
-        sb.Append("-csv ");
-        if (flags.HasFlag(RequestFlags.Size)) sb.Append("-size ");
-        if (flags.HasFlag(RequestFlags.DateModified)) sb.Append("-dm ");
-        sb.Append("-sort-name-ascending ");
-
-        var psi = new ProcessStartInfo
+        if (!Everything_QueryW(true))
         {
-            FileName = everythingExe,
-            Arguments = sb.ToString(),
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.UTF8,
-        };
-
-        try
-        {
-            using var proc = Process.Start(psi);
-            if (proc == null) return Array.Empty<Item>();
-
-            ct.Register(() =>
-            {
-                try { if (!proc.HasExited) proc.Kill(); } catch { /* ignore */ }
-            });
-
-            var items = new List<Item>();
-            // CSV 表头：Name,Path,Size,Date Modified,Date Created
-            // 第一行是表头，跳过
-            var firstLine = true;
-            while (!proc.StandardOutput.EndOfStream)
-            {
-                if (ct.IsCancellationRequested) break;
-                var line = proc.StandardOutput.ReadLine();
-                if (line == null) break;
-                if (firstLine) { firstLine = false; continue; }
-                var item = ParseCsvLine(line, flags);
-                if (item != null) items.Add(item);
-            }
-
-            if (!proc.WaitForExit(5000)) { try { proc.Kill(); } catch { /* ignore */ } }
-            return items;
-        }
-        catch
-        {
+            // 常见原因：Everything 主程序未运行 / IPC 不可达（EverythingSource.IsAvailable 已前置拦截多数情况）
+            StarLog.Warn($"Everything SDK 查询失败（GetLastError={Everything_GetLastError()}）：{query}");
             return Array.Empty<Item>();
         }
+
+        var count = Everything_GetNumResults();
+        var items = new List<Item>(Math.Min((int)count, maxResults));
+        for (uint i = 0; i < count; i++)
+        {
+            if (ct.IsCancellationRequested) break;
+
+            var buf = new System.Text.StringBuilder(1024);
+            Everything_GetResultFullPathNameW(i, buf, 1024);
+            var fullPath = buf.ToString();
+            if (string.IsNullOrEmpty(fullPath)) continue;
+
+            long? size = null;
+            if (flags.HasFlag(RequestFlags.Size) && Everything_GetResultSize(i, out var s)) size = s;
+
+            long? dateModified = null;
+            if (flags.HasFlag(RequestFlags.DateModified) && Everything_GetResultDateModified(i, out var ft))
+                dateModified = DateTimeOffset.FromFileTime(ft).ToUnixTimeSeconds();
+
+            var name = Path.GetFileName(fullPath);
+            var dir = Path.GetDirectoryName(fullPath) ?? string.Empty;
+
+            items.Add(new Item
+            {
+                Type = ItemType.File,
+                Source = ItemSources.FileSystem,
+                SourceId = ComputeStableHash(fullPath),
+                Title = name,
+                Subtitle = dir,
+                Uri = "file://" + fullPath.Replace('\\', '/'),
+                SearchText = name + ' ' + dir,
+                FileSize = size,
+                CreatedAt = dateModified ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                UpdatedAt = dateModified ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            });
+        }
+        return items;
     }
 
     private static string? _cachedExecutable;
