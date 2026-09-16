@@ -688,9 +688,9 @@ v1 将其列为"当前最高风险"。核实后：规则引擎**尚未实现**�
 └─ 验证：本地文件出现在文件夹树/标签/动态/置顶，快捷启动格可摆本地文件
 
 第十一轮 · 组件架构归位
-├─ ⬜ R1  WidgetWindow 改 XAML + MVVM（1030 行 code-behind 建 UI）
-│          （组件内绑定必须 Mode=OneWay、ItemsRepeater 内用 x:Bind）
-└─ ⬜ R3  全量重建 → ObservableCollection + ItemsRepeater
+├─ 🔵 R1  WidgetWindow 改 XAML + MVVM（增量试点：快捷启动格已落地，2026-09-16；待推广至 Todo/QuickNote/Clock/Search）
+│          （组件内绑定必须 Mode=OneWay、ItemsRepeater 内用 x:Bind；QuickLaunch 试点已验证）
+└─ 🔵 R3  全量重建 → ObservableCollection + ItemsRepeater（快捷启动格 LinksChanged 增量刷新已落地，2026-09-16）
 
 第十二轮 · 接回统一条目模型（差异化）
 ├─ ⬜ R2 / §5.3  待办/随记纳入 items（建议先随记，待办折衷）
