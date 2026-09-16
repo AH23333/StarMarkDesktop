@@ -22,6 +22,10 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty] private string _saveErrorMessage = string.Empty;
     [ObservableProperty] private bool _hasSaveError;
 
+    // 备份与恢复（P0-2）状态反馈
+    [ObservableProperty] private string _backupStatus = string.Empty;
+    [ObservableProperty] private bool _isBackupBusy;
+
     public SettingsPageViewModel()
     {
         // 与 MainWindow 保持同一实例语义：settings 文件路径由环境变量决定

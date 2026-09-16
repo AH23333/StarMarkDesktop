@@ -3,6 +3,8 @@ using System.Threading;
 using Microsoft.UI.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Backup;
+using StarMark.Core.Backup;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
@@ -59,6 +61,10 @@ public partial class App : Application
         services.AddSingleton(dbFactory);
         services.AddSingleton(sp => new StarMark.Data.MigrationRunner(sp.GetRequiredService<StarMark.Data.DbConnectionFactory>()));
         services.AddSingleton<IItemRepository, StarMark.Data.ItemRepository>();
+
+        // 备份与恢复（P0-2）：不可重建的用户元数据需要可导出/回滚
+        services.AddSingleton<IBackupRepository, StarMark.Data.BackupRepository>();
+        services.AddSingleton<BackupService>();
 
         // 集成适配层
         services.AddSingleton<StarMark.Integrations.Everything.EverythingQueryQueue>();

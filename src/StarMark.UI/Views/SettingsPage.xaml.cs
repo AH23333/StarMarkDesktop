@@ -1,11 +1,17 @@
 #nullable enable
+using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using StarMark.Abstractions.Backup;
+using StarMark.Core.Backup;
 using StarMark.Core.Widgets;
+using StarMark.UI.Helpers;
 using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 
 namespace StarMark.UI.Views;
 
@@ -13,11 +19,14 @@ public sealed partial class SettingsPage : Page
 {
     public SettingsPageViewModel ViewModel { get; }
 
+    private readonly BackupService _backup;
+
     public SettingsPage()
     {
         InitializeComponent();
         ViewModel = (App.Services.GetService(typeof(SettingsPageViewModel)) as SettingsPageViewModel)
             ?? new SettingsPageViewModel();
+        _backup = App.Services.GetRequiredService<BackupService>();
         ViewModel.LoadFromStore();
         BuildWidgetRows();
     }
@@ -91,4 +100,91 @@ public sealed partial class SettingsPage : Page
 
     private void Back_Click(object sender, RoutedEventArgs e)
         => App.MainWindow?.NavigateTo("tree");
+
+    // ==================== 数据备份与恢复（P0-2） ====================
+
+    private async void ExportBackup_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.IsBackupBusy) return;
+        var picker = new FileSavePicker();
+        InitializeWithWindow.Initialize(picker, WindowInterop.GetHwnd(App.MainWindow!));
+        picker.FileTypeChoices.Add("JSON 备份", new[] { ".json" });
+        picker.SuggestedFileName = $"starmark-backup-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}";
+        var file = await picker.PickSaveFileAsync();
+        if (file is null) return;
+
+        ViewModel.IsBackupBusy = true;
+        try
+        {
+            await _backup.ExportToFileAsync(file.Path, CancellationToken.None);
+            ViewModel.BackupStatus = $"已导出备份到：{file.Path}";
+        }
+        catch (Exception ex)
+        {
+            ViewModel.BackupStatus = $"导出失败：{ex.Message}";
+        }
+        finally { ViewModel.IsBackupBusy = false; }
+    }
+
+    private async void ImportBackup_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.IsBackupBusy) return;
+        var picker = new FileOpenPicker();
+        InitializeWithWindow.Initialize(picker, WindowInterop.GetHwnd(App.MainWindow!));
+        picker.FileTypeFilter.Add(".json");
+        var file = await picker.PickSingleFileAsync();
+        if (file is null) return;
+
+        ViewModel.IsBackupBusy = true;
+        try
+        {
+            BackupEnvelope env;
+            try
+            {
+                env = await BackupService.ReadAsync(file.Path, CancellationToken.None);
+            }
+            catch (BackupFormatException ex)
+            {
+                ViewModel.BackupStatus = ex.Message;
+                return;
+            }
+
+            var summary = BackupService.Peek(file.Path);
+            var detail = summary is not null
+                ? $"导出时间：{DateTimeOffset.FromUnixTimeSeconds(summary.ExportedAt):yyyy-MM-dd HH:mm}\n" +
+                  $"条目 {summary.ItemCount}　用户状态 {summary.UserStateCount}　标签 {summary.TagCount}" +
+                  (summary.HasWidgets ? "　组件数据：有" : "")
+                : "（无法读取摘要）";
+
+            var dlg = new ContentDialog
+            {
+                XamlRoot = this.XamlRoot,
+                Title = "导入备份",
+                PrimaryButtonText = "合并导入",
+                SecondaryButtonText = "覆盖导入",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Close,
+                Content = new TextBlock
+                {
+                    Text = $"{detail}\n\n合并导入：保留现有条目，仅补充/覆盖用户元数据（安全、可重复）。\n" +
+                           "覆盖导入：先清空再导入，精确还原到备份时刻（会丢掉备份之后新增的条目）。",
+                    TextWrapping = TextWrapping.Wrap,
+                },
+            };
+
+            var result = await dlg.ShowAsync();
+            if (result != ContentDialogResult.Primary && result != ContentDialogResult.Secondary) return;
+
+            var mode = result == ContentDialogResult.Secondary ? RestoreMode.Replace : RestoreMode.Merge;
+            var rr = await _backup.RestoreAsync(env, mode, null, CancellationToken.None);
+            ViewModel.BackupStatus = rr.Success
+                ? $"{rr.Message}（恢复前快照：{rr.SnapshotPath}）"
+                : $"导入失败：{rr.Message}";
+        }
+        catch (Exception ex)
+        {
+            ViewModel.BackupStatus = $"导入失败：{ex.Message}";
+        }
+        finally { ViewModel.IsBackupBusy = false; }
+    }
 }
