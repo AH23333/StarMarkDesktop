@@ -1,6 +1,5 @@
 #nullable enable
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -29,7 +28,7 @@ public sealed partial class WidgetWindow : Window
     private readonly IItemRepository? _repo;
     private readonly WidgetManager _manager;
 
-    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _clockTimer;
+    private ClockWidget? _clockWidget;
     private bool _styled;
     private bool _shuttingDown;
     private WidgetConfig _config;
@@ -86,7 +85,7 @@ public sealed partial class WidgetWindow : Window
         if (kind == WidgetKind.Clock)
             AppWindow.Changed += (_, e) =>
             {
-                if (e.DidVisibilityChange) UpdateClockTimer();
+                if (e.DidVisibilityChange) _clockWidget?.UpdateRunning(AppWindow.IsVisible);
             };
 
         Closed += WidgetWindow_Closed;
@@ -110,7 +109,7 @@ public sealed partial class WidgetWindow : Window
         AppWindow.Show();
         AttachToDesktopLayer();
         ApplyTopmost();
-        if (_kind == WidgetKind.Clock) UpdateClockTimer();
+        if (_kind == WidgetKind.Clock) _clockWidget?.UpdateRunning(AppWindow.IsVisible);
     }
 
     /// <summary>
@@ -133,7 +132,7 @@ public sealed partial class WidgetWindow : Window
     {
         PersistBounds();
         AppWindow.Hide();
-        if (_kind == WidgetKind.Clock) UpdateClockTimer();
+        if (_kind == WidgetKind.Clock) _clockWidget?.UpdateRunning(AppWindow.IsVisible);
     }
 
     /// <summary>彻底关闭（组件被移除时调用）。</summary>
@@ -142,7 +141,7 @@ public sealed partial class WidgetWindow : Window
         if (_shuttingDown) return;
         _shuttingDown = true;
         PersistBounds();
-        _clockTimer?.Stop();
+        _clockWidget?.Stop();
         Close();
     }
 
@@ -309,7 +308,7 @@ public sealed partial class WidgetWindow : Window
 
     private void WidgetWindow_Closed(object sender, WindowEventArgs args)
     {
-        _clockTimer?.Stop();
+        _clockWidget?.Stop();
         // 必须先脱离桌面层，否则会残留指向 SHELLDLL_DefView 的悬挂所有者
         WidgetLayerService.DetachFromDesktopLayer(WindowInterop.GetHwnd(this));
         _layerAttached = false;
@@ -449,7 +448,9 @@ public sealed partial class WidgetWindow : Window
     private void BuildContent()
     {
         ContentHost.Children.Clear();
-        ContentHost.Children.Add(WidgetContentFactory.Default.Build(_kind, this));
+        var content = WidgetContentFactory.Default.Build(_kind, this);
+        _clockWidget = content as ClockWidget;
+        ContentHost.Children.Add(content);
     }
 
     /// <summary>按窗口当前主题从应用级主题字典解析组件画笔。</summary>
@@ -569,62 +570,9 @@ public sealed partial class WidgetWindow : Window
     // 随记组件已迁移至 QuickNoteWidget（XAML + ViewModel + ItemsRepeater，R3 收尾），
     // 由 WidgetContentFactory 直接构造；不再需要本类内的 BuildQuickNote / DeleteNote。
 
-    // ── 时钟 ──
-
-    private TextBlock? _clockTime;
-    private TextBlock? _clockDate;
-
-    internal UIElement BuildClock()
-    {
-        var panel = new StackPanel
-        {
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Spacing = 4,
-            Padding = new Thickness(12, 10, 12, 12),
-        };
-        _clockTime = new TextBlock
-        {
-            Text = DateTime.Now.ToString("HH:mm:ss"),
-            FontSize = 34,
-            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-            HorizontalAlignment = HorizontalAlignment.Center,
-        };
-        _clockDate = new TextBlock
-        {
-            Text = DateTime.Now.ToString("yyyy-MM-dd dddd"),
-            FontSize = 12,
-            Opacity = 0.7,
-            HorizontalAlignment = HorizontalAlignment.Center,
-        };
-        panel.Children.Add(_clockTime);
-        panel.Children.Add(_clockDate);
-        return panel;
-    }
-
-    private void UpdateClockTimer()
-    {
-        if (_kind != WidgetKind.Clock) return;
-        if (AppWindow.IsVisible)
-        {
-            _clockTimer ??= DispatcherQueue.CreateTimer();
-            _clockTimer.Interval = TimeSpan.FromSeconds(1);
-            _clockTimer.Tick -= ClockTick;
-            _clockTimer.Tick += ClockTick;
-            _clockTimer.Start();
-            ClockTick(null, null);
-        }
-        else
-        {
-            _clockTimer?.Stop();
-        }
-    }
-
-    private void ClockTick(object? sender, object? e)
-    {
-        if (_clockTime is not null) _clockTime.Text = DateTime.Now.ToString("HH:mm:ss");
-        if (_clockDate is not null) _clockDate.Text = DateTime.Now.ToString("yyyy-MM-dd dddd");
-    }
+    // 时钟组件已迁移至 ClockWidget（XAML + ViewModel，R3 收尾）：手工构建与每秒定时器
+    // 均迁入组件内部，本类只在 Reveal / HideTemporary / 可见性变化 / 关闭时
+    // 通过 _clockWidget.UpdateRunning / Stop 启停刷新。
 
     // ── 快捷搜索 ──
 
