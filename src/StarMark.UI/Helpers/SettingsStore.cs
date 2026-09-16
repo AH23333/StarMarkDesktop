@@ -1,5 +1,7 @@
 #nullable enable
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 
 namespace StarMark.UI.Helpers;
@@ -25,6 +27,10 @@ public sealed class SettingsStore
         public bool? EnableTray { get; set; }
         public bool? EnableGlobalHotKey { get; set; }
         public bool? MinimizeToTray { get; set; }
+        /// <summary>本地文件索引根目录（P0-1b）。null/空表示使用默认（桌面/下载/文档）。</summary>
+        public List<string>? FileIndexRoots { get; set; }
+        /// <summary>每目录索引数量上限（P0-1b）。≤0 表示使用默认 5000。</summary>
+        public int? MaxFileIndexCount { get; set; }
     }
 
     public SettingsStore(string? path = null) => _path = path ?? ResolveSettingsPath();
@@ -89,6 +95,44 @@ public sealed class SettingsStore
         var d = Load() ?? new SettingsData();
         d.MinimizeToTray = enabled;
         Save(d);
+    }
+
+    /// <summary>本地文件索引根目录（P0-1b）。未配置时返回默认（桌面/下载/文档中存在的目录）。</summary>
+    public IReadOnlyList<string> LoadFileIndexRoots()
+    {
+        var d = Load();
+        if (d?.FileIndexRoots is { Count: > 0 } list)
+            return list.Where(Directory.Exists).ToList();
+        return DefaultFileIndexRoots();
+    }
+
+    public void SaveFileIndexRoots(IReadOnlyList<string> roots)
+    {
+        var d = Load() ?? new SettingsData();
+        d.FileIndexRoots = roots.Where(Directory.Exists).Distinct().ToList();
+        Save(d);
+    }
+
+    /// <summary>每目录索引数量上限（P0-1b）。未配置或非法时返回默认 5000。</summary>
+    public int LoadMaxFileIndexCount()
+        => Load() is { } d && d.MaxFileIndexCount is > 0 ? d.MaxFileIndexCount.Value : 5000;
+
+    public void SaveMaxFileIndexCount(int count)
+    {
+        var d = Load() ?? new SettingsData();
+        d.MaxFileIndexCount = count > 0 ? count : 5000;
+        Save(d);
+    }
+
+    private static List<string> DefaultFileIndexRoots()
+    {
+        var candidates = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\Downloads",
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+        };
+        return candidates.Where(Directory.Exists).Distinct().ToList();
     }
 
     public static string ResolveSettingsPath()

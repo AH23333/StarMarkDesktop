@@ -165,6 +165,25 @@
                 </StackPanel>
             </Border>
 
+            <!-- 本地文件索引（P0-1b）：限定根目录 + 数量上限，同步时入库为 ItemType.File -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,8,0,0">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="本地文件索引" Style="{StaticResource SettingTitle}"/>
+                    <TextBlock Text="索引以下目录的本地文件（每行一个，留空使用默认：桌面 / 下载 / 文档）。需安装并运行 Everything 才会生效。"
+                               Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+                    <TextBox Text="{x:Bind ViewModel.FileIndexRootsText, Mode=TwoWay}"
+                             AcceptsReturn="True" TextWrapping="Wrap" Height="72"
+                             PlaceholderText="C:\Users\You\Desktop"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="每目录上限" VerticalAlignment="Center"/>
+                        <TextBox Text="{x:Bind ViewModel.MaxFileIndexCountText, Mode=TwoWay}"
+                                 Width="100" InputScope="Number"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <!-- 诊断（P2-8）：只读信息，排查报障时最省沟通成本的一屏 -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"

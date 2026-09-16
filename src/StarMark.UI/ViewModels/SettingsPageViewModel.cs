@@ -1,5 +1,7 @@
 #nullable enable
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -63,6 +65,10 @@ public partial class SettingsPageViewModel : ObservableObject
         MinimizeToTray = _settings.LoadMinimizeToTray();
         GithubToken = github.Token ?? string.Empty;
         GithubUsername = github.Username ?? string.Empty;
+
+        // 本地文件索引（P0-1b）：根目录每行一个；上限数字
+        FileIndexRootsText = string.Join("\n", _settings.LoadFileIndexRoots());
+        MaxFileIndexCountText = _settings.LoadMaxFileIndexCount().ToString();
     }
 
     // ===== 收藏健康度（P2-6）=====
@@ -144,6 +150,10 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty] private bool _hasDiagnosticsError;
     [ObservableProperty] private string _diagnosticsError = string.Empty;
 
+    // ===== 本地文件索引（P0-1b）=====
+    [ObservableProperty] private string _fileIndexRootsText = string.Empty;
+    [ObservableProperty] private string _maxFileIndexCountText = string.Empty;
+
     /// <summary>采集只读诊断信息（P2-8）。本地查询，零网络。</summary>
     public async Task LoadDiagnosticsAsync()
     {
@@ -184,6 +194,17 @@ public partial class SettingsPageViewModel : ObservableObject
             if (!string.IsNullOrWhiteSpace(GithubToken)) github.Token = GithubToken.Trim();
             if (!string.IsNullOrWhiteSpace(GithubUsername)) github.Username = GithubUsername.Trim();
             github.Save();
+
+            // 本地文件索引（P0-1b）：只保留存在的目录；上限需为正整数
+            var roots = FileIndexRootsText
+                .Split(new[] { '\n', '\r', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .Where(s => s.Length > 0 && Directory.Exists(s))
+                .Distinct()
+                .ToList();
+            _settings.SaveFileIndexRoots(roots);
+            if (int.TryParse(MaxFileIndexCountText, out var cap) && cap > 0)
+                _settings.SaveMaxFileIndexCount(cap);
 
             StarMark.Abstractions.StarLog.Info($"设置已保存（主题={theme}, 托盘={EnableTray}）");
             SaveErrorMessage = string.Empty;

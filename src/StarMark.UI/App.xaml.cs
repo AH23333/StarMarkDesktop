@@ -67,8 +67,18 @@ public partial class App : Application
         services.AddSingleton<BackupService>();
 
         // 集成适配层
+        // P0-1b：本地文件索引配置从设置读取后注入 EverythingSource（避免 Integrations 反向依赖 UI）。
+        var fileSettings = new StarMark.UI.Helpers.SettingsStore();
+        services.AddSingleton(new StarMark.Integrations.Everything.FileIndexOptions
+        {
+            Roots = fileSettings.LoadFileIndexRoots().ToList(),
+            MaxCount = fileSettings.LoadMaxFileIndexCount(),
+        });
         services.AddSingleton<StarMark.Integrations.Everything.EverythingQueryQueue>();
-        services.AddSingleton<StarMark.Integrations.Everything.EverythingSource>();
+        services.AddSingleton<StarMark.Integrations.Everything.EverythingSource>(sp =>
+            new StarMark.Integrations.Everything.EverythingSource(
+                sp.GetRequiredService<StarMark.Integrations.Everything.EverythingQueryQueue>(),
+                sp.GetRequiredService<StarMark.Integrations.Everything.FileIndexOptions>()));
         services.AddSingleton<IItemSource>(sp => sp.GetRequiredService<StarMark.Integrations.Everything.EverythingSource>());
 
         services.AddSingleton(sp =>

@@ -1,8 +1,23 @@
 #nullable enable
+using System.Collections.Generic;
+using System.IO;
 using System.Runtime.Versioning;
 using StarMark.Abstractions;
 
 namespace StarMark.Integrations.Everything;
+
+/// <summary>
+/// 本地文件索引配置（P0-1b）。由 UI 层从 <see cref="StarMark.UI.Helpers.SettingsStore"/> 读取后注入，
+/// 避免 StarMark.Integrations 反向依赖 StarMark.UI。
+/// </summary>
+public sealed class FileIndexOptions
+{
+    /// <summary>需要索引的本地根目录。空表示使用默认（桌面/下载/文档）。</summary>
+    public IReadOnlyList<string> Roots { get; set; } = new List<string>();
+
+    /// <summary>每个根目录的索引数量上限。默认 5000。</summary>
+    public int MaxCount { get; set; } = 5000;
+}
 
 /// <summary>
 /// Everything SDK 1.4 (WM_COPYDATA) 适配器 + 查询队列。
@@ -72,10 +87,12 @@ public sealed class EverythingQueryQueue : IAsyncDisposable
 public sealed class EverythingSource : IItemSource
 {
     private readonly EverythingQueryQueue _queue;
+    private readonly FileIndexOptions _options;
 
-    public EverythingSource(EverythingQueryQueue queue)
+    public EverythingSource(EverythingQueryQueue queue, FileIndexOptions options)
     {
         _queue = queue;
+        _options = options;
     }
 
     public string SourceId => ItemSources.FileSystem;
@@ -85,11 +102,34 @@ public sealed class EverythingSource : IItemSource
     public bool IsAvailable => EverythingInterop.IsRunning();
 
     /// <summary>
-    /// 全量拉取——Everything 不支持批量枚举，仅在用户首次搜索时实时查询。
-    /// 此处返回空列表；items 表的 file 类型条目由用户主动添加（右键菜单 / 拖拽）。
+    /// 全量拉取（P0-1b）：把用户配置的本地根目录下的文件索引进 items 表，落库为 ItemType.File。
+    /// 只索引指定根目录（不扫全盘）、每目录带数量上限；source_id 用路径哈希保证幂等，
+    /// 重复同步不会产生多余条目。Everything 未运行或根目录为空时返回空列表。
     /// </summary>
-    public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
-        => Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
+    public async Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
+    {
+        if (!IsAvailable || _options.Roots.Count == 0)
+            return Array.Empty<Item>();
+
+        var results = new List<Item>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var root in _options.Roots)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!Directory.Exists(root))
+                continue;
+
+            // 以根目录路径作为 Everything 查询词，匹配其下（含子目录）全部文件。
+            var filter = new SearchFilter { IncludeSize = true, MaxResults = _options.MaxCount };
+            var items = await _queue.QueryAsync(root, filter, ct);
+            foreach (var item in items)
+            {
+                if (seen.Add(item.SourceId))
+                    results.Add(item);
+            }
+        }
+        return results;
+    }
 
     public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct)
     {

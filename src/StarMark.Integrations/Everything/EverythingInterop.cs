@@ -84,7 +84,8 @@ internal static class EverythingInterop
 
         var sb = new StringBuilder();
         sb.Append("-search \"").Append(query.Replace("\"", "\"\"")).Append("\" ");
-        sb.Append("-limit ").Append(Math.Min(maxResults, 500)).Append(' ');
+        // 入库场景（P0-1b）需要较大上限（默认 5000）；实时搜索传 100 不受影响。
+        sb.Append("-limit ").Append(Math.Min(maxResults, 20000)).Append(' ');
         sb.Append("-csv ");
         if (flags.HasFlag(RequestFlags.Size)) sb.Append("-size ");
         if (flags.HasFlag(RequestFlags.DateModified)) sb.Append("-dm ");
