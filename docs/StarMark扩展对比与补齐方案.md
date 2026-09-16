@@ -655,7 +655,7 @@ Desktop 是 `NavigationView PaneDisplayMode="Top"`（`MainWindow.xaml:103`），
 
 第五轮 · 产品感（约 2 天）
 ├─ P2-6  InsightsService 健康度 + 设置页区块  【✅ 2026-09-16 已落地】
-├─ P2-7  结果分段（精确 / 相关）
+├─ P2-7  结果分段（精确 / 相关）+ 语言筛选 + 排序维度  【✅ 2026-09-16 已落地】
 └─ P2-8  诊断区块
 
 按需 / 暂缓
