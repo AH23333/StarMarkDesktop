@@ -60,16 +60,7 @@
                 <StackPanel x:Name="ContentHost" Spacing="0"/>
             </ScrollViewer>
 
-            <!-- 右下角缩放手柄 -->
-            <Border x:Name="ResizeThumb" Grid.Row="1"
-                    Width="14" Height="14"
-                    HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                    Background="Transparent"
-                    ToolTipService.ToolTip="拖动调整大小">
-                <FontIcon Glyph="&#xE75F;" FontSize="9" Opacity="0.35"
-                          HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                          Margin="0,0,2,2"/>
-            </Border>
+            <!-- 缩放：四边 + 四角 8 向 grip 在代码中布置（AddResizeGrips），替代原右下角手柄 -->
         </Grid>
     </Border>
 </Window>

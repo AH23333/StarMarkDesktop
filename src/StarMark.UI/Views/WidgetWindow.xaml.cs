@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
@@ -37,6 +38,7 @@ public sealed partial class WidgetWindow : Window
     // ── 拖动/缩放状态（全部使用 Win32 物理像素，避免 DIP 与 AppWindow 物理坐标混用）──
     private bool _dragging;
     private bool _resizing;
+    private string _resizeDir = "se";
     private WindowInterop.POINT _gestureStart;
     private RectInt32 _gestureStartRect;
 
@@ -224,14 +226,7 @@ public sealed partial class WidgetWindow : Window
 
         if (WidgetStorage.IsResizable(_kind))
         {
-            ResizeThumb.PointerPressed += ResizeThumb_PointerPressed;
-            ResizeThumb.PointerMoved += ResizeThumb_PointerMoved;
-            ResizeThumb.PointerReleased += ResizeThumb_PointerReleased;
-            ResizeThumb.PointerCanceled += ResizeThumb_PointerReleased;
-        }
-        else
-        {
-            ResizeThumb.Visibility = Visibility.Collapsed;
+            AddResizeGrips();
         }
 
         AppWindow.Closing += (_, e) =>
@@ -398,35 +393,115 @@ public sealed partial class WidgetWindow : Window
 
     // ───────────────────────── 右下角缩放 ─────────────────────────
 
-    private void ResizeThumb_PointerPressed(object sender, PointerRoutedEventArgs e)
+    // ───────────────────── 边缘/四角缩放（8 向，替代原右下角手柄）─────────────────────────
+
+    /// <summary>沿窗口四边 + 四角布置透明缩放 grip，方向以 n/s/e/w 组合标记在 Tag 上。</summary>
+    private void AddResizeGrips()
     {
+        if (RootBorder.Child is not Grid rootGrid) return;
+
+        void AddGrip(string dir, double width, double height,
+            HorizontalAlignment hAlign, VerticalAlignment vAlign, InputSystemCursorShape shape)
+        {
+            var grip = new ResizeGrip(dir, InputSystemCursor.Create(shape))
+            {
+                Width = width,
+                Height = height,
+                HorizontalAlignment = hAlign,
+                VerticalAlignment = vAlign,
+            };
+            Grid.SetRowSpan(grip, 2);
+            // 显式提到最上层：确保 8 个 grip 始终压在标题栏/内容区之上，
+            // 避免被 DragBar / ScrollViewer 的命中测试吞掉（否则只有右下角 se 能命中）。
+            Canvas.SetZIndex(grip, 100);
+            grip.PointerPressed += ResizeGrip_PointerPressed;
+            grip.PointerMoved += ResizeGrip_PointerMoved;
+            grip.PointerReleased += ResizeGrip_PointerReleased;
+            grip.PointerCanceled += ResizeGrip_PointerReleased;
+            rootGrid.Children.Add(grip);
+        }
+
+        // 命中带加宽（边 8px、角 18px）以便精准命中；全部 RowSpan=2 + z=100（见 AddGrip），
+        // 四边四角均可从窗口边缘直接拉伸，不再只有右下角 se 生效。
+        AddGrip("n", double.NaN, 8, HorizontalAlignment.Stretch, VerticalAlignment.Top, InputSystemCursorShape.SizeNorthSouth);
+        AddGrip("s", double.NaN, 8, HorizontalAlignment.Stretch, VerticalAlignment.Bottom, InputSystemCursorShape.SizeNorthSouth);
+        AddGrip("w", 8, double.NaN, HorizontalAlignment.Left, VerticalAlignment.Stretch, InputSystemCursorShape.SizeWestEast);
+        AddGrip("e", 8, double.NaN, HorizontalAlignment.Right, VerticalAlignment.Stretch, InputSystemCursorShape.SizeWestEast);
+        AddGrip("nw", 18, 18, HorizontalAlignment.Left, VerticalAlignment.Top, InputSystemCursorShape.SizeNorthwestSoutheast);
+        AddGrip("ne", 18, 18, HorizontalAlignment.Right, VerticalAlignment.Top, InputSystemCursorShape.SizeNortheastSouthwest);
+        AddGrip("sw", 18, 18, HorizontalAlignment.Left, VerticalAlignment.Bottom, InputSystemCursorShape.SizeNortheastSouthwest);
+        AddGrip("se", 18, 18, HorizontalAlignment.Right, VerticalAlignment.Bottom, InputSystemCursorShape.SizeNorthwestSoutheast);
+    }
+
+    private void ResizeGrip_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: string dir }) return;
+        _resizeDir = dir;
         WindowInterop.GetCursorPos(out _gestureStart);
         _gestureStartRect = WindowInterop.GetWindowRect(this);
         _resizing = true;
-        ResizeThumb.CapturePointer(e.Pointer);
+        RaiseTransient();
+        ((UIElement)sender).CapturePointer(e.Pointer);
         e.Handled = true;
     }
 
-    private void ResizeThumb_PointerMoved(object sender, PointerRoutedEventArgs e)
+    private void ResizeGrip_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
         if (!_resizing) return;
         WindowInterop.GetCursorPos(out var pt);
         var scale = WindowInterop.GetScale(this);
         var minW = (int)(200 * scale);
         var minH = (int)(120 * scale);
-        var w = Math.Max(minW, _gestureStartRect.Width + pt.X - _gestureStart.X);
-        var h = Math.Max(minH, _gestureStartRect.Height + pt.Y - _gestureStart.Y);
-        AppWindow.MoveAndResize(new RectInt32(_gestureStartRect.X, _gestureStartRect.Y, w, h));
+        var dx = pt.X - _gestureStart.X;
+        var dy = pt.Y - _gestureStart.Y;
+        var x = _gestureStartRect.X;
+        var y = _gestureStartRect.Y;
+        var w = _gestureStartRect.Width;
+        var h = _gestureStartRect.Height;
+
+        // 拖左/上边缘时对侧边固定：先算新尺寸，再反推新位置（夹到最小尺寸时不跟手）
+        if (_resizeDir.Contains('w')) { var nw = Math.Max(minW, w - dx); x += w - nw; w = nw; }
+        if (_resizeDir.Contains('e')) { w = Math.Max(minW, w + dx); }
+        if (_resizeDir.Contains('n')) { var nh = Math.Max(minH, h - dy); y += h - nh; h = nh; }
+        if (_resizeDir.Contains('s')) { h = Math.Max(minH, h + dy); }
+
+        AppWindow.MoveAndResize(new RectInt32(x, y, w, h));
         e.Handled = true;
     }
 
-    private void ResizeThumb_PointerReleased(object sender, PointerRoutedEventArgs e)
+    private void ResizeGrip_PointerReleased(object sender, PointerRoutedEventArgs e)
     {
         if (!_resizing) return;
         _resizing = false;
-        try { ResizeThumb.ReleasePointerCapture(e.Pointer); } catch { }
+        try { ((UIElement)sender).ReleasePointerCapture(e.Pointer); } catch { }
         PersistBounds();
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// 8 向缩放 grip：四边 + 四角透明命中区，进入时切换为对应方向尺寸光标、离开恢复。
+    /// 基类选用 Panel（非 sealed，可承载 Background 命中；ProtectedCursor 为受保护成员，
+    /// 只能在派生类的实例方法中访问，故在构造函数内订阅自身 PointerEntered/Exited 事件来设置）。
+    /// Border/Grid/Canvas/StackPanel 在 WinUI 3 均 sealed，无法派生；UIElement 亦无 OnPointerEntered 虚方法。
+    /// </summary>
+    private sealed class ResizeGrip : Panel
+    {
+        private readonly InputSystemCursor _cursor;
+
+        public ResizeGrip(string direction, InputSystemCursor cursor)
+        {
+            Tag = direction;
+            _cursor = cursor;
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            PointerEntered += ResizeGrip_PointerEntered;
+            PointerExited += ResizeGrip_PointerExited;
+        }
+
+        private void ResizeGrip_PointerEntered(object sender, PointerRoutedEventArgs e)
+            => ProtectedCursor = _cursor;
+
+        private void ResizeGrip_PointerExited(object sender, PointerRoutedEventArgs e)
+            => ProtectedCursor = null;
     }
 
     private static bool FindAncestorButton(DependencyObject? start)
