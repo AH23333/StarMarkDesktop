@@ -132,7 +132,7 @@ public partial class App : Application
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<SearchPageViewModel>();
         services.AddSingleton<FolderTreePageViewModel>();
-        services.AddTransient<TagsPageViewModel>();
+        services.AddSingleton<TagsPageViewModel>();
         services.AddTransient<ActivityPageViewModel>();
         services.AddTransient<HiddenPageViewModel>();
         services.AddTransient<SettingsPageViewModel>();

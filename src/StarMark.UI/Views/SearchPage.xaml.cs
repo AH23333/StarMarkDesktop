@@ -1,4 +1,5 @@
 #nullable enable
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
@@ -99,12 +100,17 @@ public sealed partial class SearchPage : Page
 
     // ───────── 吸顶标签筛选条（数据来自全局 Main.GlobalTagFilters）─────────
 
+    /// <summary>
+    /// 移除一枚已选标签。延迟到 UI 消息队列末尾执行——直接在此 Click 内同步从
+    /// ItemsRepeater 的 ItemsSource（GlobalTagFilters）移除会触发 WinUI 3 重入崩溃
+    /// （被点的元素仍在视觉树中正被测量，且移除最后一个标签会让父 Border 折叠）。
+    /// </summary>
     private void TagFilterChip_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: string tag })
-            ViewModel.Main.RemoveGlobalTagFilter(tag);
+            DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() => ViewModel.Main.RemoveGlobalTagFilter(tag));
     }
 
     private void ClearTagFilters_Click(object sender, RoutedEventArgs e)
-        => ViewModel.Main.ClearGlobalTagFilters();
+        => DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() => ViewModel.Main.ClearGlobalTagFilters());
 }

@@ -1,4 +1,5 @@
 #nullable enable
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using Microsoft.UI.Xaml;
@@ -46,16 +47,25 @@ public sealed partial class FolderTreePage : Page
         _ = ViewModel.LoadCommand.ExecuteAsync(null);
     }
 
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+        // 单例 VM 的 RootsReady 在 ctor 订阅且永不退订；离开本页后必须退订，
+        // 否则死页会持续接收重建事件（重载树、操作已分离的元素），既泄漏又可能在标签变化时崩溃。
+        ViewModel.RootsReady -= OnRootsReady;
+    }
+
     // ────── 全局标签筛选栏 ──────
 
+    /// <summary>从筛选条移除一枚标签。延迟到消息队列末尾，避免 ItemsRepeater 重入崩溃。</summary>
     private void RemoveFilterChip_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: string tagName })
-            ViewModel.Main.RemoveGlobalTagFilter(tagName);
+            DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() => ViewModel.Main.RemoveGlobalTagFilter(tagName));
     }
 
     private void ClearTagFilters_Click(object sender, RoutedEventArgs e)
-        => ViewModel.Main.ClearGlobalTagFilters();
+        => DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() => ViewModel.Main.ClearGlobalTagFilters());
 
     private void OnRootsReady() => RebuildTree();
 

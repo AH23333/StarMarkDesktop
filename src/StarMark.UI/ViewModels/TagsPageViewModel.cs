@@ -30,7 +30,24 @@ public partial class TagsPageViewModel : ObservableObject
     {
         _repository = repository;
         Main = main;
-        Main.GlobalTagFiltersChanged += () => OnPropertyChanged(nameof(HasActiveFilter));
+        // 单例：仅订阅一次。全局标签筛选变化 → 同步刷新云选中态与转发属性，
+        // 这样在别的页面（搜索/文件夹 banner）增删/清除标签后，回到标签页立即可见正确选中态，
+        // 不再需要「切换导航栏才刷新」。
+        Main.GlobalTagFiltersChanged += OnGlobalTagFiltersChanged;
+    }
+
+    private void OnGlobalTagFiltersChanged()
+    {
+        OnPropertyChanged(nameof(HasActiveFilter));
+        OnPropertyChanged(nameof(ActiveFilterChips));
+        RefreshSelection();
+    }
+
+    /// <summary>按全局标签筛选状态重算标签云的 IsSelected（单一真源 = Main.GlobalTagFilters）。</summary>
+    private void RefreshSelection()
+    {
+        foreach (var tag in Tags)
+            tag.IsSelected = Main.GlobalTagFilters.Any(t => string.Equals(t.Name, tag.Name, StringComparison.OrdinalIgnoreCase));
     }
 
     [RelayCommand]
@@ -44,6 +61,8 @@ public partial class TagsPageViewModel : ObservableObject
             foreach (var (name, count) in tagList)
                 Tags.Add(new TagItemViewModel(name, count));
             EmptyHint = Tags.Count == 0 ? "暂无标签" : string.Empty;
+            // 载入后按当前全局筛选标记选中态（例如他页已选标签，回到标签页应高亮）。
+            RefreshSelection();
         }
         catch (Exception ex)
         {
