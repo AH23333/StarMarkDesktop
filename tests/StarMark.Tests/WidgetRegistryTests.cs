@@ -31,9 +31,10 @@ public sealed class WidgetRegistryTests
     [Fact]
     public void Descriptors_CarryDefaultSizeAndResizePolicy()
     {
-        Assert.Equal(220, WidgetRegistry.Default.Get(WidgetKind.Clock).DefaultWidth);
-        Assert.Equal(150, WidgetRegistry.Default.Get(WidgetKind.Clock).DefaultHeight);
-        Assert.False(WidgetRegistry.Default.Get(WidgetKind.Clock).IsResizable);
+        // 时钟已开放缩放（字号随窗口自适应），默认尺寸也放大到 240×170
+        Assert.Equal(240, WidgetRegistry.Default.Get(WidgetKind.Clock).DefaultWidth);
+        Assert.Equal(170, WidgetRegistry.Default.Get(WidgetKind.Clock).DefaultHeight);
+        Assert.True(WidgetRegistry.Default.Get(WidgetKind.Clock).IsResizable);
         Assert.True(WidgetRegistry.Default.Get(WidgetKind.Todo).IsResizable);
         Assert.True(WidgetRegistry.Default.CanCreateWindow(WidgetKind.QuickLaunch));
     }
@@ -43,9 +44,9 @@ public sealed class WidgetRegistryTests
     {
         // 标题与图标来自同一份描述符，不再有第二处 switch
         Assert.Equal("★ 快捷启动", WidgetStorage.KindTitle(WidgetKind.QuickLaunch));
-        Assert.Equal(220, WidgetStorage.DefaultWidth(WidgetKind.Clock));
-        Assert.Equal(150, WidgetStorage.DefaultHeight(WidgetKind.Clock));
-        Assert.False(WidgetStorage.IsResizable(WidgetKind.Clock));
+        Assert.Equal(240, WidgetStorage.DefaultWidth(WidgetKind.Clock));
+        Assert.Equal(170, WidgetStorage.DefaultHeight(WidgetKind.Clock));
+        Assert.True(WidgetStorage.IsResizable(WidgetKind.Clock));
         Assert.True(WidgetStorage.IsResizable(WidgetKind.Search));
     }
 
