@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Language;
 using ActivityKind = StarMark.Abstractions.ActivityKind;
 
 namespace StarMark.Data;
@@ -323,6 +324,38 @@ public sealed class ItemRepository : IItemRepository
         return result;
     }
 
+    /// <summary>
+    /// 列出 star 条目里<b>实际存在</b>的编程语言（去重并归一化为目录规范名）。
+    /// 主界面语言下拉据此渲染，确保只显示真实出现在 star 项目中的语言，
+    /// 绝不会出现当前 star 项目不存在的语言选项。
+    /// </summary>
+    public async Task<IReadOnlyList<string>> GetStarLanguagesAsync(CancellationToken ct = default)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT DISTINCT trim(json_extract(i.extra_json, '$.Language')) AS lang
+            FROM items i
+            WHERE i.type = 'githubstar'
+              AND json_extract(i.extra_json, '$.Language') IS NOT NULL
+              AND trim(json_extract(i.extra_json, '$.Language')) <> ''
+            ORDER BY lang;";
+        var list = new List<string>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            if (reader.IsDBNull(0)) continue;
+            var raw = reader.GetString(0);
+            if (string.IsNullOrWhiteSpace(raw)) continue;
+            list.Add(LanguageCatalog.Normalize(raw.Trim()));
+        }
+        return list
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     // ===== 浏览模式 =====
 
     public async Task<IReadOnlyList<Item>> GetAllAsync(BrowseFilter filter, CancellationToken ct)
@@ -331,6 +364,8 @@ public sealed class ItemRepository : IItemRepository
         var where = new List<string> { "(@include_hidden = 1 OR i.hidden = 0)" };
         if (!string.IsNullOrEmpty(filter.TypeFilter))
             where.Add("i.type = @type_filter");
+        if (!string.IsNullOrEmpty(filter.Language))
+            where.Add("json_extract(i.extra_json, '$.Language') = @lang");
 
         // 标签过滤：AND 语义（必须同时具备全部标签）。
         // 原实现用 `JOIN + t.name IN (...) + GROUP BY` 实际是 OR —— 多选标签时结果反而变多，
@@ -362,6 +397,8 @@ public sealed class ItemRepository : IItemRepository
         cmd.Parameters.AddWithValue("@limit", filter.Limit);
         if (!string.IsNullOrEmpty(filter.TypeFilter))
             cmd.Parameters.AddWithValue("@type_filter", filter.TypeFilter);
+        if (!string.IsNullOrEmpty(filter.Language))
+            cmd.Parameters.AddWithValue("@lang", filter.Language);
         BindTagParams(cmd, filter.TagFilters);
 
         var items = new List<Item>();
@@ -478,6 +515,10 @@ public sealed class ItemRepository : IItemRepository
         // CJK 展开：unicode61 把连续中文视为单个 token，不展开则中文子串查询全部落空。
         // 详见 CjkTokenizer 类注释。只影响索引列，不影响任何展示文本。
         item.SearchText = StarMark.Abstractions.Text.CjkTokenizer.ExpandForIndex(searchText.ToString());
+
+        // 语言识别（受 DeskBox 启发）：GitHub 主语言已标注直接归一；书签/网页按 TLD/CJK 推断，
+        // 统一以 extra_json.Language 落盘，供主界面语言下拉过滤。
+        item.ExtraJson = LanguageDetector.EnsureLanguage(item.ExtraJson, item.Uri, item.Title, item.Description);
 
         // UPSERT（基于 source+source_id 唯一索引）；UPDATE 集不包含 hidden/pinned/notes
         using var cmd = conn.CreateCommand();

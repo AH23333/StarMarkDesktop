@@ -46,6 +46,12 @@ public interface IItemRepository
     /// <summary>条目总数（按类型分桶）。对应侧边栏状态栏 "Stars: X / Bookmarks: Y / Files: Z"。</summary>
     Task<Dictionary<ItemType, int>> GetCountsByTypeAsync(CancellationToken ct);
 
+    /// <summary>
+    /// star 条目中实际存在的编程语言列表（去重、归一化）。
+    /// 主界面语言下拉据此渲染——只显示真实存在于 star 项目的语言。
+    /// </summary>
+    Task<IReadOnlyList<string>> GetStarLanguagesAsync(CancellationToken ct = default);
+
     /// <summary>获取所有可见条目（浏览模式），按排序方式返回。</summary>
     Task<IReadOnlyList<Item>> GetAllAsync(BrowseFilter filter, CancellationToken ct);
 
@@ -85,4 +91,7 @@ public sealed class BrowseFilter
     public bool IncludeHidden { get; init; }
     public IReadOnlyList<string>? TagFilters { get; init; }
     public int Limit { get; init; } = 500;
+
+    /// <summary>语言筛选（extra_json.Language）。null/空表示不过滤。主界面语言下拉直选后仅显示匹配 star 条目。</summary>
+    public string? Language { get; init; }
 }
