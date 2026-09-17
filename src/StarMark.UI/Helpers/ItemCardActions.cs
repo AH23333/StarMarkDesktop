@@ -13,6 +13,13 @@ namespace StarMark.UI.Helpers;
 /// </summary>
 public static class ItemCardActions
 {
+    /// <summary>
+    /// 条目标签被改动后触发（增/删/重设）。供搜索页/文件夹页订阅——
+    /// 用户在内联编辑标签后，当前的条件搜索与浏览结果需要实时刷新（对齐扩展实时条件搜索）。
+    /// 在 UI 线程触发（调用方均为 UI 事件处理器，async void 默认回到 UI 同步上下文）。
+    /// </summary>
+    public static event Action? ItemTagsChanged;
+
     public static IItemRepository GetRepo()
         => App.Services.GetService(typeof(IItemRepository)) as IItemRepository
             ?? throw new InvalidOperationException("IItemRepository 未注册");
@@ -153,6 +160,8 @@ public static class ItemCardActions
 
             if (desired.Count > 0 || current.Count > 0)
                 vm.ApplyTags(desired);
+
+            ItemTagsChanged?.Invoke();
         }
         catch (Exception ex)
         {
@@ -175,6 +184,7 @@ public static class ItemCardActions
         {
             await GetRepo().RemoveTagAsync(vm.Id, tag, CancellationToken.None);
             vm.ApplyTags(vm.Tags.Where(t => !string.Equals(t, tag, StringComparison.OrdinalIgnoreCase)).ToArray());
+            ItemTagsChanged?.Invoke();
         }
         catch (Exception ex)
         {
@@ -215,6 +225,7 @@ public static class ItemCardActions
                 await repo.AddTagAsync(vm.Id, tag, CancellationToken.None);
 
             vm.ApplyTags(current.Concat(desired).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+            ItemTagsChanged?.Invoke();
         }
         catch (Exception ex)
         {

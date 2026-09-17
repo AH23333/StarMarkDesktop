@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StarMark.Abstractions;
+using StarMark.UI.Helpers;
 
 namespace StarMark.UI.ViewModels;
 
@@ -44,12 +45,20 @@ public partial class FolderTreePageViewModel : ObservableObject
         Main = main;
         // 全局标签筛选变化（标签页增删/清除）→ 重载树
         Main.GlobalTagFiltersChanged += OnGlobalTagFiltersChanged;
+        // 条目自身标签被增删 → 当前浏览树可能应纳入/剔除该条目，实时重载（仅文件夹页激活时）
+        ItemCardActions.ItemTagsChanged += OnItemTagsChanged;
     }
 
     private void OnGlobalTagFiltersChanged()
     {
         HasTagFilter = Main.HasGlobalTagFilters;
         _ = LoadCommand.ExecuteAsync(null);
+    }
+
+    private void OnItemTagsChanged()
+    {
+        if (Main.CurrentPageTag == "tree")
+            _ = LoadCommand.ExecuteAsync(null);
     }
 
     [RelayCommand]

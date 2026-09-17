@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StarMark.Abstractions;
 using StarMark.Core.Search;
+using StarMark.UI.Helpers;
 
 namespace StarMark.UI.ViewModels;
 
@@ -112,6 +113,8 @@ public partial class SearchPageViewModel : ObservableObject
         Main = main;
         // 全局标签筛选变化（标签页增删/清除）→ 按新组合重搜（搜索在标签筛选结果内执行）
         Main.GlobalTagFiltersChanged += OnGlobalTagFiltersChanged;
+        // 条目自身标签被增删 → 当前搜索结果可能不再匹配/应新纳入，实时重搜（仅搜索页激活时）。
+        ItemCardActions.ItemTagsChanged += OnItemTagsChanged;
     }
 
     /// <summary>主窗口 ViewModel（持有全局标签筛选单一真源）。</summary>
@@ -315,6 +318,16 @@ public partial class SearchPageViewModel : ObservableObject
     private void OnGlobalTagFiltersChanged()
     {
         if (Query.Length > 0 || Main.HasGlobalTagFilters)
+            _ = SearchAsync();
+    }
+
+    /// <summary>
+    /// 条目自身标签被用户增删（内联编辑）→ 当前结果集可能失配/应纳入，实时重搜。
+    /// 仅在搜索页激活时重跑，避免对不可见的页面做无谓查询。
+    /// </summary>
+    private void OnItemTagsChanged()
+    {
+        if (Main.CurrentPageTag == "search")
             _ = SearchAsync();
     }
 }
