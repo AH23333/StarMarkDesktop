@@ -400,6 +400,12 @@ public sealed partial class WidgetWindow : Window
     {
         if (RootBorder.Child is not Grid rootGrid) return;
 
+        // 层级策略（避免「右上角关闭按钮被 grip 盖住」）：
+        // - 四边四角 grip 统一 ZIndex=100，压在标题栏(DragBar, 默认 0)与内容区之上 → 四边四角均可拉伸，
+        //   上边/左上角 grip 也因此在标题栏之上仍可拉伸。
+        // - 仅 ChromeButtons（关闭/隐藏/添加/置顶按钮区，XAML 中 ZIndex=200）置于 grip 之上，
+        //   让出右上角按钮区，保证按钮始终可点；代价是右上角那一点不再触发 ne 拉伸（按需求自行处理）。
+
         void AddGrip(string dir, double width, double height,
             HorizontalAlignment hAlign, VerticalAlignment vAlign, InputSystemCursorShape shape)
         {
