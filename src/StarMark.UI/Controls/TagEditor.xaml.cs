@@ -84,11 +84,19 @@ public sealed partial class TagEditor : UserControl
     private void InputBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         var text = InputBox.Text;
-        if (string.IsNullOrEmpty(text)) return;
+        if (string.IsNullOrEmpty(text))
+        {
+            // 清空输入 → 回退为「全部未选标签」建议（用于发现）
+            RefreshSuggestions(string.Empty);
+            return;
+        }
 
         // 以分隔符结尾 → 提交内容为一个标签
         if (Separators.Contains(text[^1]))
             CommitInput();
+        else
+            // 动态匹配：随输入实时收窄建议（对齐扩展 suggest-row 的子串过滤）
+            RefreshSuggestions(text);
     }
 
     private void InputBox_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -131,7 +139,13 @@ public sealed partial class TagEditor : UserControl
         Tags.Add(tag);
     }
 
-    private void RefreshSuggestions()
+    /// <summary>
+    /// 刷新建议列表。
+    /// - query 为空：展示全部未选标签（上限 MaxSuggestions），便于发现。
+    /// - query 非空：仅保留「名称包含该子串」且「未选 / 未在草稿中出现」的标签，
+    ///   实现输入时动态匹配已有标签（扩展项目的内联标签编辑亮点）。
+    /// </summary>
+    private void RefreshSuggestions(string? query = null)
     {
         Suggestions.Clear();
         if (AllTags is null)
@@ -140,9 +154,19 @@ public sealed partial class TagEditor : UserControl
             return;
         }
 
+        // 草稿中已敲入的标签 token（逗号/空格分隔），排除避免重复建议
+        var drafted = (query ?? string.Empty)
+            .Split(Separators, StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => x.Length > 0)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var q = (query ?? string.Empty).Trim();
         foreach (var t in AllTags
                      .Where(t => !string.IsNullOrWhiteSpace(t))
                      .Where(t => !Tags.Contains(t, StringComparer.OrdinalIgnoreCase))
+                     .Where(t => !drafted.Contains(t))
+                     .Where(t => q.Length == 0 || t.Contains(q, StringComparison.OrdinalIgnoreCase))
                      .Distinct(StringComparer.OrdinalIgnoreCase)
                      .Take(MaxSuggestions))
         {
