@@ -17,7 +17,6 @@ public partial class TagsPageViewModel : ObservableObject
     [ObservableProperty] private string _emptyHint = string.Empty;
 
     public ObservableCollection<TagItemViewModel> Tags { get; } = new();
-    public ObservableCollection<ItemCardViewModel> FilteredResults { get; } = new();
 
     public MainViewModel Main { get; }
 
@@ -65,7 +64,7 @@ public partial class TagsPageViewModel : ObservableObject
         foreach (var tag in Tags)
             tag.IsSelected = Main.GlobalTagFilters.Any(t => string.Equals(t.Name, tag.Name, StringComparison.OrdinalIgnoreCase));
 
-        await ApplyFilterAsync();
+        await Task.CompletedTask;
     }
 
     [RelayCommand]
@@ -74,41 +73,16 @@ public partial class TagsPageViewModel : ObservableObject
         Main.ClearGlobalTagFilters();
         foreach (var tag in Tags)
             tag.IsSelected = false;
-        FilteredResults.Clear();
         await Task.CompletedTask;
     }
 
-    [RelayCommand]
-    private async Task ApplyFilterAsync()
-    {
-        FilteredResults.Clear();
-        if (!Main.HasGlobalTagFilters) return;
-
-        try
-        {
-            var filter = new BrowseFilter
-            {
-                TagFilters = Main.GlobalTagFilters.Select(t => t.Name).ToList(),
-                Limit = 200,
-            };
-            var items = await _repository.GetAllAsync(filter, CancellationToken.None);
-            foreach (var item in items)
-                FilteredResults.Add(new ItemCardViewModel(item));
-        }
-        catch (Exception ex)
-        {
-            // 静默吞掉会让「按标签查看」看起来完全失效，至少留下日志可查
-            StarMark.Abstractions.StarLog.Error("标签筛选失败", ex);
-        }
-    }
-
-    /// <summary>卡片标签点击：以单个标签作为筛选条件（导航参数传入）。</summary>
-    public async Task FilterByTagAsync(string tagName)
+    /// <summary>卡片标签点击：以单个标签作为筛选条件（导航参数传入）。仅设定全局筛选，结果在文件夹页查看。</summary>
+    public Task FilterByTagAsync(string tagName)
     {
         Main.SetGlobalTagFilters(new List<string> { tagName });
         foreach (var tag in Tags)
             tag.IsSelected = tag.Name == tagName;
-        await ApplyFilterAsync();
+        return Task.CompletedTask;
     }
 }
 

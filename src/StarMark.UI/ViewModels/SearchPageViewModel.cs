@@ -29,12 +29,9 @@ public partial class SearchPageViewModel : ObservableObject
     [ObservableProperty] private int _selectedIndex = -1;
 
     /// <summary>
-    /// 当前生效的标签过滤（AND 语义：条目须同时具备全部标签）。
-    /// 对齐浏览器扩展侧边栏的 tagFilters + 吸顶 tag-banner。
+    /// 当前生效的标签过滤统一走 Main.GlobalTagFilters（单一真源，对齐扩展 tagFilters）。
+    /// 搜索页不再持有独立的标签状态，避免与导航栏「标签」出现两套入口、互相脱节。
     /// </summary>
-    public ObservableCollection<TagFilterChip> ActiveTags { get; } = new();
-
-    [ObservableProperty] private bool _hasActiveTags;
 
     public ObservableCollection<ItemCardViewModel> Results { get; } = new();
 
@@ -102,22 +99,23 @@ public partial class SearchPageViewModel : ObservableObject
         if (CurrentLanguage.Length > 0)
             CurrentLanguage = string.Empty; // 触发 OnCurrentLanguageChanged → 幂等空查询
         AvailableLanguages.Clear();
-        // 标签过滤一并无条件清空：否则下次进入搜索页会按上次残留的标签直接出结果。
-        // 先清标签再清 Query，避免中间态触发一次带标签的空查询。
-        if (ActiveTags.Count > 0)
-        {
-            ActiveTags.Clear();
-            HasActiveTags = false;
-        }
+        // 注意：全局标签筛选（Main.GlobalTagFilters）不在离开搜索页时清空，
+        // 它独立于搜索、由导航栏「标签」控制，应在各页面间持久保留。
         if (Query.Length > 0)
             Query = string.Empty; // 触发 OnQueryChanged → SearchAsync 空查询分支（幂等）
     }
 
-    public SearchPageViewModel(SearchService searchService, IItemRepository? repo = null)
+    public SearchPageViewModel(SearchService searchService, MainViewModel main, IItemRepository? repo = null)
     {
         _searchService = searchService;
         _repo = repo;
+        Main = main;
+        // 全局标签筛选变化（标签页增删/清除）→ 按新组合重搜（搜索在标签筛选结果内执行）
+        Main.GlobalTagFiltersChanged += OnGlobalTagFiltersChanged;
     }
+
+    /// <summary>主窗口 ViewModel（持有全局标签筛选单一真源）。</summary>
+    public MainViewModel Main { get; }
 
     [RelayCommand]
     private async Task SearchAsync()
@@ -126,7 +124,7 @@ public partial class SearchPageViewModel : ObservableObject
         _searchCts = new CancellationTokenSource();
         var token = _searchCts.Token;
 
-        if (string.IsNullOrWhiteSpace(Query) && ActiveTags.Count == 0)
+        if (string.IsNullOrWhiteSpace(Query) && !Main.HasGlobalTagFilters)
         {
             // 空关键词 + 无标签 → 浏览模式：展示最近条目（对齐扩展：清空搜索框回到浏览列表而非空白）
             await LoadBrowseAsync(token);
@@ -152,7 +150,7 @@ public partial class SearchPageViewModel : ObservableObject
             },
             Sort = CurrentSort,
             Language = string.IsNullOrEmpty(CurrentLanguage) ? null : CurrentLanguage,
-            Tags = ActiveTags.Count > 0 ? ActiveTags.Select(t => t.Name).ToArray() : null,
+            Tags = Main.HasGlobalTagFilters ? Main.GlobalTagFilters.Select(t => t.Name).ToArray() : null,
         };
 
         try
@@ -196,8 +194,8 @@ public partial class SearchPageViewModel : ObservableObject
             ClearSelection();
             HasResults = Results.Count > 0;
             EmptyHint = Results.Count == 0
-                ? (ActiveTags.Count > 0
-                    ? $"没有同时带 {string.Join(" + ", ActiveTags.Select(t => "#" + t.Name))} 的条目"
+                ? (Main.HasGlobalTagFilters
+                    ? $"没有同时带 {string.Join(" + ", Main.GlobalTagFilters.Select(t => "#" + t.Name))} 的条目"
                     : $"未找到与 \"{keyword}\" 相关的条目")
                 : string.Empty;
             StatusText = $"命中 {result.Items.Count} 条 · {result.ElapsedMs}ms";
@@ -308,73 +306,16 @@ public partial class SearchPageViewModel : ObservableObject
         catch (System.Text.Json.JsonException) { return null; }
     }
 
-    // ───────── 标签过滤（AND 语义，对齐扩展 tagFilters + 吸顶 banner）─────────
+    // ───────── 全局标签筛选（单一真源 = Main.GlobalTagFilters，对齐扩展 tagFilters）─────────
 
-    /// <summary>追加一个标签过滤条件。已存在则忽略（避免重复 AND 同一标签）。</summary>
-    public void AddTagFilter(string tag)
+    /// <summary>
+    /// 全局标签筛选变化（导航栏「标签」增删/清除）→ 若已有查询词或标签，按新组合重搜。
+    /// 搜索始终在标签筛选结果之内执行（AND 语义）。
+    /// </summary>
+    private void OnGlobalTagFiltersChanged()
     {
-        if (string.IsNullOrWhiteSpace(tag)) return;
-        if (ActiveTags.Any(t => string.Equals(t.Name, tag, StringComparison.OrdinalIgnoreCase))) return;
-        ActiveTags.Add(new TagFilterChip(tag));
-        HasActiveTags = true;
-        // 选择器里的同名 chip 同步选中态（未加载时忽略）。
-        // 注意不能用 ?.Selected = ...（null 条件赋值是 C# 14 预览特性，本项目 LangVersion 不支持）。
-        var pickerChip = AllTags.FirstOrDefault(t => string.Equals(t.Name, tag, StringComparison.OrdinalIgnoreCase));
-        if (pickerChip is not null) pickerChip.Selected = true;
-        _ = SearchAsync();
-    }
-
-    public void RemoveTagFilter(string tag)
-    {
-        var chip = ActiveTags.FirstOrDefault(t => string.Equals(t.Name, tag, StringComparison.OrdinalIgnoreCase));
-        if (chip is null) return;
-        ActiveTags.Remove(chip);
-        HasActiveTags = ActiveTags.Count > 0;
-        var pickerChip = AllTags.FirstOrDefault(t => string.Equals(t.Name, tag, StringComparison.OrdinalIgnoreCase));
-        if (pickerChip is not null) pickerChip.Selected = false;
-        _ = SearchAsync();
-    }
-
-    /// <summary>清空全部标签过滤；清空后若无关键词则不展示任何内容（回到初始空态）。</summary>
-    public void ClearTagFilters()
-    {
-        if (ActiveTags.Count == 0) return;
-        ActiveTags.Clear();
-        HasActiveTags = false;
-        foreach (var t in AllTags) t.Selected = false;
-        _ = SearchAsync();
-    }
-
-    /// <summary>标签选择器点选：已选则移除、未选则追加（多选 AND）。</summary>
-    public void ToggleTagFilter(string tag)
-    {
-        if (ActiveTags.Any(t => string.Equals(t.Name, tag, StringComparison.OrdinalIgnoreCase)))
-            RemoveTagFilter(tag);
-        else
-            AddTagFilter(tag);
-    }
-
-    // ───────── 标签选择器（主界面多标签筛选，对齐桌面组件标签云交互）─────────
-
-    /// <summary>全部标签（名称 + 命中数 + 选中态），供搜索页标签选择器铺开。</summary>
-    public ObservableCollection<TagChip> AllTags { get; } = new();
-
-    /// <summary>加载全部标签（按命中数倒序，最多 200 个）；已生效的 ActiveTags 同步为选中。</summary>
-    public async Task LoadAllTagsAsync()
-    {
-        if (_repo is null) return;
-        try
-        {
-            var tags = await _repo.GetAllTagsAsync(CancellationToken.None);
-            AllTags.Clear();
-            foreach (var (name, count) in tags.Take(200))
-                AllTags.Add(new TagChip(name, count,
-                    ActiveTags.Any(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase))));
-        }
-        catch (Exception ex)
-        {
-            StarLog.Error("加载标签筛选列表失败", ex);
-        }
+        if (Query.Length > 0 || Main.HasGlobalTagFilters)
+            _ = SearchAsync();
     }
 }
 

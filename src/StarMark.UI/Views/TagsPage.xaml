@@ -83,30 +83,8 @@
                            HorizontalAlignment="Center" Margin="0,40,0,16"
                            Visibility="{x:Bind ViewModel.HasActiveFilter, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
 
-                <!-- 筛选结果 -->
-                <TextBlock Text="筛选结果" FontSize="13" FontWeight="SemiBold" Margin="0,16,0,8"
-                           Visibility="{x:Bind ViewModel.HasActiveFilter, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                <ItemsRepeater ItemsSource="{x:Bind ViewModel.FilteredResults, Mode=OneWay}"
-                               Visibility="{x:Bind ViewModel.HasActiveFilter, Mode=OneWay, Converter={StaticResource BoolToVis}}">
-                    <ItemsRepeater.Layout>
-                        <StackLayout Spacing="6"/>
-                    </ItemsRepeater.Layout>
-                    <ItemsRepeater.ItemTemplate>
-                        <DataTemplate x:DataType="viewModels:ItemCardViewModel">
-                            <controls:ItemCard ViewModel="{x:Bind}"
-                                               OpenRequested="Card_OpenRequested"
-                                               EditNoteRequested="Card_EditNoteRequested"
-                                               EditTagsRequested="Card_EditTagsRequested"
-                                               HideRequested="Card_HideRequested"
-                                               PinRequested="Card_PinRequested"
-                                               CopyLinkRequested="Card_CopyLinkRequested"
-                                               OpenLocationRequested="Card_OpenLocationRequested"
-                                               TagFilterRequested="Card_TagFilterRequested"
-                                               TagRemoveRequested="Card_TagRemoveRequested"
-                                               TagAddRequested="Card_TagAddRequested"/>
-                        </DataTemplate>
-                    </ItemsRepeater.ItemTemplate>
-                </ItemsRepeater>
+                <!-- 标签页是「选择标签区域」：选中后顶部筛选条常显已选标签，
+                     筛选结果在导航栏「文件夹」查看（对齐扩展侧栏 tag 列表 + 树）。 -->
             </StackPanel>
         </ScrollViewer>
     </Grid>

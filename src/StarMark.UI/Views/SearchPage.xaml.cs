@@ -15,21 +15,21 @@ public sealed partial class SearchPage : Page
     public SearchPage()
     {
         InitializeComponent();
+        var main = App.Services.GetService(typeof(MainViewModel)) as MainViewModel
+            ?? throw new InvalidOperationException("MainViewModel 未注册");
         ViewModel = (App.Services.GetService(typeof(SearchPageViewModel)) as SearchPageViewModel)
             ?? new SearchPageViewModel(
                 App.Services.GetService(typeof(StarMark.Core.Search.SearchService)) as StarMark.Core.Search.SearchService
                     ?? throw new InvalidOperationException("SearchService 未注册"),
+                main,
                 App.Services.GetService(typeof(IItemRepository)) as IItemRepository);
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        // 标签筛选选择器数据：每次进入页面静默刷新（命中数保持新鲜，选中态从 ActiveTags 回填）。
-        _ = ViewModel.LoadAllTagsAsync();
-        // 不再在此自动重跑搜索：进入搜索页时全局搜索框会立即设置 ViewModel.Query，
-        // 由 OnQueryChanged 触发搜索。此前用单例 VM 里残留的旧 Query 重搜，
-        // 正是「清空搜索栏后仍闪现上一条搜索”未找到“」的根因。
+        // 标签选择唯一入口在导航栏「标签」（写入 Main.GlobalTagFilters），本页不再维护独立标签数据。
+        // 进入搜索页时全局搜索框会立即设置 ViewModel.Query，由 OnQueryChanged 触发搜索。
     }
 
     /// <summary>键盘 ↑↓ 移动选中项，并把选中卡片滚入视野。</summary>
@@ -88,7 +88,8 @@ public sealed partial class SearchPage : Page
     /// 现在与关键词组合成「搜 X 且带 #ai」的 AND 过滤，对齐扩展侧边栏行为。
     /// </summary>
     private void Card_TagFilterRequested(object sender, (ViewModels.ItemCardViewModel VM, string Tag) e)
-        => ViewModel.AddTagFilter(e.Tag);
+        // 卡片标签点击 → 写入全局标签筛选（与导航栏「标签」同一真源，AND 语义）
+        => ViewModel.Main.ToggleGlobalTagFilter(e.Tag);
 
     private void Card_TagRemoveRequested(object sender, (ViewModels.ItemCardViewModel VM, string Tag) e)
         => ItemCardActions.RemoveTag(this.XamlRoot, e.VM, e.Tag);
@@ -96,31 +97,14 @@ public sealed partial class SearchPage : Page
     private void Card_TagAddRequested(object sender, ViewModels.ItemCardViewModel vm)
         => ItemCardActions.AddTag(this.XamlRoot, vm);
 
-    // ───────── 吸顶标签筛选条 ─────────
+    // ───────── 吸顶标签筛选条（数据来自全局 Main.GlobalTagFilters）─────────
 
     private void TagFilterChip_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: string tag })
-            ViewModel.RemoveTagFilter(tag);
+            ViewModel.Main.RemoveGlobalTagFilter(tag);
     }
 
     private void ClearTagFilters_Click(object sender, RoutedEventArgs e)
-        => ViewModel.ClearTagFilters();
-
-    // ───────── 标签筛选选择器 ─────────
-
-    private void TagPickerToggle_Click(object sender, RoutedEventArgs e)
-    {
-        var open = TagPickerPanel.Visibility == Visibility.Visible;
-        TagPickerPanel.Visibility = open ? Visibility.Collapsed : Visibility.Visible;
-        TagPickerToggle.IsChecked = !open;
-        if (!open && ViewModel.AllTags.Count == 0)
-            _ = ViewModel.LoadAllTagsAsync();
-    }
-
-    private void PickerTag_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button { Tag: string tag })
-            ViewModel.ToggleTagFilter(tag);
-    }
+        => ViewModel.Main.ClearGlobalTagFilters();
 }

@@ -39,10 +39,6 @@ public sealed partial class TagsPage : Page
         {
             _ = ViewModel.FilterByTagAsync(tag);
         }
-        else if (ViewModel.HasActiveFilter)
-        {
-            ViewModel.ApplyFilterCommand.Execute(null);
-        }
     }
 
     private void Tag_Click(object sender, RoutedEventArgs e)
@@ -74,7 +70,6 @@ public sealed partial class TagsPage : Page
     private async void Card_HideRequested(object? sender, ViewModels.ItemCardViewModel vm)
     {
         await ItemCardActions.ToggleHidden(this.XamlRoot, vm);
-        ViewModel.FilteredResults.Remove(vm);
     }
 
     private void Card_PinRequested(object? sender, ViewModels.ItemCardViewModel vm)
