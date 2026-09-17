@@ -128,6 +128,9 @@ public partial class App : Application
         services.AddSingleton<WidgetStorage>();
         services.AddSingleton<WidgetManager>();
 
+        // 全局快捷键（动作映射 + 冲突允许；见 HotkeyService）
+        services.AddSingleton<HotkeyService>();
+
         // ViewModel 层
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<SearchPageViewModel>();
@@ -173,6 +176,49 @@ public partial class App : Application
             _window = new MainWindow();
             MainWindow = _window as StarMark.UI.MainWindow;
             _window.Activate();
+
+            // 4. 全局快捷键：在 MainWindow 句柄上子类化接收 WM_HOTKEY，绑定动作并应用设置
+            try
+            {
+                var hotkey = Services.GetRequiredService<HotkeyService>();
+                var widgetManager = Services.GetRequiredService<WidgetManager>();
+                var settings = new SettingsStore();
+
+                hotkey.RegisterHandler(HotkeyActions.MainToggle, () => { ToggleMainWindow(); return Task.CompletedTask; });
+                hotkey.RegisterHandler(HotkeyActions.MainShow, () => { PresentMainWindow(); return Task.CompletedTask; });
+                hotkey.RegisterHandler(HotkeyActions.MainHide, () => { HideMainWindow(); return Task.CompletedTask; });
+
+                hotkey.RegisterHandler(HotkeyActions.WidgetsShowAll, () => widgetManager.ShowAllAsync());
+                hotkey.RegisterHandler(HotkeyActions.WidgetsHideAll, () => widgetManager.HideAllAsync());
+                hotkey.RegisterHandler(HotkeyActions.WidgetsToggleAll, () => widgetManager.ToggleAllInstancesAsync());
+                foreach (var k in WidgetStorage.AllKinds)
+                {
+                    var kind = k;
+                    hotkey.RegisterHandler(HotkeyActions.WidgetCreate(kind), () => widgetManager.AddInstanceAsync(kind));
+                    hotkey.RegisterHandler(HotkeyActions.WidgetShow(kind), () => widgetManager.ShowKindAsync(kind));
+                    hotkey.RegisterHandler(HotkeyActions.WidgetHide(kind), () => widgetManager.HideKindAsync(kind));
+                    hotkey.RegisterHandler(HotkeyActions.WidgetToggle(kind), () => widgetManager.ToggleKindAsync(kind));
+                }
+
+                // 布局切换动作是动态的（用户随时新增/删除布局），用兜底处理器按需分派，
+                // 免去每次布局变化都重新注册一圈 handler。
+                hotkey.FallbackHandler = action =>
+                {
+                    if (!HotkeyActions.IsLayoutAction(action)) return Task.CompletedTask;
+                    var id = HotkeyActions.LayoutIdOf(action);
+                    return id is null ? Task.CompletedTask : widgetManager.ApplyLayoutAsync(id);
+                };
+
+                hotkey.Initialize(WindowInterop.GetHwnd(_window));
+                var bindings = settings.LoadEnableGlobalHotKey()
+                    ? settings.GetHotkeyBindings()
+                    : new Dictionary<string, HotkeyGesture>();
+                hotkey.ApplyBindings(bindings);
+            }
+            catch (Exception ex)
+            {
+                StarLog.Error("全局快捷键初始化失败", ex);
+            }
         }
         catch (Exception ex)
         {
@@ -203,5 +249,22 @@ public partial class App : Application
     public static void PresentMainWindow(bool settings = false)
     {
         MainWindow?.Present(settings);
+    }
+
+    /// <summary>隐藏主界面（快捷键动作用）：主进程继续驻留托盘。</summary>
+    public static void HideMainWindow()
+    {
+        var win = MainWindow;
+        if (win is null) return;
+        if (win.AppWindow.IsVisible) win.AppWindow.Hide();
+    }
+
+    /// <summary>呼出/关闭主界面（快捷键动作用）：可见则隐藏到托盘，否则显示并前置。</summary>
+    public static void ToggleMainWindow()
+    {
+        var win = MainWindow;
+        if (win is null) return;
+        if (win.AppWindow.IsVisible) win.AppWindow.Hide();
+        else win.Present(false);
     }
 }

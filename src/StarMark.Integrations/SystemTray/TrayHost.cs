@@ -9,7 +9,7 @@ namespace StarMark.Integrations.SystemTray;
 /// 系统托盘宿主（对标 DeskBox 的 TrayIconService）：
 /// 运行时创建一个仅消息窗口承载 NotifyIcon，无需 XAML 窗口或 ApplicationIcon 资源。
 /// 左键 / 双击 → 显示主窗口；右键 → 菜单（主窗口、桌面组件增减、设置、退出）。
-/// 同时承载全局热键（Ctrl+Alt+Space 唤起搜索）。
+/// 全局快捷键已迁移到 HotkeyService（注册在 MainWindow 句柄上，支持多动作与冲突允许），此处不再注册。
 /// 必须在 UI 线程创建（消息泵分发回调）。
 /// </summary>
 public sealed class TrayHost : IDisposable
@@ -36,7 +36,6 @@ public sealed class TrayHost : IDisposable
     private IntPtr _hwnd;
     private IntPtr _hIcon;
     private bool _added;
-    private bool _hotkeyRegistered;
     private WndProcDelegate? _wndProc;
     private GCHandle _selfHandle;
 
@@ -95,26 +94,16 @@ public sealed class TrayHost : IDisposable
         }
     }
 
+    // 全局快捷键已统一迁移到 HotkeyService（注册在 MainWindow 句柄上，支持多动作/冲突允许），
+    // 此处不再自行 RegisterHotKey，避免与 HotkeyService 争抢同一手势（如 Ctrl+Alt+Space）。
     public void RegisterGlobalHotKey()
     {
-        if (_hotkeyRegistered || _hwnd == IntPtr.Zero) return;
-        const uint modifiers = MOD_CONTROL | MOD_ALT | MOD_NOREPEAT;
-        if (NativeMethods.RegisterHotKey(_hwnd, 1, modifiers, VK_SPACE))
-        {
-            _hotkeyRegistered = true;
-            StarLog.Info("[TrayHost] 全局热键已注册 Ctrl+Alt+Space");
-        }
-        else
-        {
-            StarLog.Warn("[TrayHost] RegisterHotKey 失败（可能被其他程序占用）");
-        }
+        StarLog.Info("[TrayHost] 全局热键由 HotkeyService 统一接管，TrayHost 不再注册");
     }
 
     public void UnregisterGlobalHotKey()
     {
-        if (!_hotkeyRegistered || _hwnd == IntPtr.Zero) return;
-        NativeMethods.UnregisterHotKey(_hwnd, 1);
-        _hotkeyRegistered = false;
+        // 由 HotkeyService.Dispose 统一注销，这里无需操作。
     }
 
     public void ShowNotification(string title, string message)
