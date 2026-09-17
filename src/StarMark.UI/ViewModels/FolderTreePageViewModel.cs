@@ -19,6 +19,10 @@ public partial class FolderTreePageViewModel : ObservableObject
 
     private readonly IItemRepository _repository;
 
+    public MainViewModel Main { get; }
+
+    [ObservableProperty] private bool _hasTagFilter;
+
     [ObservableProperty] private string _currentSort = "recent";
     [ObservableProperty] private string _currentSource = "all";
     [ObservableProperty] private bool _showHidden;
@@ -34,9 +38,18 @@ public partial class FolderTreePageViewModel : ObservableObject
     /// <summary>在 Roots 加载完毕后触发，通知页面重建 TreeView。</summary>
     public event Action? RootsReady;
 
-    public FolderTreePageViewModel(IItemRepository repository)
+    public FolderTreePageViewModel(IItemRepository repository, MainViewModel main)
     {
         _repository = repository;
+        Main = main;
+        // 全局标签筛选变化（标签页增删/清除）→ 重载树
+        Main.GlobalTagFiltersChanged += OnGlobalTagFiltersChanged;
+    }
+
+    private void OnGlobalTagFiltersChanged()
+    {
+        HasTagFilter = Main.HasGlobalTagFilters;
+        _ = LoadCommand.ExecuteAsync(null);
     }
 
     [RelayCommand]
@@ -52,6 +65,8 @@ public partial class FolderTreePageViewModel : ObservableObject
                 Sort = CurrentSort,
                 IncludeHidden = ShowHidden,
                 TypeFilter = CurrentSource switch { "all" => null, "star" => "githubstar", _ => CurrentSource },
+                // 全局标签筛选（标签页多选，AND 语义）
+                TagFilters = Main.HasGlobalTagFilters ? Main.GlobalTagFilters.Select(t => t.Name).ToList() : null,
                 Limit = 2000,
             };
             var items = await _repository.GetAllAsync(filter, CancellationToken.None);
@@ -80,7 +95,9 @@ public partial class FolderTreePageViewModel : ObservableObject
                 Roots.Insert(0, pinnedRoot);
             }
 
-            EmptyHint = Roots.Count == 0 ? "暂无条目，请先同步数据" : string.Empty;
+            EmptyHint = Roots.Count == 0
+                ? (HasTagFilter ? "所选标签下没有条目，可在上方筛选栏移除或清除" : "暂无条目，请先同步数据")
+                : string.Empty;
         }
         catch (Exception ex)
         {

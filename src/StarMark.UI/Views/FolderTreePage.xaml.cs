@@ -24,7 +24,7 @@ public sealed partial class FolderTreePage : Page
     {
         InitializeComponent();
         ViewModel = (App.Services.GetService(typeof(FolderTreePageViewModel)) as FolderTreePageViewModel)
-            ?? new FolderTreePageViewModel(GetRepo());
+            ?? new FolderTreePageViewModel(GetRepo(), GetMain());
         ViewModel.RootsReady += OnRootsReady;
         // 主题切换会改变代码构建处的主题画笔解析，需重建以刷新颜色
         ActualThemeChanged += (_, _) => RebuildTree();
@@ -35,11 +35,27 @@ public sealed partial class FolderTreePage : Page
             as StarMark.Abstractions.IItemRepository
             ?? throw new InvalidOperationException("IItemRepository 未注册");
 
+    private static StarMark.UI.ViewModels.MainViewModel GetMain()
+        => App.Services.GetService(typeof(StarMark.UI.ViewModels.MainViewModel))
+            as StarMark.UI.ViewModels.MainViewModel
+            ?? throw new InvalidOperationException("MainViewModel 未注册");
+
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
         _ = ViewModel.LoadCommand.ExecuteAsync(null);
     }
+
+    // ────── 全局标签筛选栏 ──────
+
+    private void RemoveFilterChip_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string tagName })
+            ViewModel.Main.RemoveGlobalTagFilter(tagName);
+    }
+
+    private void ClearTagFilters_Click(object sender, RoutedEventArgs e)
+        => ViewModel.Main.ClearGlobalTagFilters();
 
     private void OnRootsReady() => RebuildTree();
 

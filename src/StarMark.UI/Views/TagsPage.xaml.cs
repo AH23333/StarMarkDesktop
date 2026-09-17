@@ -15,7 +15,7 @@ public sealed partial class TagsPage : Page
     {
         InitializeComponent();
         ViewModel = (App.Services.GetService(typeof(TagsPageViewModel)) as TagsPageViewModel)
-            ?? new TagsPageViewModel(GetRepo());
+            ?? new TagsPageViewModel(GetRepo(), GetMain());
         ViewModel.LoadCommand.Execute(null);
         // 主题切换后重载标签云，让按主题明度计算的标签颜色随之刷新
         ActualThemeChanged += (_, _) => ViewModel.LoadCommand.Execute(null);
@@ -25,6 +25,11 @@ public sealed partial class TagsPage : Page
         => App.Services.GetService(typeof(StarMark.Abstractions.IItemRepository))
             as StarMark.Abstractions.IItemRepository
             ?? throw new InvalidOperationException("IItemRepository 未注册");
+
+    private static StarMark.UI.ViewModels.MainViewModel GetMain()
+        => App.Services.GetService(typeof(StarMark.UI.ViewModels.MainViewModel))
+            as StarMark.UI.ViewModels.MainViewModel
+            ?? throw new InvalidOperationException("MainViewModel 未注册");
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {

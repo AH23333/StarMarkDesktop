@@ -51,9 +51,9 @@
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel>
-                <!-- 标签云：选中标签后隐藏（与插件一致，仅显示筛选栏 + 结果），清除后恢复 -->
-                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Tags, Mode=OneWay}"
-                               Visibility="{x:Bind ViewModel.HasActiveFilter, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
+                <!-- 标签云：常显，可连续多选（对齐扩展侧栏 tag 列表）。
+                     选中标签后不隐藏，仅在其下方追加「筛选结果」；顶部 chips 同步显示已选。 -->
+                <ItemsRepeater ItemsSource="{x:Bind ViewModel.Tags, Mode=OneWay}">
                     <ItemsRepeater.Layout>
                         <UniformGridLayout Orientation="Horizontal"
                                            MaximumRowsOrColumns="4"

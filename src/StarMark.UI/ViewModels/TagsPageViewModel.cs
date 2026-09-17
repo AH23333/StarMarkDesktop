@@ -19,16 +19,19 @@ public partial class TagsPageViewModel : ObservableObject
     public ObservableCollection<TagItemViewModel> Tags { get; } = new();
     public ObservableCollection<ItemCardViewModel> FilteredResults { get; } = new();
 
-    [ObservableProperty] private bool _hasActiveFilter;
+    public MainViewModel Main { get; }
 
-    /// <summary>当前生效的标签筛选（chip，可单个移除）。对齐扩展 tag-banner。</summary>
-    public ObservableCollection<TagFilterChip> ActiveFilterChips { get; } = new();
+    /// <summary>是否有生效的标签筛选（全局状态，转发自 MainViewModel）。</summary>
+    public bool HasActiveFilter => Main.HasGlobalTagFilters;
 
-    private List<string> _activeFilters = new();
+    /// <summary>当前生效的标签筛选 chips（全局集合，标签页与文件夹页共享同一份）。</summary>
+    public ObservableCollection<TagFilterChip> ActiveFilterChips => Main.GlobalTagFilters;
 
-    public TagsPageViewModel(IItemRepository repository)
+    public TagsPageViewModel(IItemRepository repository, MainViewModel main)
     {
         _repository = repository;
+        Main = main;
+        Main.GlobalTagFiltersChanged += () => OnPropertyChanged(nameof(HasActiveFilter));
     }
 
     [RelayCommand]
@@ -56,17 +59,11 @@ public partial class TagsPageViewModel : ObservableObject
     [RelayCommand]
     private async Task ToggleTagAsync(string tagName)
     {
-        if (_activeFilters.Contains(tagName))
-            _activeFilters.Remove(tagName);
-        else
-            _activeFilters.Add(tagName);
-
-        HasActiveFilter = _activeFilters.Count > 0;
-        SyncFilterChips();
+        Main.ToggleGlobalTagFilter(tagName);
 
         // 刷新标签选中状态
         foreach (var tag in Tags)
-            tag.IsSelected = _activeFilters.Contains(tag.Name);
+            tag.IsSelected = Main.GlobalTagFilters.Any(t => string.Equals(t.Name, tag.Name, StringComparison.OrdinalIgnoreCase));
 
         await ApplyFilterAsync();
     }
@@ -74,9 +71,7 @@ public partial class TagsPageViewModel : ObservableObject
     [RelayCommand]
     private async Task ClearFiltersAsync()
     {
-        _activeFilters.Clear();
-        HasActiveFilter = false;
-        SyncFilterChips();
+        Main.ClearGlobalTagFilters();
         foreach (var tag in Tags)
             tag.IsSelected = false;
         FilteredResults.Clear();
@@ -87,13 +82,13 @@ public partial class TagsPageViewModel : ObservableObject
     private async Task ApplyFilterAsync()
     {
         FilteredResults.Clear();
-        if (_activeFilters.Count == 0) return;
+        if (!Main.HasGlobalTagFilters) return;
 
         try
         {
             var filter = new BrowseFilter
             {
-                TagFilters = _activeFilters,
+                TagFilters = Main.GlobalTagFilters.Select(t => t.Name).ToList(),
                 Limit = 200,
             };
             var items = await _repository.GetAllAsync(filter, CancellationToken.None);
@@ -107,19 +102,10 @@ public partial class TagsPageViewModel : ObservableObject
         }
     }
 
-    private void SyncFilterChips()
-    {
-        ActiveFilterChips.Clear();
-        foreach (var t in _activeFilters)
-            ActiveFilterChips.Add(new TagFilterChip(t));
-    }
-
     /// <summary>卡片标签点击：以单个标签作为筛选条件（导航参数传入）。</summary>
     public async Task FilterByTagAsync(string tagName)
     {
-        _activeFilters = new List<string> { tagName };
-        HasActiveFilter = true;
-        SyncFilterChips();
+        Main.SetGlobalTagFilters(new List<string> { tagName });
         foreach (var tag in Tags)
             tag.IsSelected = tag.Name == tagName;
         await ApplyFilterAsync();

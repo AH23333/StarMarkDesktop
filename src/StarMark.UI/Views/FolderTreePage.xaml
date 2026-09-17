@@ -6,19 +6,50 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:helpers="using:StarMark.UI.Helpers"
+    xmlns:viewModels="using:StarMark.UI.ViewModels"
     mc:Ignorable="d">
 
     <Page.Resources>
         <helpers:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <helpers:ContainedTagColorConverter x:Key="ContainedTagColor"/>
     </Page.Resources>
 
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0"
+        <!-- 全局标签筛选栏：标签页多选后，文件夹页同步展示（对齐扩展侧栏 tag-banner） -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8"
+                    Visibility="{x:Bind ViewModel.HasTagFilter, Mode=OneWay, Converter={StaticResource BoolToVis}}"
+                    Margin="12,10,12,0">
+            <TextBlock Text="标签筛选" FontSize="11" Style="{StaticResource MutedText}" VerticalAlignment="Center"/>
+            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Main.GlobalTagFilters, Mode=OneWay}">
+                <ItemsRepeater.Layout>
+                    <StackLayout Orientation="Horizontal" Spacing="4"/>
+                </ItemsRepeater.Layout>
+                <ItemsRepeater.ItemTemplate>
+                    <DataTemplate x:DataType="viewModels:TagFilterChip">
+                        <Button Click="RemoveFilterChip_Click" Tag="{x:Bind Name}"
+                                Padding="8,2" CornerRadius="10" BorderThickness="0"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                ToolTipService.ToolTip="移除该标签筛选">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="{x:Bind Name}" FontSize="11"
+                                           Foreground="{x:Bind Name, Converter={StaticResource ContainedTagColor}}"/>
+                                <TextBlock Text="✕" FontSize="8" Opacity="0.55" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </DataTemplate>
+                </ItemsRepeater.ItemTemplate>
+            </ItemsRepeater>
+            <Button Content="清除" Click="ClearTagFilters_Click"
+                    Style="{StaticResource SecondaryButton}" Padding="6,2"/>
+        </StackPanel>
+
+        <TextBlock Grid.Row="1"
                    Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}"
                    Style="{StaticResource MutedText}"
                    HorizontalAlignment="Center" Margin="12,40,12,16"
@@ -26,7 +57,7 @@
 
         <!-- 文件夹手风琴列表：层级在代码中构建（头部 + 惰性卡片区），
              不用 TreeViewItem 容器（其 Presenter 固定行高会压扁 ItemCard）。 -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="12,6,12,12">
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="12,6,12,12">
             <StackPanel x:Name="FolderRoot" Spacing="2"/>
         </ScrollViewer>
     </Grid>

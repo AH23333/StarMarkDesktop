@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StarMark.Abstractions;
@@ -24,6 +25,58 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private int _bookmarksCount;
     [ObservableProperty] private int _filesCount;
     [ObservableProperty] private string _query = string.Empty;
+
+    // ────── 全局标签筛选（标签页多选 → 文件夹页消费，对齐扩展侧栏 tag-banner 交互）──────
+
+    /// <summary>当前生效的全局标签筛选（AND 语义）。由标签页写入，文件夹页消费。</summary>
+    public ObservableCollection<TagFilterChip> GlobalTagFilters { get; } = new();
+
+    private bool _hasGlobalTagFilters;
+    public bool HasGlobalTagFilters
+    {
+        get => _hasGlobalTagFilters;
+        private set => SetProperty(ref _hasGlobalTagFilters, value);
+    }
+
+    /// <summary>全局标签筛选变化（增/删/清）。文件夹页订阅后重载列表。</summary>
+    public event Action? GlobalTagFiltersChanged;
+
+    public void ToggleGlobalTagFilter(string tag)
+    {
+        var existing = GlobalTagFilters.FirstOrDefault(t => string.Equals(t.Name, tag, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null) GlobalTagFilters.Remove(existing);
+        else GlobalTagFilters.Add(new TagFilterChip(tag));
+        OnGlobalTagFiltersChanged();
+    }
+
+    public void RemoveGlobalTagFilter(string tag)
+    {
+        var existing = GlobalTagFilters.FirstOrDefault(t => string.Equals(t.Name, tag, StringComparison.OrdinalIgnoreCase));
+        if (existing is null) return;
+        GlobalTagFilters.Remove(existing);
+        OnGlobalTagFiltersChanged();
+    }
+
+    public void SetGlobalTagFilters(IReadOnlyList<string> tags)
+    {
+        GlobalTagFilters.Clear();
+        foreach (var t in tags)
+            GlobalTagFilters.Add(new TagFilterChip(t));
+        OnGlobalTagFiltersChanged();
+    }
+
+    public void ClearGlobalTagFilters()
+    {
+        if (GlobalTagFilters.Count == 0) return;
+        GlobalTagFilters.Clear();
+        OnGlobalTagFiltersChanged();
+    }
+
+    private void OnGlobalTagFiltersChanged()
+    {
+        HasGlobalTagFilters = GlobalTagFilters.Count > 0;
+        GlobalTagFiltersChanged?.Invoke();
+    }
 
     public MainViewModel(SearchService searchService, SyncCoordinator syncCoordinator, IItemRepository repository)
     {
