@@ -31,6 +31,27 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty] private bool _minimizeToTray = true;
     [ObservableProperty] private string _githubToken = string.Empty;
     [ObservableProperty] private string _githubUsername = string.Empty;
+
+    // 外观（半透明亚克力 / 云母 / 不透明 + 不透明度）
+    [ObservableProperty] private bool _mainWindowTranslucent = true;
+    [ObservableProperty] private int _backdropIndex;
+    [ObservableProperty] private double _widgetOpacity = 0.72;
+
+    /// <summary>毛玻璃材质浓度（0–1，对应 DeskBox 的 WidgetMaterialIntensity）。</summary>
+    [ObservableProperty] private double _widgetMaterialIntensity = 0.65;
+
+    /// <summary>组件边缘磁吸总开关（关闭后用户自由摆位）。</summary>
+    [ObservableProperty] private bool _enableWidgetSnap = true;
+
+    /// <summary>不透明度百分比文本（滑块右侧读数）。</summary>
+    public string OpacityPercentText => $"{(int)Math.Round(WidgetOpacity * 100)}%";
+
+    /// <summary>材质浓度百分比文本（滑块右侧读数）。</summary>
+    public string MaterialIntensityPercentText => $"{(int)Math.Round(WidgetMaterialIntensity * 100)}%";
+
+    partial void OnWidgetOpacityChanged(double value) => OnPropertyChanged(nameof(OpacityPercentText));
+
+    partial void OnWidgetMaterialIntensityChanged(double value) => OnPropertyChanged(nameof(MaterialIntensityPercentText));
     [ObservableProperty] private string _saveErrorMessage = string.Empty;
     [ObservableProperty] private bool _hasSaveError;
 
@@ -51,24 +72,47 @@ public partial class SettingsPageViewModel : ObservableObject
         _diagnostics = diagnostics;
     }
 
+    /// <summary>
+    /// 逐项带兜底地读取设置：任何一项读取失败都只让它回退默认值并写日志，
+    /// 绝不把异常抛出去——LoadFromStore 在 SettingsPage 构造函数里调用，
+    /// 抛错会让 Frame.Navigate 失败，用户点「设置」就整应用卡死崩溃（历史事故）。
+    /// </summary>
+    private static T Safe<T>(Func<T> read, T fallback, string what)
+    {
+        try { return read(); }
+        catch (Exception ex)
+        {
+            StarLog.Error($"读取设置失败（{what}），已回退默认值", ex);
+            return fallback;
+        }
+    }
+
     public void LoadFromStore()
     {
-        var github = StarMark.Integrations.GitHub.GitHubOptions.Load();
-        ThemeIndex = _settings.LoadTheme() switch
+        var github = Safe(() => StarMark.Integrations.GitHub.GitHubOptions.Load(),
+            new StarMark.Integrations.GitHub.GitHubOptions(), "GitHub 配置");
+        ThemeIndex = Safe(_settings.LoadTheme, ThemePreference.Default, "主题") switch
         {
             ThemePreference.Light => 1,
             ThemePreference.Dark => 2,
             _ => 0,
         };
-        EnableTray = _settings.LoadEnableTray();
-        EnableGlobalHotKey = _settings.LoadEnableGlobalHotKey();
-        MinimizeToTray = _settings.LoadMinimizeToTray();
+        EnableTray = Safe(_settings.LoadEnableTray, true, "托盘");
+        EnableGlobalHotKey = Safe(_settings.LoadEnableGlobalHotKey, true, "全局热键");
+        MinimizeToTray = Safe(_settings.LoadMinimizeToTray, true, "最小化到托盘");
         GithubToken = github.Token ?? string.Empty;
         GithubUsername = github.Username ?? string.Empty;
 
+        // 外观 + 磁吸
+        MainWindowTranslucent = Safe(_settings.LoadMainWindowTranslucent, true, "主窗口材质");
+        BackdropIndex = (int)Safe(_settings.LoadWidgetBackdrop, WidgetBackdropKind.Acrylic, "外观材质");
+        WidgetOpacity = Safe(_settings.LoadWidgetOpacity, 0.72, "不透明度");
+        WidgetMaterialIntensity = Safe(_settings.LoadWidgetMaterialIntensity, 0.65, "材质浓度");
+        EnableWidgetSnap = Safe(_settings.LoadWidgetSnapEnabled, true, "边缘磁吸");
+
         // 本地文件索引（P0-1b）：根目录每行一个；上限数字
-        FileIndexRootsText = string.Join("\n", _settings.LoadFileIndexRoots());
-        MaxFileIndexCountText = _settings.LoadMaxFileIndexCount().ToString();
+        FileIndexRootsText = string.Join("\n", Safe(_settings.LoadFileIndexRoots, Array.Empty<string>(), "索引目录"));
+        MaxFileIndexCountText = Safe(_settings.LoadMaxFileIndexCount, 5000, "索引上限").ToString();
     }
 
     // ===== 收藏健康度（P2-6）=====
@@ -189,6 +233,11 @@ public partial class SettingsPageViewModel : ObservableObject
             _settings.SaveEnableTray(EnableTray);
             _settings.SaveEnableGlobalHotKey(EnableGlobalHotKey);
             _settings.SaveMinimizeToTray(MinimizeToTray);
+            _settings.SaveWidgetSnapEnabled(EnableWidgetSnap);
+            _settings.SaveWidgetBackdrop((WidgetBackdropKind)BackdropIndex);
+            _settings.SaveWidgetOpacity(WidgetOpacity);
+            _settings.SaveWidgetMaterialIntensity(WidgetMaterialIntensity);
+            _settings.SaveMainWindowTranslucent(MainWindowTranslucent);
 
             var github = new StarMark.Integrations.GitHub.GitHubOptions();
             if (!string.IsNullOrWhiteSpace(GithubToken)) github.Token = GithubToken.Trim();
@@ -218,6 +267,22 @@ public partial class SettingsPageViewModel : ObservableObject
                     App.MainWindow.RefreshThemeIcon(theme);
                 }
             });
+
+            // 半透明外观即时应用：主窗口 + 所有已打开的组件窗口
+            try
+            {
+                App.MainWindow?.DispatcherQueue.TryEnqueue(() =>
+                {
+                    App.MainWindow?.RefreshAppearance();
+                    if (App.Services.GetService(typeof(StarMark.UI.Services.WidgetManager))
+                        is StarMark.UI.Services.WidgetManager mgr)
+                        _ = mgr.RefreshAppearanceAsync();
+                });
+            }
+            catch (Exception ex)
+            {
+                StarMark.Abstractions.StarLog.Error("应用外观设置失败", ex);
+            }
         }
         catch (Exception ex)
         {

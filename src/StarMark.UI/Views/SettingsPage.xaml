@@ -6,7 +6,9 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:helpers="using:StarMark.UI.Helpers"
+    xmlns:controls="using:StarMark.UI.Controls"
     xmlns:viewModels="using:StarMark.UI.ViewModels"
+    xmlns:local="using:StarMark.UI.Views"
     xmlns:ab="using:StarMark.Abstractions.Insights"
     xmlns:diag="using:StarMark.Core.Diagnostics"
     mc:Ignorable="d">
@@ -19,211 +21,471 @@
             <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}"/>
             <Setter Property="Margin" Value="0,0,0,8"/>
         </Style>
+        <!-- 设置项内部：左「标题 + 说明」，右「控件」，避免一侧大片空白 -->
+        <Style x:Key="SettingRowText" TargetType="TextBlock" BasedOn="{StaticResource MutedText}">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <!-- 设置页分类标签不可关闭（无关闭符号） -->
+        <Style TargetType="TabViewItem">
+            <Setter Property="IsClosable" Value="False"/>
+        </Style>
     </Page.Resources>
 
-    <ScrollViewer Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
-                  Padding="24,20,24,24" VerticalScrollBarVisibility="Auto">
-        <StackPanel MaxWidth="560" HorizontalAlignment="Left" Spacing="8">
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
-            <TextBlock Text="设置" Style="{StaticResource TitleText}" FontSize="20" Margin="0,0,0,12"/>
+        <!-- 顶部标题 + 右上角「返回」（设置改动实时生效，不再需要底部保存按钮） -->
+        <Grid Grid.Row="0" Margin="24,12,24,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="设置" FontSize="20" FontWeight="SemiBold"
+                       VerticalAlignment="Center"
+                       Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+            <Button Grid.Column="1" Content="返回" Click="Back_Click"
+                    Style="{StaticResource SecondaryButton}"/>
+        </Grid>
 
-            <!-- 主题 -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="主题" Style="{StaticResource SettingTitle}"/>
-                    <ComboBox SelectedIndex="{x:Bind ViewModel.ThemeIndex, Mode=TwoWay}" MinWidth="200">
-                        <ComboBoxItem Content="跟随系统"/>
-                        <ComboBoxItem Content="浅色"/>
-                        <ComboBoxItem Content="深色"/>
-                    </ComboBox>
-                </StackPanel>
-            </Border>
+        <TabView x:Name="SettingsTabs" Grid.Row="1"
+                 Margin="24,12,24,0"
+                 IsAddTabButtonVisible="False"
+                 TabWidthMode="SizeToContent"
+                 Background="Transparent">
 
-            <!-- 托盘与热键 -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="托盘与呼出" Style="{StaticResource SettingTitle}"/>
-                    <ToggleSwitch Header="常驻系统托盘" OnContent="开启" OffContent="关闭"
-                                  IsOn="{x:Bind ViewModel.EnableTray, Mode=TwoWay}"/>
-                    <ToggleSwitch Header="全局热键呼出（Ctrl+Alt+Space）" OnContent="开启" OffContent="关闭"
-                                  IsOn="{x:Bind ViewModel.EnableGlobalHotKey, Mode=TwoWay}"/>
-                    <ToggleSwitch Header="关闭窗口时最小化到托盘" OnContent="开启 (常驻)" OffContent="关闭 (直接退出)"
-                                  IsOn="{x:Bind ViewModel.MinimizeToTray, Mode=TwoWay}"/>
-                </StackPanel>
-            </Border>
+            <!-- ============ 常规 ============ -->
+            <TabViewItem Header="常规">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
+                    <!-- 自适应分栏：宽屏两列铺满，窄屏自动单列 -->
+                    <controls:ColumnFlowPanel MinColumnWidth="420" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
 
-            <!-- 桌面组件 -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="桌面组件" Style="{StaticResource SettingTitle}"/>
-                    <TextBlock Text="在桌面添加独立小组件：快捷启动、时钟、待办、随记、快捷搜索。组件可拖动、边缘吸附、置顶、缩放；标题栏 ✕ 只是移除，随时可在此或托盘菜单重新添加。"
-                               Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
-                    <StackPanel x:Name="WidgetRows" Spacing="2" Margin="0,2,0,0"/>
-                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
-                        <Button x:Name="WidgetShowAllButton" Content="全部显示" Style="{StaticResource SecondaryButton}" Click="WidgetShowAll_Click"/>
-                        <Button x:Name="WidgetHideAllButton" Content="全部隐藏" Style="{StaticResource SecondaryButton}" Click="WidgetHideAll_Click"/>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!-- GitHub -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="GitHub Stars 同步" Style="{StaticResource SettingTitle}"/>
-                    <TextBlock Text="Personal Access Token（可选，仅需 public_repo 只读范围）" Style="{StaticResource MutedText}"/>
-                    <TextBox PlaceholderText="ghp_..." Text="{x:Bind ViewModel.GithubToken, Mode=TwoWay}"/>
-                    <TextBlock Text="用户名（可选，用于显示）" Style="{StaticResource MutedText}"/>
-                    <TextBox PlaceholderText="octocat" Text="{x:Bind ViewModel.GithubUsername, Mode=TwoWay}"/>
-                </StackPanel>
-            </Border>
-
-            <!-- 数据备份与恢复（危险区） -->
-            <Border Style="{StaticResource Card}"
-                    BorderBrush="{ThemeResource SystemFillColorCautionBrush}" BorderThickness="1">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="数据备份与恢复" Style="{StaticResource SettingTitle}"/>
-                    <TextBlock Text="条目本体（书签/Star/文件）可重新同步，但手写笔记、标签体系、隐藏/置顶状态、桌面组件待办与随记全部不可重建。请定期导出备份。"
-                               Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
-                    <TextBlock Text="导入会先自动生成「恢复前快照」（位于 %LOCALAPPDATA%\StarMark\backups），任何恢复都可回滚。"
-                               Style="{StaticResource MutedText}" TextWrapping="Wrap" FontSize="12"/>
-                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <Button Content="导出备份…" Click="ExportBackup_Click" Style="{StaticResource SecondaryButton}"/>
-                        <Button Content="导入备份…" Click="ImportBackup_Click" Style="{StaticResource SecondaryButton}"/>
-                        <ProgressRing Width="20" Height="20"
-                                      IsActive="{x:Bind ViewModel.IsBackupBusy, Mode=OneWay}"
-                                      Visibility="{x:Bind ViewModel.IsBackupBusy, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                    </StackPanel>
-                    <TextBlock Text="{x:Bind ViewModel.BackupStatus, Mode=OneWay}"
-                               Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
-                </StackPanel>
-            </Border>
-
-            <!-- 收藏健康度（P2-6） -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="收藏健康度" Style="{StaticResource SettingTitle}"/>
-                    <TextBlock Text="本地聚合，零网络。把「收藏夹腐败」变成可行动清单。" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
-
-                    <!-- 评分 + 扣分明细 -->
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16" VerticalAlignment="Center">
-                        <StackPanel Grid.Column="0" HorizontalAlignment="Center" Spacing="2">
-                            <TextBlock Text="{x:Bind ViewModel.ScoreText, Mode=OneWay}"
-                                       FontSize="44" FontWeight="Bold" Foreground="{x:Bind ViewModel.ScoreBrush, Mode=OneWay}"/>
-                            <TextBlock Text="{x:Bind ViewModel.ScoreGrade, Mode=OneWay}" FontSize="12" HorizontalAlignment="Center" Style="{StaticResource MutedText}"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
-                            <TextBlock Text="{x:Bind ViewModel.ScoreSummary, Mode=OneWay}" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
-                            <ItemsControl ItemsSource="{x:Bind ViewModel.HealthReport.Factors, Mode=OneWay}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="ab:HealthFactor">
-                                        <TextBlock Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap">
-                                            <Run Text="• "/><Run Text="{x:Bind Label}"/><Run Text="： -"/><Run Text="{x:Bind Deduction}"/><Run Text=" 分（"/><Run Text="{x:Bind Detail}"/><Run Text="）"/>
-                                        </TextBlock>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                    </Grid>
-
-                    <!-- 近 14 天新增趋势（自绘柱状图） -->
-                    <TextBlock Text="近 14 天新增" Style="{StaticResource SettingTitle}" Margin="0,4,0,0"/>
-                    <ItemsRepeater ItemsSource="{x:Bind ViewModel.TrendBars, Mode=OneWay}" HorizontalAlignment="Stretch">
-                        <ItemsRepeater.Layout>
-                            <StackLayout Orientation="Horizontal" Spacing="3"/>
-                        </ItemsRepeater.Layout>
-                        <ItemsRepeater.ItemTemplate>
-                            <DataTemplate x:DataType="viewModels:HealthTrendBar">
-                                <StackPanel Width="28" VerticalAlignment="Bottom" Spacing="2">
-                                    <Rectangle Height="{x:Bind Height}" Fill="{ThemeResource AccentFillColorDefaultBrush}"
-                                               MinHeight="1" RadiusX="2" RadiusY="2" HorizontalAlignment="Stretch"/>
-                                    <TextBlock Text="{x:Bind DateLabel}" FontSize="9" HorizontalAlignment="Center"
-                                               Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </DataTemplate>
-                        </ItemsRepeater.ItemTemplate>
-                    </ItemsRepeater>
-
-                    <!-- 概要 -->
-                    <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap">
-                        <Run Text="语言 Top："/><Run Text="{x:Bind ViewModel.LanguageSummary, Mode=OneWay}"/>
-                    </TextBlock>
-                    <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap">
-                        <Run Text="独立域名："/><Run Text="{x:Bind ViewModel.HealthReport.DistinctDomains, Mode=OneWay}"/>
-                    </TextBlock>
-                    <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap">
-                        <Run Text="疑似重复 Top："/><Run Text="{x:Bind ViewModel.DuplicateSummary, Mode=OneWay}"/>
-                    </TextBlock>
-                    <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap">
-                        <Run Text="标签 Top："/><Run Text="{x:Bind ViewModel.TagSummary, Mode=OneWay}"/>
-                    </TextBlock>
-
-                    <ProgressRing Width="20" Height="20" IsActive="{x:Bind ViewModel.IsHealthLoading, Mode=OneWay}"
-                                  Visibility="{x:Bind ViewModel.IsHealthLoading, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                    <TextBlock Text="{x:Bind ViewModel.HealthError, Mode=OneWay}"
-                               Foreground="{ThemeResource SystemFillColorCautionBrush}" FontSize="12"
-                               Visibility="{x:Bind ViewModel.HasHealthError, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                </StackPanel>
-            </Border>
-
-            <!-- 本地文件索引（P0-1b）：限定根目录 + 数量上限，同步时入库为 ItemType.File -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,8,0,0">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="本地文件索引" Style="{StaticResource SettingTitle}"/>
-                    <TextBlock Text="索引以下目录的本地文件（每行一个，留空使用默认：桌面 / 下载 / 文档）。需安装并运行 Everything 才会生效。"
-                               Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
-                    <TextBox Text="{x:Bind ViewModel.FileIndexRootsText, Mode=TwoWay}"
-                             AcceptsReturn="True" TextWrapping="Wrap" Height="72"
-                             PlaceholderText="C:\Users\You\Desktop"/>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock Text="每目录上限" VerticalAlignment="Center"/>
-                        <TextBox Text="{x:Bind ViewModel.MaxFileIndexCountText, Mode=TwoWay}"
-                                 Width="100" InputScope="Number"/>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!-- 诊断（P2-8）：只读信息，排查报障时最省沟通成本的一屏 -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,8,0,0">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="诊断" Style="{StaticResource SettingTitle}"/>
-                    <ItemsRepeater ItemsSource="{x:Bind ViewModel.DiagnosticEntries, Mode=OneWay}">
-                        <ItemsRepeater.Layout>
-                            <StackLayout Spacing="4"/>
-                        </ItemsRepeater.Layout>
-                        <ItemsRepeater.ItemTemplate>
-                            <DataTemplate x:DataType="diag:DiagnosticEntry">
-                                <Grid ColumnSpacing="8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="150"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{x:Bind Label}" Style="{StaticResource MutedText}"/>
-                                    <TextBlock Grid.Column="1" Text="{x:Bind Value}" FontSize="12"
-                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis"/>
+                        <!-- 主题 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="主题" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <TextBlock Grid.Column="0" Text="跟随系统 / 浅色 / 深色" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
+                                    <ComboBox Grid.Column="1" MinWidth="180" SelectedIndex="{x:Bind ViewModel.ThemeIndex, Mode=TwoWay}">
+                                        <ComboBoxItem Content="跟随系统"/>
+                                        <ComboBoxItem Content="浅色"/>
+                                        <ComboBoxItem Content="深色"/>
+                                    </ComboBox>
                                 </Grid>
-                            </DataTemplate>
-                        </ItemsRepeater.ItemTemplate>
-                    </ItemsRepeater>
-                    <TextBlock Text="{x:Bind ViewModel.DiagnosticsError, Mode=OneWay}"
-                               Foreground="{ThemeResource SystemFillColorCautionBrush}" FontSize="12"
-                               Visibility="{x:Bind ViewModel.HasDiagnosticsError, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                </StackPanel>
-            </Border>
+                            </StackPanel>
+                        </Border>
 
-            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
-                <Button Content="保存设置" Style="{StaticResource SecondaryButton}"
-                        Click="Save_Click"/>
-                <Button Content="返回" Click="Back_Click" Style="{StaticResource SecondaryButton}"/>
-            </StackPanel>
+                        <!-- 外观：半透明材质（macOS 风） -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="外观 · 半透明材质" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock Text="主窗口与所有桌面组件共用同一套毛玻璃材质（照搬 DeskBox 的 Desktop Acrylic / Mica 控制器）。"
+                                           Style="{StaticResource SettingRowText}"/>
 
-            <TextBlock Text="{x:Bind ViewModel.SaveErrorMessage, Mode=OneWay}" Foreground="{ThemeResource SystemFillColorCautionBrush}"
-                       FontSize="12" Visibility="{x:Bind ViewModel.HasSaveError, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="材质"/>
+                                        <TextBlock Text="亚克力最像 macOS；云母更克制；不透明最省资源。" Style="{StaticResource SettingRowText}"/>
+                                    </StackPanel>
+                                    <ComboBox Grid.Column="1" MinWidth="200" SelectedIndex="{x:Bind ViewModel.BackdropIndex, Mode=TwoWay}">
+                                        <ComboBoxItem Content="亚克力（推荐，苹果风格）"/>
+                                        <ComboBoxItem Content="云母（更克制的桌面色调）"/>
+                                        <ComboBoxItem Content="不透明（省资源）"/>
+                                    </ComboBox>
+                                </Grid>
 
-            <TextBlock Text="提示：托盘/热键设置即时生效；GitHub 配置保存后下次同步生效。" Style="{StaticResource MutedText}"/>
-        </StackPanel>
-    </ScrollViewer>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="背景不透明度"/>
+                                        <TextBlock Text="越低越透，能看见桌面壁纸。" Style="{StaticResource SettingRowText}"/>
+                                    </StackPanel>
+                                    <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
+                                        <Slider Grid.Column="0" Minimum="0.3" Maximum="1" StepFrequency="0.02" Width="150"
+                                                Value="{x:Bind ViewModel.WidgetOpacity, Mode=TwoWay}"/>
+                                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Width="46"
+                                                   Text="{x:Bind ViewModel.OpacityPercentText, Mode=OneWay}"
+                                                   Style="{StaticResource MutedText}"/>
+                                    </Grid>
+                                </Grid>
+
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="材质浓度"/>
+                                        <TextBlock Text="控制毛玻璃的染色与光亮度（DeskBox 的 Material Intensity）。" Style="{StaticResource SettingRowText}"/>
+                                    </StackPanel>
+                                    <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
+                                        <Slider Grid.Column="0" Minimum="0" Maximum="1" StepFrequency="0.02" Width="150"
+                                                Value="{x:Bind ViewModel.WidgetMaterialIntensity, Mode=TwoWay}"/>
+                                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Width="46"
+                                                   Text="{x:Bind ViewModel.MaterialIntensityPercentText, Mode=OneWay}"
+                                                   Style="{StaticResource MutedText}"/>
+                                    </Grid>
+                                </Grid>
+
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="主窗口使用同一材质"/>
+                                        <TextBlock Text="关闭后主窗口保持不透明。" Style="{StaticResource SettingRowText}"/>
+                                    </StackPanel>
+                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.MainWindowTranslucent, Mode=TwoWay}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 托盘与呼出 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="托盘与呼出" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="常驻系统托盘"/>
+                                        <TextBlock Text="关闭时隐藏到托盘，进程常驻。" Style="{StaticResource SettingRowText}"/>
+                                    </StackPanel>
+                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.EnableTray, Mode=TwoWay}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="启用全局快捷键"/>
+                                        <TextBlock Text="总开关；关闭时所有快捷键均不生效。" Style="{StaticResource SettingRowText}"/>
+                                    </StackPanel>
+                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.EnableGlobalHotKey, Mode=TwoWay}"
+                                                  Toggled="EnableGlobalHotKey_Toggled"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="关闭窗口时最小化到托盘"/>
+                                        <TextBlock Text="关闭主窗口不退出程序。" Style="{StaticResource SettingRowText}"/>
+                                    </StackPanel>
+                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.MinimizeToTray, Mode=TwoWay}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- GitHub -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="GitHub Stars 同步" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                                    <StackPanel Grid.Column="0" Spacing="4">
+                                        <TextBlock Text="Personal Access Token（可选，仅需 public_repo）" Style="{StaticResource SettingRowText}"/>
+                                        <TextBox PlaceholderText="ghp_..." Text="{x:Bind ViewModel.GithubToken, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4">
+                                        <TextBlock Text="用户名（可选，用于显示）" Style="{StaticResource SettingRowText}"/>
+                                        <TextBox PlaceholderText="octocat" Text="{x:Bind ViewModel.GithubUsername, Mode=TwoWay}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </controls:ColumnFlowPanel>
+                </ScrollViewer>
+            </TabViewItem>
+
+            <!-- ============ 组件 ============ -->
+            <TabViewItem Header="组件">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
+                    <controls:ColumnFlowPanel MinColumnWidth="420" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="桌面组件" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock Text="在桌面添加独立小组件：快捷启动、时钟、待办、随记、快捷搜索。组件可拖动、边缘吸附、置顶、缩放；标题栏 ✕ 只是移除，随时可在此或托盘菜单重新添加。"
+                                           Style="{StaticResource SettingRowText}"/>
+                                <StackPanel x:Name="WidgetRows" Spacing="2" Margin="0,2,0,0"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
+                                    <Button x:Name="WidgetShowAllButton" Content="全部显示" Style="{StaticResource SecondaryButton}" Click="WidgetShowAll_Click"/>
+                                    <Button x:Name="WidgetHideAllButton" Content="全部隐藏" Style="{StaticResource SecondaryButton}" Click="WidgetHideAll_Click"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 边缘磁吸 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="边缘磁吸" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <TextBlock Grid.Column="0" Text="拖动 / 缩放时自动吸附对齐" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.EnableWidgetSnap, Mode=TwoWay}"/>
+                                </Grid>
+                                <TextBlock Text="开启后：拖动组件会与其它组件的边线、屏幕边缘自动贴合；调整边缘时会同步对齐宽 / 高，让参差不齐的组件一次拉齐。想自己随手摆放就关掉它。"
+                                           Style="{StaticResource SettingRowText}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 布局方案 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="布局方案" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock Text="在组件窗口标题栏点右键 →「保存当前组件布局…」即可记下这一屏的位置与大小。同一时刻只会显示一套布局，切换快捷键可在「快捷键」标签页录制。"
+                                           Style="{StaticResource SettingRowText}"/>
+                                <ItemsRepeater ItemsSource="{x:Bind LayoutRowsItems, Mode=OneWay}">
+                                    <ItemsRepeater.Layout>
+                                        <StackLayout Spacing="6"/>
+                                    </ItemsRepeater.Layout>
+                                    <ItemsRepeater.ItemTemplate>
+                                        <DataTemplate x:DataType="local:WidgetLayoutRow">
+                                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,2">
+                                                <StackPanel Grid.Column="0" Spacing="1">
+                                                    <TextBlock Text="{x:Bind Name}" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{x:Bind Summary}" Style="{StaticResource MutedText}" FontSize="11"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="1" Content="应用"
+                                                        Tag="{x:Bind Id}" Click="ApplyLayout_Click"
+                                                        Style="{StaticResource SecondaryButton}" Padding="10,2,10,2"/>
+                                                <Button Grid.Column="2" Content="删除"
+                                                        Tag="{x:Bind Id}" Click="DeleteLayout_Click"
+                                                        Style="{StaticResource SecondaryButton}" Padding="10,2,10,2"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsRepeater.ItemTemplate>
+                                </ItemsRepeater>
+                                <TextBlock Text="（暂无保存的布局）" Style="{StaticResource MutedText}"
+                                           Visibility="{x:Bind HasNoLayouts, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
+                        </Border>
+                    </controls:ColumnFlowPanel>
+                </ScrollViewer>
+            </TabViewItem>
+
+            <!-- ============ 快捷键 ============ -->
+            <TabViewItem Header="快捷键">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
+                    <controls:ColumnFlowPanel MinColumnWidth="460" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
+
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="全局快捷键" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock Text="点击右侧按钮开始录制：按钮文字会清空并实时显示你按下的按键，最多 3 个键；录满 3 个键自动结束，只录了 1~2 个键时按 Esc 结束录入（一个键都没录时按 Esc 取消）。"
+                                           Style="{StaticResource SettingRowText}"/>
+                                <TextBlock Text="录制结束不会立即生效——必须点击「保存快捷键」后才注册生效（避免刚录完「隐藏主界面」就把窗口藏了）。Backspace / Delete 可清除该动作。"
+                                           Style="{StaticResource SettingRowText}"/>
+                                <TextBlock Text="同一组合可绑定多个动作——触发时会依次执行（例如一次同时呼出主界面并显示所有组件），这是允许的「冲突」，只会在动作右侧标记，你可以直接忽略。"
+                                           Style="{StaticResource SettingRowText}"/>
+
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
+                                    <Button Content="保存快捷键" Click="SaveHotkeys_Click"
+                                            IsEnabled="{x:Bind HasUnsavedHotkeys, Mode=OneWay}"
+                                            Style="{StaticResource AccentButton}"/>
+                                    <Button Content="撤销更改" Click="DiscardHotkeys_Click"
+                                            IsEnabled="{x:Bind HasUnsavedHotkeys, Mode=OneWay}"
+                                            Style="{StaticResource SecondaryButton}"/>
+                                    <Button Content="恢复默认快捷键" Click="ResetHotkeys_Click"
+                                            Style="{StaticResource SecondaryButton}"/>
+                                </StackPanel>
+                                <TextBlock Text="⚠ 有未保存的快捷键改动，点击「保存快捷键」后才会生效。"
+                                           Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                           Style="{StaticResource SettingRowText}"
+                                           Visibility="{x:Bind HasUnsavedHotkeys, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="动作 → 快捷键" Style="{StaticResource SettingTitle}"/>
+                                <ItemsRepeater x:Name="HotkeyList" ItemsSource="{x:Bind HotkeyRowsItems, Mode=OneWay}">
+                                    <ItemsRepeater.Layout>
+                                        <StackLayout Spacing="4"/>
+                                    </ItemsRepeater.Layout>
+                                    <ItemsRepeater.ItemTemplate>
+                                        <DataTemplate x:DataType="local:HotkeyRow">
+                                            <Grid Margin="0,3">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Bind ActionName}" VerticalAlignment="Center"
+                                                           Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+                                                <Button Grid.Row="0" Grid.Column="1"
+                                                        Content="{x:Bind BindingText, Mode=OneWay}"
+                                                        Tag="{x:Bind Action}"
+                                                        Click="RecordButton_Click"
+                                                        MinWidth="210" MinHeight="32" HorizontalAlignment="Right"
+                                                        Margin="12,0,0,0"
+                                                        Style="{StaticResource SecondaryButton}"/>
+
+                                                <!-- 冲突提示：不弹窗，就地标注（用户可直接忽略） -->
+                                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="12,2,0,0"
+                                                           Text="{x:Bind ConflictText}" FontSize="11" TextWrapping="Wrap"
+                                                           MaxWidth="320" HorizontalAlignment="Right"
+                                                           Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                                           Visibility="{x:Bind HasConflict, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsRepeater.ItemTemplate>
+                                </ItemsRepeater>
+                            </StackPanel>
+                        </Border>
+                    </controls:ColumnFlowPanel>
+                </ScrollViewer>
+            </TabViewItem>
+
+            <!-- ============ 数据 ============ -->
+            <TabViewItem Header="数据">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
+                    <controls:ColumnFlowPanel MinColumnWidth="420" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
+
+                        <!-- 数据备份与恢复（危险区） -->
+                        <Border Style="{StaticResource Card}"
+                                BorderBrush="{ThemeResource SystemFillColorCautionBrush}" BorderThickness="1">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="数据备份与恢复" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock Text="条目本体（书签/Star/文件）可重新同步，但手写笔记、标签体系、隐藏/置顶状态、桌面组件待办与随记全部不可重建。请定期导出备份。"
+                                           Style="{StaticResource SettingRowText}"/>
+                                <TextBlock Text="导入会先自动生成「恢复前快照」（位于 %LOCALAPPDATA%\StarMark\backups），任何恢复都可回滚。"
+                                           Style="{StaticResource SettingRowText}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <Button Content="导出备份…" Click="ExportBackup_Click" Style="{StaticResource SecondaryButton}"/>
+                                    <Button Content="导入备份…" Click="ImportBackup_Click" Style="{StaticResource SecondaryButton}"/>
+                                    <ProgressRing Width="20" Height="20"
+                                                  IsActive="{x:Bind ViewModel.IsBackupBusy, Mode=OneWay}"
+                                                  Visibility="{x:Bind ViewModel.IsBackupBusy, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                                </StackPanel>
+                                <TextBlock Text="{x:Bind ViewModel.BackupStatus, Mode=OneWay}"
+                                           Style="{StaticResource SettingRowText}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 本地文件索引 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="本地文件索引" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock Text="索引以下目录的本地文件（每行一个，留空使用默认：桌面 / 下载 / 文档）。需安装并运行 Everything 才会生效。"
+                                           Style="{StaticResource SettingRowText}"/>
+                                <TextBox Text="{x:Bind ViewModel.FileIndexRootsText, Mode=TwoWay}"
+                                         AcceptsReturn="True" TextWrapping="Wrap" Height="72"
+                                         PlaceholderText="C:\Users\You\Desktop"/>
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Text="每目录上限" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Column="1" Text="{x:Bind ViewModel.MaxFileIndexCountText, Mode=TwoWay}"
+                                             Width="100" HorizontalAlignment="Left" InputScope="Number"/>
+                                    <!-- 多行目录列表属「需编辑后确认」项，单独给一个保存按钮 -->
+                                    <Button Grid.Column="2" Content="保存索引目录" Click="SaveRoots_Click"
+                                            Style="{StaticResource SecondaryButton}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </controls:ColumnFlowPanel>
+                </ScrollViewer>
+            </TabViewItem>
+
+            <!-- ============ 健康 + 诊断（合并：两项内容都不多，放同一页两列） ============ -->
+            <TabViewItem Header="健康与诊断">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
+                    <controls:ColumnFlowPanel MinColumnWidth="440" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
+
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="收藏健康度" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock Text="本地聚合，零网络。把「收藏夹腐败」变成可行动清单。" Style="{StaticResource SettingRowText}"/>
+
+                                <!-- 评分 + 扣分明细 -->
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16" VerticalAlignment="Center">
+                                    <StackPanel Grid.Column="0" HorizontalAlignment="Center" Spacing="2">
+                                        <TextBlock Text="{x:Bind ViewModel.ScoreText, Mode=OneWay}"
+                                                   FontSize="44" FontWeight="Bold" Foreground="{x:Bind ViewModel.ScoreBrush, Mode=OneWay}"/>
+                                        <TextBlock Text="{x:Bind ViewModel.ScoreGrade, Mode=OneWay}" FontSize="12" HorizontalAlignment="Center" Style="{StaticResource MutedText}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind ViewModel.ScoreSummary, Mode=OneWay}" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+                                        <ItemsControl ItemsSource="{x:Bind ViewModel.HealthReport.Factors, Mode=OneWay}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="ab:HealthFactor">
+                                                    <TextBlock Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap">
+                                                        <Run Text="• "/><Run Text="{x:Bind Label}"/><Run Text="： -"/><Run Text="{x:Bind Deduction}"/><Run Text=" 分（"/><Run Text="{x:Bind Detail}"/><Run Text="）"/>
+                                                    </TextBlock>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- 趋势图与统计摘要并排（原来上下堆叠，右侧空一大块） -->
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="4">
+                                        <TextBlock Text="近 14 天新增" Style="{StaticResource MutedText}" FontSize="12"/>
+                                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.TrendBars, Mode=OneWay}">
+                                            <ItemsRepeater.Layout>
+                                                <StackLayout Orientation="Horizontal" Spacing="3"/>
+                                            </ItemsRepeater.Layout>
+                                            <ItemsRepeater.ItemTemplate>
+                                                <DataTemplate x:DataType="viewModels:HealthTrendBar">
+                                                    <StackPanel Width="26" VerticalAlignment="Bottom" Spacing="2">
+                                                        <Rectangle Height="{x:Bind Height}" Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                                                                   MinHeight="1" RadiusX="2" RadiusY="2" HorizontalAlignment="Stretch"/>
+                                                        <TextBlock Text="{x:Bind DateLabel}" FontSize="9" HorizontalAlignment="Center"
+                                                                   Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsRepeater.ItemTemplate>
+                                        </ItemsRepeater>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" Spacing="3">
+                                        <TextBlock Style="{StaticResource SettingRowText}">
+                                            <Run Text="语言 Top："/><Run Text="{x:Bind ViewModel.LanguageSummary, Mode=OneWay}"/>
+                                        </TextBlock>
+                                        <TextBlock Style="{StaticResource SettingRowText}">
+                                            <Run Text="独立域名："/><Run Text="{x:Bind ViewModel.HealthReport.DistinctDomains, Mode=OneWay}"/>
+                                        </TextBlock>
+                                        <TextBlock Style="{StaticResource SettingRowText}">
+                                            <Run Text="疑似重复 Top："/><Run Text="{x:Bind ViewModel.DuplicateSummary, Mode=OneWay}"/>
+                                        </TextBlock>
+                                        <TextBlock Style="{StaticResource SettingRowText}">
+                                            <Run Text="标签 Top："/><Run Text="{x:Bind ViewModel.TagSummary, Mode=OneWay}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Grid>
+
+                                <ProgressRing Width="20" Height="20" IsActive="{x:Bind ViewModel.IsHealthLoading, Mode=OneWay}"
+                                              Visibility="{x:Bind ViewModel.IsHealthLoading, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                                <TextBlock Text="{x:Bind ViewModel.HealthError, Mode=OneWay}"
+                                           Foreground="{ThemeResource SystemFillColorCautionBrush}" FontSize="12"
+                                           Visibility="{x:Bind ViewModel.HasHealthError, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="诊断" Style="{StaticResource SettingTitle}"/>
+                                <ItemsRepeater ItemsSource="{x:Bind ViewModel.DiagnosticEntries, Mode=OneWay}">
+                                    <ItemsRepeater.Layout>
+                                        <StackLayout Spacing="4"/>
+                                    </ItemsRepeater.Layout>
+                                    <ItemsRepeater.ItemTemplate>
+                                        <DataTemplate x:DataType="diag:DiagnosticEntry">
+                                            <Grid ColumnSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="150"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{x:Bind Label}" Style="{StaticResource MutedText}"/>
+                                                <TextBlock Grid.Column="1" Text="{x:Bind Value}" FontSize="12"
+                                                           TextWrapping="Wrap" TextTrimming="CharacterEllipsis"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsRepeater.ItemTemplate>
+                                </ItemsRepeater>
+                                <TextBlock Text="{x:Bind ViewModel.DiagnosticsError, Mode=OneWay}"
+                                           Foreground="{ThemeResource SystemFillColorCautionBrush}" FontSize="12"
+                                           Visibility="{x:Bind ViewModel.HasDiagnosticsError, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
+                        </Border>
+                    </controls:ColumnFlowPanel>
+                </ScrollViewer>
+            </TabViewItem>
+        </TabView>
+
+    </Grid>
 </Page>
