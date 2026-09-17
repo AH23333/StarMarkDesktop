@@ -58,22 +58,68 @@ public sealed class WidgetConfig
     public bool? LegacyShowOnStartupInConfig { get; set; }
 }
 
+/// <summary>单个组件实例配置（v3 起按实例管理：同一类型可重复添加多个）。</summary>
+public sealed class WidgetInstanceConfig
+{
+    /// <summary>实例唯一 ID（区分同类型的多个组件）。</summary>
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+
+    public WidgetKind Kind { get; set; }
+
+    public double X { get; set; } = 120;
+    public double Y { get; set; } = 120;
+    public double Width { get; set; } = 300;
+    public double Height { get; set; } = 360;
+
+    /// <summary>窗口是否常驻最顶层（WS_EX_TOPMOST / HWND_TOPMOST）。</summary>
+    public bool Topmost { get; set; }
+
+    /// <summary>该实例自己的待办内容（多实例互不干扰）。</summary>
+    public List<TodoItem> Todos { get; set; } = new();
+
+    /// <summary>该实例自己的随记内容。</summary>
+    public List<QuickNoteItem> Notes { get; set; } = new();
+
+    /// <summary>该实例自己的快捷入口（置顶条目来自数据库，仍共享）。</summary>
+    public List<LinkItem> Links { get; set; } = new();
+}
+
 /// <summary>组件存储根。</summary>
 public sealed class WidgetStoreData
 {
-    public int Version { get; set; } = 2;
+    public int Version { get; set; } = 3;
 
-    /// <summary>启用的组件类型（设置页 / 托盘自由增减）。全新安装默认空——由用户主动添加（DeskBox 语义）。</summary>
-    public List<WidgetKind> Enabled { get; set; } = new();
+    /// <summary>全部组件实例（v3 起唯一真源；同一类型可多个）。</summary>
+    public List<WidgetInstanceConfig> Instances { get; set; } = new();
 
-    /// <summary>每组件独立窗口配置（key = WidgetKind 名）。</summary>
-    public Dictionary<string, WidgetConfig> WindowConfigs { get; set; } = new();
+    /// <summary>用户保存的组件布局方案（同一时刻只套用一套；切换即隐藏不属于该布局的实例）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<WidgetLayout>? Layouts { get; set; }
 
-    public List<TodoItem> Todos { get; set; } = new();
-    public List<QuickNoteItem> Notes { get; set; } = new();
+    /// <summary>
+    /// 默认布局（上次「选中/应用」的布局方案 Id）。
+    /// 用户每次应用某套布局即把它记为此字段；启动恢复时若此字段存在则自动套用该布局，
+    /// 使「最后一次选择的布局」成为组件默认状态。为 null 时回退为逐个显示全部实例。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? DefaultLayoutId { get; set; }
 
-    /// <summary>快捷启动格内的用户自定义条目。</summary>
-    public List<LinkItem> Links { get; set; } = new();
+    // ── v2（每类型一个实例）遗留字段，仅用于迁移，迁移后清空不再落盘 ──
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<WidgetKind>? Enabled { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, WidgetConfig>? WindowConfigs { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<TodoItem>? Todos { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<QuickNoteItem>? Notes { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<LinkItem>? Links { get; set; }
 
     // ── v1（单面板 WidgetHostWindow 时代）遗留字段，仅用于迁移 ──
 
@@ -133,7 +179,7 @@ public sealed class WidgetStorage
     /// <summary>取某组件的窗口配置（无记录时按类型给默认尺寸并级联摆放）。</summary>
     public WidgetConfig GetConfig(WidgetStoreData data, WidgetKind kind, int index)
     {
-        if (data.WindowConfigs.TryGetValue(kind.ToString(), out var c) && c != null)
+        if (data.WindowConfigs != null && data.WindowConfigs.TryGetValue(kind.ToString(), out var c) && c != null)
             return c;
         return new WidgetConfig
         {
@@ -198,46 +244,155 @@ public sealed class WidgetStorage
         {
             var showOnStartup = data.LegacyShowOnStartup == true
                 || data.LegacyConfig?.LegacyShowOnStartupInConfig == true;
-            if (showOnStartup && data.Enabled.Count == 0)
+            if (showOnStartup)
             {
-                data.Enabled.AddRange(AllKinds);
-                if (data.LegacyConfig is { } legacy)
+                data.Enabled ??= new List<WidgetKind>();
+                if (data.Enabled.Count == 0)
                 {
-                    legacy.LegacyShowOnStartupInConfig = null;
-                    data.WindowConfigs[WidgetKind.QuickLaunch.ToString()] = legacy;
+                    data.Enabled.AddRange(AllKinds);
+                    if (data.LegacyConfig is { } legacy)
+                    {
+                        legacy.LegacyShowOnStartupInConfig = null;
+                        data.WindowConfigs ??= new Dictionary<string, WidgetConfig>();
+                        data.WindowConfigs[WidgetKind.QuickLaunch.ToString()] = legacy;
+                    }
                 }
             }
             data.LegacyConfig = null;
             data.LegacyShowOnStartup = null;
         }
 
-        data.Version = 2;
-        data.Enabled ??= new List<WidgetKind>();
-        // 去重并保持枚举顺序稳定
-        data.Enabled = data.Enabled.Distinct().OrderBy(k => (int)k).ToList();
-        data.WindowConfigs ??= new Dictionary<string, WidgetConfig>();
-        data.Todos ??= new List<TodoItem>();
-        data.Notes ??= new List<QuickNoteItem>();
-        data.Links ??= new List<LinkItem>();
+        // v2 → v3 迁移：每类型一个实例 → 多实例（按实例管理，同一类型可重复添加）。
+        // 把 v2 的 Enabled + WindowConfigs + 全局 Todos/Notes/Links 归并为若干实例；
+        // 全局内容归并到该类型的首个实例，其余新实例各自为空（多组件内容互不覆盖）。
+        if (data.Version < 3)
+        {
+            data.Instances ??= new List<WidgetInstanceConfig>();
+            if (data.Enabled is { Count: > 0 })
+            {
+                foreach (var kind in data.Enabled)
+                {
+                    var cfg = (data.WindowConfigs != null
+                               && data.WindowConfigs.TryGetValue(kind.ToString(), out var w)
+                               && w is not null)
+                        ? w
+                        : new WidgetConfig();
+                    var inst = new WidgetInstanceConfig
+                    {
+                        Id = Guid.NewGuid().ToString("N"),
+                        Kind = kind,
+                        X = cfg.X, Y = cfg.Y, Width = cfg.Width, Height = cfg.Height,
+                        Topmost = cfg.Topmost,
+                    };
+                    if (kind == WidgetKind.Todo && data.Todos is not null) inst.Todos = data.Todos;
+                    else if (kind == WidgetKind.QuickNote && data.Notes is not null) inst.Notes = data.Notes;
+                    else if (kind == WidgetKind.QuickLaunch && data.Links is not null) inst.Links = data.Links;
+                    data.Instances.Add(inst);
+                }
+            }
+            data.Enabled = null;
+            data.WindowConfigs = null;
+            data.Todos = null;
+            data.Notes = null;
+            data.Links = null;
+        }
 
-        data.Todos = data.Todos
-            .Where(t => t is not null && !string.IsNullOrWhiteSpace(t.Text))
-            .OrderBy(t => t.Done)                    // 未完成(false)在前，已完成在后
-            .ThenByDescending(t => t.CreatedAt)
-            .Take(200)
-            .ToList();
-        data.Notes = data.Notes
-            .Where(n => n is not null && !string.IsNullOrWhiteSpace(n.Text))
-            .OrderByDescending(n => n.CreatedAt)
-            .Take(100)
-            .ToList();
-        data.Links = data.Links
-            .Where(l => l is not null && !string.IsNullOrWhiteSpace(l.Uri))
-            .OrderByDescending(l => l.CreatedAt)
-            .Take(100)
-            .ToList();
+        data.Version = 3;
+        data.Instances ??= new List<WidgetInstanceConfig>();
+        data.Layouts = WidgetLayoutCollection.Normalize(data.Layouts);
+
+        // 每个实例的内容分别规范化（排序/限量），避免多实例数据相互覆盖。
+        foreach (var inst in data.Instances)
+        {
+            inst.Todos = inst.Todos ?? new List<TodoItem>();
+            inst.Notes = inst.Notes ?? new List<QuickNoteItem>();
+            inst.Links = inst.Links ?? new List<LinkItem>();
+
+            inst.Todos = inst.Todos
+                .Where(t => t is not null && !string.IsNullOrWhiteSpace(t.Text))
+                .OrderBy(t => t.Done)                    // 未完成(false)在前，已完成在后
+                .ThenByDescending(t => t.CreatedAt)
+                .Take(200)
+                .ToList();
+            inst.Notes = inst.Notes
+                .Where(n => n is not null && !string.IsNullOrWhiteSpace(n.Text))
+                .OrderByDescending(n => n.CreatedAt)
+                .Take(100)
+                .ToList();
+            inst.Links = inst.Links
+                .Where(l => l is not null && !string.IsNullOrWhiteSpace(l.Uri))
+                .OrderByDescending(l => l.CreatedAt)
+                .Take(100)
+                .ToList();
+        }
         return data;
     }
 
     public static long NewId() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000 + Random.Shared.Next(0, 999);
+
+    /// <summary>取某实例配置（按 Id）。</summary>
+    public WidgetInstanceConfig? FindInstance(string id)
+    {
+        lock (_gate)
+        {
+            var data = Load();
+            return data.Instances.FirstOrDefault(i => i.Id == id);
+        }
+    }
+
+    /// <summary>在已加载的数据中按 Id 取或新建一个实例（供视图模型就地改集合后回写）。</summary>
+    public static WidgetInstanceConfig GetOrAddInstance(WidgetStoreData data, string id, WidgetKind kind)
+    {
+        var inst = data.Instances.FirstOrDefault(i => i.Id == id);
+        if (inst is null)
+        {
+            inst = new WidgetInstanceConfig { Id = id, Kind = kind };
+            data.Instances.Add(inst);
+        }
+        return inst;
+    }
+
+    // ───────────────────────── 布局方案 ─────────────────────────
+
+    /// <summary>全部已保存布局（按名称排序，名称保证唯一）。</summary>
+    public IReadOnlyList<WidgetLayout> GetLayouts()
+    {
+        lock (_gate) return Load().Layouts ?? new List<WidgetLayout>();
+    }
+
+    /// <summary>按 Id 查找布局。</summary>
+    public WidgetLayout? FindLayout(string id)
+    {
+        lock (_gate) return Load().Layouts?.FirstOrDefault(l => l.Id == id);
+    }
+
+    /// <summary>新增或覆盖同名布局（按 Id 判定）；返回去重后的最终名称。</summary>
+    public string SaveLayout(WidgetLayout layout)
+    {
+        lock (_gate)
+        {
+            var data = Load();
+            var layouts = data.Layouts ??= new List<WidgetLayout>();
+            var existing = layouts.FirstOrDefault(l => l.Id == layout.Id);
+            if (existing is not null) layouts.Remove(existing);
+            layouts.Add(layout);
+            this.Save(data);
+            return layout.Name;
+        }
+    }
+
+    /// <summary>删除布局；返回是否删除成功。</summary>
+    public bool DeleteLayout(string id)
+    {
+        lock (_gate)
+        {
+            var data = Load();
+            if (data.Layouts is not { Count: > 0 } layouts) return false;
+            var target = layouts.FirstOrDefault(l => l.Id == id);
+            if (target is null) return false;
+            layouts.Remove(target);
+            this.Save(data);
+            return true;
+        }
+    }
 }

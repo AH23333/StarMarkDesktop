@@ -1,4 +1,5 @@
 #nullable enable
+using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -8,6 +9,7 @@ using Windows.Foundation;
 using Windows.Graphics;
 using WinRT.Interop;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Language;
 using StarMark.Core.Widgets;
 using StarMark.Integrations.SystemTray;
 using StarMark.UI.Helpers;
@@ -34,6 +36,8 @@ public sealed partial class MainWindow : Window
     private readonly WidgetManager _widgetManager;
     private MenuFlyout? _widgetsMenu;
     private int _diagSimStep;
+    // star 项目中真实存在的编程语言（下拉数据源，见 LoadStarLanguagesAsync）
+    private readonly List<string> _starLanguages = new();
 
     public MainWindow()
     {
@@ -45,6 +49,9 @@ public sealed partial class MainWindow : Window
         _widgetManager.Initialize(DispatcherQueue);
         _widgetManager.GlobalSearchRequested += SearchFromWidget;
 
+        // 半透明材质（macOS 风）：主窗口与桌面组件统一质感，材质与不透明度可在设置页「常规 → 外观」调整
+        RefreshAppearance();
+
         SetupImmersiveTitleBar();
         SetSourceButtonsHighlight("all");
 
@@ -54,6 +61,7 @@ public sealed partial class MainWindow : Window
         UpdateThemeIcon();
 
         _ = ViewModel.LoadCountsAsync();
+        _ = LoadStarLanguagesAsync();   // 语言下拉只显示 star 中真实存在的语言
 
         // 托盘常驻 + 全局热键
         if (_settings.LoadEnableTray()) CreateTray(registerHotkey: _settings.LoadEnableGlobalHotKey());
@@ -90,6 +98,30 @@ public sealed partial class MainWindow : Window
     }
 
     private IntPtr MainHwnd => WindowNative.GetWindowHandle(this);
+
+    /// <summary>
+    /// 重新应用毛玻璃材质（亚克力 / 云母 / 不透明）。
+    /// 主窗口可选择是否跟随组件的同款材质（设置页「常规 → 外观」）；开启后根网格设为透明，
+    /// 让霜化背景透出（与组件一致）。
+    /// </summary>
+    public void RefreshAppearance()
+    {
+        try
+        {
+            var translucent = _settings.LoadMainWindowTranslucent();
+            var kind = translucent ? SettingsStore_WidgetBackdrop() : WidgetBackdropKind.None;
+            WidgetAppearance.ApplyBackdrop(
+                this, kind, WidgetAppearance.Opacity(), WidgetAppearance.MaterialIntensity(), RootGrid.ActualTheme);
+            RootGrid.Background = translucent ? null : (Microsoft.UI.Xaml.Media.Brush)
+                Application.Current.Resources["ApplicationPageBackgroundThemeBrush"];
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("应用主窗口半透明材质失败", ex);
+        }
+    }
+
+    private WidgetBackdropKind SettingsStore_WidgetBackdrop() => _settings.LoadWidgetBackdrop();
 
     // ───────────────────────── 托盘 ─────────────────────────
 
@@ -461,11 +493,11 @@ public sealed partial class MainWindow : Window
     private void LanguageCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_syncingLanguageCombo) return;
-        if (ContentFrame?.Content is not SearchPage sp) return;
         var selected = LanguageCombo.SelectedItem as string;
-        sp.ViewModel.CurrentLanguage = selected is null || selected == LanguageAllItem
-            ? string.Empty
-            : selected;
+        var lang = (selected is null || selected == LanguageAllItem) ? string.Empty : selected;
+        // 单一事实来源：主界面语言下拉同时驱动浏览（文件夹/star）与搜索两套过滤
+        ViewModel.CurrentLanguage = lang;
+        if (ContentFrame?.Content is SearchPage sp) sp.ViewModel.CurrentLanguage = lang;
     }
 
     private void HookLanguageOptions(SearchPageViewModel vm)
@@ -476,19 +508,52 @@ public sealed partial class MainWindow : Window
         vm.AvailableLanguages.CollectionChanged += (_, _) => SyncLanguageCombo(vm);
     }
 
-    /// <summary>把搜索页聚合出的语言选项同步到工具栏下拉框（null/空 = 回到「语言：全部」）。</summary>
+    /// <summary>
+    /// 把语言选项同步到工具栏下拉框：目录（始终直选）+ 搜索页聚合到的语言去重合并；
+    /// 当前选中以 <see cref="MainViewModel.CurrentLanguage"/> 为准（null/空 = 「语言：全部」）。
+    /// </summary>
     private void SyncLanguageCombo(SearchPageViewModel? vm)
     {
         _syncingLanguageCombo = true;
         try
         {
+            // 只取 star 条目中真实存在的语言（由 LoadStarLanguagesAsync 从库里聚合），
+            // 不再使用 LanguageCatalog.AllNames —— 避免出现当前 star 项目不存在的语言选项。
+            var set = new HashSet<string>(_starLanguages, StringComparer.OrdinalIgnoreCase);
+            // 搜索结果里实际出现的语言一并合并（同样是真实存在的语言）
+            if (vm is not null) foreach (var l in vm.AvailableLanguages) set.Add(l);
             var items = new List<string> { LanguageAllItem };
-            if (vm is not null) items.AddRange(vm.AvailableLanguages);
+            items.AddRange(set);
             LanguageCombo.ItemsSource = items;
-            var current = vm?.CurrentLanguage ?? string.Empty;
-            LanguageCombo.SelectedIndex = string.IsNullOrEmpty(current) ? 0 : items.IndexOf(current);
+            var current = ViewModel.CurrentLanguage;
+            LanguageCombo.SelectedIndex = string.IsNullOrEmpty(current)
+                ? 0
+                : Math.Max(0, items.IndexOf(current));
         }
         finally { _syncingLanguageCombo = false; }
+    }
+
+    /// <summary>
+    /// 从库里聚合 star 条目中<b>真实存在</b>的编程语言，作为语言下拉的数据源。
+    /// 保证下拉里每一项都至少对应一个 star 项目，不会出现未被任何 star 使用的语言。
+    /// </summary>
+    private async Task LoadStarLanguagesAsync()
+    {
+        try
+        {
+            // 注意：本文件未 using Microsoft.Extensions.DependencyInjection，
+            // 泛型扩展 GetService<T>() 不可用，故用 GetService(Type) + as 转换
+            var repo = App.Services.GetService(typeof(IItemRepository)) as IItemRepository;
+            if (repo is null) return;
+            var langs = await repo.GetStarLanguagesAsync();
+            _starLanguages.Clear();
+            _starLanguages.AddRange(langs);
+            SyncLanguageCombo(ContentFrame?.Content as SearchPageViewModel);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("加载 star 语言列表失败", ex);
+        }
     }
 
     private string CurrentSortTag()
@@ -518,6 +583,7 @@ public sealed partial class MainWindow : Window
             }
             StatusDot.Fill = (SolidColorBrush)Application.Current.Resources["SystemFillColorSuccessBrush"];
             await ViewModel.LoadCountsAsync();
+            await LoadStarLanguagesAsync();   // 同步后新 star 的语言要出现在下拉里
         }
         catch (Exception ex)
         {

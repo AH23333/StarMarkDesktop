@@ -23,8 +23,10 @@
             <SolidColorBrush x:Key="AppMutedBrush" Color="#5C000000"/>
             <SolidColorBrush x:Key="AppSuccessBrush" Color="#0F7B0F"/>
             <SolidColorBrush x:Key="AppCautionBrush" Color="#9D5D00"/>
-            <!-- 桌面组件窗口（WidgetWindow）专用画笔 -->
-            <SolidColorBrush x:Key="WidgetBackgroundBrush" Color="#D9FAFAFA"/>
+            <!-- 桌面组件窗口（WidgetWindow）专用画笔
+                 注：背景已降低不透明度（≈66%），配合窗口级 DesktopAcrylicBackdrop，
+                 形成半透明亚克力质感而不牺牲文字可读性。 -->
+            <SolidColorBrush x:Key="WidgetBackgroundBrush" Color="#A8FAFAFA"/>
             <SolidColorBrush x:Key="WidgetChromeBrush" Color="#0F000000"/>
             <SolidColorBrush x:Key="WidgetBorderBrush" Color="#29000000"/>
             <SolidColorBrush x:Key="WidgetDropHintBrush" Color="#330067C0"/>
@@ -38,7 +40,7 @@
             <SolidColorBrush x:Key="AppSuccessBrush" Color="#6CCB5F"/>
             <SolidColorBrush x:Key="AppCautionBrush" Color="#FCE100"/>
             <!-- 桌面组件窗口（WidgetWindow）专用画笔 -->
-            <SolidColorBrush x:Key="WidgetBackgroundBrush" Color="#D92B2B2B"/>
+            <SolidColorBrush x:Key="WidgetBackgroundBrush" Color="#A82B2B2B"/>
             <SolidColorBrush x:Key="WidgetChromeBrush" Color="#1FFFFFFF"/>
             <SolidColorBrush x:Key="WidgetBorderBrush" Color="#29FFFFFF"/>
             <SolidColorBrush x:Key="WidgetDropHintBrush" Color="#334CC2FF"/>
@@ -96,6 +98,14 @@
     <Style x:Key="SecondaryButton" TargetType="Button">
         <Setter Property="Padding" Value="10,4"/>
         <Setter Property="CornerRadius" Value="6"/>
+    </Style>
+
+    <!-- 强调按钮（主操作，如「保存快捷键」）：走 WinUI 默认强调色模板 -->
+    <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+        <Setter Property="Padding" Value="10,4"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Background" Value="{ThemeResource AccentFillColorDefaultBrush}"/>
+        <Setter Property="Foreground" Value="{ThemeResource TextOnAccentFillColorPrimaryBrush}"/>
     </Style>
 
     <!-- 图标小按钮（卡片操作栏用） -->

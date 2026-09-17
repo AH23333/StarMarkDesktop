@@ -4,10 +4,13 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="4" Padding="12,10,12,12">
-        <TextBlock Text="{x:Bind ViewModel.TimeText, Mode=OneWay}" FontSize="34" FontWeight="Bold"
-                   HorizontalAlignment="Center"/>
-        <TextBlock Text="{x:Bind ViewModel.DateText, Mode=OneWay}" FontSize="12" Opacity="0.7"
-                   HorizontalAlignment="Center"/>
-    </StackPanel>
+    <Grid Padding="10,8,10,10">
+        <StackPanel x:Name="ClockBody" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="4"
+                    SizeChanged="ClockBody_SizeChanged">
+            <TextBlock x:Name="TimeBlock" Text="{x:Bind ViewModel.TimeText, Mode=OneWay}" FontSize="34" FontWeight="Bold"
+                       HorizontalAlignment="Center"/>
+            <TextBlock x:Name="DateBlock" Text="{x:Bind ViewModel.DateText, Mode=OneWay}" FontSize="12" Opacity="0.7"
+                       HorizontalAlignment="Center"/>
+        </StackPanel>
+    </Grid>
 </UserControl>

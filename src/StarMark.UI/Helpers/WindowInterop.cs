@@ -47,6 +47,10 @@ internal static class WindowInterop
     public const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     public const int DWMWCP_ROUND = 2;
 
+    /// <summary>DWM 系统背景类型（DeskBox 用它在自管控制器生效时关掉 DWM 自带的背景）。</summary>
+    public const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
+    public const int DWMSBT_NONE = 1;   // 不用 DWM 自带背景（由 DesktopAcrylicController/MicaController 接管）
+
     public const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -160,6 +164,22 @@ internal static class WindowInterop
             DwmSetWindowAttribute(GetHwnd(window), DWMWA_WINDOW_CORNER_PREFERENCE, ref preference, sizeof(int));
         }
         catch { /* 旧系统无此属性，忽略 */ }
+    }
+
+    /// <summary>
+    /// 关掉 DWM 自带的系统背景（DWMSBT_NONE）。
+    /// 当用 <see cref="Microsoft.UI.Composition.SystemBackdrops.DesktopAcrylicController"/> /
+    /// <see cref="Microsoft.UI.Composition.SystemBackdrops.MicaController"/> 直接接管背景时，
+    /// 必须这么做，否则 DWM 会在我们的控制器之上再叠一层默认亚克力/云母（DeskBox 同款调用）。
+    /// </summary>
+    public static void SetDwmSystemBackdropNone(Microsoft.UI.Xaml.Window window)
+    {
+        try
+        {
+            var type = DWMSBT_NONE;
+            DwmSetWindowAttribute(GetHwnd(window), DWMWA_SYSTEMBACKDROP_TYPE, ref type, sizeof(int));
+        }
+        catch { /* 旧系统忽略 */ }
     }
 
     /// <summary>取窗口当前所在显示器的工作区（物理像素，多显示器正确）。</summary>

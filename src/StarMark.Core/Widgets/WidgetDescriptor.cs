@@ -110,7 +110,8 @@ public sealed class WidgetRegistry
             WidgetKind.QuickNote, "随记", "📝", 300, 340);
 
         yield return new WidgetDescriptor(
-            WidgetKind.Clock, "时钟", "🕒", 220, 150, IsResizable: false);
+            // 时钟同样可以缩放（字号随窗口自适应，见 ClockWidget.ApplyAdaptiveFontSize）
+            WidgetKind.Clock, "时钟", "🕒", 240, 170, IsResizable: true);
 
         yield return new WidgetDescriptor(
             WidgetKind.Search, "快捷搜索", "🔍", 300, 130);

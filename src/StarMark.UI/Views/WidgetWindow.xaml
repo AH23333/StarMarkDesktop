@@ -15,9 +15,12 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- 标题栏（拖动区；右键为组件菜单） -->
+            <!-- 标题栏（拖动区；右键为组件菜单）：与内容区同一背景，仅以 1px 底边分隔，
+                 实现与主界面 TopBar 同款的"标题 + 内容合并为一整块"。 -->
             <Grid x:Name="DragBar" Grid.Row="0"
-                  Background="{ThemeResource WidgetChromeBrush}"
+                  Background="{ThemeResource WidgetBackgroundBrush}"
+                  BorderBrush="{ThemeResource WidgetDividerBrush}"
+                  BorderThickness="0,0,0,1"
                   CornerRadius="8,8,0,0"
                   Padding="10,0,6,0">
                 <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
