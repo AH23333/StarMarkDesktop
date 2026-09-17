@@ -106,10 +106,12 @@ public sealed partial class FolderTreePage : Page
             StarLog.Info($"Accordion click: {node.Name} (items={node.Items.Count}, children={node.Children.Count})");
             if (body.Visibility == Visibility.Collapsed)
             {
-                BuildOnce();
                 body.Visibility = Visibility.Visible;
                 header.Content = BuildHeaderContent(node, true);
-                StarLog.Info($"Accordion expanded: {node.Name} bodyChildren={body.Children.Count}");
+                // 整个子树构建较重（递归创建子文件夹头 + 条目卡片），延后到下一消息帧，
+                // 让展开动画与头部切换先呈现，点击立即返回 → 消除展开卡顿。
+                DispatcherQueue.GetForCurrentThread()?.TryEnqueue(BuildOnce);
+                StarLog.Info($"Accordion expand queued: {node.Name}");
             }
             else
             {
@@ -147,7 +149,8 @@ public sealed partial class FolderTreePage : Page
                     expandBtn.Click += (_, _) =>
                     {
                         loaded = Math.Min(node.Items.Count, loaded + FolderTreePageViewModel.ExpandMoreStep);
-                        RenderItems();
+                        // 延后构建，避免一次性创建大量卡片时界面卡住。
+                        DispatcherQueue.GetForCurrentThread()?.TryEnqueue(RenderItems);
                         StarLog.Info($"ExpandMore: {node.Name} loaded={loaded}/{node.Items.Count}");
                     };
                     body.Children.Add(expandBtn);
@@ -171,7 +174,8 @@ public sealed partial class FolderTreePage : Page
                     body.Children.Add(BuildFolder(child, depth + 1));
                 body.Children.Add(itemsPanel);
                 loaded = Math.Min(FolderTreePageViewModel.MaxItemsPerFolder, node.Items.Count);
-                RenderItems();
+                // 卡片创建较重，延后到下一消息帧：先让展开动画/头部切换立即呈现，消除点击卡顿。
+                DispatcherQueue.GetForCurrentThread()?.TryEnqueue(RenderItems);
             }
             catch (Exception ex)
             {

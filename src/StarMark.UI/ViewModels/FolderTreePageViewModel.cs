@@ -1,5 +1,6 @@
 #nullable enable
 using System.Collections.ObjectModel;
+using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StarMark.Abstractions;
@@ -21,6 +22,14 @@ public partial class FolderTreePageViewModel : ObservableObject
     private readonly IItemRepository _repository;
 
     public MainViewModel Main { get; }
+
+    // 加载串行化：避免并发 Roots.Clear/Add 竞态与 RebuildTree 重入重建（点击标签/实时改标签
+    // 多次触发 Load 时曾导致主界面卡死/崩溃）。同一时刻仅一个加载在跑，后续请求合并为一次。
+    private readonly object _loadGate = new();
+    private bool _loadRunning;
+    private bool _loadPending;
+    // 条目实时改标签去抖：连续改标签合并为一次全量重载，避免风暴式刷新。
+    private Timer? _tagChangeTimer;
 
     [ObservableProperty] private bool _hasTagFilter;
 
@@ -57,12 +66,43 @@ public partial class FolderTreePageViewModel : ObservableObject
 
     private void OnItemTagsChanged()
     {
-        if (Main.CurrentPageTag == "tree")
+        if (Main.CurrentPageTag != "tree") return;
+        // 去抖：连续增删标签合并为一次重载，避免每次编辑都全量重建树（卡顿/崩溃来源）。
+        _tagChangeTimer?.Dispose();
+        _tagChangeTimer = new Timer(_ =>
+        {
+            _tagChangeTimer = null;
             _ = LoadCommand.ExecuteAsync(null);
+        }, null, 250, Timeout.Infinite);
     }
 
     [RelayCommand]
     private async Task LoadAsync()
+    {
+        // 串行化执行：同一时刻仅一个加载在跑，后续并发请求合并为一次（_loadPending），
+        // 避免 Roots.Clear/Add 竞态与 RebuildTree 重入重建（曾多次触发卡死/崩溃）。
+        lock (_loadGate)
+        {
+            if (_loadRunning) { _loadPending = true; return; }
+            _loadRunning = true;
+        }
+        try
+        {
+            do
+            {
+                _loadPending = false;
+                await LoadCoreAsync();
+            }
+            while (_loadPending);
+        }
+        finally
+        {
+            lock (_loadGate) { _loadRunning = false; }
+        }
+    }
+
+    /// <summary>真正执行加载：清空并重建 Roots，末尾触发 RootsReady 由页面重建树。</summary>
+    private async Task LoadCoreAsync()
     {
         IsLoading = true;
         Roots.Clear();
