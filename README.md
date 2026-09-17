@@ -187,7 +187,8 @@ dotnet run --project src\StarMark.UI\StarMark.UI.csproj -p:Platform=x64
 - **添加/移除**：设置页「桌面组件」卡片逐组件开关；托盘右键「桌面组件」子菜单逐项勾选；主窗口顶栏组件按钮（▣ 图标）同款菜单；组件标题栏 ＋ 也可管理。
 - **隐藏 vs 移除**：标题栏「—」是临时隐藏（实例保活，托盘/设置可一键恢复）；「✕」是停用并从启用集合移除。
 - **拖动 / 吸附**：按住标题栏拖动，组件之间会边缘对齐/贴合（留 8px 间距），靠近屏幕边缘也会吸附；阈值 24px、垂直投影需重叠，避免远处窗口乱吸。
-- **缩放 / 置顶**：右下角拖拽调整大小（时钟固定尺寸）；图钉按钮或双击标题栏切换置顶，置顶状态按组件持久化。
+- **缩放 / 置顶**：右下角拖拽调整大小（含时钟，字号随窗口尺寸自适应）；图钉按钮或双击标题栏切换置顶，置顶状态按组件持久化。
+- **布局持久化与亚克力**：最后通过快捷键 / 托盘切换到的布局自动存为默认布局，隐藏后再显示或下次启动都恢复到该布局；组件右键可命名保存多套布局。组件窗口采用桌面亚克力（DeskBox 式 `DesktopAcrylicController` 控制器方案）半透明材质，内容背景透明让霜化透出。
 - 全新安装默认不显示任何组件；旧版单面板若开启了「开机显示」，升级后自动迁移为启用全部五种组件。
 
 ## 配置
@@ -253,9 +254,14 @@ StarMarkDesktop/
 │   └── StarMark.UI/                   # WinUI 3 桌面端
 │       ├── App.xaml(.cs)              # DI 容器 + 迁移 + 种子数据 + 单实例
 │       ├── MainWindow.xaml(.cs)       # 主窗口（搜索框/工具栏/卡片/托盘入口）
-│       ├── Services/WidgetManager.cs  # 组件窗口生命周期（启用/显隐/吸附支持/入口数据）
+│       ├── Services/WidgetManager.cs  # 组件窗口生命周期（启用/显隐/吸附/布局套用/默认布局）
+│       ├── Services/HotkeyService.cs  # 全局快捷键录制/执行（含录制期挂起恢复）
 │       ├── Views/WidgetWindow.xaml(.cs) # 单个组件的无边框亚克力窗口
 │       ├── Helpers/WindowInterop.cs   # 无边框/置顶/圆角/工作区/拖动所需 Win32
+│       ├── Helpers/Hotkey.cs          # 组合键模型与可读名称（OEM 标点键字面量映射）
+│       ├── Helpers/WidgetAppearance.cs # 亚克力/Mica 控制器方案（DeskBox 式）
+│       ├── Helpers/CenteredDialog.cs  # 全屏居中顶层保存布局命名弹窗
+│       ├── Controls/ColumnFlowPanel.cs # 设置页两列自适应布局面板
 │       ├── SeedData.cs                # 首次启动种子数据
 │       ├── Themes/StarMarkTheme.xaml  # 主题色板（移植自浏览器扩展）
 │       └── app.manifest               # DPI / Windows 版本声明
@@ -313,6 +319,7 @@ dotnet publish src\StarMark.UI\StarMark.UI.csproj -c Release -p:Platform=x64
 - [项目功能可行性分析](docs/项目功能可行性分析.md) — 产品设想与可行性分析
 - [项目开发技术文档](docs/项目开发技术文档.md) — 架构、数据模型、开发路线
 - [开发进度报告](docs/开发进度报告.md) — 当前迭代工作记录与遗留问题
+- [踩坑记录](docs/踩坑记录.md) — 构建/渲染/数据/Win32/快捷键/性能等踩坑全集
 
 ## 开发路线
 
