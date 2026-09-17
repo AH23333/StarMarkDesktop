@@ -78,6 +78,16 @@ public partial class MainViewModel : ObservableObject
         GlobalTagFiltersChanged?.Invoke();
     }
 
+    // ────── 全局语言筛选（主界面语言下拉直选 → 文件夹/搜索页消费）──────
+
+    /// <summary>当前生效的语言筛选（extra_json.Language）。空字符串表示不过滤。</summary>
+    [ObservableProperty] private string _currentLanguage = string.Empty;
+
+    /// <summary>语言筛选变化。文件夹页订阅后重载列表，仅显示匹配语言的 star 条目。</summary>
+    public event Action? LanguageFilterChanged;
+
+    partial void OnCurrentLanguageChanged(string value) => LanguageFilterChanged?.Invoke();
+
     public MainViewModel(SearchService searchService, SyncCoordinator syncCoordinator, IItemRepository repository)
     {
         _searchService = searchService;

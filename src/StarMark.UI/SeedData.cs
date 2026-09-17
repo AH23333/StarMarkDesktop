@@ -31,7 +31,7 @@ public static class SeedData
                 CreatedAt = now,
                 UpdatedAt = now,
                 Tags = new() { "rag", "ai", "llm" },
-                ExtraJson = """{"language":"Python","topics":["rag","llm","nlp"]}""",
+                ExtraJson = """{"Language":"Python","topics":["rag","llm","nlp"]}""",
             },
             new()
             {
@@ -46,7 +46,7 @@ public static class SeedData
                 CreatedAt = now,
                 UpdatedAt = now,
                 Tags = new() { "llm", "ai", "local" },
-                ExtraJson = """{"language":"Go","topics":["llm","ai"]}""",
+                ExtraJson = """{"Language":"Go","topics":["llm","ai"]}""",
             },
             new()
             {

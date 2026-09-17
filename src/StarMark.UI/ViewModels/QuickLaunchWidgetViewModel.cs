@@ -26,10 +26,13 @@ public sealed class QuickLaunchWidgetViewModel
     public ObservableCollection<QuickLaunchPinned> Pinned { get; } = new();
     public ObservableCollection<QuickLaunchLink> Links { get; } = new();
 
-    public QuickLaunchWidgetViewModel(WidgetStorage storage, IItemRepository? repo)
+    private readonly string _instanceId;
+
+    public QuickLaunchWidgetViewModel(WidgetStorage storage, IItemRepository? repo, string instanceId)
     {
         _storage = storage;
         _repo = repo;
+        _instanceId = instanceId;
     }
 
     public async Task LoadAsync()
@@ -75,7 +78,9 @@ public sealed class QuickLaunchWidgetViewModel
     {
         Links.Clear();
         var data = _storage.Load();
-        foreach (var l in data.Links)
+        var inst = data.Instances.FirstOrDefault(i => i.Id == _instanceId);
+        if (inst is null) return;
+        foreach (var l in inst.Links)
             Links.Add(new QuickLaunchLink(l.Id, l.Title, l.Uri));
     }
 

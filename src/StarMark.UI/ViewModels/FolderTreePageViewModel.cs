@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Dispatching;
 using StarMark.Abstractions;
 using StarMark.UI.Helpers;
 
@@ -31,6 +32,23 @@ public partial class FolderTreePageViewModel : ObservableObject
     // 条目实时改标签去抖：连续改标签合并为一次全量重载，避免风暴式刷新。
     private Timer? _tagChangeTimer;
 
+    // UI 调度器：ViewModel 由 DI 在 UI 线程创建，捕获后用于把集合变更封送回 UI 线程，
+    // 避免 Timer/线程池回调里直接改 ObservableCollection 触发 RPC_E_WRONG_THREAD（卡死/崩溃）。
+    private readonly DispatcherQueue? _ui = DispatcherQueue.GetForCurrentThread();
+
+    private Task RunOnUi(Action action)
+    {
+        if (_ui is null) { action(); return Task.CompletedTask; }
+        if (_ui.HasThreadAccess) { action(); return Task.CompletedTask; }
+        var tcs = new TaskCompletionSource();
+        _ui.TryEnqueue(() =>
+        {
+            try { action(); tcs.SetResult(); }
+            catch (Exception ex) { tcs.SetException(ex); }
+        });
+        return tcs.Task;
+    }
+
     [ObservableProperty] private bool _hasTagFilter;
 
     [ObservableProperty] private string _currentSort = "recent";
@@ -54,6 +72,8 @@ public partial class FolderTreePageViewModel : ObservableObject
         Main = main;
         // 全局标签筛选变化（标签页增删/清除）→ 重载树
         Main.GlobalTagFiltersChanged += OnGlobalTagFiltersChanged;
+        // 语言下拉变化 → 仅显示匹配语言的 star 条目，重载树
+        Main.LanguageFilterChanged += OnLanguageFilterChanged;
         // 条目自身标签被增删 → 当前浏览树可能应纳入/剔除该条目，实时重载（仅文件夹页激活时）
         ItemCardActions.ItemTagsChanged += OnItemTagsChanged;
     }
@@ -61,6 +81,11 @@ public partial class FolderTreePageViewModel : ObservableObject
     private void OnGlobalTagFiltersChanged()
     {
         HasTagFilter = Main.HasGlobalTagFilters;
+        _ = LoadCommand.ExecuteAsync(null);
+    }
+
+    private void OnLanguageFilterChanged()
+    {
         _ = LoadCommand.ExecuteAsync(null);
     }
 
@@ -101,63 +126,85 @@ public partial class FolderTreePageViewModel : ObservableObject
         }
     }
 
-    /// <summary>真正执行加载：清空并重建 Roots，末尾触发 RootsReady 由页面重建树。</summary>
+    /// <summary>真正执行加载：清空并重建 Roots，末尾触发 RootsReady 由页面重建树。
+    /// 所有触及 Roots / IsLoading / EmptyHint（即会触发 PropertyChanged / CollectionChanged）的代码都封送回 UI 线程，
+    /// 避免标签删除的去抖 Timer 在后台线程直接改集合导致 RPC_E_WRONG_THREAD 卡死/崩溃。</summary>
     private async Task LoadCoreAsync()
     {
-        IsLoading = true;
-        Roots.Clear();
+        await RunOnUi(() => { IsLoading = true; });
 
+        BrowseFilter filter;
         try
         {
-            var filter = new BrowseFilter
+            filter = new BrowseFilter
             {
                 Sort = CurrentSort,
                 IncludeHidden = ShowHidden,
                 TypeFilter = CurrentSource switch { "all" => null, "star" => "githubstar", _ => CurrentSource },
                 // 全局标签筛选（标签页多选，AND 语义）
                 TagFilters = Main.HasGlobalTagFilters ? Main.GlobalTagFilters.Select(t => t.Name).ToList() : null,
+                // 语言下拉直选（仅显示匹配语言的 star 条目）
+                Language = string.IsNullOrEmpty(Main.CurrentLanguage) ? null : Main.CurrentLanguage,
                 Limit = 2000,
             };
-            var items = await _repository.GetAllAsync(filter, CancellationToken.None);
-
-            var nodeMap = new Dictionary<string, FolderPathNodeViewModel>(StringComparer.OrdinalIgnoreCase);
-            var pinnedItems = new List<Item>();
-            foreach (var item in items)
-            {
-                if (item.Pinned) pinnedItems.Add(item);
-                var path = FolderPathUtil.GetSegments(item);
-                var node = GetOrCreateNode(nodeMap, path);
-                node.Items.Add(item);
-            }
-
-            foreach (var root in nodeMap.Values.Where(n => n.Parent == null)
-                                             .OrderBy(n => n.RootOrder)
-                                             .ThenBy(n => n.Name, StringComparer.OrdinalIgnoreCase))
-                Roots.Add(root);
-
-            // 置顶伪根：聚合所有置顶条目，置顶后才有的可见入口（排序 RootOrder=-1 稳居首位）
-            if (pinnedItems.Count > 0)
-            {
-                var pinnedRoot = new FolderPathNodeViewModel(FolderPathUtil.PinnedGroup, null);
-                foreach (var item in pinnedItems)
-                    pinnedRoot.Items.Add(item);
-                Roots.Insert(0, pinnedRoot);
-            }
-
-            EmptyHint = Roots.Count == 0
-                ? (HasTagFilter ? "所选标签下没有条目，可在上方筛选栏移除或清除" : "暂无条目，请先同步数据")
-                : string.Empty;
         }
         catch (Exception ex)
         {
-            EmptyHint = $"加载失败: {ex.Message}";
-        }
-        finally
-        {
-            IsLoading = false;
+            await RunOnUi(() => { EmptyHint = $"加载失败: {ex.Message}"; IsLoading = false; });
+            return;
         }
 
-        RootsReady?.Invoke();
+        IReadOnlyList<Item> items;
+        try
+        {
+            items = await _repository.GetAllAsync(filter, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            await RunOnUi(() => { EmptyHint = $"加载失败: {ex.Message}"; IsLoading = false; });
+            return;
+        }
+
+        try
+        {
+            await RunOnUi(() =>
+            {
+                Roots.Clear();
+                var nodeMap = new Dictionary<string, FolderPathNodeViewModel>(StringComparer.OrdinalIgnoreCase);
+                var pinnedItems = new List<Item>();
+                foreach (var item in items)
+                {
+                    if (item.Pinned) pinnedItems.Add(item);
+                    var path = FolderPathUtil.GetSegments(item);
+                    var node = GetOrCreateNode(nodeMap, path);
+                    node.Items.Add(item);
+                }
+
+                foreach (var root in nodeMap.Values.Where(n => n.Parent == null)
+                                                 .OrderBy(n => n.RootOrder)
+                                                 .ThenBy(n => n.Name, StringComparer.OrdinalIgnoreCase))
+                    Roots.Add(root);
+
+                // 置顶伪根：聚合所有置顶条目，置顶后才有的可见入口（排序 RootOrder=-1 稳居首位）
+                if (pinnedItems.Count > 0)
+                {
+                    var pinnedRoot = new FolderPathNodeViewModel(FolderPathUtil.PinnedGroup, null);
+                    foreach (var item in pinnedItems)
+                        pinnedRoot.Items.Add(item);
+                    Roots.Insert(0, pinnedRoot);
+                }
+
+                EmptyHint = Roots.Count == 0
+                    ? (HasTagFilter ? "所选标签下没有条目，可在上方筛选栏移除或清除" : "暂无条目，请先同步数据")
+                    : string.Empty;
+                IsLoading = false;
+                RootsReady?.Invoke();
+            });
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("重建文件夹树失败", ex);
+        }
     }
 
     /// <summary>按路径链逐级创建/复用节点，作为树根列表返回最顶层节点。</summary>

@@ -20,19 +20,24 @@ public sealed class QuickNoteWidgetViewModel
     private const int DisplayLimit = 30;
 
     private readonly WidgetStorage _storage;
+    private readonly string _instanceId;
 
     public ObservableCollection<QuickNoteRow> Notes { get; } = new();
 
-    public QuickNoteWidgetViewModel(WidgetStorage storage)
+    public QuickNoteWidgetViewModel(WidgetStorage storage, string instanceId)
     {
         _storage = storage;
+        _instanceId = instanceId;
         Reload();
     }
 
     public void Reload()
     {
         Notes.Clear();
-        foreach (var note in _storage.Load().Notes.Take(DisplayLimit))
+        var data = _storage.Load();
+        var inst = data.Instances.FirstOrDefault(i => i.Id == _instanceId);
+        if (inst is null) return;
+        foreach (var note in inst.Notes.Take(DisplayLimit))
             Notes.Add(new QuickNoteRow(note.Id, note.Text));
     }
 
@@ -41,7 +46,8 @@ public sealed class QuickNoteWidgetViewModel
     {
         if (string.IsNullOrWhiteSpace(text)) return false;
         var data = _storage.Load();
-        data.Notes.Insert(0, new QuickNoteItem
+        var inst = WidgetStorage.GetOrAddInstance(data, _instanceId, WidgetKind.QuickNote);
+        inst.Notes.Insert(0, new QuickNoteItem
         {
             Id = WidgetStorage.NewId(),
             Text = text.Trim(),
@@ -55,7 +61,9 @@ public sealed class QuickNoteWidgetViewModel
     public void Delete(long id)
     {
         var data = _storage.Load();
-        data.Notes.RemoveAll(n => n.Id == id);
+        var inst = data.Instances.FirstOrDefault(i => i.Id == _instanceId);
+        if (inst is null) return;
+        inst.Notes.RemoveAll(n => n.Id == id);
         _storage.Save(data);
         Reload();
     }

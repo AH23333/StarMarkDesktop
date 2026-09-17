@@ -101,7 +101,7 @@ public sealed partial class ItemCard : UserControl
     {
         if (ViewModel is null || string.IsNullOrWhiteSpace(ViewModel.Uri)) return;
         var mgr = App.Services.GetService(typeof(WidgetManager)) as WidgetManager;
-        _ = mgr?.AddLinkAsync(ViewModel.Title, ViewModel.Uri);
+        if (mgr is not null) _ = mgr.AddLinkToQuickLaunchAsync(ViewModel.Title, ViewModel.Uri);
     }
 
     private void Menu_CopyLink(object sender, RoutedEventArgs e)

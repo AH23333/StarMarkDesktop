@@ -19,9 +19,9 @@ public sealed partial class TodoWidget : UserControl
 {
     public TodoWidgetViewModel ViewModel { get; }
 
-    public TodoWidget(WidgetStorage storage)
+    public TodoWidget(WidgetStorage storage, string instanceId)
     {
-        ViewModel = new TodoWidgetViewModel(storage);
+        ViewModel = new TodoWidgetViewModel(storage, instanceId);
         InitializeComponent();
     }
 

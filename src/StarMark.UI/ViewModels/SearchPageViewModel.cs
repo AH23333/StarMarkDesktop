@@ -2,6 +2,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Dispatching;
 using StarMark.Abstractions;
 using StarMark.Core.Search;
 using StarMark.UI.Helpers;
@@ -16,6 +17,23 @@ public partial class SearchPageViewModel : ObservableObject
     private readonly SearchService _searchService;
     private readonly IItemRepository? _repo;
     private CancellationTokenSource? _searchCts;
+
+    // UI 调度器：ViewModel 由 DI 在 UI 线程创建，捕获后用于把结果集合变更封送回 UI 线程，
+    // 避免 await 后在后台线程直接改 ObservableCollection 触发 RPC_E_WRONG_THREAD。
+    private readonly DispatcherQueue? _ui = DispatcherQueue.GetForCurrentThread();
+
+    private Task RunOnUi(Action action)
+    {
+        if (_ui is null) { action(); return Task.CompletedTask; }
+        if (_ui.HasThreadAccess) { action(); return Task.CompletedTask; }
+        var tcs = new TaskCompletionSource();
+        _ui.TryEnqueue(() =>
+        {
+            try { action(); tcs.SetResult(); }
+            catch (Exception ex) { tcs.SetException(ex); }
+        });
+        return tcs.Task;
+    }
 
     [ObservableProperty] private string _query = string.Empty;
     [ObservableProperty] private string _statusText = string.Empty;
@@ -161,56 +179,60 @@ public partial class SearchPageViewModel : ObservableObject
             var result = await _searchService.SearchAsync(Query.Trim(), filter, token);
             if (token.IsCancellationRequested) return;
 
-            Results.Clear();
-            ExactResults.Clear();
-            RelatedResults.Clear();
-            var keyword = Query.Trim();
-            for (var i = 0; i < result.Items.Count; i++)
+            // 结果集合与 PropertyChanged 必须在 UI 线程上更新
+            await RunOnUi(() =>
             {
-                var vm = new ItemCardViewModel(result.Items[i]);
-                vm.HighlightQuery = keyword;
-                Results.Add(vm);
-                // 分段：Items 前 ExactCount 条为精确匹配，其余为相关结果
-                if (i < result.ExactCount) ExactResults.Add(vm); else RelatedResults.Add(vm);
-            }
-            HasExact = ExactResults.Count > 0;
-            HasRelated = RelatedResults.Count > 0;
-            ExactHeader = $"精确匹配 ({ExactResults.Count})";
-            RelatedHeader = $"相关结果 ({RelatedResults.Count})";
-
-            // 语言下拉选项：仅在「未按语言过滤」时重建，避免过滤后列表塌缩成单项
-            if (string.IsNullOrEmpty(CurrentLanguage))
-            {
-                AvailableLanguages.Clear();
-                foreach (var lang in result.Items
-                             .Where(it => it.Type == ItemType.GitHubStar && !string.IsNullOrEmpty(it.ExtraJson))
-                             .Select(it => TryGetLanguage(it))
-                             .Where(l => l is not null)
-                             .Distinct(StringComparer.OrdinalIgnoreCase)
-                             .OrderBy(l => l, StringComparer.OrdinalIgnoreCase)
-                             .Cast<string>())
+                Results.Clear();
+                ExactResults.Clear();
+                RelatedResults.Clear();
+                var keyword = Query.Trim();
+                for (var i = 0; i < result.Items.Count; i++)
                 {
-                    AvailableLanguages.Add(lang);
+                    var vm = new ItemCardViewModel(result.Items[i]);
+                    vm.HighlightQuery = keyword;
+                    Results.Add(vm);
+                    // 分段：Items 前 ExactCount 条为精确匹配，其余为相关结果
+                    if (i < result.ExactCount) ExactResults.Add(vm); else RelatedResults.Add(vm);
                 }
-            }
+                HasExact = ExactResults.Count > 0;
+                HasRelated = RelatedResults.Count > 0;
+                ExactHeader = $"精确匹配 ({ExactResults.Count})";
+                RelatedHeader = $"相关结果 ({RelatedResults.Count})";
 
-            ClearSelection();
-            HasResults = Results.Count > 0;
-            EmptyHint = Results.Count == 0
-                ? (Main.HasGlobalTagFilters
-                    ? $"没有同时带 {string.Join(" + ", Main.GlobalTagFilters.Select(t => "#" + t.Name))} 的条目"
-                    : $"未找到与 \"{keyword}\" 相关的条目")
-                : string.Empty;
-            StatusText = $"命中 {result.Items.Count} 条 · {result.ElapsedMs}ms";
+                // 语言下拉选项：仅在「未按语言过滤」时重建，避免过滤后列表塌缩成单项
+                if (string.IsNullOrEmpty(CurrentLanguage))
+                {
+                    AvailableLanguages.Clear();
+                    foreach (var lang in result.Items
+                                 .Where(it => it.Type == ItemType.GitHubStar && !string.IsNullOrEmpty(it.ExtraJson))
+                                 .Select(it => TryGetLanguage(it))
+                                 .Where(l => l is not null)
+                                 .Distinct(StringComparer.OrdinalIgnoreCase)
+                                 .OrderBy(l => l, StringComparer.OrdinalIgnoreCase)
+                                 .Cast<string>())
+                    {
+                        AvailableLanguages.Add(lang);
+                    }
+                }
+
+                ClearSelection();
+                HasResults = Results.Count > 0;
+                EmptyHint = Results.Count == 0
+                    ? (Main.HasGlobalTagFilters
+                        ? $"没有同时带 {string.Join(" + ", Main.GlobalTagFilters.Select(t => "#" + t.Name))} 的条目"
+                        : $"未找到与 \"{keyword}\" 相关的条目")
+                    : string.Empty;
+                StatusText = $"命中 {result.Items.Count} 条 · {result.ElapsedMs}ms";
+            });
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            StatusText = $"错误: {ex.Message}";
+            await RunOnUi(() => StatusText = $"错误: {ex.Message}");
         }
         finally
         {
-            IsSearching = false;
+            await RunOnUi(() => IsSearching = false);
         }
     }
 
@@ -222,10 +244,6 @@ public partial class SearchPageViewModel : ObservableObject
     {
         IsSearching = true;
         StatusText = "加载中...";
-        Results.Clear();
-        ExactResults.Clear();
-        RelatedResults.Clear();
-        ClearSelection();
         try
         {
             var source = CurrentSource switch
@@ -246,28 +264,36 @@ public partial class SearchPageViewModel : ObservableObject
                 : Array.Empty<Item>();
             if (token.IsCancellationRequested) return;
 
-            foreach (var it in items)
+            // 结果集合与 PropertyChanged 必须在 UI 线程上更新
+            await RunOnUi(() =>
             {
-                var vm = new ItemCardViewModel(it);
-                Results.Add(vm);
-                RelatedResults.Add(vm);
-            }
-            HasExact = false;
-            HasRelated = Results.Count > 0;
-            ExactHeader = "精确匹配";
-            RelatedHeader = $"最近条目 ({Results.Count})";
-            HasResults = Results.Count > 0;
-            EmptyHint = Results.Count == 0 ? "没有可展示的条目" : string.Empty;
-            StatusText = $"最近 {Results.Count} 条";
+                Results.Clear();
+                ExactResults.Clear();
+                RelatedResults.Clear();
+                ClearSelection();
+                foreach (var it in items)
+                {
+                    var vm = new ItemCardViewModel(it);
+                    Results.Add(vm);
+                    RelatedResults.Add(vm);
+                }
+                HasExact = false;
+                HasRelated = Results.Count > 0;
+                ExactHeader = "精确匹配";
+                RelatedHeader = $"最近条目 ({Results.Count})";
+                HasResults = Results.Count > 0;
+                EmptyHint = Results.Count == 0 ? "没有可展示的条目" : string.Empty;
+                StatusText = $"最近 {Results.Count} 条";
+            });
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            StatusText = $"错误: {ex.Message}";
+            await RunOnUi(() => StatusText = $"错误: {ex.Message}");
         }
         finally
         {
-            IsSearching = false;
+            await RunOnUi(() => IsSearching = false);
         }
     }
 

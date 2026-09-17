@@ -24,11 +24,13 @@ public sealed partial class QuickLaunchWidget : UserControl
     public QuickLaunchWidgetViewModel ViewModel { get; }
 
     private readonly WidgetManager _manager;
+    private readonly string _instanceId;
 
-    public QuickLaunchWidget(WidgetStorage storage, IItemRepository? repo, WidgetManager manager)
+    public QuickLaunchWidget(WidgetStorage storage, IItemRepository? repo, WidgetManager manager, string instanceId)
     {
         _manager = manager;
-        ViewModel = new QuickLaunchWidgetViewModel(storage, repo);
+        _instanceId = instanceId;
+        ViewModel = new QuickLaunchWidgetViewModel(storage, repo, instanceId);
 
         InitializeComponent();
 
@@ -46,7 +48,7 @@ public sealed partial class QuickLaunchWidget : UserControl
         Unloaded -= QuickLaunchWidget_Unloaded;
     }
 
-    private void OnLinksChanged() => DispatcherQueue?.TryEnqueue(ViewModel.ReloadLinks);
+    private void OnLinksChanged(string _) => DispatcherQueue?.TryEnqueue(ViewModel.ReloadLinks);
 
     // ── 置顶条目 ──
 
@@ -80,7 +82,7 @@ public sealed partial class QuickLaunchWidget : UserControl
 
     private async void LinkRemove_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: string uri }) await _manager.RemoveLinkAsync(uri);
+        if (sender is Button { Tag: string uri }) await _manager.RemoveLinkAsync(_instanceId, uri);
     }
 
     private void AddUriBox_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -101,7 +103,7 @@ public sealed partial class QuickLaunchWidget : UserControl
         var name = (AddNameBox.Text ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(name))
             name = parsed.IsFile ? Path.GetFileName(parsed.LocalPath) : parsed.Host;
-        await _manager.AddLinkAsync(name, parsed.AbsoluteUri);
+        await _manager.AddLinkAsync(_instanceId, name, parsed.AbsoluteUri);
         AddNameBox.Text = AddUriBox.Text = string.Empty;
         AddForm.Visibility = Visibility.Collapsed;
     }

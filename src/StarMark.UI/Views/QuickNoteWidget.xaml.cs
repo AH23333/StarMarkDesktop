@@ -18,9 +18,9 @@ public sealed partial class QuickNoteWidget : UserControl
 {
     public QuickNoteWidgetViewModel ViewModel { get; }
 
-    public QuickNoteWidget(WidgetStorage storage)
+    public QuickNoteWidget(WidgetStorage storage, string instanceId)
     {
-        ViewModel = new QuickNoteWidgetViewModel(storage);
+        ViewModel = new QuickNoteWidgetViewModel(storage, instanceId);
         InitializeComponent();
     }
 

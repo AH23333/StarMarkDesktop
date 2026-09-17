@@ -20,17 +20,23 @@ public sealed class TodoWidgetViewModel
 
     public ObservableCollection<TodoRow> Todos { get; } = new();
 
-    public TodoWidgetViewModel(WidgetStorage storage)
+    private readonly string _instanceId;
+
+    public TodoWidgetViewModel(WidgetStorage storage, string instanceId)
     {
         _storage = storage;
+        _instanceId = instanceId;
         Reload();
     }
 
-    /// <summary>从 widgets.json 重新装载列表（Normalize 负责排序与限量）。</summary>
+    /// <summary>从该实例自己的 Todos 重新装载列表（Normalize 负责排序与限量）。</summary>
     public void Reload()
     {
         Todos.Clear();
-        foreach (var todo in _storage.Load().Todos)
+        var data = _storage.Load();
+        var inst = data.Instances.FirstOrDefault(i => i.Id == _instanceId);
+        if (inst is null) return;
+        foreach (var todo in inst.Todos)
             Todos.Add(new TodoRow(todo.Id, todo.Text, todo.Done));
     }
 
@@ -38,7 +44,8 @@ public sealed class TodoWidgetViewModel
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         var data = _storage.Load();
-        data.Todos.Add(new TodoItem
+        var inst = WidgetStorage.GetOrAddInstance(data, _instanceId, WidgetKind.Todo);
+        inst.Todos.Add(new TodoItem
         {
             Id = WidgetStorage.NewId(),
             Text = text.Trim(),
@@ -51,7 +58,9 @@ public sealed class TodoWidgetViewModel
     public void Toggle(long id, bool done)
     {
         var data = _storage.Load();
-        var todo = data.Todos.FirstOrDefault(t => t.Id == id);
+        var inst = data.Instances.FirstOrDefault(i => i.Id == _instanceId);
+        if (inst is null) return;
+        var todo = inst.Todos.FirstOrDefault(t => t.Id == id);
         if (todo is null || todo.Done == done) return;
         todo.Done = done;
         _storage.Save(data);
@@ -61,7 +70,9 @@ public sealed class TodoWidgetViewModel
     public void Delete(long id)
     {
         var data = _storage.Load();
-        data.Todos.RemoveAll(t => t.Id == id);
+        var inst = data.Instances.FirstOrDefault(i => i.Id == _instanceId);
+        if (inst is null) return;
+        inst.Todos.RemoveAll(t => t.Id == id);
         _storage.Save(data);
         Reload();
     }

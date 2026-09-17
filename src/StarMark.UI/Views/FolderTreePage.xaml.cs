@@ -67,13 +67,46 @@ public sealed partial class FolderTreePage : Page
     private void ClearTagFilters_Click(object sender, RoutedEventArgs e)
         => DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() => ViewModel.Main.ClearGlobalTagFilters());
 
+    /// <summary>
+    /// 重建后要恢复的展开状态：键 = 节点路径（根到该节点的名称拼接），见 <see cref="PathOf"/>。
+    /// 没有它的话，任何一次重载（改标签、排序、筛选）都会把用户展开的文件夹全部收回去。
+    /// </summary>
+    private readonly HashSet<string> _expandedPaths = new(StringComparer.Ordinal);
+
+    /// <summary>每个已展开文件夹已加载的条目数（「展开更多」后重载不至于回到默认 30 条）。</summary>
+    private readonly Dictionary<string, int> _loadedCountByPath = new(StringComparer.Ordinal);
+
+    /// <summary>本次构建出的全部文件夹视图，用于在重建结束后恢复展开状态。</summary>
+    private readonly List<FolderView> _views = new();
+
     private void OnRootsReady() => RebuildTree();
 
     private void RebuildTree()
     {
         FolderRoot.Children.Clear();
+        _views.Clear();
         foreach (var root in ViewModel.Roots)
-            FolderRoot.Children.Add(BuildFolder(root, 0));
+            FolderRoot.Children.Add(BuildFolder(root, 0, string.Empty));
+
+        // 重载会把用户展开的文件夹全部收起（表现为「给条目增删标签后界面被强制收拢」）。
+        // 这里在重建后立即按记录的恢复回去，让重载对用户无感。
+        foreach (var view in _views.ToList())
+        {
+            if (!_expandedPaths.Contains(view.Key)) continue;
+            try { view.Expand(); }
+            catch (Exception ex) { StarLog.Error($"恢复展开状态失败: {view.Key}", ex); }
+        }
+    }
+
+    /// <summary>节点路径键：从根到该节点的名称链，用于跨重建识别同一个文件夹。</summary>
+    private static string PathOf(FolderPathNodeViewModel node, string parentPath)
+        => string.IsNullOrEmpty(parentPath) ? node.Name : $"{parentPath}/{node.Name}";
+
+    /// <summary>单个文件夹的可视化句柄（供重建后恢复展开状态）。</summary>
+    private sealed class FolderView
+    {
+        public required string Key { get; init; }
+        public required Action Expand { get; init; }
     }
 
     // ===== 手风琴构建 =====
@@ -82,13 +115,14 @@ public sealed partial class FolderTreePage : Page
     /// 构建一个文件夹节点：头部（可折叠）+ 展开后内容（子文件夹 + 本层条目卡片）。
     /// 展开内容在首次点击时才惰性构建，避免海量条目一次性渲染。
     /// </summary>
-    private StackPanel BuildFolder(FolderPathNodeViewModel node, int depth)
+    private StackPanel BuildFolder(FolderPathNodeViewModel node, int depth, string parentPath)
     {
+        var key = PathOf(node, parentPath);
         var body = new StackPanel { Spacing = 2, Visibility = Visibility.Collapsed };
         bool built = false;
         var itemsPanel = new StackPanel { Spacing = 2 };
         Button? expandBtn = null;
-        int loaded = 0;
+        int loaded = _loadedCountByPath.TryGetValue(key, out var saved) ? saved : 0;
 
         var header = new Button
         {
@@ -103,23 +137,27 @@ public sealed partial class FolderTreePage : Page
         };
         header.Click += (_, _) =>
         {
-            StarLog.Info($"Accordion click: {node.Name} (items={node.Items.Count}, children={node.Children.Count})");
-            if (body.Visibility == Visibility.Collapsed)
-            {
-                body.Visibility = Visibility.Visible;
-                header.Content = BuildHeaderContent(node, true);
-                // 整个子树构建较重（递归创建子文件夹头 + 条目卡片），延后到下一消息帧，
-                // 让展开动画与头部切换先呈现，点击立即返回 → 消除展开卡顿。
-                DispatcherQueue.GetForCurrentThread()?.TryEnqueue(BuildOnce);
-                StarLog.Info($"Accordion expand queued: {node.Name}");
-            }
-            else
-            {
-                body.Visibility = Visibility.Collapsed;
-                header.Content = BuildHeaderContent(node, false);
-                StarLog.Info($"Accordion collapsed: {node.Name}");
-            }
+            if (body.Visibility == Visibility.Collapsed) DoExpand();
+            else DoCollapse();
         };
+
+        // 展开：立即呈现动画与头部切换，重活（构建子树 + 卡片）延后到下一消息帧。
+        // 同时记录展开状态：树重载后据此复原，避免用户已展开的文件夹被强制收拢。
+        void DoExpand()
+        {
+            body.Visibility = Visibility.Visible;
+            header.Content = BuildHeaderContent(node, true);
+            _expandedPaths.Add(key);
+            DispatcherQueue.GetForCurrentThread()?.TryEnqueue(BuildOnce);
+        }
+
+        void DoCollapse()
+        {
+            body.Visibility = Visibility.Collapsed;
+            header.Content = BuildHeaderContent(node, false);
+            _expandedPaths.Remove(key);
+            _loadedCountByPath.Remove(key);
+        }
 
         void RenderItems()
         {
@@ -149,6 +187,7 @@ public sealed partial class FolderTreePage : Page
                     expandBtn.Click += (_, _) =>
                     {
                         loaded = Math.Min(node.Items.Count, loaded + FolderTreePageViewModel.ExpandMoreStep);
+                        _loadedCountByPath[key] = loaded;   // 重载后仍保留用户的展开深度
                         // 延后构建，避免一次性创建大量卡片时界面卡住。
                         DispatcherQueue.GetForCurrentThread()?.TryEnqueue(RenderItems);
                         StarLog.Info($"ExpandMore: {node.Name} loaded={loaded}/{node.Items.Count}");
@@ -171,9 +210,13 @@ public sealed partial class FolderTreePage : Page
             try
             {
                 foreach (var child in node.Children)
-                    body.Children.Add(BuildFolder(child, depth + 1));
+                    body.Children.Add(BuildFolder(child, depth + 1, key));
                 body.Children.Add(itemsPanel);
-                loaded = Math.Min(FolderTreePageViewModel.MaxItemsPerFolder, node.Items.Count);
+                // 用户此前点过「展开更多」：恢复他的展开深度，而不是回到默认条数
+                loaded = _loadedCountByPath.TryGetValue(key, out var prev) && prev > 0
+                    ? Math.Min(prev, node.Items.Count)
+                    : Math.Min(FolderTreePageViewModel.MaxItemsPerFolder, node.Items.Count);
+                _loadedCountByPath[key] = loaded;
                 // 卡片创建较重，延后到下一消息帧：先让展开动画/头部切换立即呈现，消除点击卡顿。
                 DispatcherQueue.GetForCurrentThread()?.TryEnqueue(RenderItems);
             }
@@ -183,6 +226,12 @@ public sealed partial class FolderTreePage : Page
                 body.Children.Add(new TextBlock { Text = $"加载失败: {ex.Message}", Foreground = new SolidColorBrush(Colors.OrangeRed) });
             }
         }
+
+        _views.Add(new FolderView { Key = key, Expand = DoExpand });
+
+        // 子文件夹是「父级展开后才构建」的，此时 RebuildTree 的复位循环早已跑完，
+        // 所以这里再自查一次：只要记过展开就立刻恢复。
+        if (_expandedPaths.Contains(key)) DoExpand();
 
         var full = new StackPanel();
         full.Children.Add(header);
