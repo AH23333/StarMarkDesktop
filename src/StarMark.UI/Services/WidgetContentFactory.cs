@@ -57,6 +57,8 @@ public sealed class WidgetContentFactory
         factory.Register(WidgetKind.SearchResults, w => new ItemGridWidget(ItemGridMode.Search, w));
         factory.Register(WidgetKind.Activity, w => new ItemGridWidget(ItemGridMode.Activity, w));
         factory.Register(WidgetKind.Pinned, w => new ItemGridWidget(ItemGridMode.Pinned, w));
+        // Phase C：今日速览（日期 + 农历/节日 + 倒计时 + 常看条目）
+        factory.Register(WidgetKind.Glance, w => new GlanceWidget(w.Repository));
         return factory;
     }
 }

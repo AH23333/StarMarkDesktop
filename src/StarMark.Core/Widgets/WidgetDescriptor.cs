@@ -150,5 +150,10 @@ public sealed class WidgetRegistry
 
         yield return new WidgetDescriptor(
             WidgetKind.Pinned, "置顶条目格", "⏫", 300, 380, IsFeatureWidget: true);
+
+        // ── Phase C：今日速览（Glance）──
+        // 节日 / 农历算法照搬 DeskBox 的 GlanceFestivalService（基于 .NET 内置 ChineseLunisolarCalendar）。
+        yield return new WidgetDescriptor(
+            WidgetKind.Glance, "今日速览", "📅", 300, 360, IsFeatureWidget: true);
     }
 }

@@ -17,6 +17,7 @@ public enum WidgetKind
     SearchResults = 6, // 搜索结果格：钉一条查询常驻（差异化护城河）
     Activity = 7,    // 最近活动格：按 updated_at 展示最近条目
     Pinned = 8,      // 置顶条目格：pinned=1 的条目
+    Glance = 9,      // 今日速览（Glance）：日期 + 农历/节日 + 下一个节日倒计时 + 常看条目
 }
 
 /// <summary>待办条目。</summary>
