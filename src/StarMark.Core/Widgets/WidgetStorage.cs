@@ -18,6 +18,8 @@ public enum WidgetKind
     Activity = 7,    // 最近活动格：按 updated_at 展示最近条目
     Pinned = 8,      // 置顶条目格：pinned=1 的条目
     Glance = 9,      // 今日速览（Glance）：日期 + 农历/节日 + 下一个节日倒计时 + 常看条目
+    Weather = 10,    // 天气：Open-Meteo 实况 + 未来三天预报（免费无 Key）
+    Music = 11,      // 音乐：Windows 系统媒体传输控制（SMTC）的播放控制与曲目显示
 }
 
 /// <summary>待办条目。</summary>

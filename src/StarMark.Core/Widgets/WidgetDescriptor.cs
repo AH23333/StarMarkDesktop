@@ -155,5 +155,15 @@ public sealed class WidgetRegistry
         // 节日 / 农历算法照搬 DeskBox 的 GlanceFestivalService（基于 .NET 内置 ChineseLunisolarCalendar）。
         yield return new WidgetDescriptor(
             WidgetKind.Glance, "今日速览", "📅", 300, 360, IsFeatureWidget: true);
+
+        // ── Phase C：天气 ──
+        // 数据源 Open-Meteo（免费、无需 API Key）；WMO 码映射照搬 DeskBox 的 WeatherCodeMapper。
+        yield return new WidgetDescriptor(
+            WidgetKind.Weather, "天气", "🌤️", 300, 320, IsFeatureWidget: true);
+
+        // ── Phase C：音乐 ──
+        // 走 Windows SMTC，读取系统当前播放会话并控制播放，不需要对接任何第三方播放器。
+        yield return new WidgetDescriptor(
+            WidgetKind.Music, "音乐", "🎵", 300, 240, IsFeatureWidget: true);
     }
 }
