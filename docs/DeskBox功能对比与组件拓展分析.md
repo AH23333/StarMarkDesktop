@@ -221,7 +221,7 @@ Phase C · 新内容组件（按需）
 | A-2 差异化四格 | ✅ 已完成 | 新增 4 个 `WidgetKind`（TagGrid/SearchResults/Activity/Pinned）+ `WidgetInstanceConfig.GridTag/GridQuery/GridTags` 配置字段（可空、向后兼容）+ 4 个描述符 + `WidgetContentFactory` 注册 + 共享 `ItemGridWidget`（UserControl + `ItemGridWidgetViewModel`）。四格全部查询统一 `items` 表（`GetAllAsync`/`SearchAsync`/`GetRecentAsync`/`GetPinnedAsync`）；标签格/搜索结果格支持组件内配置并持久化到 `widgets.json`。 |
 | A-3 待办/随记入 items | ✅ 已完成 | 新增 `ItemType.Todo`/`Note` + `source='local'`（`LocalItemState.EncodeSourceId` 多实例隔离）+ `LocalItemsMigration` 幂等迁移（`.bak` 备份、旧字段保留）。工程量 M、风险中已落地（见第十六轮）。 |
 | A-4 QuickLaunch 复用 ItemCard + 搜索组件内直搜 | ✅ 已完成 | 复用 `ItemCard`（`IsLauncherMode` 隐藏会误写主库的操作）+ 组件内直搜（调 `SearchService` 前 12 条，点击才开主窗）。见第十七轮。 |
-| Phase B 工程能力 | ⬜ 待做 | 胶囊模式 / 每显示器拓扑布局 / 性能模式 / 外观细化。 |
+| Phase B 工程能力 | 🔶 进行中 | 胶囊模式（收起为胶囊 + 隐藏外壳，首切片已落地）/ 每显示器拓扑布局 / 性能模式 / 外观细化。 |
 | Phase C 新内容组件 | ⬜ 待做 | Glance（推荐先做）/ 天气 / 音乐。 |
 
 **验收**：`dotnet build` 0 错 0 警；`dotnet test` 173/173 通过。四格已可经「新建组件」入口添加并按模式查询统一条目库。
