@@ -137,6 +137,18 @@ public sealed class WidgetInstanceConfig
     /// <summary>每实例外观覆盖（材质/颜色/边框/圆角/文本缩放）。为 null 时本实例沿用全局外观设置。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WidgetAppearanceOverride? Appearance { get; set; }
+
+    /// <summary>
+    /// 收起为胶囊时的停靠位（物理像素）。与 X/Y/Width/Height（展开态位置，供点击展开恢复）分离保存，
+    /// 使得「悬停预览」反复收起不会重写展开位置，也不会因每次重算堆叠而把同列胶囊推离原位。
+    /// 旧实例缺字段反序列化为 null，运行时回退为「吸附最近垂直边缘 + 向下堆叠」自动分配。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CapsuleX { get; set; }
+
+    /// <summary>收起为胶囊时的停靠位 Y（物理像素）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CapsuleY { get; set; }
 }
 
 /// <summary>每实例外观覆盖（任一字段为 null 即回退到全局设置）。</summary>

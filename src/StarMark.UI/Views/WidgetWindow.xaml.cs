@@ -70,6 +70,13 @@ public sealed partial class WidgetWindow : Window
     private bool _peeking;
     private bool _fgLoadedHooked;
 
+    // ── 稳定停靠位（修复悬停预览导致的堆叠漂移 / 展开后不恢复原位置）──
+    /// <summary>胶囊稳定停靠位（物理像素）：仅在「首次进入胶囊」或「强制重排」时计算一次，
+    /// 悬停预览收回时直接回到此位，不再重算堆叠（否则每次收起都会把同列胶囊往下推、最终移出屏幕）。</summary>
+    private RectInt32? _capsuleRect;
+    /// <summary>收起前记录的正常态位置/尺寸（物理像素），供「点击展开」恢复到收起前的原位置。</summary>
+    private RectInt32? _expandedRect;
+
     public WidgetKind Kind => _kind;
     public bool IsVisible => AppWindow.IsVisible;
 
@@ -109,6 +116,11 @@ public sealed partial class WidgetWindow : Window
         // 胶囊模式尺寸夹取：任何经由系统（原生边框 / Win+方向键吸附）的尺寸变更都夹回胶囊尺寸，
         // 与隐藏 grip + LockNativeResize 共同确保「收起为胶囊时禁止修改胶囊大小」。
         AppWindow.Changed += OnAppWindowChanged;
+
+        // 记录展开态位置/尺寸，供「点击展开」恢复到收起前的原位（compact 态持久化的 X/Y 会被改写为胶囊停靠位，
+        // 故此处单独以 _expandedRect 保存，避免展开后组件跳到屏幕边缘）。
+        if (_config.Width > 0 && _config.Height > 0)
+            _expandedRect = new RectInt32((int)_config.X, (int)_config.Y, (int)_config.Width, (int)_config.Height);
 
         Closed += WidgetWindow_Closed;
     }
@@ -265,16 +277,29 @@ public sealed partial class WidgetWindow : Window
             var data = _storage.Load();
             var inst = data.Instances.FirstOrDefault(i => i.Id == _instanceId);
             if (inst is null) return;
-            inst.X = r.X;
-            inst.Y = r.Y;
-            // 收起为胶囊时，config 仍记录「展开态」尺寸，避免下次恢复变成胶囊高度
+
+            // 收起为胶囊时，窗口当前显示的是「胶囊」而非展开态：
+            //  - 展开态位置/尺寸必须保持（用 _expandedRect，其次 _config），否则点击展开会跳到屏幕边缘；
+            //  - 胶囊停靠位单独写入 CapsuleX/CapsuleY（供下次启动/悬停收回稳定回到原位）。
             if (_chromeMode == WidgetChromeMode.Compact)
             {
-                inst.Width = _config.Width;
-                inst.Height = _config.Height;
+                var scale = WindowInterop.GetScale(this);
+                var capH = (int)(36 * scale);
+                var ex = _expandedRect
+                         ?? new RectInt32((int)_config.X, (int)_config.Y, (int)_config.Width, (int)_config.Height);
+                inst.X = ex.X;
+                inst.Y = ex.Y;
+                inst.Width = ex.Width;
+                inst.Height = ex.Height;
+                // 同步胶囊停靠位（拖动胶囊后此处即最新位置，悬停收回/重启都回到这里）
+                _capsuleRect = new RectInt32(r.X, r.Y, _capsuleWidth > 0 ? _capsuleWidth : r.Width, capH);
+                inst.CapsuleX = r.X;
+                inst.CapsuleY = r.Y;
             }
             else
             {
+                inst.X = r.X;
+                inst.Y = r.Y;
                 inst.Width = r.Width;
                 inst.Height = r.Height;
             }
@@ -495,6 +520,12 @@ public sealed partial class WidgetWindow : Window
         DragBar.ContextFlyout = _contextMenu;
         RootBorder.ContextFlyout = _contextMenu;
 
+        // 右键胶囊时：先进入悬停预览 → 右键唤起菜单的过程中，鼠标离开胶囊会触发收起，
+        // 导致菜单随胶囊消失。修复：菜单打开即收回预览（回到胶囊位），且菜单打开期间禁止
+        // 任何收起/重新预览，菜单关闭后才允许（见 RootBorder_PointerEntered/Exited 的 _contextMenu.IsOpen 守卫）。
+        _contextMenu.Opening += (_, _) => { if (_peeking) CollapsePeek(); };
+        _contextMenu.Closed += (_, _) => { if (_peeking) CollapsePeek(); };
+
         // 胶囊三段式热区 + 悬停预览（B-10）：仅在 Compact 态生效，标准态走原有标题栏按钮
         DragBar.Tapped += DragBar_Tapped;
         RootBorder.PointerEntered += RootBorder_PointerEntered;
@@ -519,18 +550,21 @@ public sealed partial class WidgetWindow : Window
     {
         var menu = new MenuFlyout();
 
-        // 每种组件一个「添加」项：可重复添加同类型组件（对标 DeskBox 多实例）
+        // 「添加」收进二级菜单：每种组件一个子项，可重复添加同类型组件（对标 DeskBox 多实例）。
+        // 避免主菜单被一长串「添加 X」撑爆、与「移除本组件」混在一起难以区分。
+        var addSub = new MenuFlyoutSubItem
+        {
+            Text = "添加组件",
+            Icon = new FontIcon { Glyph = "\uE710", FontSize = 12 },
+        };
         foreach (var kind in WidgetStorage.AllKinds)
         {
-            var add = new MenuFlyoutItem
-            {
-                Text = $"添加 {WidgetStorage.KindTitle(kind)}",
-                Icon = new FontIcon { Glyph = "\uE710", FontSize = 12 },
-            };
+            var add = new MenuFlyoutItem { Text = WidgetStorage.KindTitle(kind) };
             var captured = kind;
             add.Click += (_, _) => _ = _manager.AddInstanceAsync(captured);
-            menu.Items.Add(add);
+            addSub.Items.Add(add);
         }
+        menu.Items.Add(addSub);
 
         menu.Items.Add(new MenuFlyoutSeparator());
         var removeThis = new MenuFlyoutItem
@@ -705,6 +739,14 @@ public sealed partial class WidgetWindow : Window
                 mode = WidgetChromeMode.Standard;
             }
 
+            // 仅「从非收起态切到胶囊态」时记录当前位置为展开态原位置，供点击展开恢复；
+            // 重复切到胶囊（如已在胶囊态）不覆盖，避免把胶囊停靠位误记为展开位。
+            if (mode == WidgetChromeMode.Compact && _chromeMode != WidgetChromeMode.Compact)
+            {
+                var cur = WindowInterop.GetWindowRect(this);
+                if (cur.Width > 0 && cur.Height > 0) _expandedRect = cur;
+            }
+
             _chromeMode = mode;
             _config.ChromeMode = mode;
 
@@ -724,8 +766,8 @@ public sealed partial class WidgetWindow : Window
             var hideTitle = compact && _config.PrivacyMode;
             WidgetTitle.Visibility = hideTitle ? Visibility.Collapsed : Visibility.Visible;
 
-            if (compact) CollapseToCapsule();
-            else ExpandToNormal();
+            if (compact) MoveToCapsule();      // 回到稳定胶囊停靠位（不重算堆叠）
+            else ExpandToNormal();             // 点击展开 / 隐藏外壳 → 恢复到收起前的展开态位置
 
             UpdateChromeControls();
             PersistBounds();
@@ -738,11 +780,40 @@ public sealed partial class WidgetWindow : Window
     }
 
     /// <summary>
-    /// 收起为胶囊：锁定当前宽度，把窗口高度缩到标题栏高度（36 DIP 物理像素）。
-    /// 组合栏（B-10）：同时吸附到最近的屏幕垂直边缘（左/右），并与同边缘已停靠的其它胶囊向下堆叠，
-    /// 形成一列可顺手点开的停靠栏。
+    /// 收起为胶囊：移到稳定停靠位 <see cref="_capsuleRect"/>（已分配则直接用，不重算堆叠）。
+    /// 优先用持久化的 <see cref="WidgetInstanceConfig.CapsuleX/Y"/>（重启后同列胶囊不再错位），
+    /// 否则首次进入胶囊时调用 <see cref="AssignCapsuleSlot"/> 计算一次。
+    /// 锁定宽度到胶囊宽、高度缩到标题栏高度（36 DIP 物理像素）。
     /// </summary>
-    private void CollapseToCapsule()
+    private void MoveToCapsule()
+    {
+        if (_capsuleRect is null)
+        {
+            if (_config.CapsuleX is { } cx && _config.CapsuleY is { } cy)
+            {
+                var scale = WindowInterop.GetScale(this);
+                var capW = _capsuleWidth > 0 ? _capsuleWidth : (int)_config.Width;
+                _capsuleRect = new RectInt32(cx, cy, capW > 0 ? capW : (int)(WidgetStorage.DefaultWidth(_kind) * scale), (int)(36 * scale));
+            }
+            else
+            {
+                AssignCapsuleSlot();
+            }
+        }
+        if (_capsuleRect is { } r)
+        {
+            _capsuleWidth = r.Width;
+            AppWindow.MoveAndResize(r);
+        }
+    }
+
+    /// <summary>
+    /// 分配胶囊停靠位（仅首次 / 强制重排时调用一次）：吸附到最近的屏幕垂直边缘（左/右），
+    /// 并与同边缘已停靠（高度≈胶囊）的其它胶囊向下堆叠，形成一列停靠栏。
+    /// 结果写入 <see cref="_capsuleRect"/> 并随实例持久化（CapsuleX/CapsuleY），后续悬停预览收回时
+    /// 直接回到该位，绝不再重算——这正是修复「悬停后同列胶囊依次下移、最终移出屏幕」的关键。
+    /// </summary>
+    private void AssignCapsuleSlot()
     {
         var scale = WindowInterop.GetScale(this);
         var r = WindowInterop.GetWindowRect(this);
@@ -774,12 +845,17 @@ public sealed partial class WidgetWindow : Window
             y = r.Y;
         }
 
-        AppWindow.MoveAndResize(new RectInt32(dockX, y, _capsuleWidth, capH));
+        _capsuleRect = new RectInt32(dockX, y, _capsuleWidth, capH);
     }
 
-    /// <summary>展开为正常：恢复 config 记录的展开态尺寸（位置保持当前，避免跳动）。</summary>
+    /// <summary>展开为正常：恢复到收起前记录的展开态位置/尺寸（<see cref="_expandedRect"/>）。</summary>
     private void ExpandToNormal()
     {
+        if (_expandedRect is { } er && er.Width > 0 && er.Height > 0)
+        {
+            AppWindow.MoveAndResize(new RectInt32(er.X, er.Y, er.Width, er.Height));
+            return;
+        }
         var r = WindowInterop.GetWindowRect(this);
         if (r.Width <= 0 || r.Height <= 0) return;
         var w = (int)_config.Width > 0 ? (int)_config.Width : r.Width;
@@ -831,18 +907,24 @@ public sealed partial class WidgetWindow : Window
         }
     }
 
-    /// <summary>鼠标进入组件窗口（Compact 态且非拖动/预览中）→ 临时展开预览内容，离开即收回。</summary>
+    /// <summary>鼠标进入组件窗口（Compact 态且非拖动/预览中、且右键菜单未打开）→ 临时展开预览内容，离开即收回。</summary>
     private void RootBorder_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
+        // 右键菜单打开期间禁止预览/收起，否则菜单会随胶囊收起而消失（见 _contextMenu.Opening/Closed 守卫）
+        if (_contextMenu?.IsOpen == true) return;
         if (_chromeMode == WidgetChromeMode.Compact && !_dragging && !_peeking) PeekExpand();
     }
 
     private void RootBorder_PointerExited(object sender, PointerRoutedEventArgs e)
     {
+        // 菜单仍打开时（鼠标移到菜单上会离开胶囊）不收起，避免菜单被吞掉
+        if (_contextMenu?.IsOpen == true) return;
         if (_peeking) CollapsePeek();
     }
 
-    /// <summary>悬停预览：临时把胶囊展开到正常尺寸并显示内容（外壳模式仍为 Compact，故尺寸夹取放行）。</summary>
+    /// <summary>悬停预览：临时把胶囊展开到正常尺寸并显示内容（外壳模式仍为 Compact，故尺寸夹取放行）。
+    /// 预览锚定在胶囊当前停靠位（不恢复展开态位置），离开即收回到同一胶囊位 —— 因此预览不会挪动胶囊、
+    /// 也不会触发堆叠重算（修复同列胶囊被推离原位/移出屏幕）。</summary>
     private void PeekExpand()
     {
         if (_chromeMode != WidgetChromeMode.Compact || _peeking || _dragging) return;
@@ -850,20 +932,21 @@ public sealed partial class WidgetWindow : Window
         var scale = WindowInterop.GetScale(this);
         var w = (int)_config.Width > 0 ? (int)_config.Width : (int)(WidgetStorage.DefaultWidth(_kind) * scale);
         var h = (int)_config.Height > 0 ? (int)_config.Height : (int)(WidgetStorage.DefaultHeight(_kind) * scale);
-        var r = WindowInterop.GetWindowRect(this);
+        // 以胶囊停靠位为锚点展开，保持 X/Y 不变（仅向下/向右放大内容），外观上「原地预览」
+        var anchor = _capsuleRect ?? WindowInterop.GetWindowRect(this);
         RootGrid.RowDefinitions[1].Height = new GridLength(1, GridUnitType.Star);
         ContentScroll.Visibility = Visibility.Visible;
-        AppWindow.MoveAndResize(new RectInt32(r.X, r.Y, w, h));
+        AppWindow.MoveAndResize(new RectInt32(anchor.X, anchor.Y, w, h));
     }
 
-    /// <summary>收回悬停预览：恢复胶囊尺寸与隐藏内容。</summary>
+    /// <summary>收回悬停预览：恢复胶囊尺寸与隐藏内容，并回到稳定停靠位（不再重算堆叠）。</summary>
     private void CollapsePeek()
     {
         if (!_peeking) return;
         _peeking = false;
         RootGrid.RowDefinitions[1].Height = new GridLength(0);
         ContentScroll.Visibility = Visibility.Collapsed;
-        CollapseToCapsule();
+        MoveToCapsule();   // 直接回到 _capsuleRect，不重算堆叠 → 不会把同列胶囊推走
     }
 
     /// <summary>同步折叠按钮图标与右键菜单文案到当前外壳模式。</summary>
