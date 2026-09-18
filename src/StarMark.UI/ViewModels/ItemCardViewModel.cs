@@ -27,6 +27,12 @@ public partial class ItemCardViewModel : ObservableObject
     [ObservableProperty] private bool _isKeyboardSelected;
 
     /// <summary>
+    /// 启动器（快捷启动格自定义入口）模式。为 true 时卡片代表一个没有主库 Item 的
+    /// 合成条目，必须隐藏「隐藏 / 置顶 / 编辑笔记 / 编辑标签 / 发送到桌面」等会误写主库的操作。
+    /// </summary>
+    [ObservableProperty] private bool _isLauncherMode;
+
+    /// <summary>
     /// 搜索关键词。设置后 <see cref="TitleSegments"/> / <see cref="SubtitleSegments"/>
     /// 会按命中位置切分，供卡片做字段高亮。留空表示不高亮（浏览态卡片）。
     /// </summary>
