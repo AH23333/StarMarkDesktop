@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="StarMark.UI.Views.GlanceWidget"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Padding="12,10,12,12" RowSpacing="10">
+        <Grid.RowDefinitions>
+            <!-- 0：日期头（固定高度） -->
+            <RowDefinition Height="Auto"/>
+            <!-- 1：常看条目（吃掉剩余高度，内部 ScrollViewer 才能拿到有界高度） -->
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 日期头：大号日号 + 年月 / 星期，下面跟农历与节日倒计时 -->
+        <StackPanel Grid.Row="0" Spacing="4">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <TextBlock x:Name="DayBlock" Grid.Column="0" Text="18" FontSize="42" FontWeight="Bold"
+                           VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                    <TextBlock x:Name="MonthBlock" Text="2026年9月" FontSize="13"/>
+                    <TextBlock x:Name="WeekBlock" Text="星期五" FontSize="12" Opacity="0.7"/>
+                </StackPanel>
+            </Grid>
+
+            <TextBlock x:Name="LunarBlock" Text="农历八月初八" FontSize="13" TextWrapping="Wrap"/>
+            <TextBlock x:Name="CountdownBlock" Text="" FontSize="12" Opacity="0.75" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <!-- 常看条目：ScrollViewer 直接挂在 Grid 行内（绝不能包进 StackPanel，否则不滚动，见踩坑 #61） -->
+        <Grid Grid.Row="1" RowSpacing="6">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Text="常看" FontSize="12" Opacity="0.6"/>
+
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="ItemsHost" Spacing="4"/>
+            </ScrollViewer>
+
+            <TextBlock x:Name="EmptyHint" Grid.Row="1" Text="暂无条目" FontSize="12" Opacity="0.55"
+                       Visibility="Collapsed"/>
+        </Grid>
+    </Grid>
+</UserControl>
