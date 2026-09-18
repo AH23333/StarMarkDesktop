@@ -1,4 +1,6 @@
 #nullable enable
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -69,6 +71,16 @@ public sealed partial class WidgetWindow : Window
     /// 离开窗口即收回胶囊；该标志让尺寸夹取（OnAppWindowChanged）临时放行。</summary>
     private bool _peeking;
     private bool _fgLoadedHooked;
+
+    // ── 每实例前景色 / 文本缩放的「基准值」缓存（避免反复套用导致双倍缩放或无法还原）──
+    /// <summary>记录每个 TextBlock 被我们上色前的基准字号（装箱存为 object，因 ConditionalWeakTable 的值必须为引用类型），
+    /// 文本缩放时按 基准×系数 计算，避免 RenderTransform 那种「相对组件中心放缩、放大后文本出界被裁切消失」的问题。</summary>
+    private readonly ConditionalWeakTable<TextBlock, object> _baseFonts = new();
+    /// <summary>标记曾被我们显式上过前景色的文本（弱引用），恢复全局（无前景覆盖）时只清这些，
+    /// 不误动样式自带的灰度等前景。</summary>
+    private readonly ConditionalWeakTable<TextBlock, object> _coloredMarker = new();
+    /// <summary>曾被显式上前景色的文本弱引用快照（配合 _coloredMarker 用于恢复全局时精准清除）。</summary>
+    private readonly List<WeakReference<TextBlock>> _coloredRefs = new();
 
     // ── 稳定停靠位（修复悬停预览导致的堆叠漂移 / 展开后不恢复原位置）──
     /// <summary>胶囊稳定停靠位（物理像素）：仅在「首次进入胶囊」或「强制重排」时计算一次，
@@ -399,23 +411,17 @@ public sealed partial class WidgetWindow : Window
                 ? new Thickness(Math.Clamp(bt, 0, 12))
                 : new Thickness(1);
 
-            // 圆角（标题栏仅上方两角随根圆角）
-            var radius = ov?.CornerRadius is { } cr ? Math.Clamp(cr, 0, 32) : 8;
+            // 圆角（标题栏仅上方两角随根圆角；内容区 ScrollViewer 也跟随圆角，避免大圆角时方角内容戳出圆角外）
+            var radius = ov?.CornerRadius is { } cr ? Math.Clamp(cr, 0, 48) : 8;
             RootBorder.CornerRadius = new CornerRadius(radius);
             if (DragBar is not null)
                 DragBar.CornerRadius = new CornerRadius(radius, radius, 0, 0);
+            if (ContentScroll is not null)
+                ContentScroll.CornerRadius = new CornerRadius(radius);
 
-            // 文本缩放：对内容区做 RenderTransform（>1 可能轻微裁切，范围已限制在 0.7–1.5）
-            if (ContentHost is not null)
-            {
-                var scale = ov?.TextScale is { } ts ? Math.Clamp(ts, 0.6, 1.8) : 1.0;
-                if (scale == 1.0) ContentHost.ClearValue(UIElement.RenderTransformProperty);
-                else
-                {
-                    ContentHost.RenderTransform = new ScaleTransform { ScaleX = scale, ScaleY = scale };
-                    ContentHost.RenderTransformOrigin = new Point(0.5, 0.5);
-                }
-            }
+            // 文本缩放：改为「直接缩放文本字号」（文本本身缩放），而非整块内容相对中心放缩，
+            // 故放大时文本仍留在布局内、ScrollViewer 可滚动查看，不会因超出组件范围被裁切而消失。
+            // 实际遍历在 ApplyForeground 的 SetFg 中与前景色一起套用（二者共享一次可视树遍历）。
         }
         catch (Exception ex)
         {
@@ -433,13 +439,16 @@ public sealed partial class WidgetWindow : Window
     }
 
     /// <summary>
-    /// 应用每实例前景（文本）色覆盖。关键约束（踩坑 #60）：WinUI 3 中任何“非 TextElement 容器”
+    /// 应用每实例前景（文本）色 + 文本缩放。关键约束（踩坑 #60）：WinUI 3 中任何“非 TextElement 容器”
     /// （Border / Panel / StackPanel 等）直接调用 SetValue/ClearValue(TextElement.ForegroundProperty)
     /// 都会触发原生 AccessViolation（0xc0000005，Corrupted-State，try/catch 捕获不到，直接杀进程）。
     /// 因此：
-    ///  - 无显式前景色覆盖时：直接跳过，让文本沿用主题默认前景（Application 资源自带 TextFillColorPrimaryBrush），
-    ///  - 有覆盖时：安全地遍历 ContentHost 可视树，仅对真正的文本元素（TextBlock 等 TextElement 子类）
-    ///    通过其标准 Foreground setter 上色——绝不触碰容器的 TextElement.ForegroundProperty 附加属性。
+    ///  - 有前景色覆盖时：安全地遍历 ContentHost 可视树，仅对真正的文本元素（TextBlock 等 TextElement 子类）
+    ///    通过其标准 Foreground setter 上色——绝不触碰容器的 TextElement.ForegroundProperty 附加属性；
+    ///  - 无前景色覆盖时（恢复全局）：仅清除我们此前显式上过色的文本（_coloredMarker），让它们回到样式自带前景，
+    ///    绝不误动未改过的文本（如 MutedText 的灰度）；
+    ///  - 文本缩放：直接改 TextBlock.FontSize（文本本身缩放），而非对内容区做 RenderTransform（否则放大后文本
+    ///    相对组件中心放缩、超出组件范围被裁切而消失）。基准字号缓存于 _baseFonts，避免反复套用双倍放大。
     /// 延迟到 Loaded 之后执行，确保内容子元素已生成。
     /// </summary>
     private void ApplyForeground(WidgetAppearanceOverride? ov)
@@ -450,31 +459,84 @@ public sealed partial class WidgetWindow : Window
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(ov?.ForegroundColor)) return; // 未覆盖：沿用主题默认前景（不碰附加属性）
-                if (WidgetAppearance.ParseColorBrush(ov.ForegroundColor!) is not { } fg) return;
-                SetForegroundDeep(panel, fg);
+                if (WidgetAppearance.ParseColorBrush(ov?.ForegroundColor) is { } fg)
+                {
+                    SetForegroundDeep(panel, fg);
+                }
+                else
+                {
+                    // 恢复全局前景：清掉我们此前列过前景的文本，回到样式默认（ClearValue 安全，TextBlock.Foreground 是标准属性）
+                    foreach (var (tb, _) in EnumerateColored())
+                        tb.ClearValue(TextBlock.ForegroundProperty);
+                    _coloredMarker.Clear();
+                }
+                // 文本缩放（与前景共享一次遍历的基准字号缓存）
+                ApplyTextScale(panel, ov?.TextScale is { } ts ? Math.Clamp(ts, 0.6, 1.8) : 1.0);
             }
             catch (Exception ex)
             {
-                StarLog.Error($"应用组件前景色失败 ({_kind})", ex);
+                StarLog.Error($"应用组件前景色/文本缩放失败 ({_kind})", ex);
             }
         }
         if (panel.IsLoaded) SetFg();
         else if (!_fgLoadedHooked) { _fgLoadedHooked = true; panel.Loaded += (_, _) => SetFg(); }
     }
 
+    /// <summary>枚举曾被我们显式上过前景色的文本（跳过已回收的弱引用）。</summary>
+    private IEnumerable<(TextBlock Tb, object _)> EnumerateColored()
+    {
+        // ConditionalWeakTable 无枚举 API，改用存活的弱引用快照（内容重建后旧引用自然失效）
+        foreach (var weak in _coloredRefs.ToArray())
+            if (weak.TryGetTarget(out var tb)) yield return (tb, null!);
+    }
+
     /// <summary>
-    /// 递归遍历可视树，仅给文本元素（TextBlock 等 TextElement 子类）设置前景色。
-    /// TextBlock.Foreground 是标准安全 setter，不会像容器上的 SetValue(TextElement.ForegroundProperty) 那样 AV。
+    /// 递归遍历可视树，仅给文本元素（TextBlock 等 TextElement 子类）设置前景色并记录标记
+    /// （用于恢复全局时精准清除）。TextBlock.Foreground 是标准安全 setter，不会像容器上的
+    /// SetValue(TextElement.ForegroundProperty) 那样 AV。
     /// </summary>
-    private static void SetForegroundDeep(DependencyObject parent, Brush fg)
+    private void SetForegroundDeep(DependencyObject parent, Brush fg)
     {
         var n = VisualTreeHelper.GetChildrenCount(parent);
         for (var i = 0; i < n; i++)
         {
             var child = VisualTreeHelper.GetChild(parent, i);
-            if (child is TextBlock tb) tb.Foreground = fg;
+            if (child is TextBlock tb)
+            {
+                tb.Foreground = fg;
+                if (!_coloredMarker.TryGetValue(tb, out _))
+                {
+                    _coloredMarker.AddOrUpdate(tb, new object());
+                    _coloredRefs.Add(new WeakReference<TextBlock>(tb));
+                }
+            }
             SetForegroundDeep(child, fg);
+        }
+    }
+
+    /// <summary>
+    /// 递归遍历可视树，对文本元素按「基准字号 × 系数」设置 FontSize（文本本身缩放，留在布局内、可滚动）。
+    /// 基准字号首次见到的 TextBlock 时记录（用其当前有效字号），后续均基于基准计算，故反复套用不累加。
+    /// </summary>
+    private void ApplyTextScale(DependencyObject parent, double scale)
+    {
+        var n = VisualTreeHelper.GetChildrenCount(parent);
+        for (var i = 0; i < n; i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is TextBlock tb)
+            {
+                double baseFont;
+                if (!_baseFonts.TryGetValue(tb, out var baseObj) || baseObj is not double d)
+                {
+                    baseFont = tb.FontSize;             // 当前有效字号（含继承/样式）
+                    if (baseFont <= 0) baseFont = 14;    // 兜底默认
+                    _baseFonts.AddOrUpdate(tb, (object)baseFont);
+                }
+                else baseFont = d;
+                tb.FontSize = baseFont * scale;
+            }
+            ApplyTextScale(child, scale);
         }
     }
 
@@ -690,15 +752,30 @@ public sealed partial class WidgetWindow : Window
         catch { /* 窗口正在关闭 */ }
     }
 
-    /// <summary>打开每实例外观编辑浮层（B-9），确定后实时套用并持久化到 widgets.json。</summary>
+    /// <summary>打开每实例外观编辑浮层（B-9）：编辑中实时预览到本组件，确定后持久化，取消则还原。</summary>
     private async System.Threading.Tasks.Task EditAppearanceAsync()
     {
         try
         {
-            var ov = await WidgetAppearanceEditor.ShowAsync(this, _config);
-            _config.Appearance = ov;          // ov 为 null = 清除覆盖（回退全局）
-            ApplyAppearanceCore();            // 实时套用
-            await _manager.SaveInstanceAppearanceAsync(_instanceId, ov);
+            var original = _config.Appearance;   // 取消时按此还原实时预览
+            var result = await WidgetAppearanceEditor.ShowAsync(this, _config, preview =>
+            {
+                // 实时预览：直接套用临时覆盖，不落盘
+                _config.Appearance = preview;
+                ApplyAppearanceCore();
+            });
+            if (result.Saved)
+            {
+                _config.Appearance = result.Override;     // 确定：写回并持久化
+                ApplyAppearanceCore();
+                await _manager.SaveInstanceAppearanceAsync(_instanceId, result.Override);
+            }
+            else
+            {
+                // 取消：还原为打开前的外观（编辑器内部已回退实时预览，这里兜底确保一致）
+                _config.Appearance = original;
+                ApplyAppearanceCore();
+            }
         }
         catch (Exception ex)
         {
