@@ -472,13 +472,20 @@ public static class WidgetAppearanceEditor
         root.Children.Add(cols);
 
         // 滑杆三件套（底部，阈值放宽）
-        root.Children.Add(MakeSlider("边框粗细", wThick ?? 1, 0, 12, 0.5, v => { wThick = v; Preview(); }));
-        root.Children.Add(MakeSlider("圆角半径", wRadius ?? 8, 0, 48, 1, v => { wRadius = v; Preview(); }));
-        root.Children.Add(MakeSlider("文本缩放", wScale ?? 1, 0.6, 1.8, 0.05, v =>
+        // suppressSliderReset：以编程方式回退滑杆（如「恢复全局」）时临时屏蔽其 ValueChanged，
+        // 避免把 wScale/wThick/wRadius 误写成「跟随全局」对应的默认值（应保持 null = 跟随全局）。
+        bool suppressSliderReset = false;
+        var cThick = MakeSlider("边框粗细", wThick ?? 1, 0, 12, 0.5, v => { if (suppressSliderReset) return; wThick = v; Preview(); }, out var sThick);
+        var cRadius = MakeSlider("圆角半径", wRadius ?? 8, 0, 48, 1, v => { if (suppressSliderReset) return; wRadius = v; Preview(); }, out var sRadius);
+        var cScale = MakeSlider("文本缩放", wScale ?? 1, 0.6, 1.8, 0.05, v =>
         {
+            if (suppressSliderReset) return;
             wScale = v;
             Preview();   // 实时预览文本缩放（直接改 TextBlock.FontSize，文本本身缩放，留在布局内）
-        }));
+        }, out var sScale);
+        root.Children.Add(cThick);
+        root.Children.Add(cRadius);
+        root.Children.Add(cScale);
 
         // 按钮
         var reset = MakeButton("恢复全局", false);
@@ -530,6 +537,12 @@ public static class WidgetAppearanceEditor
             wBackdrop = current?.Backdrop;   // 材质保持打开时的值，不强制改
             backdropCombo.SelectedIndex = IndexOfBackdrop(wBackdrop);
             Preview();
+            // 同步把滑杆视觉回退到「跟随全局」对应的默认值（不触发 ValueChanged，保持上面的 null = 跟随全局）
+            suppressSliderReset = true;
+            sThick.Value = 1;
+            sRadius.Value = 8;
+            sScale.Value = 1;
+            suppressSliderReset = false;
             BuildPresetStrip();
             RefreshColorHighlights();
             RefreshCurrentColor();
@@ -658,7 +671,7 @@ public static class WidgetAppearanceEditor
         Foreground = Brush("TextFillColorPrimaryBrush", Colors.Black),
     };
 
-    private static StackPanel MakeSlider(string label, double value, double min, double max, double step, Action<double> onChange)
+    private static StackPanel MakeSlider(string label, double value, double min, double max, double step, Action<double> onChange, out Slider outSlider)
     {
         var slider = new Slider
         {
@@ -691,6 +704,7 @@ public static class WidgetAppearanceEditor
         };
         Grid.SetColumn(slider, 0);
         Grid.SetColumn(tb, 1);
+        outSlider = slider;
         return new StackPanel { Spacing = 2, Children = { MakeLabel(label), row } };
     }
 
