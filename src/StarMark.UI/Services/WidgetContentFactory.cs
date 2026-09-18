@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using StarMark.Core.Widgets;
+using StarMark.UI.ViewModels;
 using StarMark.UI.Views;
 
 namespace StarMark.UI.Services;
@@ -51,6 +52,11 @@ public sealed class WidgetContentFactory
         factory.Register(WidgetKind.QuickNote, w => new QuickNoteWidget(w.Storage, w.InstanceId));
         factory.Register(WidgetKind.Clock, w => new ClockWidget());
         factory.Register(WidgetKind.Search, w => new SearchWidget(w.Repository));
+        // 差异化条目格：四种模式共用一个 ItemGridWidget，按 WidgetKind 决定查询策略。
+        factory.Register(WidgetKind.TagGrid, w => new ItemGridWidget(ItemGridMode.Tag, w));
+        factory.Register(WidgetKind.SearchResults, w => new ItemGridWidget(ItemGridMode.Search, w));
+        factory.Register(WidgetKind.Activity, w => new ItemGridWidget(ItemGridMode.Activity, w));
+        factory.Register(WidgetKind.Pinned, w => new ItemGridWidget(ItemGridMode.Pinned, w));
         return factory;
     }
 }

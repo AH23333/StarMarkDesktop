@@ -17,10 +17,21 @@ public enum WidgetContentAvailability
     Planned
 }
 
+/// <summary>组件外壳（标题栏/胶囊）的呈现模式，移植自 DeskBox <c>WidgetChromeMode</c>。</summary>
+public enum WidgetChromeMode
+{
+    /// <summary>标准标题栏 + 内容。</summary>
+    Standard,
+    /// <summary>收起为胶囊（Phase B 胶囊模式用）。</summary>
+    Compact,
+    /// <summary>完全隐藏外壳，仅留内容（透明浮层）。</summary>
+    Hidden
+}
+
 /// <summary>
 /// 组件类型的元数据描述。
 /// 移植自 DeskBox <c>WidgetContentDescriptor</c>：把标题、图标、默认尺寸、可否缩放、
-/// 成熟度等"按类型分支"的信息集中到一个不可变记录里，
+/// 成熟度、是否特性组件、外壳模式等"按类型分支"的信息集中到一个不可变记录里，
 /// 使新增组件只需在 <see cref="WidgetRegistry"/> 的清单中加一行，
 /// 而不必到各处 switch 里补分支。
 /// </summary>
@@ -34,7 +45,18 @@ public sealed record WidgetDescriptor(
     WidgetContentStage Stage = WidgetContentStage.Implemented,
     WidgetContentAvailability Availability = WidgetContentAvailability.Available,
     bool CanCreateWindow = true,
-    bool ShowInCreateEntry = true)
+    bool ShowInCreateEntry = true,
+    // ── 对标 DeskBox WidgetContentDescriptor 的扩展维度（A-1 补齐）──
+    /// <summary>特性组件：默认隐藏，需用户在设置页显式开启才可见（false 时默认可见）。</summary>
+    bool IsFeatureWidget = false,
+    /// <summary>是否有独立设置页。</summary>
+    bool HasSettingsPage = false,
+    /// <summary>默认外壳模式。</summary>
+    WidgetChromeMode DefaultChromeMode = WidgetChromeMode.Standard,
+    /// <summary>是否允许收起为胶囊（Phase B 胶囊模式前提）。</summary>
+    bool CanHideChrome = true,
+    /// <summary>是否允许使用叠加（overlay）外壳。</summary>
+    bool CanUseOverlayChrome = true)
 {
     /// <summary>带图标的展示名，用于托盘菜单 / 设置页。</summary>
     public string DisplayTitle => $"{Glyph} {Title}";
@@ -115,5 +137,18 @@ public sealed class WidgetRegistry
 
         yield return new WidgetDescriptor(
             WidgetKind.Search, "快捷搜索", "🔍", 300, 130);
+
+        // ── 差异化条目格（StarMark 护城河：全部基于统一 items 表，DeskBox 结构上做不到）──
+        yield return new WidgetDescriptor(
+            WidgetKind.TagGrid, "标签格", "🏷️", 300, 400, IsFeatureWidget: true);
+
+        yield return new WidgetDescriptor(
+            WidgetKind.SearchResults, "搜索结果格", "📌", 320, 420, IsFeatureWidget: true);
+
+        yield return new WidgetDescriptor(
+            WidgetKind.Activity, "最近活动格", "🕘", 300, 400, IsFeatureWidget: true);
+
+        yield return new WidgetDescriptor(
+            WidgetKind.Pinned, "置顶条目格", "⏫", 300, 380, IsFeatureWidget: true);
     }
 }

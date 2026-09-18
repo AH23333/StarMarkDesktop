@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 
 namespace StarMark.Core.Widgets;
 
-/// <summary>桌面组件类型（对标 DeskBox：快捷启动/待办/随记/时钟/搜索）。</summary>
+/// <summary>桌面组件类型（对标 DeskBox：快捷启动/待办/随记/时钟/搜索 + 差异化条目格）。</summary>
 public enum WidgetKind
 {
     QuickLaunch = 0, // 快捷启动格（收藏入口 + 置顶条目）
@@ -13,6 +13,10 @@ public enum WidgetKind
     QuickNote = 2,   // 随记
     Clock = 3,       // 时钟/日期
     Search = 4,      // 快捷搜索（唤起主窗口并搜索）
+    TagGrid = 5,     // 标签格：某标签条目常驻桌面（差异化护城河）
+    SearchResults = 6, // 搜索结果格：钉一条查询常驻（差异化护城河）
+    Activity = 7,    // 最近活动格：按 updated_at 展示最近条目
+    Pinned = 8,      // 置顶条目格：pinned=1 的条目
 }
 
 /// <summary>待办条目。</summary>
@@ -82,6 +86,21 @@ public sealed class WidgetInstanceConfig
 
     /// <summary>该实例自己的快捷入口（置顶条目来自数据库，仍共享）。</summary>
     public List<LinkItem> Links { get; set; } = new();
+
+    // ── 差异化条目格（TagGrid / SearchResults）的每实例查询配置 ──
+    // 均为可空、向后兼容：旧实例缺这些字段时反序列化为 null，不影响其它类型。
+
+    /// <summary>标签格所钉的标签名（TagGrid 用）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? GridTag { get; set; }
+
+    /// <summary>搜索结果格所钉的关键词（SearchResults 用）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? GridQuery { get; set; }
+
+    /// <summary>搜索结果格所钉的标签过滤（AND 语义，SearchResults 用）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? GridTags { get; set; }
 }
 
 /// <summary>组件存储根。</summary>
