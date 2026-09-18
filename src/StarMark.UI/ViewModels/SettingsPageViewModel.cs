@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Media;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Insights;
 using StarMark.Core.Insights;
+using StarMark.Core.Performance;
 using StarMark.UI.Helpers;
 using Windows.UI;
 
@@ -39,6 +40,21 @@ public partial class SettingsPageViewModel : ObservableObject
 
     /// <summary>毛玻璃材质浓度（0–1，对应 DeskBox 的 WidgetMaterialIntensity）。</summary>
     [ObservableProperty] private double _widgetMaterialIntensity = 0.65;
+
+    // 性能模式 / 内存门禁（Phase B-8）
+    [ObservableProperty] private int _performanceModeIndex;
+    [ObservableProperty] private double _cacheBudgetMb = 200;
+    [ObservableProperty] private int _maxCacheCount = 256;
+
+    /// <summary>仅「自定义」性能模式显示预算 / 缓存上限控件。</summary>
+    public bool CustomBudgetVisible => PerformanceModeIndex == (int)PerformanceMode.Custom;
+
+    /// <summary>进程内存预算读数文本（滑块右侧）。</summary>
+    public string CacheBudgetText => $"{CacheBudgetMb:0} MB";
+
+    partial void OnPerformanceModeIndexChanged(int value) => OnPropertyChanged(nameof(CustomBudgetVisible));
+
+    partial void OnCacheBudgetMbChanged(double value) => OnPropertyChanged(nameof(CacheBudgetText));
 
     /// <summary>组件边缘磁吸总开关（关闭后用户自由摆位）。</summary>
     [ObservableProperty] private bool _enableWidgetSnap = true;
@@ -109,6 +125,11 @@ public partial class SettingsPageViewModel : ObservableObject
         WidgetOpacity = Safe(_settings.LoadWidgetOpacity, WidgetAppearance.DefaultOpacity, "不透明度");
         WidgetMaterialIntensity = Safe(_settings.LoadWidgetMaterialIntensity, 0.65, "材质浓度");
         EnableWidgetSnap = Safe(_settings.LoadWidgetSnapEnabled, true, "边缘磁吸");
+
+        // 性能模式 / 内存门禁
+        PerformanceModeIndex = (int)Safe(_settings.LoadPerformanceMode, PerformanceMode.Balanced, "性能模式");
+        CacheBudgetMb = Safe(_settings.LoadCacheBudgetMb, 200.0, "缓存预算");
+        MaxCacheCount = Safe(_settings.LoadMaxImageCacheCount, 256, "缓存上限");
 
         // 本地文件索引（P0-1b）：根目录每行一个；上限数字
         FileIndexRootsText = string.Join("\n", Safe(_settings.LoadFileIndexRoots, Array.Empty<string>(), "索引目录"));
@@ -238,6 +259,9 @@ public partial class SettingsPageViewModel : ObservableObject
             _settings.SaveWidgetOpacity(WidgetOpacity);
             _settings.SaveWidgetMaterialIntensity(WidgetMaterialIntensity);
             _settings.SaveMainWindowTranslucent(MainWindowTranslucent);
+            _settings.SavePerformanceMode((PerformanceMode)PerformanceModeIndex);
+            _settings.SaveCacheBudgetMb(CacheBudgetMb);
+            _settings.SaveMaxImageCacheCount(MaxCacheCount);
 
             var github = new StarMark.Integrations.GitHub.GitHubOptions();
             if (!string.IsNullOrWhiteSpace(GithubToken)) github.Token = GithubToken.Trim();

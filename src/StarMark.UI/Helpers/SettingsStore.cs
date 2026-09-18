@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using StarMark.Core.Performance;
 
 namespace StarMark.UI.Helpers;
 
@@ -30,7 +31,7 @@ public enum WidgetBackdropKind
 /// 用户设置持久化（目前仅主题偏好）。
 /// 存储位置：STARMARK_SETTINGS_PATH > 数据库同目录(开发期跟随 STARMARK_DB_PATH) > %APPDATA%\StarMark\settings.json。
 /// </summary>
-public sealed class SettingsStore
+public sealed class SettingsStore : IPerformanceSettingsSource
 {
     private readonly string _path;
     private sealed class SettingsData
@@ -55,6 +56,12 @@ public sealed class SettingsStore
         public double? WidgetMaterialIntensity { get; set; }
         /// <summary>主窗口是否也使用同一套半透明材质（默认开启）。</summary>
         public bool? MainWindowTranslucent { get; set; }
+        /// <summary>性能模式：0=均衡（默认）1=省资源 2=自定义。常驻应用的内存/缓存预算开关。</summary>
+        public int? PerformanceMode { get; set; }
+        /// <summary>自定义性能模式下的进程工作集预算（MB，默认 200）。超预算时 MemoryReclaimer 触发回收。</summary>
+        public double? CacheBudgetMb { get; set; }
+        /// <summary>自定义性能模式下有界缓存的最大条目数（默认 256）。</summary>
+        public int? MaxImageCacheCount { get; set; }
     }
 
     public SettingsStore(string? path = null) => _path = path ?? ResolveSettingsPath();
@@ -190,6 +197,51 @@ public sealed class SettingsStore
     {
         var d = Load() ?? new SettingsData();
         d.MainWindowTranslucent = enabled;
+        Save(d);
+    }
+
+    /// <summary>性能模式（默认均衡）。旧版 settings.json 无该字段时回退均衡。</summary>
+    public PerformanceMode LoadPerformanceMode()
+    {
+        if (Load() is { } d && d.PerformanceMode is { } raw && Enum.IsDefined(typeof(PerformanceMode), raw))
+            return (PerformanceMode)raw;
+        return PerformanceMode.Balanced;
+    }
+
+    public void SavePerformanceMode(PerformanceMode mode)
+    {
+        var d = Load() ?? new SettingsData();
+        d.PerformanceMode = (int)mode;
+        Save(d);
+    }
+
+    /// <summary>自定义模式下的进程工作集预算（MB，默认 200）。</summary>
+    public double LoadCacheBudgetMb()
+    {
+        if (Load() is { } d && d.CacheBudgetMb is > 0)
+            return Math.Clamp(d.CacheBudgetMb.Value, 32.0, 4096.0);
+        return 200.0;
+    }
+
+    public void SaveCacheBudgetMb(double mb)
+    {
+        var d = Load() ?? new SettingsData();
+        d.CacheBudgetMb = Math.Clamp(mb, 32.0, 4096.0);
+        Save(d);
+    }
+
+    /// <summary>自定义模式下的有界缓存最大条目数（默认 256）。</summary>
+    public int LoadMaxImageCacheCount()
+    {
+        if (Load() is { } d && d.MaxImageCacheCount is > 0)
+            return Math.Clamp(d.MaxImageCacheCount.Value, 16, 4096);
+        return 256;
+    }
+
+    public void SaveMaxImageCacheCount(int count)
+    {
+        var d = Load() ?? new SettingsData();
+        d.MaxImageCacheCount = Math.Clamp(count, 16, 4096);
         Save(d);
     }
 

@@ -219,6 +219,51 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- 性能模式 / 内存门禁 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="性能模式 / 内存门禁" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock Text="常驻应用按预算回收内存与缓存（DeskBox 同款 MemoryReclaimer）。低内存机器选「省资源」；需要精细控制选「自定义」。"
+                                           Style="{StaticResource SettingRowText}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <TextBlock Grid.Column="0" Text="性能模式" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
+                                    <ComboBox Grid.Column="1" MinWidth="200" SelectedIndex="{x:Bind ViewModel.PerformanceModeIndex, Mode=TwoWay}">
+                                        <ComboBoxItem Content="均衡（默认，体验优先）"/>
+                                        <ComboBoxItem Content="省资源（低内存 / 笔记本）"/>
+                                        <ComboBoxItem Content="自定义"/>
+                                    </ComboBox>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16"
+                                      Visibility="{x:Bind ViewModel.CustomBudgetVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="进程内存预算（MB）"/>
+                                        <TextBlock Text="超过即触发回收" Style="{StaticResource SettingRowText}"/>
+                                    </StackPanel>
+                                    <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
+                                        <Slider Grid.Column="0" Minimum="32" Maximum="2048" StepFrequency="16" Width="150"
+                                                Value="{x:Bind ViewModel.CacheBudgetMb, Mode=TwoWay}"/>
+                                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Width="56"
+                                                   Text="{x:Bind ViewModel.CacheBudgetText, Mode=OneWay}"
+                                                   Style="{StaticResource MutedText}"/>
+                                    </Grid>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16"
+                                      Visibility="{x:Bind ViewModel.CustomBudgetVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="缓存最大条目数"/>
+                                        <TextBlock Text="图片 / 头像等有界缓存上限" Style="{StaticResource SettingRowText}"/>
+                                    </StackPanel>
+                                    <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
+                                        <Slider Grid.Column="0" Minimum="16" Maximum="1024" StepFrequency="16" Width="150"
+                                                Value="{x:Bind ViewModel.MaxCacheCount, Mode=TwoWay}"/>
+                                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Width="46"
+                                                   Text="{x:Bind ViewModel.MaxCacheCount, Mode=OneWay}"
+                                                   Style="{StaticResource MutedText}"/>
+                                    </Grid>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
                         <!-- 布局方案 -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">

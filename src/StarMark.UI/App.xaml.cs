@@ -6,6 +6,7 @@ using StarMark.Abstractions;
 using StarMark.Abstractions.Backup;
 using StarMark.Core.Backup;
 using StarMark.Core.Widgets;
+using StarMark.Core.Performance;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
@@ -127,6 +128,8 @@ public partial class App : Application
         // 桌面组件（DeskBox 式独立小组件）
         services.AddSingleton<WidgetStorage>();
         services.AddSingleton<WidgetManager>();
+        // 内存门禁（常驻进程按性能模式预算回收）
+        services.AddSingleton<MemoryReclaimer>();
 
         // 全局快捷键（动作映射 + 冲突允许；见 HotkeyService）
         services.AddSingleton<HotkeyService>();
@@ -141,6 +144,10 @@ public partial class App : Application
         services.AddTransient<SettingsPageViewModel>();
 
         Services = services.BuildServiceProvider();
+
+        // 性能模式设置来源注入（MemoryReclaimer 经 PerformanceSettingsPolicy 读取预算）
+        try { PerformanceSettingsPolicy.Provider = new SettingsStore(); }
+        catch (Exception pex) { StarLog.Error("性能模式设置来源注入失败", pex); }
 
         // Everything 就绪流程：SDK DLL 缺失自动下载；主程序未运行时自动安装（用户要求默认安装；失败静默降级）
         _ = Task.Run(async () =>
@@ -226,6 +233,10 @@ public partial class App : Application
                     ? settings.GetHotkeyBindings()
                     : new Dictionary<string, HotkeyGesture>();
                 hotkey.ApplyBindings(bindings);
+
+                // 内存门禁：常驻进程按性能模式预算回收（best-effort，失败不影响启动）
+                try { Services.GetRequiredService<MemoryReclaimer>().Start(); }
+                catch (Exception rex) { StarLog.Error("内存门禁启动失败", rex); }
             }
             catch (Exception ex)
             {
