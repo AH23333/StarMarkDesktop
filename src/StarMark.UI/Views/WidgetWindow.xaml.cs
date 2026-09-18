@@ -64,6 +64,11 @@ public sealed partial class WidgetWindow : Window
     private MenuFlyoutItem? _collapseMenuItem;
     private MenuFlyoutItem? _hideChromeMenuItem;
 
+    // ── 胶囊三段式热区 / 悬停预览 / 隐私（B-10）──
+    /// <summary>悬停预览中：此时窗口临时展开到正常尺寸，但外壳模式仍是 Compact，
+    /// 离开窗口即收回胶囊；该标志让尺寸夹取（OnAppWindowChanged）临时放行。</summary>
+    private bool _peeking;
+
     public WidgetKind Kind => _kind;
     public bool IsVisible => AppWindow.IsVisible;
 
@@ -110,6 +115,8 @@ public sealed partial class WidgetWindow : Window
     /// <summary>胶囊模式下，若系统仍改变了窗口尺寸（原生边框 / 系统快捷键吸附），立即夹回胶囊尺寸。</summary>
     private void OnAppWindowChanged(object? sender, Microsoft.UI.Windowing.AppWindowChangedEventArgs e)
     {
+        // 悬停预览临时展开时放行尺寸，避免被夹回胶囊
+        if (_peeking) return;
         if (!e.DidSizeChange || _chromeMode != WidgetChromeMode.Compact || _capsuleWidth <= 0) return;
         var scale = WindowInterop.GetScale(this);
         var capH = (int)(36 * scale);
@@ -272,6 +279,7 @@ public sealed partial class WidgetWindow : Window
             }
             inst.Topmost = _config.Topmost;
             inst.ChromeMode = _chromeMode;
+            inst.PrivacyMode = _config.PrivacyMode;
 
             // 每显示器拓扑：记录所在显示器设备名 + DIP 偏移/尺寸（恢复时按当前 DPI 还原）
             try
@@ -441,6 +449,11 @@ public sealed partial class WidgetWindow : Window
         DragBar.ContextFlyout = _contextMenu;
         RootBorder.ContextFlyout = _contextMenu;
 
+        // 胶囊三段式热区 + 悬停预览（B-10）：仅在 Compact 态生效，标准态走原有标题栏按钮
+        DragBar.Tapped += DragBar_Tapped;
+        RootBorder.PointerEntered += RootBorder_PointerEntered;
+        RootBorder.PointerExited += RootBorder_PointerExited;
+
         if (WidgetStorage.IsResizable(_kind))
         {
             AddResizeGrips();
@@ -502,6 +515,21 @@ public sealed partial class WidgetWindow : Window
         };
         _hideChromeMenuItem.Click += (_, _) => ToggleHidden();
         menu.Items.Add(_hideChromeMenuItem);
+
+        // 隐私模式（B-10）：收起为胶囊时隐藏标题，避免胶囊泄露组件身份/内容
+        var privacyItem = new ToggleMenuFlyoutItem
+        {
+            Text = "隐私模式（胶囊态隐藏标题）",
+            Icon = new FontIcon { Glyph = "\uE72E", FontSize = 12 }, // 锁
+            IsChecked = _config.PrivacyMode,
+        };
+        privacyItem.Click += (_, _) =>
+        {
+            _config.PrivacyMode = privacyItem.IsChecked;
+            ApplyChromeMode(_chromeMode);   // 刷新标题可见性
+            PersistBounds();                // 持久化开关
+        };
+        menu.Items.Add(privacyItem);
 
         menu.Items.Add(new MenuFlyoutSeparator());
         var showAll = new MenuFlyoutItem { Text = "全部显示" };
@@ -621,6 +649,9 @@ public sealed partial class WidgetWindow : Window
     {
         try
         {
+            // 进入任何外壳模式都取消悬停预览（_peeking 仅在 Compact 临时展开期间为真）
+            _peeking = false;
+
             // 该类型不允许收起外壳时，Hidden 回退为 Standard（Compact 仍允许，因为仅缩标题高度）
             if (mode == WidgetChromeMode.Hidden &&
                 !(WidgetRegistry.Default.TryGet(_kind, out var desc) && desc.CanHideChrome))
@@ -642,6 +673,11 @@ public sealed partial class WidgetWindow : Window
             ContentScroll.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
             SetGripsVisible(!compact);
 
+            // 隐私模式：Compact 态隐藏标题（正文已隐含隐藏），避免胶囊泄露组件身份/内容；
+            // 标准态不隐藏（正文可见，隐私无意义），仅收起态生效。
+            var hideTitle = compact && _config.PrivacyMode;
+            WidgetTitle.Visibility = hideTitle ? Visibility.Collapsed : Visibility.Visible;
+
             if (compact) CollapseToCapsule();
             else ExpandToNormal();
 
@@ -655,7 +691,11 @@ public sealed partial class WidgetWindow : Window
         }
     }
 
-    /// <summary>收起为胶囊：锁定当前宽度，把窗口高度缩到标题栏高度（36 DIP 物理像素）。</summary>
+    /// <summary>
+    /// 收起为胶囊：锁定当前宽度，把窗口高度缩到标题栏高度（36 DIP 物理像素）。
+    /// 组合栏（B-10）：同时吸附到最近的屏幕垂直边缘（左/右），并与同边缘已停靠的其它胶囊向下堆叠，
+    /// 形成一列可顺手点开的停靠栏。
+    /// </summary>
     private void CollapseToCapsule()
     {
         var scale = WindowInterop.GetScale(this);
@@ -663,7 +703,32 @@ public sealed partial class WidgetWindow : Window
         if (r.Width <= 0 || r.Height <= 0) return;
         _capsuleWidth = r.Width;
         var capH = (int)(36 * scale);
-        AppWindow.MoveAndResize(new RectInt32(r.X, r.Y, _capsuleWidth, capH));
+
+        int dockX, y;
+        try
+        {
+            var wa = WindowInterop.GetWorkArea(this);
+            var toLeft = (r.X + r.Width / 2) < (wa.X + wa.Width / 2);
+            dockX = toLeft ? wa.X + 8 : wa.X + wa.Width - _capsuleWidth - 8;
+            y = wa.Y + 8;
+            // 与同边缘（X 对齐到 dockX）已停靠（高度≈胶囊）的其它组件堆叠，避免重叠
+            foreach (var o in _manager.GetOtherBounds(_instanceId))
+            {
+                if (Math.Abs(o.X - dockX) <= 8 && o.Height <= capH + 6)
+                {
+                    var bottom = o.Y + o.Height + 8;
+                    if (bottom > y) y = bottom;
+                }
+            }
+        }
+        catch
+        {
+            // 拿不到工作区/其它实例边界时回退到当前位置
+            dockX = r.X;
+            y = r.Y;
+        }
+
+        AppWindow.MoveAndResize(new RectInt32(dockX, y, _capsuleWidth, capH));
     }
 
     /// <summary>展开为正常：恢复 config 记录的展开态尺寸（位置保持当前，避免跳动）。</summary>
@@ -687,6 +752,73 @@ public sealed partial class WidgetWindow : Window
 
     private void ToggleHidden() =>
         ApplyChromeMode(_chromeMode == WidgetChromeMode.Hidden ? WidgetChromeMode.Standard : WidgetChromeMode.Hidden);
+
+    // ── 胶囊三段式热区 + 悬停预览（B-10）──
+
+    /// <summary>
+    /// 胶囊态标题栏的点击分区（仅在 Compact 生效）：左 1/3 = 主操作、中 1/3 = 展开、右 1/3 = 弹出菜单。
+    /// 拖动用 PointerPressed/Moved/Released 处理，Tapped 只在「未拖动」时触发，两者不冲突。
+    /// </summary>
+    private void DragBar_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (_chromeMode != WidgetChromeMode.Compact) return;
+        var w = DragBar.ActualWidth;
+        if (w <= 0) return;
+        var x = e.GetPosition(DragBar).X;
+        if (x < w / 3.0) ActivatePrimary();
+        else if (x < 2.0 * w / 3.0) ToggleCompact();
+        else _contextMenu?.ShowAt(DragBar, e.GetPosition(DragBar));
+    }
+
+    /// <summary>主操作（胶囊左区）：搜索/快捷启动/各条目格 → 唤起主窗口；时钟/待办/随记 → 就地展开交互。</summary>
+    private void ActivatePrimary()
+    {
+        if (_kind is WidgetKind.Search or WidgetKind.QuickLaunch
+            or WidgetKind.SearchResults or WidgetKind.TagGrid
+            or WidgetKind.Activity or WidgetKind.Pinned)
+        {
+            _manager.OpenMainWindow();
+        }
+        else if (_chromeMode == WidgetChromeMode.Compact)
+        {
+            ToggleCompact();   // 时钟/待办/随记：展开到正常态以便直接操作
+        }
+    }
+
+    /// <summary>鼠标进入组件窗口（Compact 态且非拖动/预览中）→ 临时展开预览内容，离开即收回。</summary>
+    private void RootBorder_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        if (_chromeMode == WidgetChromeMode.Compact && !_dragging && !_peeking) PeekExpand();
+    }
+
+    private void RootBorder_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (_peeking) CollapsePeek();
+    }
+
+    /// <summary>悬停预览：临时把胶囊展开到正常尺寸并显示内容（外壳模式仍为 Compact，故尺寸夹取放行）。</summary>
+    private void PeekExpand()
+    {
+        if (_chromeMode != WidgetChromeMode.Compact || _peeking || _dragging) return;
+        _peeking = true;
+        var scale = WindowInterop.GetScale(this);
+        var w = (int)_config.Width > 0 ? (int)_config.Width : (int)(WidgetStorage.DefaultWidth(_kind) * scale);
+        var h = (int)_config.Height > 0 ? (int)_config.Height : (int)(WidgetStorage.DefaultHeight(_kind) * scale);
+        var r = WindowInterop.GetWindowRect(this);
+        RootGrid.RowDefinitions[1].Height = new GridLength(1, GridUnitType.Star);
+        ContentScroll.Visibility = Visibility.Visible;
+        AppWindow.MoveAndResize(new RectInt32(r.X, r.Y, w, h));
+    }
+
+    /// <summary>收回悬停预览：恢复胶囊尺寸与隐藏内容。</summary>
+    private void CollapsePeek()
+    {
+        if (!_peeking) return;
+        _peeking = false;
+        RootGrid.RowDefinitions[1].Height = new GridLength(0);
+        ContentScroll.Visibility = Visibility.Collapsed;
+        CollapseToCapsule();
+    }
 
     /// <summary>同步折叠按钮图标与右键菜单文案到当前外壳模式。</summary>
     private void UpdateChromeControls()
@@ -720,6 +852,7 @@ public sealed partial class WidgetWindow : Window
     {
         if (e.GetCurrentPoint(DragBar).Properties.IsRightButtonPressed) return;
         if (FindAncestorButton(e.OriginalSource as DependencyObject)) return;
+        if (_peeking) CollapsePeek();   // 悬停预览期间按下即先收回胶囊，再按胶囊拖动
 
         WindowInterop.GetCursorPos(out _gestureStart);
         _gestureStartRect = WindowInterop.GetWindowRect(this);

@@ -84,6 +84,12 @@ public sealed class WidgetInstanceConfig
     /// </summary>
     public WidgetChromeMode ChromeMode { get; set; } = WidgetChromeMode.Standard;
 
+    /// <summary>
+    /// 隐私模式（B-10）：收起为胶囊时隐藏标题，避免他人从胶囊窥见组件身份/内容。
+    /// 仅影响 Compact 态显示，不改变功能与持久化。旧实例缺字段默认 false（零迁移）。
+    /// </summary>
+    public bool PrivacyMode { get; set; }
+
     // ── 每显示器拓扑布局（Phase B）：位置以 DIP 存为「所在显示器工作区左上角」的偏移，
     //    配合 MonitorDevice 在恢复时按该显示器当前 DPI 重新换算物理像素；
     //    MonitorDevice 为空（旧实例/降级路径）时回退物理像素 X/Y/Width/Height 并做越界回收。
