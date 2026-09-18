@@ -52,7 +52,7 @@ public sealed class SearchFilter
     public bool IncludeDate { get; init; }
 
     /// <summary>最大返回条数。</summary>
-    public int MaxResults { get; init; } = 100;
+    public int MaxResults { get; init; } = AppConstants.DefaultMaxResults;
 
     /// <summary>偏移量（分页）。</summary>
     public int Offset { get; init; }

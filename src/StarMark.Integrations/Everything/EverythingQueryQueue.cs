@@ -215,7 +215,7 @@ public sealed class EverythingSource : IItemSource
 
             StarLog.Info("未检测到 Everything：开始自动安装（voidtools 官方 1.4 安装包，静默模式）…");
             var dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StarMark", "downloads");
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), StarMark.Abstractions.AppConstants.AppName, "downloads");
             Directory.CreateDirectory(dir);
             var installer = Path.Combine(dir, "Everything-1.4.1.1028.x64-Setup.exe");
             if (!File.Exists(installer))

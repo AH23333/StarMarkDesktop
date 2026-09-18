@@ -40,6 +40,6 @@ public sealed class DbConnectionFactory
     public static string DefaultDbPath()
     {
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, "StarMark", "starmark.db");
+        return Path.Combine(appData, StarMark.Abstractions.AppConstants.AppName, "starmark.db");
     }
 }

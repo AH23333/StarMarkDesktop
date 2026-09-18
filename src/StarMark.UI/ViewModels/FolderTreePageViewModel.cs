@@ -98,7 +98,7 @@ public partial class FolderTreePageViewModel : ObservableObject
         {
             _tagChangeTimer = null;
             _ = LoadCommand.ExecuteAsync(null);
-        }, null, 250, Timeout.Infinite);
+        }, null, AppConstants.TreeDebounceMs, Timeout.Infinite);
     }
 
     [RelayCommand]

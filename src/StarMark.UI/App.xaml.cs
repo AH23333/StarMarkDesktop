@@ -55,7 +55,7 @@ public partial class App : Application
         {
             var logPath = System.IO.Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "StarMark", "logs");
+                StarMark.Abstractions.AppConstants.AppName, "logs");
             MessageBoxW(IntPtr.Zero,
                 $"StarMark 启动失败：\n\n{ex.GetType().Name}: {ex.Message}\n\n详细日志见：\n{logPath}",
                 "StarMark 启动错误", 0x10 /* MB_ICONERROR */);

@@ -158,7 +158,7 @@ public sealed class SettingsStore
     {
         if (Load() is { } d && d.WidgetOpacity is > 0)
             return Math.Clamp(d.WidgetOpacity.Value, 0.3, 1.0);
-        return 0.72;
+        return WidgetAppearance.DefaultOpacity;
     }
 
     public void SaveWidgetOpacity(double opacity)
@@ -280,6 +280,6 @@ public sealed class SettingsStore
         }
 
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, "StarMark", "settings.json");
+        return Path.Combine(appData, StarMark.Abstractions.AppConstants.AppName, "settings.json");
     }
 }

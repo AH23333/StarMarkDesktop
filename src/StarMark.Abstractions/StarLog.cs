@@ -12,7 +12,7 @@ public static class StarLog
     private static readonly object Gate = new();
 
     public static string LogDirectory
-        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StarMark", "logs");
+        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppConstants.AppName, "logs");
 
     public static string CurrentLogFile
         => Path.Combine(LogDirectory, $"starmark-{DateTime.Now:yyyyMMdd}.log");

@@ -56,7 +56,7 @@ public sealed class BackupService
         {
             if (SnapshotDirectoryOverride is not null) return SnapshotDirectoryOverride;
             var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            return Path.Combine(local, "StarMark", "backups");
+            return Path.Combine(local, StarMark.Abstractions.AppConstants.AppName, "backups");
         }
     }
 

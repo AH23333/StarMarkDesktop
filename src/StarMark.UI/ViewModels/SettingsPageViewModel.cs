@@ -106,7 +106,7 @@ public partial class SettingsPageViewModel : ObservableObject
         // 外观 + 磁吸
         MainWindowTranslucent = Safe(_settings.LoadMainWindowTranslucent, true, "主窗口材质");
         BackdropIndex = (int)Safe(_settings.LoadWidgetBackdrop, WidgetBackdropKind.Acrylic, "外观材质");
-        WidgetOpacity = Safe(_settings.LoadWidgetOpacity, 0.72, "不透明度");
+        WidgetOpacity = Safe(_settings.LoadWidgetOpacity, WidgetAppearance.DefaultOpacity, "不透明度");
         WidgetMaterialIntensity = Safe(_settings.LoadWidgetMaterialIntensity, 0.65, "材质浓度");
         EnableWidgetSnap = Safe(_settings.LoadWidgetSnapEnabled, true, "边缘磁吸");
 

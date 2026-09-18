@@ -165,7 +165,7 @@ public sealed class WidgetStorage
         }
 
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, "StarMark", "widgets.json");
+        return Path.Combine(appData, StarMark.Abstractions.AppConstants.AppName, "widgets.json");
     }
 
     /// <summary>全部组件类型（设置页 / 托盘菜单遍历用），来源为 <see cref="WidgetRegistry"/>。</summary>

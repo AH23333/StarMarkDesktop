@@ -82,7 +82,7 @@ internal static class EverythingInterop
         get
         {
             var dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StarMark", "sdk");
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), StarMark.Abstractions.AppConstants.AppName, "sdk");
             return Path.Combine(dir, "Everything64.dll");
         }
     }
@@ -151,7 +151,7 @@ internal static class EverythingInterop
 
         Everything_Reset();
         Everything_SetRequestFlags((uint)flags);
-        Everything_SetMax((uint)Math.Min(maxResults, 20000));
+        Everything_SetMax((uint)Math.Min(maxResults, AppConstants.EverythingMaxResults));
         Everything_SetSearchW(query);
 
         if (!Everything_QueryW(true))

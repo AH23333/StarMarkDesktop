@@ -24,7 +24,7 @@ public sealed class GitHubOptions
 
     /// <summary>配置文件路径：&lt;APPDATA&gt;/StarMark/github.json</summary>
     public static string DefaultConfigPath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "StarMark", "github.json");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), StarMark.Abstractions.AppConstants.AppName, "github.json");
 
     /// <summary>从文件加载配置。文件不存在则返回空对象。</summary>
     public static GitHubOptions Load(string? path = null)
