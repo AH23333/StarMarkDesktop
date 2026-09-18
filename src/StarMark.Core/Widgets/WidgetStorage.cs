@@ -127,6 +127,42 @@ public sealed class WidgetInstanceConfig
     /// <summary>搜索结果格所钉的标签过滤（AND 语义，SearchResults 用）。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<string>? GridTags { get; set; }
+
+    /// <summary>每实例外观覆盖（材质/颜色/边框/圆角/文本缩放）。为 null 时本实例沿用全局外观设置。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WidgetAppearanceOverride? Appearance { get; set; }
+}
+
+/// <summary>每实例外观覆盖（任一字段为 null 即回退到全局设置）。</summary>
+public sealed class WidgetAppearanceOverride
+{
+    /// <summary>材质覆盖（亚克力/云母/不透明）。null = 用全局。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StarMark.Abstractions.WidgetBackdropKind? Backdrop { get; set; }
+
+    /// <summary>背景色（#RRGGBB 或 #AARRGGBB）。null = 用全局材质表面（透明/实色随主题）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? BackgroundColor { get; set; }
+
+    /// <summary>前景（文本）色（#RRGGBB）。null = 用主题默认。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ForegroundColor { get; set; }
+
+    /// <summary>边框色（#RRGGBB）。null = 用主题默认（1px 分隔色）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? BorderColor { get; set; }
+
+    /// <summary>边框粗细（物理 px）。null = 用全局（1）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? BorderThickness { get; set; }
+
+    /// <summary>圆角半径（物理 px）。null = 用全局（8）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? CornerRadius { get; set; }
+
+    /// <summary>文本缩放（1.0 = 100%）。null = 用全局（1.0）。范围建议 0.7–1.5。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? TextScale { get; set; }
 }
 
 /// <summary>组件存储根。</summary>

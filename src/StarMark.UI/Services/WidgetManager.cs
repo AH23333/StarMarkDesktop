@@ -127,6 +127,17 @@ public sealed class WidgetManager
             ShowInternal(cfg.Id);
         });
 
+    /// <summary>保存某实例的外观覆盖（材质/颜色/边框/圆角/文本缩放）。appearance 为 null 表示清除覆盖、回退全局。</summary>
+    public Task SaveInstanceAppearanceAsync(string id, WidgetAppearanceOverride? appearance)
+        => OnUiAsync(() =>
+        {
+            var data = _storage.Load();
+            var inst = data.Instances.FirstOrDefault(i => i.Id == id);
+            if (inst is null) return;
+            inst.Appearance = appearance;
+            _storage.Save(data);
+        });
+
     /// <summary>移除指定实例（标题栏 ✕ / 设置页移除 / 菜单"移除本组件"）。</summary>
     public Task RemoveInstanceAsync(string id)
         => OnUiAsync(() =>

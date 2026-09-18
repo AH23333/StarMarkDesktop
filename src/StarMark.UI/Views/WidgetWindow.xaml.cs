@@ -328,20 +328,61 @@ public sealed partial class WidgetWindow : Window
     }
 
     /// <summary>
-    /// 应用「毛玻璃材质 + 用户设定的表面不透明度」（构造时与设置变更后共用）。
-    /// 原生亚克力 / 云母用 DesktopAcrylicController / MicaController 接管窗口背景，内容背景透明；
-    /// 不透明材质回到实色。材质可在设置页「常规 → 外观」切换。
+    /// 应用「毛玻璃材质 + 表面不透明度 + 每实例外观覆盖」（构造时与设置变更后共用）。
+    /// 每实例可在 <see cref="WidgetInstanceConfig.Appearance"/> 覆盖材质/背景/前景/边框/圆角/文本缩放，
+    /// 任一字段为 null 即回退到全局设置（设置页「常规 → 外观」）。
     /// </summary>
     private void ApplyAppearanceCore()
     {
         try
         {
-            var kind = WidgetAppearance.Backdrop();
+            var ov = _config.Appearance;
+            var globalKind = WidgetAppearance.Backdrop();
+
+            // 自定义背景色优先覆盖材质（实色铺满会盖住霜化背景，故强制 None）
+            var useCustomBg = !string.IsNullOrWhiteSpace(ov?.BackgroundColor);
+            var kind = useCustomBg ? StarMark.Abstractions.WidgetBackdropKind.None : (ov?.Backdrop ?? globalKind);
             WidgetAppearance.ApplyBackdrop(
                 this, kind, WidgetAppearance.Opacity(), WidgetAppearance.MaterialIntensity(), RootBorder.ActualTheme);
-            var surface = WidgetAppearance.SurfaceBrush(RootBorder.ActualTheme, kind);
+
+            Brush surface = useCustomBg
+                ? (WidgetAppearance.ParseColorBrush(ov!.BackgroundColor!) ?? WidgetAppearance.SurfaceBrush(RootBorder.ActualTheme, globalKind))
+                : WidgetAppearance.SurfaceBrush(RootBorder.ActualTheme, kind);
             RootBorder.Background = surface;
             DragBar.Background = surface;
+
+            // 前景（文本）色：Border 自身无 Foreground，改用可继承的 TextElement.ForegroundProperty 下传至所有文本
+            if (!string.IsNullOrWhiteSpace(ov?.ForegroundColor))
+                RootBorder.SetValue(Microsoft.UI.Xaml.Documents.TextElement.ForegroundProperty,
+                    WidgetAppearance.ParseColorBrush(ov.ForegroundColor!) ?? new SolidColorBrush(Microsoft.UI.Colors.Black));
+            else
+                RootBorder.ClearValue(Microsoft.UI.Xaml.Documents.TextElement.ForegroundProperty);
+
+            // 边框色 / 粗细
+            RootBorder.BorderBrush = !string.IsNullOrWhiteSpace(ov?.BorderColor)
+                ? WidgetAppearance.ParseColorBrush(ov.BorderColor!) ?? RootBorder.BorderBrush
+                : (ThemeBrush.For(RootBorder.ActualTheme, "WidgetBorderBrush") ?? new SolidColorBrush(Microsoft.UI.Colors.Gray));
+            RootBorder.BorderThickness = ov?.BorderThickness is { } bt
+                ? new Thickness(Math.Clamp(bt, 0, 12))
+                : new Thickness(1);
+
+            // 圆角（标题栏仅上方两角随根圆角）
+            var radius = ov?.CornerRadius is { } cr ? Math.Clamp(cr, 0, 32) : 8;
+            RootBorder.CornerRadius = new CornerRadius(radius);
+            if (DragBar is not null)
+                DragBar.CornerRadius = new CornerRadius(radius, radius, 0, 0);
+
+            // 文本缩放：对内容区做 RenderTransform（>1 可能轻微裁切，范围已限制在 0.7–1.5）
+            if (ContentHost is not null)
+            {
+                var scale = ov?.TextScale is { } ts ? Math.Clamp(ts, 0.6, 1.8) : 1.0;
+                if (scale == 1.0) ContentHost.ClearValue(UIElement.RenderTransformProperty);
+                else
+                {
+                    ContentHost.RenderTransform = new ScaleTransform { ScaleX = scale, ScaleY = scale };
+                    ContentHost.RenderTransformOrigin = new Point(0.5, 0.5);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -478,6 +519,15 @@ public sealed partial class WidgetWindow : Window
         menu.Items.Add(main);
         menu.Items.Add(settings);
 
+        // 每实例外观编辑（B-9）：材质/颜色/边框/圆角/文本缩放，可一键恢复全局
+        var appearance = new MenuFlyoutItem
+        {
+            Text = "外观…",
+            Icon = new FontIcon { Glyph = "\uE790", FontSize = 12 },
+        };
+        appearance.Click += async (_, _) => await EditAppearanceAsync();
+        menu.Items.Add(appearance);
+
         // 布局方案：保存当前这一屏，或切换到已保存的布局（同一时刻只显示一套）
         menu.Items.Add(new MenuFlyoutSeparator());
         var saveLayout = new MenuFlyoutItem
@@ -530,6 +580,22 @@ public sealed partial class WidgetWindow : Window
     {
         try { await CenteredDialog.MessageAsync(title, message, owner: this); }
         catch { /* 窗口正在关闭 */ }
+    }
+
+    /// <summary>打开每实例外观编辑浮层（B-9），确定后实时套用并持久化到 widgets.json。</summary>
+    private async System.Threading.Tasks.Task EditAppearanceAsync()
+    {
+        try
+        {
+            var ov = await WidgetAppearanceEditor.ShowAsync(this, _config);
+            _config.Appearance = ov;          // ov 为 null = 清除覆盖（回退全局）
+            ApplyAppearanceCore();            // 实时套用
+            await _manager.SaveInstanceAppearanceAsync(_instanceId, ov);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("编辑组件外观失败", ex);
+        }
     }
 
     private void PinButton_Click(object sender, RoutedEventArgs e) => TogglePin();

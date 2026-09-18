@@ -169,4 +169,26 @@ public static class WidgetAppearance
 
     /// <summary>便捷重载：按当前设置读出材质。</summary>
     public static Brush SurfaceBrush(ElementTheme theme) => SurfaceBrush(theme, Backdrop());
+
+    /// <summary>解析 #RRGGBB / #AARRGGBB 为实色画笔；格式非法或空返回 null（调用方据此回退主题）。</summary>
+    public static SolidColorBrush? ParseColorBrush(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return null;
+        var s = hex!.Trim().TrimStart('#');
+        if (s.Length == 6) s = "FF" + s;
+        if (s.Length != 8) return null;
+        var a = (byte)((HexDig(s[0]) << 4) | HexDig(s[1]));
+        var r = (byte)((HexDig(s[2]) << 4) | HexDig(s[3]));
+        var g = (byte)((HexDig(s[4]) << 4) | HexDig(s[5]));
+        var b = (byte)((HexDig(s[6]) << 4) | HexDig(s[7]));
+        return new SolidColorBrush(ColorHelper.FromArgb(a, r, g, b));
+    }
+
+    private static int HexDig(char c) => c switch
+    {
+        >= '0' and <= '9' => c - '0',
+        >= 'a' and <= 'f' => c - 'a' + 10,
+        >= 'A' and <= 'F' => c - 'A' + 10,
+        _ => 0,
+    };
 }
