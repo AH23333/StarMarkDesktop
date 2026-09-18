@@ -128,8 +128,9 @@ public partial class App : Application
         // 桌面组件（DeskBox 式独立小组件）
         services.AddSingleton<WidgetStorage>();
         services.AddSingleton<WidgetManager>();
-        // 内存门禁（常驻进程按性能模式预算回收）
-        services.AddSingleton<MemoryReclaimer>();
+        // 内存门禁（常驻进程按性能模式预算回收）。MemoryReclaimer 设计为静态单例（Default），
+        // 构造器为 private，不能由 DI 直接 new；注册其单例实例，GetRequiredService 才能取到并 Start。
+        services.AddSingleton(MemoryReclaimer.Default);
 
         // 全局快捷键（动作映射 + 冲突允许；见 HotkeyService）
         services.AddSingleton<HotkeyService>();

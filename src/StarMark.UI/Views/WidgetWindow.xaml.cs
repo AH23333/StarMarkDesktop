@@ -359,12 +359,17 @@ public sealed partial class WidgetWindow : Window
             RootBorder.Background = surface;
             DragBar.Background = surface;
 
-            // 前景（文本）色：Border 自身无 Foreground，改用可继承的 TextElement.ForegroundProperty 下传至所有文本
+            // 前景（文本）色：Border 自身无 Foreground，改用可继承的 TextElement.ForegroundProperty 下传至所有文本。
+            // 严禁对 Border 调用 ClearValue(TextElement.ForegroundProperty)：ForegroundProperty 是 TextElement 注册的
+            // 附加属性，而 Border 并非 TextElement，WinUI 3 原生层对“非拥有类型”执行 ClearValue 会触发 AccessViolation
+            // （0xc0000005，Corrupted-State 异常，try/catch 捕获不到，直接进程崩溃）。重置时改用 SetValue 套回主题默认
+            // 文本色（SetValue 走的是标准安全路径，不会 AV）。
+            var fgDefault = DefaultForegroundBrush(RootBorder.ActualTheme);
             if (!string.IsNullOrWhiteSpace(ov?.ForegroundColor))
                 RootBorder.SetValue(Microsoft.UI.Xaml.Documents.TextElement.ForegroundProperty,
-                    WidgetAppearance.ParseColorBrush(ov.ForegroundColor!) ?? new SolidColorBrush(Microsoft.UI.Colors.Black));
+                    WidgetAppearance.ParseColorBrush(ov.ForegroundColor!) ?? fgDefault);
             else
-                RootBorder.ClearValue(Microsoft.UI.Xaml.Documents.TextElement.ForegroundProperty);
+                RootBorder.SetValue(Microsoft.UI.Xaml.Documents.TextElement.ForegroundProperty, fgDefault);
 
             // 边框色 / 粗细
             RootBorder.BorderBrush = !string.IsNullOrWhiteSpace(ov?.BorderColor)
@@ -406,6 +411,11 @@ public sealed partial class WidgetWindow : Window
             catch { }
         }
     }
+
+    /// <summary>组件文本默认前景色：按窗口实际主题取黑（浅色）/ 白（深色）。用于清除外观覆盖时回退到全局默认。</summary>
+    private static Microsoft.UI.Xaml.Media.Brush DefaultForegroundBrush(ElementTheme theme)
+        => new Microsoft.UI.Xaml.Media.SolidColorBrush(
+            theme == ElementTheme.Dark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black);
 
     /// <summary>设置变更后重新套用外观（材质 / 不透明度），由 WidgetManager 统一调用。</summary>
     public void RefreshAppearance()
