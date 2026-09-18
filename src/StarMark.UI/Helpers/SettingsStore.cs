@@ -55,6 +55,13 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         public int? MaxImageCacheCount { get; set; }
         /// <summary>天气组件所选城市（JSON 序列化的 WeatherCity）。null 表示未选，组件会提示先选城市。</summary>
         public string? WeatherCityJson { get; set; }
+        /// <summary>
+        /// 天气温度单位：0=摄氏（默认）1=华氏。存 <see cref="int"/> 而非枚举字符串——
+        /// 设置 JSON 是用户可手改的，数字比枚举名更不容易写错（解析见 WeatherUnits.Parse）。
+        /// </summary>
+        public int? WeatherUnit { get; set; }
+        /// <summary>天气视图：0=未来三天（默认）1=今日逐时。</summary>
+        public int? WeatherView { get; set; }
     }
 
     public SettingsStore(string? path = null) => _path = path ?? ResolveSettingsPath();
@@ -213,6 +220,36 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         {
             d.WeatherCityJson = null;
         }
+        Save(d);
+    }
+
+    /// <summary>天气温度单位（默认摄氏）。非法值一律回落摄氏。</summary>
+    public WeatherUnit LoadWeatherUnit() => WeatherUnits.Parse(Load()?.WeatherUnit);
+
+    public void SaveWeatherUnit(WeatherUnit unit)
+    {
+        var d = Load() ?? new SettingsData();
+        d.WeatherUnit = (int)unit;
+        Save(d);
+    }
+
+    /// <summary>
+    /// 天气视图（默认未来三天）。非法值回落为 0。
+    /// 注意「先 is 判断再取值」：旧版 settings.json 没有这个字段时为 null，
+    /// 直接写 <c>d.WeatherView ?? 0</c> 再 <c>.Value</c> 会对 null 取值抛 InvalidOperationException。
+    /// </summary>
+    public WeatherForecastView LoadWeatherView()
+    {
+        if (Load()?.WeatherView is { } raw &&
+            Enum.IsDefined(typeof(WeatherForecastView), raw))
+            return (WeatherForecastView)raw;
+        return WeatherForecastView.Daily;
+    }
+
+    public void SaveWeatherView(WeatherForecastView view)
+    {
+        var d = Load() ?? new SettingsData();
+        d.WeatherView = (int)view;
         Save(d);
     }
 

@@ -44,17 +44,41 @@
         <!-- 未来三天预报 -->
         <Grid Grid.Row="2" RowSpacing="6">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- 2：多日预报（吃掉剩余高度） -->
+            <RowDefinition Height="*"/>
+            <!-- 3：今日逐时（与二行共用高度，靠 Visibility 二选一） -->
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
-            <TextBlock Grid.Row="0" Text="未来三天" FontSize="12" Opacity="0.6"/>
+            <TextBlock Grid.Row="0" x:Name="ForecastTitle" Text="未来三天" FontSize="12" Opacity="0.6"
+                       VerticalAlignment="Center"/>
 
-            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <!-- 视图切换（未来三天 / 今日逐时）+ 单位切换（°C / °F） -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="4">
+                <Button x:Name="ViewButton" Height="22" Padding="8,0" FontSize="10"
+                        Content="今日逐时" Click="ViewButton_Click"
+                        ToolTipService.ToolTip="在多日概览与今日逐时之间切换"/>
+                <Button x:Name="UnitButton" Height="22" Padding="8,0" FontSize="10"
+                        Content="°C" Click="UnitButton_Click"
+                        ToolTipService.ToolTip="温度单位（华氏模式下风速同时换成 mph）"/>
+            </StackPanel>
+
+            <!-- 多日预报 -->
+            <ScrollViewer x:Name="DailyScroll" Grid.Row="2"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel x:Name="ForecastHost" Spacing="6"/>
             </ScrollViewer>
 
-            <TextBlock x:Name="EmptyHint" Grid.Row="1" Text="点击上方城市名，选择要查看天气的城市"
+            <!-- 今日逐时：横向滚动，一格一小时 -->
+            <ScrollViewer x:Name="HourlyScroll" Grid.Row="3" Visibility="Collapsed"
+                          HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                          HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled">
+                <StackPanel x:Name="HourlyHost" Orientation="Horizontal" Spacing="10"/>
+            </ScrollViewer>
+
+            <TextBlock x:Name="EmptyHint" Grid.Row="2" Grid.RowSpan="2"
+                       Text="点击上方城市名，选择要查看天气的城市"
                        FontSize="12" Opacity="0.55" TextWrapping="Wrap" Visibility="Collapsed"/>
         </Grid>
     </Grid>

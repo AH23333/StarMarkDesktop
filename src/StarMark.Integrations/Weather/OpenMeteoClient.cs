@@ -45,12 +45,71 @@ public sealed class WeatherDay
     public double MinC { get; set; }
 }
 
+/// <summary>逐小时预报的一个点。</summary>
+public sealed class WeatherHour
+{
+    public DateTimeOffset Time { get; set; }
+    public double TemperatureC { get; set; }
+    /// <summary>WMO 天气码。逐时也带code，"今日逐时"视图据此显示图标。</summary>
+    public int Code { get; set; }
+}
+
+/// <summary>
+/// 温度/风速的展示单位。设置里持久化成 int（0=摄氏 1=华氏），枚举只是为了代码可读。
+/// <para>华氏模式下风速一并换成 mph —— 华氏用户期望的是整套英制，只换温度会很怪。</para>
+/// </summary>
+public enum WeatherUnit
+{
+    Celsius = 0,
+    Fahrenheit = 1,
+}
+
+/// <summary>预报的两种视图：多日概览 / 今日逐时。</summary>
+public enum WeatherForecastView
+{
+    Daily = 0,
+    Hourly = 1,
+}
+
+/// <summary>
+/// 单位换算与格式化。全部是纯函数、无关网络和外设，因此可脱离 UI 单测。
+/// </summary>
+public static class WeatherUnits
+{
+    public static double ToFahrenheit(double celsius) => celsius * 9.0 / 5.0 + 32.0;
+
+    public static double ToMilesPerHour(double kmPerHour) => kmPerHour / 1.609344;
+
+    /// <summary>显示用整数温度字符串，已含单位符号（23° / 73°）。</summary>
+    public static string TemperatureText(double celsius, WeatherUnit unit) =>
+        $"{TemperatureValue(celsius, unit)}°";
+
+    /// <summary>显示用整数温度数值（不带符号），给需要自己排版的地方用。</summary>
+    public static long TemperatureValue(double celsius, WeatherUnit unit) =>
+        (long)Math.Round(unit == WeatherUnit.Fahrenheit ? ToFahrenheit(celsius) : celsius);
+
+    /// <summary>单位后缀（°C / °F），给"23° / 14°"这种区间排版配文字说明时用。</summary>
+    public static string UnitSuffix(WeatherUnit unit) => unit == WeatherUnit.Fahrenheit ? "°F" : "°C";
+
+    /// <summary>风速串。摄氏=km/h，华氏=mph。</summary>
+    public static string WindText(double kmPerHour, WeatherUnit unit) =>
+        unit == WeatherUnit.Fahrenheit
+            ? $"{Math.Round(ToMilesPerHour(kmPerHour))} mph"
+            : $"{Math.Round(kmPerHour)} km/h";
+
+    /// <summary>解析持久化的单位，非法值一律回落摄氏（参考 SettingsStore 可空字段坑：先 is 判断再取值）。</summary>
+    public static WeatherUnit Parse(int? raw) =>
+        raw is { } v && Enum.IsDefined(typeof(WeatherUnit), v) ? (WeatherUnit)v : WeatherUnit.Celsius;
+}
+
 /// <summary>一次完整的天气查询结果（实况 + 多日预报）。</summary>
 public sealed class WeatherReport
 {
     public WeatherCity City { get; set; } = new();
     public WeatherNow Now { get; set; } = new();
     public List<WeatherDay> Days { get; set; } = [];
+    /// <summary>逐小时预报（按时间升序）。"今日逐时"视图用它。</summary>
+    public List<WeatherHour> Hours { get; set; } = [];
     public DateTimeOffset FetchedAt { get; set; }
 }
 
@@ -96,8 +155,11 @@ public sealed class OpenMeteoClient : IDisposable
         // current 只取展示需要的字段，少传一点省带宽也省解析
         const string current = "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m";
         const string daily = "weather_code,temperature_2m_max,temperature_2m_min";
+        // 逐时只取温度与天气码：够画"今日逐时"的图标+温度，不多传一列省解析
+        const string hourly = "temperature_2m,weather_code";
         return $"{ForecastUrl}?latitude={lat}&longitude={lon}" +
                $"&current={Uri.EscapeDataString(current)}&daily={Uri.EscapeDataString(daily)}" +
+               $"&hourly={Uri.EscapeDataString(hourly)}" +
                $"&timezone=auto&forecast_days={forecastDays}";
     }
 
@@ -185,11 +247,34 @@ public sealed class OpenMeteoClient : IDisposable
                 }
             }
 
+            var hours = new List<WeatherHour>();
+            if (root.TryGetProperty("hourly", out var hourly))
+            {
+                var stamps = hourly.TryGetProperty("time", out var ht) && ht.ValueKind == JsonValueKind.Array
+                    ? ht.EnumerateArray().Select(x => x.GetString() ?? string.Empty).ToList()
+                    : [];
+                var hourTemps = ReadNumberArray(hourly, "temperature_2m");
+                var hourCodes = ReadNumberArray(hourly, "weather_code");
+
+                for (var i = 0; i < stamps.Count; i++)
+                {
+                    if (!DateTimeOffset.TryParse(stamps[i], CultureInfo.InvariantCulture, out var when)) continue;
+                    hours.Add(new WeatherHour
+                    {
+                        Time = when,
+                        TemperatureC = i < hourTemps.Count ? hourTemps[i] : 0,
+                        Code = i < hourCodes.Count ? (int)hourCodes[i] : 0,
+                    });
+                }
+            }
+            hours.Sort((a, b) => a.Time.CompareTo(b.Time));
+
             return new WeatherReport
             {
                 City = city,
                 Now = now,
                 Days = days,
+                Hours = hours,
                 FetchedAt = DateTimeOffset.Now,
             };
         }

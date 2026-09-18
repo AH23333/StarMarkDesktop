@@ -37,16 +37,67 @@ public sealed partial class WeatherWidget : UserControl
     private DispatcherQueueTimer? _timer;
     private bool _loading;
 
+    /// <summary>温度单位（°C / °F）。组件内可读，切换按钮据此回写设置。</summary>
+    private WeatherUnit _unit = WeatherUnit.Celsius;
+    /// <summary>当前预报视图：多日 / 逐时。</summary>
+    private WeatherForecastView _view = WeatherForecastView.Daily;
+
     public WeatherWidget()
     {
         InitializeComponent();
         Unloaded += (_, _) => _timer?.Stop();
         Loaded += (_, _) =>
         {
+            LoadPreferences();
+            ApplyToggleLabels();
             RenderCachedOrPlaceholder();
             StartTimer();
             _ = RefreshAsync(force: false);
         };
+    }
+
+    /// <summary>
+    /// 读取单位/视图偏好。设置文件是用户可手改的，读失败一律走默认值，
+    /// 绝不让异常冒出构造函数（参考 P0 事故：WidgetWindow 构造抛异常 = 整个组件白屏）。
+    /// </summary>
+    private void LoadPreferences()
+    {
+        try
+        {
+            var store = new SettingsStore();
+            _unit = store.LoadWeatherUnit();
+            _view = store.LoadWeatherView();
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("读取天气偏好失败，回落默认（摄氏 / 多日）", ex);
+            _unit = WeatherUnit.Celsius;
+            _view = WeatherForecastView.Daily;
+        }
+    }
+
+    private void ApplyToggleLabels()
+    {
+        UnitButton.Content = WeatherUnits.UnitSuffix(_unit);
+        ViewButton.Content = _view == WeatherForecastView.Hourly ? "未来三天" : "今日逐时";
+        ForecastTitle.Text = _view == WeatherForecastView.Hourly ? "今日逐时" : "未来三天";
+        ApplyForecastVisibility(s_cached is null);
+    }
+
+    private void UnitButton_Click(object sender, RoutedEventArgs e)
+    {
+        _unit = _unit == WeatherUnit.Celsius ? WeatherUnit.Fahrenheit : WeatherUnit.Celsius;
+        SavePreference(store => store.SaveWeatherUnit(_unit));
+        ApplyToggleLabels();
+        if (s_cached is { } r) Render(r);
+    }
+
+    private void ViewButton_Click(object sender, RoutedEventArgs e)
+    {
+        _view = _view == WeatherForecastView.Daily ? WeatherForecastView.Hourly : WeatherForecastView.Daily;
+        SavePreference(store => store.SaveWeatherView(_view));
+        ApplyToggleLabels();
+        if (s_cached is { } r) Render(r);
     }
 
     private void StartTimer()
@@ -125,24 +176,66 @@ public sealed partial class WeatherWidget : UserControl
         CityBlock.Text = report.City.Display;
         UpdatedBlock.Text = report.FetchedAt.ToString("HH:mm", CultureInfo.InvariantCulture) + " 更新";
 
-        TempBlock.Text = $"{Math.Round(report.Now.TemperatureC)}°";
+        TempBlock.Text = WeatherUnits.TemperatureText(report.Now.TemperatureC, _unit);
         DescBlock.Text = WeatherCode.Describe(report.Now.Code);
         IconBlock.Text = WeatherCode.Emoji(report.Now.Code, report.Now.IsDay);
 
-        var feels = Math.Round(report.Now.FeelsLikeC);
+        var feels = WeatherUnits.TemperatureValue(report.Now.FeelsLikeC, _unit);
         FeelsBlock.Text = report.Now.Humidity > 0
-            ? $"体感 {feels}° · 湿度 {report.Now.Humidity}% · 风 {Math.Round(report.Now.WindSpeedKmh)} km/h"
+            ? $"体感 {feels}° · 湿度 {report.Now.Humidity}% · 风 {WeatherUnits.WindText(report.Now.WindSpeedKmh, _unit)}"
             : $"体感 {feels}°";
 
         // 第 0 天是今天，跳过；只展示未来三天
         ForecastHost.Children.Clear();
-        foreach (var day in report.Days.Count > 1 ? report.Days.GetRange(1, Math.Min(3, report.Days.Count - 1)) : [])
+        var upcoming = report.Days.Count > 1 ? report.Days.GetRange(1, Math.Min(3, report.Days.Count - 1)) : [];
+        foreach (var day in upcoming)
         {
             ForecastHost.Children.Add(BuildForecastRow(day));
         }
+
+        BuildHourly(report);
     }
 
-    private static Grid BuildForecastRow(WeatherDay day)
+    /// <summary>
+    /// 今日逐时：只取「当前时刻之后」的 12 个小时。过去的小时对用户没用，
+    /// 留着反而要把列表横向拖半天才找得到现在。
+    /// </summary>
+    private void BuildHourly(WeatherReport report)
+    {
+        HourlyHost.Children.Clear();
+        var now = DateTimeOffset.Now;
+        var hours = report.Hours
+            .Where(h => h.Time >= now.AddMinutes(-30))
+            .Take(12)
+            .ToList();
+
+        foreach (var hour in hours)
+        {
+            var cell = new StackPanel { Spacing = 2, Width = 42 };
+            cell.Children.Add(new TextBlock
+            {
+                Text = hour.Time.ToString("HH:mm", CultureInfo.InvariantCulture),
+                FontSize = 10,
+                Opacity = 0.6,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            });
+            cell.Children.Add(new TextBlock
+            {
+                Text = WeatherCode.Emoji(hour.Code, true),
+                FontSize = 14,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            });
+            cell.Children.Add(new TextBlock
+            {
+                Text = WeatherUnits.TemperatureText(hour.TemperatureC, _unit),
+                FontSize = 12,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            });
+            HourlyHost.Children.Add(cell);
+        }
+    }
+
+    private Grid BuildForecastRow(WeatherDay day)
     {
         var grid = new Grid
         {
@@ -177,7 +270,7 @@ public sealed partial class WeatherWidget : UserControl
         };
         var temp = new TextBlock
         {
-            Text = $"{Math.Round(day.MinC)}° / {Math.Round(day.MaxC)}°",
+            Text = $"{WeatherUnits.TemperatureValue(day.MinC, _unit)}° / {WeatherUnits.TemperatureValue(day.MaxC, _unit)}°",
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -193,6 +286,15 @@ public sealed partial class WeatherWidget : UserControl
         return grid;
     }
 
+    /// <summary>
+    /// 持久化单位/视图偏好。写设置失败只记日志——组件是常驻 UI，
+    /// 保存失败不该影响本次渲染（下次启动回到默认值，损失可接受）。
+    /// </summary>
+    private static void SavePreference(Action<SettingsStore> save)
+    {
+        try { save(new SettingsStore()); }
+        catch (Exception ex) { StarLog.Error("保存天气偏好失败", ex); }
+    }
     private async void CityButton_Click(object sender, RoutedEventArgs e)
     {
         var current = Try(() => new SettingsStore().LoadWeatherCity(), null);
@@ -226,8 +328,10 @@ public sealed partial class WeatherWidget : UserControl
     {
         EmptyHint.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
         ForecastHost.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+        ApplyForecastVisibility(empty);
         if (empty)
         {
+            HourlyHost.Children.Clear();
             CityBlock.Text = "选择城市";
             UpdatedBlock.Text = string.Empty;
             TempBlock.Text = "--°";
@@ -235,6 +339,17 @@ public sealed partial class WeatherWidget : UserControl
             IconBlock.Text = "☀️";
             FeelsBlock.Text = string.Empty;
         }
+    }
+
+    /// <summary>
+    /// 两个预报容器二选一：空态（没选城市 / 正在加载）都藏起来，有数据时按当前视图点亮。
+    /// 用一个方法统一算，避免出现「切回多日视图时 ScrollViewer 还停在 Collapsed」这种状态残留。
+    /// </summary>
+    private void ApplyForecastVisibility(bool empty)
+    {
+        var hourly = _view == WeatherForecastView.Hourly;
+        DailyScroll.Visibility = empty || hourly ? Visibility.Collapsed : Visibility.Visible;
+        HourlyScroll.Visibility = empty || !hourly ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void ShowError()

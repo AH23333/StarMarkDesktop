@@ -131,4 +131,54 @@ public class WeatherTests
         var bare = new WeatherCity { Name = "上海" };
         Assert.Equal("上海", bare.Display);
     }
+
+    // ── 温度/风速单位 ──
+
+    [Fact]
+    public void BuildForecastUrl_AlsoRequestsHourlyFields()
+    {
+        // 逐时=预报 today hourly：有了它"今日逐时"视图才有数据可用
+        var url = OpenMeteoClient.BuildForecastUrl(39.9042, 116.4074, 4);
+        Assert.Contains("hourly=", url);
+        Assert.Contains("temperature_2m", url);
+    }
+
+    [Fact]
+    public void ToFahrenheit_UsesStandardConversion()
+    {
+        Assert.Equal(32, WeatherUnits.ToFahrenheit(0));
+        Assert.Equal(212, WeatherUnits.ToFahrenheit(100));
+        Assert.Equal(73.4, Math.Round(WeatherUnits.ToFahrenheit(23), 1));
+    }
+
+    [Theory]
+    [InlineData(23, WeatherUnit.Celsius, "23°")]
+    [InlineData(23, WeatherUnit.Fahrenheit, "73°")]
+    [InlineData(0, WeatherUnit.Fahrenheit, "32°")]
+    public void TemperatureText_AppliesSelectedUnit(double celsius, WeatherUnit unit, string expected)
+        => Assert.Equal(expected, WeatherUnits.TemperatureText(celsius, unit));
+
+    [Fact]
+    public void WindText_UsesMphUnderFahrenheit()
+    {
+        // 华氏=整套英制；只换温度不换风速会变成"73° + 12 km/h"这种混搭
+        Assert.Equal("12 km/h", WeatherUnits.WindText(12, WeatherUnit.Celsius));
+        Assert.Equal("7 mph", WeatherUnits.WindText(12, WeatherUnit.Fahrenheit));
+    }
+
+    [Fact]
+    public void UnitSuffix_MatchesSelectedUnit()
+    {
+        Assert.Equal("°C", WeatherUnits.UnitSuffix(WeatherUnit.Celsius));
+        Assert.Equal("°F", WeatherUnits.UnitSuffix(WeatherUnit.Fahrenheit));
+    }
+
+    [Theory]
+    [InlineData(null, WeatherUnit.Celsius)]   // 旧 settings.json 没有这个字段时为 null，必须回落而不是抛
+    [InlineData(0, WeatherUnit.Celsius)]
+    [InlineData(1, WeatherUnit.Fahrenheit)]
+    [InlineData(9, WeatherUnit.Celsius)]      // 手改坏了的非法值也回落
+    [InlineData(-1, WeatherUnit.Celsius)]
+    public void Parse_InvalidOrMissingFallsBackToCelsius(int? raw, WeatherUnit expected)
+        => Assert.Equal(expected, WeatherUnits.Parse(raw));
 }
