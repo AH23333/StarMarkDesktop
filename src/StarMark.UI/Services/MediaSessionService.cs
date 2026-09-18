@@ -1,5 +1,9 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
 using Windows.Media.Control;
@@ -14,6 +18,8 @@ public sealed class MediaSnapshot
     public string Album { get; set; } = string.Empty;
     /// <summary>来源应用（SMTC 的 SourceAppUserModelId，如 Spotify.exe 的 AUMID）。</summary>
     public string AppId { get; set; } = string.Empty;
+    /// <summary>来源应用的友好名（SMTC 的 AUMID 是一长串包名，直接展示用户读不懂）。</summary>
+    public string SourceName { get; set; } = string.Empty;
     public bool IsPlaying { get; set; }
     public TimeSpan Position { get; set; }
     public TimeSpan Duration { get; set; }
@@ -38,6 +44,16 @@ public sealed class MediaSnapshot
 }
 
 /// <summary>
+/// 音源下拉里的一项。<paramref name="SessionId"/> 是「应用 AUMID + 同名序号」合成的稳定标识：
+/// 同一个播放器可以开多个会话（比如多个浏览器窗口），光靠 AUMID 区分不开。
+/// </summary>
+public sealed record MediaSessionOption(
+    string SessionId,
+    string DisplayName,
+    bool IsPlaying,
+    bool IsSystemCurrent);
+
+/// <summary>
 /// Windows 系统媒体传输控制（SMTC）的封装。
 /// <para>
 /// SMTC 是系统级聚合层：Spotify / 网易云 / 浏览器里的 YouTube 等只要向系统上报了播放状态，
@@ -53,10 +69,27 @@ public sealed class MediaSessionService : IDisposable
 {
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
     private GlobalSystemMediaTransportControlsSession? _session;
+    private string? _preferredSessionId;
     private bool _disposed;
+
+    /// <summary>会话缓存：(合成 id, WinRT 会话)。会话变化时整体刷新一次，避免开菜单时反复枚举。</summary>
+    private readonly List<(string Id, GlobalSystemMediaTransportControlsSession Session)> _sessions = new();
+    private List<MediaSessionOption> _sessionOptions = new();
+
+    /// <summary>可选的播放来源列表（不含「跟随系统」这一项，UI 自行加）。</summary>
+    public IReadOnlyList<MediaSessionOption> SessionOptions => _sessionOptions;
 
     /// <summary>会话/曲目/播放状态任一变化。UI 订阅它做刷新。</summary>
     public event EventHandler? Changed;
+
+    /// <summary>系统里的会话增删（播放器开关）。UI 据此重建音源下拉。</summary>
+    public event EventHandler? SessionsChanged;
+
+    /// <summary>
+    /// 用户手选的音源。null = 跟随系统当前会话（默认行为，和 DeskBox 一致）。
+    /// 选了某个播放器后就不再被"谁最后播放"抢走。
+    /// </summary>
+    public string? PreferredSessionId => _preferredSessionId;
 
     /// <summary>SMTC 是否可用（初始化失败时为 false）。</summary>
     public bool IsAvailable { get; private set; }
@@ -81,8 +114,10 @@ public sealed class MediaSessionService : IDisposable
             }
 
             _manager.CurrentSessionChanged += OnCurrentSessionChanged;
+            _manager.SessionsChanged += OnSessionsChanged;
             IsAvailable = true;
-            AttachSession(_manager.GetCurrentSession());
+            RefreshSessionOptions();
+            AttachSession(ResolveSession());
             await RefreshAsync();
             return true;
         }
@@ -117,11 +152,201 @@ public sealed class MediaSessionService : IDisposable
 
     private void OnCurrentSessionChanged(GlobalSystemMediaTransportControlsSessionManager sender, CurrentSessionChangedEventArgs args)
     {
-        AttachSession(sender.GetCurrentSession());
+        // 手选了音源就不跟着系统切：用户明确要听某个播放器时，别的软件开播不该抢走组件。
+        RefreshSessionOptions();
+        if (_preferredSessionId is null) AttachSession(sender.GetCurrentSession());
+        _ = RefreshAsync();
+    }
+
+    private void OnSessionsChanged(GlobalSystemMediaTransportControlsSessionManager sender, SessionsChangedEventArgs args)
+    {
+        RefreshSessionOptions();
+        SessionsChanged?.Invoke(this, EventArgs.Empty);
         _ = RefreshAsync();
     }
 
     private void OnSessionChanged(GlobalSystemMediaTransportControlsSession sender, object args) => _ = RefreshAsync();
+
+    // ── 音源（会话）选择 ──
+
+    /// <summary>
+    /// 重新枚举系统会话。两个坑：
+    /// <para>
+    /// 1) 同一个播放器可能有多个会话（多窗口），因此 id 用「AUMID + 同名序号」合成，而不是直接用 AUMID。
+    /// 2) 会话可能在枚举后立刻消失（播放器退出），读它的状态时 rt 会抛；这里逐项 try，
+    ///    跳过失效项即可 —— 少一个音源条目远好过把异常甩到 UI 线程。
+    /// </para>
+    /// </summary>
+    private void RefreshSessionOptions()
+    {
+        if (_manager is null) return;
+
+        _sessions.Clear();
+        var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (var session in _manager.GetSessions())
+            {
+                var appId = session.SourceAppUserModelId ?? string.Empty;
+                var ordinal = seen.TryGetValue(appId, out var n) ? n : 0;
+                seen[appId] = ordinal + 1;
+                _sessions.Add((CreateSessionId(appId, ordinal), session));
+            }
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("枚举媒体会话失败", ex);
+        }
+
+        var rawNames = _sessions.Select(s => GetSourceDisplayName(GetAppId(s.Session))).ToList();
+        var displayNames = DisambiguateSourceDisplayNames(rawNames);
+        var systemCurrent = _manager.GetCurrentSession();
+
+        var options = new List<MediaSessionOption>(_sessions.Count);
+        for (var i = 0; i < _sessions.Count; i++)
+        {
+            try
+            {
+                var playback = _sessions[i].Session.GetPlaybackInfo();
+                options.Add(new MediaSessionOption(
+                    _sessions[i].Id,
+                    displayNames[i],
+                    playback?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing,
+                    IsSameSession(_sessions[i].Session, systemCurrent)));
+            }
+            catch (Exception ex)
+            {
+                StarLog.Error("读取媒体会话状态失败（播放器可能刚退出）", ex);
+            }
+        }
+
+        _sessionOptions = options;
+
+        // 手选的音源若已随播放器退出一起消失，自动回到"跟随系统"，否则组件会一直显示空占位。
+        if (_preferredSessionId is { } id && !_sessions.Any(s => s.Id == id))
+            _preferredSessionId = null;
+    }
+
+    private static string GetAppId(GlobalSystemMediaTransportControlsSession session)
+    {
+        try { return session.SourceAppUserModelId ?? string.Empty; }
+        catch { return string.Empty; }
+    }
+
+    /// <summary>切换音源。<paramref name="sessionId"/> 为 null 时回到「跟随系统」，成功后立刻重新读曲目。</summary>
+    public async Task<bool> SetPreferredSessionAsync(string? sessionId)
+    {
+        if (!IsAvailable) { _preferredSessionId = sessionId; return false; }
+
+        RefreshSessionOptions();
+        if (sessionId is null)
+        {
+            _preferredSessionId = null;
+            AttachSession(_manager?.GetCurrentSession());
+            await RefreshAsync();
+            return true;
+        }
+
+        var match = _sessions.FirstOrDefault(s => s.Id == sessionId).Session;
+        if (match is null) return false;
+
+        _preferredSessionId = sessionId;
+        AttachSession(match);
+        await RefreshAsync();
+        return true;
+    }
+
+    /// <summary>手选优先，其次系统当前会话。</summary>
+    private GlobalSystemMediaTransportControlsSession? ResolveSession()
+    {
+        if (_preferredSessionId is { } id)
+        {
+            var match = _sessions.FirstOrDefault(s => s.Id == id).Session;
+            if (match is not null) return match;
+        }
+        return _manager?.GetCurrentSession();
+    }
+
+    /// <summary>AUMID + 分隔符 + 同名序号。分隔符用不可见控制字符，避免与应用名里的字符撞车。</summary>
+    public static string CreateSessionId(string appUserModelId, int sourceOrdinal) =>
+        string.Concat(
+            appUserModelId,
+            "\u001F",
+            Math.Max(0, sourceOrdinal).ToString(CultureInfo.InvariantCulture));
+
+    /// <summary>
+    /// 把 AUMID 翻成"人话"应用名。SMTC 的 SourceAppUserModelId 长这样：
+    /// <c>Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic</c>，直接给用户看很难读。
+    /// 常见播放器逐个映射，其余按顺序取短名。
+    /// </summary>
+    public static string GetSourceDisplayName(string sourceAppUserModelId)
+    {
+        if (string.IsNullOrWhiteSpace(sourceAppUserModelId)) return string.Empty;
+
+        var normalized = sourceAppUserModelId.Trim();
+        var lower = normalized.ToLowerInvariant();
+
+        // 用 Contains 而非相等字符串流程：AUMID 前后可能带包名/版本，精确匹配会漏。
+        (string Key, string Name)[] known =
+        {
+            ("qqmusic", "QQ音乐"),
+            ("cloudmusic", "网易云音乐"),
+            ("netease", "网易云音乐"),
+            ("msedge", "Microsoft Edge"),
+            ("chrome", "Google Chrome"),
+            ("firefox", "Mozilla Firefox"),
+            ("spotify", "Spotify"),
+            ("foobar2000", "foobar2000"),
+            ("itunes", "iTunes"),
+            ("vlc", "VLC"),
+            ("potplayer", "PotPlayer"),
+            ("zunemusic", "Windows Media Player"),
+            ("media.player", "Windows Media Player"),
+        };
+        foreach (var (key, name) in known)
+        {
+            if (lower.Contains(key, StringComparison.Ordinal)) return name;
+        }
+
+        var firstSegment = normalized.Split('!')[0];
+        if (firstSegment.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            return Path.GetFileNameWithoutExtension(firstSegment);
+
+        var dotted = firstSegment.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        return dotted.Length > 0 ? dotted[^1] : firstSegment;
+    }
+
+    /// <summary>同名音源补序号：两个 Chrome 会话要显示成「Google Chrome (1)/(2)」才分得清。</summary>
+    public static IReadOnlyList<string> DisambiguateSourceDisplayNames(IReadOnlyList<string> displayNames)
+    {
+        var totals = displayNames
+            .GroupBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+        var ordinals = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var result = new string[displayNames.Count];
+
+        for (var i = 0; i < displayNames.Count; i++)
+        {
+            var name = displayNames[i];
+            if (totals[name] <= 1)
+            {
+                result[i] = name;
+                continue;
+            }
+
+            var ordinal = ordinals.TryGetValue(name, out var current) ? current + 1 : 1;
+            ordinals[name] = ordinal;
+            result[i] = $"{name} ({ordinal})";
+        }
+
+        return result;
+    }
+
+    private static bool IsSameSession(
+        GlobalSystemMediaTransportControlsSession? left,
+        GlobalSystemMediaTransportControlsSession? right) =>
+        left is not null && right is not null &&
+        (ReferenceEquals(left, right) || left.Equals(right));
 
     /// <summary>重新读取当前会话快照并触发 <see cref="Changed"/>。</summary>
     public async Task RefreshAsync()
@@ -129,7 +354,9 @@ public sealed class MediaSessionService : IDisposable
         if (!IsAvailable) return;
         try
         {
-            var session = _manager?.GetCurrentSession();
+            var session = ResolveSession();
+            // 顺手把当前解析到的会话挂上（引用没变时 AttachSession 会直接返回，不会有退订/重订抖动）
+            AttachSession(session);
             if (session is null)
             {
                 Current = null;
@@ -147,6 +374,7 @@ public sealed class MediaSessionService : IDisposable
                 Artist = props?.Artist ?? string.Empty,
                 Album = props?.AlbumTitle ?? string.Empty,
                 AppId = session.SourceAppUserModelId ?? string.Empty,
+                SourceName = GetSourceDisplayName(GetAppId(session)),
                 IsPlaying = playback?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing,
                 CanPlayPause = playback?.Controls?.IsPauseEnabled == true || playback?.Controls?.IsPlayEnabled == true,
                 CanSkipNext = playback?.Controls?.IsNextEnabled == true,
@@ -216,7 +444,11 @@ public sealed class MediaSessionService : IDisposable
         try
         {
             AttachSession(null);
-            if (_manager is not null) _manager.CurrentSessionChanged -= OnCurrentSessionChanged;
+            if (_manager is not null)
+            {
+                _manager.CurrentSessionChanged -= OnCurrentSessionChanged;
+                _manager.SessionsChanged -= OnSessionsChanged;
+            }
         }
         catch { /* 退订失败不影响退出 */ }
     }

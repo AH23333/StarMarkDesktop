@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Globalization;
+using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -16,6 +17,7 @@ namespace StarMark.UI.Views;
 /// <para>
 /// 与 DeskBox 的差异：DeskBox 的 MusicWidgetContent 还带音量条（走 CoreAudio 的
 /// <c>MusicVolumeNativeBackend</c>）。StarMark 按路线图「播放控制优先，音量 v2」先不做音量。
+/// 音源选择已对齐：多个会话时提供「跟随系统 / 指定播放器」下拉（见 MediaSessionService）。
 /// </para>
 /// </summary>
 public sealed partial class MusicWidget : UserControl
@@ -34,11 +36,14 @@ public sealed partial class MusicWidget : UserControl
         {
             _timer?.Stop();
             s_media.Changed -= Media_Changed;
+            s_media.SessionsChanged -= Media_SessionsChanged;
         };
         Loaded += async (_, _) =>
         {
             s_media.Changed -= Media_Changed;
             s_media.Changed += Media_Changed;
+            s_media.SessionsChanged -= Media_SessionsChanged;
+            s_media.SessionsChanged += Media_SessionsChanged;
 
             if (!s_initialized)
             {
@@ -46,8 +51,54 @@ public sealed partial class MusicWidget : UserControl
                 await s_media.InitializeAsync();
             }
             Render(s_media.Current, s_media.IsAvailable);
+            RefreshSourcePicker();
             StartTimer();
         };
+    }
+
+    private void Media_Changed(object? sender, EventArgs e) => Render(s_media.Current, s_media.IsAvailable);
+
+    private void Media_SessionsChanged(object? sender, EventArgs e) => RefreshSourcePicker();
+
+    /// <summary>
+    /// 重建「切换音源」菜单。只有一个会话时整块隐藏 —— 这时候让用户选反而是负担，
+    /// 直接跟随系统就是他要的行为（DeskBox 的会话选择器同理，只是它常驻显示）。
+    /// </summary>
+    private void RefreshSourcePicker()
+    {
+        SourceFlyout.Items.Clear();
+        var options = s_media.SessionOptions;
+
+        SourceButton.Visibility = options.Count >= 2 ? Visibility.Visible : Visibility.Collapsed;
+        if (options.Count < 2) return;
+
+        var follow = new RadioMenuFlyoutItem
+        {
+            Text = "跟随系统",
+            IsChecked = s_media.PreferredSessionId is null,
+        };
+        follow.Click += async (_, _) => await PickSessionAsync(null);
+        SourceFlyout.Items.Add(follow);
+        SourceFlyout.Items.Add(new MenuFlyoutSeparator());
+
+        foreach (var option in options)
+        {
+            var id = option.SessionId;
+            var item = new RadioMenuFlyoutItem
+            {
+                Text = option.IsPlaying ? $"{option.DisplayName} · 播放中" : option.DisplayName,
+                IsChecked = s_media.PreferredSessionId == id,
+            };
+            item.Click += async (_, _) => await PickSessionAsync(id);
+            SourceFlyout.Items.Add(item);
+        }
+    }
+
+    private async Task PickSessionAsync(string? sessionId)
+    {
+        await s_media.SetPreferredSessionAsync(sessionId);
+        RefreshSourcePicker();
+        Render(s_media.Current, s_media.IsAvailable);
     }
 
     /// <summary>
@@ -73,8 +124,6 @@ public sealed partial class MusicWidget : UserControl
             SetProgress(pos, snapshot.Duration);
         }
     }
-
-    private void Media_Changed(object? sender, EventArgs e) => Render(s_media.Current, s_media.IsAvailable);
 
     private void Render(MediaSnapshot? snapshot, bool available)
     {
@@ -102,7 +151,10 @@ public sealed partial class MusicWidget : UserControl
 
         TitleBlock.Text = string.IsNullOrWhiteSpace(snapshot.Title) ? "未知曲目" : snapshot.Title;
         ArtistBlock.Text = string.IsNullOrWhiteSpace(snapshot.Subtitle) ? "未知艺人" : snapshot.Subtitle;
-        SourceBlock.Text = snapshot.AppId;
+        // 显示友好名而不是 SMTC 的原始 AUMID（那串带包名下划线的东西用户读不懂）
+        SourceBlock.Text = string.IsNullOrWhiteSpace(snapshot.SourceName)
+            ? snapshot.AppId
+            : snapshot.SourceName;
 
         PlayIcon.Glyph = snapshot.IsPlaying ? "\uE769" : "\uE768";   // 暂停 / 播放
         PrevButton.IsEnabled = snapshot.CanSkipPrevious;
