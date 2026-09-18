@@ -179,4 +179,48 @@ public class LocalItemStateTests
     [Fact]
     public void IsOverdue_NoDue_False()
         => Assert.False(LocalItemState.IsOverdue(NewTodo()));
+
+    // ── 手动排序序号（拖拽排序持久化）──
+
+    [Fact]
+    public void GetOrder_UnsetItem_ReturnsNull()
+    {
+        // 老数据没有 order 键，必须返回 null 而不是 0 —— 否则会把所有旧条目
+        // 当成"排在最前面"，手动排序结果立刻被打乱。
+        Assert.Null(LocalItemState.GetOrder(NewTodo()));
+    }
+
+    [Fact]
+    public void SetOrder_RoundTrips()
+    {
+        var item = NewTodo();
+        LocalItemState.SetOrder(item, 3);
+        Assert.Equal(3, LocalItemState.GetOrder(item));
+
+        LocalItemState.SetOrder(item, 0);
+        Assert.Equal(0, LocalItemState.GetOrder(item));
+    }
+
+    [Fact]
+    public void SetOrder_NegativeValue_Preserved()
+    {
+        // 新条目用「最小序号 - 1」插到顶部，序号会持续变负，不能被夹到 0
+        var item = NewTodo();
+        LocalItemState.SetOrder(item, -5);
+        Assert.Equal(-5, LocalItemState.GetOrder(item));
+    }
+
+    [Fact]
+    public void SetOrder_KeepsColorAndDue()
+    {
+        var item = NewTodo();
+        LocalItemState.SetColor(item, 2);
+        LocalItemState.SetDue(item, LocalItemState.DayStartUnix(DateTimeOffset.Now));
+
+        LocalItemState.SetOrder(item, 7);   // 写 order 不能把同在 extra_json 的其它键冲掉
+
+        Assert.Equal(7, LocalItemState.GetOrder(item));
+        Assert.Equal(2, LocalItemState.GetColor(item));
+        Assert.NotNull(LocalItemState.GetDue(item));
+    }
 }

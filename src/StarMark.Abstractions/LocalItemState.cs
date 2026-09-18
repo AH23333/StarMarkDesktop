@@ -52,6 +52,8 @@ public static class LocalItemState
     private const string ColorKey = "color";
     /// <summary>待办截止时间在 extra_json 的键（Unix 秒，对齐到当日 0 点）。</summary>
     private const string DueKey = "due";
+    /// <summary>手动排序序号在 extra_json 的键（拖拽排序后写入）。缺失 = 未手动排过。</summary>
+    private const string OrderKey = "order";
 
     /// <summary>颜色标记的可选数量（不含「无」）。</summary>
     public const int ColorCount = 6;
@@ -101,6 +103,29 @@ public static class LocalItemState
         var node = ParseObject(item);
         if (dueUnixSeconds is > 0) node[DueKey] = dueUnixSeconds.Value;
         else node.Remove(DueKey);   // 清除：直接删键，比写 JSON null 干净，旧版读取也天然回落 null
+        item.ExtraJson = node.ToJsonString();
+    }
+
+    /// <summary>读手动排序序号；未手动排过返回 null。</summary>
+    public static int? GetOrder(Item item)
+    {
+        if (string.IsNullOrEmpty(item.ExtraJson)) return null;
+        try
+        {
+            var raw = JsonNode.Parse(item.ExtraJson)?[OrderKey]?.GetValue<int>();
+            return raw;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>写手动排序序号。</summary>
+    public static void SetOrder(Item item, int order)
+    {
+        var node = ParseObject(item);
+        node[OrderKey] = order;
         item.ExtraJson = node.ToJsonString();
     }
 

@@ -29,9 +29,31 @@
                     Background="Transparent" BorderThickness="0" Click="Filter_Click"/>
         </StackPanel>
 
-        <!-- 注意：ItemsRepeater 内部必须用 x:Bind（不能用 {Binding}），否则不报错但静默失效 -->
-        <ItemsRepeater ItemsSource="{x:Bind ViewModel.Visible, Mode=OneWay}">
-            <ItemsRepeater.ItemTemplate>
+        <!-- 拖拽排序：这里用 ListView 而不是 ItemsRepeater。
+             ItemsRepeater 没有内置重排，要自己接 DragStarting/Drop 并手算插入位置，
+             还得处理「UI 线程重入移除集合项会崩」的老问题；ListView 的
+             CanReorderItems 会直接把 ObservableCollection 调好，我们只负责持久化。 -->
+        <ListView x:Name="TodoList"
+                  ItemsSource="{x:Bind ViewModel.Visible, Mode=OneWay}"
+                  SelectionMode="None"
+                  CanDragItems="{x:Bind ViewModel.CanReorder, Mode=OneWay}"
+                  CanReorderItems="{x:Bind ViewModel.CanReorder, Mode=OneWay}"
+                  AllowDrop="True"
+                  DragItemsCompleted="TodoList_DragItemsCompleted"
+                  Padding="0" Margin="0" Background="Transparent">
+            <ListView.ItemContainerStyle>
+                <!-- 压掉 ListViewItem 默认的内边距/选中底/最小高度，保持原来 ItemsRepeater 的紧凑观感 -->
+                <Style TargetType="ListViewItem">
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="Margin" Value="0"/>
+                    <Setter Property="MinWidth" Value="0"/>
+                    <Setter Property="MinHeight" Value="0"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="VerticalContentAlignment" Value="Center"/>
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
                 <DataTemplate x:DataType="vm:TodoRow">
                     <Grid Margin="0,1,0,1" ColumnSpacing="2">
                         <Grid.ColumnDefinitions>
@@ -89,8 +111,8 @@
                                 Click="DeleteTodo_Click" Tag="{x:Bind Id}"/>
                     </Grid>
                 </DataTemplate>
-            </ItemsRepeater.ItemTemplate>
-        </ItemsRepeater>
+            </ListView.ItemTemplate>
+        </ListView>
 
         <TextBlock x:Name="SummaryBlock" FontSize="10" Opacity="0.55" Margin="2,2,0,0"/>
 

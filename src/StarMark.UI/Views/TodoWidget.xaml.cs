@@ -17,8 +17,9 @@ namespace StarMark.UI.Views;
 /// 勾选 / 删除 / 新增只刷新 ViewModel 集合（增量更新），不再重建整棵组件 UI；
 /// 数据契约不变（统一 items 表，source = local）。
 /// <para>
-/// 本轮对齐 DeskBox Todo 的高感知子集：**筛选分段带计数**、**颜色标记**、**截止日期**、**删除撤销条**。
-/// 相比 DeskBox 未做：拖拽排序、子步骤、Markdown 备注、主/从双栏、7 段筛选 —— 这些对一个
+/// 本轮对齐 DeskBox Todo 的高感知子集：**筛选分段带计数**、**颜色标记**、**截止日期**、
+/// **删除撤销条**、**拖拽排序**（仅「全部」筛选下开放）。
+/// 相比 DeskBox 未做：子步骤、Markdown 备注、主/从双栏、7 段筛选 —— 这些对一个
 /// 桌面小组件属于过度设计（DeskBox 的 Todo 光 UI 代码就有数千行）。
 /// </para>
 /// </summary>
@@ -96,6 +97,18 @@ public sealed partial class TodoWidget : UserControl
         if (sender is Button { Tag: string tag } && int.TryParse(tag, out var v))
             ViewModel.Filter = (TodoFilter)v;
     }
+
+    /// <summary>
+    /// 拖拽排序落地。ListView 的 CanReorderItems 已经把 <see cref="TodoWidgetViewModel.Visible"/>
+    /// 调整成新顺序，这里只负责写盘。
+    /// <para>
+    /// 关键：不要在事件里同步再动集合。拖放刚结束时框架还在收尾容器状态，
+    /// 此时同步增删 ObservableCollection 会撞上 UI 线程重入（本项目踩过：直接崩进程），
+    /// 所以走异步（内部 await 后才回到 UI 线程改集合）。
+    /// </para>
+    /// </summary>
+    private void TodoList_DragItemsCompleted(object sender, DragItemsCompletedEventArgs e)
+        => _ = ViewModel.PersistVisibleOrderAsync();
 
     /// <summary>
     /// 颜色菜单：靠 MenuFlyoutItem 在父 MenuFlyout 中的**索引**反推颜色层级。

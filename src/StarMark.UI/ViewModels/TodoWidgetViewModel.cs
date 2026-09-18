@@ -19,7 +19,8 @@ public sealed record TodoRow(
     bool Done,
     int Color,
     long? DueTs,
-    string DueText);
+    string DueText,
+    int? Order);
 
 /// <summary>待办列表筛选。</summary>
 public enum TodoFilter
@@ -34,9 +35,9 @@ public enum TodoFilter
 /// 多实例靠 source_id 编码 instanceId 隔离。
 /// <para>
 /// 本轮补齐 DeskBox TodoWidgetViewModel 中**用户最能感知**的四项（其内部 Todo 有数千行，
-/// 这里只取高价值子集，不做 DragDrop 排序 / 子步骤 / 附件等重功能）：
+/// 这里只取高价值子集，不做子步骤 / 附件等重功能）：
 /// ① 筛选分段各带**计数徽标**；② **颜色标记**；③ **截止日期**（今天/明天/清除）；
-/// ④ 删除后**内联撤销条**。
+/// ④ 删除后**内联撤销条**；⑤ **拖拽排序**（写 extra_json 的 order，仅「全部」筛选下开放）。
 /// 颜色与截止沿用 extra_json 键（见 <see cref="LocalItemState"/>），旧数据零迁移。
 /// </para>
 /// </summary>
@@ -75,6 +76,13 @@ public sealed class TodoWidgetViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// 是否允许拖拽排序。只在「全部」筛选下开放：筛选视图里看到的是子集，
+    /// 把子集的顺序写回全量列表会产生歧义（被隐藏的行该插在哪？），
+    /// 与其猜，不如这时不开放拖拽。
+    /// </summary>
+    public bool CanReorder => _filter == TodoFilter.All;
+
     public int AllCount => _all.Count;
     public int ActiveCount => _all.Count(r => !r.Done);
     public int CompletedCount => _all.Count(r => r.Done);
@@ -102,11 +110,13 @@ public sealed class TodoWidgetViewModel : ObservableObject
             var now = DateTimeOffset.Now;
             var rows = items
                 .Where(i => LocalItemState.DecodeInstanceId(i.SourceId) == _instanceId)
-                .OrderBy(i => LocalItemState.IsDone(i))
-                // 有截止的排前面（早的在前），无截止的按创建时间新→旧
-                .ThenBy(i => LocalItemState.GetDue(i) ?? long.MaxValue)
-                .ThenByDescending(i => i.CreatedAt)
                 .Select(i => BuildRow(i, now))
+                // 手动排过序的按 order 升序走在最前；没排过的（老数据）落在后面，
+                // 组内再按「未完成优先 → 截止早的优先 → 新的优先」自动排。
+                .OrderBy(r => r.Order ?? int.MaxValue)
+                .ThenBy(r => r.Done)
+                .ThenBy(r => r.DueTs ?? long.MaxValue)
+                .ThenByDescending(r => r.Id)
                 .ToList();
 
             RunOnUi(() =>
@@ -130,7 +140,8 @@ public sealed class TodoWidgetViewModel : ObservableObject
             LocalItemState.IsDone(i),
             LocalItemState.GetColor(i),
             due,
-            LocalItemState.DescribeDue(due, now));
+            LocalItemState.DescribeDue(due, now),
+            LocalItemState.GetOrder(i));
     }
 
     /// <summary>
@@ -153,7 +164,33 @@ public sealed class TodoWidgetViewModel : ObservableObject
             OnPropertyChanged(nameof(ActiveCount));
             OnPropertyChanged(nameof(CompletedCount));
             OnPropertyChanged(nameof(SummaryText));
+            OnPropertyChanged(nameof(CanReorder));
         });
+    }
+
+    /// <summary>
+    /// 把当前可见顺序写回存储（拖拽排序落地）。ListView 的内置重排已经把
+    /// <see cref="Visible"/> 调整好了，这里只负责持久化。
+    /// </summary>
+    public async Task PersistVisibleOrderAsync()
+    {
+        if (_repo is null || Visible.Count == 0) return;
+
+        var ids = Visible.Select(r => r.Id).ToList();
+        // 被筛选隐藏的行（「全部」视图下为空）保持相对次序排在显式排序之后
+        var rest = _all.Where(r => !ids.Contains(r.Id)).Select(r => r.Id).ToList();
+        var full = ids.Concat(rest).ToList();
+
+        for (var i = 0; i < full.Count; i++)
+        {
+            var it = await FindItemAsync(full[i]);
+            if (it is null) continue;
+            LocalItemState.SetOrder(it, i);
+            it.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            await _repo.UpsertLocalItemAsync(it);
+        }
+
+        await LoadAsync();
     }
 
     public async Task AddAsync(string text)
@@ -169,8 +206,18 @@ public sealed class TodoWidgetViewModel : ObservableObject
             CreatedAt = now,
             UpdatedAt = now,
         };
+        // 列表一旦启用过手动排序，新条目必须也带上 order，否则它会因为没有序号
+        // 被排到所有已排序条目之后 —— 表现为「新增的待办跑到列表最底下」。
+        LocalItemState.SetOrder(item, NextTopOrder());
         await _repo.UpsertLocalItemAsync(item);
         await LoadAsync();
+    }
+
+    /// <summary>新条目的排序号：比现有最小号再小 1，于是出现在列表最上面（与「新的优先」一致）。</summary>
+    private int NextTopOrder()
+    {
+        var known = _all.Where(r => r.Order.HasValue).Select(r => r.Order!.Value).ToList();
+        return known.Count == 0 ? 0 : known.Min() - 1;
     }
 
     public async Task ToggleAsync(long id, bool done)
