@@ -115,6 +115,9 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
             _autoSaveTimer.Stop();
             ViewModel.SaveCommand.Execute(null);   // 实时落盘（含外观 / 磁吸）
             App.MainWindow?.ApplyTraySettings();   // 托盘/热键即时生效
+            // 背景不透明度 / 材质浓度即时预览：主窗口与所有已打开组件重新套用外观
+            App.MainWindow?.RefreshAppearance();
+            _ = WidgetManager()?.RefreshAppearanceAsync();
         };
         _autoSaveTimer.Start();
     }
