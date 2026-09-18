@@ -182,7 +182,9 @@ dotnet run --project src\StarMark.UI\StarMark.UI.csproj -p:Platform=x64
 | 📝 随记 | 随手记录，`Ctrl+Enter` 保存 |
 | 🔍 快捷搜索 | 输入回车后唤起主窗口并直接搜索 |
 | 🏷️ 标签格 / 📌 搜索结果格 / 🕘 最近活动格 / ⏫ 置顶条目格 | **差异化条目格**（特性组件，默认关闭、需在设置页开启）：把某个标签、某条查询、最近更新或置顶条目常驻桌面 |
-| 📅 今日速览 | **Phase C 首个新内容组件**：大号日期 + 农历（含闰月）+ 今日/下一个节日倒计时 + 常看条目。农历与清明节算法照搬 DeskBox 的 `GlanceFestivalService`（底层用 .NET 内置 `ChineseLunisolarCalendar`） |
+| 📅 今日速览 | **Phase C 新内容组件**：大号日期 + 农历（含闰月）+ 今日/下一个节日倒计时 + 常看条目。农历与清明节算法照搬 DeskBox 的 `GlanceFestivalService`（底层用 .NET 内置 `ChineseLunisolarCalendar`） |
+| 🌤️ 天气 | **Phase C**：实况（温度/体感/湿度/风力）+ 未来三天预报。数据源 Open-Meteo，**免费且无需 API Key**；WMO 天气码的中文/图标映射照搬 DeskBox 的 `WeatherCodeMapper`。点标题栏城市名可换城市（支持中文搜索），选择写入 `settings.json` |
+| 🎵 音乐 | **Phase C**：曲目 / 艺人·专辑 / 来源应用 + 进度条 + 上一首·播放暂停·下一首。走 Windows 系统媒体传输控制（**SMTC**），因此**不需要对接任何具体播放器**——Spotify、网易云、浏览器里正在播的视频都能读和控制 |
 
 通用能力：
 
