@@ -59,6 +59,7 @@ public sealed partial class MainWindow : Window
         _themePref = _settings.LoadTheme();
         ThemeManager.Apply(this, _themePref);
         UpdateThemeIcon();
+        RefreshAppearance();   // 主题确定后再按实际主题解析背景/材质，避免启动即用错主题色
 
         _ = ViewModel.LoadCountsAsync();
         _ = LoadStarLanguagesAsync();   // 语言下拉只显示 star 中真实存在的语言
@@ -111,9 +112,14 @@ public sealed partial class MainWindow : Window
             var translucent = _settings.LoadMainWindowTranslucent();
             var kind = translucent ? SettingsStore_WidgetBackdrop() : WidgetBackdropKind.None;
             WidgetAppearance.ApplyBackdrop(
-                this, kind, WidgetAppearance.Opacity(), WidgetAppearance.MaterialIntensity(), RootGrid.ActualTheme);
+                this, kind, WidgetAppearance.Opacity(), WidgetAppearance.MaterialIntensity(), TargetTheme(_themePref));
+            // 背景必须用「按目标主题解析」的画笔（ThemeBrush.For），
+            // 不能取 Application.Current.Resources[key]——应用级主题在窗口创建后冻结，
+            // 那里解析出的永远是初始主题的画笔，导致一键切换主题时背景色不跟着变。
+            // 用 _themePref 推导目标主题（而非 RootGrid.ActualTheme），避免主题传播时机导致的「慢一拍」。
             RootGrid.Background = translucent ? null : (Microsoft.UI.Xaml.Media.Brush)
-                Application.Current.Resources["ApplicationPageBackgroundThemeBrush"];
+                (ThemeBrush.For(TargetTheme(_themePref), "ApplicationPageBackgroundThemeBrush")
+                 ?? Application.Current.Resources["ApplicationPageBackgroundThemeBrush"]);
         }
         catch (Exception ex)
         {
@@ -122,6 +128,14 @@ public sealed partial class MainWindow : Window
     }
 
     private WidgetBackdropKind SettingsStore_WidgetBackdrop() => _settings.LoadWidgetBackdrop();
+
+    /// <summary>把主题偏好推导为可用于 <see cref="ThemeBrush.For"/> 的元素主题（Default 跟随系统）。</summary>
+    private static ElementTheme TargetTheme(ThemePreference pref) => pref switch
+    {
+        ThemePreference.Light => ElementTheme.Light,
+        ThemePreference.Dark => ElementTheme.Dark,
+        _ => ThemeManager.IsSystemDark() ? ElementTheme.Dark : ElementTheme.Light,
+    };
 
     // ───────────────────────── 托盘 ─────────────────────────
 
@@ -287,6 +301,7 @@ public sealed partial class MainWindow : Window
         _settings.SaveTheme(_themePref);
         ThemeManager.Apply(this, _themePref);
         UpdateThemeIcon();
+        RefreshAppearance();   // 主题画笔按窗口实际主题重新解析，否则一键切换后主界面背景色不跟随
     }
 
     private void UpdateThemeIcon()
@@ -310,6 +325,7 @@ public sealed partial class MainWindow : Window
         _themePref = pref;
         ThemeManager.Apply(this, pref);
         UpdateThemeIcon();
+        RefreshAppearance();   // 设置页切换主题后同步刷新主界面背景
     }
 
     // ===== 导航 =====
