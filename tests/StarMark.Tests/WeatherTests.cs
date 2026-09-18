@@ -181,4 +181,81 @@ public class WeatherTests
     [InlineData(-1, WeatherUnit.Celsius)]
     public void Parse_InvalidOrMissingFallsBackToCelsius(int? raw, WeatherUnit expected)
         => Assert.Equal(expected, WeatherUnits.Parse(raw));
+
+    // ── 尺寸档位（含滞回）──
+
+    [Theory]
+    [InlineData(120, 100, WeatherLayoutLevel.Mini)]      // 很小：无条件 Mini
+    [InlineData(400, 400, WeatherLayoutLevel.Expanded)]  // 很大
+    public void Determine_LargeAndSmall_AreStable(double w, double h, WeatherLayoutLevel expected)
+    {
+        // 从中档出发也要落到同一结论，说明结论不依赖起始档位
+        Assert.Equal(expected, WeatherLayoutMath.Determine(w, h, WeatherLayoutLevel.Compact));
+        Assert.Equal(expected, WeatherLayoutMath.Determine(w, h, WeatherLayoutLevel.Mini));
+        Assert.Equal(expected, WeatherLayoutMath.Determine(w, h, WeatherLayoutLevel.Expanded));
+    }
+
+    [Fact]
+    public void Determine_HysteresisPreventsFlickerAtThreshold()
+    {
+        // 关键回归：升档阈值 300×260，降档阈值 280×240。
+        // 291 落在缓冲区里——已经是 Expanded 就保持，已经是 Compact 也不升级，
+        // 否则用户拖边缘经过这一点时界面会疯狂跳档。
+        const double w = 291, h = 250;
+
+        Assert.Equal(WeatherLayoutLevel.Expanded, WeatherLayoutMath.Determine(w, h, WeatherLayoutLevel.Expanded));
+        Assert.Equal(WeatherLayoutLevel.Compact, WeatherLayoutMath.Determine(w, h, WeatherLayoutLevel.Compact));
+    }
+
+    [Fact]
+    public void Determine_UpgradesOnlyAfterPassingUpgradeThreshold()
+    {
+        // 从 Mini 出发：185×140 落在「已过降级线、未到升级线」的缓冲区里，保持不动；
+        // 195×150 过了升级线才升档。
+        Assert.Equal(WeatherLayoutLevel.Mini, WeatherLayoutMath.Determine(185, 140, WeatherLayoutLevel.Mini));
+        Assert.Equal(WeatherLayoutLevel.Compact, WeatherLayoutMath.Determine(195, 150, WeatherLayoutLevel.Mini));
+    }
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(0)]
+    [InlineData(-10)]
+    public void Determine_InvalidSize_KeepsCurrentLevel(double bad)
+    {
+        // 布局还没起来时 SizeChanged 会带着 0 或非法值进来，此时不能乱跳档
+        Assert.Equal(WeatherLayoutLevel.Compact, WeatherLayoutMath.Determine(bad, 300, WeatherLayoutLevel.Compact));
+        Assert.Equal(WeatherLayoutLevel.Compact, WeatherLayoutMath.Determine(300, bad, WeatherLayoutLevel.Compact));
+    }
+
+    [Fact]
+    public void Determine_LargerTypographyDowngradesEarlier()
+    {
+        // 文本放大后同样尺寸要落到更低密度档，否则字挤爆
+        Assert.Equal(WeatherLayoutLevel.Expanded, WeatherLayoutMath.Determine(300, 260, WeatherLayoutLevel.Mini, 1.0));
+        Assert.NotEqual(WeatherLayoutLevel.Expanded, WeatherLayoutMath.Determine(300, 260, WeatherLayoutLevel.Mini, 1.6));
+    }
+
+    [Theory]
+    [InlineData(WeatherLayoutLevel.Mini, false)]
+    [InlineData(WeatherLayoutLevel.Compact, true)]
+    [InlineData(WeatherLayoutLevel.Expanded, true)]
+    public void ShowForecast_MatchesLevel(WeatherLayoutLevel level, bool expected)
+        => Assert.Equal(expected, WeatherLayoutMath.ShowForecast(level));
+
+    [Theory]
+    [InlineData(WeatherLayoutLevel.Mini, false)]
+    [InlineData(WeatherLayoutLevel.Compact, false)]
+    [InlineData(WeatherLayoutLevel.Expanded, true)]
+    public void ShowExtraMetrics_OnlyWhenExpanded(WeatherLayoutLevel level, bool expected)
+        => Assert.Equal(expected, WeatherLayoutMath.ShowExtraMetrics(level));
+
+    [Fact]
+    public void TemperatureFontSize_ShrinksAsLevelDrops()
+    {
+        Assert.True(WeatherLayoutMath.TemperatureFontSize(WeatherLayoutLevel.Mini) <
+                    WeatherLayoutMath.TemperatureFontSize(WeatherLayoutLevel.Compact));
+        Assert.True(WeatherLayoutMath.TemperatureFontSize(WeatherLayoutLevel.Compact) <
+                    WeatherLayoutMath.TemperatureFontSize(WeatherLayoutLevel.Expanded));
+    }
 }

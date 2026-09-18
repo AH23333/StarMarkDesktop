@@ -4,13 +4,15 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <Grid Padding="12,10,12,12" RowSpacing="10">
+    <Grid Padding="12,10,12,12" RowSpacing="10" SizeChanged="Root_SizeChanged">
         <Grid.RowDefinitions>
             <!-- 0：城市行（固定） -->
             <RowDefinition Height="Auto"/>
             <!-- 1：当前天气（固定） -->
             <RowDefinition Height="Auto"/>
-            <!-- 2：未来预报（吃掉剩余高度） -->
+            <!-- 2：附加指标网格（仅大尺寸档位显示） -->
+            <RowDefinition Height="Auto"/>
+            <!-- 3：未来预报（吃掉剩余高度） -->
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -41,13 +43,18 @@
                        VerticalAlignment="Center"/>
         </Grid>
 
+        <!-- 附加指标网格：降水概率 / 紫外线 / 气压 / 日出日落。
+             只在「大」档位显示——桌面组件默认尺寸塞不下四行指标，硬塞会挤掉预报。 -->
+        <Grid x:Name="MetricsHost" Grid.Row="2" Visibility="Collapsed"
+              ColumnSpacing="8" RowSpacing="4" Opacity="0.85"/>
+
         <!-- 未来三天预报 -->
-        <Grid Grid.Row="2" RowSpacing="6">
+        <Grid Grid.Row="3" RowSpacing="6">
             <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <!-- 2：多日预报（吃掉剩余高度） -->
-            <RowDefinition Height="*"/>
-            <!-- 3：今日逐时（与二行共用高度，靠 Visibility 二选一） -->
+            <!-- 1：预报内容区（多日与逐时共用这一行，靠 Visibility 二选一）。
+                 之前逐时写的是 Row=3，而这里只有两行——越界的行索引不会报错，
+                 但会落到布局之外的位置，表现为横向列表"飘"到奇怪的地方。 -->
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -55,7 +62,8 @@
                        VerticalAlignment="Center"/>
 
             <!-- 视图切换（未来三天 / 今日逐时）+ 单位切换（°C / °F） -->
-            <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="4">
+            <StackPanel x:Name="ToggleBar" Grid.Row="0" Orientation="Horizontal"
+                        HorizontalAlignment="Right" Spacing="4">
                 <Button x:Name="ViewButton" Height="22" Padding="8,0" FontSize="10"
                         Content="今日逐时" Click="ViewButton_Click"
                         ToolTipService.ToolTip="在多日概览与今日逐时之间切换"/>
@@ -65,19 +73,19 @@
             </StackPanel>
 
             <!-- 多日预报 -->
-            <ScrollViewer x:Name="DailyScroll" Grid.Row="2"
+            <ScrollViewer x:Name="DailyScroll" Grid.Row="1"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel x:Name="ForecastHost" Spacing="6"/>
             </ScrollViewer>
 
             <!-- 今日逐时：横向滚动，一格一小时 -->
-            <ScrollViewer x:Name="HourlyScroll" Grid.Row="3" Visibility="Collapsed"
+            <ScrollViewer x:Name="HourlyScroll" Grid.Row="1" Visibility="Collapsed"
                           HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
                           HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled">
                 <StackPanel x:Name="HourlyHost" Orientation="Horizontal" Spacing="10"/>
             </ScrollViewer>
 
-            <TextBlock x:Name="EmptyHint" Grid.Row="2" Grid.RowSpan="2"
+            <TextBlock x:Name="EmptyHint" Grid.Row="1"
                        Text="点击上方城市名，选择要查看天气的城市"
                        FontSize="12" Opacity="0.55" TextWrapping="Wrap" Visibility="Collapsed"/>
         </Grid>

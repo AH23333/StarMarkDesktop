@@ -42,6 +42,11 @@ public sealed partial class WeatherWidget : UserControl
     /// <summary>当前预报视图：多日 / 逐时。</summary>
     private WeatherForecastView _view = WeatherForecastView.Daily;
 
+    /// <summary>当前尺寸档位。默认给中档：首次布局还没拿到实际尺寸时至少能看到预报。</summary>
+    private WeatherLayoutLevel _level = WeatherLayoutLevel.Compact;
+    /// <summary>是否处于空态（未选城市 / 数据还没到）。可见性由这 + 档位共同决定。</summary>
+    private bool _empty = true;
+
     public WeatherWidget()
     {
         InitializeComponent();
@@ -54,6 +59,24 @@ public sealed partial class WeatherWidget : UserControl
             StartTimer();
             _ = RefreshAsync(force: false);
         };
+    }
+
+    /// <summary>
+    /// 尺寸变化时重算档位。放在 SizeChanged 而不是只在 Loaded 里算一次：
+    /// 组件窗口可以拖边缘缩放，档位必须跟着变，否则放大后指标永远出不来。
+    /// <para>
+    /// 这里只做「档位变了才重排」——SizeChanged 在 XAML 排布同一棵树时会连发多次，
+    /// 无条件重排会自己把布局抖起来（DeskBox 对该问题有专门注释）。
+    /// </para>
+    /// </summary>
+    private void Root_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var next = WeatherLayoutMath.Determine(e.NewSize.Width, e.NewSize.Height, _level);
+        if (next == _level) return;
+
+        _level = next;
+        ApplyVisibility();
+        if (s_cached is { } report) Render(report);
     }
 
     /// <summary>
@@ -81,7 +104,8 @@ public sealed partial class WeatherWidget : UserControl
         UnitButton.Content = WeatherUnits.UnitSuffix(_unit);
         ViewButton.Content = _view == WeatherForecastView.Hourly ? "未来三天" : "今日逐时";
         ForecastTitle.Text = _view == WeatherForecastView.Hourly ? "今日逐时" : "未来三天";
-        ApplyForecastVisibility(s_cached is null);
+        _empty = s_cached is null;
+        ApplyVisibility();
     }
 
     private void UnitButton_Click(object sender, RoutedEventArgs e)
@@ -194,6 +218,47 @@ public sealed partial class WeatherWidget : UserControl
         }
 
         BuildHourly(report);
+        BuildMetrics(report);
+    }
+
+    /// <summary>
+    /// 附加指标网格（仅大档位）：降水概率 / 紫外线 / 气压 / 日出 / 日落。
+    /// 缺测的项直接不生成格子——显示一堆「--」比少显示一项更难读。
+    /// </summary>
+    private void BuildMetrics(WeatherReport report)
+    {
+        MetricsHost.Children.Clear();
+        if (!WeatherLayoutMath.ShowExtraMetrics(_level)) return;
+
+        var today = report.Days.Count > 0 ? report.Days[0] : null;
+        var items = new List<(string Label, string Value)>();
+        if (today is not null)
+            items.Add(("降水概率", $"{today.PrecipitationProbabilityMax}%"));
+        if (report.Now.UvIndex > 0)
+            items.Add(("紫外线", report.Now.UvIndex.ToString("0.#", CultureInfo.InvariantCulture)));
+        if (report.Now.PressureHpa > 0)
+            items.Add(("气压", $"{Math.Round(report.Now.PressureHpa)} hPa"));
+        if (today?.Sunrise is { } rise)
+            items.Add(("日出", rise.ToString("HH:mm", CultureInfo.InvariantCulture)));
+        if (today?.Sunset is { } set)
+            items.Add(("日落", set.ToString("HH:mm", CultureInfo.InvariantCulture)));
+
+        MetricsHost.RowDefinitions.Clear();
+        MetricsHost.ColumnDefinitions.Clear();
+        MetricsHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        MetricsHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var i = 0; i < (items.Count + 1) / 2; i++)
+            MetricsHost.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        for (var i = 0; i < items.Count; i++)
+        {
+            var cell = new StackPanel();
+            cell.Children.Add(new TextBlock { Text = items[i].Label, FontSize = 10, Opacity = 0.55 });
+            cell.Children.Add(new TextBlock { Text = items[i].Value, FontSize = 12 });
+            Grid.SetRow(cell, i / 2);
+            Grid.SetColumn(cell, i % 2);
+            MetricsHost.Children.Add(cell);
+        }
     }
 
     /// <summary>
@@ -326,9 +391,8 @@ public sealed partial class WeatherWidget : UserControl
 
     private void ShowEmpty(bool empty)
     {
-        EmptyHint.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
-        ForecastHost.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
-        ApplyForecastVisibility(empty);
+        _empty = empty;
+        ApplyVisibility();
         if (empty)
         {
             HourlyHost.Children.Clear();
@@ -342,14 +406,28 @@ public sealed partial class WeatherWidget : UserControl
     }
 
     /// <summary>
-    /// 两个预报容器二选一：空态（没选城市 / 正在加载）都藏起来，有数据时按当前视图点亮。
-    /// 用一个方法统一算，避免出现「切回多日视图时 ScrollViewer 还停在 Collapsed」这种状态残留。
+    /// 可见性的<b>唯一真源</b>：由「空态 + 尺寸档位 + 当前视图」三者共同决定。
+    /// 分散到各处去设 Visibility 迟早会出现状态残留（比如切回多日视图后
+    /// ScrollViewer 还停在 Collapsed），这里集中一处算完。
     /// </summary>
-    private void ApplyForecastVisibility(bool empty)
+    private void ApplyVisibility()
     {
+        var showSecondary = !_empty && WeatherLayoutMath.ShowSecondaryMetrics(_level);
+        var showForecast = !_empty && WeatherLayoutMath.ShowForecast(_level);
+        var showMetrics = !_empty && WeatherLayoutMath.ShowExtraMetrics(_level);
         var hourly = _view == WeatherForecastView.Hourly;
-        DailyScroll.Visibility = empty || hourly ? Visibility.Collapsed : Visibility.Visible;
-        HourlyScroll.Visibility = empty || !hourly ? Visibility.Collapsed : Visibility.Visible;
+
+        FeelsBlock.Visibility = showSecondary ? Visibility.Visible : Visibility.Collapsed;
+        MetricsHost.Visibility = showMetrics ? Visibility.Visible : Visibility.Collapsed;
+
+        // 预报区：标题 + 两个切换按钮一起显隐，否则小档位会剩一排孤零零的按钮
+        ForecastTitle.Visibility = showForecast ? Visibility.Visible : Visibility.Collapsed;
+        ToggleBar.Visibility = showForecast ? Visibility.Visible : Visibility.Collapsed;
+        DailyScroll.Visibility = showForecast && !hourly ? Visibility.Visible : Visibility.Collapsed;
+        HourlyScroll.Visibility = showForecast && hourly ? Visibility.Visible : Visibility.Collapsed;
+
+        EmptyHint.Visibility = _empty ? Visibility.Visible : Visibility.Collapsed;
+        TempBlock.FontSize = WeatherLayoutMath.TemperatureFontSize(_level);
     }
 
     private void ShowError()

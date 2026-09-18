@@ -34,6 +34,14 @@ public sealed class WeatherNow
     public int Code { get; set; }
     /// <summary>是否白天。需要区分日/夜图标（太阳 vs 月亮）。</summary>
     public bool IsDay { get; set; }
+
+    // ── 以下三项只在「大尺寸」档位展示（见 WeatherLayoutLevel.Expanded）──
+    /// <summary>当前降水量（mm）。</summary>
+    public double PrecipitationMm { get; set; }
+    /// <summary>紫外线指数。</summary>
+    public double UvIndex { get; set; }
+    /// <summary>地面气压（hPa）。</summary>
+    public double PressureHpa { get; set; }
 }
 
 /// <summary>单日预报。</summary>
@@ -43,6 +51,14 @@ public sealed class WeatherDay
     public int Code { get; set; }
     public double MaxC { get; set; }
     public double MinC { get; set; }
+    /// <summary>当日降水概率上限（0–100）。</summary>
+    public int PrecipitationProbabilityMax { get; set; }
+    /// <summary>当日紫外线指数上限。</summary>
+    public double UvIndexMax { get; set; }
+    /// <summary>日出时刻。缺测时为 null。</summary>
+    public DateTimeOffset? Sunrise { get; set; }
+    /// <summary>日落时刻。极昼/极夜时为 null。</summary>
+    public DateTimeOffset? Sunset { get; set; }
 }
 
 /// <summary>逐小时预报的一个点。</summary>
@@ -69,6 +85,88 @@ public enum WeatherForecastView
 {
     Daily = 0,
     Hourly = 1,
+}
+
+/// <summary>
+/// 组件尺寸档位。DeskBox 的天气组件按 Mini / Compact / Expanded 三档切换信息密度，
+/// 这里照搬同一套分级（阈值也沿用），只是档位名换成更直白的「小/中/大」语义。
+/// </summary>
+public enum WeatherLayoutLevel
+{
+    /// <summary>小：只给温度 + 图标 + 天气描述。再塞就是互相挤压。</summary>
+    Mini = 0,
+    /// <summary>中：加体感/湿度/风，并显示预报。</summary>
+    Compact = 1,
+    /// <summary>大：再加降水概率 / 紫外线 / 气压 / 日出日落。</summary>
+    Expanded = 2,
+}
+
+/// <summary>
+/// 尺寸 → 档位的纯计算。抽出来是为了能脱离 UI 单测（含<b>滞回</b>这一容易写错的部分）。
+/// </summary>
+public static class WeatherLayoutMath
+{
+    /// <summary>
+    /// 判定档位。带滞回：升档用较高阈值、降档用较低阈值，中间留一段缓冲区。
+    /// <para>
+    /// 为什么必须滞回：组件边缘可以连续拖拽，如果只有一个阈值，用户在临界尺寸上
+    /// 来回拖几像素就会看到界面反复跳档（DeskBox 注释里叫 "almost fits" 抖动）。
+    /// </para>
+    /// </summary>
+    /// <param name="typographyScale">文本缩放系数，1 = 默认。字越大越早降到低密度档。</param>
+    public static WeatherLayoutLevel Determine(
+        double width,
+        double height,
+        WeatherLayoutLevel current,
+        double typographyScale = 1.0)
+    {
+        if (!double.IsFinite(width) || !double.IsFinite(height) || width <= 0 || height <= 0)
+            return current;
+
+        var delta = Math.Max(0.0, typographyScale - 1.0);
+        var miniUpW = 190 + 42 * delta;
+        var miniUpH = 145 + 58 * delta;
+        var miniDownW = 178 + 38 * delta;
+        var miniDownH = 134 + 52 * delta;
+        var expUpW = 300 + 110 * delta;
+        var expUpH = 260 + 150 * delta;
+        var expDownW = 280 + 96 * delta;
+        var expDownH = 240 + 132 * delta;
+
+        // 极小尺寸无条件降档：滞回在这里不能救场，否则小窗口里会塞爆
+        if (width <= miniDownW || height <= miniDownH) return WeatherLayoutLevel.Mini;
+
+        return current switch
+        {
+            WeatherLayoutLevel.Mini when width >= expUpW && height >= expUpH => WeatherLayoutLevel.Expanded,
+            WeatherLayoutLevel.Mini when width >= miniUpW && height >= miniUpH => WeatherLayoutLevel.Compact,
+            WeatherLayoutLevel.Mini => WeatherLayoutLevel.Mini,
+
+            WeatherLayoutLevel.Compact when width >= expUpW && height >= expUpH => WeatherLayoutLevel.Expanded,
+            WeatherLayoutLevel.Compact => WeatherLayoutLevel.Compact,
+
+            _ => width <= expDownW || height <= expDownH
+                ? WeatherLayoutLevel.Compact
+                : WeatherLayoutLevel.Expanded,
+        };
+    }
+
+    /// <summary>该档位下是否显示体感/湿度/风那一行。</summary>
+    public static bool ShowSecondaryMetrics(WeatherLayoutLevel level) => level >= WeatherLayoutLevel.Compact;
+
+    /// <summary>该档位下是否显示预报区（多日 / 逐时）。</summary>
+    public static bool ShowForecast(WeatherLayoutLevel level) => level >= WeatherLayoutLevel.Compact;
+
+    /// <summary>该档位下是否显示附加指标网格。</summary>
+    public static bool ShowExtraMetrics(WeatherLayoutLevel level) => level >= WeatherLayoutLevel.Expanded;
+
+    /// <summary>主温度字号：档位越低字越小，避免小窗口里 40px 温度把描述挤出可视区。</summary>
+    public static double TemperatureFontSize(WeatherLayoutLevel level) => level switch
+    {
+        WeatherLayoutLevel.Mini => 28,
+        WeatherLayoutLevel.Compact => 36,
+        _ => 40,
+    };
 }
 
 /// <summary>
@@ -153,8 +251,8 @@ public sealed class OpenMeteoClient : IDisposable
         var lat = latitude.ToString("G", CultureInfo.InvariantCulture);
         var lon = longitude.ToString("G", CultureInfo.InvariantCulture);
         // current 只取展示需要的字段，少传一点省带宽也省解析
-        const string current = "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m";
-        const string daily = "weather_code,temperature_2m_max,temperature_2m_min";
+        const string current = "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,precipitation,uv_index,surface_pressure";
+        const string daily = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,sunrise,sunset";
         // 逐时只取温度与天气码：够画"今日逐时"的图标+温度，不多传一列省解析
         const string hourly = "temperature_2m,weather_code";
         return $"{ForecastUrl}?latitude={lat}&longitude={lon}" +
@@ -222,6 +320,9 @@ public sealed class OpenMeteoClient : IDisposable
                 now.WindSpeedKmh = GetDouble(cur, "wind_speed_10m");
                 now.Code = (int)GetDouble(cur, "weather_code");
                 now.IsDay = GetDouble(cur, "is_day") >= 1;
+                now.PrecipitationMm = GetDouble(cur, "precipitation");
+                now.UvIndex = GetDouble(cur, "uv_index");
+                now.PressureHpa = GetDouble(cur, "surface_pressure");
             }
 
             var days = new List<WeatherDay>();
@@ -233,6 +334,10 @@ public sealed class OpenMeteoClient : IDisposable
                 var codes = ReadNumberArray(daily, "weather_code");
                 var maxs = ReadNumberArray(daily, "temperature_2m_max");
                 var mins = ReadNumberArray(daily, "temperature_2m_min");
+                var pops = ReadNumberArray(daily, "precipitation_probability_max");
+                var uvs = ReadNumberArray(daily, "uv_index_max");
+                var sunrises = ReadStringArray(daily, "sunrise");
+                var sunsets = ReadStringArray(daily, "sunset");
 
                 for (var i = 0; i < times.Count; i++)
                 {
@@ -243,6 +348,11 @@ public sealed class OpenMeteoClient : IDisposable
                         Code = i < codes.Count ? (int)codes[i] : 0,
                         MaxC = i < maxs.Count ? maxs[i] : 0,
                         MinC = i < mins.Count ? mins[i] : 0,
+                        PrecipitationProbabilityMax = i < pops.Count ? (int)Math.Round(pops[i]) : 0,
+                        UvIndexMax = i < uvs.Count ? uvs[i] : 0,
+                        // 极昼/极夜时 Open-Meteo 给 null，保持 null 让展示层跳过这一项
+                        Sunrise = i < sunrises.Count ? ParseLocalStamp(sunrises[i]) : null,
+                        Sunset = i < sunsets.Count ? ParseLocalStamp(sunsets[i]) : null,
                     });
                 }
             }
@@ -286,6 +396,29 @@ public sealed class OpenMeteoClient : IDisposable
         {
             return null;
         }
+    }
+
+    private static List<string> ReadStringArray(JsonElement parent, string name)
+    {
+        var list = new List<string>();
+        if (!parent.TryGetProperty(name, out var arr) || arr.ValueKind != JsonValueKind.Array) return list;
+        foreach (var e in arr.EnumerateArray())
+        {
+            list.Add(e.ValueKind == JsonValueKind.String ? e.GetString() ?? string.Empty : string.Empty);
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// 日出/日落是"本地墙上时间"字符串（不含时区后缀）。按 unspecified 解析，
+    /// 别让 DateTimeOffset 把它当 UTC 转成本地时间——那会平白差 8 小时。
+    /// </summary>
+    private static DateTimeOffset? ParseLocalStamp(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        return DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var when)
+            ? new DateTimeOffset(when, TimeSpan.Zero)
+            : null;
     }
 
     private static List<double> ReadNumberArray(JsonElement parent, string name)
