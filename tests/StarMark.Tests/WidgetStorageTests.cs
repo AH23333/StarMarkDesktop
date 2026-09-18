@@ -57,6 +57,29 @@ public sealed class WidgetStorageTests : IDisposable
     }
 
     [Fact]
+    public void Instance_PrivacyMode_DefaultsFalseAndRoundTrips()
+    {
+        var store = Store();
+        // 全新实例默认 false（旧实例缺字段零迁移）
+        var inst = new WidgetInstanceConfig { Kind = WidgetKind.Todo };
+        Assert.False(inst.PrivacyMode);
+
+        var data = store.Load();
+        data.Instances.Add(inst);
+        store.Save(data);
+
+        var reloaded = store.Load().Instances[0];
+        Assert.False(reloaded.PrivacyMode);
+
+        // 开启隐私模式后落盘往返保持 true
+        reloaded.PrivacyMode = true;
+        var d2 = store.Load();
+        d2.Instances[0].PrivacyMode = true;
+        store.Save(d2);
+        Assert.True(store.Load().Instances[0].PrivacyMode);
+    }
+
+    [Fact]
     public void Instances_AllowMultipleOfSameKind()
     {
         var store = Store();
