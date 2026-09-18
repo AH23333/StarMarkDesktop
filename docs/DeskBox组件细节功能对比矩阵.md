@@ -89,7 +89,7 @@
 | 已完成项折叠 | ✅ | 本轮补齐 |
 | 数据落到仓库而非本地 UI 集合 | ✅ | `ItemRepository` + `local` 源 |
 | 系统通知提醒 / 重复日程 | ⬜ | DeskBox 有 `todo-notification` + `recurrence-reminder`；StarMark 尚未引入通知管线，属**下一阶段**（需常驻通知 + 权限，收益/成本比待评估） |
-| 拖拽排序 | ⬜ | 桌面组件尺寸偏小，优先级低于增删改/筛选 |
+| 拖拽排序 | ✅ | 本轮补齐：`ListView` 的 `CanReorderItems` 直接调序 `ObservableCollection`，落盘写 `extra_json.order`；**仅「全部」筛选下开放**（子集顺序无法无歧义地映射回全量） |
 
 ### 4.3 天气（Weather）
 
@@ -101,8 +101,8 @@
 | 温度单位 °C / °F（风速同步 km/h ↔ mph） | ✅ | 本轮补齐（`WeatherUnits`） |
 | 今日逐时视图 | ✅ | 本轮补齐（新增 hourly 字段解析） |
 | 共享客户端与缓存（多实例只打一次接口） | ✅ | 静态 client + `SemaphoreSlim` 合并并发 |
-| 附加指标：降水概率 / UV / 气压 / 日出日落 | ⬜ | DeskBox 有；StarMark 待组件尺寸足够后才值得加（当前默认 300×320 塞不下） |
-| 按尺寸分级的指标显示阈值 | 🟡 | StarMark 目前靠常量排版，未做 DeskBox 那套 Viewport 阈值矩阵 |
+| 附加指标：降水概率 / UV / 气压 / 日出日落 | ✅ | 本轮补齐：新增 `precipitation_probability_max` / `uv_index_max` / `surface_pressure` / `sunrise` / `sunset` 字段解析 |
+| 按尺寸分级的指标显示阈值 | ✅ | 本轮补齐：`WeatherLayoutMath` 三档（Mini/Compact/Expanded）**带滞回**，阈值沿用 DeskBox `DetermineLayoutMode` |
 
 ### 4.4 音乐（Music）
 
@@ -114,8 +114,8 @@
 | 多会话音源选择（跟随系统 / 指定播放器） | ✅ | 本轮补齐，对齐 DeskBox `MusicSessionService.GetSessionOptions` |
 | 友好音源名（AUMID → QQ音乐 / Spotify…）+ 同名序号 | ✅ | 本轮补齐 |
 | 音量条（CoreAudio 原生后端） | ⬜ | 路线图定为 v2（需要 Rust/C++ 原生后端 ABI，成本显著高于收益） |
-| 进度拖拽定位（seek） | ⬜ | SMTC `TryChangePlaybackPositionAsync` 可用，尚未接 UI |
-| 随机 / 循环模式切换 | ⬜ | 视播放器是否暴露对应控件 |
+| 进度拖拽定位（seek） | ✅ | 本轮补齐：外层 `SeekHost` 接管指针（3px 的条点不中），拖动期间关掉刷新闸门避免被拽回，松手才提交 |
+| 随机 / 循环模式切换 | ✅ | 本轮补齐：SMTC 只有「随机开关 + 重复模式」两个独立开关，折叠成三态循环（普通→随机→列表循环），缺能力就跳过该态 |
 | 专辑封面缩略图 | ⬜ | `MediaProperties.Thumbnail` 可取，等待 UI 版式确定 |
 
 ### 4.5 快捷启动 / 随记 / 速览 / 搜索
@@ -142,7 +142,9 @@
 
 ## 六、下一步建议（按性价比排序）
 
-1. **音乐 seek + 播放模式**：已有 SMTC 能力位，UI 只需一个可拖动的 Slider 与两个模式按钮，成本低。
-2. **天气附加指标按尺寸分级**：先把 UV / 降水概率按组件高度阈值显示，复用 DeskBox 的「高度够才展开」思路。
-3. **待办拖拽排序**：桌面组件长条形 arena 下拖拽收益有限，但可与删除撤销同批做。
-4. **待办到期提醒**：需要先建通知管线（托盘 + Toast + 去重），体量最大，排在最后。
+> 前三（音乐 seek + 模式 / 天气分级指标 / 待办拖拽排序）已在**第二十八轮**全部落地，见 §4.2–4.4。
+
+1. **待办到期提醒**：需要先建通知管线（托盘 + Toast + 去重），体量最大。
+2. **音乐专辑封面缩略图**：`MediaProperties.Thumbnail` 可取，等待 UI 版式确定。
+3. **组件分组导航**：DeskBox 核心卖点，但 StarMark 走多实例路线，是否引入需产品决策。
+4. **拖放引导线浮层**：对磁吸增益有限，优先级最低。
