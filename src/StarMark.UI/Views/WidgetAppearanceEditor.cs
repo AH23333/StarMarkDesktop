@@ -318,6 +318,7 @@ public static class WidgetAppearanceEditor
         backdropCombo.Items.Add(new ComboItem { Text = "不透明", Value = WidgetBackdropKind.None });
         backdropCombo.Items.Add(new ComboItem { Text = "云母 · Alt", Value = WidgetBackdropKind.MicaAlt });
         backdropCombo.Items.Add(new ComboItem { Text = "亚克力 · 厚", Value = WidgetBackdropKind.AcrylicBase });
+        backdropCombo.Items.Add(new ComboItem { Text = "纯色 · Solid", Value = WidgetBackdropKind.Solid });
         backdropCombo.SelectedIndex = IndexOfBackdrop(wBackdrop);
         backdropCombo.SelectionChanged += (_, _) =>
         {
@@ -670,6 +671,7 @@ public static class WidgetAppearanceEditor
         WidgetBackdropKind.None => 3,
         WidgetBackdropKind.MicaAlt => 4,
         WidgetBackdropKind.AcrylicBase => 5,
+        WidgetBackdropKind.Solid => 6,
         _ => 0,
     };
 

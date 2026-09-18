@@ -74,7 +74,9 @@ public static class WidgetAppearance
             var state = _states.GetOrCreateValue(window);
             DetachControllers(state);
 
-            if (kind == WidgetBackdropKind.None)
+            // 无材质 / 纯色：照搬 DeskBox —— 两者都不挂控制器，
+            // 区别只在内容表面铺什么（None 跟主题黑白实色，Solid 铺带强调色的实色，见 SurfaceBrush）。
+            if (kind == WidgetBackdropKind.None || kind == WidgetBackdropKind.Solid)
             {
                 window.SystemBackdrop = null;
                 WindowInterop.SetDwmSystemBackdropNone(window);
@@ -158,16 +160,35 @@ public static class WidgetAppearance
     }
 
     /// <summary>
-    /// 组件内容表面画笔：原生材质（亚克力 / 云母）下返回透明，让霜化背景透出；
-    /// 不透明材质（None）返回用户不透明度的实色（深/浅随主题）。
+    /// 组件内容表面画笔：
+    /// <list type="bullet">
+    /// <item>原生材质（亚克力 / 云母）→ 透明，让霜化背景透出；</item>
+    /// <item><see cref="WidgetBackdropKind.None"/> → 跟随主题的黑白实色（按用户不透明度调 Alpha）；</item>
+    /// <item><see cref="WidgetBackdropKind.Solid"/>（照搬 DeskBox）→ 「主题基色 + 强调色」混合后再按
+    /// 用户不透明度调整 Alpha 的实色，即**纯色材质吃「背景不透明度」、不吃「材质浓度」**。</item>
+    /// </list>
     /// </summary>
     public static Brush SurfaceBrush(ElementTheme theme, WidgetBackdropKind kind)
     {
-        if (kind != WidgetBackdropKind.None) return new SolidColorBrush(Colors.Transparent);
-        var opacity = (byte)Math.Clamp((byte)(Opacity() * 255), (byte)0, (byte)255);
+        if (kind is not (WidgetBackdropKind.None or WidgetBackdropKind.Solid))
+            return new SolidColorBrush(Colors.Transparent);
+
         var dark = theme == ElementTheme.Dark;
+        var opacity = Math.Clamp(Opacity(), 0.0, 1.0);
+
+        if (kind == WidgetBackdropKind.Solid)
+        {
+            // 与 DeskBox 的 ContentWidgetWindow.ApplySurfaceStyle 同一套取色：
+            // BuildContentSolidSurfaceColor 内部已按 surfaceOpacity 调整 Alpha，
+            // 故此处不再二次叠加（否则纯色会比预期更淡/更实）。
+            var solid = WidgetMaterialVisualCalculator.BuildContentSolidSurfaceColor(
+                dark, WidgetMaterialVisualCalculator.DefaultAccentColor, opacity);
+            return new SolidColorBrush(solid);
+        }
+
         var baseColor = dark ? Colors.Black : Colors.White;
-        return new SolidColorBrush(ColorHelper.FromArgb(opacity, baseColor.R, baseColor.G, baseColor.B));
+        var alpha = (byte)Math.Clamp(opacity * 255, 0, 255);
+        return new SolidColorBrush(ColorHelper.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
     }
 
     /// <summary>便捷重载：按当前设置读出材质。</summary>

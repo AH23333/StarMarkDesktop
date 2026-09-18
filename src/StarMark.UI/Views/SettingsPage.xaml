@@ -122,15 +122,16 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock Text="材质"/>
-                                        <TextBlock Text="亚克力最像 macOS；云母更克制；实色最省资源（对齐 DeskBox 五种材质）。" Style="{StaticResource SettingRowText}"/>
+                                        <TextBlock Text="亚克力最像 macOS；云母更克制；纯色带强调色且吃不透明度；实色最省资源（对齐 DeskBox 六种材质）。" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
-                                    <!-- 顺序即枚举值：0=亚克力(薄) 1=云母 2=实色 3=云母Alt 4=亚克力(厚)，追加新项不影响已保存的设置 -->
+                                    <!-- 顺序即枚举值：0=亚克力(薄) 1=云母 2=实色 3=云母Alt 4=亚克力(厚) 5=纯色，追加新项不影响已保存的设置 -->
                                     <ComboBox Grid.Column="1" MinWidth="200" SelectedIndex="{x:Bind ViewModel.BackdropIndex, Mode=TwoWay}">
                                         <ComboBoxItem Content="亚克力 · 薄（推荐，苹果风格）"/>
                                         <ComboBoxItem Content="云母 · Mica（更克制的桌面色调）"/>
                                         <ComboBoxItem Content="实色（省资源，不使用材质）"/>
                                         <ComboBoxItem Content="云母 · Alt（取更多桌面壁纸色调）"/>
                                         <ComboBoxItem Content="亚克力 · 厚（更浓的霜化，隐私更好）"/>
+                                        <ComboBoxItem Content="纯色 · Solid（带强调色，可调不透明度）"/>
                                     </ComboBox>
                                 </Grid>
 
