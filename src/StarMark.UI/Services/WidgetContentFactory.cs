@@ -59,6 +59,9 @@ public sealed class WidgetContentFactory
         factory.Register(WidgetKind.Pinned, w => new ItemGridWidget(ItemGridMode.Pinned, w));
         // Phase C：今日速览（日期 + 农历/节日 + 倒计时 + 常看条目）
         factory.Register(WidgetKind.Glance, w => new GlanceWidget(w.Repository));
+        // Phase C：天气（Open-Meteo 实况 + 未来三天）+ 音乐（SMTC 播放控制）
+        factory.Register(WidgetKind.Weather, _ => new WeatherWidget());
+        factory.Register(WidgetKind.Music, _ => new MusicWidget());
         return factory;
     }
 }

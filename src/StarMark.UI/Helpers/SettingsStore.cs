@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.Json;
 using StarMark.Abstractions;
 using StarMark.Core.Performance;
+using StarMark.Integrations.Weather;
 
 namespace StarMark.UI.Helpers;
 
@@ -52,6 +53,8 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         public double? CacheBudgetMb { get; set; }
         /// <summary>自定义性能模式下有界缓存的最大条目数（默认 256）。</summary>
         public int? MaxImageCacheCount { get; set; }
+        /// <summary>天气组件所选城市（JSON 序列化的 WeatherCity）。null 表示未选，组件会提示先选城市。</summary>
+        public string? WeatherCityJson { get; set; }
     }
 
     public SettingsStore(string? path = null) => _path = path ?? ResolveSettingsPath();
@@ -177,6 +180,39 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     {
         var d = Load() ?? new SettingsData();
         d.WidgetMaterialIntensity = Math.Clamp(intensity, 0.0, 1.0);
+        Save(d);
+    }
+
+    /// <summary>
+    /// 天气组件所选城市。未选过（或 JSON 损坏 / 旧版无此字段）时返回 null，
+    /// 组件据此显示「点此选择城市」。解析失败一律兜底为 null —— 设置文件是用户可手改的，
+    /// 坏数据绝不能冒异常到 UI 线程。
+    /// </summary>
+    public WeatherCity? LoadWeatherCity()
+    {
+        var json = Load()?.WeatherCityJson;
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<WeatherCity>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public void SaveWeatherCity(WeatherCity? city)
+    {
+        var d = Load() ?? new SettingsData();
+        try
+        {
+            d.WeatherCityJson = city is null ? null : System.Text.Json.JsonSerializer.Serialize(city);
+        }
+        catch
+        {
+            d.WeatherCityJson = null;
+        }
         Save(d);
     }
 
