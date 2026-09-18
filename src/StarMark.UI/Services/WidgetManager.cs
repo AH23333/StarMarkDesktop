@@ -138,6 +138,20 @@ public sealed class WidgetManager
             _storage.Save(data);
         });
 
+    /// <summary>
+    /// 重命名组件实例（右键菜单「重命名…」）。title 传 null / 空白表示恢复组件类型的默认标题。
+    /// 持久化方式与其它每实例字段一致：重新载入 widgets.json → 改实例 → 落盘。
+    /// </summary>
+    public Task SaveInstanceTitleAsync(string id, string? title)
+        => OnUiAsync(() =>
+        {
+            var data = _storage.Load();
+            var inst = data.Instances.FirstOrDefault(i => i.Id == id);
+            if (inst is null) return;
+            inst.Title = string.IsNullOrWhiteSpace(title) ? null : title!.Trim();
+            _storage.Save(data);
+        });
+
     /// <summary>移除指定实例（标题栏 ✕ / 设置页移除 / 菜单"移除本组件"）。</summary>
     public Task RemoveInstanceAsync(string id)
         => OnUiAsync(() =>

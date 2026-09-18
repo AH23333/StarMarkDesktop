@@ -107,6 +107,13 @@ public sealed class WidgetInstanceConfig
     /// <summary>组件宽度（DIP）。</summary>
     public double MonitorWidth { get; set; }
 
+    /// <summary>
+    /// 用户自定义的组件名（右键「重命名…」设置），显示在标题栏与胶囊标题上。
+    /// 为 null / 空白时回退到组件类型的默认标题。旧实例缺该字段反序列化为 null，向后兼容、无需迁移。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Title { get; set; }
+
     /// <summary>组件高度（DIP）。</summary>
     public double MonitorHeight { get; set; }
 
