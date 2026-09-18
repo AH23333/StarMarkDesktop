@@ -96,6 +96,9 @@ internal static class WindowInterop
     [DllImport("user32.dll")]
     public static extern bool GetMonitorInfoW(IntPtr hMonitor, ref MONITORINFO lpmi);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetMonitorInfoW")]
+    public static extern bool GetMonitorInfoExW(IntPtr hMonitor, ref MONITORINFOEX lpmi);
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr FindWindowW(string? lpClassName, string? lpWindowName);
 
@@ -232,5 +235,154 @@ internal static class WindowInterop
         // 3) 通知框架重算非客户区，否则部分系统上仍残留标题栏
         SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    }
+
+    // ── 每显示器拓扑布局（Phase B）：用 Win32 枚举显示器，按稳定设备名（szDevice）記忆，
+    //    位置以 DIP 存为「所在显示器工作区左上角」的偏移，恢复时按该显示器当前 DPI 重新换算物理像素。
+    //    （本机 WinAppSDK 2.3.6 的 DisplayArea 无 GetFromHwnd/GetFromId，故走 Win32，更贴近 DeskBox 做法。） ──
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct MONITORINFOEX
+    {
+        public int CbSize;
+        public RECT RcMonitor;
+        public RECT RcWork;
+        public uint DwFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string SzDevice;
+    }
+
+    [DllImport("user32.dll")]
+    public static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, EnumMonitorsProc lpfnEnum, IntPtr dwData);
+
+    public delegate bool EnumMonitorsProc(IntPtr hMonitor, IntPtr hdcMonitor, IntPtr lprcMonitor, IntPtr dwData);
+
+    [DllImport("shcore.dll")]
+    private static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    private const int MONITORINFOF_PRIMARY = 0x1;
+    private const int MDT_EFFECTIVE_DPI = 0;
+
+    /// <summary>窗口所在显示器的稳定设备名（如 \\.\DISPLAY1）、工作区（物理像素）与 DPI 缩放比。</summary>
+    public static (string Device, RectInt32 WorkArea, double Scale) GetMonitorForWindow(IntPtr hwnd)
+    {
+        var hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        var mi = new MONITORINFOEX { CbSize = Marshal.SizeOf<MONITORINFOEX>() };
+        if (GetMonitorInfoExW(hmonitor, ref mi))
+        {
+            var work = new RectInt32(mi.RcWork.Left, mi.RcWork.Top,
+                mi.RcWork.Right - mi.RcWork.Left, mi.RcWork.Bottom - mi.RcWork.Top);
+            return (mi.SzDevice ?? string.Empty, work, GetMonitorScale(hmonitor));
+        }
+        return (string.Empty, new RectInt32(0, 0, 1920, 1040), 1.0);
+    }
+
+    private static double GetMonitorScale(IntPtr hmonitor)
+    {
+        try
+        {
+            if (GetDpiForMonitor(hmonitor, MDT_EFFECTIVE_DPI, out var x, out var y) == 0)
+                return (x == 0 ? 96 : x) / 96.0;
+        }
+        catch { /* 拿不到则按 100% */ }
+        return 1.0;
+    }
+
+    /// <summary>按设备名找显示器工作区；找不到（已断开）返回 null。</summary>
+    public static RectInt32? FindMonitorWorkAreaByDevice(string device)
+    {
+        if (string.IsNullOrEmpty(device)) return null;
+        RectInt32? found = null;
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (hmon, _, _, _) =>
+        {
+            var mi = new MONITORINFOEX { CbSize = Marshal.SizeOf<MONITORINFOEX>() };
+            if (GetMonitorInfoExW(hmon, ref mi) && mi.SzDevice == device)
+            {
+                found = new RectInt32(mi.RcWork.Left, mi.RcWork.Top,
+                    mi.RcWork.Right - mi.RcWork.Left, mi.RcWork.Bottom - mi.RcWork.Top);
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+
+    /// <summary>按设备名找显示器 DPI 缩放比；找不到返回 1.0。</summary>
+    public static double GetMonitorScaleByDevice(string device)
+    {
+        if (string.IsNullOrEmpty(device)) return 1.0;
+        var scale = 1.0;
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (hmon, _, _, _) =>
+        {
+            var mi = new MONITORINFOEX { CbSize = Marshal.SizeOf<MONITORINFOEX>() };
+            if (GetMonitorInfoExW(hmon, ref mi) && mi.SzDevice == device)
+            {
+                scale = GetMonitorScale(hmon);
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return scale;
+    }
+
+    /// <summary>主显示器工作区（物理像素）。</summary>
+    public static RectInt32 PrimaryWorkArea()
+    {
+        var result = new RectInt32(0, 0, 1920, 1040);
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (hmon, _, _, _) =>
+        {
+            var mi = new MONITORINFOEX { CbSize = Marshal.SizeOf<MONITORINFOEX>() };
+            if (GetMonitorInfoExW(hmon, ref mi) && (mi.DwFlags & MONITORINFOF_PRIMARY) != 0)
+            {
+                result = new RectInt32(mi.RcWork.Left, mi.RcWork.Top,
+                    mi.RcWork.Right - mi.RcWork.Left, mi.RcWork.Bottom - mi.RcWork.Top);
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return result;
+    }
+
+    /// <summary>矩形中心是否不在任何显示器工作区内（越界 / 显示器已断开）。</summary>
+    public static bool IsOffScreen(RectInt32 r)
+    {
+        var cx = r.X + r.Width / 2;
+        var cy = r.Y + r.Height / 2;
+        var onAny = false;
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (hmon, _, _, _) =>
+        {
+            var mi = new MONITORINFOEX { CbSize = Marshal.SizeOf<MONITORINFOEX>() };
+            if (GetMonitorInfoExW(hmon, ref mi))
+            {
+                var wa = mi.RcWork;
+                if (cx >= wa.Left && cx <= wa.Right && cy >= wa.Top && cy <= wa.Bottom)
+                    onAny = true;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return !onAny;
+    }
+
+    /// <summary>返回包含矩形中心的显示器工作区；没有则 null。</summary>
+    public static RectInt32? MonitorWorkAreaContaining(int x, int y, int w, int h)
+    {
+        var cx = x + w / 2;
+        var cy = y + h / 2;
+        RectInt32? found = null;
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (hmon, _, _, _) =>
+        {
+            var mi = new MONITORINFOEX { CbSize = Marshal.SizeOf<MONITORINFOEX>() };
+            if (GetMonitorInfoExW(hmon, ref mi))
+            {
+                var wa = mi.RcWork;
+                if (cx >= wa.Left && cx <= wa.Right && cy >= wa.Top && cy <= wa.Bottom)
+                {
+                    found = new RectInt32(wa.Left, wa.Top, wa.Right - wa.Left, wa.Bottom - wa.Top);
+                    return false;
+                }
+            }
+            return true;
+        }, IntPtr.Zero);
+        return found;
     }
 }

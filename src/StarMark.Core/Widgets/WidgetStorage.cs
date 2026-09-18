@@ -84,6 +84,26 @@ public sealed class WidgetInstanceConfig
     /// </summary>
     public WidgetChromeMode ChromeMode { get; set; } = WidgetChromeMode.Standard;
 
+    // ── 每显示器拓扑布局（Phase B）：位置以 DIP 存为「所在显示器工作区左上角」的偏移，
+    //    配合 MonitorDevice 在恢复时按该显示器当前 DPI 重新换算物理像素；
+    //    MonitorDevice 为空（旧实例/降级路径）时回退物理像素 X/Y/Width/Height 并做越界回收。
+    //    全部有默认值，旧 instances.json 反序列化缺字段零影响。 ──
+
+    /// <summary>组件所在显示器的稳定设备名（如 \\.\DISPLAY1，来自 Win32 MONITORINFOEX.szDevice）。空串表示未记录。</summary>
+    public string MonitorDevice { get; set; } = string.Empty;
+
+    /// <summary>组件左上角相对所在显示器工作区左上角的 DIP 偏移（X）。</summary>
+    public double MonitorLeft { get; set; }
+
+    /// <summary>组件左上角相对所在显示器工作区左上角的 DIP 偏移（Y）。</summary>
+    public double MonitorTop { get; set; }
+
+    /// <summary>组件宽度（DIP）。</summary>
+    public double MonitorWidth { get; set; }
+
+    /// <summary>组件高度（DIP）。</summary>
+    public double MonitorHeight { get; set; }
+
     /// <summary>该实例自己的待办内容（多实例互不干扰）。</summary>
     public List<TodoItem> Todos { get; set; } = new();
 

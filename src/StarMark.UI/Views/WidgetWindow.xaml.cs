@@ -170,33 +170,65 @@ public sealed partial class WidgetWindow : Window
 
     private void ApplyInitialBounds()
     {
+        var (x, y, w, h) = ResolveInitialRect();
+        AppWindow.MoveAndResize(new RectInt32(x, y, w, h));
+    }
+
+    /// <summary>
+    /// 解析组件初始物理像素矩形（每显示器拓扑布局，Phase B）：
+    /// 优先用 <see cref="WidgetInstanceConfig.MonitorId"/> + DIP 偏移按该显示器当前 DPI 重新换算；
+    /// 显示器已断开（MonitorId 找不到）或旧实例无记录时，回退物理像素并做越界回收（落到主显示器工作区）。
+    /// </summary>
+    private (int X, int Y, int W, int H) ResolveInitialRect()
+    {
         var scale = WindowInterop.GetScale(this);
 
-        int w, h, x, y;
         if (_config.Width > 0 && _config.Height > 0)
         {
-            w = (int)_config.Width;
-            h = (int)_config.Height;
-            x = (int)_config.X;
-            y = (int)_config.Y;
-        }
-        else
-        {
-            w = (int)(WidgetStorage.DefaultWidth(_kind) * scale);
-            h = (int)(WidgetStorage.DefaultHeight(_kind) * scale);
-            var index = (int)_kind;
-            x = (int)((120 + index * 28) * scale);
-            y = (int)((90 + index * 28) * scale);
+            // ── 拓扑记忆：有显示器记录 → 按该显示器当前 DPI 还原 ──
+            if (!string.IsNullOrEmpty(_config.MonitorDevice) &&
+                WindowInterop.FindMonitorWorkAreaByDevice(_config.MonitorDevice) is { } work)
+            {
+                var s = WindowInterop.GetMonitorScaleByDevice(_config.MonitorDevice);
+                var left = work.X + (int)(_config.MonitorLeft * s);
+                var top = work.Y + (int)(_config.MonitorTop * s);
+                var w = (int)(_config.MonitorWidth * s);
+                var h = (int)(_config.MonitorHeight * s);
+                return ClampToWorkArea(left, top, w, h, work);
+            }
+
+            // ── 旧实例 / 显示器已断开：物理像素 + 越界回收 ──
+            var px = (int)_config.X;
+            var py = (int)_config.Y;
+            var pw = (int)_config.Width;
+            var ph = (int)_config.Height;
+            if (WindowInterop.IsOffScreen(new RectInt32(px, py, pw, ph)))
+            {
+                // 原显示器没了：落到主显示器工作区，避免组件消失
+                var primary = WindowInterop.PrimaryWorkArea();
+                px = primary.X + 24;
+                py = primary.Y + 24;
+            }
+            var target = WindowInterop.MonitorWorkAreaContaining(px, py, pw, ph) ?? WindowInterop.PrimaryWorkArea();
+            return ClampToWorkArea(px, py, pw, ph, target);
         }
 
-        // 夹到所在显示器工作区内
-        var work = WindowInterop.GetWorkArea(this);
+        // 无尺寸记录：用类型默认尺寸（物理像素），夹到当前显示器
+        var w0 = (int)(WidgetStorage.DefaultWidth(_kind) * scale);
+        var h0 = (int)(WidgetStorage.DefaultHeight(_kind) * scale);
+        var index = (int)_kind;
+        var x0 = (int)((120 + index * 28) * scale);
+        var y0 = (int)((90 + index * 28) * scale);
+        return ClampToWorkArea(x0, y0, w0, h0, WindowInterop.GetWorkArea(this));
+    }
+
+    private static (int X, int Y, int W, int H) ClampToWorkArea(int x, int y, int w, int h, RectInt32 work)
+    {
         if (x < work.X) x = work.X + 8;
         if (y < work.Y) y = work.Y + 8;
         if (x + w > work.X + work.Width) x = Math.Max(work.X + 8, work.X + work.Width - w - 8);
         if (y + h > work.Y + work.Height) y = Math.Max(work.Y + 8, work.Y + work.Height - h - 8);
-
-        AppWindow.MoveAndResize(new RectInt32(x, y, w, h));
+        return (x, y, w, h);
     }
 
     private void PersistBounds()
@@ -223,6 +255,25 @@ public sealed partial class WidgetWindow : Window
             }
             inst.Topmost = _config.Topmost;
             inst.ChromeMode = _chromeMode;
+
+            // 每显示器拓扑：记录所在显示器设备名 + DIP 偏移/尺寸（恢复时按当前 DPI 还原）
+            try
+            {
+                var hwnd = WindowInterop.GetHwnd(this);
+                var (device, work, s) = WindowInterop.GetMonitorForWindow(hwnd);
+                if (!string.IsNullOrEmpty(device))
+                {
+                    inst.MonitorDevice = device;
+                    inst.MonitorLeft = (r.X - work.X) / s;
+                    inst.MonitorTop = (r.Y - work.Y) / s;
+                    var dipW = (_chromeMode == WidgetChromeMode.Compact ? _config.Width : r.Width) / s;
+                    var dipH = (_chromeMode == WidgetChromeMode.Compact ? _config.Height : r.Height) / s;
+                    inst.MonitorWidth = dipW;
+                    inst.MonitorHeight = dipH;
+                }
+            }
+            catch { /* 拿不到显示器信息时不写拓扑字段，回退物理像素路径 */ }
+
             _storage.Save(data);
         }
         catch (Exception ex)
