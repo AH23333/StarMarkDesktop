@@ -54,7 +54,7 @@
 | Glance（农历/节日） | ✅ | ❌（Clock 仅时间） | 中（低成本可补） |
 | 天气 | ✅ | ❌ | 中（需外部 API） |
 | 音乐控制 | ✅ | ❌ | 中（需原生媒体 API） |
-| 每显示器布局 | ✅ 拓扑记忆 | ⚠️ 存物理像素、无越界回收（P0-4 ⬜） | 中 |
+| 每显示器布局 | ✅ 拓扑记忆 | ✅ DIP 相对存储 + 越界回收（Phase B-5） | 小（余热插拔运行时重定位） |
 | 性能模式/门禁 | ✅ | ❌（无内存预算，P1-3 ⬜） | 中（常驻必补） |
 | 外观细化 | ✅ 每组件颜色/文本尺寸/材质 | ⚠️ 全局亚克力 + 不透明度（已照搬控制器） | 中 |
 | 备份/诊断 | ✅ 组件数据隔离备份 | ⚠️ 主库备份已做（P1-4），组件 `widgets.json` 隔离仍 ⬜(R4) | 中 |
@@ -86,7 +86,7 @@
 
 ### 3.5 全局外壳能力（已具备，需补强）
 - ✅ 默认布局持久化、✅ 可自定义热键（最多 3 键/保存才生效/Esc 清除）、✅ 亚克力材质（照搬 DeskBox 控制器方案）、✅ 桌面层级挂载 + 瞬态浮起 + 吸附。
-- ⬜ 缺：**每显示器拓扑布局**、**性能模式**、**组件数据隔离备份**（v3 P0-4/P1-3/P1-4；胶囊模式基础形态 Phase B-1 已落地）。
+- ⬜ 缺：**性能模式**、**组件数据隔离备份**（v3 P1-3/P1-4；胶囊模式基础形态 / 每显示器拓扑布局已落地：B-1 / B-5）。
 
 ---
 
@@ -221,7 +221,7 @@ Phase C · 新内容组件（按需）
 | A-2 差异化四格 | ✅ 已完成 | 新增 4 个 `WidgetKind`（TagGrid/SearchResults/Activity/Pinned）+ `WidgetInstanceConfig.GridTag/GridQuery/GridTags` 配置字段（可空、向后兼容）+ 4 个描述符 + `WidgetContentFactory` 注册 + 共享 `ItemGridWidget`（UserControl + `ItemGridWidgetViewModel`）。四格全部查询统一 `items` 表（`GetAllAsync`/`SearchAsync`/`GetRecentAsync`/`GetPinnedAsync`）；标签格/搜索结果格支持组件内配置并持久化到 `widgets.json`。 |
 | A-3 待办/随记入 items | ✅ 已完成 | 新增 `ItemType.Todo`/`Note` + `source='local'`（`LocalItemState.EncodeSourceId` 多实例隔离）+ `LocalItemsMigration` 幂等迁移（`.bak` 备份、旧字段保留）。工程量 M、风险中已落地（见第十六轮）。 |
 | A-4 QuickLaunch 复用 ItemCard + 搜索组件内直搜 | ✅ 已完成 | 复用 `ItemCard`（`IsLauncherMode` 隐藏会误写主库的操作）+ 组件内直搜（调 `SearchService` 前 12 条，点击才开主窗）。见第十七轮。 |
-| Phase B 工程能力 | 🔶 进行中 | 胶囊模式（收起为胶囊 + 隐藏外壳，首切片已落地）/ 每显示器拓扑布局 / 性能模式 / 外观细化。 |
+| Phase B 工程能力 | 🔶 进行中 | 胶囊模式（B-1 ✅）+ 每显示器拓扑布局（B-5 ✅）/ 性能模式 / 外观细化。 |
 | Phase C 新内容组件 | ⬜ 待做 | Glance（推荐先做）/ 天气 / 音乐。 |
 
 **验收**：`dotnet build` 0 错 0 警；`dotnet test` 173/173 通过。四格已可经「新建组件」入口添加并按模式查询统一条目库。
