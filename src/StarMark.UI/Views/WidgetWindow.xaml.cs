@@ -68,6 +68,7 @@ public sealed partial class WidgetWindow : Window
     /// <summary>悬停预览中：此时窗口临时展开到正常尺寸，但外壳模式仍是 Compact，
     /// 离开窗口即收回胶囊；该标志让尺寸夹取（OnAppWindowChanged）临时放行。</summary>
     private bool _peeking;
+    private bool _fgLoadedHooked;
 
     public WidgetKind Kind => _kind;
     public bool IsVisible => AppWindow.IsVisible;
@@ -359,17 +360,11 @@ public sealed partial class WidgetWindow : Window
             RootBorder.Background = surface;
             DragBar.Background = surface;
 
-            // 前景（文本）色：Border 自身无 Foreground，改用可继承的 TextElement.ForegroundProperty 下传至所有文本。
-            // 严禁对 Border 调用 ClearValue(TextElement.ForegroundProperty)：ForegroundProperty 是 TextElement 注册的
-            // 附加属性，而 Border 并非 TextElement，WinUI 3 原生层对“非拥有类型”执行 ClearValue 会触发 AccessViolation
-            // （0xc0000005，Corrupted-State 异常，try/catch 捕获不到，直接进程崩溃）。重置时改用 SetValue 套回主题默认
-            // 文本色（SetValue 走的是标准安全路径，不会 AV）。
-            var fgDefault = DefaultForegroundBrush(RootBorder.ActualTheme);
-            if (!string.IsNullOrWhiteSpace(ov?.ForegroundColor))
-                RootBorder.SetValue(Microsoft.UI.Xaml.Documents.TextElement.ForegroundProperty,
-                    WidgetAppearance.ParseColorBrush(ov.ForegroundColor!) ?? fgDefault);
-            else
-                RootBorder.SetValue(Microsoft.UI.Xaml.Documents.TextElement.ForegroundProperty, fgDefault);
+            // 前景（文本）色：Border 自身无 Foreground，且 WinUI 3 对“非 TextElement 根容器（如 Border）”调用
+            // SetValue/ClearValue(TextElement.ForegroundProperty) 会触发原生 AccessViolation（0xc0000005，踩坑 #60），
+            // 该异常为 Corrupted-State，try/catch 捕获不到，直接杀进程。故改在内容容器 ContentHost（StackPanel）上设置：
+            // Panel 正常支持该可继承附加属性，且延迟到 Loaded 之后执行以确保原生 peer 已创建，彻底避开 AV。
+            ApplyForeground(ov);
 
             // 边框色 / 粗细
             RootBorder.BorderBrush = !string.IsNullOrWhiteSpace(ov?.BorderColor)
@@ -412,10 +407,30 @@ public sealed partial class WidgetWindow : Window
         }
     }
 
-    /// <summary>组件文本默认前景色：按窗口实际主题取黑（浅色）/ 白（深色）。用于清除外观覆盖时回退到全局默认。</summary>
-    private static Microsoft.UI.Xaml.Media.Brush DefaultForegroundBrush(ElementTheme theme)
-        => new Microsoft.UI.Xaml.Media.SolidColorBrush(
-            theme == ElementTheme.Dark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black);
+    /// <summary>
+    /// 应用每实例前景（文本）色覆盖。在 ContentHost（StackPanel）上设置可继承的
+    /// TextElement.ForegroundProperty：Panel 支持该附加属性，且加载后原生 peer 已存在，不会触发 AV。
+    /// 未指定 ForegroundColor 时套回主题默认文本刷（视觉等价于不覆盖）；始终传入非空 Brush，
+    /// 绝不对 StackPanel 调用 ClearValue（避免任何 AV 风险）。延迟到 Loaded 之后执行以避开根容器 peer 未就绪。
+    /// </summary>
+    private void ApplyForeground(WidgetAppearanceOverride? ov)
+    {
+        if (ContentHost is null) return;
+        var panel = ContentHost;
+        void SetFg()
+        {
+            var theme = panel.ActualTheme;
+            Brush? fg = !string.IsNullOrWhiteSpace(ov?.ForegroundColor)
+                ? WidgetAppearance.ParseColorBrush(ov.ForegroundColor!)
+                : null;
+            fg ??= ThemeBrush.For(theme, "TextFillColorPrimaryBrush");
+            fg ??= new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                theme == ElementTheme.Dark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black);
+            panel.SetValue(Microsoft.UI.Xaml.Documents.TextElement.ForegroundProperty, fg);
+        }
+        if (panel.IsLoaded) SetFg();
+        else if (!_fgLoadedHooked) { _fgLoadedHooked = true; panel.Loaded += (_, _) => SetFg(); }
+    }
 
     /// <summary>设置变更后重新套用外观（材质 / 不透明度），由 WidgetManager 统一调用。</summary>
     public void RefreshAppearance()
