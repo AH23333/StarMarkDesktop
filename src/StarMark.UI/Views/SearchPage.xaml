@@ -17,7 +17,7 @@
         <local:TagSelectedBrushConverter x:Key="TagSelBrush"/>
     </Page.Resources>
 
-    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12,12,12,16">
+    <Grid Background="Transparent" Padding="12,12,12,16">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel>
             <!-- 标签选择唯一入口在导航栏「标签」（写入 Main.GlobalTagFilters）。

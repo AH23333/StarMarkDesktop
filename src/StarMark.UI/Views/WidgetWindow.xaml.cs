@@ -122,10 +122,9 @@ public sealed partial class WidgetWindow : Window
 
         InitializeComponent();
         ApplyAppearanceCore();
-        Title = $"StarMark 组件 - {WidgetStorage.KindTitle(_kind)}";
 
         WidgetGlyph.Text = KindGlyph(_kind);
-        WidgetTitle.Text = WidgetRegistry.Default.TryGet(_kind, out var d) ? d.Title : _kind.ToString();
+        ApplyTitle();   // 标题栏文本 + 窗口标题（优先取用户重命名的名字）
 
         BuildContent();
         WireChrome();
@@ -746,6 +745,15 @@ public sealed partial class WidgetWindow : Window
         menu.Items.Add(main);
         menu.Items.Add(settings);
 
+        // 重命名本组件实例（名字显示在标题栏 / 胶囊标题上）
+        var rename = new MenuFlyoutItem
+        {
+            Text = "重命名…",
+            Icon = new FontIcon { Glyph = "\uE8AC", FontSize = 14 },   // Rename，与其它图标视觉一致
+        };
+        rename.Click += async (_, _) => await RenameAsync();
+        menu.Items.Add(rename);
+
         // 每实例外观编辑（B-9）：材质/颜色/边框/圆角/文本缩放，可一键恢复全局
         var appearance = new MenuFlyoutItem
         {
@@ -844,6 +852,53 @@ public sealed partial class WidgetWindow : Window
         finally
         {
             _appearanceEditorOpen = false;
+        }
+    }
+
+    /// <summary>组件类型的默认标题（未重命名时的显示名）。</summary>
+    private string DefaultKindTitle()
+        => WidgetRegistry.Default.TryGet(_kind, out var d) ? d.Title : _kind.ToString();
+
+    /// <summary>当前显示名：优先用户重命名的名字，未命名/null 时回退到类型默认标题。</summary>
+    private string DisplayTitle()
+        => string.IsNullOrWhiteSpace(_config.Title) ? DefaultKindTitle() : _config.Title!;
+
+    /// <summary>把显示名同步到标题栏文本与窗口标题（重命名后立即刷新）。</summary>
+    private void ApplyTitle()
+    {
+        try
+        {
+            var t = DisplayTitle();
+            WidgetTitle.Text = t;
+            Title = $"StarMark 组件 - {t}";
+        }
+        catch { /* 标题不是关键路径，失败不影响窗口可用 */ }
+    }
+
+    /// <summary>
+    /// 右键「重命名…」：弹出输入框修改本组件实例的名字并持久化。
+    /// 提交空字符串即恢复组件类型的默认标题（存 null，不占磁盘、与旧版本配置兼容）。
+    /// </summary>
+    private async System.Threading.Tasks.Task RenameAsync()
+    {
+        try
+        {
+            var def = DefaultKindTitle();
+            var input = await CenteredDialog.PromptAsync(
+                title: "重命名组件",
+                message: $"给这个组件取个名字（留空则恢复默认名称「{def}」）。",
+                placeholder: def,
+                defaultText: string.IsNullOrWhiteSpace(_config.Title) ? null : _config.Title,
+                owner: this);
+            if (input is null) return;   // 用户取消
+
+            _config.Title = string.IsNullOrWhiteSpace(input) ? null : input.Trim();
+            ApplyTitle();
+            await _manager.SaveInstanceTitleAsync(_instanceId, _config.Title);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("重命名组件失败", ex);
         }
     }
 
@@ -1455,6 +1510,23 @@ public sealed partial class WidgetWindow : Window
         var content = WidgetContentFactory.Default.Build(_kind, this);
         _clockWidget = content as ClockWidget;
         ContentHost.Children.Add(content);
+
+        // 内容重建后必须补一次外观套用，原因有二：
+        // ① 构造顺序是 InitializeComponent → ApplyAppearanceCore → BuildContent，上一次 ApplyAppearanceCore
+        //    执行时 ContentHost 还是个空的 StackPanel（XAML 自带元素，已被 Loaded，所以 SetFg 立即执行却什么也遍历不到），
+        //    于是新内容永远拿不到已保存的外观（含文本缩放）——持久化的字号在启动后会无声失效。
+        // ② 旧的基准字号缓存对应的是已被丢弃的文本，重建时一并清空，保证新文本的基准一定是「未经缩放的原始字号」，
+        //    点「恢复全局」（系数回到 1.0）才能精确还原到初始加载时的大小。
+        ResetTextStyleCache();
+        try { ApplyAppearanceCore(); } catch { }
+    }
+
+    /// <summary>清空「基准字号 / 已上色文本」缓存（内容重建时调用，与 ContentHost.Children.Clear 配套）。</summary>
+    private void ResetTextStyleCache()
+    {
+        _baseFonts.Clear();
+        _coloredMarker.Clear();
+        _coloredRefs.Clear();
     }
 
     /// <summary>按窗口当前主题从应用级主题字典解析组件画笔。</summary>

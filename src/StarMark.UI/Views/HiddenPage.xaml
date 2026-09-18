@@ -14,7 +14,7 @@
         <helpers:BoolToVisibilityConverter x:Key="BoolToVis"/>
     </Page.Resources>
 
-    <ScrollViewer Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12,12,12,16"
+    <ScrollViewer Background="Transparent" Padding="12,12,12,16"
                   VerticalScrollBarVisibility="Auto">
         <StackPanel>
             <ItemsRepeater ItemsSource="{x:Bind ViewModel.HiddenItems, Mode=OneWay}">

@@ -88,14 +88,16 @@ public static class WidgetAppearance
                 Theme = isDark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light,
             };
 
-            if (kind == WidgetBackdropKind.Mica)
+            // 云母（Mica Base / BaseAlt）：对齐 DeskBox 的 ApplyMicaController 参数组合
+            if (kind == WidgetBackdropKind.Mica || kind == WidgetBackdropKind.MicaAlt)
             {
+                var useAlt = kind == WidgetBackdropKind.MicaAlt;
                 if (MicaController.IsSupported())
                 {
-                    var mica = new MicaController { Kind = MicaKind.Base };
+                    var mica = new MicaController { Kind = useAlt ? MicaKind.BaseAlt : MicaKind.Base };
                     mica.TintColor = WidgetMaterialVisualCalculator.BuildContentTintColor(isDark, WidgetMaterialVisualCalculator.DefaultAccentColor);
-                    mica.FallbackColor = WidgetMaterialVisualCalculator.BuildMicaFallbackColor(isDark, useAlt: false);
-                    var profile = WidgetMaterialVisualCalculator.CalculateMica(isDark, useAlt: false, intensity);
+                    mica.FallbackColor = WidgetMaterialVisualCalculator.BuildMicaFallbackColor(isDark, useAlt);
+                    var profile = WidgetMaterialVisualCalculator.CalculateMica(isDark, useAlt, intensity);
                     mica.TintOpacity = (float)profile.TintOpacity;
                     mica.LuminosityOpacity = (float)profile.LuminosityOpacity;
                     mica.SetSystemBackdropConfiguration(config);
@@ -110,13 +112,14 @@ public static class WidgetAppearance
                 // 不支持 Mica 时回落到亚克力
             }
 
-            // 亚克力（默认材质）
+            // 亚克力（Thin 薄 / Base 厚）：对齐 DeskBox 的 ApplyAcrylicController 参数组合
             if (DesktopAcrylicController.IsSupported())
             {
-                var acrylic = new DesktopAcrylicController { Kind = DesktopAcrylicKind.Base };
+                var useBase = kind == WidgetBackdropKind.AcrylicBase;
+                var acrylic = new DesktopAcrylicController { Kind = useBase ? DesktopAcrylicKind.Base : DesktopAcrylicKind.Thin };
                 acrylic.TintColor = WidgetMaterialVisualCalculator.BuildContentTintColor(isDark, WidgetMaterialVisualCalculator.DefaultAccentColor);
                 acrylic.FallbackColor = acrylic.TintColor;
-                var profile = WidgetMaterialVisualCalculator.CalculateAcrylic(isDark, useBase: true, surfaceOpacity, intensity);
+                var profile = WidgetMaterialVisualCalculator.CalculateAcrylic(isDark, useBase, surfaceOpacity, intensity);
                 acrylic.TintOpacity = (float)profile.TintOpacity;
                 acrylic.LuminosityOpacity = (float)profile.LuminosityOpacity;
                 acrylic.SetSystemBackdropConfiguration(config);

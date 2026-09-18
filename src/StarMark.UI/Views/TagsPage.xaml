@@ -15,7 +15,7 @@
         <helpers:ContainedTagColorConverter x:Key="ContainedTagColor"/>
     </Page.Resources>
 
-    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="12,12,12,16">
+    <Grid Background="Transparent" Padding="12,12,12,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>

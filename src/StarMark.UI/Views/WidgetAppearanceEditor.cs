@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
@@ -315,6 +316,8 @@ public static class WidgetAppearanceEditor
         backdropCombo.Items.Add(new ComboItem { Text = "亚克力", Value = WidgetBackdropKind.Acrylic });
         backdropCombo.Items.Add(new ComboItem { Text = "云母", Value = WidgetBackdropKind.Mica });
         backdropCombo.Items.Add(new ComboItem { Text = "不透明", Value = WidgetBackdropKind.None });
+        backdropCombo.Items.Add(new ComboItem { Text = "云母 · Alt", Value = WidgetBackdropKind.MicaAlt });
+        backdropCombo.Items.Add(new ComboItem { Text = "亚克力 · 厚", Value = WidgetBackdropKind.AcrylicBase });
         backdropCombo.SelectedIndex = IndexOfBackdrop(wBackdrop);
         backdropCombo.SelectionChanged += (_, _) =>
         {
@@ -561,8 +564,9 @@ public static class WidgetAppearanceEditor
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Content = root,
         };
-        // 可拖拽标题栏：编辑器可能遮挡被编辑的组件，允许拖动它到不挡视线的位置
-        var dragHeader = BuildDragHeader(win);
+        // 卡片直接承载 ScrollViewer：此前外层套了 StackPanel（含拖拽标题栏），
+        // StackPanel 以「无限高度」度量子元素，ScrollViewer 拿不到有界高度 → 永不滚动，
+        // 底部「确定 / 取消 / 恢复全局」被裁切不可达。恢复为其直接宿主即可正常滚动。
         var card = new Border
         {
             Background = Brush("CardBackgroundFillColorDefaultBrush", Colors.White),
@@ -570,14 +574,18 @@ public static class WidgetAppearanceEditor
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(10),
             Padding = new Thickness(20),
-            Child = new StackPanel { Spacing = 10, Children = { dragHeader, scroll } },
+            Child = scroll,
         };
+        // 外框留一圈内边距，给拖拽留出落点，同时视觉上更像浮层
         var grid = new Grid
         {
             Background = Brush("ApplicationPageBackgroundThemeBrush", Colors.White),
+            Padding = new Thickness(10),
             Children = { card },
         };
         win.Content = grid;
+        // 不再设单独的拖拽标题栏：整个窗口可拖拽移动（自动避开输入控件），避免遮挡被编辑的组件
+        MakeWindowDraggable(win, grid);
         WindowInterop.RemoveDefaultWindowFrame(win);
         WindowInterop.ApplyRoundedCorners(win);
 
@@ -660,6 +668,8 @@ public static class WidgetAppearanceEditor
         WidgetBackdropKind.Acrylic => 1,
         WidgetBackdropKind.Mica => 2,
         WidgetBackdropKind.None => 3,
+        WidgetBackdropKind.MicaAlt => 4,
+        WidgetBackdropKind.AcrylicBase => 5,
         _ => 0,
     };
 
@@ -733,53 +743,27 @@ public static class WidgetAppearanceEditor
 
     /// <summary>编辑器顶部的可拖拽标题栏：从标题栏按下拖动即可移动整个编辑器窗口，
     /// 避免它遮挡被编辑的组件（组件右键「外观…」弹出的浮层可能正好盖住组件本身）。</summary>
-    private static Grid BuildDragHeader(Window owner)
+    /// <summary>
+    /// 让整个窗口可拖拽移动（替代单独的拖拽标题栏）。按下点若落在真正的输入控件上则放行，
+    /// 让控件正常工作；落在留白 / 纯展示区域（标题、面板、卡片留白、预览缩略图）则可按住拖动窗口。
+    /// </summary>
+    private static void MakeWindowDraggable(Window owner, FrameworkElement surface)
     {
-        var header = new Grid
-        {
-            Height = 40,
-            Margin = new Thickness(0, 0, 0, 4),
-            Background = Brush("SubtleFillColorSecondaryBrush", Colors.LightGray),
-            Padding = new Thickness(12, 0, 12, 0),
-            ColumnSpacing = 8,
-        };
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var title = new TextBlock
-        {
-            Text = "组件外观",
-            FontSize = 14,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center,
-            Foreground = Brush("TextFillColorPrimaryBrush", Colors.Black),
-        };
-        var hint = new TextBlock
-        {
-            Text = "拖动此处移动",
-            FontSize = 11,
-            Opacity = 0.6,
-            VerticalAlignment = VerticalAlignment.Center,
-            Foreground = Brush("TextFillColorSecondaryBrush", Colors.Gray),
-        };
-        Grid.SetColumn(title, 0);
-        Grid.SetColumn(hint, 1);
-        header.Children.Add(title);
-        header.Children.Add(hint);
-
         WindowInterop.POINT start = default;
         RectInt32 rect = default;
         bool dragging = false;
-        header.PointerPressed += (_, e) =>
+
+        surface.PointerPressed += (_, e) =>
         {
-            if (e.GetCurrentPoint(header).Properties.IsRightButtonPressed) return;
+            if (e.GetCurrentPoint(surface).Properties.IsRightButtonPressed) return;  // 右键留给菜单/取色
+            if (IsInputControl(e.OriginalSource as DependencyObject)) return;        // 输入控件优先，不劫持
             dragging = true;
             WindowInterop.GetCursorPos(out start);
             rect = WindowInterop.GetWindowRect(owner);
-            try { header.CapturePointer(e.Pointer); } catch { }
+            try { surface.CapturePointer(e.Pointer); } catch { }
             e.Handled = true;
         };
-        header.PointerMoved += (_, e) =>
+        surface.PointerMoved += (_, e) =>
         {
             if (!dragging) return;
             WindowInterop.GetCursorPos(out var p);
@@ -787,17 +771,39 @@ public static class WidgetAppearanceEditor
                 rect.X + p.X - start.X, rect.Y + p.Y - start.Y, rect.Width, rect.Height));
             e.Handled = true;
         };
-        header.PointerReleased += (_, e) =>
+        surface.PointerReleased += (_, e) =>
         {
+            if (!dragging) return;
             dragging = false;
-            try { header.ReleasePointerCapture(e.Pointer); } catch { }
+            try { surface.ReleasePointerCapture(e.Pointer); } catch { }
         };
-        header.PointerCanceled += (_, e) =>
+        surface.PointerCanceled += (_, e) =>
         {
+            if (!dragging) return;
             dragging = false;
-            try { header.ReleasePointerCapture(e.Pointer); } catch { }
+            try { surface.ReleasePointerCapture(e.Pointer); } catch { }
         };
-        return header;
+    }
+
+    /// <summary>
+    /// 判断按下点是否落在输入控件（或其内部）上——是则不劫持为拖拽，让控件正常响应。
+    /// 注意刻意不把 ScrollViewer 算进来：这样滚动区内部的留白也可拖动窗口，
+    /// 而滚动条（ScrollBar/Thumb）本身已单独排除，拖拽条仍可用。
+    /// </summary>
+    private static bool IsInputControl(DependencyObject? d)
+    {
+        while (d is not null)
+        {
+            if (d is Button or RepeatButton or ToggleButton or ToggleSwitch
+                or Slider or Thumb or ScrollBar
+                or TextBox or RichEditBox or PasswordBox or AutoSuggestBox
+                or ComboBox or NumberBox or CheckBox or RadioButton
+                or Canvas or ListViewBase or ItemsRepeater or MenuFlyoutPresenter
+                or ComboBoxItem or GridViewItem or ListViewItem)
+                return true;
+            d = VisualTreeHelper.GetParent(d);
+        }
+        return false;
     }
 
     private static Brush Brush(string key, Color fallback) =>
