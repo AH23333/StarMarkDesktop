@@ -8,6 +8,8 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Shapes;
+using Windows.Foundation;
 using Windows.Graphics;
 using Windows.UI;
 using WinRT.Interop;
@@ -27,7 +29,7 @@ namespace StarMark.UI.Views;
 /// </summary>
 public static class WidgetAppearanceEditor
 {
-    // 预设调色板（#AARRGGBB）
+    // 预设调色板（#RRGGBB），作为快捷按钮；真正取色在主区渐变图上点击完成
     private static readonly (string Name, string Hex)[] Palette =
     {
         ("白", "#FFFFFFFF"), ("黑", "#FF000000"), ("深灰", "#FF2B2B2B"), ("浅灰", "#FFF3F3F3"),
@@ -65,6 +67,9 @@ public static class WidgetAppearanceEditor
         // 选中的「对象」（背景色 / 文本色 / 边框色）
         string selObj = "bg";
 
+        // 渐变取色器的当前 HSV 状态（随选中对象切换而同步）
+        double pickH = 210, pickS = 1, pickV = 1;
+
         // 把当前工作副本套到组件（实时预览）；每个字段为 null 即「跟随全局」
         void Preview() => livePreview(BuildWorking());
         WidgetAppearanceOverride BuildWorking() => new()
@@ -94,7 +99,10 @@ public static class WidgetAppearanceEditor
             "border" => wBorder,
             _ => wBg,
         };
-        void SetColor(string obj, string? hex)
+        string PickColorHex() => ToHex(HsvToRgb(pickH, pickS, pickV));
+
+        // 仅写值 + 预览（不回写 pick，避免渐变取色时的来回漂移）
+        void SetColorValue(string obj, string? hex)
         {
             if (obj == "fg") wFg = hex;
             else if (obj == "border") wBorder = hex;
@@ -107,10 +115,17 @@ public static class WidgetAppearanceEditor
         // 颜色按钮引用（用于高亮）
         var objButtons = new Dictionary<string, Button>();
         var leftButtons = new List<(string? Hex, Button Btn)>();
-        var rightButtons = new List<(string? Hex, Button Btn)>();
         WrapPanel? presetWrap = null;
         Border? currentColorSwatch = null;
         TextBlock? currentColorText = null;
+
+        // 渐变图控件
+        Canvas? svCanvas = null;
+        Rectangle? svHueRect = null;
+        Ellipse? svIndicator = null;
+        Canvas? hueCanvas = null;
+        Rectangle? hueIndicator = null;
+        bool _svPressed = false, _huePressed = false;
 
         void Highlight(Button btn, bool on)
         {
@@ -130,7 +145,6 @@ public static class WidgetAppearanceEditor
         {
             var cur = GetColor(selObj);
             foreach (var (hex, btn) in leftButtons) Highlight(btn, hex == cur);
-            foreach (var (hex, btn) in rightButtons) Highlight(btn, hex == cur);
             foreach (var (obj, btn) in objButtons) Highlight(btn, obj == selObj);
         }
 
@@ -152,12 +166,94 @@ public static class WidgetAppearanceEditor
             }
         }
 
+        // 把「当前对象颜色」同步到渐变取色器（切换对象时调用）
+        void UpdatePickerFromObject()
+        {
+            var hex = GetColor(selObj);
+            if (hex is not null && RgbFromHex(hex) is { } rgb)
+            {
+                var (h, s, v) = RgbToHsv(rgb);
+                pickH = h; pickS = s; pickV = v;
+            }
+            UpdateHueFill();
+            UpdateSvIndicator();
+            UpdateHueIndicator();
+        }
+
+        void UpdateHueFill()
+        {
+            if (svHueRect is not null) svHueRect.Fill = new SolidColorBrush(HsvToRgb(pickH, 1, 1));
+        }
+        void UpdateSvIndicator()
+        {
+            if (svCanvas is not null && svIndicator is not null)
+            {
+                var x = pickS * svCanvas.Width - svIndicator.Width / 2;
+                var y = (1 - pickV) * svCanvas.Height - svIndicator.Height / 2;
+                Canvas.SetLeft(svIndicator, x);
+                Canvas.SetTop(svIndicator, y);
+            }
+        }
+        void UpdateHueIndicator()
+        {
+            if (hueCanvas is not null && hueIndicator is not null)
+            {
+                var x = (pickH / 360.0) * hueCanvas.Width - hueIndicator.Width / 2;
+                Canvas.SetLeft(hueIndicator, x);
+            }
+        }
+
+        void SvPointer(object? s, PointerRoutedEventArgs e)
+        {
+            if (svCanvas is null) return;
+            svCanvas.CapturePointer(e.Pointer);
+            _svPressed = true;
+            SvUpdate(e);
+            e.Handled = true;
+        }
+        void SvPointerMove(object? s, PointerRoutedEventArgs e)
+        {
+            if (_svPressed) { SvUpdate(e); e.Handled = true; }
+        }
+        void SvUpdate(PointerRoutedEventArgs e)
+        {
+            if (svCanvas is null) return;
+            var p = e.GetCurrentPoint(svCanvas).Position;
+            pickS = Math.Clamp(p.X / svCanvas.Width, 0, 1);
+            pickV = Math.Clamp(1 - p.Y / svCanvas.Height, 0, 1);
+            UpdateSvIndicator();
+            SetColorValue(selObj, PickColorHex());
+        }
+
+        void HuePointer(object? s, PointerRoutedEventArgs e)
+        {
+            if (hueCanvas is null) return;
+            hueCanvas.CapturePointer(e.Pointer);
+            _huePressed = true;
+            HueUpdate(e);
+            e.Handled = true;
+        }
+        void HuePointerMove(object? s, PointerRoutedEventArgs e)
+        {
+            if (_huePressed) { HueUpdate(e); e.Handled = true; }
+        }
+        void HueUpdate(PointerRoutedEventArgs e)
+        {
+            if (hueCanvas is null) return;
+            var p = e.GetCurrentPoint(hueCanvas).Position;
+            pickH = Math.Clamp(p.X / hueCanvas.Width * 360, 0, 360);
+            UpdateHueFill();
+            UpdateHueIndicator();
+            SetColorValue(selObj, PickColorHex());
+        }
+
         void SelectObject(string obj)
         {
             selObj = obj;
             BuildPresetStrip();      // 左侧颜色按钮随对象重建
             RefreshColorHighlights();
             RefreshCurrentColor();
+            UpdatePickerFromObject();
         }
 
         // 左侧颜色按钮（随选中对象重建）：跟随全局 + 预设
@@ -167,13 +263,23 @@ public static class WidgetAppearanceEditor
             presetWrap.Children.Clear();
             leftButtons.Clear();
 
-            var follow = MakeColorButton(null, "跟随全局", () => SetColor(selObj, null));
+            var follow = MakeColorButton(null, "跟随全局", () => SetColorValue(selObj, null));
             presetWrap.Children.Add(follow);
             leftButtons.Add((null, follow));
 
             foreach (var (name, hex) in Palette)
             {
-                var btn = MakeColorButton(hex, name, () => SetColor(selObj, hex));
+                var h = hex;
+                var btn = MakeColorButton(hex, name, () =>
+                {
+                    SetColorValue(selObj, h);
+                    if (RgbFromHex(h) is { } rgb)
+                    {
+                        var (hh, ss, vv) = RgbToHsv(rgb);
+                        pickH = hh; pickS = ss; pickV = vv;
+                    }
+                    UpdateHueFill(); UpdateSvIndicator(); UpdateHueIndicator();
+                });
                 presetWrap.Children.Add(btn);
                 leftButtons.Add((hex, btn));
             }
@@ -244,21 +350,107 @@ public static class WidgetAppearanceEditor
             objList.Children.Add(ob);
         }
         leftCol.Children.Add(objList);
-        leftCol.Children.Add(MakeLabel("颜色"));
+        leftCol.Children.Add(MakeLabel("颜色（按钮快捷选取）"));
         presetWrap = new WrapPanel { HorizontalSpacing = 6, VerticalSpacing = 6 };
         leftCol.Children.Add(presetWrap);
 
-        // 右列：调色板
-        var rightCol = new StackPanel { Spacing = 10 };
-        rightCol.Children.Add(MakeLabel("调色板（点击选取颜色）"));
-        var paletteGrid = new WrapPanel { HorizontalSpacing = 8, VerticalSpacing = 8 };
-        foreach (var (name, hex) in Palette)
+        // 右列：HSV 渐变取色器
+        var rightCol = new StackPanel { Spacing = 8 };
+        rightCol.Children.Add(MakeLabel("调色板（在渐变色图上点击选取颜色）"));
+
+        // SV 方图：底色=当前色相纯色；横向白→透明（饱和度），纵向透明→黑（明度）
+        svCanvas = new Canvas
         {
-            var btn = MakeColorButton(hex, name, () => SetColor(selObj, hex));
-            paletteGrid.Children.Add(btn);
-            rightButtons.Add((hex, btn));
-        }
-        rightCol.Children.Add(paletteGrid);
+            Width = 240,
+            Height = 150,
+            Margin = new Thickness(0, 0, 0, 4),
+        };
+        svHueRect = new Rectangle { Width = 240, Height = 150, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
+        var svWhite = new Rectangle
+        {
+            Width = 240,
+            Height = 150,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Fill = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(1, 0),
+                GradientStops = { new GradientStop { Color = Colors.White, Offset = 0 }, new GradientStop { Color = Colors.Transparent, Offset = 1 } },
+            },
+        };
+        var svBlack = new Rectangle
+        {
+            Width = 240,
+            Height = 150,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Fill = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(0, 1),
+                GradientStops = { new GradientStop { Color = Colors.Transparent, Offset = 0 }, new GradientStop { Color = Colors.Black, Offset = 1 } },
+            },
+        };
+        svIndicator = new Ellipse
+        {
+            Width = 12,
+            Height = 12,
+            Stroke = new SolidColorBrush(Colors.White),
+            StrokeThickness = 2,
+            Fill = new SolidColorBrush(Colors.Transparent),
+            IsHitTestVisible = false,
+        };
+        svCanvas.Children.Add(svHueRect);
+        svCanvas.Children.Add(svWhite);
+        svCanvas.Children.Add(svBlack);
+        svCanvas.Children.Add(svIndicator);
+        svCanvas.PointerPressed += SvPointer;
+        svCanvas.PointerMoved += SvPointerMove;
+        svCanvas.PointerReleased += (_, e) => { _svPressed = false; try { svCanvas.ReleasePointerCapture(e.Pointer); } catch { } };
+        svCanvas.PointerCanceled += (_, e) => { _svPressed = false; try { svCanvas.ReleasePointerCapture(e.Pointer); } catch { } };
+        rightCol.Children.Add(svCanvas);
+
+        // 色相条（彩虹渐变）
+        hueCanvas = new Canvas
+        {
+            Width = 240,
+            Height = 18,
+            Margin = new Thickness(0, 2, 0, 0),
+        };
+        var hueGrad = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+        hueGrad.GradientStops.Add(new GradientStop { Color = Colors.Red, Offset = 0 });
+        hueGrad.GradientStops.Add(new GradientStop { Color = Colors.Yellow, Offset = 0.1667 });
+        hueGrad.GradientStops.Add(new GradientStop { Color = Colors.Lime, Offset = 0.3333 });
+        hueGrad.GradientStops.Add(new GradientStop { Color = Colors.Cyan, Offset = 0.5 });
+        hueGrad.GradientStops.Add(new GradientStop { Color = Colors.Blue, Offset = 0.6667 });
+        hueGrad.GradientStops.Add(new GradientStop { Color = Colors.Magenta, Offset = 0.8333 });
+        hueGrad.GradientStops.Add(new GradientStop { Color = Colors.Red, Offset = 1 });
+        hueCanvas.Children.Add(new Rectangle
+        {
+            Width = 240,
+            Height = 18,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Fill = hueGrad,
+        });
+        hueIndicator = new Rectangle
+        {
+            Width = 4,
+            Height = 22,
+            Fill = new SolidColorBrush(Colors.White),
+            Stroke = new SolidColorBrush(Colors.Black),
+            StrokeThickness = 1,
+            IsHitTestVisible = false,
+            Margin = new Thickness(0, -2, 0, 0),
+        };
+        hueCanvas.Children.Add(hueIndicator);
+        hueCanvas.PointerPressed += HuePointer;
+        hueCanvas.PointerMoved += HuePointerMove;
+        hueCanvas.PointerReleased += (_, e) => { _huePressed = false; try { hueCanvas.ReleasePointerCapture(e.Pointer); } catch { } };
+        hueCanvas.PointerCanceled += (_, e) => { _huePressed = false; try { hueCanvas.ReleasePointerCapture(e.Pointer); } catch { } };
+        rightCol.Children.Add(hueCanvas);
+
         rightCol.Children.Add(MakeLabel("当前颜色"));
         var curRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
         currentColorSwatch = new Border
@@ -282,7 +474,11 @@ public static class WidgetAppearanceEditor
         // 滑杆三件套（底部，阈值放宽）
         root.Children.Add(MakeSlider("边框粗细", wThick ?? 1, 0, 12, 0.5, v => { wThick = v; Preview(); }));
         root.Children.Add(MakeSlider("圆角半径", wRadius ?? 8, 0, 48, 1, v => { wRadius = v; Preview(); }));
-        root.Children.Add(MakeSlider("文本缩放", wScale ?? 1, 0.6, 1.8, 0.05, v => { wScale = v; Preview(); }));
+        root.Children.Add(MakeSlider("文本缩放", wScale ?? 1, 0.6, 1.8, 0.05, v =>
+        {
+            wScale = v;
+            Preview();   // 实时预览文本缩放（直接改 TextBlock.FontSize，文本本身缩放，留在布局内）
+        }));
 
         // 按钮
         var reset = MakeButton("恢复全局", false);
@@ -371,7 +567,7 @@ public static class WidgetAppearanceEditor
         WindowInterop.ApplyRoundedCorners(win);
 
         var scale = WindowInterop.GetScale(win);
-        const double W = 720, H = 640;
+        const double W = 760, H = 660;
         var w = (int)(W * scale);
         var h = (int)(H * scale);
         var work = owner is null ? WindowInterop.GetWorkArea(win) : WindowInterop.GetWorkArea(owner);
@@ -384,12 +580,54 @@ public static class WidgetAppearanceEditor
         try { WindowInterop.SetForegroundWindow(WindowInterop.GetHwnd(win)); } catch { }
         WindowInterop.SetTopmost(win, false);
 
-        // 初始高亮
+        // 初始高亮 + 取色器同步
         BuildPresetStrip();
         SelectObject(selObj);
 
         return tcs.Task;
     }
+
+    // ── HSV ↔ RGB 互转（取色器用）──
+
+    private static Windows.UI.Color HsvToRgb(double h, double s, double v)
+    {
+        h = ((h % 360) + 360) % 360;
+        var c = v * s;
+        var x = c * (1 - Math.Abs((h / 60.0) % 2 - 1));
+        var m = v - c;
+        double r = 0, g = 0, b = 0;
+        if (h < 60) (r, g, b) = (c, x, 0);
+        else if (h < 120) (r, g, b) = (x, c, 0);
+        else if (h < 180) (r, g, b) = (0, c, x);
+        else if (h < 240) (r, g, b) = (0, x, c);
+        else if (h < 300) (r, g, b) = (x, 0, c);
+        else (r, g, b) = (c, 0, x);
+        return Windows.UI.Color.FromArgb(255, (byte)Math.Round((r + m) * 255), (byte)Math.Round((g + m) * 255), (byte)Math.Round((b + m) * 255));
+    }
+
+    private static (double h, double s, double v) RgbToHsv(Windows.UI.Color col)
+    {
+        var rn = col.R / 255.0; var gn = col.G / 255.0; var bn = col.B / 255.0;
+        var max = Math.Max(rn, Math.Max(gn, bn));
+        var min = Math.Min(rn, Math.Min(gn, bn));
+        var d = max - min;
+        double h = 0;
+        if (d != 0)
+        {
+            if (max == rn) h = 60 * (((gn - bn) / d) % 6);
+            else if (max == gn) h = 60 * ((bn - rn) / d + 2);
+            else h = 60 * ((rn - gn) / d + 4);
+        }
+        if (h < 0) h += 360;
+        var s = max == 0 ? 0 : d / max;
+        return (h, s, max);
+    }
+
+    private static Windows.UI.Color? RgbFromHex(string hex)
+        => WidgetAppearance.ParseColorBrush(hex)?.Color;
+
+    private static string ToHex(Windows.UI.Color c)
+        => $"#FF{c.R:X2}{c.G:X2}{c.B:X2}";
 
     private sealed class ComboItem
     {
