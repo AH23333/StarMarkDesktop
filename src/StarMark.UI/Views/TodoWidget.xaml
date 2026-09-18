@@ -10,35 +10,105 @@
         <!-- 已完成条目视觉：置灰 + 删除线（等价原 code-behind 的 0.45 / Strikethrough） -->
         <local:DoneOpacityConverter x:Key="DoneOpacity"/>
         <local:DoneDecorationConverter x:Key="DoneDecoration"/>
+        <!-- 颜色标记 index → 画笔（对齐 DeskBox Todo 的 6 色：红橙黄绿蓝紫） -->
+        <local:TodoColorConverter x:Key="TodoColor"/>
     </UserControl.Resources>
 
     <StackPanel Padding="12,8,12,12" Spacing="4">
         <TextBox x:Name="InputBox" PlaceholderText="添加待办，回车确认…" FontSize="12"
                  KeyDown="InputBox_KeyDown"/>
 
+        <!-- 筛选分段：每个标签带计数徽标（DeskBox TodoWidgetViewModel 同款）。
+             选中态由代码切换（x:Bind 无法带参判断 enum，且这类视觉状态不值得再做一个 Converter） -->
+        <StackPanel Orientation="Horizontal" Spacing="2" Margin="0,2,0,2">
+            <Button x:Name="FilterAllButton" Padding="8,3,8,3" FontSize="11" Tag="0"
+                    Background="Transparent" BorderThickness="0" Click="Filter_Click"/>
+            <Button x:Name="FilterActiveButton" Padding="8,3,8,3" FontSize="11" Tag="1"
+                    Background="Transparent" BorderThickness="0" Click="Filter_Click"/>
+            <Button x:Name="FilterCompletedButton" Padding="8,3,8,3" FontSize="11" Tag="2"
+                    Background="Transparent" BorderThickness="0" Click="Filter_Click"/>
+        </StackPanel>
+
         <!-- 注意：ItemsRepeater 内部必须用 x:Bind（不能用 {Binding}），否则不报错但静默失效 -->
-        <ItemsRepeater ItemsSource="{x:Bind ViewModel.Todos, Mode=OneWay}">
+        <ItemsRepeater ItemsSource="{x:Bind ViewModel.Visible, Mode=OneWay}">
             <ItemsRepeater.ItemTemplate>
                 <DataTemplate x:DataType="vm:TodoRow">
-                    <Grid Margin="0,1,0,1">
+                    <Grid Margin="0,1,0,1" ColumnSpacing="2">
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <CheckBox IsChecked="{x:Bind Done, Mode=OneTime}" MinWidth="28"
+
+                        <CheckBox Grid.Column="0" IsChecked="{x:Bind Done, Mode=OneTime}" MinWidth="28"
                                   VerticalAlignment="Center"
                                   Click="TodoCheck_Click" Tag="{x:Bind Id}"/>
-                        <TextBlock Grid.Column="1" Text="{x:Bind Text}" FontSize="12"
-                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                                   Opacity="{x:Bind Done, Mode=OneTime, Converter={StaticResource DoneOpacity}}"
-                                   TextDecorations="{x:Bind Done, Mode=OneTime, Converter={StaticResource DoneDecoration}}"/>
-                        <Button Grid.Column="2" Content="✕" FontSize="9" Padding="5,3,5,3"
+
+                        <!-- 颜色标记：点击弹菜单改色；无颜色时是一个极淡的占位点，保持行内不跳动 -->
+                        <Button Grid.Column="1" Padding="4,2,4,2" MinWidth="16" MinHeight="16"
+                                Background="Transparent" BorderThickness="0"
+                                VerticalAlignment="Center" Tag="{x:Bind Id}"
+                                ToolTipService.ToolTip="颜色标记">
+                            <Ellipse Width="9" Height="9"
+                                     Fill="{x:Bind Color, Mode=OneTime, Converter={StaticResource TodoColor}}"
+                                     Opacity="{x:Bind Color, Mode=OneTime, Converter={StaticResource TodoColor}}"
+                                     Stroke="{ThemeResource ControlStrongStrokeColorDefaultBrush}"
+                                     StrokeThickness="0.5"/>
+                            <Button.Flyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem Text="无" Tag="{x:Bind Id}" Click="TodoColor_Click">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE711;" FontSize="12"/>
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutSeparator/>
+                                    <MenuFlyoutItem Text="红（紧急）" Tag="{x:Bind Id}" Click="TodoColor_Click"/>
+                                    <MenuFlyoutItem Text="橙（重要）" Tag="{x:Bind Id}" Click="TodoColor_Click"/>
+                                    <MenuFlyoutItem Text="黄（提醒）" Tag="{x:Bind Id}" Click="TodoColor_Click"/>
+                                    <MenuFlyoutItem Text="绿（常规）" Tag="{x:Bind Id}" Click="TodoColor_Click"/>
+                                    <MenuFlyoutItem Text="蓝（稍后）" Tag="{x:Bind Id}" Click="TodoColor_Click"/>
+                                    <MenuFlyoutItem Text="紫（灵感）" Tag="{x:Bind Id}" Click="TodoColor_Click"/>
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
+
+                        <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="4,0,0,0">
+                            <TextBlock Text="{x:Bind Text}" FontSize="12"
+                                       TextTrimming="CharacterEllipsis"
+                                       Opacity="{x:Bind Done, Mode=OneTime, Converter={StaticResource DoneOpacity}}"
+                                       TextDecorations="{x:Bind Done, Mode=OneTime, Converter={StaticResource DoneDecoration}}"/>
+                            <!-- 截止日期：未设置时整行折叠（x:Bind 无法直接用空串判 Visibility，故由 code-behind 之外的方式：
+                                 DueText 为空 → Height=0 不可行，这里用 Converter 判空更稳） -->
+                            <TextBlock Text="{x:Bind DueText}" FontSize="10" Opacity="0.65"
+                                       Visibility="{x:Bind DueText, Mode=OneTime, Converter={StaticResource TextToVisibility}}"/>
+                        </StackPanel>
+
+                        <Button Grid.Column="3" Content="✕" FontSize="9" Padding="5,3,5,3"
                                 Background="Transparent" BorderThickness="0"
                                 Click="DeleteTodo_Click" Tag="{x:Bind Id}"/>
                     </Grid>
                 </DataTemplate>
             </ItemsRepeater.ItemTemplate>
         </ItemsRepeater>
+
+        <TextBlock x:Name="SummaryBlock" FontSize="10" Opacity="0.55" Margin="2,2,0,0"/>
+
+        <!-- 删除撤销条（DeskBox Todo / QuickCapture 都有）：就地提供「撤销」，避免误删后找不到 -->
+        <Grid x:Name="UndoBar" Visibility="Collapsed" Margin="0,4,0,0"
+              Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+              Padding="8,4,4,4" ColumnSpacing="6" CornerRadius="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="UndoTextBlock" Grid.Column="0" FontSize="11"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <Button Grid.Column="1" Content="撤销" FontSize="11" Padding="8,2,8,2"
+                    Click="Undo_Click"/>
+            <Button Grid.Column="2" Content="✕" FontSize="9" Padding="6,2,6,2"
+                    Background="Transparent" BorderThickness="0" Click="UndoDismiss_Click"/>
+        </Grid>
     </StackPanel>
 </UserControl>
