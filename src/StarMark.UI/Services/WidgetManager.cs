@@ -162,6 +162,8 @@ public sealed class WidgetManager
         return new WidgetInstanceConfig
         {
             Kind = kind,
+            // 新建实例默认采用描述符推荐的外壳模式（目前均为 Standard；未来个别组件可声明 Compact/Hidden）
+            ChromeMode = WidgetRegistry.Default.Get(kind).DefaultChromeMode,
             X = 120 + kindIndex * 28 + sameKind * 26,
             Y = 90 + kindIndex * 28 + sameKind * 26,
             Width = WidgetStorage.DefaultWidth(kind),

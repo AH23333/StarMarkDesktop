@@ -9,7 +9,7 @@
             BorderBrush="{ThemeResource WidgetBorderBrush}"
             BorderThickness="1"
             CornerRadius="8">
-        <Grid>
+        <Grid x:Name="RootGrid">
             <Grid.RowDefinitions>
                 <RowDefinition Height="36"/>
                 <RowDefinition Height="*"/>
@@ -37,6 +37,10 @@
                         HorizontalAlignment="Right" VerticalAlignment="Center"
                         Margin="0,0,6,0"
                         Canvas.ZIndex="200">
+                <Button x:Name="CollapseButton" Style="{StaticResource WidgetChromeButton}"
+                        ToolTipService.ToolTip="收起 / 展开为胶囊" Click="CollapseButton_Click">
+                    <FontIcon x:Name="CollapseIcon" Glyph="&#xE70E;" FontSize="12"/>
+                </Button>
                 <Button x:Name="PinButton" Style="{StaticResource WidgetChromeButton}"
                         ToolTipService.ToolTip="置顶显示" Click="PinButton_Click">
                     <FontIcon x:Name="PinIcon" Glyph="&#xE718;" FontSize="12"/>

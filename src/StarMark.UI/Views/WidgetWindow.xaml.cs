@@ -55,6 +55,13 @@ public sealed partial class WidgetWindow : Window
     private WidgetSnapMatch? _stickyVertical;
     private bool _layerAttached;
 
+    // ── 胶囊模式（Phase B）：当前外壳呈现模式 + 缩放柄引用 + 右键菜单项引用 ──
+    private WidgetChromeMode _chromeMode = WidgetChromeMode.Standard;
+    private readonly List<ResizeGrip> _grips = new();
+    private MenuFlyout? _contextMenu;
+    private MenuFlyoutItem? _collapseMenuItem;
+    private MenuFlyoutItem? _hideChromeMenuItem;
+
     public WidgetKind Kind => _kind;
     public bool IsVisible => AppWindow.IsVisible;
 
@@ -112,6 +119,9 @@ public sealed partial class WidgetWindow : Window
                 : new SettingsStore().LoadTheme();
             ThemeManager.Apply(this, pref);
             ApplyInitialBounds();
+            // 外壳模式（标准/胶囊/隐藏）必须在初始尺寸确定后再套用：收起态要把窗口缩到标题高度
+            _chromeMode = _config.ChromeMode;
+            ApplyChromeMode(_chromeMode);
             _styled = true;
             RefreshAppearance();   // 构造期 ActualTheme 可能仍是 Default，按真实主题重挂毛玻璃控制器
         }
@@ -200,9 +210,19 @@ public sealed partial class WidgetWindow : Window
             if (inst is null) return;
             inst.X = r.X;
             inst.Y = r.Y;
-            inst.Width = r.Width;
-            inst.Height = r.Height;
+            // 收起为胶囊时，config 仍记录「展开态」尺寸，避免下次恢复变成胶囊高度
+            if (_chromeMode == WidgetChromeMode.Compact)
+            {
+                inst.Width = _config.Width;
+                inst.Height = _config.Height;
+            }
+            else
+            {
+                inst.Width = r.Width;
+                inst.Height = r.Height;
+            }
             inst.Topmost = _config.Topmost;
+            inst.ChromeMode = _chromeMode;
             _storage.Save(data);
         }
         catch (Exception ex)
@@ -293,6 +313,8 @@ public sealed partial class WidgetWindow : Window
         if (width <= 0 || height <= 0) return;
         AppWindow.MoveAndResize(new RectInt32((int)x, (int)y, (int)width, (int)height));
         ApplyTopmost();
+        // 重新套用外壳模式：保证布局方案下发的尺寸/位置与胶囊/隐藏态一致（不会引起递归）
+        ApplyChromeMode(_chromeMode);
     }
 
     // ───────────────────────── 标题栏交互 ─────────────────────────
@@ -304,7 +326,11 @@ public sealed partial class WidgetWindow : Window
         DragBar.PointerReleased += DragBar_PointerReleased;
         DragBar.PointerCanceled += DragBar_PointerReleased;
         DragBar.DoubleTapped += (_, _) => TogglePin();
-        DragBar.ContextFlyout = BuildMenu();
+        // 右键菜单只构建一次并同时挂到标题栏与根边框：Hidden 态标题栏不可见，
+        // 此时右键内容区仍能唤起同一份菜单切换回标准/胶囊；两项共享同一引用便于同步文案。
+        _contextMenu = BuildMenu();
+        DragBar.ContextFlyout = _contextMenu;
+        RootBorder.ContextFlyout = _contextMenu;
 
         if (WidgetStorage.IsResizable(_kind))
         {
@@ -346,6 +372,27 @@ public sealed partial class WidgetWindow : Window
         };
         removeThis.Click += (_, _) => _ = _manager.RemoveAsync(_instanceId);
         menu.Items.Add(removeThis);
+
+        // 胶囊模式入口（Phase B）：受描述符 CanHideChrome 控制；Hidden 态标题栏不可见时仍可经根边框菜单切换
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var canHide = WidgetRegistry.Default.TryGet(_kind, out var desc) && desc.CanHideChrome;
+        _collapseMenuItem = new MenuFlyoutItem
+        {
+            Text = "收起为胶囊",
+            Icon = new FontIcon { Glyph = "\uE70E", FontSize = 12 }, // ChevronUp：收起
+            IsEnabled = canHide,
+        };
+        _collapseMenuItem.Click += (_, _) => ToggleCompact();
+        menu.Items.Add(_collapseMenuItem);
+
+        _hideChromeMenuItem = new MenuFlyoutItem
+        {
+            Text = "隐藏外壳（仅内容）",
+            Icon = new FontIcon { Glyph = "\uEB43", FontSize = 12 },
+            IsEnabled = canHide,
+        };
+        _hideChromeMenuItem.Click += (_, _) => ToggleHidden();
+        menu.Items.Add(_hideChromeMenuItem);
 
         menu.Items.Add(new MenuFlyoutSeparator());
         var showAll = new MenuFlyoutItem { Text = "全部显示" };
@@ -428,6 +475,92 @@ public sealed partial class WidgetWindow : Window
     private void HideButton_Click(object sender, RoutedEventArgs e) => _ = _manager.HideTemporaryAsync(_instanceId);
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => _ = _manager.RemoveAsync(_instanceId);
+
+    private void CollapseButton_Click(object sender, RoutedEventArgs e) => ToggleCompact();
+
+    /// <summary>
+    /// 应用外壳呈现模式（Phase B 胶囊模式）：
+    /// Standard=标准标题栏+内容；Compact=收起为胶囊（仅标题栏、内容隐藏、窗口缩到标题高度、缩放柄隐）；
+    /// Hidden=隐藏外壳（标题栏/按钮/缩放柄均隐、内容铺满，作叠加浮层）。结果持久化到实例配置。
+    /// </summary>
+    private void ApplyChromeMode(WidgetChromeMode mode)
+    {
+        try
+        {
+            // 该类型不允许收起外壳时，Hidden 回退为 Standard（Compact 仍允许，因为仅缩标题高度）
+            if (mode == WidgetChromeMode.Hidden &&
+                !(WidgetRegistry.Default.TryGet(_kind, out var desc) && desc.CanHideChrome))
+            {
+                mode = WidgetChromeMode.Standard;
+            }
+
+            _chromeMode = mode;
+            _config.ChromeMode = mode;
+
+            var compact = mode == WidgetChromeMode.Compact;
+            var hidden = mode == WidgetChromeMode.Hidden;
+
+            RootGrid.RowDefinitions[0].Height = hidden ? new GridLength(0) : new GridLength(36);
+            DragBar.Visibility = hidden ? Visibility.Collapsed : Visibility.Visible;
+            ChromeButtons.Visibility = hidden ? Visibility.Collapsed : Visibility.Visible;
+            ContentScroll.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            SetGripsVisible(!compact);
+
+            if (compact) CollapseToCapsule();
+            else ExpandToNormal();
+
+            UpdateChromeControls();
+            PersistBounds();
+        }
+        catch (Exception ex)
+        {
+            // 外壳模式切换绝不冒泡到点击处理（否则「全部显示」等入口可能演变成未处理异常致应用崩溃）
+            StarLog.Error($"应用组件外壳模式失败 ({_kind},{mode})", ex);
+        }
+    }
+
+    /// <summary>收起为胶囊：保留宽度，把窗口高度缩到标题栏高度（36 DIP 物理像素）。</summary>
+    private void CollapseToCapsule()
+    {
+        var scale = WindowInterop.GetScale(this);
+        var r = WindowInterop.GetWindowRect(this);
+        if (r.Width <= 0 || r.Height <= 0) return;
+        var capH = (int)(36 * scale);
+        AppWindow.MoveAndResize(new RectInt32(r.X, r.Y, r.Width, capH));
+    }
+
+    /// <summary>展开为正常：恢复 config 记录的展开态尺寸（位置保持当前，避免跳动）。</summary>
+    private void ExpandToNormal()
+    {
+        var r = WindowInterop.GetWindowRect(this);
+        if (r.Width <= 0 || r.Height <= 0) return;
+        var w = (int)_config.Width > 0 ? (int)_config.Width : r.Width;
+        var h = (int)_config.Height > 0 ? (int)_config.Height : r.Height;
+        AppWindow.MoveAndResize(new RectInt32(r.X, r.Y, w, h));
+    }
+
+    private void SetGripsVisible(bool visible)
+    {
+        var v = visible ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var g in _grips) g.Visibility = v;
+    }
+
+    private void ToggleCompact() =>
+        ApplyChromeMode(_chromeMode == WidgetChromeMode.Compact ? WidgetChromeMode.Standard : WidgetChromeMode.Compact);
+
+    private void ToggleHidden() =>
+        ApplyChromeMode(_chromeMode == WidgetChromeMode.Hidden ? WidgetChromeMode.Standard : WidgetChromeMode.Hidden);
+
+    /// <summary>同步折叠按钮图标与右键菜单文案到当前外壳模式。</summary>
+    private void UpdateChromeControls()
+    {
+        if (CollapseIcon is not null)
+            CollapseIcon.Glyph = _chromeMode == WidgetChromeMode.Compact ? "\uE70D" : "\uE70E"; // 展开/收起
+        if (_collapseMenuItem is not null)
+            _collapseMenuItem.Text = _chromeMode == WidgetChromeMode.Compact ? "展开组件" : "收起为胶囊";
+        if (_hideChromeMenuItem is not null)
+            _hideChromeMenuItem.Text = _chromeMode == WidgetChromeMode.Hidden ? "显示外壳（标题栏）" : "隐藏外壳（仅内容）";
+    }
 
     private void TogglePin()
     {

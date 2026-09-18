@@ -78,6 +78,12 @@ public sealed class WidgetInstanceConfig
     /// <summary>窗口是否常驻最顶层（WS_EX_TOPMOST / HWND_TOPMOST）。</summary>
     public bool Topmost { get; set; }
 
+    /// <summary>
+    /// 外壳呈现模式：标准 / 收起为胶囊 / 隐藏外壳（Phase B 胶囊模式）。
+    /// 旧实例缺此字段反序列化为 Standard，不影响其它类型。
+    /// </summary>
+    public WidgetChromeMode ChromeMode { get; set; } = WidgetChromeMode.Standard;
+
     /// <summary>该实例自己的待办内容（多实例互不干扰）。</summary>
     public List<TodoItem> Todos { get; set; } = new();
 
