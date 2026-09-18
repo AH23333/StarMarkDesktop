@@ -408,10 +408,14 @@ public sealed partial class WidgetWindow : Window
     }
 
     /// <summary>
-    /// 应用每实例前景（文本）色覆盖。在 ContentHost（StackPanel）上设置可继承的
-    /// TextElement.ForegroundProperty：Panel 支持该附加属性，且加载后原生 peer 已存在，不会触发 AV。
-    /// 未指定 ForegroundColor 时套回主题默认文本刷（视觉等价于不覆盖）；始终传入非空 Brush，
-    /// 绝不对 StackPanel 调用 ClearValue（避免任何 AV 风险）。延迟到 Loaded 之后执行以避开根容器 peer 未就绪。
+    /// 应用每实例前景（文本）色覆盖。关键约束（踩坑 #60）：WinUI 3 中任何“非 TextElement 容器”
+    /// （Border / Panel / StackPanel 等）直接调用 SetValue/ClearValue(TextElement.ForegroundProperty)
+    /// 都会触发原生 AccessViolation（0xc0000005，Corrupted-State，try/catch 捕获不到，直接杀进程）。
+    /// 因此：
+    ///  - 无显式前景色覆盖时：直接跳过，让文本沿用主题默认前景（Application 资源自带 TextFillColorPrimaryBrush），
+    ///  - 有覆盖时：安全地遍历 ContentHost 可视树，仅对真正的文本元素（TextBlock 等 TextElement 子类）
+    ///    通过其标准 Foreground setter 上色——绝不触碰容器的 TextElement.ForegroundProperty 附加属性。
+    /// 延迟到 Loaded 之后执行，确保内容子元素已生成。
     /// </summary>
     private void ApplyForeground(WidgetAppearanceOverride? ov)
     {
@@ -419,17 +423,34 @@ public sealed partial class WidgetWindow : Window
         var panel = ContentHost;
         void SetFg()
         {
-            var theme = panel.ActualTheme;
-            Brush? fg = !string.IsNullOrWhiteSpace(ov?.ForegroundColor)
-                ? WidgetAppearance.ParseColorBrush(ov.ForegroundColor!)
-                : null;
-            fg ??= ThemeBrush.For(theme, "TextFillColorPrimaryBrush");
-            fg ??= new Microsoft.UI.Xaml.Media.SolidColorBrush(
-                theme == ElementTheme.Dark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black);
-            panel.SetValue(Microsoft.UI.Xaml.Documents.TextElement.ForegroundProperty, fg);
+            try
+            {
+                if (string.IsNullOrWhiteSpace(ov?.ForegroundColor)) return; // 未覆盖：沿用主题默认前景（不碰附加属性）
+                if (WidgetAppearance.ParseColorBrush(ov.ForegroundColor!) is not { } fg) return;
+                SetForegroundDeep(panel, fg);
+            }
+            catch (Exception ex)
+            {
+                StarLog.Error($"应用组件前景色失败 ({_kind})", ex);
+            }
         }
         if (panel.IsLoaded) SetFg();
         else if (!_fgLoadedHooked) { _fgLoadedHooked = true; panel.Loaded += (_, _) => SetFg(); }
+    }
+
+    /// <summary>
+    /// 递归遍历可视树，仅给文本元素（TextBlock 等 TextElement 子类）设置前景色。
+    /// TextBlock.Foreground 是标准安全 setter，不会像容器上的 SetValue(TextElement.ForegroundProperty) 那样 AV。
+    /// </summary>
+    private static void SetForegroundDeep(DependencyObject parent, Brush fg)
+    {
+        var n = VisualTreeHelper.GetChildrenCount(parent);
+        for (var i = 0; i < n; i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is TextBlock tb) tb.Foreground = fg;
+            SetForegroundDeep(child, fg);
+        }
     }
 
     /// <summary>设置变更后重新套用外观（材质 / 不透明度），由 WidgetManager 统一调用。</summary>
