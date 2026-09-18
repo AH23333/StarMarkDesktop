@@ -55,8 +55,8 @@
 | 天气 | ✅ | ❌ | 中（需外部 API） |
 | 音乐控制 | ✅ | ❌ | 中（需原生媒体 API） |
 | 每显示器布局 | ✅ 拓扑记忆 | ✅ DIP 相对存储 + 越界回收（Phase B-5） | 小（余热插拔运行时重定位） |
-| 性能模式/门禁 | ✅ | ❌（无内存预算，P1-3 ⬜） | 中（常驻必补） |
-| 外观细化 | ✅ 每组件颜色/文本尺寸/材质 | ⚠️ 全局亚克力 + 不透明度（已照搬控制器） | 中 |
+| 性能模式/门禁 | ✅ | ✅ 性能模式三件套 + 内存门禁（B-8） | 小（常与性能无关） |
+| 外观细化 | ✅ 每组件颜色/文本尺寸/材质 | ✅ 每实例颜色/材质/边框/圆角/文本缩放覆盖（B-9） | 小 |
 | 备份/诊断 | ✅ 组件数据隔离备份 | ⚠️ 主库备份已做（P1-4），组件 `widgets.json` 隔离仍 ⬜(R4) | 中 |
 | 多语言 | ✅ 12 语言 | ❌ 中文硬编码 | 大但**暂不做**（P2-10 判定） |
 | 统一条目模型 | ❌（无此概念） | ✅ items 统一表 + FTS5 + 跨源 | **StarMark 代差优势** |
@@ -221,10 +221,10 @@ Phase C · 新内容组件（按需）
 | A-2 差异化四格 | ✅ 已完成 | 新增 4 个 `WidgetKind`（TagGrid/SearchResults/Activity/Pinned）+ `WidgetInstanceConfig.GridTag/GridQuery/GridTags` 配置字段（可空、向后兼容）+ 4 个描述符 + `WidgetContentFactory` 注册 + 共享 `ItemGridWidget`（UserControl + `ItemGridWidgetViewModel`）。四格全部查询统一 `items` 表（`GetAllAsync`/`SearchAsync`/`GetRecentAsync`/`GetPinnedAsync`）；标签格/搜索结果格支持组件内配置并持久化到 `widgets.json`。 |
 | A-3 待办/随记入 items | ✅ 已完成 | 新增 `ItemType.Todo`/`Note` + `source='local'`（`LocalItemState.EncodeSourceId` 多实例隔离）+ `LocalItemsMigration` 幂等迁移（`.bak` 备份、旧字段保留）。工程量 M、风险中已落地（见第十六轮）。 |
 | A-4 QuickLaunch 复用 ItemCard + 搜索组件内直搜 | ✅ 已完成 | 复用 `ItemCard`（`IsLauncherMode` 隐藏会误写主库的操作）+ 组件内直搜（调 `SearchService` 前 12 条，点击才开主窗）。见第十七轮。 |
-| Phase B 工程能力 | 🔶 进行中 | 胶囊模式（B-1 ✅ 收起/隐藏外壳 + B-7 ✅ 禁止缩放）/ 每显示器拓扑布局（B-5 ✅）/ 性能模式（B-8 ✅ 性能模式+内存门禁）/ 外观细化（B-9 待做）/ 胶囊余下（B-10 待做：三段式热区·隐私·组合栏）。 |
+| Phase B 工程能力 | 🔶 进行中 | 胶囊模式（B-1 ✅ 收起/隐藏外壳 + B-7 ✅ 禁止缩放）/ 每显示器拓扑布局（B-5 ✅）/ 性能模式（B-8 ✅ 性能模式+内存门禁）/ 外观细化（B-9 ✅ 每实例外观覆盖）/ 胶囊余下（B-10 待做：三段式热区·隐私·组合栏）。 |
 | Phase C 新内容组件 | ⬜ 待做 | Glance（推荐先做）/ 天气 / 音乐。 |
 
-**验收**：`dotnet build` 0 错 0 警；`dotnet test` 180/180 通过。四格已可经「新建组件」入口添加并按模式查询统一条目库；性能模式三件套（策略/缓存/回收）已落地并单测覆盖。
+**验收**：`dotnet build` 0 错 0 警；`dotnet test` 183/183 通过。四格已可经「新建组件」入口添加并按模式查询统一条目库；性能模式三件套（策略/缓存/回收）已落地并单测覆盖；每实例外观覆盖（颜色/材质/边框/圆角/文本缩放）已落地并经序列化测试覆盖。
 
 ---
 
