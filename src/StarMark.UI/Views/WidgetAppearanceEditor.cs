@@ -116,6 +116,14 @@ public static class WidgetAppearanceEditor
         };
 
         // ── 挂载为屏幕中央顶层窗口（复用 CenteredDialog 的居中 + 置顶套路，避免被小组件边界裁掉）──
+        // 内容包进 ScrollViewer：选项较多时窗口固定高度也能滚动，「确定/取消/恢复全局」始终可点，
+        // 避免按钮被挤到窗口外导致「进入后无法退出、无法保存外观」。（Issue 3）
+        var scroll = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = panel,
+        };
         var card = new Border
         {
             Background = Brush("CardBackgroundFillColorDefaultBrush", Colors.White),
@@ -123,7 +131,7 @@ public static class WidgetAppearanceEditor
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(10),
             Padding = new Thickness(20),
-            Child = panel,
+            Child = scroll,
         };
         var root = new Grid
         {
@@ -135,7 +143,7 @@ public static class WidgetAppearanceEditor
         WindowInterop.ApplyRoundedCorners(win);
 
         var scale = WindowInterop.GetScale(win);
-        const double W = 380, H = 540;
+        const double W = 380, H = 620;
         var w = (int)(W * scale);
         var h = (int)(H * scale);
         var work = owner is null ? WindowInterop.GetWorkArea(win) : WindowInterop.GetWorkArea(owner);
