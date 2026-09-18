@@ -162,10 +162,33 @@ public static class HotkeyActions
     /// <summary>布局方案切换动作（动态生成，随用户保存的布局增删）。</summary>
     public static string LayoutApply(string layoutId) => LayoutPrefix + layoutId;
 
-    public static bool IsLayoutAction(string action) => action.StartsWith(LayoutPrefix);
+        public static bool IsLayoutAction(string action) => action.StartsWith(LayoutPrefix);
 
-    public static string? LayoutIdOf(string action)
-        => IsLayoutAction(action) ? action[LayoutPrefix.Length..] : null;
+        public static string? LayoutIdOf(string action)
+            => IsLayoutAction(action) ? action[LayoutPrefix.Length..] : null;
+
+        /// <summary>动作所属的分类（用于设置页按分类折叠成多级菜单，消除扁平长列表的重复感）。</summary>
+        public static string CategoryOf(string action, IReadOnlyList<WidgetLayout>? layouts = null)
+        {
+            if (action is MainToggle or MainShow or MainHide) return "主界面";
+            if (action is WidgetsToggleAll or WidgetsShowAll or WidgetsHideAll) return "组件总控";
+            if (IsLayoutAction(action)) return "布局方案";
+            foreach (var k in WidgetStorage.AllKinds)
+                if (action == WidgetCreate(k) || action == WidgetShow(k) || action == WidgetHide(k) || action == WidgetToggle(k))
+                    return WidgetStorage.KindTitle(k);
+            return "其它";
+        }
+
+        /// <summary>分类的固定展示顺序（主界面 → 组件总控 → 各组件 → 布局方案）。</summary>
+        public static IReadOnlyList<string> CategoryOrder { get; } = BuildCategoryOrder();
+
+        private static List<string> BuildCategoryOrder()
+        {
+            var list = new List<string> { "主界面", "组件总控" };
+            foreach (var k in WidgetStorage.AllKinds) list.Add(WidgetStorage.KindTitle(k));
+            list.Add("布局方案");
+            return list;
+        }
 
     /// <summary>全部可绑定动作（设置页逐行渲染用）。布局动作随传入的布局列表动态追加。</summary>
     public static IReadOnlyList<string> All(IReadOnlyList<WidgetLayout>? layouts = null)

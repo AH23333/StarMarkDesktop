@@ -354,18 +354,75 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
         _layouts = WidgetManager()?.GetLayouts() ?? new List<WidgetLayout>();
         HotkeyRowsItems.Clear();
+        if (HotkeyGroups is not null) HotkeyGroups.Children.Clear();
+
+        // 先按动作建行（同时进扁平列表供冲突标注），再按分类分组
+        var byCat = new Dictionary<string, List<HotkeyRow>>();
         foreach (var action in HotkeyActions.All(_layouts))
         {
             var bound = _hotkeyBindings.TryGetValue(action, out var g) && !g.IsEmpty;
-            HotkeyRowsItems.Add(new HotkeyRow
+            var row = new HotkeyRow
             {
                 Action = action,
                 ActionName = HotkeyActions.DisplayName(action, _layouts),
                 BindingText = bound ? g!.Display : UnsetText,
-            });
+            };
+            HotkeyRowsItems.Add(row);
+            var cat = HotkeyActions.CategoryOf(action, _layouts);
+            if (!byCat.TryGetValue(cat, out var list)) { list = new List<HotkeyRow>(); byCat[cat] = list; }
+            list.Add(row);
+        }
+
+        // 按固定顺序把每个分类渲染为一个可折叠的 Expander（多级菜单），消除扁平长列表的重复感
+        if (HotkeyGroups is not null)
+        {
+            foreach (var cat in HotkeyActions.CategoryOrder)
+                if (byCat.TryGetValue(cat, out var rows))
+                    HotkeyGroups.Children.Add(BuildCategoryExpander(cat, rows));
         }
         RefreshConflictMarks();
     }
+
+    /// <summary>把一个分类的动作行装进一个可折叠 <see cref="Expander"/>（标题=分类名，内容=该类的快捷键行）。</summary>
+    private Expander BuildCategoryExpander(string category, IList<HotkeyRow> rows)
+    {
+        var repeater = new ItemsRepeater
+        {
+            ItemsSource = rows,
+            ItemTemplate = (DataTemplate)Resources["HotkeyRowTemplate"],
+        };
+        repeater.Layout = new StackLayout { Spacing = 4 };
+
+        var count = rows.Count(r => !string.Equals(r.BindingText, UnsetText, StringComparison.Ordinal));
+        var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+        header.Children.Add(new TextBlock
+        {
+            Text = category,
+            FontSize = 14,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = Brush("TextFillColorPrimaryBrush", Microsoft.UI.Colors.Black),
+        });
+        header.Children.Add(new TextBlock
+        {
+            Text = $"（{count} 项已绑定）",
+            FontSize = 11,
+            Opacity = 0.7,
+            Foreground = Brush("TextFillColorSecondaryBrush", Microsoft.UI.Colors.Gray),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+
+        return new Expander
+        {
+            Header = header,
+            Content = repeater,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 4),
+            IsExpanded = category == "主界面" || category == "组件总控",   // 常用的两类默认展开
+        };
+    }
+
+    private static Brush Brush(string key, Windows.UI.Color fallback) =>
+        ThemeBrush.For(ElementTheme.Default, key) ?? new SolidColorBrush(fallback);
 
     /// <summary>把「同一组合绑定了多个动作」就地标注到每一行（不弹窗，用户可直接忽略）。</summary>
     private void RefreshConflictMarks()

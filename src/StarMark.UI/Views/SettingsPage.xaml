@@ -30,6 +30,37 @@
         <Style TargetType="TabViewItem">
             <Setter Property="IsClosable" Value="False"/>
         </Style>
+
+        <!-- 快捷键单行模板（按分类折叠到多级菜单中复用） -->
+        <DataTemplate x:Key="HotkeyRowTemplate" x:DataType="local:HotkeyRow">
+            <Grid Margin="0,3">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Bind ActionName}" VerticalAlignment="Center"
+                           Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+                <Button Grid.Row="0" Grid.Column="1"
+                        Content="{x:Bind BindingText, Mode=OneWay}"
+                        Tag="{x:Bind Action}"
+                        Click="RecordButton_Click"
+                        MinWidth="210" MinHeight="32" HorizontalAlignment="Right"
+                        Margin="12,0,0,0"
+                        Style="{StaticResource SecondaryButton}"/>
+
+                <!-- 冲突提示：不弹窗，就地标注（用户可直接忽略） -->
+                <TextBlock Grid.Row="1" Grid.Column="1" Margin="12,2,0,0"
+                           Text="{x:Bind ConflictText}" FontSize="11" TextWrapping="Wrap"
+                           MaxWidth="320" HorizontalAlignment="Right"
+                           Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                           Visibility="{x:Bind HasConflict, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+            </Grid>
+        </DataTemplate>
     </Page.Resources>
 
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
@@ -334,42 +365,10 @@
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="6">
                                 <TextBlock Text="动作 → 快捷键" Style="{StaticResource SettingTitle}"/>
-                                <ItemsRepeater x:Name="HotkeyList" ItemsSource="{x:Bind HotkeyRowsItems, Mode=OneWay}">
-                                    <ItemsRepeater.Layout>
-                                        <StackLayout Spacing="4"/>
-                                    </ItemsRepeater.Layout>
-                                    <ItemsRepeater.ItemTemplate>
-                                        <DataTemplate x:DataType="local:HotkeyRow">
-                                            <Grid Margin="0,3">
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="Auto"/>
-                                                    <RowDefinition Height="Auto"/>
-                                                </Grid.RowDefinitions>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-
-                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Bind ActionName}" VerticalAlignment="Center"
-                                                           Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
-                                                <Button Grid.Row="0" Grid.Column="1"
-                                                        Content="{x:Bind BindingText, Mode=OneWay}"
-                                                        Tag="{x:Bind Action}"
-                                                        Click="RecordButton_Click"
-                                                        MinWidth="210" MinHeight="32" HorizontalAlignment="Right"
-                                                        Margin="12,0,0,0"
-                                                        Style="{StaticResource SecondaryButton}"/>
-
-                                                <!-- 冲突提示：不弹窗，就地标注（用户可直接忽略） -->
-                                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="12,2,0,0"
-                                                           Text="{x:Bind ConflictText}" FontSize="11" TextWrapping="Wrap"
-                                                           MaxWidth="320" HorizontalAlignment="Right"
-                                                           Foreground="{ThemeResource SystemFillColorCautionBrush}"
-                                                           Visibility="{x:Bind HasConflict, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsRepeater.ItemTemplate>
-                                </ItemsRepeater>
+                                <TextBlock Text="按分类折叠。展开某类后逐行点击右侧按钮录制；同一组合可绑定多个动作（允许的「冲突」只就地标注）。"
+                                           Style="{StaticResource SettingRowText}"/>
+                                <!-- 按分类（主界面 / 组件总控 / 各组件 / 布局方案）折叠成多级结构，消除扁平长列表的重复感 -->
+                                <StackPanel x:Name="HotkeyGroups" Spacing="6"/>
                             </StackPanel>
                         </Border>
                     </controls:ColumnFlowPanel>
