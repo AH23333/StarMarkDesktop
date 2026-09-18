@@ -58,6 +58,8 @@ public sealed partial class WidgetWindow : Window
     // ── 胶囊模式（Phase B）：当前外壳呈现模式 + 缩放柄引用 + 右键菜单项引用 ──
     private WidgetChromeMode _chromeMode = WidgetChromeMode.Standard;
     private readonly List<ResizeGrip> _grips = new();
+    /// <summary>收起为胶囊时的固定宽度（物理像素）。胶囊模式下任何尺寸变更都会被夹回此宽 × 标题高度。</summary>
+    private int _capsuleWidth;
     private MenuFlyout? _contextMenu;
     private MenuFlyoutItem? _collapseMenuItem;
     private MenuFlyoutItem? _hideChromeMenuItem;
@@ -98,7 +100,22 @@ public sealed partial class WidgetWindow : Window
                 if (e.DidVisibilityChange) _clockWidget?.UpdateRunning(AppWindow.IsVisible);
             };
 
+        // 胶囊模式尺寸夹取：任何经由系统（原生边框 / Win+方向键吸附）的尺寸变更都夹回胶囊尺寸，
+        // 与隐藏 grip + LockNativeResize 共同确保「收起为胶囊时禁止修改胶囊大小」。
+        AppWindow.Changed += OnAppWindowChanged;
+
         Closed += WidgetWindow_Closed;
+    }
+
+    /// <summary>胶囊模式下，若系统仍改变了窗口尺寸（原生边框 / 系统快捷键吸附），立即夹回胶囊尺寸。</summary>
+    private void OnAppWindowChanged(object? sender, Microsoft.UI.Windowing.AppWindowChangedEventArgs e)
+    {
+        if (!e.DidSizeChange || _chromeMode != WidgetChromeMode.Compact || _capsuleWidth <= 0) return;
+        var scale = WindowInterop.GetScale(this);
+        var capH = (int)(36 * scale);
+        var r = WindowInterop.GetWindowRect(this);
+        if (r.Height != capH || r.Width != _capsuleWidth)
+            AppWindow.MoveAndResize(new RectInt32(r.X, r.Y, _capsuleWidth, capH));
     }
 
     /// <summary>实例唯一 ID（区分同类型多个组件）。</summary>
@@ -552,6 +569,8 @@ public sealed partial class WidgetWindow : Window
             var hidden = mode == WidgetChromeMode.Hidden;
 
             RootGrid.RowDefinitions[0].Height = hidden ? new GridLength(0) : new GridLength(36);
+            // 胶囊模式下内容行高夹 0：即便窗口被系统强制拉高，也绝不露出「无内容页」
+            RootGrid.RowDefinitions[1].Height = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
             DragBar.Visibility = hidden ? Visibility.Collapsed : Visibility.Visible;
             ChromeButtons.Visibility = hidden ? Visibility.Collapsed : Visibility.Visible;
             ContentScroll.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
@@ -570,14 +589,15 @@ public sealed partial class WidgetWindow : Window
         }
     }
 
-    /// <summary>收起为胶囊：保留宽度，把窗口高度缩到标题栏高度（36 DIP 物理像素）。</summary>
+    /// <summary>收起为胶囊：锁定当前宽度，把窗口高度缩到标题栏高度（36 DIP 物理像素）。</summary>
     private void CollapseToCapsule()
     {
         var scale = WindowInterop.GetScale(this);
         var r = WindowInterop.GetWindowRect(this);
         if (r.Width <= 0 || r.Height <= 0) return;
+        _capsuleWidth = r.Width;
         var capH = (int)(36 * scale);
-        AppWindow.MoveAndResize(new RectInt32(r.X, r.Y, r.Width, capH));
+        AppWindow.MoveAndResize(new RectInt32(r.X, r.Y, _capsuleWidth, capH));
     }
 
     /// <summary>展开为正常：恢复 config 记录的展开态尺寸（位置保持当前，避免跳动）。</summary>
@@ -771,6 +791,8 @@ public sealed partial class WidgetWindow : Window
 
     private void ResizeGrip_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        // 胶囊模式禁止缩放：即便 grip 意外可见也不响应
+        if (_chromeMode == WidgetChromeMode.Compact) return;
         if (sender is not FrameworkElement { Tag: string dir }) return;
         _resizeDir = dir;
         WindowInterop.GetCursorPos(out _gestureStart);
@@ -785,6 +807,8 @@ public sealed partial class WidgetWindow : Window
     private void ResizeGrip_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
         if (!_resizing) return;
+        // 胶囊模式禁止缩放（防御：grip 被隐藏后不应触发，但保险拦截）
+        if (_chromeMode == WidgetChromeMode.Compact) return;
         WindowInterop.GetCursorPos(out var pt);
         var scale = WindowInterop.GetScale(this);
         var minW = (int)(200 * scale);
