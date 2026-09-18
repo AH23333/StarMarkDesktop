@@ -181,6 +181,8 @@ dotnet run --project src\StarMark.UI\StarMark.UI.csproj -p:Platform=x64
 | ✅ 待办 | 增、勾选完成、删除；未完成在前 |
 | 📝 随记 | 随手记录，`Ctrl+Enter` 保存 |
 | 🔍 快捷搜索 | 输入回车后唤起主窗口并直接搜索 |
+| 🏷️ 标签格 / 📌 搜索结果格 / 🕘 最近活动格 / ⏫ 置顶条目格 | **差异化条目格**（特性组件，默认关闭、需在设置页开启）：把某个标签、某条查询、最近更新或置顶条目常驻桌面 |
+| 📅 今日速览 | **Phase C 首个新内容组件**：大号日期 + 农历（含闰月）+ 今日/下一个节日倒计时 + 常看条目。农历与清明节算法照搬 DeskBox 的 `GlanceFestivalService`（底层用 .NET 内置 `ChineseLunisolarCalendar`） |
 
 通用能力：
 
