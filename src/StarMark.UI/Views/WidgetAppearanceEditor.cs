@@ -548,6 +548,8 @@ public static class WidgetAppearanceEditor
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Content = root,
         };
+        // 可拖拽标题栏：编辑器可能遮挡被编辑的组件，允许拖动它到不挡视线的位置
+        var dragHeader = BuildDragHeader(win);
         var card = new Border
         {
             Background = Brush("CardBackgroundFillColorDefaultBrush", Colors.White),
@@ -555,7 +557,7 @@ public static class WidgetAppearanceEditor
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(10),
             Padding = new Thickness(20),
-            Child = scroll,
+            Child = new StackPanel { Spacing = 10, Children = { dragHeader, scroll } },
         };
         var grid = new Grid
         {
@@ -713,6 +715,75 @@ public static class WidgetAppearanceEditor
     {
         try { win.Close(); }
         catch { /* 已关闭 */ }
+    }
+
+    /// <summary>编辑器顶部的可拖拽标题栏：从标题栏按下拖动即可移动整个编辑器窗口，
+    /// 避免它遮挡被编辑的组件（组件右键「外观…」弹出的浮层可能正好盖住组件本身）。</summary>
+    private static Grid BuildDragHeader(Window owner)
+    {
+        var header = new Grid
+        {
+            Height = 40,
+            Margin = new Thickness(0, 0, 0, 4),
+            Background = Brush("SubtleFillColorSecondaryBrush", Colors.LightGray),
+            Padding = new Thickness(12, 0, 12, 0),
+            ColumnSpacing = 8,
+        };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var title = new TextBlock
+        {
+            Text = "组件外观",
+            FontSize = 14,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = Brush("TextFillColorPrimaryBrush", Colors.Black),
+        };
+        var hint = new TextBlock
+        {
+            Text = "拖动此处移动",
+            FontSize = 11,
+            Opacity = 0.6,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = Brush("TextFillColorSecondaryBrush", Colors.Gray),
+        };
+        Grid.SetColumn(title, 0);
+        Grid.SetColumn(hint, 1);
+        header.Children.Add(title);
+        header.Children.Add(hint);
+
+        WindowInterop.POINT start = default;
+        RectInt32 rect = default;
+        bool dragging = false;
+        header.PointerPressed += (_, e) =>
+        {
+            if (e.GetCurrentPoint(header).Properties.IsRightButtonPressed) return;
+            dragging = true;
+            WindowInterop.GetCursorPos(out start);
+            rect = WindowInterop.GetWindowRect(owner);
+            try { header.CapturePointer(e.Pointer); } catch { }
+            e.Handled = true;
+        };
+        header.PointerMoved += (_, e) =>
+        {
+            if (!dragging) return;
+            WindowInterop.GetCursorPos(out var p);
+            owner.AppWindow.MoveAndResize(new RectInt32(
+                rect.X + p.X - start.X, rect.Y + p.Y - start.Y, rect.Width, rect.Height));
+            e.Handled = true;
+        };
+        header.PointerReleased += (_, e) =>
+        {
+            dragging = false;
+            try { header.ReleasePointerCapture(e.Pointer); } catch { }
+        };
+        header.PointerCanceled += (_, e) =>
+        {
+            dragging = false;
+            try { header.ReleasePointerCapture(e.Pointer); } catch { }
+        };
+        return header;
     }
 
     private static Brush Brush(string key, Color fallback) =>

@@ -63,7 +63,10 @@
         </DataTemplate>
     </Page.Resources>
 
-    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    <!-- 背景透明：让主窗口的半透明毛玻璃（背景不透明度 / 材质浓度）透出，
+         否则不透明的设置页会盖住主窗口材质，导致「常规 → 外观」里的两个滑块调了也看不出效果。
+         主窗口关闭半透明时 RootGrid 自身已铺实色，透明页同样能正常显示。 -->
+    <Grid Background="Transparent">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
