@@ -43,11 +43,11 @@
 
 | 功能域 | DeskBox | StarMarkDesktop 当前 | 差距 |
 |--------|---------|----------------------|------|
-| 快捷启动/置顶入口 | 文件格 + 快捷方式 | ✅ QuickLaunch（置顶条目 + 拖入 + 自定义入口） | 小（缺 ItemCard 复用/组件内直搜） |
+| 快捷启动/置顶入口 | 文件格 + 快捷方式 | ✅ QuickLaunch（置顶条目 + 拖入 + 自定义入口 + 复用 ItemCard + 组件内直搜） | ✅ 已复用 ItemCard + 组件内直搜（A-4） |
 | 时钟 | Glance 内含时间 | ✅ Clock（可缩放、字号自适应） | 小（缺日期/农历） |
-| 待办 | ✅ 完整（提醒/重复/附件/Markdown） | ⚠️ Todo（基础勾选，存 `widgets.json`） | **大**（游离 items 表外，见 §3） |
-| 速记/随记 | ✅ Quick Capture（纸感/Markdown/附件） | ⚠️ QuickNote（基础，存 `widgets.json`） | **大**（同上） |
-| 搜索 | ✅ Everything IPC + 自有内容合并 | ✅ Search（Everything + 统一条目 FTS5） | 中（组件内唤起主窗而非内联结果） |
+| 待办 | ✅ 完整（提醒/重复/附件/Markdown） | ⚠️ Todo（基础勾选，A-3 已并入统一 items 表） | **大**（原游离，A-3 已并入 items 表） |
+| 速记/随记 | ✅ Quick Capture（纸感/Markdown/附件） | ⚠️ QuickNote（基础，A-3 已并入统一 items 表） | **大**（同上，A-3 已并入 items 表） |
+| 搜索 | ✅ Everything IPC + 自有内容合并 | ✅ Search（Everything + 统一条目 FTS5 + 组件内直搜） | ✅ 组件内直搜 + 点击才开主窗（A-4） |
 | 文件格/桌面组织 | ✅ 核心 | ❌ 无（刻意不做，见 §7） | 设计性缺失 |
 | 组件分组 | ✅ | ❌ | 大（规划内增量） |
 | 胶囊模式 | ✅ 成熟 | ❌ | 大（高频需求） |
@@ -66,8 +66,8 @@
 ## 3. 当前组件优化 / 修改意见（针对已有的 5 个组件）
 
 ### 3.1 快捷启动（QuickLaunch）—— 复用 + 内联
-- **复用 `ItemCard`**（v3 §5.2 仍 ⬜）：当前 `LinkRow()` 手搓简化版卡片。改为 `ItemsRepeater` + `ItemCard`，自动获得右键菜单、标签芯片、预览入口、发送到桌面，且视觉与主窗一致。
-- **组件内直搜**（v3 §5.4 仍 ⬜）：当前 `Submit()` 唤起主窗搜索，打断桌面工作流。应组件内直接调 `SearchService` 展示前 N 条，点击才开主窗——这是 DeskBox 做不到、StarMark 独享的形态。
+- **复用 `ItemCard`**（A-4 ✅）：原 `LinkRow()` 手搓简化版卡片已移除，改为 `ItemsRepeater` + `ItemCard`，自动获得右键菜单、标签芯片、预览入口、发送到桌面，且视觉与主窗一致；自定义快捷入口用合成 Item + `IsLauncherMode` 隐藏会误写主库的操作。
+- **组件内直搜**（A-4 ✅）：原 `Submit()` 唤起主窗搜索已移除，改为组件内直接调 `SearchService` 展示前 12 条，点击才开主窗（`WidgetManager.RequestGlobalSearch`）——这是 DeskBox 做不到、StarMark 独享的形态。
 - 已 OK：拖入建入口、置顶/取消置顶、文件打开（`LauncherEx` 已修）。
 
 ### 3.2 时钟（Clock）—— 加 Glance 式信息
@@ -219,8 +219,8 @@ Phase C · 新内容组件（按需）
 |--------|------|----------|
 | A-1 扩展描述符增强 | ✅ 已完成 | `WidgetDescriptor` 补齐 `IsFeatureWidget`/`HasSettingsPage`/`DefaultChromeMode`/`CanHideChrome`/`CanUseOverlayChrome`，与 DeskBox `WidgetContentDescriptor` 维度对齐（原已有 `Stage`/`Availability`/`CanCreateWindow`/`ShowInCreateEntry`）。 |
 | A-2 差异化四格 | ✅ 已完成 | 新增 4 个 `WidgetKind`（TagGrid/SearchResults/Activity/Pinned）+ `WidgetInstanceConfig.GridTag/GridQuery/GridTags` 配置字段（可空、向后兼容）+ 4 个描述符 + `WidgetContentFactory` 注册 + 共享 `ItemGridWidget`（UserControl + `ItemGridWidgetViewModel`）。四格全部查询统一 `items` 表（`GetAllAsync`/`SearchAsync`/`GetRecentAsync`/`GetPinnedAsync`）；标签格/搜索结果格支持组件内配置并持久化到 `widgets.json`。 |
-| A-3 待办/随记入 items | ⬜ 待做 | 方案 A：新增 `ItemType.Todo`/`Note` + `source='local'` + v2→v3 迁移 + `.bak`。工程量 M、风险中（4 处 switch + 迁移）。 |
-| A-4 QuickLaunch 复用 ItemCard + 搜索组件内直搜 | ⬜ 待做 | 需先有 `ItemCard` 控件（当前仍 ⬜）；搜索组件内直搜已具备（`SearchWidget`）。 |
+| A-3 待办/随记入 items | ✅ 已完成 | 新增 `ItemType.Todo`/`Note` + `source='local'`（`LocalItemState.EncodeSourceId` 多实例隔离）+ `LocalItemsMigration` 幂等迁移（`.bak` 备份、旧字段保留）。工程量 M、风险中已落地（见第十六轮）。 |
+| A-4 QuickLaunch 复用 ItemCard + 搜索组件内直搜 | ✅ 已完成 | 复用 `ItemCard`（`IsLauncherMode` 隐藏会误写主库的操作）+ 组件内直搜（调 `SearchService` 前 12 条，点击才开主窗）。见第十七轮。 |
 | Phase B 工程能力 | ⬜ 待做 | 胶囊模式 / 每显示器拓扑布局 / 性能模式 / 外观细化。 |
 | Phase C 新内容组件 | ⬜ 待做 | Glance（推荐先做）/ 天气 / 音乐。 |
 
