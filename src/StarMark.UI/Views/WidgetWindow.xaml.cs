@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,6 +43,12 @@ public sealed partial class WidgetWindow : Window
     // ── 拖动/缩放状态（全部使用 Win32 物理像素，避免 DIP 与 AppWindow 物理坐标混用）──
     private bool _dragging;
     private bool _resizing;
+    /// <summary>
+    /// Ctrl+拖动协同移动（DeskBox CoordinatedMove）的参与者快照：同屏可见的其它组件及其起始矩形。
+    /// 只在按下时招募一次——中途「按 Ctrl 松 Ctrl」不应改变参与者集合，否则会出现半截跟随。
+    /// </summary>
+    private List<(WidgetWindow Window, RectInt32 Start)> _coordPeers = new();
+    private bool _coordinated;
     private string _resizeDir = "se";
     private WindowInterop.POINT _gestureStart;
     private RectInt32 _gestureStartRect;
@@ -103,6 +110,32 @@ public sealed partial class WidgetWindow : Window
 
     public WidgetKind Kind => _kind;
     public bool IsVisible => AppWindow.IsVisible;
+
+    /// <summary>正在被用户拖动 / 缩放 —— 协同移动招募参与者时要排除，避免两个手势互相打架。</summary>
+    public bool IsDragBusy => _dragging || _resizing;
+
+    /// <summary>当前窗口矩形（物理像素）。协同移动取起始矩形用。</summary>
+    public RectInt32 CurrentRect => WindowInterop.GetWindowRect(this);
+
+    /// <summary>
+    /// 协同移动中的「跟随」：按 delta 平移到 start + delta。
+    /// 协同意义上是整体搬家，因此**不做吸附**（吸附只作用于用户正在拖的那个窗口，
+    /// 否则整排组件会被各自的吸附线拉扯抖动）。
+    /// </summary>
+    /// <param name="dx">相对协同起点的水平位移（物理像素）。</param>
+    /// <param name="dy">相对协同起点的垂直位移。</param>
+    /// <param name="start">本窗口在协同开始时的矩形。</param>
+    public void MoveByCoordinated(int dx, int dy, RectInt32 start)
+    {
+        var r = new RectInt32(start.X + dx, start.Y + dy, start.Width, start.Height);
+        // 胶囊态必须同步推进「稳定停靠位」，否则松手后再次收起会跳回旧位置
+        if (_chromeMode == WidgetChromeMode.Compact && _capsuleRect is not null)
+            _capsuleRect = r;
+        AppWindow.MoveAndResize(r);
+    }
+
+    /// <summary>协同移动结束后让本窗口落盘自己的位置。</summary>
+    public void PersistPosition() => PersistBounds();
 
     /// <summary>供组件内容工厂构造具体组件（如 QuickLaunchWidget）时取用依赖。</summary>
     internal WidgetStorage Storage => _storage;
@@ -649,6 +682,10 @@ public sealed partial class WidgetWindow : Window
         RootBorder.PointerEntered += RootBorder_PointerEntered;
         RootBorder.PointerExited += RootBorder_PointerExited;
 
+        // 键盘操作（对齐 DeskBox 的 WindowInteraction）：Esc 收起悬停预览、Enter/Space 展开胶囊、F2 重命名。
+        // 挂 RootGrid 而不是 Window —— WinUI 3 的 Window 没有 KeyDown，路由事件从焦点元素冒泡到内容根。
+        RootGrid.KeyDown += RootGrid_KeyDown;
+
         if (WidgetStorage.IsResizable(_kind))
         {
             AddResizeGrips();
@@ -1124,6 +1161,53 @@ public sealed partial class WidgetWindow : Window
         if (_chromeMode == WidgetChromeMode.Compact && !_dragging && !_peeking) PeekExpand();
     }
 
+    /// <summary>
+    /// 组件窗口键盘操作（对齐 DeskBox <c>Views/ContentWidgetWindow.WindowInteraction.cs</c>）。
+    /// <para>
+    /// 只处理「窗口级」语义，且<b>必须先排除输入类控件</b>：待办/随记的输入框里按 Esc/Space
+    /// 属于编辑语境（取消输入、打空格），被窗口抢走会直接破坏输入体验。
+    /// </para>
+    /// </summary>
+    private void RootGrid_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (IsEditingSource(e.OriginalSource)) return;
+
+        switch (e.Key)
+        {
+            case Windows.System.VirtualKey.Escape:
+                // 悬停预览时 Esc = 收起预览回到胶囊（DeskBox 同名语义）。
+                // 未预览时 Esc 不做任何事——避免用户按 Esc 意外把展开的组件收成胶囊。
+                if (_peeking)
+                {
+                    CollapsePeek();
+                    e.Handled = true;
+                }
+                break;
+
+            case Windows.System.VirtualKey.Enter:
+            case Windows.System.VirtualKey.Space:
+                // 胶囊态 Enter/Space = 展开到正常态（等同点击胶囊中区）
+                if (_chromeMode == WidgetChromeMode.Compact)
+                {
+                    ApplyChromeMode(WidgetChromeMode.Standard);
+                    e.Handled = true;
+                }
+                break;
+
+            case Windows.System.VirtualKey.F2:
+                // 双击已被「切换置顶」占用（README 已写明该手势），故重命名走 Windows 惯例的 F2
+                _ = RenameAsync();
+                e.Handled = true;
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 按键来源是否属于「正在编辑文本」——这类按键窗口一律不拦截。
+    /// </summary>
+    private static bool IsEditingSource(object? source) => source is
+        TextBox or RichEditBox or PasswordBox or AutoSuggestBox or NumberBox or ComboBox or RichTextBlock;
+
     private void RootBorder_PointerExited(object sender, PointerRoutedEventArgs e)
     {
         // 菜单仍打开时（鼠标移到菜单上会离开胶囊）不收起，避免菜单被吞掉
@@ -1196,6 +1280,13 @@ public sealed partial class WidgetWindow : Window
 
         WindowInterop.GetCursorPos(out _gestureStart);
         _gestureStartRect = WindowInterop.GetWindowRect(this);
+
+        // Ctrl+拖动 → 同屏所有可见组件一起移动（DeskBox CoordinatedMove）。
+        // 修饰键状态只在**按下瞬间**采样一次：拖动过程中松/按 Ctrl 都不改变参与者，
+        // 否则会出现「跟到一半不跟了」的半截跟随。
+        _coordinated = IsCtrlDown();
+        BeginCoordinatedMove();
+
         BeginSnapSession();
         RaiseTransient();
         _dragging = true;
@@ -1224,7 +1315,68 @@ public sealed partial class WidgetWindow : Window
         _stickyHorizontal = result.HorizontalMatch;
         _stickyVertical = result.VerticalMatch;
         AppWindow.MoveAndResize(result.Bounds);
+
+        ApplyCoordinatedMove(pt.X - _gestureStart.X, pt.Y - _gestureStart.Y);
         e.Handled = true;
+    }
+
+    private static bool IsCtrlDown() =>
+        InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+    /// <summary>
+    /// 招募协同移动参与者：同一显示器上的其它可见组件。
+    /// 用「显示器设备名」判定同屏（比比较矩形相交更准），
+    /// 眼睛坐标为 MONITOR_DEFAULTTONEAREST 的 hwnd 判定与本组件一致。
+    /// </summary>
+    private void BeginCoordinatedMove()
+    {
+        ClearCoordinatedMove();
+        if (!_coordinated) return;
+
+        try
+        {
+            var selfMonitor = WindowInterop.GetMonitorForWindow(WindowInterop.GetHwnd(this)).Device;
+            foreach (var w in _manager.VisibleWindowsExcept(_instanceId))
+            {
+                var device = WindowInterop.GetMonitorForWindow(WindowInterop.GetHwnd(w)).Device;
+                if (device == selfMonitor) _coordPeers.Add((w, w.CurrentRect));
+            }
+        }
+        catch (Exception ex)
+        {
+            // 招募失败不该拖累主手势：退化成普通单窗口拖动
+            StarLog.Error("Ctrl+拖动协同移动招募参与者失败", ex);
+            ClearCoordinatedMove();
+        }
+    }
+
+    private void ApplyCoordinatedMove(int dx, int dy)
+    {
+        if (!_coordinated || _coordPeers.Count == 0) return;
+        foreach (var (w, start) in _coordPeers)
+        {
+            try { w.MoveByCoordinated(dx, dy, start); }
+            catch (Exception ex) { StarLog.Error("协同移动跟随失败", ex); }
+        }
+    }
+
+    /// <summary>结束协同移动：让每个参与者落盘自己的新位置。</summary>
+    private void EndCoordinatedMove()
+    {
+        if (!_coordinated) return;
+        foreach (var (w, _) in _coordPeers)
+        {
+            try { w.PersistPosition(); }
+            catch (Exception ex) { StarLog.Error("协同移动后持久化位置失败", ex); }
+        }
+        ClearCoordinatedMove();
+    }
+
+    private void ClearCoordinatedMove()
+    {
+        _coordPeers.Clear();
+        _coordinated = false;
     }
 
     private void DragBar_PointerReleased(object sender, PointerRoutedEventArgs e)
@@ -1234,6 +1386,7 @@ public sealed partial class WidgetWindow : Window
         EndSnapSession();
         try { DragBar.ReleasePointerCapture(e.Pointer); } catch { }
         PersistBounds();
+        EndCoordinatedMove();
         e.Handled = true;
     }
 

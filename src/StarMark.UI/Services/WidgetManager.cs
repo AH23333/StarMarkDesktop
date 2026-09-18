@@ -253,6 +253,15 @@ public sealed class WidgetManager
         }
     });
 
+    /// <summary>
+    /// 除指定实例外的**可见**组件窗口。供 Ctrl+拖动协同移动（对齐 DeskBox CoordinatedMove）招募参与者。
+    /// 只在 UI 线程调用。
+    /// </summary>
+    public IReadOnlyList<WidgetWindow> VisibleWindowsExcept(string excludeInstanceId) =>
+        _windows.Values
+            .Where(w => w.InstanceId != excludeInstanceId && w.IsVisible && !w.IsDragBusy)
+            .ToList();
+
     /// <summary>托盘"桌面组件"总开关：有可见组件→全部隐藏；否则显示全部已启用实例。</summary>
     public Task ToggleAllAsync() => OnUiAsync(() =>
     {
