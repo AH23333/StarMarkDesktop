@@ -17,6 +17,21 @@ public sealed partial class ClockWidget : UserControl
 {
     public ClockWidgetViewModel ViewModel { get; }
 
+    /// <summary>组件级文本缩放系数（由宿主 WidgetWindow 的「文本缩放」套用到此，
+    /// 与自适应字号相乘：时间/日期字号 = 自适应基准 × 此系数。这样时钟时间也能随外观设置放大/缩小，
+    /// 且「恢复全局」时系数回到 1 即还原（避免被 ApplyAdaptiveFontSize 覆盖后缩放失效）。</summary>
+    public double TextScale
+    {
+        get => _textScale;
+        set
+        {
+            if (Math.Abs(_textScale - value) < 1e-6) return;
+            _textScale = value;
+            ApplyAdaptiveFontSize();
+        }
+    }
+
+    private double _textScale = 1.0;
     private DispatcherQueueTimer? _timer;
 
     public ClockWidget()
@@ -41,8 +56,9 @@ public sealed partial class ClockWidget : UserControl
         var h = ClockBody.ActualHeight;
         if (w <= 0 || h <= 0) return;
 
-        // min(宽*0.19, 高*0.34) 再夹到 [22, 72]：宽窗口不至于字太小，高窗口不至于溢出
-        var size = Math.Clamp(Math.Min(w * 0.19, h * 0.34), 22, 72);
+        // min(宽*0.19, 高*0.34) 再夹到 [22, 72]：宽窗口不至于字太小，高窗口不至于溢出。
+        // 再乘组件级文本缩放系数（来自外观「文本缩放」），让时钟时间也能随组件外观放大/缩小。
+        var size = Math.Clamp(Math.Min(w * 0.19, h * 0.34), 22, 72) * _textScale;
         TimeBlock.FontSize = Math.Round(size);
         DateBlock.FontSize = Math.Clamp(Math.Round(size * 0.34), 10, 22);
     }
