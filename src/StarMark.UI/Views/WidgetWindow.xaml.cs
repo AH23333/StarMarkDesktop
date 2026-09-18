@@ -65,6 +65,9 @@ public sealed partial class WidgetWindow : Window
     private int _capsuleWidth;
     private const int CapsuleMinWidth = 160;
     private const int CapsuleMaxWidth = 360;
+    /// <summary>收起为胶囊 / 悬停预览时统一采用的宽度（物理像素，DPI 无关；所有胶囊一致，避免宽窄不一）。
+    /// 悬停预览也用此统一宽度，只有「点击展开」才恢复到组件原本的位置与尺寸。</summary>
+    private const int UnifiedCapsuleWidth = 240;
     private MenuFlyout? _contextMenu;
     private MenuFlyoutItem? _collapseMenuItem;
     private MenuFlyoutItem? _hideChromeMenuItem;
@@ -563,6 +566,8 @@ public sealed partial class WidgetWindow : Window
     /// <summary>
     /// 递归遍历可视树，对文本元素按「基准字号 × 系数」设置 FontSize（文本本身缩放，留在布局内、可滚动）。
     /// 基准字号首次见到的 TextBlock 时记录（用其当前有效字号），后续均基于基准计算，故反复套用不累加。
+    /// 时钟组件（ClockWidget）自行管理时间/日期字号（自适应 + 文本缩放系数），故在此跳过其内部文本、
+    /// 直接把系数下发给它的 <see cref="ClockWidget.TextScale"/>，避免被这里再乘一次导致双重缩放。
     /// </summary>
     private void ApplyTextScale(DependencyObject parent, double scale)
     {
@@ -570,6 +575,12 @@ public sealed partial class WidgetWindow : Window
         for (var i = 0; i < n; i++)
         {
             var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is ClockWidget cw)
+            {
+                // 时钟时间字号由组件自适应计算，缩放只通过系数下发，不在此直接改其内部 TextBlock
+                cw.TextScale = scale;
+                continue;
+            }
             if (child is TextBlock tb)
             {
                 double baseFont;
@@ -928,11 +939,9 @@ public sealed partial class WidgetWindow : Window
                 if (sane)
                 {
                     var scale = WindowInterop.GetScale(this);
-                    // 胶囊宽度钳制到 [Min,Max]，避免历史「胶囊拉伸」测试残留的超大宽度被持久化复用
-                    var capW = _capsuleWidth > 0 ? _capsuleWidth
-                        : ((int)_config.Width > 0 ? (int)_config.Width : (int)(WidgetStorage.DefaultWidth(_kind) * scale));
-                    capW = Math.Clamp(capW, CapsuleMinWidth, CapsuleMaxWidth);
-                    _capsuleRect = new RectInt32(cx, cy, capW, (int)(36 * scale));
+                    // 胶囊统一宽度（不随组件原始宽度变化），保证角落胶囊整齐一致
+                    _capsuleWidth = UnifiedCapsuleWidth;
+                    _capsuleRect = new RectInt32(cx, cy, _capsuleWidth, (int)(36 * scale));
                 }
                 else
                 {
@@ -962,7 +971,8 @@ public sealed partial class WidgetWindow : Window
         var scale = WindowInterop.GetScale(this);
         var r = WindowInterop.GetWindowRect(this);
         if (r.Width <= 0 || r.Height <= 0) return;
-        _capsuleWidth = Math.Clamp(r.Width, CapsuleMinWidth, CapsuleMaxWidth);
+        // 统一胶囊宽度：所有胶囊一致（不随各组件原始宽度变化），避免宽窄不一、也杜绝历史「胶囊拉伸」残留
+        _capsuleWidth = UnifiedCapsuleWidth;
         var capH = (int)(36 * scale);
 
         int dockX, y;
@@ -1074,9 +1084,11 @@ public sealed partial class WidgetWindow : Window
         if (_chromeMode != WidgetChromeMode.Compact || _peeking || _dragging) return;
         _peeking = true;
         var scale = WindowInterop.GetScale(this);
-        var w = (int)_config.Width > 0 ? (int)_config.Width : (int)(WidgetStorage.DefaultWidth(_kind) * scale);
+        // 悬停预览也用「统一胶囊宽度」：宽与收起态一致，仅向下展开内容高度，外观上「原地预览」；
+        // 只有「点击展开」(ToggleCompact→Standard) 才经 ExpandToNormal 恢复到组件原本的位置与尺寸。
+        var w = _capsuleWidth > 0 ? _capsuleWidth : UnifiedCapsuleWidth;
         var h = (int)_config.Height > 0 ? (int)_config.Height : (int)(WidgetStorage.DefaultHeight(_kind) * scale);
-        // 以胶囊停靠位为锚点展开，保持 X/Y 不变（仅向下/向右放大内容），外观上「原地预览」
+        // 以胶囊停靠位为锚点展开，保持 X/Y 不变（仅向下放大内容），外观上「原地预览」
         var anchor = _capsuleRect ?? WindowInterop.GetWindowRect(this);
         RootGrid.RowDefinitions[1].Height = new GridLength(1, GridUnitType.Star);
         ContentScroll.Visibility = Visibility.Visible;
