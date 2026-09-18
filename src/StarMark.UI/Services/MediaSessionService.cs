@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
+using StarMark.Core.Media;
 using Windows.Media.Control;
 
 namespace StarMark.UI.Services;
@@ -27,6 +28,19 @@ public sealed class MediaSnapshot
     public bool CanPlayPause { get; set; }
     public bool CanSkipNext { get; set; }
     public bool CanSkipPrevious { get; set; }
+    /// <summary>是否允许跳转进度（播放器上报了 IsPlaybackPositionEnabled 且时间轴长度已知）。</summary>
+    public bool CanSeek { get; set; }
+    /// <summary>是否允许切换随机播放。</summary>
+    public bool CanChangeShuffle { get; set; }
+    /// <summary>是否允许切换重复模式。</summary>
+    public bool CanChangeRepeat { get; set; }
+    /// <summary>当前播放模式（普通 / 随机 / 列表循环）。</summary>
+    public MusicPlaybackMode PlaybackMode { get; set; } = MusicPlaybackMode.Normal;
+    /// <summary>
+    /// 时间轴起点（100ns 为单位）。SMTC 的 seek 用的是<b>绝对</b>时间轴刻度，
+    /// 而 <see cref="Position"/> 是相对起点的偏移，跳转时必须把起点加回去。
+    /// </summary>
+    public long TimelineStartTicks { get; set; }
 
     /// <summary>标题为空时说明「没有正在播放的会话」，组件据此显示占位。</summary>
     public bool HasTrack => !string.IsNullOrWhiteSpace(Title) || !string.IsNullOrWhiteSpace(Artist);
@@ -227,6 +241,19 @@ public sealed class MediaSessionService : IDisposable
             _preferredSessionId = null;
     }
 
+    /// <summary>
+    /// SMTC 把「随机」和「循环」拆成两个独立开关，UI 只要一个按钮，这里折叠成三态。
+    /// 循环包含 Track/List 两种，都算 Repeat（用户只关心"会不会重播"）。
+    /// </summary>
+    private static MusicPlaybackMode MapPlaybackMode(GlobalSystemMediaTransportControlsSessionPlaybackInfo? playback)
+    {
+        if (playback is null) return MusicPlaybackMode.Normal;
+        if (playback.IsShuffleActive == true) return MusicPlaybackMode.Shuffle;
+        return playback.AutoRepeatMode == Windows.Media.MediaPlaybackAutoRepeatMode.None
+            ? MusicPlaybackMode.Normal
+            : MusicPlaybackMode.Repeat;
+    }
+
     private static string GetAppId(GlobalSystemMediaTransportControlsSession session)
     {
         try { return session.SourceAppUserModelId ?? string.Empty; }
@@ -379,16 +406,24 @@ public sealed class MediaSessionService : IDisposable
                 CanPlayPause = playback?.Controls?.IsPauseEnabled == true || playback?.Controls?.IsPlayEnabled == true,
                 CanSkipNext = playback?.Controls?.IsNextEnabled == true,
                 CanSkipPrevious = playback?.Controls?.IsPreviousEnabled == true,
+                CanChangeShuffle = playback?.Controls?.IsShuffleEnabled == true,
+                CanChangeRepeat = playback?.Controls?.IsRepeatEnabled == true,
+                PlaybackMode = MapPlaybackMode(playback),
             };
 
             // 时间轴以 100ns 为单位（与 TimeSpan 的 tick 一致）；部分播放器不上报 EndTime，
             // 此时 EndTime 会等于 StartTime，这里判等避免算出一个 0 长度还拿去显示进度。
             if (timeline is not null)
             {
+                snapshot.TimelineStartTicks = timeline.StartTime.Ticks;
                 snapshot.Position = TimeSpan.FromTicks(Math.Max(0, timeline.Position.Ticks - timeline.StartTime.Ticks));
                 if (timeline.EndTime > timeline.StartTime)
                     snapshot.Duration = TimeSpan.FromTicks(timeline.EndTime.Ticks - timeline.StartTime.Ticks);
             }
+
+            // 只有「播放器允许跳进度」且「时间轴长度已知」时才让进度条可拖，
+            // 否则拖了也跳不动，用户会以为组件坏了。
+            snapshot.CanSeek = playback?.Controls?.IsPlaybackPositionEnabled == true && snapshot.Duration > TimeSpan.Zero;
 
             Current = snapshot;
             Changed?.Invoke(this, EventArgs.Empty);
@@ -419,6 +454,93 @@ public sealed class MediaSessionService : IDisposable
     public async Task<bool> NextAsync() => await TryControlAsync(s => s.TrySkipNextAsync());
 
     public async Task<bool> PreviousAsync() => await TryControlAsync(s => s.TrySkipPreviousAsync());
+
+    /// <summary>
+    /// 跳转到指定进度。<paramref name="position"/> 是<b>相对起点</b>的偏移（与 <see cref="MediaSnapshot.Position"/> 同口径），
+    /// 而 SMTC 的 <c>TryChangePlaybackPositionAsync</c> 收的是时间轴<b>绝对</b>刻度，所以这里要把起点加回去。
+    /// 少加这一步在起点不为 0 的播放器上会跳到错误位置。
+    /// </summary>
+    public async Task<bool> SeekAsync(TimeSpan position)
+    {
+        var session = ResolveSession() ?? _session;
+        if (session is null) return false;
+
+        var snapshot = Current;
+        if (snapshot is null || !snapshot.CanSeek) return false;
+
+        var clamped = position < TimeSpan.Zero ? TimeSpan.Zero
+            : position > snapshot.Duration ? snapshot.Duration
+            : position;
+
+        try
+        {
+            return await session.TryChangePlaybackPositionAsync(snapshot.TimelineStartTicks + clamped.Ticks);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("跳转进度失败", ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 循环切换播放模式（普通 → 随机 → 列表循环 → 普通），缺哪个能力就跳过哪一态。
+    /// 随机与循环在 SMTC 里是两个独立开关，切到某一态时必须把另一个关掉，否则会同时亮着。
+    /// </summary>
+    public async Task<bool> CyclePlaybackModeAsync()
+    {
+        var session = ResolveSession() ?? _session;
+        if (session is null) return false;
+
+        try
+        {
+            var playback = session.GetPlaybackInfo();
+            if (playback?.Controls is null) return false;
+
+            var current = Current?.PlaybackMode ?? MusicPlaybackMode.Normal;
+            var next = MusicPlaybackModeMath.NextMode(
+                current,
+                playback.Controls.IsShuffleEnabled,
+                playback.Controls.IsRepeatEnabled);
+            if (next == current) return false;
+
+            return await ApplyPlaybackModeAsync(session, playback, next);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("切换播放模式失败", ex);
+            return false;
+        }
+    }
+
+    private static async Task<bool> ApplyPlaybackModeAsync(
+        GlobalSystemMediaTransportControlsSession session,
+        GlobalSystemMediaTransportControlsSessionPlaybackInfo playback,
+        MusicPlaybackMode mode)
+    {
+        var controls = playback.Controls;
+        var shuffleOn = playback.IsShuffleActive == true;
+        var repeatOn = playback.AutoRepeatMode != Windows.Media.MediaPlaybackAutoRepeatMode.None;
+        var changed = false;
+
+        // 目标态是随机/普通时都要先关循环，是循环/普通时都要先关随机 —— 两个开关互斥。
+        var wantShuffle = mode == MusicPlaybackMode.Shuffle;
+        var wantRepeat = mode == MusicPlaybackMode.Repeat;
+
+        if (wantShuffle && !controls.IsShuffleEnabled) return false;
+        if (wantRepeat && !controls.IsRepeatEnabled) return false;
+
+        if (!wantRepeat && repeatOn && controls.IsRepeatEnabled)
+            changed |= await session.TryChangeAutoRepeatModeAsync(Windows.Media.MediaPlaybackAutoRepeatMode.None);
+        if (!wantShuffle && shuffleOn && controls.IsShuffleEnabled)
+            changed |= await session.TryChangeShuffleActiveAsync(false);
+        if (wantShuffle && !shuffleOn)
+            changed |= await session.TryChangeShuffleActiveAsync(true);
+        if (wantRepeat && !repeatOn)
+            changed |= await session.TryChangeAutoRepeatModeAsync(Windows.Media.MediaPlaybackAutoRepeatMode.List);
+
+        return changed;
+    }
 
     /// <summary>
     /// 注意委托的返回类型是 <see cref="Windows.Foundation.IAsyncOperation{TResult}"/> 而不是

@@ -5,7 +5,9 @@ using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using StarMark.Abstractions;
+using StarMark.Core.Media;
 using StarMark.UI.Services;
 
 namespace StarMark.UI.Views;
@@ -27,6 +29,14 @@ public sealed partial class MusicWidget : UserControl
     private static bool s_initialized;
 
     private DispatcherQueueTimer? _timer;
+
+    /// <summary>
+    /// 拖动进度条期间不理会 SMTC 推来的新进度：否则 1 秒一跳的刷新会把用户刚拖到的位置拽回去，
+    /// 表现为"拖了又弹回来"。松手提交后才恢复同步（DeskBox 用同一套 _isSeeking 闸门）。
+    /// </summary>
+    private bool _seeking;
+    private bool _canSeek;
+    private double _seekRatio;
 
     public MusicWidget()
     {
@@ -161,6 +171,15 @@ public sealed partial class MusicWidget : UserControl
         NextButton.IsEnabled = snapshot.CanSkipNext;
         PlayButton.IsEnabled = snapshot.CanPlayPause;
 
+        // 播放模式按钮：随机/循环都不支持时直接禁用，别给一个永远点不动的按钮
+        _canSeek = snapshot.CanSeek;
+        var canChangeMode = snapshot.CanChangeShuffle || snapshot.CanChangeRepeat;
+        ModeButton.IsEnabled = canChangeMode;
+        ModeButton.Visibility = canChangeMode ? Visibility.Visible : Visibility.Collapsed;
+        ModeIcon.Glyph = MusicPlaybackModeMath.Glyph(snapshot.PlaybackMode);
+        ModeIcon.Opacity = snapshot.PlaybackMode == MusicPlaybackMode.Normal ? 0.55 : 1.0;
+        ToolTipService.SetToolTip(ModeButton, MusicPlaybackModeMath.Label(snapshot.PlaybackMode));
+
         SetProgress(snapshot.Position, snapshot.Duration);
         if (snapshot.IsPlaying && snapshot.Duration > TimeSpan.Zero) _timer?.Start();
         else _timer?.Stop();
@@ -171,10 +190,14 @@ public sealed partial class MusicWidget : UserControl
         PlayButton.IsEnabled = enabled;
         PrevButton.IsEnabled = enabled;
         NextButton.IsEnabled = enabled;
+        ModeButton.IsEnabled = enabled;
+        if (!enabled) { _canSeek = false; _seeking = false; }
     }
 
     private void SetProgress(TimeSpan position, TimeSpan duration)
     {
+        if (_seeking) return;   // 拖动中：位置由指针说了算，别被刷新拽回去
+
         if (duration <= TimeSpan.Zero)
         {
             Progress.Value = 0;
@@ -191,6 +214,69 @@ public sealed partial class MusicWidget : UserControl
         t.TotalHours >= 1
             ? t.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture)
             : t.ToString(@"m\:ss", CultureInfo.InvariantCulture);
+
+    // ── 进度跳转（seek）──
+
+    private void SeekHost_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_canSeek) return;
+        _seeking = true;
+        // 捕获指针：拖出进度条那 16px 高之后（比如甩到下面的按钮上）仍能收到 move/release，
+        // 否则松手事件丢失，_seeking 会一直卡在 true，进度条从此不再更新。
+        SeekHost.CapturePointer(e.Pointer);
+        UpdateSeekFromPointer(e);
+        e.Handled = true;
+    }
+
+    private void SeekHost_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_seeking) return;
+        UpdateSeekFromPointer(e);
+        e.Handled = true;
+    }
+
+    private async void SeekHost_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_seeking) return;
+        _seeking = false;
+        // 指针捕获可能已经被系统收回（比如拖出窗口），此时释放会抛；
+        // 事件处理器里冒异常会直接崩进程，这里一律吞掉。
+        try { SeekHost.ReleasePointerCapture(e.Pointer); } catch { }
+        e.Handled = true;
+        await CommitSeekAsync();
+    }
+
+    private void UpdateSeekFromPointer(PointerRoutedEventArgs e)
+    {
+        var width = SeekHost.ActualWidth;
+        if (width <= 0) return;
+
+        var x = e.GetCurrentPoint(SeekHost).Position.X;
+        _seekRatio = Math.Clamp(x / width, 0.0, 1.0);
+        Progress.Value = _seekRatio * 100.0;
+
+        // 拖动时只改文本与条，不发请求 —— 每移动一像素就 seek 一次会把播放器打爆
+        var snapshot = s_media.Current;
+        if (snapshot is not null && snapshot.Duration > TimeSpan.Zero)
+            PositionBlock.Text = FormatTime(TimeSpan.FromSeconds(snapshot.Duration.TotalSeconds * _seekRatio));
+    }
+
+    private async Task CommitSeekAsync()
+    {
+        var snapshot = s_media.Current;
+        if (snapshot is null || snapshot.Duration <= TimeSpan.Zero) return;
+
+        var target = TimeSpan.FromSeconds(snapshot.Duration.TotalSeconds * _seekRatio);
+        SetProgress(target, snapshot.Duration);
+        await s_media.SeekAsync(target);
+        await s_media.RefreshAsync();
+    }
+
+    private async void ModeButton_Click(object sender, RoutedEventArgs e)
+    {
+        await s_media.CyclePlaybackModeAsync();
+        await s_media.RefreshAsync();
+    }
 
     private async void PlayButton_Click(object sender, RoutedEventArgs e)
     {

@@ -35,17 +35,24 @@
             </Grid>
         </StackPanel>
 
-        <!-- 进度：条 + 两端时间 -->
+        <!-- 进度：条 + 两端时间。条本身不接收指针（IsHitTestVisible=False），
+             由外层 SeekHost 统一接管——它比 3px 的条高得多，手指点得中。 -->
         <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
             <TextBlock x:Name="PositionBlock" Grid.Column="0" Text="0:00" FontSize="10" Opacity="0.6"
                        VerticalAlignment="Center"/>
-            <ProgressBar x:Name="Progress" Grid.Column="1" Value="0" Minimum="0" Maximum="100"
-                         Height="3" VerticalAlignment="Center"/>
+            <Grid x:Name="SeekHost" Grid.Column="1" Height="16" Background="Transparent"
+                  ToolTipService.ToolTip="点击或拖动可跳转进度"
+                  PointerPressed="SeekHost_PointerPressed" PointerMoved="SeekHost_PointerMoved"
+                  PointerReleased="SeekHost_PointerReleased" PointerCanceled="SeekHost_PointerReleased"
+                  PointerCaptureLost="SeekHost_PointerReleased">
+                <ProgressBar x:Name="Progress" Value="0" Minimum="0" Maximum="100" Height="3"
+                             VerticalAlignment="Center" IsHitTestVisible="False"/>
+            </Grid>
             <TextBlock x:Name="DurationBlock" Grid.Column="2" Text="0:00" FontSize="10" Opacity="0.6"
                        VerticalAlignment="Center"/>
         </Grid>
 
-        <!-- 传输控制：上一首 / 播放暂停 / 下一首（Segoe Fluent 字形，各 Windows 版本都能渲染） -->
+        <!-- 传输控制：上一首 / 播放暂停 / 下一首 / 播放模式（Segoe Fluent 字形，各 Windows 版本都能渲染） -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="6">
             <Button x:Name="PrevButton" Width="36" Height="36" Padding="0" Click="PrevButton_Click"
                     ToolTipService.ToolTip="上一首">
@@ -58,6 +65,9 @@
             <Button x:Name="NextButton" Width="36" Height="36" Padding="0" Click="NextButton_Click"
                     ToolTipService.ToolTip="下一首">
                 <FontIcon Glyph="&#xE893;" FontSize="14"/>
+            </Button>
+            <Button x:Name="ModeButton" Width="36" Height="36" Padding="0" Click="ModeButton_Click">
+                <FontIcon x:Name="ModeIcon" Glyph="&#xE8CB;" FontSize="14"/>
             </Button>
         </StackPanel>
     </Grid>
