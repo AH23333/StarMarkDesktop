@@ -60,11 +60,16 @@ public sealed partial class WidgetWindow : Window
     // ── 胶囊模式（Phase B）：当前外壳呈现模式 + 缩放柄引用 + 右键菜单项引用 ──
     private WidgetChromeMode _chromeMode = WidgetChromeMode.Standard;
     private readonly List<ResizeGrip> _grips = new();
-    /// <summary>收起为胶囊时的固定宽度（物理像素）。胶囊模式下任何尺寸变更都会被夹回此宽 × 标题高度。</summary>
+    /// <summary>收起为胶囊时的固定宽度（物理像素）。胶囊模式下任何尺寸变更都会被夹回此宽 × 标题高度。
+    /// 宽度钳制在 [CapsuleMinWidth, CapsuleMaxWidth]，避免历史「胶囊拉伸」测试残留的超长宽度被持久化复用。</summary>
     private int _capsuleWidth;
+    private const int CapsuleMinWidth = 160;
+    private const int CapsuleMaxWidth = 360;
     private MenuFlyout? _contextMenu;
     private MenuFlyoutItem? _collapseMenuItem;
     private MenuFlyoutItem? _hideChromeMenuItem;
+    /// <summary>外观编辑器是否已在打开中（单例守护，避免多次右键「外观…」叠加多个浮层）。</summary>
+    private bool _appearanceEditorOpen;
 
     // ── 胶囊三段式热区 / 悬停预览 / 隐私（B-10）──
     /// <summary>悬停预览中：此时窗口临时展开到正常尺寸，但外壳模式仍是 Compact，
@@ -81,6 +86,10 @@ public sealed partial class WidgetWindow : Window
     private readonly ConditionalWeakTable<TextBlock, object> _coloredMarker = new();
     /// <summary>曾被显式上前景色的文本弱引用快照（配合 _coloredMarker 用于恢复全局时精准清除）。</summary>
     private readonly List<WeakReference<TextBlock>> _coloredRefs = new();
+
+    /// <summary>当前生效的圆角半径（物理像素），用于把「窗口本身」裁成圆角矩形
+    /// （SetWindowRgn），真正圆化组件外形，而非只给内部 Border 加圆角。</summary>
+    private double _currentCornerRadius = 8;
 
     // ── 稳定停靠位（修复悬停预览导致的堆叠漂移 / 展开后不恢复原位置）──
     /// <summary>胶囊稳定停靠位（物理像素）：仅在「首次进入胶囊」或「强制重排」时计算一次，
@@ -137,17 +146,51 @@ public sealed partial class WidgetWindow : Window
         Closed += WidgetWindow_Closed;
     }
 
-    /// <summary>胶囊模式下，若系统仍改变了窗口尺寸（原生边框 / 系统快捷键吸附），立即夹回胶囊尺寸。</summary>
+    /// <summary>窗口尺寸变化：重算圆角区域（任意模式都保持圆角窗口），并夹回胶囊尺寸（仅胶囊态、非悬停预览）。</summary>
     private void OnAppWindowChanged(object? sender, Microsoft.UI.Windowing.AppWindowChangedEventArgs e)
     {
-        // 悬停预览临时展开时放行尺寸，避免被夹回胶囊
-        if (_peeking) return;
-        if (!e.DidSizeChange || _chromeMode != WidgetChromeMode.Compact || _capsuleWidth <= 0) return;
-        var scale = WindowInterop.GetScale(this);
-        var capH = (int)(36 * scale);
-        var r = WindowInterop.GetWindowRect(this);
-        if (r.Height != capH || r.Width != _capsuleWidth)
-            AppWindow.MoveAndResize(new RectInt32(r.X, r.Y, _capsuleWidth, capH));
+        if (!e.DidSizeChange) return;
+        // 圆角区域随窗口尺寸变化重算，使窗口真正保持圆角（悬停预览临时放大时也圆角）
+        ApplyRoundedWindow();
+        // 胶囊态且非悬停预览：任何非预期尺寸变更夹回胶囊尺寸（_peeking 期间放行）
+        if (_chromeMode == WidgetChromeMode.Compact && !_peeking && _capsuleWidth > 0)
+        {
+            var scale = WindowInterop.GetScale(this);
+            var capH = (int)(36 * scale);
+            var r = WindowInterop.GetWindowRect(this);
+            if (r.Height != capH || r.Width != _capsuleWidth)
+                AppWindow.MoveAndResize(new RectInt32(r.X, r.Y, _capsuleWidth, capH));
+        }
+    }
+
+    /// <summary>
+    /// 把「窗口本身」裁成圆角矩形（SetWindowRgn）：圆角半径来自当前外观
+    /// （<see cref="_currentCornerRadius"/>）。半径 ≤ 0 时移除区域（直角窗口）。
+    /// 这样圆角改变的是组件真实外形，而非仅内部 Border 形状。
+    /// </summary>
+    private void ApplyRoundedWindow()
+    {
+        try
+        {
+            var hwnd = WindowInterop.GetHwnd(this);
+            var size = AppWindow.Size;
+            var w = size.Width;
+            var h = size.Height;
+            if (w <= 0 || h <= 0) return;
+            if (_currentCornerRadius <= 0)
+            {
+                // 直角窗口：清除区域并恢复 DWM 自带圆角
+                WindowInterop.SetWindowRgn(hwnd, IntPtr.Zero, true);
+                WindowInterop.SetDwmCornerPreference(this, WindowInterop.DWMWCP_ROUND);
+                return;
+            }
+            // 用 SetWindowRgn 自定义半径（关掉 DWM 自带圆角，避免双重圆角）
+            WindowInterop.SetDwmCornerPreference(this, WindowInterop.DWMWCP_DONOTROUND);
+            var r = (int)(_currentCornerRadius * 2);
+            var hrgn = WindowInterop.CreateRoundRectRgn(0, 0, w, h, r, r);
+            if (hrgn != IntPtr.Zero) WindowInterop.SetWindowRgn(hwnd, hrgn, true);
+        }
+        catch { /* 取不到窗口句柄/尺寸时跳过，下次套用外观或尺寸变化会再算 */ }
     }
 
     /// <summary>实例唯一 ID（区分同类型多个组件）。</summary>
@@ -411,13 +454,16 @@ public sealed partial class WidgetWindow : Window
                 ? new Thickness(Math.Clamp(bt, 0, 12))
                 : new Thickness(1);
 
-            // 圆角（标题栏仅上方两角随根圆角；内容区 ScrollViewer 也跟随圆角，避免大圆角时方角内容戳出圆角外）
+            // 圆角：内部 Border 跟随圆角（内容裁进圆角矩形），同时把「窗口本身」用 SetWindowRgn
+            // 裁成圆角矩形——这样圆角改变的是组件真实外形（半径 0 即直角窗口），而不只是内部形状。
             var radius = ov?.CornerRadius is { } cr ? Math.Clamp(cr, 0, 48) : 8;
+            _currentCornerRadius = radius;
             RootBorder.CornerRadius = new CornerRadius(radius);
             if (DragBar is not null)
                 DragBar.CornerRadius = new CornerRadius(radius, radius, 0, 0);
             if (ContentScroll is not null)
                 ContentScroll.CornerRadius = new CornerRadius(radius);
+            ApplyRoundedWindow();   // 真正圆化窗口（任意模式下都生效）
 
             // 文本缩放：改为「直接缩放文本字号」（文本本身缩放），而非整块内容相对中心放缩，
             // 故放大时文本仍留在布局内、ScrollViewer 可滚动查看，不会因超出组件范围被裁切而消失。
@@ -617,7 +663,7 @@ public sealed partial class WidgetWindow : Window
         var addSub = new MenuFlyoutSubItem
         {
             Text = "添加组件",
-            Icon = new FontIcon { Glyph = "\uE710", FontSize = 12 },
+            Icon = new FontIcon { Glyph = "\uE710", FontSize = 14 },
         };
         foreach (var kind in WidgetStorage.AllKinds)
         {
@@ -632,7 +678,7 @@ public sealed partial class WidgetWindow : Window
         var removeThis = new MenuFlyoutItem
         {
             Text = "移除本组件",
-            Icon = new FontIcon { Glyph = "\uE8BB", FontSize = 12 },
+            Icon = new FontIcon { Glyph = "\uE711", FontSize = 14 },   // Cancel（X），与其它图标视觉一致
         };
         removeThis.Click += (_, _) => _ = _manager.RemoveAsync(_instanceId);
         menu.Items.Add(removeThis);
@@ -643,7 +689,7 @@ public sealed partial class WidgetWindow : Window
         _collapseMenuItem = new MenuFlyoutItem
         {
             Text = "收起为胶囊",
-            Icon = new FontIcon { Glyph = "\uE70E", FontSize = 12 }, // ChevronUp：收起
+            Icon = new FontIcon { Glyph = "\uE70E", FontSize = 14 }, // ChevronUp：收起
             IsEnabled = canHide,
         };
         _collapseMenuItem.Click += (_, _) => ToggleCompact();
@@ -652,7 +698,7 @@ public sealed partial class WidgetWindow : Window
         _hideChromeMenuItem = new MenuFlyoutItem
         {
             Text = "隐藏外壳（仅内容）",
-            Icon = new FontIcon { Glyph = "\uEB43", FontSize = 12 },
+            Icon = new FontIcon { Glyph = "\uE921", FontSize = 14 },   // Hide（有效字形，避免显示错误方框）
             IsEnabled = canHide,
         };
         _hideChromeMenuItem.Click += (_, _) => ToggleHidden();
@@ -662,7 +708,7 @@ public sealed partial class WidgetWindow : Window
         var privacyItem = new ToggleMenuFlyoutItem
         {
             Text = "隐私模式（胶囊态隐藏标题）",
-            Icon = new FontIcon { Glyph = "\uE72E", FontSize = 12 }, // 锁
+            Icon = new FontIcon { Glyph = "\uE72E", FontSize = 14 }, // 锁
             IsChecked = _config.PrivacyMode,
         };
         privacyItem.Click += (_, _) =>
@@ -693,7 +739,7 @@ public sealed partial class WidgetWindow : Window
         var appearance = new MenuFlyoutItem
         {
             Text = "外观…",
-            Icon = new FontIcon { Glyph = "\uE790", FontSize = 12 },
+            Icon = new FontIcon { Glyph = "\uE790", FontSize = 14 },
         };
         appearance.Click += async (_, _) => await EditAppearanceAsync();
         menu.Items.Add(appearance);
@@ -703,7 +749,7 @@ public sealed partial class WidgetWindow : Window
         var saveLayout = new MenuFlyoutItem
         {
             Text = "保存当前组件布局…",
-            Icon = new FontIcon { Glyph = "\uE78C", FontSize = 12 },
+            Icon = new FontIcon { Glyph = "\uE78C", FontSize = 14 },
         };
         saveLayout.Click += (_, _) => _ = SaveLayoutByNameAsync();
         menu.Items.Add(saveLayout);
@@ -752,9 +798,12 @@ public sealed partial class WidgetWindow : Window
         catch { /* 窗口正在关闭 */ }
     }
 
-    /// <summary>打开每实例外观编辑浮层（B-9）：编辑中实时预览到本组件，确定后持久化，取消则还原。</summary>
+    /// <summary>打开每实例外观编辑浮层（B-9）：编辑中实时预览到本组件，确定后持久化，取消则还原。
+    /// 同一组件若已有一个编辑器在打开，直接忽略后续点击（避免叠加多个浮层）。</summary>
     private async System.Threading.Tasks.Task EditAppearanceAsync()
     {
+        if (_appearanceEditorOpen) return;   // 单例守护：防止多次右键「外观…」叠加多个编辑器
+        _appearanceEditorOpen = true;
         try
         {
             var original = _config.Appearance;   // 取消时按此还原实时预览
@@ -780,6 +829,10 @@ public sealed partial class WidgetWindow : Window
         catch (Exception ex)
         {
             StarLog.Error("编辑组件外观失败", ex);
+        }
+        finally
+        {
+            _appearanceEditorOpen = false;
         }
     }
 
@@ -868,9 +921,23 @@ public sealed partial class WidgetWindow : Window
         {
             if (_config.CapsuleX is { } cx && _config.CapsuleY is { } cy)
             {
-                var scale = WindowInterop.GetScale(this);
-                var capW = _capsuleWidth > 0 ? _capsuleWidth : (int)_config.Width;
-                _capsuleRect = new RectInt32(cx, cy, capW > 0 ? capW : (int)(WidgetStorage.DefaultWidth(_kind) * scale), (int)(36 * scale));
+                // 持久化停靠位可能来自旧版本 / 不同分辨率 / 历史「胶囊拉伸」bug，坐标为越界或 (0,0) 角点；
+                // 落在工作区外则视为失效，改走 AssignCapsuleSlot 重新吸附最近垂直边缘。
+                var wa = WindowInterop.GetWorkArea(this);
+                var sane = cx >= wa.X && cx <= wa.X + wa.Width && cy >= wa.Y && cy <= wa.Y + wa.Height;
+                if (sane)
+                {
+                    var scale = WindowInterop.GetScale(this);
+                    // 胶囊宽度钳制到 [Min,Max]，避免历史「胶囊拉伸」测试残留的超大宽度被持久化复用
+                    var capW = _capsuleWidth > 0 ? _capsuleWidth
+                        : ((int)_config.Width > 0 ? (int)_config.Width : (int)(WidgetStorage.DefaultWidth(_kind) * scale));
+                    capW = Math.Clamp(capW, CapsuleMinWidth, CapsuleMaxWidth);
+                    _capsuleRect = new RectInt32(cx, cy, capW, (int)(36 * scale));
+                }
+                else
+                {
+                    AssignCapsuleSlot();
+                }
             }
             else
             {
@@ -895,7 +962,7 @@ public sealed partial class WidgetWindow : Window
         var scale = WindowInterop.GetScale(this);
         var r = WindowInterop.GetWindowRect(this);
         if (r.Width <= 0 || r.Height <= 0) return;
-        _capsuleWidth = r.Width;
+        _capsuleWidth = Math.Clamp(r.Width, CapsuleMinWidth, CapsuleMaxWidth);
         var capH = (int)(36 * scale);
 
         int dockX, y;

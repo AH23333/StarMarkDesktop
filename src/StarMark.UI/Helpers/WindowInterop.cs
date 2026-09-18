@@ -46,6 +46,7 @@ internal static class WindowInterop
 
     public const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     public const int DWMWCP_ROUND = 2;
+    public const int DWMWCP_DONOTROUND = 1;   // 关掉 DWM 自带圆角：改用 SetWindowRgn 自定义半径时避免双重圆角
 
     /// <summary>DWM 系统背景类型（DeskBox 用它在自管控制器生效时关掉 DWM 自带的背景）。</summary>
     public const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
@@ -89,6 +90,12 @@ internal static class WindowInterop
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int pvAttribute, int cbAttribute);
+
+    [DllImport("gdi32.dll")]
+    public static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int wEllipse, int hEllipse);
+
+    [DllImport("user32.dll")]
+    public static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
 
     [DllImport("user32.dll")]
     public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
@@ -167,6 +174,13 @@ internal static class WindowInterop
             DwmSetWindowAttribute(GetHwnd(window), DWMWA_WINDOW_CORNER_PREFERENCE, ref preference, sizeof(int));
         }
         catch { /* 旧系统无此属性，忽略 */ }
+    }
+
+    /// <summary>设置 DWM 窗口圆角偏好（用 SetWindowRgn 自定义半径时关掉 DWM 自带圆角，避免双重圆角）。</summary>
+    public static void SetDwmCornerPreference(Microsoft.UI.Xaml.Window window, int preference)
+    {
+        try { DwmSetWindowAttribute(GetHwnd(window), DWMWA_WINDOW_CORNER_PREFERENCE, ref preference, sizeof(int)); }
+        catch { /* 旧系统忽略 */ }
     }
 
     /// <summary>
