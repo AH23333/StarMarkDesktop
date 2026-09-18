@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using StarMark.Abstractions;
 using StarMark.Core.Performance;
 
 namespace StarMark.UI.Helpers;
@@ -14,17 +15,6 @@ public enum ThemePreference
     Default = 0,
     Light = 1,
     Dark = 2,
-}
-
-/// <summary>半透明材质（macOS 风格 Trinidad 观感来源）。</summary>
-public enum WidgetBackdropKind
-{
-    /// <summary>桌面亚克力：毛玻璃 + 桌面色调，最有苹果味。</summary>
-    Acrylic = 0,
-    /// <summary>云母：更克制的高级铉光。</summary>
-    Mica = 1,
-    /// <summary>不透明：完全跟主题走，最省资源。</summary>
-    None = 2,
 }
 
 /// <summary>
