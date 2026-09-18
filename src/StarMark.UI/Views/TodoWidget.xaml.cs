@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
 using Windows.System;
+using StarMark.Abstractions;
 using StarMark.Core.Widgets;
 using StarMark.UI.ViewModels;
 
@@ -19,29 +20,29 @@ public sealed partial class TodoWidget : UserControl
 {
     public TodoWidgetViewModel ViewModel { get; }
 
-    public TodoWidget(WidgetStorage storage, string instanceId)
+    public TodoWidget(IItemRepository? repo, string instanceId)
     {
-        ViewModel = new TodoWidgetViewModel(storage, instanceId);
+        ViewModel = new TodoWidgetViewModel(repo, instanceId);
         InitializeComponent();
     }
 
     private void InputBox_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key != VirtualKey.Enter || string.IsNullOrWhiteSpace(InputBox.Text)) return;
-        ViewModel.Add(InputBox.Text);
+        _ = ViewModel.AddAsync(InputBox.Text);
         InputBox.Text = string.Empty;
     }
 
     private void TodoCheck_Click(object sender, RoutedEventArgs e)
     {
         if (sender is CheckBox { Tag: long id } box)
-            ViewModel.Toggle(id, box.IsChecked == true);
+            _ = ViewModel.ToggleAsync(id, box.IsChecked == true);
     }
 
     private void DeleteTodo_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: long id })
-            ViewModel.Delete(id);
+            _ = ViewModel.DeleteAsync(id);
     }
 }
 

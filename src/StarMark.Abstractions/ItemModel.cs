@@ -12,6 +12,10 @@ public enum ItemType
     Bookmark,
     GitHubStar,
     Clipboard,
+    /// <summary>本地待办（不入任何外部源，统一条目模型下的本地内容）。</summary>
+    Todo,
+    /// <summary>本地随记（不入任何外部源，统一条目模型下的本地内容）。</summary>
+    Note,
 }
 
 /// <summary>条目来源标识。每个来源对应一个 IItemSource 实现。</summary>
@@ -23,6 +27,8 @@ public static class ItemSources
     public const string Edge = "edge";
     public const string GitHub = "github";
     public const string Ditto = "ditto";
+    /// <summary>本地内容来源（待办/随记）。不入任何 IItemSource，永不参与同步。</summary>
+    public const string Local = "local";
 }
 
 /// <summary>

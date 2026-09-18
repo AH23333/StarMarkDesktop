@@ -81,6 +81,15 @@ public interface IItemRepository
 
     /// <summary>获取用户置顶条目（桌面快捷启动组件），按更新时间倒序。</summary>
     Task<IReadOnlyList<Item>> GetPinnedAsync(int limit, CancellationToken ct);
+
+    /// <summary>按来源读取条目（本地待办/随记用）。type 可限定；按更新时间倒序。</summary>
+    Task<IReadOnlyList<Item>> GetBySourceAsync(string source, ItemType? type = null, int limit = 1000, CancellationToken ct = default);
+
+    /// <summary>按来源 + source_id 删除一条本地条目。</summary>
+    Task DeleteBySourceIdAsync(string source, string sourceId, CancellationToken ct = default);
+
+    /// <summary>写入本地条目（待办/随记）：只写 items 表，不写活动流、不跑 UriNormalizer/LanguageDetector。</summary>
+    Task UpsertLocalItemAsync(Item item, CancellationToken ct = default);
 }
 
 /// <summary>浏览过滤器（非搜索模式）。</summary>

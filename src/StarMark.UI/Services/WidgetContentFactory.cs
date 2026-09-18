@@ -48,8 +48,8 @@ public sealed class WidgetContentFactory
     {
         var factory = new WidgetContentFactory();
         factory.Register(WidgetKind.QuickLaunch, w => new QuickLaunchWidget(w.Storage, w.Repository, w.Manager, w.InstanceId));
-        factory.Register(WidgetKind.Todo, w => new TodoWidget(w.Storage, w.InstanceId));
-        factory.Register(WidgetKind.QuickNote, w => new QuickNoteWidget(w.Storage, w.InstanceId));
+        factory.Register(WidgetKind.Todo, w => new TodoWidget(w.Repository, w.InstanceId));
+        factory.Register(WidgetKind.QuickNote, w => new QuickNoteWidget(w.Repository, w.InstanceId));
         factory.Register(WidgetKind.Clock, w => new ClockWidget());
         factory.Register(WidgetKind.Search, w => new SearchWidget(w.Repository));
         // 差异化条目格：四种模式共用一个 ItemGridWidget，按 WidgetKind 决定查询策略。

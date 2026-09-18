@@ -172,6 +172,18 @@ public partial class App : Application
                 StarLog.Error("种子数据失败", ex);
             }
 
+            // 2.2 本地条目（待办/随记）迁移进统一 items 表（幂等，一次）
+            try
+            {
+                var repo = Services.GetRequiredService<IItemRepository>();
+                var migration = new LocalItemsMigration(new WidgetStorage(), repo);
+                Task.Run(() => migration.MigrateAsync(CancellationToken.None)).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                StarLog.Error("本地条目迁移失败", ex);
+            }
+
             // 3. 显示主窗口
             _window = new MainWindow();
             MainWindow = _window as StarMark.UI.MainWindow;

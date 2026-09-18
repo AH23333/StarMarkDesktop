@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.System;
+using StarMark.Abstractions;
 using StarMark.Core.Widgets;
 using StarMark.UI.ViewModels;
 
@@ -18,9 +19,9 @@ public sealed partial class QuickNoteWidget : UserControl
 {
     public QuickNoteWidgetViewModel ViewModel { get; }
 
-    public QuickNoteWidget(WidgetStorage storage, string instanceId)
+    public QuickNoteWidget(IItemRepository? repo, string instanceId)
     {
-        ViewModel = new QuickNoteWidgetViewModel(storage, instanceId);
+        ViewModel = new QuickNoteWidgetViewModel(repo, instanceId);
         InitializeComponent();
     }
 
@@ -33,15 +34,15 @@ public sealed partial class QuickNoteWidget : UserControl
         if (ctrl && e.Key == VirtualKey.Enter) Save();
     }
 
-    private void Save()
+    private async void Save()
     {
-        if (ViewModel.Save(NoteBox.Text))
+        if (await ViewModel.SaveAsync(NoteBox.Text))
             NoteBox.Text = string.Empty;
     }
 
     private void DeleteNote_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: long id })
-            ViewModel.Delete(id);
+            _ = ViewModel.DeleteAsync(id);
     }
 }

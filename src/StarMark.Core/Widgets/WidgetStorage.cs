@@ -123,6 +123,10 @@ public sealed class WidgetStoreData
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? DefaultLayoutId { get; set; }
 
+    /// <summary>本地条目（待办/随记）是否已迁移进统一 items 表。为 true 时迁移跳过（幂等）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? LocalItemsMigrated { get; set; }
+
     // ── v2（每类型一个实例）遗留字段，仅用于迁移，迁移后清空不再落盘 ──
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

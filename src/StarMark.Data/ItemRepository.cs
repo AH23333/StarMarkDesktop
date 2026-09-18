@@ -478,6 +478,93 @@ public sealed class ItemRepository : IItemRepository
             items.Add(MapItem(reader));
         return items;
     }
+
+    // ===== 本地条目（待办/随记，统一 items 表）=====
+
+    public async Task<IReadOnlyList<Item>> GetBySourceAsync(string source, ItemType? type = null, int limit = 1000, CancellationToken ct = default)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        var typeClause = type.HasValue ? " AND i.type = @type" : "";
+        cmd.CommandText = $@"
+            SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
+                   i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
+                   i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
+                   (SELECT GROUP_CONCAT(t.name, ',') FROM item_tags it
+                    JOIN tags t ON t.id = it.tag_id
+                    WHERE it.item_id = i.id) AS tag_names
+            FROM items i
+            WHERE i.source = @source{typeClause}
+            ORDER BY i.updated_at DESC LIMIT @limit;";
+        cmd.Parameters.AddWithValue("@source", source);
+        cmd.Parameters.AddWithValue("@limit", limit);
+        if (type.HasValue) cmd.Parameters.AddWithValue("@type", type.Value.ToString().ToLowerInvariant());
+        var items = new List<Item>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            items.Add(MapItem(reader));
+        return items;
+    }
+
+    public async Task DeleteBySourceIdAsync(string source, string sourceId, CancellationToken ct = default)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM items WHERE source = @source AND source_id = @sid;";
+        cmd.Parameters.AddWithValue("@source", source);
+        cmd.Parameters.AddWithValue("@sid", sourceId);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>
+    /// 写入本地条目（待办/随记）。与 <see cref="UpsertAsync"/> 不同：
+    /// 不写活动流、不跑 <c>UriNormalizer</c>（source_id 是自定义编码）、不跑 <c>LanguageDetector</c>，
+    /// 以免污染本地内容的 source_id 与完成态。
+    /// </summary>
+    public async Task UpsertLocalItemAsync(Item item, CancellationToken ct = default)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var searchText = string.IsNullOrEmpty(item.Title)
+            ? string.Empty
+            : StarMark.Abstractions.Text.CjkTokenizer.ExpandForIndex(item.Title + " ");
+        cmd.CommandText = @"
+            INSERT INTO items (type, source, source_id, title, subtitle, uri,
+                              search_text, description, stars_count, file_size,
+                              created_at, updated_at, synced_at, extra_json, hidden, notes)
+            VALUES (@type, @source, @source_id, @title, @subtitle, @uri,
+                    @search_text, @description, @stars_count, @file_size,
+                    @created_at, @updated_at, @synced_at, @extra_json, @hidden, @notes)
+            ON CONFLICT(source, source_id) DO UPDATE SET
+                type = excluded.type,
+                title = excluded.title,
+                subtitle = excluded.subtitle,
+                uri = excluded.uri,
+                search_text = excluded.search_text,
+                description = excluded.description,
+                updated_at = excluded.updated_at,
+                extra_json = excluded.extra_json
+            RETURNING id;";
+        cmd.Parameters.AddWithValue("@type", item.Type.ToString().ToLowerInvariant());
+        cmd.Parameters.AddWithValue("@source", item.Source);
+        cmd.Parameters.AddWithValue("@source_id", item.SourceId);
+        cmd.Parameters.AddWithValue("@title", item.Title);
+        cmd.Parameters.AddWithValue("@subtitle", item.Subtitle);
+        cmd.Parameters.AddWithValue("@uri", item.Uri);
+        cmd.Parameters.AddWithValue("@search_text", searchText);
+        cmd.Parameters.AddWithValue("@description", (object?)item.Description ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@stars_count", DBNull.Value);
+        cmd.Parameters.AddWithValue("@file_size", DBNull.Value);
+        cmd.Parameters.AddWithValue("@created_at", item.CreatedAt == 0 ? now : item.CreatedAt);
+        cmd.Parameters.AddWithValue("@updated_at", item.UpdatedAt == 0 ? now : item.UpdatedAt);
+        cmd.Parameters.AddWithValue("@synced_at", DBNull.Value);
+        cmd.Parameters.AddWithValue("@extra_json", (object?)item.ExtraJson ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@hidden", item.Hidden ? 1 : 0);
+        cmd.Parameters.AddWithValue("@notes", (object?)item.Notes ?? DBNull.Value);
+        var idObj = await cmd.ExecuteScalarAsync(ct);
+        if (idObj is long newId) item.Id = newId;
+    }
     // ===== 内部辅助 =====
 
     private static async Task UpsertOne(SqliteConnection conn, Item item, CancellationToken ct)

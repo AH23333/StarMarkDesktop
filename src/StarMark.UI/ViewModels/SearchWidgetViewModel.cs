@@ -141,6 +141,8 @@ public sealed class SearchWidgetViewModel
         ItemType.File => "📁",
         ItemType.Bookmark => "🔖",
         ItemType.GitHubStar => "⭐",
+        ItemType.Todo => "✅",
+        ItemType.Note => "📝",
         _ => "📌",
     };
 }

@@ -54,7 +54,11 @@ public sealed class SyncCoordinator
                 var items = await source.FetchAsync(new SyncContext(), ct);
                 if (items.Count > 0)
                 {
-                    await _repository.UpsertAsync(items, ct);
+                    // 防御：本地条目（待办/随记，source=local）永不参与同步覆盖。
+                    // 正常来源不会产出 local 条目，此处仅作保险，避免未来误覆盖。
+                    var syncable = items.Where(i => i.Source != ItemSources.Local).ToList();
+                    if (syncable.Count > 0)
+                        await _repository.UpsertAsync(syncable, ct);
                 }
                 StarLog.Info($"源 {source.SourceId} 拉取 {items.Count} 条");
                 results.Add(new SourceSyncResult

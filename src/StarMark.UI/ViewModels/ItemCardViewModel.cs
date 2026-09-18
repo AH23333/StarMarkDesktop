@@ -61,6 +61,8 @@ public partial class ItemCardViewModel : ObservableObject
         ItemType.Bookmark => "🔖",
         ItemType.File => "📄",
         ItemType.Clipboard => "📋",
+        ItemType.Todo => "✅",
+        ItemType.Note => "📝",
         _ => "•",
     };
 
