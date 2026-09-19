@@ -152,7 +152,7 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock Text="材质浓度"/>
-                                        <TextBlock Text="控制毛玻璃的染色与光亮度（DeskBox 的 Material Intensity）。" Style="{StaticResource SettingRowText}"/>
+                                        <TextBlock Text="控制毛玻璃的染色与光亮度（DeskBox 的 Material Intensity）；实色 / 纯色材质不使用毛玻璃，此项对其无效。" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
                                         <Slider Grid.Column="0" Minimum="0" Maximum="1" StepFrequency="0.02" Width="150"

@@ -46,8 +46,15 @@ public static class WidgetAppearanceEditor
         public WidgetAppearanceEditorResult(bool saved, WidgetAppearanceOverride? ov) { Saved = saved; Override = ov; }
     }
 
+    /// <param name="livePreview">外观字段（材质 / 颜色 / 边框 / 圆角）变更时的实时预览回调。</param>
+    /// <param name="liveTextPreview">
+    /// 仅「文本缩放」变更时的预览回调。单独一路是为了不重挂材质：
+    /// 拖字号滑杆若走 <paramref name="livePreview"/>，组件会顺带重铺背景，
+    /// 表现为「改字号却把背景色改了」。未传则回退到 <paramref name="livePreview"/>。
+    /// </param>
     public static Task<WidgetAppearanceEditorResult> ShowAsync(
-        Window owner, WidgetInstanceConfig config, Action<WidgetAppearanceOverride?> livePreview)
+        Window owner, WidgetInstanceConfig config, Action<WidgetAppearanceOverride?> livePreview,
+        Action<WidgetAppearanceOverride?>? liveTextPreview = null)
     {
         var tcs = new TaskCompletionSource<WidgetAppearanceEditorResult>();
         var current = config.Appearance;
@@ -73,6 +80,13 @@ public static class WidgetAppearanceEditor
 
         // 把当前工作副本套到组件（实时预览）；每个字段为 null 即「跟随全局」
         void Preview() => livePreview(BuildWorking());
+        // 只改了文本缩放：走单独通道，避免把材质/背景也重挂一遍
+        void PreviewTextOnly()
+        {
+            var ov = BuildWorking();
+            if (liveTextPreview is not null) liveTextPreview(ov);
+            else livePreview(ov);
+        }
         WidgetAppearanceOverride BuildWorking() => new()
         {
             Backdrop = wBackdrop,
@@ -487,7 +501,7 @@ public static class WidgetAppearanceEditor
         {
             if (suppressSliderReset) return;
             wScale = SnapTextScale(v);
-            Preview();   // 实时预览文本缩放（直接改 TextBlock.FontSize，文本本身缩放，留在布局内）
+            PreviewTextOnly();   // 实时预览文本缩放（只改 TextBlock.FontSize，不动材质与背景）
         }, out var sScale, v =>
         {
             var s = SnapTextScale(v);

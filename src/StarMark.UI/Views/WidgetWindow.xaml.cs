@@ -231,7 +231,10 @@ public sealed partial class WidgetWindow : Window
             // 用 SetWindowRgn 自定义半径（关掉 DWM 自带圆角，避免双重圆角）
             WindowInterop.SetDwmCornerPreference(this, WindowInterop.DWMWCP_DONOTROUND);
             var r = (int)(_currentCornerRadius * 2);
-            var hrgn = WindowInterop.CreateRoundRectRgn(0, 0, w, h, r, r);
+            // 右/下边界是**排他的**：CreateRoundRectRgn(0,0,w,h) 只覆盖到 w-1 / h-1，
+            // 于是右侧与下侧各被裁掉 1px —— 表现就是「右/下边框比左/上细，粗细 ≤1 时干脆看不见」。
+            // 这里 +1 把整窗纳入区域，四边边框才会一样粗。
+            var hrgn = WindowInterop.CreateRoundRectRgn(0, 0, w + 1, h + 1, r, r);
             if (hrgn != IntPtr.Zero) WindowInterop.SetWindowRgn(hwnd, hrgn, true);
         }
         catch { /* 取不到窗口句柄/尺寸时跳过，下次套用外观或尺寸变化会再算 */ }
@@ -484,11 +487,8 @@ public sealed partial class WidgetWindow : Window
             RootBorder.Background = surface;
             DragBar.Background = surface;
 
-            // 前景（文本）色：Border 自身无 Foreground，且 WinUI 3 对“非 TextElement 根容器（如 Border）”调用
-            // SetValue/ClearValue(TextElement.ForegroundProperty) 会触发原生 AccessViolation（0xc0000005，踩坑 #60），
-            // 该异常为 Corrupted-State，try/catch 捕获不到，直接杀进程。故改在内容容器 ContentHost（StackPanel）上设置：
-            // Panel 正常支持该可继承附加属性，且延迟到 Loaded 之后执行以确保原生 peer 已创建，彻底避开 AV。
-            ApplyForeground(ov);
+            // 前景（文本）色 + 文本缩放
+            ApplyTextAppearanceCore();
 
             // 边框色 / 粗细
             RootBorder.BorderBrush = !string.IsNullOrWhiteSpace(ov?.BorderColor)
@@ -526,6 +526,20 @@ public sealed partial class WidgetWindow : Window
             }
             catch { }
         }
+    }
+
+    /// <summary>
+    /// 只套用「文本相关」的外观（前景色 + 文本缩放），<b>不碰材质与背景</b>。
+    /// <para>
+    /// 调文本缩放时若走整块 <see cref="ApplyAppearanceCore"/>，会顺带把材质/背景重挂一遍 ——
+    /// 用户看到的就是「我只是改了字号，背景颜色却变了」，且在材质设置未即时生效时尤为明显。
+    /// 编辑器里拖字号滑杆只走这条路径。
+    /// </para>
+    /// </summary>
+    private void ApplyTextAppearanceCore()
+    {
+        try { ApplyForeground(_config.Appearance); }
+        catch (Exception ex) { StarLog.Error($"应用组件文本外观失败 ({_kind})", ex); }
     }
 
     /// <summary>
@@ -894,12 +908,21 @@ public sealed partial class WidgetWindow : Window
         try
         {
             var original = _config.Appearance;   // 取消时按此还原实时预览
-            var result = await WidgetAppearanceEditor.ShowAsync(this, _config, preview =>
-            {
-                // 实时预览：直接套用临时覆盖，不落盘
-                _config.Appearance = preview;
-                ApplyAppearanceCore();
-            });
+            var result = await WidgetAppearanceEditor.ShowAsync(
+                this,
+                _config,
+                preview =>
+                {
+                    // 实时预览：直接套用临时覆盖，不落盘
+                    _config.Appearance = preview;
+                    ApplyAppearanceCore();
+                },
+                textPreview =>
+                {
+                    // 只动字号的预览：不重挂材质 / 不重铺背景（见 ApplyTextAppearanceCore 的说明）
+                    _config.Appearance = textPreview;
+                    ApplyTextAppearanceCore();
+                });
             if (result.Saved)
             {
                 _config.Appearance = result.Override;     // 确定：写回并持久化
