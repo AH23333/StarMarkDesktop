@@ -16,7 +16,7 @@
             <helpers:ContainedTagColorConverter x:Key="ContainedTagColor"/>
             <helpers:TagSelectedBrushConverter x:Key="TagSelected"/>
 
-            <!-- 右键菜单 / 下拉浮 alte一层：统一采用半透明 acrylic 背景，
+            <!-- 右键菜单 / 下拉浮层：统一采用半透明 acrylic 背景，
                  让 MenuFlyout 弹层与窗口材质（亚克力 / 云母）观感一致，而不是一块不透明实色。
                  注意 MenuFlyout 由独立弹出层承载，拿不到主窗口的 SystemBackdrop，
                  故这里用同一套亚克力画笔模拟而非真正的窗口材质。 -->
