@@ -12,6 +12,11 @@
         <local:DoneDecorationConverter x:Key="DoneDecoration"/>
         <!-- 颜色标记 index → 画笔（对齐 DeskBox Todo 的 6 色：红橙黄绿蓝紫） -->
         <local:TodoColorConverter x:Key="TodoColor"/>
+        <!-- 截止日期行：空文本 → Collapsed。
+             必须在资源字典里声明：x:Bind 生成的 LookupConverter 走 ResourceDictionary.Lookup，
+             漏声明会在**渲染该行时**抛 COMException 0x80004005（找不到资源），
+             而它发生在 Measure 阶段、逃过业务 try/catch，直接把进程带崩（踩坑 #83）。 -->
+        <local:TextToVisibilityConverter x:Key="TextToVisibility"/>
     </UserControl.Resources>
 
     <StackPanel Padding="12,8,12,12" Spacing="4">

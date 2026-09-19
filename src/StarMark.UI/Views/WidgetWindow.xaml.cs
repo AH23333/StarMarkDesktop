@@ -1253,26 +1253,54 @@ public sealed partial class WidgetWindow : Window
     {
         if (_chromeMode != WidgetChromeMode.Compact || _peeking || _dragging) return;
         _peeking = true;
-        var scale = WindowInterop.GetScale(this);
-        // 悬停预览也用「统一胶囊宽度」：宽与收起态一致，仅向下展开内容高度，外观上「原地预览」；
-        // 只有「点击展开」(ToggleCompact→Standard) 才经 ExpandToNormal 恢复到组件原本的位置与尺寸。
-        var w = _capsuleWidth > 0 ? _capsuleWidth : UnifiedCapsuleWidth;
-        var h = (int)_config.Height > 0 ? (int)_config.Height : (int)(WidgetStorage.DefaultHeight(_kind) * scale);
-        // 以胶囊停靠位为锚点展开，保持 X/Y 不变（仅向下放大内容），外观上「原地预览」
-        var anchor = _capsuleRect ?? WindowInterop.GetWindowRect(this);
-        RootGrid.RowDefinitions[1].Height = new GridLength(1, GridUnitType.Star);
-        ContentScroll.Visibility = Visibility.Visible;
-        AppWindow.MoveAndResize(new RectInt32(anchor.X, anchor.Y, w, h));
+        try
+        {
+            var scale = WindowInterop.GetScale(this);
+            // 悬停预览也用「统一胶囊宽度」：宽与收起态一致，仅向下展开内容高度，外观上「原地预览」；
+            // 只有「点击展开」(ToggleCompact→Standard) 才经 ExpandToNormal 恢复到组件原本的位置与尺寸。
+            var w = _capsuleWidth > 0 ? _capsuleWidth : UnifiedCapsuleWidth;
+            var h = (int)_config.Height > 0 ? (int)_config.Height : (int)(WidgetStorage.DefaultHeight(_kind) * scale);
+            // 以胶囊停靠位为锚点展开，保持 X/Y 不变（仅向下放大内容），外观上「原地预览」
+            var anchor = _capsuleRect ?? WindowInterop.GetWindowRect(this);
+            if (RootGrid.RowDefinitions.Count > 1)
+                RootGrid.RowDefinitions[1].Height = new GridLength(1, GridUnitType.Star);
+            ContentScroll.Visibility = Visibility.Visible;
+            AppWindow.MoveAndResize(new RectInt32(anchor.X, anchor.Y, w, h));
+        }
+        catch (Exception ex)
+        {
+            // 预览期间内容首次参与布局；内容自身渲染失败（如 x:Bind 资源缺失抛在 Measure 阶段）
+            // 会把异常甩回这里。必须兜住并立刻收回：否则 _peeking 卡在 true，
+            // 胶囊再也收不回去，下一次悬停还会再炸一次（踩坑 #83）。
+            StarLog.Error($"展开胶囊悬停预览失败（{_kind}）", ex);
+            SafeCollapsePeek();
+        }
     }
 
     /// <summary>收回悬停预览：恢复胶囊尺寸与隐藏内容，并回到稳定停靠位（不再重算堆叠）。</summary>
     private void CollapsePeek()
     {
         if (!_peeking) return;
+        SafeCollapsePeek();
+    }
+
+    /// <summary>无条件收回预览（内部实现；预览态本身出问题时也要能把它收回去）。</summary>
+    private void SafeCollapsePeek()
+    {
         _peeking = false;
-        RootGrid.RowDefinitions[1].Height = new GridLength(0);
-        ContentScroll.Visibility = Visibility.Collapsed;
-        MoveToCapsule();   // 直接回到 _capsuleRect，不重算堆叠 → 不会把同列胶囊推走
+        try
+        {
+            if (RootGrid.RowDefinitions.Count > 1)
+                RootGrid.RowDefinitions[1].Height = new GridLength(0);
+            ContentScroll.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error($"隐藏胶囊预览内容失败（{_kind}）", ex);
+        }
+
+        try { MoveToCapsule(); }   // 直接回到 _capsuleRect，不重算堆叠 → 不会把同列胶囊推走
+        catch (Exception ex) { StarLog.Error($"收回胶囊失败（{_kind}）", ex); }
     }
 
     /// <summary>同步折叠按钮图标与右键菜单文案到当前外壳模式。</summary>
@@ -1299,6 +1327,9 @@ public sealed partial class WidgetWindow : Window
         // 必须先脱离桌面层，否则会残留指向 SHELLDLL_DefView 的悬挂所有者
         WidgetLayerService.DetachFromDesktopLayer(WindowInterop.GetHwnd(this));
         _layerAttached = false;
+        // 释放本窗口的亚克力/云母控制器：它们持有原生合成资源与 DWM 句柄，
+        // 只靠 ConditionalWeakTable 不会主动 Dispose（复用策略下控制器是长期存活的）。
+        WidgetAppearance.ReleaseBackdrop(this);
     }
 
     // ───────────────────────── 拖动 + 吸附（DeskBox CoordinatedMove 同款物理像素方案）─────────────────────────
