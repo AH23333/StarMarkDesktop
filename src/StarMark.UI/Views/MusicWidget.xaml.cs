@@ -79,8 +79,10 @@ public sealed partial class MusicWidget : UserControl
 
             if (!s_initialized)
             {
-                s_initialized = true;
+                // 仅在初始化成功后置位：若 SMTC 初始化抛错，保持 false 以便下次 Loaded 重试
+                // （旧写法先置 true 再 await，一次失败即永久禁用本进程所有音乐组件）。
                 await s_media.InitializeAsync();
+                s_initialized = true;
             }
             // 先备好计时器再渲染：Render 里会根据"是否在播放"决定启停，
             // 顺序反了就会出现"首次加载播放中却不走进度"。
