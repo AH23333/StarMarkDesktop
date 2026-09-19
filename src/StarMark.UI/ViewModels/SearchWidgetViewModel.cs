@@ -40,6 +40,10 @@ public sealed class SearchWidgetViewModel
     private readonly IItemRepository? _repo;
     private readonly SearchService? _search;
 
+    // 序列化搜索：ToggleTag/ClearTags 以 _ = RunSearchAsync() fire-and-forget，连点会交叠，
+    // 旧的 Clear→await→Add 与新的相撞导致结果翻倍。用 CTS 取消上一次、并在落结果前复查取消态。
+    private CancellationTokenSource? _searchCts;
+
     public ObservableCollection<TagChip> Tags { get; } = new();
     public ObservableCollection<SearchResultItem> Results { get; } = new();
 
@@ -89,50 +93,58 @@ public sealed class SearchWidgetViewModel
 
     public async Task RunSearchAsync()
     {
+        _searchCts?.Cancel();                 // 取消上一次；其自身 finally 负责 Dispose
+        var cts = _searchCts = new CancellationTokenSource();
+        var ct = cts.Token;
+
         Results.Clear();
         var selected = Tags.Where(t => t.Selected).Select(t => t.Name).ToList();
         var q = (Query ?? string.Empty).Trim();
 
-        // 统一搜索编排（与主窗口 SearchPage 同源）：FTS5 + Everything 实时源合并去重，
-        // 未入库的本地文件（Everything 虚拟条目）由此可达；
-        // 空关键词 + 标签退化为按标签浏览（SearchService 内部同规则）。
-        if (_search is not null)
-        {
-            try
-            {
-                var result = await _search.SearchAsync(q, new SearchFilter { Tags = selected, MaxResults = 200 }, CancellationToken.None);
-                foreach (var it in result.Items)
-                    Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type)));
-            }
-            catch (Exception ex)
-            {
-                StarMark.Abstractions.StarLog.Error("桌面搜索失败", ex);
-            }
-            return;
-        }
-
-        // 兜底：无 SearchService 时退回仓库直查（仅 FTS / 标签浏览，无实时源）
-        if (_repo is null) return;
         try
         {
+            // 统一搜索编排（与主窗口 SearchPage 同源）：FTS5 + Everything 实时源合并去重，
+            // 未入库的本地文件（Everything 虚拟条目）由此可达；
+            // 空关键词 + 标签退化为按标签浏览（SearchService 内部同规则）。
+            if (_search is not null)
+            {
+                var result = await _search.SearchAsync(q, new SearchFilter { Tags = selected, MaxResults = 200 }, ct);
+                if (ct.IsCancellationRequested) return;   // 已被更新的搜索取代，丢弃本次结果（即便 provider 未提前中断）
+                foreach (var it in result.Items)
+                    Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type)));
+                return;
+            }
+
+            // 兜底：无 SearchService 时退回仓库直查（仅 FTS / 标签浏览，无实时源）
+            if (_repo is null) return;
             IReadOnlyList<Item> items;
             if (string.IsNullOrEmpty(q))
             {
                 // 仅按标签浏览（AND 语义）
-                items = await _repo.GetAllAsync(new BrowseFilter { TagFilters = selected, Limit = 200 }, CancellationToken.None);
+                items = await _repo.GetAllAsync(new BrowseFilter { TagFilters = selected, Limit = 200 }, ct);
             }
             else
             {
-                var result = await _repo.SearchAsync(q, new SearchFilter { Tags = selected, MaxResults = 200 }, CancellationToken.None);
+                var result = await _repo.SearchAsync(q, new SearchFilter { Tags = selected, MaxResults = 200 }, ct);
                 items = result.Items;
             }
-
+            if (ct.IsCancellationRequested) return;
             foreach (var it in items)
                 Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type)));
+        }
+        catch (OperationCanceledException)
+        {
+            // 被更新的搜索取代：正常丢弃，不记为错误
         }
         catch (Exception ex)
         {
             StarMark.Abstractions.StarLog.Error("桌面搜索失败", ex);
+        }
+        finally
+        {
+            cts.Dispose();
+            // 只有"仍是本轮"时才清空字段，避免下一轮对已 Dispose 的 CTS 调 Cancel 抛 ObjectDisposedException。
+            if (ReferenceEquals(_searchCts, cts)) _searchCts = null;
         }
     }
 

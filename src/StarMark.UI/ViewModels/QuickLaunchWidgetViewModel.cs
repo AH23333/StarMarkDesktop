@@ -108,10 +108,13 @@ public sealed partial class QuickLaunchWidgetViewModel : ObservableObject
         }
     }
 
+    private CancellationTokenSource? _searchCts;
+
     /// <summary>组件内直搜：复用 SearchService 编排，展示前 12 条；空查询清空结果。</summary>
     public async Task RunSearchAsync()
     {
         var q = (SearchQuery ?? string.Empty).Trim();
+        _searchCts?.Cancel();                 // 取消上一次（含转空查询时）；各 run 在 finally 里 Dispose 自己的
         SearchResults.Clear();
         HasSearchResults = false;
         if (string.IsNullOrEmpty(q))
@@ -120,18 +123,20 @@ public sealed partial class QuickLaunchWidgetViewModel : ObservableObject
             return;
         }
 
+        var cts = _searchCts = new CancellationTokenSource();
+        var ct = cts.Token;
         IsSearching = true;
         try
         {
             IReadOnlyList<Item> items;
             if (_search is not null)
             {
-                var result = await _search.SearchAsync(q, new SearchFilter { MaxResults = 12 }, CancellationToken.None);
+                var result = await _search.SearchAsync(q, new SearchFilter { MaxResults = 12 }, ct);
                 items = result.Items;
             }
             else if (_repo is not null)
             {
-                var result = await _repo.SearchAsync(q, new SearchFilter { MaxResults = 12 }, CancellationToken.None);
+                var result = await _repo.SearchAsync(q, new SearchFilter { MaxResults = 12 }, ct);
                 items = result.Items;
             }
             else
@@ -139,9 +144,14 @@ public sealed partial class QuickLaunchWidgetViewModel : ObservableObject
                 items = Array.Empty<Item>();
             }
 
+            if (ct.IsCancellationRequested) return;   // 更新的查询已接管，丢弃本次结果
             foreach (var it in items.Take(12))
                 SearchResults.Add(new ItemCardViewModel(it));
             HasSearchResults = SearchResults.Count > 0;
+        }
+        catch (OperationCanceledException)
+        {
+            // 被更新的查询取代：正常丢弃
         }
         catch (Exception ex)
         {
@@ -149,7 +159,8 @@ public sealed partial class QuickLaunchWidgetViewModel : ObservableObject
         }
         finally
         {
-            IsSearching = false;
+            cts.Dispose();
+            if (ReferenceEquals(_searchCts, cts)) IsSearching = false;   // 仅当仍是本轮才复位，避免闪烁/误关
         }
     }
 
