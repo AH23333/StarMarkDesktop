@@ -250,6 +250,11 @@ public sealed partial class WidgetWindow : Window
         }
 
         AppWindow.Show();
+        // 关键：仅 AppWindow.Show() 对「挂在桌面图标层（所有者=Explorer SHELLDLL_DefView）」的窗口
+        // 常常无法把窗口重新点亮 —— 这是 WinUI3 的已知坑（AppWindow.Show 不总触发真实的 SW_SHOW，
+        // 跨进程 owner 的窗口尤甚），表现为「隐藏后再显示大多数时候点不出来」。DeskBox 同款做法：
+        // 显式补一发原生 ShowWindow(SW_SHOWNOACTIVATE)，确保窗口真正点亮又不抢焦点。
+        WindowInterop.ShowWindow(WindowInterop.GetHwnd(this), WindowInterop.SW_SHOWNOACTIVATE);
         // 置顶与"贴在桌面层"互斥：置顶时作为普通顶层窗口 + WS_EX_TOPMOST 真正常驻最前；
         // 默认未开启时挂到桌面图标层（落在应用窗口之下、桌面图标之上）。由 ApplyTopmost 决定挂载/脱离。
         ApplyTopmost();
@@ -275,6 +280,9 @@ public sealed partial class WidgetWindow : Window
     public void HideTemporary()
     {
         PersistBounds();
+        // 与 Reveal 对称：AppWindow.Hide() 对跨进程 owner（桌面图标层）的窗口同样不可靠，
+        // 显式补原生 ShowWindow(SW_HIDE) 确保真正隐藏，避免下次点亮时状态错乱。
+        WindowInterop.ShowWindow(WindowInterop.GetHwnd(this), WindowInterop.SW_HIDE);
         AppWindow.Hide();
         if (_kind == WidgetKind.Clock) _clockWidget?.UpdateRunning(AppWindow.IsVisible);
     }

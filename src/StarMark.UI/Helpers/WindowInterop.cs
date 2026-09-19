@@ -41,6 +41,8 @@ internal static class WindowInterop
     public const uint SWP_NOOWNERZORDER = 0x0200;
     public const uint SWP_SHOWWINDOW = 0x0040;
 
+    public const int SW_HIDE = 0;
+    public const int SW_SHOWNOACTIVATE = 4;
     public const int SW_SHOW = 5;
     public const int SW_RESTORE = 9;
 
