@@ -258,4 +258,81 @@ public class WeatherTests
         Assert.True(WeatherLayoutMath.TemperatureFontSize(WeatherLayoutLevel.Compact) <
                     WeatherLayoutMath.TemperatureFontSize(WeatherLayoutLevel.Expanded));
     }
+
+    // ── 预报 JSON 解析（纯函数，喂假响应即可覆盖时区/缺测码，不联网）──
+
+    /// <summary>一份最小 Open-Meteo 响应：城市在 UTC+1，含 null 天气码与墙上时间戳。</summary>
+    private const string SampleJson = """
+    {
+      "latitude": 51.5, "utc_offset_seconds": 3600, "timezone": "Europe/London",
+      "current": {
+        "time": "2026-09-20T13:00", "temperature_2m": 20, "relative_humidity_2m": 50,
+        "apparent_temperature": 19, "is_day": 1, "weather_code": null,
+        "wind_speed_10m": 10, "precipitation": 0, "uv_index": 3, "surface_pressure": 1010
+      },
+      "daily": {
+        "time": ["2026-09-20"], "weather_code": [null],
+        "temperature_2m_max": [22], "temperature_2m_min": [12],
+        "precipitation_probability_max": [10], "uv_index_max": [5],
+        "sunrise": ["2026-09-20T06:45"], "sunset": ["2026-09-20T19:15"]
+      },
+      "hourly": {
+        "time": ["2026-09-20T13:00", "2026-09-20T14:00"],
+        "temperature_2m": [20, 21], "weather_code": [null, 3]
+      }
+    }
+    """;
+
+    private static WeatherCity London() => new() { Name = "London", Latitude = 51.5, Longitude = -0.12 };
+
+    [Fact]
+    public void ParseReport_NullWeatherCode_BecomesUnknownNotSunny()
+    {
+        // 回归：null 天气码绝不能落到 0（0=WMO「晴」），否则"无数据"会被画成大晴天。
+        var report = OpenMeteoClient.ParseReport(SampleJson, London());
+        Assert.NotNull(report);
+        Assert.Equal(OpenMeteoClient.WeatherCodeUnknown, report!.Now.Code);
+        Assert.Equal(OpenMeteoClient.WeatherCodeUnknown, report.Days[0].Code);
+        Assert.Equal(OpenMeteoClient.WeatherCodeUnknown, report.Hours[0].Code);
+        // 非 null 的码要原样保留
+        Assert.Equal(3, report.Hours[1].Code);
+    }
+
+    [Fact]
+    public void ParseReport_StampsHourlyWithCityOffset()
+    {
+        // 逐时是城市墙上时间，按 utc_offset_seconds 还原成真实瞬时。
+        // 这样跨时区城市的"今日逐时"窗口才不会与 DateTimeOffset.Now 错位比较（旧代码按本机时区解析）。
+        var report = OpenMeteoClient.ParseReport(SampleJson, London());
+        Assert.NotNull(report);
+        var hour = report!.Hours[0].Time;
+        Assert.Equal(TimeSpan.FromHours(1), hour.Offset);
+        Assert.Equal(new DateTimeOffset(2026, 9, 20, 13, 0, 0, TimeSpan.FromHours(1)), hour);
+    }
+
+    [Fact]
+    public void ParseReport_SunriseKeepsCityWallClockAndOffset()
+    {
+        var report = OpenMeteoClient.ParseReport(SampleJson, London());
+        Assert.NotNull(report);
+        var sunrise = report!.Days[0].Sunrise;
+        Assert.NotNull(sunrise);
+        // 展示层用 ToString("HH:mm")，应打出城市本地钟点 06:45，不被任何时区二次平移
+        Assert.Equal("06:45", sunrise!.Value.ToString("HH:mm", CultureInfo.InvariantCulture));
+        Assert.Equal(TimeSpan.FromHours(1), sunrise.Value.Offset);
+    }
+
+    [Fact]
+    public void ParseReport_MissingOffsetField_FallsBackToZero()
+    {
+        // 万一响应没有 utc_offset_seconds，回落 0（UTC）而非崩溃，且仍产出可用报告。
+        var json = SampleJson.Replace("\"utc_offset_seconds\": 3600,", "");
+        var report = OpenMeteoClient.ParseReport(json, London());
+        Assert.NotNull(report);
+        Assert.Equal(TimeSpan.Zero, report!.Hours[0].Time.Offset);
+    }
+
+    [Fact]
+    public void ParseReport_MalformedJson_ReturnsNull()
+        => Assert.Null(OpenMeteoClient.ParseReport("{ not json", London()));
 }

@@ -225,6 +225,13 @@ public sealed class OpenMeteoClient : IDisposable
     private const string ForecastUrl = "https://api.open-meteo.com/v1/forecast";
     private const string GeocodingUrl = "https://geocoding-api.open-meteo.com/v1/search";
 
+    /// <summary>
+    /// 缺测天气码哨兵。刻意与 <c>StarMark.Core.Widgets.WeatherCode.Unknown</c> 取同一值（int.MinValue），
+    /// 这样展示层 Describe/Emoji 会落到「未知」分支，而不是被 0 误判成晴天。
+    /// Integrations 层不引用 Core，故这里以常量而非类型引用维持约定，改值时两处需同步。
+    /// </summary>
+    public const int WeatherCodeUnknown = int.MinValue;
+
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -269,7 +276,7 @@ public sealed class OpenMeteoClient : IDisposable
         try
         {
             var json = await _http.GetStringAsync(BuildGeocodingUrl(query, count, language), ct);
-            var doc = JsonDocument.Parse(json);
+            using var doc = JsonDocument.Parse(json);
             if (!doc.RootElement.TryGetProperty("results", out var arr) ||
                 arr.ValueKind != JsonValueKind.Array) return [];
 
@@ -308,8 +315,36 @@ public sealed class OpenMeteoClient : IDisposable
         {
             var url = BuildForecastUrl(city.Latitude, city.Longitude, forecastDays);
             var json = await _http.GetStringAsync(url, ct);
+            return ParseReport(json, city);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 解析 Open-Meteo 预报 JSON（纯函数，不发网络，可离线单测）。
+    /// 关键：所有时间戳都是「城市本地墙上时间」，必须按 <c>utc_offset_seconds</c> 还原成真实瞬时，
+    /// 否则跨时区城市（查询城市 ≠ 本机时区）的"今日逐时"窗口会错位甚至全空。
+    /// </summary>
+    public static WeatherReport? ParseReport(string json, WeatherCity city)
+    {
+        if (city is null) return null;
+        try
+        {
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
+
+            // timezone=auto 一定回该字段；万一缺失回落 0（当作 UTC），至少是自洽的一致的偏移。
+            var cityOffset = root.TryGetProperty("utc_offset_seconds", out var off) &&
+                             off.ValueKind == JsonValueKind.Number
+                ? TimeSpan.FromSeconds(off.GetDouble())
+                : TimeSpan.Zero;
 
             var now = new WeatherNow();
             if (root.TryGetProperty("current", out var cur))
@@ -318,7 +353,7 @@ public sealed class OpenMeteoClient : IDisposable
                 now.FeelsLikeC = GetDouble(cur, "apparent_temperature");
                 now.Humidity = (int)GetDouble(cur, "relative_humidity_2m");
                 now.WindSpeedKmh = GetDouble(cur, "wind_speed_10m");
-                now.Code = (int)GetDouble(cur, "weather_code");
+                now.Code = GetCode(cur, "weather_code");
                 now.IsDay = GetDouble(cur, "is_day") >= 1;
                 now.PrecipitationMm = GetDouble(cur, "precipitation");
                 now.UvIndex = GetDouble(cur, "uv_index");
@@ -331,7 +366,7 @@ public sealed class OpenMeteoClient : IDisposable
                 var times = daily.TryGetProperty("time", out var t) && t.ValueKind == JsonValueKind.Array
                     ? t.EnumerateArray().Select(x => x.GetString() ?? string.Empty).ToList()
                     : [];
-                var codes = ReadNumberArray(daily, "weather_code");
+                var codes = ReadCodeArray(daily, "weather_code");
                 var maxs = ReadNumberArray(daily, "temperature_2m_max");
                 var mins = ReadNumberArray(daily, "temperature_2m_min");
                 var pops = ReadNumberArray(daily, "precipitation_probability_max");
@@ -345,14 +380,14 @@ public sealed class OpenMeteoClient : IDisposable
                     days.Add(new WeatherDay
                     {
                         Date = DateOnly.TryParse(times[i], out var d) ? d : default,
-                        Code = i < codes.Count ? (int)codes[i] : 0,
+                        Code = i < codes.Count ? codes[i] : WeatherCodeUnknown,
                         MaxC = i < maxs.Count ? maxs[i] : 0,
                         MinC = i < mins.Count ? mins[i] : 0,
                         PrecipitationProbabilityMax = i < pops.Count ? (int)Math.Round(pops[i]) : 0,
                         UvIndexMax = i < uvs.Count ? uvs[i] : 0,
                         // 极昼/极夜时 Open-Meteo 给 null，保持 null 让展示层跳过这一项
-                        Sunrise = i < sunrises.Count ? ParseLocalStamp(sunrises[i]) : null,
-                        Sunset = i < sunsets.Count ? ParseLocalStamp(sunsets[i]) : null,
+                        Sunrise = i < sunrises.Count ? ParseLocalStamp(sunrises[i], cityOffset) : null,
+                        Sunset = i < sunsets.Count ? ParseLocalStamp(sunsets[i], cityOffset) : null,
                     });
                 }
             }
@@ -364,16 +399,17 @@ public sealed class OpenMeteoClient : IDisposable
                     ? ht.EnumerateArray().Select(x => x.GetString() ?? string.Empty).ToList()
                     : [];
                 var hourTemps = ReadNumberArray(hourly, "temperature_2m");
-                var hourCodes = ReadNumberArray(hourly, "weather_code");
+                var hourCodes = ReadCodeArray(hourly, "weather_code");
 
                 for (var i = 0; i < stamps.Count; i++)
                 {
-                    if (!DateTimeOffset.TryParse(stamps[i], CultureInfo.InvariantCulture, out var when)) continue;
+                    // 逐时时间是城市本地墙上时间：按城市偏移还原，跨时区才不会与 DateTimeOffset.Now 错位比较
+                    if (!DateTime.TryParse(stamps[i], CultureInfo.InvariantCulture, DateTimeStyles.None, out var wall)) continue;
                     hours.Add(new WeatherHour
                     {
-                        Time = when,
+                        Time = new DateTimeOffset(wall, cityOffset),
                         TemperatureC = i < hourTemps.Count ? hourTemps[i] : 0,
-                        Code = i < hourCodes.Count ? (int)hourCodes[i] : 0,
+                        Code = i < hourCodes.Count ? hourCodes[i] : WeatherCodeUnknown,
                     });
                 }
             }
@@ -387,10 +423,6 @@ public sealed class OpenMeteoClient : IDisposable
                 Hours = hours,
                 FetchedAt = DateTimeOffset.Now,
             };
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
         }
         catch
         {
@@ -410,14 +442,14 @@ public sealed class OpenMeteoClient : IDisposable
     }
 
     /// <summary>
-    /// 日出/日落是"本地墙上时间"字符串（不含时区后缀）。按 unspecified 解析，
-    /// 别让 DateTimeOffset 把它当 UTC 转成本地时间——那会平白差 8 小时。
+    /// 日出/日落是"城市本地墙上时间"字符串（不含时区后缀）。按 unspecified 解析后套上<b>城市</b>偏移，
+    /// 与逐时口径一致——展示层 ToString("HH:mm") 打出的就是该城市的墙上钟点，不会被本机时区二次平移。
     /// </summary>
-    private static DateTimeOffset? ParseLocalStamp(string raw)
+    private static DateTimeOffset? ParseLocalStamp(string raw, TimeSpan cityOffset)
     {
         if (string.IsNullOrWhiteSpace(raw)) return null;
         return DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var when)
-            ? new DateTimeOffset(when, TimeSpan.Zero)
+            ? new DateTimeOffset(when, cityOffset)
             : null;
     }
 
@@ -433,11 +465,31 @@ public sealed class OpenMeteoClient : IDisposable
         return list;
     }
 
+    /// <summary>
+    /// 天气码专用数组读取。不能复用 <see cref="ReadNumberArray"/>：那里 null→0 对温度无害，
+    /// 但 0 是 WMO「晴」——缺测天气码若落到 0 会把"无数据"伪装成晴天。故 null 一律映射到
+    /// <see cref="WeatherCodeUnknown"/>（与 Core 层 WeatherCode.Unknown 同一约定值，展示为「未知」）。
+    /// </summary>
+    private static List<int> ReadCodeArray(JsonElement parent, string name)
+    {
+        var list = new List<int>();
+        if (!parent.TryGetProperty(name, out var arr) || arr.ValueKind != JsonValueKind.Array) return list;
+        foreach (var e in arr.EnumerateArray())
+        {
+            list.Add(e.ValueKind == JsonValueKind.Number ? (int)e.GetDouble() : WeatherCodeUnknown);
+        }
+        return list;
+    }
+
     private static string GetString(JsonElement e, string name) =>
         e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? string.Empty : string.Empty;
 
     private static double GetDouble(JsonElement e, string name) =>
         e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0;
+
+    /// <summary>当前天气码：缺测（字段缺失或非数字/null）返回未知哨兵，而不是 0（晴）。</summary>
+    private static int GetCode(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? (int)v.GetDouble() : WeatherCodeUnknown;
 
     private static long GetLong(JsonElement e, string name) =>
         e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? (long)v.GetDouble() : 0;
