@@ -66,25 +66,78 @@ public sealed class SettingsStore : IPerformanceSettingsSource
 
     public SettingsStore(string? path = null) => _path = path ?? ResolveSettingsPath();
 
+    // 快照缓存：避免每个 LoadXxx 都 ReadAllText+整档反序列化（开一次设置页曾达十余次磁盘读）。
+    // 以「最后写入时间 + 文件长度」为键，用户手改 settings.json 时仍能廉价感知并自动失效；Save 后主动失效。
+    private readonly object _cacheGate = new();
+    private SettingsData? _cached;
+    private bool _hasCache;
+    private DateTime _cachedStampUtc;
+    private long _cachedLength;
+
     private SettingsData? Load()
+    {
+        lock (_cacheGate)
+        {
+            try
+            {
+                if (!File.Exists(_path))
+                {
+                    _hasCache = false;
+                    return null;
+                }
+
+                var fi = new FileInfo(_path);
+                if (_hasCache && fi.LastWriteTimeUtc == _cachedStampUtc && fi.Length == _cachedLength)
+                    return _cached;
+
+                var data = JsonSerializer.Deserialize<SettingsData>(File.ReadAllText(_path));
+                _cached = data;
+                _cachedStampUtc = fi.LastWriteTimeUtc;
+                _cachedLength = fi.Length;
+                _hasCache = true;
+                return data;
+            }
+            catch (Exception ex)
+            {
+                // 解析失败绝不能静默：它会让所有设置回落默认、看起来像"首次运行"。
+                // 记日志并保留坏文件（.bad）供排查/恢复；移走原文件后 File.Exists 变 false，天然去重不刷屏。
+                StarLog.Error($"读取设置文件失败，回落默认设置：{_path}", ex);
+                TryPreserveCorruptSettings();
+                _hasCache = false;
+                return null;
+            }
+        }
+    }
+
+    private void TryPreserveCorruptSettings()
     {
         try
         {
             if (File.Exists(_path))
-                return JsonSerializer.Deserialize<SettingsData>(File.ReadAllText(_path));
+                File.Move(_path, _path + ".bad", overwrite: true);
         }
-        catch { }
-        return null;
+        catch { /* 尽力保留，失败不影响回落默认 */ }
     }
 
     private void Save(SettingsData data)
     {
-        try
+        lock (_cacheGate)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            File.WriteAllText(_path, JsonSerializer.Serialize(data));
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+                // 先写临时文件、再原子重命名覆盖：避免写盘中途崩溃把 settings.json 截断成非法 JSON
+                // （那会触发上面的"回落默认"路径，把用户全部设置静默清空）。
+                var tmp = _path + ".tmp";
+                File.WriteAllText(tmp, JsonSerializer.Serialize(data));
+                File.Move(tmp, _path, overwrite: true);
+                _hasCache = false; // 落盘后失效，下次 Load 读到最新 mtime/len
+            }
+            catch (Exception ex)
+            {
+                StarLog.Error($"写入设置文件失败：{_path}", ex);
+            }
         }
-        catch { }
     }
 
     public ThemePreference LoadTheme() => Load() is { } d && Enum.IsDefined(typeof(ThemePreference), d.Theme)

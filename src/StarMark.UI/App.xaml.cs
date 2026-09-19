@@ -148,7 +148,7 @@ public partial class App : Application
         Services = services.BuildServiceProvider();
 
         // 性能模式设置来源注入（MemoryReclaimer 经 PerformanceSettingsPolicy 读取预算）
-        try { PerformanceSettingsPolicy.Provider = new SettingsStore(); }
+        try { PerformanceSettingsPolicy.Provider = fileSettings; }
         catch (Exception pex) { StarLog.Error("性能模式设置来源注入失败", pex); }
 
         // Everything 就绪流程：SDK DLL 缺失自动下载；主程序未运行时自动安装（用户要求默认安装；失败静默降级）
@@ -165,7 +165,7 @@ public partial class App : Application
         try
         {
             // 应用级主题（必须在首个窗口创建前设置）
-            ThemeManager.ApplyAppLevelTheme(new SettingsStore().LoadTheme());
+            ThemeManager.ApplyAppLevelTheme(fileSettings.LoadTheme());
 
             // 2. 执行数据库迁移
             Services.GetRequiredService<StarMark.Data.MigrationRunner>().EnsureSchema();
@@ -203,7 +203,7 @@ public partial class App : Application
             {
                 var hotkey = Services.GetRequiredService<HotkeyService>();
                 var widgetManager = Services.GetRequiredService<WidgetManager>();
-                var settings = new SettingsStore();
+                var settings = fileSettings;
 
                 hotkey.RegisterHandler(HotkeyActions.MainToggle, () => { ToggleMainWindow(); return Task.CompletedTask; });
                 hotkey.RegisterHandler(HotkeyActions.MainShow, () => { PresentMainWindow(); return Task.CompletedTask; });
