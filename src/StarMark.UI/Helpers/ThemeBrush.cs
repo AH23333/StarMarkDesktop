@@ -25,17 +25,27 @@ public static class ThemeBrush
 
     public static Brush? Resolve(bool dark, string key)
     {
-        var themeKey = dark ? "Dark" : "Light";
+        // 深色先查自定义调色板的 "Dark" 桶，再回退到 WinUI 内置资源（XamlControlsResources /
+        // generic.xaml）实际使用的 "Default" 桶——内置主题字典只有 "Light" / "Default"，没有 "Dark"，
+        // 只查 "Dark" 会让 ApplicationPageBackgroundThemeBrush / TextFillColor* / SystemFillColor* /
+        // AccentFillColor* 等内置画笔在深色下全部落空 → 回退到冻结的应用级资源 → 深色误判为浅色。
+        var themeKeys = dark ? DarkKeys : LightKeys;
         var app = Application.Current.Resources;
 
-        if (FindInDict(app, themeKey, key, out var brush)) return brush;
-        foreach (var md in app.MergedDictionaries)
-            if (FindInDict(md, themeKey, key, out brush)) return brush;
+        foreach (var themeKey in themeKeys)
+        {
+            if (FindInDict(app, themeKey, key, out var brush)) return brush;
+            foreach (var md in app.MergedDictionaries)
+                if (FindInDict(md, themeKey, key, out brush)) return brush;
+        }
 
         // 兜底：应用级资源（跟随冻结的应用主题，仅作最后手段）
         if (app.TryGetValue(key, out var fallback) && fallback is Brush fb) return fb;
         return null;
     }
+
+    private static readonly string[] LightKeys = { "Light" };
+    private static readonly string[] DarkKeys = { "Dark", "Default" };
 
     private static bool FindInDict(ResourceDictionary dict, string themeKey, string key, out Brush? brush)
     {

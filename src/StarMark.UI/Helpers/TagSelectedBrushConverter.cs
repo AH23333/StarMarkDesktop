@@ -11,27 +11,21 @@ namespace StarMark.UI.Helpers;
 /// </summary>
 public sealed class TagSelectedBrushConverter : IValueConverter
 {
-    private static Brush? Resolve(string key, Brush? fallback)
-    {
-        if (Microsoft.UI.Xaml.Application.Current?.Resources.TryGetValue(key, out var value) == true && value is Brush brush)
-            return brush;
-        return fallback;
-    }
-
     public object Convert(object value, Type targetType, object parameter, string language)
     {
         var selected = value is bool b && b;
+        // 按「窗口当前实际主题」解析（应用级主题启动后冻结，直接读 Application.Current.Resources
+        // 会在浅色模式下解析出深色画笔 → 标签/卡片浅底变黑）。
+        var dark = ThemeManager.IsAppDark();
         if (!selected)
         {
-            // 未选中：卡片底/分割线在深浅色间差异很小，走应用级资源即可
+            // 未选中：卡片底/分割线在深浅色间差异很小，但仍须按当前主题取，避免浅色下取到深色底
             return parameter as string == "border"
-                ? Resolve("DividerStrokeColorDefaultBrush", new SolidColorBrush(Colors.Gray))!
-                : Resolve("CardBackgroundFillColorDefaultBrush", new SolidColorBrush(Colors.Transparent))!;
+                ? ThemeBrush.Resolve(dark, "DividerStrokeColorDefaultBrush") ?? new SolidColorBrush(Colors.Gray)
+                : ThemeBrush.Resolve(dark, "CardBackgroundFillColorDefaultBrush") ?? new SolidColorBrush(Colors.Transparent);
         }
 
-        // 选中：半透明强调色底 + 强调色边框，按当前实际主题解析（应用级主题
-        // 启动后冻结，浅色模式下会解析出深色画笔）；统一用 ThemeBrush 调色板
-        var dark = ThemeManager.IsAppDark();
+        // 选中：半透明强调色底 + 强调色边框，统一用 ThemeBrush 调色板按实际主题解析
         return parameter as string == "border"
             ? ThemeBrush.Resolve(dark, "AppAccentBrush") ?? new SolidColorBrush(Colors.CornflowerBlue)
             : ThemeBrush.Resolve(dark, "AppAccentSoftBrush") ?? new SolidColorBrush(Colors.CornflowerBlue);
