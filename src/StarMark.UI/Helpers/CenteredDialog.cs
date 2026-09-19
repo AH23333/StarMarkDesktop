@@ -323,8 +323,8 @@ public static class CenteredDialog
         MountCore(win, grid, DialogWidth, height, owner, onClosed);
     }
 
-    /// <summary>把卡片（Border 套内容）放进整窗可拖拽的 Grid，并居中、置顶、去默认边框、圆角。</summary>
-    private static void MountCore(Window win, Grid root, double width, double height, Window? owner, System.Action onClosed)
+    /// <summary>把卡片（Border 套内容）放进整窗可拖拽的容器，并居中、置顶、去默认边框、圆角。</summary>
+    private static void MountCore(Window win, FrameworkElement root, double width, double height, Window? owner, System.Action onClosed)
     {
         win.Content = root;
         // 必须显式把窗口根 RequestedTheme 套成「用户存储主题」：新建窗口默认继承已冻结的应用级主题，
@@ -332,7 +332,6 @@ public static class CenteredDialog
         // 不在这里补设就会让弹窗停留在旧主题——这正是「弹窗始终为深色」的根因之一。
         try { ThemeManager.Apply(win, new SettingsStore().LoadTheme()); } catch { }
         WindowInterop.RemoveDefaultWindowFrame(win);
-        WindowInterop.ApplyRoundedCorners(win);
         MakeWindowDraggable(win, root);   // 整窗可拖动（避开输入控件）
         var scale = WindowInterop.GetScale(win);
         var w = (int)(width * scale);
@@ -343,6 +342,10 @@ public static class CenteredDialog
         var y = work.Y + Math.Max(0, (work.Height - h) / 2);
         win.AppWindow.MoveAndResize(new RectInt32(x, y, w, h));
 
+        // 必须在 MoveAndResize 之后按真实物理尺寸裁圆角：先裁再缩放会让区域与窗口不符。
+        // SetWindowRgn 真正物理裁切无黑角，取代 DWM 仅靠视觉圆角（无边框窗口会留下四角黑块）。
+        WindowInterop.SetRoundedWindowRegion(win, 10);
+
         win.Closed += (_, _) => onClosed();
         win.Activate();
         WindowInterop.SetTopmost(win, true);
@@ -351,10 +354,11 @@ public static class CenteredDialog
         WindowInterop.SetTopmost(win, false);
     }
 
-    /// <summary>卡片（带边框/圆角/背景的 Border）外再套一层同色 Grid，作拖拽落点。</summary>
-    private static Grid BuildCard(UIElement content)
+    /// <summary>卡片：单张圆角 Border（背景 + 边框 + 圆角），直接作为窗口根内容——
+    /// 整窗按同一半径裁成圆角矩形，避免「白色大圆角 + 深灰小圆角」双层叠加的灰色观感。</summary>
+    private static Border BuildCard(UIElement content)
     {
-        var card = new Border
+        return new Border
         {
             Background = Brush("CardBackgroundFillColorDefaultBrush", Colors.White),
             BorderBrush = Brush("CardStrokeColorDefaultBrush", Colors.Gray),
@@ -362,12 +366,6 @@ public static class CenteredDialog
             CornerRadius = new CornerRadius(10),
             Padding = new Thickness(20, 16, 20, 16),
             Child = content,
-        };
-
-        return new Grid
-        {
-            Background = Brush("ApplicationPageBackgroundThemeBrush", Colors.White),
-            Children = { card },
         };
     }
 

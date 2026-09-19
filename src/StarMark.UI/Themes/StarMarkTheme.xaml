@@ -32,6 +32,10 @@
             <SolidColorBrush x:Key="WidgetDropHintBrush" Color="#330067C0"/>
             <SolidColorBrush x:Key="WidgetSubtleFillBrush" Color="#0F000000"/>
             <SolidColorBrush x:Key="WidgetDividerBrush" Color="#14000000"/>
+            <!-- 弹窗卡片（CenteredDialog / 外观编辑器）专用画笔：
+                 显式定义，避免回退到冻结的应用级资源（浅色模式下误解析为深色 → 灰底弹窗）。 -->
+            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#FBFBFB"/>
+            <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#E6E6E6"/>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Default">
             <SolidColorBrush x:Key="AppAccentBrush" Color="#4CC2FF"/>
@@ -46,6 +50,9 @@
             <SolidColorBrush x:Key="WidgetDropHintBrush" Color="#334CC2FF"/>
             <SolidColorBrush x:Key="WidgetSubtleFillBrush" Color="#1FFFFFFF"/>
             <SolidColorBrush x:Key="WidgetDividerBrush" Color="#14FFFFFF"/>
+            <!-- 弹窗卡片（CenteredDialog / 外观编辑器）专用画笔：显式定义，深/浅色各自正确。 -->
+            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#2C2C2C"/>
+            <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#434343"/>
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 
