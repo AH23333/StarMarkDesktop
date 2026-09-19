@@ -24,6 +24,20 @@ public sealed class WidgetLayoutEntry
     public double Height { get; set; }
 
     public bool Topmost { get; set; }
+
+    /// <summary>
+    /// 保存布局时该组件实例的自定义外观（材质/背景色/前景色/边框/圆角/文本缩放）。
+    /// <para>
+    /// 应用布局时据此决定组件用哪套主题：
+    /// <list type="bullet">
+    ///   <item>null（保存时用户**未**给该组件单独配置）→ 恢复为无覆盖，跟随**当前设置**里的全局主题/材质；</item>
+    ///   <item>非 null（保存时用户**已**单独改过该组件）→ 还原为这套自定义外观，不受当前全局主题影响。</item>
+    /// </list>
+    /// 即"只有用户未修改的组件才使用当前设置内主题"。
+    /// </para>
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WidgetAppearanceOverride? Appearance { get; set; }
 }
 
 /// <summary>

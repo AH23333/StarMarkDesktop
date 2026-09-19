@@ -357,8 +357,13 @@ public sealed class WidgetManager
     public IReadOnlyList<WidgetLayout> GetLayouts() => _storage.GetLayouts();
 
     /// <summary>
-    /// 把「当前屏幕上可见的组件」保存为一套布局：记录每个实例的类型、同类序号、位置尺寸与置顶状态。
-    /// 只快照可见窗口——布局的语义就是「用户当下看到的这一屏」。
+    /// 把「用户当前的所有组件」保存为一套布局：记录每个实例的类型、同类序号、位置尺寸、置顶状态，
+    /// 以及该实例的**自定义外观**（材质/颜色/边框/圆角/文本缩放）。
+    /// <para>
+    /// 快照**全部实例**（含当前隐藏者），而非只快照可见窗口 —— 隐藏组件的位置取其已持久化的
+    /// config 值。这样一套布局能完整还原用户"所有组件"的摆位与个性化配置。可见窗口读实时矩形，
+    /// 保证存的是屏幕上真正的那一块。
+    /// </para>
     /// </summary>
     public Task<WidgetLayout?> SaveCurrentLayoutAsync(string name) => OnUiAsync(() =>
     {
@@ -368,19 +373,28 @@ public sealed class WidgetManager
 
         foreach (var inst in data.Instances)
         {
-            if (!_windows.TryGetValue(inst.Id, out var w) || !w.IsVisible) continue;
-            Windows.Graphics.RectInt32 r;
-            try { r = WindowInterop.GetWindowRect(w); }
-            catch { continue; }
-            if (r.Width <= 0 || r.Height <= 0) continue;
+            // 位置/尺寸：可见窗口读实时矩形；隐藏或读取失败则回退实例已持久化的 config 值。
+            double x, y, width, height;
+            if (_windows.TryGetValue(inst.Id, out var w) && w.IsVisible)
+            {
+                try
+                {
+                    Windows.Graphics.RectInt32 r = WindowInterop.GetWindowRect(w);
+                    if (r.Width > 0 && r.Height > 0) { x = r.X; y = r.Y; width = r.Width; height = r.Height; }
+                    else { x = inst.X; y = inst.Y; width = inst.Width; height = inst.Height; }
+                }
+                catch { x = inst.X; y = inst.Y; width = inst.Width; height = inst.Height; }
+            }
+            else { x = inst.X; y = inst.Y; width = inst.Width; height = inst.Height; }
 
             perKind.TryGetValue(inst.Kind, out var idx);
             entries.Add(new WidgetLayoutEntry
             {
                 Kind = inst.Kind,
                 Index = idx,
-                X = r.X, Y = r.Y, Width = r.Width, Height = r.Height,
+                X = x, Y = y, Width = width, Height = height,
                 Topmost = inst.Topmost,
+                Appearance = inst.Appearance,   // 快照每实例自定义配置（null = 未修改，应用时跟随当前主题）
             });
             perKind[inst.Kind] = idx + 1;
         }
@@ -462,13 +476,25 @@ public sealed class WidgetManager
             inst.Width = entry.Width;
             inst.Height = entry.Height;
             inst.Topmost = entry.Topmost;
+            // 还原"用户对组件的自定义配置"：把该实例的外观覆盖重置为快照值。
+            // 快照为 null（保存时用户未单独改过该组件）→ 清空覆盖，令其跟随当前设置的全局主题；
+            // 快照非 null（保存时用户已改过）→ 还原成它自己那套自定义外观，不受当前全局主题影响。
+            inst.Appearance = entry.Appearance;
             used.Add(inst.Id);
-            if (created) data.Instances.Add(inst);
+            if (created)
+            {
+                data.Instances.Add(inst);
+                _storage.Save(data);   // 新建实例先落盘，ShowInternal 才能从磁盘读到它并带上新外观
+            }
 
             ShowInternal(inst.Id);
-            // 窗口缓存的 config 是上一次 Load 的对象，必须显式下发新位置并回写
+            // 窗口缓存的 config 是上一次 Load 的对象（新建者甚至是保存前的旧磁盘数据），
+            // 必须显式下发新位置 + 新外观并回写，否则 ApplyLayoutCore 里改的 inst 不会落到窗口。
             if (_windows.TryGetValue(inst.Id, out var w))
+            {
                 w.ApplyBounds(entry.X, entry.Y, entry.Width, entry.Height, entry.Topmost);
+                w.ApplyAppearance(entry.Appearance);
+            }
         }
 
         // 布局之外的实例：隐藏但保留（内容不丢）

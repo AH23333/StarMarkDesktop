@@ -719,6 +719,19 @@ public sealed partial class WidgetWindow : Window
         ApplyChromeMode(_chromeMode);
     }
 
+    /// <summary>
+    /// 布局方案下发的"每实例自定义配置"：把外观覆盖写回窗口缓存的 config 并立即重挂材质/表面。
+    /// 与 <see cref="ApplyBounds"/> 同理 —— ApplyLayoutCore 改的是磁盘侧新 Load 的对象，
+    /// 窗口 _config 是另一份引用，必须显式下发，否则"应用布局后自定义外观不生效"。
+    /// appearance 为 null 表示清除覆盖、回退当前全局设置主题。
+    /// </summary>
+    public void ApplyAppearance(WidgetAppearanceOverride? appearance)
+    {
+        if (ReferenceEquals(_config.Appearance, appearance)) return;
+        _config.Appearance = appearance;
+        RefreshAppearance();
+    }
+
     // ───────────────────────── 标题栏交互 ─────────────────────────
 
     private void WireChrome()

@@ -227,4 +227,51 @@ public sealed class WidgetStorageTests : IDisposable
         Assert.True(File.Exists(_path));
         Assert.False(File.Exists(_path + ".tmp"));
     }
+
+    // ── D5：布局需保存每实例自定义配置；应用时"未修改"者跟随当前主题、"已改"者还原自身外观 ──
+
+    [Fact]
+    public void Layout_Entry_PersistsPerWidgetAppearanceOverride()
+    {
+        var store = Store();
+        var layout = new WidgetLayout
+        {
+            Name = "工作",
+            Entries =
+            {
+                // 已改过外观的组件：材质 + 背景色 + 文本缩放
+                new WidgetLayoutEntry
+                {
+                    Kind = WidgetKind.Clock, Index = 0,
+                    X = 100, Y = 120, Width = 260, Height = 180,
+                    Appearance = new WidgetAppearanceOverride
+                    {
+                        Backdrop = StarMark.Abstractions.WidgetBackdropKind.Solid,
+                        BackgroundColor = "#FFEFEFEF",
+                        TextScale = 1.2,
+                    },
+                },
+                // 未改过的组件：Appearance 保持 null → 应用时跟随当前全局主题
+                new WidgetLayoutEntry
+                {
+                    Kind = WidgetKind.Todo, Index = 0,
+                    X = 400, Y = 120, Width = 300, Height = 400,
+                },
+            },
+        };
+        store.SaveLayout(layout);
+
+        var reloaded = store.FindLayout(layout.Id);
+        Assert.NotNull(reloaded);
+        Assert.Equal(2, reloaded!.Entries.Count);
+
+        var modified = reloaded.Entries.First(e => e.Kind == WidgetKind.Clock);
+        Assert.NotNull(modified.Appearance);
+        Assert.Equal(StarMark.Abstractions.WidgetBackdropKind.Solid, modified.Appearance!.Backdrop);
+        Assert.Equal("#FFEFEFEF", modified.Appearance.BackgroundColor);
+        Assert.Equal(1.2, modified.Appearance.TextScale!.Value, 3);
+
+        var unmodified = reloaded.Entries.First(e => e.Kind == WidgetKind.Todo);
+        Assert.Null(unmodified.Appearance);
+    }
 }
