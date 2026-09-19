@@ -206,6 +206,12 @@ public sealed class BackupRepository : IBackupRepository
         return Task.CompletedTask;
     }
 
+    public Task ReindexSearchTextForTaggedAsync(CancellationToken ct)
+    {
+        // 与 ImportItemsAsync 同法：借用主仓储把标签贡献补进 search_text（见其方法注释）。
+        return new ItemRepository(_factory).ReindexSearchTextForTaggedAsync(ct);
+    }
+
     public Task ClearItemsAsync(CancellationToken ct)
     {
         using var conn = _factory.Open();

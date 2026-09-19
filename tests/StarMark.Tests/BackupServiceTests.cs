@@ -103,6 +103,31 @@ public sealed class BackupServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Restore_PreservesCjkTagWordSearch()
+    {
+        // D5 回归：导出条目不带 Tags 集合，还原只补 item_tags 关联行不足以把标签词烘进 search_text。
+        // 若不收尾重建，还原后按标签词（标题/笔记里都没有它）做中文全文检索会失灵。
+        var src = Seed(_db1);
+        var item = await UpsertAsync(src.Items, "test", "t1", "季度报告");   // 标题不含标签词
+        await src.Items.AddTagAsync(item.Id, "重要资料", CancellationToken.None);
+        // 前提：源库本身可按标签词搜到
+        Assert.Contains((await src.Items.SearchAsync("重要", new SearchFilter { MaxResults = 20 }, CancellationToken.None)).Items,
+                        i => i.Title == "季度报告");
+
+        var file = Path.Combine(Path.GetTempPath(), $"bk_{Guid.NewGuid():N}.json");
+        await src.Backup.ExportToFileAsync(file, CancellationToken.None);
+
+        var dst = Seed(_db2);
+        var env = await BackupService.ReadAsync(file, CancellationToken.None);
+        var rr = await dst.Backup.RestoreAsync(env, RestoreMode.Merge, null, CancellationToken.None);
+        Assert.True(rr.Success);
+
+        // 关键断言：还原后目标库仍能按标签词「重要」全文召回
+        var hits = await dst.Items.SearchAsync("重要", new SearchFilter { MaxResults = 20 }, CancellationToken.None);
+        Assert.Contains(hits.Items, i => i.Title == "季度报告");
+    }
+
+    [Fact]
     public async Task Restore_Replace_ClearsExistingItems()
     {
         var src = Seed(_db1);

@@ -180,6 +180,10 @@ public sealed class BackupService
             await _repo.ImportTagsAsync(p.Tags, ct);
             await _repo.ImportItemTagLinksAsync(p.ItemTags, ct);
 
+            // 关联落库后补一次 search_text 重建：导出条目不带 Tags 集合，导入条目时算出的 search_text
+            // 缺标签贡献，只补 item_tags 行不足以让「按标签词的全文检索」命中（见 IBackupRepository 注释）。
+            await _repo.ReindexSearchTextForTaggedAsync(ct);
+
             bool widgetsRestored = false;
             if (!string.IsNullOrEmpty(p.WidgetsJson))
             {

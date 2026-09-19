@@ -59,6 +59,12 @@ public interface IBackupRepository
     /// <summary>重建条目—标签关联。Merge 模式为「追加」，Replace 模式需先调 ClearItemTagLinksAsync。</summary>
     Task ImportItemTagLinksAsync(IReadOnlyList<ItemTagLink> links, CancellationToken ct);
 
+    /// <summary>
+    /// 在所有关联落库后，把标签名重建进受影响行的 <c>search_text</c>（按标签词的全文检索依赖它）。
+    /// 还原流程收尾必须调用一次，否则 D5：还原后按标签词做中文全文检索失灵。
+    /// </summary>
+    Task ReindexSearchTextForTaggedAsync(CancellationToken ct);
+
     /// <summary>清空全部条目（Replace 模式）。FTS 由 items_ad_fts 触发器同步清理。</summary>
     Task ClearItemsAsync(CancellationToken ct);
 
