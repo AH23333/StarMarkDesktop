@@ -160,6 +160,10 @@ public sealed partial class WidgetWindow : Window
 
         InitializeComponent();
         ApplyAppearanceCore();
+        // 主题解析完成后（Default → 浅/深）或运行期切换主题时，按真实主题重挂材质与重铺表面。
+        // 否则构造期 ActualTheme 仍是 Default（被当作浅色），浅色模式下的材质/表面会一直用错；
+        // 且主题翻转后控制器仍停在旧主题观感 —— 正是「浅色模式材质不正确」的根因之一。
+        RootBorder.ActualThemeChanged += (_, _) => RefreshAppearance();
 
         WidgetGlyph.Text = KindGlyph(_kind);
         ApplyTitle();   // 标题栏文本 + 窗口标题（优先取用户重命名的名字）
@@ -695,6 +699,10 @@ public sealed partial class WidgetWindow : Window
         _config.Topmost = topmost;
 
         if (width <= 0 || height <= 0) return;
+        // 关键：布局方案下发的尺寸/位置必须先写进 _expandedRect，再走 ApplyChromeMode。
+        // 否则 ApplyChromeMode(Standard) → ExpandToNormal() 会用构造期缓存的陈旧 _expandedRect
+        // 把刚下发的尺寸/位置覆盖掉，表现为「应用布局后组件又跳回原来的大小/位置」。
+        _expandedRect = new RectInt32((int)x, (int)y, (int)width, (int)height);
         AppWindow.MoveAndResize(new RectInt32((int)x, (int)y, (int)width, (int)height));
         ApplyTopmost();
         // 重新套用外壳模式：保证布局方案下发的尺寸/位置与胶囊/隐藏态一致（不会引起递归）
@@ -710,17 +718,20 @@ public sealed partial class WidgetWindow : Window
         DragBar.PointerReleased += DragBar_PointerReleased;
         DragBar.PointerCanceled += DragBar_PointerReleased;
         DragBar.DoubleTapped += (_, _) => TogglePin();
-        // 右键菜单只构建一次并同时挂到标题栏与根边框：Hidden 态标题栏不可见，
-        // 此时右键内容区仍能唤起同一份菜单切换回标准/胶囊；两项共享同一引用便于同步文案。
-        _contextMenu = BuildMenu();
+        // 右键菜单挂到标题栏与根边框：Hidden 态标题栏不可见，
+        // 此时右键内容区仍能唤起同一份菜单切换回标准/胶囊。
+        // 注意：菜单必须在每次 Opening 时重建（见 OnContextMenuOpening），因为「应用布局」子菜单
+        // 依赖当前已保存的布局列表 —— 用户新增 / 删除布局后若仍用旧菜单，子项不会更新。
+        _contextMenu = new MenuFlyout();
         DragBar.ContextFlyout = _contextMenu;
         RootBorder.ContextFlyout = _contextMenu;
 
         // 右键胶囊时：先进入悬停预览 → 右键唤起菜单的过程中，鼠标离开胶囊会触发收起，
         // 导致菜单随胶囊消失。修复：菜单打开即收回预览（回到胶囊位），且菜单打开期间禁止
         // 任何收起/重新预览，菜单关闭后才允许（见 RootBorder_PointerEntered/Exited 的 _contextMenu.IsOpen 守卫）。
-        _contextMenu.Opening += (_, _) => { if (_peeking) CollapsePeek(); };
+        _contextMenu.Opening += OnContextMenuOpening;
         _contextMenu.Closed += (_, _) => { if (_peeking) CollapsePeek(); };
+        PopulateMenu(_contextMenu);
 
         // 胶囊三段式热区 + 悬停预览（B-10）：仅在 Compact 态生效，标准态走原有标题栏按钮
         DragBar.Tapped += DragBar_Tapped;
@@ -746,9 +757,20 @@ public sealed partial class WidgetWindow : Window
         };
     }
 
-    private MenuFlyout BuildMenu()
+    /// <summary>
+    /// 每次右键菜单打开时重建：动态内容（布局列表、隐私模式勾选）必须反映最新状态，
+    /// 否则新增 / 删除布局后「应用布局」子菜单仍是旧列表。复用同一个 <see cref="_contextMenu"/> 实例，
+    /// 仅清空并重新填充条目，避免替换 Flyout 导致正在打开的菜单失效。
+    /// </summary>
+    private void OnContextMenuOpening(object? sender, object e)
     {
-        var menu = new MenuFlyout();
+        if (_peeking) CollapsePeek();
+        if (_contextMenu is { } menu) PopulateMenu(menu);
+    }
+
+    private void PopulateMenu(MenuFlyout menu)
+    {
+        menu.Items.Clear();
 
         // 「添加」收进二级菜单：每种组件一个子项，可重复添加同类型组件（对标 DeskBox 多实例）。
         // 避免主菜单被一长串「添加 X」撑爆、与「移除本组件」混在一起难以区分。
@@ -868,8 +890,6 @@ public sealed partial class WidgetWindow : Window
             }
             menu.Items.Add(sub);
         }
-
-        return menu;
     }
 
     /// <summary>
