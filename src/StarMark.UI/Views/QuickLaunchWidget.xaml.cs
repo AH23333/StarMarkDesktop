@@ -1,4 +1,5 @@
 #nullable enable
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -35,7 +36,7 @@ public sealed partial class QuickLaunchWidget : UserControl
     {
         _manager = manager;
         _instanceId = instanceId;
-        var search = App.Services.GetService(typeof(SearchService)) as SearchService;
+        var search = App.Services.GetRequiredService<SearchService>();
         ViewModel = new QuickLaunchWidgetViewModel(storage, repo, instanceId, search);
 
         InitializeComponent();
@@ -114,7 +115,7 @@ public sealed partial class QuickLaunchWidget : UserControl
 
     private void Card_TagFilterRequested(object sender, (ItemCardViewModel VM, string Tag) e)
     {
-        var main = App.Services.GetService(typeof(MainViewModel)) as MainViewModel;
+        var main = App.Services.GetRequiredService<MainViewModel>();
         main?.ToggleGlobalTagFilter(e.Tag);
     }
 

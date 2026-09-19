@@ -115,7 +115,7 @@ public sealed partial class ItemCard : UserControl
     private void SendToWidget_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel is null || string.IsNullOrWhiteSpace(ViewModel.Uri)) return;
-        var mgr = App.Services.GetService(typeof(WidgetManager)) as WidgetManager;
+        var mgr = App.Services.GetRequiredService<WidgetManager>();
         if (mgr is not null) _ = mgr.AddLinkToQuickLaunchAsync(ViewModel.Title, ViewModel.Uri);
     }
 

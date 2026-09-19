@@ -202,10 +202,10 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         => DispatcherQueue.TryEnqueue(() => { BuildLayoutRows(); BuildHotkeyRows(); });
 
     private WidgetManager? WidgetManager()
-        => App.Services.GetService(typeof(WidgetManager)) as WidgetManager;
+        => App.Services.GetRequiredService<WidgetManager>();
 
     private HotkeyService? HotkeySvc()
-        => App.Services.GetService(typeof(HotkeyService)) as HotkeyService;
+        => App.Services.GetRequiredService<HotkeyService>();
 
     /// <summary>
     /// 逐类型列出：类型标题 +「添加组件」按钮（可重复添加同类型），其下为该类型的每个实例一行
@@ -709,7 +709,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         var settings = new SettingsStore();
         settings.SaveHotkeyBindings(_hotkeyBindings);
 
-        if (App.Services.GetService(typeof(HotkeyService)) is HotkeyService hotkey)
+        if (App.Services.GetRequiredService<HotkeyService>() is HotkeyService hotkey)
             hotkey.ApplyBindings(ViewModel.EnableGlobalHotKey
                 ? _hotkeyBindings
                 : new Dictionary<string, HotkeyGesture>());

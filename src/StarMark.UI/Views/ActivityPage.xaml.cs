@@ -1,4 +1,5 @@
 #nullable enable
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -16,15 +17,12 @@ public sealed partial class ActivityPage : Page
     public ActivityPage()
     {
         InitializeComponent();
-        ViewModel = (App.Services.GetService(typeof(ActivityPageViewModel)) as ActivityPageViewModel)
-            ?? new ActivityPageViewModel(GetRepo());
+        ViewModel = App.Services.GetRequiredService<ActivityPageViewModel>();
         ViewModel.LoadCommand.Execute(null);
     }
 
     private static IItemRepository GetRepo()
-        => App.Services.GetService(typeof(IItemRepository))
-            as IItemRepository
-            ?? throw new InvalidOperationException("IItemRepository 未注册");
+        => App.Services.GetRequiredService<IItemRepository>();
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {

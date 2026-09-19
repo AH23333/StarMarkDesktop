@@ -1,4 +1,5 @@
 #nullable enable
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -45,10 +46,8 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        ViewModel = (App.Services.GetService(typeof(MainViewModel)) as MainViewModel)
-            ?? throw new InvalidOperationException("MainViewModel 未注册");
-        _widgetManager = (App.Services.GetService(typeof(WidgetManager)) as WidgetManager)
-            ?? throw new InvalidOperationException("WidgetManager 未注册");
+        ViewModel = App.Services.GetRequiredService<MainViewModel>();
+        _widgetManager = App.Services.GetRequiredService<WidgetManager>();
         _widgetManager.Initialize(DispatcherQueue);
         _widgetManager.GlobalSearchRequested += SearchFromWidget;
 
@@ -619,9 +618,7 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            // 注意：本文件未 using Microsoft.Extensions.DependencyInjection，
-            // 泛型扩展 GetService<T>() 不可用，故用 GetService(Type) + as 转换
-            var repo = App.Services.GetService(typeof(IItemRepository)) as IItemRepository;
+            var repo = App.Services.GetRequiredService<IItemRepository>();
             if (repo is null) return;
             var langs = await repo.GetStarLanguagesAsync();
             _starLanguages.Clear();
@@ -650,9 +647,7 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            var syncCoordinator = App.Services.GetService(typeof(StarMark.Core.Sync.SyncCoordinator))
-                as StarMark.Core.Sync.SyncCoordinator;
-            if (syncCoordinator != null)
+            var syncCoordinator = App.Services.GetRequiredService<StarMark.Core.Sync.SyncCoordinator>();
             {
                 var summary = await syncCoordinator.SyncAllAsync(CancellationToken.None);
                 var text = summary.FormatText();

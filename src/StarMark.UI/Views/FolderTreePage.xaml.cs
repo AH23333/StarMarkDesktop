@@ -1,4 +1,5 @@
 #nullable enable
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
@@ -24,22 +25,17 @@ public sealed partial class FolderTreePage : Page
     public FolderTreePage()
     {
         InitializeComponent();
-        ViewModel = (App.Services.GetService(typeof(FolderTreePageViewModel)) as FolderTreePageViewModel)
-            ?? new FolderTreePageViewModel(GetRepo(), GetMain());
+        ViewModel = App.Services.GetRequiredService<FolderTreePageViewModel>();
         ViewModel.RootsReady += OnRootsReady;
         // 主题切换会改变代码构建处的主题画笔解析，需重建以刷新颜色
         ActualThemeChanged += (_, _) => RebuildTree();
     }
 
     private static StarMark.Abstractions.IItemRepository GetRepo()
-        => App.Services.GetService(typeof(StarMark.Abstractions.IItemRepository))
-            as StarMark.Abstractions.IItemRepository
-            ?? throw new InvalidOperationException("IItemRepository 未注册");
+        => App.Services.GetRequiredService<StarMark.Abstractions.IItemRepository>();
 
     private static StarMark.UI.ViewModels.MainViewModel GetMain()
-        => App.Services.GetService(typeof(StarMark.UI.ViewModels.MainViewModel))
-            as StarMark.UI.ViewModels.MainViewModel
-            ?? throw new InvalidOperationException("MainViewModel 未注册");
+        => App.Services.GetRequiredService<StarMark.UI.ViewModels.MainViewModel>();
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {

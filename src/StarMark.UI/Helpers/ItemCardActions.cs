@@ -1,7 +1,9 @@
 #nullable enable
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using StarMark.Abstractions;
+using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
 
 namespace StarMark.UI.Helpers;
@@ -20,9 +22,7 @@ public static class ItemCardActions
     /// </summary>
     public static event Action? ItemTagsChanged;
 
-    public static IItemRepository GetRepo()
-        => App.Services.GetService(typeof(IItemRepository)) as IItemRepository
-            ?? throw new InvalidOperationException("IItemRepository 未注册");
+    public static IItemRepository GetRepo() => App.Services.GetRequiredItemRepository();
 
     public static async void Open(XamlRoot xamlRoot, long itemId)
     {

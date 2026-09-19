@@ -1,4 +1,5 @@
 #nullable enable
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using StarMark.UI.Helpers;
@@ -13,15 +14,13 @@ public sealed partial class HiddenPage : Page
     public HiddenPage()
     {
         InitializeComponent();
-        ViewModel = (App.Services.GetService(typeof(HiddenPageViewModel)) as HiddenPageViewModel)
+        ViewModel = (App.Services.GetRequiredService<HiddenPageViewModel>())
             ?? new HiddenPageViewModel(GetRepo());
         ViewModel.LoadCommand.Execute(null);
     }
 
     private static StarMark.Abstractions.IItemRepository GetRepo()
-        => App.Services.GetService(typeof(StarMark.Abstractions.IItemRepository))
-            as StarMark.Abstractions.IItemRepository
-            ?? throw new InvalidOperationException("IItemRepository 未注册");
+        => App.Services.GetRequiredService<StarMark.Abstractions.IItemRepository>();
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {

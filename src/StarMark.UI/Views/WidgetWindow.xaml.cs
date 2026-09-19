@@ -238,9 +238,7 @@ public sealed partial class WidgetWindow : Window
         {
             WindowInterop.RemoveDefaultWindowFrame(this);
             WindowInterop.ApplyRoundedCorners(this);
-            var pref = App.Services.GetService(typeof(SettingsStore)) is SettingsStore s
-                ? s.LoadTheme()
-                : new SettingsStore().LoadTheme();
+            var pref = App.Services.GetRequiredService<SettingsStore>().LoadTheme();
             ThemeManager.Apply(this, pref);
             ApplyInitialBounds();
             // 外壳模式（标准/胶囊/隐藏）必须在初始尺寸确定后再套用：收起态要把窗口缩到标题高度

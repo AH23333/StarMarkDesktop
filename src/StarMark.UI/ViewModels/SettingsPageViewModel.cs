@@ -1,4 +1,5 @@
 #nullable enable
+using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -298,7 +299,7 @@ public partial class SettingsPageViewModel : ObservableObject
                 App.MainWindow?.DispatcherQueue.TryEnqueue(() =>
                 {
                     App.MainWindow?.RefreshAppearance();
-                    if (App.Services.GetService(typeof(StarMark.UI.Services.WidgetManager))
+                    if (App.Services.GetRequiredService<StarMark.UI.Services.WidgetManager>()
                         is StarMark.UI.Services.WidgetManager mgr)
                         _ = mgr.RefreshAppearanceAsync();
                 });

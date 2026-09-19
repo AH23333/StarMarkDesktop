@@ -1,4 +1,5 @@
 #nullable enable
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -16,14 +17,8 @@ public sealed partial class SearchPage : Page
     public SearchPage()
     {
         InitializeComponent();
-        var main = App.Services.GetService(typeof(MainViewModel)) as MainViewModel
-            ?? throw new InvalidOperationException("MainViewModel 未注册");
-        ViewModel = (App.Services.GetService(typeof(SearchPageViewModel)) as SearchPageViewModel)
-            ?? new SearchPageViewModel(
-                App.Services.GetService(typeof(StarMark.Core.Search.SearchService)) as StarMark.Core.Search.SearchService
-                    ?? throw new InvalidOperationException("SearchService 未注册"),
-                main,
-                App.Services.GetService(typeof(IItemRepository)) as IItemRepository);
+        var main = App.Services.GetRequiredService<MainViewModel>();
+        ViewModel = App.Services.GetRequiredService<SearchPageViewModel>();
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)

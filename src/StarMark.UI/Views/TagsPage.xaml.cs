@@ -1,4 +1,5 @@
 #nullable enable
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
@@ -14,22 +15,17 @@ public sealed partial class TagsPage : Page
     public TagsPage()
     {
         InitializeComponent();
-        ViewModel = (App.Services.GetService(typeof(TagsPageViewModel)) as TagsPageViewModel)
-            ?? new TagsPageViewModel(GetRepo(), GetMain());
+        ViewModel = App.Services.GetRequiredService<TagsPageViewModel>();
         ViewModel.LoadCommand.Execute(null);
         // 主题切换后重载标签云，让按主题明度计算的标签颜色随之刷新
         ActualThemeChanged += (_, _) => ViewModel.LoadCommand.Execute(null);
     }
 
     private static StarMark.Abstractions.IItemRepository GetRepo()
-        => App.Services.GetService(typeof(StarMark.Abstractions.IItemRepository))
-            as StarMark.Abstractions.IItemRepository
-            ?? throw new InvalidOperationException("IItemRepository 未注册");
+        => App.Services.GetRequiredService<StarMark.Abstractions.IItemRepository>();
 
     private static StarMark.UI.ViewModels.MainViewModel GetMain()
-        => App.Services.GetService(typeof(StarMark.UI.ViewModels.MainViewModel))
-            as StarMark.UI.ViewModels.MainViewModel
-            ?? throw new InvalidOperationException("MainViewModel 未注册");
+        => App.Services.GetRequiredService<StarMark.UI.ViewModels.MainViewModel>();
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
