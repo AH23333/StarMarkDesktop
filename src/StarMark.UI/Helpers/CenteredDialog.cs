@@ -137,7 +137,7 @@ public static class CenteredDialog
         string? dedupeKey = null)
     {
         // 不可重复：同一 key 已开则置顶并返回 false（重复调用方据此不执行破坏性动作）
-        if (dedupeKey != null && IsOpen(dedupeKey, out var existing))
+        if (dedupeKey != null && IsOpen(dedupeKey, out var existing) && existing is not null)
         {
             try { WindowInterop.SetForegroundWindow(WindowInterop.GetHwnd(existing)); } catch { }
             return Task.FromResult(false);
@@ -244,7 +244,7 @@ public static class CenteredDialog
         string? cancelText = "取消")
     {
         // 不可重复：同一 key 已开则置顶已有窗口，丢弃本次重复请求（返回 Cancelled，调用方据此不落库）
-        if (dedupeKey != null && IsOpen(dedupeKey, out var existing))
+        if (dedupeKey != null && IsOpen(dedupeKey, out var existing) && existing is not null)
         {
             try { WindowInterop.SetForegroundWindow(WindowInterop.GetHwnd(existing)); } catch { }
             return Task.FromResult(HostedDialogResult.Cancelled);
