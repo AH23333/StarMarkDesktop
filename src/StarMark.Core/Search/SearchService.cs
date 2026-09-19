@@ -70,12 +70,14 @@ public sealed class SearchService
             if (r.Count > 0) realTimeResults.AddRange(r);
         }
 
-        // 合并 + 去重（按 URI 或 source+source_id）
+        // 合并 + 去重（按归一后的 URI 或 source+source_id）。
+        // file:// 必须先归一到本地路径：DB 侧存 file:///D:/x、Everything 侧给 file://D:/x，
+        // 二者作为原始串不等，会让同一文件在合并结果里出现两遍。
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var merged = new List<Item>();
         foreach (var item in ftsResult.Items.Concat(realTimeResults))
         {
-            var key = string.IsNullOrEmpty(item.Uri) ? $"{item.Source}|{item.SourceId}" : item.Uri;
+            var key = string.IsNullOrEmpty(item.Uri) ? $"{item.Source}|{item.SourceId}" : CanonicalizeUri(item.Uri);
             if (seen.Add(key))
             {
                 merged.Add(item);
@@ -117,6 +119,21 @@ public sealed class SearchService
             ElapsedMs = sw.ElapsedMilliseconds,
             ExactCount = Math.Min(exact.Count, ordered.Count),
         };
+    }
+
+    /// <summary>
+    /// 去重用的 URI 归一：把 file:// 折叠到本地路径，使 DB 的 file:///D:/x 与
+    /// Everything 的 file://D:/x 落到同一键；非文件 URI（http(s)/starmark）原样返回，
+    /// 避免破坏其键。非法 file URI 退回原串（宁可漏合并也不误合并不同文件）。
+    /// </summary>
+    private static string CanonicalizeUri(string uri)
+    {
+        if (uri.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+        {
+            try { return new Uri(uri).LocalPath; }
+            catch (UriFormatException) { return uri; }
+        }
+        return uri;
     }
 
     /// <summary>取条目主语言（仅 GitHubStar 有值）。供语言筛选兜底使用。</summary>

@@ -179,4 +179,49 @@ public sealed class SearchSegmentationTests : IDisposable
         Assert.Equal("collected late", result.Items[0].Title);
         Assert.Equal("collected early", result.Items[1].Title);
     }
+
+    /// <summary>
+    /// R-P1-8：同一文件在 DB 侧存 file:///D:/x、Everything 侧给 file://D:/x，
+    /// 归一前作为原始串不等 → 合并结果出现两遍。去重须把两者折叠到本地路径。
+    /// 同时验证不同文件不会被误合并（宁可漏合并也不误合并）。
+    /// </summary>
+    [Fact]
+    public async Task Dedup_FileUriFormDifference_CollapsesToOne()
+    {
+        // DB 里已入库同一文件（canonical 三斜杠 file:/// 形式），标题带关键词以命中 FTS。
+        await _repo.UpsertAsync(new[]
+        {
+            MakeItem(1, "report", "file:///D:/Docs/report.pdf", ItemType.File),
+        }, CancellationToken.None);
+
+        // 实时源（Everything 语义）：同一文件返回两斜杠 file://D:/x；再混一个不同文件做对照。
+        var fake = new StubSource("everything", new[]
+        {
+            new Item { Type = ItemType.File, Source = "everything", SourceId = @"D:\Docs\report.pdf",
+                       Title = "report.pdf", Uri = "file://D:/Docs/report.pdf" },
+            new Item { Type = ItemType.File, Source = "everything", SourceId = @"D:\Docs\other.pdf",
+                       Title = "other.pdf", Uri = "file://D:/Docs/other.pdf" },
+        });
+        var service = new SearchService(_repo, new IItemSource[] { fake });
+
+        var result = await service.SearchAsync("report", new SearchFilter { MaxResults = 50 }, CancellationToken.None);
+
+        // report.pdf 两处归一为同一路径 → 只留 DB 版本；other.pdf 作为独立文件保留 → 共 2 条。
+        Assert.Equal(2, result.Total);
+        Assert.DoesNotContain(result.Items, i => i.Title == "report.pdf"); // 虚拟重复项被去重
+        Assert.Contains(result.Items, i => i.Title == "report");           // 保留已入库的富条目
+        Assert.Contains(result.Items, i => i.Title == "other.pdf");        // 不同文件不误合并
+    }
+
+    /// <summary>返回固定条目的测试用实时源（无同步、始终可用）。</summary>
+    private sealed class StubSource : IItemSource
+    {
+        private readonly IReadOnlyList<Item> _items;
+        public StubSource(string sourceId, IReadOnlyList<Item> items) { SourceId = sourceId; _items = items; }
+        public string SourceId { get; }
+        public string DisplayName => SourceId;
+        public bool IsAvailable => true;
+        public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct) => Task.FromResult(_items);
+        public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct) => Task.FromResult(_items);
+    }
 }
