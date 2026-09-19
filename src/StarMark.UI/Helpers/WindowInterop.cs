@@ -113,6 +113,9 @@ internal static class WindowInterop
     [DllImport("user32.dll")]
     public static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
 
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr hObject);
+
     [DllImport("user32.dll")]
     public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
 
@@ -209,7 +212,8 @@ internal static class WindowInterop
     /// <para>
     /// 半径 ≤ 0 时移除区域并恢复 DWM 自带圆角（直角 / 系统圆角）。
     /// <see cref="SetWindowRgn"/> 会接管传入的新区域、并在下次替换时<b>自动释放</b>旧区域，
-    /// 因此调用方无需（也不应）手动 <c>DeleteObject</c> 旧句柄。
+    /// 故<b>成功</b>时调用方无需手动 <c>DeleteObject</c>；但<b>失败</b>（返回 0）时窗口并未接管，
+    /// 必须由调用方 <c>DeleteObject</c> 释放，否则每套用一次外观就泄漏一个 GDI 区域句柄。
     /// </para>
     /// </summary>
     /// <param name="window">目标窗口。</param>
@@ -235,7 +239,8 @@ internal static class WindowInterop
             SetDwmCornerPreference(window, DWMWCP_DONOTROUND);
             var d = (int)(cornerRadiusLogical * 2 * scale);   // 椭圆直径（物理像素）
             var hrgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, d, d);
-            if (hrgn != IntPtr.Zero) SetWindowRgn(hwnd, hrgn, true);
+            if (hrgn != IntPtr.Zero && SetWindowRgn(hwnd, hrgn, true) == 0)
+                DeleteObject(hrgn);   // 失败时窗口未接管，须自行释放，避免 GDI 区域句柄泄漏
         }
         catch { /* 取不到窗口句柄/尺寸时跳过，下次套用外观或尺寸变化会再算 */ }
     }
