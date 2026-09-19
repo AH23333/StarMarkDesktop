@@ -96,19 +96,29 @@ public static class WidgetAppearance
 
             var state = _states.GetOrCreateValue(window);
 
-            // 纯色（Solid）：照搬 DeskBox 的 TransparentTintBackdrop 观感 —— 整窗玻璃化 +
-            // 半透明染色表面。窗口玻璃化后桌面从客户区透出，内容表面（见 SurfaceBrush）按「背景不透明度」
-            // 调 Alpha，于是「背景不透明度」直接决定组件对桌面的透明程度：调低就能看见壁纸，
-            // 调高则是实色面板。这就是 DeskBox「纯色材质下通过背景不透明度达成透明」的效果。
-            // 不挂原生控制器（避免再把霜化层叠一层），只靠玻璃化 + 染色表面两层叠加。
+            // 统一初始化控制器配置（所有材质族共用），放在分支之前，确保 Solid / None 早返回分支
+            // 也能拿到最新配置，并在主题翻转时把配置重发给已挂载的控制器。
+            state.Target ??= window.As<ICompositionSupportsSystemBackdrop>();
+            state.Config ??= new SystemBackdropConfiguration();
+            state.Config.IsInputActive = true;
+            state.Config.Theme = isDark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light;
+
+            // 纯色（Solid）：复刻 DeskBox 的 WinUIEx.TransparentTintBackdrop —— 用一层「无模糊的纯色薄雾」
+            // 作第一层（基色纯白/炭灰，Alpha = 背景不透明度），内容表面（见 SurfaceBrush 的
+            // BuildContentSolidSurfaceColor）作第二层，两层叠加后浅色下接近不透明白、不再发灰，
+            // 且「背景不透明度」同时作用两层 → 调低即透出桌面。这才是 DeskBox「纯色材质下通过背景不透明度
+            // 达成透明」的真正机制：StarMark 原先只铺了一层半透明表面，单层 0.72 alpha 叠在深色桌面上
+            // 就显灰，与 DeskBox 明显不一致。
             if (kind == WidgetBackdropKind.Solid)
             {
-                DetachAcrylic(state);
                 DetachMica(state);
-                window.SystemBackdrop = null;
+                var solidOk = ApplySolidTint(state, isDark, surfaceOpacity);
+                if (state.AcrylicAttached) state.Acrylic?.SetSystemBackdropConfiguration(state.Config);
+                window.SystemBackdrop = null;            // 控制器手动挂载，关掉 DWM 自带背景
                 WindowInterop.SetDwmSystemBackdropNone(window);
                 WindowInterop.ApplyFullWindowFrame(window);
                 WindowInterop.SetImmersiveDarkMode(window, isDark);
+                if (!solidOk) StarLog.Error($"纯色材质薄雾挂载失败，已退化为实色表面 ({kind})");
                 return;
             }
 
@@ -132,10 +142,6 @@ public static class WidgetAppearance
             var accent = AccentColor();
             var tint = WidgetMaterialVisualCalculator.BuildContentTintColor(isDark, accent);
 
-            state.Target ??= window.As<ICompositionSupportsSystemBackdrop>();
-            state.Config ??= new SystemBackdropConfiguration();
-            state.Config.IsInputActive = true;
-            state.Config.Theme = isDark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light;
             // 主题翻转后必须重新下发配置：控制器仅在「首次挂载」时 SetSystemBackdropConfiguration，
             // 若之后切换浅/深色却不再下发，霜化层会停留在旧主题观感 —— 这正是「浅色模式材质不正确」的根因之一。
             if (state.AcrylicAttached) state.Acrylic?.SetSystemBackdropConfiguration(state.Config);
@@ -218,6 +224,43 @@ public static class WidgetAppearance
         catch (Exception ex)
         {
             StarLog.Error("应用亚克力材质失败", ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 纯色材质的第一层「扁平纯色薄雾」（复刻 DeskBox 的 WinUIEx.TransparentTintBackdrop）。
+    /// 复用 DesktopAcrylicController，但把 <see cref="DesktopAcrylicController.LuminosityOpacity"/> 置 0
+    /// 关闭霜化模糊，只保留 TintColor 以 TintOpacity（= 背景不透明度）呈现 —— 于是得到一层「扁平半透明纯色」，
+    /// 而非磨砂玻璃。内容表面（BuildContentSolidSurfaceColor）作第二层叠加，两层合计 Alpha ≈ 1-(1-o)²，
+    /// 浅色下接近不透明白（不再发灰），且「背景不透明度」同时控制两层 → 调低即透出桌面。
+    /// </summary>
+    private static bool ApplySolidTint(WindowBackdropState state, bool isDark, double surfaceOpacity)
+    {
+        if (!DesktopAcrylicController.IsSupported()) return false;
+        try
+        {
+            DetachMica(state);
+            state.Acrylic ??= new DesktopAcrylicController();
+            if (!state.AcrylicAttached)
+            {
+                if (!state.Acrylic.AddSystemBackdropTarget(state.Target!)) return false;
+                state.AcrylicAttached = true;
+                state.Acrylic.SetSystemBackdropConfiguration(state.Config!);
+            }
+            // 基色取 DeskBox 的 native backdrop tint（纯白 / 炭灰），不含强调色；
+            // 强调色由第二层内容表面带，两层叠出 DeskBox 同款淡彩。
+            state.Acrylic.Kind = DesktopAcrylicKind.Base;
+            state.Acrylic.TintColor = isDark
+                ? Windows.UI.Color.FromArgb(0xFF, 0x20, 0x22, 0x26)
+                : Windows.UI.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
+            state.Acrylic.TintOpacity = (float)Math.Clamp(surfaceOpacity, 0.0, 1.0);
+            state.Acrylic.LuminosityOpacity = 0;   // 关键：去模糊 → 扁平纯色薄雾
+            return true;
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("应用纯色薄雾失败", ex);
             return false;
         }
     }
