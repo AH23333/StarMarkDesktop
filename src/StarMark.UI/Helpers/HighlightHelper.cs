@@ -39,9 +39,8 @@ public static class HighlightHelper
             if (seg.IsMatch)
             {
                 run.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
-                // 用主题资源而非硬编码色，深浅色模式下都能读
-                run.Foreground = (Microsoft.UI.Xaml.Media.Brush)
-                    Application.Current.Resources["SystemFillColorCautionBrush"];
+                // 主题感知解析（§3.1）：TextBlock 元素的 ActualTheme 即当前生效主题
+                run.Foreground = ThemeBrush.For(tb.ActualTheme, "SystemFillColorCautionBrush");
             }
             tb.Inlines.Add(run);
         }

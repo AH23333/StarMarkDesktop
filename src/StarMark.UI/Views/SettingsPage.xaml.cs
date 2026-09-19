@@ -235,7 +235,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
             var addBtn = new Button
             {
                 Content = "添加组件",
-                Style = (Style)Application.Current.Resources["SecondaryButton"],
+                Style = (Style)Application.Current.Resources["SecondaryButton"], // 仅 Style 查找（非画笔），不受主题冻结影响
                 Padding = new Thickness(10, 3, 10, 3),
                 Margin = new Thickness(8, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
@@ -269,7 +269,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
                 var showBtn = new Button
                 {
                     Content = "显示",
-                    Style = (Style)Application.Current.Resources["SecondaryButton"],
+                    Style = (Style)Application.Current.Resources["SecondaryButton"], // 仅 Style 查找（非画笔），不受主题冻结影响
                     Padding = new Thickness(8, 2, 8, 2),
                     Margin = new Thickness(6, 0, 0, 0),
                     VerticalAlignment = VerticalAlignment.Center,
@@ -278,7 +278,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
                 var removeBtn = new Button
                 {
                     Content = "移除",
-                    Style = (Style)Application.Current.Resources["SecondaryButton"],
+                    Style = (Style)Application.Current.Resources["SecondaryButton"], // 仅 Style 查找（非画笔），不受主题冻结影响
                     Padding = new Thickness(8, 2, 8, 2),
                     Margin = new Thickness(6, 0, 0, 0),
                     VerticalAlignment = VerticalAlignment.Center,

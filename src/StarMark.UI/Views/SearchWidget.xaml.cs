@@ -75,7 +75,8 @@ public sealed class TagSelectedBrushConverter : IValueConverter
     public object? Convert(object? value, Type? targetType, object? parameter, string? language)
     {
         var selected = value is bool b && b;
-        if (selected && Application.Current.Resources.TryGetValue("AppAccentSoftBrush", out var brush))
+        // 主题感知解析（§3.1）：组件窗口主题与主窗同步，按系统暗色判定取 ThemeDictionaries
+        if (selected && ThemeBrush.Resolve(ThemeManager.IsAppDark(), "AppAccentSoftBrush") is { } brush)
             return brush;
         return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }

@@ -126,6 +126,9 @@ public sealed partial class MainWindow : Window
             // 主题色一律按目标主题解析（ThemeBrush.For），不能取 Application.Current.Resources[key]
             // —— 应用级主题在窗口创建后冻结，那里解析出的永远是初始主题的画笔。
             RootGrid.Background = WidgetAppearance.MainWindowSurfaceBrush(theme, kind, translucent);
+            // 主题切换后代码构建的画笔重解析（来源按钮高亮、状态点）
+            SetSourceButtonsHighlight(_currentSource);
+            SetStatusDot(_statusKind);
         }
         catch (Exception ex)
         {
@@ -497,10 +500,29 @@ public sealed partial class MainWindow : Window
         PushToolbarToContent();
     }
 
+    /// <summary>状态点语义色（caution=进行中/失败，success=成功）；主题切换时按此重解析。</summary>
+    private StatusKind _statusKind = StatusKind.Caution;
+
+    private enum StatusKind
+    {
+        Caution,
+        Success,
+    }
+
+    /// <summary>状态点按窗口实际主题解析画笔（§3.1 主题感知），切换主题时经 RefreshAppearance 重放。</summary>
+    private void SetStatusDot(StatusKind kind)
+    {
+        _statusKind = kind;
+        var key = kind == StatusKind.Success ? "SystemFillColorSuccessBrush" : "SystemFillColorCautionBrush";
+        StatusDot.Fill = ThemeBrush.For(RootGrid.ActualTheme, key)
+            ?? (SolidColorBrush)Application.Current.Resources[key]; // 词典缺失时兜底（仅 Style 场景外的最后手段）
+    }
+
     private void SetSourceButtonsHighlight(string source)
     {
-        var accent = (SolidColorBrush)Application.Current.Resources["AccentFillColorDefaultBrush"];
-        var muted = (SolidColorBrush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        // 主题感知解析（§3.1）：应用级资源在窗口创建后冻结，运行期切主题会拿到错误主题的画笔
+        var accent = ThemeBrush.For(RootGrid.ActualTheme, "AccentFillColorDefaultBrush");
+        var muted = ThemeBrush.For(RootGrid.ActualTheme, "TextFillColorSecondaryBrush");
         var white = new SolidColorBrush(Colors.White);
         foreach (var (btn, tag) in new[] { (SourceAll, "all"), (SourceStar, "star"), (SourceBookmark, "bookmark") })
         {
@@ -622,7 +644,7 @@ public sealed partial class MainWindow : Window
         SyncButton.IsEnabled = false;
         SyncProgress.IsActive = true;
         SyncProgress.Visibility = Visibility.Visible;
-        StatusDot.Fill = (SolidColorBrush)Application.Current.Resources["SystemFillColorCautionBrush"];
+        SetStatusDot(StatusKind.Caution);
         StatusText.Text = "同步中...";
         SyncInfoBar.IsOpen = false;
 
@@ -637,14 +659,14 @@ public sealed partial class MainWindow : Window
                 StatusText.Text = text;
                 ShowInfoBar(InfoBarSeverity.Success, "索引同步完成", string.Empty, 6500);
             }
-            StatusDot.Fill = (SolidColorBrush)Application.Current.Resources["SystemFillColorSuccessBrush"];
+            SetStatusDot(StatusKind.Success);
             await ViewModel.LoadCountsAsync();
             await LoadStarLanguagesAsync();   // 同步后新 star 的语言要出现在下拉里
         }
         catch (Exception ex)
         {
             StatusText.Text = $"同步失败: {ex.Message}";
-            StatusDot.Fill = (SolidColorBrush)Application.Current.Resources["SystemFillColorCautionBrush"];
+            SetStatusDot(StatusKind.Caution);
             ShowInfoBar(InfoBarSeverity.Error, "同步失败", ex.Message);
         }
         finally

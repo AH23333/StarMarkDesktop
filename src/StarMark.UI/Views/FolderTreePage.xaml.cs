@@ -182,7 +182,7 @@ public sealed partial class FolderTreePage : Page
                         Padding = new Thickness(12, 4, 12, 4),
                         BorderThickness = new Thickness(0),
                         FontSize = 11,
-                        Style = (Style)Application.Current.Resources["SecondaryButton"],
+                        Style = (Style)Application.Current.Resources["SecondaryButton"], // 仅 Style 查找（非画笔），不受主题冻结影响
                     };
                     expandBtn.Click += (_, _) =>
                     {

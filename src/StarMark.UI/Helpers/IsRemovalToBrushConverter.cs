@@ -14,9 +14,12 @@ public sealed class IsRemovalToBrushConverter : IValueConverter
     public object Convert(object value, Type targetType, object parameter, string language)
     {
         var isRemoval = value is bool b && b;
+        // 主题感知解析（§3.1）：IValueConverter 拿不到元素，按主窗当前暗色态从 ThemeDictionaries 取
         return isRemoval
-            ? (Brush)Application.Current.Resources["SystemFillColorCautionBrush"]
-            : (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"];
+            ? ThemeBrush.Resolve(ThemeManager.IsAppDark(), "SystemFillColorCautionBrush")
+                ?? new SolidColorBrush(Microsoft.UI.Colors.Transparent)
+            : ThemeBrush.Resolve(ThemeManager.IsAppDark(), "SystemFillColorSuccessBrush")
+                ?? new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, string language)
