@@ -65,9 +65,11 @@
             <StackPanel x:Name="ToggleBar" Grid.Row="0" Orientation="Horizontal"
                         HorizontalAlignment="Right" Spacing="4">
                 <Button x:Name="ViewButton" Height="22" Padding="8,0" FontSize="10"
+                        Style="{StaticResource WidgetActionButton}"
                         Content="今日逐时" Click="ViewButton_Click"
                         ToolTipService.ToolTip="在多日概览与今日逐时之间切换"/>
                 <Button x:Name="UnitButton" Height="22" Padding="8,0" FontSize="10"
+                        Style="{StaticResource WidgetActionButton}"
                         Content="°C" Click="UnitButton_Click"
                         ToolTipService.ToolTip="温度单位（华氏模式下风速同时换成 mph）"/>
             </StackPanel>

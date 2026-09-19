@@ -72,6 +72,31 @@
         <Setter Property="FontSize" Value="11"/>
     </Style>
 
+    <!--
+        组件内容控件（输入框 / 主动作按钮）材质对齐样式。
+        问题：这些控件此前用 WinUI 默认样式，其填充（ControlFillColorDefaultBrush）是按"不透明应用背景"
+        调校的实色，摆在亚克力/云母/自定义半透明的组件表面上会形成一块块不透明方块，与同组件里已改用
+        WidgetSubtleFillBrush 的随记行 / 搜索结果行观感割裂 —— 即用户所说"按钮、输入框、背景色不符合
+        当前材质"。这里改用与内容行同一套 ThemeResource 画笔：{ThemeResource} 按元素 ActualTheme 选
+        Light/Dark 桶（跟随主题），画笔本身半透明（透出霜化背景，跟随材质），两者与主界面材质共用同源取色。
+        仅组件 XAML 显式 Style="{StaticResource …}" 引用，不影响主窗口/设置页的默认控件。
+    -->
+    <Style x:Key="WidgetInputBox" TargetType="TextBox">
+        <Setter Property="Background" Value="{ThemeResource WidgetSubtleFillBrush}"/>
+        <Setter Property="BorderBrush" Value="{ThemeResource WidgetBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}"/>
+    </Style>
+
+    <Style x:Key="WidgetActionButton" TargetType="Button">
+        <Setter Property="Background" Value="{ThemeResource WidgetSubtleFillBrush}"/>
+        <Setter Property="BorderBrush" Value="{ThemeResource WidgetBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}"/>
+    </Style>
+
     <!-- 文本样式 -->
     <Style x:Key="BodyText" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource DefaultFontFamily}"/>

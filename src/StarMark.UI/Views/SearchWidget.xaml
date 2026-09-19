@@ -15,9 +15,10 @@
         <!-- 关键词 -->
         <StackPanel Orientation="Horizontal" Spacing="6">
             <TextBox x:Name="SearchBox" PlaceholderText="关键词，回车搜索…" FontSize="13"
+                     Style="{StaticResource WidgetInputBox}"
                      Padding="8,6,8,6" HorizontalAlignment="Stretch" MinWidth="120"
                      KeyDown="SearchBox_KeyDown"/>
-            <Button Content="搜索" Padding="10,4,10,4" Click="Search_Click"/>
+            <Button Content="搜索" Padding="10,4,10,4" Style="{StaticResource WidgetActionButton}" Click="Search_Click"/>
         </StackPanel>
 
         <!-- 标签筛选（多选 = AND 语义）。换行面板 + 垂直滚动：

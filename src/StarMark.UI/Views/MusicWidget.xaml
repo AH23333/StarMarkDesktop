@@ -27,6 +27,7 @@
                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                 <Button x:Name="SourceButton" Grid.Column="1" Height="20" Padding="6,0"
                         FontSize="10" Visibility="Collapsed" Content="切换音源"
+                        Style="{StaticResource WidgetActionButton}"
                         ToolTipService.ToolTip="选择要控制的播放器（默认跟随系统当前播放）">
                     <Button.Flyout>
                         <MenuFlyout x:Name="SourceFlyout" Placement="BottomEdgeAlignedRight"/>
@@ -55,18 +56,22 @@
         <!-- 传输控制：上一首 / 播放暂停 / 下一首 / 播放模式（Segoe Fluent 字形，各 Windows 版本都能渲染） -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="6">
             <Button x:Name="PrevButton" Width="36" Height="36" Padding="0" Click="PrevButton_Click"
+                    Style="{StaticResource WidgetActionButton}"
                     ToolTipService.ToolTip="上一首">
                 <FontIcon Glyph="&#xE892;" FontSize="14"/>
             </Button>
             <Button x:Name="PlayButton" Width="44" Height="44" Padding="0" Click="PlayButton_Click"
+                    Style="{StaticResource WidgetActionButton}"
                     ToolTipService.ToolTip="播放 / 暂停">
                 <FontIcon x:Name="PlayIcon" Glyph="&#xE768;" FontSize="18"/>
             </Button>
             <Button x:Name="NextButton" Width="36" Height="36" Padding="0" Click="NextButton_Click"
+                    Style="{StaticResource WidgetActionButton}"
                     ToolTipService.ToolTip="下一首">
                 <FontIcon Glyph="&#xE893;" FontSize="14"/>
             </Button>
-            <Button x:Name="ModeButton" Width="36" Height="36" Padding="0" Click="ModeButton_Click">
+            <Button x:Name="ModeButton" Width="36" Height="36" Padding="0" Click="ModeButton_Click"
+                    Style="{StaticResource WidgetActionButton}">
                 <FontIcon x:Name="ModeIcon" Glyph="&#xE8CB;" FontSize="14"/>
             </Button>
         </StackPanel>

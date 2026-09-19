@@ -50,6 +50,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBox x:Name="SearchBox" PlaceholderText="搜索全部条目…"
+                         Style="{StaticResource WidgetInputBox}"
                          FontSize="12" Padding="8,5,8,5"
                          TextChanged="SearchBox_TextChanged"/>
                 <Button Grid.Column="1" Content="✕" FontSize="10" Padding="8,4,8,4"
@@ -108,13 +109,16 @@
             </ItemsRepeater>
 
             <StackPanel x:Name="AddForm" Spacing="4" Margin="0,6,0,0" Visibility="Collapsed">
-                <TextBox x:Name="AddNameBox" PlaceholderText="名称（可留空）" FontSize="11" Padding="6,4,6,4"/>
+                <TextBox x:Name="AddNameBox" PlaceholderText="名称（可留空）" FontSize="11" Padding="6,4,6,4"
+                         Style="{StaticResource WidgetInputBox}"/>
                 <TextBox x:Name="AddUriBox" PlaceholderText="网址 / 文件路径（粘贴后回车）"
+                         Style="{StaticResource WidgetInputBox}"
                          FontSize="11" Padding="6,4,6,4" KeyDown="AddUriBox_KeyDown"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
                     <Button Content="取消" Padding="12,3,12,3" Background="Transparent"
                             Click="ToggleAddForm_Click"/>
                     <Button Content="添加" Padding="12,3,12,3"
+                            Style="{StaticResource WidgetActionButton}"
                             Click="AddLinkSubmit_Click"/>
                 </StackPanel>
             </StackPanel>

@@ -7,9 +7,11 @@
 
     <StackPanel Padding="12,8,12,12" Spacing="6">
         <TextBox x:Name="NoteBox" PlaceholderText="随手记一笔，Ctrl+Enter 保存…" FontSize="12"
+                 Style="{StaticResource WidgetInputBox}"
                  AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70"
                  KeyDown="NoteBox_KeyDown"/>
         <Button Content="保存随记" HorizontalAlignment="Right" Padding="12,3,12,3"
+                Style="{StaticResource WidgetActionButton}"
                 Click="SaveNote_Click"/>
 
         <!-- 注意：ItemsRepeater 内部必须用 x:Bind（不能用 {Binding}），否则不报错但静默失效 -->
