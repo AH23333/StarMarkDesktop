@@ -101,6 +101,26 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         ScheduleAutoSave();
     }
 
+    /// <summary>主窗口右上角快捷切换主题时，把本页主题选择同步过来。
+    /// 用 <see cref="_suppressSave"/> 包住，避免触发自动保存（该值已由主窗口落盘，无需重复写）。</summary>
+    private void OnExternalThemeSwitch(ThemePreference pref)
+    {
+        _suppressSave = true;
+        try
+        {
+            ViewModel.ThemeIndex = pref switch
+            {
+                ThemePreference.Light => 1,
+                ThemePreference.Dark => 2,
+                _ => 0,
+            };
+        }
+        finally
+        {
+            _suppressSave = false;
+        }
+    }
+
     private static bool IsDisplayOnlyProperty(string name)
         => name.Contains("Busy") || name.Contains("Loading") || name.Contains("Error")
         || name.Contains("Status") || name.Contains("Report") || name.Contains("Diagnostic")
@@ -142,6 +162,10 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
             mgr.LayoutsChanged -= OnLayoutsChanged;
             mgr.LayoutsChanged += OnLayoutsChanged;
         }
+        // 订阅主窗口快捷切主题：用户在设置页内用主界面右上角切主题时，把本页主题选择同步过来，
+        // 避免离开设置页时兜底保存用过期的 ThemeIndex 把主题强制切回。
+        MainWindow.ThemePreferenceQuickSwitched -= OnExternalThemeSwitch;
+        MainWindow.ThemePreferenceQuickSwitched += OnExternalThemeSwitch;
         BuildWidgetRows();
         BuildHotkeyRows();
         BuildLayoutRows();
@@ -156,6 +180,8 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
             mgr.InstancesChanged -= OnInstancesChanged;
             mgr.LayoutsChanged -= OnLayoutsChanged;
         }
+        // 退订主窗口快捷切主题（MainWindow 是单例，不退订会让死页面持续响应）
+        MainWindow.ThemePreferenceQuickSwitched -= OnExternalThemeSwitch;
         StopRecording(resetText: true);      // 离开页面停止键盘钩子
         // 快捷键属「确认后才生效」项：离开页面时把改动落盘并注册，避免用户以为改了却没生效
         if (_hotkeysDirty)

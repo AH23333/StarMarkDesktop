@@ -317,6 +317,10 @@ public sealed partial class MainWindow : Window
 
     // ===== 主题切换 =====
 
+    /// <summary>主窗口右上角快捷切换主题后触发（参数为新主题偏好）。设置页据此把自身的主题选择
+    /// 同步过来，否则离开设置页时其兜底保存会用过期的 ThemeIndex 把主题强制切回旧值。</summary>
+    public static event Action<ThemePreference>? ThemePreferenceQuickSwitched;
+
     private void ThemeButton_Click(object sender, RoutedEventArgs e)
     {
         _themePref = _themePref switch
@@ -331,6 +335,8 @@ public sealed partial class MainWindow : Window
         RefreshAppearance();   // 主题画笔按窗口实际主题重新解析，否则一键切换后主界面背景色不跟随
         ApplyTitleBarButtonColors();                 // 标题栏按钮高亮随主题
         _ = _widgetManager.ApplyThemeToAllAsync(_themePref); // 同步组件主题（组件是独立窗口，不会自动传导）
+        // 通知设置页同步主题选择（设置页已打开时尤其关键）
+        ThemePreferenceQuickSwitched?.Invoke(_themePref);
     }
 
     private void UpdateThemeIcon()
