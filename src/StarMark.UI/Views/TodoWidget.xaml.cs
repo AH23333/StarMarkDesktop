@@ -46,7 +46,16 @@ public sealed partial class TodoWidget : UserControl
             }
         };
         SyncChrome();
-        Unloaded += (_, _) => ViewModel.DismissUndo();
+
+        // 只有"真的开始拖了"才在 DragItemsCompleted 里写盘：集合增删也可能派发该事件，
+        // 不设闸门就会把每次增删都变成一轮全表写（卡顿来源）。
+        TodoList.DragItemsStarting += (_, _) => ViewModel.BeginReorder();
+
+        Unloaded += (_, _) =>
+        {
+            ViewModel.DismissUndo();
+            ViewModel.Dispose();
+        };
     }
 
     private void SyncChrome()
