@@ -128,7 +128,7 @@ internal static class WidgetMaterialVisualCalculator
         double materialIntensity)
     {
         double intensity = NormalizeMaterialIntensity(materialIntensity);
-        double opacity = Math.Clamp(surfaceOpacity, 0.0, 1.0);
+        double opacity = NormalizeOpacity(surfaceOpacity);
 
         var tinted = BuildAccentSurfaceColor(
             isDark,
@@ -167,13 +167,20 @@ internal static class WidgetMaterialVisualCalculator
                     : Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF),
                 accentMix: 0.18,
                 overlayMix: isDark ? 0.15 : 0.04),
-            Math.Clamp(surfaceOpacity, 0.0, 1.0));
+            NormalizeOpacity(surfaceOpacity));
     }
 
     private static double NormalizeMaterialIntensity(double value) =>
         double.IsFinite(value)
             ? Math.Clamp(value, MinWidgetMaterialIntensity, MaxWidgetMaterialIntensity)
             : DefaultWidgetMaterialIntensity;
+
+    /// <summary>
+    /// 背景不透明度归一。注意 <see cref="Math.Clamp(double,double,double)"/> 对 NaN 两比较皆 false 会<b>原样返回 NaN</b>，
+    /// 随后 Lerp→(byte)Math.Round(NaN*255) 得 0 → 面板 alpha 0 完全隐形。非法/NaN 一律回落 1.0（最不透明、可见）。
+    /// </summary>
+    private static double NormalizeOpacity(double value) =>
+        double.IsFinite(value) ? Math.Clamp(value, 0.0, 1.0) : 1.0;
 
     private static double Lerp(double start, double end, double progress) =>
         start + ((end - start) * Math.Clamp(progress, 0.0, 1.0));
