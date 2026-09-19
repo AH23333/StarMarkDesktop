@@ -61,7 +61,9 @@ public static class WidgetAppearanceEditor
         var original = current;   // 取消时按此还原实时预览
 
         var win = new Window { Title = "组件外观" };
-        try { ThemeManager.Apply(win, new SettingsStore().LoadTheme()); } catch { }
+        // 注意：ThemeManager.Apply 必须等 win.Content 设好后再调用（Apply 仅当 Content 是
+        // FrameworkElement 时才设置其 RequestedTheme，Content 为 null 时是空操作）。
+        // 过早调用（在 Content 之前）正是「外观编辑器始终为深色」的根因之一，故移到内容挂载之后。
 
         // ── 工作副本（编辑中实时改写，确定时一次性落盘；null 字段=跟随全局）──
         WidgetBackdropKind? wBackdrop = current?.Backdrop;
@@ -597,18 +599,14 @@ public static class WidgetAppearanceEditor
             Padding = new Thickness(20),
             Child = scroll,
         };
-        // 外框留一圈内边距，给拖拽留出落点，同时视觉上更像浮层
-        var grid = new Grid
-        {
-            Background = Brush("ApplicationPageBackgroundThemeBrush", Colors.White),
-            Padding = new Thickness(10),
-            Children = { card },
-        };
-        win.Content = grid;
+        // 卡片直接作为窗口根内容：整窗按同一半径（10）裁成圆角矩形，避免「白色大圆角 + 深灰小圆角」
+        // 双层叠加的灰色观感（之前在外层再套一层 ApplicationPageBackgroundThemeBrush 白底 Grid）。
+        win.Content = card;
+        // 必须在此（Content 已设）才套用主题：否则 root.RequestedTheme 不会生效，弹窗停留在旧主题。
+        try { ThemeManager.Apply(win, new SettingsStore().LoadTheme()); } catch { }
         // 不再设单独的拖拽标题栏：整个窗口可拖拽移动（自动避开输入控件），避免遮挡被编辑的组件
-        MakeWindowDraggable(win, grid);
+        MakeWindowDraggable(win, card);
         WindowInterop.RemoveDefaultWindowFrame(win);
-        WindowInterop.ApplyRoundedCorners(win);
 
         var scale = WindowInterop.GetScale(win);
         const double W = 760, H = 660;
@@ -618,6 +616,10 @@ public static class WidgetAppearanceEditor
         var x = work.X + Math.Max(0, (work.Width - w) / 2);
         var y = work.Y + Math.Max(0, (work.Height - h) / 2);
         win.AppWindow.MoveAndResize(new RectInt32(x, y, w, h));
+
+        // 必须在 MoveAndResize 之后按真实物理尺寸裁圆角：SetWindowRgn 真正物理裁切无黑角，
+        // 取代 DWM 仅靠视觉圆角（无边框窗口会留下四角黑块）。
+        WindowInterop.SetRoundedWindowRegion(win, 10);
 
         win.Activate();
         WindowInterop.SetTopmost(win, true);
@@ -837,6 +839,19 @@ public static class WidgetAppearanceEditor
         return false;
     }
 
+    /// <summary>把用户「设置里存的」主题偏好折算成窗口实际渲染的 <see cref="ElementTheme"/>，
+    /// 让代码侧解析的画笔与窗口根元素的 RequestedTheme 完全一致（消除弹窗主题错乱/始终深色）。</summary>
+    private static ElementTheme EffectiveTheme()
+    {
+        var pref = new SettingsStore().LoadTheme();
+        return pref switch
+        {
+            ThemePreference.Light => ElementTheme.Light,
+            ThemePreference.Dark => ElementTheme.Dark,
+            _ => ElementTheme.Default,
+        };
+    }
+
     private static Brush Brush(string key, Color fallback) =>
-        ThemeBrush.For(ElementTheme.Default, key) ?? new SolidColorBrush(fallback);
+        ThemeBrush.For(EffectiveTheme(), key) ?? new SolidColorBrush(fallback);
 }
