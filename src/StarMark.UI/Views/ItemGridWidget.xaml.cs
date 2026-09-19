@@ -49,6 +49,9 @@ public sealed partial class ItemGridWidget : UserControl
 
         ViewModel.Items.CollectionChanged += (_, _) => UpdateEmptyHint();
         UpdateEmptyHint();
+
+        // 卸载即退订数据广播：组件会被反复创建/销毁，留着订阅会白跑数据库查询。
+        Unloaded += (_, _) => ViewModel.Dispose();
     }
 
     private void UpdateEmptyHint()

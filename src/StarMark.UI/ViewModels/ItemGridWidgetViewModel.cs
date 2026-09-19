@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using StarMark.Abstractions;
 using StarMark.Core.Search;
 using StarMark.Core.Widgets;
+using StarMark.UI.Helpers;
 
 namespace StarMark.UI.ViewModels;
 
@@ -40,6 +41,12 @@ public sealed class ItemGridWidgetViewModel
     private readonly string _instanceId;
     private readonly WidgetKind _kind;
 
+    /// <summary>数据变更同步器：主界面置顶/取消置顶、改标签、删除条目后本组件自动重载。</summary>
+    private readonly DataChangeReloader _sync;
+
+    /// <summary>加载闸门：广播与用户操作可能同时触发，串行化避免重复打库。</summary>
+    private readonly SemaphoreSlim _loadGate = new(1, 1);
+
     public ItemGridMode Mode { get; }
 
     public ObservableCollection<ItemRowItem> Items { get; } = new();
@@ -71,7 +78,15 @@ public sealed class ItemGridWidgetViewModel
         _kind = kind;
         _search = search;
         LoadConfig();
+        _sync = new DataChangeReloader(LoadAsync);
         _ = LoadAsync();
+    }
+
+    /// <summary>退订数据广播 / 释放闸门（组件卸载时调用）。</summary>
+    public void Dispose()
+    {
+        _sync.Dispose();
+        _loadGate.Dispose();
     }
 
     private void LoadConfig()
@@ -88,8 +103,8 @@ public sealed class ItemGridWidgetViewModel
 
     public async Task LoadAsync()
     {
-        Items.Clear();
         if (_repo is null) return;
+        await _loadGate.WaitAsync();
         try
         {
             IReadOnlyList<Item> items = Mode switch
@@ -106,13 +121,52 @@ public sealed class ItemGridWidgetViewModel
                 _ => Array.Empty<Item>(),
             };
 
-            foreach (var it in items)
-                Items.Add(new ItemRowItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type), it.Type));
+            var rows = items
+                .Select(it => new ItemRowItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type), it.Type))
+                .ToList();
+            ApplyRows(rows);
         }
         catch (Exception ex)
         {
             StarMark.Abstractions.StarLog.Error("加载条目格失败", ex);
         }
+        finally
+        {
+            _loadGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// 把 <see cref="Items"/> 增量对齐到查询结果。
+    /// 早先是「先 Clear 再逐条 Add」——数据一变就这么来一次，列表会闪一下白并重建所有行容器；
+    /// 置顶条目格挂在桌面上常驻，隔几秒闪一次是不能接受的。改成按 id 做最小差异后，
+    /// 内容没变时是<b>零操作</b>。
+    /// </summary>
+    private void ApplyRows(List<ItemRowItem> rows)
+    {
+        var targetIds = new HashSet<long>(rows.Select(r => r.Id));
+
+        for (var i = Items.Count - 1; i >= 0; i--)
+            if (!targetIds.Contains(Items[i].Id)) Items.RemoveAt(i);
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var want = rows[i];
+            if (i < Items.Count && Items[i].Id == want.Id)
+            {
+                if (Items[i] != want) Items[i] = want;   // 标题/链接变了
+                continue;
+            }
+
+            var at = -1;
+            for (var j = i + 1; j < Items.Count; j++)
+                if (Items[j].Id == want.Id) { at = j; break; }
+
+            if (at >= 0) Items.Move(at, i);
+            else Items.Insert(i, want);
+        }
+
+        while (Items.Count > rows.Count) Items.RemoveAt(Items.Count - 1);
     }
 
     /// <summary>标签格：设置所钉标签并持久化后重载。</summary>

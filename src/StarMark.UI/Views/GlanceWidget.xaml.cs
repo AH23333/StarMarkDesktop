@@ -29,14 +29,27 @@ public sealed partial class GlanceWidget : UserControl
     private DispatcherQueueTimer? _timer;
     private DateOnly _shownDate;
 
+    /// <summary>
+    /// 「常看」区的数据同步器：别处增删/改动条目后自动去抖重载。
+    /// 日期区不靠它（那是纯日历计算），只有读库的那一半需要。
+    /// </summary>
+    private DataChangeReloader? _sync;
+
     public GlanceWidget(IItemRepository? repo)
     {
         _repo = repo;
         InitializeComponent();
 
-        Unloaded += (_, _) => _timer?.Stop();
+        Unloaded += (_, _) =>
+        {
+            _timer?.Stop();
+            _sync?.Dispose();
+            _sync = null;
+        };
         Loaded += (_, _) =>
         {
+            // Loaded 可能被多次触发（组件窗口反复显示），同步器只建一次，否则会重复订阅。
+            _sync ??= new DataChangeReloader(LoadItemsAsync);
             RefreshDate();
             StartTimer();
             _ = LoadItemsAsync();

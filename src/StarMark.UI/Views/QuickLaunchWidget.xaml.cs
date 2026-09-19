@@ -54,6 +54,7 @@ public sealed partial class QuickLaunchWidget : UserControl
         _manager.LinksChanged -= OnLinksChanged;
         _searchTimer.Tick -= SearchTimer_Tick;
         Unloaded -= QuickLaunchWidget_Unloaded;
+        ViewModel.Dispose();   // 退订数据广播
     }
 
     private void OnLinksChanged(string _) => DispatcherQueue?.TryEnqueue(ViewModel.ReloadLinks);

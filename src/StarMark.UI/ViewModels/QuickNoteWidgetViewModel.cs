@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using StarMark.Abstractions;
 using StarMark.Core.Widgets;
+using StarMark.UI.Helpers;
 
 namespace StarMark.UI.ViewModels;
 
@@ -26,6 +27,9 @@ public sealed class QuickNoteWidgetViewModel
     private readonly string _instanceId;
     private readonly DispatcherQueue _dispatcher;
 
+    /// <summary>数据变更同步器：别处改了随记（另一个随记组件 / 主界面）时自动去抖重载。</summary>
+    private readonly DataChangeReloader _sync;
+
     public ObservableCollection<QuickNoteRow> Notes { get; } = new();
 
     public QuickNoteWidgetViewModel(IItemRepository? repo, string instanceId)
@@ -34,8 +38,12 @@ public sealed class QuickNoteWidgetViewModel
         _instanceId = instanceId;
         _dispatcher = DispatcherQueue.GetForCurrentThread()
             ?? throw new InvalidOperationException("QuickNoteWidgetViewModel 必须在 UI 线程构造");
+        _sync = new DataChangeReloader(LoadAsync);
         _ = LoadAsync();
     }
+
+    /// <summary>退订数据广播（组件卸载时调用）。</summary>
+    public void Dispose() => _sync.Dispose();
 
     public async Task LoadAsync()
     {
@@ -51,6 +59,9 @@ public sealed class QuickNoteWidgetViewModel
                 .ToList();
             RunOnUi(() =>
             {
+                // 内容没变就别动集合：全量 Clear+Add 会让列表把所有行容器销毁重建，
+                // 数据广播一来就重建，肉眼可见地抖一下。
+                if (Notes.Count == rows.Count && Notes.Zip(rows).All(p => p.First == p.Second)) return;
                 Notes.Clear();
                 foreach (var r in rows) Notes.Add(r);
             });

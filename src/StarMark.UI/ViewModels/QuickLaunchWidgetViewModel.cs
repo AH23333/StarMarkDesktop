@@ -26,6 +26,9 @@ public sealed partial class QuickLaunchWidgetViewModel : ObservableObject
     private readonly SearchService? _search;
     private readonly string _instanceId;
 
+    /// <summary>数据变更同步器：主界面置顶/取消置顶后，本组件的置顶区立刻跟着变。</summary>
+    private readonly DataChangeReloader _sync;
+
     /// <summary>置顶条目（来自 StarMark 数据库 Pinned=1），完整 ItemCard 能力。</summary>
     public ObservableCollection<ItemCardViewModel> Pinned { get; } = new();
 
@@ -45,7 +48,11 @@ public sealed partial class QuickLaunchWidgetViewModel : ObservableObject
         _repo = repo;
         _search = search;
         _instanceId = instanceId;
+        _sync = new DataChangeReloader(LoadAsync);
     }
+
+    /// <summary>退订数据广播（组件卸载时调用）。</summary>
+    public void Dispose() => _sync.Dispose();
 
     public async Task LoadAsync()
     {

@@ -165,6 +165,7 @@ public sealed class ItemRepository : IItemRepository
         }
 
         await tx.CommitAsync(ct);
+        DataChangeHub.Notify();   // 主界面/同步写入后，桌面组件要跟着变
     }
 
     // ===== 标签 =====
@@ -245,6 +246,7 @@ public sealed class ItemRepository : IItemRepository
         }
 
         await tx.CommitAsync(ct);
+        DataChangeHub.Notify();
     }
 
     public async Task RemoveTagAsync(long itemId, string tagName, CancellationToken ct)
@@ -258,6 +260,7 @@ public sealed class ItemRepository : IItemRepository
         cmd.Parameters.AddWithValue("@item", itemId);
         cmd.Parameters.AddWithValue("@name", tagName);
         await cmd.ExecuteNonQueryAsync(ct);
+        DataChangeHub.Notify();
     }
 
     // ===== 笔记 =====
@@ -288,6 +291,7 @@ public sealed class ItemRepository : IItemRepository
         cmd.Parameters.AddWithValue("@content", content);
         cmd.Parameters.AddWithValue("@id", itemId);
         await cmd.ExecuteNonQueryAsync(ct);
+        DataChangeHub.Notify();
     }
 
     public async Task SetPinnedAsync(long itemId, bool pinned, CancellationToken ct)
@@ -298,6 +302,7 @@ public sealed class ItemRepository : IItemRepository
         cmd.Parameters.AddWithValue("@pinned", pinned ? 1 : 0);
         cmd.Parameters.AddWithValue("@id", itemId);
         await cmd.ExecuteNonQueryAsync(ct);
+        DataChangeHub.Notify();   // 置顶条目组件、快捷启动格都靠这条实时跟上
     }
 
     // ===== 状态统计 =====
@@ -435,6 +440,7 @@ public sealed class ItemRepository : IItemRepository
         cmd.Parameters.AddWithValue("@hidden", hidden ? 1 : 0);
         cmd.Parameters.AddWithValue("@id", itemId);
         await cmd.ExecuteNonQueryAsync(ct);
+        DataChangeHub.Notify();
     }
 
     public async Task<IReadOnlyList<Item>> GetRecentAsync(int limit, CancellationToken ct)
@@ -514,6 +520,7 @@ public sealed class ItemRepository : IItemRepository
         cmd.Parameters.AddWithValue("@source", source);
         cmd.Parameters.AddWithValue("@sid", sourceId);
         await cmd.ExecuteNonQueryAsync(ct);
+        DataChangeHub.Notify();
     }
 
     /// <summary>
@@ -564,6 +571,7 @@ public sealed class ItemRepository : IItemRepository
         cmd.Parameters.AddWithValue("@notes", (object?)item.Notes ?? DBNull.Value);
         var idObj = await cmd.ExecuteScalarAsync(ct);
         if (idObj is long newId) item.Id = newId;
+        DataChangeHub.Notify();   // 待办/随记写入后，同类型的其它组件实例也要同步
     }
     // ===== 内部辅助 =====
 

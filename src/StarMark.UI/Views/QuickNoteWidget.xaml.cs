@@ -23,6 +23,7 @@ public sealed partial class QuickNoteWidget : UserControl
     {
         ViewModel = new QuickNoteWidgetViewModel(repo, instanceId);
         InitializeComponent();
+        Unloaded += (_, _) => ViewModel.Dispose();
     }
 
     private void SaveNote_Click(object sender, RoutedEventArgs e) => Save();
