@@ -476,6 +476,17 @@ public sealed partial class WidgetWindow : Window
             Brush surface = useCustomBg
                 ? (WidgetAppearance.ParseColorBrush(ov!.BackgroundColor!) ?? WidgetAppearance.SurfaceBrush(RootBorder.ActualTheme, globalKind))
                 : WidgetAppearance.SurfaceBrush(RootBorder.ActualTheme, kind);
+
+            // 纯色材质：扁平背衬（TransparentTintBackdrop）已单独着色整窗，内容表面必须透明，
+            // 否则背衬 + 表面两层同色 alpha 叠加 → 过实/发灰（对齐 DeskBox 单层纯色）。
+            // 背衬挂载失败时 IsFlatSolidActive 为 false，仍走 SurfaceBrush 的实色兜底，不会变透明幽灵窗。
+            if (!useCustomBg &&
+                kind == StarMark.Abstractions.WidgetBackdropKind.Solid &&
+                WidgetAppearance.IsFlatSolidActive(this))
+            {
+                surface = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            }
+
             RootBorder.Background = surface;
             DragBar.Background = surface;
 

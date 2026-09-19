@@ -80,6 +80,10 @@ public static class WidgetAppearance
         public SystemBackdropConfiguration? Config;
         public ICompositionSupportsSystemBackdrop? Target;
         public bool ActivationWired;
+
+        /// <summary>纯色材质使用的扁平纯色背衬（无模糊的 CompositionColorBrush 背衬），
+        /// 对齐 DeskBox 的 WinUIEx.TransparentTintBackdrop。null = 未挂载。</summary>
+        public WinUIEx.TransparentTintBackdrop? Solid;
     }
 
     private static readonly ConditionalWeakTable<Window, WindowBackdropState> _states = new();
@@ -117,31 +121,36 @@ public static class WidgetAppearance
                 };
             }
 
-            // 纯色（Solid）：复刻 DeskBox 的 WinUIEx.TransparentTintBackdrop —— 用一层「无模糊的纯色薄雾」
-            // 作第一层（基色纯白/炭灰，Alpha = 背景不透明度），内容表面（见 SurfaceBrush 的
-            // BuildContentSolidSurfaceColor）作第二层，两层叠加后浅色下接近不透明白、不再发灰，
-            // 且「背景不透明度」同时作用两层 → 调低即透出桌面。这才是 DeskBox「纯色材质下通过背景不透明度
-            // 达成透明」的真正机制：StarMark 原先只铺了一层半透明表面，单层 0.72 alpha 叠在深色桌面上
-            // 就显灰，与 DeskBox 明显不一致。
+            // 纯色（Solid）：1:1 复刻 DeskBox 的 ApplySolidColorBackdrop —— 用真正的扁平纯色背衬
+            // （WinUIEx.TransparentTintBackdrop，内部是一层 CompositionColorBrush，绝无亚克力模糊）
+            // 挂到 window.SystemBackdrop，并**摘掉**亚克力/云母控制器。此前 StarMark 用
+            // DesktopAcrylicController + LuminosityOpacity=0 冒充纯色，但 acrylic 的采样模糊始终存在，
+            // 于是"纯色材质"永远带磨砂、且与内容表面第二层叠了两道 alpha → 用户报"纯色材质失效"。
+            // DeskBox 是单层：背衬铺 BuildContentSolidSurfaceColor(isDark, accent, surfaceOpacity)，
+            // 内容表面在背衬生效时保持透明（见 WidgetWindow 对 IsFlatSolidActive 的判断），不再双层叠加。
             if (kind == WidgetBackdropKind.Solid)
             {
+                DetachAcrylic(state);
                 DetachMica(state);
-                var solidOk = ApplySolidTint(state, isDark, surfaceOpacity);
-                if (state.AcrylicAttached) state.Acrylic?.SetSystemBackdropConfiguration(state.Config);
-                // 整窗玻璃化必须早于 SetDwmSystemBackdropNone：先 DwmExtendFrameIntoClientArea(-1)
-                // 把客户区「玻璃化」，再设 DWMSBT_NONE 让原生控制器接管，否则客户区停留为不透明灰白，
-                // 透明材质叠在灰底上 → 调最低不透明度也完全不透明、且显灰（与亚克力分支顺序一致）。
+
+                var solidTint = WidgetMaterialVisualCalculator.BuildContentSolidSurfaceColor(
+                    isDark, AccentColor(), surfaceOpacity);
+                if (state.Solid is null)
+                {
+                    state.Solid = new WinUIEx.TransparentTintBackdrop(solidTint);
+                    window.SystemBackdrop = state.Solid;
+                }
+                else
+                {
+                    state.Solid.TintColor = solidTint;
+                    if (!ReferenceEquals(window.SystemBackdrop, state.Solid))
+                        window.SystemBackdrop = state.Solid;
+                }
+
+                // 整窗玻璃化让背衬铺满客户区；DWM 侧关掉自带背景（DWMSBT_NONE），避免再叠一层默认材质。
                 WindowInterop.ApplyFullWindowFrame(window);
                 WindowInterop.SetImmersiveDarkMode(window, isDark);
-                window.SystemBackdrop = null;            // 控制器手动挂载，关掉 DWM 自带背景
                 WindowInterop.SetDwmSystemBackdropNone(window);
-                if (!solidOk)
-                {
-                    // 薄雾控制器没挂上却已把客户区玻璃化 → 什么都不垫就是透明幽灵窗。撤掉玻璃化，
-                    // 让 DWM 铺回不透明底，兑现日志里那句「退化为实色表面」。
-                    WindowInterop.ClearFullWindowFrame(window);
-                    StarLog.Error($"纯色材质薄雾挂载失败，已退化为实色表面 ({kind})");
-                }
                 return;
             }
 
@@ -150,6 +159,7 @@ public static class WidgetAppearance
             {
                 DetachAcrylic(state);
                 DetachMica(state);
+                ClearSolidBackdrop(state, window);
                 window.SystemBackdrop = null;
                 WindowInterop.SetDwmSystemBackdropNone(window);
                 WindowInterop.ClearFullWindowFrame(window);
@@ -176,7 +186,9 @@ public static class WidgetAppearance
                 : ApplyAcrylic(state, isDark, tint, kind == WidgetBackdropKind.AcrylicBase, surfaceOpacity, intensity)
                   || ApplyMica(state, isDark, tint, false, surfaceOpacity, intensity);      // 不支持亚克力 → 回落云母
 
-            // 控制器接管时必须关掉 DWM 自带背景，否则 DWM 在控制器之上再叠一层默认亚克力（DeskBox 同款处理）
+            // 控制器接管时必须关掉 DWM 自带背景，否则 DWM 在控制器之上再叠一层默认亚克力（DeskBox 同款处理）。
+            // 同时摘掉纯色背衬：从 Solid 切回亚克力/云母时，TransparentTintBackdrop 必须让位给控制器。
+            ClearSolidBackdrop(state, window);
             window.SystemBackdrop = null;
             WindowInterop.SetDwmSystemBackdropNone(window);
             if (!ok)
@@ -258,40 +270,21 @@ public static class WidgetAppearance
     }
 
     /// <summary>
-    /// 纯色材质的第一层「扁平纯色薄雾」（复刻 DeskBox 的 WinUIEx.TransparentTintBackdrop）。
-    /// 复用 DesktopAcrylicController，但把 <see cref="DesktopAcrylicController.LuminosityOpacity"/> 置 0
-    /// 关闭霜化模糊，只保留 TintColor 以 TintOpacity（= 背景不透明度）呈现 —— 于是得到一层「扁平半透明纯色」，
-    /// 而非磨砂玻璃。内容表面（BuildContentSolidSurfaceColor）作第二层叠加，两层合计 Alpha ≈ 1-(1-o)²，
-    /// 浅色下接近不透明白（不再发灰），且「背景不透明度」同时控制两层 → 调低即透出桌面。
+    /// 纯色背衬当前是否真正挂在窗口上。为 true 时内容表面应保持透明，让扁平背衬单独着色，
+    /// 避免与背衬叠两层 alpha（这正是旧实现"纯色发灰/失效"的一半成因）。
     /// </summary>
-    private static bool ApplySolidTint(WindowBackdropState state, bool isDark, double surfaceOpacity)
+    public static bool IsFlatSolidActive(Window window)
+        => _states.TryGetValue(window, out var s)
+           && s.Solid is not null
+           && ReferenceEquals(window.SystemBackdrop, s.Solid);
+
+    /// <summary>摘掉纯色背衬（切回亚克力/云母/不透明，或窗口释放时调用）。</summary>
+    private static void ClearSolidBackdrop(WindowBackdropState state, Window window)
     {
-        if (!DesktopAcrylicController.IsSupported()) return false;
-        try
-        {
-            DetachMica(state);
-            state.Acrylic ??= new DesktopAcrylicController();
-            if (!state.AcrylicAttached)
-            {
-                if (!state.Acrylic.AddSystemBackdropTarget(state.Target!)) return false;
-                state.AcrylicAttached = true;
-                state.Acrylic.SetSystemBackdropConfiguration(state.Config!);
-            }
-            // 基色取 DeskBox 的 native backdrop tint（纯白 / 炭灰），不含强调色；
-            // 强调色由第二层内容表面带，两层叠出 DeskBox 同款淡彩。
-            state.Acrylic.Kind = DesktopAcrylicKind.Base;
-            state.Acrylic.TintColor = isDark
-                ? Windows.UI.Color.FromArgb(0xFF, 0x20, 0x22, 0x26)
-                : Windows.UI.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
-            state.Acrylic.TintOpacity = (float)Math.Clamp(surfaceOpacity, 0.0, 1.0);
-            state.Acrylic.LuminosityOpacity = 0;   // 关键：去模糊 → 扁平纯色薄雾
-            return true;
-        }
-        catch (Exception ex)
-        {
-            StarLog.Error("应用纯色薄雾失败", ex);
-            return false;
-        }
+        if (state.Solid is null) return;
+        try { if (ReferenceEquals(window.SystemBackdrop, state.Solid)) window.SystemBackdrop = null; }
+        catch { }
+        state.Solid = null;
     }
 
     /// <summary>摘掉亚克力挂载点（控制器留着复用）。</summary>
@@ -326,6 +319,7 @@ public static class WidgetAppearance
             state.Mica = null;
             state.AcrylicAttached = false;
             state.MicaAttached = false;
+            state.Solid = null;
             _states.Remove(window);
         }
     }
