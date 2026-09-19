@@ -243,7 +243,7 @@ public sealed partial class MusicWidget : UserControl
         ToolTipService.SetToolTip(ModeButton, MusicPlaybackModeMath.Label(snapshot.PlaybackMode));
 
         // 每次拿到真实快照就把推算基准归零，否则本地推算会一直叠在旧基准上
-        ResetTickBase(snapshot.Position);
+        ResetTickBase(snapshot);
         SetProgress(snapshot.Position, snapshot.Duration);
         // 有曲目就保持轮询：暂停中也要回源，否则用系统媒体键/播放器窗口按了播放，
         // 组件要等到下一次事件才反应（部分播放器根本不发事件）。
@@ -251,20 +251,30 @@ public sealed partial class MusicWidget : UserControl
     }
 
     /// <summary>重新设定进度推算基准（真实快照到达 / seek 提交后调用），并顺带反推倍速。</summary>
-    private void ResetTickBase(TimeSpan position)
-    {
-        var now = DateTimeOffset.Now;
+    private void ResetTickBase(MediaSnapshot snapshot)
+        => ResetTickBase(snapshot.Position, snapshot.TimelineUpdatedAt);
 
-        // 用相邻两次真实读数反推倍速。仅在「播放中 + 间隔够长 + 位置正向推进」时取样：
-        // 切歌 / seek / 暂停恢复都会让位置跳变，那些必须丢掉，否则会算出 20× 这种离谱值。
+    /// <summary>
+    /// 设定推算基准的核心实现。
+    /// <paramref name="refAt"/> 必须是「<paramref name="position"/> 所对应的真实时刻」：
+    /// 真实快照传入 <see cref="MediaSnapshot.TimelineUpdatedAt"/>（系统读取时刻），
+    /// seek 传入「当前墙钟」（跳转即时生效），二者都不能是 UI 渲染时刻。
+    /// </summary>
+    private void ResetTickBase(TimeSpan position, DateTimeOffset refAt)
+    {
+        // 基准锚定到 refAt 而非渲染时刻：读取有 100~900ms 延迟，锚到渲染时刻会让进度条慢半拍、
+        // 并在回源校正时被拉回，表现为在相差约 1 秒的两个时刻间反复横跳（倍速播放尤甚）。
+        if (refAt <= DateTimeOffset.MinValue) refAt = DateTimeOffset.Now;
+
+        // 用相邻两次真实读数反推倍速。仅在「位置正向推进 + 间隔够长」时取样；
+        // 切歌 / seek / 暂停恢复的位置跳变必须丢掉，否则会算出 20× 这种离谱值。
         if (_hasRateSample)
         {
-            var gap = now - _lastRealAt;
+            var gap = refAt - _lastRealAt;
             var delta = position - _lastRealPosition;
             if (gap >= TimeSpan.FromMilliseconds(400) && delta > TimeSpan.Zero)
             {
                 var observed = delta.TotalSeconds / gap.TotalSeconds;
-                // 合理倍速区间（0.25×–8×）之外一律视为跳变，保持原值
                 if (observed >= 0.25 && observed <= 8.0)
                     _rate = _rate * 0.3 + observed * 0.7;   // 平滑，避免抖动
             }
@@ -275,11 +285,11 @@ public sealed partial class MusicWidget : UserControl
         }
 
         _lastRealPosition = position;
-        _lastRealAt = now;
+        _lastRealAt = refAt;
         _hasRateSample = true;
 
         _tickBase = position;
-        _tickBaseAt = now;
+        _tickBaseAt = refAt;
         _ticksSinceSync = 0;
     }
 
@@ -365,8 +375,8 @@ public sealed partial class MusicWidget : UserControl
         if (snapshot is null || snapshot.Duration <= TimeSpan.Zero) return;
 
         var target = TimeSpan.FromSeconds(snapshot.Duration.TotalSeconds * _seekRatio);
-        // 先把基准挪到目标点，否则下一次 tick 会用旧基准把进度拽回跳转前
-        ResetTickBase(target);
+        // 先把基准挪到目标点（锚定到「现在」，seek 即时生效），否则下一次 tick 会用旧基准把进度拽回跳转前
+        ResetTickBase(target, DateTimeOffset.Now);
         SetProgress(target, snapshot.Duration);
         await s_media.SeekAsync(target);
         await s_media.RefreshAsync();

@@ -43,6 +43,13 @@ public sealed class MediaSnapshot
     /// </summary>
     public long TimelineStartTicks { get; set; }
 
+    /// <summary>
+    /// <see cref="Position"/> 经 <c>LastUpdatedTime</c> 补偿后所对应的<b>真实读取时刻</b>（墙钟）。
+    /// 进度推算基准必须锚定到这个时刻，而不是 UI 渲染时刻——否则读取延迟（100~900ms）会
+    /// 让进度条系统性慢拍、并在每次回源校正的瞬间被拉回，表现为「在相差约 1 秒的两个时刻间反复横跳」。
+    /// </summary>
+    public DateTimeOffset TimelineUpdatedAt { get; set; }
+
     /// <summary>标题为空时说明「没有正在播放的会话」，组件据此显示占位。</summary>
     public bool HasTrack => !string.IsNullOrWhiteSpace(Title) || !string.IsNullOrWhiteSpace(Artist);
 
@@ -542,6 +549,10 @@ public sealed class MediaSessionService : IDisposable
                 if (snapshot.Duration > TimeSpan.Zero && snapshot.Position > snapshot.Duration)
                     snapshot.Position = snapshot.Duration;
             }
+
+            // 记录「补偿后 Position 所对应的真实读取时刻」：进度推算基准必须锚定到这里，
+            // 而不是 UI 渲染时刻（见 MusicWidget.ResetTickBase）。
+            snapshot.TimelineUpdatedAt = DateTimeOffset.Now;
 
             // 只有「播放器允许跳进度」且「时间轴长度已知」时才让进度条可拖，
             // 否则拖了也跳不动，用户会以为组件坏了。
