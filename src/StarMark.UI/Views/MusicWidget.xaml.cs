@@ -50,6 +50,16 @@ public sealed partial class MusicWidget : UserControl
     private DateTimeOffset _tickBaseAt;
     private int _ticksSinceSync;
 
+    /// <summary>
+    /// 实际播放倍速（1.0 = 常速）。SMTC 的时间轴只给「位置」，不给倍速，
+    /// 而按 1× 墙钟推算在 2× 播放时进度条会越走越慢（用户报「倍速播放时进度条与实际不符」）。
+    /// 这里用相邻两次<b>真实</b>读数的位移 / 时间差反推倍速，播放器换倍速后两秒内自动跟上。
+    /// </summary>
+    private double _rate = 1.0;
+    private TimeSpan _lastRealPosition = TimeSpan.Zero;
+    private DateTimeOffset _lastRealAt;
+    private bool _hasRateSample;
+
     public MusicWidget()
     {
         InitializeComponent();
@@ -152,10 +162,11 @@ public sealed partial class MusicWidget : UserControl
 
         if (snapshot.IsPlaying && snapshot.Duration > TimeSpan.Zero)
         {
-            // 按「基准位置 + 墙钟流逝」推算，而不是拿不动的快照做加法（那样进度条会永远停在原地）。
+            // 按「基准位置 + 墙钟流逝 × 实际倍速」推算，而不是拿不动的快照做加法（那样进度条会永远停在原地）。
+            // 乘上倍速：1× 之外（0.5× / 1.5× / 2×）时按 1× 推算会让进度条系统性偏慢/偏快。
             var elapsed = DateTimeOffset.Now - _tickBaseAt;
             if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
-            var pos = _tickBase + elapsed;
+            var pos = _tickBase + TimeSpan.FromTicks((long)(elapsed.Ticks * _rate));
 
             if (pos >= snapshot.Duration)
             {
@@ -173,9 +184,10 @@ public sealed partial class MusicWidget : UserControl
         // ① 推算会累积误差；
         // ② 播放器可能被别处（键盘媒体键、系统弹窗）改了状态；
         // ③ **部分播放器（尤其浏览器里换下一个视频/音频）不广播 MediaPropertiesChanged**，
-        //    不轮询就永远看不到曲目切换——这正是「切歌了组件还显示上一首」的根因。
-        // ResetTickBase（每次真实快照到达）会把计数归零，所以这里实际是「距上次真实刷新 3 秒」。
-        if (++_ticksSinceSync >= 3)
+        //    不轮询就永远看不到曲目切换——这正是「切歌了组件还显示上一首」的根因；
+        // ④ 倍速只能靠回源反推，回源越勤，倍速识别越准（见 _rate）。
+        // ResetTickBase（每次真实快照到达）会把计数归零，所以这里实际是「距上次真实刷新 2 秒」。
+        if (++_ticksSinceSync >= 2)
         {
             _ticksSinceSync = 0;
             _ = s_media.RefreshAsync();
@@ -238,11 +250,36 @@ public sealed partial class MusicWidget : UserControl
         _timer?.Start();
     }
 
-    /// <summary>重新设定进度推算基准（真实快照到达 / seek 提交后调用）。</summary>
+    /// <summary>重新设定进度推算基准（真实快照到达 / seek 提交后调用），并顺带反推倍速。</summary>
     private void ResetTickBase(TimeSpan position)
     {
+        var now = DateTimeOffset.Now;
+
+        // 用相邻两次真实读数反推倍速。仅在「播放中 + 间隔够长 + 位置正向推进」时取样：
+        // 切歌 / seek / 暂停恢复都会让位置跳变，那些必须丢掉，否则会算出 20× 这种离谱值。
+        if (_hasRateSample)
+        {
+            var gap = now - _lastRealAt;
+            var delta = position - _lastRealPosition;
+            if (gap >= TimeSpan.FromMilliseconds(400) && delta > TimeSpan.Zero)
+            {
+                var observed = delta.TotalSeconds / gap.TotalSeconds;
+                // 合理倍速区间（0.25×–8×）之外一律视为跳变，保持原值
+                if (observed >= 0.25 && observed <= 8.0)
+                    _rate = _rate * 0.3 + observed * 0.7;   // 平滑，避免抖动
+            }
+            else if (delta <= TimeSpan.Zero)
+            {
+                _rate = 1.0;   // 位置倒退 = 切歌或跳转，倍速回到常速重估
+            }
+        }
+
+        _lastRealPosition = position;
+        _lastRealAt = now;
+        _hasRateSample = true;
+
         _tickBase = position;
-        _tickBaseAt = DateTimeOffset.Now;
+        _tickBaseAt = now;
         _ticksSinceSync = 0;
     }
 
