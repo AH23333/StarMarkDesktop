@@ -250,7 +250,9 @@ public sealed class TodoWidgetViewModel : ObservableObject
     ///    N 条就是 N 次全表扫描，改成先建 id 索引再逐条写。
     /// </para>
     /// </summary>
-    public async Task PersistVisibleOrderAsync()
+    public Task PersistVisibleOrderAsync() => GuardAsync("保存待办顺序失败", PersistVisibleOrderCoreAsync);
+
+    private async Task PersistVisibleOrderCoreAsync()
     {
         if (!_dragActive) return;
         _dragActive = false;
@@ -277,7 +279,9 @@ public sealed class TodoWidgetViewModel : ObservableObject
         await LoadAsync();
     }
 
-    public async Task AddAsync(string text)
+    public Task AddAsync(string text) => GuardAsync("新增待办失败", () => AddCoreAsync(text));
+
+    private async Task AddCoreAsync(string text)
     {
         if (_repo is null || string.IsNullOrWhiteSpace(text)) return;
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -314,7 +318,7 @@ public sealed class TodoWidgetViewModel : ObservableObject
         return known.Count == 0 ? 0 : known.Min() - 1;
     }
 
-    public async Task ToggleAsync(long id, bool done)
+    public Task ToggleAsync(long id, bool done) => GuardAsync("更新待办状态失败", async () =>
     {
         var it = await FindItemAsync(id);
         if (it is null) return;
@@ -322,10 +326,10 @@ public sealed class TodoWidgetViewModel : ObservableObject
         it.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         await _repo!.UpsertLocalItemAsync(it);
         await LoadAsync();
-    }
+    });
 
     /// <summary>设置颜色标记（0 = 清除）。</summary>
-    public async Task SetColorAsync(long id, int color)
+    public Task SetColorAsync(long id, int color) => GuardAsync("更新待办颜色失败", async () =>
     {
         var it = await FindItemAsync(id);
         if (it is null) return;
@@ -333,13 +337,13 @@ public sealed class TodoWidgetViewModel : ObservableObject
         it.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         await _repo!.UpsertLocalItemAsync(it);
         await LoadAsync();
-    }
+    });
 
     /// <summary>
     /// 设置截止日期。<paramref name="dayOffset"/> 为相对今天的天数（0=今天，1=明天）；
     /// null 表示清除。统一存「当日 0 点」以按天比较。
     /// </summary>
-    public async Task SetDueAsync(long id, int? dayOffset)
+    public Task SetDueAsync(long id, int? dayOffset) => GuardAsync("更新待办截止日期失败", async () =>
     {
         var it = await FindItemAsync(id);
         if (it is null) return;
@@ -349,14 +353,14 @@ public sealed class TodoWidgetViewModel : ObservableObject
         it.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         await _repo!.UpsertLocalItemAsync(it);
         await LoadAsync();
-    }
+    });
 
     /// <summary>
     /// 删除并把整条 item 快照留作撤销依据。
     /// 撤销走「重新 Upsert 快照」——快照保留了同一个 source_id，
     /// 所以恢复出来的还是同一条业务记录（行 id 可能不同，但业务唯一键是 (source, source_id)）。
     /// </summary>
-    public async Task DeleteAsync(long id)
+    public Task DeleteAsync(long id) => GuardAsync("删除待办失败", async () =>
     {
         var it = await FindItemAsync(id);
         if (it is null) return;
@@ -369,9 +373,9 @@ public sealed class TodoWidgetViewModel : ObservableObject
             OnPropertyChanged(nameof(HasUndo));
         });
         await LoadAsync();
-    }
+    });
 
-    public async Task UndoDeleteAsync()
+    public Task UndoDeleteAsync() => GuardAsync("撤销删除失败", async () =>
     {
         var snapshot = _undoSnapshot;
         if (snapshot is null) return;
@@ -379,7 +383,7 @@ public sealed class TodoWidgetViewModel : ObservableObject
         snapshot.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         await _repo!.UpsertLocalItemAsync(snapshot);
         await LoadAsync();
-    }
+    });
 
     /// <summary>关闭撤销条（下次删除前 / 组件隐藏时清理，避免快照长期驻留内存）。</summary>
     public void DismissUndo()
@@ -416,5 +420,17 @@ public sealed class TodoWidgetViewModel : ObservableObject
     {
         if (_dispatcher.HasThreadAccess) action();
         else _dispatcher.TryEnqueue(() => action());
+    }
+
+    /// <summary>
+    /// 组件写操作的统一兜底。视图侧全部以 <c>_ = ViewModel.XxxAsync()</c>（fire-and-forget）触发，
+    /// 而本进程只挂了 UI 线程与 AppDomain 的 UnhandledException，<b>没有</b> TaskScheduler.UnobservedTaskException；
+    /// 于是方法内未捕获的库异常会变成"未观察的 Task 异常"被静默吞掉——"没存上"伪装成"存好了"，且无日志痕迹。
+    /// 这里统一 catch + 记日志：失败时保持列表原状（乐观更新在写成功之后才做，见各 Core 方法）。
+    /// </summary>
+    private async Task GuardAsync(string what, Func<Task> action)
+    {
+        try { await action(); }
+        catch (Exception ex) { StarLog.Error(what, ex); }
     }
 }
