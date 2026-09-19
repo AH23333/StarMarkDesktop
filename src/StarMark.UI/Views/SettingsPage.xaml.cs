@@ -308,20 +308,13 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         if (WidgetManager() is not { } mgr) return;
 
         var row = LayoutRowsItems.FirstOrDefault(r => r.Id == id);
-        var dlg = new ContentDialog
-        {
-            XamlRoot = this.XamlRoot,
-            Title = "删除布局",
-            PrimaryButtonText = "删除",
-            CloseButtonText = "取消",
-            DefaultButton = ContentDialogButton.Close,
-            Content = new TextBlock
-            {
-                Text = $"确定删除布局「{row?.Name ?? id}」？绑定给它切换的快捷键也会同时失效。",
-                TextWrapping = TextWrapping.Wrap,
-            },
-        };
-        if (await dlg.ShowAsync() != ContentDialogResult.Primary) return;
+        // 统一走外部居中窗口（非 ContentDialog）：按用户主题着色、可拖动、不可重复。
+        var confirm = await CenteredDialog.ConfirmAsync(
+            "删除布局",
+            $"确定删除布局「{row?.Name ?? id}」？绑定给它切换的快捷键也会同时失效。",
+            primaryText: "删除", cancelText: "取消",
+            owner: App.MainWindow, dedupeKey: $"deletelayout:{id}");
+        if (!confirm) return;
         await mgr.DeleteLayoutAsync(id);
     }
 
@@ -661,22 +654,13 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
     private async void ResetHotkeys_Click(object sender, RoutedEventArgs e)
     {
-        // 破坏性操作：先确认
-        if (this.XamlRoot is null) return;
-        var dlg = new ContentDialog
-        {
-            XamlRoot = this.XamlRoot,
-            Title = "恢复默认快捷键",
-            PrimaryButtonText = "恢复默认",
-            CloseButtonText = "取消",
-            DefaultButton = ContentDialogButton.Close,
-            Content = new TextBlock
-            {
-                Text = "将清空所有自定义快捷键，只保留默认的「Ctrl + Alt + Space（切换主界面）」。此操作不可撤销。",
-                TextWrapping = TextWrapping.Wrap,
-            },
-        };
-        if (await dlg.ShowAsync() != ContentDialogResult.Primary) return;
+        // 破坏性操作：先确认（统一走外部居中窗口：按用户主题着色、可拖动、不可重复）
+        var confirm = await CenteredDialog.ConfirmAsync(
+            "恢复默认快捷键",
+            "将清空所有自定义快捷键，只保留默认的「Ctrl + Alt + Space（切换主界面）」。此操作不可撤销。",
+            primaryText: "恢复默认", cancelText: "取消",
+            owner: App.MainWindow, dedupeKey: "resethotkeys");
+        if (!confirm) return;
 
         StopRecording(resetText: true);
         var defaults = SettingsStore.DefaultHotkeyBindings();
@@ -779,26 +763,23 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
                   (summary.HasWidgets ? "　组件数据：有" : "")
                 : "（无法读取摘要）";
 
-            var dlg = new ContentDialog
+            // 统一走外部居中窗口（非 ContentDialog）：按用户主题着色、可拖动、不可重复。
+            // 三选一场景（合并导入 / 覆盖导入 / 取消）用 ShowContentAsync 的 primary+secondary 双按钮。
+            var detailBlock = new TextBlock
             {
-                XamlRoot = this.XamlRoot,
-                Title = "导入备份",
-                PrimaryButtonText = "合并导入",
-                SecondaryButtonText = "覆盖导入",
-                CloseButtonText = "取消",
-                DefaultButton = ContentDialogButton.Close,
-                Content = new TextBlock
-                {
-                    Text = $"{detail}\n\n合并导入：保留现有条目，仅补充/覆盖用户元数据（安全、可重复）。\n" +
-                           "覆盖导入：先清空再导入，精确还原到备份时刻（会丢掉备份之后新增的条目）。",
-                    TextWrapping = TextWrapping.Wrap,
-                },
+                Text = $"{detail}\n\n合并导入：保留现有条目，仅补充/覆盖用户元数据（安全、可重复）。\n" +
+                       "覆盖导入：先清空再导入，精确还原到备份时刻（会丢掉备份之后新增的条目）。",
+                TextWrapping = TextWrapping.Wrap,
             };
+            var choice = await CenteredDialog.ShowContentAsync(
+                "导入备份", detailBlock, owner: App.MainWindow, dedupeKey: "importbackup",
+                width: 480, height: 320,
+                primaryText: "合并导入", secondaryText: "覆盖导入", cancelText: "取消");
 
-            var result = await dlg.ShowAsync();
-            if (result != ContentDialogResult.Primary && result != ContentDialogResult.Secondary) return;
+            if (choice != CenteredDialog.HostedDialogResult.Committed
+                && choice != CenteredDialog.HostedDialogResult.Secondary) return;
 
-            var mode = result == ContentDialogResult.Secondary ? RestoreMode.Replace : RestoreMode.Merge;
+            var mode = choice == CenteredDialog.HostedDialogResult.Secondary ? RestoreMode.Replace : RestoreMode.Merge;
             var rr = await _backup.RestoreAsync(env, mode, null, CancellationToken.None);
             ViewModel.BackupStatus = rr.Success
                 ? $"{rr.Message}（恢复前快照：{rr.SnapshotPath}）"

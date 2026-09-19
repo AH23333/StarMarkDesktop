@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using StarMark.UI.Helpers;
 using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
 
@@ -35,6 +36,9 @@ public sealed partial class ItemCard : UserControl
     /// <summary>打开所在位置（仅本地文件；资源管理器定位）。</summary>
     public event EventHandler<ItemCardViewModel>? OpenLocationRequested;
 
+    /// <summary>删除条目（快捷启动「快捷入口」场景使用，按 URI 移除）。</summary>
+    public event EventHandler<ItemCardViewModel>? DeleteRequested;
+
     private ItemCardViewModel? _viewModel;
     public ItemCardViewModel? ViewModel
     {
@@ -45,6 +49,19 @@ public sealed partial class ItemCard : UserControl
             DataContext = value;
             Bindings.Update();
         }
+    }
+
+    /// <summary>
+    /// 隐藏标签相关 UI（标签行 + 「＋ 标签」按钮）。快捷启动的「快捷入口」是合成条目、不入库，
+    /// 不应提供标签能力，由宿主模板置 <c>True</c>。
+    /// </summary>
+    public static readonly DependencyProperty SuppressTagsProperty =
+        DependencyProperty.Register(nameof(SuppressTags), typeof(bool), typeof(ItemCard), new PropertyMetadata(false));
+
+    public bool SuppressTags
+    {
+        get => (bool)GetValue(SuppressTagsProperty);
+        set => SetValue(SuppressTagsProperty, value);
     }
 
     public ItemCard() { InitializeComponent(); }
@@ -61,18 +78,16 @@ public sealed partial class ItemCard : UserControl
 
     private async void Preview_Click(object sender, RoutedEventArgs e)
     {
-        if (ViewModel == null || XamlRoot == null) return;
+        if (ViewModel == null) return;
         var vm = ViewModel;
-        var dialog = new ContentDialog
-        {
-            XamlRoot = XamlRoot,
-            Title = vm.Title.Length <= 40 ? vm.Title : vm.Title[..40] + "…",
-            Content = new PreviewHost { ViewModel = vm },
-            PrimaryButtonText = "打开",
-            CloseButtonText = "关闭",
-            DefaultButton = ContentDialogButton.Close,
-        };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        var host = new PreviewHost { ViewModel = vm };
+        // 统一走外部居中窗口（非 ContentDialog）：按用户主题着色、可拖动、不可重复。
+        var result = await CenteredDialog.ShowContentAsync(
+            vm.Title.Length <= 40 ? vm.Title : vm.Title[..40] + "…",
+            host, owner: App.MainWindow,
+            dedupeKey: $"preview:{vm.Id}", width: 560, height: 480,
+            primaryText: "打开", cancelText: "关闭");
+        if (result == CenteredDialog.HostedDialogResult.Committed)
             OpenRequested?.Invoke(this, vm.Id);
     }
 
@@ -129,5 +144,10 @@ public sealed partial class ItemCard : UserControl
     private void Tag_Add_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel != null) TagAddRequested?.Invoke(this, ViewModel);
+    }
+
+    private void Delete_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel != null) DeleteRequested?.Invoke(this, ViewModel);
     }
 }

@@ -90,34 +90,33 @@ public static class ItemCardActions
         }
     }
 
+    /// <summary>把 XamlRoot 解析为发起窗口（用于弹窗居中显示器）。无可靠映射时回落到主窗口。</summary>
+    private static Window? ResolveOwner(XamlRoot? xamlRoot) => App.MainWindow;
+
     public static async void EditNote(XamlRoot xamlRoot, ItemCardViewModel vm)
     {
         try
         {
-            var dialog = new ContentDialog
+            var box = new TextBox
             {
-                Title = "编辑笔记",
-                PrimaryButtonText = "保存",
-                CloseButtonText = "取消",
-                XamlRoot = xamlRoot,
-                DefaultButton = ContentDialogButton.Primary,
-                Content = new TextBox
-                {
-                    Text = vm.Notes ?? string.Empty,
-                    AcceptsReturn = true,
-                    TextWrapping = TextWrapping.Wrap,
-                    MinHeight = 100,
-                    PlaceholderText = "写下笔记...",
-                },
+                Text = vm.Notes ?? string.Empty,
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.Wrap,
+                MinHeight = 100,
+                PlaceholderText = "写下笔记...",
             };
+            box.Select(box.Text.Length, 0);
 
-            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-            {
-                var box = (TextBox)dialog.Content;
-                var text = box.Text.Trim();
-                await GetRepo().SetNoteAsync(vm.Id, text, CancellationToken.None);
-                vm.ApplyNotes(string.IsNullOrWhiteSpace(text) ? null : text);
-            }
+            // 统一走外部居中窗口（非 ContentDialog），自动按用户主题着色、可拖动、不可重复。
+            var result = await CenteredDialog.ShowContentAsync(
+                "编辑笔记", box, owner: ResolveOwner(xamlRoot),
+                dedupeKey: $"editnote:{vm.Id}", width: 460, height: 260,
+                primaryText: "保存", cancelText: "取消");
+
+            if (result != CenteredDialog.HostedDialogResult.Committed) return;
+            var text = box.Text.Trim();
+            await GetRepo().SetNoteAsync(vm.Id, text, CancellationToken.None);
+            vm.ApplyNotes(string.IsNullOrWhiteSpace(text) ? null : text);
         }
         catch (Exception ex)
         {
@@ -136,17 +135,13 @@ public static class ItemCardActions
             };
             editor.SetTags(vm.Tags);
 
-            var dialog = new ContentDialog
-            {
-                Title = "编辑标签",
-                PrimaryButtonText = "保存",
-                CloseButtonText = "取消",
-                XamlRoot = xamlRoot,
-                DefaultButton = ContentDialogButton.Primary,
-                Content = editor,
-            };
+            // 统一走外部居中窗口（非 ContentDialog），自动按用户主题着色、可拖动、不可重复。
+            var result = await CenteredDialog.ShowContentAsync(
+                "编辑标签", editor, owner: ResolveOwner(xamlRoot),
+                dedupeKey: $"edittags:{vm.Id}", width: 460, height: 460,
+                primaryText: "保存", cancelText: "取消");
 
-            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            if (result != CenteredDialog.HostedDialogResult.Committed) return;
 
             // 差集写库：只删真正减少的、只加真正新增的。
             // 原实现是「全删再全加」的 N+1 往返，标签多时可感知卡顿，且会 churn tags 表。
@@ -206,16 +201,13 @@ public static class ItemCardActions
                 AllTags = (await repo.GetAllTagsAsync(CancellationToken.None)).Select(t => t.Name).ToList(),
             };
 
-            var dialog = new ContentDialog
-            {
-                Title = "快速添加标签",
-                PrimaryButtonText = "添加",
-                CloseButtonText = "取消",
-                XamlRoot = xamlRoot,
-                DefaultButton = ContentDialogButton.Primary,
-                Content = editor,
-            };
-            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            // 统一走外部居中窗口（非 ContentDialog），自动按用户主题着色、可拖动、不可重复。
+            var result = await CenteredDialog.ShowContentAsync(
+                "快速添加标签", editor, owner: ResolveOwner(xamlRoot),
+                dedupeKey: $"addtag:{vm.Id}", width: 460, height: 460,
+                primaryText: "添加", cancelText: "取消");
+
+            if (result != CenteredDialog.HostedDialogResult.Committed) return;
 
             var desired = editor.Tags.ToList();
             if (desired.Count == 0) return;
