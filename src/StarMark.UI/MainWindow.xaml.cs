@@ -271,11 +271,34 @@ public sealed partial class MainWindow : Window
         titleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
         titleBar.ButtonBackgroundColor = Colors.Transparent;
         titleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
-        titleBar.ButtonHoverBackgroundColor = Colors.Transparent;
-        titleBar.ButtonPressedBackgroundColor = Colors.Transparent;
+        // 悬停/按下高亮由 ApplyTitleBarButtonColors 按主题设置；之前被设为全透明 → 最小化/窗口化/关闭
+        // 按钮悬停无任何反馈。这里不再写死透明，改在 ApplyTitleBarButtonColors 内给出主题化中性色。
+        ApplyTitleBarButtonColors();
 
         ApplyDragRects();
         SizeChanged += (_, _) => ApplyDragRects();
+    }
+
+    /// <summary>
+    /// 系统标题栏按钮（最小化 / 窗口化 / 关闭）的悬停与按下高亮。
+    /// 之前三个按钮的 Hover/Pressed 背景被写死为 <see cref="Colors.Transparent"/>，导致悬停无反馈；
+    /// 这里按当前主题给出低透明度中性色（浅色压暗、深色提亮），让悬停/按下有可见高亮，对齐 WinUI 原生标题栏。
+    /// 主题切换时调用，保证深浅色下都正确。
+    /// </summary>
+    private void ApplyTitleBarButtonColors()
+    {
+        try
+        {
+            var titleBar = AppWindow.TitleBar;
+            var isDark = TargetTheme(_themePref) == ElementTheme.Dark;
+            titleBar.ButtonHoverBackgroundColor = isDark
+                ? Windows.UI.Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)   // 深色：约 20% 白
+                : Windows.UI.Color.FromArgb(0x1F, 0x00, 0x00, 0x00);   // 浅色：约 12% 黑
+            titleBar.ButtonPressedBackgroundColor = isDark
+                ? Windows.UI.Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF)   // 深色：约 33% 白
+                : Windows.UI.Color.FromArgb(0x33, 0x00, 0x00, 0x00);   // 浅色：约 20% 黑
+        }
+        catch { }
     }
 
     private void ApplyDragRects()
@@ -306,6 +329,8 @@ public sealed partial class MainWindow : Window
         ThemeManager.Apply(this, _themePref);
         UpdateThemeIcon();
         RefreshAppearance();   // 主题画笔按窗口实际主题重新解析，否则一键切换后主界面背景色不跟随
+        ApplyTitleBarButtonColors();                 // 标题栏按钮高亮随主题
+        _ = _widgetManager.ApplyThemeToAllAsync(_themePref); // 同步组件主题（组件是独立窗口，不会自动传导）
     }
 
     private void UpdateThemeIcon()
@@ -330,6 +355,8 @@ public sealed partial class MainWindow : Window
         ThemeManager.Apply(this, pref);
         UpdateThemeIcon();
         RefreshAppearance();   // 设置页切换主题后同步刷新主界面背景
+        ApplyTitleBarButtonColors();                 // 标题栏按钮高亮随主题
+        _ = _widgetManager.ApplyThemeToAllAsync(pref); // 同步组件主题（组件是独立窗口，不会自动传导）
     }
 
     // ===== 导航 =====
