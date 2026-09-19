@@ -114,10 +114,13 @@ public static class WidgetAppearance
                 DetachMica(state);
                 var solidOk = ApplySolidTint(state, isDark, surfaceOpacity);
                 if (state.AcrylicAttached) state.Acrylic?.SetSystemBackdropConfiguration(state.Config);
-                window.SystemBackdrop = null;            // 控制器手动挂载，关掉 DWM 自带背景
-                WindowInterop.SetDwmSystemBackdropNone(window);
+                // 整窗玻璃化必须早于 SetDwmSystemBackdropNone：先 DwmExtendFrameIntoClientArea(-1)
+                // 把客户区「玻璃化」，再设 DWMSBT_NONE 让原生控制器接管，否则客户区停留为不透明灰白，
+                // 透明材质叠在灰底上 → 调最低不透明度也完全不透明、且显灰（与亚克力分支顺序一致）。
                 WindowInterop.ApplyFullWindowFrame(window);
                 WindowInterop.SetImmersiveDarkMode(window, isDark);
+                window.SystemBackdrop = null;            // 控制器手动挂载，关掉 DWM 自带背景
+                WindowInterop.SetDwmSystemBackdropNone(window);
                 if (!solidOk) StarLog.Error($"纯色材质薄雾挂载失败，已退化为实色表面 ({kind})");
                 return;
             }
