@@ -25,6 +25,8 @@
                                 Visibility="{x:Bind ViewModel.HasOpenLocation, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutItem Text="复制链接/路径" Click="Menu_CopyLink"/>
                 <MenuFlyoutItem Text="预览" Click="Preview_Click"/>
+                <MenuFlyoutItem Text="删除" Click="Delete_Click"
+                                Visibility="{x:Bind ViewModel.IsLauncherMode, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutSeparator Visibility="{x:Bind ViewModel.IsLauncherMode, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
                 <MenuFlyoutItem Click="Pin_Click"
                                 Text="{x:Bind ViewModel.PinMenuText, Mode=OneWay}"
@@ -77,7 +79,8 @@
                        Visibility="{x:Bind ViewModel.HasDescription, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
 
             <!-- 标签行：点击标签查看该标签条目 ＋ ✕ 快速移除 ＋ 快速添加 -->
-            <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Spacing="4">
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Spacing="4"
+                        Visibility="{x:Bind SuppressTags, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
                 <ItemsRepeater ItemsSource="{x:Bind ViewModel.Tags, Mode=OneWay}">
                     <ItemsRepeater.Layout>
                         <StackLayout Orientation="Horizontal" Spacing="4"/>

@@ -124,6 +124,18 @@ public sealed partial class QuickLaunchWidget : UserControl
     private void Card_TagAddRequested(object sender, ItemCardViewModel vm)
         => ItemCardActions.AddTag(this.XamlRoot, vm);
 
+    // 快捷启动「快捷入口」删除：合成条目按 URI 从本组件移除（带外部居中确认弹窗）。
+    private async void Card_DeleteRequested(object sender, ItemCardViewModel vm)
+    {
+        if (vm is not { IsLauncherMode: true }) return;
+        var ok = await CenteredDialog.ConfirmAsync(
+            "删除快捷入口",
+            $"确定删除快捷入口「{vm.Title}」？此操作不可撤销。",
+            primaryText: "删除", cancelText: "取消",
+            owner: App.MainWindow, dedupeKey: $"deletelink:{vm.Uri}");
+        if (ok) await _manager.RemoveLinkAsync(_instanceId, vm.Uri);
+    }
+
     // ── 搜索结果（SearchCardTemplate）：点击才开主窗 ──
 
     private void Card_SearchOpenRequested(object sender, long itemId)
