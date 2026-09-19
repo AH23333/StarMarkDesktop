@@ -79,6 +79,7 @@ public static class WidgetAppearance
         public bool MicaAttached;
         public SystemBackdropConfiguration? Config;
         public ICompositionSupportsSystemBackdrop? Target;
+        public bool ActivationWired;
     }
 
     private static readonly ConditionalWeakTable<Window, WindowBackdropState> _states = new();
@@ -103,6 +104,19 @@ public static class WidgetAppearance
             state.Config.IsInputActive = true;
             state.Config.Theme = isDark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light;
 
+            // 让激活态跟随窗口真实焦点：原先恒置 IsInputActive=true，令失焦的组件/窗口仍按「激活」
+            // 绘制饱和材质（与系统其它窗口观感不符）。挂一次 Activated，据此在 Active/Inactive(含隐藏)
+            // 间切换；Config 与控制器是同一实例、改属性实时生效，无需重下发。对齐 DeskBox 的窗口激活处理。
+            if (!state.ActivationWired)
+            {
+                state.ActivationWired = true;
+                window.Activated += (_, e) =>
+                {
+                    if (state.Config is { } cfg)
+                        cfg.IsInputActive = e.WindowActivationState != WindowActivationState.Deactivated;
+                };
+            }
+
             // 纯色（Solid）：复刻 DeskBox 的 WinUIEx.TransparentTintBackdrop —— 用一层「无模糊的纯色薄雾」
             // 作第一层（基色纯白/炭灰，Alpha = 背景不透明度），内容表面（见 SurfaceBrush 的
             // BuildContentSolidSurfaceColor）作第二层，两层叠加后浅色下接近不透明白、不再发灰，
@@ -121,7 +135,13 @@ public static class WidgetAppearance
                 WindowInterop.SetImmersiveDarkMode(window, isDark);
                 window.SystemBackdrop = null;            // 控制器手动挂载，关掉 DWM 自带背景
                 WindowInterop.SetDwmSystemBackdropNone(window);
-                if (!solidOk) StarLog.Error($"纯色材质薄雾挂载失败，已退化为实色表面 ({kind})");
+                if (!solidOk)
+                {
+                    // 薄雾控制器没挂上却已把客户区玻璃化 → 什么都不垫就是透明幽灵窗。撤掉玻璃化，
+                    // 让 DWM 铺回不透明底，兑现日志里那句「退化为实色表面」。
+                    WindowInterop.ClearFullWindowFrame(window);
+                    StarLog.Error($"纯色材质薄雾挂载失败，已退化为实色表面 ({kind})");
+                }
                 return;
             }
 
@@ -159,7 +179,13 @@ public static class WidgetAppearance
             // 控制器接管时必须关掉 DWM 自带背景，否则 DWM 在控制器之上再叠一层默认亚克力（DeskBox 同款处理）
             window.SystemBackdrop = null;
             WindowInterop.SetDwmSystemBackdropNone(window);
-            if (!ok) StarLog.Error($"当前平台不支持 {kind} 材质，已退化为实色表面");
+            if (!ok)
+            {
+                // 云母/亚克力都挂不上（平台不支持/AddSystemBackdropTarget 失败）却已玻璃化客户区 →
+                // 无控制器垫底就是一块透明幽灵窗，滑块再怎么调也看不见内容。撤掉玻璃化退回不透明底。
+                WindowInterop.ClearFullWindowFrame(window);
+                StarLog.Error($"当前平台不支持 {kind} 材质，已退化为实色表面");
+            }
         }
         catch (Exception ex)
         {
