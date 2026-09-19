@@ -396,6 +396,9 @@ public sealed partial class MainWindow : Window
     public void NavigateTo(string tag, object? param = null)
     {
         NavView.SelectedItem = null;
+        // 编程式导航不触发 SelectionChanged（上面把 SelectedItem 置 null），故在此同步当前页标记；
+        // 否则 FolderTreePageViewModel/SearchPageViewModel 的「仅当前页刷新」闸停在旧值，深链进入的页不再响应数据变更。
+        ViewModel.CurrentPageTag = tag;
         SetNavVisible(tag is not ("search" or "settings"));
         NavigateToPage(tag, param);
         PushToolbarToContent();
