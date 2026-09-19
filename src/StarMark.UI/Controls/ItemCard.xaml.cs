@@ -85,7 +85,7 @@ public sealed partial class ItemCard : UserControl
         var result = await CenteredDialog.ShowContentAsync(
             vm.Title.Length <= 40 ? vm.Title : vm.Title[..40] + "…",
             host, owner: App.MainWindow,
-            dedupeKey: $"preview:{vm.Id}", width: 560, height: 480,
+            dedupeKey: $"preview:{vm.Id}", width: 820, height: 640,
             primaryText: "打开", cancelText: "关闭");
         if (result == CenteredDialog.HostedDialogResult.Committed)
             OpenRequested?.Invoke(this, vm.Id);

@@ -6,7 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    MinWidth="420" MaxWidth="560" MinHeight="260" MaxHeight="520">
+    MinWidth="360" MinHeight="220">
 
     <Grid>
         <!-- 文本 / 代码预览 -->

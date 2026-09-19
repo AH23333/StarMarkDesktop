@@ -262,33 +262,50 @@ public static class CenteredDialog
             SafeClose(win);
         }
 
-        var root = new StackPanel { Spacing = 12, Margin = new Thickness(4) };
-        root.Children.Add(MakeTitle(title));
-        root.Children.Add(content);
+        // 三段式网格：标题(上) / 内容(中间 * 占满、被窗口尺寸夹住) / 按钮(下)。
+        // 用 Grid 而非 StackPanel：内容再大也不会把按钮挤出固定尺寸的窗外，保证按钮始终可见。
+        var layout = new Grid { Margin = new Thickness(4) };
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var titleBlock = MakeTitle(title);
+        Grid.SetRow(titleBlock, 0);
+        layout.Children.Add(titleBlock);
+
+        // 内容单元格：占满中间 * 行并被窗口夹住；内容随单元格拉伸填充，不会溢出盖住按钮。
+        var contentCell = new Border
+        {
+            Child = content,
+            Margin = new Thickness(0, 12, 0, 0),
+        };
+        Grid.SetRow(contentCell, 1);
+        layout.Children.Add(contentCell);
 
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
             Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, 12, 0, 0),
         };
         Button? primary = null, secondary = null, cancel = null;
         if (cancelText != null) { cancel = MakeButton(cancelText, false); buttons.Children.Add(cancel); }
         if (secondaryText != null) { secondary = MakeButton(secondaryText, false); buttons.Children.Add(secondary); }
         if (primaryText != null) { primary = MakeButton(primaryText, true); buttons.Children.Add(primary); }
-        if (buttons.Children.Count > 0) root.Children.Add(buttons);
+        Grid.SetRow(buttons, 2);
+        layout.Children.Add(buttons);
 
         if (cancel != null) cancel.Click += (_, _) => Finish(HostedDialogResult.Cancelled);
         if (secondary != null) secondary.Click += (_, _) => Finish(HostedDialogResult.Secondary);
         if (primary != null) primary.Click += (_, _) => Finish(HostedDialogResult.Committed);
-        // Esc 关闭（无主按钮时也允许关闭）
-        root.KeyDown += (_, e) =>
+
+        var grid = BuildCard(layout);
+        // Esc 关闭（无主按钮时也允许关闭）：挂在窗口根卡片上，按键从任意子元素冒泡上来都能捕获。
+        grid.KeyDown += (_, e) =>
         {
             if (e.Key == Windows.System.VirtualKey.Escape) { e.Handled = true; Finish(HostedDialogResult.Cancelled); }
         };
-
-        var grid = BuildCard(root);
         MountCore(win, grid, width, height, owner, () =>
         {
             if (dedupeKey != null) RemoveOpen(dedupeKey);
