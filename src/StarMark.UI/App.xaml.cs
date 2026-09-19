@@ -31,10 +31,16 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
-        // 全局未处理异常：写入 StarLog 便于诊断
+        // 全局未处理异常：写日志并置 Handled=true 兜住，绝不让单次 UI 异常杀掉整个进程。
+        // 关键背景：WinUI 3 中若这里不设 e.Handled，任何从点击处理里冒出的未处理异常
+        // （例如组件落盘时 WidgetStorage.Save 撞上 OneDrive/杀软文件锁抛 IOException，
+        //  该调用经 OnUiAsync 在 UI 线程同步内联执行，直接逃出点击处理）都会让应用崩溃。
+        // 组件/主界面是常驻桌面工具，一次操作失败应降级为"这条没存上"而非整个应用闪退。
+        // 注：真正的原生 AccessViolation（踩坑 #60 那类）非托管异常，本兜不住，靠调用点自身规避。
         UnhandledException += (_, e) =>
         {
-            StarLog.Error($"UI 未处理异常: {e.Exception}");
+            StarLog.Error($"UI 未处理异常（已拦截，进程继续）: {e.Exception}");
+            e.Handled = true;
         };
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
         {
