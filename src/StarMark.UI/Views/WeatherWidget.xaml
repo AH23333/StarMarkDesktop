@@ -75,14 +75,18 @@
             <!-- 多日预报 -->
             <ScrollViewer x:Name="DailyScroll" Grid.Row="1"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <StackPanel x:Name="ForecastHost" Spacing="6"/>
+                <!-- 右侧留白同理：纵向滚动条也会压住每行的温度数字 -->
+                <StackPanel x:Name="ForecastHost" Spacing="6" Padding="0,0,14,0"/>
             </ScrollViewer>
 
             <!-- 今日逐时：横向滚动，一格一小时 -->
             <ScrollViewer x:Name="HourlyScroll" Grid.Row="1" Visibility="Collapsed"
                           HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
                           HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled">
-                <StackPanel x:Name="HourlyHost" Orientation="Horizontal" Spacing="10"/>
+                <!-- 底部留白：WinUI 的滚动条是**覆盖**在内容之上的（不吃布局空间），
+                     组件一窄横向条就压住最后一行温度。给内容垫 16px 把它让开。 -->
+                <StackPanel x:Name="HourlyHost" Orientation="Horizontal" Spacing="10"
+                            Padding="0,0,0,16"/>
             </ScrollViewer>
 
             <TextBlock x:Name="EmptyHint" Grid.Row="1"
