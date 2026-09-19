@@ -491,6 +491,20 @@ public sealed class WidgetManager
         }
     });
 
+    /// <summary>
+    /// 主窗口切换主题后，把所有已打开的组件窗口的主题偏好同步过去并重挂材质。
+    /// 组件是独立窗口，主界面 <c>ThemeManager.Apply</c> 不会自动传导，必须显式广播，
+    /// 否则组件主题始终停留在各自的旧主题（或 Default=跟随系统），与主界面不同步。
+    /// </summary>
+    public Task ApplyThemeToAllAsync(ThemePreference pref) => OnUiAsync(() =>
+    {
+        foreach (var w in _windows.Values.ToList())
+        {
+            try { w.ApplyTheme(pref); }
+            catch (Exception ex) { StarLog.Error("同步组件主题失败", ex); }
+        }
+    });
+
     // ───────────────────────── 吸附支持 ─────────────────────────
 
     /// <summary>其他可见组件窗口的当前矩形（物理像素），供拖动吸附。</summary>

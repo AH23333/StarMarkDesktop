@@ -686,6 +686,17 @@ public sealed partial class WidgetWindow : Window
     }
 
     /// <summary>
+    /// 主窗口切换主题后，把同一主题偏好下发到本组件并立即重挂材质/表面。
+    /// 组件是独立窗口，主窗口 <c>ThemeManager.Apply</c> 不会自动传导；若只改材质而不改主题，
+    /// 组件的 <see cref="RefreshAppearance"/> 仍会用旧的实际主题 → 组件主题与主界面不同步。
+    /// </summary>
+    public void ApplyTheme(StarMark.UI.Helpers.ThemePreference pref)
+    {
+        try { ThemeManager.Apply(this, pref); } catch { }
+        RefreshAppearance();
+    }
+
+    /// <summary>
     /// 按给定位置 / 尺寸重新摆位（套用布局方案时用）。
     /// 注意：<see cref="WidgetStorage.Load"/> 每次反序列化都是新对象，窗口缓存的 _config
     /// 不会自动跟着变，因此必须由调用方显式下发并回写。
