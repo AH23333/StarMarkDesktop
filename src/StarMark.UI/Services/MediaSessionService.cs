@@ -109,6 +109,11 @@ public sealed class MediaSessionService : IDisposable
 
     /// <summary>重叠刷新闸门（几个 SMTC 事件常连发，合并成一次读取）。</summary>
     private bool _refreshing;
+    /// <summary>
+    /// 闸门期间又来了新事件 —— 早先的做法是<b>直接丢弃</b>，结果「曲目事件」被「时间轴事件」的
+    /// 在途刷新吞掉，用户看到的就是**切了歌但组件还显示旧曲目**。改成记脏位、在途结束后补跑一次。
+    /// </summary>
+    private bool _refreshPending;
 
     /// <summary>会话/曲目/播放状态任一变化。UI 订阅它做刷新。</summary>
     public event EventHandler? Changed;
@@ -451,8 +456,27 @@ public sealed class MediaSessionService : IDisposable
         if (!IsAvailable) return;
         // 多个事件（曲目 / 播放状态 / 时间轴）常在几毫秒内连发，
         // 重叠刷新只会重复打 WinRT 并让 UI 反复重排，这里合并成一次。
-        if (_refreshing) return;
+        // 但合并≠丢弃：期间到来的事件置脏位，结束后补跑，保证最后一次变化一定被读到。
+        if (_refreshing) { _refreshPending = true; return; }
         _refreshing = true;
+        try
+        {
+            do
+            {
+                _refreshPending = false;
+                await ReadSnapshotAsync();
+            }
+            while (_refreshPending && IsAvailable && !_disposed);
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+    }
+
+    /// <summary>读一次会话快照并触发 <see cref="Changed"/>。调用方必须已在 UI 线程。</summary>
+    private async Task ReadSnapshotAsync()
+    {
         try
         {
             var session = ResolveSession();
@@ -489,10 +513,34 @@ public sealed class MediaSessionService : IDisposable
             // 此时 EndTime 会等于 StartTime，这里判等避免算出一个 0 长度还拿去显示进度。
             if (timeline is not null)
             {
-                snapshot.TimelineStartTicks = timeline.StartTime.Ticks;
-                snapshot.Position = TimeSpan.FromTicks(Math.Max(0, timeline.Position.Ticks - timeline.StartTime.Ticks));
-                if (timeline.EndTime > timeline.StartTime)
-                    snapshot.Duration = TimeSpan.FromTicks(timeline.EndTime.Ticks - timeline.StartTime.Ticks);
+                var start = timeline.StartTime.Ticks;
+                snapshot.TimelineStartTicks = start;
+
+                // 总长优先取 EndTime；浏览器/部分播放器只给 MinSeekTime~MaxSeekTime，
+                // 这时 EndTime==StartTime，长度会算成 0（进度条永远 0%），故回退到可跳转区间。
+                var end = timeline.EndTime.Ticks;
+                if (end <= start && timeline.MaxSeekTime.Ticks > timeline.MinSeekTime.Ticks)
+                    end = timeline.MaxSeekTime.Ticks;
+
+                snapshot.Position = TimeSpan.FromTicks(Math.Max(0, timeline.Position.Ticks - start));
+                if (end > start) snapshot.Duration = TimeSpan.FromTicks(end - start);
+
+                // 时间轴是播放器「上一次上报」的快照（多数 1 秒一次，个别更慢），
+                // 直接用 Position 画出来的进度永远慢半拍 —— 用户看到的就是「进度条和实际不符」。
+                // 播放中按 LastUpdatedTime 把到此刻的流逝补回去（只在合理区间内补，防止脏时间戳把条拉爆）。
+                if (snapshot.IsPlaying)
+                {
+                    var updated = timeline.LastUpdatedTime;
+                    if (updated > DateTimeOffset.MinValue)
+                    {
+                        var delta = DateTimeOffset.Now - updated;
+                        if (delta > TimeSpan.Zero && delta < TimeSpan.FromSeconds(15))
+                            snapshot.Position += delta;
+                    }
+                }
+
+                if (snapshot.Duration > TimeSpan.Zero && snapshot.Position > snapshot.Duration)
+                    snapshot.Position = snapshot.Duration;
             }
 
             // 只有「播放器允许跳进度」且「时间轴长度已知」时才让进度条可拖，
@@ -505,10 +553,6 @@ public sealed class MediaSessionService : IDisposable
         catch (Exception ex)
         {
             StarLog.Error("读取媒体会话失败", ex);
-        }
-        finally
-        {
-            _refreshing = false;
         }
     }
 

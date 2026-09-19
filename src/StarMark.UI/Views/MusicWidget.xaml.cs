@@ -126,40 +126,56 @@ public sealed partial class MusicWidget : UserControl
     }
 
     /// <summary>
-    /// 1 秒一跳只为推进进度条；曲目信息靠 SMTC 事件驱动，不靠轮询。
-    /// 没有正在播放的会话时停表，避免常驻空转。
+    /// 1 秒一跳：① 推进进度条；② 定期回源（3 秒一次）。
+    /// 回源不能省——部分播放器换下一个视频/音频时压根不发 <c>MediaPropertiesChanged</c>，
+    /// 纯事件驱动就永远看不到切歌。没有曲目时由 <see cref="Render"/> 停表，避免常驻空转。
     /// </summary>
     private void StartTimer()
     {
-        _timer ??= DispatcherQueue.CreateTimer();
-        _timer.Interval = TimeSpan.FromSeconds(1);
-        _timer.Tick -= Timer_Tick;
-        _timer.Tick += Timer_Tick;
+        if (_timer is null)
+        {
+            _timer = DispatcherQueue.CreateTimer();
+            // 必须显式声明重复：DispatcherQueueTimer 默认 IsRepeating=false，
+            // 只 Start() 会「滴答一次就停」——表现就是进度条跳一秒后再也不动（踩坑 #84）。
+            _timer.IsRepeating = true;
+            _timer.Interval = TimeSpan.FromSeconds(1);
+            _timer.Tick += Timer_Tick;
+        }
     }
 
     private void Timer_Tick(DispatcherQueueTimer sender, object args)
     {
+        if (_seeking) return;   // 拖动中：位置由指针说了算
+
         var snapshot = s_media.Current;
-        if (snapshot is not { IsPlaying: true } || snapshot.Duration <= TimeSpan.Zero) return;
+        if (snapshot is null || !snapshot.HasTrack) return;
 
-        // 按「基准位置 + 墙钟流逝」推算，而不是拿不动的快照做加法（那样进度条会永远停在原地）。
-        var elapsed = DateTimeOffset.Now - _tickBaseAt;
-        if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
-        var pos = _tickBase + elapsed;
-
-        if (pos >= snapshot.Duration)
+        if (snapshot.IsPlaying && snapshot.Duration > TimeSpan.Zero)
         {
-            // 到点了：可能是本曲放完要切下一首，推算已经不准，必须回源读一次真实状态
-            SetProgress(snapshot.Duration, snapshot.Duration);
-            _ = s_media.RefreshAsync();
-            return;
+            // 按「基准位置 + 墙钟流逝」推算，而不是拿不动的快照做加法（那样进度条会永远停在原地）。
+            var elapsed = DateTimeOffset.Now - _tickBaseAt;
+            if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
+            var pos = _tickBase + elapsed;
+
+            if (pos >= snapshot.Duration)
+            {
+                // 到点了：可能是本曲放完要切下一首，推算已经不准，必须回源读一次真实状态
+                SetProgress(snapshot.Duration, snapshot.Duration);
+                _ = s_media.RefreshAsync();
+                return;
+            }
+
+            // 不重画整块：只推进进度，避免每秒重排文本
+            SetProgress(pos, snapshot.Duration);
         }
 
-        // 不重画整块：只推进进度，避免每秒重排文本
-        SetProgress(pos, snapshot.Duration);
-
-        // 每 5 秒回源校正一次：推算会累积误差，播放器也可能被别处（键盘媒体键、系统弹窗）改了状态
-        if (++_ticksSinceSync >= 5)
+        // 定期回源校正：
+        // ① 推算会累积误差；
+        // ② 播放器可能被别处（键盘媒体键、系统弹窗）改了状态；
+        // ③ **部分播放器（尤其浏览器里换下一个视频/音频）不广播 MediaPropertiesChanged**，
+        //    不轮询就永远看不到曲目切换——这正是「切歌了组件还显示上一首」的根因。
+        // ResetTickBase（每次真实快照到达）会把计数归零，所以这里实际是「距上次真实刷新 3 秒」。
+        if (++_ticksSinceSync >= 3)
         {
             _ticksSinceSync = 0;
             _ = s_media.RefreshAsync();
@@ -217,8 +233,9 @@ public sealed partial class MusicWidget : UserControl
         // 每次拿到真实快照就把推算基准归零，否则本地推算会一直叠在旧基准上
         ResetTickBase(snapshot.Position);
         SetProgress(snapshot.Position, snapshot.Duration);
-        if (snapshot.IsPlaying && snapshot.Duration > TimeSpan.Zero) _timer?.Start();
-        else _timer?.Stop();
+        // 有曲目就保持轮询：暂停中也要回源，否则用系统媒体键/播放器窗口按了播放，
+        // 组件要等到下一次事件才反应（部分播放器根本不发事件）。
+        _timer?.Start();
     }
 
     /// <summary>重新设定进度推算基准（真实快照到达 / seek 提交后调用）。</summary>
