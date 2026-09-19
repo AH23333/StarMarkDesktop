@@ -180,6 +180,9 @@ public sealed class EverythingSource : IItemSource
             src.CopyTo(dst);
 
             StarLog.Info("Everything SDK 下载完成。");
+            // 上面 :154 的首次尝试已把 _sdkLoadError 置位；不清标记，紧随其后的 EnsureSdkLoaded 会短路返回 false，
+            // 刚下载好的 DLL 在本进程永不被加载（须重启）。清后再试。
+            EverythingInterop.ResetLoadState();
             return EverythingInterop.EnsureSdkLoaded();
         }
         catch (Exception ex)

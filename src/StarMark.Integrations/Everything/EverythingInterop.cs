@@ -131,6 +131,15 @@ internal static class EverythingInterop
         }
     }
 
+    /// <summary>
+    /// 清除上次的加载失败标记。<b>必须在 SDK 重新下载/安装成功后、再次 <see cref="EnsureSdkLoaded"/> 之前调用</b>：
+    /// 否则 <see cref="_sdkLoadError"/> 的短路会让重试恒返回 false，导致自动下载好的 DLL 在本进程内永不被加载（须重启）。
+    /// </summary>
+    public static void ResetLoadState()
+    {
+        lock (SdkLoadGate) _sdkLoadError = null;
+    }
+
     /// <summary>检测 Everything 主程序是否运行。</summary>
     public static bool IsRunning()
     {
