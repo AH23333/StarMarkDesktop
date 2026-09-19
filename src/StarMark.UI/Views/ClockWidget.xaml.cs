@@ -60,7 +60,9 @@ public sealed partial class ClockWidget : UserControl
         // 再乘组件级文本缩放系数（来自外观「文本缩放」），让时钟时间也能随组件外观放大/缩小。
         var size = Math.Clamp(Math.Min(w * 0.19, h * 0.34), 22, 72) * _textScale;
         TimeBlock.FontSize = Math.Round(size);
-        DateBlock.FontSize = Math.Clamp(Math.Round(size * 0.34), 10, 22);
+        // 日期行同样要跟着系数走：早先漏乘 _textScale，于是「放大文字」后时间变了日期却不动。
+        // 上下限按倍率同步缩放，否则系数 1.8 时会被夹回 22，看起来像没生效。
+        DateBlock.FontSize = Math.Clamp(Math.Round(size * 0.34), 10 * _textScale, 22 * _textScale);
     }
 
     /// <summary>按宿主窗口是否可见启停每秒刷新；启动时立即校准一次显示。</summary>

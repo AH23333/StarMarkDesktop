@@ -87,10 +87,15 @@ public sealed partial class WidgetWindow : Window
     private bool _peeking;
     private bool _fgLoadedHooked;
 
-    // ── 每实例前景色 / 文本缩放的「基准值」缓存（避免反复套用导致双倍缩放或无法还原）──
-    /// <summary>记录每个 TextBlock 被我们上色前的基准字号（装箱存为 object，因 ConditionalWeakTable 的值必须为引用类型），
-    /// 文本缩放时按 基准×系数 计算，避免 RenderTransform 那种「相对组件中心放缩、放大后文本出界被裁切消失」的问题。</summary>
-    private readonly ConditionalWeakTable<TextBlock, object> _baseFonts = new();
+    /// <summary>
+    /// 当前生效的文本缩放系数（1.0 = 默认）。
+    /// 除了驱动套用，还用于判断要不要给「晚到的文本」补扫 —— 见 <see cref="ContentHost_LayoutUpdated"/>。
+    /// </summary>
+    private double _textScale = 1.0;
+
+    /// <summary>上一次补扫的时刻（补扫按 400ms 节流，避免布局抖动期被高频触发）。</summary>
+    private DateTimeOffset _lastTextPassAt;
+
     /// <summary>标记曾被我们显式上过前景色的文本（弱引用），恢复全局（无前景覆盖）时只清这些，
     /// 不误动样式自带的灰度等前景。</summary>
     private readonly ConditionalWeakTable<TextBlock, object> _coloredMarker = new();
@@ -162,6 +167,10 @@ public sealed partial class WidgetWindow : Window
         BuildContent();
         WireChrome();
         SetupQuickLaunchDrop();
+
+        // 内容里有一部分是**异步**才建出来的（天气指标格、速览的常看按钮、列表项容器），
+        // 首次套用时它们还不存在。这里补一条节流扫描，让晚到的文本也能拿到当前缩放系数。
+        ContentHost.LayoutUpdated += ContentHost_LayoutUpdated;
 
         if (_kind == WidgetKind.Clock)
             AppWindow.Changed += (_, e) =>
@@ -529,7 +538,8 @@ public sealed partial class WidgetWindow : Window
     ///  - 无前景色覆盖时（恢复全局）：仅清除我们此前显式上过色的文本（_coloredMarker），让它们回到样式自带前景，
     ///    绝不误动未改过的文本（如 MutedText 的灰度）；
     ///  - 文本缩放：直接改 TextBlock.FontSize（文本本身缩放），而非对内容区做 RenderTransform（否则放大后文本
-    ///    相对组件中心放缩、超出组件范围被裁切而消失）。基准字号缓存于 _baseFonts，避免反复套用双倍放大。
+    ///    相对组件中心放缩、超出组件范围被裁切而消失）。基准字号记在文本元素自身（Helpers/WidgetTextScale），
+    ///    保证反复套用不累加、系数回到 1.0 时能精确还原到初始加载大小。
     /// 延迟到 Loaded 之后执行，确保内容子元素已生成。
     /// </summary>
     private void ApplyForeground(WidgetAppearanceOverride? ov)
@@ -551,8 +561,9 @@ public sealed partial class WidgetWindow : Window
                         tb.ClearValue(TextBlock.ForegroundProperty);
                     _coloredMarker.Clear();
                 }
-                // 文本缩放（与前景共享一次遍历的基准字号缓存）
-                ApplyTextScale(panel, ov?.TextScale is { } ts ? Math.Clamp(ts, 0.6, 1.8) : 1.0);
+                // 文本缩放（与前景共享一次遍历）
+                _textScale = ov?.TextScale is { } ts ? Math.Clamp(ts, 0.6, 1.8) : 1.0;
+                ApplyTextScale(panel, _textScale);
             }
             catch (Exception ex)
             {
@@ -615,18 +626,38 @@ public sealed partial class WidgetWindow : Window
             }
             if (child is TextBlock tb)
             {
-                double baseFont;
-                if (!_baseFonts.TryGetValue(tb, out var baseObj) || baseObj is not double d)
-                {
-                    baseFont = tb.FontSize;             // 当前有效字号（含继承/样式）
-                    if (baseFont <= 0) baseFont = 14;    // 兜底默认
-                    _baseFonts.AddOrUpdate(tb, (object)baseFont);
-                }
-                else baseFont = d;
-                tb.FontSize = baseFont * scale;
+                // 基准只在此元素首次出现时记录一次；之后无论套用多少遍都基于同一个基准，
+                // 因此不会出现「缩放后的值被当成新基准」这种越调越偏的问题。
+                WidgetTextScale.CaptureBase(tb);
+                WidgetTextScale.Apply(tb, scale);
             }
             ApplyTextScale(child, scale);
         }
+    }
+
+    /// <summary>
+    /// 给「晚到」的文本补一次缩放套用。
+    /// <para>
+    /// 组件的不少文本是异步建出来的：天气的指标格与逐时格要等数据回来，速览的常看按钮要等查库，
+    /// 列表项容器更是虚拟化、滚动到才创建。首次套用时它们根本不在树上，于是永远保持原始字号——
+    /// 用户看到的就是「同一块组件里字号忽大忽小」。
+    /// </para>
+    /// <para>
+    /// 只在系数<b>不等于 1.0</b> 时才需要补扫：默认系数下新文本本就是原始字号，不扫也正确，
+    /// 白扫反而会在拖动/缩放的布局抖动期反复遍历可视树。
+    /// </para>
+    /// </summary>
+    private void ContentHost_LayoutUpdated(object? sender, object e)
+    {
+        if (ContentHost is null) return;
+        if (WidgetTextScale.IsDefault(_textScale)) return;
+
+        var now = DateTimeOffset.Now;
+        if ((now - _lastTextPassAt) < TimeSpan.FromMilliseconds(400)) return;
+        _lastTextPassAt = now;
+
+        try { ApplyTextScale(ContentHost, _textScale); }
+        catch (Exception ex) { StarLog.Error($"补套用文本缩放失败 ({_kind})", ex); }
     }
 
     /// <summary>设置变更后重新套用外观（材质 / 不透明度），由 WidgetManager 统一调用。</summary>
@@ -1668,16 +1699,22 @@ public sealed partial class WidgetWindow : Window
         // ① 构造顺序是 InitializeComponent → ApplyAppearanceCore → BuildContent，上一次 ApplyAppearanceCore
         //    执行时 ContentHost 还是个空的 StackPanel（XAML 自带元素，已被 Loaded，所以 SetFg 立即执行却什么也遍历不到），
         //    于是新内容永远拿不到已保存的外观（含文本缩放）——持久化的字号在启动后会无声失效。
-        // ② 旧的基准字号缓存对应的是已被丢弃的文本，重建时一并清空，保证新文本的基准一定是「未经缩放的原始字号」，
-        //    点「恢复全局」（系数回到 1.0）才能精确还原到初始加载时的大小。
+        // ② 基准字号记在文本元素自身（附加属性），随旧内容一起丢弃，新文本的基准天然是原始字号，
+        //    不存在「缓存与内容错位」的可能；点「恢复全局」（系数回到 1.0）即精确还原初始大小。
         ResetTextStyleCache();
         try { ApplyAppearanceCore(); } catch { }
     }
 
-    /// <summary>清空「基准字号 / 已上色文本」缓存（内容重建时调用，与 ContentHost.Children.Clear 配套）。</summary>
+    /// <summary>
+    /// 清空「已上色文本」记录（内容重建时调用，与 ContentHost.Children.Clear 配套）。
+    /// <para>
+    /// 基准字号<b>不需要</b>在这里清：它记在元素自身的附加属性上（见 <see cref="WidgetTextScale"/>），
+    /// 元素随内容一起被丢弃，基准自然一起消失。早先把它放在窗口级字典里，
+    /// 「清字典」与「换内容」这两件事一旦不同步，基准就会错位到已缩放的字号上。
+    /// </para>
+    /// </summary>
     private void ResetTextStyleCache()
     {
-        _baseFonts.Clear();
         _coloredMarker.Clear();
         _coloredRefs.Clear();
     }

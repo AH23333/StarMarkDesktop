@@ -481,12 +481,18 @@ public static class WidgetAppearanceEditor
         bool suppressSliderReset = false;
         var cThick = MakeSlider("边框粗细", wThick ?? 1, 0, 12, 0.5, v => { if (suppressSliderReset) return; wThick = v; Preview(); }, out var sThick);
         var cRadius = MakeSlider("圆角半径", wRadius ?? 8, 0, 48, 1, v => { if (suppressSliderReset) return; wRadius = v; Preview(); }, out var sRadius);
+        // 文本缩放：在 1.0（=默认/跟随全局）附近吸附，并把该档显示成「默认」。
+        // 不吸附的话拇指停在 0.95 / 1.05 这种临界值是常事，用户会以为「明明调回默认了，字还是不对」。
         var cScale = MakeSlider("文本缩放", wScale ?? 1, 0.6, 1.8, 0.05, v =>
         {
             if (suppressSliderReset) return;
-            wScale = v;
+            wScale = SnapTextScale(v);
             Preview();   // 实时预览文本缩放（直接改 TextBlock.FontSize，文本本身缩放，留在布局内）
-        }, out var sScale);
+        }, out var sScale, v =>
+        {
+            var s = SnapTextScale(v);
+            return Math.Abs(s - 1.0) < 1e-6 ? "默认" : $"{s:0.##}";
+        });
         root.Children.Add(cThick);
         root.Children.Add(cRadius);
         root.Children.Add(cScale);
@@ -683,7 +689,16 @@ public static class WidgetAppearanceEditor
         Foreground = Brush("TextFillColorPrimaryBrush", Colors.Black),
     };
 
+    /// <summary>
+    /// 文本缩放的「默认档」吸附：1.0 附近 ±0.03 内一律算 1.0。
+    /// 1.0 就是「跟随全局 / 未缩放」，必须能精确落到它身上，否则基准还原永远差一口气。
+    /// </summary>
+    private static double SnapTextScale(double v) => Math.Abs(v - 1.0) < 0.03 ? 1.0 : v;
+
     private static StackPanel MakeSlider(string label, double value, double min, double max, double step, Action<double> onChange, out Slider outSlider)
+        => MakeSlider(label, value, min, max, step, onChange, out outSlider, null);
+
+    private static StackPanel MakeSlider(string label, double value, double min, double max, double step, Action<double> onChange, out Slider outSlider, Func<double, string>? format)
     {
         var slider = new Slider
         {
@@ -695,7 +710,7 @@ public static class WidgetAppearanceEditor
         };
         var tb = new TextBlock
         {
-            Text = $"{value:0.##}",
+            Text = format?.Invoke(value) ?? $"{value:0.##}",
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
             Foreground = Brush("TextFillColorSecondaryBrush", Colors.Gray),
@@ -703,7 +718,7 @@ public static class WidgetAppearanceEditor
         slider.ValueChanged += (_, e) =>
         {
             onChange(e.NewValue);
-            tb.Text = $"{e.NewValue:0.##}";
+            tb.Text = format?.Invoke(e.NewValue) ?? $"{e.NewValue:0.##}";
         };
         var row = new Grid
         {
