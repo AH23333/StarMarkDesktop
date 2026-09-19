@@ -111,6 +111,37 @@ internal static class WidgetMaterialVisualCalculator
             overlayMix: isDark ? 0.04 : 0.08);
     }
 
+    /// <summary>
+    /// 原生材质（亚克力 / 云母）之上的<b>表面层</b>颜色。
+    /// <para>
+    /// 为什么必须有这一层：DeskBox 让「背景不透明度」只去乘控制器的 Tint/Luminosity，
+    /// 前提是窗口已经整窗玻璃化（DwmExtendFrameIntoClientArea(-1)），霜化层就是用户看到的背景。
+    /// 一旦玻璃化没生效，那层霜化根本透不出来，两个滑块就都成了摆设。
+    /// 这里显式给一层表面色兜底：<b>背景不透明度 → Alpha</b>（0.1→0.94，越低越能看见壁纸），
+    /// <b>材质浓度 → 染色浓度</b>（越浓越带强调色），于是无论原生霜化是否透出，两个滑块都必然可见。
+    /// </para>
+    /// </summary>
+    public static Color BuildNativeSurfaceColor(
+        bool isDark,
+        Color accentColor,
+        double surfaceOpacity,
+        double materialIntensity)
+    {
+        double intensity = NormalizeMaterialIntensity(materialIntensity);
+        double opacity = Math.Clamp(surfaceOpacity, 0.0, 1.0);
+
+        var tinted = BuildAccentSurfaceColor(
+            isDark,
+            accentColor,
+            BuildContentTintColor(isDark, accentColor),
+            accentMix: Lerp(0.06, 0.40, intensity),
+            overlayMix: Lerp(0.02, 0.12, intensity));
+
+        // 表面 Alpha：严格由「背景不透明度」驱动。低到 0.3 时几乎全透（霜化 + 壁纸直接可见），
+        // 拉到 1.0 时接近实色面板 —— 与滑杆文案「越低越透，能看见桌面壁纸」字面一致。
+        return ApplySurfaceOpacity(tinted, Lerp(0.10, 0.94, opacity));
+    }
+
     public static Color BuildMicaFallbackColor(bool isDark, bool useAlt)
     {
         return useAlt

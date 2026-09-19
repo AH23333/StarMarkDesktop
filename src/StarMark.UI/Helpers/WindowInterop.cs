@@ -52,6 +52,9 @@ internal static class WindowInterop
     public const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
     public const int DWMSBT_NONE = 1;   // 不用 DWM 自带背景（由 DesktopAcrylicController/MicaController 接管）
 
+    /// <summary>沉浸式深色模式（DeskBox 的 Win32Helper.SetWindowTheme 用同一个属性）。</summary>
+    public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+
     public const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -90,6 +93,19 @@ internal static class WindowInterop
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int pvAttribute, int cbAttribute);
+
+    /// <summary>DeskBox 的 <c>MARGINS</c>（DwmExtendFrameIntoClientArea 用，全 -1 = 整窗玻璃）。</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MARGINS
+    {
+        public int cxLeftWidth;
+        public int cxRightWidth;
+        public int cyTopHeight;
+        public int cyBottomHeight;
+    }
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref MARGINS pMarInset);
 
     [DllImport("gdi32.dll")]
     public static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int wEllipse, int hEllipse);
@@ -195,6 +211,52 @@ internal static class WindowInterop
         {
             var type = DWMSBT_NONE;
             DwmSetWindowAttribute(GetHwnd(window), DWMWA_SYSTEMBACKDROP_TYPE, ref type, sizeof(int));
+        }
+        catch { /* 旧系统忽略 */ }
+    }
+
+    /// <summary>
+    /// 整窗玻璃化（DeskBox 的 <c>Win32Helper.ApplyFullWindowFrame</c>：四个边距全 -1）。
+    /// <para>
+    /// 这是原生材质能<b>透出来</b>的前提：不扩展边框时，窗口客户区由系统按不透明底色绘制，
+    /// 内容背景设为透明也只是透出那层底色 —— 于是 <c>TintOpacity</c> / <c>LuminosityOpacity</c>
+    /// 怎么调都看不出变化（「两个滑块对组件失效」的真因）。
+    /// </para>
+    /// </summary>
+    public static void ApplyFullWindowFrame(Microsoft.UI.Xaml.Window window)
+    {
+        try
+        {
+            var margins = new MARGINS
+            {
+                cxLeftWidth = -1,
+                cxRightWidth = -1,
+                cyTopHeight = -1,
+                cyBottomHeight = -1,
+            };
+            DwmExtendFrameIntoClientArea(GetHwnd(window), ref margins);
+        }
+        catch { /* 旧系统忽略 */ }
+    }
+
+    /// <summary>收回玻璃化（实色 / 纯色材质不需要，避免 DWM 无谓参与合成）。</summary>
+    public static void ClearFullWindowFrame(Microsoft.UI.Xaml.Window window)
+    {
+        try
+        {
+            var margins = new MARGINS();
+            DwmExtendFrameIntoClientArea(GetHwnd(window), ref margins);
+        }
+        catch { /* 旧系统忽略 */ }
+    }
+
+    /// <summary>让无边框窗口的非客户区（玻璃边缘）跟随深色模式，对齐 DeskBox 的 SetWindowTheme。</summary>
+    public static void SetImmersiveDarkMode(Microsoft.UI.Xaml.Window window, bool dark)
+    {
+        try
+        {
+            var value = dark ? 1 : 0;
+            DwmSetWindowAttribute(GetHwnd(window), DWMWA_USE_IMMERSIVE_DARK_MODE, ref value, sizeof(int));
         }
         catch { /* 旧系统忽略 */ }
     }

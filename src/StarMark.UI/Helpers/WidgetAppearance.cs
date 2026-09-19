@@ -104,8 +104,14 @@ public static class WidgetAppearance
                 DetachMica(state);
                 window.SystemBackdrop = null;
                 WindowInterop.SetDwmSystemBackdropNone(window);
+                WindowInterop.ClearFullWindowFrame(window);
                 return;
             }
+
+            // 整窗玻璃化（DeskBox 的 ApplyFullWindowFrame）：原生霜化层能透出来的前提。
+            // 缺这一步时窗口客户区由系统按不透明底色绘制，控制器再怎么调也看不见。
+            WindowInterop.ApplyFullWindowFrame(window);
+            WindowInterop.SetImmersiveDarkMode(window, isDark);
 
             var accent = AccentColor();
             var tint = WidgetMaterialVisualCalculator.BuildContentTintColor(isDark, accent);
@@ -233,9 +239,12 @@ public static class WidgetAppearance
     }
 
     /// <summary>
-    /// 组件内容表面画笔：
+    /// 组件 / 主窗口的内容表面画笔（两者共用同一套，保证「设置里怎么调、两边就怎么变」）。
     /// <list type="bullet">
-    /// <item>原生材质（亚克力 / 云母）→ 透明，让霜化背景透出；</item>
+    /// <item>原生材质（亚克力 / 云母）→ <see cref="WidgetMaterialVisualCalculator.BuildNativeSurfaceColor"/>：
+    /// Alpha 吃「背景不透明度」、染色浓度吃「材质浓度」；
+    /// 早先这里一律返回透明，于是原生材质的背景完全由控制器说了算，
+    /// 一旦霜化层没透出来（缺整窗玻璃化），两个滑块就彻底失效。</item>
     /// <item><see cref="WidgetBackdropKind.None"/> → 跟随主题的黑白实色（按用户不透明度调 Alpha）；</item>
     /// <item><see cref="WidgetBackdropKind.Solid"/>（照搬 DeskBox）→ 「主题基色 + 强调色」混合后再按
     /// 用户不透明度调整 Alpha 的实色，即**纯色材质吃「背景不透明度」、不吃「材质浓度」**。</item>
@@ -247,11 +256,15 @@ public static class WidgetAppearance
     /// <param name="opacityOverride">显式指定「背景不透明度」（主窗口用它强制不透明 / 跟随滑杆）。</param>
     public static Brush SurfaceBrush(ElementTheme theme, WidgetBackdropKind kind, double? opacityOverride)
     {
-        if (kind is not (WidgetBackdropKind.None or WidgetBackdropKind.Solid))
-            return new SolidColorBrush(Colors.Transparent);
-
         var dark = theme == ElementTheme.Dark;
         var opacity = Math.Clamp(opacityOverride ?? Opacity(), 0.0, 1.0);
+
+        if (kind is WidgetBackdropKind.Acrylic or WidgetBackdropKind.AcrylicBase
+            or WidgetBackdropKind.Mica or WidgetBackdropKind.MicaAlt)
+        {
+            return new SolidColorBrush(WidgetMaterialVisualCalculator.BuildNativeSurfaceColor(
+                dark, AccentColor(), opacity, MaterialIntensity()));
+        }
 
         if (kind == WidgetBackdropKind.Solid)
         {
@@ -284,26 +297,14 @@ public static class WidgetAppearance
     /// </summary>
     public static Brush MainWindowSurfaceBrush(ElementTheme theme, WidgetBackdropKind kind, bool translucent)
     {
-        var dark = theme == ElementTheme.Dark;
-
         // 未开启主窗口材质：老老实实铺主题实色（不受不透明度滑杆影响，避免正文可读性被拖累）
         if (!translucent)
             return ThemeBrush.For(theme, "ApplicationPageBackgroundThemeBrush")
                    ?? SurfaceBrush(theme, WidgetBackdropKind.None, 1.0);
 
-        var opacity = Math.Clamp(Opacity(), 0.0, 1.0);
-
-        if (kind == WidgetBackdropKind.Solid)
-            return SurfaceBrush(theme, WidgetBackdropKind.Solid, opacity);
-
-        if (kind == WidgetBackdropKind.None)
-            return SurfaceBrush(theme, WidgetBackdropKind.None, opacity);
-
-        // 原生材质（亚克力 / 云母）：霜化背景在窗口上，表面只压一层半透明主题色。
-        // 不透明度 = 这层主题色的 Alpha：1.0 完全遮住霜化，0.3 几乎全透。
-        var tint = WidgetMaterialVisualCalculator.BuildContentTintColor(dark, AccentColor());
-        var alpha = (byte)Math.Clamp(opacity * 255, 0, 255);
-        return new SolidColorBrush(ColorHelper.FromArgb(alpha, tint.R, tint.G, tint.B));
+        // 开启后与组件走同一套表面色：两个滑块对主界面与组件必须是同一套观感，
+        // 各写一套正是「主界面调了没反应 / 组件调了才变」的来源。
+        return SurfaceBrush(theme, kind);
     }
 
     /// <summary>解析 #RRGGBB / #AARRGGBB 为实色画笔；格式非法或空返回 null（调用方据此回退主题）。</summary>
