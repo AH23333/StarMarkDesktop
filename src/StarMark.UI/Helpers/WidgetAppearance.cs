@@ -96,15 +96,31 @@ public static class WidgetAppearance
 
             var state = _states.GetOrCreateValue(window);
 
-            // 无材质 / 纯色：照搬 DeskBox —— 两者都不挂控制器，
-            // 区别只在内容表面铺什么（None 跟主题黑白实色，Solid 铺带强调色的实色，见 SurfaceBrush）。
-            if (kind == WidgetBackdropKind.None || kind == WidgetBackdropKind.Solid)
+            // 纯色（Solid）：照搬 DeskBox 的 TransparentTintBackdrop 观感 —— 整窗玻璃化 +
+            // 半透明染色表面。窗口玻璃化后桌面从客户区透出，内容表面（见 SurfaceBrush）按「背景不透明度」
+            // 调 Alpha，于是「背景不透明度」直接决定组件对桌面的透明程度：调低就能看见壁纸，
+            // 调高则是实色面板。这就是 DeskBox「纯色材质下通过背景不透明度达成透明」的效果。
+            // 不挂原生控制器（避免再把霜化层叠一层），只靠玻璃化 + 染色表面两层叠加。
+            if (kind == WidgetBackdropKind.Solid)
+            {
+                DetachAcrylic(state);
+                DetachMica(state);
+                window.SystemBackdrop = null;
+                WindowInterop.SetDwmSystemBackdropNone(window);
+                WindowInterop.ApplyFullWindowFrame(window);
+                WindowInterop.SetImmersiveDarkMode(window, isDark);
+                return;
+            }
+
+            // 不透明（None）：什么都不挂，内容表面铺实色（见 SurfaceBrush）。关掉整窗玻璃化，避免透明。
+            if (kind == WidgetBackdropKind.None)
             {
                 DetachAcrylic(state);
                 DetachMica(state);
                 window.SystemBackdrop = null;
                 WindowInterop.SetDwmSystemBackdropNone(window);
                 WindowInterop.ClearFullWindowFrame(window);
+                WindowInterop.SetImmersiveDarkMode(window, isDark);
                 return;
             }
 
@@ -120,6 +136,10 @@ public static class WidgetAppearance
             state.Config ??= new SystemBackdropConfiguration();
             state.Config.IsInputActive = true;
             state.Config.Theme = isDark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light;
+            // 主题翻转后必须重新下发配置：控制器仅在「首次挂载」时 SetSystemBackdropConfiguration，
+            // 若之后切换浅/深色却不再下发，霜化层会停留在旧主题观感 —— 这正是「浅色模式材质不正确」的根因之一。
+            if (state.AcrylicAttached) state.Acrylic?.SetSystemBackdropConfiguration(state.Config);
+            if (state.MicaAttached) state.Mica?.SetSystemBackdropConfiguration(state.Config);
 
             var ok = kind is WidgetBackdropKind.Mica or WidgetBackdropKind.MicaAlt
                 ? ApplyMica(state, isDark, tint, kind == WidgetBackdropKind.MicaAlt, surfaceOpacity, intensity)
@@ -269,8 +289,8 @@ public static class WidgetAppearance
         if (kind == WidgetBackdropKind.Solid)
         {
             // 与 DeskBox 的 ContentWidgetWindow.ApplySurfaceStyle 同一套取色：
-            // BuildContentSolidSurfaceColor 内部已按 surfaceOpacity 调整 Alpha，
-            // 故此处不再二次叠加（否则纯色会比预期更淡/更实）。
+            // BuildContentSolidSurfaceColor 内部已按 surfaceOpacity（背景不透明度）调整 Alpha，
+            // 配合窗口整窗玻璃化（ApplyBackdrop 的 Solid 分支），背景不透明度直接决定组件对桌面的透明程度。
             // 强调色必须取系统强调色（DeskBox 走 ThemeService.GetEffectiveAccentColor），
             // 用固定蓝会让纯色和 DeskBox 明显不是一个色。
             var solid = WidgetMaterialVisualCalculator.BuildContentSolidSurfaceColor(
@@ -278,9 +298,10 @@ public static class WidgetAppearance
             return new SolidColorBrush(solid);
         }
 
+        // 不透明（None）：完全实色，不受「背景不透明度」滑杆影响
+        // （该滑杆只作用于有透明的材质：Solid / 亚克力 / 云母）。浅/深主题各自给纯黑/纯白实色。
         var baseColor = dark ? Colors.Black : Colors.White;
-        var alpha = (byte)Math.Clamp(opacity * 255, 0, 255);
-        return new SolidColorBrush(ColorHelper.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
+        return new SolidColorBrush(baseColor);
     }
 
     /// <summary>便捷重载：按当前设置读出材质。</summary>
