@@ -47,4 +47,17 @@ public sealed class UriNormalizerTests
     {
         Assert.Equal("https://example.com:8080/x", UriNormalizer.Normalize("https://example.com:8080/x"));
     }
+
+    [Fact]
+    public void Normalize_Ipv6Literal_PreservesBracketsAndIsIdempotent()
+    {
+        // .NET 的 Uri.Host 对 IPv6 字面量本就返回带方括号的 "[::1]"，归一后应保持括号且幂等。
+        // 这条用例是"防回归"：任何试图再包一层方括号、或改用 Authority 拼端口导致错位的改动都会打破它。
+        var once = UriNormalizer.Normalize("http://[::1]:8080/x");
+        Assert.Equal("http://[::1]:8080/x", once);
+        Assert.Equal(once, UriNormalizer.Normalize(once));
+
+        // 默认端口 443 去掉，方括号保留
+        Assert.Equal("https://[2001:db8::1]/p", UriNormalizer.Normalize("https://[2001:db8::1]:443/p"));
+    }
 }

@@ -57,10 +57,12 @@ public sealed class DittoDatabaseReader : IDisposable
         try
         {
             using var cmd = _connection.CreateCommand();
+            // bIsGroup 常为 NULL（未分组剪贴板）。SQL 三值逻辑下 `bIsGroup IN (0, NULL)`
+            // 里的 NULL 永不匹配，会漏掉全部 NULL 行，必须显式 `OR bIsGroup IS NULL`。
             cmd.CommandText = """
                 SELECT lID, lDate, mText, bIsGroup
                 FROM Main
-                WHERE lDate IS NOT NULL AND bIsGroup IN (0, NULL)
+                WHERE lDate IS NOT NULL AND (bIsGroup = 0 OR bIsGroup IS NULL)
                 ORDER BY lDate DESC
                 LIMIT $limit
                 """;
@@ -105,7 +107,7 @@ public sealed class DittoDatabaseReader : IDisposable
             cmd.CommandText = """
                 SELECT lID, lDate, mText, bIsGroup
                 FROM Main
-                WHERE lDate IS NOT NULL AND bIsGroup IN (0, NULL)
+                WHERE lDate IS NOT NULL AND (bIsGroup = 0 OR bIsGroup IS NULL)
                   AND mText LIKE $pattern ESCAPE '\'
                 ORDER BY lDate DESC
                 LIMIT $limit

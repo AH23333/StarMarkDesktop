@@ -34,8 +34,10 @@ public sealed class DittoSourceTests : IDisposable
 
         var items = await source.FetchAsync(new SyncContext(), CancellationToken.None);
 
-        Assert.Equal(2, items.Count);
+        // ditto:1(0) / ditto:2(0) / ditto:4(NULL) 为非分组，ditto:3(1) 为分组被排除
+        Assert.Equal(3, items.Count);
         Assert.DoesNotContain(items, i => i.SourceId == "ditto:3");
+        Assert.Contains(items, i => i.SourceId == "ditto:4"); // bIsGroup IS NULL 的行必须召回（S13-1 回归）
 
         var file = Assert.Single(items, i => i.SourceId == "ditto:2");
         Assert.Equal("file:///C:/Data/demo/读我.txt", file.Uri);
@@ -93,9 +95,12 @@ public sealed class DittoSourceTests : IDisposable
         InsertMain(1, now, "Hello StarMark 剪贴板集成测试", 0);
         InsertMain(2, now - 10, "C:\\Data\\demo\\读我.txt", 0);
         InsertMain(3, now - 20, "分组: 常用", 1);
+        // Ditto 对普通（非分组）剪贴板常把 bIsGroup 留 NULL——回归 S13-1：这类行不得被 SQL 三值逻辑漏掉
+        InsertMainNullGroup(4, now - 30, "NULL 分组的历史剪贴板");
 
         InsertData(1, "CF_UNICODETEXT", Encoding.Unicode.GetBytes("Hello StarMark 剪贴板集成测试"));
         InsertData(2, "CF_HDROP", BuildDropFiles("C:\\Data\\demo\\读我.txt"));
+        InsertData(4, "CF_UNICODETEXT", Encoding.Unicode.GetBytes("NULL 分组的历史剪贴板"));
     }
 
     private void InsertMain(long id, long date, string text, int isGroup)
@@ -112,6 +117,21 @@ public sealed class DittoSourceTests : IDisposable
         cmd.Parameters.AddWithValue("$date", date);
         cmd.Parameters.AddWithValue("$text", text);
         cmd.Parameters.AddWithValue("$isGroup", isGroup);
+        cmd.ExecuteNonQuery();
+    }
+
+    private void InsertMainNullGroup(long id, long date, string text)
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO Main (lID, lDate, mText, bIsGroup)
+            VALUES ($id, $date, $text, NULL)
+            """;
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.Parameters.AddWithValue("$date", date);
+        cmd.Parameters.AddWithValue("$text", text);
         cmd.ExecuteNonQuery();
     }
 
