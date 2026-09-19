@@ -245,6 +245,9 @@ public sealed class ItemRepository : IItemRepository
             await link.ExecuteNonQueryAsync(ct);
         }
 
+        // 标签参与全文搜索：在同一事务内用 C# 侧 CJK 展开重建 search_text。
+        await RebuildSearchTextAsync(conn, itemId, ct);
+
         await tx.CommitAsync(ct);
         DataChangeHub.Notify();
     }
@@ -260,6 +263,8 @@ public sealed class ItemRepository : IItemRepository
         cmd.Parameters.AddWithValue("@item", itemId);
         cmd.Parameters.AddWithValue("@name", tagName);
         await cmd.ExecuteNonQueryAsync(ct);
+        // 删标签同样影响 search_text（标签词应随之从索引移除）。
+        await RebuildSearchTextAsync(conn, itemId, ct);
         DataChangeHub.Notify();
     }
 
@@ -279,19 +284,58 @@ public sealed class ItemRepository : IItemRepository
     {
         using var conn = _factory.Open();
         using var cmd = conn.CreateCommand();
-        // 更新 notes 字段；同步重建 search_text（笔记 + 标签都参与全文搜索）
-        cmd.CommandText = @"
-            UPDATE items
-            SET notes = @content,
-                search_text = title || ' ' || COALESCE(description, '') || ' ' || @content || ' ' ||
-                    COALESCE((SELECT GROUP_CONCAT(t2.name, ' ') FROM item_tags it2
-                              JOIN tags t2 ON t2.id = it2.tag_id
-                              WHERE it2.item_id = items.id), '')
-            WHERE id = @id;";
+        // 更新 notes；search_text 由 RebuildSearchTextAsync 走 C# 侧 CJK 展开重建（不能在 SQL 里拼原文，
+        // 否则 unicode61 把连续中文当单 token，中文子串检索失效——见 CjkTokenizer 类注释）。
+        cmd.CommandText = "UPDATE items SET notes = @content WHERE id = @id;";
         cmd.Parameters.AddWithValue("@content", content);
         cmd.Parameters.AddWithValue("@id", itemId);
         await cmd.ExecuteNonQueryAsync(ct);
+        await RebuildSearchTextAsync(conn, itemId, ct);
         DataChangeHub.Notify();
+    }
+
+    /// <summary>
+    /// 依据 items 行当前的 title/description/notes 与关联标签，用 <c>CjkTokenizer.ExpandForIndex</c> 重建 search_text。
+    /// 与 <c>UpsertOne</c> 的拼接口径一致（title + description + notes + tags），确保中文/加删标签后全文检索不失效。
+    /// 传入的连接若正处事务中，命令自动 enlist（与既有 <c>AddTagAsync</c> 内建命令同行为）。
+    /// </summary>
+    private static async Task RebuildSearchTextAsync(SqliteConnection conn, long itemId, CancellationToken ct)
+    {
+        string? title = null, description = null, notes = null;
+        using (var read = conn.CreateCommand())
+        {
+            read.CommandText = "SELECT title, description, notes FROM items WHERE id = @id;";
+            read.Parameters.AddWithValue("@id", itemId);
+            await using var r = await read.ExecuteReaderAsync(ct);
+            if (!await r.ReadAsync(ct)) return;   // 条目已删，无需重建
+            title = r.IsDBNull(0) ? null : r.GetString(0);
+            description = r.IsDBNull(1) ? null : r.GetString(1);
+            notes = r.IsDBNull(2) ? null : r.GetString(2);
+        }
+
+        var tags = new List<string>();
+        using (var readTags = conn.CreateCommand())
+        {
+            readTags.CommandText = @"
+                SELECT t.name FROM item_tags it JOIN tags t ON t.id = it.tag_id
+                WHERE it.item_id = @id;";
+            readTags.Parameters.AddWithValue("@id", itemId);
+            await using var r = await readTags.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct)) tags.Add(r.GetString(0));
+        }
+
+        var raw = new StringBuilder();
+        raw.Append(title).Append(' ');
+        if (!string.IsNullOrEmpty(description)) raw.Append(description).Append(' ');
+        if (!string.IsNullOrEmpty(notes)) raw.Append(notes).Append(' ');
+        if (tags.Count > 0) raw.Append(string.Join(' ', tags));
+        var expanded = StarMark.Abstractions.Text.CjkTokenizer.ExpandForIndex(raw.ToString());
+
+        using var upd = conn.CreateCommand();
+        upd.CommandText = "UPDATE items SET search_text = @s WHERE id = @id;";
+        upd.Parameters.AddWithValue("@s", expanded);
+        upd.Parameters.AddWithValue("@id", itemId);
+        await upd.ExecuteNonQueryAsync(ct);
     }
 
     public async Task SetPinnedAsync(long itemId, bool pinned, CancellationToken ct)
@@ -587,7 +631,11 @@ public sealed class ItemRepository : IItemRepository
         using (var existing = conn.CreateCommand())
         {
             existing.CommandText = @"
-                SELECT hidden, notes, pinned FROM items
+                SELECT hidden, notes, pinned,
+                       COALESCE((SELECT GROUP_CONCAT(t.name, char(31))
+                                 FROM item_tags it JOIN tags t ON t.id = it.tag_id
+                                 WHERE it.item_id = items.id), '')
+                FROM items
                 WHERE source = @src AND source_id = @sid LIMIT 1;";
             existing.Parameters.AddWithValue("@src", item.Source);
             existing.Parameters.AddWithValue("@sid", (object?)item.SourceId ?? DBNull.Value);
@@ -598,6 +646,14 @@ public sealed class ItemRepository : IItemRepository
                 item.Hidden = reader.GetInt64(0) != 0;
                 item.Notes = reader.IsDBNull(1) ? null : reader.GetString(1);
                 item.Pinned = !reader.IsDBNull(2) && reader.GetInt64(2) != 0;
+                // D4：同步不应把用户已加的标签从索引里冲掉——内存未带标签时用库中既有标签兜底，
+                // 否则 AddTagAsync 刚重建好的 search_text 会在下一次 re-sync 被空 Tags 覆盖。
+                if (item.Tags.Count == 0 && !reader.IsDBNull(3))
+                {
+                    var dbTagsRaw = reader.GetString(3);
+                    if (!string.IsNullOrEmpty(dbTagsRaw))
+                        item.Tags.AddRange(dbTagsRaw.Split(new[] { (char)31 }, StringSplitOptions.RemoveEmptyEntries));
+                }
             }
         }
 

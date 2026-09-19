@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -151,6 +152,46 @@ public sealed class ItemRepositoryTests : IDisposable
             new SearchFilter { MaxResults = 10, Tags = new[] { "async" } }, CancellationToken.None);
         Assert.Single(combined.Items);
         Assert.Equal("Rust 异步编程", combined.Items[0].Title);
+    }
+
+    /// <summary>
+    /// 回归钉（P0-1）：编辑中文随记 / 加删中文标签后，中文子串全文检索必须继续命中。
+    /// 旧实现里 <c>SetNoteAsync</c> 用纯 SQL 写未展开原文、<c>AddTag/RemoveTag</c> 根本不动
+    /// <c>search_text</c>，会让中文召回静默失效（unicode61 把连续中文当单个 token）。
+    /// </summary>
+    [Fact]
+    public async Task CjkSearch_SurvivesNoteEditAndTagChanges()
+    {
+        var repo = new ItemRepository(_factory);
+        var item = new Item
+        {
+            Type = ItemType.Note,
+            Source = "test",
+            SourceId = "cjk1",
+            Title = "搜索笔记工具",
+        };
+        await repo.UpsertAsync(new[] { item }, CancellationToken.None);
+
+        async Task<bool> Hits(string q)
+        {
+            var r = await repo.SearchAsync(q, new SearchFilter { MaxResults = 10 }, CancellationToken.None);
+            return r.Items.Any(i => i.Id == item.Id);
+        }
+
+        Assert.True(await Hits("笔记"), "基线：标题中文子串应命中");
+
+        // 编辑中文笔记后，标题仍可达、笔记内容亦可达
+        await repo.SetNoteAsync(item.Id, "记录随想片段", CancellationToken.None);
+        Assert.True(await Hits("笔记"), "改笔记后标题中文子串不应失效");
+        Assert.True(await Hits("随想"), "改笔记后笔记内容中文子串应命中");
+
+        // 加中文标签：标签词应进入索引
+        await repo.AddTagAsync(item.Id, "重要待办", CancellationToken.None);
+        Assert.True(await Hits("待办"), "加中文标签后该标签词应命中");
+
+        // 删中文标签：该词应随之从索引移除
+        await repo.RemoveTagAsync(item.Id, "重要待办", CancellationToken.None);
+        Assert.False(await Hits("待办"), "删中文标签后该标签词不应再命中");
     }
 
     [Fact]
