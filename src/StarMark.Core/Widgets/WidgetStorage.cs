@@ -1,7 +1,9 @@
 #nullable enable
+using System;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using StarMark.Abstractions;
 
 namespace StarMark.Core.Widgets;
 
@@ -337,12 +339,24 @@ public sealed class WidgetStorage
     {
         lock (_gate)
         {
-            var normalized = Normalize(data);
-            var dir = Path.GetDirectoryName(_path);
-            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            // 落盘绝不向外抛：本方法经 WidgetManager.OnUiAsync 在 UI 线程同步内联执行，
+            // 一旦从点击/菜单处理里抛出 IOException（widgets.json 位于 %APPDATA%，常被 OneDrive
+            // 同步或杀软实时扫描短暂锁定 → File.WriteAllText/File.Move 失败），整个应用会闪退。
+            // 失败时保留旧文件不动（先写 .tmp 再 Move，写/搬失败原文件仍是上一版），仅记日志。
             var tmp = _path + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(normalized, new JsonSerializerOptions { WriteIndented = true }));
-            File.Move(tmp, _path, overwrite: true);
+            try
+            {
+                var normalized = Normalize(data);
+                var dir = Path.GetDirectoryName(_path);
+                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                File.WriteAllText(tmp, JsonSerializer.Serialize(normalized, new JsonSerializerOptions { WriteIndented = true }));
+                File.Move(tmp, _path, overwrite: true);
+            }
+            catch (Exception ex)
+            {
+                StarLog.Error($"保存组件配置失败，已保留上一次内容不变 ({_path})", ex);
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+            }
         }
     }
 

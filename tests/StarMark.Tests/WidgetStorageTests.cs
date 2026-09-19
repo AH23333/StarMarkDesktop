@@ -274,4 +274,32 @@ public sealed class WidgetStorageTests : IDisposable
         var unmodified = reloaded.Entries.First(e => e.Kind == WidgetKind.Todo);
         Assert.Null(unmodified.Appearance);
     }
+
+    [Fact]
+    public void Save_WhenTargetUnwritable_DoesNotThrow_AndLeavesTempBehindNothing()
+    {
+        // 回归：点击 → OnUiAsync 在 UI 线程同步内联调用 Save；落盘异常（OneDrive/杀软锁定、目标被占用）
+        // 若向外抛会直接逃出点击处理、在 App.UnhandledException 处杀掉整个应用。
+        // 造一个"目标位置是一个已存在的目录"的场景：File.WriteAllText(.tmp) 成功、File.Move 必失败。
+        var dir = Path.Combine(Path.GetTempPath(), $"starmark_savefail_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var target = Path.Combine(dir, "widgets.json");
+            Directory.CreateDirectory(target);   // 目标占成目录 → Move 抛异常
+
+            var store = new WidgetStorage(target);
+            var data = store.Load();
+            data.Instances.Add(new WidgetInstanceConfig { Kind = WidgetKind.Clock });
+
+            var ex = Record.Exception(() => store.Save(data));   // 关键：Save 不得抛出
+            Assert.Null(ex);
+            // 失败路径应清理临时文件，不留 .tmp 残渣
+            Assert.False(Directory.Exists(dir) && File.Exists(target + ".tmp"));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    }
 }
