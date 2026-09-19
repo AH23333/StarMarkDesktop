@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.UI.Dispatching;
 using StarMark.Abstractions;
 using StarMark.Core.Media;
 using Windows.Media.Control;
@@ -86,12 +87,28 @@ public sealed class MediaSessionService : IDisposable
     private string? _preferredSessionId;
     private bool _disposed;
 
+    /// <summary>
+    /// UI 线程调度器（在 <see cref="InitializeAsync"/> 里抓取，那时必在 UI 线程）。
+    /// <para>
+    /// 为什么必须有它：SMTC 是套间亲和的 WinRT 对象，<c>MediaPropertiesChanged</c> /
+    /// <c>PlaybackInfoChanged</c> / <c>TimelinePropertiesChanged</c> 由系统在<b>工作线程</b>上派发。
+    /// 早先直接在这些回调里读会话并同步刷新 UI，结果 XAML 侧 <c>TextBlock.Text</c> 赋值抛
+    /// <c>RPC_E_WRONG_THREAD (0x8001010E)</c>，异常一路冒泡回 <c>RefreshAsync</c> 被吞掉 ——
+    /// 表现为「曲目/进度只在你点按钮时才更新」（点按钮是在 UI 线程发起的，那次刷新能成功）。
+    /// </para>
+    /// 因此：凡是碰 WinRT 会话对象、或会触发 <see cref="Changed"/> 的调用，一律封送回 UI 线程。
+    /// </summary>
+    private DispatcherQueue? _ui;
+
     /// <summary>会话缓存：(合成 id, WinRT 会话)。会话变化时整体刷新一次，避免开菜单时反复枚举。</summary>
     private readonly List<(string Id, GlobalSystemMediaTransportControlsSession Session)> _sessions = new();
     private List<MediaSessionOption> _sessionOptions = new();
 
     /// <summary>可选的播放来源列表（不含「跟随系统」这一项，UI 自行加）。</summary>
     public IReadOnlyList<MediaSessionOption> SessionOptions => _sessionOptions;
+
+    /// <summary>重叠刷新闸门（几个 SMTC 事件常连发，合并成一次读取）。</summary>
+    private bool _refreshing;
 
     /// <summary>会话/曲目/播放状态任一变化。UI 订阅它做刷新。</summary>
     public event EventHandler? Changed;
@@ -111,6 +128,41 @@ public sealed class MediaSessionService : IDisposable
     /// <summary>最近一次读到的快照；未读到时为 null。</summary>
     public MediaSnapshot? Current { get; private set; }
 
+    // ── 线程封送 ──
+    // 说明见 _ui 字段注释：SMTC 回调在工作线程，所有会话访问与 UI 通知都必须回到 UI 线程。
+
+    private Task RunOnUiAsync(Func<Task> work)
+    {
+        if (_ui is null || _ui.HasThreadAccess) return work();
+
+        var tcs = new TaskCompletionSource();
+        if (!_ui.TryEnqueue(async () =>
+        {
+            try { await work(); tcs.TrySetResult(); }
+            catch (Exception ex) { tcs.TrySetException(ex); }
+        }))
+        {
+            tcs.TrySetResult();   // 队列已关闭（应用退出）：不让它挂住调用方
+        }
+        return tcs.Task;
+    }
+
+    private Task<T> RunOnUiAsync<T>(Func<Task<T>> work)
+    {
+        if (_ui is null || _ui.HasThreadAccess) return work();
+
+        var tcs = new TaskCompletionSource<T>();
+        if (!_ui.TryEnqueue(async () =>
+        {
+            try { tcs.TrySetResult(await work()); }
+            catch (Exception ex) { tcs.TrySetException(ex); }
+        }))
+        {
+            tcs.TrySetResult(default!);
+        }
+        return tcs.Task;
+    }
+
     /// <summary>
     /// 初始化并订阅系统会话变化。
     /// 失败一律吞掉并置 <see cref="IsAvailable"/> = false —— 组件是常驻 UI，
@@ -120,6 +172,8 @@ public sealed class MediaSessionService : IDisposable
     {
         try
         {
+            // 必须在 UI 线程调用：后面的封送要以它为基准
+            _ui = DispatcherQueue.GetForCurrentThread();
             _manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
             if (_manager is null)
             {
@@ -165,19 +219,21 @@ public sealed class MediaSessionService : IDisposable
     }
 
     private void OnCurrentSessionChanged(GlobalSystemMediaTransportControlsSessionManager sender, CurrentSessionChangedEventArgs args)
-    {
-        // 手选了音源就不跟着系统切：用户明确要听某个播放器时，别的软件开播不该抢走组件。
-        RefreshSessionOptions();
-        if (_preferredSessionId is null) AttachSession(sender.GetCurrentSession());
-        _ = RefreshAsync();
-    }
+        => _ = RunOnUiAsync(async () =>
+        {
+            // 手选了音源就不跟着系统切：用户明确要听某个播放器时，别的软件开播不该抢走组件。
+            RefreshSessionOptions();
+            if (_preferredSessionId is null) AttachSession(sender.GetCurrentSession());
+            await RefreshCoreAsync();
+        });
 
     private void OnSessionsChanged(GlobalSystemMediaTransportControlsSessionManager sender, SessionsChangedEventArgs args)
-    {
-        RefreshSessionOptions();
-        SessionsChanged?.Invoke(this, EventArgs.Empty);
-        _ = RefreshAsync();
-    }
+        => _ = RunOnUiAsync(async () =>
+        {
+            RefreshSessionOptions();
+            SessionsChanged?.Invoke(this, EventArgs.Empty);
+            await RefreshCoreAsync();
+        });
 
     private void OnSessionChanged(GlobalSystemMediaTransportControlsSession sender, object args) => _ = RefreshAsync();
 
@@ -214,7 +270,12 @@ public sealed class MediaSessionService : IDisposable
 
         var rawNames = _sessions.Select(s => GetSourceDisplayName(GetAppId(s.Session))).ToList();
         var displayNames = DisambiguateSourceDisplayNames(rawNames);
-        var systemCurrent = _manager.GetCurrentSession();
+
+        // 读「系统当前会话」也可能因播放器刚退出而抛（枚举成功不代表会话还活着），
+        // 这里单独兜住：少一个「播放中」标记远好过把异常甩出去打断整次刷新。
+        GlobalSystemMediaTransportControlsSession? systemCurrent = null;
+        try { systemCurrent = _manager.GetCurrentSession(); }
+        catch (Exception ex) { StarLog.Error("读取系统当前媒体会话失败", ex); }
 
         var options = new List<MediaSessionOption>(_sessions.Count);
         for (var i = 0; i < _sessions.Count; i++)
@@ -261,7 +322,10 @@ public sealed class MediaSessionService : IDisposable
     }
 
     /// <summary>切换音源。<paramref name="sessionId"/> 为 null 时回到「跟随系统」，成功后立刻重新读曲目。</summary>
-    public async Task<bool> SetPreferredSessionAsync(string? sessionId)
+    public Task<bool> SetPreferredSessionAsync(string? sessionId)
+        => RunOnUiAsync(() => SetPreferredSessionCoreAsync(sessionId));
+
+    private async Task<bool> SetPreferredSessionCoreAsync(string? sessionId)
     {
         if (!IsAvailable) { _preferredSessionId = sessionId; return false; }
 
@@ -375,10 +439,20 @@ public sealed class MediaSessionService : IDisposable
         left is not null && right is not null &&
         (ReferenceEquals(left, right) || left.Equals(right));
 
-    /// <summary>重新读取当前会话快照并触发 <see cref="Changed"/>。</summary>
-    public async Task RefreshAsync()
+    /// <summary>
+    /// 重新读取当前会话快照并触发 <see cref="Changed"/>。
+    /// 入口统一走这里封送到 UI 线程（SMTC 回调在工作线程，直接刷 UI 会抛 RPC_E_WRONG_THREAD）。
+    /// </summary>
+    public Task RefreshAsync() => RunOnUiAsync(RefreshCoreAsync);
+
+    /// <summary>真正的读取逻辑。调用方必须已在 UI 线程。</summary>
+    private async Task RefreshCoreAsync()
     {
         if (!IsAvailable) return;
+        // 多个事件（曲目 / 播放状态 / 时间轴）常在几毫秒内连发，
+        // 重叠刷新只会重复打 WinRT 并让 UI 反复重排，这里合并成一次。
+        if (_refreshing) return;
+        _refreshing = true;
         try
         {
             var session = ResolveSession();
@@ -432,9 +506,15 @@ public sealed class MediaSessionService : IDisposable
         {
             StarLog.Error("读取媒体会话失败", ex);
         }
+        finally
+        {
+            _refreshing = false;
+        }
     }
 
-    public async Task<bool> TogglePlayPauseAsync()
+    public Task<bool> TogglePlayPauseAsync() => RunOnUiAsync(TogglePlayPauseCoreAsync);
+
+    private async Task<bool> TogglePlayPauseCoreAsync()
     {
         if (_session is null) return false;
         try
@@ -451,16 +531,18 @@ public sealed class MediaSessionService : IDisposable
         }
     }
 
-    public async Task<bool> NextAsync() => await TryControlAsync(s => s.TrySkipNextAsync());
+    public Task<bool> NextAsync() => RunOnUiAsync(() => TryControlAsync(s => s.TrySkipNextAsync()));
 
-    public async Task<bool> PreviousAsync() => await TryControlAsync(s => s.TrySkipPreviousAsync());
+    public Task<bool> PreviousAsync() => RunOnUiAsync(() => TryControlAsync(s => s.TrySkipPreviousAsync()));
 
     /// <summary>
     /// 跳转到指定进度。<paramref name="position"/> 是<b>相对起点</b>的偏移（与 <see cref="MediaSnapshot.Position"/> 同口径），
     /// 而 SMTC 的 <c>TryChangePlaybackPositionAsync</c> 收的是时间轴<b>绝对</b>刻度，所以这里要把起点加回去。
     /// 少加这一步在起点不为 0 的播放器上会跳到错误位置。
     /// </summary>
-    public async Task<bool> SeekAsync(TimeSpan position)
+    public Task<bool> SeekAsync(TimeSpan position) => RunOnUiAsync(() => SeekCoreAsync(position));
+
+    private async Task<bool> SeekCoreAsync(TimeSpan position)
     {
         var session = ResolveSession() ?? _session;
         if (session is null) return false;
@@ -487,7 +569,9 @@ public sealed class MediaSessionService : IDisposable
     /// 循环切换播放模式（普通 → 随机 → 列表循环 → 普通），缺哪个能力就跳过哪一态。
     /// 随机与循环在 SMTC 里是两个独立开关，切到某一态时必须把另一个关掉，否则会同时亮着。
     /// </summary>
-    public async Task<bool> CyclePlaybackModeAsync()
+    public Task<bool> CyclePlaybackModeAsync() => RunOnUiAsync(CyclePlaybackModeCoreAsync);
+
+    private async Task<bool> CyclePlaybackModeCoreAsync()
     {
         var session = ResolveSession() ?? _session;
         if (session is null) return false;

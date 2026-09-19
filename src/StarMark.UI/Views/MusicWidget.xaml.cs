@@ -38,6 +38,18 @@ public sealed partial class MusicWidget : UserControl
     private bool _canSeek;
     private double _seekRatio;
 
+    /// <summary>
+    /// 进度推算基准（最后一次真实读到的位置 + 读到它的时刻）。
+    /// <para>
+    /// 早先的写法是每秒把"快照里的 Position + 1 秒"再画一遍 —— 但快照对象是<b>不会自己走</b>的，
+    /// 于是每一跳都从同一个旧位置 +1s，进度条永远停在原地，只有点击按钮触发一次真刷新才动一下。
+    /// 正确做法：记住基准点与时刻，按墙钟推算（SMTC 的时间轴事件大约 1 秒一次，够准了）。
+    /// </para>
+    /// </summary>
+    private TimeSpan _tickBase = TimeSpan.Zero;
+    private DateTimeOffset _tickBaseAt;
+    private int _ticksSinceSync;
+
     public MusicWidget()
     {
         InitializeComponent();
@@ -60,9 +72,11 @@ public sealed partial class MusicWidget : UserControl
                 s_initialized = true;
                 await s_media.InitializeAsync();
             }
+            // 先备好计时器再渲染：Render 里会根据"是否在播放"决定启停，
+            // 顺序反了就会出现"首次加载播放中却不走进度"。
+            StartTimer();
             Render(s_media.Current, s_media.IsAvailable);
             RefreshSourcePicker();
-            StartTimer();
         };
     }
 
@@ -126,12 +140,29 @@ public sealed partial class MusicWidget : UserControl
     private void Timer_Tick(DispatcherQueueTimer sender, object args)
     {
         var snapshot = s_media.Current;
-        if (snapshot is { IsPlaying: true } && snapshot.Duration > TimeSpan.Zero)
+        if (snapshot is not { IsPlaying: true } || snapshot.Duration <= TimeSpan.Zero) return;
+
+        // 按「基准位置 + 墙钟流逝」推算，而不是拿不动的快照做加法（那样进度条会永远停在原地）。
+        var elapsed = DateTimeOffset.Now - _tickBaseAt;
+        if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
+        var pos = _tickBase + elapsed;
+
+        if (pos >= snapshot.Duration)
         {
-            // 不重画整块：只推进进度，避免每秒重排文本
-            var pos = snapshot.Position + TimeSpan.FromSeconds(1);
-            if (pos > snapshot.Duration) pos = snapshot.Duration;
-            SetProgress(pos, snapshot.Duration);
+            // 到点了：可能是本曲放完要切下一首，推算已经不准，必须回源读一次真实状态
+            SetProgress(snapshot.Duration, snapshot.Duration);
+            _ = s_media.RefreshAsync();
+            return;
+        }
+
+        // 不重画整块：只推进进度，避免每秒重排文本
+        SetProgress(pos, snapshot.Duration);
+
+        // 每 5 秒回源校正一次：推算会累积误差，播放器也可能被别处（键盘媒体键、系统弹窗）改了状态
+        if (++_ticksSinceSync >= 5)
+        {
+            _ticksSinceSync = 0;
+            _ = s_media.RefreshAsync();
         }
     }
 
@@ -166,7 +197,10 @@ public sealed partial class MusicWidget : UserControl
             ? snapshot.AppId
             : snapshot.SourceName;
 
+        // 图标表示「点击后会发生什么」：播放中显示暂停键，暂停时显示播放键（与系统播放控件一致）。
+        // 之前显示反了是因为刷新在非 UI 线程上失败（RPC_E_WRONG_THREAD），UI 拿到的是上一次的陈旧快照。
         PlayIcon.Glyph = snapshot.IsPlaying ? "\uE769" : "\uE768";   // 暂停 / 播放
+        ToolTipService.SetToolTip(PlayButton, snapshot.IsPlaying ? "暂停" : "播放");
         PrevButton.IsEnabled = snapshot.CanSkipPrevious;
         NextButton.IsEnabled = snapshot.CanSkipNext;
         PlayButton.IsEnabled = snapshot.CanPlayPause;
@@ -180,9 +214,19 @@ public sealed partial class MusicWidget : UserControl
         ModeIcon.Opacity = snapshot.PlaybackMode == MusicPlaybackMode.Normal ? 0.55 : 1.0;
         ToolTipService.SetToolTip(ModeButton, MusicPlaybackModeMath.Label(snapshot.PlaybackMode));
 
+        // 每次拿到真实快照就把推算基准归零，否则本地推算会一直叠在旧基准上
+        ResetTickBase(snapshot.Position);
         SetProgress(snapshot.Position, snapshot.Duration);
         if (snapshot.IsPlaying && snapshot.Duration > TimeSpan.Zero) _timer?.Start();
         else _timer?.Stop();
+    }
+
+    /// <summary>重新设定进度推算基准（真实快照到达 / seek 提交后调用）。</summary>
+    private void ResetTickBase(TimeSpan position)
+    {
+        _tickBase = position;
+        _tickBaseAt = DateTimeOffset.Now;
+        _ticksSinceSync = 0;
     }
 
     private void SetEnabled(bool enabled)
@@ -267,6 +311,8 @@ public sealed partial class MusicWidget : UserControl
         if (snapshot is null || snapshot.Duration <= TimeSpan.Zero) return;
 
         var target = TimeSpan.FromSeconds(snapshot.Duration.TotalSeconds * _seekRatio);
+        // 先把基准挪到目标点，否则下一次 tick 会用旧基准把进度拽回跳转前
+        ResetTickBase(target);
         SetProgress(target, snapshot.Duration);
         await s_media.SeekAsync(target);
         await s_media.RefreshAsync();
