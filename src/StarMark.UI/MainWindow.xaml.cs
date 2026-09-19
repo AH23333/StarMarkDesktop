@@ -30,6 +30,9 @@ public sealed partial class MainWindow : Window
     private DispatcherTimer? _debounceTimer;
     private readonly SettingsStore _settings = new();
     private ThemePreference _themePref;
+    /// <summary>当前实际生效的主题偏好（运行期切换后会立即更新），供弹窗等独立窗口对齐主界面主题，
+    /// 避免「主界面已切浅色、弹窗仍按旧磁盘偏好渲染成深色」的割裂。</summary>
+    public ThemePreference CurrentThemePreference => _themePref;
     private TrayHost? _trayHost;
     private bool _allowExit;
     private bool _balloonShown;

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="StarMark.UI.Views.PopupCard"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <!--
+        弹窗卡片外壳：背景/边框走 XAML ThemeResource，跟随窗口根的 RequestedTheme
+        （由 ThemeManager.Apply 在 win.Content 之后设置），与 WidgetWindow 同款机制，
+        彻底规避「代码侧 ThemeBrush 解析不到浅色画刷、导致弹窗始终深色」的隐患。
+        卡片内容通过 CardContent 注入到内层 ContentPresenter。
+    -->
+    <Border
+        x:Name="Card"
+        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+        BorderThickness="1"
+        CornerRadius="10"
+        Padding="20,16,20,16">
+        <ContentPresenter x:Name="InnerPresenter"/>
+    </Border>
+</UserControl>

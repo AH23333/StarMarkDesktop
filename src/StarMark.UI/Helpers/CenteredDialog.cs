@@ -10,6 +10,8 @@ using Microsoft.UI.Xaml.Media;
 using Windows.Graphics;
 using Windows.UI;
 using WinRT.Interop;
+using StarMark.UI;
+using StarMark.UI.Views;
 
 namespace StarMark.UI.Helpers;
 
@@ -354,19 +356,11 @@ public static class CenteredDialog
         WindowInterop.SetTopmost(win, false);
     }
 
-    /// <summary>卡片：单张圆角 Border（背景 + 边框 + 圆角），直接作为窗口根内容——
-    /// 整窗按同一半径裁成圆角矩形，避免「白色大圆角 + 深灰小圆角」双层叠加的灰色观感。</summary>
-    private static Border BuildCard(UIElement content)
+    /// <summary>卡片：单张圆角 Border 外壳（背景/边框走 XAML ThemeResource，跟随窗口根 RequestedTheme），
+    /// 直接作为窗口根内容——整窗按同一半径裁成圆角矩形，避免双层叠加的灰色观感。</summary>
+    private static PopupCard BuildCard(UIElement content)
     {
-        return new Border
-        {
-            Background = Brush("CardBackgroundFillColorDefaultBrush", Colors.White),
-            BorderBrush = Brush("CardStrokeColorDefaultBrush", Colors.Gray),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(20, 16, 20, 16),
-            Child = content,
-        };
+        return new PopupCard { CardContent = content };
     }
 
     private static TextBlock MakeTitle(string title) => new()

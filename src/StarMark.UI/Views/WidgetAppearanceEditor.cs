@@ -590,17 +590,11 @@ public static class WidgetAppearanceEditor
         // 卡片直接承载 ScrollViewer：此前外层套了 StackPanel（含拖拽标题栏），
         // StackPanel 以「无限高度」度量子元素，ScrollViewer 拿不到有界高度 → 永不滚动，
         // 底部「确定 / 取消 / 恢复全局」被裁切不可达。恢复为其直接宿主即可正常滚动。
-        var card = new Border
-        {
-            Background = Brush("CardBackgroundFillColorDefaultBrush", Colors.White),
-            BorderBrush = Brush("CardStrokeColorDefaultBrush", Colors.Gray),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(20),
-            Child = scroll,
-        };
-        // 卡片直接作为窗口根内容：整窗按同一半径（10）裁成圆角矩形，避免「白色大圆角 + 深灰小圆角」
-        // 双层叠加的灰色观感（之前在外层再套一层 ApplicationPageBackgroundThemeBrush 白底 Grid）。
+        // 卡片直接作为窗口根内容：PopupCard 用 XAML ThemeResource 渲染背景/边框，
+        // 跟随窗口根的 RequestedTheme（Apply 在 Content 之后设置），与 WidgetWindow 同款机制，
+        // 彻底消除「代码侧 ThemeBrush 解析不到浅色画刷、弹窗始终深色」的隐患；
+        // 整窗按同一半径（10）裁成圆角矩形，避免双层叠加的灰色观感。
+        var card = new PopupCard { CardContent = scroll };
         win.Content = card;
         // 必须在此（Content 已设）才套用主题：否则 root.RequestedTheme 不会生效，弹窗停留在旧主题。
         try { ThemeManager.Apply(win, new SettingsStore().LoadTheme()); } catch { }
@@ -843,7 +837,9 @@ public static class WidgetAppearanceEditor
     /// 让代码侧解析的画笔与窗口根元素的 RequestedTheme 完全一致（消除弹窗主题错乱/始终深色）。</summary>
     private static ElementTheme EffectiveTheme()
     {
-        var pref = new SettingsStore().LoadTheme();
+        // 跟随主窗口当前实际主题（运行期切换后立即生效），而非磁盘存储偏好——
+        // 否则「主界面已切浅色、弹窗仍按旧存储偏好渲染成深色」会再次出现。
+        var pref = App.MainWindow?.CurrentThemePreference ?? new SettingsStore().LoadTheme();
         return pref switch
         {
             ThemePreference.Light => ElementTheme.Light,
