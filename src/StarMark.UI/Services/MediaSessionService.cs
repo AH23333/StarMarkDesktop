@@ -122,6 +122,13 @@ public sealed class MediaSessionService : IDisposable
     /// </summary>
     private bool _refreshPending;
 
+    /// <summary>
+    /// 单次媒体属性读取的上限。挂起的播放器（浏览器页签冻结、崩溃残留会话）会让
+    /// <c>TryGetMediaPropertiesAsync</c> 永不完成，无界 await 会把刷新循环连同 <c>_refreshing</c>
+    /// 闸门一起卡死，组件从此停在旧曲目。超时即放弃本次快照、让闸门复位，下次 SMTC 事件再试。
+    /// </summary>
+    private static readonly TimeSpan MediaReadTimeout = TimeSpan.FromSeconds(3);
+
     /// <summary>会话/曲目/播放状态任一变化。UI 订阅它做刷新。</summary>
     public event EventHandler? Changed;
 
@@ -213,21 +220,32 @@ public sealed class MediaSessionService : IDisposable
     {
         if (ReferenceEquals(_session, session)) return;
 
-        if (_session is not null)
-        {
-            // 换会话必须退订旧的，否则旧会话的回调还会继续触发刷新
-            _session.MediaPropertiesChanged -= OnSessionChanged;
-            _session.PlaybackInfoChanged -= OnSessionChanged;
-            _session.TimelinePropertiesChanged -= OnSessionChanged;
-        }
-
+        var old = _session;
+        // 先换引用：即便退订/订阅抛异常，也不会继续对着已失效会话读，也不会漏订新会话。
         _session = session;
-        if (_session is not null)
+
+        try
         {
-            _session.MediaPropertiesChanged += OnSessionChanged;
-            _session.PlaybackInfoChanged += OnSessionChanged;
-            _session.TimelinePropertiesChanged += OnSessionChanged;
+            if (old is not null)
+            {
+                // 换会话必须退订旧的，否则旧会话的回调还会继续触发刷新
+                old.MediaPropertiesChanged -= OnSessionChanged;
+                old.PlaybackInfoChanged -= OnSessionChanged;
+                old.TimelinePropertiesChanged -= OnSessionChanged;
+            }
         }
+        catch (Exception ex) { StarLog.Error("退订旧媒体会话事件失败", ex); }
+
+        try
+        {
+            if (session is not null)
+            {
+                session.MediaPropertiesChanged += OnSessionChanged;
+                session.PlaybackInfoChanged += OnSessionChanged;
+                session.TimelinePropertiesChanged += OnSessionChanged;
+            }
+        }
+        catch (Exception ex) { StarLog.Error("订阅新媒体会话事件失败", ex); }
     }
 
     private void OnCurrentSessionChanged(GlobalSystemMediaTransportControlsSessionManager sender, CurrentSessionChangedEventArgs args)
@@ -460,7 +478,7 @@ public sealed class MediaSessionService : IDisposable
     /// <summary>真正的读取逻辑。调用方必须已在 UI 线程。</summary>
     private async Task RefreshCoreAsync()
     {
-        if (!IsAvailable) return;
+        if (!IsAvailable || _disposed) return;
         // 多个事件（曲目 / 播放状态 / 时间轴）常在几毫秒内连发，
         // 重叠刷新只会重复打 WinRT 并让 UI 反复重排，这里合并成一次。
         // 但合并≠丢弃：期间到来的事件置脏位，结束后补跑，保证最后一次变化一定被读到。
@@ -496,7 +514,9 @@ public sealed class MediaSessionService : IDisposable
                 return;
             }
 
-            var props = await session.TryGetMediaPropertiesAsync();
+            // 加超时上限：挂起的播放器会让该 WinRT 调用永不完成，无界 await 会卡死刷新循环与
+            // _refreshing 闸门。超时抛 TimeoutException 由本方法外层 catch 兜住，闸门照常复位、下次事件重试。
+            var props = await session.TryGetMediaPropertiesAsync().AsTask().WaitAsync(MediaReadTimeout);
             var playback = session.GetPlaybackInfo();
             var timeline = session.GetTimelineProperties();
 
