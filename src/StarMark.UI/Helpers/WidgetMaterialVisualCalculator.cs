@@ -71,12 +71,20 @@ internal static class WidgetMaterialVisualCalculator
         return ApplySurfaceOpacity(tintColor, overlayOpacity);
     }
 
+    /// <summary>
+    /// 云母的强度剖面。<paramref name="surfaceOpacity"/>（背景不透明度）必须参与：
+    /// 早先这里只吃「材质浓度」，于是在云母/云母 Alt 下拖动「背景不透明度」滑杆毫无变化 ——
+    /// 用户报「部分材质下两个滑杆对所有组件都失效」正是这一条。
+    /// 与亚克力同口径：先按主题+浓度算出目标强度，再乘表面强度因子。
+    /// </summary>
     public static WidgetMaterialOpacityProfile CalculateMica(
         bool isDark,
         bool useAlt,
+        double surfaceOpacity,
         double materialIntensity)
     {
         double intensity = NormalizeMaterialIntensity(materialIntensity);
+        double surfaceStrength = Lerp(0.08, 1.0, Math.Clamp(surfaceOpacity, 0.0, 1.0));
         double tintOpacity = useAlt
             ? Lerp(0.28, 0.82, intensity)
             : Lerp(0.04, 0.46, intensity);
@@ -84,7 +92,9 @@ internal static class WidgetMaterialVisualCalculator
             ? Lerp(isDark ? 0.34 : 0.42, isDark ? 0.72 : 0.76, intensity)
             : Lerp(isDark ? 0.78 : 0.82, isDark ? 0.94 : 0.96, intensity);
 
-        return new WidgetMaterialOpacityProfile(tintOpacity, luminosityOpacity);
+        return new WidgetMaterialOpacityProfile(
+            Math.Clamp(tintOpacity * surfaceStrength, 0.0, 1.0),
+            Math.Clamp(luminosityOpacity * surfaceStrength, 0.0, 1.0));
     }
 
     public static Color BuildContentTintColor(bool isDark, Color accentColor)

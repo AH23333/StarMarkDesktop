@@ -38,6 +38,20 @@ public static class WidgetAppearance
     public static double MaterialIntensity()
         => Try(() => new SettingsStore().LoadWidgetMaterialIntensity(), WidgetMaterialVisualCalculator.DefaultWidgetMaterialIntensity);
 
+    /// <summary>
+    /// 系统强调色（DeskBox 取 <c>ThemeService.GetEffectiveAccentColor()</c>）。
+    /// 拿不到时回落到 <see cref="WidgetMaterialVisualCalculator.DefaultAccentColor"/> ——
+    /// 纯色材质掺的就是这个色，用错会让纯色和 DeskBox 明显不同。
+    /// </summary>
+    public static Windows.UI.Color AccentColor() => Try(() =>
+    {
+        var settings = new Windows.UI.ViewManagement.UISettings();
+        var c = settings.GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent);
+        return c.A == 0
+            ? WidgetMaterialVisualCalculator.DefaultAccentColor
+            : Windows.UI.Color.FromArgb(0xFF, c.R, c.G, c.B);
+    }, WidgetMaterialVisualCalculator.DefaultAccentColor);
+
     /// <summary>默认不透明度（0.72），与 SettingsStore 默认值保持一致。</summary>
     public const double DefaultOpacity = 0.72;
 
@@ -51,18 +65,27 @@ public static class WidgetAppearance
         }
     }
 
-    // 每个窗口已有的控制器（用于切换材质时先拆掉旧的，避免泄漏原生合成资源 / DWM 句柄）
+    /// <summary>
+    /// 每个窗口的控制器状态。照搬 DeskBox 的**复用**策略：
+    /// 切换材质族（亚克力↔云母）时只 <c>RemoveAllSystemBackdropTargets()</c> 摘掉挂载点，
+    /// 控制器本身留在手里等下次复用 —— 每次都 Dispose + new 会漏原生合成内存与 DWM 句柄，
+    /// 而这类泄漏 GC 与工作集修剪都收不回来。
+    /// </summary>
     private sealed class WindowBackdropState
     {
         public DesktopAcrylicController? Acrylic;
+        public bool AcrylicAttached;
         public MicaController? Mica;
+        public bool MicaAttached;
+        public SystemBackdropConfiguration? Config;
+        public ICompositionSupportsSystemBackdrop? Target;
     }
 
     private static readonly ConditionalWeakTable<Window, WindowBackdropState> _states = new();
 
     /// <summary>
     /// 把毛玻璃材质真正挂到窗口上（构造期、设置变更后、DWM 主题翻转后共用）。
-    /// 原生亚克力 / 云母：控制器接管背景，内容背景透明；不透明：控制器拆掉，内容背景回到实色。
+    /// 原生亚克力 / 云母：控制器接管背景，内容背景透明；不透明 / 纯色：控制器摘掉，内容表面铺实色。
     /// </summary>
     public static void ApplyBackdrop(Window window, WidgetBackdropKind kind, double surfaceOpacity, double intensity, ElementTheme theme)
     {
@@ -72,71 +95,36 @@ public static class WidgetAppearance
             surfaceOpacity = Math.Clamp(surfaceOpacity, 0.0, 1.0);
 
             var state = _states.GetOrCreateValue(window);
-            DetachControllers(state);
 
             // 无材质 / 纯色：照搬 DeskBox —— 两者都不挂控制器，
             // 区别只在内容表面铺什么（None 跟主题黑白实色，Solid 铺带强调色的实色，见 SurfaceBrush）。
             if (kind == WidgetBackdropKind.None || kind == WidgetBackdropKind.Solid)
             {
+                DetachAcrylic(state);
+                DetachMica(state);
                 window.SystemBackdrop = null;
                 WindowInterop.SetDwmSystemBackdropNone(window);
                 return;
             }
 
-            var target = window.As<ICompositionSupportsSystemBackdrop>();
-            var config = new SystemBackdropConfiguration
-            {
-                IsInputActive = true,
-                Theme = isDark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light,
-            };
+            var accent = AccentColor();
+            var tint = WidgetMaterialVisualCalculator.BuildContentTintColor(isDark, accent);
 
-            // 云母（Mica Base / BaseAlt）：对齐 DeskBox 的 ApplyMicaController 参数组合
-            if (kind == WidgetBackdropKind.Mica || kind == WidgetBackdropKind.MicaAlt)
-            {
-                var useAlt = kind == WidgetBackdropKind.MicaAlt;
-                if (MicaController.IsSupported())
-                {
-                    var mica = new MicaController { Kind = useAlt ? MicaKind.BaseAlt : MicaKind.Base };
-                    mica.TintColor = WidgetMaterialVisualCalculator.BuildContentTintColor(isDark, WidgetMaterialVisualCalculator.DefaultAccentColor);
-                    mica.FallbackColor = WidgetMaterialVisualCalculator.BuildMicaFallbackColor(isDark, useAlt);
-                    var profile = WidgetMaterialVisualCalculator.CalculateMica(isDark, useAlt, intensity);
-                    mica.TintOpacity = (float)profile.TintOpacity;
-                    mica.LuminosityOpacity = (float)profile.LuminosityOpacity;
-                    mica.SetSystemBackdropConfiguration(config);
-                    if (mica.AddSystemBackdropTarget(target))
-                    {
-                        state.Mica = mica;
-                        WindowInterop.SetDwmSystemBackdropNone(window);
-                        return;
-                    }
-                    mica.Dispose();
-                }
-                // 不支持 Mica 时回落到亚克力
-            }
+            state.Target ??= window.As<ICompositionSupportsSystemBackdrop>();
+            state.Config ??= new SystemBackdropConfiguration();
+            state.Config.IsInputActive = true;
+            state.Config.Theme = isDark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light;
 
-            // 亚克力（Thin 薄 / Base 厚）：对齐 DeskBox 的 ApplyAcrylicController 参数组合
-            if (DesktopAcrylicController.IsSupported())
-            {
-                var useBase = kind == WidgetBackdropKind.AcrylicBase;
-                var acrylic = new DesktopAcrylicController { Kind = useBase ? DesktopAcrylicKind.Base : DesktopAcrylicKind.Thin };
-                acrylic.TintColor = WidgetMaterialVisualCalculator.BuildContentTintColor(isDark, WidgetMaterialVisualCalculator.DefaultAccentColor);
-                acrylic.FallbackColor = acrylic.TintColor;
-                var profile = WidgetMaterialVisualCalculator.CalculateAcrylic(isDark, useBase, surfaceOpacity, intensity);
-                acrylic.TintOpacity = (float)profile.TintOpacity;
-                acrylic.LuminosityOpacity = (float)profile.LuminosityOpacity;
-                acrylic.SetSystemBackdropConfiguration(config);
-                if (acrylic.AddSystemBackdropTarget(target))
-                {
-                    state.Acrylic = acrylic;
-                    WindowInterop.SetDwmSystemBackdropNone(window);
-                    return;
-                }
-                acrylic.Dispose();
-            }
+            var ok = kind is WidgetBackdropKind.Mica or WidgetBackdropKind.MicaAlt
+                ? ApplyMica(state, isDark, tint, kind == WidgetBackdropKind.MicaAlt, surfaceOpacity, intensity)
+                  || ApplyAcrylic(state, isDark, tint, false, surfaceOpacity, intensity)   // 不支持云母 → 回落亚克力
+                : ApplyAcrylic(state, isDark, tint, kind == WidgetBackdropKind.AcrylicBase, surfaceOpacity, intensity)
+                  || ApplyMica(state, isDark, tint, false, surfaceOpacity, intensity);      // 不支持亚克力 → 回落云母
 
-            // 平台不支持任何原生材质：回到实色（仍可半透明），保证至少有毛玻璃观感
+            // 控制器接管时必须关掉 DWM 自带背景，否则 DWM 在控制器之上再叠一层默认亚克力（DeskBox 同款处理）
             window.SystemBackdrop = null;
             WindowInterop.SetDwmSystemBackdropNone(window);
+            if (!ok) StarLog.Error($"当前平台不支持 {kind} 材质，已退化为实色表面");
         }
         catch (Exception ex)
         {
@@ -145,17 +133,102 @@ public static class WidgetAppearance
         }
     }
 
-    private static void DetachControllers(WindowBackdropState state)
+    private static bool ApplyMica(WindowBackdropState state, bool isDark, Windows.UI.Color tint,
+        bool useAlt, double surfaceOpacity, double intensity)
     {
-        if (state.Acrylic is { } a)
+        if (!MicaController.IsSupported()) return false;
+
+        try
         {
-            try { a.RemoveAllSystemBackdropTargets(); a.Dispose(); } catch { }
-            state.Acrylic = null;
+            DetachAcrylic(state);
+            // Kind 是可变属性：Base ↔ BaseAlt 复用同一个控制器即可
+            state.Mica ??= new MicaController();
+            if (!state.MicaAttached)
+            {
+                if (!state.Mica.AddSystemBackdropTarget(state.Target!)) return false;
+                state.MicaAttached = true;
+                state.Mica.SetSystemBackdropConfiguration(state.Config!);
+            }
+
+            state.Mica.Kind = useAlt ? MicaKind.BaseAlt : MicaKind.Base;
+            state.Mica.TintColor = tint;
+            state.Mica.FallbackColor = WidgetMaterialVisualCalculator.BuildMicaFallbackColor(isDark, useAlt);
+            var profile = WidgetMaterialVisualCalculator.CalculateMica(isDark, useAlt, surfaceOpacity, intensity);
+            state.Mica.TintOpacity = (float)profile.TintOpacity;
+            state.Mica.LuminosityOpacity = (float)profile.LuminosityOpacity;
+            return true;
         }
-        if (state.Mica is { } m)
+        catch (Exception ex)
         {
-            try { m.RemoveAllSystemBackdropTargets(); m.Dispose(); } catch { }
+            StarLog.Error("应用云母材质失败", ex);
+            return false;
+        }
+    }
+
+    private static bool ApplyAcrylic(WindowBackdropState state, bool isDark, Windows.UI.Color tint,
+        bool useBase, double surfaceOpacity, double intensity)
+    {
+        if (!DesktopAcrylicController.IsSupported()) return false;
+
+        try
+        {
+            DetachMica(state);
+            state.Acrylic ??= new DesktopAcrylicController();
+            if (!state.AcrylicAttached)
+            {
+                if (!state.Acrylic.AddSystemBackdropTarget(state.Target!)) return false;
+                state.AcrylicAttached = true;
+                state.Acrylic.SetSystemBackdropConfiguration(state.Config!);
+            }
+
+            state.Acrylic.Kind = useBase ? DesktopAcrylicKind.Base : DesktopAcrylicKind.Thin;
+            state.Acrylic.TintColor = tint;
+            state.Acrylic.FallbackColor = tint;
+            var profile = WidgetMaterialVisualCalculator.CalculateAcrylic(isDark, useBase, surfaceOpacity, intensity);
+            state.Acrylic.TintOpacity = (float)profile.TintOpacity;
+            state.Acrylic.LuminosityOpacity = (float)profile.LuminosityOpacity;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("应用亚克力材质失败", ex);
+            return false;
+        }
+    }
+
+    /// <summary>摘掉亚克力挂载点（控制器留着复用）。</summary>
+    private static void DetachAcrylic(WindowBackdropState state)
+    {
+        if (state.Acrylic is null || !state.AcrylicAttached) return;
+        try { state.Acrylic.RemoveAllSystemBackdropTargets(); } catch { }
+        state.AcrylicAttached = false;
+    }
+
+    /// <summary>摘掉云母挂载点（控制器留着复用）。</summary>
+    private static void DetachMica(WindowBackdropState state)
+    {
+        if (state.Mica is null || !state.MicaAttached) return;
+        try { state.Mica.RemoveAllSystemBackdropTargets(); } catch { }
+        state.MicaAttached = false;
+    }
+
+    /// <summary>窗口关闭时彻底释放（不释放会漏原生合成资源）。</summary>
+    public static void ReleaseBackdrop(Window window)
+    {
+        if (!_states.TryGetValue(window, out var state)) return;
+        try
+        {
+            if (state.Acrylic is { } a) { try { a.RemoveAllSystemBackdropTargets(); a.Dispose(); } catch { } }
+            if (state.Mica is { } m) { try { m.RemoveAllSystemBackdropTargets(); m.Dispose(); } catch { } }
+        }
+        catch { }
+        finally
+        {
+            state.Acrylic = null;
             state.Mica = null;
+            state.AcrylicAttached = false;
+            state.MicaAttached = false;
+            _states.Remove(window);
         }
     }
 
@@ -169,20 +242,26 @@ public static class WidgetAppearance
     /// </list>
     /// </summary>
     public static Brush SurfaceBrush(ElementTheme theme, WidgetBackdropKind kind)
+        => SurfaceBrush(theme, kind, null);
+
+    /// <param name="opacityOverride">显式指定「背景不透明度」（主窗口用它强制不透明 / 跟随滑杆）。</param>
+    public static Brush SurfaceBrush(ElementTheme theme, WidgetBackdropKind kind, double? opacityOverride)
     {
         if (kind is not (WidgetBackdropKind.None or WidgetBackdropKind.Solid))
             return new SolidColorBrush(Colors.Transparent);
 
         var dark = theme == ElementTheme.Dark;
-        var opacity = Math.Clamp(Opacity(), 0.0, 1.0);
+        var opacity = Math.Clamp(opacityOverride ?? Opacity(), 0.0, 1.0);
 
         if (kind == WidgetBackdropKind.Solid)
         {
             // 与 DeskBox 的 ContentWidgetWindow.ApplySurfaceStyle 同一套取色：
             // BuildContentSolidSurfaceColor 内部已按 surfaceOpacity 调整 Alpha，
             // 故此处不再二次叠加（否则纯色会比预期更淡/更实）。
+            // 强调色必须取系统强调色（DeskBox 走 ThemeService.GetEffectiveAccentColor），
+            // 用固定蓝会让纯色和 DeskBox 明显不是一个色。
             var solid = WidgetMaterialVisualCalculator.BuildContentSolidSurfaceColor(
-                dark, WidgetMaterialVisualCalculator.DefaultAccentColor, opacity);
+                dark, AccentColor(), opacity);
             return new SolidColorBrush(solid);
         }
 
@@ -193,6 +272,39 @@ public static class WidgetAppearance
 
     /// <summary>便捷重载：按当前设置读出材质。</summary>
     public static Brush SurfaceBrush(ElementTheme theme) => SurfaceBrush(theme, Backdrop());
+
+    /// <summary>
+    /// 主窗口的表面画笔（照搬 DeskBox「材质表面」分层，但按主窗口的可读性做了适配）。
+    /// <para>
+    /// 为什么不能直接用 <see cref="SurfaceBrush"/>：主窗口的顶栏 / NavigationView / 页面
+    /// 各自带不透明背景，原生材质即便挂上了也几乎被盖住 —— 用户拖「背景不透明度」看不出任何变化，
+    /// 于是报「两个滑杆对主界面失效」。这里改为在原生材质之上再压一层**按不透明度调 Alpha 的主题色**，
+    /// 让「背景不透明度」字面生效（越高越实、越低越透出霜化背景），与主窗口的实际观感一致。
+    /// </para>
+    /// </summary>
+    public static Brush MainWindowSurfaceBrush(ElementTheme theme, WidgetBackdropKind kind, bool translucent)
+    {
+        var dark = theme == ElementTheme.Dark;
+
+        // 未开启主窗口材质：老老实实铺主题实色（不受不透明度滑杆影响，避免正文可读性被拖累）
+        if (!translucent)
+            return ThemeBrush.For(theme, "ApplicationPageBackgroundThemeBrush")
+                   ?? SurfaceBrush(theme, WidgetBackdropKind.None, 1.0);
+
+        var opacity = Math.Clamp(Opacity(), 0.0, 1.0);
+
+        if (kind == WidgetBackdropKind.Solid)
+            return SurfaceBrush(theme, WidgetBackdropKind.Solid, opacity);
+
+        if (kind == WidgetBackdropKind.None)
+            return SurfaceBrush(theme, WidgetBackdropKind.None, opacity);
+
+        // 原生材质（亚克力 / 云母）：霜化背景在窗口上，表面只压一层半透明主题色。
+        // 不透明度 = 这层主题色的 Alpha：1.0 完全遮住霜化，0.3 几乎全透。
+        var tint = WidgetMaterialVisualCalculator.BuildContentTintColor(dark, AccentColor());
+        var alpha = (byte)Math.Clamp(opacity * 255, 0, 255);
+        return new SolidColorBrush(ColorHelper.FromArgb(alpha, tint.R, tint.G, tint.B));
+    }
 
     /// <summary>解析 #RRGGBB / #AARRGGBB 为实色画笔；格式非法或空返回 null（调用方据此回退主题）。</summary>
     public static SolidColorBrush? ParseColorBrush(string? hex)

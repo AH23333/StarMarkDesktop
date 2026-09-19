@@ -110,16 +110,19 @@ public sealed partial class MainWindow : Window
         try
         {
             var translucent = _settings.LoadMainWindowTranslucent();
+            var theme = TargetTheme(_themePref);
             var kind = translucent ? SettingsStore_WidgetBackdrop() : WidgetBackdropKind.None;
             WidgetAppearance.ApplyBackdrop(
-                this, kind, WidgetAppearance.Opacity(), WidgetAppearance.MaterialIntensity(), TargetTheme(_themePref));
-            // 背景必须用「按目标主题解析」的画笔（ThemeBrush.For），
-            // 不能取 Application.Current.Resources[key]——应用级主题在窗口创建后冻结，
-            // 那里解析出的永远是初始主题的画笔，导致一键切换主题时背景色不跟着变。
-            // 用 _themePref 推导目标主题（而非 RootGrid.ActualTheme），避免主题传播时机导致的「慢一拍」。
-            RootGrid.Background = translucent ? null : (Microsoft.UI.Xaml.Media.Brush)
-                (ThemeBrush.For(TargetTheme(_themePref), "ApplicationPageBackgroundThemeBrush")
-                 ?? Application.Current.Resources["ApplicationPageBackgroundThemeBrush"]);
+                this, kind, WidgetAppearance.Opacity(), WidgetAppearance.MaterialIntensity(), theme);
+            // 表面画笔必须跟着材质走：
+            // ① 早先「半透明就置 null」，于是纯色材质下主窗口是**全透明**的（什么都不铺），
+            //    与 DeskBox 的纯色完全不是一个东西；
+            // ② 光挂控制器也不够 —— 顶栏 / NavigationView / 页面各自带不透明背景，
+            //    霜化被盖住后拖「背景不透明度 / 材质浓度」看不出任何变化。
+            //    故这里在原生材质之上再压一层按不透明度调 Alpha 的主题色（见 MainWindowSurfaceBrush）。
+            // 主题色一律按目标主题解析（ThemeBrush.For），不能取 Application.Current.Resources[key]
+            // —— 应用级主题在窗口创建后冻结，那里解析出的永远是初始主题的画笔。
+            RootGrid.Background = WidgetAppearance.MainWindowSurfaceBrush(theme, kind, translucent);
         }
         catch (Exception ex)
         {
@@ -187,6 +190,7 @@ public sealed partial class MainWindow : Window
         try { await _widgetManager.ShutdownAllAsync(); }
         catch (Exception ex) { StarLog.Error("关闭桌面组件失败", ex); }
         DisposeTray();
+        WidgetAppearance.ReleaseBackdrop(this);   // 释放主窗口的材质控制器（原生合成资源）
         Application.Current.Exit();
     }
 
