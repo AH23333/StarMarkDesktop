@@ -330,6 +330,44 @@ internal static class WindowInterop
         catch { return 1.0; }
     }
 
+    // ───────────────────────── XamlRoot → 发起窗口映射 ─────────────────────────
+    // 弹窗（CenteredDialog）以「发起窗口所在显示器」为基准居中，需要把内容里的 XamlRoot
+    // 反查回它的宿主 Window——组件与主窗口是各自独立的顶层窗口，若恒按主窗口居中，
+    // 从桌面组件弹出的编辑框就会跑到主窗口那块屏幕上。弱引用登记，窗口关闭即摘除。
+
+    private static readonly List<WeakReference<Microsoft.UI.Xaml.Window>> _liveWindows = new();
+
+    /// <summary>登记一个存活的顶层窗口（在其宿主 XamlRoot 就绪前调用也安全，解析时才惰性比对）。
+    /// 会在窗口 Closed 时自动摘除，重复登记同一窗口会先清旧项。</summary>
+    public static void TrackWindow(Microsoft.UI.Xaml.Window window)
+    {
+        void Prune()
+        {
+            lock (_liveWindows)
+                _liveWindows.RemoveAll(wr => !wr.TryGetTarget(out var t) || ReferenceEquals(t, window));
+        }
+        Prune();
+        lock (_liveWindows) _liveWindows.Add(new WeakReference<Microsoft.UI.Xaml.Window>(window));
+        window.Closed += (_, _) => Prune();
+    }
+
+    /// <summary>把 <paramref name="xamlRoot"/> 解析回其宿主 Window；未命中时回退 <paramref name="fallback"/>。</summary>
+    public static Microsoft.UI.Xaml.Window? ResolveWindow(Microsoft.UI.Xaml.XamlRoot? xamlRoot,
+        Microsoft.UI.Xaml.Window? fallback)
+    {
+        if (xamlRoot is null) return fallback;
+        lock (_liveWindows)
+        {
+            foreach (var wr in _liveWindows)
+            {
+                if (wr.TryGetTarget(out var w)
+                    && ReferenceEquals((w.Content as Microsoft.UI.Xaml.FrameworkElement)?.XamlRoot, xamlRoot))
+                    return w;
+            }
+        }
+        return fallback;
+    }
+
     /// <summary>去掉窗口默认标题栏/边框（DeskBox WidgetWindowBase.ConfigureWindowCore 同款序列）。</summary>
     public static void RemoveDefaultWindowFrame(Microsoft.UI.Xaml.Window window)
     {

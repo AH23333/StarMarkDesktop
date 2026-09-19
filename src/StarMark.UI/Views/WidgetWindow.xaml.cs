@@ -159,6 +159,7 @@ public sealed partial class WidgetWindow : Window
         _config = config;
 
         InitializeComponent();
+        WindowInterop.TrackWindow(this);   // 供弹窗按发起组件窗口所在显示器居中
         ApplyAppearanceCore();
         // 主题解析完成后（Default → 浅/深）或运行期切换主题时，按真实主题重挂材质与重铺表面。
         // 否则构造期 ActualTheme 仍是 Default（被当作浅色），浅色模式下的材质/表面会一直用错；

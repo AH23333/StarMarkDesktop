@@ -91,7 +91,7 @@ public static class ItemCardActions
     }
 
     /// <summary>把 XamlRoot 解析为发起窗口（用于弹窗居中显示器）。无可靠映射时回落到主窗口。</summary>
-    private static Window? ResolveOwner(XamlRoot? xamlRoot) => App.MainWindow;
+    private static Window? ResolveOwner(XamlRoot? xamlRoot) => WindowInterop.ResolveWindow(xamlRoot, App.MainWindow);
 
     public static async void EditNote(XamlRoot xamlRoot, ItemCardViewModel vm)
     {

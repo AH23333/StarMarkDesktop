@@ -46,6 +46,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        WindowInterop.TrackWindow(this);   // 供弹窗按发起窗口所在显示器居中
         ViewModel = App.Services.GetRequiredService<MainViewModel>();
         _widgetManager = App.Services.GetRequiredService<WidgetManager>();
         _widgetManager.Initialize(DispatcherQueue);
