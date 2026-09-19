@@ -134,6 +134,7 @@ public partial class App : Application
 
         // 全局快捷键（动作映射 + 冲突允许；见 HotkeyService）
         services.AddSingleton<HotkeyService>();
+        services.AddSingleton<AutostartService>();
 
         // ViewModel 层
         services.AddSingleton<MainViewModel>();

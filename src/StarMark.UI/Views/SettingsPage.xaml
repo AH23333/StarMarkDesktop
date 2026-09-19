@@ -240,6 +240,8 @@
                                     <Button x:Name="WidgetShowAllButton" Content="全部显示" Style="{StaticResource SecondaryButton}" Click="WidgetShowAll_Click"/>
                                     <Button x:Name="WidgetHideAllButton" Content="全部隐藏" Style="{StaticResource SecondaryButton}" Click="WidgetHideAll_Click"/>
                                 </StackPanel>
+                                <ToggleSwitch x:Name="AutostartToggle" Header="开机自动启动 StarMark"
+                                              Margin="0,4,0,0" Toggled="AutostartToggle_Toggled"/>
                             </StackPanel>
                         </Border>
 

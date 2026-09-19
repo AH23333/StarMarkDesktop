@@ -12,6 +12,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using StarMark.Abstractions;
 using StarMark.Abstractions.Backup;
 using StarMark.Core.Backup;
 using StarMark.Core.Widgets;
@@ -211,10 +212,22 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     /// 逐类型列出：类型标题 +「添加组件」按钮（可重复添加同类型），其下为该类型的每个实例一行
     /// （显示 / 移除）。置顶实例在标签后标注（置顶）。
     /// </summary>
+    private AutostartService AutostartService()
+        => App.Services.GetRequiredService<AutostartService>();
+
+    private void AutostartToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        try { AutostartService().SetEnabled(AutostartToggle.IsOn); }
+        catch (Exception ex) { StarLog.Error("设置开机自启失败", ex); }
+    }
+
     private void BuildWidgetRows()
     {
         var mgr = WidgetManager();
         if (mgr is null || WidgetRows is null) return;
+
+        // 开机自启开关初始态以注册表为准（SetEnabled 幂等，程序化置位不会误写）
+        AutostartToggle.IsOn = AutostartService().IsEnabled();
 
         WidgetRows.Children.Clear();
         var instances = mgr.Instances;
