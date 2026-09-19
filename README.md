@@ -310,6 +310,17 @@ dotnet publish src\StarMark.UI\StarMark.UI.csproj -c Release -p:Platform=x64
 # 输出在 bin\x64\Release\net9.0-windows10.0.19041.0\publish\
 ```
 
+### 安装与启动（发布产物）
+
+`powershell
+# 仓库根目录执行（普通用户权限即可）：
+powershell -ExecutionPolicy Bypass -File publish.ps1
+`
+
+- 产物：publish\StarMark.UI.exe（框架依赖，运行需 [.NET 9 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/9.0)）
+- 桌面自动创建快捷方式「StarMark」（指向发布产物，图标自动取仓库内 .ico）
+- 开机自启：应用内 设置 → 组件 → 「开机自动启动」开关（写 HKCU Run 键，无需管理员；关闭开关即清除）
+
 ## 集成源
 
 | 源 | 状态 | 协议 | 说明 |
