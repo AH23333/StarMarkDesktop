@@ -1,4 +1,5 @@
 #nullable enable
+using System.Globalization;
 using System.IO;
 using StarMark.Abstractions;
 using StarMark.Data;
@@ -96,9 +97,11 @@ public sealed class DiagnosticsService
 
     private static string FormatUnixSeconds(string? seconds)
     {
-        if (string.IsNullOrEmpty(seconds) || !long.TryParse(seconds, out var sec) || sec <= 0)
+        if (string.IsNullOrEmpty(seconds) || !long.TryParse(seconds, CultureInfo.InvariantCulture, out var sec) || sec <= 0)
             return "从未";
-        return DateTimeOffset.FromUnixTimeSeconds(sec).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+        // InvariantCulture：诊断时间戳必须恒为公历数字；否则 th-TH 等区域会把年份显示成佛历（2569），
+        // 这是本仓多次踩过的"佛历漂移"坑（见 RelativeTimeHelper / ActivityItemViewModel 的同款修）。
+        return DateTimeOffset.FromUnixTimeSeconds(sec).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
     }
 
     private static string Shorten(string value, int max = 24)

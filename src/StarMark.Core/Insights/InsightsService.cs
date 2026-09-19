@@ -36,7 +36,9 @@ public static class InsightsService
         // 1. 疑似重复（按归一化标题分组）
         var dupList = items
             .GroupBy(i => NormalizeTitle(i.Title))
-            .Where(g => g.Count() >= 2)
+            // 空键 = 标题为空或纯标点/符号，归一后塌成 ""；这类"无有效标题"的条目彼此本就不该算重复，
+            // 否则多条无名/纯符号条目会被并成一个幽灵重复组、误扣分。
+            .Where(g => g.Count() >= 2 && g.Key.Length > 0)
             .Select(g => new { Key = g.Key, Sample = g.First().Title, Count = g.Count() })
             .ToList();
         if (dupList.Count > 0)

@@ -73,6 +73,23 @@ public sealed class InsightsServiceTests
     }
 
     [Fact]
+    public void Duplicates_EmptyOrPunctuationTitles_AreNotGrouped()
+    {
+        // 多条"无有效标题"（空 / 纯标点）条目归一化后都塌成 ""。旧实现把它们并成一个幽灵重复组误扣分；
+        // 归一无意义者不应参与重复判定。
+        var items = new List<Item>
+        {
+            MakeItem("", tags: new() { "t" }),
+            MakeItem("!!!", tags: new() { "t" }),
+            MakeItem("？？？", tags: new() { "t" }),
+        };
+        var r = InsightsService.BuildHealthReport(items, now: FixedNow);
+        Assert.DoesNotContain(r.Factors, f => f.Key == "duplicates");
+        Assert.Empty(r.DuplicateTop);
+        Assert.Equal(100, r.Score);
+    }
+
+    [Fact]
     public void Duplicates_ManyGroups_CappedAt40()
     {
         var items = new List<Item>();
