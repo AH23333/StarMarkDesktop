@@ -1,7 +1,0 @@
-﻿D:\Visual Studio Code\Something\StarMarkDesktop\tests\StarMark.Tests\bin\x64\Debug\net9.0-windows10.0.19041.0\StarMark.Tests.dll (.NETCoreApp,Version=v9.0)的测试运行
-VSTest 版本 17.14.1 (x64)
-
-正在启动测试执行，请稍候...
-总共 1 个测试文件与指定模式相匹配。
-
-已通过! - 失败:     0，通过:   295，已跳过:     0，总计:   295，持续时间: 2 s - StarMark.Tests.dll (net9.0)

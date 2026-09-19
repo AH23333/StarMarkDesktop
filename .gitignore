@@ -48,6 +48,9 @@ starmark-startup.log
 Thumbs.db
 Desktop.ini
 # ===== 临时构建/测试日志（调试产物，不入库）=====
+*.log
+.tmp-*.txt
+.tmp-*.json
 .build.txt
 .test.txt
 build-fix.txt
