@@ -309,11 +309,16 @@ public sealed partial class MainWindow : Window
     private void ApplyDragRects()
     {
         // 拖拽区 = 顶栏中段（logo + 状态），右侧留给交互按钮与系统窗口按钮。
+        // AppWindow.Size 与 SetDragRectangles 均以物理像素为单位，而 ActualHeight/ActualWidth 是 DIP；
+        // 非 100% DPI 下不换算会让拖拽区高度不足、右边界压到按钮（低分屏拖不动、高分屏误触按钮）。
+        var scale = WindowInterop.GetScale(this);
         var width = AppWindow.Size.Width;
-        var height = TopBar.ActualHeight > 0 ? (int)TopBar.ActualHeight : 52;
-        var buttonsRightPad = 150;                       // 顶栏右侧 padding（避开系统窗口按钮）
-        var buttonsWidth = TopBarButtons.ActualWidth > 0 ? TopBarButtons.ActualWidth : 150;
-        var dragW = Math.Max(0, width - buttonsRightPad - (int)buttonsWidth - 8);
+        var heightDip = TopBar.ActualHeight > 0 ? TopBar.ActualHeight : 52;
+        var height = (int)Math.Round(heightDip * scale);
+        var buttonsRightPad = (int)Math.Round(150 * scale);   // 顶栏右侧 padding（避开系统窗口按钮）
+        var buttonsWidthDip = TopBarButtons.ActualWidth > 0 ? TopBarButtons.ActualWidth : 150;
+        var gap = (int)Math.Round(8 * scale);
+        var dragW = Math.Max(0, width - buttonsRightPad - (int)Math.Round(buttonsWidthDip * scale) - gap);
         AppWindow.TitleBar.SetDragRectangles(new RectInt32[]
         {
             new() { X = 0, Y = 0, Width = dragW, Height = height },
