@@ -200,6 +200,47 @@ internal static class WindowInterop
     }
 
     /// <summary>
+    /// 把「窗口本身」裁成圆角矩形（<see cref="SetWindowRgn"/>，真正物理裁切，无黑角）。
+    /// <para>
+    /// 圆角半径用<b>逻辑像素</b>传入，内部按 DPI 换算成物理像素的椭圆直径；尺寸取自
+    /// <see cref="GetWindowRect"/>（物理像素），而非 <c>AppWindow.Size</c>（逻辑像素）——
+    /// 在缩放屏上后者会让区域与窗口实际尺寸不符，表现为「修改前/后两种圆角叠加」或裁切错位。
+    /// </para>
+    /// <para>
+    /// 半径 ≤ 0 时移除区域并恢复 DWM 自带圆角（直角 / 系统圆角）。
+    /// <see cref="SetWindowRgn"/> 会接管传入的新区域、并在下次替换时<b>自动释放</b>旧区域，
+    /// 因此调用方无需（也不应）手动 <c>DeleteObject</c> 旧句柄。
+    /// </para>
+    /// </summary>
+    /// <param name="window">目标窗口。</param>
+    /// <param name="cornerRadiusLogical">圆角半径（逻辑像素，即与 XAML CornerRadius 同单位）。</param>
+    public static void SetRoundedWindowRegion(Microsoft.UI.Xaml.Window window, double cornerRadiusLogical)
+    {
+        try
+        {
+            var hwnd = GetHwnd(window);
+            var rect = GetWindowRect(window);   // 物理像素：始终是当前窗口的真实尺寸
+            var scale = GetScale(window);
+            var w = rect.Width;
+            var h = rect.Height;
+            if (w <= 0 || h <= 0) return;
+            if (cornerRadiusLogical <= 0)
+            {
+                // 直角 / 恢复 DWM 自带圆角：移除自定义区域
+                SetWindowRgn(hwnd, IntPtr.Zero, true);
+                SetDwmCornerPreference(window, DWMWCP_ROUND);
+                return;
+            }
+            // 关掉 DWM 自带圆角，改用 SetWindowRgn 自定义半径，避免双重圆角
+            SetDwmCornerPreference(window, DWMWCP_DONOTROUND);
+            var d = (int)(cornerRadiusLogical * 2 * scale);   // 椭圆直径（物理像素）
+            var hrgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, d, d);
+            if (hrgn != IntPtr.Zero) SetWindowRgn(hwnd, hrgn, true);
+        }
+        catch { /* 取不到窗口句柄/尺寸时跳过，下次套用外观或尺寸变化会再算 */ }
+    }
+
+    /// <summary>
     /// 关掉 DWM 自带的系统背景（DWMSBT_NONE）。
     /// 当用 <see cref="Microsoft.UI.Composition.SystemBackdrops.DesktopAcrylicController"/> /
     /// <see cref="Microsoft.UI.Composition.SystemBackdrops.MicaController"/> 直接接管背景时，

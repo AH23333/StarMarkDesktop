@@ -218,29 +218,10 @@ public sealed partial class WidgetWindow : Window
     /// </summary>
     private void ApplyRoundedWindow()
     {
-        try
-        {
-            var hwnd = WindowInterop.GetHwnd(this);
-            var size = AppWindow.Size;
-            var w = size.Width;
-            var h = size.Height;
-            if (w <= 0 || h <= 0) return;
-            if (_currentCornerRadius <= 0)
-            {
-                // 直角窗口：清除区域并恢复 DWM 自带圆角
-                WindowInterop.SetWindowRgn(hwnd, IntPtr.Zero, true);
-                WindowInterop.SetDwmCornerPreference(this, WindowInterop.DWMWCP_ROUND);
-                return;
-            }
-            // 用 SetWindowRgn 自定义半径（关掉 DWM 自带圆角，避免双重圆角）
-            WindowInterop.SetDwmCornerPreference(this, WindowInterop.DWMWCP_DONOTROUND);
-            var r = (int)(_currentCornerRadius * 2);
-            // 右/下边界是**排他的**：CreateRoundRectRgn(0,0,w,h) 只覆盖到 w-1 / h-1，
-            // 于是右侧与下侧各被裁掉 1px —— 表现就是「右/下边框比左/上细，粗细 ≤1 时干脆看不见」。
-            // 这里 +1 把整窗纳入区域，四边边框才会一样粗。
-            var hrgn = WindowInterop.CreateRoundRectRgn(0, 0, w + 1, h + 1, r, r);
-            if (hrgn != IntPtr.Zero) WindowInterop.SetWindowRgn(hwnd, hrgn, true);
-        }
+        // 真正圆化窗口：用 SetWindowRgn 把窗口裁成圆角矩形。半径取自当前外观
+        // （_currentCornerRadius，逻辑像素）；尺寸用 GetWindowRect 的物理像素，按 DPI 换算，
+        // 避免缩放屏上「修改前/后两种圆角叠加」或裁切错位（直接套用外观 / 尺寸变化 / 实时预览都走这里）。
+        try { WindowInterop.SetRoundedWindowRegion(this, _currentCornerRadius); }
         catch { /* 取不到窗口句柄/尺寸时跳过，下次套用外观或尺寸变化会再算 */ }
     }
 
