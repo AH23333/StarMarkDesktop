@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using StarMark.Core.Widgets;
@@ -24,6 +25,28 @@ public sealed class WidgetLayoutTests
         Assert.Equal("工作模式", result[0].Name);
         Assert.Equal("工作模式 (2)", result[1].Name);
         Assert.Equal("未命名布局", result[2].Name);
+    }
+
+    [Fact]
+    public void Normalize_Deduplication_NeverCollidesWithLiteralNumberedName()
+    {
+        // 旧实现只在"基名"上计数：第三条 "A" 生成 "A (2)"，会与首条本就名为 "A (2)" 的布局撞车，
+        // 违反"名称保证唯一"。修后按最终名去重，必须三者互不相同。
+        var layouts = new List<WidgetLayout>
+        {
+            new() { Name = "A (2)" },
+            new() { Name = "A" },
+            new() { Name = "A" },
+        };
+
+        var result = WidgetLayoutCollection.Normalize(layouts);
+        var names = result.Select(l => l.Name).ToList();
+
+        Assert.Equal(3, names.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal("A", names[0]);                   // 首条纯 "A" 保留原名
+        Assert.Equal("A (2)", names[1]);               // 原本就名为 "A (2)" 的那条也不被改名
+        Assert.Equal("A (3)", names[2]);               // 第三条 "A" 顺延到 (3)，避开与 (2) 撞名
+        Assert.Equal(1, names.Count(n => n == "A (2)"));
     }
 
     [Fact]

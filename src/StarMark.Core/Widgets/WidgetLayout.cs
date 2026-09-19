@@ -68,21 +68,22 @@ public static class WidgetLayoutCollection
             result.Add(l);
         }
 
-        // 名称去重：同名追加 (2)(3)…；空名兜底
-        var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        // 名称去重：以「最终名」为准防碰撞。同名追加 (2)(3)…；生成的 "X (N)"
+        // 不得再与某个本就叫 "X (N)" 的布局撞车（旧实现只记基名，会出现两个同名）。空名兜底。
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var l in result)
         {
-            var name = string.IsNullOrWhiteSpace(l.Name) ? "未命名布局" : l.Name.Trim();
-            if (seen.TryGetValue(name, out var count))
+            var desired = string.IsNullOrWhiteSpace(l.Name) ? "未命名布局" : l.Name.Trim();
+            var name = desired;
+            if (used.Contains(name))
             {
-                count++;
-                seen[name] = count;
-                name = $"{name} ({count})";
+                for (var n = 2; ; n++)
+                {
+                    name = $"{desired} ({n})";
+                    if (!used.Contains(name)) break;
+                }
             }
-            else
-            {
-                seen[name] = 1;
-            }
+            used.Add(name);
             l.Name = name;
         }
 
