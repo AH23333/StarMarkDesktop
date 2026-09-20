@@ -41,4 +41,29 @@ public sealed class LaunchGuardTests
 
     [Fact]
     public void Null_ReturnsFalse() => Assert.False(LaunchGuard.IsAllowedScheme(null));
+
+    // 「打开所在位置」把路径拼进 explorer.exe /select,"<path>"，被子进程重切参数：
+    // 含双引号即可越界注入额外 explorer 参数（被污染备份/快照 uri 可携），故必须拒绝。真实 NTFS 名恒不含 "。
+    [Theory]
+    [InlineData(@"D:\C#项目\报告.txt")]              // 合法路径
+    [InlineData(@"C:\Users\me\Docs\a b.txt")]        // 含空格仍合法
+    [InlineData(@"C:\a&b<c>d|e.txt")]                // 其它特殊字符不含引号 → 放行
+    public void SafeShellSelectTargets_ReturnTrue(string path)
+        => Assert.True(LaunchGuard.IsSafeShellSelectTarget(path));
+
+    [Theory]
+    [InlineData(@"c:\x"" ""C:\Windows\System32\calc.exe""")]  // 经典越界注入
+    [InlineData("with\"quote")]
+    [InlineData("\"")]
+    public void ShellSelectTargetsContainingQuote_ReturnFalse(string path)
+        => Assert.False(LaunchGuard.IsSafeShellSelectTarget(path));
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ShellSelectTargetEmptyOrWhitespace_ReturnFalse(string path)
+        => Assert.False(LaunchGuard.IsSafeShellSelectTarget(path));
+
+    [Fact]
+    public void ShellSelectTargetNull_ReturnsFalse() => Assert.False(LaunchGuard.IsSafeShellSelectTarget(null));
 }

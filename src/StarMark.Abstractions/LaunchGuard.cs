@@ -27,4 +27,14 @@ public static class LaunchGuard
             || parsed.Scheme == Uri.UriSchemeHttps
             || parsed.Scheme == Uri.UriSchemeFile;
     }
+
+    /// <summary>
+    /// 「打开所在位置」把本地路径拼成 <c>explorer.exe /select,"&lt;path&gt;"</c> 命令行；子进程会用
+    /// <c>CommandLineToArgvW</c> 重新切分参数。路径若含双引号即可越出 <c>"..."</c> 边界、注入额外的
+    /// <c>explorer.exe</c> 参数（被污染的备份 / 快照条目 <c>uri</c> 可携带此串）→ 任意本地程序被执行，
+    /// 且该启动点不经 <see cref="IsAllowedScheme"/>。真实 NTFS 文件名恒不含 <c>"</c>，故拒绝含引号者
+    /// 对合法「打开所在位置」零影响。空 / 空白路径同样拒绝。
+    /// </summary>
+    public static bool IsSafeShellSelectTarget(string? path)
+        => !string.IsNullOrWhiteSpace(path) && path!.IndexOf('"') < 0;
 }

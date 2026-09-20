@@ -60,6 +60,11 @@ public static class ItemCardActions
             if (!vm.HasOpenLocation) return;
             // TryPathFromUri 而非 new Uri().LocalPath：后者在 '#' 处截断，含 '#' 的文件会定位到错误路径。
             if (!LocalFileIdentity.TryPathFromUri(vm.Uri, out var localPath)) return;
+            // 该启动点不经 LaunchGuard.IsAllowedScheme，路径直拼进 explorer.exe 命令行、被子进程重切参数。
+            // 被污染备份/快照的 uri 可携双引号越界注入额外参数 → 任意本地程序被执行，故闸门拒含引号者；
+            // 并要求目标确在磁盘上（合法「打开所在位置」恒满足；对已删除/伪造路径 explorer 本就无意义）。
+            if (!StarMark.Abstractions.LaunchGuard.IsSafeShellSelectTarget(localPath)) return;
+            if (!System.IO.File.Exists(localPath) && !System.IO.Directory.Exists(localPath)) return;
             System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{localPath}\"");
         }
         catch (Exception ex)
