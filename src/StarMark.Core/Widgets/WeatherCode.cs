@@ -68,6 +68,7 @@ public static class WeatherCode
     /// </summary>
     public static string Glyph(int code, bool isDay = true) => code switch
     {
+        Unknown => "\uE9CB",                  // 未知：不给"晴"（太阳），用本表已有的中性字形，避免与「未知」文字自相矛盾
         0 => isDay ? "\uE706" : "\uE708",   // 太阳 / 月亮
         1 => isDay ? "\uE706" : "\uE708",   // 大部晴朗
         2 => isDay ? "\uE9D2" : "\uE708",   // 多云 / 夜
@@ -83,21 +84,22 @@ public static class WeatherCode
         _ => "\uE706",
     };
 
-    /// <summary>WMO 码 → emoji（组件头部大图标用；未识别时回落太阳）。</summary>
+    /// <summary>WMO 码 → emoji（组件头部大图标用；未知/缺失码显式给 ❓，不回落成太阳）。</summary>
     public static string Emoji(int code, bool isDay = true) => code switch
     {
-        0 or 1 => isDay ? "\u2600\uFE0F" : "\U0001F319",
-        2 => isDay ? "\u26C5" : "\U0001F319",
+        Unknown => "❓",
+        0 or 1 => isDay ? "☀️" : "\U0001F319",
+        2 => isDay ? "⛅" : "\U0001F319",
         3 => "\U0001F325\uFE0F",
-        45 or 48 => "\u2601\uFE0F",           // 刻意用云不用 🌫️，后者在部分字体下会缺字
+        45 or 48 => "☁️",           // 刻意用云不用 🌫️，后者在部分字体下会缺字
         51 or 53 or 55 or 56 or 57 => "\U0001F326\uFE0F",
         >= 61 and <= 67 => "\U0001F327\uFE0F",
         80 or 81 => "\U0001F327\uFE0F",
         82 => "\U0001F327\uFE0F",
         >= 71 and <= 77 or 85 or 86 => "\U0001F328\uFE0F",
         95 => "\U0001F329\uFE0F",
-        96 or 99 => "\u26C8\uFE0F",
-        _ => "\u2600\uFE0F",
+        96 or 99 => "⛈️",
+        _ => "☀️",
     };
 
     /// <summary>WMO 码 → 天气大类。</summary>
