@@ -90,6 +90,20 @@ public interface IItemRepository
 
     /// <summary>写入本地条目（待办/随记）：只写 items 表，不写活动流、不跑 UriNormalizer/LanguageDetector。</summary>
     Task UpsertLocalItemAsync(Item item, CancellationToken ct = default);
+
+    /// <summary>
+    /// 读取某一组件实例名下的全部本地条目（待办 + 随记），含隐藏/置顶/子标题/URI/描述/笔记与标签等用户状态。
+    /// 以 <c>source_id</c> 前缀 <c>instanceId + "|"</c> 精确圈定本实例，无跨实例数量窗口（区别于
+    /// <see cref="GetBySourceAsync"/> 的全局 limit 截断）。供快照忠实捕获使用。
+    /// </summary>
+    Task<IReadOnlyList<Item>> GetLocalItemsForInstanceAsync(string instanceId, CancellationToken ct = default);
+
+    /// <summary>
+    /// 单事务把某实例的本地条目整体替换为给定集合（快照忠实还原用）：先按前缀删除本实例既有条目
+    /// （连带其 <c>item_tags</c> 级联），再逐条插入并保留隐藏/置顶/子标题/URI/描述/笔记，且按标签名重新挂接。
+    /// 调用方负责给定唯一且已按目标实例编码的 <c>source_id</c>。全程原子，任何异常回滚不留下半套数据。
+    /// </summary>
+    Task ReplaceLocalItemsForInstanceAsync(string instanceId, IReadOnlyList<Item> items, CancellationToken ct = default);
 }
 
 /// <summary>浏览过滤器（非搜索模式）。</summary>
