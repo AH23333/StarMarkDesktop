@@ -30,13 +30,20 @@ public sealed partial class SearchWidget : UserControl
         ViewModel = new SearchWidgetViewModel(repo, App.Services.GetService<SearchService>());
         InitializeComponent();
         ViewModel.Results.CollectionChanged += (_, _) => UpdateEmptyHint();
+        ViewModel.SearchCompleted += UpdateEmptyHint;
         _ = ViewModel.LoadTagsAsync();
+        // 打开组件即展示最近条目（空态浏览），而不是先给用户一页「无结果」。
+        _ = ViewModel.RunSearchAsync();
     }
 
     private void UpdateEmptyHint()
     {
         var empty = ViewModel.Results.Count == 0;
-        if (EmptyHint is not null) EmptyHint.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+        if (EmptyHint is not null)
+        {
+            EmptyHint.Text = ViewModel.EmptyHint;
+            EmptyHint.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+        }
         if (ResultsRepeater is not null) ResultsRepeater.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -44,6 +51,13 @@ public sealed partial class SearchWidget : UserControl
     {
         ViewModel.Query = SearchBox?.Text ?? string.Empty;
         await ViewModel.RunSearchAsync();
+    }
+
+    /// <summary>搜索即输入：边打边搜（去抖），对照 DeskBox 弹窗引擎；回车/按钮仍立即搜。</summary>
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        ViewModel.Query = SearchBox?.Text ?? string.Empty;
+        _ = ViewModel.SearchDebouncedAsync();
     }
 
     private async void SearchBox_KeyDown(object sender, KeyRoutedEventArgs e)

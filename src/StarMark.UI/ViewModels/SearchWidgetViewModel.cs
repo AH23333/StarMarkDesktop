@@ -44,6 +44,9 @@ public sealed class SearchWidgetViewModel
     // 旧的 Clear→await→Add 与新的相撞导致结果翻倍。用 CTS 取消上一次、并在落结果前复查取消态。
     private CancellationTokenSource? _searchCts;
 
+    // 搜索即输入去抖：连打只保留最后一次查询，避免每个按键都打一次 Everything IPC。
+    private CancellationTokenSource? _debounceCts;
+
     public ObservableCollection<TagChip> Tags { get; } = new();
     public ObservableCollection<SearchResultItem> Results { get; } = new();
 
@@ -52,6 +55,15 @@ public sealed class SearchWidgetViewModel
     public int ResultCount => Results.Count;
 
     public bool HasResults => Results.Count > 0;
+
+    /// <summary>当前结果是否来自「空态浏览最近条目」（用于区分空态文案：还没搜 / 没找到）。</summary>
+    public bool IsBrowsing { get; private set; }
+
+    /// <summary>空态提示文案（Results 为空时由视图展示）。</summary>
+    public string EmptyHint { get; private set; } = "输入关键词或选择标签开始搜索";
+
+    /// <summary>一轮搜索收尾时触发，通知视图刷新空态文案（Results 的 CollectionChanged 早于文案确定）。</summary>
+    public event Action? SearchCompleted;
 
     public SearchWidgetViewModel(IItemRepository? repo, SearchService? search = null)
     {
@@ -91,6 +103,30 @@ public sealed class SearchWidgetViewModel
         _ = RunSearchAsync();
     }
 
+    /// <summary>
+    /// 搜索即输入（对照 DeskBox SearchPopupWindow 的 35ms UI 去抖）：连打时只保留最后一次查询。
+    /// 在 UI 线程 await Task.Delay（不 ConfigureAwait(false)），保证后续 Results 变更回到 UI 线程。
+    /// </summary>
+    public async Task SearchDebouncedAsync(int debounceMs = 120)
+    {
+        _debounceCts?.Cancel();
+        var dts = _debounceCts = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(debounceMs, dts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;   // 有更新的输入进来，本轮放弃
+        }
+        finally
+        {
+            if (ReferenceEquals(_debounceCts, dts)) _debounceCts = null;
+            dts.Dispose();
+        }
+        await RunSearchAsync();
+    }
+
     public async Task RunSearchAsync()
     {
         _searchCts?.Cancel();                 // 取消上一次；其自身 finally 负责 Dispose
@@ -98,11 +134,29 @@ public sealed class SearchWidgetViewModel
         var ct = cts.Token;
 
         Results.Clear();
+        IsBrowsing = false;
         var selected = Tags.Where(t => t.Selected).Select(t => t.Name).ToList();
         var q = (Query ?? string.Empty).Trim();
 
         try
         {
+            // 空关键词 + 无标签：不再留白——展示最近条目（对齐主窗口 SearchPage 的浏览态、
+            // 以及 DeskBox 空态推荐：搜索框空时先给出可点内容，而不是「无结果」的错觉）。
+            if (q.Length == 0 && selected.Count == 0)
+            {
+                IsBrowsing = true;
+                EmptyHint = "还没有条目";
+                if (_repo is not null)
+                {
+                    var recent = await _repo.GetRecentAsync(60, ct);
+                    if (ct.IsCancellationRequested) return;
+                    foreach (var it in recent)
+                        Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type)));
+                }
+                EmptyHint = Results.Count == 0 ? "暂无最近条目，输入关键词或选择标签开始搜索" : "最近条目";
+                return;
+            }
+
             // 统一搜索编排（与主窗口 SearchPage 同源）：FTS5 + Everything 实时源合并去重，
             // 未入库的本地文件（Everything 虚拟条目）由此可达；
             // 空关键词 + 标签退化为按标签浏览（SearchService 内部同规则）。
@@ -112,6 +166,7 @@ public sealed class SearchWidgetViewModel
                 if (ct.IsCancellationRequested) return;   // 已被更新的搜索取代，丢弃本次结果（即便 provider 未提前中断）
                 foreach (var it in result.Items)
                     Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type)));
+                EmptyHint = EmptyMessageFor(q, selected);
                 return;
             }
 
@@ -131,21 +186,34 @@ public sealed class SearchWidgetViewModel
             if (ct.IsCancellationRequested) return;
             foreach (var it in items)
                 Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type)));
+            EmptyHint = EmptyMessageFor(q, selected);
         }
         catch (OperationCanceledException)
         {
             // 被更新的搜索取代：正常丢弃，不记为错误
+            return;
         }
         catch (Exception ex)
         {
             StarMark.Abstractions.StarLog.Error("桌面搜索失败", ex);
+            EmptyHint = "搜索失败，请重试";
         }
         finally
         {
             cts.Dispose();
             // 只有"仍是本轮"时才清空字段，避免下一轮对已 Dispose 的 CTS 调 Cancel 抛 ObjectDisposedException。
             if (ReferenceEquals(_searchCts, cts)) _searchCts = null;
+            if (!ct.IsCancellationRequested) SearchCompleted?.Invoke();
         }
+    }
+
+    /// <summary>无结果时按查询词 / 标签组合给出的空态文案。</summary>
+    private string EmptyMessageFor(string q, IReadOnlyList<string> selected)
+    {
+        if (Results.Count > 0) return string.Empty;
+        if (q.Length == 0 && selected.Count > 0)
+            return $"没有同时带 {string.Join(" + ", selected.Select(t => "#" + t))} 的条目";
+        return $"未找到与 \"{q}\" 相关的条目";
     }
 
     public static string EmojiFor(ItemType t) => t switch

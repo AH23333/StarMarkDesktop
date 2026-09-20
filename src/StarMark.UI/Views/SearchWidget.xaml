@@ -14,9 +14,10 @@
     <StackPanel Padding="12,8,12,12" Spacing="8">
         <!-- 关键词 -->
         <StackPanel Orientation="Horizontal" Spacing="6">
-            <TextBox x:Name="SearchBox" PlaceholderText="关键词，回车搜索…" FontSize="13"
+            <TextBox x:Name="SearchBox" PlaceholderText="关键词，边输入边搜索…" FontSize="13"
                      Style="{StaticResource WidgetInputBox}"
                      Padding="8,6,8,6" HorizontalAlignment="Stretch" MinWidth="120"
+                     TextChanged="SearchBox_TextChanged"
                      KeyDown="SearchBox_KeyDown"/>
             <Button Content="搜索" Padding="10,4,10,4" Style="{StaticResource WidgetActionButton}" Click="Search_Click"/>
         </StackPanel>
