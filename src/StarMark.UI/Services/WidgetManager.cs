@@ -59,7 +59,7 @@ public sealed class WidgetManager
     {
         var ui = Ui();
         if (ui.HasThreadAccess) { action(); return Task.CompletedTask; }
-        var tcs = new TaskCompletionSource();
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         if (ui.TryEnqueue(() =>
         {
             try { action(); tcs.SetResult(); }
@@ -73,12 +73,15 @@ public sealed class WidgetManager
     {
         var ui = Ui();
         if (ui.HasThreadAccess) return Task.FromResult(func());
-        var tcs = new TaskCompletionSource<T>();
-        ui.TryEnqueue(() =>
-        {
-            try { tcs.SetResult(func()); }
-            catch (Exception ex) { tcs.SetException(ex); }
-        });
+        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        // 分发器已停（窗口正在关闭）时 TryEnqueue 返回 false：必须显式失败，否则 await 一个永不完成的
+        // Task → 应用静默挂死且无任何日志（区别于 Action 重载可安全空转）。
+        if (!ui.TryEnqueue(() =>
+            {
+                try { tcs.SetResult(func()); }
+                catch (Exception ex) { tcs.SetException(ex); }
+            }))
+            tcs.TrySetException(new InvalidOperationException("UI 分发器不可用，操作已取消"));
         return tcs.Task;
     }
 
@@ -379,19 +382,7 @@ public sealed class WidgetManager
 
         foreach (var inst in data.Instances)
         {
-            // 位置/尺寸：可见窗口读实时矩形；隐藏或读取失败则回退实例已持久化的 config 值。
-            double x, y, width, height;
-            if (_windows.TryGetValue(inst.Id, out var w) && w.IsVisible)
-            {
-                try
-                {
-                    Windows.Graphics.RectInt32 r = WindowInterop.GetWindowRect(w);
-                    if (r.Width > 0 && r.Height > 0) { x = r.X; y = r.Y; width = r.Width; height = r.Height; }
-                    else { x = inst.X; y = inst.Y; width = inst.Width; height = inst.Height; }
-                }
-                catch { x = inst.X; y = inst.Y; width = inst.Width; height = inst.Height; }
-            }
-            else { x = inst.X; y = inst.Y; width = inst.Width; height = inst.Height; }
+            var (x, y, width, height) = ResolveLiveRect(inst);
 
             perKind.TryGetValue(inst.Kind, out var idx);
             entries.Add(new WidgetLayoutEntry
@@ -534,6 +525,29 @@ public sealed class WidgetManager
     public IReadOnlyList<WidgetSnapshot> GetSnapshots() => _storage.GetSnapshots();
 
     /// <summary>
+    /// 取某实例当前应被持久化的矩形（必须在 UI 线程调用）。
+    /// <para>
+    /// 可见「展开态」窗口读实时矩形（屏幕上真正那块）；<b>收起为胶囊的窗口除外</b>——
+    /// 此刻 GetWindowRect 返回的是胶囊停靠位，直接写入会把胶囊尺寸错存成展开尺寸，
+    /// 下次展开/还原就跳到屏幕边缘。胶囊态与隐藏窗口一律回退实例已持久化的展开态 config 值
+    /// （<c>PersistBounds</c> 在收起时保留 inst.X/Y/Width/Height 为展开矩形）。
+    /// </para>
+    /// </summary>
+    private (double X, double Y, double Width, double Height) ResolveLiveRect(WidgetInstanceConfig inst)
+    {
+        if (_windows.TryGetValue(inst.Id, out var w) && w.IsVisible && !w.IsCollapsed)
+        {
+            try
+            {
+                var r = WindowInterop.GetWindowRect(w);
+                if (r.Width > 0 && r.Height > 0) return (r.X, r.Y, r.Width, r.Height);
+            }
+            catch { /* 读实时矩形失败 → 回退持久化值 */ }
+        }
+        return (inst.X, inst.Y, inst.Width, inst.Height);
+    }
+
+    /// <summary>
     /// 在 UI 线程读取「当前所有实例」的实时矩形 + 配置，产出一张尚未填本地条目数据的快照，
     /// 以及各条目对应的实例 ID（随后在 UI 线程外用仓库补 LocalItems）。镜像 <see cref="SaveCurrentLayoutAsync"/> 的取位逻辑。
     /// </summary>
@@ -546,19 +560,7 @@ public sealed class WidgetManager
 
         foreach (var inst in data.Instances)
         {
-            // 位置/尺寸：可见窗口读实时矩形；隐藏或读取失败则回退实例已持久化的 config 值。
-            double x, y, width, height;
-            if (_windows.TryGetValue(inst.Id, out var w) && w.IsVisible)
-            {
-                try
-                {
-                    Windows.Graphics.RectInt32 r = WindowInterop.GetWindowRect(w);
-                    if (r.Width > 0 && r.Height > 0) { x = r.X; y = r.Y; width = r.Width; height = r.Height; }
-                    else { x = inst.X; y = inst.Y; width = inst.Width; height = inst.Height; }
-                }
-                catch { x = inst.X; y = inst.Y; width = inst.Width; height = inst.Height; }
-            }
-            else { x = inst.X; y = inst.Y; width = inst.Width; height = inst.Height; }
+            var (x, y, width, height) = ResolveLiveRect(inst);
 
             perKind.TryGetValue(inst.Kind, out var idx);
             entries.Add(new WidgetSnapshotEntry
@@ -602,16 +604,16 @@ public sealed class WidgetManager
         {
             for (var i = 0; i < snapshot.Entries.Count; i++)
             {
-                try
-                {
-                    snapshot.Entries[i].LocalItems =
-                        await _snapshotService.CaptureLocalItemsAsync(instanceIds[i], CancellationToken.None);
-                }
-                catch (Exception ex) { StarLog.Error($"捕获实例本地条目失败 ({instanceIds[i]})", ex); }
+                // 任一条目捕获失败即整体抛出：宁可让用户看到"保存失败"，也不能落一张静默缺数据的快照，
+                // 否则用户以为已备份、日后据此还原才发现丢了待办/随记，损失不可逆。
+                snapshot.Entries[i].LocalItems =
+                    await _snapshotService.CaptureLocalItemsAsync(instanceIds[i], CancellationToken.None);
             }
         }
 
-        var saved = _storage.AppendSnapshot(snapshot);
+        // AppendSnapshot 内部走 Load→改→Save；与窗口拖动时的 PersistBounds 同写一份磁盘，
+        // 必须在 UI 线程串行执行，否则并发改写会丢失其中一方的更新。
+        var saved = await OnUiAsync(() => _storage.AppendSnapshot(snapshot));
         SnapshotsChanged?.Invoke();
         return saved;
     }
@@ -626,7 +628,10 @@ public sealed class WidgetManager
         if (snapshot is null) return false;
 
         // 1) 自动回滚点：应用前把当前状态先存成一个快照，结果不满意可「应用」它退回这一刻。
-        await CaptureSnapshotInternalAsync($"自动备份（应用前） · {DateTime.Now:MM-dd HH:mm}");
+        //    快照是 Replace 语义（会覆盖当前待办/随记/摆位）——若这个回滚点没存成，一旦应用出错就无从退回，
+        //    属于破坏性且不可逆，因此捕获失败必须中止、绝不继续落位。
+        if (!await CaptureSnapshotInternalAsync($"自动备份（应用前） · {DateTime.Now:MM-dd HH:mm}"))
+            return false;
 
         // 2) 布局半 + 配置数据半（UI 线程）：落位几何/外观，并把 Links/Grid/Title/外壳/隐私写回匹配到的实例。
         var dataRestore = await OnUiAsync(() =>
@@ -645,6 +650,9 @@ public sealed class WidgetManager
                 inst.GridTags = entry.GridTags is null ? null : new List<string>(entry.GridTags);
                 restore.Add((inst.Id, entry.LocalItems));
             }
+            // 快照还原的是「当时那一整套摆位」，与"最后一次选择的布局"已无对应关系；
+            // 若不清默认布局，之后点「显示组件」会按旧 DefaultLayoutId 重新隐藏/落位，把刚还原的状态打回另一套布局。
+            data.DefaultLayoutId = null;
             _storage.Save(data);
             return restore;
         });
@@ -707,11 +715,11 @@ public sealed class WidgetManager
         return layout;
     });
 
-    /// <summary>捕获内部实现（供 Apply 的自动回滚点复用；捕获异常不外抛，绝不阻断应用）。</summary>
-    private async Task CaptureSnapshotInternalAsync(string name)
+    /// <summary>捕获内部实现（供 Apply 的自动回滚点复用）：吞掉异常不外抛，但以返回值告知调用方是否存成——回滚点没存成时 Apply 须中止。</summary>
+    private async Task<bool> CaptureSnapshotInternalAsync(string name)
     {
-        try { await CaptureSnapshotAsync(name); }
-        catch (Exception ex) { StarLog.Error($"创建应用前回滚快照失败", ex); }
+        try { return await CaptureSnapshotAsync(name) is not null; }
+        catch (Exception ex) { StarLog.Error("创建应用前回滚快照失败", ex); return false; }
     }
 
     /// <summary>设置变更时把半透明材质/不透明度重新应用到所有已打开的组件窗口。</summary>

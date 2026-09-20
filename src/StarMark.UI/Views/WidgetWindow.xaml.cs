@@ -427,6 +427,12 @@ public sealed partial class WidgetWindow : Window
         }
     }
 
+    /// <summary>
+    /// 该窗口当前是否收起为胶囊。<see cref="WidgetChromeMode.Compact"/> 时窗口实际显示的是胶囊矩形，
+    /// 读到的 <c>GetWindowRect</c> 是胶囊尺寸而非展开尺寸——布局/快照取几何须避开它、改用已持久化的展开位（inst.X/Y/W/H）。
+    /// </summary>
+    public bool IsCollapsed => _chromeMode == WidgetChromeMode.Compact;
+
     private void ApplyTopmost()
     {
         var dark = RootBorder.ActualTheme == ElementTheme.Dark;
@@ -932,7 +938,12 @@ public sealed partial class WidgetWindow : Window
                 var id = s.Id;
                 var apply = new MenuFlyoutItem { Text = $"{s.Name}（{s.Summary}）" };
                 // 快照应用刻意与「应用布局」一致：直接应用、不再二次确认，因为应用前会自动留回滚点。
-                apply.Click += (_, _) => _ = _manager.ApplySnapshotAsync(id);
+                // 但回滚点没存成时 Apply 会中止（返回 false）——不静默吞掉，给一条提示说明"未应用"。
+                apply.Click += async (_, _) =>
+                {
+                    if (!await _manager.ApplySnapshotAsync(id))
+                        await ShowTipAsync("未能应用快照", "生成「应用前」回滚点失败，为防数据丢失已中止，当前状态未改动。");
+                };
                 snapSub.Items.Add(apply);
             }
             menu.Items.Add(snapSub);
@@ -963,9 +974,19 @@ public sealed partial class WidgetWindow : Window
 
         if (name is null) return;
 
-        var saved = await _manager.CaptureSnapshotAsync(name);
-        if (saved is null) await ShowTipAsync("当前没有组件", "没有可保存的快照内容。");
-        else await ShowTipAsync("已保存快照", $"「{saved.Name}」已记录（{saved.Summary}）。可在主窗口「快照」页或右键「应用快照」里回到这一刻。");
+        // CaptureSnapshotAsync 现任一条目取数失败即整体抛出——绝不能落一张静默缺数据的快照，
+        // 故此处捕获并明确告知"保存失败"，避免用户误以为已备份。
+        try
+        {
+            var saved = await _manager.CaptureSnapshotAsync(name);
+            if (saved is null) await ShowTipAsync("当前没有组件", "没有可保存的快照内容。");
+            else await ShowTipAsync("已保存快照", $"「{saved.Name}」已记录（{saved.Summary}）。可在主窗口「快照」页或右键「应用快照」里回到这一刻。");
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("保存布局与数据快照失败", ex);
+            await ShowTipAsync("保存快照失败", "读取组件数据时出错，快照未保存，请重试。");
+        }
     }
 
     /// <summary>
