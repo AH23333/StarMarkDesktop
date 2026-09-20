@@ -38,6 +38,10 @@ public static class UriNormalizer
         var path = uri.AbsolutePath;
         // 去尾斜杠（根路径 / 保留）
         if (path.Length > 1 && path.EndsWith('/')) path = path.TrimEnd('/');
+        // 形如 http://host// 的多斜杠根：TrimEnd 后塌成空串，重建得 http://host（无尾斜杠）；
+        // 再归一时 AbsolutePath 变 "/"（长度 1，不再触发上面的去尾斜杠）→ http://host/。两次结果不一致，
+        // 破坏幂等且让同一资源裂成两个 source_id。钳回 "/" 使两条路径收敛到同一标准形。
+        if (path.Length == 0) path = "/";
 
         string query;
         if (IsGitHub(host))

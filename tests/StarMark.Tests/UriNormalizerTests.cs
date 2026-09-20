@@ -35,6 +35,19 @@ public sealed class UriNormalizerTests
         Assert.Equal(UriNormalizer.Normalize(a), UriNormalizer.Normalize(UriNormalizer.Normalize(a)));
     }
 
+    [Theory]
+    [InlineData("http://example.com//", "http://example.com/")]
+    [InlineData("http://example.com///", "http://example.com/")]
+    [InlineData("https://github.com//", "https://github.com/")]
+    public void Normalize_MultiSlashRoot_CollapsesToSingleSlashAndIsIdempotent(string input, string expected)
+    {
+        // 旧实现 TrimEnd('/') 把 "//" 塌成空串 → 重建得 "http://host"（无尾斜杠）；
+        // 再次归一时 AbsolutePath 变 "/"（长度 1，不再触发去尾斜杠）→ "http://host/"，两次不一致、裂成两个 source_id。
+        var once = UriNormalizer.Normalize(input);
+        Assert.Equal(expected, once);
+        Assert.Equal(once, UriNormalizer.Normalize(once)); // 幂等
+    }
+
     [Fact]
     public void Normalize_EmptyReturnsEmpty()
     {
