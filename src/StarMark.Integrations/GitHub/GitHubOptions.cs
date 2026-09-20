@@ -43,7 +43,7 @@ public sealed class GitHubOptions
         }
     }
 
-    /// <summary>保存配置到文件。</summary>
+    /// <summary>保存配置到文件（先写临时文件再原子替换，避免崩溃/占用把含 PAT 的配置截断）。</summary>
     public void Save(string? path = null)
     {
         var p = path ?? DefaultConfigPath;
@@ -52,7 +52,9 @@ public sealed class GitHubOptions
         {
             WriteIndented = true,
         });
-        File.WriteAllText(p, json);
+        var tmp = p + ".tmp";
+        File.WriteAllText(tmp, json);
+        File.Move(tmp, p, overwrite: true);
     }
 
     /// <summary>从环境变量覆盖（开发期用 STARMARK_GITHUB_TOKEN 兜底）。</summary>

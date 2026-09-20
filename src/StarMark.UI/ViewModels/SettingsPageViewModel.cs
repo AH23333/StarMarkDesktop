@@ -257,9 +257,11 @@ public partial class SettingsPageViewModel : ObservableObject
             _settings.SaveCacheBudgetMb(CacheBudgetMb);
             _settings.SaveMaxImageCacheCount(MaxCacheCount);
 
-            var github = new StarMark.Integrations.GitHub.GitHubOptions();
-            if (!string.IsNullOrWhiteSpace(GithubToken)) github.Token = GithubToken.Trim();
-            if (!string.IsNullOrWhiteSpace(GithubUsername)) github.Username = GithubUsername.Trim();
+            // 载入现有配置再改：旧写法 new GitHubOptions() 整档重写会把本面板不出现的
+            // SyncIntervalSeconds / PageSize 等字段静默重置为默认；Load→改→Save 仅覆盖 Token/Username。
+            var github = StarMark.Integrations.GitHub.GitHubOptions.Load();
+            github.Token = string.IsNullOrWhiteSpace(GithubToken) ? null : GithubToken.Trim();
+            github.Username = string.IsNullOrWhiteSpace(GithubUsername) ? null : GithubUsername.Trim();
             github.Save();
 
             // 本地文件索引（P0-1b）：只保留存在的目录；上限需为正整数
