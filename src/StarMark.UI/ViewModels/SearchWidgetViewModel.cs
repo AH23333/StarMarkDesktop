@@ -27,8 +27,23 @@ public sealed partial class TagChip : ObservableObject
     }
 }
 
-/// <summary>搜索结果行（桌面组件内联展示，复用统一条目模型）。</summary>
-public sealed record SearchResultItem(long Id, string Title, string Subtitle, string Uri, string Emoji);
+/// <summary>搜索结果行（桌面组件内联展示）。可被 ↑↓ 键盘选中并高亮，故为 ObservableObject。</summary>
+public sealed partial class SearchResultItem : ObservableObject
+{
+    public long Id { get; }
+    public string Title { get; }
+    public string Subtitle { get; }
+    public string Uri { get; }
+    public string Emoji { get; }
+
+    /// <summary>↑↓ 键盘导航时的选中高亮。</summary>
+    [ObservableProperty] private bool _isSelected;
+
+    public SearchResultItem(long id, string title, string subtitle, string uri, string emoji)
+    {
+        Id = id; Title = title; Subtitle = subtitle; Uri = uri; Emoji = emoji;
+    }
+}
 
 /// <summary>
 /// 搜索组件 ViewModel（R2 试点，顺带实现「多标签 AND 搜索」桌面版）：
@@ -52,6 +67,9 @@ public sealed class SearchWidgetViewModel
 
     public string Query { get; set; } = string.Empty;
 
+    /// <summary>排序方式：relevance（相关度，默认）/ recent（最近更新）/ name（名称）。由视图排序下拉写入。</summary>
+    public string Sort { get; set; } = "relevance";
+
     public int ResultCount => Results.Count;
 
     public bool HasResults => Results.Count > 0;
@@ -64,6 +82,42 @@ public sealed class SearchWidgetViewModel
 
     /// <summary>一轮搜索收尾时触发，通知视图刷新空态文案（Results 的 CollectionChanged 早于文案确定）。</summary>
     public event Action? SearchCompleted;
+
+    // ───────── ↑↓ 键盘选中（对齐主窗口 SearchPage 的键盘导航）─────────
+    private int _selectedIndex = -1;
+
+    /// <summary>当前 ↑↓ 选中的结果；无选中返回 null。</summary>
+    public SearchResultItem? Selected
+        => _selectedIndex >= 0 && _selectedIndex < Results.Count ? Results[_selectedIndex] : null;
+
+    /// <summary>当前选中项索引（-1 表示无）。供视图把选中行滚入视野。</summary>
+    public int SelectedIndex => _selectedIndex;
+
+    /// <summary>↑↓ 移动选中项（夹在 [0, count-1]，未选中时 ↓→首项）。</summary>
+    public void MoveSelection(int delta)
+    {
+        if (Results.Count == 0) { _selectedIndex = -1; return; }
+        var next = _selectedIndex < 0
+            ? (delta > 0 ? 0 : Results.Count - 1)
+            : Math.Clamp(_selectedIndex + delta, 0, Results.Count - 1);
+        SetSelected(next);
+    }
+
+    private void SetSelected(int index)
+    {
+        if (_selectedIndex >= 0 && _selectedIndex < Results.Count)
+            Results[_selectedIndex].IsSelected = false;
+        _selectedIndex = index;
+        if (index >= 0 && index < Results.Count)
+            Results[index].IsSelected = true;
+    }
+
+    /// <summary>新一轮结果落地后复位选中：有结果即自动选中首项（对齐 DeskBox 首项自动选）。</summary>
+    private void ResetSelectionAfterPopulate()
+    {
+        SetSelected(-1);
+        if (Results.Count > 0) SetSelected(0);
+    }
 
     public SearchWidgetViewModel(IItemRepository? repo, SearchService? search = null)
     {
@@ -134,6 +188,7 @@ public sealed class SearchWidgetViewModel
         var ct = cts.Token;
 
         Results.Clear();
+        _selectedIndex = -1;
         IsBrowsing = false;
         var selected = Tags.Where(t => t.Selected).Select(t => t.Name).ToList();
         var q = (Query ?? string.Empty).Trim();
@@ -142,16 +197,19 @@ public sealed class SearchWidgetViewModel
         {
             // 空关键词 + 无标签：不再留白——展示最近条目（对齐主窗口 SearchPage 的浏览态、
             // 以及 DeskBox 空态推荐：搜索框空时先给出可点内容，而不是「无结果」的错觉）。
+            // 经 BrowseFilter 走 GetAllAsync，使排序下拉（名称/最近更新）在浏览态同样生效。
             if (q.Length == 0 && selected.Count == 0)
             {
                 IsBrowsing = true;
                 EmptyHint = "还没有条目";
                 if (_repo is not null)
                 {
-                    var recent = await _repo.GetRecentAsync(60, ct);
+                    var recent = await _repo.GetAllAsync(
+                        new BrowseFilter { Sort = Sort == "name" ? "name" : "recent", Limit = 60 }, ct);
                     if (ct.IsCancellationRequested) return;
                     foreach (var it in recent)
                         Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type)));
+                    ResetSelectionAfterPopulate();
                 }
                 EmptyHint = Results.Count == 0 ? "暂无最近条目，输入关键词或选择标签开始搜索" : "最近条目";
                 return;
@@ -162,10 +220,11 @@ public sealed class SearchWidgetViewModel
             // 空关键词 + 标签退化为按标签浏览（SearchService 内部同规则）。
             if (_search is not null)
             {
-                var result = await _search.SearchAsync(q, new SearchFilter { Tags = selected, MaxResults = 200 }, ct);
+                var result = await _search.SearchAsync(q, new SearchFilter { Tags = selected, MaxResults = 200, Sort = Sort }, ct);
                 if (ct.IsCancellationRequested) return;   // 已被更新的搜索取代，丢弃本次结果（即便 provider 未提前中断）
                 foreach (var it in result.Items)
                     Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type)));
+                ResetSelectionAfterPopulate();
                 EmptyHint = EmptyMessageFor(q, selected);
                 return;
             }
@@ -176,16 +235,17 @@ public sealed class SearchWidgetViewModel
             if (string.IsNullOrEmpty(q))
             {
                 // 仅按标签浏览（AND 语义）
-                items = await _repo.GetAllAsync(new BrowseFilter { TagFilters = selected, Limit = 200 }, ct);
+                items = await _repo.GetAllAsync(new BrowseFilter { TagFilters = selected, Sort = Sort == "relevance" ? "recent" : Sort, Limit = 200 }, ct);
             }
             else
             {
-                var result = await _repo.SearchAsync(q, new SearchFilter { Tags = selected, MaxResults = 200 }, ct);
+                var result = await _repo.SearchAsync(q, new SearchFilter { Tags = selected, MaxResults = 200, Sort = Sort }, ct);
                 items = result.Items;
             }
             if (ct.IsCancellationRequested) return;
             foreach (var it in items)
                 Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type)));
+            ResetSelectionAfterPopulate();
             EmptyHint = EmptyMessageFor(q, selected);
         }
         catch (OperationCanceledException)

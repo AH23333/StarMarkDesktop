@@ -53,6 +53,17 @@ public sealed partial class SearchWidget : UserControl
         await ViewModel.RunSearchAsync();
     }
 
+    /// <summary>排序下拉：索引→排序键，切换即重搜（浏览态空词也走同一入口）。</summary>
+    private static readonly string[] SortKeys = { "relevance", "recent", "name" };
+
+    private void SortBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (SortBox is null) return;      // 初值 SelectedIndex=0 在 InitializeComponent 期触发，ViewModel 尚未就绪
+        var idx = SortBox.SelectedIndex;
+        ViewModel.Sort = idx >= 0 && idx < SortKeys.Length ? SortKeys[idx] : "relevance";
+        _ = ViewModel.RunSearchAsync();
+    }
+
     /// <summary>搜索即输入：边打边搜（去抖），对照 DeskBox 弹窗引擎；回车/按钮仍立即搜。</summary>
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
@@ -60,12 +71,49 @@ public sealed partial class SearchWidget : UserControl
         _ = ViewModel.SearchDebouncedAsync();
     }
 
+    /// <summary>↑↓ 移动选中并滚入视野；回车打开当前选中项（无选中则立即搜）。对照 DeskBox 键盘导航。</summary>
     private async void SearchBox_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Enter)
+        switch (e.Key)
         {
-            ViewModel.Query = SearchBox?.Text ?? string.Empty;
-            await ViewModel.RunSearchAsync();
+            case VirtualKey.Up:
+                ViewModel.MoveSelection(-1);
+                BringSelectedIntoView();
+                e.Handled = true;
+                break;
+            case VirtualKey.Down:
+                ViewModel.MoveSelection(1);
+                BringSelectedIntoView();
+                e.Handled = true;
+                break;
+            case VirtualKey.Enter:
+                if (ViewModel.Selected is { } sel)
+                {
+                    await LauncherEx.OpenAsync(sel.Uri);
+                }
+                else
+                {
+                    ViewModel.Query = SearchBox?.Text ?? string.Empty;
+                    await ViewModel.RunSearchAsync();
+                }
+                e.Handled = true;
+                break;
+        }
+    }
+
+    /// <summary>把选中行滚入视野（ItemsRepeater 容器按需创建；失败静默，不影响选中态）。</summary>
+    private void BringSelectedIntoView()
+    {
+        var index = ViewModel.SelectedIndex;
+        if (index < 0) return;
+        try
+        {
+            if (ResultsRepeater.GetOrCreateElement(index) is UIElement el)
+                el.StartBringIntoView();
+        }
+        catch (Exception ex)
+        {
+            StarMark.Abstractions.StarLog.Error("搜索组件键盘导航滚动失败", ex);
         }
     }
 

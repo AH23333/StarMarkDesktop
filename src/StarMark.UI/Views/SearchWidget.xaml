@@ -22,6 +22,19 @@
             <Button Content="搜索" Padding="10,4,10,4" Style="{StaticResource WidgetActionButton}" Click="Search_Click"/>
         </StackPanel>
 
+        <!-- 排序（批次 P 内联轻量增强）：相关度 / 最近更新 / 名称。对照 DeskBox 弹窗可点列排序，
+             这里收敛为小组件适配的一枚下拉。索引→键见 SortKeys，浏览态（空词）只认 名称/最近更新。 -->
+        <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="排序" FontSize="11" Opacity="0.7" VerticalAlignment="Center"/>
+            <ComboBox x:Name="SortBox" FontSize="11" SelectedIndex="0" MinWidth="104"
+                      SelectionChanged="SortBox_SelectionChanged">
+                <ComboBoxItem Content="相关度"/>
+                <ComboBoxItem Content="最近更新"/>
+                <ComboBoxItem Content="名称"/>
+            </ComboBox>
+            <TextBlock Text="↑↓ 选择 · 回车打开" FontSize="9" Opacity="0.5" VerticalAlignment="Center" Margin="4,0,0,0"/>
+        </StackPanel>
+
         <!-- 标签筛选（多选 = AND 语义）。换行面板 + 垂直滚动：
              旧实现是 36px 高的横向单行滚动，标签一多整行被裁剪且滚轮不可达；
              WinUI 3 无内置 WrapLayout（WMC0001）、ItemsRepeater 不接受非虚拟化布局，
@@ -68,15 +81,20 @@
                             Padding="6,4,6,4" Background="{ThemeResource WidgetSubtleFillBrush}"
                             BorderThickness="0" CornerRadius="4"
                             Click="ResultOpen_Click" RightTapped="Row_RightTapped" Tag="{x:Bind Uri}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="{x:Bind Emoji}" FontSize="11" VerticalAlignment="Center"/>
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="{x:Bind Title}" FontSize="11"
-                                           TextTrimming="CharacterEllipsis" MaxWidth="220"/>
-                                <TextBlock Text="{x:Bind Subtitle}" FontSize="9" Opacity="0.6"
-                                           TextTrimming="CharacterEllipsis" MaxWidth="220"/>
+                        <Grid>
+                            <!-- ↑↓ 键盘选中高亮层：叠在紧凑行底色之上，未选中即透明（复用标签选中转换器语义）。 -->
+                            <Border CornerRadius="3" Margin="-6,-4,-6,-4"
+                                    Background="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource TagSelBrush}}"/>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="{x:Bind Emoji}" FontSize="11" VerticalAlignment="Center"/>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Bind Title}" FontSize="11"
+                                               TextTrimming="CharacterEllipsis" MaxWidth="220"/>
+                                    <TextBlock Text="{x:Bind Subtitle}" FontSize="9" Opacity="0.6"
+                                               TextTrimming="CharacterEllipsis" MaxWidth="220"/>
+                                </StackPanel>
                             </StackPanel>
-                        </StackPanel>
+                        </Grid>
                     </Button>
                 </DataTemplate>
             </ItemsRepeater.ItemTemplate>
