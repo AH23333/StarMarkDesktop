@@ -134,7 +134,12 @@ public sealed partial class SearchWidget : UserControl
     private void Row_RightTapped(object sender, RightTappedRoutedEventArgs e)
     {
         if (sender is FrameworkElement { DataContext: SearchResultItem item })
+        {
+            // 必须置 Handled：右键冒泡到 WidgetWindow.RootBorder.ContextFlyout（组件级菜单）会覆盖本条目菜单，
+            // 表现为"右键只有组件功能、没有条目菜单"。置真后事件不再上溯，条目级菜单与主窗口一致。
+            e.Handled = true;
             ItemContextMenu.ShowForItem(item.Id, sender as FrameworkElement ?? this);
+        }
     }
 }
 
