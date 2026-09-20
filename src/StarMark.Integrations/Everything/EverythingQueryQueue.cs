@@ -18,6 +18,13 @@ public sealed class FileIndexOptions
 
     /// <summary>每个根目录的索引数量上限。默认 5000。</summary>
     public int MaxCount { get; set; } = 5000;
+
+    /// <summary>
+    /// 本地磁盘搜索总开关（默认关）。关时 <see cref="EverythingSource.IsAvailable"/> 恒 false，
+    /// 统一搜索直接跳过该源（不发 IPC 查询），且启动流程绝不下载 SDK / 安装 / 拉起 Everything——保障默认零内存零打扰。
+    /// 由 UI 层从 SettingsStore 读取注入，避免 Integrations 反向依赖 UI。
+    /// </summary>
+    public bool Enabled { get; set; }
 }
 
 /// <summary>
@@ -100,7 +107,11 @@ public sealed class EverythingSource : IItemSource
 
     public string DisplayName => "本地文件 (Everything)";
 
-    public bool IsAvailable => EverythingInterop.IsRunning();
+    /// <summary>
+    /// 检测依赖是否可用。总开关关闭时恒 false——统一搜索据此跳过本源，不发任何 IPC 查询，
+    /// 保障默认（轻度用户）零本地文件搜索、零额外内存。开启后才看 Everything 是否在运行。
+    /// </summary>
+    public bool IsAvailable => _options.Enabled && EverythingInterop.IsRunning();
 
     /// <summary>
     /// 全量拉取（P0-1b）：把用户配置的本地根目录下的文件索引进 items 表，落库为 ItemType.File。

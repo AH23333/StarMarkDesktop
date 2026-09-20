@@ -35,6 +35,11 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         public List<string>? FileIndexRoots { get; set; }
         /// <summary>每目录索引数量上限（P0-1b）。≤0 表示使用默认 5000。</summary>
         public int? MaxFileIndexCount { get; set; }
+        /// <summary>
+        /// 本地磁盘搜索（全盘文件索引）总开关。默认关：轻度用户零打扰、且后台提权服务/Everything 绝不启动、不加载索引（0 内存）。
+        /// 旧配置无此字段时按未开启处理。
+        /// </summary>
+        public bool? LocalDiskSearchEnabled { get; set; }
         /// <summary>快捷键绑定（动作 id → 手势）的 JSON。缺省时使用 <see cref="DefaultHotkeyBindings"/>。</summary>
         public string? HotkeyBindingsJson { get; set; }
         /// <summary>组件拖动 / 缩放时的边缘磁吸总开关（默认开启）。关闭后用户可自由摆位。</summary>
@@ -385,6 +390,16 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     {
         var d = Load() ?? new SettingsData();
         d.MaxImageCacheCount = Math.Clamp(count, 16, 4096);
+        Save(d);
+    }
+
+    /// <summary>本地磁盘搜索总开关（默认关）。关闭时后台提权服务/Everything 不启动、不加载索引（0 内存），搜索也不含本地文件。</summary>
+    public bool LoadLocalDiskSearchEnabled() => Load() is { } d && d.LocalDiskSearchEnabled == true;
+
+    public void SaveLocalDiskSearchEnabled(bool enabled)
+    {
+        var d = Load() ?? new SettingsData();
+        d.LocalDiskSearchEnabled = enabled;
         Save(d);
     }
 

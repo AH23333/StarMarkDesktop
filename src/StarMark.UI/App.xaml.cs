@@ -107,6 +107,7 @@ public partial class App : Application
         {
             Roots = fileSettings.LoadFileIndexRoots().ToList(),
             MaxCount = fileSettings.LoadMaxFileIndexCount(),
+            Enabled = fileSettings.LoadLocalDiskSearchEnabled(),
         });
         services.AddSingleton<StarMark.Integrations.Everything.EverythingQueryQueue>();
         services.AddSingleton<StarMark.Integrations.Everything.EverythingSource>(sp =>
@@ -162,16 +163,20 @@ public partial class App : Application
         try { PerformanceSettingsPolicy.Provider = fileSettings; }
         catch (Exception pex) { StarLog.Error("性能模式设置来源注入失败", pex); }
 
-        // Everything 就绪流程：SDK DLL 缺失自动下载；主程序未运行时自动安装（用户要求默认安装；失败静默降级）
-        _ = Task.Run(async () =>
+        // Everything 就绪流程（下载 SDK / 主程序未运行时自动安装）——仅在用户开启「本地磁盘搜索」后执行。
+        // 默认关时绝不在此下载/安装/拉起 Everything，满足"轻度用户零打扰、默认零内存"。
+        if (fileSettings.LoadLocalDiskSearchEnabled())
         {
-            try
+            _ = Task.Run(async () =>
             {
-                await Services.GetRequiredService<StarMark.Integrations.Everything.EverythingSource>()
-                    .EnsureReadyAsync();
-            }
-            catch { /* 内部已兜底 */ }
-        });
+                try
+                {
+                    await Services.GetRequiredService<StarMark.Integrations.Everything.EverythingSource>()
+                        .EnsureReadyAsync();
+                }
+                catch { /* 内部已兜底 */ }
+            });
+        }
 
         try
         {
