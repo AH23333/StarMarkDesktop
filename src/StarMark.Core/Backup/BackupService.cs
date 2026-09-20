@@ -190,6 +190,13 @@ public sealed class BackupService
                 widgetsRestored = WriteWidgetsJson(p.WidgetsJson!, widgetsTargetPath);
             }
 
+            // 还原走的是批量 DELETE + INSERT（绕开 ItemRepository 各写方法的 Notify），
+            // 而 ItemRepository.ReindexSearchTextForTaggedAsync 的注释约定「调用方收尾统一刷新」——
+            // 但 SettingsPage 的调用方只更新了一行状态文本、并未刷新任何界面/组件。
+            // 这里在成功返回前补一次广播：主界面计数/列表页与各组件的 DataChangeReloader 才会去抖重载，
+            // 否则还原后满屏仍是旧数据（要重启才更新）。
+            DataChangeHub.Notify();
+
             return new RestoreResult
             {
                 Success = true,
