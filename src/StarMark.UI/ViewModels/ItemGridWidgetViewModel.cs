@@ -190,6 +190,8 @@ public sealed class ItemGridWidgetViewModel
         var chip = Tags.FirstOrDefault(t => t.Name == name);
         if (chip is null) return;
         chip.Selected = !chip.Selected;
+        SaveConfig();   // 持久化标签选择：搜索结果格是「钉一条查询」的常驻组件，选/取消标签须与钉查询一样落盘，
+                        // 否则重启/重建后 LoadConfig 恢复不到刚才的标签过滤（表现为「标签选择无结果」的另一半）。
         _ = LoadAsync();
     }
 
@@ -197,18 +199,29 @@ public sealed class ItemGridWidgetViewModel
     {
         foreach (var chip in Tags)
             if (chip.Selected) chip.Selected = false;
+        SaveConfig();
         _ = LoadAsync();
     }
 
     public async Task LoadTagsAsync()
     {
-        Tags.Clear();
         if (_repo is null) return;
+        // 记住重建前已选的标签（含构造函数里 LoadConfig 刚从 widgets.json 恢复的钉选标签）。
+        // 早先这里无条件 Tags.Clear() 再把每个 chip 按 selected:false 重建，会：
+        // ① 抹掉 LoadConfig 恢复的钉选态；② 与构造函数首轮 _ = LoadAsync() 竞争，
+        //    让 LoadAsync 读到空的标签集 → 钉了标签却「无结果」。改为按名字保留选择态。
+        var selected = new HashSet<string>(Tags.Where(t => t.Selected).Select(t => t.Name));
         try
         {
             var tags = await _repo.GetAllTagsAsync(CancellationToken.None);
-            foreach (var (name, count) in tags.Take(60))
-                Tags.Add(new TagChip(name, count, false));
+            var cloud = tags.Take(60).ToList();
+            // 钉选但不在前 60 热门标签里的，补进标签云，保证其选择态可见、可再点取消。
+            foreach (var name in selected)
+                if (!cloud.Any(t => t.Name == name))
+                    cloud.Add((name, 0));
+            Tags.Clear();
+            foreach (var (name, count) in cloud)
+                Tags.Add(new TagChip(name, count, selected.Contains(name)));
         }
         catch (Exception ex)
         {

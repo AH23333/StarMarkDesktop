@@ -40,6 +40,11 @@ public sealed partial class ItemGridWidget : UserControl
                 ? "输入要常驻桌面的标签名（如 rag、llm），回车或点「应用」。"
                 : "输入要常驻桌面的查询词（可叠加标签），回车或点「应用」。";
             ConfigBox.PlaceholderText = mode == ItemGridMode.Tag ? "标签名，如 rag" : "查询词，如 stars>500";
+            // 回填已钉内容：早先这里从不回填，重新打开组件时输入框是空的，
+            // 即便后台仍按上次的查询/标签出结果，用户也会误以为「配置丢了 / 搜不到」。
+            ConfigBox.Text = mode == ItemGridMode.Tag
+                ? (ViewModel.GridTag ?? string.Empty)
+                : (ViewModel.Query ?? string.Empty);
             if (mode == ItemGridMode.Search)
             {
                 TagCloudPanel.Visibility = Visibility.Visible;
