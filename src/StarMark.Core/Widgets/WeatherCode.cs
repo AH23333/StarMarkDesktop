@@ -81,7 +81,7 @@ public static class WeatherCode
         >= 80 and <= 82 => "\uE755",         // 阵雨
         >= 85 and <= 86 => "\uE703",         // 阵雪
         >= 95 and <= 99 => "\uE756",         // 雷
-        _ => "\uE706",
+        _ => "\uE9CB",                       // 表外码：与 Unknown 同处理（中性字形），绝不回落太阳，避免「☀️ 未知」自相矛盾
     };
 
     /// <summary>WMO 码 → emoji（组件头部大图标用；未知/缺失码显式给 ❓，不回落成太阳）。</summary>
@@ -99,7 +99,7 @@ public static class WeatherCode
         >= 71 and <= 77 or 85 or 86 => "\U0001F328\uFE0F",
         95 => "\U0001F329\uFE0F",
         96 or 99 => "⛈️",
-        _ => "☀️",
+        _ => "❓",                            // 表外码：与 Unknown 同处理，绝不回落太阳（本方法 doc 承诺）
     };
 
     /// <summary>WMO 码 → 天气大类。</summary>

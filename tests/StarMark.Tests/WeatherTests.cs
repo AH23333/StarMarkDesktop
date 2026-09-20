@@ -69,6 +69,21 @@ public class WeatherTests
         }
     }
 
+    /// <summary>
+    /// 回归 AT：表外 WMO 码（Describe/Classify 判为「未知」/Unknown）的 Glyph/Emoji 绝不能回落成太阳，
+    /// 否则组件头部会画成自相矛盾的「☀️ 未知」。旧实现的 _ 兜底分支给了 ☀️/U+E706（晴），
+    /// 与 Unknown 哨兵的 ❓/U+E9CB 不一致。修后表外码与 Unknown 同处理。
+    /// </summary>
+    [Fact]
+    public void GlyphAndEmoji_OffTableCode_MatchUnknownNotSun()
+    {
+        Assert.Equal(WeatherCode.Glyph(WeatherCode.Unknown), WeatherCode.Glyph(4));       // 表外码 4
+        Assert.Equal(WeatherCode.Emoji(WeatherCode.Unknown), WeatherCode.Emoji(12345));   // 任意越界码
+        Assert.Equal("❓", WeatherCode.Emoji(4));
+        Assert.Equal("❓", WeatherCode.Emoji(7));                    // 非 WMO 值：不得是雨/太阳
+        Assert.Equal("\uE9CB", WeatherCode.Glyph(4, isDay: true));   // 中性字形而非太阳 U+E706
+    }
+
     // ── Open-Meteo URL 构造 ──
 
     [Fact]
