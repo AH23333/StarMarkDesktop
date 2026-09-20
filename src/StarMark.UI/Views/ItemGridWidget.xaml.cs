@@ -142,7 +142,7 @@ public sealed partial class ItemGridWidget : UserControl
             args.Handled = true;   // 阻止冒泡到 RootBorder.ContextFlyout（组件菜单）
             // 搜索结果格会合并 Everything 实时源（未入库、Id=0）；置顶/标签格为已入库行。
             // 传兜底条目后虚拟行也能弹菜单（Id=0 时 ShowForItem 的 GetByIdAsync 查不到 → 用行数据）。
-            var fallback = new Item { Id = item.Id, Type = item.Type, Title = item.Title, Subtitle = item.Subtitle, Uri = item.Uri };
+            var fallback = new Item { Id = item.Id, Type = item.Type, Title = item.Title, Subtitle = item.Subtitle, Uri = item.Uri, Source = item.Source, SourceId = item.SourceId };
             ItemContextMenu.ShowForItem(item.Id, el, fallback);
         }
     }

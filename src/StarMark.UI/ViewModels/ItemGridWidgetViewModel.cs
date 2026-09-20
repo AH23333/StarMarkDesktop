@@ -24,8 +24,12 @@ public enum ItemGridMode
     Pinned,
 }
 
-/// <summary>条目格里的一行（复用统一条目模型，渲染与主窗口一致）。</summary>
-public sealed record ItemRowItem(long Id, string Title, string Subtitle, string Uri, string Emoji, ItemType Type);
+/// <summary>
+/// 条目格里的一行（复用统一条目模型，渲染与主窗口一致）。
+/// 携带 <paramref name="Source"/>/<paramref name="SourceId"/> 业务键：搜索结果格合并 Everything 实时源时，
+/// 虚拟行（Id=0）不入库，右键「记录到本地」/置顶/标签等需据此幂等登记真实条目（见 <c>ItemCardActions.EnsureRecordedAsync</c>）。
+/// </summary>
+public sealed record ItemRowItem(long Id, string Title, string Subtitle, string Uri, string Emoji, ItemType Type, string Source, string SourceId);
 
 /// <summary>
 /// 差异化条目格 ViewModel（Phase A-2，StarMark 护城河）：
@@ -136,7 +140,7 @@ public sealed class ItemGridWidgetViewModel
             };
 
             var rows = items
-                .Select(it => new ItemRowItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type), it.Type))
+                .Select(it => new ItemRowItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type), it.Type, it.Source, it.SourceId))
                 .ToList();
             ApplyRows(rows);
         }

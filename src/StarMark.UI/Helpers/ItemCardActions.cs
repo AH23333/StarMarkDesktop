@@ -24,6 +24,19 @@ public static class ItemCardActions
 
     public static IItemRepository GetRepo() => App.Services.GetRequiredItemRepository();
 
+    /// <summary>
+    /// 确保一条「实时源虚拟条目」（Everything 文件结果：Id=0、查询时从不入库）已登记进主库，返回其真实 Id；
+    /// 已入库条目（Id&gt;0）原样返回其 Id。<b>只登记索引记录（复用同步口径的幂等 upsert），绝不移动 / 改名 / 删除磁盘上的实际文件。</b>
+    /// 登记会把真实 Id 回填到 <paramref name="item"/>——其宿主 <see cref="ItemCardViewModel"/> 随即指向真实条目，
+    /// 故紧随其后的置顶/隐藏/标签/笔记等按 Id 写库的操作得以生效。缺 (Source, SourceId) 业务键无法登记时返回 0。
+    /// </summary>
+    public static async Task<long> EnsureRecordedAsync(Item? item, CancellationToken ct = default)
+    {
+        if (item is null) return 0;
+        if (item.Id > 0) return item.Id;
+        return await GetRepo().RecordItemAsync(item, ct);
+    }
+
     public static async void Open(XamlRoot xamlRoot, long itemId)
     {
         try
@@ -80,6 +93,8 @@ public static class ItemCardActions
     {
         try
         {
+            // 未入库的实时源虚拟条目（Everything，Id=0）没有可写 pinned 的主库行：先按路径登记拿真实 Id。
+            if (vm.Id == 0 && await EnsureRecordedAsync(vm.GetItem()) == 0) return;
             var newState = !vm.IsPinned;
             await GetRepo().SetPinnedAsync(vm.Id, newState, CancellationToken.None);
             vm.SetPinned(newState);
@@ -118,6 +133,8 @@ public static class ItemCardActions
             // 仅在真正改动时记一条「修改」事件——空保存/重复保存不污染活动流（#51）。
             var oldNotes = vm.Notes ?? string.Empty;
             if (string.Equals(oldNotes, text, StringComparison.Ordinal)) return;
+            // 虚拟条目（Everything，Id=0）无主库行可写 notes：先按路径登记拿真实 Id，再落笔。
+            if (vm.Id == 0 && await EnsureRecordedAsync(vm.GetItem()) == 0) return;
             await GetRepo().SetNoteAsync(vm.Id, text, CancellationToken.None);
             vm.ApplyNotes(string.IsNullOrWhiteSpace(text) ? null : text);
             await LogModify(vm);
@@ -155,6 +172,9 @@ public static class ItemCardActions
             var removed = current.Where(c => !desired.Contains(c, StringComparer.OrdinalIgnoreCase)).ToList();
             var added = desired.Where(d => !current.Contains(d, StringComparer.OrdinalIgnoreCase)).ToList();
 
+            // 虚拟条目（Everything，Id=0）无主库行可挂标签：有净改动时先按路径登记拿真实 Id，再写关联。
+            if (vm.Id == 0 && (added.Count > 0 || removed.Count > 0) && await EnsureRecordedAsync(vm.GetItem()) == 0) return;
+
             foreach (var tag in removed)
                 await repo.RemoveTagAsync(vm.Id, tag, CancellationToken.None);
             foreach (var tag in added)
@@ -183,6 +203,8 @@ public static class ItemCardActions
         // UI 线程成未处理异常。改为兜异常并回传"未改变"的当前状态（调用方据此不再做移除/刷新）。
         try
         {
+            // 虚拟条目（Everything，Id=0）无主库行可写 hidden：先按路径登记拿真实 Id，「隐藏」才落得下去。
+            if (vm.Id == 0 && await EnsureRecordedAsync(vm.GetItem()) == 0) return vm.IsHidden;
             var repo = GetRepo();
             var newState = !vm.IsHidden;
             await repo.SetHiddenAsync(vm.Id, newState, CancellationToken.None);
@@ -238,6 +260,10 @@ public static class ItemCardActions
 
             var current = await repo.GetTagsForItemAsync(vm.Id, CancellationToken.None);
             var toAdd = desired.Where(d => !current.Contains(d, StringComparer.OrdinalIgnoreCase)).ToList();
+
+            // 虚拟条目（Everything，Id=0）无主库行可挂标签：确有新增时先按路径登记拿真实 Id。
+            if (vm.Id == 0 && toAdd.Count > 0 && await EnsureRecordedAsync(vm.GetItem()) == 0) return;
+
             foreach (var tag in toAdd)
                 await repo.AddTagAsync(vm.Id, tag, CancellationToken.None);
 

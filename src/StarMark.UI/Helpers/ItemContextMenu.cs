@@ -69,6 +69,11 @@ internal static class ItemContextMenu
         flyout.Items.Add(Item("复制链接/路径", (_, _) => ItemCardActions.CopyUri(vm)));
         flyout.Items.Add(Item("预览", async (_, _) => await PreviewAsync(vm, root)));
 
+        // 未入库的实时源虚拟条目（Everything 文件结果，Id=0）：显式「记录到本地」把路径登记为主库条目，
+        // 之后便可在库中被检索、并被置顶/标签格持久化（这些操作自身也会按需自动登记，此处提供主动入口）。
+        if (vm.Id == 0 && !vm.IsLauncherMode)
+            flyout.Items.Add(Item("记录到本地", (_, _) => _ = RecordToLocalAsync(vm)));
+
         if (vm.IsLauncherMode)
         {
             // 启动器态（快捷启动的合成入口）：只保留按 URI 移除，隐藏一切会误写主库的操作。
@@ -120,6 +125,27 @@ internal static class ItemContextMenu
         catch (Exception ex)
         {
             StarLog.Error($"预览失败 (id={vm.Id})", ex);
+        }
+    }
+
+    /// <summary>
+    /// 「记录到本地」：把一条未入库的实时源虚拟条目（Everything，Id=0）按 (source, source_id) 幂等登记进主库，
+    /// 使其成为可检索、可被置顶/标签格持久化的真实条目。<b>只写索引记录，绝不移动 / 改名 / 删除磁盘上的实际文件。</b>
+    /// 登记成功再补记一条「新增」活动（用户主动动作，#51）；缺业务键（返回 0）时静默不写活动流。
+    /// </summary>
+    private static async Task RecordToLocalAsync(ItemCardViewModel vm)
+    {
+        if (vm.Id != 0) return;
+        try
+        {
+            var item = vm.GetItem();
+            if (await ItemCardActions.EnsureRecordedAsync(item) == 0) return;
+            await ItemCardActions.GetRepo().LogActivityAsync(
+                ActivityKind.ItemAdd, $"{item.Source}:{item.SourceId}", item.Title, item.Uri, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error($"记录到本地失败 (uri={vm.Uri})", ex);
         }
     }
 

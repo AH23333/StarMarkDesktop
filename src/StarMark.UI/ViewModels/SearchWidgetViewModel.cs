@@ -39,12 +39,16 @@ public sealed partial class SearchResultItem : ObservableObject
     /// <summary>条目类型：右键菜单需据此判断「打开所在位置」等可见性，并为未入库的实时源虚拟条目（Id=0）兜底重建一条 Item。</summary>
     public ItemType Type { get; }
 
+    /// <summary>业务键 (Source, SourceId)：Everything 实时源虚拟条目（Id=0）据此在右键「记录到本地」/置顶/标签时幂等登记真实条目。</summary>
+    public string Source { get; }
+    public string SourceId { get; }
+
     /// <summary>↑↓ 键盘导航时的选中高亮。</summary>
     [ObservableProperty] private bool _isSelected;
 
-    public SearchResultItem(long id, string title, string subtitle, string uri, string emoji, ItemType type)
+    public SearchResultItem(long id, string title, string subtitle, string uri, string emoji, ItemType type, string source, string sourceId)
     {
-        Id = id; Title = title; Subtitle = subtitle; Uri = uri; Emoji = emoji; Type = type;
+        Id = id; Title = title; Subtitle = subtitle; Uri = uri; Emoji = emoji; Type = type; Source = source; SourceId = sourceId;
     }
 }
 
@@ -211,7 +215,7 @@ public sealed class SearchWidgetViewModel
                         new BrowseFilter { Sort = Sort == "name" ? "name" : "recent", Limit = 60 }, ct);
                     if (ct.IsCancellationRequested) return;
                     foreach (var it in recent)
-                        Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type), it.Type));
+                        Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type), it.Type, it.Source, it.SourceId));
                     ResetSelectionAfterPopulate();
                 }
                 EmptyHint = Results.Count == 0 ? "暂无最近条目，输入关键词或选择标签开始搜索" : "最近条目";
@@ -226,7 +230,7 @@ public sealed class SearchWidgetViewModel
                 var result = await _search.SearchAsync(q, new SearchFilter { Tags = selected, MaxResults = 200, Sort = Sort }, ct);
                 if (ct.IsCancellationRequested) return;   // 已被更新的搜索取代，丢弃本次结果（即便 provider 未提前中断）
                 foreach (var it in result.Items)
-                    Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type), it.Type));
+                    Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type), it.Type, it.Source, it.SourceId));
                 ResetSelectionAfterPopulate();
                 EmptyHint = EmptyMessageFor(q, selected);
                 return;
@@ -247,7 +251,7 @@ public sealed class SearchWidgetViewModel
             }
             if (ct.IsCancellationRequested) return;
             foreach (var it in items)
-                Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type), it.Type));
+                Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type), it.Type, it.Source, it.SourceId));
             ResetSelectionAfterPopulate();
             EmptyHint = EmptyMessageFor(q, selected);
         }
