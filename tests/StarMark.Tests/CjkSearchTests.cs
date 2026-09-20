@@ -250,6 +250,17 @@ public sealed class CjkSearchTests : IDisposable
         Assert.DoesNotContain("2023年", tokens);
     }
 
+    [Fact]
+    public void ExpandForIndex_SeparatesAtEveryNonCjkCjkJunction()
+    {
+        // 双交界 "CJK→非CJK→CJK"（年report年）：两个交界都要各自成词。
+        // 第一段的 CJK→非CJK 由 AppendRun 行尾空格隔开；第二段非 CJK→CJK 必须再补一个空格。
+        string expanded = CjkTokenizer.ExpandForIndex("年report年");
+        var tokens = expanded.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        Assert.Equal(new[] { "年", "report", "年" }, tokens);
+    }
+
     private async Task SeedOneAsync(string title, string sourceId)
     {
         var repo = new ItemRepository(_factory);
