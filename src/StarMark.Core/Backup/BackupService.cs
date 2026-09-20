@@ -149,6 +149,14 @@ public sealed class BackupService
         string? widgetsTargetPath = null,
         CancellationToken ct = default)
     {
+        // 规则 0（先于快照与清库）：Replace 会先清空 items/item_tags 再导入，若导入途中抛异常，
+        // 已提交的清空不会回滚 → 库被毁却只报「恢复失败」。校验和只保证字节完整、不保证语义合法，
+        // 故在动任何数据前先拒绝缺业务键（Source/SourceId）的条目、并把可空字符串/集合归一到安全值，
+        // 让「会崩到一半留半截状态」的载荷根本进不到清库那步。合法备份恒满足，行为不变。
+        var validateFail = ValidatePayload(env.Payload);
+        if (validateFail is not null)
+            return new RestoreResult { Success = false, Message = validateFail };
+
         // 规则 1：导入前自动快照（扩展没有这一步，是最该补的）
         string? snapshotPath = null;
         try
@@ -250,6 +258,31 @@ public sealed class BackupService
         var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, CanonicalOptions);
         var hash = SHA256.HashData(bytes);
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// 动数据前的语义校验（校验和只保证字节完整，不保证载荷可用）。缺业务键的条目直接拒绝导入并原样
+    /// 返回错误；null 元素与空白键行剔除；可空字符串/集合归一到安全值——把「Replace 清库后才崩、
+    /// 留下半截空库」的载荷挡在清库之前。合法备份恒满足，行为不变。返回 null 表示通过。
+    /// </summary>
+    private static string? ValidatePayload(BackupPayload p)
+    {
+        p.Items.RemoveAll(it => it is null);
+        p.UserState.RemoveAll(s => s is null || string.IsNullOrWhiteSpace(s.Source) || string.IsNullOrWhiteSpace(s.SourceId));
+        p.Tags.RemoveAll(t => t is null || string.IsNullOrWhiteSpace(t.Name));
+        p.ItemTags.RemoveAll(l => l is null || string.IsNullOrWhiteSpace(l.Source) || string.IsNullOrWhiteSpace(l.SourceId) || string.IsNullOrWhiteSpace(l.TagName));
+
+        foreach (var it in p.Items)
+        {
+            if (string.IsNullOrWhiteSpace(it.Source) || string.IsNullOrWhiteSpace(it.SourceId))
+                return "备份条目缺 source/source_id（业务键），已拒绝导入，未改动现有数据。";
+            it.Title ??= string.Empty;
+            it.Subtitle ??= string.Empty;
+            it.Uri ??= string.Empty;
+            it.SearchText ??= string.Empty;
+            it.Tags ??= new List<string>();
+        }
+        return null;
     }
 
     private static string? ReadWidgetsJson()

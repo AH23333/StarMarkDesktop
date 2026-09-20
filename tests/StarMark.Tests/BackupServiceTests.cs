@@ -288,4 +288,33 @@ public sealed class BackupServiceTests : IDisposable
         }
         finally { try { File.Delete(blocker); } catch { } }
     }
+
+    /// <summary>
+    /// 回归 AT（备份破坏性顺序）：Replace 先清库再导入，若导入途中崩（缺业务键触发 NOT NULL / 半截事务），
+    /// 已提交的清空不回滚 → 库被毁却只报「恢复失败」。校验和只保证字节完整、不保证载荷语义合法。
+    /// 修后 RestoreAsync 在快照与清库之前先做语义校验并拒绝，现有数据原样保留、绝不清空。
+    /// </summary>
+    [Fact]
+    public async Task Restore_Replace_BadBusinessKey_DoesNotWipeExistingItems()
+    {
+        var src = Seed(_db1);
+        await UpsertAsync(src.Items, "src", "a1", "来自备份");
+        var env = await src.Backup.ExportAsync(CancellationToken.None);
+        // 追加一条缺业务键（Source 空白）的条目：直接改内存 env 走 RestoreAsync（不经 ReadAsync 校验和复查），
+        // 模拟一份校验和自洽但载荷语义非法的构造备份。
+        env.Payload.Items.Add(new Item { Source = "  ", SourceId = "x", Title = "坏条目", Uri = "https://evil" });
+
+        var dst = Seed(_db2);
+        await UpsertAsync(dst.Items, "dst", "b1", "现有条目");
+
+        var rr = await dst.Backup.RestoreAsync(env, RestoreMode.Replace, null, CancellationToken.None);
+
+        Assert.False(rr.Success);
+        Assert.Contains("业务键", rr.Message);
+        // 关键：拒绝发生在清库之前 → dst 原有条目仍在，未被抹掉（旧实现此处已清空、Assert.Empty）。
+        var all = await dst.Items.GetAllAsync(new BrowseFilter { IncludeHidden = true, Limit = 1000 }, CancellationToken.None);
+        var only = Assert.Single(all);
+        Assert.Equal("dst", only.Source);
+        Assert.Equal("b1", only.SourceId);
+    }
 }
