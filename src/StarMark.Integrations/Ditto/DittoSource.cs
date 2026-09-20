@@ -64,7 +64,12 @@ public sealed class DittoSource : IItemSource
             SearchText = isFiles ? string.Join("\n", clip.Files) + "\n" + text : text,
             CreatedAt = clip.Date,
             UpdatedAt = clip.Date,
-            Description = isFiles ? text : null,
+            // 正文必须落在 Description：ItemRepository.UpsertOne 落库时用 title+description+notes+tags
+            // 重算 search_text（并 CJK 展开），**无条件忽略**来源自带的 SearchText。旧实现把整段正文只塞进
+            // SearchText、文本 clip 的 Description 留 null → 首行(≤140字符)之外的正文永远进不了 FTS 索引，
+            // 表现为「关键词写在第二行，SQLite 侧搜不到；但 Ditto 实时 LIKE 能搜到」两路径结果不一致，
+            // 且 Ditto 未运行/DB 被占用时彻底搜不到。文件 clip 本就把 text 放 Description，故仅文本分支受害。
+            Description = text,
         };
         return item;
     }
