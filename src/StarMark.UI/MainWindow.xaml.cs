@@ -42,6 +42,10 @@ public sealed partial class MainWindow : Window
     private int _diagSimStep;
     // star 项目中真实存在的编程语言（下拉数据源，见 LoadStarLanguagesAsync）
     private readonly List<string> _starLanguages = new();
+    // 主界面的数据变更同步器：此前全应用只有组件 VM 订阅 DataChangeHub，主窗口一个都没有 ——
+    // 组件里改一条随记/待办、或备份还原落库后，主界面的侧栏计数与当前列表页
+    // （文件夹 / 标签 / 已隐藏 / 活动）全停在旧数据，要切页或重启才更新。这里补上订阅。
+    private DataChangeReloader? _dataSync;
 
     public MainWindow()
     {
@@ -99,6 +103,36 @@ public sealed partial class MainWindow : Window
         }
 
         SetupDiag();
+
+        // 订阅数据广播（去抖 250ms）：别处（组件写随记/待办、同步、备份还原）落库后，
+        // 刷新侧栏计数并重载当前列表页。构造必须在 UI 线程且 ContentFrame 已就绪之后。
+        _dataSync = new DataChangeReloader(RefreshOnDataChangedAsync);
+    }
+
+    /// <summary>数据变更后的主界面刷新：计数恒刷，当前页按类型重载（见 <see cref="RefreshCurrentPageForData"/>）。</summary>
+    private async Task RefreshOnDataChangedAsync()
+    {
+        await ViewModel.LoadCountsAsync();
+        RefreshCurrentPageForData();
+    }
+
+    /// <summary>
+    /// 只重载「当前正显示、且内容来自条目库」的页，避免无谓打库。
+    /// <para>
+    /// 刻意<b>不</b>自动重载 <see cref="SearchPage"/>：用户可能正在搜索框逐字输入，
+    /// 广播一来就重跑查询会打断编辑（且结果本由 OnQueryChanged 驱动，无需外部刷新）；
+    /// <see cref="SettingsPage"/> 无条目列表，同样跳过。
+    /// </para>
+    /// </summary>
+    private void RefreshCurrentPageForData()
+    {
+        switch (ContentFrame?.Content)
+        {
+            case FolderTreePage ftp: _ = ftp.ViewModel.LoadCommand.ExecuteAsync(null); break;
+            case TagsPage tp: tp.ViewModel.LoadCommand.Execute(null); break;
+            case HiddenPage hp: hp.ViewModel.LoadCommand.Execute(null); break;
+            case ActivityPage ap: ap.ViewModel.LoadCommand.Execute(null); break;
+        }
     }
 
     private IntPtr MainHwnd => WindowNative.GetWindowHandle(this);
@@ -117,15 +151,21 @@ public sealed partial class MainWindow : Window
             var kind = translucent ? SettingsStore_WidgetBackdrop() : WidgetBackdropKind.None;
             WidgetAppearance.ApplyBackdrop(
                 this, kind, WidgetAppearance.Opacity(), WidgetAppearance.MaterialIntensity(), theme);
-            // 表面画笔必须跟着材质走：
-            // ① 早先「半透明就置 null」，于是纯色材质下主窗口是**全透明**的（什么都不铺），
-            //    与 DeskBox 的纯色完全不是一个东西；
-            // ② 光挂控制器也不够 —— 顶栏 / NavigationView / 页面各自带不透明背景，
-            //    霜化被盖住后拖「背景不透明度 / 材质浓度」看不出任何变化。
-            //    故这里在原生材质之上再压一层按不透明度调 Alpha 的主题色（见 MainWindowSurfaceBrush）。
             // 主题色一律按目标主题解析（ThemeBrush.For），不能取 Application.Current.Resources[key]
             // —— 应用级主题在窗口创建后冻结，那里解析出的永远是初始主题的画笔。
-            RootGrid.Background = WidgetAppearance.MainWindowSurfaceBrush(theme, kind, translucent);
+            // 表面画笔必须跟着材质走（与组件 ApplyAppearanceCore 同构，保证主界面/组件同款观感、同步切换）：
+            // ① 原生控制器材质（亚克力薄/厚、云母、云母 Alt）成功接管背景时，RootGrid 必须透明，
+            //    让各自不同的霜化直接透出——此前这里无条件铺 BuildNativeSurfaceColor（与 kind 无关的半实色），
+            //    把四种原生材质抹成同一种观感，正是「主界面切材质看不出 / 与组件不同步」的根因；
+            // ② 纯色材质：扁平纯色背衬已单独着色整窗，RootGrid 透明避免双层 alpha 叠加（发灰/过实）；
+            // ③ 控制器挂不上（Win10/VM）或未开材质时，回落到 MainWindowSurfaceBrush 的按不透明度着色实色，
+            //    不会变全透明幽灵窗。
+            var frostActive = translucent && WidgetAppearance.IsNativeFrostActive(this);
+            var flatSolidActive = translucent && kind == WidgetBackdropKind.Solid
+                                  && WidgetAppearance.IsFlatSolidActive(this);
+            RootGrid.Background = frostActive || flatSolidActive
+                ? new SolidColorBrush(Microsoft.UI.Colors.Transparent)
+                : WidgetAppearance.MainWindowSurfaceBrush(theme, kind, translucent);
             // 主题切换后代码构建的画笔重解析（来源按钮高亮、状态点）
             SetSourceButtonsHighlight(_currentSource);
             SetStatusDot(_statusKind);
@@ -193,6 +233,7 @@ public sealed partial class MainWindow : Window
     private async void ExitApp()
     {
         _allowExit = true;
+        _dataSync?.Dispose();
         try { await _widgetManager.ShutdownAllAsync(); }
         catch (Exception ex) { StarLog.Error("关闭桌面组件失败", ex); }
         DisposeTray();
