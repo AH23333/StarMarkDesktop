@@ -111,16 +111,19 @@ public sealed partial class ItemGridWidget : UserControl
         if (sender is Button { Tag: string uri }) await LauncherEx.OpenAsync(uri);
     }
 
-    /// <summary>右键：弹出与主窗口条目完全一致的 ContextFlyout（批次 M 的共享菜单工厂）。
-    /// 对标签格 / 搜索结果格 / 最近活动格 / 置顶条目格的所有条目生效。</summary>
-    private void Row_RightTapped(object sender, RightTappedRoutedEventArgs e)
+    /// <summary>右键（ContextRequested）：弹出与主窗口条目完全一致的 ContextFlyout（批次 M 的共享菜单工厂）。
+    /// 对标签格 / 搜索结果格 / 置顶条目格的所有条目生效（最近活动格仅展示、不挂此处理器）。
+    /// <para>
+    /// 必须拦 <b>ContextRequested</b> 而非 RightTapped：WinUI 3 的 ContextFlyout 响应 ContextRequested 弹出，
+    /// 组件级菜单挂在 <c>RootBorder.ContextFlyout</c>，普通 Button 行不消费该事件即冒泡命中组件菜单。
+    /// 置 <c>args.Handled=true</c> 后与真实 ItemCard（自带 ContextFlyout）就近消费的行为一致。
+    /// </para></summary>
+    private void Row_ContextRequested(object sender, ContextRequestedEventArgs args)
     {
-        if (sender is FrameworkElement { DataContext: ItemRowItem item })
+        if (sender is FrameworkElement { DataContext: ItemRowItem item } el)
         {
-            // 必须置 Handled：右键冒泡到 WidgetWindow.RootBorder.ContextFlyout（组件级菜单）会覆盖本条目菜单，
-            // 表现为"右键只有组件功能、没有条目菜单"。置真后事件不再上溯，条目级菜单与主窗口一致。
-            e.Handled = true;
-            ItemContextMenu.ShowForItem(item.Id, sender as FrameworkElement ?? this);
+            args.Handled = true;   // 阻止冒泡到 RootBorder.ContextFlyout（组件级菜单）
+            ItemContextMenu.ShowForItem(item.Id, el);
         }
     }
 }
