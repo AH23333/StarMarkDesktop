@@ -171,6 +171,12 @@ internal static class EverythingInterop
         }
 
         var count = Everything_GetNumResults();
+        if (count == 0)
+        {
+            // 诊断埋点（V2）：IPC 调用成功但零结果——用于区分"根本没连上 Everything"与"连上了但索引/权限导致查不到"。
+            // 连同 GetLastError 一并记录，便于用户复现日志精准定位。
+            StarLog.Warn($"Everything 查询命中 0 条：关键词「{query}」GetLastError={Everything_GetLastError()}（max={maxResults}）");
+        }
         var items = new List<Item>(Math.Min((int)count, maxResults));
         for (uint i = 0; i < count; i++)
         {

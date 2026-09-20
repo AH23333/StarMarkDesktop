@@ -136,6 +136,9 @@ public sealed class EverythingSource : IItemSource
     {
         if (!IsAvailable)
         {
+            // 诊断埋点（V2）：走到这里说明调用方探测到可用、真正查询时又不可用（多为竞态）；
+            // 若日志里这条频繁出现而"跳过"那条却没有，则 IsAvailable 判定本身不稳定。
+            StarLog.Warn($"Everything 搜索被跳过：查询瞬间 IsAvailable=false（FindWindow 未探到 EVERYTHING 窗口），关键词「{query}」");
             return Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
         }
         return _queue.QueryAsync(query, filter, ct);
@@ -195,8 +198,18 @@ public sealed class EverythingSource : IItemSource
     /// <summary>启动时的 Everything 就绪流程：SDK DLL → （主程序未运行时）自动安装主程序。</summary>
     public async Task EnsureReadyAsync()
     {
-        await EnsureSdkReadyAsync();
-        if (!EverythingInterop.IsRunning())
+        var sdkReady = await EnsureSdkReadyAsync();
+
+        // 诊断埋点（V2）：把启动时的 Everything 可用性一次打全，用于定位用户报告的
+        // "Everything 已开却搜不到本地文件"——区分究竟是①主程序未被探测到②SDK DLL 未加载③IPC 通但查询空。
+        var running = EverythingInterop.IsRunning();
+        var exe = EverythingInterop.FindEverythingExecutable();
+        StarLog.Info(
+            $"Everything 就绪快照：主程序运行(FindWindow)={running} · SDK已加载={sdkReady} · " +
+            $"探测到exe={(exe is null ? "未找到" : exe)} · SDK DLL={EverythingInterop.SdkDllPath}" +
+            $"({(File.Exists(EverythingInterop.SdkDllPath) ? "存在" : "缺失")})");
+
+        if (!running)
         {
             await EnsureEverythingInstalledAsync();
         }
