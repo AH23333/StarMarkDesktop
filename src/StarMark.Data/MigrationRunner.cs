@@ -33,7 +33,10 @@ public sealed class MigrationRunner
         if (version < 3) MigrateV3(conn);
         if (version < 4) MigrateV4(conn);
 
-        WriteSchemaVersion(conn, CurrentVersion);
+        // 只在真正向前迁移后才推进版本号。若库里存的版本已高于本二进制（应用降级：
+        // 新版建库后回退到旧版），无条件写回 CurrentVersion 会把 schema_version 倒拨，
+        // 掩盖"库结构其实比二进制更新"这一事实，并可能在下次升级时误重跑已执行过的迁移。
+        if (version < CurrentVersion) WriteSchemaVersion(conn, CurrentVersion);
     }
 
     public const int CurrentVersion = 4;
