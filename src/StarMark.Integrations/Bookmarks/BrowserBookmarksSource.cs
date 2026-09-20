@@ -35,9 +35,11 @@ public abstract class BrowserBookmarksSource : IItemSource
                 .ToList();
             return Task.FromResult<IReadOnlyList<Item>>(items);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // 书签文件损坏等：不阻断整体同步，返回空
+            // 书签文件损坏等：不阻断整体同步，返回空。但必须留痕——否则「整份书签一条没导入」
+            // 会毫无日志地静默发生（历史上解析器抛 InvalidOperationException 就被这里无声吞掉）。
+            StarLog.Warn($"读取浏览器书签失败，本次 {SourceId} 同步返回空（{_bookmarksPath}）：{ex.Message}");
             return Empty();
         }
     }

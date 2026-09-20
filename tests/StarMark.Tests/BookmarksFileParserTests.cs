@@ -78,19 +78,45 @@ public sealed class BookmarksFileParserTests
     }
 
     [Fact]
-    public void ParseFile_TempFile_Works()
+    public void ParseJson_NumericDateAdded_DoesNotThrowAndKeepsWholeTree()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"starmark_bm_{System.Guid.NewGuid():N}.json");
-        File.WriteAllText(path, SampleJson);
-        try
+        // 回归 R6#1：date_added 为「未加引号的数字」时，旧实现 d.GetString() 抛
+        // InvalidOperationException → 整棵树解析中断、上层吞异常后静默返回空（整份书签导不进来）。
+        // 修复后：按 ValueKind 安全取值，数字型也正常解析，且不再牵连其它条目。
+        const string json = """
         {
-            var entries = BookmarksFileParser.ParseFile(path);
-            Assert.Equal(3, entries.Count);
-            Assert.Contains(entries, e => e.Url == "https://github.com");
+          "roots": {
+            "bookmark_bar": {
+              "type": "folder", "name": "bar", "children": [
+                { "type": "url", "name": "A", "url": "https://a.example", "date_added": 13300000000000000 },
+                { "type": "url", "name": "B", "url": "https://b.example", "date_added": "13300000000000000" }
+              ]
+            }
+          }
         }
-        finally
-        {
-            File.Delete(path);
-        }
+        """;
+        var entries = BookmarksFileParser.ParseJson(json);
+
+        Assert.Equal(2, entries.Count);   // 两条都在，未因数字型 date_added 崩掉整棵树
+        var a = Assert.Single(entries, e => e.Url == "https://a.example");
+        var b = Assert.Single(entries, e => e.Url == "https://b.example");
+        // 数字型与字符串型解析出的收藏时间一致（同一微秒值 → 同一 Unix 秒）
+        Assert.Equal(b.BookmarkedAt, a.BookmarkedAt);
+        Assert.True(a.BookmarkedAt > 0);
+    }
+
+    [Fact]
+    public void ParseJson_NonStringTypeNode_IsSkippedNotFatal()
+    {
+        // type 非字符串（异常导出）不得抛；应安全跳过该节点，其余照常解析。
+        const string json = """
+        { "roots": { "bookmark_bar": { "type": "folder", "name": "bar", "children": [
+            { "type": 42, "name": "坏节点", "url": "https://bad.example" },
+            { "type": "url", "name": "好", "url": "https://good.example" }
+        ] } } }
+        """;
+        var entries = BookmarksFileParser.ParseJson(json);
+        var good = Assert.Single(entries);
+        Assert.Equal("https://good.example", good.Url);
     }
 }

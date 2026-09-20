@@ -66,7 +66,7 @@ public static class BookmarksFileParser
 
     private static void WalkNode(JsonElement node, List<string> ancestors, List<BookmarkEntry> result, bool isRoot = false)
     {
-        if (!node.TryGetProperty("type", out var typeProp)) return;
+        if (!node.TryGetProperty("type", out var typeProp) || typeProp.ValueKind != JsonValueKind.String) return;
         var type = typeProp.GetString();
 
         if (type == "url")
@@ -74,10 +74,22 @@ public static class BookmarksFileParser
             var url = GetString(node, "url");
             if (string.IsNullOrWhiteSpace(url)) return;
 
-            var added = node.TryGetProperty("date_added", out var d)
-                && long.TryParse(d.GetString(), out var micros)
-                ? FromChromeTime(micros)
-                : 0L;
+            // date_added 既可能是字符串（Chrome 常见），也可能是未加引号的数字（部分导出/旧版）。
+            // 直接 .GetString() 对数字型 JsonElement 会抛 InvalidOperationException——一旦抛出，
+            // 整个书签树解析中断、上层 catch 吞掉后静默返回空，导致「整份书签一条都导不进来」。
+            // 这里按 ValueKind 分别安全取值；数字用 TryGetInt64（避免 GetDouble 对 >2^53 微秒丢精度）。
+            long added = 0;
+            if (node.TryGetProperty("date_added", out var d))
+            {
+                long micros = 0;
+                bool parsed = d.ValueKind switch
+                {
+                    JsonValueKind.String => long.TryParse(d.GetString(), out micros),
+                    JsonValueKind.Number => d.TryGetInt64(out micros),
+                    _ => false,
+                };
+                if (parsed) added = FromChromeTime(micros);
+            }
 
             result.Add(new BookmarkEntry
             {
@@ -110,5 +122,7 @@ public static class BookmarksFileParser
         => microseconds / 1_000_000L - FiletimeToUnixEpochSeconds;
 
     private static string GetString(JsonElement e, string prop)
-        => e.TryGetProperty(prop, out var v) ? v.GetString() ?? string.Empty : string.Empty;
+        => e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String
+            ? v.GetString() ?? string.Empty
+            : string.Empty;
 }
