@@ -142,8 +142,11 @@ public sealed partial class SearchWidget : UserControl
     {
         if (sender is FrameworkElement { DataContext: SearchResultItem item } el)
         {
-            args.Handled = true;   // 阻止冒泡到 RootBorder.ContextFlyout（组件级菜单）
-            ItemContextMenu.ShowForItem(item.Id, el);
+            args.Handled = true;   // 阻止冒泡到 RootBorder.ContextFlyout（组件菜单）
+            // 传入由行数据重建的兜底条目：Everything 实时源结果未入库、Id=0，GetByIdAsync 查不到，
+            // 若无兜底则菜单直接不弹（此前右键"什么都不出现"的真因）。与主窗口用内存 VM 建菜单同源。
+            var fallback = new Item { Id = item.Id, Type = item.Type, Title = item.Title, Subtitle = item.Subtitle, Uri = item.Uri };
+            ItemContextMenu.ShowForItem(item.Id, el, fallback);
         }
     }
 }

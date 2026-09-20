@@ -26,16 +26,25 @@ namespace StarMark.UI.Helpers;
 internal static class ItemContextMenu
 {
     /// <summary>
-    /// 在 <paramref name="anchor"/> 处弹出与主窗口一致的条目右键菜单。取不到条目（已删除等）时静默不弹。
+    /// 在 <paramref name="anchor"/> 处弹出与主窗口一致的条目右键菜单。
+    /// <para>
+    /// 优先按 Id 现查一条完整 <see cref="Item"/>，以取回最新的 Tags/Pinned/Hidden；
+    /// 查不到时用 <paramref name="fallback"/>（组件行自身数据重建的条目）兜底——
+    /// 这正是 <b>Everything 实时源虚拟条目</b>（未入库、Id=0）与「刚被删除的行」的场景：
+    /// 主窗口 <see cref="Controls.ItemCard"/> 的 ContextFlyout 本就由内存 VM 直接构建、不查库，
+    /// 若这里查不到就 return，会让组件行右键「什么都不弹」，与主窗口不一致。兜底后菜单照常出现，
+    /// 按 URI 的动作（打开 / 复制链接 / 预览 / 打开所在位置 / 发送到快捷启动）全部可用。
+    /// </para>
     /// </summary>
-    public static async void ShowForItem(long itemId, FrameworkElement anchor)
+    public static async void ShowForItem(long itemId, FrameworkElement anchor, Item? fallback = null)
     {
         try
         {
             if (anchor.XamlRoot is not { } root) return;
             var item = await App.Services.GetRequiredItemRepository()
-                .GetByIdAsync(itemId, CancellationToken.None);
-            if (item is null) return;   // 条目可能已被删除/隐藏：不弹陈旧菜单
+                .GetByIdAsync(itemId, CancellationToken.None)
+                ?? fallback;   // 虚拟条目(Id=0)查不到 / 行已删：用行内数据兜底，保证与主窗口一致地弹出条目菜单
+            if (item is null) return;
             Build(new ItemCardViewModel(item), root).ShowAt(anchor);
         }
         catch (Exception ex)
@@ -52,7 +61,7 @@ internal static class ItemContextMenu
     {
         var flyout = new MenuFlyout();
 
-        flyout.Items.Add(Item("打开", (_, _) => ItemCardActions.Open(root, vm.Id)));
+        flyout.Items.Add(Item("打开", (_, _) => OpenByRow(root, vm)));
 
         if (vm.HasOpenLocation)
             flyout.Items.Add(Item("打开所在位置", (_, _) => ItemCardActions.OpenLocation(vm)));
@@ -82,6 +91,17 @@ internal static class ItemContextMenu
         return mi;
     }
 
+    /// <summary>
+    /// 打开条目：已入库条目（Id&gt;0）沿用 <see cref="ItemCardActions.Open"/>（按最新库值打开）；
+    /// 未入库的实时源虚拟条目（Everything，Id=0）库里查不到，直接按行 URI 打开，与左侧单击
+    /// （<c>ResultOpen_Click</c> 走 <see cref="LauncherEx"/>）行为一致——否则右键「打开」对其静默失效。
+    /// </summary>
+    private static void OpenByRow(XamlRoot root, ItemCardViewModel vm)
+    {
+        if (vm.Id != 0) { ItemCardActions.Open(root, vm.Id); return; }
+        _ = LauncherEx.OpenAsync(vm.Uri);
+    }
+
     /// <summary>预览（QuickLook 式内嵌预览窗）：与主窗口 ItemCard.Preview_Click 同一宿主、同一提交行为。</summary>
     private static async Task PreviewAsync(ItemCardViewModel vm, XamlRoot root)
     {
@@ -95,7 +115,7 @@ internal static class ItemContextMenu
                 dedupeKey: $"preview:{vm.Id}", width: 820, height: 640,
                 primaryText: "打开", cancelText: "关闭");
             if (result == CenteredDialog.HostedDialogResult.Committed)
-                ItemCardActions.Open(root, vm.Id);
+                OpenByRow(root, vm);
         }
         catch (Exception ex)
         {
