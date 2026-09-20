@@ -75,7 +75,8 @@
 | Weather | 天气 `Weather` | ✅（本轮增强） |
 | Music | 音乐 `Music` | ✅（本轮增强） |
 | — | 时钟 `Clock` | ✅ StarMark 多出 |
-| — | 标签格 / 搜索结果格 / 最近活动格 / 置顶条目格 | ✅ StarMark 多出（书签主业衍生，DeskBox 无对应） |
+| — | 标签格 / 最近活动格 / 置顶条目格 | ✅ StarMark 多出（书签主业衍生，DeskBox 无对应） |
+| 搜索结果面（`SearchPopupWindow`+`SearchResultRowControl`+`SearchResultRanker`+`SearchResultSelectionPolicy`） | 搜索结果格 `SearchResults` | ✅ 无同名组件，但**能力可比**——见 §4.6 逐项对照（排序本轮补齐） |
 
 ### 4.2 待办（Todo）
 
@@ -128,6 +129,19 @@
 | 随记即时落库（local 源） | ✅ | |
 | 今日速览含农历日期 | ✅ | `GlanceCalendar`（`ChineseLunisolarCalendar`） |
 | 组件内快捷搜索（走主检索链路） | ✅ | |
+
+### 4.6 搜索结果格（`ItemGridMode.Search`，钉查询常驻）
+
+> 此前只标「DeskBox 无对应」即收口——不成立：搜索结果格的**对应物是 DeskBox 的搜索结果渲染面**。逐能力比对如下（本轮据此补齐排序）。
+
+| DeskBox 结果面能力 | StarMark 搜索结果格 | 状态 | 说明 |
+| --- | --- | --- | --- |
+| 钉一条查询 + 标签过滤常驻 | `GridQuery` + `GridTags`（AND）持久化 | ✅ | DeskBox 无「常驻钉查询格」，StarMark 差异化 |
+| **排序 / 相关度重排**（`SearchResultRanker`、弹窗排序） | 「相关度/最近更新/名称」下拉 + per-instance `GridSort` | ✅（本轮补齐） | 与快捷搜索同 `SearchFilter{Sort}` 管道，此前漏传漏入口 |
+| 快照忠实携带排序 | 采集/还原/摘要均含 `GridSort` | ✅（本轮补齐） | 与 `GridQuery/GridTags` 对齐 |
+| ↑↓ 键盘导航 + 自动选首项（`SearchResultSelectionPolicy`） | 无 | ⬜ 缓做 | 需把四格共用不可变 `ItemRowItem` 改可通知、牵动 `ApplyRows` 增量差逻辑，性价比不划算 |
+| 每行 类型/大小/日期列 + Shell 图标（`SearchResultRowControl`） | 仅 emoji+标题+副标题 | 🚫 有意不做 | DeskBox 是文件主业、列为文件属性；搜索结果格跨源（书签/Star/文件/待办/随记），文件大小/日期对书签无意义 |
+| 搜索历史 / 收藏查询（`SearchHistoryService`，启动器→弹窗） | 钉查询本身即「收藏」 | 🚫 有意不做 | 用户已裁决走内联、不做弹窗；常驻格本身就是持久化的查询收藏 |
 
 ---
 
