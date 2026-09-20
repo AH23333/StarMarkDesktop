@@ -18,6 +18,7 @@ public sealed class WidgetManager
 {
     private readonly WidgetStorage _storage;
     private readonly IItemRepository? _repo;
+    private readonly WidgetSnapshotService? _snapshotService;
     private readonly Dictionary<string, WidgetWindow> _windows = new();
     private DispatcherQueue? _ui;
 
@@ -36,10 +37,15 @@ public sealed class WidgetManager
     /// <summary>布局方案发生变化（保存 / 删除），设置页据此刷新布局列表与快捷键行。</summary>
     public event Action? LayoutsChanged;
 
+    /// <summary>快照点集合发生变化（保存 / 应用产生的自动备份 / 删除），「快照」页与组件右键菜单据此刷新。</summary>
+    public event Action? SnapshotsChanged;
+
     public WidgetManager(WidgetStorage storage, IItemRepository? repo)
     {
         _storage = storage;
         _repo = repo;
+        // 快照的数据读写只在仓库可用时才成立（无仓库 → 只存布局/配置，本地条目数据为空）。
+        _snapshotService = repo is not null ? new WidgetSnapshotService(repo) : null;
     }
 
     /// <summary>在 UI 线程上记录调度器（MainWindow 构造时调用）。</summary>
@@ -444,10 +450,20 @@ public sealed class WidgetManager
     /// 写入位置/尺寸/置顶、显示布局内实例、隐藏布局外实例。
     /// </summary>
     private void ApplyLayoutCore(WidgetStoreData data, WidgetLayout layout)
+        => ApplyGeometryCore(data, layout.Entries);
+
+    /// <summary>
+    /// 「几何 + 外观」套用引擎：按「类型 + 序号」把每条几何落位到实例（缺则新建），
+    /// 显示入列实例、隐藏其余。布局模板与数据快照共用这一份匹配逻辑，避免两处实现漂移。
+    /// 返回条目 → 实例的映射，供快照据此把数据写回正确的实例。
+    /// </summary>
+    private List<(T entry, WidgetInstanceConfig inst)> ApplyGeometryCore<T>(WidgetStoreData data, IReadOnlyList<T> entries)
+        where T : IWidgetGeometryEntry
     {
+        var mapping = new List<(T, WidgetInstanceConfig)>();
         var used = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var entry in layout.Entries)
+        foreach (var entry in entries)
         {
             var sameKind = data.Instances.Where(i => i.Kind == entry.Kind).ToList();
 
@@ -495,6 +511,8 @@ public sealed class WidgetManager
                 w.ApplyBounds(entry.X, entry.Y, entry.Width, entry.Height, entry.Topmost);
                 w.ApplyAppearance(entry.Appearance);
             }
+
+            mapping.Add((entry, inst));
         }
 
         // 布局之外的实例：隐藏但保留（内容不丢）
@@ -505,6 +523,195 @@ public sealed class WidgetManager
         }
 
         InstancesChanged?.Invoke();
+        return mapping;
+    }
+
+    // ───────────────────────── 布局与数据快照（#53） ─────────────────────────
+    // 快照 = 布局半（几何 + 外观，走同一套 ApplyGeometryCore）+ 数据半（快捷入口/待办/随记/条目格查询）。
+    // 与「纯模板」布局的分工：模板可复用、按 Id 就地覆盖；快照是不可变历史点，应用它 = 回到那一刻（Replace + 自动回滚）。
+
+    /// <summary>全部快照点（新的在前）。</summary>
+    public IReadOnlyList<WidgetSnapshot> GetSnapshots() => _storage.GetSnapshots();
+
+    /// <summary>
+    /// 在 UI 线程读取「当前所有实例」的实时矩形 + 配置，产出一张尚未填本地条目数据的快照，
+    /// 以及各条目对应的实例 ID（随后在 UI 线程外用仓库补 LocalItems）。镜像 <see cref="SaveCurrentLayoutAsync"/> 的取位逻辑。
+    /// </summary>
+    private (WidgetSnapshot snapshot, List<string> instanceIds) BuildSnapshotShell(string name)
+    {
+        var data = _storage.Load();
+        var entries = new List<WidgetSnapshotEntry>();
+        var instanceIds = new List<string>();
+        var perKind = new Dictionary<WidgetKind, int>();
+
+        foreach (var inst in data.Instances)
+        {
+            // 位置/尺寸：可见窗口读实时矩形；隐藏或读取失败则回退实例已持久化的 config 值。
+            double x, y, width, height;
+            if (_windows.TryGetValue(inst.Id, out var w) && w.IsVisible)
+            {
+                try
+                {
+                    Windows.Graphics.RectInt32 r = WindowInterop.GetWindowRect(w);
+                    if (r.Width > 0 && r.Height > 0) { x = r.X; y = r.Y; width = r.Width; height = r.Height; }
+                    else { x = inst.X; y = inst.Y; width = inst.Width; height = inst.Height; }
+                }
+                catch { x = inst.X; y = inst.Y; width = inst.Width; height = inst.Height; }
+            }
+            else { x = inst.X; y = inst.Y; width = inst.Width; height = inst.Height; }
+
+            perKind.TryGetValue(inst.Kind, out var idx);
+            entries.Add(new WidgetSnapshotEntry
+            {
+                Kind = inst.Kind,
+                Index = idx,
+                X = x, Y = y, Width = width, Height = height,
+                Topmost = inst.Topmost,
+                Title = inst.Title,
+                ChromeMode = inst.ChromeMode,
+                PrivacyMode = inst.PrivacyMode,
+                Appearance = inst.Appearance,
+                Links = inst.Links.Select(l => new LinkItem { Id = l.Id, Title = l.Title, Uri = l.Uri, CreatedAt = l.CreatedAt }).ToList(),
+                GridTag = inst.GridTag,
+                GridQuery = inst.GridQuery,
+                GridTags = inst.GridTags is null ? null : new List<string>(inst.GridTags),
+            });
+            instanceIds.Add(inst.Id);
+            perKind[inst.Kind] = idx + 1;
+        }
+
+        var snapshot = new WidgetSnapshot
+        {
+            Name = name,
+            CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            Entries = entries,
+        };
+        return (snapshot, instanceIds);
+    }
+
+    /// <summary>
+    /// 把「当前所有组件的布局 + 组件数据」存为一个不可变快照点。
+    /// 无实例时不落空快照，返回 null 让调用方给提示。
+    /// </summary>
+    public async Task<WidgetSnapshot?> CaptureSnapshotAsync(string name)
+    {
+        var (snapshot, instanceIds) = await OnUiAsync(() => BuildSnapshotShell(name));
+        if (snapshot.Entries.Count == 0) return null;
+
+        if (_snapshotService is not null)
+        {
+            for (var i = 0; i < snapshot.Entries.Count; i++)
+            {
+                try
+                {
+                    snapshot.Entries[i].LocalItems =
+                        await _snapshotService.CaptureLocalItemsAsync(instanceIds[i], CancellationToken.None);
+                }
+                catch (Exception ex) { StarLog.Error($"捕获实例本地条目失败 ({instanceIds[i]})", ex); }
+            }
+        }
+
+        var saved = _storage.AppendSnapshot(snapshot);
+        SnapshotsChanged?.Invoke();
+        return saved;
+    }
+
+    /// <summary>
+    /// 应用快照 = 回到那一刻（Replace）：先自动留一个「应用前」回滚点，再落位布局 + 写回配置数据 + 还原本地条目。
+    /// 布局外的实例被隐藏（内容保留）；快照里各组件的快捷入口/待办/随记/条目格查询按「类型+序号」匹配回对应实例。
+    /// </summary>
+    public async Task<bool> ApplySnapshotAsync(string snapshotId)
+    {
+        var snapshot = _storage.FindSnapshot(snapshotId);
+        if (snapshot is null) return false;
+
+        // 1) 自动回滚点：应用前把当前状态先存成一个快照，结果不满意可「应用」它退回这一刻。
+        await CaptureSnapshotInternalAsync($"自动备份（应用前） · {DateTime.Now:MM-dd HH:mm}");
+
+        // 2) 布局半 + 配置数据半（UI 线程）：落位几何/外观，并把 Links/Grid/Title/外壳/隐私写回匹配到的实例。
+        var dataRestore = await OnUiAsync(() =>
+        {
+            var data = _storage.Load();
+            var mapping = ApplyGeometryCore(data, snapshot.Entries);
+            var restore = new List<(string instanceId, IReadOnlyList<SnapshotLocalItem> items)>(mapping.Count);
+            foreach (var (entry, inst) in mapping)
+            {
+                inst.Title = entry.Title;
+                inst.ChromeMode = entry.ChromeMode;
+                inst.PrivacyMode = entry.PrivacyMode;
+                inst.Links = entry.Links.Select(l => new LinkItem { Id = l.Id, Title = l.Title, Uri = l.Uri, CreatedAt = l.CreatedAt }).ToList();
+                inst.GridTag = entry.GridTag;
+                inst.GridQuery = entry.GridQuery;
+                inst.GridTags = entry.GridTags is null ? null : new List<string>(entry.GridTags);
+                restore.Add((inst.Id, entry.LocalItems));
+            }
+            _storage.Save(data);
+            return restore;
+        });
+
+        // 3) 本地条目数据半（仓库，异步）：整实例先删后插还原待办/随记；DataChangeHub 自动驱动组件重载。
+        if (_snapshotService is not null)
+        {
+            foreach (var (instanceId, items) in dataRestore)
+            {
+                try { await _snapshotService.RestoreLocalItemsAsync(instanceId, items, CancellationToken.None); }
+                catch (Exception ex) { StarLog.Error($"还原实例本地条目失败 ({instanceId})", ex); }
+            }
+        }
+
+        // 4) 让每个组件窗口以磁盘上刚写好的配置重建：Title / 外壳 / 隐私 / 几何 / 外观一并生效
+        //    （窗口缓存的 _config 是另一份引用，改磁盘不会自动传导，只能重建）。
+        await OnUiAsync(() =>
+        {
+            var keep = new HashSet<string>(dataRestore.Select(r => r.instanceId), StringComparer.Ordinal);
+            foreach (var id in _windows.Keys.ToList()) CloseInternal(id, persist: false);
+            foreach (var id in keep) ShowInternal(id);
+        });
+
+        SnapshotsChanged?.Invoke();
+        return true;
+    }
+
+    /// <summary>删除快照点。</summary>
+    public Task<bool> DeleteSnapshotAsync(string snapshotId) => OnUiAsync(() =>
+    {
+        var removed = _storage.DeleteSnapshot(snapshotId);
+        if (removed) SnapshotsChanged?.Invoke();
+        return removed;
+    });
+
+    /// <summary>
+    /// 从快照「提取布局」：把某个快照点的几何 + 外观转成一套**新的、不含数据**的纯模板布局。
+    /// 名称由用户输入（空则兜底），与 <see cref="SaveCurrentLayoutAsync"/> 产物同构、可在布局列表里复用。
+    /// </summary>
+    public Task<WidgetLayout?> ExtractLayoutFromSnapshotAsync(string snapshotId, string layoutName) => OnUiAsync(() =>
+    {
+        var snapshot = _storage.FindSnapshot(snapshotId);
+        if (snapshot is null || snapshot.Entries.Count == 0) return null;
+
+        var layout = new WidgetLayout
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Name = WidgetLayoutCollection.MakeUniqueName(_storage.GetLayouts(), layoutName),
+            CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            // 只搬几何 + 外观，绝不带入 Links/LocalItems/Grid* —— 提取产物是纯模板（#52 边界在此同样成立）。
+            Entries = snapshot.Entries.Select(e => new WidgetLayoutEntry
+            {
+                Kind = e.Kind, Index = e.Index,
+                X = e.X, Y = e.Y, Width = e.Width, Height = e.Height,
+                Topmost = e.Topmost, Appearance = e.Appearance,
+            }).ToList(),
+        };
+        _storage.SaveLayout(layout);
+        LayoutsChanged?.Invoke();
+        return layout;
+    });
+
+    /// <summary>捕获内部实现（供 Apply 的自动回滚点复用；捕获异常不外抛，绝不阻断应用）。</summary>
+    private async Task CaptureSnapshotInternalAsync(string name)
+    {
+        try { await CaptureSnapshotAsync(name); }
+        catch (Exception ex) { StarLog.Error($"创建应用前回滚快照失败", ex); }
     }
 
     /// <summary>设置变更时把半透明材质/不透明度重新应用到所有已打开的组件窗口。</summary>
