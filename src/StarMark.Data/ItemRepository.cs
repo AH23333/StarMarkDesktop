@@ -877,9 +877,16 @@ public sealed class ItemRepository : IItemRepository
         // 无法区分归属，MVP 折衷：源侧声明标签始终存在，用户标签不因同步丢失（见 §十一）。
         if (item.Tags.Count > 0 && item.Id > 0)
         {
-            foreach (var tagName in item.Tags.Distinct(StringComparer.OrdinalIgnoreCase))
+            // 与本地写入路径（上面的 LinkTagByNameAsync 分支）同口径：Trim 后剔除空白再去重。
+            // UpsertTagLink 是「按名 get-or-create」且 tags.name 无 CHECK 约束——源侧标签里混入的空串/
+            // 纯空白（书签匿名文件夹经 BookmarksFileParser.GetString 得到 ""）会建成一条真实的空白标签行，
+            // " work"/"work" 也因 NOCASE 只并大小写、不并空白而裂成两行。先归一再 Distinct 消除这两类脏标签。
+            foreach (var tagName in item.Tags
+                         .Select(t => t?.Trim())
+                         .Where(t => !string.IsNullOrWhiteSpace(t))
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                await UpsertTagLink(conn, item.Id, tagName, ct);
+                await UpsertTagLink(conn, item.Id, tagName!, ct);
             }
         }
 

@@ -74,6 +74,41 @@ public sealed class ItemRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task Upsert_BlankAndWhitespaceTags_AreNormalizedAway()
+    {
+        // AQ-2 回归：UpsertOne 的标签循环曾缺 IsNullOrWhiteSpace + Trim（同仓储的本地写入路径
+        // LinkTagByNameAsync 已有），tags.name 又无 CHECK 约束——书签匿名文件夹产出的 "" 会落成一条
+        // 真实空白标签行，" work"/"work" 因 NOCASE 只并大小写而裂成两行。
+        var repo = new ItemRepository(_factory);
+        var item = new Item
+        {
+            Type = ItemType.Bookmark,
+            Source = "test",
+            SourceId = "tags1",
+            Title = "脏标签",
+            Tags = new List<string> { "", "   ", " work", "work", "C++" },
+        };
+        await repo.UpsertAsync(new[] { item }, CancellationToken.None);
+        Assert.True(item.Id > 0);
+
+        var names = new List<string>();
+        using (var conn = _factory.Open())
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT t.name FROM tags t JOIN item_tags it ON it.tag_id = t.id WHERE it.item_id = @id;";
+            cmd.Parameters.AddWithValue("@id", item.Id);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read()) names.Add(reader.GetString(0));
+        }
+
+        // 空串/纯空白不入库；" work"+"work" 归并为一条 "work"；"C++" 原样保留。
+        Assert.Equal(2, names.Count);
+        Assert.Contains("work", names);
+        Assert.Contains("C++", names);
+        Assert.DoesNotContain(names, n => string.IsNullOrWhiteSpace(n));
+    }
+
+    [Fact]
     public async Task UpsertIdempotent_UpdatesExisting()
     {
         var repo = new ItemRepository(_factory);
