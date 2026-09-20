@@ -84,6 +84,12 @@ public static class WidgetAppearance
         /// <summary>纯色材质使用的扁平纯色背衬（无模糊的 CompositionColorBrush 背衬），
         /// 对齐 DeskBox 的 WinUIEx.TransparentTintBackdrop。null = 未挂载。</summary>
         public WinUIEx.TransparentTintBackdrop? Solid;
+
+        /// <summary>本次套用是否有原生霜化控制器（亚克力 / 云母）成功接管窗口背景。
+        /// 为真时组件内容表面应保持透明，让控制器各自不同的霜化透出——这正是
+        /// 「不同材质呈现同一效果」的修复点；为假（平台不支持 / 挂载失败）时回落实色表面兜底，
+        /// 避免透明幽灵窗。Solid / None 恒为 false。</summary>
+        public bool NativeFrostActive;
     }
 
     private static readonly ConditionalWeakTable<Window, WindowBackdropState> _states = new();
@@ -130,6 +136,7 @@ public static class WidgetAppearance
             // 内容表面在背衬生效时保持透明（见 WidgetWindow 对 IsFlatSolidActive 的判断），不再双层叠加。
             if (kind == WidgetBackdropKind.Solid)
             {
+                state.NativeFrostActive = false;
                 DetachAcrylic(state);
                 DetachMica(state);
 
@@ -157,6 +164,7 @@ public static class WidgetAppearance
             // 不透明（None）：什么都不挂，内容表面铺实色（见 SurfaceBrush）。关掉整窗玻璃化，避免透明。
             if (kind == WidgetBackdropKind.None)
             {
+                state.NativeFrostActive = false;
                 DetachAcrylic(state);
                 DetachMica(state);
                 ClearSolidBackdrop(state, window);
@@ -191,6 +199,7 @@ public static class WidgetAppearance
             ClearSolidBackdrop(state, window);
             window.SystemBackdrop = null;
             WindowInterop.SetDwmSystemBackdropNone(window);
+            state.NativeFrostActive = ok;
             if (!ok)
             {
                 // 云母/亚克力都挂不上（平台不支持/AddSystemBackdropTarget 失败）却已玻璃化客户区 →
@@ -277,6 +286,15 @@ public static class WidgetAppearance
         => _states.TryGetValue(window, out var s)
            && s.Solid is not null
            && ReferenceEquals(window.SystemBackdrop, s.Solid);
+
+    /// <summary>
+    /// 原生霜化控制器（亚克力 / 云母）当前是否真正接管了窗口背景。为 true 时组件内容表面应保持透明，
+    /// 让各材质本就不同的 Tint/Luminosity/Kind 霜化直接透出（对齐 DeskBox：原生材质下表面层透明）——
+    /// 否则在其上再铺一层「与材质无关」的半实色表面，会把亚克力薄/厚、云母/云母 Alt 抹成同一种观感，
+    /// 这正是用户所说「不同材质呈现同一效果 / 切换材质组件不同步」的根因。
+    /// </summary>
+    public static bool IsNativeFrostActive(Window window)
+        => _states.TryGetValue(window, out var s) && s.NativeFrostActive;
 
     /// <summary>摘掉纯色背衬（切回亚克力/云母/不透明，或窗口释放时调用）。</summary>
     private static void ClearSolidBackdrop(WindowBackdropState state, Window window)

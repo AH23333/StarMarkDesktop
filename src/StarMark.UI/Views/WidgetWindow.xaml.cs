@@ -486,6 +486,20 @@ public sealed partial class WidgetWindow : Window
             {
                 surface = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             }
+            // 原生霜化材质（亚克力薄/厚、云母、云母 Alt）：控制器接管背景时内容表面同样必须透明，
+            // 让各材质各自不同的 Tint/Luminosity/Kind 霜化直接透出（对齐 DeskBox 的原生材质透明表面）。
+            // 此前这里对所有原生材质一律铺 BuildNativeSurfaceColor 的「与材质无关」半实色，把四种材质
+            // 抹成同一种观感，于是「切换材质组件看不出变化 / 不同材质呈现同一效果」。控制器未挂载时
+            // IsNativeFrostActive 为 false，保留实色兜底，不会变透明幽灵窗。
+            else if (!useCustomBg &&
+                kind is StarMark.Abstractions.WidgetBackdropKind.Acrylic
+                    or StarMark.Abstractions.WidgetBackdropKind.AcrylicBase
+                    or StarMark.Abstractions.WidgetBackdropKind.Mica
+                    or StarMark.Abstractions.WidgetBackdropKind.MicaAlt &&
+                WidgetAppearance.IsNativeFrostActive(this))
+            {
+                surface = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            }
 
             RootBorder.Background = surface;
             DragBar.Background = surface;
