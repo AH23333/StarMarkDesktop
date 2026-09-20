@@ -162,8 +162,11 @@ public sealed class SearchService
         {
             throw;
         }
-        catch
+        catch (Exception ex)
         {
+            // 主查询（SQLite FTS）失败此前被空 catch 吞没，用户侧只表现为"搜索无结果"却无任何线索，
+            // 与实时源重载（下方带源名日志）不一致。补日志，仍降级返回空以保证调用方不崩。
+            StarLog.Error("统一搜索：主查询(FTS/SQLite)异常，本次已降级为空结果", ex);
             return new SearchResult { Items = Array.Empty<Item>(), Total = 0, ElapsedMs = 0 };
         }
     }
