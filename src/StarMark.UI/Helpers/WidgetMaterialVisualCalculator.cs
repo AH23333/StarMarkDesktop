@@ -73,19 +73,24 @@ internal static class WidgetMaterialVisualCalculator
     }
 
     /// <summary>
-    /// 云母的强度剖面。<paramref name="surfaceOpacity"/>（背景不透明度）必须参与：
-    /// 早先这里只吃「材质浓度」，于是在云母/云母 Alt 下拖动「背景不透明度」滑杆毫无变化 ——
-    /// 用户报「部分材质下两个滑杆对所有组件都失效」正是这一条。
-    /// 与亚克力同口径：先按主题+浓度算出目标强度，再乘表面强度因子。
+    /// 云母的强度剖面。**与 DeskBox 完全一致：只吃「材质浓度」，不吃「背景不透明度」。**
+    /// <para>
+    /// DeskBox 两处 <c>CalculateMica</c> 调用（<c>WidgetMaterialSystemBackdrop.cs:197</c>、
+    /// <c>WidgetWindowBase.Backdrop.cs:508</c>）均为 3 参、不乘 surfaceOpacity——因为云母的语义
+    /// 就是「贴着壁纸的、不透明的哑光金属板」，其不透明度由 LuminosityOpacity 决定，本就**不该**被
+    /// 「背景不透明度」滑杆稀释。此前 StarMark 擅自加第 4 参 <c>surfaceOpacity</c> 并把 Tint/Luminosity
+    /// 一律乘以 <c>Lerp(0.08,1.0,opacity)</c>，于是默认 0.72 不透明度下 luminosity 被压到约 0.74 倍，
+    /// 用户拖低「背景不透明度」更把云母直接**化成一层面纱似的半透明**——正是用户所报
+    /// 「云母无壁纸取色、看起来就是半透明效果」。回归 DeskBox 契约：云母由「材质浓度」控浓淡、
+    /// 不随「背景不透明度」变透明。
+    /// </para>
     /// </summary>
     public static WidgetMaterialOpacityProfile CalculateMica(
         bool isDark,
         bool useAlt,
-        double surfaceOpacity,
         double materialIntensity)
     {
         double intensity = NormalizeMaterialIntensity(materialIntensity);
-        double surfaceStrength = Lerp(0.08, 1.0, Math.Clamp(surfaceOpacity, 0.0, 1.0));
         double tintOpacity = useAlt
             ? Lerp(0.28, 0.82, intensity)
             : Lerp(0.04, 0.46, intensity);
@@ -93,9 +98,7 @@ internal static class WidgetMaterialVisualCalculator
             ? Lerp(isDark ? 0.34 : 0.42, isDark ? 0.72 : 0.76, intensity)
             : Lerp(isDark ? 0.78 : 0.82, isDark ? 0.94 : 0.96, intensity);
 
-        return new WidgetMaterialOpacityProfile(
-            Math.Clamp(tintOpacity * surfaceStrength, 0.0, 1.0),
-            Math.Clamp(luminosityOpacity * surfaceStrength, 0.0, 1.0));
+        return new WidgetMaterialOpacityProfile(tintOpacity, luminosityOpacity);
     }
 
     public static Color BuildContentTintColor(bool isDark, Color accentColor)

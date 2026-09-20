@@ -235,9 +235,11 @@ public static class WidgetAppearance
             state.Mica.Kind = useAlt ? MicaKind.BaseAlt : MicaKind.Base;
             state.Mica.TintColor = tint;
             state.Mica.FallbackColor = WidgetMaterialVisualCalculator.BuildMicaFallbackColor(isDark, useAlt);
-            var profile = WidgetMaterialVisualCalculator.CalculateMica(isDark, useAlt, surfaceOpacity, intensity);
+            var profile = WidgetMaterialVisualCalculator.CalculateMica(isDark, useAlt, intensity);
             state.Mica.TintOpacity = (float)profile.TintOpacity;
             state.Mica.LuminosityOpacity = (float)profile.LuminosityOpacity;
+            StarLog.Info($"[材质诊断] Mica alt={useAlt} dark={isDark} opacity={surfaceOpacity:F2} intensity={intensity:F2} " +
+                $"tint={profile.TintOpacity:F3} lum={profile.LuminosityOpacity:F3} targetNotNull={state.Target is not null}");
             return true;
         }
         catch (Exception ex)
@@ -269,6 +271,8 @@ public static class WidgetAppearance
             var profile = WidgetMaterialVisualCalculator.CalculateAcrylic(isDark, useBase, surfaceOpacity, intensity);
             state.Acrylic.TintOpacity = (float)profile.TintOpacity;
             state.Acrylic.LuminosityOpacity = (float)profile.LuminosityOpacity;
+            StarLog.Info($"[材质诊断] Acrylic base={useBase} dark={isDark} opacity={surfaceOpacity:F2} intensity={intensity:F2} " +
+                $"tint={profile.TintOpacity:F3} lum={profile.LuminosityOpacity:F3} targetNotNull={state.Target is not null}");
             return true;
         }
         catch (Exception ex)
