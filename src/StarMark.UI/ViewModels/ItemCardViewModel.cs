@@ -104,8 +104,7 @@ public partial class ItemCardViewModel : ObservableObject
     {
         if (!string.IsNullOrEmpty(Uri))
         {
-            try { await Windows.System.Launcher.LaunchUriAsync(new Uri(Uri)); }
-            catch { }
+            await StarMark.UI.Helpers.LauncherEx.OpenAsync(Uri);
         }
     }
 

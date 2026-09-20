@@ -208,8 +208,8 @@ public sealed partial class PreviewHost : UserControl
         var uri = _viewModel?.Uri;
         if (!string.IsNullOrWhiteSpace(uri))
         {
-            try { _ = Windows.System.Launcher.LaunchUriAsync(new Uri(uri)); }
-            catch { }
+            // 经统一入口打开：套用协议白名单闸门，并让 file:// 走 LaunchFile/Folder（直调 LaunchUriAsync 对 file:// 静默失效）。
+            _ = StarMark.UI.Helpers.LauncherEx.OpenAsync(uri);
         }
     }
 }

@@ -35,7 +35,7 @@ public sealed partial class ActivityPage : Page
         if (sender is not Button { Tag: string uri } || string.IsNullOrEmpty(uri)) return;
         try
         {
-            await Windows.System.Launcher.LaunchUriAsync(new Uri(uri));
+            await StarMark.UI.Helpers.LauncherEx.OpenAsync(uri);
         }
         catch (Exception ex)
         {

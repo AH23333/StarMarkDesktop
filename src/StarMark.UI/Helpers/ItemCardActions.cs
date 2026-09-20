@@ -44,7 +44,7 @@ public static class ItemCardActions
             var repo = GetRepo();
             var item = await repo.GetByIdAsync(itemId, CancellationToken.None);
             if (item != null && !string.IsNullOrEmpty(item.Uri))
-                await Windows.System.Launcher.LaunchUriAsync(new Uri(item.Uri));
+                await LauncherEx.OpenAsync(item.Uri);
         }
         catch (Exception ex)
         {
