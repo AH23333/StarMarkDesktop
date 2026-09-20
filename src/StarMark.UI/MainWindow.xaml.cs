@@ -160,9 +160,24 @@ public sealed partial class MainWindow : Window
             //    避免与背衬叠两层 alpha（发灰/过实）；② 实色或未生效时回落 MainWindowSurfaceBrush 实色，
             //    绝不变全透明幽灵窗。批次 K 起材质统一走扁平背衬，不再区分「原生控制器 / 纯色」两条路径。
             var backdropActive = translucent && WidgetAppearance.IsBackdropSurfaceActive(this);
-            RootGrid.Background = backdropActive
-                ? new SolidColorBrush(Microsoft.UI.Colors.Transparent)
-                : WidgetAppearance.MainWindowSurfaceBrush(theme, kind, translucent);
+            if (backdropActive)
+            {
+                RootGrid.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            }
+            else if (kind == WidgetBackdropKind.None)
+            {
+                // 实色（None）：交回 XAML 声明式 `{ThemeResource ApplicationPageBackgroundThemeBrush}`。
+                // 不能用代码画笔覆盖——`ApplicationPageBackgroundThemeBrush` 是框架内置画笔，其 ThemeDictionaries
+                // 桶在运行期是 `ResourceDictionaryThemeData`（非 `ResourceDictionary`），ThemeBrush.For 的
+                // FindInDict（要求 `is ResourceDictionary`）读不到 → 落到跟随冻结应用主题的兜底 → 浅色模式下
+                // 解析出深色/黑色。XAML 的 ThemeResource 会正确跟随本窗口 ActualTheme，浅色即浅色。
+                RootGrid.ClearValue(Microsoft.UI.Xaml.Controls.Panel.BackgroundProperty);
+            }
+            else
+            {
+                // 半透明材质但背衬未挂上（防御路径）：用按 isDark 直接算色的 SurfaceBrush，可靠不分主题。
+                RootGrid.Background = WidgetAppearance.MainWindowSurfaceBrush(theme, kind, translucent);
+            }
             // 主题切换后代码构建的画笔重解析（来源按钮高亮、状态点）
             SetSourceButtonsHighlight(_currentSource);
             SetStatusDot(_statusKind);
