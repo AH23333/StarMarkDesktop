@@ -233,4 +233,33 @@ public sealed class BackupServiceTests : IDisposable
         Assert.True(File.Exists(rr.SnapshotPath));
         Assert.StartsWith(_snapshotDir, rr.SnapshotPath);
     }
+
+    [Fact]
+    public async Task Restore_WidgetsWriteFails_ReportsSuccessWithWarning()
+    {
+        // 回归 R1#2：备份含组件数据但组件写盘失败时，旧实现返回纯成功文案（调用方只看 Message、
+        // 不单独看 WidgetsRestored），构成「假成功」。修复后 Success 仍 true（条目本体确还原），
+        // 但 Message 必须点出组件恢复失败。
+        var src = Seed(_db1);
+        await UpsertAsync(src.Items, "test", "a1", "标题");
+        var env = await src.Backup.ExportAsync(CancellationToken.None);
+        env.Payload.WidgetsJson = "[]";   // 触发组件写盘分支
+
+        // 让组件写盘必失败：目标父级指向一个「文件」→ Directory.CreateDirectory 抛异常。
+        var blocker = Path.Combine(Path.GetTempPath(), $"blk_{Guid.NewGuid():N}.bin");
+        await File.WriteAllTextAsync(blocker, "x");
+        var badWidgetsPath = Path.Combine(blocker, "widgets.json");
+
+        try
+        {
+            var dst = Seed(_db2);
+            var rr = await dst.Backup.RestoreAsync(env, RestoreMode.Merge, badWidgetsPath, CancellationToken.None);
+
+            Assert.True(rr.Success);
+            Assert.False(rr.WidgetsRestored);
+            Assert.Contains("组件", rr.Message);
+            Assert.Contains("失败", rr.Message);
+        }
+        finally { try { File.Delete(blocker); } catch { } }
+    }
 }

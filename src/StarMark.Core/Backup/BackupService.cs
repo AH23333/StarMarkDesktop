@@ -197,12 +197,19 @@ public sealed class BackupService
             // 否则还原后满屏仍是旧数据（要重启才更新）。
             DataChangeHub.Notify();
 
+            // 备份里带了组件数据却写盘失败时，若仍返回纯成功文案就是「假成功」——调用方
+            // (SettingsPage) 只把 rr.Message 显示到状态栏、并不单独呈现 WidgetsRestored，
+            // 用户会误以为组件也一并还原了。这里把失败并入文案，Success 仍为 true（条目本体确已还原）。
+            var widgetsNote = (!string.IsNullOrEmpty(p.WidgetsJson) && !widgetsRestored)
+                ? " 但桌面组件数据恢复失败（组件保持原状），请稍后重试或检查 %APPDATA% 是否被占用。"
+                : string.Empty;
+
             return new RestoreResult
             {
                 Success = true,
-                Message = mode == RestoreMode.Replace
+                Message = (mode == RestoreMode.Replace
                     ? $"已覆盖恢复 {p.Items.Count} 条条目。"
-                    : $"已合并恢复 {p.Items.Count} 条条目。",
+                    : $"已合并恢复 {p.Items.Count} 条条目。") + widgetsNote,
                 SnapshotPath = snapshotPath,
                 ItemsRestored = p.Items.Count,
                 UserStatesRestored = p.UserState.Count,
