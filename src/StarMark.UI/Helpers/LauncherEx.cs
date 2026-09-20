@@ -21,6 +21,13 @@ public static class LauncherEx
     public static async Task OpenAsync(string? uri)
     {
         if (string.IsNullOrWhiteSpace(uri)) return;
+        // 协议白名单闸门：条目 URI 是可被导入/同步/外部数据影响的字符串，
+        // 只放行 http/https/file，拒绝 javascript:/data:/ms-msdt:/自定义协议等借 Shell 协议处理器执行的记录。
+        if (!StarMark.Abstractions.LaunchGuard.IsAllowedScheme(uri))
+        {
+            StarMark.Abstractions.StarLog.Warn($"拒绝以非法协议打开条目：{uri}");
+            return;
+        }
         try
         {
             if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed)) return;
