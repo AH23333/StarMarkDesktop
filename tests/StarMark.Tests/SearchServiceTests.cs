@@ -72,4 +72,36 @@ public sealed class SearchServiceTests : IDisposable
             new SearchFilter { MaxResults = 10 }, CancellationToken.None);
         Assert.Contains(all.Items, i => i.Type == ItemType.Clipboard);
     }
+
+    [Fact]
+    public async Task TagBrowse_AppliesLanguageFilter()
+    {
+        // 回归 R-AS-2：空关键词 + 标签浏览此前只转发 Tag/Type/Hidden，漏了 Language →
+        // 「选了标签 + 选了语言」的浏览态里语言静默失效（语言是持久化的全局工具栏控件）。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "x/cs",
+                       Title = "csharp repo", ExtraJson = """{"Language":"C#"}""" },
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "x/rust",
+                       Title = "rust repo", ExtraJson = """{"Language":"Rust"}""" },
+        }, CancellationToken.None);
+
+        var stored = await repo.GetAllAsync(new BrowseFilter { Limit = 100 }, CancellationToken.None);
+        foreach (var it in stored)
+            await repo.AddTagAsync(it.Id, "shared", CancellationToken.None);   // 两条同挂一标签
+
+        var svc = new SearchService(repo, Array.Empty<IItemSource>());
+
+        // 语言="C#" 应把共同标签下的两条收窄到一条。
+        var filtered = await svc.SearchAsync("",
+            new SearchFilter { Tags = new[] { "shared" }, Language = "C#", MaxResults = 10 }, CancellationToken.None);
+        Assert.Single(filtered.Items);
+        Assert.Equal("x/cs", filtered.Items[0].SourceId);
+
+        // 护栏：不设语言时两条都在（修复不得误伤无语言浏览）。
+        var both = await svc.SearchAsync("",
+            new SearchFilter { Tags = new[] { "shared" }, MaxResults = 10 }, CancellationToken.None);
+        Assert.Equal(2, both.Items.Count);
+    }
 }

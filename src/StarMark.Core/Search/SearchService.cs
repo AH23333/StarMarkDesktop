@@ -41,6 +41,10 @@ public sealed class SearchService
                 TagFilters = filter.Tags,
                 TypeFilter = filter.Type?.ToString().ToLowerInvariant(),
                 IncludeHidden = filter.IncludeHidden,
+                // 语言是持久化的全局工具栏控件，且在浏览态与关键词态都应收窄；此前只转发了
+                // Tag/Type/Hidden，漏了 Language → 「选了标签 + 选了语言」的空关键词浏览里语言静默失效
+                //（GetAllAsync 本就支持 BrowseFilter.Language，这里只是没把值传进去）。
+                Language = filter.Language,
                 Sort = filter.Sort ?? "recent",
                 Limit = filter.MaxResults,
             }, ct);
