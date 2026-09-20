@@ -182,4 +182,66 @@ public sealed class WidgetSnapshotTests : IDisposable
         Assert.DoesNotContain("Snapshots", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Layouts", json, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void Snapshot_PreservesFaithfulLocalItemFields()
+    {
+        // #53 V1：快照须忠实带走标签/置顶/隐藏/笔记/子标题/URI/描述，跨实例还原才不丢用户状态。
+        var store = Store();
+        var snap = new WidgetSnapshot
+        {
+            Name = "忠实",
+            CreatedAt = 5,
+            Entries =
+            {
+                new WidgetSnapshotEntry
+                {
+                    Kind = WidgetKind.Todo,
+                    LocalItems =
+                    {
+                        new SnapshotLocalItem
+                        {
+                            Type = ItemType.Todo, Title = "t",
+                            Subtitle = "副", Uri = "u", Description = "d", Notes = "n",
+                            Tags = new() { "甲", "乙" },
+                            Hidden = true, Pinned = true,
+                            ExtraJson = """{"done":true}""",
+                        },
+                    },
+                },
+            },
+        };
+
+        var reloaded = store.FindSnapshot(store.AppendSnapshot(snap).Id);
+        var it = Assert.Single(Assert.Single(reloaded!.Entries).LocalItems);
+        Assert.Equal("副", it.Subtitle);
+        Assert.Equal("u", it.Uri);
+        Assert.Equal("d", it.Description);
+        Assert.Equal("n", it.Notes);
+        Assert.Equal(new[] { "甲", "乙" }, it.Tags);
+        Assert.True(it.Hidden);
+        Assert.True(it.Pinned);
+        Assert.Contains("\"done\":true", it.ExtraJson);
+    }
+
+    [Fact]
+    public void Normalize_GuardsNullLinksAndLocalItems()
+    {
+        // 显式 null（OneDrive 截断 / 手改 JSON 反序列化会覆盖初始化器）经 Normalize 兜底成空集合，
+        // 否则 Summary / 捕获 / 应用路径上的 .Count 与 foreach 会 NRE。
+        var snap = new WidgetSnapshot
+        {
+            Name = "脏",
+            CreatedAt = 1,
+            Entries = { new WidgetSnapshotEntry { Kind = WidgetKind.Todo, Links = null!, LocalItems = null! } },
+        };
+
+        var norm = WidgetSnapshotCollection.Normalize(new[] { snap });
+        var e = Assert.Single(norm.Single().Entries);
+        Assert.NotNull(e.Links);
+        Assert.Empty(e.Links);
+        Assert.NotNull(e.LocalItems);
+        Assert.Empty(e.LocalItems);
+        Assert.Contains("1 个组件", snap.Summary);
+    }
 }

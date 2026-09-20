@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -140,5 +141,59 @@ public sealed class WidgetSnapshotServiceTests : IDisposable
         await _svc.RestoreLocalItemsAsync("A", Array.Empty<SnapshotLocalItem>(), CancellationToken.None);
 
         Assert.Empty(await _svc.CaptureLocalItemsAsync("A", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Capture_PreservesFaithfulUserState()
+    {
+        var id = await AddLocalAsync("A", ItemType.Todo, "带全套字段", it =>
+        {
+            it.Subtitle = "副标题";
+            it.Uri = "file:///D:/x";
+            it.Description = "描述文字";
+            it.Notes = "笔记内容";
+            it.Hidden = true;
+        });
+        await _repo.SetPinnedAsync(id, true, CancellationToken.None);
+        await _repo.AddTagAsync(id, "重要", CancellationToken.None);
+        await _repo.AddTagAsync(id, "工作", CancellationToken.None);
+
+        var captured = await _svc.CaptureLocalItemsAsync("A", CancellationToken.None);
+        var s = Assert.Single(captured);
+        Assert.Equal("副标题", s.Subtitle);
+        Assert.Equal("file:///D:/x", s.Uri);
+        Assert.Equal("描述文字", s.Description);
+        Assert.Equal("笔记内容", s.Notes);
+        Assert.True(s.Hidden);
+        Assert.True(s.Pinned);
+        Assert.Equal(new[] { "工作", "重要" }, s.Tags?.OrderBy(x => x, StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
+    public async Task RestoreFaithful_RoundTrip_KeepsTagsPinHiddenNotesAcrossInstances()
+    {
+        var id = await AddLocalAsync("SRC", ItemType.Note, "原样搬走", it =>
+        {
+            it.Subtitle = "副";
+            it.Uri = "http://u";
+            it.Description = "描";
+            it.Notes = "笔";
+            it.Hidden = true;
+        });
+        await _repo.SetPinnedAsync(id, true, CancellationToken.None);
+        await _repo.AddTagAsync(id, "标签甲", CancellationToken.None);
+
+        var captured = await _svc.CaptureLocalItemsAsync("SRC", CancellationToken.None);
+        await _svc.RestoreLocalItemsAsync("DST", captured, CancellationToken.None);
+
+        var dst = await _svc.CaptureLocalItemsAsync("DST", CancellationToken.None);
+        var s = Assert.Single(dst);
+        Assert.Equal("副", s.Subtitle);
+        Assert.Equal("http://u", s.Uri);
+        Assert.Equal("描", s.Description);
+        Assert.Equal("笔", s.Notes);
+        Assert.True(s.Hidden);
+        Assert.True(s.Pinned);
+        Assert.Contains("标签甲", s.Tags ?? new List<string>());
     }
 }

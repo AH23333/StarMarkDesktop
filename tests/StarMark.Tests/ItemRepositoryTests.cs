@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -285,5 +286,78 @@ public sealed class ItemRepositoryTests : IDisposable
         var result = await search.SearchAsync("Alpha", new SearchFilter { MaxResults = 10 }, CancellationToken.None);
         Assert.Single(result.Items);
         Assert.Equal("https://alpha.com", result.Items[0].Uri);
+    }
+
+    // ===== #53 V1：快照忠实还原仓储层 =====
+
+    [Fact]
+    public async Task ReplaceLocalItemsForInstance_PreservesFaithfulFields_AndIsolates()
+    {
+        var repo = new ItemRepository(_factory);
+
+        // 别的来源/别的实例的条目必须不受前缀 Replace 影响。
+        var other = new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "keep1", Title = "别来源不动" };
+        await repo.UpsertAsync(new[] { other }, CancellationToken.None);
+        var sib = new Item { Type = ItemType.Todo, Source = ItemSources.Local, SourceId = "Y|9", Title = "别实例不动" };
+        await repo.UpsertLocalItemAsync(sib, CancellationToken.None);
+
+        // 目标实例先有一条将被覆盖。
+        await repo.UpsertLocalItemAsync(
+            new Item { Type = ItemType.Todo, Source = ItemSources.Local, SourceId = "X|1", Title = "将被替换掉的旧条目" },
+            CancellationToken.None);
+
+        var toInsert = new List<Item>
+        {
+            new Item
+            {
+                Type = ItemType.Todo,
+                Source = ItemSources.Local,
+                SourceId = "X|2",
+                Title = "忠实还原",
+                Subtitle = "副",
+                Uri = "u",
+                Description = "d",
+                Notes = "n",
+                Hidden = true,
+                Pinned = true,
+                Tags = new List<string> { "重要", "工作" },
+                ExtraJson = """{"done":true}""",
+            },
+        };
+        await repo.ReplaceLocalItemsForInstanceAsync("X", toInsert, CancellationToken.None);
+
+        var got = await repo.GetLocalItemsForInstanceAsync("X", CancellationToken.None);
+        var s = Assert.Single(got);
+        Assert.Equal("忠实还原", s.Title);
+        Assert.Equal("副", s.Subtitle);
+        Assert.Equal("u", s.Uri);
+        Assert.Equal("d", s.Description);
+        Assert.Equal("n", s.Notes);
+        Assert.True(s.Hidden);
+        Assert.True(s.Pinned);
+        Assert.Contains("重要", s.Tags);
+        Assert.Contains("工作", s.Tags);
+        Assert.Contains("\"done\":true", s.ExtraJson);
+
+        // 别来源 + 别实例都还在
+        Assert.NotNull(await repo.GetByIdAsync(other.Id, CancellationToken.None));
+        var sibGot = await repo.GetLocalItemsForInstanceAsync("Y", CancellationToken.None);
+        Assert.Equal("别实例不动", Assert.Single(sibGot).Title);
+    }
+
+    [Fact]
+    public async Task GetLocalItemsForInstance_PrefixBoundaryDoesNotMatchSibling()
+    {
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertLocalItemAsync(
+            new Item { Type = ItemType.Todo, Source = ItemSources.Local, SourceId = "12|1", Title = "本实例" },
+            CancellationToken.None);
+        await repo.UpsertLocalItemAsync(
+            new Item { Type = ItemType.Todo, Source = ItemSources.Local, SourceId = "123|1", Title = "兄弟前缀" },
+            CancellationToken.None);
+
+        // LIKE "12|%" 必须因 '|' 边界而不命中 "123|…"。
+        var only = await repo.GetLocalItemsForInstanceAsync("12", CancellationToken.None);
+        Assert.Equal("本实例", Assert.Single(only).Title);
     }
 }
