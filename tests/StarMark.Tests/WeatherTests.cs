@@ -82,6 +82,22 @@ public class WeatherTests
         Assert.Contains("format=json", url);
     }
 
+    /// <summary>
+    /// 安全回归：城市名由用户输入（搜索框键入），构造查询串时必须整体百分号编码，
+    /// 让塞在名字里的 '&amp;' / '=' 无法逃逸成第二个查询参数——否则用户可用 "北京&amp;count=99999"
+    /// 覆盖调用方设定的 count（参数注入/越权拉取）。钉死这条转义契约防回归。
+    /// </summary>
+    [Fact]
+    public void BuildGeocodingUrl_CityNameCannotInjectExtraQueryParams()
+    {
+        var url = OpenMeteoClient.BuildGeocodingUrl("北京&count=99999", 8, "zh");
+        // '&'(→%26) 与 '='(→%3D) 必须被编码，注入串不得以字面量出现
+        Assert.DoesNotContain("&count=99999", url);
+        Assert.Contains("name=%E5%8C%97%E4%BA%AC%26count%3D99999", url);
+        // 整串中 count= 只应出现一次（调用方传的 8），证明注入未生出新参数
+        Assert.Equal(1, url.Split("count=", StringSplitOptions.None).Length - 1);
+    }
+
     [Fact]
     public void BuildForecastUrl_RequestsCurrentAndDailyFields()
     {
