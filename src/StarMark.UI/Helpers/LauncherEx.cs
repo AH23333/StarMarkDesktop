@@ -34,30 +34,29 @@ public static class LauncherEx
 
             if (parsed.Scheme == Uri.UriSchemeFile)
             {
-                // 用 LocalFileIdentity.TryPathFromUri 而非 parsed.LocalPath 还原路径：
-                // Uri.LocalPath 会在 '#' 处截断（file://C:/x#y.txt → C:\x），含 '#' 的合法文件名（如 C#入门.docx）打不开。
-                // 该基元走纯字符串剥前缀+斜杠互换，保留 '#'/%；不识别（如 UNC）时退回 URI 激活。
-                if (StarMark.Abstractions.LocalFileIdentity.TryPathFromUri(uri, out var path))
+                // file:// 有两类互补的生产者，单靠一种还原法都会错：
+                //  · Everything / LocalFileIdentity.UriForPath → 原始两斜杠，'#'、空格、非 ASCII 一律不编码。
+                //    只有 TryPathFromUri 能原样还原（parsed.LocalPath 会把裸 '#' 之后当片段截断）。
+                //  · 快捷启动经 new Uri(path).AbsoluteUri → percent 编码（%20 / %23 / %E5%B7%A5…）。
+                //    只有 parsed.LocalPath 能解码还原（TryPathFromUri 故意不解 %XX，以维持与 UriForPath 的往返契约）。
+                // 取磁盘上确实存在的那个候选（优先原始形态），两类输入都能打开，且不改动任何存储格式。
+                StarMark.Abstractions.LocalFileIdentity.TryPathFromUri(uri, out var rawPath);
+                var decodedPath = SafeLocalPath(parsed);
+                var path = FirstExisting(rawPath, decodedPath);
+                if (path is null)
                 {
-                    if (Directory.Exists(path))
-                    {
-                        var folder = await StorageFolder.GetFolderFromPathAsync(path);
-                        await Launcher.LaunchFolderAsync(folder);
-                    }
-                    else if (File.Exists(path))
-                    {
-                        var file = await StorageFile.GetFileFromPathAsync(path);
-                        await Launcher.LaunchFileAsync(file);
-                    }
-                    else
-                    {
-                        // 路径已不存在：退化为 URI 激活（可能无效果，但至少不抛异常）
-                        await Launcher.LaunchUriAsync(parsed);
-                    }
+                    // 两种还原都不存在（文件已删）：退化为 URI 激活（可能无效果，但不抛异常）
+                    await Launcher.LaunchUriAsync(parsed);
+                }
+                else if (Directory.Exists(path))
+                {
+                    var folder = await StorageFolder.GetFolderFromPathAsync(path);
+                    await Launcher.LaunchFolderAsync(folder);
                 }
                 else
                 {
-                    await Launcher.LaunchUriAsync(parsed);
+                    var file = await StorageFile.GetFileFromPathAsync(path);
+                    await Launcher.LaunchFileAsync(file);
                 }
                 return;
             }
@@ -68,5 +67,18 @@ public static class LauncherEx
         {
             StarMark.Abstractions.StarLog.Error($"打开条目失败: {uri}", ex);
         }
+    }
+
+    private static string SafeLocalPath(Uri parsed)
+    {
+        try { return parsed.LocalPath; } catch { return string.Empty; }
+    }
+
+    /// <summary>返回第一个"磁盘上存在"的候选路径；都不存在返回 null。</summary>
+    private static string? FirstExisting(string? a, string? b)
+    {
+        if (!string.IsNullOrEmpty(a) && (File.Exists(a) || Directory.Exists(a))) return a;
+        if (!string.IsNullOrEmpty(b) && (File.Exists(b) || Directory.Exists(b))) return b;
+        return null;
     }
 }

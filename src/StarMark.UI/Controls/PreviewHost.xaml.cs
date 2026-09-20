@@ -107,14 +107,19 @@ public sealed partial class PreviewHost : UserControl
     private static bool TryGetLocalFile(string? uri, out string path)
     {
         path = string.Empty;
-        // TryPathFromUri（纯字符串剥前缀，保留 '#'/'%'/空格、不解码）而非 new Uri().LocalPath：
-        // 后者在 '#' 处截断，含 '#' 的本地文件会算出不存在的路径而无法预览。
-        if (!StarMark.Abstractions.LocalFileIdentity.TryPathFromUri(uri, out var local)) return false;
-        if (Path.GetFullPath(local) != local) return false;
-        if (!File.Exists(local)) return false;
-        path = local;
-        return true;
+        if (string.IsNullOrWhiteSpace(uri) || !uri.StartsWith("file://", StringComparison.OrdinalIgnoreCase)) return false;
+        // 两类 file:// 生产者互补：TryPathFromUri 保裸 '#'（Everything/LocalFileIdentity 的原始形态，不解 %XX），
+        // new Uri().LocalPath 解 '%XX'（快捷启动经 AbsoluteUri 存的编码形态，但会把裸 '#' 当片段截断）。
+        // 取磁盘上确实存在的规范文件路径；两者都不存在才判失败。GetFullPath 相等以拒绝 '..'/相对遍历。
+        StarMark.Abstractions.LocalFileIdentity.TryPathFromUri(uri, out var raw);
+        string decoded;
+        try { decoded = new Uri(uri).LocalPath; } catch { decoded = string.Empty; }
+        if (IsExistingFile(raw) && Path.GetFullPath(raw) == raw) { path = raw; return true; }
+        if (IsExistingFile(decoded) && Path.GetFullPath(decoded) == decoded) { path = decoded; return true; }
+        return false;
     }
+
+    private static bool IsExistingFile(string? p) => !string.IsNullOrEmpty(p) && File.Exists(p);
 
     private async System.Threading.Tasks.Task ShowImageAsync(string path)
     {
