@@ -472,6 +472,12 @@ public sealed class WidgetStorage
         data.Snapshots = WidgetSnapshotCollection.Normalize(data.Snapshots);
 
         // 每个实例的内容分别规范化（排序/限量），避免多实例数据相互覆盖。
+        // 先剔除实例数组里的显式 null 元素（坏写入 / 手改 JSON / OneDrive 截断可达），与下方 Todos/Notes/
+        // Links 及 Layouts/Snapshots 各兄弟集合一律滤 null 的口径一致。缺此过滤时，紧接 foreach 里的
+        // inst.Todos 取属性即抛 NullReferenceException——它落在 Load 的 try 内、被 catch-all 当作「文件被
+        // 临时占用」，于是 _loadDegraded 被永久置位（每次重载重抛同一形状错误，成功 Load 永不再发生），
+        // 反把整个组件持久化锁死且恒返回空。属确定性、非 IO 的缺陷，不在 AA/R10-1 的「损坏 vs 瞬时占用」二分内。
+        data.Instances.RemoveAll(inst => inst is null);
         foreach (var inst in data.Instances)
         {
             inst.Todos = inst.Todos ?? new List<TodoItem>();

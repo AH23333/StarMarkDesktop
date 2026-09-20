@@ -380,5 +380,39 @@ public sealed class WidgetStorageTests : IDisposable
         store.Save(healed);
         Assert.Contains("999", File.ReadAllText(_path));           // 写入已恢复
     }
+
+    // ── AQ-1：instances 数组含显式 null 元素不得把整份组件持久化反向锁死 ──
+
+    [Fact]
+    public void Normalize_DropsNullInstanceElements()
+    {
+        // 兄弟集合（Todos/Notes/Links、Layouts/Snapshots）都滤 null，唯独实例数组的元素没滤。
+        // 旧实现在 foreach 里对 null 元素取 inst.Todos 抛 NRE。
+        var data = WidgetStorage.Normalize(null);
+        data.Instances.Add(null!);
+        data.Instances.Add(new WidgetInstanceConfig { Kind = WidgetKind.Todo });
+
+        var ex = Record.Exception(() => WidgetStorage.Normalize(data));
+        Assert.Null(ex);                    // 旧实现此处 NRE
+        Assert.Single(data.Instances);      // null 元素被剔除，合法实例保留
+        Assert.NotNull(data.Instances[0]);
+    }
+
+    [Fact]
+    public void NullInstanceElement_LoadDoesNotThrow_AndKeepsPersistenceUsable()
+    {
+        // 端到端：坏写入/手改/OneDrive 截断让 widgets.json 的 instances 含显式 null。
+        // 旧实现 NRE 落在 Load 的 try 内、被 catch-all 当作「临时占用」→ _loadDegraded 永久置位，
+        // 后续每次 Save 被静默跳过（持久化整体锁死），且每次 Load 恒返回空。
+        File.WriteAllText(_path, """{ "Version": 3, "Instances": [ null ] }""");
+        var store = Store();
+
+        var data = store.Load();                                    // 不得抛
+        Assert.Empty(data.Instances);                              // null 被剔除，且未误入降级态
+
+        data.Instances.Add(new WidgetInstanceConfig { Kind = WidgetKind.Clock, X = 999 });
+        store.Save(data);                                           // 若降级位被误置，这里会被跳过
+        Assert.Contains("999", File.ReadAllText(_path));            // 证明持久化仍可用
+    }
 }
 
