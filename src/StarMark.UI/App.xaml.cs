@@ -98,6 +98,11 @@ public partial class App : Application
         // 集成适配层
         // P0-1b：本地文件索引配置从设置读取后注入 EverythingSource（避免 Integrations 反向依赖 UI）。
         var fileSettings = new StarMark.UI.Helpers.SettingsStore();
+        // SettingsStore 必须作为单例登记：WidgetWindow.Reveal 等处通过 App.Services.GetRequiredService<SettingsStore>()
+        // 取用它。此前只 new 了本地实例却未注册，导致每次显示组件都在 Reveal 早期抛
+        // InvalidOperationException（No service for type ... SettingsStore），被 UI 线程未处理异常安全网吞掉后
+        // 组件既不显示也不套主题/材质——表现为"材质不切换、数据不同步、四种材质看不出区别"。
+        services.AddSingleton(fileSettings);
         services.AddSingleton(new StarMark.Integrations.Everything.FileIndexOptions
         {
             Roots = fileSettings.LoadFileIndexRoots().ToList(),
