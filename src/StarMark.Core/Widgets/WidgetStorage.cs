@@ -268,6 +268,12 @@ public sealed class WidgetStorage
     private readonly string _path;
     private readonly object _gate = new();
 
+    /// <summary>
+    /// 上一次 <see cref="Load"/> 是否因**瞬时** IO/权限错误（OneDrive 同步、杀软实时扫描短暂锁定 widgets.json）
+    /// 而未能读到磁盘内容。为 true 时内存态不代表磁盘态，<see cref="Save"/> 拒绝落盘，避免用空数据覆盖真实配置。
+    /// </summary>
+    private bool _loadDegraded;
+
     public WidgetStorage(string? path = null)
     {
         _path = path ?? DefaultPath();
@@ -330,19 +336,36 @@ public sealed class WidgetStorage
     {
         lock (_gate)
         {
+            if (!File.Exists(_path))
+            {
+                // 首启/文件确被删除：空态是可信的，允许后续 Save 落盘。
+                _loadDegraded = false;
+                return Normalize(null);
+            }
             try
             {
-                if (File.Exists(_path))
-                {
-                    var data = JsonSerializer.Deserialize<WidgetStoreData>(File.ReadAllText(_path));
-                    return Normalize(data);
-                }
+                var data = JsonSerializer.Deserialize<WidgetStoreData>(File.ReadAllText(_path));
+                _loadDegraded = false;
+                return Normalize(data);
             }
-            catch
+            catch (JsonException ex)
             {
-                // 损坏文件 → 回退默认（与 DeskBox ResilientJsonStore 同策略）
+                // 内容损坏（读得到字节、只是 JSON 非法）：磁盘上本就无可信数据，回退默认并允许后续 Save 覆盖掉坏文件。
+                // 覆盖前把损坏原文留一份 .bak，给用户最后的挽回机会。
+                _loadDegraded = false;
+                StarLog.Error($"组件配置损坏，已回退默认并尝试备份原文件 ({_path})", ex);
+                try { File.Copy(_path, _path + ".bak", overwrite: true); } catch { }
+                return Normalize(null);
             }
-            return Normalize(null);
+            catch (Exception ex)
+            {
+                // 未能读到内容（OneDrive 同步 / 杀软实时扫描 / 索引器瞬时锁定 → IOException；权限/占用 → UnauthorizedAccessException 等）：
+                // 磁盘数据其实完好，只是这一瞬拿不到。此时若返回空并让随后的 Save 落盘，会用空数据**覆盖真实配置**——最坏的数据丢失。
+                // 置降级位，令 Save 拒绝写入；锁定解除后的下一次成功 Load 会自动清除该位。
+                _loadDegraded = true;
+                StarLog.Warn($"读取组件配置失败（疑似被临时占用），本次不落盘以免覆盖真实数据 ({_path})：{ex.Message}");
+                return Normalize(null);
+            }
         }
     }
 
@@ -350,6 +373,14 @@ public sealed class WidgetStorage
     {
         lock (_gate)
         {
+            // 降级态：内存里是读不到磁盘时回退出的空数据，绝不能拿它覆盖磁盘上其实完好的真实配置。
+            // 跳过本次写入（改动丢失远好于全量清空）；锁定解除后的下一次成功 Load 会自动清除该位。
+            if (_loadDegraded)
+            {
+                StarLog.Warn($"组件配置处于降级态（读取曾被临时占用），跳过本次保存以保护磁盘数据 ({_path})");
+                return;
+            }
+
             // 落盘绝不向外抛：本方法经 WidgetManager.OnUiAsync 在 UI 线程同步内联执行，
             // 一旦从点击/菜单处理里抛出 IOException（widgets.json 位于 %APPDATA%，常被 OneDrive
             // 同步或杀软实时扫描短暂锁定 → File.WriteAllText/File.Move 失败），整个应用会闪退。

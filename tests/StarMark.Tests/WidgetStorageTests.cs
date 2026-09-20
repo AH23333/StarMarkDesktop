@@ -331,30 +331,54 @@ public sealed class WidgetStorageTests : IDisposable
     }
 
     [Fact]
-    public void Save_WhenTargetUnwritable_DoesNotThrow_AndLeavesTempBehindNothing()
+    public void Save_WhenTargetLockedAtMoveTime_DoesNotThrow_AndLeavesNoTemp()
     {
-        // 回归：点击 → OnUiAsync 在 UI 线程同步内联调用 Save；落盘异常（OneDrive/杀软锁定、目标被占用）
-        // 若向外抛会直接逃出点击处理、在 App.UnhandledException 处杀掉整个应用。
-        // 造一个"目标位置是一个已存在的目录"的场景：File.WriteAllText(.tmp) 成功、File.Move 必失败。
-        var dir = Path.Combine(Path.GetTempPath(), $"starmark_savefail_{Guid.NewGuid():N}");
-        Directory.CreateDirectory(dir);
-        try
-        {
-            var target = Path.Combine(dir, "widgets.json");
-            Directory.CreateDirectory(target);   // 目标占成目录 → Move 抛异常
+        // 非降级态下（本次 Store 的 Load 未触发降级），Save 的写入/搬移若因目标被独占而失败
+        // （OneDrive 同步 / 杀软实时扫描短暂锁定 widgets.json），必须被吞掉不外抛——
+        // 它经 WidgetManager.OnUiAsync 在 UI 线程同步内联执行，抛出会直接闪退整个应用。
+        // 用 FileShare.None 独占句柄锁住 _path：WriteAllText(.tmp) 成功、File.Move→_path 必抛 IOException。
+        var store = Store();
+        var data = store.Load();                                   // 文件此刻还不存在 → 空态、degraded=false
+        data.Instances.Add(new WidgetInstanceConfig { Kind = WidgetKind.Clock });
+        using var hold = new FileStream(_path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
 
-            var store = new WidgetStorage(target);
-            var data = store.Load();
-            data.Instances.Add(new WidgetInstanceConfig { Kind = WidgetKind.Clock });
+        var ex = Record.Exception(() => store.Save(data));         // 关键：Save 不得抛出
+        Assert.Null(ex);
+        Assert.False(File.Exists(_path + ".tmp"));                 // 失败路径应清理临时文件，不留残渣
+    }
 
-            var ex = Record.Exception(() => store.Save(data));   // 关键：Save 不得抛出
-            Assert.Null(ex);
-            // 失败路径应清理临时文件，不留 .tmp 残渣
-            Assert.False(Directory.Exists(dir) && File.Exists(target + ".tmp"));
-        }
-        finally
+    [Fact]
+    public void TransientLockAtLoad_BlocksSubsequentSaveFromWipingDiskData()
+    {
+        // 真实数据丢失场景（R10#1）：widgets.json 已存在且合法，但某一刻被 OneDrive/杀软独占锁定。
+        // Load 因 IOException 读不到 → 旧实现吞异常返回空、随后的 Save 会用**空数据覆盖真实配置**，全量组件被抹掉。
+        // 修复：读到失败进入降级态 → Save 拒绝落盘（改动丢失远好于全量清空）；某次成功 Load 会自动复位、恢复写入。
+        var seeded = Store();
+        var seed = seeded.Load();
+        seed.Instances.Add(new WidgetInstanceConfig { Kind = WidgetKind.Clock, X = 777 });
+        seeded.Save(seed);
+        var originalText = File.ReadAllText(_path);
+        Assert.Contains("777", originalText);
+
+        // 模拟"读到空 → 就地改动 → 保存"的同一实例链路（如 AppendSnapshot：Load()→mutate→Save(data)）。
+        var store = Store();
+        using (var hold = new FileStream(_path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
         {
-            try { Directory.Delete(dir, true); } catch { }
-        }
+            var degraded = store.Load();                            // 读到被占用 → 降级、返回空
+            Assert.Empty(degraded.Instances);
+        }                                                           // 释放锁；store 仍停留在降级态（未再成功 Load）
+
+        var wipingData = WidgetStorage.Normalize(null);            // 相当于那次降级读到的空数据
+        var ex = Record.Exception(() => store.Save(wipingData));
+        Assert.Null(ex);
+        Assert.Equal(originalText, File.ReadAllText(_path));       // 磁盘原样保留，未被空数据抹掉
+
+        // 成功 Load 复位后，同一实例的 Save 应恢复正常落盘（证明拒绝只是临时保护、不是永久锁死）。
+        var healed = store.Load();
+        Assert.Single(healed.Instances);
+        healed.Instances[0].X = 999;
+        store.Save(healed);
+        Assert.Contains("999", File.ReadAllText(_path));           // 写入已恢复
     }
 }
+
