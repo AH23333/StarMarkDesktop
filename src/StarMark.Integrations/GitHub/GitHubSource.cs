@@ -72,8 +72,8 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
     public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
 
-    /// <summary>GitHub REST API repo 模型 → StarMark Item。</summary>
-    private static Item MapToItem(GitHubStarApiModel repo, long now)
+    /// <summary>GitHub REST API repo 模型 → StarMark Item。<c>internal</c> 仅为可机检单测（StarMark.Tests 已 InternalsVisibleTo）。</summary>
+    internal static Item MapToItem(GitHubStarApiModel repo, long now)
     {
         var starredAt = ParseUnixTime(repo.PushedAt) ?? now;
         var updatedAt = ParseUnixTime(repo.UpdatedAt) ?? ParseUnixTime(repo.PushedAt) ?? now;

@@ -149,4 +149,84 @@ public sealed class GitHubClientTests
 
         Assert.Equal(prior, sent); // 首页带上了 If-None-Match
     }
+
+    // ---- 批次 AK：GetAllStarredAsync 分页循环护栏（此前仅测单页，翻页停止条件无覆盖）----
+
+    private static string RepoArray(int count, int idOffset)
+    {
+        var sb = new StringBuilder("[");
+        for (int i = 0; i < count; i++)
+        {
+            if (i > 0) sb.Append(',');
+            sb.Append("{\"id\":").Append(idOffset + i).Append(",\"full_name\":\"o/r").Append(idOffset + i).Append("\"}");
+        }
+        return sb.Append(']').ToString();
+    }
+
+    private static HttpResponseMessage OkJson(string json)
+        => new(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+
+    private static int PageOf(HttpRequestMessage req)
+    {
+        // URL 形如 .../user/starred?per_page=100&page=N —— 锚定 "&page=" 以免误命中 "per_page="。
+        var query = req.RequestUri!.Query;
+        const string key = "&page=";
+        var idx = query.IndexOf(key, StringComparison.OrdinalIgnoreCase);
+        return idx >= 0 && int.TryParse(query.AsSpan(idx + key.Length), out var p) ? p : 1;
+    }
+
+    [Fact]
+    public async Task GetAllStarredAsync_PaginatesWhilePagesAreFull_AndStopsOnPartialPage()
+    {
+        // PageSize=100：页1/页2 各满 100 → 继续翻页；页3 只有 30（<PageSize）→ 停止。
+        var requested = new List<int>();
+        var handler = new ScriptedHandler(req =>
+        {
+            var page = PageOf(req);
+            requested.Add(page);
+            var n = page <= 2 ? 100 : 30;
+            return OkJson(RepoArray(n, (page - 1) * 100));
+        });
+        using var client = new GitHubClient(ConfiguredOptions(), new HttpClient(handler));
+
+        var all = await client.GetAllStarredAsync(CancellationToken.None);
+
+        Assert.Equal(230, all.Count);
+        Assert.Equal(new[] { 1, 2, 3 }, requested); // 恰请求三页，页3 后未再请求页4
+        Assert.Equal(0, all[0].Id);
+        Assert.Equal(229, all[^1].Id);
+    }
+
+    [Fact]
+    public async Task GetAllStarredAsync_StopsImmediatelyOnEmptyFirstPage()
+    {
+        // 空列表（0 stars 或首页即空）→ 一次请求即停，不请求页2。
+        var requested = new List<int>();
+        var handler = new ScriptedHandler(req => { requested.Add(PageOf(req)); return OkJson("[]"); });
+        using var client = new GitHubClient(ConfiguredOptions(), new HttpClient(handler));
+
+        var all = await client.GetAllStarredAsync(CancellationToken.None);
+
+        Assert.Empty(all);
+        Assert.Equal(new[] { 1 }, requested);
+    }
+
+    [Fact]
+    public async Task GetAllStarredAsync_ExactlyOneFullPageThenEmptyStops()
+    {
+        // 边界：用户 star 数恰为 PageSize 整数倍。页1 满 100 → 继续；页2 空 → break（非 partial 判定，走空判定）。
+        var requested = new List<int>();
+        var handler = new ScriptedHandler(req =>
+        {
+            var page = PageOf(req);
+            requested.Add(page);
+            return OkJson(page == 1 ? RepoArray(100, 0) : "[]");
+        });
+        using var client = new GitHubClient(ConfiguredOptions(), new HttpClient(handler));
+
+        var all = await client.GetAllStarredAsync(CancellationToken.None);
+
+        Assert.Equal(100, all.Count);
+        Assert.Equal(new[] { 1, 2 }, requested);
+    }
 }
