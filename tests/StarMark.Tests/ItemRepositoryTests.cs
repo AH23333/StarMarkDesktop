@@ -50,6 +50,30 @@ public sealed class ItemRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task GetAll_UnknownTypeColumn_FallsBackToBookmarkInsteadOfThrowing()
+    {
+        // AE-1 回归：items.type 无 CHECK 约束，降级/手工/坏备份可留未知值。
+        // Enum.Parse 会让 MapItem(所有读路径的水合入口)对整页抛 ArgumentException；
+        // TryParse 兜底后应回落 Bookmark 且整页仍可读。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.File, Source = "test", SourceId = "x1", Title = "坏类型行" },
+        }, CancellationToken.None);
+
+        using (var conn = _factory.Open())
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "UPDATE items SET type = 'nonsense_type' WHERE source = 'test' AND source_id = 'x1';";
+            cmd.ExecuteNonQuery();
+        }
+
+        var all = await repo.GetAllAsync(new BrowseFilter { IncludeHidden = true, Limit = 1000 }, CancellationToken.None);
+        var row = Assert.Single(all);
+        Assert.Equal(ItemType.Bookmark, row.Type);
+    }
+
+    [Fact]
     public async Task UpsertIdempotent_UpdatesExisting()
     {
         var repo = new ItemRepository(_factory);
