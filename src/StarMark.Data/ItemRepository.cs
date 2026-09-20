@@ -1018,7 +1018,10 @@ public sealed class ItemRepository : IItemRepository
         var item = new Item
         {
             Id = reader.GetInt64(0),
-            Type = Enum.Parse<ItemType>(reader.GetString(1), ignoreCase: true),
+            // 与 BackupRepository.MapItem 同口径用 TryParse 兜底：items.type 无 CHECK 约束，
+            // 降级/备份恢复/手工修正可留 Enum.Parse 抛 ArgumentException 的未知值；而 MapItem 是所有读路径
+            // （Search/GetAll/GetPinned/GetHidden/…）的水合入口，一行坏值即整页查询抛异常（非只坏那一行）。
+            Type = Enum.TryParse<ItemType>(reader.GetString(1), ignoreCase: true, out var itemType) ? itemType : ItemType.Bookmark,
             Source = reader.GetString(2),
             SourceId = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
             Title = reader.GetString(4),
