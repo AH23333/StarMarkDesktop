@@ -167,6 +167,49 @@ public sealed class ActivityRepositoryTests : IDisposable
         Assert.Single((await search.SearchAsync("zzmergednote", new SearchFilter { MaxResults = 10 }, CancellationToken.None)).Items);
     }
 
+    [Fact]
+    public void MigrateV4_FoldsHiddenAndPinnedOfMergedDuplicateOntoKeeper()
+    {
+        // 回归 AR-2：合并只搬标签+笔记、dup 一律 DELETE。若用户当初把"较晚那条 URL 变体"
+        // 隐藏/置顶（keeper 保持可见未置顶），旧实现会连同 dup 行一起把这份用户状态抹掉，
+        // 升级后条目重新现身且丢置顶。修后须整组 OR 归并回 keeper。
+        var ids = InsertRawBookmarks(new[]
+        {
+            ("https://github.com/h/x", "keeper笔记"),   // ids[0] created_at 最早 → keeper（hidden=0,pinned=0）
+            ("https://github.com/h/x/", "dup笔记"),    // ids[1] 较晚 → dup，被用户隐藏+置顶
+        });
+        using (var c = _factory.Open())
+        using (var upd = c.CreateCommand())
+        {
+            upd.CommandText = "UPDATE items SET hidden=1, pinned=1 WHERE id=@id;";
+            upd.Parameters.AddWithValue("@id", ids[1]);
+            upd.ExecuteNonQuery();
+        }
+
+        using (var c = _factory.Open())
+        using (var down = c.CreateCommand())
+        {
+            down.CommandText = "UPDATE sync_state SET value='3' WHERE key='schema_version';";
+            down.ExecuteNonQuery();
+        }
+        new MigrationRunner(_factory).EnsureSchema();   // 触发 V4 合并
+
+        using var conn = _factory.Open();
+        using (var cnt = conn.CreateCommand())
+        {
+            cnt.CommandText = "SELECT COUNT(*) FROM items WHERE source='test';";
+            Assert.Equal(1L, (long)cnt.ExecuteScalar()!);   // 两条变体并为一条
+        }
+        using (var q = conn.CreateCommand())
+        {
+            q.CommandText = "SELECT hidden, pinned FROM items WHERE source_id='https://github.com/h/x';";
+            using var r = q.ExecuteReader();
+            Assert.True(r.Read());
+            Assert.Equal(1L, r.GetInt64(0));   // dup 的隐藏态并入 keeper
+            Assert.Equal(1L, r.GetInt64(1));   // dup 的置顶态并入 keeper
+        }
+    }
+
     private long[] InsertRawBookmarks((string Url, string Notes)[] rows)
     {
         var ids = new long[rows.Length];

@@ -146,10 +146,10 @@ public sealed class MigrationRunner
     /// </summary>
     private static void MigrateV4(Microsoft.Data.Sqlite.SqliteConnection conn)
     {
-        var rows = new List<(long Id, string Source, string SourceId, long CreatedAt, string? Notes)>();
+        var rows = new List<(long Id, string Source, string SourceId, long CreatedAt, string? Notes, bool Hidden, bool Pinned)>();
         using (var sel = conn.CreateCommand())
         {
-            sel.CommandText = "SELECT id, source, source_id, created_at, notes FROM items WHERE source_id IS NOT NULL;";
+            sel.CommandText = "SELECT id, source, source_id, created_at, notes, hidden, pinned FROM items WHERE source_id IS NOT NULL;";
             using var reader = sel.ExecuteReader();
             while (reader.Read())
             {
@@ -158,7 +158,9 @@ public sealed class MigrationRunner
                     reader.GetString(1),
                     reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
                     reader.GetInt64(3),
-                    reader.IsDBNull(4) ? null : reader.GetString(4)));
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    reader.GetInt64(5) != 0,
+                    reader.GetInt64(6) != 0));
             }
         }
 
@@ -176,6 +178,12 @@ public sealed class MigrationRunner
             // keeper = 最早 created_at（并列取最小 id），其余为待删除的重复项
             var keeper = g.OrderBy(r => r.CreatedAt).ThenBy(r => r.Id).First();
             var normKey = StarMark.Abstractions.UriNormalizer.Normalize(keeper.SourceId);
+
+            // hidden/pinned 是逐条用户状态，合并只搬标签+笔记、其余 dup 一律 DELETE，
+            // 会把"用户当初隐藏的正是那条 URL 变体"的意图静默抹掉（升级后条目重新现身 / 丢置顶）。
+            // 删除前对整个分组 OR 归并到 keeper：OR 单调故幂等，重复执行结果一致。
+            var keepHidden = g.Any(r => r.Hidden);
+            var keepPinned = g.Any(r => r.Pinned);
 
             foreach (var dup in g.Where(r => r.Id != keeper.Id))
             {
@@ -221,11 +229,14 @@ public sealed class MigrationRunner
                 }
             }
 
-            // keeper 的 source_id 归一到标准键，使后续同步直接合并而非再分裂
+            // keeper 的 source_id 归一到标准键，使后续同步直接合并而非再分裂；
+            // 同时把整组的 hidden/pinned OR 结果落回 keeper，防止删 dup 时丢掉这份用户状态。
             using (var upd = conn.CreateCommand())
             {
-                upd.CommandText = "UPDATE items SET source_id = @k WHERE id = @id;";
+                upd.CommandText = "UPDATE items SET source_id = @k, hidden = @h, pinned = @p WHERE id = @id;";
                 upd.Parameters.AddWithValue("@k", normKey);
+                upd.Parameters.AddWithValue("@h", keepHidden ? 1 : 0);
+                upd.Parameters.AddWithValue("@p", keepPinned ? 1 : 0);
                 upd.Parameters.AddWithValue("@id", keeper.Id);
                 upd.ExecuteNonQuery();
             }
