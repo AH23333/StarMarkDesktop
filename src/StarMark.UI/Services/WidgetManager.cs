@@ -810,6 +810,27 @@ public sealed class WidgetManager
         return await AddLinkAsync(id, title, uri);
     }
 
+    /// <summary>
+    /// 把拖入快捷启动的外部文件/文件夹<b>按路径登记进主库</b>（触发器2「拖入即入库」）。
+    /// 以与 Everything 查询/全量索引<b>完全一致</b>的 <c>(filesystem, 路径哈希)</c> 业务键幂等 upsert
+    /// （<see cref="LocalFileIdentity"/>），故同一路径无论来自拖入、Everything 还是后台同步都合并为一条，不产生重复。
+    /// <b>只写索引记录，绝不移动 / 改名 / 删除磁盘上的实际文件。</b>与快捷入口链接并存：链接负责在本组件展示，
+    /// 登记负责使其成为可检索、可持久化置顶/标签/笔记的真实条目。活动流由调用侧的 <see cref="AddLinkAsync"/> 记一次「新增」，
+    /// 此处不重复记录。缺仓储或登记失败仅记日志并静默降级（不影响快捷入口本身）。
+    /// </summary>
+    public async Task RecordPathToLibraryAsync(string? title, string fullPath)
+    {
+        if (_repo is null || string.IsNullOrWhiteSpace(fullPath)) return;
+        try
+        {
+            await _repo.RecordItemAsync(LocalFileIdentity.FromPath(fullPath, title), CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error($"拖入登记本地路径失败 (path={fullPath})", ex);
+        }
+    }
+
     private async Task<string?> GetOrCreateQuickLaunchInstanceIdAsync()
     {
         string? id = null;

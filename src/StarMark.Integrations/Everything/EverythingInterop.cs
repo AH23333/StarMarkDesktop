@@ -218,10 +218,10 @@ internal static class EverythingInterop
             {
                 Type = ItemType.File,
                 Source = ItemSources.FileSystem,
-                SourceId = ComputeStableHash(fullPath),
+                SourceId = LocalFileIdentity.SourceIdForPath(fullPath),
                 Title = name,
                 Subtitle = dir,
-                Uri = "file://" + fullPath.Replace('\\', '/'),
+                Uri = LocalFileIdentity.UriForPath(fullPath),
                 SearchText = name + ' ' + dir,
                 FileSize = size,
                 CreatedAt = dateModified ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
@@ -394,8 +394,8 @@ internal static class EverythingInterop
             }
         }
 
-        // 文件路径哈希作为 source_id
-        var sourceId = ComputeStableHash(fullPath);
+        // 文件路径哈希作为 source_id（与 Everything 查询侧、拖拽登记侧同一基元，保证同路径幂等合并）
+        var sourceId = LocalFileIdentity.SourceIdForPath(fullPath);
 
         return new Item
         {
@@ -404,7 +404,7 @@ internal static class EverythingInterop
             SourceId = sourceId,
             Title = name,
             Subtitle = path,
-            Uri = "file://" + fullPath.Replace('\\', '/'),
+            Uri = LocalFileIdentity.UriForPath(fullPath),
             SearchText = name + ' ' + path,
             FileSize = size,
             CreatedAt = dateModified ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
@@ -436,13 +436,5 @@ internal static class EverythingInterop
         }
         result.Add(sb.ToString());
         return result;
-    }
-
-    /// <summary>稳定的路径哈希，作为 source_id 的基础（保证同一路径幂等）。</summary>
-    private static string ComputeStableHash(string input)
-    {
-        var bytes = Encoding.UTF8.GetBytes(input.ToLowerInvariant());
-        var hash = System.Security.Cryptography.SHA256.HashData(bytes);
-        return Convert.ToHexString(hash, 0, 8);
     }
 }

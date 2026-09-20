@@ -1961,6 +1961,9 @@ public sealed partial class WidgetWindow : Window
                     {
                         if (!string.IsNullOrWhiteSpace(item.Path))
                         {
+                            // 触发器2「拖入即入库」：把拖入的本地文件/文件夹按路径登记进主库
+                            // （只写索引记录，绝不移动磁盘文件），令其可检索、可持久化置顶/标签/笔记。
+                            await _manager.RecordPathToLibraryAsync(item.Name, item.Path);
                             var uri = new Uri(item.Path).AbsoluteUri;
                             if (await _manager.AddLinkAsync(_instanceId, item.Name, uri)) added++;
                         }
