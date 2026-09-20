@@ -471,6 +471,23 @@ public sealed class ItemRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task GetAllTags_OmittedAfterLastTagReferenceRemoved()
+    {
+        // 批次 AJ-1：全库无 DELETE FROM tags，RemoveTagAsync 只删 item_tags 关联 → tags 行残留成孤儿。
+        // 旧 GetAllTagsAsync 用 LEFT JOIN 驱动，会让零引用孤儿永久以「(标签, 0)」幽灵挂在列表。
+        // 与上面的隐藏用例对照：这里断言「无任何关联」的标签必须整体消失（而隐藏标签仍保留 count=0）。
+        var repo = new ItemRepository(_factory);
+        var item = new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "g1", Title = "幽灵" };
+        await repo.UpsertAsync(new[] { item }, CancellationToken.None);
+        await repo.AddTagAsync(item.Id, "临时标签", CancellationToken.None);
+
+        Assert.Contains("临时标签", (await repo.GetAllTagsAsync(CancellationToken.None)).Select(t => t.Name));
+
+        await repo.RemoveTagAsync(item.Id, "临时标签", CancellationToken.None);
+        Assert.DoesNotContain("临时标签", (await repo.GetAllTagsAsync(CancellationToken.None)).Select(t => t.Name));
+    }
+
+    [Fact]
     public async Task UpsertLocalItem_Updates_PersistsHiddenAndNotes()
     {
         var repo = new ItemRepository(_factory);

@@ -193,10 +193,15 @@ public sealed class ItemRepository : IItemRepository
     {
         using var conn = _factory.Open();
         using var cmd = conn.CreateCommand();
+        // 用 INNER JOIN 驱动标签集合：只列出仍有 item_tags 关联的标签。全库没有 DELETE FROM tags，
+        // RemoveTagAsync/删条目/备份 Replace 都只清 item_tags，tags 行会残留成孤儿；用 LEFT JOIN 会让
+        // 这些零引用孤儿以「(标签, 0)」幽灵形式永久挂在列表里（含备份还原后未重新挂接的历史标签）。
+        // 注意：COUNT(i.id) 仍只计非隐藏条目（W-A 口径），故「条目全被隐藏」的标签因 item_tags 仍在而保留，
+        // 本改动只剔除「无任何关联」的孤儿标签，不改动隐藏语义。
         cmd.CommandText = @"
             SELECT t.name, COUNT(i.id) AS cnt
             FROM tags t
-            LEFT JOIN item_tags it ON it.tag_id = t.id
+            JOIN item_tags it ON it.tag_id = t.id
             LEFT JOIN items i ON i.id = it.item_id AND i.hidden = 0
             GROUP BY t.id
             ORDER BY cnt DESC, t.name ASC;";
