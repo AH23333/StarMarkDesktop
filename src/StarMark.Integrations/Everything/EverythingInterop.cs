@@ -73,6 +73,12 @@ internal static class EverythingInterop
     [DllImport("Everything64.dll", SetLastError = false)]
     private static extern uint Everything_GetLastError();
 
+    // 官方 SDK 契约：调用其它任何 SDK 函数前必须先 Everything_Startup() 初始化 IPC 接收端；
+    // 否则 Everything_QueryW 直接失败并返回 EVERYTHING_ERROR_IPC(2)（本次日志实锤即此）。
+    [DllImport("Everything64.dll", SetLastError = false)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool Everything_Startup();
+
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr LoadLibraryW(string lpLibFileName);
 
@@ -115,6 +121,15 @@ internal static class EverythingInterop
                 if (!System.Runtime.InteropServices.NativeLibrary.TryLoad(path, out _))
                 {
                     _sdkLoadError = new InvalidOperationException($"Everything64.dll 加载失败：{path}");
+                    StarLog.Error(_sdkLoadError.Message);
+                    return false;
+                }
+
+                // 官方 SDK 要求：任何查询前必须先 Startup 初始化 IPC 接收端，否则 QueryW 恒返回 IPC(2)。
+                if (!Everything_Startup())
+                {
+                    var err = Everything_GetLastError();
+                    _sdkLoadError = new InvalidOperationException($"Everything_Startup 失败（GetLastError={err}：{DescribeSdkError(err)}）");
                     StarLog.Error(_sdkLoadError.Message);
                     return false;
                 }
@@ -165,8 +180,10 @@ internal static class EverythingInterop
 
         if (!Everything_QueryW(true))
         {
-            // 常见原因：Everything 主程序未运行 / IPC 不可达（EverythingSource.IsAvailable 已前置拦截多数情况）
-            StarLog.Warn($"Everything SDK 查询失败（GetLastError={Everything_GetLastError()}）：{query}");
+            // 常见原因：未调用 Startup（本类 EnsureSdkLoaded 已补）/ Everything 主程序未运行 /
+            // Everything 与 StarMark 管理员权限等级不一致致 UIPI 拦截 WM_COPYDATA / SDK 与主程序版本不匹配。
+            var err = Everything_GetLastError();
+            StarLog.Warn($"Everything SDK 查询失败（GetLastError={err}：{DescribeSdkError(err)}）：{query}");
             return Array.Empty<Item>();
         }
 
@@ -213,6 +230,20 @@ internal static class EverythingInterop
         }
         return items;
     }
+
+    /// <summary>把 Everything SDK 的 EVERYTHING_ERROR_* 数字码翻成人话，供日志定位用。</summary>
+    private static string DescribeSdkError(uint code) => code switch
+    {
+        0 => "OK",
+        1 => "内存不足(MEMORY)",
+        2 => "IPC 不可达——多为未调用 Startup（本类已补），或 Everything 与 StarMark 管理员权限不一致被 UIPI 拦截，或 SDK 与主程序版本不匹配",
+        3 => "注册窗口类失败(REGISTERCLASSEX)",
+        4 => "创建窗口失败(CREATEWINDOW)",
+        5 => "创建线程失败(CREATETHREAD)",
+        6 => "无效搜索请求(INVALID)",
+        7 => "无效调用顺序(INVALIDCALL)",
+        _ => "未知错误",
+    };
 
     private static string? _cachedExecutable;
 
