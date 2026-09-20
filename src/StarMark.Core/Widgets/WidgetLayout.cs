@@ -7,10 +7,26 @@ using System.Text.Json.Serialization;
 namespace StarMark.Core.Widgets;
 
 /// <summary>
+/// 「几何 + 外观」条目契约。布局模板条目与快照条目共享同一套位置/尺寸/置顶/外观字段，
+/// 使 <c>WidgetManager</c> 的套用逻辑（按「类型+序号」匹配实例并落位）可为二者复用一份实现。
+/// </summary>
+public interface IWidgetGeometryEntry
+{
+    WidgetKind Kind { get; }
+    int Index { get; }
+    double X { get; }
+    double Y { get; }
+    double Width { get; }
+    double Height { get; }
+    bool Topmost { get; }
+    WidgetAppearanceOverride? Appearance { get; }
+}
+
+/// <summary>
 /// 布局中的单个组件条目：按「类型 + 该类型内的序号」匹配实例，而不是写死实例 ID。
 /// 这样换一批实例（例如删除重建后）仍能套用同一套布局。
 /// </summary>
-public sealed class WidgetLayoutEntry
+public sealed class WidgetLayoutEntry : IWidgetGeometryEntry
 {
     public WidgetKind Kind { get; set; }
 

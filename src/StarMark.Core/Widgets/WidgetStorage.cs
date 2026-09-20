@@ -208,6 +208,13 @@ public sealed class WidgetStoreData
     public List<WidgetLayout>? Layouts { get; set; }
 
     /// <summary>
+    /// 用户保存的「布局 + 组件数据」快照点（#53）。与 <see cref="Layouts"/> 的**纯模板**相对：
+    /// 快照额外带快捷入口/待办/随记/条目格查询等组件数据，且**不可变**（一次一点、永不就地覆盖）。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<WidgetSnapshot>? Snapshots { get; set; }
+
+    /// <summary>
     /// 默认布局（上次「选中/应用」的布局方案 Id）。
     /// 用户每次应用某套布局即把它记为此字段；启动恢复时若此字段存在则自动套用该布局，
     /// 使「最后一次选择的布局」成为组件默认状态。为 null 时回退为逐个显示全部实例。
@@ -427,6 +434,7 @@ public sealed class WidgetStorage
         data.Version = 3;
         data.Instances ??= new List<WidgetInstanceConfig>();
         data.Layouts = WidgetLayoutCollection.Normalize(data.Layouts);
+        data.Snapshots = WidgetSnapshotCollection.Normalize(data.Snapshots);
 
         // 每个实例的内容分别规范化（排序/限量），避免多实例数据相互覆盖。
         foreach (var inst in data.Instances)
@@ -518,6 +526,59 @@ public sealed class WidgetStorage
             var target = layouts.FirstOrDefault(l => l.Id == id);
             if (target is null) return false;
             layouts.Remove(target);
+            this.Save(data);
+            return true;
+        }
+    }
+
+    // ───────────────────────── 布局与数据快照（#53） ─────────────────────────
+    // 快照与布局的本质区别：布局是可复用的**纯模板**且按 Id 就地覆盖；快照是**不可变历史点**、
+    // 带组件数据、一次一点永不覆盖（唯一例外是用户主动删除）。故此处刻意不提供 SaveSnapshot。
+
+    /// <summary>全部快照点（新的在前；名称唯一，由 <see cref="WidgetSnapshotCollection.Normalize"/> 保证）。</summary>
+    public IReadOnlyList<WidgetSnapshot> GetSnapshots()
+    {
+        lock (_gate) return Load().Snapshots ?? new List<WidgetSnapshot>();
+    }
+
+    /// <summary>按 Id 查找快照点。</summary>
+    public WidgetSnapshot? FindSnapshot(string id)
+    {
+        lock (_gate) return Load().Snapshots?.FirstOrDefault(s => s.Id == id);
+    }
+
+    /// <summary>
+    /// 追加一个快照点（**不可变**：永不按 Id 覆盖既有点）。
+    /// 名称自动去重、Id 冲突时重新生成后追加；返回落盘后的快照（含最终名称）。
+    /// </summary>
+    public WidgetSnapshot AppendSnapshot(WidgetSnapshot snapshot)
+    {
+        lock (_gate)
+        {
+            var data = Load();
+            var snaps = data.Snapshots ??= new List<WidgetSnapshot>();
+
+            // 不可变：Id 若与既有点相同（理论上不该发生，除非手工构造），换新 Id 而不是覆盖。
+            if (snaps.Any(s => s.Id == snapshot.Id))
+                snapshot.Id = Guid.NewGuid().ToString("N");
+
+            snapshot.Name = WidgetSnapshotCollection.MakeUniqueName(snaps, snapshot.Name);
+            snaps.Add(snapshot);
+            this.Save(data);   // Save→Normalize 会补全排序/去重，返回的 snapshot 即最终落盘对象
+            return snapshot;
+        }
+    }
+
+    /// <summary>删除快照点；返回是否删除成功。</summary>
+    public bool DeleteSnapshot(string id)
+    {
+        lock (_gate)
+        {
+            var data = Load();
+            if (data.Snapshots is not { Count: > 0 } snaps) return false;
+            var target = snaps.FirstOrDefault(s => s.Id == id);
+            if (target is null) return false;
+            snaps.Remove(target);
             this.Save(data);
             return true;
         }
