@@ -367,7 +367,7 @@ public static class WidgetAppearance
             or WidgetBackdropKind.Mica or WidgetBackdropKind.MicaAlt)
         {
             return new SolidColorBrush(WidgetMaterialVisualCalculator.BuildNativeSurfaceColor(
-                dark, AccentColor(), opacity, MaterialIntensity()));
+                dark, AccentColor(), opacity, MaterialIntensity(), kind));
         }
 
         if (kind == WidgetBackdropKind.Solid)

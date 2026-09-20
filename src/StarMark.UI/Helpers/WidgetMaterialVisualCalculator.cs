@@ -1,5 +1,6 @@
 #nullable enable
 using Windows.UI;
+using StarMark.Abstractions;
 
 namespace StarMark.UI.Helpers;
 
@@ -117,29 +118,47 @@ internal static class WidgetMaterialVisualCalculator
     /// 为什么必须有这一层：DeskBox 让「背景不透明度」只去乘控制器的 Tint/Luminosity，
     /// 前提是窗口已经整窗玻璃化（DwmExtendFrameIntoClientArea(-1)），霜化层就是用户看到的背景。
     /// 一旦玻璃化没生效，那层霜化根本透不出来，两个滑块就都成了摆设。
-    /// 这里显式给一层表面色兜底：<b>背景不透明度 → Alpha</b>（0.1→0.94，越低越能看见壁纸），
+    /// 这里显式给一层表面色兜底：<b>背景不透明度 → Alpha</b>（越低越能看见壁纸），
     /// <b>材质浓度 → 染色浓度</b>（越浓越带强调色），于是无论原生霜化是否透出，两个滑块都必然可见。
+    /// </para>
+    /// <para>
+    /// <b>按材质 kind 分化</b>（批次 G2）：控制器挂载失败时（Win10 / 虚拟机 / RDP，
+    /// 以及主窗口内容带这层 wash）这一层就是用户实际看到的背景。此前四种原生材质共用同一剖面 →
+    /// 兜底观感又抹成一种，正是「不同材质呈现同一效果」。故按各自真实材质性格给不同的
+    /// Alpha 区间与强调色偏向：亚克力薄最通透、亚克力厚略实、云母偏实且低染色、
+    /// 云母 Alt 最取壁纸调（染色最高）。
     /// </para>
     /// </summary>
     public static Color BuildNativeSurfaceColor(
         bool isDark,
         Color accentColor,
         double surfaceOpacity,
-        double materialIntensity)
+        double materialIntensity,
+        WidgetBackdropKind kind)
     {
         double intensity = NormalizeMaterialIntensity(materialIntensity);
         double opacity = NormalizeOpacity(surfaceOpacity);
+
+        // 各材质的 (Alpha 下限, Alpha 上限, 强调色偏向)。区间宽度决定「背景不透明度」滑杆的行程，
+        // 下限高低决定「最不透明时有多实」，偏向决定壁纸/强调色调的强弱。
+        var (alphaFloor, alphaCeiling, accentBias) = kind switch
+        {
+            WidgetBackdropKind.AcrylicBase => (0.12, 0.92, +0.06),  // 厚亚克力：比薄略实、略染色
+            WidgetBackdropKind.Mica        => (0.30, 0.98, -0.02),  // 云母：偏实、克制染色（高级哑光）
+            WidgetBackdropKind.MicaAlt     => (0.38, 0.99, +0.08),  // 云母 Alt：最取壁纸/强调色调
+            _                              => (0.06, 0.80,  0.00),  // 薄亚克力：最通透、苹果味
+        };
 
         var tinted = BuildAccentSurfaceColor(
             isDark,
             accentColor,
             BuildContentTintColor(isDark, accentColor),
-            accentMix: Lerp(0.06, 0.40, intensity),
+            accentMix: Math.Clamp(Lerp(0.06, 0.40, intensity) + accentBias, 0.0, 1.0),
             overlayMix: Lerp(0.02, 0.12, intensity));
 
-        // 表面 Alpha：严格由「背景不透明度」驱动。低到 0.3 时几乎全透（霜化 + 壁纸直接可见），
-        // 拉到 1.0 时接近实色面板 —— 与滑杆文案「越低越透，能看见桌面壁纸」字面一致。
-        return ApplySurfaceOpacity(tinted, Lerp(0.10, 0.94, opacity));
+        // 表面 Alpha：严格由「背景不透明度」驱动，在材质专属区间内插值 ——
+        // 越低越透（能看见壁纸），越高越接近该材质应有的实色面板。
+        return ApplySurfaceOpacity(tinted, Lerp(alphaFloor, alphaCeiling, opacity));
     }
 
     public static Color BuildMicaFallbackColor(bool isDark, bool useAlt)
