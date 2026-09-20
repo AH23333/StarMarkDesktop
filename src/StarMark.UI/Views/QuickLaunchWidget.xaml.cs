@@ -3,13 +3,11 @@ using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.System;
 using StarMark.Abstractions;
-using StarMark.Core.Search;
 using StarMark.Core.Widgets;
 using StarMark.UI.Controls;
 using StarMark.UI.Helpers;
@@ -20,9 +18,9 @@ namespace StarMark.UI.Views;
 
 /// <summary>
 /// 快捷启动格（A-4）：复用 <see cref="ItemCard"/>（右键菜单/标签/预览/发送到桌面，视觉与主窗一致）
-/// 渲染置顶条目与自定义快捷入口，并新增「组件内直搜」——直接调 <see cref="SearchService"/> 展示前 12 条，
-/// 点击结果才开主窗（<see cref="WidgetManager.RequestGlobalSearch"/>）。置顶条目与搜索结果走真实 Item，
-/// 暴露全部操作；自定义快捷入口是合成 Item（<see cref="ItemCardViewModel.IsLauncherMode"/>）只暴露打开/复制/预览。
+/// 渲染置顶条目与自定义快捷入口。本组件只负责展示，不再内嵌搜索栏（搜索统一走快捷搜索组件 / 主窗搜索页）。
+/// 置顶条目走真实 Item，暴露全部操作；自定义快捷入口是合成 Item（<see cref="ItemCardViewModel.IsLauncherMode"/>）
+/// 只暴露打开/复制/预览。
 /// </summary>
 public sealed partial class QuickLaunchWidget : UserControl
 {
@@ -30,21 +28,18 @@ public sealed partial class QuickLaunchWidget : UserControl
 
     private readonly WidgetManager _manager;
     private readonly string _instanceId;
-    private readonly DispatcherTimer _searchTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
 
     public QuickLaunchWidget(WidgetStorage storage, IItemRepository? repo, WidgetManager manager, string instanceId)
     {
         _manager = manager;
         _instanceId = instanceId;
-        var search = App.Services.GetRequiredService<SearchService>();
-        ViewModel = new QuickLaunchWidgetViewModel(storage, repo, instanceId, search);
+        ViewModel = new QuickLaunchWidgetViewModel(storage, repo, instanceId);
 
         InitializeComponent();
 
         // 快捷入口变化（增删 / 外部拖入）只增量刷新 Links 集合，不重建整棵 UI。
         _manager.LinksChanged += OnLinksChanged;
         Unloaded += QuickLaunchWidget_Unloaded;
-        _searchTimer.Tick += SearchTimer_Tick;
 
         // 置顶条目来自数据库（异步），快捷入口来自本地存储；首屏一次性加载。
         _ = ViewModel.LoadAsync();
@@ -53,32 +48,11 @@ public sealed partial class QuickLaunchWidget : UserControl
     private void QuickLaunchWidget_Unloaded(object sender, RoutedEventArgs e)
     {
         _manager.LinksChanged -= OnLinksChanged;
-        _searchTimer.Tick -= SearchTimer_Tick;
         Unloaded -= QuickLaunchWidget_Unloaded;
         ViewModel.Dispose();   // 退订数据广播
     }
 
     private void OnLinksChanged(string _) => DispatcherQueue?.TryEnqueue(ViewModel.ReloadLinks);
-
-    private void SearchTimer_Tick(object? sender, object e)
-    {
-        _searchTimer.Stop();
-        _ = ViewModel.RunSearchAsync();
-    }
-
-    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        ViewModel.SearchQuery = SearchBox.Text;
-        _searchTimer.Stop();
-        _searchTimer.Start();
-    }
-
-    private void SearchClear_Click(object sender, RoutedEventArgs e)
-    {
-        _searchTimer.Stop();
-        ViewModel.ClearSearch();
-        if (SearchBox != null) SearchBox.Text = string.Empty;
-    }
 
     // ── ItemCard 事件路由（置顶 / 快捷入口共用 CardTemplate）──
 
@@ -135,15 +109,6 @@ public sealed partial class QuickLaunchWidget : UserControl
             primaryText: "删除", cancelText: "取消",
             owner: App.MainWindow, dedupeKey: $"deletelink:{vm.Uri}");
         if (ok) await _manager.RemoveLinkAsync(_instanceId, vm.Uri);
-    }
-
-    // ── 搜索结果（SearchCardTemplate）：点击才开主窗 ──
-
-    private void Card_SearchOpenRequested(object sender, long itemId)
-    {
-        // 组件内直搜：点击结果把查询交给主窗口执行（唤起主窗 + 跑搜索），不在此打开 URI。
-        App.PresentMainWindow();
-        _manager.RequestGlobalSearch(ViewModel.SearchQuery);
     }
 
     // ── 置顶条目操作 ──

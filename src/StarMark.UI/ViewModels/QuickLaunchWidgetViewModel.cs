@@ -7,23 +7,20 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using StarMark.Abstractions;
-using StarMark.Core.Search;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 
 namespace StarMark.UI.ViewModels;
 
 /// <summary>
-/// 快捷启动格 ViewModel（A-4）：复用 <see cref="ItemCardViewModel"/> 统一渲染置顶条目与
-/// 自定义快捷入口，并新增「组件内直搜」——直接调 <see cref="SearchService"/> 展示前 12 条，
-/// 点击结果才开主窗（<see cref="WidgetManager.RequestGlobalSearch"/>，DeskBox 做不到的形态）。
+/// 快捷启动格 ViewModel（A-4）：复用 <see cref="ItemCardViewModel"/> 统一渲染置顶条目与自定义快捷入口。
+/// 本组件只做「展示 + 与主窗一致的右键」，不再内嵌搜索栏（搜索统一走快捷搜索组件 / 主窗搜索页）。
 /// 自定义快捷入口无主库 Item，故用合成 Item + <see cref="ItemCardViewModel.IsLauncherMode"/> 隐藏会误写主库的操作。
 /// </summary>
 public sealed partial class QuickLaunchWidgetViewModel : ObservableObject
 {
     private readonly IItemRepository? _repo;
     private readonly WidgetStorage _storage;
-    private readonly SearchService? _search;
     private readonly string _instanceId;
 
     /// <summary>数据变更同步器：主界面置顶/取消置顶后，本组件的置顶区立刻跟着变。</summary>
@@ -35,18 +32,10 @@ public sealed partial class QuickLaunchWidgetViewModel : ObservableObject
     /// <summary>用户自定义快捷入口（合成 Item + IsLauncherMode，仅打开/复制/预览）。</summary>
     public ObservableCollection<ItemCardViewModel> Links { get; } = new();
 
-    /// <summary>组件内直搜结果（前 12 条），点击才开主窗。</summary>
-    public ObservableCollection<ItemCardViewModel> SearchResults { get; } = new();
-
-    [ObservableProperty] private string _searchQuery = string.Empty;
-    [ObservableProperty] private bool _hasSearchResults;
-    [ObservableProperty] private bool _isSearching;
-
-    public QuickLaunchWidgetViewModel(WidgetStorage storage, IItemRepository? repo, string instanceId, SearchService? search = null)
+    public QuickLaunchWidgetViewModel(WidgetStorage storage, IItemRepository? repo, string instanceId)
     {
         _storage = storage;
         _repo = repo;
-        _search = search;
         _instanceId = instanceId;
         _sync = new DataChangeReloader(LoadAsync);
     }
@@ -106,69 +95,6 @@ public sealed partial class QuickLaunchWidgetViewModel : ObservableObject
             };
             Links.Add(new ItemCardViewModel(item) { IsLauncherMode = true });
         }
-    }
-
-    private CancellationTokenSource? _searchCts;
-
-    /// <summary>组件内直搜：复用 SearchService 编排，展示前 12 条；空查询清空结果。</summary>
-    public async Task RunSearchAsync()
-    {
-        var q = (SearchQuery ?? string.Empty).Trim();
-        _searchCts?.Cancel();                 // 取消上一次（含转空查询时）；各 run 在 finally 里 Dispose 自己的
-        SearchResults.Clear();
-        HasSearchResults = false;
-        if (string.IsNullOrEmpty(q))
-        {
-            IsSearching = false;
-            return;
-        }
-
-        var cts = _searchCts = new CancellationTokenSource();
-        var ct = cts.Token;
-        IsSearching = true;
-        try
-        {
-            IReadOnlyList<Item> items;
-            if (_search is not null)
-            {
-                var result = await _search.SearchAsync(q, new SearchFilter { MaxResults = 12 }, ct);
-                items = result.Items;
-            }
-            else if (_repo is not null)
-            {
-                var result = await _repo.SearchAsync(q, new SearchFilter { MaxResults = 12 }, ct);
-                items = result.Items;
-            }
-            else
-            {
-                items = Array.Empty<Item>();
-            }
-
-            if (ct.IsCancellationRequested) return;   // 更新的查询已接管，丢弃本次结果
-            foreach (var it in items.Take(12))
-                SearchResults.Add(new ItemCardViewModel(it));
-            HasSearchResults = SearchResults.Count > 0;
-        }
-        catch (OperationCanceledException)
-        {
-            // 被更新的查询取代：正常丢弃
-        }
-        catch (Exception ex)
-        {
-            StarMark.Abstractions.StarLog.Error("快捷启动组件内搜索失败", ex);
-        }
-        finally
-        {
-            cts.Dispose();
-            if (ReferenceEquals(_searchCts, cts)) IsSearching = false;   // 仅当仍是本轮才复位，避免闪烁/误关
-        }
-    }
-
-    public void ClearSearch()
-    {
-        SearchQuery = string.Empty;
-        SearchResults.Clear();
-        HasSearchResults = false;
     }
 
     /// <summary>
