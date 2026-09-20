@@ -87,6 +87,19 @@ public sealed class FolderPathUtilTests
     }
 
     [Fact]
+    public void File_FolderNameWithHash_KeepsFullHierarchy()
+    {
+        // 回归：Uri.LocalPath 在 '#' 处截断。旧实现下 D:\C#项目\x.txt → LocalPath=D:\C
+        // → 只剩 [D:]，丢掉整层文件夹。TryPathFromUri 保留 '#'，须还原完整目录层级。
+        var item = new Item { Type = ItemType.File, Uri = "file:///D:/C#项目/x.txt" };
+        Assert.Equal(new[] { "D:", "C#项目" }, FolderPathUtil.FileSegments(item));
+
+        // 文件名（非目录）含 '#'：目录层级不含该名字，仍应正确（截断只会削掉文件名，不影响此处断言）。
+        var fileNamed = new Item { Type = ItemType.File, Uri = "file:///D:/docs/C#入门.docx" };
+        Assert.Equal(new[] { "D:", "docs" }, FolderPathUtil.FileSegments(fileNamed));
+    }
+
+    [Fact]
     public void GitHubStar_PseudoRoot()
     {
         Assert.Equal(new[] { "⭐ GitHub Stars" }, FolderPathUtil.GetSegments(new Item { Type = ItemType.GitHubStar }));

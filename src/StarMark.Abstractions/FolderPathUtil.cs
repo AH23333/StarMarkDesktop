@@ -51,9 +51,11 @@ public static class FolderPathUtil
     {
         if (!string.IsNullOrWhiteSpace(item.Uri) && item.Uri.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
         {
-            try
+            // TryPathFromUri（纯字符串剥前缀，保留 '#'/'%'）而非 new Uri().LocalPath：
+            // 后者在 '#' 处截断，会让目录名含 '#' 的文件（如 D:\C#项目\x.txt）丢掉整层文件夹而归错分组。
+            if (LocalFileIdentity.TryPathFromUri(item.Uri, out var local))
             {
-                var local = new Uri(item.Uri).LocalPath.TrimStart('\\').Trim('/');
+                local = local.TrimStart('\\').Trim('/');
                 var segs = local.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
                 if (segs.Length >= 2)
                 {
@@ -61,7 +63,6 @@ public static class FolderPathUtil
                     return segs.Take(segs.Length - 1).ToArray();
                 }
             }
-            catch { }
         }
         return new[] { OtherFileGroup };
     }

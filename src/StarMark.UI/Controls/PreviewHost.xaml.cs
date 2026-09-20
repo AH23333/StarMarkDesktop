@@ -107,17 +107,13 @@ public sealed partial class PreviewHost : UserControl
     private static bool TryGetLocalFile(string? uri, out string path)
     {
         path = string.Empty;
-        if (string.IsNullOrWhiteSpace(uri)) return false;
-        if (!uri.StartsWith("file://", StringComparison.OrdinalIgnoreCase)) return false;
-        try
-        {
-            var local = new Uri(uri).LocalPath;
-            if (Path.GetFullPath(local) != local) return false;
-            if (!File.Exists(local)) return false;
-            path = local;
-            return true;
-        }
-        catch { return false; }
+        // TryPathFromUri（纯字符串剥前缀，保留 '#'/'%'/空格、不解码）而非 new Uri().LocalPath：
+        // 后者在 '#' 处截断，含 '#' 的本地文件会算出不存在的路径而无法预览。
+        if (!StarMark.Abstractions.LocalFileIdentity.TryPathFromUri(uri, out var local)) return false;
+        if (Path.GetFullPath(local) != local) return false;
+        if (!File.Exists(local)) return false;
+        path = local;
+        return true;
     }
 
     private async System.Threading.Tasks.Task ShowImageAsync(string path)

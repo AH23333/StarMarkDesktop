@@ -1984,7 +1984,9 @@ public sealed partial class WidgetWindow : Window
                     var text = (await v.GetTextAsync()).Trim();
                     if (QuickLaunchWidgetViewModel.TryParseUri(text, out var uri) && uri is not null
                         && await _manager.AddLinkAsync(_instanceId,
-                            uri.IsFile ? System.IO.Path.GetFileName(uri.LocalPath) : uri.Host,
+                            // 含 '#' 的本地文件名：TryPathFromUri 保留 '#'（LocalPath 会截断成 "C"）。
+                            uri.IsFile ? System.IO.Path.GetFileName(
+                                StarMark.Abstractions.LocalFileIdentity.TryPathFromUri(uri.AbsoluteUri, out var fp) ? fp : uri.LocalPath) : uri.Host,
                             uri.AbsoluteUri))
                     {
                         added++;

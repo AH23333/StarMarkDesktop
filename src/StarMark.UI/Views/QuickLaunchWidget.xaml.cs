@@ -148,7 +148,11 @@ public sealed partial class QuickLaunchWidget : UserControl
         }
         var name = (AddNameBox.Text ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(name))
-            name = parsed.IsFile ? Path.GetFileName(parsed.LocalPath) : parsed.Host;
+        {
+            // 含 '#' 的本地文件名默认标题：TryPathFromUri 保留 '#'（LocalPath 会截断成 "C"）。
+            var filePath = StarMark.Abstractions.LocalFileIdentity.TryPathFromUri(parsed.AbsoluteUri, out var fp) ? fp : parsed.LocalPath;
+            name = parsed.IsFile ? Path.GetFileName(filePath) : parsed.Host;
+        }
         await _manager.AddLinkAsync(_instanceId, name, parsed.AbsoluteUri);
         AddNameBox.Text = AddUriBox.Text = string.Empty;
         AddForm.Visibility = Visibility.Collapsed;
