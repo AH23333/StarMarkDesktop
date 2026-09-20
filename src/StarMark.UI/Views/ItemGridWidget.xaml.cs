@@ -109,7 +109,7 @@ public sealed partial class ItemGridWidget : UserControl
 
     private async void ResultOpen_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: string uri }) await LauncherEx.OpenAsync(uri);
+        if (sender is Button { Tag: ItemRowItem row }) await LauncherEx.OpenAsync(row.Uri);
     }
 
     /// <summary>右键（ContextRequested）：弹出与主窗口条目完全一致的 ContextFlyout（批次 M 的共享菜单工厂）。
@@ -118,10 +118,14 @@ public sealed partial class ItemGridWidget : UserControl
     /// 必须拦 <b>ContextRequested</b> 而非 RightTapped：WinUI 3 的 ContextFlyout 响应 ContextRequested 弹出，
     /// 组件级菜单挂在 <c>RootBorder.ContextFlyout</c>，普通 Button 行不消费该事件即冒泡命中组件菜单。
     /// 置 <c>args.Handled=true</c> 后与真实 ItemCard（自带 ContextFlyout）就近消费的行为一致。
+    /// </para>
+    /// <para>
+    /// 行对象取自 <c>Tag="{x:Bind}"</c>（编译期绑定，可靠），不依赖 <c>DataContext</c>：ItemsRepeater 不保证把
+    /// 数据项写入容器 DataContext（见 ItemCard.xaml 同类注释），依赖它取值不稳。
     /// </para></summary>
     private void Row_ContextRequested(object sender, ContextRequestedEventArgs args)
     {
-        if (sender is FrameworkElement { DataContext: ItemRowItem item } el)
+        if (sender is FrameworkElement { Tag: ItemRowItem item } el)
         {
             args.Handled = true;   // 阻止冒泡到 RootBorder.ContextFlyout（组件菜单）
             // 搜索结果格会合并 Everything 实时源（未入库、Id=0）；置顶/标签格为已入库行。

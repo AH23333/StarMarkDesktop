@@ -80,7 +80,7 @@
                     <Button Margin="0,1,0,1" HorizontalContentAlignment="Left"
                             Padding="6,4,6,4" Background="{ThemeResource WidgetSubtleFillBrush}"
                             BorderThickness="0" CornerRadius="4"
-                            Click="ResultOpen_Click" ContextRequested="Row_ContextRequested" Tag="{x:Bind Uri}">
+                            Click="ResultOpen_Click" ContextRequested="Row_ContextRequested" Tag="{x:Bind}">
                         <Grid>
                             <!-- ↑↓ 键盘选中高亮层：叠在紧凑行底色之上，未选中即透明（复用标签选中转换器语义）。 -->
                             <Border CornerRadius="3" Margin="-6,-4,-6,-4"

@@ -127,20 +127,23 @@ public sealed partial class SearchWidget : UserControl
 
     private async void ResultOpen_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: string uri }) await LauncherEx.OpenAsync(uri);
+        if (sender is Button { Tag: SearchResultItem row }) await LauncherEx.OpenAsync(row.Uri);
     }
 
     /// <summary>右键（ContextRequested）：弹出与主窗口条目完全一致的 ContextFlyout（批次 M 的共享菜单工厂）。
     /// <para>
     /// 必须拦 <b>ContextRequested</b> 而非 RightTapped：WidgetWindow 把组件级菜单挂在
     /// <c>RootBorder.ContextFlyout</c>，而 WinUI 3 的 ContextFlyout 是响应 <b>ContextRequested</b> 路由事件弹出的。
-    /// 本行是普通 Button、无自身 ContextFlyout，若不在此消费事件，ContextRequested 冒泡到 RootBorder 即弹组件菜单
-    /// （表现为"右键只有组件功能"）。置 <c>args.Handled=true</c> 后事件不再上溯，与真实 ItemCard（自带 ContextFlyout
-    /// 故在就近祖先处被消费）行为一致——这正是快捷启动右键一直正常、其余组件不正常的根因。
+    /// 本行是普通 Button、无自身 ContextFlyout，若不在此消费事件，ContextRequested 冒泡到 RootBorder 即弹组件菜单。
+    /// 置 <c>args.Handled=true</c> 后事件不再上溯。
+    /// </para>
+    /// <para>
+    /// 行对象取自 <c>Tag="{x:Bind}"</c>（编译期绑定，可靠）而非 <c>DataContext</c>：本项目 <c>ItemCard.xaml</c> 已注明
+    /// ItemsRepeater 不保证把数据项写入容器 <c>DataContext</c>，依赖它取值不稳。
     /// </para></summary>
     private void Row_ContextRequested(object sender, ContextRequestedEventArgs args)
     {
-        if (sender is FrameworkElement { DataContext: SearchResultItem item } el)
+        if (sender is FrameworkElement { Tag: SearchResultItem item } el)
         {
             args.Handled = true;   // 阻止冒泡到 RootBorder.ContextFlyout（组件菜单）
             // 传入由行数据重建的兜底条目：Everything 实时源结果未入库、Id=0，GetByIdAsync 查不到，
