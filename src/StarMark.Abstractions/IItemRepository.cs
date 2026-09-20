@@ -28,6 +28,15 @@ public interface IItemRepository
     /// <summary>批量插入/更新条目。同步协调器调用。</summary>
     Task UpsertAsync(IReadOnlyList<Item> items, CancellationToken ct);
 
+    /// <summary>
+    /// 把一条「实时源虚拟条目」（Everything 文件结果等：<c>Id=0</c>、查询时从不入库）按 <c>(source, source_id)</c>
+    /// 幂等登记进主库，返回持久化后的真实 <c>Id</c>（同一 <c>source_id</c> 已入库则返回既有 Id，不产生重复行）。
+    /// 复用与后台同步完全一致的 upsert 口径（保留既有 hidden/pinned/notes、按 CJK 重建 search_text），
+    /// 故与后续 Everything 全量索引天然合并、不分裂。<b>只写索引记录，绝不改动磁盘上的实际文件</b>（不移动 / 改名 / 删除）。
+    /// 真实 Id 同时回填到 <paramref name="item"/>，调用方可继续使用。缺 <c>Source</c>/<c>SourceId</c> 业务键时返回 0。
+    /// </summary>
+    Task<long> RecordItemAsync(Item item, CancellationToken ct);
+
     /// <summary>标签 CRUD。</summary>
     Task<IReadOnlyList<(string Name, int Count)>> GetAllTagsAsync(CancellationToken ct);
 

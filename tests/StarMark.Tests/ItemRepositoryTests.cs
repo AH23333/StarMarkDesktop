@@ -219,6 +219,72 @@ public sealed class ItemRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task RecordItemAsync_ReturnsRealId_AndIsIdempotent()
+    {
+        var repo = new ItemRepository(_factory);
+        // 模拟 Everything 虚拟条目：Id=0、带 (filesystem, 路径哈希 source_id)、尚未入库。
+        var virtualItem = new Item
+        {
+            Type = ItemType.File,
+            Source = ItemSources.FileSystem,
+            SourceId = "abc123hash",
+            Title = "report.pdf",
+            Subtitle = @"C:\docs",
+            Uri = "file://C:/docs/report.pdf",
+        };
+        Assert.Equal(0, virtualItem.Id);
+
+        var id = await repo.RecordItemAsync(virtualItem, CancellationToken.None);
+        Assert.True(id > 0);
+        Assert.Equal(id, virtualItem.Id);   // 真实 Id 回填
+
+        // 再次登记同一 (source, source_id)：返回既有 Id，不产生重复行。
+        var again = new Item
+        {
+            Type = ItemType.File,
+            Source = ItemSources.FileSystem,
+            SourceId = "abc123hash",
+            Title = "report.pdf",
+            Subtitle = @"C:\docs",
+            Uri = "file://C:/docs/report.pdf",
+        };
+        var id2 = await repo.RecordItemAsync(again, CancellationToken.None);
+        Assert.Equal(id, id2);
+
+        var fetched = await repo.GetByIdAsync(id, CancellationToken.None);
+        Assert.NotNull(fetched);
+        Assert.Equal(ItemSources.FileSystem, fetched!.Source);
+    }
+
+    [Fact]
+    public async Task RecordItemAsync_MergesWithSync_AndPreservesUserState()
+    {
+        var repo = new ItemRepository(_factory);
+        // 先按同步口径落库一条文件系统条目。
+        var synced = new Item { Type = ItemType.File, Source = ItemSources.FileSystem, SourceId = "h1", Title = "v1" };
+        await repo.UpsertAsync(new[] { synced }, CancellationToken.None);
+        await repo.SetPinnedAsync(synced.Id, true, CancellationToken.None);
+
+        // 再登记同一路径的虚拟条目：应命中同一行、返回既有 Id，且保留用户置顶（upsert 不覆盖 pinned）。
+        var virtualItem = new Item { Type = ItemType.File, Source = ItemSources.FileSystem, SourceId = "h1", Title = "v1-again" };
+        var id = await repo.RecordItemAsync(virtualItem, CancellationToken.None);
+        Assert.Equal(synced.Id, id);
+
+        var fetched = await repo.GetByIdAsync(id, CancellationToken.None);
+        Assert.True(fetched!.Pinned);   // 置顶未被登记冲掉
+    }
+
+    [Fact]
+    public async Task RecordItemAsync_MissingBusinessKey_ReturnsZero()
+    {
+        var repo = new ItemRepository(_factory);
+        Assert.Equal(0, await repo.RecordItemAsync(
+            new Item { Type = ItemType.File, Source = "", SourceId = "x" }, CancellationToken.None));
+        Assert.Equal(0, await repo.RecordItemAsync(
+            new Item { Type = ItemType.File, Source = ItemSources.FileSystem, SourceId = "" }, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task SetPinned_BrowseSortsPinnedFirst()
     {
         var repo = new ItemRepository(_factory);

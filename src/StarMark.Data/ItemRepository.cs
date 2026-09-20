@@ -168,6 +168,25 @@ public sealed class ItemRepository : IItemRepository
         DataChangeHub.Notify();   // 主界面/同步写入后，桌面组件要跟着变
     }
 
+    /// <summary>
+    /// 登记一条实时源虚拟条目（Everything 文件结果，Id=0）：走与 <see cref="UpsertAsync"/> 完全相同的
+    /// <see cref="UpsertOne"/> 口径（按 (source, source_id) 幂等，保留既有 hidden/pinned/notes、重建 search_text），
+    /// 故与后台全量索引天然合并。<b>只写这一条索引记录，不触碰磁盘上的实际文件。</b>
+    /// UpsertOne 用 <c>INSERT … RETURNING id</c> 把真实 Id 回填到 <paramref name="item"/>；缺业务键时返回 0。
+    /// </summary>
+    public async Task<long> RecordItemAsync(Item item, CancellationToken ct)
+    {
+        if (item is null) return 0;
+        if (string.IsNullOrEmpty(item.Source) || string.IsNullOrEmpty(item.SourceId)) return 0;
+
+        using var conn = _factory.Open();
+        using var tx = conn.BeginTransaction();
+        await UpsertOne(conn, item, ct);
+        await tx.CommitAsync(ct);
+        DataChangeHub.Notify();   // 记录后置顶/标签/搜索等组件实时跟上
+        return item.Id;
+    }
+
     // ===== 标签 =====
 
     public async Task<IReadOnlyList<(string Name, int Count)>> GetAllTagsAsync(CancellationToken ct)
