@@ -379,7 +379,11 @@ public sealed class OpenMeteoClient : IDisposable
                     // 数组长度理论上一致，但任一缺失都按 0/未知兜底，绝不因越界崩 UI
                     days.Add(new WeatherDay
                     {
-                        Date = DateOnly.TryParse(times[i], out var d) ? d : default,
+                        // Open-Meteo 的 daily.time 恒为 ISO "yyyy-MM-dd"。必须按不变文化解析：
+                        // DateOnly.TryParse 走环境文化时，ICU(net9) 会按该文化默认日历解释——
+                        // th-TH(佛历 -543y)/fa-IR(波斯历 +621y) 直接错位年份，ar-SA 更因超范围解析失败回落 default(0001-01-01)，
+                        // 于是「今天」判定(WeatherWidget.xaml.cs 比 DateOnly.FromDateTime(Now))永不命中。与下方 407/451 两处墙上时间同口径。
+                        Date = DateOnly.TryParse(times[i], CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : default,
                         Code = i < codes.Count ? codes[i] : WeatherCodeUnknown,
                         MaxC = i < maxs.Count ? maxs[i] : 0,
                         MinC = i < mins.Count ? mins[i] : 0,

@@ -351,4 +351,24 @@ public class WeatherTests
     [Fact]
     public void ParseReport_MalformedJson_ReturnsNull()
         => Assert.Null(OpenMeteoClient.ParseReport("{ not json", London()));
+
+    [Fact]
+    public void ParseReport_ParsesDailyDatesWithInvariantCultureUnderBuddhistLocale()
+    {
+        // 回归 AR-1：daily.time 恒为 ISO "yyyy-MM-dd"。旧代码用环境文化的 DateOnly.TryParse，
+        // 在 ICU(net9) 下 th-TH 按佛历解释→年份被削 543（2026→1483），"今天"判定永不命中。
+        // 修后须按 InvariantCulture 解析，与墙上时间戳两处同口径。
+        var original = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("th-TH");
+            var report = OpenMeteoClient.ParseReport(SampleJson, London());
+            Assert.NotNull(report);
+            Assert.Equal(new DateOnly(2026, 9, 20), report!.Days[0].Date);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
 }
