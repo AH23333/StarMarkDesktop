@@ -234,4 +234,86 @@ public sealed class CjkSearchTests : IDisposable
 
         Assert.Equal(new[] { "搜索笔记工具" }, await SearchTitlesAsync("笔记"));
     }
+
+    // ────────────────────────── 非 CJK↔CJK 交界（v5） ──────────────────────────
+
+    [Fact]
+    public void ExpandForIndex_SeparatesNonCjkFromCjkRun()
+    {
+        // 旧实现把 "2023" 与首字 "年" 并成 "2023年" 一个 token → 搜「年」落空。
+        // 修复后交界补空格，首字独立成词。
+        string expanded = CjkTokenizer.ExpandForIndex("2023年度报告");
+        var tokens = expanded.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        Assert.Contains("2023", tokens);   // 数字段独立
+        Assert.Contains("年", tokens);      // CJK 首字独立，不再被并入 "2023年"
+        Assert.DoesNotContain("2023年", tokens);
+    }
+
+    private async Task SeedOneAsync(string title, string sourceId)
+    {
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.Bookmark, Source = "cjk-test", SourceId = sourceId, Title = title },
+        }, CancellationToken.None);
+    }
+
+    /// <summary>数字/字母紧贴中文的标题：跨界子串必须可召回（旧实现全 0 命中）。</summary>
+    [Theory]
+    [InlineData("2023年度报告", "年")]
+    [InlineData("2023年度报告", "2023年")]
+    [InlineData("2023年度报告", "2023")]
+    [InlineData("2023年度报告", "报告")]
+    [InlineData("WinUI桌面", "桌")]
+    [InlineData("WinUI桌面", "桌面")]
+    public async Task Search_MixedScriptBoundary_IsRecallable(string title, string keyword)
+    {
+        await SeedOneAsync(title, "mix-" + title.Length + keyword);
+        var titles = await SearchTitlesAsync(keyword);
+
+        Assert.Contains(title, titles);
+    }
+
+    /// <summary>
+    /// v5 迁移：存量行 search_text 仍是旧的「并词」形态（如 "2023年 度 报 告 年度 度报 报告"，
+    /// 首字被并入 2023）时，EnsureSchema 必须按新口径重算并 rebuild，令「年」可搜。
+    /// </summary>
+    [Fact]
+    public async Task MigrateV5_ReindexesJunctionGluedRows()
+    {
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.Bookmark, Source = "legacy5", SourceId = "L5", Title = "2023年度报告" },
+        }, CancellationToken.None);
+
+        // 人为退回旧展开形态（首字与数字并词、无行首分隔），并把版本降到 4，模拟 v5 前的库
+        using (var conn = _factory.Open())
+        {
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "UPDATE items SET search_text = '2023年 度 报 告 年度 度报 报告 ' WHERE source='legacy5';";
+                cmd.ExecuteNonQuery();
+            }
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+                    INSERT INTO sync_state(key, value) VALUES('schema_version', '4')
+                    ON CONFLICT(key) DO UPDATE SET value = excluded.value;";
+                cmd.ExecuteNonQuery();
+            }
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "INSERT INTO items_fts(items_fts) VALUES('rebuild');";
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        Assert.DoesNotContain("2023年度报告", await SearchTitlesAsync("年")); // 迁移前：首字被并词，落空
+
+        new MigrationRunner(_factory).EnsureSchema(); // 触发 v5
+
+        Assert.Contains("2023年度报告", await SearchTitlesAsync("年"));
+    }
 }

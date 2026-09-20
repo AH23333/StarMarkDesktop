@@ -32,6 +32,7 @@ public sealed class MigrationRunner
         if (version < 2) MigrateV2(conn);
         if (version < 3) MigrateV3(conn);
         if (version < 4) MigrateV4(conn);
+        if (version < 5) MigrateV5(conn);
 
         // 只在真正向前迁移后才推进版本号。若库里存的版本已高于本二进制（应用降级：
         // 新版建库后回退到旧版），无条件写回 CurrentVersion 会把 schema_version 倒拨，
@@ -39,7 +40,7 @@ public sealed class MigrationRunner
         if (version < CurrentVersion) WriteSchemaVersion(conn, CurrentVersion);
     }
 
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 5;
 
     private static int ReadSchemaVersion(Microsoft.Data.Sqlite.SqliteConnection conn)
     {
@@ -68,6 +69,18 @@ public sealed class MigrationRunner
     /// 幂等：重复执行结果一致。
     /// </remarks>
     private static void MigrateV3(Microsoft.Data.Sqlite.SqliteConnection conn)
+        => RebuildSearchTextAndIndex(conn);
+
+    /// <summary>
+    /// v5：修复「非 CJK↔CJK 交界」漏召回后重算 search_text 并重建 FTS 索引。
+    /// </summary>
+    /// <remarks>
+    /// 旧 <c>ExpandForIndex</c> 未在 CJK 段前补分隔符，unicode61 会把 "2023年" 之类
+    /// 「数字/字母 + 中文」并成一个 token，令该段首字（及跨界词）永远搜不到。
+    /// 分词器已修正，但<b>存量行</b>的 search_text 仍是旧的并词形态，必须按新口径全表重算 +
+    /// 'rebuild' 才能生效。与 MigrateV3 同走 <see cref="RebuildSearchTextAndIndex"/>，幂等。
+    /// </remarks>
+    private static void MigrateV5(Microsoft.Data.Sqlite.SqliteConnection conn)
         => RebuildSearchTextAndIndex(conn);
 
     /// <summary>

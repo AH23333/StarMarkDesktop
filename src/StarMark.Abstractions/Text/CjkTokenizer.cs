@@ -58,6 +58,13 @@ public static class CjkTokenizer
     /// 写入侧展开：把文本中每段 CJK 连续串展开为「整串 + 单字 + 相邻二元组」，
     /// 非 CJK 部分原样保留。用于构造 <c>items.search_text</c>。
     /// </summary>
+    /// <remarks>
+    /// <para><b>数字/字母与 CJK 交界处必须补分隔符：</b>unicode61 把「数字/字母 + CJK」
+    /// 的连续串视为<b>一个</b> token（如原文 "2023年" 索引成单 token "2023年"）。若紧贴着
+    /// 展开，本段的<b>首字</b>会被并入前一非 CJK token，导致搜「年」「2023年」这类跨界查询
+    /// 全部落空。故在每段 CJK 前（且前一个已写字符非空格时）插入一个空格，让首字独立成词。
+    /// CJK→非 CJK 方向由 <see cref="AppendRun"/> 的行尾空格天然隔开，无需处理。</para>
+    /// </remarks>
     public static string ExpandForIndex(string? text)
     {
         if (string.IsNullOrEmpty(text)) return string.Empty;
@@ -75,6 +82,8 @@ public static class CjkTokenizer
 
             int start = i;
             while (i < text.Length && IsCjk(text[i])) i++;
+            // 交界分隔：非 CJK 段不留行尾空格，这里补齐，避免 CJK 首字并入前一 token
+            if (sb.Length > 0 && sb[^1] != ' ') sb.Append(' ');
             AppendRun(sb, text.AsSpan(start, i - start));
         }
         return sb.ToString();

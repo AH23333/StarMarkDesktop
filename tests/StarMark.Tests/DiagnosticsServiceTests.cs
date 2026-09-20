@@ -50,7 +50,7 @@ public sealed class DiagnosticsServiceTests : IDisposable
         // 数据库事实
         Assert.Equal(_dbPath, dict["数据库路径"]);
         Assert.Contains("B", dict["数据库体积"]);
-        Assert.Equal("4", dict["Schema 版本"]);
+        Assert.Equal(MigrationRunner.CurrentVersion.ToString(), dict["Schema 版本"]);
 
         // 条目计数
         Assert.Contains("Stars 1", dict["条目总数"]);
@@ -98,7 +98,7 @@ public sealed class DiagnosticsServiceTests : IDisposable
 
         var display = dict["Schema 版本"];
         Assert.StartsWith("2", display);                 // 读到的是库内真实值 2
-        Assert.DoesNotContain("4", display[..1]);        // 不是代码常量 4
-        Assert.Contains("目标 4", display);              // 并明确警示与目标不一致
+        Assert.DoesNotContain(MigrationRunner.CurrentVersion.ToString(), display[..1]); // 不是代码常量
+        Assert.Contains($"目标 {MigrationRunner.CurrentVersion}", display); // 并明确警示与目标不一致
     }
 }
