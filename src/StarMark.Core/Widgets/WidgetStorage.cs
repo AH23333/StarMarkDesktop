@@ -498,7 +498,28 @@ public sealed class WidgetStorage
         return data;
     }
 
-    public static long NewId() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000 + Random.Shared.Next(0, 999);
+    private static readonly object _idGate = new();
+    private static long _lastId;
+
+    /// <summary>
+    /// 进程内<b>严格递增</b>的本地 Id：常态取「当前毫秒×1000」作号段基址，同一毫秒内（或时钟回退时）
+    /// 退回「上一个 Id + 1」保证绝不重号。
+    /// <para>
+    /// <b>为何不能用毫秒内随机数</b>：<c>source_id = EncodeSourceId(instanceId, NewId())</c> 落在
+    /// <c>UNIQUE(items.source, source_id)</c> 上。旧实现 <c>ms*1000 + Random(0..998)</c> 在同一毫秒批量取号时
+    /// 概率性撞号，两笔不同待办/笔记同号即被 <c>ON CONFLICT(source, source_id) DO UPDATE</c> 静默覆盖（丢数据）。
+    /// 单调号从构造上杜绝重号，且无人解码 Id 的毫秒含义，故进位越界无害。
+    /// </para>
+    /// </summary>
+    public static long NewId()
+    {
+        lock (_idGate)
+        {
+            var floor = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000;
+            _lastId = floor > _lastId ? floor : _lastId + 1;
+            return _lastId;
+        }
+    }
 
     /// <summary>取某实例配置（按 Id）。</summary>
     public WidgetInstanceConfig? FindInstance(string id)
