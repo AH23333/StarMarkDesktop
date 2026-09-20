@@ -8,10 +8,15 @@ using StarMark.Abstractions;
 namespace StarMark.Core.Widgets;
 
 /// <summary>
-/// 快照里的一条本地条目（待办 / 随记）。只存重建 <c>items</c> 行所需的最小字段。
+/// 快照里的一条本地条目（待办 / 随记）。忠实保存重建 <c>items</c> 行所需的全部用户状态字段。
 /// <para>
 /// 刻意**不**存 <c>source_id</c>：其格式为 <c>instanceId|localId</c>，而应用快照时目标实例的 instanceId 可能不同，
 /// 故在应用阶段按目标实例 id 重新编码（见 <c>LocalItemState.EncodeSourceId</c>），从而跨实例可移植、且不撞唯一键。
+/// </para>
+/// <para>
+/// 除标题/状态(extra_json)外，还捕获 隐藏/置顶/子标题/URI/描述/笔记 与 标签名——
+/// 因还原走「整实例先删后插」，<c>item_tags</c> 随旧行级联删除，不捕获这些就会在应用后把用户贴在待办上的
+/// 标签、置顶、隐藏、附注悄悄抹平（#53 V1 忠实还原）。source_id 之外的一切可移植字段都进快照。
 /// </para>
 /// </summary>
 public sealed class SnapshotLocalItem
@@ -22,6 +27,26 @@ public sealed class SnapshotLocalItem
     /// <summary>待办状态（done/color/due/order）所在的 extra_json；随记一般为 null。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ExtraJson { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Subtitle { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Uri { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Description { get; set; }
+
+    /// <summary>items.notes 列（用户给该条目写的便签正文），同步不覆盖的用户状态。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Notes { get; set; }
+
+    /// <summary>条目上的标签名（还原时按名取或建并重新挂接 item_tags）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Tags { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Hidden { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Pinned { get; set; }
 
     public long CreatedAt { get; set; }
     public long UpdatedAt { get; set; }
@@ -104,6 +129,13 @@ public static class WidgetSnapshotCollection
                 .OrderBy(e => e.Kind)
                 .ThenBy(e => e.Index)
                 .ToList();
+            // 反序列化遇到显式 null 会用 null 覆盖属性初始化器；统一兜底为空集合，
+            // 否则 Summary/Apply/捕获路径上的 .Count / foreach 会 NRE（OneDrive 截断/手改 JSON 可达）。
+            foreach (var e in s.Entries)
+            {
+                e.Links ??= new List<LinkItem>();
+                e.LocalItems ??= new List<SnapshotLocalItem>();
+            }
             result.Add(s);
         }
 

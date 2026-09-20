@@ -21,22 +21,28 @@ public sealed class WidgetSnapshotService
 
     public WidgetSnapshotService(IItemRepository repo) => _repo = repo;
 
-    /// <summary>读某实例当前全部本地条目（待办 + 随记）为快照片段。</summary>
+    /// <summary>读某实例当前全部本地条目（待办 + 随记）为快照片段，忠实保留标签/置顶/隐藏/笔记等用户状态。</summary>
     public async Task<List<SnapshotLocalItem>> CaptureLocalItemsAsync(string instanceId, CancellationToken ct = default)
     {
         var result = new List<SnapshotLocalItem>();
         if (string.IsNullOrEmpty(instanceId)) return result;
 
-        // source=local 一次取全，再按编码进 source_id 的 instanceId 归到本实例（type=null → 待办与随记都要）。
-        var items = await _repo.GetBySourceAsync(ItemSources.Local, null, 1000, ct);
+        // 按实例前缀精确读取（不再受 GetBySourceAsync 的跨实例 limit 窗口截断）。
+        var items = await _repo.GetLocalItemsForInstanceAsync(instanceId, ct);
         foreach (var it in items)
         {
-            if (LocalItemState.DecodeInstanceId(it.SourceId) != instanceId) continue;
             result.Add(new SnapshotLocalItem
             {
                 Type = it.Type,
                 Title = it.Title,
                 ExtraJson = string.IsNullOrEmpty(it.ExtraJson) ? null : it.ExtraJson,
+                Subtitle = string.IsNullOrEmpty(it.Subtitle) ? null : it.Subtitle,
+                Uri = string.IsNullOrEmpty(it.Uri) ? null : it.Uri,
+                Description = string.IsNullOrEmpty(it.Description) ? null : it.Description,
+                Notes = string.IsNullOrEmpty(it.Notes) ? null : it.Notes,
+                Tags = it.Tags.Count > 0 ? new List<string>(it.Tags) : null,
+                Hidden = it.Hidden,
+                Pinned = it.Pinned,
                 CreatedAt = it.CreatedAt,
                 UpdatedAt = it.UpdatedAt,
             });
@@ -45,11 +51,12 @@ public sealed class WidgetSnapshotService
     }
 
     /// <summary>
-    /// 把快照片段还原到目标实例：先删除该实例现有本地条目，再按目标 instanceId 重新编码 source_id 写回。
+    /// 把快照片段忠实还原到目标实例：交给仓储层在<b>单个事务</b>里按前缀删除本实例既有条目、
+    /// 再逐条插回（含 隐藏/置顶/子标题/URI/描述/笔记），并按标签名重新挂接 <c>item_tags</c>。
     /// <para>
-    /// 采用「整实例先删后插」而非逐条 diff —— 应用快照要的是「这一刻严格覆盖」的 Replace 语义，
-    /// 让本实例的本地内容与快照完全一致，不多不少。<c>source_id</c> 用<b>新生成</b>的 localId 重编码：
-    /// 既保证跨实例可移植（快照里没存原 instanceId），又避免与既有行撞 <c>UNIQUE(source, source_id)</c>。
+    /// 「整实例替换」= 应用快照要这一刻严格覆盖的 Replace 语义，不多不少。<c>source_id</c> 用<b>新生成</b>的
+    /// localId 按目标 instanceId 重编码：既保证跨实例可移植（快照里没存原 instanceId），又避免与既有行撞
+    /// <c>UNIQUE(source, source_id)</c>。删除与插入同事务，任一步失败整体回滚，绝不留下「删了没插回」的空实例。
     /// </para>
     /// </summary>
     public async Task RestoreLocalItemsAsync(
@@ -59,15 +66,7 @@ public sealed class WidgetSnapshotService
     {
         if (string.IsNullOrEmpty(targetInstanceId)) return;
 
-        // 1) 清掉目标实例现有的本地条目（只动本实例，别的实例的本地内容不受影响）
-        var existing = await _repo.GetBySourceAsync(ItemSources.Local, null, 1000, ct);
-        foreach (var it in existing)
-        {
-            if (LocalItemState.DecodeInstanceId(it.SourceId) != targetInstanceId) continue;
-            await _repo.DeleteBySourceIdAsync(ItemSources.Local, it.SourceId, ct);
-        }
-
-        // 2) 写回快照片段的本地条目（新 source_id；批内自碰撞防护）
+        var toInsert = new List<Item>(items.Count);
         var used = new HashSet<string>(StringComparer.Ordinal);
         foreach (var s in items)
         {
@@ -76,16 +75,25 @@ public sealed class WidgetSnapshotService
             do { sourceId = LocalItemState.EncodeSourceId(targetInstanceId, WidgetStorage.NewId()); }
             while (!used.Add(sourceId));   // NewId 含随机位，理论上仍可能同刻相同 → 重取直到批内唯一
 
-            await _repo.UpsertLocalItemAsync(new Item
+            toInsert.Add(new Item
             {
                 Type = s.Type,
                 Source = ItemSources.Local,
                 SourceId = sourceId,
                 Title = s.Title,
+                Subtitle = s.Subtitle ?? string.Empty,
+                Uri = s.Uri ?? string.Empty,
+                Description = s.Description,
+                Notes = s.Notes,
+                Tags = s.Tags is { Count: > 0 } ? new List<string>(s.Tags) : new List<string>(),
+                Hidden = s.Hidden,
+                Pinned = s.Pinned,
                 ExtraJson = s.ExtraJson,   // 原样带回：done/color/due/order 全在此，故待办状态不丢
                 CreatedAt = s.CreatedAt > 0 ? s.CreatedAt : now,
                 UpdatedAt = now,
-            }, ct);
+            });
         }
+
+        await _repo.ReplaceLocalItemsForInstanceAsync(targetInstanceId, toInsert, ct);
     }
 }
