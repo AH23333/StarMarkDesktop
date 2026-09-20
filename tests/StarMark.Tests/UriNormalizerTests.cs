@@ -28,6 +28,24 @@ public sealed class UriNormalizerTests
         Assert.Equal("file:///C:/x.txt", UriNormalizer.Normalize("file:///C:/x.txt"));
     }
 
+    /// <summary>
+    /// 批次 Z 不变式：本地文件的 source_id 是 <see cref="LocalFileIdentity.SourceIdForPath"/> 产出的
+    /// 裸 16 位十六进制串（不是 URI），而 <c>ItemRepository.UpsertOne</c> 对<b>每个</b> upsert 都会把
+    /// source_id 喂给这个「面向 URL」的 Normalize。若 Normalize 哪天尝试「修正」这类短串（补协议、
+    /// 改动大小写），文件去重键会被静默破坏、同一文件裂成多条。这里钉死恒等 + 幂等。
+    /// 用真实哈希而非硬编码串，确保测的是实际落库形态。
+    /// </summary>
+    [Theory]
+    [InlineData(@"C:\Users\me\文档\报告 v2#1.txt")]
+    [InlineData(@"D:\Program Files\app.exe")]
+    [InlineData(@"E:\")]
+    public void Normalize_LeavesLocalFileSourceIdUntouched(string path)
+    {
+        var sourceId = LocalFileIdentity.SourceIdForPath(path);
+        Assert.Equal(sourceId, UriNormalizer.Normalize(sourceId));
+        Assert.Equal(sourceId, UriNormalizer.Normalize(UriNormalizer.Normalize(sourceId)));
+    }
+
     [Fact]
     public void Normalize_Idempotent()
     {
