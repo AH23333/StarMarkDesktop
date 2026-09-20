@@ -118,7 +118,7 @@ public sealed class GitHubClient : IDisposable
     public async Task<string?> GetLoginAsync(CancellationToken ct)
     {
         if (!IsConfigured) return null;
-        var resp = await _http.GetAsync($"{ApiBase}/user", ct);
+        using var resp = await _http.GetAsync($"{ApiBase}/user", ct);
         if (!resp.IsSuccessStatusCode) return null;
         var user = await resp.Content.ReadFromJsonAsync<GitHubUserApiModel>(JsonOpts, ct);
         return user?.Login;
