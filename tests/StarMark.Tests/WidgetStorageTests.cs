@@ -275,6 +275,44 @@ public sealed class WidgetStorageTests : IDisposable
         Assert.Null(unmodified.Appearance);
     }
 
+    // ── #52：布局 = 纯模板（位置 + 尺寸 + 置顶 + 每组件外观配置），结构上绝不承载条目/待办/随记/入口数据 ──
+
+    [Fact]
+    public void Layout_Template_CarriesConfig_ButNeverItemData()
+    {
+        // 回归护栏：将来若有人往 WidgetLayoutEntry 塞条目/筛选字段，本用例即失败。
+        // 数据快照属 #53「保存当前布局与数据」，不得混进纯模板。
+        var layout = new WidgetLayout
+        {
+            Name = "模板",
+            Entries =
+            {
+                new WidgetLayoutEntry
+                {
+                    Kind = WidgetKind.TagGrid, Index = 0,
+                    X = 50, Y = 60, Width = 240, Height = 320, Topmost = true,
+                    Appearance = new WidgetAppearanceOverride
+                    {
+                        Backdrop = StarMark.Abstractions.WidgetBackdropKind.Mica,
+                    },
+                },
+            },
+        };
+
+        var json = System.Text.Json.JsonSerializer.Serialize(layout);
+
+        // 布局与外观配置在场
+        Assert.Contains("\"X\":50", json);
+        Assert.Contains("\"Y\":60", json);
+        Assert.Contains("\"Topmost\":true", json);
+        Assert.Contains("Backdrop", json);
+
+        // 条目数据 / 筛选配置绝不在场
+        foreach (var forbidden in new[]
+                 { "Todos", "Notes", "Links", "SourceId", "GridTag", "GridQuery", "ItemKey", "PrivacyMode", "ChromeMode" })
+            Assert.DoesNotContain(forbidden, json, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void Save_WhenTargetUnwritable_DoesNotThrow_AndLeavesTempBehindNothing()
     {

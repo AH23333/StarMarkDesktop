@@ -924,7 +924,7 @@ public sealed partial class WidgetWindow : Window
     {
         var name = await CenteredDialog.PromptAsync(
             title: "保存当前组件布局",
-            message: "将记下当前屏幕上所有可见组件的位置与大小。应用布局时，不属于该布局的组件会被隐藏（内容保留）。",
+            message: "记下当前屏幕上所有可见组件的位置、大小与各自的外观配置（材质/颜色等），形成一套可复用的模板。不含任何条目内容数据（待办/随记/快捷入口/笔记）。应用布局时，不属于该布局的组件会被隐藏（内容保留）。",
             placeholder: "例如：工作模式",
             primaryText: "保存",
             cancelText: "取消",

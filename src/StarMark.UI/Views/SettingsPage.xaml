@@ -301,7 +301,7 @@
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="布局方案" Style="{StaticResource SettingTitle}"/>
-                                <TextBlock Text="在组件窗口标题栏点右键 →「保存当前组件布局…」即可记下这一屏的位置与大小。同一时刻只会显示一套布局，切换快捷键可在「快捷键」标签页录制。"
+                                <TextBlock Text="在组件窗口标题栏点右键 →「保存当前组件布局…」即可把这一屏存为纯模板：各组件的位置、大小与外观配置（不含条目内容数据）。同一时刻只会显示一套布局，切换快捷键可在「快捷键」标签页录制。"
                                            Style="{StaticResource SettingRowText}"/>
                                 <ItemsRepeater ItemsSource="{x:Bind LayoutRowsItems, Mode=OneWay}">
                                     <ItemsRepeater.Layout>
