@@ -33,7 +33,9 @@ public sealed class DiagnosticsService
         // ── 数据库 ──
         entries.Add(new DiagnosticEntry("数据库路径", _factory.DbPath));
         entries.Add(new DiagnosticEntry("数据库体积", FormatBytes(GetDbSizeBytes())));
-        entries.Add(new DiagnosticEntry("Schema 版本", MigrationRunner.CurrentVersion.ToString()));
+        // 展示库内实际 schema_version，而非代码常量 MigrationRunner.CurrentVersion——
+        // 迁移失败/半途中断时二者会背离，常量会让面板永远显示"最新"，掩盖问题。
+        entries.Add(new DiagnosticEntry("Schema 版本", GetSchemaVersionDisplay()));
 
         // ── 条目与索引 ──
         var counts = await _repository.GetCountsByTypeAsync(ct);
@@ -64,6 +66,27 @@ public sealed class DiagnosticsService
             string.IsNullOrEmpty(etag) ? "（无，下次全量拉取）" : Shorten(etag)));
 
         return entries;
+    }
+
+    /// <summary>读取库内实际 schema_version 并与代码目标版本对比展示；不一致时高亮警示。</summary>
+    private string GetSchemaVersionDisplay()
+    {
+        try
+        {
+            using var conn = _factory.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT value FROM sync_state WHERE key = 'schema_version';";
+            var raw = cmd.ExecuteScalar()?.ToString();
+            if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var actual))
+                return $"（未记录，目标 {MigrationRunner.CurrentVersion}）";
+            return actual == MigrationRunner.CurrentVersion
+                ? actual.ToString(CultureInfo.InvariantCulture)
+                : $"{actual}（≠ 目标 {MigrationRunner.CurrentVersion}，迁移可能未成功）";
+        }
+        catch (Exception ex)
+        {
+            return $"（查询失败：{ex.Message}）";
+        }
     }
 
     private long GetDbSizeBytes()

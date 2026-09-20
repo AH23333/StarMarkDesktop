@@ -78,4 +78,27 @@ public sealed class DiagnosticsServiceTests : IDisposable
         Assert.Contains(entries, e => e.Label == "上次 GitHub 同步" && e.Value == "从未");
         Assert.Contains(entries, e => e.Label == "GitHub ETag" && e.Value.Contains("下次全量拉取"));
     }
+
+    [Fact]
+    public async Task SchemaVersion_ReflectsActualDbValue_NotCodeConst()
+    {
+        // R8#6：诊断必须显示库内**实际** schema_version，而非硬编码的 MigrationRunner.CurrentVersion。
+        // 迁移半途中断/失败时二者背离，常量会永远显示"最新"而掩盖问题。
+        // 手动把库内值改成 2（低于代码目标 4），模拟"迁移未成功"。
+        using (var conn = _factory.Open())
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "UPDATE sync_state SET value='2' WHERE key='schema_version';";
+            cmd.ExecuteNonQuery();
+        }
+
+        var svc = new DiagnosticsService(_factory, _repo, Array.Empty<IItemSource>());
+        var entries = await svc.CollectAsync(CancellationToken.None);
+        var dict = entries.ToDictionary(e => e.Label, e => e.Value);
+
+        var display = dict["Schema 版本"];
+        Assert.StartsWith("2", display);                 // 读到的是库内真实值 2
+        Assert.DoesNotContain("4", display[..1]);        // 不是代码常量 4
+        Assert.Contains("目标 4", display);              // 并明确警示与目标不一致
+    }
 }
