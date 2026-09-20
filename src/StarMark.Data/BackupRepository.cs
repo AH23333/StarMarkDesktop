@@ -206,10 +206,15 @@ public sealed class BackupRepository : IBackupRepository
         return Task.CompletedTask;
     }
 
-    public Task ReindexSearchTextForTaggedAsync(CancellationToken ct)
+    public Task ReindexAllSearchTextAsync(CancellationToken ct)
     {
-        // 与 ImportItemsAsync 同法：借用主仓储把标签贡献补进 search_text（见其方法注释）。
-        return new ItemRepository(_factory).ReindexSearchTextForTaggedAsync(ct);
+        // 还原收尾做「全表」search_text 重算 + FTS rebuild，复用迁移里的同一口径（单一真源）。
+        // 为什么全表而非只补带标签的行：ImportUserStateAsync 用裸 UPDATE SET notes 改正文却不重算
+        // search_text，AFTER UPDATE 触发器只会按旧 search_text 重灌 → 未打标签行的还原笔记永远搜不到。
+        // 全表重算把带/不带标签的行一并覆盖；还原是一次性离线操作，代价可接受，且方法幂等。
+        using var conn = _factory.Open();
+        MigrationRunner.RebuildSearchTextAndIndex(conn);
+        return Task.CompletedTask;
     }
 
     public Task ClearItemsAsync(CancellationToken ct)

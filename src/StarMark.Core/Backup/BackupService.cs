@@ -180,9 +180,11 @@ public sealed class BackupService
             await _repo.ImportTagsAsync(p.Tags, ct);
             await _repo.ImportItemTagLinksAsync(p.ItemTags, ct);
 
-            // 关联落库后补一次 search_text 重建：导出条目不带 Tags 集合，导入条目时算出的 search_text
-            // 缺标签贡献，只补 item_tags 行不足以让「按标签词的全文检索」命中（见 IBackupRepository 注释）。
-            await _repo.ReindexSearchTextForTaggedAsync(ct);
+            // 所有导入落库后做一次「全表」search_text 重算 + FTS rebuild（复用迁移里的同一口径）。
+            // 覆盖两类缺失：① 导出条目不带 Tags，按标签词的全文检索需要把标签名烘进 search_text；
+            // ② ImportUserStateAsync 用裸 UPDATE SET notes 改正文却不重算 search_text，AFTER UPDATE
+            // 触发器只按旧值重灌 → 未打标签行的还原笔记搜不到。全表重算一并修掉两者。
+            await _repo.ReindexAllSearchTextAsync(ct);
 
             bool widgetsRestored = false;
             if (!string.IsNullOrEmpty(p.WidgetsJson))
@@ -191,7 +193,7 @@ public sealed class BackupService
             }
 
             // 还原走的是批量 DELETE + INSERT（绕开 ItemRepository 各写方法的 Notify），
-            // 而 ItemRepository.ReindexSearchTextForTaggedAsync 的注释约定「调用方收尾统一刷新」——
+            // 而 ReindexAllSearchTextAsync 的注释约定「调用方收尾统一刷新」——
             // 但 SettingsPage 的调用方只更新了一行状态文本、并未刷新任何界面/组件。
             // 这里在成功返回前补一次广播：主界面计数/列表页与各组件的 DataChangeReloader 才会去抖重载，
             // 否则还原后满屏仍是旧数据（要重启才更新）。

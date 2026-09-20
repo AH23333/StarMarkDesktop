@@ -71,8 +71,13 @@ public sealed class MigrationRunner
     /// 全表按规范口径（title + description + notes + 标签名）重算 search_text 并对 FTS5
     /// 外部内容表执行 'rebuild'。幂等。凡改动过 notes / item_tags 但没走 UpsertOne 的路径
     /// 都需在事后调用它，否则新写入的正文/标签词永远进不了索引。
+    /// <para>
+    /// 除迁移外，备份还原收尾也走它：还原的 <c>ImportUserStateAsync</c> 用裸 <c>UPDATE ... SET notes</c>
+    /// 改正文但不重算 search_text，AFTER UPDATE 触发器只会按旧的 search_text 重灌，未打标签的行
+    /// 因此永远搜不到还原进来的笔记——这里做<b>全表</b>重算，把带标签与不带标签的行一并覆盖。
+    /// </para>
     /// </summary>
-    private static void RebuildSearchTextAndIndex(Microsoft.Data.Sqlite.SqliteConnection conn)
+    internal static void RebuildSearchTextAndIndex(Microsoft.Data.Sqlite.SqliteConnection conn)
     {
         var rows = new List<(long Id, string Text)>();
         using (var sel = conn.CreateCommand())

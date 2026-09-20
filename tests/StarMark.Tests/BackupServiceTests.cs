@@ -128,6 +128,32 @@ public sealed class BackupServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Restore_PreservesCjkNoteSearch_OnUntaggedItem()
+    {
+        // AE-2 回归：ImportUserStateAsync 用裸 UPDATE SET notes 改正文却不重算 search_text，
+        // 旧的还原收尾只重建「带标签的行」→ 未打标签条目还原进来的笔记永远搜不到。
+        // 全表重算后应能按笔记词召回。笔记词刻意与标题/标签都不同，确保命中的确是笔记贡献。
+        var src = Seed(_db1);
+        var item = await UpsertAsync(src.Items, "test", "n1", "普通标题");   // 不打标签
+        await src.Items.SetNoteAsync(item.Id, "紫水晶收藏笔记", CancellationToken.None);
+        // 前提：源库本身可按笔记词搜到
+        Assert.Contains((await src.Items.SearchAsync("紫水晶", new SearchFilter { MaxResults = 20 }, CancellationToken.None)).Items,
+                        i => i.Title == "普通标题");
+
+        var file = Path.Combine(Path.GetTempPath(), $"bk_{Guid.NewGuid():N}.json");
+        await src.Backup.ExportToFileAsync(file, CancellationToken.None);
+
+        var dst = Seed(_db2);
+        var env = await BackupService.ReadAsync(file, CancellationToken.None);
+        var rr = await dst.Backup.RestoreAsync(env, RestoreMode.Merge, null, CancellationToken.None);
+        Assert.True(rr.Success);
+
+        // 关键断言：还原后目标库仍能按笔记词「紫水晶」全文召回（未打标签行）
+        var hits = await dst.Items.SearchAsync("紫水晶", new SearchFilter { MaxResults = 20 }, CancellationToken.None);
+        Assert.Contains(hits.Items, i => i.Title == "普通标题");
+    }
+
+    [Fact]
     public async Task Restore_Replace_ClearsExistingItems()
     {
         var src = Seed(_db1);

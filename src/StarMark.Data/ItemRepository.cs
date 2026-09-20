@@ -357,30 +357,6 @@ public sealed class ItemRepository : IItemRepository
         await upd.ExecuteNonQueryAsync(ct);
     }
 
-    /// <summary>
-    /// 对「当前带标签的行」统一重建 <c>search_text</c>，把标签名烘焙进全文索引。
-    /// <para>
-    /// 专供<b>备份还原</b>收尾调用：还原走 <see cref="ImportItemsAsync"/>→<see cref="ImportItemTagLinksAsync"/>
-    /// 两步——导入条目时标签关联尚未建立（且导出条目本身不带 Tags 集合），标签对全文的贡献因此缺失；
-    /// 只补 <c>item_tags</c> 关联行不足以让「按标签词做中文全文检索」命中（chip 过滤走 JOIN，不受影响，
-    /// 故此前仅表现为搜索失灵而非标签丢失）。这里在所有关联落库后，按 <c>item_tags</c> 反查、逐行重建。
-    /// 不 <see cref="DataChangeHub.Notify"/>——还原是一次性离线操作，调用方收尾统一刷新。
-    /// </para>
-    /// </summary>
-    public async Task ReindexSearchTextForTaggedAsync(CancellationToken ct)
-    {
-        using var conn = _factory.Open();
-        var ids = new List<long>();
-        using (var q = conn.CreateCommand())
-        {
-            q.CommandText = "SELECT DISTINCT item_id FROM item_tags;";
-            await using var r = await q.ExecuteReaderAsync(ct);
-            while (await r.ReadAsync(ct)) ids.Add(r.GetInt64(0));
-        }
-        foreach (var id in ids)
-            await RebuildSearchTextAsync(conn, id, ct);
-    }
-
     public async Task SetPinnedAsync(long itemId, bool pinned, CancellationToken ct)
     {
         using var conn = _factory.Open();
