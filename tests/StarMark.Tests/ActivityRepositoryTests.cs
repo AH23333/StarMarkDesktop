@@ -137,6 +137,36 @@ public sealed class ActivityRepositoryTests : IDisposable
         Assert.Equal("这是一条更长的笔记应该被保留", bm[0].Notes);   // 非空冲突保留较长者
     }
 
+    [Fact]
+    public async Task MigrateV4_RebuildsSearchIndexForMergedContent()
+    {
+        // 三条 URL 变体（InsertRawBookmarks 的 search_text 插入时只含 title）。
+        var ids = InsertRawBookmarks(new[]
+        {
+            ("https://github.com/m/merge", "普通笔记"),
+            ("https://github.com/m/merge/", "zzmergednote更长的笔记应当被合并保留"),
+            ("https://github.com/m/merge?tab=readme", "普通笔记"),
+        });
+        var repo = new ItemRepository(_factory);
+        // keeper=ids[0]（最早 created_at）。zztgamma 挂在 dup ids[2] 上，合并后移到 keeper。
+        await repo.AddTagAsync(ids[0], "zztalpha", CancellationToken.None);
+        await repo.AddTagAsync(ids[2], "zztgamma", CancellationToken.None);
+
+        using (var c = _factory.Open())
+        using (var down = c.CreateCommand())
+        {
+            down.CommandText = "UPDATE sync_state SET value='3' WHERE key='schema_version';";
+            down.ExecuteNonQuery();
+        }
+        new MigrationRunner(_factory).EnsureSchema();   // 触发 V4 合并
+
+        // 合并改写了 keeper.notes 并新增 item_tags，但都没走 UpsertOne，若不事后重算 search_text +
+        // FTS rebuild，则「被合并进来的更长笔记词 zzmergednote」与「dup 标签 zztgamma」永久搜不到（回归 R2 F1）。
+        var search = new StarMark.Core.Search.SearchService(repo, Array.Empty<IItemSource>());
+        Assert.Single((await search.SearchAsync("zztgamma", new SearchFilter { MaxResults = 10 }, CancellationToken.None)).Items);
+        Assert.Single((await search.SearchAsync("zzmergednote", new SearchFilter { MaxResults = 10 }, CancellationToken.None)).Items);
+    }
+
     private long[] InsertRawBookmarks((string Url, string Notes)[] rows)
     {
         var ids = new long[rows.Length];

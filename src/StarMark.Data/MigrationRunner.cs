@@ -65,6 +65,14 @@ public sealed class MigrationRunner
     /// 幂等：重复执行结果一致。
     /// </remarks>
     private static void MigrateV3(Microsoft.Data.Sqlite.SqliteConnection conn)
+        => RebuildSearchTextAndIndex(conn);
+
+    /// <summary>
+    /// 全表按规范口径（title + description + notes + 标签名）重算 search_text 并对 FTS5
+    /// 外部内容表执行 'rebuild'。幂等。凡改动过 notes / item_tags 但没走 UpsertOne 的路径
+    /// 都需在事后调用它，否则新写入的正文/标签词永远进不了索引。
+    /// </summary>
+    private static void RebuildSearchTextAndIndex(Microsoft.Data.Sqlite.SqliteConnection conn)
     {
         var rows = new List<(long Id, string Text)>();
         using (var sel = conn.CreateCommand())
@@ -202,6 +210,11 @@ public sealed class MigrationRunner
             }
         }
         tx.Commit();
+
+        // 合并改写了 keeper 的 notes 并新增了 item_tags，但都没经过 UpsertOne，
+        // 故其 search_text 仍是被合并前的旧值——不重建则「被合并进来的笔记/标签词」永久搜不到。
+        // 仅当本次真的合并过（groups>0）才需要，全表重算 + FTS rebuild 一次到位。
+        RebuildSearchTextAndIndex(conn);
     }
 
     private static bool ColumnExists(Microsoft.Data.Sqlite.SqliteConnection conn, string table, string column)
