@@ -19,18 +19,32 @@ public sealed class BookmarkItemFactoryTests
         => new() { Url = url, Title = title, FolderPaths = folders ?? new(), BookmarkedAt = bookmarkedAt };
 
     [Fact]
-    public void MapItem_UsesNormalizedUrlAsDedupKeyAndUri()
+    public void MapItem_UsesNormalizedUrlAsDedupKey_ButKeepsOriginalUriForOpening()
     {
-        // source_id/uri 必须是「归一后的 URL」，让同一资源的尾斜杠/utm 等变体在 (source, source_id) 上合并为一条。
+        // source_id 必须是「归一后的 URL」，让同一资源的尾斜杠/utm 等变体在 (source, source_id) 上合并为一条；
+        // 但 Uri 保留用户原始 URL——它是 LauncherEx 实际打开的目标，不能用归一串（会丢 #锚点/GitHub 深链）。
         var withSlash = BookmarkItemFactory.MapItem(Entry("https://github.com/a/b/", "R"), Source, Now);
         var variant = BookmarkItemFactory.MapItem(Entry("https://github.com/a/b?utm_source=x", "R"), Source, Now);
 
         Assert.Equal("https://github.com/a/b", withSlash.SourceId);
         Assert.Equal("https://github.com/a/b", variant.SourceId);
-        Assert.Equal(withSlash.SourceId, variant.SourceId);   // 同资源 → 同键（否则标签/笔记分裂）
-        Assert.Equal(withSlash.Uri, withSlash.SourceId);       // uri 与去重键同源
+        Assert.Equal(withSlash.SourceId, variant.SourceId);   // 同资源 → 同去重键（否则标签/笔记分裂）
+        Assert.Equal("https://github.com/a/b/", withSlash.Uri);        // Uri = 原样（含尾斜杠）
+        Assert.Equal("https://github.com/a/b?utm_source=x", variant.Uri); // Uri 与归一键不再强等同
         Assert.Equal(Source, withSlash.Source);                // 浏览器源键落在 Source，非 SourceId
         Assert.Equal(ItemType.Bookmark, withSlash.Type);
+    }
+
+    [Fact]
+    public void MapItem_GitHubDeepLink_UriKeepsFilePathAndAnchor_SourceIdCollapsesToRepo()
+    {
+        // 点开书签走 item.Uri（见 ItemCardViewModel/LauncherEx）。GitHub 深层文件+锚点必须原样落在 Uri，
+        // 否则会被归一逻辑折叠到 /owner/repo 仓库首页；source_id 仍折叠到 /owner/repo 以合并同一仓库的变体。
+        var deep = BookmarkItemFactory.MapItem(
+            Entry("https://github.com/rust-lang/rust/blob/master/src/lib.rs#L42", "rust"), Source, Now);
+
+        Assert.Equal("https://github.com/rust-lang/rust/blob/master/src/lib.rs#L42", deep.Uri);  // 打开目标忠实
+        Assert.Equal("https://github.com/rust-lang/rust", deep.SourceId);                         // 去重键归一
     }
 
     [Fact]

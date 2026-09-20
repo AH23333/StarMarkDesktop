@@ -12,8 +12,10 @@ public static class BookmarkItemFactory
         var domain = TryGetDomain(e.Url);
         var added = e.BookmarkedAt > 0 ? e.BookmarkedAt : now;
 
-        // URL 归一化：同源不同变体（尾斜杠 / utm 参数 / 默认端口 / GitHub tab 查询）
-        // 统一为同一 source_id，避免重复条目分裂标签与笔记（扩展对比方案 P1-5）。
+        // URL 归一化只用于 source_id（去重主键）：把同源不同变体（尾斜杠 / utm 参数 / 默认端口 /
+        // GitHub 的 tab= 查询、深层 blob 路径）统一为同一 source_id，避免重复条目分裂标签与笔记
+        // （扩展对比方案 P1-5）。但 Uri 保留用户原始 URL——它是 LauncherEx 实际打开的目标，
+        // 归一串会丢掉 #锚点/GitHub 深链，导致书签点开到错误位置且原始精确链接无处可存。
         var normalizedUrl = StarMark.Abstractions.UriNormalizer.Normalize(e.Url);
 
         var meta = new BookmarkMeta
@@ -32,7 +34,7 @@ public static class BookmarkItemFactory
             SourceId = normalizedUrl,
             Title = string.IsNullOrWhiteSpace(e.Title) ? e.Url : e.Title,
             Subtitle = domain,
-            Uri = normalizedUrl,
+            Uri = e.Url,
             CreatedAt = added,
             UpdatedAt = added,
             SyncedAt = now,
