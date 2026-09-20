@@ -87,6 +87,8 @@ public sealed class QuickNoteWidgetViewModel
             UpdatedAt = now,
         };
         await _repo.UpsertLocalItemAsync(item);
+        // 用户新增一条随记 → 活动流记「新增」（绿）。#51。
+        await _repo.LogActivityAsync(ActivityKind.ItemAdd, $"{ItemSources.Local}:{item.SourceId}", item.Title, null, CancellationToken.None);
         await LoadAsync();
         return true;
     }
@@ -98,6 +100,8 @@ public sealed class QuickNoteWidgetViewModel
         var it = items.FirstOrDefault(i => i.Id == id);
         if (it is null) return;
         await _repo.DeleteBySourceIdAsync(ItemSources.Local, it.SourceId);
+        // 用户删除一条随记 → 活动流记「删除」（红）。#51。
+        await _repo.LogActivityAsync(ActivityKind.ItemDelete, $"{ItemSources.Local}:{it.SourceId}", it.Title, null, CancellationToken.None);
         await LoadAsync();
     }
 

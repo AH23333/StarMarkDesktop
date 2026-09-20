@@ -51,6 +51,9 @@ public sealed class ItemGridWidgetViewModel
 
     public ObservableCollection<ItemRowItem> Items { get; } = new();
 
+    /// <summary>最近活动格（#51）专用：用户主动的增/删/改事件流（非条目本身），按时间倒序。</summary>
+    public ObservableCollection<ActivityItemViewModel> Events { get; } = new();
+
     /// <summary>标签格所钉的标签名。</summary>
     public string? GridTag { get; private set; }
 
@@ -107,6 +110,14 @@ public sealed class ItemGridWidgetViewModel
         await _loadGate.WaitAsync();
         try
         {
+            // 最近活动格（#51）：读用户主动增/删/改的「事件流」，而不是「最近更新条目」。
+            if (Mode == ItemGridMode.Activity)
+            {
+                var recs = await _repo.GetActivityAsync(200, CancellationToken.None);
+                ApplyEvents(recs);
+                return;
+            }
+
             IReadOnlyList<Item> items = Mode switch
             {
                 ItemGridMode.Tag => await _repo.GetAllAsync(
@@ -116,7 +127,6 @@ public sealed class ItemGridWidgetViewModel
                         new SearchFilter { Tags = Tags.Where(t => t.Selected).Select(t => t.Name).ToList(), MaxResults = 200 }, CancellationToken.None)).Items
                     : (await _repo.SearchAsync(Query ?? string.Empty,
                         new SearchFilter { Tags = Tags.Where(t => t.Selected).Select(t => t.Name).ToList(), MaxResults = 200 }, CancellationToken.None)).Items,
-                ItemGridMode.Activity => await _repo.GetRecentAsync(200, CancellationToken.None),
                 ItemGridMode.Pinned => await _repo.GetPinnedAsync(200, CancellationToken.None),
                 _ => Array.Empty<Item>(),
             };
@@ -167,6 +177,32 @@ public sealed class ItemGridWidgetViewModel
         }
 
         while (Items.Count > rows.Count) Items.RemoveAt(Items.Count - 1);
+    }
+
+    /// <summary>
+    /// 最近活动格的事件流增量对齐（#51）：按事件 id 做最小差异，避免每次数据广播都 Clear 重建导致常驻组件闪一下白。
+    /// 事件按时间倒序，新事件天然落在最前。
+    /// </summary>
+    private void ApplyEvents(IReadOnlyList<ActivityRecord> recs)
+    {
+        var target = recs.Select(r => new ActivityItemViewModel(r)).ToList();
+        var targetIds = new HashSet<long>(target.Select(t => t.Id));
+
+        for (var i = Events.Count - 1; i >= 0; i--)
+            if (!targetIds.Contains(Events[i].Id)) Events.RemoveAt(i);
+
+        for (var i = 0; i < target.Count; i++)
+        {
+            var want = target[i];
+            if (i < Events.Count && Events[i].Id == want.Id) continue;   // 同一事件，标题/时间是快照，不重绘
+            var at = -1;
+            for (var j = i + 1; j < Events.Count; j++)
+                if (Events[j].Id == want.Id) { at = j; break; }
+            if (at >= 0) Events.Move(at, i);
+            else Events.Insert(i, want);
+        }
+
+        while (Events.Count > target.Count) Events.RemoveAt(Events.Count - 1);
     }
 
     /// <summary>标签格：设置所钉标签并持久化后重载。</summary>

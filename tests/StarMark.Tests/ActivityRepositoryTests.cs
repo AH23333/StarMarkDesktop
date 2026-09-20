@@ -51,28 +51,37 @@ public sealed class ActivityRepositoryTests : IDisposable
     }
 
     [Fact]
-    public async Task Upsert_NewItem_LogsBookmarkAdd()
+    public async Task Upsert_BackgroundPath_DoesNotLogActivity()
     {
+        // #51：UpsertAsync 只服务后台来源同步 / 种子 / 还原，一律不再自动写活动流，
+        // 否则「最近活动」会被批量同步刷屏。用户主动增删改改由 UI 显式 LogActivityAsync。
         var repo = new ItemRepository(_factory);
         await repo.UpsertAsync(new[]
         {
             new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "https://x.com/p", Title = "新条目" },
         }, CancellationToken.None);
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.GitHubStar, Source = "github", SourceId = "a/b", Title = "仓库" },
+        }, CancellationToken.None);
 
         var acts = await repo.GetActivityAsync(100, CancellationToken.None);
-        Assert.Contains(acts, a => a.Kind == ActivityKind.BookmarkAdd && a.Title == "新条目");
+        Assert.Empty(acts);
     }
 
     [Fact]
-    public async Task Upsert_ExistingItem_NoDuplicateActivity()
+    public async Task LogActivity_UserKinds_RoundTrip()
     {
+        // 用户主动事件（新增 / 修改）能被记录并原样解析回对应 Kind。
         var repo = new ItemRepository(_factory);
-        var item = new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "https://x.com/p", Title = "t" };
-        await repo.UpsertAsync(new[] { item }, CancellationToken.None);
-        await repo.UpsertAsync(new[] { item }, CancellationToken.None);   // 二次为更新，不记活动
+        await repo.LogActivityAsync(ActivityKind.ItemAdd, "local:t1", "买牛奶", null, CancellationToken.None);
+        await repo.LogActivityAsync(ActivityKind.ItemModify, null, "改了笔记", "https://x.com/1", CancellationToken.None);
 
         var acts = await repo.GetActivityAsync(100, CancellationToken.None);
-        Assert.Single(acts, a => a.Kind == ActivityKind.BookmarkAdd);
+        Assert.Equal(2, acts.Count);
+        Assert.Equal(ActivityKind.ItemModify, acts[0].Kind);   // 时间倒序
+        Assert.Equal(ActivityKind.ItemAdd, acts[1].Kind);
+        Assert.Equal("买牛奶", acts[1].Title);
     }
 
     [Fact]

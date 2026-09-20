@@ -579,6 +579,8 @@ public sealed class WidgetManager
         if (!added) return false;
 
         LinksChanged?.Invoke(instanceId);
+        // 用户拖入 / 发送一个快捷入口 → 活动流记「新增」（绿）。快捷入口非 items 行，item_key 留空。#51。
+        await LogActivityAsync(ActivityKind.ItemAdd, string.IsNullOrWhiteSpace(title) ? uri : title.Trim(), uri);
         return true;
     }
 
@@ -612,18 +614,31 @@ public sealed class WidgetManager
     public async Task RemoveLinkAsync(string instanceId, string uri)
     {
         bool removed = false;
+        string? removedTitle = null;
         await OnUiAsync(() =>
         {
             var data = _storage.Load();
             var inst = data.Instances.FirstOrDefault(i => i.Id == instanceId);
             if (inst is null) return;
-            if (inst.Links.RemoveAll(l => string.Equals(l.Uri, uri, StringComparison.OrdinalIgnoreCase)) > 0)
-            {
-                _storage.Save(data);
-                removed = true;
-            }
+            var doomed = inst.Links.Where(l => string.Equals(l.Uri, uri, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (doomed.Count == 0) return;
+            removedTitle = doomed[0].Title;
+            inst.Links.RemoveAll(l => string.Equals(l.Uri, uri, StringComparison.OrdinalIgnoreCase));
+            _storage.Save(data);
+            removed = true;
         });
-        if (removed) LinksChanged?.Invoke(instanceId);
+        if (!removed) return;
+        LinksChanged?.Invoke(instanceId);
+        // 用户移除一个快捷入口 → 活动流记「删除」（红）。#51。
+        await LogActivityAsync(ActivityKind.ItemDelete, removedTitle ?? uri, uri);
+    }
+
+    /// <summary>记录一条用户主动活动（快捷入口等非 items 资源）。仓库不可用时静默跳过，绝不打断交互。</summary>
+    private async Task LogActivityAsync(ActivityKind kind, string title, string? uri)
+    {
+        if (_repo is null) return;
+        try { await _repo.LogActivityAsync(kind, null, title, uri, CancellationToken.None); }
+        catch (Exception ex) { StarLog.Error($"记录快捷入口活动失败 ({kind})", ex); }
     }
 
     // ───────────────────────── 跨窗口动作 ─────────────────────────

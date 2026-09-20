@@ -11,7 +11,7 @@
 
     <Page.Resources>
         <helpers:BoolToVisibilityConverter x:Key="BoolToVis"/>
-        <helpers:IsRemovalToBrushConverter x:Key="IsRemovalToBrush"/>
+        <helpers:ActivityChangeToBrushConverter x:Key="ChangeToBrush"/>
     </Page.Resources>
 
     <ScrollViewer Background="Transparent" Padding="12,12,12,16"
@@ -28,11 +28,11 @@
                                 Click="Activity_Click" Tag="{x:Bind Uri}">
                             <Grid ColumnDefinitions="4,*,Auto" Padding="10,8" HorizontalAlignment="Stretch">
                                 <Border Grid.Column="0" CornerRadius="2"
-                                        Background="{x:Bind IsRemoval, Converter={StaticResource IsRemovalToBrush}}"/>
+                                        Background="{x:Bind Change, Converter={StaticResource ChangeToBrush}}"/>
                                 <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
                                     <TextBlock Text="{x:Bind KindLabel}"
                                                Style="{StaticResource CaptionTextBlockStyle}"
-                                               Foreground="{x:Bind IsRemoval, Converter={StaticResource IsRemovalToBrush}}"/>
+                                               Foreground="{x:Bind Change, Converter={StaticResource ChangeToBrush}}"/>
                                     <TextBlock Text="{x:Bind Title}"
                                                Style="{StaticResource BodyTextBlockStyle}"
                                                TextTrimming="CharacterEllipsis"/>

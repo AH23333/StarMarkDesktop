@@ -298,6 +298,8 @@ public sealed class TodoWidgetViewModel : ObservableObject
         // 被排到所有已排序条目之后 —— 表现为「新增的待办跑到列表最底下」。
         LocalItemState.SetOrder(item, NextTopOrder());
         await _repo.UpsertLocalItemAsync(item);   // 写回真实行 id（INSERT ... RETURNING id）
+        // 用户新增一条待办 → 活动流记「新增」（绿）。#51。
+        await _repo.LogActivityAsync(ActivityKind.ItemAdd, $"{ItemSources.Local}:{item.SourceId}", item.Title, null, CancellationToken.None);
 
         // 乐观插入：写完立刻把新行画出来，不等下一次整表读取。
         // 之前是"落盘 → 全表重读 → 重建列表"，回车到看见新条目之间隔着一次数据库往返 + 一次列表重建。
@@ -365,6 +367,8 @@ public sealed class TodoWidgetViewModel : ObservableObject
         var it = await FindItemAsync(id);
         if (it is null) return;
         await _repo!.DeleteBySourceIdAsync(ItemSources.Local, it.SourceId);
+        // 用户删除一条待办 → 活动流记「删除」（红）。#51。
+        await _repo.LogActivityAsync(ActivityKind.ItemDelete, $"{ItemSources.Local}:{it.SourceId}", it.Title, null, CancellationToken.None);
 
         RunOnUi(() =>
         {
@@ -382,6 +386,8 @@ public sealed class TodoWidgetViewModel : ObservableObject
         DismissUndo();
         snapshot.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         await _repo!.UpsertLocalItemAsync(snapshot);
+        // 撤销删除 = 条目重新回到库中 → 记「新增」（绿）。#51。
+        await _repo.LogActivityAsync(ActivityKind.ItemAdd, $"{ItemSources.Local}:{snapshot.SourceId}", snapshot.Title, null, CancellationToken.None);
         await LoadAsync();
     });
 

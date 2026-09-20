@@ -52,7 +52,15 @@ public sealed partial class ItemGridWidget : UserControl
             }
         }
 
+        // 最近活动格（#51）：只展示事件流，隐藏可点开/右键的条目列表；其余模式反之。
+        if (mode == ItemGridMode.Activity)
+        {
+            ResultsRepeater.Visibility = Visibility.Collapsed;
+            EventsRepeater.Visibility = Visibility.Visible;
+        }
+
         ViewModel.Items.CollectionChanged += (_, _) => UpdateEmptyHint();
+        ViewModel.Events.CollectionChanged += (_, _) => UpdateEmptyHint();
         UpdateEmptyHint();
 
         // 卸载即退订数据广播：组件会被反复创建/销毁，留着订阅会白跑数据库查询。
@@ -61,11 +69,18 @@ public sealed partial class ItemGridWidget : UserControl
 
     private void UpdateEmptyHint()
     {
-        var empty = ViewModel.Items.Count == 0;
+        bool isActivity = ViewModel.Mode == ItemGridMode.Activity;
+        var empty = isActivity ? ViewModel.Events.Count == 0 : ViewModel.Items.Count == 0;
         EmptyHint.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
-        ResultsRepeater.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+        if (isActivity)
+            EventsRepeater.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+        else
+            ResultsRepeater.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+
         if (empty)
-            EmptyHint.Text = ViewModel.NeedsConfig ? "先在上方配置要钉的内容" : "暂无条目";
+            EmptyHint.Text = isActivity
+                ? "暂无活动记录。新增 / 删除 / 修改条目（含待办、随记、快捷入口、笔记、标签）后会显示在这里。"
+                : ViewModel.NeedsConfig ? "先在上方配置要钉的内容" : "暂无条目";
     }
 
     private void ConfigBox_KeyDown(object sender, KeyRoutedEventArgs e)

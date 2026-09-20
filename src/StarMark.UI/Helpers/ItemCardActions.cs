@@ -115,8 +115,12 @@ public static class ItemCardActions
 
             if (result != CenteredDialog.HostedDialogResult.Committed) return;
             var text = box.Text.Trim();
+            // 仅在真正改动时记一条「修改」事件——空保存/重复保存不污染活动流（#51）。
+            var oldNotes = vm.Notes ?? string.Empty;
+            if (string.Equals(oldNotes, text, StringComparison.Ordinal)) return;
             await GetRepo().SetNoteAsync(vm.Id, text, CancellationToken.None);
             vm.ApplyNotes(string.IsNullOrWhiteSpace(text) ? null : text);
+            await LogModify(vm);
         }
         catch (Exception ex)
         {
@@ -148,13 +152,20 @@ public static class ItemCardActions
             var desired = editor.Tags.ToList();
             var current = await repo.GetTagsForItemAsync(vm.Id, CancellationToken.None);
 
-            foreach (var tag in current.Where(c => !desired.Contains(c, StringComparer.OrdinalIgnoreCase)))
+            var removed = current.Where(c => !desired.Contains(c, StringComparer.OrdinalIgnoreCase)).ToList();
+            var added = desired.Where(d => !current.Contains(d, StringComparer.OrdinalIgnoreCase)).ToList();
+
+            foreach (var tag in removed)
                 await repo.RemoveTagAsync(vm.Id, tag, CancellationToken.None);
-            foreach (var tag in desired.Where(d => !current.Contains(d, StringComparer.OrdinalIgnoreCase)))
+            foreach (var tag in added)
                 await repo.AddTagAsync(vm.Id, tag, CancellationToken.None);
 
             if (desired.Count > 0 || current.Count > 0)
                 vm.ApplyTags(desired);
+
+            // 只有净增删才记「修改」；原样保存不写活动流（#51）。
+            if (removed.Count > 0 || added.Count > 0)
+                await LogModify(vm);
 
             ItemTagsChanged?.Invoke();
         }
@@ -191,6 +202,7 @@ public static class ItemCardActions
         {
             await GetRepo().RemoveTagAsync(vm.Id, tag, CancellationToken.None);
             vm.ApplyTags(vm.Tags.Where(t => !string.Equals(t, tag, StringComparison.OrdinalIgnoreCase)).ToArray());
+            await LogModify(vm);
             ItemTagsChanged?.Invoke();
         }
         catch (Exception ex)
@@ -225,15 +237,36 @@ public static class ItemCardActions
             if (desired.Count == 0) return;
 
             var current = await repo.GetTagsForItemAsync(vm.Id, CancellationToken.None);
-            foreach (var tag in desired.Where(d => !current.Contains(d, StringComparer.OrdinalIgnoreCase)))
+            var toAdd = desired.Where(d => !current.Contains(d, StringComparer.OrdinalIgnoreCase)).ToList();
+            foreach (var tag in toAdd)
                 await repo.AddTagAsync(vm.Id, tag, CancellationToken.None);
 
             vm.ApplyTags(current.Concat(desired).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+            if (toAdd.Count > 0)
+                await LogModify(vm);
             ItemTagsChanged?.Invoke();
         }
         catch (Exception ex)
         {
             StarLog.Error($"添加标签失败 (id={vm.Id})", ex);
+        }
+    }
+
+    /// <summary>
+    /// 记一条用户主动「修改」事件（笔记 / 标签增删）。活动流只反映用户操作，不含同步/种子（#51）。
+    /// item_key 用条目的 (source:source_id) 作为业务键，便于后续按条目聚合。
+    /// </summary>
+    private static async Task LogModify(ItemCardViewModel vm)
+    {
+        try
+        {
+            var it = vm.GetItem();
+            var key = !string.IsNullOrEmpty(it.Source) ? $"{it.Source}:{it.SourceId}" : null;
+            await GetRepo().LogActivityAsync(ActivityKind.ItemModify, key, vm.Title, vm.Uri, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error($"记录修改活动失败 (id={vm.Id})", ex);
         }
     }
 }

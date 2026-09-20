@@ -17,6 +17,14 @@ public enum ActivityKind
     ClipAdd,
     ClipRemove,
     ItemDelete,
+
+    // 用户主动操作的通用事件（#51）：与上面「来源专属」事件区分，只由用户交互路径写入
+    // （待办/随记增删、快捷入口增删、改笔记、改标签），后台同步 / 种子 / 还原一律不写。
+    // 最近活动格据此上三色：ItemAdd=绿(增)、ItemDelete=红(删)、ItemModify=黄(改)。
+    /// <summary>用户新增内容条目（待办 / 随记 / 拖入快捷入口）→ 绿。</summary>
+    ItemAdd,
+    /// <summary>用户编辑内容（改笔记 / 增删标签）→ 黄。</summary>
+    ItemModify,
 }
 
 /// <summary>

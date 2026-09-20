@@ -651,7 +651,6 @@ public sealed class ItemRepository : IItemRepository
 
         // 用户状态（hidden / pinned / notes）是本地编辑，源侧同步不应覆盖。
         // 先读旧值合并进 item：既保住状态，又让 search_text 计算包含用户笔记。
-        bool isNew = true;
         using (var existing = conn.CreateCommand())
         {
             existing.CommandText = @"
@@ -666,7 +665,6 @@ public sealed class ItemRepository : IItemRepository
             await using var reader = await existing.ExecuteReaderAsync(ct);
             if (await reader.ReadAsync(ct))
             {
-                isNew = false;
                 item.Hidden = reader.GetInt64(0) != 0;
                 item.Notes = reader.IsDBNull(1) ? null : reader.GetString(1);
                 item.Pinned = !reader.IsDBNull(2) && reader.GetInt64(2) != 0;
@@ -751,21 +749,9 @@ public sealed class ItemRepository : IItemRepository
             }
         }
 
-        // 活动流：仅当本条是「新插入」才记录新增事件（扩展对比方案 P1-3）。
-        // 已存在的条目每次同步走 UPDATE 分支，不重复记活动；主体后续被同步移除时
-        // 由同步对账分支记录移除事件（同方法外的写入点）。
-        if (isNew && item.Id > 0)
-        {
-            var kind = item.Type switch
-            {
-                ItemType.GitHubStar => ActivityKind.StarAdd,
-                ItemType.Bookmark => ActivityKind.BookmarkAdd,
-                ItemType.File => ActivityKind.FileAdd,
-                ItemType.Clipboard => ActivityKind.ClipAdd,
-                _ => ActivityKind.ItemDelete,
-            };
-            await LogActivityOnConnection(conn, kind, $"{item.Source}:{item.SourceId}", item.Title, item.Uri, ct);
-        }
+        // 活动流（#51 收束）：本方法（UpsertAsync/UpsertOne）只被后台来源同步、种子与备份还原调用，
+        // 一律**不**记活动事件——「最近活动」要反映的是用户主动的增/删/改，而不是后台批量写入刷屏。
+        // 用户主动增删改由 UI 交互路径显式调用 LogActivityAsync（ItemAdd/ItemModify/ItemDelete）落库。
     }
 
     // ===== 活动流（扩展对比方案 P1-3）=====
@@ -775,6 +761,7 @@ public sealed class ItemRepository : IItemRepository
     {
         using var conn = _factory.Open();
         await LogActivityOnConnection(conn, kind, itemKey, title, uri, ct);
+        DataChangeHub.Notify();   // 活动事件本身也是「数据」：让常驻的最近活动格即时跟上（与业务写各自的 Notify 叠加，重载有去抖）
     }
 
     /// <summary>在给定连接上写入活动事件（供 <see cref="UpsertOne"/> 在已有事务内复用连接）。</summary>
