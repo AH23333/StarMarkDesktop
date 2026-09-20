@@ -1,0 +1,136 @@
+#nullable enable
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using StarMark.Abstractions;
+using StarMark.UI.Services;
+using StarMark.UI.ViewModels;
+
+namespace StarMark.UI.Helpers;
+
+/// <summary>
+/// 条目右键菜单的<b>单一真源构建器</b>（批次 M）：让「快捷搜索 / 搜索结果格 / 标签格 / 快捷启动」等
+/// 条目型桌面组件的紧凑行，弹出与主窗口 <see cref="Controls.ItemCard"/> 逐条一致的 ContextFlyout。
+/// <para>
+/// 菜单结构与 <c>Controls/ItemCard.xaml</c> 的 ContextFlyout 保持一一对应（打开 / 打开所在位置 / 复制链接
+/// / 预览 / 删除(仅启动器态) / 置顶 / 发送到桌面·快捷启动 / 编辑笔记 / 编辑标签 / 隐藏），动作全部走
+/// <see cref="ItemCardActions"/>（已含 try/catch + 日志），保证行为、可见性规则（HasOpenLocation /
+/// IsLauncherMode）与主窗口完全相同。
+/// </para>
+/// <para>
+/// <b>为何按需构建、每次右击现取条目</b>：置顶/隐藏/标签态需实时准确，而组件行是轻量记录、非
+/// <see cref="ItemCardViewModel"/>；这里用条目 Id 现查一条完整 <see cref="Item"/> 包成 VM 再建菜单，
+/// 既拿到最新 Tags/Pinned/Hidden，又无需把组件行数据模型整体重构（保持组件紧凑密度、改动面最小）。
+/// </para>
+/// </summary>
+internal static class ItemContextMenu
+{
+    /// <summary>
+    /// 在 <paramref name="anchor"/> 处弹出与主窗口一致的条目右键菜单。取不到条目（已删除等）时静默不弹。
+    /// </summary>
+    public static async void ShowForItem(long itemId, FrameworkElement anchor)
+    {
+        try
+        {
+            if (anchor.XamlRoot is not { } root) return;
+            var item = await App.Services.GetRequiredItemRepository()
+                .GetByIdAsync(itemId, CancellationToken.None);
+            if (item is null) return;   // 条目可能已被删除/隐藏：不弹陈旧菜单
+            Build(new ItemCardViewModel(item), root).ShowAt(anchor);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error($"构建条目右键菜单失败 (id={itemId})", ex);
+        }
+    }
+
+    /// <summary>
+    /// 按 <see cref="ItemCardViewModel"/> 状态构建右键菜单。<paramref name="root"/> 用于把弹窗按发起窗居中
+    /// （与 <see cref="ItemCardActions"/> 内的 ResolveOwner 同源）。
+    /// </summary>
+    private static MenuFlyout Build(ItemCardViewModel vm, XamlRoot root)
+    {
+        var flyout = new MenuFlyout();
+
+        flyout.Items.Add(Item("打开", (_, _) => ItemCardActions.Open(root, vm.Id)));
+
+        if (vm.HasOpenLocation)
+            flyout.Items.Add(Item("打开所在位置", (_, _) => ItemCardActions.OpenLocation(vm)));
+
+        flyout.Items.Add(Item("复制链接/路径", (_, _) => ItemCardActions.CopyUri(vm)));
+        flyout.Items.Add(Item("预览", async (_, _) => await PreviewAsync(vm, root)));
+
+        if (vm.IsLauncherMode)
+        {
+            // 启动器态（快捷启动的合成入口）：只保留按 URI 移除，隐藏一切会误写主库的操作。
+            flyout.Items.Add(Item("删除", (_, _) => RemoveLauncherEntry(vm)));
+            return flyout;
+        }
+
+        flyout.Items.Add(Item(vm.PinMenuText, (_, _) => ItemCardActions.TogglePin(vm)));
+        flyout.Items.Add(Item("发送到桌面 · 快捷启动", (_, _) => _ = SendToQuickLaunchAsync(vm)));
+        flyout.Items.Add(Item("编辑笔记", (_, _) => ItemCardActions.EditNote(root, vm)));
+        flyout.Items.Add(Item("编辑标签", (_, _) => ItemCardActions.EditTags(root, vm)));
+        flyout.Items.Add(Item(vm.HideMenuText, (_, _) => _ = ItemCardActions.ToggleHidden(root, vm)));
+        return flyout;
+    }
+
+    private static MenuFlyoutItem Item(string text, RoutedEventHandler click)
+    {
+        var mi = new MenuFlyoutItem { Text = text };
+        mi.Click += click;
+        return mi;
+    }
+
+    /// <summary>预览（QuickLook 式内嵌预览窗）：与主窗口 ItemCard.Preview_Click 同一宿主、同一提交行为。</summary>
+    private static async Task PreviewAsync(ItemCardViewModel vm, XamlRoot root)
+    {
+        try
+        {
+            var host = new Controls.PreviewHost { ViewModel = vm };
+            var title = vm.Title.Length <= 40 ? vm.Title : vm.Title[..40] + "…";
+            var owner = WindowInterop.ResolveWindow(root, App.MainWindow);
+            var result = await CenteredDialog.ShowContentAsync(
+                title, host, owner: owner,
+                dedupeKey: $"preview:{vm.Id}", width: 820, height: 640,
+                primaryText: "打开", cancelText: "关闭");
+            if (result == CenteredDialog.HostedDialogResult.Committed)
+                ItemCardActions.Open(root, vm.Id);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error($"预览失败 (id={vm.Id})", ex);
+        }
+    }
+
+    private static async Task SendToQuickLaunchAsync(ItemCardViewModel vm)
+    {
+        if (string.IsNullOrWhiteSpace(vm.Uri)) return;
+        try
+        {
+            var mgr = App.Services.GetRequiredService<WidgetManager>();
+            await mgr.AddLinkToQuickLaunchAsync(vm.Title, vm.Uri);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error($"发送到快捷启动失败 (id={vm.Id})", ex);
+        }
+    }
+
+    /// <summary>启动器态「删除」：把这条自定义入口从组件配置移除（不触主库）。</summary>
+    private static void RemoveLauncherEntry(ItemCardViewModel vm)
+    {
+        try
+        {
+            // 与主窗口 ItemCard 的 launcher-mode 删除一致：按 URI 移除；宿主组件订阅此事件完成移除。
+            LauncherEntryRemoved?.Invoke(vm.Uri);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error($"删除快捷入口失败 (uri={vm.Uri})", ex);
+        }
+    }
+
+    /// <summary>启动器态条目被「删除」时广播其 URI，由承载组件（快捷启动）订阅后从自身配置移除。</summary>
+    public static event Action<string?>? LauncherEntryRemoved;
+}

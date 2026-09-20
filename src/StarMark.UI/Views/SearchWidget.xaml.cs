@@ -67,6 +67,13 @@ public sealed partial class SearchWidget : UserControl
     {
         if (sender is Button { Tag: string uri }) await LauncherEx.OpenAsync(uri);
     }
+
+    /// <summary>右键：弹出与主窗口条目完全一致的 ContextFlyout（批次 M 的共享菜单工厂）。</summary>
+    private void Row_RightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: SearchResultItem item })
+            ItemContextMenu.ShowForItem(item.Id, sender as FrameworkElement ?? this);
+    }
 }
 
 /// <summary>标签选中态底色转换器：选中返回主题强调色（柔和），未选中透明。</summary>

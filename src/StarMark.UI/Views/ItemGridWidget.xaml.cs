@@ -95,4 +95,12 @@ public sealed partial class ItemGridWidget : UserControl
     {
         if (sender is Button { Tag: string uri }) await LauncherEx.OpenAsync(uri);
     }
+
+    /// <summary>右键：弹出与主窗口条目完全一致的 ContextFlyout（批次 M 的共享菜单工厂）。
+    /// 对标签格 / 搜索结果格 / 最近活动格 / 置顶条目格的所有条目生效。</summary>
+    private void Row_RightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: ItemRowItem item })
+            ItemContextMenu.ShowForItem(item.Id, sender as FrameworkElement ?? this);
+    }
 }
