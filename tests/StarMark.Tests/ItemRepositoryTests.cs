@@ -478,4 +478,46 @@ public sealed class ItemRepositoryTests : IDisposable
         Assert.NotNull(fetched);
         Assert.Equal(new[] { "含,逗号" }, fetched!.Tags.ToArray());
     }
+
+    // ===== 批次 AA（R3）：本地条目 search_text 口径 / GetBySource 隐藏过滤回归 =====
+
+    [Fact]
+    public async Task UpsertLocalItem_SearchTextCoversNotesDescriptionTags()
+    {
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertLocalItemAsync(new Item
+        {
+            Type = ItemType.Todo,
+            Source = ItemSources.Local,
+            SourceId = "S|1",
+            Title = "买咖啡",
+            Description = "描述zzdesc",
+            Notes = "笔记zznote",
+            Tags = new List<string> { "zztag" },
+        }, CancellationToken.None);
+
+        var search = new SearchService(repo, Array.Empty<IItemSource>());
+        // 旧实现 UpsertLocalItemAsync 的 search_text 只含 Title → 每次待办/随记 re-save 把描述/笔记/
+        // 标签词从 FTS 索引抹掉，表现为「明明写了却搜不到」。三个词都必须命中。
+        Assert.Single((await search.SearchAsync("zzdesc", new SearchFilter { MaxResults = 10 }, CancellationToken.None)).Items);
+        Assert.Single((await search.SearchAsync("zznote", new SearchFilter { MaxResults = 10 }, CancellationToken.None)).Items);
+        Assert.Single((await search.SearchAsync("zztag", new SearchFilter { MaxResults = 10 }, CancellationToken.None)).Items);
+    }
+
+    [Fact]
+    public async Task GetBySource_ExcludesHidden()
+    {
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertLocalItemAsync(
+            new Item { Type = ItemType.Todo, Source = ItemSources.Local, SourceId = "H|1", Title = "可见项" },
+            CancellationToken.None);
+        var hideMe = new Item { Type = ItemType.Todo, Source = ItemSources.Local, SourceId = "H|2", Title = "隐藏项" };
+        await repo.UpsertLocalItemAsync(hideMe, CancellationToken.None);
+        await repo.SetHiddenAsync(hideMe.Id, true, CancellationToken.None);
+
+        // 旧实现无 hidden 过滤 → 已隐藏的待办/随记仍会回到组件行列表。
+        var visible = await repo.GetBySourceAsync(ItemSources.Local, ItemType.Todo, 1000, CancellationToken.None);
+        Assert.Contains(visible, i => i.Title == "可见项");
+        Assert.DoesNotContain(visible, i => i.Title == "隐藏项");
+    }
 }

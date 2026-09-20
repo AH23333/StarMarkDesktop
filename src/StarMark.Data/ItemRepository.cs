@@ -587,7 +587,7 @@ public sealed class ItemRepository : IItemRepository
                     JOIN tags t ON t.id = it.tag_id
                     WHERE it.item_id = i.id) AS tag_names
             FROM items i
-            WHERE i.source = @source{typeClause}
+            WHERE i.source = @source AND i.hidden = 0{typeClause}
             ORDER BY i.updated_at DESC LIMIT @limit;";
         cmd.Parameters.AddWithValue("@source", source);
         cmd.Parameters.AddWithValue("@limit", limit);
@@ -620,9 +620,15 @@ public sealed class ItemRepository : IItemRepository
         using var conn = _factory.Open();
         using var cmd = conn.CreateCommand();
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var searchText = string.IsNullOrEmpty(item.Title)
-            ? string.Empty
-            : StarMark.Abstractions.Text.CjkTokenizer.ExpandForIndex(item.Title + " ");
+        // search_text 口径与 UpsertOne / ReplaceLocalItemsForInstanceAsync 完全一致（title + description +
+        // notes + 标签），否则每次待办/随记 re-save 都会把笔记、描述、标签词从 FTS 索引里抹掉，
+        // 表现为「明明写了却搜不到」。调用方（Todo/QuickNote VM）加载时已带 Tags，故此处直接用。
+        var raw = new StringBuilder();
+        raw.Append(item.Title).Append(' ');
+        if (!string.IsNullOrEmpty(item.Description)) raw.Append(item.Description).Append(' ');
+        if (!string.IsNullOrEmpty(item.Notes)) raw.Append(item.Notes).Append(' ');
+        if (item.Tags is { Count: > 0 }) raw.Append(string.Join(' ', item.Tags));
+        var searchText = StarMark.Abstractions.Text.CjkTokenizer.ExpandForIndex(raw.ToString());
         cmd.CommandText = @"
             INSERT INTO items (type, source, source_id, title, subtitle, uri,
                               search_text, description, stars_count, file_size,
