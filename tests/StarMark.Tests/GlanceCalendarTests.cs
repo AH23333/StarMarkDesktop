@@ -95,4 +95,15 @@ public sealed class GlanceCalendarTests
     {
         Assert.Equal(expected, GlanceCalendar.WeekdayText(new DateOnly(y, m, d)));
     }
+
+    /// <summary>
+    /// 回归 AT：本类契约「所有入口绝不把异常冒到 UI 线程」。NextFestival 的 AddDays(i) 在 from
+    /// 逼近 DateOnly.MaxValue 时抛 ArgumentOutOfRangeException（旧实现未钳窗口）。修后须返回 null 而非抛。
+    /// </summary>
+    [Fact]
+    public void NextFestival_NearDateOnlyMaxValue_ReturnsNullNotThrow()
+    {
+        Assert.Null(GlanceCalendar.NextFestival(DateOnly.MaxValue));
+        Assert.Null(GlanceCalendar.NextFestival(new DateOnly(9999, 12, 30), 5));
+    }
 }

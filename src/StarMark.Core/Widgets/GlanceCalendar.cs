@@ -91,6 +91,9 @@ public static class GlanceCalendar
     /// </summary>
     public static FestivalCountdown? NextFestival(DateOnly from, int maxDays = 400)
     {
+        // 兜底本类「所有入口绝不把异常冒到 UI 线程」的契约：from 逼近 DateOnly.MaxValue 时 AddDays(i) 会抛
+        // ArgumentOutOfRangeException，故把窗口钳到距上限的剩余天数（负 maxDays 仍 0 次迭代返回 null）。
+        maxDays = System.Math.Min(maxDays, DateOnly.MaxValue.DayNumber - from.DayNumber);
         for (var i = 0; i <= maxDays; i++)
         {
             var date = from.AddDays(i);
