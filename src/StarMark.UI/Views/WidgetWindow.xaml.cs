@@ -913,6 +913,59 @@ public sealed partial class WidgetWindow : Window
             }
             menu.Items.Add(sub);
         }
+
+        // 布局与数据快照（#53）：连组件数据一起存成不可变历史点；应用 = 回到那一刻（带自动回滚）。
+        var saveSnapshot = new MenuFlyoutItem
+        {
+            Text = "保存当前布局与数据…",
+            Icon = new FontIcon { Glyph = "\uE787", FontSize = 14 },
+        };
+        saveSnapshot.Click += (_, _) => _ = SaveSnapshotByNameAsync();
+        menu.Items.Add(saveSnapshot);
+
+        var snapshots = _manager.GetSnapshots();
+        if (snapshots.Count > 0)
+        {
+            var snapSub = new MenuFlyoutSubItem { Text = "应用快照" };
+            foreach (var s in snapshots)
+            {
+                var id = s.Id;
+                var apply = new MenuFlyoutItem { Text = $"{s.Name}（{s.Summary}）" };
+                // 快照应用刻意与「应用布局」一致：直接应用、不再二次确认，因为应用前会自动留回滚点。
+                apply.Click += (_, _) => _ = _manager.ApplySnapshotAsync(id);
+                snapSub.Items.Add(apply);
+            }
+            menu.Items.Add(snapSub);
+        }
+
+        var manageSnapshots = new MenuFlyoutItem { Text = "管理快照…" };
+        manageSnapshots.Click += (_, _) =>
+        {
+            App.PresentMainWindow();
+            App.MainWindow?.NavigateTo("snapshot");
+        };
+        menu.Items.Add(manageSnapshots);
+    }
+
+    /// <summary>
+    /// 询问名称并把「当前所有组件的布局 + 各自的数据」存为一个不可变快照点。
+    /// 与 <see cref="SaveLayoutByNameAsync"/> 的分工：那条纯模板不含数据，本条含数据（#52/#53）。
+    /// </summary>
+    private async System.Threading.Tasks.Task SaveSnapshotByNameAsync()
+    {
+        var name = await CenteredDialog.PromptAsync(
+            title: "保存当前布局与数据",
+            message: "把当前屏幕上所有组件的位置、外观，连同各自的数据（快捷入口 / 待办 / 随记 / 条目格查询）一起存成一个不可变快照点。之后「应用快照」即回到这一刻，并会先自动生成一个「应用前」回滚点。",
+            placeholder: "例如：上线前",
+            primaryText: "保存",
+            cancelText: "取消",
+            owner: this);
+
+        if (name is null) return;
+
+        var saved = await _manager.CaptureSnapshotAsync(name);
+        if (saved is null) await ShowTipAsync("当前没有组件", "没有可保存的快照内容。");
+        else await ShowTipAsync("已保存快照", $"「{saved.Name}」已记录（{saved.Summary}）。可在主窗口「快照」页或右键「应用快照」里回到这一刻。");
     }
 
     /// <summary>
