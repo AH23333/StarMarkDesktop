@@ -69,7 +69,24 @@ public sealed class SyncCoordinator
                     PulledCount = items.Count,
                 });
             }
-            catch (OperationCanceledException) { throw; }
+            // 单源内部超时（HttpClient 抛的 TaskCanceledException 是 OperationCanceledException 子类）
+            // 在顶层 ct 未取消时并非「用户取消整次同步」。旧实现一律无差别上抛 → 一个慢/卡住的源
+            // 拖垮整批，且丢弃前面已拉取好的兄弟结果。与其余每个源的容错口径对齐：记为该源失败、
+            // 继续下一个；仅当调用方确已取消（ct.IsCancellationRequested）才上抛中断整次同步。
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                StarLog.Error($"源 {source.SourceId} 拉取超时/被单独取消，已跳过该源并继续其余源");
+                results.Add(new SourceSyncResult
+                {
+                    SourceId = source.SourceId,
+                    DisplayName = source.DisplayName,
+                    Success = false,
+                    PulledCount = 0,
+                    Error = "拉取超时或被取消（未中断其余源）",
+                    ErrorKind = SourceSyncErrorKind.Unknown,
+                });
+            }
+            catch (OperationCanceledException) { throw; }   // 调用方真正取消整次同步 → 上抛
             catch (GitHubApiException gex)
             {
                 StarLog.Error($"源 {source.SourceId} 同步失败（{gex.Kind}）: {gex.Message}");

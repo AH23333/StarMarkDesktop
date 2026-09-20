@@ -119,4 +119,46 @@ public sealed class SyncCoordinatorTests : IDisposable
         Assert.Single(all);
         Assert.Equal("V2", all[0].Title);
     }
+
+    [Fact]
+    public async Task SyncAll_SourceLocalTimeout_DoesNotAbortBatch()
+    {
+        // 单源内部超时（HttpClient 的 TaskCanceledException 是 OCE 子类），而顶层 ct 未取消：
+        // 旧实现无差别上抛 → 整批中断、good 源永不执行。修复后应记为 bad 失败、good 照常拉取。
+        var repo = new ItemRepository(_factory);
+        var bad = new FakeSource { SourceId = "slow", DisplayName = "Slow", Throw = new TaskCanceledException() };
+        var good = new FakeSource
+        {
+            SourceId = "good",
+            DisplayName = "Good",
+            Result = new[] { new Item { Type = ItemType.File, Source = "good", SourceId = "a", Title = "OK" } },
+        };
+        var coordinator = new SyncCoordinator(repo, new[] { bad, good });
+
+        var summary = await coordinator.SyncAllAsync(CancellationToken.None);
+
+        Assert.Equal(1, summary.TotalPulled);
+        Assert.Equal(1, summary.FailedCount);
+        Assert.Contains(summary.Sources, s => s.SourceId == "slow" && !s.Success);
+        Assert.Contains(summary.Sources, s => s.SourceId == "good" && s.Success);
+    }
+
+    [Fact]
+    public async Task SyncAll_GenuineCancellation_Rethrows()
+    {
+        // 顶层确已取消时的 OCE 仍须上抛中断整次同步（不能被当作单源失败吞掉）。
+        var repo = new ItemRepository(_factory);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var src = new FakeSource
+        {
+            SourceId = "x",
+            DisplayName = "X",
+            Throw = new OperationCanceledException(cts.Token),
+        };
+        var coordinator = new SyncCoordinator(repo, new[] { src });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => coordinator.SyncAllAsync(cts.Token));
+    }
 }
