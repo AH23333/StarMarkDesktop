@@ -124,6 +124,13 @@ public sealed partial class ItemGridWidget : UserControl
         if (sender is Button { Tag: ItemRowItem row }) await LauncherEx.OpenAsync(row.Uri);
     }
 
+    /// <summary>拖出（CanDrag/DragStarting）：把该行本地文件/文件夹以存储项引用拖到桌面/资源管理器，网页则拖为快捷方式。只交引用不改动磁盘。</summary>
+    private void Row_DragStarting(UIElement sender, DragStartingEventArgs args)
+    {
+        if (sender is FrameworkElement { Tag: ItemRowItem row })
+            ItemDragHelper.BeginFromUri(row.Uri, args);
+    }
+
     /// <summary>右键（ContextRequested）：弹出与主窗口条目完全一致的 ContextFlyout（批次 M 的共享菜单工厂）。
     /// 对标签格 / 搜索结果格 / 置顶条目格的所有条目生效（最近活动格仅展示、不挂此处理器）。
     /// <para>

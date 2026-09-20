@@ -130,6 +130,13 @@ public sealed partial class SearchWidget : UserControl
         if (sender is Button { Tag: SearchResultItem row }) await LauncherEx.OpenAsync(row.Uri);
     }
 
+    /// <summary>拖出（CanDrag/DragStarting）：把该行本地文件/文件夹以存储项引用拖到桌面/资源管理器，网页则拖为快捷方式。Everything 虚拟行与已入库行同源，均可拖出。</summary>
+    private void Row_DragStarting(UIElement sender, DragStartingEventArgs args)
+    {
+        if (sender is FrameworkElement { Tag: SearchResultItem row })
+            ItemDragHelper.BeginFromUri(row.Uri, args);
+    }
+
     /// <summary>右键（ContextRequested）：弹出与主窗口条目完全一致的 ContextFlyout（批次 M 的共享菜单工厂）。
     /// <para>
     /// 必须拦 <b>ContextRequested</b> 而非 RightTapped：WidgetWindow 把组件级菜单挂在

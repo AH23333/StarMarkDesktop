@@ -65,4 +65,30 @@ public sealed class LocalFileIdentityTests
         Assert.Equal(LocalFileIdentity.SourceIdForPath(@"C:\Data\demo\readme.md"), item.SourceId);
         Assert.Equal("file://C:/Data/demo/readme.md", item.Uri);
     }
+
+    [Fact]
+    public void TryPathFromUri_RoundTripsBothSlashForms()
+    {
+        // 两斜杠（Everything 侧拼法）
+        Assert.True(LocalFileIdentity.TryPathFromUri("file://C:/Data/demo/readme.md", out var p1));
+        Assert.Equal(@"C:\Data\demo\readme.md", p1);
+
+        // 三斜杠（DB / 标准 file:/// 拼法）—— 剥多余前导斜杠后须与两斜杠结果一致
+        Assert.True(LocalFileIdentity.TryPathFromUri("file:///C:/Data/demo/readme.md", out var p2));
+        Assert.Equal(@"C:\Data\demo\readme.md", p2);
+
+        // UriForPath → TryPathFromUri 往返一致（拖出侧依赖此不变式）
+        Assert.True(LocalFileIdentity.TryPathFromUri(LocalFileIdentity.UriForPath(@"D:\工作 报告\x.pdf"), out var p3));
+        Assert.Equal(@"D:\工作 报告\x.pdf", p3);
+    }
+
+    [Fact]
+    public void TryPathFromUri_RejectsNonFileOrMissingDrive()
+    {
+        Assert.False(LocalFileIdentity.TryPathFromUri(null, out _));
+        Assert.False(LocalFileIdentity.TryPathFromUri("", out _));
+        Assert.False(LocalFileIdentity.TryPathFromUri("https://example.com/x", out _));
+        // file:// 但缺盘符（如 UNC 或相对）→ false，不臆造路径
+        Assert.False(LocalFileIdentity.TryPathFromUri("file://server/share", out _));
+    }
 }

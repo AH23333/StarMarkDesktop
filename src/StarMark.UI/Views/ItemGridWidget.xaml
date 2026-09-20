@@ -82,7 +82,7 @@
                         <DataTemplate x:DataType="vm:ItemRowItem">
                             <Button Margin="0,2,0,2" HorizontalContentAlignment="Left" HorizontalAlignment="Stretch"
                                     Padding="6,5,6,5" Background="{ThemeResource WidgetSubtleFillBrush}"
-                                    BorderThickness="0" CornerRadius="4"
+                                    BorderThickness="0" CornerRadius="4" CanDrag="True" DragStarting="Row_DragStarting"
                                     Click="ResultOpen_Click" ContextRequested="Row_ContextRequested" Tag="{x:Bind}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <TextBlock Text="{x:Bind Emoji}" FontSize="15" VerticalAlignment="Center"/>
