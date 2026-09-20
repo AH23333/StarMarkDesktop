@@ -206,4 +206,62 @@ public sealed class InsightsServiceTests
         Assert.Equal(2, r.NewTrend.Sum(t => t.Count)); // 仅近 14 天内的 2 条
         Assert.Contains(r.NewTrend, t => t.Count == 1);
     }
+
+    [Fact]
+    public void Duplicates_CrossOwnerSameTitle_DifferentUri_AreNotGrouped()
+    {
+        // 两个不同 owner 的仓库，标题同为 "{Repo} · {Language}"（NormalizeTitle 后同为 "tool rust"），Uri 不同。
+        // 旧实现仅按归一化标题分组 → 误判为疑似重复（−10）。加入 host+path 维度后各归各的，不再误判。
+        var items = new List<Item>
+        {
+            MakeItem("Tool · Rust", ItemType.GitHubStar, tags: new() { "t" }, uri: "https://github.com/ownerA/tool"),
+            MakeItem("Tool · Rust", ItemType.GitHubStar, tags: new() { "t" }, uri: "https://github.com/ownerB/tool"),
+        };
+        var r = InsightsService.BuildHealthReport(items, now: FixedNow);
+        Assert.DoesNotContain(r.Factors, f => f.Key == "duplicates");
+        Assert.Empty(r.DuplicateTop);
+        Assert.Equal(100, r.Score);
+    }
+
+    [Fact]
+    public void Duplicates_SameTitleSameDestination_StillGrouped()
+    {
+        // 同一目的地（host+path 相同，仅尾斜杠差异）的两条书签仍应算重复——加 uri 维度不该放松真正的重复。
+        var items = new List<Item>
+        {
+            MakeItem("My Page", tags: new() { "t" }, uri: "https://example.com/page"),
+            MakeItem("My Page", tags: new() { "t" }, uri: "https://example.com/page/"),
+        };
+        var r = InsightsService.BuildHealthReport(items, now: FixedNow);
+        var f = Assert.Single(r.Factors, x => x.Key == "duplicates");
+        Assert.Equal(10, f.Deduction);
+        Assert.Single(r.DuplicateTop);
+        Assert.Equal(2, r.DuplicateTop[0].Count);
+        Assert.Equal(90, r.Score);
+    }
+
+    [Fact]
+    public void NewTrend_NegativeDays_DoesNotThrow_ReturnsEmptyTrend()
+    {
+        // days 为负曾让 new List<>/new Dictionary<> 的负 capacity 抛 ArgumentOutOfRangeException。
+        var items = new List<Item> { MakeItem("x", createdAt: FixedNow().ToUnixTimeSeconds()) };
+        var r = InsightsService.BuildHealthReport(items, days: -5, now: FixedNow);
+        Assert.Empty(r.NewTrend);
+    }
+
+    [Fact]
+    public void NewTrend_CrossYearSameMonthDay_UsesDistinctBuckets()
+    {
+        // days>365 时旧的 "MM-dd" 内部键会跨年碰撞：2025-09-16 与 2026-09-16 都渲染 "09-16" → 塌进同一桶（旧计 2、另一桶空）。
+        // 内部键改 "yyyy-MM-dd" 后各归各桶，显示标签仍是 "MM-dd"。
+        var items = new List<Item>
+        {
+            MakeItem("this year", createdAt: FixedNow().ToUnixTimeSeconds()),               // 2026-09-16
+            MakeItem("last year", createdAt: FixedNow().AddDays(-365).ToUnixTimeSeconds()), // 2025-09-16（同年非闰，恰隔 365 天）
+        };
+        var r = InsightsService.BuildHealthReport(items, days: 400, now: FixedNow);
+        Assert.Equal(400, r.NewTrend.Count);
+        Assert.Equal(2, r.NewTrend.Count(t => t.Count == 1)); // 两个不同桶各 1（旧实现此处会是 1 桶计 2）
+        Assert.Equal(2, r.NewTrend.Sum(t => t.Count));
+    }
 }

@@ -33,9 +33,9 @@ public static class InsightsService
         var factors = new List<HealthFactor>();
         var deduction = 0;
 
-        // 1. 疑似重复（按归一化标题分组）
+        // 1. 疑似重复（按归一化标题 + 目标地址分组）
         var dupList = items
-            .GroupBy(i => NormalizeTitle(i.Title))
+            .GroupBy(DupGroupKey)
             // 空键 = 标题为空或纯标点/符号，归一后塌成 ""；这类"无有效标题"的条目彼此本就不该算重复，
             // 否则多条无名/纯符号条目会被并成一个幽灵重复组、误扣分。
             .Where(g => g.Count() >= 2 && g.Key.Length > 0)
@@ -107,18 +107,22 @@ public static class InsightsService
             .ToList();
 
         // 近 N 天新增趋势：按 anchor 日期分桶
+        // days 可能为负（调用方传入），new List<>/new Dictionary<> 的负 capacity 会抛；先钳到 >=0。
+        var span = Math.Max(0, days);
         var today = clock().LocalDateTime.Date;
-        var trend = new List<DateCount>(days);
-        var trendIndex = new Dictionary<string, int>(days);
-        for (var k = days - 1; k >= 0; k--)
+        var trend = new List<DateCount>(span);
+        // 内部键用 yyyy-MM-dd：MM-dd 在 days>365 时会把跨年同日期的两天塌进同一桶；DateCount.Date 仍显示 MM-dd。
+        var trendIndex = new Dictionary<string, int>(span);
+        for (var k = span - 1; k >= 0; k--)
         {
-            var date = today.AddDays(-k).ToString("MM-dd", CultureInfo.InvariantCulture);
-            trendIndex[date] = trend.Count;
-            trend.Add(new DateCount { Date = date, Count = 0 });
+            var day = today.AddDays(-k);
+            var key = day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            trendIndex[key] = trend.Count;
+            trend.Add(new DateCount { Date = day.ToString("MM-dd", CultureInfo.InvariantCulture), Count = 0 });
         }
         foreach (var item in items)
         {
-            var key = AnchorDate(item, clock).ToString("MM-dd", CultureInfo.InvariantCulture);
+            var key = AnchorDate(item, clock).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             if (trendIndex.TryGetValue(key, out var idx))
                 trend[idx] = new DateCount { Date = trend[idx].Date, Count = trend[idx].Count + 1 };
         }
@@ -174,6 +178,29 @@ public static class InsightsService
             // 标点/符号直接丢弃
         }
         return string.Join(" ", sb.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    /// <summary>
+    /// 重复检测分组键 = 归一化标题 + 目标主机路径。
+    /// 仅按标题归一会把"仓库名+语言相同、但 owner 不同"的两个 GitHub Star（标题形如 "{Repo} · {Language}"，
+    /// Subtitle=owner/repo、Uri=github.com/owner/repo）误判为同组重复。加上 host+path 后按真实目的地区分；
+    /// 而 uri 为空的书签测试夹具仍塌到同一 host+path（空串），行为与只按标题分组一致（无回归）。
+    /// 标题归一无意义（空）时返回空键，交由上游过滤（不参与重复判定）。
+    /// </summary>
+    private static string DupGroupKey(Item item)
+    {
+        var t = NormalizeTitle(item.Title);
+        if (t.Length == 0) return string.Empty;
+        return t + "\u241F" + HostPath(item.Uri);
+    }
+
+    /// <summary>http(s) URI 归一为小写 "host + path(去尾斜杠)"；非 http(s) 空 uri 返回空串；其它原样小写。</summary>
+    private static string HostPath(string uri)
+    {
+        if (Uri.TryCreate(uri, UriKind.Absolute, out var u)
+            && (u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps))
+            return (u.Host + u.AbsolutePath).TrimEnd('/').ToLowerInvariant();
+        return string.IsNullOrEmpty(uri) ? string.Empty : uri.ToLowerInvariant();
     }
 
     private static string? ExtractLanguage(Item item)
