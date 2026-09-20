@@ -41,9 +41,6 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty] private int _mainWindowBackdropIndex;
     [ObservableProperty] private double _widgetOpacity = 0.72;
 
-    /// <summary>毛玻璃材质浓度（0–1，对应 DeskBox 的 WidgetMaterialIntensity）。</summary>
-    [ObservableProperty] private double _widgetMaterialIntensity = 0.65;
-
     // 性能模式 / 内存门禁（Phase B-8）
     [ObservableProperty] private int _performanceModeIndex;
     [ObservableProperty] private double _cacheBudgetMb = 200;
@@ -65,12 +62,8 @@ public partial class SettingsPageViewModel : ObservableObject
     /// <summary>不透明度百分比文本（滑块右侧读数）。</summary>
     public string OpacityPercentText => $"{(int)Math.Round(WidgetOpacity * 100)}%";
 
-    /// <summary>材质浓度百分比文本（滑块右侧读数）。</summary>
-    public string MaterialIntensityPercentText => $"{(int)Math.Round(WidgetMaterialIntensity * 100)}%";
-
     partial void OnWidgetOpacityChanged(double value) => OnPropertyChanged(nameof(OpacityPercentText));
 
-    partial void OnWidgetMaterialIntensityChanged(double value) => OnPropertyChanged(nameof(MaterialIntensityPercentText));
     [ObservableProperty] private string _saveErrorMessage = string.Empty;
     [ObservableProperty] private bool _hasSaveError;
 
@@ -126,7 +119,6 @@ public partial class SettingsPageViewModel : ObservableObject
         BackdropIndex = (int)Safe(_settings.LoadWidgetBackdrop, WidgetBackdropKind.Acrylic, "组件材质");
         MainWindowBackdropIndex = (int)Safe(_settings.LoadMainWindowBackdrop, WidgetBackdropKind.Acrylic, "主窗口材质");
         WidgetOpacity = Safe(_settings.LoadWidgetOpacity, WidgetAppearance.DefaultOpacity, "不透明度");
-        WidgetMaterialIntensity = Safe(_settings.LoadWidgetMaterialIntensity, 0.65, "材质浓度");
         EnableWidgetSnap = Safe(_settings.LoadWidgetSnapEnabled, true, "边缘磁吸");
 
         // 性能模式 / 内存门禁
@@ -260,7 +252,6 @@ public partial class SettingsPageViewModel : ObservableObject
             _settings.SaveWidgetSnapEnabled(EnableWidgetSnap);
             _settings.SaveWidgetBackdrop((WidgetBackdropKind)BackdropIndex);
             _settings.SaveWidgetOpacity(WidgetOpacity);
-            _settings.SaveWidgetMaterialIntensity(WidgetMaterialIntensity);
             _settings.SaveMainWindowBackdrop((WidgetBackdropKind)MainWindowBackdropIndex);
             _settings.SavePerformanceMode((PerformanceMode)PerformanceModeIndex);
             _settings.SaveCacheBudgetMb(CacheBudgetMb);

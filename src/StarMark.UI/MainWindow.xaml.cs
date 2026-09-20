@@ -152,20 +152,15 @@ public sealed partial class MainWindow : Window
             var translucent = kind != WidgetBackdropKind.None;
             var theme = TargetTheme(_themePref);
             WidgetAppearance.ApplyBackdrop(
-                this, kind, WidgetAppearance.Opacity(), WidgetAppearance.MaterialIntensity(), theme);
+                this, kind, WidgetAppearance.Opacity(), theme);
             // 主题色一律按目标主题解析（ThemeBrush.For），不能取 Application.Current.Resources[key]
             // —— 应用级主题在窗口创建后冻结，那里解析出的永远是初始主题的画笔。
-            // 表面画笔必须跟着材质走（与组件 ApplyAppearanceCore 同构，保证主界面/组件同款观感、同步切换）：
-            // ① 原生控制器材质（亚克力薄/厚、云母、云母 Alt）成功接管背景时，RootGrid 必须透明，
-            //    让各自不同的霜化直接透出——此前这里无条件铺 BuildNativeSurfaceColor（与 kind 无关的半实色），
-            //    把四种原生材质抹成同一种观感，正是「主界面切材质看不出 / 与组件不同步」的根因；
-            // ② 纯色材质：扁平纯色背衬已单独着色整窗，RootGrid 透明避免双层 alpha 叠加（发灰/过实）；
-            // ③ 控制器挂不上（Win10/VM）或未开材质时，回落到 MainWindowSurfaceBrush 的按不透明度着色实色，
-            //    不会变全透明幽灵窗。
-            var frostActive = translucent && WidgetAppearance.IsNativeFrostActive(this);
-            var flatSolidActive = translucent && kind == WidgetBackdropKind.Solid
-                                  && WidgetAppearance.IsFlatSolidActive(this);
-            RootGrid.Background = frostActive || flatSolidActive
+            // 表面画笔跟着材质走（与组件 ApplyAppearanceCore 同构，保证主界面/组件同款观感、同步切换）：
+            // ① 背衬画笔已接管整窗（除实色外的亚克力/云母/纯色）时，RootGrid 透明让背衬单独透出着色，
+            //    避免与背衬叠两层 alpha（发灰/过实）；② 实色或未生效时回落 MainWindowSurfaceBrush 实色，
+            //    绝不变全透明幽灵窗。批次 K 起材质统一走扁平背衬，不再区分「原生控制器 / 纯色」两条路径。
+            var backdropActive = translucent && WidgetAppearance.IsBackdropSurfaceActive(this);
+            RootGrid.Background = backdropActive
                 ? new SolidColorBrush(Microsoft.UI.Colors.Transparent)
                 : WidgetAppearance.MainWindowSurfaceBrush(theme, kind, translucent);
             // 主题切换后代码构建的画笔重解析（来源按钮高亮、状态点）

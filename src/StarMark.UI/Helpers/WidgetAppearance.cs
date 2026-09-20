@@ -1,24 +1,27 @@
 #nullable enable
 using System.Runtime.CompilerServices;
 using Microsoft.UI;
-using Microsoft.UI.Composition;
-using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
-using Windows.Graphics;
-using WinRT;
 using StarMark.Abstractions;
 
 namespace StarMark.UI.Helpers;
 
 /// <summary>
-/// 组件 / 主窗口「macOS 风」外观：材质（亚克力 / 云母 / 不透明）+ 表面不透明度 + 材质浓度。
+/// 组件 / 主窗口「macOS 风」外观：材质（亚克力 / 云母 / 纯色 / 实色）+ 纯色背景不透明度。
 /// <para>
-/// 直接照搬 DeskBox 的控制器方案：原生亚克力 / 云母用 <see cref="DesktopAcrylicController"/> /
-/// <see cref="MicaController"/> 挂到 <see cref="ICompositionSupportsSystemBackdrop"/>，
-/// 可精确控制 TintColor / TintOpacity / LuminosityOpacity / Kind，得到真正的霜化玻璃（而不是
-/// 旧版用 72% 不透明实色盖住 SystemBackdrop 的「白盒子」观感）。内容背景在原生材质下设为透明，
-/// 让霜化背景透出。
+/// <b>批次 K 架构收敛（为何不再用 <c>DesktopAcrylicController</c> / <c>MicaController</c>）：</b>
+/// 未打包 WinUI3 下把控制器挂到窗口目标时，常出现「<c>AddSystemBackdropTarget</c> 返回 true 但 DWM 实际
+/// 不合成霜层」——用户真机现象即「除纯色外所有材质全黑、两滑杆全无反应、薄=厚」。既然「纯色」用的
+/// <c>TransparentTintBackdrop</c>（真·合成 CompositionColorBrush 背衬）在用户机上稳定可见，本批次把
+/// <b>全部材质统一改走该已验证可靠的背衬画笔机制</b>：玻璃化整窗 + 铺一层按材质性格取色的扁平背衬，
+/// 内容表面保持透明让背衬透出。于是每种材质在任何显示驱动 / 远程会话下都必然可见、互不相同、绝不全黑。
+/// 代价：亚克力不再产生真实的采样模糊（变成带壁纸透出的半透明染色面板）。这是为「稳定可用」对
+/// DeskBox 控制器方案的有意偏离；若日后转为打包（MSIX）应用，可再评估恢复真实模糊。
+/// </para>
+/// <para>
+/// 「背景不透明度」自本批次起<b>仅作用于纯色（Solid）</b>——其余材质用各自固定的透明度性格，不受滑杆影响
+/// （用户明确要求：放弃长期无法生效的滑杆联动）。「材质浓度」滑杆已整体删除。
 /// </para>
 /// </summary>
 public static class WidgetAppearance
@@ -34,9 +37,6 @@ public static class WidgetAppearance
 
     public static double Opacity()
         => Try(() => new SettingsStore().LoadWidgetOpacity(), DefaultOpacity);
-
-    public static double MaterialIntensity()
-        => Try(() => new SettingsStore().LoadWidgetMaterialIntensity(), WidgetMaterialVisualCalculator.DefaultWidgetMaterialIntensity);
 
     /// <summary>
     /// 系统强调色（DeskBox 取 <c>ThemeService.GetEffectiveAccentColor()</c>）。
@@ -66,353 +66,160 @@ public static class WidgetAppearance
     }
 
     /// <summary>
-    /// 每个窗口的控制器状态。照搬 DeskBox 的**复用**策略：
-    /// 切换材质族（亚克力↔云母）时只 <c>RemoveAllSystemBackdropTargets()</c> 摘掉挂载点，
-    /// 控制器本身留在手里等下次复用 —— 每次都 Dispose + new 会漏原生合成内存与 DWM 句柄，
-    /// 而这类泄漏 GC 与工作集修剪都收不回来。
+    /// 每个窗口的背衬状态。统一用一层 <see cref="WinUIEx.TransparentTintBackdrop"/> 扁平背衬着色整窗，
+    /// 按材质性格取不同颜色 / 固定透明度；不再持有或挂载任何系统背衬控制器。
     /// </summary>
     private sealed class WindowBackdropState
     {
-        public DesktopAcrylicController? Acrylic;
-        public bool AcrylicAttached;
-        public MicaController? Mica;
-        public bool MicaAttached;
-        public SystemBackdropConfiguration? Config;
-        public ICompositionSupportsSystemBackdrop? Target;
-        public bool ActivationWired;
+        /// <summary>整窗扁平背衬画笔。null = 未挂载（实色 None 材质）。</summary>
+        public WinUIEx.TransparentTintBackdrop? Tint;
 
-        /// <summary>纯色材质使用的扁平纯色背衬（无模糊的 CompositionColorBrush 背衬），
-        /// 对齐 DeskBox 的 WinUIEx.TransparentTintBackdrop。null = 未挂载。</summary>
-        public WinUIEx.TransparentTintBackdrop? Solid;
-
-        /// <summary>本次套用是否有原生霜化控制器（亚克力 / 云母）成功接管窗口背景。
-        /// 为真时组件内容表面应保持透明，让控制器各自不同的霜化透出——这正是
-        /// 「不同材质呈现同一效果」的修复点；为假（平台不支持 / 挂载失败）时回落实色表面兜底，
-        /// 避免透明幽灵窗。Solid / None 恒为 false。</summary>
-        public bool NativeFrostActive;
+        /// <summary>
+        /// 当前是否已用背衬画笔接管整窗着色（除「实色 None」外的所有材质均为 true）。
+        /// 为 true 时内容表面应保持透明，让这一层背衬单独着色——若再叠一层内容实色，
+        /// 就会与背衬两次 alpha 叠加导致过实 / 发灰（正是旧「纯色失效」的一半成因）。
+        /// </summary>
+        public bool BackdropSurfaceActive;
     }
 
     private static readonly ConditionalWeakTable<Window, WindowBackdropState> _states = new();
 
     /// <summary>
-    /// 把毛玻璃材质真正挂到窗口上（构造期、设置变更后、DWM 主题翻转后共用）。
-    /// 原生亚克力 / 云母：控制器接管背景，内容背景透明；不透明 / 纯色：控制器摘掉，内容表面铺实色。
+    /// 把材质真正挂到窗口上（构造期、设置变更后、DWM 主题翻转后共用）。
+    /// <para>
+    /// 实色（None）：什么都不挂，不玻璃化，内容表面铺主题实色（见 <see cref="SurfaceBrush"/>）。
+    /// 其余材质：玻璃化整窗 + 铺一层按材质取色的扁平背衬，内容表面保持透明让背衬透出。
+    /// 「背景不透明度」(<paramref name="solidOpacity"/>) 只在纯色材质参与取色；其它材质用各自固定透明度。
+    /// </para>
     /// </summary>
-    public static void ApplyBackdrop(Window window, WidgetBackdropKind kind, double surfaceOpacity, double intensity, ElementTheme theme)
+    public static void ApplyBackdrop(Window window, WidgetBackdropKind kind, double solidOpacity, ElementTheme theme)
     {
         try
         {
             var isDark = theme == ElementTheme.Dark;
-            surfaceOpacity = Math.Clamp(surfaceOpacity, 0.0, 1.0);
 
             var state = _states.GetOrCreateValue(window);
 
-            // 统一初始化控制器配置（所有材质族共用），放在分支之前，确保 Solid / None 早返回分支
-            // 也能拿到最新配置，并在主题翻转时把配置重发给已挂载的控制器。
-            state.Target ??= window.As<ICompositionSupportsSystemBackdrop>();
-            state.Config ??= new SystemBackdropConfiguration();
-            state.Config.IsInputActive = true;
-            state.Config.Theme = isDark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light;
-
-            // 让激活态跟随窗口真实焦点：原先恒置 IsInputActive=true，令失焦的组件/窗口仍按「激活」
-            // 绘制饱和材质（与系统其它窗口观感不符）。挂一次 Activated，据此在 Active/Inactive(含隐藏)
-            // 间切换；Config 与控制器是同一实例、改属性实时生效，无需重下发。对齐 DeskBox 的窗口激活处理。
-            if (!state.ActivationWired)
-            {
-                state.ActivationWired = true;
-                window.Activated += (_, e) =>
-                {
-                    if (state.Config is { } cfg)
-                        cfg.IsInputActive = e.WindowActivationState != WindowActivationState.Deactivated;
-                };
-            }
-
-            // 纯色（Solid）：1:1 复刻 DeskBox 的 ApplySolidColorBackdrop —— 用真正的扁平纯色背衬
-            // （WinUIEx.TransparentTintBackdrop，内部是一层 CompositionColorBrush，绝无亚克力模糊）
-            // 挂到 window.SystemBackdrop，并**摘掉**亚克力/云母控制器。此前 StarMark 用
-            // DesktopAcrylicController + LuminosityOpacity=0 冒充纯色，但 acrylic 的采样模糊始终存在，
-            // 于是"纯色材质"永远带磨砂、且与内容表面第二层叠了两道 alpha → 用户报"纯色材质失效"。
-            // DeskBox 是单层：背衬铺 BuildContentSolidSurfaceColor(isDark, accent, surfaceOpacity)，
-            // 内容表面在背衬生效时保持透明（见 WidgetWindow 对 IsFlatSolidActive 的判断），不再双层叠加。
-            if (kind == WidgetBackdropKind.Solid)
-            {
-                state.NativeFrostActive = false;
-                DetachAcrylic(state);
-                DetachMica(state);
-
-                var solidTint = WidgetMaterialVisualCalculator.BuildContentSolidSurfaceColor(
-                    isDark, AccentColor(), surfaceOpacity);
-                if (state.Solid is null)
-                {
-                    state.Solid = new WinUIEx.TransparentTintBackdrop(solidTint);
-                    window.SystemBackdrop = state.Solid;
-                }
-                else
-                {
-                    state.Solid.TintColor = solidTint;
-                    if (!ReferenceEquals(window.SystemBackdrop, state.Solid))
-                        window.SystemBackdrop = state.Solid;
-                }
-
-                // 整窗玻璃化让背衬铺满客户区；DWM 侧关掉自带背景（DWMSBT_NONE），避免再叠一层默认材质。
-                WindowInterop.ApplyFullWindowFrame(window);
-                WindowInterop.SetImmersiveDarkMode(window, isDark);
-                WindowInterop.SetDwmSystemBackdropNone(window);
-                return;
-            }
-
-            // 不透明（None）：什么都不挂，内容表面铺实色（见 SurfaceBrush）。关掉整窗玻璃化，避免透明。
             if (kind == WidgetBackdropKind.None)
             {
-                state.NativeFrostActive = false;
-                DetachAcrylic(state);
-                DetachMica(state);
-                ClearSolidBackdrop(state, window);
-                window.SystemBackdrop = null;
+                // 实色：关玻璃、摘背衬，内容表面铺不透明主题色，最省资源。
+                state.BackdropSurfaceActive = false;
+                ClearTintBackdrop(state, window);
                 WindowInterop.SetDwmSystemBackdropNone(window);
                 WindowInterop.ClearFullWindowFrame(window);
                 WindowInterop.SetImmersiveDarkMode(window, isDark);
                 return;
             }
 
-            // 整窗玻璃化（DeskBox 的 ApplyFullWindowFrame）：原生霜化层能透出来的前提。
-            // 缺这一步时窗口客户区由系统按不透明底色绘制，控制器再怎么调也看不见。
+            // 其余材质统一：按材质性格取扁平背衬色（纯色吃滑杆，其余固定），玻璃化整窗让背衬透出。
+            var color = WidgetMaterialVisualCalculator.BuildMaterialBackdropColor(
+                isDark, AccentColor(), kind, Math.Clamp(solidOpacity, 0.0, 1.0));
+
+            if (state.Tint is null)
+            {
+                state.Tint = new WinUIEx.TransparentTintBackdrop(color);
+                window.SystemBackdrop = state.Tint;
+            }
+            else
+            {
+                state.Tint.TintColor = color;
+                if (!ReferenceEquals(window.SystemBackdrop, state.Tint))
+                    window.SystemBackdrop = state.Tint;
+            }
+
+            // 整窗玻璃化让背衬铺满客户区；DWM 侧关掉自带背景（DWMSBT_NONE），避免再叠一层默认材质。
             WindowInterop.ApplyFullWindowFrame(window);
             WindowInterop.SetImmersiveDarkMode(window, isDark);
-
-            var accent = AccentColor();
-            var tint = WidgetMaterialVisualCalculator.BuildContentTintColor(isDark, accent);
-
-            // 主题翻转后必须重新下发配置：控制器仅在「首次挂载」时 SetSystemBackdropConfiguration，
-            // 若之后切换浅/深色却不再下发，霜化层会停留在旧主题观感 —— 这正是「浅色模式材质不正确」的根因之一。
-            if (state.AcrylicAttached) state.Acrylic?.SetSystemBackdropConfiguration(state.Config);
-            if (state.MicaAttached) state.Mica?.SetSystemBackdropConfiguration(state.Config);
-
-            var ok = kind is WidgetBackdropKind.Mica or WidgetBackdropKind.MicaAlt
-                ? ApplyMica(state, isDark, tint, kind == WidgetBackdropKind.MicaAlt, surfaceOpacity, intensity)
-                  || ApplyAcrylic(state, isDark, tint, false, surfaceOpacity, intensity)   // 不支持云母 → 回落亚克力
-                : ApplyAcrylic(state, isDark, tint, kind == WidgetBackdropKind.AcrylicBase, surfaceOpacity, intensity)
-                  || ApplyMica(state, isDark, tint, false, surfaceOpacity, intensity);      // 不支持亚克力 → 回落云母
-
-            // 控制器接管时必须关掉 DWM 自带背景，否则 DWM 在控制器之上再叠一层默认亚克力（DeskBox 同款处理）。
-            // 同时摘掉纯色背衬：从 Solid 切回亚克力/云母时，TransparentTintBackdrop 必须让位给控制器。
-            ClearSolidBackdrop(state, window);
-            window.SystemBackdrop = null;
             WindowInterop.SetDwmSystemBackdropNone(window);
-            state.NativeFrostActive = ok;
-            if (!ok)
-            {
-                // 云母/亚克力都挂不上（平台不支持/AddSystemBackdropTarget 失败）却已玻璃化客户区 →
-                // 无控制器垫底就是一块透明幽灵窗，滑块再怎么调也看不见内容。撤掉玻璃化退回不透明底。
-                WindowInterop.ClearFullWindowFrame(window);
-                StarLog.Error($"当前平台不支持 {kind} 材质，已退化为实色表面");
-            }
+            state.BackdropSurfaceActive = true;
+
+            StarLog.Info($"[材质诊断] backdrop kind={kind} dark={isDark} solidOpacity={solidOpacity:F2} " +
+                $"tint=#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}");
         }
         catch (Exception ex)
         {
-            StarLog.Error($"应用毛玻璃材质失败 ({kind})", ex);
+            StarLog.Error($"应用材质背衬失败 ({kind})", ex);
             try { window.SystemBackdrop = null; } catch { }
         }
     }
 
-    private static bool ApplyMica(WindowBackdropState state, bool isDark, Windows.UI.Color tint,
-        bool useAlt, double surfaceOpacity, double intensity)
-    {
-        if (!MicaController.IsSupported()) return false;
-
-        try
-        {
-            DetachAcrylic(state);
-            // Kind 是可变属性：Base ↔ BaseAlt 复用同一个控制器即可
-            state.Mica ??= new MicaController();
-            if (!state.MicaAttached)
-            {
-                if (!state.Mica.AddSystemBackdropTarget(state.Target!)) return false;
-                state.MicaAttached = true;
-                state.Mica.SetSystemBackdropConfiguration(state.Config!);
-            }
-
-            state.Mica.Kind = useAlt ? MicaKind.BaseAlt : MicaKind.Base;
-            state.Mica.TintColor = tint;
-            state.Mica.FallbackColor = WidgetMaterialVisualCalculator.BuildMicaFallbackColor(isDark, useAlt);
-            var profile = WidgetMaterialVisualCalculator.CalculateMica(isDark, useAlt, intensity);
-            state.Mica.TintOpacity = (float)profile.TintOpacity;
-            state.Mica.LuminosityOpacity = (float)profile.LuminosityOpacity;
-            StarLog.Info($"[材质诊断] Mica alt={useAlt} dark={isDark} opacity={surfaceOpacity:F2} intensity={intensity:F2} " +
-                $"tint={profile.TintOpacity:F3} lum={profile.LuminosityOpacity:F3} targetNotNull={state.Target is not null}");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            StarLog.Error("应用云母材质失败", ex);
-            return false;
-        }
-    }
-
-    private static bool ApplyAcrylic(WindowBackdropState state, bool isDark, Windows.UI.Color tint,
-        bool useBase, double surfaceOpacity, double intensity)
-    {
-        if (!DesktopAcrylicController.IsSupported()) return false;
-
-        try
-        {
-            DetachMica(state);
-            state.Acrylic ??= new DesktopAcrylicController();
-            if (!state.AcrylicAttached)
-            {
-                if (!state.Acrylic.AddSystemBackdropTarget(state.Target!)) return false;
-                state.AcrylicAttached = true;
-                state.Acrylic.SetSystemBackdropConfiguration(state.Config!);
-            }
-
-            state.Acrylic.Kind = useBase ? DesktopAcrylicKind.Base : DesktopAcrylicKind.Thin;
-            state.Acrylic.TintColor = tint;
-            state.Acrylic.FallbackColor = tint;
-            var profile = WidgetMaterialVisualCalculator.CalculateAcrylic(isDark, useBase, surfaceOpacity, intensity);
-            state.Acrylic.TintOpacity = (float)profile.TintOpacity;
-            state.Acrylic.LuminosityOpacity = (float)profile.LuminosityOpacity;
-            StarLog.Info($"[材质诊断] Acrylic base={useBase} dark={isDark} opacity={surfaceOpacity:F2} intensity={intensity:F2} " +
-                $"tint={profile.TintOpacity:F3} lum={profile.LuminosityOpacity:F3} targetNotNull={state.Target is not null}");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            StarLog.Error("应用亚克力材质失败", ex);
-            return false;
-        }
-    }
-
     /// <summary>
-    /// 纯色背衬当前是否真正挂在窗口上。为 true 时内容表面应保持透明，让扁平背衬单独着色，
-    /// 避免与背衬叠两层 alpha（这正是旧实现"纯色发灰/失效"的一半成因）。
+    /// 整窗背衬画笔当前是否真正挂在窗口上。为 true 时内容表面应保持透明，让扁平背衬单独着色，
+    /// 避免与背衬叠两层 alpha。适用于除「实色 None」外的所有材质（含纯色 Solid）。
     /// </summary>
-    public static bool IsFlatSolidActive(Window window)
+    public static bool IsBackdropSurfaceActive(Window window)
         => _states.TryGetValue(window, out var s)
-           && s.Solid is not null
-           && ReferenceEquals(window.SystemBackdrop, s.Solid);
+           && s.BackdropSurfaceActive
+           && s.Tint is not null
+           && ReferenceEquals(window.SystemBackdrop, s.Tint);
 
-    /// <summary>
-    /// 原生霜化控制器（亚克力 / 云母）当前是否真正接管了窗口背景。为 true 时组件内容表面应保持透明，
-    /// 让各材质本就不同的 Tint/Luminosity/Kind 霜化直接透出（对齐 DeskBox：原生材质下表面层透明）——
-    /// 否则在其上再铺一层「与材质无关」的半实色表面，会把亚克力薄/厚、云母/云母 Alt 抹成同一种观感，
-    /// 这正是用户所说「不同材质呈现同一效果 / 切换材质组件不同步」的根因。
-    /// </summary>
-    public static bool IsNativeFrostActive(Window window)
-        => _states.TryGetValue(window, out var s) && s.NativeFrostActive;
-
-    /// <summary>摘掉纯色背衬（切回亚克力/云母/不透明，或窗口释放时调用）。</summary>
-    private static void ClearSolidBackdrop(WindowBackdropState state, Window window)
+    /// <summary>摘掉扁平背衬（切回实色，或窗口释放时调用）。</summary>
+    private static void ClearTintBackdrop(WindowBackdropState state, Window window)
     {
-        if (state.Solid is null) return;
-        try { if (ReferenceEquals(window.SystemBackdrop, state.Solid)) window.SystemBackdrop = null; }
+        if (state.Tint is null) return;
+        try { if (ReferenceEquals(window.SystemBackdrop, state.Tint)) window.SystemBackdrop = null; }
         catch { }
-        state.Solid = null;
+        state.Tint = null;
     }
 
-    /// <summary>摘掉亚克力挂载点（控制器留着复用）。</summary>
-    private static void DetachAcrylic(WindowBackdropState state)
-    {
-        if (state.Acrylic is null || !state.AcrylicAttached) return;
-        try { state.Acrylic.RemoveAllSystemBackdropTargets(); } catch { }
-        state.AcrylicAttached = false;
-    }
-
-    /// <summary>摘掉云母挂载点（控制器留着复用）。</summary>
-    private static void DetachMica(WindowBackdropState state)
-    {
-        if (state.Mica is null || !state.MicaAttached) return;
-        try { state.Mica.RemoveAllSystemBackdropTargets(); } catch { }
-        state.MicaAttached = false;
-    }
-
-    /// <summary>窗口关闭时彻底释放（不释放会漏原生合成资源）。</summary>
+    /// <summary>窗口关闭时彻底释放（把背衬从窗口摘掉，避免引用悬挂）。</summary>
     public static void ReleaseBackdrop(Window window)
     {
         if (!_states.TryGetValue(window, out var state)) return;
-        try
-        {
-            if (state.Acrylic is { } a) { try { a.RemoveAllSystemBackdropTargets(); a.Dispose(); } catch { } }
-            if (state.Mica is { } m) { try { m.RemoveAllSystemBackdropTargets(); m.Dispose(); } catch { } }
-        }
+        try { if (ReferenceEquals(window.SystemBackdrop, state.Tint)) window.SystemBackdrop = null; }
         catch { }
         finally
         {
-            state.Acrylic = null;
-            state.Mica = null;
-            state.AcrylicAttached = false;
-            state.MicaAttached = false;
-            state.Solid = null;
+            state.Tint = null;
+            state.BackdropSurfaceActive = false;
             _states.Remove(window);
         }
     }
 
     /// <summary>
     /// 组件 / 主窗口的内容表面画笔（两者共用同一套，保证「设置里怎么调、两边就怎么变」）。
+    /// <para>
+    /// 正常路径下背衬（<see cref="IsBackdropSurfaceActive"/>）会透出，调用方会把内容置透明；这里的画笔
+    /// 是<b>背衬未生效时的实色兜底</b>（理论上扁平背衬总能挂上，兜底只为防御）：
+    /// </para>
     /// <list type="bullet">
-    /// <item>原生材质（亚克力 / 云母）→ <see cref="WidgetMaterialVisualCalculator.BuildNativeSurfaceColor"/>：
-    /// Alpha 吃「背景不透明度」、染色浓度吃「材质浓度」；
-    /// 早先这里一律返回透明，于是原生材质的背景完全由控制器说了算，
-    /// 一旦霜化层没透出来（缺整窗玻璃化），两个滑块就彻底失效。</item>
-    /// <item><see cref="WidgetBackdropKind.None"/> → 跟随主题的黑白实色（按用户不透明度调 Alpha）；</item>
-    /// <item><see cref="WidgetBackdropKind.Solid"/>（照搬 DeskBox）→ 「主题基色 + 强调色」混合后再按
-    /// 用户不透明度调整 Alpha 的实色，即**纯色材质吃「背景不透明度」、不吃「材质浓度」**。</item>
+    /// <item>半透明材质（亚克力 / 云母 / 纯色）→ 与背衬同源的 <see cref="WidgetMaterialVisualCalculator.BuildMaterialBackdropColor"/>，
+    ///     保证「万一没挂上背衬也仍是该材质应有的染色面板」，绝不全黑；</item>
+    /// <item><see cref="WidgetBackdropKind.None"/> → 跟随主题的黑 / 白实色。</item>
     /// </list>
     /// </summary>
     public static Brush SurfaceBrush(ElementTheme theme, WidgetBackdropKind kind)
         => SurfaceBrush(theme, kind, null);
 
-    /// <param name="opacityOverride">显式指定「背景不透明度」（主窗口用它强制不透明 / 跟随滑杆）。</param>
+    /// <param name="opacityOverride">显式指定「背景不透明度」（仅纯色材质读取它）。</param>
     public static Brush SurfaceBrush(ElementTheme theme, WidgetBackdropKind kind, double? opacityOverride)
     {
         var dark = theme == ElementTheme.Dark;
         var opacity = Math.Clamp(opacityOverride ?? Opacity(), 0.0, 1.0);
 
-        if (kind is WidgetBackdropKind.Acrylic or WidgetBackdropKind.AcrylicBase
-            or WidgetBackdropKind.Mica or WidgetBackdropKind.MicaAlt)
+        if (kind == WidgetBackdropKind.None)
         {
-            return new SolidColorBrush(WidgetMaterialVisualCalculator.BuildNativeSurfaceColor(
-                dark, AccentColor(), opacity, MaterialIntensity(), kind));
+            // 实色：完全跟主题的黑白实色，不吃任何滑杆。
+            return new SolidColorBrush(dark ? Colors.Black : Colors.White);
         }
 
-        if (kind == WidgetBackdropKind.Solid)
-        {
-            // 与 DeskBox 的 ContentWidgetWindow.ApplySurfaceStyle 同一套取色：
-            // BuildContentSolidSurfaceColor 内部已按 surfaceOpacity（背景不透明度）调整 Alpha，
-            // 配合窗口整窗玻璃化（ApplyBackdrop 的 Solid 分支），背景不透明度直接决定组件对桌面的透明程度。
-            // 强调色必须取系统强调色（DeskBox 走 ThemeService.GetEffectiveAccentColor），
-            // 用固定蓝会让纯色和 DeskBox 明显不是一个色。
-            var solid = WidgetMaterialVisualCalculator.BuildContentSolidSurfaceColor(
-                dark, AccentColor(), opacity);
-            return new SolidColorBrush(solid);
-        }
-
-        // 不透明（None）：完全实色，不受「背景不透明度」滑杆影响
-        // （该滑杆只作用于有透明的材质：Solid / 亚克力 / 云母）。浅/深主题各自给纯黑/纯白实色。
-        var baseColor = dark ? Colors.Black : Colors.White;
-        return new SolidColorBrush(baseColor);
+        return new SolidColorBrush(WidgetMaterialVisualCalculator.BuildMaterialBackdropColor(
+            dark, AccentColor(), kind, opacity));
     }
 
     /// <summary>便捷重载：按当前设置读出材质。</summary>
     public static Brush SurfaceBrush(ElementTheme theme) => SurfaceBrush(theme, Backdrop());
 
     /// <summary>
-    /// 主窗口的表面画笔（照搬 DeskBox「材质表面」分层，但按主窗口的可读性做了适配）。
-    /// <para>
-    /// 为什么不能直接用 <see cref="SurfaceBrush"/>：主窗口的顶栏 / NavigationView / 页面
-    /// 各自带不透明背景，原生材质即便挂上了也几乎被盖住 —— 用户拖「背景不透明度」看不出任何变化，
-    /// 于是报「两个滑杆对主界面失效」。这里改为在原生材质之上再压一层**按不透明度调 Alpha 的主题色**，
-    /// 让「背景不透明度」字面生效（越高越实、越低越透出霜化背景），与主窗口的实际观感一致。
-    /// </para>
+    /// 主窗口的表面画笔。未开启材质（实色 None）时铺主题实色；开启后与组件走同一套表面色兜底
+    /// （正常路径下 RootGrid 会被置透明让整窗背衬透出，见 MainWindow.RefreshAppearance）。
     /// </summary>
     public static Brush MainWindowSurfaceBrush(ElementTheme theme, WidgetBackdropKind kind, bool translucent)
     {
-        // 未开启主窗口材质：老老实实铺主题实色（不受不透明度滑杆影响，避免正文可读性被拖累）
         if (!translucent)
             return ThemeBrush.For(theme, "ApplicationPageBackgroundThemeBrush")
                    ?? SurfaceBrush(theme, WidgetBackdropKind.None, 1.0);
 
-        // 开启后与组件走同一套表面色：两个滑块对主界面与组件必须是同一套观感，
-        // 各写一套正是「主界面调了没反应 / 组件调了才变」的来源。
         return SurfaceBrush(theme, kind);
     }
 

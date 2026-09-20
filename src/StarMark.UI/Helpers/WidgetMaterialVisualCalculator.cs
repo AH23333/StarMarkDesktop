@@ -5,101 +5,23 @@ using StarMark.Abstractions;
 namespace StarMark.UI.Helpers;
 
 /// <summary>
-/// 桌面组件 / 主窗口「macOS 风」毛玻璃的视觉参数计算（直接照搬 DeskBox 的 WidgetMaterialVisualCalculator）。
+/// 桌面组件 / 主窗口「macOS 风」材质的取色计算（源自 DeskBox 的 WidgetMaterialVisualCalculator，
+/// 但批次 K 起只保留「扁平背衬着色」这一条可靠路径所需的映射）。
 /// <para>
-/// 原生亚克力 / 云母的强度由 <see cref="DesktopAcrylicController"/> / <see cref="MicaController"/> 的
-/// TintOpacity / LuminosityOpacity 控制，这里给出「主题 + 表面不透明度 + 材质浓度」到这些值的映射。
+/// 每个材质产出一个 <see cref="Color"/>（含 alpha）交给 <c>TransparentTintBackdrop</c> 铺满整窗：
+/// 纯色（Solid）的 alpha 由用户「背景不透明度」驱动，其余材质用各自固定 alpha（见
+/// <see cref="BuildMaterialBackdropColor"/>）。「材质浓度」滑杆已废弃，内部统一取
+/// <see cref="DefaultWidgetMaterialIntensity"/>，仅影响染色浓淡、不再对外可调。
 /// </para>
 /// </summary>
 internal static class WidgetMaterialVisualCalculator
 {
-    // DeskBox 的 SettingsService 区间常量（StarMark 直接内联为常量）
     public const double MinWidgetMaterialIntensity = 0.0;
     public const double MaxWidgetMaterialIntensity = 1.0;
     public const double DefaultWidgetMaterialIntensity = 0.65;
 
     /// <summary>默认强调色（用于给底色掺一点点彩，呈 macOS 那种淡冷调）。</summary>
     public static readonly Color DefaultAccentColor = Color.FromArgb(0xFF, 0x3B, 0x82, 0xF6);
-
-    public static WidgetMaterialOpacityProfile CalculateAcrylic(
-        bool isDark,
-        bool useBase,
-        double surfaceOpacity,
-        double materialIntensity)
-    {
-        double intensity = NormalizeMaterialIntensity(materialIntensity);
-        double surfaceStrength = Lerp(0.08, 1.0, Math.Clamp(surfaceOpacity, 0.0, 1.0));
-        double tintOpacity = useBase
-            ? Lerp(isDark ? 0.18 : 0.12, isDark ? 0.72 : 0.62, intensity)
-            : Lerp(isDark ? 0.04 : 0.02, isDark ? 0.42 : 0.34, intensity);
-        double luminosityOpacity = useBase
-            ? Lerp(isDark ? 0.38 : 0.46, isDark ? 0.82 : 0.90, intensity)
-            : Lerp(isDark ? 0.16 : 0.22, isDark ? 0.56 : 0.64, intensity);
-
-        return new WidgetMaterialOpacityProfile(
-            Math.Clamp(tintOpacity * surfaceStrength, 0.0, 1.0),
-            Math.Clamp(luminosityOpacity * surfaceStrength, 0.0, 1.0));
-    }
-
-    public static double CalculateLegacyAcrylicOpacity(
-        bool useBase,
-        double surfaceOpacity,
-        double materialIntensity)
-    {
-        double surface = Math.Clamp(surfaceOpacity, 0.0, 1.0);
-        double intensity = NormalizeMaterialIntensity(materialIntensity);
-        double maximumOpacity = useBase ? 0.90 : 0.72;
-        double opacity = Lerp(0.01, maximumOpacity, surface);
-
-        // Win10 的 accent policy 只暴露一个 tint-alpha 控制（不像 Desktop Acrylic 有独立的
-        // tint/luminosity），这里让 intensity 也能调节最终浓度，避免不透明度滑块失效。
-        return Math.Clamp(opacity * Lerp(0.58, 1.0, intensity), 0.0, 1.0);
-    }
-
-    public static Color BuildLegacyAcrylicSurfaceOverlayColor(
-        bool isDark,
-        Color accentColor,
-        bool useBase,
-        double surfaceOpacity,
-        double materialIntensity)
-    {
-        Color tintColor = BuildContentTintColor(isDark, accentColor);
-        double legacyOpacity = CalculateLegacyAcrylicOpacity(useBase, surfaceOpacity, materialIntensity);
-
-        // accent policy 在 Win10/VM/RDP 下可能不模糊也不染色，这里用一个轻量 XAML 染色兜底，
-        // 让两个滑块在真实亚克力失败时仍然可见。
-        double overlayOpacity = legacyOpacity * (useBase ? 0.72 : 0.62);
-        return ApplySurfaceOpacity(tintColor, overlayOpacity);
-    }
-
-    /// <summary>
-    /// 云母的强度剖面。**与 DeskBox 完全一致：只吃「材质浓度」，不吃「背景不透明度」。**
-    /// <para>
-    /// DeskBox 两处 <c>CalculateMica</c> 调用（<c>WidgetMaterialSystemBackdrop.cs:197</c>、
-    /// <c>WidgetWindowBase.Backdrop.cs:508</c>）均为 3 参、不乘 surfaceOpacity——因为云母的语义
-    /// 就是「贴着壁纸的、不透明的哑光金属板」，其不透明度由 LuminosityOpacity 决定，本就**不该**被
-    /// 「背景不透明度」滑杆稀释。此前 StarMark 擅自加第 4 参 <c>surfaceOpacity</c> 并把 Tint/Luminosity
-    /// 一律乘以 <c>Lerp(0.08,1.0,opacity)</c>，于是默认 0.72 不透明度下 luminosity 被压到约 0.74 倍，
-    /// 用户拖低「背景不透明度」更把云母直接**化成一层面纱似的半透明**——正是用户所报
-    /// 「云母无壁纸取色、看起来就是半透明效果」。回归 DeskBox 契约：云母由「材质浓度」控浓淡、
-    /// 不随「背景不透明度」变透明。
-    /// </para>
-    /// </summary>
-    public static WidgetMaterialOpacityProfile CalculateMica(
-        bool isDark,
-        bool useAlt,
-        double materialIntensity)
-    {
-        double intensity = NormalizeMaterialIntensity(materialIntensity);
-        double tintOpacity = useAlt
-            ? Lerp(0.28, 0.82, intensity)
-            : Lerp(0.04, 0.46, intensity);
-        double luminosityOpacity = useAlt
-            ? Lerp(isDark ? 0.34 : 0.42, isDark ? 0.72 : 0.76, intensity)
-            : Lerp(isDark ? 0.78 : 0.82, isDark ? 0.94 : 0.96, intensity);
-
-        return new WidgetMaterialOpacityProfile(tintOpacity, luminosityOpacity);
-    }
 
     public static Color BuildContentTintColor(bool isDark, Color accentColor)
     {
@@ -116,21 +38,13 @@ internal static class WidgetMaterialVisualCalculator
     }
 
     /// <summary>
-    /// 原生材质（亚克力 / 云母）之上的<b>表面层</b>颜色。
-    /// <para>
-    /// 为什么必须有这一层：DeskBox 让「背景不透明度」只去乘控制器的 Tint/Luminosity，
-    /// 前提是窗口已经整窗玻璃化（DwmExtendFrameIntoClientArea(-1)），霜化层就是用户看到的背景。
-    /// 一旦玻璃化没生效，那层霜化根本透不出来，两个滑块就都成了摆设。
-    /// 这里显式给一层表面色兜底：<b>背景不透明度 → Alpha</b>（越低越能看见壁纸），
-    /// <b>材质浓度 → 染色浓度</b>（越浓越带强调色），于是无论原生霜化是否透出，两个滑块都必然可见。
-    /// </para>
-    /// <para>
-    /// <b>按材质 kind 分化</b>（批次 G2）：控制器挂载失败时（Win10 / 虚拟机 / RDP，
-    /// 以及主窗口内容带这层 wash）这一层就是用户实际看到的背景。此前四种原生材质共用同一剖面 →
-    /// 兜底观感又抹成一种，正是「不同材质呈现同一效果」。故按各自真实材质性格给不同的
-    /// Alpha 区间与强调色偏向：亚克力薄最通透、亚克力厚略实、云母偏实且低染色、
-    /// 云母 Alt 最取壁纸调（染色最高）。
-    /// </para>
+    /// 半透明材质（亚克力 / 云母）的<b>背衬</b>取色：
+    /// <list type="bullet">
+    /// <item>Alpha 由 <paramref name="surfaceOpacity"/> 在该材质专属区间内插值——越低越能透出壁纸；</item>
+    /// <item>强调色浓淡由 <paramref name="materialIntensity"/> 决定。</item>
+    /// </list>
+    /// <b>按 kind 分化</b>（批次 G2）：四种原生材质各给不同的 Alpha 区间与强调色偏向（亚克力薄最通透、
+    /// 亚克力厚略实、云母偏实且低染色、云母 Alt 最取壁纸调），避免「不同材质呈现同一效果」。
     /// </summary>
     public static Color BuildNativeSurfaceColor(
         bool isDark,
@@ -142,8 +56,7 @@ internal static class WidgetMaterialVisualCalculator
         double intensity = NormalizeMaterialIntensity(materialIntensity);
         double opacity = NormalizeOpacity(surfaceOpacity);
 
-        // 各材质的 (Alpha 下限, Alpha 上限, 强调色偏向)。区间宽度决定「背景不透明度」滑杆的行程，
-        // 下限高低决定「最不透明时有多实」，偏向决定壁纸/强调色调的强弱。
+        // 各材质的 (Alpha 下限, Alpha 上限, 强调色偏向)。
         var (alphaFloor, alphaCeiling, accentBias) = kind switch
         {
             WidgetBackdropKind.AcrylicBase => (0.12, 0.92, +0.06),  // 厚亚克力：比薄略实、略染色
@@ -159,21 +72,29 @@ internal static class WidgetMaterialVisualCalculator
             accentMix: Math.Clamp(Lerp(0.06, 0.40, intensity) + accentBias, 0.0, 1.0),
             overlayMix: Lerp(0.02, 0.12, intensity));
 
-        // 表面 Alpha：严格由「背景不透明度」驱动，在材质专属区间内插值 ——
-        // 越低越透（能看见壁纸），越高越接近该材质应有的实色面板。
         return ApplySurfaceOpacity(tinted, Lerp(alphaFloor, alphaCeiling, opacity));
     }
 
-    public static Color BuildMicaFallbackColor(bool isDark, bool useAlt)
-    {
-        return useAlt
-            ? isDark
-                ? Color.FromArgb(0xFF, 0x16, 0x18, 0x1D)
-                : Color.FromArgb(0xFF, 0xE8, 0xEA, 0xEF)
-            : isDark
-                ? Color.FromArgb(0xFF, 0x20, 0x22, 0x26)
-                : Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
-    }
+    /// <summary>
+    /// 材质整窗背衬的统一取色（批次 K）。每种材质给一个<b>固定透明度性格</b>，只有纯色（Solid）吃用户的
+    /// 「背景不透明度」滑杆——于是「不透明度只对纯色有效」成为字面事实，且各材质在任何机器上都必然
+    /// 可见、互不相同、绝不全黑（背衬是合成的 CompositionColorBrush，不依赖 DWM 霜化合成）。
+    /// <para>固定 alpha 性格：亚克力薄最通透 &lt; 亚克力厚 &lt; 云母 Alt &lt; 云母（偏实哑光）。</para>
+    /// </summary>
+    public static Color BuildMaterialBackdropColor(
+        bool isDark,
+        Color accentColor,
+        WidgetBackdropKind kind,
+        double solidOpacity)
+        => kind switch
+        {
+            WidgetBackdropKind.Solid => BuildContentSolidSurfaceColor(isDark, accentColor, solidOpacity),
+            WidgetBackdropKind.AcrylicBase => BuildNativeSurfaceColor(isDark, accentColor, 0.62, DefaultWidgetMaterialIntensity, kind),
+            WidgetBackdropKind.Mica => BuildNativeSurfaceColor(isDark, accentColor, 0.90, DefaultWidgetMaterialIntensity, kind),
+            WidgetBackdropKind.MicaAlt => BuildNativeSurfaceColor(isDark, accentColor, 0.82, DefaultWidgetMaterialIntensity, kind),
+            WidgetBackdropKind.None => isDark ? Color.FromArgb(0xFF, 0x00, 0x00, 0x00) : Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF),
+            _ /* Acrylic 薄 */ => BuildNativeSurfaceColor(isDark, accentColor, 0.46, DefaultWidgetMaterialIntensity, kind),
+        };
 
     public static Color BuildContentSolidSurfaceColor(
         bool isDark,
@@ -238,6 +159,3 @@ internal static class WidgetMaterialVisualCalculator
             (byte)Math.Round(from.B + ((to.B - from.B) * amount)));
     }
 }
-
-/// <summary>亚克力 / 云母材质的不透明度剖面（与 DeskBox 同名结构体对应）。</summary>
-internal readonly record struct WidgetMaterialOpacityProfile(double TintOpacity, double LuminosityOpacity);

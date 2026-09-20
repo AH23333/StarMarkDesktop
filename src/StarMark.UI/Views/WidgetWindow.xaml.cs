@@ -471,32 +471,18 @@ public sealed partial class WidgetWindow : Window
             var useCustomBg = !string.IsNullOrWhiteSpace(ov?.BackgroundColor);
             var kind = useCustomBg ? StarMark.Abstractions.WidgetBackdropKind.None : (ov?.Backdrop ?? globalKind);
             WidgetAppearance.ApplyBackdrop(
-                this, kind, WidgetAppearance.Opacity(), WidgetAppearance.MaterialIntensity(), RootBorder.ActualTheme);
+                this, kind, WidgetAppearance.Opacity(), RootBorder.ActualTheme);
 
             Brush surface = useCustomBg
                 ? (WidgetAppearance.ParseColorBrush(ov!.BackgroundColor!) ?? WidgetAppearance.SurfaceBrush(RootBorder.ActualTheme, globalKind))
                 : WidgetAppearance.SurfaceBrush(RootBorder.ActualTheme, kind);
 
-            // 纯色材质：扁平背衬（TransparentTintBackdrop）已单独着色整窗，内容表面必须透明，
-            // 否则背衬 + 表面两层同色 alpha 叠加 → 过实/发灰（对齐 DeskBox 单层纯色）。
-            // 背衬挂载失败时 IsFlatSolidActive 为 false，仍走 SurfaceBrush 的实色兜底，不会变透明幽灵窗。
+            // 背衬画笔已接管整窗着色（除实色 None 外的所有材质：亚克力/云母/纯色）时，内容表面必须透明，
+            // 让这一层扁平背衬单独着色——若再叠一层内容实色就会两次 alpha 叠加导致过实/发灰。
+            // 背衬未生效（理论上不会，实色 None 走 else）时保留 SurfaceBrush 的实色兜底，绝不变透明幽灵窗。
             if (!useCustomBg &&
-                kind == StarMark.Abstractions.WidgetBackdropKind.Solid &&
-                WidgetAppearance.IsFlatSolidActive(this))
-            {
-                surface = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            }
-            // 原生霜化材质（亚克力薄/厚、云母、云母 Alt）：控制器接管背景时内容表面同样必须透明，
-            // 让各材质各自不同的 Tint/Luminosity/Kind 霜化直接透出（对齐 DeskBox 的原生材质透明表面）。
-            // 此前这里对所有原生材质一律铺 BuildNativeSurfaceColor 的「与材质无关」半实色，把四种材质
-            // 抹成同一种观感，于是「切换材质组件看不出变化 / 不同材质呈现同一效果」。控制器未挂载时
-            // IsNativeFrostActive 为 false，保留实色兜底，不会变透明幽灵窗。
-            else if (!useCustomBg &&
-                kind is StarMark.Abstractions.WidgetBackdropKind.Acrylic
-                    or StarMark.Abstractions.WidgetBackdropKind.AcrylicBase
-                    or StarMark.Abstractions.WidgetBackdropKind.Mica
-                    or StarMark.Abstractions.WidgetBackdropKind.MicaAlt &&
-                WidgetAppearance.IsNativeFrostActive(this))
+                kind != StarMark.Abstractions.WidgetBackdropKind.None &&
+                WidgetAppearance.IsBackdropSurfaceActive(this))
             {
                 surface = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             }
