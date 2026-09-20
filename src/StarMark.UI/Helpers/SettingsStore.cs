@@ -45,8 +45,13 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         public double? WidgetOpacity { get; set; }
         /// <summary>毛玻璃材质浓度 0–1（默认 0.65，DeskBox 的 WidgetMaterialIntensity）。</summary>
         public double? WidgetMaterialIntensity { get; set; }
-        /// <summary>主窗口是否也使用同一套半透明材质（默认开启）。</summary>
+        /// <summary>主窗口是否也使用同一套半透明材质（默认开启）。已被 <see cref="MainWindowBackdrop"/> 取代，仅为旧配置迁移保留。</summary>
         public bool? MainWindowTranslucent { get; set; }
+        /// <summary>
+        /// 主窗口背景材质（独立于组件的 <see cref="WidgetBackdrop"/>）。null 表示从未单独设过，
+        /// 迁移语义见 <see cref="LoadMainWindowBackdrop"/>：沿用旧的「主窗口使用同一材质」开关。
+        /// </summary>
+        public int? MainWindowBackdrop { get; set; }
         /// <summary>性能模式：0=均衡（默认）1=省资源 2=自定义。常驻应用的内存/缓存预算开关。</summary>
         public int? PerformanceMode { get; set; }
         /// <summary>自定义性能模式下的进程工作集预算（MB，默认 200）。超预算时 MemoryReclaimer 触发回收。</summary>
@@ -313,6 +318,28 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     {
         var d = Load() ?? new SettingsData();
         d.MainWindowTranslucent = enabled;
+        Save(d);
+    }
+
+    /// <summary>
+    /// 主窗口背景材质（独立于组件）。新配置直接读 <see cref="SettingsData.MainWindowBackdrop"/>；
+    /// 旧配置（从未单设过主窗材质、只有「主窗口使用同一材质」布尔）按原语义迁移：
+    /// 开关开 → 沿用组件材质，关 → 实色不透明（None）。这样升级后主窗口观感与升级前完全一致。
+    /// </summary>
+    public WidgetBackdropKind LoadMainWindowBackdrop()
+    {
+        if (Load() is { } d && d.MainWindowBackdrop is { } raw
+            && Enum.IsDefined(typeof(WidgetBackdropKind), raw))
+            return (WidgetBackdropKind)raw;
+        return LoadMainWindowTranslucent() ? LoadWidgetBackdrop() : WidgetBackdropKind.None;
+    }
+
+    public void SaveMainWindowBackdrop(WidgetBackdropKind kind)
+    {
+        var d = Load() ?? new SettingsData();
+        d.MainWindowBackdrop = (int)kind;
+        // 同步写旧布尔，保证仍以 MainWindowTranslucent 读取的历史路径（若有）语义不漂移。
+        d.MainWindowTranslucent = kind != WidgetBackdropKind.None;
         Save(d);
     }
 

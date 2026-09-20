@@ -146,9 +146,11 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var translucent = _settings.LoadMainWindowTranslucent();
+            // 主窗口材质独立于组件（批次 J：拆「主窗口使用同一材质」为各自可选）。
+            // 未选材质（None）即不透明，沿用旧的「开关关」语义；其余材质与组件走同一套用色逻辑。
+            var kind = _settings.LoadMainWindowBackdrop();
+            var translucent = kind != WidgetBackdropKind.None;
             var theme = TargetTheme(_themePref);
-            var kind = translucent ? SettingsStore_WidgetBackdrop() : WidgetBackdropKind.None;
             WidgetAppearance.ApplyBackdrop(
                 this, kind, WidgetAppearance.Opacity(), WidgetAppearance.MaterialIntensity(), theme);
             // 主题色一律按目标主题解析（ThemeBrush.For），不能取 Application.Current.Resources[key]
@@ -175,8 +177,6 @@ public sealed partial class MainWindow : Window
             StarLog.Error("应用主窗口半透明材质失败", ex);
         }
     }
-
-    private WidgetBackdropKind SettingsStore_WidgetBackdrop() => _settings.LoadWidgetBackdrop();
 
     /// <summary>把主题偏好推导为可用于 <see cref="ThemeBrush.For"/> 的元素主题（Default 跟随系统）。</summary>
     private static ElementTheme TargetTheme(ThemePreference pref) => pref switch

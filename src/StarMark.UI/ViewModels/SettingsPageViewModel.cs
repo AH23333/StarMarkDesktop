@@ -35,8 +35,10 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty] private string _githubUsername = string.Empty;
 
     // 外观（半透明亚克力 / 云母 / 不透明 + 不透明度）
-    [ObservableProperty] private bool _mainWindowTranslucent = true;
+    /// <summary>组件材质下拉索引（= <see cref="WidgetBackdropKind"/> 整数值）。</summary>
     [ObservableProperty] private int _backdropIndex;
+    /// <summary>主窗口材质下拉索引（批次 J：与组件材质各自独立；= <see cref="WidgetBackdropKind"/> 整数值，None=不透明）。</summary>
+    [ObservableProperty] private int _mainWindowBackdropIndex;
     [ObservableProperty] private double _widgetOpacity = 0.72;
 
     /// <summary>毛玻璃材质浓度（0–1，对应 DeskBox 的 WidgetMaterialIntensity）。</summary>
@@ -121,8 +123,8 @@ public partial class SettingsPageViewModel : ObservableObject
         GithubUsername = github.Username ?? string.Empty;
 
         // 外观 + 磁吸
-        MainWindowTranslucent = Safe(_settings.LoadMainWindowTranslucent, true, "主窗口材质");
-        BackdropIndex = (int)Safe(_settings.LoadWidgetBackdrop, WidgetBackdropKind.Acrylic, "外观材质");
+        BackdropIndex = (int)Safe(_settings.LoadWidgetBackdrop, WidgetBackdropKind.Acrylic, "组件材质");
+        MainWindowBackdropIndex = (int)Safe(_settings.LoadMainWindowBackdrop, WidgetBackdropKind.Acrylic, "主窗口材质");
         WidgetOpacity = Safe(_settings.LoadWidgetOpacity, WidgetAppearance.DefaultOpacity, "不透明度");
         WidgetMaterialIntensity = Safe(_settings.LoadWidgetMaterialIntensity, 0.65, "材质浓度");
         EnableWidgetSnap = Safe(_settings.LoadWidgetSnapEnabled, true, "边缘磁吸");
@@ -259,7 +261,7 @@ public partial class SettingsPageViewModel : ObservableObject
             _settings.SaveWidgetBackdrop((WidgetBackdropKind)BackdropIndex);
             _settings.SaveWidgetOpacity(WidgetOpacity);
             _settings.SaveWidgetMaterialIntensity(WidgetMaterialIntensity);
-            _settings.SaveMainWindowTranslucent(MainWindowTranslucent);
+            _settings.SaveMainWindowBackdrop((WidgetBackdropKind)MainWindowBackdropIndex);
             _settings.SavePerformanceMode((PerformanceMode)PerformanceModeIndex);
             _settings.SaveCacheBudgetMb(CacheBudgetMb);
             _settings.SaveMaxImageCacheCount(MaxCacheCount);

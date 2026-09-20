@@ -116,12 +116,12 @@
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="10">
                                 <TextBlock Text="外观 · 半透明材质" Style="{StaticResource SettingTitle}"/>
-                                <TextBlock Text="主窗口与所有桌面组件共用同一套毛玻璃材质（照搬 DeskBox 的 Desktop Acrylic / Mica 控制器）。"
+                                <TextBlock Text="分别为「桌面组件」与「主窗口」选择毛玻璃材质（照搬 DeskBox 的 Desktop Acrylic / Mica 控制器），两者互不影响。"
                                            Style="{StaticResource SettingRowText}"/>
 
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="材质"/>
+                                        <TextBlock Text="组件材质"/>
                                         <TextBlock Text="亚克力最像 macOS；云母更克制；纯色带强调色且吃不透明度；实色最省资源（对齐 DeskBox 六种材质）。" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <!-- 顺序即枚举值：0=亚克力(薄) 1=云母 2=实色 3=云母Alt 4=亚克力(厚) 5=纯色，追加新项不影响已保存的设置 -->
@@ -165,11 +165,18 @@
 
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="主窗口使用同一材质"/>
-                                        <TextBlock Text="关闭后主窗口保持不透明。" Style="{StaticResource SettingRowText}"/>
+                                        <TextBlock Text="主窗口材质"/>
+                                        <TextBlock Text="单独设置主窗口的背景材质，与上方「组件材质」互不影响；选「实色」即不透明。" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
-                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
-                                                  IsOn="{x:Bind ViewModel.MainWindowTranslucent, Mode=TwoWay}"/>
+                                    <!-- 顺序即枚举值，与「组件材质」一致：0=亚克力(薄) 1=云母 2=实色 3=云母Alt 4=亚克力(厚) 5=纯色 -->
+                                    <ComboBox Grid.Column="1" MinWidth="200" SelectedIndex="{x:Bind ViewModel.MainWindowBackdropIndex, Mode=TwoWay}">
+                                        <ComboBoxItem Content="亚克力 · 薄（推荐，苹果风格）"/>
+                                        <ComboBoxItem Content="云母 · Mica（更克制的桌面色调）"/>
+                                        <ComboBoxItem Content="实色（省资源，不使用材质）"/>
+                                        <ComboBoxItem Content="云母 · Alt（取更多桌面壁纸色调）"/>
+                                        <ComboBoxItem Content="亚克力 · 厚（更浓的霜化，隐私更好）"/>
+                                        <ComboBoxItem Content="纯色 · Solid（带强调色，可调不透明度）"/>
+                                    </ComboBox>
                                 </Grid>
                             </StackPanel>
                         </Border>
