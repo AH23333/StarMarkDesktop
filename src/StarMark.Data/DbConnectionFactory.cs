@@ -31,7 +31,10 @@ public sealed class DbConnectionFactory
         // 每次连接时设置 PRAGMA（SQLite 每连接独立）
         using (var cmd = conn.CreateCommand())
         {
-            cmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA synchronous=NORMAL;";
+            // busy_timeout：WAL 下写写仍互斥，应用有约 30 处各自 Open 的短连接 + 后台同步/组件写入并发。
+            // 不设时默认 0ms，任一次瞬时锁争用即抛 SQLITE_BUSY（表现为同步/迁移/组件保存偶发失败）。
+            // 给 5s 让 SQLite 自行重试排队，消除这类伪失败。
+            cmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;";
             cmd.ExecuteNonQuery();
         }
         return conn;
