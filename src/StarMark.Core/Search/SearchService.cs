@@ -88,6 +88,15 @@ public sealed class SearchService
             }
         }
 
+        // 类型兜底：SQL 侧已按 filter.Type 过滤「已入库」条目（ItemRepository.SearchAsync 的 @type_filter），
+        // 但实时源（Everything 文件 / Ditto 剪贴板）不经该 SQL，返回的是异构虚拟条目。缺这一步时，
+        // 「来源=Star」标签页下 Ditto 的 Clipboard 行会混进本应只显示 star 的列表——与下方语言同类，
+        // 合并后必须重新核对来自实时源、SQL 闸门管不到的那部分 filter 标量谓词。
+        if (filter.Type.HasValue)
+        {
+            merged = merged.Where(i => i.Type == filter.Type.Value).ToList();
+        }
+
         // 语言筛选（SQL 侧已过滤已入库条目；此处兜底过滤实时源返回的条目）。
         if (!string.IsNullOrEmpty(filter.Language))
         {
