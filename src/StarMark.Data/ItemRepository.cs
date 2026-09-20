@@ -84,7 +84,7 @@ public sealed class ItemRepository : IItemRepository
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
                    i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
-                   (SELECT GROUP_CONCAT(t.name, ',') FROM item_tags it
+                   (SELECT GROUP_CONCAT(t.name, char(31)) FROM item_tags it
                     JOIN tags t ON t.id = it.tag_id
                     WHERE it.item_id = i.id) AS tag_names
             FROM fts_hits f
@@ -143,7 +143,7 @@ public sealed class ItemRepository : IItemRepository
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
                    i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
-                   (SELECT GROUP_CONCAT(t.name, ',') FROM item_tags it
+                   (SELECT GROUP_CONCAT(t.name, char(31)) FROM item_tags it
                     JOIN tags t ON t.id = it.tag_id
                     WHERE it.item_id = i.id) AS tag_names
             FROM items i
@@ -175,7 +175,7 @@ public sealed class ItemRepository : IItemRepository
         using var conn = _factory.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT t.name, COUNT(it.item_id) AS cnt
+            SELECT t.name, COUNT(i.id) AS cnt
             FROM tags t
             LEFT JOIN item_tags it ON it.tag_id = t.id
             LEFT JOIN items i ON i.id = it.item_id AND i.hidden = 0
@@ -455,7 +455,7 @@ public sealed class ItemRepository : IItemRepository
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
                    i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
-                   (SELECT GROUP_CONCAT(t2.name, ',') FROM item_tags it2
+                   (SELECT GROUP_CONCAT(t2.name, char(31)) FROM item_tags it2
                     JOIN tags t2 ON t2.id = it2.tag_id
                     WHERE it2.item_id = i.id) AS tag_names
             FROM items i
@@ -489,7 +489,7 @@ public sealed class ItemRepository : IItemRepository
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
                    i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
-                   (SELECT GROUP_CONCAT(t.name, ',') FROM item_tags it
+                   (SELECT GROUP_CONCAT(t.name, char(31)) FROM item_tags it
                     JOIN tags t ON t.id = it.tag_id
                     WHERE it.item_id = i.id) AS tag_names
             FROM items i WHERE i.hidden = 1 ORDER BY i.updated_at DESC;";
@@ -519,7 +519,7 @@ public sealed class ItemRepository : IItemRepository
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
                    i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
-                   (SELECT GROUP_CONCAT(t.name, ',') FROM item_tags it
+                   (SELECT GROUP_CONCAT(t.name, char(31)) FROM item_tags it
                     JOIN tags t ON t.id = it.tag_id
                     WHERE it.item_id = i.id) AS tag_names
             FROM items i WHERE i.hidden = 0
@@ -540,7 +540,7 @@ public sealed class ItemRepository : IItemRepository
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
                    i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
-                   (SELECT GROUP_CONCAT(t.name, ',') FROM item_tags it
+                   (SELECT GROUP_CONCAT(t.name, char(31)) FROM item_tags it
                     JOIN tags t ON t.id = it.tag_id
                     WHERE it.item_id = i.id) AS tag_names
             FROM items i WHERE i.hidden = 0 AND i.pinned = 1
@@ -564,7 +564,7 @@ public sealed class ItemRepository : IItemRepository
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
                    i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
-                   (SELECT GROUP_CONCAT(t.name, ',') FROM item_tags it
+                   (SELECT GROUP_CONCAT(t.name, char(31)) FROM item_tags it
                     JOIN tags t ON t.id = it.tag_id
                     WHERE it.item_id = i.id) AS tag_names
             FROM items i
@@ -619,7 +619,9 @@ public sealed class ItemRepository : IItemRepository
                 search_text = excluded.search_text,
                 description = excluded.description,
                 updated_at = excluded.updated_at,
-                extra_json = excluded.extra_json
+                extra_json = excluded.extra_json,
+                hidden = excluded.hidden,
+                notes = excluded.notes
             RETURNING id;";
         cmd.Parameters.AddWithValue("@type", item.Type.ToString().ToLowerInvariant());
         cmd.Parameters.AddWithValue("@source", item.Source);
@@ -656,7 +658,7 @@ public sealed class ItemRepository : IItemRepository
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
                    i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
-                   (SELECT GROUP_CONCAT(t.name, ',') FROM item_tags it
+                   (SELECT GROUP_CONCAT(t.name, char(31)) FROM item_tags it
                     JOIN tags t ON t.id = it.tag_id
                     WHERE it.item_id = i.id) AS tag_names
             FROM items i
@@ -1034,13 +1036,13 @@ public sealed class ItemRepository : IItemRepository
             Notes = reader.FieldCount > 16 && !reader.IsDBNull(16) ? reader.GetString(16) : null,
         };
 
-        // 标签：逗号分隔的字符串 → List<string>
+        // 标签：char(31)（单元分隔符，正常标签名不含）分隔的字符串 → List<string>
         if (reader.FieldCount > 17 && !reader.IsDBNull(17))
         {
             var tagStr = reader.GetString(17);
             if (!string.IsNullOrEmpty(tagStr))
             {
-                item.Tags = tagStr.Split(',').ToList();
+                item.Tags = tagStr.Split(new[] { (char)31 }, StringSplitOptions.RemoveEmptyEntries).ToList();
             }
         }
         return item;

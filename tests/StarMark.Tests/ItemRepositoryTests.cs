@@ -360,4 +360,56 @@ public sealed class ItemRepositoryTests : IDisposable
         var only = await repo.GetLocalItemsForInstanceAsync("12", CancellationToken.None);
         Assert.Equal("本实例", Assert.Single(only).Title);
     }
+
+    // ===== 批次 W：数据层缺陷回归 =====
+
+    [Fact]
+    public async Task GetAllTags_ExcludesHiddenItems()
+    {
+        var repo = new ItemRepository(_factory);
+        var item = new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "t1", Title = "tagged" };
+        await repo.UpsertAsync(new[] { item }, CancellationToken.None);
+        await repo.AddTagAsync(item.Id, "计数标签", CancellationToken.None);
+
+        var before = await repo.GetAllTagsAsync(CancellationToken.None);
+        Assert.Equal(1, before.Single(t => t.Name == "计数标签").Count);
+
+        // 隐藏该条目后徽标计数必须随之下降（旧实现数 item_tags 连接行，隐藏不减）。
+        await repo.SetHiddenAsync(item.Id, true, CancellationToken.None);
+        var after = await repo.GetAllTagsAsync(CancellationToken.None);
+        Assert.Equal(0, after.Single(t => t.Name == "计数标签").Count);
+    }
+
+    [Fact]
+    public async Task UpsertLocalItem_Updates_PersistsHiddenAndNotes()
+    {
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertLocalItemAsync(
+            new Item { Type = ItemType.Todo, Source = ItemSources.Local, SourceId = "Z|1", Title = "待办" },
+            CancellationToken.None);
+
+        // 取回完整行（FindItemAsync 语义），改隐藏 + 加笔记后回写。
+        var loaded = Assert.Single(await repo.GetLocalItemsForInstanceAsync("Z", CancellationToken.None));
+        loaded.Hidden = true;
+        loaded.Notes = "用户笔记";
+        await repo.UpsertLocalItemAsync(loaded, CancellationToken.None);
+
+        var again = Assert.Single(await repo.GetLocalItemsForInstanceAsync("Z", CancellationToken.None));
+        Assert.True(again.Hidden);                 // 旧实现 DO UPDATE 漏 hidden → 回滚
+        Assert.Equal("用户笔记", again.Notes);      // 旧实现 DO UPDATE 漏 notes → 丢失
+    }
+
+    [Fact]
+    public async Task TagNameWithComma_RoundTripsAsSingleTag()
+    {
+        var repo = new ItemRepository(_factory);
+        var item = new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "c1", Title = "逗号标签" };
+        await repo.UpsertAsync(new[] { item }, CancellationToken.None);
+        await repo.AddTagAsync(item.Id, "含,逗号", CancellationToken.None);
+
+        // 读路径曾以 ',' 切 GROUP_CONCAT，会把一个标签错拆成两个。
+        var fetched = await repo.GetByIdAsync(item.Id, CancellationToken.None);
+        Assert.NotNull(fetched);
+        Assert.Equal(new[] { "含,逗号" }, fetched!.Tags.ToArray());
+    }
 }
