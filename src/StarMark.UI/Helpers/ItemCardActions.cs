@@ -58,7 +58,8 @@ public static class ItemCardActions
         try
         {
             if (!vm.HasOpenLocation) return;
-            var localPath = new Uri(vm.Uri).LocalPath;
+            // TryPathFromUri 而非 new Uri().LocalPath：后者在 '#' 处截断，含 '#' 的文件会定位到错误路径。
+            if (!LocalFileIdentity.TryPathFromUri(vm.Uri, out var localPath)) return;
             System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{localPath}\"");
         }
         catch (Exception ex)
@@ -76,7 +77,8 @@ public static class ItemCardActions
             var text = vm.Uri;
             if (text.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
             {
-                try { text = new Uri(text).LocalPath; } catch { }
+                // TryPathFromUri 保留 '#'/%，new Uri().LocalPath 会在 '#' 截断而复制到错误路径。
+                if (LocalFileIdentity.TryPathFromUri(text, out var localPath)) text = localPath;
             }
             var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
             package.SetText(text);

@@ -91,4 +91,25 @@ public sealed class LocalFileIdentityTests
         // file:// 但缺盘符（如 UNC 或相对）→ false，不臆造路径
         Assert.False(LocalFileIdentity.TryPathFromUri("file://server/share", out _));
     }
+
+    [Fact]
+    public void TryPathFromUri_PreservesHashAndPercent()
+    {
+        // 回归：Uri.LocalPath 会在 '#' 处把 URI 当片段截断（file://C:/x#y.txt → C:\x），
+        // 导致含 '#' 的合法文件名打不开、且 C#1.txt 与 C#2.txt 在去重键上塌成同一。
+        // TryPathFromUri 走纯字符串剥前缀，必须保留 '#' 与 '%'（不做百分号解码，维持与 UriForPath 的往返契约）。
+        Assert.True(LocalFileIdentity.TryPathFromUri("file://C:/docs/C#入门.docx", out var hash));
+        Assert.Equal(@"C:\docs\C#入门.docx", hash);
+
+        Assert.True(LocalFileIdentity.TryPathFromUri("file:///C:/tmp/issue#1.pdf", out var hash3));
+        Assert.Equal(@"C:\tmp\issue#1.pdf", hash3);
+
+        Assert.True(LocalFileIdentity.TryPathFromUri("file://C:/a/100%.txt", out var pct));
+        Assert.Equal(@"C:\a\100%.txt", pct);   // 不解码 %
+
+        // 含 '#' 的两个不同文件必须还原成不同路径（去重键不冲突）
+        Assert.True(LocalFileIdentity.TryPathFromUri("file://C:/C#1.txt", out var u1));
+        Assert.True(LocalFileIdentity.TryPathFromUri("file://C:/C#2.txt", out var u2));
+        Assert.NotEqual(u1, u2);
+    }
 }

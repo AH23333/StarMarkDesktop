@@ -34,20 +34,29 @@ public static class LauncherEx
 
             if (parsed.Scheme == Uri.UriSchemeFile)
             {
-                var path = parsed.LocalPath;
-                if (Directory.Exists(path))
+                // 用 LocalFileIdentity.TryPathFromUri 而非 parsed.LocalPath 还原路径：
+                // Uri.LocalPath 会在 '#' 处截断（file://C:/x#y.txt → C:\x），含 '#' 的合法文件名（如 C#入门.docx）打不开。
+                // 该基元走纯字符串剥前缀+斜杠互换，保留 '#'/%；不识别（如 UNC）时退回 URI 激活。
+                if (StarMark.Abstractions.LocalFileIdentity.TryPathFromUri(uri, out var path))
                 {
-                    var folder = await StorageFolder.GetFolderFromPathAsync(path);
-                    await Launcher.LaunchFolderAsync(folder);
-                }
-                else if (File.Exists(path))
-                {
-                    var file = await StorageFile.GetFileFromPathAsync(path);
-                    await Launcher.LaunchFileAsync(file);
+                    if (Directory.Exists(path))
+                    {
+                        var folder = await StorageFolder.GetFolderFromPathAsync(path);
+                        await Launcher.LaunchFolderAsync(folder);
+                    }
+                    else if (File.Exists(path))
+                    {
+                        var file = await StorageFile.GetFileFromPathAsync(path);
+                        await Launcher.LaunchFileAsync(file);
+                    }
+                    else
+                    {
+                        // 路径已不存在：退化为 URI 激活（可能无效果，但至少不抛异常）
+                        await Launcher.LaunchUriAsync(parsed);
+                    }
                 }
                 else
                 {
-                    // 路径已不存在：退化为 URI 激活（可能无效果，但至少不抛异常）
                     await Launcher.LaunchUriAsync(parsed);
                 }
                 return;

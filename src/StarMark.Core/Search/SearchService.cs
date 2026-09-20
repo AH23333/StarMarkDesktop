@@ -134,8 +134,11 @@ public sealed class SearchService
     {
         if (uri.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
         {
-            try { return new Uri(uri).LocalPath; }
-            catch (UriFormatException) { return uri; }
+            // 用 LocalFileIdentity.TryPathFromUri 而非 new Uri().LocalPath：后者在 '#' 处截断，
+            // 会让 C#1.txt 与 C#2.txt 归一到同一路径键而被误合并（不同文件塌成一条）。
+            // TryPathFromUri 走纯字符串还原、保留 '#'/%；不识别（如 UNC/缺盘符）时退回原串。
+            if (LocalFileIdentity.TryPathFromUri(uri, out var path)) return path;
+            return uri;
         }
         return uri;
     }
