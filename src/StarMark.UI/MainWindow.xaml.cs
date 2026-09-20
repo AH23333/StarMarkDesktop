@@ -470,6 +470,7 @@ public sealed partial class MainWindow : Window
             "tags" => typeof(TagsPage),
             "activity" => typeof(ActivityPage),
             "hidden" => typeof(HiddenPage),
+            "snapshot" => typeof(SnapshotPage),
             "settings" => typeof(SettingsPage),
             _ => typeof(SearchPage),
         };

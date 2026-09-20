@@ -135,6 +135,11 @@
                         <FontIcon Glyph="&#xE7B3;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
+                <NavigationViewItem x:Name="NavSnapshotItem" Content="快照" Tag="snapshot">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE787;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
             </NavigationView.MenuItems>
         </NavigationView>
 
