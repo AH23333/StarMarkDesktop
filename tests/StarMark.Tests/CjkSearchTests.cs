@@ -261,6 +261,27 @@ public sealed class CjkSearchTests : IDisposable
         Assert.Equal(new[] { "年", "report", "年" }, tokens);
     }
 
+    [Theory]
+    [InlineData("年\"x\"年")]      // CJK 夹带被引号包裹的片段
+    [InlineData("搜索(笔记)")]     // 圆括号
+    [InlineData("词*语")]          // 通配符
+    [InlineData("中文:列名")]      // 冒号（FTS5 列过滤前缀）
+    [InlineData("混排-a-b")]       // 连字符
+    public void SplitForQuery_CjkTokensNeverCarryFts5Metachars(string keyword)
+    {
+        // BuildFtsQuery 对「含 CJK 的词元」走**原样输出、不加引号转义**的分支。其安全前提是：
+        // SplitForQuery 产出的词元要么纯 CJK、要么完全不含 CJK——绝不能把 CJK 与 FTS5 元字符
+        // (" * ( ) : - ^) 混在同一词元里，否则未转义的特殊字符会漏进 MATCH 表达式破坏语法/语义。
+        // CjkTokenizer 是被高频改动的热文件，此不变式此前无测钉死，锁住以防未来改动破坏该前提。
+        var specials = new[] { '"', '*', '(', ')', ':', '-', '^' };
+        foreach (var t in CjkTokenizer.SplitForQuery(keyword))
+        {
+            if (!CjkTokenizer.ContainsCjk(t)) continue;
+            foreach (var c in specials)
+                Assert.DoesNotContain(c.ToString(), t);
+        }
+    }
+
     private async Task SeedOneAsync(string title, string sourceId)
     {
         var repo = new ItemRepository(_factory);
