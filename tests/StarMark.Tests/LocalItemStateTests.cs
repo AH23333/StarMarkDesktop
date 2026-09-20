@@ -45,6 +45,17 @@ public class LocalItemStateTests
     public void GetColor_MalformedJson_DoesNotThrow()
         => Assert.Equal(0, LocalItemState.GetColor(NewTodo(extra: "{ not json")));
 
+    [Fact]
+    public void SetDone_MalformedJson_DoesNotThrow_AndReopens()
+    {
+        // 写入侧曾只有 SetDone 直接 JsonNode.Parse 无兜底：坏 extra_json 时「勾选完成」即抛 JsonException。
+        // 现统一走 ParseObject——坏数据丢弃重开，done 仍能写入。
+        var item = NewTodo(extra: "{ not json");
+        var ex = Record.Exception(() => LocalItemState.SetDone(item, true));
+        Assert.Null(ex);
+        Assert.True(LocalItemState.IsDone(item));
+    }
+
     // ── 颜色 ──
 
     [Fact]

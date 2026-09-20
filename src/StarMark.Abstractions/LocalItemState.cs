@@ -39,9 +39,9 @@ public static class LocalItemState
     /// <summary>写入待办完成态到 extra_json（保留其它字段）。</summary>
     public static void SetDone(Item item, bool done)
     {
-        var node = string.IsNullOrEmpty(item.ExtraJson)
-            ? new JsonObject()
-            : (JsonNode.Parse(item.ExtraJson) as JsonObject ?? new JsonObject());
+        // 与 SetColor/SetDue/SetOrder 一致走 ParseObject：corrupt extra_json 时丢弃坏内容重开一个对象，
+        // 而不是让 JsonNode.Parse 抛未处理 JsonException——否则「勾选完成」这条日常路径遇到坏数据即崩。
+        var node = ParseObject(item);
         node[DoneKey] = done;
         item.ExtraJson = node.ToJsonString();
     }
