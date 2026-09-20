@@ -63,6 +63,9 @@ public sealed class ItemGridWidgetViewModel
     /// <summary>搜索结果格所钉的标签过滤（AND 语义）。</summary>
     public ObservableCollection<TagChip> Tags { get; } = new();
 
+    /// <summary>搜索结果格排序键：relevance（相关度，默认）/ recent（最近更新）/ name（名称）。与快捷搜索同源。</summary>
+    public string Sort { get; private set; } = "relevance";
+
     /// <summary>是否仍需要用户配置（标签格缺标签 / 搜索格缺关键词）。</summary>
     public bool NeedsConfig =>
         Mode == ItemGridMode.Tag ? string.IsNullOrWhiteSpace(GridTag)
@@ -98,6 +101,7 @@ public sealed class ItemGridWidgetViewModel
         if (inst is null) return;
         GridTag = inst.GridTag;
         Query = inst.GridQuery;
+        Sort = string.IsNullOrWhiteSpace(inst.GridSort) ? "relevance" : inst.GridSort;
         Tags.Clear();
         if (inst.GridTags is { Count: > 0 })
             foreach (var t in inst.GridTags)
@@ -124,9 +128,9 @@ public sealed class ItemGridWidgetViewModel
                     new BrowseFilter { TagFilters = new List<string> { GridTag ?? string.Empty }, Limit = 200 }, CancellationToken.None),
                 ItemGridMode.Search => _search is not null
                     ? (await _search.SearchAsync(Query ?? string.Empty,
-                        new SearchFilter { Tags = Tags.Where(t => t.Selected).Select(t => t.Name).ToList(), MaxResults = 200 }, CancellationToken.None)).Items
+                        new SearchFilter { Tags = Tags.Where(t => t.Selected).Select(t => t.Name).ToList(), MaxResults = 200, Sort = Sort }, CancellationToken.None)).Items
                     : (await _repo.SearchAsync(Query ?? string.Empty,
-                        new SearchFilter { Tags = Tags.Where(t => t.Selected).Select(t => t.Name).ToList(), MaxResults = 200 }, CancellationToken.None)).Items,
+                        new SearchFilter { Tags = Tags.Where(t => t.Selected).Select(t => t.Name).ToList(), MaxResults = 200, Sort = Sort }, CancellationToken.None)).Items,
                 ItemGridMode.Pinned => await _repo.GetPinnedAsync(200, CancellationToken.None),
                 _ => Array.Empty<Item>(),
             };
@@ -221,6 +225,19 @@ public sealed class ItemGridWidgetViewModel
         _ = LoadAsync();
     }
 
+    /// <summary>搜索结果格：切换排序键（relevance/recent/name）并持久化后重载。与快捷搜索排序下拉同源。</summary>
+    public void ApplySort(string sort)
+    {
+        var next = string.IsNullOrWhiteSpace(sort) ? "relevance" : sort;
+        if (Sort == next) return;
+        Sort = next;
+        SaveConfig();
+        _ = LoadAsync();
+    }
+
+    /// <summary>当前排序键映射到下拉索引（0 相关度 / 1 最近更新 / 2 名称），供视图初始化选中项。</summary>
+    public int SortIndex => Sort switch { "recent" => 1, "name" => 2, _ => 0 };
+
     public void ToggleTag(string name)
     {
         var chip = Tags.FirstOrDefault(t => t.Name == name);
@@ -272,6 +289,7 @@ public sealed class ItemGridWidgetViewModel
         inst.GridTag = GridTag;
         inst.GridQuery = Query;
         inst.GridTags = Tags.Where(t => t.Selected).Select(t => t.Name).ToList();
+        inst.GridSort = Sort == "relevance" ? null : Sort;   // null=默认相关度，避免给非搜索格/默认态写冗余字段
         _storage.Save(data);
     }
 

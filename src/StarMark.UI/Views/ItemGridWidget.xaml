@@ -29,6 +29,18 @@
                 <Button Content="应用" Padding="10,4,10,4" Style="{StaticResource WidgetActionButton}" Click="Apply_Click"/>
             </StackPanel>
 
+            <!-- 搜索结果格的排序（仅搜索模式由 code-behind 置可见）：对照 DeskBox 结果面可重排，
+                 并与快捷搜索的排序下拉同源（相关度 / 最近更新 / 名称）。索引→键见 ViewModel.ApplySort。 -->
+            <StackPanel x:Name="SortRow" Orientation="Horizontal" Spacing="6" Visibility="Collapsed">
+                <TextBlock Text="排序" FontSize="11" Opacity="0.7" VerticalAlignment="Center"/>
+                <ComboBox x:Name="SortBox" FontSize="11" SelectedIndex="0" MinWidth="104"
+                          SelectionChanged="SortBox_SelectionChanged">
+                    <ComboBoxItem Content="相关度"/>
+                    <ComboBoxItem Content="最近更新"/>
+                    <ComboBoxItem Content="名称"/>
+                </ComboBox>
+            </StackPanel>
+
             <!-- 搜索结果格的标签过滤（AND 语义） -->
             <StackPanel x:Name="TagCloudPanel" Visibility="Collapsed" Spacing="4">
                 <StackPanel Orientation="Horizontal" Spacing="6">

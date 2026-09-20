@@ -146,6 +146,10 @@ public sealed class WidgetInstanceConfig
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<string>? GridTags { get; set; }
 
+    /// <summary>搜索结果格的排序键（relevance/recent/name，SearchResults 用）。null=按相关度（默认），与快捷搜索同源。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? GridSort { get; set; }
+
     /// <summary>每实例外观覆盖（材质/颜色/边框/圆角/文本缩放）。为 null 时本实例沿用全局外观设置。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WidgetAppearanceOverride? Appearance { get; set; }

@@ -577,6 +577,7 @@ public sealed class WidgetManager
                 GridTag = inst.GridTag,
                 GridQuery = inst.GridQuery,
                 GridTags = inst.GridTags is null ? null : new List<string>(inst.GridTags),
+                GridSort = inst.GridSort,
             });
             instanceIds.Add(inst.Id);
             perKind[inst.Kind] = idx + 1;
@@ -648,6 +649,7 @@ public sealed class WidgetManager
                 inst.GridTag = entry.GridTag;
                 inst.GridQuery = entry.GridQuery;
                 inst.GridTags = entry.GridTags is null ? null : new List<string>(entry.GridTags);
+                inst.GridSort = entry.GridSort;
                 restore.Add((inst.Id, entry.LocalItems));
             }
             // 快照还原的是「当时那一整套摆位」，与"最后一次选择的布局"已无对应关系；

@@ -49,6 +49,8 @@ public sealed partial class ItemGridWidget : UserControl
             if (mode == ItemGridMode.Search)
             {
                 TagCloudPanel.Visibility = Visibility.Visible;
+                SortRow.Visibility = Visibility.Visible;
+                SortBox.SelectedIndex = ViewModel.SortIndex;   // 回填已钉排序；与默认相关度一致时不变、不触发重搜
                 _ = ViewModel.LoadTagsAsync();
             }
         }
@@ -103,6 +105,16 @@ public sealed partial class ItemGridWidget : UserControl
     {
         if (sender is Button { Tag: string name })
             ViewModel.ToggleTag(name);
+    }
+
+    private static readonly string[] SortKeys = { "relevance", "recent", "name" };
+
+    /// <summary>排序下拉切换：索引→排序键，交 ViewModel.ApplySort 落盘并重载（相关度为默认，与快捷搜索同源）。</summary>
+    private void SortBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var idx = SortBox.SelectedIndex;
+        if (idx < 0 || idx >= SortKeys.Length) return;
+        ViewModel.ApplySort(SortKeys[idx]);
     }
 
     private void ClearTags_Click(object sender, RoutedEventArgs e) => ViewModel.ClearTags();
