@@ -323,6 +323,35 @@ public class WeatherTests
         Assert.NotEqual(WeatherLayoutLevel.Expanded, WeatherLayoutMath.Determine(300, 260, WeatherLayoutLevel.Mini, 1.6));
     }
 
+    // ── DT：滞回「降档侧」——current=Expanded 收缩到降级线以下须降到 Compact（:148 真分支此前零覆盖）──
+    // 默认 typographyScale=1.0 → delta=0 → expDownW/H 恰为 280/240（整值 double 比较、无浮点临界陷阱）。
+
+    [Fact]
+    public void Determine_ExpandedDowngradesOnHeightBelowDownThreshold()
+    {
+        // 只让 height 析取项为真：width 320 > expDownW(280) 使宽度项假，height 235 <= expDownH(240) 真 → 降 Compact。
+        // 既有传 Expanded 的用例全落 :137（120×100→Mini）或 :150（400×400 / 291×250→保持 Expanded），
+        // 从未进入这条 :148 降档真分支——`||` 误写成 `&&` 或删 height 项即被本测拦下。
+        Assert.Equal(WeatherLayoutLevel.Compact, WeatherLayoutMath.Determine(320, 235, WeatherLayoutLevel.Expanded));
+    }
+
+    [Fact]
+    public void Determine_ExpandedDowngradesOnWidthBelowDownThreshold()
+    {
+        // 只让 width 析取项为真：height 300 > expDownH(240)，width 250 <= expDownW(280) → 降 Compact。
+        // 且 250 > miniDownW(178) 未触发 :137 无条件 Mini，确证走的是 :148 的 width 项而非 Mini 早退。
+        Assert.Equal(WeatherLayoutLevel.Compact, WeatherLayoutMath.Determine(250, 300, WeatherLayoutLevel.Expanded));
+    }
+
+    [Fact]
+    public void Determine_ExpandedDowngradeBoundary_IsInclusiveAtExpDownWidth()
+    {
+        // 钉 `<=` 闭区间：恰在降级线（280）即降；刚过一线（281×241 两维皆 >降级线）则留 Expanded。
+        // 与既有松括号 291×250（缓冲区中段保持）互补——此处把边界收紧到 off-by-one。
+        Assert.Equal(WeatherLayoutLevel.Compact, WeatherLayoutMath.Determine(280, 300, WeatherLayoutLevel.Expanded));
+        Assert.Equal(WeatherLayoutLevel.Expanded, WeatherLayoutMath.Determine(281, 241, WeatherLayoutLevel.Expanded));
+    }
+
     [Theory]
     [InlineData(WeatherLayoutLevel.Mini, false)]
     [InlineData(WeatherLayoutLevel.Compact, true)]
