@@ -231,6 +231,14 @@ public static class InsightsService
         {
             anchorSec = item.CreatedAt;
         }
+        // FromUnixTimeSeconds 只接受 [-62135596800, 253402300799]；越界值（毫秒级/荒谬 long，
+        // 手改或坏备份可注入）会抛 ArgumentOutOfRangeException，且趋势循环无 try 包裹 → 整份报告崩。
+        // 落回条目入库时间；若 created_at 本身也被污染则退到 Unix 纪元，绝不抛出。
+        if (!IsRepresentableUnixSec(anchorSec)) anchorSec = item.CreatedAt;
+        if (!IsRepresentableUnixSec(anchorSec)) return new DateTime(1970, 1, 1);
         return DateTimeOffset.FromUnixTimeSeconds(anchorSec).LocalDateTime.Date;
     }
+
+    private static bool IsRepresentableUnixSec(long sec) =>
+        sec is >= -62_135_596_800L and <= 253_402_300_799L;
 }
