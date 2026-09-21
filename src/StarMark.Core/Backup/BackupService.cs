@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text.Encodings.Web;
@@ -244,7 +245,8 @@ public sealed class BackupService
     public async Task<string> WriteSnapshotAsync(CancellationToken ct = default)
     {
         Directory.CreateDirectory(SnapshotDirectory);
-        var name = $"pre-restore-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.json";
+        // 锁定 InvariantCulture：非公历区域（th-TH 佛历 / ar-SA 希吉来历）下不加锁定会得到错误年份，破坏回滚点按名排序的时间序。
+        var name = $"pre-restore-{DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.json";
         var path = Path.Combine(SnapshotDirectory, name);
         await ExportToFileAsync(path, ct);
         return path;

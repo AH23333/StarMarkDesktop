@@ -1,5 +1,6 @@
 #nullable enable
 using System.Diagnostics;
+using System.Globalization;
 
 namespace StarMark.Abstractions;
 
@@ -14,8 +15,9 @@ public static class StarLog
     public static string LogDirectory
         => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppConstants.AppName, "logs");
 
+    // 锁定 InvariantCulture：th-TH/ar-SA 的 CurrentCulture 用佛历/希吉来历，否则文件名会得到 2569/1447 这类年份，与文档承诺及行内 [O] 时间戳矛盾。
     public static string CurrentLogFile
-        => Path.Combine(LogDirectory, $"starmark-{DateTime.Now:yyyyMMdd}.log");
+        => Path.Combine(LogDirectory, $"starmark-{DateTime.Now.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}.log");
 
     public static void Info(string message) => Write("INFO", message);
 
