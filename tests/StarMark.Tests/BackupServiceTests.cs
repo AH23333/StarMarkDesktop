@@ -22,12 +22,14 @@ public sealed class BackupServiceTests : IDisposable
     private readonly string _db1;
     private readonly string _db2;
     private readonly string _snapshotDir;
+    private readonly string _widgetsPath;
 
     public BackupServiceTests()
     {
         _db1 = Path.Combine(Path.GetTempPath(), $"starmark_bk1_{Guid.NewGuid():N}.db");
         _db2 = Path.Combine(Path.GetTempPath(), $"starmark_bk2_{Guid.NewGuid():N}.db");
         _snapshotDir = Path.Combine(Path.GetTempPath(), $"starmark_snap_{Guid.NewGuid():N}");
+        _widgetsPath = Path.Combine(Path.GetTempPath(), $"starmark_wg_{Guid.NewGuid():N}.json");
         Directory.CreateDirectory(_snapshotDir);
         // 把恢复前快照重定向到临时目录，避免污染真实 %LOCALAPPDATA%
         BackupService.SnapshotDirectoryOverride = _snapshotDir;
@@ -41,6 +43,10 @@ public sealed class BackupServiceTests : IDisposable
             try { File.Delete(p); } catch { }
             try { File.Delete(p + "-wal"); } catch { }
             try { File.Delete(p + "-shm"); } catch { }
+        }
+        foreach (var suffix in new[] { "", ".bak", ".tmp" })
+        {
+            try { File.Delete(_widgetsPath + suffix); } catch { }
         }
         try { Directory.Delete(_snapshotDir, recursive: true); } catch { }
     }
@@ -316,5 +322,30 @@ public sealed class BackupServiceTests : IDisposable
         var only = Assert.Single(all);
         Assert.Equal("dst", only.Source);
         Assert.Equal("b1", only.SourceId);
+    }
+
+    /// <summary>
+    /// 回归 AU（组件写盘原子性）：WriteWidgetsJson 此前用裸 File.WriteAllText 覆盖线上 widgets.json，
+    /// 是本仓**唯一**未走 tmp+move 的用户数据写站点（WidgetStorage.Save / SettingsStore.Save / GitHubOptions.Save 皆原子）。
+    /// 写一半崩溃/磁盘满即把整份组件配置截断成非法 JSON，而 .bak 无任何代码自动回滚 → 下次启动整块组件全丢。
+    /// 修后先写 .tmp 再 File.Move(overwrite)：还原成功的组件文件内容须逐字节忠实，且不得残留 .tmp。
+    /// </summary>
+    [Fact]
+    public async Task Restore_WritesWidgetsJson_Atomically_AndFaithfully()
+    {
+        const string widgets = """{"Instances":[{"Kind":1}]}""";
+        var src = Seed(_db1);
+        await UpsertAsync(src.Items, "test", "a1", "标题");
+        var env = await src.Backup.ExportAsync(CancellationToken.None);
+        env.Payload.WidgetsJson = widgets;   // 触发组件写盘（成功）分支
+
+        var dst = Seed(_db2);
+        var rr = await dst.Backup.RestoreAsync(env, RestoreMode.Merge, _widgetsPath, CancellationToken.None);
+
+        Assert.True(rr.Success);
+        Assert.True(rr.WidgetsRestored);
+        Assert.True(File.Exists(_widgetsPath));
+        Assert.Equal(widgets, await File.ReadAllTextAsync(_widgetsPath));
+        Assert.False(File.Exists(_widgetsPath + ".tmp"));   // 原子写不得留下半截临时文件
     }
 }

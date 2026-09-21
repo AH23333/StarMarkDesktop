@@ -310,7 +310,12 @@ public sealed class BackupService
             {
                 File.Copy(path, path + ".bak", overwrite: true);
             }
-            File.WriteAllText(path, json);
+            // 原子落盘：先写 .tmp 再 File.Move(overwrite) 覆盖，与 WidgetStorage.Save / SettingsStore.Save /
+            // GitHubOptions.Save 同口径——否则写一半崩溃/磁盘满会把线上 widgets.json 截断成非法 JSON，
+            // 而 .bak 无任何代码自动回滚，用户下次启动即整块组件全丢（R10-1 会把截断判为「内容损坏」留 .bak 但返回空）。
+            var tmp = path + ".tmp";
+            File.WriteAllText(tmp, json);
+            File.Move(tmp, path, overwrite: true);
             return true;
         }
         catch (Exception ex)
