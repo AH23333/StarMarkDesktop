@@ -1102,9 +1102,20 @@ public sealed class ItemRepository : IItemRepository
             }
             else
             {
-                sb.Append(t).Append('*');  // 前缀匹配
+                // AND/OR/NOT/NEAR 是 FTS5 大写布尔算符：裸 "AND*" 会被语法解析器当算符、
+                // 对尾随 '*' 报 "fts5: syntax error"（语句级、整条 MATCH 崩）。本项目的检索语义
+                // 是"空格=全部 AND"、不支持布尔算符，故把这几个词降级为普通检索词（小写化去掉
+                // 算符身份），仍走前缀匹配——既不崩、又能按字面召回含该词的条目。
+                var term = IsFts5Operator(t) ? t.ToLowerInvariant() : t;
+                sb.Append(term).Append('*');  // 前缀匹配
             }
         }
         return sb.ToString();
     }
+
+    private static bool IsFts5Operator(string token) =>
+        token.Equals("AND", StringComparison.OrdinalIgnoreCase) ||
+        token.Equals("OR", StringComparison.OrdinalIgnoreCase) ||
+        token.Equals("NOT", StringComparison.OrdinalIgnoreCase) ||
+        token.Equals("NEAR", StringComparison.OrdinalIgnoreCase);
 }
