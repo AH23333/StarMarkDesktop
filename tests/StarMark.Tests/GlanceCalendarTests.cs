@@ -106,4 +106,25 @@ public sealed class GlanceCalendarTests
         Assert.Null(GlanceCalendar.NextFestival(DateOnly.MaxValue));
         Assert.Null(GlanceCalendar.NextFestival(new DateOnly(9999, 12, 30), 5));
     }
+
+    /// <summary>
+    /// 契约护栏（DC）：除夕按「次日即正月初一」反推（`GlanceCalendar.cs:75-78`），刻意**不**硬编码
+    /// 「腊月三十」——因农历十二月有 29 天（无年三十）与 30 天两种，硬编码会在 29 天年份**静默漏掉除夕**。
+    /// 该分支此前无测（`Festival_KnownDates` 仅覆盖春节/公历节日）。以本文件已钉死的三个春节（正月初一）
+    /// 锚点日各减一天即除夕，跨年验证反推恒命中，且再前一天不得是除夕（排除把窗口算宽）；春节锚点自洽复核。
+    /// 断言纯由既有农历锚点定义性推导，无需离线推算农历日号。
+    /// </summary>
+    [Theory]
+    [InlineData(2026, 2, 17)] // 正月初一 → 除夕 02-16
+    [InlineData(2025, 1, 29)] // 正月初一 → 除夕 01-28
+    [InlineData(2024, 2, 10)] // 正月初一 → 除夕 02-09
+    public void Festival_Chuxi_IsDerivedFromDayBeforeSpringFestival(int y, int m, int d)
+    {
+        var springFestival = new DateOnly(y, m, d);
+        var chuxi = springFestival.AddDays(-1);
+
+        Assert.Equal("除夕", GlanceCalendar.Festival(chuxi));                 // 次日即正月初一 → 命中除夕
+        Assert.NotEqual("除夕", GlanceCalendar.Festival(chuxi.AddDays(-1)));  // 再往前一天不得也是除夕
+        Assert.Equal("春节", GlanceCalendar.Festival(springFestival));        // 锚点自洽：正月初一即春节
+    }
 }
