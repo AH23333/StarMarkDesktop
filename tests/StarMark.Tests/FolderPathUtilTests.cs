@@ -116,4 +116,50 @@ public sealed class FolderPathUtilTests
     {
         Assert.Equal(new[] { "其他文件" }, FolderPathUtil.GetSegments(new Item { Type = ItemType.File }));
     }
+
+    // ───────── DS：未覆盖分支 / 未断言输出值（纯函数契约护栏；重构即回退）─────────
+
+    [Fact]
+    public void GetSegments_TodoAndNoteType_FallsBackToOther()
+    {
+        // switch 默认臂（:27 _ => OtherGroup）此前从未被进入——既有仅钉 Bookmark/File/GitHub/Clipboard 四臂。
+        // Todo/Note 是统一条目模型下的一等类型，无外部来源分组，须落到单一「其他」伪根。
+        Assert.Equal(new[] { "其他" }, FolderPathUtil.GetSegments(new Item { Type = ItemType.Todo }));
+        Assert.Equal(new[] { "其他" }, FolderPathUtil.GetSegments(new Item { Type = ItemType.Note }));
+    }
+
+    [Fact]
+    public void FileSegments_UppercaseFileScheme_StillParsesToHierarchy()
+    {
+        // :52 用 OrdinalIgnoreCase 匹配 file:// 前缀；既有测全为小写，把它换成大小写敏感即静默回归到「其他文件」。
+        // 与 DJ（LocalFileIdentity 内层 :48）是不同函数、不同行——DJ 全绿仍漏此调用点的回归。
+        // 仅断言文化无关结果（ASCII 大小写折叠），不绑定宿主 CurrentCulture/ICU。
+        var item = new Item { Type = ItemType.File, Uri = "FILE:///C:/a/b/file.txt" };
+        Assert.Equal(new[] { "C:", "a", "b" }, FolderPathUtil.FileSegments(item));
+    }
+
+    [Fact]
+    public void FileSegments_BareDriveRoot_FallsBackToOtherFiles()
+    {
+        // TryPathFromUri 认 "C:" 为合法本地路径（返 true），但 FileSegments 的 segs.Length>=2 门拒单段——
+        // 否则丢「文件名」后目录层级为空数组，会破坏 GetSegments 的非空不变式。此 false 落空臂此前未被覆盖。
+        var item = new Item { Type = ItemType.File, Uri = "file:///C:" };
+        Assert.Equal(new[] { "其他文件" }, FolderPathUtil.FileSegments(item));
+    }
+
+    [Fact]
+    public void BookmarkSegments_EmptyElementDropped_SiblingsSurvive()
+    {
+        // Where 双合取（!IsNullOrEmpty && Trim('/').Length>0）对「混合」数组逐元素剔除：空串删、其余层级留。
+        // 既有仅覆盖「全删→兜底」与「全留→返回」，从未断言部分删除后的 ["技术","AI"] 这一独立输出值。
+        var item = new Item
+        {
+            Type = ItemType.Bookmark,
+            ExtraJson = JsonSerializer.Serialize(new BookmarkMeta
+            {
+                FolderPaths = new List<string> { "技术", "", "AI" },
+            }),
+        };
+        Assert.Equal(new[] { "技术", "AI" }, FolderPathUtil.BookmarkSegments(item));
+    }
 }
