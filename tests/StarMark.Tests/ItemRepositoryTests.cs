@@ -633,4 +633,24 @@ public sealed class ItemRepositoryTests : IDisposable
         var items = await repo.GetAllAsync(new BrowseFilter { Sort = "starred", Limit = 10 }, CancellationToken.None);
         Assert.Equal(new[] { "晚star", "中star", "早star" }, items.Select(i => i.Title).ToArray());
     }
+
+    [Fact]
+    public async Task GetAllAsync_LanguageFilter_ExcludesNonStarItems()
+    {
+        // AZ-2：语言下拉语义是「按编程语言筛 star」（LanguageDetector / FolderTreePage 注释），
+        // 「所有来源」视图（TypeFilter=null）下旧实现只比 json_extract($.Language) 无 type 闸门。
+        // EnsureLanguage 会给 .py 书签兜底打 Python → 它会冒充 star 混入。加 i.type='githubstar' 闸门后
+        // 只应返回 star 那条。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "st1", Title = "Python Star", Uri = "https://github.com/o/r", ExtraJson = """{"Language":"Python"}""" },
+            new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "bk1", Title = "Python 脚本书签", Uri = "https://example.com/tool.py" },
+        }, CancellationToken.None);
+
+        var items = await repo.GetAllAsync(new BrowseFilter { Language = "Python", Limit = 10 }, CancellationToken.None);
+        var only = Assert.Single(items);
+        Assert.Equal(ItemType.GitHubStar, only.Type);
+        Assert.Equal("Python Star", only.Title);
+    }
 }
