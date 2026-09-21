@@ -759,4 +759,34 @@ public sealed class ItemRepositoryTests : IDisposable
         Assert.Equal(new[] { ItemType.GitHubStar }, counts.Keys.ToArray());
         Assert.Equal(1, counts[ItemType.GitHubStar]);
     }
+
+    [Fact]
+    public async Task SyncState_RoundTrips_AndMissingKeyReturnsNull()
+    {
+        // EE：sync_state 是 GitHub 增量同步检查点（ETag / last_synced_at，P1-4·P-19 相关）的落库处，
+        // 仓储层此前只被 DiagnosticsServiceTests 当「写入种子」间接用过（断言的是诊断展示、非本方法读回），
+        // Get↔Set 往返与「缺键」语义在仓储层零直接测。钉死：① 存什么读回什么（含 GitHub 式带引号 W/"…" 值，
+        // 防 json/引号被吞）；② 不同键各自独立读回（键作用域正确）；③ 从未写过的键读回 null（方法自陈契约 +
+        // string? 可空返回，防退化成对空结果集误抛）。
+        var repo = new ItemRepository(_factory);
+        await repo.SetSyncStateAsync("github:etag", "W/\"abc123\"", CancellationToken.None);
+        await repo.SetSyncStateAsync("github:last_synced_at", "1700000000", CancellationToken.None);
+
+        Assert.Equal("W/\"abc123\"", await repo.GetSyncStateAsync("github:etag", CancellationToken.None));
+        Assert.Equal("1700000000", await repo.GetSyncStateAsync("github:last_synced_at", CancellationToken.None));
+        Assert.Null(await repo.GetSyncStateAsync("github:never-set", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task SyncState_SetSameKeyTwice_OverwritesDespitePrimaryKey()
+    {
+        // EE 承重幂等面：sync_state.key 是 PRIMARY KEY（Schema.sql:137），且 GitHubSource:54 每轮同步都以
+        // 同一键 "github:etag" 重写。SetSyncStateAsync 的 `ON CONFLICT(key) DO UPDATE` 是「幂等覆盖」的唯一
+        // 支点——若它退化为裸 INSERT（或误改 INSERT OR IGNORE），第二次写同键会抛约束、或因 IGNORE 保留陈旧
+        // ETag 使条件请求带旧 etag→永远命中错误版本。钉死：同键二次写不抛、读回最新值。
+        var repo = new ItemRepository(_factory);
+        await repo.SetSyncStateAsync("github:etag", "W/\"v1\"", CancellationToken.None);
+        await repo.SetSyncStateAsync("github:etag", "W/\"v2\"", CancellationToken.None); // 不抛 = ON CONFLICT 生效
+        Assert.Equal("W/\"v2\"", await repo.GetSyncStateAsync("github:etag", CancellationToken.None));
+    }
 }
