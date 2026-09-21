@@ -20,8 +20,10 @@ public sealed class DbConnectionFactory
         // （避免沙盒限制 %APPDATA% 写入；生产环境走 %APPDATA%\StarMark\starmark.db）
         DbPath = dbPath ?? Environment.GetEnvironmentVariable("STARMARK_DB_PATH") ?? DefaultDbPath();
         Directory.CreateDirectory(Path.GetDirectoryName(DbPath)!);
-        // SQLite 数据库文件位于 %APPDATA%\StarMark\starmark.db
-        _connectionString = $"Data Source={DbPath}";
+        // SQLite 数据库文件位于 %APPDATA%\StarMark\starmark.db。
+        // 用 builder 而非裸拼接：路径里的 ';' / '=' 是连接串保留字符（Windows 文件名合法，如用户名含 ';'），
+        // 裸拼会被解析成关键字分隔符而抛 ArgumentException，导致应用在自己的库上都打不开。builder 会自动加引号转义。
+        _connectionString = new SqliteConnectionStringBuilder { DataSource = DbPath }.ConnectionString;
     }
 
     public SqliteConnection Open()
