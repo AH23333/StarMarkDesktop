@@ -558,4 +558,65 @@ public sealed class BackupServiceTests : IDisposable
         cmd.Parameters.AddWithValue("@tag", tagName);
         return System.Convert.ToInt32(cmd.ExecuteScalar());
     }
+
+    [Fact]
+    public async Task ExportUserState_OnlyTouchedRows_EmptyNoteAndCleanExcluded()
+    {
+        // EH：ExportUserStateAsync:50-52 的门 `WHERE hidden<>0 OR pinned<>0 OR (notes IS NOT NULL AND notes<>'')`——
+        // 仅"用户动过"的行进入用户态导出。三析取臂各须生效、两条排除臂（全默认 / notes 空串）亦须生效。
+        // 承重且不可见：漏任一整臂→该维度用户态不导出、还原后静默丢失；`notes<>''` 尤为隐蔽——
+        // SetNoteAsync 原样存 content（:318 无空串早退），故用户"清空笔记"会留下 notes=''，若去掉 `<>''`
+        // 空笔记行将冒充"有笔记"混入导出、还原时对目标真实笔记徒生扰动。
+        var ctx = Seed(_db1);
+        var clean  = await UpsertAsync(ctx.Items, "test", "u_clean", "全默认");
+        var noted  = await UpsertAsync(ctx.Items, "test", "u_note",  "有笔记");
+        var empty  = await UpsertAsync(ctx.Items, "test", "u_empty", "空笔记");
+        var pinned = await UpsertAsync(ctx.Items, "test", "u_pin",   "置顶");
+        var hidden = await UpsertAsync(ctx.Items, "test", "u_hide",  "隐藏");
+        _ = clean;   // clean 不加任何状态，仅用于验证排除
+
+        await ctx.Items.SetNoteAsync(noted.Id, "正文笔记", CancellationToken.None);
+        await ctx.Items.SetNoteAsync(empty.Id, string.Empty, CancellationToken.None);   // notes='' → 应被 `<>''` 剔
+        await ctx.Items.SetPinnedAsync(pinned.Id, true, CancellationToken.None);
+        await ctx.Items.SetHiddenAsync(hidden.Id, true, CancellationToken.None);
+
+        var repo = new BackupRepository(ctx.Factory);
+        var ids = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+        foreach (var s in await repo.ExportUserStateAsync(CancellationToken.None)) ids.Add(s.SourceId);
+
+        Assert.Equal(3, ids.Count);                 // 不多不少：恰三条被用户动过
+        Assert.Contains("u_note", ids);             // notes 臂
+        Assert.Contains("u_pin", ids);              // pinned 臂
+        Assert.Contains("u_hide", ids);             // hidden 臂
+        Assert.DoesNotContain("u_clean", ids);      // 三臂全 0 → 排除
+        Assert.DoesNotContain("u_empty", ids);      // notes 空串 → `<>''` 排除（隐蔽承重臂）
+    }
+
+    [Fact]
+    public async Task ExportUserState_ProjectsFieldValuesFaithfully_HiddenOnlyNoteStaysNull()
+    {
+        // EH②：ExportUserStateAsync:57-62 的 reader 值投影——Hidden/Pinned 由 `int != 0`、Notes 由
+        // `IsDBNull(4) ? null : GetString(4)`。承重：hidden-only 行（无笔记）须投为 Notes==null；
+        // 若误把 null 读成 ""（或 hidden/pinned/notes 列序错位），ImportUserStateAsync 的
+        // `(object?)s.Notes ?? DBNull.Value` 会因拿到 ""（非 null）而在还原时把目标库该条真实笔记静默洗成空。
+        // 逐字段钉死，防列序/判定翻转（列序错位会把 Pinned 的 1 当 Notes 之类，导出即腐）。
+        var ctx = Seed(_db1);
+        var hide = await UpsertAsync(ctx.Items, "test", "h", "隐藏无笔记");
+        var both = await UpsertAsync(ctx.Items, "test", "b", "又置顶又有笔记");
+        await ctx.Items.SetHiddenAsync(hide.Id, true, CancellationToken.None);
+        await ctx.Items.SetPinnedAsync(both.Id, true, CancellationToken.None);
+        await ctx.Items.SetNoteAsync(both.Id, "备注B", CancellationToken.None);
+
+        var repo = new BackupRepository(ctx.Factory);
+        var recs = await repo.ExportUserStateAsync(CancellationToken.None);
+
+        var h = Assert.Single(recs, r => r.SourceId == "h");
+        Assert.True(h.Hidden);
+        Assert.False(h.Pinned);
+        Assert.Null(h.Notes);                       // 无笔记 → null（非 ""），否则还原会洗掉目标笔记
+        var b = Assert.Single(recs, r => r.SourceId == "b");
+        Assert.False(b.Hidden);
+        Assert.True(b.Pinned);
+        Assert.Equal("备注B", b.Notes);
+    }
 }
