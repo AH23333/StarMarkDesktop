@@ -70,4 +70,63 @@ public sealed class MigrationRunnerTests : IDisposable
 
         Assert.Equal(future, ReadVersion()); // 不得被倒拨回 CurrentVersion
     }
+
+    private void Exec(string sql)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+
+    private T Scalar<T>(string sql)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        var obj = cmd.ExecuteScalar();
+        return (T)Convert.ChangeType(obj!, typeof(T));
+    }
+
+    /// <summary>
+    /// 契约护栏：MigrateV4 按归一化 source_id 合并重复条目时，必须把整组的用户状态
+    /// （hidden / pinned）与更长笔记、标签关联，全部 OR/合并回「最早 created_at」的 keeper，
+    /// 只删 URL 变体不丢用户意图。此路径每次从 &lt;v4 升级都会跑，且回归会静默删除用户数据——
+    /// 此前完全无测。构造两条归一后同键的 github_star（尾斜杠 vs tab= 查询）验证：
+    /// keeper 保留、dup 删除、hidden/pinned OR 落到 keeper、空笔记被 dup 长笔记填充、source_id 归一。
+    /// </summary>
+    [Fact]
+    public void EnsureSchema_MigrateV4_MergesDuplicatesPreservingUserState()
+    {
+        new MigrationRunner(_factory).EnsureSchema(); // 建表
+
+        // keeper：URL 带尾斜杠，created_at 更早(100)，用户未隐藏/未置顶、无笔记
+        Exec(@"INSERT INTO items(id,type,source,source_id,title,search_text,created_at,updated_at,hidden,pinned,notes)
+               VALUES(1,'github_star','github','https://github.com/foo/bar/','A','A',100,100,0,0,'');");
+        // dup：tab= 查询变体（归一后与 keeper 同键），created_at 更晚(200)，但用户把隐藏/置顶/笔记都留在了这条上
+        Exec(@"INSERT INTO items(id,type,source,source_id,title,search_text,created_at,updated_at,hidden,pinned,notes)
+               VALUES(2,'github_star','github','https://github.com/foo/bar?tab=issues','B','B',200,200,1,1,'这是较长的一条笔记');");
+        // 标签挂在 dup 上
+        Exec("INSERT INTO tags(id,name,created_at) VALUES(1,'work',1);");
+        Exec("INSERT INTO item_tags(item_id,tag_id,created_at) VALUES(2,1,1);");
+
+        // 回退到 v3 触发 v4 合并
+        WriteVersion(3);
+        new MigrationRunner(_factory).EnsureSchema();
+
+        // 只剩 keeper（id=1），dup 被删
+        Assert.Equal(1, Scalar<long>("SELECT COUNT(*) FROM items;"));
+        Assert.Equal(1, Scalar<long>("SELECT id FROM items;"));
+        // 用户状态整组 OR 归并到 keeper（原本只在 dup 上的 hidden/pinned 未丢）
+        Assert.Equal(1, Scalar<long>("SELECT hidden FROM items WHERE id=1;"));
+        Assert.Equal(1, Scalar<long>("SELECT pinned FROM items WHERE id=1;"));
+        // keeper 空笔记被 dup 的长笔记填充
+        Assert.Equal("这是较长的一条笔记",
+            Scalar<string>("SELECT notes FROM items WHERE id=1;"));
+        // keeper 的 source_id 归一到标准键（尾斜杠与 tab= 均被剥除）
+        Assert.Equal("https://github.com/foo/bar",
+            Scalar<string>("SELECT source_id FROM items WHERE id=1;"));
+        // 标签关联随合并搬到 keeper
+        Assert.Equal(1, Scalar<long>("SELECT COUNT(*) FROM item_tags WHERE item_id=1 AND tag_id=1;"));
+    }
 }
