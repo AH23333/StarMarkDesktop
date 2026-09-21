@@ -596,4 +596,41 @@ public sealed class ItemRepositoryTests : IDisposable
         Assert.Contains(visible, i => i.Title == "可见项");
         Assert.DoesNotContain(visible, i => i.Title == "隐藏项");
     }
+
+    // ===== 批次 AZ：浏览模式 GetAllAsync 排序分支 / 语言闸门回归 =====
+
+    [Fact]
+    public async Task GetAllAsync_SortCollected_OrdersByCreatedAtDesc()
+    {
+        // AZ-1：主窗工具栏「最近收藏」经 BrowseFilter.Sort="collected" 直达 GetAllAsync，
+        // 旧 switch 只有 stars/name/recent → 落 default 变成「最近更新」。用 created/updated 反向
+        // 排列钉死：collected 必须按 created_at DESC，而非 updated_at DESC。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "c1", Title = "早收藏", CreatedAt = 100, UpdatedAt = 300 },
+            new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "c2", Title = "中收藏", CreatedAt = 200, UpdatedAt = 200 },
+            new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "c3", Title = "晚收藏", CreatedAt = 300, UpdatedAt = 100 },
+        }, CancellationToken.None);
+
+        var items = await repo.GetAllAsync(new BrowseFilter { Sort = "collected", Limit = 10 }, CancellationToken.None);
+        Assert.Equal(new[] { "晚收藏", "中收藏", "早收藏" }, items.Select(i => i.Title).ToArray());
+    }
+
+    [Fact]
+    public async Task GetAllAsync_SortStarred_OrdersByStarredAtDesc()
+    {
+        // AZ-1：主窗工具栏「最近 Star」→ Sort="starred" → GetAllAsync 旧实现漏支落 default。
+        // starredAt 与 updated_at 反向排列，钉死须按 extra_json.StarredAt DESC。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "s1", Title = "晚star", Uri = "https://github.com/o/r1", UpdatedAt = 100, ExtraJson = """{"StarredAt":900}""" },
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "s2", Title = "中star", Uri = "https://github.com/o/r2", UpdatedAt = 200, ExtraJson = """{"StarredAt":800}""" },
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "s3", Title = "早star", Uri = "https://github.com/o/r3", UpdatedAt = 300, ExtraJson = """{"StarredAt":700}""" },
+        }, CancellationToken.None);
+
+        var items = await repo.GetAllAsync(new BrowseFilter { Sort = "starred", Limit = 10 }, CancellationToken.None);
+        Assert.Equal(new[] { "晚star", "中star", "早star" }, items.Select(i => i.Title).ToArray());
+    }
 }
