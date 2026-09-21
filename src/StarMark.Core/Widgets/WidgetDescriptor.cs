@@ -17,15 +17,22 @@ public enum WidgetContentAvailability
     Planned
 }
 
-/// <summary>组件外壳（标题栏/胶囊）的呈现模式，移植自 DeskBox <c>WidgetChromeMode</c>。</summary>
+/// <summary>
+/// 组件外壳（标题栏/胶囊）的呈现模式，移植自 DeskBox <c>WidgetChromeMode</c>。
+/// <para>
+/// <b>持久化契约：只能追加、不得重排或改值。</b>此枚举经 <c>System.Text.Json</c> 按<b>底层整数</b>
+/// 写入 <c>widgets.json</c>（全仓无 <c>JsonStringEnumConverter</c>），且 <c>WidgetStorage</c> 依赖
+/// <c>0 == Standard</c> 作为遗留/缺省文件的兜底。显式钉死序号以防中途插值静默重映射既有配置。
+/// </para>
+/// </summary>
 public enum WidgetChromeMode
 {
     /// <summary>标准标题栏 + 内容。</summary>
-    Standard,
+    Standard = 0,
     /// <summary>收起为胶囊（Phase B 胶囊模式用）。</summary>
-    Compact,
+    Compact = 1,
     /// <summary>完全隐藏外壳，仅留内容（透明浮层）。</summary>
-    Hidden
+    Hidden = 2
 }
 
 /// <summary>

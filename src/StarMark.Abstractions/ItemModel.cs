@@ -5,17 +5,24 @@ namespace StarMark.Abstractions;
 
 /// <summary>
 /// 条目类型。对应原 StarMark 浏览器扩展中的 <c>Source</c>，桌面端扩展为四类。
+/// <para>
+/// <b>持久化契约：只能追加、不得重排或改值。</b>SQLite <c>items.type</c> 按 <c>ToString()</c>
+/// 名字存（重排安全），但备份 JSON 的 <c>Item.Type</c> 经 <c>System.Text.Json</c> 按<b>底层整数</b>存
+/// （全仓无 <c>JsonStringEnumConverter</c>）。故此处显式钉死序号：中途插值会让既有备份的
+/// <c>"type"</c> 整数静默重映射到别的成员（且备份校验和只重算已解析载荷、查不出），必须保持
+/// File=0…Note=5 恒定。
+/// </para>
 /// </summary>
 public enum ItemType
 {
-    File,
-    Bookmark,
-    GitHubStar,
-    Clipboard,
+    File = 0,
+    Bookmark = 1,
+    GitHubStar = 2,
+    Clipboard = 3,
     /// <summary>本地待办（不入任何外部源，统一条目模型下的本地内容）。</summary>
-    Todo,
+    Todo = 4,
     /// <summary>本地随记（不入任何外部源，统一条目模型下的本地内容）。</summary>
-    Note,
+    Note = 5,
 }
 
 /// <summary>条目来源标识。每个来源对应一个 IItemSource 实现。</summary>
