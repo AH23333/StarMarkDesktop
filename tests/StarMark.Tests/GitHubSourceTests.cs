@@ -1,5 +1,6 @@
 #nullable enable
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using Xunit;
 using StarMark.Abstractions;
@@ -95,6 +96,28 @@ public sealed class GitHubSourceTests
         Assert.Equal(1296068472, item.CreatedAt); // 2011-01-26T19:01:12Z
         Assert.Equal(1706781600, item.UpdatedAt); // 2024-02-01T10:00:00Z
         Assert.Equal(Now, item.SyncedAt);
+    }
+
+    [Theory]
+    [InlineData("th-TH")]   // 佛历：默认历法年份 +543
+    [InlineData("fa-IR")]   // 波斯历
+    [InlineData("ar-SA")]   // 希吉来历
+    public void MapToItem_IsoTimestamps_AreCultureInvariant(string culture)
+    {
+        // GitHub 恒返回 ISO 8601 基本格式带 Z 的 UTC 串；映射层绝不能按 CurrentCulture 历法解析，
+        // 否则非公历区域下每条 star 的 CreatedAt/UpdatedAt 会被算成错误 epoch，击穿 recent/starred 排序与健康度分桶。
+        var saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(culture);
+            var item = GitHubSource.MapToItem(Repo(), Now);
+            Assert.Equal(1296068472, item.CreatedAt); // 2011-01-26T19:01:12Z——非公历历法下也必须原样
+            Assert.Equal(1706781600, item.UpdatedAt); // 2024-02-01T10:00:00Z
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
     }
 
     [Fact]
