@@ -102,7 +102,10 @@ public static class CjkTokenizer
         var result = new List<string>();
         if (string.IsNullOrWhiteSpace(keyword)) return result;
 
-        foreach (string part in keyword.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        // 按 Unicode 空白（char.IsWhiteSpace：含 U+00A0 不换行空格、U+3000 全角空格等）断词，
+        // 与索引侧 unicode61 的分隔符集对齐。旧实现只 split ASCII 空格，用户用全角空格分隔或
+        // 粘贴含不换行空格的标题时，该空白被当正文并入词元 → 交给 FTS5 成一个空短语 → 整条查询 0 命中。
+        foreach (string part in keyword.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
         {
             var buf = new StringBuilder();
             int i = 0;

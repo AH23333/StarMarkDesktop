@@ -145,6 +145,26 @@ public sealed class CjkSearchTests : IDisposable
         Assert.Equal(new[] { "winui", "桌面", "面组", "组件" }, tokens);
     }
 
+    /// <summary>
+    /// 回归 EP：查询侧曾只 split ASCII 空格，全角空格（U+3000，微软拼音/搜狗全角模式的空格键）
+    /// 或不换行空格（U+00A0，网页/Word 粘贴标题常见）被当正文并入词元，交给 FTS5 成一个空短语
+    /// → 整条查询静默 0 命中。修复后按 char.IsWhiteSpace 断词，与索引侧 unicode61 分隔符集对齐。
+    /// </summary>
+    [Theory]
+    [InlineData("笔记　工具")] // U+3000 全角空格
+    [InlineData("笔记 工具")] // U+00A0 不换行空格
+    public void SplitForQuery_TreatsUnicodeSpaceAsSeparator(string keyword)
+    {
+        var tokens = CjkTokenizer.SplitForQuery(keyword);
+
+        // 铁律：Unicode 空白的行为必须与 ASCII 空格完全一致——两段独立 CJK 串各成一个二元组，
+        // 既不跨空白拼「记工」，也不残留任何纯空白词元。旧实现只 split U+0020 → 空白被并入词元、
+        // 交给 FTS5 成空短语 → 整查询 0 命中（tokens=["笔记", <空白>, "工具"]），下列断言在旧实现下即失败。
+        Assert.Equal(CjkTokenizer.SplitForQuery("笔记 工具"), tokens);
+        Assert.Equal(new[] { "笔记", "工具" }, tokens);
+        Assert.All(tokens, t => Assert.DoesNotMatch(@"\s", t));
+    }
+
     // ────────────────────────── 端到端 FTS 检索 ──────────────────────────
 
     private static readonly (string Title, string SourceId)[] Corpus =
@@ -221,6 +241,21 @@ public sealed class CjkSearchTests : IDisposable
     }
 
     // ────────────────────────── 迁移 v3 ──────────────────────────
+
+    /// <summary>
+    /// 回归 EP（端到端）：用户以全角空格（或粘贴含不换行空格）分隔关键词查「笔记 X 工具」时，
+    /// 旧实现把该空白当正文并入词元 → FTS5 空短语 → 明明库里有匹配却返回 0 条；修复后应命中含这两词的标题。
+    /// </summary>
+    [Theory]
+    [InlineData('　')] // 全角空格
+    [InlineData(' ')] // 不换行空格
+    public async Task Search_KeywordJoinedByUnicodeSpace_IsRecallable(char space)
+    {
+        await SeedAsync();
+        var titles = await SearchTitlesAsync("笔记" + space + "工具");
+
+        Assert.Contains("搜索笔记工具", titles);
+    }
 
     [Fact]
     public async Task MigrateV3_RebuildsLegacySearchText()
