@@ -174,6 +174,17 @@ public sealed class WidgetSnapshotTests : IDisposable
     }
 
     [Fact]
+    public void MakeUniqueName_BlankDesired_FallsBackToSnapshotDefault()
+    {
+        // DR：空白兜底真臂（:172）从未在任一重载上走过。钉快照侧默认串是「未命名快照」而非布局侧的
+        // 「未命名布局」——两重载逻辑近同，唯兜底字面量应各自分化；若复制粘贴误接则用户快照被叫成布局名。
+        Assert.Equal("未命名快照", WidgetSnapshotCollection.MakeUniqueName([], ""));
+        // 兜底名已占用 → 加计数后缀（与布局侧同结构）。
+        var taken = new[] { new WidgetSnapshot { Name = "未命名快照" } };
+        Assert.Equal("未命名快照 (2)", WidgetSnapshotCollection.MakeUniqueName(taken, "  "));
+    }
+
+    [Fact]
     public void EmptySnapshots_AreOmittedFromJson()
     {
         // Normalize 会把 null 归一化为空列表；无快照时字段按 WhenWritingNull 不落盘，

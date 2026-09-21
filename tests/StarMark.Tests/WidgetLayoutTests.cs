@@ -97,6 +97,38 @@ public sealed class WidgetLayoutTests
         Assert.Equal("专注", WidgetLayoutCollection.MakeUniqueName(existing, "专注"));
     }
 
+    // ── DR：MakeUniqueName 的输入归一与碰撞检测臂从未被覆盖 ──
+    // 既有 MakeUniqueName_AppendsCounterWhenTaken 只喂「已 trim、大小写一致、非空」的 CJK 名 → :127 的
+    // 空白兜底真臂、.Trim()、:128 StringComparer.OrdinalIgnoreCase 三处皆未走到必要场景。GUID 兜底(:135)
+    // 需 999 条同前缀碰撞才触发，属计数/规模用例、构造即注水，故刻意不测。
+
+    [Fact]
+    public void MakeUniqueName_BlankDesired_FallsBackToDefault()
+    {
+        // 用户新建布局时名字留空/纯空白 → 兜底默认名，而非落回空串（空名会让列表出现无名条目）。
+        Assert.Equal("未命名布局", WidgetLayoutCollection.MakeUniqueName([], ""));
+        // 兜底名本身已占用时须继续加计数后缀（空白兜底臂 → 碰撞循环串联）。
+        var taken = new[] { new WidgetLayout { Name = "未命名布局" } };
+        Assert.Equal("未命名布局 (2)", WidgetLayoutCollection.MakeUniqueName(taken, "   "));
+    }
+
+    [Fact]
+    public void MakeUniqueName_TrimsDesired()
+    {
+        // 首尾空白应被裁掉：否则 "  专注  " 与既有 "专注" 视作不同名、或落盘带脏空白。
+        Assert.Equal("专注", WidgetLayoutCollection.MakeUniqueName([], "  专注  "));
+    }
+
+    [Fact]
+    public void MakeUniqueName_Collision_IsCaseInsensitive()
+    {
+        // 碰撞集合用 StringComparer.OrdinalIgnoreCase（:128）——既有 CJK 测里 OrdinalIgnoreCase 与大小写敏感
+        // 结果一致，从未区分。若被"简化"成大小写敏感默认比较，existing "Foo" 时 desired "foo" 会误判不撞名、
+        // 返回 "foo"（与 "Foo" 实为同名）→ 本用例钉住 OrdinalIgnoreCase：应撞名并加后缀。
+        var existing = new[] { new WidgetLayout { Name = "Foo" } };
+        Assert.Equal("foo (2)", WidgetLayoutCollection.MakeUniqueName(existing, "foo"));
+    }
+
     // ───────── DK：损坏输入下的 null 护栏（JSON 反序列化可真实到达；任一护栏被重构删去即设置页加载 NRE）─────────
 
     /// <summary>:87 入参声明为可空 <c>IEnumerable&lt;WidgetLayout&gt;?</c>——反序列化缺省 / 传 null 时须返空列表而非抛。</summary>
