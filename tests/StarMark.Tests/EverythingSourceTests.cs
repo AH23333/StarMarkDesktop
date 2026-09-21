@@ -71,4 +71,30 @@ public class EverythingSourceTests
         Assert.Equal(ItemSources.FileSystem, source.SourceId);
         Assert.Equal("本地文件 (Everything)", source.DisplayName);
     }
+
+    /// <summary>
+    /// 默认关闸门契约（本地磁盘搜索「opt-in / 0 内存」护栏）：
+    /// <c>Enabled=false</c> 时 <c>IsAvailable</c> 的 <c>&amp;&amp;</c> 在调用原生 <c>EverythingInterop.IsRunning()</c>
+    /// 之前即短路返回 false。⇒ 关态可确定性判定、绝不触碰原生窗口探测，统一搜索据此跳过本源。
+    /// 这正是批次 FL 设置开关所翻动的那个位——锁死以防未来把短路写成两段求值或改了默认值而静默破功。
+    /// </summary>
+    [Fact]
+    public void IsAvailable_IsFalse_WhenDisabled_ShortCircuitsBeforeNative()
+    {
+        var source = new EverythingSource(new EverythingQueryQueue(), new FileIndexOptions { Enabled = false });
+        Assert.False(source.IsAvailable);
+    }
+
+    /// <summary>
+    /// 关态不发查询契约：<c>Enabled=false</c> 时 <c>SearchAsync</c> 走 <c>!IsAvailable</c> 早退分支，
+    /// 同步返回空、绝不发起任何 Everything IPC（同样因短路而不触原生）。保障默认关「零打扰」——
+    /// 用户未开启本地磁盘搜索时，逐按键搜索不会向 Everything 发任何请求。
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_ReturnsEmpty_WhenDisabled_WithoutQuerying()
+    {
+        var source = new EverythingSource(new EverythingQueryQueue(), new FileIndexOptions { Enabled = false });
+        var items = await source.SearchAsync("anything", new SearchFilter(), CancellationToken.None);
+        Assert.Empty(items);
+    }
 }
