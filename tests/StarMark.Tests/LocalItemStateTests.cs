@@ -297,4 +297,45 @@ public class LocalItemStateTests
     [Fact]
     public void GetDue_AcceptsPositiveRawValue()
         => Assert.Equal(1L, LocalItemState.GetDue(NewTodo(extra: """{"due":1}""")));
+
+    // ── source_id 编解码（批次 DV）：多实例隔离基元。此前只在 WidgetSnapshotServiceTests 里
+    //     被间接用作 fixture（:44 Encode）/黑盒往返断言（:115 Decode=="TARGET"），本单元测试文件零直接断言。──
+
+    /// <summary>
+    /// 契约护栏（DV-1）：<see cref="LocalItemState.DecodeInstanceId"/> 的 <c>idx &lt; 0 ? null</c> 臂
+    /// （<c>LocalItemState.cs:22</c>）——source_id 不含分隔符即判为「非本地编码」返回 null。
+    /// 这是本地/非本地条目判别子（<c>TodoWidgetViewModel:129</c> / <c>QuickNoteWidgetViewModel:55</c>
+    /// 以 <c>DecodeInstanceId(i.SourceId) == _instanceId</c> 过滤本实例待办/随记）。该臂此前**从未被任何用例进入**：
+    /// 现有间接覆盖（:115）只喂已编码的 <c>"TARGET|…"</c>（走 <c>idx&gt;=0</c> 子串臂）。回归面真实且静默——
+    /// 若把兜底从 <c>null</c> 改成返回整串，GitHub/书签等非本地条目的 <c>DecodeInstanceId</c> 会吐出其原始
+    /// source_id，虽未必恰等某实例 id，但语义已坏（非本地被判成"有实例"）；若删掉 <c>idx&lt;0</c> 守卫直接切片，
+    /// 无管道输入 <c>""[..-1]</c> 会抛 <c>ArgumentOutOfRangeException</c> 冒到 UI 线程。用空串 + 无管道真实非本地 id
+    /// 各钉一次（空串专证「越界守卫防抛」这一独立承重点），二者皆须干净返回 null。纯字符串、确定性自证无需探针。
+    /// </summary>
+    [Fact]
+    public void DecodeInstanceId_WithoutSeparator_ReturnsNullNotWholeString()
+    {
+        Assert.Null(LocalItemState.DecodeInstanceId(""));                    // 空串：守卫防 ""[..-1] 抛
+        Assert.Null(LocalItemState.DecodeInstanceId("octocat/Hello-World")); // 真实非本地 source_id（无 '|')
+    }
+
+    /// <summary>
+    /// 契约护栏（DV-2）：<see cref="LocalItemState.EncodeSourceId"/> 的字面分隔符契约
+    /// （<c>LocalItemState.cs:16</c> 的 <c>$"{instanceId}|{localId}"</c>）。<c>'|'</c> 是**三处独立消费者**共享的
+    /// 承重边界：除本类的 Decode 外，<c>ItemRepository.cs:686/704</c> 把 <c>@prefix</c> 硬编码成
+    /// <c>instanceId + "|%"</c> 喂 <c>source_id LIKE @prefix</c> 做按实例前缀读写（<c>:674</c> 注释明载「'|' 作边界
+    /// 避免 '12' 命中 '123|…'」）。:115 的往返只校验 Decode 侧、对 Encode 的**字面量**完全不敏感——若有人把
+    /// Encode 与 Decode 的分隔符同步改成 ':'（:115 仍全绿），SQL 前缀 <c>"id|%"</c> 会静默匹配零行，
+    /// 快照 Capture/Restore 的实例隔离失效、且此回归无纯测可拦。故在单元层直接钉死 Encode 的确切输出串 +
+    /// Decode 回取实例段，锁住与 SQL 前缀共享的那一根 <c>'|'</c>。**刻意不测**多管道 "a|b|c"（真实
+    /// instanceId 为十六进制 GUID、localId 为数字 → source_id 恒恰含一个 <c>'|'</c> → 多管道结构不可达，测之即
+    /// 为不可能输入加校验·注水），亦不测前导 <c>'|'</c> 的 <c>"|42"→""</c>（空实例 id 生产不可达 + 产品语义歧义）。
+    /// </summary>
+    [Fact]
+    public void EncodeSourceId_FixesPipeDelimitedWireFormat_ConsumedBySqlPrefixAndDecode()
+    {
+        // 字面量钉死分隔符：这就是 ItemRepository 前缀 LIKE 与 DecodeInstanceId 共同依赖的那根 '|'。
+        Assert.Equal("f3a9|42", LocalItemState.EncodeSourceId("f3a9", 42));
+        Assert.Equal("f3a9", LocalItemState.DecodeInstanceId("f3a9|42"));
+    }
 }
