@@ -414,5 +414,56 @@ public sealed class WidgetStorageTests : IDisposable
         store.Save(data);                                           // 若降级位被误置，这里会被跳过
         Assert.Contains("999", File.ReadAllText(_path));            // 证明持久化仍可用
     }
+
+    // ── DO：v2→v3 全局内容路由（:456-458）+ 非 QuickLaunch 类型的 WindowConfig 真实几何路由（:444-448 `? w` 真臂）──
+    //     既有 v1 迁移测的 Todos/Notes 恒为 []，路由臂虽被进入却从未校验输出值——
+    //     把 inst.Todos 误接成 data.Notes（灌进错误实例）当前全测无感；v1 仅给 QuickLaunch 塞 WindowConfig，
+    //     非 QuickLaunch 类型取到真实 cfg 的那条 `? w` 真臂也从未走过（v1 里其余类型一律走 `new WidgetConfig()` 默认）。
+
+    [Fact]
+    public void LegacyV2_GlobalContent_RoutesToMatchingInstanceAndClearsLegacy()
+    {
+        // 模拟一位停在 v2 的用户升级：Enabled（整数枚举）+ 仅 Todo 有真实 WindowConfig + 全局 Todos/Notes/Links 各非空。
+        // 期望：每类全局内容只归并进「同类型首个实例」，其余实例各留空（互不覆盖）；Todo 拿到迁移的真实几何。
+        File.WriteAllText(_path, """
+        {
+          "Version": 2,
+          "Enabled": [1, 2, 0],
+          "WindowConfigs": { "Todo": { "X": 50, "Y": 60, "Width": 320, "Height": 480, "Topmost": true } },
+          "Todos": [ { "Text": "买牛奶", "Done": false, "CreatedAt": 100 } ],
+          "Notes": [ { "Text": "随记甲", "CreatedAt": 200 } ],
+          "Links": [ { "Title": "GH", "Uri": "https://gh", "CreatedAt": 300 } ]
+        }
+        """);
+        var data = Store().Load();
+
+        Assert.Equal(3, data.Version);
+        Assert.Equal(3, data.Instances.Count);
+
+        var todo = data.Instances.First(i => i.Kind == WidgetKind.Todo);
+        Assert.Equal("买牛奶", Assert.Single(todo.Todos).Text);     // 全局 Todos → Todo 实例
+        Assert.Empty(todo.Notes);                                   // 未误收 Notes
+        Assert.Empty(todo.Links);
+        Assert.Equal(50, todo.X);                                   // WindowConfigs["Todo"] 真实几何迁移（非 QuickLaunch 的 `? w` 真臂）
+        Assert.Equal(480, todo.Height);
+        Assert.True(todo.Topmost);
+
+        var note = data.Instances.First(i => i.Kind == WidgetKind.QuickNote);
+        Assert.Equal("随记甲", Assert.Single(note.Notes).Text);     // 全局 Notes → QuickNote 实例，非 Todo
+        Assert.Empty(note.Todos);
+        Assert.Equal(120, note.X);                                  // 无 WindowConfig → new WidgetConfig() 默认回退
+
+        var link = data.Instances.First(i => i.Kind == WidgetKind.QuickLaunch);
+        Assert.Equal("https://gh", Assert.Single(link.Links).Uri);  // 全局 Links → QuickLaunch 实例
+        Assert.Empty(link.Todos);
+        Assert.Empty(link.Notes);
+
+        // 迁移后 v2 遗留全局字段清空、不再落盘
+        Assert.Null(data.Enabled);
+        Assert.Null(data.WindowConfigs);
+        Assert.Null(data.Todos);
+        Assert.Null(data.Notes);
+        Assert.Null(data.Links);
+    }
 }
 
