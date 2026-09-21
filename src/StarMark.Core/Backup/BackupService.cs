@@ -154,7 +154,7 @@ public sealed class BackupService
         // 已提交的清空不会回滚 → 库被毁却只报「恢复失败」。校验和只保证字节完整、不保证语义合法，
         // 故在动任何数据前先拒绝缺业务键（Source/SourceId）的条目、并把可空字符串/集合归一到安全值，
         // 让「会崩到一半留半截状态」的载荷根本进不到清库那步。合法备份恒满足，行为不变。
-        var validateFail = ValidatePayload(env?.Payload);
+        var validateFail = ValidatePayload(env.Payload);
         if (validateFail is not null)
             return new RestoreResult { Success = false, Message = validateFail };
 
