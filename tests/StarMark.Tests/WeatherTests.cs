@@ -60,6 +60,31 @@ public class WeatherTests
         Assert.True(WeatherCode.IsPrecipitation(95));    // 雷
     }
 
+    /// <summary>
+    /// 批次 DF：承 DB→DE 透镜（审到**分支逻辑**粒度、非"有没有同名测试"）。`Classify` 的两条
+    /// 「range 析取」臂——Rain 的 <c>&gt;=80 and &lt;=82</c>、Snow 的 <c>or 85 or 86</c>——此前**零测**：
+    /// 既有 Classify/IsPrecipitation 用例只命中 61-67 与 71-77 前半，析取后半从未走到。阵雨/强阵雨/暴雨
+    /// (80-82)、阵雪/强阵雪(85-86) 是 Open-Meteo 常返的真实 WMO 码；若把 <c>A and B or C and D</c> 的
+    /// 优先级写错或漏臂，这些码静默落到 Unknown、<c>IsPrecipitation</c> 误判「非降水」→组件漏报降水。
+    /// 这与 Describe 的纯字面码→串表不同（补全 27 臂=测数据表值·注水），本测钉的是**布尔范围逻辑与派生谓词**。
+    /// </summary>
+    [Theory]
+    [InlineData(80, WeatherCode.Condition.Rain)]
+    [InlineData(81, WeatherCode.Condition.Rain)]
+    [InlineData(82, WeatherCode.Condition.Rain)]
+    [InlineData(85, WeatherCode.Condition.Snow)]
+    [InlineData(86, WeatherCode.Condition.Snow)]
+    public void Classify_RangeDisjunctArms_MapToRainAndSnow(int code, WeatherCode.Condition expected)
+        => Assert.Equal(expected, WeatherCode.Classify(code));
+
+    [Theory]
+    [InlineData(80)]   // 阵雨
+    [InlineData(82)]   // 暴雨
+    [InlineData(85)]   // 阵雪
+    [InlineData(86)]   // 强阵雪
+    public void IsPrecipitation_ShowerAndSnowShowerCodes_ArePrecipitation(int code)
+        => Assert.True(WeatherCode.IsPrecipitation(code));
+
     [Fact]
     public void Emoji_NeverEmptyForKnownCodes()
     {
