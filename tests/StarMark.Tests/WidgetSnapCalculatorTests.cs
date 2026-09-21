@@ -275,6 +275,97 @@ public sealed class WidgetSnapCalculatorTests
         Assert.Equal(expected, WidgetSnapCalculator.IntervalGap(firstStart, firstEnd, secondStart, secondEnd));
     }
 
+    // ───────── 迟滞（sticky）求解两臂：跨轴守卫 + 释放闭区间边界 ─────────
+
+    /// <summary>
+    /// 契约护栏（DU-1a）：<see cref="WidgetSnapCalculator.ResolveMove"/> 的水平轴必须拒绝
+    /// 一条竖边（Top/Bottom）sticky。守卫条件 <c>horizontal != (SourceEdge is Left or Right)</c>
+    /// （<c>WidgetSnapCalculator.cs:205</c>）此前从未被任何用例进入——<c>stickyVertical</c> 形参
+    /// 全程未被使用，<c>stickyHorizontal</c> 也只喂过真正的横边匹配。若守卫缺失或判反，
+    /// 误传到水平槽的竖边匹配会把窗口 X 拉到那条竖边匹配的 ResolvedOrigin，
+    /// 造成「拖水平却纵向跳档」的跨轴污染。这里刻意把 proposedX 放进 release 半径内
+    /// （|505−500|=5 ≤ 12），使唯一能阻止吸附的只剩轴守卫本身，从而把守卫与阈值区分开。
+    /// </summary>
+    [Fact]
+    public void ResolveMove_HorizontalAxis_RejectsVerticalEdgeSticky()
+    {
+        var wrongAxisSticky = new WidgetSnapMatch(
+            WidgetSnapEdge.Top, WidgetSnapEdge.Bottom, 500, 500, IntPtr.Zero, UsesSpacing: false, Delta: 0);
+
+        WidgetMoveSnapResult result = WidgetSnapCalculator.ResolveMove(
+            new RectInt32(505, 600, 100, 100),
+            [],
+            workArea: null,
+            spacing: 5,
+            engageThreshold: 8,
+            releaseThreshold: 12,
+            stickyHorizontal: wrongAxisSticky);
+
+        Assert.Null(result.HorizontalMatch);
+        Assert.Equal(505, result.Bounds.X);   // 未吸附到 500：证明守卫生效，而非阈值巧合
+    }
+
+    /// <summary>
+    /// 契约护栏（DU-1b）：与 DU-1a 镜像——垂直轴必须拒绝误传进 <c>stickyVertical</c> 的横边
+    /// （Left/Right）匹配。同样把 proposedY 放进 release 半径（|505−500|=5），锁定轴守卫。
+    /// </summary>
+    [Fact]
+    public void ResolveMove_VerticalAxis_RejectsHorizontalEdgeSticky()
+    {
+        var wrongAxisSticky = new WidgetSnapMatch(
+            WidgetSnapEdge.Left, WidgetSnapEdge.Right, 500, 500, IntPtr.Zero, UsesSpacing: false, Delta: 0);
+
+        WidgetMoveSnapResult result = WidgetSnapCalculator.ResolveMove(
+            new RectInt32(600, 505, 100, 100),
+            [],
+            workArea: null,
+            spacing: 5,
+            engageThreshold: 8,
+            releaseThreshold: 12,
+            stickyVertical: wrongAxisSticky);
+
+        Assert.Null(result.VerticalMatch);
+        Assert.Equal(505, result.Bounds.Y);
+    }
+
+    /// <summary>
+    /// 契约护栏（DU-2）：迟滞脱离用 <c>delta &lt;= releaseThreshold</c>（含等号，
+    /// <c>WidgetSnapCalculator.cs:211</c>）。既有 <c>Move_StickyMatchHoldsUntilReleaseThreshold</c>
+    /// 只喂 delta=11（保持）与 13（脱离），恰好跳过 ==12 的闭区间临界；若误写成严格 <c>&lt;</c>，
+    /// 恰好停在 release 边上的窗口会提前脱附，用户拖过该像素瞬间界面抖动。
+    /// 全为整数算术，无浮点临界陷阱。
+    /// </summary>
+    [Fact]
+    public void ResolveMove_StickyReleaseBoundary_IsInclusiveAtThreshold()
+    {
+        var sticky = new WidgetSnapMatch(
+            WidgetSnapEdge.Right, WidgetSnapEdge.Left, 197, 97, new IntPtr(42), UsesSpacing: true, Delta: 0);
+
+        // |109−97| = 12 == release → 仍保持吸附，X 解析回 97，Delta 记为 12
+        WidgetMoveSnapResult atBoundary = WidgetSnapCalculator.ResolveMove(
+            new RectInt32(109, 220, 100, 60),
+            [s_target],
+            workArea: null,
+            spacing: 5,
+            engageThreshold: 8,
+            releaseThreshold: 12,
+            stickyHorizontal: sticky);
+        Assert.Equal(97, atBoundary.Bounds.X);
+        Assert.Equal(12, AssertSnap(atBoundary.HorizontalMatch).Delta);
+
+        // |110−97| = 13 > release → 脱离，回落自由求解（该位无候选命中，X 保持 110）
+        WidgetMoveSnapResult pastBoundary = WidgetSnapCalculator.ResolveMove(
+            new RectInt32(110, 220, 100, 60),
+            [s_target],
+            workArea: null,
+            spacing: 5,
+            engageThreshold: 8,
+            releaseThreshold: 12,
+            stickyHorizontal: sticky);
+        Assert.Null(pastBoundary.HorizontalMatch);
+        Assert.Equal(110, pastBoundary.Bounds.X);
+    }
+
     // ───────── 辅助 ─────────
 
     private static WidgetMoveSnapResult Move(RectInt32 proposedBounds) =>
