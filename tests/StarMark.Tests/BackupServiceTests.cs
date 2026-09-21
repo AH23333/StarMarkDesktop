@@ -619,4 +619,70 @@ public sealed class BackupServiceTests : IDisposable
         Assert.True(b.Pinned);
         Assert.Equal("备注B", b.Notes);
     }
+
+    [Fact]
+    public async Task Restore_BlankKeyAuxRows_AreSilentlyPruned_RestoreSucceedsWithFaithfulCounts()
+    {
+        // EJ：ValidatePayload 的软剔除臂（BackupService.cs:281-283）与条目硬失败臂（:285-288）刻意不对称——
+        // 用户态/标签/关联里的「空白业务键行」静默剔除、还原照旧成功；而条目缺 source/source_id 硬拒整份备份。
+        // 既有 Restore_Replace_BadBusinessKey 只钉了条目那一侧的硬失败，辅助集合的软剔除侧此前零测。
+        // 承重且不可见：RestoreResult 的 UserStatesRestored/TagsRestored/LinksRestored（:226-228）取的是
+        // 「剔除后」计数——若 ValidatePayload 漏剔，计数会按载荷原长虚报（ImportTags 自身虽跳空白名，
+        // 但还原计数仍会谎报），故断言 ==1 精确钉住「验证层的剔除」而非仅靠导入层兜底。
+        var dst = Seed(_db2);
+        var env = new BackupEnvelope();
+        env.Payload.Items.Add(new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "k1", Title = "真条目", Uri = "https://example.com/k1", CreatedAt = 1000 });
+        env.Payload.UserState.Add(new UserStateRecord("test", "k1", false, true, null));   // 有效：置顶
+        env.Payload.UserState.Add(new UserStateRecord("  ", "k1", true, false, "x"));      // 空白 Source → 剔
+        env.Payload.UserState.Add(new UserStateRecord("test", " ", false, false, "y"));    // 空白 SourceId → 剔
+        env.Payload.Tags.Add(new TagRecord("重要", null, null));                            // 有效
+        env.Payload.Tags.Add(new TagRecord("  ", "red", null));                             // 空白 Name → 剔
+        env.Payload.ItemTags.Add(new ItemTagLink("test", "k1", "重要"));                     // 有效关联
+        env.Payload.ItemTags.Add(new ItemTagLink("test", "k1", "  "));                       // 空白 TagName → 剔
+        env.Payload.ItemTags.Add(new ItemTagLink(" ", "k1", "重要"));                        // 空白 Source → 剔
+
+        var rr = await dst.Backup.RestoreAsync(env, RestoreMode.Merge, null, CancellationToken.None);
+
+        Assert.True(rr.Success);                       // 不对称：辅助空白键不致命（对比条目空白键 → Success=false）
+        Assert.Equal(1, rr.UserStatesRestored);        // 计数忠实于剔除后集合（虚报即暴露漏剔）
+        Assert.Equal(1, rr.TagsRestored);
+        Assert.Equal(1, rr.LinksRestored);
+        var item = Assert.Single(await dst.Items.GetAllAsync(new BrowseFilter { IncludeHidden = true, Limit = 1000 }, CancellationToken.None));
+        Assert.Equal("k1", item.SourceId);
+        Assert.True(item.Pinned);                      // 有效 userstate 照常生效
+        var tags = await dst.Items.GetTagsForItemAsync(item.Id, CancellationToken.None);
+        Assert.Equal("重要", Assert.Single(tags));      // 恰有效标签，空白幽灵标签从未生成
+    }
+
+    [Fact]
+    public async Task Restore_NullElementAuxRows_ArePrunedWithoutThrowing()
+    {
+        // EJ②：剔除的另一独立条件臂——`x is null`（BackupService.cs:280-283 各 RemoveAll 的首项合取），
+        // 与空白键是不同的谓词分支。STJ 把 `[null, {...}]` 反序列化成含 null 元素的 List，四集合皆可现。
+        // :272-273 注释明确点出「null 元素若不先剔、下游 Import*/Reindex 遍历 s.Source/t.Name 直接 NRE，
+        // 且 RemoveAll 在 try 之外会逃出本应『返回失败』的方法」。此臂（含 Items 的 `it is null`）此前零测。
+        var dst = Seed(_db2);
+        var env = new BackupEnvelope();
+        env.Payload.Items.Add(new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "k2", Title = "另一条目", Uri = "https://example.com/k2", CreatedAt = 1000 });
+        env.Payload.Items.Add(null!);
+        env.Payload.UserState.Add(new UserStateRecord("test", "k2", false, false, "备注")); // 有效：笔记
+        env.Payload.UserState.Add(null!);
+        env.Payload.Tags.Add(new TagRecord("标签Z", null, null));                            // 有效
+        env.Payload.Tags.Add(null!);
+        env.Payload.ItemTags.Add(new ItemTagLink("test", "k2", "标签Z"));                     // 有效
+        env.Payload.ItemTags.Add(null!);
+
+        var rr = await dst.Backup.RestoreAsync(env, RestoreMode.Merge, null, CancellationToken.None);
+
+        Assert.True(rr.Success);                       // null 元素被剔，未以 NRE 逃出
+        Assert.Equal(1, rr.ItemsRestored);
+        Assert.Equal(1, rr.UserStatesRestored);
+        Assert.Equal(1, rr.TagsRestored);
+        Assert.Equal(1, rr.LinksRestored);
+        var item = Assert.Single(await dst.Items.GetAllAsync(new BrowseFilter { IncludeHidden = true, Limit = 1000 }, CancellationToken.None));
+        Assert.Equal("k2", item.SourceId);
+        Assert.Equal("备注", item.Notes);              // 有效 userstate 照常生效
+        var tags = await dst.Items.GetTagsForItemAsync(item.Id, CancellationToken.None);
+        Assert.Equal("标签Z", Assert.Single(tags));    // 有效关联仍在
+    }
 }
