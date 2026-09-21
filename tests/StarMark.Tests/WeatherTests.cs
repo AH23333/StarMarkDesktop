@@ -38,6 +38,37 @@ public class WeatherTests
         Assert.Equal("\uE708", WeatherCode.Glyph(0, isDay: false));
     }
 
+    /// <summary>
+    /// 批次 DG：承 DB→DF 透镜（审到**分支进入 + 输出值**粒度，非"有没有同名测试"）。作者为「夜里不得显示太阳」
+    /// 这一行为契约**专门写了** <see cref="Glyph_DistinguishesDayAndNightForClearSky"/>，却只钉了 Glyph 的 0 号臂。
+    /// 同一 `isDay ?` 三元模式在 Glyph 的 晴间多云(1)、多云(2) 两臂，以及 **Emoji 的 0/1/2 全部三臂**的日/夜两支
+    /// ——此前**从未被任何用例进入或校验**。回归面真实：若把 <c>2 =&gt; isDay ? "\uE9D2" : "\uE708"</c> 手误改成
+    /// <c>2 =&gt; "\uE9D2"</c>（漏夜支）或删某条独立臂，夜间多云/晴间多云会画成云或太阳而非月亮，现有测全绿无感。
+    /// 这与 Describe 的纯字面码→串表不同（补全=测数据表值·注水，DF 已申明），本批扫的是**日/夜二选一的布尔分支**，
+    /// 且刻意沿用作者既有测试确立的同一契约口径、只把覆盖面从 1 个码补齐到全部有日/夜之分的码。
+    /// </summary>
+    [Theory]
+    [InlineData(1, true, "\uE706")]   // 晴间多云·日=太阳
+    [InlineData(1, false, "\uE708")]  // 晴间多云·夜=月亮（独立于 0 号臂，可被单独改坏）
+    [InlineData(2, true, "\uE9D2")]   // 多云·日=云
+    [InlineData(2, false, "\uE708")]  // 多云·夜=月亮（不得沿用日支画成云）
+    public void Glyph_DayNightTernary_NonClearCodes_MatchContract(int code, bool isDay, string expected)
+        => Assert.Equal(expected, WeatherCode.Glyph(code, isDay));
+
+    /// <summary>
+    /// Emoji 的日/夜三元此前零测（<see cref="Emoji_NeverEmptyForKnownCodes"/> 只断非空、不含 isDay 维度）。
+    /// 夜支恒为月亮 U+1F319、且日≠夜——用「夜=月亮 + 日夜相异」钉住选择逻辑本身，避开 ☀️/⛅ 变体选择符的字节脆弱。
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void Emoji_CodesWithDayNightTernary_AreMoonAtNightAndDifferFromDay(int code)
+    {
+        Assert.Equal("\U0001F319", WeatherCode.Emoji(code, isDay: false));
+        Assert.NotEqual(WeatherCode.Emoji(code, isDay: true), WeatherCode.Emoji(code, isDay: false));
+    }
+
     [Theory]
     [InlineData(0, WeatherCode.Condition.Clear)]
     [InlineData(3, WeatherCode.Condition.Cloudy)]
