@@ -91,4 +91,46 @@ public sealed class UriNormalizerTests
         // 默认端口 443 去掉，方括号保留
         Assert.Equal("https://[2001:db8::1]/p", UriNormalizer.Normalize("https://[2001:db8::1]:443/p"));
     }
+
+    /// <summary>
+    /// 批次 DD：IsGitHub 的 `.github.com` 后缀子句（UriNormalizer.cs:68）此前零测——所有 github 用例都用裸
+    /// github.com。该子句决定 www.github.com / gist.github.com 等是否享受「/owner/repo 收窄 + tab 清空」，
+    /// 一旦回归（改成 == 比较）这些主机的 source_id 会静默不再收窄、同一仓库裂成多条。同时钉死反向：
+    /// 仅以 "github.com" 结尾但**缺点号**的 notgithub.com 不是 GitHub，绝不能被误收窄（防过度匹配）。
+    /// </summary>
+    [Theory]
+    [InlineData("https://www.github.com/owner/repo/issues/5", "https://www.github.com/owner/repo")]
+    [InlineData("https://gist.github.com/alice/abc?tab=example", "https://gist.github.com/alice/abc")]
+    public void Normalize_GitHubSubdomain_NarrowsLikeApex(string input, string expected)
+    {
+        var once = UriNormalizer.Normalize(input);
+        Assert.Equal(expected, once);
+        Assert.Equal(once, UriNormalizer.Normalize(once));   // 幂等
+    }
+
+    [Theory]
+    [InlineData("https://notgithub.com/owner/repo/issues/5")]
+    [InlineData("https://mygithub.com/a/b/c")]
+    public void Normalize_HostEndingInGithubWithoutDot_IsNotTreatedAsGitHub(string input)
+    {
+        // 无点号后缀不应命中 IsGitHub 的 EndsWith(".github.com")，路径不收窄。
+        Assert.Equal(input, UriNormalizer.Normalize(input));
+    }
+
+    /// <summary>
+    /// 批次 DD：StripTrackingParams 的「参数全被剥除 → 返回空串」分支（:91 kept.Count==0）+ 重建时
+    /// 「query 空则不拼 '?'」的 IsNullOrEmpty 守卫（:63）此前无测——既有仅覆盖 utm+存活参数（?id=1 保留）。
+    /// 纯追踪链接（分享链常见形态）若被误留一个悬空 '?'，source_id 就与去参标准形分裂、同页去重失效。
+    /// </summary>
+    [Theory]
+    [InlineData("https://example.com/p?utm_source=a&utm_medium=b")]
+    [InlineData("https://example.com/p?fbclid=1")]
+    [InlineData("https://example.com/docs?gclid=x&mc_eid=y")]
+    public void Normalize_AllParamsAreTracking_StrippedWithoutStrayQuestionMark(string input)
+    {
+        var once = UriNormalizer.Normalize(input);
+        Assert.DoesNotContain("?", once);
+        Assert.Equal(input.Split('?')[0], once);   // 恰等于去 query 的裸形，无悬空 '?'
+        Assert.Equal(once, UriNormalizer.Normalize(once));   // 幂等
+    }
 }
