@@ -271,6 +271,22 @@ public sealed class BackupServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadAsync_RejectsFutureVersion()
+    {
+        // 契约护栏：前向兼容闸门（BackupService.ReadAsync:106）——高于当前支持版本的备份必须被拒，
+        // 否则旧版会用自己不认识的 schema 半导入未来备份、静默丢弃其新增字段（比"直接失败"更坏）。
+        // 版本校验(:106)在校验和校验(:110)之前，故用正确 app 段 + 空 checksum 即命中版本分支；
+        // 再断言错误文案含"高于当前支持的"，以防该断言实际是被校验和不匹配那一支抛出的（那样等于没钉住版本闸门）。
+        var file = Path.Combine(Path.GetTempPath(), $"bk_{Guid.NewGuid():N}.json");
+        await File.WriteAllTextAsync(file,
+            $"{{\"app\":\"{BackupEnvelope.AppId}\",\"version\":{BackupEnvelope.CurrentVersion + 1},\"exportedAt\":0,\"checksum\":\"\",\"payload\":{{}}}}");
+
+        var ex = await Assert.ThrowsAsync<BackupFormatException>(
+            () => BackupService.ReadAsync(file, CancellationToken.None));
+        Assert.Contains("高于当前支持的", ex.Message);
+    }
+
+    [Fact]
     public async Task Peek_ReturnsSummaryForValidFile()
     {
         var src = Seed(_db1);
