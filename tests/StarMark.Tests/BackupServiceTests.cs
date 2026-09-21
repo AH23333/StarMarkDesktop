@@ -475,4 +475,87 @@ public sealed class BackupServiceTests : IDisposable
         var tags = await dst.Items.GetTagsForItemAsync(restored.Id, CancellationToken.None);
         Assert.Equal("Work", Assert.Single(tags));
     }
+
+    [Fact]
+    public async Task ImportTags_ExistingColorWins_BlankColorFilledFromBackup()
+    {
+        // EG：ImportTagsAsync:155 的 `color = COALESCE(tags.color, excluded.color)`（extra_json 同理）——
+        // 主键 name 冲突时【已存在行的值胜出】，备份仅填目标库的空缺。这是合并式还原(RestoreMode.Merge)的
+        // 承重取向：用户在目标库亲手挑的标签颜色，绝不能被一份旧备份静默覆盖；反之目标库该标签本无色时
+        // 才用备份颜色补上。若有人把 COALESCE 参数写反(excluded, tags)或改成 excluded 直取(后写覆盖)，
+        // 用户本地配色会在每次合并还原后被旧备份悄然改掉、RestoreResult 照常报成功——无人察觉。
+        var ctx = Seed(_db1);
+        var repo = new BackupRepository(ctx.Factory);
+
+        // 预置：A 带用户色 #111111 + extra；B 无色无 extra（模拟用户新建尚未配色的标签）。
+        await repo.ImportTagsAsync(new[]
+        {
+            new TagRecord("A", "#111111", """{"u":1}"""),
+            new TagRecord("B", null, null),
+        }, CancellationToken.None);
+
+        // 再导入一份同名、但颜色/extra 皆不同的备份载荷 → COALESCE：A 原样保留，B 空缺被填。
+        await repo.ImportTagsAsync(new[]
+        {
+            new TagRecord("A", "#222222", """{"u":2}"""),
+            new TagRecord("B", "#333333", """{"v":9}"""),
+        }, CancellationToken.None);
+
+        var (aColor, aExtra, bColor) = ReadTagColors(ctx.Factory);
+        Assert.Equal("#111111", aColor);              // 已存在色胜出，未被备份 #222222 覆盖
+        Assert.Equal("""{"u":1}""", aExtra);          // extra 同理保留原值
+        Assert.Equal("#333333", bColor);              // 原本无色 → 用备份色填上（COALESCE 另一臂）
+    }
+
+    [Fact]
+    public async Task ImportItemTagLinks_ReapplyExistingLink_IsIdempotentNoThrow()
+    {
+        // EG：ImportItemTagLinksAsync:189 的 `AND NOT EXISTS (…item_tags x WHERE x.item_id=i.id AND x.tag_id=t.id)`。
+        // item_tags 主键 = (item_id, tag_id)：闸门缺失时，对已存在的 (条目,标签) 关联再执行 INSERT…SELECT
+        // 会撞主键抛 "PRIMARY KEY constraint failed"，把整个导入事务在还原中途打断（合并式还原本就常在
+        // 已有相同关联的库上重跑）。闸门把撞键变成静默跳过——幂等、不抛、行数恒 1。
+        var ctx = Seed(_db1);
+        var item = await UpsertAsync(ctx.Items, "test", "l1", "带标签条目");
+        await ctx.Items.AddTagAsync(item.Id, "重要", CancellationToken.None);   // 该关联此时已存在
+
+        var repo = new BackupRepository(ctx.Factory);
+        var link = new[] { new ItemTagLink("test", "l1", "重要") };
+        await repo.ImportItemTagLinksAsync(link, CancellationToken.None);   // 无闸门则此处即撞主键抛
+        await repo.ImportItemTagLinksAsync(link, CancellationToken.None);   // 再重跑一次仍应静默无操作
+
+        Assert.Equal(1, CountItemTagLinks(ctx.Factory, "l1", "重要"));
+    }
+
+    private static (string? AColor, string? AExtra, string? BColor) ReadTagColors(DbConnectionFactory factory)
+    {
+        using var conn = factory.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT name, color, extra_json FROM tags;";
+        string? aColor = null, aExtra = null, bColor = null;
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var name = reader.GetString(0);
+            var color = reader.IsDBNull(1) ? null : reader.GetString(1);
+            var extra = reader.IsDBNull(2) ? null : reader.GetString(2);
+            if (name == "A") { aColor = color; aExtra = extra; }
+            else if (name == "B") { bColor = color; }
+        }
+        return (aColor, aExtra, bColor);
+    }
+
+    private static int CountItemTagLinks(DbConnectionFactory factory, string sourceId, string tagName)
+    {
+        using var conn = factory.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT COUNT(*) FROM item_tags it
+              JOIN items i ON i.id = it.item_id
+              JOIN tags  t ON t.id = it.tag_id
+             WHERE i.source = @s AND i.source_id = @sid AND t.name = @tag;";
+        cmd.Parameters.AddWithValue("@s", "test");
+        cmd.Parameters.AddWithValue("@sid", sourceId);
+        cmd.Parameters.AddWithValue("@tag", tagName);
+        return System.Convert.ToInt32(cmd.ExecuteScalar());
+    }
 }
