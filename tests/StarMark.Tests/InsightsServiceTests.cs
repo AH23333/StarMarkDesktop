@@ -264,4 +264,58 @@ public sealed class InsightsServiceTests
         Assert.Equal(2, r.NewTrend.Count(t => t.Count == 1)); // 两个不同桶各 1（旧实现此处会是 1 桶计 2）
         Assert.Equal(2, r.NewTrend.Sum(t => t.Count));
     }
+
+    // ── DP：比例扣分公式的「线性区系数」与「刚过阈值边界」从未被断言 ──
+    // 两个因子都是 Math.Min(夹顶, floor(ratio × 系数))。既有测试只喂能被夹顶钳住的高比例（untagged 0.9/1.0、
+    // stale 0.83/1.0），floor 结果恒等于夹顶值 → 系数标量（×50 / ×30）从未被单独验证：把 50 改成 40、30 改成
+    // 28 都能让全套测试继续绿，却会静默改变 20%~50% 区间的收藏扣分。再补 stale 缺失的 `> 0.4` 恰阈值边界
+    // （untagged 侧早有对称的 AtThreshold_NoPenalty 钉住 `>`；stale 侧把 `>` 改成 `>=` 无从发现）。
+
+    [Fact]
+    public void Untagged_LinearBand_PinsDeductionCoefficient()
+    {
+        // 4/10 = 0.4 落在 0.2<r<0.5 的线性区（非夹顶）：floor(0.4×50)=20 → min(25,20)=20。
+        // 只有 ×50 会让此比例得到 20（×40→16、×60→24），故本用例把系数钉死。
+        var items = new List<Item>();
+        for (var i = 0; i < 4; i++) items.Add(MakeItem($"u {i}"));                      // 4 未打标签（默认新鲜、标题互异）
+        for (var i = 0; i < 6; i++) items.Add(MakeItem($"t {i}", tags: new() { "ok" }));  // 6 已打标签
+        var r = InsightsService.BuildHealthReport(items, now: FixedNow);
+        Assert.Equal(80, r.Score);                                                       // 仅扣 untagged 20
+        Assert.DoesNotContain(r.Factors, f => f.Key == "duplicates");                    // 标题互异，无重复
+        Assert.DoesNotContain(r.Factors, f => f.Key == "stale");                         // 全部新鲜
+        Assert.Contains(r.Factors, f => f.Key == "untagged" && f.Deduction == 20);
+    }
+
+    [Fact]
+    public void Stale_LinearBand_PinsDeductionCoefficient()
+    {
+        // 4/9 ≈ 0.444 落在 0.4<r<0.5 的线性区（非夹顶）：floor(0.444×30)=13 → min(15,13)=13。
+        // 只有 ×30 得到 13（×28→12、×34 起触顶 15），系数被单独钉住。
+        var items = new List<Item>();
+        for (var i = 0; i < 4; i++) items.Add(MakeItem($"s {i}", updatedAt: DaysAgo(200), tags: new() { "t" })); // 4 陈旧
+        for (var i = 0; i < 5; i++) items.Add(MakeItem($"f {i}", updatedAt: DaysAgo(1), tags: new() { "t" }));   // 5 新鲜
+        var r = InsightsService.BuildHealthReport(items, now: FixedNow);
+        Assert.Equal(87, r.Score);                                                       // 仅扣 stale 13
+        Assert.DoesNotContain(r.Factors, f => f.Key == "untagged");                      // 全部已打标签
+        Assert.DoesNotContain(r.Factors, f => f.Key == "duplicates");
+        Assert.Contains(r.Factors, f => f.Key == "stale" && f.Deduction == 13);
+    }
+
+    [Fact]
+    public void Stale_AtThreshold_NoPenalty()
+    {
+        // 2/5 = 0.4 恰在阈值 → `ratio > 0.4` 为假 → 不罚。补上 untagged 侧已有的对称边界：
+        // 若把 `>` 误写成 `>=`，恰 40% 陈旧会误扣 floor(0.4×30)=12，本用例即失败。
+        var items = new List<Item>
+        {
+            MakeItem("s1", updatedAt: DaysAgo(200), tags: new() { "t" }),
+            MakeItem("s2", updatedAt: DaysAgo(200), tags: new() { "t" }),
+            MakeItem("f1", updatedAt: DaysAgo(1), tags: new() { "t" }),
+            MakeItem("f2", updatedAt: DaysAgo(1), tags: new() { "t" }),
+            MakeItem("f3", updatedAt: DaysAgo(1), tags: new() { "t" }),
+        };
+        var r = InsightsService.BuildHealthReport(items, now: FixedNow);
+        Assert.DoesNotContain(r.Factors, f => f.Key == "stale");
+        Assert.Equal(100, r.Score);                                                      // 全打标签、标题互异、非超阈
+    }
 }
