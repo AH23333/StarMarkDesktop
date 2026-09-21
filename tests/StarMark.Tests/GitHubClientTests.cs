@@ -229,4 +229,64 @@ public sealed class GitHubClientTests
         Assert.Equal(100, all.Count);
         Assert.Equal(new[] { 1, 2 }, requested);
     }
+
+    // ---- 批次 AZ-3：per_page 越界（github.json 属外部输入）→ 与 GitHub 100 上限的同源钳制 ----
+
+    private static int PerPageOf(HttpRequestMessage req)
+    {
+        // URL 查询形如 per_page=N&page=M —— 锚定 "per_page="，取到下一个 '&' 为止的数值。
+        var query = req.RequestUri!.Query;
+        const string key = "per_page=";
+        var idx = query.IndexOf(key, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0) return -1;
+        var start = idx + key.Length;
+        var amp = query.IndexOf('&', start);
+        var digits = amp >= 0 ? query[start..amp] : query[start..];
+        return int.TryParse(digits, out var n) ? n : -1;
+    }
+
+    [Fact]
+    public async Task GetAllStarredAsync_PageSizeAboveGitHubCap_StillFetchesAllPages()
+    {
+        // 复现缺陷：PageSize=200 但 GitHub 静默按 100/页返回。旧实现把停止判定用原始 PageSize，
+        // 于是「返回 100 < 200」被误判末页 → 只拉一页、静默丢页2+ 的 Star。钳制修复后须拉全 240 条。
+        var requestedPerPage = new List<int>();
+        var handler = new ScriptedHandler(req =>
+        {
+            requestedPerPage.Add(PerPageOf(req));
+            var page = PageOf(req);
+            // GitHub 真实行为：无论请求多大，每页最多 100。页1/页2 各 100，页3 只有 40。
+            return OkJson(page <= 2 ? RepoArray(100, (page - 1) * 100) : RepoArray(40, 200));
+        });
+        using var client = new GitHubClient(
+            new GitHubOptions { Token = "ghp_test", PageSize = 200 }, new HttpClient(handler));
+
+        var all = await client.GetAllStarredAsync(CancellationToken.None);
+
+        Assert.Equal(240, all.Count);
+        Assert.All(requestedPerPage, pp => Assert.Equal(100, pp)); // 每页请求都被钳到 100
+    }
+
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(-5, 1)]
+    [InlineData(101, 100)]
+    [InlineData(5000, 100)]
+    [InlineData(100, 100)]
+    public async Task GetStarredPageAsync_PerPageSent_IsClampedToGitHubRange(int pageSize, int expectedPerPage)
+    {
+        // per_page 发给 GitHub 必须落在 [1,100]：越界 github.json 配置不得原样拼进 URL。
+        var sent = -1;
+        var handler = new ScriptedHandler(req =>
+        {
+            sent = PerPageOf(req);
+            return OkJson("[]");
+        });
+        using var client = new GitHubClient(
+            new GitHubOptions { Token = "ghp_test", PageSize = pageSize }, new HttpClient(handler));
+
+        await client.GetStarredPageAsync(1, CancellationToken.None);
+
+        Assert.Equal(expectedPerPage, sent);
+    }
 }

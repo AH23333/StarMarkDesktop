@@ -27,12 +27,21 @@ public sealed class GitHubClient : IDisposable
     private readonly HttpClient _http;
     private readonly GitHubOptions _options;
 
+    /// <summary>
+    /// 实际发给 GitHub 的每页条数。GitHub 硬性上限 100：请求 &gt;100 时它静默按 100 返回，
+    /// 而翻页停止判定若用原始 PageSize 会把「返回 100 &lt; PageSize(200)」误判为末页 → 只拉第一页、
+    /// 静默丢后续 Star。故 URL 与停止判定统一用这个钳到 [1,100] 的同源值（github.json 属外部输入，可被
+    /// 手改/坏备份塞进越界值）。
+    /// </summary>
+    private readonly int _perPage;
+
     /// <summary>条件请求缓存的 ETag（P1-4）。非 null 时首页请求带 If-None-Match，命中 304 直接短路整轮拉取。</summary>
     public string? CachedETag { get; set; }
 
     public GitHubClient(GitHubOptions options, HttpClient? http = null)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _perPage = Math.Clamp(_options.PageSize, 1, 100);
 
         _http = http ?? new HttpClient();
         _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
@@ -58,7 +67,7 @@ public sealed class GitHubClient : IDisposable
     {
         if (!IsConfigured) return Array.Empty<GitHubStarApiModel>();
 
-        var url = $"{ApiBase}/user/starred?per_page={_options.PageSize}&page={page}";
+        var url = $"{ApiBase}/user/starred?per_page={_perPage}&page={page}";
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
         // P1-4 条件请求：仅首页带 If-None-Match，命中 304 可省掉整轮拉取
         if (page == 1 && !string.IsNullOrEmpty(CachedETag))
@@ -105,7 +114,7 @@ public sealed class GitHubClient : IDisposable
             var pageList = await GetStarredPageAsync(page, ct);
             if (pageList.Count == 0) break;
             all.AddRange(pageList);
-            if (pageList.Count < _options.PageSize) break;
+            if (pageList.Count < _perPage) break;
             page++;
         }
         return all;
