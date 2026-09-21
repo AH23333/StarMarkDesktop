@@ -325,6 +325,46 @@ public sealed class BackupServiceTests : IDisposable
     }
 
     /// <summary>
+    /// 回归 BC-#3（RestoreAsync 契约）：方法约定"对非法载荷返回 RestoreResult 而非抛异常"，
+    /// 但 ValidatePayload 在 try 之外被调用，且对 p.Items/UserState/Tags/ItemTags 直接 RemoveAll，
+    /// 未判空。STJ 会把 JSON 显式 null 覆盖到 `= new()` 初始值之上，故"校验和自洽但集合为 null"
+    /// （甚至 payload 整体为 null）的构造备份会以 NullReferenceException 逃出 RestoreAsync，
+    /// 而非返回失败——破坏"挡在清库之前、现有数据原样保留"的既有契约。
+    /// </summary>
+    [Fact]
+    public async Task Restore_NullPayload_ReturnsFailureNoThrowAndKeepsData()
+    {
+        var dst = Seed(_db2);
+        await UpsertAsync(dst.Items, "dst", "b1", "现有条目");
+
+        var rr = await dst.Backup.RestoreAsync(
+            new BackupEnvelope { Payload = null! }, RestoreMode.Replace, null, CancellationToken.None);
+
+        Assert.False(rr.Success);
+        var all = await dst.Items.GetAllAsync(new BrowseFilter { IncludeHidden = true, Limit = 1000 }, CancellationToken.None);
+        Assert.Equal("dst", Assert.Single(all).Source);   // 拒绝发生在清库之前，数据未被抹
+    }
+
+    [Fact]
+    public async Task Restore_NullItemsCollection_ReturnsFailureNoThrowAndKeepsData()
+    {
+        var src = Seed(_db1);
+        await UpsertAsync(src.Items, "src", "a1", "来自备份");
+        var env = await src.Backup.ExportAsync(CancellationToken.None);
+        // 模拟校验和自洽、但 items 字段被显式置 null 的语义非法备份（不经 ReadAsync 校验和复查）。
+        env.Payload.Items = null!;
+
+        var dst = Seed(_db2);
+        await UpsertAsync(dst.Items, "dst", "b1", "现有条目");
+
+        var rr = await dst.Backup.RestoreAsync(env, RestoreMode.Replace, null, CancellationToken.None);
+
+        Assert.False(rr.Success);
+        var all = await dst.Items.GetAllAsync(new BrowseFilter { IncludeHidden = true, Limit = 1000 }, CancellationToken.None);
+        Assert.Equal("dst", Assert.Single(all).Source);   // 未 NRE 逃出、也未清空现有库
+    }
+
+    /// <summary>
     /// 回归 AU（组件写盘原子性）：WriteWidgetsJson 此前用裸 File.WriteAllText 覆盖线上 widgets.json，
     /// 是本仓**唯一**未走 tmp+move 的用户数据写站点（WidgetStorage.Save / SettingsStore.Save / GitHubOptions.Save 皆原子）。
     /// 写一半崩溃/磁盘满即把整份组件配置截断成非法 JSON，而 .bak 无任何代码自动回滚 → 下次启动整块组件全丢。

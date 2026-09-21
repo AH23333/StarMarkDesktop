@@ -154,7 +154,7 @@ public sealed class BackupService
         // 已提交的清空不会回滚 → 库被毁却只报「恢复失败」。校验和只保证字节完整、不保证语义合法，
         // 故在动任何数据前先拒绝缺业务键（Source/SourceId）的条目、并把可空字符串/集合归一到安全值，
         // 让「会崩到一半留半截状态」的载荷根本进不到清库那步。合法备份恒满足，行为不变。
-        var validateFail = ValidatePayload(env.Payload);
+        var validateFail = ValidatePayload(env?.Payload);
         if (validateFail is not null)
             return new RestoreResult { Success = false, Message = validateFail };
 
@@ -267,8 +267,16 @@ public sealed class BackupService
     /// 返回错误；null 元素与空白键行剔除；可空字符串/集合归一到安全值——把「Replace 清库后才崩、
     /// 留下半截空库」的载荷挡在清库之前。合法备份恒满足，行为不变。返回 null 表示通过。
     /// </summary>
-    private static string? ValidatePayload(BackupPayload p)
+    private static string? ValidatePayload(BackupPayload? p)
     {
+        // STJ 会把 JSON 显式 null 覆盖到集合的 `= new()` 初始值之上，故 payload 或任一必需集合
+        // 都可能为 null——直接 RemoveAll 会 NRE 且发生在 try 之外、以异常形式逃出本应"返回失败"的方法。
+        // null（字段缺失/被置 null）语义上≠空备份 `[]`，属畸形载荷，一律在清库之前拒绝。
+        if (p is null)
+            return "备份载荷缺失（payload 为 null），已拒绝导入，未改动现有数据。";
+        if (p.Items is null || p.UserState is null || p.Tags is null || p.ItemTags is null)
+            return "备份载荷缺少必需集合（items/user_state/tags/item_tags 存在 null），已拒绝导入，未改动现有数据。";
+
         p.Items.RemoveAll(it => it is null);
         p.UserState.RemoveAll(s => s is null || string.IsNullOrWhiteSpace(s.Source) || string.IsNullOrWhiteSpace(s.SourceId));
         p.Tags.RemoveAll(t => t is null || string.IsNullOrWhiteSpace(t.Name));
