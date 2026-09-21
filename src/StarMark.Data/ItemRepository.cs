@@ -59,6 +59,11 @@ public sealed class ItemRepository : IItemRepository
     public async Task<SearchResult> SearchAsync(string keyword, SearchFilter filter, CancellationToken ct)
     {
         var sw = Stopwatch.StartNew();
+        // 纯空白关键词 → FTS 表达式为空串；直接返回空结果，避免把 MATCH '' 交给 FTS5 触发语句级语法错误。
+        var ftsQuery = BuildFtsQuery(keyword);
+        if (ftsQuery.Length == 0)
+            return new SearchResult { Items = Array.Empty<Item>(), Total = 0, ElapsedMs = sw.ElapsedMilliseconds };
+
         using var conn = _factory.Open();
         // 阶段 1：FTS5 MATCH 先缩小文本范围（命中倒排索引，毫秒级）
         // 阶段 2：JOIN 主表做数值过滤 + 完整字段 hydration
@@ -100,7 +105,7 @@ public sealed class ItemRepository : IItemRepository
 
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
-        cmd.Parameters.AddWithValue("@keyword", BuildFtsQuery(keyword));
+        cmd.Parameters.AddWithValue("@keyword", ftsQuery);
         cmd.Parameters.AddWithValue("@limit", filter.MaxResults);
         cmd.Parameters.AddWithValue("@offset", filter.Offset);
         cmd.Parameters.AddWithValue("@type_filter", (object?)filter.Type?.ToString().ToLowerInvariant() ?? DBNull.Value);
@@ -121,7 +126,7 @@ public sealed class ItemRepository : IItemRepository
         using var countCmd = conn.CreateCommand();
         countCmd.CommandText = @"
             SELECT COUNT(*) FROM items_fts WHERE items_fts MATCH @keyword;";
-        countCmd.Parameters.AddWithValue("@keyword", BuildFtsQuery(keyword));
+        countCmd.Parameters.AddWithValue("@keyword", ftsQuery);
         var totalObj = await countCmd.ExecuteScalarAsync(ct);
         var total = totalObj is long v ? (int)v : 0;
 
