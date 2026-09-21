@@ -112,4 +112,45 @@ public sealed class LocalFileIdentityTests
         Assert.True(LocalFileIdentity.TryPathFromUri("file://C:/C#2.txt", out var u2));
         Assert.NotEqual(u1, u2);
     }
+
+    /// <summary>
+    /// 契约护栏（DJ·承 CW 大小写不敏感归一同款）：scheme 前缀匹配刻意用
+    /// <c>StringComparison.OrdinalIgnoreCase</c>（<c>LocalFileIdentity.cs:48</c>），但既有全部
+    /// <c>TryPathFromUri_*</c> 测都用小写 "file://"，从未**区分性**触发不敏感那一半——
+    /// 若有人把它改回默认 <c>Ordinal</c>，现有测全绿却会静默丢弃 <c>File://</c> 大小写混合的 URI
+    /// （历史导入 / 外部来源可产生），令本可打开的本地文件条目被误判为非法。三例覆盖全大写 / 混合 + 三斜杠 / 交替大小写。
+    /// </summary>
+    [Theory]
+    [InlineData("FILE://C:/x", @"C:\x")]
+    [InlineData("File:///D:/y.md", @"D:\y.md")]  // 混合大小写 scheme + 三斜杠形态
+    [InlineData("fIlE://E:/z", @"E:\z")]
+    public void TryPathFromUri_IsCaseInsensitiveOnSchemePrefix(string uri, string expected)
+    {
+        Assert.True(LocalFileIdentity.TryPathFromUri(uri, out var path));
+        Assert.Equal(expected, path);
+    }
+
+    /// <summary>
+    /// 契约护栏（DJ·承 AT 崩溃钳制同款）：<c>:50</c> 的门 <c>rest.Length &gt;= 2 &amp;&amp; char.IsLetter(rest[0]) &amp;&amp; rest[1] == ':'</c>
+    /// 依赖 <c>&amp;&amp;</c> 从左到右短路——长度检查**必须先于** <c>rest[1]</c> 求值。若被重排或改成 <c>&gt;= 1</c>，
+    /// 单字符 rest（"file://C" → "C"，Length==1）访问 <c>rest[1]</c> 即抛 <see cref="IndexOutOfRangeException"/>，
+    /// 冒到调用方 <c>FolderPathUtil.FileSegments</c> 与 UI 拖拽登记路径。钉死「1 字符 → 干净返 false、fullPath 留空」防重构回归。
+    /// </summary>
+    [Fact]
+    public void TryPathFromUri_SingleCharRest_ReturnsFalseWithoutThrowing()
+    {
+        Assert.False(LocalFileIdentity.TryPathFromUri("file://C", out var p));
+        Assert.Equal(string.Empty, p);  // :46 早置空串，早退分支不改写
+    }
+
+    /// <summary>
+    /// 契约护栏（DJ）：<c>file://C:</c>（rest 恰为 "C:"，Length==2）是合法裸盘符根，须返 true 且原样保留——
+    /// 与上例合起来钉死门的下界（Length==1 拒、==2 且字母+冒号 接受）。
+    /// </summary>
+    [Fact]
+    public void TryPathFromUri_AcceptsBareDriveRoot()
+    {
+        Assert.True(LocalFileIdentity.TryPathFromUri("file://C:", out var p));
+        Assert.Equal("C:", p);
+    }
 }
