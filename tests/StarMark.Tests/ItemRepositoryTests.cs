@@ -653,4 +653,64 @@ public sealed class ItemRepositoryTests : IDisposable
         Assert.Equal(ItemType.GitHubStar, only.Type);
         Assert.Equal("Python Star", only.Title);
     }
+
+    [Fact]
+    public async Task GetStarLanguages_OnlyFromStarItems_NormalizesRetainsAndOrders()
+    {
+        // EC：主界面语言下拉的唯一数据源。钉死三层契约——
+        // ① type 闸门：EnsureLanguage 会给书签兜底打 Language，非 star 的语言不得混入下拉；
+        // ② Normalize 归一（python→Python、assembly→Assembly）；未收录语言原样保留（Brainfuck）；
+        // ③ 末尾按 OrdinalIgnoreCase 升序（A<B<P<R，纯 ASCII 与语言无歧义）。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "s1", Title = "A", Uri = "https://github.com/o/a", ExtraJson = """{"Language":"python"}""" },
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "s2", Title = "B", Uri = "https://github.com/o/b", ExtraJson = """{"Language":"Rust"}""" },
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "s3", Title = "C", Uri = "https://github.com/o/c", ExtraJson = """{"Language":"assembly"}""" },
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "s4", Title = "D", Uri = "https://github.com/o/d", ExtraJson = """{"Language":"Brainfuck"}""" },
+            new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "b1", Title = "E", Uri = "https://example.com", ExtraJson = """{"Language":"Python"}""" },
+        }, CancellationToken.None);
+
+        var langs = await repo.GetStarLanguagesAsync(CancellationToken.None);
+        Assert.Equal(new[] { "Assembly", "Brainfuck", "Python", "Rust" }, langs.ToArray());
+    }
+
+    [Fact]
+    public async Task GetStarLanguages_CollapsesCaseAndWhitespaceVariantsOnlyAfterNormalize()
+    {
+        // EC：SQL 的 DISTINCT 对文本是二进制、区分大小写的——"c#" 与 "C#" 在 SQL 层是两行。
+        // 折叠只能靠 C# 侧「先 Normalize 再 Distinct(OrdinalIgnoreCase)」这二次去重完成；
+        // 若删该 C# Distinct（误以为 SQL DISTINCT 已够），下拉会同时出现 "C#" 与 "c#"。
+        // 顺带钉死 SQL trim + Normalize 内 Trim 的双层空白兜底。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "s1", Title = "A", Uri = "https://github.com/o/a", ExtraJson = """{"Language":"c#"}""" },
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "s2", Title = "B", Uri = "https://github.com/o/b", ExtraJson = """{"Language":"C#"}""" },
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "s3", Title = "C", Uri = "https://github.com/o/c", ExtraJson = """{"Language":"  C++  "}""" },
+        }, CancellationToken.None);
+
+        var langs = await repo.GetStarLanguagesAsync(CancellationToken.None);
+        // '#'(0x23) < '+'(0x2B)：OrdinalIgnoreCase 下 "C#" 先于 "C++"。
+        Assert.Equal(new[] { "C#", "C++" }, langs.ToArray());
+    }
+
+    [Fact]
+    public async Task GetStarLanguages_DropsNullAndBlankLanguages()
+    {
+        // EC：缺 Language 键、空串、纯空白三种 star 都不应产出下拉项
+        // （SQL IS NOT NULL + trim<>'' 与 C# IsNullOrWhiteSpace 双闸，回归时任一失效都会冒出空选项）。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "s1", Title = "A", Uri = "https://github.com/o/a", ExtraJson = """{"Language":"Go"}""" },
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "s2", Title = "B", Uri = "https://github.com/o/b", ExtraJson = """{}""" },
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "s3", Title = "C", Uri = "https://github.com/o/c", ExtraJson = """{"Language":""}""" },
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "s4", Title = "D", Uri = "https://github.com/o/d", ExtraJson = """{"Language":"   "}""" },
+        }, CancellationToken.None);
+
+        var langs = await repo.GetStarLanguagesAsync(CancellationToken.None);
+        var only = Assert.Single(langs);
+        Assert.Equal("Go", only);
+    }
 }
