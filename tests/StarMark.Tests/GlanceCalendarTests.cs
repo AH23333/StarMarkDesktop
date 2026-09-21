@@ -150,4 +150,28 @@ public sealed class GlanceCalendarTests
     [InlineData(2025, 8, 23, "七月初一")]    // cm=8 > lm=7：8-1=7 → 次月正确续号
     public void LunarText_LeapMonth_RenderingAndMonthNumbering(int y, int m, int d, string expected)
         => Assert.Equal(expected, GlanceCalendar.LunarText(new DateOnly(y, m, d)));
+
+    /// <summary>
+    /// 批次 EK（潜在缺陷修复 + 回归）：本类契约「越界日期一律兜底、绝不冒异常」——测试 <see cref="LunarText_OutOfCalendarRange_ReturnsEmpty"/>
+    /// 已断言 <c>Festival(1800-01-01)==null</c>。旧实现把清明判定放在 <c>GetChineseDate</c> **之前**：清明是纯公历
+    /// 寿星公式、不读农历、不抛越界异常，于是「范围外(约 1901~2100)又恰撞清明公式那天」的 4 月日期会漏过越界闸门、
+    /// 错误返回「清明」，与同方法内其它节日（春节/元旦…皆在 <c>GetChineseDate</c> 之后、越界即抛→null）不一致。
+    /// 修后把求农历前置、清明纳入同一闸门。此断言在旧实现下**会失败**（1800-04-05 / 2200-04-04 正是旧公式算出的清明日）。
+    /// 反证：范围内清明照旧命中，闸门未矫枉过正。
+    /// </summary>
+    [Fact]
+    public void Festival_QingmingFormulaDateOutsideCalendarRange_IsNullLikeOtherFestivals()
+    {
+        foreach (var year in new[] { 1800, 2200 })   // 1800 低于范围下界、2200 高于上界
+        {
+            for (var day = 1; day <= 30; day++)
+            {
+                var d = new DateOnly(year, 4, day);
+                Assert.Equal(string.Empty, GlanceCalendar.LunarText(d));   // 越界：农历文本空（既有契约）
+                Assert.Null(GlanceCalendar.Festival(d));                   // 越界：节日须一律 null（清明不再漏网）
+            }
+        }
+        // 反证：受支持范围内的清明仍命中，修复未误伤正常路径。
+        Assert.Equal("清明", GlanceCalendar.Festival(new DateOnly(2026, 4, 5)));
+    }
 }

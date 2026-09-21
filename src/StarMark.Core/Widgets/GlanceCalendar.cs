@@ -51,11 +51,16 @@ public static class GlanceCalendar
     {
         try
         {
-            // 清明：DeskBox 的寿星公式（每年日期浮动，需按年计算）
+            // 先求农历：越界日期在此抛、由方法末尾 catch 统一兜底 null。清明虽属纯公历寿星公式、不读农历、
+            // 不触发此抛，但须与其它节日同受越界闸门约束——否则受支持范围外(约 1901~2100)又恰撞清明公式那天
+            // 的 4 月日期会漏网返回「清明」，与同类越界契约（测试 LunarText_OutOfCalendarRange 已断言
+            // `Festival(1800-01-01)==null`）相悖。故把求农历前置，令清明亦经同一闸门。
+            var (month, day, isLeap) = GetChineseDate(date);
+
+            // 清明：DeskBox 的寿星公式（每年日期浮动，需按年计算）；仅受支持年份内才可能命中
             if (date.Month == 4 && date.Day == GetQingmingDay(date.Year))
                 return "清明";
 
-            var (month, day, isLeap) = GetChineseDate(date);
             if (!isLeap)
             {
                 var lunarFestival = (month, day) switch
