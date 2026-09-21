@@ -254,6 +254,17 @@ public class WeatherTests
     }
 
     [Fact]
+    public void Rounding_HalfDegreeReadings_RoundAwayFromZeroNotBankers()
+    {
+        // Math.Round(double) 默认 ToEven（银行家舍入）：2.5→2、36.5→36，会让显示温度/风速在半度处莫名少 1。
+        // 显示格式化应固定 AwayFromZero：2.5→3、-2.5→-3、2.5°C 换算 36.5°F→37、2.5km/h→3。
+        Assert.Equal(3, WeatherUnits.TemperatureValue(2.5, WeatherUnit.Celsius));
+        Assert.Equal(-3, WeatherUnits.TemperatureValue(-2.5, WeatherUnit.Celsius));
+        Assert.Equal(37, WeatherUnits.TemperatureValue(2.5, WeatherUnit.Fahrenheit));  // ToFahrenheit(2.5)=36.5
+        Assert.Equal("3 km/h", WeatherUnits.WindText(2.5, WeatherUnit.Celsius));
+    }
+
+    [Fact]
     public void UnitSuffix_MatchesSelectedUnit()
     {
         Assert.Equal("°C", WeatherUnits.UnitSuffix(WeatherUnit.Celsius));

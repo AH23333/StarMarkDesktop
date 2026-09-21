@@ -184,7 +184,7 @@ public static class WeatherUnits
 
     /// <summary>显示用整数温度数值（不带符号），给需要自己排版的地方用。</summary>
     public static long TemperatureValue(double celsius, WeatherUnit unit) =>
-        (long)Math.Round(unit == WeatherUnit.Fahrenheit ? ToFahrenheit(celsius) : celsius);
+        (long)Math.Round(unit == WeatherUnit.Fahrenheit ? ToFahrenheit(celsius) : celsius, MidpointRounding.AwayFromZero);
 
     /// <summary>单位后缀（°C / °F），给"23° / 14°"这种区间排版配文字说明时用。</summary>
     public static string UnitSuffix(WeatherUnit unit) => unit == WeatherUnit.Fahrenheit ? "°F" : "°C";
@@ -192,8 +192,8 @@ public static class WeatherUnits
     /// <summary>风速串。摄氏=km/h，华氏=mph。</summary>
     public static string WindText(double kmPerHour, WeatherUnit unit) =>
         unit == WeatherUnit.Fahrenheit
-            ? $"{Math.Round(ToMilesPerHour(kmPerHour))} mph"
-            : $"{Math.Round(kmPerHour)} km/h";
+            ? $"{Math.Round(ToMilesPerHour(kmPerHour), MidpointRounding.AwayFromZero)} mph"
+            : $"{Math.Round(kmPerHour, MidpointRounding.AwayFromZero)} km/h";
 
     /// <summary>解析持久化的单位，非法值一律回落摄氏（参考 SettingsStore 可空字段坑：先 is 判断再取值）。</summary>
     public static WeatherUnit Parse(int? raw) =>
