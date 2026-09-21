@@ -29,6 +29,21 @@ public sealed class PerformanceTests
         public void Trim() => TrimCalls++;
     }
 
+    // 可控抛异常的设置来源：验证 PerformanceSettingsPolicy「读取一律兜底·绝不抛异常」契约。
+    private sealed class ThrowingSettings : IPerformanceSettingsSource
+    {
+        public PerformanceMode Mode;
+        public bool ThrowOnMode;
+        public bool ThrowOnBudget;
+        public bool ThrowOnCache;
+        public PerformanceMode LoadPerformanceMode()
+            => ThrowOnMode ? throw new InvalidOperationException("mode read boom") : Mode;
+        public double LoadCacheBudgetMb()
+            => ThrowOnBudget ? throw new InvalidOperationException("budget read boom") : 777.0;
+        public int LoadMaxImageCacheCount()
+            => ThrowOnCache ? throw new InvalidOperationException("cache read boom") : 777;
+    }
+
     [Fact]
     public void LruCache_EvictsLeastRecentlyUsed_WhenOverMax()
     {
@@ -163,5 +178,68 @@ public sealed class PerformanceTests
         Assert.Equal(1, cache.Count);
         Assert.True(cache.TryGet("b", out _));
         Assert.False(cache.TryGet("a", out _));
+    }
+
+    // ===== 契约护栏（CF 批·补覆盖，非修缺陷）=====
+    // 上方既有用例只喂**正常返回**的 FakeSettings，从未走 PerformanceSettingsPolicy 的核心承诺
+    // ——`Try`（:53-61）：任一来源读取抛异常须回退默认、绝不把异常透给调用方（缓存/UI 热路径取预算）。
+    // 若日后有人把 EffectiveBudgetMb/MaxCacheCount 简化成直连 Provider（丢 Try），既有三例仍跑绿
+    // （Custom 正常值照样返回），真实 SettingsStore 读取抛错却会崩调用方——现有覆盖测不到。以下钉死兜底。
+
+    [Fact]
+    public void PerformanceSettingsPolicy_ModeReadThrows_FallsBackToBalanced_AndNeverThrows()
+    {
+        var prev = PerformanceSettingsPolicy.Provider;
+        try
+        {
+            PerformanceSettingsPolicy.Provider = new ThrowingSettings { ThrowOnMode = true };
+            // 三重入口皆须兜底为均衡语义、无一处抛。
+            Assert.Equal(PerformanceMode.Balanced, PerformanceSettingsPolicy.CurrentMode());
+            Assert.Equal(PerformanceSettingsPolicy.BalancedBudgetMb, PerformanceSettingsPolicy.EffectiveBudgetMb());
+            Assert.Equal(PerformanceSettingsPolicy.BalancedMaxCacheCount, PerformanceSettingsPolicy.EffectiveMaxCacheCount());
+            Assert.False(PerformanceSettingsPolicy.ResourceSaverActive());
+        }
+        finally { PerformanceSettingsPolicy.Provider = prev; }
+    }
+
+    [Fact]
+    public void PerformanceSettingsPolicy_CustomBudgetReadThrows_FallsBackToBalancedBudget()
+    {
+        var prev = PerformanceSettingsPolicy.Provider;
+        try
+        {
+            // 模式=Custom（读得出），仅预算读取抛 → EffectiveBudgetMb 回退均衡，但缓存计数不受牵连。
+            PerformanceSettingsPolicy.Provider = new ThrowingSettings { Mode = PerformanceMode.Custom, ThrowOnBudget = true };
+            Assert.Equal(PerformanceSettingsPolicy.BalancedBudgetMb, PerformanceSettingsPolicy.EffectiveBudgetMb());
+            Assert.Equal(777, PerformanceSettingsPolicy.EffectiveMaxCacheCount()); // 隔离性：另一路径照常
+        }
+        finally { PerformanceSettingsPolicy.Provider = prev; }
+    }
+
+    [Fact]
+    public void PerformanceSettingsPolicy_CustomCacheCountReadThrows_FallsBackToBalancedCacheCount()
+    {
+        var prev = PerformanceSettingsPolicy.Provider;
+        try
+        {
+            PerformanceSettingsPolicy.Provider = new ThrowingSettings { Mode = PerformanceMode.Custom, ThrowOnCache = true };
+            Assert.Equal(PerformanceSettingsPolicy.BalancedMaxCacheCount, PerformanceSettingsPolicy.EffectiveMaxCacheCount());
+            Assert.Equal(777.0, PerformanceSettingsPolicy.EffectiveBudgetMb()); // 隔离性：预算路径照常
+        }
+        finally { PerformanceSettingsPolicy.Provider = prev; }
+    }
+
+    [Fact]
+    public void PerformanceSettingsPolicy_ResourceSaverActive_False_ForBalancedAndCustom()
+    {
+        var prev = PerformanceSettingsPolicy.Provider;
+        try
+        {
+            PerformanceSettingsPolicy.Provider = new ThrowingSettings { Mode = PerformanceMode.Balanced };
+            Assert.False(PerformanceSettingsPolicy.ResourceSaverActive());
+            PerformanceSettingsPolicy.Provider = new ThrowingSettings { Mode = PerformanceMode.Custom };
+            Assert.False(PerformanceSettingsPolicy.ResourceSaverActive()); // 仅 ResourceSaver 才亮，Custom 不算
+        }
+        finally { PerformanceSettingsPolicy.Provider = prev; }
     }
 }
