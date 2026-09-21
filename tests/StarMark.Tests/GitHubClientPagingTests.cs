@@ -72,4 +72,19 @@ public sealed class GitHubClientPagingTests
 
         Assert.Equal(5000, all.Count);
     }
+
+    [Fact]
+    public async Task ItemBudgetTrimAppliesWhenPageSizeNotDivide5000()
+    {
+        // 钉死 GetAllStarredAsync 末尾 `if (all.Count > maxItems) all.RemoveRange(...)` 的截断臂。
+        // 上方 FetchHaltsAtItemBudget5000 用 perPage=10（整除 5000）→ 循环 `break` 时 all.Count 恰为
+        // 5000，`>` 不成立 → 截断臂从未进入。用 perPage=99（不整除 5000）：page 51 满页使 all=5049
+        // 触发 `>=` break，随后必须裁回恰好 5000；删掉 RemoveRange 会返回 5049。
+        var handler = new Handler(_ => 99);
+        using var client = new GitHubClient(Options(99), new HttpClient(handler));
+
+        var all = await client.GetAllStarredAsync(CancellationToken.None);
+
+        Assert.Equal(5000, all.Count);   // 5049 → 裁到预算上限
+    }
 }
