@@ -107,16 +107,20 @@ public sealed class GitHubClient : IDisposable
 
         var all = new List<GitHubStarApiModel>();
         var page = 1;
-        const int maxPages = 50;  // 安全上限：5000 仓库已远超常见用户的 starred 数
-        while (page <= maxPages)
+        // 安全上限按"条目数"而非"固定页数"封顶。过去 maxPages 固定 50，使真实上限 = 50 × _perPage，
+        // AZ-3 让 _perPage 可随 PageSize 调小后，PageSize=10 会把可拉取量从宣称的 5000 静默砍到 500。
+        const int maxItems = 5000;  // 安全上限：5000 仓库已远超常见用户的 starred 数
+        while (true)
         {
             if (ct.IsCancellationRequested) break;
             var pageList = await GetStarredPageAsync(page, ct);
             if (pageList.Count == 0) break;
             all.AddRange(pageList);
-            if (pageList.Count < _perPage) break;
+            if (pageList.Count < _perPage) break;   // 末页：返回数不足一页
+            if (all.Count >= maxItems) break;        // 条目预算封顶
             page++;
         }
+        if (all.Count > maxItems) all.RemoveRange(maxItems, all.Count - maxItems);
         return all;
     }
 
