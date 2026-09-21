@@ -106,4 +106,62 @@ public sealed class PerformanceTests
         Assert.Equal(PerformanceSettingsPolicy.ResourceSaverMaxCacheCount, PerformanceSettingsPolicy.EffectiveMaxCacheCount());
         Assert.True(PerformanceSettingsPolicy.ResourceSaverActive());
     }
+
+    // ===== 契约护栏（BU 批·补覆盖，非修缺陷）=====
+    // 上方既有用例对 Set 只喂**互异新键**，从未走「更新既有键」分支（LruCache.cs:60-66
+    // 的 _order.Remove(旧节点) + 提升最近度），也未测 MaxCount 运行期下调的淘汰与容量下限。
+    // 若「更新」漏摘旧节点：_map[key] 指向 fresh 而旧节点仍留在 _order → EvictBeyond 摘到
+    // 头部旧节点时 _map.Remove(该 Key) 会误删活键，_map.Count 与 _order.Length 失同步——
+    // 现有三例因从不更新键而**测不到**。当前实现正确，这些测跑绿即钉死该不变式防回归。
+
+    [Fact]
+    public void LruCache_Set_ExistingKey_ReplacesValueWithoutGrowingCount()
+    {
+        var cache = new LruCache<string, int>(2);
+        cache.Set("a", 1);
+        cache.Set("a", 99);              // 更新既有键：值应替换
+        Assert.Equal(1, cache.Count);    // 不得因更新而把同一键计成两份
+        Assert.True(cache.TryGet("a", out var v) && v == 99);
+    }
+
+    [Fact]
+    public void LruCache_Set_ExistingKey_PromotesRecency_SoEvictionDropsOtherKey()
+    {
+        var cache = new LruCache<string, int>(2);
+        cache.Set("a", 1);
+        cache.Set("b", 2);
+        cache.Set("a", 11);   // 更新 a → a 成为最近使用，b 退为最久未用
+        cache.Set("c", 3);    // 超上限：应淘汰 b 而非 a（漏摘旧节点的实现会误逐 a）
+
+        Assert.True(cache.TryGet("a", out var av) && av == 11);
+        Assert.False(cache.TryGet("b", out _));
+        Assert.True(cache.TryGet("c", out _));
+    }
+
+    [Fact]
+    public void LruCache_MaxCountSetter_LowerEvictsLeastRecentToFit()
+    {
+        var cache = new LruCache<string, int>(5);
+        cache.Set("a", 1);
+        cache.Set("b", 2);
+        cache.Set("c", 3);
+        cache.MaxCount = 2;              // 运行期下调上限（如切省资源模式）
+
+        Assert.Equal(2, cache.Count);
+        Assert.False(cache.TryGet("a", out _));   // 最久未用者被淘汰
+        Assert.True(cache.TryGet("b", out _));
+        Assert.True(cache.TryGet("c", out _));
+    }
+
+    [Fact]
+    public void LruCache_MaxCount_ClampedAtLeastOne_ConstructorAndSetter()
+    {
+        var cache = new LruCache<string, int>(0);   // 构造入参下限
+        cache.MaxCount = -5;                        // setter 入参下限
+        cache.Set("a", 1);
+        cache.Set("b", 2);                          // 容量恒 ≥1 → 仅保最近一个
+        Assert.Equal(1, cache.Count);
+        Assert.True(cache.TryGet("b", out _));
+        Assert.False(cache.TryGet("a", out _));
+    }
 }
