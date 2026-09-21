@@ -244,4 +244,42 @@ public sealed class WidgetSnapshotTests : IDisposable
         Assert.Empty(e.LocalItems);
         Assert.Contains("1 个组件", snap.Summary);
     }
+
+    // ───────── DM：Normalize 的两处「从未被进入」输出分支——同刻名序平局臂 + 空名兜底真支 ─────────
+    // 既有排序/去重测（GetSnapshots_OrdersNewestFirst 10/30/20、Append_DedupsNames 1/2/3、Append_IsImmutable 100/200）
+    // 的时间戳两两不同，故 :165 的 .ThenBy(Name, OrdinalIgnoreCase) 平局臂一次都未走；且所有构造快照皆带非空名，
+    // :148 空名→「未命名快照」兜底真支一次未进。这里直调纯 Normalize 钉两处。
+
+    [Fact]
+    public void Normalize_OrdersEqualCreatedAtByName_CaseInsensitive()
+    {
+        // 三条同一 CreatedAt → 主次键全等，落位完全由平局臂 ThenBy(Name, OrdinalIgnoreCase) 决定。
+        // 名字刻意混大小写：OrdinalIgnoreCase 升序得 a<B<C；若误改 Ordinal（码点序）则 B<C<a、断言即炸——
+        // 与 DJ 的 TryPathFromUri 同款「刻意选择从未被区分性触发」透镜。
+        var snapshots = new[]
+        {
+            new WidgetSnapshot { Name = "C", CreatedAt = 5 },
+            new WidgetSnapshot { Name = "B", CreatedAt = 5 },
+            new WidgetSnapshot { Name = "a", CreatedAt = 5 },
+        };
+
+        var names = WidgetSnapshotCollection.Normalize(snapshots).Select(s => s.Name).ToList();
+
+        Assert.Equal(new[] { "a", "B", "C" }, names);
+    }
+
+    [Fact]
+    public void Normalize_FallsBackToDefaultNameForBlank_AndDedupsAmongThemselves()
+    {
+        // 空白 / 空名经 :148 兜底为「未命名快照」；多条同兜底名再经去重级联顺延 (2)。
+        var snapshots = new[]
+        {
+            new WidgetSnapshot { Name = "   ", CreatedAt = 7 },
+            new WidgetSnapshot { Name = "", CreatedAt = 7 },
+        };
+
+        var names = WidgetSnapshotCollection.Normalize(snapshots).Select(s => s.Name).ToList();
+
+        Assert.Equal(new[] { "未命名快照", "未命名快照 (2)" }, names);
+    }
 }
