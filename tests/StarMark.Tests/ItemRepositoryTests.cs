@@ -713,4 +713,50 @@ public sealed class ItemRepositoryTests : IDisposable
         var only = Assert.Single(langs);
         Assert.Equal("Go", only);
     }
+
+    [Fact]
+    public async Task GetCountsByType_ExcludesHiddenAndGroupsPerType()
+    {
+        // ED：MainViewModel:126 类型徽标计数的唯一来源。钉死 `WHERE hidden=0` 闸门
+        // （隐藏条目不得计入徽标，与浏览默认视图/标签徽标排除 hidden 同口径）+ 按 type 分组计数正确。
+        var repo = new ItemRepository(_factory);
+        var s1 = new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "s1", Title = "可见star", Uri = "https://github.com/o/a" };
+        var s2 = new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "s2", Title = "隐藏star", Uri = "https://github.com/o/b" };
+        var b1 = new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "b1", Title = "书签", Uri = "https://example.com" };
+        var t1 = new Item { Type = ItemType.Todo, Source = "test", SourceId = "t1", Title = "待办" };
+        await repo.UpsertAsync(new[] { s1, s2, b1, t1 }, CancellationToken.None);
+
+        // 把其中一条 star 隐藏：GitHubStar 徽标应只数可见的 1 条，而非 2。
+        await repo.SetHiddenAsync(s2.Id, true, CancellationToken.None);
+
+        var counts = await repo.GetCountsByTypeAsync(CancellationToken.None);
+        Assert.Equal(1, counts[ItemType.GitHubStar]);
+        Assert.Equal(1, counts[ItemType.Bookmark]);
+        Assert.Equal(1, counts[ItemType.Todo]);
+    }
+
+    [Fact]
+    public async Task GetCountsByType_UnknownTypeRow_SilentlyDroppedNotThrown()
+    {
+        // ED 与 AE-1 刻意不对称的契约护栏：AE-1 钉 `MapItem` 读路径对未知 type **回落 Bookmark**（整页不抛）；
+        // GetCountsByTypeAsync 用 `Enum.TryParse(ignoreCase)` 且**无 else 兜底**——未知 type 组被**静默丢弃**
+        // （既不抛、也不并入任何已知键）。徽标计数与浏览列表对损坏 type 的处理本就不同，须各自钉死防回归：
+        // 若有人把此处改成 `Enum.Parse`（误与 MapItem 对齐），统计页会对一行坏数据整页抛 ArgumentException。
+        var repo = new ItemRepository(_factory);
+        var ok = new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "g1", Title = "正常star", Uri = "https://github.com/o/a" };
+        var bad = new Item { Type = ItemType.File, Source = "test", SourceId = "x1", Title = "坏类型行", Uri = "https://example.com/x" };
+        await repo.UpsertAsync(new[] { ok, bad }, CancellationToken.None);
+
+        using (var conn = _factory.Open())
+        using (var cmd = conn.CreateCommand())
+        {
+            // items.type 无 CHECK 约束（AE-1 同源）：降级/手工/坏备份可留未知值。
+            cmd.CommandText = "UPDATE items SET type = 'nonsense_type' WHERE source = 'test' AND source_id = 'x1';";
+            cmd.ExecuteNonQuery();
+        }
+
+        var counts = await repo.GetCountsByTypeAsync(CancellationToken.None); // 能返回即证未抛
+        Assert.Equal(new[] { ItemType.GitHubStar }, counts.Keys.ToArray());
+        Assert.Equal(1, counts[ItemType.GitHubStar]);
+    }
 }
