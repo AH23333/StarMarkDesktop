@@ -348,4 +348,37 @@ public sealed class BackupServiceTests : IDisposable
         Assert.Equal(widgets, await File.ReadAllTextAsync(_widgetsPath));
         Assert.False(File.Exists(_widgetsPath + ".tmp"));   // 原子写不得留下半截临时文件
     }
+
+    /// <summary>
+    /// 契约护栏（AW）：跨库还原时，即使备份里的标签名与目标库既有标签仅大小写不同，链接仍应重挂到同一标签身份。
+    /// tags.name 声明为 UNIQUE COLLATE NOCASE，SQLite 会把列自身的 collation 用于 `t.name = @tag` 比较，
+    /// 故 ImportItemTagLinksAsync 的裸 '=' 本就大小写无关（已实测：去掉显式 COLLATE 仍通过）。此测锁死该不变式——
+    /// 若未来 tags.name 被改成 BINARY，链接会静默丢失而 RestoreResult.LinksRestored 仍按载荷条数报 1，无人察觉。
+    /// </summary>
+    [Fact]
+    public async Task Restore_Merge_ReattachesTagLinkAcrossDivergentCasing()
+    {
+        // 源库：条目打小写标签 "work"
+        var src = Seed(_db1);
+        var srcItem = await UpsertAsync(src.Items, "test", "x1", "跨机还原条目");
+        await src.Items.AddTagAsync(srcItem.Id, "work", CancellationToken.None);
+        var file = Path.Combine(Path.GetTempPath(), $"bk_{Guid.NewGuid():N}.json");
+        await src.Backup.ExportToFileAsync(file, CancellationToken.None);
+
+        // 目标库：另一条目先把同名标签以不同大小写 "Work" 落库（决定 tags 行的实际大小写）
+        var dst = Seed(_db2);
+        var seedItem = await UpsertAsync(dst.Items, "test", "u9", "目标库既有条目");
+        await dst.Items.AddTagAsync(seedItem.Id, "Work", CancellationToken.None);
+
+        var env = await BackupService.ReadAsync(file, CancellationToken.None);
+        var rr = await dst.Backup.RestoreAsync(env, RestoreMode.Merge, null, CancellationToken.None);
+        Assert.True(rr.Success);
+
+        // 关键：还原进来的条目必须重新挂上目标库里大小写不同的 "Work"（同一 NOCASE 标签身份），且不新增 "work" 行
+        var restored = Assert.Single(
+            await dst.Items.GetAllAsync(new BrowseFilter { IncludeHidden = true, Limit = 1000 }, CancellationToken.None),
+            i => i.SourceId == "x1");
+        var tags = await dst.Items.GetTagsForItemAsync(restored.Id, CancellationToken.None);
+        Assert.Equal("Work", Assert.Single(tags));
+    }
 }
