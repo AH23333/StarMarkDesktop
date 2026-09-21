@@ -180,4 +180,41 @@ public sealed class WidgetLayoutTests
         Assert.Equal(WidgetKind.Todo, entries[0].Kind);
         Assert.Equal(WidgetKind.Clock, entries[1].Kind);
     }
+
+    // ───────── DW：WidgetLayout 仅剩的两处未断言分支（Summary 非空插值臂 + Normalize 末尾比较器）─────────
+    // DK 钉了 Normalize 的 null 护栏、DR 钉了 MakeUniqueName 的空白/Trim/OrdinalIgnoreCase 碰撞集；本文件
+    // 其余分支（去重 (N) 循环、Kind→Index 排序、Id 兜底）亦各有测。唯二裸奔：① WidgetLayout.Summary(:77) 的
+    // **非空插值臂**——"空布局"真臂已被 Normalize_FillsMissingId(:84)/:158 触及，$"{Count} 个组件" 假臂却零断言
+    // （注意 WidgetSnapshotTests 的 "N 个组件" 测的是**另一类型** WidgetSnapshot.Summary 的更丰富串，不覆盖本属性）；
+    // ② Normalize 末尾 OrderBy(:121) 用 OrdinalIgnoreCase，但既有测全喂 CJK（大小写无意义）→ 无法区分它被
+    // "简化"成 Ordinal（大写字母码点 < 小写 → 顺序翻转）这一回归。二者皆纯 Core、确定性、设置页每套非空布局都走。
+
+    [Theory]
+    [InlineData(0, "空布局")]     // 三元真臂：与假臂成 0↔1 分界对照
+    [InlineData(1, "1 个组件")]   // 假臂下界：防 Count-1 之类 off-by-one（1→"0 个组件"即暴露）
+    [InlineData(3, "3 个组件")]   // 假臂：证明数字随 Entries.Count 插值、非塌成常量
+    public void Summary_InterpolatesEntryCount_WithEmptyLayoutFallback(int entryCount, string expected)
+    {
+        var layout = new WidgetLayout { Name = "L", Entries = new List<WidgetLayoutEntry>() };
+        for (var i = 0; i < entryCount; i++)
+            layout.Entries.Add(new WidgetLayoutEntry { Kind = WidgetKind.Todo, Index = i });
+
+        Assert.Equal(expected, layout.Summary);
+    }
+
+    [Fact]
+    public void Normalize_FinalOrder_IsOrdinalIgnoreCase_NotOrdinal()
+    {
+        // "Banana"(B=0x42) 与 "apple"(a=0x61)：OrdinalIgnoreCase 按字母 a<b → apple 先；
+        // Ordinal 大小写敏感下 'B'<'a' → Banana 先。刻意用 ASCII 让期望与具体 culture 无关
+        // （en-US 下 CurrentCulture 亦 apple 先），从而只隔离「大小写敏感轴」：专门拦
+        // OrdinalIgnoreCase→Ordinal 的降级回归（若误降级，本断言顺序翻转即红）。
+        var result = WidgetLayoutCollection.Normalize(new[]
+        {
+            new WidgetLayout { Name = "Banana" },
+            new WidgetLayout { Name = "apple" },
+        });
+
+        Assert.Equal(new[] { "apple", "Banana" }, result.Select(l => l.Name).ToArray());
+    }
 }
