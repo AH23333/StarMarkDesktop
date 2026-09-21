@@ -263,4 +263,38 @@ public class LocalItemStateTests
         var due = LocalItemState.DayStartUnix(LocalNoon(dueY, dueM, dueD));
         Assert.Equal(expected, LocalItemState.DescribeDue(due, now));
     }
+
+    // ── 越界拒绝臂（批次 DN）：SetColor 写时夹到 0、SetDue 写时删键，故 getter 的「拒绝」分支
+    //     经 Set→Get 往返永远进不去；只有 corrupt/手改/前向版本 extra_json 会绕过写侧校验直达此臂。
+    //     若有人把 `>= 0 and <= ColorCount` 改成裸 `raw.Value`，get 会返回 8 → 6 元调色板 IndexOutOfRange；
+    //     把 due 的 `> 0` 去掉，get 返回 0 → 渲染成 1970 日期。故把拒绝臂逐一钉死。──
+
+    /// <summary>
+    /// GetColor 的越界拒绝：<c>raw is &gt;= 0 and &lt;= ColorCount</c> 的 false 分支。
+    /// 边界 <c>6==ColorCount</c> 必须**接受**（证明是闭区间、非 off-by-one 的 <c>&lt; ColorCount</c>），
+    /// 而 -1/7/99 必须回落 0。这些 raw 值都由 SetColor 写侧夹掉，无法经往返喂进，只能直构 extra_json。
+    /// </summary>
+    [Theory]
+    [InlineData(-1, 0)]    // 下界拒绝
+    [InlineData(6, 6)]     // 上界=ColorCount：闭区间接受，防误改成 < ColorCount
+    [InlineData(7, 0)]     // ColorCount+1 拒绝（前向版本多写一种颜色也不能越界取值）
+    [InlineData(99, 0)]    // 远越界拒绝
+    public void GetColor_RejectsOutOfRangeRawValue(int stored, int expected)
+        => Assert.Equal(expected, LocalItemState.GetColor(NewTodo(extra: $"{{\"color\":{stored}}}")));
+
+    /// <summary>
+    /// GetDue 的非正拒绝：<c>raw is &gt; 0</c> 的 false 分支返回 null（而非 0→1970 日期）。
+    /// due=0 是精确边界（>0 排除），SetDue 对 ≤0 走 Remove 键，故经往返拿不到 raw 非正，只能直构。
+    /// </summary>
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    [InlineData(-1000L)]
+    public void GetDue_RejectsNonPositiveRawValue(long stored)
+        => Assert.Null(LocalItemState.GetDue(NewTodo(extra: $"{{\"due\":{stored}}}")));
+
+    /// <summary>GetDue 接受侧边界：最小正数 1 须原样返回，证明拒绝臂是「非正」而非「误伤正值」。</summary>
+    [Fact]
+    public void GetDue_AcceptsPositiveRawValue()
+        => Assert.Equal(1L, LocalItemState.GetDue(NewTodo(extra: """{"due":1}""")));
 }
