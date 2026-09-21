@@ -96,4 +96,56 @@ public sealed class WidgetLayoutTests
         Assert.Equal("阅读模式 (3)", WidgetLayoutCollection.MakeUniqueName(existing, "阅读模式"));
         Assert.Equal("专注", WidgetLayoutCollection.MakeUniqueName(existing, "专注"));
     }
+
+    // ───────── DK：损坏输入下的 null 护栏（JSON 反序列化可真实到达；任一护栏被重构删去即设置页加载 NRE）─────────
+
+    /// <summary>:87 入参声明为可空 <c>IEnumerable&lt;WidgetLayout&gt;?</c>——反序列化缺省 / 传 null 时须返空列表而非抛。</summary>
+    [Fact]
+    public void Normalize_NullCollection_ReturnsEmpty()
+    {
+        Assert.Empty(WidgetLayoutCollection.Normalize(null));
+    }
+
+    /// <summary>:91 <c>l is null</c> continue——corrupt JSON 数组里的 <c>null</c> 元素须被跳过、保留有效布局（删去即 <c>l.Id</c> NRE）。</summary>
+    [Fact]
+    public void Normalize_SkipsNullLayoutElements()
+    {
+        var result = WidgetLayoutCollection.Normalize(new List<WidgetLayout> { null!, new() { Name = "有效" } });
+
+        Assert.Single(result);
+        Assert.Equal("有效", result[0].Name);
+    }
+
+    /// <summary>:93 <c>l.Entries ??= new()</c>——某布局 Entries 显式为 null 时须兜底为空列表，Summary 归「空布局」，且后续 Where/OrderBy 不抛。</summary>
+    [Fact]
+    public void Normalize_MaterializesNullEntriesList()
+    {
+        var result = WidgetLayoutCollection.Normalize(new List<WidgetLayout> { new() { Name = "兜底", Entries = null! } });
+
+        Assert.Empty(result[0].Entries);
+        Assert.Equal("空布局", result[0].Summary);
+    }
+
+    /// <summary>:95 <c>Where(e =&gt; e is not null)</c>——Entries 数组含 null 元素时须在 OrderBy 前剔除（否则 <c>e.Kind</c> 排序 NRE），有效条目仍按 Kind→Index 落位。</summary>
+    [Fact]
+    public void Normalize_FiltersNullGeometryEntries()
+    {
+        var layout = new WidgetLayout
+        {
+            Name = "含坏条目",
+            Entries = new List<WidgetLayoutEntry>
+            {
+                null!,
+                new() { Kind = WidgetKind.Clock, Index = 0 },
+                new() { Kind = WidgetKind.Todo, Index = 0 },
+            },
+        };
+
+        var entries = WidgetLayoutCollection.Normalize(new[] { layout })[0].Entries;
+
+        // QuickLaunch=0 < Todo=1 < QuickNote=2 < Clock=3 < Search=4 → Todo 先于 Clock
+        Assert.Equal(2, entries.Count);
+        Assert.Equal(WidgetKind.Todo, entries[0].Kind);
+        Assert.Equal(WidgetKind.Clock, entries[1].Kind);
+    }
 }
