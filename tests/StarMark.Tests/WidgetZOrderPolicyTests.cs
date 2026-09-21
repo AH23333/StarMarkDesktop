@@ -93,4 +93,36 @@ public sealed class WidgetZOrderPolicyTests
     {
         Assert.Empty(WidgetZOrderPolicy.OrderHighestToLowest([]));
     }
+
+    // ── DQ：两处字符串比较器刻意用 StringComparer.Ordinal 以保证「跨文化确定性」，但 Ordinal 性从未在
+    //    Ordinal 与默认排序（Comparer<string>.Default→按 CurrentCulture）分歧处被验证：既有 7 测全用
+    //    Ordinal 与文化一致的 ASCII 对（DISPLAY1/DISPLAY2、皆小写的 z/a）。若把 , StringComparer.Ordinal
+    //    "简化"掉，堆叠次序会随用户系统区域设置变化、破坏确定性，而 648 测全绿无感。用 "B"(U+0042) 与
+    //    "a"(U+0061) 这对分歧键钉死：Ordinal 按码位 'B'<'a'；文化排序按字母主序 a<b（大小写仅三级差异）。
+    //    关键：只断言与区域无关的 Ordinal 结果，绝不断言文化结果 → 用例对宿主 CurrentCulture 完全确定。
+
+    [Fact]
+    public void DisplayKeyGrouping_IsCultureInvariant_UsesOrdinal()
+    {
+        var upper = new WidgetZOrderCandidate(1, "Monitor-B", Top: 100, Left: 0, "x");
+        var lower = new WidgetZOrderCandidate(2, "Monitor-a", Top: 100, Left: 0, "y");
+
+        var ordered = WidgetZOrderPolicy.OrderHighestToLowest([upper, lower]);
+
+        Assert.Equal("Monitor-B", ordered[0].DisplayKey); // Ordinal：'B'(0x42) < 'a'(0x61)
+        Assert.Equal("Monitor-a", ordered[1].DisplayKey);
+    }
+
+    [Fact]
+    public void StableKeyTieBreak_IsCultureInvariant_UsesOrdinal()
+    {
+        // 同显示器/同位置全平局时由 StableKey 兜底定序（:39），同样须 Ordinal。
+        var a = new WidgetZOrderCandidate(1, Display, Top: 200, Left: 300, "a");
+        var b = new WidgetZOrderCandidate(2, Display, Top: 200, Left: 300, "B");
+
+        var ordered = WidgetZOrderPolicy.OrderHighestToLowest([a, b]);
+
+        Assert.Equal("B", ordered[0].StableKey); // Ordinal：'B'(0x42) < 'a'(0x61)
+        Assert.Equal("a", ordered[1].StableKey);
+    }
 }
