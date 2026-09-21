@@ -250,6 +250,31 @@ public sealed class WidgetSnapCalculatorTests
         Assert.Equal(new RectInt32(0, 0, 1000, 800), WidgetSnapCalculator.InsetWorkArea(new RectInt32(0, 0, 1000, 800), 0));
     }
 
+    /// <summary>
+    /// 契约护栏（DI）：<see cref="WidgetSnapCalculator.IntervalGap"/> 是 public 纯函数，
+    /// 也是吸附打散项 <c>PerpendicularGap</c> 的唯一生产者（<c>WidgetSnapCalculator.cs:246-247</c>），
+    /// 但此前无任何用例名或断言触及其三臂与 <c>&lt;</c> 严格边界——现有 Snap 测仅在候选 delta 相等时
+    /// 才间接依赖它，且从不校验其返回值。两离区臂分别返回 <c>secondStart - firstEnd</c> 与
+    /// <c>firstStart - secondEnd</c>，若符号写反或两臂互换，离区 gap 会变负/错值，导致 delta 相等时
+    /// <c>IsBetter</c> 选中错误候选（用户看到的贴合边静默错位），而现有断言全部照过。
+    /// 离区用例刻意取**非对称**数字（0/10↔25/28），故一次即钉死「方向 + 符号」；相切两端点验证
+    /// 边界为严格 <c>&lt;</c>（相接判 0 间隙，非负 gap）。纯确定性算术，无需探针。
+    /// </summary>
+    [Theory]
+    [InlineData(0, 10, 25, 28, 15)]  // first 整体在左 → secondStart-firstEnd（非对称，锁死方向与符号）
+    [InlineData(25, 28, 0, 10, 15)]  // second 整体在左 → firstStart-secondEnd
+    [InlineData(0, 10, 20, 30, 10)]  // 左离（对称复核）
+    [InlineData(20, 30, 0, 10, 10)]  // 右离（对称复核）
+    [InlineData(0, 20, 10, 30, 0)]   // 部分重叠 → 0
+    [InlineData(0, 100, 20, 30, 0)]  // 包含 → 0
+    [InlineData(0, 10, 10, 20, 0)]   // 端点相切（first 在左）：严格 < → 判 0 间隙
+    [InlineData(10, 20, 0, 10, 0)]   // 端点相切（second 在左）：严格 < → 判 0 间隙
+    public void IntervalGap_DisjointOverlapAndTouching_AreSignedCorrectly(
+        int firstStart, int firstEnd, int secondStart, int secondEnd, int expected)
+    {
+        Assert.Equal(expected, WidgetSnapCalculator.IntervalGap(firstStart, firstEnd, secondStart, secondEnd));
+    }
+
     // ───────── 辅助 ─────────
 
     private static WidgetMoveSnapResult Move(RectInt32 proposedBounds) =>
