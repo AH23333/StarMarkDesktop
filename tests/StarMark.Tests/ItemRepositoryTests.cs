@@ -789,4 +789,37 @@ public sealed class ItemRepositoryTests : IDisposable
         await repo.SetSyncStateAsync("github:etag", "W/\"v2\"", CancellationToken.None); // 不抛 = ON CONFLICT 生效
         Assert.Equal("W/\"v2\"", await repo.GetSyncStateAsync("github:etag", CancellationToken.None));
     }
+
+    [Fact]
+    public async Task DeleteBySourceId_DeletesOnlyTargetSource_NotOtherSourceSharingSameId()
+    {
+        // EF：DeleteBySourceIdAsync = `DELETE … WHERE source=@source AND source_id=@sid`（ItemRepository:599）。
+        // (source, source_id) 才是复合唯一键（`ON CONFLICT(source, source_id)`·:632/:851）——source_id 单独不全局唯一：
+        // GitHub 仓库节点 id 与 Ditto 剪贴板 id 可同为 "42"。若有人把谓词简化成 `WHERE source_id=@sid`
+        // （漏 source），取消 star 一个 GitHub 仓库会**连带删掉同 id 的 Ditto 条目**——静默跨源数据丢失。
+        var repo = new ItemRepository(_factory);
+        var gh = new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "42", Title = "GitHub 42", Uri = "https://github.com/o/r42" };
+        var clip = new Item { Type = ItemType.Clipboard, Source = ItemSources.Ditto, SourceId = "42", Title = "Ditto 42", Uri = "ditto://42" };
+        await repo.UpsertAsync(new[] { gh, clip }, CancellationToken.None);
+
+        await repo.DeleteBySourceIdAsync(ItemSources.GitHub, "42", CancellationToken.None);
+
+        Assert.Null(await repo.GetByIdAsync(gh.Id, CancellationToken.None));   // 目标源已删
+        Assert.NotNull(await repo.GetByIdAsync(clip.Id, CancellationToken.None)); // 他源同 id 存活
+    }
+
+    [Fact]
+    public async Task DeleteBySourceId_DeletesOnlyTargetId_NotOtherIdSameSource()
+    {
+        // EF 另一半复合作用域：漏 `AND source_id=@sid` 会**整源全删**（取消 star 一个仓库却清空全部 GitHub 条目）。
+        var repo = new ItemRepository(_factory);
+        var a = new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "1", Title = "r1", Uri = "https://github.com/o/r1" };
+        var b = new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "2", Title = "r2", Uri = "https://github.com/o/r2" };
+        await repo.UpsertAsync(new[] { a, b }, CancellationToken.None);
+
+        await repo.DeleteBySourceIdAsync(ItemSources.GitHub, "1", CancellationToken.None);
+
+        Assert.Null(await repo.GetByIdAsync(a.Id, CancellationToken.None));    // 目标条目删
+        Assert.NotNull(await repo.GetByIdAsync(b.Id, CancellationToken.None)); // 同源他条存活
+    }
 }
