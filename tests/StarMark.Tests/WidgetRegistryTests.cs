@@ -66,4 +66,50 @@ public sealed class WidgetRegistryTests
         Assert.Equal("99", WidgetStorage.KindTitle((WidgetKind)99));
         Assert.True(WidgetStorage.IsResizable((WidgetKind)99));
     }
+
+    // ───────── DL：注册表的「排除过滤器」——三条合取消除臂 + 新建入口臂从未被进入（Default 全通过）─────────
+    // GetWindowDescriptors = Where(CanCreateWindow && HasImplementedContent && IsAvailable)，
+    // GetCreateEntryDescriptors = Where(ShowInCreateEntry)。CreateDefaults 的描述符全部为默认（三条合取皆真、
+    // ShowInCreateEntry 真），故各「消除臂」的假分支一次都未走到；既有 AllKinds 测只把 GetWindowDescriptors()
+    // 与由它派生的 WidgetStorage.AllKinds 对拍=重言、不钉谓词。这里构造非默认描述符逐条钉门。
+
+    private static WidgetDescriptor Creatable(WidgetKind kind) => new(kind, "T", "G", 100, 100);
+
+    [Fact]
+    public void GetWindowDescriptors_ExcludesEachGateIndependently_ButKeepsRegistered()
+    {
+        var registry = new WidgetRegistry(new[]
+        {
+            Creatable(WidgetKind.Todo),
+            // 三条合取：每个变体只让恰好一条为假（其余两条仍真）→ 单独钉该门确在排除集中起作用
+            new(WidgetKind.QuickNote, "N", "G", 100, 100, CanCreateWindow: false),                       // 关①
+            new(WidgetKind.Clock, "C", "G", 100, 100, Stage: WidgetContentStage.Placeholder),            // 关②
+            new(WidgetKind.Search, "S", "G", 100, 100, Availability: WidgetContentAvailability.Planned), // 关③
+            // 特性组件：IsFeatureWidget 不在此谓词内 → 默认可建窗（默认隐藏≠不可建），钉「谓词恰为三条、不多不少」
+            new(WidgetKind.TagGrid, "Tag", "G", 100, 100, IsFeatureWidget: true),
+        });
+
+        var windowed = registry.GetWindowDescriptors().Select(d => d.Kind).ToArray();
+
+        Assert.Equal(new[] { WidgetKind.Todo, WidgetKind.TagGrid }, windowed);
+
+        // 被排除者仍在册（用户态配置可持久化），Get/IsKnown 不因排除而崩溃
+        Assert.True(registry.IsKnown(WidgetKind.Clock));
+        Assert.Equal(WidgetContentStage.Placeholder, registry.Get(WidgetKind.Clock).Stage);
+        Assert.False(registry.CanCreateWindow(WidgetKind.QuickNote)); // 关①经 CanCreateWindow 亦为 false
+    }
+
+    [Fact]
+    public void GetCreateEntryDescriptors_ExcludesShowInCreateEntryFalse()
+    {
+        var registry = new WidgetRegistry(new[]
+        {
+            Creatable(WidgetKind.Todo),
+            new(WidgetKind.Clock, "C", "G", 100, 100, ShowInCreateEntry: false),
+        });
+
+        Assert.Equal(
+            new[] { WidgetKind.Todo },
+            registry.GetCreateEntryDescriptors().Select(d => d.Kind).ToArray());
+    }
 }
