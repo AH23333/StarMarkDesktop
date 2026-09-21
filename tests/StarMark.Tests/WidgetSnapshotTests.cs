@@ -165,6 +165,41 @@ public sealed class WidgetSnapshotTests : IDisposable
         Assert.Equal("空快照", new WidgetSnapshot().Summary);
     }
 
+    /// <summary>
+    /// 契约护栏（DX）：Summary 三插槽各取自**不同**投影——widgets=Entries.Count、local=Σ LocalItems.Count、
+    /// links=Σ Links.Count（<c>WidgetSnapshot.cs:107-109</c>）。既有 <see cref="Summary_CountsWidgetsLocalAndLinks"/>
+    /// 喂的是全等 2/2/2（QuickLaunch 条目出 2 个 link、Todo 条目出 2 个 local），三值恰好相等 → 若把 local/links
+    /// 两插槽表达式**对调**、把某个 Σ **退化**成单条目计数、或误用 Entries.Count 去填第三插槽，输出仍是
+    /// "2 · 2 · 2" 而**测不到**（承 DR 输入归一碰撞 / DM 同刻平局 同族「等值掩盖跨源错位」透镜）。本用例刻意让
+    /// 三值**互异**（widgets=2 / local=5 / links=3）且 local、links 各**跨两个条目**求和（证明是 Σ 而非单条目捷径），
+    /// 把每个插槽钉死到其唯一来源——任何对调/退化都会翻转数字使本断言即红。
+    /// </summary>
+    [Fact]
+    public void Summary_DistinctCounts_PinEachSlotToItsOwnProjection()
+    {
+        var snap = new WidgetSnapshot
+        {
+            Entries =
+            {
+                new WidgetSnapshotEntry
+                {
+                    Kind = WidgetKind.QuickLaunch,
+                    Links = { new LinkItem(), new LinkItem() },                                            // +2 link
+                    LocalItems = { new SnapshotLocalItem(), new SnapshotLocalItem(), new SnapshotLocalItem() }, // +3 local
+                },
+                new WidgetSnapshotEntry
+                {
+                    Kind = WidgetKind.Todo,
+                    Links = { new LinkItem() },                                                            // Σ link = 2+1 = 3
+                    LocalItems = { new SnapshotLocalItem(), new SnapshotLocalItem() },                     // Σ local = 3+2 = 5
+                },
+            },
+        };
+
+        // widgets=2、local=5、links=3 —— 三插槽互异，任何跨插槽对调 / Σ→单条目退化都会改变输出串。
+        Assert.Equal("2 个组件 · 5 条待办/随记 · 3 个入口", snap.Summary);
+    }
+
     [Fact]
     public void MakeUniqueName_AppendsSuffix()
     {
