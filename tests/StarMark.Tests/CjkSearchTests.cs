@@ -48,6 +48,33 @@ public sealed class CjkSearchTests : IDisposable
         Assert.False(CjkTokenizer.IsCjk(' '));
     }
 
+    /// <summary>
+    /// 批次 DY：承 DB→DX 透镜（审到**分支进入 + 边界值**粒度）。<c>IsCjk</c> 是六段区间的析取
+    /// （<c>CjkTokenizer.cs:39-44</c>），既有 <see cref="IsCjk_CoversChineseJapaneseKorean"/> 只进入
+    /// CJK 基本区 / 平假名 / 片假名 / 韩文 四类，而 <b>CJK 扩展A(0x3400-0x4DBF)、兼容表意(0xF900-0xFAFF)、
+    /// 半角片假名(0xFF66-0xFF9F) 三段从未有 True 用例进入</b>。回归面真实且<b>静默</b>：若把某段上下界写反
+    /// （<c>&gt;=</c>→<c>&gt;</c> 漏段首）或误扩（<c>&lt;=</c>→<c>&lt;</c>）乃至整段漏并，
+    /// <c>ExpandForIndex</c>/<c>SplitForQuery</c>/<c>ContainsCjk</c> 对相应脚本会静默按「非 CJK 原样」处理——
+    /// 用户标题/随记里的兼容表意字（如「豈」）或半角片假名（ｱ）失去中文式子串展开、且
+    /// <see cref="SplitForQuery_CjkTokensNeverCarryFts5Metachars"/> 赖以成立的「词元要么纯 CJK 要么不含 CJK」前提被破坏，现有测全绿无感。
+    /// 与 DF 同类（钉的是<b>布尔范围归属逻辑与闭区间两侧</b>，非 Describe 式字面码→串表·注水）。
+    /// </summary>
+    [Theory]
+    // CJK 扩展 A：段首/段尾含、越界假
+    [InlineData('\u3400', true)]   // 段首下界（含）
+    [InlineData('\u4DBF', true)]   // 段尾上界（含）
+    [InlineData('\u4DC0', false)]  // 越上界一个码点（易筋经符号区）
+    // CJK 兼容表意文字
+    [InlineData('\uF900', true)]   // 段首（含）
+    [InlineData('\uFAFF', true)]   // 段尾（含）
+    [InlineData('\uFB00', false)]  // 越上界（拉丁连字 "ﬀ"）
+    // 半角片假名
+    [InlineData('\uFF66', true)]   // ｱ 段首（含）
+    [InlineData('\uFF9F', true)]   // 段尾（含）
+    [InlineData('\uFFA0', false)]  // 越上界
+    public void IsCjk_ThreePreviouslyUnenteredRanges_HaveInclusiveBoundaries(char c, bool expected)
+        => Assert.Equal(expected, CjkTokenizer.IsCjk(c));
+
     [Fact]
     public void ExpandForIndex_EmitsSinglesAndBigrams()
     {
