@@ -109,6 +109,44 @@ public sealed class BackupServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ImportItems_SlicesAcross200BatchBoundary()
+    {
+        // 钉死 BackupRepository.ImportItemsAsync 的 200 条分批（私有 Slice）在批边界处不重不漏：
+        // 250 = 首批满 200 + 尾批 50。Slice 若少切/越界/尾批 off-by-one/负容量，本测以总数+跨边界抽样显形。
+        // （Slice 的负容量路径在当前唯一调用方 for(i=0;i<items.Count;i+=batch) 下不可达——offset 恒 < Count、
+        //  count 恒为常量 200 故 n∈[1,200]；本测固化该批边界契约以防将来改循环/批大小悄悄破坏切分。）
+        var ctx = Seed(_db1);
+        const int total = 250;
+        var items = new System.Collections.Generic.List<Item>();
+        for (int i = 1; i <= total; i++)
+        {
+            items.Add(new Item
+            {
+                Type = ItemType.Bookmark,
+                Source = "test",
+                SourceId = "bulk" + i,
+                Title = "条" + i,
+                Uri = "https://example.com/bulk" + i,
+                CreatedAt = 1000 + i,
+            });
+        }
+
+        var repo = new BackupRepository(ctx.Factory);
+        await repo.ImportItemsAsync(items, CancellationToken.None);
+
+        var all = await ctx.Items.GetAllAsync(
+            new BrowseFilter { IncludeHidden = true, Limit = 1000 }, CancellationToken.None);
+        Assert.Equal(total, all.Count);
+
+        // 无重复：Slice 切分不得重漏（配合 items UNIQUE(source,source_id)）
+        var seen = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+        foreach (var it in all) Assert.True(seen.Add(it.SourceId), $"重复 source_id: {it.SourceId}");
+        Assert.Contains("bulk200", seen); // 首批末
+        Assert.Contains("bulk201", seen); // 次批首（跨 200 边界）
+        Assert.Contains("bulk250", seen); // 尾批末（部分批的收尾）
+    }
+
+    [Fact]
     public async Task Restore_PreservesCjkTagWordSearch()
     {
         // D5 回归：导出条目不带 Tags 集合，还原只补 item_tags 关联行不足以把标签词烘进 search_text。
