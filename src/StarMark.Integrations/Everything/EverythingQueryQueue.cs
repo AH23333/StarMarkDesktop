@@ -38,17 +38,30 @@ public sealed class FileIndexOptions
 public sealed class EverythingQueryQueue : IAsyncDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly object _ctsGate = new();
     private CancellationTokenSource? _cts;
 
     /// <summary>
-    /// 执行查询。键入新关键词时取消前一个查询并释放 SDK 资源。
+    /// 执行查询。
     /// </summary>
+    /// <param name="preemptPrevious">
+    /// <c>true</c>＝前台键入，取消上一个前台查询（既有语义）；<c>false</c>＝后台全量索引
+    /// （<c>FetchAsync</c> 逐根目录）专用，**不去碰别人的在途 token**。
+    /// 旧实现两者共用一个 <c>_cts</c> 且裸字段赋值：索引跑到第 2 个根目录时用户在搜索框敲一个字，
+    /// 索引那一轮就被 Cancel ⇒ SDK 提前 break 返回半截，而 SyncCoordinator 仍记 Success=true
+    /// ⇒ 该根目录条目静默缺失到下次同步（P-52）。
+    /// </param>
     public async Task<IReadOnlyList<Item>> QueryAsync(
-        string query, SearchFilter filter, CancellationToken externalCt)
+        string query, SearchFilter filter, CancellationToken externalCt, bool preemptPrevious = true)
     {
-        _cts?.Cancel();
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(externalCt);
-        var localCt = _cts.Token;
+        var linked = CancellationTokenSource.CreateLinkedTokenSource(externalCt);
+        var localCt = linked.Token;
+        if (preemptPrevious)
+        {
+            CancellationTokenSource? replaced;
+            lock (_ctsGate) { replaced = _cts; _cts = linked; }
+            replaced?.Cancel();   // Cancel 放锁外：它可能正被自己的调用方等待
+        }
 
         // 必须离开调用线程：Everything_QueryW(true) 是阻塞式 IPC（内部 SendMessageTimeout 等回包）。
         // 从 UI 线程直接调它，只要引擎在重建索引 / 回包慢 / 权限等级不一致导致回包被 UIPI 丢弃，
@@ -71,6 +84,10 @@ public sealed class EverythingQueryQueue : IAsyncDisposable
         finally
         {
             _gate.Release();
+            // 只有"我仍是当前前台查询"时才清场（后来者已换入的话由它自己清）。
+            // 实例本身交给 GC：.NET Core 的 CTS 无手动句柄，除非用了 CancelAfter/timer。
+            if (preemptPrevious)
+                lock (_ctsGate) if (ReferenceEquals(_cts, linked)) _cts = null;
         }
     }
 
@@ -90,8 +107,10 @@ public sealed class EverythingQueryQueue : IAsyncDisposable
 
     public ValueTask DisposeAsync()
     {
-        _cts?.Cancel();
-        _cts?.Dispose();
+        CancellationTokenSource? cts;
+        lock (_ctsGate) { cts = _cts; _cts = null; }
+        try { cts?.Cancel(); } catch (ObjectDisposedException) { }
+        try { cts?.Dispose(); } catch (ObjectDisposedException) { }
         _gate.Dispose();
         return ValueTask.CompletedTask;
     }
@@ -144,7 +163,8 @@ public sealed class EverythingSource : IItemSource
 
             // 以根目录路径作为 Everything 查询词，匹配其下（含子目录）全部文件。
             var filter = new SearchFilter { IncludeSize = true, MaxResults = _options.MaxCount };
-            var items = await _queue.QueryAsync(root, filter, ct);
+            // preemptPrevious:false ＝这一轮不被前台键入取消（P-52）；外部 ct 仍能停它。
+            var items = await _queue.QueryAsync(root, filter, ct, preemptPrevious: false);
             foreach (var item in items)
             {
                 if (seen.Add(item.SourceId))
