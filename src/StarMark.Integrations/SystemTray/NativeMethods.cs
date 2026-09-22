@@ -36,9 +36,7 @@ internal static class NativeMethods
     public const int IDM_EXIT = 1002;
     public const int IDM_WIDGETS = 1003;
     public const int IDM_SETTINGS = 1004;
-    public const int IDM_WIDGET_BASE = 1100;
-    public const int IDM_WIDGET_SHOWALL = 1110;
-    public const int IDM_WIDGET_HIDEALL = 1111;
+    // 逐组件项与"全部显示/隐藏"的号段见 TrayWidgetMenu（块与 sentinel 由同一处推导，防撞号）。
 
     // 热键修饰符
     public const uint MOD_ALT = 0x0001;

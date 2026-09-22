@@ -222,14 +222,19 @@ public sealed partial class MainWindow : Window
     {
         if (_trayHost is not null) return;
         _trayHost = new TrayHost();
-        _trayHost.IsWidgetEnabled = i => _widgetManager.IsEnabled((WidgetKind)i);
+        // 子菜单直接从组件注册表生成：以前这是 TrayHost 里一份手写的 5 条标题数组，
+        // 注册表长出到 12 种后，7 种组件（含新的剪贴板格）在托盘里既看不到也关不掉（P-62b）。
+        _trayHost.WidgetMenuItems = WidgetStorage.AllKinds
+            .Select(k => new TrayWidgetItem((int)k, WidgetStorage.KindTitle(k)))
+            .ToList();
+        _trayHost.IsWidgetEnabled = kind => _widgetManager.IsEnabled((WidgetKind)kind);
         _trayHost.ShowRequested += () => DispatcherQueue.TryEnqueue(() => Present(false));
         _trayHost.ExitRequested += () => DispatcherQueue.TryEnqueue(ExitApp);
         _trayHost.WidgetsToggleRequested += () => DispatcherQueue.TryEnqueue(() => _ = _widgetManager.ToggleAllAsync());
-        _trayHost.WidgetToggleRequested += i => DispatcherQueue.TryEnqueue(() =>
+        _trayHost.WidgetToggleRequested += kind => DispatcherQueue.TryEnqueue(() =>
         {
-            var kind = (WidgetKind)i;
-            _ = _widgetManager.SetEnabledAsync(kind, !_widgetManager.IsEnabled(kind));
+            var k = (WidgetKind)kind;
+            _ = _widgetManager.SetEnabledAsync(k, !_widgetManager.IsEnabled(k));
         });
         _trayHost.ShowAllWidgetsRequested += () => DispatcherQueue.TryEnqueue(() => _ = _widgetManager.ShowAllAsync());
         _trayHost.HideAllWidgetsRequested += () => DispatcherQueue.TryEnqueue(() => _ = _widgetManager.HideAllAsync());

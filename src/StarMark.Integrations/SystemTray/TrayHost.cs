@@ -14,23 +14,26 @@ namespace StarMark.Integrations.SystemTray;
 /// </summary>
 public sealed class TrayHost : IDisposable
 {
-    /// <summary>组件类型显示名（索引与 StarMark.Core.Widgets.WidgetKind 枚举值一致）。</summary>
-    public static readonly string[] WidgetTitles =
-    {
-        "★ 快捷启动", "✅ 待办", "📝 随记", "🕒 时钟", "🔍 快捷搜索",
-    };
+    /// <summary>
+    /// 托盘「桌面组件」子菜单要列出的行，<b>由宿主从组件注册表注入</b>。
+    /// <para>
+    /// 这里原先是一份手写的 5 条标题数组，而注册表已长出到 12 种组件 ⇒ 7 种在托盘里既看不到也关不掉
+    /// （P-62b）。第二份清单必然漂移，所以直接删掉它、只接受注入。没注入时子菜单只剩"全部显示/隐藏"。
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<TrayWidgetItem> WidgetMenuItems { get; set; } = Array.Empty<TrayWidgetItem>();
 
     public event Action? ShowRequested;
     public event Action? ExitRequested;
     /// <summary>托盘“显示/隐藏全部组件”总开关。</summary>
     public event Action? WidgetsToggleRequested;
-    /// <summary>勾选/取消某组件（参数为 WidgetKind 枚举值 0..4）。</summary>
+    /// <summary>勾选/取消某组件（参数为注入行携带的 WidgetKind 整数值，<b>不是</b>菜单序号）。</summary>
     public event Action<int>? WidgetToggleRequested;
     public event Action? ShowAllWidgetsRequested;
     public event Action? HideAllWidgetsRequested;
     public event Action? SettingsRequested;
 
-    /// <summary>菜单打开时查询某组件是否已启用（勾选态）。</summary>
+    /// <summary>菜单打开时查询某组件是否已启用（勾选态）；参数同样是 WidgetKind 整数值。</summary>
     public Func<int, bool>? IsWidgetEnabled { get; set; }
 
     private IntPtr _hwnd;
@@ -173,17 +176,18 @@ public sealed class TrayHost : IDisposable
         AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null!);
         AppendMenuW(menu, MF_STRING, (IntPtr)IDM_WIDGETS, "显示/隐藏全部组件");
 
-        // 桌面组件子菜单：逐项勾选 + 全部显示/隐藏
+        // 桌面组件子菜单：逐项勾选 + 全部显示/隐藏。行由宿主注入（注册表为唯一事实来源）。
+        var items = WidgetMenuItems;
         var sub = CreatePopupMenu();
-        for (var i = 0; i < WidgetTitles.Length; i++)
+        for (var i = 0; i < items.Count; i++)
         {
-            var enabled = IsWidgetEnabled?.Invoke(i) ?? false;
+            var enabled = IsWidgetEnabled?.Invoke(items[i].Kind) ?? false;
             var flags = MF_STRING | (enabled ? MF_CHECKED : 0);
-            AppendMenuW(sub, (uint)flags, (IntPtr)(IDM_WIDGET_BASE + i), WidgetTitles[i]);
+            AppendMenuW(sub, (uint)flags, (IntPtr)(TrayWidgetMenu.Base + i), items[i].Title);
         }
         AppendMenuW(sub, MF_SEPARATOR, IntPtr.Zero, null!);
-        AppendMenuW(sub, MF_STRING, (IntPtr)IDM_WIDGET_SHOWALL, "全部显示");
-        AppendMenuW(sub, MF_STRING, (IntPtr)IDM_WIDGET_HIDEALL, "全部隐藏");
+        AppendMenuW(sub, MF_STRING, (IntPtr)TrayWidgetMenu.ShowAll, "全部显示");
+        AppendMenuW(sub, MF_STRING, (IntPtr)TrayWidgetMenu.HideAll, "全部隐藏");
         AppendMenuW(menu, MF_POPUP, sub, "桌面组件");
 
         AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null!);
@@ -206,12 +210,15 @@ public sealed class TrayHost : IDisposable
             case IDM_SHOW: ShowRequested?.Invoke(); break;
             case IDM_EXIT: ExitRequested?.Invoke(); break;
             case IDM_WIDGETS: WidgetsToggleRequested?.Invoke(); break;
-            case IDM_WIDGET_SHOWALL: ShowAllWidgetsRequested?.Invoke(); break;
-            case IDM_WIDGET_HIDEALL: HideAllWidgetsRequested?.Invoke(); break;
+            case TrayWidgetMenu.ShowAll: ShowAllWidgetsRequested?.Invoke(); break;
+            case TrayWidgetMenu.HideAll: HideAllWidgetsRequested?.Invoke(); break;
             case IDM_SETTINGS: SettingsRequested?.Invoke(); break;
             default:
-                if (cmd >= IDM_WIDGET_BASE && cmd < IDM_WIDGET_BASE + WidgetTitles.Length)
-                    WidgetToggleRequested?.Invoke(cmd - IDM_WIDGET_BASE);
+                // 逐组件项：把命令号换算回菜单序号后，交回该行携带的 kind 值（不是序号）——
+                // 序号与枚举值相等只是"注册表按枚举顺序声明"的巧合，拿它当 kind 用会在两者分叉时静默点错组件。
+                var offset = cmd - TrayWidgetMenu.Base;
+                if (offset >= 0 && offset < WidgetMenuItems.Count)
+                    WidgetToggleRequested?.Invoke(WidgetMenuItems[offset].Kind);
                 break;
         }
     }
