@@ -190,11 +190,10 @@ public sealed class EverythingSource : IItemSource
             if (!File.Exists(zip))
             {
                 using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(5) };
-                var bytes = await http.GetByteArrayAsync(SdkZipUrl);
-                await File.WriteAllBytesAsync(zip, bytes);
+                await DownloadAtomicAsync(http, SdkZipUrl, zip, CancellationToken.None);
             }
 
-            using var archive = ZipFile.OpenRead(zip);
+            using var archive = OpenCachedZip(zip);
             var entry = archive.Entries.FirstOrDefault(e =>
                 string.Equals(e.Name, "Everything64.dll", StringComparison.OrdinalIgnoreCase));
             if (entry is null)
@@ -312,6 +311,43 @@ public sealed class EverythingSource : IItemSource
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         StarMark.Abstractions.AppConstants.AppName, "everything");
     private static string OwnedExePath => Path.Combine(OwnedDir, "Everything.exe");
+
+    /// <summary>
+    /// 下载到一个 <c>.tmp</c> 再原子改名。直接写终件时，中途被打断（磁盘满、进程被杀、OneDrive/杀软
+    /// 占用）会留下一个"存在但截断"的包，而下游一律用 <c>File.Exists</c> 当"已缓存"判据 ⇒ 这台机器
+    /// 上永远不会再下，本地磁盘搜索从此装不上。
+    /// </summary>
+    private static async Task DownloadAtomicAsync(
+        System.Net.Http.HttpClient http, string url, string target, CancellationToken ct)
+    {
+        var tmp = target + ".tmp";
+        try
+        {
+            var bytes = await http.GetByteArrayAsync(url, ct);
+            await File.WriteAllBytesAsync(tmp, bytes, ct);
+            File.Move(tmp, target, overwrite: true);
+        }
+        catch
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 打开缓存 zip；读不开即视为坏缓存并<b>立即作废</b>（抛给调用方按既有失败路径降级）。
+    /// 不删的话：下次 <c>File.Exists</c> 命中同一坏包，跳过重下 ⇒ 永久失败。
+    /// </summary>
+    private static ZipArchive OpenCachedZip(string zip)
+    {
+        try { return ZipFile.OpenRead(zip); }
+        catch (Exception ex)
+        {
+            try { if (File.Exists(zip)) File.Delete(zip); } catch { /* 删不掉也只是这次再失败一次 */ }
+            StarLog.Warn($"缓存的 Everything 压缩包读不开，已作废以便下次重新下载（{zip}）：{ex.Message}");
+            throw;
+        }
+    }
 
     /// <summary>确保「StarMark 自带」standard Everything 已运行并持有默认实例：自带实例已在跑→跳过；否则
     /// （按需下载便携版→）关闭其它 Everything 实例→以 -hidden 拉起自带实例→等 IPC 窗口就绪。返回最终是否可 IPC。</summary>
@@ -439,10 +475,9 @@ public sealed class EverythingSource : IItemSource
             if (!File.Exists(zip))
             {
                 using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(5) };
-                var bytes = await http.GetByteArrayAsync(PortableZipUrl, ct);
-                await File.WriteAllBytesAsync(zip, bytes, ct);
+                await DownloadAtomicAsync(http, PortableZipUrl, zip, ct);
             }
-            using (var archive = ZipFile.OpenRead(zip))
+            using (var archive = OpenCachedZip(zip))
             {
                 foreach (var name in new[] { "Everything.exe", "Everything.lng" })
                 {
