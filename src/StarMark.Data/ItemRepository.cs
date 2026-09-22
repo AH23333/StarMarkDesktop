@@ -78,6 +78,9 @@ public sealed class ItemRepository : IItemRepository
             "collected" => "i.created_at DESC, MIN(f.rank)",
             _ => "MIN(f.rank)",
         };
+        // 语言闸门只约束 GitHubStar：LanguageDetector.EnsureLanguage 会给任意来源（含本地文件）
+        // 按扩展名兜底打 Language，所以 @lang 若不加豁免，选中语言就会把已入库的本地文件行
+        // 一起筛掉（.mp3 被当成"非 C#"消失）。产品口径：语言对本地文件无效，见 SearchService 同类豁免。
         var sql = @"
             WITH fts_hits AS (
                 SELECT rowid, bm25(items_fts) AS rank
@@ -97,7 +100,7 @@ public sealed class ItemRepository : IItemRepository
             WHERE (@type_filter IS NULL OR i.type = @type_filter)
               AND (@stars_min IS NULL OR i.stars_count >= @stars_min)
               AND (@date_from IS NULL OR i.updated_at >= @date_from)
-              AND (@lang IS NULL OR json_extract(i.extra_json, '$.Language') = @lang)
+              AND (@lang IS NULL OR i.type = 'file' OR json_extract(i.extra_json, '$.Language') = @lang)
               AND (@include_hidden = 1 OR i.hidden = 0)"
             + BuildTagClause(filter.Tags, "i") + @"
             GROUP BY i.id

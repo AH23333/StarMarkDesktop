@@ -76,6 +76,13 @@ public sealed class SearchFilter
     /// </summary>
     public IReadOnlyList<string>? Tags { get; init; }
 
+    /// <summary>
+    /// 本地磁盘检索的附加 Everything 检索式片段（搜索栏「类型」多选翻译而来，见
+    /// <see cref="FileKindQuery.Fragments"/>）。只有 <c>EverythingSource</c> 消费它：
+    /// 其余来源（书签 / Star / 剪贴板）没有扩展名与体积概念，片段对它们是噪音。
+    /// </summary>
+    public IReadOnlyList<string>? FileQueryFragments { get; init; }
+
     /// <summary>是否有生效的标签过滤。</summary>
     public bool HasTags => Tags is { Count: > 0 };
 }

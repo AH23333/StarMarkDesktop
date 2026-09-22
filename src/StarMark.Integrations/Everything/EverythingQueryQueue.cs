@@ -152,7 +152,10 @@ public sealed class EverythingSource : IItemSource
             StarLog.Warn($"Everything 搜索被跳过：查询瞬间 IsAvailable=false（FindWindow 未探到 EVERYTHING 窗口），关键词「{query}」");
             return Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
         }
-        return _queue.QueryAsync(query, filter, ct);
+        // 「类型」多选的检索式只加在这一条链路上：用户关键词本身逐字保留（手敲 ext:/size: 仍生效），
+        // 片段绝不回写搜索框。
+        return _queue.QueryAsync(
+            StarMark.Abstractions.FileKindQuery.Compose(query, filter.FileQueryFragments), filter, ct);
     }
 
     private const string SdkZipUrl = "https://www.voidtools.com/Everything-SDK.zip";

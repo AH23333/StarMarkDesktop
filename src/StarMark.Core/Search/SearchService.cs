@@ -102,9 +102,12 @@ public sealed class SearchService
         }
 
         // 语言筛选（SQL 侧已过滤已入库条目；此处兜底过滤实时源返回的条目）。
+        // 语言是 GitHubStar 的属性：本地文件没有语言概念，若一并套用会把 Everything 命中的
+        // 文件行全部抹掉（GetLanguage 对非 star 恒 null），故 File 类型豁免。
         if (!string.IsNullOrEmpty(filter.Language))
         {
-            merged = merged.Where(i => string.Equals(GetLanguage(i), filter.Language, StringComparison.OrdinalIgnoreCase))
+            merged = merged.Where(i => i.Type == ItemType.File
+                                       || string.Equals(GetLanguage(i), filter.Language, StringComparison.OrdinalIgnoreCase))
                            .ToList();
         }
 

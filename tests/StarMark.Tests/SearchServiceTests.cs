@@ -139,6 +139,69 @@ public sealed class SearchServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task KeywordSearch_LanguageFilter_DoesNotAffectLocalFiles()
+    {
+        // 产品口径：「语言」是 GitHubStar 的属性，对本地文件筛选无效。GetLanguage 对 File 恒 null，
+        // 少这一条豁免时，选了语言的「全部 / 本地文件」搜索会把 Everything 命中的文件全抹掉。
+        var repo = new ItemRepository(_factory);   // 空库 → 结果全来自实时源
+        var rustStar = new Item
+        {
+            Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "o/rust",
+            Title = "widget rust repo", Uri = "https://github.com/o/rust",
+            ExtraJson = """{"Language":"Rust"}""",
+        };
+        var pythonStar = new Item
+        {
+            Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "o/py",
+            Title = "widget py repo", Uri = "https://github.com/o/py",
+            ExtraJson = """{"Language":"Python"}""",
+        };
+        var file = new Item
+        {
+            Type = ItemType.File, Source = ItemSources.FileSystem, SourceId = "deadbeef",
+            Title = "widget 报告.docx", Subtitle = @"D:\docs", Uri = "file://D:/docs/widget 报告.docx",
+        };
+        var svc = new SearchService(repo, new IItemSource[] { new StubSource(new[] { rustStar, pythonStar, file }) });
+
+        var filtered = await svc.SearchAsync("widget",
+            new SearchFilter { Language = "Rust", MaxResults = 10 }, CancellationToken.None);
+
+        Assert.Contains(filtered.Items, i => i.Type == ItemType.File);   // 文件不受语言影响
+        Assert.Contains(filtered.Items, i => i.SourceId == "o/rust");
+        Assert.DoesNotContain(filtered.Items, i => i.SourceId == "o/py"); // 语言仍约束 star
+    }
+
+    [Fact]
+    public async Task KeywordSearch_LanguageFilter_KeepsIndexedFileRowsFromSql()
+    {
+        // SQL 侧同一口径（ItemRepository 的 @lang 子句加 i.type='file' 豁免）：
+        // 已入库的本地文件行经 LanguageDetector 兜底打过 Language，不豁免时会被别的语言挤掉。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.File, Source = ItemSources.FileSystem, SourceId = "cafe0001",
+                       Title = "budget 表格.mp3", Subtitle = @"D:\music",
+                       Uri = "file://D:/music/budget 表格.mp3" },
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "o/go",
+                       Title = "budget repo", Uri = "https://github.com/o/go",
+                       ExtraJson = """{"Language":"Go"}""" },
+        }, CancellationToken.None);
+
+        var svc = new SearchService(repo, Array.Empty<IItemSource>());
+        var filtered = await svc.SearchAsync("budget",
+            new SearchFilter { Language = "Go", MaxResults = 10 }, CancellationToken.None);
+
+        Assert.Contains(filtered.Items, i => i.Type == ItemType.File);
+        Assert.Contains(filtered.Items, i => i.SourceId == "o/go");
+
+        // 护栏：语言依然筛掉别的语言的 star（豁免只开给 File，不能变成「语言失效」）。
+        var rust = await svc.SearchAsync("budget",
+            new SearchFilter { Language = "Rust", MaxResults = 10 }, CancellationToken.None);
+        Assert.DoesNotContain(rust.Items, i => i.SourceId == "o/go");
+        Assert.Contains(rust.Items, i => i.Type == ItemType.File);
+    }
+
+    [Fact]
     public async Task ExactCount_ClampedToTruncatedItems_WhenMaxResultsSplitsExactSegment()
     {
         // 钉死 SearchService.cs:137 `ExactCount = Math.Min(exact.Count, ordered.Count)` 的取小侧。
