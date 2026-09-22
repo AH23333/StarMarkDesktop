@@ -115,22 +115,12 @@ public sealed partial class SnapshotPage : Page, INotifyPropertyChanged
             var local = entry.LocalItems.Count;
             if (local > 0) bits.Add($"待办/随记 {local}");
             if (!string.IsNullOrWhiteSpace(entry.GridTag)) bits.Add($"标签「{entry.GridTag}」");
-            if (!string.IsNullOrWhiteSpace(entry.GridQuery)) bits.Add($"查询「{entry.GridQuery}」");
-            if (!string.IsNullOrWhiteSpace(entry.GridSort) && entry.GridSort != "relevance")
-                bits.Add($"排序:{SortLabel(entry.GridSort)}");
             var data = bits.Count > 0 ? string.Join("，", bits) : "无数据";
             var where = $"{(int)entry.X},{(int)entry.Y} {Math.Max(0, (int)entry.Width)}×{Math.Max(0, (int)entry.Height)}";
             return $"· {WidgetStorage.KindTitle(entry.Kind)} — {data}（位置 {where}）";
         });
         return string.Join(Environment.NewLine, lines);
     }
-
-    private static string SortLabel(string key) => key switch
-    {
-        "recent" => "最近更新",
-        "name" => "名称",
-        _ => "相关度",
-    };
 
     private async void Extract_Click(object sender, RoutedEventArgs e)
     {

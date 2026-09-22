@@ -131,24 +131,12 @@ public sealed class WidgetInstanceConfig
     /// <summary>该实例自己的快捷入口（置顶条目来自数据库，仍共享）。</summary>
     public List<LinkItem> Links { get; set; } = new();
 
-    // ── 差异化条目格（TagGrid / SearchResults）的每实例查询配置 ──
-    // 均为可空、向后兼容：旧实例缺这些字段时反序列化为 null，不影响其它类型。
+    // ── 差异化条目格的每实例查询配置 ──
+    // 可空、向后兼容：旧实例缺这些字段时反序列化为 null，不影响其它类型。
 
     /// <summary>标签格所钉的标签名（TagGrid 用）。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? GridTag { get; set; }
-
-    /// <summary>搜索结果格所钉的关键词（SearchResults 用）。</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? GridQuery { get; set; }
-
-    /// <summary>搜索结果格所钉的标签过滤（AND 语义，SearchResults 用）。</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public List<string>? GridTags { get; set; }
-
-    /// <summary>搜索结果格的排序键（relevance/recent/name，SearchResults 用）。null=按相关度（默认），与快捷搜索同源。</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? GridSort { get; set; }
 
     /// <summary>每实例外观覆盖（材质/颜色/边框/圆角/文本缩放）。为 null 时本实例沿用全局外观设置。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

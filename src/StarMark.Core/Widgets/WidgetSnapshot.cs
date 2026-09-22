@@ -80,12 +80,6 @@ public sealed class WidgetSnapshotEntry : IWidgetGeometryEntry
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? GridTag { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? GridQuery { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public List<string>? GridTags { get; set; }
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? GridSort { get; set; }
 
     public List<SnapshotLocalItem> LocalItems { get; set; } = new();
 }

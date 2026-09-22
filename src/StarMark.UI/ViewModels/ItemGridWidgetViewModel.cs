@@ -1,11 +1,10 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
-using StarMark.Core.Search;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 
@@ -16,8 +15,6 @@ public enum ItemGridMode
 {
     /// <summary>标签格：某标签条目常驻。</summary>
     Tag,
-    /// <summary>搜索结果格：钉一条查询常驻。（原「搜索结果格」的内容源，已被剪贴板格取代，待清理）</summary>
-    Search,
     /// <summary>最近活动格：按 updated_at 展示最近条目。</summary>
     Activity,
     /// <summary>置顶条目格：pinned=1 的条目。</summary>
@@ -32,21 +29,22 @@ public enum ItemGridMode
 
 /// <summary>
 /// 条目格里的一行（复用统一条目模型，渲染与主窗口一致）。
-/// 携带 <paramref name="Source"/>/<paramref name="SourceId"/> 业务键：搜索结果格合并 Everything 实时源时，
-/// 虚拟行（Id=0）不入库，右键「记录到本地」/置顶/标签等需据此幂等登记真实条目（见 <c>ItemCardActions.EnsureRecordedAsync</c>）。
+/// <b>必须带上 <paramref name="Source"/>/<paramref name="Type"/> 等业务键</b>：右键菜单由共享工厂按需现查库构建，
+/// 查不到时要用行数据兜底建条目（<c>ItemContextMenu.ShowForItem</c> 的 fallback）——而
+/// 「这条是不是内置剪贴板历史（可删）」「打开=复制还是启动」这类判据全都依赖 Type/Source。
 /// </summary>
 public sealed record ItemRowItem(long Id, string Title, string Subtitle, string Uri, string Emoji, ItemType Type, string Source, string SourceId);
 
 /// <summary>
 /// 差异化条目格 ViewModel（Phase A-2，StarMark 护城河）：
-/// 标签格 / 搜索结果格 / 最近活动格 / 置顶条目格，全部查询统一 <c>items</c> 表，
-/// 与 DeskBox 的"文件收纳"路线完全区分。标签格与搜索结果格支持组件内配置（钉标签/钉查询）并持久化到 widgets.json。
-/// 抄 DeskBox 思路：内容只读查询、外壳由 WidgetWindow 承载；复用 SearchWidget 的仓库直查兜底。
+/// 标签格 / 剪贴板格 / 最近活动格 / 置顶条目格，全部查询统一 <c>items</c> 表，
+/// 与 DeskBox 的"文件收纳"路线完全区分。只有标签格支持组件内配置（钉标签）并持久化到 widgets.json；
+/// 其余三格的内容就是"当前库里最近的那一份"，没有可钉参数。
+/// 抄 DeskBox 思路：内容只读查询、外壳由 WidgetWindow 承载。
 /// </summary>
 public sealed class ItemGridWidgetViewModel
 {
     private readonly IItemRepository? _repo;
-    private readonly SearchService? _search;
     private readonly WidgetStorage _storage;
     private readonly string _instanceId;
     private readonly WidgetKind _kind;
@@ -67,23 +65,11 @@ public sealed class ItemGridWidgetViewModel
     /// <summary>标签格所钉的标签名。</summary>
     public string? GridTag { get; private set; }
 
-    /// <summary>搜索结果格所钉的关键词。</summary>
-    public string? Query { get; set; }
+    /// <summary>是否仍需要用户配置（标签格还没钉标签）。</summary>
+    public bool NeedsConfig => Mode == ItemGridMode.Tag && string.IsNullOrWhiteSpace(GridTag);
 
-    /// <summary>搜索结果格所钉的标签过滤（AND 语义）。</summary>
-    public ObservableCollection<TagChip> Tags { get; } = new();
-
-    /// <summary>搜索结果格排序键：relevance（相关度，默认）/ recent（最近更新）/ name（名称）。与快捷搜索同源。</summary>
-    public string Sort { get; private set; } = "relevance";
-
-    /// <summary>是否仍需要用户配置（标签格缺标签 / 搜索格缺关键词）。</summary>
-    public bool NeedsConfig =>
-        Mode == ItemGridMode.Tag ? string.IsNullOrWhiteSpace(GridTag)
-        : Mode == ItemGridMode.Search ? string.IsNullOrWhiteSpace(Query)
-        : false;
-
-    /// <summary>该格是否需要配置栏（仅标签格 / 搜索结果格）。</summary>
-    public bool IsConfigurable => Mode is ItemGridMode.Tag or ItemGridMode.Search;
+    /// <summary>该格是否需要配置栏（只有标签格有可钉参数）。</summary>
+    public bool IsConfigurable => Mode == ItemGridMode.Tag;
 
     /// <summary>剪贴板格最多铺几条：桌面上的展示型组件要"一眼看完最近"，完整列表在「剪贴板」页里看。</summary>
     public const int ClipboardLimit = 100;
@@ -108,14 +94,13 @@ public sealed class ItemGridWidgetViewModel
         _ => NeedsConfig ? "先在上方配置要钉的内容" : "暂无条目",
     };
 
-    public ItemGridWidgetViewModel(ItemGridMode mode, WidgetStorage storage, IItemRepository? repo, string instanceId, WidgetKind kind, SearchService? search = null)
+    public ItemGridWidgetViewModel(ItemGridMode mode, WidgetStorage storage, IItemRepository? repo, string instanceId, WidgetKind kind)
     {
         Mode = mode;
         _storage = storage;
         _repo = repo;
         _instanceId = instanceId;
         _kind = kind;
-        _search = search;
         LoadConfig();
         _sync = new DataChangeReloader(LoadAsync);
         _ = LoadAsync();
@@ -133,12 +118,6 @@ public sealed class ItemGridWidgetViewModel
         var inst = _storage.FindInstance(_instanceId);
         if (inst is null) return;
         GridTag = inst.GridTag;
-        Query = inst.GridQuery;
-        Sort = string.IsNullOrWhiteSpace(inst.GridSort) ? "relevance" : inst.GridSort;
-        Tags.Clear();
-        if (inst.GridTags is { Count: > 0 })
-            foreach (var t in inst.GridTags)
-                Tags.Add(new TagChip(t, 0, true));
     }
 
     public async Task LoadAsync()
@@ -159,11 +138,6 @@ public sealed class ItemGridWidgetViewModel
             {
                 ItemGridMode.Tag => await _repo.GetAllAsync(
                     new BrowseFilter { TagFilters = new List<string> { GridTag ?? string.Empty }, Limit = 200 }, CancellationToken.None),
-                ItemGridMode.Search => _search is not null
-                    ? (await _search.SearchAsync(Query ?? string.Empty,
-                        new SearchFilter { Tags = Tags.Where(t => t.Selected).Select(t => t.Name).ToList(), MaxResults = 200, Sort = Sort }, CancellationToken.None)).Items
-                    : (await _repo.SearchAsync(Query ?? string.Empty,
-                        new SearchFilter { Tags = Tags.Where(t => t.Selected).Select(t => t.Name).ToList(), MaxResults = 200, Sort = Sort }, CancellationToken.None)).Items,
                 ItemGridMode.Pinned => await _repo.GetPinnedAsync(200, CancellationToken.None),
                 // 剪贴板格：只读本机采集的那一份（source 限定 ⇒ 不会把 Ditto 的历史混进来，
                 // 那类行的正文属于外部程序，展示在这里会诱导用户去删别人的库）。
@@ -256,79 +230,11 @@ public sealed class ItemGridWidgetViewModel
         _ = LoadAsync();
     }
 
-    /// <summary>搜索结果格：设置所钉关键词并持久化后重载。</summary>
-    public void ApplySearchConfig(string query)
-    {
-        Query = query.Trim();
-        SaveConfig();
-        _ = LoadAsync();
-    }
-
-    /// <summary>搜索结果格：切换排序键（relevance/recent/name）并持久化后重载。与快捷搜索排序下拉同源。</summary>
-    public void ApplySort(string sort)
-    {
-        var next = string.IsNullOrWhiteSpace(sort) ? "relevance" : sort;
-        if (Sort == next) return;
-        Sort = next;
-        SaveConfig();
-        _ = LoadAsync();
-    }
-
-    /// <summary>当前排序键映射到下拉索引（0 相关度 / 1 最近更新 / 2 名称），供视图初始化选中项。</summary>
-    public int SortIndex => Sort switch { "recent" => 1, "name" => 2, _ => 0 };
-
-    public void ToggleTag(string name)
-    {
-        var chip = Tags.FirstOrDefault(t => t.Name == name);
-        if (chip is null) return;
-        chip.Selected = !chip.Selected;
-        SaveConfig();   // 持久化标签选择：搜索结果格是「钉一条查询」的常驻组件，选/取消标签须与钉查询一样落盘，
-                        // 否则重启/重建后 LoadConfig 恢复不到刚才的标签过滤（表现为「标签选择无结果」的另一半）。
-        _ = LoadAsync();
-    }
-
-    public void ClearTags()
-    {
-        foreach (var chip in Tags)
-            if (chip.Selected) chip.Selected = false;
-        SaveConfig();
-        _ = LoadAsync();
-    }
-
-    public async Task LoadTagsAsync()
-    {
-        if (_repo is null) return;
-        // 记住重建前已选的标签（含构造函数里 LoadConfig 刚从 widgets.json 恢复的钉选标签）。
-        // 早先这里无条件 Tags.Clear() 再把每个 chip 按 selected:false 重建，会：
-        // ① 抹掉 LoadConfig 恢复的钉选态；② 与构造函数首轮 _ = LoadAsync() 竞争，
-        //    让 LoadAsync 读到空的标签集 → 钉了标签却「无结果」。改为按名字保留选择态。
-        var selected = new HashSet<string>(Tags.Where(t => t.Selected).Select(t => t.Name));
-        try
-        {
-            var tags = await _repo.GetAllTagsAsync(CancellationToken.None);
-            var cloud = tags.Take(60).ToList();
-            // 钉选但不在前 60 热门标签里的，补进标签云，保证其选择态可见、可再点取消。
-            foreach (var name in selected)
-                if (!cloud.Any(t => t.Name == name))
-                    cloud.Add((name, 0));
-            Tags.Clear();
-            foreach (var (name, count) in cloud)
-                Tags.Add(new TagChip(name, count, selected.Contains(name)));
-        }
-        catch (Exception ex)
-        {
-            StarMark.Abstractions.StarLog.Error("加载标签云失败", ex);
-        }
-    }
-
     private void SaveConfig()
     {
         var data = _storage.Load();
         var inst = WidgetStorage.GetOrAddInstance(data, _instanceId, _kind);
         inst.GridTag = GridTag;
-        inst.GridQuery = Query;
-        inst.GridTags = Tags.Where(t => t.Selected).Select(t => t.Name).ToList();
-        inst.GridSort = Sort == "relevance" ? null : Sort;   // null=默认相关度，避免给非搜索格/默认态写冗余字段
         _storage.Save(data);
     }
 

@@ -309,25 +309,8 @@ public sealed class WidgetStorageTests : IDisposable
 
         // 条目数据 / 筛选配置绝不在场
         foreach (var forbidden in new[]
-                 { "Todos", "Notes", "Links", "SourceId", "GridTag", "GridQuery", "GridSort", "ItemKey", "PrivacyMode", "ChromeMode" })
+                 { "Todos", "Notes", "Links", "SourceId", "GridTag", "ItemKey", "PrivacyMode", "ChromeMode" })
             Assert.DoesNotContain(forbidden, json, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void GridSort_RoundTrips_AndDefaultsToNull()
-    {
-        // 搜索结果格的排序键须与 GridQuery 一样按实例持久化（重启后回填），且 relevance 视为默认不落盘。
-        var store = Store();
-        var data = store.Load();
-        var named = new WidgetInstanceConfig { Kind = WidgetKind.Clipboard, GridQuery = "stars>500", GridSort = "name" };
-        var relevance = new WidgetInstanceConfig { Kind = WidgetKind.Clipboard, GridQuery = "rag", GridSort = null };
-        data.Instances.Add(named);
-        data.Instances.Add(relevance);
-        store.Save(data);
-
-        var reloaded = store.Load().Instances;
-        Assert.Equal("name", reloaded[0].GridSort);
-        Assert.Null(reloaded[1].GridSort);   // null=相关度默认，向后兼容、无迁移
     }
 
     [Fact]

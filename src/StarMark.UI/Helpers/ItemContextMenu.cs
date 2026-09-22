@@ -9,13 +9,14 @@ using StarMark.UI.ViewModels;
 namespace StarMark.UI.Helpers;
 
 /// <summary>
-/// 条目右键菜单的<b>单一真源构建器</b>（批次 M）：让「快捷搜索 / 搜索结果格 / 标签格 / 快捷启动」等
+/// 条目右键菜单的<b>单一真源构建器</b>（批次 M）：让「快捷搜索 / 剪贴板格 / 标签格 / 快捷启动」等
 /// 条目型桌面组件的紧凑行，弹出与主窗口 <see cref="Controls.ItemCard"/> 逐条一致的 ContextFlyout。
 /// <para>
-/// 菜单结构与 <c>Controls/ItemCard.xaml</c> 的 ContextFlyout 保持一一对应（打开 / 打开所在位置 / 复制链接
-/// / 预览 / 删除(仅启动器态) / 置顶 / 发送到桌面·快捷启动 / 编辑笔记 / 编辑标签 / 隐藏），动作全部走
-/// <see cref="ItemCardActions"/>（已含 try/catch + 日志），保证行为、可见性规则（HasOpenLocation /
-/// IsLauncherMode）与主窗口完全相同。
+/// 菜单结构与 <c>Controls/ItemCard.xaml</c> 的 ContextFlyout 保持一一对应（打开／复制到剪贴板 / 打开所在位置
+/// / 复制链接·复制内容 / 预览 / 记录到本地 / 置顶 / 删除这条历史 / 发送到桌面·快捷启动 / 编辑笔记
+/// / 编辑标签 / 隐藏），动作全部走 <see cref="ItemCardActions"/>（已含 try/catch + 日志），
+/// 可见性规则（HasOpenLocation / CanDeletePermanently / CanSendToWidget / IsLauncherMode）也与之一致。
+/// 文案随条目类型变的几项取自 <see cref="ItemCardViewModel"/>，两处共用同一判据，不再各写一份。
 /// </para>
 /// <para>
 /// <b>为何按需构建、每次右击现取条目</b>：置顶/隐藏/标签态需实时准确，而组件行是轻量记录、非

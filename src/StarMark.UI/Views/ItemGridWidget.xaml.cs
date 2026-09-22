@@ -1,12 +1,10 @@
-#nullable enable
+﻿#nullable enable
 using System;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.System;
 using StarMark.Abstractions;
-using StarMark.Core.Search;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
@@ -26,32 +24,20 @@ public sealed partial class ItemGridWidget : UserControl
 
     public ItemGridWidget(ItemGridMode mode, WidgetWindow host)
     {
-        var search = App.Services.GetService<SearchService>();
         ViewModel = new ItemGridWidgetViewModel(
-            mode, host.Storage, host.Repository, host.InstanceId, host.Kind, search);
+            mode, host.Storage, host.Repository, host.InstanceId, host.Kind);
 
         InitializeComponent();
 
-        // 配置栏可见性：仅标签格 / 搜索结果格需要。
+        // 配置栏：只有标签格有可钉的参数（一个标签名）。
         if (ViewModel.IsConfigurable)
         {
             ConfigBar.Visibility = Visibility.Visible;
-            ConfigHint.Text = mode == ItemGridMode.Tag
-                ? "输入要常驻桌面的标签名（如 rag、llm），回车或点「应用」。"
-                : "输入要常驻桌面的查询词（可叠加标签），回车或点「应用」。";
-            ConfigBox.PlaceholderText = mode == ItemGridMode.Tag ? "标签名，如 rag" : "查询词，如 stars>500";
+            ConfigHint.Text = "输入要常驻桌面的标签名（如 rag、llm），回车或点「应用」。";
+            ConfigBox.PlaceholderText = "标签名，如 rag";
             // 回填已钉内容：早先这里从不回填，重新打开组件时输入框是空的，
-            // 即便后台仍按上次的查询/标签出结果，用户也会误以为「配置丢了 / 搜不到」。
-            ConfigBox.Text = mode == ItemGridMode.Tag
-                ? (ViewModel.GridTag ?? string.Empty)
-                : (ViewModel.Query ?? string.Empty);
-            if (mode == ItemGridMode.Search)
-            {
-                TagCloudPanel.Visibility = Visibility.Visible;
-                SortRow.Visibility = Visibility.Visible;
-                SortBox.SelectedIndex = ViewModel.SortIndex;   // 回填已钉排序；与默认相关度一致时不变、不触发重搜
-                _ = ViewModel.LoadTagsAsync();
-            }
+            // 即便后台仍按上次的标签出结果，用户也会误以为「配置丢了 / 搜不到」。
+            ConfigBox.Text = ViewModel.GridTag ?? string.Empty;
         }
 
         // 最近活动格（#51）：只展示事件流，隐藏可点开/右键的条目列表；其余模式反之。
@@ -92,29 +78,8 @@ public sealed partial class ItemGridWidget : UserControl
     {
         var text = (ConfigBox.Text ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(text)) return;
-        if (ViewModel.Mode == ItemGridMode.Tag)
-            ViewModel.ApplyTagConfig(text);
-        else
-            ViewModel.ApplySearchConfig(text);
+        ViewModel.ApplyTagConfig(text);
     }
-
-    private void TagToggle_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button { Tag: string name })
-            ViewModel.ToggleTag(name);
-    }
-
-    private static readonly string[] SortKeys = { "relevance", "recent", "name" };
-
-    /// <summary>排序下拉切换：索引→排序键，交 ViewModel.ApplySort 落盘并重载（相关度为默认，与快捷搜索同源）。</summary>
-    private void SortBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        var idx = SortBox.SelectedIndex;
-        if (idx < 0 || idx >= SortKeys.Length) return;
-        ViewModel.ApplySort(SortKeys[idx]);
-    }
-
-    private void ClearTags_Click(object sender, RoutedEventArgs e) => ViewModel.ClearTags();
 
     /// <summary>
     /// 行数据 → 条目。<b>行是轻量记录、不带 Description</b>，所以按 Id 走 <see cref="ItemCardActions"/> 那条
@@ -152,7 +117,7 @@ public sealed partial class ItemGridWidget : UserControl
     }
 
     /// <summary>右键（ContextRequested）：弹出与主窗口条目完全一致的 ContextFlyout（批次 M 的共享菜单工厂）。
-    /// 对标签格 / 搜索结果格 / 置顶条目格的所有条目生效（最近活动格仅展示、不挂此处理器）。
+    /// 对标签格 / 剪贴板格 / 置顶条目格的所有条目生效（最近活动格仅展示、不挂此处理器）。
     /// <para>
     /// 必须拦 <b>ContextRequested</b> 而非 RightTapped：WinUI 3 的 ContextFlyout 响应 ContextRequested 弹出，
     /// 组件级菜单挂在 <c>RootBorder.ContextFlyout</c>，普通 Button 行不消费该事件即冒泡命中组件菜单。
@@ -167,8 +132,8 @@ public sealed partial class ItemGridWidget : UserControl
         if (sender is FrameworkElement { Tag: ItemRowItem item } el)
         {
             args.Handled = true;   // 阻止冒泡到 RootBorder.ContextFlyout（组件菜单）
-            // 搜索结果格会合并 Everything 实时源（未入库、Id=0）；置顶/标签格为已入库行。
-            // 传兜底条目后虚拟行也能弹菜单（Id=0 时 ShowForItem 的 GetByIdAsync 查不到 → 用行数据）。
+            // 标签格等偶尔会遇到未入库的虚拟行（Id=0，来自 Everything 实时源）：
+            // 传兜底条目后它也能弹菜单（Id=0 时 ShowForItem 的 GetByIdAsync 查不到 → 用行数据）。
             ItemContextMenu.ShowForItem(item.Id, el, RowAsItem(item));
         }
     }
