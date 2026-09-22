@@ -206,24 +206,30 @@ public sealed class EverythingSource : IItemSource
         }
     }
 
-    /// <summary>启动时的 Everything 就绪流程：SDK DLL → （主程序未运行时）自动安装主程序。</summary>
+    /// <summary>启动时的 Everything 就绪流程：SDK DLL → 主程序缺失则安装 → **确保客户端在运行**（拉起）。</summary>
     public async Task EnsureReadyAsync()
     {
         var sdkReady = await EnsureSdkReadyAsync();
 
-        // 诊断埋点（V2）：把启动时的 Everything 可用性一次打全，用于定位用户报告的
-        // "Everything 已开却搜不到本地文件"——区分究竟是①主程序未被探测到②SDK DLL 未加载③IPC 通但查询空。
-        var running = EverythingInterop.IsRunning();
         var exe = EverythingInterop.FindEverythingExecutable();
+        if (exe is null)
+        {
+            await EnsureEverythingInstalledAsync();   // 探测不到 → voidtools 官方静默安装
+            exe = EverythingInterop.FindEverythingExecutable();
+        }
+
+        // 关键：安装≠启动。NSIS 静默安装不会拉起客户端；用户手动关掉 Everything 后重新开启本地搜索时，
+        // 若这里不拉起，FindWindow 恒探不到窗口 → EverythingSource.IsAvailable 恒 false → 本地文件永远不进结果。
+        // （EnableAsync 有此步、旧的 EnsureReadyAsync 漏了，正是「开启后没启动 Everything」的根因。）
+        if (!EverythingInterop.IsRunning() && exe is not null)
+            await EnsureClientRunningAsync(exe, CancellationToken.None);
+
+        // 诊断埋点（V2）：把启动时的 Everything 可用性一次打全，用于定位"开了仍搜不到"——
+        // 区分①主程序未运行②SDK DLL 未加载③IPC 通但查询空。
         StarLog.Info(
-            $"Everything 就绪快照：主程序运行(FindWindow)={running} · SDK已加载={sdkReady} · " +
+            $"Everything 就绪快照：SDK已加载={sdkReady} · 运行(FindWindow)={EverythingInterop.IsRunning()} · " +
             $"探测到exe={(exe is null ? "未找到" : exe)} · SDK DLL={EverythingInterop.SdkDllPath}" +
             $"({(File.Exists(EverythingInterop.SdkDllPath) ? "存在" : "缺失")})");
-
-        if (!running)
-        {
-            await EnsureEverythingInstalledAsync();
-        }
     }
 
     private const string InstallerUrl = "https://www.voidtools.com/Everything-1.4.1.1028.x64-Setup.exe";
