@@ -55,7 +55,10 @@ public sealed class EverythingQueryQueue : IAsyncDisposable
         {
             // 动态选取最小必要请求标志集（不展示的字段不请求）
             var flags = ComputeMinimalFlags(filter);
-            return EverythingInterop.Query(query, flags, filter.MaxResults, localCt);
+            return EverythingInterop.Query(
+                query, flags, filter.MaxResults, localCt,
+                StarMark.Abstractions.EverythingSort.Map(filter.Sort) ?? 0,
+                (uint)Math.Max(0, filter.Offset));
         }
         finally
         {

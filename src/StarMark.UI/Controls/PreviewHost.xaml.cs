@@ -244,11 +244,11 @@ public sealed partial class PreviewHost : UserControl
         {
             using var zip = System.IO.Compression.ZipFile.OpenRead(path);
             var sb = new StringBuilder();
-            sb.AppendLine($"{Path.GetFileName(path)}  ·  {SizeText(new FileInfo(path).Length)}"
+            sb.AppendLine($"{Path.GetFileName(path)}  ·  {StarMark.Abstractions.FileSizeText.Human(new FileInfo(path).Length)}"
                 + $"  ·  {zip.Entries.Count} 项");
             const int cap = 80;
             foreach (var entry in zip.Entries.Take(cap))
-                sb.AppendLine($"  {entry.FullName}  {SizeText(entry.Length)}");
+                sb.AppendLine($"  {entry.FullName}  {StarMark.Abstractions.FileSizeText.Human(entry.Length)}");
             if (zip.Entries.Count > cap)
                 sb.AppendLine($"  … 其余 {zip.Entries.Count - cap} 项未列出");
             ShowText(sb.ToString());
@@ -258,15 +258,6 @@ public sealed partial class PreviewHost : UserControl
             ShowFallback(Path.GetFileName(path), "压缩包无法读取（可能已加密或损坏）", true, "用默认程序打开");
         }
     }
-
-    private static string SizeText(long bytes)
-        => bytes switch
-        {
-            < 1024 => $"{bytes} B",
-            < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
-            < 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024):0.#} MB",
-            _ => $"{bytes / (1024.0 * 1024 * 1024):0.##} GB",
-        };
 
     private async System.Threading.Tasks.Task ShowTextFileAsync(string path)
     {

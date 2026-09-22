@@ -81,6 +81,16 @@ public partial class ItemCardViewModel : ObservableObject
 
     public string RelativeTime => RelativeTimeHelper.Format(UpdatedAt);
 
+    /// <summary>
+    /// 本地文件的体积读数（Everything 已按 size 请求字段）。仅 File 类型且拿到体积时才非空——
+    /// 0 字节文件也应当显示「0 B」而不是留白，故判定用 has-value 而非大小。
+    /// </summary>
+    public string SizeText => Type == ItemType.File && _item.FileSize is long b
+        ? StarMark.Abstractions.FileSizeText.Human(b)
+        : string.Empty;
+
+    public bool HasSizeText => SizeText.Length > 0;
+
     public bool HasSubtitle => !string.IsNullOrEmpty(Subtitle);
     public bool HasDescription => !string.IsNullOrEmpty(Description);
     public bool HasNotes => !string.IsNullOrEmpty(Notes);
