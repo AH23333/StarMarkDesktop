@@ -35,7 +35,11 @@ public sealed class GitHubClient : IDisposable
     /// </summary>
     private readonly int _perPage;
 
-    /// <summary>条件请求缓存的 ETag（P1-4）。非 null 时首页请求带 If-None-Match，命中 304 直接短路整轮拉取。</summary>
+    /// <summary>
+    /// 条件请求缓存的 ETag（P1-4）。非 null 时首页请求带 If-None-Match，命中 304 直接短路整轮拉取。
+    /// <para><b>不变式：它只代表"完整拉完的一轮"</b>——页 1 的 ETag 描述的是全量列表，中途取消/失败的
+    /// 一轮若也把它前移，下一轮就会被 304 短路而永远补不回缺失部分（见 <see cref="GetAllStarredAsync"/>）。</para>
+    /// </summary>
     public string? CachedETag { get; set; }
 
     public GitHubClient(GitHubOptions options, HttpClient? http = null)
@@ -101,27 +105,43 @@ public sealed class GitHubClient : IDisposable
     }
 
     /// <summary>
-    /// 拉取全量 starred 列表（自动分页，遵循 GitHub API 分页）。
-    /// 当返回数 &lt; pageSize 时停止翻页。
+    /// 拉取全量 starred 列表（自动分页，遵循 GitHub API 分页）。当返回数 &lt; pageSize 时停止翻页。
+    /// <para>
+    /// <b>取消＝抛，不是"带回半截"</b>：旧写法中途取消会 <c>break</c> 返回已拉到的那几页，而在调用方
+    /// （<c>GitHubSource.FetchAsync</c>）看来这与完整一轮毫无差别 ⇒ 照样把页 1 带回的<b>全量列表</b> ETag
+    /// 与 last_synced_at 落进 sync_state。下一次同步首页带 <c>If-None-Match</c> 直接命中 304 短路，
+    /// 被掐掉的那几页<b>永远补不回来</b>（P-55；与 P-19 的崩溃窗口同一失序面，但取消是日常操作，窗口宽得多）。
+    /// </para>
+    /// <para>同理，异常/取消退回去时把 <see cref="CachedETag"/> 复位：单例客户端内存里留着"跑完才成立"的
+    /// ETag，下一轮即使换了机器也会凭空 304。</para>
     /// </summary>
     public async Task<IReadOnlyList<GitHubStarApiModel>> GetAllStarredAsync(CancellationToken ct)
     {
         if (!IsConfigured) return Array.Empty<GitHubStarApiModel>();
 
+        var etagBefore = CachedETag;   // 本轮开始前的检查点：未完成的一轮不得推进它
         var all = new List<GitHubStarApiModel>();
         var page = 1;
         // 安全上限按"条目数"而非"固定页数"封顶。过去 maxPages 固定 50，使真实上限 = 50 × _perPage，
         // AZ-3 让 _perPage 可随 PageSize 调小后，PageSize=10 会把可拉取量从宣称的 5000 静默砍到 500。
         const int maxItems = 5000;  // 安全上限：5000 仓库已远超常见用户的 starred 数
-        while (true)
+        try
         {
-            if (ct.IsCancellationRequested) break;
-            var pageList = await GetStarredPageAsync(page, ct);
-            if (pageList.Count == 0) break;
-            all.AddRange(pageList);
-            if (pageList.Count < _perPage) break;   // 末页：返回数不足一页
-            if (all.Count >= maxItems) break;        // 条目预算封顶
-            page++;
+            while (true)
+            {
+                ct.ThrowIfCancellationRequested();
+                var pageList = await GetStarredPageAsync(page, ct);
+                if (pageList.Count == 0) break;
+                all.AddRange(pageList);
+                if (pageList.Count < _perPage) break;   // 末页：返回数不足一页
+                if (all.Count >= maxItems) break;        // 条目预算封顶
+                page++;
+            }
+        }
+        catch
+        {
+            CachedETag = etagBefore;
+            throw;
         }
         if (all.Count > maxItems) all.RemoveRange(maxItems, all.Count - maxItems);
         return all;

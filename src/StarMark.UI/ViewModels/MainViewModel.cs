@@ -9,18 +9,15 @@ using StarMark.Core.Sync;
 namespace StarMark.UI.ViewModels;
 
 /// <summary>
-/// 主窗口 ViewModel。管理导航状态、全局搜索查询、同步状态。
+/// 主窗口 ViewModel。管理导航状态、全局搜索查询、跨页共享的标签/语言筛选与计数。
+/// （同步的进行状态与结果由 MainWindow 顶栏直接呈现，不在这里另存一份。）
 /// </summary>
 public partial class MainViewModel : ObservableObject
 {
     private readonly SearchService _searchService;
-    private readonly SyncCoordinator _syncCoordinator;
     private readonly IItemRepository _repository;
 
     [ObservableProperty] private string _currentPageTag = "tree";
-    [ObservableProperty] private string _statusText = "索引就绪";
-    [ObservableProperty] private string _statusDotBrush = "StatusOkBrush";
-    [ObservableProperty] private bool _isSyncing;
     [ObservableProperty] private int _starsCount;
     [ObservableProperty] private int _bookmarksCount;
     [ObservableProperty] private int _filesCount;
@@ -88,36 +85,15 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnCurrentLanguageChanged(string value) => LanguageFilterChanged?.Invoke();
 
-    public MainViewModel(SearchService searchService, SyncCoordinator syncCoordinator, IItemRepository repository)
+    public MainViewModel(SearchService searchService, IItemRepository repository)
     {
         _searchService = searchService;
-        _syncCoordinator = syncCoordinator;
         _repository = repository;
     }
 
-    [RelayCommand]
-    private async Task SyncAsync()
-    {
-        IsSyncing = true;
-        StatusDotBrush = "StatusBusyBrush";
-        StatusText = "同步中...";
-        try
-        {
-            var summary = await _syncCoordinator.SyncAllAsync(CancellationToken.None);
-            StatusText = summary.FormatText();
-            StatusDotBrush = "StatusOkBrush";
-            await LoadCountsAsync();
-        }
-        catch (Exception ex)
-        {
-            StatusText = $"同步失败: {ex.Message}";
-            StatusDotBrush = "StatusBusyBrush";
-        }
-        finally
-        {
-            IsSyncing = false;
-        }
-    }
+    // 同步入口只有 MainWindow.DoSyncAsync 一处（顶栏「同步」+「取消同步」）。
+    // 这里原先另有一个无人绑定的 SyncAsync/IsSyncing/StatusText/StatusDotBrush：一条不带取消、
+    // 也不写 InfoBar 的第二同步路径，一旦被人绑上就会与真入口分叉（P-55 收口时删除）。
 
     public async Task LoadCountsAsync()
     {

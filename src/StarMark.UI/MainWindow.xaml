@@ -45,6 +45,10 @@
                             <TextBlock Text="同步"/>
                         </StackPanel>
                     </Button>
+                    <!-- 同步中途原先唯一的出路是"等它跑完或杀进程"（入口硬传 CancellationToken.None，
+                         大账号/慢网下要几十秒到几分钟）。只在同步中出现的取消键（P-55）。 -->
+                    <Button x:Name="SyncCancelButton" Style="{StaticResource SecondaryButton}" Content="取消同步"
+                            Click="SyncCancelButton_Click" Visibility="Collapsed"/>
                     <Button x:Name="ThemeButton" Style="{StaticResource SecondaryButton}" Click="ThemeButton_Click">
                         <FontIcon x:Name="ThemeIcon" Glyph="&#xE895;" FontSize="14"/>
                     </Button>

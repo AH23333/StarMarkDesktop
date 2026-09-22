@@ -772,20 +772,36 @@ public sealed partial class MainWindow : Window
 
     private void SyncButton_Click(object sender, RoutedEventArgs e) => _ = DoSyncAsync();
 
+    /// <summary>在途同步的取消源。null＝没有同步在跑。</summary>
+    private CancellationTokenSource? _syncCts;
+
+    private void SyncCancelButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_syncCts is null) return;
+        _syncCts.Cancel();
+        // 取消是"请求"：正在 await 的那一页要等 HTTP 回包或抛异常才退出。按钮就地禁用，
+        // 免得用户连点三下以为没反应、转去杀进程。
+        SyncCancelButton.IsEnabled = false;
+        StatusText.Text = "正在取消同步…";
+    }
+
     private async Task DoSyncAsync()
     {
         SyncButton.IsEnabled = false;
         SyncProgress.IsActive = true;
         SyncProgress.Visibility = Visibility.Visible;
+        SyncCancelButton.IsEnabled = true;
+        SyncCancelButton.Visibility = Visibility.Visible;
         SetStatusDot(StatusKind.Caution);
         StatusText.Text = "同步中...";
         SyncInfoBar.IsOpen = false;
 
+        var cts = _syncCts = new CancellationTokenSource();
         try
         {
             var syncCoordinator = App.Services.GetRequiredService<StarMark.Core.Sync.SyncCoordinator>();
             {
-                var summary = await syncCoordinator.SyncAllAsync(CancellationToken.None);
+                var summary = await syncCoordinator.SyncAllAsync(cts.Token);
                 var text = summary.FormatText();
                 StatusText.Text = text;
                 ShowInfoBar(InfoBarSeverity.Success, "索引同步完成", string.Empty, 6500);
@@ -793,6 +809,16 @@ public sealed partial class MainWindow : Window
             SetStatusDot(StatusKind.Success);
             await ViewModel.LoadCountsAsync();
             await LoadStarLanguagesAsync();   // 同步后新 star 的语言要出现在下拉里
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            // 用户主动取消不是故障：与「同步失败」分开报。已拉完的源逐源提交过（幂等 upsert），
+            // 所以这句话必须说清"部分结果留下了、缺的下次补齐"，否则用户以为白点了一次同步。
+            const string cancelled = "已取消同步：已拉完的源已入库，未拉完的下次同步继续补齐。";
+            StatusText.Text = cancelled;
+            SetStatusDot(StatusKind.Success);
+            ShowInfoBar(InfoBarSeverity.Informational, "已取消同步", cancelled, 6500);
+            await ViewModel.LoadCountsAsync();
         }
         catch (Exception ex)
         {
@@ -805,6 +831,10 @@ public sealed partial class MainWindow : Window
             SyncButton.IsEnabled = true;
             SyncProgress.IsActive = false;
             SyncProgress.Visibility = Visibility.Collapsed;
+            SyncCancelButton.Visibility = Visibility.Collapsed;
+            var own = _syncCts;
+            _syncCts = null;
+            own?.Dispose();   // 在途 await 已退出（正常返回或抛错）才走到这里
         }
     }
 

@@ -21,10 +21,16 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
     private bool _disposed;
 
     public GitHubSource(GitHubOptions options, IItemRepository repository)
+        : this(options, repository, new GitHubClient(options))
+    {
+    }
+
+    /// <summary>测试缝：注入带假 HTTP 的客户端，用来钉死"取消/失败的一轮绝不推进 sync_state 检查点"。</summary>
+    internal GitHubSource(GitHubOptions options, IItemRepository repository, GitHubClient client)
     {
         _options = options;
         _repository = repository;
-        _client = new GitHubClient(options);
+        _client = client;
     }
 
     public string SourceId => ItemSources.GitHub;
@@ -39,6 +45,11 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
     /// 同步策略：
     ///   - 拉取前载入上次 ETag，用于条件请求（命中 304 省掉整轮拉取）
     ///   - 拉取后回写最新 ETag 与 last_synced_at 检查点
+    /// <para>
+    /// <b>检查点一律在 <c>GetAllStarredAsync</c> 正常返回之后才写</b>：中途取消/失败的那一轮会抛出，
+    /// 于是 etag 与 last_synced_at 都停在上一轮，下一次同步仍会真去拉全量。反过来（先写检查点再拉完、
+    /// 或把取消当成"少拉几页也算成功"）会让下一次首页条件请求直接命中 304 ⇒ 缺失部分永不补齐（P-19/P-55）。
+    /// </para>
     /// </summary>
     public async Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
     {
