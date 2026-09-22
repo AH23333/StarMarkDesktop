@@ -306,10 +306,12 @@ public sealed class EverythingSource : IItemSource
 
         try
         {
+            // -startup：Everything 官方参数，启动后不显示主窗口（仅托盘/后台），且照常创建 IPC 通知窗口。
+            // （真机自证：`Everything.exe -startup` 起标准版后 es 能连上并出结果；用 -hidden 则 FindWindow 探不到窗口。）
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = exe,
-                Arguments = "-hidden",   // 官方参数：后台运行不弹主窗口，只提供 IPC 落点
+                Arguments = "-startup",
                 UseShellExecute = true,
                 WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
             });
@@ -320,11 +322,14 @@ public sealed class EverythingSource : IItemSource
             return false;
         }
 
-        for (var i = 0; i < 20 && !EverythingInterop.IsRunning(); i++)
+        // 首次运行要建索引/落 INI，给足 ~15s；一旦 FindWindow 探到 IPC 窗口即返回。
+        for (var i = 0; i < 60 && !EverythingInterop.IsRunning(); i++)
         {
             try { await Task.Delay(250, ct); } catch (OperationCanceledException) { break; }
         }
-        return EverythingInterop.IsRunning();
+        var up = EverythingInterop.IsRunning();
+        if (!up) StarLog.Warn("自带 Everything 已拉起但 FindWindow 仍未探到 IPC 窗口（可能仍在初始化/被安全软件拦/权限不一致）。");
+        return up;
     }
 
     /// <summary>自带 standard Everything 是否已在运行——按主模块路径精确匹配自有路径，避免把用户 repack 误当作自带。</summary>
