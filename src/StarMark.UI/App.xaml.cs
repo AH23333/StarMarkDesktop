@@ -309,21 +309,54 @@ public partial class App : Application
         }
     }
 
-    /// <summary>唤起已有实例的主窗口（按窗口标题查找，组件窗口标题不同不会误匹配）。</summary>
+    /// <summary>
+    /// 唤起已有实例的主窗口（按窗口标题查找，组件窗口标题不同不会误匹配）。
+    /// <para>
+    /// 必须校验属主进程：任意程序都能把自己的窗口标题设成 "StarMark"（浏览器标签页标题、同名小工具…），
+    /// 不加校验时我们会对**别人的**窗口 ShowWindow/SetForegroundWindow——既把陌生人弹到用户面前、
+    /// 又让自己这个实例退出，用户表现为"双击图标开了另一个程序，StarMark 没起来"，
+    /// 且这是一个可被本地任意进程利用的前置抢占面。校验取不到结论时一律不动别人的窗口。
+    /// </para>
+    /// </summary>
     private static void TryActivateExistingInstance()
     {
         try
         {
             var hwnd = WindowInterop.FindWindowW(null, "StarMark");
-            if (hwnd != IntPtr.Zero)
-            {
-                // 窗口可能处于隐藏（最小化到托盘）或最小化状态：先显示再还原
-                WindowInterop.ShowWindow(hwnd, WindowInterop.SW_SHOW);
-                WindowInterop.ShowWindow(hwnd, WindowInterop.SW_RESTORE);
-                WindowInterop.SetForegroundWindow(hwnd);
-            }
+            if (hwnd == IntPtr.Zero) return;
+
+            if (!IsOurMainWindow(hwnd)) return;
+
+            // 窗口可能处于隐藏（最小化到托盘）或最小化状态：先显示再还原
+            WindowInterop.ShowWindow(hwnd, WindowInterop.SW_SHOW);
+            WindowInterop.ShowWindow(hwnd, WindowInterop.SW_RESTORE);
+            WindowInterop.SetForegroundWindow(hwnd);
         }
-        catch { /* 找不到就算了，让第二实例退出即可 */ }
+        catch (Exception ex) { StarLog.Warn($"转交已有实例时出错（让本实例照常退出）：{ex.Message}"); }
+    }
+
+    /// <summary>该 hwnd 是否属于"另一个 StarMark 进程"：进程名相同且 pid 不是自己。</summary>
+    private static bool IsOurMainWindow(IntPtr hwnd)
+    {
+        WindowInterop.GetWindowThreadProcessId(hwnd, out var pid);
+        if (pid == 0 || pid == (uint)Environment.ProcessId)
+        {
+            StarLog.Warn($"按标题找到的「StarMark」窗口属主 pid={pid} 不是另一实例，放弃转交");
+            return false;
+        }
+        try
+        {
+            var name = System.Diagnostics.Process.GetProcessById(unchecked((int)pid)).ProcessName;
+            if (string.Equals(name, "StarMark", StringComparison.OrdinalIgnoreCase)) return true;
+            StarLog.Warn($"按标题找到的「StarMark」窗口属主是进程「{name}」(pid={pid})，非本应用，放弃转交");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            // 进程已退出 / 无权限读名字：宁可不动别人的窗口，也不要把陌生程序前置
+            StarLog.Warn($"无法确认「StarMark」窗口属主 pid={pid}（{ex.Message}），放弃转交");
+            return false;
+        }
     }
 
     /// <summary>托盘/组件唤起主窗口的统一入口。</summary>

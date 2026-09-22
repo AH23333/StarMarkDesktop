@@ -130,6 +130,10 @@ internal static class WindowInterop
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr FindWindowW(string? lpClassName, string? lpWindowName);
 
+    /// <summary>取窗口属主的进程 id（返回值为线程 id）。用于"按标题找窗口"时确认它真是我们的窗口。</summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr FindWindowExW(
         IntPtr hWndParent, IntPtr hWndChildAfter, string? lpszClass, string? lpszWindow);
