@@ -72,11 +72,19 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // 会话边界标记：日志里此前没有任何"开始/结束"行，用户报"闪退"时无从判断一次运行
+        // 是正常关闭还是被打断。ProcessExit 在正常返回与 Environment.Exit 两条路径都会触发，
+        // 因此"有会话开始、无进程退出"就等价于异常终止，可直接把崩溃时刻与最后一次操作对齐。
+        StarLog.Info($"===== StarMark 会话开始 pid={Environment.ProcessId} elev={Privilege.IsElevated()} =====");
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+            StarLog.Info($"===== StarMark 进程退出 pid={Environment.ProcessId} =====");
+
         // 单实例：再次启动时唤起已有主窗口并退出新进程
         _singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName,
             createdNew: out var createdNew);
         if (!createdNew)
         {
+            StarLog.Info("二次启动：转交已有实例后退出本进程");
             TryActivateExistingInstance();
             Environment.Exit(0);
             return;
@@ -173,7 +181,15 @@ public partial class App : Application
                 if (string.Equals(a, "--elevate-retry", StringComparison.OrdinalIgnoreCase)) { alreadyRetried = true; break; }
             StarLog.Info($"本地磁盘搜索：提权自检 IsElevated={Privilege.IsElevated()} · elevateRetry={alreadyRetried} · pid={Environment.ProcessId}");
             if (!Privilege.IsElevated() && !alreadyRetried && Privilege.TryRelaunchSelfElevated("--elevate-retry"))
+            {
+                // 交接前必须让出单实例互斥体：提权新实例要在数百毫秒内起跑并抢这把锁，
+                // 而旧进程要到 Exit 之后 OS 才释放句柄。抢不到锁的新实例会走
+                // 「激活已有窗口 + 自己退出」分支，去激活一个马上就要消失的旧窗口 ⇒ 两个进程都没了，
+                // 用户看到的就是"双击没反应 / 闪退"。先 Dispose 再 Exit，锁的交接就没有竞态。
+                _singleInstanceMutex?.Dispose();
+                _singleInstanceMutex = null;
                 Environment.Exit(0);
+            }
         }
 
         // Everything 就绪流程（下载 SDK / 主程序未运行时自动安装）——仅在用户开启「本地磁盘搜索」后执行。
