@@ -88,7 +88,7 @@ public static class BackupPathPolicy
     private static bool HasDirectory(string text)
     {
         if (text.StartsWith(@"\\", StringComparison.Ordinal)) return true;
-        try { return Path.GetDirectoryName(text).Length > 0; }
+        try { return Path.GetDirectoryName(text)?.Length > 0; }
         catch (ArgumentException) { return false; }
     }
 
