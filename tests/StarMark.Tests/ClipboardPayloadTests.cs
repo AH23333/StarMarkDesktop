@@ -148,7 +148,7 @@ public sealed class ClipboardDedupeTests
     public void OwnWrite_IsSwallowedExactlyOnce_ThenSameTextFromElsewhereRecords()
     {
         var d = new ClipboardDedupe(windowMs: 700);
-        d.NoteOwnWrite("来自历史页的文本");
+        d.NoteOwnWrite("来自历史页的文本", T0);
 
         Assert.True(d.ShouldSkip("来自历史页的文本", T0));            // 回声：挡
         Assert.False(d.ShouldSkip("来自历史页的文本", T0 + 5_000));   // 登记已消费；5 s 后用户真的又抄了一次 ⇒ 记
@@ -158,7 +158,7 @@ public sealed class ClipboardDedupeTests
     public void OwnWriteRegistration_IsPerContent_NotGlobal()
     {
         var d = new ClipboardDedupe(windowMs: 700);
-        d.NoteOwnWrite("甲");
+        d.NoteOwnWrite("甲", T0);
 
         Assert.False(d.ShouldSkip("乙", T0));    // 登记的是甲，不能把乙也吞掉
         Assert.True(d.ShouldSkip("甲", T0 + 10));
@@ -169,11 +169,50 @@ public sealed class ClipboardDedupeTests
     {
         var d = new ClipboardDedupe(windowMs: 700);
         for (var i = 0; i < ClipboardDedupe.OwnWriteCapacity + 5; i++)
-            d.NoteOwnWrite($"条目 {i}");
+            d.NoteOwnWrite($"条目 {i}", T0);
 
         // 最早的 5 条已被挤出登记 ⇒ 不再当回声吞掉
         Assert.False(d.ShouldSkip("条目 0", T0));
         Assert.True(d.ShouldSkip($"条目 {ClipboardDedupe.OwnWriteCapacity + 4}", T0));
+    }
+
+    // ==================== 回声登记必须会过期 ====================
+
+    [Fact]
+    public void OwnWriteToken_OutlivesNoLongerThanTtl()
+    {
+        // 现场复现的失效：一次"登记了但没写成功"（应用被挂起 / 剪贴板被别家占住 / 抛异常）
+        // 会留下无人消费的令牌。若令牌只按容量淘汰，用户几小时后<b>真的</b>复制同一段文字
+        // 会被当成回声吞掉一次＝那条复制静默丢失。
+        var d = new ClipboardDedupe(windowMs: 700, ownWriteTtlMs: 5_000);
+        d.NoteOwnWrite("同一段文本", T0);
+
+        Assert.True(d.ShouldSkip("同一段文本", T0 + 5_000));      // 边界（== TTL）仍算有效期内
+        Assert.False(d.ShouldSkip("同一段文本", T0 + 5_001));     // 过期 ⇒ 放行，不再吞真复制
+    }
+
+    [Fact]
+    public void OwnWriteToken_WithFutureTimestamp_StillExpires()
+    {
+        // 用户把时钟往回调（或唤醒后系统对时）⇒ 登记的 AtMs 落在"未来"。
+        // 带符号差值恒为负 ⟹ 永不过期，这条令牌就变成长期屏蔽；取绝对值才不会。
+        var d = new ClipboardDedupe(windowMs: 700, ownWriteTtlMs: 5_000);
+        d.NoteOwnWrite("同一段文本", T0);
+
+        Assert.False(d.ShouldSkip("同一段文本", T0 - 5_001));
+    }
+
+    [Fact]
+    public void BurstWindow_IsSymmetric_AroundClockDrift()
+    {
+        var d = new ClipboardDedupe(windowMs: 700);
+        Assert.False(d.ShouldSkip("同一段", T0));
+
+        // 倒退但仍落在窗口内：与正向一样按"同一次复制的连发"处理。
+        Assert.True(d.ShouldSkip("同一段", T0 - 100));
+
+        // 时钟倒退一小时（用户调钟 / 唤醒后系统对时）：这不是"刚复制过"，是真的一次新复制，必须记。
+        Assert.False(d.ShouldSkip("同一段", T0 - 3_600_000));
     }
 
     [Theory]

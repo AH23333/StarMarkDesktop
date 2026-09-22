@@ -22,32 +22,44 @@ public sealed class ClipboardDedupe
     /// <summary>突发去抖窗口：同一内容在该窗口内的重复通知视为一次复制。</summary>
     public const int DefaultWindowMs = 700;
 
+    /// <summary>自己写入的登记有效期。超过它就不再认——见 <see cref="NoteOwnWrite"/>。</summary>
+    public const int OwnWriteTtlMs = 5_000;
+
     /// <summary>自己写入的登记容量上限（有界，防止一路增长）。</summary>
     public const int OwnWriteCapacity = 16;
 
     private readonly object _gate = new();
     private readonly int _windowMs;
-    private readonly List<string> _ownWrites = new();
+    private readonly int _ownWriteTtlMs;
+    private readonly List<(string Id, long AtMs)> _ownWrites = new();
 
     private string? _lastId;
     private long _lastMs;
 
-    public ClipboardDedupe(int windowMs = DefaultWindowMs)
-        => _windowMs = Math.Max(0, windowMs);
+    public ClipboardDedupe(int windowMs = DefaultWindowMs, int ownWriteTtlMs = OwnWriteTtlMs)
+    {
+        _windowMs = Math.Max(0, windowMs);
+        _ownWriteTtlMs = Math.Max(0, ownWriteTtlMs);
+    }
 
     /// <summary>
     /// 登记"我们即将把这段文本写进系统剪贴板"（点复制/重新复制前调用）。
     /// 之后的同内容通知会被当作自己的回声挡掉一次。
+    /// <para>
+    /// <b>登记必须会过期</b>：调用顺序是"先登记再写剪贴板"（反了就可能已被采集读到），
+    /// 于是"登记成功但写入失败"（应用被挂起、剪贴板被别家占住、抛异常）与"登记时正好在暂停"
+    /// 都会留下一个没人消费的令牌。若令牌只按容量淘汰，用户几小时后<b>真的</b>从别处复制同一段
+    /// 文字时会被当成回声挡掉一次＝这条复制静默丢失。5 s 足够覆盖"写入→系统发通知"的真实间隔。
+    /// </para>
     /// </summary>
-    public void NoteOwnWrite(string? rawText)
+    public void NoteOwnWrite(string? rawText, long nowMs)
     {
         var id = IdOf(rawText);
         if (id is null) return;
         lock (_gate)
         {
-            _ownWrites.Add(id);
-            // 有界：只认最近若干次自己的写入。用户连抄 20 次同一内容后，
-            // 旧登记自然淘汰，不会攒成无界增长，也不会永久屏蔽该文本。
+            _ownWrites.Add((id, nowMs));
+            // 双上限：时间过期由 ShouldSkip 负责，这里只保证"哪怕时钟疯跳也不会无界增长"。
             while (_ownWrites.Count > OwnWriteCapacity) _ownWrites.RemoveAt(0);
         }
     }
@@ -63,16 +75,21 @@ public sealed class ClipboardDedupe
 
         lock (_gate)
         {
+            // 先剥过期登记。用 <b>绝对值</b> 而不是 <c>nowMs - AtMs</c>：用户调时钟（或笔记本唤醒后
+            // 系统对时）会让带符号差值变负，那样"未来登记"永不过期——与自动备份那条 ShouldRun
+            // 判定同一形状的错（时钟漂移不能让护栏变成永久停摆）。
+            _ownWrites.RemoveAll(t => Math.Abs(nowMs - t.AtMs) > _ownWriteTtlMs);
+
             // ① 自己的回声：按值消费**一个**登记（不是只挡队头——多次交替复制时队头可能已不是本条）
-            var hit = _ownWrites.IndexOf(id);
+            var hit = _ownWrites.FindIndex(t => t.Id == id);
             if (hit >= 0)
             {
                 _ownWrites.RemoveAt(hit);
                 return true;
             }
 
-            // ② 突发重复：同内容且未出窗口
-            if (_lastId == id && nowMs - _lastMs <= _windowMs) return true;
+            // ② 突发重复：同内容且未出窗口（同样取绝对值，时钟倒退时不该把真复制误判成"刚复制过"）
+            if (_lastId == id && Math.Abs(nowMs - _lastMs) <= _windowMs) return true;
 
             _lastId = id;
             _lastMs = nowMs;

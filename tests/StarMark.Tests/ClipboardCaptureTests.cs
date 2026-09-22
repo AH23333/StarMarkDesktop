@@ -94,12 +94,15 @@ public sealed class ClipboardCaptureTests : IDisposable
     public async Task StarMarkOwnCopy_IsNotReRecorded_ButLaterRealCopyStillIs()
     {
         var d = new ClipboardDedupe();
-        Assert.NotNull(await Cap(d, "用户从历史页复制的文本", now: Ms()));
+        var t0 = Ms();
+        Assert.NotNull(await Cap(d, "用户从历史页复制的文本", now: t0));
 
-        d.NoteOwnWrite("用户从历史页复制的文本");
-        Assert.Null(await Cap(d, "用户从历史页复制的文本", now: Ms(5_000)));   // 回声：不记、不加次数
+        d.NoteOwnWrite("用户从历史页复制的文本", t0);
+        // 取 t0+1 s（已超出 700 ms 连发窗）：吞掉它的只可能是回声登记，而不是去抖——
+        // 两个机制都在这个类里，测试必须说清是哪一道在起作用。
+        Assert.Null(await Cap(d, "用户从历史页复制的文本", now: t0 + 1_000));
 
-        var again = await Cap(d, "用户从历史页复制的文本", now: Ms(60_000));   // 之后用户真的又抄了一次
+        var again = await Cap(d, "用户从历史页复制的文本", now: t0 + 60_000);   // 之后用户真的又抄了一次
         Assert.NotNull(again);
         Assert.Equal(2, ClipboardEntry.CopyCount(again!));
     }

@@ -256,8 +256,13 @@ public sealed class ClipboardWatcher : IDisposable
         }
     }
 
-    /// <summary>登记"这段内容是 StarMark 自己写进剪贴板的"（点条目复制回剪贴板时调用），采集时按回声挡掉。</summary>
-    public void NoteOwnWrite(string? text) => _dedupe.NoteOwnWrite(text);
+    /// <summary>
+    /// 登记"这段内容是 StarMark 自己写进剪贴板的"（点条目复制回剪贴板时调用），采集时按回声挡掉。
+    /// 时钟在这里现取：调用方（UI）不该关心毫秒口径，但令牌必须有寿命，否则一次失败的写入
+    /// 会把该文本永久屏蔽掉（见 <see cref="ClipboardDedupe.NoteOwnWrite"/>）。
+    /// </summary>
+    public void NoteOwnWrite(string? text)
+        => _dedupe.NoteOwnWrite(text, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
 
     public void Dispose()
     {
