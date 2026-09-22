@@ -85,8 +85,8 @@ public sealed class WidgetRegistryTests
             new(WidgetKind.QuickNote, "N", "G", 100, 100, CanCreateWindow: false),                       // 关①
             new(WidgetKind.Clock, "C", "G", 100, 100, Stage: WidgetContentStage.Placeholder),            // 关②
             new(WidgetKind.Search, "S", "G", 100, 100, Availability: WidgetContentAvailability.Planned), // 关③
-            // 特性组件：IsFeatureWidget 不在此谓词内 → 默认可建窗（默认隐藏≠不可建），钉「谓词恰为三条、不多不少」
-            new(WidgetKind.TagGrid, "Tag", "G", 100, 100, IsFeatureWidget: true),
+            // 无关旗标不在此谓词内 → 仍可建窗（不可缩放≠不可建），钉「谓词恰为三条、不多不少」
+            new(WidgetKind.TagGrid, "Tag", "G", 100, 100, IsResizable: false),
         });
 
         var windowed = registry.GetWindowDescriptors().Select(d => d.Kind).ToArray();
