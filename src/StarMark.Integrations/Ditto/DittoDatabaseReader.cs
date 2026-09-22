@@ -1,6 +1,6 @@
 #nullable enable
-using System.Text;
 using Microsoft.Data.Sqlite;
+using StarMark.Abstractions.Clipboard;
 
 namespace StarMark.Integrations.Ditto;
 
@@ -158,7 +158,7 @@ public sealed class DittoDatabaseReader : IDisposable
                     {
                         case "CF_UNICODETEXT":
                         case "CF_TEXT":
-                            var text = DecodeText(fmt.ToUpperInvariant() == "CF_TEXT", data);
+                            var text = ClipboardPayload.DecodeText(data, ansi: fmt.ToUpperInvariant() == "CF_TEXT");
                             if (!string.IsNullOrWhiteSpace(text))
                             {
                                 clip.Text = text;
@@ -174,93 +174,12 @@ public sealed class DittoDatabaseReader : IDisposable
 
             if (hdrop != null)
             {
-                clip.Files = ParseDropFiles(hdrop);
+                clip.Files = ClipboardPayload.ParseDropFiles(hdrop);
                 if (clip.Files.Count > 0)
-                    clip.Format = "CF_HDROP";
+                    clip.Format = ClipboardPayload.FormatHDrop;
             }
         }
         catch { }
-    }
-
-    private static string DecodeText(bool ansi, byte[] data)
-    {
-        try
-        {
-            if (ansi)
-            {
-                // ANSI/UTF-8：NUL 终止符是单字节，按字节剥离安全。
-                var end = data.Length;
-                while (end > 0 && data[end - 1] == 0) end--;
-                return Encoding.UTF8.GetString(data, 0, end);
-            }
-
-            // UTF-16LE：NUL 终止符是「码元」= 2 字节 0x0000，必须按整个码元剥离。
-            // 旧实现逐「字节」剥尾零再 `end & ~1` 会把以 ASCII 结尾的文本（如 'A'=0x41,0x00）的
-            // 合法高位字节 0x00 误当终止符吃掉，再 &~1 丢弃配对的 0x41 → 末字符被静默截断。
-            // 先对齐到偶数字节，再仅剥离完整的 0x0000 对，杜绝奇数剥离与错切。
-            var len = data.Length & ~1;
-            while (len >= 2 && data[len - 2] == 0 && data[len - 1] == 0) len -= 2;
-            return Encoding.Unicode.GetString(data, 0, len);
-        }
-        catch
-        {
-            return string.Empty;
-        }
-    }
-
-    /// <summary>解析 CF_HDROP 的 DROPFILES 结构：头部 20 字节 + 双 NUL 结束的文件路径列表。</summary>
-    private static List<string> ParseDropFiles(byte[] data)
-    {
-        var files = new List<string>();
-        if (data.Length < 20) return files;
-
-        uint pFiles = BitConverter.ToUInt32(data, 0);
-        bool wide = BitConverter.ToUInt32(data, 16) != 0;
-        var offset = Math.Min((int)pFiles, data.Length);
-
-        if (wide)
-        {
-            var sb = new StringBuilder();
-            var i = offset;
-            while (i + 1 < data.Length)
-            {
-                var ch = (char)BitConverter.ToUInt16(data, i);
-                i += 2;
-                if (ch == 0)
-                {
-                    if (sb.Length > 0)
-                    {
-                        files.Add(sb.ToString());
-                        sb.Clear();
-                    }
-                    // 连续两个 NUL 表示列表结束
-                    if (i + 1 < data.Length && BitConverter.ToUInt16(data, i) == 0) break;
-                    continue;
-                }
-                sb.Append(ch);
-            }
-        }
-        else
-        {
-            var sb = new StringBuilder();
-            var i = offset;
-            while (i < data.Length)
-            {
-                var ch = (char)data[i++];
-                if (ch == 0)
-                {
-                    if (sb.Length > 0)
-                    {
-                        files.Add(sb.ToString());
-                        sb.Clear();
-                    }
-                    if (i < data.Length && data[i] == 0) break;
-                    continue;
-                }
-                sb.Append(ch);
-            }
-        }
-        return files;
     }
 
     private static string EscapeLike(string s) => s.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
