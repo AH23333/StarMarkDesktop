@@ -34,6 +34,8 @@ public static class ItemSources
     public const string Edge = "edge";
     public const string GitHub = "github";
     public const string Ditto = "ditto";
+    /// <summary>内置剪贴板历史（本机采集，不来自任何外部源，永不参与来源同步）。</summary>
+    public const string Clipboard = "clipboard";
     /// <summary>本地内容来源（待办/随记）。不入任何 IItemSource，永不参与同步。</summary>
     public const string Local = "local";
 }
