@@ -50,15 +50,21 @@ public sealed class EverythingQueryQueue : IAsyncDisposable
         _cts = CancellationTokenSource.CreateLinkedTokenSource(externalCt);
         var localCt = _cts.Token;
 
-        await _gate.WaitAsync(localCt);
+        // 必须离开调用线程：Everything_QueryW(true) 是阻塞式 IPC（内部 SendMessageTimeout 等回包）。
+        // 从 UI 线程直接调它，只要引擎在重建索引 / 回包慢 / 权限等级不一致导致回包被 UIPI 丢弃，
+        // 整个界面就按超时时长冻住（实测表现为"搜索时高频卡死"）；且这里的 await 若无
+        // ConfigureAwait(false) 会回到 UI 线程续跑，所以两件事都要断开。
+        await _gate.WaitAsync(localCt).ConfigureAwait(false);
         try
         {
             // 动态选取最小必要请求标志集（不展示的字段不请求）
             var flags = ComputeMinimalFlags(filter);
-            return EverythingInterop.Query(
-                query, flags, filter.MaxResults, localCt,
-                StarMark.Abstractions.EverythingSort.Map(filter.Sort) ?? 0,
-                (uint)Math.Max(0, filter.Offset));
+            var max = filter.MaxResults;
+            var offset = (uint)Math.Max(0, filter.Offset);
+            var sort = StarMark.Abstractions.EverythingSort.Map(filter.Sort) ?? 0;
+            return await Task.Run(
+                () => EverythingInterop.Query(query, flags, max, localCt, sort, offset),
+                localCt).ConfigureAwait(false);
         }
         finally
         {
@@ -213,17 +219,22 @@ public sealed class EverythingSource : IItemSource
     }
 
     /// <summary>启动就绪流程（C′）：SDK DLL → 确保 StarMark 自带 standard Everything 在运行并接管默认实例。</summary>
-    public async Task EnsureReadyAsync()
+    /// <summary>
+    /// 启动/开启时的准备流程。整段都是**同步阻塞**（枚举进程与读主模块、Kill+WaitForExit、
+    /// 下载与解压 SDK/便携版、FindWindow 轮询），而调用方是 App 启动路径与设置页开关（UI 线程）——
+    /// 不 offload 就是"一开本地磁盘搜索，界面先冻死数秒到十几秒"（用户报的"卡死"主因之一）。
+    /// </summary>
+    public Task EnsureReadyAsync() => Task.Run(async () =>
     {
-        var sdkReady = await EnsureSdkReadyAsync();
-        var ownedRunning = await EnsureOwnedRunningAsync(CancellationToken.None);
+        var sdkReady = await EnsureSdkReadyAsync().ConfigureAwait(false);
+        var ownedRunning = await EnsureOwnedRunningAsync(CancellationToken.None).ConfigureAwait(false);
 
         // 诊断：一次打全启动时 Everything 可用性，便于定位"开了仍搜不到"——①自带实例没起②SDK DLL 未加载③IPC 通但查询空。
         StarLog.Info(
             $"Everything 就绪快照(C′)：SDK已加载={sdkReady} · 自带实例接管={ownedRunning} · " +
             $"运行(FindWindow)={EverythingInterop.IsRunning()} · 自带exe路径={(File.Exists(OwnedExePath) ? "存在" : "未下载")} · " +
             $"SDK DLL={EverythingInterop.SdkDllPath}({(File.Exists(EverythingInterop.SdkDllPath) ? "存在" : "缺失")})");
-    }
+    });
 
     private const string InstallerUrl = "https://www.voidtools.com/Everything-1.4.1.1028.x64-Setup.exe";
 
@@ -281,12 +292,14 @@ public sealed class EverythingSource : IItemSource
     /// ② 确保 StarMark 自带 standard Everything 在运行并接管默认实例（<see cref="EnsureOwnedRunningAsync"/>）。
     /// 不再依赖/探测用户机上那只（可能不应答 IPC 的）第三方 Everything，也不再装 Session-0「Everything 服务」。
     /// </summary>
-    public async Task<LocalDiskSearchEnableOutcome> EnableAsync(CancellationToken ct)
-    {
-        await EnsureSdkReadyAsync();   // 下载 / 加载 SDK DLL（不提权）
-        var ok = await EnsureOwnedRunningAsync(ct);
-        return ok ? LocalDiskSearchEnableOutcome.Ready : LocalDiskSearchEnableOutcome.Failed;
-    }
+    public Task<LocalDiskSearchEnableOutcome> EnableAsync(CancellationToken ct)
+        // 同 EnsureReadyAsync：这段全是阻塞式系统调用，而它是设置页开关的直接 await 目标。
+        => Task.Run(async () =>
+        {
+            await EnsureSdkReadyAsync().ConfigureAwait(false);   // 下载 / 加载 SDK DLL（不提权）
+            var ok = await EnsureOwnedRunningAsync(ct).ConfigureAwait(false);
+            return ok ? LocalDiskSearchEnableOutcome.Ready : LocalDiskSearchEnableOutcome.Failed;
+        }, ct);
 
     // ===== C′：StarMark 自带 standard Everything（显式自有路径 + 接管默认实例）=====
     // 动机：用户机上的第三方 Everything repack（如强制提权的 Lite 版）不对外应答标准 SDK IPC，且运行/注册表探测

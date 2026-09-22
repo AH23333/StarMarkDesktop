@@ -59,8 +59,11 @@ public sealed class SearchService
 
         var sw = Stopwatch.StartNew();
 
-        // 并行：SQLite FTS5 查询 + 所有实时源（Everything 等）查询
-        var ftsTask = _repository.SearchAsync(keyword, filter, ct);
+        // 并行：SQLite FTS5 查询 + 所有实时源（Everything 等）查询。
+        // 两条腿都必须离开调用线程：调用方是搜索框（UI 线程），而 ItemRepository 在首个 await 之前
+        // 就同步 Open 数据库并逐行 hydrate、Ditto/书签源同理是同步文件 I/O——留在 UI 线程上时，
+        // 一次键入就是一次"整窗无响应"，与 Everything 的阻塞 IPC 叠加即成用户报的"高频卡死"。
+        var ftsTask = Task.Run(() => _repository.SearchAsync(keyword, filter, ct), ct);
 
         // 标签过滤下必须跳过实时源：Everything 返回的本地文件是「虚拟条目」，未入库因而无标签，
         // 参与合并会让「带 ai 标签」的筛选结果里混进一堆无标签文件。
@@ -72,7 +75,7 @@ public sealed class SearchService
             StarLog.Warn($"统一搜索：实时源「{skipped.SourceId}」IsAvailable=false，本次已跳过（未参与查询）");
 
         var realTimeTasks = usable
-            .Select(s => (Source: s, Task: s.SearchAsync(keyword, filter, ct)))
+            .Select(s => (Source: s, Task: Task.Run(() => s.SearchAsync(keyword, filter, ct), ct)))
             .ToList();
 
         // 等所有源完成（即使部分失败也返回已成功部分）
