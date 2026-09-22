@@ -160,8 +160,8 @@ public sealed class EverythingSource : IItemSource
     /// <summary>
     /// 确保 Everything SDK DLL 可用：应用目录 / 缓存目录缺失时，从 voidtools 下载官方 SDK zip
     /// 并提取 x64 DLL 到缓存目录（%LOCALAPPDATA%\StarMark\sdk），然后加载。
-    /// 注意：SDK 是 IPC 包装，Everything 主程序仍需在后台运行；主程序未安装时的自动安装见
-    /// <see cref="EnsureEverythingInstalledAsync"/>。
+    /// 注意：SDK 是 IPC 包装，Everything 主程序仍需在后台运行；StarMark 自带 standard Everything 的拉起/接管见
+    /// <see cref="EnsureOwnedRunningAsync"/>。
     /// </summary>
     public async Task<bool> EnsureSdkReadyAsync()
     {
@@ -206,30 +206,17 @@ public sealed class EverythingSource : IItemSource
         }
     }
 
-    /// <summary>启动时的 Everything 就绪流程：SDK DLL → 主程序缺失则安装 → **确保客户端在运行**（拉起）。</summary>
+    /// <summary>启动就绪流程（C′）：SDK DLL → 确保 StarMark 自带 standard Everything 在运行并接管默认实例。</summary>
     public async Task EnsureReadyAsync()
     {
         var sdkReady = await EnsureSdkReadyAsync();
+        var ownedRunning = await EnsureOwnedRunningAsync(CancellationToken.None);
 
-        var exe = EverythingInterop.FindEverythingExecutable();
-        if (exe is null)
-        {
-            await EnsureEverythingInstalledAsync();   // 探测不到 → voidtools 官方静默安装
-            exe = EverythingInterop.FindEverythingExecutable();
-        }
-
-        // 关键：安装≠启动。NSIS 静默安装不会拉起客户端；用户手动关掉 Everything 后重新开启本地搜索时，
-        // 若这里不拉起，FindWindow 恒探不到窗口 → EverythingSource.IsAvailable 恒 false → 本地文件永远不进结果。
-        // （EnableAsync 有此步、旧的 EnsureReadyAsync 漏了，正是「开启后没启动 Everything」的根因。）
-        if (!EverythingInterop.IsRunning() && exe is not null)
-            await EnsureClientRunningAsync(exe, CancellationToken.None);
-
-        // 诊断埋点（V2）：把启动时的 Everything 可用性一次打全，用于定位"开了仍搜不到"——
-        // 区分①主程序未运行②SDK DLL 未加载③IPC 通但查询空。
+        // 诊断：一次打全启动时 Everything 可用性，便于定位"开了仍搜不到"——①自带实例没起②SDK DLL 未加载③IPC 通但查询空。
         StarLog.Info(
-            $"Everything 就绪快照：SDK已加载={sdkReady} · 运行(FindWindow)={EverythingInterop.IsRunning()} · " +
-            $"探测到exe={(exe is null ? "未找到" : exe)} · SDK DLL={EverythingInterop.SdkDllPath}" +
-            $"({(File.Exists(EverythingInterop.SdkDllPath) ? "存在" : "缺失")})");
+            $"Everything 就绪快照(C′)：SDK已加载={sdkReady} · 自带实例接管={ownedRunning} · " +
+            $"运行(FindWindow)={EverythingInterop.IsRunning()} · 自带exe路径={(File.Exists(OwnedExePath) ? "存在" : "未下载")} · " +
+            $"SDK DLL={EverythingInterop.SdkDllPath}({(File.Exists(EverythingInterop.SdkDllPath) ? "存在" : "缺失")})");
     }
 
     private const string InstallerUrl = "https://www.voidtools.com/Everything-1.4.1.1028.x64-Setup.exe";
@@ -284,55 +271,145 @@ public sealed class EverythingSource : IItemSource
     public enum LocalDiskSearchEnableOutcome { Ready, Failed }
 
     /// <summary>
-    /// 用户开启「本地磁盘搜索」时的准备流程：<b>不再装「Everything 服务」</b>（那是 Session-0 服务，反倒会让
-    /// 普通权限客户端被顶成空壳、对外 IPC 失效）——改由 <b>StarMark 自身以管理员权限重启</b>（见 UI 层 Privilege /
-    /// App 启动逻辑），与用户那只（可能常以管理员运行的）Everything 同完整性级别，WM_COPYDATA IPC 便不被 UIPI 拦。
-    /// 本方法只做：① 确保 SDK 就绪（下载 / 加载 Everything64.dll）；② 主程序缺失则装官方 Everything；③ 确保客户端在跑。
+    /// 用户开启「本地磁盘搜索」时的准备流程（C′）：① 确保 SDK 就绪（下载 / 加载 Everything64.dll）；
+    /// ② 确保 StarMark 自带 standard Everything 在运行并接管默认实例（<see cref="EnsureOwnedRunningAsync"/>）。
+    /// 不再依赖/探测用户机上那只（可能不应答 IPC 的）第三方 Everything，也不再装 Session-0「Everything 服务」。
     /// </summary>
     public async Task<LocalDiskSearchEnableOutcome> EnableAsync(CancellationToken ct)
     {
         await EnsureSdkReadyAsync();   // 下载 / 加载 SDK DLL（不提权）
-
-        var exe = EverythingInterop.FindEverythingExecutable();
-        if (exe is null)
-        {
-            // 主程序未装：官方安装器（NSIS /S，自带一次 UAC 提权）。装后再定位一次。
-            await EnsureEverythingInstalledAsync();
-            exe = EverythingInterop.FindEverythingExecutable();
-            if (exe is null) return LocalDiskSearchEnableOutcome.Failed;
-        }
-
-        await EnsureClientRunningAsync(exe, ct);   // 确保有可 IPC 的客户端窗口
-
-        return EverythingInterop.IsRunning()
-            ? LocalDiskSearchEnableOutcome.Ready
-            : LocalDiskSearchEnableOutcome.Failed;
+        var ok = await EnsureOwnedRunningAsync(ct);
+        return ok ? LocalDiskSearchEnableOutcome.Ready : LocalDiskSearchEnableOutcome.Failed;
     }
 
-    /// <summary>确保有一个可 IPC 的 Everything 客户端在运行；未运行则拉起并最多等 ~5s。</summary>
-    private static async Task EnsureClientRunningAsync(string everythingExe, CancellationToken ct)
+    // ===== C′：StarMark 自带 standard Everything（显式自有路径 + 接管默认实例）=====
+    // 动机：用户机上的第三方 Everything repack（如强制提权的 Lite 版）不对外应答标准 SDK IPC，且运行/注册表探测
+    // 会把我们指到那只坏 repack。C′ 改为自带一份官方 standard Everything 便携版到自有目录、开启时接管唯一默认实例，
+    // 复用已真机验证正确的 1.4 SDK 通道查询。代价（已获用户确认）：开启时会关闭其它 Everything 实例。
+    private const string PortableZipUrl = "https://www.voidtools.com/Everything-1.4.1.1024.x64.zip";
+    private static string OwnedDir => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        StarMark.Abstractions.AppConstants.AppName, "everything");
+    private static string OwnedExePath => Path.Combine(OwnedDir, "Everything.exe");
+
+    /// <summary>确保「StarMark 自带」standard Everything 已运行并持有默认实例：自带实例已在跑→跳过；否则
+    /// （按需下载便携版→）关闭其它 Everything 实例→以 -hidden 拉起自带实例→等 IPC 窗口就绪。返回最终是否可 IPC。</summary>
+    public static async Task<bool> EnsureOwnedRunningAsync(CancellationToken ct)
     {
-        if (EverythingInterop.IsRunning()) return;
+        if (OwnedEverythingRunning()) return true;
+
+        var exe = await EnsureOwnedEverythingAsync(ct);
+        if (exe is null) return false;
+
+        // 默认实例只能有一个：接管所有权，关掉其它 Everything（提权下可结束 High-IL repack；失败仅降级）。
+        CloseOtherEverything(exe);
+
         try
         {
-            // -hidden：Everything 官方参数，启动后不弹主窗口（只在后台提供 IPC 落点窗口）。
-            // 用户要的是「在主搜索栏直接搜本地文件」，不该看到另开一个 Everything 界面来回切换。
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = everythingExe,
-                Arguments = "-hidden",
+                FileName = exe,
+                Arguments = "-hidden",   // 官方参数：后台运行不弹主窗口，只提供 IPC 落点
                 UseShellExecute = true,
                 WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
             });
         }
         catch (Exception ex)
         {
-            StarLog.Error("启动 Everything 客户端失败", ex);
-            return;
+            StarLog.Error("拉起自带 Everything 失败", ex);
+            return false;
         }
+
         for (var i = 0; i < 20 && !EverythingInterop.IsRunning(); i++)
         {
             try { await Task.Delay(250, ct); } catch (OperationCanceledException) { break; }
+        }
+        return EverythingInterop.IsRunning();
+    }
+
+    /// <summary>自带 standard Everything 是否已在运行——按主模块路径精确匹配自有路径，避免把用户 repack 误当作自带。</summary>
+    private static bool OwnedEverythingRunning()
+    {
+        try
+        {
+            foreach (var p in System.Diagnostics.Process.GetProcessesByName("Everything"))
+            {
+                try
+                {
+                    if (string.Equals(p.MainModule?.FileName, OwnedExePath, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+                catch { /* 跨完整性级别读不到主模块，忽略该进程 */ }
+                finally { p.Dispose(); }
+            }
+        }
+        catch (Exception ex) { StarLog.Error("枚举 Everything 进程失败", ex); }
+        return false;
+    }
+
+    /// <summary>关闭除待启动自带实例外的所有 Everything 进程（提权可结束 High-IL 的 repack）。单个失败仅记录并继续。</summary>
+    private static void CloseOtherEverything(string keepExePath)
+    {
+        try
+        {
+            foreach (var p in System.Diagnostics.Process.GetProcessesByName("Everything"))
+            {
+                try
+                {
+                    string? path = null;
+                    try { path = p.MainModule?.FileName; } catch { }
+                    if (path is not null && string.Equals(path, keepExePath, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    p.Kill();
+                    p.WaitForExit(3000);
+                }
+                catch (Exception ex) { StarLog.Error("关闭其它 Everything 实例失败（可能无权限，降级继续）", ex); }
+                finally { p.Dispose(); }
+            }
+        }
+        catch (Exception ex) { StarLog.Error("枚举待关闭 Everything 进程失败", ex); }
+    }
+
+    /// <summary>确保自带 standard Everything 便携版落到自有目录（%LOCALAPPDATA%\StarMark\everything\Everything.exe）；
+    /// 缺失则下官方便携 zip 抽取 exe+lng（只取固定文件名，无 Zip Slip 面）。返回落地路径或 null。</summary>
+    private static async Task<string?> EnsureOwnedEverythingAsync(CancellationToken ct)
+    {
+        if (File.Exists(OwnedExePath)) return OwnedExePath;
+        try
+        {
+            StarLog.Info("下载官方 standard Everything（便携版）到 StarMark 自有目录…");
+            Directory.CreateDirectory(OwnedDir);
+            var zip = Path.Combine(OwnedDir, "Everything-portable.zip");
+            if (!File.Exists(zip))
+            {
+                using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+                var bytes = await http.GetByteArrayAsync(PortableZipUrl, ct);
+                await File.WriteAllBytesAsync(zip, bytes, ct);
+            }
+            using (var archive = ZipFile.OpenRead(zip))
+            {
+                foreach (var name in new[] { "Everything.exe", "Everything.lng" })
+                {
+                    var entry = archive.Entries.FirstOrDefault(e =>
+                        string.Equals(e.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (entry is not null)
+                        entry.ExtractToFile(Path.Combine(OwnedDir, name), overwrite: true);
+                }
+            }
+            try { File.Delete(zip); } catch { }
+
+            if (File.Exists(OwnedExePath))
+            {
+                StarLog.Info($"自带 Everything 就绪：{OwnedExePath}");
+                return OwnedExePath;
+            }
+            StarLog.Error("自带 Everything 解压后仍未见 Everything.exe。");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("下载/解压自带 Everything 失败（离线属正常，降级为无本地文件搜索）", ex);
+            return null;
         }
     }
 }
