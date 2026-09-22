@@ -274,19 +274,14 @@ public sealed class EverythingSource : IItemSource
         }
     }
 
-    /// <summary>本地磁盘搜索「开启」结果，供设置页据此决定开关回退与文案。</summary>
-    public enum LocalDiskSearchEnableOutcome { Ready, ElevationDeclined, Failed }
+    /// <summary>本地磁盘搜索「开启」结果，供设置页据此决定状态文案。</summary>
+    public enum LocalDiskSearchEnableOutcome { Ready, Failed }
 
     /// <summary>
-    /// 用户开启「本地磁盘搜索」时的完整准备流程（对应需求「开启则申请提权、开启 SDK」）：
-    /// ① 下载 / 加载 Everything64.dll（SDK，无需提权）；② 主程序缺失则装官方 Everything；
-    /// ③ <b>安装并启动「Everything 服务」——这一步才申请提权（一次 UAC）</b>；④ 确保普通权限客户端在跑。
-    /// <para>
-    /// 为什么提权只用于「装服务」、而非把 Everything 本身提权：SDK 走 WM_COPYDATA 与 Everything 客户端窗口通信，
-    /// 若把客户端抬到 High IL，普通权限的 StarMark 发的窗口消息会被 UIPI 拦截、IPC 恒失败（见 EverythingInterop 注释）。
-    /// 官方「Everything 服务」以 SYSTEM 身份读全盘 NTFS(MFT) 并喂给普通 IL 客户端——既拿到全盘索引，又保住 IPC。
-    /// </para>
-    /// 返回 <see cref="LocalDiskSearchEnableOutcome.ElevationDeclined"/> 表示用户在 UAC 取消（调用方应把开关回退为关）。
+    /// 用户开启「本地磁盘搜索」时的准备流程：<b>不再装「Everything 服务」</b>（那是 Session-0 服务，反倒会让
+    /// 普通权限客户端被顶成空壳、对外 IPC 失效）——改由 <b>StarMark 自身以管理员权限重启</b>（见 UI 层 Privilege /
+    /// App 启动逻辑），与用户那只（可能常以管理员运行的）Everything 同完整性级别，WM_COPYDATA IPC 便不被 UIPI 拦。
+    /// 本方法只做：① 确保 SDK 就绪（下载 / 加载 Everything64.dll）；② 主程序缺失则装官方 Everything；③ 确保客户端在跑。
     /// </summary>
     public async Task<LocalDiskSearchEnableOutcome> EnableAsync(CancellationToken ct)
     {
@@ -301,51 +296,14 @@ public sealed class EverythingSource : IItemSource
             if (exe is null) return LocalDiskSearchEnableOutcome.Failed;
         }
 
-        // 申请提权：装「Everything 服务」。用户取消 UAC → ElevationDeclined（开关回退）。
-        if (!await EnsureServiceInstalledAsync(exe, ct))
-            return LocalDiskSearchEnableOutcome.ElevationDeclined;
-
-        await EnsureClientRunningAsync(exe, ct);   // 客户端保持普通 IL，WM_COPYDATA 才有落点
+        await EnsureClientRunningAsync(exe, ct);   // 确保有可 IPC 的客户端窗口
 
         return EverythingInterop.IsRunning()
             ? LocalDiskSearchEnableOutcome.Ready
             : LocalDiskSearchEnableOutcome.Failed;
     }
 
-    /// <summary>
-    /// 以提权方式执行 <c>Everything.exe -install-service</c>（voidtools 官方命令：装 SYSTEM 级索引服务）。
-    /// 幂等：服务已存在时 Everything 自身快速返回。用户在 UAC 点「否」→ <c>runas</c> 抛 <see cref="System.ComponentModel.Win32Exception"/>，
-    /// 捕获后返回 false 让调用方把开关回退为关（＝「不使用则纯当书签 / Star 工具」）。
-    /// </summary>
-    private static async Task<bool> EnsureServiceInstalledAsync(string everythingExe, CancellationToken ct)
-    {
-        try
-        {
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = everythingExe,
-                Arguments = "-install-service",
-                Verb = "runas",                 // 触发一次 UAC：仅服务安装提权，客户端随后仍普通权限运行
-                UseShellExecute = true,
-                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
-            };
-            using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc is not null) await proc.WaitForExitAsync(ct);
-            return true;
-        }
-        catch (System.ComponentModel.Win32Exception)
-        {
-            // 1223 ERROR_CANCELLED：用户在 UAC 取消提权——属正常，视为「不开启」。
-            return false;
-        }
-        catch (Exception ex)
-        {
-            StarLog.Error("安装 Everything 服务失败（-install-service）", ex);
-            return false;
-        }
-    }
-
-    /// <summary>确保普通完整性 Everything 客户端在运行（提供 IPC 落点窗口）；未运行则拉起并最多等 ~5s。</summary>
+    /// <summary>确保有一个可 IPC 的 Everything 客户端在运行；未运行则拉起并最多等 ~5s。</summary>
     private static async Task EnsureClientRunningAsync(string everythingExe, CancellationToken ct)
     {
         if (EverythingInterop.IsRunning()) return;

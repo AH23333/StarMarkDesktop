@@ -163,6 +163,18 @@ public partial class App : Application
         try { PerformanceSettingsPolicy.Provider = fileSettings; }
         catch (Exception pex) { StarLog.Error("性能模式设置来源注入失败", pex); }
 
+        // 本地磁盘搜索「A 方案：与提权 Everything 同权限」——若已开启且当前非提权，以管理员重启一次
+        // （带 --elevate-retry 标记防死循环；用户取消 UAC 则继续普通运行，仅本地文件搜索用不了，其余不受影响）。
+        // 放在 DI 建好之后、拉起 Everything 之前，让提权实例去走下面正常的 SDK/IPC 就绪流程。
+        if (fileSettings.LoadLocalDiskSearchEnabled() && !Privilege.IsElevated())
+        {
+            var alreadyRetried = false;
+            foreach (var a in Environment.GetCommandLineArgs())
+                if (string.Equals(a, "--elevate-retry", StringComparison.OrdinalIgnoreCase)) { alreadyRetried = true; break; }
+            if (!alreadyRetried && Privilege.TryRelaunchSelfElevated("--elevate-retry"))
+                Environment.Exit(0);
+        }
+
         // Everything 就绪流程（下载 SDK / 主程序未运行时自动安装）——仅在用户开启「本地磁盘搜索」后执行。
         // 默认关时绝不在此下载/安装/拉起 Everything，满足"轻度用户零打扰、默认零内存"。
         if (fileSettings.LoadLocalDiskSearchEnabled())

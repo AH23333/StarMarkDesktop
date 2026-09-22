@@ -250,45 +250,42 @@ public partial class SettingsPageViewModel : ObservableObject
             return;
         }
 
-        // 开启：先跑「申请提权 + 装 Everything 服务 + 起 SDK」，成功才真正置 Enabled=true；
-        // 用户拒绝提权 / 失败则把开关自动回退为关——契合「不使用则产品仅作为书签 / Star 工具」。
-        // 成功前保持关闭，避免半套状态（源被纳入却查不到）。
-        LocalDiskSearchStatus = "正在准备本地磁盘搜索：将弹出一次 UAC 以安装全盘索引服务（Everything 服务）…";
-        _ = Task.Run(async () =>
-        {
-            StarMark.Integrations.Everything.EverythingSource.LocalDiskSearchEnableOutcome outcome;
-            try
-            {
-                var src = App.Services.GetRequiredService<StarMark.Integrations.Everything.EverythingSource>();
-                outcome = await src.EnableAsync(CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                StarLog.Error("本地磁盘搜索：启用流程异常", ex);
-                outcome = StarMark.Integrations.Everything.EverythingSource.LocalDiskSearchEnableOutcome.Failed;
-            }
+        // 开启：持久化 + 实时翻位单例（IsAvailable 实读）。若已是管理员权限，就地后台准备 Everything；
+        // 否则走「A 方案」——请求以管理员重启一次，让新实例与提权运行的 Everything 同 IL，WM_COPYDATA IPC 不再被 UIPI 拦。
+        options.Enabled = true;
+        _settings.SaveLocalDiskSearchEnabled(true);
 
-            App.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+        if (Privilege.IsElevated())
+        {
+            LocalDiskSearchStatus = "已开启（管理员）：正在准备 Everything（起 SDK / 拉起客户端）…";
+            _ = Task.Run(async () =>
             {
-                if (outcome == StarMark.Integrations.Everything.EverythingSource.LocalDiskSearchEnableOutcome.Ready)
+                try
                 {
-                    options.Enabled = true;                 // 实时翻位：IsAvailable 实读，无需重启
-                    _settings.SaveLocalDiskSearchEnabled(true);
-                    LocalDiskSearchStatus = "已开启：本地文件将参与全盘搜索（快捷搜索 / 主窗即时生效）。";
+                    var src = App.Services.GetRequiredService<StarMark.Integrations.Everything.EverythingSource>();
+                    var outcome = await src.EnableAsync(CancellationToken.None);
+                    App.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                        LocalDiskSearchStatus = outcome == StarMark.Integrations.Everything.EverythingSource.LocalDiskSearchEnableOutcome.Ready
+                            ? "已开启：本地文件将参与全盘搜索（快捷搜索 / 主窗即时生效）。"
+                            : "已开启，但 Everything 尚未就绪——请确认 Everything 正在运行后稍候再试。");
                 }
-                else
+                catch (Exception ex)
                 {
-                    _suppressLocalDiskApply = true;
-                    LocalDiskSearchEnabled = false;         // 回退开关（抑制再入本处理器）
-                    _suppressLocalDiskApply = false;
-                    options.Enabled = false;
-                    _settings.SaveLocalDiskSearchEnabled(false);
-                    LocalDiskSearchStatus = outcome == StarMark.Integrations.Everything.EverythingSource.LocalDiskSearchEnableOutcome.ElevationDeclined
-                        ? "已取消提权，未开启本地磁盘搜索。应用仍作为浏览器收藏夹 / Star 管理工具使用。"
-                        : "未能准备 Everything（离线 / 安装失败），未开启本地磁盘搜索。可稍后重试。";
+                    StarLog.Error("本地磁盘搜索：准备 Everything 失败", ex);
+                    App.MainWindow?.DispatcherQueue?.TryEnqueue(
+                        () => LocalDiskSearchStatus = "已开启，但准备 Everything 失败（离线 / 未装成），可稍后重试。");
                 }
             });
-        });
+            return;
+        }
+
+        LocalDiskSearchStatus = "已开启。正请求以管理员身份重启 StarMark（以便连上以管理员运行的 Everything）——请在 UAC 点「是」…";
+        if (Privilege.TryRelaunchSelfElevated("--elevate-retry"))
+        {
+            Environment.Exit(0);   // 交给提权实例（其启动自带 --elevate-retry，不再二次弹窗）
+            return;
+        }
+        LocalDiskSearchStatus = "已开启，但你取消了提权重启。若 Everything 以管理员运行，请用开始菜单「以管理员身份运行」重启 StarMark，否则本地文件可能搜不到。";
     }
 
     /// <summary>采集只读诊断信息（P2-8）。本地查询，零网络。</summary>
