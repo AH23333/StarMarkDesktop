@@ -12,6 +12,12 @@ public static class StarLog
 {
     private static readonly object Gate = new();
 
+    // 每条日志都要落一次盘，热路径上先把"目录已建"与"当日文件名"记下来：
+    // 否则每行都会做一遍环境目录查询 + CreateDirectory + 日期格式化。
+    private static bool _dirEnsured;
+    private static string? _dayFile;
+    private static DateTime _dayFileExpiry;
+
     public static string LogDirectory
         => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppConstants.AppName, "logs");
 
@@ -36,12 +42,28 @@ public static class StarLog
         {
             try
             {
-                Directory.CreateDirectory(LogDirectory);
-                File.AppendAllText(CurrentLogFile, line + Environment.NewLine);
+                if (!_dirEnsured)
+                {
+                    Directory.CreateDirectory(LogDirectory);
+                    _dirEnsured = true;
+                }
+                var now = DateTime.Now;
+                if (_dayFile is null || now >= _dayFileExpiry)
+                {
+                    _dayFile = Path.Combine(LogDirectory,
+                        $"starmark-{now.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}.log");
+                    _dayFileExpiry = now.Date.AddDays(1);   // 跨零点自动换档
+                }
+                File.AppendAllText(_dayFile, line + Environment.NewLine);
             }
-            catch { /* 日志失败不影响主流程 */ }
-            Debug.WriteLine($"[StarMark] {level} {body}");
+            catch
+            {
+                // 日志失败不影响主流程；但作废缓存，下一行会重试建目录（目录被手工删过也能自愈）
+                _dirEnsured = false;
+                _dayFile = null;
+            }
         }
+        Debug.WriteLine($"[StarMark] {level} {body}");
     }
 
     /// <summary>
