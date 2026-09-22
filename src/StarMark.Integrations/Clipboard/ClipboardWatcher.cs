@@ -62,20 +62,40 @@ public sealed class ClipboardWatcher : IDisposable
     private static NativeMethods.WndProcDelegate? _sharedProc;
     private static ushort _classAtom;
 
+    /// <summary>
+    /// 当前唯一的派发目标。<b>刻意不用 <c>GWLP_USERDATA</c> 传实例</b>：
+    /// <c>CreateWindowExW</c> 的 <c>lpParam</c> 只会出现在 <c>WM_NCCREATE</c> 的 CREATESTRUCT 里，
+    /// <b>不会</b>自动落进 GWLP_USERDATA；而该原生偏移在 SDK 头文件里有"等于 GWL_USERDATA(-21)"与
+    /// "-(sizeof(LONG_PTR)*2)+1"两种并存写法，取错了不会编译报错、也不会抛异常，只会让 WndProc
+    /// 永远读到 0 ⇒ <b>一条都不记，而界面照样显示"已开始记录"</b>——最难查的那种失效。
+    /// 本监听窗全进程只有一个，静态目标在结构上排除了这一整类失效（也顺带消掉 GCHandle 与
+    /// 消息派发的释放时序竞争：不再有"非托管持有的裸指针可能已 Free"这回事）。
+    /// </summary>
+    private static ClipboardWatcher? _current;
+
     private readonly IItemRepository _repo;
     private readonly ClipboardDedupe _dedupe = new();
     private readonly SemaphoreSlim _writeGate = new(1, 1);
 
     private IntPtr _hwnd;
-    private GCHandle _self;
     private int _inFlight;    // 0/1：是否有在途读取轮
     private int _dirty;       // 0/1：在途期间又来过通知
+
+    /// <summary>
+    /// 已停用。Stop 之后在途那一轮必须立刻收手——否则"用户刚关掉剪贴板历史"与"最后一次复制"
+    /// 赛跑，关掉之后仍会多落一条，而这正是用户关掉这个开关想避免的东西。
+    /// </summary>
+    private volatile bool _stopped;
 
     /// <summary>用户主动暂停（临时粘贴私密内容）。暂停期间通知照收、内容不落库。</summary>
     public volatile bool Paused;
 
-    /// <summary>是否已在采集。<b>名字刻意不叫 IsAvailable</b>：这里的语义是"监听窗口已建立"。</summary>
-    public bool IsRunning => _hwnd != IntPtr.Zero;
+    /// <summary>
+    /// 是否已在采集。<b>名字刻意不叫 IsAvailable</b>，且语义严格限定为"监听窗口已建立、派发已接上、
+    /// 未被停用"——三者是一起成立或一起不成立的（见 <see cref="TryStart"/> 里的赋值顺序）。
+    /// 它仍然证明不了"系统真的在给我们发通知"，那一条只能真机验收。
+    /// </summary>
+    public bool IsRunning => !_stopped && Volatile.Read(ref _hwnd) != IntPtr.Zero;
 
     public ClipboardWatcher(IItemRepository repo) => _repo = repo;
 
@@ -89,24 +109,27 @@ public sealed class ClipboardWatcher : IDisposable
         try
         {
             EnsureClassRegistered();
-            _self = GCHandle.Alloc(this);
-            _hwnd = NativeMethods.CreateWindowExW(
+            var hwnd = NativeMethods.CreateWindowExW(
                 0, ClassName, "StarMark 剪贴板采集", NativeMethods.WS_POPUP,
                 0, 0, 0, 0, NativeMethods.HWND_MESSAGE, IntPtr.Zero,
-                NativeMethods.GetModuleHandleW(null), GCHandle.ToIntPtr(_self));
+                NativeMethods.GetModuleHandleW(null), IntPtr.Zero);
 
-            if (_hwnd == IntPtr.Zero)
+            if (hwnd == IntPtr.Zero)
             {
-                _self.Free();
                 StarLog.Error($"剪贴板采集窗口创建失败（CreateWindowExW=0, Win32={Marshal.GetLastWin32Error()}），历史不会记录");
-                _self = default;
                 return false;
             }
+
+            // 顺序要紧：先接上派发目标、最后才挂监听。反过来会留一条窄缝——监听已生效而派发还
+            // 认不出这个窗口，期间到来的那条通知就永久丢了（WM_CLIPBOARDUPDATE 不会重发）。
+            _stopped = false;
+            _current = this;
+            _hwnd = hwnd;
 
             if (!NativeMethods.AddClipboardFormatListener(_hwnd))
             {
                 StarLog.Error($"AddClipboardFormatListener 失败（Win32={Marshal.GetLastWin32Error()}），历史不会记录");
-                DestroyCore();
+                Stop();
                 return false;
             }
             return true;
@@ -114,28 +137,36 @@ public sealed class ClipboardWatcher : IDisposable
         catch (Exception ex)
         {
             StarLog.Error("启动剪贴板采集失败", ex);
-            DestroyCore();
+            Stop();
             return false;
         }
     }
 
     public void Stop()
     {
-        if (_hwnd == IntPtr.Zero) return;
-        try { NativeMethods.RemoveClipboardFormatListener(_hwnd); }
+        // 先置停用位：让在途那一轮在下一句检查就收手，不再落库。
+        _stopped = true;
+        // 先把句柄摘走再销毁：DestroyWindow 会同步送回 WM_DESTROY，若此时 _hwnd 仍是它自己，
+        // 派发路径会再 DestroyWindow 一次（同一句柄二次销毁）；摘零后 WM_DESTROY 分支的
+        // 句柄比对自然失败，重入在结构上不可能发生。
+        var hwnd = Interlocked.Exchange(ref _hwnd, IntPtr.Zero);
+        if (ReferenceEquals(_current, this)) _current = null;
+        if (hwnd == IntPtr.Zero) return;
+
+        try { NativeMethods.RemoveClipboardFormatListener(hwnd); }
         catch (Exception ex) { StarLog.Warn($"移除剪贴板监听失败（忽略）：{ex.Message}"); }
-        DestroyCore();
+        try { NativeMethods.DestroyWindow(hwnd); }
+        catch (Exception ex) { StarLog.Warn($"销毁剪贴板采集窗口失败（忽略，随线程退出回收）：{ex.Message}"); }
     }
 
-    private void DestroyCore()
+    /// <summary>
+    /// 窗口在外面被毁掉（线程退出等）时的自清：<b>只摘状态，绝不再 DestroyWindow</b>
+    /// ——在 WM_DESTROY 里对同一句柄再调一次是无效的（Win32 会直接返回失败）。
+    /// </summary>
+    private void OnWindowDestroyed()
     {
-        if (_hwnd != IntPtr.Zero)
-        {
-            try { NativeMethods.DestroyWindow(_hwnd); } catch { /* 随线程退出销毁即可 */ }
-            _hwnd = IntPtr.Zero;
-        }
-        if (_self.IsAllocated) _self.Free();
-        _self = default;
+        Interlocked.Exchange(ref _hwnd, IntPtr.Zero);
+        if (ReferenceEquals(_current, this)) _current = null;
     }
 
     private static void EnsureClassRegistered()
@@ -163,11 +194,13 @@ public sealed class ClipboardWatcher : IDisposable
         // 原生 WNDPROC 里逃出的异常会直接终结常驻进程（与 TrayHost 同一教训）：全程兜住。
         try
         {
-            var handle = NativeMethods.GetWindowLongPtrW(hWnd, NativeMethods.GWL_USERDATA);
-            if (handle != IntPtr.Zero && GCHandle.FromIntPtr(handle).Target is ClipboardWatcher self)
+            // 句柄比对是为了挡住"旧窗口的尾讯"：Stop 之后系统仍可能把那条 WM_DESTROY/WM_CLIPBOARDUPDATE
+            // 派进来，此时 _current 可能已指向重新开启的同一个实例（它的新句柄不同）⇒ 不认，直接丢。
+            var self = _current;
+            if (self is not null && Volatile.Read(ref self._hwnd) == hWnd && hWnd != IntPtr.Zero)
             {
                 if (msg == NativeMethods.WM_CLIPBOARDUPDATE) self.ScheduleRead();
-                else if (msg == NativeMethods.WM_DESTROY) self.DestroyCore();
+                else if (msg == NativeMethods.WM_DESTROY) self.OnWindowDestroyed();
             }
         }
         catch { /* 采集失败不能影响宿主 */ }
@@ -177,6 +210,7 @@ public sealed class ClipboardWatcher : IDisposable
     /// <summary>置脏位并按需起一轮读取；在途期间的多次通知合并成一轮。</summary>
     private void ScheduleRead()
     {
+        if (_stopped) return;
         Interlocked.Exchange(ref _dirty, 1);
         if (Interlocked.CompareExchange(ref _inFlight, 1, 0) != 0) return;
         _ = Task.Run(ReadLoopAsync);
@@ -186,16 +220,21 @@ public sealed class ClipboardWatcher : IDisposable
     {
         try
         {
-            while (Interlocked.Exchange(ref _dirty, 0) == 1)
+            while (!_stopped && Interlocked.Exchange(ref _dirty, 0) == 1)
             {
                 if (Paused) continue;
 
                 var (raw, format, app) = ClipboardNative.ReadSnapshot();
                 if (raw is null) continue;   // 这一帧没内容/被占用：等下一次通知
 
+                // 读一帧要几十毫秒，期间用户可能刚把开关关掉：落库前再判一次，
+                // 否则"关掉之后仍多记一条"正好是这个开关要避免的事。
+                if (_stopped) break;
+
                 await _writeGate.WaitAsync().ConfigureAwait(false);
                 try
                 {
+                    if (_stopped) break;
                     var item = await ClipboardCapture.CaptureAsync(
                         _repo, _dedupe, raw, format, app,
                         DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), CancellationToken.None).ConfigureAwait(false);
@@ -213,7 +252,7 @@ public sealed class ClipboardWatcher : IDisposable
         {
             Interlocked.Exchange(ref _inFlight, 0);
             // 在途结束时又来过的话补跑一轮，避免"最后一次复制没记上"。
-            if (_dirty == 1 && !Paused) ScheduleRead();
+            if (_dirty == 1 && !_stopped && !Paused) ScheduleRead();
         }
     }
 
