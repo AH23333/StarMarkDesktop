@@ -442,7 +442,7 @@
                                      现在程序自己按天落盘，故这里改成陈述事实 + 说明自动清理的边界。 -->
                                 <TextBlock Text="应用会自己备份：启动时距上次满 24 小时自动存一份到 %LOCALAPPDATA%\StarMark\backups，只保留最近 7 份 auto- 开头的自动件——你手动导出的备份与恢复前快照都不会被删。"
                                            Style="{StaticResource SettingRowText}"/>
-                                <TextBlock Text="导入会先自动生成「恢复前快照」（同上目录），任何恢复都可回滚。"
+                                <TextBlock Text="导入会先自动生成「恢复前快照」（同上目录），任何恢复都可回滚：它就是下面列表里标着「恢复前快照」的那一行，点「用它回滚」即撤销这次导入。"
                                            Style="{StaticResource SettingRowText}"/>
                                 <!-- 提权会话下系统文件选择器跨不到中 IL 的对话框宿主（真机日志 E_FAIL 四连挂）。
                                      已改为自动退回应用内路径输入框，故这里只做状态说明，不再指挥用户换权限重启。 -->
@@ -453,10 +453,37 @@
                                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                     <Button Content="导出备份…" Click="ExportBackup_Click" Style="{StaticResource SecondaryButton}"/>
                                     <Button Content="导入备份…" Click="ImportBackup_Click" Style="{StaticResource SecondaryButton}"/>
+                                    <!-- 备份就在本机目录里，"去看一眼/自己拷走"本该一步到位，不该让用户去地址栏敲路径 -->
+                                    <Button Content="打开备份目录" Click="OpenBackupFolder_Click" Style="{StaticResource SecondaryButton}"/>
                                     <ProgressRing Width="20" Height="20"
                                                   IsActive="{x:Bind ViewModel.IsBackupBusy, Mode=OneWay}"
                                                   Visibility="{x:Bind ViewModel.IsBackupBusy, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                                 </StackPanel>
+
+                                <!-- 本机已有备份：看得见有哪些份，才谈得上"恢复到某一份"或"用它回滚" -->
+                                <TextBlock Text="{x:Bind ViewModel.BackupsHeader, Mode=OneWay}"
+                                           Style="{StaticResource SettingRowText}" FontWeight="SemiBold"/>
+                                <ItemsControl ItemsSource="{x:Bind ViewModel.Backups, Mode=OneWay}"
+                                              Visibility="{x:Bind ViewModel.HasBackups, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="viewModels:BackupRow">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,2">
+                                                <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{x:Bind MetaText}" FontSize="12"/>
+                                                    <TextBlock Text="{x:Bind NameText}" Style="{StaticResource MutedText}"
+                                                               FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="1" Content="{x:Bind RestoreLabel}" Tag="{x:Bind File}"
+                                                        Click="RestoreBackup_Click"
+                                                        Style="{StaticResource SecondaryButton}" Padding="10,2,10,2"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="还没有任何备份文件（自动备份在启动后按天落盘，也可以点上面「导出备份」立刻来一份）。"
+                                           Style="{StaticResource MutedText}" TextWrapping="Wrap"
+                                           Visibility="{x:Bind ViewModel.HasBackups, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+
                                 <TextBlock Text="{x:Bind ViewModel.BackupStatus, Mode=OneWay}"
                                            Style="{StaticResource SettingRowText}"/>
                             </StackPanel>

@@ -80,7 +80,13 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     private void LoadFromStoreSilently()
     {
         _suppressSave = true;
-        try { ViewModel.LoadFromStore(); }
+        try
+        {
+            ViewModel.LoadFromStore();
+            // 进设置页就重扫一次备份目录：列表要反映"刚刚那份自动备份真的落盘了没"，
+            // 只看启动时缓存的话，用户永远看不到今天的新件。
+            ViewModel.RefreshBackups();
+        }
         catch (Exception ex)
         {
             // 绝不让读取设置的异常冒出 SettingsPage 构造函数：
@@ -910,6 +916,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
             await Task.Run(() => _backup.ExportToFileAsync(target, CancellationToken.None));
             ViewModel.BackupStatus = $"已导出备份到：{target}";
+            ViewModel.RefreshBackups();     // 刚导出那份必须立刻出现在下面列表里，否则用户会以为没写成
         }
         catch (Exception ex)
         {
@@ -929,52 +936,99 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
                 ?? BackupService.SnapshotDirectory + Path.DirectorySeparatorChar;
             var source = await RequestBackupPathAsync(save: false, suggested);
             if (source is null) return;
-            // 备份文件可达数十 MB：整份读盘 + 反序列化必须在后台线程做（Microsoft.Data.Sqlite 与
-            // File/Json 都是同步实现，await 并不让出），否则"点导入备份"就是先冻住整个界面几秒。
-            BackupEnvelope env;
-            try
-            {
-                env = await Task.Run(() => BackupService.ReadAsync(source, CancellationToken.None));
-            }
-            catch (BackupFormatException ex)
-            {
-                ViewModel.BackupStatus = ex.Message;
-                return;
-            }
-
-            // 摘要直接从已解析的 env 算：旧代码再调 Peek(file.Path)，等于把整份备份第二次读盘+反序列化。
-            var summary = BackupService.Summarize(env);
-            var detail = $"导出时间：{DateTimeOffset.FromUnixTimeSeconds(summary.ExportedAt):yyyy-MM-dd HH:mm}\n"
-                + $"条目 {summary.ItemCount}　用户状态 {summary.UserStateCount}　标签 {summary.TagCount}"
-                + (summary.HasWidgets ? "　组件数据：有" : "");
-
-            // 统一走外部居中窗口（非 ContentDialog）：按用户主题着色、可拖动、不可重复。
-            // 三选一场景（合并导入 / 覆盖导入 / 取消）用 ShowContentAsync 的 primary+secondary 双按钮。
-            var detailBlock = new TextBlock
-            {
-                Text = $"{detail}\n\n合并导入：保留现有条目，仅补充/覆盖用户元数据（安全、可重复）。\n" +
-                       "覆盖导入：先清空再导入，精确还原到备份时刻（会丢掉备份之后新增的条目）。",
-                TextWrapping = TextWrapping.Wrap,
-            };
-            var choice = await CenteredDialog.ShowContentAsync(
-                "导入备份", detailBlock, owner: App.MainWindow, dedupeKey: "importbackup",
-                width: 480, height: 320,
-                primaryText: "合并导入", secondaryText: "覆盖导入", cancelText: "取消");
-
-            if (choice != CenteredDialog.HostedDialogResult.Committed
-                && choice != CenteredDialog.HostedDialogResult.Secondary) return;
-
-            var mode = choice == CenteredDialog.HostedDialogResult.Secondary ? RestoreMode.Replace : RestoreMode.Merge;
-            var rr = await Task.Run(() => _backup.RestoreAsync(env, mode, null, CancellationToken.None));
-            ViewModel.BackupStatus = rr.Success
-                ? $"{rr.Message}（恢复前快照：{rr.SnapshotPath}）"
-                : $"导入失败：{rr.Message}";
+            await ImportFromPathAsync(source);
         }
         catch (Exception ex)
         {
             ViewModel.BackupStatus = $"导入失败：{ex.Message}";
         }
         finally { ViewModel.IsBackupBusy = false; }
+    }
+
+    /// <summary>列表里某一行的「恢复这份 / 用它回滚」：跳过选择器，直接走与导入完全相同的那条链。</summary>
+    private async void RestoreBackup_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.IsBackupBusy) return;
+        if (sender is not Microsoft.UI.Xaml.Controls.Button { Tag: BackupService.BackupFile file }) return;
+        ViewModel.IsBackupBusy = true;
+        try
+        {
+            await ImportFromPathAsync(file.Path);
+        }
+        catch (Exception ex)
+        {
+            ViewModel.BackupStatus = $"恢复失败：{ex.Message}";
+        }
+        finally { ViewModel.IsBackupBusy = false; }
+    }
+
+    /// <summary>打开备份目录（备份就在本机，"去看一眼/自己拷走"不该让用户去地址栏敲路径）。</summary>
+    private void OpenBackupFolder_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var dir = BackupService.SnapshotDirectory;
+            Directory.CreateDirectory(dir);     // 首次使用时目录可能还没建；开着空目录也比报错有用
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"\"{dir}\"")
+            { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            ViewModel.BackupStatus = $"打不开备份目录：{ex.Message}";
+            StarMark.Abstractions.StarLog.Warn($"打开备份目录失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 从一份已知路径导入。<b>「导入备份…」与列表里的「恢复这份」共用这一条</b>——
+    /// 两条路径若各写一遍，摘要/合并-覆盖确认/恢复前快照这些护栏很容易只存在于其中一条。
+    /// 调用方负责 <see cref="SettingsPageViewModel.IsBackupBusy"/> 的置位与异常兜底。
+    /// </summary>
+    private async Task ImportFromPathAsync(string source)
+    {
+        // 备份文件可达数十 MB：整份读盘 + 反序列化必须在后台线程做（Microsoft.Data.Sqlite 与
+        // File/Json 都是同步实现，await 并不让出），否则"点导入备份"就是先冻住整个界面几秒。
+        BackupEnvelope env;
+        try
+        {
+            env = await Task.Run(() => BackupService.ReadAsync(source, CancellationToken.None));
+        }
+        catch (BackupFormatException ex)
+        {
+            ViewModel.BackupStatus = ex.Message;
+            return;
+        }
+
+        // 摘要直接从已解析的 env 算：旧代码再调 Peek(file.Path)，等于把整份备份第二次读盘+反序列化。
+        var summary = BackupService.Summarize(env);
+        var detail = $"文件：{Path.GetFileName(source)}\n"
+            + $"导出时间：{DateTimeOffset.FromUnixTimeSeconds(summary.ExportedAt):yyyy-MM-dd HH:mm}\n"
+            + $"条目 {summary.ItemCount}　用户状态 {summary.UserStateCount}　标签 {summary.TagCount}"
+            + (summary.HasWidgets ? "　组件数据：有" : "");
+
+        // 统一走外部居中窗口（非 ContentDialog）：按用户主题着色、可拖动、不可重复。
+        // 三选一场景（合并导入 / 覆盖导入 / 取消）用 ShowContentAsync 的 primary+secondary 双按钮。
+        var detailBlock = new TextBlock
+        {
+            Text = $"{detail}\n\n合并导入：保留现有条目，仅补充/覆盖用户元数据（安全、可重复）。\n" +
+                   "覆盖导入：先清空再导入，精确还原到备份时刻（会丢掉备份之后新增的条目）。\n" +
+                   "两种都会先自动留下一份「恢复前快照」，想撤销就在列表里点它的「用它回滚」。",
+            TextWrapping = TextWrapping.Wrap,
+        };
+        var choice = await CenteredDialog.ShowContentAsync(
+            "导入备份", detailBlock, owner: App.MainWindow, dedupeKey: "importbackup",
+            width: 480, height: 340,
+            primaryText: "合并导入", secondaryText: "覆盖导入", cancelText: "取消");
+
+        if (choice != CenteredDialog.HostedDialogResult.Committed
+            && choice != CenteredDialog.HostedDialogResult.Secondary) return;
+
+        var mode = choice == CenteredDialog.HostedDialogResult.Secondary ? RestoreMode.Replace : RestoreMode.Merge;
+        var rr = await Task.Run(() => _backup.RestoreAsync(env, mode, null, CancellationToken.None));
+        ViewModel.BackupStatus = rr.Success
+            ? $"{rr.Message}（恢复前快照：{rr.SnapshotPath}）"
+            : $"导入失败：{rr.Message}";
+        ViewModel.RefreshBackups();     // 这次恢复留下的快照要立刻可见——它就是"撤销"的入口
     }
 }
 

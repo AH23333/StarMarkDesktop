@@ -1,6 +1,7 @@
 #nullable enable
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -10,6 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml.Media;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Insights;
+using StarMark.Core.Backup;
 using StarMark.Core.Insights;
 using StarMark.Core.Performance;
 using StarMark.UI.Helpers;
@@ -95,6 +97,44 @@ public partial class SettingsPageViewModel : ObservableObject
     /// 与其让用户以为"备份功能坏了"，不如在备份卡片里先说明。进程存续期间不会变，故不做通知。
     /// </summary>
     public bool IsElevatedSession { get; } = Privilege.IsElevated();
+
+    /// <summary>列表里最多展示多少份（盘点本身另有上限，这里只是不让卡片被几百行撑爆）。</summary>
+    public const int BackupListLimit = 20;
+
+    /// <summary>
+    /// 本机已有备份的清单。<b>存在的理由</b>：卡片一直写着"应用会自己备份""任何恢复都可回滚"，
+    /// 却没有任何地方能看到"到底有哪些份、什么时候、多大"，也没有点一下就能恢复的入口——
+    /// 名字暗示的能力停在"要自己敲文件名"。这里把它接成可见、可点。
+    /// </summary>
+    public ObservableCollection<BackupRow> Backups { get; } = new();
+
+    public bool HasBackups => Backups.Count > 0;
+
+    public string BackupsHeader => Backups.Count == 0
+        ? "本机备份"
+        : $"本机备份（列出最近 {Backups.Count} 份）";
+
+    /// <summary>
+    /// 重新扫描备份目录。<b>同步</b>文件枚举：件数被上限钉死在几十份以内、目录在本地盘，
+    /// 走异步只会多出跳转与状态而没有收益（本仓库的教训：await ≠ 换线程，这里更不需要 await）。
+    /// 读目录失败只写状态行、不抛出——列表空掉不能连带把整个设置页卡住。
+    /// </summary>
+    public void RefreshBackups()
+    {
+        Backups.Clear();
+        try
+        {
+            foreach (var f in BackupService.EnumerateBackups(max: BackupListLimit))
+                Backups.Add(new BackupRow(f));
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"列出本机备份失败：{ex.Message}");
+            BackupStatus = $"未能列出备份文件：{ex.Message}";
+        }
+        OnPropertyChanged(nameof(HasBackups));
+        OnPropertyChanged(nameof(BackupsHeader));
+    }
 
     public SettingsPageViewModel()
     {
@@ -607,4 +647,37 @@ public sealed class HealthTrendBar
     public double Height { get; init; }
     public int Count { get; init; }
     public string DateLabel { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// 「本机备份」列表的一行：显示文本 + 按钮要用的原始盘点结果。
+/// 类别/时间的中文口径留在这里（Core 只管判类，不管怎么显示），
+/// 但<b>判类本身不在这里重复</b>——直接读 <see cref="BackupService.BackupFile.Kind"/>，
+/// 免得界面自己再按文件名前缀猜一次而和清理逻辑分叉。
+/// </summary>
+public sealed class BackupRow
+{
+    public BackupRow(BackupService.BackupFile file) => File = file;
+
+    /// <summary>整条记录（按钮的 Tag 直接绑它，恢复时不再按名字回查目录）。</summary>
+    public BackupService.BackupFile File { get; }
+
+    public string NameText => File.FileName;
+
+    public string KindLabel => File.Kind switch
+    {
+        AutoBackupPolicy.BackupKind.Auto => "自动备份",
+        AutoBackupPolicy.BackupKind.PreRestore => "恢复前快照",
+        _ => "手动导出",
+    };
+
+    /// <summary>列表一律说本地时间——用户记的是"我昨天下午导过一次"，不是 UTC。</summary>
+    public string WhenText => File.ModifiedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+
+    public string SizeText => FileSizeText.Human(File.LengthBytes);
+
+    public string MetaText => $"{WhenText} · {KindLabel} · {SizeText}";
+
+    /// <summary>快照那一份要说"用它回滚"：用户心里的动作是"撤销刚才那次导入"，不是"恢复一份备份"。</summary>
+    public string RestoreLabel => File.Kind == AutoBackupPolicy.BackupKind.PreRestore ? "用它回滚" : "恢复这份";
 }
