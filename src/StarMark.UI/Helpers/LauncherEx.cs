@@ -1,8 +1,8 @@
 #nullable enable
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
-using Windows.Storage;
 using Windows.System;
 
 namespace StarMark.UI.Helpers;
@@ -10,8 +10,10 @@ namespace StarMark.UI.Helpers;
 /// <summary>
 /// 统一打开条目 URI 的助手。集中处理 file:// 与 http(s):// 的差异：
 /// <list type="bullet">
-///   <item>文件/文件夹 URI 必须用 <see cref="Launcher.LaunchFileAsync"/>，
-///   <see cref="Launcher.LaunchUriAsync"/> 对 <c>file://</c> 在多数环境下静默失效（"拖入快捷访问的文件打不开"根因）。</item>
+///   <item>本地路径（文件 / 文件夹 / <c>.exe</c> / <c>.lnk</c>）经 <see cref="Process"/> 的
+///   <c>UseShellExecute=true</c>（＝资源管理器双击），这是唯一能真正启动应用的托管途径；
+///   <see cref="Launcher.LaunchFileAsync"/> 被 WinRT 拒启可执行文件、<see cref="Launcher.LaunchUriAsync"/>
+///   对 <c>file://</c> 静默失效，二者都不能用来"打开应用"。</item>
 ///   <item>网页 URI 用 <see cref="Launcher.LaunchUriAsync"/>。</item>
 /// </list>
 /// 快捷启动格与搜索结果组件共用，避免重复逻辑。
@@ -48,15 +50,16 @@ public static class LauncherEx
                     // 两种还原都不存在（文件已删）：退化为 URI 激活（可能无效果，但不抛异常）
                     await Launcher.LaunchUriAsync(parsed);
                 }
-                else if (Directory.Exists(path))
-                {
-                    var folder = await StorageFolder.GetFolderFromPathAsync(path);
-                    await Launcher.LaunchFolderAsync(folder);
-                }
                 else
                 {
-                    var file = await StorageFile.GetFileFromPathAsync(path);
-                    await Launcher.LaunchFileAsync(file);
+                    // ShellExecute（资源管理器双击等价）：.exe/.lnk 才真正能跑，文档走关联程序，文件夹在资源管理器打开。
+                    // 早先走 Launcher.LaunchFileAsync 是"打不开应用"根因——WinRT 按设计拒启可执行文件，
+                    // 且其返回的 bool 被丢弃 → 点了没反应、无任何提示。
+                    try { Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true }); }
+                    catch (Exception ex)
+                    {
+                        StarMark.Abstractions.StarLog.Error($"打开本地路径失败（ShellExecute）：{path}", ex);
+                    }
                 }
                 return;
             }
