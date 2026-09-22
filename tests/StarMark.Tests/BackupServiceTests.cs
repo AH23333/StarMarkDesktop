@@ -287,7 +287,7 @@ public sealed class BackupServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Peek_ReturnsSummaryForValidFile()
+    public async Task Summarize_CountsMatchExportedPayload()
     {
         var src = Seed(_db1);
         var item = await UpsertAsync(src.Items, "test", "a1", "标题");
@@ -296,9 +296,11 @@ public sealed class BackupServiceTests : IDisposable
         var file = Path.Combine(Path.GetTempPath(), $"bk_{Guid.NewGuid():N}.json");
         await src.Backup.ExportToFileAsync(file, CancellationToken.None);
 
-        var summary = BackupService.Peek(file);
-        Assert.NotNull(summary);
-        Assert.Equal(1, summary!.ItemCount);
+        // 与 UI 同一条路径：先按校验过的 ReadAsync 解析，再由已解析的信封算摘要。
+        // （旧 BackupService.Peek(path) 会为看个计数把整份备份再读盘+反序列化一次，已删。）
+        var env = await BackupService.ReadAsync(file, CancellationToken.None);
+        var summary = BackupService.Summarize(env);
+        Assert.Equal(1, summary.ItemCount);
         Assert.Equal(1, summary.TagCount);
     }
 

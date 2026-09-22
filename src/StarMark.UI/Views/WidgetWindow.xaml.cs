@@ -1724,7 +1724,10 @@ public sealed partial class WidgetWindow : Window
 
         var proposed = new RectInt32(x, y, w, h);
 
-        if (WidgetAppearance.SnapEnabled())
+        // 用会话快照判定，不再每次指针移动重读设置：BeginSnapSession（缩放起点）已经把
+        // "磁吸是否开启"折进 _snapWorkArea——关着时它是 null，开着时非 null。
+        // 旧的 WidgetAppearance.SnapEnabled() 在这里按 60–120 Hz 触发一次 settings.json 读+反序列化。
+        if (_snapWorkArea is not null)
         {
             // 1) 被拖动的边对齐邻居/屏幕边缘（保证边线与其他组件齐平）
             proposed = SnapResizedEdges(proposed, minW, minH);

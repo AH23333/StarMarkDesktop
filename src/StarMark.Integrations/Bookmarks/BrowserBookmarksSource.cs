@@ -25,24 +25,28 @@ public abstract class BrowserBookmarksSource : IItemSource
     public bool IsAvailable => File.Exists(_bookmarksPath);
 
     public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
-    {
-        try
+        // 书签文件常有数 MB：File.ReadAllText + JSON 解析 + 全量映射都是同步的，而点「立即同步」
+        // 是从 UI 线程一路 await 下来的 ⇒ 不 offload 就是点一下冻一下。
+        // 有意不把 ct 传给 Task.Run：本方法的契约是"任何情况下都不抛，只返回空"。
+        => Task.Run(() =>
         {
-            if (!IsAvailable) return Empty();
-            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            var items = BookmarksFileParser.ParseFile(_bookmarksPath)
-                .Select(e => BookmarkItemFactory.MapItem(e, SourceId, now))
-                .ToList();
-            return Task.FromResult<IReadOnlyList<Item>>(items);
-        }
-        catch (Exception ex)
-        {
-            // 书签文件损坏等：不阻断整体同步，返回空。但必须留痕——否则「整份书签一条没导入」
-            // 会毫无日志地静默发生（历史上解析器抛 InvalidOperationException 就被这里无声吞掉）。
-            StarLog.Warn($"读取浏览器书签失败，本次 {SourceId} 同步返回空（{_bookmarksPath}）：{ex.Message}");
-            return Empty();
-        }
-    }
+            try
+            {
+                if (!IsAvailable) return Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
+                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                var items = BookmarksFileParser.ParseFile(_bookmarksPath)
+                    .Select(e => BookmarkItemFactory.MapItem(e, SourceId, now))
+                    .ToList();
+                return Task.FromResult<IReadOnlyList<Item>>(items);
+            }
+            catch (Exception ex)
+            {
+                // 书签文件损坏等：不阻断整体同步，返回空。但必须留痕——否则「整份书签一条没导入」
+                // 会毫无日志地静默发生（历史上解析器抛 InvalidOperationException 就被这里无声吞掉）。
+                StarLog.Warn($"读取浏览器书签失败，本次 {SourceId} 同步返回空（{_bookmarksPath}）：{ex.Message}");
+                return Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
+            }
+        });
 
     public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct)
         => Empty();

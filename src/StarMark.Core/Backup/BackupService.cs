@@ -117,27 +117,19 @@ public sealed class BackupService
         return env;
     }
 
-    /// <summary>仅看摘要（不校验），供 UI 在确认对话框里展示条数。校验失败返回 null。</summary>
-    public static BackupSummary? Peek(string path)
-    {
-        try
-        {
-            var text = File.ReadAllText(path);
-            var env = JsonSerializer.Deserialize<BackupEnvelope>(text, JsonOptions);
-            if (env is null) return null;
-            return new BackupSummary(
-                env.ExportedAt,
-                env.Payload.Items.Count,
-                env.Payload.UserState.Count,
-                env.Payload.Tags.Count,
-                env.Payload.WidgetsJson is not null);
-        }
-        catch (Exception ex)
-        {
-            StarLog.Warn($"读取备份摘要失败: {ex.Message}");
-            return null;
-        }
-    }
+    /// <summary>
+    /// 从<b>已解析</b>的信封算摘要，供 UI 确认框展示条数。
+    /// 旧签名是 <c>Peek(string path)</c>：唯一调用方（导入备份）在那之前已经用 <see cref="ReadAsync"/>
+    /// 把整份文件读盘并反序列化过一次，再走 path 版本等于为一部可达数十 MB 的备份重复读+解析一次
+    /// （且在 UI 线程上）。改为收 env 后该次冗余 I/O 归零，也不再需要吞异常的"摘要读不出"分支。
+    /// </summary>
+    public static BackupSummary Summarize(BackupEnvelope env)
+        => new(
+            env.ExportedAt,
+            env.Payload.Items.Count,
+            env.Payload.UserState.Count,
+            env.Payload.Tags.Count,
+            env.Payload.WidgetsJson is not null);
 
     // ==================== 恢复 ====================
 

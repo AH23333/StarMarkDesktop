@@ -29,22 +29,34 @@ public static class WidgetAppearance
     // 以下 getter 会在组件窗口构造函数、主窗口刷新、拖放/缩放等高频路径被调用，
     // 一律不得向外抛异常：读取失败时用默认值兜底并写日志（外观退化总好过整个窗口创建失败导致崩溃）。
 
+    /// <summary>
+    /// 走 DI 里那个 <see cref="SettingsStore"/> 单例，而不是每次 <c>new SettingsStore()</c>：
+    /// 该类的读缓存是<b>实例级</b>，冷实例每次都重新 File.ReadAllText + 整档反序列化。而这些 getter 里
+    /// 最勤的 <see cref="SnapEnabled"/> 在缩放手势的<b>每次 PointerMoved</b> 上被调（60–120 Hz），
+    /// 一次组件显示也会连着读 6–9 次。取不到（启动早期）时才退回一次性读取，语义不变。
+    /// </summary>
+    private static SettingsStore Store =>
+        App.Services is { } sp
+            ? Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
+                .GetService<SettingsStore>(sp) ?? new SettingsStore()
+            : new SettingsStore();
+
     /// <summary>拖动 / 缩放时的边缘磁吸总开关（关闭 = 用户自由摆位，不做任何自动贴合）。</summary>
-    public static bool SnapEnabled() => Try(() => new SettingsStore().LoadWidgetSnapEnabled(), true);
+    public static bool SnapEnabled() => Try(() => Store.LoadWidgetSnapEnabled(), true);
 
     /// <summary>磁吸对齐间距（逻辑像素，默认 8）。用户可在设置页调节。</summary>
     public static int SnapSpacing() => Try(
-        () => new SettingsStore().LoadWidgetSnapSpacing(), StarMark.Core.Widgets.WidgetSnapCalculator.DefaultSpacing);
+        () => Store.LoadWidgetSnapSpacing(), StarMark.Core.Widgets.WidgetSnapCalculator.DefaultSpacing);
 
     /// <summary>磁吸吸附强度＝进入吸附阈值（逻辑像素，默认 24）。越大越早吸附。</summary>
     public static int SnapEngageThreshold() => Try(
-        () => new SettingsStore().LoadWidgetSnapStrength(), StarMark.Core.Widgets.WidgetSnapCalculator.DefaultEngageThreshold);
+        () => Store.LoadWidgetSnapStrength(), StarMark.Core.Widgets.WidgetSnapCalculator.DefaultEngageThreshold);
 
     public static WidgetBackdropKind Backdrop()
-        => Try(() => new SettingsStore().LoadWidgetBackdrop(), WidgetBackdropKind.Acrylic);
+        => Try(() => Store.LoadWidgetBackdrop(), WidgetBackdropKind.Acrylic);
 
     public static double Opacity()
-        => Try(() => new SettingsStore().LoadWidgetOpacity(), DefaultOpacity);
+        => Try(() => Store.LoadWidgetOpacity(), DefaultOpacity);
 
     /// <summary>
     /// 系统强调色（DeskBox 取 <c>ThemeService.GetEffectiveAccentColor()</c>）。

@@ -25,11 +25,14 @@ public sealed class DittoSource : IItemSource
         => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Ditto", "DB", "DittoDB.db");
 
     public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
-    {
-        var clip = ReadAsync(r => r.ReadRecent(MaxSync), ct);
-        if (!clip.Any()) return Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
-        return Task.FromResult<IReadOnlyList<Item>>(clip.Select(Map).ToList());
-    }
+        // 「立即同步」由 UI 线程一路 await 到这里，而下面读的是 Ditto 的 SQLite 文件（同步实现，
+        // 且可能被 Ditto 自身持写锁）——留在调用线程上就是一次点击冻一次。
+        => Task.Run(() =>
+        {
+            var clip = ReadAsync(r => r.ReadRecent(MaxSync), ct);
+            if (clip.Count == 0) return (IReadOnlyList<Item>)Array.Empty<Item>();
+            return clip.Select(Map).ToList();
+        });
 
     public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct)
     {
