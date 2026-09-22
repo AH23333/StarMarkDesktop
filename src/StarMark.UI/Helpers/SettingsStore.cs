@@ -525,19 +525,48 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         Save(d);
     }
 
-    /// <summary>本地文件索引根目录（P0-1b）。未配置时返回默认（桌面/下载/文档中存在的目录）。</summary>
+    /// <summary>
+    /// 本地文件索引根目录（P0-1b）。未配置时返回默认（桌面/下载/文档中存在的目录）。
+    /// <para>
+    /// P-56：<b>这里不再按 <c>Directory.Exists</c> 过滤</b>。旧行为会在盘没插时把"移动盘/U 盘上的目录"
+    /// 从返回结果里抹掉，而设置页那个多行文本框正是读这份结果再写回去的 ⇒ 用户在插回盘之前只要保存过
+    /// 任意一项设置，那条根就永久消失了，全程零提示。暂不可用的目录由索引侧逐根跳过
+    /// （<c>EverythingSource.FetchAsync</c> 早有 Exists 闸门），配置本身保持用户写下的原样。
+    /// </para>
+    /// </summary>
     public IReadOnlyList<string> LoadFileIndexRoots()
     {
         var d = Load();
         if (d?.FileIndexRoots is { Count: > 0 } list)
-            return list.Where(Directory.Exists).ToList();
+            return NormalizeRoots(list);
         return DefaultFileIndexRoots();
     }
 
+    /// <summary>
+    /// 已配置但<b>当前</b>不可用的根目录（不存在 / 无权限探测）。设置页据此照实说明"这条暂时不索引进库"，
+    /// 而不是像过去那样悄悄从列表里删掉它（P-56）。
+    /// </summary>
+    public IReadOnlyList<string> UnavailableFileIndexRoots()
+        => LoadFileIndexRoots().Where(r => !IsDirectoryUsable(r)).ToList();
+
+    private static bool IsDirectoryUsable(string path)
+    {
+        try { return Directory.Exists(path); }
+        catch { return false; }   // 探测本身就抛（无权限、坏网络路径）同样按"当前不可用"处理
+    }
+
+    private static List<string> NormalizeRoots(IEnumerable<string> roots)
+        => roots.Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s => s.Trim())
+                // Windows 路径大小写不敏感：OrdinalIgnoreCase 去重，否则 "d:\Docs" 与 "D:\Docs" 算两条。
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+    /// <summary>保存用户写下的根目录：只做 trim / 去空行 / 去重，<b>不</b>以"当前是否存在"为准入门（见 <see cref="LoadFileIndexRoots"/>）。</summary>
     public void SaveFileIndexRoots(IReadOnlyList<string> roots)
     {
         var d = Load() ?? new SettingsData();
-        d.FileIndexRoots = roots.Where(Directory.Exists).Distinct().ToList();
+        d.FileIndexRoots = NormalizeRoots(roots);
         Save(d);
     }
 

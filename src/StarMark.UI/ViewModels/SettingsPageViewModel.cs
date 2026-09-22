@@ -157,6 +157,7 @@ public partial class SettingsPageViewModel : ObservableObject
         // 本地文件索引（P0-1b）：根目录每行一个；上限数字
         FileIndexRootsText = string.Join("\n", Safe(_settings.LoadFileIndexRoots, Array.Empty<string>(), "索引目录"));
         MaxFileIndexCountText = Safe(_settings.LoadMaxFileIndexCount, 5000, "索引上限").ToString();
+        RefreshFileIndexRootsStatus();
 
         // 本地磁盘搜索开关：回灌初值时抑制副作用（见 _suppressLocalDiskApply）。
         _suppressLocalDiskApply = true;
@@ -254,6 +255,26 @@ public partial class SettingsPageViewModel : ObservableObject
     // ===== 本地文件索引（P0-1b）=====
     [ObservableProperty] private string _fileIndexRootsText = string.Empty;
     [ObservableProperty] private string _maxFileIndexCountText = string.Empty;
+
+    /// <summary>
+    /// 「已配置但当前不可用」的索引目录说明（空＝全部可用，控件据此隐藏）。
+    /// 过去这类目录是被 <c>Directory.Exists</c> 静默剔除的：用户看到的文本框少了一行、
+    /// 下次保存就永久没了，而搜索结果少了一批文件却无任何解释（P-56）。
+    /// </summary>
+    [ObservableProperty] private string _fileIndexRootsStatus = string.Empty;
+
+    /// <summary>有无"当前不可用目录"要提示（XAML 用现成的 BoolToVisibility 控制该行的显示）。</summary>
+    public bool HasFileIndexRootsWarning => !string.IsNullOrEmpty(FileIndexRootsStatus);
+
+    partial void OnFileIndexRootsStatusChanged(string value) => OnPropertyChanged(nameof(HasFileIndexRootsWarning));
+
+    private void RefreshFileIndexRootsStatus()
+    {
+        var unavailable = Safe(_settings.UnavailableFileIndexRoots, Array.Empty<string>(), "索引目录可用性");
+        FileIndexRootsStatus = unavailable.Count == 0
+            ? string.Empty
+            : $"以下索引目录当前不可用（不存在 / 盘未插 / 无权限），配置已保留、恢复后无需重填，但暂时不会索引进库：{string.Join("、", unavailable)}";
+    }
 
     /// <summary>
     /// 本地磁盘搜索总开关。开启即把 <see cref="StarMark.Integrations.Everything.FileIndexOptions.Enabled"/>
@@ -459,12 +480,14 @@ public partial class SettingsPageViewModel : ObservableObject
                 github.Username = string.IsNullOrWhiteSpace(GithubUsername) ? null : GithubUsername.Trim();
                 github.Save();
 
-                // 本地文件索引（P0-1b）：只保留存在的目录；上限需为正整数
+                // 本地文件索引（P0-1b）：上限需为正整数。
+                // P-56：这里不再用 Directory.Exists 过滤目录——文本框读的是同一份配置，过滤即等于
+                // "盘没插就把那条根删了"，而且全程没有一句话。暂不可用的根由索引侧逐根跳过，
+                // 并在下方 FileIndexRootsStatus 里如实列出。
                 var roots = FileIndexRootsText
                     .Split(new[] { '\n', '\r', ';' }, StringSplitOptions.RemoveEmptyEntries)
                     .Select(s => s.Trim())
-                    .Where(s => s.Length > 0 && Directory.Exists(s))
-                    .Distinct()
+                    .Where(s => s.Length > 0)
                     .ToList();
                 _settings.SaveFileIndexRoots(roots);
                 if (int.TryParse(MaxFileIndexCountText, out var cap) && cap > 0)
@@ -483,6 +506,9 @@ public partial class SettingsPageViewModel : ObservableObject
             {
                 StarLog.Error("本地文件索引配置即时应用失败（下次重启仍会生效）", fox);
             }
+
+            // 保存完立刻按磁盘现状复核"哪几条根当前不可用"，让用户当场看到而不是下次才发现少搜了目录。
+            RefreshFileIndexRootsStatus();
 
             // 写盘失败原先只进日志（P-53）：SaveCore 吞异常 ⇒ 界面表现为"已保存"，用户下次启动
             // 发现设置全回退。日志不是用户能看到的反馈面，故这里把"未落盘"当成保存失败呈现，

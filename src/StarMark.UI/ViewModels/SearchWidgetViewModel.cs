@@ -263,7 +263,9 @@ public sealed class SearchWidgetViewModel
         catch (Exception ex)
         {
             StarMark.Abstractions.StarLog.Error("桌面搜索失败", ex);
-            EmptyHint = "搜索失败，请重试";
+            // 原先只有一句"搜索失败，请重试"：既没说为什么（库被占用？SQL 异常？来源抛的？），
+            // 也没交代"要不要按什么按钮重试"——本组件重新输入关键词就会再跑一轮，把这两点写清楚（P-56）。
+            EmptyHint = $"搜索失败：{ex.Message}（重新输入关键词会自动再试一次）";
         }
         finally
         {

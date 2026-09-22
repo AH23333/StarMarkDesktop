@@ -506,6 +506,11 @@
                                     <Button Grid.Column="2" Content="保存索引目录" Click="SaveRoots_Click"
                                             Style="{StaticResource SecondaryButton}"/>
                                 </Grid>
+                                <!-- 不可用的根目录不再被静默剔除：照实列出，并说明"配置已保留、暂时不入库"（P-56）。 -->
+                                <TextBlock Text="{x:Bind ViewModel.FileIndexRootsStatus, Mode=OneWay}"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                           Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                           Visibility="{x:Bind ViewModel.HasFileIndexRootsWarning, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                             </StackPanel>
                         </Border>
                     </controls:ColumnFlowPanel>
