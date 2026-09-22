@@ -129,18 +129,25 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
     private void ScheduleAutoSave()
     {
-        _autoSaveTimer?.Stop();
-        _autoSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
-        _autoSaveTimer.Tick += (_, _) =>
+        // 单实例：滑杆拖动时本方法按指针频率触发，续期只需 Stop/Start。
+        var timer = _autoSaveTimer ??= BuildAutoSaveTimer();
+        timer.Stop();
+        timer.Start();
+    }
+
+    private DispatcherTimer BuildAutoSaveTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+        timer.Tick += (_, _) =>
         {
-            _autoSaveTimer.Stop();
+            timer.Stop();
             ViewModel.SaveCommand.Execute(null);   // 实时落盘（含外观 / 磁吸）
             App.MainWindow?.ApplyTraySettings();   // 托盘/热键即时生效
             // 材质 / 背景不透明度即时预览：主窗口与所有已打开组件重新套用外观
             App.MainWindow?.RefreshAppearance();
             _ = WidgetManager()?.RefreshAppearanceAsync();
         };
-        _autoSaveTimer.Start();
+        return timer;
     }
 
     private void SaveRoots_Click(object sender, RoutedEventArgs e)

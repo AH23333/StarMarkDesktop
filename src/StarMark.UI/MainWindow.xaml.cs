@@ -498,11 +498,18 @@ public sealed partial class MainWindow : Window
 
     private void SearchBox_TextChanging(TextBox sender, TextBoxTextChangingEventArgs args)
     {
-        _debounceTimer?.Stop();
-        _debounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
-        _debounceTimer.Tick += (s, args2) =>
+        // 单实例：本方法按击键频率触发，续期只需 Stop/Start，不必每键 new 一个计时器再另挂委托。
+        var timer = _debounceTimer ??= BuildDebounceTimer();
+        timer.Stop();
+        timer.Start();
+    }
+
+    private DispatcherTimer BuildDebounceTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+        timer.Tick += (s, args2) =>
         {
-            _debounceTimer!.Stop();
+            timer.Stop();
             var q = SearchBox.Text;
             ViewModel.Query = q;
 
@@ -527,7 +534,7 @@ public sealed partial class MainWindow : Window
                 if (string.IsNullOrWhiteSpace(q)) SetNavVisible(true);
             }
         };
-        _debounceTimer.Start();
+        return timer;
     }
 
     private void SearchBox_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
