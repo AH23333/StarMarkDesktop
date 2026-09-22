@@ -73,11 +73,12 @@ internal static class EverythingInterop
     [DllImport("Everything64.dll", SetLastError = false)]
     private static extern uint Everything_GetLastError();
 
-    // 官方 SDK 契约：调用其它任何 SDK 函数前必须先 Everything_Startup() 初始化 IPC 接收端；
-    // 否则 Everything_QueryW 直接失败并返回 EVERYTHING_ERROR_IPC(2)（本次日志实锤即此）。
-    [DllImport("Everything64.dll", SetLastError = false)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool Everything_Startup();
+    // Everything_Startup 只在 Everything **1.5** SDK 里存在；**1.4 SDK 无此导出**（官方 SDK 参考仅列 Everything_Cleanup，
+    // 1.4 直接 Everything_Query 即可）。若用 [DllImport] 硬绑，会在正常的 1.4 Everything64.dll 上抛
+    // EntryPointNotFoundException，令 SDK 整体加载失败、本地文件搜索恒空（用户 1.4.1.x 实测即此）。
+    // 故不静态声明，改由 EnsureSdkLoaded 按导出符号「探测式」可选调用。
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    private delegate bool EverythingStartupFn();
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr LoadLibraryW(string lpLibFileName);
@@ -118,20 +119,26 @@ internal static class EverythingInterop
                     return false;
                 }
 
-                if (!System.Runtime.InteropServices.NativeLibrary.TryLoad(path, out _))
+                if (!System.Runtime.InteropServices.NativeLibrary.TryLoad(path, out var module))
                 {
                     _sdkLoadError = new InvalidOperationException($"Everything64.dll 加载失败：{path}");
                     StarLog.Error(_sdkLoadError.Message);
                     return false;
                 }
 
-                // 官方 SDK 要求：任何查询前必须先 Startup 初始化 IPC 接收端，否则 QueryW 恒返回 IPC(2)。
-                if (!Everything_Startup())
+                // 仅 1.5 SDK 需要显式初始化 IPC 接收端；1.4 SDK 无 Everything_Startup 导出、直接查询即可。
+                // 探测到该导出才调用（并据返回值判失败），否则跳过——两代 SDK 兼容，且不再在 1.4 上抛 EntryPointNotFound。
+                if (System.Runtime.InteropServices.NativeLibrary.TryGetExport(module, "Everything_Startup", out var startupPtr))
                 {
-                    var err = Everything_GetLastError();
-                    _sdkLoadError = new InvalidOperationException($"Everything_Startup 失败（GetLastError={err}：{DescribeSdkError(err)}）");
-                    StarLog.Error(_sdkLoadError.Message);
-                    return false;
+                    var startup = System.Runtime.InteropServices.Marshal
+                        .GetDelegateForFunctionPointer<EverythingStartupFn>(startupPtr);
+                    if (!startup())
+                    {
+                        var err = Everything_GetLastError();
+                        _sdkLoadError = new InvalidOperationException($"Everything_Startup 失败（GetLastError={err}：{DescribeSdkError(err)}）");
+                        StarLog.Error(_sdkLoadError.Message);
+                        return false;
+                    }
                 }
 
                 _sdkLoaded = true;
