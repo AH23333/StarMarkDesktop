@@ -322,6 +322,8 @@ public sealed class EverythingSource : IItemSource
 
         // 默认实例只能有一个：接管所有权，关掉其它 Everything（提权下可结束 High-IL repack；失败仅降级）。
         CloseOtherEverything(exe);
+        // 关掉的正是"上一只 IPC 窗口"⇒ 作废 IsRunning 的粘性，否则下面轮询会把它的命中当成自带实例就绪
+        EverythingInterop.ForgetRunning();
 
         // 让自带实例不占系统托盘图标（用户视觉上只有 StarMark 一个应用）：仅改我们掌控的自带 ini。
         SeedOwnedTrayHidden();

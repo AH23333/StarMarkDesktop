@@ -190,12 +190,32 @@ internal static class EverythingInterop
         }
     }
 
-    /// <summary>检测 Everything 主程序是否运行。</summary>
+    /// <summary>
+    /// 检测 Everything 主程序是否运行。带"探到即信"的一秒粘性（P-47）：
+    /// <list type="bullet">
+    /// <item>同一次搜索里 <c>IsAvailable</c> 会被判两次（Core 侧筛源 + 队列侧查询前），两次都是全窗口
+    /// 枚举，且中间无粘性 ⇒ 一次命中一次没命中就表现为"本地文件结果时有时无"。</item>
+    /// <item>粘性<b>只往上</b>：探到 true 后 1 s 内直接返回 true；探到 false 不粘、每次都真判
+    /// ⇒ 用户退出 Everything 仍然立刻反映为不可用。</item>
+    /// </list>
+    /// </summary>
     public static bool IsRunning()
     {
-        var hwnd = FindWindowW(EverythingWindowClass, null);
-        return hwnd != IntPtr.Zero;
+        var now = Environment.TickCount64;
+        if (now - Interlocked.Read(ref _lastSeenTicks) < RunningStickyMs) return true;
+        if (FindWindowW(EverythingWindowClass, null) == IntPtr.Zero) return false;
+        Interlocked.Exchange(ref _lastSeenTicks, now);
+        return true;
     }
+
+    private const long RunningStickyMs = 1000;
+    private static long _lastSeenTicks;
+
+    /// <summary>
+    /// 让"探到在跑"的粘性立刻失效。窗口被换掉/关掉时（如接管默认实例前关掉别人的 Everything）必须调，
+    /// 否则会把**上一只**窗口的命中当成新实例就绪，导致刚开启就误报"已可用"。
+    /// </summary>
+    public static void ForgetRunning() => Interlocked.Exchange(ref _lastSeenTicks, 0);
 
     /// <summary>
     /// 通过 Everything SDK DLL（Everything64.dll，IPC）查询文件。
