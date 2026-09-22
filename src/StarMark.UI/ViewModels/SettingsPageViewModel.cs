@@ -89,6 +89,13 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty] private string _backupStatus = string.Empty;
     [ObservableProperty] private bool _isBackupBusy;
 
+    /// <summary>
+    /// 本次会话是否以管理员权限运行（开本地磁盘搜索时会重启自己提权，见 P-46）。
+    /// 提权进程跨完整性调不到中 IL 的系统文件对话框宿主 ⇒ 导出/导入的选择器稳定失败，
+    /// 与其让用户以为"备份功能坏了"，不如在备份卡片里先说明。进程存续期间不会变，故不做通知。
+    /// </summary>
+    public bool IsElevatedSession { get; } = Privilege.IsElevated();
+
     public SettingsPageViewModel()
     {
         // 与 MainWindow 保持同一实例语义：settings 文件路径由环境变量决定
