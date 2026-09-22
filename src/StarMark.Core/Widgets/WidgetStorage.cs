@@ -292,6 +292,16 @@ public sealed class WidgetStorage
     public static IReadOnlyList<WidgetKind> AllKinds { get; } =
         WidgetRegistry.Default.GetWindowDescriptors().Select(d => d.Kind).ToArray();
 
+    /// <summary>
+    /// v1（单面板时代）真实存在的五种组件。v1→v2 迁移只认这份历史清单，<b>不认</b> <see cref="AllKinds"/>：
+    /// 迁移的答案是"当时有什么"，而 AllKinds 会随注册表增长——写它的后果是每加一种组件，
+    /// 所有还没升级过的 v1 用户一升级就多开一个窗口（今天会是 12 个，含要联网的天气）。
+    /// </summary>
+    public static readonly IReadOnlyList<WidgetKind> LegacyV1Kinds = new[]
+    {
+        WidgetKind.QuickLaunch, WidgetKind.Todo, WidgetKind.QuickNote, WidgetKind.Clock, WidgetKind.Search,
+    };
+
     /// <summary>组件展示名（含图标）；未知类型回退为类型名。</summary>
     public static string KindTitle(WidgetKind kind) =>
         WidgetRegistry.Default.TryGet(kind, out var d) ? d.DisplayTitle : kind.ToString();
@@ -400,7 +410,7 @@ public sealed class WidgetStorage
         data ??= new WidgetStoreData();
 
         // v1 → v2 迁移：旧版是单面板（Config + ShowOnStartup，开关可能在根上也可能嵌在 Config 内）。
-        // 旧用户若勾选了“启动时显示”，迁移为启用全部五种组件；旧面板位置交给快捷启动格。
+        // 旧用户若勾选了“启动时显示”，迁移为启用 v1 时代的那五种组件；旧面板位置交给快捷启动格。
         if (data.Version < 2)
         {
             var showOnStartup = data.LegacyShowOnStartup == true
@@ -410,7 +420,10 @@ public sealed class WidgetStorage
                 data.Enabled ??= new List<WidgetKind>();
                 if (data.Enabled.Count == 0)
                 {
-                    data.Enabled.AddRange(AllKinds);
+                    // 刻意不写 AllKinds：迁移的答案是"当时有什么"，不是"现在有什么"。
+                    // 这句早年写的是 AllKinds（那时 5 条），注册表长到 12 种后同一条路径会跟着膨胀
+                    // ⇒ v1 老用户升级回来，桌面凭空多出天气/今日速览/音乐/四张条目格共 7 个窗口。
+                    data.Enabled.AddRange(LegacyV1Kinds);
                     if (data.LegacyConfig is { } legacy)
                     {
                         legacy.LegacyShowOnStartupInConfig = null;

@@ -152,7 +152,7 @@ public sealed class WidgetStorageTests : IDisposable
     }
 
     [Fact]
-    public void LegacyV1_ShowOnStartup_MigratesToAllKindsAsInstances()
+    public void LegacyV1_ShowOnStartup_MigratesToTheFiveV1Kinds_AsInstances()
     {
         File.WriteAllText(_path, """
         {
@@ -165,10 +165,13 @@ public sealed class WidgetStorageTests : IDisposable
         """);
         var data = Store().Load();
         Assert.Equal(3, data.Version);
-        Assert.Equal(WidgetStorage.AllKinds.Count, data.Instances.Count);
-        // 每种组件各迁移出一个实例
-        foreach (var kind in WidgetStorage.AllKinds)
-            Assert.Contains(data.Instances, i => i.Kind == kind);
+        // 迁移只认"v1 时代有什么"，不认 AllKinds。本断言原先写的是 AllKinds.Count ⇒ 它不但不拦，
+        // 还会在每次新增组件时自动改口说"12 个窗口是对的"（护栏给时间炸弹盖章）。现在钉死成历史清单，
+        // 并显式要求 AllKinds 是它的真超集：谁把 AllKinds 写回迁移里，这条立刻红。
+        Assert.Equal(WidgetStorage.LegacyV1Kinds, data.Instances.Select(i => i.Kind));
+        Assert.All(data.Instances, i => Assert.Contains(i.Kind, WidgetStorage.AllKinds));
+        Assert.True(WidgetStorage.LegacyV1Kinds.Count < WidgetStorage.AllKinds.Count,
+            "迁移清单必须是全量注册表的真子集，否则这条护栏退化成对拍（重言）拦不住任何东西。");
         // 旧面板位置迁移给快捷启动格实例
         Assert.Equal(100, data.Instances.First(i => i.Kind == WidgetKind.QuickLaunch).X);
         // 遗留字段已清空
@@ -189,7 +192,7 @@ public sealed class WidgetStorageTests : IDisposable
         }
         """);
         var data = Store().Load();
-        Assert.Equal(WidgetStorage.AllKinds.Count, data.Instances.Count);
+        Assert.Equal(WidgetStorage.LegacyV1Kinds.Count, data.Instances.Count);
         Assert.Equal(100, data.Instances.First(i => i.Kind == WidgetKind.QuickLaunch).X);
     }
 
