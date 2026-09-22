@@ -16,7 +16,7 @@ public enum WidgetKind
     Clock = 3,       // 时钟/日期
     Search = 4,      // 快捷搜索（唤起主窗口并搜索）
     TagGrid = 5,     // 标签格：某标签条目常驻桌面（差异化护城河）
-    SearchResults = 6, // 搜索结果格：钉一条查询常驻（差异化护城河）
+    Clipboard = 6, // 剪贴板格：本机复制历史常驻（原「搜索结果格」，与快捷搜索定位重叠，经用户裁决改为剪贴板；wire 值 6 不变 ⇒ 老配置自动变成本组件）
     Activity = 7,    // 最近活动格：按 updated_at 展示最近条目
     Pinned = 8,      // 置顶条目格：pinned=1 的条目
     Glance = 9,      // 今日速览（Glance）：日期 + 农历/节日 + 下一个节日倒计时 + 常看条目

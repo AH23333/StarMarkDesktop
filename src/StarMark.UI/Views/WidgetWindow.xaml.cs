@@ -1310,13 +1310,16 @@ public sealed partial class WidgetWindow : Window
         else _contextMenu?.ShowAt(DragBar, e.GetPosition(DragBar));
     }
 
-    /// <summary>主操作（胶囊左区）：搜索/快捷启动/各条目格 → 唤起主窗口；时钟/待办/随记 → 就地展开交互。</summary>
+    /// <summary>主操作（胶囊左区）：搜索/快捷启动/各条目格 → 唤起主窗口；剪贴板格直接落到「剪贴板」页；时钟/待办/随记 → 就地展开交互。</summary>
     private void ActivatePrimary()
     {
         if (_kind is WidgetKind.Search or WidgetKind.QuickLaunch
-            or WidgetKind.SearchResults or WidgetKind.TagGrid
+            or WidgetKind.Clipboard or WidgetKind.TagGrid
             or WidgetKind.Activity or WidgetKind.Pinned)
         {
+            // 剪贴板格点名要去的就是那一页：停在「全部」列表上等于把用户带到医院却不挂号。
+            // NavigateTo 不可用（主窗尚未就绪）时退回"唤起主窗"，至少窗口来到前台。
+            if (_kind == WidgetKind.Clipboard && App.MainWindow is { } mw) { mw.NavigateTo("clipboard"); return; }
             _manager.OpenMainWindow();
         }
         else if (_chromeMode == WidgetChromeMode.Compact)

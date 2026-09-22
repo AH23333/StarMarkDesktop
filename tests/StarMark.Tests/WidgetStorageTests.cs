@@ -319,8 +319,8 @@ public sealed class WidgetStorageTests : IDisposable
         // 搜索结果格的排序键须与 GridQuery 一样按实例持久化（重启后回填），且 relevance 视为默认不落盘。
         var store = Store();
         var data = store.Load();
-        var named = new WidgetInstanceConfig { Kind = WidgetKind.SearchResults, GridQuery = "stars>500", GridSort = "name" };
-        var relevance = new WidgetInstanceConfig { Kind = WidgetKind.SearchResults, GridQuery = "rag", GridSort = null };
+        var named = new WidgetInstanceConfig { Kind = WidgetKind.Clipboard, GridQuery = "stars>500", GridSort = "name" };
+        var relevance = new WidgetInstanceConfig { Kind = WidgetKind.Clipboard, GridQuery = "rag", GridSort = null };
         data.Instances.Add(named);
         data.Instances.Add(relevance);
         store.Save(data);

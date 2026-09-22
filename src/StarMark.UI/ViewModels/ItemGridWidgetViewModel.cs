@@ -16,12 +16,18 @@ public enum ItemGridMode
 {
     /// <summary>标签格：某标签条目常驻。</summary>
     Tag,
-    /// <summary>搜索结果格：钉一条查询常驻。</summary>
+    /// <summary>搜索结果格：钉一条查询常驻。（原「搜索结果格」的内容源，已被剪贴板格取代，待清理）</summary>
     Search,
     /// <summary>最近活动格：按 updated_at 展示最近条目。</summary>
     Activity,
     /// <summary>置顶条目格：pinned=1 的条目。</summary>
     Pinned,
+    /// <summary>
+    /// 剪贴板格：本机复制历史常驻（<c>source='clipboard'</c>）。<b>展示型组件</b>——
+    /// 与置顶条目格同构：一行一条、点一条把它再复制回剪贴板、右键是与主窗逐条一致的条目菜单、
+    /// 并订阅数据广播实时刷新（复制一条就当场出现在桌面上）。
+    /// </summary>
+    Clipboard,
 }
 
 /// <summary>
@@ -78,6 +84,29 @@ public sealed class ItemGridWidgetViewModel
 
     /// <summary>该格是否需要配置栏（仅标签格 / 搜索结果格）。</summary>
     public bool IsConfigurable => Mode is ItemGridMode.Tag or ItemGridMode.Search;
+
+    /// <summary>剪贴板格最多铺几条：桌面上的展示型组件要"一眼看完最近"，完整列表在「剪贴板」页里看。</summary>
+    public const int ClipboardLimit = 100;
+
+    /// <summary>
+    /// 空列表时该说什么。<b>剪贴板格不能只说"暂无条目"</b>：一片空白最容易被读成"组件坏了"，
+    /// 而真实原因有四种（没开启 / 开着但监听窗没建立 / 正在暂停 / 真的还没复制过），
+    /// 每种对应的下一步动作都不一样——照实说是省掉一轮"是不是 bug"来回沟通的唯一办法。
+    /// </summary>
+    public string EmptyStateText => Mode switch
+    {
+        ItemGridMode.Clipboard when !App.IsClipboardHistoryEnabled()
+            => "剪贴板历史还没开启：到「设置 → 数据 → 剪贴板历史」打开后，复制过的内容会自动出现在这里。",
+        ItemGridMode.Clipboard when !App.IsClipboardCollecting
+            => "开关已打开，但采集窗口没建立——期间不会记录任何复制。到设置里把该开关关掉再打开即可重试。",
+        ItemGridMode.Clipboard when App.IsClipboardPaused
+            => "正在暂停记录（临时粘贴私密内容用的）。到「剪贴板」页关掉「暂停记录」就会继续采集。",
+        ItemGridMode.Clipboard
+            => "还没有记录到任何复制内容。复制一段文字，它就会出现在这里。",
+        ItemGridMode.Activity
+            => "暂无活动记录。新增 / 删除 / 修改条目（含待办、随记、快捷入口、笔记、标签）后会显示在这里。",
+        _ => NeedsConfig ? "先在上方配置要钉的内容" : "暂无条目",
+    };
 
     public ItemGridWidgetViewModel(ItemGridMode mode, WidgetStorage storage, IItemRepository? repo, string instanceId, WidgetKind kind, SearchService? search = null)
     {
@@ -136,6 +165,12 @@ public sealed class ItemGridWidgetViewModel
                     : (await _repo.SearchAsync(Query ?? string.Empty,
                         new SearchFilter { Tags = Tags.Where(t => t.Selected).Select(t => t.Name).ToList(), MaxResults = 200, Sort = Sort }, CancellationToken.None)).Items,
                 ItemGridMode.Pinned => await _repo.GetPinnedAsync(200, CancellationToken.None),
+                // 剪贴板格：只读本机采集的那一份（source 限定 ⇒ 不会把 Ditto 的历史混进来，
+                // 那类行的正文属于外部程序，展示在这里会诱导用户去删别人的库）。
+                ItemGridMode.Clipboard => (await _repo.GetBySourceAsync(
+                        ItemSources.Clipboard, ItemType.Clipboard, ClipboardLimit, CancellationToken.None))
+                    // 与「剪贴板」页同一口径：置顶优先，其余按最近复制（仓储已按 updated_at 倒序）。
+                    .OrderByDescending(i => i.Pinned).ToList(),
                 _ => Array.Empty<Item>(),
             };
 

@@ -16,9 +16,8 @@ namespace StarMark.UI.Views;
 
 /// <summary>
 /// 差异化条目格宿主（Phase A-2，StarMark 护城河）：
-/// 标签格 / 搜索结果格 / 最近活动格 / 置顶条目格，共用一个控件，按 <see cref="ItemGridMode"/> 决定查询策略。
-/// 标签格与搜索结果格在组件内即可配置（钉标签 / 钉查询）并持久化到 widgets.json；
-/// 活动格 / 置顶条目格直接查询统一 items 表，无需配置。
+/// 标签格 / 剪贴板格 / 最近活动格 / 置顶条目格，共用一个控件，按 <see cref="ItemGridMode"/> 决定查询策略。
+/// 标签格在组件内即可配置（钉标签）并持久化到 widgets.json；活动格 / 置顶格 / 剪贴板格直接查询统一 items 表，无需配置。
 /// 抄 DeskBox 思路：内容只读查询、外壳由 WidgetWindow 承载。
 /// </summary>
 public sealed partial class ItemGridWidget : UserControl
@@ -80,10 +79,8 @@ public sealed partial class ItemGridWidget : UserControl
         else
             ResultsRepeater.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
 
-        if (empty)
-            EmptyHint.Text = isActivity
-                ? "暂无活动记录。新增 / 删除 / 修改条目（含待办、随记、快捷入口、笔记、标签）后会显示在这里。"
-                : ViewModel.NeedsConfig ? "先在上方配置要钉的内容" : "暂无条目";
+        // 文案交给 ViewModel：剪贴板格的"为什么是空的"有四种，各自对应不同的下一步动作。
+        if (empty) EmptyHint.Text = ViewModel.EmptyStateText;
     }
 
     private void ConfigBox_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -119,9 +116,32 @@ public sealed partial class ItemGridWidget : UserControl
 
     private void ClearTags_Click(object sender, RoutedEventArgs e) => ViewModel.ClearTags();
 
-    private async void ResultOpen_Click(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// 行数据 → 条目。<b>行是轻量记录、不带 Description</b>，所以按 Id 走 <see cref="ItemCardActions"/> 那条
+    /// "现查库再动作"的路，正文/标签/置顶态才拿得全（剪贴板格的"再复制"尤其依赖正文）。
+    /// </summary>
+    private static Item RowAsItem(ItemRowItem row) => new()
     {
-        if (sender is Button { Tag: ItemRowItem row }) await LauncherEx.OpenAsync(row.Uri);
+        Id = row.Id,
+        Type = row.Type,
+        Title = row.Title,
+        Subtitle = row.Subtitle,
+        Uri = row.Uri,
+        Source = row.Source,
+        SourceId = row.SourceId,
+    };
+
+    /// <summary>
+    /// 点一行 = 该行的主操作。<b>刻意不直接 <c>LauncherEx.OpenAsync(row.Uri)</c></b>：
+    /// 剪贴板条目（以及无链接的待办/随记）Uri 恒为空，那样点下去静默无事发生。
+    /// 交给 <see cref="ItemCardActions.Open(XamlRoot, ItemCardViewModel)"/> 按条目类型分流——
+    /// 剪贴板条目＝把正文再复制回剪贴板（含回声登记，不会被自己再记一条），
+    /// 已入库条目＝按最新库值打开，未入库虚拟行（Everything，Id=0）＝按行 Uri 启动。
+    /// </summary>
+    private void ResultOpen_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ItemRowItem row })
+            ItemCardActions.Open(this.XamlRoot, new ItemCardViewModel(RowAsItem(row)));
     }
 
     /// <summary>拖出（CanDrag/DragStarting）：把该行本地文件/文件夹以存储项引用拖到桌面/资源管理器，网页则拖为快捷方式。只交引用不改动磁盘。</summary>
@@ -149,8 +169,7 @@ public sealed partial class ItemGridWidget : UserControl
             args.Handled = true;   // 阻止冒泡到 RootBorder.ContextFlyout（组件菜单）
             // 搜索结果格会合并 Everything 实时源（未入库、Id=0）；置顶/标签格为已入库行。
             // 传兜底条目后虚拟行也能弹菜单（Id=0 时 ShowForItem 的 GetByIdAsync 查不到 → 用行数据）。
-            var fallback = new Item { Id = item.Id, Type = item.Type, Title = item.Title, Subtitle = item.Subtitle, Uri = item.Uri, Source = item.Source, SourceId = item.SourceId };
-            ItemContextMenu.ShowForItem(item.Id, el, fallback);
+            ItemContextMenu.ShowForItem(item.Id, el, RowAsItem(item));
         }
     }
 }

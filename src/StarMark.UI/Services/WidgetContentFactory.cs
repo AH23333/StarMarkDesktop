@@ -54,7 +54,7 @@ public sealed class WidgetContentFactory
         factory.Register(WidgetKind.Search, w => new SearchWidget(w.Repository));
         // 差异化条目格：四种模式共用一个 ItemGridWidget，按 WidgetKind 决定查询策略。
         factory.Register(WidgetKind.TagGrid, w => new ItemGridWidget(ItemGridMode.Tag, w));
-        factory.Register(WidgetKind.SearchResults, w => new ItemGridWidget(ItemGridMode.Search, w));
+        factory.Register(WidgetKind.Clipboard, w => new ItemGridWidget(ItemGridMode.Clipboard, w));
         factory.Register(WidgetKind.Activity, w => new ItemGridWidget(ItemGridMode.Activity, w));
         factory.Register(WidgetKind.Pinned, w => new ItemGridWidget(ItemGridMode.Pinned, w));
         // Phase C：今日速览（日期 + 农历/节日 + 倒计时 + 常看条目）

@@ -150,7 +150,7 @@ public sealed class WidgetRegistry
             WidgetKind.TagGrid, "标签格", "🏷️", 300, 400, IsFeatureWidget: true);
 
         yield return new WidgetDescriptor(
-            WidgetKind.SearchResults, "搜索结果格", "📌", 320, 420, IsFeatureWidget: true);
+            WidgetKind.Clipboard, "剪贴板格", "📋", 320, 420, IsFeatureWidget: true);
 
         yield return new WidgetDescriptor(
             WidgetKind.Activity, "最近活动格", "🕘", 300, 400, IsFeatureWidget: true);

@@ -438,6 +438,34 @@ public partial class App : Application
         }
     }
 
+    /// <summary>用户是否开过「剪贴板历史」开关（默认关）。与"是否真的在采集"是两件事，分开问。</summary>
+    public static bool IsClipboardHistoryEnabled()
+    {
+        try
+        {
+            return new StarMark.UI.Helpers.SettingsStore().LoadClipboardHistoryEnabled();
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("读取剪贴板历史开关失败（按未开启处理）", ex);
+            return false;
+        }
+    }
+
+    /// <summary>是否处于「暂停记录」（监听在跑但不落库）。取不到监听窗时按未暂停处理，不猜。</summary>
+    public static bool IsClipboardPaused
+    {
+        get
+        {
+            try
+            {
+                var w = Services.GetRequiredService<StarMark.Integrations.Clipboard.ClipboardWatcher>();
+                return w.IsRunning && w.Paused;
+            }
+            catch { return false; }
+        }
+    }
+
     /// <summary>暂停/恢复记录（临时粘贴私密内容用）。暂停期间监听仍在，只是不落库。</summary>
     public static void SetClipboardPaused(bool paused)
     {
