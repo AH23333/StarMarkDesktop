@@ -261,6 +261,34 @@
                                     <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.EnableWidgetSnap, Mode=TwoWay}"/>
                                 </Grid>
+
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="磁吸强度"/>
+                                        <TextBlock Text="距其它组件边线 / 屏幕边缘多近就贴上（像素）。数值越大越容易吸住，越大手感越「粘」；调小则更接近自由摆放。" Style="{StaticResource SettingRowText}"/>
+                                    </StackPanel>
+                                    <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
+                                        <Slider Grid.Column="0" Minimum="4" Maximum="64" StepFrequency="2" Width="150"
+                                                Value="{x:Bind ViewModel.SnapStrength, Mode=TwoWay}"/>
+                                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Width="46"
+                                                   Text="{x:Bind ViewModel.SnapStrengthText, Mode=OneWay}"
+                                                   Style="{StaticResource MutedText}"/>
+                                    </Grid>
+                                </Grid>
+
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="对齐间距"/>
+                                        <TextBlock Text="吸住之后组件之间保留的缝隙（像素）。0＝边边紧贴，越大排得越松。" Style="{StaticResource SettingRowText}"/>
+                                    </StackPanel>
+                                    <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
+                                        <Slider Grid.Column="0" Minimum="0" Maximum="40" StepFrequency="1" Width="150"
+                                                Value="{x:Bind ViewModel.SnapSpacing, Mode=TwoWay}"/>
+                                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Width="46"
+                                                   Text="{x:Bind ViewModel.SnapSpacingText, Mode=OneWay}"
+                                                   Style="{StaticResource MutedText}"/>
+                                    </Grid>
+                                </Grid>
                                 <TextBlock Text="开启后：拖动组件会与其它组件的边线、屏幕边缘自动贴合；调整边缘时会同步对齐宽 / 高，让参差不齐的组件一次拉齐。想自己随手摆放就关掉它。"
                                            Style="{StaticResource SettingRowText}"/>
                             </StackPanel>

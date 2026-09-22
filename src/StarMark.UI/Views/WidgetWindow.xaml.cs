@@ -1618,11 +1618,13 @@ public sealed partial class WidgetWindow : Window
         _snapWorkArea = WidgetSnapCalculator.InsetWorkArea(
             WindowInterop.GetWorkArea(this),
             (int)Math.Round(WidgetSnapCalculator.DefaultScreenMargin * scale));
-        _snapSpacing = (int)Math.Round(WidgetSnapCalculator.DefaultSpacing * scale);
-        _snapEngage = Math.Max(1, (int)Math.Round(WidgetSnapCalculator.DefaultEngageThreshold * scale));
+        _snapSpacing = (int)Math.Round(WidgetAppearance.SnapSpacing() * scale);
+        _snapEngage = Math.Max(1, (int)Math.Round(WidgetAppearance.SnapEngageThreshold() * scale));
+        // 迟滞：release 恒比 engage 宽一档（沿用默认 24→32 的 +8px 关系），避免拖动时抖动。
         _snapRelease = Math.Max(
             _snapEngage,
-            (int)Math.Round(WidgetSnapCalculator.DefaultReleaseThreshold * scale));
+            (int)Math.Round((WidgetAppearance.SnapEngageThreshold()
+                + (WidgetSnapCalculator.DefaultReleaseThreshold - WidgetSnapCalculator.DefaultEngageThreshold)) * scale));
         _stickyHorizontal = null;
         _stickyVertical = null;
     }

@@ -32,6 +32,14 @@ public static class WidgetAppearance
     /// <summary>拖动 / 缩放时的边缘磁吸总开关（关闭 = 用户自由摆位，不做任何自动贴合）。</summary>
     public static bool SnapEnabled() => Try(() => new SettingsStore().LoadWidgetSnapEnabled(), true);
 
+    /// <summary>磁吸对齐间距（逻辑像素，默认 8）。用户可在设置页调节。</summary>
+    public static int SnapSpacing() => Try(
+        () => new SettingsStore().LoadWidgetSnapSpacing(), StarMark.Core.Widgets.WidgetSnapCalculator.DefaultSpacing);
+
+    /// <summary>磁吸吸附强度＝进入吸附阈值（逻辑像素，默认 24）。越大越早吸附。</summary>
+    public static int SnapEngageThreshold() => Try(
+        () => new SettingsStore().LoadWidgetSnapStrength(), StarMark.Core.Widgets.WidgetSnapCalculator.DefaultEngageThreshold);
+
     public static WidgetBackdropKind Backdrop()
         => Try(() => new SettingsStore().LoadWidgetBackdrop(), WidgetBackdropKind.Acrylic);
 

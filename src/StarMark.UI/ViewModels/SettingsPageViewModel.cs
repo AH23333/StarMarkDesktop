@@ -61,6 +61,18 @@ public partial class SettingsPageViewModel : ObservableObject
     /// <summary>组件边缘磁吸总开关（关闭后用户自由摆位）。</summary>
     [ObservableProperty] private bool _enableWidgetSnap = true;
 
+    /// <summary>磁吸贴合后的目标间距（逻辑像素，0＝边边紧贴）。</summary>
+    [ObservableProperty] private double _snapSpacing = 8;
+
+    /// <summary>磁吸强度：距参照线多近即吸附（逻辑像素）。越大越容易吸上。</summary>
+    [ObservableProperty] private double _snapStrength = 24;
+
+    public string SnapSpacingText => $"{(int)SnapSpacing} px";
+    public string SnapStrengthText => $"{(int)SnapStrength} px";
+
+    partial void OnSnapSpacingChanged(double value) => OnPropertyChanged(nameof(SnapSpacingText));
+    partial void OnSnapStrengthChanged(double value) => OnPropertyChanged(nameof(SnapStrengthText));
+
     /// <summary>组件不透明度百分比文本（滑块右侧读数）。</summary>
     public string OpacityPercentText => $"{(int)Math.Round(WidgetOpacity * 100)}%";
 
@@ -127,6 +139,8 @@ public partial class SettingsPageViewModel : ObservableObject
         WidgetOpacity = Safe(_settings.LoadWidgetOpacity, WidgetAppearance.DefaultOpacity, "不透明度");
         MainWindowOpacity = Safe(_settings.LoadMainWindowOpacity, WidgetAppearance.DefaultOpacity, "主窗口不透明度");
         EnableWidgetSnap = Safe(_settings.LoadWidgetSnapEnabled, true, "边缘磁吸");
+        SnapSpacing = Safe(_settings.LoadWidgetSnapSpacing, 8, "磁吸间距");
+        SnapStrength = Safe(_settings.LoadWidgetSnapStrength, 24, "磁吸强度");
 
         // 性能模式 / 内存门禁
         PerformanceModeIndex = (int)Safe(_settings.LoadPerformanceMode, PerformanceMode.Balanced, "性能模式");
@@ -331,6 +345,8 @@ public partial class SettingsPageViewModel : ObservableObject
             _settings.SaveEnableGlobalHotKey(EnableGlobalHotKey);
             _settings.SaveMinimizeToTray(MinimizeToTray);
             _settings.SaveWidgetSnapEnabled(EnableWidgetSnap);
+            _settings.SaveWidgetSnapSpacing((int)SnapSpacing);
+            _settings.SaveWidgetSnapStrength((int)SnapStrength);
             _settings.SaveWidgetBackdrop((WidgetBackdropKind)BackdropIndex);
             _settings.SaveWidgetOpacity(WidgetOpacity);
             _settings.SaveMainWindowBackdrop((WidgetBackdropKind)MainWindowBackdropIndex);

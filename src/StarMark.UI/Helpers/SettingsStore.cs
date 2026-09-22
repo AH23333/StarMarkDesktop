@@ -44,6 +44,10 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         public string? HotkeyBindingsJson { get; set; }
         /// <summary>组件拖动 / 缩放时的边缘磁吸总开关（默认开启）。关闭后用户可自由摆位。</summary>
         public bool? WidgetSnapEnabled { get; set; }
+        /// <summary>磁吸对齐间距（物理像素，默认 8）：两组件贴合时保留的间隙。</summary>
+        public int? WidgetSnapSpacing { get; set; }
+        /// <summary>磁吸吸附强度→进入阈值（物理像素，默认 24）：越大越早吸附（更易吸、更难微调）。</summary>
+        public int? WidgetSnapStrength { get; set; }
         /// <summary>半透明材质：0=亚克力 1=云母 2=不透明（默认 0）。</summary>
         public int? WidgetBackdrop { get; set; }
         /// <summary>组件背景不透明度 0.3–1.0（默认 0.72），配合半透明材质使用。</summary>
@@ -201,6 +205,32 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     {
         var d = Load() ?? new SettingsData();
         d.WidgetSnapEnabled = enabled;
+        Save(d);
+    }
+
+    /// <summary>磁吸对齐间距（逻辑像素，默认 8，范围 0–40）：两组件贴合时保留的间隙。</summary>
+    public int LoadWidgetSnapSpacing()
+        => Load() is { } d && d.WidgetSnapSpacing is { } v
+            ? Math.Clamp(v, 0, 40)
+            : StarMark.Core.Widgets.WidgetSnapCalculator.DefaultSpacing;
+
+    public void SaveWidgetSnapSpacing(int px)
+    {
+        var d = Load() ?? new SettingsData();
+        d.WidgetSnapSpacing = Math.Clamp(px, 0, 40);
+        Save(d);
+    }
+
+    /// <summary>磁吸吸附强度＝进入吸附阈值（逻辑像素，默认 24，范围 4–64）：越大越早吸附。</summary>
+    public int LoadWidgetSnapStrength()
+        => Load() is { } d && d.WidgetSnapStrength is { } v
+            ? Math.Clamp(v, 4, 64)
+            : StarMark.Core.Widgets.WidgetSnapCalculator.DefaultEngageThreshold;
+
+    public void SaveWidgetSnapStrength(int px)
+    {
+        var d = Load() ?? new SettingsData();
+        d.WidgetSnapStrength = Math.Clamp(px, 4, 64);
         Save(d);
     }
 
