@@ -16,6 +16,11 @@ internal static class NativeMethods
     public const uint WM_RBUTTONUP = 0x0205;
     public const uint TRAY_CALLBACK = 0x8001; // WM_APP + 1
 
+    // 剪贴板（批次 ID：内置剪贴板历史的采集侧）
+    public const uint WM_CLIPBOARDUPDATE = 0x031D;   // Vista+；旧的 WM_RENDERFORMAT 路线不需要
+    public const uint CF_UNICODETEXT = 13;
+    public const uint CF_HDROP = 15;
+
     public const int GWL_USERDATA = -21;
     public const int SW_HIDE = 0;
     public const int SW_SHOW = 5;
@@ -216,4 +221,39 @@ internal static class NativeMethods
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     public static extern bool Shell_NotifyIconW(uint dwMessage, ref NOTIFYICONDATA lpdata);
+
+    // ===== 剪贴板采集（批次 ID）=====
+    [DllImport("user32.dll")]
+    public static extern bool AddClipboardFormatListener(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool RemoveClipboardFormatListener(IntPtr hWnd);
+
+    /// <remarks>另一个应用正持有剪贴板时返回 false——调用方需短重试，不要把"这一次没读到"当成"剪贴板是空的"。</remarks>
+    [DllImport("user32.dll")]
+    public static extern bool OpenClipboard(IntPtr hWndNewOwner);
+
+    [DllImport("user32.dll")]
+    public static extern bool CloseClipboard();
+
+    [DllImport("user32.dll")]
+    public static extern bool IsClipboardFormatAvailable(uint format);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr GetClipboardData(uint uFormat);
+
+    [DllImport("kernel32.dll")]
+    public static extern UIntPtr GlobalSize(IntPtr hMem);
+
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr GlobalLock(IntPtr hMem);
+
+    [DllImport("kernel32.dll")]
+    public static extern bool GlobalUnlock(IntPtr hMem);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 }
