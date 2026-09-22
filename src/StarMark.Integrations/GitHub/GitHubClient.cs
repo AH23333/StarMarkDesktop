@@ -43,7 +43,10 @@ public sealed class GitHubClient : IDisposable
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _perPage = Math.Clamp(_options.PageSize, 1, 100);
 
-        _http = http ?? new HttpClient();
+        // 自己 new 的 HttpClient 必须有界：默认 100 s，代理/门户网络（TCP 连上但不回包）下每页都要
+        // 冻满 100 s，而同步入口传的是 CancellationToken.None ⇒ 用户只能等或杀进程。
+        // 注入进来的不动 Timeout（可能是共享实例，改它会波及别处）。
+        _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         if (!string.IsNullOrEmpty(_options.Token))
