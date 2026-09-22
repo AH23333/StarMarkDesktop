@@ -176,12 +176,16 @@ public sealed partial class MainWindow : Window
             }
             else if (kind == WidgetBackdropKind.None)
             {
-                // 实色（None）：交回 XAML 声明式 `{ThemeResource ApplicationPageBackgroundThemeBrush}`。
-                // 不能用代码画笔覆盖——`ApplicationPageBackgroundThemeBrush` 是框架内置画笔，其 ThemeDictionaries
-                // 桶在运行期是 `ResourceDictionaryThemeData`（非 `ResourceDictionary`），ThemeBrush.For 的
-                // FindInDict（要求 `is ResourceDictionary`）读不到 → 落到跟随冻结应用主题的兜底 → 浅色模式下
-                // 解析出深色/黑色。XAML 的 ThemeResource 会正确跟随本窗口 ActualTheme，浅色即浅色。
-                RootGrid.ClearValue(Microsoft.UI.Xaml.Controls.Panel.BackgroundProperty);
+                // 实色（None）：不再交回框架 XAML `{ThemeResource ApplicationPageBackgroundThemeBrush}`——
+                // 批次 O 曾假设它"浅色即浅色"，但真机在浅色下仍解析出深色/纯黑（该内置画笔的 ThemeDictionaries
+                // 桶在运行期是 ResourceDictionaryThemeData，XAML 侧偶发命中深色 Default 桶）。
+                // 改为按窗口"实际主题"显式铺主题化实色：浅色＝浅灰白、深色＝柔和深灰（非纯黑），且随
+                // ActualThemeChanged（构造期已订阅）在切换时重铺。绝不依赖任何可能判错的框架画笔资源。
+                var lightSurface = RootGrid.ActualTheme != ElementTheme.Dark;
+                RootGrid.Background = new SolidColorBrush(lightSurface
+                    ? Windows.UI.Color.FromArgb(0xFF, 0xF3, 0xF3, 0xF3)
+                    : Windows.UI.Color.FromArgb(0xFF, 0x20, 0x20, 0x20));
+                StarLog.Info($"[材质诊断] 实色(None) 主窗底色按实际主题铺：ActualTheme={RootGrid.ActualTheme} pref={_themePref} → {(lightSurface ? "浅" : "深")}");
             }
             else
             {
