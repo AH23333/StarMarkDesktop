@@ -81,11 +81,27 @@ public sealed class ItemRepository : IItemRepository
         // 语言闸门只约束 GitHubStar：LanguageDetector.EnsureLanguage 会给任意来源（含本地文件）
         // 按扩展名兜底打 Language，所以 @lang 若不加豁免，选中语言就会把已入库的本地文件行
         // 一起筛掉（.mp3 被当成"非 C#"消失）。产品口径：语言对本地文件无效，见 SearchService 同类豁免。
+        //
+        // P-49 修复：**所有谓词都在 LIMIT 之前生效**。原写法把 type/lang/hidden/标签谓词留在外层
+        // WHERE，而 LIMIT 在 CTE 内先按相关度截断 ⇒ 被过滤掉的行照样占名额：结果页偏短，分页时
+        // HasMore 还会提前判 false（用户读作"才 60 条就到底了"）。谓词下进 CTE 后，LIMIT 数的是
+        // 真正通过筛选的行。代价是 join+谓词要跑在全部 FTS 命中上——但 bm25 排序本来就要给每条
+        // 命中算 rank 并排序，这里只是常数级增加，且标签 EXISTS 走 idx_item_tags_tag。
+        var filteredWhere = @"
+            WHERE items_fts MATCH @keyword
+              AND (@type_filter IS NULL OR i.type = @type_filter)
+              AND (@stars_min IS NULL OR i.stars_count >= @stars_min)
+              AND (@date_from IS NULL OR i.updated_at >= @date_from)
+              AND (@lang IS NULL OR i.type = 'file' OR json_extract(i.extra_json, '$.Language') = @lang)
+              AND (@include_hidden = 1 OR i.hidden = 0)"
+            + BuildTagClause(filter.Tags, "i");
+
         var sql = @"
             WITH fts_hits AS (
-                SELECT rowid, bm25(items_fts) AS rank
+                SELECT items_fts.rowid AS rowid, bm25(items_fts) AS rank
                 FROM items_fts
-                WHERE items_fts MATCH @keyword
+                JOIN items i ON i.id = items_fts.rowid"
+            + filteredWhere + @"
                 ORDER BY rank
                 LIMIT @limit
             )
@@ -97,12 +113,6 @@ public sealed class ItemRepository : IItemRepository
                     WHERE it.item_id = i.id) AS tag_names
             FROM fts_hits f
             JOIN items i ON i.id = f.rowid
-            WHERE (@type_filter IS NULL OR i.type = @type_filter)
-              AND (@stars_min IS NULL OR i.stars_count >= @stars_min)
-              AND (@date_from IS NULL OR i.updated_at >= @date_from)
-              AND (@lang IS NULL OR i.type = 'file' OR json_extract(i.extra_json, '$.Language') = @lang)
-              AND (@include_hidden = 1 OR i.hidden = 0)"
-            + BuildTagClause(filter.Tags, "i") + @"
             GROUP BY i.id
             ORDER BY " + orderBy + ";";
 

@@ -822,4 +822,65 @@ public sealed class ItemRepositoryTests : IDisposable
         Assert.Null(await repo.GetByIdAsync(a.Id, CancellationToken.None));    // 目标条目删
         Assert.NotNull(await repo.GetByIdAsync(b.Id, CancellationToken.None)); // 同源他条存活
     }
+
+    [Fact]
+    public async Task Search_NarrowingFilter_LimitCountsOnlySurvivingRows()
+    {
+        // P-49：谓词必须比 LIMIT 先生效。旧写法把 type 过滤留在 CTE 外层，LIMIT 先按相关度截断
+        // ⇒ 高分但被过滤掉的行白占名额，页偏短，分页时 HasMore 提前 false（"才几条就到底了"）。
+        // 这里让 90 条 bookmark 的 "widget" 出现 3 次（bm25 词频更高 ⇒ rank 更靠前），
+        // 只有 10 条 star 符合条件：旧形状取 top5 全是 bookmark → 过滤后 0 条；新形状 5 条。
+        var repo = new ItemRepository(_factory);
+        var noise = Enumerable.Range(0, 90).Select(i => new Item
+        {
+            Type = ItemType.Bookmark, Source = "test", SourceId = $"n{i}",
+            Title = "widget widget widget", Uri = $"https://example.com/n{i}",
+        });
+        var stars = Enumerable.Range(0, 10).Select(i => new Item
+        {
+            Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = $"s{i}",
+            Title = "widget", Uri = $"https://github.com/o/s{i}",
+        });
+        await repo.UpsertAsync(noise.Concat(stars).ToList(), CancellationToken.None);
+
+        // 先自证判据成立：不加过滤时 top5 确实全是那 90 条"高分但不合格"的 bookmark
+        // ——否则下面这条断言就没有鉴别力（旧形状碰巧也能过）。
+        var unfiltered = await repo.SearchAsync("widget",
+            new SearchFilter { MaxResults = 5 }, CancellationToken.None);
+        Assert.All(unfiltered.Items, i => Assert.Equal(ItemType.Bookmark, i.Type));
+
+        var result = await repo.SearchAsync("widget",
+            new SearchFilter { Type = ItemType.GitHubStar, MaxResults = 5 }, CancellationToken.None);
+
+        Assert.Equal(5, result.Items.Count);
+        Assert.All(result.Items, i => Assert.Equal(ItemType.GitHubStar, i.Type));
+    }
+
+    [Fact]
+    public async Task Search_NarrowingFilter_SurvivingRowsStillOrderAndHydrateNormally()
+    {
+        // 同一条 SQL 重写后的护栏：谓词下进 CTE 不得改变结果内容/字段 hydration/排序，
+        // 也不得让标签 EXISTS（引用 CTE 内的 i 别名）失效。
+        var repo = new ItemRepository(_factory);
+        var keep = new Item
+        {
+            Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "keep/one",
+            Title = "widget keeper", Subtitle = "保留项", Uri = "https://github.com/keep/one",
+            Description = "带标签的 star",
+        };
+        var drop = new Item
+        {
+            Type = ItemType.Bookmark, Source = "test", SourceId = "drop",
+            Title = "widget widget widget", Uri = "https://example.com/drop",
+        };
+        await repo.UpsertAsync(new[] { drop, keep }, CancellationToken.None);
+        await repo.AddTagAsync(keep.Id, "工具", CancellationToken.None);
+
+        var byTag = await repo.SearchAsync("widget",
+            new SearchFilter { Tags = new[] { "工具" }, MaxResults = 10 }, CancellationToken.None);
+        var only = Assert.Single(byTag.Items);
+        Assert.Equal("widget keeper", only.Title);
+        Assert.Equal("保留项", only.Subtitle);
+        Assert.Contains("工具", only.Tags);
+    }
 }
