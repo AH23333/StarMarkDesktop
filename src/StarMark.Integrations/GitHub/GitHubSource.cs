@@ -1,4 +1,5 @@
 #nullable enable
+using System.Globalization;
 using System.Text.Json;
 using StarMark.Abstractions;
 
@@ -114,11 +115,22 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
         };
     }
 
-    /// <summary>ISO 8601 时间字符串 → Unix 秒。失败返回 null。</summary>
-    private static long? ParseUnixTime(string? iso)
+    /// <summary>
+    /// ISO 8601 时间字符串 → Unix 秒。失败返回 null。<c>internal</c> 仅为可机检单测。
+    /// <para>
+    /// 锁 InvariantCulture 是<b>纵深防御</b>：GitHub 现网回的 <c>2024-05-01T12:00:00Z</c> 这类完整
+    /// ISO 走 .NET 的 ISO 快路，本就不吃机器文化的历法（已实测）；但日期一旦退化成
+    /// <c>2024-05-01</c> / <c>2024-05-01 12:00:00</c>（代理改写、缓存字段、以后别的来源），
+    /// th-TH/ar-SA 的 <c>DateTimeFormatInfo.Calendar</c> 会把四位数年份按佛历/希吉来历解释，
+    /// 实测同一字符串从 1.71e9 掉到 -1.54e10（差 ~540 年），排序/相对时间/洞察一起歪。
+    /// 与日志文件名的同源处置（见 StarLog），也与 OpenMeteoClient 已锁文化的时间解析一致。
+    /// 逐例断言见 CultureInvariantNamingTests。
+    /// </para>
+    /// </summary>
+    internal static long? ParseUnixTime(string? iso)
     {
         if (string.IsNullOrEmpty(iso)) return null;
-        if (DateTimeOffset.TryParse(iso, out var dto))
+        if (DateTimeOffset.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dto))
             return dto.ToUnixTimeSeconds();
         return null;
     }
