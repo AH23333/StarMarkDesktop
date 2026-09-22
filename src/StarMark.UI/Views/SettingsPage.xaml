@@ -429,9 +429,13 @@
                                 BorderBrush="{ThemeResource SystemFillColorCautionBrush}" BorderThickness="1">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="数据备份与恢复" Style="{StaticResource SettingTitle}"/>
-                                <TextBlock Text="条目本体（书签/Star/文件）可重新同步，但手写笔记、标签体系、隐藏/置顶状态、桌面组件待办与随记全部不可重建。请定期导出备份。"
+                                <TextBlock Text="条目本体（书签/Star/文件）可重新同步，但手写笔记、标签体系、隐藏/置顶状态、桌面组件待办与随记全部不可重建。"
                                            Style="{StaticResource SettingRowText}"/>
-                                <TextBlock Text="导入会先自动生成「恢复前快照」（位于 %LOCALAPPDATA%\StarMark\backups），任何恢复都可回滚。"
+                                <!-- 原文案是「请定期导出备份」：把"别丢数据"托付给人的记性，且给用户加了一步。
+                                     现在程序自己按天落盘，故这里改成陈述事实 + 说明自动清理的边界。 -->
+                                <TextBlock Text="应用会自己备份：启动时距上次满 24 小时自动存一份到 %LOCALAPPDATA%\StarMark\backups，只保留最近 7 份 auto- 开头的自动件——你手动导出的备份与恢复前快照都不会被删。"
+                                           Style="{StaticResource SettingRowText}"/>
+                                <TextBlock Text="导入会先自动生成「恢复前快照」（同上目录），任何恢复都可回滚。"
                                            Style="{StaticResource SettingRowText}"/>
                                 <!-- 提权会话下系统文件选择器跨不到中 IL 的对话框宿主（真机日志 E_FAIL 四连挂）。
                                      已改为自动退回应用内路径输入框，故这里只做状态说明，不再指挥用户换权限重启。 -->

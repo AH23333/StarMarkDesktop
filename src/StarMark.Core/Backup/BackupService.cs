@@ -244,6 +244,65 @@ public sealed class BackupService
         return path;
     }
 
+    // ==================== 自动备份（P-51） ====================
+
+    /// <summary>
+    /// 每日自动备份：距最近一份 <c>auto-</c> 件超过 <see cref="AutoBackupPolicy.MinGap"/> 才落盘，
+    /// 落完后把自动件裁到最近 <see cref="AutoBackupPolicy.Keep"/> 份（手动导出与 pre-restore 快照不动）。
+    /// <para>返回写出的路径；本次跳过（间隔未到 / 空库）返回 null。<b>异常上抛</b>由调用方记日志——
+    /// 在这儿吞掉就会出现"以为备份了其实没有"，与本条存在的理由相反。</para>
+    /// </summary>
+    public async Task<string?> RunAutoBackupAsync(CancellationToken ct = default)
+    {
+        var dir = SnapshotDirectory;
+        if (!AutoBackupPolicy.ShouldRun(DateTimeOffset.UtcNow, NewestAutoBackupUtc(dir)))
+            return null;
+
+        var env = await ExportAsync(ct);
+        // 空库不落盘：首次运行的"空备份"只是占位噪声，还会把"最近一份"的时钟推后 24h。
+        if (env.Payload.Items.Count == 0 && env.Payload.UserState.Count == 0 && env.Payload.Tags.Count == 0)
+            return null;
+
+        Directory.CreateDirectory(dir);
+        var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+        var path = Path.Combine(dir, $"{AutoBackupPolicy.Prefix}{stamp}.json");
+        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(env, JsonOptions), ct);
+
+        foreach (var stale in AutoBackupPolicy.PrunePlan(EnumerateAutoBackups(dir)))
+        {
+            try { File.Delete(stale); }
+            catch (Exception ex)
+            {
+                // 清理失败不影响本次备份已落盘；被占用的过期件下次启动会再试。
+                StarLog.Warn($"自动备份过期件未删掉（{stale}）：{ex.Message}");
+            }
+        }
+        return path;
+    }
+
+    /// <summary>最近一份自动件的写入时刻；目录不存在/没有自动件/探测被拦都返回 null（＝该备份）。</summary>
+    private static DateTimeOffset? NewestAutoBackupUtc(string dir)
+        => EnumerateAutoBackups(dir).Max(f => (DateTimeOffset?)f.ModifiedUtc);
+
+    private static IEnumerable<(string Path, DateTimeOffset ModifiedUtc)> EnumerateAutoBackups(string dir)
+    {
+        try
+        {
+            if (!Directory.Exists(dir)) return Array.Empty<(string, DateTimeOffset)>();
+            return new DirectoryInfo(dir).EnumerateFiles(AutoBackupPolicy.Prefix + "*.json")
+                .Where(f => AutoBackupPolicy.IsAuto(f.Name))
+                // LastWriteTimeUtc 是 Kind=Utc 的 DateTime；直接当 DateTimeOffset 用会按本地时区解释，
+                // 差出一个时区的量就足以让"24 小时"判定天天提前或天天推后。
+                .Select(f => (f.FullName, new DateTimeOffset(f.LastWriteTimeUtc, TimeSpan.Zero)))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"扫描自动备份目录失败（{dir}）：{ex.Message}");
+            return Array.Empty<(string, DateTimeOffset)>();
+        }
+    }
+
     // ==================== 内部 ====================
 
     /// <summary>SHA-256，覆盖载荷的规范序列化（无缩进、属性顺序固定）。</summary>

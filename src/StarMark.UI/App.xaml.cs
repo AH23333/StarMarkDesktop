@@ -254,6 +254,25 @@ public partial class App : Application
             _window.Activate();
             UIStallWatchdog.Start(_window.DispatcherQueue);   // 卡顿取证：把"卡死了"变成日志里的时长与当时的页面
 
+            // 3.1 每日自动备份（P-51）：不可重建的笔记/标签/组件数据不能只靠用户记得手动导出。
+            // 延后到首屏之后再起，避开与迁移、组件创建抢同一批磁盘 I/O；失败只进日志，不弹窗打断用户。
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+                    var svc = Services.GetRequiredService<BackupService>();
+                    var written = await svc.RunAutoBackupAsync();
+                    StarLog.Info(written is null
+                        ? "自动备份：本次跳过（距上次不足 24 小时，或库里没有可备份的内容）"
+                        : $"自动备份已落盘：{written}");
+                }
+                catch (Exception ex)
+                {
+                    StarLog.Error("自动备份失败（不影响使用，下次启动会再试）", ex);
+                }
+            });
+
             // 4. 全局快捷键：在 MainWindow 句柄上子类化接收 WM_HOTKEY，绑定动作并应用设置
             try
             {
