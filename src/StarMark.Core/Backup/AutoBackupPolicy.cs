@@ -22,8 +22,18 @@ public static class AutoBackupPolicy
     /// <summary>自动备份文件名片段前缀，也是"哪些件允许被自动清理"的唯一判据。</summary>
     public const string Prefix = "auto-";
 
+    /// <summary>
+    /// 导入/覆盖恢复前自动快照的前缀。两个用途共用这一个常量：界面上标成"恢复前快照"，
+    /// 以及它与 <c>auto-</c> 一起构成"永不进自动清理候选"的第二条臂。
+    /// 写入侧（<c>BackupService.WriteSnapshotAsync</c>）必须引用它，否则分类与文件名会各说各话。
+    /// </summary>
+    public const string SnapshotPrefix = "pre-restore-";
+
     /// <summary>保留最近多少份自动件。</summary>
     public const int Keep = 7;
+
+    /// <summary>备份件的归类（决定列表里怎么标，也决定能不能被自动清理）。</summary>
+    public enum BackupKind { Auto, PreRestore, Manual }
 
     /// <summary>两份自动件之间的最小间隔。</summary>
     public static readonly TimeSpan MinGap = TimeSpan.FromHours(24);
@@ -44,6 +54,19 @@ public static class AutoBackupPolicy
     /// <summary>是否自动件（按文件名前缀，路径无关）。</summary>
     public static bool IsAuto(string path)
         => Path.GetFileName(path).StartsWith(Prefix, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 按文件名归类一份备份。<b>先判 <c>pre-restore-</c> 再判 <c>auto-</c></b>：两者前缀互不包含，
+    /// 顺序看着无关，但"回滚点"是唯一一个"用户会点它来撤销上一步"的类别，判错方向的代价最大，
+    /// 所以让它先走。前缀匹配一律大小写不敏感（与 <see cref="IsAuto"/> 同口径，避免云盘/重命名改出大写）。
+    /// </summary>
+    public static BackupKind Classify(string pathOrFileName)
+    {
+        var name = Path.GetFileName(pathOrFileName);
+        if (name.StartsWith(SnapshotPrefix, StringComparison.OrdinalIgnoreCase)) return BackupKind.PreRestore;
+        if (name.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase)) return BackupKind.Auto;
+        return BackupKind.Manual;
+    }
 
     /// <summary>
     /// 给出要删除的过期自动件（保留最新 <paramref name="keep"/> 份）。非 <c>auto-</c> 前缀的一律

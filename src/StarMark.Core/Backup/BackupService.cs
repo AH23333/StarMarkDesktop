@@ -241,10 +241,63 @@ public sealed class BackupService
     {
         Directory.CreateDirectory(SnapshotDirectory);
         // 锁定 InvariantCulture：非公历区域（th-TH 佛历 / ar-SA 希吉来历）下不加锁定会得到错误年份，破坏回滚点按名排序的时间序。
-        var name = $"pre-restore-{DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.json";
+        var name = $"{AutoBackupPolicy.SnapshotPrefix}{DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.json";
         var path = Path.Combine(SnapshotDirectory, name);
         await ExportToFileAsync(path, ct);
         return path;
+    }
+
+    // ==================== 备份盘点（界面上的"本机已有备份"列表） ====================
+
+    /// <summary>一份备份文件的盘点结果（路径、类别、写入时刻、体积）。</summary>
+    public sealed record BackupFile(
+        string Path, string FileName, DateTimeOffset ModifiedUtc, long LengthBytes,
+        AutoBackupPolicy.BackupKind Kind);
+
+    /// <summary>
+    /// 列出目录里的备份件，按写入时刻<b>倒序</b>（同一秒内再按文件名倒序，避免刷新时上下抖），
+    /// 最多 <paramref name="max"/> 份。
+    /// <para>
+    /// 存在的理由：卡片一直写着"应用会自己备份""任何恢复都可回滚"，却没有任何地方能看到
+    /// "有哪些份、什么时候、多大"——要恢复指定某一份得自己敲文件名，回滚点也得靠同一份文件手动导入。
+    /// 这里先把盘点做成可单测的纯扫描，界面上的列表与「恢复」按钮都从它取数。
+    /// </para>
+    /// <para>
+    /// 容错方向刻意偏"少说不是错"：目录不存在或没有件＝空表；<b>单个文件的属性读不出来只跳过该件</b>
+    /// （一份正被云盘/杀软占用的件不该让整列消失）；整个目录枚举失败才记一行日志返回空。
+    /// </para>
+    /// </summary>
+    public static IReadOnlyList<BackupFile> EnumerateBackups(string? directory = null, int max = 50)
+    {
+        var dir = directory ?? SnapshotDirectory;
+        var list = new List<BackupFile>();
+        try
+        {
+            if (!Directory.Exists(dir)) return list;
+            foreach (var f in new DirectoryInfo(dir).EnumerateFiles("*.json"))
+            {
+                try
+                {
+                    list.Add(new BackupFile(f.FullName, f.Name,
+                        // LastWriteTimeUtc 是 Kind=Utc 的 DateTime：不显式包装会被按本地时区解释，差出一个时区。
+                        new DateTimeOffset(f.LastWriteTimeUtc, TimeSpan.Zero),
+                        f.Length, AutoBackupPolicy.Classify(f.Name)));
+                }
+                catch (Exception ex)
+                {
+                    StarLog.Warn($"备份件属性读不出，跳过该件（{f.Name}）：{ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"扫描备份目录失败（{dir}）：{ex.Message}");
+            return list;
+        }
+        return list.OrderByDescending(b => b.ModifiedUtc)
+                   .ThenByDescending(b => b.FileName, StringComparer.Ordinal)
+                   .Take(Math.Max(0, max))
+                   .ToList();
     }
 
     // ==================== 自动备份（P-51） ====================
