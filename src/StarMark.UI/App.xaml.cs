@@ -252,6 +252,7 @@ public partial class App : Application
             _window = new MainWindow();
             MainWindow = _window as StarMark.UI.MainWindow;
             _window.Activate();
+            UIStallWatchdog.Start(_window.DispatcherQueue);   // 卡顿取证：把"卡死了"变成日志里的时长与当时的页面
 
             // 4. 全局快捷键：在 MainWindow 句柄上子类化接收 WM_HOTKEY，绑定动作并应用设置
             try
