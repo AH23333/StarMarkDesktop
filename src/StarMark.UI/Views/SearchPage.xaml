@@ -118,6 +118,15 @@
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
 
+                <!-- 「加载更多」：只在上一页报告仍有剩余时出现。分页＝合并去重后再切片（P-42 路线 D），
+                     所以这一页接上去的是"完整有序列表的下一段"，不重不漏。放在结果末尾而非工具栏：
+                     它是"往下读"的动作，位置本身就是语义。 -->
+                <Button Content="{x:Bind ViewModel.LoadMoreLabel, Mode=OneWay}"
+                        HorizontalAlignment="Center" Margin="0,14,0,4" Padding="18,6"
+                        Visibility="{x:Bind ViewModel.CanLoadMore, Mode=OneWay, Converter={StaticResource BoolToVis}}"
+                        IsEnabled="{x:Bind ViewModel.CanLoadMoreButton, Mode=OneWay}"
+                        Command="{x:Bind ViewModel.LoadMoreCommand}"/>
+
                 <TextBlock Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}" Style="{StaticResource MutedText}"
                            HorizontalAlignment="Center" Margin="0,40,0,16"
                            Visibility="{x:Bind ViewModel.HasResults, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>

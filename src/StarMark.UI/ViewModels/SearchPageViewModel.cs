@@ -41,6 +41,19 @@ public partial class SearchPageViewModel : ObservableObject
     [ObservableProperty] private string _emptyHint = "输入关键词开始搜索";
     [ObservableProperty] private bool _hasResults;
     [ObservableProperty] private bool _isSearching;
+
+    /// <summary>上一页之后仍有命中 ⇒ 显示「加载更多」。浏览态（空关键词）恒 false，那条路径不分页。</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanLoadMoreButton)), NotifyPropertyChangedFor(nameof(LoadMoreLabel))]
+    private bool _canLoadMore;
+
+    /// <summary>正在取下一页：按钮禁用，避免连点把偏移推过头。</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanLoadMoreButton)), NotifyPropertyChangedFor(nameof(LoadMoreLabel))]
+    private bool _isLoadingMore;
+
+    /// <summary>「加载更多」可点＝还有剩余 且 当前没在取页。</summary>
+    public bool CanLoadMoreButton => CanLoadMore && !IsLoadingMore;
+
+    public string LoadMoreLabel => IsLoadingMore ? "加载中…" : "加载更多";
     [ObservableProperty] private string _currentSort = "relevance";
     [ObservableProperty] private string _currentSource = "all";
     [ObservableProperty] private bool _showHidden;
@@ -139,6 +152,8 @@ public partial class SearchPageViewModel : ObservableObject
         HasRelated = false;
         ClearSelection();
         HasResults = false;
+        CanLoadMore = false;
+        IsLoadingMore = false;
         IsSearching = false;
         StatusText = string.Empty;
         EmptyHint = "输入关键词开始搜索";
@@ -167,7 +182,21 @@ public partial class SearchPageViewModel : ObservableObject
     public MainViewModel Main { get; }
 
     [RelayCommand]
-    private async Task SearchAsync()
+    private async Task SearchAsync() => await RunSearchAsync(append: false);
+
+    /// <summary>
+    /// 「加载更多」：把偏移推到当前列表末尾，再取一页接上去。分页语义是"合并去重后再切片"
+    /// （<see cref="SearchService"/>，P-42 路线 D），所以第 N 页就是完整有序列表的第 N 段。
+    /// 上一页没报剩余时不可点，也不允许并发重入。
+    /// </summary>
+    [RelayCommand]
+    private async Task LoadMoreAsync()
+    {
+        if (!CanLoadMore || IsLoadingMore) return;
+        await RunSearchAsync(append: true);
+    }
+
+    private async Task RunSearchAsync(bool append)
     {
         _searchCts?.Cancel();
         _searchCts = new CancellationTokenSource();
@@ -175,6 +204,7 @@ public partial class SearchPageViewModel : ObservableObject
 
         if (string.IsNullOrWhiteSpace(Query) && !Main.HasGlobalTagFilters && FileQueryFragments.Count == 0)
         {
+            if (append) return;   // 浏览态不分页（该分支 CanLoadMore 恒 false，此为双保险）
             // 空关键词 + 无标签 → 浏览模式：展示最近条目（对齐扩展：清空搜索框回到浏览列表而非空白）
             await LoadBrowseAsync(token);
             return;
@@ -183,12 +213,14 @@ public partial class SearchPageViewModel : ObservableObject
         // （与桌面组件同一规则），让主界面也能不输关键词、纯靠标签组合过滤。
         // 空关键词 + 已勾「类型」→ 也不提前返回：交给 Everything 当「浏览该类型的文件」。
 
-        IsSearching = true;
-        StatusText = "搜索中...";
+        IsSearching = !append;
+        IsLoadingMore = append;
+        StatusText = append ? "加载更多..." : "搜索中...";
 
         var filter = new SearchFilter
         {
             MaxResults = 100,
+            Offset = append ? Results.Count : 0,
             IncludeSize = true,
             IncludeDate = true,
             IncludeHidden = ShowHidden,
@@ -216,25 +248,36 @@ public partial class SearchPageViewModel : ObservableObject
             // 结果集合与 PropertyChanged 必须在 UI 线程上更新
             await RunOnUi(() =>
             {
-                Results.Clear();
-                ExactResults.Clear();
-                RelatedResults.Clear();
+                if (!append)
+                {
+                    Results.Clear();
+                    ExactResults.Clear();
+                    RelatedResults.Clear();
+                }
                 var keyword = Query.Trim();
+                // 追加页时按预览去重键挡住重复：两页之间底层结果若被同步/编辑改过，切片边界
+                // 可能把同一条再给一次；重复显示比少显示更刺眼，故宁可在接上时过滤。
+                HashSet<string>? seen = append
+                    ? new HashSet<string>(Results.Select(r => r.PreviewDedupeKey), StringComparer.Ordinal)
+                    : null;
                 for (var i = 0; i < result.Items.Count; i++)
                 {
                     var vm = new ItemCardViewModel(result.Items[i]);
                     vm.HighlightQuery = keyword;
+                    if (seen is not null && !seen.Add(vm.PreviewDedupeKey)) continue;
                     Results.Add(vm);
-                    // 分段：Items 前 ExactCount 条为精确匹配，其余为相关结果
+                    // 分段：Items 前 ExactCount 条为精确匹配，其余为相关结果（ExactCount 按本页给）
                     if (i < result.ExactCount) ExactResults.Add(vm); else RelatedResults.Add(vm);
                 }
                 HasExact = ExactResults.Count > 0;
                 HasRelated = RelatedResults.Count > 0;
                 ExactHeader = $"精确匹配 ({ExactResults.Count})";
                 RelatedHeader = $"相关结果 ({RelatedResults.Count})";
+                CanLoadMore = result.HasMore;
 
-                // 语言下拉选项：仅在「未按语言过滤」时重建，避免过滤后列表塌缩成单项
-                if (string.IsNullOrEmpty(CurrentLanguage))
+                // 语言下拉选项：仅在「未按语言过滤」时重建，避免过滤后列表塌缩成单项。
+                // 追加页不重建——它只覆盖第 N 段，用它聚合会把首页带来的语言项悄悄抹掉。
+                if (!append && string.IsNullOrEmpty(CurrentLanguage))
                 {
                     AvailableLanguages.Clear();
                     foreach (var lang in result.Items
@@ -249,7 +292,7 @@ public partial class SearchPageViewModel : ObservableObject
                     }
                 }
 
-                ClearSelection();
+                if (!append) ClearSelection();   // 追加页不该把用户已选中的那条丢掉
                 HasResults = Results.Count > 0;
                 EmptyHint = Results.Count == 0
                     ? CurrentSource switch
@@ -263,7 +306,7 @@ public partial class SearchPageViewModel : ObservableObject
                             : $"未找到与 \"{keyword}\" 相关的条目",
                     }
                     : string.Empty;
-                StatusText = $"命中 {result.Items.Count} 条 · {result.ElapsedMs}ms";
+                StatusText = $"命中 {Results.Count} 条 · {result.ElapsedMs}ms";
             });
         }
         catch (OperationCanceledException) { }
@@ -273,7 +316,11 @@ public partial class SearchPageViewModel : ObservableObject
         }
         finally
         {
-            await RunOnUi(() => IsSearching = false);
+            await RunOnUi(() =>
+            {
+                IsSearching = false;
+                IsLoadingMore = false;
+            });
         }
     }
 
@@ -322,6 +369,7 @@ public partial class SearchPageViewModel : ObservableObject
                 HasRelated = Results.Count > 0;
                 ExactHeader = "精确匹配";
                 RelatedHeader = $"最近条目 ({Results.Count})";
+                CanLoadMore = false;   // 浏览态走 GetAllAsync（无偏移），故不给"加载更多"入口
                 HasResults = Results.Count > 0;
                 EmptyHint = Results.Count == 0 ? "没有可展示的条目" : string.Empty;
                 StatusText = $"最近 {Results.Count} 条";

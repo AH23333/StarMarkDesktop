@@ -15,6 +15,10 @@ public sealed class SearchResult
     /// <summary>精确匹配条数（Items 前 ExactCount 条为「精确匹配」，其余为「相关结果」）。
     /// 对应扩展 selectors.ts 的 isStrong 分段，见对比方案 P2-7。</summary>
     public int ExactCount { get; init; }
+
+    /// <summary>本次切片之后还有未取回的命中（供「加载更多」按钮可见性）。
+    /// 分页语义＝合并去重后再切片，见 <c>SearchService</c> 与 P-42。</summary>
+    public bool HasMore { get; init; }
 }
 
 /// <summary>仓储接口。供 ItemRepository 实现，UI/AppService 调用。</summary>

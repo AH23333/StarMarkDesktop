@@ -59,11 +59,18 @@ public sealed class SearchService
 
         var sw = Stopwatch.StartNew();
 
+        // 分页（P-42 路线 D）第一步：把两条腿的取数窗口加宽到"本页末"（offset+size），
+        // 偏移不在腿内施加。反面做法（每腿各 OFFSET + 合并侧仍 Take(size)）会永久跳过条目：
+        // 第 1 页里被 DB 行占掉的名额，Everything 那几十条从未展示过，第 2 页两腿各前进 size
+        // 条就把它们整批跨过去了。
+        var pageFrom = Math.Max(0, filter.Offset);
+        var legFilter = pageFrom > 0 ? filter.WithFetchWindow(filter.MaxResults + pageFrom) : filter;
+
         // 并行：SQLite FTS5 查询 + 所有实时源（Everything 等）查询。
         // 两条腿都必须离开调用线程：调用方是搜索框（UI 线程），而 ItemRepository 在首个 await 之前
         // 就同步 Open 数据库并逐行 hydrate、Ditto/书签源同理是同步文件 I/O——留在 UI 线程上时，
         // 一次键入就是一次"整窗无响应"，与 Everything 的阻塞 IPC 叠加即成用户报的"高频卡死"。
-        var ftsTask = Task.Run(() => _repository.SearchAsync(keyword, filter, ct), ct);
+        var ftsTask = Task.Run(() => _repository.SearchAsync(keyword, legFilter, ct), ct);
 
         // 标签过滤下必须跳过实时源：Everything 返回的本地文件是「虚拟条目」，未入库因而无标签，
         // 参与合并会让「带 ai 标签」的筛选结果里混进一堆无标签文件。
@@ -78,7 +85,7 @@ public sealed class SearchService
                 $"统一搜索：实时源「{skipped.SourceId}」IsAvailable=false，本次已跳过（未参与查询）");
 
         var realTimeTasks = usable
-            .Select(s => (Source: s, Task: Task.Run(() => s.SearchAsync(keyword, filter, ct), ct)))
+            .Select(s => (Source: s, Task: Task.Run(() => s.SearchAsync(keyword, legFilter, ct), ct)))
             .ToList();
 
         // 等所有源完成（即使部分失败也返回已成功部分）
@@ -137,19 +144,19 @@ public sealed class SearchService
         }
         var ordered = exact.Concat(related).ToList();
 
-        // 截断到 MaxResults
-        if (ordered.Count > filter.MaxResults)
-        {
-            ordered = ordered.Take(filter.MaxResults).ToList();
-        }
+        // 分页（P-42 路线 D）第二步：**先合并去重、再分段、最后切片**。第 N 页就是"完整有序
+        // 列表的第 N 段"——不重不漏（pageFrom 已在上面随腿侧窗口一起算好）。
+        var page = ordered.Skip(pageFrom).Take(filter.MaxResults).ToList();
 
         sw.Stop();
         return new SearchResult
         {
-            Items = ordered,
-            Total = ordered.Count,
+            Items = page,
+            Total = page.Count,
             ElapsedMs = sw.ElapsedMilliseconds,
-            ExactCount = Math.Min(exact.Count, ordered.Count),
+            // 分段计数按"本页内"给：UI 用 i < ExactCount 把本页拆成精确/相关两段。
+            ExactCount = Math.Clamp(exact.Count - pageFrom, 0, page.Count),
+            HasMore = ordered.Count > pageFrom + page.Count,
         };
     }
 

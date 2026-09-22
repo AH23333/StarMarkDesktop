@@ -49,14 +49,13 @@ internal static class EverythingInterop
     [DllImport("Everything64.dll", SetLastError = false)]
     private static extern void Everything_SetRequestFlags(uint dwRequestFlags);
 
-    // 排序/偏移：SDK 侧导出由我们自己随应用分发（1.4.1），故可直接硬绑；
+    // 排序：SDK 侧导出由我们自己随应用分发（1.4.1），故可直接硬绑；
     // 若服务端的 Everything 更旧不支持该字段，最坏退化为默认排序，不会像 Everything_Startup
     // 那样在 1.4 上抛 EntryPointNotFoundException（那个是"1.4 根本没有这个导出"）。
+    // 刻意**不**用 Everything_SetOffset：分页走"合并后切片"（见 SearchService 与 P-42），
+    // 每条腿各偏移会让合并侧的二次截断永久跳过未展示过的条目。
     [DllImport("Everything64.dll", SetLastError = false)]
     private static extern void Everything_SetSort(uint dwSort);
-
-    [DllImport("Everything64.dll", SetLastError = false)]
-    private static extern void Everything_SetOffset(uint dwOffset);
 
     [DllImport("Everything64.dll", SetLastError = false)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -225,7 +224,7 @@ internal static class EverythingInterop
     /// </summary>
     public static IReadOnlyList<Item> Query(
         string query, RequestFlags flags, int maxResults, CancellationToken ct,
-        uint sort = 0, uint offset = 0)
+        uint sort = 0)
     {
         if (!EnsureSdkLoaded()) return Array.Empty<Item>();
 
@@ -234,7 +233,6 @@ internal static class EverythingInterop
         Everything_SetMax((uint)Math.Min(maxResults, AppConstants.EverythingMaxResults));
         // 0 = 不下发：Everything_Reset 后本就是默认排序/首屏，多余调用只会掩盖"到底排了没"。
         if (sort > 0) Everything_SetSort(sort);
-        if (offset > 0) Everything_SetOffset(offset);
         Everything_SetSearchW(query);
 
         if (!Everything_QueryW(true))

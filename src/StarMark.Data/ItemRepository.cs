@@ -87,7 +87,7 @@ public sealed class ItemRepository : IItemRepository
                 FROM items_fts
                 WHERE items_fts MATCH @keyword
                 ORDER BY rank
-                LIMIT @limit OFFSET @offset
+                LIMIT @limit
             )
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
@@ -109,8 +109,10 @@ public sealed class ItemRepository : IItemRepository
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
         cmd.Parameters.AddWithValue("@keyword", ftsQuery);
+        // 分页语义＝合并后切片（P-42 路线 D）：本腿只认 MaxResults、从 0 取，不在 SQL 里 OFFSET
+        // （SearchService 会把窗口加宽到"本页末"，再在合并去重之后 Skip）。原先的 OFFSET @offset
+        // 已移除——两条腿各偏移 + 合并侧再截断 = 每翻一页永久跳过一批未展示过的条目。
         cmd.Parameters.AddWithValue("@limit", filter.MaxResults);
-        cmd.Parameters.AddWithValue("@offset", filter.Offset);
         cmd.Parameters.AddWithValue("@type_filter", (object?)filter.Type?.ToString().ToLowerInvariant() ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@stars_min", (object?)filter.StarsMin ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@date_from", (object?)filter.DateFrom ?? DBNull.Value);

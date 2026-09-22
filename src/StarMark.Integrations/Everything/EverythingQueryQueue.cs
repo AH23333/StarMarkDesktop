@@ -59,11 +59,13 @@ public sealed class EverythingQueryQueue : IAsyncDisposable
         {
             // 动态选取最小必要请求标志集（不展示的字段不请求）
             var flags = ComputeMinimalFlags(filter);
+            // 只认 MaxResults、一律从 0 取：分页由 SearchService 在合并去重之后切片完成
+            // （P-42 路线 D，它会把窗口加宽到"本页末"）。腿内偏移会与被合并侧截断叠加成
+            // "每翻一页永久跳过一批"，故刻意不向 SDK 下发 Everything_SetOffset。
             var max = filter.MaxResults;
-            var offset = (uint)Math.Max(0, filter.Offset);
             var sort = StarMark.Abstractions.EverythingSort.Map(filter.Sort) ?? 0;
             return await Task.Run(
-                () => EverythingInterop.Query(query, flags, max, localCt, sort, offset),
+                () => EverythingInterop.Query(query, flags, max, localCt, sort),
                 localCt).ConfigureAwait(false);
         }
         finally

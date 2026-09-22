@@ -85,4 +85,28 @@ public sealed class SearchFilter
 
     /// <summary>是否有生效的标签过滤。</summary>
     public bool HasTags => Tags is { Count: > 0 };
+
+    /// <summary>
+    /// 复制本条件、只把取数窗口改成 <paramref name="maxResults"/>（并把偏移归零）。
+    /// <para>
+    /// 分页语义是"合并去重后再切片"（见 <c>SearchService</c> 与 P-42）：每条腿一律<b>从 0</b> 取到
+    /// "本页末"，所以腿侧只需要一个更大的 MaxResults，<b>不必也不应</b>理解 Offset——这样任何
+    /// IItemSource 实现都不会出现"忘了把窗口加宽 ⇒ 深页静默少一批"的坑。
+    /// </para>
+    /// </summary>
+    public SearchFilter WithFetchWindow(int maxResults) => new()
+    {
+        Type = Type,
+        StarsMin = StarsMin,
+        DateFrom = DateFrom,
+        IncludeSize = IncludeSize,
+        IncludeDate = IncludeDate,
+        MaxResults = maxResults,
+        Offset = 0,
+        IncludeHidden = IncludeHidden,
+        Sort = Sort,
+        Language = Language,
+        Tags = Tags,
+        FileQueryFragments = FileQueryFragments,
+    };
 }

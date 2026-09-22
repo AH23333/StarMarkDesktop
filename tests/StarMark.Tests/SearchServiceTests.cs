@@ -274,4 +274,120 @@ public sealed class SearchServiceTests : IDisposable
         Assert.Single(result.Items);
         Assert.Equal(1, result.ExactCount);        // 被 Math.Min 夹到展示数；去掉 Min 会变 2 → 断言失败
     }
+
+    // ===== 分页（P-42 路线 D：合并去重后再切片）=====
+
+    /// <summary>
+    /// 实时源桩：按 <see cref="SearchFilter.MaxResults"/> 从 0 起给 N 条稳定的文件行。
+    /// 刻意<b>不认识</b> Offset——这正是 Everything 那条腿在路线 D 下的真实形态（腿内不偏移，
+    /// 每页都"从 0 取到本页末"，偏移只在合并之后施加）。
+    /// </summary>
+    private sealed class PagedFileSource : IItemSource
+    {
+        private readonly int _total;
+        public PagedFileSource(int total) => _total = total;
+        public string SourceId => "filesystem";
+        public string DisplayName => "paged";
+        public bool IsAvailable => true;
+        public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
+        public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct)
+        {
+            IReadOnlyList<Item> hits = Enumerable.Range(0, Math.Min(_total, filter.MaxResults))
+                .Select(i => new Item
+                {
+                    Type = ItemType.File, Source = ItemSources.FileSystem, SourceId = $"f{i:D4}",
+                    Title = $"doc {i:D4}.txt", Subtitle = @"D:\docs",
+                    Uri = $@"file://D:/docs/doc {i:D4}.txt",
+                })
+                .ToList();
+            return Task.FromResult(hits);
+        }
+    }
+
+    private static Item StarRow(int i) => new()
+    {
+        Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = $"o/w{i:D4}",
+        Title = $"widget {i:D4}", Uri = $"https://github.com/o/w{i:D4}",
+    };
+
+    private static string KeyOf(Item i) => $"{i.Source}|{i.SourceId}";
+
+    [Fact]
+    public async Task Paging_SecondPageRecoversFilesThatFirstPageTruncated()
+    {
+        // 这条就是 P-42 里"翻一页少一批文件"的反回归：库里 60 行 + 磁盘 100 行，页宽 50。
+        // 第 1 页被 60 条库行占满名额 → 磁盘那 100 条**一条都没展示过**；第 2 页必须把它们
+        // 从头接上。若按"每腿各 OFFSET + 合并侧仍 Take"的朴素做法，第 2 页拿的是磁盘第
+        // 50..99 条，前 50 条永久不可达。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(Enumerable.Range(0, 60).Select(StarRow).ToList(), CancellationToken.None);
+        var svc = new SearchService(repo, new IItemSource[] { new PagedFileSource(100) });
+
+        var page1 = await svc.SearchAsync("widget",
+            new SearchFilter { MaxResults = 50, Offset = 0 }, CancellationToken.None);
+        Assert.Equal(50, page1.Items.Count);
+        Assert.All(page1.Items, i => Assert.Equal(ItemType.GitHubStar, i.Type));   // 首页全是库行
+        Assert.Equal(50, page1.ExactCount);
+        Assert.True(page1.HasMore);
+
+        var page2 = await svc.SearchAsync("widget",
+            new SearchFilter { MaxResults = 50, Offset = 50 }, CancellationToken.None);
+        Assert.Equal(50, page2.Items.Count);
+        Assert.Equal(10, page2.ExactCount);                     // 库行剩 10 条落在本页开头
+        Assert.Equal(40, page2.Items.Count(i => i.Type == ItemType.File));
+        Assert.Contains(page2.Items, i => i.SourceId == "f0000");   // 朴素翻页会跳掉的第一条
+    }
+
+    [Fact]
+    public async Task Paging_AllPagesCoverEveryHitExactlyOnce()
+    {
+        // "不重不漏"的总量口径：4 页 × 50 = 160 条，正好等于合并去重后的命中数（60 库行 + 100 磁盘行）。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(Enumerable.Range(0, 60).Select(StarRow).ToList(), CancellationToken.None);
+        var svc = new SearchService(repo, new IItemSource[] { new PagedFileSource(100) });
+
+        var seen = new List<string>();
+        var hasMore = true;
+        for (var offset = 0; hasMore && offset < 10_000; offset += 50)
+        {
+            var page = await svc.SearchAsync("widget",
+                new SearchFilter { MaxResults = 50, Offset = offset }, CancellationToken.None);
+            hasMore = page.HasMore;
+            seen.AddRange(page.Items.Select(KeyOf));
+        }
+
+        Assert.Equal(160, seen.Count);                          // 不漏：页数取满全部命中
+        Assert.Equal(160, seen.Distinct().Count());             // 不重：跨页无重复
+    }
+
+    [Fact]
+    public async Task Paging_OffsetBeyondLastHit_ReturnsEmptyAndStops()
+    {
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(Enumerable.Range(0, 3).Select(StarRow).ToList(), CancellationToken.None);
+        var svc = new SearchService(repo, Array.Empty<IItemSource>());
+
+        var beyond = await svc.SearchAsync("widget",
+            new SearchFilter { MaxResults = 50, Offset = 500 }, CancellationToken.None);
+        Assert.Empty(beyond.Items);
+        Assert.False(beyond.HasMore);
+        Assert.Equal(0, beyond.ExactCount);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(int.MinValue)]
+    public async Task Paging_NegativeOffset_BehavesAsFirstPage(int offset)
+    {
+        // 偏移只夹不抛：非法值退回首屏，而不是把 Skip 的 ArgumentOutOfRangeException 抛给 UI。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(Enumerable.Range(0, 4).Select(StarRow).ToList(), CancellationToken.None);
+        var svc = new SearchService(repo, Array.Empty<IItemSource>());
+
+        var page = await svc.SearchAsync("widget",
+            new SearchFilter { MaxResults = 50, Offset = offset }, CancellationToken.None);
+        Assert.Equal(4, page.Items.Count);
+        Assert.False(page.HasMore);
+    }
 }
