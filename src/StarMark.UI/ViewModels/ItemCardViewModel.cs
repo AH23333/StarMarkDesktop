@@ -20,6 +20,13 @@ public partial class ItemCardViewModel : ObservableObject
     public string Uri => _item.Uri;
     public string? Description => _item.Description;
     public long? StarsCount => _item.StarsCount;
+
+    /// <summary>
+    /// 预览弹窗的去重键。Everything 本地文件结果是不入库的虚拟条目（一律 <see cref="Id"/>＝0），
+    /// 只按 Id 组键会让「预览 A 后预览 B」被当成重复请求——B 的窗口不出现，只把 A 置顶，故退到 Uri。
+    /// </summary>
+    public string PreviewDedupeKey => Id > 0 ? $"preview:{Id}" : $"preview:uri:{Uri}";
+
     [ObservableProperty] private bool _isHidden;
     [ObservableProperty] private bool _isPinned;
 

@@ -23,6 +23,11 @@
             <Image x:Name="ImagePreview" Stretch="Uniform"/>
         </ScrollViewer>
 
+        <!-- 音频 / 视频内嵌播放（尽力而为：解码失败即回落为「用默认程序打开」） -->
+        <MediaPlayerElement x:Name="MediaPreview" Visibility="Collapsed"
+                            AreTransportControlsEnabled="True" Stretch="Uniform"
+                            HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
+
         <!-- 链接 / 不可预览 -->
         <StackPanel x:Name="FallbackPanel" Visibility="Collapsed" VerticalAlignment="Top" Spacing="10">
             <TextBlock x:Name="FallbackTitle" FontSize="15" FontWeight="SemiBold"
@@ -30,7 +35,7 @@
             <TextBlock x:Name="FallbackDetail" FontSize="12"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                        TextWrapping="Wrap"/>
-            <Button x:Name="OpenButton" Click="Open_Click" Content="在浏览器中打开"/>
+            <Button x:Name="OpenButton" Click="Open_Click" Content="用默认程序打开"/>
         </StackPanel>
 
         <!-- 加载状态 -->

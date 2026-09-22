@@ -117,7 +117,7 @@ internal static class ItemContextMenu
             var owner = WindowInterop.ResolveWindow(root, App.MainWindow);
             var result = await CenteredDialog.ShowContentAsync(
                 title, host, owner: owner,
-                dedupeKey: $"preview:{vm.Id}", width: 820, height: 640,
+                dedupeKey: vm.PreviewDedupeKey, width: 820, height: 640,
                 primaryText: "打开", cancelText: "关闭");
             if (result == CenteredDialog.HostedDialogResult.Committed)
                 OpenByRow(root, vm);
