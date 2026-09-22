@@ -60,7 +60,7 @@
         <!-- 搜索框 -->
         <Border Grid.Row="1" Padding="16,10,16,4">
             <TextBox x:Name="SearchBox"
-                     PlaceholderText="搜索本地文件、GitHub Stars、书签...  (↑↓ 选择 · Enter 打开 · Ctrl+Enter 位置)"
+                     PlaceholderText="搜索本地文件 / Star / 书签… 支持 ext: size: dm: folder:  (↑↓ 选择 · Enter 打开 · Ctrl+Enter 位置)"
                      CornerRadius="8"
                      Padding="12,9"
                      FontSize="14"
@@ -84,17 +84,65 @@
                     BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4">
                 <StackPanel Orientation="Horizontal">
                     <Button x:Name="SourceAll" Content="全部" Click="SourceFilter_Click" Tag="all"
+                            ToolTipService.ToolTip="全部来源"
                             Background="Transparent" BorderThickness="0" Padding="10,4"/>
                     <Button x:Name="SourceStar" Content="⭐" Click="SourceFilter_Click" Tag="star"
+                            ToolTipService.ToolTip="Star"
                             Background="Transparent" BorderThickness="0" Padding="10,4"/>
                     <Button x:Name="SourceBookmark" Content="🔖" Click="SourceFilter_Click" Tag="bookmark"
+                            ToolTipService.ToolTip="收藏夹"
+                            Background="Transparent" BorderThickness="0" Padding="10,4"/>
+                    <Button x:Name="SourceFile" Content="📁" Click="SourceFilter_Click" Tag="file"
+                            ToolTipService.ToolTip="本地文件（需先在设置开启本地磁盘搜索）"
                             Background="Transparent" BorderThickness="0" Padding="10,4"/>
                 </StackPanel>
             </Border>
 
+            <!-- 类型多选：只给本地文件用，翻成 Everything 检索式（不进搜索框，见 FileKindQuery） -->
+            <Button x:Name="FileKindButton" Content="类型筛选" FontSize="12" Padding="8,4"
+                    ToolTipService.ToolTip="按文件类型筛选本地文件；不输关键词也能浏览该类型的全部文件">
+                <Button.Flyout>
+                    <Flyout>
+                        <StackPanel Spacing="4" MinWidth="176">
+                            <TextBlock Text="文件类型" FontWeight="SemiBold"/>
+                            <StackPanel x:Name="FileKindPanel" Spacing="0">
+                                <CheckBox Content="文件夹" Tag="Folder" FontSize="13"
+                                          Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
+                                <CheckBox Content="文档" Tag="Document" FontSize="13"
+                                          Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
+                                <CheckBox Content="图片" Tag="Picture" FontSize="13"
+                                          Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
+                                <CheckBox Content="音乐" Tag="Music" FontSize="13"
+                                          Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
+                                <CheckBox Content="视频" Tag="Video" FontSize="13"
+                                          Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
+                                <CheckBox Content="压缩包" Tag="Archive" FontSize="13"
+                                          Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
+                            </StackPanel>
+                            <TextBlock Text="条件" FontWeight="SemiBold" Margin="0,6,0,0"/>
+                            <StackPanel x:Name="FileCondPanel" Spacing="0">
+                                <CheckBox Content="大文件（&gt;100 MB）" Tag="Large" FontSize="13"
+                                          Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
+                                <CheckBox Content="最近改动（7 天内）" Tag="Recent" FontSize="13"
+                                          Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7"
+                                       Text="仅作用于本地文件；「文件夹」与类型互斥，勾选后只列文件夹。"
+                                       TextWrapping="Wrap"/>
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7"
+                                       Text="也可直接在搜索框键入语法：ext:、size:、dm:、folder:"
+                                       TextWrapping="Wrap"/>
+                            <Button Content="清除类型筛选" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                    Click="FileKind_Clear_Click"/>
+                        </StackPanel>
+                    </Flyout>
+                </Button.Flyout>
+            </Button>
+
             <!-- 语言筛选：常态显示（对齐扩展工具栏），选项由搜索页结果聚合；全部 = 不过滤 -->
             <ComboBox x:Name="LanguageCombo" MinWidth="116" FontSize="12"
                       PlaceholderText="语言：全部"
+                      ToolTipService.ToolTip="按 Star 的编程语言筛选（对本地文件无效）"
                       SelectionChanged="LanguageCombo_SelectionChanged"/>
 
             <CheckBox x:Name="ShowHiddenCheck" Content="显示隐藏" Click="ShowHidden_Click" FontSize="12" VerticalAlignment="Center"/>

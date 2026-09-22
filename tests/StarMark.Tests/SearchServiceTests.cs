@@ -201,6 +201,60 @@ public sealed class SearchServiceTests : IDisposable
         Assert.Contains(rust.Items, i => i.Type == ItemType.File);
     }
 
+    // 记录「源实际看到的查询词」的桩：用来证明「类型」片段真的进了实时源，而不是被空关键词闸门吞掉。
+    private sealed class EchoSource : IItemSource
+    {
+        public string? LastQuery { get; private set; }
+        public string SourceId => "echo";
+        public string DisplayName => "echo";
+        public bool IsAvailable => true;
+        public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct) => Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
+        public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct)
+        {
+            LastQuery = StarMark.Abstractions.FileKindQuery.Compose(query, filter.FileQueryFragments);
+            IReadOnlyList<Item> hits = new[]
+            {
+                new Item { Type = ItemType.File, Source = ItemSources.FileSystem, SourceId = "aa11",
+                           Title = "photo.png", Subtitle = @"D:\pic", Uri = "file://D:/pic/photo.png" },
+            };
+            return Task.FromResult(hits);
+        }
+    }
+
+    [Fact]
+    public async Task EmptyKeyword_WithFileQueryFragments_StillQueriesRealTimeSources()
+    {
+        // 「只勾类型、不打字」＝浏览该类型的文件：空关键词闸门不得把实时源一并关掉，
+        // 且片段必须原样抵达源（Everything 收到纯检索式才会返回文件）。
+        var repo = new ItemRepository(_factory);
+        var echo = new EchoSource();
+        var svc = new SearchService(repo, new IItemSource[] { echo });
+
+        var result = await svc.SearchAsync(string.Empty,
+            new SearchFilter
+            {
+                FileQueryFragments = new[] { "ext:png;jpg" },
+                MaxResults = 10,
+            }, CancellationToken.None);
+
+        Assert.Equal("ext:png;jpg", echo.LastQuery);
+        Assert.Contains(result.Items, i => i.Type == ItemType.File);
+    }
+
+    [Fact]
+    public async Task EmptyKeyword_WithoutFragments_QueriesNoRealTimeSource()
+    {
+        // 护栏：上述豁免只开给「带类型片段」的空查询；普通空查询仍须静默（浏览由专门页面承担）。
+        var repo = new ItemRepository(_factory);
+        var echo = new EchoSource();
+        var svc = new SearchService(repo, new IItemSource[] { echo });
+
+        var result = await svc.SearchAsync("   ", new SearchFilter { MaxResults = 10 }, CancellationToken.None);
+
+        Assert.Null(echo.LastQuery);
+        Assert.Empty(result.Items);
+    }
+
     [Fact]
     public async Task ExactCount_ClampedToTruncatedItems_WhenMaxResultsSplitsExactSegment()
     {

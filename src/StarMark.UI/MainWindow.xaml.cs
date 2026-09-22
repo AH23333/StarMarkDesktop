@@ -565,7 +565,54 @@ public sealed partial class MainWindow : Window
         if (sender is not Button btn || btn.Tag is not string tag) return;
         _currentSource = tag;
         SetSourceButtonsHighlight(tag);
+        // 语言是 Star 的维度：来源切到本地文件时它无从生效，直接禁用而不是"选了没反应"。
+        LanguageCombo.IsEnabled = tag != "file";
         PushToolbarToContent();
+    }
+
+    // ───────── 「类型」多选（本地文件；翻译成 Everything 检索式，不进搜索框）─────────
+
+    private bool _suppressFileKindEvents;
+
+    private void FileKind_Changed(object sender, RoutedEventArgs e) => ApplyFileKinds();
+
+    private void FileKind_Clear_Click(object sender, RoutedEventArgs e)
+    {
+        // 逐个取消会各触发一次 Unchecked；不抑制就会为"清除"这一动作重跑 N 次搜索。
+        _suppressFileKindEvents = true;
+        try
+        {
+            foreach (var box in FileKindBoxes()) box.IsChecked = false;
+        }
+        finally
+        {
+            _suppressFileKindEvents = false;
+        }
+        ApplyFileKinds();
+    }
+
+    private IEnumerable<CheckBox> FileKindBoxes()
+        => FileKindPanel is { } a && FileCondPanel is { } b
+            ? a.Children.OfType<CheckBox>().Concat(b.Children.OfType<CheckBox>())
+            : Enumerable.Empty<CheckBox>();
+
+    /// <summary>当前勾选的类型（面板 Tag 存枚举名）。面板尚未创建时视为无勾选。</summary>
+    private IReadOnlyList<FileKind> CurrentFileKinds()
+    {
+        var kinds = new List<FileKind>(8);
+        foreach (var box in FileKindBoxes())
+            if (box.IsChecked == true && box.Tag is string tag
+                && Enum.TryParse<FileKind>(tag, out var kind)) kinds.Add(kind);
+        return kinds;
+    }
+
+    private void ApplyFileKinds()
+    {
+        if (_suppressFileKindEvents || FileKindButton == null) return;
+        var kinds = CurrentFileKinds();
+        FileKindButton.Content = kinds.Count == 0 ? "类型筛选" : $"类型筛选 · {kinds.Count}";
+        // 只下发给搜索页：书签/Star 没有扩展名与体积概念，类型筛选对它们无意义。
+        if (ContentFrame?.Content is SearchPage sp) sp.ViewModel.SetFileKinds(kinds);
     }
 
     private void ShowHidden_Click(object sender, RoutedEventArgs e)
@@ -598,7 +645,8 @@ public sealed partial class MainWindow : Window
         var accent = ThemeBrush.For(RootGrid.ActualTheme, "AccentFillColorDefaultBrush");
         var muted = ThemeBrush.For(RootGrid.ActualTheme, "TextFillColorSecondaryBrush");
         var white = new SolidColorBrush(Colors.White);
-        foreach (var (btn, tag) in new[] { (SourceAll, "all"), (SourceStar, "star"), (SourceBookmark, "bookmark") })
+        foreach (var (btn, tag) in new[]
+                 { (SourceAll, "all"), (SourceStar, "star"), (SourceBookmark, "bookmark"), (SourceFile, "file") })
         {
             var selected = tag == source;
             btn.Background = selected ? accent : new SolidColorBrush(Colors.Transparent);

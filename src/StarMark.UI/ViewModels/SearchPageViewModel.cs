@@ -2,6 +2,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Dispatching;
 using StarMark.Abstractions;
 using StarMark.Core.Search;
@@ -75,6 +76,33 @@ public partial class SearchPageViewModel : ObservableObject
     /// <summary>语言下拉可选项：由最近一次（未按语言过滤的）搜索结果聚合而来。</summary>
     public ObservableCollection<string> AvailableLanguages { get; } = new();
 
+    // ───────── 「类型」多选（本地文件检索式片段，见 FileKindQuery）─────────
+
+    /// <summary>
+    /// 工具栏「类型」多选翻译出的 Everything 检索式片段。空数组＝不追加语法。
+    /// 刻意只存翻译结果、不存勾选：片段本身已是序稳定的，比对它即等价于比对勾选集合。
+    /// </summary>
+    private IReadOnlyList<string> _fileFragments = Array.Empty<string>();
+
+    /// <summary>工具栏「类型」多选的当前勾选（UI 在搜索页被激活时下发）。</summary>
+    public IReadOnlyList<string> FileQueryFragments => _fileFragments;
+
+    /// <summary>
+    /// 应用「类型」多选：勾选变化即重跑当前查询。同一组勾选（片段逐字相同）不重复发查询——
+    /// 工具栏状态每次进搜索页都会重新下发一遍，无此判等就会在导航时空转一轮搜索。
+    /// </summary>
+    public void SetFileKinds(IReadOnlyCollection<FileKind>? kinds)
+    {
+        var fragments = FileKindQuery.Fragments(kinds ?? Array.Empty<FileKind>());
+        if (fragments.SequenceEqual(_fileFragments)) return;
+        _fileFragments = fragments;
+        _ = SearchAsync();
+    }
+
+    /// <summary>本地磁盘搜索开关：只用来决定空结果时该说「没找到」还是「还没开启」。</summary>
+    private static bool IsLocalDiskSearchOn()
+        => App.Services.GetService<StarMark.Integrations.Everything.FileIndexOptions>()?.Enabled == true;
+
     public ItemCardViewModel? SelectedItem
         => SelectedIndex >= 0 && SelectedIndex < Results.Count ? Results[SelectedIndex] : null;
 
@@ -145,7 +173,7 @@ public partial class SearchPageViewModel : ObservableObject
         _searchCts = new CancellationTokenSource();
         var token = _searchCts.Token;
 
-        if (string.IsNullOrWhiteSpace(Query) && !Main.HasGlobalTagFilters)
+        if (string.IsNullOrWhiteSpace(Query) && !Main.HasGlobalTagFilters && FileQueryFragments.Count == 0)
         {
             // 空关键词 + 无标签 → 浏览模式：展示最近条目（对齐扩展：清空搜索框回到浏览列表而非空白）
             await LoadBrowseAsync(token);
@@ -153,6 +181,7 @@ public partial class SearchPageViewModel : ObservableObject
         }
         // 空关键词 + 已选标签 → 不提前返回：SearchService 会退化为「按标签浏览」
         // （与桌面组件同一规则），让主界面也能不输关键词、纯靠标签组合过滤。
+        // 空关键词 + 已勾「类型」→ 也不提前返回：交给 Everything 当「浏览该类型的文件」。
 
         IsSearching = true;
         StatusText = "搜索中...";
@@ -167,11 +196,16 @@ public partial class SearchPageViewModel : ObservableObject
             {
                 "star" => ItemType.GitHubStar,
                 "bookmark" => ItemType.Bookmark,
+                "file" => ItemType.File,
                 _ => null,
             },
             Sort = CurrentSort,
-            Language = string.IsNullOrEmpty(CurrentLanguage) ? null : CurrentLanguage,
+            // 语言是 GitHubStar 的维度：来源切到「本地文件」时整体失效（带上它只会让文件被
+            // 语言闸门筛光）。合并/SQL 两侧也已豁免 File 类型，这里是让条件根本不进查询。
+            Language = CurrentSource == "file" || string.IsNullOrEmpty(CurrentLanguage)
+                ? null : CurrentLanguage,
             Tags = Main.HasGlobalTagFilters ? Main.GlobalTagFilters.Select(t => t.Name).ToArray() : null,
+            FileQueryFragments = FileQueryFragments.Count > 0 ? FileQueryFragments : null,
         };
 
         try
@@ -218,9 +252,16 @@ public partial class SearchPageViewModel : ObservableObject
                 ClearSelection();
                 HasResults = Results.Count > 0;
                 EmptyHint = Results.Count == 0
-                    ? (Main.HasGlobalTagFilters
-                        ? $"没有同时带 {string.Join(" + ", Main.GlobalTagFilters.Select(t => "#" + t.Name))} 的条目"
-                        : $"未找到与 \"{keyword}\" 相关的条目")
+                    ? CurrentSource switch
+                    {
+                        // 本地文件空结果最常被误读成"搜索坏了"：开关没开时直接说出下一步该做什么。
+                        "file" when !IsLocalDiskSearchOn() =>
+                            "本地磁盘搜索还没开启 — 设置 › 本地磁盘搜索 打开后即可搜遍整盘文件",
+                        "file" => $"磁盘上没有找到{(keyword.Length > 0 ? $"\"{keyword}\"" : "该类型")}的文件",
+                        _ => Main.HasGlobalTagFilters
+                            ? $"没有同时带 {string.Join(" + ", Main.GlobalTagFilters.Select(t => "#" + t.Name))} 的条目"
+                            : $"未找到与 \"{keyword}\" 相关的条目",
+                    }
                     : string.Empty;
                 StatusText = $"命中 {result.Items.Count} 条 · {result.ElapsedMs}ms";
             });

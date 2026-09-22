@@ -32,23 +32,29 @@ public sealed class SearchService
         if (string.IsNullOrWhiteSpace(keyword))
         {
             // 无关键词 + 有标签过滤 → 退化为「按标签浏览」，与扩展浏览态的 tagFilters 行为一致。
-            // 否则维持原语义：空查询不返回内容（桌面端浏览由文件夹/标签/动态/隐藏四个页面承担）。
-            if (!filter.HasTags)
-                return new SearchResult { Items = Array.Empty<Item>(), Total = 0, ElapsedMs = 0 };
-
-            var browsed = await _repository.GetAllAsync(new BrowseFilter
+            if (filter.HasTags)
             {
-                TagFilters = filter.Tags,
-                TypeFilter = filter.Type?.ToString().ToLowerInvariant(),
-                IncludeHidden = filter.IncludeHidden,
-                // 语言是持久化的全局工具栏控件，且在浏览态与关键词态都应收窄；此前只转发了
-                // Tag/Type/Hidden，漏了 Language → 「选了标签 + 选了语言」的空关键词浏览里语言静默失效
-                //（GetAllAsync 本就支持 BrowseFilter.Language，这里只是没把值传进去）。
-                Language = filter.Language,
-                Sort = filter.Sort ?? "recent",
-                Limit = filter.MaxResults,
-            }, ct);
-            return new SearchResult { Items = browsed, Total = browsed.Count, ElapsedMs = 0 };
+                var browsed = await _repository.GetAllAsync(new BrowseFilter
+                {
+                    TagFilters = filter.Tags,
+                    TypeFilter = filter.Type?.ToString().ToLowerInvariant(),
+                    IncludeHidden = filter.IncludeHidden,
+                    // 语言是持久化的全局工具栏控件，且在浏览态与关键词态都应收窄；此前只转发了
+                    // Tag/Type/Hidden，漏了 Language → 「选了标签 + 选了语言」的空关键词浏览里语言静默失效
+                    //（GetAllAsync 本就支持 BrowseFilter.Language，这里只是没把值传进去）。
+                    Language = filter.Language,
+                    Sort = filter.Sort ?? "recent",
+                    Limit = filter.MaxResults,
+                }, ct);
+                return new SearchResult { Items = browsed, Total = browsed.Count, ElapsedMs = 0 };
+            }
+
+            // 无关键词但勾了「类型」多选 → 不返回，继续往下查实时源：Everything 收到纯检索式
+            // （ext:/size:/dm:）本身就是「浏览这个类型的所有文件」，这正是 B1 要给的能力
+            //（FTS 侧空词本就返回 0 条，不会污染结果）。
+            // 否则维持原语义：空查询不返回内容（桌面端浏览由文件夹/标签/动态/隐藏四个页面承担）。
+            if (filter.FileQueryFragments is not { Count: > 0 })
+                return new SearchResult { Items = Array.Empty<Item>(), Total = 0, ElapsedMs = 0 };
         }
 
         var sw = Stopwatch.StartNew();
