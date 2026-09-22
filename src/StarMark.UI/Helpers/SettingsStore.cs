@@ -95,34 +95,40 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     {
         lock (_cacheGate)
         {
-            try
-            {
-                if (!File.Exists(_path))
-                {
-                    _hasCache = false;
-                    return null;
-                }
+            if (_batchDepth > 0) return _batchData;   // 批量区间内：读写都走那份待落盘快照
+            return LoadCore();
+        }
+    }
 
-                var fi = new FileInfo(_path);
-                if (_hasCache && fi.LastWriteTimeUtc == _cachedStampUtc && fi.Length == _cachedLength)
-                    return _cached;
-
-                var data = JsonSerializer.Deserialize<SettingsData>(File.ReadAllText(_path));
-                _cached = data;
-                _cachedStampUtc = fi.LastWriteTimeUtc;
-                _cachedLength = fi.Length;
-                _hasCache = true;
-                return data;
-            }
-            catch (Exception ex)
+    private SettingsData? LoadCore()
+    {
+        try
+        {
+            if (!File.Exists(_path))
             {
-                // 解析失败绝不能静默：它会让所有设置回落默认、看起来像"首次运行"。
-                // 记日志并保留坏文件（.bad）供排查/恢复；移走原文件后 File.Exists 变 false，天然去重不刷屏。
-                StarLog.Error($"读取设置文件失败，回落默认设置：{_path}", ex);
-                TryPreserveCorruptSettings();
                 _hasCache = false;
                 return null;
             }
+
+            var fi = new FileInfo(_path);
+            if (_hasCache && fi.LastWriteTimeUtc == _cachedStampUtc && fi.Length == _cachedLength)
+                return _cached;
+
+            var data = JsonSerializer.Deserialize<SettingsData>(File.ReadAllText(_path));
+            _cached = data;
+            _cachedStampUtc = fi.LastWriteTimeUtc;
+            _cachedLength = fi.Length;
+            _hasCache = true;
+            return data;
+        }
+        catch (Exception ex)
+        {
+            // 解析失败绝不能静默：它会让所有设置回落默认、看起来像"首次运行"。
+            // 记日志并保留坏文件（.bad）供排查/恢复；移走原文件后 File.Exists 变 false，天然去重不刷屏。
+            StarLog.Error($"读取设置文件失败，回落默认设置：{_path}", ex);
+            TryPreserveCorruptSettings();
+            _hasCache = false;
+            return null;
         }
     }
 
@@ -140,20 +146,71 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     {
         lock (_cacheGate)
         {
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-                // 先写临时文件、再原子重命名覆盖：避免写盘中途崩溃把 settings.json 截断成非法 JSON
-                // （那会触发上面的"回落默认"路径，把用户全部设置静默清空）。
-                var tmp = _path + ".tmp";
-                File.WriteAllText(tmp, JsonSerializer.Serialize(data));
-                File.Move(tmp, _path, overwrite: true);
-                _hasCache = false; // 落盘后失效，下次 Load 读到最新 mtime/len
-            }
-            catch (Exception ex)
-            {
-                StarLog.Error($"写入设置文件失败：{_path}", ex);
-            }
+            if (_batchDepth > 0) { _batchData = data; return; }   // 区间内只攒，Dispose 时一次落盘
+            SaveCore(data);
+        }
+    }
+
+    private int _batchDepth;
+    private SettingsData? _batchData;
+
+    /// <summary>
+    /// 批量保存区间：区间内每个 <c>SaveXxx</c> 只改内存快照，Dispose 时一次落盘。
+    /// <para>
+    /// 为什么需要：每个 SaveXxx 单看都是"一读一写"，而设置页一次保存串了 16 项 ⇒ 16 次整档读
+    /// + 16 次原子替换（写临时文件再 Move），而拖滑杆会按 350 ms 自动保存的节奏反复走这一轮。
+    /// 区间内的<b>读</b>也返回同一份待落盘快照，所以跨字段回落（主窗不透明度沿用组件值、主窗材质
+    /// 沿用旧布尔）在批量中看到的与落盘后完全一致。
+    /// </para>
+    /// <para>用法约束：同一线程的同步段内 using（可嵌套，按深度计数）；不要在区间里 await。</para>
+    /// </summary>
+    public IDisposable BeginBatch()
+    {
+        lock (_cacheGate)
+        {
+            if (_batchDepth++ == 0) _batchData = LoadCore() ?? new SettingsData();
+            return new BatchScope(this);
+        }
+    }
+
+    private void EndBatch()
+    {
+        lock (_cacheGate)
+        {
+            if (--_batchDepth > 0) return;
+            var pending = _batchData;
+            _batchData = null;
+            if (pending is not null) SaveCore(pending);
+        }
+    }
+
+    private sealed class BatchScope(SettingsStore owner) : IDisposable
+    {
+        private SettingsStore? _owner = owner;
+
+        public void Dispose()
+        {
+            var owner = _owner;
+            _owner = null;
+            owner?.EndBatch();   // 只放行外层那一次落盘；重复 Dispose 不重复计数
+        }
+    }
+
+    private void SaveCore(SettingsData data)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+            // 先写临时文件、再原子重命名覆盖：避免写盘中途崩溃把 settings.json 截断成非法 JSON
+            // （那会触发上面的"回落默认"路径，把用户全部设置静默清空）。
+            var tmp = _path + ".tmp";
+            File.WriteAllText(tmp, JsonSerializer.Serialize(data));
+            File.Move(tmp, _path, overwrite: true);
+            _hasCache = false; // 落盘后失效，下次 Load 读到最新 mtime/len
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error($"写入设置文件失败：{_path}", ex);
         }
     }
 

@@ -351,38 +351,43 @@ public partial class SettingsPageViewModel : ObservableObject
                 2 => ThemePreference.Dark,
                 _ => ThemePreference.Default,
             };
-            _settings.SaveTheme(theme);
-            _settings.SaveEnableTray(EnableTray);
-            _settings.SaveEnableGlobalHotKey(EnableGlobalHotKey);
-            _settings.SaveMinimizeToTray(MinimizeToTray);
-            _settings.SaveWidgetSnapEnabled(EnableWidgetSnap);
-            _settings.SaveWidgetSnapSpacing((int)SnapSpacing);
-            _settings.SaveWidgetSnapStrength((int)SnapStrength);
-            _settings.SaveWidgetBackdrop((WidgetBackdropKind)BackdropIndex);
-            _settings.SaveWidgetOpacity(WidgetOpacity);
-            _settings.SaveMainWindowBackdrop((WidgetBackdropKind)MainWindowBackdropIndex);
-            _settings.SaveMainWindowOpacity(MainWindowOpacity);
-            _settings.SavePerformanceMode((PerformanceMode)PerformanceModeIndex);
-            _settings.SaveCacheBudgetMb(CacheBudgetMb);
-            _settings.SaveMaxImageCacheCount(MaxCacheCount);
+            // 一次保存串 16 项：不在批量区间里就是 16 次整档读 + 16 次原子替换，而拖滑杆会按
+            // 350 ms 自动保存的节奏反复走这一轮（P-43）。区间内读写同一份待落盘快照。
+            using (_settings.BeginBatch())
+            {
+                _settings.SaveTheme(theme);
+                _settings.SaveEnableTray(EnableTray);
+                _settings.SaveEnableGlobalHotKey(EnableGlobalHotKey);
+                _settings.SaveMinimizeToTray(MinimizeToTray);
+                _settings.SaveWidgetSnapEnabled(EnableWidgetSnap);
+                _settings.SaveWidgetSnapSpacing((int)SnapSpacing);
+                _settings.SaveWidgetSnapStrength((int)SnapStrength);
+                _settings.SaveWidgetBackdrop((WidgetBackdropKind)BackdropIndex);
+                _settings.SaveWidgetOpacity(WidgetOpacity);
+                _settings.SaveMainWindowBackdrop((WidgetBackdropKind)MainWindowBackdropIndex);
+                _settings.SaveMainWindowOpacity(MainWindowOpacity);
+                _settings.SavePerformanceMode((PerformanceMode)PerformanceModeIndex);
+                _settings.SaveCacheBudgetMb(CacheBudgetMb);
+                _settings.SaveMaxImageCacheCount(MaxCacheCount);
 
-            // 载入现有配置再改：旧写法 new GitHubOptions() 整档重写会把本面板不出现的
-            // SyncIntervalSeconds / PageSize 等字段静默重置为默认；Load→改→Save 仅覆盖 Token/Username。
-            var github = StarMark.Integrations.GitHub.GitHubOptions.Load();
-            github.Token = string.IsNullOrWhiteSpace(GithubToken) ? null : GithubToken.Trim();
-            github.Username = string.IsNullOrWhiteSpace(GithubUsername) ? null : GithubUsername.Trim();
-            github.Save();
+                // 载入现有配置再改：旧写法 new GitHubOptions() 整档重写会把本面板不出现的
+                // SyncIntervalSeconds / PageSize 等字段静默重置为默认；Load→改→Save 仅覆盖 Token/Username。
+                var github = StarMark.Integrations.GitHub.GitHubOptions.Load();
+                github.Token = string.IsNullOrWhiteSpace(GithubToken) ? null : GithubToken.Trim();
+                github.Username = string.IsNullOrWhiteSpace(GithubUsername) ? null : GithubUsername.Trim();
+                github.Save();
 
-            // 本地文件索引（P0-1b）：只保留存在的目录；上限需为正整数
-            var roots = FileIndexRootsText
-                .Split(new[] { '\n', '\r', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .Where(s => s.Length > 0 && Directory.Exists(s))
-                .Distinct()
-                .ToList();
-            _settings.SaveFileIndexRoots(roots);
-            if (int.TryParse(MaxFileIndexCountText, out var cap) && cap > 0)
-                _settings.SaveMaxFileIndexCount(cap);
+                // 本地文件索引（P0-1b）：只保留存在的目录；上限需为正整数
+                var roots = FileIndexRootsText
+                    .Split(new[] { '\n', '\r', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => s.Trim())
+                    .Where(s => s.Length > 0 && Directory.Exists(s))
+                    .Distinct()
+                    .ToList();
+                _settings.SaveFileIndexRoots(roots);
+                if (int.TryParse(MaxFileIndexCountText, out var cap) && cap > 0)
+                    _settings.SaveMaxFileIndexCount(cap);
+            }
 
             // 即时把根目录 / 上限推给 FileIndexOptions 单例，令后台重扫无需重启即生效（与开关同为方案 B）。
             // 读回持久化值而非直接用 roots：空 roots 时 LoadFileIndexRoots 会回退默认（桌面/下载/文档），与建库时口径一致。
