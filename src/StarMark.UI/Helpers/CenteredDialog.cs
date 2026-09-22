@@ -315,19 +315,62 @@ public static class CenteredDialog
         return tcs.Task;
     }
 
-    // ───────────────────────── 构建 ─────────────────────────
+    // ───────────────────────── 弹窗主题同步 ─────────────────────────
 
-    /// <summary>把用户「设置里存的」主题偏好折算成窗口实际渲染的 <see cref="ElementTheme"/>，
-    /// 让代码侧解析的画笔与窗口根元素的 RequestedTheme 完全一致（消除弹窗主题错乱）。</summary>
-    private static ElementTheme EffectiveTheme()
+    /// <summary>一处"按主题资源上色"的属性：切主题时用它把画刷按新主题重解析并写回。</summary>
+    private sealed record BrushSlot(DependencyObject Target, DependencyProperty Prop, string Key, Color Fallback);
+
+    /// <summary>
+    /// 仍打开的顶层弹窗 → 该弹窗里代码上色的属性清单。
+    /// <para>
+    /// 为什么必须自己管：弹窗是独立 Window，应用级主题在首个窗口创建时即冻结，运行期切深浅色
+    /// 只是显式盖各窗口根的 RequestedTheme（<see cref="ThemeManager.Apply"/>），既不会传导到别的
+    /// 窗口，也不会重解析<b>代码</b>里赋给标题/正文/主按钮的画刷——于是"切换主题时所有弹窗都不跟随"。
+    /// WinUI 3 又没给代码侧留 <c>SetResourceReference</c>（只有 XAML 的 {ThemeResource} 会动态重解析），
+    /// 所以构建期把这些属性登记成清单，切换时统一按新主题重放。
+    /// </para>
+    /// </summary>
+    private static readonly Dictionary<Window, IReadOnlyList<BrushSlot>> _openDialogs = new();
+
+    private static readonly List<BrushSlot> _buildSlots = new();
+
+    /// <summary>登记一个仍打开的顶层弹窗（其 Closed 时自动注销）；构建期攒下的上色属性归到它名下。</summary>
+    public static void TrackForThemeSync(Window win)
     {
-        var pref = new SettingsStore().LoadTheme();
-        return pref switch
+        IReadOnlyList<BrushSlot> slots;
+        lock (_buildSlots)
         {
-            ThemePreference.Light => ElementTheme.Light,
-            ThemePreference.Dark => ElementTheme.Dark,
-            _ => ElementTheme.Default,
-        };
+            slots = _buildSlots.ToArray();
+            _buildSlots.Clear();
+        }
+        lock (_openDialogs) _openDialogs[win] = slots;
+        win.Closed += (_, _) => { lock (_openDialogs) _openDialogs.Remove(win); };
+    }
+
+    /// <summary>主题切换后重刷所有仍打开的弹窗（主窗口 <c>RefreshAppearance</c> 调用）。</summary>
+    public static void ApplyThemeToOpenDialogs(ThemePreference pref)
+    {
+        var theme = ThemeManager.ResolveEffectiveTheme(pref);
+        Window[] snapshot;
+        IReadOnlyList<BrushSlot>[] slots;
+        lock (_openDialogs)
+        {
+            snapshot = _openDialogs.Keys.ToArray();
+            slots = _openDialogs.Values.ToArray();
+        }
+        for (var i = 0; i < snapshot.Length; i++)
+        {
+            var win = snapshot[i];
+            // 弹窗可能正在关闭过程中（Closed 尚未摘除登记），单个失败不该影响其余窗口。
+            try
+            {
+                ThemeManager.Apply(win, pref);   // 卡片背景/边框等 {ThemeResource} 部分随根主题重解析
+                foreach (var slot in slots[i])
+                    slot.Target.SetValue(slot.Prop,
+                        ThemeBrush.For(theme, slot.Key) ?? new SolidColorBrush(slot.Fallback));
+            }
+            catch (Exception ex) { StarMark.Abstractions.StarLog.Error("弹窗主题同步失败", ex); }
+        }
     }
 
     private static Window BuildWindow(string title, string? message, double height, Window? owner)
@@ -366,6 +409,7 @@ public static class CenteredDialog
         WindowInterop.SetRoundedWindowRegion(win, 10);
 
         win.Closed += (_, _) => onClosed();
+        TrackForThemeSync(win);
         win.Activate();
         WindowInterop.SetTopmost(win, true);
         try { WindowInterop.SetForegroundWindow(WindowInterop.GetHwnd(win)); } catch { }
@@ -380,31 +424,51 @@ public static class CenteredDialog
         return new PopupCard { CardContent = content };
     }
 
-    private static TextBlock MakeTitle(string title) => new()
+    private static TextBlock MakeTitle(string title)
     {
-        Text = title,
-        FontSize = 16,
-        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-        TextWrapping = TextWrapping.Wrap,
-        Foreground = Brush("TextFillColorPrimaryBrush", Colors.Black),
-    };
+        var tb = new TextBlock
+        {
+            Text = title,
+            FontSize = 16,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        Paint(tb, TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush", Colors.Black);
+        return tb;
+    }
 
-    /// <summary>按用户存储主题解析画笔（ThemeResource 在代码里拿不到，靠 ThemeBrush 兜底）。</summary>
-    private static Brush Brush(string key, Color fallback) => ThemeBrush.For(EffectiveTheme(), key)
-        ?? new SolidColorBrush(fallback);
+    /// <summary>把用户「设置里存的」主题偏好折算成窗口实际渲染的 <see cref="ElementTheme"/>，
+    /// 让代码侧解析的画笔与窗口根元素的 RequestedTheme 完全一致（消除弹窗主题错乱）。</summary>
+    private static ElementTheme EffectiveTheme()
+        => ThemeManager.ResolveEffectiveTheme(new SettingsStore().LoadTheme());
+
+    private static Brush Brush(string key, Color fallback)
+        => ThemeBrush.For(EffectiveTheme(), key) ?? new SolidColorBrush(fallback);
+
+    /// <summary>
+    /// 按当前主题给某个属性上一次色，并把它登记进 <see cref="_buildSlots"/>：
+    /// 代码赋的画刷不会随主题自动重解析（WinUI 3 无代码侧 SetResourceReference），
+    /// 切主题时由 <see cref="ApplyThemeToOpenDialogs"/> 按新主题重放一遍。
+    /// </summary>
+    private static void Paint(DependencyObject target, DependencyProperty prop, string key, Color fallback)
+    {
+        target.SetValue(prop, Brush(key, fallback));
+        lock (_buildSlots) _buildSlots.Add(new BrushSlot(target, prop, key, fallback));
+    }
 
     private static UIElement MakeMessage(string? message)
     {
         if (string.IsNullOrWhiteSpace(message)) return new Grid { Height = 0 };
-        return new TextBlock
+        var tb = new TextBlock
         {
             Text = message,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 8, 0, 0),
             Opacity = 0.85,
             FontSize = 13,
-            Foreground = Brush("TextFillColorSecondaryBrush", Colors.Gray),
         };
+        Paint(tb, TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush", Colors.Gray);
+        return tb;
     }
 
     private static Button MakeButton(string text, bool accent)
@@ -418,8 +482,8 @@ public static class CenteredDialog
         };
         if (accent)
         {
-            btn.Background = Brush("AccentFillColorDefaultBrush", Colors.RoyalBlue);
-            btn.Foreground = Brush("TextOnAccentFillColorPrimaryBrush", Colors.White);
+            Paint(btn, Control.BackgroundProperty, "AccentFillColorDefaultBrush", Colors.RoyalBlue);
+            Paint(btn, Control.ForegroundProperty, "TextOnAccentFillColorPrimaryBrush", Colors.White);
         }
         return btn;
     }

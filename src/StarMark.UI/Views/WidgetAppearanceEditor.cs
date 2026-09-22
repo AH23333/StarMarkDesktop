@@ -598,6 +598,8 @@ public static class WidgetAppearanceEditor
         win.Content = card;
         // 必须在此（Content 已设）才套用主题：否则 root.RequestedTheme 不会生效，弹窗停留在旧主题。
         try { ThemeManager.Apply(win, new SettingsStore().LoadTheme()); } catch { }
+        // 登记进弹窗主题同步表：主界面运行期切深浅色时不会传导到独立顶层窗口，须由 CenteredDialog 统一重刷。
+        CenteredDialog.TrackForThemeSync(win);
         // 不再设单独的拖拽标题栏：整个窗口可拖拽移动（自动避开输入控件），避免遮挡被编辑的组件
         MakeWindowDraggable(win, card);
         WindowInterop.RemoveDefaultWindowFrame(win);

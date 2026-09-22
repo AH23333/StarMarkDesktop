@@ -195,6 +195,9 @@ public sealed partial class MainWindow : Window
             // 主题切换后代码构建的画笔重解析（来源按钮高亮、状态点）
             SetSourceButtonsHighlight(_currentSource);
             SetStatusDot(_statusKind);
+            // 弹窗是独立顶层窗口：主窗只改自己的根主题传导不到它们，必须显式重刷，
+            // 否则切深浅色时"仍打开的弹窗全部停在旧主题"（外观编辑器/预览/标签/确认框都在内）。
+            CenteredDialog.ApplyThemeToOpenDialogs(_themePref);
         }
         catch (Exception ex)
         {
