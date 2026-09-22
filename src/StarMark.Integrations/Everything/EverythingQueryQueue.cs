@@ -378,15 +378,40 @@ public sealed class EverythingSource : IItemSource
         catch (Exception ex) { StarLog.Error("枚举待关闭 Everything 进程失败", ex); }
     }
 
-    /// <summary>确保自带 standard Everything 便携版落到自有目录（%LOCALAPPDATA%\StarMark\everything\Everything.exe）；
-    /// 缺失则下官方便携 zip 抽取 exe+lng（只取固定文件名，无 Zip Slip 面）。返回落地路径或 null。</summary>
+    /// <summary>确保自带 standard Everything 落到自有目录（%LOCALAPPDATA%\StarMark\everything\Everything.exe）。
+    /// A2 两级来源：① 优先复制<b>随应用分发</b>的副本（发布时把 portable Everything.exe/.lng 放进应用目录或
+    /// its <c>everything\</c> 子目录 → 新环境零联网即可用）；② 无副本才从 voidtools 官网下载兜底。
+    /// 只取固定文件名，无 Zip Slip 面。返回落地路径或 null。</summary>
     private static async Task<string?> EnsureOwnedEverythingAsync(CancellationToken ct)
     {
         if (File.Exists(OwnedExePath)) return OwnedExePath;
+        Directory.CreateDirectory(OwnedDir);
+
+        // ① 随应用分发的副本（免联网）
+        foreach (var dir in new[]
+                 {
+                     Path.Combine(AppContext.BaseDirectory, "everything"),
+                     AppContext.BaseDirectory,
+                 })
+        {
+            var src = Path.Combine(dir, "Everything.exe");
+            if (!File.Exists(src)) continue;
+            try
+            {
+                File.Copy(src, OwnedExePath, overwrite: true);
+                var lng = Path.Combine(dir, "Everything.lng");
+                if (File.Exists(lng))
+                    File.Copy(lng, Path.Combine(OwnedDir, "Everything.lng"), overwrite: true);
+                StarLog.Info($"自带 Everything 采用随应用分发副本：{src}");
+                return OwnedExePath;
+            }
+            catch (Exception ex) { StarLog.Error("复制随应用分发的 Everything 失败，改用联网下载兜底", ex); }
+        }
+
+        // ② 兜底：官网下载便携版
         try
         {
-            StarLog.Info("下载官方 standard Everything（便携版）到 StarMark 自有目录…");
-            Directory.CreateDirectory(OwnedDir);
+            StarLog.Info("未发现随应用分发副本：下载官方 standard Everything（便携版）到 StarMark 自有目录…");
             var zip = Path.Combine(OwnedDir, "Everything-portable.zip");
             if (!File.Exists(zip))
             {
