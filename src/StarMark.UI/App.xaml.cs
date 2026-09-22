@@ -165,13 +165,14 @@ public partial class App : Application
 
         // 本地磁盘搜索「A 方案：与提权 Everything 同权限」——若已开启且当前非提权，以管理员重启一次
         // （带 --elevate-retry 标记防死循环；用户取消 UAC 则继续普通运行，仅本地文件搜索用不了，其余不受影响）。
-        // 放在 DI 建好之后、拉起 Everything 之前，让提权实例去走下面正常的 SDK/IPC 就绪流程。
-        if (fileSettings.LoadLocalDiskSearchEnabled() && !Privilege.IsElevated())
+        // 每次启动记一行提权自检，便于定位 IPC(2) 究竟出在"StarMark 没真提权"还是"Everything 没提权"。
+        if (fileSettings.LoadLocalDiskSearchEnabled())
         {
             var alreadyRetried = false;
             foreach (var a in Environment.GetCommandLineArgs())
                 if (string.Equals(a, "--elevate-retry", StringComparison.OrdinalIgnoreCase)) { alreadyRetried = true; break; }
-            if (!alreadyRetried && Privilege.TryRelaunchSelfElevated("--elevate-retry"))
+            StarLog.Info($"本地磁盘搜索：提权自检 IsElevated={Privilege.IsElevated()} · elevateRetry={alreadyRetried} · pid={Environment.ProcessId}");
+            if (!Privilege.IsElevated() && !alreadyRetried && Privilege.TryRelaunchSelfElevated("--elevate-retry"))
                 Environment.Exit(0);
         }
 

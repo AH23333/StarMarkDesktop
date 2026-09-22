@@ -309,10 +309,14 @@ public sealed class EverythingSource : IItemSource
         if (EverythingInterop.IsRunning()) return;
         try
         {
+            // -hidden：Everything 官方参数，启动后不弹主窗口（只在后台提供 IPC 落点窗口）。
+            // 用户要的是「在主搜索栏直接搜本地文件」，不该看到另开一个 Everything 界面来回切换。
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = everythingExe,
+                Arguments = "-hidden",
                 UseShellExecute = true,
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
             });
         }
         catch (Exception ex)
