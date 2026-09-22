@@ -86,6 +86,9 @@ public partial class ClipboardPageViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            // HasItems 必须一起复位：那一行的可见性绑的就是它，留着 true 会让"加载失败"这句话
+            // 直接被折叠掉——用户看到的是空白页加一句"还没有记录"，比报错更难查。
+            HasItems = false;
             EmptyHint = $"加载失败：{ex.Message}";
         }
         finally
@@ -125,10 +128,25 @@ public partial class ClipboardPageViewModel : ObservableObject
         return true;
     }
 
-    /// <summary>清空全部历史（含置顶）。返回被删条数，让调用方能在确认文案里说清后果。</summary>
+    /// <summary>
+    /// 清空全部历史（含置顶）。返回被删条数，让调用方能在确认文案里说清后果；失败返回 -1
+    /// 并把原因写进状态行——这条路径由用户的"清空"按钮直连，抛出去就是一次 async void 崩溃，
+    /// 静默返回则等于"点了没反应、历史还在"。
+    /// </summary>
     public async Task<int> ClearAllAsync()
     {
-        var deleted = await _repository.ClearClipboardHistoryAsync(CancellationToken.None);
+        int deleted;
+        try
+        {
+            deleted = await _repository.ClearClipboardHistoryAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"清空失败：{ex.Message}（列表未变动，可再点一次）";
+            StarLog.Error("清空剪贴板历史失败", ex);
+            return -1;
+        }
+
         StatusText = $"已清空 {deleted} 条剪贴板历史";
         Entries.Clear();
         HasItems = false;

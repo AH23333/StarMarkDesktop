@@ -53,10 +53,17 @@ public partial class HiddenPageViewModel : ObservableObject
         try
         {
             await _repository.SetHiddenAsync(item.Id, false, CancellationToken.None);
+            // 落库成功才从列表里摘掉。旧写法是"先摘再吞异常"：失败时界面当场少一条，
+            // 用户以为还原好了，下次进这页它又回来——比报错更难查的是"看起来成功了"。
             HiddenItems.Remove(item);
             HasItems = HiddenItems.Count > 0;
             EmptyHint = HiddenItems.Count == 0 ? "没有隐藏的条目" : string.Empty;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // 该页没有状态行可写原因（EmptyHint 只在空列表时可见），所以这里只保证"不骗人"；
+            // 可见原因属该页 UI 增强，已单独登记待决策。
+            StarLog.Error($"还原隐藏条目失败 (id={item.Id})", ex);
+        }
     }
 }
