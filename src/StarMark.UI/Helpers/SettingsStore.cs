@@ -537,13 +537,33 @@ public sealed class SettingsStore : IPerformanceSettingsSource
 
     private static List<string> DefaultFileIndexRoots()
     {
-        var candidates = new[]
+        // P-50：下载目录以前写死 %USERPROFILE%\Downloads。开了 OneDrive「已知文件夹移动」的机器上
+        // 真实下载目录是 …\OneDrive\Downloads ⇒ 该根恒不存在，被下面的 Exists 过滤静默剔除，
+        // 用户表现为"下载里的文件永远搜不到"（桌面/文档走 GetFolderPath 会自动跟随，只有这条不会）。
+        // 口径：.NET 没暴露 Downloads 这个已知文件夹（只有 Desktop/Documents 等），而 OneDrive
+        // 「已知文件夹移动」就是把 Downloads 挪到用户 OneDrive 根下 ⇒ 显式收三种 OneDrive 形态
+        // （个人版/企业版环境变量 + 配置文件目录下的 OneDrive）再兜老路径，全部按存在与否过滤。
+        var candidates = new List<string>();
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        foreach (var oneDrive in new[] { "OneDrive", "OneDriveCommercial" })
         {
-            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\Downloads",
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-        };
-        return candidates.Where(Directory.Exists).Distinct().ToList();
+            var root = Environment.GetEnvironmentVariable(oneDrive);
+            if (!string.IsNullOrWhiteSpace(root)) AddIfUsable(candidates, () => Path.Combine(root, "Downloads"));
+        }
+        AddIfUsable(candidates, () => Path.Combine(profile, "OneDrive", "Downloads"));
+        AddIfUsable(candidates, () => Path.Combine(profile, "Downloads"));
+        AddIfUsable(candidates, () => Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory));
+        AddIfUsable(candidates, () => Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
+        return candidates;
+    }
+
+    private static void AddIfUsable(List<string> list, Func<string> pick)
+    {
+        string path;
+        try { path = pick(); } catch { return; }        // 个别机器上已知文件夹解析会抛
+        if (string.IsNullOrWhiteSpace(path)) return;
+        try { if (Directory.Exists(path) && !list.Contains(path, StringComparer.OrdinalIgnoreCase)) list.Add(path); }
+        catch { /* 无权限探测的目录（网络盘/重定向被拦）：跳过它，不影响其余根目录 */ }
     }
 
     /// <summary>快捷键绑定：默认 + 已保存合并。未配置动作回退到默认手势（缺省为无）。</summary>
