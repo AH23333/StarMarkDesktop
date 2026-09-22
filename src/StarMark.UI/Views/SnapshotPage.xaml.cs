@@ -174,7 +174,9 @@ public sealed partial class SnapshotPage : Page, INotifyPropertyChanged
         // 必须明确告知用户"未应用"，否则会误以为已还原。
         var ok = await mgr.ApplySnapshotAsync(id);
         if (!ok)
-            await CenteredDialog.MessageAsync("未能应用", "生成「应用前」回滚点失败，为防数据丢失已中止，当前状态未改动。请重试。", owner: App.MainWindow);
+            await CenteredDialog.MessageAsync("未能应用",
+                $"{mgr.LastApplyError ?? "生成「应用前」回滚点失败"}——为防数据丢失已中止，当前状态未改动。",
+                owner: App.MainWindow);
     }
 
     private async void Delete_Click(object sender, RoutedEventArgs e)

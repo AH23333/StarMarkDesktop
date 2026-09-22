@@ -346,7 +346,15 @@ public sealed class BackupServiceTests : IDisposable
             Assert.True(rr.Success);
             Assert.False(rr.WidgetsRestored);
             Assert.Contains("组件", rr.Message);
-            Assert.Contains("失败", rr.Message);
+            Assert.Contains("未能写入", rr.Message);
+
+            // P-54：失败原因必须一路带到状态栏。旧文案只写"请稍后重试或检查 %APPDATA% 是否被占用"，
+            // 让用户去猜一个日志里早已写明的事——真正的错因（这里是往"文件"下建目录）被丢进了日志。
+            const string marker = "（组件保持原状）：";
+            Assert.Contains(marker, rr.Message);
+            var reason = rr.Message[(rr.Message.IndexOf(marker, StringComparison.Ordinal) + marker.Length)..];
+            Assert.NotEmpty(reason.Trim());
+            Assert.DoesNotContain("请稍后重试", rr.Message);
         }
         finally { try { File.Delete(blocker); } catch { } }
     }

@@ -188,9 +188,10 @@ public sealed class BackupService
             await _repo.ReindexAllSearchTextAsync(ct);
 
             bool widgetsRestored = false;
+            string? widgetsError = null;
             if (!string.IsNullOrEmpty(p.WidgetsJson))
             {
-                widgetsRestored = WriteWidgetsJson(p.WidgetsJson!, widgetsTargetPath);
+                (widgetsRestored, widgetsError) = WriteWidgetsJson(p.WidgetsJson!, widgetsTargetPath);
             }
 
             // 还原走的是批量 DELETE + INSERT（绕开 ItemRepository 各写方法的 Notify），
@@ -203,8 +204,10 @@ public sealed class BackupService
             // 备份里带了组件数据却写盘失败时，若仍返回纯成功文案就是「假成功」——调用方
             // (SettingsPage) 只把 rr.Message 显示到状态栏、并不单独呈现 WidgetsRestored，
             // 用户会误以为组件也一并还原了。这里把失败并入文案，Success 仍为 true（条目本体确已还原）。
+            // 原因必须一起给出：旧文案是"请稍后重试或检查 %APPDATA% 是否被占用"，等于让用户去猜
+            // 一个日志里已经写明的东西（P-54）。
             var widgetsNote = (!string.IsNullOrEmpty(p.WidgetsJson) && !widgetsRestored)
-                ? " 但桌面组件数据恢复失败（组件保持原状），请稍后重试或检查 %APPDATA% 是否被占用。"
+                ? $" 但桌面组件数据未能写入（组件保持原状）：{widgetsError}"
                 : string.Empty;
 
             return new RestoreResult
@@ -360,7 +363,8 @@ public sealed class BackupService
         }
     }
 
-    private static bool WriteWidgetsJson(string json, string? targetPath)
+    /// <summary>把备份里的组件数据写回磁盘。返回成败与失败原因（原因要一路带到状态栏，见调用点）。</summary>
+    private static (bool Ok, string? Error) WriteWidgetsJson(string json, string? targetPath)
     {
         try
         {
@@ -377,12 +381,12 @@ public sealed class BackupService
             var tmp = path + ".tmp";
             File.WriteAllText(tmp, json);
             File.Move(tmp, path, overwrite: true);
-            return true;
+            return (true, null);
         }
         catch (Exception ex)
         {
             StarLog.Error("恢复 widgets.json 失败", ex);
-            return false;
+            return (false, ex.Message);
         }
     }
 }

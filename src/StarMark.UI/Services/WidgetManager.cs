@@ -620,13 +620,25 @@ public sealed class WidgetManager
     }
 
     /// <summary>
+    /// 最近一次 <see cref="ApplySnapshotAsync"/> 未能应用的原因（成功或未尝试＝null，失败时随该次调用刷新）。
+    /// <para>快照页原先无论为何失败都只会说"请重试"，而原因埋在日志里：磁盘满、快照被别处删掉、
+    /// 组件数据读不出来——用户看到的都是同一句话，也就无从判断重试有没有意义（P-54）。</para>
+    /// </summary>
+    public string? LastApplyError { get; private set; }
+
+    /// <summary>
     /// 应用快照 = 回到那一刻（Replace）：先自动留一个「应用前」回滚点，再落位布局 + 写回配置数据 + 还原本地条目。
     /// 布局外的实例被隐藏（内容保留）；快照里各组件的快捷入口/待办/随记/条目格查询按「类型+序号」匹配回对应实例。
     /// </summary>
     public async Task<bool> ApplySnapshotAsync(string snapshotId)
     {
+        LastApplyError = null;
         var snapshot = _storage.FindSnapshot(snapshotId);
-        if (snapshot is null) return false;
+        if (snapshot is null)
+        {
+            LastApplyError = "该快照已不存在（可能在别处被删除）";
+            return false;
+        }
 
         // 1) 自动回滚点：应用前把当前状态先存成一个快照，结果不满意可「应用」它退回这一刻。
         //    快照是 Replace 语义（会覆盖当前待办/随记/摆位）——若这个回滚点没存成，一旦应用出错就无从退回，
@@ -721,7 +733,12 @@ public sealed class WidgetManager
     private async Task<bool> CaptureSnapshotInternalAsync(string name)
     {
         try { return await CaptureSnapshotAsync(name) is not null; }
-        catch (Exception ex) { StarLog.Error("创建应用前回滚快照失败", ex); return false; }
+        catch (Exception ex)
+        {
+            StarLog.Error("创建应用前回滚快照失败", ex);
+            LastApplyError = $"生成「应用前」回滚点失败：{ex.Message}";
+            return false;
+        }
     }
 
     /// <summary>设置变更时把半透明材质/不透明度重新应用到所有已打开的组件窗口。</summary>

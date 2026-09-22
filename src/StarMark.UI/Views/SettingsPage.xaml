@@ -474,6 +474,12 @@
                                 </Grid>
                                 <TextBlock Text="{x:Bind ViewModel.LocalDiskSearchStatus, Mode=OneWay}"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                                <!-- 准备失败原先只留一句「请确认 Everything 正在运行后稍候再试」／「请用开始菜单以管理员身份运行」，
+                                     等于把程序自己能做的动作写成用户作业。改为就地按钮，点的就是同一段准备代码（P-54）。 -->
+                                <Button Content="{x:Bind ViewModel.LocalDiskSearchRetryLabel, Mode=OneWay}"
+                                        Command="{x:Bind ViewModel.RetryLocalDiskPrepareCommand}"
+                                        Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"
+                                        Visibility="{x:Bind ViewModel.CanRetryLocalDiskPrepare, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                                 <!-- 自带引擎管理：占用大小 + 打开所在目录 + 删除（误删无妨，下次开启自愈式重下） -->
                                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
                                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">

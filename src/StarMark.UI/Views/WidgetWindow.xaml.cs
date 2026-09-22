@@ -942,7 +942,8 @@ public sealed partial class WidgetWindow : Window
                 apply.Click += async (_, _) =>
                 {
                     if (!await _manager.ApplySnapshotAsync(id))
-                        await ShowTipAsync("未能应用快照", "生成「应用前」回滚点失败，为防数据丢失已中止，当前状态未改动。");
+                        await ShowTipAsync("未能应用快照",
+                            $"{_manager.LastApplyError ?? "生成「应用前」回滚点失败"}——为防数据丢失已中止，当前状态未改动。");
                 };
                 snapSub.Items.Add(apply);
             }
@@ -985,7 +986,7 @@ public sealed partial class WidgetWindow : Window
         catch (Exception ex)
         {
             StarLog.Error("保存布局与数据快照失败", ex);
-            await ShowTipAsync("保存快照失败", "读取组件数据时出错，快照未保存，请重试。");
+            await ShowTipAsync("保存快照失败", $"读取组件数据时出错，快照未保存：{ex.Message}");
         }
     }
 
