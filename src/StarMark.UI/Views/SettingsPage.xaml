@@ -78,9 +78,16 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Text="设置" FontSize="20" FontWeight="SemiBold"
-                       VerticalAlignment="Center"
-                       Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                <TextBlock Text="设置" FontSize="20" FontWeight="SemiBold"
+                           Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                <!-- 设置改动实时生效、没有底部保存按钮，因此"没保存成功"这种反面事实必须自己露头，
+                     否则用户唯一能发现的时间点是下次启动设置悄悄回退（P-53）。 -->
+                <TextBlock Text="{x:Bind ViewModel.SaveErrorMessage, Mode=OneWay}"
+                           FontSize="12" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
+                           Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                           Visibility="{x:Bind ViewModel.HasSaveError, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+            </StackPanel>
             <Button Grid.Column="1" Content="返回" Click="Back_Click"
                     Style="{StaticResource SecondaryButton}"/>
         </Grid>

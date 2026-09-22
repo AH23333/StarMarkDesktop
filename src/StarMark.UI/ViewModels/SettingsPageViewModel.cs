@@ -409,8 +409,21 @@ public partial class SettingsPageViewModel : ObservableObject
                 StarLog.Error("本地文件索引配置即时应用失败（下次重启仍会生效）", fox);
             }
 
-            StarMark.Abstractions.StarLog.Info($"设置已保存（主题={theme}, 托盘={EnableTray}）");
-            SaveErrorMessage = string.Empty;
+            // 写盘失败原先只进日志（P-53）：SaveCore 吞异常 ⇒ 界面表现为"已保存"，用户下次启动
+            // 发现设置全回退。日志不是用户能看到的反馈面，故这里把"未落盘"当成保存失败呈现，
+            // 也不再谎报已保存。本次会话内的即时应用照旧生效（改动已体现在内存与界面上）。
+            var writeError = _settings.LastWriteError;
+            if (writeError is null)
+            {
+                StarMark.Abstractions.StarLog.Info($"设置已保存（主题={theme}, 托盘={EnableTray}）");
+                HasSaveError = false;
+                SaveErrorMessage = string.Empty;
+            }
+            else
+            {
+                HasSaveError = true;
+                SaveErrorMessage = $"设置未能写入磁盘，重启后会回到旧值：{writeError}";
+            }
 
             // 主题即时应用
             App.MainWindow?.DispatcherQueue.TryEnqueue(() =>

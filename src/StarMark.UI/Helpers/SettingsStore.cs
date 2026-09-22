@@ -207,11 +207,28 @@ public sealed class SettingsStore : IPerformanceSettingsSource
             File.WriteAllText(tmp, JsonSerializer.Serialize(data));
             File.Move(tmp, _path, overwrite: true);
             _hasCache = false; // 落盘后失效，下次 Load 读到最新 mtime/len
+            _lastWriteError = null;
         }
         catch (Exception ex)
         {
             StarLog.Error($"写入设置文件失败：{_path}", ex);
+            _lastWriteError = ex.Message;   // 与成功分支同在 _cacheGate 下（Save/EndBatch 已持锁）
         }
+    }
+
+    private string? _lastWriteError;
+
+    /// <summary>
+    /// 最近一次写盘的失败原因（写成功即复位为 null）。
+    /// <para>
+    /// 为什么要有它：写盘失败原先只进日志，而日志不是用户能看到的反馈面 ⇒ 设置页表现"已保存"，
+    /// %APPDATA% 被同步盘占用、被设为只读、磁盘满时用户当场毫无察觉，下次启动全部回退（P-53）。
+    /// 异常不外抛是对的（保存路径上有一串即时应用，不该因写盘失败中断），但失败必须回传到能显示它的地方。
+    /// </para>
+    /// </summary>
+    public string? LastWriteError
+    {
+        get { lock (_cacheGate) return _lastWriteError; }
     }
 
     public ThemePreference LoadTheme() => Load() is { } d && Enum.IsDefined(typeof(ThemePreference), d.Theme)
