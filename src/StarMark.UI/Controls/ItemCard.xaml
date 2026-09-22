@@ -20,10 +20,10 @@
         </Border.Transitions>
         <Border.ContextFlyout>
             <MenuFlyout>
-                <MenuFlyoutItem Text="打开" Click="Menu_Open"/>
+                <MenuFlyoutItem Text="{x:Bind ViewModel.OpenMenuText, Mode=OneWay}" Click="Menu_Open"/>
                 <MenuFlyoutItem Text="打开所在位置" Click="Menu_OpenLocation"
                                 Visibility="{x:Bind ViewModel.HasOpenLocation, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                <MenuFlyoutItem Text="复制链接/路径" Click="Menu_CopyLink"/>
+                <MenuFlyoutItem Text="{x:Bind ViewModel.CopyMenuText, Mode=OneWay}" Click="Menu_CopyLink"/>
                 <MenuFlyoutItem Text="预览" Click="Preview_Click"/>
                 <MenuFlyoutItem Text="删除" Click="Delete_Click"
                                 Visibility="{x:Bind ViewModel.IsLauncherMode, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
@@ -32,7 +32,7 @@
                                 Text="{x:Bind ViewModel.PinMenuText, Mode=OneWay}"
                                 Visibility="{x:Bind ViewModel.IsLauncherMode, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
                 <MenuFlyoutItem Text="发送到桌面 · 快捷启动" Click="SendToWidget_Click"
-                                Visibility="{x:Bind ViewModel.IsLauncherMode, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+                                Visibility="{x:Bind ViewModel.CanSendToWidget, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutItem Text="编辑笔记" Click="EditNote_Click"
                                 Visibility="{x:Bind ViewModel.IsLauncherMode, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
                 <MenuFlyoutItem Text="编辑标签" Click="EditTags_Click"
@@ -151,7 +151,7 @@
                         ToolTipService.ToolTip="置顶（浏览视图排最前）" Click="Pin_Click"
                         Visibility="{x:Bind ViewModel.IsLauncherMode, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
                 <Button Content="⧉" Padding="4,2" Style="{StaticResource MiniIconButton}"
-                        ToolTipService.ToolTip="复制链接/路径" Click="Menu_CopyLink"/>
+                        ToolTipService.ToolTip="{x:Bind ViewModel.CopyMenuText, Mode=OneWay}" Click="Menu_CopyLink"/>
                 <Button Content="👁" Padding="4,2" Style="{StaticResource MiniIconButton}"
                         ToolTipService.ToolTip="隐藏" Click="Hide_Click"
                         Visibility="{x:Bind ViewModel.IsLauncherMode, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>

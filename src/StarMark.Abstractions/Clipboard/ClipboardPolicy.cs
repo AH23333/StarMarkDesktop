@@ -135,6 +135,20 @@ public static class ClipboardPolicy
         return normalizedText[..MaxStoredChars];
     }
 
+    // ==================== 条目动作口径 ====================
+
+    /// <summary>
+    /// 条目的"打开"是否应落为"把正文复制回剪贴板"。剪贴板历史条目<b>没有可启动的目标</b>（Uri 恒为空），
+    /// 对它"打开"若照本宣科去启动 Uri，就是一个点下去毫无反应的死菜单项。
+    /// <para>
+    /// 判据要求 <see cref="ItemType.Clipboard"/> <b>且</b> Uri 为空：只按类型判会让用户手工改出 Uri 的条目
+    /// 反而打不开；只按 Uri 空判会把待办/随记（同样可能没有 Uri）也拖进来，而它们的"打开"本就无意义，
+    /// 不该被解释成"复制"。UI 的菜单文案与执行入口都走这一个判据，避免同一类型在两处各判一次而漂移。
+    /// </para>
+    /// </summary>
+    public static bool OpensAsCopy(ItemType type, string? uri)
+        => type == ItemType.Clipboard && string.IsNullOrWhiteSpace(uri);
+
     // ==================== 不该出现在历史里的内容 ====================
 
     /// <summary>

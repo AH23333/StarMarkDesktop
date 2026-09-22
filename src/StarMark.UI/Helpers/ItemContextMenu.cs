@@ -61,12 +61,12 @@ internal static class ItemContextMenu
     {
         var flyout = new MenuFlyout();
 
-        flyout.Items.Add(Item("打开", (_, _) => OpenByRow(root, vm)));
+        flyout.Items.Add(Item(vm.OpenMenuText, (_, _) => OpenByRow(root, vm)));
 
         if (vm.HasOpenLocation)
             flyout.Items.Add(Item("打开所在位置", (_, _) => ItemCardActions.OpenLocation(vm)));
 
-        flyout.Items.Add(Item("复制链接/路径", (_, _) => ItemCardActions.CopyUri(vm)));
+        flyout.Items.Add(Item(vm.CopyMenuText, (_, _) => ItemCardActions.CopyUri(vm)));
         flyout.Items.Add(Item("预览", async (_, _) => await PreviewAsync(vm, root)));
 
         // 未入库的实时源虚拟条目（Everything 文件结果，Id=0）：显式「记录到本地」把路径登记为主库条目，
@@ -82,7 +82,8 @@ internal static class ItemContextMenu
         }
 
         flyout.Items.Add(Item(vm.PinMenuText, (_, _) => ItemCardActions.TogglePin(vm)));
-        flyout.Items.Add(Item("发送到桌面 · 快捷启动", (_, _) => _ = SendToQuickLaunchAsync(vm)));
+        if (vm.CanSendToWidget)
+            flyout.Items.Add(Item("发送到桌面 · 快捷启动", (_, _) => _ = SendToQuickLaunchAsync(vm)));
         flyout.Items.Add(Item("编辑笔记", (_, _) => ItemCardActions.EditNote(root, vm)));
         flyout.Items.Add(Item("编辑标签", (_, _) => ItemCardActions.EditTags(root, vm)));
         flyout.Items.Add(Item(vm.HideMenuText, (_, _) => _ = ItemCardActions.ToggleHidden(root, vm)));
@@ -118,7 +119,7 @@ internal static class ItemContextMenu
             var result = await CenteredDialog.ShowContentAsync(
                 title, host, owner: owner,
                 dedupeKey: vm.PreviewDedupeKey, width: 820, height: 640,
-                primaryText: "打开", cancelText: "关闭");
+                primaryText: vm.OpenMenuText, cancelText: "关闭");
             if (result == CenteredDialog.HostedDialogResult.Committed)
                 OpenByRow(root, vm);
         }

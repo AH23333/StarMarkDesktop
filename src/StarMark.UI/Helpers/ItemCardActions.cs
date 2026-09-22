@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Clipboard;
 using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
 
@@ -43,7 +44,11 @@ public static class ItemCardActions
         {
             var repo = GetRepo();
             var item = await repo.GetByIdAsync(itemId, CancellationToken.None);
-            if (item != null && !string.IsNullOrEmpty(item.Uri))
+            if (item is null) return;
+            // 剪贴板条目没有可启动的目标，对它"打开"＝把正文复制回剪贴板。各页/组件都从这一个入口进来，
+            // 所以在这里收口一次即可；否则搜索页右键一条剪贴板记录点"打开"会静默无事发生。
+            if (ClipboardPolicy.OpensAsCopy(item.Type, item.Uri)) { CopyUri(new ItemCardViewModel(item)); return; }
+            if (!string.IsNullOrEmpty(item.Uri))
                 await LauncherEx.OpenAsync(item.Uri);
         }
         catch (Exception ex)
@@ -98,7 +103,7 @@ public static class ItemCardActions
                 // TryPathFromUri 保留 '#'/%，new Uri().LocalPath 会在 '#' 截断而复制到错误路径。
                 if (LocalFileIdentity.TryPathFromUri(text, out var localPath)) text = localPath;
             }
-            else if (string.IsNullOrEmpty(text) && vm.Source == StarMark.Abstractions.ItemSources.Clipboard)
+            else if (ClipboardPolicy.OpensAsCopy(vm.Type, text))
             {
                 // 剪贴板历史条目没有 URI，正文才是"可复制的东西"。这里若照抄空串，
                 // 菜单点下去毫无反应（还静默），等于一个看着能点其实无效的动作。

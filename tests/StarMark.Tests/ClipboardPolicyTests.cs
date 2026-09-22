@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Linq;
+using StarMark.Abstractions;
 using StarMark.Abstractions.Clipboard;
 using Xunit;
 
@@ -187,5 +188,46 @@ public sealed class ClipboardPolicyTests
         var over = ClipboardPolicy.Truncate(new string('q', ClipboardPolicy.MaxStoredChars + 7), out var t2);
         Assert.True(t2);
         Assert.Equal(ClipboardPolicy.MaxStoredChars, over.Length);
+    }
+
+    // ==================== 条目动作口径 ====================
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void OpensAsCopy_ClipboardWithoutTarget_IsCopy(string? uri)
+        => Assert.True(ClipboardPolicy.OpensAsCopy(ItemType.Clipboard, uri));
+
+    [Fact]
+    public void OpensAsCopy_ClipboardWithTarget_StillOpens()
+    {
+        // 只按类型判会把"手工给了链接"的条目也变成复制——它就该正常打开。
+        Assert.False(ClipboardPolicy.OpensAsCopy(ItemType.Clipboard, "https://example.com"));
+    }
+
+    [Theory]
+    [InlineData(ItemType.GitHubStar)]
+    [InlineData(ItemType.Bookmark)]
+    [InlineData(ItemType.File)]
+    [InlineData(ItemType.Todo)]
+    [InlineData(ItemType.Note)]
+    public void OpensAsCopy_NonClipboard_IsNeverCopy(ItemType type)
+    {
+        // 待办/随记同样可能没有 Uri，但它们的"打开"不该被解释成"复制正文"：
+        // 判据收在"类型且无 Uri"两臂上，少一个臂就会把别的类型卷进来。
+        Assert.False(ClipboardPolicy.OpensAsCopy(type, null));
+        Assert.False(ClipboardPolicy.OpensAsCopy(type, ""));
+    }
+
+    [Fact]
+    public void OpensAsCopy_ExactlyOneTypeQualifies()
+    {
+        // 全类型扫描：新增 ItemType 时若被无意并进"复制"口径，这里会红——
+        // 那意味着新类型的卡片菜单首项会突然从「打开」变成「复制到剪贴板」。
+        var qualifying = Enum.GetValues<ItemType>()
+            .Where(t => ClipboardPolicy.OpensAsCopy(t, ""))
+            .ToList();
+        Assert.Equal(new[] { ItemType.Clipboard }, qualifying);
     }
 }

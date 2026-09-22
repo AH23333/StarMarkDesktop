@@ -86,7 +86,7 @@ public sealed partial class ItemCard : UserControl
             vm.Title.Length <= 40 ? vm.Title : vm.Title[..40] + "…",
             host, owner: App.MainWindow,
             dedupeKey: vm.PreviewDedupeKey, width: 820, height: 640,
-            primaryText: "打开", cancelText: "关闭");
+            primaryText: vm.OpenMenuText, cancelText: "关闭");
         if (result == CenteredDialog.HostedDialogResult.Committed)
             OpenRequested?.Invoke(this, vm.Id);
     }

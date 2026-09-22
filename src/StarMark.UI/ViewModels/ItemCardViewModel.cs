@@ -2,6 +2,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Clipboard;
 using StarMark.UI.Helpers;
 
 namespace StarMark.UI.ViewModels;
@@ -61,12 +62,27 @@ public partial class ItemCardViewModel : ObservableObject
     public string HideMenuText => IsHidden ? "显示" : "隐藏";
     public string PinMenuText => IsPinned ? "取消置顶" : "置顶";
 
+    /// <summary>
+    /// 「打开」这一项对该条目到底做什么。剪贴板历史条目没有可启动的目标，
+    /// 它的"打开"＝把正文再复制回剪贴板；文案若仍写"打开"，用户点之前无从知道会发生什么。
+    /// </summary>
+    public string OpenMenuText => ClipboardPolicy.OpensAsCopy(Type, Uri) ? "复制到剪贴板" : "打开";
+
+    /// <summary>同上：对没有链接的条目，这一项复制的是正文而不是"链接/路径"。</summary>
+    public string CopyMenuText => ClipboardPolicy.OpensAsCopy(Type, Uri) ? "复制内容" : "复制链接/路径";
+
     partial void OnIsHiddenChanged(bool value) => OnPropertyChanged(nameof(HideMenuText));
     partial void OnIsPinnedChanged(bool value) => OnPropertyChanged(nameof(PinMenuText));
 
     /// <summary>是否可“打开所在位置”（仅本地文件条目）。</summary>
     public bool HasOpenLocation
         => Type == ItemType.File && Uri.StartsWith("file://", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 是否可"发送到桌面 · 快捷启动"。快捷启动存的是<b>可启动的 URI</b>，没有 URI 的条目
+    /// （剪贴板正文、无链接的待办/随记）发过去只会是一条永远打不开的空入口，故不提供该动作。
+    /// </summary>
+    public bool CanSendToWidget => !IsLauncherMode && !string.IsNullOrWhiteSpace(Uri);
 
     public string SourceIcon => Type switch
     {
@@ -115,22 +131,6 @@ public partial class ItemCardViewModel : ObservableObject
     public void ApplyNotes(string? notes) { _item.Notes = notes; OnPropertyChanged(nameof(Notes)); OnPropertyChanged(nameof(HasNotes)); }
 
     public void ApplyTags(IReadOnlyList<string> tags) { _item.Tags = tags.ToList(); OnPropertyChanged(nameof(Tags)); }
-
-    [RelayCommand]
-    private async Task OpenAsync()
-    {
-        if (!string.IsNullOrEmpty(Uri))
-        {
-            await StarMark.UI.Helpers.LauncherEx.OpenAsync(Uri);
-        }
-    }
-
-    [RelayCommand]
-    private Task ToggleHiddenAsync()
-    {
-        // 由调用方（页面 ViewModel）处理
-        return Task.CompletedTask;
-    }
 
     public Item GetItem() => _item;
 }
