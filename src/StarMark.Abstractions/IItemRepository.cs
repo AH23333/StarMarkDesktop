@@ -116,6 +116,12 @@ public interface IItemRepository
     Task<int> ClearClipboardHistoryAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// 删除<b>一条</b>剪贴板历史，返回是否真的删掉一行。实现必须在 SQL 里同时限定 Id 与
+    /// <c>source='clipboard'</c>——否则误传的 Id 会连书签 / Star / 待办一起删掉。
+    /// </summary>
+    Task<bool> DeleteClipboardEntryAsync(long itemId, CancellationToken ct = default);
+
+    /// <summary>
     /// 读取某一组件实例名下的全部本地条目（待办 + 随记），含隐藏/置顶/子标题/URI/描述/笔记与标签等用户状态。
     /// 以 <c>source_id</c> 前缀 <c>instanceId + "|"</c> 精确圈定本实例，无跨实例数量窗口（区别于
     /// <see cref="GetBySourceAsync"/> 的全局 limit 截断）。供快照忠实捕获使用。

@@ -150,4 +150,10 @@ public sealed partial class ItemCard : UserControl
     {
         if (ViewModel != null) DeleteRequested?.Invoke(this, ViewModel);
     }
+
+    /// <summary>删除一条剪贴板历史：动作自包含（不要求宿主页面订阅），失败由主窗 InfoBar 说出来。</summary>
+    private void DeleteClipboard_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel != null) ItemCardActions.DeleteClipboard(ViewModel);
+    }
 }

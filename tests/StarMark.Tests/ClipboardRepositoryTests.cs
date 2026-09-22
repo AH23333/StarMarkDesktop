@@ -201,4 +201,83 @@ public sealed class ClipboardRepositoryTests : IDisposable
         Assert.NotEqual(a.Id, b.Id);
         Assert.Equal(2, (await History()).Count);
     }
+
+    // ==================== 单条删除 ====================
+
+    [Fact]
+    public async Task DeleteClipboardEntry_RemovesRow_AndStopsMatchingSearch()
+    {
+        var saved = await _repo.RecordClipboardAsync(Draft("一次性验证码 88213"));
+        Assert.Single(await History());
+
+        Assert.True(await _repo.DeleteClipboardEntryAsync(saved.Id, CancellationToken.None));
+
+        Assert.Empty(await History());
+        Assert.Null(await _repo.GetByIdAsync(saved.Id, CancellationToken.None));
+        // 删行后 FTS 必须同步失效（items_fts 的 AFTER DELETE 触发器）：否则搜索页仍会命中一条
+        // 已经不存在的历史，点上去就是"记录不见了"级别的错觉。
+        var hits = await _repo.SearchAsync("88213", new SearchFilter { MaxResults = 10 }, CancellationToken.None);
+        Assert.DoesNotContain(hits.Items, i => i.Id == saved.Id);
+    }
+
+    [Fact]
+    public async Task DeleteClipboardEntry_Twice_SecondCallReportsNothingRemoved()
+    {
+        var saved = await _repo.RecordClipboardAsync(Draft("删两次的文本"));
+        Assert.True(await _repo.DeleteClipboardEntryAsync(saved.Id, CancellationToken.None));
+
+        // 并发/重复点击的常态：第二次不是错误，但必须能被调用方区分出来（UI 靠它说"这条已经不在"）
+        Assert.False(await _repo.DeleteClipboardEntryAsync(saved.Id, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task DeleteClipboardEntry_RefusesForeignSourceRow()
+    {
+        // 这条是真正的护栏：只按 Id 删的方法签名挡不住"把书签/待办的 Id 传进来"，
+        // 而那种误用的表现是用户删一条复制记录却丢了一条不可重建的条目。
+        var other = new Item
+        {
+            Type = ItemType.Todo,
+            Source = ItemSources.Local,
+            SourceId = "todo|keepme",
+            Title = "不可重建的待办",
+            Uri = string.Empty,
+        };
+        await _repo.UpsertLocalItemAsync(other, CancellationToken.None);
+        var foreign = (await _repo.GetBySourceAsync(ItemSources.Local, ItemType.Todo)).Single();
+
+        Assert.False(await _repo.DeleteClipboardEntryAsync(foreign.Id, CancellationToken.None));
+        Assert.NotNull(await _repo.GetByIdAsync(foreign.Id, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task DeleteClipboardEntry_RefusesDittoRowOfSameType()
+    {
+        // Ditto 派条目的 Type 也是 ItemType.Clipboard —— 这是最容易写坏的一对：
+        // 若 WHERE 只限 type，"删除这条历史"会连外部程序同步进来的记录一起删掉。
+        var dittoShaped = new Item
+        {
+            Type = ItemType.Clipboard,
+            Source = ItemSources.Ditto,
+            SourceId = "ditto-row-1",
+            Title = "Ditto 里的历史",
+            Description = "属于外部程序的正文",
+            Uri = string.Empty,
+        };
+        await _repo.UpsertLocalItemAsync(dittoShaped, CancellationToken.None);
+        var row = (await _repo.GetBySourceAsync(ItemSources.Ditto, ItemType.Clipboard)).Single();
+
+        Assert.False(await _repo.DeleteClipboardEntryAsync(row.Id, CancellationToken.None));
+        Assert.NotNull(await _repo.GetByIdAsync(row.Id, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task DeleteClipboardEntry_UnknownId_ReturnsFalseWithoutTouchingOthers()
+    {
+        var saved = await _repo.RecordClipboardAsync(Draft("留在历史里的文本"));
+
+        Assert.False(await _repo.DeleteClipboardEntryAsync(999_999, CancellationToken.None));
+        Assert.Single(await History());
+        Assert.Equal(saved.Id, (await History())[0].Id);
+    }
 }

@@ -84,6 +84,17 @@ public partial class ItemCardViewModel : ObservableObject
     /// </summary>
     public bool CanSendToWidget => !IsLauncherMode && !string.IsNullOrWhiteSpace(Uri);
 
+    /// <summary>
+    /// 是否提供"删除这一条"（<b>永久移除</b>，与「隐藏」相对）。只给<b>内置</b>剪贴板历史：
+    /// 它的正文是可再复制的一次性内容，删了不心疼；而书签 / Star / 文件条目删掉要么被下次同步
+    /// 再拉回来（＝看着无效的动作）、要么连不可重建的用户状态一起丢（＝危险），
+    /// 那两类条目的正确动作是「隐藏」。待办 / 随记的删除在它们自己的页面里。
+    /// <para>判据必须含 source：<b>Ditto 派条目类型也是 <see cref="ItemType.Clipboard"/></b>，
+    /// 但那是外部程序的库，我们从这里删既越界也删不掉（仓储 WHERE 限定 <c>source='clipboard'</c>），
+    /// 菜单上就会多出一个只会报"记录已经不在"的死项。"能删"与"删得掉"必须是同一个判据。</para>
+    /// </summary>
+    public bool CanDeletePermanently => !IsLauncherMode && ClipboardPolicy.IsBuiltinEntry(Source, Type);
+
     public string SourceIcon => Type switch
     {
         ItemType.GitHubStar => "⭐",

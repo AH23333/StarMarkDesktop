@@ -230,4 +230,33 @@ public sealed class ClipboardPolicyTests
             .ToList();
         Assert.Equal(new[] { ItemType.Clipboard }, qualifying);
     }
+
+    // ==================== 谁的条目：内置 vs 外部程序 ====================
+
+    [Fact]
+    public void IsBuiltinEntry_DittoRowDoesNotQualify()
+    {
+        // 类型同为 ItemType.Clipboard，但来源是外部程序的库 ⇒ 不能从这里删。
+        // 这条断言挡的是"菜单上多出一个点了只会报'记录已经不在'的死项"。
+        Assert.True(ClipboardPolicy.IsBuiltinEntry(ItemSources.Clipboard, ItemType.Clipboard));
+        Assert.False(ClipboardPolicy.IsBuiltinEntry(ItemSources.Ditto, ItemType.Clipboard));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("clipboard ")]      // 带空格的脏来源不该被当成内置历史
+    [InlineData("CLIPBOARD")]       // 落库键是逐字比较的常量，不做大小写折叠
+    [InlineData("local")]
+    public void IsBuiltinEntry_RejectsEveryOtherSource(string? source)
+        => Assert.False(ClipboardPolicy.IsBuiltinEntry(source, ItemType.Clipboard));
+
+    [Theory]
+    [InlineData(ItemType.Todo)]
+    [InlineData(ItemType.Note)]
+    [InlineData(ItemType.File)]
+    [InlineData(ItemType.Bookmark)]
+    [InlineData(ItemType.GitHubStar)]
+    public void IsBuiltinEntry_RejectsOtherTypes(ItemType type)
+        => Assert.False(ClipboardPolicy.IsBuiltinEntry(ItemSources.Clipboard, type));
 }

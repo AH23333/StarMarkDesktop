@@ -129,6 +129,33 @@ public static class ItemCardActions
         await Task.CompletedTask;
     }
 
+    /// <summary>
+    /// 永久删除一条剪贴板历史（单条正文可再复制，故不设确认框；"清空全部"那条才有确认）。
+    /// <b>刻意自包含、不走页面事件</b>：卡片被搜索页 / 标签格 / 组件行等十余处复用，
+    /// 若靠宿主订阅，凡是没订阅的那几处就又是一个"看着能点其实没反应"的菜单项。
+    /// 成功不需要额外反馈（数据广播会让这一行自己消失）；<b>失败必须说出来</b>——
+    /// "点完什么都没发生"与"这条已经没了"在界面上长得一样，是最难自证的一种歧义。
+    /// </summary>
+    public static async void DeleteClipboard(ItemCardViewModel vm)
+    {
+        try
+        {
+            if (vm.Id <= 0)
+            {
+                App.MainWindow?.ShowError("删除失败", "这条历史还没入库，没有可删除的记录。");
+                return;
+            }
+            var removed = await GetRepo().DeleteClipboardEntryAsync(vm.Id, CancellationToken.None);
+            if (!removed)
+                App.MainWindow?.ShowError("删除失败", "这条记录已经不在历史里了（可能刚被清空或被新内容挤掉）。");
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error($"删除剪贴板历史失败 (id={vm.Id})", ex);
+            App.MainWindow?.ShowError("删除失败", ex.Message);
+        }
+    }
+
     public static async void TogglePin(ItemCardViewModel vm)
     {
         try

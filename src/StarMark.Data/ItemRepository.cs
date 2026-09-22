@@ -810,6 +810,25 @@ public sealed class ItemRepository : IItemRepository
         return deleted;
     }
 
+    /// <summary>
+    /// 删除<b>一条</b>剪贴板历史，返回是否真的删掉了一行（0 行＝那条已不在）。
+    /// <para>WHERE 里 <b>id 与 source 两个条件缺一不可</b>：只按 id 删的方法签名无法阻止调用方
+    /// 传进书签/Star/待办的 Id，而那种误用的表现是"用户点了删除一条复制记录，结果丢了一条不可重建的条目"。
+    /// 标签关联与 FTS 索引不需要这里处理：<c>item_tags</c> 等表是 <c>ON DELETE CASCADE</c>，
+    /// <c>items_fts</c> 有 <c>AFTER DELETE</c> 触发器（Schema.sql）。</para>
+    /// </summary>
+    public async Task<bool> DeleteClipboardEntryAsync(long itemId, CancellationToken ct = default)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM items WHERE id = @id AND source = @source;";
+        cmd.Parameters.AddWithValue("@id", itemId);
+        cmd.Parameters.AddWithValue("@source", ItemSources.Clipboard);
+        var removed = await cmd.ExecuteNonQueryAsync(ct);
+        if (removed > 0) DataChangeHub.Notify();
+        return removed > 0;
+    }
+
     // ===== 快照忠实捕获 / 还原（#53 V1）：按实例前缀读写，保全标签/置顶/隐藏/笔记等用户状态 =====
 
     public async Task<IReadOnlyList<Item>> GetLocalItemsForInstanceAsync(string instanceId, CancellationToken ct = default)

@@ -839,6 +839,13 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// 供共享卡片动作（<c>ItemCardActions</c>）等"没有自己状态行的页面"用的瞬时错误提示。
+    /// 判据同 P-53/P-54：<b>日志不是用户能看到的反馈面</b>——失败要么就地写清楚，要么就别报"已完成"。
+    /// </summary>
+    public void ShowError(string title, string message)
+        => ShowInfoBar(InfoBarSeverity.Error, title, message, 8000);
+
     private void ShowInfoBar(InfoBarSeverity severity, string title, string message, int autoCloseMs = -1)
     {
         SyncInfoBar.Severity = severity;

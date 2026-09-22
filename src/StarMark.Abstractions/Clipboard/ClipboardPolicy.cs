@@ -149,6 +149,18 @@ public static class ClipboardPolicy
     public static bool OpensAsCopy(ItemType type, string? uri)
         => type == ItemType.Clipboard && string.IsNullOrWhiteSpace(uri);
 
+    /// <summary>
+    /// 这条是不是<b>内置</b>剪贴板历史（本机采集、StarMark 自己有权整条删掉）。
+    /// <para>
+    /// 必须按 <paramref name="source"/> 判而不是只按类型：<b>Ditto 派条目的 <see cref="ItemType"/> 同样是
+    /// <c>Clipboard</c></b>（外部程序里它也叫"剪贴板历史"），但那些正文与幂等键属于 Ditto 自己的库——
+    /// 从我们这里删既越界、也删不掉（仓储的 WHERE 带 <c>source='clipboard'</c>），
+    /// 结果就是菜单上出现一个点了只会报"记录已经不在"的死项。
+    /// </para>
+    /// </summary>
+    public static bool IsBuiltinEntry(string? source, ItemType type)
+        => type == ItemType.Clipboard && source == ItemSources.Clipboard;
+
     // ==================== 不该出现在历史里的内容 ====================
 
     /// <summary>

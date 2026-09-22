@@ -82,6 +82,8 @@ internal static class ItemContextMenu
         }
 
         flyout.Items.Add(Item(vm.PinMenuText, (_, _) => ItemCardActions.TogglePin(vm)));
+        if (vm.CanDeletePermanently)
+            flyout.Items.Add(Item("删除这条历史", (_, _) => ItemCardActions.DeleteClipboard(vm)));
         if (vm.CanSendToWidget)
             flyout.Items.Add(Item("发送到桌面 · 快捷启动", (_, _) => _ = SendToQuickLaunchAsync(vm)));
         flyout.Items.Add(Item("编辑笔记", (_, _) => ItemCardActions.EditNote(root, vm)));
