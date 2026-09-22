@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Clipboard;
 using StarMark.Abstractions.Language;
 using ActivityKind = StarMark.Abstractions.ActivityKind;
 
@@ -675,6 +676,138 @@ public sealed class ItemRepository : IItemRepository
         var idObj = await cmd.ExecuteScalarAsync(ct);
         if (idObj is long newId) item.Id = newId;
         DataChangeHub.Notify();   // 待办/随记写入后，同类型的其它组件实例也要同步
+    }
+
+    /// <summary>
+    /// 记录一条剪贴板历史：幂等 upsert + 复制次数累加 + 用户状态保留 + 按上限轮转。
+    /// <para>
+    /// 与 <see cref="UpsertLocalItemAsync"/> 同族（都不走 UriNormalizer / LanguageDetector / 活动流）
+    /// 但<b>刻意不复用</b>，三处语义不同：
+    /// ① 同一段文本再次复制必须"移回最近 + 次数 +1"，而不是原地覆盖；
+    /// ② 必须保住用户在这条历史上加的<b>置顶 / 隐藏 / 笔记 / 标签</b>——采集是后台行为，
+    ///    反过来吃掉用户的手动状态就是"我用着用着我标星的东西没了"；
+    /// ③ 落库后轮转，且<b>置顶条目豁免</b>（用户明确要留的东西不该被"后来又复制了 500 次"挤掉）。
+    /// </para>
+    /// <para>
+    /// 活动流刻意不记：剪贴板是被动、高频事件，写进「最近活动」只会把用户真正的增删改刷没
+    /// （与 <c>UpsertOne</c> 对后台批量写入的同一口径）。
+    /// </para>
+    /// </summary>
+    /// <param name="maxEntries">未置顶条目的保留上限，默认 <see cref="ClipboardPolicy.MaxEntries"/>；
+    /// 测试与非默认策略可传更小值。小于 1 按 1 处理（至少留下刚写的这条）。</param>
+    public async Task<Item> RecordClipboardAsync(Item draft, CancellationToken ct = default, int maxEntries = ClipboardPolicy.MaxEntries)
+    {
+        if (draft is null) throw new ArgumentNullException(nameof(draft));
+        // 轮转是按 source 圈定的，写错来源会把别的来源裁掉 ⇒ 直接拒，不做"尽力而为"。
+        if (draft.Source != ItemSources.Clipboard)
+            throw new ArgumentException($"剪贴板写入只接受 source={ItemSources.Clipboard}，收到「{draft.Source}」", nameof(draft));
+        if (string.IsNullOrWhiteSpace(draft.SourceId)) return draft;   // 没键就没法幂等，直接放弃这条
+
+        using var conn = _factory.Open();
+        using var tx = conn.BeginTransaction();
+
+        // ① 读旧行：次数要累加、用户状态要原样带回去
+        string? existingExtra = null;
+        bool hidden = draft.Hidden, pinned = draft.Pinned;
+        string? notes = draft.Notes;
+        var known = false;
+        using (var read = conn.CreateCommand())
+        {
+            read.CommandText = "SELECT extra_json, hidden, pinned, notes FROM items WHERE source = @s AND source_id = @sid;";
+            read.Parameters.AddWithValue("@s", draft.Source);
+            read.Parameters.AddWithValue("@sid", draft.SourceId);
+            await using var r = await read.ExecuteReaderAsync(ct);
+            if (await r.ReadAsync(ct))
+            {
+                known = true;
+                existingExtra = r.IsDBNull(0) ? null : r.GetString(0);
+                hidden = r.GetInt64(1) != 0;
+                pinned = r.GetInt64(2) != 0;
+                notes = r.IsDBNull(3) ? null : r.GetString(3);
+            }
+        }
+
+        var copyCount = known ? ClipboardEntry.CopyCountOf(existingExtra) + 1 : 1;
+        var extraJson = known ? ClipboardEntry.MergeForReplay(existingExtra, draft, copyCount) : draft.ExtraJson;
+
+        long id;
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"
+                INSERT INTO items (type, source, source_id, title, subtitle, uri,
+                                  search_text, description, created_at, updated_at,
+                                  extra_json, hidden, pinned, notes)
+                VALUES (@type, @source, @source_id, @title, @subtitle, @uri,
+                        '', @description, @created_at, @updated_at,
+                        @extra_json, @hidden, @pinned, @notes)
+                ON CONFLICT(source, source_id) DO UPDATE SET
+                    title = excluded.title,
+                    subtitle = excluded.subtitle,
+                    description = excluded.description,
+                    updated_at = excluded.updated_at,
+                    extra_json = excluded.extra_json
+                RETURNING id;";
+            cmd.Parameters.AddWithValue("@type", draft.Type.ToString().ToLowerInvariant());
+            cmd.Parameters.AddWithValue("@source", draft.Source);
+            cmd.Parameters.AddWithValue("@source_id", draft.SourceId);
+            cmd.Parameters.AddWithValue("@title", draft.Title);
+            cmd.Parameters.AddWithValue("@subtitle", draft.Subtitle);
+            cmd.Parameters.AddWithValue("@uri", draft.Uri);
+            cmd.Parameters.AddWithValue("@description", (object?)draft.Description ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@created_at", draft.CreatedAt);
+            cmd.Parameters.AddWithValue("@updated_at", draft.UpdatedAt);
+            cmd.Parameters.AddWithValue("@extra_json", (object?)extraJson ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@hidden", hidden ? 1 : 0);
+            cmd.Parameters.AddWithValue("@pinned", pinned ? 1 : 0);
+            cmd.Parameters.AddWithValue("@notes", (object?)notes ?? DBNull.Value);
+            // UPDATE 集刻意不含 hidden/pinned/notes：用户状态不因"又被复制了一次"而回退。
+            id = (long)(await cmd.ExecuteScalarAsync(ct) ?? 0L);
+        }
+
+        // ② search_text 走唯一口径重建（title + description + notes + 标签，再 CJK 展开）。
+        //     复用 RebuildSearchTextAsync 而不是自己再拼一遍：这里必须把①读回来的旧 notes 与旧标签
+        //     一起算进去，否则"给某条历史写了笔记→再次复制→笔记词从索引里消失"。
+        await RebuildSearchTextAsync(conn, id, ct);
+
+        // ③ 轮转：只裁未置顶的，按"最近复制"倒排留 maxEntries 条。
+        using (var prune = conn.CreateCommand())
+        {
+            prune.CommandText = @"
+                DELETE FROM items
+                WHERE source = @source AND pinned = 0
+                  AND id NOT IN (
+                      SELECT id FROM items WHERE source = @source AND pinned = 0
+                      ORDER BY updated_at DESC, id DESC LIMIT @keep);";
+            prune.Parameters.AddWithValue("@source", draft.Source);
+            prune.Parameters.AddWithValue("@keep", Math.Max(1, maxEntries));
+            await prune.ExecuteNonQueryAsync(ct);
+        }
+
+        await tx.CommitAsync(ct);
+        DataChangeHub.Notify();
+
+        draft.Id = id;
+        draft.ExtraJson = extraJson;
+        draft.Hidden = hidden;
+        draft.Pinned = pinned;
+        draft.Notes = notes;
+        return draft;
+    }
+
+    /// <summary>
+    /// 清空全部剪贴板历史（<b>含置顶</b>），返回删除条数。
+    /// <para>之所以连置顶一起删：用户点"清空"要的是"这台机器上不再留着我复制过的东西"，
+    /// 留一堆"豁免项"既不符合直觉也违背这个功能的隐私目的。UI 侧必须在确认框里写明含多少条置顶。</para>
+    /// </summary>
+    public async Task<int> ClearClipboardHistoryAsync(CancellationToken ct = default)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM items WHERE source = @source;";
+        cmd.Parameters.AddWithValue("@source", ItemSources.Clipboard);
+        var deleted = await cmd.ExecuteNonQueryAsync(ct);
+        DataChangeHub.Notify();
+        return deleted;
     }
 
     // ===== 快照忠实捕获 / 还原（#53 V1）：按实例前缀读写，保全标签/置顶/隐藏/笔记等用户状态 =====

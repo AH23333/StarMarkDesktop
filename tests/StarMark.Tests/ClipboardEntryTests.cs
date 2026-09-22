@@ -112,7 +112,7 @@ public sealed class ClipboardEntryTests
         oldTruncated.ExtraJson = obj.ToJsonString();
 
         var freshShort = Build("重新复制的短文本", app: "edge");
-        var merged = ClipboardEntry.MergeForReplay(oldTruncated, freshShort, copyCount: 7);
+        var merged = ClipboardEntry.MergeForReplay(oldTruncated.ExtraJson, freshShort, copyCount: 7);
         var probe = new Item { ExtraJson = merged };
 
         Assert.Equal(7, ClipboardEntry.CopyCount(probe));

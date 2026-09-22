@@ -105,6 +105,17 @@ public interface IItemRepository
     Task UpsertLocalItemAsync(Item item, CancellationToken ct = default);
 
     /// <summary>
+    /// 记录一条剪贴板历史（source=<see cref="ItemSources.Clipboard"/>）：按 (source, source_id) 幂等，
+    /// 同一段文本再次复制 = 移回最近 + 复制次数累加，并<b>保留</b>用户在该条上的置顶/隐藏/笔记/标签。
+    /// 不写活动流；落库后按 <paramref name="maxEntries"/> 轮转，置顶条目豁免删除。
+    /// 返回带真实 Id 与合并后 extra_json 的条目。
+    /// </summary>
+    Task<Item> RecordClipboardAsync(Item draft, CancellationToken ct = default, int maxEntries = Clipboard.ClipboardPolicy.MaxEntries);
+
+    /// <summary>清空全部剪贴板历史（含置顶条目），返回删除条数。</summary>
+    Task<int> ClearClipboardHistoryAsync(CancellationToken ct = default);
+
+    /// <summary>
     /// 读取某一组件实例名下的全部本地条目（待办 + 随记），含隐藏/置顶/子标题/URI/描述/笔记与标签等用户状态。
     /// 以 <c>source_id</c> 前缀 <c>instanceId + "|"</c> 精确圈定本实例，无跨实例数量窗口（区别于
     /// <see cref="GetBySourceAsync"/> 的全局 limit 截断）。供快照忠实捕获使用。

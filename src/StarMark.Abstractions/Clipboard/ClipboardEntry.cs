@@ -102,22 +102,28 @@ public static class ClipboardEntry
     }
 
     /// <summary>该条目被复制过几次（旧数据无此字段 ⇒ 1）。</summary>
-    public static long CopyCount(Item item)
+    public static long CopyCount(Item item) => CopyCountOf(item.ExtraJson);
+
+    /// <summary>
+    /// 次数读取的字符串入口（仓储层手里只有 extra_json 文本，不必为读一个数造一个 <see cref="Item"/>）。
+    /// 0/负数/类型错乱一律按 1 返回——不能让一条坏数据在"按次数排序"上变成无穷小。
+    /// </summary>
+    public static long CopyCountOf(string? extraJson)
     {
         try
         {
-            var v = Parse(item.ExtraJson)[CopyCountKey]?.GetValue<long>();
+            var v = Parse(extraJson)[CopyCountKey]?.GetValue<long>();
             return v is null or <= 0 ? 1 : v.Value;
         }
         catch { return 1; }
     }
 
     /// <summary>
-    /// 同一条文本再次复制时，在<b>旧</b>条目的 extra 上累加次数并刷新来源应用（其余键原样保留，
+    /// 同一条文本再次复制时，在<b>旧</b> extra 上累加次数并刷新来源应用（其余键原样保留，
     /// 例如以后可能加进来的用户标记）。次数由调用方（仓储层）从旧值算好后传进来，这里只做拼装。
     /// </summary>
-    public static string MergeForReplay(Item existing, Item draft, long copyCount)
-        => Write(existing.ExtraJson, App(draft), Format(draft), copyCount, IsTruncated(draft), FullLength(draft));
+    public static string MergeForReplay(string? existingExtraJson, Item draft, long copyCount)
+        => Write(existingExtraJson, App(draft), Format(draft), copyCount, IsTruncated(draft), FullLength(draft));
 
     /// <summary>条目格式（<see cref="FormatText"/> / <see cref="FormatFiles"/>；未知旧数据按文本）。</summary>
     public static string Format(Item item)
