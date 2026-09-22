@@ -129,6 +129,14 @@ public partial class SettingsPageViewModel : ObservableObject
         // 本地文件索引（P0-1b）：根目录每行一个；上限数字
         FileIndexRootsText = string.Join("\n", Safe(_settings.LoadFileIndexRoots, Array.Empty<string>(), "索引目录"));
         MaxFileIndexCountText = Safe(_settings.LoadMaxFileIndexCount, 5000, "索引上限").ToString();
+
+        // 本地磁盘搜索开关：回灌初值时抑制副作用（见 _suppressLocalDiskApply）。
+        _suppressLocalDiskApply = true;
+        LocalDiskSearchEnabled = Safe(_settings.LoadLocalDiskSearchEnabled, false, "本地磁盘搜索");
+        _suppressLocalDiskApply = false;
+        LocalDiskSearchStatus = LocalDiskSearchEnabled
+            ? "已开启：本地文件会出现在快捷搜索 / 主窗搜索结果中。"
+            : "已关闭：开启后可像 Everything 一样全盘秒搜本地文件（首次会自动准备 Everything）。";
     }
 
     // ===== 收藏健康度（P2-6）=====
@@ -214,6 +222,75 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty] private string _fileIndexRootsText = string.Empty;
     [ObservableProperty] private string _maxFileIndexCountText = string.Empty;
 
+    /// <summary>
+    /// 本地磁盘搜索总开关。开启即把 <see cref="StarMark.Integrations.Everything.FileIndexOptions.Enabled"/>
+    /// 单例实时翻位——<c>EverythingSource.IsAvailable</c> 每次查询都实读该属性，故统一搜索立刻纳入/剔除
+    /// 本地文件源，无需重启（收束待决策 P-2 方案 B）。开启时后台懒起 <c>EnsureReadyAsync</c> 准备 Everything。
+    /// </summary>
+    [ObservableProperty] private bool _localDiskSearchEnabled;
+
+    /// <summary>开关下方的一行状态提示文本。</summary>
+    [ObservableProperty] private string _localDiskSearchStatus = string.Empty;
+
+    /// <summary>LoadFromStore 回灌初值期间抑制 <see cref="OnLocalDiskSearchEnabledChanged"/> 副作用，
+    /// 免得每次进入设置页就把默认值再存一遍、甚至误触发 Everything 拉起。</summary>
+    private bool _suppressLocalDiskApply;
+
+    partial void OnLocalDiskSearchEnabledChanged(bool value)
+    {
+        if (_suppressLocalDiskApply) return;
+        var options = App.Services.GetRequiredService<StarMark.Integrations.Everything.FileIndexOptions>();
+
+        // 关闭：即时翻位单例（IsAvailable 实读），统一搜索立刻剔除本地文件源；已装的 Everything / 服务不动。
+        if (!value)
+        {
+            options.Enabled = false;
+            _settings.SaveLocalDiskSearchEnabled(false);
+            LocalDiskSearchStatus = "已关闭：不再搜索本地文件（已安装的 Everything 不受影响）。";
+            return;
+        }
+
+        // 开启：先跑「申请提权 + 装 Everything 服务 + 起 SDK」，成功才真正置 Enabled=true；
+        // 用户拒绝提权 / 失败则把开关自动回退为关——契合「不使用则产品仅作为书签 / Star 工具」。
+        // 成功前保持关闭，避免半套状态（源被纳入却查不到）。
+        LocalDiskSearchStatus = "正在准备本地磁盘搜索：将弹出一次 UAC 以安装全盘索引服务（Everything 服务）…";
+        _ = Task.Run(async () =>
+        {
+            StarMark.Integrations.Everything.EverythingSource.LocalDiskSearchEnableOutcome outcome;
+            try
+            {
+                var src = App.Services.GetRequiredService<StarMark.Integrations.Everything.EverythingSource>();
+                outcome = await src.EnableAsync(CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                StarLog.Error("本地磁盘搜索：启用流程异常", ex);
+                outcome = StarMark.Integrations.Everything.EverythingSource.LocalDiskSearchEnableOutcome.Failed;
+            }
+
+            App.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+            {
+                if (outcome == StarMark.Integrations.Everything.EverythingSource.LocalDiskSearchEnableOutcome.Ready)
+                {
+                    options.Enabled = true;                 // 实时翻位：IsAvailable 实读，无需重启
+                    _settings.SaveLocalDiskSearchEnabled(true);
+                    LocalDiskSearchStatus = "已开启：本地文件将参与全盘搜索（快捷搜索 / 主窗即时生效）。";
+                }
+                else
+                {
+                    _suppressLocalDiskApply = true;
+                    LocalDiskSearchEnabled = false;         // 回退开关（抑制再入本处理器）
+                    _suppressLocalDiskApply = false;
+                    options.Enabled = false;
+                    _settings.SaveLocalDiskSearchEnabled(false);
+                    LocalDiskSearchStatus = outcome == StarMark.Integrations.Everything.EverythingSource.LocalDiskSearchEnableOutcome.ElevationDeclined
+                        ? "已取消提权，未开启本地磁盘搜索。应用仍作为浏览器收藏夹 / Star 管理工具使用。"
+                        : "未能准备 Everything（离线 / 安装失败），未开启本地磁盘搜索。可稍后重试。";
+                }
+            });
+        });
+    }
+
     /// <summary>采集只读诊断信息（P2-8）。本地查询，零网络。</summary>
     public async Task LoadDiagnosticsAsync()
     {
@@ -274,6 +351,19 @@ public partial class SettingsPageViewModel : ObservableObject
             _settings.SaveFileIndexRoots(roots);
             if (int.TryParse(MaxFileIndexCountText, out var cap) && cap > 0)
                 _settings.SaveMaxFileIndexCount(cap);
+
+            // 即时把根目录 / 上限推给 FileIndexOptions 单例，令后台重扫无需重启即生效（与开关同为方案 B）。
+            // 读回持久化值而非直接用 roots：空 roots 时 LoadFileIndexRoots 会回退默认（桌面/下载/文档），与建库时口径一致。
+            try
+            {
+                var fo = App.Services.GetRequiredService<StarMark.Integrations.Everything.FileIndexOptions>();
+                fo.Roots = _settings.LoadFileIndexRoots().ToList();
+                fo.MaxCount = _settings.LoadMaxFileIndexCount();
+            }
+            catch (Exception fox)
+            {
+                StarLog.Error("本地文件索引配置即时应用失败（下次重启仍会生效）", fox);
+            }
 
             StarMark.Abstractions.StarLog.Info($"设置已保存（主题={theme}, 托盘={EnableTray}）");
             SaveErrorMessage = string.Empty;

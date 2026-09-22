@@ -406,9 +406,17 @@
                         <!-- 本地文件索引 -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="本地文件索引" Style="{StaticResource SettingTitle}"/>
-                                <TextBlock Text="索引以下目录的本地文件（每行一个，留空使用默认：桌面 / 下载 / 文档）。需安装并运行 Everything 才会生效。"
-                                           Style="{StaticResource SettingRowText}"/>
+                                <TextBlock Text="本地磁盘搜索" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Text="开启后可像 Everything 一样全盘秒搜本地文件，结果并入快捷搜索 / 主窗搜索。首次开启会自动准备 Everything（可能需要一次 UAC）。"
+                                               Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.LocalDiskSearchEnabled, Mode=TwoWay}"/>
+                                </Grid>
+                                <TextBlock Text="{x:Bind ViewModel.LocalDiskSearchStatus, Mode=OneWay}"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                                <TextBlock Text="以下为「索引进库」的目录（供文件夹树 / 标签使用，每行一个，留空默认桌面 / 下载 / 文档）；全盘实时搜索不受此限制。"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                 <TextBox Text="{x:Bind ViewModel.FileIndexRootsText, Mode=TwoWay}"
                                          AcceptsReturn="True" TextWrapping="Wrap" Height="72"
                                          PlaceholderText="C:\Users\You\Desktop"/>
