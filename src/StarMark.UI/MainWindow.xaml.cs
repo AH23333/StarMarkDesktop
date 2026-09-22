@@ -531,7 +531,7 @@ public sealed partial class MainWindow : Window
                     .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
                     .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
                 if (ctrl) ItemCardActions.OpenLocation(selected);
-                else ItemCardActions.Open(SearchBox.XamlRoot, selected.Id);
+                else ItemCardActions.Open(SearchBox.XamlRoot, selected);   // 传视图模型：Everything 文件结果是 Id=0 虚拟条目，按 Id 查库会静默失效
                 e.Handled = true;
                 break;
         }

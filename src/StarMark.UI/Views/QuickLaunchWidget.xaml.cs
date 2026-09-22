@@ -59,10 +59,13 @@ public sealed partial class QuickLaunchWidget : UserControl
     private void Card_OpenRequested(object sender, long itemId)
     {
         // 启动器模式的合成条目（自定义快捷入口）直接按 URI 打开，不走主库。
-        if (sender is ItemCard { ViewModel: { IsLauncherMode: true } vm })
-            _ = LauncherEx.OpenAsync(vm.Uri);
-        else
-            ItemCardActions.Open(this.XamlRoot, itemId);
+        if (sender is ItemCard { ViewModel: { } vm })
+        {
+            if (vm.IsLauncherMode) { _ = LauncherEx.OpenAsync(vm.Uri); return; }
+            ItemCardActions.Open(this.XamlRoot, vm);   // 带 VM：兼容未入库的本地文件虚拟条目（Id=0）
+            return;
+        }
+        ItemCardActions.Open(this.XamlRoot, itemId);
     }
 
     private void Card_EditNoteRequested(object sender, ItemCardViewModel vm)

@@ -53,7 +53,11 @@ public sealed partial class SearchPage : Page
     }
 
     private void Card_OpenRequested(object sender, long itemId)
-        => ItemCardActions.Open(this.XamlRoot, itemId);
+    {
+        // Everything 本地文件结果是未入库的虚拟条目（Id=0）：必须带视图模型按其 Uri 打开，否则静默无反应。
+        if (sender is Controls.ItemCard { ViewModel: { } vm }) { ItemCardActions.Open(this.XamlRoot, vm); return; }
+        ItemCardActions.Open(this.XamlRoot, itemId);
+    }
 
     private void Card_EditNoteRequested(object sender, ViewModels.ItemCardViewModel vm)
         => ItemCardActions.EditNote(this.XamlRoot, vm);

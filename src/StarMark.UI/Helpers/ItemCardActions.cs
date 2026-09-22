@@ -52,6 +52,19 @@ public static class ItemCardActions
         }
     }
 
+    /// <summary>
+    /// 按卡片视图模型打开条目。<b>未入库的实时源虚拟条目（Everything 本地文件结果 Id=0）库里必然查不到，
+    /// 旧的"只按 Id 打开"对它们静默失效</b>——现象即"文件夹能开、文件点了没反应"。Id≤0 时直接按其 Uri 走
+    /// <see cref="LauncherEx"/>（ShellExecute：文件交系统关联程序，无关联则由 Windows 提示选应用；文件夹在资源管理器打开）；
+    /// 已入库条目仍按 Id 取最新库值，行为不变。
+    /// </summary>
+    public static void Open(XamlRoot xamlRoot, ItemCardViewModel? vm)
+    {
+        if (vm is null) return;
+        if (vm.Id <= 0) { _ = LauncherEx.OpenAsync(vm.Uri); return; }
+        Open(xamlRoot, vm.Id);
+    }
+
     /// <summary>打开所在位置：本地文件 → 资源管理器定位；其余类型无位置概念。</summary>
     public static async void OpenLocation(ItemCardViewModel vm)
     {

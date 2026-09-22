@@ -291,7 +291,11 @@ public sealed partial class FolderTreePage : Page
     }
 
     private void Card_OpenRequested(object? sender, long itemId)
-        => ItemCardActions.Open(this.XamlRoot, itemId);
+    {
+        // 与主窗一致：本地文件虚拟条目（Id=0）须按视图模型 Uri 打开。
+        if (sender is Controls.ItemCard { ViewModel: { } vm }) { ItemCardActions.Open(this.XamlRoot, vm); return; }
+        ItemCardActions.Open(this.XamlRoot, itemId);
+    }
 
     private void Card_EditNoteRequested(object? sender, ItemCardViewModel vm)
         => ItemCardActions.EditNote(this.XamlRoot, vm);
