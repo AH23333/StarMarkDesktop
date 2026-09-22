@@ -302,6 +302,7 @@ public sealed class ItemGridWidgetViewModel
         ItemType.File => "📁",
         ItemType.Bookmark => "🔖",
         ItemType.GitHubStar => "⭐",
+        ItemType.Clipboard => "📋",
         ItemType.Todo => "✅",
         ItemType.Note => "📝",
         _ => "📌",

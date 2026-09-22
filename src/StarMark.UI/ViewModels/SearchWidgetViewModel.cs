@@ -290,6 +290,7 @@ public sealed class SearchWidgetViewModel
         ItemType.File => "📁",
         ItemType.Bookmark => "🔖",
         ItemType.GitHubStar => "⭐",
+        ItemType.Clipboard => "📋",
         ItemType.Todo => "✅",
         ItemType.Note => "📝",
         _ => "📌",
