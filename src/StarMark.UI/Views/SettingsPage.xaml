@@ -433,9 +433,9 @@
                                            Style="{StaticResource SettingRowText}"/>
                                 <TextBlock Text="导入会先自动生成「恢复前快照」（位于 %LOCALAPPDATA%\StarMark\backups），任何恢复都可回滚。"
                                            Style="{StaticResource SettingRowText}"/>
-                                <!-- 提权会话下系统文件选择器跨不到中 IL 的对话框宿主（真机日志 E_FAIL 四连挂），
-                                     与其让用户以为"备份功能坏了"，先在界面上说清成因与恢复路径。见待决策 P-46。 -->
-                                <TextBlock Text="当前以管理员身份运行（开启本地磁盘搜索时会这样）：这种会话里系统文件选择器不可用，导出/导入会提示无法打开选择器。要用备份功能，请先关闭「本地磁盘搜索」，再以普通权限启动 StarMark。"
+                                <!-- 提权会话下系统文件选择器跨不到中 IL 的对话框宿主（真机日志 E_FAIL 四连挂）。
+                                     已改为自动退回应用内路径输入框，故这里只做状态说明，不再指挥用户换权限重启。 -->
+                                <TextBlock Text="当前以管理员身份运行（开启本地磁盘搜索时会这样）：系统文件对话框在这种会话里不可用，导出/导入会自动改用应用内的路径输入框，无需换权限或重启。"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
                                            Foreground="{ThemeResource SystemFillColorCautionBrush}"
                                            Visibility="{x:Bind ViewModel.IsElevatedSession, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>

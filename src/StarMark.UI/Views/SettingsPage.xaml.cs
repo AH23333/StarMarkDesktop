@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -794,12 +795,11 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     // WinRT 的文件选择器要走系统对话框宿主（中 IL）。本地磁盘搜索会让 StarMark 以管理员运行，
     // 此时 PickSaveFileAsync/PickSingleFileAsync 稳定抛 COMException E_FAIL（真机日志：提权 pid 内连挂 4 次），
     // 且 try 若从 picker 之后才开始，异常就冲到 UI 兜底网、用户只看到"点了没反应"。
-    // 因此：picker 调用本身进 try，失败时给出可执行的解释，而不是裸抛。
+    // 处置：picker 调用本身进 try；失败**不再要求用户换权限重启**，而是退回应用内路径输入框（见 RequestBackupPathAsync）。
     private const string PickerBlockedHint =
-        "系统文件对话框调不起来（StarMark 正以管理员身份运行，而对话框宿主在普通权限）——" +
-        "备份文件仍可直接写到固定目录，请用下方「导出到默认位置」。";
+        "系统文件对话框在当前会话调不起来（StarMark 以管理员身份运行，而对话框宿主在普通权限）——改用路径输入框。";
 
-    /// <summary>调起 WinRT 选择器；返回 null 表示用户取消或（提权下）系统对话框不可用。</summary>
+    /// <summary>调起 WinRT 选择器；返回 null 表示用户取消。（提权下抛 InvalidOperationException＝对话框宿主不可用。）</summary>
     private static async Task<Windows.Storage.IStorageItem?> PickAsync(
         Windows.Storage.Pickers.FileOpenPicker picker)
     {
@@ -822,21 +822,94 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         }
     }
 
+    private static async Task<string?> PickNativeAsync(bool save, string fileName)
+    {
+        var hwnd = WindowInterop.GetHwnd(App.MainWindow!);
+        if (save)
+        {
+            var picker = new FileSavePicker();
+            InitializeWithWindow.Initialize(picker, hwnd);
+            picker.FileTypeChoices.Add("JSON 备份", new[] { ".json" });
+            picker.SuggestedFileName = Path.GetFileNameWithoutExtension(fileName);
+            return (await PickAsync(picker))?.Path;
+        }
+        var open = new FileOpenPicker();
+        InitializeWithWindow.Initialize(open, hwnd);
+        open.FileTypeFilter.Add(".json");
+        return (await PickAsync(open))?.Path;
+    }
+
+    /// <summary>
+    /// 取得备份文件路径。普通权限会话仍用系统选择器（用户熟悉、能浏览）；提权会话里宿主调不通，
+    /// 直接退回应用内输入框——**不让用户为了备份去关开关、降权限、重启**。
+    /// 输入非法时带着原因再问一次（就地改正），而不是失败退出后再点一遍。
+    /// </summary>
+    private static async Task<string?> RequestBackupPathAsync(bool save, string suggestedPath)
+    {
+        if (!Privilege.IsElevated())
+        {
+            try { return await PickNativeAsync(save, Path.GetFileName(suggestedPath)); }
+            catch (InvalidOperationException) { /* 宿主不可用（不止提权一种成因）：落到输入框 */ }
+        }
+
+        string? error = null;
+        var text = suggestedPath;
+        while (true)
+        {
+            var input = await CenteredDialog.PromptAsync(
+                save ? "导出备份到" : "导入备份自",
+                message: error ?? PickerBlockedHint,
+                placeholder: $"完整路径，例：{suggestedPath}",
+                defaultText: text,
+                primaryText: save ? "导出" : "导入",
+                owner: App.MainWindow);
+            if (input is null) return null;   // 取消
+
+            var (path, validation) = save
+                ? BackupPathPolicy.ForExport(input, BackupService.SnapshotDirectory)
+                : BackupPathPolicy.ForImport(input);
+            if (validation is null) return path;
+
+            // 校验不过就带着原因重问，且保留用户刚敲的内容——他要改的只是一个字符，不该从头再来。
+            error = validation;
+            text = input;
+        }
+    }
+
+    /// <summary>备份目录里最近改动过的一份 .json（目录不存在/被占用时返回 null，不打断导入流程）。</summary>
+    private static string? NewestBackupPath()
+    {
+        try
+        {
+            var dir = BackupService.SnapshotDirectory;
+            if (!Directory.Exists(dir)) return null;
+            return new DirectoryInfo(dir).EnumerateFiles("*.json")
+                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .Select(f => f.FullName)
+                .FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            // 只是"默认值取不到"，不是失败：用户照样能手输路径，故只记一行不弹提示。
+            StarLog.Warn($"扫描备份目录失败，导入对话框将退回目录本身作默认值：{ex.Message}");
+            return null;
+        }
+    }
+
     private async void ExportBackup_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel.IsBackupBusy) return;
         ViewModel.IsBackupBusy = true;      // 必须覆盖"弹对话框"阶段：否则等待期间可重复点，多个 picker 并存在提权下更是必挂
         try
         {
-            var picker = new FileSavePicker();
-            InitializeWithWindow.Initialize(picker, WindowInterop.GetHwnd(App.MainWindow!));
-            picker.FileTypeChoices.Add("JSON 备份", new[] { ".json" });
-            picker.SuggestedFileName = $"starmark-backup-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}";
-            var file = await PickAsync(picker);
-            if (file is null) return;
+            // 默认落在备份目录（那里已有"恢复前快照"），用户回车即接受，不必从 C:\ 一路敲过来。
+            var suggested = Path.Combine(BackupService.SnapshotDirectory,
+                $"starmark-backup-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.json");
+            var target = await RequestBackupPathAsync(save: true, suggested);
+            if (target is null) return;
 
-            await Task.Run(() => _backup.ExportToFileAsync(file.Path, CancellationToken.None));
-            ViewModel.BackupStatus = $"已导出备份到：{file.Path}";
+            await Task.Run(() => _backup.ExportToFileAsync(target, CancellationToken.None));
+            ViewModel.BackupStatus = $"已导出备份到：{target}";
         }
         catch (Exception ex)
         {
@@ -851,17 +924,17 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         ViewModel.IsBackupBusy = true;      // 同导出：选择器阶段也要占住忙碌位，避免重复点击叠出第二个 picker
         try
         {
-            var picker = new FileOpenPicker();
-            InitializeWithWindow.Initialize(picker, WindowInterop.GetHwnd(App.MainWindow!));
-            picker.FileTypeFilter.Add(".json");
-            var file = await PickAsync(picker);
-            if (file is null) return;
+            // 默认指向最近一份备份（导入最常就是"回到上一次"），没有就直接给备份目录当输入起点。
+            var suggested = NewestBackupPath()
+                ?? BackupService.SnapshotDirectory + Path.DirectorySeparatorChar;
+            var source = await RequestBackupPathAsync(save: false, suggested);
+            if (source is null) return;
             // 备份文件可达数十 MB：整份读盘 + 反序列化必须在后台线程做（Microsoft.Data.Sqlite 与
             // File/Json 都是同步实现，await 并不让出），否则"点导入备份"就是先冻住整个界面几秒。
             BackupEnvelope env;
             try
             {
-                env = await Task.Run(() => BackupService.ReadAsync(file.Path, CancellationToken.None));
+                env = await Task.Run(() => BackupService.ReadAsync(source, CancellationToken.None));
             }
             catch (BackupFormatException ex)
             {
