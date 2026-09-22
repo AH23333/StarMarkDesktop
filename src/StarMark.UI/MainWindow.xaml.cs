@@ -68,6 +68,11 @@ public sealed partial class MainWindow : Window
         UpdateThemeIcon();
         RefreshAppearance();   // 主题确定后再按实际主题解析背景/材质，避免启动即用错主题色
 
+        // 与组件窗口(WidgetWindow 订阅 RootBorder.ActualThemeChanged)对齐：主题在运行期落地/翻转后，
+        // 用窗口"实际主题"重铺材质与背景。否则主窗只按启动时推导的偏好上色，
+        // 浅色主题下可能仍按 isDark=true 铺成黑/深色（实色纯黑、深色材质基色）。
+        RootGrid.ActualThemeChanged += (_, _) => RefreshAppearance();
+
         _ = ViewModel.LoadCountsAsync();
         _ = LoadStarLanguagesAsync();   // 语言下拉只显示 star 中真实存在的语言
 
@@ -150,7 +155,12 @@ public sealed partial class MainWindow : Window
             // 未选材质（None）即不透明，沿用旧的「开关关」语义；其余材质与组件走同一套用色逻辑。
             var kind = _settings.LoadMainWindowBackdrop();
             var translucent = kind != WidgetBackdropKind.None;
-            var theme = TargetTheme(_themePref);
+            // 优先取窗口"实际主题"（RootGrid 已被 ThemeManager 盖成具体 Light/Dark，且随系统/偏好翻转），
+            // 仅在实际主题还是 Default（尚未落地）时才回落到按偏好推导。
+            // 组件窗口一直是这么做的，故组件浅色正常、主窗曾出现浅色仍偏黑。
+            var theme = RootGrid.ActualTheme == ElementTheme.Default
+                ? TargetTheme(_themePref)
+                : RootGrid.ActualTheme;
             WidgetAppearance.ApplyBackdrop(
                 this, kind, WidgetAppearance.Opacity(), theme);
             // 主题色一律按目标主题解析（ThemeBrush.For），不能取 Application.Current.Resources[key]
