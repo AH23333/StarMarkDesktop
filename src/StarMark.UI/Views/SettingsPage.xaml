@@ -137,8 +137,8 @@
 
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="背景不透明度（仅纯色材质）"/>
-                                        <TextBlock Text="只对「纯色 · Solid」材质生效：越低越透、能看见桌面壁纸。其余材质用各自固定的透明度性格。" Style="{StaticResource SettingRowText}"/>
+                                        <TextBlock Text="组件背景不透明度（仅纯色材质）"/>
+                                        <TextBlock Text="只影响桌面组件的「纯色 · Solid」材质：越低越透、能看见桌面壁纸。主窗口的不透明度在下方单独设置。" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
                                         <Slider Grid.Column="0" Minimum="0.3" Maximum="1" StepFrequency="0.02" Width="150"
@@ -163,6 +163,20 @@
                                         <ComboBoxItem Content="亚克力 · 厚（更浓的霜化，隐私更好）"/>
                                         <ComboBoxItem Content="纯色 · Solid（带强调色，可调不透明度）"/>
                                     </ComboBox>
+                                </Grid>
+
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="主窗口背景不透明度（仅纯色材质）"/>
+                                        <TextBlock Text="只影响主窗口的「纯色 · Solid」材质，与组件互不影响；其余材质用各自固定的透明度性格。" Style="{StaticResource SettingRowText}"/>
+                                    </StackPanel>
+                                    <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
+                                        <Slider Grid.Column="0" Minimum="0.3" Maximum="1" StepFrequency="0.02" Width="150"
+                                                Value="{x:Bind ViewModel.MainWindowOpacity, Mode=TwoWay}"/>
+                                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Width="46"
+                                                   Text="{x:Bind ViewModel.MainWindowOpacityPercentText, Mode=OneWay}"
+                                                   Style="{StaticResource MutedText}"/>
+                                    </Grid>
                                 </Grid>
                             </StackPanel>
                         </Border>

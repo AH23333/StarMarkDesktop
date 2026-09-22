@@ -40,6 +40,8 @@ public partial class SettingsPageViewModel : ObservableObject
     /// <summary>主窗口材质下拉索引（批次 J：与组件材质各自独立；= <see cref="WidgetBackdropKind"/> 整数值，None=不透明）。</summary>
     [ObservableProperty] private int _mainWindowBackdropIndex;
     [ObservableProperty] private double _widgetOpacity = 0.72;
+    /// <summary>主窗口背景不透明度（独立于组件 <see cref="WidgetOpacity"/>）。批次 J 已拆材质，这里补齐拆不透明度。</summary>
+    [ObservableProperty] private double _mainWindowOpacity = 0.72;
 
     // 性能模式 / 内存门禁（Phase B-8）
     [ObservableProperty] private int _performanceModeIndex;
@@ -59,10 +61,14 @@ public partial class SettingsPageViewModel : ObservableObject
     /// <summary>组件边缘磁吸总开关（关闭后用户自由摆位）。</summary>
     [ObservableProperty] private bool _enableWidgetSnap = true;
 
-    /// <summary>不透明度百分比文本（滑块右侧读数）。</summary>
+    /// <summary>组件不透明度百分比文本（滑块右侧读数）。</summary>
     public string OpacityPercentText => $"{(int)Math.Round(WidgetOpacity * 100)}%";
 
+    /// <summary>主窗口不透明度百分比文本（滑块右侧读数）。</summary>
+    public string MainWindowOpacityPercentText => $"{(int)Math.Round(MainWindowOpacity * 100)}%";
+
     partial void OnWidgetOpacityChanged(double value) => OnPropertyChanged(nameof(OpacityPercentText));
+    partial void OnMainWindowOpacityChanged(double value) => OnPropertyChanged(nameof(MainWindowOpacityPercentText));
 
     [ObservableProperty] private string _saveErrorMessage = string.Empty;
     [ObservableProperty] private bool _hasSaveError;
@@ -119,6 +125,7 @@ public partial class SettingsPageViewModel : ObservableObject
         BackdropIndex = (int)Safe(_settings.LoadWidgetBackdrop, WidgetBackdropKind.Acrylic, "组件材质");
         MainWindowBackdropIndex = (int)Safe(_settings.LoadMainWindowBackdrop, WidgetBackdropKind.Acrylic, "主窗口材质");
         WidgetOpacity = Safe(_settings.LoadWidgetOpacity, WidgetAppearance.DefaultOpacity, "不透明度");
+        MainWindowOpacity = Safe(_settings.LoadMainWindowOpacity, WidgetAppearance.DefaultOpacity, "主窗口不透明度");
         EnableWidgetSnap = Safe(_settings.LoadWidgetSnapEnabled, true, "边缘磁吸");
 
         // 性能模式 / 内存门禁
@@ -327,6 +334,7 @@ public partial class SettingsPageViewModel : ObservableObject
             _settings.SaveWidgetBackdrop((WidgetBackdropKind)BackdropIndex);
             _settings.SaveWidgetOpacity(WidgetOpacity);
             _settings.SaveMainWindowBackdrop((WidgetBackdropKind)MainWindowBackdropIndex);
+            _settings.SaveMainWindowOpacity(MainWindowOpacity);
             _settings.SavePerformanceMode((PerformanceMode)PerformanceModeIndex);
             _settings.SaveCacheBudgetMb(CacheBudgetMb);
             _settings.SaveMaxImageCacheCount(MaxCacheCount);

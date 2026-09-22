@@ -162,7 +162,7 @@ public sealed partial class MainWindow : Window
                 ? TargetTheme(_themePref)
                 : RootGrid.ActualTheme;
             WidgetAppearance.ApplyBackdrop(
-                this, kind, WidgetAppearance.Opacity(), theme);
+                this, kind, _settings.LoadMainWindowOpacity(), theme);
             // 主题色一律按目标主题解析（ThemeBrush.For），不能取 Application.Current.Resources[key]
             // —— 应用级主题在窗口创建后冻结，那里解析出的永远是初始主题的画笔。
             // 表面画笔跟着材质走（与组件 ApplyAppearanceCore 同构，保证主界面/组件同款观感、同步切换）：
@@ -190,7 +190,7 @@ public sealed partial class MainWindow : Window
             else
             {
                 // 半透明材质但背衬未挂上（防御路径）：用按 isDark 直接算色的 SurfaceBrush，可靠不分主题。
-                RootGrid.Background = WidgetAppearance.MainWindowSurfaceBrush(theme, kind, translucent);
+                RootGrid.Background = WidgetAppearance.MainWindowSurfaceBrush(theme, kind, translucent, _settings.LoadMainWindowOpacity());
             }
             // 主题切换后代码构建的画笔重解析（来源按钮高亮、状态点）
             SetSourceButtonsHighlight(_currentSource);

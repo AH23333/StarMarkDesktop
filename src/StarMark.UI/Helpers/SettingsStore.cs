@@ -57,6 +57,9 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         /// 迁移语义见 <see cref="LoadMainWindowBackdrop"/>：沿用旧的「主窗口使用同一材质」开关。
         /// </summary>
         public int? MainWindowBackdrop { get; set; }
+        /// <summary>主窗口背景不透明度（独立于组件的 <see cref="WidgetOpacity"/>）。null = 从未单设，
+        /// 迁移语义见 <see cref="LoadMainWindowOpacity"/>：沿用组件不透明度，保证升级观感不变。</summary>
+        public double? MainWindowOpacity { get; set; }
         /// <summary>性能模式：0=均衡（默认）1=省资源 2=自定义。常驻应用的内存/缓存预算开关。</summary>
         public int? PerformanceMode { get; set; }
         /// <summary>自定义性能模式下的进程工作集预算（MB，默认 200）。超预算时 MemoryReclaimer 触发回收。</summary>
@@ -235,6 +238,21 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     {
         var d = Load() ?? new SettingsData();
         d.WidgetOpacity = Math.Clamp(opacity, 0.3, 1.0);
+        Save(d);
+    }
+
+    /// <summary>主窗口背景不透明度（独立于组件）。从未单设则回落到组件不透明度（升级观感不变）。</summary>
+    public double LoadMainWindowOpacity()
+    {
+        if (Load() is { } d && d.MainWindowOpacity is > 0)
+            return Math.Clamp(d.MainWindowOpacity.Value, 0.3, 1.0);
+        return LoadWidgetOpacity();
+    }
+
+    public void SaveMainWindowOpacity(double opacity)
+    {
+        var d = Load() ?? new SettingsData();
+        d.MainWindowOpacity = Math.Clamp(opacity, 0.3, 1.0);
         Save(d);
     }
 
