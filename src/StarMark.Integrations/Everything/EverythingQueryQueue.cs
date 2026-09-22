@@ -304,6 +304,9 @@ public sealed class EverythingSource : IItemSource
         // 默认实例只能有一个：接管所有权，关掉其它 Everything（提权下可结束 High-IL repack；失败仅降级）。
         CloseOtherEverything(exe);
 
+        // 让自带实例不占系统托盘图标（用户视觉上只有 StarMark 一个应用）：仅改我们掌控的自带 ini。
+        SeedOwnedTrayHidden();
+
         try
         {
             // -startup：Everything 官方参数，启动后不显示主窗口（仅托盘/后台），且照常创建 IPC 通知窗口。
@@ -415,6 +418,98 @@ public sealed class EverythingSource : IItemSource
         {
             StarLog.Error("下载/解压自带 Everything 失败（离线属正常，降级为无本地文件搜索）", ex);
             return null;
+        }
+    }
+
+    // ===== 自带引擎的用户管理面（供设置页：占用大小 / 打开所在目录 / 删除） =====
+
+    /// <summary>StarMark 数据根目录（%LOCALAPPDATA%\StarMark，内含 sdk\ 与 everything\）。</summary>
+    public static string DataRootPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), StarMark.Abstractions.AppConstants.AppName);
+
+    private static string SdkDir => Path.GetDirectoryName(EverythingInterop.SdkDllPath)!;
+
+    /// <summary>把自带实例的 <c>show_tray_icon</c> 置 0（写我们掌控的自带 ini，不动用户任何 Everything）。</summary>
+    private static void SeedOwnedTrayHidden()
+    {
+        try
+        {
+            var ini = Path.Combine(OwnedDir, "Everything.ini");
+            var lines = File.Exists(ini) ? File.ReadAllLines(ini).ToList() : new List<string>();
+            void Set(string key, string val)
+            {
+                for (var i = 0; i < lines.Count; i++)
+                    if (lines[i].StartsWith(key + "=", StringComparison.OrdinalIgnoreCase)) { lines[i] = $"{key}={val}"; return; }
+                lines.Add($"{key}={val}");
+            }
+            Set("show_tray_icon", "0");
+            File.WriteAllText(ini, string.Join(Environment.NewLine, lines));
+        }
+        catch (Exception ex) { StarLog.Error("设置自带 Everything 不显示托盘图标失败（不影响搜索）", ex); }
+    }
+
+    /// <summary>本地搜索引擎占用字节数（everything\ + sdk\ 递归求和；单个文件读不了则跳过）。</summary>
+    public static long GetEngineOccupancyBytes()
+    {
+        long sum = 0;
+        foreach (var dir in new[] { OwnedDir, SdkDir })
+        {
+            try
+            {
+                if (!Directory.Exists(dir)) continue;
+                foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+                {
+                    try { sum += new FileInfo(f).Length; } catch { /* 占用/权限，跳过 */ }
+                }
+            }
+            catch (Exception ex) { StarLog.Error("统计本地搜索引擎占用失败", ex); }
+        }
+        return sum;
+    }
+
+    /// <summary>是否已下载/安装过本地搜索引擎（任一目录非空）。</summary>
+    public static bool IsEngineInstalled()
+    {
+        foreach (var dir in new[] { OwnedDir, SdkDir })
+        {
+            try { if (Directory.Exists(dir) && Directory.EnumerateFileSystemEntries(dir).Any()) return true; }
+            catch { }
+        }
+        return false;
+    }
+
+    /// <summary>在资源管理器中打开 StarMark 数据根目录（含 everything\ 与 sdk\）。</summary>
+    public static void OpenEngineFolder()
+    {
+        try
+        {
+            Directory.CreateDirectory(DataRootPath);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            { FileName = DataRootPath, UseShellExecute = true });
+        }
+        catch (Exception ex) { StarLog.Error("打开本地搜索引擎目录失败", ex); }
+    }
+
+    /// <summary>删除本地搜索引擎（everything\ + sdk\）：先结束所有 Everything 进程、再卸载进程内映射的 SDK，
+    /// 最后尽力删目录。个别文件仍被占用会留下，不抛错。用户下次开启本地搜索会自动重新下载。</summary>
+    public static void DeleteEngine()
+    {
+        try
+        {
+            foreach (var p in System.Diagnostics.Process.GetProcessesByName("Everything"))
+            {
+                try { p.Kill(); p.WaitForExit(2000); } catch { }
+                finally { p.Dispose(); }
+            }
+        }
+        catch (Exception ex) { StarLog.Error("结束 Everything 进程失败", ex); }
+
+        EverythingInterop.FreeSdk();   // 解除 Everything64.dll 进程内映射，尽量让它可删
+
+        foreach (var dir in new[] { OwnedDir, SdkDir })
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+            catch (Exception ex) { StarLog.Error($"删除本地搜索引擎目录失败（部分文件可能仍被占用）：{dir}", ex); }
         }
     }
 }

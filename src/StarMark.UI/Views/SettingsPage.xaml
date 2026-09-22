@@ -415,6 +415,19 @@
                                 </Grid>
                                 <TextBlock Text="{x:Bind ViewModel.LocalDiskSearchStatus, Mode=OneWay}"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                                <!-- 自带引擎管理：占用大小 + 打开所在目录 + 删除（误删无妨，下次开启自愈式重下） -->
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                                        <TextBlock Text="本地搜索引擎占用" Style="{StaticResource SettingRowText}"/>
+                                        <TextBlock x:Name="EngineSizeText" Text="—" Style="{StaticResource SettingRowText}" Opacity="0.7"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="打开所在目录" Click="OpenEngineFolder_Click"
+                                            Style="{StaticResource SecondaryButton}" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="2" Content="删除" Click="DeleteEngine_Click"
+                                            Style="{StaticResource SecondaryButton}" VerticalAlignment="Center"/>
+                                </Grid>
+                                <TextBlock Text="删除只清理本地搜索引擎（Everything 及其 SDK），书签 / Star / 标签数据不受影响；即使误删，下次开启本地磁盘搜索会自动重新下载。"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap" Opacity="0.62" FontSize="12"/>
                                 <TextBlock Text="以下为「索引进库」的目录（供文件夹树 / 标签使用，每行一个，留空默认桌面 / 下载 / 文档）；全盘实时搜索不受此限制。"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                 <TextBox Text="{x:Bind ViewModel.FileIndexRootsText, Mode=TwoWay}"

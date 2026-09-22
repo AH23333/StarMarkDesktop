@@ -150,12 +150,47 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         ViewModel.SaveCommand.Execute(null);
     }
 
+    // ===== 本地搜索引擎管理（占用 / 打开所在目录 / 删除）=====
+    private void OpenEngineFolder_Click(object sender, RoutedEventArgs e)
+        => StarMark.Integrations.Everything.EverythingSource.OpenEngineFolder();
+
+    private async void DeleteEngine_Click(object sender, RoutedEventArgs e)
+    {
+        var bytes = StarMark.Integrations.Everything.EverythingSource.GetEngineOccupancyBytes();
+        var sizeHint = bytes > 0 ? $"（约 {FormatBytes(bytes)}）" : "";
+        var confirm = await CenteredDialog.ConfirmAsync(
+            "删除本地搜索引擎",
+            $"将删除本地磁盘搜索所用的 Everything 引擎及其 SDK{sizeHint}。书签 / Star / 标签数据不受影响；" +
+            "下次开启本地磁盘搜索会自动重新下载。确定删除？",
+            primaryText: "删除", cancelText: "取消",
+            owner: App.MainWindow, dedupeKey: "deleteengine");
+        if (!confirm) return;
+        StarMark.Integrations.Everything.EverythingSource.DeleteEngine();
+        RefreshEngineSize();
+        ViewModel.LocalDiskSearchStatus = "已删除本地搜索引擎。下次开启本地磁盘搜索（或重启应用）会自动重新下载。";
+    }
+
+    private void RefreshEngineSize()
+    {
+        var bytes = StarMark.Integrations.Everything.EverythingSource.GetEngineOccupancyBytes();
+        EngineSizeText.Text = bytes > 0 ? $"约 {FormatBytes(bytes)}" : "未安装";
+    }
+
+    private static string FormatBytes(long b) => b switch
+    {
+        < 1024 => $"{b} B",
+        < 1024 * 1024 => $"{b / 1024.0:0.#} KB",
+        < 1024L * 1024 * 1024 => $"{b / (1024.0 * 1024):0.#} MB",
+        _ => $"{b / (1024.0 * 1024 * 1024):0.##} GB",
+    };
+
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
         LoadFromStoreSilently();
         _ = ViewModel.LoadHealthAsync();
         _ = ViewModel.LoadDiagnosticsAsync();
+        RefreshEngineSize();
         if (WidgetManager() is { } mgr)
         {
             mgr.InstancesChanged -= OnInstancesChanged;   // 防重复订阅
