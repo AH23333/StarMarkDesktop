@@ -192,6 +192,12 @@
                         <FontIcon Glyph="&#xE787;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
+                <!-- 剪贴板历史（默认关；关着时页面自己说明"去设置开启"，不藏入口——藏了等于用户找不到） -->
+                <NavigationViewItem x:Name="NavClipboardItem" Content="剪贴板" Tag="clipboard">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8CB;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
             </NavigationView.MenuItems>
         </NavigationView>
 

@@ -462,6 +462,21 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- 剪贴板历史（默认关：这是敏感度最高的本地数据） -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="剪贴板历史" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               Text="开启后自动记录本机复制过的文本与文件列表（最近 500 条），在主窗「剪贴板」页点一条即可再复制回去。密码管理器复制的内容、以及私钥 / 登录令牌 / 银行卡号形态一律不入库。"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.ClipboardHistoryEnabled, Mode=TwoWay}"/>
+                                </Grid>
+                                <TextBlock Text="{x:Bind ViewModel.ClipboardHistoryStatus, Mode=OneWay}"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
                         <!-- 本地文件索引 -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">

@@ -164,6 +164,17 @@ public partial class SettingsPageViewModel : ObservableObject
         LocalDiskSearchEnabled = Safe(_settings.LoadLocalDiskSearchEnabled, false, "本地磁盘搜索");
         _suppressLocalDiskApply = false;
         RefreshLocalDiskSearchState();
+
+        // 剪贴板历史：进页面只回灌状态，<b>不因为"显示"而去建监听窗口</b>；
+        // 但"开关开着却没在记录"必须一眼看得见，否则用户会一直以为历史在长。
+        _suppressClipboardApply = true;
+        ClipboardHistoryEnabled = Safe(_settings.LoadClipboardHistoryEnabled, false, "剪贴板历史");
+        _suppressClipboardApply = false;
+        ClipboardHistoryStatus = !ClipboardHistoryEnabled
+            ? "未开启：不读剪贴板、不落盘。开启后自动记录，不需要其它步骤。"
+            : App.IsClipboardCollecting
+                ? "正在记录本机复制的内容（密码管理器与私钥 / 令牌 / 卡号形态除外）。"
+                : "开关是开着的，但本会话的剪贴板监听没建立起来，暂时不会记录新内容——关掉再打开本开关可重试。";
     }
 
     // ===== 收藏健康度（P2-6）=====
@@ -251,6 +262,35 @@ public partial class SettingsPageViewModel : ObservableObject
         = new();
     [ObservableProperty] private bool _hasDiagnosticsError;
     [ObservableProperty] private string _diagnosticsError = string.Empty;
+
+    /// <summary>
+    /// 「剪贴板历史」总开关（默认关）。翻位即持久化 + <b>立刻</b>启停监听窗口，
+    /// 并把"到底有没有开始记录"照实写进状态行——开成功与开失败必须区分得出来（P-53/P-54 同口径）。
+    /// </summary>
+    [ObservableProperty] private bool _clipboardHistoryEnabled;
+
+    [ObservableProperty] private string _clipboardHistoryStatus = string.Empty;
+
+    /// <summary>LoadFromStore 回灌初值期间抑制启停动作，免得每次进设置页就凭默认值建/拆监听窗口。</summary>
+    private bool _suppressClipboardApply;
+
+    partial void OnClipboardHistoryEnabledChanged(bool value)
+    {
+        if (_suppressClipboardApply) return;
+        ApplyClipboardHistorySwitch(value);
+    }
+
+    private void ApplyClipboardHistorySwitch(bool enabled)
+    {
+        _settings.SaveClipboardHistoryEnabled(enabled);
+        var collecting = App.ApplyClipboardHistory(enabled);
+        ClipboardHistoryStatus = enabled
+            ? collecting
+                ? "已开始记录。密码管理器复制的内容、以及私钥 / 登录令牌 / 银行卡号形态一律不入库；"
+                  + "想临时停一下，去「剪贴板」页点「暂停记录」。"
+                : "开关已打开，但系统剪贴板监听窗口没建起来（原因见日志）——当前仍不会记录任何内容。"
+            : "已停止记录。之前存下的历史仍在「剪贴板」页，可在那里一键清空。";
+    }
 
     // ===== 本地文件索引（P0-1b）=====
     [ObservableProperty] private string _fileIndexRootsText = string.Empty;

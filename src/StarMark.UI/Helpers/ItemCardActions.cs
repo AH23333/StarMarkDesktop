@@ -98,9 +98,24 @@ public static class ItemCardActions
                 // TryPathFromUri 保留 '#'/%，new Uri().LocalPath 会在 '#' 截断而复制到错误路径。
                 if (LocalFileIdentity.TryPathFromUri(text, out var localPath)) text = localPath;
             }
+            else if (string.IsNullOrEmpty(text) && vm.Source == StarMark.Abstractions.ItemSources.Clipboard)
+            {
+                // 剪贴板历史条目没有 URI，正文才是"可复制的东西"。这里若照抄空串，
+                // 菜单点下去毫无反应（还静默），等于一个看着能点其实无效的动作。
+                text = vm.Description ?? string.Empty;
+            }
+            if (text.Length == 0) return;
+
+            // 先登记回声再写剪贴板：不登记的话，开着剪贴板历史时"在应用里复制一次"会被自己再记一条，
+            // 表现为"我只是翻了翻列表，它自己重排了"。顺序不能反——写入是同步的，登记慢了就可能已被采集读到。
+            App.NoteClipboardOwnWrite(text);
+
             var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
             package.SetText(text);
             Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+            // Flush：SetContent 默认是延迟渲染，主窗口/组件被挂起或进程退出时内容会丢。
+            // 用户点了"复制"就该在剪贴板里，不靠应用还活着。
+            Windows.ApplicationModel.DataTransfer.Clipboard.Flush();
         }
         catch (Exception ex)
         {

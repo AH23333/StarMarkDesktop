@@ -118,6 +118,10 @@ public partial class App : Application
         services.AddSingleton<IBackupRepository, StarMark.Data.BackupRepository>();
         services.AddSingleton<BackupService>();
 
+        // 内置剪贴板历史：单例持有监听窗口与去重闸门。开关默认关 ⇒ 本会话绝不 TryStart（零读取、零落盘）。
+        services.AddSingleton(sp => new StarMark.Integrations.Clipboard.ClipboardWatcher(
+            sp.GetRequiredService<IItemRepository>()));
+
         // 集成适配层
         // P0-1b：本地文件索引配置从设置读取后注入 EverythingSource（避免 Integrations 反向依赖 UI）。
         var fileSettings = new StarMark.UI.Helpers.SettingsStore();
@@ -178,6 +182,7 @@ public partial class App : Application
         services.AddSingleton<TagsPageViewModel>();
         services.AddTransient<ActivityPageViewModel>();
         services.AddTransient<HiddenPageViewModel>();
+        services.AddTransient<ClipboardPageViewModel>();
         services.AddTransient<SettingsPageViewModel>();
 
         Services = services.BuildServiceProvider();
@@ -272,6 +277,18 @@ public partial class App : Application
                     StarLog.Error("自动备份失败（不影响使用，下次启动会再试）", ex);
                 }
             });
+
+            // 3.2 剪贴板历史（默认关）：开着才建监听窗口。必须在 UI 线程建——HWND_MESSAGE 的 WndProc
+            // 由所属线程的消息队列驱动，线程池线程没有消息泵就永远收不到 WM_CLIPBOARDUPDATE。
+            try
+            {
+                if (fileSettings.LoadClipboardHistoryEnabled())
+                    ApplyClipboardHistory(true);
+            }
+            catch (Exception cex)
+            {
+                StarLog.Error("剪贴板历史启动失败（不影响其它功能）", cex);
+            }
 
             // 4. 全局快捷键：在 MainWindow 句柄上子类化接收 WM_HOTKEY，绑定动作并应用设置
             try
@@ -382,6 +399,67 @@ public partial class App : Application
     public static void PresentMainWindow(bool settings = false)
     {
         MainWindow?.Present(settings);
+    }
+
+    /// <summary>
+    /// 按设置启停剪贴板采集，返回<b>实际</b>是否在采集（而不是"用户点了开"）。
+    /// <para>必须在 UI 线程调用：监听窗口的消息泵属于调用线程。设置页的开关回调正在 UI 线程上，
+    /// 因此直接同步调用即可——拿到 false 就把"没启起来"照实显示出来，不能默默假装有历史。</para>
+    /// </summary>
+    public static bool ApplyClipboardHistory(bool enabled)
+    {
+        try
+        {
+            var watcher = Services.GetRequiredService<StarMark.Integrations.Clipboard.ClipboardWatcher>();
+            if (!enabled)
+            {
+                watcher.Stop();
+                return false;
+            }
+            return watcher.TryStart();
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("切换剪贴板采集失败", ex);
+            return false;
+        }
+    }
+
+    /// <summary>剪贴板采集当前是否真的在跑（监听窗口已建立）。</summary>
+    public static bool IsClipboardCollecting
+    {
+        get
+        {
+            try
+            {
+                return Services.GetRequiredService<StarMark.Integrations.Clipboard.ClipboardWatcher>().IsRunning;
+            }
+            catch { return false; }
+        }
+    }
+
+    /// <summary>暂停/恢复记录（临时粘贴私密内容用）。暂停期间监听仍在，只是不落库。</summary>
+    public static void SetClipboardPaused(bool paused)
+    {
+        try
+        {
+            Services.GetRequiredService<StarMark.Integrations.Clipboard.ClipboardWatcher>().Paused = paused;
+        }
+        catch (Exception ex) { StarLog.Error("切换剪贴板暂停失败", ex); }
+    }
+
+    /// <summary>
+    /// 登记"这段内容是 StarMark 自己写进剪贴板的"，采集时按回声挡掉一次。
+    /// 任何往剪贴板写内容的地方（复制链接、历史页"再复制"）都必须在写之前调它，
+    /// 否则用户点开历史页翻几下，列表就会自己重排——像是被别的东西动过。
+    /// </summary>
+    public static void NoteClipboardOwnWrite(string? text)
+    {
+        try
+        {
+            Services.GetRequiredService<StarMark.Integrations.Clipboard.ClipboardWatcher>().NoteOwnWrite(text);
+        }
+        catch { /* 登记失败最多导致多记一条回声，不该影响复制本身 */ }
     }
 
     /// <summary>隐藏主界面（快捷键动作用）：主进程继续驻留托盘。</summary>

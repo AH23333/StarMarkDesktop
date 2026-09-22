@@ -40,6 +40,11 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         /// 旧配置无此字段时按未开启处理。
         /// </summary>
         public bool? LocalDiskSearchEnabled { get; set; }
+        /// <summary>
+        /// 内置剪贴板历史总开关。<b>默认关</b>：剪贴板是全机器敏感度最高的数据（密码、卡号、私钥都会路过它），
+        /// 默认开等于在用户不知情时把这些抄进一个明文 SQLite 文件。开启后采集全自动，无需任何后续步骤。
+        /// </summary>
+        public bool? ClipboardHistoryEnabled { get; set; }
         /// <summary>快捷键绑定（动作 id → 手势）的 JSON。缺省时使用 <see cref="DefaultHotkeyBindings"/>。</summary>
         public string? HotkeyBindingsJson { get; set; }
         /// <summary>组件拖动 / 缩放时的边缘磁吸总开关（默认开启）。关闭后用户可自由摆位。</summary>
@@ -522,6 +527,18 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     {
         var d = Load() ?? new SettingsData();
         d.LocalDiskSearchEnabled = enabled;
+        Save(d);
+    }
+
+    /// <summary>
+    /// 内置剪贴板历史总开关（<b>默认关</b>）。关闭时连监听窗口都不创建——不读剪贴板、不落盘。
+    /// </summary>
+    public bool LoadClipboardHistoryEnabled() => Load() is { } d && d.ClipboardHistoryEnabled == true;
+
+    public void SaveClipboardHistoryEnabled(bool enabled)
+    {
+        var d = Load() ?? new SettingsData();
+        d.ClipboardHistoryEnabled = enabled;
         Save(d);
     }
 
