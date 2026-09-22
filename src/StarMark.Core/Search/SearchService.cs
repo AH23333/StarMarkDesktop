@@ -71,8 +71,11 @@ public sealed class SearchService
         var usable = candidates.Where(s => s.IsAvailable).ToList();
         // 诊断埋点（V2）：实时源因 IsAvailable=false 被静默剔除是"开了 Everything 仍搜不到本地文件"的
         // 首要嫌疑（如 Everything 1.5 窗口类名变化使 FindWindow 探测失败）。只记日志，不改判定闸门。
+        // 节流：这一句按"每次搜索 × 每个被剔源"放大（本机日志实测 ditto/chrome 各 185 行/日），
+        // 60 s 窗口内同源自省一条并累计，保留"仍在被跳过"的证据而不刷没别的日志。
         foreach (var skipped in candidates.Except(usable))
-            StarLog.Warn($"统一搜索：实时源「{skipped.SourceId}」IsAvailable=false，本次已跳过（未参与查询）");
+            StarLog.WarnThrottled($"search-skip:{skipped.SourceId}",
+                $"统一搜索：实时源「{skipped.SourceId}」IsAvailable=false，本次已跳过（未参与查询）");
 
         var realTimeTasks = usable
             .Select(s => (Source: s, Task: Task.Run(() => s.SearchAsync(keyword, filter, ct), ct)))

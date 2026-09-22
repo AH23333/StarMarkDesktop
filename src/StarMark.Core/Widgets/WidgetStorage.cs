@@ -363,7 +363,9 @@ public sealed class WidgetStorage
                 // 磁盘数据其实完好，只是这一瞬拿不到。此时若返回空并让随后的 Save 落盘，会用空数据**覆盖真实配置**——最坏的数据丢失。
                 // 置降级位，令 Save 拒绝写入；锁定解除后的下一次成功 Load 会自动清除该位。
                 _loadDegraded = true;
-                StarLog.Warn($"读取组件配置失败（疑似被临时占用），本次不落盘以免覆盖真实数据 ({_path})：{ex.Message}");
+                // 节流：锁定期内每次 Load 都会撞这一句（60 s 窗口内同路径只留首条 + 累计数）
+                StarLog.WarnThrottled($"widget-read:{_path}",
+                    $"读取组件配置失败（疑似被临时占用），本次不落盘以免覆盖真实数据 ({_path})：{ex.Message}");
                 return Normalize(null);
             }
         }
@@ -377,7 +379,9 @@ public sealed class WidgetStorage
             // 跳过本次写入（改动丢失远好于全量清空）；锁定解除后的下一次成功 Load 会自动清除该位。
             if (_loadDegraded)
             {
-                StarLog.Warn($"组件配置处于降级态（读取曾被临时占用），跳过本次保存以保护磁盘数据 ({_path})");
+                // 节流：降级期间每次保存都撞这一句（摆位/改标题都会保存），留首条 + 累计数即可
+                StarLog.WarnThrottled($"widget-degraded:{_path}",
+                    $"组件配置处于降级态（读取曾被临时占用），跳过本次保存以保护磁盘数据 ({_path})");
                 return;
             }
 

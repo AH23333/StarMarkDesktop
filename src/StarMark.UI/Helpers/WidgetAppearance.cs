@@ -153,8 +153,11 @@ public static class WidgetAppearance
             WindowInterop.SetDwmSystemBackdropNone(window);
             state.BackdropSurfaceActive = true;
 
-            StarLog.Info($"[材质诊断] backdrop kind={kind} dark={isDark} solidOpacity={solidOpacity:F2} " +
-                $"tint=#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}");
+            // 节流：每次套材质都写一行 ⇒ 组件多 + 拖滑杆即时预览时成串刷屏（同类 5 s 窗口）。
+            StarLog.InfoThrottled($"backdrop:{kind}:{isDark}",
+                $"[材质诊断] backdrop kind={kind} dark={isDark} solidOpacity={solidOpacity:F2} " +
+                $"tint=#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}",
+                windowMs: 5000);
         }
         catch (Exception ex)
         {

@@ -185,7 +185,10 @@ public sealed partial class MainWindow : Window
                 RootGrid.Background = new SolidColorBrush(lightSurface
                     ? Windows.UI.Color.FromArgb(0xFF, 0xF3, 0xF3, 0xF3)
                     : Windows.UI.Color.FromArgb(0xFF, 0x20, 0x20, 0x20));
-                StarLog.Info($"[材质诊断] 实色(None) 主窗底色按实际主题铺：ActualTheme={RootGrid.ActualTheme} pref={_themePref} → {(lightSurface ? "浅" : "深")}");
+                // 节流：RefreshAppearance 在拖滑杆时按 350 ms 自动保存的节奏被调，这句会成串刷屏。
+                StarLog.InfoThrottled($"main-solid:{_themePref}",
+                    $"[材质诊断] 实色(None) 主窗底色按实际主题铺：ActualTheme={RootGrid.ActualTheme} pref={_themePref} → {(lightSurface ? "浅" : "深")}",
+                    windowMs: 5000);
             }
             else
             {
