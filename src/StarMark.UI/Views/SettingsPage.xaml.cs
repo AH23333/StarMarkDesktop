@@ -784,25 +784,56 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
     // ==================== 数据备份与恢复（P0-2） ====================
 
+    // WinRT 的文件选择器要走系统对话框宿主（中 IL）。本地磁盘搜索会让 StarMark 以管理员运行，
+    // 此时 PickSaveFileAsync/PickSingleFileAsync 稳定抛 COMException E_FAIL（真机日志：提权 pid 内连挂 4 次），
+    // 且 try 若从 picker 之后才开始，异常就冲到 UI 兜底网、用户只看到"点了没反应"。
+    // 因此：picker 调用本身进 try，失败时给出可执行的解释，而不是裸抛。
+    private const string PickerBlockedHint =
+        "系统文件对话框调不起来（StarMark 正以管理员身份运行，而对话框宿主在普通权限）——" +
+        "备份文件仍可直接写到固定目录，请用下方「导出到默认位置」。";
+
+    /// <summary>调起 WinRT 选择器；返回 null 表示用户取消或（提权下）系统对话框不可用。</summary>
+    private static async Task<Windows.Storage.IStorageItem?> PickAsync(
+        Windows.Storage.Pickers.FileOpenPicker picker)
+    {
+        try { return await picker.PickSingleFileAsync(); }
+        catch (Exception ex)
+        {
+            StarLog.Error("文件选择器调起失败（多为提权进程跨完整性级别访问系统对话框宿主被拦）", ex);
+            throw new InvalidOperationException(PickerBlockedHint, ex);
+        }
+    }
+
+    private static async Task<Windows.Storage.IStorageItem?> PickAsync(
+        Windows.Storage.Pickers.FileSavePicker picker)
+    {
+        try { return await picker.PickSaveFileAsync(); }
+        catch (Exception ex)
+        {
+            StarLog.Error("文件保存对话框调起失败（多为提权进程跨完整性级别访问系统对话框宿主被拦）", ex);
+            throw new InvalidOperationException(PickerBlockedHint, ex);
+        }
+    }
+
     private async void ExportBackup_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel.IsBackupBusy) return;
-        var picker = new FileSavePicker();
-        InitializeWithWindow.Initialize(picker, WindowInterop.GetHwnd(App.MainWindow!));
-        picker.FileTypeChoices.Add("JSON 备份", new[] { ".json" });
-        picker.SuggestedFileName = $"starmark-backup-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}";
-        var file = await picker.PickSaveFileAsync();
-        if (file is null) return;
-
-        ViewModel.IsBackupBusy = true;
+        ViewModel.IsBackupBusy = true;      // 必须覆盖"弹对话框"阶段：否则等待期间可重复点，多个 picker 并存在提权下更是必挂
         try
         {
-            await _backup.ExportToFileAsync(file.Path, CancellationToken.None);
+            var picker = new FileSavePicker();
+            InitializeWithWindow.Initialize(picker, WindowInterop.GetHwnd(App.MainWindow!));
+            picker.FileTypeChoices.Add("JSON 备份", new[] { ".json" });
+            picker.SuggestedFileName = $"starmark-backup-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}";
+            var file = await PickAsync(picker);
+            if (file is null) return;
+
+            await Task.Run(() => _backup.ExportToFileAsync(file.Path, CancellationToken.None));
             ViewModel.BackupStatus = $"已导出备份到：{file.Path}";
         }
         catch (Exception ex)
         {
-            ViewModel.BackupStatus = $"导出失败：{ex.Message}";
+            ViewModel.BackupStatus = ex.Message;
         }
         finally { ViewModel.IsBackupBusy = false; }
     }
@@ -810,19 +841,20 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     private async void ImportBackup_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel.IsBackupBusy) return;
-        var picker = new FileOpenPicker();
-        InitializeWithWindow.Initialize(picker, WindowInterop.GetHwnd(App.MainWindow!));
-        picker.FileTypeFilter.Add(".json");
-        var file = await picker.PickSingleFileAsync();
-        if (file is null) return;
-
-        ViewModel.IsBackupBusy = true;
+        ViewModel.IsBackupBusy = true;      // 同导出：选择器阶段也要占住忙碌位，避免重复点击叠出第二个 picker
         try
         {
+            var picker = new FileOpenPicker();
+            InitializeWithWindow.Initialize(picker, WindowInterop.GetHwnd(App.MainWindow!));
+            picker.FileTypeFilter.Add(".json");
+            var file = await PickAsync(picker);
+            if (file is null) return;
+            // 备份文件可达数十 MB：整份读盘 + 反序列化必须在后台线程做（Microsoft.Data.Sqlite 与
+            // File/Json 都是同步实现，await 并不让出），否则"点导入备份"就是先冻住整个界面几秒。
             BackupEnvelope env;
             try
             {
-                env = await BackupService.ReadAsync(file.Path, CancellationToken.None);
+                env = await Task.Run(() => BackupService.ReadAsync(file.Path, CancellationToken.None));
             }
             catch (BackupFormatException ex)
             {
@@ -830,12 +862,11 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
                 return;
             }
 
-            var summary = BackupService.Peek(file.Path);
-            var detail = summary is not null
-                ? $"导出时间：{DateTimeOffset.FromUnixTimeSeconds(summary.ExportedAt):yyyy-MM-dd HH:mm}\n" +
-                  $"条目 {summary.ItemCount}　用户状态 {summary.UserStateCount}　标签 {summary.TagCount}" +
-                  (summary.HasWidgets ? "　组件数据：有" : "")
-                : "（无法读取摘要）";
+            // 摘要直接从已解析的 env 算：旧代码再调 Peek(file.Path)，等于把整份备份第二次读盘+反序列化。
+            var summary = BackupService.Summarize(env);
+            var detail = $"导出时间：{DateTimeOffset.FromUnixTimeSeconds(summary.ExportedAt):yyyy-MM-dd HH:mm}\n"
+                + $"条目 {summary.ItemCount}　用户状态 {summary.UserStateCount}　标签 {summary.TagCount}"
+                + (summary.HasWidgets ? "　组件数据：有" : "");
 
             // 统一走外部居中窗口（非 ContentDialog）：按用户主题着色、可拖动、不可重复。
             // 三选一场景（合并导入 / 覆盖导入 / 取消）用 ShowContentAsync 的 primary+secondary 双按钮。
@@ -854,7 +885,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
                 && choice != CenteredDialog.HostedDialogResult.Secondary) return;
 
             var mode = choice == CenteredDialog.HostedDialogResult.Secondary ? RestoreMode.Replace : RestoreMode.Merge;
-            var rr = await _backup.RestoreAsync(env, mode, null, CancellationToken.None);
+            var rr = await Task.Run(() => _backup.RestoreAsync(env, mode, null, CancellationToken.None));
             ViewModel.BackupStatus = rr.Success
                 ? $"{rr.Message}（恢复前快照：{rr.SnapshotPath}）"
                 : $"导入失败：{rr.Message}";

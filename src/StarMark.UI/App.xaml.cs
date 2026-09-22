@@ -70,6 +70,21 @@ public partial class App : Application
         catch { }
     }
 
+    /// <summary>
+    /// 交接前让出单实例互斥体：提权/重启出的新实例会在数百毫秒内起跑并抢这把锁，
+    /// 而旧进程要等 Environment.Exit 之后 OS 才释放句柄。抢锁失败的新实例会走
+    /// 「激活已有窗口 + 自己退出」——它激活的正是那个马上消失的旧窗口，结果两个进程都没了，
+    /// 用户看到的就是"双击没反应 / 闪退"。所有"拉起新进程后自己退出"的路径都必须先调这里。
+    /// </summary>
+    public static void ReleaseSingleInstanceForHandoff()
+    {
+        var m = _singleInstanceMutex;
+        _singleInstanceMutex = null;
+        if (m is null) return;
+        try { m.ReleaseMutex(); } catch (ApplicationException) { }   // 非持有者释放会抛，交接场景下无所谓
+        m.Dispose();
+    }
+
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         // 会话边界标记：日志里此前没有任何"开始/结束"行，用户报"闪退"时无从判断一次运行
@@ -182,12 +197,7 @@ public partial class App : Application
             StarLog.Info($"本地磁盘搜索：提权自检 IsElevated={Privilege.IsElevated()} · elevateRetry={alreadyRetried} · pid={Environment.ProcessId}");
             if (!Privilege.IsElevated() && !alreadyRetried && Privilege.TryRelaunchSelfElevated("--elevate-retry"))
             {
-                // 交接前必须让出单实例互斥体：提权新实例要在数百毫秒内起跑并抢这把锁，
-                // 而旧进程要到 Exit 之后 OS 才释放句柄。抢不到锁的新实例会走
-                // 「激活已有窗口 + 自己退出」分支，去激活一个马上就要消失的旧窗口 ⇒ 两个进程都没了，
-                // 用户看到的就是"双击没反应 / 闪退"。先 Dispose 再 Exit，锁的交接就没有竞态。
-                _singleInstanceMutex?.Dispose();
-                _singleInstanceMutex = null;
+                ReleaseSingleInstanceForHandoff();
                 Environment.Exit(0);
             }
         }

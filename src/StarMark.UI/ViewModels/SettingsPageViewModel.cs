@@ -183,9 +183,16 @@ public partial class SettingsPageViewModel : ObservableObject
         HasHealthError = false;
         try
         {
-            var items = await _repository.GetAllAsync(
-                new BrowseFilter { IncludeHidden = false, Limit = int.MaxValue }, CancellationToken.None);
-            HealthReport = InsightsService.BuildHealthReport(items);
+            // 整表读 + 全量健康度聚合都是同步跑完的（Microsoft.Data.Sqlite 无真异步 I/O），
+            // 而这里是"进设置页"的直接 await 目标 ⇒ 不 offload 就是一次点设置页冻结整窗。
+            // await 不加 ConfigureAwait(false)：Task.Run 之后仍回到 UI 线程刷 HealthReport/视图。
+            var report = await Task.Run(async () =>
+            {
+                var items = await _repository.GetAllAsync(
+                    new BrowseFilter { IncludeHidden = false, Limit = int.MaxValue }, CancellationToken.None);
+                return InsightsService.BuildHealthReport(items);
+            });
+            HealthReport = report;
             RefreshHealthView();
         }
         catch (Exception ex)
@@ -303,6 +310,9 @@ public partial class SettingsPageViewModel : ObservableObject
         LocalDiskSearchStatus = "已开启。正请求以管理员身份重启 StarMark（以便连上以管理员运行的 Everything）——请在 UAC 点「是」…";
         if (Privilege.TryRelaunchSelfElevated("--elevate-retry"))
         {
+            // 与 App 的启动期提权重启同一个坑：先让出单实例互斥体再 Exit，否则提权新实例抢锁失败
+            // 会去"激活"这个马上消失的旧窗口然后自己退出 ⇒ 两个进程都没了（表现为点开关于就闪退）。
+            App.ReleaseSingleInstanceForHandoff();
             Environment.Exit(0);   // 交给提权实例（其启动自带 --elevate-retry，不再二次弹窗）
             return;
         }
@@ -316,7 +326,8 @@ public partial class SettingsPageViewModel : ObservableObject
         HasDiagnosticsError = false;
         try
         {
-            var entries = await _diagnostics.CollectAsync(CancellationToken.None);
+            // 诊断里含 COUNT(*) 全量扫描与逐表统计：同样是"进设置页即同步跑完"的站点，offload 后回 UI 填集合。
+            var entries = await Task.Run(() => _diagnostics.CollectAsync(CancellationToken.None));
             DiagnosticEntries.Clear();
             foreach (var e in entries) DiagnosticEntries.Add(e);
         }

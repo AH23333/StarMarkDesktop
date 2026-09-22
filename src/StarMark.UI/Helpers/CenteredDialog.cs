@@ -389,32 +389,46 @@ public static class CenteredDialog
     private static void MountCore(Window win, FrameworkElement root, double width, double height, Window? owner, System.Action onClosed)
     {
         win.Content = root;
+        // 第一件事就是把窗口登记进主题同步表：它顺带取走本次构建登记的 BrushSlot。
+        // 放在最前而不是最后，是为了让"中途原生调用抛异常"时这些槽不会滞留在全局暂存里、
+        // 被下一个弹窗的 TrackForThemeSync 误当成自己的（跨弹窗串色）。
+        TrackForThemeSync(win);
         // 必须显式把窗口根 RequestedTheme 套成「用户存储主题」：新建窗口默认继承已冻结的应用级主题，
         // 用户运行期切换深浅色后应用级主题不变、且窗口 Content 在 BuildWindow 时尚为 null（Apply 会落空），
         // 不在这里补设就会让弹窗停留在旧主题——这正是「弹窗始终为深色」的根因之一。
         try { ThemeManager.Apply(win, new SettingsStore().LoadTheme()); } catch { }
-        WindowInterop.RemoveDefaultWindowFrame(win);
-        MakeWindowDraggable(win, root);   // 整窗可拖动（避开输入控件）
-        var scale = WindowInterop.GetScale(win);
-        var w = (int)(width * scale);
-        var h = (int)(height * scale);
-        // 以「发起弹窗的窗口所在显示器」为基准居中；无 owner 时取主显示器
-        var work = owner is null ? WindowInterop.GetWorkArea(win) : WindowInterop.GetWorkArea(owner);
-        var x = work.X + Math.Max(0, (work.Width - w) / 2);
-        var y = work.Y + Math.Max(0, (work.Height - h) / 2);
-        win.AppWindow.MoveAndResize(new RectInt32(x, y, w, h));
+        try
+        {
+            WindowInterop.RemoveDefaultWindowFrame(win);
+            MakeWindowDraggable(win, root);   // 整窗可拖动（避开输入控件）
+            var scale = WindowInterop.GetScale(win);
+            var w = (int)(width * scale);
+            var h = (int)(height * scale);
+            // 以「发起弹窗的窗口所在显示器」为基准居中；无 owner 时取主显示器
+            var work = owner is null ? WindowInterop.GetWorkArea(win) : WindowInterop.GetWorkArea(owner);
+            var x = work.X + Math.Max(0, (work.Width - w) / 2);
+            var y = work.Y + Math.Max(0, (work.Height - h) / 2);
+            win.AppWindow.MoveAndResize(new RectInt32(x, y, w, h));
 
-        // 必须在 MoveAndResize 之后按真实物理尺寸裁圆角：先裁再缩放会让区域与窗口不符。
-        // SetWindowRgn 真正物理裁切无黑角，取代 DWM 仅靠视觉圆角（无边框窗口会留下四角黑块）。
-        WindowInterop.SetRoundedWindowRegion(win, 10);
+            // 必须在 MoveAndResize 之后按真实物理尺寸裁圆角：先裁再缩放会让区域与窗口不符。
+            // SetWindowRgn 真正物理裁切无黑角，取代 DWM 仅靠视觉圆角（无边框窗口会留下四角黑块）。
+            WindowInterop.SetRoundedWindowRegion(win, 10);
 
-        win.Closed += (_, _) => onClosed();
-        TrackForThemeSync(win);
-        win.Activate();
-        WindowInterop.SetTopmost(win, true);
-        try { WindowInterop.SetForegroundWindow(WindowInterop.GetHwnd(win)); } catch { }
-        // 拿到输入焦点后再取消置顶，避免它永远压住其它窗口
-        WindowInterop.SetTopmost(win, false);
+            win.Closed += (_, _) => onClosed();
+            win.Activate();
+            WindowInterop.SetTopmost(win, true);
+            try { WindowInterop.SetForegroundWindow(WindowInterop.GetHwnd(win)); } catch { }
+            // 拿到输入焦点后再取消置顶，避免它永远压住其它窗口
+            WindowInterop.SetTopmost(win, false);
+        }
+        catch (Exception ex)
+        {
+            // dedupe key 在进 MountCore 之前就登记了，而摘除它的 Closed 处理要等 win.Closed 挂上才有。
+            // 装配途中抛异常若不收这个尾，该 key 会永久占位 ⇒ 用户之后每次点同一个弹窗都"没反应、无日志"。
+            StarMark.Abstractions.StarLog.Error("弹窗装配失败（已回收去重登记并关闭窗口）", ex);
+            onClosed();
+            SafeClose(win);
+        }
     }
 
     /// <summary>卡片：单张圆角 Border 外壳（背景/边框走 XAML ThemeResource，跟随窗口根 RequestedTheme），
@@ -440,7 +454,15 @@ public static class CenteredDialog
     /// <summary>把用户「设置里存的」主题偏好折算成窗口实际渲染的 <see cref="ElementTheme"/>，
     /// 让代码侧解析的画笔与窗口根元素的 RequestedTheme 完全一致（消除弹窗主题错乱）。</summary>
     private static ElementTheme EffectiveTheme()
-        => ThemeManager.ResolveEffectiveTheme(new SettingsStore().LoadTheme());
+        => ThemeManager.ResolveEffectiveTheme(Store.LoadTheme());
+
+    /// <summary>同一个 SettingsStore 单例（DI 里已注册）：本类的上色路径每个弹窗要走 4~5 次，
+    /// 每次 new 一个实例等于绕开它的实例级缓存、重新读盘并反序列化整个 settings.json。</summary>
+    private static SettingsStore Store =>
+        App.Services is { } sp
+            ? Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
+                .GetService<SettingsStore>(sp) ?? new SettingsStore()
+            : new SettingsStore();
 
     private static Brush Brush(string key, Color fallback)
         => ThemeBrush.For(EffectiveTheme(), key) ?? new SolidColorBrush(fallback);

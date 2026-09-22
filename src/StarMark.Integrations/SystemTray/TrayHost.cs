@@ -128,32 +128,40 @@ public sealed class TrayHost : IDisposable
 
     private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
-        if (msg == WM_DESTROY)
+        // 原生 WNDPROC 反调托管代码：异常从这儿穿出去既不经 UI 调度器、也不经 DispatcherQueue，
+        // Application.UnhandledException 结构上够不到，只能落到 AppDomain（IsTerminating=true）
+        // 或直接 fail-fast ⇒ 托盘右键一次就能把常驻应用带走。同类钩子站点都做了包裹，这里补齐。
+        try
         {
-            if (_selfHandle.IsAllocated) _selfHandle.Free();
-            return IntPtr.Zero;
-        }
-
-        if (msg == WM_HOTKEY)
-        {
-            ShowRequested?.Invoke();
-            return IntPtr.Zero;
-        }
-
-        if (msg == TRAY_CALLBACK)
-        {
-            var mouseMsg = (uint)(lParam.ToInt64() & 0xFFFF);
-            switch (mouseMsg)
+            if (msg == WM_DESTROY)
             {
-                case WM_LBUTTONUP:
-                case WM_LBUTTONDBLCLK:
-                    ShowRequested?.Invoke();
-                    break;
-                case WM_RBUTTONUP:
-                    ShowContextMenu();
-                    break;
+                if (_selfHandle.IsAllocated) _selfHandle.Free();
+                return IntPtr.Zero;
+            }
+
+            if (msg == WM_HOTKEY)
+            {
+                ShowRequested?.Invoke();
+                return IntPtr.Zero;
+            }
+
+            if (msg == TRAY_CALLBACK)
+            {
+                var mouseMsg = (uint)(lParam.ToInt64() & 0xFFFF);
+                switch (mouseMsg)
+                {
+                    case WM_LBUTTONUP:
+                    case WM_LBUTTONDBLCLK:
+                        ShowRequested?.Invoke();
+                        break;
+                    case WM_RBUTTONUP:
+                        ShowContextMenu();
+                        break;
+                }
             }
         }
+        catch (Exception ex) { StarLog.Error($"[TrayHost] 窗口过程异常（已吞，避免穿越原生边界杀进程）：msg=0x{msg:x}", ex); }
+
         return DefWindowProcW(hWnd, msg, wParam, lParam);
     }
 
