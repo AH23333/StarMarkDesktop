@@ -19,12 +19,10 @@ namespace StarMark.UI.Views;
 /// </summary>
 public sealed partial class TrendingPage : Page
 {
-    private const string AllLanguages = "全部";
-
     public TrendingPageViewModel ViewModel { get; }
 
     /// <summary>
-    /// 回填下拉时抑制一次"选择变化"事件。没有这个闸门，进入页面回填选中项就会立刻再发一次抓取，
+    /// 回填周期下拉时抑制一次"选择变化"事件。没有这个闸门，进入页面回填选中项就会立刻再发一次抓取，
     /// 表现为每次切回这一页都白抓一遍（缓存明明命中）。
     /// </summary>
     private bool _syncing;
@@ -47,7 +45,6 @@ public sealed partial class TrendingPage : Page
             { PeriodCombo.SelectedIndex = i; break; }
         _syncing = false;
 
-        await LoadLanguagesAsync();
         await ViewModel.ReloadAsync(force: false);
     }
 
@@ -58,42 +55,13 @@ public sealed partial class TrendingPage : Page
         ViewModel.CancelLoading();
     }
 
-    private async System.Threading.Tasks.Task LoadLanguagesAsync()
-    {
-        _syncing = true;
-        try
-        {
-            LanguageCombo.ItemsSource = await ViewModel.LoadLanguageOptionsAsync();
-            var lang = ViewModel.Language;
-            LanguageCombo.SelectedItem = lang.Length == 0 ? AllLanguages : null;
-            LanguageCombo.Text = lang.Length == 0 ? AllLanguages : lang;
-        }
-        finally { _syncing = false; }
-    }
-
     private void Period_Changed(object sender, SelectionChangedEventArgs e) => ApplyPeriod();
-
-    private void Language_Changed(object sender, SelectionChangedEventArgs e) => ApplyLanguage();
-
-    /// <summary>手输的语言没有"选中项变化"，用失焦提交；连打几个字不该触发几次抓取。</summary>
-    private void Language_Committed(object sender, RoutedEventArgs e) => ApplyLanguage();
 
     private void ApplyPeriod()
     {
         if (_syncing || PeriodCombo.SelectedItem is not ComboBoxItem { Tag: string code }) return;
         ViewModel.PeriodCode = code;
         App.Services.GetRequiredService<SettingsStore>().SaveTrendingPeriod(code);
-    }
-
-    private void ApplyLanguage()
-    {
-        if (_syncing) return;
-        var text = LanguageCombo.Text?.Trim() ?? string.Empty;
-        if (text == AllLanguages) text = string.Empty;
-        if (string.Equals(text, ViewModel.Language, StringComparison.OrdinalIgnoreCase)) return;
-
-        ViewModel.Language = text;                      // 变化即重载（OnLanguageChanged）
-        App.Services.GetRequiredService<SettingsStore>().SaveTrendingLanguage(text);
     }
 
     private void Filter_Changed(object sender, TextChangedEventArgs e)

@@ -55,8 +55,6 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         public bool? TrendingEnabled { get; set; }
         /// <summary>热榜页上次的周期（daily/weekly/monthly）；缺省 weekly（同扩展口径）。</summary>
         public string? TrendingPeriod { get; set; }
-        /// <summary>热榜页上次的语言筛选（可手输）；空＝全部。</summary>
-        public string? TrendingLanguage { get; set; }
         /// <summary>是否在「今日速览」组件里显示热榜块（默认关；开启热榜时弹窗问过，设置里随时可改）。</summary>
         public bool? TrendingGlanceEnabled { get; set; }
         /// <summary>快捷键绑定（动作 id → 手势）的 JSON。缺省时使用 <see cref="HotkeyBindings.Defaults"/>。</summary>
@@ -584,16 +582,6 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         if (!TrendingPeriods.TryParse(code, out var period)) return;
         var d = Load() ?? new SettingsData();
         d.TrendingPeriod = TrendingPeriods.Code(period);
-        Save(d);
-    }
-
-    /// <summary>上次的语言筛选；空＝全部。</summary>
-    public string LoadTrendingLanguage() => Load()?.TrendingLanguage?.Trim() ?? string.Empty;
-
-    public void SaveTrendingLanguage(string? language)
-    {
-        var d = Load() ?? new SettingsData();
-        d.TrendingLanguage = string.IsNullOrWhiteSpace(language) ? null : language.Trim();
         Save(d);
     }
 

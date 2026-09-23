@@ -17,7 +17,7 @@
     <Grid Background="Transparent" RowDefinitions="Auto,Auto,Auto,*,Auto">
 
         <!-- 页头：一句话讲清两个按钮的落点差别（远端 Star vs 本机收藏），右侧是周期 / 语言 / 刷新 / 停止 -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="8" Margin="12,12,12,4">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8" Margin="12,12,12,4">
             <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                 <TextBlock Text="GitHub 热榜" FontSize="18" FontWeight="SemiBold"
                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
@@ -31,12 +31,9 @@
                 <ComboBoxItem Content="本周" Tag="weekly"/>
                 <ComboBoxItem Content="本月" Tag="monthly"/>
             </ComboBox>
-            <ComboBox Grid.Column="2" x:Name="LanguageCombo" MinWidth="120" VerticalAlignment="Center"
-                      IsEditable="True" SelectionChanged="Language_Changed" LostFocus="Language_Committed"
-                      ToolTipService.ToolTip="按语言筛选；下拉里是本机 star 过的语言，也可以直接手输任意语言（失焦即应用）"/>
-            <Button Grid.Column="3" Content="刷新" VerticalAlignment="Center" Click="Refresh_Click"
+            <Button Grid.Column="2" Content="刷新" VerticalAlignment="Center" Click="Refresh_Click"
                     ToolTipService.ToolTip="强制重抓本期（跳过“今天已抓过”的短路）"/>
-            <Button Grid.Column="4" Content="停止" VerticalAlignment="Center" Click="Cancel_Click"
+            <Button Grid.Column="3" Content="停止" VerticalAlignment="Center" Click="Cancel_Click"
                     Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVis}}"
                     ToolTipService.ToolTip="掐掉本次抓取，列表保持原样（取消不会被当成失败去走兜底）"/>
         </Grid>
@@ -56,7 +53,7 @@
 
         <!-- 页内筛选：这批数据不落库 ⇒ 统一搜索里没有它，所以筛选必须在这一页上给 -->
         <TextBox Grid.Row="2" x:Name="FilterBox" Margin="12,4,12,4"
-                 PlaceholderText="在本期候选里筛选：仓库名 / 描述 / 语言（只筛这一页，不动主库）"
+                 PlaceholderText="在本期候选里筛选：仓库名 / 描述 / 语言（只筛这一页，不动主库、不影响榜单本身）"
                  TextChanged="Filter_Changed"
                  Text="{x:Bind ViewModel.Filter, Mode=OneWay}"/>
 

@@ -29,10 +29,7 @@ namespace StarMark.UI.ViewModels;
 /// </summary>
 public partial class TrendingPageViewModel : ObservableObject
 {
-    private const string AllLanguages = "全部";
-
     private readonly TrendingService _service;
-    private readonly IItemRepository _repository;
     private readonly SettingsStore _settings;
     private readonly GitHubOptions _githubOptions;
 
@@ -47,7 +44,6 @@ public partial class TrendingPageViewModel : ObservableObject
     [ObservableProperty] private bool _enabled;
 
     [ObservableProperty] private string _periodCode = TrendingPeriods.Code(TrendingPeriod.Weekly);
-    [ObservableProperty] private string _language = string.Empty;
     [ObservableProperty] private string _filter = string.Empty;
 
     [ObservableProperty] private bool _isLoading;
@@ -69,13 +65,11 @@ public partial class TrendingPageViewModel : ObservableObject
     public TrendingPageViewModel()
     {
         _service = App.Services.GetRequiredService<TrendingService>();
-        _repository = App.Services.GetRequiredItemRepository();
         _settings = App.Services.GetRequiredService<SettingsStore>();
         _githubOptions = App.Services.GetRequiredService<GitHubOptions>();
 
         Enabled = _settings.LoadTrendingEnabled();
         PeriodCode = TrendingPeriods.Code(_settings.LoadTrendingPeriod());
-        Language = _settings.LoadTrendingLanguage();
         HasToken = !string.IsNullOrWhiteSpace(_githubOptions.Token);
         _suppressReload = false;
 
@@ -99,11 +93,6 @@ public partial class TrendingPageViewModel : ObservableObject
         if (!_suppressReload) _ = ReloadAsync(force: false);
     }
 
-    partial void OnLanguageChanged(string value)
-    {
-        if (!_suppressReload) _ = ReloadAsync(force: false);
-    }
-
     partial void OnFilterChanged(string value) => RebuildRows();
     partial void OnEnabledChanged(bool value)
     {
@@ -111,22 +100,6 @@ public partial class TrendingPageViewModel : ObservableObject
         if (!value) { Rows.Clear(); HasRowsChanged(); }
     }
     partial void OnHasTokenChanged(bool value) => OnPropertyChanged(nameof(NeedsTokenHint));
-
-    /// <summary>
-    /// 语言下拉数据源：「全部」+ 库里 star 条目真实出现过的语言（复用既有统计，不再写一套）。
-    /// 下拉可编辑 ⇒ 用户能手输任何语言，不受本机有没有 star 过该语言限制。
-    /// </summary>
-    public async Task<IReadOnlyList<string>> LoadLanguageOptionsAsync()
-    {
-        var list = new List<string> { AllLanguages };
-        try
-        {
-            foreach (var lang in await _repository.GetStarLanguagesAsync(CancellationToken.None))
-                if (!list.Any(x => string.Equals(x, lang, StringComparison.OrdinalIgnoreCase))) list.Add(lang);
-        }
-        catch (Exception ex) { StarLog.Warn($"读取本机 star 语言列表失败，热榜语言筛选只留「全部」：{ex.Message}"); }
-        return list;
-    }
 
     /// <summary>页面进入 / 筛选变化：走缓存短路（同一本地日历日不重复抓）。</summary>
     public Task ReloadAsync(bool force) => LoadAsync(force);
@@ -156,8 +129,8 @@ public partial class TrendingPageViewModel : ObservableObject
         try
         {
             var period = TrendingPeriods.TryParse(PeriodCode, out var p) ? p : TrendingPeriod.Weekly;
-            var result = await _service.GetAsync(period, string.IsNullOrWhiteSpace(Language) ? null : Language.Trim(),
-                force, cts.Token);
+            // 语言固定给 null＝不筛：v1 曾给过语言下拉，但候选与本机已 star 的语言混在一起会让人误判（用户裁决删除）。
+            var result = await _service.GetAsync(period, language: null, force, cts.Token);
             _lastResult = result;
             _last = result.Repos;
             RebuildRows();
@@ -176,7 +149,7 @@ public partial class TrendingPageViewModel : ObservableObject
             HasRowsChanged();
             EmptyHint = $"抓取失败：{ex.Message}";
             StatusText = "抓取失败，下面给出的是原因；点「重试」可以再抓一次。";
-            StarLog.Warn($"热榜页抓取失败（{PeriodCode}/{Language}）：{ex.Message}");
+            StarLog.Warn($"热榜页抓取失败（{PeriodCode}）：{ex.Message}");
         }
         finally
         {
