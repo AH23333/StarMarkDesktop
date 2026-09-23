@@ -24,6 +24,7 @@
             <MenuFlyout>
                 <MenuFlyoutItem x:Name="CopyItem" Text="复制这张图" Click="Copy_Click"/>
                 <MenuFlyoutItem x:Name="SaveItem" Text="另存为图片" Click="Save_Click"/>
+                <MenuFlyoutItem x:Name="OcrItem" Text="识别文字（复制纯文本）" Click="Ocr_Click"/>
                 <MenuFlyoutItem x:Name="ThroughItem" Text="鼠标穿透（所有贴图）" Click="ClickThrough_Click"/>
                 <MenuFlyoutItem x:Name="CloseItem" Text="关闭这张（Esc）" Click="Close_Click"/>
             </MenuFlyout>

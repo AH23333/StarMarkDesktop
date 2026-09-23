@@ -175,6 +175,9 @@ public sealed partial class PinWindow : Window
     private void Save_Click(object sender, RoutedEventArgs e)
         => _ = ScreenshotService.SavePixelsAsync(_bgra, _sourceWidth, _sourceHeight);
 
+    private void Ocr_Click(object sender, RoutedEventArgs e)
+        => _ = OcrService.CopyTextFromPixelsAsync(_bgra, _sourceWidth, _sourceHeight, "贴图识字");
+
     private void ClickThrough_Click(object sender, RoutedEventArgs e) => PinManager.ToggleClickThrough();
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();

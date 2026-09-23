@@ -57,6 +57,11 @@ if (args.Length >= 1 && args[0] == "capture")
     await CaptureCheckAsync();
     return;
 }
+if (args.Length >= 1 && args[0] == "ocr")
+{
+    await OcrCheckAsync();
+    return;
+}
 
 await SmokeModeAsync();
 
@@ -702,9 +707,75 @@ static async Task<(int Width, int Height, int Alpha)> ProbePngAsync(string path)
     return (software.PixelWidth, software.PixelHeight, data.Length > 3 ? data[3] : -1);
 }
 
-/// <summary>冒烟进程要自己声明 DPI 感知，否则与 PerMonitorV2 的应用本体看到的桌面尺寸不是一回事。</summary>
-internal static class CaptureSmokeNative
+// ===== OCR 能力探针（ocr）=====
+// Windows.Media.Ocr 在这台机器上到底能不能用、给的是哪种语言、
+// 以及**它把一行中文切成什么样的词**——这些都不是读码能定的（语言包按机器装、切词按引擎版本变），
+// 而"把词拼回一段可复制文字"的规则必须照着它实际给的形状写，不然就是凭想象。
+static async Task OcrCheckAsync()
 {
+    CaptureSmokeNative.SetProcessDpiAwarenessContext(CaptureSmokeNative.PerMonitorV2);
+    var result = StarMark.Integrations.Capture.GdiScreenCapture.CaptureVirtualScreen();
+    if (!result.Ok || result.Frame is not { } frame) throw new Exception("截屏失败：" + (result.Error ?? "无帧"));
+    Console.WriteLine($"Frame {frame.Width}x{frame.Height}");
+
+    Console.WriteLine("AvailableLanguages: " + string.Join(", ",
+        Windows.Media.Ocr.OcrEngine.AvailableRecognizerLanguages.Select(l => l.LanguageTag)));
+    var supported = Windows.Media.Ocr.OcrEngine.IsLanguageSupported(new Windows.Globalization.Language("zh-Hans-CN"));
+    Console.WriteLine($"IsLanguageSupported(zh-Hans-CN)={supported}");
+
+    var engine = Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
+    Console.WriteLine($"TryCreateFromUserProfileLanguages => {(engine is null ? "null（系统没有可用的 OCR 语言包）" : engine.RecognizerLanguage?.LanguageTag ?? "?")}");
+    if (engine is null)
+    {
+        Console.WriteLine("SKIP-NO-ENGINE");
+        return;
+    }
+
+    // 整帧：机器上刚好拍到什么不可预测，中央一块往往是壁纸（引擎会从纯图形里"读"出噪声，本次探针就见到了）
+    var w = frame.Width;
+    var h = frame.Height;
+    var crop = StarMark.Integrations.Capture.GdiScreenCapture.Crop(
+        new StarMark.Integrations.Capture.FrameCopyRequest(frame, 0, 0, w, h));
+    // 用 DataWriter 而不是 Buffer + AsStream：后者要 System.Runtime.InteropServices.WindowsRuntime
+    // 那个拓展方法，而本文件是 top-level program，using 只能写在所有语句之前，不如直接用 WinRT 自己的写法。
+    var writer = new Windows.Storage.Streams.DataWriter();
+    writer.WriteBytes(crop);
+    var native = writer.DetachBuffer();
+    var bitmap = Windows.Graphics.Imaging.SoftwareBitmap.CreateCopyFromBuffer(
+        native, Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8, w, h, Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
+
+    var started = Stopwatch.GetTimestamp();
+    var ocr = await engine.RecognizeAsync(bitmap);
+    var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+    // 结果写 UTF-8 文件而不是 stdout：控制台是 cp936，中文在那里只会看见乱码，
+    // 而本探针要判的恰恰是"引擎把中文切成了什么"
+    var report = Path.Combine(Path.GetTempPath(), "starmark-ocr-smoke.txt");
+    var lines = new List<string>
+    {
+        $"Recognize {w}x{h} elapsed={elapsed:F0}ms lines={ocr.Lines.Count} words={ocr.Lines.Sum(l => l.Words.Count)}",
+        $"engineLang={engine.RecognizerLanguage?.LanguageTag ?? "-"}",
+    };
+    foreach (var line in ocr.Lines)
+    {
+        var words = line.Words.Select(word => word.Text).ToList();
+        lines.Add($"[{string.Join("|", words)}]  Text=<{line.Text}>  spaceJoined=<{string.Join(" ", words)}>  textIsSpaceJoin={line.Text == string.Join(" ", words)}");
+    }
+    // 再走一遍产品真正用的那条链（Integrations 的封装 + Core 的拼回），
+    // 而不是只验引擎本身：探针能认出词、产品却拼不出可读文字，也是常见的分岔
+    var outcome = await StarMark.Integrations.Ocr.ScreenOcrReader.RecognizeAsync(crop, w, h);
+    var assembled = StarMark.Core.Ocr.OcrText.Assemble(outcome.Lines);
+    lines.Add($"Reader ok={outcome.Ok} engine={outcome.EngineLanguage ?? "-"} err={outcome.Error ?? "-"} "
+              + $"assembledChars={StarMark.Core.Ocr.OcrText.CountMeaningful(assembled)} lines={outcome.Lines.Count}");
+    lines.Add("ASSEMBLED <" + assembled.Replace(((char)10).ToString(), " | ") + ">");
+    if (!outcome.Ok) throw new Exception("ScreenOcrReader 没能识别：" + (outcome.Error ?? "无原因"));
+    if (outcome.Lines.Count > 0 && assembled.Length == 0) throw new Exception("引擎给了行，拼回来却是空的（拼接判据错了）");
+    File.WriteAllLines(report, lines, new System.Text.UTF8Encoding(false));
+    Console.WriteLine($"Recognize {w}x{h} elapsed={elapsed:F0}ms lines={ocr.Lines.Count} report={report}");
+    Console.WriteLine("DONE");
+}
+
+/// <summary>冒烟进程要自己声明 DPI 感知，否则与 PerMonitorV2 的应用本体看到的桌面尺寸不是一回事。</summary>
+internal static class CaptureSmokeNative{
     public static readonly IntPtr PerMonitorV2 = new(-4);
 
     [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]

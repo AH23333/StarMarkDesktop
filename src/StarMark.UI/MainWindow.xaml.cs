@@ -266,6 +266,7 @@ public sealed partial class MainWindow : Window
     private const int TrayScreenshot = 1;
     private const int TrayTopmostToggle = 2;
     private const int TrayScreenPin = 3;
+    private const int TrayScreenOcr = 7;
     private const int TrayPinsShowHide = 4;
     private const int TrayPinsClickThrough = 5;
     private const int TrayPinsCloseAll = 6;
@@ -291,6 +292,8 @@ public sealed partial class MainWindow : Window
             new("截图（框选区域）", TrayScreenshot,
                 Enabled: !StarMark.UI.Services.ScreenshotService.IsCapturing, SeparatorBefore: true),
             new("贴图（框选后钉在桌面）", TrayScreenPin,
+                Enabled: !StarMark.UI.Services.ScreenshotService.IsCapturing),
+            new("识字（框选后复制文字）", TrayScreenOcr,
                 Enabled: !StarMark.UI.Services.ScreenshotService.IsCapturing),
             // 三条"所有贴图"的动作。一张都没有时点它们都是空动作 ⇒ 灰掉并把状态写进标签，
             // 比"点了没反应"好（P-54 口径）。标签按要执行的动作说人话（菜单惯例），
@@ -319,10 +322,13 @@ public sealed partial class MainWindow : Window
         switch (tag)
         {
             case TrayScreenshot:
-                StarMark.UI.Services.ScreenshotService.Start();
+                StarMark.UI.Services.ScreenshotService.Start(StarMark.UI.Services.CaptureMode.Toolbar);
                 break;
             case TrayScreenPin:
-                StarMark.UI.Services.ScreenshotService.Start(pinMode: true);
+                StarMark.UI.Services.ScreenshotService.Start(StarMark.UI.Services.CaptureMode.Pin);
+                break;
+            case TrayScreenOcr:
+                StarMark.UI.Services.ScreenshotService.Start(StarMark.UI.Services.CaptureMode.Ocr);
                 break;
             case TrayPinsShowHide:
                 StarMark.UI.Services.PinManager.ToggleHidden();

@@ -45,6 +45,12 @@ public static class HotkeyActions
     /// <summary>所有贴图的鼠标穿透开关。<b>默认不绑键</b>（少占一个全局键位），托盘里有同名勾选项，设置页可自行绑定。</summary>
     public const string ScreenPinClickThrough = "screen.pinthrough";
 
+    /// <summary>
+    /// 识字：框选一块画面，认出其中的文字并复制走。<b>默认不绑键</b>——它比截图低频，
+    /// 而入口已经有三处（截图动作条上的「识字」、贴图右键、托盘菜单），不必再吃一个全局键位。
+    /// </summary>
+    public const string ScreenOcr = "screen.ocr";
+
     private const string LayoutPrefix = "layout.apply:";
 
     public static string WidgetCreate(WidgetKind k) => $"widget.create:{k}";
@@ -67,7 +73,7 @@ public static class HotkeyActions
     {
         if (action is MainToggle or MainShow or MainHide) return "主界面";
         if (action is WidgetsToggleAll or WidgetsShowAll or WidgetsHideAll or WidgetsToggleTopmostAll) return "组件总控";
-        if (action.StartsWith("screen.")) return "截图 / 贴图";
+        if (action.StartsWith("screen.")) return "截图 / 贴图 / 识字";
         if (IsLayoutAction(action)) return "布局方案";
         foreach (var k in WidgetStorage.AllKinds)
             if (action == WidgetCreate(k) || action == WidgetShow(k) || action == WidgetHide(k) || action == WidgetToggle(k))
@@ -80,7 +86,7 @@ public static class HotkeyActions
 
     private static List<string> BuildCategoryOrder()
     {
-        var list = new List<string> { "主界面", "组件总控", "截图 / 贴图" };
+        var list = new List<string> { "主界面", "组件总控", "截图 / 贴图 / 识字" };
         foreach (var k in WidgetStorage.AllKinds) list.Add(WidgetStorage.KindTitle(k));
         list.Add("布局方案");
         return list;
@@ -93,7 +99,7 @@ public static class HotkeyActions
         {
             MainToggle, MainShow, MainHide,
             WidgetsToggleAll, WidgetsShowAll, WidgetsHideAll, WidgetsToggleTopmostAll,
-            ScreenCapture, ScreenPin, ScreenPinToggleHidden, ScreenPinClickThrough,
+            ScreenCapture, ScreenPin, ScreenPinToggleHidden, ScreenPinClickThrough, ScreenOcr,
         };
         foreach (var k in WidgetStorage.AllKinds)
         {
@@ -124,6 +130,7 @@ public static class HotkeyActions
             case ScreenPin: return "贴图（框选后钉在桌面）";
             case ScreenPinToggleHidden: return "切换贴图显示 / 隐藏（全部）";
             case ScreenPinClickThrough: return "切换贴图鼠标穿透（全部）";
+            case ScreenOcr: return "识字（框选区域并复制文字）";
         }
 
         if (IsLayoutAction(action))

@@ -133,14 +133,14 @@ public sealed class PinGeometryTests
         var screen = new[]
         {
             HotkeyActions.ScreenCapture, HotkeyActions.ScreenPin,
-            HotkeyActions.ScreenPinToggleHidden, HotkeyActions.ScreenPinClickThrough,
+            HotkeyActions.ScreenPinToggleHidden, HotkeyActions.ScreenPinClickThrough, HotkeyActions.ScreenOcr,
         };
         foreach (var action in screen)
         {
-            Assert.Equal("截图 / 贴图", HotkeyActions.CategoryOf(action));
+            Assert.Equal("截图 / 贴图 / 识字", HotkeyActions.CategoryOf(action));
             Assert.Contains(action, HotkeyActions.All());
         }
-        Assert.Contains("截图 / 贴图", HotkeyActions.CategoryOrder);
+        Assert.Contains("截图 / 贴图 / 识字", HotkeyActions.CategoryOrder);
         // 每个动作都要有自己的中文名：设置页逐行渲染，漏一个就显示成英文 id
         foreach (var action in screen)
         {

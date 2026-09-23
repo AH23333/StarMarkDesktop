@@ -16,6 +16,17 @@ using Windows.Storage.Streams;
 
 namespace StarMark.UI.Services;
 
+/// <summary>一次框选放开之后的落点（见 <see cref="ScreenshotService.Start"/>）。</summary>
+public enum CaptureMode
+{
+    /// <summary>给动作条，让用户挑复制 / 存图 / 贴图 / 识字。</summary>
+    Toolbar,
+    /// <summary>直接钉到桌面（F3）。</summary>
+    Pin,
+    /// <summary>直接识别并把文字复制走。</summary>
+    Ocr,
+}
+
 /// <summary>
 /// 截图会话编排：抓一帧 → 每屏铺一个遮罩窗 → 拿回这一屏的选区 → 裁剪 → 复制或存盘。
 /// <para>
@@ -36,20 +47,21 @@ public static class ScreenshotService
     public static bool IsCapturing => _busy;
 
     /// <summary>
-    /// 按热键进入选区遮罩。抓不到画面时给原因，不铺一层空白暗幕。
+    /// 按热键/托盘进入选区遮罩。抓不到画面时给原因，不铺一层空白暗幕。
     /// </summary>
-    /// <param name="pinMode">
-    /// 贴图为真（F3）：放开选区后<b>直接钉在桌面上</b>，不再等用户点一次按钮；
-    /// 为假（F1）沿用动作条。两种模式共用同一个遮罩，只差这最后一步的落点。
+    /// <param name="mode">
+    /// 放开选区之后要做什么：<see cref="CaptureMode.Toolbar"/> 给动作条（复制/存图/贴图/识字）；
+    /// <see cref="CaptureMode.Pin"/> 直接钉到桌面；<see cref="CaptureMode.Ocr"/> 直接把文字复制走。
+    /// 三者共用同一套遮罩与几何，只差最后那一步——多一条链就要多写一遍"每屏一窗、退出收干净"，不值。
     /// </param>
-    public static void Start(bool pinMode = false)
+    public static void Start(CaptureMode mode = CaptureMode.Toolbar)
     {
         // 遮罩窗必须在 UI 线程上建：热键回调本来就在，但托盘/菜单那类入口的回调线程不保证。
         // 在别的线程上 new Window 会直接崩，所以这里显式回主线程，而不是"指望调用方在对的线程"。
         var queue = App.MainWindow?.DispatcherQueue;
         if (queue is { HasThreadAccess: false })
         {
-            queue.TryEnqueue(() => Start(pinMode));
+            queue.TryEnqueue(() => Start(mode));
             return;
         }
         if (_busy)
@@ -75,7 +87,7 @@ public static class ScreenshotService
         {
             foreach (var monitor in monitors)
             {
-                var window = new CaptureOverlayWindow(frame, monitor, OnFinished, pinMode);
+                var window = new CaptureOverlayWindow(frame, monitor, OnFinished, mode);
                 Session.Add(window);
                 // 热键回调本来就在 UI 线程，这里不必再排一帧：晚一帧Activate会让用户看到"按了没反应"
                 window.Activate();

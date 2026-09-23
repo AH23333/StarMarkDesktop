@@ -59,6 +59,7 @@
                 <Button x:Name="CopyButton" Content="复制" FontSize="11" Click="Copy_Click"/>
                 <Button Content="存图" FontSize="11" Click="Save_Click"/>
                 <Button Content="贴图" FontSize="11" Click="Pin_Click" ToolTipService.ToolTip="钉在桌面上（同 F3）"/>
+                <Button Content="识字" FontSize="11" Click="Ocr_Click" ToolTipService.ToolTip="认出这块画面的文字并复制"/>
                 <Button Content="取消" FontSize="11" Click="Cancel_Click"/>
             </StackPanel>
         </Border>
@@ -75,7 +76,7 @@
                 x:Name="HintText"
                 FontSize="12"
                 Foreground="#FFFFFFFF"
-                Text="按住拖动框选区域 · 放开后选复制或存图 · Enter 复制 · Esc 取消 · 右键不截"/>
+                Text="按住拖动框选区域 · 放开后选复制 / 存图 / 贴图 / 识字 · Enter 复制 · Esc 取消 · 右键不截"/>
         </Border>
 
         <!-- 失败原因就地显示：弹对话框会立刻把遮罩的焦点抢走（抢走就等于取消截图） -->
