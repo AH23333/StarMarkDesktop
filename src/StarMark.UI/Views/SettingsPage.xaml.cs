@@ -680,6 +680,11 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         var row = _recordingRow;
         if (action is null || row is null) { CancelRecording(); return; }
 
+        // 定稿常常就由这最后一次按下触发，而 StopRecording 会在同一个钩子回调里把热键 Resume
+        // 回注册态 ⇒ 这次按键若继续派发给系统，会当场命中（可能是别的动作已绑的）热键并执行，
+        // 表现为"刚设置完就触发一次"。把这一键吞掉，动作只能等用户点「保存快捷键」后由新键触发。
+        _hkHook.SwallowCurrentKeyDown();
+
         _hotkeyBindings[action] = new HotkeyGesture(_recordedModifiers | HotkeyModifiers.NoRepeat, _recordedMainKey);
 
         StopRecording(resetText: false);
@@ -730,6 +735,9 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     {
         if (_recordingAction is null) return;
         var row = _recordingRow;
+        // 同 FinishRecording：清除也由一次按下（Esc / Backspace / Delete）触发，而 StopRecording
+        // 会在同一回调里恢复热键注册 ⇒ 不吞掉就会让这一键当场命中某个已生效的组合并执行动作。
+        _hkHook.SwallowCurrentKeyDown();
         _hotkeyBindings[_recordingAction] = new HotkeyGesture(HotkeyModifiers.NoRepeat, 0);
         StopRecording(resetText: false);
         if (row is not null) row.BindingText = UnsetText;
