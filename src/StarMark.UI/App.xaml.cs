@@ -150,6 +150,19 @@ public partial class App : Application
         services.AddSingleton<StarMark.Integrations.GitHub.GitHubSource>();
         services.AddSingleton<IItemSource>(sp => sp.GetRequiredService<StarMark.Integrations.GitHub.GitHubSource>());
 
+        // GitHub 热榜（不入库的候选流）：抓取在 Integrations、编排在 Core、缓存写在 sync_state（键前缀 trending:）。
+        // Token 走 tokenProvider 现取而非构造期快照 ⇒ 设置里改了 Token 不需要重启就能按新配额抓取。
+        services.AddSingleton<StarMark.Abstractions.Trending.ITrendingSource>(sp =>
+            new StarMark.Integrations.Trending.TrendingFetcher(
+                tokenProvider: () => sp.GetRequiredService<StarMark.Integrations.GitHub.GitHubOptions>().Token));
+        services.AddSingleton(sp =>
+            new StarMark.Core.Trending.TrendingService(
+                sp.GetRequiredService<StarMark.Abstractions.Trending.ITrendingSource>(),
+                (key, ct) => sp.GetRequiredService<IItemRepository>().GetSyncStateAsync(key, ct),
+                (key, val, ct) => sp.GetRequiredService<IItemRepository>().SetSyncStateAsync(key, val, ct)));
+        // 「已 Star / 已收藏」的会话态：远端 Star 成功后先记在这里，避免同步前刷新又显示成未 Star。
+        services.AddSingleton<StarMark.Abstractions.Trending.TrendingStarState>();
+
         // 浏览器书签源（Chrome / Edge）
         services.AddSingleton<StarMark.Integrations.Bookmarks.ChromeBookmarksSource>();
         services.AddSingleton<IItemSource>(sp => sp.GetRequiredService<StarMark.Integrations.Bookmarks.ChromeBookmarksSource>());

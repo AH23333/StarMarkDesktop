@@ -202,6 +202,42 @@ public sealed class TrendingFetchTests
         Assert.All(h.Calls, c => Assert.Null(c.Auth));
     }
 
+    /// <summary>
+    /// DI 注册用的是 <c>tokenProvider</c>（每次请求现取），本条钉住"现取"这个语义：
+    /// 构造期快照 Token 会让"设置里改了 Token"必须重启才生效——而界面上一切正常，只有配额还是旧的。
+    /// </summary>
+    [Fact]
+    public async Task TokenProvider_IsReadPerRequest_SoAChangedTokenTakesEffectAtOnce()
+    {
+        var h = new FakeHandler((url, _) => IsTrendingPage(url)
+            ? Status(HttpStatusCode.InternalServerError)
+            : Json(SearchJson));
+        var current = "tk-old";
+        using var f = new TrendingFetcher(new HttpClient(h), tokenProvider: () => current);
+
+        await f.FetchAsync(TrendingPeriod.Weekly, null, CancellationToken.None);
+        current = "  tk-new  ";                     // 用户刚在设置里换了一个（顺带夹着空白）
+        await f.FetchAsync(TrendingPeriod.Daily, null, CancellationToken.None);
+
+        var apiCalls = h.Calls.Where(c => IsApi(c.Url)).ToList();
+        Assert.Equal(2, apiCalls.Count);
+        Assert.Equal("Bearer tk-old", apiCalls[0].Auth);
+        Assert.Equal("Bearer tk-new", apiCalls[1].Auth);   // 空白被清掉，而不是带着空格发出去
+    }
+
+    [Fact]
+    public async Task TokenProvider_ReturningBlank_SendsNoCredentials()
+    {
+        var h = new FakeHandler((url, _) => IsTrendingPage(url)
+            ? Status(HttpStatusCode.InternalServerError)
+            : Json(SearchJson));
+        using var f = new TrendingFetcher(new HttpClient(h), tokenProvider: () => "   ");
+
+        await f.FetchAsync(TrendingPeriod.Weekly, null, CancellationToken.None);
+
+        Assert.All(h.Calls, c => Assert.Null(c.Auth));
+    }
+
     // ===== 取消 ≠ 失败 =====
 
     [Fact]

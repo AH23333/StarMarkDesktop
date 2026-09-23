@@ -560,6 +560,20 @@ public partial class SettingsPageViewModel : ObservableObject
                 github.Username = string.IsNullOrWhiteSpace(GithubUsername) ? null : GithubUsername.Trim();
                 github.Save();
 
+                // 存完立刻把凭据推到运行中的实例：否则"填了 Token 点了 Star 却报未配置"，
+                // 用户只能重启应用——而重启是我们在别处已判定为缺陷的那种多余步骤。
+                try
+                {
+                    var live = App.Services.GetRequiredService<StarMark.Integrations.GitHub.GitHubOptions>();
+                    live.Token = github.Token;
+                    live.Username = github.Username;
+                    App.Services.GetRequiredService<StarMark.Integrations.GitHub.GitHubClient>().SyncCredentials();
+                }
+                catch (Exception gx)
+                {
+                    StarLog.Error("GitHub 凭据推送到运行实例失败（重启应用后仍会生效）", gx);
+                }
+
                 // 本地文件索引（P0-1b）：上限需为正整数。
                 // P-56：这里不再用 Directory.Exists 过滤目录——文本框读的是同一份配置，过滤即等于
                 // "盘没插就把那条根删了"，而且全程没有一句话。暂不可用的根由索引侧逐根跳过，

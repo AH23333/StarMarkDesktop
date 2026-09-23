@@ -95,6 +95,59 @@ public partial class ItemCardViewModel : ObservableObject
     /// </summary>
     public bool CanDeletePermanently => !IsLauncherMode && ClipboardPolicy.IsBuiltinEntry(Source, Type);
 
+    /// <summary>
+    /// 这一行是不是 GitHub 热榜候选（外部数据、<b>不入库</b>）。判据收在 <see cref="ItemCardPolicy"/>：
+    /// 它决定"哪些动作连出现都不该出现"——置顶/隐藏/笔记/标签对 Id=0 的候选会经按需登记把它写进 items。
+    /// </summary>
+    public bool IsTrendingRepo => ItemCardPolicy.IsTrendingRepo(Source);
+
+    /// <summary>是否显示"库管理"类动作（置顶 / 隐藏 / 笔记 / 标签 / 发送到桌面）——单一判据，取代逐处写条件。</summary>
+    public bool ShowsLibraryActions => ItemCardPolicy.ShowsLibraryActions(IsLauncherMode, IsTrendingRepo);
+
+    partial void OnIsLauncherModeChanged(bool value) => OnPropertyChanged(nameof(ShowsLibraryActions));
+
+    // ===== 热榜行的两个状态位（由宿主在加载与每次操作后回填；非热榜行永远为 false） =====
+
+    private bool _isStarred;
+    private bool _isCollected;
+    private bool _hasToken = true;
+
+    /// <summary>回填热榜状态。<paramref name="hasToken"/> 只影响提示文案——没 Token 时按钮照点，点了会说为什么要配。</summary>
+    public void SetTrendingState(bool starred, bool collected, bool hasToken)
+    {
+        _isStarred = starred;
+        _isCollected = collected;
+        _hasToken = hasToken;
+        foreach (var name in new[] { nameof(IsStarred), nameof(StarGlyph), nameof(StarLabel), nameof(StarTip),
+                                     nameof(IsCollected), nameof(CollectLabel), nameof(CollectTip) })
+            OnPropertyChanged(name);
+    }
+
+    public bool IsStarred => _isStarred;
+    public bool IsCollected => _isCollected;
+    public string StarGlyph => ItemCardPolicy.StarGlyph(_isStarred);
+    public string StarLabel => ItemCardPolicy.StarLabel(_isStarred);
+    public string StarTip => ItemCardPolicy.StarTip(_isStarred, _hasToken);
+    public string CollectLabel => ItemCardPolicy.CollectLabel(_isCollected);
+    public string CollectTip => ItemCardPolicy.CollectTip(_isCollected);
+
+    /// <summary>
+    /// 最近一次热榜动作的结果（成功与失败都写这里）。宿主把它显示在页面状态行或组件的说明行上——
+    /// 动作没有回显，用户就只能靠"列表有没有变"来猜自己是否点到了。
+    /// </summary>
+    [ObservableProperty] private string _lastTrendingNotice = string.Empty;
+
+    /// <summary>热榜行右键：Star / 取消 Star。</summary>
+    public event Action<ItemCardViewModel>? StarRequested;
+
+    /// <summary>热榜行右键：收进收藏 / 移出收藏。</summary>
+    public event Action<ItemCardViewModel>? CollectRequested;
+
+    /// <summary>由右键菜单工厂（组件里的紧凑行）转发动作；卡片自身的事件走 XAML 事件线。</summary>
+    public void RaiseStarRequested() => StarRequested?.Invoke(this);
+
+    public void RaiseCollectRequested() => CollectRequested?.Invoke(this);
+
     public string SourceIcon => Type switch
     {
         ItemType.GitHubStar => "⭐",

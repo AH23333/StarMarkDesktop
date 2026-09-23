@@ -54,10 +54,21 @@ public sealed class GitHubClient : IDisposable
         _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
         _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        if (!string.IsNullOrEmpty(_options.Token))
-        {
-            _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _options.Token);
-        }
+        SyncCredentials();
+    }
+
+    /// <summary>
+    /// 把 <c>Authorization</c> 头换成 <see cref="_options"/> 里的当前 Token（设置页保存 Token 后调用）。
+    /// <para>
+    /// 少这一步就会出一个"改了还得重启"的坑：<see cref="IsConfigured"/> 读的是配置对象的当前值，
+    /// 而请求带的是<b>构造时</b>那一次的凭据 ⇒ 界面以为已配置好、GitHub 回 401，用户只会觉得"填了没用"。
+    /// </para>
+    /// </summary>
+    public void SyncCredentials()
+    {
+        _http.DefaultRequestHeaders.Authorization = string.IsNullOrEmpty(_options.Token)
+            ? null
+            : new AuthenticationHeaderValue("Bearer", _options.Token);
     }
 
     /// <summary>检测 Token 是否配置。MVP 阶段不主动验证 Token 有效性（懒失败）。</summary>
@@ -183,7 +194,7 @@ public sealed class GitHubClient : IDisposable
             throw new GitHubApiException(GitHubErrorKind.Unknown, $"仓库标识不合法，无法{(starred ? "加星" : "取消星")}：「{fullName}」");
         if (!IsConfigured)
             throw new GitHubApiException(GitHubErrorKind.Auth,
-                "Star 失败：未配置 GitHub Token（在设置里填入带 public_repo 范围的 Token 后即可）",
+                "未配置 GitHub Token（在设置里填入带 public_repo 范围的 Token 后即可）",
                 HttpStatusCode.Unauthorized);
 
         using var req = new HttpRequestMessage(starred ? HttpMethod.Put : HttpMethod.Delete,

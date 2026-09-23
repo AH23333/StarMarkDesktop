@@ -46,7 +46,11 @@ internal static class ItemContextMenu
                 .GetByIdAsync(itemId, CancellationToken.None)
                 ?? fallback;   // 虚拟条目(Id=0)查不到 / 行已删：用行内数据兜底，保证与主窗口一致地弹出条目菜单
             if (item is null) return;
-            Build(new ItemCardViewModel(item), root).ShowAt(anchor);
+            var vm = new ItemCardViewModel(item);
+            // 热榜行现查一次已 Star / 已收藏：菜单标题（☆ Star / ★ 已 Star）必须与卡片上显示的一致，
+            // 否则右键看到的是"没点过"、点下去却变成取消——语义反了。
+            if (vm.IsTrendingRepo) await TrendingItemActions.RefreshStatesAsync(new[] { vm }, CancellationToken.None);
+            Build(vm, root).ShowAt(anchor);
         }
         catch (Exception ex)
         {
@@ -69,6 +73,16 @@ internal static class ItemContextMenu
 
         flyout.Items.Add(Item(vm.CopyMenuText, (_, _) => ItemCardActions.CopyUri(vm)));
         flyout.Items.Add(Item("预览", async (_, _) => await PreviewAsync(vm, root)));
+
+        // 热榜候选行（未入库虚拟条目）：与主窗卡片逐项一致，只给"按 URI 的动作"+ ⭐Star / 🔖收进收藏。
+        // 下面那些会写主库的入口（记录到本地 / 置顶 / 笔记 / 标签 / 隐藏）一律不出现——
+        // 否则"顺手右键点个置顶"就把一次性的榜单候选灌进 items（用户裁决：默认不入库，收藏要走 🔖）。
+        if (vm.IsTrendingRepo)
+        {
+            flyout.Items.Add(Item(vm.StarLabel, (_, _) => _ = TrendingItemActions.ToggleStarAsync(vm)));
+            flyout.Items.Add(Item(vm.CollectLabel, (_, _) => _ = TrendingItemActions.ToggleCollectAsync(vm)));
+            return flyout;
+        }
 
         // 未入库的实时源虚拟条目（Everything 文件结果，Id=0）：显式「记录到本地」把路径登记为主库条目，
         // 之后便可在库中被检索、并被置顶/标签格持久化（这些操作自身也会按需自动登记，此处提供主动入口）。

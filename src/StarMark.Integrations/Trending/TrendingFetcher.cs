@@ -39,20 +39,28 @@ public sealed class TrendingFetcher : ITrendingSource, IDisposable
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromSeconds(20);
 
     private readonly HttpClient _http;
-    private readonly string? _token;
+
+    /// <summary>
+    /// 取 Token 的函数，<b>每次请求现取</b>：设置里改了 Token 就立刻按新值走，不必重启应用
+    /// （与 <c>GitHubClient.SyncCredentials</c> 同一口径——固定字符串会留下"改了但不生效"）。
+    /// </summary>
+    private readonly Func<string?>? _tokenProvider;
+
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
     private readonly bool _ownsHttp;
 
     /// <param name="http">注入以做无网单测；不注入时给一个 20 s 有界的实例（默认 100 s 会冻住界面）。</param>
     /// <param name="token">仅用于 Search API 兜底那条腿（可匿名，带 Token 只是提高配额）。为空则不发凭据。</param>
     /// <param name="delay">等待函数，测试里换成不真等的实现。</param>
-    public TrendingFetcher(HttpClient? http = null, string? token = null, Func<TimeSpan, CancellationToken, Task>? delay = null)
+    /// <param name="tokenProvider">运行期取 Token（DI 用这个）；给了它则 <paramref name="token"/> 作废。</param>
+    public TrendingFetcher(HttpClient? http = null, string? token = null,
+        Func<TimeSpan, CancellationToken, Task>? delay = null, Func<string?>? tokenProvider = null)
     {
         _ownsHttp = http is null;
         _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
         if (!_http.DefaultRequestHeaders.Contains("User-Agent"))
             _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
-        _token = string.IsNullOrWhiteSpace(token) ? null : token.Trim();
+        _tokenProvider = tokenProvider ?? (string.IsNullOrWhiteSpace(token) ? null : () => token);
         _delay = delay ?? Task.Delay;
     }
 
@@ -107,8 +115,9 @@ public sealed class TrendingFetcher : ITrendingSource, IDisposable
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
             req.Headers.Accept.ParseAdd(accept);
             // 只在这一条请求上附加凭据：抓 github.com 页面那趟必须裸奔（见类注释 ①）
-            if (sendToken && _token is not null)
-                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            var token = _tokenProvider?.Invoke();
+            if (sendToken && !string.IsNullOrWhiteSpace(token))
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token!.Trim());
 
             using var resp = await _http.SendAsync(req, ct);
 

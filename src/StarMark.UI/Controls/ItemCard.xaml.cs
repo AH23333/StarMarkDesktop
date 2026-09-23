@@ -124,6 +124,21 @@ public sealed partial class ItemCard : UserControl
         if (ViewModel != null) CopyLinkRequested?.Invoke(this, ViewModel);
     }
 
+    /// <summary>热榜行的 ⭐Star（图标按钮与右键菜单同一实现）。动作结果写在卡片的 LastTrendingNotice 上，宿主负责显示。</summary>
+    private async void Star_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is { } vm) await TrendingItemActions.ToggleStarAsync(vm);
+    }
+
+    /// <summary>热榜行的 🔖收进收藏 / 移出收藏（本机书签，与 Star 是两个不同落点）。</summary>
+    private async void Collect_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is { } vm) await TrendingItemActions.ToggleCollectAsync(vm);
+    }
+
+    private void Menu_Star_Click(object sender, RoutedEventArgs e) => Star_Click(sender, e);
+    private void Menu_Collect_Click(object sender, RoutedEventArgs e) => Collect_Click(sender, e);
+
     private void Menu_OpenLocation(object sender, RoutedEventArgs e)
     {
         if (ViewModel != null) OpenLocationRequested?.Invoke(this, ViewModel);

@@ -38,6 +38,11 @@ public static class ItemSources
     public const string Clipboard = "clipboard";
     /// <summary>本地内容来源（待办/随记）。不入任何 IItemSource，永不参与同步。</summary>
     public const string Local = "local";
+    /// <summary>
+    /// GitHub 热榜候选（外部数据，<b>默认不入库</b>）。它不是 IItemSource，也不写 items 表：
+    /// 界面用它作"这一行来自热榜"的标记，所有会写主库的动作都必须对它关闭。
+    /// </summary>
+    public const string Trending = "trending";
 }
 
 /// <summary>
