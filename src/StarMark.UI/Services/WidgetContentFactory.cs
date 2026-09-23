@@ -64,6 +64,7 @@ public sealed class WidgetContentFactory
         factory.Register(WidgetKind.Music, _ => new MusicWidget());
         // 效率组件批次 LA：计算器（历史带按实例持久化，故要拿到实例配置与管理器）
         factory.Register(WidgetKind.Calc, w => new CalcWidget(w.Config, w.Manager));
+        factory.Register(WidgetKind.WorldClock, w => new WorldClockWidget(w.Config, w.Manager));
         return factory;
     }
 }

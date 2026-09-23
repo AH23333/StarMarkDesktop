@@ -13,7 +13,7 @@ namespace StarMark.UI.Views;
 /// AppWindow 可见性变化时通过 <see cref="UpdateRunning"/> 启停刷新，关闭时调用
 /// <see cref="Stop"/>；隐藏期间停表（与原行为一致，常驻应用省电）。
 /// </summary>
-public sealed partial class ClockWidget : UserControl
+public sealed partial class ClockWidget : UserControl, IWidgetTicker
 {
     public ClockWidgetViewModel ViewModel { get; }
 

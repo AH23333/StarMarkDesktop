@@ -34,7 +34,7 @@ public sealed partial class WidgetWindow : Window
     private readonly IItemRepository? _repo;
     private readonly WidgetManager _manager;
 
-    private ClockWidget? _clockWidget;
+    private IWidgetTicker? _ticker;
     private bool _styled;
     private bool _shuttingDown;
     private WidgetInstanceConfig _config;
@@ -177,10 +177,11 @@ public sealed partial class WidgetWindow : Window
         // 首次套用时它们还不存在。这里补一条节流扫描，让晚到的文本也能拿到当前缩放系数。
         ContentHost.LayoutUpdated += ContentHost_LayoutUpdated;
 
-        if (_kind == WidgetKind.Clock)
-            AppWindow.Changed += (_, e) =>
-            {
-                if (e.DidVisibilityChange) _clockWidget?.UpdateRunning(AppWindow.IsVisible);
+        // 可见性变化要驱动内容里的定时器（时钟/世界时钟…），但不必为此按类型分支：
+        // 没实现 IWidgetTicker 的内容 _ticker 为 null，这一句本身就是空操作。
+        AppWindow.Changed += (_, e) =>
+        {
+            if (e.DidVisibilityChange) _ticker?.UpdateRunning(AppWindow.IsVisible);
             };
 
         // 胶囊模式尺寸夹取：任何经由系统（原生边框 / Win+方向键吸附）的尺寸变更都夹回胶囊尺寸，
@@ -258,7 +259,7 @@ public sealed partial class WidgetWindow : Window
         // 置顶与"贴在桌面层"互斥：置顶时作为普通顶层窗口 + WS_EX_TOPMOST 真正常驻最前；
         // 默认未开启时挂到桌面图标层（落在应用窗口之下、桌面图标之上）。由 ApplyTopmost 决定挂载/脱离。
         ApplyTopmost();
-        if (_kind == WidgetKind.Clock) _clockWidget?.UpdateRunning(AppWindow.IsVisible);
+        _ticker?.UpdateRunning(AppWindow.IsVisible);
     }
 
     /// <summary>
@@ -284,7 +285,7 @@ public sealed partial class WidgetWindow : Window
         // 显式补原生 ShowWindow(SW_HIDE) 确保真正隐藏，避免下次点亮时状态错乱。
         WindowInterop.ShowWindow(WindowInterop.GetHwnd(this), WindowInterop.SW_HIDE);
         AppWindow.Hide();
-        if (_kind == WidgetKind.Clock) _clockWidget?.UpdateRunning(AppWindow.IsVisible);
+        _ticker?.UpdateRunning(AppWindow.IsVisible);
     }
 
     /// <summary>彻底关闭（组件被移除时调用）。</summary>
@@ -293,7 +294,7 @@ public sealed partial class WidgetWindow : Window
         if (_shuttingDown) return;
         _shuttingDown = true;
         PersistBounds();
-        _clockWidget?.Stop();
+        _ticker?.Stop();
         Close();
     }
 
@@ -1480,7 +1481,7 @@ public sealed partial class WidgetWindow : Window
 
     private void WidgetWindow_Closed(object sender, WindowEventArgs args)
     {
-        _clockWidget?.Stop();
+        _ticker?.Stop();
         // 必须先脱离桌面层，否则会残留指向 SHELLDLL_DefView 的悬挂所有者
         WidgetLayerService.DetachFromDesktopLayer(WindowInterop.GetHwnd(this));
         _layerAttached = false;
@@ -1885,7 +1886,7 @@ public sealed partial class WidgetWindow : Window
     {
         ContentHost.Children.Clear();
         var content = WidgetContentFactory.Default.Build(_kind, this);
-        _clockWidget = content as ClockWidget;
+        _ticker = content as IWidgetTicker;
         ContentHost.Children.Add(content);
 
         // 内容重建后必须补一次外观套用，原因有二：
@@ -2036,7 +2037,7 @@ public sealed partial class WidgetWindow : Window
 
     // 时钟组件已迁移至 ClockWidget（XAML + ViewModel，R3 收尾）：手工构建与每秒定时器
     // 均迁入组件内部，本类只在 Reveal / HideTemporary / 可见性变化 / 关闭时
-    // 通过 _clockWidget.UpdateRunning / Stop 启停刷新。
+    // 通过 IWidgetTicker（_ticker）启停刷新——不再按 WidgetKind 分支。
 
     // ── 快捷搜索 ──
 

@@ -169,5 +169,10 @@ public sealed class WidgetRegistry
         // 表达式求值 / 单位换算 / 时间戳换算三页；换算率是内置静态表，断网可用，刻意不含汇率（发起人裁决）。
         yield return new WidgetDescriptor(
             WidgetKind.Calc, "计算器", "🧮", 330, 460);
+
+        // ── 效率组件批次 LB：世界时钟 ──
+        // 只用 Windows 自带时区 Id（不引 TimeZoneConverter）；缺时区的极端环境逐行给原因，不静默少一行。
+        yield return new WidgetDescriptor(
+            WidgetKind.WorldClock, "世界时钟", "🌍", 300, 360);
     }
 }

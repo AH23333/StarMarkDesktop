@@ -75,7 +75,7 @@ public sealed class WidgetFactoryGateTests
             (WidgetKind.Clock, 3), (WidgetKind.Search, 4), (WidgetKind.TagGrid, 5),
             (WidgetKind.Clipboard, 6), (WidgetKind.Activity, 7), (WidgetKind.Pinned, 8),
             (WidgetKind.Glance, 9), (WidgetKind.Weather, 10), (WidgetKind.Music, 11),
-            (WidgetKind.Calc, 12),
+            (WidgetKind.Calc, 12), (WidgetKind.WorldClock, 13),
         };
         foreach (var (kind, wire) in expected) Assert.Equal(wire, (int)kind);
 

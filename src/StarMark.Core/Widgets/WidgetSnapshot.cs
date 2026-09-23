@@ -85,6 +85,10 @@ public sealed class WidgetSnapshotEntry : IWidgetGeometryEntry
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<CalcHistoryItem>? CalcHistory { get; set; }
 
+    /// <summary>世界时钟点位。<b>null 与空表含义不同</b>：null=当时没配过（还原后给默认四城），空=当时被删光。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<WorldClockCity>? WorldClockZones { get; set; }
+
     public List<SnapshotLocalItem> LocalItems { get; set; } = new();
 }
 
