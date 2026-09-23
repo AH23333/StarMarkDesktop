@@ -57,10 +57,43 @@ public static class ScreenOcrReader
             : $"系统报告有 {available.Count} 种 OCR 语言（{string.Join("、", available)}），但仍没能创建识别引擎";
 
     /// <summary>
+    /// 除 <paramref name="primary"/> 之外还能试哪些语言（最多两条，多的排在后面 = 白等）。
+    /// 用户配置语言排第一，剩下的按系统给的原序。
+    /// </summary>
+    public static IReadOnlyList<string> AlternativeLanguages(string? primary)
+    {
+        var all = AvailableLanguages();
+        var list = new List<string>();
+        foreach (var tag in all)
+        {
+            if (list.Count >= 2) break;
+            if (string.Equals(tag, primary, StringComparison.OrdinalIgnoreCase)) continue;
+            list.Add(tag);
+        }
+        return list;
+    }
+
+    /// <summary>用指定语言建引擎；建不出来返回 null（交给调用方回落）。</summary>
+    public static OcrEngine? CreateEngine(string? languageTag)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(languageTag)) return OcrEngine.TryCreateFromUserProfileLanguages();
+            return OcrEngine.TryCreateFromLanguage(new Windows.Globalization.Language(languageTag));
+        }
+        catch (Exception ex)
+        {
+            LastError = ex.Message;
+            return null;
+        }
+    }
+
+    /// <summary>
     /// 认一块 BGRA 画面。返回的 <see cref="OcrOutcome.Lines"/> 是引擎原样的词表，
     /// 拼成文本请走 <c>OcrText.Assemble</c>。
     /// </summary>
-    public static async Task<OcrOutcome> RecognizeAsync(byte[] bgra, int width, int height)
+    /// <param name="languageTag">null＝跟随用户配置语言；否则用指定语言（换语言重试走这里）。</param>
+    public static async Task<OcrOutcome> RecognizeAsync(byte[] bgra, int width, int height, string? languageTag = null)
     {
         if (width <= 0 || height <= 0)
             return OcrOutcome.Fail($"画面尺寸不合法（{width} × {height}），交给引擎只会拿到空结果");
@@ -68,18 +101,14 @@ public static class ScreenOcrReader
             return OcrOutcome.Fail("像素缓冲比声明的尺寸短，交给引擎会读到越界数据");
 
         var available = AvailableLanguages();
-        OcrEngine? engine;
-        try
-        {
-            engine = OcrEngine.TryCreateFromUserProfileLanguages();
-        }
-        catch (Exception ex)
-        {
-            LastError = ex.Message;
-            return OcrOutcome.Fail("创建识别引擎时出错：" + ex.Message, available.Count > 0 ? available[0] : null);
-        }
+        var engine = CreateEngine(languageTag);
         if (engine is null)
-            return OcrOutcome.Fail(NoEngineReason(available), available.Count > 0 ? available[0] : null);
+        {
+            var reason = string.IsNullOrWhiteSpace(languageTag)
+                ? NoEngineReason(available)
+                : $"系统没能按 {languageTag} 创建识别引擎（该语言可能没装 OCR 组件）";
+            return OcrOutcome.Fail(reason, available.Count > 0 ? available[0] : null);
+        }
 
         try
         {

@@ -708,71 +708,149 @@ static async Task<(int Width, int Height, int Alpha)> ProbePngAsync(string path)
 }
 
 // ===== OCR 能力探针（ocr）=====
-// Windows.Media.Ocr 在这台机器上到底能不能用、给的是哪种语言、
-// 以及**它把一行中文切成什么样的词**——这些都不是读码能定的（语言包按机器装、切词按引擎版本变），
-// 而"把词拼回一段可复制文字"的规则必须照着它实际给的形状写，不然就是凭想象。
+// 这里要量的不是"引擎能不能跑"，而是**认错字这件事改善了没有**。而"认错"必须有标准答案可言：
+// 当场拍到的屏幕没人知道正确文本，多认出来的字既可能是修好也可能是幻觉。
+// 所以探针自己用 GDI 把已知文字按桌面字号画成图——与产品截到的完全同类
+// （同一个字体渲染器、同一套抗锯齿、alpha 同样是 0 的 BGRA、同样的内存位图）。
+// 然后同一条链跑两遍：原样交引擎＝改善前，走 Core.Ocr.OcrPipeline＝改善后。
 static async Task OcrCheckAsync()
 {
     CaptureSmokeNative.SetProcessDpiAwarenessContext(CaptureSmokeNative.PerMonitorV2);
-    var result = StarMark.Integrations.Capture.GdiScreenCapture.CaptureVirtualScreen();
-    if (!result.Ok || result.Frame is not { } frame) throw new Exception("截屏失败：" + (result.Error ?? "无帧"));
-    Console.WriteLine($"Frame {frame.Width}x{frame.Height}");
+    var report = Path.Combine(Path.GetTempPath(), "starmark-ocr-smoke.txt");
+    var lines = new List<string>();
 
-    Console.WriteLine("AvailableLanguages: " + string.Join(", ",
+    lines.Add("AvailableLanguages: " + string.Join(", ",
         Windows.Media.Ocr.OcrEngine.AvailableRecognizerLanguages.Select(l => l.LanguageTag)));
-    var supported = Windows.Media.Ocr.OcrEngine.IsLanguageSupported(new Windows.Globalization.Language("zh-Hans-CN"));
-    Console.WriteLine($"IsLanguageSupported(zh-Hans-CN)={supported}");
-
-    var engine = Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
-    Console.WriteLine($"TryCreateFromUserProfileLanguages => {(engine is null ? "null（系统没有可用的 OCR 语言包）" : engine.RecognizerLanguage?.LanguageTag ?? "?")}");
-    if (engine is null)
+    lines.Add("IsLanguageSupported(zh-Hans-CN)="
+        + Windows.Media.Ocr.OcrEngine.IsLanguageSupported(new Windows.Globalization.Language("zh-Hans-CN")));
+    var profileEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
+    lines.Add($"TryCreateFromUserProfileLanguages => {(profileEngine is null ? "null（系统没有可用的 OCR 语言包）" : profileEngine.RecognizerLanguage?.LanguageTag ?? "?")}");
+    if (profileEngine is null)
     {
-        Console.WriteLine("SKIP-NO-ENGINE");
+        // 没有引擎就没得量：直说，别让下面的表格以 0% 冒充"识别很差"
+        lines.Add("SKIP-NO-ENGINE");
+        File.WriteAllLines(report, lines, new System.Text.UTF8Encoding(false));
+        Console.WriteLine("SKIP-NO-ENGINE report=" + report);
         return;
     }
 
-    // 整帧：机器上刚好拍到什么不可预测，中央一块往往是壁纸（引擎会从纯图形里"读"出噪声，本次探针就见到了）
-    var w = frame.Width;
-    var h = frame.Height;
-    var crop = StarMark.Integrations.Capture.GdiScreenCapture.Crop(
-        new StarMark.Integrations.Capture.FrameCopyRequest(frame, 0, 0, w, h));
-    // 用 DataWriter 而不是 Buffer + AsStream：后者要 System.Runtime.InteropServices.WindowsRuntime
-    // 那个拓展方法，而本文件是 top-level program，using 只能写在所有语句之前，不如直接用 WinRT 自己的写法。
-    var writer = new Windows.Storage.Streams.DataWriter();
-    writer.WriteBytes(crop);
-    var native = writer.DetachBuffer();
-    var bitmap = Windows.Graphics.Imaging.SoftwareBitmap.CreateCopyFromBuffer(
-        native, Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8, w, h, Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
-
-    var started = Stopwatch.GetTimestamp();
-    var ocr = await engine.RecognizeAsync(bitmap);
-    var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-    // 结果写 UTF-8 文件而不是 stdout：控制台是 cp936，中文在那里只会看见乱码，
-    // 而本探针要判的恰恰是"引擎把中文切成了什么"
-    var report = Path.Combine(Path.GetTempPath(), "starmark-ocr-smoke.txt");
-    var lines = new List<string>
+    // ────────── 一、有标准答案的对照 ──────────
+    // 挑的五条覆盖桌面上最常见的四种形状：纯中文菜单、中英数混排、带全角括号的版本号、纯快捷键。
+    // 字号取 14/18 物理像素：14 是 Win11 正文的下限，18 是常见放大/高分屏下的实际高度。
+    var texts = new[]
     {
-        $"Recognize {w}x{h} elapsed={elapsed:F0}ms lines={ocr.Lines.Count} words={ocr.Lines.Sum(l => l.Words.Count)}",
-        $"engineLang={engine.RecognizerLanguage?.LanguageTag ?? "-"}",
+        "设置与时间和语言选项",
+        "今日天气晴 24 摄氏度",
+        "StarMark 已复制到剪贴板 12 项",
+        "版本 1.4.11（2026 年发布）",
+        "按住 Ctrl 加 Alt 加 Space 呼出主界面",
     };
-    foreach (var line in ocr.Lines)
+    lines.Add(string.Empty);
+    lines.Add("=== 改善前（原样交引擎） vs 改善后（OcrPipeline：放大 + 对比拉伸 + 弱结果换语言） ===");
+    lines.Add("字号  基线%   产品%   基线字 产品字  放大  换语言  产品实际认出");
+    double baseSum = 0, prodSum = 0;
+    var counted = 0;
+    var better = 0;
+    var worse = 0;
+    foreach (var px in new[] { 14, 18 })
     {
-        var words = line.Words.Select(word => word.Text).ToList();
-        lines.Add($"[{string.Join("|", words)}]  Text=<{line.Text}>  spaceJoined=<{string.Join(" ", words)}>  textIsSpaceJoin={line.Text == string.Join(" ", words)}");
+        foreach (var truthText in texts)
+        {
+            var (bgra, w, h) = OcrSmokeNative.RenderTextStrip(truthText, px);
+            var snapshot = (byte[])bgra.Clone();
+
+            var raw = await StarMark.Integrations.Ocr.ScreenOcrReader.RecognizeAsync(bgra, w, h);
+            if (!raw.Ok) throw new Exception("基线识别失败：" + raw.Error);
+            var rawText = StarMark.Core.Ocr.OcrText.Assemble(raw.Lines);
+
+            var read = await StarMark.Core.Ocr.OcrPipeline.ReadAsync(bgra, w, h);
+            if (!read.Ok) throw new Exception("产品链识别失败：" + read.Error);
+            // 产品的预处理绝不能改到调用方给的缓冲：贴图窗交出来的就是它正在显示的那份像素，
+            // 就地转灰度＝"点一下识字，贴图变灰图"。这条断言量的就是那个反直觉的边界。
+            if (!bgra.AsSpan().SequenceEqual(snapshot))
+                throw new Exception("OcrPipeline 就地改了传入的像素（预处理必须自己复制）");
+
+            var score0 = Accuracy(truthText, rawText);
+            var score1 = Accuracy(truthText, read.Text);
+            baseSum += score0;
+            prodSum += score1;
+            counted++;
+            if (score1 > score0) better++;
+            else if (score1 < score0) worse++;
+            lines.Add($"{px,3}px {score0,6:F1} {score1,7:F1} {StarMark.Core.Ocr.OcrText.CountMeaningful(rawText),6} {read.Chars,5} {read.Upscale,4}× {(read.SwappedLanguage ? " 是" : " 否"),4}  "
+                + "<" + StarMark.Core.Ocr.OcrText.Preview(read.Text, 26) + ">");
+        }
     }
-    // 再走一遍产品真正用的那条链（Integrations 的封装 + Core 的拼回），
-    // 而不是只验引擎本身：探针能认出词、产品却拼不出可读文字，也是常见的分岔
-    var outcome = await StarMark.Integrations.Ocr.ScreenOcrReader.RecognizeAsync(crop, w, h);
-    var assembled = StarMark.Core.Ocr.OcrText.Assemble(outcome.Lines);
-    lines.Add($"Reader ok={outcome.Ok} engine={outcome.EngineLanguage ?? "-"} err={outcome.Error ?? "-"} "
-              + $"assembledChars={StarMark.Core.Ocr.OcrText.CountMeaningful(assembled)} lines={outcome.Lines.Count}");
-    lines.Add("ASSEMBLED <" + assembled.Replace(((char)10).ToString(), " | ") + ">");
-    if (!outcome.Ok) throw new Exception("ScreenOcrReader 没能识别：" + (outcome.Error ?? "无原因"));
-    if (outcome.Lines.Count > 0 && assembled.Length == 0) throw new Exception("引擎给了行，拼回来却是空的（拼接判据错了）");
+    lines.Add($"合计：基线 {baseSum / counted:F1}% → 产品 {prodSum / counted:F1}%（变好 {better} 例、变差 {worse} 例、共 {counted} 例）");
+    Console.WriteLine($"Accuracy baseline={baseSum / counted:F1}% product={prodSum / counted:F1}% cases={counted}");
+
+    // ────────── 二、真屏整帧（无标准答案，只看链路跑不跑得通） ──────────
+    // 这一段量的是"拍到真实桌面时那条链还成不成立"：基线与产品各认一遍，只比计数与耗时。
+    lines.Add(string.Empty);
+    lines.Add("=== 真屏整帧（当前桌面拍到什么算什么，无标准答案） ===");
+    var captured = StarMark.Integrations.Capture.GdiScreenCapture.CaptureVirtualScreen();
+    if (!captured.Ok || captured.Frame is not { } frame)
+    {
+        lines.Add("截屏失败：" + (captured.Error ?? "没有帧"));
+    }
+    else
+    {
+        var fw = frame.Width;
+        var fh = frame.Height;
+        var crop = StarMark.Integrations.Capture.GdiScreenCapture.Crop(
+            new StarMark.Integrations.Capture.FrameCopyRequest(frame, 0, 0, fw, fh));
+        var rawFrame = await StarMark.Integrations.Ocr.ScreenOcrReader.RecognizeAsync(crop, fw, fh);
+        if (!rawFrame.Ok) throw new Exception("ScreenOcrReader 没能识别：" + (rawFrame.Error ?? "无原因"));
+        var rawAssembled = StarMark.Core.Ocr.OcrText.Assemble(rawFrame.Lines);
+        if (rawFrame.Lines.Count > 0 && rawAssembled.Length == 0)
+            throw new Exception("引擎给了行，拼回来却是空的（拼接判据错了）");
+        var started = Stopwatch.GetTimestamp();
+        var readFrame = await StarMark.Core.Ocr.OcrPipeline.ReadAsync(crop, fw, fh);
+        var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        lines.Add($"Frame {fw}x{fh} 基线 lines={rawFrame.Lines.Count} chars={StarMark.Core.Ocr.OcrText.CountMeaningful(rawAssembled)} "
+            + $"→ 产品 chars={readFrame.Chars} how={readFrame.How} 产品链耗时={elapsed:F0}ms");
+        // 刻意不把屏幕上的文字抄进临时文件：整屏 OCR 出来的内容里可能有密码、令牌或私人信息，
+        // 而这一段要证的只是"真屏那条链跑得通、耗时多少"，计数就够了。
+        // （MX 那次量到的"引擎用空格切词"形状已记进审查报告，不必再往磁盘上留一份明文。）
+    }
+
     File.WriteAllLines(report, lines, new System.Text.UTF8Encoding(false));
-    Console.WriteLine($"Recognize {w}x{h} elapsed={elapsed:F0}ms lines={ocr.Lines.Count} report={report}");
+    Console.WriteLine("report=" + report);
     Console.WriteLine("DONE");
 }
+
+/// <summary>
+/// 对着标准答案算准确率：两边的空白一律去掉（引擎按词给、拼接规则另说，这里只问"字对不对"），
+/// 再按编辑距离折算。<b>可能超过 100% 的多认不算惩罚</b>：幻觉会让分母外的字符变多，
+/// 所以同时把字数打印出来，别只留一个百分比。
+/// </summary>
+static double Accuracy(string truth, string got)
+{
+    var a = new string(truth.Where(c => !char.IsWhiteSpace(c)).ToArray());
+    var b = new string(got.Where(c => !char.IsWhiteSpace(c)).ToArray());
+    if (a.Length == 0) return b.Length == 0 ? 100d : 0d;
+    var distance = EditDistance(a, b);
+    return Math.Max(0d, 100d * (1d - (double)distance / a.Length));
+}
+
+static int EditDistance(string a, string b)
+{
+    var prev = new int[b.Length + 1];
+    var cur = new int[b.Length + 1];
+    for (var j = 0; j <= b.Length; j++) prev[j] = j;
+    for (var i = 1; i <= a.Length; i++)
+    {
+        cur[0] = i;
+        for (var j = 1; j <= b.Length; j++)
+        {
+            var cost = a[i - 1] == b[j - 1] ? 0 : 1;
+            cur[j] = Math.Min(Math.Min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
+        }
+        (prev, cur) = (cur, prev);
+    }
+    return prev[b.Length];
+}
+
 
 /// <summary>冒烟进程要自己声明 DPI 感知，否则与 PerMonitorV2 的应用本体看到的桌面尺寸不是一回事。</summary>
 internal static class CaptureSmokeNative{
@@ -781,3 +859,155 @@ internal static class CaptureSmokeNative{
     [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
     public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
 }
+
+/// <summary>
+/// 用 GDI 把一行已知文字画进内存位图，读出 BGRA——探针由此得到"知道正确答案的输入"。
+/// <para>
+/// 刻意走与产品同一条取像素的路（<c>GetDIBits</c> + 自上而下 + 先摘位图再读 + 手工写 BITMAPINFOHEADER），
+/// 因为照抄产品验证过的写法才不会有第三种意外。
+/// </para>
+/// </summary>
+internal static class OcrSmokeNative
+{
+    /// <summary>桌面常见的浅底深字（Win11 亮色窗体），留 6px 空白边距，与用户随手框选的形状一致。</summary>
+    public static (byte[] Bgra, int Width, int Height) RenderTextStrip(string text, int pixelHeight, string face = "Microsoft YaHei UI")
+    {
+        const int Margin = 6;
+        const int HeaderSize = 40;                       // BITMAPINFOHEADER 的 biSize 恒为 40
+        const uint Back = 0x00F3F3F3;                    // COLORREF 是 0x00BBGGRR
+        const uint Fore = 0x001A1A1A;
+
+        var screen = GetDC(IntPtr.Zero);
+        var dc = CreateCompatibleDC(screen);
+        var logFont = new LogFont
+        {
+            Height = -pixelHeight,                       // 负值＝按 em 高（设备像素）给，不含内部留白
+            Weight = 400,                                // FW_NORMAL
+            CharSet = 1,                                 // DEFAULT_CHARSET：中文必须靠它挑到支持 CJK 的字面
+            Quality = 5,                                 // CLEARTYPE_QUALITY，与真实桌面一致
+            FaceName = face,
+        };
+        var font = CreateFontIndirectW(ref logFont);
+        if (font == IntPtr.Zero)
+            throw new Exception($"GDI 没能创建字体 {face}（这台机器上没有该字体，探针无法造标准答案）");
+        IntPtr oldFont = IntPtr.Zero, oldBitmap = IntPtr.Zero, bitmap = IntPtr.Zero, info = IntPtr.Zero;
+        try
+        {
+            oldFont = SelectObject(dc, font);
+            if (!GetTextExtentPoint32W(dc, text, text.Length, out var extent))
+                throw new Exception("量不出文字尺寸（GetTextExtentPoint32 失败）");
+            var width = extent.cx + Margin * 2;
+            var height = extent.cy + Margin * 2;
+
+            bitmap = CreateCompatibleBitmap(screen, width, height);
+            if (bitmap == IntPtr.Zero) throw new Exception("创建内存位图失败");
+            oldBitmap = SelectObject(dc, bitmap);
+
+            var brush = CreateSolidBrush(Back);
+            var rect = new Rect { Left = 0, Top = 0, Right = width, Bottom = height };
+            FillRect(dc, ref rect, brush);
+            DeleteObject(brush);
+            SetTextColor(dc, Fore);
+            SetBkMode(dc, 1);                            // TRANSPARENT：底色已由 FillRect 铺好
+            if (!TextOutW(dc, Margin, Margin, text, text.Length))
+                throw new Exception("TextOutW 失败（Win32 " + System.Runtime.InteropServices.Marshal.GetLastWin32Error() + "）");
+
+            info = System.Runtime.InteropServices.Marshal.AllocHGlobal(HeaderSize + 1024);
+            for (var i = 0; i < HeaderSize; i++) System.Runtime.InteropServices.Marshal.WriteByte(info, i, 0);
+            System.Runtime.InteropServices.Marshal.WriteInt32(info, 0, HeaderSize);
+            System.Runtime.InteropServices.Marshal.WriteInt32(info, 4, width);
+            System.Runtime.InteropServices.Marshal.WriteInt32(info, 8, -height);   // 负＝自上而下行序
+            System.Runtime.InteropServices.Marshal.WriteInt16(info, 12, (short)1);
+            System.Runtime.InteropServices.Marshal.WriteInt16(info, 14, (short)32);
+
+            var pixels = new byte[width * height * 4];
+            // 读像素前把位图从 DC 上摘下来：仍被选中时 GetDIBits 在部分驱动上返回 0 行且不带错误码
+            SelectObject(dc, oldBitmap);
+            oldBitmap = IntPtr.Zero;
+            var got = GetDIBits(dc, bitmap, 0, (uint)height, pixels, info, 0);
+            if (got == 0) throw new Exception("GetDIBits 返回 0 行，标准答案画不出来");
+            // 与产品一致地把 alpha 转不透明：GDI 写的是 0，而引擎按 Bgra8/Premultiplied 收
+            for (var p = 3; p < pixels.Length; p += 4) pixels[p] = 255;
+            return (pixels, width, height);
+        }
+        finally
+        {
+            if (info != IntPtr.Zero) System.Runtime.InteropServices.Marshal.FreeHGlobal(info);
+            if (oldBitmap != IntPtr.Zero) SelectObject(dc, oldBitmap);
+            if (oldFont != IntPtr.Zero) SelectObject(dc, oldFont);
+            if (bitmap != IntPtr.Zero) DeleteObject(bitmap);
+            DeleteObject(font);
+            DeleteDC(dc);
+            ReleaseDC(IntPtr.Zero, screen);
+        }
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private struct LogFont
+    {
+        public int Height, Width, Escapement, Orientation, Weight;
+        public byte Italic, Underline, StrikeOut, CharSet, OutPrecision, ClipPrecision, Quality, PitchAndFamily;
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string FaceName;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct TextExtent
+    {
+        public int cx;
+        public int cy;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct Rect
+    {
+        public int Left, Top, Right, Bottom;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetDC(IntPtr hWnd);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+    private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+    private static extern bool DeleteDC(IntPtr hdc);
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+    private static extern IntPtr CreateCompatibleBitmap(IntPtr hdc, int width, int height);
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+    private static extern IntPtr SelectObject(IntPtr hdc, IntPtr h);
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr ho);
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+    private static extern IntPtr CreateSolidBrush(uint color);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int FillRect(IntPtr hDC, ref Rect rect, IntPtr brush);
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+    private static extern uint SetTextColor(IntPtr hdc, uint color);
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+    private static extern int SetBkMode(IntPtr hdc, int mode);
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern IntPtr CreateFontIndirectW(ref LogFont logFont);
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern bool GetTextExtentPoint32W(IntPtr hdc, string lpString, int count, out TextExtent size);
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern bool TextOutW(IntPtr hdc, int x, int y, string lpString, int count);
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll", SetLastError = true)]
+    private static extern int GetDIBits(IntPtr hdc, IntPtr hBitmap, uint start, uint lines,
+        byte[] bits, IntPtr bmi, uint usage);
+}
+
