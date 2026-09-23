@@ -12,26 +12,11 @@ using StarMark.Abstractions.Trending;
 
 namespace StarMark.Integrations.Trending;
 
-/// <summary>这一批候选是从哪条腿来的——界面要据此标注来源，解析失败兜底不是"免费的成功"。</summary>
-public enum TrendingSource
-{
-    /// <summary>GitHub 热榜页（有"本期新增星数"）。</summary>
-    TrendingHtml,
-    /// <summary>Search API 兜底（<b>没有</b>"本期新增星数"，界面必须降级显示而不是画 +0）。</summary>
-    SearchApi,
-}
-
-/// <param name="Notice">这条结果为什么走了兜底（页面 HTTP 码 / 解析为 0 条 / 响应过大…）。给界面标注用，可为 null。</param>
-public sealed record TrendingFetchResult(IReadOnlyList<TrendingRepo> Repos, TrendingSource Via, string? Notice = null);
-
-/// <summary>两条腿都拿不到结果时的错误（消息即给人看的原因，界面直接贴出来）。</summary>
-public sealed class TrendingException : Exception
-{
-    public TrendingException(string message) : base(message) { }
-}
-
 /// <summary>
 /// GitHub 热榜抓取：热榜页 HTML 优先，失败自动回退 Search API（与浏览器扩展同一条路线）。
+/// 契约类型（<see cref="TrendingSource"/> / <see cref="TrendingFetchResult"/> / <see cref="TrendingException"/> /
+/// <see cref="ITrendingSource"/>）都在 <c>StarMark.Abstractions.Trending</c>：编排服务在 Core，
+/// 而本仓依赖方向是 <c>Core → Integrations</c>，只有 Abstractions 能同时被两边看见。
 /// <para>
 /// 三条与安全/稳定性有关的硬约束，改这里前先读：
 /// ① <b>Token 只发给 <c>api.github.com</c>，且只按请求附加</b>——绝不放进 <see cref="HttpClient.DefaultRequestHeaders"/>，
@@ -42,7 +27,7 @@ public sealed class TrendingException : Exception
 ///    一次性 <c>ReadAsStringAsync</c> 会把常驻进程直接撑爆。
 /// </para>
 /// </summary>
-public sealed class TrendingFetcher : IDisposable
+public sealed class TrendingFetcher : ITrendingSource, IDisposable
 {
     private const string SearchUrl = "https://api.github.com/search/repositories";
     private const string UserAgent = "StarMarkDesktop/1.0";
