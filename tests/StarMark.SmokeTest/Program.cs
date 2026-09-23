@@ -52,6 +52,11 @@ if (args.Length >= 1 && args[0] == "widgets")
     WidgetsCheck();
     return;
 }
+if (args.Length >= 1 && args[0] == "capture")
+{
+    await CaptureCheckAsync();
+    return;
+}
 
 await SmokeModeAsync();
 
@@ -616,4 +621,92 @@ static void WidgetsCheck()
         if (!cond) throw new InvalidOperationException($"WidgetsCheck FAIL: {name}");
         Console.WriteLine($"  ok - {name}");
     }
+}
+// ===== 真实截屏自检（capture）=====
+// GDI 抓屏与 PNG 编码没法在 xUnit 里跑（要真桌面），按可行性分析 §三-3 的约定走冒烟：
+// 截一帧 → 裁一小块 → 编 PNG → 再解码回来对尺寸与 alpha。任何一步不对都抛非零退出码。
+static async Task CaptureCheckAsync()
+{
+    // 与 StarMark.UI 的 app.manifest 同一档 DPI 感知：不设的话系统会把坐标虚拟化，
+    // 冒烟看到的尺寸就不再等价于应用里的真实尺寸
+    // 冒烟必须按应用本体的 DPI 形态跑（app.manifest 里是 PerMonitorV2），
+    // 否则这里看到的桌面尺寸与真机不是一回事，测出来的"通过"不作数
+    var dpiAware = CaptureSmokeNative.SetProcessDpiAwarenessContext(CaptureSmokeNative.PerMonitorV2);
+    Console.WriteLine($"DpiAwareness PMv2 set={dpiAware}");
+
+    var started = Stopwatch.GetTimestamp();
+    var result = StarMark.Integrations.Capture.GdiScreenCapture.CaptureVirtualScreen();
+    var elapsedMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+    Console.WriteLine($"Capture ok={result.Ok} elapsed={elapsedMs:F0}ms err={result.Error ?? "-"}");
+    if (!result.Ok || result.Frame is not { } frame) throw new Exception("截屏失败：" + (result.Error ?? "无帧"));
+    Console.WriteLine($"Frame bounds={frame.Bounds.X},{frame.Bounds.Y} {frame.Bounds.Width}x{frame.Bounds.Height} bytes={frame.Bgra.Length}");
+    if (frame.Bgra.Length != (long)frame.Width * frame.Height * 4) throw new Exception("像素缓冲长度与宽高不符");
+
+    var (distinct, brightest) = SurveyPixels(frame.Bgra);
+    Console.WriteLine($"Pixels distinct={distinct} brightest={brightest}");
+    if (brightest == 0) throw new Exception("整帧全黑——多半是独占全屏应用或桌面合成被关");
+    if (distinct < 2) throw new Exception("整帧只有一个颜色值——像素读数可疑（先怀疑位深或行序）");
+
+    // 中心 200×120 一块，走完整的"判定 → 偏移 → 裁剪 → 编码 → 解码"链
+    var selection = new StarMark.Abstractions.Capture.IntRect(
+        frame.Bounds.X + frame.Width / 2 - 100, frame.Bounds.Y + frame.Height / 2 - 60, 200, 120);
+    if (StarMark.Core.Capture.CaptureGeometry.CropProblem(selection, frame.Bounds) is { } problem)
+        throw new Exception("裁剪判定拒绝：" + problem);
+    var (offsetX, offsetY) = StarMark.Core.Capture.CaptureGeometry.CropOffset(selection, frame.Bounds);
+    if (offsetX < 0 || offsetY < 0) throw new Exception($"裁剪偏移为负（{offsetX},{offsetY}）——原点折算错了");
+
+    var crop = StarMark.Integrations.Capture.GdiScreenCapture.Crop(
+        new StarMark.Integrations.Capture.FrameCopyRequest(frame, offsetX, offsetY, selection.Width, selection.Height));
+    if (crop.Length != selection.Width * selection.Height * 4) throw new Exception("裁剪缓冲尺寸不符");
+
+    var path = Path.Combine(Path.GetTempPath(), $"starmark-smoke-{Guid.NewGuid():N}.png");
+    try
+    {
+        if (!await StarMark.Integrations.Capture.GdiScreenCapture.SavePngAsync(path, crop, selection.Width, selection.Height))
+            throw new Exception("PNG 落盘失败");
+        var info = await ProbePngAsync(path);
+        Console.WriteLine($"Png {path} decoded={info.Width}x{info.Height} alpha={info.Alpha} sizeOnDisk={new FileInfo(path).Length}");
+        if (info.Width != selection.Width || info.Height != selection.Height) throw new Exception("PNG 解码尺寸与选区不符");
+        // alpha 必须是 255：GDI 不写 alpha，没做"补不透明"这一步的话存出来是一张全透明图
+        if (info.Alpha != 255) throw new Exception($"PNG alpha={info.Alpha}，不是 255——存出来会是透明图");
+    }
+    finally { try { File.Delete(path); } catch { } }
+    Console.WriteLine("DONE");
+}
+
+/// <summary>粗采样整帧：不同颜色个数与最亮通道值（够判"全黑 / 只有一个值"，不为精确）。</summary>
+static (int Distinct, int Brightest) SurveyPixels(byte[] bgra)
+{
+    var seen = new HashSet<uint>();
+    var brightest = 0;
+    for (var i = 0; i + 3 < bgra.Length; i += 4 * 997)
+    {
+        var packed = (uint)(bgra[i] | (bgra[i + 1] << 8) | (bgra[i + 2] << 16));
+        seen.Add(packed);
+        brightest = Math.Max(brightest, Math.Max(bgra[i], Math.Max(bgra[i + 1], bgra[i + 2])));
+        if (seen.Count > 4096) break;
+    }
+    return (seen.Count, brightest);
+}
+
+static async Task<(int Width, int Height, int Alpha)> ProbePngAsync(string path)
+{
+    using var file = File.OpenRead(path);
+    using var stream = file.AsRandomAccessStream();
+    var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
+    // 用无参重载：拿"解码器自己认定的格式"，不拿我们期望的格式去问它——
+    // 传格式参数就会把不匹配的期望当成事实读，正是这类自检最容易被糊过去的地方
+    using var software = await decoder.GetSoftwareBitmapAsync();
+    var data = (await decoder.GetPixelDataAsync()).DetachPixelData();
+    Console.WriteLine($"Png format={software.BitmapPixelFormat}/{software.BitmapAlphaMode} bytes={data.Length}");
+    return (software.PixelWidth, software.PixelHeight, data.Length > 3 ? data[3] : -1);
+}
+
+/// <summary>冒烟进程要自己声明 DPI 感知，否则与 PerMonitorV2 的应用本体看到的桌面尺寸不是一回事。</summary>
+internal static class CaptureSmokeNative
+{
+    public static readonly IntPtr PerMonitorV2 = new(-4);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
 }
