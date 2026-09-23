@@ -21,6 +21,11 @@ public static class HotkeyActions
     public const string MainHide = "main.hide";
 
     public const string WidgetsShowAll = "widgets.showall";
+    /// <summary>
+    /// 置顶 / 不置顶<b>所有</b>组件（一个键来回）。与"显示/隐藏所有组件"是两件不同的事：
+    /// 前者只改层序（组件都还在，只是压到所有窗口之上或之下），后者改可见性。
+    /// </summary>
+    public const string WidgetsToggleTopmostAll = "widgets.topmostall";
     public const string WidgetsHideAll = "widgets.hideall";
     public const string WidgetsToggleAll = "widgets.toggleall";
 
@@ -45,7 +50,7 @@ public static class HotkeyActions
     public static string CategoryOf(string action, IReadOnlyList<WidgetLayout>? layouts = null)
     {
         if (action is MainToggle or MainShow or MainHide) return "主界面";
-        if (action is WidgetsToggleAll or WidgetsShowAll or WidgetsHideAll) return "组件总控";
+        if (action is WidgetsToggleAll or WidgetsShowAll or WidgetsHideAll or WidgetsToggleTopmostAll) return "组件总控";
         if (IsLayoutAction(action)) return "布局方案";
         foreach (var k in WidgetStorage.AllKinds)
             if (action == WidgetCreate(k) || action == WidgetShow(k) || action == WidgetHide(k) || action == WidgetToggle(k))
@@ -70,7 +75,7 @@ public static class HotkeyActions
         var list = new List<string>
         {
             MainToggle, MainShow, MainHide,
-            WidgetsToggleAll, WidgetsShowAll, WidgetsHideAll,
+            WidgetsToggleAll, WidgetsShowAll, WidgetsHideAll, WidgetsToggleTopmostAll,
         };
         foreach (var k in WidgetStorage.AllKinds)
         {
@@ -96,6 +101,7 @@ public static class HotkeyActions
             case WidgetsShowAll: return "显示所有组件";
             case WidgetsHideAll: return "隐藏所有组件";
             case WidgetsToggleAll: return "切换所有组件（显示 / 隐藏）";
+            case WidgetsToggleTopmostAll: return "切换所有组件置顶（置顶 / 不置顶）";
         }
 
         if (IsLayoutAction(action))

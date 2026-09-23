@@ -321,6 +321,7 @@ public partial class App : Application
                 hotkey.RegisterHandler(HotkeyActions.WidgetsShowAll, () => widgetManager.ShowAllAsync());
                 hotkey.RegisterHandler(HotkeyActions.WidgetsHideAll, () => widgetManager.HideAllAsync());
                 hotkey.RegisterHandler(HotkeyActions.WidgetsToggleAll, () => widgetManager.ToggleAllInstancesAsync());
+                hotkey.RegisterHandler(HotkeyActions.WidgetsToggleTopmostAll, () => widgetManager.ToggleAllTopmostAsync());
                 foreach (var k in WidgetStorage.AllKinds)
                 {
                     var kind = k;

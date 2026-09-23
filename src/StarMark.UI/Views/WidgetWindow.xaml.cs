@@ -1465,6 +1465,19 @@ public sealed partial class WidgetWindow : Window
         PersistBounds();
     }
 
+    /// <summary>本窗口当前是否置顶（供「组件总控」判断这一批的整体方向）。</summary>
+    public bool IsTopmost => _config.Topmost;
+
+    /// <summary>
+    /// 由「切换所有组件置顶」快捷键统一下发：<b>只改层序、不落盘</b>。
+    /// 落盘交给 WidgetManager 一次写完 —— 逐窗口各自 Load/Save 会把一次按键变成 N 次整档读写。
+    /// </summary>
+    public void ApplyGlobalTopmost(bool topmost)
+    {
+        _config.Topmost = topmost;
+        ApplyTopmost();
+    }
+
     private void WidgetWindow_Closed(object sender, WindowEventArgs args)
     {
         _clockWidget?.Stop();

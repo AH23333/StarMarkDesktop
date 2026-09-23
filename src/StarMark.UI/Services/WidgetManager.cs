@@ -263,6 +263,24 @@ public sealed class WidgetManager
     });
 
     /// <summary>
+    /// 切换"所有组件是否置顶于其它窗口"：一个键在置顶/不置顶之间来回。
+    /// 方向按"当前有没有任何一个处于置顶"决定（只要还有一个没置顶，这一键就是全部置顶），
+    /// 这样用户不必关心个别实例历史上被单独置顶过。落盘一次写完（见 <see cref="WidgetWindow.ApplyGlobalTopmost"/>）。
+    /// </summary>
+    public Task ToggleAllTopmostAsync() => OnUiAsync(() =>
+    {
+        if (_windows.Count == 0) return;
+        var wantTopmost = !_windows.Values.Any(w => w.IsTopmost);
+        foreach (var w in _windows.Values.ToList()) w.ApplyGlobalTopmost(wantTopmost);
+
+        var data = _storage.Load();
+        var changed = false;
+        foreach (var inst in data.Instances)
+            if (inst.Topmost != wantTopmost) { inst.Topmost = wantTopmost; changed = true; }
+        if (changed) _storage.Save(data);
+    });
+
+    /// <summary>
     /// 除指定实例外的**可见**组件窗口。供 Ctrl+拖动协同移动（对齐 DeskBox CoordinatedMove）招募参与者。
     /// 只在 UI 线程调用。
     /// </summary>

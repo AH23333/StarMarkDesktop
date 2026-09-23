@@ -1,5 +1,6 @@
 #nullable enable
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using Xunit;
 using StarMark.Core.Hotkeys;
@@ -249,6 +250,30 @@ public sealed class HotkeyBindingTests
             Assert.Equal(title, HotkeyActions.CategoryOf(HotkeyActions.WidgetToggle(kind)));
             Assert.Contains(title, order);
         }
+    }
+
+    /// <summary>
+    /// 目录完整性：每个动作都必须同时登记在 All() / CategoryOf() / DisplayName() 三处。
+    /// <para>
+    /// 加一个动作却漏登记其中一处时，设置页会渲染出一行"裸 id + 分类=其它"的条目——
+    /// 一个看得见、绑得上、却没人认得的入口（与"加一个可见条目类型＝立刻制造静默死菜单项"同形）。
+    /// 「切换所有组件置顶」就是本轮新加的动作，本条同时守住它。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void HotkeyActions_EveryActionIsFullyRegistered()
+    {
+        var layouts = new List<WidgetLayout> { new() { Id = "id-1", Name = "工作" } };
+        var all = HotkeyActions.All(layouts);
+
+        Assert.Equal(all.Count, all.Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(HotkeyActions.WidgetsToggleTopmostAll, all);
+        foreach (var action in all)
+        {
+            Assert.NotEqual("其它", HotkeyActions.CategoryOf(action, layouts));
+            Assert.NotEqual(action, HotkeyActions.DisplayName(action, layouts));   // 展示名不许退回裸 id
+        }
+        Assert.Equal("组件总控", HotkeyActions.CategoryOf(HotkeyActions.WidgetsToggleTopmostAll));
     }
 
     /// <summary>布局被删掉后它的动作还在磁盘上：展示名要说明"已删除"，而不是回显裸 id 或空串。</summary>
