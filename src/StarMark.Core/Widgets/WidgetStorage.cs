@@ -25,6 +25,7 @@ public enum WidgetKind
     Calc = 12,       // 计算器：表达式求值 + 单位换算 + 时间戳换算（离线静态表，无汇率）
     WorldClock = 13, // 世界时钟：多城市并列秒级刷新（桌面日历按裁决并入今日速览，不另立组件）
     Countdown = 14,  // 倒计时/纪念日：多条命名倒计时 + 每年重复 + 到点提醒
+    Focus = 15,      // 番茄钟：可自定义时长的专注/休息循环，可带本轮任务名（第一版不做统计）
 }
 
 /// <summary>计算器历史带的一行：算式原文 + 当次算出的答案（答案只作显示，重新计算以引擎为准）。</summary>
@@ -159,6 +160,10 @@ public sealed class WidgetInstanceConfig
     /// <summary>该实例自己的倒计时/纪念日列表。空与 null 都表示"没有项目"（这类内容没有合理的默认值可预置）。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<CountdownItem>? Countdowns { get; set; }
+
+    /// <summary>番茄钟时长设置（只存时长；进行中的轮次与统计刻意不存，见 <c>FocusTimer</c>）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public FocusTimerConfig? Focus { get; set; }
 
     // ── 差异化条目格的每实例查询配置 ──
     // 可空、向后兼容：旧实例缺这些字段时反序列化为 null，不影响其它类型。

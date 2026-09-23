@@ -101,6 +101,9 @@ internal static class ItemContextMenu
             flyout.Items.Add(Item("删除这条历史", (_, _) => ItemCardActions.DeleteClipboard(vm)));
         if (vm.CanSendToWidget)
             flyout.Items.Add(Item("发送到桌面 · 快捷启动", (_, _) => _ = SendToQuickLaunchAsync(vm)));
+        // 只对"这是一条待办"出现：别的类型没有"这一项要做多久"的语境，出现即成为点了没反应的死项。
+        if (vm.Type == ItemType.Todo)
+            flyout.Items.Add(Item("开始专注这一项", (_, _) => _ = StartFocusAsync(vm)));
         flyout.Items.Add(Item("编辑笔记", (_, _) => ItemCardActions.EditNote(root, vm)));
         flyout.Items.Add(Item("编辑标签", (_, _) => ItemCardActions.EditTags(root, vm)));
         flyout.Items.Add(Item(vm.HideMenuText, (_, _) => _ = ItemCardActions.ToggleHidden(root, vm)));
@@ -178,6 +181,23 @@ internal static class ItemContextMenu
         catch (Exception ex)
         {
             StarLog.Error($"发送到快捷启动失败 (id={vm.Id})", ex);
+        }
+    }
+
+    /// <summary>
+    /// 从待办条目拉起番茄钟。成败由那个组件自己显示（窗口会被唤起到前台，提示文本就在里面），
+    /// 这里只兜住异常——两处各说一句会互相矛盾。
+    /// </summary>
+    private static async Task StartFocusAsync(ItemCardViewModel vm)
+    {
+        try
+        {
+            var mgr = App.Services.GetRequiredService<WidgetManager>();
+            await mgr.StartFocusAsync(vm.Title);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error($"从待办开始专注失败 (id={vm.Id})", ex);
         }
     }
 

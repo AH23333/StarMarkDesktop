@@ -179,5 +179,10 @@ public sealed class WidgetRegistry
         // 存"墙上时钟 + 时区"而非 UTC 瞬间：每年重复项若按 UTC 月日推进，跨时区会把纪念日错开一整天。
         yield return new WidgetDescriptor(
             WidgetKind.Countdown, "倒计时", "⏳", 300, 400);
+
+        // ── 效率组件批次 LD：番茄钟 ──
+        // 纯状态机在 Core（FocusTimer），UI 只传 now 与显示文本；第一版不留统计，重启即回空闲。
+        yield return new WidgetDescriptor(
+            WidgetKind.Focus, "番茄钟", "🍅", 250, 330, IsResizable: false);
     }
 }

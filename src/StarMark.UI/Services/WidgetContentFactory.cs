@@ -66,6 +66,7 @@ public sealed class WidgetContentFactory
         factory.Register(WidgetKind.Calc, w => new CalcWidget(w.Config, w.Manager));
         factory.Register(WidgetKind.WorldClock, w => new WorldClockWidget(w.Config, w.Manager));
         factory.Register(WidgetKind.Countdown, w => new CountdownWidget(w.Config, w.Manager));
+        factory.Register(WidgetKind.Focus, w => new FocusTimerWidget(w.Config, w.Manager));
         return factory;
     }
 }

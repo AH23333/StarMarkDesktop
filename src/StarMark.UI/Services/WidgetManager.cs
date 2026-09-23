@@ -873,6 +873,40 @@ public sealed class WidgetManager
             _storage.Save(data);
         });
 
+    /// <summary>保存番茄钟时长设置（只存时长；进行中的轮次刻意不持久化）。</summary>
+    public Task SaveFocusConfigAsync(string instanceId, FocusTimerConfig config)
+        => OnUiAsync(() =>
+        {
+            var data = _storage.Load();
+            var inst = data.Instances.FirstOrDefault(i => i.Id == instanceId);
+            if (inst is null) return;
+            inst.Focus = new FocusTimerConfig { FocusMinutes = config.FocusMinutes, RestMinutes = config.RestMinutes };
+            _storage.Save(data);
+        });
+
+    /// <summary>
+    /// 从别处（待办条目右键「开始专注」）拉起番茄钟：落到首个番茄钟实例，无则新建并显示。
+    /// <b>成败与原因由那个组件自己显示在界面上</b>（本窗口被唤起到前台，提示文本就在里面）——
+    /// 返回值只用于日志，不要在调用点再叠一层弹窗：两处都说一遍会互相矛盾。
+    /// </summary>
+    public Task<bool> StartFocusAsync(string? title) => OnUiAsync(() =>
+    {
+        var data = _storage.Load();
+        var inst = data.Instances.FirstOrDefault(i => i.Kind == WidgetKind.Focus);
+        if (inst is null)
+        {
+            inst = CreateInstanceConfig(data, WidgetKind.Focus);
+            data.Instances.Add(inst);
+            _storage.Save(data);
+            InstancesChanged?.Invoke();
+        }
+        ShowInternal(inst.Id);   // 窗口没有就创建、隐藏的就唤起到前台
+        var started = _windows.TryGetValue(inst.Id, out var win)
+            && win.FindContent<StarMark.UI.Views.FocusTimerWidget>()?.StartFromTodo(title) == true;
+        if (!started) StarLog.Info("番茄钟未能开始本轮（组件窗口创建失败，或本轮已在计时）");
+        return started;
+    });
+
     /// <summary>从主窗口卡片「发送到快捷启动」：落到首个快捷启动实例，无则新建一个实例并显示。</summary>
     public async Task<bool> AddLinkToQuickLaunchAsync(string title, string uri)
     {

@@ -233,6 +233,13 @@ public sealed partial class WidgetWindow : Window
     /// <summary>该实例的持久化配置（位置/尺寸/置顶，引用自存储数据，原地改动后由 PersistBounds 落盘）。</summary>
     public WidgetInstanceConfig Config => _config;
 
+    /// <summary>
+    /// 取本窗口内的组件内容实例（跨组件联动用，如待办右键「开始专注」要把任务名交给番茄钟）。
+    /// 类型不对时返回 null 而不是抛——调用方本来就该准备着"这个实例没开番茄钟"。
+    /// 名字带 Find：WinUI 的 <c>Window.Content</c> 已被宿主占用，同名会隐藏它。
+    /// </summary>
+    public T? FindContent<T>() where T : UIElement => ContentHost.Children.OfType<T>().FirstOrDefault();
+
     /// <summary>显示窗口（首次显示时完成样式、位置、置顶初始化）。</summary>
     public void Reveal()
     {
