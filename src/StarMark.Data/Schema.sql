@@ -11,7 +11,7 @@ PRAGMA synchronous = NORMAL;
 -- ============================================================
 CREATE TABLE IF NOT EXISTS items (
     id              INTEGER PRIMARY KEY,
-    type            TEXT    NOT NULL,                 -- 'file' | 'bookmark' | 'github_star' | 'clipboard'
+    type            TEXT    NOT NULL,                 -- 枚举名小写：'file' | 'bookmark' | 'githubstar' | 'clipboard' | 'todo' | 'note'（写入方是 Type.ToString().ToLowerInvariant()，见 ItemRepository）
     source          TEXT    NOT NULL,                 -- 'filesystem' | 'chrome' | 'github' | 'ditto' ...
     source_id       TEXT,                             -- 源内唯一标识
     title           TEXT    NOT NULL DEFAULT '',
