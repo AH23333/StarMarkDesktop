@@ -139,16 +139,16 @@ public sealed class WidgetRegistry
 
         // ── 差异化条目格（StarMark 护城河：全部基于统一 items 表，DeskBox 结构上做不到）──
         yield return new WidgetDescriptor(
-            WidgetKind.TagGrid, "标签格", "🏷️", 300, 400);
+            WidgetKind.TagGrid, "标签", "🏷️", 300, 400);
 
         yield return new WidgetDescriptor(
-            WidgetKind.Clipboard, "剪贴板格", "📋", 320, 420);
+            WidgetKind.Clipboard, "剪贴板", "📋", 320, 420);
 
         yield return new WidgetDescriptor(
-            WidgetKind.Activity, "最近活动格", "🕘", 300, 400);
+            WidgetKind.Activity, "最近活动", "🕘", 300, 400);
 
         yield return new WidgetDescriptor(
-            WidgetKind.Pinned, "置顶条目格", "⏫", 300, 380);
+            WidgetKind.Pinned, "置顶条目", "⏫", 300, 380);
 
         // ── Phase C：今日速览（Glance）──
         // 节日 / 农历算法照搬 DeskBox 的 GlanceFestivalService（基于 .NET 内置 ChineseLunisolarCalendar）。

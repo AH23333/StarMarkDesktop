@@ -7,18 +7,18 @@ using StarMark.Abstractions;
 
 namespace StarMark.Core.Widgets;
 
-/// <summary>桌面组件类型（对标 DeskBox：快捷启动/待办/随记/时钟/搜索 + 差异化条目格）。</summary>
+/// <summary>桌面组件类型（对标 DeskBox：快捷启动/待办/随记/时钟/搜索 + 差异化条目组件）。</summary>
 public enum WidgetKind
 {
-    QuickLaunch = 0, // 快捷启动格（收藏入口 + 置顶条目）
+    QuickLaunch = 0, // 快捷启动：仅用户自定义快捷入口（置顶条目改由 Pinned 组件负责，批次 IX）
     Todo = 1,        // 待办
     QuickNote = 2,   // 随记
     Clock = 3,       // 时钟/日期
     Search = 4,      // 快捷搜索（唤起主窗口并搜索）
-    TagGrid = 5,     // 标签格：某标签条目常驻桌面（差异化护城河）
-    Clipboard = 6, // 剪贴板格：本机复制历史常驻（原「搜索结果格」，与快捷搜索定位重叠，经用户裁决改为剪贴板；wire 值 6 不变 ⇒ 老配置自动变成本组件）
-    Activity = 7,    // 最近活动格：按 updated_at 展示最近条目
-    Pinned = 8,      // 置顶条目格：pinned=1 的条目
+    TagGrid = 5,     // 标签：某标签条目常驻桌面（差异化护城河）
+    Clipboard = 6,   // 剪贴板：本机复制历史常驻（前身是「搜索结果格」，与快捷搜索定位重叠 ⇒ 经用户裁决取代；wire 值 6 不变 ⇒ 老配置自动变成本组件）
+    Activity = 7,    // 最近活动：用户主动增/删/改的事件流（#51），不是"最近更新的条目"
+    Pinned = 8,      // 置顶条目：pinned=1 的条目
     Glance = 9,      // 今日速览（Glance）：日期 + 农历/节日 + 下一个节日倒计时 + 常看条目
     Weather = 10,    // 天气：Open-Meteo 实况 + 未来三天预报（免费无 Key）
     Music = 11,      // 音乐：Windows 系统媒体传输控制（SMTC）的播放控制与曲目显示

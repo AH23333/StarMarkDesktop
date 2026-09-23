@@ -55,7 +55,7 @@ public sealed class TrayWidgetMenuTests
         Assert.Equal(titles.Count, titles.Select(t => t.Kind).Distinct().Count());
 
         // 展示名带图标（DisplayTitle = "{Glyph} {Title}"），用户在托盘里就靠它认出是哪一格。
-        Assert.Equal("📋 剪贴板格", WidgetStorage.KindTitle(WidgetKind.Clipboard));
+        Assert.Equal("📋 剪贴板", WidgetStorage.KindTitle(WidgetKind.Clipboard));
         Assert.StartsWith("★", WidgetStorage.KindTitle(WidgetKind.QuickLaunch));
     }
 

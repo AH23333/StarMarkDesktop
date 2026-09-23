@@ -112,4 +112,13 @@ public sealed class WidgetRegistryTests
             new[] { WidgetKind.Todo },
             registry.GetCreateEntryDescriptors().Select(d => d.Kind).ToArray());
     }
+
+    [Fact]
+    public void DisplayTitles_NeverCarryTheGridSuffix()
+    {
+        // 用户口径（批次 IY）：组件名统一不带「格」字。名字只在描述符里写一次，
+        // 托盘子菜单 / 新建入口 / 组件标题栏 / 快照摘要全部由它派生 ⇒ 钉这一处就等于钉住全域。
+        foreach (var d in WidgetRegistry.Default.All)
+            Assert.False(d.Title.Contains('格'), $"组件「{d.Kind}」的显示名带了「格」字：{d.Title}");
+    }
 }
