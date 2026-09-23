@@ -14,19 +14,41 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- 日期头：大号日号 + 年月 / 星期，下面跟农历与节日倒计时 -->
+        <!-- 日期头：大号日号 + 年月 / 星期，下面跟农历与节日倒计时；右上角可切月历（发起人裁决：日历不另立组件） -->
         <StackPanel Grid.Row="0" Spacing="4">
-            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
                 <TextBlock x:Name="DayBlock" Grid.Column="0" Text="18" FontSize="42" FontWeight="Bold"
                            VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                     <TextBlock x:Name="MonthBlock" Text="2026年9月" FontSize="13"/>
                     <TextBlock x:Name="WeekBlock" Text="星期五" FontSize="12" Opacity="0.7"/>
                 </StackPanel>
+                <ToggleButton Grid.Column="2" x:Name="CalendarToggle" Content="月历" FontSize="11"
+                              Padding="8,2,8,2" VerticalAlignment="Top" Checked="CalendarToggle_Changed"
+                              Unchecked="CalendarToggle_Changed"
+                              ToolTipService.ToolTip="在这一格里翻看整月（含节日标记）"/>
             </Grid>
 
-            <TextBlock x:Name="LunarBlock" Text="农历八月初八" FontSize="13" TextWrapping="Wrap"/>
-            <TextBlock x:Name="CountdownBlock" Text="" FontSize="12" Opacity="0.75" TextWrapping="Wrap"/>
+            <StackPanel x:Name="DateHead" Spacing="4">
+                <TextBlock x:Name="LunarBlock" Text="农历八月初八" FontSize="13" TextWrapping="Wrap"/>
+                <TextBlock x:Name="CountdownBlock" Text="" FontSize="12" Opacity="0.75" TextWrapping="Wrap"/>
+            </StackPanel>
+
+            <!-- 月历：表头固定周日…周六，格子由代码按 MonthGrid 生成（补齐整周 ⇒ 每行的星期都对得上表头） -->
+            <StackPanel x:Name="CalendarBlock" Spacing="4" Visibility="Collapsed">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="4">
+                    <Button Grid.Column="0" Content="‹" FontSize="12" Padding="8,0,8,0" Click="PrevMonth_Click"
+                            ToolTipService.ToolTip="上一月"/>
+                    <TextBlock Grid.Column="1" x:Name="CalendarTitle" Text="2026年9月" FontSize="12"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Button Grid.Column="2" Content="›" FontSize="12" Padding="8,0,8,0" Click="NextMonth_Click"
+                            ToolTipService.ToolTip="下一月"/>
+                    <Button Grid.Column="3" Content="今天" FontSize="11" Padding="6,0,6,0" Click="TodayMonth_Click"
+                            ToolTipService.ToolTip="回到本月"/>
+                </Grid>
+                <Grid x:Name="CalendarHost"/>
+                <TextBlock Text="· 有圆点 = 当天是节日" FontSize="9" Opacity="0.5"/>
+            </StackPanel>
         </StackPanel>
 
         <!--

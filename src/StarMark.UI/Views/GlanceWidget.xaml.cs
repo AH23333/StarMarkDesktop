@@ -3,8 +3,11 @@ using System;
 using System.Linq;
 using System.Threading;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Shapes;
 using StarMark.Abstractions;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
@@ -125,7 +128,134 @@ public sealed partial class GlanceWidget : UserControl
     {
         // 只在跨天时重算（农历/节日查询涉及 ChineseLunisolarCalendar，没必要每帧算）
         var today = DateOnly.FromDateTime(DateTime.Now);
-        if (today != _shownDate) RefreshDate();
+        if (today != _shownDate)
+        {
+            RefreshDate();
+            // 月历开着时跨天必须把"今天"这一格挪过去；停在别的月份则不动（用户正在看那一月）
+            if (_calendarOpen && today.Month == _calendarMonth && today.Year == _calendarYear) RebuildCalendar();
+        }
+    }
+
+    // ───────────────────────── 月历视图（D2 裁决：不另立组件，就在这一格里翻） ─────────────────────────
+
+    private bool _calendarOpen;
+    private int _calendarYear;
+    private int _calendarMonth;
+
+    private void CalendarToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        _calendarOpen = CalendarToggle.IsChecked == true;
+        // 切换而不是叠加：大号日号那一半与月历同时存在会把「常看」挤出可见区
+        DateHead.Visibility = _calendarOpen ? Visibility.Collapsed : Visibility.Visible;
+        CalendarBlock.Visibility = _calendarOpen ? Visibility.Visible : Visibility.Collapsed;
+        if (!_calendarOpen) return;
+        if (_calendarYear == 0)
+        {
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            (_calendarYear, _calendarMonth) = (today.Year, today.Month);
+        }
+        RebuildCalendar();
+    }
+
+    private void PrevMonth_Click(object sender, RoutedEventArgs e) => ShiftCalendar(-1);
+
+    private void NextMonth_Click(object sender, RoutedEventArgs e) => ShiftCalendar(1);
+
+    private void TodayMonth_Click(object sender, RoutedEventArgs e)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        (_calendarYear, _calendarMonth) = (today.Year, today.Month);
+        RebuildCalendar();
+    }
+
+    private void ShiftCalendar(int delta)
+    {
+        (_calendarYear, _calendarMonth) = MonthGrid.Shift(_calendarYear, _calendarMonth, delta);
+        RebuildCalendar();
+    }
+
+    /// <summary>
+    /// 按 <see cref="MonthGrid"/> 重画整月。网格几何（周日首排、补齐整周）不在这里判——
+    /// 那部分已经有单测钉住，界面只负责把它摆出来。
+    /// </summary>
+    private void RebuildCalendar()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var rows = MonthGrid.Build(_calendarYear, _calendarMonth, today);
+        CalendarTitle.Text = $"{_calendarYear}年{_calendarMonth}月";
+        CalendarHost.Children.Clear();
+        CalendarHost.ColumnDefinitions.Clear();
+        CalendarHost.RowDefinitions.Clear();
+
+        for (var c = 0; c < MonthGrid.Columns; c++)
+            CalendarHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        // 第 0 行是星期表头，之后每行七天
+        CalendarHost.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        foreach (var _ in rows) CalendarHost.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        for (var c = 0; c < MonthGrid.Columns; c++)
+        {
+            var head = new TextBlock
+            {
+                Text = MonthGrid.WeekHeaders[c],
+                FontSize = 10,
+                Opacity = c is 0 or 6 ? 0.75 : 0.55,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            };
+            Grid.SetRow(head, 0);
+            Grid.SetColumn(head, c);
+            CalendarHost.Children.Add(head);
+        }
+
+        for (var r = 0; r < rows.Count; r++)
+        {
+            for (var c = 0; c < rows[r].Count; c++)
+            {
+                var cell = BuildCalendarCell(rows[r][c]);
+                Grid.SetRow(cell, r + 1);
+                Grid.SetColumn(cell, c);
+                CalendarHost.Children.Add(cell);
+            }
+        }
+    }
+
+    private FrameworkElement BuildCalendarCell(MonthCell cell)
+    {
+        var text = new TextBlock
+        {
+            Text = cell.Day.ToString(),
+            FontSize = 11,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontWeight = cell.IsToday ? FontWeights.Bold : FontWeights.Normal,
+            Opacity = cell.InMonth ? 1d : 0.35d,
+        };
+
+        var body = new Grid();
+        body.Children.Add(text);
+        if (cell.IsFestival)
+        {
+            // 节日只给一个圆点：300 宽的小格里塞不下节日名，而"哪天有节日"正是翻月时要看的
+            body.Children.Add(new Ellipse
+            {
+                Width = 3,
+                Height = 3,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 2),
+                Fill = ThemeBrush.For(ActualTheme, "AppAccentBrush") ?? new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            });
+        }
+
+        return new Border
+        {
+            Child = body,
+            Padding = new Thickness(0, 3, 0, 3),
+            CornerRadius = new CornerRadius(3),
+            Background = cell.IsToday
+                ? ThemeBrush.For(ActualTheme, "AppAccentSoftBrush") ?? new SolidColorBrush(Microsoft.UI.Colors.Transparent)
+                : new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+        };
     }
 
     private async System.Threading.Tasks.Task LoadItemsAsync()
