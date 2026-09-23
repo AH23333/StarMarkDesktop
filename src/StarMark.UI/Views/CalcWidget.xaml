@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <UserControl
     x:Class="StarMark.UI.Views.CalcWidget"
+    FontSize="12"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:StarMark.UI.ViewModels">
 
+    <!--
+        组件内字号只走这一架梯子：14 主数字 / 13 输入 / 12 正文与下拉 / 11 按钮与小标题 / 10 注释。
+        根元素（UserControl）上的 FontSize 是兜底基准：漏写字号的元素继承组件正文 12，而不是 WinUI 的 14。
+        页签走 WidgetTabs：WinUI 默认页签是 24px，比组件正文大 80%，真机反馈"字都偏大"就出在那儿。
+    -->
     <Grid Padding="12,4,12,10">
-        <Pivot x:Name="Tabs">
+        <Pivot x:Name="Tabs" Style="{StaticResource WidgetTabs}">
             <!-- ═══════════ 计算 ═══════════ -->
             <PivotItem Header="计算">
                 <StackPanel Spacing="8">
@@ -15,7 +21,7 @@
                              Padding="8,6,8,6" TextChanged="ExprBox_TextChanged"
                              KeyDown="ExprBox_KeyDown"/>
                     <TextBlock Text="{x:Bind ViewModel.CalcResult, Mode=OneWay}"
-                               FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                               FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"/>
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <Button Content="复制结果" FontSize="11" Padding="10,4,10,4"
                                 Style="{StaticResource WidgetActionButton}" Click="CopyResult_Click"/>

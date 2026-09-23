@@ -97,6 +97,26 @@
         <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}"/>
     </Style>
 
+    <!--
+        组件内的分页（Pivot）。真机反馈"计算器组件内文字依旧很大，除了历史区"的真相在这里：
+        全仓只有计算器用 Pivot，而 WinUI 的页签默认是 24px + 上下大留白（PivotHeaderItemFontSize），
+        装进 300px 宽的组件里时，页签比组件正文大出 80%，视觉上"整个组件字都偏大"——
+        而历史区文字继承所在按钮的 11px，所以恰好是唯一正常的一块。
+        这里不新建画笔也不改控件模板，只把页签内容换成组件正文档的文本：
+        HeaderTemplate 里的 TextBlock 显式给字号，压过 PivotHeaderItem 样式带来的 24px。
+    -->
+    <Style x:Key="WidgetTabs" TargetType="Pivot">
+        <Setter Property="Margin" Value="0,-12,0,0"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="HeaderTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" FontSize="12" Opacity="0.85"/>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- 文本样式 -->
     <Style x:Key="BodyText" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource DefaultFontFamily}"/>
