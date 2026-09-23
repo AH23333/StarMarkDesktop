@@ -8,7 +8,9 @@
         <Grid.RowDefinitions>
             <!-- 0：日期头（固定高度） -->
             <RowDefinition Height="Auto"/>
-            <!-- 1：常看条目（吃掉剩余高度，内部 ScrollViewer 才能拿到有界高度） -->
+            <!-- 1：GitHub 热榜（可选，Auto = 关着时整块 0 高度，不跟「常看」抢空间） -->
+            <RowDefinition Height="Auto"/>
+            <!-- 2：常看条目（吃掉剩余高度，内部 ScrollViewer 才能拿到有界高度） -->
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -27,8 +29,29 @@
             <TextBlock x:Name="CountdownBlock" Text="" FontSize="12" Opacity="0.75" TextWrapping="Wrap"/>
         </StackPanel>
 
+        <!--
+            GitHub 热榜块（用户裁决：在「常看」上面；默认日榜）。组件小 ⇒ 不放图标按钮，
+            Star / 收进收藏 走行右键（与主窗同一菜单工厂 ItemContextMenu）。
+        -->
+        <StackPanel x:Name="TrendingBlock" Grid.Row="1" Spacing="6" Visibility="Collapsed">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBlock Grid.Column="0" Text="GitHub 热榜 · 今日" FontSize="12" Opacity="0.6"/>
+                <Button Grid.Column="1" x:Name="TrendingRefreshButton" Content="刷新" FontSize="11"
+                        Padding="6,2" Click="TrendingRefresh_Click"
+                        ToolTipService.ToolTip="强制重抓今日榜（每个周期每天至多自动抓一次）"/>
+            </Grid>
+            <ScrollViewer MaxHeight="168" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="TrendingHost" Spacing="4"/>
+            </ScrollViewer>
+            <!-- 空与失败分开说：抓失败时留一句原因，不让用户以为"今天 GitHub 没有热榜" -->
+            <TextBlock x:Name="TrendingEmpty" Text="" FontSize="11" Opacity="0.6" TextWrapping="Wrap"
+                       Visibility="Collapsed"/>
+            <TextBlock x:Name="TrendingStatus" Text="" FontSize="10" Opacity="0.5" TextWrapping="Wrap"
+                       Visibility="Collapsed"/>
+        </StackPanel>
+
         <!-- 常看条目：ScrollViewer 直接挂在 Grid 行内（绝不能包进 StackPanel，否则不滚动，见踩坑 #61） -->
-        <Grid Grid.Row="1" RowSpacing="6">
+        <Grid Grid.Row="2" RowSpacing="6">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
