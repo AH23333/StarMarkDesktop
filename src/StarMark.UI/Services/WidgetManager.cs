@@ -595,6 +595,7 @@ public sealed class WidgetManager
                 GridTag = inst.GridTag,
                 CalcHistory = inst.CalcHistory?.Select(h => new CalcHistoryItem { Expression = h.Expression, Answer = h.Answer }).ToList(),
                 WorldClockZones = inst.WorldClockZones?.Select(c => new WorldClockCity(c.ZoneId, c.Name)).ToList(),
+                Countdowns = inst.Countdowns?.Select(c => c.Clone()).ToList(),
             });
             instanceIds.Add(inst.Id);
             perKind[inst.Kind] = idx + 1;
@@ -679,6 +680,7 @@ public sealed class WidgetManager
                 // null 也要照搬：那一刻这台计算器没有历史，还原后就不该留着之后算出来的条目
                 inst.CalcHistory = entry.CalcHistory?.Select(h => new CalcHistoryItem { Expression = h.Expression, Answer = h.Answer }).ToList();
                 inst.WorldClockZones = entry.WorldClockZones?.Select(c => new WorldClockCity(c.ZoneId, c.Name)).ToList();
+                inst.Countdowns = entry.Countdowns?.Select(c => c.Clone()).ToList();
                 restore.Add((inst.Id, entry.LocalItems));
             }
             // 快照还原的是「当时那一整套摆位」，与"最后一次选择的布局"已无对应关系；
@@ -857,6 +859,17 @@ public sealed class WidgetManager
             var inst = data.Instances.FirstOrDefault(i => i.Id == instanceId);
             if (inst is null) return;
             inst.WorldClockZones = cities.ToList();
+            _storage.Save(data);
+        });
+
+    /// <summary>保存倒计时列表（整表替换）。到点提醒键写在条目里，因此刷新循环触发提醒后也要走这里落一次盘。</summary>
+    public Task SaveCountdownsAsync(string instanceId, IReadOnlyList<CountdownItem> items)
+        => OnUiAsync(() =>
+        {
+            var data = _storage.Load();
+            var inst = data.Instances.FirstOrDefault(i => i.Id == instanceId);
+            if (inst is null) return;
+            inst.Countdowns = items.ToList();
             _storage.Save(data);
         });
 

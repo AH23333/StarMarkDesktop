@@ -174,5 +174,10 @@ public sealed class WidgetRegistry
         // 只用 Windows 自带时区 Id（不引 TimeZoneConverter）；缺时区的极端环境逐行给原因，不静默少一行。
         yield return new WidgetDescriptor(
             WidgetKind.WorldClock, "世界时钟", "🌍", 300, 360);
+
+        // ── 效率组件批次 LC：倒计时 / 纪念日 ──
+        // 存"墙上时钟 + 时区"而非 UTC 瞬间：每年重复项若按 UTC 月日推进，跨时区会把纪念日错开一整天。
+        yield return new WidgetDescriptor(
+            WidgetKind.Countdown, "倒计时", "⏳", 300, 400);
     }
 }

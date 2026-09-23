@@ -89,6 +89,10 @@ public sealed class WidgetSnapshotEntry : IWidgetGeometryEntry
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<WorldClockCity>? WorldClockZones { get; set; }
 
+    /// <summary>倒计时条目（连"哪一轮已提醒过"一起回滚：回到那一刻，就该按那一刻的提醒状态）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<CountdownItem>? Countdowns { get; set; }
+
     public List<SnapshotLocalItem> LocalItems { get; set; } = new();
 }
 

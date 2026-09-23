@@ -48,6 +48,16 @@ public sealed partial class MainWindow : Window
     // （文件夹 / 标签 / 已隐藏 / 活动）全停在旧数据，要切页或重启才更新。这里补上订阅。
     private DataChangeReloader? _dataSync;
 
+    /// <summary>
+    /// 组件侧的托盘气泡出口（倒计时到点等）。<b>返回是否真的发出去了</b>：托盘没启用时是 false，
+    /// 调用方据此留下替代证据（日志 + 组件内的常驻高亮），而不是以为"已经提醒过用户了"。
+    /// </summary>
+    public bool TryShowTrayNotification(string title, string message)
+    {
+        var tray = _trayHost;
+        return tray is not null && tray.ShowNotification(title, message);
+    }
+
     public MainWindow()
     {
         InitializeComponent();

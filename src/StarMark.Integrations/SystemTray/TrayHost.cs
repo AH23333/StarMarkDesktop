@@ -98,9 +98,14 @@ public sealed class TrayHost : IDisposable
         }
     }
 
-    public void ShowNotification(string title, string message)
+    /// <summary>
+    /// 托盘气泡。<b>返回是否真的发出去了</b>：托盘没启用（未 Initialize 成功 / 用户关了托盘 / 图标被系统
+    /// 隐藏）时这里发不出去，而调用方（倒计时到点提醒）必须知道这一点才能留下别的证据——
+    /// 只有 void 返回值时，"提醒了"与"什么都没发生"在日志里长得一模一样。
+    /// </summary>
+    public bool ShowNotification(string title, string message)
     {
-        if (!_added) return;
+        if (!_added) return false;
         try
         {
             var data = new NOTIFYICONDATA
@@ -113,9 +118,13 @@ public sealed class TrayHost : IDisposable
                 szInfo = message.Length > 255 ? message[..255] : message,
                 dwInfoFlags = NIIF_INFO,
             };
-            Shell_NotifyIconW(NIM_MODIFY, ref data);
+            return Shell_NotifyIconW(NIM_MODIFY, ref data);
         }
-        catch (Exception ex) { StarLog.Warn($"[TrayHost] 通知失败: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"[TrayHost] 通知失败: {ex.Message}");
+            return false;
+        }
     }
 
     private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)

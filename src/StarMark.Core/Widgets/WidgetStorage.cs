@@ -24,6 +24,7 @@ public enum WidgetKind
     Music = 11,      // 音乐：Windows 系统媒体传输控制（SMTC）的播放控制与曲目显示
     Calc = 12,       // 计算器：表达式求值 + 单位换算 + 时间戳换算（离线静态表，无汇率）
     WorldClock = 13, // 世界时钟：多城市并列秒级刷新（桌面日历按裁决并入今日速览，不另立组件）
+    Countdown = 14,  // 倒计时/纪念日：多条命名倒计时 + 每年重复 + 到点提醒
 }
 
 /// <summary>计算器历史带的一行：算式原文 + 当次算出的答案（答案只作显示，重新计算以引擎为准）。</summary>
@@ -154,6 +155,10 @@ public sealed class WidgetInstanceConfig
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<WorldClockCity>? WorldClockZones { get; set; }
+
+    /// <summary>该实例自己的倒计时/纪念日列表。空与 null 都表示"没有项目"（这类内容没有合理的默认值可预置）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<CountdownItem>? Countdowns { get; set; }
 
     // ── 差异化条目格的每实例查询配置 ──
     // 可空、向后兼容：旧实例缺这些字段时反序列化为 null，不影响其它类型。
