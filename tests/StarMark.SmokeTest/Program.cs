@@ -260,17 +260,18 @@ static byte[] BuildDropFiles(string path)
     return buffer;
 }
 
-// ===== 托盘/全局热键宿主（tray） =====
+// ===== 托盘宿主（tray） =====
 static void TraySmokeCheck()
 {
     Trace.Listeners.Add(new TextWriterTraceListener(Console.Out));
     using var host = new StarMark.Integrations.SystemTray.TrayHost();
-    var ok = host.Initialize(registerHotkey: false);
+    var ok = host.Initialize();
     Console.WriteLine($"Tray host available: {ok}");
     if (!ok) throw new Exception("托盘宿主初始化失败");
 
-    host.RegisterGlobalHotKey();
-    Console.WriteLine("Hotkey register requested (Ctrl+Alt+Space)");
+    // 全局热键不在这里验：批次 JB 起 TrayHost 不再注册热键（它那份同名方法早已是只打日志的空壳），
+    // 注册统一由 StarMark.UI 的 HotkeyService 挂在主窗口句柄上——冒烟程序没有那个窗口，验不了。
+    Console.WriteLine("Hotkey registration owned by HotkeyService (not covered by this smoke check)");
     host.ShowNotification("SmokeTest", "托盘冒烟自检");
     Console.WriteLine("Tray balloon modify: ok");
     Console.WriteLine("DONE");
