@@ -59,6 +59,13 @@ public partial class TrendingPageViewModel : ObservableObject
     /// <summary>有没有配 Token：只决定那一行提示与「去设置配 Token」按钮，<b>不</b>决定 Star 按钮能不能点。</summary>
     [ObservableProperty] private bool _hasToken;
 
+    /// <summary>
+    /// 回灌初值期间抑制"筛选变了就重载"。没有这个闸门，构造里给 PeriodCode/Language 赋值就会
+    /// 立刻发起一次抓取，紧接着页面 OnNavigatedTo 又发一次 ⇒ 两次并发、前一次被取消，
+    /// 状态行还会被"已取消本次抓取"盖掉真正的原因（与设置页 _suppressTrendingApply 同一口径）。
+    /// </summary>
+    private bool _suppressReload = true;
+
     public TrendingPageViewModel()
     {
         _service = App.Services.GetRequiredService<TrendingService>();
@@ -70,6 +77,7 @@ public partial class TrendingPageViewModel : ObservableObject
         PeriodCode = TrendingPeriods.Code(_settings.LoadTrendingPeriod());
         Language = _settings.LoadTrendingLanguage();
         HasToken = !string.IsNullOrWhiteSpace(_githubOptions.Token);
+        _suppressReload = false;
 
         // 动作结果的唯一出口：主窗按钮、卡片右键、组件右键三处都广播到这里，页面只订阅一处。
         TrendingItemActions.NoticeRaised += m => StatusText = m;
@@ -86,8 +94,16 @@ public partial class TrendingPageViewModel : ObservableObject
     partial void OnStatusTextChanged(string value) => OnPropertyChanged(nameof(HasStatus));
     partial void OnIsLoadingChanged(bool value) => OnPropertyChanged(nameof(IsBusy));
 
-    partial void OnPeriodCodeChanged(string value) { _ = ReloadAsync(force: false); }
-    partial void OnLanguageChanged(string value) { _ = ReloadAsync(force: false); }
+    partial void OnPeriodCodeChanged(string value)
+    {
+        if (!_suppressReload) _ = ReloadAsync(force: false);
+    }
+
+    partial void OnLanguageChanged(string value)
+    {
+        if (!_suppressReload) _ = ReloadAsync(force: false);
+    }
+
     partial void OnFilterChanged(string value) => RebuildRows();
     partial void OnEnabledChanged(bool value)
     {
