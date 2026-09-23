@@ -247,7 +247,7 @@
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="桌面组件" Style="{StaticResource SettingTitle}"/>
-                                <TextBlock Text="在桌面添加独立小组件：快捷启动、时钟、待办、随记、快捷搜索。组件可拖动、边缘吸附、置顶、缩放；标题栏 ✕ 只是移除，随时可在此或托盘菜单重新添加。"
+                                <TextBlock Text="在桌面添加独立小组件：下方按类型折叠，标题直接写明「已添加 N 个 / 未添加」，展开后才是添加与各实例的显示 / 移除。组件可拖动、边缘吸附、置顶、缩放；标题栏 ✕ 只是移除，随时可在此或托盘菜单重新添加。"
                                            Style="{StaticResource SettingRowText}"/>
                                 <StackPanel x:Name="WidgetRows" Spacing="2" Margin="0,2,0,0"/>
                                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">

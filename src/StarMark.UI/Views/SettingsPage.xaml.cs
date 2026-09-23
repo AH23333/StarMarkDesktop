@@ -270,6 +270,14 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         catch (Exception ex) { StarLog.Error("设置开机自启失败", ex); }
     }
 
+    /// <summary>
+    /// 「桌面组件」卡片：一种组件一个可折叠 <see cref="Expander"/>（与「快捷键」页同形状）。
+    /// <para>
+    /// 此前是把 12 种类型连同各自的全部实例一次性铺开：类型越加越多，这张卡片越长，
+    /// 而用户绝大多数时候只想找某一类。现在标题上直接写"已添加 N 个 / 未添加"，
+    /// 展开后才看到「添加组件」与各实例的显示 / 移除。
+    /// </para>
+    /// </summary>
     private void BuildWidgetRows()
     {
         var mgr = WidgetManager();
@@ -283,36 +291,22 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
         foreach (var kind in WidgetStorage.AllKinds)
         {
-            // 类型标题行：名称 + 添加按钮
-            var header = new Grid { Margin = new Thickness(0, 0, 0, 4) };
-            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var kindInstances = instances.Where(i => i.Kind == kind).ToList();
 
-            var title = new TextBlock
-            {
-                Text = WidgetStorage.KindTitle(kind),
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
+            var content = new StackPanel { Spacing = 2 };
+
             var addBtn = new Button
             {
                 Content = "添加组件",
                 Style = (Style)Application.Current.Resources["SecondaryButton"], // 仅 Style 查找（非画笔），不受主题冻结影响
                 Padding = new Thickness(10, 3, 10, 3),
-                Margin = new Thickness(8, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Left,
             };
             var captured = kind;
             addBtn.Click += (_, _) => _ = mgr.AddInstanceAsync(captured);
-
-            Grid.SetColumn(title, 0);
-            Grid.SetColumn(addBtn, 1);
-            header.Children.Add(title);
-            header.Children.Add(addBtn);
-            WidgetRows.Children.Add(header);
+            content.Children.Add(addBtn);
 
             // 该类型每个实例一行：显示 / 移除
-            var kindInstances = instances.Where(i => i.Kind == kind).ToList();
             for (var idx = 0; idx < kindInstances.Count; idx++)
             {
                 var inst = kindInstances[idx];
@@ -353,16 +347,34 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
                 row.Children.Add(label);
                 row.Children.Add(showBtn);
                 row.Children.Add(removeBtn);
-                WidgetRows.Children.Add(row);
+                content.Children.Add(row);
             }
 
-            // 类型之间分隔
-            WidgetRows.Children.Add(new Border
+            var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+            header.Children.Add(new TextBlock
             {
-                Height = 1,
-                Margin = new Thickness(0, 6, 0, 6),
-                Background = ThemeBrush.For(ElementTheme.Default, "WidgetDividerBrush")
-                             ?? new SolidColorBrush(Microsoft.UI.Colors.Gray),
+                Text = WidgetStorage.KindTitle(kind),
+                FontSize = 14,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = Brush("TextFillColorPrimaryBrush", Microsoft.UI.Colors.Black),
+            });
+            header.Children.Add(new TextBlock
+            {
+                Text = kindInstances.Count == 0 ? "未添加" : $"已添加 {kindInstances.Count} 个",
+                FontSize = 11,
+                Opacity = 0.7,
+                Foreground = Brush("TextFillColorSecondaryBrush", Microsoft.UI.Colors.Gray),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+
+            WidgetRows.Children.Add(new Expander
+            {
+                Header = header,
+                Content = content,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Margin = new Thickness(0, 0, 0, 4),
+                // 一律收起：计数已写在标题上，展开后才出现实例行——这正是"不要始终显示所有实例"的落点。
+                IsExpanded = false,
             });
         }
     }
