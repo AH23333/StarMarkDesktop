@@ -81,6 +81,10 @@ public sealed class WidgetSnapshotEntry : IWidgetGeometryEntry
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? GridTag { get; set; }
 
+    /// <summary>计算器的历史带（快照要连它一起回滚，否则"回到那一刻"却留着之后的算式）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<CalcHistoryItem>? CalcHistory { get; set; }
+
     public List<SnapshotLocalItem> LocalItems { get; set; } = new();
 }
 

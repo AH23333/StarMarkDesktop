@@ -62,6 +62,8 @@ public sealed class WidgetContentFactory
         // Phase C：天气（Open-Meteo 实况 + 未来三天）+ 音乐（SMTC 播放控制）
         factory.Register(WidgetKind.Weather, _ => new WeatherWidget());
         factory.Register(WidgetKind.Music, _ => new MusicWidget());
+        // 效率组件批次 LA：计算器（历史带按实例持久化，故要拿到实例配置与管理器）
+        factory.Register(WidgetKind.Calc, w => new CalcWidget(w.Config, w.Manager));
         return factory;
     }
 }

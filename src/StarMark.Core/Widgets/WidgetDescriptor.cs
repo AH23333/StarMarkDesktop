@@ -164,5 +164,10 @@ public sealed class WidgetRegistry
         // 走 Windows SMTC，读取系统当前播放会话并控制播放，不需要对接任何第三方播放器。
         yield return new WidgetDescriptor(
             WidgetKind.Music, "音乐", "🎵", 300, 240);
+
+        // ── 效率组件批次 LA：计算器 ──
+        // 表达式求值 / 单位换算 / 时间戳换算三页；换算率是内置静态表，断网可用，刻意不含汇率（发起人裁决）。
+        yield return new WidgetDescriptor(
+            WidgetKind.Calc, "计算器", "🧮", 330, 460);
     }
 }

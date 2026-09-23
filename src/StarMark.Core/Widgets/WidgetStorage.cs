@@ -22,6 +22,14 @@ public enum WidgetKind
     Glance = 9,      // 今日速览（Glance）：日期 + 农历/节日 + 下一个节日倒计时 + 常看条目
     Weather = 10,    // 天气：Open-Meteo 实况 + 未来三天预报（免费无 Key）
     Music = 11,      // 音乐：Windows 系统媒体传输控制（SMTC）的播放控制与曲目显示
+    Calc = 12,       // 计算器：表达式求值 + 单位换算 + 时间戳换算（离线静态表，无汇率）
+}
+
+/// <summary>计算器历史带的一行：算式原文 + 当次算出的答案（答案只作显示，重新计算以引擎为准）。</summary>
+public sealed class CalcHistoryItem
+{
+    public string Expression { get; set; } = string.Empty;
+    public string Answer { get; set; } = string.Empty;
 }
 
 /// <summary>待办条目。</summary>
@@ -130,6 +138,13 @@ public sealed class WidgetInstanceConfig
 
     /// <summary>该实例自己的快捷入口（置顶条目来自数据库，仍共享）。</summary>
     public List<LinkItem> Links { get; set; } = new();
+
+    /// <summary>
+    /// 该实例自己的计算器历史带（最新在前，条数上限由组件侧守住）。
+    /// 可空：旧实例缺此字段反序列化为 null ⇒ 空历史，零迁移。按实例存 ⇒ 两个计算器互不干扰。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<CalcHistoryItem>? CalcHistory { get; set; }
 
     // ── 差异化条目格的每实例查询配置 ──
     // 可空、向后兼容：旧实例缺这些字段时反序列化为 null，不影响其它类型。

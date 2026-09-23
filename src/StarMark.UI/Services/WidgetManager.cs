@@ -593,6 +593,7 @@ public sealed class WidgetManager
                 Appearance = inst.Appearance,
                 Links = inst.Links.Select(l => new LinkItem { Id = l.Id, Title = l.Title, Uri = l.Uri, CreatedAt = l.CreatedAt }).ToList(),
                 GridTag = inst.GridTag,
+                CalcHistory = inst.CalcHistory?.Select(h => new CalcHistoryItem { Expression = h.Expression, Answer = h.Answer }).ToList(),
             });
             instanceIds.Add(inst.Id);
             perKind[inst.Kind] = idx + 1;
@@ -674,6 +675,8 @@ public sealed class WidgetManager
                 inst.PrivacyMode = entry.PrivacyMode;
                 inst.Links = entry.Links.Select(l => new LinkItem { Id = l.Id, Title = l.Title, Uri = l.Uri, CreatedAt = l.CreatedAt }).ToList();
                 inst.GridTag = entry.GridTag;
+                // null 也要照搬：那一刻这台计算器没有历史，还原后就不该留着之后算出来的条目
+                inst.CalcHistory = entry.CalcHistory?.Select(h => new CalcHistoryItem { Expression = h.Expression, Answer = h.Answer }).ToList();
                 restore.Add((inst.Id, entry.LocalItems));
             }
             // 快照还原的是「当时那一整套摆位」，与"最后一次选择的布局"已无对应关系；
@@ -829,6 +832,20 @@ public sealed class WidgetManager
         await LogActivityAsync(ActivityKind.ItemAdd, string.IsNullOrWhiteSpace(title) ? uri : title.Trim(), uri);
         return true;
     }
+
+    /// <summary>
+    /// 保存计算器某实例的历史带（整带替换）。与快捷入口同走实例配置，但<b>不发 LinksChanged 那类广播</b>：
+    /// 历史只有产生它的那个窗口在用，广播会让同类型其它实例无谓重绘。
+    /// </summary>
+    public Task SaveCalcHistoryAsync(string instanceId, IReadOnlyList<CalcHistoryItem> history)
+        => OnUiAsync(() =>
+        {
+            var data = _storage.Load();
+            var inst = data.Instances.FirstOrDefault(i => i.Id == instanceId);
+            if (inst is null) return;
+            inst.CalcHistory = history.ToList();
+            _storage.Save(data);
+        });
 
     /// <summary>从主窗口卡片「发送到快捷启动」：落到首个快捷启动实例，无则新建一个实例并显示。</summary>
     public async Task<bool> AddLinkToQuickLaunchAsync(string title, string uri)
