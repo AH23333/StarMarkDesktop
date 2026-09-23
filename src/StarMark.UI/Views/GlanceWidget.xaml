@@ -48,6 +48,9 @@
                        Visibility="Collapsed"/>
             <TextBlock x:Name="TrendingStatus" Text="" FontSize="10" Opacity="0.5" TextWrapping="Wrap"
                        Visibility="Collapsed"/>
+            <!-- 动作回显单独一行：Star 在远端、本机列表当下不变，没有这一行的话组件上点了就是"毫无反应" -->
+            <TextBlock x:Name="TrendingAction" Text="" FontSize="10" Opacity="0.8" TextWrapping="Wrap"
+                       Visibility="Collapsed"/>
         </StackPanel>
 
         <!-- 常看条目：ScrollViewer 直接挂在 Grid 行内（绝不能包进 StackPanel，否则不滚动，见踩坑 #61） -->

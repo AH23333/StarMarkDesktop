@@ -50,16 +50,34 @@ public sealed partial class GlanceWidget : UserControl
             _timer?.Stop();
             _sync?.Dispose();
             _sync = null;
+            // 静态事件是强引用：组件被移除后若不退订，整个控件（连同其下的行）会一直被钉住。
+            Helpers.TrendingItemActions.NoticeRaised -= OnTrendingNotice;
         };
         Loaded += (_, _) =>
         {
             // Loaded 可能被多次触发（组件窗口反复显示），同步器只建一次，否则会重复订阅。
             _sync ??= new DataChangeReloader(ReloadAsync);
+            // 动作结果先退再订：没有这一步，窗口每次隐藏/显示都会多挂一份同一个委托。
+            Helpers.TrendingItemActions.NoticeRaised -= OnTrendingNotice;
+            Helpers.TrendingItemActions.NoticeRaised += OnTrendingNotice;
             RefreshDate();
             StartTimer();
             _ = ReloadAsync();
         };
     }
+
+    /// <summary>
+    /// 热榜动作（Star / 收进收藏）的结果落到热榜块自己那一行。
+    /// <para>组件上的右键菜单没有主窗那条状态行，而 ⭐Star 改的是远端、本机列表当下看不出变化 ⇒
+    /// 不写这一行就是"点了没反应"（P-54）。通知可能来自别的窗口线程，统一切回本组件的 DispatcherQueue。</para>
+    /// </summary>
+    private void OnTrendingNotice(string message)
+        => DispatcherQueue.TryEnqueue(() =>
+        {
+            if (TrendingBlock.Visibility != Visibility.Visible) return;
+            TrendingAction.Text = message;
+            TrendingAction.Visibility = Visibility.Visible;
+        });
 
     /// <summary>
     /// 一次重载两半：「常看」读本机库，热榜读缓存。放一起是因为点进热榜行的 🔖/置顶都会广播
