@@ -194,6 +194,14 @@
                                 <TextBlock Text="托盘与呼出" Style="{StaticResource SettingTitle}"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="开机自动启动 StarMark"/>
+                                        <TextBlock Text="登录 Windows 后自动常驻，不必每次手动打开。" Style="{StaticResource SettingRowText}"/>
+                                    </StackPanel>
+                                    <ToggleSwitch Grid.Column="1" x:Name="AutostartToggle" OnContent="开启" OffContent="关闭"
+                                                  MinWidth="0" Toggled="AutostartToggle_Toggled"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock Text="常驻系统托盘"/>
                                         <TextBlock Text="关闭时隐藏到托盘，进程常驻。" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
@@ -254,8 +262,6 @@
                                     <Button x:Name="WidgetShowAllButton" Content="全部显示" Style="{StaticResource SecondaryButton}" Click="WidgetShowAll_Click"/>
                                     <Button x:Name="WidgetHideAllButton" Content="全部隐藏" Style="{StaticResource SecondaryButton}" Click="WidgetHideAll_Click"/>
                                 </StackPanel>
-                                <ToggleSwitch x:Name="AutostartToggle" Header="开机自动启动 StarMark"
-                                              Margin="0,4,0,0" Toggled="AutostartToggle_Toggled"/>
                             </StackPanel>
                         </Border>
 

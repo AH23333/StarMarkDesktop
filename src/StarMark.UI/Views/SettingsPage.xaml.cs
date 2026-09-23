@@ -70,6 +70,9 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         _hkHook.KeyUp += OnHookKeyUp;       // 修饰键抬起时回显同步
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;  // 实时生效：属性变更去抖落盘
         LoadFromStoreSilently();
+        // 开机自启开关初始态以注册表为准（SetEnabled 幂等，程序化置位不会误写）。
+        // 它归在「常规 → 托盘与呼出」，所以由页面构造时读一次，不再挂在组件列表的构建里。
+        AutostartToggle.IsOn = AutostartService().IsEnabled();
         _ = ViewModel.LoadHealthAsync();
         BuildWidgetRows();
         BuildHotkeyRows();
@@ -282,9 +285,6 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     {
         var mgr = WidgetManager();
         if (mgr is null || WidgetRows is null) return;
-
-        // 开机自启开关初始态以注册表为准（SetEnabled 幂等，程序化置位不会误写）
-        AutostartToggle.IsOn = AutostartService().IsEnabled();
 
         WidgetRows.Children.Clear();
         var instances = mgr.Instances;
