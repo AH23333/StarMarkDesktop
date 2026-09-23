@@ -84,8 +84,11 @@
 
 | 批次 | 内容 | 机检性 | 状态 |
 | --- | --- | --- | --- |
-| **KA** | `StarMark.Core/Trending`：`TrendingRepo` + `TrendingPeriods` + `TrendingHtmlParser`（解析 / 兜底来源转换 / URL / 查询串 / 缓存键） | 纯逻辑 ⇒ 23 条护栏 | ✅ `afe49e8` |
-| **KB** | `StarMark.Integrations/Trending`：匿名 HTTP 抓取（**响应体长度上限**，防把整页 HTML 读进内存）+ 失败分类 + `Retry-After` **退避重试一次**（扩展有、桌面原先没有）+ Search API 兜底 + 缓存读写落在现成 `sync_state` 键 | 传输缝可注入（照 `GitHubClient` 的做法）⇒ 重试/退避/长度上限/兜底都可单测 | 待做 |
+| **KA** | `TrendingRepo` + `TrendingPeriods` + `TrendingHtmlParser`（解析 / 兜底来源转换 / URL / 查询串 / 缓存键） | 纯逻辑 ⇒ 23 条护栏 | ✅ `afe49e8` |
+| **KB** | 匿名 HTTP 抓取（**响应体字节上限**）+ 失败分类 + `Retry-After` **退避重试一次**（扩展有、桌面原先没有）+ Search API 兜底 + 缓存编解码与"同一本地日历日"判定（落 `sync_state`，键带 `trending:` 前缀） | 假 `HttpMessageHandler` + 可注入 delay ⇒ 两条腿/退避/上限/取消/凭据走向全部可单测（24 条） | ✅ 本批 |
+
+> **分层更正（KB 落地时发现，写下来免得下次再撞）**：这几层放在 **`StarMark.Abstractions.Trending`**，不是 `StarMark.Core.Trending`——本仓依赖方向是 `Core → Integrations → Abstractions`，**`Integrations` 引用不到 `Core`**，而抓取层必须用这些类型。纯模型 + 纯解析本就属于 Abstractions 的既有范围（同 `UriNormalizer` / `FileSizeText` / `LaunchGuard`）。
+> **KB 的两条约束各占一组断言**（它们出问题时界面上一切正常）：① **Token 只按请求附加给 `api.github.com`**，抓 `github.com` HTML 那趟必须裸奔——所以凭据绝不能放进 `HttpClient.DefaultRequestHeaders`；② **取消一律外抛，不许静默改走兜底**（P-55 同一失序面：用户按了停止却看到另一批数据）；③ 429/5xx 只重试一次、`Retry-After` 超 20 s 不等而是走兜底。
 | **KC** | `TrendingService` 编排：可取消、错误隔离、stale 回读、`via` 透传、"同一本地日历日"判定；**不进 `SyncCoordinator` 的串行循环**（它服务"同步收藏"，语义不同） | 编排可单测（假传输缝 + 假时钟） | 待做 |
 | **KD** | `GitHubClient` 写操作：`PUT`/`DELETE /user/starred/{owner}/{repo}` + 错误分类 + **未配 Token 明确抛错**（不是静默返回空）；"已 Star"集合取自本地已同步的 star 条目（纯函数判等） | 假 `HttpMessageHandler` 可单测；判等纯函数可单测 | 待做 |
 | **KE** | `ItemCard` 复用改造：新增**单一纯判据** `ShowsLibraryActions`（＝非启动器模式 且 非热榜候选）取代逐处 `IsLauncherMode…Invert`；行内 ⭐/🔖 两个图标 + 两个事件 | 判据是纯函数 ⇒ 单测；卡片本身属真机 | 待做 |

@@ -1,6 +1,6 @@
 #nullable enable
 
-namespace StarMark.Core.Trending;
+namespace StarMark.Abstractions.Trending;
 
 /// <summary>热榜周期（页面上的 ?since= 参数，也决定 Search API 兜底的 created 窗口）。</summary>
 public enum TrendingPeriod

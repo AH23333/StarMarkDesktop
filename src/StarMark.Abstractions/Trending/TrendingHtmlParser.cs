@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace StarMark.Core.Trending;
+namespace StarMark.Abstractions.Trending;
 
 /// <summary>
 /// GitHub trending 页 HTML → 候选列表（纯函数：无网络、无 DOM、可单测）。

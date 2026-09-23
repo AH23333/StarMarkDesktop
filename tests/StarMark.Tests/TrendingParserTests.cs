@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
-using StarMark.Core.Trending;
+using StarMark.Abstractions.Trending;
 
 namespace StarMark.Tests;
 
