@@ -34,10 +34,14 @@ public sealed partial class PinWindow : Window
     private readonly int _sourceHeight;
 
     private double _zoom = 1.0;
-    private double _scale = 1.0;
     private bool _dragging;
     private bool _clickThrough;
-    private (double X, double Y) _grabDip;
+
+    /// <summary>按下瞬间的光标物理坐标与窗口矩形：拖动全程按这两份快照重算绝对位置。</summary>
+    private WindowInterop.POINT _gestureStartCursor;
+    private Windows.Graphics.RectInt32 _gestureStartRect;
+    private int _lastAppliedX = int.MinValue;
+    private int _lastAppliedY = int.MinValue;
 
     /// <param name="placement">贴在虚拟桌面里的物理矩形（就是刚框选的那块区域）。</param>
     public PinWindow(byte[] bgra, int width, int height, IntRect placement)
@@ -67,7 +71,6 @@ public sealed partial class PinWindow : Window
         WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOPMOST,
             placement.X, placement.Y, w, h,
             WindowInterop.SWP_SHOWWINDOW | WindowInterop.SWP_NOACTIVATE);
-        _scale = WindowInterop.GetScale(this);
 
         // 抢一次焦点：贴图窗要能直接按 Esc 关掉（Snipaste 同做法）。不激活的话 Esc 永远收不到，
         // 而"只能右键才能关"在贴图铺满屏幕时是最难受的那种死法。
@@ -124,26 +127,28 @@ public sealed partial class PinWindow : Window
 
     private void Root_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        var point = e.GetCurrentPoint(Root);
-        if (!point.Properties.IsLeftButtonPressed) return;
-        // 每开始一次拖动都重取缩放：把贴图拖到另一块 DPI 不同的屏上时，
-        // "DIP 位移 × 缩放"要用**当下这块屏**的缩放，用开局那块会越拖越偏。
-        _scale = WindowInterop.GetScale(this);
+        if (!e.GetCurrentPoint(Root).Properties.IsLeftButtonPressed) return;
+        // 按下瞬间把"光标物理坐标"和"窗口矩形"各存一份，之后每帧都从这两份快照重算绝对位置。
+        // 用坐标增量累加会抖：窗一移动，指针相对窗的位置就变了，
+        // 下一次再叠上去等于把同一段位移重复应用——越拖越 runaway。
+        WindowInterop.GetCursorPos(out _gestureStartCursor);
+        _gestureStartRect = WindowInterop.GetWindowRect(this);
         _dragging = true;
-        _grabDip = (point.Position.X, point.Position.Y);
         Root.CapturePointer(e.Pointer);
     }
 
     private void Root_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
         if (!_dragging) return;
-        var position = e.GetCurrentPoint(Root).Position;
-        var current = WindowInterop.GetWindowRect(this);
-        var dx = (int)Math.Round((position.X - _grabDip.X) * _scale, MidpointRounding.AwayFromZero);
-        var dy = (int)Math.Round((position.Y - _grabDip.Y) * _scale, MidpointRounding.AwayFromZero);
-        if (dx == 0 && dy == 0) return;
-        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero,
-            current.X + dx, current.Y + dy, 0, 0,
+        WindowInterop.GetCursorPos(out var cursor);
+        // 全程物理像素：光标坐标与窗口矩形同一单位，不需要 DPI 缩放因子，
+        // 于是"拖到另一块缩放不同的屏上就越来越偏"这一类错误结构上不存在。
+        var x = _gestureStartRect.X + cursor.X - _gestureStartCursor.X;
+        var y = _gestureStartRect.Y + cursor.Y - _gestureStartCursor.Y;
+        if (x == _lastAppliedX && y == _lastAppliedY) return;
+        _lastAppliedX = x;
+        _lastAppliedY = y;
+        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero, x, y, 0, 0,
             WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
     }
 
@@ -216,9 +221,10 @@ public sealed partial class PinWindow : Window
 
     private void SyncBadge()
     {
-        ThroughItem.Text = _clickThrough ? "取消鼠标穿透（所有贴图）" : "鼠标穿透（所有贴图）";
+        ThroughItem.Text = _clickThrough ? "取消鼠标穿透（F5）" : "鼠标穿透（开启后用 F5 恢复）";
         var zoomText = CaptureGeometry.FormatZoom(_zoom);
-        var text = _clickThrough ? zoomText + " · 已穿透" : zoomText;
+        // 穿透时必须把出口写在图上：这张窗收不到鼠标，用户若不知道 F5 就只剩"托盘关掉全部"这一条粗路
+        var text = _clickThrough ? zoomText + " · 已穿透，按 F5 恢复" : zoomText;
         // 100% 且没穿透＝刚贴上的原样，不必顶一个角标挡画面
         var isDefault = Math.Abs(_zoom - 1.0) < 0.0001 && !_clickThrough;
         BadgeText.Text = text;

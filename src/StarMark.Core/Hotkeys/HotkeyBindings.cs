@@ -40,6 +40,13 @@ public static class HotkeyBindings
     public const uint VirtualKeyF4 = 0x73;
 
     /// <summary>
+    /// VK_F5：贴图鼠标穿透的默认键。Snipaste 把这项放在贴图窗的右键菜单里，
+    /// 但桌面贴图一旦穿透就收不到任何点击，"只能靠托盘关掉全部"是不可接受的出口（发起人 2026-09-24 反馈），
+    /// 所以这里给一条全局键：不必知道哪张被穿透了，按一下就把它们全部交还鼠标。F5 不与 Snipaste 的键位相冲。
+    /// </summary>
+    public const uint VirtualKeyF5 = 0x74;
+
+    /// <summary>
     /// 出厂默认：主界面呼出/关闭 = Ctrl+Alt+Space。
     /// 每次调用给出**新的可写字典**，调用方可以就地叠加而不污染默认表。
     /// </summary>
@@ -47,14 +54,18 @@ public static class HotkeyBindings
     {
         [HotkeyActions.MainToggle] = new HotkeyGesture(
             HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.NoRepeat, VirtualKeySpace),
-        // 截图/贴图/隐藏贴图用裸 F1/F3/F4（与 Snipaste 默认一致，无修饰键）。
+        // 截图/贴图/隐藏贴图/穿透用裸 F1/F3/F4/F5（前三条与 Snipaste 默认一致，无修饰键）。
         // 与主界面呼出键不冲突：那条是 Ctrl+Alt+Space。装了 Snipaste 的机器上会撞，
         // 但批次 KL 已把冲突改成"只提示、不阻碍注册"，用户在设置里改一键即可，不必先关别的产品。
         [HotkeyActions.ScreenCapture] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF1),
         [HotkeyActions.ScreenPin] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF3),
         [HotkeyActions.ScreenPinToggleHidden] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF4),
-        // 鼠标穿透刻意**不占默认键**：它不是一个"每天按"的动作，而是一项设置，
-        // 而且穿透态本身有托盘勾选项 + F4 两条出口，不必再吃一个全局键位（同 P-76 的口径）。
+        // 鼠标穿透**必须有全局键可以退出来**：穿透中的贴图收不到任何鼠标消息，
+        // 那时它的右键菜单、托盘勾选项之外的操作路径全断（发起人真机反馈：只能靠托盘关掉全部）。
+        // 所以给 F5——用户不需要知道是哪张被穿透了，按一下把这一组全部交还鼠标（见 VirtualKeyF5 注释）。
+        [HotkeyActions.ScreenPinClickThrough] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF5),
+        // 识字刻意**不占默认键**：它比截图低频，而入口已有三处（动作条「识字」、贴图右键、托盘），
+        // 少占一个全局键位就少一处"与别的软件撞键"的可能（同 P-76 的口径）。
     };
 
     /// <summary>

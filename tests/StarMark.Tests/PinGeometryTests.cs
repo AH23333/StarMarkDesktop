@@ -107,16 +107,24 @@ public sealed class PinGeometryTests
         Assert.Equal(0x70u, defaults[HotkeyActions.ScreenCapture].VirtualKey);   // F1
         Assert.Equal(0x72u, defaults[HotkeyActions.ScreenPin].VirtualKey);       // F3
         Assert.Equal(0x73u, defaults[HotkeyActions.ScreenPinToggleHidden].VirtualKey);   // F4
-        foreach (var action in new[] { HotkeyActions.ScreenCapture, HotkeyActions.ScreenPin, HotkeyActions.ScreenPinToggleHidden })
+        Assert.Equal(0x74u, defaults[HotkeyActions.ScreenPinClickThrough].VirtualKey);   // F5（穿透必须有键盘出口）
+        foreach (var action in new[]
+        {
+            HotkeyActions.ScreenCapture, HotkeyActions.ScreenPin,
+            HotkeyActions.ScreenPinToggleHidden, HotkeyActions.ScreenPinClickThrough,
+        })
             Assert.True(defaults[action].Modifiers.HasFlag(HotkeyModifiers.NoRepeat), $"{action} 应为裸键且不重复触发");
     }
 
     [Fact]
-    public void Defaults_ClickThrough_IsDeliberatelyUnbound()
+    public void Defaults_OcrIsDeliberatelyUnbound_ButStillListedForBinding()
     {
-        // 穿透是"一项设置"而不是"每天按的动作"，且它已有托盘勾选项 + F4 两条出口 ⇒ 不占全局键位
-        Assert.False(HotkeyBindings.Defaults().ContainsKey(HotkeyActions.ScreenPinClickThrough));
-        Assert.Contains(HotkeyActions.ScreenPinClickThrough, HotkeyActions.All());   // 但设置页里要能被用户自己绑上
+        // 识字是低频动作且入口已有三处（动作条、贴图右键、托盘）⇒ 不占默认键，
+        // 但必须出现在设置页里，否则想绑的人找不到地方（"只提示不阻碍"之外还要"够得着"）
+        Assert.False(HotkeyBindings.Defaults().ContainsKey(HotkeyActions.ScreenOcr));
+        Assert.Contains(HotkeyActions.ScreenOcr, HotkeyActions.All());
+        // 穿透反过来：它有默认键，因为穿透中的窗除了全局键没有任何自救路径
+        Assert.True(HotkeyBindings.Defaults().ContainsKey(HotkeyActions.ScreenPinClickThrough));
     }
 
     [Fact]
