@@ -13,6 +13,9 @@ public sealed class DittoSource : IItemSource
 
     private readonly string? _dbPath;
 
+    /// <summary>探测过的位置清单——提示里要说清"找过哪里"，否则用户只知道"没有"却无从判断是自己没装、还是装在别处。</summary>
+    private readonly IReadOnlyList<string> _probed;
+
     public string SourceId => ItemSources.Ditto;
 
     public string DisplayName => "Ditto 剪贴板";
@@ -21,12 +24,87 @@ public sealed class DittoSource : IItemSource
 
     /// <summary>Ditto 是外部程序：没装就没有数据库，这一项本来就该是空的（与内置剪贴板历史是两回事）。</summary>
     public string? AvailabilityHint
-        => $"本机没有 Ditto 的数据库（找过 {_dbPath}）；没用过 Ditto 属正常，StarMark 自带的「剪贴板历史」不依赖它";
+        => $"没在本机找到 Ditto 的数据库（找过：{string.Join("；", _probed)}）。"
+         + "没用过 Ditto 属正常，StarMark 自带的「剪贴板历史」不依赖它——在设置里开启后即可用";
 
-    public DittoSource(string? dbPath = null) => _dbPath = dbPath ?? DefaultDbPath();
+    /// <param name="dbPath">显式指定库路径（测试/自定义安装位置）；为 null 时自动探测 <see cref="CandidateDbPaths"/>。</param>
+    public DittoSource(string? dbPath = null)
+    {
+        if (dbPath is not null)
+        {
+            _dbPath = dbPath;
+            _probed = new[] { dbPath };
+            return;
+        }
+        _probed = CandidateDbPaths();
+        _dbPath = FindDbPath(_probed);
+    }
 
-    public static string DefaultDbPath()
-        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Ditto", "DB", "DittoDB.db");
+    /// <summary>
+    /// Ditto 数据库的候选位置。<b>Ditto 没有单一约定路径</b>：安装版默认在
+    /// <c>%APPDATA%\Ditto\DB\DittoDB.db</c>，但便携版把库放在 <c>Ditto.exe</c> 旁边（<c>DB\</c> 或同目录），
+    /// 也有人把数据目录指到 <c>%LOCALAPPDATA%</c>。只探一条等于"在我这台机器上能跑"，
+    /// 所以这里把已知形态都列出来，由 <see cref="FindDbPath"/> 取第一个真实存在的。
+    /// </summary>
+    public static IReadOnlyList<string> CandidateDbPaths()
+    {
+        var roots = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        };
+        var list = new List<string>();
+        foreach (var root in roots)
+        {
+            if (string.IsNullOrEmpty(root)) continue;
+            list.Add(Path.Combine(root, "Ditto", "DB", "DittoDB.db"));
+            list.Add(Path.Combine(root, "Ditto", "DittoDB.db"));
+        }
+        list.AddRange(PortableDbPaths());
+        return list.Where(p => p.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>便携版：正在运行的 Ditto.exe 所在目录下的 <c>DB\DittoDB.db</c> 或 <c>DittoDB.db</c>。</summary>
+    private static IEnumerable<string> PortableDbPaths()
+    {
+        foreach (var dir in RunningDittoDirectories())
+        {
+            yield return Path.Combine(dir, "DB", "DittoDB.db");
+            yield return Path.Combine(dir, "DittoDB.db");
+        }
+    }
+
+    /// <summary>
+    /// 取运行中 Ditto 的模块目录。<b>整体兜错</b>：读别的进程的 MainModule 在无权限/进程刚退出时会抛，
+    /// 而这只是"多试一个候选路径"，不该让源探测本身失败。（先收集再返回：C# 不允许在带 catch 的
+    /// try 块里 yield return。）
+    /// </summary>
+    private static IReadOnlyList<string> RunningDittoDirectories()
+    {
+        var dirs = new List<string>();
+        foreach (var p in System.Diagnostics.Process.GetProcessesByName("Ditto"))
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(p.MainModule?.FileName ?? string.Empty);
+                if (!string.IsNullOrEmpty(dir)) dirs.Add(dir!);
+            }
+            catch { }
+            finally { p.Dispose(); }
+        }
+        return dirs;
+    }
+
+    /// <summary>第一个真实存在的候选路径；都没有则返回首个默认位置（让提示能说清"找过哪里"）。</summary>
+    public static string? FindDbPath(IReadOnlyList<string>? candidates = null)
+    {
+        candidates ??= CandidateDbPaths();
+        foreach (var c in candidates)
+        {
+            try { if (File.Exists(c)) return c; } catch { }
+        }
+        return candidates.Count > 0 ? candidates[0] : null;
+    }
 
     public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
         // 「立即同步」由 UI 线程一路 await 到这里，而下面读的是 Ditto 的 SQLite 文件（同步实现，

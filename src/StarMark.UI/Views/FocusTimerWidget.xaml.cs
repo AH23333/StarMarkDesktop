@@ -3,6 +3,7 @@ using System;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using StarMark.Abstractions;
 using StarMark.Core.Widgets;
 using StarMark.UI.Services;
@@ -78,6 +79,24 @@ public sealed partial class FocusTimerWidget : UserControl, IWidgetTicker
         if (!_ready) return;
         ViewModel.ApplyDurations(double.IsNaN(FocusBox.Value) ? ViewModel.FocusMinutes : FocusBox.Value,
             double.IsNaN(args.NewValue) ? ViewModel.RestMinutes : args.NewValue);
+    }
+
+    /// <summary>
+    /// 滚轮微调（去掉上下按钮后的第二条调节路径，用户明确要求"直接输入或滚轮"）。
+    /// WinUI 的 NumberBox 不原生响应滚轮 ⇒ 在控件上显式接一次，按 SmallChange 步进并夹进 Min/Max。
+    /// </summary>
+    private void FocusBox_PointerWheelChanged(object sender, PointerRoutedEventArgs e) => WheelStep(FocusBox, e);
+
+    private void RestBox_PointerWheelChanged(object sender, PointerRoutedEventArgs e) => WheelStep(RestBox, e);
+
+    private static void WheelStep(NumberBox box, PointerRoutedEventArgs e)
+    {
+        var delta = e.GetCurrentPoint(box).Properties.MouseWheelDelta;
+        if (delta == 0) return;
+        var step = double.IsNaN(box.SmallChange) || box.SmallChange == 0 ? 1 : box.SmallChange;
+        var current = double.IsNaN(box.Value) ? box.Minimum : box.Value;
+        box.Value = Math.Clamp(Math.Round(current + (delta > 0 ? step : -step)), box.Minimum, box.Maximum);
+        e.Handled = true;
     }
 
     public void UpdateRunning(bool windowVisible)

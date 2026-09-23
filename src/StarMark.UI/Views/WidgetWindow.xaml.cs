@@ -160,6 +160,11 @@ public sealed partial class WidgetWindow : Window
 
         InitializeComponent();
         WindowInterop.TrackWindow(this);   // 供弹窗按发起组件窗口所在显示器居中
+        // 主题必须在首次渲染前就盖成<b>具体</b>的 Light/Dark，不能等到 Reveal：
+        // 构造期根元素 RequestedTheme 仍是 Default ⇒ 继承"启动时已冻结"的应用级主题，
+        // 于是「OS 深色 + 应用浅色」下标题栏（无显式前景的 WidgetTitle/WidgetGlyph）会按深色桶
+        // 取到近白画笔——浅色组件上"组件名看不见"就是这么来的。Reveal 里仍会再套一次（设置可能已改）。
+        ThemeManager.Apply(this, App.Services.GetRequiredService<SettingsStore>().LoadTheme());
         ApplyAppearanceCore();
         // 主题解析完成后（Default → 浅/深）或运行期切换主题时，按真实主题重挂材质与重铺表面。
         // 否则构造期 ActualTheme 仍是 Default（被当作浅色），浅色模式下的材质/表面会一直用错；

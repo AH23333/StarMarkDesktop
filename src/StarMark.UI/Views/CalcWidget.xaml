@@ -15,7 +15,7 @@
                              Padding="8,6,8,6" TextChanged="ExprBox_TextChanged"
                              KeyDown="ExprBox_KeyDown"/>
                     <TextBlock Text="{x:Bind ViewModel.CalcResult, Mode=OneWay}"
-                               FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                               FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <Button Content="复制结果" FontSize="11" Padding="10,4,10,4"
                                 Style="{StaticResource WidgetActionButton}" Click="CopyResult_Click"/>
@@ -87,7 +87,7 @@
                                   SelectionChanged="ToBox_SelectionChanged"/>
                     </Grid>
                     <TextBlock Text="{x:Bind ViewModel.UnitResult, Mode=OneWay}"
-                               FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                               FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
                     <TextBlock Text="换算率为内置静态表，断网可用；不含实时汇率。"
                                FontSize="10" Opacity="0.55" TextWrapping="Wrap"/>
                 </StackPanel>

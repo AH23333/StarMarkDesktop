@@ -31,15 +31,19 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Text="专注" FontSize="11" Opacity="0.7" VerticalAlignment="Center"/>
+            <!-- 不用上下调节按钮：SpinButtonPlacementMode=Compact 在组件小窗里会弹出一块巨大的 +/- 浮层，
+                 正好盖住输入框且 Esc 关不掉。改为直接输入 + 滚轮微调（见 code-behind 的 PointerWheelChanged）。 -->
             <NumberBox Grid.Column="1" x:Name="FocusBox" FontSize="12" Minimum="1" Maximum="180"
-                       SpinButtonPlacementMode="Compact" SmallChange="5" LargeChange="10"
+                       SpinButtonPlacementMode="Hidden" SmallChange="5" LargeChange="10"
                        Value="{x:Bind ViewModel.FocusMinutes, Mode=OneWay}"
-                       ValueChanged="FocusBox_ValueChanged"/>
+                       ValueChanged="FocusBox_ValueChanged"
+                       PointerWheelChanged="FocusBox_PointerWheelChanged"/>
             <TextBlock Grid.Column="2" Text="休息" FontSize="11" Opacity="0.7" VerticalAlignment="Center"/>
             <NumberBox Grid.Column="3" x:Name="RestBox" FontSize="12" Minimum="1" Maximum="180"
-                       SpinButtonPlacementMode="Compact" SmallChange="1" LargeChange="5"
+                       SpinButtonPlacementMode="Hidden" SmallChange="1" LargeChange="5"
                        Value="{x:Bind ViewModel.RestMinutes, Mode=OneWay}"
-                       ValueChanged="RestBox_ValueChanged"/>
+                       ValueChanged="RestBox_ValueChanged"
+                       PointerWheelChanged="RestBox_PointerWheelChanged"/>
         </Grid>
 
         <TextBlock Text="{x:Bind ViewModel.HintText, Mode=OneWay}" FontSize="10" TextWrapping="Wrap"

@@ -220,6 +220,9 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         // 避免离开设置页时兜底保存用过期的 ThemeIndex 把主题强制切回。
         MainWindow.ThemePreferenceQuickSwitched -= OnExternalThemeSwitch;
         MainWindow.ThemePreferenceQuickSwitched += OnExternalThemeSwitch;
+        // 本页代码构建的行按 ActualTheme 取画笔，主题翻转时要重建（先退再订：本页可能被反复导航进入）
+        ActualThemeChanged -= OnPageActualThemeChanged;
+        ActualThemeChanged += OnPageActualThemeChanged;
         BuildWidgetRows();
         BuildHotkeyRows();
         BuildLayoutRows();
@@ -236,6 +239,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         }
         // 退订主窗口快捷切主题（MainWindow 是单例，不退订会让死页面持续响应）
         MainWindow.ThemePreferenceQuickSwitched -= OnExternalThemeSwitch;
+        ActualThemeChanged -= OnPageActualThemeChanged;
         StopRecording(resetText: true);      // 离开页面停止键盘钩子
         // 快捷键属「确认后才生效」项：离开页面时把改动落盘并注册，避免用户以为改了却没生效
         if (_hotkeysDirty)
@@ -542,8 +546,29 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         };
     }
 
-    private static Brush Brush(string key, Windows.UI.Color fallback) =>
-        ThemeBrush.For(ElementTheme.Default, key) ?? new SolidColorBrush(fallback);
+    /// <summary>
+    /// 代码构建的行取画笔必须按<b>本页的实际主题</b>，不能传 <c>ElementTheme.Default</c>——
+    /// Default 会把深浅判定交给 <c>IsSystemDark()</c>（OS 实时主题），于是「OS 深色 + 应用强制浅色」时
+    /// 组件名/分组名解析到深色桶的近白画笔，浅底白字（审查报告 F3）。
+    /// </summary>
+    private Brush Brush(string key, Windows.UI.Color fallback) =>
+        ThemeBrush.For(ActualTheme, key) ?? new SolidColorBrush(fallback);
+
+    /// <summary>
+    /// 主题在运行期翻转时重建这些代码构建的行：它们的前景色是在构建那一刻取定的，
+    /// 不重建就会把上一种主题的画笔留在页面上（与「切主题后组件材质不跟」同一类缺陷）。
+    /// 录制快捷键期间不重建——那会把用户正在录的那一行的临时态抹掉。
+    /// </summary>
+    private void OnPageActualThemeChanged(object? sender, object e)
+    {
+        if (_recordingAction is not null) return;
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            BuildWidgetRows();
+            BuildHotkeyRows();
+            BuildLayoutRows();
+        });
+    }
 
     /// <summary>把「同一组合绑定了多个动作」就地标注到每一行（不弹窗，用户可直接忽略）。</summary>
     private void RefreshConflictMarks()

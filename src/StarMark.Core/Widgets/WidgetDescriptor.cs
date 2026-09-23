@@ -181,8 +181,9 @@ public sealed class WidgetRegistry
             WidgetKind.Countdown, "倒计时", "⏳", 300, 400);
 
         // ── 效率组件批次 LD：番茄钟 ──
-        // 纯状态机在 Core（FocusTimer），UI 只传 now 与显示文本；第一版不留统计，重启即回空闲。
+        // 纯状态机在 Core（FocusTimer），UI 只传 now 与显示文本；第一版不做统计，重启即回空闲。
+        // 必须可缩放：用户要把倒计时拉大成"桌面时钟"用（真机反馈：不可缩放等于少一种用法）。
         yield return new WidgetDescriptor(
-            WidgetKind.Focus, "番茄钟", "🍅", 250, 330, IsResizable: false);
+            WidgetKind.Focus, "番茄钟", "🍅", 250, 330);
     }
 }

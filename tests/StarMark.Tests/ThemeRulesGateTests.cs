@@ -70,6 +70,47 @@ public partial class ThemeRulesGateTests
         Assert.True(violations.Count == 0, "发现主题画笔违规引用：\n" + string.Join("\n", violations));
     }
 
+    /// <summary>
+    /// 审查报告 F3 的机检版：<b>不许把 <c>ElementTheme.Default</c> 当字面量传给画笔解析</b>。
+    /// <para>
+    /// <c>ThemeBrush.For(Default, …)</c> 的深浅判定会退化成 <c>ThemeManager.IsSystemDark()</c>（OS 实时主题），
+    /// 于是「OS 深色 + 应用强制浅色」时解析出深色桶的近白画笔 → 浅底白字。设置页代码构建的
+    /// 「桌面组件类型名 / 快捷键分组名」两处长年就是这个形状（组件名在浅色下看不见）。
+    /// </para>
+    /// <para>
+    /// 合法写法是传<b>元素自己的</b> <c>ActualTheme</c>，或像弹窗那样传"偏好折算后的" <c>EffectiveTheme()</c>
+    /// （那里 Default 只作为跟随系统的显式入口，且它自己会解析）——所以本条只禁字面量。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void UiSources_MustNotPassLiteralDefaultThemeToBrushResolution()
+    {
+        var root = FindRepoRoot() ?? throw new InvalidOperationException("未找到仓库根目录（src/StarMark.UI）");
+        var uiDir = Path.Combine(root, "src", "StarMark.UI");
+        var violations = new List<string>();
+        var callSites = 0;   // 正向对照：本扫描确实看到了画笔解析点，否则"零违规"只是空转
+
+        foreach (var file in Directory.EnumerateFiles(uiDir, "*.cs", SearchOption.AllDirectories))
+        {
+            var rel = Path.GetRelativePath(uiDir, file).Replace('\\', '/');
+            if (rel.Contains("Helpers/ThemeBrush.cs")) continue;   // 解析器自己必须处理 Default
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var t = lines[i].TrimStart();
+                if (t.StartsWith("//") || t.StartsWith("///") || t.StartsWith("*")) continue;
+                if (!t.Contains("ThemeBrush.For(")) continue;
+                callSites++;
+                var rest = t[(t.IndexOf("ThemeBrush.For(", StringComparison.Ordinal) + "ThemeBrush.For(".Length)..];
+                if (rest.StartsWith("ElementTheme.Default") || rest.StartsWith(" ElementTheme.Default"))
+                    violations.Add($"{rel}:{i + 1} 画笔解析要按元素实际主题取桶，不能写死 Default：{t.Trim()}");
+            }
+        }
+
+        Assert.True(callSites >= 10, $"画笔解析站点计数异常偏低（{callSites}），扫描可能已失效");
+        Assert.True(violations.Count == 0, "发现写死 ElementTheme.Default 的画笔解析：\n" + string.Join("\n", violations));
+    }
+
     [GeneratedRegex(@"Resources\[\s*""(?<key>[^""]+)""\s*\]")]
     private static partial Regex ResourceKeyRegex();
 }
