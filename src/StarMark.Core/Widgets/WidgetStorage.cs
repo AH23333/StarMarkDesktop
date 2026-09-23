@@ -302,6 +302,12 @@ public sealed class WidgetStorage
         WidgetKind.QuickLaunch, WidgetKind.Todo, WidgetKind.QuickNote, WidgetKind.Clock, WidgetKind.Search,
     };
 
+    /// <summary>
+    /// 首次运行预置哪些组件（P-66 由用户裁决：只给时钟）。只在"磁盘上没有配置文件"那一次生效，
+    /// 用户主动删光组件后不会被重新塞回来（见 <see cref="Normalize"/> 的 firstRun 说明）。
+    /// </summary>
+    public static readonly IReadOnlyList<WidgetKind> FirstRunKinds = new[] { WidgetKind.Clock };
+
     /// <summary>组件展示名（含图标）；未知类型回退为类型名。</summary>
     public static string KindTitle(WidgetKind kind) =>
         WidgetRegistry.Default.TryGet(kind, out var d) ? d.DisplayTitle : kind.ToString();
@@ -338,7 +344,11 @@ public sealed class WidgetStorage
             {
                 // 首启/文件确被删除：空态是可信的，允许后续 Save 落盘。
                 _loadDegraded = false;
-                return Normalize(null);
+                var fresh = Normalize(null, firstRun: true);
+                // 预置实例必须当场落盘：实例 ID 是随机 Guid，不落盘则每次 Load 都换一个，
+                // 上层按 ID 管窗口会重复建窗 / 找不到窗（以前首启是空列表，没有这个问题）。
+                if (fresh.Instances.Count > 0) Save(fresh);
+                return fresh;
             }
             try
             {
@@ -404,8 +414,13 @@ public sealed class WidgetStorage
         }
     }
 
-    /// <summary>规范数据：去 null/空文本、排序（待办未完成在前按时间倒序，随记/入口按时间倒序）、限量、v1 迁移。</summary>
-    public static WidgetStoreData Normalize(WidgetStoreData? data)
+    /// <summary>
+    /// 规范数据：去 null/空文本、排序（待办未完成在前按时间倒序，随记/入口按时间倒序）、限量、v1 迁移。
+    /// <paramref name="firstRun"/> 仅在"磁盘上确实没有配置文件"时由 <see cref="Load"/> 传 true，
+    /// 用于预置首启组件（P-66）；<b>已存在但实例为空的文件不算首启</b>——那是用户主动删光的结果，
+    /// 再塞回去就是"删不掉的组件"。
+    /// </summary>
+    public static WidgetStoreData Normalize(WidgetStoreData? data, bool firstRun = false)
     {
         data ??= new WidgetStoreData();
 
@@ -473,6 +488,17 @@ public sealed class WidgetStorage
 
         data.Version = 3;
         data.Instances ??= new List<WidgetInstanceConfig>();
+
+        // 首次运行预置（P-66）：只给时钟，让"桌面组件"在第一屏就被看见，其余靠新建入口 / 托盘发现。
+        if (firstRun && data.Instances.Count == 0)
+            foreach (var kind in FirstRunKinds)
+                data.Instances.Add(new WidgetInstanceConfig
+                {
+                    Kind = kind,
+                    Width = DefaultWidth(kind),
+                    Height = DefaultHeight(kind),
+                });
+
         data.Layouts = WidgetLayoutCollection.Normalize(data.Layouts);
         data.Snapshots = WidgetSnapshotCollection.Normalize(data.Snapshots);
 

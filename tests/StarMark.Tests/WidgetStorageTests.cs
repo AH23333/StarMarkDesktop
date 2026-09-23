@@ -9,9 +9,9 @@ namespace StarMark.Tests;
 
 /// <summary>
 /// 桌面组件存储测试点（DeskBox 式独立组件窗口的持久化契约，v3 多实例模型）：
-/// 全新安装默认不启用任何实例 / 实例集合与窗口配置持久化 / 同类型可重复添加多个实例 /
-/// 待办·随记·入口增删与排序规范（按实例隔离）/ v1 单面板迁移（迁移为多个实例）/
-/// 损坏文件容错 / 原子写入。
+/// 首次运行预置（P-66：只给时钟）与"删光后不再回来"的分界 / 实例集合与窗口配置持久化 /
+/// 同类型可重复添加多个实例 / 待办·随记·入口增删与排序规范（按实例隔离）/
+/// v1 单面板迁移（迁移为多个实例）/ 损坏文件容错 / 原子写入。
 /// </summary>
 public sealed class WidgetStorageTests : IDisposable
 {
@@ -26,20 +26,48 @@ public sealed class WidgetStorageTests : IDisposable
 
     private WidgetStorage Store() => new(_path);
 
+    /// <summary>
+    /// 起点设为「文件已存在、实例为空」。首启会预置一个时钟（P-66），而多数持久化用例要的起点是
+    /// "一位当前没有组件的老用户"，不是首启——直接调 <see cref="Store"/> 的 Load 会带上那只预置时钟，
+    /// 断言就得去记一笔无关的偏移。显式铺空态，用例只测自己那件事。
+    /// </summary>
+    private void StartWithEmptyExistingConfig() => File.WriteAllText(_path, """{ "Version": 3, "Instances": [] }""");
+
     [Fact]
-    public void MissingFile_ReturnsDefaults()
+    public void FirstRun_SeedsOnlyTheClock_AndPersistsItSoIdentityIsStable()
     {
+        Assert.False(File.Exists(_path));
         var data = Store().Load();
         Assert.Equal(3, data.Version);
-        Assert.Empty(data.Instances);          // 全新安装不弹任何组件，由用户主动添加
+        // P-66（用户裁决）：首启只预置时钟，其余靠新建入口 / 托盘发现。
+        Assert.Equal(WidgetStorage.FirstRunKinds, data.Instances.Select(i => i.Kind));
+        var clock = Assert.Single(data.Instances);
+        Assert.Equal(WidgetStorage.DefaultWidth(WidgetKind.Clock), clock.Width);
+        Assert.Equal(WidgetStorage.DefaultHeight(WidgetKind.Clock), clock.Height);
+        // 预置必须当场落盘：实例 Id 是随机 Guid，不落则每次 Load 换一个，上层按 Id 管窗口会重复建窗。
+        Assert.True(File.Exists(_path), "首启预置未落盘 ⇒ 实例身份每次 Load 都变");
+        Assert.Equal(clock.Id, Store().Load().Instances.Single().Id);
         // 未保存过的组件取类型默认尺寸
         Assert.Equal(320, WidgetStorage.DefaultWidth(WidgetKind.QuickLaunch));
         Assert.Equal(460, WidgetStorage.DefaultHeight(WidgetKind.QuickLaunch));
     }
 
     [Fact]
+    public void EmptyButExistingConfig_IsNotReseeded()
+    {
+        // 用户把组件全删光：文件在、实例为空。这不是首启——再预置就成了"删不掉的组件"。
+        StartWithEmptyExistingConfig();
+        var store = Store();
+        var data = store.Load();
+        Assert.Empty(data.Instances);
+        store.Save(data);
+        Assert.Empty(Store().Load().Instances);   // 存一圈回来仍然为空，Save 侧也不得补种
+    }
+
+    [Fact]
     public void Instances_RoundTrip()
     {
+        StartWithEmptyExistingConfig();
         var store = Store();
         var data = store.Load();
         var clock = new WidgetInstanceConfig { Kind = WidgetKind.Clock, X = 480, Y = 260, Width = 260, Height = 180, Topmost = true };
@@ -82,6 +110,7 @@ public sealed class WidgetStorageTests : IDisposable
     [Fact]
     public void Instances_AllowMultipleOfSameKind()
     {
+        StartWithEmptyExistingConfig();
         var store = Store();
         var data = store.Load();
         data.Instances.Add(new WidgetInstanceConfig { Kind = WidgetKind.Todo });
@@ -98,6 +127,7 @@ public sealed class WidgetStorageTests : IDisposable
     [Fact]
     public void Todos_PersistSortedAndFiltered()
     {
+        StartWithEmptyExistingConfig();
         var store = Store();
         var data = store.Load();
         var inst = new WidgetInstanceConfig { Kind = WidgetKind.Todo };
@@ -120,6 +150,7 @@ public sealed class WidgetStorageTests : IDisposable
     [Fact]
     public void Notes_PersistNewestFirst()
     {
+        StartWithEmptyExistingConfig();
         var store = Store();
         var data = store.Load();
         var inst = new WidgetInstanceConfig { Kind = WidgetKind.QuickNote };
@@ -136,6 +167,7 @@ public sealed class WidgetStorageTests : IDisposable
     [Fact]
     public void Links_PersistNewestFirstAndDropInvalid()
     {
+        StartWithEmptyExistingConfig();
         var store = Store();
         var data = store.Load();
         var inst = new WidgetInstanceConfig { Kind = WidgetKind.QuickLaunch };
@@ -323,8 +355,9 @@ public sealed class WidgetStorageTests : IDisposable
         // （OneDrive 同步 / 杀软实时扫描短暂锁定 widgets.json），必须被吞掉不外抛——
         // 它经 WidgetManager.OnUiAsync 在 UI 线程同步内联执行，抛出会直接闪退整个应用。
         // 用 FileShare.None 独占句柄锁住 _path：WriteAllText(.tmp) 成功、File.Move→_path 必抛 IOException。
+        StartWithEmptyExistingConfig();
         var store = Store();
-        var data = store.Load();                                   // 文件此刻还不存在 → 空态、degraded=false
+        var data = store.Load();                                   // 空态、degraded=false
         data.Instances.Add(new WidgetInstanceConfig { Kind = WidgetKind.Clock });
         using var hold = new FileStream(_path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
 
@@ -339,6 +372,7 @@ public sealed class WidgetStorageTests : IDisposable
         // 真实数据丢失场景（R10#1）：widgets.json 已存在且合法，但某一刻被 OneDrive/杀软独占锁定。
         // Load 因 IOException 读不到 → 旧实现吞异常返回空、随后的 Save 会用**空数据覆盖真实配置**，全量组件被抹掉。
         // 修复：读到失败进入降级态 → Save 拒绝落盘（改动丢失远好于全量清空）；某次成功 Load 会自动复位、恢复写入。
+        StartWithEmptyExistingConfig();
         var seeded = Store();
         var seed = seeded.Load();
         seed.Instances.Add(new WidgetInstanceConfig { Kind = WidgetKind.Clock, X = 777 });
