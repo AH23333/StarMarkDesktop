@@ -76,43 +76,46 @@
         </Border>
 
         <!--
-            一条工具条管全部：第一行画什么、第二行用什么画、第三行画完了干什么。
-            刻意合成一块而不是"工具条在上、动作条在下"：两块浮层要各算一次上下左右与互相避让，
-            而小选区（比如截一个按钮）根本放不下两条 —— 挤出来的结果就是盖住用户正要标的东西。
+            一条<b>窄窄的</b>工具条：笔 / 色 / 粗细收进三个下拉，主动作留在外面一眼可点。
+            刻意排成一行而不是三行：三行浮层在小选区上会盖住用户正要标的东西，
+            而"按钮全排开"看着像工具面板、不像一个随手就能用的编辑条（对齐 Snipaste 的窄条）。
         -->
         <Border
             x:Name="ActionBar"
             Background="#EE202020"
             CornerRadius="6"
-            Padding="6"
+            Padding="5,3,5,3"
             HorizontalAlignment="Left"
             VerticalAlignment="Top"
             Visibility="Collapsed">
-            <StackPanel Spacing="4">
-
-                <!--
-                    三行都由代码按 Core 的模型生成（AnnotationTool / Annotation.Palette / ThicknessSteps）。
-                    刻意不在这里手写按钮：手写就会多一份"有哪些工具"的事实，
-                    于是"加了工具却忘了上按钮"这种缺陷只能靠眼睛发现——而它现在根本不可能发生。
-                -->
-                <StackPanel x:Name="ToolPanel" Orientation="Horizontal" Spacing="2"/>
-                <StackPanel Orientation="Horizontal" Spacing="2">
-                    <StackPanel x:Name="ColourPanel" Orientation="Horizontal" Spacing="2"/>
-                    <Border Width="1" Background="#44FFFFFF" Margin="4,2,4,2"/>
-                    <StackPanel x:Name="WeightPanel" Orientation="Horizontal" Spacing="2"/>
-                    <Border Width="1" Background="#44FFFFFF" Margin="4,2,4,2"/>
-                    <Button x:Name="UndoButton" Content="撤销" FontSize="11" Click="Undo_Click"
-                        ToolTipService.ToolTip="撤掉最后一条标注（Ctrl+Z）" IsEnabled="False"/>
-                    <Button x:Name="ClearButton" Content="清空" FontSize="11" Click="Clear_Click" IsEnabled="False"/>
-                </StackPanel>
-
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <Button x:Name="CopyButton" Content="复制" FontSize="11" Click="Copy_Click"/>
-                    <Button Content="存图" FontSize="11" Click="Save_Click"/>
-                    <Button Content="贴图" FontSize="11" Click="Pin_Click" ToolTipService.ToolTip="钉在桌面上（同 F3），带上刚画的标注"/>
-                    <Button Content="识字" FontSize="11" Click="Ocr_Click" ToolTipService.ToolTip="认出这块画面的文字并复制"/>
-                    <Button Content="取消" FontSize="11" Click="Cancel_Click"/>
-                </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="3">
+                <!-- 三个下拉的内容全部由代码按 Core 的表生成（XAML 里手写按钮＝多一份"有哪些工具"的事实） -->
+                <DropDownButton x:Name="ToolPicker" Content="矩形" FontSize="11" Padding="7,2,7,2"
+                    Background="#22FFFFFF" BorderThickness="0" Foreground="#FFFFFFFF"
+                    ToolTipService.ToolTip="要画什么（1–8 太远，这里用下拉收起来）"/>
+                <DropDownButton x:Name="ColourPicker" FontSize="11" Padding="7,2,7,2"
+                    Background="#22FFFFFF" BorderThickness="0"
+                    ToolTipService.ToolTip="笔的颜色：深浅底都有，所以黑与白也在里面"/>
+                <DropDownButton x:Name="WeightPicker" Content="中" FontSize="11" Padding="7,2,7,2"
+                    Background="#22FFFFFF" BorderThickness="0" Foreground="#FFFFFFFF"
+                    ToolTipService.ToolTip="粗细（打码与荧光笔会按工具自动放大到能盖住的笔刷）"/>
+                <Border Width="1" Background="#44FFFFFF" Margin="3,4,3,4"/>
+                <Button x:Name="UndoButton" Content="&#x21B6;" FontSize="13" Padding="8,2,8,2"
+                    Click="Undo_Click" IsEnabled="False" ToolTipService.ToolTip="撤销上一条（Ctrl+Z）"/>
+                <Button x:Name="RedoButton" Content="&#x21B7;" FontSize="13" Padding="8,2,8,2"
+                    Click="Redo_Click" IsEnabled="False" ToolTipService.ToolTip="重做（Ctrl+Y）"/>
+                <Button x:Name="ClearButton" Content="&#x2715;" FontSize="12" Padding="8,2,8,2"
+                    Click="Clear_Click" IsEnabled="False" ToolTipService.ToolTip="清空全部标注（还能撤销回来）"/>
+                <Border Width="1" Background="#44FFFFFF" Margin="3,4,3,4"/>
+                <Button x:Name="CopyButton" Content="复制" FontSize="11" Padding="8,2,8,2" Click="Copy_Click"
+                    ToolTipService.ToolTip="把带标注的画面复制进剪贴板（Enter）"/>
+                <Button Content="存图" FontSize="11" Padding="8,2,8,2" Click="Save_Click"
+                    ToolTipService.ToolTip="存成 PNG（Ctrl+S）"/>
+                <Button Content="贴图" FontSize="11" Padding="8,2,8,2" Click="Pin_Click"
+                    ToolTipService.ToolTip="钉在桌面上（同 F3），带上刚画的标注"/>
+                <Button Content="识字" FontSize="11" Padding="8,2,8,2" Click="Ocr_Click"
+                    ToolTipService.ToolTip="认出这块画面的文字并复制"/>
+                <Button Content="取消" FontSize="11" Padding="8,2,8,2" Click="Cancel_Click"/>
             </StackPanel>
         </Border>
 
