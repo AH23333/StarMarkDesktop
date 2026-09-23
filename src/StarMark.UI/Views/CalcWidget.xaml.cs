@@ -12,9 +12,9 @@ using StarMark.UI.ViewModels;
 namespace StarMark.UI.Views;
 
 /// <summary>
-/// 计算器组件：表达式求值 + 单位换算 + 时间戳换算。
+/// 计算器组件：表达式求值 + 常用速算 + 单位换算。
 /// <para>
-/// 全部判定在 <c>StarMark.Core.Calc</c>（求值器 / 换算表 / 时间戳），本类只搬运输入与输出。
+/// 全部判定在 <c>StarMark.Core.Calc</c>（求值器 / 速算目录与算法 / 换算表），本类只搬运输入与输出。
 /// 历史带按实例存进 <c>widgets.json</c>（与快捷入口的 Links 同一通道），因此同类型的两个计算器互不干扰。
 /// </para>
 /// </summary>
@@ -24,6 +24,9 @@ public sealed partial class CalcWidget : UserControl
 
     private readonly WidgetManager _manager;
     private readonly string _instanceId;
+    private TextBox[] _quickBoxes = Array.Empty<TextBox>();
+    private TextBlock[] _quickLabels = Array.Empty<TextBlock>();
+    private FrameworkElement[] _quickCells = Array.Empty<FrameworkElement>();
 
     /// <summary>InitializeComponent 期间设置 SelectedIndex 也会触发 SelectionChanged，此时 VM 与控件都还没接好。</summary>
     private bool _ready;
@@ -34,9 +37,13 @@ public sealed partial class CalcWidget : UserControl
         _manager = manager;
         _instanceId = config.Id;
         InitializeComponent();
+        _quickBoxes = new[] { QuickBox0, QuickBox1, QuickBox2, QuickBox3 };
+        _quickLabels = new[] { QuickLabel0, QuickLabel1, QuickLabel2, QuickLabel3 };
+        _quickCells = new FrameworkElement[] { QuickCell0, QuickCell1, QuickCell2, QuickCell3 };
         ViewModel.SeedHistory(config.CalcHistory);
-        // 三个换算页各先算一次：否则切过去是一片空白，看起来像功能没做
+        // 三页各先算一次：否则切过去是一片空白，看起来像功能没做
         ViewModel.RecalcUnit();
+        ApplyQuickMode(0);
         SyncHistoryEmptyHint();
         _ready = true;
     }
@@ -134,39 +141,58 @@ public sealed partial class CalcWidget : UserControl
         ToBox.SelectedIndex = ViewModel.ToIndex;
     }
 
-    // ───────────────────────── 时间戳 ─────────────────────────
+    // ───────────────────────── 常用速算 ─────────────────────────
 
-    private void StampBox_TextChanged(object sender, TextChangedEventArgs e)
+    /// <summary>四个输入槽按模式复用：谁显示、叫什么名字，全部听 <see cref="QuickCalculator"/> 的槽表。</summary>
+    private void ApplyQuickMode(int index)
     {
-        if (!_ready) return;
-        ViewModel.RecalcStamp();
-    }
-
-    private void ClockBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (!_ready) return;
-        ViewModel.RecalcClock();
-    }
-
-    private void UseNow_Click(object sender, RoutedEventArgs e)
-    {
-        ViewModel.UseNow();
-        // 文本框回填会再触发一次 TextChanged→重算，值相同故无害
-        StampBox.Text = ViewModel.StampText;
-        ClockBox.Text = ViewModel.ClockText;
-    }
-
-    private void CopyStamp_Click(object sender, RoutedEventArgs e)
-    {
-        if (!long.TryParse(ViewModel.StampText?.Trim(), out var seconds))
+        var fields = ViewModel.SelectQuickMode(index);
+        for (var i = 0; i < _quickBoxes.Length; i++)
         {
-            ShowHint("没有可复制的秒值：左边时间戳还没填对");
+            // 先一律清空再决定显隐：收起来的格子若留着上一模式的文本，切回来就是"看着像填错"的旧值
+            _quickBoxes[i].Text = string.Empty;
+            _quickCells[i].Visibility = i < fields.Count ? Visibility.Visible : Visibility.Collapsed;
+            if (i >= fields.Count) continue;
+            _quickLabels[i].Text = fields[i].Required ? fields[i].Label : fields[i].Label + "（可空）";
+            _quickBoxes[i].PlaceholderText = fields[i].Placeholder;
+            _quickBoxes[i].Tag = i;
+        }
+        ShowQuickHint(string.Empty);
+    }
+
+    private void QuickModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_ready) return;
+        ApplyQuickMode(QuickModeBox.SelectedIndex);
+    }
+
+    private void QuickBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!_ready || sender is not TextBox { Tag: int slot }) return;
+        ShowQuickHint(string.Empty);
+        ViewModel.SetQuickText(slot, ((TextBox)sender).Text);
+    }
+
+    private void CopyQuick_Click(object sender, RoutedEventArgs e)
+    {
+        var text = ViewModel.QuickCopyText;
+        if (text is null)
+        {
+            ShowQuickHint("没有可复制的结果：还有必填的格子没填对");
             return;
         }
-        ShowHint(TryCopy(seconds.ToString(System.Globalization.CultureInfo.InvariantCulture), out var why)
-            ? $"已复制秒值 {seconds}"
-            : $"复制失败：{why}");
+        ShowQuickHint(TryCopy(text, out var why) ? "已复制速算结果" : $"复制失败：{why}");
     }
+
+    private void ClearQuick_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var box in _quickBoxes) box.Text = string.Empty;
+        ShowQuickHint("已清空");
+    }
+
+    /// <summary>常用页的提示走自己的文本块（<c>HintBlock</c> 在"计算"页里，从这页看不见）；空文本＝回落到模式说明。</summary>
+    private void ShowQuickHint(string text)
+        => QuickHintBlock.Text = string.IsNullOrEmpty(text) ? ViewModel.CurrentQuickMode.Hint : text;
 
     // ───────────────────────── 共用 ─────────────────────────
 

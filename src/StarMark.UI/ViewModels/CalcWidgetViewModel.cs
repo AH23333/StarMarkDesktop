@@ -11,10 +11,10 @@ using StarMark.Core.Widgets;
 namespace StarMark.UI.ViewModels;
 
 /// <summary>
-/// 计算器组件 ViewModel：表达式求值 / 单位换算 / 时间戳换算三种输入的统一承载。
+/// 计算器组件 ViewModel：表达式求值 / 常用速算 / 单位换算三种输入的统一承载。
 /// <para>
-/// <b>这里不放任何判定</b>——求值、换算率、位数判精度全部在 <c>StarMark.Core.Calc</c>（可单测）。
-/// 本类只做三件事：接住逐键输入的字符串、把 Core 的结论拼成一行显示文本、维护历史带的顺序与上限。
+/// <b>这里不放任何判定</b>——求值、速算目录与算法、换算率全部在 <c>StarMark.Core.Calc</c>（可单测）。
+/// 本类只做三件事：接住逐键输入的字符串、把 Core 的结论拼成显示文本、维护历史带的顺序与上限。
 /// </para>
 /// </summary>
 public sealed partial class CalcWidgetViewModel : ObservableObject
@@ -26,10 +26,7 @@ public sealed partial class CalcWidgetViewModel : ObservableObject
     [ObservableProperty] private string _calcResult = "输入算式，回车记入历史";
     [ObservableProperty] private string _unitValueText = "1";
     [ObservableProperty] private string _unitResult = string.Empty;
-    [ObservableProperty] private string _stampText = string.Empty;
-    [ObservableProperty] private string _stampResult = string.Empty;
-    [ObservableProperty] private string _clockText = string.Empty;
-    [ObservableProperty] private string _clockResult = string.Empty;
+    [ObservableProperty] private string _quickResult = string.Empty;
     [ObservableProperty] private IReadOnlyList<CalcUnit> _units;
     [ObservableProperty] private int _fromIndex;
     [ObservableProperty] private int _toIndex = 1;
@@ -37,14 +34,23 @@ public sealed partial class CalcWidgetViewModel : ObservableObject
 
     private CalcUnitCategory? _category;
 
+    /// <summary>各输入槽的原始文本；按槽位下标存，切模式时整组作废。</summary>
+    private readonly string?[] _quickTexts = new string?[QuickCalculator.MaxFields];
+    private int _quickMode = -1;
+    private QuickResult _quick = new(Array.Empty<QuickLine>(), null);
+
     public CalcWidgetViewModel()
     {
         Categories = UnitTables.Categories;
         _category = Categories[0];
         _units = _category.Units;
+        QuickModeTitles = QuickCalculator.Modes.Select(m => m.Title).ToList();
     }
 
     public IReadOnlyList<CalcUnitCategory> Categories { get; }
+
+    /// <summary>速算下拉的标题列表（与 <see cref="QuickCalculator.Modes"/> 同序）。</summary>
+    public IReadOnlyList<string> QuickModeTitles { get; }
 
     public ObservableCollection<CalcHistoryEntry> History { get; } = new();
 
@@ -143,45 +149,46 @@ public sealed partial class CalcWidgetViewModel : ObservableObject
         RecalcUnit();
     }
 
-    // ───────────────────────── 时间戳 ─────────────────────────
+    // ───────────────────────── 常用速算 ─────────────────────────
 
-    /// <summary>时间戳 → 日期。时区取本机（Core 侧只接受参数，不在内部读环境）。</summary>
-    public void RecalcStamp()
+    /// <summary>当前速算模式（<see cref="SelectQuickMode"/> 之后有效；未初始化时是"打折 / 满减"）。</summary>
+    public QuickMode CurrentQuickMode => QuickCalculator.Modes[Math.Clamp(_quickMode, 0, QuickCalculator.Modes.Count - 1)];
+
+    /// <summary>
+    /// 切到某种速算，返回它的输入槽（界面据此改标题/占位/显隐）。
+    /// <b>换模式必定作废上一组的输入文本</b>：把"原价 800"接着当成"起始值 800"用，
+    /// 是给用户一个看起来算得飞快、其实答非所问的结果。
+    /// </summary>
+    public IReadOnlyList<QuickField> SelectQuickMode(int index)
     {
-        var zone = TimeZoneInfo.Local;
-        if (!TimestampConverter.TryParseStamp(StampText, zone, out var at, out var unit, out var error))
+        if (index < 0 || index >= QuickCalculator.Modes.Count) index = 0;
+        if (_quickMode != index)
         {
-            StampResult = error ?? "无法解析";
-            return;
+            Array.Clear(_quickTexts, 0, _quickTexts.Length);
+            _quickMode = index;
         }
-        StampResult = $"{TimestampConverter.Format(at)}  {TimestampConverter.OffsetText(at.Offset)}"
-                    + $"（按{TimestampConverter.UnitLabel(unit)}理解）"
-                    + (at.Offset == TimeSpan.Zero ? string.Empty
-                       : $"\nUTC：{TimestampConverter.Format(at.ToUniversalTime())}");
+        RecalcQuick();
+        return CurrentQuickMode.Fields;
     }
 
-    /// <summary>日期 → 三种精度的时间戳一次给全（用户多半正要的是其中一个）。</summary>
-    public void RecalcClock()
+    /// <summary>某个输入槽逐键变化（越界的槽号直接忽略：界面预放了 <see cref="QuickCalculator.MaxFields"/> 个，用不满是常态）。</summary>
+    public void SetQuickText(int slot, string? text)
     {
-        if (!TimestampConverter.TryParseClock(ClockText, TimeZoneInfo.Local, out var at, out var error))
-        {
-            ClockResult = error ?? "无法解析";
-            return;
-        }
-        ClockResult = $"秒 {TimestampConverter.ToUnix(at, UnixStampUnit.Seconds)}"
-                    + $"　毫秒 {TimestampConverter.ToUnix(at, UnixStampUnit.Milliseconds)}"
-                    + $"　微秒 {TimestampConverter.ToUnix(at, UnixStampUnit.Microseconds)}";
+        if (slot < 0 || slot >= _quickTexts.Length) return;
+        _quickTexts[slot] = text;
+        RecalcQuick();
     }
 
-    /// <summary>「用此刻」：把当前时间同时填进两侧，省掉手打（也是"我这台机器的时区到底差几小时"的最快问法）。</summary>
-    public void UseNow()
+    public void RecalcQuick()
     {
-        var now = DateTimeOffset.Now;
-        ClockText = now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-        StampText = now.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
-        RecalcClock();
-        RecalcStamp();
+        if (_quickMode < 0) _quickMode = 0;
+        _quick = QuickCalculator.Evaluate(_quickMode, _quickTexts, DateTime.Now);
+        // 什么都没填时这里就是"「原价」还没填数字"：结果区一片空白会被当成功能没做（组件里的老教训）
+        QuickResult = _quick.MultiLine;
     }
+
+    /// <summary>可复制的速算结果。算错/没填时给 null，让界面明说"现在没东西可复制"而不是把错误原因塞进剪贴板。</summary>
+    public string? QuickCopyText => _quick.Ok ? _quick.MultiLine : null;
 }
 
 /// <summary>历史带的一行（表达式 + 当次答案）。</summary>

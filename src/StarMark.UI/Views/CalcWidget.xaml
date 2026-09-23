@@ -64,6 +64,58 @@
                 </StackPanel>
             </PivotItem>
 
+            <!-- ═══════════ 常用 ═══════════ -->
+            <PivotItem Header="常用">
+                <StackPanel Spacing="8">
+                    <ComboBox x:Name="QuickModeBox" HorizontalAlignment="Stretch" FontSize="12"
+                              SelectedIndex="0" ItemsSource="{x:Bind ViewModel.QuickModeTitles, Mode=OneTime}"
+                              SelectionChanged="QuickModeBox_SelectionChanged"/>
+                    <TextBlock x:Name="QuickHintBlock" Text="" FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+
+                    <Grid ColumnSpacing="6" RowSpacing="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <!-- 四个槽按模式改标题与占位、用不到的整格收起：
+                             与其做四套界面，不如让"要几个填几个"这件事由 Core 的槽表说话。 -->
+                        <StackPanel x:Name="QuickCell0" Grid.Row="0" Grid.Column="0" Spacing="2">
+                            <TextBlock x:Name="QuickLabel0" FontSize="11" Opacity="0.7"/>
+                            <TextBox x:Name="QuickBox0" FontSize="12" Style="{StaticResource WidgetInputBox}"
+                                     Padding="8,5,8,5" TextChanged="QuickBox_TextChanged"/>
+                        </StackPanel>
+                        <StackPanel x:Name="QuickCell1" Grid.Row="0" Grid.Column="1" Spacing="2">
+                            <TextBlock x:Name="QuickLabel1" FontSize="11" Opacity="0.7"/>
+                            <TextBox x:Name="QuickBox1" FontSize="12" Style="{StaticResource WidgetInputBox}"
+                                     Padding="8,5,8,5" TextChanged="QuickBox_TextChanged"/>
+                        </StackPanel>
+                        <StackPanel x:Name="QuickCell2" Grid.Row="1" Grid.Column="0" Spacing="2">
+                            <TextBlock x:Name="QuickLabel2" FontSize="11" Opacity="0.7"/>
+                            <TextBox x:Name="QuickBox2" FontSize="12" Style="{StaticResource WidgetInputBox}"
+                                     Padding="8,5,8,5" TextChanged="QuickBox_TextChanged"/>
+                        </StackPanel>
+                        <StackPanel x:Name="QuickCell3" Grid.Row="1" Grid.Column="1" Spacing="2">
+                            <TextBlock x:Name="QuickLabel3" FontSize="11" Opacity="0.7"/>
+                            <TextBox x:Name="QuickBox3" FontSize="12" Style="{StaticResource WidgetInputBox}"
+                                     Padding="8,5,8,5" TextChanged="QuickBox_TextChanged"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="{x:Bind ViewModel.QuickResult, Mode=OneWay}"
+                               FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Button Content="复制结果" FontSize="11" Padding="10,4,10,4"
+                                Style="{StaticResource WidgetActionButton}" Click="CopyQuick_Click"/>
+                        <Button Content="清空" FontSize="11" Padding="10,4,10,4"
+                                Style="{StaticResource WidgetActionButton}" Click="ClearQuick_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </PivotItem>
+
             <!-- ═══════════ 换算 ═══════════ -->
             <PivotItem Header="换算">
                 <StackPanel Spacing="8">
@@ -96,34 +148,6 @@
                                FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
                     <TextBlock Text="换算率为内置静态表，断网可用；不含实时汇率。"
                                FontSize="10" Opacity="0.55" TextWrapping="Wrap"/>
-                </StackPanel>
-            </PivotItem>
-
-            <!-- ═══════════ 时间戳 ═══════════ -->
-            <PivotItem Header="时间戳">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="时间戳 → 日期（按位数自动识别秒/毫秒/微秒）"
-                               FontSize="11" Opacity="0.7" TextWrapping="Wrap"/>
-                    <TextBox x:Name="StampBox" PlaceholderText="1727000000" FontSize="13"
-                             Style="{StaticResource WidgetInputBox}" Padding="8,6,8,6"
-                             TextChanged="StampBox_TextChanged"/>
-                    <TextBlock Text="{x:Bind ViewModel.StampResult, Mode=OneWay}"
-                               FontSize="12" TextWrapping="Wrap"/>
-
-                    <Border Height="1" Margin="0,2,0,2" Background="{ThemeResource WidgetDividerBrush}"/>
-
-                    <TextBlock Text="日期 → 时间戳" FontSize="11" Opacity="0.7"/>
-                    <TextBox x:Name="ClockBox" PlaceholderText="2026-09-23 20:48:12" FontSize="13"
-                             Style="{StaticResource WidgetInputBox}" Padding="8,6,8,6"
-                             TextChanged="ClockBox_TextChanged"/>
-                    <TextBlock Text="{x:Bind ViewModel.ClockResult, Mode=OneWay}"
-                               FontSize="12" TextWrapping="Wrap"/>
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <Button Content="用此刻" FontSize="11" Padding="10,4,10,4"
-                                Style="{StaticResource WidgetActionButton}" Click="UseNow_Click"/>
-                        <Button Content="复制秒值" FontSize="11" Padding="10,4,10,4"
-                                Style="{StaticResource WidgetActionButton}" Click="CopyStamp_Click"/>
-                    </StackPanel>
                 </StackPanel>
             </PivotItem>
         </Pivot>
