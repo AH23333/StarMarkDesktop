@@ -51,8 +51,16 @@ public static class ItemCardPolicy
            + (hasToken ? string.Empty : "；当前未配置 Token，点击会提示失败")
            + "。判定取自本机已同步的 Star 列表，网页上刚 Star 的要等下次同步才显示。";
 
-    public static string CollectLabel(bool collected) => collected ? "移出收藏" : "收进收藏";
+    /// <summary>
+    /// 卡片的「更新时间」行与「★ 星数」行是否出现。热榜候选两行都要关，理由各不相同：
+    /// <para>① 候选没有"本机更新时间"，<c>UpdatedAt</c> 缺省是 0 ⇒ 不关就会在卡片右上角印出
+    /// <c>1970-01-01</c>——把一个缺值显示成一个看起来完全真实的日期（与"不知道不许画成 0"同一条口径）。</para>
+    /// <para>② 星数已经和语言、本期新增一起写在副标题里了（组件只读副标题，必须带），
+    /// 卡片再单独一行 ★ 就是同一件事说两遍。</para>
+    /// </summary>
+    public static bool ShowsTimeAndStarsLines(bool isTrendingRepo) => !isTrendingRepo;
 
+    public static string CollectLabel(bool collected) => collected ? "移出收藏" : "收进收藏";
     public static string CollectTip(bool collected)
         => collected
             ? "已在本机收藏（书签）里，点击移除；不会动 GitHub 的 Star 状态"

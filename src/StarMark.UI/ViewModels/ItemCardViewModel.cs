@@ -162,7 +162,9 @@ public partial class ItemCardViewModel : ObservableObject
         _ => "•",
     };
 
-    public string RelativeTime => RelativeTimeHelper.Format(UpdatedAt);
+    /// <summary>更新时间（热榜候选不显示：它们没有"本机更新时间"，缺省 0 会印成 1970-01-01）。</summary>
+    public string RelativeTime => ItemCardPolicy.ShowsTimeAndStarsLines(IsTrendingRepo)
+        ? RelativeTimeHelper.Format(UpdatedAt) : string.Empty;
 
     /// <summary>
     /// 本地文件的体积读数（Everything 已按 size 请求字段）。仅 File 类型且拿到体积时才非空——
@@ -177,7 +179,8 @@ public partial class ItemCardViewModel : ObservableObject
     public bool HasSubtitle => !string.IsNullOrEmpty(Subtitle);
     public bool HasDescription => !string.IsNullOrEmpty(Description);
     public bool HasNotes => !string.IsNullOrEmpty(Notes);
-    public bool HasStars => StarsCount is long s && s > 0;
+    /// <summary>独立星数行（热榜候选的星数已在副标题里与语言、本期新增一并给出，不再重复一行）。</summary>
+    public bool HasStars => ItemCardPolicy.ShowsTimeAndStarsLines(IsTrendingRepo) && StarsCount is long s && s > 0;
     public string StarsText => HasStars && StarsCount is long s ? $"★ {s:N0}" : string.Empty;
 
     public Windows.UI.Color TagColor(string tag) => TagColorHelper.GetTagColor(tag);

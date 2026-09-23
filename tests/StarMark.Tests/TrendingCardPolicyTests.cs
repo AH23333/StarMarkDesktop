@@ -72,6 +72,25 @@ public sealed class TrendingCardPolicyTests
     public void SendToLauncher_OnlyForRealRowsWithAUri(bool launcher, bool trending, bool hasUri, bool expected)
         => Assert.Equal(expected, ItemCardPolicy.CanSendToLauncher(launcher, trending, hasUri));
 
+    /// <summary>
+    /// 关掉的不是"好看"，是两件会说谎的显示：候选行没有本机更新时间（缺省 0 会印成 1970-01-01），
+    /// 星数又已经在副标题里与语言、本期新增一并给出。
+    /// </summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void TimeAndStarsLines_DoNotInventValuesForCandidateRows(bool trending, bool expected)
+        => Assert.Equal(expected, ItemCardPolicy.ShowsTimeAndStarsLines(trending));
+
+    /// <summary>关掉星数行的前提：副标题一定带着它。两处的判据若哪天分开，这条会红。</summary>
+    [Fact]
+    public void Subtitle_CarriesTheStarCount_ThatTheStarsLineSurrenders()
+    {
+        var subtitle = TrendingRowDraft.ForRow(Repo(), TrendingPeriod.Weekly, TrendingSource.TrendingHtml).Subtitle;
+        Assert.Contains(TrendingStarsText.Total(12345), subtitle);
+        Assert.False(ItemCardPolicy.ShowsTimeAndStarsLines(true));
+    }
+
     // ===== Star / 书签 的显示值 =====
 
     [Fact]
