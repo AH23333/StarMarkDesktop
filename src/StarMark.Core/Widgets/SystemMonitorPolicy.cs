@@ -274,6 +274,17 @@ public sealed class AverageWindow
         return sum / _samples.Count;
     }
 
+    /// <summary>
+    /// 收一帧并立刻给出窗内均值。<paramref name="value"/> 为 null 表示"这一拍没有可信数据"——
+    /// 只驱逐过期样本、不写入新样本，于是均值会随窗滑动直到自然变空（返回 null），
+    /// 而不是硬凑一个数，也不是把最后一帧有效值永久挂在屏幕上。
+    /// </summary>
+    public double? Sample(long nowMs, double? value)
+    {
+        if (value is { } fresh) Add(nowMs, fresh);
+        return Average(nowMs);
+    }
+
     public void Clear() => _samples.Clear();
 
     private void Evict(long nowMs)

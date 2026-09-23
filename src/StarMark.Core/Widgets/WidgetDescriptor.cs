@@ -185,5 +185,11 @@ public sealed class WidgetRegistry
         // 必须可缩放：用户要把倒计时拉大成"桌面时钟"用（真机反馈：不可缩放等于少一种用法）。
         yield return new WidgetDescriptor(
             WidgetKind.Focus, "番茄钟", "🍅", 250, 330);
+
+        // ── 效率组件批次 MM：系统监控 ──
+        // 判据在 Core（SystemMonitorPolicy），原生读数在 Integrations（SystemMetricsProbe）；
+        // 采样只在有可见实例时进行（D7），所以隐藏起来的组件一次 P/Invoke 都不发。
+        yield return new WidgetDescriptor(
+            WidgetKind.SystemMonitor, "系统监控", "📊", 260, 300);
     }
 }

@@ -67,6 +67,8 @@ public sealed class WidgetContentFactory
         factory.Register(WidgetKind.WorldClock, w => new WorldClockWidget(w.Config, w.Manager));
         factory.Register(WidgetKind.Countdown, w => new CountdownWidget(w.Config, w.Manager));
         factory.Register(WidgetKind.Focus, w => new FocusTimerWidget(w.Config, w.Manager));
+        // 效率组件批次 MM：系统监控（勾选按实例持久化；采样只在窗口可见时进行）
+        factory.Register(WidgetKind.SystemMonitor, w => new SystemMonitorWidget(w.Config, w.Manager));
         return factory;
     }
 }

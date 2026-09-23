@@ -93,6 +93,14 @@ public sealed class WidgetSnapshotEntry : IWidgetGeometryEntry
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<CountdownItem>? Countdowns { get; set; }
 
+    /// <summary>番茄钟时长（配置项，与 ChromeMode/Appearance 同一层：快照要能真的回到那一刻的观感）。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public FocusTimerConfig? Focus { get; set; }
+
+    /// <summary>系统监控的指标勾选。<b>null 与 0 分别是"当时没配过"与"当时被全取消"</b>。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MonitorMetrics { get; set; }
+
     public List<SnapshotLocalItem> LocalItems { get; set; } = new();
 }
 

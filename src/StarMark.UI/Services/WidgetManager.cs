@@ -596,6 +596,8 @@ public sealed class WidgetManager
                 CalcHistory = inst.CalcHistory?.Select(h => new CalcHistoryItem { Expression = h.Expression, Answer = h.Answer }).ToList(),
                 WorldClockZones = inst.WorldClockZones?.Select(c => new WorldClockCity(c.ZoneId, c.Name)).ToList(),
                 Countdowns = inst.Countdowns?.Select(c => c.Clone()).ToList(),
+                Focus = inst.Focus is null ? null : new FocusTimerConfig { FocusMinutes = inst.Focus.FocusMinutes, RestMinutes = inst.Focus.RestMinutes },
+                MonitorMetrics = inst.MonitorMetrics,
             });
             instanceIds.Add(inst.Id);
             perKind[inst.Kind] = idx + 1;
@@ -681,6 +683,8 @@ public sealed class WidgetManager
                 inst.CalcHistory = entry.CalcHistory?.Select(h => new CalcHistoryItem { Expression = h.Expression, Answer = h.Answer }).ToList();
                 inst.WorldClockZones = entry.WorldClockZones?.Select(c => new WorldClockCity(c.ZoneId, c.Name)).ToList();
                 inst.Countdowns = entry.Countdowns?.Select(c => c.Clone()).ToList();
+                inst.Focus = entry.Focus is null ? null : new FocusTimerConfig { FocusMinutes = entry.Focus.FocusMinutes, RestMinutes = entry.Focus.RestMinutes };
+                inst.MonitorMetrics = entry.MonitorMetrics;
                 restore.Add((inst.Id, entry.LocalItems));
             }
             // 快照还原的是「当时那一整套摆位」，与"最后一次选择的布局"已无对应关系；
@@ -881,6 +885,17 @@ public sealed class WidgetManager
             var inst = data.Instances.FirstOrDefault(i => i.Id == instanceId);
             if (inst is null) return;
             inst.Focus = new FocusTimerConfig { FocusMinutes = config.FocusMinutes, RestMinutes = config.RestMinutes };
+            _storage.Save(data);
+        });
+
+    /// <summary>保存系统监控的指标勾选（整数形态的旗标集合）。0 照写：那是"用户全取消了"，与 null＝没配过必须可分辨。</summary>
+    public Task SaveMonitorMetricsAsync(string instanceId, int wire)
+        => OnUiAsync(() =>
+        {
+            var data = _storage.Load();
+            var inst = data.Instances.FirstOrDefault(i => i.Id == instanceId);
+            if (inst is null) return;
+            inst.MonitorMetrics = wire;
             _storage.Save(data);
         });
 

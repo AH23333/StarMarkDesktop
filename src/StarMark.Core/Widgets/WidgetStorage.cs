@@ -26,6 +26,7 @@ public enum WidgetKind
     WorldClock = 13, // 世界时钟：多城市并列秒级刷新（桌面日历按裁决并入今日速览，不另立组件）
     Countdown = 14,  // 倒计时/纪念日：多条命名倒计时 + 每年重复 + 到点提醒
     Focus = 15,      // 番茄钟：可自定义时长的专注/休息循环，可带本轮任务名（第一版不做统计）
+    SystemMonitor = 16, // 系统监控：CPU/内存/网速实时读数（仅在有可见实例时采样）
 }
 
 /// <summary>计算器历史带的一行：算式原文 + 当次算出的答案（答案只作显示，重新计算以引擎为准）。</summary>
@@ -164,6 +165,13 @@ public sealed class WidgetInstanceConfig
     /// <summary>番茄钟时长设置（只存时长；进行中的轮次与统计刻意不存，见 <c>FocusTimer</c>）。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public FocusTimerConfig? Focus { get; set; }
+
+    /// <summary>
+    /// 系统监控要显示哪些指标（<c>MonitorMetric</c> 的整数形态）。
+    /// <b>null＝这台机器上从没配过 ⇒ 三项全开；0＝用户自己把勾都取消了 ⇒ 保持空</b>（判据是 null 与否）。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MonitorMetrics { get; set; }
 
     // ── 差异化条目格的每实例查询配置 ──
     // 可空、向后兼容：旧实例缺这些字段时反序列化为 null，不影响其它类型。

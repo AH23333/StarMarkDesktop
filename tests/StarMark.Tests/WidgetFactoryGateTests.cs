@@ -64,7 +64,7 @@ public sealed class WidgetFactoryGateTests
 
     /// <summary>
     /// 类型清单是**按整数**落进 widgets.json 的，所以序号一旦中途变动，老用户的实例会静默变成别的组件。
-    /// 这里把 0..12 全序列钉死（追加只能往后），与 TrayWidgetMenuTests 的抽查互补。
+    /// 这里把 0..16 全序列钉死（追加只能往后），与 TrayWidgetMenuTests 的抽查互补。
     /// </summary>
     [Fact]
     public void WidgetKind_WireValuesAreFrozenAndAppendOnly()
@@ -76,7 +76,7 @@ public sealed class WidgetFactoryGateTests
             (WidgetKind.Clipboard, 6), (WidgetKind.Activity, 7), (WidgetKind.Pinned, 8),
             (WidgetKind.Glance, 9), (WidgetKind.Weather, 10), (WidgetKind.Music, 11),
             (WidgetKind.Calc, 12), (WidgetKind.WorldClock, 13), (WidgetKind.Countdown, 14),
-            (WidgetKind.Focus, 15),
+            (WidgetKind.Focus, 15), (WidgetKind.SystemMonitor, 16),
         };
         foreach (var (kind, wire) in expected) Assert.Equal(wire, (int)kind);
 
