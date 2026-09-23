@@ -808,19 +808,20 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     /// </summary>
     private void MarkRegistrationFailures()
     {
-        var failed = HotkeySvc()?.RegistrationFailures ?? Array.Empty<HotkeyGesture>();
-        var failedKeys = new HashSet<string>(failed.Select(HotkeyGesture.GestureKey));
+        var failed = HotkeySvc()?.RegistrationFailures ?? Array.Empty<HotkeyRegistrationFailure>();
+        var reasons = new Dictionary<string, string>();
+        foreach (var f in failed) reasons[HotkeyGesture.GestureKey(f.Gesture)] = f.Reason;
 
         foreach (var row in HotkeyRowsItems)
         {
-            var hit = _hotkeyBindings.TryGetValue(row.Action, out var g) && !g.IsEmpty
-                      && failedKeys.Contains(HotkeyGesture.GestureKey(g));
-            row.RegisterErrorText = hit ? "未注册：该组合键可能已被其它程序占用" : string.Empty;
+            row.RegisterErrorText =
+                _hotkeyBindings.TryGetValue(row.Action, out var g) && !g.IsEmpty
+                && reasons.TryGetValue(HotkeyGesture.GestureKey(g), out var why) ? "未注册：" + why : string.Empty;
         }
 
         RegisterErrorSummary = failed.Count == 0
             ? string.Empty
-            : $"有 {failed.Count} 个组合键未能注册（可能被其它程序占用）：{string.Join("、", failed.Select(HotkeyDisplay.Display))}。"
+            : $"有 {failed.Count} 个组合键未能注册：{string.Join("、", failed.Select(f => $"{HotkeyDisplay.Display(f.Gesture)}（{f.Reason}）"))}。"
               + "占用它的程序退出后点「重试注册」；或给这些动作换一个组合再点「保存快捷键」。";
     }
 

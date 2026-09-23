@@ -36,14 +36,15 @@ public sealed class HotkeyService : IDisposable
     private bool _suspended;
 
     /// <summary>
-    /// 最近一次注册<b>失败</b>的手势（组合键已被其它程序占用 ⇒ RegisterHotKey 返回 false）。
+    /// 最近一次注册<b>失败</b>的手势及其 Win32 错误码。
     /// <para>
     /// 暴露它是因为"只写日志"等于没说：设置页那一行照样显示着用户刚录的组合、保存也算成功，
     /// 用户看到的却是"设了但永远不生效"，且没有任何地方解释原因（P-54 口径：失败要看得见、点得动）。
     /// </para>
     /// <para>挂起（录制中）不清空——录制不改变注册结果；<see cref="Resume"/> 与下一次应用绑定会刷新。</para>
     /// </summary>
-    public IReadOnlyList<HotkeyGesture> RegistrationFailures { get; private set; } = Array.Empty<HotkeyGesture>();
+    public IReadOnlyList<HotkeyRegistrationFailure> RegistrationFailures { get; private set; }
+        = Array.Empty<HotkeyRegistrationFailure>();
 
     /// <summary>
     /// 挂起所有已注册热键（仅注销 OS 层注册，不丢弃绑定）。
@@ -96,7 +97,7 @@ public sealed class HotkeyService : IDisposable
         _gestureToActions.Clear();
 
         var id = 1;
-        var failed = new List<HotkeyGesture>();
+        var failed = new List<HotkeyRegistrationFailure>();
         foreach (var group in HotkeyBindings.GroupByGesture(bindings))
         {
             var g = group.Gesture;
@@ -108,8 +109,11 @@ public sealed class HotkeyService : IDisposable
             }
             else
             {
-                failed.Add(g);
-                StarLog.Warn($"[Hotkey] 注册失败（可能被其它程序占用）: {HotkeyDisplay.Display(g)}");
+                // 必须紧跟着取： SetLastError 只保留"最近一次 Win32 调用"的错误码，隔一次调用就脏了
+                var err = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
+                var f = new HotkeyRegistrationFailure(g, err);
+                failed.Add(f);
+                StarLog.Warn($"[Hotkey] 注册失败: {HotkeyDisplay.Display(g)}（{f.Reason}，Win32 错误 {err}）");
             }
         }
         RegistrationFailures = failed;
@@ -159,4 +163,22 @@ public sealed class HotkeyService : IDisposable
         _idToGesture.Clear();
         _gestureToActions.Clear();
     }
+}
+
+/// <summary>
+/// 一次未能注册的手势及其 Win32 错误码。
+/// <para>
+/// 带上错误码而不是统称"可能被占用"：1409（ERROR_HOTKEY_ALREADY_REGISTERED）才是"已被别的程序占用"，
+/// 还有句柄无效/参数非法等可能。已知事实时说模糊话会让用户去关本不相干的程序；
+/// 真因未知时至少给了能查的编号。
+/// </para>
+/// </summary>
+public sealed record HotkeyRegistrationFailure(HotkeyGesture Gesture, int ErrorCode)
+{
+    private const int ErrorHotkeyAlreadyRegistered = 1409;
+
+    /// <summary>给用户看的原因（不含组合键本身——界面自己拼 <c>HotkeyDisplay.Display</c>）。</summary>
+    public string Reason => ErrorCode == ErrorHotkeyAlreadyRegistered
+        ? "该组合键已被其它程序占用"
+        : $"系统拒绝注册（Win32 错误 {ErrorCode}）";
 }
