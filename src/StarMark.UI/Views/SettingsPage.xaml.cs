@@ -478,6 +478,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
                     HotkeyGroups.Children.Add(BuildCategoryExpander(cat, rows));
         }
         RefreshConflictMarks();
+        MarkRegistrationFailures();   // 行是新建的，注册失败要在建行时就标出来（否则开页看不到原因）
     }
 
     /// <summary>把一个分类的动作行装进一个可折叠 <see cref="Expander"/>（标题=分类名，内容=该类的快捷键行）。</summary>
@@ -787,6 +788,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
             hotkey.ApplyBindings(ViewModel.EnableGlobalHotKey
                 ? _hotkeyBindings
                 : new Dictionary<string, HotkeyGesture>());
+        MarkRegistrationFailures();   // 保存后立刻把"没注册上"的那几条说清楚
     }
 
     private void EnableGlobalHotKey_Toggled(object sender, RoutedEventArgs e)
@@ -796,6 +798,56 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         settings.SaveEnableGlobalHotKey(ViewModel.EnableGlobalHotKey);
         ApplyHotkeyBindings();
     }
+
+    /// <summary>
+    /// 把"注册失败（组合键已被其它程序占用）"说出来：逐行标原因 + 一条带「重试注册」的汇总。
+    /// <para>
+    /// 原先这一失败只写 <c>StarLog.Warn</c>：那一行仍显示用户刚录的组合、「保存快捷键」也算成功，
+    /// 用户看到的只是"设了却永远不生效"，且没有任何地方告诉他为什么（P-54：失败要看得见、点得动）。
+    /// </para>
+    /// </summary>
+    private void MarkRegistrationFailures()
+    {
+        var failed = HotkeySvc()?.RegistrationFailures ?? Array.Empty<HotkeyGesture>();
+        var failedKeys = new HashSet<string>(failed.Select(HotkeyGesture.GestureKey));
+
+        foreach (var row in HotkeyRowsItems)
+        {
+            var hit = _hotkeyBindings.TryGetValue(row.Action, out var g) && !g.IsEmpty
+                      && failedKeys.Contains(HotkeyGesture.GestureKey(g));
+            row.RegisterErrorText = hit ? "未注册：该组合键可能已被其它程序占用" : string.Empty;
+        }
+
+        RegisterErrorSummary = failed.Count == 0
+            ? string.Empty
+            : $"有 {failed.Count} 个组合键未能注册（可能被其它程序占用）：{string.Join("、", failed.Select(HotkeyDisplay.Display))}。"
+              + "占用它的程序退出后点「重试注册」；或给这些动作换一个组合再点「保存快捷键」。";
+    }
+
+    /// <summary>重试注册：不改绑定内容，只再向系统注册一次（用户可能刚关掉占用该组合键的程序）。</summary>
+    private void RetryHotkeyRegister_Click(object sender, RoutedEventArgs e)
+    {
+        if (HotkeySvc() is { } hotkey && ViewModel.EnableGlobalHotKey)
+            hotkey.ApplyBindings(new SettingsStore().GetHotkeyBindings());   // 注册的是磁盘上的绑定，不含未保存的录制
+        MarkRegistrationFailures();
+    }
+
+    private string _registerErrorSummary = string.Empty;
+
+    /// <summary>未能注册的组合键汇总（空＝全部注册成功，提示与按钮随之隐藏）。</summary>
+    public string RegisterErrorSummary
+    {
+        get => _registerErrorSummary;
+        set
+        {
+            if (_registerErrorSummary == value) return;
+            _registerErrorSummary = value;
+            RaisePropertyChanged();
+            RaisePropertyChanged(nameof(HasRegisterErrors));
+        }
+    }
+
+    public bool HasRegisterErrors => !string.IsNullOrEmpty(_registerErrorSummary);
 
     // ==================== 底部操作 ====================
 
@@ -1060,6 +1112,17 @@ public sealed class HotkeyRow : INotifyPropertyChanged
 
     /// <summary>是否与其它动作共用同一组合（仅提示，允许保留）。</summary>
     public bool HasConflict => !string.IsNullOrEmpty(_conflictText);
+
+    private string _registerErrorText = string.Empty;
+
+    /// <summary>该组合未能注册时的原因；空＝已注册或不适用（未绑定）。</summary>
+    public string RegisterErrorText
+    {
+        get => _registerErrorText;
+        set { if (_registerErrorText != value) { _registerErrorText = value; OnChanged(); OnChanged(nameof(HasRegisterError)); } }
+    }
+
+    public bool HasRegisterError => !string.IsNullOrEmpty(_registerErrorText);
 
     private bool _isRecording;
     public bool IsRecording

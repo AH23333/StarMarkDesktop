@@ -59,6 +59,13 @@
                            MaxWidth="320" HorizontalAlignment="Right"
                            Foreground="{ThemeResource SystemFillColorCautionBrush}"
                            Visibility="{x:Bind HasConflict, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- 注册失败（组合键被别的程序占用）：原先只写日志，界面却仍显示"已设置"⇒ 用户只看到"设了不生效" -->
+                <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,2,0,0"
+                           Text="{x:Bind RegisterErrorText}" FontSize="11" TextWrapping="Wrap"
+                           HorizontalAlignment="Left"
+                           Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                           Visibility="{x:Bind HasRegisterError, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
             </Grid>
         </DataTemplate>
     </Page.Resources>
@@ -416,6 +423,14 @@
                                            Foreground="{ThemeResource SystemFillColorCautionBrush}"
                                            Style="{StaticResource SettingRowText}"
                                            Visibility="{x:Bind HasUnsavedHotkeys, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                                <!-- 注册失败原先只写一行日志，界面照旧显示"已设置"⇒ 给原因 + 就地重试 -->
+                                <TextBlock Text="{x:Bind RegisterErrorSummary, Mode=OneWay}" TextWrapping="Wrap"
+                                           Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                           Style="{StaticResource SettingRowText}"
+                                           Visibility="{x:Bind HasRegisterErrors, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                                <Button Content="重试注册" Click="RetryHotkeyRegister_Click" HorizontalAlignment="Left"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Visibility="{x:Bind HasRegisterErrors, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                             </StackPanel>
                         </Border>
 

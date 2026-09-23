@@ -15,7 +15,7 @@ namespace StarMark.UI.Services;
 /// <list type="bullet">
 ///   <item>同一手势可绑定多个动作，触发时全部执行（用户可借此一次完成多个操作）。</item>
 ///   <item>冲突不阻止保存：<see cref="HotkeyBindings.GetConflicts"/> 仅用于 UI 提示。</item>
-///   <item>注册失败（被其它程序占用）→ 该手势跳过并告警，不影响其余手势。</item>
+///   <item>注册失败（被其它程序占用）→ 该手势跳过，不影响其余手势，并记入 <see cref="RegistrationFailures"/> 供界面标注。</item>
 /// </list>
 /// </summary>
 public sealed class HotkeyService : IDisposable
@@ -34,6 +34,16 @@ public sealed class HotkeyService : IDisposable
 
     /// <summary>是否处于挂起态（录制快捷键时临时停用，避免按下的键命中已生效的热键而误触发动作）。</summary>
     private bool _suspended;
+
+    /// <summary>
+    /// 最近一次注册<b>失败</b>的手势（组合键已被其它程序占用 ⇒ RegisterHotKey 返回 false）。
+    /// <para>
+    /// 暴露它是因为"只写日志"等于没说：设置页那一行照样显示着用户刚录的组合、保存也算成功，
+    /// 用户看到的却是"设了但永远不生效"，且没有任何地方解释原因（P-54 口径：失败要看得见、点得动）。
+    /// </para>
+    /// <para>挂起（录制中）不清空——录制不改变注册结果；<see cref="Resume"/> 与下一次应用绑定会刷新。</para>
+    /// </summary>
+    public IReadOnlyList<HotkeyGesture> RegistrationFailures { get; private set; } = Array.Empty<HotkeyGesture>();
 
     /// <summary>
     /// 挂起所有已注册热键（仅注销 OS 层注册，不丢弃绑定）。
@@ -86,6 +96,7 @@ public sealed class HotkeyService : IDisposable
         _gestureToActions.Clear();
 
         var id = 1;
+        var failed = new List<HotkeyGesture>();
         foreach (var group in HotkeyBindings.GroupByGesture(bindings))
         {
             var g = group.Gesture;
@@ -97,9 +108,11 @@ public sealed class HotkeyService : IDisposable
             }
             else
             {
+                failed.Add(g);
                 StarLog.Warn($"[Hotkey] 注册失败（可能被其它程序占用）: {HotkeyDisplay.Display(g)}");
             }
         }
+        RegistrationFailures = failed;
     }
 
     private IntPtr OnSubclassProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam, UIntPtr uIdSubclass, UIntPtr dwRefData)
