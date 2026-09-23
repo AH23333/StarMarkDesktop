@@ -35,20 +35,20 @@
                                 Visibility="{x:Bind ViewModel.IsLauncherMode, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutItem Text="删除这条历史" Click="DeleteClipboard_Click"
                                 Visibility="{x:Bind ViewModel.CanDeletePermanently, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                <MenuFlyoutSeparator Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+                <MenuFlyoutSeparator Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutItem Click="Pin_Click"
                                 Text="{x:Bind ViewModel.PinMenuText, Mode=OneWay}"
-                                Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+                                Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutItem Text="发送到桌面 · 快捷启动" Click="SendToWidget_Click"
                                 Visibility="{x:Bind ViewModel.CanSendToWidget, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutItem Text="编辑笔记" Click="EditNote_Click"
-                                Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+                                Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutItem Text="编辑标签" Click="EditTags_Click"
-                                Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
-                <MenuFlyoutSeparator Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+                                Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                <MenuFlyoutSeparator Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutItem Click="Hide_Click"
                                 Text="{x:Bind ViewModel.HideMenuText, Mode=OneWay}"
-                                Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+                                Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
             </MenuFlyout>
         </Border.ContextFlyout>
         <Grid>
@@ -151,13 +151,13 @@
                         ToolTipService.ToolTip="预览（QuickLook）" Click="Preview_Click"/>
                 <Button Content="📝" Padding="4,2" Style="{StaticResource MiniIconButton}"
                         ToolTipService.ToolTip="编辑笔记" Click="EditNote_Click"
-                        Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+                        Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <Button Content="🏷" Padding="4,2" Style="{StaticResource MiniIconButton}"
                         ToolTipService.ToolTip="编辑标签" Click="EditTags_Click"
-                        Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+                        Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <Button Content="📌" Padding="4,2" Style="{StaticResource MiniIconButton}"
                         ToolTipService.ToolTip="置顶（浏览视图排最前）" Click="Pin_Click"
-                        Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+                        Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <Button Content="⧉" Padding="4,2" Style="{StaticResource MiniIconButton}"
                         ToolTipService.ToolTip="{x:Bind ViewModel.CopyMenuText, Mode=OneWay}" Click="Menu_CopyLink"/>
                 <!-- 热榜行的两个图标动作（其余条目不出现）：文字/图标随状态翻转，"已 Star"再点即取消 -->
@@ -169,7 +169,7 @@
                         Visibility="{x:Bind ViewModel.IsTrendingRepo, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <Button Content="👁" Padding="4,2" Style="{StaticResource MiniIconButton}"
                         ToolTipService.ToolTip="隐藏" Click="Hide_Click"
-                        Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+                        Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
             </StackPanel>
         </StackPanel>
 
