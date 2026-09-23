@@ -28,9 +28,22 @@ public static class HotkeyActions
     public const string WidgetsToggleTopmostAll = "widgets.topmostall";
     public const string WidgetsHideAll = "widgets.hideall";
 
-    /// <summary>屏幕取词式截图：按 Snipaste 的默认键位（F1）进入选区遮罩。</summary>
-    public const string ScreenCapture = "screen.capture";
     public const string WidgetsToggleAll = "widgets.toggleall";
+
+    /// <summary>截图（Snipaste 的默认键 F1）：进选区遮罩，放开后复制或存图（动作条上也能选贴图）。</summary>
+    public const string ScreenCapture = "screen.capture";
+
+    /// <summary>贴图（Snipaste 的默认键 F3）：同样框选，但放开后<b>直接钉在桌面上</b>，不再等一次点击。</summary>
+    public const string ScreenPin = "screen.pin";
+
+    /// <summary>
+    /// 显示 / 隐藏所有贴图（Snipaste 的默认键 F4）。这一条同时是"贴图忽然点不动了"的出口：
+    /// 处于鼠标穿透的贴图窗收不到任何点击，只有全局热键与托盘还能把画面叫回来。
+    /// </summary>
+    public const string ScreenPinToggleHidden = "screen.pinhidden";
+
+    /// <summary>所有贴图的鼠标穿透开关。<b>默认不绑键</b>（少占一个全局键位），托盘里有同名勾选项，设置页可自行绑定。</summary>
+    public const string ScreenPinClickThrough = "screen.pinthrough";
 
     private const string LayoutPrefix = "layout.apply:";
 
@@ -54,7 +67,7 @@ public static class HotkeyActions
     {
         if (action is MainToggle or MainShow or MainHide) return "主界面";
         if (action is WidgetsToggleAll or WidgetsShowAll or WidgetsHideAll or WidgetsToggleTopmostAll) return "组件总控";
-        if (action.StartsWith("screen.")) return "截图";
+        if (action.StartsWith("screen.")) return "截图 / 贴图";
         if (IsLayoutAction(action)) return "布局方案";
         foreach (var k in WidgetStorage.AllKinds)
             if (action == WidgetCreate(k) || action == WidgetShow(k) || action == WidgetHide(k) || action == WidgetToggle(k))
@@ -62,12 +75,12 @@ public static class HotkeyActions
         return "其它";
     }
 
-    /// <summary>分类的固定展示顺序（主界面 → 组件总控 → 各组件 → 布局方案）。</summary>
+    /// <summary>分类的固定展示顺序（主界面 → 组件总控 → 截图 / 贴图 → 各组件 → 布局方案）。</summary>
     public static IReadOnlyList<string> CategoryOrder { get; } = BuildCategoryOrder();
 
     private static List<string> BuildCategoryOrder()
     {
-        var list = new List<string> { "主界面", "组件总控", "截图" };
+        var list = new List<string> { "主界面", "组件总控", "截图 / 贴图" };
         foreach (var k in WidgetStorage.AllKinds) list.Add(WidgetStorage.KindTitle(k));
         list.Add("布局方案");
         return list;
@@ -80,7 +93,7 @@ public static class HotkeyActions
         {
             MainToggle, MainShow, MainHide,
             WidgetsToggleAll, WidgetsShowAll, WidgetsHideAll, WidgetsToggleTopmostAll,
-            ScreenCapture,
+            ScreenCapture, ScreenPin, ScreenPinToggleHidden, ScreenPinClickThrough,
         };
         foreach (var k in WidgetStorage.AllKinds)
         {
@@ -108,6 +121,9 @@ public static class HotkeyActions
             case WidgetsToggleAll: return "切换所有组件（显示 / 隐藏）";
             case WidgetsToggleTopmostAll: return "切换所有组件置顶（置顶 / 不置顶）";
             case ScreenCapture: return "截图（框选区域）";
+            case ScreenPin: return "贴图（框选后钉在桌面）";
+            case ScreenPinToggleHidden: return "切换贴图显示 / 隐藏（全部）";
+            case ScreenPinClickThrough: return "切换贴图鼠标穿透（全部）";
         }
 
         if (IsLayoutAction(action))

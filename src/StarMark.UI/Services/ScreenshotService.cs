@@ -35,15 +35,21 @@ public static class ScreenshotService
     /// <summary>当前是否有一次截图会话在进行（供托盘/菜单决定要不要灰掉这一项）。</summary>
     public static bool IsCapturing => _busy;
 
-    /// <summary>按热键进入选区遮罩。抓不到画面时给原因，不铺一层空白暗幕。</summary>
-    public static void Start()
+    /// <summary>
+    /// 按热键进入选区遮罩。抓不到画面时给原因，不铺一层空白暗幕。
+    /// </summary>
+    /// <param name="pinMode">
+    /// 贴图为真（F3）：放开选区后<b>直接钉在桌面上</b>，不再等用户点一次按钮；
+    /// 为假（F1）沿用动作条。两种模式共用同一个遮罩，只差这最后一步的落点。
+    /// </param>
+    public static void Start(bool pinMode = false)
     {
         // 遮罩窗必须在 UI 线程上建：热键回调本来就在，但托盘/菜单那类入口的回调线程不保证。
         // 在别的线程上 new Window 会直接崩，所以这里显式回主线程，而不是"指望调用方在对的线程"。
         var queue = App.MainWindow?.DispatcherQueue;
         if (queue is { HasThreadAccess: false })
         {
-            queue.TryEnqueue(Start);
+            queue.TryEnqueue(() => Start(pinMode));
             return;
         }
         if (_busy)
@@ -69,7 +75,7 @@ public static class ScreenshotService
         {
             foreach (var monitor in monitors)
             {
-                var window = new CaptureOverlayWindow(frame, monitor, OnFinished);
+                var window = new CaptureOverlayWindow(frame, monitor, OnFinished, pinMode);
                 Session.Add(window);
                 // 热键回调本来就在 UI 线程，这里不必再排一帧：晚一帧Activate会让用户看到"按了没反应"
                 window.Activate();
@@ -98,20 +104,40 @@ public static class ScreenshotService
     // ────────── 终结动作 ──────────
 
     /// <summary>
-    /// 把选区写进剪贴板（图片）。<b>整体是异步的，绝不 .Wait()</b>：
-    /// WinUI3 装了 DispatcherQueueSynchronizationContext，UI 线程上同步等异步会在
-    /// BitmapEncoder 的续接处自锁——那条路在这个仓库里是明确避开的。
+    /// 把选区写进剪贴板（图片）。真正的编码与发送在 <see cref="CopyPixelsAsync"/>（贴图复制走同一份）。
     /// </summary>
-    public static async System.Threading.Tasks.Task CopySelectionAsync(ScreenFrame frame, IntRect selection)
+    public static System.Threading.Tasks.Task CopySelectionAsync(ScreenFrame frame, IntRect selection)
+        => CropSilently(frame, selection) is { } crop
+            ? CopyPixelsAsync(crop.Pixels, crop.Width, crop.Height)
+            : System.Threading.Tasks.Task.CompletedTask;
+
+    /// <summary>把选区存成 PNG，存到 图片\StarMark 截图（首次自动建目录）。</summary>
+    public static System.Threading.Tasks.Task SaveSelectionAsync(ScreenFrame frame, IntRect selection)
+        => CropSilently(frame, selection) is { } crop
+            ? SavePixelsAsync(crop.Pixels, crop.Width, crop.Height)
+            : System.Threading.Tasks.Task.CompletedTask;
+
+    /// <summary>
+    /// 把选区那块画面钉到桌面上（F3 那条路径的落点）。
+    /// 上限判定与回报都在 <see cref="PinManager"/>，这里只负责"从这一帧里把像素取出来"。
+    /// </summary>
+    public static void PinSelection(ScreenFrame frame, IntRect selection)
+    {
+        if (CropSilently(frame, selection) is not { } crop) return;
+        PinManager.Add(crop.Pixels, crop.Width, crop.Height, selection);
+    }
+
+    /// <summary>把一份 BGRA 画面交给剪贴板。截图与贴图共用这一份实现（两份"从像素到剪贴板"迟早分岔）。</summary>
+    public static async System.Threading.Tasks.Task CopyPixelsAsync(
+        byte[] pixels, int width, int height, string category = "截图")
     {
         try
         {
-            var (pixels, width, height) = CropOrFail(frame, selection);
             // 剪贴板要的是流引用：把同一份 PNG 编码器（落盘用的那个）产出的内存流交出去，
             // 不另写一份"从像素到剪贴板"的旁路实现
             if (await GdiScreenCapture.EncodePngAsync(pixels, width, height) is not { } stream)
             {
-                Report("复制失败", "把画面编成图片时失败");
+                ReportFor(category, "复制失败", "把画面编成图片时失败");
                 return;
             }
             using (stream)
@@ -119,25 +145,25 @@ public static class ScreenshotService
                 var package = new DataPackage { RequestedOperation = DataPackageOperation.Copy };
                 package.SetBitmap(RandomAccessStreamReference.CreateFromStream(stream));
                 Clipboard.SetContent(package);
-                // Flush：SetContent 默认延迟渲染，遮罩窗一关、应用被挂起时内容会丢（点了"复制"却没东西）
+                // Flush：SetContent 默认延迟渲染，窗一关、应用被挂起时内容会丢（点了"复制"却没东西）
                 Clipboard.Flush();
             }
-            Report("已复制", CaptureGeometry.FormatSize(width, height) + " 的画面已进剪贴板");
+            ReportFor(category, "已复制", CaptureGeometry.FormatSize(width, height) + " 的画面已进剪贴板");
         }
         catch (Exception ex)
         {
-            StarLog.Error("[Screenshot] 复制到剪贴板失败", ex);
-            Report("复制失败", ex.Message);
+            StarLog.Error($"[{category}] 复制到剪贴板失败", ex);
+            ReportFor(category, "复制失败", ex.Message);
         }
     }
 
-    /// <summary>把选区存成 PNG，存到 图片\StarMark 截图（首次自动建目录）。</summary>
-    public static async System.Threading.Tasks.Task SaveSelectionAsync(ScreenFrame frame, IntRect selection)
+    /// <summary>把一份 BGRA 画面存成 PNG（同名自动递增，不覆盖上一张）。</summary>
+    public static async System.Threading.Tasks.Task SavePixelsAsync(
+        byte[] pixels, int width, int height, string category = "截图")
     {
         string? path = null;
         try
         {
-            var (pixels, width, height) = CropOrFail(frame, selection);
             var directory = System.IO.Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "StarMark 截图");
             System.IO.Directory.CreateDirectory(directory);
@@ -150,23 +176,39 @@ public static class ScreenshotService
                 index++;
             }
             var saved = await GdiScreenCapture.SavePngAsync(path!, pixels, width, height);
-            if (saved) Report("已存图", $"{width} × {height} → {path}");
-            else Report("存图失败", "写入图片文件时出错（检查磁盘空间与目录权限）");
+            if (saved) ReportFor(category, "已存图", $"{width} × {height} → {path}");
+            else ReportFor(category, "存图失败", "写入图片文件时出错（检查磁盘空间与目录权限）");
         }
         catch (Exception ex)
         {
-            StarLog.Error($"[Screenshot] 存图失败（{path}）", ex);
-            Report("存图失败", ex.Message);
+            StarLog.Error($"[{category}] 存图失败（{path}）", ex);
+            ReportFor(category, "存图失败", ex.Message);
         }
     }
 
-    private static (byte[] Pixels, int Width, int Height) CropOrFail(ScreenFrame frame, IntRect selection)
+    /// <summary>
+    /// 裁出选区的像素。<b>裁不动时这里就已经回报过了</b>并返回 null——调用方是"点一下按钮就没了"的
+    /// 事件处理器，异常抛出去等于静默失败（那些调用点没有 await，也没有 catch）。
+    /// </summary>
+    private static (byte[] Pixels, int Width, int Height)? CropSilently(ScreenFrame frame, IntRect selection)
     {
-        var problem = CaptureGeometry.CropProblem(selection, frame.Bounds);
-        if (problem is not null) throw new InvalidOperationException(problem);
-        var (ox, oy) = CaptureGeometry.CropOffset(selection, frame.Bounds);
-        var pixels = GdiScreenCapture.Crop(new FrameCopyRequest(frame, ox, oy, selection.Width, selection.Height));
-        return (pixels, selection.Width, selection.Height);
+        try
+        {
+            if (CaptureGeometry.CropProblem(selection, frame.Bounds) is { } problem)
+            {
+                Report("截图失败", problem);
+                return null;
+            }
+            var (ox, oy) = CaptureGeometry.CropOffset(selection, frame.Bounds);
+            return (GdiScreenCapture.Crop(new FrameCopyRequest(frame, ox, oy, selection.Width, selection.Height)),
+                selection.Width, selection.Height);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("[Screenshot] 取这一块的像素失败", ex);
+            Report("截图失败", ex.Message);
+            return null;
+        }
     }
 
     // ────────── 收摊 ──────────
@@ -187,15 +229,9 @@ public static class ScreenshotService
     /// <summary>
     /// 结果回报：优先托盘气泡；托盘没启用时退到日志。
     /// 与番茄钟同一口径 —— 通道要报告它自己有没有真的把消息送出去，
-    /// 否则"提示了"与"什么都没发生"在事后无从分辨。
+    /// 否则"提示了"与"什么都没发生"在事后无从分辨。实现收在 <see cref="TrayReporter"/>（贴图共用）。
     /// </summary>
-    private static void Report(string title, string body)
-    {
-        StarLog.Info($"截图 {title}：{body}");
-        var shown = false;
-        try { shown = App.MainWindow?.TryShowTrayNotification("截图 · " + title, body) == true; }
-        catch (Exception ex) { StarLog.Warn($"[Screenshot] 托盘回报失败：{ex.Message}"); }
-        if (!shown) StarLog.Info($"（托盘未启用，结果只留在日志）{title}：{body}");
-    }
+    private static void Report(string title, string body) => ReportFor("截图", title, body);
 
+    private static void ReportFor(string category, string title, string body) => TrayReporter.Report(category, title, body);
 }

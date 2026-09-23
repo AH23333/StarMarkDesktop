@@ -36,10 +36,10 @@ public static class CaptureGeometry
         => new(Math.Min(x0, x1), Math.Min(y0, y1), Math.Abs(x1 - x0), Math.Abs(y1 - y0));
 
     /// <summary>
-/// 与边界求交；<b>交集不足一个像素时返回 null</b>（不是空矩形）——"完全在屏外 / 只贴到边"与
-/// "真有一块可截"必须能分开判，否则遮罩窗会在 0 宽选区上继续往下走。
-/// 输入须是宽高非负的矩形（见 <see cref="IntRect"/> 的不变量与 <see cref="Normalize"/>）。
-/// </summary>
+    /// 与边界求交；<b>交集不足一个像素时返回 null</b>（不是空矩形）——"完全在屏外 / 只贴到边"与
+    /// "真有一块可截"必须能分开判，否则遮罩窗会在 0 宽选区上继续往下走。
+    /// 输入须是宽高非负的矩形（见 <see cref="IntRect"/> 的不变量与 <see cref="Normalize"/>）。
+    /// </summary>
     public static IntRect? Intersect(IntRect rect, IntRect bounds)
     {
         var left = Math.Max(rect.X, bounds.X);
@@ -128,6 +128,30 @@ public static class CaptureGeometry
         => currentPins >= MaxPins
             ? $"已经有 {currentPins} 张贴图，最多 {MaxPins} 张——先关掉不用的再贴（贴图会把那块画面常驻在内存里）"
             : null;
+
+    /// <summary>
+    /// 对"所有贴图"下指令（隐藏 / 穿透 / 全关）时可不可行。
+    /// 一张都没有时必须回原因：这三条指令在空集上都是"什么都没发生"，
+    /// 静默返回就等于让用户以为按错了键（热键回调没有任何别的反馈渠道）。
+    /// </summary>
+    public static string? PinCommandProblem(int currentPins)
+        => currentPins == 0 ? "现在没有贴图，这一条没有可操作的对象" : null;
+
+    /// <summary>贴图当前的提示文案（缩放徽标与右键菜单里的那个百分比）。</summary>
+    public static string FormatZoom(double zoom)
+        => ((int)Math.Round(ClampZoom(zoom) * 100, MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture) + "%";
+
+    /// <summary>
+    /// 贴图窗该占多少<b>物理像素</b>。源图就是按物理像素截下来的，所以 1× 时窗口的物理尺寸
+    /// 与当初屏幕上那块区域完全一致——<b>不必也不该再乘 DPI 缩放</b>，否则 150% 屏上贴图会比原物大一半。
+    /// 舍入用 AwayFromZero（截断会让 1.1× 之类的档位每档都少一像素，多档之后肉眼可见地缩水）。
+    /// </summary>
+    public static (int Width, int Height) PinPixelSize(int sourceWidth, int sourceHeight, double zoom)
+    {
+        static int Map(int source, double factor)
+            => Math.Max(1, (int)Math.Round(source * ClampZoom(factor), MidpointRounding.AwayFromZero));
+        return (Map(sourceWidth, zoom), Map(sourceHeight, zoom));
+    }
 
     /// <summary>
     /// 截图文件名（不含目录）。同一秒内连拍时靠 <paramref name="collisionIndex"/> 递增，

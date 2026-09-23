@@ -265,6 +265,10 @@ public sealed partial class MainWindow : Window
 
     private const int TrayScreenshot = 1;
     private const int TrayTopmostToggle = 2;
+    private const int TrayScreenPin = 3;
+    private const int TrayPinsShowHide = 4;
+    private const int TrayPinsClickThrough = 5;
+    private const int TrayPinsCloseAll = 6;
     private const int TrayThemeDefault = 10;
     private const int TrayThemeLight = 11;
     private const int TrayThemeDark = 12;
@@ -281,10 +285,19 @@ public sealed partial class MainWindow : Window
     {
         var perf = _settings.LoadPerformanceMode();
         var hotkeysOn = _settings.LoadEnableGlobalHotKey();
+        var (pins, hidden) = (StarMark.UI.Services.PinManager.Count, StarMark.UI.Services.PinManager.AreHidden);
         var list = new List<TrayHost.TrayCommandItem>
         {
             new("截图（框选区域）", TrayScreenshot,
                 Enabled: !StarMark.UI.Services.ScreenshotService.IsCapturing, SeparatorBefore: true),
+            new("贴图（框选后钉在桌面）", TrayScreenPin,
+                Enabled: !StarMark.UI.Services.ScreenshotService.IsCapturing),
+            // 三条"所有贴图"的动作。一张都没有时点它们都是空动作 ⇒ 灰掉并把状态写进标签，
+            // 比"点了没反应"好（P-54 口径）。标签按要执行的动作说人话（菜单惯例），
+            // 只有"忽略鼠标"这项是状态开关，所以它用勾选态。
+            new(PinLabel(pins, hidden), TrayPinsShowHide, SeparatorBefore: true, Enabled: pins > 0),
+            new("贴图忽略鼠标", TrayPinsClickThrough, StarMark.UI.Services.PinManager.ClickThrough, Enabled: pins > 0),
+            new("关闭所有贴图", TrayPinsCloseAll, Enabled: pins > 0),
             new("所有组件置顶 / 不置顶", TrayTopmostToggle, SeparatorBefore: true),
             new("主题 · 跟随系统", TrayThemeDefault, _themePref == ThemePreference.Default, SeparatorBefore: true),
             new("主题 · 浅色", TrayThemeLight, _themePref == ThemePreference.Light),
@@ -297,12 +310,28 @@ public sealed partial class MainWindow : Window
         return list;
     }
 
+    /// <summary>贴图显隐那一项的标签：没有贴图时把状态写进文字，灰掉的项才知道自己为什么点不动。</summary>
+    private static string PinLabel(int pins, bool hidden)
+        => pins == 0 ? "显示 / 收起所有贴图（当前没有贴图）" : hidden ? "显示所有贴图" : "收起所有贴图";
+
     private void RunTrayCommand(int tag)
     {
         switch (tag)
         {
             case TrayScreenshot:
                 StarMark.UI.Services.ScreenshotService.Start();
+                break;
+            case TrayScreenPin:
+                StarMark.UI.Services.ScreenshotService.Start(pinMode: true);
+                break;
+            case TrayPinsShowHide:
+                StarMark.UI.Services.PinManager.ToggleHidden();
+                break;
+            case TrayPinsClickThrough:
+                StarMark.UI.Services.PinManager.ToggleClickThrough();
+                break;
+            case TrayPinsCloseAll:
+                StarMark.UI.Services.PinManager.CloseAll();
                 break;
             case TrayTopmostToggle:
                 _ = _widgetManager.ToggleAllTopmostAsync();

@@ -26,6 +26,10 @@ internal static class WindowInterop
     public const uint WS_EX_TOOLWINDOW = 0x00000080;
     public const uint WS_EX_TOPMOST = 0x00000008;
 
+    /// <summary>鼠标穿透（须与 LAYERED 同设）与分层窗口位。贴图窗"让它不挡鼠标"用这一对。</summary>
+    public const uint WS_EX_TRANSPARENT = 0x00000020;
+    public const uint WS_EX_LAYERED = 0x00080000;
+
     public static readonly IntPtr HWND_TOP = IntPtr.Zero;
     public static readonly IntPtr HWND_BOTTOM = new(1);
     public static readonly IntPtr HWND_TOPMOST = new(-1);
@@ -36,6 +40,7 @@ internal static class WindowInterop
 
     public const uint SWP_NOMOVE = 0x0002;
     public const uint SWP_NOSIZE = 0x0001;
+    public const uint SWP_NOZORDER = 0x0004;
     public const uint SWP_NOACTIVATE = 0x0010;
     public const uint SWP_FRAMECHANGED = 0x0020;
     public const uint SWP_NOOWNERZORDER = 0x0200;
@@ -188,6 +193,29 @@ internal static class WindowInterop
             topmost ? HWND_TOPMOST : HWND_NOTOPMOST,
             0, 0, 0, 0,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+
+    /// <summary>
+    /// 贴图窗的鼠标穿透：加上 <c>WS_EX_TRANSPARENT</c> 后鼠标消息会越过这扇窗落到下面。
+    /// <para>
+    /// Win32 要求它与 <c>WS_EX_LAYERED</c> 同设才生效，所以第一次开启时一并加上 LAYERED；
+    /// <b>关闭时只摘 TRANSPARENT、保留 LAYERED</b>——来回改 LAYERED 会让 DWM 重建呈现路径，
+    /// 是"贴图一关穿透就变黑框"那类现象的来源。
+    /// </para>
+    /// </summary>
+    /// <returns>改完并**读回确认**过才返回 true。扩展样式被系统拒绝时不能假装成功：
+    /// 用户下一步就是"点这张贴图怎么没反应"，那时"改了没改成"只有窗口自己知道。</returns>
+    public static bool SetClickThrough(Microsoft.UI.Xaml.Window window, bool on)
+    {
+        var hwnd = GetHwnd(window);
+        var current = GetWindowLong(hwnd, GWL_EXSTYLE).ToInt64();
+        var wanted = on ? current | WS_EX_TRANSPARENT | WS_EX_LAYERED : current & ~((long)WS_EX_TRANSPARENT);
+        SetWindowLong(hwnd, GWL_EXSTYLE, new IntPtr(wanted));
+        // 改扩展样式后要一次带 SWP_FRAMECHANGED 的位置调用才会被重算
+        SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        var nowTransparent = (GetWindowLong(hwnd, GWL_EXSTYLE).ToInt64() & WS_EX_TRANSPARENT) != 0;
+        return nowTransparent == on;
     }
 
     /// <summary>Win11 圆角（无边框窗口默认是方角，需要显式设置）。</summary>

@@ -35,6 +35,10 @@ public static class HotkeyBindings
     /// <summary>VK_F1：截图默认键（D3 裁决"默认键与 Snipaste 一致"）。</summary>
     public const uint VirtualKeyF1 = 0x70;
 
+    /// <summary>VK_F3 / VK_F4：贴图与"显示·隐藏所有贴图"的默认键，同样取自 Snipaste。</summary>
+    public const uint VirtualKeyF3 = 0x72;
+    public const uint VirtualKeyF4 = 0x73;
+
     /// <summary>
     /// 出厂默认：主界面呼出/关闭 = Ctrl+Alt+Space。
     /// 每次调用给出**新的可写字典**，调用方可以就地叠加而不污染默认表。
@@ -43,10 +47,14 @@ public static class HotkeyBindings
     {
         [HotkeyActions.MainToggle] = new HotkeyGesture(
             HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.NoRepeat, VirtualKeySpace),
-        // 截图用裸 F1（与 Snipaste 默认一致，无修饰键）。
+        // 截图/贴图/隐藏贴图用裸 F1/F3/F4（与 Snipaste 默认一致，无修饰键）。
         // 与主界面呼出键不冲突：那条是 Ctrl+Alt+Space。装了 Snipaste 的机器上会撞，
         // 但批次 KL 已把冲突改成"只提示、不阻碍注册"，用户在设置里改一键即可，不必先关别的产品。
         [HotkeyActions.ScreenCapture] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF1),
+        [HotkeyActions.ScreenPin] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF3),
+        [HotkeyActions.ScreenPinToggleHidden] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF4),
+        // 鼠标穿透刻意**不占默认键**：它不是一个"每天按"的动作，而是一项设置，
+        // 而且穿透态本身有托盘勾选项 + F4 两条出口，不必再吃一个全局键位（同 P-76 的口径）。
     };
 
     /// <summary>

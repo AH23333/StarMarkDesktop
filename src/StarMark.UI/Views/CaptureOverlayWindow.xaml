@@ -58,6 +58,7 @@
             <StackPanel Orientation="Horizontal" Spacing="6">
                 <Button x:Name="CopyButton" Content="复制" FontSize="11" Click="Copy_Click"/>
                 <Button Content="存图" FontSize="11" Click="Save_Click"/>
+                <Button Content="贴图" FontSize="11" Click="Pin_Click" ToolTipService.ToolTip="钉在桌面上（同 F3）"/>
                 <Button Content="取消" FontSize="11" Click="Cancel_Click"/>
             </StackPanel>
         </Border>
@@ -71,6 +72,7 @@
             VerticalAlignment="Top"
             Margin="0,24,0,0">
             <TextBlock
+                x:Name="HintText"
                 FontSize="12"
                 Foreground="#FFFFFFFF"
                 Text="按住拖动框选区域 · 放开后选复制或存图 · Enter 复制 · Esc 取消 · 右键不截"/>

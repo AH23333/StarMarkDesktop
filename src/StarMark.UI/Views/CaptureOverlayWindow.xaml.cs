@@ -32,13 +32,16 @@ namespace StarMark.UI.Views;
 /// </summary>
 public sealed partial class CaptureOverlayWindow : Window
 {
-    private const double Action_bar_width = 210;
+    // 四个动作按钮（复制/存图/贴图/取消）+ 左右内边距；改按钮数要跟着改这里，
+    // 否则操作条会压住选区右半边或掉到屏外
+    private const double Action_bar_width = 268;
     private const double Action_bar_height = 44;
 
     private readonly ScreenFrame _frame;
     private readonly IntRect _monitor;          // 本屏在虚拟桌面里的物理矩形
     private readonly double _scale;             // 本屏 DPI 缩放（1.0 / 1.25 / 1.5 …）
     private readonly Action<CaptureOverlayWindow, IntRect?> _finish;
+    private readonly bool _pinMode;             // F3 那条路：放开选区直接贴图，不再等一次点击
 
     private PointInt32 _startPhysical;
     private IntRect? _selection;                // 虚拟桌面物理像素
@@ -46,18 +49,23 @@ public sealed partial class CaptureOverlayWindow : Window
     private bool _settled;
 
     /// <param name="monitorDevice">本窗负责的显示器设备名（失活时只认自己这屏的失活）。</param>
+    /// <param name="pinMode">真＝放开选区后<b>直接钉到桌面</b>（贴图）；假＝先给动作条让用户挑（截图）。</param>
     public CaptureOverlayWindow(
         ScreenFrame frame,
         (string Device, RectInt32 Bounds, double Scale) monitor,
-        Action<CaptureOverlayWindow, IntRect?> finish)
+        Action<CaptureOverlayWindow, IntRect?> finish,
+        bool pinMode)
     {
         _frame = frame;
         _monitor = new IntRect(monitor.Bounds.X, monitor.Bounds.Y, monitor.Bounds.Width, monitor.Bounds.Height);
         _scale = monitor.Scale <= 0 ? 1.0 : monitor.Scale;
         _finish = finish;
+        _pinMode = pinMode;
         DeviceName = monitor.Device;
 
         InitializeComponent();
+        if (pinMode)
+            HintText.Text = "按住拖动框选区域 · 放开即钉到桌面 · Enter 立即贴当前选区 · Esc 取消 · 右键不截";
 
         // 遮罩不需要主题：画面是抓来的桌面，文字全画在暗底上并用硬编码白色 —— 这里刻意不调
         // ThemeManager。套主题反而会把窗口的 ActualTheme 拉去影响按钮默认前景，出现"暗底灰字"。
@@ -172,9 +180,14 @@ public sealed partial class CaptureOverlayWindow : Window
             ShowError(reason);
             return;
         }
-        ActionBar.Visibility = Visibility.Visible;
-        PositionActionBar(selection);
-        CopyButton.Focus(FocusState.Programmatic);
+        // 贴图模式：放开的这个动作本身就是答案，不必再让用户多点一次按钮（Snipaste 的 F3 同理）
+        if (_pinMode) Commit(CommitAction.Pin);
+        else
+        {
+            ActionBar.Visibility = Visibility.Visible;
+            PositionActionBar(selection);
+            CopyButton.Focus(FocusState.Programmatic);
+        }
     }
 
     private void Root_RightTapped(object sender, RightTappedRoutedEventArgs e)
@@ -193,11 +206,11 @@ public sealed partial class CaptureOverlayWindow : Window
                 break;
             case VirtualKey.Enter:
                 e.Handled = true;
-                Commit(Copy: true);
+                Commit(_pinMode ? CommitAction.Pin : CommitAction.Copy);
                 break;
             case VirtualKey.S when IsControlDown():
                 e.Handled = true;
-                Commit(Copy: false);
+                Commit(CommitAction.Save);
                 break;
         }
     }
@@ -288,18 +301,22 @@ public sealed partial class CaptureOverlayWindow : Window
 
     // ────────── 动作 ──────────
 
-    private void Copy_Click(object sender, RoutedEventArgs e) => Commit(Copy: true);
+    private void Copy_Click(object sender, RoutedEventArgs e) => Commit(CommitAction.Copy);
 
-    private void Save_Click(object sender, RoutedEventArgs e) => Commit(Copy: false);
+    private void Save_Click(object sender, RoutedEventArgs e) => Commit(CommitAction.Save);
+
+    private void Pin_Click(object sender, RoutedEventArgs e) => Commit(CommitAction.Pin);
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => Settle(null);
 
+    private enum CommitAction { Copy, Save, Pin }
+
     /// <summary>
-    /// 提交这一屏的选区。<paramref name="copy"/> 为真走剪贴板，否则存成文件。
+    /// 提交这一屏的选区：复制或存图或直接钉住。
     /// 先 Settle 再干活：服务收到结果就会关掉所有遮罩窗（包括本窗），
     /// 反过来先干活会让用户在裁图期间还被困在暗幕里。
     /// </summary>
-    private void Commit(bool Copy)
+    private void Commit(CommitAction action)
     {
         if (_selection is not { } selection)
         {
@@ -312,7 +329,11 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
         Settle(selection);
-        if (Copy) _ = ScreenshotService.CopySelectionAsync(_frame, selection);
-        else _ = ScreenshotService.SaveSelectionAsync(_frame, selection);
+        switch (action)
+        {
+            case CommitAction.Copy: _ = ScreenshotService.CopySelectionAsync(_frame, selection); break;
+            case CommitAction.Save: _ = ScreenshotService.SaveSelectionAsync(_frame, selection); break;
+            default: ScreenshotService.PinSelection(_frame, selection); break;
+        }
     }
 }

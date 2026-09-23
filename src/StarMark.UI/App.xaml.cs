@@ -323,6 +323,9 @@ public partial class App : Application
                 hotkey.RegisterHandler(HotkeyActions.WidgetsToggleAll, () => widgetManager.ToggleAllInstancesAsync());
                 hotkey.RegisterHandler(HotkeyActions.WidgetsToggleTopmostAll, () => widgetManager.ToggleAllTopmostAsync());
                 hotkey.RegisterHandler(HotkeyActions.ScreenCapture, () => { StarMark.UI.Services.ScreenshotService.Start(); return Task.CompletedTask; });
+                hotkey.RegisterHandler(HotkeyActions.ScreenPin, () => { StarMark.UI.Services.ScreenshotService.Start(pinMode: true); return Task.CompletedTask; });
+                hotkey.RegisterHandler(HotkeyActions.ScreenPinToggleHidden, () => { StarMark.UI.Services.PinManager.ToggleHidden(); return Task.CompletedTask; });
+                hotkey.RegisterHandler(HotkeyActions.ScreenPinClickThrough, () => { StarMark.UI.Services.PinManager.ToggleClickThrough(); return Task.CompletedTask; });
                 foreach (var k in WidgetStorage.AllKinds)
                 {
                     var kind = k;
