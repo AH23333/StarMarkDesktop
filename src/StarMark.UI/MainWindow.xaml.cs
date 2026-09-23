@@ -253,7 +253,86 @@ public sealed partial class MainWindow : Window
         _trayHost.ShowAllWidgetsRequested += () => DispatcherQueue.TryEnqueue(() => _ = _widgetManager.ShowAllAsync());
         _trayHost.HideAllWidgetsRequested += () => DispatcherQueue.TryEnqueue(() => _ = _widgetManager.HideAllAsync());
         _trayHost.SettingsRequested += () => DispatcherQueue.TryEnqueue(() => Present(true));
+        // 附加命令的清单用回调现取，不用属性快照：主题/性能模式/自启/热键开关都会变，
+        // 快照等于"托盘显示的是上一次右键时的状态"，勾选框会指着错的那一项。
+        _trayHost.CommandProvider = BuildTrayCommands;
+        _trayHost.CommandInvoked += tag => DispatcherQueue.TryEnqueue(() => RunTrayCommand(tag));
         _trayHost.Initialize();
+    }
+
+    // ───────────────────────── 托盘：附加命令 ─────────────────────────
+    // 编号是"宿主自己的语义标签"，与 TrayHost 发出去的菜单命令号无关（它按渲染顺序发号）。
+
+    private const int TrayScreenshot = 1;
+    private const int TrayTopmostToggle = 2;
+    private const int TrayThemeDefault = 10;
+    private const int TrayThemeLight = 11;
+    private const int TrayThemeDark = 12;
+    private const int TrayPerfBalanced = 20;
+    private const int TrayPerfSaver = 21;
+    private const int TrayAutostart = 30;
+    private const int TrayHotkeysEnabled = 31;
+
+    private static StarMark.UI.Services.AutostartService Autostart()
+        => App.Services.GetRequiredService<StarMark.UI.Services.AutostartService>();
+
+    /// <summary>右键那一刻现取托盘附加命令：勾选态反映当前设置，正在截图时不让人再点一次。</summary>
+    private IReadOnlyList<TrayHost.TrayCommandItem> BuildTrayCommands()
+    {
+        var perf = _settings.LoadPerformanceMode();
+        var hotkeysOn = _settings.LoadEnableGlobalHotKey();
+        var list = new List<TrayHost.TrayCommandItem>
+        {
+            new("截图（框选区域）", TrayScreenshot,
+                Enabled: !StarMark.UI.Services.ScreenshotService.IsCapturing, SeparatorBefore: true),
+            new("所有组件置顶 / 不置顶", TrayTopmostToggle, SeparatorBefore: true),
+            new("主题 · 跟随系统", TrayThemeDefault, _themePref == ThemePreference.Default, SeparatorBefore: true),
+            new("主题 · 浅色", TrayThemeLight, _themePref == ThemePreference.Light),
+            new("主题 · 深色", TrayThemeDark, _themePref == ThemePreference.Dark),
+            new("性能 · 均衡", TrayPerfBalanced, perf == StarMark.Core.Performance.PerformanceMode.Balanced, SeparatorBefore: true),
+            new("性能 · 省资源", TrayPerfSaver, perf == StarMark.Core.Performance.PerformanceMode.ResourceSaver),
+            new("开机自动启动", TrayAutostart, Autostart().IsEnabled(), SeparatorBefore: true),
+            new("全局快捷键已启用", TrayHotkeysEnabled, hotkeysOn),
+        };
+        return list;
+    }
+
+    private void RunTrayCommand(int tag)
+    {
+        switch (tag)
+        {
+            case TrayScreenshot:
+                StarMark.UI.Services.ScreenshotService.Start();
+                break;
+            case TrayTopmostToggle:
+                _ = _widgetManager.ToggleAllTopmostAsync();
+                break;
+            case TrayThemeDefault:
+            case TrayThemeLight:
+            case TrayThemeDark:
+                ApplyThemePreference(tag switch
+                {
+                    TrayThemeLight => ThemePreference.Light,
+                    TrayThemeDark => ThemePreference.Dark,
+                    _ => ThemePreference.Default,
+                });
+                break;
+            case TrayPerfBalanced:
+            case TrayPerfSaver:
+                var mode = tag == TrayPerfSaver ? StarMark.Core.Performance.PerformanceMode.ResourceSaver : StarMark.Core.Performance.PerformanceMode.Balanced;
+                // 只需要写盘：性能模式的消费方（内存回收、监控采样间隔…）每次都经
+                // PerformanceSettingsPolicy 现读，所以不需要"再通知一遍"，也就不会漏通知。
+                _settings.SavePerformanceMode(mode);
+                break;
+            case TrayAutostart:
+                Autostart().SetEnabled(!Autostart().IsEnabled());
+                break;
+            case TrayHotkeysEnabled:
+                var enable = !_settings.LoadEnableGlobalHotKey();
+                _settings.SaveEnableGlobalHotKey(enable);
+                ApplyTraySettings();
+                break;
+        }
     }
 
     private void DisposeTray()
@@ -430,14 +509,25 @@ public sealed partial class MainWindow : Window
             ThemePreference.Light => ThemePreference.Dark,
             _ => ThemePreference.Default,
         };
-        _settings.SaveTheme(_themePref);
-        ThemeManager.Apply(this, _themePref);
+        ApplyThemePreference(_themePref);
+    }
+
+    /// <summary>
+    /// 套用一个主题偏好并把它传导到所有该知道的地方：主窗、标题栏按钮、组件、设置页。
+    /// <b>标题栏一键循环与托盘直接指定都走这里</b>——这条链有 6 步，写两遍迟早有一遍漏掉某一步
+    /// （漏掉"组件主题"就是当初"切主题后组件不跟"那一类缺陷的形状）。
+    /// </summary>
+    private void ApplyThemePreference(ThemePreference pref)
+    {
+        _themePref = pref;
+        _settings.SaveTheme(pref);
+        ThemeManager.Apply(this, pref);
         UpdateThemeIcon();
         RefreshAppearance();   // 主题画笔按窗口实际主题重新解析，否则一键切换后主界面背景色不跟随
         ApplyTitleBarButtonColors();                 // 标题栏按钮高亮随主题
-        _ = _widgetManager.ApplyThemeToAllAsync(_themePref); // 同步组件主题（组件是独立窗口，不会自动传导）
+        _ = _widgetManager.ApplyThemeToAllAsync(pref); // 同步组件主题（组件是独立窗口，不会自动传导）
         // 通知设置页同步主题选择（设置页已打开时尤其关键）
-        ThemePreferenceQuickSwitched?.Invoke(_themePref);
+        ThemePreferenceQuickSwitched?.Invoke(pref);
     }
 
     private void UpdateThemeIcon()

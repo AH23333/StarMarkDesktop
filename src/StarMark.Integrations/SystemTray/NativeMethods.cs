@@ -35,6 +35,7 @@ internal static class NativeMethods
     public const int MF_POPUP = 0x0010;
     public const int MF_SEPARATOR = 0x0800;
     public const int MF_CHECKED = 0x0008;
+    public const int MF_GRAYED = 0x0001;
     public const int IDM_SHOW = 1001;
     public const int IDM_EXIT = 1002;
     public const int IDM_WIDGETS = 1003;

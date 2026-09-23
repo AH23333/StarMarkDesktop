@@ -33,6 +33,30 @@ public sealed class TrayHost : IDisposable
     public event Action? HideAllWidgetsRequested;
     public event Action? SettingsRequested;
 
+    /// <summary>
+    /// 宿主在右键那一刻提供的附加命令（渲染在「桌面组件」之后、设置之前）。
+    /// <b>用回调而不是属性快照</b>：勾选态（主题、性能模式、开机自启、热键开关）随时在变，
+    /// 存成属性就等于"托盘显示的是上一次右键时的状态"——点错了还看不出为什么。
+    /// </summary>
+    public Func<IReadOnlyList<TrayCommandItem>>? CommandProvider { get; set; }
+
+    /// <summary>附加命令被点击，参数是该条目自带的 Tag（宿主自己的语义编号）。</summary>
+    public event Action<int>? CommandInvoked;
+
+    /// <summary>宿主附加命令的号段起点。与 TrayHost 自带的 1001–1004、组件子菜单号段都不重叠。</summary>
+    public const int HostCommandBase = 5000;
+
+    /// <summary>
+    /// 一条附加命令。<see cref="Tag"/> 交给宿主解释；<b>TrayHost 只按"渲染顺序 + 起始号"发号</b>，
+    /// 不让宿主直接给命令号——那样两个来源可能撞号（组件子菜单那次"序号≠kind"的教训同一族）。
+    /// </summary>
+    public sealed record TrayCommandItem(
+        string Label,
+        int Tag,
+        bool Checked = false,
+        bool SeparatorBefore = false,
+        bool Enabled = true);
+
     /// <summary>菜单打开时查询某组件是否已启用（勾选态）；参数同样是 WidgetKind 整数值。</summary>
     public Func<int, bool>? IsWidgetEnabled { get; set; }
 
@@ -127,6 +151,9 @@ public sealed class TrayHost : IDisposable
         }
     }
 
+    /// <summary>本次右键实际渲染出来的宿主命令（点击时用行号回查其 Tag）。</summary>
+    private readonly List<TrayCommandItem> _hostCommands = new();
+
     private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
         // 原生 WNDPROC 反调托管代码：异常从这儿穿出去既不经 UI 调度器、也不经 DispatcherQueue，
@@ -182,6 +209,20 @@ public sealed class TrayHost : IDisposable
         AppendMenuW(sub, MF_STRING, (IntPtr)TrayWidgetMenu.HideAll, "全部隐藏");
         AppendMenuW(menu, MF_POPUP, sub, "桌面组件");
 
+        // 宿主附加命令：按渲染顺序发号（HostCommandBase + 行号），点击后回传该行的 Tag。
+        _hostCommands.Clear();
+        var provided = CommandProvider?.Invoke();
+        if (provided is { Count: > 0 })
+        {
+            foreach (var item in provided)
+            {
+                if (item.SeparatorBefore) AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null!);
+                var flags = MF_STRING | (item.Enabled ? 0 : MF_GRAYED) | (item.Checked ? MF_CHECKED : 0);
+                AppendMenuW(menu, (uint)flags, (IntPtr)(HostCommandBase + _hostCommands.Count), item.Label);
+                _hostCommands.Add(item);
+            }
+        }
+
         AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null!);
         AppendMenuW(menu, MF_STRING, (IntPtr)IDM_SETTINGS, "设置");
         AppendMenuW(menu, MF_STRING, (IntPtr)IDM_EXIT, "退出");
@@ -206,6 +247,13 @@ public sealed class TrayHost : IDisposable
             case TrayWidgetMenu.HideAll: HideAllWidgetsRequested?.Invoke(); break;
             case IDM_SETTINGS: SettingsRequested?.Invoke(); break;
             default:
+                if (cmd >= HostCommandBase)
+                {
+                    var hostIndex = cmd - HostCommandBase;
+                    if (hostIndex >= 0 && hostIndex < _hostCommands.Count)
+                        CommandInvoked?.Invoke(_hostCommands[hostIndex].Tag);
+                    break;
+                }
                 // 逐组件项：把命令号换算回菜单序号后，交回该行携带的 kind 值（不是序号）——
                 // 序号与枚举值相等只是"注册表按枚举顺序声明"的巧合，拿它当 kind 用会在两者分叉时静默点错组件。
                 var offset = cmd - TrayWidgetMenu.Base;
