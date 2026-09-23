@@ -1,4 +1,5 @@
 #nullable enable
+using StarMark.Abstractions.Trending;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -161,6 +162,42 @@ public sealed class GitHubClient : IDisposable
     }
 
     public void Dispose() => _http.Dispose();
+
+    /// <summary>
+    /// 给仓库加星 / 取消星（本应用<b>第一个 GitHub 写操作</b>）：
+    /// <c>PUT</c> / <c>DELETE</c> <c>/user/starred/{owner}/{repo}</c>，成功是 204 无正文。
+    /// <para>
+    /// 与读侧的关键差别：读侧失败可以"少一批数据"，这里是<b>用户点了一下按钮</b>，
+    /// 所以任何不成功的分支都必须抛出让界面说出原因——包括没配 Token
+    /// （读侧那句 <c>if (!IsConfigured) return null/空;</c> 的静默处置在这里就是"点了没反应"）。
+    /// </para>
+    /// <para>
+    /// <paramref name="fullName"/> 必须先过 <see cref="GitHubRepoId.Normalize"/>：它会被拼进 REST 路径，
+    /// 不合法的两段之外的形状（<c>../../</c>、编码斜杠、空格）能把"给某仓库加星"变成打到任意端点的请求。
+    /// </para>
+    /// <param name="starred">true＝加星，false＝取消星。</param>
+    /// <remarks>取消星时 404 视为成功：目标状态（"不再 star"）已经达成，报失败只会让用户以为没生效。</remarks>
+    public async Task SetStarredAsync(string fullName, bool starred, CancellationToken ct)
+    {
+        if (GitHubRepoId.Normalize(fullName) is not { } repo)
+            throw new GitHubApiException(GitHubErrorKind.Unknown, $"仓库标识不合法，无法{(starred ? "加星" : "取消星")}：「{fullName}」");
+        if (!IsConfigured)
+            throw new GitHubApiException(GitHubErrorKind.Auth,
+                "Star 失败：未配置 GitHub Token（在设置里填入带 public_repo 范围的 Token 后即可）",
+                HttpStatusCode.Unauthorized);
+
+        using var req = new HttpRequestMessage(starred ? HttpMethod.Put : HttpMethod.Delete,
+            $"{ApiBase}/user/starred/{repo}");
+        req.Content = new ByteArrayContent(Array.Empty<byte>());   // GitHub 要求空正文 + Content-Length: 0
+        using var resp = await _http.SendAsync(req, ct);
+
+        if (resp.StatusCode == HttpStatusCode.NoContent) return;
+        if (!starred && resp.StatusCode == HttpStatusCode.NotFound) return;
+        if (resp.StatusCode == HttpStatusCode.NotFound)
+            throw new GitHubApiException(GitHubErrorKind.Forbidden,
+                "GitHub 找不到该仓库（可能已改名、被删除或不可见）", HttpStatusCode.NotFound);
+        if (!resp.IsSuccessStatusCode) throw Classify(resp);
+    }
 
     /// <summary>P1-4 把非成功响应分类为可操作的错误类型。</summary>
     private static GitHubApiException Classify(HttpResponseMessage resp)
