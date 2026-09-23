@@ -2,6 +2,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using StarMark.Abstractions;
+using StarMark.Abstractions.SystemMonitor;
 
 namespace StarMark.Core.Widgets;
 
@@ -141,6 +143,74 @@ public static class SystemMonitorPolicy
         return (currentBytes - previousBytes) / elapsedSeconds;
     }
 
+    // ── 接口计数判定：哪些网卡的字节该算进"这台机器的网速" ──
+    // 下面三个值抄自 SDK 的 IFTYPE / TUNNEL_TYPE / IF_OPER_STATUS（Integrations 侧只把原始整数交进来）。
+
+    /// <summary>IF_TYPE_SOFTWARE_LOOPBACK：本机回环，流量从没出过机器。</summary>
+    public const int IfTypeSoftwareLoopback = 24;
+
+    /// <summary>TUNNEL_TYPE.NONE：非隧道接口。</summary>
+    public const int TunnelTypeNone = 0;
+
+    /// <summary>IF_OPER_UP：链路已起的接口。</summary>
+    public const int IfOperUp = 1;
+
+    /// <summary>
+    /// 这条接口本身有没有资格算作"这台机器的流量"。
+    /// <para>
+    /// 排除<b>隧道</b>与<b>软件回环</b>不是装饰：Teredo / ISATAP 这类隧道接口会把同一份流量在
+    /// "隧道 + 底层物理网卡"上<b>各记一遍</b>，把它们一起加起来就是把下载速度翻倍显示。
+    /// 用类型位判定而不是按网卡名（"Teredo Tunneling"、"isatap.{...}"）做字符串匹配——
+    /// 名字随语言与驱动变，而类型位是接口自己声明的。
+    /// </para>
+    /// <para>链路未起（<c>OperStatus != Up</c>）的接口不计：它的数据是上一次连接的残留，
+    /// 会把"已经断网"画成"还在跑满速"。</para>
+    /// <para>真硬件与否不在这个判定里，由 <see cref="SumCountedAdapters"/> 分两趟处理——
+    /// 那一层还要负责"只有虚拟链路在线时宁给虚拟数"的退路。</para>
+    /// </summary>
+    public static bool CountsTowardNetworkRate(int ifType, int tunnelType, int operStatus)
+        => operStatus == IfOperUp
+        && tunnelType == TunnelTypeNone
+        && ifType != IfTypeSoftwareLoopback;
+
+    /// <summary>一次求和的结果：<see cref="CountedAdapters"/>＝0 表示"没有可显示的链路"，与"网速是 0"必须可分辨。</summary>
+    /// <param name="CountedViaVirtualFallback">真硬件网卡一块都没在线，退而统计虚拟接口（界面要说明这一点）。</param>
+    public sealed record NetworkTotals(long InBytes, long OutBytes, int CountedAdapters, bool CountedViaVirtualFallback);
+
+    /// <summary>
+    /// 把"该计入"的网卡累计字节加起来。
+    /// <para>
+    /// <b>为什么不能直接全加</b>：真机上一次实测 56 行接口里有 4 块虚拟网卡报着<b>完全相同</b>的计数器
+    /// （托管网络 / Wi-Fi Direct 把物理网卡的统计原样镜像了一份），全加等于把同一份流量算四遍。
+    /// 所以先只认真硬件接口；<b>若一块硬件接口都不在线</b>（VPN-only、纯虚拟网络）再退回统计虚拟接口，
+    /// 并在返回值里标出用了退路——"永不显示"比"数字偏大"更糟，而两者都不该是静默的。
+    /// （真机对照：本机 56 块接口里只有 2 块是真硬件，不区分会把同一份流量算成 7 倍。）
+    /// </para>
+    /// </summary>
+    public static NetworkTotals SumCountedAdapters(IReadOnlyList<NetworkAdapterCounters> adapters)
+    {
+        var hardware = Sum(adapters, hardwareOnly: true);
+        if (hardware.CountedAdapters > 0) return hardware;
+        var any = Sum(adapters, hardwareOnly: false);
+        // "一块都没计入"不是"走了退路"：那时该说的是"没有可用链路"，标成退路会把界面引向错误的解释
+        return any.CountedAdapters > 0 ? any with { CountedViaVirtualFallback = true } : any;
+    }
+
+    private static NetworkTotals Sum(IReadOnlyList<NetworkAdapterCounters> adapters, bool hardwareOnly)
+    {
+        long inTotal = 0, outTotal = 0;
+        var counted = 0;
+        foreach (var adapter in adapters)
+        {
+            if (hardwareOnly && !adapter.HardwareInterface) continue;
+            if (!CountsTowardNetworkRate(adapter.IfType, adapter.TunnelType, adapter.OperStatus)) continue;
+            inTotal += adapter.InBytes;
+            outTotal += adapter.OutBytes;
+            counted++;
+        }
+        return new NetworkTotals(inTotal, outTotal, counted, false);
+    }
+
     /// <summary>百分比显示：null ⇒ "--"，其余取整（监控数字小数点没有意义，抖一位会让人误以为在读实时值）。</summary>
     public static string FormatPercent(double? percent)
         => percent is null ? "--"
@@ -151,33 +221,17 @@ public static class SystemMonitorPolicy
         => percent is null ? 0 : Math.Clamp(percent.Value / 100.0, 0, 1);
 
     /// <summary>
-    /// 字节速率显示（"1.2 MB/s"）。<b>单位按 1024 进制</b>，与任务管理器/资源管理器一致——
-    /// 网络速率按 ISP 习惯该是比特，但同屏混用两种基数（内存 1024、网速 1000）才是日后"为什么对不上"的源头。
+    /// 字节速率显示（"13.3 KB/s"）。<b>基数与舍入一律走 <see cref="FileSizeText"/></b>——全应用只有那一份
+    /// 字节显示规则（1024 进制，与资源管理器/任务管理器同基数），这里只负责补上 "/s" 与"无数据"的 "--"。
+    /// 网络速率按 ISP 习惯其实该用比特，但同屏混两种基数（内存 1024、网速 1000）才是日后
+    /// "为什么和另一个窗口对不上"的源头，故一律跟随 FileSizeText。
     /// </summary>
     public static string FormatRate(double? bytesPerSecond)
-        => bytesPerSecond is null ? "--" : FormatScaled(bytesPerSecond.Value, "/s");
-
-    /// <summary>字节量显示（"12.4 GB"），同样 1024 进制。</summary>
-    public static string FormatBytes(double? bytes)
-        => bytes is null ? "--" : FormatScaled(bytes.Value, string.Empty);
-
-    private static readonly string[] ByteUnits = { "B", "KB", "MB", "GB", "TB", "PB" };
-
-    private static string FormatScaled(double bytes, string suffix)
     {
-        if (double.IsNaN(bytes) || double.IsInfinity(bytes)) return "--";
-        var value = Math.Max(bytes, 0);
-        var unit = 0;
-        while (value >= 1024 && unit < ByteUnits.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-        // 小于 10 才留一位小数：1024 以上再留小数点只是把噪声画给用户看
-        var text = unit == 0
-            ? ((long)value).ToString(CultureInfo.InvariantCulture)
-            : value.ToString(value < 10 ? "0.0" : "0", CultureInfo.InvariantCulture);
-        return text + " " + ByteUnits[unit] + suffix;
+        if (bytesPerSecond is null) return "--";
+        var value = bytesPerSecond.Value;
+        if (double.IsNaN(value) || double.IsInfinity(value)) return "--";
+        return FileSizeText.Human((long)Math.Max(value, 0)) + "/s";
     }
 }
 

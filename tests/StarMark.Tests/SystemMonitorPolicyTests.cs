@@ -232,16 +232,15 @@ public sealed class SystemMonitorPolicyTests
     }
 
     [Fact]
-    public void FormatRate_UnitsAreBinaryAndBoundaryIsExact()
+    public void FormatRate_UsesTheSameBinaryBaseAsTheRestOfTheApp()
     {
+        // 基数与舍入一律走 FileSizeText：这里只验 "/s" 的接法与"无数据"的形状
         Assert.Equal("--", SystemMonitorPolicy.FormatRate(null));
         Assert.Equal("0 B/s", SystemMonitorPolicy.FormatRate(0));
         Assert.Equal("1023 B/s", SystemMonitorPolicy.FormatRate(1023));
-        Assert.Equal("1.0 KB/s", SystemMonitorPolicy.FormatRate(1024));
-        Assert.Equal("1.0 MB/s", SystemMonitorPolicy.FormatRate(1024 * 1024));
-        Assert.Equal("14 MB/s", SystemMonitorPolicy.FormatRate(15_000_000));   // ≥10 不再留小数
-        Assert.Equal("1.0 GB/s", SystemMonitorPolicy.FormatRate(1024d * 1024 * 1024));
-        Assert.Equal("1024 PB/s", SystemMonitorPolicy.FormatRate(1024d * 1024 * 1024 * 1024 * 1024 * 1024));   // 单位到顶后不再进位
+        Assert.Equal("1 KB/s", SystemMonitorPolicy.FormatRate(1024));
+        Assert.Equal("1 MB/s", SystemMonitorPolicy.FormatRate(1024 * 1024));
+        Assert.Equal("1 GB/s", SystemMonitorPolicy.FormatRate(1024d * 1024 * 1024));
     }
 
     [Fact]
@@ -252,30 +251,12 @@ public sealed class SystemMonitorPolicyTests
         Assert.Equal("--", SystemMonitorPolicy.FormatRate(double.PositiveInfinity));
     }
 
-    [Fact]
-    public void FormatBytes_DecimalPlacesOnlyBelowTen()
-    {
-        Assert.Equal("--", SystemMonitorPolicy.FormatBytes(null));
-        Assert.Equal("512 B", SystemMonitorPolicy.FormatBytes(512));
-        Assert.Equal("1.0 GB", SystemMonitorPolicy.FormatBytes(1024d * 1024 * 1024));
-        Assert.Equal("7.4 GB", SystemMonitorPolicy.FormatBytes(1024d * 1024 * 1024 * 7.4));   // <10 才留小数
-        Assert.Equal("12 GB", SystemMonitorPolicy.FormatBytes(1024d * 1024 * 1024 * 12.4));
-        Assert.Equal("16 GB", SystemMonitorPolicy.FormatBytes(16d * 1024 * 1024 * 1024));
-    }
-
-    /// <summary>显示串必须与文化无关（实现里显式走 InvariantCulture），否则某些机器上会出现"12,4 GB"。</summary>
+    /// <summary>显示串必须与文化无关（实现里显式走 InvariantCulture / FileSizeText），否则某些机器上会出现"12,4 GB"。</summary>
     [Fact]
     public void FormattedNumbers_NeverUseCommaAsDecimalSeparator()
     {
-        foreach (var text in new[]
-                 {
-                     SystemMonitorPolicy.FormatBytes(1024d * 1024 * 1024 * 5.34),
-                     SystemMonitorPolicy.FormatRate(1024 * 1024 * 5.5),
-                 })
-        {
-            Assert.DoesNotContain(",", text);
-            Assert.Contains(".", text);
-        }
+        Assert.DoesNotContain(",", SystemMonitorPolicy.FormatPercent(1234.5));
+        Assert.DoesNotContain(",", SystemMonitorPolicy.FormatRate(1024 * 1024 * 5.5));
     }
 
     // ────────── 滑动平均窗 ──────────
