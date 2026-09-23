@@ -73,6 +73,10 @@ public static class OcrService
         error = null;
         try
         {
+            // 登记回声：这是本仓库既定的硬规则（App.NoteClipboardOwnWrite 的注释：任何往剪贴板写内容
+            // 的地方都要先登记，否则用户正开着剪贴板历史页，列表会因为我们自己的一次复制而重排）。
+            // 另一层好处是 OCR 结果不会以明文自动进历史——框选到密码框之类的画面时，那不该被静默归档。
+            App.NoteClipboardOwnWrite(text);
             var package = new DataPackage { RequestedOperation = DataPackageOperation.Copy };
             package.SetText(text);
             Clipboard.SetContent(package);
