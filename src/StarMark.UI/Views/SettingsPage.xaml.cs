@@ -262,6 +262,27 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         => App.Services.GetRequiredService<HotkeyService>();
 
     /// <summary>
+    /// 页面活着的时候盯住"占用中"清单：注册是自动重试的，占用者一退出提示就该消失。
+    /// 不刷新等于让一句已经过期的"被占用"留在界面上——那从"看得见失败"变成"撒谎的旧提示"。
+    /// </summary>
+    private void OnRegistrationStateFlushed(System.Collections.Generic.IReadOnlyList<HotkeyRegistrationFailure> _)
+        => MarkRegistrationFailures();
+
+    private void Page_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (App.Services.GetRequiredService<HotkeyService>() is not { } svc) return;
+        // 本页可能被反复导航回来：先退再订，避免同一个处理器挂多份（一份事件 → N 次重建 UI）。
+        svc.RegistrationStateFlushed -= OnRegistrationStateFlushed;
+        svc.RegistrationStateFlushed += OnRegistrationStateFlushed;
+    }
+
+    private void Page_Unloaded(object sender, RoutedEventArgs e)
+    {
+        if (App.Services.GetRequiredService<HotkeyService>() is { } svc)
+            svc.RegistrationStateFlushed -= OnRegistrationStateFlushed;
+    }
+
+    /// <summary>
     /// 逐类型列出：类型标题 +「添加组件」按钮（可重复添加同类型），其下为该类型的每个实例一行
     /// （显示 / 移除）。置顶实例在标签后标注（置顶）。
     /// </summary>
@@ -515,7 +536,9 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
             Content = repeater,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             Margin = new Thickness(0, 0, 0, 4),
-            IsExpanded = category == "主界面" || category == "组件总控",   // 常用的两类默认展开
+            // 一律折叠：进这一页不等于"要看这两类"。原先每次点「快捷键」都把「主界面」「组件总控」摊开，
+            // 用户要看的在底下、却先被两屏不相关的行顶下去（展开与否是用户的事）。
+            IsExpanded = false,
         };
     }
 
@@ -823,15 +846,18 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
         foreach (var row in HotkeyRowsItems)
         {
+            // 措辞刻意不是"失败/未注册"：绑定已经存下并在自动重试，这一行只是"此刻还归别人"的事实提示。
             row.RegisterErrorText =
                 _hotkeyBindings.TryGetValue(row.Action, out var g) && !g.IsEmpty
-                && reasons.TryGetValue(HotkeyGesture.GestureKey(g), out var why) ? "未注册：" + why : string.Empty;
+                && reasons.TryGetValue(HotkeyGesture.GestureKey(g), out var why)
+                    ? $"提示：{why}（设置已保存，占用者退出后自动生效）" : string.Empty;
         }
 
         RegisterErrorSummary = failed.Count == 0
             ? string.Empty
-            : $"有 {failed.Count} 个组合键未能注册：{string.Join("、", failed.Select(f => $"{HotkeyDisplay.Display(f.Gesture)}（{f.Reason}）"))}。"
-              + "占用它的程序退出后点「重试注册」；或给这些动作换一个组合再点「保存快捷键」。";
+            : $"提示：{failed.Count} 个组合键此刻被其它程序占用（{string.Join("、", failed.Select(f => $"{HotkeyDisplay.Display(f.Gesture)}：{f.Reason}"))}）。"
+              + "这些快捷键已经保存，程序会每 " + HotkeyService.OccupancyRetrySeconds + " 秒自己再注册一次，对方一退出就生效——不需要你做任何事；"
+              + "急着现在就要生效可以点「重试注册」，或给这些动作换一个组合再点「保存快捷键」。";
     }
 
     /// <summary>重试注册：不改绑定内容，只再向系统注册一次（用户可能刚关掉占用该组合键的程序）。</summary>

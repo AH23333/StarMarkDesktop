@@ -15,7 +15,9 @@ namespace StarMark.UI.Services;
 /// <list type="bullet">
 ///   <item>同一手势可绑定多个动作，触发时全部执行（用户可借此一次完成多个操作）。</item>
 ///   <item>冲突不阻止保存：<see cref="HotkeyBindings.GetConflicts"/> 仅用于 UI 提示。</item>
-///   <item>注册失败（被其它程序占用）→ 该手势跳过，不影响其余手势，并记入 <see cref="RegistrationFailures"/> 供界面标注。</item>
+///   <item>注册失败（被其它程序占用）→ 该手势本轮不生效，其余手势照常；绑定<b>已经保存</b>，
+///     并且程序每隔 <see cref="OccupancyRetrySeconds"/> 秒<b>自己再试一次</b>，占用者一退出就生效。
+///     界面只把这件事当<strong>提示</strong>（<see cref="RegistrationFailures"/>），不当"注册被拒绝"。</item>
 /// </list>
 /// </summary>
 public sealed class HotkeyService : IDisposable
@@ -45,6 +47,18 @@ public sealed class HotkeyService : IDisposable
     /// </summary>
     public IReadOnlyList<HotkeyRegistrationFailure> RegistrationFailures { get; private set; }
         = Array.Empty<HotkeyRegistrationFailure>();
+
+    /// <summary>占用中的组合键的自动重试间隔（秒）。<b>公开</b>给设置页的提示文案引用——同一个数不许有两个书写点。</summary>
+    public const int OccupancyRetrySeconds = 10;
+
+    /// <summary>
+    /// 每次真正向系统重新注册之后广播当前占用清单（可能为空＝全部已生效）。
+    /// <para>为什么要有这个事件：自动重试会把提示悄悄治好，而页面上那行"被占用"若不再刷新，
+    /// 就从"看得见失败"变成"撒谎的旧提示"。可见状态必须跟着事实走。</para>
+    /// </summary>
+    public event Action<IReadOnlyList<HotkeyRegistrationFailure>>? RegistrationStateFlushed;
+
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _occupancyRetry;
 
     /// <summary>
     /// 挂起所有已注册热键（仅注销 OS 层注册，不丢弃绑定）。
@@ -117,6 +131,30 @@ public sealed class HotkeyService : IDisposable
             }
         }
         RegistrationFailures = failed;
+        RegistrationStateFlushed?.Invoke(failed);
+        if (failed.Count > 0) StartOccupancyRetry(); else StopOccupancyRetry();
+    }
+
+    /// <summary>
+    /// 起（或复用）一个占用重试表。<b>只留一个</b>：反复注册失败每次新建一个表＝按失败次数叠加定时源。
+    /// </summary>
+    private void StartOccupancyRetry()
+    {
+        if (_hwnd == IntPtr.Zero || _suspended || _occupancyRetry is not null) return;
+        var queue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        if (queue is null) return;          // 非 UI 线程调用（理论上不该发生）：手动「重试注册」仍然可用
+        var timer = queue.CreateTimer();
+        timer.Interval = TimeSpan.FromSeconds(OccupancyRetrySeconds);
+        timer.Tick += (_, _) => { if (!_suspended && !_disposed) ApplyBindings(_lastBindings); };
+        _occupancyRetry = timer;
+        timer.Start();
+    }
+
+    private void StopOccupancyRetry()
+    {
+        if (_occupancyRetry is not { } timer) return;
+        timer.Stop();
+        _occupancyRetry = null;
     }
 
     private IntPtr OnSubclassProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam, UIntPtr uIdSubclass, UIntPtr dwRefData)
@@ -154,6 +192,7 @@ public sealed class HotkeyService : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        StopOccupancyRetry();
         if (_hwnd != IntPtr.Zero)
         {
             foreach (var id in _idToGesture.Keys.ToList()) Win32Hotkey.UnregisterHotKey(_hwnd, id);
