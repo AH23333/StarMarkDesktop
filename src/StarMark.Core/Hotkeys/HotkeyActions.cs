@@ -27,6 +27,9 @@ public static class HotkeyActions
     /// </summary>
     public const string WidgetsToggleTopmostAll = "widgets.topmostall";
     public const string WidgetsHideAll = "widgets.hideall";
+
+    /// <summary>屏幕取词式截图：按 Snipaste 的默认键位（F1）进入选区遮罩。</summary>
+    public const string ScreenCapture = "screen.capture";
     public const string WidgetsToggleAll = "widgets.toggleall";
 
     private const string LayoutPrefix = "layout.apply:";
@@ -51,6 +54,7 @@ public static class HotkeyActions
     {
         if (action is MainToggle or MainShow or MainHide) return "主界面";
         if (action is WidgetsToggleAll or WidgetsShowAll or WidgetsHideAll or WidgetsToggleTopmostAll) return "组件总控";
+        if (action.StartsWith("screen.")) return "截图";
         if (IsLayoutAction(action)) return "布局方案";
         foreach (var k in WidgetStorage.AllKinds)
             if (action == WidgetCreate(k) || action == WidgetShow(k) || action == WidgetHide(k) || action == WidgetToggle(k))
@@ -63,7 +67,7 @@ public static class HotkeyActions
 
     private static List<string> BuildCategoryOrder()
     {
-        var list = new List<string> { "主界面", "组件总控" };
+        var list = new List<string> { "主界面", "组件总控", "截图" };
         foreach (var k in WidgetStorage.AllKinds) list.Add(WidgetStorage.KindTitle(k));
         list.Add("布局方案");
         return list;
@@ -76,6 +80,7 @@ public static class HotkeyActions
         {
             MainToggle, MainShow, MainHide,
             WidgetsToggleAll, WidgetsShowAll, WidgetsHideAll, WidgetsToggleTopmostAll,
+            ScreenCapture,
         };
         foreach (var k in WidgetStorage.AllKinds)
         {
@@ -102,6 +107,7 @@ public static class HotkeyActions
             case WidgetsHideAll: return "隐藏所有组件";
             case WidgetsToggleAll: return "切换所有组件（显示 / 隐藏）";
             case WidgetsToggleTopmostAll: return "切换所有组件置顶（置顶 / 不置顶）";
+            case ScreenCapture: return "截图（框选区域）";
         }
 
         if (IsLayoutAction(action))

@@ -32,6 +32,9 @@ public static class HotkeyBindings
     /// <summary>Win32 虚拟键码 VK_SPACE（Core 层不引 WinRT 的 VirtualKey 枚举）。</summary>
     public const uint VirtualKeySpace = 0x20;
 
+    /// <summary>VK_F1：截图默认键（D3 裁决"默认键与 Snipaste 一致"）。</summary>
+    public const uint VirtualKeyF1 = 0x70;
+
     /// <summary>
     /// 出厂默认：主界面呼出/关闭 = Ctrl+Alt+Space。
     /// 每次调用给出**新的可写字典**，调用方可以就地叠加而不污染默认表。
@@ -40,6 +43,10 @@ public static class HotkeyBindings
     {
         [HotkeyActions.MainToggle] = new HotkeyGesture(
             HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.NoRepeat, VirtualKeySpace),
+        // 截图用裸 F1（与 Snipaste 默认一致，无修饰键）。
+        // 与主界面呼出键不冲突：那条是 Ctrl+Alt+Space。装了 Snipaste 的机器上会撞，
+        // 但批次 KL 已把冲突改成"只提示、不阻碍注册"，用户在设置里改一键即可，不必先关别的产品。
+        [HotkeyActions.ScreenCapture] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF1),
     };
 
     /// <summary>

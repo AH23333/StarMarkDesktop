@@ -322,6 +322,7 @@ public partial class App : Application
                 hotkey.RegisterHandler(HotkeyActions.WidgetsHideAll, () => widgetManager.HideAllAsync());
                 hotkey.RegisterHandler(HotkeyActions.WidgetsToggleAll, () => widgetManager.ToggleAllInstancesAsync());
                 hotkey.RegisterHandler(HotkeyActions.WidgetsToggleTopmostAll, () => widgetManager.ToggleAllTopmostAsync());
+                hotkey.RegisterHandler(HotkeyActions.ScreenCapture, () => { StarMark.UI.Services.ScreenshotService.Start(); return Task.CompletedTask; });
                 foreach (var k in WidgetStorage.AllKinds)
                 {
                     var kind = k;

@@ -125,26 +125,44 @@ public static class GdiScreenCapture
     /// </summary>
     public static async Task<bool> SavePngAsync(string path, byte[] bgra, int width, int height, CancellationToken ct = default)
     {
-        if (width <= 0 || height <= 0 || bgra.Length < (long)width * height * 4) return false;
         try
         {
+            if (await EncodePngAsync(bgra, width, height, ct) is not { } encoded) return false;
             var directory = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            using var file = File.Create(path);
+            encoded.Seek(0);
+            await encoded.AsStreamForRead().CopyToAsync(file, CancellationToken.None);
+            encoded.Dispose();
+            file.Flush();
+            return true;
+        }
+        catch (OperationCanceledException) { return false; }
+        catch (Exception) { return false; }        // 调用方负责把"存不下"显示出来
+    }
 
-            using var stream = new InMemoryRandomAccessStream();
+    /// <summary>
+    /// 把 BGRA 编成 PNG 到一个内存流里（已 Seek(0)，可直接交文件系统或剪贴板）。
+    /// <b>编码只这一处</b>：落盘与"复制到剪贴板"两边各写一遍编码器，早晚会写出两种尺寸或两种 alpha 处理。
+    /// </summary>
+    public static async Task<InMemoryRandomAccessStream?> EncodePngAsync(byte[] bgra, int width, int height, CancellationToken ct = default)
+    {
+        if (width <= 0 || height <= 0 || bgra.Length < (long)width * height * 4) return null;
+        var stream = new InMemoryRandomAccessStream();
+        try
+        {
             var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream).AsTask(ct);
             encoder.SetPixelData(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight,
                 (uint)width, (uint)height, 96, 96, bgra);
             await encoder.FlushAsync().AsTask(ct);
-
             stream.Seek(0);
-            using var file = File.Create(path);
-            using var input = stream.GetInputStreamAt(0);
-            await input.AsStreamForRead().CopyToAsync(file, CancellationToken.None);
-            return true;
+            return stream;
         }
-        catch (OperationCanceledException) { return false; }
-        catch (Exception) { return false; }        // 调用方负责把"存盘失败"显示出来，这里不吞日志之外的东西
+        catch (Exception)
+        {
+            stream.Dispose();     // 出错路径上也要释放：调用方拿到 null 就不会再管这个流了
+            throw;
+        }
     }
 
     /// <summary>裁剪一块像素：目标缓冲独立分配（贴图要能脱离原帧被单独持有与释放）。</summary>

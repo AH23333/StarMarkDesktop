@@ -491,6 +491,29 @@ internal static class WindowInterop
         return scale;
     }
 
+    /// <summary>
+    /// 所有显示器的<b>整屏</b>矩形（物理像素，含任务栏——截图遮罩必须盖住整块屏，
+    /// 用工作区会留下一条任务栏没被压暗，用户会以为遮罩没铺满）+ 各自的有效缩放。
+    /// 截图/贴图按"每屏一个窗口"铺，是因为每块的 DPI 可能不同：单窗跨屏时
+    /// 只有一屏的 DIP→物理换算是对的，另一屏上的选区会整体偏移。
+    /// </summary>
+    public static IReadOnlyList<(string Device, RectInt32 Bounds, double Scale)> ListMonitors()
+    {
+        var list = new List<(string, RectInt32, double)>();
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (hmon, _, _, _) =>
+        {
+            var mi = new MONITORINFOEX { CbSize = Marshal.SizeOf<MONITORINFOEX>() };
+            if (GetMonitorInfoExW(hmon, ref mi))
+                list.Add((mi.SzDevice ?? string.Empty,
+                    new RectInt32(mi.RcMonitor.Left, mi.RcMonitor.Top,
+                        mi.RcMonitor.Right - mi.RcMonitor.Left,
+                        mi.RcMonitor.Bottom - mi.RcMonitor.Top),
+                    GetMonitorScale(hmon)));
+            return true;      // 继续枚举下一块
+        }, IntPtr.Zero);
+        return list;
+    }
+
     /// <summary>主显示器工作区（物理像素）。</summary>
     public static RectInt32 PrimaryWorkArea()
     {

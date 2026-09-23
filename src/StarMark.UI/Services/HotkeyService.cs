@@ -26,6 +26,12 @@ public sealed class HotkeyService : IDisposable
     private readonly Dictionary<int, HotkeyGesture> _idToGesture = new();
     private readonly Dictionary<string, IReadOnlyList<string>> _gestureToActions = new();
     private IntPtr _hwnd;
+    /// <summary>
+    /// 已记过"注册失败"的手势键 → 当时那条原因。占用重试每 10 秒跑一轮，
+    /// 这张表让同一个失败只在状态变化时落一行日志（并让恢复也落一行）。
+    /// </summary>
+    private readonly Dictionary<string, string> _warnedFailures = new();
+
     private readonly Dictionary<IntPtr, Win32Hotkey.SubclassProc> _procKeepAlive = new();
     private Win32Hotkey.SubclassProc? _proc;
     private bool _disposed;
@@ -112,6 +118,7 @@ public sealed class HotkeyService : IDisposable
 
         var id = 1;
         var failed = new List<HotkeyRegistrationFailure>();
+        var failingKeys = new HashSet<string>();
         foreach (var group in HotkeyBindings.GroupByGesture(bindings))
         {
             var g = group.Gesture;
@@ -127,8 +134,21 @@ public sealed class HotkeyService : IDisposable
                 var err = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
                 var f = new HotkeyRegistrationFailure(g, err);
                 failed.Add(f);
-                StarLog.Warn($"[Hotkey] 注册失败: {HotkeyDisplay.Display(g)}（{f.Reason}，Win32 错误 {err}）");
+                failingKeys.Add(group.Key);
+                // 只在"这次和上次记的不一样"时落一行：占用重试每 10 秒跑一轮（那是自愈设计，不能停），
+                // 每个周期都记一遍会让一条被别的产品长期占用的组合刷掉整本日志（一天 ~8600 行），
+                // 真正该被看见的那行反而被埋掉。
+                var note = $"{f.Reason}，Win32 错误 {err}";
+                if (_warnedFailures.TryGetValue(group.Key, out var last) && last == note) continue;
+                _warnedFailures[group.Key] = note;
+                StarLog.Warn($"[Hotkey] 注册失败: {HotkeyDisplay.Display(g)}（{note}）");
             }
+        }
+        // 之前记过失败、这一轮不再失败的：说明占用方退出了，重试注册成功 —— 这条同样值得记一次
+        foreach (var recovered in _warnedFailures.Keys.Where(k => !failingKeys.Contains(k)).ToList())
+        {
+            _warnedFailures.Remove(recovered);
+            StarLog.Info($"[Hotkey] 曾注册失败的手势已恢复注册: {recovered}");
         }
         RegistrationFailures = failed;
         RegistrationStateFlushed?.Invoke(failed);
