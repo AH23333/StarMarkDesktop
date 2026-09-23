@@ -6,44 +6,9 @@
     xmlns:controls="using:StarMark.UI.Controls"
     xmlns:vm="using:StarMark.UI.ViewModels">
 
-    <UserControl.Resources>
-        <!-- 置顶 / 快捷入口共用：完整 ItemCard 能力（复用右键菜单/标签/预览/发送到桌面） -->
-        <DataTemplate x:Key="CardTemplate" x:DataType="vm:ItemCardViewModel">
-            <controls:ItemCard Margin="0,1,0,1" ViewModel="{x:Bind}" SuppressTags="True"
-                               OpenRequested="Card_OpenRequested"
-                               EditNoteRequested="Card_EditNoteRequested"
-                               EditTagsRequested="Card_EditTagsRequested"
-                               HideRequested="Card_HideRequested"
-                               PinRequested="Card_PinRequested"
-                               CopyLinkRequested="Card_CopyLinkRequested"
-                               OpenLocationRequested="Card_OpenLocationRequested"
-                               TagFilterRequested="Card_TagFilterRequested"
-                               TagRemoveRequested="Card_TagRemoveRequested"
-                               TagAddRequested="Card_TagAddRequested"
-                               DeleteRequested="Card_DeleteRequested"/>
-        </DataTemplate>
-    </UserControl.Resources>
-
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Padding="12,8,12,12" Spacing="6">
-            <!-- 置顶条目（来自 StarMark 数据库 Pinned=1，完整 ItemCard 能力） -->
-            <StackPanel Orientation="Horizontal" Margin="0,4,0,2">
-                <TextBlock Text="置顶条目" FontSize="11" FontWeight="SemiBold"
-                           Opacity="0.7" VerticalAlignment="Center"/>
-                <Button Content="🔄" FontSize="10" Padding="6,1,6,1"
-                        Background="Transparent" BorderThickness="0" Margin="8,0,0,0"
-                        Click="RefreshPinned_Click"/>
-            </StackPanel>
-            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Pinned, Mode=OneWay}"
-                           ItemTemplate="{StaticResource CardTemplate}">
-                <ItemsRepeater.Layout>
-                    <StackLayout Spacing="6"/>
-                </ItemsRepeater.Layout>
-            </ItemsRepeater>
-
-            <Border Height="1" Margin="0,4,0,4" Background="{ThemeResource WidgetDividerBrush}"/>
-
-            <!-- 用户自定义快捷入口（合成 Item + IsLauncherMode） -->
+            <!-- 只做"快捷入口"。置顶条目此前也在这一格里展示，与「置顶条目」组件重复，经用户裁决摘除。 -->
             <StackPanel Orientation="Horizontal" Margin="0,4,0,2">
                 <TextBlock Text="快捷入口" FontSize="11" FontWeight="SemiBold"
                            Opacity="0.7" VerticalAlignment="Center"/>
@@ -51,8 +16,17 @@
                         Background="Transparent" BorderThickness="0" Margin="8,0,0,0"
                         Click="ToggleAddForm_Click"/>
             </StackPanel>
-            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Links, Mode=OneWay}"
-                           ItemTemplate="{StaticResource CardTemplate}">
+            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Links, Mode=OneWay}">
+                <ItemsRepeater.ItemTemplate>
+                    <!-- 快捷入口是合成条目（IsLauncherMode）：置顶/隐藏/笔记/标签在卡片里本就不可见，故不接线 -->
+                    <DataTemplate x:DataType="vm:ItemCardViewModel">
+                        <controls:ItemCard Margin="0,1,0,1" ViewModel="{x:Bind}" SuppressTags="True"
+                                           OpenRequested="Card_OpenRequested"
+                                           CopyLinkRequested="Card_CopyLinkRequested"
+                                           OpenLocationRequested="Card_OpenLocationRequested"
+                                           DeleteRequested="Card_DeleteRequested"/>
+                    </DataTemplate>
+                </ItemsRepeater.ItemTemplate>
                 <ItemsRepeater.Layout>
                     <StackLayout Spacing="6"/>
                 </ItemsRepeater.Layout>

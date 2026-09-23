@@ -265,7 +265,7 @@ public static class ItemCardActions
     public static async Task<bool> ToggleHidden(XamlRoot xamlRoot, ItemCardViewModel vm)
     {
         // 兄弟方法（EditTags/RemoveTag/AddTag）均有 try/catch，此前唯 ToggleHidden 裸奔：
-        // 它被多个 async void 的 Card_HideRequested 直接 await（SearchPage / QuickLaunchWidget /
+        // 它被多个 async void 的 Card_HideRequested 直接 await（SearchPage / ClipboardPage /
         // FolderTreePage / TagsPage），SetHiddenAsync 抛 SqliteException 会顺着 async void 冒到
         // UI 线程成未处理异常。改为兜异常并回传"未改变"的当前状态（调用方据此不再做移除/刷新）。
         try
