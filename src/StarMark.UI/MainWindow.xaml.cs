@@ -86,6 +86,9 @@ public sealed partial class MainWindow : Window
         var startIndex = startTag switch { "tags" => 1, "tree" => 0, _ => 0 };
         NavView.SelectedItem = NavView.MenuItems[startIndex];
 
+        // 「热榜」是可选浏览面：开关关着时导航项本身不显示（用户裁决），设置页改动即时生效、不需要重启。
+        ApplyTrendingNavVisibility(_settings.LoadTrendingEnabled());
+
         // 启动时恢复已启用的桌面组件
         DispatcherQueue.TryEnqueue(async () =>
         {
@@ -497,11 +500,23 @@ public sealed partial class MainWindow : Window
             "activity" => typeof(ActivityPage),
             "hidden" => typeof(HiddenPage),
             "clipboard" => typeof(ClipboardPage),
+            "trending" => typeof(TrendingPage),
             "snapshot" => typeof(SnapshotPage),
             "settings" => typeof(SettingsPage),
             _ => typeof(SearchPage),
         };
         ContentFrame.Navigate(pageType, param);
+    }
+
+    /// <summary>
+    /// 按设置开关导航栏的「热榜」项（<b>即时</b>，不等重启）。
+    /// <para>关掉的那一刻若正停在这一页，必须退回文件夹页：入口已经没了、屏幕上却还留着它的内容，
+    /// 是"程序坏了"的典型观感（P-54 那条口径的另一面——状态变了界面就得跟着变）。</para>
+    /// </summary>
+    public void ApplyTrendingNavVisibility(bool enabled)
+    {
+        NavTrendingItem.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        if (!enabled && ViewModel.CurrentPageTag == "trending") NavigateTo("tree");
     }
 
     // ===== 搜索框防抖 =====

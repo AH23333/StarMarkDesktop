@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Trending;
 using StarMark.Core.Hotkeys;
 using StarMark.Core.Performance;
 using StarMark.Integrations.Weather;
@@ -46,6 +47,18 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         /// 默认开等于在用户不知情时把这些抄进一个明文 SQLite 文件。开启后采集全自动，无需任何后续步骤。
         /// </summary>
         public bool? ClipboardHistoryEnabled { get; set; }
+        /// <summary>
+        /// GitHub 热榜浏览面总开关（<b>默认关</b>）。关时不发任何请求，且导航栏连「热榜」项都不显示——
+        /// 这是用户主动开启的可选浏览面，留一个点进去只会说"未开启"的项更像故障
+        /// （与剪贴板"入口常驻"刻意相反，两边的理由都写在蓝图 §5）。
+        /// </summary>
+        public bool? TrendingEnabled { get; set; }
+        /// <summary>热榜页上次的周期（daily/weekly/monthly）；缺省 weekly（同扩展口径）。</summary>
+        public string? TrendingPeriod { get; set; }
+        /// <summary>热榜页上次的语言筛选（可手输）；空＝全部。</summary>
+        public string? TrendingLanguage { get; set; }
+        /// <summary>是否在「今日速览」组件里显示热榜块（默认关；开启热榜时弹窗问过，设置里随时可改）。</summary>
+        public bool? TrendingGlanceEnabled { get; set; }
         /// <summary>快捷键绑定（动作 id → 手势）的 JSON。缺省时使用 <see cref="HotkeyBindings.Defaults"/>。</summary>
         public string? HotkeyBindingsJson { get; set; }
         /// <summary>组件拖动 / 缩放时的边缘磁吸总开关（默认开启）。关闭后用户可自由摆位。</summary>
@@ -540,6 +553,57 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     {
         var d = Load() ?? new SettingsData();
         d.ClipboardHistoryEnabled = enabled;
+        Save(d);
+    }
+
+    // ===== GitHub 热榜（批次 KA→）=====
+
+    /// <summary>热榜总开关（<b>默认关</b>）。关着时导航项不显示、页面也不发任何请求。</summary>
+    public bool LoadTrendingEnabled() => Load() is { } d && d.TrendingEnabled == true;
+
+    public void SaveTrendingEnabled(bool enabled)
+    {
+        var d = Load() ?? new SettingsData();
+        d.TrendingEnabled = enabled;
+        Save(d);
+    }
+
+    /// <summary>
+    /// 上次的周期。<b>存了个不认识的值 ⇒ 回落默认周榜</b>：设置文件可被手改、也可能来自更老的版本，
+    /// 把异常值一路传下去只会得到一个"点开是空白"的页面。
+    /// </summary>
+    public TrendingPeriod LoadTrendingPeriod()
+        => TrendingPeriods.TryParse(Load()?.TrendingPeriod, out var p)
+            ? p : TrendingPeriod.Weekly;
+
+    /// <summary>周期代码（daily/weekly/monthly），与缓存键、界面筛选共用同一套写法。</summary>
+    public string LoadTrendingPeriodCode() => TrendingPeriods.Code(LoadTrendingPeriod());
+
+    public void SaveTrendingPeriod(string code)
+    {
+        if (!TrendingPeriods.TryParse(code, out var period)) return;
+        var d = Load() ?? new SettingsData();
+        d.TrendingPeriod = TrendingPeriods.Code(period);
+        Save(d);
+    }
+
+    /// <summary>上次的语言筛选；空＝全部。</summary>
+    public string LoadTrendingLanguage() => Load()?.TrendingLanguage?.Trim() ?? string.Empty;
+
+    public void SaveTrendingLanguage(string? language)
+    {
+        var d = Load() ?? new SettingsData();
+        d.TrendingLanguage = string.IsNullOrWhiteSpace(language) ? null : language.Trim();
+        Save(d);
+    }
+
+    /// <summary>「今日速览」是否显示热榜块（默认关——开启热榜功能时由弹窗征询，之后设置里可改）。</summary>
+    public bool LoadTrendingGlanceEnabled() => Load() is { } d && d.TrendingGlanceEnabled == true;
+
+    public void SaveTrendingGlanceEnabled(bool enabled)
+    {
+        var d = Load() ?? new SettingsData();
+        d.TrendingGlanceEnabled = enabled;
         Save(d);
     }
 

@@ -81,8 +81,11 @@ public partial class ItemCardViewModel : ObservableObject
     /// <summary>
     /// 是否可"发送到桌面 · 快捷启动"。快捷启动存的是<b>可启动的 URI</b>，没有 URI 的条目
     /// （剪贴板正文、无链接的待办/随记）发过去只会是一条永远打不开的空入口，故不提供该动作。
+    /// 启动器行与热榜候选同样排除（判据在 <see cref="ItemCardPolicy.CanSendToLauncher"/>）：
+    /// 前者本来就在快捷启动里，后者会把"顺手一发"变成长期入口。
     /// </summary>
-    public bool CanSendToWidget => !IsLauncherMode && !string.IsNullOrWhiteSpace(Uri);
+    public bool CanSendToWidget
+        => ItemCardPolicy.CanSendToLauncher(IsLauncherMode, IsTrendingRepo, !string.IsNullOrWhiteSpace(Uri));
 
     /// <summary>
     /// 是否提供"删除这一条"（<b>永久移除</b>，与「隐藏」相对）。只给<b>内置</b>剪贴板历史：

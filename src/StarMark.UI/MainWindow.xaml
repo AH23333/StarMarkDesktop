@@ -198,6 +198,16 @@
                         <FontIcon Glyph="&#xE8CB;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
+                <!--
+                    GitHub 热榜（默认关）。**关着时这一项整个不显示**——与上面剪贴板"入口常驻"刻意相反：
+                    热榜是用户主动开启的可选浏览面，留一个点进去只会说"未开启"的项更像故障。
+                    可见性在 MainWindow.ApplyTrendingNavVisibility 里按设置即时开关（不需要重启）。
+                -->
+                <NavigationViewItem x:Name="NavTrendingItem" Content="热榜" Tag="trending">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE735;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
             </NavigationView.MenuItems>
         </NavigationView>
 

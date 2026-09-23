@@ -60,6 +60,18 @@ public sealed class TrendingCardPolicyTests
                             && ItemCardPolicy.ShowsLibraryActions(launcher, trending));
     }
 
+    /// <summary>
+    /// 「发送到桌面 · 快捷启动」写的是组件配置、不是 items，所以 <see cref="ItemCardPolicy.ShowsLibraryActions"/>
+    /// 管不到它 —— 但热榜候选同样不该有：那会把"顺手一发"变成一个长期入口。真值表单独钉一条。
+    /// </summary>
+    [Theory]
+    [InlineData(false, false, true, true)]     // 普通库条目且有 URI
+    [InlineData(false, false, false, false)]   // 没有 URI（剪贴板正文/待办）
+    [InlineData(true, false, true, false)]     // 快捷启动自己的行：不给自己加入口
+    [InlineData(false, true, true, false)]     // 热榜候选
+    public void SendToLauncher_OnlyForRealRowsWithAUri(bool launcher, bool trending, bool hasUri, bool expected)
+        => Assert.Equal(expected, ItemCardPolicy.CanSendToLauncher(launcher, trending, hasUri));
+
     // ===== Star / 书签 的显示值 =====
 
     [Fact]

@@ -29,6 +29,14 @@ public static class ItemCardPolicy
     /// <summary>是否显示热榜专属动作（⭐Star / 🔖收进收藏）。反过来也成立：只有热榜候选才有这两个按钮。</summary>
     public static bool ShowsTrendingActions(bool isTrendingRepo) => isTrendingRepo;
 
+    /// <summary>
+    /// 是否提供「发送到桌面 · 快捷启动」。它写的是<b>组件配置</b>而不是主库，所以 <see cref="ShowsLibraryActions"/>
+    /// 没管它，但两类合成行同样不该出现：启动器行本来就在快捷启动里（发过去＝自己给自己再加一条），
+    /// 热榜候选则会把"顺手一发"变成一个长期存在的入口——用户只是想看看这个仓库。
+    /// </summary>
+    public static bool CanSendToLauncher(bool isLauncherMode, bool isTrendingRepo, bool hasUri)
+        => hasUri && ShowsLibraryActions(isLauncherMode, isTrendingRepo);
+
     /// <summary>Star 按钮的图标与文字：已 Star 必须一眼可辨（它是"再点会取消"的信号）。</summary>
     public static string StarGlyph(bool starred) => starred ? "★" : "☆";
 
