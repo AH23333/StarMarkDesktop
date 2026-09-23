@@ -251,6 +251,34 @@
                                 </Grid>
                             </StackPanel>
                         </Border>
+
+                        <!-- GitHub 热榜（默认关；关时导航栏连「热榜」项都不显示——用户裁决的可选浏览面） -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="GitHub 热榜" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               Text="开启后导航栏「剪贴板」右侧出现「热榜」。抓取只在你打开那一页时发生（每个周期每天至多一次，失败时回读上次结果并说明）；条目默认不进库——点 ⭐ 才是给 GitHub 远端加星（需 Token），点 🔖 才存进本机收藏。"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.TrendingEnabled, Mode=TwoWay}"/>
+                                </Grid>
+                                <TextBlock Text="{x:Bind ViewModel.TrendingStatus, Mode=OneWay}"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               Text="在「今日速览」组件里显示热榜块（默认日榜）；关掉则该块消失、原「常看」回到顶部。"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="显示" OffContent="不显示" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.TrendingGlanceEnabled, Mode=TwoWay}"/>
+                                </Grid>
+                                <TextBlock Text="热榜页上选的周期与语言会记住，下次打开还是那一档。没配 Token 也能浏览热榜（读侧不依赖 Token），只是 Star 按钮会提示要配 Token。"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap" Opacity="0.62" FontSize="12"/>
+                                <!-- 就地入口：刚开启的人多半想立刻看一眼，不该让他自己回导航栏找那一项 -->
+                                <Button Content="打开热榜页" Click="OpenTrending_Click" Style="{StaticResource SecondaryButton}"
+                                        HorizontalAlignment="Left"
+                                        Visibility="{x:Bind ViewModel.TrendingEnabled, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
+                        </Border>
                     </controls:ColumnFlowPanel>
                 </ScrollViewer>
             </TabViewItem>

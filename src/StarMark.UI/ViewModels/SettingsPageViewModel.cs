@@ -215,6 +215,15 @@ public partial class SettingsPageViewModel : ObservableObject
             : App.IsClipboardCollecting
                 ? "正在记录本机复制的内容（密码管理器与私钥 / 令牌 / 卡号形态除外）。"
                 : "开关是开着的，但本会话的剪贴板监听没建立起来，暂时不会记录新内容——关掉再打开本开关可重试。";
+
+        // GitHub 热榜：回灌两个开关的当前值（副作用同样在回灌期间抑制）。
+        _suppressTrendingApply = true;
+        TrendingEnabled = Safe(_settings.LoadTrendingEnabled, false, "GitHub 热榜");
+        TrendingGlanceEnabled = Safe(_settings.LoadTrendingGlanceEnabled, false, "热榜·今日速览");
+        _suppressTrendingApply = false;
+        TrendingStatus = TrendingEnabled
+            ? "已开启：导航栏「剪贴板」右侧有「热榜」。热榜本身不需要 Token，只有 Star 按钮需要。"
+            : "未开启：不发请求、导航栏也没有「热榜」项。";
     }
 
     // ===== 收藏健康度（P2-6）=====
@@ -330,6 +339,65 @@ public partial class SettingsPageViewModel : ObservableObject
                   + "想临时停一下，去「剪贴板」页点「暂停记录」。"
                 : "开关已打开，但系统剪贴板监听窗口没建起来（原因见日志）——当前仍不会记录任何内容。"
             : "已停止记录。之前存下的历史仍在「剪贴板」页，可在那里一键清空。";
+    }
+
+    // ===== GitHub 热榜（批次 KG）=====
+
+    /// <summary>
+    /// 热榜总开关（<b>默认关</b>）。翻位即持久化并<b>立刻</b>控制导航栏「热榜」项的可见性——
+    /// 用户裁决"关着就不显示"，那么"关掉了项还在"就是没做到位；也不需要重启。
+    /// </summary>
+    [ObservableProperty] private bool _trendingEnabled;
+
+    /// <summary>是否在「今日速览」显示热榜块（开启热榜时弹窗问过，这里随时可改）。</summary>
+    [ObservableProperty] private bool _trendingGlanceEnabled;
+
+    [ObservableProperty] private string _trendingStatus = string.Empty;
+
+    /// <summary>LoadFromStore 回灌初值期间抑制副作用（否则每次进设置页都重设可见性、甚至弹一次询问框）。</summary>
+    private bool _suppressTrendingApply;
+
+    partial void OnTrendingEnabledChanged(bool value)
+    {
+        if (_suppressTrendingApply) return;
+        _settings.SaveTrendingEnabled(value);
+        App.MainWindow?.ApplyTrendingNavVisibility(value);
+        TrendingStatus = value
+            ? "已开启：导航栏「剪贴板」右侧现在有「热榜」。热榜本身不需要 Token（读侧匿名），只有 Star 按钮需要。"
+            : "已关闭：导航栏的「热榜」项已移除，不再发起任何抓取；已缓存的那份留在本机，重新开启时直接用。";
+        if (value) _ = AskTrendingGlanceAsync();
+    }
+
+    partial void OnTrendingGlanceEnabledChanged(bool value)
+    {
+        if (_suppressTrendingApply) return;
+        _settings.SaveTrendingGlanceEnabled(value);
+        TrendingStatus = value
+            ? "「今日速览」已加上热榜块（默认日榜），原「常看」排在它下面。"
+            : "「今日速览」不再显示热榜块；导航栏的「热榜」页不受影响。";
+        // 组件即时跟上：这条广播就是各组件"数据变了重载一次"的既有通道，不必等重启、也不新写一套通知。
+        StarMark.Abstractions.DataChangeHub.Notify();
+    }
+
+    /// <summary>
+    /// 开启热榜时征询一次"要不要在今日速览里也显示"（用户裁决 §5.1）。
+    /// <para>刻意不阻塞开关本身：开关先落地、弹窗只是追加决定第二块，弹窗若抛错也不能把开关状态卡住。</para>
+    /// </summary>
+    private async System.Threading.Tasks.Task AskTrendingGlanceAsync()
+    {
+        try
+        {
+            if (App.MainWindow is not { } owner) return;
+            if (_settings.LoadTrendingGlanceEnabled()) return;      // 之前已答过"是"就不再问
+            var yes = await Helpers.CenteredDialog.ConfirmAsync(
+                "要在今日速览里显示 GitHub 热榜吗？",
+                "组件里会多一块热榜（默认日榜），原「常看」排到它的下面。" +
+                "选「不显示」也没关系：导航栏的「热榜」页照常可用，这里随时能改。",
+                primaryText: "显示", cancelText: "不显示", owner: owner, dedupeKey: "trending-glance-ask");
+            if (!yes) return;
+            TrendingGlanceEnabled = true;
+        }
+        catch (Exception ex) { StarLog.Error("热榜「今日速览」询问弹窗失败（开关已生效，可在设置里手动勾选）", ex); }
     }
 
     // ===== 本地文件索引（P0-1b）=====

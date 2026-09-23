@@ -881,6 +881,10 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     private void Back_Click(object sender, RoutedEventArgs e)
         => App.MainWindow?.NavigateTo("tree");
 
+    /// <summary>「打开热榜页」：刚开启开关的人不必自己回导航栏找那一项（就地入口，P-54 口径）。</summary>
+    private void OpenTrending_Click(object sender, RoutedEventArgs e)
+        => App.MainWindow?.NavigateTo("trending");
+
     // ==================== 数据备份与恢复（P0-2） ====================
 
     // WinRT 的文件选择器要走系统对话框宿主（中 IL）。本地磁盘搜索会让 StarMark 以管理员运行，
