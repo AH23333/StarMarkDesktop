@@ -53,9 +53,12 @@ public sealed class DiagnosticsService
         }
 
         // ── 各源可用性 ──
+        // 不能只写"不可用"：那会把"这台机器压根没装"（用 Edge 的人看见 Chrome 不可用）与
+        // "装了但读不到"、"没配 Token" 压成同一句话，用户只能猜。成因由来源自己给（它才知道找过什么）。
         foreach (var source in _sources)
         {
-            entries.Add(new DiagnosticEntry($"源：{source.DisplayName}", source.IsAvailable ? "可用" : "不可用"));
+            entries.Add(new DiagnosticEntry(
+                $"源：{source.DisplayName}", SourceAvailabilityText.Of(source.IsAvailable, source.AvailabilityHint)));
         }
 
         // ── GitHub 同步检查点（P1-4 落库的 sync_state）──

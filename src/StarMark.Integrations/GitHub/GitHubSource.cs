@@ -39,6 +39,10 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
 
     public bool IsAvailable => _client.IsConfigured;
 
+    /// <summary>"不可用"在这里的成因是<b>没配 Token</b>，不是坏了；且只影响 Star 同步这一条源。</summary>
+    public string? AvailabilityHint
+        => "未配置 GitHub Token（设置 → GitHub Stars 同步 里填入带 public_repo 范围的 Token 才会同步 Star；书签 / 本地文件 / 热榜浏览都不受影响）";
+
     /// <summary>
     /// 全量拉取 starred 列表。
     /// 对应技术文档 §4.7 sync_state（P1-4 兑现）：此处把 etag + last_synced_at 写入 DB 的 sync_state 表。

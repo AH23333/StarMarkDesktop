@@ -19,6 +19,16 @@ public interface IItemSource
     /// <summary>检测依赖是否可用（如 Everything 是否运行、浏览器是否安装）。</summary>
     bool IsAvailable { get; }
 
+    /// <summary>
+    /// 不可用时，"它到底找过什么 / 缺的是什么"——诊断面板把这句原样显示出来。
+    /// <para>
+    /// 为什么要有它：只报一个"不可用"，用户无从分辨<b>这台机器压根没装</b>与<b>装了但读不到</b>，
+    /// 也就不知道"Edge 能用、Chrome 不可用"是正常现象还是坏了（文案不许比已知事实更含糊）。
+    /// 走默认实现，所以既有源与测试桩都可以不动；愿意说细节的源各自覆写。
+    /// </para>
+    /// </summary>
+    string? AvailabilityHint => null;
+
     /// <summary>从源拉取全量条目，写入 items 表。同步协调器调用。</summary>
     Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct);
 

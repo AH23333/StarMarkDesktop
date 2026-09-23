@@ -144,6 +144,14 @@ public sealed class EverythingSource : IItemSource
     public bool IsAvailable => _options.Enabled && EverythingInterop.IsRunning();
 
     /// <summary>
+    /// 这一项有两个独立成因，必须分开说：开关没开（去设置里打开）与引擎没在跑（StarMark 会在开启时自带一份）。
+    /// 合成一句"不可用"会让人去查错的那一半。
+    /// </summary>
+    public string? AvailabilityHint => !_options.Enabled
+        ? "本地磁盘搜索未开启（设置 → 本地磁盘搜索 打开即可；不开时不占内存也不启动任何外部程序）"
+        : "Everything 引擎当前没在运行（开启本地磁盘搜索时 StarMark 会自带并拉起一份；也可手动启动 Everything）";
+
+    /// <summary>
     /// 全量拉取（P0-1b）：把用户配置的本地根目录下的文件索引进 items 表，落库为 ItemType.File。
     /// 只索引指定根目录（不扫全盘）、每目录带数量上限；source_id 用路径哈希保证幂等，
     /// 重复同步不会产生多余条目。Everything 未运行或根目录为空时返回空列表。

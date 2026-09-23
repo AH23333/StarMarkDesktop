@@ -19,6 +19,10 @@ public sealed class DittoSource : IItemSource
 
     public bool IsAvailable => _dbPath != null && File.Exists(_dbPath);
 
+    /// <summary>Ditto 是外部程序：没装就没有数据库，这一项本来就该是空的（与内置剪贴板历史是两回事）。</summary>
+    public string? AvailabilityHint
+        => $"本机没有 Ditto 的数据库（找过 {_dbPath}）；没用过 Ditto 属正常，StarMark 自带的「剪贴板历史」不依赖它";
+
     public DittoSource(string? dbPath = null) => _dbPath = dbPath ?? DefaultDbPath();
 
     public static string DefaultDbPath()

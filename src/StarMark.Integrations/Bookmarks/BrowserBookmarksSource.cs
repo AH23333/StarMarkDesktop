@@ -61,6 +61,20 @@ public abstract class BrowserBookmarksSource : IItemSource
 
     public bool IsAvailable => Sources().Any(File.Exists);
 
+    /// <summary>
+    /// 说清"找过哪个文件"，并点破一件容易被误判成故障的事：Chrome 与 Edge <b>各读各自的用户数据目录</b>，
+    /// 只用 Edge 的机器上「Chrome 书签 没有这项数据」是正常状态，不影响 Edge 那一条。
+    /// </summary>
+    public string? AvailabilityHint
+    {
+        get
+        {
+            var candidates = Sources();
+            var where = candidates.Count <= 1 ? candidates[0] : candidates[0] + " 及同级 Profile 目录";
+            return $"没在本机找到这个浏览器的书签文件（找过 {where}）；没装它属正常，其它浏览器来源各读各的目录、不受影响";
+        }
+    }
+
     public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
         // 书签文件常有数 MB：File.ReadAllText + JSON 解析 + 全量映射都是同步的，而点「立即同步」
         // 是从 UI 线程一路 await 下来的 ⇒ 不 offload 就是点一下冻一下。
