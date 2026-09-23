@@ -143,7 +143,7 @@ internal sealed class KeyboardHookService : IDisposable
     private void TrackDown(uint vk)
     {
         _down.Add(vk);
-        CurrentModifiers |= ModifierOf(vk);
+        CurrentModifiers |= HotkeyKeys.ModifierOf(vk);
     }
 
     private void TrackUp(uint vk)
@@ -156,30 +156,25 @@ internal sealed class KeyboardHookService : IDisposable
     private HotkeyModifiers RecomputeModifiers()
     {
         var m = HotkeyModifiers.None;
-        foreach (var vk in _down) m |= ModifierOf(vk);
+        foreach (var vk in _down) m |= HotkeyKeys.ModifierOf(vk);
         return m;
     }
-
-    private static HotkeyModifiers ModifierOf(uint vk) => vk switch
-    {
-        0x11 or 0xA2 or 0xA3 => HotkeyModifiers.Control,  // Ctrl / LControl / RControl
-        0x12 or 0xA4 or 0xA5 => HotkeyModifiers.Alt,      // Alt / LMenu / RMenu
-        0x10 or 0xA0 or 0xA1 => HotkeyModifiers.Shift,    // Shift / LShift / RShift
-        0x5B or 0x5C => HotkeyModifiers.Windows,          // LWin / RWin
-        _ => HotkeyModifiers.None,
-    };
 
     /// <summary>Win32 层读取「当前是否按住」（高位为 1 才是按下，避免历史脏位误判）。</summary>
     public static bool IsKeyPressed(uint vk) => (GetAsyncKeyState((int)vk) & 0x8000) != 0;
 
-    /// <summary>启动钩子时的兜底：直接问系统当前按住的修饰键（钩子未记录到按下之前的状态）。</summary>
+    /// <summary>
+    /// 启动钩子时的兜底：直接问系统当前按住的修饰键（钩子未记录到按下之前的状态）。
+    /// 键码表取自 <see cref="HotkeyKeys"/>，此处不再另抄一份左右/通用码。
+    /// </summary>
     public static HotkeyModifiers ReadSystemModifiers()
     {
         var m = HotkeyModifiers.None;
-        if (IsKeyPressed(0x11) || IsKeyPressed(0xA2) || IsKeyPressed(0xA3)) m |= HotkeyModifiers.Control;
-        if (IsKeyPressed(0x12) || IsKeyPressed(0xA4) || IsKeyPressed(0xA5)) m |= HotkeyModifiers.Alt;
-        if (IsKeyPressed(0x10) || IsKeyPressed(0xA0) || IsKeyPressed(0xA1)) m |= HotkeyModifiers.Shift;
-        if (IsKeyPressed(0x5B) || IsKeyPressed(0x5C)) m |= HotkeyModifiers.Windows;
+        foreach (var bit in HotkeyKeys.ModifierBits)
+        {
+            foreach (var vk in HotkeyKeys.CodesOf(bit))
+                if (IsKeyPressed(vk)) { m |= bit; break; }
+        }
         return m;
     }
 

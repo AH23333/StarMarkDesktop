@@ -618,10 +618,11 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
         // 修饰键：累加到已录组合；仅当已有主键且总键数达到上限才自动结束
         // （纯修饰键不能单独构成热键，不结束，避免录成空绑定）
-        if (IsModifierKey((VirtualKey)vk))
+        if (HotkeyKeys.IsModifier(vk))
         {
-            var mod = ModifierOf(vk);
-            if (mod == HotkeyModifiers.None || _recordedModifiers.HasFlag(mod)) { UpdateRecordingText(); return; }
+            var mod = HotkeyKeys.ModifierOf(vk);
+            // 走到这里 mod 必非 None（IsModifier 与取位出自同一张表），只需处理"重复按下同一修饰键"
+            if (_recordedModifiers.HasFlag(mod)) { UpdateRecordingText(); return; }
             _recordedModifiers |= mod;
             UpdateRecordingText();
             if (_recordedMainKey != 0 && RecordedKeyCount >= MaxHotkeyKeys) FinishRecording();
@@ -644,24 +645,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     /// <summary>当前已录入的按键个数（修饰键个数 + 主键）。</summary>
     private int RecordedKeyCount => CountModifiers(_recordedModifiers) + (_recordedMainKey != 0 ? 1 : 0);
 
-    private static int CountModifiers(HotkeyModifiers m)
-    {
-        var n = 0;
-        if (m.HasFlag(HotkeyModifiers.Control)) n++;
-        if (m.HasFlag(HotkeyModifiers.Alt)) n++;
-        if (m.HasFlag(HotkeyModifiers.Shift)) n++;
-        if (m.HasFlag(HotkeyModifiers.Windows)) n++;
-        return n;
-    }
-
-    private static HotkeyModifiers ModifierOf(uint vk) => vk switch
-    {
-        0x11 or 0xA2 or 0xA3 => HotkeyModifiers.Control,
-        0x12 or 0xA4 or 0xA5 => HotkeyModifiers.Alt,
-        0x10 or 0xA0 or 0xA1 => HotkeyModifiers.Shift,
-        0x5B or 0x5C => HotkeyModifiers.Windows,
-        _ => HotkeyModifiers.None,
-    };
+    private static int CountModifiers(HotkeyModifiers m) => HotkeyKeys.ModifierBits.Count(bit => m.HasFlag(bit));
 
     /// <summary>把已录入的键实时显示在按钮上（未录任何键时保持空白）。</summary>
     private void UpdateRecordingText()
@@ -812,12 +796,6 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         settings.SaveEnableGlobalHotKey(ViewModel.EnableGlobalHotKey);
         ApplyHotkeyBindings();
     }
-
-    private static bool IsModifierKey(VirtualKey key) => key is
-        VirtualKey.Control or VirtualKey.LeftControl or VirtualKey.RightControl or
-        VirtualKey.Menu or VirtualKey.LeftMenu or VirtualKey.RightMenu or
-        VirtualKey.Shift or VirtualKey.LeftShift or VirtualKey.RightShift or
-        VirtualKey.LeftWindows or VirtualKey.RightWindows;
 
     // ==================== 底部操作 ====================
 

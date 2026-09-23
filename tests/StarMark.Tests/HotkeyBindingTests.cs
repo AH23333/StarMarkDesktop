@@ -260,4 +260,59 @@ public sealed class HotkeyBindingTests
             HotkeyActions.LayoutApply("id-1"),
             new List<WidgetLayout> { new WidgetLayout { Id = "id-1", Name = "工作" } }));
     }
+
+    // ===== 修饰键键码表（钩子累计、系统状态兜底、录制判定三方共用） =====
+
+    /// <summary>
+    /// Win32 对同一个修饰键给三种码（通用 + 左 + 右），而键盘钩子实际送左右码、
+    /// GetAsyncKeyState 三种都应答 ⇒ 少认一个就会出现"按住左 Ctrl 录制却没记到 Ctrl 位"。
+    /// </summary>
+    [Theory]
+    [InlineData(0x11, HotkeyModifiers.Control)]
+    [InlineData(0xA2, HotkeyModifiers.Control)]
+    [InlineData(0xA3, HotkeyModifiers.Control)]
+    [InlineData(0x12, HotkeyModifiers.Alt)]
+    [InlineData(0xA4, HotkeyModifiers.Alt)]
+    [InlineData(0xA5, HotkeyModifiers.Alt)]
+    [InlineData(0x10, HotkeyModifiers.Shift)]
+    [InlineData(0xA0, HotkeyModifiers.Shift)]
+    [InlineData(0xA1, HotkeyModifiers.Shift)]
+    [InlineData(0x5B, HotkeyModifiers.Windows)]
+    [InlineData(0x5C, HotkeyModifiers.Windows)]
+    public void ModifierCodes_MapToTheirBit(int vk, HotkeyModifiers expected)
+    {
+        Assert.Equal(expected, HotkeyKeys.ModifierOf((uint)vk));
+        Assert.True(HotkeyKeys.IsModifier((uint)vk));
+    }
+
+    /// <summary>主键绝不能被认成修饰键（Space 与字母是最常见的主键）。</summary>
+    [Theory]
+    [InlineData(0x20)]   // Space
+    [InlineData(0x41)]   // A
+    [InlineData(0x70)]   // F1
+    public void MainKeys_AreNotModifiers(int vk)
+        => Assert.False(HotkeyKeys.IsModifier((uint)vk));
+
+    /// <summary>
+    /// "取位"与"列出该位的全部码"必须是同一张表的两个视图：任一处漏改，
+    /// 兜底读系统状态与录制判定就会给出互相矛盾的答案。
+    /// </summary>
+    [Fact]
+    public void CodesOf_And_ModifierOf_AgreeOnEveryBit()
+    {
+        foreach (var bit in HotkeyKeys.ModifierBits)
+        {
+            var codes = HotkeyKeys.CodesOf(bit);
+            Assert.NotEmpty(codes);
+            foreach (var vk in codes) Assert.Equal(bit, HotkeyKeys.ModifierOf(vk));
+        }
+
+        // 通用码排在前（逐码探测时先问一次通用码即可命中多数情况）；Win 键没有通用码，只有左右两个
+        Assert.Equal(0x11u, HotkeyKeys.CodesOf(HotkeyModifiers.Control)[0]);
+        Assert.Equal(new uint[] { 0x5B, 0x5C }, HotkeyKeys.CodesOf(HotkeyModifiers.Windows));
+
+        // 组合入参给出并集；NoRepeat 不是按键，没有对应键码
+        Assert.Equal(6, HotkeyKeys.CodesOf(HotkeyModifiers.Control | HotkeyModifiers.Alt).Count);
+        Assert.Empty(HotkeyKeys.CodesOf(HotkeyModifiers.NoRepeat));
+    }
 }
