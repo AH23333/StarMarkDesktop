@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
+using StarMark.Core.Hotkeys;
 using StarMark.UI.Helpers;
 
 namespace StarMark.UI.Services;
@@ -13,7 +14,7 @@ namespace StarMark.UI.Services;
 /// 移植并简化自 DeskBox <c>GlobalHotkeyService</c>：手势模型 + 动作映射 + 冲突允许。
 /// <list type="bullet">
 ///   <item>同一手势可绑定多个动作，触发时全部执行（用户可借此一次完成多个操作）。</item>
-///   <item>冲突不阻止保存：<see cref="GetConflicts"/> 仅用于 UI 提示。</item>
+///   <item>冲突不阻止保存：<see cref="HotkeyBindings.GetConflicts"/> 仅用于 UI 提示。</item>
 ///   <item>注册失败（被其它程序占用）→ 该手势跳过并告警，不影响其余手势。</item>
 /// </list>
 /// </summary>
@@ -21,8 +22,7 @@ public sealed class HotkeyService : IDisposable
 {
     private readonly Dictionary<string, Func<Task>> _handlers = new();
     private readonly Dictionary<int, HotkeyGesture> _idToGesture = new();
-    private readonly Dictionary<string, HotkeyGesture> _keyToGesture = new();
-    private readonly Dictionary<string, List<string>> _gestureToActions = new();
+    private readonly Dictionary<string, IReadOnlyList<string>> _gestureToActions = new();
     private IntPtr _hwnd;
     private readonly Dictionary<IntPtr, Win32Hotkey.SubclassProc> _procKeepAlive = new();
     private Win32Hotkey.SubclassProc? _proc;
@@ -45,7 +45,6 @@ public sealed class HotkeyService : IDisposable
         if (_hwnd == IntPtr.Zero) { _suspended = true; return; }
         foreach (var regId in _idToGesture.Keys.ToList()) Win32Hotkey.UnregisterHotKey(_hwnd, regId);
         _idToGesture.Clear();
-        _keyToGesture.Clear();
         _gestureToActions.Clear();
         _suspended = true;
     }
@@ -75,7 +74,7 @@ public sealed class HotkeyService : IDisposable
         Win32Hotkey.SetWindowSubclass(hwnd, _proc, UIntPtr.Zero, UIntPtr.Zero);
     }
 
-    /// <summary>应用一组绑定：去重为「手势→动作列表」，逐个 RegisterHotKey。</summary>
+    /// <summary>应用一组绑定：先按手势归并（<see cref="HotkeyBindings.GroupByGesture"/>），再逐个 RegisterHotKey。</summary>
     public void ApplyBindings(IReadOnlyDictionary<string, HotkeyGesture> bindings)
     {
         _lastBindings = bindings;
@@ -84,57 +83,23 @@ public sealed class HotkeyService : IDisposable
         if (_hwnd == IntPtr.Zero) return;
         foreach (var regId in _idToGesture.Keys.ToList()) Win32Hotkey.UnregisterHotKey(_hwnd, regId);
         _idToGesture.Clear();
-        _keyToGesture.Clear();
         _gestureToActions.Clear();
 
-        var byKey = new Dictionary<string, List<string>>();
-        foreach (var (action, g) in bindings)
-        {
-            if (g.VirtualKey == 0) continue;
-            var key = HotkeyGesture.GestureKey(g);
-            if (!byKey.TryGetValue(key, out var list)) byKey[key] = list = new();
-            list.Add(action);
-            _keyToGesture[key] = g;
-        }
-
         var id = 1;
-        foreach (var (key, actions) in byKey)
+        foreach (var group in HotkeyBindings.GroupByGesture(bindings))
         {
-            var g = _keyToGesture[key];
+            var g = group.Gesture;
             if (Win32Hotkey.RegisterHotKey(_hwnd, id, (uint)g.Modifiers, g.VirtualKey))
             {
                 _idToGesture[id] = g;
-                _gestureToActions[key] = actions;
+                _gestureToActions[group.Key] = group.Actions;
                 id++;
             }
             else
             {
-                StarLog.Warn($"[Hotkey] 注册失败（可能被其它程序占用）: {g.Display}");
+                StarLog.Warn($"[Hotkey] 注册失败（可能被其它程序占用）: {HotkeyDisplay.Display(g)}");
             }
         }
-    }
-
-    /// <summary>检测冲突：返回绑定了多个动作的手势（允许保留，仅用于提示）。</summary>
-    public static IReadOnlyList<(HotkeyGesture Gesture, IReadOnlyList<string> Actions)> GetConflicts(
-        IReadOnlyDictionary<string, HotkeyGesture> bindings)
-    {
-        var byKey = new Dictionary<string, List<string>>();
-        foreach (var (action, g) in bindings)
-        {
-            if (g.VirtualKey == 0) continue;
-            var key = HotkeyGesture.GestureKey(g);
-            if (!byKey.TryGetValue(key, out var list)) byKey[key] = list = new();
-            list.Add(action);
-        }
-
-        var result = new List<(HotkeyGesture, IReadOnlyList<string>)>();
-        foreach (var (key, actions) in byKey)
-        {
-            if (actions.Count <= 1) continue;
-            var gesture = bindings.First(kv => HotkeyGesture.GestureKey(kv.Value) == key).Value;
-            result.Add((gesture, actions));
-        }
-        return result;
     }
 
     private IntPtr OnSubclassProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam, UIntPtr uIdSubclass, UIntPtr dwRefData)
@@ -180,6 +145,5 @@ public sealed class HotkeyService : IDisposable
         }
         _idToGesture.Clear();
         _gestureToActions.Clear();
-        _keyToGesture.Clear();
     }
 }

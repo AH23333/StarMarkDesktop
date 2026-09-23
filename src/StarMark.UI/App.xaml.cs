@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Backup;
 using StarMark.Core.Backup;
+using StarMark.Core.Hotkeys;
 using StarMark.Core.Widgets;
 using StarMark.Core.Performance;
 using StarMark.UI.Helpers;

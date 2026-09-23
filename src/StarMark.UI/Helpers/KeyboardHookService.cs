@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Runtime.InteropServices;
+using StarMark.Core.Hotkeys;
 
 namespace StarMark.UI.Helpers;
 

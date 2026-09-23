@@ -16,6 +16,7 @@ using Microsoft.UI.Xaml.Navigation;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Backup;
 using StarMark.Core.Backup;
+using StarMark.Core.Hotkeys;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
@@ -461,7 +462,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
             {
                 Action = action,
                 ActionName = HotkeyActions.DisplayName(action, _layouts),
-                BindingText = bound ? g!.Display : UnsetText,
+                BindingText = bound ? HotkeyDisplay.Display(g!) : UnsetText,
             };
             HotkeyRowsItems.Add(row);
             var cat = HotkeyActions.CategoryOf(action, _layouts);
@@ -523,8 +524,8 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     /// <summary>把「同一组合绑定了多个动作」就地标注到每一行（不弹窗，用户可直接忽略）。</summary>
     private void RefreshConflictMarks()
     {
-        var byGesture = HotkeyService.GetConflicts(_hotkeyBindings)
-            .ToDictionary(c => HotkeyGesture.GestureKey(c.Gesture), c => c.Actions);
+        var byGesture = HotkeyBindings.GetConflicts(_hotkeyBindings)
+            .ToDictionary(c => c.Key, c => c.Actions);
 
         foreach (var row in HotkeyRowsItems)
         {
@@ -666,10 +667,10 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     private void UpdateRecordingText()
     {
         if (_recordingRow is null) return;
-        var mods = HotkeyGesture.ModifiersDisplay(_recordedModifiers);
+        var mods = HotkeyDisplay.ModifiersDisplay(_recordedModifiers);
         var text = _recordedMainKey == 0
             ? mods
-            : (mods.Length == 0 ? HotkeyGesture.KeyName(_recordedMainKey) : $"{mods} + {HotkeyGesture.KeyName(_recordedMainKey)}");
+            : (mods.Length == 0 ? HotkeyDisplay.KeyName(_recordedMainKey) : $"{mods} + {HotkeyDisplay.KeyName(_recordedMainKey)}");
         _recordingRow.BindingText = text;
     }
 
@@ -690,7 +691,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         StopRecording(resetText: false);
         row.IsRecording = false;
         var g = _hotkeyBindings[action];
-        row.BindingText = g.IsEmpty ? UnsetText : g.Display;
+        row.BindingText = g.IsEmpty ? UnsetText : HotkeyDisplay.Display(g);
         _ignoreClickUntil = DateTimeOffset.UtcNow.AddMilliseconds(400);  // 吞掉本键附带的那次 Click
         _hotkeysDirty = true;
         RaiseHotkeyStateChanged();
@@ -778,7 +779,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         if (!confirm) return;
 
         StopRecording(resetText: true);
-        var defaults = SettingsStore.DefaultHotkeyBindings();
+        var defaults = HotkeyBindings.Defaults();
         _hotkeyBindings.Clear();
         foreach (var kv in defaults) _hotkeyBindings[kv.Key] = kv.Value;
         ApplyHotkeyBindings();      // 确认后立即生效（用户显式确认过）

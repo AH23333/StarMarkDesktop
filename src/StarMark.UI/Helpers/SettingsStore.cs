@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using StarMark.Abstractions;
+using StarMark.Core.Hotkeys;
 using StarMark.Core.Performance;
 using StarMark.Integrations.Weather;
 
@@ -45,7 +46,7 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         /// 默认开等于在用户不知情时把这些抄进一个明文 SQLite 文件。开启后采集全自动，无需任何后续步骤。
         /// </summary>
         public bool? ClipboardHistoryEnabled { get; set; }
-        /// <summary>快捷键绑定（动作 id → 手势）的 JSON。缺省时使用 <see cref="DefaultHotkeyBindings"/>。</summary>
+        /// <summary>快捷键绑定（动作 id → 手势）的 JSON。缺省时使用 <see cref="HotkeyBindings.Defaults"/>。</summary>
         public string? HotkeyBindingsJson { get; set; }
         /// <summary>组件拖动 / 缩放时的边缘磁吸总开关（默认开启）。关闭后用户可自由摆位。</summary>
         public bool? WidgetSnapEnabled { get; set; }
@@ -630,27 +631,20 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     }
 
     /// <summary>
-    /// 快捷键绑定：默认 + 已保存合并，<b>已保存的每一项都覆盖默认</b>（含"空手势"）。
-    /// <para>
-    /// 空手势（VirtualKey=0）就是"用户显式清掉了这个动作"的记号：<see cref="Views.SettingsPage"/>
-    /// 清除绑定时写空手势而非删键。若改成删键，这里就会因为"键缺失 ⇒ 回退默认"而把
-    /// Ctrl+Alt+Space 之类的默认值重新补上 ⇒ 清不掉，且界面与真实注册状态不一致。
-    /// </para>
+    /// 快捷键绑定：默认 + 已保存的合并结果。合并规则本身在 <see cref="HotkeyBindings"/>
+    /// （Core 层纯函数，可单测）：已保存的每一项都覆盖默认，而"空手势"是用户显式清掉该动作的
+    /// 记号 ⇒ 清除必须写成空手势而不是删键，否则会被默认值复活。
     /// </summary>
     public IReadOnlyDictionary<string, HotkeyGesture> GetHotkeyBindings()
     {
-        var merged = DefaultHotkeyBindings();
+        IReadOnlyDictionary<string, HotkeyGesture>? saved = null;
         var d = Load();
         if (d?.HotkeyBindingsJson is { } json)
         {
-            try
-            {
-                var saved = JsonSerializer.Deserialize<Dictionary<string, HotkeyGesture>>(json);
-                if (saved is not null) foreach (var kv in saved) merged[kv.Key] = kv.Value;
-            }
-            catch { }
+            try { saved = JsonSerializer.Deserialize<Dictionary<string, HotkeyGesture>>(json); }
+            catch { /* 绑定 JSON 损坏：整表按默认，坏一次设置不该让程序起不来 */ }
         }
-        return merged;
+        return HotkeyBindings.MergeWithDefaults(saved);
     }
 
     /// <summary>保存快捷键绑定（动作 id → 手势）。</summary>
@@ -659,16 +653,6 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         var d = Load() ?? new SettingsData();
         d.HotkeyBindingsJson = JsonSerializer.Serialize(bindings);
         Save(d);
-    }
-
-    /// <summary>默认快捷键：主界面呼出/关闭 = Ctrl+Alt+Space（沿用原有全局热键）。</summary>
-    public static Dictionary<string, HotkeyGesture> DefaultHotkeyBindings()
-    {
-        var m = new Dictionary<string, HotkeyGesture>
-        {
-            [HotkeyActions.MainToggle] = new HotkeyGesture(HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.NoRepeat, (uint)Windows.System.VirtualKey.Space),
-        };
-        return m;
     }
 
     public static string ResolveSettingsPath()

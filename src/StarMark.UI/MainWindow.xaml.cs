@@ -11,6 +11,7 @@ using Windows.Graphics;
 using WinRT.Interop;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Language;
+using StarMark.Core.Hotkeys;
 using StarMark.Core.Widgets;
 using StarMark.Integrations.SystemTray;
 using StarMark.UI.Helpers;
