@@ -7,6 +7,14 @@ using StarMark.Core.Sync;
 using StarMark.Data;
 using StarMark.Integrations.Everything;
 using StarMark.SmokeTest.Mocks;
+using IntRect = StarMark.Abstractions.Capture.IntRect;
+using PixelPoint = StarMark.Abstractions.Capture.PixelPoint;
+using CaptureGeometry = StarMark.Core.Capture.CaptureGeometry;
+using AnnotationPainter = StarMark.Core.Capture.AnnotationPainter;
+using Mark = StarMark.Core.Capture.Annotation;
+using Tool = StarMark.Core.Capture.AnnotationTool;
+using GdiScreenCapture = StarMark.Integrations.Capture.GdiScreenCapture;
+using FrameCopyRequest = StarMark.Integrations.Capture.FrameCopyRequest;
 
 // 用法：
 //   无参数            -> 全新临时 DB，跑 schema + seed + 搜索（自检）
@@ -57,6 +65,12 @@ if (args.Length >= 1 && args[0] == "capture")
     await CaptureCheckAsync();
     return;
 }
+if (args.Length >= 1 && args[0] == "annotate")
+{
+    await AnnotateCheckAsync();
+    return;
+}
+
 if (args.Length >= 1 && args[0] == "ocr")
 {
     await OcrCheckAsync();
@@ -852,6 +866,82 @@ static int EditDistance(string a, string b)
 }
 
 
+// ===== 标注合成探针（annotate）=====
+// 量的是"画完标注之后真正会交出去的那张图"这一整条链：真屏裁一块 → AnnotationPainter 合成 →
+// PNG 落盘 → 再解码读回来验像素。BGRA 步长、alpha、编码器、贴图那份像素，哪一环错了这里都会红，
+// 而且最后留下一张可以用眼睛看的图——标注这种东西"读码自洽"不算证据。
+static async Task AnnotateCheckAsync()
+{
+    CaptureSmokeNative.SetProcessDpiAwarenessContext(CaptureSmokeNative.PerMonitorV2);
+    var captured = StarMark.Integrations.Capture.GdiScreenCapture.CaptureVirtualScreen();
+    if (!captured.Ok || captured.Frame is not { } frame) throw new Exception("截屏失败：" + (captured.Error ?? "无帧"));
+
+    var width = Math.Min(700, frame.Bounds.Width - 120);
+    var height = Math.Min(430, frame.Bounds.Height - 120);
+    var box = new IntRect(frame.Bounds.X + 60, frame.Bounds.Y + 60, width, height);
+    var (ox, oy) = CaptureGeometry.CropOffset(box, frame.Bounds);
+    var basePixels = GdiScreenCapture.Crop(new FrameCopyRequest(frame, ox, oy, box.Width, box.Height));
+
+    var red = Mark.Opaque(0x23, 0x11, 0xE8);
+    var blue = Mark.Opaque(0xD4, 0x78, 0x00);
+    PixelPoint P(int x, int y) => new(x, y);
+    var marks = new[]
+    {
+        new Mark(Tool.Rectangle, new[] { P(20, 20), P(220, 120) }, red, 4),
+        new Mark(Tool.Ellipse, new[] { P(260, 20), P(430, 140) }, blue, 6),
+        new Mark(Tool.Arrow, new[] { P(30, 320), P(210, 180) }, red, 4),
+        new Mark(Tool.Line, new[] { P(250, 320), P(520, 320) }, blue, 8),
+        new Mark(Tool.Pen, new[] { P(300, 200), P(330, 240), P(360, 190), P(400, 250), P(440, 195), P(480, 245) }, red, 3),
+        new Mark(Tool.Highlighter, new[] { P(250, 70), P(520, 70) }, red, 22),
+        new Mark(Tool.Mosaic, new[] { P(540, 330), P(600, 350), P(660, 380) }, red, 36),
+        new Mark(Tool.Text, new[] { P(250, 350) }, blue, 4) { Text = "这是标注文字 1.4.11", FontHeight = 30 },
+    };
+
+    var composed = AnnotationPainter.Render(basePixels, box.Width, box.Height, marks);
+    var changed = 0;
+    for (var i = 0; i < composed.Length; i += 4)
+        if (composed[i] != basePixels[i] || composed[i + 1] != basePixels[i + 1] || composed[i + 2] != basePixels[i + 2])
+            changed++;
+    for (var p = 3; p < composed.Length; p += 4)
+        if (composed[p] != 255) throw new Exception($"合成结果第 {p / 4} 个像素 alpha={composed[p]}，交出去会变成透明洞");
+
+    // 没被任何标注扫到的地方必须逐字节不变：这一条挡的是"合成顺手把别处也改脏了"
+    AssertSame(basePixels, composed, box.Width, 2, 2, "左上角");
+    AssertSame(basePixels, composed, box.Width, box.Width - 3, 2, "右上角");
+    // 边线中点必须是那支笔的颜色（顺带验 BGRA 位序：红蓝写反这里就对不上）
+    AssertColor(composed, box.Width, 20, 70, red, "矩形左边线");
+    AssertColor(composed, box.Width, 345, 20, blue, "椭圆上边线");
+
+    var path = Path.Combine(Path.GetTempPath(), "starmark-annotate.png");
+    if (!await GdiScreenCapture.SavePngAsync(path, composed, box.Width, box.Height))
+        throw new Exception("标注后的画面没能写成 PNG");
+    var (pngWidth, pngHeight, pngAlpha) = await ProbePngAsync(path);
+    if (pngWidth != box.Width || pngHeight != box.Height)
+        throw new Exception($"PNG 尺寸对不上：{pngWidth}×{pngHeight} vs {box.Width}×{box.Height}");
+    if (pngAlpha != 255) throw new Exception("存出来的 PNG 第一像素是半透明的");
+
+    Console.WriteLine($"Annotate {box.Width}x{box.Height} marks={marks.Length} changedPixels={changed} "
+        + $"png={pngWidth}x{pngHeight} file={path}");
+    Console.WriteLine("DONE");
+}
+
+static void AssertSame(byte[] a, byte[] b, int width, int x, int y, string what)
+{
+    var p = (y * width + x) * 4;
+    if (a[p] != b[p] || a[p + 1] != b[p + 1] || a[p + 2] != b[p + 2])
+        throw new Exception($"{what}（{x},{y}）本该逐字节不变，却从 {a[p]},{a[p + 1]},{a[p + 2]} 变成 {b[p]},{b[p + 1]},{b[p + 2]}");
+}
+
+static void AssertColor(byte[] pixels, int width, int x, int y, int bgra, string what)
+{
+    var p = (y * width + x) * 4;
+    if (pixels[p] != (byte)bgra || pixels[p + 1] != (byte)(bgra >> 8) || pixels[p + 2] != (byte)(bgra >> 16))
+        throw new Exception($"{what}（{x},{y}）期望 {bgra & 0xFF},{bgra >> 8 & 0xFF},{bgra >> 16 & 0xFF}，"
+            + $"实际 {pixels[p]},{pixels[p + 1]},{pixels[p + 2]}");
+}
+
+/// <summary>
+
 /// <summary>冒烟进程要自己声明 DPI 感知，否则与 PerMonitorV2 的应用本体看到的桌面尺寸不是一回事。</summary>
 internal static class CaptureSmokeNative{
     public static readonly IntPtr PerMonitorV2 = new(-4);
@@ -860,7 +950,6 @@ internal static class CaptureSmokeNative{
     public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
 }
 
-/// <summary>
 /// 用 GDI 把一行已知文字画进内存位图，读出 BGRA——探针由此得到"知道正确答案的输入"。
 /// <para>
 /// 刻意走与产品同一条取像素的路（<c>GetDIBits</c> + 自上而下 + 先摘位图再读 + 手工写 BITMAPINFOHEADER），

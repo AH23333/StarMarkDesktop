@@ -28,6 +28,16 @@
             用"四块压暗"而不是"一层暗幕挖洞"：前者只需四次矩形定位，不需要裁剪几何，
             跨 DPI 与负原点时没什么可算错的。
         -->
+        <!--
+            标注层：摆在选区那块位置，显示的是 AnnotationPainter 真的画出来的那份像素
+            （不是"界面另画一遍近似的样子"）——所见即所存，撤销/重画也只需要拿底图重烤一次。
+            拖动中未松手的那一条由 LiveLayer 用简单图元近似显示，松手立刻换成真像素。
+        -->
+        <Canvas x:Name="AnnotateLayer" Visibility="Collapsed" IsHitTestVisible="False">
+            <Image x:Name="AnnotateShot" Stretch="Fill"/>
+            <Canvas x:Name="LiveLayer"/>
+        </Canvas>
+
         <Canvas x:Name="DimLayer" IsHitTestVisible="False">
             <Rectangle x:Name="DimTop" Fill="#66000000"/>
             <Rectangle x:Name="DimLeft" Fill="#66000000"/>
@@ -35,6 +45,24 @@
             <Rectangle x:Name="DimBottom" Fill="#66000000"/>
             <Rectangle x:Name="SelRect" Stroke="#FF4CA0FF" StrokeThickness="2" Visibility="Collapsed"/>
         </Canvas>
+
+
+        <!-- 文字标注就地输入：Enter 落笔、Esc 只丢掉这一行字（不收整场截图） -->
+        <Border
+            x:Name="TextEditorHost"
+            Background="#EEFFFF00"
+            BorderBrush="#FF000000"
+            BorderThickness="1"
+            Visibility="Collapsed">
+            <TextBox
+                x:Name="TextEditor"
+                Background="Transparent"
+                BorderThickness="0"
+                MinWidth="180"
+                FontFamily="Microsoft YaHei UI"
+                KeyDown="TextEditor_KeyDown"
+                LostFocus="TextEditor_LostFocus"/>
+        </Border>
 
         <Border
             x:Name="SizeChip"
@@ -47,6 +75,11 @@
             <TextBlock x:Name="SizeText" FontSize="11" Foreground="#FFFFFFFF"/>
         </Border>
 
+        <!--
+            一条工具条管全部：第一行画什么、第二行用什么画、第三行画完了干什么。
+            刻意合成一块而不是"工具条在上、动作条在下"：两块浮层要各算一次上下左右与互相避让，
+            而小选区（比如截一个按钮）根本放不下两条 —— 挤出来的结果就是盖住用户正要标的东西。
+        -->
         <Border
             x:Name="ActionBar"
             Background="#EE202020"
@@ -55,12 +88,31 @@
             HorizontalAlignment="Left"
             VerticalAlignment="Top"
             Visibility="Collapsed">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-                <Button x:Name="CopyButton" Content="复制" FontSize="11" Click="Copy_Click"/>
-                <Button Content="存图" FontSize="11" Click="Save_Click"/>
-                <Button Content="贴图" FontSize="11" Click="Pin_Click" ToolTipService.ToolTip="钉在桌面上（同 F3）"/>
-                <Button Content="识字" FontSize="11" Click="Ocr_Click" ToolTipService.ToolTip="认出这块画面的文字并复制"/>
-                <Button Content="取消" FontSize="11" Click="Cancel_Click"/>
+            <StackPanel Spacing="4">
+
+                <!--
+                    三行都由代码按 Core 的模型生成（AnnotationTool / Annotation.Palette / ThicknessSteps）。
+                    刻意不在这里手写按钮：手写就会多一份"有哪些工具"的事实，
+                    于是"加了工具却忘了上按钮"这种缺陷只能靠眼睛发现——而它现在根本不可能发生。
+                -->
+                <StackPanel x:Name="ToolPanel" Orientation="Horizontal" Spacing="2"/>
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                    <StackPanel x:Name="ColourPanel" Orientation="Horizontal" Spacing="2"/>
+                    <Border Width="1" Background="#44FFFFFF" Margin="4,2,4,2"/>
+                    <StackPanel x:Name="WeightPanel" Orientation="Horizontal" Spacing="2"/>
+                    <Border Width="1" Background="#44FFFFFF" Margin="4,2,4,2"/>
+                    <Button x:Name="UndoButton" Content="撤销" FontSize="11" Click="Undo_Click"
+                        ToolTipService.ToolTip="撤掉最后一条标注（Ctrl+Z）" IsEnabled="False"/>
+                    <Button x:Name="ClearButton" Content="清空" FontSize="11" Click="Clear_Click" IsEnabled="False"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Button x:Name="CopyButton" Content="复制" FontSize="11" Click="Copy_Click"/>
+                    <Button Content="存图" FontSize="11" Click="Save_Click"/>
+                    <Button Content="贴图" FontSize="11" Click="Pin_Click" ToolTipService.ToolTip="钉在桌面上（同 F3），带上刚画的标注"/>
+                    <Button Content="识字" FontSize="11" Click="Ocr_Click" ToolTipService.ToolTip="认出这块画面的文字并复制"/>
+                    <Button Content="取消" FontSize="11" Click="Cancel_Click"/>
+                </StackPanel>
             </StackPanel>
         </Border>
 
@@ -76,7 +128,7 @@
                 x:Name="HintText"
                 FontSize="12"
                 Foreground="#FFFFFFFF"
-                Text="按住拖动框选区域 · 放开后选复制 / 存图 / 贴图 / 识字 · Enter 复制 · Esc 取消 · 右键不截"/>
+                Text="按住拖动框选区域 · 放开后可以画标注，再选复制 / 存图 / 贴图 / 识字 · Enter 复制 · Esc 取消 · 右键不截"/>
         </Border>
 
         <!-- 失败原因就地显示：弹对话框会立刻把遮罩的焦点抢走（抢走就等于取消截图） -->

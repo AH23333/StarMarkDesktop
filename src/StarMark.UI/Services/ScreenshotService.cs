@@ -119,13 +119,13 @@ public static class ScreenshotService
     /// 把选区写进剪贴板（图片）。真正的编码与发送在 <see cref="CopyPixelsAsync"/>（贴图复制走同一份）。
     /// </summary>
     public static System.Threading.Tasks.Task CopySelectionAsync(ScreenFrame frame, IntRect selection)
-        => CropSilently(frame, selection) is { } crop
+        => TryCrop(frame, selection) is { } crop
             ? CopyPixelsAsync(crop.Pixels, crop.Width, crop.Height)
             : System.Threading.Tasks.Task.CompletedTask;
 
     /// <summary>把选区存成 PNG，存到 图片\StarMark 截图（首次自动建目录）。</summary>
     public static System.Threading.Tasks.Task SaveSelectionAsync(ScreenFrame frame, IntRect selection)
-        => CropSilently(frame, selection) is { } crop
+        => TryCrop(frame, selection) is { } crop
             ? SavePixelsAsync(crop.Pixels, crop.Width, crop.Height)
             : System.Threading.Tasks.Task.CompletedTask;
 
@@ -135,9 +135,16 @@ public static class ScreenshotService
     /// </summary>
     public static void PinSelection(ScreenFrame frame, IntRect selection)
     {
-        if (CropSilently(frame, selection) is not { } crop) return;
-        PinManager.Add(crop.Pixels, crop.Width, crop.Height, selection);
+        if (TryCrop(frame, selection) is not { } crop) return;
+        PinPixels(crop.Pixels, crop.Width, crop.Height, selection);
     }
+
+    /// <summary>
+    /// 把一份已经是「最终样子」的画面钉到桌面上。
+    /// 标注编辑器交出来的就是这一份（画完的像素已经合成好了），所以这条落点不必再认识 <see cref="ScreenFrame"/>。
+    /// </summary>
+    public static void PinPixels(byte[] pixels, int width, int height, IntRect sourceSelection)
+        => PinManager.Add(pixels, width, height, sourceSelection);
 
     /// <summary>把一份 BGRA 画面交给剪贴板。截图与贴图共用这一份实现（两份"从像素到剪贴板"迟早分岔）。</summary>
     public static async System.Threading.Tasks.Task CopyPixelsAsync(
@@ -202,7 +209,7 @@ public static class ScreenshotService
     /// 裁出选区的像素。<b>裁不动时这里就已经回报过了</b>并返回 null——调用方是"点一下按钮就没了"的
     /// 事件处理器，异常抛出去等于静默失败（那些调用点没有 await，也没有 catch）。
     /// </summary>
-    private static (byte[] Pixels, int Width, int Height)? CropSilently(ScreenFrame frame, IntRect selection)
+    public static (byte[] Pixels, int Width, int Height)? TryCrop(ScreenFrame frame, IntRect selection)
     {
         try
         {

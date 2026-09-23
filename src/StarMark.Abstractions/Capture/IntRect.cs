@@ -20,6 +20,14 @@ public readonly record struct IntRect(int X, int Y, int Width, int Height)
     public bool IsEmpty => Width <= 0 || Height <= 0;
 }
 
+/// <summary>
+/// 一个像素坐标。<b>与 <see cref="IntRect"/> 同处一层</b>的理由一样：标注的判据在 <c>Core</c>，
+/// 而抓屏与 GDI 绘制在 <c>Integrations</c>，两边要拿同一个点说话（用 <c>Windows.Graphics.PointInt32</c>
+/// 就把 WinRT 类型漏进了纯判据层，单测与换算都会跟着变复杂）。
+/// <para>允许为负：选区内的标注允许被拖到画面外面去， clipping 是绘制那一步的事，不是模型的事。</para>
+/// </summary>
+public readonly record struct PixelPoint(int X, int Y);
+
 /// <summary>像素缓冲层的通用处理（GDI 与编码器的格式差异常在这里出问题）。</summary>
 public static class PixelBuffers
 {
