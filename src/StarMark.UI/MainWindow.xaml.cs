@@ -77,7 +77,7 @@ public sealed partial class MainWindow : Window
         _ = LoadStarLanguagesAsync();   // 语言下拉只显示 star 中真实存在的语言
 
         // 托盘常驻 + 全局热键
-        if (_settings.LoadEnableTray()) CreateTray(registerHotkey: _settings.LoadEnableGlobalHotKey());
+        if (_settings.LoadEnableTray()) CreateTray();
         AppWindow.Closing += OnAppWindowClosing;
 
         // 默认选中文件夹页（触发 SelectionChanged → 导航）
@@ -218,7 +218,7 @@ public sealed partial class MainWindow : Window
 
     // ───────────────────────── 托盘 ─────────────────────────
 
-    private void CreateTray(bool registerHotkey)
+    private void CreateTray()
     {
         if (_trayHost is not null) return;
         _trayHost = new TrayHost();
@@ -239,7 +239,7 @@ public sealed partial class MainWindow : Window
         _trayHost.ShowAllWidgetsRequested += () => DispatcherQueue.TryEnqueue(() => _ = _widgetManager.ShowAllAsync());
         _trayHost.HideAllWidgetsRequested += () => DispatcherQueue.TryEnqueue(() => _ = _widgetManager.HideAllAsync());
         _trayHost.SettingsRequested += () => DispatcherQueue.TryEnqueue(() => Present(true));
-        _trayHost.Initialize(registerHotkey);
+        _trayHost.Initialize();
     }
 
     private void DisposeTray()
@@ -248,21 +248,21 @@ public sealed partial class MainWindow : Window
         _trayHost = null;
     }
 
-    /// <summary>设置页保存后调用：托盘/热键即时生效，无需重启。</summary>
+    /// <summary>设置页保存后调用：托盘与全局热键开关即时生效，无需重启。</summary>
     public void ApplyTraySettings()
     {
         var trayEnabled = _settings.LoadEnableTray();
         var hotkeyEnabled = _settings.LoadEnableGlobalHotKey();
-        if (trayEnabled)
-        {
-            CreateTray(registerHotkey: false);
-            if (hotkeyEnabled) _trayHost?.RegisterGlobalHotKey();
-            else _trayHost?.UnregisterGlobalHotKey();
-        }
-        else
-        {
-            DisposeTray();
-        }
+        if (trayEnabled) CreateTray();
+        else DisposeTray();
+
+        // 热键的注册 / 注销只归 HotkeyService。此前这里调的是 TrayHost.RegisterGlobalHotKey()——
+        // 一个只打一行日志的空壳（热键早就迁到 MainWindow 句柄上注册），所以「启用全局快捷键」
+        // 拨完当场不生效，要等重启或下一次点「保存快捷键」。
+        if (App.Services.GetRequiredService<HotkeyService>() is { } hotkey)
+            hotkey.ApplyBindings(hotkeyEnabled
+                ? _settings.GetHotkeyBindings()
+                : new Dictionary<string, HotkeyGesture>());
     }
 
     private async void ExitApp()

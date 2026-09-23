@@ -629,7 +629,14 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         catch { /* 无权限探测的目录（网络盘/重定向被拦）：跳过它，不影响其余根目录 */ }
     }
 
-    /// <summary>快捷键绑定：默认 + 已保存合并。未配置动作回退到默认手势（缺省为无）。</summary>
+    /// <summary>
+    /// 快捷键绑定：默认 + 已保存合并，<b>已保存的每一项都覆盖默认</b>（含"空手势"）。
+    /// <para>
+    /// 空手势（VirtualKey=0）就是"用户显式清掉了这个动作"的记号：<see cref="Views.SettingsPage"/>
+    /// 清除绑定时写空手势而非删键。若改成删键，这里就会因为"键缺失 ⇒ 回退默认"而把
+    /// Ctrl+Alt+Space 之类的默认值重新补上 ⇒ 清不掉，且界面与真实注册状态不一致。
+    /// </para>
+    /// </summary>
     public IReadOnlyDictionary<string, HotkeyGesture> GetHotkeyBindings()
     {
         var merged = DefaultHotkeyBindings();

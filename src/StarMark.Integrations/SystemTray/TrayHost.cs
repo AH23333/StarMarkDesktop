@@ -42,7 +42,7 @@ public sealed class TrayHost : IDisposable
     private WndProcDelegate? _wndProc;
     private GCHandle _selfHandle;
 
-    public bool Initialize(bool registerHotkey = true)
+    public bool Initialize()
     {
         try
         {
@@ -87,7 +87,8 @@ public sealed class TrayHost : IDisposable
             data.uVersion = NOTIFYICON_VERSION_4;
             Shell_NotifyIconW(NIM_SETVERSION, ref data);
 
-            if (registerHotkey) RegisterGlobalHotKey();
+            // 全局快捷键不在这里注册：它统一由 HotkeyService 挂在 MainWindow 句柄上
+            // （支持多动作 / 允许冲突），TrayHost 曾经也有一个 RegisterHotKey，两边会抢同一手势。
             return true;
         }
         catch (Exception ex)
@@ -95,18 +96,6 @@ public sealed class TrayHost : IDisposable
             StarLog.Error("[TrayHost] 初始化失败", ex);
             return false;
         }
-    }
-
-    // 全局快捷键已统一迁移到 HotkeyService（注册在 MainWindow 句柄上，支持多动作/冲突允许），
-    // 此处不再自行 RegisterHotKey，避免与 HotkeyService 争抢同一手势（如 Ctrl+Alt+Space）。
-    public void RegisterGlobalHotKey()
-    {
-        StarLog.Info("[TrayHost] 全局热键由 HotkeyService 统一接管，TrayHost 不再注册");
-    }
-
-    public void UnregisterGlobalHotKey()
-    {
-        // 由 HotkeyService.Dispose 统一注销，这里无需操作。
     }
 
     public void ShowNotification(string title, string message)
@@ -139,12 +128,6 @@ public sealed class TrayHost : IDisposable
             if (msg == WM_DESTROY)
             {
                 if (_selfHandle.IsAllocated) _selfHandle.Free();
-                return IntPtr.Zero;
-            }
-
-            if (msg == WM_HOTKEY)
-            {
-                ShowRequested?.Invoke();
                 return IntPtr.Zero;
             }
 
@@ -225,9 +208,9 @@ public sealed class TrayHost : IDisposable
 
     public void Dispose()
     {
+        // 全局热键由 HotkeyService.Dispose 统一注销：TrayHost 从不注册热键，所以这里也没有对应操作。
         try
         {
-            UnregisterGlobalHotKey();
             if (_added)
             {
                 var data = new NOTIFYICONDATA

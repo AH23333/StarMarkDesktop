@@ -718,12 +718,19 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         RefreshConflictMarks();
     }
 
-    /// <summary>清除当前动作的绑定（不立即生效，需保存）。</summary>
+    /// <summary>
+    /// 清除当前动作的绑定（不立即生效，需保存）。
+    /// <para>
+    /// 写的是<b>空手势</b>而不是从字典里 Remove：磁盘上必须留下"用户明确清过这一条"的痕迹，
+    /// 否则 <c>GetHotkeyBindings</c> 的"默认 + 已存"合并会因为键缺失而把默认手势补回来 ⇒
+    /// 表现为「Ctrl+Alt+Space（切换主界面）清不掉」，且界面显示与真实注册状态还会不一致。
+    /// </para>
+    /// </summary>
     private void ClearBinding()
     {
         if (_recordingAction is null) return;
         var row = _recordingRow;
-        _hotkeyBindings.Remove(_recordingAction);
+        _hotkeyBindings[_recordingAction] = new HotkeyGesture(HotkeyModifiers.NoRepeat, 0);
         StopRecording(resetText: false);
         if (row is not null) row.BindingText = UnsetText;
         _hotkeysDirty = true;

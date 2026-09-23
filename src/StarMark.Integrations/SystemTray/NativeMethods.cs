@@ -4,12 +4,15 @@ using System.Runtime.InteropServices;
 namespace StarMark.Integrations.SystemTray;
 
 /// <summary>
-/// 托盘/全局热键所需的 Win32 P/Invoke 声明。仅 x64。
+/// 托盘（NotifyIcon + 菜单）所需的 Win32 P/Invoke 声明。仅 x64。
+/// <para>
+/// 全局热键不在这里：它由 StarMark.UI 的 <c>HotkeyService</c> + <c>Win32Hotkey</c> 统一挂在主窗口句柄上。
+/// 本文件曾有 RegisterHotKey / MOD_* / VK_SPACE 一整套，托盘不再注册热键后它们全成了零引用死声明。
+/// </para>
 /// </summary>
 internal static class NativeMethods
 {
     // ===== 常量 =====
-    public const uint WM_HOTKEY = 0x0312;
     public const uint WM_DESTROY = 0x0002;
     public const uint WM_LBUTTONUP = 0x0202;
     public const uint WM_LBUTTONDBLCLK = 0x0203;
@@ -37,14 +40,6 @@ internal static class NativeMethods
     public const int IDM_WIDGETS = 1003;
     public const int IDM_SETTINGS = 1004;
     // 逐组件项与"全部显示/隐藏"的号段见 TrayWidgetMenu（块与 sentinel 由同一处推导，防撞号）。
-
-    // 热键修饰符
-    public const uint MOD_ALT = 0x0001;
-    public const uint MOD_CONTROL = 0x0002;
-    public const uint MOD_SHIFT = 0x0004;
-    public const uint MOD_WIN = 0x0008;
-    public const uint MOD_NOREPEAT = 0x4000;
-    public const uint VK_SPACE = 0x20;
 
     // NotifyIcon
     public const uint NIM_ADD = 0x0000;
@@ -168,12 +163,6 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern IntPtr LoadCursorW(IntPtr hInstance, IntPtr lpCursorName);
-
-    [DllImport("user32.dll")]
-    public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
-
-    [DllImport("user32.dll")]
-    public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
     [DllImport("user32.dll")]
     public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
