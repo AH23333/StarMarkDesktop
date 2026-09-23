@@ -294,7 +294,7 @@ public sealed class HotkeyBindingTests
         => Assert.False(HotkeyKeys.IsModifier((uint)vk));
 
     /// <summary>
-    /// "取位"与"列出该位的全部码"必须是同一张表的两个视图：任一处漏改，
+    /// "哪个虚拟键码属于哪个修饰位"必须是同一张表的两个视图：任一处漏改，
     /// 兜底读系统状态与录制判定就会给出互相矛盾的答案。
     /// </summary>
     [Fact]
@@ -315,4 +315,25 @@ public sealed class HotkeyBindingTests
         Assert.Equal(6, HotkeyKeys.CodesOf(HotkeyModifiers.Control | HotkeyModifiers.Alt).Count);
         Assert.Empty(HotkeyKeys.CodesOf(HotkeyModifiers.NoRepeat));
     }
+
+    // ===== Win32 错误码 → 给人看的原因 =====
+
+    /// <summary>1409 是"已被别的程序占用"，可直接说成事实；其它码不编造解释。</summary>
+    [Fact]
+    public void RegisterFailure_NamesTheOccupiedCase_AndKeepsOtherCodesRaw()
+    {
+        Assert.Equal("该组合键已被其它程序占用", HotkeyErrorText.RegisterFailure(1409));
+        Assert.Equal("系统拒绝注册（Win32 错误 5）", HotkeyErrorText.RegisterFailure(5));
+    }
+
+    /// <summary>
+    /// 无论认不认识这个码，文案都必须带编号：用户拿着编号能查到根因，只看到"可能失败"就只能挨个猜。
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(5)]
+    [InlineData(1401)]
+    [InlineData(9999)]
+    public void HookInstallFailure_AlwaysCarriesTheCodeNumber(int code)
+        => Assert.Contains(code.ToString(), HotkeyErrorText.HookInstallFailure(code));
 }

@@ -431,6 +431,11 @@
                                 <Button Content="重试注册" Click="RetryHotkeyRegister_Click" HorizontalAlignment="Left"
                                         Style="{StaticResource SecondaryButton}"
                                         Visibility="{x:Bind HasRegisterErrors, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                                <!-- 钩子装不上＝一个键都收不到；原先只写日志，界面却仍进入"正在录制"并清空按钮文字 -->
+                                <TextBlock Text="{x:Bind RecordingAlert, Mode=OneWay}" TextWrapping="Wrap"
+                                           Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                           Style="{StaticResource SettingRowText}"
+                                           Visibility="{x:Bind HasRecordingAlert, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                             </StackPanel>
                         </Border>
 

@@ -175,10 +175,6 @@ public sealed class HotkeyService : IDisposable
 /// </summary>
 public sealed record HotkeyRegistrationFailure(HotkeyGesture Gesture, int ErrorCode)
 {
-    private const int ErrorHotkeyAlreadyRegistered = 1409;
-
-    /// <summary>给用户看的原因（不含组合键本身——界面自己拼 <c>HotkeyDisplay.Display</c>）。</summary>
-    public string Reason => ErrorCode == ErrorHotkeyAlreadyRegistered
-        ? "该组合键已被其它程序占用"
-        : $"系统拒绝注册（Win32 错误 {ErrorCode}）";
+    /// <summary>给用户看的原因（不含组合键本身——界面自己拼 <c>HotkeyDisplay.Display</c>）。措辞在 Core 的纯函数里，可单测。</summary>
+    public string Reason => HotkeyErrorText.RegisterFailure(ErrorCode);
 }

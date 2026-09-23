@@ -573,9 +573,20 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         BeginRecording(action, btn, row);
     }
 
-    /// <summary>进入录制态：清空按钮文字（保持按钮样式，不高亮）、记录该动作是否原有绑定、安装底层钩子。</summary>
+    /// <summary>进入录制态：先装底层钩子（装不上就说明原因、保持原显示），再清空按钮文字（不高亮）并开始回显按键。</summary>
     private void BeginRecording(string action, Button btn, HotkeyRow row)
     {
+        // 先装钩子、再进录制态：钩子装不上就一个按键都收不到，而原先的顺序会先把按钮文字清空，
+        // 用户看到的是"按了没反应、原来的快捷键也不显示了"，而不是一句"录制现在不可用"。
+        if (!_hkHook.TryStart(out var hookError))
+        {
+            var why = HotkeyErrorText.HookInstallFailure(hookError);
+            StarMark.Abstractions.StarLog.Warn($"无法安装键盘钩子：{why} ⇒ 快捷键录制不可用");
+            RecordingAlert = why + "——因此收不到你按下的键。再点一次这个按钮即可重试。";
+            return;
+        }
+        RecordingAlert = string.Empty;
+
         _recordingAction = action;
         _recordingButton = btn;
         _recordingRow = row;
@@ -589,8 +600,6 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         row.ConflictText = string.Empty;
         // 注意：不设置 btn.Background，保持默认按钮样式（按用户要求不高亮）
 
-        if (!_hkHook.TryStart())
-            StarMark.Abstractions.StarLog.Warn("无法安装键盘钩子，录制可能不稳定");
         // 录制期间挂起全局热键，避免按下的键命中已生效的热键（如正在重录「隐藏主界面」
         // 却按下了它的旧键）导致当场触发动作、打断录制。
         HotkeySvc()?.Suspend();
@@ -849,6 +858,23 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     }
 
     public bool HasRegisterErrors => !string.IsNullOrEmpty(_registerErrorSummary);
+
+    private string _recordingAlert = string.Empty;
+
+    /// <summary>键盘钩子装不上时的一次性说明（成功后自动清空）。装不上＝一个按键都收不到。</summary>
+    public string RecordingAlert
+    {
+        get => _recordingAlert;
+        set
+        {
+            if (_recordingAlert == value) return;
+            _recordingAlert = value;
+            RaisePropertyChanged();
+            RaisePropertyChanged(nameof(HasRecordingAlert));
+        }
+    }
+
+    public bool HasRecordingAlert => !string.IsNullOrEmpty(_recordingAlert);
 
     // ==================== 底部操作 ====================
 

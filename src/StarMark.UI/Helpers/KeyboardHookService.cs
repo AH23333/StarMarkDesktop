@@ -76,8 +76,17 @@ internal sealed class KeyboardHookService : IDisposable
 
     public bool Started => _hook != IntPtr.Zero;
 
-    public bool TryStart()
+    /// <summary>
+    /// 安装底层键盘钩子；失败时用 <paramref name="lastError"/> 给出 Win32 错误码。
+    /// <para>
+    /// 一定要把码带出去：钩子装不上就等于<b>一个按键都收不到</b>，调用方若只看到 false，
+    /// 界面会照常进入"正在录制"却永远不回显（表现为"点了没反应"）。
+    /// 错误码只在紧接着的一次读取里有效，故紧跟调用取走。
+    /// </para>
+    /// </summary>
+    public bool TryStart(out int lastError)
     {
+        lastError = 0;
         if (_hook != IntPtr.Zero) return true;
         _down.Clear();
         CurrentModifiers = ReadSystemModifiers();
@@ -85,6 +94,7 @@ internal sealed class KeyboardHookService : IDisposable
         _hook = SetWindowsHookEx(WhKeyboardLl, _proc, IntPtr.Zero, 0);
         if (_hook == IntPtr.Zero)
         {
+            lastError = Marshal.GetLastWin32Error();
             _proc = null;
             return false;
         }
