@@ -342,7 +342,11 @@ public static class ClassifyPrompt
     private static void AddTo(Dictionary<long, List<string>> proposals, long id, IEnumerable<string?> tags)
     {
         if (!proposals.TryGetValue(id, out var list)) proposals[id] = list = new List<string>();
-        list.AddRange(tags.Where(tag => !string.IsNullOrWhiteSpace(tag)!));
+        foreach (var tag in tags)
+        {
+            if (string.IsNullOrWhiteSpace(tag)) continue;   // 空位由 Sanitize 之前就先挡掉，不让 null 流进 List<string>
+            list.Add(tag);
+        }
     }
 
     /// <summary>从答复里抠出第一段完整的 JSON。<b>必须先剥代码围栏再找括号</b>：
