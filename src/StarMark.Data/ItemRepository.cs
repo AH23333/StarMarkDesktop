@@ -729,6 +729,49 @@ public sealed class ItemRepository : IItemRepository
         return items;
     }
 
+    /// <summary>
+    /// 一次连接取回"还没有任何标签"的条目。<b>NOT EXISTS 直接下推</b>：
+    /// 反过来（先取一批再在 C# 里筛）会带上一个窗口，而窗口会<b>静默少报</b>——
+    /// 最近几千条都有标签时，早期没标签的一条都不会被列出，界面却说"没有待整理的条目"。
+    /// <para>顺序与浏览页 "recent" 档一致（置顶优先，再按更新时间倒序），
+    /// 同一件事在两处排出不同顺序，用户会以为看到的是两份数据。</para>
+    /// </summary>
+    public async Task<IReadOnlyList<Item>> GetUntaggedAsync(IReadOnlyList<ItemType> types, int limit, CancellationToken ct = default)
+    {
+        if (types is null || types.Count == 0 || limit <= 0) return Array.Empty<Item>();
+
+        var names = types.Select(type => type.ToString().ToLowerInvariant()).Distinct().ToList();
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+
+        var placeholders = new List<string>(names.Count);
+        for (var i = 0; i < names.Count; i++)
+        {
+            var name = "@ty" + i;
+            cmd.Parameters.AddWithValue(name, names[i]);
+            placeholders.Add(name);
+        }
+        cmd.Parameters.AddWithValue("@limit", limit);
+
+        // tag_names 直接给 NULL：候选的定义就是"没有标签"，再为每行跑一次关联子查询是白跑
+        cmd.CommandText = $@"
+            SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
+                   i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
+                   i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
+                   NULL AS tag_names
+            FROM items i
+            WHERE i.hidden = 0
+              AND i.type IN ({string.Join(",", placeholders)})
+              AND NOT EXISTS (SELECT 1 FROM item_tags it WHERE it.item_id = i.id)
+            ORDER BY i.pinned DESC, i.updated_at DESC
+            LIMIT @limit;";
+
+        var items = new List<Item>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) items.Add(MapItem(reader));
+        return items;
+    }
+
     public async Task<IReadOnlyList<Item>> GetHiddenAsync(CancellationToken ct)
     {
         using var conn = _factory.Open();

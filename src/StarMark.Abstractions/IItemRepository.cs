@@ -150,6 +150,18 @@ public interface IItemRepository
     /// </para>
     /// </summary>
     Task<int> TagItemsAsync(IReadOnlyList<ItemTagAssignment> assignments, CancellationToken ct = default);
+
+    /// <summary>
+    /// 取"还没有任何标签"的条目，按浏览页同一套最近优先顺序，最多 <paramref name="limit"/> 条。
+    /// <para>
+    /// <b>这个条件只能在 SQL 里判</b>：先取一批再看有没有标签，取的那一批是有窗口的——
+    /// 库里最近几千条都打了标签时，早期那些没标签的条目根本进不了窗口，
+    /// 于是界面会说"没有待整理的条目"，而实际上还有几百条。少报的这类错比报错更难发现。
+    /// </para>
+    /// <para>返回的条目 <see cref="Item.Tags"/> 恒为空（这就是筛选条件本身），
+    /// 因此不跑每行一次的 GROUP_CONCAT 子查询。</para>
+    /// </summary>
+    Task<IReadOnlyList<Item>> GetUntaggedAsync(IReadOnlyList<ItemType> types, int limit, CancellationToken ct = default);
 }
 
 /// <summary>"给这个条目追加这些标签"。<see cref="IItemRepository.TagItemsAsync"/> 的入参。</summary>

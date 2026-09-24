@@ -57,33 +57,23 @@ public sealed class AiClassifyService
         _gateway = gateway;
     }
 
-    /// <summary>候选：库里<b>还没有任何标签</b>的条目，按最近活跃排，取前 limit 条。
-    /// <b>"没有标签"这个条件只能在这里筛</b>——按标签过滤是搜索侧的能力，
-    /// 而"未打标签"恰恰是它表达不了的那个条件。</summary>
+    /// <summary>
+    /// 候选：库里<b>还没有任何标签</b>的条目，按最近优先取前 limit 条。
+    /// <para>筛选整个交给 <see cref="IItemRepository.GetUntaggedAsync"/> 在 SQL 里做。
+    /// 先前这里写法是"取最近 2000 条再在内存里挑没标签的"，那有一个窗口：
+    /// 库里最近两千条都打了标签时，早期真正待整理的一条都进不来，
+    /// 而界面会老老实实报告"没有待整理的条目"——<b>少报比报错难发现得多</b>。</para>
+    /// </summary>
     public async Task<IReadOnlyList<ClassifyItem>> LoadCandidatesAsync(int limit, CancellationToken ct)
     {
         var wanted = Math.Clamp(limit, 1, MaxCandidates);
-        // 多取一些再本地筛：库里混着已打标签的与剪贴板条目，直接按 wanted 取会一条候选都筛不出来
-        var rows = await _repo.GetAllAsync(new BrowseFilter
-        {
-            Limit = 2000,
-            Sort = "recent",
-            IncludeHidden = false,
-        }, ct);
-
-        var result = new List<ClassifyItem>();
-        foreach (var item in rows)
-        {
-            if (ct.IsCancellationRequested) break;
-            if (!InScope.Contains(item.Type)) continue;
-            if (item.Tags is { Count: > 0 }) continue;              // 已经有标签的不重来：那是用户自己打过的
-            result.Add(new ClassifyItem(item.Id, item.Title,
+        var rows = await _repo.GetUntaggedAsync(InScope, wanted, ct);
+        return rows
+            .Select(item => new ClassifyItem(item.Id, item.Title,
                 string.IsNullOrWhiteSpace(item.Subtitle) ? null : item.Subtitle,
                 string.IsNullOrWhiteSpace(item.Description) ? null : item.Description,
-                NameOf(item), Array.Empty<string>()));
-            if (result.Count >= wanted) break;
-        }
-        return result;
+                NameOf(item), item.Tags ?? new List<string>()))
+            .ToList();
     }
 
     private static string NameOf(Item item) => item.Type switch
