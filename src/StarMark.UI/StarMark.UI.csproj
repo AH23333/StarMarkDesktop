@@ -4,8 +4,14 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
-    <!-- 解决方案含 Any CPU 平台时归一化到 x64（WinAppSDK 不支持 AnyCPU） -->
+    <!-- WinAppSDK 不支持 AnyCPU。第一行那种"归一化"在**平台被 VS/命令行当全局属性传进来时是失效的**
+         （MSBuild 里项目体改不动全局属性），所以光有它，VS 选到 Any CPU 仍只会得到一句天书般的
+         "WindowsAppSDKSelfContained requires a supported Windows architecture."。
+         第二行走的是那道闸门认的另一个入口（AnyCPU 时它改看 RuntimeIdentifier），于是 Any CPU 也照样出
+         x64 的可运行产物，不用用户去切配置管理器。正常 x64 构建不受影响（条件根本不成立）。
+         这条兜底由 BuildConfigGateTests 钉着（删掉它，-p:Platform=AnyCPU 就复现那句天书错误）。 -->
     <Platform Condition="'$(Platform)' == '' or '$(Platform)' == 'AnyCPU' or '$(Platform)' == 'Any CPU'">x64</Platform>
+    <RuntimeIdentifier Condition="('$(Platform)' == 'AnyCPU' or '$(Platform)' == 'Any CPU') and '$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
