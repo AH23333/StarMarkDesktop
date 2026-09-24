@@ -93,6 +93,23 @@ public sealed record Annotation(
     public const double MinScale = 0.2;
     public const double MaxScale = 6d;
 
+    /// <summary>容差的基准（物理像素）。把手只有几像素大，不容差就等于"看得见点不中"。</summary>
+    public const int HandleSlop = 12;
+
+    /// <summary>
+    /// 角点（＝缩放）的容差<b>随包围盒的短边收缩</b>。
+    /// <para>固定 12 像素放在一行字上（高约 22 像素）会把整行字都盖成"角点"，于是每一次拖动都变成缩放：
+    /// 字号越拖越大、字还往右下方滑——真机反馈的"可拖动但位置四窜、文字脱离文字框、并且增大"就是这么来的。
+    /// 按短边 1/4 取之后，四角各占住两端，中间那一大片仍然归"移动"。</para>
+    /// <para>这条判据住在模型里而不是界面里，是因为它<b>可测</b>：任何尺寸下两端的容差带都不能在中间接上
+    /// （接上了就等于这一档根本没有"移动"），所以还要再夹一道 <c>(短边-1)/2</c>。</para>
+    /// </summary>
+    public static int HandleSlopFor(IntRect box)
+    {
+        var shortSide = Math.Min(box.Width, box.Height);
+        return Math.Min(Math.Min(HandleSlop, shortSide / 4), (shortSide - 1) / 2);
+    }
+
     /// <summary>有没有带变换。没变换时 <see cref="TransformedPoints"/> 直接给原列表，不复制。</summary>
     public bool HasTransform => Rotation != 0 || Scale != 1d;
 
@@ -132,6 +149,18 @@ public sealed record Annotation(
 
     /// <summary>绕轴点缩放（倍数夹在上下限之间）。文字改的是字号，几何改的是点距。</summary>
     public Annotation ScaledBy(double factor) => this with { Scale = Math.Clamp(Scale * factor, MinScale, MaxScale) };
+
+    /// <summary>
+    /// 把变换轴挪到<b>当前这一块的正中</b>（只在标注刚创建、还没带任何变换时调用）。
+    /// <para>文字尤其需要：轴在左上角时，放大＝整行字向右下方滑出去，缩小时又向左上角缩回去——
+    /// 用户看到的就是"我想改个字号，结果字跑掉了、还和选择框对不上"（真机反馈的"位置四窜"）。
+    /// 绕中心改字号，字留在原地，才是"改大小"这件事该有的样子。</para>
+    /// </summary>
+    public Annotation WithPivotAtCentre()
+    {
+        var box = Bounds();
+        return this with { Pivot = new PixelPoint(box.X + box.Width / 2, box.Y + box.Height / 2) };
+    }
 
     /// <summary>绕轴点转过 <paramref name="angle"/> 度（归一到 0–360，负角与超过一圈都不该改变形状）。</summary>
     public Annotation RotatedBy(double angle) => this with { Rotation = NormalizeAngle(Rotation + angle) };

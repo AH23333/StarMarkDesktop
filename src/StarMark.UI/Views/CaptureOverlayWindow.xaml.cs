@@ -80,11 +80,13 @@ public sealed partial class CaptureOverlayWindow : Window
     private enum Grab { None, Move, Scale, Rotate }
     private Grab _grab;
 
-    /// <summary>把手的命中容差（物理像素）。把手本身只有几像素大，不容差就等于"看得见点不中"。</summary>
-    private const int GrabSlop = 12;
-
-    /// <summary>"点一下"要不要算选中脚下那条的容差（物理像素）。比把手小：点是打在形状上，不是打在小方块上。</summary>
+    /// <summary>"点一下"要不要算选中脚下那条的容差（物理像素）。比把手小：点是打在形状上，不是打在小方块上。
+    /// <para>角点/把手的容差不在这里——那一条跟着形状尺寸收缩，住在模型里（<c>Annotation.HandleSlopFor</c>），
+    /// 因为它能被断言。</para></summary>
     private const int SelectionSlop = 8;
+
+    /// <summary>框内（＝移动）的容差（物理像素）：贴着形状边缘那几像素也算"点在它身上"，不然细线永远拖不动。</summary>
+    private const int MoveSlop = 6;
 
     /// <summary>旋转把手离框顶多远（物理像素）。</summary>
     private const int RotateHandleLift = 26;
@@ -389,7 +391,7 @@ public sealed partial class CaptureOverlayWindow : Window
             {
                 _colourIndex = wanted;
                 // 正在输入的那行字跟着换色：否则"选了颜色，字却没变"要用户自己去猜为什么
-                if (_editingText) TextEditor.Foreground = new SolidColorBrush(ToColor(colour.Bgra));
+                if (_editingText) ApplyEditorAccent();
                 HidePicker();
             };
             colours.Children.Add(dot);
@@ -966,9 +968,10 @@ public sealed partial class CaptureOverlayWindow : Window
         if (Selected is not { } mark) { DropSelection(); return false; }
 
         _grab = Grab.None;
-        if (mark.SupportsRotation && Near(RotateHandle(mark), local)) _grab = Grab.Rotate;
-        else if (mark.Corners().Any(corner => Near(corner, local))) _grab = Grab.Scale;
-        else if (mark.Contains(local, 0)) _grab = Grab.Move;
+        var slop = Annotation.HandleSlopFor(mark.Bounds());
+        if (mark.SupportsRotation && Near(RotateHandle(mark), local, Annotation.HandleSlop)) _grab = Grab.Rotate;
+        else if (mark.Corners().Any(corner => Near(corner, local, slop))) _grab = Grab.Scale;
+        else if (mark.Contains(local, MoveSlop)) _grab = Grab.Move;
         else return false;
 
         _dragOriginal = mark;
@@ -981,8 +984,8 @@ public sealed partial class CaptureOverlayWindow : Window
         return true;
     }
 
-    private static bool Near(PixelPoint a, PixelPoint b)
-        => Math.Abs(a.X - b.X) <= GrabSlop && Math.Abs(a.Y - b.Y) <= GrabSlop;
+    private static bool Near(PixelPoint a, PixelPoint b, int slop)
+        => Math.Abs(a.X - b.X) <= slop && Math.Abs(a.Y - b.Y) <= slop;
 
     /// <summary>
     /// 旋转把手落在哪儿。<b>顶边贴到选区上沿时把它挪进框内</b>：画在选区外面的那一按不属于本窗的
@@ -1297,13 +1300,26 @@ public sealed partial class CaptureOverlayWindow : Window
             Math.Clamp(y, 0, Math.Max(0, _monitor.Height / _scale - 40)), 0, 0);
         TextEditorHost.Visibility = Visibility.Visible;
         TextEditor.FontSize = Annotation.DefaultFontHeight / _scale;
-        TextEditor.Foreground = new SolidColorBrush(ToColor(ColourBgra));
+        ApplyEditorAccent();
         TextEditor.Text = string.Empty;
         _textAnchor = local;
         // 焦点没落进输入框必须当场说出来：那之后敲的键会落到遮罩那一层，Enter 变成"复制整张截图"，
         // 用户看到的就是"打了字什么都没发生"（真机反馈的原话）。静默失效比报错难查得多。
         if (!TextEditor.Focus(FocusState.Programmatic))
-            ShowError("这一行字还没拿到键盘焦点：点一下黄色的输入框再打字（Enter 落笔，Esc 只丢掉这一行）");
+            ShowError("这一行字还没拿到键盘焦点：点一下那个描边的输入框再打字（Enter 落笔，Esc 只丢掉这一行）");
+    }
+
+    /// <summary>
+    /// 就地输入那一框的字色与描边：<b>只有这一处</b>在说"用哪个颜色"。
+    /// 底板是近乎透明的（真机反馈："点击后不应出现黄色矩形，最好是透明但描边的边框"——
+    /// 实色黄底会把正要看的画面盖掉），所以边界全靠这条描边认出来，描边跟着当前字色走，
+    /// 在深色截图与浅色截图上都看得出来。
+    /// </summary>
+    private void ApplyEditorAccent()
+    {
+        var brush = new SolidColorBrush(ToColor(ColourBgra));
+        TextEditor.Foreground = brush;
+        TextEditorHost.BorderBrush = brush;
     }
 
     /// <summary>
@@ -1321,7 +1337,7 @@ public sealed partial class CaptureOverlayWindow : Window
         {
             Text = text,
             FontHeight = Annotation.DefaultFontHeight,
-        });
+        }.WithPivotAtCentre());   // 轴放在字块正中：否则改字号时整行字会向右下滑（"位置四窜"）
         _selected = _history.Count - 1;   // 打完字紧接着就是"挪个位置/改个字号"：那一条直接在手边
         Rebake();
         DrawSelectionHandles();

@@ -313,6 +313,75 @@ public sealed class AnnotationTests
         Assert.Equal(48, turned.Bounds().Height);
     }
 
+    // ────────── 角点容差与文字缩放轴（批次 RF-1：真机反馈"一拖就变大、位置四窜"）──────────
+
+    /// <summary>
+    /// 角点容差<b>必须随形状尺寸收缩</b>：一行字只有 22 像素高，给它 12 像素的角点容差，
+    /// 上下两个角带就在中间接上了 —— 于是每一次拖动都被判成缩放（真机反馈的原话是
+    /// "可拖动但实际位置四窜，甚至出现文字显著脱离文字框范围内，并且增大"）。
+    /// 这条是纯几何，所以在模型里断言；界面只在取用的那一刻经过它。
+    /// </summary>
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(6, 6)]
+    [InlineData(44, 22)]          // 一两个汉字那么短的一行
+    [InlineData(300, 22)]         // 长句：高仍是短板
+    [InlineData(40, 40)]
+    [InlineData(400, 300)]        // 大框：该拿到满容差才点得中
+    [InlineData(9, 400)]
+    public void CornerToleranceNeverSwallowsTheMiddleOfTheShape(int width, int height)
+    {
+        var slop = Annotation.HandleSlopFor(new IntRect(0, 0, width, height));
+        var shortSide = Math.Min(width, height);
+        Assert.True(slop >= 0, "容差不该是负的（负的会一个像素都点不中）");
+        Assert.True(2 * slop < shortSide,
+            $"{shortSide}px 的短边配 {slop}px 角点容差：两端的带子在中间接上了，那一档就没有移动了");
+    }
+
+    [Fact]
+    public void BigShapesStillGetTheFullTolerance()
+        => Assert.Equal(Annotation.HandleSlop, Annotation.HandleSlopFor(new IntRect(0, 0, 400, 300)));
+
+    [Fact]
+    public void ATextLineShrinksTheCornerZoneInsteadOfBecomingAllCorner()
+        => Assert.Equal(5, Annotation.HandleSlopFor(new IntRect(0, 0, 44, 22)));   // 22/4＝5：中间还剩 12px 归移动
+
+    /// <summary>
+    /// 改字号时字要<b>留在原地</b>：轴在左上角时，放大会把整行字向右下方推出去，
+    /// 用户看到的就是"位置四窜 + 字跑到框外面"。轴放在字块正中之后，缩放前后中心不动，只有宽高在长。
+    /// </summary>
+    [Fact]
+    public void ScalingTextKeepsItInPlace()
+    {
+        var text = TextAt("中英 mixed 一行").WithPivotAtCentre();
+        var before = Centre(text.Bounds());
+        var after = Centre(text.ScaledBy(1.8).Bounds());
+        var grown = text.ScaledBy(1.8).Bounds();
+
+        Assert.True(grown.Width > text.Bounds().Width && grown.Height > text.Bounds().Height,
+            $"放大就该整体变大：{text.Bounds()} → {grown}");
+        Assert.True(Math.Abs(before.X - after.X) <= 1.5, $"横向中心不该跑：{before} → {after}");
+        Assert.True(Math.Abs(before.Y - after.Y) <= 1.5, $"纵向中心不该跑：{before} → {after}");
+    }
+
+    private static Annotation TextAt(string text)
+        => new(AnnotationTool.Text, new[] { new PixelPoint(30, 40) }, Annotation.Opaque(0, 0, 255), 4)
+        { Text = text, FontHeight = 22 };
+
+    private static (double X, double Y) Centre(IntRect box) => (box.X + box.Width / 2.0, box.Y + box.Height / 2.0);
+
+    /// <summary>移动一条改过字号的字：轴跟着一起走，下一次缩放仍以这条字现在的中心为轴（不然会跳回原位）。</summary>
+    [Fact]
+    public void MovingCarriesThePivotAlongWithTheGlyphs()
+    {
+        var text = TextAt("字").WithPivotAtCentre();
+        var moved = text.MovedBy(12, -8);
+        Assert.Equal(new PixelPoint(42, 32), moved.Points[0]);      // 字本身跟着走
+        Assert.Equal(text.Origin.X + 12, moved.Origin.X);           // 轴也跟着走：下一次缩放仍以"现在"的中心为轴
+        Assert.Equal(text.Origin.Y - 8, moved.Origin.Y);
+        Assert.NotEqual(moved.Points[0], moved.Origin);             // 轴在字块中心，不是左上那一个点
+    }
+
     [Fact]
     public void HitTestForgivesASlopAndPrefersTheTopmostMark()
     {

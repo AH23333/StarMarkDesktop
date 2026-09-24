@@ -262,6 +262,9 @@ public sealed class CaptureOverlayGateTests
         // 把手只有一个算法出口：画它的那一处与判"按中了没有"的那处必须是同一个坐标
         var handle = SourceGate.MethodBody(cs, "private PixelPoint RotateHandle");
         Assert.Contains("box.Y - lift < selection.Y", handle);   // 贴到选区上沿时夹回框内，否则这颗点永远点不到
+        // 角点容差由模型给（那条判据可测）：界面里再写一个固定数字，就是"一行字全变成角点"复发的入口
+        Assert.Contains("Annotation.HandleSlopFor(mark.Bounds())", grab);
+        Assert.Contains("Near(corner, local, slop)", grab);
     }
 
     /// <summary>
@@ -370,4 +373,26 @@ public sealed class CaptureOverlayGateTests
         Assert.Contains("Delete", tip);             // 删除要有键盘出口，而出口得写在用户看得见的这一句里
         Assert.Contains("SelectionTip.Visibility", SourceGate.MethodBody(ReadOverlay(xaml: false), "private void DropSelection"));
     }
+
+    /// <summary>
+    /// 就地输入那一块底板<b>不许是实色</b>。真机反馈："点击后不应出现黄色矩形，最好是透明但描边的边框"——
+    /// 截图时要看的画面正被这块板子盖住。边界改由描边负责，而描边的颜色只有当前字色说得准（深浅底都要看得出来），
+    /// 所以"字色"与"边框色"必须出自同一个出口；再出现一处直接写 <c>TextEditor.Foreground</c> 就是第二份事实。
+    /// </summary>
+    [Fact]
+    public void TextEditorIsATranslucentOutlinedBoxNotASolidSlab()
+    {
+        var host = SourceGate.Between(ReadOverlay(xaml: true), "x:Name=\"TextEditorHost\"", "<TextBox");
+        Assert.DoesNotContain("#EEFFFF00", host);            // 那一批实色黄底（0xEE alpha）不许回来
+        Assert.Contains("BorderThickness=\"2\"", host);      // 边界靠描边，不靠填充
+        var cs = ReadOverlay(xaml: false);
+        Assert.Contains("TextEditorHost.BorderBrush = brush", SourceGate.MethodBody(cs, "private void ApplyEditorAccent"));
+        Assert.Equal(1, SourceGate.Count(cs, "TextEditor.Foreground"));   // 只有那一个出口在说"用哪个颜色"
+    }
+
+    /// <summary>刚打完的那一行字，变换轴要放在字块正中：轴在左上角时改字号会把字推着走（"位置四窜"）。</summary>
+    [Fact]
+    public void TheJustTypedLineIsPivotedAtItsOwnCentre()
+        => Assert.Contains(".WithPivotAtCentre()", SourceGate.MethodBody(
+            ReadOverlay(xaml: false), "private void EndTextEditing"));
 }

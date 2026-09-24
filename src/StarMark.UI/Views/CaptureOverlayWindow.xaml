@@ -50,14 +50,17 @@
         <!--
             文字标注就地输入：Enter 落笔、Esc 只丢掉这一行字（不收整场截图）。
             <b>左上角对齐是必须的</b>：Grid 子元素默认 Stretch，只给 Margin 定位的话，
-            这块黄底会从"点击处"一路铺到屏幕右下角（真机反馈的"点击处到右下角的黄色矩形"），
+            这块底板会从"点击处"一路铺到屏幕右下角（真机反馈的"点击处到右下角的黄色矩形"），
             输入框本身也会跟着拉成一条巨大无比的东西。
+            <b>底板刻意近乎透明、靠描边认边界</b>（真机反馈："点击后不应出现黄色矩形，最好是透明但描边的边框"）：
+            一块实色黄底会把要看的那片画面整个盖掉。描边用当前选的字色，在深浅底上都看得出来；
+            留一成暗底只是为了字在半透明图上还读得清，不是把这块做成色块。
         -->
         <Border
             x:Name="TextEditorHost"
-            Background="#EEFFFF00"
-            BorderBrush="#FF000000"
-            BorderThickness="1"
+            Background="#1A000000"
+            BorderBrush="#FFFFFFFF"
+            BorderThickness="2"
             HorizontalAlignment="Left"
             VerticalAlignment="Top"
             Visibility="Collapsed">
