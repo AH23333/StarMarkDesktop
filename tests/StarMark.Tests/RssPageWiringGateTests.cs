@@ -142,16 +142,24 @@ public sealed class RssPageWiringGateTests
     // ────────── RSS 页本身 ──────────
 
     /// <summary>用户裁决："该页内容不提供搜索/排序等功能"。写成守门而不是记在注释里，
-    /// 因为下一次"顺手加个筛选框"看起来像增强，实际把这一页变成了另一个主窗。</summary>
+    /// 因为下一次"顺手加个筛选框"看起来像增强，实际把这一页变成了另一个主窗。
+    /// <para>另一半是这一批的真机反馈：<b>文件夹必须能展开/收起</b>——上一版一次性平铺所有源的全部条目，
+    /// 用户的评价是"文件夹只是个摆设"。所以这里同时钉"默认收起 + 展开状态记得住 + 卡片惰性建"。</para></summary>
     [Fact]
-    public void RssPageOffersNoSearchNoSortAndHidesTheTagChips()
+    public void RssPageIsACollapsibleAccordionWithNoSearchNoSort()
     {
         var xaml = Markup(ReadRepoFile(RssPageXaml));
+        var code = ReadRepoFile("src/StarMark.UI/Views/RssPage.xaml.cs");
         foreach (var gone in new[] { "<TextBox", "<ComboBox", "<AutoSuggestBox", "排序" })
             Assert.False(xaml.Contains(gone, StringComparison.Ordinal));
 
-        Assert.Contains("SuppressTags=\"True\"", xaml);   // 候选行不给标签入口（＋标签会按需登记写库）
-        Assert.Contains("OpenRequested=\"Card_OpenRequested\"", xaml);
+        Assert.Contains("SuppressTags = true", code);   // 候选行不给标签入口（＋标签会按需登记写库）
+        Assert.Contains("OpenRequested +=", code);      // 点标题直接跳文章
+        Assert.Contains("Visibility.Collapsed", code);  // 体默认收起
+        Assert.Contains("_expanded", code);             // 展开状态跨刷新记住
+        Assert.Contains("DispatcherQueue.TryEnqueue(BuildOnce)", code);   // 卡片惰性建，点一下不卡
+        Assert.Contains("StructureChanged += RebuildSources", code);
+        Assert.Contains("StructureChanged -= RebuildSources", code);      // 成对退订（死页不该继续收重建事件）
     }
 
     /// <summary>点条目跳文章：<b>打不开必须说出原因</b>；静默失败正是这一栏最早那条"点了没反应"的形状。</summary>

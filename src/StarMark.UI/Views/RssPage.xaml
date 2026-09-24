@@ -5,9 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:controls="using:StarMark.UI.Controls"
     xmlns:helpers="using:StarMark.UI.Helpers"
-    xmlns:viewModels="using:StarMark.UI.ViewModels"
     mc:Ignorable="d">
 
     <Page.Resources>
@@ -15,9 +13,10 @@
     </Page.Resources>
 
     <!--
-        每个订阅源＝一个文件夹，文件夹里是它当前给出的条目（用户裁决的形状）。
-        这一页刻意没有搜索框、没有排序下拉：条目按源分组、组内保持源给的顺序，
-        要筛要排去「文件夹」页——那里已经是本机的数据了。
+        每个订阅源＝一个可展开/收起的文件夹（样式照「文件夹」页，用户裁决）。
+        条目区在代码里按手风琴构建：TreeViewItem/ItemsRepeater 的容器会把 ItemCard 压扁，
+        而"展开时才建卡片"是这一页能同时挂几十个源的前提。
+        这一页刻意没有搜索框、没有排序下拉（用户裁决）。
     -->
     <Grid Background="Transparent" RowDefinitions="Auto,Auto,*,Auto">
 
@@ -25,7 +24,7 @@
             <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                 <TextBlock Text="RSS 订阅" FontSize="18" FontWeight="SemiBold"
                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                <TextBlock Text="点条目标题＝在浏览器打开这篇文章。只有点「收藏到文件夹」的那一条才会进本机库，并放进它自己的文件夹（RSS订阅 / 源名）；不点就不进库，也不会后台去抓——只有按「刷新」时才发请求。"
+                <TextBlock Text="点文件夹展开这个源的文章；点标题＝在浏览器打开这篇文章。只有点「收藏到文件夹」的那一条才会进本机库，并放进它自己的文件夹（RSS订阅 / 源名）；不点就不进库，也不会后台去抓——只有按「刷新」时才发请求。"
                            Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
             </StackPanel>
             <Button Grid.Column="1" x:Name="RefreshButton" Content="{x:Bind ViewModel.RefreshLabel, Mode=OneWay}"
@@ -39,50 +38,12 @@
                    Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="12,4,12,4" VerticalAlignment="Center"
                    Visibility="{x:Bind ViewModel.HasStatus, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
 
-        <ScrollViewer Grid.Row="2" Background="Transparent" Padding="12,4,12,8"
-                      VerticalScrollBarVisibility="Auto">
-            <ItemsRepeater ItemsSource="{x:Bind ViewModel.Sections, Mode=OneWay}">
-                <ItemsRepeater.Layout>
-                    <StackLayout Spacing="10"/>
-                </ItemsRepeater.Layout>
-                <ItemsRepeater.ItemTemplate>
-                    <DataTemplate x:DataType="viewModels:RssSourceSection">
-                        <StackPanel Spacing="4">
-                            <!-- 文件夹标题：源名 + 这一轮的状态 + 条数。状态必须写在标题上，
-                                 否则"这个文件夹是空的"与"这个源坏了"看起来是同一件事。 -->
-                            <StackPanel Orientation="Horizontal" Spacing="8" ToolTipService.ToolTip="{x:Bind Url}">
-                                <FontIcon Glyph="&#xE8B7;" FontSize="14" VerticalAlignment="Center"
-                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                <TextBlock Text="{x:Bind Name}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"
-                                           Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                                <TextBlock Text="{x:Bind Status}" FontSize="11" VerticalAlignment="Center"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                <TextBlock Text="{x:Bind CountText}" FontSize="11" VerticalAlignment="Center"
-                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
-                            </StackPanel>
-                            <!-- 落点写在标题下面一行：收藏这一动作到底把这条东西放到哪儿，不能等点完才知道 -->
-                            <TextBlock FontSize="11" Margin="22,0,0,0"
-                                       Style="{StaticResource MutedText}"
-                                       Text="收藏会放进「{x:Bind FolderPath, Mode=OneWay}」"/>
-                            <ItemsRepeater ItemsSource="{x:Bind Rows}">
-                                <ItemsRepeater.Layout>
-                                    <StackLayout Spacing="6"/>
-                                </ItemsRepeater.Layout>
-                                <ItemsRepeater.ItemTemplate>
-                                    <DataTemplate x:DataType="viewModels:ItemCardViewModel">
-                                        <!-- SuppressTags：候选行没有库 id，标签行上的「＋ 标签」会经按需登记
-                                             把这条一次性候选写进 items——正是 D4 要挡住的那件事。 -->
-                                        <controls:ItemCard ViewModel="{x:Bind}" SuppressTags="True"
-                                                           OpenRequested="Card_OpenRequested"/>
-                                    </DataTemplate>
-                                </ItemsRepeater.ItemTemplate>
-                            </ItemsRepeater>
-                        </StackPanel>
-                    </DataTemplate>
-                </ItemsRepeater.ItemTemplate>
-            </ItemsRepeater>
+        <ScrollViewer Grid.Row="2" x:Name="SourceScroll" Background="Transparent" Padding="12,6,12,12"
+                      VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled">
+            <StackPanel x:Name="SourceRoot" Spacing="2"/>
         </ScrollViewer>
 
+        <!-- 空态与进度：都放在最后一行，不占走列表的位置（源一多，滚动位置不该被顶掉） -->
         <StackPanel Grid.Row="3" HorizontalAlignment="Center" Margin="12,0,12,20" Spacing="8"
                     Visibility="{x:Bind ViewModel.HasSections, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
             <TextBlock Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}" Style="{StaticResource MutedText}"

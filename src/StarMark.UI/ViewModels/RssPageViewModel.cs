@@ -51,6 +51,18 @@ public partial class RssPageViewModel : ObservableObject
 
     public ObservableCollection<RssSourceSection> Sections { get; } = new();
 
+    /// <summary>
+    /// 源列表或某一轮结果变了 ⇒ 页面要重铺手风琴。
+    /// <para>为什么是事件而不是让页面去监听集合：状态与行是<b>原地改</b>的（源没变、只是这一轮抓完了），
+    /// 集合本身没有 Reset，页面光订阅 CollectionChanged 会永远等不到那一次刷新——
+    /// 表现就是"抓完了界面还是空的"。与 <c>FolderTreePageViewModel.RootsReady</c> 同一分工。</para>
+    /// </summary>
+    public event Action? StructureChanged;
+
+    /// <summary>展开时一次渲染多少条（照「文件夹」页的口径：先给一屏，剩下的按「展开更多」要）。</summary>
+    public const int InitialRows = 30;
+    public const int MoreStep = 50;
+
     [ObservableProperty] private bool _enabled;
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string _statusText = string.Empty;
@@ -97,6 +109,7 @@ public partial class RssPageViewModel : ObservableObject
         {
             Sections.Clear();
             HasSectionsChanged();
+            StructureChanged?.Invoke();
             return;
         }
 
@@ -105,6 +118,7 @@ public partial class RssPageViewModel : ObservableObject
         foreach (var source in sources)
             Sections.Add(keep.TryGetValue(source.Id, out var old) ? old.WithConfig(source) : new RssSourceSection(source));
         HasSectionsChanged();
+        StructureChanged?.Invoke();
 
         EmptyHint = Sections.Count == 0
             ? "还没有添加任何来源地址：到「设置 → 网址来源（RSS / Atom）」填一个订阅地址再回来。"
@@ -165,6 +179,7 @@ public partial class RssPageViewModel : ObservableObject
             // 汇总说的是"这一页真的摆出来了多少条"，不是聚合器那份带 200 条上限的摊平清单：
             // 分组是按源各自取的，两个数不是一回事，拿后者报前者就会出现"页面上明明更多"。
             var shown = Sections.Sum(s => s.Rows.Count);
+            StructureChanged?.Invoke();
 
             EmptyHint = shown == 0 ? "这一轮没有任何源给出条目，原因写在每个文件夹的标题上。" : string.Empty;
             StatusText = Summarise(run, shown);
