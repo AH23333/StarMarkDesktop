@@ -59,8 +59,9 @@ public static class TagText
     }
 
     /// <summary>一组标签的收口：规范化 → 大小写不敏感去重 → 按原顺序保留 → 截到 max。
-    /// <b>一条给四个已经够分类用了，再多是噪声</b>。</summary>
-    public static IReadOnlyList<string> Sanitize(IEnumerable<string?> proposed, int max = 4)
+    /// <b>上限取 3（对齐扩展侧实测）</b>：一条给四个已经够分类用了，而多出来的那一个往往就是
+    /// "给这一条单独造的专有词"——正是整理要消灭的东西。</summary>
+    public static IReadOnlyList<string> Sanitize(IEnumerable<string?> proposed, int max = 3)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var result = new List<string>();
@@ -119,7 +120,9 @@ public static class ClassifyPrompt
             : "优先从下列已有标签里选，确实不合适才新造：" + string.Join("、", referenceTags.Take(MaxReferenceTags));
 
         return "你在为一个人的资料库整理标签。" + vocabulary + "。"
-            + "规则：每条给 1-4 个标签；标签 2-6 个字；同一批里相同含义必须用同一个词；"
+            + "规则：每条给 1-3 个标签；标签 2-6 个字；同一批里相同含义必须用同一个词；"
+            + "标签要能成类：一个标签至少要能套上 3 条条目，只适合一两次的宁可不给，"
+            + "绝不为个别条目造专有词——宁可少分类，也不要一条一个标签；"
             + "不要重复该条已有的标签；不要给无信息量的词（如\u201c其他\u201d\u201c资料\u201d\u201c重要\u201d）。"
             + "输出：只输出一个 JSON 对象，不要解释文字、不要代码围栏。格式："
             + "{ \"items\": [ { \"id\": 1, \"tags\": [ \"标签一\" ] } ] }";

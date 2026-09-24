@@ -60,11 +60,15 @@ public sealed class AiClassifyTests
         Assert.Equal(TagText.MaxLength, longOne.Length);
     }
 
+    /// <summary>上限 3（批次 QA-1，与扩展侧实测同口径）：一条给四个已经够分类用，
+    /// 而多出来的那一个往往就是"给这一条单独造的专有词"——正是整理要消灭的东西。</summary>
     [Fact]
     public void SanitizeDedupesCaseInsensitivelyAndCapsCount()
     {
         var tags = TagText.Sanitize(new[] { "前端", "前端 ", "FrontEnd", "工具", "读书", "多余" });
-        Assert.Equal(new[] { "前端", "FrontEnd", "工具", "读书" }, tags);   // 大小写不同算同一个词
+        Assert.Equal(new[] { "前端", "FrontEnd", "工具" }, tags);
+        Assert.Equal(new[] { "AI" }, TagText.Sanitize(new[] { "AI", "ai ", "Ai" }));   // 大小写不同算同一个词
+        Assert.Equal(4, TagText.Sanitize(new[] { "一", "二", "三", "四", "五" }, max: 4).Count);
     }
 
     // ────────── 提示词与分批 ──────────
@@ -77,6 +81,12 @@ public sealed class AiClassifyTests
         Assert.Contains("前端、工具", prompt);
         Assert.Contains("只输出一个 JSON 对象", prompt);           // 不写这句，模型会加"好的，下面是结果："
         Assert.DoesNotContain("数据库", prompt);
+        // 批次 QA-1：用户抱怨"出一堆各挂一条的标签"，"要能成类"这句必须真的写在提示词里，
+        // 而不是只在应用侧偷偷砍——那样模型下一轮还会照旧造专有词。
+        Assert.Contains("1-3 个标签", prompt);
+        Assert.DoesNotContain("1-4", prompt);
+        Assert.Contains("至少", prompt);
+        Assert.Contains("宁可少分类", prompt);
     }
 
     [Fact]

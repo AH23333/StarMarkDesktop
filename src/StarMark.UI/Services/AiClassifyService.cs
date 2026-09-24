@@ -12,8 +12,11 @@ using StarMark.UI.Helpers;
 namespace StarMark.UI.Services;
 
 /// <summary>一轮整理的结果汇总（界面上那一行就靠它）。</summary>
-/// <param name="Plan">整理出来、还没应用的方案。</param>
+/// <param name="Plan">整理出来、还没应用的方案（<b>已经过"不成类标签"这一刀</b>）。</param>
 /// <param name="MissingItems">模型答了但漏掉的条目数——<b>"整理完了"这句话要把缺的报出来</b>。</param>
+/// <param name="DroppedTags">被砍掉的"整个方案里只挂了一条条目"的标签数。<b>砍了多少必须报</b>：
+/// 建议条数变少了，用户有权知道是程序替他砍的，而不是模型少答了。</param>
+/// <param name="DroppedItems">因为这些标签被砍而一个标签都不剩、于是整条不提的条目数。</param>
 /// <param name="FirstError">第一个坏批的原因。<b>只报第一个</b>：六个批各自超时，用户要处理的是同一件事。</param>
 public sealed record OrganiseOutcome(
     ClassifyPlan Plan,
@@ -23,6 +26,8 @@ public sealed record OrganiseOutcome(
     int StoppedBatches,
     int MissingItems,
     int UnknownOrdinals,
+    int DroppedTags,
+    int DroppedItems,
     string? FirstError)
 {
     public bool NothingOrganised => Plan.IsEmpty && FailedBatches > 0;
@@ -108,12 +113,12 @@ public sealed class AiClassifyService
     {
         var settings = _store.LoadAiSettings();
         if (settings.Problem() is { } bad)
-            return new OrganiseOutcome(ClassifyPlan.Empty, 0, 0, 0, 0, 0, 0, "AI 通道还不能用：" + bad);
+            return new OrganiseOutcome(ClassifyPlan.Empty, 0, 0, 0, 0, 0, 0, 0, 0, "AI 通道还不能用：" + bad);
 
         onStatus("正在挑出还没有标签的条目…");
         var candidates = await LoadCandidatesAsync(limit, ct);
         if (candidates.Count == 0)
-            return new OrganiseOutcome(ClassifyPlan.Empty, 0, 0, 0, 0, 0, 0,
+            return new OrganiseOutcome(ClassifyPlan.Empty, 0, 0, 0, 0, 0, 0, 0, 0,
                 "没有待整理的条目（要么都有标签了，要么只剩剪贴板条目）");
 
         var catalog = await ReferenceTagsAsync(ct);
@@ -134,7 +139,10 @@ public sealed class AiClassifyService
             ct);
 
         Merge(proposals, report.Proposals);                 // 编排层给的汇总为准（含回调没覆盖到的情况）
-        var plan = new ClassifyPlan(proposals, DateTimeOffset.UtcNow);
+        // 最后再砍一刀：整个方案里只挂上一条条目的标签不叫分类（用户要的正是"别再一条一个词"）。
+        // 计数按<b>整个方案</b>而不是按批：同一个词在两批里各出现一次，合起来是两条，它够格留下。
+        var pruned = new ClassifyPlan(proposals, DateTimeOffset.UtcNow).WithoutSingletonTags();
+        var plan = pruned.Plan;
         if (plan.IsEmpty) ClearPending(); else SavePending(plan);
 
         return new OrganiseOutcome(
@@ -145,6 +153,8 @@ public sealed class AiClassifyService
             report.StoppedBatches,
             report.Batches.Sum(batch => batch.MissingCount),
             report.Batches.Sum(batch => batch.UnknownCount),
+            pruned.DroppedTags.Count,
+            pruned.DroppedItems,
             report.Batches.FirstOrDefault(batch => !batch.Ok)?.Error);
     }
 
@@ -162,7 +172,10 @@ public sealed class AiClassifyService
 
     // ────────── 未应用方案的落盘 ──────────
 
-    public ClassifyPlan LoadPending() => _store.LoadAiPlan();
+    /// <summary>读"还没应用的方案"。<b>读侧也要砍一次不成类的标签</b>：每批边界的检查点存的是
+    /// 汇总前的原始结果（那样中途被杀不丢信息），而这一刀必须在交给界面之前落——
+    /// 这条规则之前整理出来的旧档里那些"一条一个词"的标签，否则又会原样摆回预览。</summary>
+    public ClassifyPlan LoadPending() => _store.LoadAiPlan().WithoutSingletonTags().Plan;
     public void SavePending(ClassifyPlan plan) => _store.SaveAiPlan(plan);
     public void ClearPending() => _store.ClearAiPlan();
 

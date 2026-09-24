@@ -104,6 +104,25 @@ public sealed class AiLayerGateTests
 
     /// <summary>AI 那一组的六个设置项必须全部带 <c>Ai</c> 前缀。<b>扩展项目出过一次四个 key 同名互相覆盖</b>
     /// 的事故（第一批分类结果落盘就把 AI 设置冲掉），而代码里完全看不出来。</summary>
+    /// <summary>
+    /// "还没应用的方案"只能经服务那一道出口读（<c>AiClassifyService.LoadPending</c>）。
+    /// <para>批次 QA-1 把"整个方案里只挂一条的标签"砍掉，那一刀住在服务里：界面上谁再直接
+    /// <c>SettingsStore.LoadAiPlan()</c>，旧存档里几百个一条一词的标签就会绕过规则原样摆回预览——
+    /// 而这正是用户这次点名要消灭的东西。</para>
+    /// </summary>
+    [Fact]
+    public void PendingPlanIsReadThroughTheOnePruningDoor()
+    {
+        var page = Read(Page);
+        Assert.Contains("AiClassifyService>().LoadPending()", page);   // 锚点必须扫到：不然这条闸门是在空转
+        Assert.DoesNotContain(".LoadAiPlan()", page);
+        Assert.DoesNotContain(".SaveAiPlan(", page);
+        Assert.DoesNotContain("WithoutSingletonTags", page);           // 那一刀不许在界面上再砍一次（两处口径迟早分岔）
+
+        var service = Read("src/StarMark.UI/Services/AiClassifyService.cs");
+        Assert.Equal(2, service.Split('\n').Count(l => l.Contains("WithoutSingletonTags")));  // 出轮 + 读档，各一次
+    }
+
     [Fact]
     public void AiStorageKeysAreNamespaced()
     {

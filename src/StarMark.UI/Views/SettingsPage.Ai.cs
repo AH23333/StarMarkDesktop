@@ -162,9 +162,13 @@ public sealed partial class SettingsPage
     private void InitAiOrganiseSection()
     {
         AiGroupList.ItemsSource = _aiGroups;
-        ShowPlan(App.Services.GetRequiredService<SettingsStore>().LoadAiPlan());
+        ShowPlan(PendingPlan());
         if (_aiPlan.IsEmpty) AiResumeButton.Visibility = Visibility.Collapsed;
     }
+
+    /// <summary>"还没应用的方案"只从一个入口读（那条"砍掉不成类标签"的规则住在服务里）。
+    /// 界面上再开一条直读存档的口子就是第二个事实源：旧档里的专有词会绕过那一刀又摆回预览。</summary>
+    private ClassifyPlan PendingPlan() => App.Services.GetRequiredService<AiClassifyService>().LoadPending();
 
     private async void AiOrganise_Click(object sender, RoutedEventArgs e)
     {
@@ -201,7 +205,7 @@ public sealed partial class SettingsPage
         catch (OperationCanceledException)
         {
             AiStatusText.Text = "已经停下。下面这些是停之前整理出来的，可以先挑几组应用。";
-            ShowPlan(App.Services.GetRequiredService<SettingsStore>().LoadAiPlan());
+            ShowPlan(PendingPlan());
         }
         catch (Exception ex)
         {
@@ -227,6 +231,9 @@ public sealed partial class SettingsPage
             : $"整理出 {outcome.Plan.ItemCount} 条建议（问的是 {outcome.AskedItems} 条）";
         if (outcome.MissingItems > 0) text += $"，{outcome.MissingItems} 条模型没答";
         if (outcome.UnknownOrdinals > 0) text += $"，丢掉 {outcome.UnknownOrdinals} 个对不上号的编号";
+        if (outcome.DroppedTags > 0)
+            text += $"，砍掉 {outcome.DroppedTags} 个只挂在 1 条上的标签"
+                + (outcome.DroppedItems > 0 ? $"（{outcome.DroppedItems} 条因此没有建议）" : string.Empty);
         if (outcome.StoppedBatches > 0) text += $"，{outcome.StoppedBatches} 批没问（已停止）";
         if (outcome.FailedBatches > 0)
             text += $"，{outcome.FailedBatches} 批没成功" + (outcome.FirstError is { } err ? $"（{err}）" : string.Empty);
@@ -250,7 +257,7 @@ public sealed partial class SettingsPage
     }
 
     private void AiResume_Click(object sender, RoutedEventArgs e)
-        => ShowPlan(App.Services.GetRequiredService<SettingsStore>().LoadAiPlan());
+        => ShowPlan(PendingPlan());
 
     private async void AiApplyAll_Click(object sender, RoutedEventArgs e) => await ApplyAsync(_aiPlan, "全部");
 
@@ -279,7 +286,7 @@ public sealed partial class SettingsPage
             var appliedIds = plan.Proposals.Select(proposal => proposal.Id).ToHashSet();
             ShowPlan(new ClassifyPlan(
                 _aiPlan.Proposals.Where(proposal => !appliedIds.Contains(proposal.Id)).ToList(), _aiPlan.CreatedAt));
-            App.Services.GetRequiredService<SettingsStore>().SaveAiPlan(_aiPlan);
+            App.Services.GetRequiredService<AiClassifyService>().SavePending(_aiPlan);
             AiStatusText.Text = applied > 0
                 ? $"已把{label}的标签写进库：{applied} 条。"
                 : $"{label}的标签其实都已经有了，没有需要新加的。";
@@ -299,7 +306,7 @@ public sealed partial class SettingsPage
     {
         if (sender is not Button { Tag: AiGroupRow row }) return;
         ShowPlan(_aiPlan.WithoutGroup(row.Group));
-        App.Services.GetRequiredService<SettingsStore>().SaveAiPlan(_aiPlan);
+        App.Services.GetRequiredService<AiClassifyService>().SavePending(_aiPlan);
         AiStatusText.Text = _aiPlan.IsEmpty
             ? "这一组不要了。剩下的预览已清空。"
             : $"这一组不要了（{row.Group.Ids.Count} 条），还剩 {_aiPlan.ItemCount} 条。";

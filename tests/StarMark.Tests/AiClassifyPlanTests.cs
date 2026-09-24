@@ -113,4 +113,79 @@ public sealed class AiClassifyPlanTests
         var plan = new ClassifyPlan(new[] { P(1, "前端", "工具"), P(2, "前端") }, DateTimeOffset.UtcNow);
         Assert.Equal(new[] { "前端", "工具" }, plan.AllTags());
     }
+    // ────────── 不成类的标签（批次 QA-1：用户要消灭的就是"一个标签只有一条"）──────────────────
+
+    /// <summary>整个方案里只挂上一条条目的标签不算分类：砍掉，连同因此一个标签都不剩的那条。
+    /// <b>不砍的话界面上就是几百个各挂一条的标签</b>——用户要的"分类"变成另一种脏。</summary>
+    [Fact]
+    public void ATagOnASingleItemIsNotAClassification()
+    {
+        var plan = new ClassifyPlan(new[]
+        {
+            P(1, "前端", "自研框架X"),
+            P(2, "前端"),
+            P(3, "只此一条的专有词"),
+        }, DateTimeOffset.UtcNow);
+
+        var pruned = plan.WithoutSingletonTags();
+
+        Assert.Equal(new long[] { 1, 2 }, pruned.Plan.Proposals.Select(proposal => proposal.Id).ToArray());
+        Assert.Equal("前端", pruned.Plan.Proposals[0].Tags.Single());     // 只砍不够格的那个，不是整条丢掉
+        Assert.Equal(2, pruned.DroppedTags.Count);
+        Assert.Contains("自研框架X", pruned.DroppedTags);
+        Assert.DoesNotContain("前端", pruned.DroppedTags);
+        Assert.Equal(1, pruned.DroppedItems);                             // 第 3 条标签全被砍 ⇒ 整条不提
+    }
+
+    /// <summary>计数按<b>整个方案</b>而不是按批：同一个词在两批里各出现一次，合起来两条，够格留下。
+    /// 按批砍会把真分类砍掉，而且"哪批算一条"这种事在界面上完全看不出来。</summary>
+    [Fact]
+    public void SingletonCountingIsPerPlanNotPerBatch()
+    {
+        var pruned = new ClassifyPlan(new[] { P(1, "前端"), P(2, "前端") }, DateTimeOffset.UtcNow)
+            .WithoutSingletonTags();
+        Assert.Equal(2, pruned.Plan.ItemCount);
+        Assert.Empty(pruned.DroppedTags);
+        Assert.Equal(0, pruned.DroppedItems);
+    }
+
+    /// <summary>大小写不同的同一个词算一个标签的两次，否则 "FrontEnd" + "frontend" 各挂一条会双双被砍。</summary>
+    [Fact]
+    public void CaseVariantsOfOneTagAreCountedTogether()
+        => Assert.False(new ClassifyPlan(new[] { P(1, "FrontEnd"), P(2, "frontend") }, DateTimeOffset.UtcNow)
+            .WithoutSingletonTags().Plan.IsEmpty);
+
+    /// <summary>门槛调到 1 等于不砍；<b>传 0 或负数不能变成"把所有标签都砍光"</b>（那是静默清空方案）。</summary>
+    [Fact]
+    public void AFloorOfOneKeepsEverythingAndNonsenseFloorsAreBounded()
+    {
+        var plan = new ClassifyPlan(new[] { P(1, "独占词") }, DateTimeOffset.UtcNow);
+        Assert.Equal(1, plan.WithoutSingletonTags(1).Plan.ItemCount);
+        Assert.Empty(plan.WithoutSingletonTags(1).DroppedTags);
+        Assert.Equal(1, plan.WithoutSingletonTags(0).Plan.ItemCount);
+        Assert.Equal(1, plan.WithoutSingletonTags(-7).Plan.ItemCount);
+    }
+
+    /// <summary>硬底线是 2（提示词里要求 3）：<b>程序只确实只挂一条的那种砍，两三条的小组留给用户判断</b>——
+    /// 替他砍掉真分类比留下一个偏小的组更难发现。</summary>
+    [Fact]
+    public void TwoItemGroupsSurviveTheHardFloor()
+    {
+        Assert.Equal(2, ClassifyPlan.MinItemsPerTag);
+        var pruned = new ClassifyPlan(new[] { P(1, "前端"), P(2, "前端") }, DateTimeOffset.UtcNow)
+            .WithoutSingletonTags();
+        Assert.False(pruned.Plan.IsEmpty);
+        // 三条才算类的那一档也要真的能开（提示词改口径时这里先红）
+        Assert.True(new ClassifyPlan(new[] { P(1, "前端"), P(2, "前端") }, DateTimeOffset.UtcNow)
+            .WithoutSingletonTags(3).Plan.IsEmpty);
+    }
+
+    /// <summary>没有专有词时这一刀必须<b>原样返回同一份方案</b>（不是复制一份新的）：
+    /// 否则每次读档都白分配一遍列表，也让"砍没砍"这件事变得无从对照。</summary>
+    [Fact]
+    public void PruningACleanPlanIsANoOp()
+    {
+        var plan = new ClassifyPlan(new[] { P(1, "前端"), P(2, "前端") }, DateTimeOffset.UtcNow);
+        Assert.Same(plan, plan.WithoutSingletonTags().Plan);
+    }
 }
