@@ -521,6 +521,144 @@ public sealed class ItemRepository : IItemRepository
         DataChangeHub.Notify();
     }
 
+    /// <summary>
+    /// 标签编辑器的唯一写入出口：读现状 → 算差集 → 一次事务里删/建/关联 → 重建索引一次 → 记一笔活动 → 通知一次。
+    /// <para>
+    /// <b>search_text 只在最终状态下重建一次</b>是这里比逐条调用更重要的差别：
+    /// 逐条调用时中间每次重建用的都是半成品标签集，最后一次才是对的——
+    /// 中途被查询命中就会拿到一个"少了刚加的标签"的索引。
+    /// </para>
+    /// </summary>
+    public async Task<TagEditResult> SetItemTagsAsync(long itemId, IReadOnlyList<string> desired, CancellationToken ct = default)
+    {
+        if (itemId <= 0) return TagEditResult.Unchanged;
+
+        // 目标集合先收口（去空白、去重、大小写不敏感）：编辑器那边已经做一次，这里再做一次是因为
+        // 存档/撤销/批量路径都可能把同一个名字给两遍，差集算错会写出重复关联。
+        var target = new List<string>();
+        if (desired is not null)
+        {
+            foreach (var raw in desired)
+            {
+                if (string.IsNullOrWhiteSpace(raw)) continue;
+                var name = raw.Trim();
+                if (!target.Any(has => string.Equals(has, name, StringComparison.OrdinalIgnoreCase))) target.Add(name);
+            }
+        }
+
+        using var conn = _factory.Open();
+        using var tx = conn.BeginTransaction();
+
+        var row = await ReadItemShellAsync(conn, tx, itemId, ct);
+        if (row is null) return TagEditResult.Unchanged;      // 条目已经不在了：编辑动作没有落点
+
+        var current = await ReadTagNamesAsync(conn, tx, itemId, ct);
+        var currentSet = new HashSet<string>(current, StringComparer.OrdinalIgnoreCase);
+        var targetSet = new HashSet<string>(target, StringComparer.OrdinalIgnoreCase);
+
+        var removed = current.Where(name => !targetSet.Contains(name)).ToList();
+        var added = target.Where(name => !currentSet.Contains(name)).ToList();
+        if (removed.Count == 0 && added.Count == 0)
+            return new TagEditResult(false, 0, 0, current);   // 原样保存：不发写语句、不记活动
+
+        if (removed.Count > 0) await DetachTagsAsync(conn, tx, itemId, removed, ct);
+        if (added.Count > 0) await AttachTagsAsync(conn, tx, itemId, added, ct);
+
+        var finalTags = targetSet.Count == 0 ? new List<string>() : target;
+        await WriteSearchTextAsync(conn, itemId, row.Value.Title, row.Value.Description, row.Value.Notes, finalTags, ct);
+        await LogActivityOnConnection(conn, ActivityKind.ItemModify,
+            row.Value.Source + ":" + row.Value.SourceId, row.Value.Title, row.Value.Uri, ct);
+
+        await tx.CommitAsync(ct);
+        DataChangeHub.Notify();
+        return new TagEditResult(true, added.Count, removed.Count, finalTags);
+    }
+
+    /// <summary>条目上那几个"重建索引/记活动"要用的字段，一次读回。</summary>
+    private static async Task<(string Title, string? Description, string? Notes, string? Uri, string Source, string SourceId)?>
+        ReadItemShellAsync(SqliteConnection conn, SqliteTransaction tx, long itemId, CancellationToken ct)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "SELECT title, description, notes, uri, source, source_id FROM items WHERE id = @id;";
+        cmd.Parameters.AddWithValue("@id", itemId);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return null;
+        return (
+            reader.IsDBNull(0) ? string.Empty : reader.GetString(0),
+            reader.IsDBNull(1) ? null : reader.GetString(1),
+            reader.IsDBNull(2) ? null : reader.GetString(2),
+            reader.IsDBNull(3) ? null : reader.GetString(3),
+            reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+            reader.IsDBNull(5) ? string.Empty : reader.GetString(5));
+    }
+
+    private static async Task<List<string>> ReadTagNamesAsync(
+        SqliteConnection conn, SqliteTransaction tx, long itemId, CancellationToken ct)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = @"
+            SELECT t.name FROM item_tags it JOIN tags t ON t.id = it.tag_id
+            WHERE it.item_id = @id ORDER BY t.name;";
+        cmd.Parameters.AddWithValue("@id", itemId);
+        var names = new List<string>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) names.Add(reader.GetString(0));
+        return names;
+    }
+
+    /// <summary>解绑一批标签。<b>只删关联、不删 tags 行</b>：与 <see cref="RemoveTagAsync"/> 同口径
+    /// （全库没有 DELETE FROM tags，孤儿由 GetAllTagsAsync 的 INNER JOIN 挡掉）。</summary>
+    private static async Task DetachTagsAsync(
+        SqliteConnection conn, SqliteTransaction tx, long itemId, IReadOnlyList<string> names, CancellationToken ct)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = $@"
+            DELETE FROM item_tags
+            WHERE item_id = @item
+              AND tag_id IN (SELECT id FROM tags WHERE name COLLATE NOCASE IN ({InParams(names.ToList(), cmd, "dn")}));";
+        cmd.Parameters.AddWithValue("@item", itemId);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>挂上一批标签：名字已存在的复用同一行（NOCASE），缺的才建。</summary>
+    private static async Task AttachTagsAsync(
+        SqliteConnection conn, SqliteTransaction tx, long itemId, IReadOnlyList<string> names, CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        foreach (var name in names)
+        {
+            long tagId;
+            using (var find = conn.CreateCommand())
+            {
+                find.Transaction = tx;
+                find.CommandText = "SELECT id FROM tags WHERE name = @name COLLATE NOCASE;";
+                find.Parameters.AddWithValue("@name", name);
+                var existing = await find.ExecuteScalarAsync(ct);
+                if (existing is long known) tagId = known;
+                else
+                {
+                    using var create = conn.CreateCommand();
+                    create.Transaction = tx;
+                    create.CommandText = "INSERT INTO tags(name, created_at) VALUES(@name, @now) RETURNING id;";
+                    create.Parameters.AddWithValue("@name", name);
+                    create.Parameters.AddWithValue("@now", now);
+                    tagId = (long)(await create.ExecuteScalarAsync(ct))!;
+                }
+            }
+
+            using var link = conn.CreateCommand();
+            link.Transaction = tx;
+            link.CommandText = "INSERT OR IGNORE INTO item_tags(item_id, tag_id, created_at) VALUES(@item, @tag, @now);";
+            link.Parameters.AddWithValue("@item", itemId);
+            link.Parameters.AddWithValue("@tag", tagId);
+            link.Parameters.AddWithValue("@now", now);
+            await link.ExecuteNonQueryAsync(ct);
+        }
+    }
+
     // ===== 笔记 =====
 
     public async Task<string?> GetNoteAsync(long itemId, CancellationToken ct)

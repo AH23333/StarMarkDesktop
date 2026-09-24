@@ -162,6 +162,24 @@ public interface IItemRepository
     /// 因此不跑每行一次的 GROUP_CONCAT 子查询。</para>
     /// </summary>
     Task<IReadOnlyList<Item>> GetUntaggedAsync(IReadOnlyList<ItemType> types, int limit, CancellationToken ct = default);
+
+    /// <summary>
+    /// 把某个条目的标签集合<b>整体设成</b> <paramref name="desired"/>（差集写入），一次连接、一次事务、一次通知。
+    /// <para>
+    /// 为什么要有这个方法：标签编辑器是"改一次标签、库里跑好几趟"最典型的地方——
+    /// 逐条 <c>AddTagAsync</c>/<c>RemoveTagAsync</c> 时每个标签各开一次库、各重建一次 search_text、
+    /// 各通知一次组件；加五个删三个就是十六次往返，而其中每次"重建索引"用的都是半成品状态。
+    /// 中间态本身还是个正确性问题：<b>search_text 会被按最终的标签集重建一次才对</b>。
+    /// </para>
+    /// <para>没有净变化时不写不通知不记活动（原样保存不该在时间线里留下"我改过"）。</para>
+    /// </summary>
+    Task<TagEditResult> SetItemTagsAsync(long itemId, IReadOnlyList<string> desired, CancellationToken ct = default);
+}
+
+/// <summary>一次标签编辑的结果。<b>把"有没有变"回报清楚，界面才知道要不要刷新</b>。</summary>
+public sealed record TagEditResult(bool Changed, int Added, int Removed, IReadOnlyList<string> FinalTags)
+{
+    public static readonly TagEditResult Unchanged = new(false, 0, 0, Array.Empty<string>());
 }
 
 /// <summary>"给这个条目追加这些标签"。<see cref="IItemRepository.TagItemsAsync"/> 的入参。</summary>

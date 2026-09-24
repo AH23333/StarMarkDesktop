@@ -231,29 +231,17 @@ public static class ItemCardActions
 
             if (result != CenteredDialog.HostedDialogResult.Committed) return;
 
-            // 差集写库：只删真正减少的、只加真正新增的。
-            // 原实现是「全删再全加」的 N+1 往返，标签多时可感知卡顿，且会 churn tags 表。
+            // 差集、索引重建、活动流水、组件通知全部交给仓储一次做完（PA-3）。
+            // 逐条 Add/RemoveTagAsync 的写法里，"加五个删三个"要开十六次库，
+            // 而且中间每次重建 search_text 用的都是半成品标签集——中途来一次搜索就会少命中。
             var desired = editor.Tags.ToList();
-            var current = await repo.GetTagsForItemAsync(vm.Id, CancellationToken.None);
 
-            var removed = current.Where(c => !desired.Contains(c, StringComparer.OrdinalIgnoreCase)).ToList();
-            var added = desired.Where(d => !current.Contains(d, StringComparer.OrdinalIgnoreCase)).ToList();
+            // 虚拟条目（Everything，Id=0）无主库行可挂标签：想打标签就得先按路径登记拿真实 Id。
+            // 判据从"有净改动"变成"清单非空"是等价的：虚拟条目在库里没有行，现状必然是空集。
+            if (vm.Id == 0 && desired.Count > 0 && await EnsureRecordedAsync(vm.GetItem()) == 0) return;
 
-            // 虚拟条目（Everything，Id=0）无主库行可挂标签：有净改动时先按路径登记拿真实 Id，再写关联。
-            if (vm.Id == 0 && (added.Count > 0 || removed.Count > 0) && await EnsureRecordedAsync(vm.GetItem()) == 0) return;
-
-            foreach (var tag in removed)
-                await repo.RemoveTagAsync(vm.Id, tag, CancellationToken.None);
-            foreach (var tag in added)
-                await repo.AddTagAsync(vm.Id, tag, CancellationToken.None);
-
-            if (desired.Count > 0 || current.Count > 0)
-                vm.ApplyTags(desired);
-
-            // 只有净增删才记「修改」；原样保存不写活动流（#51）。
-            if (removed.Count > 0 || added.Count > 0)
-                await LogModify(vm);
-
+            var edit = await repo.SetItemTagsAsync(vm.Id, desired, CancellationToken.None);
+            vm.ApplyTags(edit.FinalTags.ToArray());
             ItemTagsChanged?.Invoke();
         }
         catch (Exception ex)
@@ -326,17 +314,15 @@ public static class ItemCardActions
             if (desired.Count == 0) return;
 
             var current = await repo.GetTagsForItemAsync(vm.Id, CancellationToken.None);
-            var toAdd = desired.Where(d => !current.Contains(d, StringComparer.OrdinalIgnoreCase)).ToList();
 
-            // 虚拟条目（Everything，Id=0）无主库行可挂标签：确有新增时先按路径登记拿真实 Id。
-            if (vm.Id == 0 && toAdd.Count > 0 && await EnsureRecordedAsync(vm.GetItem()) == 0) return;
+            // 虚拟条目（Everything，Id=0）无主库行可挂标签：先按路径登记拿真实 Id。
+            if (vm.Id == 0 && await EnsureRecordedAsync(vm.GetItem()) == 0) return;
 
-            foreach (var tag in toAdd)
-                await repo.AddTagAsync(vm.Id, tag, CancellationToken.None);
+            // 差集与"要不要记活动"都在 TagItemsAsync 里判（PA-1）：这里再算一遍就是第二套判据，
+            // 而两处判据一旦分叉，就会出现"卡片上写着加了、库里其实没加"。
+            await repo.TagItemsAsync(new[] { new ItemTagAssignment(vm.Id, desired) }, CancellationToken.None);
 
             vm.ApplyTags(current.Concat(desired).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
-            if (toAdd.Count > 0)
-                await LogModify(vm);
             ItemTagsChanged?.Invoke();
         }
         catch (Exception ex)
