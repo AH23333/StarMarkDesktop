@@ -76,6 +76,60 @@ public sealed class RssRowPolicyTests
 
     // ────────── 收藏落点：文件夹 ──────────
 
+    /// <summary>候选行<b>自带</b>落点：tooltip 上那个文件夹与收藏时真正写进去的那一层，
+    /// 必须是同一份数据算出来的两处读法。否则"提示说 A，实际存进 B"这种错没有任何东西能抓到。</summary>
+    [Fact]
+    public void CandidateRowCarriesItsOwnLandingFolder()
+    {
+        var row = RssRowDraft.ForCandidate(Entry(sourceName: "开源中国"));
+
+        Assert.Equal(new[] { "RSS订阅", "开源中国" }, FolderPathUtil.BookmarkSegments(row));
+        Assert.Contains("RSS订阅 / 开源中国", ItemCardPolicy.RssCollectTip(false, RssFolders.DisplayPath("开源中国")));
+    }
+
+    /// <summary>收藏写库的那一行：与候选行只差"进库"这件事（来源换成本地、补时间戳），
+    /// 内容一个字段都不许多写或漏写——两份各写字段的形状，正是热榜那边出现过的"卡片一个标题、库里另一个"。</summary>
+    [Fact]
+    public void CollectedRowIsTheCandidateRowTurnedIntoALocalBookmark()
+    {
+        var candidate = RssRowDraft.ForCandidate(Entry(sourceName: "开源中国"));
+        var stored = RssRowDraft.ForCollect(candidate, 1_700_000_000);
+
+        Assert.Equal(ItemSources.Local, stored.Source);            // 进库后是普通书签，不该再标着 rss
+        Assert.False(ItemCardPolicy.IsRssCandidate(stored.Source));
+        Assert.Equal(0, stored.Id);                                // 由仓储按 (source, source_id) 判定新增还是合并
+        Assert.Equal(candidate.SourceId, stored.SourceId);
+        Assert.Equal(candidate.Uri, stored.Uri);
+        Assert.Equal(candidate.Title, stored.Title);
+        Assert.Equal(candidate.Description, stored.Description);
+        Assert.Equal(candidate.ExtraJson, stored.ExtraJson);       // 落点随行带过来，不在收藏那一步另算
+        Assert.Equal(1_700_000_000, stored.CreatedAt);
+        Assert.Equal(1_700_000_000, stored.UpdatedAt);
+        Assert.Equal(new[] { "RSS订阅", "开源中国" }, FolderPathUtil.BookmarkSegments(stored));
+    }
+
+    [Fact]
+    public void BothCandidateFamiliesGetTheCollectSlotButWordedPerFamily()
+    {
+        Assert.True(ItemCardPolicy.ShowsCollect(isTrendingRepo: true, isRssCandidate: false));
+        Assert.True(ItemCardPolicy.ShowsCollect(false, true));
+        Assert.False(ItemCardPolicy.ShowsCollect(false, false));   // 库里的行没有"再收藏一次"
+
+        // 同一个按钮位，两类行两套文案：混用就会出现"RSS 行上写着 GitHub 的落点"
+        Assert.Equal("收藏到文件夹", ItemCardPolicy.CollectLabelFor(true, false));
+        Assert.Equal("收进收藏", ItemCardPolicy.CollectLabelFor(false, false));
+        Assert.Contains("RSS订阅", ItemCardPolicy.CollectTipFor(true, false, "RSS订阅 / 开源中国"));
+        Assert.Contains("GitHub", ItemCardPolicy.CollectTipFor(false, false, "RSS订阅 / 开源中国"));
+    }
+
+    /// <summary>候选行没有"本机更新时间"：<c>UpdatedAt</c> 缺省 0，不关掉就会在卡片右上角印出 1970-01-01。</summary>
+    [Fact]
+    public void CandidateRowsShowNoLocalUpdateTimeLine()
+    {
+        Assert.False(ItemCardPolicy.ShowsTimeAndStarsLines(isTrendingRepo: false, isRssCandidate: true));
+        Assert.True(ItemCardPolicy.ShowsTimeAndStarsLines(false, false));
+    }
+
     [Fact]
     public void CollectingGoesIntoOneFolderPerSourceUnderTheRssRoot()
     {

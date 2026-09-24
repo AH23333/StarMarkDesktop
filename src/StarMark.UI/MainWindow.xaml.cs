@@ -98,6 +98,7 @@ public sealed partial class MainWindow : Window
 
         // 「热榜」是可选浏览面：开关关着时导航项本身不显示（用户裁决），设置页改动即时生效、不需要重启。
         ApplyTrendingNavVisibility(_settings.LoadTrendingEnabled());
+        ApplyRssNavVisibility(_settings.LoadRssEnabled());
 
         // 启动时恢复已启用的桌面组件
         DispatcherQueue.TryEnqueue(async () =>
@@ -636,6 +637,7 @@ public sealed partial class MainWindow : Window
             "hidden" => typeof(HiddenPage),
             "clipboard" => typeof(ClipboardPage),
             "trending" => typeof(TrendingPage),
+            "rss" => typeof(RssPage),
             "snapshot" => typeof(SnapshotPage),
             "settings" => typeof(SettingsPage),
             _ => typeof(SearchPage),
@@ -652,6 +654,16 @@ public sealed partial class MainWindow : Window
     {
         NavTrendingItem.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
         if (!enabled && ViewModel.CurrentPageTag == "trending") NavigateTo("tree");
+    }
+
+    /// <summary>
+    /// 按 RSS 总开关即时收放导航栏的「RSS」项（与 <see cref="ApplyTrendingNavVisibility"/> 同一形状：
+    /// 关掉的那一刻若正停在这一页就退回文件夹页——入口已经没了、屏幕上却还留着它的内容，是"程序坏了"的典型观感）。
+    /// </summary>
+    public void ApplyRssNavVisibility(bool enabled)
+    {
+        NavRssItem.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        if (!enabled && ViewModel.CurrentPageTag == "rss") NavigateTo("tree");
     }
 
     // ===== 搜索框防抖 =====

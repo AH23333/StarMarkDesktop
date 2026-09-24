@@ -204,6 +204,9 @@ public partial class App : Application
         // 热榜页 VM 用单例：页面每次进入都重读设置与缓存，抓取结果与两个动作的回填状态留在这一份上，
         // 切走再回来不必重抓（它同时是 TrendingItemActions.NoticeRaised 的唯一订阅者， transient 会累积委托）。
         services.AddSingleton<TrendingPageViewModel>();
+        // RSS 页 VM 同样是单例：它持有这一轮抓到的条目，并且是 RssItemActions.NoticeRaised 的唯一订阅者
+        // （transient 会让每次进页面都多挂一个委托，回报就会重复）。
+        services.AddSingleton<RssPageViewModel>();
         services.AddTransient<SettingsPageViewModel>();
 
         Services = services.BuildServiceProvider();

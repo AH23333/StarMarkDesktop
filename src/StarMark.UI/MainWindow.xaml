@@ -208,6 +208,17 @@
                         <FontIcon Glyph="&#xE735;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
+                <!--
+                    RSS 订阅：总开关关着时这一项整个不显示（与热榜同一口径——可选的浏览面留一个点进去
+                    只会说"未开启"的项，更像故障）。开关从没表过态时按"有没有启用的源"决定，判据在 RssActivation。
+                    图标用 E8A1（一张带文字行的卡片）：这个码位在 Segoe Fluent Icons 与 Segoe MDL2 Assets
+                    里都实测存在且形状一致（两套字体分别渲染比对过）——缺字会显示成方块，而方块没有任何断言能抓到。
+                -->
+                <NavigationViewItem x:Name="NavRssItem" Content="RSS" Tag="rss">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8A1;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
             </NavigationView.MenuItems>
         </NavigationView>
 

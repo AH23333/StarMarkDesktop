@@ -98,6 +98,16 @@ public interface IItemRepository
     /// <summary>按来源读取条目（本地待办/随记用）。type 可限定；按更新时间倒序。</summary>
     Task<IReadOnlyList<Item>> GetBySourceAsync(string source, ItemType? type = null, int limit = 1000, CancellationToken ct = default);
 
+    /// <summary>
+    /// 列出"由 RSS 收藏动作写进库"的那些链接（一次连接、只读 <c>source_id</c> 一列、<b>不带行数窗口</b>）。
+    /// <para>为什么不用 <see cref="GetBySourceAsync"/> 再在内存里筛：那个调用有 <c>limit</c>（默认 1000），
+    /// 落在窗口外的已收藏条目会被当成"没收藏过"，于是 RSS 页上那颗按钮说假话——
+    /// <b>少报比报错更难被发现</b>（批次 PA 的同一教训：界面报"没有"，用户就信了"没有"）。</para>
+    /// <para>作用域同样写进 SQL：<c>source='local'</c> + <c>type=bookmark</c> + 前缀，
+    /// 只认这一族 <c>source_id</c>，别处生产的同 URL 书签不会被算进来。</para>
+    /// </summary>
+    Task<IReadOnlyList<string>> GetCollectedRssLinksAsync(CancellationToken ct = default);
+
     /// <summary>按来源 + source_id 删除一条本地条目。</summary>
     Task DeleteBySourceIdAsync(string source, string sourceId, CancellationToken ct = default);
 

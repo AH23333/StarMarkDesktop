@@ -72,7 +72,17 @@ internal static class ItemContextMenu
             flyout.Items.Add(Item("打开所在位置", (_, _) => ItemCardActions.OpenLocation(vm)));
 
         flyout.Items.Add(Item(vm.CopyMenuText, (_, _) => ItemCardActions.CopyUri(vm)));
-        flyout.Items.Add(Item("预览", async (_, _) => await PreviewAsync(vm, root)));
+        // 预览与卡片上那颗 🔎 读同一个判据（RSS 候选不给：点条目直接跳文章，正文解析暂不做）
+        if (vm.ShowsPreview)
+            flyout.Items.Add(Item("预览", async (_, _) => await PreviewAsync(vm, root)));
+
+        // RSS 候选行（同样未入库）：这一页按用户裁决不提供搜索/排序，右键因此只是主窗右键的一个子集——
+        // "按 URI 的动作" + 收藏到文件夹。置顶/笔记/标签/隐藏一律不出现（会经按需登记把一次性候选灌进 items）。
+        if (vm.IsRssCandidate)
+        {
+            flyout.Items.Add(Item(vm.CollectLabel, (_, _) => _ = ItemCollectActions.ToggleAsync(vm)));
+            return flyout;
+        }
 
         // 热榜候选行（未入库虚拟条目）：与主窗卡片逐项一致，只给"按 URI 的动作"+ ⭐Star / 🔖收进收藏。
         // 下面那些会写主库的入口（记录到本地 / 置顶 / 笔记 / 标签 / 隐藏）一律不出现——
@@ -80,7 +90,7 @@ internal static class ItemContextMenu
         if (vm.IsTrendingRepo)
         {
             flyout.Items.Add(Item(vm.StarLabel, (_, _) => _ = TrendingItemActions.ToggleStarAsync(vm)));
-            flyout.Items.Add(Item(vm.CollectLabel, (_, _) => _ = TrendingItemActions.ToggleCollectAsync(vm)));
+            flyout.Items.Add(Item(vm.CollectLabel, (_, _) => _ = ItemCollectActions.ToggleAsync(vm)));
             return flyout;
         }
 

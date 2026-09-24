@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Globalization;
+using System.Linq;
 
 namespace StarMark.Abstractions.Feed;
 
@@ -34,6 +35,39 @@ public static class RssRowDraft
             Subtitle = PublishedText(entry),
             Uri = link,
             Description = string.IsNullOrWhiteSpace(entry.Summary) ? null : entry.Summary.Trim(),
+            // 落点随行携带：收藏只是把这一行的 Source 换成本地，文件夹层级不再另算一处，
+            // 于是"提示里说的那个文件夹"与"真正写进去的那个文件夹"不可能是两个东西。
+            ExtraJson = BookmarkMetaJson(entry.SourceName),
         };
     }
+
+    /// <summary>
+    /// 点「收藏到文件夹」时真正写进库的那一行：由候选行<b>原样搬过来</b>，只改三件事——
+    /// <c>Source</c> 从 <see cref="ItemSources.Rss"/> 换成 <see cref="ItemSources.Local"/>
+    /// （进库后它就是本机书签，若仍标着 rss，<see cref="ItemCardPolicy"/> 会把它的标签/置顶全关掉，
+    /// 用户刚收进来的那条反而成了二等公民）、补上两个时间戳、<c>Id</c> 归零交给仓储判定。
+    /// <para>刻意不做成"另起一份形状"：两份各写字段的结果就是热榜那边已经出现过的那类偏差——
+    /// 卡片上显示一个标题，收进库变成另一个。</para>
+    /// </summary>
+    public static Item ForCollect(Item candidate, long nowUnixSeconds) => new()
+    {
+        Id = 0,
+        Type = ItemType.Bookmark,
+        Source = ItemSources.Local,
+        SourceId = candidate.SourceId,
+        Title = candidate.Title,
+        Subtitle = candidate.Subtitle,
+        Uri = candidate.Uri,
+        Description = candidate.Description,
+        ExtraJson = candidate.ExtraJson,
+        CreatedAt = nowUnixSeconds,
+        UpdatedAt = nowUnixSeconds,
+    };
+
+    /// <summary>收藏落点写成书签元信息（<c>FolderPaths</c> 数组每个元素即一级，见 <c>FolderPathUtil.BookmarkSegments</c>）。</summary>
+    private static string BookmarkMetaJson(string? sourceName)
+        => System.Text.Json.JsonSerializer.Serialize(new BookmarkMeta
+        {
+            FolderPaths = RssFolders.PathFor(sourceName).ToList(),
+        });
 }

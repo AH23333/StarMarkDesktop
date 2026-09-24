@@ -124,7 +124,7 @@ public sealed partial class ItemCard : UserControl
         if (ViewModel != null) CopyLinkRequested?.Invoke(this, ViewModel);
     }
 
-    /// <summary>热榜行的 ⭐Star（图标按钮与右键菜单同一实现）。动作结果写在卡片的 LastTrendingNotice 上，宿主负责显示。</summary>
+    /// <summary>热榜行的 ⭐Star（图标按钮与右键菜单同一实现）。动作结果由宿主订阅 NoticeRaised 显示。</summary>
     private async void Star_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel is { } vm) await TrendingItemActions.ToggleStarAsync(vm);
@@ -133,7 +133,8 @@ public sealed partial class ItemCard : UserControl
     /// <summary>热榜行的 🔖收进收藏 / 移出收藏（本机书签，与 Star 是两个不同落点）。</summary>
     private async void Collect_Click(object sender, RoutedEventArgs e)
     {
-        if (ViewModel is { } vm) await TrendingItemActions.ToggleCollectAsync(vm);
+        // 分流只在这一处（ItemCollectActions）：热榜的 🔖 与 RSS 的「收藏到文件夹」共用同一个按钮位
+        if (ViewModel is { } vm) await ItemCollectActions.ToggleAsync(vm);
     }
 
     private void Menu_Star_Click(object sender, RoutedEventArgs e) => Star_Click(sender, e);

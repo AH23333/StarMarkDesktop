@@ -35,6 +35,22 @@ public static class ItemCardPolicy
     public static bool ShowsTrendingActions(bool isTrendingRepo) => isTrendingRepo;
 
     /// <summary>
+    /// 是否显示「收藏」这一项：热榜候选与 RSS 候选<b>共用同一个按钮位</b>，但落点与文案各不相同
+    /// （热榜收进本机书签；RSS 收进"RSS订阅 / 源名"那一层，见 <see cref="RssCollectTip"/>）。
+    /// <para>刻意只留一个判据：两处各写一遍的话，加一类候选就会只补上一处，另一处变成一个
+    /// 点了没有对应动作的死项。Star 不在这里——RSS 没有远端可 Star。</para>
+    /// </summary>
+    public static bool ShowsCollect(bool isTrendingRepo, bool isRssCandidate) => isTrendingRepo || isRssCandidate;
+
+    /// <summary>收藏动作的文字（按行种类分流）。</summary>
+    public static string CollectLabelFor(bool isRssCandidate, bool collected)
+        => isRssCandidate ? RssCollectLabel(collected) : CollectLabel(collected);
+
+    /// <summary>收藏动作的 tooltip（按行种类分流）。RSS 那一份要说清落到哪个文件夹，故多带一个参数。</summary>
+    public static string CollectTipFor(bool isRssCandidate, bool collected, string folderPath)
+        => isRssCandidate ? RssCollectTip(collected, folderPath) : CollectTip(collected);
+
+    /// <summary>
     /// 是否提供「发送到桌面 · 快捷启动」。它写的是<b>组件配置</b>而不是主库，所以 <see cref="ShowsLibraryActions"/>
     /// 没管它，但两类合成行同样不该出现：启动器行本来就在快捷启动里（发过去＝自己给自己再加一条），
     /// 热榜候选则会把"顺手一发"变成一个长期存在的入口——用户只是想看看这个仓库。
@@ -78,8 +94,11 @@ public static class ItemCardPolicy
     /// <c>1970-01-01</c>——把一个缺值显示成一个看起来完全真实的日期（与"不知道不许画成 0"同一条口径）。</para>
     /// <para>② 星数已经和语言、本期新增一起写在副标题里了（组件只读副标题，必须带），
     /// 卡片再单独一行 ★ 就是同一件事说两遍。</para>
+    /// <para>RSS 候选同理关掉：它的时间是<b>源给的发布时间</b>，已经写在副标题里，而 <c>UpdatedAt</c>
+    /// 是"本机更新时间"、对一条没进过库的候选根本不存在——留着就会在卡片右上角印出一个 1970-01-01。</para>
     /// </summary>
-    public static bool ShowsTimeAndStarsLines(bool isTrendingRepo) => !isTrendingRepo;
+    public static bool ShowsTimeAndStarsLines(bool isTrendingRepo, bool isRssCandidate = false)
+        => !isTrendingRepo && !isRssCandidate;
 
     public static string CollectLabel(bool collected) => collected ? "移出收藏" : "收进收藏";
     public static string CollectTip(bool collected)

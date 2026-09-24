@@ -224,6 +224,28 @@ public partial class SettingsPageViewModel : ObservableObject
         TrendingStatus = TrendingEnabled
             ? "已开启：导航栏「剪贴板」右侧有「热榜」。热榜本身不需要 Token，只有 Star 按钮需要。"
             : "未开启：不发请求、导航栏也没有「热榜」项。";
+
+        // RSS 总开关：回灌当前判定值（从没表过态时按"有没有启用的源"算，见 RssActivation）。
+        _suppressRssApply = true;
+        RssEnabled = Safe(_settings.LoadRssEnabled, false, "RSS 订阅");
+        _suppressRssApply = false;
+        RssStatus = RssEnabled
+            ? "已开启：导航栏有「RSS」这一栏，每个订阅源是它自己的一个文件夹。这一栏只管来源地址。"
+            : "未开启：导航栏没有「RSS」项，也不会去抓任何地址。添加一个启用中的来源就会自动开启。";
+    }
+
+    /// <summary>
+    /// 源列表改动后重算一次"这一栏算不算开着"，并<b>立刻</b>把导航栏跟上。
+    /// <para>为什么必须由源列表的改动来调它：从没表过态的用户（升级来的、或一个源都没删过的）
+    /// 按「添加」之后，导航栏就该出现「RSS」了——若还等他去翻那个开关，就是凭空多出来的一步。</para>
+    /// <para>用户<b>明确关过</b>时这里不会擅自替他打开：<c>LoadRssEnabled</c> 在有表态时一律以表态为准。</para>
+    /// </summary>
+    public void RefreshRssEnabled()
+    {
+        _suppressRssApply = true;
+        RssEnabled = _settings.LoadRssEnabled();
+        _suppressRssApply = false;
+        App.MainWindow?.ApplyRssNavVisibility(RssEnabled);
     }
 
     // ===== 收藏健康度（P2-6）=====
@@ -339,6 +361,29 @@ public partial class SettingsPageViewModel : ObservableObject
                   + "想临时停一下，去「剪贴板」页点「暂停记录」。"
                 : "开关已打开，但系统剪贴板监听窗口没建起来（原因见日志）——当前仍不会记录任何内容。"
             : "已停止记录。之前存下的历史仍在「剪贴板」页，可在那里一键清空。";
+    }
+
+    // ===== RSS 订阅（批次 RB）=====
+
+    /// <summary>
+    /// RSS 总开关。翻位即持久化并<b>立刻</b>控制导航栏「RSS」项——"关掉之后项还在"就是没做到位，
+    /// 也不需要重启（与 <see cref="OnTrendingEnabledChanged"/> 同一口径）。
+    /// </summary>
+    [ObservableProperty] private bool _rssEnabled;
+
+    [ObservableProperty] private string _rssStatus = string.Empty;
+
+    /// <summary>LoadFromStore 回灌初值期间抑制副作用（否则每次进设置页都会重设一次导航可见性）。</summary>
+    private bool _suppressRssApply;
+
+    partial void OnRssEnabledChanged(bool value)
+    {
+        if (_suppressRssApply) return;
+        _settings.SaveRssEnabled(value);
+        App.MainWindow?.ApplyRssNavVisibility(value);
+        RssStatus = value
+            ? "已开启：导航栏现在有「RSS」这一栏，每个订阅源是它自己的一个文件夹。抓取只在你按「刷新」时发生。"
+            : "已关闭：导航栏的「RSS」项已移除，不再发起任何抓取。已收藏进库的条目不受影响（它们已经是普通书签了）。";
     }
 
     // ===== GitHub 热榜（批次 KG）=====

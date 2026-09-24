@@ -1110,6 +1110,29 @@ public sealed class ItemRepository : IItemRepository
     }
 
     /// <summary>
+    /// 一次连接、只读 <c>source_id</c> 一列、<b>不带 LIMIT</b>：RSS 页要用它把"已经收过的"标出来，
+    /// 而任何行数窗口都会让窗口外的已收藏条目被当成没收藏（按钮说假话，且看起来完全正常）。
+    /// 前缀只允许取自 <c>RssEntryIdentity.BookmarkSourcePrefix</c>，这里不再抄一份字面量。
+    /// </summary>
+    public async Task<IReadOnlyList<string>> GetCollectedRssLinksAsync(CancellationToken ct = default)
+    {
+        var links = new List<string>();
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT source_id FROM items
+            WHERE source = @source AND type = @type AND source_id LIKE @prefix;";
+        cmd.Parameters.AddWithValue("@source", ItemSources.Local);
+        cmd.Parameters.AddWithValue("@type", ItemType.Bookmark.ToString().ToLowerInvariant());
+        // 前缀只含 ASCII 字母、连字符与冒号，不含 LIKE 通配符（% 与 _），故无需转义。
+        cmd.Parameters.AddWithValue("@prefix", StarMark.Abstractions.Feed.RssEntryIdentity.BookmarkSourcePrefix + "%");
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            links.Add(reader.GetString(0)[StarMark.Abstractions.Feed.RssEntryIdentity.BookmarkSourcePrefix.Length..]);
+        return links;
+    }
+
+    /// <summary>
     /// 由被写/被删的那一行自己拼出活动记录。<b>主体字段一律不让调用方填</b>：
     /// 组件那边只说"这一笔算什么"（新增/删除），于是时间线里不可能出现一条与库里内容对不上的标题或键。
     /// </summary>

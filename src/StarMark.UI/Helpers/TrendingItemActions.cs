@@ -15,7 +15,7 @@ namespace StarMark.UI.Helpers;
 /// 热榜行两个动作（⭐Star / 🔖收进收藏）的<b>唯一</b>实现：主窗「热榜」页的图标按钮、卡片右键、
 /// 组件里的右键菜单三处都走这里 ⇒ 同一个动作在三个入口语义一致（历史上"组件行与主窗行为不同"出过多次）。
 /// <para>
-/// 每个动作都必须留下一句结果（<see cref="ItemCardViewModel.LastTrendingNotice"/>）：
+/// 每个动作都必须留下一句结果（<see cref="NoticeRaised"/>）：
 /// 静默的成功会让人怀疑没点上，静默的失败更是直接把问题推回给用户（P-54 口径）。
 /// </para>
 /// </summary>
@@ -25,17 +25,14 @@ public static class TrendingItemActions
     private const int ScanLimit = 5000;
 
     /// <summary>
-    /// 任意一次动作的结果（成功与失败都会广播）。UI 侧订阅一次即可，不必每个入口各拉一条属性线；
-    /// 卡片上的 <see cref="ItemCardViewModel.LastTrendingNotice"/> 仍然写，供就地内联显示。
+    /// 任意一次动作的结果（成功与失败都会广播）。UI 侧订阅一次即可，不必每个入口各拉一条属性线。
+    /// <para>早先这里还往卡片写一个 <c>LastTrendingNotice</c> 属性，但没有任何一处读它——
+    /// 一个从不被显示的结果槽只会让后来人以为"卡片上会显示"，故连属性一起删掉（批次 RB）。</para>
     /// </summary>
     public static event Action<string>? NoticeRaised;
 
-    /// <summary>结果落点：既写回这一行（就地可见），也广播给页面/组件（toast、状态栏）。</summary>
-    private static void Report(ItemCardViewModel vm, string message)
-    {
-        vm.LastTrendingNotice = message;
-        NoticeRaised?.Invoke(message);
-    }
+    /// <summary>结果落点：广播给页面/组件的状态行（提示必须长在用户看得见的那一页）。</summary>
+    private static void Report(ItemCardViewModel vm, string message) => NoticeRaised?.Invoke(message);
 
     /// <summary>Star / 取消 Star（远端写操作）。成功后记入会话状态，避免"刷新一下又显示未 Star"。</summary>
     public static async Task ToggleStarAsync(ItemCardViewModel vm)

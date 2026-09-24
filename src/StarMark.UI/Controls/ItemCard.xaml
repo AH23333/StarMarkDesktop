@@ -24,13 +24,16 @@
                 <MenuFlyoutItem Text="打开所在位置" Click="Menu_OpenLocation"
                                 Visibility="{x:Bind ViewModel.HasOpenLocation, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutItem Text="{x:Bind ViewModel.CopyMenuText, Mode=OneWay}" Click="Menu_CopyLink"/>
-                <MenuFlyoutItem Text="预览" Click="Preview_Click"/>
+                <!-- RSS 候选不给预览（用户裁决：点条目直接跳文章，正文解析暂不做）；判据与操作栏那颗按钮同一个属性 -->
+                <MenuFlyoutItem Text="预览" Click="Preview_Click"
+                                Visibility="{x:Bind ViewModel.ShowsPreview, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <!-- 热榜候选专属：⭐Star 与 🔖收进收藏（两者落点不同——远端 vs 本机书签，tooltip 已写明）。
                      库管理类动作对这类行一律不出现（ItemCardPolicy 判定）：它们会经"按需登记"把外部候选写进 items。 -->
                 <MenuFlyoutItem Text="{x:Bind ViewModel.StarLabel, Mode=OneWay}" Click="Menu_Star_Click"
                                 Visibility="{x:Bind ViewModel.IsTrendingRepo, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                <!-- 收藏这一位两类候选共用（热榜＝本机书签，RSS＝收藏进"RSS订阅 / 源名"），文案与 tooltip 按种类分流 -->
                 <MenuFlyoutItem Text="{x:Bind ViewModel.CollectLabel, Mode=OneWay}" Click="Menu_Collect_Click"
-                                Visibility="{x:Bind ViewModel.IsTrendingRepo, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                                Visibility="{x:Bind ViewModel.ShowsCollect, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutItem Text="删除" Click="Delete_Click"
                                 Visibility="{x:Bind ViewModel.IsLauncherMode, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutItem Text="删除这条历史" Click="DeleteClipboard_Click"
@@ -148,7 +151,8 @@
             <!-- 操作栏：预览 / 笔记 / 标签 / 置顶 / 复制 / 隐藏 -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0" Spacing="4">
                 <Button Content="🔎" Padding="4,2" Style="{StaticResource MiniIconButton}"
-                        ToolTipService.ToolTip="预览（QuickLook）" Click="Preview_Click"/>
+                        ToolTipService.ToolTip="预览（QuickLook）" Click="Preview_Click"
+                        Visibility="{x:Bind ViewModel.ShowsPreview, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <Button Content="📝" Padding="4,2" Style="{StaticResource MiniIconButton}"
                         ToolTipService.ToolTip="编辑笔记" Click="EditNote_Click"
                         Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
@@ -166,7 +170,7 @@
                         Visibility="{x:Bind ViewModel.IsTrendingRepo, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <Button Content="🔖" Padding="4,2" Style="{StaticResource MiniIconButton}"
                         ToolTipService.ToolTip="{x:Bind ViewModel.CollectTip, Mode=OneWay}" Click="Collect_Click"
-                        Visibility="{x:Bind ViewModel.IsTrendingRepo, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                        Visibility="{x:Bind ViewModel.ShowsCollect, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <Button Content="👁" Padding="4,2" Style="{StaticResource MiniIconButton}"
                         ToolTipService.ToolTip="隐藏" Click="Hide_Click"
                         Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>

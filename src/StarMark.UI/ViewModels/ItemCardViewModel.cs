@@ -85,7 +85,7 @@ public partial class ItemCardViewModel : ObservableObject
     /// 前者本来就在快捷启动里，后者会把"顺手一发"变成长期入口。
     /// </summary>
     public bool CanSendToWidget
-        => ItemCardPolicy.CanSendToLauncher(IsLauncherMode, IsTrendingRepo, !string.IsNullOrWhiteSpace(Uri));
+        => ItemCardPolicy.CanSendToLauncher(IsLauncherMode, IsTrendingRepo, !string.IsNullOrWhiteSpace(Uri), IsRssCandidate);
 
     /// <summary>
     /// 是否提供"删除这一条"（<b>永久移除</b>，与「隐藏」相对）。只给<b>内置</b>剪贴板历史：
@@ -104,8 +104,19 @@ public partial class ItemCardViewModel : ObservableObject
     /// </summary>
     public bool IsTrendingRepo => ItemCardPolicy.IsTrendingRepo(Source);
 
+    /// <summary>这一行是不是 RSS 源里的候选（外部数据、<b>不入库</b>）。与热榜同族，但动作集不同：
+    /// 没有远端可 Star，也没有"预览"（要先抓正文），多一个"收藏到文件夹"。</summary>
+    public bool IsRssCandidate => ItemCardPolicy.IsRssCandidate(Source);
+
     /// <summary>是否显示"库管理"类动作（置顶 / 隐藏 / 笔记 / 标签 / 发送到桌面）——单一判据，取代逐处写条件。</summary>
-    public bool ShowsLibraryActions => ItemCardPolicy.ShowsLibraryActions(IsLauncherMode, IsTrendingRepo);
+    public bool ShowsLibraryActions => ItemCardPolicy.ShowsLibraryActions(IsLauncherMode, IsTrendingRepo, IsRssCandidate);
+
+    /// <summary>是否给「预览」：RSS 候选不给（用户裁决：点条目直接跳文章，网页正文解析暂不做）。
+    /// 菜单项与操作栏按钮<b>读同一个属性</b>，两处各判一次就会出现"菜单里没有、按钮上却有"。</summary>
+    public bool ShowsPreview => ItemCardPolicy.ShowsPreview(IsRssCandidate);
+
+    /// <summary>是否给「收藏」（热榜与 RSS 两类候选共用这一个动作位，文案按种类分流）。</summary>
+    public bool ShowsCollect => ItemCardPolicy.ShowsCollect(IsTrendingRepo, IsRssCandidate);
 
     partial void OnIsLauncherModeChanged(bool value) => OnPropertyChanged(nameof(ShowsLibraryActions));
 
@@ -131,14 +142,23 @@ public partial class ItemCardViewModel : ObservableObject
     public string StarGlyph => ItemCardPolicy.StarGlyph(_isStarred);
     public string StarLabel => ItemCardPolicy.StarLabel(_isStarred);
     public string StarTip => ItemCardPolicy.StarTip(_isStarred, _hasToken);
-    public string CollectLabel => ItemCardPolicy.CollectLabel(_isCollected);
-    public string CollectTip => ItemCardPolicy.CollectTip(_isCollected);
+    public string CollectLabel => ItemCardPolicy.CollectLabelFor(IsRssCandidate, _isCollected);
+    public string CollectTip => ItemCardPolicy.CollectTipFor(IsRssCandidate, _isCollected, RssFolderPath);
 
-    /// <summary>
-    /// 最近一次热榜动作的结果（成功与失败都写这里）。宿主把它显示在页面状态行或组件的说明行上——
-    /// 动作没有回显，用户就只能靠"列表有没有变"来猜自己是否点到了。
-    /// </summary>
-    [ObservableProperty] private string _lastTrendingNotice = string.Empty;
+    /// <summary>RSS 候选收藏后的落点（"RSS订阅 / 源名"）。<b>取自这一行自带的 ExtraJson</b>，
+    /// 不另算一遍：提示里说的文件夹与真正写进去的文件夹必须是同一个来源，否则 tooltip 会指一个不存在的路径。</summary>
+    public string RssFolderPath
+        => string.Join(" / ", FolderPathUtil.BookmarkSegments(_item));
+
+    /// <summary>收藏态回填（两类候选共用这一个状态位；RSS 那边只会由未收过成"已收藏"，不会反向）。</summary>
+    public void SetCollected(bool collected)
+    {
+        if (_isCollected == collected) return;
+        _isCollected = collected;
+        OnPropertyChanged(nameof(IsCollected));
+        OnPropertyChanged(nameof(CollectLabel));
+        OnPropertyChanged(nameof(CollectTip));
+    }
 
     /// <summary>热榜行右键：Star / 取消 Star。</summary>
     public event Action<ItemCardViewModel>? StarRequested;
@@ -163,7 +183,7 @@ public partial class ItemCardViewModel : ObservableObject
     };
 
     /// <summary>更新时间（热榜候选不显示：它们没有"本机更新时间"，缺省 0 会印成 1970-01-01）。</summary>
-    public string RelativeTime => ItemCardPolicy.ShowsTimeAndStarsLines(IsTrendingRepo)
+    public string RelativeTime => ItemCardPolicy.ShowsTimeAndStarsLines(IsTrendingRepo, IsRssCandidate)
         ? RelativeTimeHelper.Format(UpdatedAt) : string.Empty;
 
     /// <summary>
@@ -180,7 +200,7 @@ public partial class ItemCardViewModel : ObservableObject
     public bool HasDescription => !string.IsNullOrEmpty(Description);
     public bool HasNotes => !string.IsNullOrEmpty(Notes);
     /// <summary>独立星数行（热榜候选的星数已在副标题里与语言、本期新增一并给出，不再重复一行）。</summary>
-    public bool HasStars => ItemCardPolicy.ShowsTimeAndStarsLines(IsTrendingRepo) && StarsCount is long s && s > 0;
+    public bool HasStars => ItemCardPolicy.ShowsTimeAndStarsLines(IsTrendingRepo, IsRssCandidate) && StarsCount is long s && s > 0;
     public string StarsText => HasStars && StarsCount is long s ? $"★ {s:N0}" : string.Empty;
 
     public Windows.UI.Color TagColor(string tag) => TagColorHelper.GetTagColor(tag);

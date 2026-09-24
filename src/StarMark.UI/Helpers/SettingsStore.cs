@@ -67,6 +67,12 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         /// 空表时不发任何请求。与"快捷键从没配过"不同，这里没有默认值可回落——源只有用户自己知道。
         /// </summary>
         public string? RssSourcesJson { get; set; }
+        /// <summary>
+        /// RSS 总开关（批次 RB：开启后导航栏出现「RSS」页）。<b>三态是有意的</b>：
+        /// <c>null</c> ＝ 从没表过态（这一版之前只有源列表、没有这个键），<c>true/false</c> ＝ 用户按过开关。
+        /// 判据在 <c>RssActivation.IsOn</c>——把"没表过态"读成"关过"，升级后那一栏就凭空不见了。
+        /// </summary>
+        public bool? RssEnabled { get; set; }
         /// <summary>组件拖动 / 缩放时的边缘磁吸总开关（默认开启）。关闭后用户可自由摆位。</summary>
         public bool? WidgetSnapEnabled { get; set; }
         /// <summary>磁吸对齐间距（物理像素，默认 8）：两组件贴合时保留的间隙。</summary>
@@ -640,9 +646,12 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     /// 而"设置页整页打不开"比"这一栏看着像没配过"严重得多（坏档仍原样留在磁盘上，不会被这次保存悄悄覆盖掉——
     /// 只有用户真的改动源列表时才会重写这一栏）。
     /// </summary>
-    public List<RssSourceConfig> LoadRssSources()
+    public List<RssSourceConfig> LoadRssSources() => DeserializeRssSources(Load()?.RssSourcesJson);
+
+    /// <summary>读侧只有一条解析路径：<see cref="LoadRssEnabled"/> 也要看同一份源列表，
+    /// 各写一遍就会出现"开关判定与列表内容对不上"的那种错。</summary>
+    private static List<RssSourceConfig> DeserializeRssSources(string? json)
     {
-        var json = Load()?.RssSourcesJson;
         if (string.IsNullOrWhiteSpace(json)) return new List<RssSourceConfig>();
         try
         {
@@ -655,6 +664,24 @@ public sealed class SettingsStore : IPerformanceSettingsSource
             StarLog.Warn($"[Settings] 网址来源列表读不出，按未配置处理：{ex.Message}");
             return new List<RssSourceConfig>();
         }
+    }
+
+    /// <summary>
+    /// RSS 这一栏算不算开着。<b>一次读档</b>同时取开关与源列表：分两次 <c>Load()</c> 的话，
+    /// 中间有人改了设置文件，就会出现"开关按的是 A 列表，判的是 B 列表"。
+    /// </summary>
+    public bool LoadRssEnabled()
+    {
+        var d = Load();
+        return RssActivation.IsOn(d?.RssEnabled, DeserializeRssSources(d?.RssSourcesJson));
+    }
+
+    /// <summary>写下用户的表态（此后"没表过态"那条兜底不再生效，见 <c>RssActivation</c>）。</summary>
+    public void SaveRssEnabled(bool enabled)
+    {
+        var d = Load() ?? new SettingsData();
+        d.RssEnabled = enabled;
+        Save(d);
     }
 
     public void SaveRssSources(IReadOnlyList<RssSourceConfig> sources)
