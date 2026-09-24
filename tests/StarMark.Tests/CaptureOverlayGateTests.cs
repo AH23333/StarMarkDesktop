@@ -254,17 +254,32 @@ public sealed class CaptureOverlayGateTests
             "抓住旧的一条必须在起新的一笔之前问，否则永远拖不动已画的东西");
         var grab = SourceGate.MethodBody(cs, "private bool TryBeginGrab");
         Assert.Contains("if (_editingText || _polyLine is not null) return false;", grab);
-        // 命中顺序＝把手 → 四角 → 框内：反过来先判框内，四角会被"移动"整锅吃掉（缩放的把手就点不到）
-        Assert.True(grab.IndexOf("Grab.Rotate", StringComparison.Ordinal)
-            < grab.IndexOf("Grab.Scale", StringComparison.Ordinal));
-        Assert.True(grab.IndexOf("Grab.Scale", StringComparison.Ordinal)
-            < grab.IndexOf("Grab.Move", StringComparison.Ordinal));
         // 把手只有一个算法出口：画它的那一处与判"按中了没有"的那处必须是同一个坐标
         var handle = SourceGate.MethodBody(cs, "private PixelPoint RotateHandle");
         Assert.Contains("box.Y - lift < selection.Y", handle);   // 贴到选区上沿时夹回框内，否则这颗点永远点不到
-        // 角点容差由模型给（那条判据可测）：界面里再写一个固定数字，就是"一行字全变成角点"复发的入口
-        Assert.Contains("Annotation.HandleSlopFor(mark.Bounds())", grab);
-        Assert.Contains("Near(corner, local, slop)", grab);
+        // 按下那一点的三条豁免与"问模型"这唯一出口
+        Assert.Contains("mark.GrabAt(local, RotateHandle(mark), MoveSlop)", grab);
+    }
+
+    /// <summary>
+    /// "这一按是移动、缩放还是旋转"只许模型说一次。
+    /// <para>真机反馈"拖动文字后字会变大"就长在这个判据上：界面里自己数了一遍角点，而角点容差跟着<b>框的尺寸</b>
+    /// 收缩——一行字只有二十来像素高，四角那一圈容差正好压在用户抓字的位置上，于是"拖一下"被判成"拖角"，
+    /// 字号一路涨。更糟的是这份判据在界面里<b>一条断言都造不出来</b>（测试工程引用不到 UI），
+    /// 只能等用户在真机上撞见。</para>
+    /// <para>所以这里钉的是结构：判据调一次 <c>GrabAt</c>，界面里不再出现容差数字、也不定义第二套抓取枚举。
+    /// 判据搬回可测的那一层后，"框内每一像素都不许是缩放"才成为 <c>AnnotationTests</c> 里逐像素扫得过的一条性质。</para>
+    /// </summary>
+    [Fact]
+    public void TheGrabDecisionLivesOnlyInTheModel()
+    {
+        var cs = ReadOverlay(xaml: false);
+        var grab = SourceGate.MethodBody(cs, "private bool TryBeginGrab");
+        Assert.Contains("mark.GrabAt(", grab);
+        Assert.DoesNotContain("enum Grab", cs);                  // 抓取取值只有一套（界面顶多起个别名）
+        Assert.DoesNotContain(".Corners().Any(", cs);            // 自己数角点＝把判据搬回不可测的那一层
+        Assert.DoesNotContain("HandleSlop", grab);               // 容差由模型取，界面里不写死数字
+        Assert.Contains("using Grab = StarMark.Core.Capture.AnnotationGrab;", cs);
     }
 
     /// <summary>

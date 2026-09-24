@@ -23,6 +23,21 @@ public enum AnnotationTool
     Text,
 }
 
+/// <summary>按下去那一下想改的是哪一样（<see cref="Annotation.GrabAt"/> 的返回值）。
+/// <para>住在模型里而不是界面里：它决定"用户以为自己在拖什么"，而界面里那份 if/else 一条都断言不到——
+/// "拖动一行字结果字号变了"这种缺陷就是这么漏出去的。</para></summary>
+public enum AnnotationGrab
+{
+    /// <summary>没按在任何把手上，也没按在这条标注上。</summary>
+    None,
+    /// <summary>框内＝移动位置。</summary>
+    Move,
+    /// <summary>角上＝改大小（文字＝改字号）。</summary>
+    Scale,
+    /// <summary>顶上的圆点＝转方向。</summary>
+    Rotate,
+}
+
 /// <summary>工具的分组。<b>这条判据住在模型里</b>：工具条上"哪几个收进一个选择栏、哪几个各占一颗"
 /// 与折线该按几个点收尾都从它推；界面里各写一遍就会长成"加了工具而条上没有"那种只有跑起来才看得见的错。</summary>
 public static class AnnotationTools
@@ -130,6 +145,39 @@ public sealed record Annotation(
 
     /// <summary>有没有带变换。没变换时 <see cref="TransformedPoints"/> 直接给原列表，不复制。</summary>
     public bool HasTransform => Rotation != 0 || Scale != 1d;
+
+    /// <summary>两点足够近（容差是物理像素）。<b>界面的抓取判定与这里的测试共用这一个式子</b>，
+    /// 免得两处各写一遍绝对值比较而哪天改出不一样。</summary>
+    public static bool Near(PixelPoint a, PixelPoint b, int slop)
+        => Math.Abs(a.X - b.X) <= slop && Math.Abs(a.Y - b.Y) <= slop;
+
+    /// <summary>这一点算不算按在<b>缩放把手</b>上。
+    /// <para><b>文字只认包围盒之外的那半个角。</b>一行字只有二十来像素高，<see cref="HandleSlopFor"/>
+    /// 给四角各让出 5 像素之后，那几个 5×5 的小方块正好落在字的<b>两端</b>——而用户抓一行字要挪，
+    /// 手就放在那一头：于是"拖动位置"被读成"拖角改字号"，字越拖越大（真机反馈）。
+    /// 把手本来就画在角上、有一半露在框外，所以缩放这个动作仍然留着，只是不再和移动抢同一块地方。</para>
+    /// <para>几何类不受这条影响：它们的框远大于角点区，内侧那一圈本来就是改大小的正常落点。</para></summary>
+    public bool OnCorner(PixelPoint at, int slop)
+    {
+        if (Tool != AnnotationTool.Text) return Corners().Any(corner => Near(corner, at, slop));
+        var box = Bounds();
+        var inside = at.X >= box.X && at.X < box.Right && at.Y >= box.Y && at.Y < box.Bottom;
+        return !inside && Corners().Any(corner => Near(corner, at, slop));
+    }
+
+    /// <summary>
+    /// 按下去的那一点该改的是什么——<b>整条判定住在模型里</b>，因为它决定"用户以为自己在动哪一下"，
+    /// 而界面里那份 if/else 是测不到的（批次 NF 同一课：测不到的判据＝改坏了没人知道）。
+    /// <para>顺序是刻意的：旋转把手最优先（它是一颗画在框外的小点，用户看得见才会去按），
+    /// 然后缩放把手，最后才是"在框内＝移动"。</para>
+    /// </summary>
+    public AnnotationGrab GrabAt(PixelPoint at, PixelPoint rotateHandleAt, int moveSlop)
+    {
+        if (Near(rotateHandleAt, at, HandleSlop)) return AnnotationGrab.Rotate;
+        if (OnCorner(at, HandleSlopFor(Bounds()))) return AnnotationGrab.Scale;
+        if (Contains(at, moveSlop)) return AnnotationGrab.Move;
+        return AnnotationGrab.None;
+    }
 
     /// <summary>
     /// 画出去的那一组点：把 <see cref="Rotation"/> 与 <see cref="Scale"/> 绕 <see cref="Origin"/> 作用上去。

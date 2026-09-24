@@ -453,4 +453,114 @@ public sealed class AnnotationTests
         Assert.False(AnnotationTools.IsShapeTool(AnnotationTool.Text));
         Assert.False(AnnotationTools.IsShapeTool(AnnotationTool.Mosaic));
     }
+
+    // ────────── 抓取判定：按这一下究竟改什么（批次 RH-1） ──────────
+
+    /// <summary>把手画在角上：顶上一颗在框外 26 像素（与遮罩窗同一个数），所以扫框内时不会误判成旋转。</summary>
+    private static PixelPoint HandleAbove(IntRect box) => new(box.X + box.Width / 2, box.Y - 26);
+
+    /// <summary>
+    /// 用户报的那一条：<b>拖动一行字，结果字变大</b>。
+    /// <para>机制不是字号算错，而是"这一下算拖什么"判错：一行字只有二十来像素高，
+    /// 四角各让出 5 像素的缩放区正好压在字的两端——而人抓一行字要挪，手就放在那一头。
+    /// 所以这一条把整个框内的像素<b>逐个数过去</b>：没有一个应判成缩放。
+    /// 扫全框而不是抽几点，是因为这正是一个"位置相关"的缺陷，抽样恰好会抽到中间那块干净的。</para>
+    /// </summary>
+    [Theory]
+    [InlineData("字")]                                     // 最短的一个字：框最窄，角区占比最大
+    [InlineData("把这句话挪一下位置")]
+    [InlineData("A very long line of english text here")]  // 拉丁字母的宽度另算一版
+    public void DraggingAnywhereInsideATextLineIsNeverAMagnify(string text)
+    {
+        var mark = TextAt(text);
+        var box = mark.Bounds();
+        var handle = HandleAbove(box);
+
+        var wrong = new List<string>();
+        for (var y = box.Y; y < box.Bottom; y++)
+            for (var x = box.X; x < box.Right; x++)
+            {
+                var grab = mark.GrabAt(new PixelPoint(x, y), handle, 6);
+                if (grab != AnnotationGrab.Move) wrong.Add($"({x},{y})→{grab}");
+            }
+
+        Assert.True(box.Width > 0 && box.Height > 0);
+        Assert.Empty(wrong.Take(6));                                    // 框内每一格都必须是"移动"
+    }
+
+    /// <summary>反面的一半：缩放这条路**没有被砍掉**——把手那半个角（框外）仍然改字号。
+    /// 只断言"框内不缩放"是不够的：那会让"永远不缩放"的错误实现照样全绿。</summary>
+    [Fact]
+    public void ATextLineStillScalesFromTheHalfOfEachHandleOutsideTheBox()
+    {
+        var mark = TextAt("挪我");
+        var box = mark.Bounds();
+        var handle = HandleAbove(box);
+        var outside = new[]
+        {
+            new PixelPoint(box.X - 3, box.Y - 3), new PixelPoint(box.Right + 3, box.Y - 3),
+            new PixelPoint(box.Right + 3, box.Bottom + 3), new PixelPoint(box.X - 3, box.Bottom + 3),
+        };
+
+        foreach (var at in outside)
+            Assert.Equal(AnnotationGrab.Scale, mark.GrabAt(at, handle, 6));
+    }
+
+    /// <summary>几何类不许被这条规则连带改掉：它们的框远大于角点区，按在内侧那一圈本来就是改大小。</summary>
+    [Fact]
+    public void ShapesKeepTheirInsideCornerZone()
+    {
+        var rect = new Annotation(AnnotationTool.Rectangle,
+            new[] { new PixelPoint(0, 0), new PixelPoint(300, 160) }, Annotation.Opaque(255, 0, 0), 4);
+        var box = rect.Bounds();
+
+        Assert.Equal(AnnotationGrab.Scale, rect.GrabAt(new PixelPoint(box.X + 2, box.Y + 2), HandleAbove(box), 6));
+        Assert.Equal(AnnotationGrab.Move, rect.GrabAt(new PixelPoint(box.X + box.Width / 2, box.Y + box.Height / 2), HandleAbove(box), 6));
+    }
+
+    /// <summary>
+    /// 判序：旋转把手 &gt; 缩放 &gt; 移动。<b>这一条只有搬进模型才断言得出来</b>（界面里那条链引用不到）。
+    /// <para>场景不是想象出来的：顶边贴到选区上沿时，遮罩窗会把把手<b>夹进框内</b>（框外那一按会被当成重新框选，
+    /// 等于那颗把手永远点不到，而屏幕上它明明画在那儿）。这时把手同时落在"框内"里——判序若写反成先判移动，
+    /// 旋转就永远够不着，而全绿的用例里不会有任何一条喊出来。</para>
+    /// </summary>
+    [Fact]
+    public void AHandleClampedInsideTheBoxStillWinsOverMoving()
+    {
+        var mark = Make(AnnotationTool.Text, text: "贴着选区上沿的一行字");
+        var box = mark.Bounds();
+        // 把手被夹到框内那一点：它既是"框内"（移动）又是把手（旋转）
+        var clamped = new PixelPoint(box.X + box.Width / 2, box.Y + 5);
+
+        Assert.Equal(AnnotationGrab.Rotate, mark.GrabAt(clamped, clamped, 6));
+        // 反过来，框里别处不许被夹进来的把手整块吞掉（那等于旋转吞了移动）
+        var elsewhere = new PixelPoint(box.X + 2, box.Y + box.Height / 2);
+        Assert.True(clamped.X - elsewhere.X > Annotation.HandleSlop);
+        Assert.Equal(AnnotationGrab.Move, mark.GrabAt(elsewhere, clamped, 6));
+    }
+
+    /// <summary>
+    /// 连着拖五次之后字号必须还是那个字号——这条钉的是<b>累积效应</b>：单看一次拖动"稍微变大"
+    /// 很像 DPI/取整的噪声，只有连拖几次才看得出那是一个停不下来的棘轮。
+    /// </summary>
+    [Fact]
+    public void RepeatedDragsNeverGrowTheGlyphs()
+    {
+        var mark = TextAt("连续拖五次看看会不会变大");
+        var box = mark.Bounds();
+        var handle = HandleAbove(box);
+
+        for (var round = 0; round < 5; round++)
+        {
+            var press = new PixelPoint(box.X + box.Width / 2, box.Y + box.Height / 2);
+            Assert.Equal(AnnotationGrab.Move, mark.GrabAt(press, handle, 6));
+            mark = mark.MovedBy(7, 5);
+            box = mark.Bounds();
+            handle = HandleAbove(box);
+        }
+
+        Assert.Equal(1d, mark.Scale);
+        Assert.Equal(Annotation.DefaultFontHeight, mark.DrawFontHeight);   // 字高没被拖动改过
+        Assert.Equal(TextAt("连续拖五次看看会不会变大").Bounds().Height, box.Height);
+    }
 }

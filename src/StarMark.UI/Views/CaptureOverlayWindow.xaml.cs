@@ -20,6 +20,9 @@ using Windows.Foundation;
 using Windows.Graphics;
 using Windows.System;
 using Windows.UI;
+// "按下这一想改什么"的枚举归模型（Core.Capture）所有：判定与取值同源，界面不再自己列一份
+// （原来那份私有 enum 就是让"拖动一行字变成放大字号"测不到的一半原因——政策在界面，测试引不到）。
+using Grab = StarMark.Core.Capture.AnnotationGrab;
 
 namespace StarMark.UI.Views;
 
@@ -77,8 +80,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private PixelPoint _dragLast;             // 最近一次光标位置（松手按它落定，与预览同一套判据）
     private byte[]? _underDrag;               // 拖动期间的底：底图 + 除被拖那条之外的全部标注（一次算好）
     private byte[]? _dragCanvas;              // 每帧复用：_underDrag 的副本 + 预览那一条
-    private enum Grab { None, Move, Scale, Rotate }
-    private Grab _grab;
+    private Grab _grab;                        // Grab ＝ 别名的 AnnotationGrab（判定与取值都在模型一处）
 
     /// <summary>"点一下"要不要算选中脚下那条的容差（物理像素）。比把手小：点是打在形状上，不是打在小方块上。
     /// <para>角点/把手的容差不在这里——那一条跟着形状尺寸收缩，住在模型里（<c>Annotation.HandleSlopFor</c>），
@@ -967,12 +969,8 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_selected is not { } index) return false;
         if (Selected is not { } mark) { DropSelection(); return false; }
 
-        _grab = Grab.None;
-        var slop = Annotation.HandleSlopFor(mark.Bounds());
-        if (Near(RotateHandle(mark), local, Annotation.HandleSlop)) _grab = Grab.Rotate;
-        else if (mark.Corners().Any(corner => Near(corner, local, slop))) _grab = Grab.Scale;
-        else if (mark.Contains(local, MoveSlop)) _grab = Grab.Move;
-        else return false;
+        _grab = mark.GrabAt(local, RotateHandle(mark), MoveSlop);
+        if (_grab == Grab.None) return false;
 
         _dragOriginal = mark;
         _dragAnchor = local;
@@ -983,9 +981,6 @@ public sealed partial class CaptureOverlayWindow : Window
         DrawSelectionHandles();
         return true;
     }
-
-    private static bool Near(PixelPoint a, PixelPoint b, int slop)
-        => Math.Abs(a.X - b.X) <= slop && Math.Abs(a.Y - b.Y) <= slop;
 
     /// <summary>
     /// 旋转把手落在哪儿。<b>顶边贴到选区上沿时把它挪进框内</b>：画在选区外面的那一按不属于本窗的
