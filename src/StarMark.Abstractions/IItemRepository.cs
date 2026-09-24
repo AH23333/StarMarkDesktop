@@ -232,6 +232,16 @@ public interface IItemRepository
     /// 而时间线正是用户回头查自己改动时唯一能看的证据。</para>
     /// </summary>
     Task<Item?> DeleteLocalItemAsync(long id, ItemType type, ActivityKind? activity = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// 列出"当前确实有本地条目（待办/随记）"的组件实例 id（去重、按 Ordinal 排序）。
+    /// <b>一次连接、只读 <c>source_id</c> 一列</b>（不跑每行一次的标签 <c>GROUP_CONCAT</c>），
+    /// 实例归属一律交给 <c>LocalItemState.DecodeInstanceId</c> 解——<b>编码规则只有一份，
+    /// 这里不再另写一套 SQL 字符串切割</b>（否则改了编码，这条就会安静地漏人）。
+    /// <para>用途：快照要为每个实例捕获/还原本地条目，而十几个实例里通常只有两三台真的有内容；
+    /// 逐个实例各开一次库去"确认它是空的"，代价全花在空集上。</para>
+    /// </summary>
+    Task<IReadOnlyList<string>> GetInstancesWithLocalItemsAsync(CancellationToken ct = default);
     Task LogActivitiesAsync(IReadOnlyList<ActivityDraft> events, CancellationToken ct = default);
 }
 

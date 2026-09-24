@@ -1150,6 +1150,27 @@ public sealed class ItemRepository : IItemRepository
     }
 
     /// <summary>
+    /// 一次连接问出"哪些实例名下还有本地条目"。<b>只读 source_id 一列</b>：这条的目的就是把
+    /// "为了一台空实例开一次库、还把每行的标签拼一遍"那种花销省掉。
+    /// 实例归属用 <see cref="LocalItemState.DecodeInstanceId"/> 解，编码规则因此只有一份。
+    /// </summary>
+    public async Task<IReadOnlyList<string>> GetInstancesWithLocalItemsAsync(CancellationToken ct = default)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT DISTINCT source_id FROM items WHERE source = @source;";
+        cmd.Parameters.AddWithValue("@source", ItemSources.Local);
+        var owners = new SortedSet<string>(StringComparer.Ordinal);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var owner = LocalItemState.DecodeInstanceId(reader.GetString(0));
+            if (!string.IsNullOrEmpty(owner)) owners.Add(owner);   // 没有分隔符的（非组件编码）一律忽略
+        }
+        return owners.ToList();
+    }
+
+    /// <summary>
     /// 删一条本地条目 +（可选）在同一事务里记一笔活动，返回被删掉的那行；
     /// 没删到就返回 null，且<b>什么都不写、也不通知</b>。
     /// 同事务的理由见接口注释：条目没了而时间线里找不到这一笔，是最难向用户解释的缺口。

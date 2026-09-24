@@ -21,6 +21,14 @@ public sealed class WidgetSnapshotService
 
     public WidgetSnapshotService(IItemRepository repo) => _repo = repo;
 
+    /// <summary>
+    /// 一次问出"哪些实例名下真的有本地条目"。<b>快照两侧都靠它决定谁需要各开一次库</b>：
+    /// 捕获时不在名单上的实例直接给空列表（与逐台查出来的结果完全相同，只是不白跑）；
+    /// 还原时"快照里这台是空的、库里它也确实是空的"就整个跳过。
+    /// </summary>
+    public async Task<HashSet<string>> GetInstancesWithLocalItemsAsync(CancellationToken ct = default)
+        => new(await _repo.GetInstancesWithLocalItemsAsync(ct), StringComparer.Ordinal);
+
     /// <summary>读某实例当前全部本地条目（待办 + 随记）为快照片段，忠实保留标签/置顶/隐藏/笔记等用户状态。</summary>
     public async Task<List<SnapshotLocalItem>> CaptureLocalItemsAsync(string instanceId, CancellationToken ct = default)
     {

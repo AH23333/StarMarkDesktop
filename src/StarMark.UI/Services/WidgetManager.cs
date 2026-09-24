@@ -619,12 +619,16 @@ public sealed class WidgetManager
 
         if (_snapshotService is not null)
         {
+            // 只有"名下确实有本地条目"的实例才值得各开一次库去读。空集由这一次查询统一确认——
+            // 逐台去问"你是不是空的"，代价全花在空集上（十几个实例里通常只两三台有内容）。
+            var owners = await _snapshotService.GetInstancesWithLocalItemsAsync(CancellationToken.None);
             for (var i = 0; i < snapshot.Entries.Count; i++)
             {
                 // 任一条目捕获失败即整体抛出：宁可让用户看到"保存失败"，也不能落一张静默缺数据的快照，
                 // 否则用户以为已备份、日后据此还原才发现丢了待办/随记，损失不可逆。
-                snapshot.Entries[i].LocalItems =
-                    await _snapshotService.CaptureLocalItemsAsync(instanceIds[i], CancellationToken.None);
+                snapshot.Entries[i].LocalItems = owners.Contains(instanceIds[i])
+                    ? await _snapshotService.CaptureLocalItemsAsync(instanceIds[i], CancellationToken.None)
+                    : new List<SnapshotLocalItem>();
             }
         }
 
@@ -693,8 +697,12 @@ public sealed class WidgetManager
         // 3) 本地条目数据半（仓库，异步）：整实例先删后插还原待办/随记；DataChangeHub 自动驱动组件重载。
         if (_snapshotService is not null)
         {
+            var owners = await _snapshotService.GetInstancesWithLocalItemsAsync(CancellationToken.None);
             foreach (var (instanceId, items) in dataRestore)
             {
+                // 快照里这台是空的、库里它也确实是空的 ⇒ 整个跳过（Replace 语义是先删后插，
+                // 对空集来说是白开一次库 + 白通知一次组件）。有一侧非空就必须走 Replace。
+                if (items.Count == 0 && !owners.Contains(instanceId)) continue;
                 try { await _snapshotService.RestoreLocalItemsAsync(instanceId, items, CancellationToken.None); }
                 catch (Exception ex) { StarLog.Error($"还原实例本地条目失败 ({instanceId})", ex); }
             }
