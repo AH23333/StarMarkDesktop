@@ -17,14 +17,19 @@ public static class ItemCardPolicy
     public static bool IsTrendingRepo(string? source)
         => string.Equals(source, ItemSources.Trending, StringComparison.Ordinal);
 
+    /// <summary>这一行是不是 RSS 源里的候选（外部数据、默认不入库，D4 口径）。与热榜同一族，但动作集不同。</summary>
+    public static bool IsRssCandidate(string? source)
+        => string.Equals(source, ItemSources.Rss, StringComparison.Ordinal);
+
     /// <summary>
     /// 是否显示"库管理"类动作（置顶 / 隐藏 / 编辑笔记 / 编辑标签 / 发送到桌面 / 删除）。
-    /// <para>两种宿主合成的行都要关掉：快捷启动入口（<paramref name="isLauncherMode"/>）与热榜候选
-    /// （<paramref name="isTrendingRepo"/>）——前者没有对应库行，后者<b>有</b>会被写进库：
-    /// 对 Id=0 的候选执行置顶会经"按需登记"把它塞进 items，直接违背"热榜默认不入库"。</para>
+    /// <para>三种宿主合成的行都要关掉：快捷启动入口（<paramref name="isLauncherMode"/>）、热榜候选
+    /// （<paramref name="isTrendingRepo"/>）与 RSS 候选（<paramref name="isRssCandidate"/>）——
+    /// 前两者<b>有</b>会被写进库：对 Id=0 的候选执行置顶会经"按需登记"把它塞进 items，
+    /// 直接违背"这两类默认不入库"。</para>
     /// </summary>
-    public static bool ShowsLibraryActions(bool isLauncherMode, bool isTrendingRepo)
-        => !isLauncherMode && !isTrendingRepo;
+    public static bool ShowsLibraryActions(bool isLauncherMode, bool isTrendingRepo, bool isRssCandidate = false)
+        => !isLauncherMode && !isTrendingRepo && !isRssCandidate;
 
     /// <summary>是否显示热榜专属动作（⭐Star / 🔖收进收藏）。反过来也成立：只有热榜候选才有这两个按钮。</summary>
     public static bool ShowsTrendingActions(bool isTrendingRepo) => isTrendingRepo;
@@ -34,8 +39,24 @@ public static class ItemCardPolicy
     /// 没管它，但两类合成行同样不该出现：启动器行本来就在快捷启动里（发过去＝自己给自己再加一条），
     /// 热榜候选则会把"顺手一发"变成一个长期存在的入口——用户只是想看看这个仓库。
     /// </summary>
-    public static bool CanSendToLauncher(bool isLauncherMode, bool isTrendingRepo, bool hasUri)
-        => hasUri && ShowsLibraryActions(isLauncherMode, isTrendingRepo);
+    public static bool CanSendToLauncher(bool isLauncherMode, bool isTrendingRepo, bool hasUri, bool isRssCandidate = false)
+        => hasUri && ShowsLibraryActions(isLauncherMode, isTrendingRepo, isRssCandidate);
+
+    /// <summary>
+    /// 「预览」这一项是否出现。<b>RSS 候选不给</b>：源里的条目要先抓网页正文才能预览，而用户明确
+    /// "暂不提供预览，网页解析太麻烦" ⇒ 与其给一个十有八九打不开的按钮，不如没有（点条目直接跳文章）。
+    /// 热榜不给是另一个理由（它只有仓库主页，预览等于再开一次浏览器）——两件事别混成一个判据。
+    /// </summary>
+    public static bool ShowsPreview(bool isRssCandidate) => !isRssCandidate;
+
+    /// <summary>RSS 那一行的动作文案。<b>已经收藏过的不再提供"从库里移除"</b>（P-88 的裁决：
+    /// 这一栏的职责是"把看中的收进来"，移除属于资料库自己的页面），所以收过之后它是一颗说明性的灰按钮，
+    /// 不是可点的开关。</summary>
+    public static string RssCollectLabel(bool collected) => collected ? "已收藏" : "收藏到文件夹";
+
+    public static string RssCollectTip(bool collected, string folderPath) => collected
+        ? $"已经在「{folderPath}」里了。要移除请到资料库对应那一行"
+        : $"作为书签存进本机，并放进「{folderPath}」（第一次收藏这个源时会建出这一层文件夹）";
 
     /// <summary>Star 按钮的图标与文字：已 Star 必须一眼可辨（它是"再点会取消"的信号）。</summary>
     public static string StarGlyph(bool starred) => starred ? "★" : "☆";

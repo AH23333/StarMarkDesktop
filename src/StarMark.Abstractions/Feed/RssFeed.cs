@@ -78,3 +78,26 @@ public static class RssEntryIdentity
     /// <summary>去掉首尾空白：地址带一个空格就会多出一行看起来一模一样的收藏。</summary>
     public static string BookmarkSourceId(string link) => BookmarkSourcePrefix + (link ?? string.Empty).Trim();
 }
+
+/// <summary>
+/// RSS 收藏落到哪个文件夹（判据只在这里说一次）。
+/// <para>不新建一套"订阅文件夹"实体：<c>BookmarkMeta.FolderPaths</c> 已经是文件夹树的唯一来源，
+/// 再立一个存储就会两边各长出一棵树。源名一到一级，收藏动作就只是把这一层写进 <c>ExtraJson</c>。</para>
+/// </summary>
+public static class RssFolders
+{
+    /// <summary>所有订阅源共用的根。<b>名字钉死</b>：改了它，之前收藏进去的行仍留在旧名字的文件夹里，
+    /// 用户会同时看到"RSS订阅"与新的那一棵，而没人知道为什么会有两棵。</summary>
+    public const string Root = "RSS订阅";
+
+    /// <summary>
+    /// 某个源的收藏落点：根 + 源名，两级。<b>数组的每个元素就是一级</b>（见 <c>FolderPathUtil.BookmarkSegments</c>），
+    /// 所以源名里带 "/" 也必须整段留着——拆成两级等于把一个源劈成两个文件夹。
+    /// 源名为空时只给根（不编一个"未命名"出来：源列表在 Normalize 阶段就不会有空名走到这里）。
+    /// </summary>
+    public static string[] PathFor(string? sourceName)
+        => string.IsNullOrWhiteSpace(sourceName) ? new[] { Root } : new[] { Root, sourceName.Trim() };
+
+    /// <summary>给人看的那一条路径（"RSS订阅 / 源名"）。文案与真实层级必须同源，否则提示会指一个不存在的路径。</summary>
+    public static string DisplayPath(string? sourceName) => string.Join(" / ", PathFor(sourceName));
+}

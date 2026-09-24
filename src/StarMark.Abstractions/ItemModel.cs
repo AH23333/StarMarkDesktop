@@ -43,6 +43,12 @@ public static class ItemSources
     /// 界面用它作"这一行来自热榜"的标记，所有会写主库的动作都必须对它关闭。
     /// </summary>
     public const string Trending = "trending";
+    /// <summary>
+    /// RSS 源里的候选条目（外部数据，<b>默认不入库</b>，D4 口径）。与 <see cref="Trending"/> 同族：
+    /// 不写 items 表，界面用它作"这一行来自订阅源"的标记，所有会写主库的动作（置顶 / 隐藏 / 笔记 / 标签）
+    /// 都必须对它关闭——否则"顺手右键一个置顶"就把一次性候选灌进了库。
+    /// </summary>
+    public const string Rss = "rss";
 }
 
 /// <summary>
