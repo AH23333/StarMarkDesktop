@@ -15,13 +15,16 @@ namespace StarMark.Core.Feed;
 /// <param name="Entries">这个源给出的条目（失败时为空）。</param>
 /// <param name="Error">失败原因；null＝这一轮成功。</param>
 /// <param name="NotModified">源回了 304（没变化）。这是好消息，不能算失败。</param>
+/// <param name="Stopped">这一条<b>根本没抓</b>：用户按了停止（或整轮到了时限）。它既不是"坏了"也不是"空的"，
+/// 混进任何一边都会让人去改一个其实没问题的地址。</param>
 public sealed record RssSourceOutcome(
     RssSourceConfig Source,
     IReadOnlyList<RssEntry> Entries,
     string? Error = null,
-    bool NotModified = false)
+    bool NotModified = false,
+    bool Stopped = false)
 {
-    public bool Ok => Error is null;
+    public bool Ok => Error is null && !Stopped;
 }
 
 /// <summary>
@@ -29,11 +32,14 @@ public sealed record RssSourceOutcome(
 /// </summary>
 /// <param name="Outcomes">每个启用的源一条，<b>顺序与配置顺序一致</b>（界面上源不该每次刷新就换位置）。</param>
 /// <param name="Entries">所有条目按时间倒序摊平后的结果（无时间的排最后）。</param>
-/// <param name="FailedCount">失败的源数。为 0 时界面不必显示"部分源失败"的提示。</param>
+/// <param name="FailedCount">失败的源数。为 0 时界面不必显示"部分源失败"的提示。<b>不含被停掉的那些</b>。</param>
+/// <param name="StoppedCount">因为停止/时限而没抓的源数。界面要用它说"还剩几条没抓"，
+/// 而不是让用户自己数列表里哪几行是空的。</param>
 public sealed record RssRunResult(
     IReadOnlyList<RssSourceOutcome> Outcomes,
     IReadOnlyList<RssEntry> Entries,
-    int FailedCount);
+    int FailedCount,
+    int StoppedCount = 0);
 
 /// <summary>
 /// 把"抓 → 解析 → 汇总"这条编排跑一遍。<b>本类不碰网络也不解析 XML</b>：
@@ -53,7 +59,12 @@ public static class RssAggregator
         var outcomes = new List<RssSourceOutcome>(sources.Count);
         foreach (var source in sources)
         {
-            ct.ThrowIfCancellationRequested();
+            // 停止之后剩下的源逐条记为"没抓"：整轮结果照样返回，<b>已抓到的不能因为按了停止而丢掉</b>
+            if (ct.IsCancellationRequested)
+            {
+                outcomes.Add(new RssSourceOutcome(source, Array.Empty<RssEntry>(), Stopped: true));
+                continue;
+            }
             outcomes.Add(await OneAsync(source, fetch, ct));
         }
 
@@ -65,7 +76,11 @@ public static class RssAggregator
             .Take(MaxTotalEntries)
             .ToList();
 
-        return new RssRunResult(outcomes, entries, outcomes.Count(o => !o.Ok));
+        return new RssRunResult(
+            outcomes,
+            entries,
+            outcomes.Count(o => !o.Ok && !o.Stopped),
+            outcomes.Count(o => o.Stopped));
     }
 
     /// <summary>
@@ -95,7 +110,9 @@ public static class RssAggregator
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            throw;      // 用户按了取消：这是控制流，不是一个源的失败
+            // 抓取途中被叫停：这一条记为"没抓"，而<b>不往上抛</b>——抛出去就把前面几个源已经抓到的结果一起扔了，
+            // 于是"停止"变成了"撤销整轮"，用户只能再等一遍。
+            return new RssSourceOutcome(source, Array.Empty<RssEntry>(), Stopped: true);
         }
         catch (Exception ex)
         {
