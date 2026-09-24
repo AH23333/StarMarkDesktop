@@ -20,63 +20,11 @@ public sealed class QuickLaunchDropBatchGateTests
     private const string ManagerRelativePath = "src/StarMark.UI/Services/WidgetManager.cs";
     private const string WindowRelativePath = "src/StarMark.UI/Views/WidgetWindow.xaml.cs";
 
-    /// <summary>从测试输出目录往上找仓库根（认 <c>StarMark.sln</c>）。</summary>
-    private static string RepoRoot()
-    {
-        var dir = Path.GetDirectoryName(AppContext.BaseDirectory);
-        for (var i = 0; i < 10 && dir is not null; i++)
-        {
-            if (File.Exists(Path.Combine(dir, "StarMark.sln"))) return dir;
-            dir = Path.GetDirectoryName(dir);
-        }
-        throw new InvalidOperationException("没找到仓库根（守门失效比红测更危险，故直接抛）");
-    }
+    // 结构比对工具（仓库根 / 挖方法体 / 数出现次数）收在 SourceGate，两个守门文件共用一份。
+    private static string ReadRepoFile(string path) => SourceGate.ReadRepoFile(path);
 
-    private static string ReadRepoFile(string relativePath)
-        => File.ReadAllText(Path.Combine(RepoRoot(), relativePath.Replace('/', Path.DirectorySeparatorChar)));
+    private static string MethodBody(string source, string fragment) => SourceGate.MethodBody(source, fragment);
 
-    /// <summary>
-    /// 切出一个方法：<b>块体</b>按大括号配对，<b>表达式体</b>（<c>=> ...;</c>）取到第一个分号行。
-    /// 后者必须单独处理——否则"只是转发"的那个小方法会把下一个方法的 <c>{</c> 也算进体内。
-    /// 锚点缺失或有歧义都抛。
-    /// </summary>
-    private static string MethodBody(string source, string signatureFragment)
-    {
-        var lines = source.Split('\n');
-        var hits = lines.Select((line, index) => (line, index))
-            .Where(x => x.line.Contains(signatureFragment)).ToList();
-        Assert.True(hits.Count == 1,
-            $"锚点「{signatureFragment}」命中 {hits.Count} 处（应为 1 处）——方法被改名或复制了，守门要先跟上");
-
-        var start = hits[0].index;
-        for (var i = start; i < lines.Length; i++)
-        {
-            var line = lines[i].TrimEnd('\r');
-            if (line.Contains("=>") && !line.Contains("=> {") && !line.EndsWith("{"))
-            {
-                var end = i;
-                while (end < lines.Length && !lines[end].TrimEnd('\r').TrimEnd().EndsWith(";")) end++;
-                return string.Join("\n", lines[start..(end + 1)]);
-            }
-            if (line.EndsWith("{"))
-            {
-                var depth = 0;
-                for (var j = i; j < lines.Length; j++)
-                {
-                    foreach (var ch in lines[j])
-                    {
-                        if (ch == '{') depth++;
-                        else if (ch == '}') depth--;
-                    }
-                    if (depth == 0) return string.Join("\n", lines[start..(j + 1)]);
-                }
-                break;
-            }
-        }
-        throw new InvalidOperationException($"没能为「{signatureFragment}」切出方法体");
-    }
-
-    /// <summary>整批添加的出口必须<b>只读一次档、只写一次盘、只广播一次</b>。</summary>
     [Fact]
     public void AWholeBatchReadsAndWritesTheStoreExactlyOnce()
     {
@@ -124,7 +72,7 @@ public sealed class QuickLaunchDropBatchGateTests
     [Fact]
     public void ThePerItemRecordExitIsGoneFromEveryCaller()
     {
-        var src = Path.Combine(RepoRoot(), "src");
+        var src = Path.Combine(SourceGate.RepoRoot(), "src");
         var hits = Directory.GetFiles(src, "*.cs", SearchOption.AllDirectories)
             .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
             .SelectMany(file => File.ReadAllLines(file))
@@ -137,14 +85,7 @@ public sealed class QuickLaunchDropBatchGateTests
             Path.Combine(src, "StarMark.UI", "Services", "WidgetManager.cs"))); // 反空转：新出口还在
     }
 
-    private static int Count(string text, string needle)
-        => text.Split(new[] { needle }, StringSplitOptions.None).Length - 1;
+    private static int Count(string text, string needle) => SourceGate.Count(text, needle);
 
-    private static string Between(string text, string from, string to)
-    {
-        var a = text.IndexOf(from, StringComparison.Ordinal);
-        var b = text.IndexOf(to, a + from.Length, StringComparison.Ordinal);
-        Assert.True(a >= 0 && b > a, $"没能从「{from}」定位到「{to}」——结构变了，守门要先跟上");
-        return text[a..b];
-    }
+    private static string Between(string text, string from, string to) => SourceGate.Between(text, from, to);
 }

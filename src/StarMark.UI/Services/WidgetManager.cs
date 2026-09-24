@@ -120,7 +120,7 @@ public sealed class WidgetManager
                 data.Instances.RemoveAll(i => i.Kind == kind);
                 _storage.Save(data);
                 InstancesChanged?.Invoke();
-                foreach (var id in ids) CloseInternal(id, persist: false);
+                CloseAll(ids, persist: false);
             }
         });
 
@@ -185,7 +185,7 @@ public sealed class WidgetManager
     /// <summary>临时隐藏（实例保留）。</summary>
     public Task HideTemporaryAsync(string id) => OnUiAsync(() =>
     {
-        if (_windows.TryGetValue(id, out var w)) w.HideTemporary();
+        if (_windows.TryGetValue(id, out var w)) HideTemporaryAll(new[] { w });
     });
 
     /// <summary>新建实例配置：在同类已有实例基础上做级联偏移，避免叠在一起。</summary>
@@ -212,7 +212,7 @@ public sealed class WidgetManager
 
     public Task HideAllAsync() => OnUiAsync(() =>
     {
-        foreach (var w in _windows.Values.ToList()) w.HideTemporary();
+        HideTemporaryAll(_windows.Values.ToList());
     });
 
     /// <summary>显示某类型的全部实例（快捷键「显示组件」用）。</summary>
@@ -224,7 +224,7 @@ public sealed class WidgetManager
     /// <summary>隐藏某类型的全部实例（快捷键「隐藏组件」用）。</summary>
     public Task HideKindAsync(WidgetKind kind) => OnUiAsync(() =>
     {
-        foreach (var w in _windows.Values.Where(w => w.Kind == kind).ToList()) w.HideTemporary();
+        HideTemporaryAll(_windows.Values.Where(w => w.Kind == kind).ToList());
     });
 
     /// <summary>
@@ -236,7 +236,7 @@ public sealed class WidgetManager
         var kindWindows = _windows.Values.Where(w => w.Kind == kind).ToList();
         if (kindWindows.Any(w => w.IsVisible))
         {
-            foreach (var w in kindWindows) w.HideTemporary();
+            HideTemporaryAll(kindWindows);
             return;
         }
 
@@ -251,7 +251,7 @@ public sealed class WidgetManager
         var anyVisible = _windows.Values.Any(w => w.IsVisible);
         if (anyVisible)
         {
-            foreach (var w in _windows.Values.ToList()) w.HideTemporary();
+            HideTemporaryAll(_windows.Values.ToList());
         }
         else
         {
@@ -295,7 +295,7 @@ public sealed class WidgetManager
         var anyVisible = _windows.Values.Any(w => w.IsVisible);
         if (anyVisible)
         {
-            foreach (var w in _windows.Values.ToList()) w.HideTemporary();
+            HideTemporaryAll(_windows.Values.ToList());
         }
         else
         {
@@ -375,7 +375,7 @@ public sealed class WidgetManager
 
     public Task ShutdownAllAsync() => OnUiAsync(() =>
     {
-        foreach (var id in _windows.Keys.ToList()) CloseInternal(id, persist: false);
+        CloseAll(_windows.Keys.ToList(), persist: true);
     });
 
     // ───────────────────────── 布局方案 ─────────────────────────
@@ -525,11 +525,7 @@ public sealed class WidgetManager
         }
 
         // 布局之外的实例：隐藏但保留（内容不丢）
-        foreach (var id in _windows.Keys.ToList())
-        {
-            if (used.Contains(id)) continue;
-            if (_windows.TryGetValue(id, out var w)) w.HideTemporary();
-        }
+        HideTemporaryAll(_windows.Values.Where(w => !used.Contains(w.InstanceId)).ToList());
 
         InstancesChanged?.Invoke();
         return mapping;
@@ -709,7 +705,7 @@ public sealed class WidgetManager
         await OnUiAsync(() =>
         {
             var keep = new HashSet<string>(dataRestore.Select(r => r.instanceId), StringComparer.Ordinal);
-            foreach (var id in _windows.Keys.ToList()) CloseInternal(id, persist: false);
+            CloseAll(_windows.Keys.ToList(), persist: false);
             foreach (var id in keep) ShowInternal(id);
         });
 
@@ -1080,11 +1076,50 @@ public sealed class WidgetManager
         }
     }
 
+    /// <summary>
+    /// 关闭一个实例。<paramref name="persist"/> 决定"要不要先把屏幕上的几何留在盘上"：
+    /// 移除实例（那一行已从存档里删掉）与应用快照（磁盘刚按快照写好，不许用旧几何盖回去）时必须 false，
+    /// 退出应用时必须 true。<b>这个旗标曾经被完全忽略</b>——于是每个调用点都各写一趟整档，
+    /// 而"该不该写"根本没人说了算。
+    /// </summary>
     private void CloseInternal(string id, bool persist = true)
     {
-        if (_windows.Remove(id, out var window))
-        {
-            window.Shutdown();
-        }
+        if (!_windows.Remove(id, out var window)) return;
+        if (persist) PersistBoundsFor(new[] { window });
+        window.Shutdown();
     }
+
+    /// <summary>整批关闭：<b>几何一次落盘</b>，再逐个关窗（逐个 PersistBounds 时 N 个窗口＝N 趟整档读写）。</summary>
+    private void CloseAll(IReadOnlyList<string> ids, bool persist)
+    {
+        if (persist)
+        {
+            var targets = new List<WidgetWindow>();
+            foreach (var id in ids)
+                if (_windows.TryGetValue(id, out var w)) targets.Add(w);
+            PersistBoundsFor(targets);
+        }
+        foreach (var id in ids.ToList()) CloseInternal(id, persist: false);
+    }
+
+    /// <summary>整批临时隐藏：同样先一次性把几何写好，再逐个隐藏。</summary>
+    private void HideTemporaryAll(IReadOnlyList<WidgetWindow> windows)
+    {
+        if (windows.Count == 0) return;
+        PersistBoundsFor(windows);
+        foreach (var w in windows) w.HideTemporary();
+    }
+
+    /// <summary>
+    /// 一批窗口各自的几何<b>共用一次读档、最多一次落盘</b>。<see cref="WidgetStorage.Mutate"/> 存在的理由就在这里：
+    /// <c>WidgetWindow</c> 自己 Load+Save 的话，N 个窗口就是 N 趟整档读写（隐藏/关闭/协同拖动都会踩到）。
+    /// 一个窗口都没写动到（实例已移除）时一次盘都不写。
+    /// </summary>
+    private void PersistBoundsFor(IReadOnlyList<WidgetWindow> windows) =>
+        _storage.Mutate(data =>
+        {
+            var wrote = false;
+            foreach (var w in windows) wrote |= w.WriteBoundsInto(data);
+            return wrote;
+        });
 }

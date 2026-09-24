@@ -1,0 +1,93 @@
+#nullable enable
+using System.Linq;
+using Xunit;
+using static StarMark.Tests.SourceGate;
+
+namespace StarMark.Tests;
+
+/// <summary>
+/// 组件几何持久化的结构守门（批次 PA-7）。被测的 <c>WidgetWindow</c> / <c>WidgetManager</c> 都在
+/// <c>StarMark.UI</c>，测试工程按分层红线不引用它 ⇒ 只能扫源码。
+/// <para>
+/// 为什么值得守：<b>"每个窗口各写一趟整档"回来时不会有任何功能异常</b>——隐藏全部组件照样成功，
+/// 只是 widgets.json 被整档读写 N 遍（这文件还连带存着全部布局与快照）。
+/// 更糟的是 <c>CloseInternal(persist:…)</c> 那个旗标曾经<b>压根没人读</b>：
+/// 调用点写了 <c>persist:false</c> 却照样落盘，"应用快照后又被旧几何盖回去"就是这么来的。
+/// </para>
+/// </summary>
+public sealed class WidgetGeometryPersistGateTests
+{
+    private const string ManagerPath = "src/StarMark.UI/Services/WidgetManager.cs";
+    private const string WindowPath = "src/StarMark.UI/Views/WidgetWindow.xaml.cs";
+
+    /// <summary>隐藏一批组件只能走"整批一次落盘"那一个出口。</summary>
+    [Fact]
+    public void HidingAlwaysGoesThroughTheBatchExit()
+    {
+        var manager = ReadRepoFile(ManagerPath);
+        var outside = WithoutMethod(manager, "private void HideTemporaryAll(");
+
+        Assert.True(Count(manager, "HideTemporaryAll(") >= 6,
+            $"整批隐藏的出口只被引用 {Count(manager, "HideTemporaryAll(")} 次，调用点变少了——守门要先跟上");
+        Assert.Equal(0, Count(outside, ".HideTemporary()"));   // 别处一律不许逐个隐藏
+    }
+
+    /// <summary>关窗的每个调用点都必须<b>自己说清要不要留几何</b>，不许吃默认值。</summary>
+    [Fact]
+    public void EveryCloseSiteStatesWhetherItPersists()
+    {
+        var manager = ReadRepoFile(ManagerPath);
+        var outside = WithoutMethod(WithoutMethod(manager, "private void CloseInternal("), "private void CloseAll(");
+
+        var calls = outside.Split('\n')
+            .Select(l => l.TrimEnd('\r'))
+            .Where(l => (l.Contains("CloseInternal(") || l.Contains("CloseAll(")) && !l.TrimStart().StartsWith("///"))
+            .ToList();
+
+        Assert.True(calls.Count >= 4, $"只扫到 {calls.Count} 处关窗调用，扫描可能已失效");
+        Assert.All(calls, line => Assert.Contains("persist:", line));
+    }
+
+    [Fact]
+    public void ThePersistFlagIsActuallyRead()
+    {
+        var body = MethodBody(ReadRepoFile(ManagerPath), "private void CloseInternal(");
+
+        Assert.Contains("if (persist)", body);                 // 曾经这个参数收下就丢，四个调用点的意图全部落空
+        Assert.Contains("window.Shutdown()", body);
+    }
+
+    /// <summary>窗口自己的隐藏/关闭动作不许再各自落盘——那是 N 趟整档读写的源头。</summary>
+    [Fact]
+    public void TheWindowMethodsDoNotPersistThemselves()
+    {
+        var window = ReadRepoFile(WindowPath);
+
+        Assert.Equal(0, Count(MethodBody(window, "public void HideTemporary()"), "PersistBounds("));
+        Assert.Equal(0, Count(MethodBody(window, "public void Shutdown()"), "PersistBounds("));
+        Assert.Contains("SW_HIDE", MethodBody(window, "public void HideTemporary()"));   // 反空转：扫到的确实是隐藏
+    }
+
+    /// <summary>Ctrl+拖动收尾：一次 <c>Mutate</c>，参与者全在里面；<b>逐个 PersistBounds 会写 N+1 趟</b>。</summary>
+    [Fact]
+    public void ACoordinatedDragPersistsOnceForEveryone()
+    {
+        var window = ReadRepoFile(WindowPath);
+        var body = MethodBody(window, "private void PersistPositionsAfterDrag()");
+
+        Assert.Equal(1, Count(body, "_storage.Mutate("));
+        Assert.Equal(0, Count(body, "PersistBounds("));
+        Assert.Contains("_coordPeers", body);                  // 参与者必须在这一次里，不能被漏到循环外
+    }
+
+    /// <summary>"写进存档"与"落盘"必须分开：<b>能把整批塞进一次读档的前提就是它不碰磁盘</b>。</summary>
+    [Fact]
+    public void TheBoundsWriterNeverTouchesTheDisk()
+    {
+        var body = MethodBody(ReadRepoFile(WindowPath), "internal bool WriteBoundsInto(WidgetStoreData data)");
+
+        Assert.Equal(0, Count(body, "_storage.Load()"));
+        Assert.Equal(0, Count(body, "_storage.Save("));
+        Assert.Contains("inst.X = ", body);                    // 反空转：几何确实是在这里写的
+    }
+}

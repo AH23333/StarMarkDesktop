@@ -139,9 +139,6 @@ public sealed partial class WidgetWindow : Window
         AppWindow.MoveAndResize(r);
     }
 
-    /// <summary>协同移动结束后让本窗口落盘自己的位置。</summary>
-    public void PersistPosition() => PersistBounds();
-
     /// <summary>供组件内容工厂构造具体组件（如 QuickLaunchWidget）时取用依赖。</summary>
     internal WidgetStorage Storage => _storage;
     internal IItemRepository? Repository => _repo;
@@ -289,10 +286,11 @@ public sealed partial class WidgetWindow : Window
     private void RaiseTransient() =>
         WidgetLayerService.RaiseTransient(WindowInterop.GetHwnd(this));
 
-    /// <summary>临时隐藏（实例保留，托盘/设置可一键恢复）。</summary>
+    /// <summary>临时隐藏（实例保留，托盘/设置可一键恢复）。
+    /// <b>不负责落盘</b>：几何由调用侧整批写好（<c>WidgetManager.HideTemporaryAll</c>）——
+    /// 逐个 Save 时"隐藏全部组件"＝N 趟整档读写，而隐藏本身并不改几何，那一趟多半是白写的。</summary>
     public void HideTemporary()
     {
-        PersistBounds();
         // 与 Reveal 对称：AppWindow.Hide() 对跨进程 owner（桌面图标层）的窗口同样不可靠，
         // 显式补原生 ShowWindow(SW_HIDE) 确保真正隐藏，避免下次点亮时状态错乱。
         WindowInterop.ShowWindow(WindowInterop.GetHwnd(this), WindowInterop.SW_HIDE);
@@ -300,12 +298,14 @@ public sealed partial class WidgetWindow : Window
         _ticker?.UpdateRunning(AppWindow.IsVisible);
     }
 
-    /// <summary>彻底关闭（组件被移除时调用）。</summary>
+    /// <summary>彻底关闭（组件被移除时调用）。<b>不负责落盘</b>，理由同 <c>HideTemporary</c>：
+    /// 几何由调用侧整批写好（<c>WidgetManager.CloseAll</c>）。原先这里也各写一趟，于是"关闭全部组件"＝
+    /// N 趟整档读写，而 <c>CloseInternal</c> 的 <c>persist</c> 旗标压根没人读——退出时该写的没写清、
+    /// 应用快照时不该写的却写了。</summary>
     public void Shutdown()
     {
         if (_shuttingDown) return;
         _shuttingDown = true;
-        PersistBounds();
         _ticker?.Stop();
         Close();
     }
@@ -375,15 +375,22 @@ public sealed partial class WidgetWindow : Window
         return (x, y, w, h);
     }
 
-    private void PersistBounds()
+    /// <summary>把本窗口当前几何单独落盘（一次读 + 最多一次写）。</summary>
+    internal void PersistBounds() => _storage.Mutate(WriteBoundsInto);
+
+    /// <summary>
+    /// 把本窗口当前几何<b>写进给定的存档</b>——不读盘、不落盘。整批窗口共用一次读档一次落盘时走这里
+    /// （<see cref="WidgetManager"/> 的 PersistBoundsFor，以及本类的 <see cref="PersistPositionsAfterDrag"/>）。
+    /// </summary>
+    /// <returns>有没有写到东西。<b>实例已从存档里消失（正在被移除）时返回 false，一次盘都不该写</b>。</returns>
+    internal bool WriteBoundsInto(WidgetStoreData data)
     {
         try
         {
             var r = WindowInterop.GetWindowRect(this);
-            if (r.Width <= 0 || r.Height <= 0) return;
-            var data = _storage.Load();
+            if (r.Width <= 0 || r.Height <= 0) return false;
             var inst = data.Instances.FirstOrDefault(i => i.Id == _instanceId);
-            if (inst is null) return;
+            if (inst is null) return false;
 
             // 收起为胶囊时，窗口当前显示的是「胶囊」而非展开态：
             //  - 展开态位置/尺寸必须保持（用 _expandedRect，其次 _config），否则点击展开会跳到屏幕边缘；
@@ -432,11 +439,12 @@ public sealed partial class WidgetWindow : Window
             }
             catch { /* 拿不到显示器信息时不写拓扑字段，回退物理像素路径 */ }
 
-            _storage.Save(data);
+            return true;
         }
         catch (Exception ex)
         {
             StarLog.Error($"组件位置持久化失败 ({_kind})", ex);
+            return false;
         }
     }
 
@@ -1593,15 +1601,25 @@ public sealed partial class WidgetWindow : Window
         }
     }
 
-    /// <summary>结束协同移动：让每个参与者落盘自己的新位置。</summary>
-    private void EndCoordinatedMove()
+    /// <summary>
+    /// 拖动收尾的持久化：自己 + 协同移动的每个参与者，<b>一次读档、最多一次落盘</b>。
+    /// 逐窗 PersistBounds 的话，一次 Ctrl+拖动要写 N+1 趟整档（N＝同屏参与组件数），
+    /// 而这正是"多个组件一起摆位"的常用手势。单个窗口写失败不该拖住其它窗口，所以逐个兜住。
+    /// </summary>
+    private void PersistPositionsAfterDrag()
     {
-        if (!_coordinated) return;
-        foreach (var (w, _) in _coordPeers)
+        var targets = new List<WidgetWindow> { this };
+        targets.AddRange(_coordPeers.Select(p => p.Window));
+        _storage.Mutate(data =>
         {
-            try { w.PersistPosition(); }
-            catch (Exception ex) { StarLog.Error("协同移动后持久化位置失败", ex); }
-        }
+            var wrote = false;
+            foreach (var w in targets)
+            {
+                try { wrote |= w.WriteBoundsInto(data); }
+                catch (Exception ex) { StarLog.Error("拖动后持久化组件位置失败", ex); }
+            }
+            return wrote;
+        });
         ClearCoordinatedMove();
     }
 
@@ -1617,8 +1635,7 @@ public sealed partial class WidgetWindow : Window
         _dragging = false;
         EndSnapSession();
         try { DragBar.ReleasePointerCapture(e.Pointer); } catch { }
-        PersistBounds();
-        EndCoordinatedMove();
+        PersistPositionsAfterDrag();
         e.Handled = true;
     }
 

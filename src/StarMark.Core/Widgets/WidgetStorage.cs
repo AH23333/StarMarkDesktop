@@ -403,6 +403,9 @@ public sealed class WidgetStorage
     /// <summary>命中快照缓存的次数（诊断/测试用）。</summary>
     internal int CacheHits;
 
+    /// <summary>真正整档写盘的次数（诊断/测试用）。与 <see cref="DiskReads"/> 一起才是"省了几趟"的证据。</summary>
+    internal int DiskWrites;
+
     public WidgetStoreData Load()
     {
         lock (_gate)
@@ -468,7 +471,9 @@ public sealed class WidgetStorage
         }
     }
 
-    public void Save(WidgetStoreData data)
+    /// <summary>整档写盘。<b>返回是否真的落盘了</b>：降级态（读取曾被占用）与写/搬失败都返回 false，
+    /// 调用方据此才能说实话——否则"我保存好了"是一句谎话。</summary>
+    public bool Save(WidgetStoreData data)
     {
         lock (_gate)
         {
@@ -479,7 +484,7 @@ public sealed class WidgetStorage
                 // 节流：降级期间每次保存都撞这一句（摆位/改标题都会保存），留首条 + 累计数即可
                 StarLog.WarnThrottled($"widget-degraded:{_path}",
                     $"组件配置处于降级态（读取曾被临时占用），跳过本次保存以保护磁盘数据 ({_path})");
-                return;
+                return false;
             }
 
             // 落盘绝不向外抛：本方法经 WidgetManager.OnUiAsync 在 UI 线程同步内联执行，
@@ -494,15 +499,35 @@ public sealed class WidgetStorage
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
                 File.WriteAllText(tmp, JsonSerializer.Serialize(normalized, new JsonSerializerOptions { WriteIndented = true }));
                 File.Move(tmp, _path, overwrite: true);
+                DiskWrites++;
                 // 只有真的搬成功了才作废缓存：失败时磁盘仍是上一版，缓存照样有效
                 // （反过来若在这里也作废，就成了"写失败却重读一遍旧内容"，白做一次还多一处会错的地方）。
                 _cached = null;
+                return true;
             }
             catch (Exception ex)
             {
                 StarLog.Error($"保存组件配置失败，已保留上一次内容不变 ({_path})", ex);
                 try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                return false;
             }
+        }
+    }
+
+    /// <summary>
+    /// "一次读档 → 就地改 N 处 → 最多一次落盘"的出口。<b>循环里逐个 <see cref="Save"/> 正是这条路要消灭的形状</b>：
+    /// 每次 Save 都会作废 <see cref="Load"/> 缓存的快照，于是"读→写→读→写"逐轮整档往返——
+    /// 隐藏/关闭 8 个组件窗口就是 8 趟全档读写，而 widgets.json 还连带存着全部布局与快照，会随用户积累变大。
+    /// </summary>
+    /// <param name="mutate">就地改这份存档，返回<b>是否需要落盘</b>；返回 false 时一次写盘都不发生。</param>
+    /// <returns>是否真的写了盘。</returns>
+    public bool Mutate(Func<WidgetStoreData, bool> mutate)
+    {
+        lock (_gate)
+        {
+            var data = Load();
+            if (!mutate(data)) return false;
+            return Save(data);
         }
     }
 
