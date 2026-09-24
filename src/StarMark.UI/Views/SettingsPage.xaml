@@ -399,6 +399,46 @@
 
                                 <TextBlock x:Name="AiStatusText" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
                                            Text="还没测过。" Opacity="0.72"/>
+
+                                <!--
+                                    批量整理。入口只有一个（扩展教训：两个功能重叠的按钮引发多次返工），
+                                    就放在通道配置下面——通道没接通时这里点了也只会在状态行给出原因。
+                                -->
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                    <NumberBox Grid.Column="0" x:Name="AiScopeBox" Header="整理多少条还没有标签的条目"
+                                               Minimum="1" Maximum="500" SmallChange="10" LargeChange="50" SpinButtonPlacementMode="Compact"
+                                               Value="100" FontSize="12" HorizontalAlignment="Stretch"/>
+                                    <Button Grid.Column="1" x:Name="AiOrganiseButton" Content="开始整理" Click="AiOrganise_Click"
+                                            Style="{StaticResource SecondaryButton}" VerticalAlignment="Bottom"/>
+                                    <Button Grid.Column="2" x:Name="AiApplyAllButton" Content="全部应用" Click="AiApplyAll_Click"
+                                            Style="{StaticResource SecondaryButton}" VerticalAlignment="Bottom" IsEnabled="False"/>
+                                </Grid>
+
+                                <Button x:Name="AiResumeButton" Content="继续处理上次整理好的结果" Click="AiResume_Click"
+                                        Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" Visibility="Collapsed"/>
+
+                                <!--
+                                    预览以"组"为单位：三百条逐个看是没人会做的复核，
+                                    而"这六条打同一组标签"一眼就能判断对不对。
+                                -->
+                                <ScrollViewer MaxHeight="380" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl x:Name="AiGroupList">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,3,0,3">
+                                                    <StackPanel Grid.Column="0" Spacing="1">
+                                                        <TextBlock Text="{Binding TagLine}" FontSize="13" TextWrapping="Wrap"/>
+                                                        <TextBlock Text="{Binding ItemLine}" FontSize="11" Opacity="0.62" TextWrapping="Wrap"/>
+                                                    </StackPanel>
+                                                    <Button Grid.Column="1" Content="应用这组" Click="AiApplyGroup_Click" Tag="{Binding}"
+                                                            Style="{StaticResource SecondaryButton}" VerticalAlignment="Center"/>
+                                                    <Button Grid.Column="2" Content="不要" Click="AiIgnoreGroup_Click" Tag="{Binding}"
+                                                            Style="{StaticResource SecondaryButton}" VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
                             </StackPanel>
                         </Border>
                     </controls:ColumnFlowPanel>

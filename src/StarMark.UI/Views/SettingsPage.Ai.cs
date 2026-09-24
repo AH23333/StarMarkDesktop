@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ using StarMark.Abstractions;
 using StarMark.Abstractions.Ai;
 using StarMark.Integrations.Ai;
 using StarMark.UI.Helpers;
+using StarMark.UI.Services;
 
 namespace StarMark.UI.Views;
 
@@ -53,6 +55,7 @@ public sealed partial class SettingsPage
             _aiLoading = false;
         }
         ShowAiProblem();
+        InitAiOrganiseSection();
     }
 
     /// <summary>把界面上这一组控件读成一份配置。<b>只有这一个地方读控件</b>：
@@ -146,4 +149,178 @@ public sealed partial class SettingsPage
         if (_aiModels.Count == 0) return;
         AiModelBox.Text = _aiModels[0];       // TextChanged 会顺手保存并刷新状态
     }
+
+    // ───────────────────── 批量整理（批次 B）─────────────────────
+
+    private readonly ObservableCollection<AiGroupRow> _aiGroups = new();
+    private ClassifyPlan _aiPlan = ClassifyPlan.Empty;
+    private bool _aiOrganising;
+    private CancellationTokenSource? _aiOrganiseCts;
+
+    /// <summary>装载时把"上次整理好但还没应用"的方案递出来。<b>它必须看得见</b>：
+    /// 用户中途关了设置页（甚至重启了程序），已经花掉的那次整理不该凭空消失。</summary>
+    private void InitAiOrganiseSection()
+    {
+        AiGroupList.ItemsSource = _aiGroups;
+        ShowPlan(App.Services.GetRequiredService<SettingsStore>().LoadAiPlan());
+        if (_aiPlan.IsEmpty) AiResumeButton.Visibility = Visibility.Collapsed;
+    }
+
+    private async void AiOrganise_Click(object sender, RoutedEventArgs e)
+    {
+        if (_aiOrganising)
+        {
+            _aiOrganiseCts?.Cancel();
+            AiStatusText.Text = "正在停下…（已经整理出来的会留在下面）";
+            return;
+        }
+
+        var settings = ReadAiSettings();
+        if (settings.Problem() is { } bad)
+        {
+            // 就地给原因，不让人对着一个灰按钮猜：通道没通是"点了没反应"最常见的原因
+            AiStatusText.Text = "还不能开始整理：" + bad;
+            return;
+        }
+
+        _aiOrganising = true;
+        AiOrganiseButton.Content = "暂停";
+        AiApplyAllButton.IsEnabled = false;
+        var cts = new CancellationTokenSource();
+        _aiOrganiseCts = cts;
+        AiStatusText.Text = "正在准备…";
+        try
+        {
+            var outcome = await App.Services.GetRequiredService<AiClassifyService>()
+                .OrganiseAsync((int)Math.Round(AiScopeBox.Value), status => AiStatusText.Text = status,
+                    (done, total) => AiStatusText.Text = $"第 {done} / {total} 批完成，继续中…", cts.Token);
+
+            ShowPlan(outcome.Plan);
+            AiStatusText.Text = Describe(outcome);
+        }
+        catch (OperationCanceledException)
+        {
+            AiStatusText.Text = "已经停下。下面这些是停之前整理出来的，可以先挑几组应用。";
+            ShowPlan(App.Services.GetRequiredService<SettingsStore>().LoadAiPlan());
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("[AI] 批量整理失败", ex);
+            AiStatusText.Text = "整理没能完成：" + ex.Message;
+        }
+        finally
+        {
+            _aiOrganising = false;
+            _aiOrganiseCts = null;
+            AiOrganiseButton.Content = "开始整理";
+            AiApplyAllButton.IsEnabled = !_aiPlan.IsEmpty;
+            cts.Dispose();
+        }
+    }
+
+    /// <summary>一句话交代这一轮：<b>整理出多少、缺多少、坏了几批、以及"还没写进库"</b>。
+    /// 只报"完成"会漏掉两种真话：模型答漏了条目、某些批次根本没成功。</summary>
+    private static string Describe(OrganiseOutcome outcome)
+    {
+        var text = outcome.Plan.IsEmpty
+            ? "没有整理出可用的建议"
+            : $"整理出 {outcome.Plan.ItemCount} 条建议（问的是 {outcome.AskedItems} 条）";
+        if (outcome.MissingItems > 0) text += $"，{outcome.MissingItems} 条模型没答";
+        if (outcome.UnknownOrdinals > 0) text += $"，丢掉 {outcome.UnknownOrdinals} 个对不上号的编号";
+        if (outcome.StoppedBatches > 0) text += $"，{outcome.StoppedBatches} 批没问（已停止）";
+        if (outcome.FailedBatches > 0)
+            text += $"，{outcome.FailedBatches} 批没成功" + (outcome.FirstError is { } err ? $"（{err}）" : string.Empty);
+        return text + "。点「应用这组」才会写进库。";
+    }
+
+    private void ShowPlan(ClassifyPlan plan)
+    {
+        _aiPlan = plan;
+        _aiGroups.Clear();
+        foreach (var group in plan.Groups())
+        {
+            if (group.Ids.Count == 0) continue;
+            var ids = new HashSet<long>(group.Ids);
+            _aiGroups.Add(new AiGroupRow(group, plan.Proposals.Where(proposal => ids.Contains(proposal.Id)).ToList()));
+        }
+        AiApplyAllButton.IsEnabled = !plan.IsEmpty;
+        AiResumeButton.Visibility = plan.IsEmpty ? Visibility.Collapsed : Visibility.Visible;
+        AiResumeButton.Content = plan.IsEmpty ? "继续处理上次的整理结果"
+            : $"继续处理上次整理好的 {plan.ItemCount} 条";
+    }
+
+    private void AiResume_Click(object sender, RoutedEventArgs e)
+        => ShowPlan(App.Services.GetRequiredService<SettingsStore>().LoadAiPlan());
+
+    private async void AiApplyAll_Click(object sender, RoutedEventArgs e) => await ApplyAsync(_aiPlan, "全部");
+
+    private async void AiApplyGroup_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: AiGroupRow row }) return;
+        // 只切这一组的条目出去应用；"这一组"是用户点头的单位，不能顺手把别的组也写了
+        await ApplyAsync(new ClassifyPlan(row.Proposals, _aiPlan.CreatedAt),
+            $"「{string.Join("、", row.Group.Tags)}」这一组");
+    }
+
+    /// <summary>只应用这一组：把组内条目从总方案里切出来交给服务，应用完再从预览里摘掉。</summary>
+    private async Task ApplyAsync(ClassifyPlan plan, string label)
+    {
+        if (plan.IsEmpty)
+        {
+            AiStatusText.Text = label + "没有可应用的内容。";
+            return;
+        }
+        AiApplyAllButton.IsEnabled = false;
+        try
+        {
+            var applied = await App.Services.GetRequiredService<AiClassifyService>()
+                .ApplyAsync(plan, CancellationToken.None);
+            // 应用过的从待处理方案里剔除，剩下的（用户还没点的那些）继续留在预览与存档里
+            var appliedIds = plan.Proposals.Select(proposal => proposal.Id).ToHashSet();
+            ShowPlan(new ClassifyPlan(
+                _aiPlan.Proposals.Where(proposal => !appliedIds.Contains(proposal.Id)).ToList(), _aiPlan.CreatedAt));
+            App.Services.GetRequiredService<SettingsStore>().SaveAiPlan(_aiPlan);
+            AiStatusText.Text = applied > 0
+                ? $"已把{label}的标签写进库：{applied} 条。"
+                : $"{label}的标签其实都已经有了，没有需要新加的。";
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("[AI] 应用整理结果失败", ex);
+            AiStatusText.Text = "写入没能完成：" + ex.Message;
+        }
+        finally
+        {
+            AiApplyAllButton.IsEnabled = !_aiPlan.IsEmpty;
+        }
+    }
+
+    private void AiIgnoreGroup_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: AiGroupRow row }) return;
+        ShowPlan(_aiPlan.WithoutGroup(row.Group));
+        App.Services.GetRequiredService<SettingsStore>().SaveAiPlan(_aiPlan);
+        AiStatusText.Text = _aiPlan.IsEmpty
+            ? "这一组不要了。剩下的预览已清空。"
+            : $"这一组不要了（{row.Group.Ids.Count} 条），还剩 {_aiPlan.ItemCount} 条。";
+    }
+}
+
+/// <summary>预览里"一组标签一样的条目"那一行。<b>标签集合与条目 id 都用字符串显示出来</b>：
+/// 用户在应用之前要能看见"到底给哪几条打哪几个标签"，看不见就等于让人盲签。</summary>
+public sealed class AiGroupRow
+{
+    public AiGroupRow(TagGroup group, IReadOnlyList<TagProposal> proposals)
+    {
+        Group = group;
+        Proposals = proposals;
+        TagLine = string.Join("、", group.Tags) + "（" + group.Ids.Count + " 条）";
+        ItemLine = "条目编号 " + string.Join("、", group.Ids.Take(6))
+            + (group.Ids.Count > 6 ? $"…（共 {group.Ids.Count} 条）" : string.Empty);
+    }
+
+    public TagGroup Group { get; }
+    public string TagLine { get; }
+    public string ItemLine { get; }
+    public IReadOnlyList<TagProposal> Proposals { get; }
 }

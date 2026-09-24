@@ -130,6 +130,10 @@ public sealed class SettingsStore : IPerformanceSettingsSource
 
         /// <summary>OpenAI 兼容端点地址（填到 <c>/v1</c> 那一层）。null＝用默认。</summary>
         public string? AiBaseUrl { get; set; }
+
+        /// <summary>一轮整理<strong>还没应用</strong>的方案（JSON）。写它是为了"关窗口/进程被杀也不丢已整理出来的"，
+        /// 应用完或用户明确丢弃时清空。与 <c>Ai*</c> 那六个一样保持独立 key，谁也不覆盖谁。</summary>
+        public string? AiPendingPlanJson { get; set; }
     }
 
     public SettingsStore(string? path = null) => _path = path ?? ResolveSettingsPath();
@@ -689,6 +693,69 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         d.AiOllamaBaseUrl = string.IsNullOrWhiteSpace(settings.OllamaBaseUrl) ? null : settings.OllamaBaseUrl.Trim();
         d.AiBaseUrl = string.IsNullOrWhiteSpace(settings.BaseUrl) ? null : settings.BaseUrl.Trim();
         Save(d);
+    }
+
+    /// <summary>读出还没应用的整理方案。读不出来按"没有方案"处理：<b>这一栏只是缓存性质，
+    /// 坏了不该让设置页打不开</b>（真正的数据——条目与标签——都在库里，没写进来过）。</summary>
+    public ClassifyPlan LoadAiPlan()
+    {
+        var json = Load()?.AiPendingPlanJson;
+        if (string.IsNullOrWhiteSpace(json)) return ClassifyPlan.Empty;
+        try
+        {
+            var plan = JsonSerializer.Deserialize<AiPlanRow>(json);
+            if (plan is null) return ClassifyPlan.Empty;
+            var proposals = new List<TagProposal>();
+            foreach (var row in plan.Items ?? new List<AiProposalRow>())
+            {
+                if (row is not { Id: > 0 } || row.Tags is not { Count: > 0 } tags) continue;
+                var clean = TagText.Sanitize(tags);          // 存档里的标签再过一次闸门：那是用户可以手改的文件
+                if (clean.Count > 0) proposals.Add(new TagProposal(row.Id, clean));
+            }
+            return new ClassifyPlan(proposals, plan.At == default ? DateTimeOffset.UtcNow : plan.At);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"[AI] 待应用的整理方案读不出，按没有方案处理：{ex.Message}");
+            return ClassifyPlan.Empty;
+        }
+    }
+
+    public void SaveAiPlan(ClassifyPlan plan)
+    {
+        var d = Load() ?? new SettingsData();
+        if (plan.IsEmpty) d.AiPendingPlanJson = null;
+        else d.AiPendingPlanJson = JsonSerializer.Serialize(new AiPlanRow
+        {
+            At = plan.CreatedAt,
+            Items = plan.Proposals.Select(proposal => new AiProposalRow
+            {
+                Id = proposal.Id,
+                Tags = proposal.Tags.ToList(),
+            }).ToList(),
+        });
+        Save(d);
+    }
+
+    public void ClearAiPlan()
+    {
+        var d = Load() ?? new SettingsData();
+        d.AiPendingPlanJson = null;
+        Save(d);
+    }
+
+    /// <summary>方案的落盘形状。<b>不直接序列化 <see cref="ClassifyPlan"/> 本身</b>：那会让记录类型的
+    /// 内部结构变成存档格式，将来给方案加一个字段就会读到旧档里的 null 集合。</summary>
+    private sealed class AiPlanRow
+    {
+        public DateTimeOffset At { get; set; }
+        public List<AiProposalRow>? Items { get; set; }
+    }
+
+    private sealed class AiProposalRow
+    {
+        public long Id { get; set; }
+        public List<string>? Tags { get; set; }
     }
 
     /// <summary>
