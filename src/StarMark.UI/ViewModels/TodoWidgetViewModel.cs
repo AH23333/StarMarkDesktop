@@ -264,17 +264,9 @@ public sealed class TodoWidgetViewModel : ObservableObject
         var rest = _all.Where(r => !idSet.Contains(r.Id)).Select(r => r.Id).ToList();
         var full = ids.Concat(rest).ToList();
 
-        var items = await _repo.GetBySourceAsync(ItemSources.Local, ItemType.Todo, ct: CancellationToken.None);
-        var byId = new Dictionary<long, Item>();
-        foreach (var it in items) byId[it.Id] = it;
-
-        for (var i = 0; i < full.Count; i++)
-        {
-            if (!byId.TryGetValue(full[i], out var it)) continue;
-            LocalItemState.SetOrder(it, i);
-            it.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            await _repo.UpsertLocalItemAsync(it);
-        }
+        // 顺序写回交给仓储：一次连接、每条只改 extra_json 与 updated_at。
+        // 之前逐条 UpsertLocalItemAsync 会把整行覆盖一遍并重建 20 次全文索引，而顺序不在索引里。
+        await _repo.ReorderLocalItemsAsync(full, CancellationToken.None);
 
         await LoadAsync();
     }

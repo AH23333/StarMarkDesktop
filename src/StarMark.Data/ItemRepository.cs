@@ -659,6 +659,61 @@ public sealed class ItemRepository : IItemRepository
         }
     }
 
+    /// <summary>
+    /// 拖动排序的写入出口：读现状 → 只改 order → 只写变化的行。
+    /// <para><b>为什么不用 <see cref="UpsertLocalItemAsync"/> 逐条写</b>：那条路径按整行覆盖并重建全文索引，
+    /// 而顺序既不在索引里也不该影响别的列——一次 20 条的拖动会变成 20 次开库 + 20 次无谓的索引重建，
+    /// 还把"整行覆盖"的风险引进一个只该改一个数字的动作里。</para>
+    /// </summary>
+    public async Task<int> ReorderLocalItemsAsync(IReadOnlyList<long> orderedIds, CancellationToken ct = default)
+    {
+        if (orderedIds is null || orderedIds.Count == 0) return 0;
+
+        var ids = orderedIds.Where(id => id > 0).Distinct().ToList();
+        if (ids.Count == 0) return 0;
+
+        using var conn = _factory.Open();
+        using var tx = conn.BeginTransaction();
+
+        var current = new Dictionary<long, string?>();
+        foreach (var chunk in Chunks(ids))
+        {
+            using var read = conn.CreateCommand();
+            read.Transaction = tx;
+            read.CommandText = $"SELECT id, extra_json FROM items WHERE id IN ({InParams(chunk, read, "ro")});";
+            await using var reader = await read.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                current[reader.GetInt64(0)] = reader.IsDBNull(1) ? null : reader.GetString(1);
+        }
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var changed = 0;
+        for (var position = 0; position < ids.Count; position++)
+        {
+            var id = ids[position];
+            if (!current.TryGetValue(id, out var extraJson)) continue;     // 已经不在了：跳过，不新建行
+
+            // 顺序的编码只在 LocalItemState 一处定义，这里借它算目标写法（不自己拼 JSON）
+            var probe = new Item { Id = id, ExtraJson = extraJson };
+            LocalItemState.SetOrder(probe, position);
+            if (string.Equals(probe.ExtraJson, extraJson, StringComparison.Ordinal)) continue;
+
+            using var upd = conn.CreateCommand();
+            upd.Transaction = tx;
+            upd.CommandText = "UPDATE items SET extra_json = @extra, updated_at = @at WHERE id = @id;";
+            upd.Parameters.AddWithValue("@extra", (object?)probe.ExtraJson ?? DBNull.Value);
+            upd.Parameters.AddWithValue("@at", now);
+            upd.Parameters.AddWithValue("@id", id);
+            await upd.ExecuteNonQueryAsync(ct);
+            changed++;
+        }
+
+        if (changed == 0) return 0;                                       // 拖回原位：不写、不通知
+        await tx.CommitAsync(ct);
+        DataChangeHub.Notify();                                           // 整批一次：待办组件与列表各自重读一遍就够
+        return changed;
+    }
+
     // ===== 笔记 =====
 
     public async Task<string?> GetNoteAsync(long itemId, CancellationToken ct)

@@ -174,6 +174,18 @@ public interface IItemRepository
     /// <para>没有净变化时不写不通知不记活动（原样保存不该在时间线里留下"我改过"）。</para>
     /// </summary>
     Task<TagEditResult> SetItemTagsAsync(long itemId, IReadOnlyList<string> desired, CancellationToken ct = default);
+
+    /// <summary>
+    /// 按给定顺序把 <c>order</c> 写回这批本地条目（待办/随记的拖动排序），返回真正改了写法的条目数。
+    /// <para>
+    /// 一次连接、一次事务，<b>每条只更新 extra_json 与 updated_at 两列</b>。
+    /// 之前是逐条 <c>UpsertLocalItemAsync</c>：拖一次 20 条的待办要开 20 次库，
+    /// 而且每次都按整行重写并<strong>重建一次全文索引</strong>——顺序根本不在 search_text 里，
+    /// 那 20 次索引重建是纯粹的浪费，还顺手把"整行覆盖"的风险带进一个只该改一个数字的动作。
+    /// </para>
+    /// <para>顺序与现状一致的条目<b>不写</b>；整批都没变时不发任何写语句、不通知。</para>
+    /// </summary>
+    Task<int> ReorderLocalItemsAsync(IReadOnlyList<long> orderedIds, CancellationToken ct = default);
 }
 
 /// <summary>一次标签编辑的结果。<b>把"有没有变"回报清楚，界面才知道要不要刷新</b>。</summary>
