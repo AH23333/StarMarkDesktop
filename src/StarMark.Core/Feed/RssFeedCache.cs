@@ -106,6 +106,23 @@ public static class RssFeedCache
     }
 
     /// <summary>
+    /// 把"多久自动补抓一次"说成用户的那句人话。<b>24 小时要说"一天"不说"24 小时"</b>——
+    /// 他给的原话是"每天仅刷新一次"，页面用他的词回给他，才看得出这条口径真的落实了。
+    /// <para>为什么要有这个函数而不是把"一天"写进界面文案：那样一改 <see cref="AutoRefreshGap"/>
+    /// 就会留下三句假话（数字写在句子和常数里，编译器不响）。现在句子只从这里取。</para>
+    /// </summary>
+    public static string GapTextFor(TimeSpan gap)
+    {
+        var hours = (int)Math.Round(gap.TotalHours);
+        if (hours < 1) return $"{(int)Math.Round(gap.TotalMinutes)} 分钟";
+        if (hours < 24) return $"{hours} 小时";
+        return hours % 24 == 0 ? (hours == 24 ? "一天" : $"{hours / 24} 天") : $"{hours / 24} 天多";
+    }
+
+    /// <summary><see cref="GapTextFor"/> 按当前生效的间隔取的那一份（界面上写节奏的地方只用它）。</summary>
+    public static string GapText => GapTextFor(AutoRefreshGap);
+
+    /// <summary>
     /// 条目的身份键＝<b>条目自己的链接</b>（去首尾空白，忽略大小写）。
     /// <para><b>刻意不做 <c>UriNormalizer</c> 那套归一</b>：它会剥掉 query，而
     /// <c>?id=1</c> 与 <c>?id=2</c> 是两个不同的条目，剥掉就是静默丢条目

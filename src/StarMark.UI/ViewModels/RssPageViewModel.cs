@@ -156,8 +156,8 @@ public partial class RssPageViewModel : ObservableObject
             ? string.Empty
             : $"{Sections.Count} 个来源，{Sections.Count(s => s.Config.Enabled)} 个启用中；上面摆的是本机缓存"
               + (due > 0
-                    ? $"，{due} 个已超过一天没抓（打开这一页时自动补抓，不用点按钮）。"
-                    : "，今天都已经抓过一轮，不会再联网；要看新的点「刷新」。");
+                    ? $"，{due} 个已超过{RssFeedCache.GapText}没抓（打开这一页时自动补抓，不用点按钮）。"
+                    : $"，都在{RssFeedCache.GapText}之内抓过，不会再联网；要看新的点「刷新」。");
     }
 
     /// <summary>把某个源的缓存行与"上次抓取/什么时候再自动刷新"摆到它那一行上。</summary>
@@ -268,7 +268,7 @@ public partial class RssPageViewModel : ObservableObject
         if (targets.Count == 0) return;
 
         StatusText = auto
-            ? $"正在补抓 {targets.Count} 个已超过一天的来源…"
+            ? $"正在补抓 {targets.Count} 个已超过{RssFeedCache.GapText}的来源…"
             : $"正在抓取 {targets.Count} 个来源…（再点一下可以停）";
 
         // 校验符的"上一次是什么"在这一轮开始时定死（读 _file），抓回来的新值只在轮末串行落盘：
@@ -363,7 +363,7 @@ public partial class RssPageViewModel : ObservableObject
         var text = shown == 0
             ? $"{run.Outcomes.Count} 个来源里有 {okCount} 个通了，但没有给出任何条目"
             : auto
-                ? $"这一页每天自动补抓一次：本轮补了 {run.Outcomes.Count} 个到期的来源、新增 {added} 条，"
+                ? $"按「{RssFeedCache.GapText}一次」的节奏，本轮补抓了 {run.Outcomes.Count} 个到期的来源、新增 {added} 条，"
                   + $"现在共 {shown} 条（其余是缓存）。要看最新的点「刷新」。"
                 : $"共 {shown} 条（{okCount} 个源给了内容，本轮新增 {added} 条）。点条目直接跳文章，点「收藏到文件夹」才进库。";
         if (run.FailedCount > 0) text += $"　{run.FailedCount} 个源失败，原因写在对应那一行";

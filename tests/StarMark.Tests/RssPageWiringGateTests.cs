@@ -286,9 +286,24 @@ public sealed class RssPageWiringGateTests
     public void ThePageTellsTheTruthAboutWhenItGoesOnline()
     {
         var xaml = Markup(ReadRepoFile(RssPageXaml));
-        Assert.Contains("超过一天", xaml);
-        Assert.DoesNotContain("只有按「刷新」时才发请求", xaml);
+        Assert.DoesNotContain("只有按「刷新」时才发请求", xaml);       // 这句在每天一次之后就是假话
         Assert.Contains("rss-cache.json", xaml);                        // 说的是本机缓存，就得让人找得到那份文件
+    }
+
+    /// <summary>"隔多久自动补抓一次"这个节奏只许有一处在说话（<c>RssFeedCache.AutoRefreshGap</c>）。
+    /// <para>原先"一天"这个词写在标记与状态行里共四处：把常数改成 6 小时，编译器不响、闸门不红，
+    /// 只有用户看到的句子还在说"一天"——那是比少一个功能更难受的一种假口径。现在句子只从 GapText 取，
+    /// 标记里连这个词都不许出现。</para></summary>
+    [Fact]
+    public void TheCadenceIsStatedInExactlyOnePlace()
+    {
+        var vm = ReadRepoFile(RssPageVm);
+        Assert.True(Count(vm, "RssFeedCache.GapText") >= 4,
+            "界面那句节奏必须四处都从 RssFeedCache.GapText 取（改了 AutoRefreshGap 才不会留下四句假话）");
+
+        var xaml = Markup(ReadRepoFile(RssPageXaml));
+        foreach (var stray in new[] { "一天", "每天", "24 小时" })
+            Assert.DoesNotContain(stray, xaml);
     }
 
     /// <summary>「已收藏」的读法不许带行数窗口：窗口外的收藏会被显示成"没收藏"，

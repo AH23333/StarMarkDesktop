@@ -70,6 +70,22 @@ public sealed class RssFeedCacheTests : IDisposable
     public void AnEmptyCacheFileIsNeverMistakenForUpToDate()
         => Assert.True(RssFeedCache.IsDue(new RssCacheFile().Find(1), Now));   // 冷启动第一次进页面必须真抓
 
+    /// <summary>节奏要说人话：<b>24 小时得说"一天"</b>（用户原话就是"每天仅刷新一次"，用他的词回给他，
+    /// 才看得出这条口径真的落实了）。而这句话只能从这里产生——界面上那几处都引用它，
+    /// 改 <see cref="RssFeedCache.AutoRefreshGap"/> 就不会留下还在说旧数字的假话。</summary>
+    [Theory]
+    [InlineData(0.5, "30 分钟")]
+    [InlineData(6, "6 小时")]
+    [InlineData(24, "一天")]
+    [InlineData(48, "2 天")]
+    [InlineData(30, "1 天多")]
+    public void TheCadenceIsSaidInHumanWords(double hours, string expected)
+        => Assert.Equal(expected, RssFeedCache.GapTextFor(TimeSpan.FromHours(hours)));
+
+    [Fact]
+    public void TheCadenceQuotedOnScreenIsTheOneTheGateActuallyUses()
+        => Assert.Equal(RssFeedCache.GapTextFor(RssFeedCache.AutoRefreshGap), RssFeedCache.GapText);
+
     /// <summary>还有多久到期：给状态行说"约 X 小时后自动刷新"。已经过了的不能给负数（那会显示成"约 -3 小时"）。</summary>
     [Theory]
     [InlineData(Now - 23 * 3600, 3600)]
