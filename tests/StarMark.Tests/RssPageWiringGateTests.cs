@@ -174,6 +174,9 @@ public sealed class RssPageWiringGateTests
         Assert.Contains("RssSourceStatus.Describe(outcome)", vm);
         Assert.Contains("public void CancelLoading()", vm);
         Assert.Contains("ViewModel.CancelLoading();", ReadRepoFile("src/StarMark.UI/Views/RssPage.xaml.cs"));
+        // 状态行那句"共 N 条"必须数页面上真的摆出来的行，而不是聚合器那份带 200 条上限的摊平清单
+        Assert.Contains("Sections.Sum(s => s.Rows.Count)", vm);
+        Assert.DoesNotContain("共 {run.Entries.Count}", vm);
     }
 
     /// <summary>「已收藏」的读法不许带行数窗口：窗口外的收藏会被显示成"没收藏"，

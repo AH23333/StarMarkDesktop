@@ -162,8 +162,12 @@ public partial class RssPageViewModel : ObservableObject
                     section.SetRows(outcome.Entries.Select(e => RowFor(e, collected)).ToList());
             }
 
-            EmptyHint = run.Entries.Count == 0 ? "这一轮没有任何源给出条目，原因写在每个文件夹的标题上。" : string.Empty;
-            StatusText = Summarise(run);
+            // 汇总说的是"这一页真的摆出来了多少条"，不是聚合器那份带 200 条上限的摊平清单：
+            // 分组是按源各自取的，两个数不是一回事，拿后者报前者就会出现"页面上明明更多"。
+            var shown = Sections.Sum(s => s.Rows.Count);
+
+            EmptyHint = shown == 0 ? "这一轮没有任何源给出条目，原因写在每个文件夹的标题上。" : string.Empty;
+            StatusText = Summarise(run, shown);
         }
         catch (Exception ex)
         {
@@ -196,13 +200,13 @@ public partial class RssPageViewModel : ObservableObject
     }
 
     /// <summary>一轮下来给人看的那一句。<b>失败数与"没抓到"数分不开，用户就不知道该改地址还是该查网络</b>。</summary>
-    private string Summarise(RssRunResult run)
+    private string Summarise(RssRunResult run, int shown)
     {
         var enabledCount = Sections.Count(s => s.Config.Enabled);
         var okCount = run.Outcomes.Count(o => o.Ok && o.Source.Enabled);
-        var text = run.Entries.Count == 0
+        var text = shown == 0
             ? $"{enabledCount} 个启用的源里有 {okCount} 个通了，但没有给出任何条目"
-            : $"共 {run.Entries.Count} 条（{okCount} 个源给了内容）。点条目直接跳文章，点「收藏到文件夹」才进库。";
+            : $"共 {shown} 条（{okCount} 个源给了内容）。点条目直接跳文章，点「收藏到文件夹」才进库。";
         if (run.FailedCount > 0) text += $"　{run.FailedCount} 个源失败，原因写在对应那一行";
         if (run.StoppedCount > 0) text += $"　已停止，还有 {run.StoppedCount} 个源没抓（再点一次接着抓）";
         return text;
