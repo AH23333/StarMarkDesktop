@@ -972,6 +972,14 @@ public sealed partial class CaptureOverlayWindow : Window
         _grab = mark.GrabAt(local, RotateHandle(mark), MoveSlop);
         if (_grab == Grab.None) return false;
 
+        // 【临时诊断·批次 RH-3】用户真机仍报"拖动时字会变大"，而模型侧逐像素用例全绿 ⇒
+        // "判据"与"他手指下的那一按"之间还差一环。这一行把系统把这一按读成了什么落进日志，
+        // 定位到真因之后就摘掉（诊断留在热路径里就是以后的噪声与第二份口径）。
+        var box = mark.Bounds();
+        StarLog.Info($"[AnnoGrab] {_grab} tool={mark.Tool} press=({local.X},{local.Y}) " +
+            $"box=({box.X},{box.Y},{box.Width},{box.Height}) dpi={_scale:F2} " +
+            $"font={mark.FontHeight}x{mark.Scale:F2} rot={mark.Rotation:F0}");
+
         // 按的是某一头的把手 ⇒ 钉住的那一点改到<b>对面</b>那头（模型算，界面不猜）：
         // 否则绕字块中心缩放会把左上角一起推出去，真机反馈就是"一缩放整行字和它的框都跑了"。
         _dragOriginal = _grab == Grab.Scale ? mark.WithScalePivotTowards(local) : mark;
@@ -1083,6 +1091,14 @@ public sealed partial class CaptureOverlayWindow : Window
         if (original is null || index is not { } i || grab == Grab.None) return;
         var result = Preview(original, _dragLast);
         if (result == original) { DrawSelectionHandles(); return; }
+
+        // 【临时诊断·批次 RH-3】与 [AnnoGrab] 同一批，定位完就摘：这一行说"这一拖到底改了什么"。
+        // 只量字高与倍数不够，还要看落点（松手那一点）与轴点的距离比 —— 缩放是那个比值的幂等函数，
+        // 若每帧都从 _dragOriginal 重算，比值就该被钉在 1 附近；跑飞了说明轴点或锚点被逐帧挪动。
+        StarLog.Info($"[AnnoDrag] {grab} font {original.DrawFontHeight}→{result.DrawFontHeight} " +
+            $"scale {original.Scale:F3}→{result.Scale:F3} box {original.Bounds()}→{result.Bounds()} " +
+            $"release=({_dragLast.X},{_dragLast.Y}) anchor=({_dragAnchor.X},{_dragAnchor.Y})");
+
         _history.ReplaceAt(i, result);
         Rebake();
         DrawSelectionHandles();
