@@ -480,6 +480,44 @@ public sealed class AnnotationPainterTests
             $"墨跑出框了：ink {ink} vs bounds {box}（角度 {angle}）");
     }
 
+    /// <summary>
+    /// 抓着一头改大小，<b>另一头画出来的墨必须一格都不动</b>。
+    /// <para>真机反馈"缩放文字后，位置与文字框都偏移了"修在模型的轴点上；但轴点这件事最后成不成立，
+    /// 看的是字有没有真的挪。只量 <c>Bounds()</c> 是不够的——那个框和轴点共用一套式子，
+    /// 轴点写错时它会跟着一起错（"框与字一起跑"就又是下一次反馈）。所以从像素那一头验：
+    /// 钉住右下 ⇒ 墨的右边界与下边界不许动，左与上必须长出去。</para>
+    /// </summary>
+    [Fact]
+    public void ScalingTextFromOneEndLeavesTheOtherEndsInkWhereItWas()
+    {
+        const string line = "拖着左上角放大这一行";
+        var mark = new Annotation(AnnotationTool.Text, new[] { new PixelPoint(150, 140) }, Red, 4)
+        { Text = line, FontHeight = 26 };
+        var blank = Canvas(560, 320);
+
+        var beforeBuffer = (byte[])blank.Clone();
+        AnnotationPainter.Paint(beforeBuffer, 560, 320, mark);
+        var before = InkBox(blank, beforeBuffer, 560, 320);
+
+        var box = mark.Bounds();
+        var grown = mark.WithScalePivotTowards(new PixelPoint(box.X, box.Y)).ScaledBy(1.5);   // 抓左上 ⇒ 钉右下
+        var afterBuffer = (byte[])blank.Clone();
+        AnnotationPainter.Paint(afterBuffer, 560, 320, grown);
+        var after = InkBox(blank, afterBuffer, 560, 320);
+
+        Assert.True(after.Width > before.Width && after.Height > before.Height,
+            $"放大就该墨迹变大：{before.Width}x{before.Height} → {after.Width}x{after.Height}");
+        Assert.True(Math.Abs(after.Right - before.Right) <= 1, $"右端自己动了：{before.Right} → {after.Right}");
+        Assert.True(Math.Abs(after.Bottom - before.Bottom) <= 1, $"下端自己动了：{before.Bottom} → {after.Bottom}");
+        Assert.True(after.Left < before.Left && after.Top < before.Top,
+            $"被抓的那一头该往外长：({before.Left},{before.Top}) → ({after.Left},{after.Top})");
+        // 字与它的框还得继续重合（这条挡住"墨钉住了、框却还按中心算"那种分岔）
+        var bounds = grown.Bounds();
+        Assert.True(after.Left >= bounds.X && after.Top >= bounds.Y
+            && after.Right <= bounds.Right - 1 && after.Bottom <= bounds.Bottom - 1,
+            $"缩放后墨跑出框了：ink {after} vs bounds {bounds}");
+    }
+
     /// <summary>改动过的像素的外接框与数量（"画了多少"与"画在哪儿"两件事一起看）。</summary>
     private static (int Left, int Top, int Right, int Bottom, int Width, int Height, int Count)
         InkBox(byte[] before, byte[] after, int width, int height)

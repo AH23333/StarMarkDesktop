@@ -280,6 +280,12 @@ public sealed class CaptureOverlayGateTests
         Assert.DoesNotContain(".Corners().Any(", cs);            // 自己数角点＝把判据搬回不可测的那一层
         Assert.DoesNotContain("HandleSlop", grab);               // 容差由模型取，界面里不写死数字
         Assert.Contains("using Grab = StarMark.Core.Capture.AnnotationGrab;", cs);
+        // 批次 RH-2：缩放"钉住哪一头"同样只许模型说（界面里自己挑角点＝又一处测不到的判据）
+        Assert.Contains("mark.WithScalePivotTowards(local)", grab);
+        var preview = SourceGate.MethodBody(cs, "private Annotation Preview");
+        Assert.Contains("var pivot = original.ScalePivot;", preview);
+        // 旋转仍绕字块中心（Origin，RF-2 实测过的那条）；缩放才走 ScalePivot。各一处，多一处就是分岔
+        Assert.Equal(1, Count(preview, "original.Origin"));
     }
 
     /// <summary>
@@ -416,7 +422,11 @@ public sealed class CaptureOverlayGateTests
     public void TheOverlayNeverInventsItsOwnTransformAxis()
     {
         var cs = ReadOverlay(xaml: false);
-        Assert.DoesNotContain("Pivot", cs);
+        // 钉的是"界面自己碰轴点"这件事：既不给它赋值、也不读它——只许调模型给的那几个出口
+        // （WithScalePivotTowards / ScalePivot / Origin）。RF-2 那版写成"不许出现 Pivot 这个词"，
+        // 结果 RH-2 一调模型方法就误红：锚点要钉住动作，别钉住字面。
+        Assert.DoesNotContain("Pivot =", cs);
+        Assert.DoesNotContain(".Pivot", cs);
         Assert.Contains("mark.Bounds()", SourceGate.MethodBody(cs, "private void DrawSelectionHandles"));
     }
 }

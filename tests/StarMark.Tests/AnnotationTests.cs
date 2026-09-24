@@ -563,4 +563,112 @@ public sealed class AnnotationTests
         Assert.Equal(Annotation.DefaultFontHeight, mark.DrawFontHeight);   // 字高没被拖动改过
         Assert.Equal(TextAt("连续拖五次看看会不会变大").Bounds().Height, box.Height);
     }
+
+    // ────────── 缩放时"钉住哪一头"（批次 RH-2） ──────────
+
+    private static (int X, int Y) CornerOf(IntRect box, bool right, bool bottom)
+        => (right ? box.Right : box.X, bottom ? box.Bottom : box.Y);
+
+    /// <summary>
+    /// 用户报的第二条："缩放文字后，位置与文字框都偏移了"。
+    /// <para>默认那条路是绕<b>字块中心</b>缩放（改字号往四周均匀长），所以放大时左上角会被一起推到左上方——
+    /// 但用户是按着某一头的把手在拖，他期望的是<b>另一头一步都不挪</b>。这条把四个把手各拖一遍，
+    /// 逐一对量"对面那一角缩放前后是不是同一个像素"。</para>
+    /// <para>容差 1 像素只给取整（字模量宽对倍数不完全是线性的），不给方向：方向错了就是几像素到几十像素。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]      // 抓左上 ⇒ 钉右下
+    [InlineData(true, false)]       // 抓右上 ⇒ 钉左下
+    [InlineData(true, true)]        // 抓右下 ⇒ 钉左上（最常见的那一下）
+    [InlineData(false, true)]       // 抓左下 ⇒ 钉右上
+    public void ScalingTextFromOneEndKeepsTheOtherEndPut(bool grabRight, bool grabBottom)
+    {
+        var mark = TextAt("拖着这一行的某一头改大小");
+        var before = mark.Bounds();
+        var anchor = CornerOf(before, !grabRight, !grabBottom);
+
+        var grown = mark
+            .WithScalePivotTowards(new PixelPoint(CornerOf(before, grabRight, grabBottom).X, CornerOf(before, grabRight, grabBottom).Y))
+            .ScaledBy(1.9);
+        var after = grown.Bounds();
+
+        Assert.True(after.Width > before.Width && after.Height > before.Height, "放大就该两边都长");
+        var kept = CornerOf(after, !grabRight, !grabBottom);
+        Assert.True(Math.Abs(kept.X - anchor.X) <= 1 && Math.Abs(kept.Y - anchor.Y) <= 1,
+            $"钉住的那一头跑了：({anchor.X},{anchor.Y}) → ({kept.X},{kept.Y})");
+    }
+
+    /// <summary>
+    /// 缩完一次再从<b>另一头</b>缩一次——第二次的"钉住"必须是<em>此刻</em>那一头，不是最初那一头。
+    /// <para>轴点若按<em>未缩放</em>那份字框算：第一次把左端拉出去了，第二次的"左端"其实已经换了一个像素位置，
+    /// 拿旧框的左端去钉，第二次一拖整行字就跳回去（连抓两下是常见的用法，不是边角）。</para>
+    /// </summary>
+    [Fact]
+    public void ScalingFromTheOtherEndAfterwardsPinsTheEndThatIsActuallyThere()
+    {
+        var mark = TextAt("先拉左边再拉右边");
+        var box = mark.Bounds();
+
+        // 第一次：抓左上 ⇒ 钉右下
+        mark = mark.WithScalePivotTowards(new PixelPoint(box.X, box.Y)).ScaledBy(1.5);
+        var pinnedRight = box.Right;
+        var pinnedBottom = box.Bottom;
+        var second = mark.Bounds();
+        Assert.True(second.Right == pinnedRight && second.Bottom == pinnedBottom,
+            $"第一次没钉住右下：({pinnedRight},{pinnedBottom}) → ({second.Right},{second.Bottom})");
+        Assert.True(second.X < box.X, "抓左上放大，左端该往外走");
+
+        // 第二次：改抓右下 ⇒ 钉左上，而"左上"现在是<em>第一次之后</em>那一头
+        mark = mark.WithScalePivotTowards(new PixelPoint(second.Right, second.Bottom)).ScaledBy(1.5);
+        var third = mark.Bounds();
+        Assert.True(third.X == second.X && third.Y == second.Y,
+            $"第二次钉错了头（回到了最初那一头？）：({second.X},{second.Y}) → ({third.X},{third.Y})");
+    }
+
+    /// <summary>
+    /// 转过的字，<b>包围盒的角落在字外面的空处</b>：把轴钉在那儿等于什么都没钉（字还是会跑）。
+    /// 所以轴要落在<b>局部（未旋转）那一框</b>的角上——也就是"这行字自己的另一头"。
+    /// </summary>
+    [Fact]
+    public void ARotatedLineAnchorsOnItsOwnEndNotOnTheEmptyCornerOfItsBox()
+    {
+        const string text = "转了九十度的一行字";
+        var mark = TextAt(text).RotatedBy(90);
+        var box = mark.Bounds();
+
+        var anchored = mark.WithScalePivotTowards(new PixelPoint(box.Right, box.Bottom)).ScaledBy(1.7);
+        var pivot = anchored.Pivot ?? throw new InvalidOperationException("轴点没设上");
+        var (width, height) = StarMark.Integrations.Capture.GdiTextDrawer.Measure(text, anchored.DrawFontHeight);
+        var topLeft = anchored.TransformedPoints()[0];
+        var localCorners = new[]
+        {
+            topLeft,
+            new PixelPoint(topLeft.X + width, topLeft.Y),
+            new PixelPoint(topLeft.X, topLeft.Y + height),
+            new PixelPoint(topLeft.X + width, topLeft.Y + height),
+        };
+
+        Assert.Contains(localCorners, corner => corner.X == pivot.X && corner.Y == pivot.Y);
+        // 而包围盒那一角是空处：它<em>不该</em>是轴（写成断言是为了"哪天有人改用 Bounds() 的角"当场红）
+        Assert.DoesNotContain(localCorners, corner =>
+            Math.Abs(corner.X - box.Right) <= 1 && Math.Abs(corner.Y - box.Bottom) <= 1);
+    }
+
+    /// <summary>缩放这条路没有被砍窄：一行字在<b>框外</b>那一整圈（拿满容差）都还算按在把手上。
+    /// 容差随短边收缩那条是为了不让角点区吃掉整行字，而框外本来就不与"移动"抢地方。</summary>
+    [Fact]
+    public void ATextLinesScaleZoneReachesAWholeHandleOutsideTheBox()
+    {
+        var mark = TextAt("挪我");
+        var box = mark.Bounds();
+        var handle = HandleAbove(box);
+
+        var outside = new[]
+        {
+            new PixelPoint(box.X - 10, box.Y - 10), new PixelPoint(box.Right + 9, box.Y - 9),
+            new PixelPoint(box.Right + 10, box.Bottom + 10), new PixelPoint(box.X - 10, box.Bottom + 10),
+        };
+        foreach (var at in outside)
+            Assert.Equal(AnnotationGrab.Scale, mark.GrabAt(at, handle, 6));
+    }
 }

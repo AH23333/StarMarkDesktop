@@ -90,8 +90,8 @@ public sealed record Annotation(
 
     /// <summary>
     /// 变换的轴点（可空）。<b>没指定时：几何类＝第一个点，文字＝字块自己的中心</b>（见 <see cref="Origin"/>）。
-    /// <para>留一个可空槽而不是写死，是因为"绕哪一点缩放"是要跟着拖动语义走的：
-    /// 拖一个角时钉住的应是它对面那个角，那时调用方会明确给一个轴点。</para>
+    /// <para>留一个可空槽而不是写死，是因为"绕哪一点缩放"要跟着拖动语义走：抓住某一头的把手时该钉住它对面那头，
+    /// 那一档由 <see cref="WithScalePivotTowards"/> 在按下把手时填上（模型自己填，不让调用方各算一遍）。</para>
     /// </summary>
     public PixelPoint? Pivot { get; init; }
 
@@ -102,16 +102,58 @@ public sealed record Annotation(
     public double Scale { get; init; } = 1d;
 
     /// <summary>
-    /// 变换轴点。几何类＝<b>第一个点</b>（用户按下的那一点，缩放时它钉住不动）；
-    /// 文字＝<b>字块自己的中心</b>（见 <see cref="TextCentre"/>）。
-    /// <para>文字为什么单独：用户转一行字、改一行字的字号，期望的是"这行字原地动一下"。
-    /// 绕左上角转会把它甩出去——真机反馈的"转一下/改一下字号，位置四窜、还和框对不上"就是这么来的。</para>
+    /// <b>旋转</b>的轴点。几何类＝<b>第一个点</b>；文字＝<b>字块自己的中心</b>（见 <see cref="TextCentre"/>）。
+    /// <para>文字为什么单独：转一行字期望的是"这行字原地转一下"。绕左上角转会把它甩出去——
+    /// 真机反馈的"转一下就跑到画外、和框对不上"就是这么来的。<b>缩放不走这里，走 <see cref="ScalePivot"/></b>：
+    /// 那一条要跟着"用户按住了哪一头"。</para>
     /// </summary>
     public PixelPoint Origin => Tool == AnnotationTool.Text
         ? TextCentre
         : Pivot ?? (Points.Count > 0 ? Points[0] : default);
 
-    /// <summary>字块中心＝锚点（用户点下去的那个左上角）+ <b>未缩放</b>那份字模的一半。</summary>
+    /// <summary>
+    /// <b>缩放</b>绕哪一点。几何类一直是 <see cref="Origin"/>（第一个点）；
+    /// 文字默认绕字块中心，只有按在缩放把手上时才由 <see cref="WithScalePivotTowards"/> 改到被抓那一头的对面。
+    /// <para>旋转仍走 <see cref="Origin"/>（文字＝字块中心）：那一条是 RF-2 实测出来的，别跟着这次一起动。</para>
+    /// </summary>
+    public PixelPoint ScalePivot => Tool == AnnotationTool.Text ? Pivot ?? TextCentre : Origin;
+
+    /// <summary>
+    /// 抓住某一头去改大小时，<b>把"钉住不动"的那一点设到它的对面</b>：手指那一端跟着走，另一端一步都不该挪。
+    /// <para>真机反馈"缩放文字后，位置与文字框都偏移了"：默认那套绕字块中心缩放，放大时字块两头<b>同时</b>往外长，
+    /// 于是左上角被推向左上方——用户看到的是"一缩放整行字就跑"。字块中心那条留着不改（改字号往四周均匀长），
+    /// 只把"拖把手"这一条路指到对面那一头。几何类这一步先不接线：它今天绕 <see cref="Points"/> 的第一点，
+    /// 拖右下角时本来就是对角，没有反馈支撑就不动已工作的代码。</para>
+    /// <para>文字用的是<b>局部（未旋转）那一框</b>的角：转过的字，包围盒的角落在字外面的空处，
+    /// 钉在那儿等于什么都没钉。</para>
+    /// </summary>
+    public Annotation WithScalePivotTowards(PixelPoint grabbed)
+    {
+        if (Tool != AnnotationTool.Text) return this;
+        var current = TransformedPoints();
+        if (current.Count == 0) return this;
+        var topLeft = current[0];
+        var (width, height) = StarMark.Integrations.Capture.GdiTextDrawer.Measure(Text ?? string.Empty, DrawFontHeight);
+        var centre = new PixelPoint(topLeft.X + width / 2, topLeft.Y + height / 2);
+        var pivot = new PixelPoint(
+            grabbed.X > centre.X ? topLeft.X : topLeft.X + width,
+            grabbed.Y > centre.Y ? topLeft.Y : topLeft.Y + height);
+        // 顺手把"此刻这一份"折成基线（字高＝现在真画出来的那个，锚点＝现在的左上角，倍数归 1）。
+        // <para>不折会怎样：轴点是按<b>当前</b>那一框挑的，而缩放公式是按<b>基线</b>那一框算位似的——
+        // 已经放大过的字两个框不重合，第二次换头去拖就会把字钉回旧位置（"先拉左边再拉右边"连两下就跳，
+        // 真机撞得到）。折过之后每次抓把手都等于第一次抓，公式只剩一种情形。</para>
+        // <para>绝对上下限仍然守得住：写进基线的字高本身就是夹过的 6–200，倍数那一档只约束这一次手势。</para>
+        return this with
+        {
+            Points = new[] { topLeft },
+            FontHeight = DrawFontHeight,
+            Scale = 1d,
+            Pivot = pivot,
+        };
+    }
+
+    /// <summary>字块中心＝锚点（这一次缩放的左上角）+ <b>基线那份字模</b>的一半。
+    /// 基线会被 <see cref="WithScalePivotTowards"/> 换档，所以这里说的是"当前这一档"，不是最初打出来那一档。</summary>
     private PixelPoint TextCentre
     {
         get
@@ -159,7 +201,7 @@ public sealed record Annotation(
     /// <para>几何类不受这条影响：它们的框远大于角点区，内侧那一圈本来就是改大小的正常落点。</para></summary>
     public bool OnCorner(PixelPoint at, int slop)
     {
-        if (Tool != AnnotationTool.Text) return Corners().Any(corner => Near(corner, at, slop));
+        if (!ScalesFromOutsideOnly) return Corners().Any(corner => Near(corner, at, slop));
         var box = Bounds();
         var inside = at.X >= box.X && at.X < box.Right && at.Y >= box.Y && at.Y < box.Bottom;
         return !inside && Corners().Any(corner => Near(corner, at, slop));
@@ -174,18 +216,25 @@ public sealed record Annotation(
     public AnnotationGrab GrabAt(PixelPoint at, PixelPoint rotateHandleAt, int moveSlop)
     {
         if (Near(rotateHandleAt, at, HandleSlop)) return AnnotationGrab.Rotate;
-        if (OnCorner(at, HandleSlopFor(Bounds()))) return AnnotationGrab.Scale;
+        // 容差随短边收缩那条，是为了不让四角把"一行字"整条吃掉；框外那一半本来就不与移动抢地方，
+        // 所以文字在<b>框外</b>拿满 HandleSlop——否则一行 22px 的字只剩 5×5，看得见却按不着。
+        var cornerSlop = ScalesFromOutsideOnly ? HandleSlop : HandleSlopFor(Bounds());
+        if (OnCorner(at, cornerSlop)) return AnnotationGrab.Scale;
         if (Contains(at, moveSlop)) return AnnotationGrab.Move;
         return AnnotationGrab.None;
     }
 
+    /// <summary>只在<b>包围盒之外</b>认缩放把手的工具（文字）。见 <see cref="OnCorner"/>。</summary>
+    public bool ScalesFromOutsideOnly => Tool == AnnotationTool.Text;
+
     /// <summary>
-    /// 画出去的那一组点：把 <see cref="Rotation"/> 与 <see cref="Scale"/> 绕 <see cref="Origin"/> 作用上去。
+    /// 画出去的那一组点：把 <see cref="Rotation"/> 与 <see cref="Scale"/> 作用上去
+    /// （旋转绕 <see cref="Origin"/>，缩放绕 <see cref="ScalePivot"/>）。
     /// <para>放在模型里而不是绘制里，是因为<b>选择框、命中测试、四个落点的渲染都要用同一组点</b>——
     /// 各算一遍就会出现"选择框框住的是原位置，字已经转走了"。</para>
-    /// <para>文字单独一条：它只有一个点，那个点是"字块左上角"，而字块转与放都绕<b>它自己的中心</b>发生，
-    /// 所以中心不动、左上角要按当前字模重新算回去。把通用的"点绕轴转"直接套在左上角上，
-    /// 等于把位置也转了一次——一转就跑到画外、和框对不上，正是真机反馈的那两下。</para>
+    /// <para>文字单独一条：它只有一个点，那个点是"字块左上角"，而字块是绕<b>它自己的中心/被钉住的那一头</b>变的，
+    /// 所以左上角要按当前字模重新算回去。把通用的"点绕轴转"直接套在左上角上，等于把位置也转了一次——
+    /// 一转就跑到画外、和框对不上，正是真机反馈的那两下。</para>
     /// </summary>
     public IReadOnlyList<PixelPoint> TransformedPoints()
     {
@@ -193,9 +242,21 @@ public sealed record Annotation(
         if (Tool == AnnotationTool.Text)
         {
             if (Scale == 1d) return Points;                 // 转方向不改左上角（绕中心转），字高也没变 ⇒ 原样
-            var (w, h) = StarMark.Integrations.Capture.GdiTextDrawer.Measure(Text ?? string.Empty, DrawFontHeight);
-            var centre = Origin;
-            return new[] { new PixelPoint(centre.X - w / 2, centre.Y - h / 2) };
+            var topLeft = Points[0];
+            var (baseWidth, baseHeight) = StarMark.Integrations.Capture.GdiTextDrawer.Measure(Text ?? string.Empty, FontHeight);
+            var (width, height) = StarMark.Integrations.Capture.GdiTextDrawer.Measure(Text ?? string.Empty, DrawFontHeight);
+            var scalePivot = ScalePivot;
+            // 位似：轴点取字框的一个角时，缩放后那个角分毫不动，只有手指那一头在长。
+            // 比例用"真画出来那份字模"量出的宽高，而不是 Scale 本身——字体宽度对倍数不是完全线性的（取整、
+            // 换档后重新排版），拿 Scale 推会让本该钉住的那一角跑掉一两像素，而 Bounds() 与绘制吃的是量出来的那份。
+            var rx = baseWidth == 0 ? 1d : (double)width / baseWidth;
+            var ry = baseHeight == 0 ? 1d : (double)height / baseHeight;
+            return new[]
+            {
+                new PixelPoint(
+                    scalePivot.X + (int)Math.Round((topLeft.X - scalePivot.X) * rx, MidpointRounding.AwayFromZero),
+                    scalePivot.Y + (int)Math.Round((topLeft.Y - scalePivot.Y) * ry, MidpointRounding.AwayFromZero)),
+            };
         }
         if (!HasTransform) return Points;
         var pivot = Origin;

@@ -972,7 +972,9 @@ public sealed partial class CaptureOverlayWindow : Window
         _grab = mark.GrabAt(local, RotateHandle(mark), MoveSlop);
         if (_grab == Grab.None) return false;
 
-        _dragOriginal = mark;
+        // 按的是某一头的把手 ⇒ 钉住的那一点改到<b>对面</b>那头（模型算，界面不猜）：
+        // 否则绕字块中心缩放会把左上角一起推出去，真机反馈就是"一缩放整行字和它的框都跑了"。
+        _dragOriginal = _grab == Grab.Scale ? mark.WithScalePivotTowards(local) : mark;
         _dragAnchor = local;
         _dragLast = local;
         _underDrag = UnderDragBuffer(index);
@@ -1056,7 +1058,8 @@ public sealed partial class CaptureOverlayWindow : Window
             }
             default:
             {
-                var pivot = original.Origin;
+                // 缩放走 ScalePivot（按下的是哪一头，轴就在对面那一头）；旋转仍走 Origin（字块中心）。
+                var pivot = original.ScalePivot;
                 var start = Distance(_dragAnchor, pivot);
                 // 把手正好按在轴点上时比值没有意义（分母为 0）：保持原样，别让形状瞬间炸开
                 return start < 1 ? original : original.ScaledBy(Distance(local, pivot) / start);
