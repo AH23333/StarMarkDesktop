@@ -289,9 +289,9 @@ public sealed class TodoWidgetViewModel : ObservableObject
         // 列表一旦启用过手动排序，新条目必须也带上 order，否则它会因为没有序号
         // 被排到所有已排序条目之后 —— 表现为「新增的待办跑到列表最底下」。
         LocalItemState.SetOrder(item, NextTopOrder());
-        await _repo.UpsertLocalItemAsync(item);   // 写回真实行 id（INSERT ... RETURNING id）
-        // 用户新增一条待办 → 活动流记「新增」（绿）。#51。
-        await _repo.LogActivityAsync(ActivityKind.ItemAdd, $"{ItemSources.Local}:{item.SourceId}", item.Title, null, CancellationToken.None);
+        // 写条目与记「新增」活动（#51 那笔绿的）现在在一次事务里完成：
+        // 之前这里开两次库，中间出点问题就是"待办存了、时间线里找不到这一笔"。
+        await _repo.UpsertLocalItemAsync(item, CancellationToken.None, ActivityKind.ItemAdd);   // 写回真实行 id（INSERT ... RETURNING id）
 
         // 乐观插入：写完立刻把新行画出来，不等下一次整表读取。
         // 之前是"落盘 → 全表重读 → 重建列表"，回车到看见新条目之间隔着一次数据库往返 + 一次列表重建。
@@ -356,11 +356,10 @@ public sealed class TodoWidgetViewModel : ObservableObject
     /// </summary>
     public Task DeleteAsync(long id) => GuardAsync("删除待办失败", async () =>
     {
-        var it = await FindItemAsync(id);
+        // 一次连接里"限定本地待办 → 读出来 → 删掉 → 记一笔删除（红，#51）"。
+        // 返回的那行就是撤销的依据；没删到（id 不属于本地待办，或已经被删）就什么都不做。
+        var it = await _repo!.DeleteLocalItemAsync(id, ItemType.Todo, ActivityKind.ItemDelete, CancellationToken.None);
         if (it is null) return;
-        await _repo!.DeleteBySourceIdAsync(ItemSources.Local, it.SourceId);
-        // 用户删除一条待办 → 活动流记「删除」（红）。#51。
-        await _repo.LogActivityAsync(ActivityKind.ItemDelete, $"{ItemSources.Local}:{it.SourceId}", it.Title, null, CancellationToken.None);
 
         RunOnUi(() =>
         {
@@ -377,9 +376,8 @@ public sealed class TodoWidgetViewModel : ObservableObject
         if (snapshot is null) return;
         DismissUndo();
         snapshot.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        await _repo!.UpsertLocalItemAsync(snapshot);
-        // 撤销删除 = 条目重新回到库中 → 记「新增」（绿）。#51。
-        await _repo.LogActivityAsync(ActivityKind.ItemAdd, $"{ItemSources.Local}:{snapshot.SourceId}", snapshot.Title, null, CancellationToken.None);
+        // 撤销删除 = 条目回到库中 → 同一事务里记「新增」（绿）。#51。
+        await _repo!.UpsertLocalItemAsync(snapshot, CancellationToken.None, ActivityKind.ItemAdd);
         await LoadAsync();
     });
 
@@ -395,14 +393,18 @@ public sealed class TodoWidgetViewModel : ObservableObject
         });
     }
 
-    /// <summary>按行 id 取回原始 item（仓库只提供「按 source 拉全部」，故本地过滤）。</summary>
+    /// <summary>
+    /// 按行 id 取回原始 item：<b>一次连接、一行结果</b>。之前是把该类型的全部本地条目
+    /// （默认上限 1000，每条还带一次标签拼接）读回来再 <c>FirstOrDefault</c>——
+    /// 有 300 条待办时勾一次框就要先物化 300 行。作用域（本地 + 待办）也交给 SQL 判，
+    /// 于是拿着别处的 id 来改这条路走不通，而不是把别人的行整行覆盖掉。
+    /// </summary>
     private async Task<Item?> FindItemAsync(long id)
     {
         if (_repo is null) return null;
         try
         {
-            var items = await _repo.GetBySourceAsync(ItemSources.Local, ItemType.Todo, ct: CancellationToken.None);
-            return items.FirstOrDefault(i => i.Id == id);
+            return await _repo.GetLocalItemAsync(id, ItemType.Todo, CancellationToken.None);
         }
         catch (Exception ex)
         {

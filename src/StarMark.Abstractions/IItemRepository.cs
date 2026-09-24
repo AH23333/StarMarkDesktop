@@ -102,7 +102,10 @@ public interface IItemRepository
     Task DeleteBySourceIdAsync(string source, string sourceId, CancellationToken ct = default);
 
     /// <summary>写入本地条目（待办/随记）：只写 items 表，不写活动流、不跑 UriNormalizer/LanguageDetector。</summary>
-    Task UpsertLocalItemAsync(Item item, CancellationToken ct = default);
+    /// <param name="activity">带上它，那一笔活动就<b>与本次写落在同一事务里</b>（调用方因此不必
+    /// 为了"记一笔"再开一次库）。活动的主体字段（键/标题/URI）<b>由本方法从这条 item 现推</b>——
+    /// 调用方只说"这一笔算什么"，于是时间线里不可能出现一条与库里内容对不上的标题。</param>
+    Task UpsertLocalItemAsync(Item item, CancellationToken ct = default, ActivityKind? activity = null);
 
     /// <summary>
     /// 记录一条剪贴板历史（source=<see cref="ItemSources.Clipboard"/>）：按 (source, source_id) 幂等，
@@ -205,6 +208,30 @@ public interface IItemRepository
     /// <b>一次连接</b>写入一批活动事件，环形缓冲口径与单条 <see cref="LogActivityAsync"/> 相同（只留最近 500 条）。
     /// 空集合不开库。
     /// </summary>
+
+    /// <summary>
+    /// 按 id 取回<b>一条</b>本地条目（待办/随记组件每次编辑都要先拿到它）。
+    /// <para>
+    /// 为什么不用 <see cref="GetBySourceAsync"/> 再在内存里筛：那个调用会把该类型的全部本地条目
+    /// （默认上限 1000，每条还带一次标签 <c>GROUP_CONCAT</c>）读回来，只为了用其中一行——
+    /// 用户有 300 条待办时，勾一次框就要物化 300 行。
+    /// </para>
+    /// <para><c>source='local'</c> 与 <paramref name="type"/> 一律<b>在 SQL 里限定</b>：
+    /// 拿着一个来自别处的 id（书签 / Star / 剪贴板）来改，这里必须回 null，
+    /// 否则组件就能把整行 <c>extra_json</c> 写到别人的记录上。<b>隐藏的行照样取得到</b>
+    /// （撤销与删除要能作用在自己刚操作过的那一行上，隐藏不是"不许改"的信号）。</para>
+    /// </summary>
+    Task<Item?> GetLocalItemAsync(long id, ItemType type, CancellationToken ct = default);
+
+    /// <summary>
+    /// 删掉一条本地条目，并在<b>同一连接同一事务</b>里（可选）记一笔活动，返回被删掉的那一行（供撤销用）；
+    /// 没删到就返回 null，此时<b>活动也不记</b>。
+    /// <para>作用域与 <see cref="GetLocalItemAsync"/> 同样在 SQL 里限定，故一次删除既不用先把整表读回来找那一行，
+    /// 也不可能删到别处的记录。</para>
+    /// <para>删除与活动同事务：否则中途出点问题就是「条目没了、时间线里却找不到这一笔」——
+    /// 而时间线正是用户回头查自己改动时唯一能看的证据。</para>
+    /// </summary>
+    Task<Item?> DeleteLocalItemAsync(long id, ItemType type, ActivityKind? activity = null, CancellationToken ct = default);
     Task LogActivitiesAsync(IReadOnlyList<ActivityDraft> events, CancellationToken ct = default);
 }
 

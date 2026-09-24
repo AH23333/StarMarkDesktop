@@ -86,9 +86,8 @@ public sealed class QuickNoteWidgetViewModel
             CreatedAt = now,
             UpdatedAt = now,
         };
-        await _repo.UpsertLocalItemAsync(item);
-        // 用户新增一条随记 → 活动流记「新增」（绿）。#51。
-        await _repo.LogActivityAsync(ActivityKind.ItemAdd, $"{ItemSources.Local}:{item.SourceId}", item.Title, null, CancellationToken.None);
+        // 写随记与记「新增」（绿）在同一事务里完成（#51）：以前这里开两次库。
+        await _repo.UpsertLocalItemAsync(item, CancellationToken.None, ActivityKind.ItemAdd);
         await LoadAsync();
         return true;
     }
@@ -96,12 +95,9 @@ public sealed class QuickNoteWidgetViewModel
     public async Task DeleteAsync(long id)
     {
         if (_repo is null) return;
-        var items = await _repo.GetBySourceAsync(ItemSources.Local, ItemType.Note, ct: CancellationToken.None);
-        var it = items.FirstOrDefault(i => i.Id == id);
-        if (it is null) return;
-        await _repo.DeleteBySourceIdAsync(ItemSources.Local, it.SourceId);
-        // 用户删除一条随记 → 活动流记「删除」（红）。#51。
-        await _repo.LogActivityAsync(ActivityKind.ItemDelete, $"{ItemSources.Local}:{it.SourceId}", it.Title, null, CancellationToken.None);
+        // 一次连接：限定"本地 + 随记"、读出来、删掉、并把「删除」（红）记进同一事务。#51。
+        // 没删到（这 id 不属于本地随记，或已经被删）就什么都不做，也不记活动。
+        await _repo.DeleteLocalItemAsync(id, ItemType.Note, ActivityKind.ItemDelete, CancellationToken.None);
         await LoadAsync();
     }
 

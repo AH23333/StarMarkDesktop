@@ -1109,6 +1109,80 @@ public sealed class ItemRepository : IItemRepository
         return items;
     }
 
+    /// <summary>
+    /// 由被写/被删的那一行自己拼出活动记录。<b>主体字段一律不让调用方填</b>：
+    /// 组件那边只说"这一笔算什么"（新增/删除），于是时间线里不可能出现一条与库里内容对不上的标题或键。
+    /// </summary>
+    private static (ActivityKind Kind, string? Key, string Title, string? Uri) ActivityRow(ActivityKind kind, Item row)
+        => (kind, row.Source + ":" + row.SourceId, row.Title, string.IsNullOrEmpty(row.Uri) ? null : row.Uri);
+
+    /// <summary>
+    /// 按 id 读一条本地条目（<b>限定 <c>source='local'</c> 且类型相符</b>）。
+    /// 不限定的话，一个来自别处的 id 就能被组件改走一整行。
+    /// </summary>
+    private static async Task<Item?> ReadLocalItemAsync(
+        SqliteConnection conn, SqliteTransaction? tx, long id, ItemType type, CancellationToken ct)
+    {
+        using var cmd = conn.CreateCommand();
+        if (tx is not null) cmd.Transaction = tx;
+        cmd.CommandText = @"
+            SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
+                   i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
+                   i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
+                   (SELECT GROUP_CONCAT(t.name, char(31)) FROM item_tags it
+                    JOIN tags t ON t.id = it.tag_id
+                    WHERE it.item_id = i.id) AS tag_names
+            FROM items i
+            WHERE i.id = @id AND i.source = @source AND i.type = @type;";
+        cmd.Parameters.AddWithValue("@id", id);
+        cmd.Parameters.AddWithValue("@source", ItemSources.Local);
+        cmd.Parameters.AddWithValue("@type", type.ToString().ToLowerInvariant());
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        return await reader.ReadAsync(ct) ? MapItem(reader) : null;
+    }
+
+    /// <summary>按 id 取一条本地条目。语义（含"为什么必须在 SQL 里限定作用域"）见接口注释。</summary>
+    public async Task<Item?> GetLocalItemAsync(long id, ItemType type, CancellationToken ct = default)
+    {
+        if (id <= 0) return null;                          // 虚拟行（Id=0）本来就不在库里，不必开库问
+        using var conn = _factory.Open();
+        return await ReadLocalItemAsync(conn, null, id, type, ct);
+    }
+
+    /// <summary>
+    /// 删一条本地条目 +（可选）在同一事务里记一笔活动，返回被删掉的那行；
+    /// 没删到就返回 null，且<b>什么都不写、也不通知</b>。
+    /// 同事务的理由见接口注释：条目没了而时间线里找不到这一笔，是最难向用户解释的缺口。
+    /// </summary>
+    public async Task<Item?> DeleteLocalItemAsync(
+        long id, ItemType type, ActivityKind? activity = null, CancellationToken ct = default)
+    {
+        if (id <= 0) return null;
+        using var conn = _factory.Open();
+        using var tx = conn.BeginTransaction();
+
+        var row = await ReadLocalItemAsync(conn, tx, id, type, ct);
+        if (row is null) return null;
+
+        using (var del = conn.CreateCommand())
+        {
+            del.Transaction = tx;
+            del.CommandText = "DELETE FROM items WHERE id = @id AND source = @source AND type = @type;";
+            del.Parameters.AddWithValue("@id", id);
+            del.Parameters.AddWithValue("@source", ItemSources.Local);
+            del.Parameters.AddWithValue("@type", type.ToString().ToLowerInvariant());
+            await del.ExecuteNonQueryAsync(ct);
+        }
+
+        if (activity is { } kind)
+            await LogActivitiesOnConnection(conn, tx, new[] { ActivityRow(kind, row) }, ct);
+
+        await tx.CommitAsync(ct);
+        DataChangeHub.Notify();
+        return row;
+    }
+
+
     public async Task DeleteBySourceIdAsync(string source, string sourceId, CancellationToken ct = default)
     {
         using var conn = _factory.Open();
@@ -1122,12 +1196,16 @@ public sealed class ItemRepository : IItemRepository
 
     /// <summary>
     /// 写入本地条目（待办/随记）。与 <see cref="UpsertAsync"/> 不同：
-    /// 不写活动流、不跑 <c>UriNormalizer</c>（source_id 是自定义编码）、不跑 <c>LanguageDetector</c>，
-    /// 以免污染本地内容的 source_id 与完成态。
+    /// 默认不写活动流，也不跑 <c>UriNormalizer</c>（source_id 是自定义编码）与 <c>LanguageDetector</c>，
+    /// 以免污染本地内容的 source_id 与完成态。<b>带上 <paramref name="activity"/> 时，那一笔活动
+    /// 与本次写落在同一事务里</b>——调用方因此不必为了"删除要记一笔"再开一次库。
     /// </summary>
-    public async Task UpsertLocalItemAsync(Item item, CancellationToken ct = default)
+    public async Task UpsertLocalItemAsync(Item item, CancellationToken ct = default, ActivityKind? activity = null)
     {
         using var conn = _factory.Open();
+        // 带上活动时开一个事务：写条目与记活动要么都成立、要么都不成立。
+        // 不带活动时不开（一次写入本来就是一条语句，BEGIN/COMMIT 只是白付两次往返）。
+        using SqliteTransaction? tx = activity is null ? null : conn.BeginTransaction();
         using var cmd = conn.CreateCommand();
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         // search_text 口径与 UpsertOne / ReplaceLocalItemsForInstanceAsync 完全一致（title + description +
@@ -1176,7 +1254,10 @@ public sealed class ItemRepository : IItemRepository
         cmd.Parameters.AddWithValue("@notes", (object?)item.Notes ?? DBNull.Value);
         var idObj = await cmd.ExecuteScalarAsync(ct);
         if (idObj is long newId) item.Id = newId;
-        DataChangeHub.Notify();   // 待办/随记写入后，同类型的其它组件实例也要同步
+        if (activity is { } kind)
+            await LogActivitiesOnConnection(conn, tx!, new[] { ActivityRow(kind, item) }, ct);
+        if (tx is not null) await tx.CommitAsync(ct);
+        DataChangeHub.Notify();
     }
 
     /// <summary>
