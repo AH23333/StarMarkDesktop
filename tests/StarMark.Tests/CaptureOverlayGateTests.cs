@@ -180,4 +180,35 @@ public sealed class CaptureOverlayGateTests
         Assert.Contains("PlaceVertex(ToLocal(physical))", cs);                        // 每一按钉一个顶点，不走拖动那套
         Assert.Contains("FinishPolyLine(commit: false)", SourceGate.MethodBody(cs, "private void ResetAnnotations"));
     }
+    /// <summary>
+    /// 就地输入那一块黄底必须<b>左上角对齐</b>。Grid 的子元素默认 Stretch：只给它 Margin 定位，
+    /// 它会从点击处一路铺到屏幕右下角（真机反馈的"点击处到右下角的黄色矩形"），
+    /// 输入框本身也跟着拉成一条巨大的东西——这一条只能在 XAML 里守，代码里看不出来。
+    /// </summary>
+    [Fact]
+    public void TextEditorIsAnchoredTopLeftInsteadOfStretching()
+    {
+        var xaml = ReadOverlay(xaml: true);
+        var host = SourceGate.Between(xaml, "x:Name=\"TextEditorHost\"", "</Border>");
+        Assert.Contains("HorizontalAlignment=\"Left\"", host);
+        Assert.Contains("VerticalAlignment=\"Top\"", host);
+        // 只给 MinWidth 而不给上限，输入框会一路长到 Margin 之外；MaxWidth 是"别铺满屏"的下限保障
+        Assert.Contains("MaxWidth=", host);
+    }
+
+    /// <summary>
+    /// 打码要<b>边画边看见</b>：它的职责是遮住敏感信息，松手才出现等于让用户在看不见的情况下涂。
+    /// 所以预览这一层对打码走真像素（重烤一次），不再画"笔刷大小的圈"——那一臂已经不可达，
+    /// 留着它就是一条会让人以为"打码预览还是个圈"的假线索。
+    /// </summary>
+    [Fact]
+    public void MosaicPreviewsInRealPixelsAndKeepsNoStrokeRing()
+    {
+        var cs = ReadOverlay(xaml: false);
+        Assert.Contains("Rebake(MosaicLive(points))", SourceGate.MethodBody(cs, "private void PaintPreview"));
+        Assert.DoesNotContain("AnnotationTool.Mosaic", SourceGate.MethodBody(cs, "private void DrawLive"));
+        // 按下那一下就要能糊住一格：起点先存两份（MosaicBrush 逐段走，两个重合的点正好是笔尖那一格）。
+        // 锚点取"存两份"这一句本身——只搜工具名会被注释或分支条件冒充成绿灯。
+        Assert.Contains("new List<PixelPoint> { local, local }", SourceGate.MethodBody(cs, "private void BeginStroke"));
+    }
 }

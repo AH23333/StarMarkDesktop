@@ -244,6 +244,25 @@ public sealed class AnnotationPainterTests
         Assert.Equal((BgB, BgG, BgR, 255), At(pixels, 24, 23, 23));  // 没涂到的格子必须原样
     }
 
+    /// <summary>点一下就走完的那一笔（按下即松开，两个采样点重合）：必须糊掉笔尖所在的整格。
+    /// 否则"选中打码、点一下、什么也没发生"就成了静默失效（真机反馈的那一类）。</summary>
+    [Fact]
+    public void ATapWithTwoIdenticalPointsStillPixelatesTheBlockUnderIt()
+    {
+        var pixels = Canvas(24, 24);
+        for (var y = 0; y < 24; y++)
+            for (var x = 0; x < 24; x += 2)
+                pixels[(y * 24 + x) * 4 + 2] = 255;                     // 隔列竖条纹：没糊掉的格子一定看得见两种红
+        AnnotationPainter.Paint(pixels, 24, 24, new Annotation(AnnotationTool.Mosaic,
+            new[] { new PixelPoint(5, 5), new PixelPoint(5, 5) }, Red, Annotation.DefaultThickness(AnnotationTool.Mosaic)));
+
+        var first = At(pixels, 24, 0, 0);
+        for (var y = 0; y < Annotation.MosaicBlockSize; y++)
+            for (var x = 0; x < Annotation.MosaicBlockSize; x++)
+                Assert.Equal(first, At(pixels, 24, x, y));              // 第 0 格整块同色
+        Assert.NotEqual(first, At(pixels, 24, 22, 22));                  // 没涂到的那一格必须还是条纹
+    }
+
     [Fact]
     public void MosaicBrushedTwiceIsTheSameImage()
     {

@@ -65,6 +65,8 @@ public sealed partial class CaptureOverlayWindow : Window
     private byte[]? _base;                      // 选区那块底图（物理像素，合成时的固定起点）
     private WriteableBitmap? _preview;
     private List<PixelPoint>? _stroke;          // 正在拖、还没合成进去的那一条
+    /// <summary>上一次为打码重烤预览的时刻（毫秒）。见 <c>PaintPreview</c>：约 45ms 合一次帧。</summary>
+    private long _lastMosaicPreview;
     private bool _editingText;
     private PixelPoint _textAnchor;
     private AnnotationTool _tool = AnnotationTool.Rectangle;
@@ -790,10 +792,33 @@ public sealed partial class CaptureOverlayWindow : Window
             BeginTextEdit(local);
             return;
         }
-        _stroke = new List<PixelPoint> { local };
+        // 打码的"一笔"从按下那一下就该看见：同一格糊掉与"还没糊"对用户是两个完全不同的结果，
+        // 所以起点先按"一个点画两遍"存（MosaicBrush 走的是段，两个重合的点正好糊掉笔尖那一格）。
+        _stroke = _tool == AnnotationTool.Mosaic
+            ? new List<PixelPoint> { local, local }
+            : new List<PixelPoint> { local };
         Root.CapturePointer(pointer);
-        DrawLive();
+        PaintPreview();
     }
+
+    /// <summary>拖动中的预览：画笔/荧光/形状走近似图元，打码走真像素（每次合帧重烤）。</summary>
+    private void PaintPreview()
+    {
+        if (_tool != AnnotationTool.Mosaic)
+        {
+            DrawLive();
+            return;
+        }
+        // 整块重烤一次的成本与"提交一条标注"相同，但每一帧都烤在大选区上会跟不上手 ⇒ 约 45ms 合一次帧；
+        // 松手时 EndStroke 无条件再烤一遍，所以中途少烤那一两次不会留下任何差异。
+        if (Environment.TickCount64 - _lastMosaicPreview < 45) return;
+        _lastMosaicPreview = Environment.TickCount64;
+        if (_stroke is { Count: > 1 } points) Rebake(MosaicLive(points));
+    }
+
+    /// <summary>正在打的这一条马赛克（还没提交）。粗细取当前工具的实际笔刷，颜色不参与（打码改的是像素本身）。</summary>
+    private Annotation MosaicLive(IReadOnlyList<PixelPoint> points)
+        => new(AnnotationTool.Mosaic, points, ColourBgra, ThicknessForTool);
 
     private void ExtendStroke(PixelPoint local)
     {
@@ -804,7 +829,7 @@ public sealed partial class CaptureOverlayWindow : Window
         // 都会画出针尖大的框——预览取最后一点、落笔取第二点，就是"松手后图形变得非常小"的成因。
         if (points.Count > 1 && Annotation.IsTwoPointTool(_tool)) points[^1] = local;
         else points.Add(local);
-        DrawLive();
+        PaintPreview();
     }
 
     private void EndStroke()
@@ -829,12 +854,13 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <para>重烤而不是增量叠画：撤销、清空、改顺序这些操作就都不需要反向运算，
     /// 而"部分成功"（撤销了一条却残留半条）这类缺陷也结构上不可能出现。</para>
     /// </summary>
-    private void Rebake()
+    private void Rebake(Annotation? pending = null)
     {
         if (_base is not { } basePixels || _preview is not { } preview || _selection is not { } selection) return;
+        var marks = pending is null ? _history.Marks : _history.Marks.Append(pending).ToList();
         try
         {
-            var composed = AnnotationPainter.Render(basePixels, selection.Width, selection.Height, _history.Marks);
+            var composed = AnnotationPainter.Render(basePixels, selection.Width, selection.Height, marks);
             using (var stream = preview.PixelBuffer.AsStream())
                 stream.Write(composed, 0, composed.Length);
             preview.Invalidate();
@@ -865,20 +891,9 @@ public sealed partial class CaptureOverlayWindow : Window
         var brush = new SolidColorBrush(ToColor(ColourBgra));
         var thickness = Math.Max(1.0, ThicknessForTool / _scale);
         var first = LocalToDip(points[0]);
-        var mosaicDiameter = Annotation.ThicknessFor(AnnotationTool.Mosaic, _weightIndex) / _scale;
 
         switch (_tool)
         {
-            case AnnotationTool.Mosaic:
-                // 打码的效果是"整块糊掉"，画一条线没有意义：只把笔刷大小显示出来就够了
-                AddShape(new Ellipse
-                {
-                    Stroke = brush,
-                    StrokeThickness = thickness,
-                    Fill = new SolidColorBrush(Color.FromArgb(0x33, 0x80, 0x80, 0x80)),
-                }, first.X - mosaicDiameter / 2, first.Y - mosaicDiameter / 2, mosaicDiameter, mosaicDiameter);
-                return;
-
             case AnnotationTool.Rectangle:
             {
                 var last = LocalToDip(points[^1]);
@@ -962,7 +977,10 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         var (x, y) = LocalToDip(local);
         _editingText = true;
-        TextEditorHost.Margin = new Thickness(Math.Max(0, x), Math.Max(0, y), 0, 0);
+        // 靠右边/下边点击时把输入框拉回屏内：默认宽度 180 DIP，越界就等于"输入框跑屏外了，打不了字"
+        TextEditorHost.Margin = new Thickness(
+            Math.Clamp(x, 0, Math.Max(0, _monitor.Width / _scale - 190)),
+            Math.Clamp(y, 0, Math.Max(0, _monitor.Height / _scale - 40)), 0, 0);
         TextEditorHost.Visibility = Visibility.Visible;
         TextEditor.FontSize = Annotation.DefaultFontHeight / _scale;
         TextEditor.Foreground = new SolidColorBrush(ToColor(ColourBgra));

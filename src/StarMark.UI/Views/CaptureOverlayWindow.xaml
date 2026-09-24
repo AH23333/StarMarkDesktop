@@ -47,18 +47,27 @@
         </Canvas>
 
 
-        <!-- 文字标注就地输入：Enter 落笔、Esc 只丢掉这一行字（不收整场截图） -->
+        <!--
+            文字标注就地输入：Enter 落笔、Esc 只丢掉这一行字（不收整场截图）。
+            <b>左上角对齐是必须的</b>：Grid 子元素默认 Stretch，只给 Margin 定位的话，
+            这块黄底会从"点击处"一路铺到屏幕右下角（真机反馈的"点击处到右下角的黄色矩形"），
+            输入框本身也会跟着拉成一条巨大无比的东西。
+        -->
         <Border
             x:Name="TextEditorHost"
             Background="#EEFFFF00"
             BorderBrush="#FF000000"
             BorderThickness="1"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
             Visibility="Collapsed">
             <TextBox
                 x:Name="TextEditor"
                 Background="Transparent"
                 BorderThickness="0"
+                HorizontalAlignment="Left"
                 MinWidth="180"
+                MaxWidth="520"
                 FontFamily="Microsoft YaHei UI"
                 KeyDown="TextEditor_KeyDown"
                 LostFocus="TextEditor_LostFocus"/>
