@@ -297,6 +297,214 @@ public sealed class ItemRepository : IItemRepository
         DataChangeHub.Notify();
     }
 
+    /// <summary>
+    /// 一次事务给一批条目追加标签。<b>存在的理由是把往返压下来</b>：逐条 <see cref="AddTagAsync"/>
+    /// 时"500 条各加 2 个标签"要开 1000 次连接、起 1000 个事务、把同一条目的 search_text 重建 2 遍、
+    /// 通知 1000 次；这里压成 1 次连接、每条目最多重建 1 次、整批通知 1 次。
+    /// <para>
+    /// <b>语义与逐条调用严格一致</b>：只追加不替换、已关联的跳过、标签名按 NOCASE 复用同一行、
+    /// 发生变化的条目各写一条「修改」活动。两点是有意的差别：
+    /// ① 全批都没有可加的东西时<b>一条语句都不多发</b>（幂等重放不该在活动流里留下足迹）；
+    /// ② 条目在读取后已被删除，则整条跳过——不给一个不存在的条目建关联（外键会拒，但那时已经花了语句）。
+    /// </para>
+    /// </summary>
+    public async Task<int> TagItemsAsync(IReadOnlyList<ItemTagAssignment> assignments, CancellationToken ct)
+    {
+        if (assignments is null || assignments.Count == 0) return 0;
+
+        // 入参先收口：同一条目重复出现要并起来，否则后面按差集算会漏
+        var wanted = new Dictionary<long, List<string>>();
+        foreach (var assignment in assignments)
+        {
+            if (assignment is null || assignment.ItemId <= 0 || assignment.Tags is null) continue;
+            if (!wanted.TryGetValue(assignment.ItemId, out var names)) wanted[assignment.ItemId] = names = new List<string>();
+            foreach (var raw in assignment.Tags)
+            {
+                if (string.IsNullOrWhiteSpace(raw)) continue;
+                var name = raw.Trim();
+                if (!names.Any(has => string.Equals(has, name, StringComparison.OrdinalIgnoreCase))) names.Add(name);
+            }
+        }
+        if (wanted.Count == 0) return 0;
+
+        var ids = wanted.Keys.ToList();
+        using var conn = _factory.Open();
+        using var tx = conn.BeginTransaction();
+
+        // ① 一次读回这批条目已有的标签（大小写不敏感比对用）
+        var existing = new Dictionary<long, HashSet<string>>();
+        foreach (var chunk in Chunks(ids))
+        {
+            using var read = conn.CreateCommand();
+            read.Transaction = tx;
+            read.CommandText = @$"
+                SELECT it.item_id, t.name FROM item_tags it JOIN tags t ON t.id = it.tag_id
+                WHERE it.item_id IN ({InParams(chunk, read)});";
+            await using var r = await read.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct))
+            {
+                var id = r.GetInt64(0);
+                if (!existing.TryGetValue(id, out var set)) existing[id] = set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                set.Add(r.GetString(1));
+            }
+        }
+
+        // ② 算差集
+        var additions = new Dictionary<long, List<string>>();
+        foreach (var (id, names) in wanted)
+        {
+            var has = existing.TryGetValue(id, out var set) ? set : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var fresh = names.Where(name => !has.Contains(name)).ToList();
+            if (fresh.Count > 0) additions[id] = fresh;
+        }
+        if (additions.Count == 0) return 0;      // 没有任何可加的：直接结束，不写不通知
+
+        // ③ 条目现在还在不在（批量整理跑几分钟，期间用户删掉某条是完全正常的）
+        var rows = new Dictionary<long, (string Title, string? Uri, string Source, string SourceId, string? Description, string? Notes)>();
+        foreach (var chunk in Chunks(additions.Keys.ToList()))
+        {
+            using var read = conn.CreateCommand();
+            read.Transaction = tx;
+            read.CommandText = @$"
+                SELECT id, title, uri, source, source_id, description, notes FROM items
+                WHERE id IN ({InParams(chunk, read)});";
+            await using var r = await read.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct))
+                rows[r.GetInt64(0)] = (
+                    r.IsDBNull(1) ? string.Empty : r.GetString(1),
+                    r.IsDBNull(2) ? null : r.GetString(2),
+                    r.IsDBNull(3) ? string.Empty : r.GetString(3),
+                    r.IsDBNull(4) ? string.Empty : r.GetString(4),
+                    r.IsDBNull(5) ? null : r.GetString(5),
+                    r.IsDBNull(6) ? null : r.GetString(6));
+        }
+
+        var live = additions.Where(pair => rows.ContainsKey(pair.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
+        if (live.Count == 0) return 0;
+
+        // ④ 标签行：已知的名字一次查回来，缺的才建（RETURNING 省掉一次 last_insert_rowid）
+        var neededNames = live.Values.SelectMany(names => names).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var tagIds = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        foreach (var chunk in Chunks(neededNames))
+        {
+            using var find = conn.CreateCommand();
+            find.Transaction = tx;
+            find.CommandText = $"SELECT id, name FROM tags WHERE name COLLATE NOCASE IN ({InParams(chunk, find, "tn")});";
+            await using var r = await find.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct)) tagIds[r.GetString(1)] = r.GetInt64(0);
+        }
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        foreach (var name in neededNames)
+        {
+            if (tagIds.ContainsKey(name)) continue;
+            using var create = conn.CreateCommand();
+            create.Transaction = tx;
+            create.CommandText = "INSERT INTO tags(name, created_at) VALUES(@name, @now) RETURNING id;";
+            create.Parameters.AddWithValue("@name", name);
+            create.Parameters.AddWithValue("@now", now);
+            tagIds[name] = (long)(await create.ExecuteScalarAsync(ct))!;
+        }
+
+        // ⑤ 建关联：每个 (条目, 新标签) 一条 INSERT OR IGNORE（幂等，靠的是唯一索引）
+        foreach (var (id, names) in live)
+        {
+            foreach (var name in names)
+            {
+                using var link = conn.CreateCommand();
+                link.Transaction = tx;
+                link.CommandText = "INSERT OR IGNORE INTO item_tags(item_id, tag_id, created_at) VALUES(@item, @tag, @now);";
+                link.Parameters.AddWithValue("@item", id);
+                link.Parameters.AddWithValue("@tag", tagIds[name]);
+                link.Parameters.AddWithValue("@now", now);
+                await link.ExecuteNonQueryAsync(ct);
+            }
+        }
+
+        // ⑥ 索引重建：每个变动的条目一次（标签并进 search_text 是全文检索的前提，见 EP/AM 两批的教训）。
+        //    已有的 + 刚加的合起来就是最终状态，不必再回库里读一遍。
+        foreach (var (id, names) in live)
+        {
+            var finalTags = new List<string>(existing.TryGetValue(id, out var has) ? has : Enumerable.Empty<string>());
+            finalTags.AddRange(names);
+            var row = rows[id];
+            await WriteSearchTextAsync(conn, id, row.Title, row.Description, row.Notes, finalTags, ct);
+        }
+
+        // ⑦ 活动流水：整批一次多行 INSERT + 一次裁剪（逐条写的话光活动就两倍语句数）
+        var activityRows = live.Keys.OrderBy(id => id)
+            .Select(id => (Kind: ActivityKind.ItemModify,
+                           Key: rows[id].Source + ":" + rows[id].SourceId,
+                           Title: rows[id].Title,
+                           Uri: rows[id].Uri))
+            .ToList();
+        await LogActivitiesOnConnection(conn, tx, activityRows, ct);
+
+        await tx.CommitAsync(ct);
+        DataChangeHub.Notify();       // 整批只通知一次：每条都通知会让所有常驻组件各重读一遍库
+        return live.Count;
+    }
+
+    /// <summary>IN (…) 的参数个数上限。SQLite 默认变量上限是 999（老版本）——留足余量分块，
+    /// 免得"条目多了"变成一个看不懂的 SqliteException。</summary>
+    private const int InChunkSize = 400;
+
+    private static IEnumerable<List<T>> Chunks<T>(IReadOnlyList<T> items)
+    {
+        for (var i = 0; i < items.Count; i += InChunkSize)
+            yield return items.Skip(i).Take(InChunkSize).ToList();
+    }
+
+    /// <summary>给命令挂上 @<paramref name="prefix"/>0…n 并返回 SQL 里的占位串。<b>只用参数化</b>：
+    /// 拼字符串的那条路一旦被复用就是注入面。</summary>
+    private static string InParams<T>(List<T> values, SqliteCommand command, string prefix = "in")
+    {
+        var names = new List<string>(values.Count);
+        for (var i = 0; i < values.Count; i++)
+        {
+            var name = "@" + prefix + i;
+            command.Parameters.AddWithValue(name, values[i]!);
+            names.Add(name);
+        }
+        return string.Join(",", names);
+    }
+
+    /// <summary>批量写活动流水。<b>与 <see cref="LogActivityOnConnection"/> 同一套环形缓冲口径</b>（只留最近 500 条），
+    /// 区别只在于一次多行 INSERT、最后裁剪一次，而不是每条都数一遍总数。</summary>
+    private static async Task LogActivitiesOnConnection(
+        SqliteConnection conn, SqliteTransaction tx,
+        IReadOnlyList<(ActivityKind Kind, string Key, string Title, string? Uri)> rows, CancellationToken ct)
+    {
+        for (var start = 0; start < rows.Count; start += InChunkSize)
+        {
+            var slice = rows.Skip(start).Take(InChunkSize).ToList();
+            using var insert = conn.CreateCommand();
+            insert.Transaction = tx;
+            var valueGroups = new List<string>(slice.Count);
+            for (var i = 0; i < slice.Count; i++)
+            {
+                valueGroups.Add($"(@at{i}, @kind{i}, @key{i}, @title{i}, @uri{i})");
+                insert.Parameters.AddWithValue($"@at{i}", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                insert.Parameters.AddWithValue($"@kind{i}", slice[i].Kind.ToString().ToLowerInvariant());
+                insert.Parameters.AddWithValue($"@key{i}", slice[i].Key);
+                insert.Parameters.AddWithValue($"@title{i}", slice[i].Title);
+                insert.Parameters.AddWithValue($"@uri{i}", (object?)slice[i].Uri ?? DBNull.Value);
+            }
+            insert.CommandText = "INSERT INTO activity(at, kind, item_key, title, uri) VALUES " + string.Join(",", valueGroups) + ";";
+            await insert.ExecuteNonQueryAsync(ct);
+        }
+
+        using var countCmd = conn.CreateCommand();
+        countCmd.Transaction = tx;
+        countCmd.CommandText = "SELECT COUNT(*) - 500 FROM activity;";
+        var overflow = Convert.ToInt64(await countCmd.ExecuteScalarAsync(ct));
+        if (overflow <= 0) return;
+        using var prune = conn.CreateCommand();
+        prune.Transaction = tx;
+        prune.CommandText = "DELETE FROM activity WHERE id IN (SELECT id FROM activity ORDER BY at ASC, id ASC LIMIT @n);";
+        prune.Parameters.AddWithValue("@n", overflow);
+        await prune.ExecuteNonQueryAsync(ct);
+    }
+
     public async Task RemoveTagAsync(long itemId, string tagName, CancellationToken ct)
     {
         using var conn = _factory.Open();
@@ -369,6 +577,18 @@ public sealed class ItemRepository : IItemRepository
             while (await r.ReadAsync(ct)) tags.Add(r.GetString(0));
         }
 
+        await WriteSearchTextAsync(conn, itemId, title, description, notes, tags, ct);
+    }
+
+    /// <summary>
+    /// 拼出并写入某条目的 search_text。<b>拆成"算"与"写"两半是给批量路径用的</b>：
+    /// 那边一次把整批的标题/描述/标签读回来了，再按条目各读一遍就等于把省下的往返又加回去。
+    /// 拼接口径仍是唯一一份（title + description + notes + tags，再过 CJK 展开）。
+    /// </summary>
+    private static async Task WriteSearchTextAsync(
+        SqliteConnection conn, long itemId, string? title, string? description, string? notes,
+        IReadOnlyList<string> tags, CancellationToken ct)
+    {
         var raw = new StringBuilder();
         raw.Append(title).Append(' ');
         if (!string.IsNullOrEmpty(description)) raw.Append(description).Append(' ');

@@ -176,26 +176,15 @@ public sealed class AiClassifyService
     public void SavePending(ClassifyPlan plan) => _store.SaveAiPlan(plan);
     public void ClearPending() => _store.ClearAiPlan();
 
-    /// <summary>应用方案（整份或某一组）。返回真正加上标签的条目数。</summary>
+    /// <summary>
+    /// 应用方案（整份或某一组）。返回真正加上标签的条目数。
+    /// <para>写库全部交给 <see cref="IItemRepository.TagItemsAsync"/>：一次事务、每条目一次索引重建、
+    /// 整批一次通知。<b>不要在界面上自己转圈逐条 AddTagAsync</b>——那正是这个方法要避免的形状。</para>
+    /// </summary>
     public async Task<int> ApplyAsync(ClassifyPlan plan, CancellationToken ct)
     {
         if (plan.IsEmpty) return 0;
-        var applied = 0;
-        foreach (var proposal in plan.Proposals)
-        {
-            if (ct.IsCancellationRequested) break;
-            var current = await _repo.GetTagsForItemAsync(proposal.Id, ct);
-            var fresh = proposal.Tags
-                .Where(tag => !current.Any(has => string.Equals(has, tag, StringComparison.OrdinalIgnoreCase)))
-                .ToList();
-            if (fresh.Count == 0) continue;
-
-            foreach (var tag in fresh) await _repo.AddTagAsync(proposal.Id, tag, ct);
-            await _repo.LogActivityAsync(ActivityKind.ItemModify, null,
-                (await _repo.GetByIdAsync(proposal.Id, ct))?.Title ?? "条目 " + proposal.Id, null, ct);
-            applied++;
-        }
-        DataChangeHub.Notify();       // 一次整理几百条，通知一次就够：每条都通知会让所有组件各重读一遍
-        return applied;
+        return await _repo.TagItemsAsync(
+            plan.Proposals.Select(proposal => new ItemTagAssignment(proposal.Id, proposal.Tags)).ToList(), ct);
     }
 }

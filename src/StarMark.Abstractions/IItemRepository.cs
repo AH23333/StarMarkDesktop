@@ -134,7 +134,26 @@ public interface IItemRepository
     /// 调用方负责给定唯一且已按目标实例编码的 <c>source_id</c>。全程原子，任何异常回滚不留下半套数据。
     /// </summary>
     Task ReplaceLocalItemsForInstanceAsync(string instanceId, IReadOnlyList<Item> items, CancellationToken ct = default);
+
+    /// <summary>
+    /// <b>一次事务里</b>给一批条目追加标签，返回真正发生变化的条目数。
+    /// <para>
+    /// 为什么要有这个方法：AI 批量整理一次要动几百条。用 <see cref="AddTagAsync"/> 逐条调的话，
+    /// 一个条目两个标签就要开 2 次连接、起 2 个事务、把同一个条目的 search_text 重建 2 遍、
+    /// 通知 DataChangeHub 2 次——"给 500 条打标签"从几秒变成几十秒。
+    /// 这里把往返压成：<b>连接 1 次、每个条目最多重建一次索引、整批通知一次</b>。
+    /// </para>
+    /// <para>
+    /// 语义与逐条调用一致：标签<b>只追加不替换</b>（用户手打过的不动）、已关联的跳过、
+    /// 标签名大小写不敏感地复用同一行、每个发生变化的条目写一条「修改」活动。
+    /// 一个条目都不需要变化时<b>不发任何写语句</b>（幂等重放不该留下活动流水）。
+    /// </para>
+    /// </summary>
+    Task<int> TagItemsAsync(IReadOnlyList<ItemTagAssignment> assignments, CancellationToken ct = default);
 }
+
+/// <summary>"给这个条目追加这些标签"。<see cref="IItemRepository.TagItemsAsync"/> 的入参。</summary>
+public sealed record ItemTagAssignment(long ItemId, IReadOnlyList<string> Tags);
 
 /// <summary>浏览过滤器（非搜索模式）。</summary>
 public sealed class BrowseFilter
