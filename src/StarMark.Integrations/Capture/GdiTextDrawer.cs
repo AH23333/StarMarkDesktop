@@ -26,13 +26,26 @@ public static class GdiTextDrawer
     /// 失败一律抛 <see cref="InvalidOperationException"/> 并带上原因。宁可让用户看到"字没写出去"，
     /// 也不能静默交出一张少了字的图——那种图会被当成"我刚才明明写了字"，事后无从分辨。
     /// </para>
+    /// <para>
+    /// <paramref name="rotation"/> 是绕<b>字块中心</b>顺时针转的度数。转的时候走另一条路：
+    /// 先把字用灰度抗锯齿写进一块黑底字模（拿到的是一张覆盖率图，不是"字 + 背景"），
+    /// 再按覆盖率逐像素混合到目标上。<b>覆盖率 0 的像素一个字节都不改</b>——
+    /// 要是把那块方方正正的字模整个转过去，字没盖到的地方也会被打磨成背景色，
+    /// 用户看到的就是"字转走了，还留下一块比字大得多的脏斑"。
+    /// </para>
     /// </summary>
-    public static void Draw(byte[] bgra, int width, int height, int atX, int atY, string text, int fontHeight, int colorBgra)
+    public static void Draw(byte[] bgra, int width, int height, int atX, int atY,
+        string text, int fontHeight, int colorBgra, double rotation = 0d)
     {
         if (bgra is null || width <= 0 || height <= 0 || bgra.Length < (long)width * height * 4)
             throw new ArgumentException("像素缓冲比声明的尺寸短，画上去会越界", nameof(bgra));
         if (string.IsNullOrEmpty(text)) return;
         if (fontHeight < 1) throw new InvalidOperationException("文字高度至少 1 像素");
+        if (TextGeometry.Normalise(rotation) != 0d)
+        {
+            DrawRotated(bgra, width, height, atX, atY, text, fontHeight, colorBgra, rotation);
+            return;
+        }
 
         var dc = CreateCompatibleDC(IntPtr.Zero);
         if (dc == IntPtr.Zero) throw new InvalidOperationException("创建内存画布失败（GDI 句柄用尽）");
@@ -130,11 +143,138 @@ public static class GdiTextDrawer
     }
 
     /// <summary>
+    /// 旋转那条路：字模 → 覆盖率图 → 逐像素混合。
+    /// <para>与不旋转那条的关键差别是<b>不能"搬背景"</b>：不旋转时把目标那块的原像素先搬进字模、
+    /// 在上面写字、再搬回去，天然对齐；一旦转起来，字模是个方块而字是斜的，整个方块搬过去
+    /// 就会在字周围留下一片脏斑。所以这里只取"这一像素有多少墨"，再按角度铺到目标上。</para>
+    /// </summary>
+    private static void DrawRotated(byte[] bgra, int width, int height,
+        int atX, int atY, string text, int fontHeight, int colorBgra, double rotation)
+    {
+        var dc = CreateCompatibleDC(IntPtr.Zero);
+        if (dc == IntPtr.Zero) throw new InvalidOperationException("创建内存画布失败（GDI 句柄用尽）");
+        var font = CreateFont(fontHeight, grayscale: true);
+        IntPtr dib = IntPtr.Zero, oldObject = IntPtr.Zero, oldFont = IntPtr.Zero, header = IntPtr.Zero;
+        var bits = IntPtr.Zero;
+        byte[] coverage;
+        int textWidth, textHeight;
+        try
+        {
+            if (font == IntPtr.Zero) throw new InvalidOperationException("系统没能创建标注用的字体（雅黑与 Segoe UI 都试过）");
+            oldFont = SelectObject(dc, font);
+            if (!GetTextExtentPoint32W(dc, text, text.Length, out var extent) || extent.cx <= 0 || extent.cy <= 0)
+                throw new InvalidOperationException("量不出这行文字要占多大（GDI 拒绝了这个字体或这段文字）");
+            textWidth = extent.cx;
+            textHeight = extent.cy;
+            var rowBytes = textWidth * 4;
+
+            header = AllocTopDown32Header(textWidth, textHeight);
+            dib = CreateDIBSection(dc, header, DIB_RGB_COLORS, out bits, IntPtr.Zero, 0);
+            if (dib == IntPtr.Zero || bits == IntPtr.Zero)
+                throw new InvalidOperationException("创建文字画布失败（内存不足）");
+            oldObject = SelectObject(dc, dib);
+
+            // 黑底自己清：CreateDIBSection 不承诺位图内存的初值，而"黑＝没墨"是这张覆盖率图的前提
+            var zero = new byte[textWidth * 4];
+            for (var y = 0; y < textHeight; y++) Marshal.Copy(zero, 0, bits + y * rowBytes, textWidth * 4);
+
+            SetTextColor(dc, 0x00FFFFFF);                // 白＝满墨；COLORREF 是 0x00BBGGRR
+            SetBkMode(dc, TRANSPARENT);
+            if (!TextOutW(dc, 0, 0, text, text.Length))
+                throw new InvalidOperationException($"文字没能写出去（Win32 {Marshal.GetLastWin32Error()}）");
+            GdiFlush();
+
+            coverage = new byte[textWidth * textHeight];
+            var row = new byte[textWidth * 4];
+            for (var y = 0; y < textHeight; y++)
+            {
+                Marshal.Copy(bits + y * rowBytes, row, 0, textWidth * 4);
+                for (var x = 0; x < textWidth; x++)
+                    // 灰度抗锯齿下三个通道相等；取最大是防某个通道被系统的字距调整单独动过
+                    coverage[y * textWidth + x] = Math.Max(row[x * 4], Math.Max(row[x * 4 + 1], row[x * 4 + 2]));
+            }
+        }
+        finally
+        {
+            if (oldObject != IntPtr.Zero) SelectObject(dc, oldObject);
+            if (oldFont != IntPtr.Zero) SelectObject(dc, oldFont);
+            if (dib != IntPtr.Zero) DeleteObject(dib);
+            if (header != IntPtr.Zero) Marshal.FreeHGlobal(header);
+            if (font != IntPtr.Zero) DeleteObject(font);
+            DeleteDC(dc);
+        }
+
+        var box = TextGeometry.RotatedBox(atX, atY, textWidth, textHeight, rotation);
+        var left = Math.Max(0, box.Left);
+        var top = Math.Max(0, box.Top);
+        var right = Math.Min(width, box.Right);
+        var bottom = Math.Min(height, box.Bottom);
+        var inkBlue = colorBgra & 0xFF;
+        var inkGreen = (colorBgra >>> 8) & 0xFF;
+        var inkRed = (colorBgra >>> 16) & 0xFF;
+        var inkAlpha = (colorBgra >>> 24) & 0xFF;
+
+        for (var y = top; y < bottom; y++)
+        {
+            for (var x = left; x < right; x++)
+            {
+                var (sourceX, sourceY) = TextGeometry.SourceOf(
+                    atX, atY, textWidth, textHeight, rotation, x + 0.5, y + 0.5);
+                var ink = Sample(coverage, textWidth, textHeight, sourceX - atX, sourceY - atY);
+                if (ink == 0) continue;                 // 没墨的像素一个字节都不动：这就是"不糊出脏斑"
+                var alpha = ink * inkAlpha / 255;
+                if (alpha == 0) continue;
+                var at = (y * width + x) * 4;
+                bgra[at] = (byte)((bgra[at] * (255 - alpha) + inkBlue * alpha + 127) / 255);
+                bgra[at + 1] = (byte)((bgra[at + 1] * (255 - alpha) + inkGreen * alpha + 127) / 255);
+                bgra[at + 2] = (byte)((bgra[at + 2] * (255 - alpha) + inkRed * alpha + 127) / 255);
+                // 与不旋转那条同一口径：碰过的像素 alpha 必须是 255，否则存出的 PNG 里字是透明洞
+                bgra[at + 3] = 255;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 双线性取墨量。<paramref name="u"/>/<paramref name="v"/> 按"字模内第 0 个像素的中心是 0.5"计，
+    /// 与 <see cref="TextGeometry.SourceOf"/> 同一套坐标；超出字模一律算没墨。
+    /// </summary>
+    private static int Sample(byte[] coverage, int width, int height, double u, double v)
+    {
+        var fx = u - 0.5;
+        var fy = v - 0.5;
+        var x0 = (int)Math.Floor(fx);
+        var y0 = (int)Math.Floor(fy);
+        var tx = fx - x0;
+        var ty = fy - y0;
+        var sum = 0d;
+        for (var dy = 0; dy <= 1; dy++)
+        {
+            var sy = y0 + dy;
+            if (sy < 0 || sy >= height) continue;                    // 越界的角＝没墨（权重不重新归一，正是"边缘淡出"）
+            for (var dx = 0; dx <= 1; dx++)
+            {
+                var sx = x0 + dx;
+                if (sx < 0 || sx >= width) continue;
+                var weight = (dx == 0 ? 1 - tx : tx) * (dy == 0 ? 1 - ty : ty);
+                sum += coverage[sy * width + sx] * weight;
+            }
+        }
+        return (int)Math.Round(sum);
+    }
+
+    /// <summary>
     /// 依次试 微软雅黑 UI → 微软雅黑 → Segoe UI（截图上中英混排是常态，只会一种的就别当默认）。
     /// <para>负 <c>lfHeight</c> ＝按 em 高给，与用户看到的字号最接近；本进程声明了 PerMonitorV2，
     /// 所以这里的数值就是<b>设备像素</b>，与那块 BGRA 缓冲同一个单位。</para>
     /// </summary>
-    private static IntPtr CreateFont(int fontHeight)
+    private static IntPtr CreateFont(int fontHeight) => CreateFont(fontHeight, grayscale: false);
+
+    /// <summary>
+    /// <paramref name="grayscale"/> 为真时用 <c>ANTIALIASED_QUALITY</c>（灰度抗锯齿）而不是 ClearType：
+    /// 旋转那条路要把字模当<b>覆盖率图</b>来采样，而 ClearType 是亚像素渲染——同一个笔画在
+    /// R/G/B 三个通道上给的是三个不同的值，拿它当 alpha 会转出一排彩边。
+    /// </summary>
+    private static IntPtr CreateFont(int fontHeight, bool grayscale)
     {
         foreach (var face in new[] { "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI" })
         {
@@ -143,7 +283,7 @@ public static class GdiTextDrawer
                 Height = -fontHeight,
                 Weight = 400,
                 CharSet = 1,                 // DEFAULT_CHARSET：中文靠它挑到支持 CJK 的字面
-                Quality = 5,                 // CLEARTYPE_QUALITY，与真实桌面一致
+                Quality = (byte)(grayscale ? 4 : 5),   // 4＝ANTIALIASED（灰度），5＝CLEARTYPE，与真实桌面一致
                 FaceName = face,
             };
             var handle = CreateFontIndirectW(ref logFont);

@@ -345,17 +345,19 @@ public sealed class CaptureOverlayGateTests
     public void TransformMathLivesOnlyInTheModel()
     {
         var painter = SourceGate.ReadRepoFile("src/StarMark.Core/Capture/AnnotationPainter.cs");
-        Assert.Contains("mark.TransformedPoints()", SourceGate.MethodBody(painter, "public static void Paint"));
-        // 绘制端一旦自己读 Rotation / Scale 去算，就变成"模型算一遍、画的时候再算一遍"，
-        // 预览与交付会在两次换算的差里分开。（椭圆那类图元自己的三角函数与此无关。）
-        Assert.DoesNotContain(".Rotation", painter);
-        Assert.DoesNotContain(".Scale", painter);
+        var paint = SourceGate.MethodBody(painter, "public static void Paint");
+        Assert.Contains("mark.TransformedPoints()", paint);
+        Assert.Contains("mark.DrawFontHeight", paint);
+        // 角度在这一层只是"递出去"（给 GdiTextDrawer），不在这里被换算：绘制编排里出现 Math.
+        // 就是第二次换算的入口，而"预览对、存出来偏了"那类 bug 恰恰长在多次换算上。
+        Assert.Contains("mark.Rotation", paint);
+        Assert.DoesNotContain("Math.", paint);
 
         var overlay = ReadOverlay(xaml: false);
         var handles = SourceGate.MethodBody(overlay, "private void DrawSelectionHandles");
         Assert.Contains("mark.Bounds()", handles);
         Assert.Contains("mark.Corners()", handles);          // 把手摆在哪儿由模型说，界面只负责画
-        Assert.Contains("mark.SupportsRotation", handles);   // 转不转得动也是模型的判断
+        Assert.Contains("RotateHandle(mark)", handles);      // 旋转那颗点由模型的外接框推出来，界面不自己算
         // 界面读原始角度/自己算三角函数＝第二处换算，预览与交付会在两次换算的差里分开
         Assert.DoesNotContain("mark.Rotation", handles);
         Assert.DoesNotContain("Math.Sin", handles);
@@ -390,9 +392,16 @@ public sealed class CaptureOverlayGateTests
         Assert.Equal(1, SourceGate.Count(cs, "TextEditor.Foreground"));   // 只有那一个出口在说"用哪个颜色"
     }
 
-    /// <summary>刚打完的那一行字，变换轴要放在字块正中：轴在左上角时改字号会把字推着走（"位置四窜"）。</summary>
+    /// <summary>
+    /// 变换轴只由模型说一次：界面既不写 <c>Pivot</c>，也不自己算"绕哪一点转/放"。
+    /// <para>批次 RF-1 先做成"界面给文字打一个居中轴点"，结果同一件事在两处各表达一次——
+    /// 位置四窜修好后又留下一个"只有模型自己看"的第二份事实，RF-2 把它收回到 <c>Annotation.Origin</c>。</para>
+    /// </summary>
     [Fact]
-    public void TheJustTypedLineIsPivotedAtItsOwnCentre()
-        => Assert.Contains(".WithPivotAtCentre()", SourceGate.MethodBody(
-            ReadOverlay(xaml: false), "private void EndTextEditing"));
+    public void TheOverlayNeverInventsItsOwnTransformAxis()
+    {
+        var cs = ReadOverlay(xaml: false);
+        Assert.DoesNotContain("Pivot", cs);
+        Assert.Contains("mark.Bounds()", SourceGate.MethodBody(cs, "private void DrawSelectionHandles"));
+    }
 }

@@ -51,7 +51,9 @@ public static class AnnotationPainter
         switch (mark.Tool)
         {
             case AnnotationTool.Text:
-                GdiTextDrawer.Draw(bgra, width, height, points[0].X, points[0].Y, mark.Text!, mark.DrawFontHeight, color);
+                // 位置已由 TransformedPoints() 转过，这里再给角度：字块绕自己的中心转（同一套数学在 TextGeometry）
+                GdiTextDrawer.Draw(bgra, width, height, points[0].X, points[0].Y,
+                    mark.Text!, mark.DrawFontHeight, color, mark.Rotation);
                 break;
 
             case AnnotationTool.Rectangle:

@@ -57,9 +57,9 @@ public readonly record struct AnnotationColor(string Name, int Bgra);
 /// </para>
 /// <para>
 /// 一条标注是<b>画完即定形</b>的（点、颜色、粗细都在创建时给定），所以「撤销」就是弹掉列表末尾，
-/// 不需要任何反向操作。<b>之后可以整条移动 / 缩放 / 旋转</b>（批次 RE-3）：这三样改的都是
-/// <see cref="Pivot"/>/<see cref="Rotation"/>/<see cref="Scale"/> 三个变换量，<b>不改点集本身</b>——
-/// 于是"撤销一条变换"与"撤销一条标注"走的是同一条快照路径，同样不需要反向运算。
+/// 不需要任何反向操作。<b>之后可以整条移动 / 缩放 / 旋转</b>（批次 RE-3）：这两样改的都是
+/// <see cref="Rotation"/>/<see cref="Scale"/> 两个变换量（轴点由 <see cref="Origin"/> 现算），
+/// <b>不改点集本身</b>——于是"撤销一条变换"与"撤销一条标注"走的是同一条快照路径，同样不需要反向运算。
 /// 逐顶点改形（拖一个角把矩形拉歪）仍然不做：那要的是每类工具各自的顶点语义。
 /// </para>
 /// </summary>
@@ -74,9 +74,9 @@ public sealed record Annotation(
     public string? Text { get; init; }
 
     /// <summary>
-    /// 变换的轴点（<b>没显式指定＝第一个点</b>，见 <see cref="Origin"/>）。
-    /// 单独存一个可空值而不是直接写死 Points[0]：拖动改位置时点集整体平移，
-    /// 轴点跟着走才转得对；而"绕自己转"是用户的直觉，绕画布原点转会把形状甩出视野。
+    /// 变换的轴点（可空）。<b>没指定时：几何类＝第一个点，文字＝字块自己的中心</b>（见 <see cref="Origin"/>）。
+    /// <para>留一个可空槽而不是写死，是因为"绕哪一点缩放"是要跟着拖动语义走的：
+    /// 拖一个角时钉住的应是它对面那个角，那时调用方会明确给一个轴点。</para>
     /// </summary>
     public PixelPoint? Pivot { get; init; }
 
@@ -86,8 +86,26 @@ public sealed record Annotation(
     /// <summary>绕 <see cref="Origin"/> 的等比缩放倍数（1＝原样）。文字靠它改字号。</summary>
     public double Scale { get; init; } = 1d;
 
-    /// <summary>变换轴点：没指定就是第一个点。</summary>
-    public PixelPoint Origin => Pivot ?? (Points.Count > 0 ? Points[0] : default);
+    /// <summary>
+    /// 变换轴点。几何类＝<b>第一个点</b>（用户按下的那一点，缩放时它钉住不动）；
+    /// 文字＝<b>字块自己的中心</b>（见 <see cref="TextCentre"/>）。
+    /// <para>文字为什么单独：用户转一行字、改一行字的字号，期望的是"这行字原地动一下"。
+    /// 绕左上角转会把它甩出去——真机反馈的"转一下/改一下字号，位置四窜、还和框对不上"就是这么来的。</para>
+    /// </summary>
+    public PixelPoint Origin => Tool == AnnotationTool.Text
+        ? TextCentre
+        : Pivot ?? (Points.Count > 0 ? Points[0] : default);
+
+    /// <summary>字块中心＝锚点（用户点下去的那个左上角）+ <b>未缩放</b>那份字模的一半。</summary>
+    private PixelPoint TextCentre
+    {
+        get
+        {
+            var anchor = Points.Count > 0 ? Points[0] : default;
+            var (width, height) = StarMark.Integrations.Capture.GdiTextDrawer.Measure(Text ?? string.Empty, FontHeight);
+            return new PixelPoint(anchor.X + width / 2, anchor.Y + height / 2);
+        }
+    }
 
     /// <summary>缩放上下限。缩到 0 附近会"再也点不中"，放大到几百倍会直接把画布撑爆——两端都要有墙。</summary>
     public const double MinScale = 0.2;
@@ -117,9 +135,20 @@ public sealed record Annotation(
     /// 画出去的那一组点：把 <see cref="Rotation"/> 与 <see cref="Scale"/> 绕 <see cref="Origin"/> 作用上去。
     /// <para>放在模型里而不是绘制里，是因为<b>选择框、命中测试、四个落点的渲染都要用同一组点</b>——
     /// 各算一遍就会出现"选择框框住的是原位置，字已经转走了"。</para>
+    /// <para>文字单独一条：它只有一个点，那个点是"字块左上角"，而字块转与放都绕<b>它自己的中心</b>发生，
+    /// 所以中心不动、左上角要按当前字模重新算回去。把通用的"点绕轴转"直接套在左上角上，
+    /// 等于把位置也转了一次——一转就跑到画外、和框对不上，正是真机反馈的那两下。</para>
     /// </summary>
     public IReadOnlyList<PixelPoint> TransformedPoints()
     {
+        if (Points.Count == 0) return Points;
+        if (Tool == AnnotationTool.Text)
+        {
+            if (Scale == 1d) return Points;                 // 转方向不改左上角（绕中心转），字高也没变 ⇒ 原样
+            var (w, h) = StarMark.Integrations.Capture.GdiTextDrawer.Measure(Text ?? string.Empty, DrawFontHeight);
+            var centre = Origin;
+            return new[] { new PixelPoint(centre.X - w / 2, centre.Y - h / 2) };
+        }
         if (!HasTransform) return Points;
         var pivot = Origin;
         var radians = Rotation * Math.PI / 180d;
@@ -140,7 +169,7 @@ public sealed record Annotation(
     /// <summary>文字实际字高（缩放之后）。夹回 <see cref="Problem"/> 认的那个区间，免得画出去才发现越界。</summary>
     public int DrawFontHeight => Math.Clamp((int)Math.Round(FontHeight * Scale, MidpointRounding.AwayFromZero), 6, 200);
 
-    /// <summary>整条平移（＝拖动位置）：点与轴点一起走，角度与倍数不变。</summary>
+    /// <summary>整条平移（＝拖动位置）：点集与轴点一起走，角度与倍数不变（文字的轴由锚点推出来，跟着一起走）。</summary>
     public Annotation MovedBy(int dx, int dy) => this with
     {
         Points = Points.Select(p => new PixelPoint(p.X + dx, p.Y + dy)).ToList(),
@@ -149,18 +178,6 @@ public sealed record Annotation(
 
     /// <summary>绕轴点缩放（倍数夹在上下限之间）。文字改的是字号，几何改的是点距。</summary>
     public Annotation ScaledBy(double factor) => this with { Scale = Math.Clamp(Scale * factor, MinScale, MaxScale) };
-
-    /// <summary>
-    /// 把变换轴挪到<b>当前这一块的正中</b>（只在标注刚创建、还没带任何变换时调用）。
-    /// <para>文字尤其需要：轴在左上角时，放大＝整行字向右下方滑出去，缩小时又向左上角缩回去——
-    /// 用户看到的就是"我想改个字号，结果字跑掉了、还和选择框对不上"（真机反馈的"位置四窜"）。
-    /// 绕中心改字号，字留在原地，才是"改大小"这件事该有的样子。</para>
-    /// </summary>
-    public Annotation WithPivotAtCentre()
-    {
-        var box = Bounds();
-        return this with { Pivot = new PixelPoint(box.X + box.Width / 2, box.Y + box.Height / 2) };
-    }
 
     /// <summary>绕轴点转过 <paramref name="angle"/> 度（归一到 0–360，负角与超过一圈都不该改变形状）。</summary>
     public Annotation RotatedBy(double angle) => this with { Rotation = NormalizeAngle(Rotation + angle) };
@@ -171,13 +188,6 @@ public sealed record Annotation(
         var wrapped = degrees % 360d;
         return wrapped < 0 ? wrapped + 360d : wrapped;
     }
-
-    /// <summary>
-    /// 这一条能不能转。<b>文字不行</b>：GDI 那条路是"把字写进一块与文字框同样大小的临时画布再搬回去"，
-    /// 转起来要换世界变换矩阵、还要重算被裁切的包围盒，风险全在像素层而这里断言不到。
-    /// 所以界面对文字只给"移动 + 缩放"两颗把手——<b>把手不给，比给了不生效诚实</b>（P-97 记着这条取舍）。
-    /// </summary>
-    public bool SupportsRotation => Tool != AnnotationTool.Text;
 
     /// <summary>字高（物理像素）。文字标注不看 <see cref="Thickness"/>——字号就是它的粗细。</summary>
     public int FontHeight { get; init; } = DefaultFontHeight;
@@ -281,8 +291,6 @@ public sealed record Annotation(
             return $"文字高度 {FontHeight} 太离谱（只接受 6–200 物理像素）";
         if (Scale is < MinScale or > MaxScale)
             return $"缩放倍数 {Scale:0.##} 超出 {MinScale:0.##}–{MaxScale:0.##}（缩到底会再也点不中，放到最大会撑破画面）";
-        if (Tool == AnnotationTool.Text && Rotation != 0)
-            return "文字不支持旋转（只能移动与改字号）";
         if (EffectiveColorBgra >>> 24 == 0)
             return "颜色是全透明的，画上去等于没画";
         return null;
@@ -361,7 +369,10 @@ public sealed record Annotation(
         if (Tool == AnnotationTool.Text)
         {
             var (width, height) = StarMark.Integrations.Capture.GdiTextDrawer.Measure(Text ?? string.Empty, DrawFontHeight);
-            return new IntRect(minX, minY, Math.Max(1, width), Math.Max(1, height));
+            // 转出去的字占的是<b>斜着那一块的外接框</b>：只报未旋转的宽高，框就会横在原地而字站出去
+            // （真机反馈的"文字显著脱离文字框范围内"）。数学与绘制端共用 TextGeometry 那一处。
+            var box = StarMark.Integrations.Capture.TextGeometry.RotatedBox(minX, minY, width, height, Rotation);
+            return new IntRect(box.Left, box.Top, Math.Max(1, box.Right - box.Left), Math.Max(1, box.Bottom - box.Top));
         }
         var pad = Tool == AnnotationTool.Mosaic ? Thickness / 2 + MosaicBlockSize : Thickness;
         return new IntRect(minX - pad, minY - pad, maxX - minX + pad * 2, maxY - minY + pad * 2);

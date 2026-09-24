@@ -290,15 +290,50 @@ public sealed class AnnotationTests
         => Assert.Equal(expected, Make(AnnotationTool.Line).RotatedBy(added).Rotation);
 
     [Fact]
-    public void TextRefusesRotationAndExplainsWhy()
+    public void TextAcceptsRotationLikeEverythingElse()
     {
         var text = Make(AnnotationTool.Text, text: "字");
-        Assert.False(text.SupportsRotation);
-        var rotated = text with { Rotation = 30 };
-        Assert.Contains("文字不支持旋转", rotated.Problem());
-        // 缩放对文字是有效的（＝改字号），别一起关掉
+        var rotated = text.RotatedBy(30);
+        Assert.Null(rotated.Problem());                     // 文字旋转已落地（批次 RF-2），不再拒
+        Assert.Equal(30, rotated.Rotation);
+        // 缩放对文字是有效的（＝改字号）
         Assert.Null(text.ScaledBy(1.5).Problem());
         Assert.Equal(33, text.ScaledBy(1.5).DrawFontHeight);
+    }
+
+    /// <summary>
+    /// 转出去的字，<b>选择框要跟着转</b>：只报未旋转的宽高，框就会横在原地而字站出去。
+    /// <para>断言取三件互相独立的事：中心钉住（转的是自己不是位置）、面积只会变大（外接框没算小）、
+    /// 而 90°/270° 必须<b>两轴对调</b>（没真的转就换不了轴——这一条能抓到"角度被吃掉"那类假实现）。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(30)]
+    [InlineData(45)]
+    [InlineData(90)]
+    [InlineData(150)]
+    [InlineData(180)]
+    [InlineData(270)]
+    public void TextBoundsGrowWithRotation(double angle)
+    {
+        // 单点：真实的一条文字标注就是"一个锚点 + 一段字"（两个点的写法会让外接框把那个不存在的第二点也算进去）
+        var text = new Annotation(AnnotationTool.Text, new[] { new PixelPoint(20, 20) },
+            Annotation.Opaque(0, 0, 255), 4)
+        { Text = "一段中英 mixed 文字", FontHeight = 40 };
+        var flat = text.Bounds();
+        var turned = text.RotatedBy(angle).Bounds();
+
+        Assert.True(Math.Abs(flat.X + flat.Width / 2.0 - (turned.X + turned.Width / 2.0)) <= 2,
+            $"横向中心该钉住（绕中心转，不是把位置转出去）：{flat} → {turned}");
+        Assert.True(Math.Abs(flat.Y + flat.Height / 2.0 - (turned.Y + turned.Height / 2.0)) <= 2,
+            $"纵向中心该钉住：{flat} → {turned}");
+        Assert.True((long)turned.Width * turned.Height >= (long)flat.Width * flat.Height,
+            $"旋转后的外接框面积不会变小：{flat} → {turned}");
+        Assert.True(turned.Height >= flat.Height, $"短边方向该被长边占进去：{flat} → {turned}");
+        if (angle is 90 or 270)
+        {
+            Assert.True(Math.Abs(turned.Width - flat.Height) <= 2 && Math.Abs(turned.Height - flat.Width) <= 2,
+                $"转 {angle}° 必须两轴对调（没真的转就换不了轴）：{flat} → {turned}");
+        }
     }
 
     [Fact]
@@ -353,7 +388,7 @@ public sealed class AnnotationTests
     [Fact]
     public void ScalingTextKeepsItInPlace()
     {
-        var text = TextAt("中英 mixed 一行").WithPivotAtCentre();
+        var text = TextAt("中英 mixed 一行");
         var before = Centre(text.Bounds());
         var after = Centre(text.ScaledBy(1.8).Bounds());
         var grown = text.ScaledBy(1.8).Bounds();
@@ -374,7 +409,7 @@ public sealed class AnnotationTests
     [Fact]
     public void MovingCarriesThePivotAlongWithTheGlyphs()
     {
-        var text = TextAt("字").WithPivotAtCentre();
+        var text = TextAt("字");
         var moved = text.MovedBy(12, -8);
         Assert.Equal(new PixelPoint(42, 32), moved.Points[0]);      // 字本身跟着走
         Assert.Equal(text.Origin.X + 12, moved.Origin.X);           // 轴也跟着走：下一次缩放仍以"现在"的中心为轴

@@ -969,7 +969,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         _grab = Grab.None;
         var slop = Annotation.HandleSlopFor(mark.Bounds());
-        if (mark.SupportsRotation && Near(RotateHandle(mark), local, Annotation.HandleSlop)) _grab = Grab.Rotate;
+        if (Near(RotateHandle(mark), local, Annotation.HandleSlop)) _grab = Grab.Rotate;
         else if (mark.Corners().Any(corner => Near(corner, local, slop))) _grab = Grab.Scale;
         else if (mark.Contains(local, MoveSlop)) _grab = Grab.Move;
         else return false;
@@ -1113,12 +1113,11 @@ public sealed partial class CaptureOverlayWindow : Window
             var (x, y) = LocalToDip(corner);
             LiveLayer.Children.Add(Fill(x - 3, y - 3, 6, 6, Ink));
         }
-        if (mark.SupportsRotation)
-        {
-            var (hx, hy) = LocalToDip(RotateHandle(mark));
-            LiveLayer.Children.Add(new Line { X1 = hx, Y1 = hy, X2 = hx, Y2 = top, Stroke = Ink, StrokeThickness = 1 });
-            LiveLayer.Children.Add(Fill(hx - 3, hy - 3, 6, 6, Ink));
-        }
+        // 每一类标注都给旋转把手：文字的旋转走"字模覆盖率再铺回去"那条路（见 GdiTextDrawer），
+        // 与几何类一样能被像素断言钉住，所以不必再对文字单独关一档。
+        var (hx, hy) = LocalToDip(RotateHandle(mark));
+        LiveLayer.Children.Add(new Line { X1 = hx, Y1 = hy, X2 = hx, Y2 = top, Stroke = Ink, StrokeThickness = 1 });
+        LiveLayer.Children.Add(Fill(hx - 3, hy - 3, 6, 6, Ink));
         SelectionTip.Visibility = Visibility.Visible;
     }
 
@@ -1337,7 +1336,7 @@ public sealed partial class CaptureOverlayWindow : Window
         {
             Text = text,
             FontHeight = Annotation.DefaultFontHeight,
-        }.WithPivotAtCentre());   // 轴放在字块正中：否则改字号时整行字会向右下滑（"位置四窜"）
+        });   // 轴由模型按字块中心现算（Annotation.Origin），界面不自己钉变换轴
         _selected = _history.Count - 1;   // 打完字紧接着就是"挪个位置/改个字号"：那一条直接在手边
         Rebake();
         DrawSelectionHandles();

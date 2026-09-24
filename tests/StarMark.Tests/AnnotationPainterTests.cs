@@ -419,4 +419,93 @@ public sealed class AnnotationPainterTests
         Assert.Contains("折线", one.Problem());
         Assert.Contains("2 个点", one.Problem());
     }
+
+    // ────────── 批次 RF-2：文字旋转 ──────────
+
+    /// <summary>
+    /// 转 90° 的那一行字要<b>站起来</b>，而且转出去之后<b>只有墨被搬过去</b>。
+    /// <para>旋转那条路的实现是"字模→覆盖率图→逐像素混合"，最容易犯的错是把整块方方的字模
+    /// 连着背景一起搬过去——那会在字周围留一片脏斑。这里两头都钉：字形方向要换，
+    /// 改动的像素数要远小于整块字模的面积（真脏斑会接近填满）。</para>
+    /// </summary>
+    [Fact]
+    public void ARotatedLineOfTextStandsUpAndCarriesNoBackgroundWithIt()
+    {
+        var text = new Annotation(AnnotationTool.Text, new[] { new PixelPoint(40, 70) }, Red, 4)
+        { Text = "MMMMMMMMMM", FontHeight = 30 };
+        var blank = Canvas(220, 220);
+
+        var flat = (byte[])blank.Clone();
+        AnnotationPainter.Paint(flat, 220, 220, text);
+        var lying = InkBox(blank, flat, 220, 220);
+
+        var turned = (byte[])blank.Clone();
+        AnnotationPainter.Paint(turned, 220, 220, text.RotatedBy(90));
+        var standing = InkBox(blank, turned, 220, 220);
+
+        Assert.True(lying.Width > 60 && lying.Height is > 5 and < 45,
+            $"不旋转时该是横着长长的一条：{lying}");
+        Assert.True(standing.Height > 60 && standing.Width is > 5 and < 45,
+            $"转 90° 之后该竖起来（旋转没生效／只搬了字模＝这一条会红）：{standing}");
+        Assert.True(standing.Count < lying.Width * lying.Height,
+            $"改动像素数（{standing.Count}）不该接近整块字模的面积：连背景一起搬＝脏斑");
+    }
+
+    /// <summary>
+    /// 转出去的字，<b>每一滴墨都落在 Bounds 里</b>。
+    /// <para>这条直接对着真机反馈"文字显著脱离文字框范围内"：选择框与命中测试都读 <c>Bounds()</c>，
+    /// 而它在批次 RF-2 之前只报未旋转的宽高——字转出去了、框还横在原地，
+    /// 用户点字点不中、拖框又拖到空处。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(30)]
+    [InlineData(45)]
+    [InlineData(90)]
+    [InlineData(150)]
+    [InlineData(270)]
+    public void RotatedTextBoundsCoverEveryPixelItPaints(double angle)
+    {
+        var text = new Annotation(AnnotationTool.Text, new[] { new PixelPoint(60, 90) }, Red, 4)
+        { Text = "旋转我 turn me", FontHeight = 28 };
+        var blank = Canvas(260, 260);
+        var turned = text.RotatedBy(angle);
+        var painted = (byte[])blank.Clone();
+        AnnotationPainter.Paint(painted, 260, 260, turned);
+
+        var ink = InkBox(blank, painted, 260, 260);
+        Assert.True(ink.Count > 60, $"这一转总得画上字（改动 {ink.Count} 个像素＝多半什么都没画）");
+        var box = turned.Bounds();
+        Assert.True(ink.Left >= box.X && ink.Top >= box.Y
+            && ink.Right <= box.Right - 1 && ink.Bottom <= box.Bottom - 1,
+            $"墨跑出框了：ink {ink} vs bounds {box}（角度 {angle}）");
+    }
+
+    /// <summary>改动过的像素的外接框与数量（"画了多少"与"画在哪儿"两件事一起看）。</summary>
+    private static (int Left, int Top, int Right, int Bottom, int Width, int Height, int Count)
+        InkBox(byte[] before, byte[] after, int width, int height)
+    {
+        var left = int.MaxValue;
+        var top = int.MaxValue;
+        var right = -1;
+        var bottom = -1;
+        var count = 0;
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var at = ((long)y * width + x) * 4;
+                var changed = false;
+                for (var channel = 0; channel < 4; channel++)
+                    if (before[at + channel] != after[at + channel]) { changed = true; break; }
+                if (!changed) continue;
+                count++;
+                left = Math.Min(left, x);
+                top = Math.Min(top, y);
+                right = Math.Max(right, x);
+                bottom = Math.Max(bottom, y);
+            }
+        }
+        if (right < left) return (0, 0, -1, -1, 0, 0, 0);
+        return (left, top, right, bottom, right - left + 1, bottom - top + 1, count);
+    }
 }
