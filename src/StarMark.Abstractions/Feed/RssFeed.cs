@@ -60,3 +60,21 @@ public sealed record RssEntry(
     string? Author,
     int SourceId,
     string SourceName);
+
+/// <summary>
+/// 一条 RSS 候选被用户点「收藏」后，写进库时用的源内标识。
+/// <para>
+/// <b>前缀与 <c>trending-bookmark:</c> 同族，而不是直接用 URL</b>：同一个地址可能有多个生产者
+/// （浏览器导入的书签、热榜收藏、这里收藏），按 <c>(source, source_id)</c> 删才不会连别的生产者一起删掉
+/// （P-65 同一形状）。
+/// </para>
+/// </summary>
+public static class RssEntryIdentity
+{
+    /// <summary>钉死的前缀。<b>改了它，之前收藏进来的行就查不回来了</b>（按前缀列不出、按 id 删不掉），
+    /// 所以这里只允许加，不允许改。</summary>
+    public const string BookmarkSourcePrefix = "rss-bookmark:";
+
+    /// <summary>去掉首尾空白：地址带一个空格就会多出一行看起来一模一样的收藏。</summary>
+    public static string BookmarkSourceId(string link) => BookmarkSourcePrefix + (link ?? string.Empty).Trim();
+}

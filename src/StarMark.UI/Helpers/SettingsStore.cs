@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Feed;
+using StarMark.Core.Feed;
 using StarMark.Abstractions.Trending;
 using StarMark.Core.Hotkeys;
 using StarMark.Core.Performance;
@@ -59,6 +61,11 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         public bool? TrendingGlanceEnabled { get; set; }
         /// <summary>快捷键绑定（动作 id → 手势）的 JSON。缺省时使用 <see cref="HotkeyBindings.Defaults"/>。</summary>
         public string? HotkeyBindingsJson { get; set; }
+        /// <summary>
+        /// 网址来源（RSS / Atom）列表的 JSON。<b>默认空表</b>：这是用户主动添加的可选浏览面（D4），
+        /// 空表时不发任何请求。与"快捷键从没配过"不同，这里没有默认值可回落——源只有用户自己知道。
+        /// </summary>
+        public string? RssSourcesJson { get; set; }
         /// <summary>组件拖动 / 缩放时的边缘磁吸总开关（默认开启）。关闭后用户可自由摆位。</summary>
         public bool? WidgetSnapEnabled { get; set; }
         /// <summary>磁吸对齐间距（物理像素，默认 8）：两组件贴合时保留的间隙。</summary>
@@ -592,6 +599,37 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     {
         var d = Load() ?? new SettingsData();
         d.TrendingGlanceEnabled = enabled;
+        Save(d);
+    }
+
+    // ===== 网址来源（RSS / Atom，批次 NF）=====
+
+    /// <summary>
+    /// 已配置的网址来源。<b>解析不出来时返回空表而不是抛</b>：设置文件可被手改、也可能来自更老的版本，
+    /// 而"设置页整页打不开"比"这一栏看着像没配过"严重得多（坏档仍原样留在磁盘上，不会被这次保存悄悄覆盖掉——
+    /// 只有用户真的改动源列表时才会重写这一栏）。
+    /// </summary>
+    public List<RssSourceConfig> LoadRssSources()
+    {
+        var json = Load()?.RssSourcesJson;
+        if (string.IsNullOrWhiteSpace(json)) return new List<RssSourceConfig>();
+        try
+        {
+            var list = JsonSerializer.Deserialize<List<RssSourceConfig>>(json) ?? new List<RssSourceConfig>();
+            // 剩下的清洗（空地址、重复地址、id 撞车）搬去了 Core 的 RssSourceList.Normalize：UI 层测试引用不到，判据只能放在引得到的那一侧
+            return RssSourceList.Normalize(list);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"[Settings] 网址来源列表读不出，按未配置处理：{ex.Message}");
+            return new List<RssSourceConfig>();
+        }
+    }
+
+    public void SaveRssSources(IReadOnlyList<RssSourceConfig> sources)
+    {
+        var d = Load() ?? new SettingsData();
+        d.RssSourcesJson = JsonSerializer.Serialize(sources);
         Save(d);
     }
 
