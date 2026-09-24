@@ -6,17 +6,41 @@ using StarMark.Abstractions.Capture;
 
 namespace StarMark.Core.Capture;
 
-/// <summary>截图上能画的几种东西。顺序就是工具条上从左到右的顺序。</summary>
+/// <summary>截图上能画的几种东西。<b>顺序就是选择栏里从左到右的顺序</b>
+/// （"哪些算图形、哪些是笔"另见 <see cref="IsShapeTool"/>，条上摆哪一颗由那两个判据说，不在界面里写死）。</summary>
 public enum AnnotationTool
 {
     Rectangle,
     Ellipse,
     Line,
+    /// <summary>折线：点几下钉几个顶点，Enter 或双击收口。直线只能一段，
+    /// 而"沿着一条边界描一圈"是截图标注里最常见的一种指示（真机反馈点名缺它）。</summary>
+    PolyLine,
     Arrow,
     Pen,
     Highlighter,
     Mosaic,
     Text,
+}
+
+/// <summary>工具的分组。<b>这条判据住在模型里</b>：工具条上"哪几个收进一个选择栏、哪几个各占一颗"
+/// 与折线该按几个点收尾都从它推；界面里各写一遍就会长成"加了工具而条上没有"那种只有跑起来才看得见的错。</summary>
+public static class AnnotationTools
+{
+    /// <summary>"图形"那一组：都是<b>框出一段几何</b>的东西，收进同一颗按钮的选择栏里。</summary>
+    public static readonly AnnotationTool[] Shapes =
+    {
+        AnnotationTool.Rectangle, AnnotationTool.Ellipse, AnnotationTool.Line,
+        AnnotationTool.PolyLine, AnnotationTool.Arrow,
+    };
+
+    /// <summary>"笔"那一组：直接按在画布上走，各占一颗按钮（画法彼此差得远，收进浮层反而多一次点击）。</summary>
+    public static readonly AnnotationTool[] Brushes =
+    {
+        AnnotationTool.Pen, AnnotationTool.Highlighter, AnnotationTool.Mosaic, AnnotationTool.Text,
+    };
+
+    public static bool IsShapeTool(AnnotationTool tool) => Array.IndexOf(Shapes, tool) >= 0;
 }
 
 /// <summary>工具条上给用户挑的一个颜色。</summary>
@@ -157,6 +181,7 @@ public sealed record Annotation(
         AnnotationTool.Rectangle => "矩形",
         AnnotationTool.Ellipse => "椭圆",
         AnnotationTool.Line => "直线",
+        AnnotationTool.PolyLine => "折线",
         AnnotationTool.Arrow => "箭头",
         AnnotationTool.Pen => "画笔",
         AnnotationTool.Highlighter => "荧光",
@@ -171,6 +196,7 @@ public sealed record Annotation(
         AnnotationTool.Rectangle => "拖一个方框圈出来",
         AnnotationTool.Ellipse => "拖一个椭圆圈出来",
         AnnotationTool.Line => "拖一条直线（做指示线、划掉内容）",
+        AnnotationTool.PolyLine => "点几下钉几个顶点（沿一条边界描一圈），Enter 或双击收口，Esc 丢掉这一条",
         AnnotationTool.Arrow => "从起点指到终点，箭头在终点",
         AnnotationTool.Pen => "按住划出任意线条",
         AnnotationTool.Highlighter => "半透明高亮：盖在字上还能读原来的字",

@@ -70,6 +70,9 @@ public static class AnnotationPainter
 
             case AnnotationTool.Pen:
             case AnnotationTool.Highlighter:
+            // 折线＝"顶点是点出来的，不是拖出来的"画笔：逐段连起来，走的还是同一条臂。
+            // 顶点处不做斜接（miter）而是让圆头叠过去——截图上的折角看不出差别，而少一处几何就少一处会算错。
+            case AnnotationTool.PolyLine:
                 // 半透明笔必须"每个像素只混合一次"：圆点是连续盖着的，同一个像素会被七八个圆点扫到，
                 // 逐次混合会让笔画中段明显比两端浓——荧光笔涂出来一条深浅不匀的带子，等于没做对。
                 byte[]? painted = color >>> 24 < 255 ? new byte[width * height] : null;

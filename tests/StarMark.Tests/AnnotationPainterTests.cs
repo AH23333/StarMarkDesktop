@@ -330,4 +330,30 @@ public sealed class AnnotationPainterTests
         Assert.Equal((0x00, 0xFF, 0x00, 255), At(pixels, 12, 0, 6));
         Assert.True(IsRed(At(pixels, 12, 6, 6)));
     }
+    /// <summary>折线＝顶点是点出来的多段线：每一段都得连上，中间断一段就是"圈了一半"，
+    /// 而它看起来像画完了（撤销列表里也只有一条）。</summary>
+    [Fact]
+    public void PolyLineConnectsEverySegmentNotJustTheEnds()
+    {
+        var points = new[] { new PixelPoint(2, 18), new PixelPoint(9, 3), new PixelPoint(17, 15) };
+        var pixels = AnnotationPainter.Render(Canvas(22, 22), 22, 22,
+            new[] { Shape(AnnotationTool.PolyLine, Red, points) });
+
+        Assert.True(IsRed(At(pixels, 22, 2, 18)), "起点必须有笔画");
+        Assert.True(IsRed(At(pixels, 22, 17, 15)), "终点必须有笔画");
+        Assert.True(IsRed(At(pixels, 22, 9, 3)), "中间顶点必须有笔画（只连首尾就会绕过它）");
+        Assert.True(IsRed(At(pixels, 22, 5, 11)), "第一段中点必须有笔画");
+        Assert.True(IsRed(At(pixels, 22, 13, 9)), "第二段中点必须有笔画");
+        Assert.True(IsBackground(At(pixels, 22, 13, 19)), "折线不是填充：拐角外侧不该被糊上");
+    }
+
+    /// <summary>折线只点了一下（一个顶点）时不是一条线：判据必须说不画并给原因，
+    /// 而不是画出一个孤点让用户以为"这工具坏了"。</summary>
+    [Fact]
+    public void ASingleVertexPolyLineIsRefusedWithTheModelsReason()
+    {
+        var one = new Annotation(AnnotationTool.PolyLine, new[] { new PixelPoint(6, 6) }, Red, 4);
+        Assert.Contains("折线", one.Problem());
+        Assert.Contains("2 个点", one.Problem());
+    }
 }

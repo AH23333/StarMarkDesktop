@@ -122,6 +122,7 @@ public sealed class AnnotationTests
     [InlineData(AnnotationTool.Rectangle)]
     [InlineData(AnnotationTool.Ellipse)]
     [InlineData(AnnotationTool.Line)]
+    [InlineData(AnnotationTool.PolyLine)]
     [InlineData(AnnotationTool.Arrow)]
     [InlineData(AnnotationTool.Pen)]
     [InlineData(AnnotationTool.Highlighter)]
@@ -179,7 +180,7 @@ public sealed class AnnotationTests
             new[] { AnnotationTool.Rectangle, AnnotationTool.Ellipse, AnnotationTool.Line, AnnotationTool.Arrow },
             corners);
         // 新加工具时这条先红：它属于"两个角"还是"一条折线"必须想清楚，不能默认落进某一组
-        Assert.Equal(8, Enum.GetValues<AnnotationTool>().Length);
+        Assert.Equal(9, Enum.GetValues<AnnotationTool>().Length);
     }
 
     [Fact]
@@ -230,5 +231,20 @@ public sealed class AnnotationTests
         var empty = new Annotation(AnnotationTool.Rectangle, Array.Empty<PixelPoint>(), Annotation.Opaque(0, 0, 0), 4);
         Assert.NotNull(empty.Problem());
         Assert.Equal(default, empty.Bounds());
+    }
+    /// <summary>条上"哪几种收进图形选择栏、哪几种各占一颗"由 <see cref="AnnotationTools"/> 说。
+    /// <b>两组必须不重不漏盖住整个枚举</b>：漏一个就有一种画法在条上根本没有出口（只有跑起来才发现），
+    /// 重一个则同一支笔会在两处各亮一次选中态。</summary>
+    [Fact]
+    public void ShapesAndBrushesCoverEveryToolExactlyOnce()
+    {
+        var all = AnnotationTools.Shapes.Concat(AnnotationTools.Brushes).ToList();
+        Assert.Equal(Enum.GetValues<AnnotationTool>().Length, all.Count);
+        Assert.Equal(all.Count, all.Distinct().Count());
+        // 折线与直线必须同组：两段差别只在"点几下"，分在两组会让人在两个地方各找一半
+        Assert.True(AnnotationTools.IsShapeTool(AnnotationTool.PolyLine));
+        Assert.True(AnnotationTools.IsShapeTool(AnnotationTool.Line));
+        Assert.False(AnnotationTools.IsShapeTool(AnnotationTool.Text));
+        Assert.False(AnnotationTools.IsShapeTool(AnnotationTool.Mosaic));
     }
 }

@@ -88,6 +88,16 @@ public sealed partial class CaptureOverlayWindow : Window
 
         InitializeComponent();
         BuildToolBar();
+        // 点进输入框（放光标、选中一段）不算"在选区里起一笔"：不拦下这一冒泡，第二次点击进来
+        // 就会走 BeginStroke → BeginTextEdit → 把刚打的一行清空（真机反馈"文字编辑无效"的路径之一）。
+        // 光标定位由 TextBox 自己的处理负责，我们只在它之后把事件吃掉。
+        TextEditor.PointerPressed += (_, e) => e.Handled = true;
+        Root.DoubleTapped += (_, e) =>
+        {
+            if (_polyLine is null) return;
+            e.Handled = true;
+            FinishPolyLine(commit: true);
+        };
         HintText.Text = mode switch
         {
             CaptureMode.Pin => "按住拖动框选区域 · 放开即钉到桌面 · Enter 立即贴当前选区 · Esc 取消 · 右键不截",
@@ -163,7 +173,7 @@ public sealed partial class CaptureOverlayWindow : Window
     // ────────── 工具条（按钮、图标、颜色、粗细一律按 Core 的模型生成）──────────────────
 
     /// <summary>图标边长与按钮尺寸（DIP）。整条上每个按钮都由这几个数决定：
-    /// 加一个工具就多一颗点，而不是把条撑成第二行（浮层多长一行就盖住用户正要标的东西）。</summary>
+    /// 加一种画法就多一颗点或浮层里多一项，而不是把条撑成第二行（浮层多长一行就盖住用户正要标的东西）。</summary>
     private const double IconSide = 16;
     private const double ButtonWidth = 27;
     private const double ButtonHeight = 23;
@@ -178,30 +188,41 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>浮层里圆点用的实心白（<see cref="Ink"/> 是画笔，带浓度，点出来会像"没选中"）。</summary>
     private static readonly int SolidWhite = Annotation.Opaque(0xFF, 0xFF, 0xFF);
 
-    private readonly List<Button> _toolButtons = new();
+    private Button _shapeButton = null!;
+    private readonly List<Button> _brushButtons = new();
     private Button _brushButton = null!;
     private Button _undoButton = null!;
     private Button _redoButton = null!;
     private Button _clearButton = null!;
     private Button _copyButton = null!;
-    private Flyout? _brushFlyout;
+    private Flyout? _pickerFlyout;
+
+    /// <summary>正在点的折线（顶点＝选区内物理像素）；null＝没有正在画的折线。</summary>
+    private List<PixelPoint>? _polyLine;
+    private PixelPoint _hoverLocal;                 // 折线的"橡皮筋"拖到哪儿
 
     /// <summary>
-    /// 生成整条工具条：八个工具图标（按 <see cref="AnnotationTool"/> 枚举）+「当前这支笔」
-    /// + 撤销/重做/清空 + 四个动作。文字全部收进 ToolTip，条上只有图标。
-    /// <para>颜色与粗细收在「笔」那颗点开的浮层里（点已选中的工具图标也开同一层，Snipaste 的用法）：
-    /// 条上再摆两个下拉就是真机反馈的"选择器太大"，而把它们彻底藏起来又让"现在用什么颜色、多粗"看不见
-    /// ⇒ 折中成<b>条上留一颗看得懂的点，点开才是选择</b>。</para>
+    /// 生成整条工具条：一颗「图形」（矩形/椭圆/直线/折线/箭头收在同一层里，见
+    /// <see cref="AnnotationTools.Shapes"/>）+ 四颗各占一位的笔（画笔/荧光/打码/文字）
+    /// +「当前这支笔」+ 撤销/重做/清空 + 四个动作。文字全部收进 ToolTip，条上只有图标。
+    /// <para>真机反馈两轮把它推到了这个形状：先嫌"带文字的下拉太大"（于是全上图标），
+    /// 再嫌"图形一种占一颗太铺开"（于是图形收进一个选择栏，新增折线也不再撑长条）。</para>
+    /// <para>颜色与粗细收在「笔」那颗点开的浮层里（点当前工具图标也开同一层）：
+    /// 藏起来的是选择，不是状态——条上那颗点始终看得出当前颜色与粗细。</para>
     /// </summary>
     private void BuildToolBar()
     {
-        foreach (AnnotationTool tool in Enum.GetValues<AnnotationTool>())
+        _shapeButton = IconButton(ToolIcon(_tool), ShapeButtonText());
+        _shapeButton.Click += (_, _) => ShowShapePicker(_shapeButton);
+        BarRow.Children.Add(_shapeButton);
+
+        foreach (AnnotationTool tool in AnnotationTools.Brushes)
         {
             var button = IconButton(ToolIcon(tool),
                 $"{Annotation.ToolName(tool)}：{Annotation.ToolHint(tool)}（再点一次换颜色和粗细）");
             button.Tag = tool;
-            button.Click += ToolButton_Click;
-            _toolButtons.Add(button);
+            button.Click += BrushTool_Click;
+            _brushButtons.Add(button);
             BarRow.Children.Add(button);
         }
 
@@ -234,7 +255,7 @@ public sealed partial class CaptureOverlayWindow : Window
         foreach (var action in new[] { _copyButton, save, pin, ocr, cancel }) BarRow.Children.Add(action);
 
         _undoButton.IsEnabled = _redoButton.IsEnabled = _clearButton.IsEnabled = false;
-        SyncToolButtons();
+        SyncTools();
     }
 
     private static Border Separator() => new()
@@ -262,24 +283,38 @@ public sealed partial class CaptureOverlayWindow : Window
         return button;
     }
 
-    private void ToolButton_Click(object sender, RoutedEventArgs e)
+    private void BrushTool_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: AnnotationTool tool }) return;
         if (tool == _tool)
         {
-            // 再点一次当前工具＝换这支笔：八个图标已经排满一行，颜色和粗细若再各摆一个下拉就又回到"太大"
+            // 再点一次当前工具＝换这支笔：条上已经排满图标，颜色和粗细若再各摆一个下拉就又回到"太大"
             ToggleBrushPicker((FrameworkElement)sender);
             return;
         }
-        EndTextEditing(commit: true);   // 先落笔再换工具：用户打了一半的字不该凭空消失
-        _tool = tool;
-        SyncToolButtons();
+        SetTool(tool);
     }
 
-    /// <summary>把"哪一个是当前工具"画出来（图标上没有文字，只能靠底色说），并让"笔"那颗点跟上颜色与粗细。</summary>
-    private void SyncToolButtons()
+    /// <summary>换工具。<b>所有换工具的入口都必须走这里</b>：先落笔（正在打的那行字、正在点的折线），
+    /// 否则"换了个工具，刚画的东西凭空消失"。</summary>
+    private void SetTool(AnnotationTool tool)
     {
-        foreach (var button in _toolButtons)
+        EndTextEditing(commit: true);
+        FinishPolyLine(commit: true);
+        _tool = tool;
+        SyncTools();
+    }
+
+    private string ShapeButtonText()
+        => $"图形：{Annotation.ToolName(_tool)}（点开换矩形 / 椭圆 / 直线 / 折线 / 箭头）";
+
+    /// <summary>把"当前用的是哪种图形、哪一支笔"画出来（图标上没有文字，只能靠底色与那颗点说）。</summary>
+    private void SyncTools()
+    {
+        _shapeButton.Content = ToolIcon(AnnotationTools.IsShapeTool(_tool) ? _tool : AnnotationTool.Rectangle);
+        _shapeButton.Background = AnnotationTools.IsShapeTool(_tool) ? BarChecked : BarNormal;
+        ToolTipService.SetToolTip(_shapeButton, ShapeButtonText());
+        foreach (var button in _brushButtons)
             button.Background = (AnnotationTool)button.Tag! == _tool ? BarChecked : BarNormal;
         _brushButton.Content = BrushIcon();
         var sizes = string.Join(" / ", Enumerable.Range(0, Annotation.ThicknessSteps.Length)
@@ -290,12 +325,30 @@ public sealed partial class CaptureOverlayWindow : Window
             + $"（{Annotation.ToolName(_tool)} 的细 / 中 / 粗 ≈ {sizes} 像素）。点开换");
     }
 
-    // ────────── 颜色和粗细：浮层里的项同样按模型生成 ──────────
+    // ────────── 选择浮层：图形 / 颜色 / 粗细（项同样按模型生成）──────────────────
 
-    /// <summary>点开 / 收起那一层。已经开着时再点一次是"关掉"，不是"把浮层挪到另一颗点上"。</summary>
+    private void ShowShapePicker(FrameworkElement anchor)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Padding = new Thickness(4) };
+        foreach (AnnotationTool shape in AnnotationTools.Shapes)
+        {
+            var wanted = shape;
+            var button = IconButton(ToolIcon(shape),
+                $"{Annotation.ToolName(shape)}：{Annotation.ToolHint(shape)}");
+            button.Background = shape == _tool ? BarChecked : BarNormal;
+            button.Click += (_, _) =>
+            {
+                SetTool(wanted);
+                HidePicker();
+            };
+            row.Children.Add(button);
+        }
+        ShowPicker(anchor, row);
+    }
+
     private void ToggleBrushPicker(FrameworkElement anchor)
     {
-        if (_brushFlyout is not null) HideBrushPicker();
+        if (_pickerFlyout is not null) HidePicker();
         else ShowBrushPicker(anchor);
     }
 
@@ -312,8 +365,9 @@ public sealed partial class CaptureOverlayWindow : Window
             dot.Click += (_, _) =>
             {
                 _colourIndex = wanted;
+                // 正在输入的那行字跟着换色：否则"选了颜色，字却没变"要用户自己去猜为什么
                 if (_editingText) TextEditor.Foreground = new SolidColorBrush(ToColor(colour.Bgra));
-                HideBrushPicker();
+                HidePicker();
             };
             colours.Children.Add(dot);
         }
@@ -327,27 +381,64 @@ public sealed partial class CaptureOverlayWindow : Window
             dot.Click += (_, _) =>
             {
                 _weightIndex = wanted;
-                HideBrushPicker();
+                HidePicker();
             };
             weights.Children.Add(dot);
         }
 
         rows.Children.Add(colours);
         rows.Children.Add(weights);
-        _brushFlyout = new Flyout { Content = rows };
-        _brushFlyout.ShowAt(anchor);
+        ShowPicker(anchor, rows);
     }
 
-    private void HideBrushPicker()
+    private void ShowPicker(FrameworkElement anchor, UIElement content)
     {
-        _brushFlyout?.Hide();
-        _brushFlyout = null;
-        SyncToolButtons();
+        _pickerFlyout = new Flyout { Content = content };
+        _pickerFlyout.ShowAt(anchor);
+    }
+
+    private void HidePicker()
+    {
+        _pickerFlyout?.Hide();
+        _pickerFlyout = null;
+        SyncTools();
+    }
+
+    // ────────── 折线：点几下钉几个顶点 ──────────
+
+    /// <summary>点一下加一个顶点。<b>直线只能一段，而"沿一条边界描一圈"是截图标注最常见的指示</b>
+    /// （真机反馈点名缺它）。顶点是点出来的，所以它不进拖动那套 _stroke 状态。</summary>
+    private void PlaceVertex(PixelPoint local)
+    {
+        ErrorChip.Visibility = Visibility.Collapsed;
+        if (_polyLine is null) _polyLine = new List<PixelPoint> { local };
+        else if (_polyLine[^1] != local) _polyLine.Add(local);
+        _hoverLocal = local;
+        DrawLive();
+    }
+
+    /// <summary>收口折线。<paramref name="commit"/> 为 false 只用于 Esc 与换选区——
+    /// 顶点不足两个不算一条（那只是一个点，画出来什么也指不了）。</summary>
+    private void FinishPolyLine(bool commit)
+    {
+        var points = _polyLine;
+        _polyLine = null;
+        LiveLayer.Children.Clear();
+        if (points is null) return;
+        if (!commit || points.Count < Annotation.MinPoints(AnnotationTool.PolyLine)) return;
+        var mark = new Annotation(AnnotationTool.PolyLine, points, ColourBgra, ThicknessForTool);
+        if (mark.Problem() is { } problem)
+        {
+            ShowError(problem);
+            return;
+        }
+        _history.Add(mark);
+        Rebake();
     }
 
     // ────────── 图标：矢量图元画的，不用字体字形 ──────────
-    // 为什么不用图标字体：缺字会显示成方块，而遮罩窗一按 Esc 就没了，"八个字形到底长什么样"
-    // 没人能在真机上一眼逐个确认。画出来的图元至少几何是自己算出来的，撞不了车。
+    // 为什么不用图标字体：缺字会显示成方块，而遮罩窗一按 Esc 就没了，"这九个字形到底长什么样"
+    // 没人能在真机上一眼逐个确认。画出来的图元至少几何是自己算出来的，撞了车也能在断言里看出来。
 
     private static Canvas Icon(params UIElement[] parts)
     {
@@ -402,12 +493,15 @@ public sealed partial class CaptureOverlayWindow : Window
     }
 
     /// <summary>某个工具长什么样。<b>每种工具的差异必须只看图形就分得开</b>：条上没有文字，
-    /// 图标撞车就等于把两个功能摆成同一个按钮。</summary>
+    /// 图标撞车就等于把两个功能摆成同一个按钮（直线与折线的差别刻意做成"一段 / 两段带顶点"）。</summary>
     private static UIElement ToolIcon(AnnotationTool tool) => tool switch
     {
         AnnotationTool.Rectangle => Icon(Out(2.5, 4, 11, 8)),                        // 空心方框
         AnnotationTool.Ellipse => Icon(Ring(2.5, 4, 11, 8)),                         // 空心椭圆
         AnnotationTool.Line => Icon(Seg(3, 13, 13, 3)),                              // 就是一条斜线，没头没尾
+        // 两段折 + 顶点小方块：一眼看得出"这是点出来的多段线"，不是一条直线
+        AnnotationTool.PolyLine => Icon(Curve(null, (2.5, 13), (7, 5.5), (13.5, 9.5)),
+            Fill(5.6, 4.1, 2.8, 2.8, Ink), Fill(12.1, 8.1, 2.8, 2.8, Ink)),
         AnnotationTool.Arrow => Icon(Seg(3, 13, 12, 4),                              // 斜线 + 终点一个开口头
             Seg(12, 4, 7.6, 4.4), Seg(12, 4, 11.6, 8.4)),
         AnnotationTool.Pen => Icon(Curve(null, (2.5, 13), (5.5, 6.5), (8.5, 10.5), (13.5, 2.5))),
@@ -451,6 +545,7 @@ public sealed partial class CaptureOverlayWindow : Window
         => Icon(Ring(4.5, 2, 7, 5.5), Seg(8, 7.5, 8, 13.5), Seg(5, 13.5, 11, 13.5));
 
     private static UIElement OcrIcon() => Icon(Ring(2.5, 2.5, 8, 8, 1.6), Seg(9.8, 9.8, 14, 14, 1.8));
+
     private int ColourBgra => Annotation.Palette[Math.Clamp(_colourIndex, 0, Annotation.Palette.Count - 1)].Bgra;
 
     private int ThicknessForTool => Annotation.ThicknessFor(_tool, _weightIndex);
@@ -471,7 +566,9 @@ public sealed partial class CaptureOverlayWindow : Window
         // 选区外面照旧起新框：用户想换个范围就换个范围，标注跟着作废（底图都换了，留着旧的只会对不上）。
         if (_mode == CaptureMode.Toolbar && _base is not null && InsideSelection(physical))
         {
-            BeginStroke(ToLocal(physical), e.Pointer);
+            // 折线是"点出来的"，没有按下-拖动-放开这一说：每一按钉一个顶点，收口用 Enter 或双击
+            if (_tool == AnnotationTool.PolyLine) PlaceVertex(ToLocal(physical));
+            else BeginStroke(ToLocal(physical), e.Pointer);
             return;
         }
 
@@ -493,6 +590,13 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_stroke is not null)
         {
             ExtendStroke(ToLocal(ToPhysical(position.X, position.Y)));
+            return;
+        }
+        if (_polyLine is not null)
+        {
+            // 看不见"下一段会落在哪儿"，点出来的顶点就不是想要的形状 ⇒ 最后顶点到光标挂一段橡皮筋
+            _hoverLocal = ToLocal(ToPhysical(position.X, position.Y));
+            DrawLive();
             return;
         }
         if (!_awaitingRelease) return;
@@ -542,6 +646,22 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void Root_KeyDown(object sender, KeyRoutedEventArgs e)
     {
+        // 正在打字时键盘归那一行字：Enter＝落笔，Esc＝只丢掉这一行。
+        // 这一道是兜底——焦点真落进输入框时上面那条链会先把键处理掉（Handled 不再冒到这一层），
+        // 而焦点没进去时（表现就是"文字编辑无效"）至少不会把整张截图复制走或整场取消。
+        if (_editingText && e.Key is VirtualKey.Enter or VirtualKey.Escape)
+        {
+            e.Handled = true;
+            EndTextEditing(commit: e.Key == VirtualKey.Enter);
+            return;
+        }
+        if (_polyLine is not null && e.Key is VirtualKey.Enter or VirtualKey.Escape)
+        {
+            // Enter＝收口这条折线，Esc＝只丢掉这一条；两者都不该动到整场截图
+            e.Handled = true;
+            FinishPolyLine(commit: e.Key == VirtualKey.Enter);
+            return;
+        }
         switch (e.Key)
         {
             case VirtualKey.Escape:
@@ -650,6 +770,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private void ResetAnnotations()
     {
         EndTextEditing(commit: false);
+        FinishPolyLine(commit: false);
         _stroke = null;
         _history.Reset();
         _base = null;
@@ -662,6 +783,8 @@ public sealed partial class CaptureOverlayWindow : Window
     private void BeginStroke(PixelPoint local, Pointer pointer)
     {
         ErrorChip.Visibility = Visibility.Collapsed;
+        // 上一行字先落笔再动手：在画布上点第二下不该把刚打的字凭空清掉（真机反馈"文字编辑无效"的路径之一）。
+        EndTextEditing(commit: true);
         if (_tool == AnnotationTool.Text)
         {
             BeginTextEdit(local);
@@ -733,6 +856,11 @@ public sealed partial class CaptureOverlayWindow : Window
     private void DrawLive()
     {
         LiveLayer.Children.Clear();
+        if (_polyLine is { Count: > 0 } vertices)
+        {
+            DrawPolyLinePreview(vertices);
+            return;
+        }
         if (_stroke is not { Count: > 0 } points) return;
         var brush = new SolidColorBrush(ToColor(ColourBgra));
         var thickness = Math.Max(1.0, ThicknessForTool / _scale);
@@ -793,6 +921,26 @@ public sealed partial class CaptureOverlayWindow : Window
         LiveLayer.Children.Add(polyline);
     }
 
+    /// <summary>正在点的折线：已定的段实线、最后一顶点到光标那段半透明，顶点各摆一颗白点
+    /// （不画顶点就分不清"这里断了一段"与"这里只是一笔经过"）。</summary>
+    private void DrawPolyLinePreview(IReadOnlyList<PixelPoint> vertices)
+    {
+        var thickness = Math.Max(1.0, ThicknessForTool / _scale);
+        var corners = vertices.Select(LocalToDip).ToList();
+        if (corners.Count >= 2) LiveLayer.Children.Add(Band(corners, Ink, thickness));
+        var trailing = new List<(double X, double Y)>(corners) { LocalToDip(_hoverLocal) };
+        if (trailing.Count >= 2) LiveLayer.Children.Add(Band(trailing, InkDim, thickness));
+        foreach (var corner in corners)
+            LiveLayer.Children.Add(Placed(Fill(corner.X - 2, corner.Y - 2, 4, 4, Ink), corner.X - 2, corner.Y - 2));
+    }
+
+    private static Polyline Band(IReadOnlyList<(double X, double Y)> pts, Brush brush, double thickness)
+    {
+        var line = new Polyline { Stroke = brush, StrokeThickness = thickness };
+        foreach (var p in pts) line.Points.Add(new Point(p.X, p.Y));
+        return line;
+    }
+
     private void AddShape(Shape shape, double x, double y, double w, double h)
     {
         Canvas.SetLeft(shape, x);
@@ -819,8 +967,11 @@ public sealed partial class CaptureOverlayWindow : Window
         TextEditor.FontSize = Annotation.DefaultFontHeight / _scale;
         TextEditor.Foreground = new SolidColorBrush(ToColor(ColourBgra));
         TextEditor.Text = string.Empty;
-        TextEditor.Focus(FocusState.Programmatic);
         _textAnchor = local;
+        // 焦点没落进输入框必须当场说出来：那之后敲的键会落到遮罩那一层，Enter 变成"复制整张截图"，
+        // 用户看到的就是"打了字什么都没发生"（真机反馈的原话）。静默失效比报错难查得多。
+        if (!TextEditor.Focus(FocusState.Programmatic))
+            ShowError("这一行字还没拿到键盘焦点：点一下黄色的输入框再打字（Enter 落笔，Esc 只丢掉这一行）");
     }
 
     /// <summary>
@@ -976,6 +1127,8 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private void Commit(CommitAction action)
     {
+        // 没按 Enter 就点动作按钮：刚打的那行字要跟着图一起走，而不是被丢掉（四条落点同一条出口）。
+        EndTextEditing(commit: true);
         if (_selection is not { } selection)
         {
             Settle(null);

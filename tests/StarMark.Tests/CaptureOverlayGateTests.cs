@@ -47,7 +47,11 @@ public sealed class CaptureOverlayGateTests
     public void EveryToolStripButtonIsBuiltFromTheModel()
     {
         var cs = ReadOverlay(xaml: false);
-        Assert.Contains("Enum.GetValues<AnnotationTool>()", cs);
+        // 条上的清单来自 Core 的分组表，不再自己数枚举：分组（哪些收进选择栏、哪些各占一颗）
+        // 一旦在界面里重推一遍，"新工具落进哪一组"就又变成两处各说一次。
+        Assert.Contains("AnnotationTools.Shapes", cs);
+        Assert.Contains("AnnotationTools.Brushes", cs);
+        Assert.DoesNotContain("Enum.GetValues<AnnotationTool>()", cs);
         Assert.Contains("BarRow.Children.Add", cs);
         Assert.Contains("Annotation.Palette", cs);
         Assert.Contains("Annotation.ThicknessSteps", cs);
@@ -142,5 +146,38 @@ public sealed class CaptureOverlayGateTests
         var xaml = ReadOverlay(xaml: true);
         Assert.True(xaml.IndexOf("x:Name=\"AnnotateLayer\"", StringComparison.Ordinal)
             < xaml.IndexOf("x:Name=\"DimLayer\"", StringComparison.Ordinal));
+    }
+    /// <summary>
+    /// 就地输入那一行字，每条离开它的出口都必须先落笔。<b>真机反馈"文字编辑功能无效"就是这类出口漏了</b>：
+    /// 在画布上点第二下会把刚打的字清空、没按 Enter 就点动作按钮会把字丢掉、
+    /// 焦点没进输入框时 Enter 会变成"复制整张截图"并关掉遮罩——三种表现都指向同一句"我打的字呢"。
+    /// </summary>
+    [Fact]
+    public void TypedTextIsCommittedOnEveryWayOut()
+    {
+        var cs = ReadOverlay(xaml: false);
+        Assert.Contains("EndTextEditing(commit: true)", SourceGate.MethodBody(cs, "private void Commit(CommitAction action)"));
+        Assert.Contains("EndTextEditing(commit: true)", SourceGate.MethodBody(cs, "private void BeginStroke"));
+        Assert.Contains("EndTextEditing(commit: true)", SourceGate.MethodBody(cs, "private void SetTool"));
+        // 点进输入框不算"在选区里起一笔"（否则第二次点击进来就把这行清空了）
+        Assert.Contains("TextEditor.PointerPressed += (_, e) => e.Handled = true;", cs);
+        // 焦点没落进输入框时必须当场说出来：静默失效是最难自查的一类
+        Assert.Contains("if (!TextEditor.Focus(FocusState.Programmatic))", cs);
+        // 焦点跑掉时 Enter/Esc 也不能被当成"复制整张 / 取消这一屏"
+        Assert.Contains("if (_editingText && e.Key is VirtualKey.Enter or VirtualKey.Escape)",
+            SourceGate.MethodBody(cs, "private void Root_KeyDown"));
+    }
+
+    /// <summary>折线是"点出来的"，所以收口必须有两个出口（键盘与鼠标各一个），
+    /// 而换选区时正在点的那一条要丢掉——留着它会在新框里画出一个对不上位置的圈。</summary>
+    [Fact]
+    public void PolyLineIsClosedOnBothEndsAndDroppedOnNewSelection()
+    {
+        var cs = ReadOverlay(xaml: false);
+        var keys = SourceGate.MethodBody(cs, "private void Root_KeyDown");
+        Assert.Contains("FinishPolyLine(commit: e.Key == VirtualKey.Enter)", keys);   // Enter 收口 / Esc 丢掉
+        Assert.Contains("Root.DoubleTapped", cs);                                     // 双击也是收口（只给键盘＝找不到出口）
+        Assert.Contains("PlaceVertex(ToLocal(physical))", cs);                        // 每一按钉一个顶点，不走拖动那套
+        Assert.Contains("FinishPolyLine(commit: false)", SourceGate.MethodBody(cs, "private void ResetAnnotations"));
     }
 }
