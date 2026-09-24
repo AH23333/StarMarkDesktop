@@ -1,0 +1,120 @@
+#nullable enable
+using System;
+using System.IO;
+using System.Linq;
+using Xunit;
+
+namespace StarMark.Tests;
+
+/// <summary>
+/// 批次 A 里<b>只有界面知道</b>的那几条规则。<b>测试工程按分层规定引不到 StarMark.UI</b>，
+/// 所以只能扫源码——这与截图工具条那两条闸门同一做法：
+/// 规则本身没别的办法守，那就让它写歪的下一刻就红，而不是等下一次改界面的人撞上去。
+/// </summary>
+public sealed class AiLayerGateTests
+{
+    private static readonly string RepoRoot = FindRoot();
+
+    private static string FindRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "StarMark.sln"))) dir = dir.Parent;
+        return dir?.FullName ?? throw new InvalidOperationException("找不到仓库根（没有 StarMark.sln）");
+    }
+
+    private static string Read(string relative)
+        => File.ReadAllText(Path.Combine(RepoRoot, relative));
+
+    private const string Xaml = "src/StarMark.UI/Views/SettingsPage.xaml";
+    private const string Page = "src/StarMark.UI/Views/SettingsPage.Ai.cs";
+
+    /// <summary>通道下拉的项必须由枚举生成。<b>手写 ComboBoxItem 就是第二份"有哪些通道"的事实</b>：
+    /// 将来加第三个通道时，枚举改了而这里没改，界面上永远选不到它，且不会有任何报错。</summary>
+    [Fact]
+    public void ProviderPickerIsGeneratedNotHandWritten()
+    {
+        var xaml = Read(Xaml);
+        var aiCard = xaml[xaml.IndexOf("AI 助手", StringComparison.Ordinal)..];
+        var upToNext = aiCard.IndexOf("还没测过", StringComparison.Ordinal);
+        Assert.True(upToNext > 0, "AI 那一栏的结尾锚点没找到，闸门本身要看一眼");
+        Assert.DoesNotContain("<ComboBoxItem", aiCard[..upToNext]);
+
+        Assert.Contains("Enum.GetValues<AiProviderKind>()", Read(Page));
+    }
+
+    /// <summary>「测试连接」在忙时必须变成取消入口：<b>一个不能中断的黑盒按钮，等于没有出口</b>
+    /// （本机模型冷启动时这一下可能要十几秒）。</summary>
+    [Fact]
+    public void ConnectionTestHasAnExitWhileItRuns()
+    {
+        var page = Read(Page);
+        Assert.Contains("AiProbeButton.Content = \"取消\"", page);
+        Assert.Contains("_aiProbeCts?.Cancel()", page);
+    }
+
+    /// <summary>这一栏的每一项改动都要就地落盘——<b>不能有"改了但要点保存才生效"的中间态</b>。
+    /// 三格（开关 / 下拉 / 文本）各自的处理器都必须直接拐到同一个持久化出口。</summary>
+    [Fact]
+    public void EveryAiFieldPersistsImmediately()
+    {
+        var page = Read(Page);
+        var lines = page.Split('\n');
+        foreach (var handler in new[] { "AiEnabled_Toggled", "AiProvider_SelectionChanged", "AiField_TextChanged" })
+        {
+            // 中间只要多一步判断或改回"按保存按钮才写"，就会出现某一格改了却没落盘
+            var line = lines.Single(l => l.Contains("void " + handler));
+            Assert.EndsWith("=> PersistAiAndShow();", line.TrimEnd());
+        }
+
+        // 写盘只有一个出口：出现第二处 SaveAiSettings 调用就等于有了两套"什么算改完"
+        Assert.Equal(1, lines.Count(l => l.Contains(".SaveAiSettings(")));
+
+        var store = Read("src/StarMark.UI/Helpers/SettingsStore.cs");
+        Assert.Contains("public void SaveAiSettings(AiSettings settings)", store);
+        Assert.Contains("public AiSettings LoadAiSettings()", store);
+    }
+
+    /// <summary>"能不能用"只有一处判据（<c>AiSettings.Problem</c>）。<b>各处零散判 apiKey 非空</b>
+    /// 是扩展项目两次故障的同根因，而其中一次就是漏了 Ollama 免 Key。</summary>
+    [Fact]
+    public void UsabilityGateIsNotDuplicated()
+    {
+        // 合法使用者：闸门自己、写盘时的空值归一、请求头要不要带 Bearer（"怎么发"不是"能不能用"）
+        var allowed = new[] { "AiSettings.cs", "SettingsStore.cs", "AiProviders.cs" };
+        var offenders = new System.Collections.Generic.List<string>();
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar) ||
+                file.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar)) continue;
+            var text = File.ReadAllText(file);
+            // 除了 AiSettings.Problem 自己，谁都不许拿 ApiKey 空不空来当"能不能用"的判据
+            foreach (var line in text.Split('\n'))
+            {
+                if (!line.Contains("ApiKey")) continue;
+                var trimmed = line.Trim();
+                if (trimmed.StartsWith("//") || trimmed.StartsWith("///")) continue;
+                if (allowed.Contains(Path.GetFileName(file))) continue;
+                if (trimmed.Contains("IsNullOrWhiteSpace") || trimmed.Contains("IsNullOrEmpty"))
+                    offenders.Add(Path.GetFileName(file) + " → " + trimmed);
+            }
+        }
+
+        Assert.True(offenders.Count == 0, string.Join("；", offenders));
+    }
+
+    /// <summary>AI 那一组的六个设置项必须全部带 <c>Ai</c> 前缀。<b>扩展项目出过一次四个 key 同名互相覆盖</b>
+    /// 的事故（第一批分类结果落盘就把 AI 设置冲掉），而代码里完全看不出来。</summary>
+    [Fact]
+    public void AiStorageKeysAreNamespaced()
+    {
+        var store = Read("src/StarMark.UI/Helpers/SettingsStore.cs");
+        var aiProps = store.Split('\n')
+            .Where(line => line.TrimStart().StartsWith("public ") && line.Contains("{ get; set; }")
+                           && line.Contains(" Ai"))
+            .Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries)[2])
+            .ToList();
+
+        Assert.Equal(6, aiProps.Count);                             // 开关/通道/模型/Key/两个地址
+        Assert.All(aiProps, name => Assert.StartsWith("Ai", name)); // 同名覆盖那条事故的形状
+    }
+}

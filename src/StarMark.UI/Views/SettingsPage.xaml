@@ -350,6 +350,57 @@
                                 </ScrollViewer>
                             </StackPanel>
                         </Border>
+
+                        <!--
+                            AI 助手（批次 A：只到"通道能不能用"，批量整理在批次 B）。
+                            默认关闭且不发任何请求：这功能要把库里的标题与摘要交给一个外部进程或外部服务，
+                            未明确开启前不得处于工作状态。
+                            刻意做成"一格一改就地保存 + 状态常驻"：这一栏的每一项都要能立刻看出还差什么，
+                            攒到按「保存」时才校验是扩展项目返工过的形状。
+                        -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="AI 助手" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                           Text="把模型通道接进来。本机装了 Ollama 就选 Ollama（不需要任何 Key）；有别的 OpenAI 兼容端点（各类代理、LM Studio 的开放服务）也可以填地址与 Key。这一批只提供通道与「测试连接」，用 AI 批量整理标签的入口在下一批接上。"/>
+
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Text="启用 AI 助手" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
+                                    <ToggleSwitch Grid.Column="1" x:Name="AiEnabledToggle" OnContent="开" OffContent="关" MinWidth="0"
+                                                  Toggled="AiEnabled_Toggled"/>
+                                </Grid>
+
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                    <ComboBox Grid.Column="0" x:Name="AiProviderBox" Header="通道" HorizontalAlignment="Stretch"
+                                              SelectionChanged="AiProvider_SelectionChanged"/>
+                                    <TextBox Grid.Column="1" x:Name="AiModelBox" Header="模型名"
+                                             PlaceholderText="如 qwen2.5:7b（要与服务侧列表一致）"
+                                             FontSize="12" TextChanged="AiField_TextChanged"/>
+                                </Grid>
+
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                    <TextBox Grid.Column="0" x:Name="AiOllamaUrlBox" Header="Ollama 地址"
+                                             PlaceholderText="留空＝http://127.0.0.1:11434"
+                                             FontSize="12" TextChanged="AiField_TextChanged"/>
+                                    <TextBox Grid.Column="1" x:Name="AiBaseUrlBox" Header="OpenAI 兼容端点（填到 /v1）"
+                                             PlaceholderText="留空＝https://api.openai.com/v1"
+                                             FontSize="12" TextChanged="AiField_TextChanged"/>
+                                </Grid>
+                                <PasswordBox x:Name="AiKeyBox" Header="API Key（选 Ollama 时不必填）"
+                                             FontSize="12" PasswordChanged="AiField_TextChanged"/>
+
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Button x:Name="AiProbeButton" Content="测试连接" Click="AiProbe_Click"
+                                            Style="{StaticResource SecondaryButton}"/>
+                                    <!-- 只有"通了但模型名不对"时才出现：把服务侧的名字递过去，不让用户抄一遍 -->
+                                    <Button x:Name="AiFillModelButton" Content="改用本机有的模型" Click="AiFillModel_Click"
+                                            Style="{StaticResource SecondaryButton}" Visibility="Collapsed"/>
+                                </StackPanel>
+
+                                <TextBlock x:Name="AiStatusText" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                           Text="还没测过。" Opacity="0.72"/>
+                            </StackPanel>
+                        </Border>
                     </controls:ColumnFlowPanel>
                 </ScrollViewer>
             </TabViewItem>

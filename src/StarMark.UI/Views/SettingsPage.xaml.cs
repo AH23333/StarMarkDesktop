@@ -67,6 +67,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         InitializeComponent();
         ViewModel = App.Services.GetRequiredService<SettingsPageViewModel>();
         InitRssSection();   // 网址来源（RSS）那一栏：状态只服务它自己，见 SettingsPage.Rss.cs
+        InitAiSection();      // AI 助手那一栏：同上，见 SettingsPage.Ai.cs
         _backup = App.Services.GetRequiredService<BackupService>();
         _hkHook.KeyDown += OnHookKeyDown;   // 底层键盘钩子录制组合键
         _hkHook.KeyUp += OnHookKeyUp;       // 修饰键抬起时回显同步

@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Ai;
 using StarMark.Abstractions.Feed;
 using StarMark.Core.Feed;
 using StarMark.Abstractions.Trending;
@@ -103,6 +104,32 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         public int? WeatherUnit { get; set; }
         /// <summary>天气视图：0=未来三天（默认）1=今日逐时。</summary>
         public int? WeatherView { get; set; }
+
+        // ===== AI 助手（批次 A：Provider 抽象 + 连接自检）=====
+        // 六个 key 全部带 Ai 前缀且各自独立。扩展项目出过一次"AI 域四个 key 同名"的事故：
+        // 第一批分类结果落盘就把 AI 设置整个冲掉了，而两处写的是同一个字符串，看代码看不出来。
+
+        /// <summary>AI 通道总开关。<b>默认关闭</b>（null 与 false 都算关）：这功能会把库里的标题/摘要发出去，
+        /// 未明确开启前不得处于工作状态。</summary>
+        public bool? AiEnabled { get; set; }
+
+        /// <summary>0=Ollama（本机，默认）1=OpenAI 兼容端点。<b>序号即持久化值，只能加不能改</b>
+        /// （解析与兜底见 <c>AiSettings</c>）。</summary>
+        public int? AiProvider { get; set; }
+
+        /// <summary>模型名，原样发给服务。<b>不预置默认值</b>：本机装的是哪个模型只有用户知道，
+        /// 猜一个只会换来一次"模型名不对"。</summary>
+        public string? AiModel { get; set; }
+
+        /// <summary>API Key。<b>Ollama 不需要它</b>（免 Key 豁免写在 <c>AiSettings.Problem</c> 里，
+        /// 是唯一一处判"能不能用"的地方）。</summary>
+        public string? AiApiKey { get; set; }
+
+        /// <summary>Ollama 地址。null＝用默认 <c>http://127.0.0.1:11434</c>。</summary>
+        public string? AiOllamaBaseUrl { get; set; }
+
+        /// <summary>OpenAI 兼容端点地址（填到 <c>/v1</c> 那一层）。null＝用默认。</summary>
+        public string? AiBaseUrl { get; set; }
     }
 
     public SettingsStore(string? path = null) => _path = path ?? ResolveSettingsPath();
@@ -630,6 +657,37 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     {
         var d = Load() ?? new SettingsData();
         d.RssSourcesJson = JsonSerializer.Serialize(sources);
+        Save(d);
+    }
+
+    /// <summary>读出 AI 通道配置。<b>档位序号认不出来时退回默认而不是抛</b>：这一格是用户可手改的
+    /// JSON 数字，写错一个数字不该让设置页打不开。</summary>
+    public AiSettings LoadAiSettings()
+    {
+        var d = Load();
+        var kind = d?.AiProvider is int raw && Enum.IsDefined(typeof(AiProviderKind), raw)
+            ? (AiProviderKind)raw
+            : AiProviderKind.Ollama;
+        return new AiSettings(
+            Enabled: d?.AiEnabled == true,
+            Provider: kind,
+            Model: d?.AiModel,
+            ApiKey: d?.AiApiKey,
+            OllamaBaseUrl: d?.AiOllamaBaseUrl,
+            BaseUrl: d?.AiBaseUrl);
+    }
+
+    /// <summary>整组一次写入。<b>刻意不提供"只改一个字段"的写法</b>：这一组字段互相才有意义
+    /// （通道换了，Key 与地址的必填性跟着变），分开写会出现"Ollama 却带着 https 校验"的中间态。</summary>
+    public void SaveAiSettings(AiSettings settings)
+    {
+        var d = Load() ?? new SettingsData();
+        d.AiEnabled = settings.Enabled;
+        d.AiProvider = (int)settings.Provider;
+        d.AiModel = string.IsNullOrWhiteSpace(settings.Model) ? null : settings.Model.Trim();
+        d.AiApiKey = string.IsNullOrWhiteSpace(settings.ApiKey) ? null : settings.ApiKey.Trim();
+        d.AiOllamaBaseUrl = string.IsNullOrWhiteSpace(settings.OllamaBaseUrl) ? null : settings.OllamaBaseUrl.Trim();
+        d.AiBaseUrl = string.IsNullOrWhiteSpace(settings.BaseUrl) ? null : settings.BaseUrl.Trim();
         Save(d);
     }
 

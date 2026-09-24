@@ -118,6 +118,9 @@ public partial class App : Application
         // 备份与恢复（P0-2）：不可重建的用户元数据需要可导出/回滚
         services.AddSingleton<IBackupRepository, StarMark.Data.BackupRepository>();
         services.AddSingleton<BackupService>();
+        // AI 通道网关（批次 A）。单例：它持有两个 HttpClient，按窗口创建会攒出连接池；
+        // 批次 B 的批量整理也从这里取同一个实例，配置与"能不能用"的判定只此一份。
+        services.AddSingleton<StarMark.Integrations.Ai.AiGateway>();
 
         // 内置剪贴板历史：单例持有监听窗口与去重闸门。开关默认关 ⇒ 本会话绝不 TryStart（零读取、零落盘）。
         services.AddSingleton(sp => new StarMark.Integrations.Clipboard.ClipboardWatcher(
