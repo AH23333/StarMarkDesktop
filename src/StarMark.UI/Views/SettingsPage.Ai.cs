@@ -172,12 +172,7 @@ public sealed partial class SettingsPage
 
     private async void AiOrganise_Click(object sender, RoutedEventArgs e)
     {
-        if (_aiOrganising)
-        {
-            _aiOrganiseCts?.Cancel();
-            AiStatusText.Text = "正在停下…（已经整理出来的会留在下面）";
-            return;
-        }
+        if (_aiOrganising) return;              // 忙的时候"开始"是灰的；这一道只防重入（连点 / 快捷键）
 
         var settings = ReadAiSettings();
         if (settings.Problem() is { } bad)
@@ -188,7 +183,8 @@ public sealed partial class SettingsPage
         }
 
         _aiOrganising = true;
-        AiOrganiseButton.Content = "暂停";
+        AiOrganiseButton.IsEnabled = false;      // 忙的时候"开始"让位给「停止」：一次点击只管一件事
+        AiStopButton.Visibility = Visibility.Visible;
         AiApplyAllButton.IsEnabled = false;
         var cts = new CancellationTokenSource();
         _aiOrganiseCts = cts;
@@ -216,10 +212,24 @@ public sealed partial class SettingsPage
         {
             _aiOrganising = false;
             _aiOrganiseCts = null;
-            AiOrganiseButton.Content = "开始整理";
+            AiOrganiseButton.IsEnabled = true;
+            AiStopButton.IsEnabled = true;
+            AiStopButton.Visibility = Visibility.Collapsed;
             AiApplyAllButton.IsEnabled = !_aiPlan.IsEmpty;
             cts.Dispose();
         }
+    }
+
+    /// <summary>
+    /// 停下这一轮。<b>停止不是"取消整场"</b>：按下去之后断的是正在飞的那一次请求（不再等它把
+    /// 剩下的 token 吐完），后面的批次一个都不问，而停之前整理出来的那些照旧留在下面可以挑几组应用。
+    /// </summary>
+    private void AiStop_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_aiOrganising) return;
+        AiStopButton.IsEnabled = false;         // 按过一次就够了：正在停下这件事不需要第二次指令
+        _aiOrganiseCts?.Cancel();
+        AiStatusText.Text = "正在停下…（已经整理出来的会留在下面）";
     }
 
     /// <summary>一句话交代这一轮：<b>整理出多少、缺多少、坏了几批、以及"还没写进库"</b>。

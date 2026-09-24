@@ -401,16 +401,23 @@
                                            Text="还没测过。" Opacity="0.72"/>
 
                                 <!--
-                                    批量整理。入口只有一个（扩展教训：两个功能重叠的按钮引发多次返工），
+                                    批量整理。"开始"只有一个入口（扩展教训：两个功能重叠的按钮引发多次返工），
                                     就放在通道配置下面——通道没接通时这里点了也只会在状态行给出原因。
+                                    旁边那颗「停止」不是第二个入口，是同一段忙碌的出口：只在忙的时候现身。
                                 -->
-                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
                                     <NumberBox Grid.Column="0" x:Name="AiScopeBox" Header="整理多少条还没有标签的条目"
                                                Minimum="1" Maximum="500" SmallChange="10" LargeChange="50" SpinButtonPlacementMode="Compact"
                                                Value="100" FontSize="12" HorizontalAlignment="Stretch"/>
                                     <Button Grid.Column="1" x:Name="AiOrganiseButton" Content="开始整理" Click="AiOrganise_Click"
                                             Style="{StaticResource SecondaryButton}" VerticalAlignment="Bottom"/>
-                                    <Button Grid.Column="2" x:Name="AiApplyAllButton" Content="全部应用" Click="AiApplyAll_Click"
+                                    <!--
+                                        停止单独一颗，忙的时候才现身（把"开始"就地变成"暂停"这种一次点击两件事的
+                                        按钮，用户在忙的那一刻不确定自己按下的是哪一个——扩展侧最终也收敛到这里）。
+                                    -->
+                                    <Button Grid.Column="2" x:Name="AiStopButton" Content="停止" Click="AiStop_Click"
+                                            Style="{StaticResource SecondaryButton}" VerticalAlignment="Bottom" Visibility="Collapsed"/>
+                                    <Button Grid.Column="3" x:Name="AiApplyAllButton" Content="全部应用" Click="AiApplyAll_Click"
                                             Style="{StaticResource SecondaryButton}" VerticalAlignment="Bottom" IsEnabled="False"/>
                                 </Grid>
 

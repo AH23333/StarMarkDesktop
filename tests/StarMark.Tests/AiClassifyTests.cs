@@ -251,6 +251,37 @@ public sealed class AiClassifyTests
         Assert.Equal(0, report.StoppedBatches);
     }
 
+    /// <summary>真机反馈的另一半：<b>停止落在"正在问的那一批"里面</b>——那时在飞的 HTTP 已被掐断，
+    /// await 直接抛出 OperationCanceledException。旧写法让这一抛冒到界面那一层，
+    /// 于是"按了停止"表现为"已经整理好的前五批一起没了"。修法是在循环里就地收成"停下并回报"。</summary>
+    [Fact]
+    public async Task CancellingMidFlightReturnsTheRunInsteadOfThrowingItAway()
+    {
+        using var cts = new CancellationTokenSource();
+        var items = Enumerable.Range(1, 150).Select(n => Item(n, "T" + n)).ToList();      // 三批
+        var calls = 0;
+
+        var report = await ClassifyRunner.RunAsync(items, Array.Empty<string>(),
+            _ =>
+            {
+                calls++;
+                if (calls == 2)
+                {
+                    cts.Cancel();
+                    return Task.FromException<AiReply>(new OperationCanceledException());
+                }
+                return Reply("""{"items":[{"id":1,"tags":["工具"]}]}""");
+            },
+            null, cts.Token);
+
+        Assert.Equal(2, calls);                                   // 第三批一个字节都没问 ⇒ 不再继续烧 token
+        Assert.Single(report.Proposals);                          // 停之前那一批的结果留着
+        Assert.Equal(0, report.FailedBatches);                    // 被叫停不等于"这一批坏了"（那会让人去查通道）
+        Assert.Equal(2, report.StoppedBatches);                   // 正在问的那一批 + 还没问的第三批
+        Assert.Equal(3, report.BatchesTotal);
+        Assert.True(report.AnythingToApply);
+    }
+
     [Fact]
     public async Task CheckpointCallbackRunsOnEveryBatchBoundary()
     {

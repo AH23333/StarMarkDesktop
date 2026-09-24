@@ -54,6 +54,41 @@ public sealed class AiLayerGateTests
 
     /// <summary>这一栏的每一项改动都要就地落盘——<b>不能有"改了但要点保存才生效"的中间态</b>。
     /// 三格（开关 / 下拉 / 文本）各自的处理器都必须直接拐到同一个持久化出口。</summary>
+    /// <summary>
+    /// 「停止」必须是单独一颗、只在忙的时候现身的按钮，而"开始"那一段忙碌期间要退场。
+    /// <para>把"开始"就地改成"暂停"（一次点击两件事）在扩展项目里返工过好几次：用户在忙的那一刻
+    /// 不确定自己按下的到底是哪一个，而且没有第二次出口。这里钉的是形状：
+    /// 有 <c>AiStopButton</c>、它接自己的处理器、忙时"开始"被禁用而不是改字。</para>
+    /// </summary>
+    [Fact]
+    public void OrganisingHasItsOwnStopButton()
+    {
+        var xaml = Read(Xaml);
+        Assert.Contains("x:Name=\"AiStopButton\"", xaml);
+        Assert.Contains("Click=\"AiStop_Click\"", xaml);
+
+        var page = Read(Page);
+        Assert.Contains("AiStopButton.IsEnabled = false", page);              // 正在停下时不许再按一次
+        Assert.Contains("AiOrganiseButton.IsEnabled = false", page);
+        Assert.Contains("AiStopButton.Visibility = Visibility.Visible", page);
+        Assert.Contains("AiStopButton.Visibility = Visibility.Collapsed", page);
+        Assert.DoesNotContain("AiOrganiseButton.Content = ", page);           // 改字＝一键两义回来了
+
+        // 一轮整理只有一个写存档的人：界面上再开一处 OrganiseAsync 就会出现两份"当前方案"
+        Assert.Equal(1, page.Split('\n').Count(line => line.Contains(".OrganiseAsync(")));
+    }
+
+    /// <summary>重跑一轮不许把"上次整理好但还没应用"的方案整档盖掉——存档是整档写的，
+    /// 没有"追加"这回事 ⇒ 这一轮必须<b>从旧方案接着写</b>（同一条以新的为准）。
+    /// 用户上一次花掉的那次整理凭空消失，是这里最贵的一类错。</summary>
+    [Fact]
+    public void ReRunningSeedsFromTheUnappliedPlan()
+    {
+        var service = Read("src/StarMark.UI/Services/AiClassifyService.cs");
+        Assert.Contains("LoadPending().Proposals.ToList()", service);
+        Assert.Contains("public ClassifyPlan LoadPending()", service);        // 种子与读档必须走同一个口子
+    }
+
     [Fact]
     public void EveryAiFieldPersistsImmediately()
     {

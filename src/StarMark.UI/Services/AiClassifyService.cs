@@ -125,7 +125,10 @@ public sealed class AiClassifyService
         var total = ClassifyPrompt.Batches(candidates).Count;
         onStatus($"共 {candidates.Count} 条待整理，分 {total} 批问模型…");
 
-        var proposals = new List<TagProposal>();
+        // 从"上次整理好但还没应用"的方案接着写：<b>不种子就会让这一轮把旧结果整档覆盖掉</b>——
+        // 用户上一次花掉的那次整理会在毫无提示的情况下消失（存档是整档写的，没有"追加"这回事）。
+        // 同一条目若这轮又问了一遍，Merge 以新的一份为准，不会把两次的标签并起来。
+        var proposals = LoadPending().Proposals.ToList();
         var report = await ClassifyRunner.RunAsync(
             candidates, catalog,
             request => _gateway.CompleteAsync(settings, request, ct),

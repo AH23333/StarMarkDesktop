@@ -28,8 +28,8 @@ public sealed record ClassifyBatchReport(
     int UnknownCount);
 
 /// <summary>整轮的结果。</summary>
-/// <param name="StoppedCount">因为停止或超时没问的批数。与 RSS 那边同一套三态：
-/// <b>按了停止不该把已经整理出来的结果一起丢掉</b>。</param>
+/// <param name="StoppedBatches">因为叫停而没问成的批数——<b>正在飞的那一批也算在内</b>（它没拿到结果）。
+/// 与 RSS 那边同一套三态：<b>按了停止不该把已经整理出来的结果一起丢掉</b>，也不该把它记成"这几批坏了"。</param>
 public sealed record ClassifyRunReport(
     IReadOnlyList<ClassifyBatchReport> Batches,
     IReadOnlyList<TagProposal> Proposals,
@@ -77,7 +77,20 @@ public static class ClassifyRunner
             }
 
             var batch = batches[i];
-            var report = await OneAsync(i, batch, catalog, call, timeoutSeconds, ct);
+            ClassifyBatchReport report;
+            try
+            {
+                report = await OneAsync(i, batch, catalog, call, timeoutSeconds, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // 叫停落在"正在问的那一批"里面：这一批和它后面的都不再问。
+                // <b>不能把这一下继续抛出去</b>——抛出去就等于把已经整理好的前五批一起丢掉，
+                // 而"按了停止反而什么都没剩下"是用户最没法理解的一种失败（与 RSS 那侧同一口径）。
+                stopped = batches.Count - i;
+                break;
+            }
+
             reports.Add(report);
             if (report.Ok)
             {
