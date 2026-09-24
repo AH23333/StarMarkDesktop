@@ -304,9 +304,19 @@ public sealed class WidgetStorage
     /// </summary>
     private bool _loadDegraded;
 
-    public WidgetStorage(string? path = null)
+    /// <summary>
+    /// 快照缓存的有效期。<b>取这么短是为了让陈旧有上界</b>：绕过 <see cref="Save"/> 的改写
+    /// （备份还原、用户手改、另一个实例写入）最坏只晚 250 ms 被看到。
+    /// 真实读盘远快于这个数，所以"一次交互内的多次询问"必然全部命中——省的正是那部分。
+    /// </summary>
+    public static readonly TimeSpan DefaultCacheValidity = TimeSpan.FromMilliseconds(250);
+
+    /// <summary><paramref name="cacheValidity"/> 只给测试和"必须立刻反映外部改动"的调用方用；
+    /// 传 null 就是 <see cref="DefaultCacheValidity"/>。</summary>
+    public WidgetStorage(string? path = null, TimeSpan? cacheValidity = null)
     {
         _path = path ?? DefaultPath();
+        _cacheValidityMs = (cacheValidity ?? DefaultCacheValidity).TotalMilliseconds;
     }
 
     public string StorePath => _path;
@@ -378,10 +388,36 @@ public sealed class WidgetStorage
     public static bool IsResizable(WidgetKind kind) =>
         !WidgetRegistry.Default.TryGet(kind, out var d) || d.IsResizable;
 
+    /// <summary>
+    /// 上一次成功解析的快照。<b>能进缓存的只有"完整读到并解析成功"这一种结果</b>：
+    /// 文件不存在（要写预置）、内容损坏（要留 .bak）、读盘被瞬时锁定（要等锁释放重试并禁止落盘）
+    /// 这三种各自带一个后续动作，缓存把它们挡住就等于把恢复路径堵死。
+    /// </summary>
+    private WidgetStoreData? _cached;
+    private long _cachedAtMs;
+    private readonly double _cacheValidityMs;
+
+    /// <summary>真正读盘并解析的次数（诊断/测试用）。缓存生效的证据就靠它，而不是靠"感觉快了"。</summary>
+    internal int DiskReads;
+
+    /// <summary>命中快照缓存的次数（诊断/测试用）。</summary>
+    internal int CacheHits;
+
     public WidgetStoreData Load()
     {
         lock (_gate)
         {
+            // 命中判据只有一句话："距上次成功读盘有没有超过有效期"——连文件都不问。
+            // 一次托盘右键菜单要问 17 种组件的启用状态，不缓存就是 17 次整档读 + 17 次反序列化；
+            // 而 stat 在 Windows 上同样是一趟 IO（widgets.json 常放在 OneDrive 目录下，属性查询还会
+            // 牵出占位符），所以这里不用"指纹更便宜"的那条路，只用自己进程内的时钟。
+            if (_cached is not null && Environment.TickCount64 - _cachedAtMs <= _cacheValidityMs)
+            {
+                CacheHits++;
+                return _cached;
+            }
+            _cached = null;
+
             if (!File.Exists(_path))
             {
                 // 首启/文件确被删除：空态是可信的，允许后续 Save 落盘。
@@ -390,13 +426,22 @@ public sealed class WidgetStorage
                 // 预置实例必须当场落盘：实例 ID 是随机 Guid，不落盘则每次 Load 都换一个，
                 // 上层按 ID 管窗口会重复建窗 / 找不到窗（以前首启是空列表，没有这个问题）。
                 if (fresh.Instances.Count > 0) Save(fresh);
+                _cached = null;                       // 刚写过（或决定不写）：下一次按磁盘事实重新判断
                 return fresh;
             }
             try
             {
+                DiskReads++;
                 var data = JsonSerializer.Deserialize<WidgetStoreData>(File.ReadAllText(_path));
                 _loadDegraded = false;
-                return Normalize(data);
+                var parsed = Normalize(data);
+
+                // 读完不回问指纹，直接缓存：写盘走的是"先写 .tmp 再 File.Move"，读者要么拿到旧版、
+                // 要么拿到新版，不存在读到半档。至于"读的这一瞬恰好被改写"，最坏也只陈旧一个有效期——
+                // 拿指纹换"永不陈旧"是不划算的：NTFS 的时间戳粒度让等长改写根本问不出来（用例里实测过）。
+                _cached = parsed;
+                _cachedAtMs = Environment.TickCount64;
+                return parsed;
             }
             catch (JsonException ex)
             {
@@ -405,6 +450,7 @@ public sealed class WidgetStorage
                 _loadDegraded = false;
                 StarLog.Error($"组件配置损坏，已回退默认并尝试备份原文件 ({_path})", ex);
                 try { File.Copy(_path, _path + ".bak", overwrite: true); } catch { }
+                _cached = null;                       // 回退出来的默认态不是磁盘事实，不许被下一次 Load 当成缓存复用
                 return Normalize(null);
             }
             catch (Exception ex)
@@ -416,6 +462,7 @@ public sealed class WidgetStorage
                 // 节流：锁定期内每次 Load 都会撞这一句（60 s 窗口内同路径只留首条 + 累计数）
                 StarLog.WarnThrottled($"widget-read:{_path}",
                     $"读取组件配置失败（疑似被临时占用），本次不落盘以免覆盖真实数据 ({_path})：{ex.Message}");
+                _cached = null;                       // 降级态必须在下次调用重试，缓存住它就把"锁释放后自动恢复"堵了
                 return Normalize(null);
             }
         }
@@ -447,6 +494,9 @@ public sealed class WidgetStorage
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
                 File.WriteAllText(tmp, JsonSerializer.Serialize(normalized, new JsonSerializerOptions { WriteIndented = true }));
                 File.Move(tmp, _path, overwrite: true);
+                // 只有真的搬成功了才作废缓存：失败时磁盘仍是上一版，缓存照样有效
+                // （反过来若在这里也作废，就成了"写失败却重读一遍旧内容"，白做一次还多一处会错的地方）。
+                _cached = null;
             }
             catch (Exception ex)
             {
