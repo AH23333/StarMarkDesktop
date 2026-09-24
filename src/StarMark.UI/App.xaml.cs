@@ -91,7 +91,11 @@ public partial class App : Application
         // 会话边界标记：日志里此前没有任何"开始/结束"行，用户报"闪退"时无从判断一次运行
         // 是正常关闭还是被打断。ProcessExit 在正常返回与 Environment.Exit 两条路径都会触发，
         // 因此"有会话开始、无进程退出"就等价于异常终止，可直接把崩溃时刻与最后一次操作对齐。
-        StarLog.Info($"===== StarMark 会话开始 pid={Environment.ProcessId} elev={Privilege.IsElevated()} =====");
+        // build= 是这一行第二次被要求承担职责：真机反馈里出现过"修好的代码在树里、跑的是旧产物"
+        // 而双方都不知道（VS 源码没变时 F5 不重编，产物时间戳看不出），于是"问题依旧"被当成了
+        // "修复无效"。会话边界带上构建时刻，一句日志就能把这两种解释分开。
+        StarLog.Info($"===== StarMark 会话开始 pid={Environment.ProcessId} elev={Privilege.IsElevated()} " +
+            $"build={BuildInfo.Display} =====");
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
             StarLog.Info($"===== StarMark 进程退出 pid={Environment.ProcessId} =====");
 

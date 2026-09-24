@@ -29,6 +29,32 @@ public sealed class DiagnosticsServiceTests : IDisposable
 
     public void Dispose() { try { File.Delete(_dbPath); } catch { } }
 
+    /// <summary>
+    /// "跑的是哪份构建"必须是程序自己报的，而且报的就是<em>正在运行那个文件</em>的写入时间。
+    /// <para>真机反馈里出现过一整轮误判：树里已经修好，跑的人是旧产物（VS 源码未变时 F5 不重编，
+    /// 光看产物时间戳分不出来），于是"问题依旧"被当成"修复无效"，又往判据上叠了一层猜测。
+    /// 这条断言钉的是取值来源：换成任何"编译期常量/版本号"都会在这里红——那些都不能证明是这次编出来的。</para>
+    /// </summary>
+    [Fact]
+    public void TheBuildStampIsReadFromTheRunningExecutableItself()
+    {
+        var path = Environment.ProcessPath;
+        Assert.NotNull(path);
+        Assert.Equal(new FileInfo(path!).LastWriteTime, BuildInfo.LocalTime);
+        Assert.Equal(BuildInfo.LocalTime!.Value.ToString("yyyy-MM-dd HH:mm"), BuildInfo.Display);
+    }
+
+    [Fact]
+    public async Task DiagnosticsOpensWithTheBuildStampSoTheAnswerIsTheFirstLine()
+    {
+        var svc = new DiagnosticsService(_factory, _repo, Array.Empty<IItemSource>());
+        var entries = await svc.CollectAsync(CancellationToken.None);
+
+        // 面板第一行就是它：不用滚动、不用解释去哪儿看（这一条存在的意义是"一眼能答"）
+        Assert.Equal("本次运行的构建时间", entries[0].Label);
+        Assert.Equal(BuildInfo.Display, entries[0].Value);
+    }
+
     [Fact]
     public async Task CollectAsync_ReportsDbCountsSourcesAndSyncState()
     {

@@ -30,6 +30,11 @@ public sealed class DiagnosticsService
     {
         var entries = new List<DiagnosticEntry>();
 
+        // ── 这一份是哪次构建 ──
+        // 放在最前面：它的用途是回答"你刚才跑的那次，到底含不含最新改动"。
+        // 这个问题以前只能靠人记，记错一次的代价是把一轮已修好的判据当成无效又重新猜一遍。
+        entries.Add(new DiagnosticEntry("本次运行的构建时间", StarMark.Abstractions.BuildInfo.Display));
+
         // ── 数据库 ──
         entries.Add(new DiagnosticEntry("数据库路径", _factory.DbPath));
         entries.Add(new DiagnosticEntry("数据库体积", FormatBytes(GetDbSizeBytes())));
