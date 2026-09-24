@@ -159,6 +159,51 @@ public sealed class AnnotationPainterTests
         Assert.True(IsRed(At(pixels, 12, 6, 6)));
     }
 
+    // ────────── 形状的尺寸：按下点 → 放开点 ──────────
+
+    /// <summary>
+    /// 真机反馈的成因：<b>拖动过程中每一帧的鼠标位置都会被采进来</b>，于是一条矩形在历史里带着几十个点。
+    /// 另一端若取"第二个元素"，那是按下后的第一次移动（离起点一两个像素），松手就看见一个针尖大的框；
+    /// 而拖动中的预览取的是最后一点 ⇒ "预览对、落笔错"，正是最难自己发现的那一类。
+    /// </summary>
+    [Theory]
+    [InlineData(AnnotationTool.Rectangle)]
+    [InlineData(AnnotationTool.Ellipse)]
+    [InlineData(AnnotationTool.Line)]
+    [InlineData(AnnotationTool.Arrow)]
+    public void ShapeSpansThePressPointToTheReleasePointNotTheFirstSample(AnnotationTool tool)
+    {
+        // 首点＝按下，末点＝放开，中间两个是拖过的痕迹：形状只能由首末两点决定
+        var stroke = new[]
+        {
+            new PixelPoint(3, 4), new PixelPoint(4, 5), new PixelPoint(11, 9), new PixelPoint(24, 18),
+        };
+        var pixels = AnnotationPainter.Render(Canvas(30, 24), 30, 24, new[] { Shape(tool, Red, stroke) });
+        var ink = RedBox(pixels, 30, 24);
+
+        Assert.True(ink.X <= 4 && ink.Y <= 5, $"{Annotation.ToolName(tool)}：笔画没到按下的那一点（{ink.X},{ink.Y}）");
+        Assert.True(ink.Right - 1 >= 20, $"{Annotation.ToolName(tool)} 只画到 x={ink.Right - 1}：图形被画小了（末端应在 24）");
+        Assert.True(ink.Bottom - 1 >= 14, $"{Annotation.ToolName(tool)} 只画到 y={ink.Bottom - 1}：图形被画小了（末端应在 18）");
+    }
+
+    private static IntRect RedBox(byte[] pixels, int width, int height)
+    {
+        var minX = width; var minY = height; var maxX = -1; var maxY = -1;
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                if (!IsRed(At(pixels, width, x, y))) continue;
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+            }
+        }
+        Assert.True(maxX >= minX, "一个红像素都没有：这条标注根本没画出去");
+        return new IntRect(minX, minY, maxX - minX + 1, maxY - minY + 1);
+    }
+
     // ────────── 荧光笔：每像素只混合一次 ──────────
 
     [Fact]

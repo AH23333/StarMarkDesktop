@@ -118,6 +118,17 @@ public sealed record Annotation(
     /// <summary>画这条标注至少要几个点；不够就是「用户点了一下还没拖」，不该画。</summary>
     public static int MinPoints(AnnotationTool tool) => tool == AnnotationTool.Text ? 1 : 2;
 
+    /// <summary>这一类工具的形状<b>完全由「按下那一点」与「放开那一点」决定</b>（矩形/椭圆看对角，
+    /// 直线/箭头看两端），拖动中途经过的采样点只是痕迹。
+    /// <para>界面上据此<b>覆盖而不是追加</b>，绘制那边据此取末尾一点当另一端：两处必须同一个口径，
+    /// 否则"按第二个点取端点"就会画出 1–2 像素的小框——按下后第一次鼠标移动就是它的第二个点。
+    /// 真机反馈的"松手后图形变得非常小"正是这个错位：预览取的是最后一点，落笔取的是第二点。</para></summary>
+    public static bool IsTwoPointTool(AnnotationTool tool)
+        => tool is AnnotationTool.Rectangle or AnnotationTool.Ellipse or AnnotationTool.Line or AnnotationTool.Arrow;
+
+    /// <summary>这一条的另一端（两点点工具用）：<b>永远是最后采到的那一点</b>，不是第二个元素。</summary>
+    public PixelPoint EndPoint => Points[^1];
+
     /// <summary>
     /// 这条标注画不出来时的原因，能画则 null。
     /// <para>

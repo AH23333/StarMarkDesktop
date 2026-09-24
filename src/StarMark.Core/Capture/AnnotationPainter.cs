@@ -42,6 +42,9 @@ public static class AnnotationPainter
         var color = mark.EffectiveColorBgra;
         var radius = Radius(mark);
         var points = mark.Points;
+        // 两点点工具的"另一端"取末尾采到的那一点，不取第二个元素：调用方在拖动过程中会一路追加采样点，
+        // 而第二个元素只是按下后的第一次移动（离起点一两个像素）——拿它当另一端就画出一个针尖大的框。
+        var far = mark.EndPoint;
 
         switch (mark.Tool)
         {
@@ -50,19 +53,19 @@ public static class AnnotationPainter
                 break;
 
             case AnnotationTool.Rectangle:
-                RectangleOutline(bgra, width, height, points[0], points[1], radius, color);
+                RectangleOutline(bgra, width, height, points[0], far, radius, color);
                 break;
 
             case AnnotationTool.Ellipse:
-                EllipseOutline(bgra, width, height, points[0], points[1], radius, color);
+                EllipseOutline(bgra, width, height, points[0], far, radius, color);
                 break;
 
             case AnnotationTool.Line:
-                Segment(bgra, width, height, points[0], points[1], radius, color);
+                Segment(bgra, width, height, points[0], far, radius, color);
                 break;
 
             case AnnotationTool.Arrow:
-                Arrow(bgra, width, height, points[0], points[1], radius, color);
+                Arrow(bgra, width, height, points[0], far, radius, color);
                 break;
 
             case AnnotationTool.Pen:

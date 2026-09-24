@@ -166,6 +166,22 @@ public sealed class AnnotationTests
 
     // ────────── 覆盖范围 ──────────
 
+    /// <summary>
+    /// 哪些工具"只看两个角"、哪些要留下整条折线——这条分组必须存在且只有一处能说：
+    /// 界面据此决定拖动中途的采样是覆盖还是追加，绘制端据此决定另一端取最后一点。
+    /// 两边各写一遍就会长成"预览对、落笔错"（真机反馈：松手后图形只剩针尖大）。
+    /// </summary>
+    [Fact]
+    public void TwoPointToolsAreExactlyTheCornerShapes()
+    {
+        var corners = Enum.GetValues<AnnotationTool>().Where(Annotation.IsTwoPointTool).OrderBy(tool => tool).ToList();
+        Assert.Equal(
+            new[] { AnnotationTool.Rectangle, AnnotationTool.Ellipse, AnnotationTool.Line, AnnotationTool.Arrow },
+            corners);
+        // 新加工具时这条先红：它属于"两个角"还是"一条折线"必须想清楚，不能默认落进某一组
+        Assert.Equal(8, Enum.GetValues<AnnotationTool>().Length);
+    }
+
     [Fact]
     public void BoundsGrowOutwardByTheLineWidth()
     {
