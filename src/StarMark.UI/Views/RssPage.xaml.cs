@@ -25,7 +25,9 @@ namespace StarMark.UI.Views;
 /// </para>
 /// <para>
 /// <b>默认全部收起</b>：进入这一页看到的是"哪些源、各抓到几条、哪个坏了"，
-/// 要看内容才点开那一个源。抓取仍是一次「刷新」跑完所有启用的源（那是那个按钮的语义）。
+/// 要看内容才点开那一个源。<b>打开这一页不联网</b>：摆出来的是 <c>rss-cache.json</c> 里的那一份，
+/// 只有超过一天没抓的源会被自动补抓一次（<c>RssFeedCache.AutoRefreshGap</c>）；
+/// 「刷新」才是明确要一次全量问一遍（那是那个按钮的语义）。
 /// </para>
 /// </summary>
 public sealed partial class RssPage : Page
@@ -51,8 +53,10 @@ public sealed partial class RssPage : Page
         base.OnNavigatedTo(e);
         // 订阅/退订成对：单例 VM 的事件若不在离开时退订，死页会持续收到重建事件（泄漏 + 操作已分离的元素）
         ViewModel.StructureChanged += RebuildSources;
-        ViewModel.ReloadSources();
-        RebuildSources();
+        // 进页面＝先摆本机缓存，再只补抓"超过一天没抓"的那些源（用户裁决"每天仅刷新一次"）。
+        // 这里不再自己 RebuildSources()：PrimeAsync 的第一步 ReloadSources 就会发 StructureChanged，
+        // 由那条事件铺一次——再手动铺一次等于同一批标题建两遍。
+        _ = ViewModel.PrimeAsync();
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)

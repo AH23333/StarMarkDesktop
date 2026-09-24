@@ -179,4 +179,88 @@ public sealed class RssAggregatorTests
         Assert.Equal(0, result.StoppedCount);
         Assert.Equal("源返回 503", result.Outcomes[0].Error);
     }
+
+    // ────────── 并发（批次 RF-3：真机反馈"每次刷新极为缓慢"的主因） ──────────
+
+    /// <summary>
+    /// 一轮里<b>同时</b>在飞的源数必须落在 1 与 <see cref="RssAggregator.MaxParallel"/> 之间。
+    /// <para>下限那半边同样要紧：一个坏源配上 20 秒超时，串行时能把它后面所有源都按住——六个源里坏两个
+    /// 就是半分钟以上，而这正是用户抱怨的那个数字。上限那半边是对第三方站点的礼貌：
+    /// 几十路并发等于对人家做一次小范围压测。</para>
+    /// <para>判据取"至少两个重叠"而不是"恰好四个"：后者要靠延时长度赌机器快慢，测的是调度不是行为。</para>
+    /// </summary>
+    [Fact]
+    public async Task SourcesAreFetchedConcurrentlyButBounded()
+    {
+        var inFlight = 0;
+        var peak = 0;
+        var asked = 0;
+        var sources = Enumerable.Range(1, 12).Select(i => Src(i, $"https://s{i}.test/feed")).ToList();
+
+        var result = await Run(sources, async source =>
+        {
+            var now = Interlocked.Increment(ref inFlight);
+            Interlocked.Increment(ref asked);
+            Assert.True(now <= RssAggregator.MaxParallel, $"同时在飞 {now} 个，超过上限 {RssAggregator.MaxParallel}");
+            if (now > peak) peak = now;
+            await Task.Delay(30);
+            Interlocked.Decrement(ref inFlight);
+            return Content(Feed(("条目" + source.Id, source.Url + "/1", null)));
+        });
+
+        Assert.Equal(12, asked);
+        Assert.True(peak >= 2, $"同时在飞峰值只有 {peak}：并发被改回串行了，慢的就是这一条");
+        Assert.Equal(12, result.Outcomes.Count);
+        Assert.Equal(0, result.FailedCount);
+    }
+
+    /// <summary>并发完成有先后，<b>界面上的顺序不许跟着变</b>：否则"源排第几"每次刷新都在动，
+    /// 用户点第二行点的就不是刚才那一行。</summary>
+    [Fact]
+    public async Task OutcomesStayInConfigOrderEvenWhenTheFirstSourceIsTheSlowest()
+    {
+        var sources = new[] { Src(1), Src(2, "https://b.test/feed"), Src(3, "https://c.test/feed") };
+        var result = await Run(sources, async source =>
+        {
+            if (source.Id == 1) await Task.Delay(60);         // 第一个源最慢：它必须仍然排在第一位
+            return Content(Feed(("条目" + source.Id, source.Url + "/1", null)));
+        });
+
+        Assert.Equal(new[] { 1, 2, 3 }, result.Outcomes.Select(o => o.Source.Id));
+        Assert.True(result.Outcomes[0].Ok);
+    }
+
+    [Fact]
+    public async Task StoppingMidRoundLeavesTheFinishedSourcesFetchedAndTheRestMarked()
+    {
+        using var cts = new CancellationTokenSource();
+        var sources = Enumerable.Range(1, 8).Select(i => Src(i, $"https://s{i}.test/feed")).ToList();
+
+        var result = await Run(sources, async source =>
+        {
+            if (source.Id == 1) { await Task.Delay(20); await cts.CancelAsync(); }
+            else await Task.Delay(80);
+            return Content(Feed(("条目" + source.Id, source.Url + "/1", null)));
+        }, cts.Token);
+
+        Assert.Equal(8, result.Outcomes.Count);                        // 每个源都有一条结果，谁都不缺
+        Assert.Contains(result.Outcomes, o => o.Ok && o.Entries.Count == 1);   // 停止前完成的那些留着
+        Assert.True(result.StoppedCount >= 1);
+        Assert.Equal(0, result.FailedCount);                           // "没轮到"与"正在抓被打断"都不是"坏了"
+    }
+
+    /// <summary>校验符必须随结果带回去：它原先只活在内存里，关掉程序就丢，
+    /// 于是每次启动的第一轮必定是全量下载（用户说的"每次刷新极为缓慢"的另一半）。</summary>
+    [Fact]
+    public async Task ValidatorsComeBackOnTheOutcomeForBothContentAndNotModified()
+    {
+        var withBody = new RssFetchResult(RssFetchStatus.Content, Feed(("x", "https://a.test/1", null)), "W/\"7\"", "Wed, 04 Mar 2026 00:00:00 GMT", null);
+        var content = await Run(new[] { Src(1) }, _ => Task.FromResult(withBody));
+        Assert.Equal("W/\"7\"", content.Outcomes[0].Etag);
+        Assert.Equal("Wed, 04 Mar 2026 00:00:00 GMT", content.Outcomes[0].LastModified);
+
+        var notModified = await Run(new[] { Src(1) },
+            _ => Task.FromResult(new RssFetchResult(RssFetchStatus.NotModified, null, "W/\"7\"", null, null)));
+        Assert.Equal("W/\"7\"", notModified.Outcomes[0].Etag);         // 304 也要带：否则调用方"沿用旧值"就丢了它
+    }
 }

@@ -206,6 +206,9 @@ public partial class App : Application
         services.AddSingleton<TrendingPageViewModel>();
         // RSS 页 VM 同样是单例：它持有这一轮抓到的条目，并且是 RssItemActions.NoticeRaised 的唯一订阅者
         // （transient 会让每次进页面都多挂一个委托，回报就会重复）。
+        // 缓存档必须在它之前就能解析到——没注册的话 GetRequiredService 在构造 VM 时当场抛，
+        // 表现是"点 RSS 这一页没反应"（SettingsStore 未入 DI 那次踩过同一处，批次 H1）。
+        services.AddSingleton<StarMark.Core.Feed.RssCacheStore>();
         services.AddSingleton<RssPageViewModel>();
         services.AddTransient<SettingsPageViewModel>();
 

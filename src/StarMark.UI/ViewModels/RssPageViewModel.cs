@@ -25,8 +25,13 @@ namespace StarMark.UI.ViewModels;
 /// 会带上一层文件夹（<c>RssFolders</c>），于是「收藏」这个动作同时完成了归档。
 /// </para>
 /// <para>
-/// <b>抓取只在这一页按「刷新」时发生</b>（没有后台定时器）：订阅地址是用户输入的第三方站点，
-/// 自作主张地定时去访问它，等于替用户向外部服务承诺了他没同意的流量。
+/// <b>打开这一页先摆缓存，不联网</b>（用户裁决"每天仅刷新一次"）：条目与校验符落在
+/// <c>rss-cache.json</c>，进页面直接读回来；只有<b>过了 <see cref="RssFeedCache.AutoRefreshGap"/> 的源</b>
+/// 才会被自动补抓一轮，其余要用户点「刷新」才动。「刷新」＝强制一轮（无视到期判断）。
+/// </para>
+/// <para>
+/// 与自动刷新分不开的一句：<b>抓回来的条目是"并进"缓存而不是盖掉</b>（<see cref="RssFeedCache.Merge"/>），
+/// 所以增量刷新之后用户看到的仍是同一列，不会因为他正指着的那条突然跳走而点错。
 /// </para>
 /// <para>
 /// 这一页刻意<b>没有搜索、没有排序</b>（用户裁决）：条目按源分组、组内按源给的顺序，
@@ -36,9 +41,19 @@ namespace StarMark.UI.ViewModels;
 public partial class RssPageViewModel : ObservableObject
 {
     private readonly SettingsStore _settings;
+    private readonly RssCacheStore _cache;
 
-    /// <summary>校验符（ETag / Last-Modified）按源 id 记住，让第二次刷新能走 304 少下载一次。</summary>
-    private readonly Dictionary<int, (string? Etag, string? LastModified)> _validators = new();
+    /// <summary>
+    /// 缓存的那一份（条目 + 校验符 + 上次成功时刻）。<b>一轮只读一次、只写一次</b>：
+    /// 逐源读写会随源数线性放大，而校验符与条目本来就是"一轮"这个整体的一部分。
+    /// </summary>
+    private RssCacheFile _file = new();
+
+    /// <summary>
+    /// 已经收进库的那些链接（用来标"这一条收藏过了"）。<b>进页面读一次，一轮内不改</b>：
+    /// 逐行查库就是"每项一趟往返"那个形状（批次 PA），而收藏动作自己会更新它改动的那一行。
+    /// </summary>
+    private HashSet<string> _collected = new();
 
     /// <summary>正在抓的那一轮的控制器；null＝没在抓。<b>抓取一定要能中途叫停</b>：
     /// 订阅地址是第三方的，一个连不上的地址配上 20 秒超时就能把这一页按住几十秒。</summary>
@@ -71,6 +86,7 @@ public partial class RssPageViewModel : ObservableObject
     public RssPageViewModel()
     {
         _settings = App.Services.GetRequiredService<SettingsStore>();
+        _cache = App.Services.GetRequiredService<RssCacheStore>();
         Enabled = _settings.LoadRssEnabled();
         // 收藏结果与"打不开"的原因都落在这一行的状态上：动作没有回显，用户只能靠列表有没有变来猜。
         RssItemActions.NoticeRaised += m => StatusText = m;
@@ -100,7 +116,11 @@ public partial class RssPageViewModel : ObservableObject
         }
     }
 
-    /// <summary>进入页面：按当前设置重读源列表（开关与源都可能在设置页刚被改动）。</summary>
+    /// <summary>
+    /// 进入页面：按当前设置重读源列表（开关与源都可能在设置页刚被改动），并把<b>本机缓存</b>的那一份摆出来。
+    /// <para>这一步刻意不联网：用户裁决"每天仅刷新一次"，而打开页面不等于想看新东西——
+    /// 先看上次抓到的，缺不缺新的由 <see cref="PrimeAsync"/> 按到期判断决定。</para>
+    /// </summary>
     public void ReloadSources()
     {
         Enabled = _settings.LoadRssEnabled();
@@ -113,19 +133,75 @@ public partial class RssPageViewModel : ObservableObject
             return;
         }
 
+        _file = _cache.Load();
         var keep = Sections.ToDictionary(s => s.Config.Id, s => s);
         Sections.Clear();
         foreach (var source in sources)
-            Sections.Add(keep.TryGetValue(source.Id, out var old) ? old.WithConfig(source) : new RssSourceSection(source));
+        {
+            var section = keep.TryGetValue(source.Id, out var old) ? old.WithConfig(source) : new RssSourceSection(source);
+            Sections.Add(section);
+            ShowCached(section);
+        }
         HasSectionsChanged();
+        DropCachesOfDeletedSources(sources);
         StructureChanged?.Invoke();
 
+        // 这一句只在"一个源都没有"时看得见（页面上的空态块按 HasSections 反向显示），
+        // 所以它只说这一种情况；有源但还没抓到东西时该说什么，由下面的 StatusText 负责（它永远在）。
         EmptyHint = Sections.Count == 0
             ? "还没有添加任何来源地址：到「设置 → 网址来源（RSS / Atom）」填一个订阅地址再回来。"
-            : "还没有抓过。点上面的「刷新」抓一次——只有这一步会真的去访问那些地址。";
+            : string.Empty;
+        var due = DueCount();
         StatusText = Sections.Count == 0
             ? string.Empty
-            : $"{Sections.Count} 个来源，{Sections.Count(s => s.Config.Enabled)} 个启用中。点「刷新」看它们给了什么。";
+            : $"{Sections.Count} 个来源，{Sections.Count(s => s.Config.Enabled)} 个启用中；上面摆的是本机缓存"
+              + (due > 0
+                    ? $"，{due} 个已超过一天没抓（打开这一页时自动补抓，不用点按钮）。"
+                    : "，今天都已经抓过一轮，不会再联网；要看新的点「刷新」。");
+    }
+
+    /// <summary>把某个源的缓存行与"上次抓取/什么时候再自动刷新"摆到它那一行上。</summary>
+    private void ShowCached(RssSourceSection section)
+    {
+        var cached = _file.Find(section.Config.Id);
+        if (cached is null || cached.Entries.Count == 0)
+        {
+            section.SetRows(Array.Empty<ItemCardViewModel>());
+            section.SetStatus(RssSourceStatus.NeverFetched);
+            return;
+        }
+        section.SetRows(RssFeedCache.ToEntries(cached, section.Config).Select(e => RowFor(e, _collected)).ToList());
+        section.SetStatus(RssSourceStatus.FromCache(cached, NowUnix));
+    }
+
+    /// <summary>
+    /// 源被删掉之后把它的缓存一起清掉：这一档会随源数长大，留着没人再读的条目就是只增不减的磁盘占用。
+    /// <para>只在真的少了东西时才落盘——否则每次进这一页都白写一次文件。</para>
+    /// </summary>
+    private void DropCachesOfDeletedSources(IReadOnlyList<RssSourceConfig> sources)
+    {
+        if (_file.Sources.Count == 0) return;
+        var before = _file.Sources.Count;
+        _cache.Without(_file, sources.Select(s => s.Id));
+        if (_file.Sources.Count != before) _cache.Save(_file);
+    }
+
+    private int DueCount() => Sections.Count(s => s.Config.Enabled && RssFeedCache.IsDue(_file.Find(s.Config.Id), NowUnix));
+
+    private static long NowUnix => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+    /// <summary>
+    /// 页面进来的那一次：<b>只补抓到期的源</b>（一天一次），其余连请求都不发。
+    /// <para>订阅地址是用户填的第三方站点，自作主张地反复访问＝替用户向外部服务承诺了他没同意的流量；
+    /// 而他的抱怨是"每次刷新极为缓慢"，所以自动那一档压到一天一次，要立刻看新的仍然由「刷新」按钮明说。</para>
+    /// </summary>
+    public async Task PrimeAsync()
+    {
+        ReloadSources();
+        // IsBusy 那一句挡的是"上一轮还在跑就又开一轮"：切走时只叫停了请求，那一轮的收尾（并缓存、落盘）还在 await 之后，
+        // 两轮同时在写同一份档就是互相盖。这一页该摆的缓存上面那次 ReloadSources 已经摆出来了，不缺这一轮的画面。
+        if (!Enabled || Sections.Count == 0 || IsBusy) return;
+        await StartRoundAsync(auto: true);
     }
 
     /// <summary>「刷新」/「停止抓取」同一个按钮：正在抓时再点一次就是叫停。</summary>
@@ -144,45 +220,28 @@ public partial class RssPageViewModel : ObservableObject
             StatusText = "还没有添加任何来源地址。";
             return;
         }
+        await StartRoundAsync(auto: false);
+    }
 
+    /// <summary>
+    /// 开一轮的唯一闸门（自动补抓与手动「刷新」都从这里进）。<b>IsBusy 与那枚 CTS 都在第一个 await 之前置好</b>，
+    /// 各挡一种真机现象：
+    /// ① 连点两下「刷新」：读库那几毫秒里如果还没占住名额，第二击会通过"没在忙"的判断开出<b>第二轮</b>——
+    /// 两轮并写同一份缓存，且 <c>_rounds</c> 被后一个盖掉，前一个再也停不了；
+    /// ② "按了停止没反应"：停止那一下必须有东西可掐，所以 CTS 在这一段就建好，哪怕还停在读库这一步
+    /// （掐了之后聚合器把每个源都记成"没抓到"，已抓到的照样留下）。
+    /// </summary>
+    private async Task StartRoundAsync(bool auto)
+    {
         IsBusy = true;
-        StatusText = "正在抓取…（再点一下可以停）";
         var cts = _rounds = new CancellationTokenSource(RoundBudget);
         try
         {
-            var collected = await CollectedLinksAsync(cts.Token);
-            using var client = new RssClient();
-            var run = await RssAggregator.RunAsync(
-                Sections.Select(s => s.Config).ToList(),
-                async source =>
-                {
-                    cts.Token.ThrowIfCancellationRequested();      // 停手时别再开新请求
-                    _validators.TryGetValue(source.Id, out var cached);
-                    var fetched = await client.FetchAsync(source.Url, cached.Etag, cached.LastModified, cts.Token);
-                    // 源没重发校验符时沿用旧的：否则下一次又退化成全量下载
-                    _validators[source.Id] = (fetched.ETag ?? cached.Etag, fetched.LastModified ?? cached.LastModified);
-                    return fetched;
-                },
-                cts.Token);
-
-            foreach (var outcome in run.Outcomes)
-            {
-                var section = Sections.FirstOrDefault(s => s.Config.Id == outcome.Source.Id);
-                if (section is null) continue;
-                section.SetStatus(RssSourceStatus.Describe(outcome));
-                // 只有源真的给了条目才换掉这一组的行：304 / 失败 / 没抓到时留着上一轮的结果，
-                // 否则"源说没变化"（好消息）会把用户正在看的那一列清空，看着像坏了。
-                if (outcome.Ok && outcome.Entries.Count > 0)
-                    section.SetRows(outcome.Entries.Select(e => RowFor(e, collected)).ToList());
-            }
-
-            // 汇总说的是"这一页真的摆出来了多少条"，不是聚合器那份带 200 条上限的摊平清单：
-            // 分组是按源各自取的，两个数不是一回事，拿后者报前者就会出现"页面上明明更多"。
-            var shown = Sections.Sum(s => s.Rows.Count);
+            // 库里那份"已经收藏过的链接"是个本地读，不参与取消（半途掐它只会把收藏状态标错）
+            _collected = await CollectedLinksAsync(CancellationToken.None);
+            foreach (var section in Sections) ShowCached(section);   // 收藏状态要等这一步读出来才标得对
             StructureChanged?.Invoke();
-
-            EmptyHint = shown == 0 ? "这一轮没有任何源给出条目，原因写在每个文件夹的标题上。" : string.Empty;
-            StatusText = Summarise(run, shown);
+            await RunRoundAsync(auto, cts.Token);
         }
         catch (Exception ex)
         {
@@ -195,6 +254,85 @@ public partial class RssPageViewModel : ObservableObject
             _rounds = null;
             cts.Dispose();
         }
+    }
+
+    /// <summary>
+    /// 跑一轮。<paramref name="auto"/> 为真＝进页面时的自动补抓，只带上<b>到期的</b>那些源；
+    /// 为假＝用户按了「刷新」，全部启用的源都去问一次（条件请求，源说没变化就只花一个来回）。
+    /// </summary>
+    private async Task RunRoundAsync(bool auto, CancellationToken ct)
+    {
+        var targets = Sections
+            .Where(s => s.Config.Enabled && (!auto || RssFeedCache.IsDue(_file.Find(s.Config.Id), NowUnix)))
+            .ToList();
+        if (targets.Count == 0) return;
+
+        StatusText = auto
+            ? $"正在补抓 {targets.Count} 个已超过一天的来源…"
+            : $"正在抓取 {targets.Count} 个来源…（再点一下可以停）";
+
+        // 校验符的"上一次是什么"在这一轮开始时定死（读 _file），抓回来的新值只在轮末串行落盘：
+        // 抓取那一路是并发的，Dictionary 不能一边被读一边被写。
+        var validators = targets.ToDictionary(s => s.Config.Id, s => _file.Find(s.Config.Id));
+        using var client = new RssClient();
+        var run = await RssAggregator.RunAsync(
+            targets.Select(s => s.Config).ToList(),
+            async source =>
+            {
+                ct.ThrowIfCancellationRequested();                      // 停手时别再开新请求
+                var known = validators[source.Id];
+                return await client.FetchAsync(source.Url, known?.Etag, known?.LastModified, ct);
+            },
+            ct);
+
+        var now = NowUnix;
+        var added = 0;
+        foreach (var outcome in run.Outcomes)
+        {
+            var section = Sections.FirstOrDefault(s => s.Config.Id == outcome.Source.Id);
+            if (section is null) continue;
+            var cached = _file.Find(outcome.Source.Id);
+            if (!outcome.Ok)
+            {
+                // 失败/被停掉：既不建空缓存项（那会随坏源攒一堆没人读的条目），也<b>不推进</b> FetchedAtUnix
+                // ——否则"每天一次"会把一个只坏了十分钟的源按住一整天。
+                section.SetStatus(RssSourceStatus.Describe(outcome, cached?.Entries.Count));
+                continue;
+            }
+            if (cached is null)
+            {
+                cached = new RssCachedSource { SourceId = outcome.Source.Id };
+                _file.Sources.Add(cached);
+            }
+            // 源没重发校验符时沿用旧的：否则下一次又退化成全量下载
+            cached.Etag = outcome.Etag ?? cached.Etag;
+            cached.LastModified = outcome.LastModified ?? cached.LastModified;
+            if (outcome.NotModified)
+            {
+                cached.FetchedAtUnix = now;                        // 通了、只是没变化：这一天的额度算用掉了
+                section.SetStatus(RssSourceStatus.Describe(outcome, cached.Entries.Count));
+            }
+            else
+            {
+                added += RssFeedCache.Merge(cached, outcome.Entries, now);
+                // 行取自<b>合并后的缓存</b>（不是这一轮的条目）：增量刷新之后用户看到的仍是同一列
+                section.SetRows(RssFeedCache.ToEntries(cached, outcome.Source).Select(e => RowFor(e, _collected)).ToList());
+                section.SetStatus(RssSourceStatus.Describe(outcome, cached.Entries.Count));
+            }
+        }
+
+        // 一轮一次落盘（逐源写会随源数线性放大，而且中途崩溃会留下半新半旧的一档）
+        var saved = _cache.Save(_file);
+
+        // 汇总说的是"这一页真的摆出来了多少条"，不是聚合器那份带 200 条上限的摊平清单：
+        // 分组是按源各自取的，两个数不是一回事，拿后者报前者就会出现"页面上明明更多"。
+        var shown = Sections.Sum(s => s.Rows.Count);
+        StructureChanged?.Invoke();
+
+        // 这里刻意不写 EmptyHint：页面上那块空态按"有没有源"显示，有源时它根本不可见，
+        // 而"哪几个源没给条目"已经逐行写在标题上了（写在看不见的地方＝给后来人撒假线索）。
+        StatusText = Summarise(run, shown, added, auto)
+            + (saved ? string.Empty : "　缓存没能写进磁盘（下次进这一页还得重抓）");
     }
 
     /// <summary>离开页面只掐掉在途请求：已经抓到的那一轮结果留在单例 VM 上，回来不必重抓。</summary>
@@ -214,14 +352,20 @@ public partial class RssPageViewModel : ObservableObject
         return vm;
     }
 
-    /// <summary>一轮下来给人看的那一句。<b>失败数与"没抓到"数分不开，用户就不知道该改地址还是该查网络</b>。</summary>
-    private string Summarise(RssRunResult run, int shown)
+    /// <summary>
+    /// 一轮下来给人看的那一句。<b>失败数与"没抓到"数分不开，用户就不知道该改地址还是该查网络</b>。
+    /// <para>自动那一轮必须自己说清楚"这页为什么只显示这些"：<see cref="RssFeedCache.AutoRefreshGap"/>
+    /// 之外的那些源这一轮根本没被问，报告只写"共 N 条"就会被当成实时结果，看不到新文章就判定功能坏了。</para>
+    /// </summary>
+    private string Summarise(RssRunResult run, int shown, int added, bool auto)
     {
-        var enabledCount = Sections.Count(s => s.Config.Enabled);
-        var okCount = run.Outcomes.Count(o => o.Ok && o.Source.Enabled);
+        var okCount = run.Outcomes.Count(o => o.Ok);
         var text = shown == 0
-            ? $"{enabledCount} 个启用的源里有 {okCount} 个通了，但没有给出任何条目"
-            : $"共 {shown} 条（{okCount} 个源给了内容）。点条目直接跳文章，点「收藏到文件夹」才进库。";
+            ? $"{run.Outcomes.Count} 个来源里有 {okCount} 个通了，但没有给出任何条目"
+            : auto
+                ? $"这一页每天自动补抓一次：本轮补了 {run.Outcomes.Count} 个到期的来源、新增 {added} 条，"
+                  + $"现在共 {shown} 条（其余是缓存）。要看最新的点「刷新」。"
+                : $"共 {shown} 条（{okCount} 个源给了内容，本轮新增 {added} 条）。点条目直接跳文章，点「收藏到文件夹」才进库。";
         if (run.FailedCount > 0) text += $"　{run.FailedCount} 个源失败，原因写在对应那一行";
         if (run.StoppedCount > 0) text += $"　已停止，还有 {run.StoppedCount} 个源没抓（再点一次接着抓）";
         return text;

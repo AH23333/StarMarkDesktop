@@ -24,6 +24,7 @@ public sealed class RssPageWiringGateTests
     private const string MainWindowCs = "src/StarMark.UI/MainWindow.xaml.cs";
     private const string SettingsVm = "src/StarMark.UI/ViewModels/SettingsPageViewModel.cs";
     private const string RssPageXaml = "src/StarMark.UI/Views/RssPage.xaml";
+    private const string RssPageCode = "src/StarMark.UI/Views/RssPage.xaml.cs";
     private const string RssPageVm = "src/StarMark.UI/ViewModels/RssPageViewModel.cs";
     private const string ItemCardXaml = "src/StarMark.UI/Controls/ItemCard.xaml";
 
@@ -172,19 +173,122 @@ public sealed class RssPageWiringGateTests
         Assert.DoesNotContain("LauncherEx.OpenAsync", open);
     }
 
-    /// <summary>一轮抓取的时限、校验符、停止出口都在页 VM 上（设置页那份已删净，见上一条守门）。</summary>
+    /// <summary>一轮抓取的时限、停止出口都在页 VM 上（设置页那份已删净，见上面的守门）。</summary>
     [Fact]
-    public void TheRoundKeepsItsBudgetValidatorsAndStopDoorOnThePage()
+    public void TheRoundKeepsItsBudgetAndStopDoorOnThePage()
     {
         var vm = ReadRepoFile(RssPageVm);
         Assert.Contains("RoundBudget = TimeSpan.FromSeconds(60)", vm);
-        Assert.Contains("_validators", vm);
-        Assert.Contains("RssSourceStatus.Describe(outcome)", vm);
+        Assert.Contains("RssSourceStatus.Describe(outcome", vm);
         Assert.Contains("public void CancelLoading()", vm);
-        Assert.Contains("ViewModel.CancelLoading();", ReadRepoFile("src/StarMark.UI/Views/RssPage.xaml.cs"));
+        Assert.Contains("ViewModel.CancelLoading();", ReadRepoFile(RssPageCode));
         // 状态行那句"共 N 条"必须数页面上真的摆出来的行，而不是聚合器那份带 200 条上限的摊平清单
         Assert.Contains("Sections.Sum(s => s.Rows.Count)", vm);
         Assert.DoesNotContain("共 {run.Entries.Count}", vm);
+    }
+
+    // ────────── 批次 RF-3：缓存 + 每天一次 + 增量 ──────────
+
+    /// <summary><b>进页面不许无脑全抓</b>（用户裁决"每天仅刷新一次"）。
+    /// 这条守门看着普通，失效方式却很难看：把它改回"每次进页面都跑一轮"，构建全绿、纯函数全绿，
+    /// 只有用户每次都慢——所以只能钉结构。</summary>
+    [Fact]
+    public void EnteringThePageOnlyFetchesSourcesThatAreDue()
+    {
+        var vm = ReadRepoFile(RssPageVm);
+        var page = ReadRepoFile(RssPageCode);
+
+        Assert.Contains("_ = ViewModel.PrimeAsync();", MethodBody(page, "protected override void OnNavigatedTo(NavigationEventArgs e)"));
+        Assert.Equal(0, Count(page, "ViewModel.ReloadSources()"));      // 只从 PrimeAsync 走一遍，别在页面里再抓一次
+
+        var prime = MethodBody(vm, "public async Task PrimeAsync()");
+        Assert.Contains("StartRoundAsync(auto: true)", prime);
+        Assert.Contains("|| IsBusy) return;", prime);                  // 上一轮还在收尾时不许再开一轮
+
+        var start = MethodBody(vm, "private async Task StartRoundAsync(bool auto)");
+        Assert.Contains("IsBusy = true;", start);                       // 闸门在任何 await 之前就合上
+        Assert.Contains("RunRoundAsync(auto, cts.Token)", start);
+
+        var round = MethodBody(vm, "private async Task RunRoundAsync(bool auto, CancellationToken ct)");
+        Assert.Contains("(!auto || RssFeedCache.IsDue(", round);        // 到期判断只作用在自动那一轮
+        Assert.DoesNotContain("if (!auto) return;", round);             // 手动那一轮不许顺手把自动的活也推掉
+    }
+
+    /// <summary>一轮对缓存档<b>只读一次、只写一次</b>（批次 PA 的口径：逐源读写随源数线性放大，
+    /// 而且中途崩溃会留下半新半旧的一档）。</summary>
+    [Fact]
+    public void ARoundTouchesTheCacheFileAtMostOnce()
+    {
+        var vm = ReadRepoFile(RssPageVm);
+        var round = MethodBody(vm, "private async Task RunRoundAsync(bool auto,");
+
+        Assert.Equal(1, Count(round, "_cache.Save(_file)"));
+        Assert.Equal(0, Count(round, "_cache.Load()"));                 // 读发生在 ReloadSources，不在轮里
+        Assert.Equal(1, Count(vm, "_cache.Load()"));                    // 全仓也就这一次
+        Assert.Equal(2, Count(vm, "_cache.Save(_file)"));               // 一处是轮末，一处是删源之后，没有第三处
+    }
+
+    /// <summary>校验符（ETag / Last-Modified）<b>必须活过渡</b>：它原先待在 VM 的一个内存字典里，
+    /// 于是每次启动的第一轮必定是全量下载——那正是"每次刷新极为缓慢"的另一半。</summary>
+    [Fact]
+    public void ValidatorsArePersistedInsteadOfLivingInAMemoryDictionary()
+    {
+        var vm = ReadRepoFile(RssPageVm);
+        var round = MethodBody(vm, "private async Task RunRoundAsync(bool auto,");
+
+        Assert.Equal(0, Count(vm, "_validators"));                      // 那份内存字典删净了，不许回来
+        Assert.Contains("cached.Etag = outcome.Etag ?? cached.Etag;", round);   // 源没重发就沿用旧的
+        Assert.Contains("known?.Etag, known?.LastModified", round);
+        Assert.Contains("RssCacheStore", ReadRepoFile("src/StarMark.UI/App.xaml.cs"));
+    }
+
+    /// <summary>抓取那一路是并发的 ⇒ <b>缓存的写入必须留在轮末的串行段</b>，
+    /// 而界面上那一列要取自合并后的缓存（取自本轮条目就是把增量刷新白做了一次）。</summary>
+    [Fact]
+    public void RowsComeFromTheMergedCacheNotFromThisRound()
+    {
+        var round = MethodBody(ReadRepoFile(RssPageVm), "private async Task RunRoundAsync(bool auto,");
+
+        Assert.Contains("RssFeedCache.ToEntries(cached, outcome.Source)", round);
+        Assert.DoesNotContain("outcome.Entries.Select(e => RowFor", round);
+        Assert.DoesNotContain("_file.Sources.Add", MethodBody(ReadRepoFile(RssPageVm), "public void ReloadSources()"));
+        // 进页面那一段不许凭空长出缓存项（只有轮末真的抓到东西才建）；"删源之后清档"是另一件事
+    }
+
+    /// <summary>缓存的判据不许在 UI 层另写一套（批次 NF 同一课：<c>SettingsStore</c> 在 UI，一条都断言不到）：
+    /// 页 VM 只许"问"Core，不许自己算一天、自己加时间戳。</summary>
+    [Fact]
+    public void TheDailyGateIsAskedAboutNotReimplemented()
+    {
+        var vm = ReadRepoFile(RssPageVm);
+        Assert.Contains("RssFeedCache.IsDue(", vm);
+        Assert.Contains("RssFeedCache.Merge(", vm);
+        Assert.DoesNotContain("TimeSpan.FromHours(24)", vm);
+        Assert.DoesNotContain("FetchedAtUnix +", vm);
+        Assert.DoesNotContain("CacheVersion", vm);                      // 格式版本只有一处在说话
+    }
+
+    /// <summary><b>缓存档必须进 DI</b>：没注册的话构造页 VM 时当场抛，表现是"点 RSS 这一页没反应"
+    /// （SettingsStore 未入 DI 那次踩过同一处，批次 H1）。</summary>
+    [Fact]
+    public void TheCacheStoreIsRegisteredBeforeThePageViewModelNeedsIt()
+    {
+        var app = ReadRepoFile("src/StarMark.UI/App.xaml.cs");
+        Assert.Contains("services.AddSingleton<StarMark.Core.Feed.RssCacheStore>();", app);
+        Assert.True(app.IndexOf("RssCacheStore", StringComparison.Ordinal) <
+                    app.IndexOf("services.AddSingleton<RssPageViewModel>", StringComparison.Ordinal));
+    }
+
+    /// <summary>页面顶部那句说明必须与"什么时候真的会联网"一致。
+    /// 上一版写的是"只有按「刷新」时才发请求"——每天自动补抓落地之后那句话就成了假话，
+    /// 而用户是照着它判断"我看到的是不是最新的"。</summary>
+    [Fact]
+    public void ThePageTellsTheTruthAboutWhenItGoesOnline()
+    {
+        var xaml = Markup(ReadRepoFile(RssPageXaml));
+        Assert.Contains("超过一天", xaml);
+        Assert.DoesNotContain("只有按「刷新」时才发请求", xaml);
+        Assert.Contains("rss-cache.json", xaml);                        // 说的是本机缓存，就得让人找得到那份文件
     }
 
     /// <summary>「已收藏」的读法不许带行数窗口：窗口外的收藏会被显示成"没收藏"，

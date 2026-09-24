@@ -24,12 +24,12 @@
             <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                 <TextBlock Text="RSS 订阅" FontSize="18" FontWeight="SemiBold"
                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                <TextBlock Text="点文件夹展开这个源的文章；点标题＝在浏览器打开这篇文章。只有点「收藏到文件夹」的那一条才会进本机库，并放进它自己的文件夹（RSS订阅 / 源名）；不点就不进库，也不会后台去抓——只有按「刷新」时才发请求。"
+                <TextBlock Text="点文件夹展开这个源的文章；点标题＝在浏览器打开这篇文章。只有点「收藏到文件夹」的那一条才会进本机库，并放进它自己的文件夹（RSS订阅 / 源名）；不点就不进库。打开这一页先摆本机缓存（rss-cache.json），只有超过一天没抓的源才会自动补抓一次；要立刻看新的点「刷新」。"
                            Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
             </StackPanel>
             <Button Grid.Column="1" x:Name="RefreshButton" Content="{x:Bind ViewModel.RefreshLabel, Mode=OneWay}"
                     VerticalAlignment="Center" Click="Refresh_Click"
-                    ToolTipService.ToolTip="抓取所有启用的源（再点一次就是停止，已经抓到的会留下）"/>
+                    ToolTipService.ToolTip="无视「每天一次」的判断，现在就去问一遍所有启用的源（源没变化时只花一个来回；再点一次就是停止，已经抓到的会留下）"/>
             <Button Grid.Column="2" Content="去设置改来源" VerticalAlignment="Center" Click="GoSettings_Click"
                     ToolTipService.ToolTip="添加 / 停用 / 删除订阅地址，以及这一栏的总开关"/>
         </Grid>
