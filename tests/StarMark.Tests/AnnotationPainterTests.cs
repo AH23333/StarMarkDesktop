@@ -32,6 +32,17 @@ public sealed class AnnotationPainterTests
         return pixels;
     }
 
+    /// <summary>隔列竖条纹：一个格子里必然同时有两种红 ⇒ "糊过"与"没糊"用肉眼和断言都分得开。
+    /// 纯平底色上打码等于什么都没改（平均色就是它自己），拿它做锚点会假绿。</summary>
+    private static byte[] StripedCanvas(int width, int height)
+    {
+        var pixels = Canvas(width, height);
+        for (var y = 0; y < height; y++)
+            for (var x = 0; x < width; x += 2)
+                pixels[(y * width + x) * 4 + 2] = 255;
+        return pixels;
+    }
+
     private static (int B, int G, int R, int A) At(byte[] pixels, int width, int x, int y)
     {
         var p = (y * width + x) * 4;
@@ -273,6 +284,39 @@ public sealed class AnnotationPainterTests
         var once = AnnotationPainter.Render(Canvas(32, 24), 32, 24, new[] { stroke });
         var twice = AnnotationPainter.Render(Canvas(32, 24), 32, 24, new[] { stroke, stroke });
         Assert.Equal(once, twice);
+    }
+
+    /// <summary>
+    /// <b>拖动中的"一段一段补"必须与松手后"整条一次烤"给出同一张图。</b>
+    /// <para>这是增量预览唯一能成立的前提：预览为了跟手不再每帧从底图重烤整张，
+    /// 而是拿上一张合成图当起点、每帧只补新走过的那一段。若格子会因"来过几次"而不同，
+    /// 用户就会看到"松手的瞬间画面跳了一下"——预览与交付是两套口径（本仓库吃过这类亏）。</para>
+    /// <para>刻意按真实输入的形状构造：段与段<b>共用端点</b>、并且有一段会回头穿过已涂过的格子，
+    /// 这样"重复涂同一格"这条路径真的被跑到，而不是被一个不相交的样例绕开。</para>
+    /// </summary>
+    [Fact]
+    public void MosaicPaintedSegmentBySegmentEqualsOneShotStroke()
+    {
+        const int width = 48, height = 32;
+        var thickness = Annotation.DefaultThickness(AnnotationTool.Mosaic);
+        var points = new[]
+        {
+            new PixelPoint(4, 5), new PixelPoint(30, 12), new PixelPoint(12, 26), new PixelPoint(34, 9),
+        };
+        var whole = AnnotationPainter.Render(StripedCanvas(width, height), width, height,
+            new[] { new Annotation(AnnotationTool.Mosaic, points, Red, thickness) });
+
+        // 模拟拖动：起点先按"一个点画两遍"涂一次（与 BeginStroke 同一口径），之后逐段接上
+        var stepwise = StripedCanvas(width, height);
+        for (var i = 0; i < points.Length - 1; i++)
+            AnnotationPainter.Paint(stepwise, width, height,
+                new Annotation(AnnotationTool.Mosaic, new[] { points[i], points[i + 1] }, Red, thickness));
+        AnnotationPainter.Paint(stepwise, width, height,
+            new Annotation(AnnotationTool.Mosaic, new[] { points[0], points[0] }, Red, thickness));
+
+        Assert.Equal(whole, stepwise);
+        // 锚点：这条线真的涂到了东西（纯平底色上"什么都没变"也会让相等断言假绿）
+        Assert.NotEqual(At(stepwise, width, 30, 12), At(StripedCanvas(width, height), width, 30, 12));
     }
 
     // ────────── 越界 ──────────

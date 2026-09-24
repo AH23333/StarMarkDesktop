@@ -64,8 +64,11 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private byte[]? _base;                      // 选区那块底图（物理像素，合成时的固定起点）
     private WriteableBitmap? _preview;
+    private byte[]? _composed;                  // 底图 + 全部已提交标注（每次重烤后留下，给拖动做起点）
+    private byte[]? _scratch;                   // 正在拖的这条打码的画布：_composed 的副本 + 已走过的段
+    private PixelPoint _scratchTail;            // _scratch 已经画到哪个点（下一段从这里接）
     private List<PixelPoint>? _stroke;          // 正在拖、还没合成进去的那一条
-    /// <summary>上一次为打码重烤预览的时刻（毫秒）。见 <c>PaintPreview</c>：约 45ms 合一次帧。</summary>
+    /// <summary>上一次把整块缓冲推给屏幕的时刻（毫秒）。见 <c>PaintPreview</c>。</summary>
     private long _lastMosaicPreview;
     private bool _editingText;
     private PixelPoint _textAnchor;
@@ -797,11 +800,40 @@ public sealed partial class CaptureOverlayWindow : Window
         _stroke = _tool == AnnotationTool.Mosaic
             ? new List<PixelPoint> { local, local }
             : new List<PixelPoint> { local };
+        if (_tool == AnnotationTool.Mosaic) StartMosaicScratch(local);
         Root.CapturePointer(pointer);
         PaintPreview();
     }
 
-    /// <summary>拖动中的预览：画笔/荧光/形状走近似图元，打码走真像素（每次合帧重烤）。</summary>
+    /// <summary>
+    /// 开一条打码：以"已提交的那张合成图"为起点，之后每帧只往上补新走过的那一段。
+    /// <b>不再每帧从底图重烤整张</b>——那正是真机反馈"打码速度远落后于鼠标移动速度"的成因：
+    /// 一次重烤的代价 ∝ 选区面积 × 已有标注条数，手一快就落在后面。
+    /// </summary>
+    private void StartMosaicScratch(PixelPoint local)
+    {
+        _scratch = _composed is { } composed ? (byte[])composed.Clone() : null;
+        _scratchTail = local;
+    }
+
+    /// <summary>把 _scratch 推到屏幕。整块缓冲上传是 memcpy，节流只为挡住每秒上百次的重复上传。</summary>
+    private void FlushMosaicScratch()
+    {
+        if (_scratch is not { } scratch || _preview is not { } preview) return;
+        try
+        {
+            using var stream = preview.PixelBuffer.AsStream();
+            stream.Write(scratch, 0, scratch.Length);
+            preview.Invalidate();
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("[CaptureOverlay] 打码预览上传失败", ex);
+            ShowError("打码预览没能刷到屏幕上：" + ex.Message);
+        }
+    }
+
+    /// <summary>拖动中的预览：画笔/荧光/形状走近似图元，打码走真像素（增量补段）。</summary>
     private void PaintPreview()
     {
         if (_tool != AnnotationTool.Mosaic)
@@ -809,16 +841,21 @@ public sealed partial class CaptureOverlayWindow : Window
             DrawLive();
             return;
         }
-        // 整块重烤一次的成本与"提交一条标注"相同，但每一帧都烤在大选区上会跟不上手 ⇒ 约 45ms 合一次帧；
-        // 松手时 EndStroke 无条件再烤一遍，所以中途少烤那一两次不会留下任何差异。
-        if (Environment.TickCount64 - _lastMosaicPreview < 45) return;
+        if (_stroke is not { Count: > 1 } points || _scratch is not { } scratch
+            || _base is not { } || _preview is null || _selection is not { } selection) return;
+        // 先补段（每帧都做，代价只与"这一帧走了多远"成正比），再按节奏上传整块缓冲：
+        // 少上传一次不会丢东西——下一帧会把之前画的段一起带上去。
+        var tail = points[^1];
+        if (tail != _scratchTail)
+        {
+            AnnotationPainter.Paint(scratch, selection.Width, selection.Height,
+                new Annotation(AnnotationTool.Mosaic, new[] { _scratchTail, tail }, ColourBgra, ThicknessForTool));
+            _scratchTail = tail;
+        }
+        if (Environment.TickCount64 - _lastMosaicPreview < 16) return;
         _lastMosaicPreview = Environment.TickCount64;
-        if (_stroke is { Count: > 1 } points) Rebake(MosaicLive(points));
+        FlushMosaicScratch();
     }
-
-    /// <summary>正在打的这一条马赛克（还没提交）。粗细取当前工具的实际笔刷，颜色不参与（打码改的是像素本身）。</summary>
-    private Annotation MosaicLive(IReadOnlyList<PixelPoint> points)
-        => new(AnnotationTool.Mosaic, points, ColourBgra, ThicknessForTool);
 
     private void ExtendStroke(PixelPoint local)
     {
@@ -853,17 +890,22 @@ public sealed partial class CaptureOverlayWindow : Window
     /// 拿底图把所有标注重烤一遍，并把结果摆成选区那块画面。
     /// <para>重烤而不是增量叠画：撤销、清空、改顺序这些操作就都不需要反向运算，
     /// 而"部分成功"（撤销了一条却残留半条）这类缺陷也结构上不可能出现。</para>
+    /// <para>结果同时留一份在 <c>_composed</c>：下一条打码要以"已经画成的这张"为起点做增量预览
+    /// （见 <see cref="StartMosaicScratch"/>），而<b>提交仍以这一次全烤为准</b>——
+    /// 拖动中的增量只负责跟手，绝不会变成最终输出的第二条口径。</para>
     /// </summary>
-    private void Rebake(Annotation? pending = null)
+    private void Rebake()
     {
         if (_base is not { } basePixels || _preview is not { } preview || _selection is not { } selection) return;
-        var marks = pending is null ? _history.Marks : _history.Marks.Append(pending).ToList();
+        var marks = _history.Marks;
         try
         {
             var composed = AnnotationPainter.Render(basePixels, selection.Width, selection.Height, marks);
             using (var stream = preview.PixelBuffer.AsStream())
                 stream.Write(composed, 0, composed.Length);
             preview.Invalidate();
+            _composed = composed;
+            _scratch = null;
         }
         catch (Exception ex)
         {
@@ -1026,8 +1068,6 @@ public sealed partial class CaptureOverlayWindow : Window
         }
     }
 
-    private void TextEditor_LostFocus(object sender, RoutedEventArgs e) => EndTextEditing(commit: true);
-
     // ────────── 编辑历史：撤销 / 重做 / 清空 ──────────
     // 三个动作都只是移动历史指针（状态快照在 AnnotationHistory 里），
     // 所以"清空了又撤销回来"和"撤销两步再重做"不需要任何额外代码，也不会残留半条。
@@ -1042,12 +1082,27 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_history.Redo()) Rebake();
     }
 
-    private void Undo_Click(object sender, RoutedEventArgs e) => Undo();
+    /// <summary>
+    /// 输入框<b>不</b>因失去焦点而结束——这一条就是真机反馈"必须按住鼠标才在输入、松手就算编辑完"的成因：
+    /// 按下那一下把焦点给了输入框，松开时焦点回到遮罩那一层，原先挂在 LostFocus 上的落笔于是把这一行当场结掉。
+    /// 落笔的时机改由用户看得见的那几个动作明确决定：Enter、点画布别处、切工具、点动作按钮（各自都会调
+    /// <see cref="EndTextEditing"/>），Esc 只丢掉这一行。
+    /// </summary>
+    private void Undo_Click(object sender, RoutedEventArgs e)
+    {
+        EndTextEditing(commit: true);
+        Undo();
+    }
 
-    private void Redo_Click(object sender, RoutedEventArgs e) => Redo();
+    private void Redo_Click(object sender, RoutedEventArgs e)
+    {
+        EndTextEditing(commit: true);
+        Redo();
+    }
 
     private void Clear_Click(object sender, RoutedEventArgs e)
     {
+        EndTextEditing(commit: true);
         _history.Clear();
         Rebake();
     }

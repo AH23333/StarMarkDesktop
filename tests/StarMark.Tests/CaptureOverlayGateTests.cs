@@ -166,6 +166,22 @@ public sealed class CaptureOverlayGateTests
         // 焦点跑掉时 Enter/Esc 也不能被当成"复制整张 / 取消这一屏"
         Assert.Contains("if (_editingText && e.Key is VirtualKey.Enter or VirtualKey.Escape)",
             SourceGate.MethodBody(cs, "private void Root_KeyDown"));
+        // 点撤销/重做/清空这三颗按钮同样要落笔（它们不经过 SetTool，也不经过 Commit）
+        foreach (var button in new[] { "Undo_Click", "Redo_Click", "Clear_Click" })
+            Assert.Contains("EndTextEditing(commit: true)", SourceGate.MethodBody(cs, $"private void {button}"));
+    }
+
+    /// <summary>
+    /// <b>输入框不许挂在"失去焦点"上结束</b>。真机反馈："必须长按才能出现黄色矩形进行输入，
+    /// 输入完文字后松开鼠标表示完成编辑"——按下那一下把焦点给了输入框，松开时焦点回到遮罩那一层，
+    /// 挂在 LostFocus 上的落笔于是当场把这一行结掉，用户学到的用法就变成了"按住不放"。
+    /// 落笔时机只许由看得见的动作决定（Enter / 点画布别处 / 切工具 / 点动作按钮 / Esc 丢弃）。
+    /// </summary>
+    [Fact]
+    public void TextEditorNeverCommitsOnLostFocus()
+    {
+        Assert.DoesNotContain("LostFocus", ReadOverlay(xaml: true));
+        Assert.DoesNotContain("TextEditor_LostFocus", ReadOverlay(xaml: false));
     }
 
     /// <summary>折线是"点出来的"，所以收口必须有两个出口（键盘与鼠标各一个），
@@ -197,18 +213,27 @@ public sealed class CaptureOverlayGateTests
     }
 
     /// <summary>
-    /// 打码要<b>边画边看见</b>：它的职责是遮住敏感信息，松手才出现等于让用户在看不见的情况下涂。
-    /// 所以预览这一层对打码走真像素（重烤一次），不再画"笔刷大小的圈"——那一臂已经不可达，
-    /// 留着它就是一条会让人以为"打码预览还是个圈"的假线索。
+    /// 打码的拖动预览必须是<b>真像素 + 增量</b>。
+    /// <para>"真像素"这条来自真机反馈：预览画一圈近似环、松手才糊 ⇒ 用户看到的是"点出红圆点、
+    /// 画的过程中什么都不显示"。"增量"这条来自同一批的第二次反馈：<b>打码速度远落后于鼠标移动速度</b>——
+    /// 每帧从底图重烤整张的代价是 O(选区面积 × 已有标注数)，手一快就落在后面。</para>
+    /// <para>所以这里同时钉两件事：预览只补新段（<c>AnnotationPainter.Paint(scratch</c>），
+    /// 且拖动路径里<b>不许再出现全量重烤</b>（改回 <c>Rebake(...)</c> 当场红）。</para>
     /// </summary>
     [Fact]
-    public void MosaicPreviewsInRealPixelsAndKeepsNoStrokeRing()
+    public void MosaicPreviewsInRealPixelsAndOnlyPaintsTheNewSegment()
     {
         var cs = ReadOverlay(xaml: false);
-        Assert.Contains("Rebake(MosaicLive(points))", SourceGate.MethodBody(cs, "private void PaintPreview"));
+        var preview = SourceGate.MethodBody(cs, "private void PaintPreview");
+        Assert.Contains("AnnotationPainter.Paint(scratch", preview);
+        Assert.DoesNotContain("Rebake(", preview);
         Assert.DoesNotContain("AnnotationTool.Mosaic", SourceGate.MethodBody(cs, "private void DrawLive"));
         // 按下那一下就要能糊住一格：起点先存两份（MosaicBrush 逐段走，两个重合的点正好是笔尖那一格）。
         // 锚点取"存两份"这一句本身——只搜工具名会被注释或分支条件冒充成绿灯。
         Assert.Contains("new List<PixelPoint> { local, local }", SourceGate.MethodBody(cs, "private void BeginStroke"));
+        Assert.Contains("StartMosaicScratch(local)", SourceGate.MethodBody(cs, "private void BeginStroke"));
+        // 增量画布以"已提交的那张"为起点，而提交仍以全烤为准：两条口径不能各画各的
+        Assert.Contains("_composed = composed", SourceGate.MethodBody(cs, "private void Rebake()"));
+        Assert.Contains("Rebake();", SourceGate.MethodBody(cs, "private void EndStroke"));
     }
 }
