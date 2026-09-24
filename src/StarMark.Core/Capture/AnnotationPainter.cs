@@ -41,15 +41,17 @@ public static class AnnotationPainter
         if (mark.Problem() is { } problem) throw new InvalidOperationException(problem);
         var color = mark.EffectiveColorBgra;
         var radius = Radius(mark);
-        var points = mark.Points;
+        // 变换（旋转/缩放）在这里落地一次：绘制、选择框、命中测试读的都是同一组点，
+        // 分三处各算一遍就会出现"框框住原位置、字已经转走"。
+        var points = mark.TransformedPoints();
         // 两点点工具的"另一端"取末尾采到的那一点，不取第二个元素：调用方在拖动过程中会一路追加采样点，
         // 而第二个元素只是按下后的第一次移动（离起点一两个像素）——拿它当另一端就画出一个针尖大的框。
-        var far = mark.EndPoint;
+        var far = points[^1];
 
         switch (mark.Tool)
         {
             case AnnotationTool.Text:
-                GdiTextDrawer.Draw(bgra, width, height, points[0].X, points[0].Y, mark.Text!, mark.FontHeight, color);
+                GdiTextDrawer.Draw(bgra, width, height, points[0].X, points[0].Y, mark.Text!, mark.DrawFontHeight, color);
                 break;
 
             case AnnotationTool.Rectangle:
@@ -84,6 +86,20 @@ public static class AnnotationPainter
                 MosaicBrush(bgra, width, height, points, radius);
                 break;
         }
+    }
+
+    // ────────── 选中：命中测试 ──────────
+
+    /// <summary>
+    /// 这一点落在哪条标注上，返回<b>最上面</b>那条的下标（后画的盖在上面，命中的也该是它），没有则 null。
+    /// <para>包围盒一律取 <see cref="Annotation.Bounds"/>——那是"画出去占哪一块"的唯一说法；
+    /// 这里再算一遍就会长成"框框住原位置、字已经转走"。</para>
+    /// </summary>
+    public static int? HitTest(IReadOnlyList<Annotation> marks, PixelPoint at, int slop)
+    {
+        for (var i = marks.Count - 1; i >= 0; i--)
+            if (marks[i].Contains(at, slop)) return i;
+        return null;
     }
 
     // ────────── 图元 ──────────

@@ -236,4 +236,138 @@ public sealed class CaptureOverlayGateTests
         Assert.Contains("_composed = composed", SourceGate.MethodBody(cs, "private void Rebake()"));
         Assert.Contains("Rebake();", SourceGate.MethodBody(cs, "private void EndStroke"));
     }
+
+    // ────────── 批次 RE-3：画完还能挪位置 / 缩放 / 转方向 ──────────
+
+    /// <summary>
+    /// "点住已有的那一条就拖得动"这件事必须排在"起一笔"之前，但<b>不许抢走打字与钉顶点的那一下</b>。
+    /// <para>反过来（先 BeginStroke 再考虑选中）就是"文字编辑永远进不去"那一类：按下被吃掉了，
+    /// 用户学到的用法变成"必须先长按"。而在输入框里/折线顶点之间被抢走，则等于把刚打的一行字丢掉。</para>
+    /// </summary>
+    [Fact]
+    public void GrabbingAnExistingMarkBeatsDrawingButNeverStealsATypingPress()
+    {
+        var cs = ReadOverlay(xaml: false);
+        var pressed = SourceGate.MethodBody(cs, "private void Root_PointerPressed");
+        Assert.True(pressed.IndexOf("TryBeginGrab", StringComparison.Ordinal)
+            < pressed.IndexOf("BeginStroke(ToLocal", StringComparison.Ordinal),
+            "抓住旧的一条必须在起新的一笔之前问，否则永远拖不动已画的东西");
+        var grab = SourceGate.MethodBody(cs, "private bool TryBeginGrab");
+        Assert.Contains("if (_editingText || _polyLine is not null) return false;", grab);
+        // 命中顺序＝把手 → 四角 → 框内：反过来先判框内，四角会被"移动"整锅吃掉（缩放的把手就点不到）
+        Assert.True(grab.IndexOf("Grab.Rotate", StringComparison.Ordinal)
+            < grab.IndexOf("Grab.Scale", StringComparison.Ordinal));
+        Assert.True(grab.IndexOf("Grab.Scale", StringComparison.Ordinal)
+            < grab.IndexOf("Grab.Move", StringComparison.Ordinal));
+        // 把手只有一个算法出口：画它的那一处与判"按中了没有"的那处必须是同一个坐标
+        var handle = SourceGate.MethodBody(cs, "private PixelPoint RotateHandle");
+        Assert.Contains("box.Y - lift < selection.Y", handle);   // 贴到选区上沿时夹回框内，否则这颗点永远点不到
+    }
+
+    /// <summary>
+    /// 拖动过程每帧只许做"一次整块复制 + 一条重画"。<b>每帧从底图重烤全部标注</b>就是
+    /// 真机反馈"打码速度远落后于鼠标移动速度"的同一个成因（代价 ∝ 选区面积 × 已有条数），
+    /// 刚修好一处又在另一处复发是不可接受的。
+    /// </summary>
+    [Fact]
+    public void DraggingRepaintsWithOneCopyInsteadOfRebakingEveryFrame()
+    {
+        var cs = ReadOverlay(xaml: false);
+        var drag = SourceGate.MethodBody(cs, "private void DragTo");
+        Assert.Contains("Buffer.BlockCopy(under, 0, canvas", drag);
+        Assert.DoesNotContain("Render(", drag);
+        Assert.DoesNotContain("Rebake(", drag);
+        Assert.DoesNotContain("UnderDragBuffer", drag);
+        // 底图整份准备只在"按下那一下"算一次；出现在每帧路径里就等于把全烤搬回拖动
+        Assert.Contains("UnderDragBuffer(index)", SourceGate.MethodBody(cs, "private bool TryBeginGrab"));
+        Assert.DoesNotContain("UnderDragBuffer", SourceGate.MethodBody(cs, "private void PaintPreview"));
+    }
+
+    /// <summary>
+    /// 历史一变（撤销 / 重做 / 清空 / 换选区）与起新的一笔，都必须把选中一起丢掉。
+    /// <para>留着旧下标 = 框还画在原地、下一拖改的却是完全另一条标注，而且"哪条被选中"在屏幕上
+    /// 看着是对的——这是最难从界面发现的一类错，所以只能在结构上钉死。</para>
+    /// </summary>
+    [Fact]
+    public void EveryHistoryChangeDropsTheSelection()
+    {
+        var cs = ReadOverlay(xaml: false);
+        foreach (var signature in new[]
+        {
+            "private void Undo()", "private void Redo()", "private void Clear_Click",
+            "private void ResetAnnotations", "private void BeginStroke", "private void PlaceVertex",
+            "private void DeleteSelected",
+        })
+            Assert.Contains("DropSelection()", SourceGate.MethodBody(cs, signature));
+        // 把手只有这一处会画：再开一处就会出现"改了框没跟着改"的第二份事实
+        Assert.Equal(1, Count(cs, "private void DrawSelectionHandles("));
+        Assert.Contains("LiveLayer.Children.Clear()", SourceGate.MethodBody(cs, "private void DrawSelectionHandles"));
+    }
+
+    /// <summary>
+    /// "点一下没拖出形状"不再是静默丢掉，而是去选中脚下那一条；打码除外（它的"点一下"本身要糊住一格，
+    /// 自动选中后下一点就变成"移动整条"，正对着批次 RE-2 才修好的那件事）。
+    /// </summary>
+    [Fact]
+    public void ATapThatDrewNothingSelectsWhatIsUnderIt()
+    {
+        var cs = ReadOverlay(xaml: false);
+        var end = SourceGate.MethodBody(cs, "private void EndStroke");
+        Assert.Contains("SelectAtTap(points[0])", end);
+        Assert.Contains("mark.Tool == AnnotationTool.Mosaic ? null", end);
+        Assert.Contains("AnnotationPainter.HitTest", SourceGate.MethodBody(cs, "private void SelectAtTap"));
+        // 刚打完的那一行字也要立刻可拖：写完紧接着改位置是最常见的顺序
+        var text = SourceGate.MethodBody(cs, "private void EndTextEditing");
+        Assert.Contains("_selected = _history.Count - 1;", text);
+        Assert.Contains("DrawSelectionHandles();", text);
+    }
+
+    /// <summary>删除选中的那条要有键盘出口（Delete 与 Backspace 各一条，只给一个就等于找不到）。</summary>
+    [Fact]
+    public void TheSelectedMarkHasAKeyboardExit()
+    {
+        var cs = ReadOverlay(xaml: false);
+        var keys = SourceGate.MethodBody(cs, "private void Root_KeyDown");
+        Assert.Contains("case VirtualKey.Delete when _selected is not null:", keys);
+        Assert.Contains("case VirtualKey.Back when _selected is not null:", keys);
+        Assert.Contains("DeleteSelected();", keys);
+        Assert.Contains("_history.RemoveAt(index)", SourceGate.MethodBody(cs, "private void DeleteSelected"));
+    }
+
+    /// <summary>
+    /// 变换的算术只许住在模型里：绘制端与选择框两端都只能调 <c>TransformedPoints()</c> / <c>Bounds()</c>。
+    /// 界面上自己再算一次旋转矩阵，就是"预览对、存出来偏了"那类多次换算误差的老路。
+    /// </summary>
+    [Fact]
+    public void TransformMathLivesOnlyInTheModel()
+    {
+        var painter = SourceGate.ReadRepoFile("src/StarMark.Core/Capture/AnnotationPainter.cs");
+        Assert.Contains("mark.TransformedPoints()", SourceGate.MethodBody(painter, "public static void Paint"));
+        // 绘制端一旦自己读 Rotation / Scale 去算，就变成"模型算一遍、画的时候再算一遍"，
+        // 预览与交付会在两次换算的差里分开。（椭圆那类图元自己的三角函数与此无关。）
+        Assert.DoesNotContain(".Rotation", painter);
+        Assert.DoesNotContain(".Scale", painter);
+
+        var overlay = ReadOverlay(xaml: false);
+        var handles = SourceGate.MethodBody(overlay, "private void DrawSelectionHandles");
+        Assert.Contains("mark.Bounds()", handles);
+        Assert.Contains("mark.Corners()", handles);          // 把手摆在哪儿由模型说，界面只负责画
+        Assert.Contains("mark.SupportsRotation", handles);   // 转不转得动也是模型的判断
+        // 界面读原始角度/自己算三角函数＝第二处换算，预览与交付会在两次换算的差里分开
+        Assert.DoesNotContain("mark.Rotation", handles);
+        Assert.DoesNotContain("Math.Sin", handles);
+        Assert.DoesNotContain("Math.Cos", handles);
+    }
+
+    /// <summary>选中说明要长在遮罩窗上（悬停到几像素的把手才看得见＝没有提示）。</summary>
+    [Fact]
+    public void SelectionTipLivesOnTheOverlayNotInAToolTip()
+    {
+        var xaml = ReadOverlay(xaml: true);
+        var tip = SourceGate.Between(xaml, "x:Name=\"SelectionTip\"", "</Border>");
+        Assert.Contains("VerticalAlignment=\"Bottom\"", tip);
+        Assert.Contains("Visibility=\"Collapsed\"", tip);
+        Assert.Contains("Delete", tip);             // 删除要有键盘出口，而出口得写在用户看得见的这一句里
+        Assert.Contains("SelectionTip.Visibility", SourceGate.MethodBody(ReadOverlay(xaml: false), "private void DropSelection"));
+    }
 }

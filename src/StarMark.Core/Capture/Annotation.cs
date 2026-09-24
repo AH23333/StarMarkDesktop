@@ -57,7 +57,10 @@ public readonly record struct AnnotationColor(string Name, int Bgra);
 /// </para>
 /// <para>
 /// 一条标注是<b>画完即定形</b>的（点、颜色、粗细都在创建时给定），所以「撤销」就是弹掉列表末尾，
-/// 不需要任何反向操作；代价是已画的形状不能拖拽改形——那要的是另一套命中测试，先不做。
+/// 不需要任何反向操作。<b>之后可以整条移动 / 缩放 / 旋转</b>（批次 RE-3）：这三样改的都是
+/// <see cref="Pivot"/>/<see cref="Rotation"/>/<see cref="Scale"/> 三个变换量，<b>不改点集本身</b>——
+/// 于是"撤销一条变换"与"撤销一条标注"走的是同一条快照路径，同样不需要反向运算。
+/// 逐顶点改形（拖一个角把矩形拉歪）仍然不做：那要的是每类工具各自的顶点语义。
 /// </para>
 /// </summary>
 public sealed record Annotation(
@@ -69,6 +72,83 @@ public sealed record Annotation(
     /// <summary>文字内容（只有 <see cref="AnnotationTool.Text"/> 用得上）。刻意做成 init 属性而不是
     /// 构造参数：位置参数的默认值必须能在类型体外面写死，而 <see cref="DefaultFontHeight"/> 是这个类型自己的数。</summary>
     public string? Text { get; init; }
+
+    /// <summary>
+    /// 变换的轴点（<b>没显式指定＝第一个点</b>，见 <see cref="Origin"/>）。
+    /// 单独存一个可空值而不是直接写死 Points[0]：拖动改位置时点集整体平移，
+    /// 轴点跟着走才转得对；而"绕自己转"是用户的直觉，绕画布原点转会把形状甩出视野。
+    /// </summary>
+    public PixelPoint? Pivot { get; init; }
+
+    /// <summary>绕 <see cref="Origin"/> 旋转的角度（度，顺时针）。0＝不转。</summary>
+    public double Rotation { get; init; }
+
+    /// <summary>绕 <see cref="Origin"/> 的等比缩放倍数（1＝原样）。文字靠它改字号。</summary>
+    public double Scale { get; init; } = 1d;
+
+    /// <summary>变换轴点：没指定就是第一个点。</summary>
+    public PixelPoint Origin => Pivot ?? (Points.Count > 0 ? Points[0] : default);
+
+    /// <summary>缩放上下限。缩到 0 附近会"再也点不中"，放大到几百倍会直接把画布撑爆——两端都要有墙。</summary>
+    public const double MinScale = 0.2;
+    public const double MaxScale = 6d;
+
+    /// <summary>有没有带变换。没变换时 <see cref="TransformedPoints"/> 直接给原列表，不复制。</summary>
+    public bool HasTransform => Rotation != 0 || Scale != 1d;
+
+    /// <summary>
+    /// 画出去的那一组点：把 <see cref="Rotation"/> 与 <see cref="Scale"/> 绕 <see cref="Origin"/> 作用上去。
+    /// <para>放在模型里而不是绘制里，是因为<b>选择框、命中测试、四个落点的渲染都要用同一组点</b>——
+    /// 各算一遍就会出现"选择框框住的是原位置，字已经转走了"。</para>
+    /// </summary>
+    public IReadOnlyList<PixelPoint> TransformedPoints()
+    {
+        if (!HasTransform) return Points;
+        var pivot = Origin;
+        var radians = Rotation * Math.PI / 180d;
+        var cos = Math.Cos(radians) * Scale;
+        var sin = Math.Sin(radians) * Scale;
+        var moved = new List<PixelPoint>(Points.Count);
+        foreach (var p in Points)
+        {
+            var dx = p.X - pivot.X;
+            var dy = p.Y - pivot.Y;
+            moved.Add(new PixelPoint(
+                pivot.X + (int)Math.Round(dx * cos - dy * sin, MidpointRounding.AwayFromZero),
+                pivot.Y + (int)Math.Round(dx * sin + dy * cos, MidpointRounding.AwayFromZero)));
+        }
+        return moved;
+    }
+
+    /// <summary>文字实际字高（缩放之后）。夹回 <see cref="Problem"/> 认的那个区间，免得画出去才发现越界。</summary>
+    public int DrawFontHeight => Math.Clamp((int)Math.Round(FontHeight * Scale, MidpointRounding.AwayFromZero), 6, 200);
+
+    /// <summary>整条平移（＝拖动位置）：点与轴点一起走，角度与倍数不变。</summary>
+    public Annotation MovedBy(int dx, int dy) => this with
+    {
+        Points = Points.Select(p => new PixelPoint(p.X + dx, p.Y + dy)).ToList(),
+        Pivot = Pivot is { } pivot ? new PixelPoint(pivot.X + dx, pivot.Y + dy) : null,
+    };
+
+    /// <summary>绕轴点缩放（倍数夹在上下限之间）。文字改的是字号，几何改的是点距。</summary>
+    public Annotation ScaledBy(double factor) => this with { Scale = Math.Clamp(Scale * factor, MinScale, MaxScale) };
+
+    /// <summary>绕轴点转过 <paramref name="angle"/> 度（归一到 0–360，负角与超过一圈都不该改变形状）。</summary>
+    public Annotation RotatedBy(double angle) => this with { Rotation = NormalizeAngle(Rotation + angle) };
+
+    /// <summary>角度归一：0 ≤ a &lt; 360。转两圈与转一圈半是同一件事，不归一会让撤销栈里出现"看着不同其实一样"的两条。</summary>
+    public static double NormalizeAngle(double degrees)
+    {
+        var wrapped = degrees % 360d;
+        return wrapped < 0 ? wrapped + 360d : wrapped;
+    }
+
+    /// <summary>
+    /// 这一条能不能转。<b>文字不行</b>：GDI 那条路是"把字写进一块与文字框同样大小的临时画布再搬回去"，
+    /// 转起来要换世界变换矩阵、还要重算被裁切的包围盒，风险全在像素层而这里断言不到。
+    /// 所以界面对文字只给"移动 + 缩放"两颗把手——<b>把手不给，比给了不生效诚实</b>（P-97 记着这条取舍）。
+    /// </summary>
+    public bool SupportsRotation => Tool != AnnotationTool.Text;
 
     /// <summary>字高（物理像素）。文字标注不看 <see cref="Thickness"/>——字号就是它的粗细。</summary>
     public int FontHeight { get; init; } = DefaultFontHeight;
@@ -170,6 +250,10 @@ public sealed record Annotation(
             return $"粗细 {Thickness} 不在 {MinThickness}–{MaxThickness} 之间";
         if (FontHeight is < 6 or > 200)
             return $"文字高度 {FontHeight} 太离谱（只接受 6–200 物理像素）";
+        if (Scale is < MinScale or > MaxScale)
+            return $"缩放倍数 {Scale:0.##} 超出 {MinScale:0.##}–{MaxScale:0.##}（缩到底会再也点不中，放到最大会撑破画面）";
+        if (Tool == AnnotationTool.Text && Rotation != 0)
+            return "文字不支持旋转（只能移动与改字号）";
         if (EffectiveColorBgra >>> 24 == 0)
             return "颜色是全透明的，画上去等于没画";
         return null;
@@ -232,25 +316,47 @@ public sealed record Annotation(
     }
 
     /// <summary>
-    /// 这条标注覆盖到的矩形（含线宽外沿），<b>不做裁剪、可能超出画面</b>——交给绘制方按缓冲尺寸夹。
-    /// 椭圆与矩形用两个对角点；画笔/荧光笔/马赛克用整条折线的外接框；文字按字宽×字高估一个框。
+    /// 这条标注<b>真正占住的那一块</b>（含线宽外沿，且已作用旋转/缩放），不做裁剪——交给绘制方按缓冲尺寸夹。
+    /// <para>椭圆与矩形用两个对角点；画笔/荧光笔/马赛克用整条折线的外接框；
+    /// 文字按 <b>GDI 实测</b>宽高——这块框除了当刷新范围，现在还要当"点哪里算选中它"和"选择框画在哪"，
+    /// 按"字数 × 字高"估会在中英混排那行上偏出一截，用户看到的就是"我点这行字，框跑到别处去了"。</para>
     /// </summary>
     public IntRect Bounds()
     {
         if (Points.Count == 0) return default;
-        var minX = Points.Min(point => point.X);
-        var minY = Points.Min(point => point.Y);
-        var maxX = Points.Max(point => point.X);
-        var maxY = Points.Max(point => point.Y);
+        var points = TransformedPoints();
+        var minX = points.Min(point => point.X);
+        var minY = points.Min(point => point.Y);
+        var maxX = points.Max(point => point.X);
+        var maxY = points.Max(point => point.Y);
         if (Tool == AnnotationTool.Text)
         {
-            // 宽度按「字数 × 字高」估：中文一字一宽，拉丁字约一半。估宽不影响正确性（只影响这一块的刷新范围），
-            // 但<b>不能估窄</b>——窄了会把画出去的字切掉，而绘制那边按 GDI 的真实字宽写像素。
-            var chars = Text?.Length ?? 0;
-            var width = Math.Max(1, (int)Math.Round(chars * FontHeight * 0.85, MidpointRounding.AwayFromZero));
-            return new IntRect(minX, minY, width, FontHeight * 2);
+            var (width, height) = StarMark.Integrations.Capture.GdiTextDrawer.Measure(Text ?? string.Empty, DrawFontHeight);
+            return new IntRect(minX, minY, Math.Max(1, width), Math.Max(1, height));
         }
         var pad = Tool == AnnotationTool.Mosaic ? Thickness / 2 + MosaicBlockSize : Thickness;
         return new IntRect(minX - pad, minY - pad, maxX - minX + pad * 2, maxY - minY + pad * 2);
+    }
+
+    /// <summary>包围盒的四个角（"拖动改大小"的把手位置）。顺序＝左上、右上、右下、左下。</summary>
+    public IReadOnlyList<PixelPoint> Corners()
+    {
+        var box = Bounds();
+        return new[]
+        {
+            new PixelPoint(box.X, box.Y), new PixelPoint(box.Right, box.Y),
+            new PixelPoint(box.Right, box.Bottom), new PixelPoint(box.X, box.Bottom),
+        };
+    }
+
+    /// <summary>
+    /// 这一点算不算点中这一条。<paramref name="slop"/> 是给"手指头点不准"的容差（物理像素）：
+    /// 细线只有两三个像素宽，不容差就等于告诉用户"能选中"其实选不中。
+    /// </summary>
+    public bool Contains(PixelPoint at, int slop)
+    {
+        var box = Bounds();
+        return at.X >= box.X - slop && at.X <= box.Right + slop
+            && at.Y >= box.Y - slop && at.Y <= box.Bottom + slop;
     }
 }

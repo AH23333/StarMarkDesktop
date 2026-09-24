@@ -101,6 +101,35 @@ public static class GdiTextDrawer
     }
 
     /// <summary>
+    /// 这行字实际要占多大（物理像素）。<b>选择框与命中测试只能量，不能估</b>：
+    /// 按"字高 × 字数"估宽，中文与英文差着两三倍，框会框到一个不存在的位置，
+    /// 用户就会看到"我点那行字，选中的却是旁边那条线"。
+    /// 与 <see cref="Draw"/> 用同一个字体选择顺序，量出来的才是真正会被画出去的那一块。
+    /// </summary>
+    public static (int Width, int Height) Measure(string text, int fontHeight)
+    {
+        if (string.IsNullOrEmpty(text)) return (0, 0);
+        if (fontHeight < 1) throw new InvalidOperationException("文字高度至少 1 像素");
+        var dc = CreateCompatibleDC(IntPtr.Zero);
+        if (dc == IntPtr.Zero) throw new InvalidOperationException("创建内存画布失败（GDI 句柄用尽）");
+        var font = CreateFont(fontHeight);
+        try
+        {
+            if (font == IntPtr.Zero) throw new InvalidOperationException("系统没能创建标注用的字体（雅黑与 Segoe UI 都试过）");
+            var oldFont = SelectObject(dc, font);
+            if (!GetTextExtentPoint32W(dc, text, text.Length, out var extent) || extent.cx <= 0 || extent.cy <= 0)
+                throw new InvalidOperationException("量不出这行文字要占多大（GDI 拒绝了这个字体或这段文字）");
+            SelectObject(dc, oldFont);
+            return (extent.cx, extent.cy);
+        }
+        finally
+        {
+            if (font != IntPtr.Zero) DeleteObject(font);
+            DeleteDC(dc);
+        }
+    }
+
+    /// <summary>
     /// 依次试 微软雅黑 UI → 微软雅黑 → Segoe UI（截图上中英混排是常态，只会一种的就别当默认）。
     /// <para>负 <c>lfHeight</c> ＝按 em 高给，与用户看到的字号最接近；本进程声明了 PerMonitorV2，
     /// 所以这里的数值就是<b>设备像素</b>，与那块 BGRA 缓冲同一个单位。</para>

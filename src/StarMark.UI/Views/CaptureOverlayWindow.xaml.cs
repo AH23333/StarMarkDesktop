@@ -70,6 +70,24 @@ public sealed partial class CaptureOverlayWindow : Window
     private List<PixelPoint>? _stroke;          // 正在拖、还没合成进去的那一条
     /// <summary>上一次把整块缓冲推给屏幕的时刻（毫秒）。见 <c>PaintPreview</c>。</summary>
     private long _lastMosaicPreview;
+    // ── 选中与拖动（批次 RE-3：画完还能挪位置、改大小、转方向）──
+    private int? _selected;                   // 选中的那一条（画着选择框与把手）
+    private Annotation? _dragOriginal;        // 按下时的原样：拖动只改副本，松手才落进历史
+    private PixelPoint _dragAnchor;           // 按下那一点（选区内物理像素）
+    private PixelPoint _dragLast;             // 最近一次光标位置（松手按它落定，与预览同一套判据）
+    private byte[]? _underDrag;               // 拖动期间的底：底图 + 除被拖那条之外的全部标注（一次算好）
+    private byte[]? _dragCanvas;              // 每帧复用：_underDrag 的副本 + 预览那一条
+    private enum Grab { None, Move, Scale, Rotate }
+    private Grab _grab;
+
+    /// <summary>把手的命中容差（物理像素）。把手本身只有几像素大，不容差就等于"看得见点不中"。</summary>
+    private const int GrabSlop = 12;
+
+    /// <summary>"点一下"要不要算选中脚下那条的容差（物理像素）。比把手小：点是打在形状上，不是打在小方块上。</summary>
+    private const int SelectionSlop = 8;
+
+    /// <summary>旋转把手离框顶多远（物理像素）。</summary>
+    private const int RotateHandleLift = 26;
     private bool _editingText;
     private PixelPoint _textAnchor;
     private AnnotationTool _tool = AnnotationTool.Rectangle;
@@ -416,7 +434,11 @@ public sealed partial class CaptureOverlayWindow : Window
     private void PlaceVertex(PixelPoint local)
     {
         ErrorChip.Visibility = Visibility.Collapsed;
-        if (_polyLine is null) _polyLine = new List<PixelPoint> { local };
+        if (_polyLine is null)
+        {
+            DropSelection();                  // 开始钉新的顶点，就不该再指着上一条（把手也会被 DrawLive 抹掉）
+            _polyLine = new List<PixelPoint> { local };
+        }
         else if (_polyLine[^1] != local) _polyLine.Add(local);
         _hoverLocal = local;
         DrawLive();
@@ -438,7 +460,9 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
         _history.Add(mark);
+        _selected = _history.Count - 1;       // 与 EndStroke 同一口径：刚画完的那条立刻可挪/可缩放
         Rebake();
+        DrawSelectionHandles();
     }
 
     // ────────── 图标：矢量图元画的，不用字体字形 ──────────
@@ -571,6 +595,8 @@ public sealed partial class CaptureOverlayWindow : Window
         // 选区外面照旧起新框：用户想换个范围就换个范围，标注跟着作废（底图都换了，留着旧的只会对不上）。
         if (_mode == CaptureMode.Toolbar && _base is not null && InsideSelection(physical))
         {
+            // 先问"这一按是不是在改已有的那一条"（选中框/把手就在那儿）；不是才轮到画新的
+            if (TryBeginGrab(ToLocal(physical), e.Pointer)) return;
             // 折线是"点出来的"，没有按下-拖动-放开这一说：每一按钉一个顶点，收口用 Enter 或双击
             if (_tool == AnnotationTool.PolyLine) PlaceVertex(ToLocal(physical));
             else BeginStroke(ToLocal(physical), e.Pointer);
@@ -592,6 +618,11 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         if (_settled) return;
         var position = e.GetCurrentPoint(Root).Position;
+        if (_dragOriginal is not null)
+        {
+            DragTo(ToLocal(ToPhysical(position.X, position.Y)));
+            return;
+        }
         if (_stroke is not null)
         {
             ExtendStroke(ToLocal(ToPhysical(position.X, position.Y)));
@@ -615,6 +646,13 @@ public sealed partial class CaptureOverlayWindow : Window
     private void Root_PointerReleased(object sender, PointerRoutedEventArgs e)
     {
         if (_settled) return;
+        if (_dragOriginal is not null)
+        {
+            // 拖动改的是已有的那一条：这条链与"新画一笔"的收口（EndStroke）是两件事，别混在一起
+            EndDrag();
+            Root.ReleasePointerCapture(e.Pointer);
+            return;
+        }
         if (_stroke is not null)
         {
             EndStroke();
@@ -669,6 +707,12 @@ public sealed partial class CaptureOverlayWindow : Window
         }
         switch (e.Key)
         {
+            case VirtualKey.Delete when _selected is not null:
+            case VirtualKey.Back when _selected is not null:
+                // 选中之后总得能删掉：只有"撤销"的话，删中间那条要把后面几条一起退掉
+                e.Handled = true;
+                DeleteSelected();
+                break;
             case VirtualKey.Escape:
                 e.Handled = true;
                 Settle(null);
@@ -781,7 +825,9 @@ public sealed partial class CaptureOverlayWindow : Window
         _base = null;
         _preview = null;
         AnnotateLayer.Visibility = Visibility.Collapsed;
-        LiveLayer.Children.Clear();
+        DropSelection();
+        _composed = null;
+        _scratch = null;
         _undoButton.IsEnabled = _clearButton.IsEnabled = false;
     }
 
@@ -795,6 +841,8 @@ public sealed partial class CaptureOverlayWindow : Window
             BeginTextEdit(local);
             return;
         }
+        // 起新的一笔就不再指着上一条了：选择框留在原地会挡住看新画的形状，下标也会变成误导
+        DropSelection();
         // 打码的"一笔"从按下那一下就该看见：同一格糊掉与"还没糊"对用户是两个完全不同的结果，
         // 所以起点先按"一个点画两遍"存（MosaicBrush 走的是段，两个重合的点正好糊掉笔尖那一格）。
         _stroke = _tool == AnnotationTool.Mosaic
@@ -875,7 +923,13 @@ public sealed partial class CaptureOverlayWindow : Window
         _stroke = null;
         LiveLayer.Children.Clear();
         if (points is null) return;
-        if (points.Count < Annotation.MinPoints(_tool)) return;   // 点了一下没拖：不是错误，静默丢掉
+        if (points.Count < Annotation.MinPoints(_tool))
+        {
+            // 点了一下没拖：以前是静默丢掉（真机反馈"点了没反应"），现在改成"选中脚下那一条"。
+            // 打码（点一下糊一格）与文字（点一下出输入框）走不到这里——它们的那一下本来就够点数。
+            SelectAtTap(points[0]);
+            return;
+        }
         var mark = new Annotation(_tool, points, ColourBgra, ThicknessForTool);
         if (mark.Problem() is { } problem)
         {
@@ -883,6 +937,224 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
         _history.Add(mark);
+        // 刚画完的那条就是接下来最想改的：不用再点一次就把它选中。
+        // 打码**不**自动选中——它是"同一块区域反复补几笔"的面积笔刷，
+        // 选中后"点住就拖"会变成移动整条，正对着 RE-2 修好的"点一下就糊一格"。
+        _selected = mark.Tool == AnnotationTool.Mosaic ? null : _history.Count - 1;
+        Rebake();
+        DrawSelectionHandles();
+    }
+
+    // ────────── 选中：点住拖动改位置，四角拖改大小，顶上那颗转方向 ──────────
+
+    /// <summary>当前选中的那一条（下标会因撤销/删除而失效，一律现取，不缓存引用）。</summary>
+    private Annotation? Selected =>
+        _selected is { } i && i < _history.Count ? _history.Marks[i] : null;
+
+    /// <summary>
+    /// 这一按是不是"抓住已有的那一条"。顺序＝<b>旋转把手 → 四角（缩放）→ 框内（移动）</b>：
+    /// 把手就画在框的边角上，反过来先判框内，四角会被"移动"整锅吃掉。
+    /// <para>命中框内时连选中一起改。Snipaste 那套"先点一下选中、再点一下才拖"在这里会变成
+    /// 用户点了两下没反应（第一下被吃掉了看不见），"点住就拖"一次就成。</para>
+    /// </summary>
+    private bool TryBeginGrab(PixelPoint local, Pointer pointer)
+    {
+        // 正在打字、或正在钉折线顶点时，这一按有它自己的含义（落笔/钉点），不能被"抓住上一条"抢走：
+        // 抢走就等于把刚打的一行字丢在半路——那是批次 RD-1 刚堵掉的那一类丢字路径。
+        if (_editingText || _polyLine is not null) return false;
+        if (_selected is not { } index) return false;
+        if (Selected is not { } mark) { DropSelection(); return false; }
+
+        _grab = Grab.None;
+        if (mark.SupportsRotation && Near(RotateHandle(mark), local)) _grab = Grab.Rotate;
+        else if (mark.Corners().Any(corner => Near(corner, local))) _grab = Grab.Scale;
+        else if (mark.Contains(local, 0)) _grab = Grab.Move;
+        else return false;
+
+        _dragOriginal = mark;
+        _dragAnchor = local;
+        _dragLast = local;
+        _underDrag = UnderDragBuffer(index);
+        _dragCanvas = _underDrag is { } under ? (byte[])under.Clone() : null;
+        Root.CapturePointer(pointer);
+        DrawSelectionHandles();
+        return true;
+    }
+
+    private static bool Near(PixelPoint a, PixelPoint b)
+        => Math.Abs(a.X - b.X) <= GrabSlop && Math.Abs(a.Y - b.Y) <= GrabSlop;
+
+    /// <summary>
+    /// 旋转把手落在哪儿。<b>顶边贴到选区上沿时把它挪进框内</b>：画在选区外面的那一按不属于本窗的
+    /// "在选区里"那条链（会被当成重新框选），等于这颗把手永远点不到——而它在屏幕上明明看得见。
+    /// </summary>
+    private PixelPoint RotateHandle(Annotation mark)
+    {
+        var box = mark.Bounds();
+        var lift = RotateHandleLift;
+        if (_selection is { } selection && box.Y - lift < selection.Y)
+            lift = Math.Min(box.Height / 2, RotateHandleLift);
+        return new PixelPoint(box.X + box.Width / 2, box.Y - lift);
+    }
+
+    /// <summary>
+    /// "除了被拖这条、其余都在原位"的那张底，拖动开始时算一次；之后每帧只做
+    /// <b>一次整块复制 + 一条重画</b>。每帧从底图重烤全部标注的话，标注一多就又变成"跟不上手"
+    /// 那一类（正是打码那条反馈的同一个成因）。
+    /// </summary>
+    private byte[]? UnderDragBuffer(int excluding)
+    {
+        if (_base is not { } basePixels || _selection is not { } selection) return null;
+        var rest = new List<Annotation>(_history.Marks);
+        rest.RemoveAt(excluding);
+        try { return AnnotationPainter.Render(basePixels, selection.Width, selection.Height, rest); }
+        catch (Exception ex)
+        {
+            StarLog.Error("[CaptureOverlay] 拖动底图准备失败", ex);
+            return null;
+        }
+    }
+
+    /// <summary>拖动过程中：算出这一帧该长什么样，画进预览缓冲，再跟着更新选择框。</summary>
+    private void DragTo(PixelPoint local)
+    {
+        _dragLast = local;
+        if (_dragOriginal is not { } original || _grab == Grab.None) return;
+        var preview = Preview(original, local);
+        if (_dragCanvas is { } canvas && _underDrag is { } under
+            && _preview is { } previewBitmap && _selection is { } selection)
+        {
+            Buffer.BlockCopy(under, 0, canvas, 0, under.Length);
+            try
+            {
+                AnnotationPainter.Paint(canvas, selection.Width, selection.Height, preview);
+            }
+            catch (Exception ex)
+            {
+                // 预览画不出来不当场说，用户就要到松手才发现这一改是坏的
+                ShowError("这一改画不出来：" + ex.Message);
+                return;
+            }
+            using (var stream = previewBitmap.PixelBuffer.AsStream())
+                stream.Write(canvas, 0, canvas.Length);
+            previewBitmap.Invalidate();
+        }
+        DrawSelectionHandles(preview);
+    }
+
+    /// <summary>拖动后的那一条：几何一律由模型侧算（MovedBy / ScaledBy / RotatedBy），界面只递光标位置。</summary>
+    private Annotation Preview(Annotation original, PixelPoint local)
+    {
+        switch (_grab)
+        {
+            case Grab.Move:
+                return original.MovedBy(local.X - _dragAnchor.X, local.Y - _dragAnchor.Y);
+            case Grab.Rotate:
+            {
+                var pivot = original.Origin;
+                var from = Math.Atan2(_dragAnchor.Y - pivot.Y, _dragAnchor.X - pivot.X);
+                var to = Math.Atan2(local.Y - pivot.Y, local.X - pivot.X);
+                return original.RotatedBy((to - from) * 180d / Math.PI);
+            }
+            default:
+            {
+                var pivot = original.Origin;
+                var start = Distance(_dragAnchor, pivot);
+                // 把手正好按在轴点上时比值没有意义（分母为 0）：保持原样，别让形状瞬间炸开
+                return start < 1 ? original : original.ScaledBy(Distance(local, pivot) / start);
+            }
+        }
+    }
+
+    private static double Distance(PixelPoint a, PixelPoint b)
+        => Math.Sqrt((double)(a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+
+    /// <summary>松手：把这一改落进历史（算一步，撤销能回去）。没真的动过就不制造一步空历史。</summary>
+    private void EndDrag()
+    {
+        var original = _dragOriginal;
+        var index = _selected;
+        var grab = _grab;
+        _dragOriginal = null;
+        _underDrag = null;
+        _dragCanvas = null;
+        _grab = Grab.None;
+        if (original is null || index is not { } i || grab == Grab.None) return;
+        var result = Preview(original, _dragLast);
+        if (result == original) { DrawSelectionHandles(); return; }
+        _history.ReplaceAt(i, result);
+        Rebake();
+        DrawSelectionHandles();
+    }
+
+    /// <summary>
+    /// 选择框 + 把手。传 <paramref name="mark"/> 时画的是"正在拖的那一条"的新位置。
+    /// <para>名字刻意与 <see cref="DrawSelection(IntRect)"/> 分开：那个画的是"框选出来的哪一块"，
+    /// 这个画的是"选中的哪一条标注"，两件事共用一个名字迟早会有人调错。</para>
+    /// </summary>
+    private void DrawSelectionHandles(Annotation? mark = null)
+    {
+        LiveLayer.Children.Clear();           // 先清再画：把手只有几颗，叠两层就会糊成一团黑方块
+        mark ??= Selected;
+        if (mark is null)
+        {
+            SelectionTip.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var box = mark.Bounds();
+        var (left, top) = LocalToDip(new PixelPoint(box.X, box.Y));
+        var (right, bottom) = LocalToDip(new PixelPoint(box.Right, box.Bottom));
+        LiveLayer.Children.Add(Out(left, top, Math.Max(1, right - left), Math.Max(1, bottom - top)));
+        foreach (var corner in mark.Corners())
+        {
+            var (x, y) = LocalToDip(corner);
+            LiveLayer.Children.Add(Fill(x - 3, y - 3, 6, 6, Ink));
+        }
+        if (mark.SupportsRotation)
+        {
+            var (hx, hy) = LocalToDip(RotateHandle(mark));
+            LiveLayer.Children.Add(new Line { X1 = hx, Y1 = hy, X2 = hx, Y2 = top, Stroke = Ink, StrokeThickness = 1 });
+            LiveLayer.Children.Add(Fill(hx - 3, hy - 3, 6, 6, Ink));
+        }
+        SelectionTip.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// 丢掉选中（连带把手与那句说明）。
+    /// <para><b>历史一变就必须调</b>：撤销/重做/清空/删除都会移动下标，留着旧下标就成了
+    /// "框指着矩形、下一个拖动改的是椭圆"。拖动状态也一起收：那些缓冲是按旧下标算的。</para>
+    /// </summary>
+    private void DropSelection()
+    {
+        _selected = null;
+        _grab = Grab.None;
+        _dragOriginal = null;
+        _dragLast = default;
+        _underDrag = null;
+        _dragCanvas = null;
+        LiveLayer.Children.Clear();
+        SelectionTip.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// "这一按没拖出形状"（点了一下就走）原来会被静默丢掉——真机反馈的"点了没反应"就是它。
+    /// 现在用它去选中脚下那条：已有的标注于是有一个不需要额外模式、也不会挡住画新东西的出口。
+    /// <para>只在 <see cref="Annotation.MinPoints"/> 判定为"画不成"的那条链上触发，所以打码（点一下
+    /// 就该糊掉一格）与文字（点一下就该出输入框）的语义完全没动。</para>
+    /// </summary>
+    private void SelectAtTap(PixelPoint at)
+    {
+        var index = AnnotationPainter.HitTest(_history.Marks, at, SelectionSlop);
+        _selected = index;
+        DrawSelectionHandles();               // 没点中时它也负责把手与说明一起收掉
+    }
+
+    /// <summary>删掉选中的那一条（Delete / Backspace）。算一步，撤销能拿回来。</summary>
+    private void DeleteSelected()
+    {
+        if (_selected is not { } index) return;
+        _history.RemoveAt(index);
+        DropSelection();
         Rebake();
     }
 
@@ -1050,7 +1322,9 @@ public sealed partial class CaptureOverlayWindow : Window
             Text = text,
             FontHeight = Annotation.DefaultFontHeight,
         });
+        _selected = _history.Count - 1;   // 打完字紧接着就是"挪个位置/改个字号"：那一条直接在手边
         Rebake();
+        DrawSelectionHandles();
     }
 
     private void TextEditor_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -1074,12 +1348,16 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void Undo()
     {
-        if (_history.Undo()) Rebake();
+        if (!_history.Undo()) return;
+        DropSelection();                      // 下标随历史移动：旧框指着的是完全另一条标注
+        Rebake();
     }
 
     private void Redo()
     {
-        if (_history.Redo()) Rebake();
+        if (!_history.Redo()) return;
+        DropSelection();
+        Rebake();
     }
 
     /// <summary>
@@ -1104,6 +1382,7 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         EndTextEditing(commit: true);
         _history.Clear();
+        DropSelection();
         Rebake();
     }
 

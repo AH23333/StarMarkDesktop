@@ -130,4 +130,78 @@ public sealed class AnnotationHistoryTests
         Assert.Same(first, history.Marks[0]);
         Assert.Same(second, history.Marks[1]);
     }
+
+    // ────────── 就地改一条（批次 RE-3：移动 / 缩放 / 转方向后落回历史）──────────
+
+    [Fact]
+    public void ReplacingTheSelectedMarkIsExactlyOneUndoableStep()
+    {
+        var history = new AnnotationHistory();
+        var original = Mark(1);
+        history.Add(original);
+        history.Add(Mark(2));
+
+        history.ReplaceAt(1, Mark(99));
+        Assert.Equal(99, history.Marks[1].Points[0].X);
+        Assert.Same(original, history.Marks[0]);        // 没被改的那一条必须原样（不是重建出来的近似值）
+        Assert.Equal(2, history.Count);                 // 改一条不会变成"删了再画一条"（计数不能变）
+    }
+
+    [Fact]
+    public void UndoAfterAReplaceHandsBackThePreviousState()
+    {
+        var history = new AnnotationHistory();
+        history.Add(Mark(1));
+        history.Add(Mark(2));
+        var moved = Mark(2).MovedBy(3, 0);
+
+        history.ReplaceAt(1, moved);
+        Assert.Equal(5, history.Marks[1].Points[0].X);
+
+        Assert.True(history.Undo());                    // 撤销一次改，不是撤销整条
+        Assert.Equal(2, history.Count);
+        Assert.Equal(2, history.Marks[1].Points[0].X);
+    }
+
+    [Fact]
+    public void RemovingTheSelectedMarkKeepsTheRestInPaintOrder()
+    {
+        var history = new AnnotationHistory();
+        for (var i = 1; i <= 3; i++) history.Add(Mark(i));
+
+        history.RemoveAt(1);
+        Assert.Equal(new[] { 1, 3 }, history.Marks.Select(m => m.Points[0].X));
+
+        Assert.True(history.Undo());
+        Assert.Equal(new[] { 1, 2, 3 }, history.Marks.Select(m => m.Points[0].X));
+    }
+
+    [Fact]
+    public void EditingAnExpiredIndexDoesNothingRatherThanThrow()
+    {
+        // 界面上选中记下的是个下标：撤销/清空之后它可能已经不属于任何一条。
+        // 这里抛异常等于把用户一次普通的按键变成遮罩窗崩溃（遮罩一崩，整场截图就没了）。
+        var history = new AnnotationHistory();
+        history.Add(Mark(1));
+        history.Undo();                                 // 退回到"还没有标注"
+
+        history.ReplaceAt(0, Mark(2));
+        history.RemoveAt(0);
+        history.ReplaceAt(-1, Mark(3));
+        Assert.Empty(history.Marks);
+        Assert.False(history.CanUndo, "越界的改不该制造一步空历史");
+    }
+
+    [Fact]
+    public void EditingAfterUndoDiscardsTheRedoBranch()
+    {
+        var history = new AnnotationHistory();
+        history.Add(Mark(1));
+        history.Add(Mark(2));
+        history.Undo();
+
+        history.ReplaceAt(0, Mark(7).MovedBy(0, 5));
+        Assert.False(history.CanRedo, "改过的分支必须作废：否则「前进」会把用户刚改的位置换回旧的那一份");
+        Assert.Equal(5, history.Marks[0].Points[0].Y);
+    }
 }

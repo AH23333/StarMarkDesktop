@@ -133,5 +133,24 @@
             Visibility="Collapsed">
             <TextBlock x:Name="ErrorText" FontSize="12" Foreground="#FFFFFFFF" TextWrapping="Wrap" MaxWidth="460"/>
         </Border>
+
+        <!--
+            选中某条标注后才现身的一句说明。放在这里而不是 ToolTip：把手怎么用法只有"正握着它的人"需要知道，
+            而遮罩窗上悬停到一颗 6 像素的方块才看得到提示，等于没有提示（真机反复反馈"以为功能没做"）。
+        -->
+        <Border
+            x:Name="SelectionTip"
+            Background="#CC202020"
+            CornerRadius="6"
+            Padding="10,5,10,5"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Bottom"
+            Margin="0,0,0,20"
+            Visibility="Collapsed">
+            <TextBlock
+                FontSize="12"
+                Foreground="#FFFFFFFF"
+                Text="已选中：拖框内＝移动 · 拖角点＝缩放 · 拖顶部圆点＝转方向 · Delete＝删除；点一下别处换目标，起新的一笔即取消"/>
+        </Border>
     </Grid>
 </Window>

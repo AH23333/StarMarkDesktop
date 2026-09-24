@@ -50,6 +50,30 @@ public sealed class AnnotationHistory
         Push(Array.Empty<Annotation>());
     }
 
+    /// <summary>
+    /// 把第 <paramref name="index"/> 条换成 <paramref name="replacement"/>——移动 / 缩放 / 旋转的落定都走这里。
+    /// <para>仍然只是"再存一份快照"：这就是选快照模型的红利，加一类编辑不需要再写一条反向动作
+    /// （反向写漏一处，就是"撤销后残留半条"那种只有真机能看见的缺陷）。</para>
+    /// <para>下标越界（撤销之后旧下标失效是常态）静默忽略：界面拿的是一份可能已经过期的选中下标，
+    /// 这里抛异常等于把一次普通的按键变成崩溃。</para>
+    /// </summary>
+    public void ReplaceAt(int index, Annotation replacement)
+    {
+        if (index < 0 || index >= Marks.Count) return;
+        var next = Marks.ToList();
+        next[index] = replacement;
+        Push(next);
+    }
+
+    /// <summary>删掉第 <paramref name="index"/> 条（选中后按 Delete）。算一步，能撤销回来。</summary>
+    public void RemoveAt(int index)
+    {
+        if (index < 0 || index >= Marks.Count) return;
+        var next = Marks.ToList();
+        next.RemoveAt(index);
+        Push(next);
+    }
+
     /// <summary>退一步。已在最早的状态时返回 false（界面据此灰掉按钮，而不是点了没反应）。</summary>
     public bool Undo()
     {

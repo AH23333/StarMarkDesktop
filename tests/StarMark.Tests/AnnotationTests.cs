@@ -214,15 +214,117 @@ public sealed class AnnotationTests
         Assert.True(bounds.X <= -Annotation.MosaicBlockSize);
     }
 
+    /// <summary>文字的外接框必须<b>等于 GDI 量出来的那一块</b>：这块框现在还要当"点哪里算选中"与
+    /// "选择框画在哪"，按字数估宽会偏，用户看到的就是"我点这行字，框跑到别处去了"。</summary>
     [Fact]
-    public void TextBoundsNeverNarrowerThanTheCharacters()
+    public void TextBoundsIsWhatGdiActuallyMeasures()
     {
         var one = new Annotation(AnnotationTool.Text, new[] { new PixelPoint(0, 0) },
             Annotation.Opaque(0, 0, 0), 4) { Text = "中", FontHeight = 20 };
+        var measured = StarMark.Integrations.Capture.GdiTextDrawer.Measure("中", 20);
+        Assert.Equal(new IntRect(0, 0, measured.Width, measured.Height), one.Bounds());
+
         var many = one with { Text = "一二三四五六七八九十" };
-        Assert.Equal(new IntRect(0, 0, 17, 40), one.Bounds());
         Assert.True(many.Bounds().Width > one.Bounds().Width * 5, "字数多了框就该跟着变宽，否则末尾的字被切");
         Assert.Null(one.Problem());
+    }
+
+    // ────────── 变换：移动 / 缩放 / 旋转 ──────────
+
+    [Fact]
+    public void NoTransformHandsBackTheSamePointListWithoutCopying()
+    {
+        var plain = Make(AnnotationTool.Pen);
+        Assert.False(plain.HasTransform);
+        Assert.Same(plain.Points, plain.TransformedPoints());     // 热路径：每帧都要过这里，不该复制
+    }
+
+    [Fact]
+    public void RotatingQuarterTurnSweepsTheLineOntoTheOtherAxis()
+    {
+        // 一条向右的横线，绕第一个点转 90°（顺时针）⇒ 变成向下竖线，起点不动
+        var line = new Annotation(AnnotationTool.Line,
+            new[] { new PixelPoint(10, 10), new PixelPoint(30, 10) }, Annotation.Opaque(0, 0, 0), 4);
+        var turned = line.RotatedBy(90);
+        Assert.Equal(new[] { new PixelPoint(10, 10), new PixelPoint(10, 30) }, turned.TransformedPoints());
+        Assert.Equal(90d, turned.Rotation);
+    }
+
+    [Fact]
+    public void ScalingDoublesTheDistanceFromThePivotOnly()
+    {
+        var line = new Annotation(AnnotationTool.Line,
+            new[] { new PixelPoint(10, 10), new PixelPoint(20, 15) }, Annotation.Opaque(0, 0, 0), 4)
+        { Pivot = new PixelPoint(10, 10) };
+        Assert.Equal(new[] { new PixelPoint(10, 10), new PixelPoint(30, 20) }, line.ScaledBy(2).TransformedPoints());
+    }
+
+    [Fact]
+    public void MovingCarriesThePivotAlongSoTheRotationStaysPut()
+    {
+        // 先转 90° 再整体平移：轴点必须跟着走，否则"拖一下位置"会把形状绕回旧轴甩出去
+        var turned = new Annotation(AnnotationTool.Line,
+            new[] { new PixelPoint(0, 0), new PixelPoint(20, 0) }, Annotation.Opaque(0, 0, 0), 4).RotatedBy(90);
+        var moved = turned.MovedBy(5, 7);
+        Assert.Equal(new PixelPoint(5, 7), moved.Origin);
+        Assert.Equal(new[] { new PixelPoint(5, 7), new PixelPoint(5, 27) }, moved.TransformedPoints());
+        Assert.Equal(90d, moved.Rotation);        // 平移不该改角度
+    }
+
+    [Theory]
+    [InlineData(0.0001)]      // 缩到看不见 ⇒ 再也点不中，必须有下限
+    [InlineData(1000d)]       // 放大到撑破画面 ⇒ 必须有上限
+    public void ScaleIsClampedAtBothEnds(double factor)
+    {
+        var line = Make(AnnotationTool.Line);
+        var scaled = line.ScaledBy(factor);
+        Assert.InRange(scaled.Scale, Annotation.MinScale, Annotation.MaxScale);
+        Assert.Null(scaled.Problem());
+    }
+
+    [Theory]
+    [InlineData(-90d, 270d)]
+    [InlineData(360d, 0d)]
+    [InlineData(725d, 5d)]
+    public void AngleIsNormalisedIntoOneTurn(double added, double expected)
+        => Assert.Equal(expected, Make(AnnotationTool.Line).RotatedBy(added).Rotation);
+
+    [Fact]
+    public void TextRefusesRotationAndExplainsWhy()
+    {
+        var text = Make(AnnotationTool.Text, text: "字");
+        Assert.False(text.SupportsRotation);
+        var rotated = text with { Rotation = 30 };
+        Assert.Contains("文字不支持旋转", rotated.Problem());
+        // 缩放对文字是有效的（＝改字号），别一起关掉
+        Assert.Null(text.ScaledBy(1.5).Problem());
+        Assert.Equal(33, text.ScaledBy(1.5).DrawFontHeight);
+    }
+
+    [Fact]
+    public void BoundsFollowTheTransform()
+    {
+        var line = new Annotation(AnnotationTool.Line,
+            new[] { new PixelPoint(0, 0), new PixelPoint(40, 0) }, Annotation.Opaque(0, 0, 0), 4);
+        Assert.Equal(48, line.Bounds().Width);            // 40 + 两侧各 4 的线宽外沿
+        Assert.Equal(8, line.Bounds().Height);
+        var turned = line.RotatedBy(90);                  // 横的变竖的：长边换到竖直方向
+        Assert.Equal(8, turned.Bounds().Width);
+        Assert.Equal(48, turned.Bounds().Height);
+    }
+
+    [Fact]
+    public void HitTestForgivesASlopAndPrefersTheTopmostMark()
+    {
+        var first = new Annotation(AnnotationTool.Line,
+            new[] { new PixelPoint(0, 0), new PixelPoint(40, 40) }, Annotation.Opaque(0, 0, 0), 4);
+        var second = new Annotation(AnnotationTool.Line,
+            new[] { new PixelPoint(0, 40), new PixelPoint(40, 0) }, Annotation.Opaque(0, 0, 0), 4);
+        var marks = new[] { first, second };
+        var middle = new PixelPoint(20, 20);              // 两条的重叠处
+        Assert.Equal(1, StarMark.Core.Capture.AnnotationPainter.HitTest(marks, middle, 0));
+        Assert.Equal(0, StarMark.Core.Capture.AnnotationPainter.HitTest(new[] { first }, new PixelPoint(60, 5), 25));
+        Assert.Null(StarMark.Core.Capture.AnnotationPainter.HitTest(new[] { first }, new PixelPoint(60, 5), 4));
     }
 
     [Fact]
