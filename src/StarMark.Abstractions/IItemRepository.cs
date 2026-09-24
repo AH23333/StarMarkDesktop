@@ -186,7 +186,30 @@ public interface IItemRepository
     /// <para>顺序与现状一致的条目<b>不写</b>；整批都没变时不发任何写语句、不通知。</para>
     /// </summary>
     Task<int> ReorderLocalItemsAsync(IReadOnlyList<long> orderedIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// <b>一次事务</b>登记多条实时源虚拟条目（一次拖入 N 个文件），返回真正拿到 Id 的条数。
+    /// 逐条 <see cref="RecordItemAsync"/> 的形状是"每项一趟往返"的典型：N 个文件就是 N 次开库
+    /// （每次还要跑三遍 PRAGMA）、N 个事务、N 次组件通知。
+    /// </summary>
+    /// <remarks>
+    /// 语义与逐条调用完全一致：缺 <c>Source</c>/<c>SourceId</c> 业务键的<b>不写</b>、
+    /// 同一 <c>(source, source_id)</c> 幂等合并、保留既有 hidden/pinned/notes、按最终内容重建 search_text。
+    /// 差别在于<b>整批要么全记要么全不记</b>（一个拖放动作是一个动作），
+    /// 且整批都没键时连库都不开。
+    /// 同一批里出现两次的路径<b>只登记一次</b>，所以返回值是"登记了几条"而不是"收了几项"。
+    /// </remarks>
+    Task<int> RecordItemsAsync(IReadOnlyList<Item> items, CancellationToken ct = default);
+
+    /// <summary>
+    /// <b>一次连接</b>写入一批活动事件，环形缓冲口径与单条 <see cref="LogActivityAsync"/> 相同（只留最近 500 条）。
+    /// 空集合不开库。
+    /// </summary>
+    Task LogActivitiesAsync(IReadOnlyList<ActivityDraft> events, CancellationToken ct = default);
 }
+
+/// <summary>"往活动流记这一笔"。<see cref="IItemRepository.LogActivitiesAsync"/> 的入参。</summary>
+public sealed record ActivityDraft(ActivityKind Kind, string? ItemKey, string Title, string? Uri);
 
 /// <summary>一次标签编辑的结果。<b>把"有没有变"回报清楚，界面才知道要不要刷新</b>。</summary>
 public sealed record TagEditResult(bool Changed, int Added, int Removed, IReadOnlyList<string> FinalTags)

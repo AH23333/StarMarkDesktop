@@ -208,6 +208,35 @@ public sealed class ItemRepository : IItemRepository
         return item.Id;
     }
 
+    /// <summary>
+    /// 一次事务登记多条（一次拖入 N 个文件时的那一圈写库）。逐条 <see cref="RecordItemAsync"/> 的话
+    /// N 个文件要开 N 次库、跑 N×3 遍 PRAGMA、通知组件 N 次；这里全部压成一次。
+    /// 单条语义原样保留：缺业务键的不写、同一 (source, source_id) 幂等合并、保留用户态、重建 search_text。
+    /// 同一批里重复的业务键只登记一次（返回登记条数，不是入参条数）。
+    /// </summary>
+    public async Task<int> RecordItemsAsync(IReadOnlyList<Item> items, CancellationToken ct = default)
+    {
+        if (items is not { Count: > 0 }) return 0;
+        var writable = new List<Item>(items.Count);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in items)
+        {
+            if (item is null || string.IsNullOrEmpty(item.Source) || string.IsNullOrEmpty(item.SourceId)) continue;
+            // 同一批里重复的业务键只写一次：一次拖放很容易带进同一个文件两遍，
+            // 第二次 upsert 不落任何新事实，却白重建一次全文索引。
+            if (!seen.Add(item.Source + ":" + item.SourceId)) continue;
+            writable.Add(item);
+        }
+        if (writable.Count == 0) return 0;               // 整批都没业务键：不开库、不通知
+
+        using var conn = _factory.Open();
+        using var tx = conn.BeginTransaction();
+        foreach (var item in writable) await UpsertOne(conn, item, ct);
+        await tx.CommitAsync(ct);
+        DataChangeHub.Notify();   // 整批一次：置顶/标签/搜索等组件跟着刷一遍，而不是 N 遍
+        return writable.Count;
+    }
+
     // ===== 标签 =====
 
     public async Task<IReadOnlyList<(string Name, int Count)>> GetAllTagsAsync(CancellationToken ct)
@@ -431,12 +460,12 @@ public sealed class ItemRepository : IItemRepository
         }
 
         // ⑦ 活动流水：整批一次多行 INSERT + 一次裁剪（逐条写的话光活动就两倍语句数）
-        var activityRows = live.Keys.OrderBy(id => id)
-            .Select(id => (Kind: ActivityKind.ItemModify,
-                           Key: rows[id].Source + ":" + rows[id].SourceId,
-                           Title: rows[id].Title,
-                           Uri: rows[id].Uri))
-            .ToList();
+        var activityRows = new List<(ActivityKind Kind, string? Key, string Title, string? Uri)>();
+        foreach (var id in live.Keys.OrderBy(id => id))
+        {
+            var row = rows[id];
+            activityRows.Add((ActivityKind.ItemModify, row.Source + ":" + row.SourceId, row.Title, row.Uri));
+        }
         await LogActivitiesOnConnection(conn, tx, activityRows, ct);
 
         await tx.CommitAsync(ct);
@@ -472,7 +501,7 @@ public sealed class ItemRepository : IItemRepository
     /// 区别只在于一次多行 INSERT、最后裁剪一次，而不是每条都数一遍总数。</summary>
     private static async Task LogActivitiesOnConnection(
         SqliteConnection conn, SqliteTransaction tx,
-        IReadOnlyList<(ActivityKind Kind, string Key, string Title, string? Uri)> rows, CancellationToken ct)
+        IReadOnlyList<(ActivityKind Kind, string? Key, string Title, string? Uri)> rows, CancellationToken ct)
     {
         for (var start = 0; start < rows.Count; start += InChunkSize)
         {
@@ -485,7 +514,7 @@ public sealed class ItemRepository : IItemRepository
                 valueGroups.Add($"(@at{i}, @kind{i}, @key{i}, @title{i}, @uri{i})");
                 insert.Parameters.AddWithValue($"@at{i}", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
                 insert.Parameters.AddWithValue($"@kind{i}", slice[i].Kind.ToString().ToLowerInvariant());
-                insert.Parameters.AddWithValue($"@key{i}", slice[i].Key);
+                insert.Parameters.AddWithValue($"@key{i}", (object?)slice[i].Key ?? DBNull.Value);
                 insert.Parameters.AddWithValue($"@title{i}", slice[i].Title);
                 insert.Parameters.AddWithValue($"@uri{i}", (object?)slice[i].Uri ?? DBNull.Value);
             }
@@ -503,6 +532,22 @@ public sealed class ItemRepository : IItemRepository
         prune.CommandText = "DELETE FROM activity WHERE id IN (SELECT id FROM activity ORDER BY at ASC, id ASC LIMIT @n);";
         prune.Parameters.AddWithValue("@n", overflow);
         await prune.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>
+    /// 一次连接写入一批活动事件（拖入 N 个快捷入口时的那一圈写库：逐条 <see cref="LogActivityAsync"/>
+    /// 就是 N 次开库 + N 次数总数 + N 次裁剪）。环形缓冲口径与单条完全一致：整批插完只裁一次，仍留最近 500 条。
+    /// </summary>
+    public async Task LogActivitiesAsync(IReadOnlyList<ActivityDraft> events, CancellationToken ct = default)
+    {
+        if (events is not { Count: > 0 }) return;             // 空批不开库：没有"什么都没记"还要惊动组件的道理
+        using var conn = _factory.Open();
+        using var tx = conn.BeginTransaction();
+        var rows = new List<(ActivityKind Kind, string? Key, string Title, string? Uri)>(events.Count);
+        foreach (var e in events) rows.Add((e.Kind, e.ItemKey, e.Title, e.Uri));
+        await LogActivitiesOnConnection(conn, tx, rows, ct);
+        await tx.CommitAsync(ct);
+        DataChangeHub.Notify();   // 活动事件本身也是「数据」：让常驻的最近活动格即时跟上，整批一次
     }
 
     public async Task RemoveTagAsync(long itemId, string tagName, CancellationToken ct)

@@ -812,34 +812,59 @@ public sealed class WidgetManager
 
     // ───────────────────────── 快捷入口 ─────────────────────────
 
-    /// <summary>新增快捷入口（去重）；自动定位到该实例（若该实例窗口已开则增量刷新）。</summary>
-    public async Task<bool> AddLinkAsync(string instanceId, string title, string uri)
+    /// <summary>
+    /// 一次拖入 N 个文件的落点：<b>整批只读一次档、只写一次盘、只广播一次</b>。
+    /// <para>
+    /// 为什么不能沿用逐条 <see cref="AddLinkAsync"/>：每条都要 <c>Load()</c> 再 <c>Save()</c>，
+    /// 而 <c>Save()</c> 按设计必须把自己刚写过的快照作废（否则改标题后组件会读到旧内容），
+    /// 于是读盘缓存在这条路径上完全帮不上忙——拖 20 个文件就是 20 次整档读 + 20 次整档写 + 20 次重绘。
+    /// </para>
+    /// </summary>
+    /// <returns>真正加进去的条数。实例不存在、或整批都是已有入口时为 0，且<b>不落盘、不广播、不记活动</b>。</returns>
+    public async Task<int> AddLinksAsync(string instanceId, IReadOnlyList<(string Title, string Uri)> links)
     {
-        if (string.IsNullOrWhiteSpace(uri)) return false;
+        if (links is not { Count: > 0 }) return 0;
         var added = await OnUiAsync(() =>
         {
             var data = _storage.Load();
             var inst = data.Instances.FirstOrDefault(i => i.Id == instanceId);
-            if (inst is null) return false;
-            if (inst.Links.Any(l => string.Equals(l.Uri, uri, StringComparison.OrdinalIgnoreCase)))
-                return false;
-            inst.Links.Add(new LinkItem
+            if (inst is null) return new List<(string, string)>();
+            var taken = new HashSet<string>(inst.Links.Select(l => l.Uri), StringComparer.OrdinalIgnoreCase);
+            var fresh = new List<(string, string)>();
+            foreach (var (title, uri) in links)
             {
-                Id = WidgetStorage.NewId(),
-                Title = string.IsNullOrWhiteSpace(title) ? uri : title.Trim(),
-                Uri = uri.Trim(),
-                CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            });
+                if (string.IsNullOrWhiteSpace(uri)) continue;
+                var target = uri.Trim();
+                // 去重必须把"同一批里刚收下的那条"也算进来：只对着已落盘的列表比的话，
+                // 一次拖进两个同名文件（资源管理器里复制同一文件两次是常事）会两条都塞进去，
+                // 界面上就多出一个点开后是同一个地方的重复入口。
+                if (!taken.Add(target)) continue;
+                var shown = string.IsNullOrWhiteSpace(title) ? target : title.Trim();
+                inst.Links.Add(new LinkItem
+                {
+                    Id = WidgetStorage.NewId(),
+                    Title = shown,
+                    Uri = target,
+                    CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                });
+                fresh.Add((shown, target));
+            }
+            if (fresh.Count == 0) return fresh;             // 没有净变化 ⇒ 一次盘也不写、一次也不广播
             _storage.Save(data);
-            return true;
+            return fresh;
         });
-        if (!added) return false;
+        if (added.Count == 0) return 0;
 
-        LinksChanged?.Invoke(instanceId);
+        LinksChanged?.Invoke(instanceId);                  // 整批一次：N 次增量刷新压成 1 次
         // 用户拖入 / 发送一个快捷入口 → 活动流记「新增」（绿）。快捷入口非 items 行，item_key 留空。#51。
-        await LogActivityAsync(ActivityKind.ItemAdd, string.IsNullOrWhiteSpace(title) ? uri : title.Trim(), uri);
-        return true;
+        await LogActivitiesAsync(ActivityKind.ItemAdd, added);
+        return added.Count;
     }
+
+    /// <summary>新增单个快捷入口（去重）；自动定位到该实例（若该实例窗口已开则增量刷新）。
+    /// 走的是 <see cref="AddLinksAsync"/> 那条批处理路，只是长度为 1——判据只留一处。</summary>
+    public async Task<bool> AddLinkAsync(string instanceId, string title, string uri)
+        => await AddLinksAsync(instanceId, new[] { (title, uri) }) > 0;
 
     /// <summary>
     /// 保存计算器某实例的历史带（整带替换）。与快捷入口同走实例配置，但<b>不发 LinksChanged 那类广播</b>：
@@ -932,23 +957,32 @@ public sealed class WidgetManager
     }
 
     /// <summary>
-    /// 把拖入快捷启动的外部文件/文件夹<b>按路径登记进主库</b>（触发器2「拖入即入库」）。
+    /// 把拖入快捷启动的一批外部文件/文件夹<b>按路径登记进主库</b>（触发器2「拖入即入库」）。
     /// 以与 Everything 查询/全量索引<b>完全一致</b>的 <c>(filesystem, 路径哈希)</c> 业务键幂等 upsert
     /// （<see cref="LocalFileIdentity"/>），故同一路径无论来自拖入、Everything 还是后台同步都合并为一条，不产生重复。
     /// <b>只写索引记录，绝不移动 / 改名 / 删除磁盘上的实际文件。</b>与快捷入口链接并存：链接负责在本组件展示，
-    /// 登记负责使其成为可检索、可持久化置顶/标签/笔记的真实条目。活动流由调用侧的 <see cref="AddLinkAsync"/> 记一次「新增」，
-    /// 此处不重复记录。缺仓储或登记失败仅记日志并静默降级（不影响快捷入口本身）。
+    /// 登记负责使其成为可检索、可持久化置顶/标签/笔记的真实条目。活动流由调用侧的 <see cref="AddLinksAsync"/>
+    /// 按真正新增的那些入口记「新增」，此处不重复记录。
+    /// <para>整批<b>一次连接、一个事务</b>（逐条登记时拖 20 个文件要开 20 次库、每次还带三遍 PRAGMA），
+    /// 因此语义是"要么全记要么全不记"：一次拖放就是一个动作，留下半套登记比整批没记更难解释。
+    /// 缺仓储或写库失败仅记日志并静默降级（不影响快捷入口本身）。</para>
     /// </summary>
-    public async Task RecordPathToLibraryAsync(string? title, string fullPath)
+    /// <returns>真正登记的条数。</returns>
+    public async Task<int> RecordPathsToLibraryAsync(IReadOnlyList<(string? Title, string Path)> paths)
     {
-        if (_repo is null || string.IsNullOrWhiteSpace(fullPath)) return;
+        if (_repo is null || paths is not { Count: > 0 }) return 0;
         try
         {
-            await _repo.RecordItemAsync(LocalFileIdentity.FromPath(fullPath, title), CancellationToken.None);
+            var drafts = new List<Item>(paths.Count);
+            foreach (var (title, path) in paths)
+                if (!string.IsNullOrWhiteSpace(path)) drafts.Add(LocalFileIdentity.FromPath(path, title));
+            if (drafts.Count == 0) return 0;
+            return await _repo.RecordItemsAsync(drafts, CancellationToken.None);
         }
         catch (Exception ex)
         {
-            StarLog.Error($"拖入登记本地路径失败 (path={fullPath})", ex);
+            StarLog.Error($"拖入登记本地路径失败（本批 {paths.Count} 项）", ex);
+            return 0;
         }
     }
 
@@ -998,6 +1032,20 @@ public sealed class WidgetManager
         if (_repo is null) return;
         try { await _repo.LogActivityAsync(kind, null, title, uri, CancellationToken.None); }
         catch (Exception ex) { StarLog.Error($"记录快捷入口活动失败 ({kind})", ex); }
+    }
+
+    /// <summary>批量记录用户主动活动：<b>整批一次连接</b>（逐条记的话拖 N 个快捷入口就要开 N 次库、
+    /// 数 N 遍活动总数、裁 N 遍环形缓冲）。仓库不可用时同样静默跳过，绝不打断交互。</summary>
+    private async Task LogActivitiesAsync(ActivityKind kind, IReadOnlyList<(string Title, string Uri)> rows)
+    {
+        if (_repo is null || rows.Count == 0) return;
+        try
+        {
+            var events = new List<ActivityDraft>(rows.Count);
+            foreach (var (title, uri) in rows) events.Add(new ActivityDraft(kind, null, title, uri));
+            await _repo.LogActivitiesAsync(events, CancellationToken.None);
+        }
+        catch (Exception ex) { StarLog.Error($"记录快捷入口活动失败 ({kind} ×{rows.Count})", ex); }
     }
 
     // ───────────────────────── 跨窗口动作 ─────────────────────────

@@ -1987,46 +1987,45 @@ public sealed partial class WidgetWindow : Window
         try
         {
             var v = e.DataView;
-            var added = 0;
 
             if (v.Contains(StandardDataFormats.StorageItems))
+            {
+                // 一次拖入可能有几十项：先只收集，再整批登记 + 整批添加。
+                // 逐项 await 的话，每一项都要开一次库、并把 widgets.json 整档读一遍写一遍（见 AddLinksAsync）。
+                var items = await v.GetStorageItemsAsync();
+                var paths = new List<(string? Title, string Path)>();
+                var links = new List<(string Title, string Uri)>();
+                foreach (var item in items)
                 {
-                    var items = await v.GetStorageItemsAsync();
-                    foreach (var item in items)
-                    {
-                        if (!string.IsNullOrWhiteSpace(item.Path))
-                        {
-                            // 触发器2「拖入即入库」：把拖入的本地文件/文件夹按路径登记进主库
-                            // （只写索引记录，绝不移动磁盘文件），令其可检索、可持久化置顶/标签/笔记。
-                            await _manager.RecordPathToLibraryAsync(item.Name, item.Path);
-                            var uri = new Uri(item.Path).AbsoluteUri;
-                            if (await _manager.AddLinkAsync(_instanceId, item.Name, uri)) added++;
-                        }
-                    }
+                    if (string.IsNullOrWhiteSpace(item.Path)) continue;
+                    // 触发器2「拖入即入库」：把拖入的本地文件/文件夹按路径登记进主库
+                    // （只写索引记录，绝不移动磁盘文件），令其可检索、可持久化置顶/标签/笔记。
+                    paths.Add((item.Name, item.Path));
+                    links.Add((item.Name, new Uri(item.Path).AbsoluteUri));
                 }
-                else if (v.Contains(StandardDataFormats.WebLink))
-                {
-                    var uri = await v.GetWebLinkAsync();
-                    if (await _manager.AddLinkAsync(_instanceId, uri.Host, uri.AbsoluteUri)) added++;
-                }
-                else if (v.Contains(StandardDataFormats.ApplicationLink))
-                {
-                    var uri = await v.GetApplicationLinkAsync();
-                    if (await _manager.AddLinkAsync(_instanceId, uri.Host, uri.AbsoluteUri)) added++;
-                }
-                else if (v.Contains(StandardDataFormats.Text))
-                {
-                    var text = (await v.GetTextAsync()).Trim();
-                    if (QuickLaunchWidgetViewModel.TryParseUri(text, out var uri) && uri is not null
-                        && await _manager.AddLinkAsync(_instanceId,
-                            // 含 '#' 的本地文件名：TryPathFromUri 保留 '#'（LocalPath 会截断成 "C"）。
-                            uri.IsFile ? System.IO.Path.GetFileName(
-                                StarMark.Abstractions.LocalFileIdentity.TryPathFromUri(uri.AbsoluteUri, out var fp) ? fp : uri.LocalPath) : uri.Host,
-                            uri.AbsoluteUri))
-                    {
-                        added++;
-                    }
-                }
+                await _manager.RecordPathsToLibraryAsync(paths);
+                await _manager.AddLinksAsync(_instanceId, links);
+            }
+            else if (v.Contains(StandardDataFormats.WebLink))
+            {
+                var uri = await v.GetWebLinkAsync();
+                await _manager.AddLinkAsync(_instanceId, uri.Host, uri.AbsoluteUri);
+            }
+            else if (v.Contains(StandardDataFormats.ApplicationLink))
+            {
+                var uri = await v.GetApplicationLinkAsync();
+                await _manager.AddLinkAsync(_instanceId, uri.Host, uri.AbsoluteUri);
+            }
+            else if (v.Contains(StandardDataFormats.Text))
+            {
+                var text = (await v.GetTextAsync()).Trim();
+                if (QuickLaunchWidgetViewModel.TryParseUri(text, out var uri) && uri is not null)
+                    await _manager.AddLinkAsync(_instanceId,
+                        // 含 '#' 的本地文件名：TryPathFromUri 保留 '#'（LocalPath 会截断成 "C"）。
+                        uri.IsFile ? System.IO.Path.GetFileName(
+                            StarMark.Abstractions.LocalFileIdentity.TryPathFromUri(uri.AbsoluteUri, out var fp) ? fp : uri.LocalPath) : uri.Host,
+                        uri.AbsoluteUri);
+            }
 
             // 新增后 WidgetManager 触发 LinksChanged，QuickLaunchWidget 订阅后增量刷新 Links（R3）。
         }
