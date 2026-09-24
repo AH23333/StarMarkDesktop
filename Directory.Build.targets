@@ -1,0 +1,31 @@
+<Project>
+
+  <!-- ── 覆盖 WindowsAppSDK 的架构闸门（批次 RG-2）────────────────────────────────
+       包里那道 `GetWindowsAppSDKNativePlatform` 只做一件事：把 $(Platform) 的字面量映射成
+       NativePlatform，映射不上就报 "requires a supported Windows architecture."。
+       问题在于 $(Platform) 常常是**全局属性**（VS 配置管理器 / 命令行 -p:Platform=...），
+       项目体改不动它；而包只认 5 个字面量 + AnyCPU 时看 RuntimeIdentifier，于是
+       "Any CPU"、" X64 "、"x64‘"（全角引号）这类值都只会换来一句不含任何可执行信息的天书。
+
+       本仓库只发 x64（StarMark.UI 里 <Platforms>x64</Platforms> 是唯一的声明），
+       所以这里把这道判断收回来：认得的字面量照原样给，**认不出的统一落到 x64 而不是报错**。
+       为什么这样是安全的：这个 target 的产物只有一个 NativePlatform 属性，
+       包后续用它去挑 runtimes-framework\win-<arch> 里的 DLL —— 我们不会挑错架构，
+       因为本仓库根本没有第二种架构的产物。
+
+       Directory.Build.targets 由 Microsoft.Common.targets 导入，位置在 NuGet 的
+       nuget.g.targets **之后**，所以这里的同名 target 才会覆盖掉包里那份（MSBuild 取最后定义）。
+       包升级后若那段逻辑变多（不再只算这个属性），BuildConfigGateTests 会红，提醒重新核对。
+       刻意不加 SelfContained 条件：这条判断对没引用 WinAppSDK 的项目是死代码，加了条件反而会在
+       "SelfContained 被改成 false"的那一刻留下 NativePlatform 为空的窗口（那时路径会变成 win-）。 -->
+  <Target Name="GetWindowsAppSDKNativePlatform">
+    <PropertyGroup>
+      <NativePlatform>x64</NativePlatform>
+      <NativePlatform Condition="$([System.String]::Copy('$(Platform)').Trim().ToLowerInvariant()) == 'x86'">x86</NativePlatform>
+      <NativePlatform Condition="$([System.String]::Copy('$(Platform)').Trim().ToLowerInvariant()) == 'win32'">x86</NativePlatform>
+      <NativePlatform Condition="$([System.String]::Copy('$(Platform)').Trim().ToLowerInvariant()) == 'arm64ec'">arm64ec</NativePlatform>
+      <NativePlatform Condition="$([System.String]::Copy('$(Platform)').Trim().ToLowerInvariant()) == 'arm64'">arm64</NativePlatform>
+    </PropertyGroup>
+  </Target>
+
+</Project>
