@@ -247,6 +247,8 @@ public partial class App : Application
         // 本地磁盘搜索「A 方案：与提权 Everything 同权限」——若已开启且当前非提权，以管理员重启一次
         // （带 --elevate-retry 标记防死循环；用户取消 UAC 则继续普通运行，仅本地文件搜索用不了，其余不受影响）。
         // 每次启动记一行提权自检，便于定位 IPC(2) 究竟出在"StarMark 没真提权"还是"Everything 没提权"。
+        // 冒烟/开发期要一台不提权的实例：带着 --elevate-retry 起就行（磁盘搜索开着时它就不再转提权），
+        // 提权只服务于 Everything 那一条链，其余功能与权限无关。
         if (fileSettings.LoadLocalDiskSearchEnabled())
         {
             var alreadyRetried = false;
