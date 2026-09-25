@@ -10,7 +10,9 @@ using StarMark.UI.Views;
 namespace StarMark.UI.Services;
 
 /// <summary>
-/// 贴图名册：谁在桌面上、有没有被隐藏、是不是穿透。
+/// 贴图名册：谁在桌面上、有没有被隐藏、是不是穿透。窗体就是 <see cref="CaptureOverlayWindow"/> 的贴图态
+/// ——那扇窗本身就是截图那条标注链（批次 PN），所以名册只管"有哪几张、处于什么全局状态"，
+/// 一笔一画都不从这里过。
 /// <para>
 /// 贴图窗<b>刻意不进组件体系</b>（D3 裁决）：不写进 widgets.json、不参与布局与快照、
 /// 退出程序就没了。它是一次性的工具窗，不是"用户摆在那儿的一台组件"。
@@ -24,7 +26,7 @@ namespace StarMark.UI.Services;
 /// </summary>
 public static class PinManager
 {
-    private static readonly List<PinWindow> Pins = new();
+    private static readonly List<CaptureOverlayWindow> Pins = new();
 
     public static int Count => Pins.Count;
 
@@ -45,7 +47,7 @@ public static class PinManager
             }
             try
             {
-                var pin = new PinWindow(bgra, width, height, placement);
+                var pin = new CaptureOverlayWindow(bgra, width, height, placement, zoom: 1.0);
                 Pins.Add(pin);
                 // 新贴的一张要跟随当前全局状态，否则"明明收起了却冒出一张新的"
                 if (AreHidden) pin.HidePin();
@@ -92,7 +94,7 @@ public static class PinManager
         {
             // 部分成功是最坏的形状：有的收鼠标有的不收。如实说出来，别让用户自己一张一张试出来。
             TrayReporter.Report("贴图", "穿透未能全部生效",
-                $"{failed} / {Pins.Count} 张拒绝了这个改动（系统拒绝了扩展样式），逐张右键再试一次");
+                $"{failed} / {Pins.Count} 张拒绝了这个改动（系统拒绝了扩展样式），在那几张的工具条上再点一次穿透");
             return;
         }
         StarLog.Info($"[Pin] 鼠标穿透＝{(ClickThrough ? "开" : "关")}（{Pins.Count} 张）");
@@ -117,8 +119,8 @@ public static class PinManager
         StarLog.Info($"[Pin] 已关闭 {closed} 张贴图");
     });
 
-    /// <summary>贴图自己关闭时（右键 / Esc / Alt+F4）从名册里摘掉。</summary>
-    internal static void Unregister(PinWindow pin)
+    /// <summary>贴图自己关闭时（Esc / 条上的 ✕ / Alt+F4）从名册里摘掉。</summary>
+    internal static void Unregister(CaptureOverlayWindow pin)
     {
         if (!Pins.Remove(pin)) return;
         if (Pins.Count == 0) ResetState();

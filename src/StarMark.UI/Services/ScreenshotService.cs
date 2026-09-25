@@ -141,91 +141,11 @@ public static class ScreenshotService
 
     /// <summary>
     /// 把一份已经是「最终样子」的画面钉到桌面上。
-    /// 标注编辑器交出来的就是这一份（画完的像素已经合成好了），所以这条落点不必再认识 <see cref="ScreenFrame"/>。
+    /// 编辑器交出来的就是这一份（画完的像素已经合成好了），所以这条落点不必再认识 <see cref="ScreenFrame"/>。
+    /// 钉上去之后那扇窗<b>本身就是编辑器</b>：贴图态的工具条与截图时是同一条链（批次 PN，用户口径）。
     /// </summary>
     public static void PinPixels(byte[] pixels, int width, int height, IntRect sourceSelection)
         => PinManager.Add(pixels, width, height, sourceSelection);
-
-    // ────────── 就地编辑一张贴图 ──────────
-
-    private static CaptureOverlayWindow? _editWindow;
-
-    /// <summary>当前是否有一张贴图正在被编辑（供贴图菜单决定要不要灰掉「编辑」）。</summary>
-    public static bool IsEditingPin => _editWindow is not null;
-
-    /// <summary>
-    /// 就地编辑一张贴图：在<b>它现在这块矩形上</b>开一扇编辑窗，底图＝贴图像素，
-    /// 工具条、八种笔、文字、撤销重做、复制存图识字<b>全是截图那一条链</b>（同一个窗类的另一个构造入口）。
-    /// <para>
-    /// 为什么复用而不是再写一份：标注这一层被修过十几轮（尺寸回弹、文字两层、拖字变大…），
-    /// 每一条修复都要在两份实现里各成立一次才叫修好——那正是"另一份迟早漂移"的形状。
-    /// </para>
-    /// <para>编辑期间贴图收起；交回什么就写回什么，尺寸不符时保留原图并说清原因。</para>
-    /// </summary>
-    public static void EditPin(PinWindow pin)
-    {
-        var queue = App.MainWindow?.DispatcherQueue;
-        if (queue is { HasThreadAccess: false })
-        {
-            queue.TryEnqueue(() => EditPin(pin));
-            return;
-        }
-        if (pin.IsEditing) return;
-        // 截图会话进行中不插一脚：那时用户手还在框选上，桌面上突然冒出一扇编辑窗只会让他以为遮罩坏了。
-        if (_busy)
-        {
-            ReportFor("贴图编辑", "没能进入编辑", "截图正在进行，先按 Esc 取消这一次截图");
-            return;
-        }
-        if (_editWindow is not null)
-        {
-            ReportFor("贴图编辑", "已经在编辑另一张", "先按 Enter 完成或 Esc 放弃那一张，再动这张");
-            return;
-        }
-        if (PinManager.AreHidden)
-        {
-            ReportFor("贴图编辑", "贴图当前是收起的", "按 F4 把贴图显示出来再编辑这一张");
-            return;
-        }
-        try
-        {
-            var rect = pin.DisplayRect;
-            CaptureOverlayWindow? editor = null;
-            pin.EnterEditing();
-            editor = new CaptureOverlayWindow(
-                pin.PixelsForEdit(), pin.SourceWidth, pin.SourceHeight, rect,
-                pin.DpiScale, pin.Zoom,
-                (_, result) => FinishPinEdit(pin, result, editor));
-            _editWindow = editor;
-            editor.Activate();
-            StarLog.Info($"[Screenshot] 进入贴图编辑：{CaptureGeometry.FormatSize(pin.SourceWidth, pin.SourceHeight)}" +
-                $" @ {CaptureGeometry.FormatZoom(pin.Zoom)}");
-        }
-        catch (Exception ex)
-        {
-            _editWindow = null;
-            StarLog.Error("[Screenshot] 打开贴图编辑失败", ex);
-            pin.EndEditing(null, closePin: false);      // 编辑没开成，贴图必须回来，不能留下一张"不见了"的图
-            ReportFor("贴图编辑", "没能进入编辑", ex.Message);
-        }
-    }
-
-    /// <summary>
-    /// 编辑窗交回结果：先关编辑窗，再把像素写回那张贴图（或按用户要求把这张关掉）。
-    /// <paramref name="editor"/> 用参数传而不是读 <see cref="_editWindow"/>：
-    /// 回调里第一件事就是把后者清成 null，那时再拿它就拿到 null 了。
-    /// </summary>
-    private static void FinishPinEdit(
-        PinWindow pin, CaptureOverlayWindow.PinEditResult result, CaptureOverlayWindow? editor)
-    {
-        _editWindow = null;
-        if (editor is not null)
-        {
-            try { editor.CloseWindow(); }
-            catch (Exception ex) { StarLog.Error("[Screenshot] 关闭贴图编辑窗失败", ex); }
-        }
-        pin.EndEditing(result.Pixels, result.ClosePin);
-    }
 
     /// <summary>把一份 BGRA 画面交给剪贴板。截图与贴图共用这一份实现（两份"从像素到剪贴板"迟早分岔）。</summary>
     public static async System.Threading.Tasks.Task CopyPixelsAsync(

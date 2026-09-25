@@ -47,7 +47,7 @@ public static class HotkeyActions
 
     /// <summary>
     /// 识字：框选一块画面，认出其中的文字并复制走。<b>默认不绑键</b>——它比截图低频，
-    /// 而入口已经有三处（截图动作条上的「识字」、贴图右键、托盘菜单），不必再吃一个全局键位。
+    /// 而入口已经有三处（截图动作条上的「识字」、贴图工具条、托盘菜单），不必再吃一个全局键位。
     /// </summary>
     public const string ScreenOcr = "screen.ocr";
 

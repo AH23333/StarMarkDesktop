@@ -31,8 +31,16 @@ namespace StarMark.UI.Views;
 /// 截图遮罩窗：显示"按下热键那一刻"的整屏帧，让用户拖动框选，然后<b>就地标注</b>，
 /// 最后复制或存图或贴图或识字。
 /// <para>
+/// 本类有两种态，共用<b>同一条标注链</b>（批次 PN 的用户口径）：
+/// <b>截图态</b>铺满一整块屏、要框选；<b>贴图态</b>（<see cref="_pinned"/>）就是那张钉在桌面上的图——
+/// 窗口尺寸＝画面尺寸、整块都是内容，没有压暗、没有"重新框一块"，未选笔时那一按是移动这张图，
+/// 滚轮缩放、鼠标穿透与角标都搬到了这里（原来那份贴图右键菜单由这条工具条整体取代）。
+/// 两态只在建窗与"这一按算不算改框"上分岔，八种笔、文字、撤销重做、合成、四个落点全是同一批代码。
+/// </para>
+/// <para>
 /// 生命周期是<b>一次性</b>的：每次截图新建每屏一个窗、结束即关，不留常驻窗池（D3 裁决）。
 /// 常驻隐藏窗池能省几十毫秒首帧，代价是永远有一批顶层窗口挂在每台显示器上。
+/// 贴图态是唯一例外：它按名册（<see cref="PinManager"/>）常驻，直到用户关掉它或关掉全部。
 /// </para>
 /// <para>
 /// <b>每条退出路径都必须把会话收干净</b>：漏一条就等于把用户摁在一层吃满屏幕的顶层窗里，
@@ -54,24 +62,33 @@ public sealed partial class CaptureOverlayWindow : Window
     private const double Bar_fallback_height = 34;
 
     private readonly ScreenFrame? _frame;       // 截图模式的整帧；就地编辑贴图时没有帧（底图由贴图交进来）
-    private readonly IntRect _monitor;          // 本屏在虚拟桌面里的物理矩形
+    private IntRect _monitor;                   // 本屏（截图态）／这张贴图（贴图态）在虚拟桌面里的物理矩形
     private readonly double _scale;             // 本屏 DPI 缩放（1.0 / 1.25 / 1.5 …）
     private readonly Action<CaptureOverlayWindow, IntRect?> _finish;
     private readonly CaptureMode _mode;         // 放开选区后做什么（F1 给条 / F3 贴 / 识字直接复制）
 
     /// <summary>
-    /// 就地编辑一张贴图：<b>整块画面就是内容</b>——不铺全屏、不压暗、不许改框，
-    /// 交出去的也不是"选区"而是"改完的那份像素"（由 <see cref="_finishEdit"/> 写回原贴图）。
+    /// <b>这扇窗本身就是那张钉在桌面上的贴图。</b>不铺全屏、不压暗、没有"重新框一块"，
+    /// 因为整块画面都是内容；工具条、八种笔、文字、撤销重做与截图时<b>是同一条链、同一扇窗</b>，
+    /// 只有"框选中的画面"与"已经钉住的画面"这一个状态差别（用户口径）。
     /// </summary>
-    private readonly bool _editing;
+    private readonly bool _pinned;
 
     /// <summary>
     /// 一个"底图像素"对应几个显示像素：截图恒为 1（选区就是屏幕上的那块），
     /// 贴图在 2.5× 时就是 2.5——不把这个除掉，放大后的贴图会"鼠标在字上、笔落在字外"。
+    /// 贴图滚轮缩放改的就是它，所以可变。
     /// </summary>
-    private readonly double _sourceScale;
+    private double _sourceScale;
 
-    private readonly Action<CaptureOverlayWindow, PinEditResult>? _finishEdit;
+    /// <summary>贴图态：倍率、拖动快照、穿透、角标。</summary>
+    private double _zoom = 1.0;
+    private bool _draggingPin;
+    private bool _clickThrough;
+    private WindowInterop.POINT _gestureStartCursor;
+    private Windows.Graphics.RectInt32 _gestureStartRect;
+    private int _lastAppliedX = int.MinValue;
+    private int _lastAppliedY = int.MinValue;
 
     /// <summary>底图／最终图的尺寸（截图＝选区尺寸；编辑＝贴图的源尺寸，与显示尺寸无关）。</summary>
     private int _contentWidth, _contentHeight;
@@ -178,40 +195,49 @@ public sealed partial class CaptureOverlayWindow : Window
     }
 
     /// <summary>
-    /// 就地编辑一张已经钉在桌面上的贴图：窗口摆在这张贴图现在的位置、按它当前的显示尺寸，
-    /// 底图就是贴图像素。<b>整块画面都是内容</b>——没有"再框一块"、没有压暗、没有改框，
-    /// 因为那时"选区"与"画面"是同一个矩形，留着那套只会让用户以为贴图被裁了。
+    /// 钉一张图到桌面上：<b>这扇窗就是那张图，同时也是它的编辑器</b>。
+    /// 位置与尺寸走 Win32 物理像素（1× 时与当初屏幕那块区域等大，不该再乘一次 DPI），
+    /// 倍率由滚轮改、左上角钉住并收边（PJ 口径）；没选笔时按下拖动＝移动这张图。
     /// </summary>
-    /// <param name="displayRect">贴图当前的物理矩形（已含缩放：源尺寸 × zoom）。</param>
-    /// <param name="sourceScale">一个底图像素对应几个显示像素（＝贴图的 zoom）。</param>
-    /// <param name="finishEdit">改完的那份像素（null＝放弃）；尺寸与传入像素一致。</param>
-    public CaptureOverlayWindow(
-        byte[] pixels, int width, int height, IntRect displayRect,
-        double scale, double sourceScale,
-        Action<CaptureOverlayWindow, PinEditResult> finishEdit)
+    /// <param name="placement">贴在虚拟桌面里的物理矩形（就是刚框选的那块区域）。</param>
+    public CaptureOverlayWindow(byte[] pixels, int width, int height, IntRect placement, double zoom)
     {
         _frame = null;
-        _monitor = displayRect;
-        _scale = scale <= 0 ? 1.0 : scale;
-        _sourceScale = sourceScale <= 0 ? 1.0 : sourceScale;
-        _finish = (_, _) => { };
-        _finishEdit = finishEdit;
-        _mode = CaptureMode.Toolbar;      // 编辑态要的是完整动作条（复制/存图/识字都在）
-        _editing = true;
-        DeviceName = "贴图编辑";
+        _scale = 1.0;                       // 真实缩放要等窗口就位、知道自己在哪块屏之后才量得到
+        _finish = (_, _) => { };            // 贴图态没有"交回选区"这回事
+        _mode = CaptureMode.Toolbar;        // 要的就是那条完整工具条
+        _pinned = true;
+        _zoom = CaptureGeometry.ClampZoom(zoom);
+        _sourceScale = _zoom;
+        DeviceName = "贴图";
+        var (pw, ph) = CaptureGeometry.PinPixelSize(Math.Max(1, width), Math.Max(1, height), _zoom);
+        _monitor = new IntRect(placement.X, placement.Y, pw, ph);
 
         InitWindow();
-        // 编辑态没有"选区"这件事：整块都是内容。压暗、蓝框、尺寸提示、框选说明全部收起，
-        // 否则用户会看到一圈根本不存在的"边界"，接着去拖它。
-        DimLayer.Visibility = Visibility.Collapsed;
-        HintChip.Visibility = Visibility.Collapsed;
-        SizeChip.Visibility = Visibility.Collapsed;
-
-        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), WindowInterop.HWND_TOPMOST,
+        // 贴图不进任务栏、不进 Alt+Tab：一屏贴十几张时那两处会被占满，而它是一次性的工具窗，
+        // 用户找回它靠的是"看得见的那张图"本身。
+        var hwnd = WindowInterop.GetHwnd(this);
+        WindowInterop.SetWindowLong(hwnd, WindowInterop.GWL_EXSTYLE,
+            new IntPtr(WindowInterop.GetWindowLong(hwnd, WindowInterop.GWL_EXSTYLE).ToInt64()
+                | WindowInterop.WS_EX_TOOLWINDOW));
+        WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOPMOST,
             _monitor.X, _monitor.Y, _monitor.Width, _monitor.Height,
             WindowInterop.SWP_SHOWWINDOW | WindowInterop.SWP_NOACTIVATE);
 
+        // 缩放比要按"落在哪块屏"来量：多屏混合 DPI 下拿主屏的数会把选区整体算偏。
+        _scale = WindowInterop.GetScale(this);
+        // 编辑态没有"选区"这件事：压暗、蓝框、尺寸提示与那条框选说明全部收起，
+        // 否则用户会看到一圈根本不存在的边界，接着去拖它。
+        DimLayer.Visibility = Visibility.Collapsed;
+        HintChip.Visibility = Visibility.Collapsed;
+        SelectionTip.IsHitTestVisible = false;
+
         BeginEditingExisting(pixels, width, height);
+        SyncBadge();
+        // 抢一次焦点：贴图要能直接按 Esc 关掉（Snipaste 同做法）。不激活的话 Esc 永远收不到，
+        // 而"只能去托盘关掉全部"在贴图铺满屏幕时是最难受的那种死法。
+        Activate();
+        Closed += (_, _) => PinManager.Unregister(this);
     }
 
     /// <summary>两种模式共用的建窗步骤（XAML、工具条、事件钩子、无边框、关闭兜底）。</summary>
@@ -248,31 +274,13 @@ public sealed partial class CaptureOverlayWindow : Window
 
     // ────────── 会话收尾 ──────────
 
-    /// <summary>
-    /// 编辑贴图的一次结果：<see cref="Pixels"/> 为 null 表示这次没改动要写回（放弃／关闭这张）；
-    /// <see cref="ClosePin"/> 是"连贴图一起关掉"——编辑态里没有第二个地方能说这句话
-    /// （Esc 已经被"放弃编辑"占了，再说清一次比让用户猜强）。
-    /// </summary>
-    public readonly record struct PinEditResult(byte[]? Pixels, bool ClosePin);
-
     /// <summary>把结果（null＝取消）交给服务；一个会话只交一次。</summary>
     private void Settle(IntRect? selection)
     {
         if (_settled) return;
         _settled = true;
-        if (_editing) _finishEdit!(this, new PinEditResult(null, ClosePin: false));
-        else _finish(this, selection);
-    }
-
-    /// <summary>
-    /// 编辑贴图：把这一份写回原贴图并收窗。<b>任何动作都先写回</b>——用户画完点的是「复制」，
-    /// 不写回就等于回到桌面后发现贴图还是旧的，那些标注凭空没了（丢东西比多一步严重）。
-    /// </summary>
-    private void FinishEdit(byte[]? pixels, bool closePin)
-    {
-        if (_settled) return;
-        _settled = true;
-        _finishEdit!(this, new PinEditResult(pixels, closePin));
+        // 贴图态没有"交回"这回事：这扇窗显示的就是那张图，关掉即从名册里摘掉（见 Closed 钩子）。
+        if (!_pinned) _finish(this, selection);
     }
 
     /// <summary>服务在统一收尾时调用：本窗已把结果交出去了，直接关。</summary>
@@ -375,15 +383,12 @@ public sealed partial class CaptureOverlayWindow : Window
         BarRow.Children.Add(_clearButton);
 
         BarRow.Children.Add(Separator());
-        _copyButton = IconButton(CopyIcon(), _editing
-            ? "把改好的画面复制进剪贴板（同时写回贴图）"
-            : "把带标注的画面复制进剪贴板（Enter）");
+        _copyButton = IconButton(CopyIcon(), "把带标注的画面复制进剪贴板（Enter）");
         _copyButton.Click += Copy_Click;
         var save = IconButton(SaveIcon(), "存成 PNG（Ctrl+S）");
         save.Click += Save_Click;
-        // 编辑贴图时"再钉一张"这颗没有意义（这张本来就钉在桌面上），换成「完成」：
-        // 少一颗按钮也少一种"我刚点的那份到底去哪了"的困惑。
-        if (!_editing)
+        // 贴图态不再显示"再钉一张"这颗：这张本来就钉着，多一颗只会让人猜那份去哪了。
+        if (!_pinned)
         {
             var pin = IconButton(PinIcon(), "钉在桌面上（同 F3），带上刚画的标注");
             pin.Click += Pin_Click;
@@ -394,13 +399,13 @@ public sealed partial class CaptureOverlayWindow : Window
         BarRow.Children.Add(_copyButton);
         BarRow.Children.Add(save);
         BarRow.Children.Add(ocr);
-        if (_editing)
+        if (_pinned)
         {
-            var done = IconButton(CheckIcon(), "完成编辑，把这一份写回贴图（Enter）");
-            done.Click += EditDone_Click;
-            BarRow.Children.Add(done);
+            var through = IconButton(ThroughIcon(), "鼠标穿透：让这张图不再收鼠标（全体恢复用 F5）");
+            through.Click += Through_Click;
+            BarRow.Children.Add(through);
         }
-        var cancel = IconButton(CrossIcon(), _editing ? "放弃本次编辑，贴图保持原样（Esc）" : "结束这一屏（Esc）");
+        var cancel = IconButton(CrossIcon(), _pinned ? "关闭这张（Esc）" : "结束这一屏（Esc）");
         cancel.Click += Cancel_Click;
         BarRow.Children.Add(cancel);
 
@@ -484,7 +489,10 @@ public sealed partial class CaptureOverlayWindow : Window
     private string ShapeButtonText()
         => _tool is { } tool
             ? $"图形：{Annotation.ToolName(tool)}（点开换矩形 / 椭圆 / 直线 / 折线 / 箭头；再点一次当前工具＝取消选中）"
-            : "没选工具＝改框那一态（十字箭头：可拖动选区、可改边缘大小）。点图标开始画";
+            // 贴图态没有"框"可改：未选笔那一按是移动整张图，说明要按它真正的行为写
+            : _pinned
+                ? "没选工具＝移动这张图（十字箭头：按住可拖走）。点图标开始画"
+                : "没选工具＝改框那一态（十字箭头：可拖动选区、可改边缘大小）。点图标开始画";
 
     /// <summary>把"当前用的是哪种图形、哪一支笔"画出来（图标上没有文字，只能靠底色与那颗点说）。</summary>
     private void SyncTools()
@@ -728,7 +736,10 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private static UIElement CrossIcon() => Icon(Seg(3.5, 3.5, 12.5, 12.5), Seg(12.5, 3.5, 3.5, 12.5));
 
-    private static UIElement CheckIcon() => Icon(Seg(3.4, 8.6, 6.8, 11.9, 1.9), Seg(6.8, 11.9, 12.9, 4.4, 1.9));
+    /// <summary>穿透那颗：一个方框被一支箭头穿过——"鼠标会从它身上走过去"这件事得看得出来。</summary>
+    private static UIElement ThroughIcon() => Icon(
+        Ring(4.5, 3, 8.5, 9, 1.4), Seg(1.5, 14, 14.5, 1.5, 1.8),
+        Seg(10.5, 1.5, 14.5, 1.5, 1.8), Seg(14.5, 1.5, 14.5, 5.5, 1.8));
 
     private static UIElement CopyIcon()
         => Icon(Out(2, 2.5, 8, 9, 1.3, InkDim), Out(6, 5, 8, 9, 1.3));
@@ -760,14 +771,18 @@ public sealed partial class CaptureOverlayWindow : Window
         // 已经有选区、这次按在选区里面、而且是"给动作条"的那条链 ⇒ 这一按是**画**，不是重新框选。
         // 选区外面照旧起新框：用户想换个范围就换个范围，标注跟着作废（底图都换了，留着旧的只会对不上）。
         // 一支笔都没选 ⇒ 这一按是用来改框的（整块移动 / 改边缘大小）。落在框外远处则放行给"重新框一块"。
-        if (_mode == CaptureMode.Toolbar && !_editing && _base is not null && !Armed && TryBeginAdjust(physical, e.Pointer)) return;
+        if (_mode == CaptureMode.Toolbar && !_pinned && _base is not null && !Armed && TryBeginAdjust(physical, e.Pointer)) return;
         if (_mode == CaptureMode.Toolbar && _base is not null && InsideSelection(physical))
         {
             // 先问"这一按是不是在改已有的那一条"（选中框/把手就在那儿）；不是才轮到画新的
             if (TryBeginGrab(ToLocal(physical), e.Pointer)) return;
-            // 一支笔都没选＝不改画面，只预备改框（拖动/改大小在批次 PK-2 接上）。
-            // 这一条守卫是"未选工具还能不能画"的唯一出口——少了它，下面所有 _tool!.Value 都会是空引用。
-            if (_tool is not { } tool) return;
+            // 一支笔都没选＝不改画面。截图态放行给"改框/重新框一块"（上面那条守卫是唯一出口——
+            // 少了它，下面所有 _tool!.Value 都会是空引用）；贴图态没有框可改，这一按＝移动整张图。
+            if (_tool is not { } tool)
+            {
+                if (_pinned) BeginPinDrag(e.Pointer);
+                return;
+            }
             _strokeTool = tool;                        // 这一笔从头到尾用它，与中途会不会换工具无关
             // 折线是"点出来的"，没有按下-拖动-放开这一说：每一按钉一个顶点，收口用 Enter 或双击
             if (tool == AnnotationTool.PolyLine) PlaceVertex(ToLocal(physical));
@@ -775,9 +790,14 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
-        // 编辑贴图时没有"重新框一块"这回事：整块画面就是内容，落点稍偏（圆角外、边缘那一像素）
+        // 贴图态没有"重新框一块"这回事：整块画面就是内容，落点稍偏（圆角外、边缘那一像素）
         // 也不能把底图丢掉——那等于把用户已经画好的标注一起清空。
-        if (_editing) return;
+        // 没选笔 ⇒ 这一按是"移动这张图"（与截图态"未选笔＝不动笔、可以改框"同一语义）。
+        if (_pinned)
+        {
+            if (!Armed) BeginPinDrag(e.Pointer);
+            return;
+        }
 
         _startPhysical = physical;
         _awaitingRelease = true;
@@ -793,6 +813,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private void Root_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
         if (_settled) return;
+        if (_draggingPin) { PinDragTo(); return; }
         var position = e.GetCurrentPoint(Root).Position;
         if (_dragOriginal is not null)
         {
@@ -827,6 +848,12 @@ public sealed partial class CaptureOverlayWindow : Window
     private void Root_PointerReleased(object sender, PointerRoutedEventArgs e)
     {
         if (_settled) return;
+        if (_draggingPin)
+        {
+            _draggingPin = false;
+            Root.ReleasePointerCapture(e.Pointer);
+            return;
+        }
         if (_adjust != CaptureGeometry.SelectionEdge.None)
         {
             EndAdjust();
@@ -871,11 +898,10 @@ public sealed partial class CaptureOverlayWindow : Window
     private void Root_RightTapped(object sender, RightTappedRoutedEventArgs e)
     {
         e.Handled = true;
-        // 截图时右键＝"这一屏不截"（与 Snipaste 一致）。编辑贴图时右键<b>不能是"丢"</b>：
-        // 那时用户已经画了一半，一次误触就没了。所以编辑态右键打开那份合并后的菜单
-        // （完成／放弃／复制／存图／识字／关闭这张），把"丢"明确写成一句"放弃本次编辑"。
-        if (_editing) FlyoutBase.ShowAttachedFlyout(Root);
-        else Settle(null);
+        // 截图时右键＝"这一屏不截"（与 Snipaste 一致）。贴图态右键<b>什么都不做</b>：
+        // 图已经画了一半，一次误触不该把它丢掉；贴图能做的动作全在这条工具条上
+        // （用户口径：那份右键菜单由截图时这条小菜单整体取代）。
+        if (!_pinned) Settle(null);
     }
 
     private void Root_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -909,12 +935,13 @@ public sealed partial class CaptureOverlayWindow : Window
                 break;
             case VirtualKey.Escape:
                 e.Handled = true;
-                Settle(null);
+                if (_pinned) Close();     // 贴图态：Esc＝关闭这张（与建窗时的口径一致）
+                else Settle(null);
                 break;
             case VirtualKey.Enter:
                 e.Handled = true;
-                // 编辑贴图时 Enter＝"改完了，写回贴图"；截图时 Enter 仍是"复制走"（口径不变）。
-                Commit(_editing ? CommitAction.Done : _mode switch
+                // Enter 一直是"按当前那条链直接交出去"：截图＝复制走，贴图态是 Toolbar 模式所以同样复制走。
+                Commit(_mode switch
                 {
                     CaptureMode.Pin => CommitAction.Pin,
                     CaptureMode.Ocr => CommitAction.Ocr,
@@ -1040,6 +1067,154 @@ public sealed partial class CaptureOverlayWindow : Window
         SyncTools();            // 条上不该有任何一颗看起来是选中的：框选完是"改框"那一态
         ApplyCursor();
         _copyButton.Focus(FocusState.Programmatic);
+    }
+
+    // ────────── 贴图态：移动、缩放、穿透、角标、悬停出条 ──────────
+
+    /// <summary>
+    /// 没选笔时按下拖动＝移动整张图。存"按下时的窗口矩形 + 光标物理坐标"两份快照，
+    /// 每帧从快照重算绝对位置——用增量累加会抖（与 MZ 那条抖动教训同一口径）。
+    /// </summary>
+    private void BeginPinDrag(Pointer pointer)
+    {
+        WindowInterop.GetCursorPos(out _gestureStartCursor);
+        _gestureStartRect = WindowInterop.GetWindowRect(this);
+        _draggingPin = true;
+        Root.CapturePointer(pointer);
+    }
+
+    private void PinDragTo()
+    {
+        WindowInterop.GetCursorPos(out var cursor);
+        // 全程物理像素：光标坐标与窗口矩形同一单位，不需要 DPI 因子，
+        // 于是"拖到另一块缩放不同的屏上就越来越偏"这一类错误结构上不存在。
+        var x = _gestureStartRect.X + cursor.X - _gestureStartCursor.X;
+        var y = _gestureStartRect.Y + cursor.Y - _gestureStartCursor.Y;
+        // 可以拖出屏幕去看想看的部分，但不许整块丢光（与缩放共用同一条收边判据）
+        var (cx, cy) = CaptureGeometry.PinOrigin(
+            x, y, _gestureStartRect.Width, _gestureStartRect.Height, WorkArea());
+        if (cx == _lastAppliedX && cy == _lastAppliedY) return;
+        _lastAppliedX = cx;
+        _lastAppliedY = cy;
+        _monitor = new IntRect(cx, cy, _monitor.Width, _monitor.Height);
+        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero, cx, cy, 0, 0,
+            WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
+    }
+
+    /// <summary>滚轮＝缩放这张图（贴图态专属；截图态滚轮没有意义）。</summary>
+    private void Root_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_pinned) return;
+        var next = CaptureGeometry.NextZoom(_zoom, e.GetCurrentPoint(Root).Properties.MouseWheelDelta);
+        if (Math.Abs(next - _zoom) < 0.0001) { SyncBadge(); return; }   // 已在端点：窗不动，角标仍要说清现在几倍
+        _zoom = next;
+        _sourceScale = next;
+        ResizePinAnchoringTopLeft();
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// 改尺寸时<b>钉住左上角</b>再按 <see cref="CaptureGeometry.PinOrigin"/> 收边（PJ 口径）：
+    /// 绕中心缩放会让整块图跑出屏幕再也回不来。
+    /// </summary>
+    private void ResizePinAnchoringTopLeft()
+    {
+        var current = WindowInterop.GetWindowRect(this);
+        var (w, h) = CaptureGeometry.PinPixelSize(_contentWidth, _contentHeight, _zoom);
+        var (x, y) = CaptureGeometry.PinOrigin(current.X, current.Y, w, h, WorkArea());
+        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero, x, y, w, h,
+            WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
+        _monitor = new IntRect(x, y, w, h);
+        _lastAppliedX = x;
+        _lastAppliedY = y;
+        RelayoutContent();
+    }
+
+    /// <summary>窗口矩形变了（缩放）之后重摆内容与工具条：底图与预览的像素没动，动的只是显示尺寸。</summary>
+    private void RelayoutContent()
+    {
+        if (_selection is not { } s) return;
+        var (x, y, w, h) = ToDip(s);
+        Canvas.SetLeft(AnnotateShot, x);
+        Canvas.SetTop(AnnotateShot, y);
+        AnnotateShot.Width = w;
+        AnnotateShot.Height = h;
+        PositionBar(s);
+        DrawSelectionHandles();
+        SyncBadge();
+    }
+
+    /// <summary>
+    /// 贴图态的角标：倍率，以及"已穿透"这件事必须留在图上（这张窗收不到鼠标时，
+    /// 用户若不知道 F5 就只剩"托盘关掉全部"这一条粗路）。复用截图时那颗尺寸提示 <c>SizeChip</c>——
+    /// 它本来就是"这块画面现在是什么样"的说明位，另起一块只会多一处要维护的浮层。
+    /// <para>摆在<b>右下</b>：这条工具条在贴图态只能压在画面顶部，左上一个角标会把最右那几颗挡住。</para>
+    /// </summary>
+    private void SyncBadge()
+    {
+        if (!_pinned) return;
+        SizeChip.HorizontalAlignment = HorizontalAlignment.Right;
+        SizeChip.VerticalAlignment = VerticalAlignment.Bottom;
+        SizeChip.Margin = new Thickness(0, 0, 1, 1);
+        SizeText.Text = CaptureGeometry.FormatZoom(_zoom) + (_clickThrough ? " · 已穿透，按 F5 恢复" : "");
+        // 100% 且没穿透＝刚贴上的原样，不必顶一个角标挡画面
+        SizeChip.Visibility = Math.Abs(_zoom - 1.0) < 0.0001 && !_clickThrough
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
+    /// <summary>当前是否鼠标穿透（名册用它决定托盘勾选项的勾选态）。</summary>
+    public bool IsClickThrough => _clickThrough;
+
+    /// <summary>
+    /// 套用穿透状态并回报有没有真的套上。<b>失败不能静默</b>：那时用户看到的是"点了没反应"。
+    /// <para>开成穿透时把工具条收掉：这张窗此后收不到鼠标，那条悬停才收起的条子会一直压在画面上，
+    /// 而用户已经没有第二颗按钮能把它点掉（F5 恢复后再移进来就会重新出现）。</para>
+    /// </summary>
+    public bool ApplyClickThrough(bool on)
+    {
+        var ok = WindowInterop.SetClickThrough(this, on);
+        _clickThrough = ok ? on : _clickThrough;
+        if (_clickThrough) ActionBar.Visibility = Visibility.Collapsed;
+        SyncBadge();
+        return ok;
+    }
+
+    /// <summary>
+    /// 放回屏幕（F4 显示全部）。显示走"原生 ShowWindow 兜一遍"：批次 D4 量过 WinUI 的显示调用
+    /// 在桌面窗 owned 的那层关系上并不可靠，贴图窗同样挂在桌面上，不该指望另一条路径。
+    /// </summary>
+    public void Present()
+    {
+        try
+        {
+            var hwnd = WindowInterop.GetHwnd(this);
+            WindowInterop.ShowWindow(hwnd, WindowInterop.SW_SHOWNOACTIVATE);
+            Activate();
+        }
+        catch (Exception ex) { StarLog.Warn($"[Pin] 唤回贴图失败：{ex.Message}"); }
+    }
+
+    public void HidePin()
+    {
+        try { WindowInterop.ShowWindow(WindowInterop.GetHwnd(this), WindowInterop.SW_HIDE); }
+        catch (Exception ex) { StarLog.Warn($"[Pin] 隐藏贴图失败：{ex.Message}"); }
+    }
+
+    /// <summary>工具条平时收起（一屏十几张贴图就十几条横杠，会盖住画面），鼠标进窗即现。</summary>
+    private void Root_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        if (_pinned) ActionBar.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// 鼠标离开就收起——但<b>正在用笔的时候不许收</b>：选了笔、正在打字、折线还没收口、已选中某条要拖，
+    /// 这些时候条子半路消失比看不见更烦（真机反馈里"工具条自己没了"就是这类收起时机错的形状）。
+    /// </summary>
+    private void Root_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_pinned || Armed || _editingText || _polyLine is not null || _selected is not null) return;
+        ActionBar.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>本屏工作区（物理像素，已扣任务栏）：选区挪动与改大小都只能在它里面。</summary>
@@ -1809,9 +1984,19 @@ public sealed partial class CaptureOverlayWindow : Window
         var (x, y, w, h) = ToDip(selection);
         var screenWidth = _monitor.Width / _scale;
         var screenHeight = _monitor.Height / _scale;
-        var left = Math.Clamp(x + w - barWidth, 4, Math.Max(4, screenWidth - barWidth - 4));
-        var below = y + h + 6 + barHeight <= screenHeight;
-        PlaceByMargin(ActionBar, left, below ? y + h + 6 : Math.Max(4, y - barHeight - 6));
+        // 贴图态这条只能压在画面上（窗口就是那张图），而"截一小块钉住"常常没有一条工具条宽。
+        // 整条缩到塞得进画面，而不是把右边那几颗（复制/存图/识字/关闭）裁掉——裁掉的正好是要用的。
+        var fit = 1.0;
+        if (_pinned && barWidth > 0)
+        {
+            fit = Math.Clamp((screenWidth - 8) / barWidth, 0.5, 1.0);
+            ActionBar.RenderTransformOrigin = new Windows.Foundation.Point();
+            ActionBar.RenderTransform = new ScaleTransform { ScaleX = fit, ScaleY = fit };
+        }
+        var (scaledWidth, scaledHeight) = (barWidth * fit, barHeight * fit);
+        var left = Math.Clamp(x + w - scaledWidth, 4, Math.Max(4, screenWidth - scaledWidth - 4));
+        var below = y + h + 6 + scaledHeight <= screenHeight;
+        PlaceByMargin(ActionBar, left, below ? y + h + 6 : Math.Max(4, y - scaledHeight - 6));
     }
 
     private static void PlaceOnCanvas(FrameworkElement element, double x, double y, double w, double h)
@@ -1843,25 +2028,20 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void Ocr_Click(object sender, RoutedEventArgs e) => Commit(CommitAction.Ocr);
 
-    private void Cancel_Click(object sender, RoutedEventArgs e) => Settle(null);
+    private void Cancel_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pinned) Close();          // 贴图态的 ✕＝关闭这张图（与 Esc 同一件事）
+        else Settle(null);
+    }
 
-    private void EditDone_Click(object sender, RoutedEventArgs e) => Commit(CommitAction.Done);
+    private void Through_Click(object sender, RoutedEventArgs e) => PinManager.ToggleClickThrough();
 
-    private void EditDiscard_Click(object sender, RoutedEventArgs e) => Settle(null);
-
-    private void ClosePin_Click(object sender, RoutedEventArgs e) => FinishEdit(null, closePin: true);
-
-    private enum CommitAction { Copy, Save, Pin, Ocr, Done }
+    private enum CommitAction { Copy, Save, Pin, Ocr }
 
     /// <summary>
     /// 提交这一屏的选区：复制、存图、钉住，或认字并复制文字。四个落点交的都是<b>带上标注的那一份画面</b>。
     /// 先算好像素再 Settle：服务收到结果就会关掉所有遮罩窗（包括本窗），
     /// 反过来先干活会让用户在裁图期间还被困在暗幕里。
-    /// <para>
-    /// 编辑贴图时多一条规矩：<b>不管点的是哪个动作，都先把这一份写回原贴图</b>（<see cref="CommitAction.Done"/>
-    /// 就是"只写回"）。用户点「复制」之后回到桌面，看到的贴图应该就是他刚画完的那张——
-    /// 不写回等于把刚画的东西凭空抹掉，那比多点一次按钮严重得多。
-    /// </para>
     /// </summary>
     private void Commit(CommitAction action)
     {
@@ -1872,28 +2052,26 @@ public sealed partial class CaptureOverlayWindow : Window
             Settle(null);
             return;
         }
-        if (!_editing && CaptureGeometry.SelectionProblem(selection, _monitor) is { } reason)
+        if (!_pinned && CaptureGeometry.SelectionProblem(selection, _monitor) is { } reason)
         {
             ShowError(reason);
             return;
         }
         if (FinalPixels() is not { } final) return;       // 原因已经在里面报过了，这里只负责不再往下走
-        if (_editing) FinishEdit(final.Pixels, closePin: false);
-        else Settle(selection);
+        if (!_pinned) Settle(selection);
+        // 贴图态交出去的也是"当前这一份"：贴图显示的就是合成预览，所见即所存这条不变。
+        var category = _pinned ? "贴图" : "截图";
         switch (action)
         {
-            case CommitAction.Done: break;                 // 写回已经在上面做完了
             case CommitAction.Copy:
-                _ = ScreenshotService.CopyPixelsAsync(final.Pixels, final.Width, final.Height,
-                    _editing ? "贴图编辑" : "截图");
+                _ = ScreenshotService.CopyPixelsAsync(final.Pixels, final.Width, final.Height, category);
                 break;
             case CommitAction.Save:
-                _ = ScreenshotService.SavePixelsAsync(final.Pixels, final.Width, final.Height,
-                    _editing ? "贴图编辑" : "截图");
+                _ = ScreenshotService.SavePixelsAsync(final.Pixels, final.Width, final.Height, category);
                 break;
             case CommitAction.Ocr:
                 _ = OcrService.CopyTextFromPixelsAsync(final.Pixels, final.Width, final.Height,
-                    _editing ? "贴图识字" : "截图识字");
+                    _pinned ? "贴图识字" : "截图识字");
                 break;
             default: ScreenshotService.PinPixels(final.Pixels, final.Width, final.Height, selection); break;
         }

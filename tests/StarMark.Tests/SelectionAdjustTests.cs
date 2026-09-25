@@ -153,7 +153,7 @@ public sealed class SelectionAdjustTests
         // ① 未选工具 ⇒ 这一按是改框，且改完不再走到"画一笔"
         var press = SourceGate.MethodBody(cs, "private void Root_PointerPressed");
         Assert.Contains("!Armed && TryBeginAdjust(physical, e.Pointer)", press);
-        Assert.Contains("if (_tool is not { } tool) return;", press);
+        Assert.Contains("if (_tool is not { } tool)", press);   // 未选笔这一按不起笔（贴图态那里是移动整张图）
         Assert.True(press.IndexOf("TryBeginAdjust", System.StringComparison.Ordinal)
                     < press.IndexOf("BeginStroke(", System.StringComparison.Ordinal),
             "改框的分支排在起笔之后＝未选工具时那一按仍会被当成画");
@@ -198,7 +198,10 @@ public sealed class SelectionAdjustTests
         var cs = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
         // 守卫（未选工具不起笔）与钉笔种必须在同一处，谁也不能只留一半
         var press = SourceGate.MethodBody(cs, "private void Root_PointerPressed");
-        Assert.Contains("if (_tool is not { } tool) return;", press);
+        Assert.Contains("if (_tool is not { } tool)", press);
+        Assert.True(press.IndexOf("if (_tool is not { } tool)", System.StringComparison.Ordinal)
+                    < press.IndexOf("_strokeTool = tool;", System.StringComparison.Ordinal),
+            "未选笔的守卫排在钉笔种之后＝先起笔再拦，等于没拦");
         Assert.Contains("_strokeTool = tool;", press);
         Assert.Contains("private AnnotationTool _strokeTool", cs);
         Assert.Contains("BeginStroke(PixelPoint local, Pointer pointer, AnnotationTool tool)", cs);

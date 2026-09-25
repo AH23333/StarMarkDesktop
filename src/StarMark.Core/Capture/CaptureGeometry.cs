@@ -253,7 +253,7 @@ public static class CaptureGeometry
     public static string? PinCommandProblem(int currentPins)
         => currentPins == 0 ? "现在没有贴图，这一条没有可操作的对象" : null;
 
-    /// <summary>贴图当前的提示文案（缩放徽标与右键菜单里的那个百分比）。</summary>
+    /// <summary>贴图当前的倍率文案（右上角那颗角标用的百分比）。</summary>
     public static string FormatZoom(double zoom)
         => ((int)Math.Round(ClampZoom(zoom) * 100, MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture) + "%";
 
@@ -267,21 +267,6 @@ public static class CaptureGeometry
         static int Map(int source, double factor)
             => Math.Max(1, (int)Math.Round(source * ClampZoom(factor), MidpointRounding.AwayFromZero));
         return (Map(sourceWidth, zoom), Map(sourceHeight, zoom));
-    }
-
-    /// <summary>
-    /// 编辑交回的那份像素<b>能不能</b>写回这张贴图。null＝可以；否则是一句能直接读给用户的原因。
-    /// <para>尺寸不符意味着链上某一步把画面改了尺寸（改框、重裁、未来的旋转…）。那种像素贴回去
-    /// 会与窗口对不上，显示成被拉伸过的一张图——比"这次编辑没生效"更难诊断，所以宁可保留原图并说清。</para>
-    /// <para>像素按 BGRA 每像素 4 字节算；乘法走 <see cref="long"/>，免得超大选区先溢出成负数再误判。</para>
-    /// </summary>
-    public static string? PinEditProblem(int sourceWidth, int sourceHeight, byte[]? pixels)
-    {
-        if (pixels is null) return null;      // 放弃本次编辑／关闭这张：没有要写回的东西，不算失败
-        var expected = (long)sourceWidth * sourceHeight * 4;
-        return (long)pixels.Length == expected
-            ? null
-            : $"编辑交回 {pixels.Length} 字节，与这张图的 {expected} 字节（{sourceWidth} × {sourceHeight}）不符";
     }
 
     /// <summary>

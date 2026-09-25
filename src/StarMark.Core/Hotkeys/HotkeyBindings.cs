@@ -64,7 +64,7 @@ public static class HotkeyBindings
         // 那时它的右键菜单、托盘勾选项之外的操作路径全断（发起人真机反馈：只能靠托盘关掉全部）。
         // 所以给 F5——用户不需要知道是哪张被穿透了，按一下把这一组全部交还鼠标（见 VirtualKeyF5 注释）。
         [HotkeyActions.ScreenPinClickThrough] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF5),
-        // 识字刻意**不占默认键**：它比截图低频，而入口已有三处（动作条「识字」、贴图右键、托盘），
+        // 识字刻意**不占默认键**：它比截图低频，而入口已有三处（动作条「识字」、贴图工具条、托盘），
         // 少占一个全局键位就少一处"与别的软件撞键"的可能（同 P-76 的口径）。
     };
 

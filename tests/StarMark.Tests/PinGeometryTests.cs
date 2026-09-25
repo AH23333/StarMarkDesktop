@@ -119,7 +119,7 @@ public sealed class PinGeometryTests
     [Fact]
     public void Defaults_OcrIsDeliberatelyUnbound_ButStillListedForBinding()
     {
-        // 识字是低频动作且入口已有三处（动作条、贴图右键、托盘）⇒ 不占默认键，
+        // 识字是低频动作且入口已有三处（动作条、贴图工具条、托盘）⇒ 不占默认键，
         // 但必须出现在设置页里，否则想绑的人找不到地方（"只提示不阻碍"之外还要"够得着"）
         Assert.False(HotkeyBindings.Defaults().ContainsKey(HotkeyActions.ScreenOcr));
         Assert.Contains(HotkeyActions.ScreenOcr, HotkeyActions.All());

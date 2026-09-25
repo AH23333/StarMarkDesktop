@@ -73,16 +73,18 @@ public sealed class PinPlacementTests
     /// 界面那两条路（滚轮缩放、拖动）都必须走这条判据，且缩放不许再绕中心。
     /// <para>绕中心就是这次的缺陷本体：中心被拖到屏外以后，往下缩只是围着屏外的中心收拢。
     /// 测试工程引用不到 UI 层，所以这条只能扫源码——但它钉的是"还有没有人自己算落点"。</para>
+    /// <para>批次 PN：贴图窗本身就是截图那条编辑链，所以这两条路从 PinWindow 搬进了
+    /// CaptureOverlayWindow 的贴图态——判据一个字没改，只是要跟着换文件找。</para>
     /// </summary>
     [Fact]
     public void TheUiOnlyAsksForTheOrigin_ItNoLongerAnchorsZoomAtTheCenter()
     {
-        var cs = SourceGate.ReadRepoFile("src/StarMark.UI/Views/PinWindow.xaml.cs");
+        var cs = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
         Assert.DoesNotContain("(current.Width - w) / 2", cs);
         Assert.DoesNotContain("ResizeKeepingCenter", cs);
         Assert.Equal(2, SourceGate.Count(cs, "CaptureGeometry.PinOrigin("));   // 缩放一处、拖动一处
-        Assert.Contains("ResizeAnchoringTopLeft();", SourceGate.MethodBody(cs, "private void Root_PointerWheelChanged"));
-        // 工作区取"贴图所在那块屏"，不是主屏——多屏下按主屏夹会把贴图从副屏拽走
+        Assert.Contains("ResizePinAnchoringTopLeft();", SourceGate.MethodBody(cs, "private void Root_PointerWheelChanged"));
+        // 工作区取"这块屏"，不是主屏——多屏下按主屏夹会把贴图从副屏拽走
         Assert.Contains("WindowInterop.GetWorkArea(this)", cs);
     }
 }
