@@ -461,16 +461,7 @@ public partial class SearchPageViewModel : ObservableObject
     partial void OnCurrentLanguageChanged(string value) { _ = SearchAsync(); }
 
     /// <summary>解析条目主语言（仅 GitHubStar）。供语言下拉聚合。</summary>
-    private static string? TryGetLanguage(Item it)
-    {
-        if (string.IsNullOrEmpty(it.ExtraJson)) return null;
-        try
-        {
-            var meta = System.Text.Json.JsonSerializer.Deserialize<StarMark.Abstractions.GitHubStarMeta>(it.ExtraJson);
-            return string.IsNullOrEmpty(meta?.Language) ? null : meta.Language;
-        }
-        catch (System.Text.Json.JsonException) { return null; }
-    }
+    private static string? TryGetLanguage(Item it) => StarMark.Abstractions.GitHubStarExtra.LanguageOf(it);
 
     // ───────── 全局标签筛选（单一真源 = Main.GlobalTagFilters，对齐扩展 tagFilters）─────────
 

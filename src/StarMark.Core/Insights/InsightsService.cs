@@ -96,9 +96,13 @@ public static class InsightsService
 
         var score = Math.Max(0, 100 - deduction);
 
+        // 一条条目在一次报告里<b>只解析一次</b> ExtraJson：语言分布与趋势归属过去各解析一遍，
+        // 而这里是整表——等于每条都反序列化两遍。解析口径收在 GitHubStarExtra（坏 JSON 与"没有"同义）。
+        var parsed = items.Select(item => (item, Meta: GitHubStarExtra.TryRead(item))).ToList();
+
         // 语言分布 Top8
-        var languageTop = items
-            .Select(ExtractLanguage)
+        var languageTop = parsed
+            .Select(p => string.IsNullOrEmpty(p.Meta?.Language) ? null : p.Meta!.Language)
             .Where(l => !string.IsNullOrEmpty(l))
             .GroupBy(l => l!, StringComparer.OrdinalIgnoreCase)
             .Select(g => new LanguageStat { Language = g.Key, Count = g.Count() })
@@ -120,9 +124,9 @@ public static class InsightsService
             trendIndex[key] = trend.Count;
             trend.Add(new DateCount { Date = day.ToString("MM-dd", CultureInfo.InvariantCulture), Count = 0 });
         }
-        foreach (var item in items)
+        foreach (var (item, meta) in parsed)
         {
-            var key = AnchorDate(item, clock).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var key = AnchorDate(item, meta, clock).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             if (trendIndex.TryGetValue(key, out var idx))
                 trend[idx] = new DateCount { Date = trend[idx].Date, Count = trend[idx].Count + 1 };
         }
@@ -203,34 +207,14 @@ public static class InsightsService
         return string.IsNullOrEmpty(uri) ? string.Empty : uri.ToLowerInvariant();
     }
 
-    private static string? ExtractLanguage(Item item)
+    /// <summary>
+    /// 新增归属日期：GitHubStar 用 starredAt（否则 createdAt），其它类型用 createdAt。
+    /// <paramref name="meta"/> 由调用侧一次解析好传进来（<see cref="GitHubStarExtra.TryRead"/>），
+    /// 这里不再碰 JSON——整表统计里每条二次反序列化是白花的钱。
+    /// </summary>
+    private static DateTime AnchorDate(Item item, GitHubStarMeta? meta, Func<DateTimeOffset> clock)
     {
-        if (item.Type != ItemType.GitHubStar || string.IsNullOrEmpty(item.ExtraJson)) return null;
-        try
-        {
-            var meta = JsonSerializer.Deserialize<GitHubStarMeta>(item.ExtraJson);
-            return string.IsNullOrEmpty(meta?.Language) ? null : meta.Language;
-        }
-        catch (JsonException) { return null; }
-    }
-
-    /// <summary>新增归属日期：GitHubStar 用 starredAt（否则 createdAt），其它类型用 createdAt。</summary>
-    private static DateTime AnchorDate(Item item, Func<DateTimeOffset> clock)
-    {
-        long anchorSec;
-        if (item.Type == ItemType.GitHubStar && !string.IsNullOrEmpty(item.ExtraJson))
-        {
-            try
-            {
-                var meta = JsonSerializer.Deserialize<GitHubStarMeta>(item.ExtraJson);
-                anchorSec = meta?.StarredAt ?? item.CreatedAt;
-            }
-            catch (JsonException) { anchorSec = item.CreatedAt; }
-        }
-        else
-        {
-            anchorSec = item.CreatedAt;
-        }
+        var anchorSec = meta?.StarredAt ?? item.CreatedAt;
         // FromUnixTimeSeconds 只接受 [-62135596800, 253402300799]；越界值（毫秒级/荒谬 long，
         // 手改或坏备份可注入）会抛 ArgumentOutOfRangeException，且趋势循环无 try 包裹 → 整份报告崩。
         // 落回条目入库时间；若 created_at 本身也被污染则退到 Unix 纪元，绝不抛出。

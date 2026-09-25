@@ -179,16 +179,7 @@ public sealed class SearchService
     }
 
     /// <summary>取条目主语言（仅 GitHubStar 有值）。供语言筛选兜底使用。</summary>
-    private static string? GetLanguage(Item item)
-    {
-        if (item.Type != ItemType.GitHubStar || string.IsNullOrEmpty(item.ExtraJson)) return null;
-        try
-        {
-            var meta = System.Text.Json.JsonSerializer.Deserialize<GitHubStarMeta>(item.ExtraJson);
-            return string.IsNullOrEmpty(meta?.Language) ? null : meta.Language;
-        }
-        catch (System.Text.Json.JsonException) { return null; }
-    }
+    private static string? GetLanguage(Item item) => GitHubStarExtra.LanguageOf(item);
 
     private static async Task<SearchResult> SafeAwait(Task<SearchResult> task, CancellationToken ct)
     {
