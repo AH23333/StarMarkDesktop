@@ -180,18 +180,19 @@ public sealed class SelectionAdjustTests
         Assert.Contains("ApplyCursor();", enter);
     }
 
-    /// <summary>取消选中：再点当前工具/当前图形都回到"不动笔"，而不是保持选中。</summary>
+    /// <summary>
+    /// 工具的选中态没有"默认那支笔"。批次 PV 起口径变了：点笔一次＝选中＋弹出颜色/粗细浮层，
+    /// "收笔"统一走 Esc（见 TwoStageCaptureTests.APenClickSelectsItAndOpensThePalette）；
+    /// 这里只钉"不许有隐形默认工具"这条不变的底线。
+    /// </summary>
     [Fact]
-    public void EveryToolTogglesOffOnTheSecondClick()
+    public void NoToolIsSilentlyPreselected()
     {
         var cs = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
-        Assert.Contains("if (tool == _tool) SetTool(null);",
-            SourceGate.MethodBody(cs, "private void BrushTool_Click"));
-        Assert.Contains("SetTool(wanted == _tool ? null : wanted);", cs);
         Assert.Contains("private AnnotationTool? _tool;", cs);              // 没有"默认那支笔"这回事
         Assert.DoesNotContain("_tool = AnnotationTool.Rectangle;", cs);     // 也不许在别处偷偷选上
         Assert.Contains("private void SetTool(AnnotationTool? tool)", cs);
-        // 换颜色/粗细的入口挪到右键，点按那条让给"取消选中"
+        // 换颜色/粗细的入口保留右键一路（批次 PV：点笔一次＝选中＋弹浮层）
         Assert.Contains("button.RightTapped += BrushTool_RightTapped;", cs);
     }
 

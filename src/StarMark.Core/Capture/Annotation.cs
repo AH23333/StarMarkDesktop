@@ -368,6 +368,10 @@ public sealed record Annotation(
     /// 荧光笔与马赛克<b>按比例放大</b>而不是共用 2/4/8：它们的「粗细」是笔刷直径，
     /// 拿 2–8 像素去涂敏感信息会出现一条条漏缝——那是安全问题，不是难看。
     /// </para>
+    /// <para>
+    /// 文字的「粗细」实际是<b>字号</b>（真机反馈：输入时的文字大小要为编辑后的文字大小——
+    /// 给用户一个看得见、选得到的字号档，输入框与烤出去的字都按这一档走，所见即所得才有抓手）。
+    /// </para>
     /// </summary>
     public static int ThicknessFor(AnnotationTool tool, int stepIndex)
     {
@@ -376,6 +380,7 @@ public sealed record Annotation(
         {
             AnnotationTool.Highlighter => step * 4,
             AnnotationTool.Mosaic => step * 6,
+            AnnotationTool.Text => step switch { 2 => 16, 4 => 22, 8 => 32, _ => step * 4 },
             _ => step,
         };
     }

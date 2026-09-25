@@ -327,7 +327,7 @@ public sealed class CaptureOverlayGateTests
         Assert.DoesNotContain("Rebake(", drag);
         Assert.DoesNotContain("UnderDragBuffer", drag);
         // 底图整份准备只在"按下那一下"算一次；出现在每帧路径里就等于把全烤搬回拖动
-        Assert.Contains("UnderDragBuffer(index)", SourceGate.MethodBody(cs, "private bool TryBeginGrab"));
+        Assert.Contains("UnderDragBuffer(idx)", SourceGate.MethodBody(cs, "private bool TryBeginGrab"));
         Assert.DoesNotContain("UnderDragBuffer", SourceGate.MethodBody(cs, "private void PaintPreview"));
     }
 

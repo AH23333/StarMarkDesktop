@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Linq;
 using StarMark.Abstractions.Capture;
 using StarMark.Integrations.Capture;
 using Xunit;
@@ -63,15 +64,20 @@ public sealed class TwoStageCaptureTests
         Assert.Contains("ScreenshotService.TryCrop(frame", final);   // 未确认（Enter 直提交）的兜底仍在
     }
 
-    /// <summary>压暗烤进合成图：XAML 那四块压暗在确认选区后必须收起（否则叠暗一遍、盖掉越界标注）。</summary>
+    /// <summary>压暗烤进合成图：确认且不在拖框时 XAML 那四块必须收起（否则叠暗一遍、盖掉越界标注）；
+    /// 改框/重拖进行中内容源切到无压暗平面缓冲，四块重新出来实时跟随（零重烤，批次 PV 的卡顿修复）。</summary>
     [Fact]
     public void DimIsBakedIntoTheComposedFrame()
     {
         var cs = SourceGate.ReadRepoFile(Overlay);
         Assert.Contains("BitmapTransform.DimOutside(composed, _contentWidth, _contentHeight, hole, 0x66);",
             SourceGate.MethodBody(cs, "private void Rebake()"));
+        Assert.Contains("_flatPreview", SourceGate.MethodBody(cs, "private void Rebake()"));
         var draw = SourceGate.MethodBody(cs, "private void DrawSelection(IntRect selection)");
-        Assert.Contains("_annotating ? Visibility.Collapsed : Visibility.Visible", draw);
+        Assert.Contains("!_annotating || IsFrameDragging ? Visibility.Visible : Visibility.Collapsed", draw);
+        // 拖动期间不许有任何整帧重烤：ShowFlatWhileDragging 只切 Source，不碰像素
+        Assert.Contains("private void ShowFlatWhileDragging()", cs);
+        Assert.DoesNotContain("ScheduleRebake", cs);
     }
 
     /// <summary>识别（悬停建议）阶段不出现菜单栏：自动检测与放大镜只在"未确认选区"时活动，
@@ -151,6 +157,61 @@ public sealed class TwoStageCaptureTests
         var drag = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void DragTo");
         Assert.Contains("_lastDragPaint", drag);
         Assert.Contains(">= 16", drag);
+    }
+
+    // ────────── 批次 PV（PU 复验六条）的结构闸门 ──────────
+
+    /// <summary>确认选区后选区框必须<b>常驻</b>（真机：确认路径路过 ClearDetected→ClearSelection
+    /// 把框收掉＝"无框"）；提示条也要压回去。</summary>
+    [Fact]
+    public void TheSelectionBorderSurvivesConfirmation()
+    {
+        var enter = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void EnterEditing(");
+        Assert.Contains("DrawSelection(selection);", enter);
+        Assert.Contains("HintChip.Visibility = Visibility.Collapsed;", enter);
+    }
+
+    /// <summary>框选模式下点击已画内容＝直接选中（不需要先拿笔）：
+    /// 抓取的入口在"没有选中"时先做命中测试，未命中才放行给挪框。</summary>
+    [Fact]
+    public void TappingDrawnContentSelectsItWithoutATool()
+    {
+        var grab = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private bool TryBeginGrab");
+        Assert.Contains("AnnotationPainter.HitTest(_history.Marks, local, SlopInSource(SelectionSlop))", grab);
+        Assert.Contains("fresh", grab);      // 首次选中与"点回去改字"是两回事
+        // 文字"再点一次才进编辑"：首次选中的那一按松手不许直接弹输入框
+        var end = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void EndDrag");
+        Assert.Contains("!fresh && grab == Grab.Move && original.Tool == AnnotationTool.Text", end);
+    }
+
+    /// <summary>笔类工具点一次＝选中＋弹出颜色/粗细浮层（换颜色永远一次点击就到）；收笔统一走 Esc。</summary>
+    [Fact]
+    public void APenClickSelectsItAndOpensThePalette()
+    {
+        var cs = SourceGate.ReadRepoFile(Overlay);
+        var click = SourceGate.MethodBody(cs, "private void BrushTool_Click");
+        Assert.Contains("SetTool(tool);", click);
+        Assert.Contains("ShowBrushPicker(button);", click);
+        Assert.DoesNotContain("SetTool(null)", click);          // "再点取消"让位给 Esc
+        Assert.Contains("SetTool(wanted);", cs);                 // 形状浮层同样只选中、不 toggle
+        var keys = SourceGate.MethodBody(cs, "private void Root_KeyDown");
+        Assert.Contains("else if (Armed) SetTool(null);", keys); // 收笔的出口在 Esc
+    }
+
+    /// <summary>文字的"细/中/粗"＝字号档（16/22/32）：输入框开框与落笔烤出去用的是同一个数——
+    /// 输入时的文字大小就是编辑后的文字大小（真机反馈的 WYSIWYG 缺口）。</summary>
+    [Fact]
+    public void TextWeightStepsAreFontSizes()
+    {
+        // 注意传的是"档位下标"（ThicknessSteps = {2,4,8} 的 0/1/2），不是粗细值本身
+        Assert.Equal(new[] { 16, 22, 32 },
+            new[] { 0, 1, 2 }.Select(step => StarMark.Core.Capture.Annotation.ThicknessFor(
+                StarMark.Core.Capture.AnnotationTool.Text, step)));
+        var cs = SourceGate.ReadRepoFile(Overlay);
+        Assert.Contains("Annotation.ThicknessFor(AnnotationTool.Text, _weightIndex)",
+            SourceGate.MethodBody(cs, "private void BeginTextEdit"));
+        Assert.Contains("FontHeight = Annotation.ThicknessFor(AnnotationTool.Text, _weightIndex),",
+            SourceGate.MethodBody(cs, "private void EndTextEditing"));
     }
 
     // ────────── 像素单测（Integrations，直接跑真数据） ──────────

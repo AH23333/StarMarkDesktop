@@ -76,6 +76,7 @@
                 x:Name="TextEditor"
                 Background="Transparent"
                 BorderThickness="0"
+                Padding="0"
                 HorizontalAlignment="Left"
                 MinWidth="180"
                 AcceptsReturn="True"
