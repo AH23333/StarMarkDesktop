@@ -107,20 +107,33 @@ public sealed partial class PinWindow : Window
         var next = CaptureGeometry.NextZoom(_zoom, e.GetCurrentPoint(Root).Properties.MouseWheelDelta);
         if (Math.Abs(next - _zoom) < 0.0001) { SyncBadge(); return; }   // 已在端点：窗不动，但角标要说清现在几倍
         _zoom = next;
-        ResizeKeepingCenter();
+        ResizeAnchoringTopLeft();
         SyncBadge();
         e.Handled = true;
     }
 
-    /// <summary>改尺寸时按住中心：否则每滚一档窗就往右下跑，图很快"看不见了"。</summary>
-    private void ResizeKeepingCenter()
+    /// <summary>
+    /// 改尺寸时<b>钉住左上角</b>（Snipaste 口径），再按 <see cref="CaptureGeometry.PinOrigin"/> 收边。
+    /// <para>原来是绕窗口中心缩放，那正是真机反馈"过度放大后贴图跑出屏幕外、再也看不见"的成因：
+    /// 贴图允许拖出屏，中心一旦在屏外，往下缩只是围着那个屏外的中心收拢，整块永远回不来。
+    /// 钉住左上角之后，"缩到能塞进屏幕"的那一刻，收边规则会把左上角自动带回屏幕边缘。</para>
+    /// </summary>
+    private void ResizeAnchoringTopLeft()
     {
         var current = WindowInterop.GetWindowRect(this);
         var (w, h) = CaptureGeometry.PinPixelSize(_sourceWidth, _sourceHeight, _zoom);
+        var (x, y) = CaptureGeometry.PinOrigin(current.X, current.Y, w, h, WorkArea());
         WindowInterop.SetWindowPos(
             WindowInterop.GetHwnd(this), IntPtr.Zero,
-            current.X + (current.Width - w) / 2, current.Y + (current.Height - h) / 2, w, h,
+            x, y, w, h,
             WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
+    }
+
+    /// <summary>所在显示器的工作区（物理像素，已扣掉任务栏）。多屏按"最近那块"取，与拖动的快照同一口径。</summary>
+    private IntRect WorkArea()
+    {
+        var area = WindowInterop.GetWorkArea(this);
+        return new IntRect(area.X, area.Y, area.Width, area.Height);
     }
 
     // ────────── 拖动 ──────────
@@ -145,10 +158,13 @@ public sealed partial class PinWindow : Window
         // 于是"拖到另一块缩放不同的屏上就越来越偏"这一类错误结构上不存在。
         var x = _gestureStartRect.X + cursor.X - _gestureStartCursor.X;
         var y = _gestureStartRect.Y + cursor.Y - _gestureStartCursor.Y;
-        if (x == _lastAppliedX && y == _lastAppliedY) return;
-        _lastAppliedX = x;
-        _lastAppliedY = y;
-        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero, x, y, 0, 0,
+        // 同一条收边判据（与缩放共用）：贴图可以拖出屏去看想看的部分，但不许整块丢光——
+        // "整块在屏外"就是这次反馈里"再也看不见"的另一条来路，只修缩放等于留一半。
+        var (cx, cy) = CaptureGeometry.PinOrigin(x, y, _gestureStartRect.Width, _gestureStartRect.Height, WorkArea());
+        if (cx == _lastAppliedX && cy == _lastAppliedY) return;
+        _lastAppliedX = cx;
+        _lastAppliedY = cy;
+        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero, cx, cy, 0, 0,
             WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
     }
 

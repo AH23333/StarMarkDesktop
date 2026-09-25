@@ -121,6 +121,42 @@ public static class CaptureGeometry
         => Math.Max(1, sourceLength * ClampZoom(zoom));
 
     /// <summary>
+    /// 贴图窗左上角该落在哪儿（滚轮缩放与拖动共用同一条判据）。
+    /// <para>
+    /// 要治的是真机反馈的"过度放大之后贴图跑出屏幕外，再也看不见了"。原来的缩放<b>绕窗口中心</b>，
+    /// 于是中心一旦被拖到屏外（贴图允许拖出屏），往下缩只是"围着那个屏外的中心收拢"，整块永远回不来。
+    /// </para>
+    /// <para>
+    /// 口径按 Snipaste：<b>缩放钉住左上角</b>，再用这条判据收边——
+    /// ① 整块塞得下工作区时，必须整块留在屏内（左上角在屏外就会被自动拉回屏幕边缘，正是用户要的重置）；
+    /// ② 放不下时（图比屏还大）不强求整块可见，但<b>至少留 <paramref name="minVisible"/> 像素在屏内</b>，
+    ///    左右上下哪一方向都不许整块丢光。
+    /// </para>
+    /// <para>退化输入都不许抛、也不许把窗甩到别处：工作区拿不到（0 尺寸）、尺寸非正、
+    /// 或工作区窄到 <c>min</c> 会大于 <c>max</c>（<c>Math.Clamp</c> 在这种情况下直接抛异常）。</para>
+    /// </summary>
+    public static (int X, int Y) PinOrigin(int x, int y, int width, int height, IntRect workArea, int minVisible = 48)
+    {
+        if (workArea.IsEmpty) return (x, y);            // 拿不到工作区：宁可什么都不做，也不要把窗丢到(0,0)
+        var w = Math.Max(1, width);
+        var h = Math.Max(1, height);
+        var keep = Math.Max(1, minVisible);
+
+        int Clamp(int value, int lo, int hi) => hi < lo ? lo : Math.Clamp(value, lo, hi);
+
+        if (w <= workArea.Width && h <= workArea.Height)
+        {
+            // 塞得下 ⇒ 整块留 inside：这一条就把"左上角在屏外 + 缩到能看见"自动收敛回屏幕边缘
+            return (Clamp(x, workArea.X, workArea.Right - w), Clamp(y, workArea.Y, workArea.Bottom - h));
+        }
+
+        // 塞不下 ⇒ 只保证每个方向都还有一条 keep 宽的像素在屏内（贴图仍可拖出屏去看不想看的部分）。
+        // 下界＝让右边露出 keep（x + w ≥ X + keep）；上界＝让左边露出 keep（x ≤ Right - keep）。
+        return (Clamp(x, workArea.X + keep - w, workArea.Right - keep),
+                Clamp(y, workArea.Y + keep - h, workArea.Bottom - keep));
+    }
+
+    /// <summary>
     /// 再开一张贴图行不行。到上限时的文案要带上怎么办（关掉不用的那张），
     /// 而不是只说"不行"——这是 P-54 那条"提示与阻碍"的口径。
     /// </summary>
