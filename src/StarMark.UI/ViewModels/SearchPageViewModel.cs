@@ -19,6 +19,9 @@ public partial class SearchPageViewModel : ObservableObject
     private readonly IItemRepository? _repo;
     private CancellationTokenSource? _searchCts;
 
+    /// <summary>输入合并窗口（与 <see cref="SearchDebouncedAsync"/> 配对）。每键一次全链路的代价见该方法的注释。</summary>
+    private CancellationTokenSource? _typingCts;
+
     // UI 调度器：ViewModel 由 DI 在 UI 线程创建，捕获后用于把结果集合变更封送回 UI 线程，
     // 避免 await 后在后台线程直接改 ObservableCollection 触发 RPC_E_WRONG_THREAD。
     private readonly DispatcherQueue? _ui = DispatcherQueue.GetForCurrentThread();
@@ -182,7 +185,53 @@ public partial class SearchPageViewModel : ObservableObject
     public MainViewModel Main { get; }
 
     [RelayCommand]
-    private async Task SearchAsync() => await RunSearchAsync(append: false);
+    private async Task SearchAsync()
+    {
+        // 显式动作（回车、点搜索按钮、切来源/排序/语言/显示隐藏）自己就把这一次搜完了：
+        // 先把还压着的合并窗口关掉，否则用户按完回车，150 ms 后又会被补一次一模一样的查询。
+        CancelPendingTypingSearch();
+        await RunSearchAsync(append: false);
+    }
+
+    /// <summary>
+    /// 「搜索即输入」的合并窗口：连打时只跑最后一次。快捷搜索组件早就是这个口径
+    /// （<see cref="SearchWidgetViewModel.SearchDebouncedAsync"/>，120 ms），这里窗口给到 150 ms——
+    /// 主窗这一条链比组件重（整表 SQL + 多源合并 + 映射 + 卡片重建），每键跑一遍就是每敲一个字
+    /// 把界面冻一次（真机反馈里"打字时卡顿"的来源）。
+    /// <para>
+    /// 两条不变式：<b>①跑的是最后一次那一句</b>（延时期一到就现取 <see cref="Query"/>，不快照旧文本）；
+    /// <b>②被更晚的键入顶掉时本轮直接放弃</b>，不留下"两次搜索交叠"的旧病（同 批次 13 那条 fire-and-forget 教训）。
+    /// </para>
+    /// </summary>
+    private async Task SearchDebouncedAsync(int mergeMs = 150)
+    {
+        _typingCts?.Cancel();
+        var cts = _typingCts = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(mergeMs, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;   // 有更晚的一次键入进来，本轮作废
+        }
+        finally
+        {
+            if (ReferenceEquals(_typingCts, cts)) _typingCts = null;
+            cts.Dispose();
+        }
+        await RunSearchAsync(append: false);
+    }
+
+    /// <summary>关掉待跑的合并窗口（显式动作抢先整跑一次时用）。</summary>
+    private void CancelPendingTypingSearch()
+    {
+        var cts = _typingCts;
+        _typingCts = null;
+        if (cts is null) return;
+        cts.Cancel();
+        cts.Dispose();
+    }
 
     /// <summary>
     /// 「加载更多」：把偏移推到当前列表末尾，再取一页接上去。分页语义是"合并去重后再切片"
@@ -399,10 +448,9 @@ public partial class SearchPageViewModel : ObservableObject
         RelatedHeader = $"相关结果 ({RelatedResults.Count})";
     }
 
+    /// <summary>键入这条路径走合并窗口（连打只跑最后一次）；显式动作（回车/按钮/切来源排序语言）仍立即执行。</summary>
     partial void OnQueryChanged(string value)
-    {
-        _ = SearchAsync();
-    }
+        => _ = SearchDebouncedAsync();
 
     partial void OnShowHiddenChanged(bool value) { _ = SearchAsync(); }
 
