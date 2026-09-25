@@ -402,19 +402,23 @@ internal static class WindowInterop
         return fallback;
     }
 
-    /// <summary>去掉窗口默认标题栏/边框（DeskBox WidgetWindowBase.ConfigureWindowCore 同款序列）。</summary>
+    /// <summary>
+    /// 去掉窗口默认标题栏/边框。
+    /// <para>
+    /// <b>为什么整段走 Win32、不调 <c>OverlappedPresenter.SetBorderAndTitleBar</c></b>：真机分段计量到
+    /// 那一句框架调用单次就要 <b>≈68 ms</b>（同一函数里其余五步合计 &lt;3 ms），而无边框窗不止组件——
+    /// 截图遮罩、贴图、各类弹窗每次都要过一遍；22 颗组件在启动那一段里就因此吃掉 ≈1.5 s。
+    /// 下面第 2 步清的是同一批样式位（WS_CAPTION / WS_BORDER / WS_DLGFRAME / WS_THICKFRAME），
+    /// 第 3 步一次 <c>SWP_FRAMECHANGED</c> 让非客户区重算，观感与那句框架调用一致。
+    /// </para>
+    /// </summary>
     public static void RemoveDefaultWindowFrame(Microsoft.UI.Xaml.Window window)
     {
         var hwnd = GetHwnd(window);
 
-        // 1) WinAppSDK 层：先关边框/标题栏与最大化/最小化
-        if (window.AppWindow.Presenter is OverlappedPresenter presenter)
-        {
-            presenter.SetBorderAndTitleBar(false, false);
-            presenter.IsResizable = false;
-            presenter.IsMaximizable = false;
-            presenter.IsMinimizable = false;
-        }
+        // 1) WinAppSDK 层：只留"不进任务栏 / Alt+Tab"这件只有框架能替我们说的事。
+        //    （早先这里还设过 IsResizable / IsMaximizable / IsMinimizable 三个 bool——第 2 步清的
+        //     WS_THICKFRAME / WS_MAXIMIZEBOX / WS_MINIMIZEBOX 正是同一件事，属于对着系统白说一遍。）
         window.AppWindow.IsShownInSwitchers = false;
 
         // 2) Win32 层：清样式位 + 工具窗口（不进任务栏/Alt+Tab）

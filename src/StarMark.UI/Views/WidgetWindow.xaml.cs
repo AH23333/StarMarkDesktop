@@ -155,14 +155,17 @@ public sealed partial class WidgetWindow : Window
         _manager = manager;
         _config = config;
 
-        InitializeComponent();
+        // PO-2 的分段：一颗组件窗口从"要显示"到"点亮"实测 94~156 ms，22 个实例串在启动那一段里
+        // （恢复共 ≈1.2~1.4 s）。哪一段是大头只能量，不能再猜——这几条尺子量出来的结论写在
+        // WindowInterop.RemoveDefaultWindowFrame 的注释里（真凶是 SetBorderAndTitleBar，≈68 ms/颗）。
+        StartupProfile.Measure($"组件 XAML 加载 {_kind}", InitializeComponent, logWhenMs: 10);
         WindowInterop.TrackWindow(this);   // 供弹窗按发起组件窗口所在显示器居中
         // 主题必须在首次渲染前就盖成<b>具体</b>的 Light/Dark，不能等到 Reveal：
         // 构造期根元素 RequestedTheme 仍是 Default ⇒ 继承"启动时已冻结"的应用级主题，
         // 于是「OS 深色 + 应用浅色」下标题栏（无显式前景的 WidgetTitle/WidgetGlyph）会按深色桶
         // 取到近白画笔——浅色组件上"组件名看不见"就是这么来的。Reveal 里仍会再套一次（设置可能已改）。
         ThemeManager.Apply(this, App.Services.GetRequiredService<SettingsStore>().LoadTheme());
-        ApplyAppearanceCore();
+        StartupProfile.Measure($"组件外观套用 {_kind}", ApplyAppearanceCore, logWhenMs: 10);
         // 主题解析完成后（Default → 浅/深）或运行期切换主题时，按真实主题重挂材质与重铺表面。
         // 否则构造期 ActualTheme 仍是 Default（被当作浅色），浅色模式下的材质/表面会一直用错；
         // 且主题翻转后控制器仍停在旧主题观感 —— 正是「浅色模式材质不正确」的根因之一。
@@ -171,7 +174,7 @@ public sealed partial class WidgetWindow : Window
         WidgetGlyph.Text = KindGlyph(_kind);
         ApplyTitle();   // 标题栏文本 + 窗口标题（优先取用户重命名的名字）
 
-        BuildContent();
+        StartupProfile.Measure($"组件内容构建 {_kind}", BuildContent, logWhenMs: 10);
         WireChrome();
         SetupQuickLaunchDrop();
 
@@ -245,20 +248,33 @@ public sealed partial class WidgetWindow : Window
     /// <summary>显示窗口（首次显示时完成样式、位置、置顶初始化）。</summary>
     public void Reveal()
     {
+        // 首装（样式/尺寸/外壳）与每次都要走的"点亮"分开量：PO-2 就是靠这条分段把"一颗组件 ≈100 ms"
+        // 追到 <c>SetBorderAndTitleBar</c> 那一句（≈68 ms/颗），合并回去就只剩"就是慢"这一句可说。
         if (!_styled)
-        {
-            WindowInterop.RemoveDefaultWindowFrame(this);
-            WindowInterop.ApplyRoundedCorners(this);
-            var pref = App.Services.GetRequiredService<SettingsStore>().LoadTheme();
-            ThemeManager.Apply(this, pref);
-            ApplyInitialBounds();
-            // 外壳模式（标准/胶囊/隐藏）必须在初始尺寸确定后再套用：收起态要把窗口缩到标题高度
-            _chromeMode = _config.ChromeMode;
-            ApplyChromeMode(_chromeMode);
-            _styled = true;
-            RefreshAppearance();   // 构造期 ActualTheme 可能仍是 Default，按真实主题重挂毛玻璃控制器
-        }
+            StartupProfile.Measure($"组件首装样式 {_kind}", StyleForTheFirstTime, logWhenMs: 10);
+        StartupProfile.Measure($"组件显示点亮 {_kind}", ShowOnDesktop, logWhenMs: 10);
+        _ticker?.UpdateRunning(AppWindow.IsVisible);
+    }
 
+    private void StyleForTheFirstTime()
+    {
+        StartupProfile.Measure($"组件去边框 {_kind}", () =>
+            WindowInterop.RemoveDefaultWindowFrame(this), logWhenMs: 8);
+        StartupProfile.Measure($"组件圆角 {_kind}", () =>
+            WindowInterop.ApplyRoundedCorners(this), logWhenMs: 8);
+        var pref = App.Services.GetRequiredService<SettingsStore>().LoadTheme();
+        StartupProfile.Measure($"组件主题套用 {_kind}", () => ThemeManager.Apply(this, pref), logWhenMs: 8);
+        StartupProfile.Measure($"组件定位尺寸 {_kind}", ApplyInitialBounds, logWhenMs: 8);
+        // 外壳模式（标准/胶囊/隐藏）必须在初始尺寸确定后再套用：收起态要把窗口缩到标题高度
+        _chromeMode = _config.ChromeMode;
+        StartupProfile.Measure($"组件外壳模式 {_kind}", () => ApplyChromeMode(_chromeMode), logWhenMs: 8);
+        _styled = true;
+        // 构造期 ActualTheme 可能仍是 Default，按真实主题重挂毛玻璃控制器
+        StartupProfile.Measure($"组件外观重挂 {_kind}", RefreshAppearance, logWhenMs: 8);
+    }
+
+    private void ShowOnDesktop()
+    {
         AppWindow.Show();
         // 关键：仅 AppWindow.Show() 对「挂在桌面图标层（所有者=Explorer SHELLDLL_DefView）」的窗口
         // 常常无法把窗口重新点亮 —— 这是 WinUI3 的已知坑（AppWindow.Show 不总触发真实的 SW_SHOW，
@@ -268,7 +284,6 @@ public sealed partial class WidgetWindow : Window
         // 置顶与"贴在桌面层"互斥：置顶时作为普通顶层窗口 + WS_EX_TOPMOST 真正常驻最前；
         // 默认未开启时挂到桌面图标层（落在应用窗口之下、桌面图标之上）。由 ApplyTopmost 决定挂载/脱离。
         ApplyTopmost();
-        _ticker?.UpdateRunning(AppWindow.IsVisible);
     }
 
     /// <summary>
@@ -497,8 +512,8 @@ public sealed partial class WidgetWindow : Window
             // 自定义背景色优先覆盖材质（实色铺满会盖住霜化背景，故强制 None）
             var useCustomBg = !string.IsNullOrWhiteSpace(ov?.BackgroundColor);
             var kind = useCustomBg ? StarMark.Abstractions.WidgetBackdropKind.None : (ov?.Backdrop ?? globalKind);
-            WidgetAppearance.ApplyBackdrop(
-                this, kind, WidgetAppearance.Opacity(), RootBorder.ActualTheme);
+            StartupProfile.Measure($"组件材质挂载 {_kind}", () => WidgetAppearance.ApplyBackdrop(
+                this, kind, WidgetAppearance.Opacity(), RootBorder.ActualTheme), logWhenMs: 10);
 
             Brush surface = useCustomBg
                 ? (WidgetAppearance.ParseColorBrush(ov!.BackgroundColor!) ?? WidgetAppearance.SurfaceBrush(RootBorder.ActualTheme, globalKind))
