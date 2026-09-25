@@ -176,16 +176,40 @@ public sealed class PinEditTests
     }
 
     /// <summary>旋转保持当前倍率；四边形窗口区域随缩放按新倍率重套（否则放大后画面被裁得只剩一角）。</summary>
+    /// <summary>
+    /// 旋转只提供 90° 离散四种（用户裁决：左转/右转/水平/垂直）。自由角度旋转在 WinUI 上必然
+    /// "四角填黑 + SetWindowRgn 裁切"两件套——真机就是大面积黑背景；外接矩形随角度变大还会把
+    /// 贴图顶出屏幕。90° 是精确像素重排：保持倍率、窗口按 PinOrigin 收边、窗口恒为矩形。
+    /// </summary>
     [Fact]
-    public void RotationKeepsTheZoomAndRescalesTheQuad()
+    public void RotationIsQuarterTurnOnly_KeepsZoomAndStaysOnScreen()
     {
         var cs = SourceGate.ReadRepoFile(Overlay);
-        var bake = SourceGate.MethodBody(cs, "private void BakeRotation");
-        Assert.DoesNotContain("_zoom = 1d", bake);
+        var bake = SourceGate.MethodBody(cs, "private void BakeQuarterTurn");
+        Assert.Contains("BitmapTransform.Rotate90(composed, _contentWidth, _contentHeight, clockwise)", bake);
         Assert.Contains("PinPixelSize(rotated.Width, rotated.Height, _zoom)", bake);
-        Assert.Contains("ApplyQuadRegion(rotated, _zoom)", bake);
-        Assert.Contains("if (_lastRotated is not null) ApplyQuadRegion(_lastRotated, _zoom);",
-            SourceGate.MethodBody(cs, "private void ResizePinAnchoringTopLeft"));
+        Assert.Contains("PinOrigin(current.X, current.Y, w, h, WorkArea())", bake);   // 转完仍整块在屏内
+        Assert.DoesNotContain("_zoom = 1d", bake);                                    // 旋转不重置倍率
+        // 自由角度旋转的全套机器必须清干净：填黑四角 / 区域裁切 / 角度累计
+        Assert.DoesNotContain("SetWindowRgn", cs);
+        Assert.DoesNotContain("_bakedRotation", cs);
+        Assert.DoesNotContain("RotatedImage", cs);
+        Assert.Contains("Rotate90(", SourceGate.ReadRepoFile("src/StarMark.Integrations/Capture/BitmapTransform.cs"));
+        Assert.DoesNotContain("RotatedImage", SourceGate.ReadRepoFile("src/StarMark.Integrations/Capture/BitmapTransform.cs"));
+    }
+
+    /// <summary>
+    /// 候选窗口点击与手动拖框必须走进<b>同一个</b>标注态：<c>ShowBase</c> 负责把 selection 落进
+    /// <c>_selection</c>——漏了它，候选点击后 <c>_selection</c> 保持 null，之后每一按都判不出
+    /// "在选区里"，落回"重新框选"并清掉底图（真机：点击候选无反应、只能一直拖框、什么都画不了）。
+    /// </summary>
+    [Fact]
+    public void CandidateClickEntersTheSameAnnotationMode()
+    {
+        var cs = SourceGate.ReadRepoFile(Overlay);
+        Assert.Contains("_selection = selection;", SourceGate.MethodBody(cs, "private void ShowBase"));
+        Assert.Contains("EnterAnnotationMode(detected);",
+            SourceGate.MethodBody(cs, "private void Root_PointerPressed"));
     }
 
     /// <summary>真机反馈"贴图边缘无高亮显示"：悬停时要有高亮边框，且与工具条同节奏出现/收起。</summary>

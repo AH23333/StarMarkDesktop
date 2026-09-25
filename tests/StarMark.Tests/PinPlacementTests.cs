@@ -82,7 +82,8 @@ public sealed class PinPlacementTests
         var cs = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
         Assert.DoesNotContain("(current.Width - w) / 2", cs);
         Assert.DoesNotContain("ResizeKeepingCenter", cs);
-        Assert.Equal(2, SourceGate.Count(cs, "CaptureGeometry.PinOrigin("));   // 缩放一处、拖动一处
+        // 缩放一处、拖动一处、90° 旋转烘焙一处——三种姿态全走同一条收边判据
+        Assert.Equal(3, SourceGate.Count(cs, "CaptureGeometry.PinOrigin("));
         Assert.Contains("ResizePinAnchoringTopLeft();", SourceGate.MethodBody(cs, "private void Root_PointerWheelChanged"));
         // 工作区取"这块屏"，不是主屏——多屏下按主屏夹会把贴图从副屏拽走
         Assert.Contains("WindowInterop.GetWorkArea(this)", cs);

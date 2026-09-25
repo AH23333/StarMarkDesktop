@@ -115,13 +115,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private readonly HashSet<Annotation> _eraseRemoved = new();
 
     // ── 贴图旋转/镜像/透明度 ──
-    private bool _rotating;
-    private bool _suppressRightTap;
-    private double _bakedRotation;
-    private RotatedImage? _lastRotated;              // 最近一次旋转的四边形（缩放时要按新倍率重套窗口区域）
     private double _opacity = 1d;
-    private double _rotateStartAngle;
-    private PixelPoint _rotateCurrent;
 
     private byte[]? _base;                      // 选区那块底图（物理像素，合成时的固定起点）
     private WriteableBitmap? _preview;
@@ -807,13 +801,6 @@ public sealed partial class CaptureOverlayWindow : Window
         var point = e.GetCurrentPoint(Root);
         var physical = ToPhysical(point.Position.X, point.Position.Y);
 
-        // 贴图：右键按下＝开始绕中心旋转（右键未拖动＝RightTapped 弹菜单）
-        if (_pinned && point.Properties.IsRightButtonPressed)
-        {
-            BeginRotate(AsPixel(physical), e.Pointer);
-            return;
-        }
-
         if (!point.Properties.IsLeftButtonPressed) return;
 
         // 已经有选区、这次按在选区里面、而且是"给动作条"的那条链 ⇒ 这一按是**画**，不是重新框选。
@@ -878,7 +865,6 @@ public sealed partial class CaptureOverlayWindow : Window
         var point = e.GetCurrentPoint(Root);
         var physical = ToPhysical(point.Position.X, point.Position.Y);
 
-        if (_rotating) { RotateTo(AsPixel(physical)); return; }
         if (_erasing) { EraseTo(ToLocal(physical)); return; }
         if (_dragOriginal is not null)
         {
@@ -927,12 +913,6 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_draggingPin)
         {
             _draggingPin = false;
-            Root.ReleasePointerCapture(e.Pointer);
-            return;
-        }
-        if (_rotating)
-        {
-            EndRotate(e.GetCurrentPoint(Root).Position);
             Root.ReleasePointerCapture(e.Pointer);
             return;
         }
@@ -1008,11 +988,6 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void Root_RightTapped(object sender, RightTappedRoutedEventArgs e)
     {
-        if (_suppressRightTap)
-        {
-            _suppressRightTap = false;
-            return;
-        }
         e.Handled = true;
         // 截图时右键＝"这一屏不截"（Snipaste 同款）。
         if (!_pinned) Settle(null);
@@ -1208,6 +1183,11 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         HideMagnifier();
         ClearDetected();
+        // <b>selection 必须在这里落进 _selection</b>：手动拖框那条路在拖动时已赋过值，
+        // 但候选窗口点击（EnterAnnotationMode）把框直接递进来——不落的话 _selection 保持 null，
+        // 之后每一按都判不出"在选区里"，落回"重新框选"并清掉刚铺好的底图
+        // （真机反馈"点击候选无反应、只能一直拖框、什么都画不了"就是它）。
+        _selection = selection;
         _base = basePixels;
         _contentWidth = Math.Max(1, contentWidth);
         _contentHeight = Math.Max(1, contentHeight);
@@ -1297,7 +1277,7 @@ public sealed partial class CaptureOverlayWindow : Window
         // 手上有未完成的一笔时不改倍率/透明度：那些点是按旧倍率换算的，中途改等于让正在画的那一笔跑偏，
         // 而"跑偏"只在松手合成之后才看得见（那时已经退不掉）。
         if (_stroke is not null || _polyLine is not null || _dragOriginal is not null
-            || _draggingPin || _editingText || _rotating) return;
+            || _draggingPin || _editingText) return;
         var delta = e.GetCurrentPoint(Root).Properties.MouseWheelDelta;
         // Shift+滚轮＝整窗透明度（Snipaste 同款）
         if (IsShiftDown())
@@ -1330,9 +1310,6 @@ public sealed partial class CaptureOverlayWindow : Window
         _lastAppliedY = y;
         RefreshScaleIfChanged();        // 收边可能把这张图整个推到另一块屏上
         RelayoutContent();
-        // 旋转过的贴图带四边形窗口区域：区域是按"当时多少倍"算的绝对像素，缩放后必须按新倍率重套，
-        // 否则放大后只有左上那一块是画面、其余被裁掉（或反过来）。
-        if (_lastRotated is not null) ApplyQuadRegion(_lastRotated, _zoom);
     }
 
     /// <summary>窗口矩形变了（缩放）之后重摆内容与工具条：底图与预览的像素没动，动的只是显示尺寸。</summary>
@@ -2631,88 +2608,29 @@ public sealed partial class CaptureOverlayWindow : Window
 
     // ────────── 贴图旋转 / 翻转 / 透明度 / 右键菜单 ──────────
 
-    private PixelPoint PinCenterPhysical()
+    /// <summary>
+    /// 90° 离散旋转（左/右）：源尺寸换轴的<b>精确像素重排</b>——没有插值糊化、没有填黑四角、
+    /// 不需要任何窗口区域裁切。自由角度旋转（右键拖动）在 WinUI 上必然带着"四角填黑 +
+    /// 区域裁切"两件套，真机反馈就是大面积黑背景；且外接矩形随角度变大，
+    /// 过度旋转会把贴图顶出屏幕。按用户裁决只留四种姿态：左转 90° / 右转 90° / 水平翻转 / 垂直翻转。
+    /// <para>先把当前标注合成进像素再转（旋转带着标注一起走，之后它们就是像素的一部分）；
+    /// 显示尺寸＝新源尺寸 × 当前倍率，位置按 <see cref="CaptureGeometry.PinOrigin"/> 收边——
+    /// 转完仍要整块可见，不许跑出屏幕。</para>
+    /// </summary>
+    private void BakeQuarterTurn(bool clockwise)
     {
-        var r = WindowInterop.GetWindowRect(this);
-        return new PixelPoint(r.X + r.Width / 2, r.Y + r.Height / 2);
-    }
-
-    private static double AngleTo(PixelPoint center, PixelPoint p)
-        => CaptureGeometry.AngleDegrees(center, p);
-
-    private void BeginRotate(PixelPoint physical, Pointer pointer)
-    {
-        _rotating = true;
-        _suppressRightTap = true;
-        _rotateCurrent = physical;
-        _rotateStartAngle = AngleTo(PinCenterPhysical(), physical);
-        Root.CapturePointer(pointer);
-    }
-
-    private void RotateTo(PixelPoint physical)
-    {
-        _rotateCurrent = physical;
-        var total = CurrentRotation(physical);
-        SizeChip.Visibility = Visibility.Visible;
-        SizeText.Text = $"旋转 {total:0}°（Shift 吸附 15°）";
-    }
-
-    private double CurrentRotation(PixelPoint physical)
-    {
-        var total = _bakedRotation + AngleTo(PinCenterPhysical(), physical) - _rotateStartAngle;
-        if (IsShiftDown()) total = Math.Round(total / 15d) * 15d;
-        return total;
-    }
-
-    private void EndRotate(Point releaseDip)
-    {
-        var total = CurrentRotation(_rotateCurrent);
-        _rotating = false;
-        if (Math.Abs(total - _bakedRotation) < 0.5)
-        {
-            // 右键按下没拖动＝右键单击：直接弹贴图菜单（捕获指针可能吞掉 RightTapped）
-            ShowPinMenu(releaseDip);
-            return;
-        }
-        BakeRotation(total);
-    }
-
-    private void BakeRotation(double totalAngle)
-    {
-        // 先把当前标注合成进像素：旋转带着标注一起走
         Rebake();
         if (_composed is not { } composed) return;
-        var rotated = BitmapTransform.Rotate(composed, _contentWidth, _contentHeight,
-            totalAngle - _bakedRotation);
-        // 显示尺寸＝旋转后的源尺寸 × 当前倍率：<b>不重置倍率</b>——放大到 2.5× 的贴图一旋转就跳回
-        // 100% 是"转个方向还得重新放大"的折腾（Snipaste 旋转后保持缩放）。
+        var rotated = BitmapTransform.Rotate90(composed, _contentWidth, _contentHeight, clockwise);
         var (w, h) = CaptureGeometry.PinPixelSize(rotated.Width, rotated.Height, _zoom);
-        var center = PinCenterPhysical();
-        var newX = center.X - w / 2;
-        var newY = center.Y - h / 2;
-        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero,
-            newX, newY, w, h,
+        var current = WindowInterop.GetWindowRect(this);
+        var (x, y) = CaptureGeometry.PinOrigin(current.X, current.Y, w, h, WorkArea());
+        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero, x, y, w, h,
             WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
-        SetMonitor(new IntRect(newX, newY, w, h));
-        _bakedRotation = totalAngle;
+        SetMonitor(new IntRect(x, y, w, h));
         BeginEditingExisting(rotated.Pixels, rotated.Width, rotated.Height);
-        _lastRotated = rotated;
-        // 透明区域按四边形裁：窗口被放大了多少倍，四角就得跟着放大多少倍（否则只有左上那一块是透明的）
-        ApplyQuadRegion(rotated, _zoom);
         RefreshScaleIfChanged();
         SyncBadge();
-    }
-
-    private void ApplyQuadRegion(RotatedImage rotated, double scale)
-    {
-        var pts = rotated.Quad.Select(q => new WindowInterop.POINT
-        {
-            X = (int)Math.Round(q.X * scale, MidpointRounding.AwayFromZero),
-            Y = (int)Math.Round(q.Y * scale, MidpointRounding.AwayFromZero),
-        }).ToArray();
-        var rgn = WindowInterop.CreatePolygonRgn(pts, pts.Length, WindowInterop.WINDING_FILL);
-        if (rgn != IntPtr.Zero)
-            WindowInterop.SetWindowRgn(WindowInterop.GetHwnd(this), rgn, true);
     }
 
     private void BakeFlip(bool horizontal)
@@ -2721,9 +2639,6 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_composed is not { } composed) return;
         var flipped = BitmapTransform.Flip(composed, _contentWidth, _contentHeight, horizontal);
         BeginEditingExisting(flipped, _contentWidth, _contentHeight);
-        // 翻转后窗口区域恢复矩形（旋转四边形已失效，镜像后的四角不再与旧区域重合）
-        _lastRotated = null;
-        WindowInterop.SetWindowRgn(WindowInterop.GetHwnd(this), IntPtr.Zero, true);
         SyncBadge();
     }
 
@@ -2751,6 +2666,8 @@ public sealed partial class CaptureOverlayWindow : Window
         }
         menu.Items.Add(opacityMenu);
         menu.Items.Add(new MenuFlyoutSeparator());
+        AddMenuItem(menu, "向左旋转 90°", () => BakeQuarterTurn(clockwise: false));
+        AddMenuItem(menu, "向右旋转 90°", () => BakeQuarterTurn(clockwise: true));
         AddMenuItem(menu, "水平翻转", () => BakeFlip(horizontal: true));
         AddMenuItem(menu, "垂直翻转", () => BakeFlip(horizontal: false));
         AddMenuItem(menu, _clickThrough ? "取消鼠标穿透" : "鼠标穿透",
@@ -2776,9 +2693,6 @@ public sealed partial class CaptureOverlayWindow : Window
         _zoom = 1d;
         _sourceScale = 1d;
         ResizePinAnchoringTopLeft();
-        // 转过角度（非 90 的倍数）时四边形区域仍然有效，按 1 倍重套；没转过才真正清掉
-        if (_lastRotated is not null) ApplyQuadRegion(_lastRotated, 1d);
-        else WindowInterop.SetWindowRgn(WindowInterop.GetHwnd(this), IntPtr.Zero, true);
         SyncBadge();
     }
 
