@@ -61,10 +61,11 @@ public sealed class PinEditTests
     public void BarIsScaledDownSoTheRightHandButtonsStayReachable()
     {
         var bar = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void PositionBar");
-        Assert.Contains("Math.Clamp((screenWidth - 8) / barWidth, 0.5, 1.0)", bar);
-        // 摆放一律按缩放后的尺寸算：按原尺寸摆会把条子推出去一半
-        Assert.Contains("x + w - scaledWidth", bar);
-        Assert.Contains("y + h + 6 + scaledHeight", bar);
+        // 小贴图整条缩进画面（下限 0.5），且缩的时候贴着右上角收——不然被裁掉的正是右边那几颗
+        Assert.Contains("Math.Clamp((available - 8) / barWidth, 0.5, 1.0)", bar);
+        // 贴图这条不许再自己算左边界：那是"整条被推到画面外、要靠放大才挪得出来"的成因
+        Assert.DoesNotContain("screenWidth - scaledWidth", bar);
+        Assert.Contains("return;", bar);
     }
 
     /// <summary>穿透中的贴图收不到鼠标，那条"悬停才收起"的工具条会一直留在画面上且没人点得动它。</summary>
@@ -90,6 +91,44 @@ public sealed class PinEditTests
         Assert.Contains("SetMonitor(", drag);
         Assert.DoesNotContain("_monitor = new IntRect(", drag);      // 不许绕过 SetMonitor 自己改
         Assert.Contains("SetMonitor(", SourceGate.MethodBody(cs, "private void ResizePinAnchoringTopLeft"));
+    }
+
+    /// <summary>
+    /// 每一处"把标注烤进缓冲"的调用都必须按<b>底图尺寸</b>算，不能按选区尺寸。
+    /// <para>贴图态选区＝窗口的显示尺寸（＝底图 × 倍率），一放大就比缓冲长：
+    /// `AnnotationPainter` 的护栏直接抛"像素缓冲比声明的尺寸短，画上去会越界"，
+    /// 界面把它显示成"标注没能画上去"——真机反馈就是这条，且倍率 1× 时看不出来。</para>
+    /// </summary>
+    [Fact]
+    public void EveryPaintSizesOffTheBaseBuffer_NotTheSelection()
+    {
+        var cs = SourceGate.ReadRepoFile(Overlay);
+        foreach (var method in new[] { "private void Rebake()", "private byte[]? UnderDragBuffer", "private void DragTo" })
+            Assert.Contains("_contentWidth, _contentHeight", SourceGate.MethodBody(cs, method));
+        Assert.DoesNotContain("Render(basePixels, selection.Width", cs);
+        Assert.DoesNotContain("(scratch, selection.Width", cs);
+        Assert.DoesNotContain("(canvas, selection.Width", cs);
+    }
+
+    /// <summary>
+    /// 贴图这条工具条只能压在画面上：摆它的那一处必须用<b>布局真值</b>量可用宽度，
+    /// 而不是"物理宽 ÷ 缩放"自己算左边界（建窗那一刻 DPI 还没落到本窗时算出来的数会比窗口宽，
+    /// 整条被推到画面外，只剩右上角露一点 —— 真机反馈"要不停放大才把菜单挪出来"）。
+    /// </summary>
+    [Fact]
+    public void PinBarIsPlacedByLayoutTruthAndKeepsItsOwnSize()
+    {
+        var bar = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void PositionBar");
+        Assert.Contains("Root.ActualWidth", bar);
+        Assert.Contains("HorizontalAlignment = HorizontalAlignment.Right", bar);
+        Assert.Contains("RenderTransformOrigin = new Windows.Foundation.Point(1, 0)", bar);   // 贴着右上角往里收
+        Assert.Contains("_pinned", bar);
+        // 第一次布局才有真宽度：量到了要重摆一次
+        Assert.Contains("ActionBar.SizeChanged += ",
+            SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void InitWindow"));
+        // 输入框的字号也要过倍率这一层：只除 DPI 的话，放大过的贴图上"框里的字"比烤进去的那份小一个倍率
+        Assert.Contains("_sourceScale / _scale",
+            SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void BeginTextEdit"));
     }
 
     [Fact]

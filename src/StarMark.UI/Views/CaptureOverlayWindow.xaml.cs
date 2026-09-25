@@ -250,6 +250,12 @@ public sealed partial class CaptureOverlayWindow : Window
         // 就会走 BeginStroke → BeginTextEdit → 把刚打的一行清空（真机反馈"文字编辑无效"的路径之一）。
         // 光标定位由 TextBox 自己的处理负责，我们只在它之后把事件吃掉。
         TextEditor.PointerPressed += (_, e) => e.Handled = true;
+        // 条子自己的宽度要等第一次布局才有真值，而贴图态"缩多少、靠哪儿摆"全按它算：
+        // 量到真值就重摆一次，否则用户得滚一下轮才把整条菜单"叫出来"。
+        ActionBar.SizeChanged += (_, _) =>
+        {
+            if (_pinned && _selection is { } s) PositionBar(s);
+        };
         Root.DoubleTapped += (_, e) =>
         {
             if (_polyLine is null) return;
@@ -1439,7 +1445,7 @@ public sealed partial class CaptureOverlayWindow : Window
         var tail = points[^1];
         if (tail != _scratchTail)
         {
-            AnnotationPainter.Paint(scratch, selection.Width, selection.Height,
+            AnnotationPainter.Paint(scratch, _contentWidth, _contentHeight,
                 new Annotation(AnnotationTool.Mosaic, new[] { _scratchTail, tail }, ColourBgra, ThicknessForTool));
             _scratchTail = tail;
         }
@@ -1546,10 +1552,11 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private byte[]? UnderDragBuffer(int excluding)
     {
-        if (_base is not { } basePixels || _selection is not { } selection) return null;
+        if (_base is not { } basePixels || _selection is not { }) return null;
         var rest = new List<Annotation>(_history.Marks);
         rest.RemoveAt(excluding);
-        try { return AnnotationPainter.Render(basePixels, selection.Width, selection.Height, rest); }
+        // 与 Rebake 同一口径：尺寸跟着底图走，不跟选区（贴图态那是显示尺寸）走。
+        try { return AnnotationPainter.Render(basePixels, _contentWidth, _contentHeight, rest); }
         catch (Exception ex)
         {
             StarLog.Error("[CaptureOverlay] 拖动底图准备失败", ex);
@@ -1569,7 +1576,7 @@ public sealed partial class CaptureOverlayWindow : Window
             Buffer.BlockCopy(under, 0, canvas, 0, under.Length);
             try
             {
-                AnnotationPainter.Paint(canvas, selection.Width, selection.Height, preview);
+                AnnotationPainter.Paint(canvas, _contentWidth, _contentHeight, preview);
             }
             catch (Exception ex)
             {
@@ -1699,7 +1706,7 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private void Rebake()
     {
-        if (_base is not { } basePixels || _preview is not { } preview || _selection is not { } selection) return;
+        if (_base is not { } basePixels || _preview is not { }) return;
         // 正在改的那一条先不烤进画面：输入框就压在它原来的位置上，两份同时画出来
         // 就是真机反馈的"编辑中文字和已编辑文字重叠，红白两层"。落笔/取消后它自然回来。
         var marks = _editingText && _editingIndex is { } hidden && hidden < _history.Count
@@ -1707,10 +1714,12 @@ public sealed partial class CaptureOverlayWindow : Window
             : _history.Marks;
         try
         {
-            var composed = AnnotationPainter.Render(basePixels, selection.Width, selection.Height, marks);
-            using (var stream = preview.PixelBuffer.AsStream())
+            // 渲染尺寸取底图自己的尺寸，<b>不取选区</b>：贴图态"选区"＝窗口的显示尺寸（＝底图 × 倍率），
+            // 按它渲染就是"缓冲比声明的尺寸短，画上去会越界"——真机反馈"标注没能画上去"的那条报信。
+            var composed = AnnotationPainter.Render(basePixels, _contentWidth, _contentHeight, marks);
+            using (var stream = _preview.PixelBuffer.AsStream())
                 stream.Write(composed, 0, composed.Length);
-            preview.Invalidate();
+            _preview.Invalidate();
             _composed = composed;
             _scratch = null;
         }
@@ -1851,7 +1860,9 @@ public sealed partial class CaptureOverlayWindow : Window
             Math.Clamp(x, 0, Math.Max(0, _monitor.Width / _scale - 40)),
             Math.Clamp(y, 0, Math.Max(0, _monitor.Height / _scale - 40)), 0, 0);
         TextEditorHost.Visibility = Visibility.Visible;
-        TextEditor.FontSize = (editing?.DrawFontHeight ?? Annotation.DefaultFontHeight) / _scale;
+        // 字号走的是"底图像素 → 屏幕像素 → DIP"两层：只除 `_scale` 的话，放大过的贴图里
+        // 输入框中的字会比烤进去的那份小一个倍率（所见非所得），2.5× 上就是小 2.5 倍。
+        TextEditor.FontSize = (editing?.DrawFontHeight ?? Annotation.DefaultFontHeight) * _sourceScale / _scale;
         ApplyEditorAccent();
         TextEditor.Text = editing?.Text ?? string.Empty;
         TextEditor.SelectionStart = TextEditor.Text.Length;   // 改字＝光标落在末尾：退格与接着打字都在手边
@@ -2031,21 +2042,28 @@ public sealed partial class CaptureOverlayWindow : Window
         var barWidth = ActionBar.ActualWidth > 0 ? ActionBar.ActualWidth : Bar_fallback_width;
         var barHeight = ActionBar.ActualHeight > 0 ? ActionBar.ActualHeight : Bar_fallback_height;
         var (x, y, w, h) = ToDip(selection);
+        // 贴图态这条只能压在画面上（窗口就是那张图）。这里<b>不自己算左边界</b>：直接靠右上对齐，
+        // 可用宽度量布局真值（Root.ActualWidth）而不是"物理宽 ÷ 缩放"——后者在建窗那一刻可能还没
+        // 拿到本窗真正的 DPI，算出来的边界会比窗口宽，结果整条被推到画面外，只剩右上角露一点，
+        // 真机反馈就是"要不停放大贴图，菜单才一点点挪出来"。
+        if (_pinned)
+        {
+            var available = Root.ActualWidth > 0 ? Root.ActualWidth : _monitor.Width / _scale;
+            // 小贴图常常没有一条工具条宽：整条缩到塞得进画面（贴着右上角往里收），
+            // 而不是把右边那几颗（复制/存图/识字/穿透/关闭）裁掉——裁掉的正好是要用的。
+            var fit = barWidth > 0 ? Math.Clamp((available - 8) / barWidth, 0.5, 1.0) : 1.0;
+            ActionBar.HorizontalAlignment = HorizontalAlignment.Right;
+            ActionBar.VerticalAlignment = VerticalAlignment.Top;
+            ActionBar.Margin = new Thickness(0, 0, 4, 0);
+            ActionBar.RenderTransformOrigin = new Windows.Foundation.Point(1, 0);
+            ActionBar.RenderTransform = new ScaleTransform { ScaleX = fit, ScaleY = fit };
+            return;
+        }
         var screenWidth = _monitor.Width / _scale;
         var screenHeight = _monitor.Height / _scale;
-        // 贴图态这条只能压在画面上（窗口就是那张图），而"截一小块钉住"常常没有一条工具条宽。
-        // 整条缩到塞得进画面，而不是把右边那几颗（复制/存图/识字/关闭）裁掉——裁掉的正好是要用的。
-        var fit = 1.0;
-        if (_pinned && barWidth > 0)
-        {
-            fit = Math.Clamp((screenWidth - 8) / barWidth, 0.5, 1.0);
-            ActionBar.RenderTransformOrigin = new Windows.Foundation.Point();
-            ActionBar.RenderTransform = new ScaleTransform { ScaleX = fit, ScaleY = fit };
-        }
-        var (scaledWidth, scaledHeight) = (barWidth * fit, barHeight * fit);
-        var left = Math.Clamp(x + w - scaledWidth, 4, Math.Max(4, screenWidth - scaledWidth - 4));
-        var below = y + h + 6 + scaledHeight <= screenHeight;
-        PlaceByMargin(ActionBar, left, below ? y + h + 6 : Math.Max(4, y - scaledHeight - 6));
+        var left = Math.Clamp(x + w - barWidth, 4, Math.Max(4, screenWidth - barWidth - 4));
+        var below = y + h + 6 + barHeight <= screenHeight;
+        PlaceByMargin(ActionBar, left, below ? y + h + 6 : Math.Max(4, y - barHeight - 6));
     }
 
     private static void PlaceOnCanvas(FrameworkElement element, double x, double y, double w, double h)
