@@ -1,4 +1,5 @@
 #nullable enable
+using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
@@ -399,12 +400,24 @@ public sealed partial class MainWindow : Window
     private async void ExitApp()
     {
         _allowExit = true;
+        StarLog.Info("退出：开始收尾（停同步 → 关组件 → 停采集 → 摘托盘 → 结束进程）");
+        // 硬退出保险：收尾里任何一步卡住（22 个组件窗口的关闭，只要有一个不返回就够）都会让进程留在
+        // "托盘图标已经没了、StarMark.UI.exe 还在锁着 dll" 这个状态。这条后台线程不参与任何业务，
+        // 正常路径会自己走到最后那句 Environment.Exit，它只在 5 秒后替用户把话说完。
+        new Thread(() => { Thread.Sleep(5000); Environment.Exit(0); }) { IsBackground = true }.Start();
         _dataSync?.Dispose();
         try { await _widgetManager.ShutdownAllAsync(); }
         catch (Exception ex) { StarLog.Error("关闭桌面组件失败", ex); }
+        try { App.ApplyClipboardHistory(false); }
+        catch (Exception ex) { StarLog.Error("停止剪贴板采集失败", ex); }
         DisposeTray();
         WidgetAppearance.ReleaseBackdrop(this);   // 释放主窗口的材质控制器（原生合成资源）
-        Application.Current.Exit();
+        try { Application.Current.Exit(); }
+        catch (Exception ex) { StarLog.Error("Application.Exit 失败（不影响结束进程）", ex); }
+        // WinUI 3 的 Application.Exit 只把应用从 UI 上摘下来，**不带下线进程**。真机日志里
+        // "有会话开始、无进程退出"正好对上"托盘图标早已不见、进程还在锁 dll"（dotnet run 报 MSB3027）。
+        // 退出这条路必须自己结束进程，不能指望框架替我们收。
+        Environment.Exit(0);
     }
 
     private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)

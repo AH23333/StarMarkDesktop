@@ -8,6 +8,7 @@ using StarMark.Core.Backup;
 using StarMark.Core.Hotkeys;
 using StarMark.Core.Widgets;
 using StarMark.Core.Performance;
+using StarMark.Core.Startup;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
@@ -28,6 +29,12 @@ public partial class App : Application
     /// <summary>单实例互斥体（进程生命周期内保持引用，防止被 GC 释放）。</summary>
     private static Mutex? _singleInstanceMutex;
     private const string SingleInstanceMutexName = "Local\\StarMark.Desktop.SingleInstance";
+
+    /// <summary>
+    /// 启动参数：<c>--resolve-ghost &lt;pid&gt;</c>＝"我是为了收掉一台残留进程才被提权重启的"。
+    /// 提权实例在抢互斥体<b>之前</b>先按这个 pid 收一次（见 <see cref="ResolveStaleInstanceFromArgs"/>）。
+    /// </summary>
+    private const string ResolveGhostArg = "--resolve-ghost";
 
     public App()
     {
@@ -99,15 +106,30 @@ public partial class App : Application
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
             StarLog.Info($"===== StarMark 进程退出 pid={Environment.ProcessId} =====");
 
+        // 上一轮用户同意"提权收掉残留进程"时，这次就是来兑现的：必须在抢互斥体之前做，
+        // 否则残留还攥着那把锁，我们自己就是那个"唤起不到窗口 → 自我退出"的新实例。
+        ResolveStaleInstanceFromArgs();
+
         // 单实例：再次启动时唤起已有主窗口并退出新进程
         _singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName,
             createdNew: out var createdNew);
         if (!createdNew)
         {
-            StarLog.Info("二次启动：转交已有实例后退出本进程");
-            TryActivateExistingInstance();
-            Environment.Exit(0);
-            return;
+            if (TryActivateExistingInstance())
+            {
+                StarLog.Info("二次启动：已唤起已有实例，退出本进程");
+                Environment.Exit(0);
+                return;
+            }
+            // 唤不起：对面要么是一具没有窗口的残留（退出没结束进程留下的），要么正好在消失。
+            // 这两种都不该让用户对着"双击没反应"猜，所以先试着把锁拿回来，拿不回才退。
+            var problem = TryRecoverStaleInstance();
+            if (problem is not null)
+            {
+                StarLog.Warn($"二次启动：既唤不起也没能回收残留，退出本进程。原因：{problem}");
+                Environment.Exit(0);
+                return;
+            }
         }
 
         // 1. 构建 DI 容器
@@ -390,6 +412,8 @@ public partial class App : Application
 
     /// <summary>
     /// 唤起已有实例的主窗口（按窗口标题查找，组件窗口标题不同不会误匹配）。
+    /// 返回是否真的唤起了——没唤起时调用方还要判断"对面是不是一具没窗口的残留"，
+    /// 不能像早先那样不问缘由地自我退出（那正是"双击图标没反应"的成因）。
     /// <para>
     /// 必须校验属主进程：任意程序都能把自己的窗口标题设成 "StarMark"（浏览器标签页标题、同名小工具…），
     /// 不加校验时我们会对**别人的**窗口 ShowWindow/SetForegroundWindow——既把陌生人弹到用户面前、
@@ -397,45 +421,155 @@ public partial class App : Application
     /// 且这是一个可被本地任意进程利用的前置抢占面。校验取不到结论时一律不动别人的窗口。
     /// </para>
     /// </summary>
-    private static void TryActivateExistingInstance()
+    private static bool TryActivateExistingInstance()
     {
         try
         {
-            var hwnd = WindowInterop.FindWindowW(null, "StarMark");
-            if (hwnd == IntPtr.Zero) return;
+            var hwnd = WindowInterop.FindWindowW(null, AppConstants.AppName);
+            if (hwnd == IntPtr.Zero) return false;
 
-            if (!IsOurMainWindow(hwnd)) return;
+            if (!IsOurMainWindow(hwnd)) return false;
 
             // 窗口可能处于隐藏（最小化到托盘）或最小化状态：先显示再还原
             WindowInterop.ShowWindow(hwnd, WindowInterop.SW_SHOW);
             WindowInterop.ShowWindow(hwnd, WindowInterop.SW_RESTORE);
             WindowInterop.SetForegroundWindow(hwnd);
+            return true;
         }
-        catch (Exception ex) { StarLog.Warn($"转交已有实例时出错（让本实例照常退出）：{ex.Message}"); }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"唤起已有实例时出错（本实例接着判断残留）：{ex.Message}");
+            return false;
+        }
     }
 
-    /// <summary>该 hwnd 是否属于"另一个 StarMark 进程"：进程名相同且 pid 不是自己。</summary>
+    /// <summary>该 hwnd 是否属于"另一个 StarMark 进程"：进程名与自身所在 exe 同名且 pid 不是自己。</summary>
     private static bool IsOurMainWindow(IntPtr hwnd)
     {
         WindowInterop.GetWindowThreadProcessId(hwnd, out var pid);
         if (pid == 0 || pid == (uint)Environment.ProcessId)
         {
-            StarLog.Warn($"按标题找到的「StarMark」窗口属主 pid={pid} 不是另一实例，放弃转交");
+            StarLog.Warn($"按标题找到的「{AppConstants.AppName}」窗口属主 pid={pid} 不是另一实例，放弃转交");
             return false;
         }
         try
         {
             var name = System.Diagnostics.Process.GetProcessById(unchecked((int)pid)).ProcessName;
-            if (string.Equals(name, "StarMark", StringComparison.OrdinalIgnoreCase)) return true;
-            StarLog.Warn($"按标题找到的「StarMark」窗口属主是进程「{name}」(pid={pid})，非本应用，放弃转交");
+            if (string.Equals(name, InstanceProbe.OurProcessName, StringComparison.OrdinalIgnoreCase)) return true;
+            StarLog.Warn($"按标题找到的「{AppConstants.AppName}」窗口属主是进程「{name}」(pid={pid})，非本应用，放弃转交");
             return false;
         }
         catch (Exception ex)
         {
             // 进程已退出 / 无权限读名字：宁可不动别人的窗口，也不要把陌生程序前置
-            StarLog.Warn($"无法确认「StarMark」窗口属主 pid={pid}（{ex.Message}），放弃转交");
+            StarLog.Warn($"无法确认「{AppConstants.AppName}」窗口属主 pid={pid}（{ex.Message}），放弃转交");
             return false;
         }
+    }
+
+    /// <summary>
+    /// 唤起不到窗口之后，判断并收掉"界面已经拆完、进程却没结束"的残留，把单实例锁拿回来。
+    /// 返回 null＝锁已归本实例，可以照常启动；返回一段原因＝什么都不动、本进程退出（原因进日志）。
+    /// </summary>
+    private static string? TryRecoverStaleInstance()
+    {
+        var (action, pid, why) = InstanceHandoff.Decide(InstanceProbe.ListPeers());
+        switch (action)
+        {
+            case HandoffAction.ActivatePeer:
+                // 它还留着窗口，只是按标题没找到（主窗被关、只剩组件窗那类）：那不是残留，
+                // 结束一个还在正常显示东西的进程比一次"双击没反应"严重得多。
+                return $"{why}，但按标题没能唤起它的窗口";
+
+            case HandoffAction.RecoverPeer:
+                var (ok, permissionDenied, problem) = InstanceProbe.TryStop(pid);
+                if (!ok)
+                {
+                    if (permissionDenied && !Privilege.IsElevated() && AcceptsElevatedCleanup(pid))
+                    {
+                        // 提权后的新实例会带着 --resolve-ghost 收掉它并照常启动。这里必须先把锁让出去
+                        // 再退（见 ReleaseSingleInstanceForHandoff），否则新实例抢不到锁、又去唤起这个
+                        // 马上要消失的进程，结果是两个都没了。
+                        ReleaseSingleInstanceForHandoff();
+                        Environment.Exit(0);
+                    }
+                    return problem;
+                }
+                return TryClaimMutex() ? null : $"{why}，但结束后互斥体仍没拿到";
+
+            default:
+                // 判定说"证据不足"时仍值得等一把：持有者可能正好在我们枚举的这几毫秒里结束——
+                // 进程一死，锁会被"遗弃"，等到遗弃通知的这一方直接接管。
+                return TryClaimMutex() ? null : why;
+        }
+    }
+
+    /// <summary>再抢一次单实例锁（对面进程结束时锁会被遗弃，接到通知的一方即获得所有权）。</summary>
+    private static bool TryClaimMutex(int waitMs = 2000)
+    {
+        if (_singleInstanceMutex is not { } m) return false;
+        try
+        {
+            return m.WaitOne(waitMs);
+        }
+        catch (AbandonedMutexException)
+        {
+            return true;
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"等待单实例锁时出错：{ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 问一句要不要以管理员权限收掉那个残留。<b>这一句问不得省</b>：对面权限比我们高，是系统在拦
+    /// （UIPI），程序自己没有任何合法路径越过去；而"打开任务管理器手动结束"是把活推给用户。
+    /// 返回 true 表示提权实例已经拉起来，本进程要把锁让出去后退出。
+    /// </summary>
+    private static bool AcceptsElevatedCleanup(int pid)
+    {
+        const uint MB_YESNO = 0x04;
+        const uint MB_ICONWARNING = 0x10;
+        const int IDYES = 6;
+        var answer = MessageBoxW(IntPtr.Zero,
+            $"StarMark 发现上一次运行没收干净的进程（pid={pid}）。它以管理员权限运行，" +
+            "当前这个实例没有权限结束它，所以既唤不起它、也抢不回单实例锁。\n\n" +
+            "「是」＝以管理员权限重启 StarMark 并自动收掉那个残留（系统会再弹一次确认框）。\n" +
+            "「否」＝本次启动直接退出，不动任何进程。",
+            "StarMark 需要结束一个残留进程", MB_YESNO | MB_ICONWARNING);
+        return answer == IDYES && Privilege.TryRelaunchSelfElevated($"{ResolveGhostArg} {pid}");
+    }
+
+    /// <summary>
+    /// 兑现"提权收残留"那一句：只在带 <c>--resolve-ghost &lt;pid&gt;</c> 时做事，而且只结束
+    /// <b>指名那台、同名、已过宽限期、确实一个窗口都没有</b>的进程——四个条件缺任何一个都不动手。
+    /// 这里不再弹框、也不再递归提权（这次已是提权实例；失败只记一行日志）。
+    /// </summary>
+    private static void ResolveStaleInstanceFromArgs()
+    {
+        var argv = Environment.GetCommandLineArgs();
+        var at = Array.FindIndex(argv, a => string.Equals(a, ResolveGhostArg, StringComparison.OrdinalIgnoreCase));
+        if (at < 0) return;
+        if (at + 1 >= argv.Length || !int.TryParse(argv[at + 1], out var pid) || pid <= 0)
+        {
+            StarLog.Warn($"{ResolveGhostArg} 后面没带上 pid，跳过清理");
+            return;
+        }
+        if (!Privilege.IsElevated())
+        {
+            StarLog.Warn($"{ResolveGhostArg} pid={pid}：这次不是管理员权限，收不掉，跳过（不再重复弹框）");
+            return;
+        }
+        if (!InstanceProbe.ListPeers().Any(p =>
+                p.Pid == pid && p.NameMatches && !p.HasTopLevelWindow && p.PastGrace))
+        {
+            StarLog.Info($"{ResolveGhostArg} pid={pid} 已不是残留状态（窗口回来了／已经不在了），不用清理");
+            return;
+        }
+        var (ok, _, problem) = InstanceProbe.TryStop(pid);
+        StarLog.Info(ok ? $"{ResolveGhostArg}：已结束残留实例 pid={pid}" : $"{ResolveGhostArg}：{problem}");
     }
 
     /// <summary>托盘/组件唤起主窗口的统一入口。</summary>

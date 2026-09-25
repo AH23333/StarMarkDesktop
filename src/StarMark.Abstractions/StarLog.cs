@@ -18,8 +18,16 @@ public static class StarLog
     private static string? _dayFile;
     private static DateTime _dayFileExpiry;
 
+    /// <summary>
+    /// 日志目录覆盖，<b>只为测试准备</b>：默认写进 <c>%LOCALAPPDATA%\StarMark\logs</c>，
+    /// 单测里那些"写失败要降级""来源跳过要记一行"的断言于是也往同一份真机日志里追加行——
+    /// 排查真机问题时要先分辨哪几行根本没在真机上发生过。改道临时目录后，这份文件只剩真机的事。
+    /// </summary>
+    public static string? DirectoryOverride { get; set; }
+
     public static string LogDirectory
-        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppConstants.AppName, "logs");
+        => DirectoryOverride
+           ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppConstants.AppName, "logs");
 
     // 锁定 InvariantCulture：th-TH/ar-SA 的 CurrentCulture 用佛历/希吉来历，否则文件名会得到 2569/1447 这类年份，与文档承诺及行内 [O] 时间戳矛盾。
     public static string CurrentLogFile
