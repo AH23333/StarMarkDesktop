@@ -281,6 +281,51 @@ public sealed class CanvasInkTests
         Assert.Equal(Annotation.HighlighterAlpha, marker.EffectiveColorBgra >>> 24);
     }
 
+    [Fact]
+    public void ClearRectOnlyTouchesThatRect()
+    {
+        var buffer = Buffer();
+        CanvasCompositor.Paint(buffer, 100, 100, Pen(20, 20));
+        CanvasCompositor.Paint(buffer, 100, 100, Pen(70, 70));
+        CanvasCompositor.ClearRect(buffer, 100, 100, new IntRect(10, 10, 25, 25));
+        Assert.Equal(0u, Pixel(buffer, 20, 20));                     // 撤销走的就是这条路：只擦那一条的包围盒
+        Assert.True(AlphaOf(Pixel(buffer, 70, 70)) > 0, "别的地方不能被牵连");
+    }
+
+    [Fact]
+    public void CopyRectMovesPixelsWithoutTouchingTheRest()
+    {
+        var source = Buffer();
+        var target = Buffer();
+        CanvasCompositor.Paint(source, 100, 100, Pen(20, 20));
+        CanvasCompositor.Paint(target, 100, 100, Pen(70, 70));       // 目标那块区域外本来有别的东西
+        CanvasCompositor.CopyRect(source, target, 100, 100, new IntRect(0, 0, 40, 40));
+        Assert.Equal(Pixel(source, 20, 20), Pixel(target, 20, 20));
+        Assert.Equal(Pixel(target, 70, 70), Pixel(target, 70, 70));  // 区域外原样
+        Assert.True(AlphaOf(Pixel(target, 70, 70)) > 0, "拷贝不能把区域外的笔迹带走");
+    }
+
+    [Fact]
+    public void GlowIsBrightestAtTheCentreAndDiesAtTheEdge()
+    {
+        var buffer = Buffer();
+        var dirty = CanvasCompositor.PaintGlow(buffer, 100, 100, new PixelPoint(50, 50), 16, Red);
+        var centre = AlphaOf(Pixel(buffer, 50, 50));
+        var middle = AlphaOf(Pixel(buffer, 58, 50));
+        var edge = AlphaOf(Pixel(buffer, 66, 50));
+        Assert.True(centre > middle && middle > edge, $"光晕必须是连续的一团：{centre}/{middle}/{edge}");
+        Assert.Equal(new IntRect(34, 34, 33, 33), dirty);
+    }
+
+    [Fact]
+    public void GlowNeverWashesOutInkThatIsAlreadyDenser()
+    {
+        var buffer = Buffer();
+        CanvasCompositor.Paint(buffer, 100, 100, Pen(50, 50));              // 不透明的笔芯
+        CanvasCompositor.PaintGlow(buffer, 100, 100, new PixelPoint(50, 50), 16, Red);
+        Assert.Equal(255, AlphaOf(Pixel(buffer, 50, 50)));                  // 取大：光晕不改变已有浓墨的密度
+    }
+
     // ────────── 脏区数学 ──────────
 
     [Fact]

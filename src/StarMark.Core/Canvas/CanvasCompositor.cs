@@ -27,6 +27,28 @@ public static class CanvasCompositor
     public static void Clear(uint[] buffer) => Array.Clear(buffer, 0, buffer.Length);
 
     /// <summary>
+    /// 只擦一块区域。<b>撤销与"擦掉一段荧光"靠的是这个而不是整块擦</b>：
+    /// 4K 上一次 <c>Array.Clear</c> 是 33MB，每收一笔都整块擦就等于自己把自己卡住。
+    /// </summary>
+    public static void ClearRect(uint[] buffer, int width, int height, IntRect rect)
+    {
+        var r = Clamp(rect, width, height);
+        for (var y = r.Y; y < r.Bottom; y++)
+            Array.Clear(buffer, y * width + r.X, r.Width);
+    }
+
+    /// <summary>把一块区域从源缓冲拷进目标缓冲（合成时"先铺持久层，再叠荧光段与光晕"就靠它）。</summary>
+    public static void CopyRect(uint[] source, uint[] target, int width, int height, IntRect rect)
+    {
+        var r = Clamp(rect, width, height);
+        for (var y = r.Y; y < r.Bottom; y++)
+        {
+            var from = y * width + r.X;
+            Array.Copy(source, from, target, from, r.Width);
+        }
+    }
+
+    /// <summary>
     /// 画<b>整条</b>笔迹（清屏/撤销后的全量重画走这条）。返回真碰到的区域（已夹进画布），
     /// 调用方据此决定往屏幕上提交哪一块——<b>4K 全屏每帧整张提交是 33MB，规格 §16.7 明令禁止</b>。
     /// </summary>
@@ -92,6 +114,41 @@ public static class CanvasCompositor
         var x2 = Math.Min(width, rect.Right);
         var y2 = Math.Min(height, rect.Bottom);
         return x2 <= x1 || y2 <= y1 ? Nothing : new IntRect(x1, y1, x2 - x1, y2 - y1);
+    }
+
+    /// <summary>
+    /// 在光标处盖一团光晕（荧光笔态下"我现在拿的是荧光笔"的常驻提示）。
+    /// <para>
+    /// 与笔迹同一套取大规则，但它是<b>每帧重画</b>的：光晕跟着鼠标走，旧位置靠"那一块从持久层重铺"复原
+    /// （调用方把新旧两块都算进脏区）。因此这里不需要缓存一张光晕贴图——一次 128×128 的圆盘
+    /// 就是一帧的全部开销，而缓存位图会多一处"颜色改了没重建"的失效点。
+    /// </para>
+    /// </summary>
+    public static IntRect PaintGlow(uint[] buffer, int width, int height, PixelPoint center, int radius, int colorBgra)
+    {
+        if (radius <= 0) return Nothing;
+        var reach = radius;
+        var top = Math.Max(0, center.Y - reach);
+        var bottom = Math.Min(height - 1, center.Y + reach);
+        var left = Math.Max(0, center.X - reach);
+        var right = Math.Min(width - 1, center.X + reach);
+        for (var y = top; y <= bottom; y++)
+        {
+            var dy = y - center.Y;
+            for (var x = left; x <= right; x++)
+            {
+                var dx = x - center.X;
+                var distance = MathF.Sqrt(dx * dx + dy * dy);
+                if (distance > reach) continue;
+                // 中心最亮、外缘淡到 0：与荧光笔的"三层"不同，这里要的是连续的一团光
+                var density = 1f - distance / reach;
+                var index = y * width + x;
+                var alpha = (int)Math.Round((colorBgra >>> 24) * density);
+                if (alpha <= (int)(buffer[index] >>> 24)) continue;
+                buffer[index] = Premultiply(colorBgra, alpha);
+            }
+        }
+        return Clamp(new IntRect(center.X - reach, center.Y - reach, reach * 2 + 1, reach * 2 + 1), width, height);
     }
 
     // ────────── 逐像素 ──────────
