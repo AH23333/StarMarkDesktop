@@ -713,9 +713,12 @@ public sealed partial class CaptureOverlayWindow : Window
         }
         switch (e.Key)
         {
-            case VirtualKey.Delete when _selected is not null:
-            case VirtualKey.Back when _selected is not null:
-                // 选中之后总得能删掉：只有"撤销"的话，删中间那条要把后面几条一起退掉
+            case VirtualKey.Delete when _selected is not null && !_editingText:
+            case VirtualKey.Back when _selected is not null && !_editingText:
+                // 选中之后总得能删掉：只有"撤销"的话，删中间那条要把后面几条一起退掉。
+                // <b>编辑中不放行</b>：正在改的那一条同时也是"选中的那一条"，而输入框没接到焦点时
+                // 退格会冒到这一层——真机反馈"在编辑里按 Backspace，上一次编辑的文字整个没了"就是它，
+                // 一次按键删掉一整条，比删不干净严重得多。
                 e.Handled = true;
                 DeleteSelected();
                 break;
@@ -843,19 +846,21 @@ public sealed partial class CaptureOverlayWindow : Window
         // 上一行字先落笔再动手：在画布上点第二下不该把刚打的字凭空清掉（真机反馈"文字编辑无效"的路径之一）。
         if (_tool == AnnotationTool.Text)
         {
+            // 落笔必须排在命中<b>之前</b>：真机反馈"第二次编辑时已经输入了文字，点旧字之后刚打的字直接没了"，
+            // 原因是这里原先按"先命中、再丢弃正在打的那一行"走（commit: false＝丢），而丢弃并不等于"那条不存在"。
+            // 命中也不能先算：落笔那一步可能删掉一条（把一条改成空字＝删那条），先算好的下标就会指着隔壁那条，
+            // 于是"改这一行"变成"把字写进另一行"——最坏的一种静默改错。
+            EndTextEditing(commit: true);
             // 点在已经写好的那行字上＝回去改它（真机期望"随时可以点击之前编辑的文字继续删减修改"），
-            // 点在空白处＝新写一行。命中判据用模型里那一条（与"点一下就选中"同一个式子），不另算一套；
-            // 而"上一行字先落笔"排在命中之后，否则点旧字那一下会先把刚打的字烤成新的一条。
+            // 点在空白处＝新写一行。命中判据用模型里那一条（与"点一下就选中"同一个式子），不另算一套。
             var hit = AnnotationPainter.HitTest(_history.Marks, local, SelectionSlop);
             if (hit is { } index && _history.Marks[index].Tool == AnnotationTool.Text)
             {
-                if (_editingText) EndTextEditing(commit: false);      // 正在打的那一行没写完就被打断：丢掉的是这次编辑，不是已落笔的字
                 _selected = index;
                 DrawSelectionHandles();
                 BeginTextEdit(local, _history.Marks[index], index);
                 return;
             }
-            EndTextEditing(commit: true);                             // 在画布上点第二下＝这一行写完，不该把它清掉
             BeginTextEdit(local);
             return;
         }
@@ -1309,6 +1314,10 @@ public sealed partial class CaptureOverlayWindow : Window
         // 颜色跟着"这一条自己的颜色"，不跟着调色板：用户改旧字时可能已经换成了别的颜色，
         // 输入框显示红的、落笔仍是白的＝"编辑时和编辑完不是一份字"（真机反馈的红白两层之一）。
         _editorColourBgra = editing?.EffectiveColorBgra ?? ColourBgra;
+        // "让位"必须长在开框这一步里，不能指望调用方随后重烤：Rebake 的那条排除只在下标已经写进字段之后
+        // 才生效，而两条入口（命中测试、拖动没动）原先都只画把手 ⇒ 底下那份旧字一直留在画面里，
+        // 与输入框叠成真机反馈了两轮的"红白两层"。
+        Rebake();
         _textAnchor = local;
         // 摆到"真画出去那一格"的左上角（Bounds() 是旋转后的外接框，转过 90° 时它会跑到字外面的空处）
         var at = editing is { } mark ? mark.TransformedPoints()[0] : local;
@@ -1382,7 +1391,13 @@ public sealed partial class CaptureOverlayWindow : Window
         TextEditorHost.Visibility = Visibility.Collapsed;
         var index = _editingIndex;
         _editingIndex = null;
-        if (!commit) return;
+        // 开框时被从画面里藏掉的那一条（见 Rebake）要在这一刻回来，否则它就永久隐身：一条画不出又点不着的字。
+        // 只在下标非空时才需要重烤——新写一行的那一路什么都没藏，白烤一张整幅选区不值。
+        if (!commit)
+        {
+            if (index is not null) Rebake();
+            return;
+        }
         var text = TextEditor.Text.TrimEnd();
 
         if (index is { } existing)

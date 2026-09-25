@@ -363,8 +363,10 @@ public sealed class CaptureOverlayGateTests
     {
         var cs = ReadOverlay(xaml: false);
         var keys = SourceGate.MethodBody(cs, "private void Root_KeyDown");
-        Assert.Contains("case VirtualKey.Delete when _selected is not null:", keys);
-        Assert.Contains("case VirtualKey.Back when _selected is not null:", keys);
+        // 两把键都只在"没在打字"时才删条目：闸门跟到 !_editingText 那半个条件，
+        // 缺了它，退格就会在编辑中途删掉整条（真机反馈），而这条出口也就成了陷阱。
+        Assert.Contains("case VirtualKey.Delete when _selected is not null && !_editingText:", keys);
+        Assert.Contains("case VirtualKey.Back when _selected is not null && !_editingText:", keys);
         Assert.Contains("DeleteSelected();", keys);
         Assert.Contains("_history.RemoveAt(index)", SourceGate.MethodBody(cs, "private void DeleteSelected"));
     }
@@ -451,8 +453,21 @@ public sealed class CaptureOverlayGateTests
         Assert.Contains("_editingIndex is null ? ColourBgra : _editorColourBgra",
             SourceGate.MethodBody(cs, "private void ApplyEditorAccent"));
         // 输入框要盖在"真画出去那一格"上（Bounds 是旋转后的外接框，转过的字会偏到空处）
-        Assert.Contains("mark.TransformedPoints()[0] : local",
-            SourceGate.MethodBody(cs, "private void BeginTextEdit"));
+        var begin = SourceGate.MethodBody(cs, "private void BeginTextEdit");
+        Assert.Contains("mark.TransformedPoints()[0] : local", begin);
+        // 藏旧字这件事必须长在开框这一步里。Rebake 的排除只在下标已经写进字段之后才生效，而两条入口
+        // 原先都只画把手不重烤 ⇒ 底下那份旧字一直留在画面里，与输入框叠成"红白两层"（真机反馈了两轮）。
+        Assert.Contains("Rebake();", begin);
+        // 改旧字之前，正在打的那一行必须先落笔：commit: false 就是真机反馈的"第二次编辑已经输入了文字，
+        // 点旧字之后刚打的那一行直接没了"。这一路里不许再有丢弃式的收口。
+        Assert.DoesNotContain("EndTextEditing(commit: false)", stroke);
+        // 而且落笔要排在命中之前：落笔那一步可能删掉一条（把一条改成空字＝删那条），
+        // 先算好的下标就会指着隔壁那条，"改这一行"静默变成"写进另一行"。
+        Assert.True(stroke.IndexOf("EndTextEditing(commit: true)", StringComparison.Ordinal)
+                    < stroke.IndexOf("AnnotationPainter.HitTest(", StringComparison.Ordinal),
+            "命中测试排在落笔之前＝下标可能已经被落笔那一步挪位，字会写进隔壁那条");
+        // 退出编辑（换选区、清历史那条路）要把藏掉的旧字烤回来，否则它永久隐身：画不出又点不着
+        Assert.Contains("if (index is not null) Rebake();", commit);
     }
 
     /// <summary>选中说明要长在遮罩窗上（悬停到几像素的把手才看得见＝没有提示）。</summary>
