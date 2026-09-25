@@ -131,6 +131,22 @@ public sealed class PinEditTests
             SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void BeginTextEdit"));
     }
 
+    /// <summary>
+    /// 换算除数必须有初始值。<b>截图那条链不经过贴图构造</b>，不写初始值就是 double 的默认 0，
+    /// 而 <c>ToLocal</c> 拿它做除数、<c>SlopInSource</c> 与输入框字号也按它换算 ⇒ 起笔坐标变成
+    /// Infinity/NaN 再截回 int，表现就是真机反馈的"截图时无法编辑"。
+    /// <para>这条闸门存在的理由：PM/PN 两批的断言都在问"贴图要不要除掉这个数"，
+    /// 没有一句问过"截图态它是几"——而 C# 里"忘了写初始值"既不报警也不报错。</para>
+    /// </summary>
+    [Fact]
+    public void TheCapturePathNeverReliesOnAnUninitializedScale()
+    {
+        var cs = SourceGate.ReadRepoFile(Overlay);
+        Assert.Contains("private double _sourceScale = 1.0;", cs);
+        Assert.DoesNotContain("private double _sourceScale;", cs);
+        Assert.Contains("private double _zoom = 1.0;", cs);        // 同一族：贴图倍率也有明确初值
+    }
+
     [Fact]
     public void PointerMappingDividesTheZoomOut_AndWheelKeepsItInStep()
     {

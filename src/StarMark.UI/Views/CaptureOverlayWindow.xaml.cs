@@ -78,8 +78,12 @@ public sealed partial class CaptureOverlayWindow : Window
     /// 一个"底图像素"对应几个显示像素：截图恒为 1（选区就是屏幕上的那块），
     /// 贴图在 2.5× 时就是 2.5——不把这个除掉，放大后的贴图会"鼠标在字上、笔落在字外"。
     /// 贴图滚轮缩放改的就是它，所以可变。
+    /// <para><b>初始值 1.0 是承重的</b>：截图那条链不经过贴图构造，没有这个初始值它就是 double 的默认 0，
+    /// 而 <see cref="ToLocal"/> 拿它做除数、<see cref="SlopInSource"/> 与字号也按它换算 ⇒
+    /// 坐标变成 Infinity/NaN 再截回整数，<b>截图态一条都画不上</b>（真机反馈"截图时无法编辑"的真因，
+    /// PM/PN 两批都只盯着"贴图要不要除"，没问过"截图态它是几"）。</para>
     /// </summary>
-    private double _sourceScale;
+    private double _sourceScale = 1.0;
 
     /// <summary>贴图态：倍率、拖动快照、穿透、角标。</summary>
     private double _zoom = 1.0;
@@ -915,7 +919,9 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void Root_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        // 编辑文字时：Enter 提交、Esc 取消（不提交）
+        // 编辑文字时：Enter 提交、Esc 取消（不提交）。
+        // 这一整层是"焦点没真的落进输入框"时的兜底（RD-1 那条"文字编辑无效"）：焦点进去了键会先被
+        // TextBox 吃掉、冒不到这里；没进去时至少不会把整张截图复制走或整场取消。
         if (_editingText && e.Key is VirtualKey.Enter or VirtualKey.Escape)
         {
             e.Handled = true;
