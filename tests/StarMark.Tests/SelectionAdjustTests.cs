@@ -152,7 +152,10 @@ public sealed class SelectionAdjustTests
         var cs = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
         // ① 未选工具 ⇒ 这一按是改框，且改完不再走到"画一笔"
         var press = SourceGate.MethodBody(cs, "private void Root_PointerPressed");
-        Assert.Contains("!Armed && TryBeginAdjust(physical, e.Pointer)", press);
+        Assert.Contains("!_pinned && _base is not null && TryBeginAdjust(physical, e.Pointer)", press);
+        // 批次 PR 起<b>边框优先于落笔</b>（Snipaste 同款）：选了笔也能直接抓选区边缘改框，
+        // 不必先"再点一次取消选中"——守卫里不许再出现 !Armed 把这条路堵死
+        Assert.DoesNotContain("!Armed && TryBeginAdjust", press);
         Assert.Contains("if (_tool is not { } tool)", press);   // 未选笔这一按不起笔（贴图态那里是移动整张图）
         Assert.True(press.IndexOf("TryBeginAdjust", System.StringComparison.Ordinal)
                     < press.IndexOf("BeginStroke(", System.StringComparison.Ordinal),

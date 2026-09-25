@@ -109,7 +109,6 @@ public sealed partial class CaptureOverlayWindow : Window
     private bool _autoDetect = true;                 // 窗口自动检测（按住 Ctrl 临时关闭）
     private IReadOnlyList<IntRect> _windowCandidates = Array.Empty<IntRect>();
     private IntRect? _detected;                      // 当前悬停命中的窗口
-    private int _numberCounter;                      // 序号计数（一次截图会话内连续）
 
     // ── 橡皮擦 ──
     private bool _erasing;
@@ -119,6 +118,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private bool _rotating;
     private bool _suppressRightTap;
     private double _bakedRotation;
+    private RotatedImage? _lastRotated;              // 最近一次旋转的四边形（缩放时要按新倍率重套窗口区域）
     private double _opacity = 1d;
     private double _rotateStartAngle;
     private PixelPoint _rotateCurrent;
@@ -284,19 +284,7 @@ public sealed partial class CaptureOverlayWindow : Window
         {
             if (_pinned && _selection is { } s) PositionBar(s);
         };
-        Root.DoubleTapped += (_, e) =>
-        {
-            // 折线进行中：双击收笔（既有行为）
-            if (_polyLine is not null) { e.Handled = true; FinishPolyLine(commit: true); return; }
-            // 贴图：双击＝快速隐藏这一张（Snipaste；F4/托盘可全部找回）
-            if (_pinned) { e.Handled = true; HidePin(); return; }
-            if (_mode != CaptureMode.Toolbar) return;
-            // 选区阶段双击＝复制（没框就先取整屏），Snipaste 同款
-            e.Handled = true;
-            _selection ??= _monitor;
-            if (_base is null) EnterAnnotationMode(_selection.Value);
-            Commit(CommitAction.Copy);
-        };
+        Root.DoubleTapped += (_, e) => OnDoubleTapped(e);
 
         // 遮罩不需要主题：画面是抓来的桌面，文字全画在暗底上并用硬编码白色 —— 这里刻意不调
         // ThemeManager。套主题反而会把窗口的 ActualTheme 拉去影响按钮默认前景，出现"暗底灰字"。
@@ -827,8 +815,9 @@ public sealed partial class CaptureOverlayWindow : Window
 
         // 已经有选区、这次按在选区里面、而且是"给动作条"的那条链 ⇒ 这一按是**画**，不是重新框选。
         // 选区外面照旧起新框：用户想换个范围就换个范围，标注跟着作废（底图都换了，留着旧的只会对不上）。
-        // 一支笔都没选 ⇒ 这一按是用来改框的（整块移动 / 改边缘大小）。落在框外远处则放行给"重新框一块"。
-        if (_mode == CaptureMode.Toolbar && !_pinned && _base is not null && !Armed && TryBeginAdjust(physical, e.Pointer)) return;
+        // <b>边框优先于落笔</b>（Snipaste 同款）：选了笔之后，按在选区边缘那一圈仍是"改框"——
+        // 不放行的话，选了笔就只能靠"再点一次取消选中"才能调框，等于换范围前要先扔掉手上的笔。
+        if (_mode == CaptureMode.Toolbar && !_pinned && _base is not null && TryBeginAdjust(physical, e.Pointer)) return;
         if (_mode == CaptureMode.Toolbar && _base is not null && InsideSelection(physical))
         {
             // 先问"这一按是不是在改已有的那一条"（选中框/把手就在那儿）；不是才轮到画新的
@@ -991,6 +980,29 @@ public sealed partial class CaptureOverlayWindow : Window
         else EnterAnnotationMode(selection);
     }
 
+    /// <summary>
+    /// 双击的分工：<b>只在选区阶段</b>（还没进入标注）承担"确认并复制"——没框就取本屏，Snipaste 同款。
+    /// <para><b>标注阶段双击一律不做全局动作</b>：那是"快速点两下"的高频手势（放两颗序号、
+    /// 双击文字想接着改字——那一条会先经过抓取进编辑），这时把整场截图提交复制收走，
+    /// 用户看到的就是"我还没弄完，图没了"。折线进行中的双击＝收笔（既有口径）；
+    /// 贴图态双击＝快速隐藏这一张（Snipaste 同款，F4/托盘可全部找回）。</para>
+    /// </summary>
+    private void OnDoubleTapped(DoubleTappedRoutedEventArgs e)
+    {
+        // 折线进行中：双击收笔（既有行为）
+        if (_polyLine is not null) { e.Handled = true; FinishPolyLine(commit: true); return; }
+        // 贴图：双击＝快速隐藏这一张（Snipaste；F4/托盘可全部找回）
+        if (_pinned) { e.Handled = true; HidePin(); return; }
+        if (_mode != CaptureMode.Toolbar) return;
+        // 已进入标注 ⇒ 双击交给"落笔/编辑"那一层，不再承担提交
+        if (_base is not null) return;
+        // 选区阶段双击＝复制（没框就先取整屏），Snipaste 同款
+        e.Handled = true;
+        _selection ??= _monitor;
+        EnterAnnotationMode(_selection.Value);
+        Commit(CommitAction.Copy);
+    }
+
     private void Root_RightTapped(object sender, RightTappedRoutedEventArgs e)
     {
         if (_suppressRightTap)
@@ -1058,7 +1070,13 @@ public sealed partial class CaptureOverlayWindow : Window
                 break;
             case VirtualKey.Escape:
                 e.Handled = true;
-                if (_pinned) Close();     // 贴图态：Esc＝关闭这张（与建窗时的口径一致）
+                // 贴图态 Esc 分两级：有选中的标注先丢选中（顺手改的取消不伤画面），再按才关这张——
+                // 关闭会连没烤出去的标注一起丢，一次误按全没是最贵的出口。截图态 Esc 仍是取消整场（Snipaste 同款）。
+                if (_pinned)
+                {
+                    if (_selected is not null) DropSelection();
+                    else Close();
+                }
                 else Settle(null);
                 break;
             case VirtualKey.Enter:
@@ -1309,6 +1327,9 @@ public sealed partial class CaptureOverlayWindow : Window
         _lastAppliedY = y;
         RefreshScaleIfChanged();        // 收边可能把这张图整个推到另一块屏上
         RelayoutContent();
+        // 旋转过的贴图带四边形窗口区域：区域是按"当时多少倍"算的绝对像素，缩放后必须按新倍率重套，
+        // 否则放大后只有左上那一块是画面、其余被裁掉（或反过来）。
+        if (_lastRotated is not null) ApplyQuadRegion(_lastRotated, _zoom);
     }
 
     /// <summary>窗口矩形变了（缩放）之后重摆内容与工具条：底图与预览的像素没动，动的只是显示尺寸。</summary>
@@ -1490,7 +1511,6 @@ public sealed partial class CaptureOverlayWindow : Window
         DropSelection();
         _composed = null;
         _scratch = null;
-        _numberCounter = 0;
         _detected = null;
         HideMagnifier();
         _undoButton.IsEnabled = _clearButton.IsEnabled = false;
@@ -2114,6 +2134,8 @@ public sealed partial class CaptureOverlayWindow : Window
                 VirtualKey.Down => sel with { Y = sel.Y + 1 },
                 _ => sel,
             };
+            // 夹回本屏：方向键把选区推到屏外再按 Enter，裁剪护栏会拿一句错误把人挡住
+            next = CaptureGeometry.Intersect(next, _monitor) ?? next;
         }
         _selection = next;
         DrawSelection(next);
@@ -2124,7 +2146,9 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         if (_selected is not int idx || idx < 0 || idx >= _history.Count) return;
         var mark = _history.Marks[idx];
-        var step = big ? 10 : 1;
+        // 步长按<b>屏幕</b>像素定再换算进底图：贴图缩到 0.2× 时 1 个底图像素只有 0.2 个屏幕像素，
+        // 按一下方向键几乎看不见动（Snipaste 的手感是"按一下动一格"）；放大 5× 时反过来会窜格。
+        var step = SlopInSource(big ? 10 : 1);
         var dx = key switch
         {
             VirtualKey.Left => -step,
@@ -2532,12 +2556,16 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void PlaceNumber(PixelPoint local)
     {
-        _numberCounter++;
+        // 编号取"现存最大号 + 1"而不是自增计数器：撤销/删除最大那颗之后再点，Snipaste 的手感是
+        // 接着已有的号往下走（画 1,2,3 → 撤销掉 3 → 再点仍是 3），全局计数器会让它跳成 4。
+        var next = 1;
+        foreach (var existing in _history.Marks)
+            if (existing.Tool == AnnotationTool.Number) next = Math.Max(next, existing.Number + 1);
         var mark = new Annotation(AnnotationTool.Number, new[] { local }, ColourBgra, 2)
         {
-            Number = _numberCounter,
+            Number = next,
         };
-        if (mark.Problem() is not null) { _numberCounter--; return; }
+        if (mark.Problem() is not null) { return; }
         EndTextEditing(commit: true);
         DropSelection();
         _history.Add(mark);
@@ -2634,25 +2662,32 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_composed is not { } composed) return;
         var rotated = BitmapTransform.Rotate(composed, _contentWidth, _contentHeight,
             totalAngle - _bakedRotation);
+        // 显示尺寸＝旋转后的源尺寸 × 当前倍率：<b>不重置倍率</b>——放大到 2.5× 的贴图一旋转就跳回
+        // 100% 是"转个方向还得重新放大"的折腾（Snipaste 旋转后保持缩放）。
+        var (w, h) = CaptureGeometry.PinPixelSize(rotated.Width, rotated.Height, _zoom);
         var center = PinCenterPhysical();
-        var newX = center.X - rotated.Width / 2;
-        var newY = center.Y - rotated.Height / 2;
+        var newX = center.X - w / 2;
+        var newY = center.Y - h / 2;
         WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero,
-            newX, newY, rotated.Width, rotated.Height,
+            newX, newY, w, h,
             WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
-        SetMonitor(new IntRect(newX, newY, rotated.Width, rotated.Height));
+        SetMonitor(new IntRect(newX, newY, w, h));
         _bakedRotation = totalAngle;
         BeginEditingExisting(rotated.Pixels, rotated.Width, rotated.Height);
-        ApplyQuadRegion(rotated);
-        _zoom = 1d;
-        _sourceScale = 1d;
+        _lastRotated = rotated;
+        // 透明区域按四边形裁：窗口被放大了多少倍，四角就得跟着放大多少倍（否则只有左上那一块是透明的）
+        ApplyQuadRegion(rotated, _zoom);
         RefreshScaleIfChanged();
         SyncBadge();
     }
 
-    private void ApplyQuadRegion(RotatedImage rotated)
+    private void ApplyQuadRegion(RotatedImage rotated, double scale)
     {
-        var pts = rotated.Quad.Select(q => new WindowInterop.POINT { X = q.X, Y = q.Y }).ToArray();
+        var pts = rotated.Quad.Select(q => new WindowInterop.POINT
+        {
+            X = (int)Math.Round(q.X * scale, MidpointRounding.AwayFromZero),
+            Y = (int)Math.Round(q.Y * scale, MidpointRounding.AwayFromZero),
+        }).ToArray();
         var rgn = WindowInterop.CreatePolygonRgn(pts, pts.Length, WindowInterop.WINDING_FILL);
         if (rgn != IntPtr.Zero)
             WindowInterop.SetWindowRgn(WindowInterop.GetHwnd(this), rgn, true);
@@ -2664,7 +2699,8 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_composed is not { } composed) return;
         var flipped = BitmapTransform.Flip(composed, _contentWidth, _contentHeight, horizontal);
         BeginEditingExisting(flipped, _contentWidth, _contentHeight);
-        // 翻转后窗口区域恢复矩形（旋转四边形已失效）
+        // 翻转后窗口区域恢复矩形（旋转四边形已失效，镜像后的四角不再与旧区域重合）
+        _lastRotated = null;
         WindowInterop.SetWindowRgn(WindowInterop.GetHwnd(this), IntPtr.Zero, true);
         SyncBadge();
     }
@@ -2682,6 +2718,7 @@ public sealed partial class CaptureOverlayWindow : Window
         var menu = new MenuFlyout();
         AddMenuItem(menu, "复制（Ctrl+C）", () => Commit(CommitAction.Copy));
         AddMenuItem(menu, "保存（Ctrl+S）", () => Commit(CommitAction.Save));
+        AddMenuItem(menu, "识字", () => Commit(CommitAction.Ocr));
         menu.Items.Add(new MenuFlyoutSeparator());
         AddMenuItem(menu, "缩放重置为 100%", ResetZoomTo1);
         var opacityMenu = new MenuFlyoutSubItem { Text = "不透明度" };
@@ -2717,7 +2754,9 @@ public sealed partial class CaptureOverlayWindow : Window
         _zoom = 1d;
         _sourceScale = 1d;
         ResizePinAnchoringTopLeft();
-        WindowInterop.SetWindowRgn(WindowInterop.GetHwnd(this), IntPtr.Zero, true);
+        // 转过角度（非 90 的倍数）时四边形区域仍然有效，按 1 倍重套；没转过才真正清掉
+        if (_lastRotated is not null) ApplyQuadRegion(_lastRotated, 1d);
+        else WindowInterop.SetWindowRgn(WindowInterop.GetHwnd(this), IntPtr.Zero, true);
         SyncBadge();
     }
 

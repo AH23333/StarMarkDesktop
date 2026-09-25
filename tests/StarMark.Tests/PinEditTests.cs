@@ -46,7 +46,7 @@ public sealed class PinEditTests
         var pressed = SourceGate.MethodBody(cs, "private void Root_PointerPressed");
         Assert.Contains("if (_pinned)", pressed);
         Assert.Contains("if (!Armed) BeginPinDrag(e.Pointer);", pressed);   // 没选笔＝不动笔 ⇒ 这一按是移动这张图
-        Assert.Contains("!_pinned && _base is not null && !Armed && TryBeginAdjust", pressed);
+        Assert.Contains("!_pinned && _base is not null && TryBeginAdjust", pressed);
         // 贴图态的"选区"＝整块画面，所以"未选笔"那一按先在选区内被拦下、根本走不到选区外面。
         // 这条就是真机反馈"贴图拖不动"的位置：没在里面接上 BeginPinDrag，移动就永远触发不了。
         Assert.Contains("if (_tool is not { } tool)", pressed);
@@ -147,6 +147,46 @@ public sealed class PinEditTests
         Assert.Contains("private double _zoom = 1.0;", cs);        // 同一族：贴图倍率也有明确初值
     }
 
+    /// <summary>批次 PR：标注阶段双击不承担"提交复制"——那是放序号、回编辑文字时的高频手势。</summary>
+    [Fact]
+    public void DoubleTapCommitsOnlyInTheSelectionStage()
+    {
+        var tapped = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void OnDoubleTapped");
+        Assert.Contains("if (_base is not null) return;", tapped);   // 标注阶段：交给落笔/编辑那一层
+        Assert.Contains("Commit(CommitAction.Copy);", tapped);       // 选区阶段才提交
+        Assert.Contains("if (_pinned) { e.Handled = true; HidePin(); return; }", tapped);
+    }
+
+    /// <summary>方向键步长按屏幕定：0.2× 贴图上 1 个底图像素＝0.2 个屏幕像素，按一下几乎不动。</summary>
+    [Fact]
+    public void ArrowNudgeStepsAreScreenSized()
+    {
+        var nudge = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void NudgeSelectedMark");
+        Assert.Contains("SlopInSource(big ? 10 : 1)", nudge);
+    }
+
+    /// <summary>序号接着现存最大号走：撤销/删掉最大那颗之后再点，不该跳号（Snipaste 手感）。</summary>
+    [Fact]
+    public void NumberToolContinuesFromExistingMarks()
+    {
+        var place = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void PlaceNumber");
+        Assert.Contains("existing.Tool == AnnotationTool.Number) next = Math.Max(next, existing.Number + 1);", place);
+        Assert.DoesNotContain("_numberCounter", SourceGate.ReadRepoFile(Overlay));
+    }
+
+    /// <summary>旋转保持当前倍率；四边形窗口区域随缩放按新倍率重套（否则放大后画面被裁得只剩一角）。</summary>
+    [Fact]
+    public void RotationKeepsTheZoomAndRescalesTheQuad()
+    {
+        var cs = SourceGate.ReadRepoFile(Overlay);
+        var bake = SourceGate.MethodBody(cs, "private void BakeRotation");
+        Assert.DoesNotContain("_zoom = 1d", bake);
+        Assert.Contains("PinPixelSize(rotated.Width, rotated.Height, _zoom)", bake);
+        Assert.Contains("ApplyQuadRegion(rotated, _zoom)", bake);
+        Assert.Contains("if (_lastRotated is not null) ApplyQuadRegion(_lastRotated, _zoom);",
+            SourceGate.MethodBody(cs, "private void ResizePinAnchoringTopLeft"));
+    }
+
     [Fact]
     public void PointerMappingDividesTheZoomOut_AndWheelKeepsItInStep()
     {
@@ -217,7 +257,9 @@ public sealed class PinEditTests
 
         Assert.Contains("if (_pinned) Close();", SourceGate.MethodBody(cs, "private void Cancel_Click"));
         var keys = SourceGate.MethodBody(cs, "private void Root_KeyDown");
-        Assert.Contains("if (_pinned) Close();     // 贴图态：Esc＝关闭这张", keys);
+        // 贴图 Esc 是两级：有选中的标注先丢选中，再按才关这张（关闭会连没烤出去的标注一起丢）
+        Assert.Contains("if (_selected is not null) DropSelection();", keys);
+        Assert.Contains("else Close();", keys);
         // 贴图态右键不能是"丢"：图已经画了一半，一次误触不该把它清空
         Assert.Contains("if (!_pinned) Settle(null);", SourceGate.MethodBody(cs, "private void Root_RightTapped"));
     }
