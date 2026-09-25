@@ -467,7 +467,7 @@ public sealed record Annotation(
         AnnotationTool.Pen => "按住划出任意线条",
         AnnotationTool.Highlighter => "半透明高亮：盖在字上还能读原来的字",
         AnnotationTool.Mosaic => "涂过的地方变成不可读的色块（发图前遮敏感信息）",
-        AnnotationTool.Text => "点一下选区开始打字，Enter 落笔、Esc 丢掉这一行",
+        AnnotationTool.Text => "点一下选区就开始打字，Enter 换行，Esc 结束编辑；点已写好的字可以接着改",
         _ => string.Empty,
     };
 

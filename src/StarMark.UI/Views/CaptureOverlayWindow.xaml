@@ -48,7 +48,9 @@
 
 
         <!--
-            文字标注就地输入：Enter 落笔、Esc 只丢掉这一行字（不收整场截图）。
+            文字标注就地输入：点一下就打字，Enter 换行（不再当"落笔"），Esc 结束编辑并保住已打的字；
+            点已经写好的那行字会带着原文再开一次编辑。写满一行的宽度按屏幕收，不自动折行——
+            折行只有编辑框看得见，画出去的成品是一整行，那就是两张图。
             <b>左上角对齐是必须的</b>：Grid 子元素默认 Stretch，只给 Margin 定位的话，
             这块底板会从"点击处"一路铺到屏幕右下角（真机反馈的"点击处到右下角的黄色矩形"），
             输入框本身也会跟着拉成一条巨大无比的东西。
@@ -70,7 +72,7 @@
                 BorderThickness="0"
                 HorizontalAlignment="Left"
                 MinWidth="180"
-                MaxWidth="520"
+                AcceptsReturn="True"
                 FontFamily="Microsoft YaHei UI"
                 KeyDown="TextEditor_KeyDown"/>
         </Border>
@@ -153,7 +155,7 @@
             <TextBlock
                 FontSize="12"
                 Foreground="#FFFFFFFF"
-                Text="已选中：拖框内＝移动 · 拖角点＝缩放 · 拖顶部圆点＝转方向 · Delete＝删除；点一下别处换目标，起新的一笔即取消"/>
+                Text="已选中：拖框内＝移动 · 拖角＝缩放 · 拖顶部圆点＝转方向 · 文字点住它＝接着改（Enter 换行） · Delete＝删除"/>
         </Border>
     </Grid>
 </Window>

@@ -518,6 +518,62 @@ public sealed class AnnotationPainterTests
             $"缩放后墨跑出框了：ink {after} vs bounds {bounds}");
     }
 
+    /// <summary>
+    /// 编辑框里按 Enter 换的行，画出来必须<em>真的</em>占一行：量的行高与画的行距必须是同一个数。
+    /// <para>这一条钉的是"框比字矮一行"那一类——行高用估的（字高、字号、行数各乘一下）就会偏，
+    /// 而偏了之后第二行的字落在选择框外面：点它点不中，拖动它也拖不走。</para>
+    /// </summary>
+    [Fact]
+    public void ATwoLineTextPaintsBothLinesInsideItsOwnBounds()
+    {
+        var mark = new Annotation(AnnotationTool.Text, new[] { new PixelPoint(20, 20) }, Red, 4)
+        { Text = "上行 Aaaa\n下行 Bbbbbbb", FontHeight = 26 };
+        var blank = Canvas(420, 220);
+        var painted = (byte[])blank.Clone();
+        AnnotationPainter.Paint(painted, 420, 220, mark);
+
+        var ink = InkBox(blank, painted, 420, 220);
+        var box = mark.Bounds();
+        var line = StarMark.Integrations.Capture.GdiTextDrawer.Measure("上行 Aaaa", 26).Height;
+
+        // 墨不会铺满两格（行高里含行距空白），但必须明显超过一格——那才说明第二行真的另起了一行
+        Assert.True(ink.Height > line, $"第二行没另起一行：两行墨只有 {ink.Height}，单行高 {line}");
+        Assert.True(ink.Left >= box.X && ink.Top >= box.Y
+            && ink.Right <= box.Right - 1 && ink.Bottom <= box.Bottom - 1,
+            $"两行的墨跑出框了：ink {ink} vs bounds {box}");
+    }
+
+    /// <summary>转过角度的多行：整块字模（含两行）按覆盖率铺回去，墨仍然一滴都不许出框。</summary>
+    [Theory]
+    [InlineData(45)]
+    [InlineData(90)]
+    [InlineData(200)]
+    public void ATwoLineTextStillStaysInsideItsBoundsWhenTurned(double angle)
+    {
+        var mark = new Annotation(AnnotationTool.Text, new[] { new PixelPoint(60, 60) }, Red, 4)
+        { Text = "上行 Aaaa" + '\n' + "下行 Bbbbbbb", FontHeight = 26 }.RotatedBy(angle);
+        var blank = Canvas(420, 420);
+        var painted = (byte[])blank.Clone();
+        AnnotationPainter.Paint(painted, 420, 420, mark);
+
+        var ink = InkBox(blank, painted, 420, 420);
+        var box = mark.Bounds();
+        // 转起来之后"两行"落在哪个方向都会变，所以这里数墨不数量边界：
+        // 只画第一行的实现，墨量会明显少于一行半——那条正是这条断言要抓的。
+        var oneLine = new Annotation(AnnotationTool.Text, new[] { new PixelPoint(60, 60) }, Red, 4)
+        { Text = "上行 Aaaa", FontHeight = 26 }.RotatedBy(angle);
+        var singleBuffer = (byte[])blank.Clone();
+        AnnotationPainter.Paint(singleBuffer, 420, 420, oneLine);
+        var single = InkBox(blank, singleBuffer, 420, 420);
+
+        Assert.True(ink.Count > 120, $"这一转总得画上字（只画了 {ink.Count} 个像素）");
+        Assert.True(ink.Count > single.Count * 3 / 2,
+            $"转 {angle:0}° 时第二行没画出去：两行墨 {ink.Count}，一行墨 {single.Count}");
+        Assert.True(ink.Left >= box.X && ink.Top >= box.Y
+            && ink.Right <= box.Right - 1 && ink.Bottom <= box.Bottom - 1,
+            $"转 {angle:0}° 后两行的墨跑出框了：ink {ink} vs bounds {box}");
+    }
+
     /// <summary>改动过的像素的外接框与数量（"画了多少"与"画在哪儿"两件事一起看）。</summary>
     private static (int Left, int Top, int Right, int Bottom, int Width, int Height, int Count)
         InkBox(byte[] before, byte[] after, int width, int height)

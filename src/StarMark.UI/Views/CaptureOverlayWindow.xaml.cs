@@ -93,6 +93,7 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>旋转把手离框顶多远（物理像素）。</summary>
     private const int RotateHandleLift = 26;
     private bool _editingText;
+    private int? _editingIndex;             // 非空＝正在改历史里那一条（落笔时替换它，不再新增一条）
     private PixelPoint _textAnchor;
     private AnnotationTool _tool = AnnotationTool.Rectangle;
     private int _colourIndex;
@@ -839,12 +840,26 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         ErrorChip.Visibility = Visibility.Collapsed;
         // 上一行字先落笔再动手：在画布上点第二下不该把刚打的字凭空清掉（真机反馈"文字编辑无效"的路径之一）。
-        EndTextEditing(commit: true);
         if (_tool == AnnotationTool.Text)
         {
+            // 点在已经写好的那行字上＝回去改它（真机期望"随时可以点击之前编辑的文字继续删减修改"），
+            // 点在空白处＝新写一行。命中判据用模型里那一条（与"点一下就选中"同一个式子），不另算一套；
+            // 而"上一行字先落笔"排在命中之后，否则点旧字那一下会先把刚打的字烤成新的一条。
+            var hit = AnnotationPainter.HitTest(_history.Marks, local, SelectionSlop);
+            if (hit is { } index && _history.Marks[index].Tool == AnnotationTool.Text)
+            {
+                if (_editingText) EndTextEditing(commit: false);      // 正在打的那一行没写完就被打断：丢掉的是这次编辑，不是已落笔的字
+                _selected = index;
+                DrawSelectionHandles();
+                BeginTextEdit(local, _history.Marks[index], index);
+                return;
+            }
+            EndTextEditing(commit: true);                             // 在画布上点第二下＝这一行写完，不该把它清掉
             BeginTextEdit(local);
             return;
         }
+        // 非文字工具：上一行字先落笔再动手（真机反馈"文字编辑无效"的路径之一）。
+        EndTextEditing(commit: true);
         // 起新的一笔就不再指着上一条了：选择框留在原地会挡住看新画的形状，下标也会变成误导
         DropSelection();
         // 打码的"一笔"从按下那一下就该看见：同一格糊掉与"还没糊"对用户是两个完全不同的结果，
@@ -972,14 +987,6 @@ public sealed partial class CaptureOverlayWindow : Window
         _grab = mark.GrabAt(local, RotateHandle(mark), MoveSlop);
         if (_grab == Grab.None) return false;
 
-        // 【临时诊断·批次 RH-3】用户真机仍报"拖动时字会变大"，而模型侧逐像素用例全绿 ⇒
-        // "判据"与"他手指下的那一按"之间还差一环。这一行把系统把这一按读成了什么落进日志，
-        // 定位到真因之后就摘掉（诊断留在热路径里就是以后的噪声与第二份口径）。
-        var box = mark.Bounds();
-        StarLog.Info($"[AnnoGrab] {_grab} tool={mark.Tool} press=({local.X},{local.Y}) " +
-            $"box=({box.X},{box.Y},{box.Width},{box.Height}) dpi={_scale:F2} " +
-            $"font={mark.FontHeight}x{mark.Scale:F2} rot={mark.Rotation:F0}");
-
         // 按的是某一头的把手 ⇒ 钉住的那一点改到<b>对面</b>那头（模型算，界面不猜）：
         // 否则绕字块中心缩放会把左上角一起推出去，真机反馈就是"一缩放整行字和它的框都跑了"。
         _dragOriginal = _grab == Grab.Scale ? mark.WithScalePivotTowards(local) : mark;
@@ -1066,14 +1073,16 @@ public sealed partial class CaptureOverlayWindow : Window
         _grab = Grab.None;
         if (original is null || index is not { } i || grab == Grab.None) return;
         var result = original.DraggedBy(_dragAnchor, _dragLast, grab);
-        if (result == original) { DrawSelectionHandles(); return; }
-
-        // 【临时诊断·批次 RH-3】与 [AnnoGrab] 同一批，定位完就摘：这一行说"这一拖到底改了什么"。
-        // 只量字高与倍数不够，还要看落点（松手那一点）与轴点的距离比 —— 缩放是那个比值的幂等函数，
-        // 若每帧都从 _dragOriginal 重算，比值就该被钉在 1 附近；跑飞了说明轴点或锚点被逐帧挪动。
-        StarLog.Info($"[AnnoDrag] {grab} font {original.DrawFontHeight}→{result.DrawFontHeight} " +
-            $"scale {original.Scale:F3}→{result.Scale:F3} box {original.Bounds()}→{result.Bounds()} " +
-            $"release=({_dragLast.X},{_dragLast.Y}) anchor=({_dragAnchor.X},{_dragAnchor.Y})");
+        if (result == original)
+        {
+            DrawSelectionHandles();
+            // 按住的是已经写好的那行字、按下到松手几乎没有移动 ⇒ 这是"点回去改它"（真机期望：
+            // 随时可以点击之前编辑的文字，在编辑框里继续删减修改）。真拖过了就还是上一条语义＝移动位置，
+            // 不该在这种时候弹框。
+            if (grab == Grab.Move && original.Tool == AnnotationTool.Text &&
+                Annotation.Near(_dragAnchor, _dragLast, SelectionSlop)) BeginTextEdit(_dragAnchor, original, i);
+            return;
+        }
 
         _history.ReplaceAt(i, result);
         Rebake();
@@ -1118,6 +1127,9 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private void DropSelection()
     {
+        // 正在改的那一条被历史移动带走了：留住下标就等于把这一笔字写进"另一条"里（最坏的一种静默改错）
+        if (_editingText && _editingIndex is not null) EndTextEditing(commit: false);
+        _editingIndex = null;
         _selected = null;
         _grab = Grab.None;
         _dragOriginal = null;
@@ -1279,23 +1291,47 @@ public sealed partial class CaptureOverlayWindow : Window
 
     // ────────── 文字标注：就地输入 ──────────
 
-    private void BeginTextEdit(PixelPoint local)
+    /// <summary>
+    /// 就地开一个输入框。<b>点一下就该能直接打字</b>（用户的原话是"不需要再次点击文字编辑框内区域才能输入"），
+    /// 所以这里管三件事：框摆在哪儿、字色描边、以及<b>键盘焦点真的落进去</b>。
+    /// <para><paramref name="editing"/> 非空＝改已经写好的那一条：框里带上原文、光标停在末尾，
+    /// 落笔时替换那一条而不是再加一条。位置用它<b>当下</b>的包围盒左上角——那条字可能已经被拖走过或放大过。</para>
+    /// </summary>
+    private void BeginTextEdit(PixelPoint local, Annotation? editing = null, int? index = null)
     {
-        var (x, y) = LocalToDip(local);
         _editingText = true;
-        // 靠右边/下边点击时把输入框拉回屏内：默认宽度 180 DIP，越界就等于"输入框跑屏外了，打不了字"
+        _editingIndex = editing is null ? null : index;
+        _textAnchor = local;
+        var at = editing is { } mark ? new PixelPoint(mark.Bounds().X, mark.Bounds().Y) : local;
+        var (x, y) = LocalToDip(at);
+        // 宽度上限跟着屏幕收：写满一行的字被 MaxWidth 截断＝用户看到的成品与框里不一样。
+        // 换行只由 Enter 决定（XAML 里 AcceptsReturn），不许自动折行——编辑框折了而 GDI 不折，就是两张图。
+        TextEditor.MaxWidth = Math.Max(180, _monitor.Width / _scale - 20);
+        // 靠右边/下边点击时把输入框拉回屏内：越界就等于"输入框跑屏外了，打不了字"
         TextEditorHost.Margin = new Thickness(
-            Math.Clamp(x, 0, Math.Max(0, _monitor.Width / _scale - 190)),
+            Math.Clamp(x, 0, Math.Max(0, _monitor.Width / _scale - 40)),
             Math.Clamp(y, 0, Math.Max(0, _monitor.Height / _scale - 40)), 0, 0);
         TextEditorHost.Visibility = Visibility.Visible;
-        TextEditor.FontSize = Annotation.DefaultFontHeight / _scale;
+        TextEditor.FontSize = (editing?.DrawFontHeight ?? Annotation.DefaultFontHeight) / _scale;
         ApplyEditorAccent();
-        TextEditor.Text = string.Empty;
-        _textAnchor = local;
-        // 焦点没落进输入框必须当场说出来：那之后敲的键会落到遮罩那一层，Enter 变成"复制整张截图"，
-        // 用户看到的就是"打了字什么都没发生"（真机反馈的原话）。静默失效比报错难查得多。
-        if (!TextEditor.Focus(FocusState.Programmatic))
-            ShowError("这一行字还没拿到键盘焦点：点一下那个描边的输入框再打字（Enter 落笔，Esc 只丢掉这一行）");
+        TextEditor.Text = editing?.Text ?? string.Empty;
+        TextEditor.SelectionStart = TextEditor.Text.Length;   // 改字＝光标落在末尾：退格与接着打字都在手边
+        TakeEditorFocus();
+    }
+
+    /// <summary>
+    /// 把键盘焦点真的送进输入框。刚把宿主从 Collapsed 改成 Visible 的<em>同一帧</em>里
+    /// <c>Focus()</c> 会当场返回 false（元素还没量过），键于是全落到遮罩那一层——
+    /// 用户看到的就是"框出来了，但必须再点一下框里才能打字"。所以：补一次布局再要，
+    /// 仍要不到就在接下来几帧里重试；真拿不到才说实话（静默失效是最难查的一类）。
+    /// </summary>
+    private void TakeEditorFocus(int triesLeft = 3)
+    {
+        TextEditor.UpdateLayout();
+        if (TextEditor.Focus(FocusState.Programmatic)) return;
+        if (triesLeft > 1 && Root.DispatcherQueue.TryEnqueue(() => TakeEditorFocus(triesLeft - 1))) return;
+        if (!_editingText) return;        // 用户已改去点别处：这时再说"没焦点"是假警报
+        ShowError("这一行字还没拿到键盘焦点：点一下那个描边的输入框再打字（Enter 换行，Esc 结束编辑）");
     }
 
     /// <summary>
@@ -1312,16 +1348,43 @@ public sealed partial class CaptureOverlayWindow : Window
     }
 
     /// <summary>
-    /// 结束就地输入。<paramref name="commit"/> 为 false 只用于 Esc 与"换选区"——
-    /// 点工具条别的按钮时**要落笔**，否则用户打了一半的字凭空消失，比多一条标注糟得多。
+    /// 输入框里的键：<b>Enter 换行</b>（交给 TextBox 自己插行，不再当"落笔"），Esc 结束编辑并保住已打的字。
+    /// <para>Enter 以前是提交，用户想分两行就只能写完一条再点别处开第二条——真机期望是"编辑过程中可以通过
+    /// enter 进行文字换行继续编辑"。提交出口现在是：点选区别处、切工具、点动作按钮、或 Esc。</para>
+    /// </summary>
+    private void TextEditor_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key != VirtualKey.Escape) return;
+        e.Handled = true;                 // Esc 在输入框里＝结束这一行字的编辑，不是取消整场截图
+        EndTextEditing(commit: true);
+    }
+
+    /// <summary>
+    /// 结束就地输入。<paramref name="commit"/> 为 false 只用于"换选区"（整屏都要作废的那条路）——
+    /// <b>Esc 是落笔不是丢弃</b>：用户要的是"退出文字编辑去选别的工具"，不是"把我打的字变没"。
+    /// <para>改旧字那一路只动文本、不动变换（位置/字号/角度都留着），并且删空了就是删掉那条——
+    /// 留一条"没有字"的文字标注既画不出东西又占着选中位，只会让人以为程序卡了一条。</para>
     /// </summary>
     private void EndTextEditing(bool commit)
     {
         if (!_editingText) return;
         _editingText = false;
         TextEditorHost.Visibility = Visibility.Collapsed;
-        var text = TextEditor.Text.Trim();
-        if (!commit || text.Length == 0) return;
+        var index = _editingIndex;
+        _editingIndex = null;
+        if (!commit) return;
+        var text = TextEditor.Text.TrimEnd();
+
+        if (index is { } existing)
+        {
+            if (existing >= _history.Count) return;       // 编辑期间历史被动过（撤销/删除）：不猜下标，宁可不改
+            if (text.Length == 0) { _selected = existing; DeleteSelected(); return; }
+            _history.ReplaceAt(existing, _history.Marks[existing] with { Text = text });
+            Rebake();
+            DrawSelectionHandles();
+            return;
+        }
+        if (text.Length == 0) return;
         _history.Add(new Annotation(AnnotationTool.Text, new[] { _textAnchor }, ColourBgra, ThicknessForTool)
         {
             Text = text,
@@ -1330,21 +1393,6 @@ public sealed partial class CaptureOverlayWindow : Window
         _selected = _history.Count - 1;   // 打完字紧接着就是"挪个位置/改个字号"：那一条直接在手边
         Rebake();
         DrawSelectionHandles();
-    }
-
-    private void TextEditor_KeyDown(object sender, KeyRoutedEventArgs e)
-    {
-        switch (e.Key)
-        {
-            case VirtualKey.Enter:
-                e.Handled = true;             // 不能漏给 Root：那条链会变成"复制整张截图"
-                EndTextEditing(commit: true);
-                break;
-            case VirtualKey.Escape:
-                e.Handled = true;             // Esc 在输入框里＝丢掉这一行字，不是取消整场截图
-                EndTextEditing(commit: false);
-                break;
-        }
     }
 
     // ────────── 编辑历史：撤销 / 重做 / 清空 ──────────

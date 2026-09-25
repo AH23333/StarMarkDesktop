@@ -161,8 +161,17 @@ public sealed class CaptureOverlayGateTests
         Assert.Contains("EndTextEditing(commit: true)", SourceGate.MethodBody(cs, "private void SetTool"));
         // 点进输入框不算"在选区里起一笔"（否则第二次点击进来就把这行清空了）
         Assert.Contains("TextEditor.PointerPressed += (_, e) => e.Handled = true;", cs);
-        // 焦点没落进输入框时必须当场说出来：静默失效是最难自查的一类
-        Assert.Contains("if (!TextEditor.Focus(FocusState.Programmatic))", cs);
+        // 点一下就要能直接打字（用户："不需要再次点击文字编辑框内区域才能输入文字"）：
+        // 刚把宿主从 Collapsed 放出来的那一帧 Focus() 会当场失败，所以补一次布局再要、仍不行逐帧重试，
+        // 实在拿不到才说实话。锚点钉的是这套动作，不是某一句 if。
+        var focus = SourceGate.MethodBody(cs, "private void TakeEditorFocus");
+        Assert.Contains("TextEditor.UpdateLayout();", focus);
+        Assert.Contains("if (TextEditor.Focus(FocusState.Programmatic)) return;", focus);
+        Assert.Contains("Root.DispatcherQueue.TryEnqueue", focus);
+        Assert.Contains("TakeEditorFocus();", SourceGate.MethodBody(cs, "private void BeginTextEdit"));
+        // Enter 换行＝TextBox 自己吃掉这个键；Enter 再也不是"落笔"的出口（提交出口见 EndTextEditing 那条）
+        Assert.Contains("AcceptsReturn=\"True\"", ReadOverlay(xaml: true));
+        Assert.DoesNotContain("case VirtualKey.Enter:", SourceGate.MethodBody(cs, "private void TextEditor_KeyDown"));
         // 焦点跑掉时 Enter/Esc 也不能被当成"复制整张 / 取消这一屏"
         Assert.Contains("if (_editingText && e.Key is VirtualKey.Enter or VirtualKey.Escape)",
             SourceGate.MethodBody(cs, "private void Root_KeyDown"));
@@ -208,8 +217,11 @@ public sealed class CaptureOverlayGateTests
         var host = SourceGate.Between(xaml, "x:Name=\"TextEditorHost\"", "</Border>");
         Assert.Contains("HorizontalAlignment=\"Left\"", host);
         Assert.Contains("VerticalAlignment=\"Top\"", host);
-        // 只给 MinWidth 而不给上限，输入框会一路长到 Margin 之外；MaxWidth 是"别铺满屏"的下限保障
-        Assert.Contains("MaxWidth=", host);
+        // 上限必须存在（没有它输入框一路长到 Margin 之外），但它的值跟着屏幕算，所以住在代码里：
+        // XAML 里写死一个数＝宽屏上说谎、窄屏上截字
+        Assert.DoesNotContain("MaxWidth=", host);
+        Assert.Contains("TextEditor.MaxWidth = Math.Max(180,",
+            SourceGate.MethodBody(ReadOverlay(xaml: false), "private void BeginTextEdit"));
     }
 
     /// <summary>
@@ -407,6 +419,31 @@ public sealed class CaptureOverlayGateTests
         Assert.Contains("var grab = _grab;", end);
         Assert.Contains("original.DraggedBy(_dragAnchor, _dragLast, grab)", end);
         Assert.DoesNotContain("DraggedBy(_dragAnchor, _dragLast, _grab)", end);
+    }
+
+    /// <summary>
+    /// 点一行<b>已经写好的</b>字＝回去改它，而不是在旁边再写一条（用户列的期望原文：
+    /// "用户随时可以点击之前编辑的文字，继续在文字的编辑框内进行删减修改"）。
+    /// <para>两条入口都要汇到"带着原文与下标开框"：① 那条字还没被选中 ⇒ 走命中测试；
+    /// ② 它已选中、按下没移动就松手 ⇒ 走拖动那一步的"其实没拖"分支。真拖过就必须还是移动，
+    /// 不能弹框——否则上一批才修好的"拖位置"又会被这次改动吃掉。</para>
+    /// </summary>
+    [Fact]
+    public void ClickingAnExistingTextLineReopensItWithItsOwnText()
+    {
+        var cs = ReadOverlay(xaml: false);
+        var stroke = SourceGate.MethodBody(cs, "private void BeginStroke");
+        Assert.Contains("_history.Marks[index].Tool == AnnotationTool.Text", stroke);
+        Assert.Contains("BeginTextEdit(local, _history.Marks[index], index)", stroke);
+        var end = SourceGate.MethodBody(cs, "private void EndDrag");
+        Assert.Contains("grab == Grab.Move && original.Tool == AnnotationTool.Text", end);
+        Assert.Contains("BeginTextEdit(_dragAnchor, original, i)", end);
+        // 落笔那一步对"改旧字"是替换而不是新增；删空了就是删掉那条（留一条没字的标注只会让人以为卡住）
+        var commit = SourceGate.MethodBody(cs, "private void EndTextEditing");
+        Assert.Contains("_history.Marks[existing] with { Text = text }", commit);
+        Assert.Contains("{ _selected = existing; DeleteSelected(); return; }", commit);
+        // Esc 是结束编辑而不是丢弃（"按一次 esc 退出文字编辑"，而"原已编辑输入的文字不会消失"）
+        Assert.Contains("EndTextEditing(commit: true);", SourceGate.MethodBody(cs, "private void TextEditor_KeyDown"));
     }
 
     /// <summary>选中说明要长在遮罩窗上（悬停到几像素的把手才看得见＝没有提示）。</summary>

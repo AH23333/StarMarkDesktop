@@ -454,6 +454,23 @@ public sealed class AnnotationTests
         Assert.False(AnnotationTools.IsShapeTool(AnnotationTool.Mosaic));
     }
 
+    /// <summary>
+    /// 换行过的字占<b>两行高</b>、宽取<b>宽的那一行</b>。选择框、命中测试、旋转后的外接框都从这里长出来，
+    /// 所以"两行只算一行高"会一路传到"第二行的字点不中"。
+    /// </summary>
+    [Fact]
+    public void ATwoLineTextIsAsTallAsTwoLinesAndAsWideAsTheWiderOne()
+    {
+        var one = TextAt("第一行短");
+        var two = TextAt("第一行短" + '\n' + "第二行要长得多得多");
+
+        Assert.Equal(one.Bounds().Height * 2, two.Bounds().Height);
+        Assert.True(two.Bounds().Width > one.Bounds().Width * 2,
+            $"宽该跟最宽那一行走：{one.Bounds().Width} → {two.Bounds().Width}");
+        // 行数只由换行符决定：末尾多一个空格不该多出一行（编辑框里 TrimEnd 之后仍然要量得一样）
+        Assert.Equal(two.Bounds().Height, TextAt("第一行短" + '\n' + "第二行要长得多得多 ").Bounds().Height);
+    }
+
     // ────────── 抓取判定：按这一下究竟改什么（批次 RH-1） ──────────
 
     /// <summary>把手画在角上：顶上一颗在框外 26 像素（与遮罩窗同一个数），所以扫框内时不会误判成旋转。</summary>

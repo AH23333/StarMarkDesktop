@@ -20,8 +20,13 @@ namespace StarMark.Integrations.Capture;
 public static class GdiTextDrawer
 {
     /// <summary>
-    /// 在 <paramref name="atX"/>/<paramref name="atY"/>（文字框左上角，缓冲内坐标）画一行文字。
+    /// 在 <paramref name="atX"/>/<paramref name="atY"/>（文字框左上角，缓冲内坐标）画一段文字。
     /// <para>字高按<b>物理像素</b>给：这块缓冲就是物理像素，传 DIP 进来等于让调用方去猜 DPI。</para>
+    /// <para>
+    /// <b>段里可以有几行</b>（编辑框里按 Enter 换的行）。一行的高度按量出来的单行高算，逐行往下排；
+    /// 这样"编辑框里看到的换行"与"松手后画出去的成品"是同一件事——反过来（把整段当一行画）
+    /// 会让换行只在编辑时存在、落笔就并成一行，那是"我明明分了行"这类反馈的源头。
+    /// </para>
     /// <para>
     /// 失败一律抛 <see cref="InvalidOperationException"/> 并带上原因。宁可让用户看到"字没写出去"，
     /// 也不能静默交出一张少了字的图——那种图会被当成"我刚才明明写了字"，事后无从分辨。
@@ -41,9 +46,10 @@ public static class GdiTextDrawer
             throw new ArgumentException("像素缓冲比声明的尺寸短，画上去会越界", nameof(bgra));
         if (string.IsNullOrEmpty(text)) return;
         if (fontHeight < 1) throw new InvalidOperationException("文字高度至少 1 像素");
+        var lines = LinesOf(text);
         if (TextGeometry.Normalise(rotation) != 0d)
         {
-            DrawRotated(bgra, width, height, atX, atY, text, fontHeight, colorBgra, rotation);
+            DrawRotated(bgra, width, height, atX, atY, lines, fontHeight, colorBgra, rotation);
             return;
         }
 
@@ -57,17 +63,19 @@ public static class GdiTextDrawer
         {
             if (font == IntPtr.Zero) throw new InvalidOperationException("系统没能创建标注用的字体（雅黑与 Segoe UI 都试过）");
             oldFont = SelectObject(dc, font);
-            if (!GetTextExtentPoint32W(dc, text, text.Length, out var extent) || extent.cx <= 0 || extent.cy <= 0)
-                throw new InvalidOperationException("量不出这行文字要占多大（GDI 拒绝了这个字体或这段文字）");
+            var lineHeight = LineHeight(dc);
+            var (textWidth, textHeight) = ExtentOf(dc, lines, lineHeight);
+            if (textWidth <= 0 || textHeight <= 0)
+                throw new InvalidOperationException("量不出这段文字要占多大（GDI 拒绝了这个字体或这段文字）");
 
             // 只处理与画布相交的那一块：用户可以把字写到选区外面，那部分应当被切掉而不是越界写
             var left = Math.Max(0, atX);
             var top = Math.Max(0, atY);
-            var right = Math.Min(width, atX + extent.cx);
-            var bottom = Math.Min(height, atY + extent.cy);
+            var right = Math.Min(width, atX + textWidth);
+            var bottom = Math.Min(height, atY + textHeight);
             var tileWidth = right - left;
             var tileHeight = bottom - top;
-            if (tileWidth <= 0 || tileHeight <= 0) return;        // 整行都在画布外：没东西可画，也不算错
+            if (tileWidth <= 0 || tileHeight <= 0) return;        // 整段都在画布外：没东西可画，也不算错
 
             header = AllocTopDown32Header(tileWidth, tileHeight);
             dib = CreateDIBSection(dc, header, DIB_RGB_COLORS, out bits, IntPtr.Zero, 0);
@@ -88,8 +96,10 @@ public static class GdiTextDrawer
             SetTextColor(dc, unchecked((uint)ColorRefOf(colorBgra)));
             SetBkMode(dc, TRANSPARENT);
             // 文字相对 tile 左上角的位置 = 目标位置 − tile 左上角（tile 可能被画布边界切过，所以不能填 0）
-            if (!TextOutW(dc, left - atX, top - atY, text, text.Length))
-                throw new InvalidOperationException($"文字没能写出去（Win32 {Marshal.GetLastWin32Error()}）");
+            for (var line = 0; line < lines.Length; line++)
+                if (lines[line].Length > 0 &&
+                    !TextOutW(dc, left - atX, top - atY + line * lineHeight, lines[line], lines[line].Length))
+                    throw new InvalidOperationException($"文字没能写出去（Win32 {Marshal.GetLastWin32Error()}）");
             // GDI 的绘制可以被打批：不刷的话读回来可能是旧的位图内存
             GdiFlush();
 
@@ -114,10 +124,12 @@ public static class GdiTextDrawer
     }
 
     /// <summary>
-    /// 这行字实际要占多大（物理像素）。<b>选择框与命中测试只能量，不能估</b>：
+    /// 这段字实际要占多大（物理像素）。<b>选择框与命中测试只能量，不能估</b>：
     /// 按"字高 × 字数"估宽，中文与英文差着两三倍，框会框到一个不存在的位置，
     /// 用户就会看到"我点那行字，选中的却是旁边那条线"。
     /// 与 <see cref="Draw"/> 用同一个字体选择顺序，量出来的才是真正会被画出去的那一块。
+    /// <para>多行时宽取<b>最宽那一行</b>、高取<code>行数 × 单行高</code>——与 <see cref="Draw"/> 逐行往下排的
+    /// 那套完全同一个式子；两边各算一遍就会出现"框比字矮一行"。</para>
     /// </summary>
     public static (int Width, int Height) Measure(string text, int fontHeight)
     {
@@ -130,16 +142,44 @@ public static class GdiTextDrawer
         {
             if (font == IntPtr.Zero) throw new InvalidOperationException("系统没能创建标注用的字体（雅黑与 Segoe UI 都试过）");
             var oldFont = SelectObject(dc, font);
-            if (!GetTextExtentPoint32W(dc, text, text.Length, out var extent) || extent.cx <= 0 || extent.cy <= 0)
-                throw new InvalidOperationException("量不出这行文字要占多大（GDI 拒绝了这个字体或这段文字）");
+            var box = ExtentOf(dc, LinesOf(text), LineHeight(dc));
             SelectObject(dc, oldFont);
-            return (extent.cx, extent.cy);
+            return box;
         }
         finally
         {
             if (font != IntPtr.Zero) DeleteObject(font);
             DeleteDC(dc);
         }
+    }
+
+    /// <summary>换行符切行（编辑框给的是 \r\n 与 \n 两种都可能）；空行留着——它要占一行的高。</summary>
+    private static string[] LinesOf(string text) => text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+
+    /// <summary>
+    /// 单行高。用一段"没有任何降部/上部首字符"的探针量，而不是拿整段文字去量：
+    /// 多行文字里某一行的字距可能被调高，用它当行距会让后面每一行错位累积。
+    /// </summary>
+    private static int LineHeight(IntPtr dc)
+    {
+        const string probe = "Hxg";               // 大写 + 小写 x + 带降部的 g：CellHeight 本来就含这两者
+        if (!GetTextExtentPoint32W(dc, probe, probe.Length, out var extent) || extent.cy <= 0)
+            throw new InvalidOperationException("量不出这个字体的行高（GDI 拒绝了探针字符串）");
+        return extent.cy;
+    }
+
+    private static (int Width, int Height) ExtentOf(IntPtr dc, string[] lines, int lineHeight)
+    {
+        var widest = 0;
+        foreach (var line in lines)
+        {
+            if (line.Length == 0) continue;
+            if (!GetTextExtentPoint32W(dc, line, line.Length, out var extent) || extent.cx <= 0)
+                throw new InvalidOperationException("量不出这段文字要占多大（GDI 拒绝了这个字体或这段文字）");
+            widest = Math.Max(widest, extent.cx);
+        }
+        if (widest <= 0) throw new InvalidOperationException("量不出这段文字要占多大（每一行都是空的）");
+        return (widest, lineHeight * lines.Length);
     }
 
     /// <summary>
@@ -149,7 +189,7 @@ public static class GdiTextDrawer
     /// 就会在字周围留下一片脏斑。所以这里只取"这一像素有多少墨"，再按角度铺到目标上。</para>
     /// </summary>
     private static void DrawRotated(byte[] bgra, int width, int height,
-        int atX, int atY, string text, int fontHeight, int colorBgra, double rotation)
+        int atX, int atY, string[] lines, int fontHeight, int colorBgra, double rotation)
     {
         var dc = CreateCompatibleDC(IntPtr.Zero);
         if (dc == IntPtr.Zero) throw new InvalidOperationException("创建内存画布失败（GDI 句柄用尽）");
@@ -162,10 +202,8 @@ public static class GdiTextDrawer
         {
             if (font == IntPtr.Zero) throw new InvalidOperationException("系统没能创建标注用的字体（雅黑与 Segoe UI 都试过）");
             oldFont = SelectObject(dc, font);
-            if (!GetTextExtentPoint32W(dc, text, text.Length, out var extent) || extent.cx <= 0 || extent.cy <= 0)
-                throw new InvalidOperationException("量不出这行文字要占多大（GDI 拒绝了这个字体或这段文字）");
-            textWidth = extent.cx;
-            textHeight = extent.cy;
+            var lineHeight = LineHeight(dc);
+            (textWidth, textHeight) = ExtentOf(dc, lines, lineHeight);
             var rowBytes = textWidth * 4;
 
             header = AllocTopDown32Header(textWidth, textHeight);
@@ -180,8 +218,10 @@ public static class GdiTextDrawer
 
             SetTextColor(dc, 0x00FFFFFF);                // 白＝满墨；COLORREF 是 0x00BBGGRR
             SetBkMode(dc, TRANSPARENT);
-            if (!TextOutW(dc, 0, 0, text, text.Length))
-                throw new InvalidOperationException($"文字没能写出去（Win32 {Marshal.GetLastWin32Error()}）");
+            for (var line = 0; line < lines.Length; line++)
+                if (lines[line].Length > 0 &&
+                    !TextOutW(dc, 0, line * lineHeight, lines[line], lines[line].Length))
+                    throw new InvalidOperationException($"文字没能写出去（Win32 {Marshal.GetLastWin32Error()}）");
             GdiFlush();
 
             coverage = new byte[textWidth * textHeight];
