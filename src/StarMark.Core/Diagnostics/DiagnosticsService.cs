@@ -35,6 +35,11 @@ public sealed class DiagnosticsService
         // 这个问题以前只能靠人记，记错一次的代价是把一轮已修好的判据当成无效又重新猜一遍。
         entries.Add(new DiagnosticEntry("本次运行的构建时间", StarMark.Abstractions.BuildInfo.Display));
 
+        // ── 这一次启动的各段花了多久 ──
+        // 与上一行同一个用途：报"启动慢"时不必来回猜，面板上就有分段数字（也才判断得出优化有没有真的变快）。
+        if (StarMark.Abstractions.StartupProfile.Segments is { Count: > 0 } segments)
+            entries.Add(new DiagnosticEntry("本次启动分段", string.Join(" · ", segments)));
+
         // ── 数据库 ──
         entries.Add(new DiagnosticEntry("数据库路径", _factory.DbPath));
         entries.Add(new DiagnosticEntry("数据库体积", FormatBytes(GetDbSizeBytes())));

@@ -371,6 +371,8 @@ public sealed class WidgetManager
                 catch (Exception ex) { StarLog.Error($"恢复桌面组件失败 ({inst.Kind})", ex); }
             }
         }
+        // 这一段是启动里最重的一块（建窗口＋套材质），单独计时才有"改完有没有变快"的对照
+        StarMark.Abstractions.StartupProfile.Mark($"桌面组件恢复（{data.Instances.Count} 个实例）");
     });
 
     public Task ShutdownAllAsync() => OnUiAsync(() =>
@@ -1062,7 +1064,14 @@ public sealed class WidgetManager
 
     // ───────────────────────── 内部 ─────────────────────────
 
+    /// <summary>
+    /// 显示某实例。<b>这一层只做计时</b>：启动要建十几颗组件窗口，"每颗多贵"必须由日志说话，
+    /// 而不是靠"约 -50~150 ms"这类猜（超过 30 ms 才写行，正常环境一条都不出）。
+    /// </summary>
     private void ShowInternal(string id)
+        => StarMark.Abstractions.StartupProfile.Measure($"显示组件窗口 {id}", () => ShowNow(id), logWhenMs: 30);
+
+    private void ShowNow(string id)
     {
         // 窗口创建/显示必须整体兜错：这里的异常会顺着 UI 线程冒到点击处理，
         // 演变成未处理异常让整个应用卡死崩溃（历史事故：外观设置读取失败导致「全部显示」崩溃）。

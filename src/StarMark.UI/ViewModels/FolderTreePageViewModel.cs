@@ -31,6 +31,7 @@ public partial class FolderTreePageViewModel : ObservableObject
     private bool _loadPending;
     // 条目实时改标签去抖：连续改标签合并为一次全量重载，避免风暴式刷新。
     private Timer? _tagChangeTimer;
+    private int _loadCount;                 // 只为"第一次才进启动分段表"而数
 
     // UI 调度器：ViewModel 由 DI 在 UI 线程创建，捕获后用于把集合变更封送回 UI 线程，
     // 避免 Timer/线程池回调里直接改 ObservableCollection 触发 RPC_E_WRONG_THREAD（卡死/崩溃）。
@@ -131,6 +132,9 @@ public partial class FolderTreePageViewModel : ObservableObject
     /// 避免标签删除的去抖 Timer 在后台线程直接改集合导致 RPC_E_WRONG_THREAD 卡死/崩溃。</summary>
     private async Task LoadCoreAsync()
     {
+        // 只有第一次加载进启动分段表：此后每次改标签/换排序都会重载，全记进日志就成了噪声。
+        // （计数不必原子：LoadAsync 的 _loadGate 保证同一时刻只有一个加载在跑。）
+        var first = ++_loadCount == 1;
         await RunOnUi(() => { IsLoading = true; });
 
         BrowseFilter filter;
@@ -158,6 +162,7 @@ public partial class FolderTreePageViewModel : ObservableObject
         try
         {
             items = await _repository.GetAllAsync(filter, CancellationToken.None);
+            if (first) StarMark.Abstractions.StartupProfile.Mark("首屏条目查询（整表读取＋映射）");
         }
         catch (Exception ex)
         {
@@ -205,6 +210,7 @@ public partial class FolderTreePageViewModel : ObservableObject
         {
             StarLog.Error("重建文件夹树失败", ex);
         }
+        if (first) StarMark.Abstractions.StartupProfile.Mark("文件夹树重建（逐条分组＋手风琴建元素）");
     }
 
     /// <summary>按路径链逐级创建/复用节点，作为树根列表返回最顶层节点。</summary>

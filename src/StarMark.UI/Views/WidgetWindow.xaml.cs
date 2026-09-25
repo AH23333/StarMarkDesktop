@@ -756,7 +756,8 @@ public sealed partial class WidgetWindow : Window
     {
         if (ReferenceEquals(_config.Appearance, appearance)) return;
         _config.Appearance = appearance;
-        RefreshAppearance();
+        // 材质套用是启动里头号嫌疑（日志里 5 秒内出现过 38 次 backdrop 应用），超过 30 ms 就留下证据
+        StarMark.Abstractions.StartupProfile.Measure($"组件材质套用 {InstanceId}", RefreshAppearance, logWhenMs: 30);
     }
 
     // ───────────────────────── 标题栏交互 ─────────────────────────

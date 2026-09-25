@@ -61,6 +61,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        StarMark.Abstractions.StartupProfile.Mark("主窗 XAML 加载（InitializeComponent）");
         WindowInterop.TrackWindow(this);   // 供弹窗按发起窗口所在显示器居中
         ViewModel = App.Services.GetRequiredService<MainViewModel>();
         _widgetManager = App.Services.GetRequiredService<WidgetManager>();
@@ -92,6 +93,7 @@ public sealed partial class MainWindow : Window
         AppWindow.Closing += OnAppWindowClosing;
 
         // 默认选中文件夹页（触发 SelectionChanged → 导航）
+        StarMark.Abstractions.StartupProfile.Mark("主窗侧栏与托盘（导航到首屏之前）");
         var startTag = Environment.GetEnvironmentVariable("STARMARK_START_PAGE");
         var startIndex = startTag switch { "tags" => 1, "tree" => 0, _ => 0 };
         NavView.SelectedItem = NavView.MenuItems[startIndex];

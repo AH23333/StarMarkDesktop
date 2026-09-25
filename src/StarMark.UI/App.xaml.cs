@@ -260,6 +260,7 @@ public partial class App : Application
 
             // 2. 执行数据库迁移
             Services.GetRequiredService<StarMark.Data.MigrationRunner>().EnsureSchema();
+            StarMark.Abstractions.StartupProfile.Mark("DI 与数据库迁移完成");
 
             // 2.1 种子数据
             try
@@ -271,6 +272,7 @@ public partial class App : Application
             {
                 StarLog.Error("种子数据失败", ex);
             }
+            StarMark.Abstractions.StartupProfile.Mark("种子数据");
 
             // 2.2 本地条目（待办/随记）迁移进统一 items 表（幂等，一次）
             try
@@ -283,11 +285,14 @@ public partial class App : Application
             {
                 StarLog.Error("本地条目迁移失败", ex);
             }
+            StarMark.Abstractions.StartupProfile.Mark("本地条目迁移");
 
             // 3. 显示主窗口
             _window = new MainWindow();
             MainWindow = _window as StarMark.UI.MainWindow;
+            StarMark.Abstractions.StartupProfile.Mark("主窗构造（含首屏导航）");
             _window.Activate();
+            StarMark.Abstractions.StartupProfile.Mark("首帧提交");
             UIStallWatchdog.Start(_window.DispatcherQueue);   // 卡顿取证：把"卡死了"变成日志里的时长与当时的页面
 
             // 3.1 每日自动备份（P-51）：不可重建的笔记/标签/组件数据不能只靠用户记得手动导出。
@@ -373,6 +378,7 @@ public partial class App : Application
             {
                 StarLog.Error("全局快捷键初始化失败", ex);
             }
+            StarMark.Abstractions.StartupProfile.Mark("热键注册与内存门禁");
         }
         catch (Exception ex)
         {
