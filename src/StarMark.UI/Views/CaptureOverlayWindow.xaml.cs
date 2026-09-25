@@ -117,7 +117,8 @@ public sealed partial class CaptureOverlayWindow : Window
     private byte[]? _dragCanvas;              // 每帧复用：_underDrag 的副本 + 预览那一条
     private Grab _grab;                        // Grab ＝ 别名的 AnnotationGrab（判定与取值都在模型一处）
 
-    /// <summary>"点一下"要不要算选中脚下那条的容差（物理像素）。比把手小：点是打在形状上，不是打在小方块上。
+    /// <summary>"点一下"要不要算选中脚下那条的容差（<b>屏幕像素</b>，进模型前按 <see cref="_sourceScale"/> 换算）。
+    /// 比把手小：点是打在形状上，不是打在小方块上。
     /// <para>角点/把手的容差不在这里——那一条跟着形状尺寸收缩，住在模型里（<c>Annotation.HandleSlopFor</c>），
     /// 因为它能被断言。</para></summary>
     private const int SelectionSlop = 8;
@@ -1012,6 +1013,15 @@ public sealed partial class CaptureOverlayWindow : Window
                 (s.Y + local.Y * _sourceScale - _monitor.Y) / _scale);
     }
 
+    /// <summary>
+    /// 把"用屏幕像素量的容差"换算进底图像素。<b>容差是手感量，只能按屏幕定</b>：
+    /// 贴图放大到 5× 时 8 个底图像素＝40 个屏幕像素（在角把手附近随手一点就误判成抓把手），
+    /// 缩到 0.2× 时又只剩 1.6 个屏幕像素（那颗 6 DIP 看得见的小方块机械地抓不到）。
+    /// 截图那条链 <see cref="_sourceScale"/> 恒为 1 ⇒ 换算结果与常量一字不差，现行为零变化。
+    /// </summary>
+    private int SlopInSource(int screenPixels)
+        => Math.Max(1, (int)Math.Round(screenPixels / _sourceScale, MidpointRounding.AwayFromZero));
+
     // ────────── 标注：进入、拖动一条、合成 ──────────
 
     /// <summary>框选放开后进入标注态：把这一块底图拿在手里，之后每改一条就在它上面重烤一次。</summary>
@@ -1361,7 +1371,7 @@ public sealed partial class CaptureOverlayWindow : Window
             EndTextEditing(commit: true);
             // 点在已经写好的那行字上＝回去改它（真机期望"随时可以点击之前编辑的文字继续删减修改"），
             // 点在空白处＝新写一行。命中判据用模型里那一条（与"点一下就选中"同一个式子），不另算一套。
-            var hit = AnnotationPainter.HitTest(_history.Marks, local, SelectionSlop);
+            var hit = AnnotationPainter.HitTest(_history.Marks, local, SlopInSource(SelectionSlop));
             if (hit is { } index && _history.Marks[index].Tool == AnnotationTool.Text)
             {
                 _selected = index;
@@ -1498,7 +1508,7 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_selected is not { } index) return false;
         if (Selected is not { } mark) { DropSelection(); return false; }
 
-        _grab = mark.GrabAt(local, RotateHandle(mark), MoveSlop);
+        _grab = mark.GrabAt(local, RotateHandle(mark), SlopInSource(MoveSlop));
         if (_grab == Grab.None) return false;
 
         // 按的是某一头的把手 ⇒ 钉住的那一点改到<b>对面</b>那头（模型算，界面不猜）：
@@ -1514,15 +1524,18 @@ public sealed partial class CaptureOverlayWindow : Window
     }
 
     /// <summary>
-    /// 旋转把手落在哪儿。<b>顶边贴到选区上沿时把它挪进框内</b>：画在选区外面的那一按不属于本窗的
-    /// "在选区里"那条链（会被当成重新框选），等于这颗把手永远点不到——而它在屏幕上明明看得见。
+    /// 旋转把手落在哪儿。<b>顶边贴到画面上沿时把它挪进框内</b>：画在画面外面的那一按不属于本窗的
+    /// "在画面里"那条链（截图态会被当成重新框选，贴图态干脆落在窗外），等于这颗永远点不到。
+    /// <para><b>比较要在底图像素这一层做</b>：`box` 是选区内坐标（原点＝画面左上角），而 `_selection.Y`
+    /// 是虚拟桌面坐标——拿桌面坐标当边界，副屏在主屏下方时那个不等式对每条标注都成立（把手永远被
+    /// 塞进框内压住内容），副屏在主屏上方时又永不成立（贴顶的那颗画到窗外、点不到）。
+    /// 原点在 0 时两种写法恰好同值，所以这条错只有多屏才露出来。</para>
     /// </summary>
     private PixelPoint RotateHandle(Annotation mark)
     {
         var box = mark.Bounds();
-        var lift = RotateHandleLift;
-        if (_selection is { } selection && box.Y - lift < selection.Y)
-            lift = Math.Min(box.Height / 2, RotateHandleLift);
+        var lift = SlopInSource(RotateHandleLift);
+        if (box.Y - lift < 0) lift = Math.Min(box.Height / 2, lift);
         return new PixelPoint(box.X + box.Width / 2, box.Y - lift);
     }
 
@@ -1594,7 +1607,7 @@ public sealed partial class CaptureOverlayWindow : Window
             // 随时可以点击之前编辑的文字，在编辑框里继续删减修改）。真拖过了就还是上一条语义＝移动位置，
             // 不该在这种时候弹框。
             if (grab == Grab.Move && original.Tool == AnnotationTool.Text &&
-                Annotation.Near(_dragAnchor, _dragLast, SelectionSlop)) BeginTextEdit(_dragAnchor, original, i);
+                Annotation.Near(_dragAnchor, _dragLast, SlopInSource(SelectionSlop))) BeginTextEdit(_dragAnchor, original, i);
             return;
         }
 
@@ -1662,7 +1675,7 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private void SelectAtTap(PixelPoint at)
     {
-        var index = AnnotationPainter.HitTest(_history.Marks, at, SelectionSlop);
+        var index = AnnotationPainter.HitTest(_history.Marks, at, SlopInSource(SelectionSlop));
         _selected = index;
         DrawSelectionHandles();               // 没点中时它也负责把手与说明一起收掉
     }

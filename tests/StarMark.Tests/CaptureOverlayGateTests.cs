@@ -268,9 +268,20 @@ public sealed class CaptureOverlayGateTests
         Assert.Contains("if (_editingText || _polyLine is not null) return false;", grab);
         // 把手只有一个算法出口：画它的那一处与判"按中了没有"的那处必须是同一个坐标
         var handle = SourceGate.MethodBody(cs, "private PixelPoint RotateHandle");
-        Assert.Contains("box.Y - lift < selection.Y", handle);   // 贴到选区上沿时夹回框内，否则这颗点永远点不到
+        // 贴到画面上沿时夹回框内，否则这颗点永远点不到。<b>边界要在底图像素这一层比</b>：`box` 是选区内坐标，
+        // 而 `_selection.Y` 是虚拟桌面坐标——副屏在主屏下方时那个不等式对每条标注都成立（把手全被塞进框里），
+        // 在主屏上方时又永不成立（贴顶那颗画到窗外）。原点在 0 时两种写法同值 ⇒ 只有多屏才露出来。
+        Assert.Contains("box.Y - lift < 0", handle);
+        Assert.DoesNotContain("lift < selection.Y", handle);
         // 按下那一点的三条豁免与"问模型"这唯一出口
-        Assert.Contains("mark.GrabAt(local, RotateHandle(mark), MoveSlop)", grab);
+        Assert.Contains("mark.GrabAt(local, RotateHandle(mark), SlopInSource(MoveSlop))", grab);
+        // 容差是手感量，只能按屏幕定：贴图缩到 0.2× 时按底图像素定的常量会小到抓不到（放大时反过来误抓）。
+        // 截图那条链 _sourceScale 恒为 1 ⇒ 换算后与常量一字不差，所以这条改动不影响现行为。
+        Assert.Contains("screenPixels / _sourceScale", SourceGate.MethodBody(cs, "private int SlopInSource"));
+        foreach (var site in new[] { "HitTest(_history.Marks, local, SlopInSource(SelectionSlop))",
+                                     "HitTest(_history.Marks, at, SlopInSource(SelectionSlop))",
+                                     "Near(_dragAnchor, _dragLast, SlopInSource(SelectionSlop))" })
+            Assert.Contains(site, cs);
     }
 
     /// <summary>
