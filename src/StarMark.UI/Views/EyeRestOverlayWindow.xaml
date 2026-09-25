@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="StarMark.UI.Views.EyeRestOverlayWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:StarMark.UI.Views">
+
+    <!--
+        强制休息遮罩：一块盖住整屏的暗幕 + 倒数。与截图遮罩不同，这里<b>不注册任何按键与鼠标处理</b>——
+        规格点名的"防形同虚设"就是这条：Esc / Alt+F4 都不该能提前揭开，20 秒走完自己淡出。
+        背景刻意用固定的暗色而不跟主题：幕布在浅色桌面上也要暗得让人读不下去屏幕上的字。
+    -->
+    <Grid Background="#C0000000">
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+            <TextBlock
+                Text="让眼睛休息一下"
+                FontSize="26"
+                FontWeight="SemiBold"
+                Foreground="#FFFFFFFF"
+                HorizontalAlignment="Center"/>
+            <TextBlock
+                x:Name="Countdown"
+                Text="20"
+                FontSize="76"
+                FontWeight="Light"
+                Foreground="#FFFFFFFF"
+                HorizontalAlignment="Center"/>
+            <TextBlock
+                x:Name="Hint"
+                FontSize="13"
+                Foreground="#BFFFFFFF"
+                TextWrapping="Wrap"
+                MaxWidth="560"
+                TextAlignment="Center"
+                HorizontalAlignment="Center"/>
+        </StackPanel>
+    </Grid>
+</Window>

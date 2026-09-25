@@ -216,6 +216,17 @@ public partial class SettingsPageViewModel : ObservableObject
                 ? "正在记录本机复制的内容（密码管理器与私钥 / 令牌 / 卡号形态除外）。"
                 : "开关是开着的，但本会话的剪贴板监听没建立起来，暂时不会记录新内容——关掉再打开本开关可重试。";
 
+        // 护眼 / 休息提醒：进页面只回灌四项当前值，<b>不因为"显示"而去起停定时器</b>
+        // （否则每次打开设置页都等于把节拍表重建一遍，"下一次几点"会被悄悄推后）。
+        _suppressEyeRestApply = true;
+        EyeRestEnabled = Safe(_settings.LoadEyeRestEnabled, false, "护眼提醒");
+        EyeRestIntervalIndex = StarMark.Core.Health.EyeRestPolicy.IntervalIndexOf(
+            Safe(_settings.LoadEyeRestIntervalMinutes, StarMark.Core.Health.EyeRestPolicy.DefaultIntervalMinutes, "护眼间隔"));
+        EyeRestEnforced = Safe(_settings.LoadEyeRestEnforced, false, "护眼强制模式");
+        EyeRestDeferOnFullscreen = Safe(_settings.LoadEyeRestDeferOnFullscreen, true, "护眼全屏让路");
+        _suppressEyeRestApply = false;
+        EyeRestStatus = BuildEyeRestStatus();
+
         // GitHub 热榜：回灌两个开关的当前值（副作用同样在回灌期间抑制）。
         _suppressTrendingApply = true;
         TrendingEnabled = Safe(_settings.LoadTrendingEnabled, false, "GitHub 热榜");
@@ -361,6 +372,107 @@ public partial class SettingsPageViewModel : ObservableObject
                   + "想临时停一下，去「剪贴板」页点「暂停记录」。"
                 : "开关已打开，但系统剪贴板监听窗口没建起来（原因见日志）——当前仍不会记录任何内容。"
             : "已停止记录。之前存下的历史仍在「剪贴板」页，可在那里一键清空。";
+    }
+
+    // ===== 护眼 / 休息提醒（批次 WA）=====
+
+    /// <summary>
+    /// 护眼总开关，<b>默认关</b>：不请自来的遮罩是最讨人嫌的一种"帮忙"。
+    /// 翻位即起停那张节拍表（与剪贴板开关同一口径：回报<b>实际</b>在不在跑，而不是"用户点了开"）。
+    /// </summary>
+    [ObservableProperty] private bool _eyeRestEnabled;
+
+    /// <summary>间隔档位在 <see cref="StarMark.Core.Health.EyeRestPolicy.IntervalOptions"/> 里的下标（是档位不是滑杆）。</summary>
+    [ObservableProperty] private int _eyeRestIntervalIndex;
+
+    /// <summary>强制模式：盖一层 20 秒暗幕（按规格 Esc 不跳过）。关＝只发托盘气泡。</summary>
+    [ObservableProperty] private bool _eyeRestEnforced;
+
+    /// <summary>前台是全屏应用时让路（放 PPT / 放映不被砸）。默认开。</summary>
+    [ObservableProperty] private bool _eyeRestDeferOnFullscreen;
+
+    [ObservableProperty] private string _eyeRestStatus = string.Empty;
+
+    /// <summary>「试一试」的结果回报（属性名含 Status＝不进自动保存，见 <c>IsDisplayOnlyProperty</c>）。</summary>
+    [ObservableProperty] private string _eyeRestPreviewStatus = string.Empty;
+
+    /// <summary>下拉的档位文案，与 <see cref="EyeRestIntervalIndex"/> 同序（一处事实：档位与文案都在 Core）。</summary>
+    public IReadOnlyList<string> EyeRestIntervalOptions => StarMark.Core.Health.EyeRestPolicy.IntervalLabels;
+
+    private int EyeRestIntervalMinutes => StarMark.Core.Health.EyeRestPolicy.IntervalAt(EyeRestIntervalIndex);
+
+    private bool _suppressEyeRestApply;
+
+    partial void OnEyeRestEnabledChanged(bool value)
+    {
+        if (_suppressEyeRestApply) return;
+        ApplyEyeRestSwitch();
+    }
+
+    partial void OnEyeRestIntervalIndexChanged(int value)
+    {
+        if (_suppressEyeRestApply) return;
+        ApplyEyeRestSwitch();
+    }
+
+    partial void OnEyeRestEnforcedChanged(bool value)
+    {
+        if (_suppressEyeRestApply) return;
+        ApplyEyeRestSwitch();
+    }
+
+    partial void OnEyeRestDeferOnFullscreenChanged(bool value)
+    {
+        if (_suppressEyeRestApply) return;
+        ApplyEyeRestSwitch();
+    }
+
+    private void ApplyEyeRestSwitch()
+    {
+        _settings.SaveEyeRest(EyeRestEnabled, EyeRestIntervalMinutes, EyeRestEnforced, EyeRestDeferOnFullscreen);
+        App.ApplyEyeRest(EyeRestEnabled);
+        EyeRestStatus = BuildEyeRestStatus();
+        // 设置一变，上一次"试一试"演出来的就已经不是当前配置了：留着那行会读成"刚验证过现在的设置"
+        EyeRestPreviewStatus = string.Empty;
+    }
+
+    /// <summary>
+    /// 状态行说三件事：怎么提醒、全屏时让不让路、下一次大约几点。
+    /// "开着但表没挂上"必须自己承认——用户没法用眼睛验证一张定时器在不在跑。
+    /// </summary>
+    private string BuildEyeRestStatus()
+    {
+        if (!EyeRestEnabled)
+            return "已关闭：不建定时器、不探测前台窗口，屏幕上不会出现任何东西。";
+        var how = EyeRestEnforced
+            ? $"连续工作约 {EyeRestIntervalMinutes} 分钟后盖一层 20 秒暗幕（倒数期间 Esc 与点击都不能提前跳过）"
+            : $"连续工作约 {EyeRestIntervalMinutes} 分钟后发一条托盘气泡";
+        var defer = EyeRestDeferOnFullscreen ? "；前台是全屏应用（放 PPT / 放映）时自己让路" : "；全屏应用下也照常提醒";
+        var running = StarMark.UI.Services.EyeRestService.IsRunning;
+        var next = running && StarMark.UI.Services.EyeRestService.NextDueAt is { } due
+            ? $"下一次大约 {due:HH:mm}。"
+            : string.Empty;
+        var warning = running ? string.Empty : "开关是开着的，但节拍表没挂上（原因见日志）——当前不会提醒。";
+        return $"{how}{defer}。{next}{warning}";
+    }
+
+    /// <summary>
+    /// 「试一试」：按<b>当前设置</b>原样演一次。没有这条出口，用户只能等满间隔才知道自己配的到底是什么
+    /// 效果——而"等 15 分钟验证一个开关"等于没给验证路径。演的内容不动节拍（见 <c>EyeRestService.Preview</c>）。
+    /// </summary>
+    [RelayCommand]
+    private void PreviewEyeRest()
+    {
+        var did = StarMark.UI.Services.EyeRestService.Preview();
+        EyeRestPreviewStatus = did switch
+        {
+            true when StarMark.UI.Services.EyeRestService.IsResting
+                => "已演一次：20 秒暗幕盖屏，倒数期间按 Esc、点鼠标都不能提前跳过。",
+            true => "已演一次：发了一条提醒（托盘在跑走气泡，否则走主窗提示条）。",
+            false when StarMark.UI.Services.EyeRestService.IsResting
+                => "幕布还盖着屏，等这一轮倒数完再按。",
+            false => "没演成：护眼开关没打开时不建节拍表，也就没有可演的东西（先开启本卡片顶部的开关）。",
+        };
     }
 
     // ===== RSS 订阅（批次 RB）=====

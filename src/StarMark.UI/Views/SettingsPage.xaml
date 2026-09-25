@@ -237,6 +237,51 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- 护眼 / 休息提醒（默认关：不请自来的遮罩是最讨人嫌的一种"帮忙"） -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="护眼 · 休息提醒" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               Text="连续工作一段时间后提醒你休息。开着才建那张定时表，关掉后不探测前台窗口、也不会显示任何东西。"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.EyeRestEnabled, Mode=TwoWay}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="间隔多久提醒一次"/>
+                                        <TextBlock Text="到点后还要看当前前台是不是全屏应用，所以实际时刻会有一两分钟浮动。" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <ComboBox Grid.Column="1" MinWidth="120" VerticalAlignment="Center"
+                                              ItemsSource="{x:Bind ViewModel.EyeRestIntervalOptions}"
+                                              SelectedIndex="{x:Bind ViewModel.EyeRestIntervalIndex, Mode=TwoWay}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               Text="强制休息：盖一层 20 秒暗幕，倒数期间按 Esc、点鼠标都不能提前跳过（只想被提醒一下就别开）。"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="强制" OffContent="只提醒" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.EyeRestEnforced, Mode=TwoWay}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               Text="前台是全屏应用时让路：放 PPT / 放映 / 全屏游戏不被打断，稍后再探一次。"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="让路" OffContent="不让路" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.EyeRestDeferOnFullscreen, Mode=TwoWay}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                    <Button Grid.Column="0" Content="试一试当前设置的效果"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Command="{x:Bind ViewModel.PreviewEyeRestCommand}"/>
+                                    <!-- 演完必须有回执："按了没反应"与"演过了但没看见"在用户侧长得一样 -->
+                                    <TextBlock Grid.Column="1" VerticalAlignment="Center"
+                                               Text="{x:Bind ViewModel.EyeRestPreviewStatus, Mode=OneWay}"
+                                               Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                                </Grid>
+                                <TextBlock Text="{x:Bind ViewModel.EyeRestStatus, Mode=OneWay}"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
                         <!-- GitHub -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="10">

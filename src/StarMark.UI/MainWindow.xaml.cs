@@ -1029,6 +1029,13 @@ public sealed partial class MainWindow : Window
     public void ShowError(string title, string message)
         => ShowInfoBar(InfoBarSeverity.Error, title, message, 8000);
 
+    /// <summary>
+    /// 中性提示（不是错误也不是"操作完成"）：托盘气泡发不出去时的兜底出口。
+    /// 停留久一点——护眼这类提醒是"给你看一眼"，不该 8 秒就自己收走。
+    /// </summary>
+    public void ShowNotice(string title, string message)
+        => ShowInfoBar(InfoBarSeverity.Informational, title, message, 15000);
+
     private void ShowInfoBar(InfoBarSeverity severity, string title, string message, int autoCloseMs = -1)
     {
         SyncInfoBar.Severity = severity;

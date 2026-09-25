@@ -140,6 +140,23 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         /// <summary>一轮整理<strong>还没应用</strong>的方案（JSON）。写它是为了"关窗口/进程被杀也不丢已整理出来的"，
         /// 应用完或用户明确丢弃时清空。与 <c>Ai*</c> 那六个一样保持独立 key，谁也不覆盖谁。</summary>
         public string? AiPendingPlanJson { get; set; }
+
+        /// <summary>
+        /// 护眼 / 休息提醒总开关（<b>默认关</b>）：默认开等于在谁都没要求的时候往屏幕上盖一层遮罩，
+        /// 那是"程序替用户决定什么时候该休息"。关时连节拍定时器都不建（不占表、不探前台窗口）。
+        /// </summary>
+        public bool? EyeRestEnabled { get; set; }
+
+        /// <summary>连续工作多少分钟算该休息一次。非法值由 <c>EyeRestPolicy.ClampInterval</c> 回落默认，
+        /// <b>不夹到边界</b>：夹到 5 等于把一处存档损坏放大成"每 5 分钟打断一次"。</summary>
+        public int? EyeRestIntervalMinutes { get; set; }
+
+        /// <summary>强制模式：全屏遮罩 + 20 秒倒数（按规格 Esc 不跳过，防形同虚设）。
+        /// <b>默认关</b>——刚打开护眼就吃一次锁屏是惊吓；先气泡，想要锁再勾这条。</summary>
+        public bool? EyeRestEnforced { get; set; }
+
+        /// <summary>前台是全屏应用时让路（放 PPT / 放映 / 全屏游戏不被遮罩砸）。默认开。</summary>
+        public bool? EyeRestDeferOnFullscreen { get; set; }
     }
 
     public SettingsStore(string? path = null) => _path = path ?? ResolveSettingsPath();
@@ -595,6 +612,38 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     {
         var d = Load() ?? new SettingsData();
         d.ClipboardHistoryEnabled = enabled;
+        Save(d);
+    }
+
+    // ────────── 护眼 / 休息提醒（批次 WA）──────────
+
+    /// <summary>总开关（<b>默认关</b>）。关时不建定时器、不探前台窗口、屏幕上不会出现任何遮罩。</summary>
+    public bool LoadEyeRestEnabled() => Load() is { } d && d.EyeRestEnabled == true;
+
+    /// <summary>间隔（分钟）。缺省与非法值都走 <c>EyeRestPolicy</c> 的回落，界面上看到的与真用到的是同一个数。</summary>
+    public int LoadEyeRestIntervalMinutes()
+        => StarMark.Core.Health.EyeRestPolicy.ClampInterval(
+            Load() is { } d
+                ? d.EyeRestIntervalMinutes ?? StarMark.Core.Health.EyeRestPolicy.DefaultIntervalMinutes
+                : StarMark.Core.Health.EyeRestPolicy.DefaultIntervalMinutes);
+
+    /// <summary>强制模式（<b>默认关</b>：刚开护眼就吃一次锁屏是惊吓）。</summary>
+    public bool LoadEyeRestEnforced() => Load() is { } d && d.EyeRestEnforced == true;
+
+    /// <summary>全屏让路（默认开）。</summary>
+    public bool LoadEyeRestDeferOnFullscreen() => Load() is not { } d || d.EyeRestDeferOnFullscreen != false;
+
+    /// <summary>
+    /// 四项一次落盘：这四条说的是同一件事（怎么提醒），分开写就是"改了间隔但没改开关"这类半套状态的来源，
+    /// 而且设置页的自动保存按 350 ms 节奏整档读写，一次写完比四次省（P-43 同一口径）。
+    /// </summary>
+    public void SaveEyeRest(bool enabled, int intervalMinutes, bool enforced, bool deferOnFullscreen)
+    {
+        var d = Load() ?? new SettingsData();
+        d.EyeRestEnabled = enabled;
+        d.EyeRestIntervalMinutes = StarMark.Core.Health.EyeRestPolicy.ClampInterval(intervalMinutes);
+        d.EyeRestEnforced = enforced;
+        d.EyeRestDeferOnFullscreen = deferOnFullscreen;
         Save(d);
     }
 

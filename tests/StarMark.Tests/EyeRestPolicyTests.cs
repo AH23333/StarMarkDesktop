@@ -125,6 +125,55 @@ public sealed class EyeRestPolicyTests
         Assert.Equal(T0 + Min(45), policy.DueAt(0));    // 存档里 0 ⇒ 不是"每分钟弹"，是 45 分钟
     }
 
+    // ────────── 界面档位（下拉的唯一真源也在 Core）──────────
+
+    /// <summary>
+    /// 默认值必须在档位列表里：不在的话设置页回灌时下拉<b>选不中当前值</b>，
+    /// 显示成空白而实际用着 45——用户看到的就是错的。
+    /// </summary>
+    [Fact]
+    public void DefaultInterval_IsOneOfTheOptions()
+        => Assert.Contains(EyeRestPolicy.DefaultIntervalMinutes, EyeRestPolicy.IntervalOptions);
+
+    /// <summary>
+    /// 每一档都得是 <c>ClampInterval</c> 认的合法值：某档被回落成默认的话，
+    /// 用户选了"90 分钟"实际攒的是 45 分钟，而且回灌时下拉还会跳到别的档位。
+    /// </summary>
+    [Fact]
+    public void EveryOption_SurvivesClampUnchanged()
+    {
+        foreach (var minutes in EyeRestPolicy.IntervalOptions)
+            Assert.Equal(minutes, EyeRestPolicy.ClampInterval(minutes));
+    }
+
+    [Fact]
+    public void Labels_AreOnePerOption_AndCarryTheirOwnNumber()
+    {
+        Assert.Equal(EyeRestPolicy.IntervalOptions.Length, EyeRestPolicy.IntervalLabels.Count);
+        for (var i = 0; i < EyeRestPolicy.IntervalOptions.Length; i++)
+            Assert.Equal($"{EyeRestPolicy.IntervalOptions[i]} 分钟", EyeRestPolicy.IntervalLabels[i]);
+    }
+
+    [Fact]
+    public void IndexOf_NearestOptionWins_AndBrokenValuesLandOnTheDefault()
+    {
+        for (var i = 0; i < EyeRestPolicy.IntervalOptions.Length; i++)
+            Assert.Equal(i, EyeRestPolicy.IntervalIndexOf(EyeRestPolicy.IntervalOptions[i]));   // 逐档往返
+
+        Assert.Equal(1, EyeRestPolicy.IntervalIndexOf(22));      // 22 → 20（不是 30）
+        Assert.Equal(2, EyeRestPolicy.IntervalIndexOf(27));      // 27 → 30
+        Assert.Equal(3, EyeRestPolicy.IntervalIndexOf(0));       // 非法值先回落 45，再定位到 45 那档
+        Assert.Equal(3, EyeRestPolicy.IntervalIndexOf(-999));
+        Assert.Equal(3, EyeRestPolicy.IntervalIndexOf(9999));
+    }
+
+    [Fact]
+    public void IntervalAt_ClampsOutOfBoundsIndexes_InsteadOfThrowing()
+    {
+        Assert.Equal(EyeRestPolicy.IntervalOptions[0], EyeRestPolicy.IntervalAt(-7));
+        Assert.Equal(EyeRestPolicy.IntervalOptions[^1], EyeRestPolicy.IntervalAt(999));
+    }
+
     // ────────── 全屏几何判据 ──────────
 
     private static readonly IntRect Screen = new(0, 0, 1920, 1080);

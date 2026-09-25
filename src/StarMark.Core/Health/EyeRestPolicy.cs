@@ -1,5 +1,7 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using StarMark.Abstractions.Capture;
 
 namespace StarMark.Core.Health;
@@ -23,6 +25,32 @@ public sealed class EyeRestPolicy
 
     public const int MinIntervalMinutes = 5;
     public const int MaxIntervalMinutes = 180;
+
+    /// <summary>
+    /// 界面上给的间隔档位（分钟）。<b>是档位不是滑杆</b>：与标注的细/中/粗同一口径
+    /// （"点一下就能选到"），且滑杆会按自动保存的节奏反复整档读写存档。
+    /// 默认值 45 必须在这一列里——否则设置页回灌时选不中当前值。
+    /// </summary>
+    public static readonly int[] IntervalOptions = { 15, 20, 30, 45, 60, 90 };
+
+    /// <summary>给界面下拉用的档位文案（与 <see cref="IntervalOptions"/> 同序）。文案与数值放在一处，
+    /// 免得"下拉里有 120 分钟但 ClampInterval 不认"这类分岔。</summary>
+    public static IReadOnlyList<string> IntervalLabels { get; } =
+        IntervalOptions.Select(minutes => minutes + " 分钟").ToList();
+
+    /// <summary>第 <paramref name="index"/> 档是多少分钟（下标越界夹到两端，不抛）。</summary>
+    public static int IntervalAt(int index)
+        => IntervalOptions[Math.Clamp(index, 0, IntervalOptions.Length - 1)];
+
+    /// <summary>某个分钟数落在哪一档（找不到就给最接近的一档，供设置页回灌下拉的选中项）。</summary>
+    public static int IntervalIndexOf(int minutes)
+    {
+        var want = ClampInterval(minutes);
+        var best = 0;
+        for (var i = 1; i < IntervalOptions.Length; i++)
+            if (Math.Abs(IntervalOptions[i] - want) < Math.Abs(IntervalOptions[best] - want)) best = i;
+        return best;
+    }
 
     /// <summary>强制模式下遮罩停留多久（秒）。20 秒是"看远处"够用的最短值，再长就从护眼变成惩罚。</summary>
     public const int RestSeconds = 20;

@@ -350,6 +350,18 @@ public partial class App : Application
                 StarLog.Error("剪贴板历史启动失败（不影响其它功能）", cex);
             }
 
+            // 3.3 护眼 / 休息提醒（默认关）：开着才挂那张 15 秒的节拍表。表挂在主窗的 DispatcherQueue 上，
+            // 所以必须在主窗建好之后起（与剪贴板监听同一条顺序理由）。
+            try
+            {
+                if (fileSettings.LoadEyeRestEnabled())
+                    ApplyEyeRest(true);
+            }
+            catch (Exception ex)
+            {
+                StarLog.Error("护眼提醒启动失败（不影响其它功能）", ex);
+            }
+
             // 4. 全局快捷键：在 MainWindow 句柄上子类化接收 WM_HOTKEY，绑定动作并应用设置
             try
             {
@@ -600,6 +612,36 @@ public partial class App : Application
         catch (Exception ex)
         {
             StarLog.Error("切换剪贴板采集失败", ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 按设置起停护眼提醒，回报<b>实际</b>是否在跑（设置页显示的是这个，不是"用户点了开"）。
+    /// 必须在 UI 线程调用：节拍表挂在主窗的 DispatcherQueue 上，而主窗可能在托盘里——
+    /// 所以拿 <see cref="MainWindow"/> 的队列而不是"指望调用方在哪条线程"。
+    /// </summary>
+    public static bool ApplyEyeRest(bool enabled)
+    {
+        try
+        {
+            if (!enabled)
+            {
+                StarMark.UI.Services.EyeRestService.Stop();
+                return false;
+            }
+            var queue = MainWindow?.DispatcherQueue;
+            if (queue is null)
+            {
+                StarLog.Warn("护眼提醒起不来：主窗还不存在（应用还没起完？）");
+                return false;
+            }
+            StarMark.UI.Services.EyeRestService.Start(queue, Services.GetRequiredService<StarMark.UI.Helpers.SettingsStore>());
+            return StarMark.UI.Services.EyeRestService.IsRunning;
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("切换护眼提醒失败", ex);
             return false;
         }
     }
