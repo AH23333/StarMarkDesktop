@@ -271,6 +271,7 @@ public sealed partial class MainWindow : Window
     private const int TrayTopmostToggle = 2;
     private const int TrayScreenPin = 3;
     private const int TrayScreenOcr = 7;
+    private const int TrayCanvas = 8;
     private const int TrayPinsShowHide = 4;
     private const int TrayPinsClickThrough = 5;
     private const int TrayPinsCloseAll = 6;
@@ -299,6 +300,9 @@ public sealed partial class MainWindow : Window
                 Enabled: !StarMark.UI.Services.ScreenshotService.IsCapturing),
             new("识字（框选后复制文字）", TrayScreenOcr,
                 Enabled: !StarMark.UI.Services.ScreenshotService.IsCapturing),
+            // 画布的开关。穿透态下画布收不到任何鼠标事件，托盘这一项与全局热键是"找回来"的两条路（§16.6）。
+            new("屏幕画布（讲解时在屏幕上画）", TrayCanvas,
+                StarMark.UI.Services.CanvasService.IsRunning, SeparatorBefore: true),
             // 三条"所有贴图"的动作。一张都没有时点它们都是空动作 ⇒ 灰掉并把状态写进标签，
             // 比"点了没反应"好（P-54 口径）。标签按要执行的动作说人话（菜单惯例），
             // 只有"忽略鼠标"这项是状态开关，所以它用勾选态。
@@ -333,6 +337,9 @@ public sealed partial class MainWindow : Window
                 break;
             case TrayScreenOcr:
                 StarMark.UI.Services.ScreenshotService.Start(StarMark.UI.Services.CaptureMode.Ocr);
+                break;
+            case TrayCanvas:
+                StarMark.UI.Services.CanvasService.Toggle();
                 break;
             case TrayPinsShowHide:
                 StarMark.UI.Services.PinManager.ToggleHidden();

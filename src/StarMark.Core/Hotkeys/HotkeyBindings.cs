@@ -46,6 +46,9 @@ public static class HotkeyBindings
     /// </summary>
     public const uint VirtualKeyF5 = 0x74;
 
+    /// <summary>VK_D：屏幕画布模式的默认键（规格 §16.5 的 Ctrl+Alt+D）。</summary>
+    public const uint VirtualKeyD = 0x44;
+
     /// <summary>
     /// 出厂默认：主界面呼出/关闭 = Ctrl+Alt+Space。
     /// 每次调用给出**新的可写字典**，调用方可以就地叠加而不污染默认表。
@@ -64,6 +67,10 @@ public static class HotkeyBindings
         // 那时它的右键菜单、托盘勾选项之外的操作路径全断（发起人真机反馈：只能靠托盘关掉全部）。
         // 所以给 F5——用户不需要知道是哪张被穿透了，按一下把这一组全部交还鼠标（见 VirtualKeyF5 注释）。
         [HotkeyActions.ScreenPinClickThrough] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF5),
+        // 画布用 Ctrl+Alt+D（规格 §16.5 的默认键）。不占裸 F6：那一段留给截图那条链继续加动作，
+        // 而画布是"进出一次用一下"的模式，带修饰键反而不容易与游戏/放映软件撞。
+        [HotkeyActions.CanvasToggle] = new HotkeyGesture(
+            HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.NoRepeat, VirtualKeyD),
         // 识字刻意**不占默认键**：它比截图低频，而入口已有三处（动作条「识字」、贴图工具条、托盘），
         // 少占一个全局键位就少一处"与别的软件撞键"的可能（同 P-76 的口径）。
     };

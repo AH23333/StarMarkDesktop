@@ -382,6 +382,7 @@ public partial class App : Application
                 hotkey.RegisterHandler(HotkeyActions.ScreenOcr, () => { StarMark.UI.Services.ScreenshotService.Start(StarMark.UI.Services.CaptureMode.Ocr); return Task.CompletedTask; });
                 hotkey.RegisterHandler(HotkeyActions.ScreenPinToggleHidden, () => { StarMark.UI.Services.PinManager.ToggleHidden(); return Task.CompletedTask; });
                 hotkey.RegisterHandler(HotkeyActions.ScreenPinClickThrough, () => { StarMark.UI.Services.PinManager.ToggleClickThrough(); return Task.CompletedTask; });
+                hotkey.RegisterHandler(HotkeyActions.CanvasToggle, () => { StarMark.UI.Services.CanvasService.Toggle(); return Task.CompletedTask; });
                 foreach (var k in WidgetStorage.AllKinds)
                 {
                     var kind = k;

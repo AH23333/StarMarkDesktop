@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="StarMark.UI.Views.CanvasToolbarWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        画布工具条：一块独立小窗（与截图那条窗链同一套理由：不进组件体系、不参与布局存档）。
+        它<b>永远不穿透</b>——§16.6 点名的"穿透之后找不回"就靠这条 + 全局热键 + 托盘三处出口。
+    -->
+    <Grid x:Name="Root" Background="#F21E1E1E" RequestedTheme="Dark">
+        <StackPanel Spacing="6" Padding="10">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <!-- 拖动落点：整条窗跟着走，笔迹不受影响（分层窗自己不动） -->
+                <Border x:Name="Grip" Width="22" Height="22" Background="#33FFFFFF"
+                        VerticalAlignment="Center" ToolTipService.ToolTip="拖动移动工具条">
+                    <TextBlock Text="⋮⋮" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <Button x:Name="PenButton" Content="画笔" Click="Pen_Click"/>
+                <Button x:Name="MarkerButton" Content="荧光笔" Click="Marker_Click"/>
+                <Button x:Name="EraserButton" Content="橡皮" Click="Eraser_Click"/>
+                <Button Content="撤销" Click="Undo_Click" ToolTipService.ToolTip="撤掉这一块屏上的最后一笔"/>
+                <Button Content="清屏" Click="Clear_Click"/>
+                <Button x:Name="ThroughButton" Content="穿透" Click="Through_Click"
+                        ToolTipService.ToolTip="点穿到下面的 PPT／桌面；再按一次或按热键回到绘制"/>
+                <Button x:Name="HaloButton" Content="光晕" Click="Halo_Click"
+                        ToolTipService.ToolTip="荧光笔态下那团跟着鼠标的光"/>
+                <Button Content="贴图" Click="Pin_Click" ToolTipService.ToolTip="屏幕画面 + 笔迹合成一张钉在桌面"/>
+                <Button Content="存图" Click="Save_Click"/>
+                <Button Content="复制" Click="Copy_Click"/>
+                <Button x:Name="CloseButton" Content="✕ 退出" Click="Close_Click"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <Border x:Name="ColourRow" Background="#22FFFFFF" Padding="4,2">
+                    <StackPanel x:Name="ColourPalette" Orientation="Horizontal" Spacing="4"/>
+                </Border>
+                <Button x:Name="ThinButton" Content="细" Click="Thin_Click"/>
+                <Button x:Name="MediumButton" Content="中" Click="Medium_Click"/>
+                <Button x:Name="ThickButton" Content="粗" Click="Thick_Click"/>
+                <TextBlock x:Name="Status" VerticalAlignment="Center" FontSize="12"
+                           Foreground="#BFFFFFFF" TextWrapping="Wrap"/>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -151,6 +151,37 @@ public static class CanvasCompositor
         return Clamp(new IntRect(center.X - reach, center.Y - reach, reach * 2 + 1, reach * 2 + 1), width, height);
     }
 
+    /// <summary>
+    /// 把一块预乘的画布墨叠到一份<b>不透明</b>的 BGRA 帧上（<see cref="Paint"/> 的目标是透明玻璃，
+    /// 这里的目标是截屏／存图／贴图那一类实底画面——两种 alpha 语义不能共用一个函数）。
+    /// <param name="bgra">帧缓冲（BGRA 字节序）。就地改：调用方交给它的本来就是这一帧的副本。</param>
+    /// <param name="frameWidth">整帧宽度（行跨距按它算）。</param>
+    /// <param name="at">这块墨贴到帧上的位置（帧坐标，可为负——画布上"拖出屏幕外"的那部分会被夹掉）。</param>
+    /// </summary>
+    public static void OverlayOntoFrame(byte[] bgra, int frameWidth, int frameHeight,
+        IntRect at, uint[] ink, int inkWidth, int inkHeight)
+    {
+        for (var y = 0; y < inkHeight; y++)
+        {
+            var frameY = at.Y + y;
+            if (frameY < 0 || frameY >= frameHeight) continue;
+            for (var x = 0; x < inkWidth; x++)
+            {
+                var frameX = at.X + x;
+                if (frameX < 0 || frameX >= frameWidth) continue;
+                var pixel = ink[y * inkWidth + x];
+                var alpha = (int)(pixel >>> 24);
+                if (alpha == 0) continue;
+                var index = (frameY * frameWidth + frameX) * 4;
+                var keep = 255 - alpha;                    // 帧是实底：源 over 目标，且墨本身已预乘，直接相加
+                bgra[index] = (byte)((pixel & 0xFF) + (bgra[index] & 0xFF) * keep / 255);
+                bgra[index + 1] = (byte)((pixel >> 8 & 0xFF) + (bgra[index + 1] & 0xFF) * keep / 255);
+                bgra[index + 2] = (byte)((pixel >> 16 & 0xFF) + (bgra[index + 2] & 0xFF) * keep / 255);
+                bgra[index + 3] = 255;                     // 交出去的图不能留透明洞
+            }
+        }
+    }
+
     // ────────── 逐像素 ──────────
 
     private static IntRect Stamp(uint[] buffer, int width, int height, CanvasStroke stroke, PixelPoint p, double fade)

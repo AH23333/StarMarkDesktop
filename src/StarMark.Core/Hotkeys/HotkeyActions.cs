@@ -51,6 +51,12 @@ public static class HotkeyActions
     /// </summary>
     public const string ScreenOcr = "screen.ocr";
 
+    /// <summary>
+    /// 屏幕画布模式的开关（讲解时直接在屏幕上画）。放在 <c>screen.</c> 前缀之外：
+    /// <see cref="CategoryOf"/> 用那个前缀归到"截图 / 贴图 / 识字"，而画布是<b>常驻模式</b>不是工具会话。
+    /// </summary>
+    public const string CanvasToggle = "canvas.toggle";
+
     private const string LayoutPrefix = "layout.apply:";
 
     public static string WidgetCreate(WidgetKind k) => $"widget.create:{k}";
@@ -74,6 +80,7 @@ public static class HotkeyActions
         if (action is MainToggle or MainShow or MainHide) return "主界面";
         if (action is WidgetsToggleAll or WidgetsShowAll or WidgetsHideAll or WidgetsToggleTopmostAll) return "组件总控";
         if (action.StartsWith("screen.")) return "截图 / 贴图 / 识字";
+        if (action == CanvasToggle) return "屏幕画布";
         if (IsLayoutAction(action)) return "布局方案";
         foreach (var k in WidgetStorage.AllKinds)
             if (action == WidgetCreate(k) || action == WidgetShow(k) || action == WidgetHide(k) || action == WidgetToggle(k))
@@ -86,7 +93,7 @@ public static class HotkeyActions
 
     private static List<string> BuildCategoryOrder()
     {
-        var list = new List<string> { "主界面", "组件总控", "截图 / 贴图 / 识字" };
+        var list = new List<string> { "主界面", "组件总控", "截图 / 贴图 / 识字", "屏幕画布" };
         foreach (var k in WidgetStorage.AllKinds) list.Add(WidgetStorage.KindTitle(k));
         list.Add("布局方案");
         return list;
@@ -100,6 +107,7 @@ public static class HotkeyActions
             MainToggle, MainShow, MainHide,
             WidgetsToggleAll, WidgetsShowAll, WidgetsHideAll, WidgetsToggleTopmostAll,
             ScreenCapture, ScreenPin, ScreenPinToggleHidden, ScreenPinClickThrough, ScreenOcr,
+            CanvasToggle,
         };
         foreach (var k in WidgetStorage.AllKinds)
         {
@@ -131,6 +139,7 @@ public static class HotkeyActions
             case ScreenPinToggleHidden: return "切换贴图显示 / 隐藏（全部）";
             case ScreenPinClickThrough: return "切换贴图鼠标穿透（全部）";
             case ScreenOcr: return "识字（框选区域并复制文字）";
+            case CanvasToggle: return "屏幕画布（开启 / 关闭）";
         }
 
         if (IsLayoutAction(action))
