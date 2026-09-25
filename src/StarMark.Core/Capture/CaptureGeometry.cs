@@ -270,6 +270,21 @@ public static class CaptureGeometry
     }
 
     /// <summary>
+    /// 编辑交回的那份像素<b>能不能</b>写回这张贴图。null＝可以；否则是一句能直接读给用户的原因。
+    /// <para>尺寸不符意味着链上某一步把画面改了尺寸（改框、重裁、未来的旋转…）。那种像素贴回去
+    /// 会与窗口对不上，显示成被拉伸过的一张图——比"这次编辑没生效"更难诊断，所以宁可保留原图并说清。</para>
+    /// <para>像素按 BGRA 每像素 4 字节算；乘法走 <see cref="long"/>，免得超大选区先溢出成负数再误判。</para>
+    /// </summary>
+    public static string? PinEditProblem(int sourceWidth, int sourceHeight, byte[]? pixels)
+    {
+        if (pixels is null) return null;      // 放弃本次编辑／关闭这张：没有要写回的东西，不算失败
+        var expected = (long)sourceWidth * sourceHeight * 4;
+        return (long)pixels.Length == expected
+            ? null
+            : $"编辑交回 {pixels.Length} 字节，与这张图的 {expected} 字节（{sourceWidth} × {sourceHeight}）不符";
+    }
+
+    /// <summary>
     /// 截图文件名（不含目录）。同一秒内连拍时靠 <paramref name="collisionIndex"/> 递增，
     /// 而不是把时间戳加粗到毫秒——文件名里出现毫秒只是噪声，而撞车的概率只发生在"一次热键连按"时。
     /// </summary>

@@ -18,10 +18,18 @@
         PointerReleased="Root_PointerReleased"
         PointerWheelChanged="Root_PointerWheelChanged"
         RightTapped="Root_RightTapped"
+        DoubleTapped="Root_DoubleTapped"
         KeyDown="Root_KeyDown">
 
         <FlyoutBase.AttachedFlyout>
             <MenuFlyout>
+                <!--
+                    「编辑」排在最前：贴图不再只是"贴上去的一张死图"，双击 / 按 E 就能接着画。
+                    编辑态里出现的就是截图时那条工具条（八种笔、文字、撤销重做、复制存图识字），
+                    外加贴图特有的「关闭这张」——两份菜单在这里合并成一条链，而不是两套各写一遍。
+                -->
+                <MenuFlyoutItem x:Name="EditItem" Text="编辑这张（双击 / 按 E）" Click="Edit_Click"/>
+                <MenuFlyoutSeparator/>
                 <MenuFlyoutItem x:Name="CopyItem" Text="复制这张图" Click="Copy_Click"/>
                 <MenuFlyoutItem x:Name="SaveItem" Text="另存为图片" Click="Save_Click"/>
                 <MenuFlyoutItem x:Name="OcrItem" Text="识别文字（复制纯文本）" Click="Ocr_Click"/>

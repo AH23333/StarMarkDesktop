@@ -23,6 +23,25 @@
         RightTapped="Root_RightTapped"
         KeyDown="Root_KeyDown">
 
+        <!--
+            只有"就地编辑贴图"那一态会用这份菜单（右键唤出）：截图时右键是"这一屏不截"，
+            而编辑时一次误触不该把用户画了一半的东西丢掉，所以那里右键给的是菜单，
+            把"丢"明确写成一句「放弃本次编辑」。贴图自己那份菜单（复制/存图/识字/关闭这张）
+            在这里合并进来，用户不必退出编辑再右键。
+        -->
+        <FlyoutBase.AttachedFlyout>
+            <MenuFlyout>
+                <MenuFlyoutItem Text="完成编辑，写回这张贴图（Enter）" Click="EditDone_Click"/>
+                <MenuFlyoutItem Text="放弃本次编辑，贴图保持原样（Esc）" Click="EditDiscard_Click"/>
+                <MenuFlyoutSeparator/>
+                <MenuFlyoutItem Text="复制这张图" Click="Copy_Click"/>
+                <MenuFlyoutItem Text="另存为图片" Click="Save_Click"/>
+                <MenuFlyoutItem Text="识别文字（复制纯文本）" Click="Ocr_Click"/>
+                <MenuFlyoutSeparator/>
+                <MenuFlyoutItem Text="关闭这张贴图" Click="ClosePin_Click"/>
+            </MenuFlyout>
+        </FlyoutBase.AttachedFlyout>
+
         <Image x:Name="Shot" Stretch="Fill" IsHitTestVisible="False"/>
 
         <!--

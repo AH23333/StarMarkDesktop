@@ -29,13 +29,44 @@ namespace StarMark.UI.Views;
 /// </summary>
 public sealed partial class PinWindow : Window
 {
-    private readonly byte[] _bgra;
+    private byte[] _bgra;
     private readonly int _sourceWidth;
     private readonly int _sourceHeight;
 
     private double _zoom = 1.0;
     private bool _dragging;
     private bool _clickThrough;
+
+    /// <summary>
+    /// 正在被就地编辑：这期间这扇窗收起，由编辑窗盖在它原来的位置上。
+    /// 这个旗标不是为了好看——不挡住重复进入的话，同一张贴图会被开两次编辑，
+    /// 后写回的那份把先写的悄悄覆盖掉（两次写回＝丢一次改动）。
+    /// </summary>
+    public bool IsEditing { get; private set; }
+
+    /// <summary>贴图的源尺寸（＝标注编辑器交回来必须是这个尺寸）。</summary>
+    public int SourceWidth => _sourceWidth;
+    public int SourceHeight => _sourceHeight;
+
+    /// <summary>当前显示倍率。编辑时按它换算"鼠标在哪、笔落在哪个像素上"。</summary>
+    public double Zoom => _zoom;
+
+    /// <summary>当前显示在屏幕上的物理矩形（已含缩放）——编辑窗要一模一样地盖在它上面。</summary>
+    public IntRect DisplayRect
+    {
+        get
+        {
+            var r = WindowInterop.GetWindowRect(this);
+            return new IntRect(r.X, r.Y, r.Width, r.Height);
+        }
+    }
+
+    /// <summary>所在显示器的 DPI 缩放（编辑窗把 DIP 换算成物理像素用）。</summary>
+    public double DpiScale => WindowInterop.GetScale(this);
+
+    /// <summary>交给编辑器的底图：<b>一份副本</b>。编辑器会拿它当"重烤标注的起点"，
+    /// 把原件交出去就等于允许就地改写一张已经钉在桌面上的图——写回只应发生在用户点「完成」那一刻。</summary>
+    public byte[] PixelsForEdit() => (byte[])_bgra.Clone();
 
     /// <summary>按下瞬间的光标物理坐标与窗口矩形：拖动全程按这两份快照重算绝对位置。</summary>
     private WindowInterop.POINT _gestureStartCursor;
@@ -98,6 +129,61 @@ public sealed partial class PinWindow : Window
             StarLog.Error("[Pin] 位图未能显示", ex);
             return false;
         }
+    }
+
+    // ────────── 就地编辑（复用截图那条标注链）──────────
+
+    /// <summary>
+    /// 进入编辑：本窗收起，由 <see cref="ScreenshotService.EditPin"/> 在同一块矩形上开一扇编辑窗。
+    /// <para>收起而不是"留在底下"：编辑窗是不透明的同一份画面，留一张在底下只是多占一份像素，
+    /// 而且万一两者差一像素，用户会看到一条重影边。</para>
+    /// </summary>
+    public void EnterEditing()
+    {
+        if (IsEditing) return;
+        IsEditing = true;
+        HidePin();
+    }
+
+    /// <summary>
+    /// 编辑结束。<paramref name="pixels"/> 非空＝把这一份写回这张图（尺寸必须与源一致，
+    /// 不一致就是哪一步把尺寸改了，那种图不能往桌面上贴——它会与窗口的尺寸对不上，显示成拉伸过的样子）。
+    /// </summary>
+    public void EndEditing(byte[]? pixels, bool closePin)
+    {
+        if (!IsEditing) return;
+        IsEditing = false;
+        if (closePin)
+        {
+            try { Close(); }
+            catch (Exception ex) { StarLog.Error("[Pin] 关闭贴图失败", ex); }
+            return;
+        }
+        if (pixels is { } edited)
+        {
+            // 尺寸判据在 Core（CaptureGeometry.PinEditProblem）：那是"能不能写回"的唯一说法，
+            // 贴图与将来的其它回写点都该问它，而不是各写一份字节数比较。
+            if (CaptureGeometry.PinEditProblem(_sourceWidth, _sourceHeight, edited) is { } problem)
+                TrayReporter.Report("贴图编辑", "没能写回", problem + "（已保留原来那张）");
+            else
+            {
+                _bgra = edited;
+                if (!TryPaint())
+                    TrayReporter.Report("贴图编辑", "已写回但没能刷新显示", "按 Esc 关掉这张，再重截一张");
+            }
+        }
+        Present();
+    }
+
+    /// <summary>右键菜单 / 双击 / 按 E：进入就地编辑。</summary>
+    private void Edit_Click(object sender, RoutedEventArgs e) => ScreenshotService.EditPin(this);
+
+    private void Root_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        // 双击＝进入编辑（Snipaste 同口径）。拖动那条链用的是按下-移动-放开，
+        // 一次双击会被它当成"原地没动的拖动"，两者不冲突。
+        e.Handled = true;
+        ScreenshotService.EditPin(this);
     }
 
     // ────────── 缩放 ──────────
@@ -185,9 +271,19 @@ public sealed partial class PinWindow : Window
 
     private void Root_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key != VirtualKey.Escape) return;
-        e.Handled = true;
-        Close();
+        if (e.Key == VirtualKey.Escape)
+        {
+            e.Handled = true;
+            Close();
+            return;
+        }
+        // E＝进入就地编辑。贴图窗收得到键盘（建窗时抢过一次焦点），
+        // 所以"想改这张图"不必先把鼠标挪到右键菜单上。
+        if (e.Key == VirtualKey.E)
+        {
+            e.Handled = true;
+            ScreenshotService.EditPin(this);
+        }
     }
 
     private void Copy_Click(object sender, RoutedEventArgs e)

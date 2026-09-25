@@ -6,6 +6,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -52,11 +53,28 @@ public sealed partial class CaptureOverlayWindow : Window
     private const double Bar_fallback_width = 460;
     private const double Bar_fallback_height = 34;
 
-    private readonly ScreenFrame _frame;
+    private readonly ScreenFrame? _frame;       // 截图模式的整帧；就地编辑贴图时没有帧（底图由贴图交进来）
     private readonly IntRect _monitor;          // 本屏在虚拟桌面里的物理矩形
     private readonly double _scale;             // 本屏 DPI 缩放（1.0 / 1.25 / 1.5 …）
     private readonly Action<CaptureOverlayWindow, IntRect?> _finish;
     private readonly CaptureMode _mode;         // 放开选区后做什么（F1 给条 / F3 贴 / 识字直接复制）
+
+    /// <summary>
+    /// 就地编辑一张贴图：<b>整块画面就是内容</b>——不铺全屏、不压暗、不许改框，
+    /// 交出去的也不是"选区"而是"改完的那份像素"（由 <see cref="_finishEdit"/> 写回原贴图）。
+    /// </summary>
+    private readonly bool _editing;
+
+    /// <summary>
+    /// 一个"底图像素"对应几个显示像素：截图恒为 1（选区就是屏幕上的那块），
+    /// 贴图在 2.5× 时就是 2.5——不把这个除掉，放大后的贴图会"鼠标在字上、笔落在字外"。
+    /// </summary>
+    private readonly double _sourceScale;
+
+    private readonly Action<CaptureOverlayWindow, PinEditResult>? _finishEdit;
+
+    /// <summary>底图／最终图的尺寸（截图＝选区尺寸；编辑＝贴图的源尺寸，与显示尺寸无关）。</summary>
+    private int _contentWidth, _contentHeight;
 
     private readonly AnnotationHistory _history = new();
 
@@ -137,28 +155,13 @@ public sealed partial class CaptureOverlayWindow : Window
         _mode = mode;
         DeviceName = monitor.Device;
 
-        InitializeComponent();
-        BuildToolBar();
-        // 点进输入框（放光标、选中一段）不算"在选区里起一笔"：不拦下这一冒泡，第二次点击进来
-        // 就会走 BeginStroke → BeginTextEdit → 把刚打的一行清空（真机反馈"文字编辑无效"的路径之一）。
-        // 光标定位由 TextBox 自己的处理负责，我们只在它之后把事件吃掉。
-        TextEditor.PointerPressed += (_, e) => e.Handled = true;
-        Root.DoubleTapped += (_, e) =>
-        {
-            if (_polyLine is null) return;
-            e.Handled = true;
-            FinishPolyLine(commit: true);
-        };
+        InitWindow();
         HintText.Text = mode switch
         {
             CaptureMode.Pin => "按住拖动框选区域 · 放开即钉到桌面 · Enter 立即贴当前选区 · Esc 取消 · 右键不截",
             CaptureMode.Ocr => "按住拖动框选要认字的区域 · 放开即识别并把文字复制走 · Esc 取消 · 右键不截",
             _ => HintText.Text,
         };
-
-        // 遮罩不需要主题：画面是抓来的桌面，文字全画在暗底上并用硬编码白色 —— 这里刻意不调
-        // ThemeManager。套主题反而会把窗口的 ActualTheme 拉去影响按钮默认前景，出现"暗底灰字"。
-        WindowInterop.RemoveDefaultWindowFrame(this);
 
         // 位置与尺寸走 Win32 物理像素：AppWindow 那套按 DIP 算，多屏混合 DPI 时每屏都会算偏。
         // SWP_NOACTIVATE：先就位再 Activate，避免用户看到窗口从别处滑过来。
@@ -172,6 +175,64 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
         Shot.Source = bitmap;
+    }
+
+    /// <summary>
+    /// 就地编辑一张已经钉在桌面上的贴图：窗口摆在这张贴图现在的位置、按它当前的显示尺寸，
+    /// 底图就是贴图像素。<b>整块画面都是内容</b>——没有"再框一块"、没有压暗、没有改框，
+    /// 因为那时"选区"与"画面"是同一个矩形，留着那套只会让用户以为贴图被裁了。
+    /// </summary>
+    /// <param name="displayRect">贴图当前的物理矩形（已含缩放：源尺寸 × zoom）。</param>
+    /// <param name="sourceScale">一个底图像素对应几个显示像素（＝贴图的 zoom）。</param>
+    /// <param name="finishEdit">改完的那份像素（null＝放弃）；尺寸与传入像素一致。</param>
+    public CaptureOverlayWindow(
+        byte[] pixels, int width, int height, IntRect displayRect,
+        double scale, double sourceScale,
+        Action<CaptureOverlayWindow, PinEditResult> finishEdit)
+    {
+        _frame = null;
+        _monitor = displayRect;
+        _scale = scale <= 0 ? 1.0 : scale;
+        _sourceScale = sourceScale <= 0 ? 1.0 : sourceScale;
+        _finish = (_, _) => { };
+        _finishEdit = finishEdit;
+        _mode = CaptureMode.Toolbar;      // 编辑态要的是完整动作条（复制/存图/识字都在）
+        _editing = true;
+        DeviceName = "贴图编辑";
+
+        InitWindow();
+        // 编辑态没有"选区"这件事：整块都是内容。压暗、蓝框、尺寸提示、框选说明全部收起，
+        // 否则用户会看到一圈根本不存在的"边界"，接着去拖它。
+        DimLayer.Visibility = Visibility.Collapsed;
+        HintChip.Visibility = Visibility.Collapsed;
+        SizeChip.Visibility = Visibility.Collapsed;
+
+        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), WindowInterop.HWND_TOPMOST,
+            _monitor.X, _monitor.Y, _monitor.Width, _monitor.Height,
+            WindowInterop.SWP_SHOWWINDOW | WindowInterop.SWP_NOACTIVATE);
+
+        BeginEditingExisting(pixels, width, height);
+    }
+
+    /// <summary>两种模式共用的建窗步骤（XAML、工具条、事件钩子、无边框、关闭兜底）。</summary>
+    private void InitWindow()
+    {
+        InitializeComponent();
+        BuildToolBar();
+        // 点进输入框（放光标、选中一段）不算"在选区里起一笔"：不拦下这一冒泡，第二次点击进来
+        // 就会走 BeginStroke → BeginTextEdit → 把刚打的一行清空（真机反馈"文字编辑无效"的路径之一）。
+        // 光标定位由 TextBox 自己的处理负责，我们只在它之后把事件吃掉。
+        TextEditor.PointerPressed += (_, e) => e.Handled = true;
+        Root.DoubleTapped += (_, e) =>
+        {
+            if (_polyLine is null) return;
+            e.Handled = true;
+            FinishPolyLine(commit: true);
+        };
+
+        // 遮罩不需要主题：画面是抓来的桌面，文字全画在暗底上并用硬编码白色 —— 这里刻意不调
+        // ThemeManager。套主题反而会把窗口的 ActualTheme 拉去影响按钮默认前景，出现"暗底灰字"。
+        WindowInterop.RemoveDefaultWindowFrame(this);
 
         // 被外部关掉（Alt+F4、任务管理器"切到"、系统注销）也要按取消回报，否则会话永远挂着。
         Closed += (_, _) => Settle(null);
@@ -187,12 +248,31 @@ public sealed partial class CaptureOverlayWindow : Window
 
     // ────────── 会话收尾 ──────────
 
+    /// <summary>
+    /// 编辑贴图的一次结果：<see cref="Pixels"/> 为 null 表示这次没改动要写回（放弃／关闭这张）；
+    /// <see cref="ClosePin"/> 是"连贴图一起关掉"——编辑态里没有第二个地方能说这句话
+    /// （Esc 已经被"放弃编辑"占了，再说清一次比让用户猜强）。
+    /// </summary>
+    public readonly record struct PinEditResult(byte[]? Pixels, bool ClosePin);
+
     /// <summary>把结果（null＝取消）交给服务；一个会话只交一次。</summary>
     private void Settle(IntRect? selection)
     {
         if (_settled) return;
         _settled = true;
-        _finish(this, selection);
+        if (_editing) _finishEdit!(this, new PinEditResult(null, ClosePin: false));
+        else _finish(this, selection);
+    }
+
+    /// <summary>
+    /// 编辑贴图：把这一份写回原贴图并收窗。<b>任何动作都先写回</b>——用户画完点的是「复制」，
+    /// 不写回就等于回到桌面后发现贴图还是旧的，那些标注凭空没了（丢东西比多一步严重）。
+    /// </summary>
+    private void FinishEdit(byte[]? pixels, bool closePin)
+    {
+        if (_settled) return;
+        _settled = true;
+        _finishEdit!(this, new PinEditResult(pixels, closePin));
     }
 
     /// <summary>服务在统一收尾时调用：本窗已把结果交出去了，直接关。</summary>
@@ -203,11 +283,12 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private WriteableBitmap? BuildMonitorBitmap()
     {
+        if (_frame is not { } frame) return null;     // 编辑态没有整帧，也不需要（底图由贴图交进来）
         try
         {
-            var (ox, oy) = CaptureGeometry.CropOffset(_monitor, _frame.Bounds);
+            var (ox, oy) = CaptureGeometry.CropOffset(_monitor, frame.Bounds);
             var pixels = GdiScreenCapture.Crop(new FrameCopyRequest(
-                _frame, ox, oy, _monitor.Width, _monitor.Height));
+                frame, ox, oy, _monitor.Width, _monitor.Height));
             var bitmap = new WriteableBitmap(_monitor.Width, _monitor.Height);
             using (var stream = bitmap.PixelBuffer.AsStream())
                 stream.Write(pixels, 0, pixels.Length);
@@ -294,17 +375,34 @@ public sealed partial class CaptureOverlayWindow : Window
         BarRow.Children.Add(_clearButton);
 
         BarRow.Children.Add(Separator());
-        _copyButton = IconButton(CopyIcon(), "把带标注的画面复制进剪贴板（Enter）");
+        _copyButton = IconButton(CopyIcon(), _editing
+            ? "把改好的画面复制进剪贴板（同时写回贴图）"
+            : "把带标注的画面复制进剪贴板（Enter）");
         _copyButton.Click += Copy_Click;
         var save = IconButton(SaveIcon(), "存成 PNG（Ctrl+S）");
         save.Click += Save_Click;
-        var pin = IconButton(PinIcon(), "钉在桌面上（同 F3），带上刚画的标注");
-        pin.Click += Pin_Click;
+        // 编辑贴图时"再钉一张"这颗没有意义（这张本来就钉在桌面上），换成「完成」：
+        // 少一颗按钮也少一种"我刚点的那份到底去哪了"的困惑。
+        if (!_editing)
+        {
+            var pin = IconButton(PinIcon(), "钉在桌面上（同 F3），带上刚画的标注");
+            pin.Click += Pin_Click;
+            BarRow.Children.Add(pin);
+        }
         var ocr = IconButton(OcrIcon(), "认出这块画面的文字并复制");
         ocr.Click += Ocr_Click;
-        var cancel = IconButton(CrossIcon(), "结束这一屏（Esc）");
+        BarRow.Children.Add(_copyButton);
+        BarRow.Children.Add(save);
+        BarRow.Children.Add(ocr);
+        if (_editing)
+        {
+            var done = IconButton(CheckIcon(), "完成编辑，把这一份写回贴图（Enter）");
+            done.Click += EditDone_Click;
+            BarRow.Children.Add(done);
+        }
+        var cancel = IconButton(CrossIcon(), _editing ? "放弃本次编辑，贴图保持原样（Esc）" : "结束这一屏（Esc）");
         cancel.Click += Cancel_Click;
-        foreach (var action in new[] { _copyButton, save, pin, ocr, cancel }) BarRow.Children.Add(action);
+        BarRow.Children.Add(cancel);
 
         _undoButton.IsEnabled = _redoButton.IsEnabled = _clearButton.IsEnabled = false;
         SyncTools();
@@ -630,6 +728,8 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private static UIElement CrossIcon() => Icon(Seg(3.5, 3.5, 12.5, 12.5), Seg(12.5, 3.5, 3.5, 12.5));
 
+    private static UIElement CheckIcon() => Icon(Seg(3.4, 8.6, 6.8, 11.9, 1.9), Seg(6.8, 11.9, 12.9, 4.4, 1.9));
+
     private static UIElement CopyIcon()
         => Icon(Out(2, 2.5, 8, 9, 1.3, InkDim), Out(6, 5, 8, 9, 1.3));
 
@@ -660,7 +760,7 @@ public sealed partial class CaptureOverlayWindow : Window
         // 已经有选区、这次按在选区里面、而且是"给动作条"的那条链 ⇒ 这一按是**画**，不是重新框选。
         // 选区外面照旧起新框：用户想换个范围就换个范围，标注跟着作废（底图都换了，留着旧的只会对不上）。
         // 一支笔都没选 ⇒ 这一按是用来改框的（整块移动 / 改边缘大小）。落在框外远处则放行给"重新框一块"。
-        if (_mode == CaptureMode.Toolbar && _base is not null && !Armed && TryBeginAdjust(physical, e.Pointer)) return;
+        if (_mode == CaptureMode.Toolbar && !_editing && _base is not null && !Armed && TryBeginAdjust(physical, e.Pointer)) return;
         if (_mode == CaptureMode.Toolbar && _base is not null && InsideSelection(physical))
         {
             // 先问"这一按是不是在改已有的那一条"（选中框/把手就在那儿）；不是才轮到画新的
@@ -674,6 +774,10 @@ public sealed partial class CaptureOverlayWindow : Window
             else BeginStroke(ToLocal(physical), e.Pointer, tool);
             return;
         }
+
+        // 编辑贴图时没有"重新框一块"这回事：整块画面就是内容，落点稍偏（圆角外、边缘那一像素）
+        // 也不能把底图丢掉——那等于把用户已经画好的标注一起清空。
+        if (_editing) return;
 
         _startPhysical = physical;
         _awaitingRelease = true;
@@ -767,7 +871,11 @@ public sealed partial class CaptureOverlayWindow : Window
     private void Root_RightTapped(object sender, RightTappedRoutedEventArgs e)
     {
         e.Handled = true;
-        Settle(null);                        // 右键＝这一屏不截（与 Snipaste 一致）
+        // 截图时右键＝"这一屏不截"（与 Snipaste 一致）。编辑贴图时右键<b>不能是"丢"</b>：
+        // 那时用户已经画了一半，一次误触就没了。所以编辑态右键打开那份合并后的菜单
+        // （完成／放弃／复制／存图／识字／关闭这张），把"丢"明确写成一句"放弃本次编辑"。
+        if (_editing) FlyoutBase.ShowAttachedFlyout(Root);
+        else Settle(null);
     }
 
     private void Root_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -805,7 +913,8 @@ public sealed partial class CaptureOverlayWindow : Window
                 break;
             case VirtualKey.Enter:
                 e.Handled = true;
-                Commit(_mode switch
+                // 编辑贴图时 Enter＝"改完了，写回贴图"；截图时 Enter 仍是"复制走"（口径不变）。
+                Commit(_editing ? CommitAction.Done : _mode switch
                 {
                     CaptureMode.Pin => CommitAction.Pin,
                     CaptureMode.Ocr => CommitAction.Ocr,
@@ -858,15 +967,20 @@ public sealed partial class CaptureOverlayWindow : Window
     private bool InsideSelection(PointInt32 physical) => _selection is { } s
         && physical.X >= s.X && physical.X < s.Right && physical.Y >= s.Y && physical.Y < s.Bottom;
 
-    /// <summary>虚拟桌面物理像素 → 选区内物理像素（标注模型用的坐标系，原点在选区左上角）。</summary>
+    /// <summary>虚拟桌面物理像素 → 选区内物理像素（标注模型用的坐标系，原点在选区左上角）。
+    /// 贴图编辑时"显示像素"与"底图像素"差一个 zoom，所以这里要除掉——不除就是
+    /// 2.5× 的贴图"鼠标明明在字上、笔落在字外"。</summary>
     private PixelPoint ToLocal(PointInt32 physical)
-        => new(physical.X - (_selection?.X ?? physical.X), physical.Y - (_selection?.Y ?? physical.Y));
+        => new(
+            (int)Math.Round((physical.X - (_selection?.X ?? physical.X)) / _sourceScale, MidpointRounding.AwayFromZero),
+            (int)Math.Round((physical.Y - (_selection?.Y ?? physical.Y)) / _sourceScale, MidpointRounding.AwayFromZero));
 
     /// <summary>选区内物理像素 → 窗口内 DIP（摆预览图元与文字输入框用）。</summary>
     private (double X, double Y) LocalToDip(PixelPoint local)
     {
         var s = _selection ?? default;
-        return ((s.X + local.X - _monitor.X) / _scale, (s.Y + local.Y - _monitor.Y) / _scale);
+        return ((s.X + local.X * _sourceScale - _monitor.X) / _scale,
+                (s.Y + local.Y * _sourceScale - _monitor.Y) / _scale);
     }
 
     // ────────── 标注：进入、拖动一条、合成 ──────────
@@ -874,10 +988,12 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>框选放开后进入标注态：把这一块底图拿在手里，之后每改一条就在它上面重烤一次。</summary>
     private void EnterAnnotationMode(IntRect selection)
     {
-        var (ox, oy) = CaptureGeometry.CropOffset(selection, _frame.Bounds);
+        if (_frame is not { } frame) return;      // 编辑态走 BeginEditingExisting，这里必须有帧
+        var (ox, oy) = CaptureGeometry.CropOffset(selection, frame.Bounds);
+        byte[] basePixels;
         try
         {
-            _base = GdiScreenCapture.Crop(new FrameCopyRequest(_frame, ox, oy, selection.Width, selection.Height));
+            basePixels = GdiScreenCapture.Crop(new FrameCopyRequest(frame, ox, oy, selection.Width, selection.Height));
         }
         catch (Exception ex)
         {
@@ -885,8 +1001,31 @@ public sealed partial class CaptureOverlayWindow : Window
             ShowError("这一块画面的像素没能取到：" + ex.Message);
             return;
         }
+        ShowBase(basePixels, selection.Width, selection.Height, selection);
+    }
+
+    /// <summary>
+    /// 就地编辑贴图的第一帧：底图＝贴图像素，选区＝整个窗口（＝贴图当前显示的那块矩形），
+    /// 之后所有编辑动作与截图时<b>走的是同一批代码</b>（八种笔、文字、撤销重做、马赛克增量、复制存图识字）。
+    /// </summary>
+    private void BeginEditingExisting(byte[] pixels, int width, int height)
+    {
+        _selection = _monitor;
+        ShowBase(pixels, width, height, _monitor);
+        HintText.Text = string.Empty;
+    }
+
+    /// <summary>
+    /// 把一份底图摆上屏幕并进入可标注态。截图与贴图编辑共用这一句：两者唯一的差别是底图从哪来，
+    /// 摆法、重烤、工具条定位、光标态完全一致——分成两份写迟早会有一处不同步（本项目已栽过四次）。
+    /// </summary>
+    private void ShowBase(byte[] basePixels, int contentWidth, int contentHeight, IntRect selection)
+    {
+        _base = basePixels;
+        _contentWidth = Math.Max(1, contentWidth);
+        _contentHeight = Math.Max(1, contentHeight);
         _history.Reset();
-        _preview = new WriteableBitmap(selection.Width, selection.Height);
+        _preview = new WriteableBitmap(_contentWidth, _contentHeight);
         AnnotateShot.Source = _preview;
         var (x, y, w, h) = ToDip(selection);
         Canvas.SetLeft(AnnotateShot, x);
@@ -950,12 +1089,14 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private void ApplySelection(IntRect next)
     {
-        if (_selection is not { } old || old == next || next.Width < 1 || next.Height < 1) return;
-        var (ox, oy) = CaptureGeometry.CropOffset(next, _frame.Bounds);
+        // 改框只在截图态存在（编辑贴图时整块都是内容，没有"另一个框"可裁）
+        if (_frame is not { } frame || _selection is not { } old || old == next
+            || next.Width < 1 || next.Height < 1) return;
+        var (ox, oy) = CaptureGeometry.CropOffset(next, frame.Bounds);
         byte[] cropped;
         try
         {
-            cropped = GdiScreenCapture.Crop(new FrameCopyRequest(_frame, ox, oy, next.Width, next.Height));
+            cropped = GdiScreenCapture.Crop(new FrameCopyRequest(frame, ox, oy, next.Width, next.Height));
         }
         catch (Exception ex)
         {
@@ -965,6 +1106,8 @@ public sealed partial class CaptureOverlayWindow : Window
         }
         _selection = next;
         _base = cropped;
+        _contentWidth = Math.Max(1, next.Width);
+        _contentHeight = Math.Max(1, next.Height);
         _history.ShiftAllBy(old.X - next.X, old.Y - next.Y);   // 标注原点跟着画面走（不制造一步历史）
         _preview = new WriteableBitmap(next.Width, next.Height);
         AnnotateShot.Source = _preview;
@@ -1702,12 +1845,23 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => Settle(null);
 
-    private enum CommitAction { Copy, Save, Pin, Ocr }
+    private void EditDone_Click(object sender, RoutedEventArgs e) => Commit(CommitAction.Done);
+
+    private void EditDiscard_Click(object sender, RoutedEventArgs e) => Settle(null);
+
+    private void ClosePin_Click(object sender, RoutedEventArgs e) => FinishEdit(null, closePin: true);
+
+    private enum CommitAction { Copy, Save, Pin, Ocr, Done }
 
     /// <summary>
     /// 提交这一屏的选区：复制、存图、钉住，或认字并复制文字。四个落点交的都是<b>带上标注的那一份画面</b>。
     /// 先算好像素再 Settle：服务收到结果就会关掉所有遮罩窗（包括本窗），
     /// 反过来先干活会让用户在裁图期间还被困在暗幕里。
+    /// <para>
+    /// 编辑贴图时多一条规矩：<b>不管点的是哪个动作，都先把这一份写回原贴图</b>（<see cref="CommitAction.Done"/>
+    /// 就是"只写回"）。用户点「复制」之后回到桌面，看到的贴图应该就是他刚画完的那张——
+    /// 不写回等于把刚画的东西凭空抹掉，那比多点一次按钮严重得多。
+    /// </para>
     /// </summary>
     private void Commit(CommitAction action)
     {
@@ -1718,18 +1872,29 @@ public sealed partial class CaptureOverlayWindow : Window
             Settle(null);
             return;
         }
-        if (CaptureGeometry.SelectionProblem(selection, _monitor) is { } reason)
+        if (!_editing && CaptureGeometry.SelectionProblem(selection, _monitor) is { } reason)
         {
             ShowError(reason);
             return;
         }
         if (FinalPixels() is not { } final) return;       // 原因已经在里面报过了，这里只负责不再往下走
-        Settle(selection);
+        if (_editing) FinishEdit(final.Pixels, closePin: false);
+        else Settle(selection);
         switch (action)
         {
-            case CommitAction.Copy: _ = ScreenshotService.CopyPixelsAsync(final.Pixels, final.Width, final.Height); break;
-            case CommitAction.Save: _ = ScreenshotService.SavePixelsAsync(final.Pixels, final.Width, final.Height); break;
-            case CommitAction.Ocr: _ = OcrService.CopyTextFromPixelsAsync(final.Pixels, final.Width, final.Height); break;
+            case CommitAction.Done: break;                 // 写回已经在上面做完了
+            case CommitAction.Copy:
+                _ = ScreenshotService.CopyPixelsAsync(final.Pixels, final.Width, final.Height,
+                    _editing ? "贴图编辑" : "截图");
+                break;
+            case CommitAction.Save:
+                _ = ScreenshotService.SavePixelsAsync(final.Pixels, final.Width, final.Height,
+                    _editing ? "贴图编辑" : "截图");
+                break;
+            case CommitAction.Ocr:
+                _ = OcrService.CopyTextFromPixelsAsync(final.Pixels, final.Width, final.Height,
+                    _editing ? "贴图识字" : "截图识字");
+                break;
             default: ScreenshotService.PinPixels(final.Pixels, final.Width, final.Height, selection); break;
         }
     }
@@ -1737,16 +1902,17 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>
     /// 要交出去的那份画面：有底图就在它上面重烤一次标注（连"一条都没画"也走这条路，结果就是原样），
     /// 拿不到底图时退回"直接从这一帧里裁"。两条路都报同样的失败原因，不静默少一张图。
+    /// <para>尺寸取 <see cref="_contentWidth"/>／<see cref="_contentHeight"/>（底图自己的尺寸），
+    /// <b>不取选区的显示尺寸</b>：贴图在 2.5× 时选区矩形是显示尺寸，按它渲染会得到一张放大的糊图。</para>
     /// </summary>
     private (byte[] Pixels, int Width, int Height)? FinalPixels()
     {
-        if (_selection is not { } selection) return null;
         if (_base is { } basePixels)
         {
             try
             {
-                return (AnnotationPainter.Render(basePixels, selection.Width, selection.Height, _history.Marks),
-                    selection.Width, selection.Height);
+                return (AnnotationPainter.Render(basePixels, _contentWidth, _contentHeight, _history.Marks),
+                    _contentWidth, _contentHeight);
             }
             catch (Exception ex)
             {
@@ -1755,6 +1921,8 @@ public sealed partial class CaptureOverlayWindow : Window
                 return null;
             }
         }
-        return ScreenshotService.TryCrop(_frame, selection);
+        return _selection is { } selection && _frame is { } frame
+            ? ScreenshotService.TryCrop(frame, selection)
+            : null;
     }
 }

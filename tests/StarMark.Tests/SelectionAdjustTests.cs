@@ -168,8 +168,10 @@ public sealed class SelectionAdjustTests
             SourceGate.ReadRepoFile("src/StarMark.UI/Views/CursorLayer.cs"));
         Assert.Contains("<local:CursorLayer",
             SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml"));
-        // ④ 进入标注态＝一支笔都没选（工具条不预先高亮，光标是十字箭头）
-        var enter = SourceGate.MethodBody(cs, "private void EnterAnnotationMode");
+        // ④ 进入标注态＝一支笔都没选（工具条不预先高亮，光标是十字箭头）。
+        //    批次 PM 之后这份"摆底图"的动作由截图与贴图编辑共用（ShowBase），锚点跟着搬过去——
+        //    规则本身一字未改；锚点扫不到就说明结构变了，正是它该红的时候。
+        var enter = SourceGate.MethodBody(cs, "private void ShowBase(");
         Assert.Contains("SyncTools();", enter);
         Assert.Contains("ApplyCursor();", enter);
     }
