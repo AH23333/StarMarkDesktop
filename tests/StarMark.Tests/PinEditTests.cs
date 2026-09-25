@@ -75,6 +75,23 @@ public sealed class PinEditTests
         Assert.Contains("if (_clickThrough) ActionBar.Visibility = Visibility.Collapsed;", through);
     }
 
+    /// <summary>
+    /// 贴图态"选区"恒等于本窗矩形 ⇒ 改窗口位置/尺寸必须把选区带着一起走。
+    /// <para>`ToLocal`／`InsideSelection`／`PositionBar` 全以选区为原点：只改 _monitor 的话，
+    /// 用户把这张图拖过一次，笔迹就按那段距离整体平移（并且 InsideSelection 一路报 false＝再也画不上）。</para>
+    /// </summary>
+    [Fact]
+    public void MovingOrResizingThePinKeepsTheSelectionInStep()
+    {
+        var cs = SourceGate.ReadRepoFile(Overlay);
+        Assert.Contains("if (_pinned) _selection = next;",
+            SourceGate.MethodBody(cs, "private void SetMonitor(IntRect next)"));
+        var drag = SourceGate.MethodBody(cs, "private void PinDragTo");
+        Assert.Contains("SetMonitor(", drag);
+        Assert.DoesNotContain("_monitor = new IntRect(", drag);      // 不许绕过 SetMonitor 自己改
+        Assert.Contains("SetMonitor(", SourceGate.MethodBody(cs, "private void ResizePinAnchoringTopLeft"));
+    }
+
     [Fact]
     public void PointerMappingDividesTheZoomOut_AndWheelKeepsItInStep()
     {

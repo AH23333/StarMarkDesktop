@@ -1096,12 +1096,24 @@ public sealed partial class CaptureOverlayWindow : Window
         if (cx == _lastAppliedX && cy == _lastAppliedY) return;
         _lastAppliedX = cx;
         _lastAppliedY = cy;
-        _monitor = new IntRect(cx, cy, _monitor.Width, _monitor.Height);
+        SetMonitor(new IntRect(cx, cy, _monitor.Width, _monitor.Height));
         WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero, cx, cy, 0, 0,
             WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
         // 换到一块缩放不同的屏：物理尺寸不用动（我们本来就按物理像素摆窗），但 DIP↔物理的除数变了，
         // 不重算就是"拖到另一台显示器上画面突然比窗口大/小一圈，笔也落在偏的地方"。
         if (RefreshScaleIfChanged()) RelayoutContent();
+    }
+
+    /// <summary>
+    /// 摆这张贴图的新位置/新尺寸。<b>贴图态的"选区"恒等于本窗矩形</b>，所以改 <see cref="_monitor"/>
+    /// 必须连它一起改：`ToLocal`／`LocalToDip`／`InsideSelection`／`PositionBar` 全以选区为原点，
+    /// 留着旧矩形就等于把笔迹按"拖过的那段距离"整体平移一遍——拖完一次就再也画不到点上，
+    /// 而且 `InsideSelection` 会一路报 false，连"这一按是画"都判不出来。
+    /// </summary>
+    private void SetMonitor(IntRect next)
+    {
+        _monitor = next;
+        if (_pinned) _selection = next;
     }
 
     /// <summary>
@@ -1145,7 +1157,7 @@ public sealed partial class CaptureOverlayWindow : Window
         var (x, y) = CaptureGeometry.PinOrigin(current.X, current.Y, w, h, WorkArea());
         WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero, x, y, w, h,
             WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
-        _monitor = new IntRect(x, y, w, h);
+        SetMonitor(new IntRect(x, y, w, h));
         _lastAppliedX = x;
         _lastAppliedY = y;
         RefreshScaleIfChanged();        // 收边可能把这张图整个推到另一块屏上
