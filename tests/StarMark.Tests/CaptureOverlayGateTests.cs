@@ -444,6 +444,15 @@ public sealed class CaptureOverlayGateTests
         Assert.Contains("{ _selected = existing; DeleteSelected(); return; }", commit);
         // Esc 是结束编辑而不是丢弃（"按一次 esc 退出文字编辑"，而"原已编辑输入的文字不会消失"）
         Assert.Contains("EndTextEditing(commit: true);", SourceGate.MethodBody(cs, "private void TextEditor_KeyDown"));
+        // 编辑期间那一条不许再烤进画面：输入框压在它原来的位置上，两份一起画＝"红白两层文字"（真机反馈）
+        Assert.Contains("_editingText && _editingIndex is { } hidden",
+            SourceGate.MethodBody(cs, "private void Rebake"));
+        // 也不许拿"当前调色板"去涂它：改旧字时用户可能已经换成别的颜色，那会让编辑中与落笔后是两个颜色
+        Assert.Contains("_editingIndex is null ? ColourBgra : _editorColourBgra",
+            SourceGate.MethodBody(cs, "private void ApplyEditorAccent"));
+        // 输入框要盖在"真画出去那一格"上（Bounds 是旋转后的外接框，转过的字会偏到空处）
+        Assert.Contains("mark.TransformedPoints()[0] : local",
+            SourceGate.MethodBody(cs, "private void BeginTextEdit"));
     }
 
     /// <summary>选中说明要长在遮罩窗上（悬停到几像素的把手才看得见＝没有提示）。</summary>

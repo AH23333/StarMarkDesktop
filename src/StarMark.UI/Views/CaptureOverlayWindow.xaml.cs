@@ -94,6 +94,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private const int RotateHandleLift = 26;
     private bool _editingText;
     private int? _editingIndex;             // 非空＝正在改历史里那一条（落笔时替换它，不再新增一条）
+    private int _editorColourBgra;          // 那一条自己的颜色：改旧字时输入框不许改用现在的调色板（否则红白两层）
     private PixelPoint _textAnchor;
     private AnnotationTool _tool = AnnotationTool.Rectangle;
     private int _colourIndex;
@@ -1173,7 +1174,11 @@ public sealed partial class CaptureOverlayWindow : Window
     private void Rebake()
     {
         if (_base is not { } basePixels || _preview is not { } preview || _selection is not { } selection) return;
-        var marks = _history.Marks;
+        // 正在改的那一条先不烤进画面：输入框就压在它原来的位置上，两份同时画出来
+        // 就是真机反馈的"编辑中文字和已编辑文字重叠，红白两层"。落笔/取消后它自然回来。
+        var marks = _editingText && _editingIndex is { } hidden && hidden < _history.Count
+            ? _history.Marks.Where((_, i) => i != hidden).ToList()
+            : _history.Marks;
         try
         {
             var composed = AnnotationPainter.Render(basePixels, selection.Width, selection.Height, marks);
@@ -1301,8 +1306,12 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         _editingText = true;
         _editingIndex = editing is null ? null : index;
+        // 颜色跟着"这一条自己的颜色"，不跟着调色板：用户改旧字时可能已经换成了别的颜色，
+        // 输入框显示红的、落笔仍是白的＝"编辑时和编辑完不是一份字"（真机反馈的红白两层之一）。
+        _editorColourBgra = editing?.EffectiveColorBgra ?? ColourBgra;
         _textAnchor = local;
-        var at = editing is { } mark ? new PixelPoint(mark.Bounds().X, mark.Bounds().Y) : local;
+        // 摆到"真画出去那一格"的左上角（Bounds() 是旋转后的外接框，转过 90° 时它会跑到字外面的空处）
+        var at = editing is { } mark ? mark.TransformedPoints()[0] : local;
         var (x, y) = LocalToDip(at);
         // 宽度上限跟着屏幕收：写满一行的字被 MaxWidth 截断＝用户看到的成品与框里不一样。
         // 换行只由 Enter 决定（XAML 里 AcceptsReturn），不许自动折行——编辑框折了而 GDI 不折，就是两张图。
@@ -1342,7 +1351,8 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private void ApplyEditorAccent()
     {
-        var brush = new SolidColorBrush(ToColor(ColourBgra));
+        // 新写的一行跟着当前调色板走；改旧字时用那条字自己的颜色（换调色板不该改旧字的颜色）
+        var brush = new SolidColorBrush(ToColor(_editingIndex is null ? ColourBgra : _editorColourBgra));
         TextEditor.Foreground = brush;
         TextEditorHost.BorderBrush = brush;
     }
