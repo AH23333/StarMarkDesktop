@@ -46,7 +46,8 @@ public sealed class PinEditTests
         var pressed = SourceGate.MethodBody(cs, "private void Root_PointerPressed");
         Assert.Contains("if (_pinned)", pressed);
         Assert.Contains("if (!Armed) BeginPinDrag(e.Pointer);", pressed);   // 没选笔＝不动笔 ⇒ 这一按是移动这张图
-        Assert.Contains("!_pinned && _base is not null && TryBeginAdjust", pressed);
+        // 批次 PU：改框的边/角判定自己算（SelectionEdgeAt），Move 那条留给"抓标注/挪框"的后面分支
+        Assert.Contains("!_pinned && _selection is { } box", pressed);
         // 贴图态的"选区"＝整块画面，所以"未选笔"那一按先在选区内被拦下、根本走不到选区外面。
         // 这条就是真机反馈"贴图拖不动"的位置：没在里面接上 BeginPinDrag，移动就永远触发不了。
         Assert.Contains("if (_tool is not { } tool)", pressed);
@@ -148,12 +149,12 @@ public sealed class PinEditTests
         Assert.Contains("private double _zoom = 1.0;", cs);        // 同一族：贴图倍率也有明确初值
     }
 
-    /// <summary>批次 PR：标注阶段双击不承担"提交复制"——那是放序号、回编辑文字时的高频手势。</summary>
+    /// <summary>批次 PR/PU：确认选区之后双击不承担"提交复制"——那是放序号、回编辑文字时的高频手势。</summary>
     [Fact]
     public void DoubleTapCommitsOnlyInTheSelectionStage()
     {
         var tapped = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void OnDoubleTapped");
-        Assert.Contains("if (_base is not null) return;", tapped);   // 标注阶段：交给落笔/编辑那一层
+        Assert.Contains("if (_annotating) return;", tapped);         // 确认过选区：交给落笔/编辑那一层
         Assert.Contains("Commit(CommitAction.Copy);", tapped);       // 选区阶段才提交
         Assert.Contains("if (_pinned) { e.Handled = true; HidePin(); return; }", tapped);
     }
@@ -199,17 +200,23 @@ public sealed class PinEditTests
     }
 
     /// <summary>
-    /// 候选窗口点击与手动拖框必须走进<b>同一个</b>标注态：<c>ShowBase</c> 负责把 selection 落进
-    /// <c>_selection</c>——漏了它，候选点击后 <c>_selection</c> 保持 null，之后每一按都判不出
-    /// "在选区里"，落回"重新框选"并清掉底图（真机：点击候选无反应、只能一直拖框、什么都画不了）。
+    /// 候选窗口点击<b>不得开出一个独立的"标注态"</b>（批次 PU，用户口径：点击推荐窗口后
+    /// 依旧处于框选阶段、可继续调框、可画可写）。两条路共用 <c>EnterEditing</c>：
+    /// <c>EnterAnnotationMode</c> 那个"点了候选就锁进编辑"的独立入口必须不存在；
+    /// <c>_selection</c> 在摆底图的那一处落进字段——漏了它，候选点击后每一按都判不出"在选区里"。
     /// </summary>
     [Fact]
-    public void CandidateClickEntersTheSameAnnotationMode()
+    public void CandidateClickStaysInTheSelectionStage()
     {
         var cs = SourceGate.ReadRepoFile(Overlay);
-        Assert.Contains("_selection = selection;", SourceGate.MethodBody(cs, "private void ShowBase"));
-        Assert.Contains("EnterAnnotationMode(detected);",
+        Assert.Contains("_selection = selection;", SourceGate.MethodBody(cs, "private void EnterEditing"));
+        Assert.Contains("BeginCandidatePress(physical, e.Pointer);",
             SourceGate.MethodBody(cs, "private void Root_PointerPressed"));
+        Assert.DoesNotContain("EnterAnnotationMode", cs);
+        // 点按（没拖动）松手＝确认候选；确认的入口只有 ConfirmSelection 这一处
+        Assert.Contains("if (candidate is { } cand)",
+            SourceGate.MethodBody(cs, "private void Root_PointerReleased"));
+        Assert.Contains("private void ConfirmSelection()", cs);
     }
 
     /// <summary>真机反馈"贴图边缘无高亮显示"：悬停时要有高亮边框，且与工具条同节奏出现/收起。</summary>
@@ -278,11 +285,13 @@ public sealed class PinEditTests
     public void FinalPixelsRenderAtSourceSize_NotDisplaySize()
     {
         // 贴图在 2.5× 时"窗口矩形"是显示尺寸；按它渲染会得到一张拉伸过的糊图。
+        // 批次 PU 起 FinalPixels 分两条路：贴图＝按底图尺寸重烤，截图＝从合成图裁选区（裁剪用选区尺寸是对的）。
         var body = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay),
             "private (byte[] Pixels, int Width, int Height)? FinalPixels()");
 
-        Assert.Contains("_contentWidth, _contentHeight", body);
-        Assert.DoesNotContain("selection.Width, selection.Height", body);
+        Assert.Contains("AnnotationPainter.Render(basePixels, _contentWidth, _contentHeight, _history.Marks)", body);
+        Assert.DoesNotContain("Render(basePixels, selection.Width", body);
+        Assert.Contains("BitmapTransform.Crop(composed", body);
     }
 
     [Fact]

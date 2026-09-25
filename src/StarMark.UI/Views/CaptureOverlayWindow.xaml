@@ -83,6 +83,29 @@
                 KeyDown="TextEditor_KeyDown"/>
         </Border>
 
+        <!--
+            文字标注的 ✕（批次 PU，用户口径："编辑框右上角为X号，可以点击删除该文字编辑框"）。
+            <b>不放进 AnnotateLayer</b>：那一整层不吃命中（事件全归 Root），放进里面这颗永远点不到。
+            单独一层顶层元素，选中文字标注时由 DrawSelectionHandles 摆到包围盒右上角；
+            图标用代码同款的矢量线段，不依赖字体字形。
+        -->
+        <Border
+            x:Name="TextDeleteButton"
+            Width="20"
+            Height="20"
+            Background="#DD202020"
+            BorderBrush="#88FFFFFF"
+            BorderThickness="1"
+            CornerRadius="10"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Visibility="Collapsed">
+            <Canvas Width="16" Height="16">
+                <Line X1="4.8" Y1="4.8" X2="11.2" Y2="11.2" Stroke="#FFFFFFFF" StrokeThickness="1.6"/>
+                <Line X1="11.2" Y1="4.8" X2="4.8" Y2="11.2" Stroke="#FFFFFFFF" StrokeThickness="1.6"/>
+            </Canvas>
+        </Border>
+
         <Border
             x:Name="SizeChip"
             Background="#DD1F1F1F"
@@ -141,7 +164,7 @@
                 x:Name="HintText"
                 FontSize="12"
                 Foreground="#FFFFFFFF"
-                Text="按住拖动框选区域 · 条上点「图形」换矩形 / 椭圆 / 直线 / 折线 / 箭头，再点当前工具换颜色和粗细 · 折线点几下钉顶点，Enter 或双击收口 · Enter 复制 · Esc 取消 · 右键不截"/>
+                Text="拖动框选 · 点亮框的窗口＝选中（可继续改框）· 选一支笔就能画，可以画出框外；再点一次收笔、回来改框 · Enter 复制 · Esc 取消 · 右键不截"/>
         </Border>
 
         <!-- 失败原因就地显示：弹对话框会立刻把遮罩的焦点抢走（抢走就等于取消截图） -->

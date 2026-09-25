@@ -28,8 +28,10 @@ using Grab = StarMark.Core.Capture.AnnotationGrab;
 namespace StarMark.UI.Views;
 
 /// <summary>
-/// 截图遮罩窗：显示"按下热键那一刻"的整屏帧，让用户拖动框选，然后<b>就地标注</b>，
-/// 最后复制或存图或贴图或识字。
+/// 截图遮罩窗：显示"按下热键那一刻"的整屏帧，让用户框选（悬停亮出候选窗口、点一下即预填），
+/// <b>框选阶段就能画标注</b>——可越出选区、可随时改框、重拖一块新选区也不清笔迹（标注跟屏走）；
+/// 点「贴」才把选区那块（连同标注一起）钉到桌面上，钉住后还能继续二次编辑
+/// （批次 PU 的 Snipaste 两阶段口径：框选阶段＝一切可调，贴图阶段＝只有贴图内的编辑算数）。
 /// <para>
 /// 本类有两种态，共用<b>同一条标注链</b>（批次 PN 的用户口径）：
 /// <b>截图态</b>铺满一整块屏、要框选；<b>贴图态</b>（<see cref="_pinned"/>）就是那张钉在桌面上的图——
@@ -49,7 +51,8 @@ namespace StarMark.UI.Views;
 /// </para>
 /// <para>
 /// 标注这一层的设计要点：<b>预览显示的就是真的会被交出去的那份像素</b>。
-/// 松手即由 <see cref="AnnotationPainter"/> 把标注合成进选区底图，再把合成结果摆回原位；
+/// 标注画在整帧底图的坐标系里（截图态原点＝屏幕左上角），每落一条笔就由 <see cref="AnnotationPainter"/>
+/// 把整帧重烤一遍推上屏幕；提交时从合成图里<b>裁出选区</b>，越出选区的部分自然被裁掉、选区内天然不含压暗。
 /// 只有"正在拖、还没松手"的那一条用简单图元近似显示。这样"预览看着对、存出来不对"这一整类缺陷
 /// 结构上就不成立，而撤销/清空也只是拿底图重烤一次，不需要任何反向操作。
 /// </para>
@@ -109,6 +112,21 @@ public sealed partial class CaptureOverlayWindow : Window
     private bool _autoDetect = true;                 // 窗口自动检测（按住 Ctrl 临时关闭）
     private IReadOnlyList<IntRect> _windowCandidates = Array.Empty<IntRect>();
     private IntRect? _detected;                      // 当前悬停命中的窗口
+    private IntRect? _candidate;                     // 按下去那一刻所在的候选：点一下＝确认它，拖动＝自定义框选
+
+    /// <summary>
+    /// 截图态有没有"确认过选区"（批次 PU 两阶段模型的分界线）。确认之后工具条才出现，
+    /// 标注跟屏走、可以越出选区；识别（悬停建议）阶段<b>不出现菜单栏</b>，重拖选区也不清标注。
+    /// 贴图态建窗即已进入编辑，恒为 true。
+    /// </summary>
+    private bool _annotating;
+
+    /// <summary>悬停光标的形状缓存：PointerMoved 每帧都会走到这里，形状没变就不重建 InputSystemCursor。</summary>
+    private InputSystemCursorShape? _lastCursor;
+    /// <summary>上一次把整帧合成图推给屏幕的时刻（毫秒）。改框/重拖时压暗跟着选区走，见 <c>ScheduleRebake</c>。</summary>
+    private long _lastFramePaint;
+    /// <summary>拖动已有标注时上一次上传预览的时刻（毫秒）。整帧缓冲每帧上传太重，节流到 ~60fps。</summary>
+    private long _lastDragPaint;
 
     // ── 橡皮擦 ──
     private bool _erasing;
@@ -209,12 +227,17 @@ public sealed partial class CaptureOverlayWindow : Window
             _monitor.X, _monitor.Y, _monitor.Width, _monitor.Height,
             WindowInterop.SWP_SHOWWINDOW | WindowInterop.SWP_NOACTIVATE);
 
-        if (BuildMonitorBitmap() is not { } bitmap)
+        if (BuildMonitorBitmap() is not { } shot)
         {
             ShowError("这一帧没能铺到屏幕上（内存不足或像素缓冲尺寸不符）——按 Esc 结束");
             return;
         }
-        Shot.Source = bitmap;
+        Shot.Source = shot.Bitmap;
+        // 底图＝整帧、内容尺寸＝整屏（批次 PU 两阶段模型）：标注画在屏幕坐标系里、可以越出选区，
+        // 提交时才从"帧＋标注"的合成图里裁出选区那块。选区只是"裁到哪里"的记号，不再是渲染的边界。
+        _base = shot.Pixels;
+        _contentWidth = _monitor.Width;
+        _contentHeight = _monitor.Height;
 
         // 键盘（方向键改框 / Enter 复制 / Esc 取消）需要 Root 持有焦点
         Root.Loaded += (_, _) => Root.Focus(FocusState.Programmatic);
@@ -275,6 +298,13 @@ public sealed partial class CaptureOverlayWindow : Window
         // 就会走 BeginStroke → BeginTextEdit → 把刚打的一行清空（真机反馈"文字编辑无效"的路径之一）。
         // 光标定位由 TextBox 自己的处理负责，我们只在它之后把事件吃掉。
         TextEditor.PointerPressed += (_, e) => e.Handled = true;
+        // 文字标注的 ✕（用户口径："编辑框右上角为X号，可以点击删除该文字编辑框"）。
+        // Handled 必须吃掉：否则这一按会冒到 Root 再落一笔/挪框，删除就变成了"删完又画一条"。
+        TextDeleteButton.PointerPressed += (_, e) =>
+        {
+            e.Handled = true;
+            DeleteSelected();
+        };
         // 条子自己的宽度要等第一次布局才有真值，而贴图态"缩多少、靠哪儿摆"全按它算：
         // 量到真值就重摆一次，否则用户得滚一下轮才把整条菜单"叫出来"。
         ActionBar.SizeChanged += (_, _) =>
@@ -316,7 +346,7 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>用户按了 Esc / 右键 / 取消：服务据此撤销整场会话。</summary>
     public void CancelFromService() => Settle(null);
 
-    private WriteableBitmap? BuildMonitorBitmap()
+    private (WriteableBitmap Bitmap, byte[] Pixels)? BuildMonitorBitmap()
     {
         if (_frame is not { } frame) return null;     // 编辑态没有整帧，也不需要（底图由贴图交进来）
         try
@@ -328,7 +358,7 @@ public sealed partial class CaptureOverlayWindow : Window
             using (var stream = bitmap.PixelBuffer.AsStream())
                 stream.Write(pixels, 0, pixels.Length);
             bitmap.Invalidate();
-            return bitmap;
+            return (bitmap, pixels);
         }
         catch (Exception ex)
         {
@@ -497,10 +527,12 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>
     /// 光标跟着"这一按是画还是改框"走：<b>没选工具＝十字箭头</b>（用户要的"进入拖动模式"的可见信号），
     /// 选了工具＝十字准线（要落笔的地方得看得清）。没有这一步，用户只能靠点一下才知道自己在哪一态。
+    /// 悬停中的细形状（框内/边/角/框外）由 <see cref="UpdateHoverCursor"/> 按 PointerMoved 逐帧给。
     /// </summary>
     private void ApplyCursor()
     {
         if (_mode != CaptureMode.Toolbar) return;
+        _lastCursor = null;                   // 状态变了：下一次悬停判定必须重算形状
         // 正在改哪条边就用哪条边的双向箭头；没在改：选了笔＝十字准线，一支都没选＝十字箭头（可拖框）
         InputSystemCursorShape? shape = _adjust switch
         {
@@ -803,34 +835,37 @@ public sealed partial class CaptureOverlayWindow : Window
 
         if (!point.Properties.IsLeftButtonPressed) return;
 
-        // 已经有选区、这次按在选区里面、而且是"给动作条"的那条链 ⇒ 这一按是**画**，不是重新框选。
-        // 选区外面照旧起新框：用户想换个范围就换个范围，标注跟着作废（底图都换了，留着旧的只会对不上）。
-        // <b>边框优先于落笔</b>（Snipaste 同款）：选了笔之后，按在选区边缘那一圈仍是"改框"——
-        // 不放行的话，选了笔就只能靠"再点一次取消选中"才能调框，等于换范围前要先扔掉手上的笔。
-        if (_mode == CaptureMode.Toolbar && !_pinned && _base is not null && TryBeginAdjust(physical, e.Pointer)) return;
-        if (_mode == CaptureMode.Toolbar && _base is not null && InsideSelection(physical))
+        // ── ① 改框的边与角（截图态）。<b>边框优先于落笔</b>（Snipaste 同款）：选了笔，按在选区
+        // 边缘那一圈仍是改框。但<b>框内那条（Move）不在这里抢</b>——SelectionEdgeAt 对框内一律回
+        // Move，之前它排在落笔前面，等于"拿着笔按在框内＝挪框"，笔永远落不上（真机反馈
+        // "点击编辑工具后编辑无效，反而把识别出的框又拖了一遍"的真因）。
+        if (_mode == CaptureMode.Toolbar && !_pinned && _selection is { } box)
         {
-            // 先问"这一按是不是在改已有的那一条"（选中框/把手就在那儿）；不是才轮到画新的
-            if (TryBeginGrab(ToLocal(physical), e.Pointer)) return;
-            // 一支笔都没选＝不改画面。截图态放行给"改框/重新框一块"（上面那条守卫是唯一出口——
-            // 少了它，下面所有 _tool!.Value 都会是空引用）；贴图态没有框可改，这一按＝移动整张图。
-            if (_tool is not { } tool)
+            var edge = CaptureGeometry.SelectionEdgeAt(box, AsPixel(physical), SelectionSlop);
+            if (edge is not (CaptureGeometry.SelectionEdge.None or CaptureGeometry.SelectionEdge.Move))
             {
-                if (_pinned) BeginPinDrag(e.Pointer);
+                BeginAdjust(edge, physical, e.Pointer);
                 return;
             }
-            _strokeTool = tool;                        // 这一笔从头到尾用它，与中途会不会换工具无关
-            // 橡皮擦：按住拖过标注，整条擦掉
-            if (tool == AnnotationTool.Eraser) { BeginEraseStroke(ToLocal(physical), e.Pointer); return; }
-            // 序号：每按一下放一个编号圆点
-            if (tool == AnnotationTool.Number) { PlaceNumber(ToLocal(physical)); return; }
-            // 折线是"点出来的"，没有按下-拖动-放开这一说：每一按钉一个顶点，收口用 Enter 或双击
-            if (tool == AnnotationTool.PolyLine) PlaceVertex(ToLocal(physical));
-            else BeginStroke(ToLocal(physical), e.Pointer, tool);
+        }
+
+        // ── ② 框内：没拿笔先问是不是抓已画的那条（点住就拖，一次成），拿笔就是落笔。
+        if (_mode == CaptureMode.Toolbar && _base is not null && InsideSelection(physical))
+        {
+            if (!Armed && TryBeginGrab(ToLocal(physical), e.Pointer)) return;
+            if (_tool is not { } tool)
+            {
+                // 贴图态没有框可改，这一按＝移动整张图；截图态未拿笔按在框内＝挪框
+                //（Move 那条在 ① 里被刻意放行，就是为了让"抓标注"排在"挪框"前面）。
+                if (_pinned) BeginPinDrag(e.Pointer);
+                else BeginAdjust(CaptureGeometry.SelectionEdge.Move, physical, e.Pointer);
+                return;
+            }
+            BeginToolStroke(physical, e.Pointer);
             return;
         }
 
-        // 贴图态没有"重新框一块"这回事：整块画面就是内容，落点稍偏（圆角外、边缘那一像素）
+        // ── ③ 贴图态没有"重新框一块"这回事：整块画面就是内容，落点稍偏（圆角外、边缘那一像素）
         // 也不能把底图丢掉——那等于把用户已经画好的标注一起清空。
         // 没选笔 ⇒ 这一按是"移动这张图"（与截图态"未选笔＝不动笔、可以改框"同一语义）。
         if (_pinned)
@@ -839,22 +874,81 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
-        // 自动检测窗口：点在候选窗口上即选中它（按住 Ctrl 时 _detected 为 null，退回手动拖框）
+        // ── ④ 截图态拿着笔：选区外那一按<b>也是落笔</b>（标注可以越出选区，批次 PU）。
+        // 想换个范围就先"再点一次取消选中"回到改框那一态，再拖新框。
+        if (_mode == CaptureMode.Toolbar && Armed)
+        {
+            BeginToolStroke(physical, e.Pointer);
+            return;
+        }
+
+        // ── ⑤ 自动检测窗口：点在候选上＝预填选区，仍处于框选阶段（点一下确认 / 从这里拖出
+        // 自定义范围），识别阶段不出现菜单栏。按住 Ctrl 时 _detected 为 null，退回手动拖框。
         if (_detected is { } detected && ContainsPoint(detected, AsPixel(physical)))
         {
-            if (_mode == CaptureMode.Toolbar) EnterAnnotationMode(detected);
+            if (_mode == CaptureMode.Toolbar) BeginCandidatePress(physical, e.Pointer);
             else { _selection = detected; Commit(_mode == CaptureMode.Pin ? CommitAction.Pin : CommitAction.Ocr); }
             return;
         }
 
+        // ── ⑥ 手动拖框。已画的标注<b>留在屏上</b>（标注跟屏走，不再随选区作废）。
+        BeginRegionDrag(physical, e.Pointer);
+    }
+
+    /// <summary>
+    /// 落笔的那一按（框内/框外同一处分发）。<b>笔种在按下那一刻钉进 <see cref="_strokeTool"/></b>：
+    /// 中途换工具不许改正在画的这一笔。折线是"点出来的"，每一按钉一个顶点，收口用 Enter 或双击。
+    /// </summary>
+    private void BeginToolStroke(PointInt32 physical, Pointer pointer)
+    {
+        var tool = _tool!.Value;
+        _strokeTool = tool;                        // 这一笔从头到尾用它，与中途会不会换工具无关
+        var local = ToLocal(physical);
+        // 橡皮擦：按住拖过标注，整条擦掉
+        if (tool == AnnotationTool.Eraser) { BeginEraseStroke(local, pointer); return; }
+        // 序号：每按一下放一个编号圆点
+        if (tool == AnnotationTool.Number) { PlaceNumber(local); return; }
+        if (tool == AnnotationTool.PolyLine) PlaceVertex(local);
+        else BeginStroke(local, pointer, tool);
+    }
+
+    /// <summary>
+    /// 按在候选窗口上的那一按：记住候选、进入"等待放开"。<b>选区当场预填成这个候选</b>——
+    /// 点一下（没拖动）松手＝确认它，按住拖动＝从这里拖出自定义框选（逐帧归一化的矩形会覆盖预填值）。
+    /// 预填是必须的：纯点击可能一个 Moved 事件都没有，松手时 _selection 若还是 null，
+    /// "确认候选"就永远走不到。两条路都仍处于框选阶段，松手才确认并出现工具条。
+    /// </summary>
+    private void BeginCandidatePress(PointInt32 physical, Pointer pointer)
+    {
+        _candidate = _detected;
         _startPhysical = physical;
         _awaitingRelease = true;
-        ResetAnnotations();
+        _selection = _candidate;
+        HintChip.Visibility = Visibility.Collapsed;
+        ErrorChip.Visibility = Visibility.Collapsed;
+        Root.CapturePointer(pointer);      // 拖出窗口边界也要继续收到 Moved/Released
+        if (_candidate is { } cand) DrawSelection(cand);   // 按住期间候选框保持可见（别被 0 尺寸清掉）
+    }
+
+    /// <summary>
+    /// 手动拖一块新选区。已画的标注<b>全部留在屏上</b>（批次 PU：标注跟屏走，
+    /// 不再随"重新框一块"作废——用户画了一半换个范围，笔迹还在原处等着被圈进新框）。
+    /// 正在打的那行字先落笔保住；没收口的折线作废。
+    /// </summary>
+    private void BeginRegionDrag(PointInt32 physical, Pointer pointer)
+    {
+        EndTextEditing(commit: true);
+        FinishPolyLine(commit: false);
+        _stroke = null;
+        DropSelection();
+        _candidate = null;
         _selection = null;
         HintChip.Visibility = Visibility.Collapsed;
         ActionBar.Visibility = Visibility.Collapsed;
         ErrorChip.Visibility = Visibility.Collapsed;
-        Root.CapturePointer(e.Pointer);      // 拖出窗口边界也要继续收到 Moved/Released
+        _startPhysical = physical;
+        _awaitingRelease = true;
+        Root.CapturePointer(pointer);      // 拖出窗口边界也要继续收到 Moved/Released
         DrawSelection(new IntRect(_startPhysical.X, _startPhysical.Y, 0, 0));
     }
 
@@ -889,8 +983,8 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
-        // 选区阶段（还没进入标注）：放大镜一直跟；未拖框时做窗口自动检测
-        if (!_pinned && _base is null)
+        // 选区阶段（还没确认选区）：放大镜一直跟；未拖框时做窗口自动检测
+        if (!_pinned && !_annotating)
         {
             if (!_awaitingRelease)
             {
@@ -899,12 +993,27 @@ public sealed partial class CaptureOverlayWindow : Window
             }
             UpdateMagnifier(AsPixel(physical));
         }
+        else if (!_pinned)
+        {
+            UpdateHoverCursor(physical);            // 悬停光标：框内十字箭头 / 边缘双向箭头 / 拿笔十字准线
+        }
 
         if (!_awaitingRelease) return;
         var selection = CaptureGeometry.Normalize(_startPhysical.X, _startPhysical.Y, physical.X, physical.Y);
         // 夹回本屏：L1 按"每屏各截各的"处理跨屏拖拽（每屏一个遮罩窗，各拿各的选区，互不合并）
-        _selection = CaptureGeometry.Intersect(selection, _monitor) ?? selection;
-        if (_selection is { } box) DrawSelection(box);
+        var normalized = CaptureGeometry.Intersect(selection, _monitor) ?? selection;
+        // 按在候选上的那一下还没拖出形状（点击时的毫级抖动）就继续亮着候选框——
+        // 拖动一旦成型就接管为自定义范围；这也是 Snipaste 的手感：建议框留到你真的拖走它。
+        if (_candidate is not null && normalized.Width < CaptureGeometry.MinSelectionSide
+            && normalized.Height < CaptureGeometry.MinSelectionSide) return;
+        _selection = normalized;
+        if (_selection is { } box)
+        {
+            DrawSelection(box);
+            // 确认过选区之后又拖了新框：压暗烤在合成图里，得跟着重烤（标注跟屏不动，
+            // 所以重烤的只有"压暗层"，节流到 ~60fps，松手时再整帧收准一次）
+            if (_annotating) ScheduleRebake();
+        }
     }
 
     private void Root_PointerReleased(object sender, PointerRoutedEventArgs e)
@@ -945,10 +1054,19 @@ public sealed partial class CaptureOverlayWindow : Window
         _awaitingRelease = false;
         Root.ReleasePointerCapture(e.Pointer);
         if (_selection is not { } selection) return;
+        var candidate = _candidate;
+        _candidate = null;
 
-        // 只点了一下没拖动：不是错误，静默清掉让用户再拖一次（"选区太小"的措辞留给真拖了但太窄的情况）
+        // 只点了一下没拖动：按在候选上＝确认这个候选（窗口检测那条捷径）；
+        // 按在空白处＝静默清掉让用户再拖一次（"选区太小"的措辞留给真拖了但太窄的情况）。
         if (selection.Width < CaptureGeometry.MinSelectionSide && selection.Height < CaptureGeometry.MinSelectionSide)
         {
+            if (candidate is { } cand)
+            {
+                _selection = cand;
+                ConfirmSelection();
+                return;
+            }
             _selection = null;
             ClearSelection();
             return;
@@ -960,7 +1078,7 @@ public sealed partial class CaptureOverlayWindow : Window
         }
         // 贴图与识字：放开的这个动作本身就是答案，不必再让用户多点一次按钮（Snipaste 的 F3 同理）
         if (_mode != CaptureMode.Toolbar) Commit(_mode == CaptureMode.Pin ? CommitAction.Pin : CommitAction.Ocr);
-        else EnterAnnotationMode(selection);
+        else ConfirmSelection();
     }
 
     /// <summary>
@@ -977,12 +1095,12 @@ public sealed partial class CaptureOverlayWindow : Window
         // 贴图：双击＝快速隐藏这一张（Snipaste；F4/托盘可全部找回）
         if (_pinned) { e.Handled = true; HidePin(); return; }
         if (_mode != CaptureMode.Toolbar) return;
-        // 已进入标注 ⇒ 双击交给"落笔/编辑"那一层，不再承担提交
-        if (_base is not null) return;
+        // 已确认选区（框选阶段起）⇒ 双击交给"落笔/编辑"那一层，不再承担提交
+        if (_annotating) return;
         // 选区阶段双击＝复制（没框就先取整屏），Snipaste 同款
         e.Handled = true;
         _selection ??= _monitor;
-        EnterAnnotationMode(_selection.Value);
+        ConfirmSelection();
         Commit(CommitAction.Copy);
     }
 
@@ -1025,12 +1143,12 @@ public sealed partial class CaptureOverlayWindow : Window
             FinishPolyLine(commit: e.Key == VirtualKey.Enter);
             return;
         }
-        // 方向键：选区阶段＝移动/缩放选区（Shift＝缩放）；标注阶段＝移动选中的标注（Shift＝10px）。
+        // 方向键：未确认选区＝移动/缩放选区（Shift＝缩放）；确认之后＝移动选中的标注（Shift＝10px）。
         // Snipaste 同款，坐标为物理像素。
         if (e.Key is VirtualKey.Left or VirtualKey.Right or VirtualKey.Up or VirtualKey.Down)
         {
             e.Handled = true;
-            if (_pinned || _base is not null) NudgeSelectedMark(e.Key, IsShiftDown());
+            if (_pinned || _annotating) NudgeSelectedMark(e.Key, IsShiftDown());
             else NudgeRegion(e.Key, IsShiftDown());
             return;
         }
@@ -1049,12 +1167,14 @@ public sealed partial class CaptureOverlayWindow : Window
             case VirtualKey.Escape:
                 e.Handled = true;
                 // 贴图态 Esc 分两级：有选中的标注先丢选中（顺手改的取消不伤画面），再按才关这张——
-                // 关闭会连没烤出去的标注一起丢，一次误按全没是最贵的出口。截图态 Esc 仍是取消整场（Snipaste 同款）。
+                // 关闭会连没烤出去的标注一起丢，一次误按全没是最贵的出口。
+                // 截图态同样两级（批次 PU）：拿着笔先收笔回到改框那一态，再按才取消整场。
                 if (_pinned)
                 {
                     if (_selected is not null) DropSelection();
                     else Close();
                 }
+                else if (Armed) SetTool(null);
                 else Settle(null);
                 break;
             case VirtualKey.Enter:
@@ -1118,17 +1238,24 @@ public sealed partial class CaptureOverlayWindow : Window
     private bool InsideSelection(PointInt32 physical) => _selection is { } s
         && physical.X >= s.X && physical.X < s.Right && physical.Y >= s.Y && physical.Y < s.Bottom;
 
-    /// <summary>虚拟桌面物理像素 → 选区内物理像素（标注模型用的坐标系，原点在选区左上角）。
-    /// 贴图编辑时"显示像素"与"底图像素"差一个 zoom，所以这里要除掉——不除就是
+    /// <summary>虚拟桌面物理像素 → 标注模型的坐标系。批次 PU 起两态的原点不同：
+    /// <b>截图态＝整帧左上角</b>（标注跟屏走、可以越出选区，选区只是最后裁剪的记号）；
+    /// <b>贴图态＝贴图左上角</b>，且"显示像素"与"底图像素"差一个 zoom，要除掉——不除就是
     /// 2.5× 的贴图"鼠标明明在字上、笔落在字外"。</summary>
     private PixelPoint ToLocal(PointInt32 physical)
-        => new(
-            (int)Math.Round((physical.X - (_selection?.X ?? physical.X)) / _sourceScale, MidpointRounding.AwayFromZero),
-            (int)Math.Round((physical.Y - (_selection?.Y ?? physical.Y)) / _sourceScale, MidpointRounding.AwayFromZero));
+    {
+        var originX = _pinned ? _selection?.X ?? physical.X : _monitor.X;
+        var originY = _pinned ? _selection?.Y ?? physical.Y : _monitor.Y;
+        return new(
+            (int)Math.Round((physical.X - originX) / _sourceScale, MidpointRounding.AwayFromZero),
+            (int)Math.Round((physical.Y - originY) / _sourceScale, MidpointRounding.AwayFromZero));
+    }
 
-    /// <summary>选区内物理像素 → 窗口内 DIP（摆预览图元与文字输入框用）。</summary>
+    /// <summary>标注坐标 → 窗口内 DIP（摆选择框、把手与文字输入框用）。截图态直接除 DPI；
+    /// 贴图态按"选区原点 + 局部坐标 × 倍率"回虚拟桌面再转 DIP。</summary>
     private (double X, double Y) LocalToDip(PixelPoint local)
     {
+        if (!_pinned) return (local.X / _scale, local.Y / _scale);
         var s = _selection ?? default;
         return ((s.X + local.X * _sourceScale - _monitor.X) / _scale,
                 (s.Y + local.Y * _sourceScale - _monitor.Y) / _scale);
@@ -1145,56 +1272,41 @@ public sealed partial class CaptureOverlayWindow : Window
 
     // ────────── 标注：进入、拖动一条、合成 ──────────
 
-    /// <summary>框选放开后进入标注态：把这一块底图拿在手里，之后每改一条就在它上面重烤一次。</summary>
-    private void EnterAnnotationMode(IntRect selection)
-    {
-        if (_frame is not { } frame) return;      // 编辑态走 BeginEditingExisting，这里必须有帧
-        var (ox, oy) = CaptureGeometry.CropOffset(selection, frame.Bounds);
-        byte[] basePixels;
-        try
-        {
-            basePixels = GdiScreenCapture.Crop(new FrameCopyRequest(frame, ox, oy, selection.Width, selection.Height));
-        }
-        catch (Exception ex)
-        {
-            StarLog.Error("[CaptureOverlay] 取选区底图失败", ex);
-            ShowError("这一块画面的像素没能取到：" + ex.Message);
-            return;
-        }
-        ShowBase(basePixels, selection.Width, selection.Height, selection);
-    }
-
     /// <summary>
     /// 就地编辑贴图的第一帧：底图＝贴图像素，选区＝整个窗口（＝贴图当前显示的那块矩形），
     /// 之后所有编辑动作与截图时<b>走的是同一批代码</b>（八种笔、文字、撤销重做、马赛克增量、复制存图识字）。
+    /// 历史在这里清空：贴图拿的是一份<b>新</b>底图（旋转/翻转烘焙后同理），旧标注已经烤在像素里；
+    /// 截图态确认选区不清历史（标注跟屏走），所以清不清是调用方的事，不放进 <see cref="EnterEditing"/>。
     /// </summary>
     private void BeginEditingExisting(byte[] pixels, int width, int height)
     {
         _selection = _monitor;
-        ShowBase(pixels, width, height, _monitor);
+        _history.Reset();
+        EnterEditing(pixels, width, height, _monitor);
         HintText.Text = string.Empty;
     }
 
     /// <summary>
-    /// 把一份底图摆上屏幕并进入可标注态。截图与贴图编辑共用这一句：两者唯一的差别是底图从哪来，
+    /// 把一份底图摆上屏幕并进入可编辑态。截图与贴图编辑共用这一句：两者唯一的差别是底图从哪来，
     /// 摆法、重烤、工具条定位、光标态完全一致——分成两份写迟早会有一处不同步（本项目已栽过四次）。
+    /// <para>内容层永远<b>铺满整扇窗</b>（截图＝整屏帧、贴图＝整张贴图）：标注跟屏走、可以越出选区，
+    /// 不再按选区裁一小块摆——选区外的压暗改在合成图里烤（XAML 压暗层会盖住越界的标注）。</para>
     /// </summary>
-    private void ShowBase(byte[] basePixels, int contentWidth, int contentHeight, IntRect selection)
+    private void EnterEditing(byte[] basePixels, int contentWidth, int contentHeight, IntRect selection)
     {
         HideMagnifier();
         ClearDetected();
         // <b>selection 必须在这里落进 _selection</b>：手动拖框那条路在拖动时已赋过值，
-        // 但候选窗口点击（EnterAnnotationMode）把框直接递进来——不落的话 _selection 保持 null，
-        // 之后每一按都判不出"在选区里"，落回"重新框选"并清掉刚铺好的底图
-        // （真机反馈"点击候选无反应、只能一直拖框、什么都画不了"就是它）。
+        // 但候选窗口点击把框直接递进来——不落的话 _selection 保持 null，
+        // 之后每一按都判不出"在选区里"（真机反馈"点击候选无反应、只能一直拖框"就是它）。
         _selection = selection;
         _base = basePixels;
         _contentWidth = Math.Max(1, contentWidth);
         _contentHeight = Math.Max(1, contentHeight);
-        _history.Reset();
-        _preview = new WriteableBitmap(_contentWidth, _contentHeight);
+        if (_preview is null || _preview.PixelWidth != _contentWidth || _preview.PixelHeight != _contentHeight)
+            _preview = new WriteableBitmap(_contentWidth, _contentHeight);
         AnnotateShot.Source = _preview;
-        var (x, y, w, h) = ToDip(selection);
+        var (x, y, w, h) = ToDip(_monitor);
         Canvas.SetLeft(AnnotateShot, x);
         Canvas.SetTop(AnnotateShot, y);
         AnnotateShot.Width = w;
@@ -1204,7 +1316,7 @@ public sealed partial class CaptureOverlayWindow : Window
         Rebake();
         ActionBar.Visibility = Visibility.Visible;
         PositionBar(selection);
-        SyncTools();            // 条上不该有任何一颗看起来是选中的：框选完是"改框"那一态
+        SyncTools();            // 条上不该有任何一颗看起来是选中的：确认选区后是"改框"那一态
         ApplyCursor();
         _copyButton.Focus(FocusState.Programmatic);
     }
@@ -1413,19 +1525,19 @@ public sealed partial class CaptureOverlayWindow : Window
         return new IntRect(a.X, a.Y, a.Width, a.Height);
     }
 
-    /// <summary>这一按是不是在改框：落在边/角或框内才是改框；框外放行给"重新框一块"。</summary>
-    private bool TryBeginAdjust(PointInt32 physical, Pointer pointer)
+    /// <summary>开始改框。按下时的选区与按下点都是快照，之后每一帧从这两份快照<b>重算</b>绝对矩形，
+    /// 不累加增量（贴图那条抖动教训同一口径）。只在边/角与"未拿笔的框内"两条路上被调（见 Root_PointerPressed）。</summary>
+    private void BeginAdjust(CaptureGeometry.SelectionEdge edge, PointInt32 physical, Pointer pointer)
     {
-        if (_selection is not { } s) return false;
-        var edge = CaptureGeometry.SelectionEdgeAt(s, new PixelPoint(physical.X, physical.Y), SelectionSlop);
-        if (edge == CaptureGeometry.SelectionEdge.None) return false;
+        if (_selection is not { } s) return;
+        // 改框是一次模式切换：打了一半的字先落笔保住（输入框开着挪框，字悬在半路最难收拾）
+        EndTextEditing(commit: true);
         _adjust = edge;
         _adjustStart = s;
         _adjustPending = s;
         _adjustPress = physical;
         Root.CapturePointer(pointer);
         ApplyCursor();
-        return true;
     }
 
     private void AdjustTo(PointInt32 physical)
@@ -1435,72 +1547,32 @@ public sealed partial class CaptureOverlayWindow : Window
         _adjustPending = _adjust == CaptureGeometry.SelectionEdge.Move
             ? CaptureGeometry.MoveSelection(_adjustStart, dx, dy, work)
             : CaptureGeometry.ResizeSelection(_adjustStart, _adjust, dx, dy, work, CaptureGeometry.MinSelectionSide);
+        // 选区活更新（批次 PU）：标注跟屏走、不再随选区平移，改框期间压暗要跟着新矩形重烤。
+        _selection = _adjustPending;
         DrawSelection(_adjustPending);
+        ScheduleRebake();
     }
 
     private void EndAdjust()
     {
         _adjust = CaptureGeometry.SelectionEdge.None;
-        ApplySelection(_adjustPending);
-        DrawSelection(_selection ?? _adjustStart);
+        _selection = _adjustPending;
+        DrawSelection(_selection.Value);
+        PositionBar(_selection.Value);
+        // 节流可能吞掉拖动中的最后一帧：收尾整帧重烤一次，压暗与选区严格对齐
+        Rebake();
         ApplyCursor();
     }
 
     /// <summary>
-    /// 把选区挪到／改成 <paramref name="next"/>：<b>底图重裁一次，标注整体跟着画面平移</b>。
-    /// <para>两步必须成对：只挪框不挪标注，已画的矩形/文字就会对到另一块画面上（错位比丢框更难发现）。
-    /// 重裁失败时保留原框并说明原因——交出一张"框与内容不一致"的画面比不改更糟。</para>
+    /// 框选确认（批次 PU 两阶段模型的分界线）：候选点一下、拖框松手、双击取整屏都汇到这一处。
+    /// 确认之后工具条才出现；已画的标注<b>不清</b>——它们跟屏走，新的选区只是重新画了个"裁剪记号"。
     /// </summary>
-    private void ApplySelection(IntRect next)
+    private void ConfirmSelection()
     {
-        // 改框只在截图态存在（编辑贴图时整块都是内容，没有"另一个框"可裁）
-        if (_frame is not { } frame || _selection is not { } old || old == next
-            || next.Width < 1 || next.Height < 1) return;
-        var (ox, oy) = CaptureGeometry.CropOffset(next, frame.Bounds);
-        byte[] cropped;
-        try
-        {
-            cropped = GdiScreenCapture.Crop(new FrameCopyRequest(frame, ox, oy, next.Width, next.Height));
-        }
-        catch (Exception ex)
-        {
-            StarLog.Error("[CaptureOverlay] 改框后重取底图失败", ex);
-            ShowError("改完框之后这一块画面的像素没能取到：" + ex.Message);
-            return;
-        }
-        _selection = next;
-        _base = cropped;
-        _contentWidth = Math.Max(1, next.Width);
-        _contentHeight = Math.Max(1, next.Height);
-        _history.ShiftAllBy(old.X - next.X, old.Y - next.Y);   // 标注原点跟着画面走（不制造一步历史）
-        _preview = new WriteableBitmap(next.Width, next.Height);
-        AnnotateShot.Source = _preview;
-        var (x, y, w, h) = ToDip(next);
-        Canvas.SetLeft(AnnotateShot, x);
-        Canvas.SetTop(AnnotateShot, y);
-        AnnotateShot.Width = w;
-        AnnotateShot.Height = h;
-        Rebake();
-        DrawSelectionHandles();
-        PositionBar(next);
-    }
-
-    /// <summary>换选区或取消：标注与底图一起丢掉（留着旧的会和新的选区对不上）。</summary>
-    private void ResetAnnotations()
-    {
-        EndTextEditing(commit: false);
-        FinishPolyLine(commit: false);
-        _stroke = null;
-        _history.Reset();
-        _base = null;
-        _preview = null;
-        AnnotateLayer.Visibility = Visibility.Collapsed;
-        DropSelection();
-        _composed = null;
-        _scratch = null;
-        _detected = null;
-        HideMagnifier();
-        _undoButton.IsEnabled = _clearButton.IsEnabled = false;
+        if (_frame is null || _base is null || _selection is not { } selection) return;
+        _annotating = true;
+        EnterEditing(_base, _contentWidth, _contentHeight, selection);
     }
 
     private void BeginStroke(PixelPoint local, Pointer pointer, AnnotationTool tool)
@@ -1723,9 +1795,15 @@ public sealed partial class CaptureOverlayWindow : Window
                 ShowError("这一改画不出来：" + ex.Message);
                 return;
             }
-            using (var stream = previewBitmap.PixelBuffer.AsStream())
-                stream.Write(canvas, 0, canvas.Length);
-            previewBitmap.Invalidate();
+            // 截图态的拖动底是整帧缓冲，逐事件上传会跟不上手：节流到 ~60fps，
+            // 松手时 EndDrag 的 Rebake 会整帧收准，这里漏掉的那几帧不会丢东西。
+            if (Environment.TickCount64 - _lastDragPaint >= 16)
+            {
+                _lastDragPaint = Environment.TickCount64;
+                using (var stream = previewBitmap.PixelBuffer.AsStream())
+                    stream.Write(canvas, 0, canvas.Length);
+                previewBitmap.Invalidate();
+            }
         }
         DrawSelectionHandles(preview);
     }
@@ -1774,6 +1852,7 @@ public sealed partial class CaptureOverlayWindow : Window
         if (mark is null)
         {
             SelectionTip.Visibility = Visibility.Collapsed;
+            TextDeleteButton.Visibility = Visibility.Collapsed;
             return;
         }
         var box = mark.Bounds();
@@ -1790,6 +1869,14 @@ public sealed partial class CaptureOverlayWindow : Window
         var (hx, hy) = LocalToDip(RotateHandle(mark));
         LiveLayer.Children.Add(new Line { X1 = hx, Y1 = hy, X2 = hx, Y2 = top, Stroke = Ink, StrokeThickness = 1 });
         LiveLayer.Children.Add(Fill(hx - 3, hy - 3, 6, 6, Ink));
+        // 文字标注的 ✕（用户口径："编辑框右上角为X号，可以点击删除该文字编辑框"）。
+        // 只有文字给：形状类删起来没有"框住的是哪行字"的歧义，Delete 键与橡皮都够用。
+        if (mark.Tool == AnnotationTool.Text)
+        {
+            TextDeleteButton.Margin = new Thickness(Math.Max(0, right - 6), Math.Max(0, top - 6), 0, 0);
+            TextDeleteButton.Visibility = Visibility.Visible;
+        }
+        else TextDeleteButton.Visibility = Visibility.Collapsed;
         SelectionTip.Visibility = Visibility.Visible;
     }
 
@@ -1811,6 +1898,7 @@ public sealed partial class CaptureOverlayWindow : Window
         _dragCanvas = null;
         LiveLayer.Children.Clear();
         SelectionTip.Visibility = Visibility.Collapsed;
+        TextDeleteButton.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
@@ -1856,6 +1944,10 @@ public sealed partial class CaptureOverlayWindow : Window
             // 渲染尺寸取底图自己的尺寸，<b>不取选区</b>：贴图态"选区"＝窗口的显示尺寸（＝底图 × 倍率），
             // 按它渲染就是"缓冲比声明的尺寸短，画上去会越界"——真机反馈"标注没能画上去"的那条报信。
             var composed = AnnotationPainter.Render(basePixels, _contentWidth, _contentHeight, marks);
+            // 截图态把选区外的压暗烤进合成图（批次 PU）：标注要能越出选区显示，
+            // XAML 压暗层会把它盖掉；提交时裁的是选区内那一块，天然不含压暗。
+            if (!_pinned && _selection is { } hole)
+                BitmapTransform.DimOutside(composed, _contentWidth, _contentHeight, hole, 0x66);
             using (var stream = _preview.PixelBuffer.AsStream())
                 stream.Write(composed, 0, composed.Length);
             _preview.Invalidate();
@@ -1995,9 +2087,23 @@ public sealed partial class CaptureOverlayWindow : Window
         // 换行只由 Enter 决定（XAML 里 AcceptsReturn），不许自动折行——编辑框折了而 GDI 不折，就是两张图。
         TextEditor.MaxWidth = Math.Max(180, _monitor.Width / _scale - 20);
         // 靠右边/下边点击时把输入框拉回屏内：越界就等于"输入框跑屏外了，打不了字"
-        TextEditorHost.Margin = new Thickness(
-            Math.Clamp(x, 0, Math.Max(0, _monitor.Width / _scale - 40)),
-            Math.Clamp(y, 0, Math.Max(0, _monitor.Height / _scale - 40)), 0, 0);
+        var hostX = Math.Clamp(x, 0, Math.Max(0, _monitor.Width / _scale - 40));
+        var hostY = Math.Clamp(y, 0, Math.Max(0, _monitor.Height / _scale - 40));
+        TextEditorHost.Margin = new Thickness(hostX, hostY, 0, 0);
+        // 旋转过的文字回编辑时输入框跟着转同一个角度（用户口径："旋转文字时文字编辑框也一同旋转"），
+        // 轴是字块自己的中心——绕别的点转，框里的字就和烤出去的那份对不上位置。
+        if (editing is { } rotated && rotated.Rotation != 0)
+        {
+            var box = rotated.Bounds();
+            var (cx, cy) = LocalToDip(new PixelPoint(box.X + box.Width / 2, box.Y + box.Height / 2));
+            TextEditorHost.RenderTransform = new RotateTransform
+            {
+                Angle = rotated.Rotation,
+                CenterX = cx - hostX,
+                CenterY = cy - hostY,
+            };
+        }
+        else TextEditorHost.RenderTransform = null;
         TextEditorHost.Visibility = Visibility.Visible;
         // 字号走的是"底图像素 → 屏幕像素 → DIP"两层：只除 `_scale` 的话，放大过的贴图里
         // 输入框中的字会比烤进去的那份小一个倍率（所见非所得），2.5× 上就是小 2.5 倍。
@@ -2126,6 +2232,7 @@ public sealed partial class CaptureOverlayWindow : Window
         }
         _selection = next;
         DrawSelection(next);
+        if (_annotating) Rebake();      // 压暗烤在合成图里：方向键挪了框就要跟着重烤（离散按键，不必节流）
     }
 
     /// <summary>标注阶段的方向键：移动选中的那条标注（plain 1px，Shift 10px）。</summary>
@@ -2218,14 +2325,63 @@ public sealed partial class CaptureOverlayWindow : Window
         SelRect.Visibility = Visibility.Visible;
         PlaceOnCanvas(SelRect, x, y, w, h);
 
+        // 压暗层的分工（批次 PU）：确认选区之前用 XAML 四块压暗（跟手、零成本）；
+        // 确认之后压暗烤在合成图里，XAML 这四块必须收起——否则叠在烤好的压暗上再暗一遍，
+        // 而且会把越出选区的标注一起盖掉。
+        var dim = _annotating ? Visibility.Collapsed : Visibility.Visible;
         PlaceOnCanvas(DimTop, 0, 0, screenWidth, y);
         PlaceOnCanvas(DimBottom, 0, y + h, screenWidth, Math.Max(0, screenHeight - y - h));
         PlaceOnCanvas(DimLeft, 0, y, x, h);
         PlaceOnCanvas(DimRight, x + w, y, Math.Max(0, screenWidth - x - w), h);
+        DimTop.Visibility = dim;
+        DimBottom.Visibility = dim;
+        DimLeft.Visibility = dim;
+        DimRight.Visibility = dim;
 
         SizeChip.Visibility = Visibility.Visible;
         SizeText.Text = CaptureGeometry.FormatSize(selection.Width, selection.Height);
         PlaceByMargin(SizeChip, Math.Max(0, x), Math.Max(0, y - 22));
+    }
+
+    /// <summary>
+    /// 悬停光标（批次 PU，用户口径："光标位于区域内时为十字箭头，位于边缘时为拉伸的双向箭头"）：
+    /// 没拿笔时按光标落在选区的哪个部位给形状（框内＝移动、边/角＝拉伸、框外＝可以重新框一块）；
+    /// 拿着笔＝十字准线（要落笔的地方得看得清）。形状没变就不重建，PointerMoved 每帧都路过这里。
+    /// </summary>
+    private void UpdateHoverCursor(PointInt32 physical)
+    {
+        if (_adjust != CaptureGeometry.SelectionEdge.None) return;   // 拖动中由 ApplyCursor 定
+        InputSystemCursorShape shape;
+        if (!_annotating || Armed) shape = InputSystemCursorShape.Cross;
+        else if (_selection is { } box)
+        {
+            shape = CaptureGeometry.SelectionEdgeAt(box, AsPixel(physical), SelectionSlop) switch
+            {
+                CaptureGeometry.SelectionEdge.Left or CaptureGeometry.SelectionEdge.Right => InputSystemCursorShape.SizeWestEast,
+                CaptureGeometry.SelectionEdge.Top or CaptureGeometry.SelectionEdge.Bottom => InputSystemCursorShape.SizeNorthSouth,
+                CaptureGeometry.SelectionEdge.TopLeft or CaptureGeometry.SelectionEdge.BottomRight => InputSystemCursorShape.SizeNorthwestSoutheast,
+                CaptureGeometry.SelectionEdge.TopRight or CaptureGeometry.SelectionEdge.BottomLeft => InputSystemCursorShape.SizeNortheastSouthwest,
+                CaptureGeometry.SelectionEdge.Move => InputSystemCursorShape.SizeAll,
+                _ => InputSystemCursorShape.Cross,
+            };
+        }
+        else shape = InputSystemCursorShape.Cross;
+        if (_lastCursor == shape) return;
+        _lastCursor = shape;
+        Root.Cursor = Microsoft.UI.Input.InputSystemCursor.Create(shape);
+    }
+
+    /// <summary>
+    /// 改框/重拖期间的节流重烤：标注跟屏不动，要跟着选区走的只有烤在合成图里的压暗层。
+    /// 16ms 合并窗口挡住每秒上百次的整帧上传；收尾（EndAdjust/ConfirmSelection）都另有整帧重烤，
+    /// 这里漏掉的帧不会残留。
+    /// </summary>
+    private void ScheduleRebake()
+    {
+        if (!_annotating || _preview is null) return;
+        if (Environment.TickCount64 - _lastFramePaint < 16) return;
+        _lastFramePaint = Environment.TickCount64;
+        Rebake();
     }
 
     /// <summary>
@@ -2342,14 +2498,16 @@ public sealed partial class CaptureOverlayWindow : Window
     }
 
     /// <summary>
-    /// 要交出去的那份画面：有底图就在它上面重烤一次标注（连"一条都没画"也走这条路，结果就是原样），
-    /// 拿不到底图时退回"直接从这一帧里裁"。两条路都报同样的失败原因，不静默少一张图。
-    /// <para>尺寸取 <see cref="_contentWidth"/>／<see cref="_contentHeight"/>（底图自己的尺寸），
-    /// <b>不取选区的显示尺寸</b>：贴图在 2.5× 时选区矩形是显示尺寸，按它渲染会得到一张放大的糊图。</para>
+    /// 要交出去的那份画面。两态两条路：
+    /// <b>贴图态</b>拿底图重烤一次标注（连"一条都没画"也走这条路，结果就是原样），尺寸取底图自己的
+    /// （<see cref="_contentWidth"/>，<b>不取选区的显示尺寸</b>——贴图 2.5× 时按显示尺寸渲染是放大糊图）；
+    /// <b>截图态</b>确认过选区后直接从合成图（帧＋标注＋选区外压暗）里<b>裁出选区</b>——
+    /// 裁的是选区内那块，天然不含压暗，标注越出选区的部分也在这里被裁掉（批次 PU）；
+    /// 还没确认选区（Enter 直提交）或没有合成图时，退回"直接从这一帧里裁"。失败都要报原因，不静默少一张图。
     /// </summary>
     private (byte[] Pixels, int Width, int Height)? FinalPixels()
     {
-        if (_base is { } basePixels)
+        if (_pinned && _base is { } basePixels)
         {
             try
             {
@@ -2363,8 +2521,23 @@ public sealed partial class CaptureOverlayWindow : Window
                 return null;
             }
         }
-        return _selection is { } selection && _frame is { } frame
-            ? ScreenshotService.TryCrop(frame, selection)
+        if (!_pinned && _annotating && _composed is { } composed && _selection is { } selection)
+        {
+            var (ox, oy) = CaptureGeometry.CropOffset(selection, _monitor);
+            try
+            {
+                return BitmapTransform.Crop(composed, _contentWidth, _contentHeight,
+                    ox, oy, selection.Width, selection.Height);
+            }
+            catch (Exception ex)
+            {
+                StarLog.Error("[CaptureOverlay] 从合成图裁选区失败", ex);
+                ShowError("选区那块画面没能裁出来：" + ex.Message);
+                return null;
+            }
+        }
+        return _selection is { } sel && _frame is { } frame
+            ? ScreenshotService.TryCrop(frame, sel)
             : null;
     }
 

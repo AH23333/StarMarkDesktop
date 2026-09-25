@@ -143,38 +143,39 @@ public sealed class SelectionAdjustTests
     }
 
     /// <summary>
-    /// 界面那侧只钉结构：未选工具时不许起笔、改框必须"重裁底图＋平移标注"成对出现、光标走 CursorLayer。
-    /// 测试工程引用不到 UI，所以这三条只能扫源码——它们各自对应一种"只有真机看得见"的错。
+    /// 界面那侧只钉结构：未选工具时不许起笔、改框不许再"重裁底图＋平移标注"（批次 PU 起标注跟屏走）、
+    /// 光标走 CursorLayer。测试工程引用不到 UI，所以这三条只能扫源码——它们各自对应一种"只有真机看得见"的错。
     /// </summary>
     [Fact]
     public void TheUiGuardsStayInTheShapesTheTestsCanBeAbout()
     {
         var cs = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
-        // ① 未选工具 ⇒ 这一按是改框，且改完不再走到"画一笔"
+        // ① 未选工具 ⇒ 这一按是改框（Move 那条在抓标注之后接手），且改完不再走到"画一笔"
         var press = SourceGate.MethodBody(cs, "private void Root_PointerPressed");
-        Assert.Contains("!_pinned && _base is not null && TryBeginAdjust(physical, e.Pointer)", press);
-        // 批次 PR 起<b>边框优先于落笔</b>（Snipaste 同款）：选了笔也能直接抓选区边缘改框，
-        // 不必先"再点一次取消选中"——守卫里不许再出现 !Armed 把这条路堵死
+        // 边与角优先于落笔（Snipaste 同款），但 SelectionEdgeAt 对框内一律回 Move——
+        // Move 不许在落笔前劫持那一按（真机反馈"点了编辑工具反而把框拖走、笔落不上"的真因）
+        Assert.Contains("edge is not (CaptureGeometry.SelectionEdge.None or CaptureGeometry.SelectionEdge.Move)", press);
+        Assert.Contains("BeginAdjust(CaptureGeometry.SelectionEdge.Move, physical, e.Pointer);", press);
         Assert.DoesNotContain("!Armed && TryBeginAdjust", press);
         Assert.Contains("if (_tool is not { } tool)", press);   // 未选笔这一按不起笔（贴图态那里是移动整张图）
-        Assert.True(press.IndexOf("TryBeginAdjust", System.StringComparison.Ordinal)
-                    < press.IndexOf("BeginStroke(", System.StringComparison.Ordinal),
+        Assert.True(press.IndexOf("BeginAdjust(CaptureGeometry.SelectionEdge.Move", System.StringComparison.Ordinal)
+                    < press.IndexOf("BeginToolStroke(", System.StringComparison.Ordinal),
             "改框的分支排在起笔之后＝未选工具时那一按仍会被当成画");
-        // ② 改框之后：重裁与平移必须成对（只做一个就是"框与内容不一致"或"标注跑偏"）
-        var apply = SourceGate.MethodBody(cs, "private void ApplySelection");
-        Assert.Contains("GdiScreenCapture.Crop(", apply);
-        Assert.Contains("_history.ShiftAllBy(old.X - next.X, old.Y - next.Y);", apply);
-        Assert.Contains("ShowError", apply);      // 重裁失败要看得见，并保留原框
+        // ② 批次 PU：改框<b>不再重裁底图、不再平移标注</b>——标注跟屏走，选区只是"裁到哪"的记号
+        var adjust = SourceGate.MethodBody(cs, "private void AdjustTo");
+        Assert.Contains("_selection = _adjustPending;", adjust);
+        Assert.DoesNotContain("_history.ShiftAllBy", cs);       // 那对"重裁＋平移"必须整体消失
+        Assert.DoesNotContain("GdiScreenCapture.Crop(new FrameCopyRequest(frame, ox, oy, next.Width", cs);
         // ③ 光标：WinUI 3 没有 UIElement.PointerCursor，只能走 CursorLayer 暴露的 ProtectedCursor
         Assert.Contains("Root.Cursor = Microsoft.UI.Input.InputSystemCursor.Create(", cs);
         Assert.Contains("public sealed class CursorLayer : Grid",
             SourceGate.ReadRepoFile("src/StarMark.UI/Views/CursorLayer.cs"));
         Assert.Contains("<local:CursorLayer",
             SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml"));
-        // ④ 进入标注态＝一支笔都没选（工具条不预先高亮，光标是十字箭头）。
-        //    批次 PM 之后这份"摆底图"的动作由截图与贴图编辑共用（ShowBase），锚点跟着搬过去——
+        // ④ 进入编辑态＝一支笔都没选（工具条不预先高亮，光标是十字箭头）。
+        //    批次 PM 之后这份"摆底图"的动作由截图与贴图编辑共用（PU 起叫 EnterEditing），
         //    规则本身一字未改；锚点扫不到就说明结构变了，正是它该红的时候。
-        var enter = SourceGate.MethodBody(cs, "private void ShowBase(");
+        var enter = SourceGate.MethodBody(cs, "private void EnterEditing(");
         Assert.Contains("SyncTools();", enter);
         Assert.Contains("ApplyCursor();", enter);
     }
@@ -199,13 +200,12 @@ public sealed class SelectionAdjustTests
     public void AStrokeInFlightKeepsTheToolThatStartedIt()
     {
         var cs = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
-        // 守卫（未选工具不起笔）与钉笔种必须在同一处，谁也不能只留一半
+        // 批次 PU 起"框内/框外"两条落笔路共用一个分发（BeginToolStroke），笔种在按下那一刻钉进去
+        var dispatch = SourceGate.MethodBody(cs, "private void BeginToolStroke");
+        Assert.Contains("_strokeTool = tool;", dispatch);
         var press = SourceGate.MethodBody(cs, "private void Root_PointerPressed");
         Assert.Contains("if (_tool is not { } tool)", press);
-        Assert.True(press.IndexOf("if (_tool is not { } tool)", System.StringComparison.Ordinal)
-                    < press.IndexOf("_strokeTool = tool;", System.StringComparison.Ordinal),
-            "未选笔的守卫排在钉笔种之后＝先起笔再拦，等于没拦");
-        Assert.Contains("_strokeTool = tool;", press);
+        Assert.Contains("BeginToolStroke(physical, e.Pointer);", press);
         Assert.Contains("private AnnotationTool _strokeTool", cs);
         Assert.Contains("BeginStroke(PixelPoint local, Pointer pointer, AnnotationTool tool)", cs);
         Assert.DoesNotContain("new Annotation(_tool,", cs);   // 落笔用 _strokeTool，不再读那个可变的当前工具

@@ -202,8 +202,9 @@ public sealed class CaptureOverlayGateTests
         var keys = SourceGate.MethodBody(cs, "private void Root_KeyDown");
         Assert.Contains("FinishPolyLine(commit: e.Key == VirtualKey.Enter)", keys);   // Enter 收口 / Esc 丢掉
         Assert.Contains("Root.DoubleTapped", cs);                                     // 双击也是收口（只给键盘＝找不到出口）
-        Assert.Contains("PlaceVertex(ToLocal(physical))", cs);                        // 每一按钉一个顶点，不走拖动那套
-        Assert.Contains("FinishPolyLine(commit: false)", SourceGate.MethodBody(cs, "private void ResetAnnotations"));
+        Assert.Contains("PlaceVertex(local);", cs);                                  // 每一按钉一个顶点，不走拖动那套
+        // 批次 PU：ResetAnnotations 删了，"重新框选时丢掉没收口的折线"由 BeginRegionDrag 承担
+        Assert.Contains("FinishPolyLine(commit: false)", SourceGate.MethodBody(cs, "private void BeginRegionDrag"));
     }
     /// <summary>
     /// 就地输入那一块黄底必须<b>左上角对齐</b>。Grid 的子元素默认 Stretch：只给它 Margin 定位，
@@ -261,8 +262,9 @@ public sealed class CaptureOverlayGateTests
     {
         var cs = ReadOverlay(xaml: false);
         var pressed = SourceGate.MethodBody(cs, "private void Root_PointerPressed");
+        // 批次 PU 起"框内/框外"落笔都收进 BeginToolStroke：抓旧的那条仍必须在落笔之前问
         Assert.True(pressed.IndexOf("TryBeginGrab", StringComparison.Ordinal)
-            < pressed.IndexOf("BeginStroke(ToLocal", StringComparison.Ordinal),
+            < pressed.IndexOf("BeginToolStroke(", StringComparison.Ordinal),
             "抓住旧的一条必须在起新的一笔之前问，否则永远拖不动已画的东西");
         var grab = SourceGate.MethodBody(cs, "private bool TryBeginGrab");
         Assert.Contains("if (_editingText || _polyLine is not null) return false;", grab);
@@ -341,7 +343,7 @@ public sealed class CaptureOverlayGateTests
         foreach (var signature in new[]
         {
             "private void Undo()", "private void Redo()", "private void Clear_Click",
-            "private void ResetAnnotations", "private void BeginStroke", "private void PlaceVertex",
+            "private void BeginRegionDrag", "private void BeginStroke", "private void PlaceVertex",
             "private void DeleteSelected",
         })
             Assert.Contains("DropSelection()", SourceGate.MethodBody(cs, signature));

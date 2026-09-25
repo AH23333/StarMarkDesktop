@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using StarMark.Abstractions.Capture;
 
 namespace StarMark.Integrations.Capture;
 
@@ -63,5 +64,65 @@ public static class BitmapTransform
             }
         }
         return dst;
+    }
+
+    /// <summary>
+    /// 从一幅画面里裁出一块矩形（批次 PU：截图提交＝从"整帧＋标注"的合成图里裁出选区）。
+    /// 逐行 BlockCopy，不逐像素走；<paramref name="x"/>/<paramref name="y"/> 为负或越界都会被夹进源图，
+    /// 夹完不足一个像素时抛出——交一张 0×0 的图等于静默失败。
+    /// </summary>
+    public static (byte[] Pixels, int Width, int Height) Crop(
+        byte[] src, int srcWidth, int srcHeight, int x, int y, int width, int height)
+    {
+        if (srcWidth <= 0 || srcHeight <= 0 || src.Length < (long)srcWidth * srcHeight * 4)
+            throw new ArgumentException("像素缓冲与声明尺寸不符");
+        var left = Math.Clamp(x, 0, srcWidth);
+        var top = Math.Clamp(y, 0, srcHeight);
+        var w = Math.Clamp(width, 0, srcWidth - left);
+        var h = Math.Clamp(height, 0, srcHeight - top);
+        if (w <= 0 || h <= 0) throw new ArgumentException($"裁不出画面（请求 {width}×{height} @({x},{y})，源图 {srcWidth}×{srcHeight}）");
+        var dst = new byte[(long)w * h * 4];
+        for (var row = 0; row < h; row++)
+        {
+            var from = ((long)(top + row) * srcWidth + left) * 4;
+            Buffer.BlockCopy(src, (int)from, dst, row * w * 4, w * 4);
+        }
+        return (dst, w, h);
+    }
+
+    /// <summary>
+    /// 把 <paramref name="hole"/> 之外的画面压暗（批次 PU：选区外的压暗烤进合成图）。
+    /// <para>标注要能越出选区显示，就不能再让 XAML 压暗层叠在上面——那会把越界的标注一起盖暗到看不见。
+    /// 烤进画面还有第二个理由：提交时从合成图里裁选区，选区内本来就不含压暗，交出去的图天然干净。</para>
+    /// </summary>
+    public static void DimOutside(byte[] bgra, int width, int height, IntRect hole, byte alpha)
+    {
+        if (width <= 0 || height <= 0 || bgra.Length < (long)width * height * 4)
+            throw new ArgumentException("像素缓冲与声明尺寸不符");
+        var keep = 255 - alpha;
+        if (keep <= 0) return;
+        var x0 = Math.Clamp(hole.X, 0, width);
+        var y0 = Math.Clamp(hole.Y, 0, height);
+        var x1 = Math.Clamp(hole.Right, 0, width);
+        var y1 = Math.Clamp(hole.Bottom, 0, height);
+
+        void DimSpan(int y, int from, int to)
+        {
+            for (var x = from; x < to; x++)
+            {
+                var p = (y * width + x) * 4;
+                bgra[p] = (byte)(bgra[p] * keep / 255);
+                bgra[p + 1] = (byte)(bgra[p + 1] * keep / 255);
+                bgra[p + 2] = (byte)(bgra[p + 2] * keep / 255);
+            }
+        }
+
+        for (var y = 0; y < y0; y++) DimSpan(y, 0, width);
+        for (var y = y0; y < y1; y++)
+        {
+            DimSpan(y, 0, x0);
+            DimSpan(y, x1, width);
+        }
+        for (var y = y1; y < height; y++) DimSpan(y, 0, width);
     }
 }
