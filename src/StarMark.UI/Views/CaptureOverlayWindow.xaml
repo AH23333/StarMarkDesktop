@@ -2,7 +2,8 @@
 <Window
     x:Class="StarMark.UI.Views.CaptureOverlayWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:StarMark.UI.Views">
 
     <!--
         截图遮罩：每块显示器一个本窗口的实例（每屏 DPI 可能不同，单窗跨屏只有一屏的坐标换算是对的）。
@@ -11,7 +12,9 @@
         Background 用 #01000000 而不是 Transparent：完全透明的背景不参与命中测试，
         那样在还没框选的空白处按下鼠标会穿到桌面去，用户会觉得"第一下点不动"。
     -->
-    <Grid
+    <!-- 根元素用 CursorLayer（Grid 的子类）而不是 Grid：WinUI 3 只有 protected 的 ProtectedCursor，
+         要按"这一按是画还是改框"换光标形状就必须子类化一个口子出来（见 CursorLayer.cs）。 -->
+    <local:CursorLayer
         x:Name="Root"
         Background="#01000000"
         PointerPressed="Root_PointerPressed"
@@ -157,5 +160,5 @@
                 Foreground="#FFFFFFFF"
                 Text="已选中：拖框内＝移动 · 拖角＝缩放 · 拖顶部圆点＝转方向 · 文字点住它＝接着改（Enter 换行） · Delete＝删除"/>
         </Border>
-    </Grid>
+    </local:CursorLayer>
 </Window>

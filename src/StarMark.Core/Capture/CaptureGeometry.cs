@@ -157,6 +157,86 @@ public static class CaptureGeometry
     }
 
     /// <summary>
+    /// 选区上"这一点按下去要干什么"的答案：中间＝整块移动，八条边/四个角＝改大小，
+    /// 完全在外面＝<see cref="SelectionEdge.None"/>（放行给"重新框一块"）。
+    /// </summary>
+    public enum SelectionEdge
+    {
+        None,
+        Move,
+        Left,
+        Right,
+        Top,
+        Bottom,
+        TopLeft,
+        TopRight,
+        BottomLeft,
+        BottomRight,
+    }
+
+    /// <summary>
+    /// 这一按落在选区的哪个部位。<b>角点先于边、边先于内部</b>：角上那 8×8 同时属于两条边，
+    /// 判成"左"还是"上"会让用户拖出与他预期相反的那一条。
+    /// <paramref name="slop"/> 是给把手留的容差（把手画在框外一侧，不放宽就点不着）。
+    /// </summary>
+    public static SelectionEdge SelectionEdgeAt(IntRect selection, PixelPoint at, int slop)
+    {
+        var onLeft = Math.Abs(at.X - selection.X) <= slop;
+        var onRight = Math.Abs(at.X - selection.Right) <= slop;
+        var onTop = Math.Abs(at.Y - selection.Y) <= slop;
+        var onBottom = Math.Abs(at.Y - selection.Bottom) <= slop;
+
+        if (onLeft && onTop) return SelectionEdge.TopLeft;
+        if (onRight && onTop) return SelectionEdge.TopRight;
+        if (onLeft && onBottom) return SelectionEdge.BottomLeft;
+        if (onRight && onBottom) return SelectionEdge.BottomRight;
+        if (onLeft) return SelectionEdge.Left;
+        if (onRight) return SelectionEdge.Right;
+        if (onTop) return SelectionEdge.Top;
+        if (onBottom) return SelectionEdge.Bottom;
+
+        return at.X >= selection.X && at.X < selection.Right && at.Y >= selection.Y && at.Y < selection.Bottom
+            ? SelectionEdge.Move
+            : SelectionEdge.None;
+    }
+
+    /// <summary>
+    /// 移动选区：<b>由"按下时的矩形 + 总位移"直接算</b>，不累加每帧增量（贴图拖动那条抖动教训同一口径），
+    /// 且整块不许离开工作区——选区决定截到哪块画面，出一半屏就等于把已画的标注丢到看不见的地方。
+    /// </summary>
+    public static IntRect MoveSelection(IntRect start, int dx, int dy, IntRect workArea)
+    {
+        int Clamp(int value, int lo, int hi) => hi < lo ? lo : Math.Clamp(value, lo, hi);
+        return new IntRect(
+            Clamp(start.X + dx, workArea.X, workArea.Right - start.Width),
+            Clamp(start.Y + dy, workArea.Y, workArea.Bottom - start.Height),
+            start.Width, start.Height);
+    }
+
+    /// <summary>
+    /// 改选区大小：拖哪条边就只动那条边（对面钉住），角点同时动两条。<b>最小边长夹住</b>
+    /// （0 或负尺寸的选区会让后面的整条链算出无意义的东西：底图 0 宽、把手位置反向），
+    /// 并且每条边都不得越过本屏工作区。
+    /// </summary>
+    public static IntRect ResizeSelection(IntRect start, SelectionEdge edge, int dx, int dy, IntRect workArea, int minSide)
+    {
+        int Clamp(int value, int lo, int hi) => hi < lo ? lo : Math.Clamp(value, lo, hi);
+        var min = Math.Max(1, minSide);
+        var (left, top, right, bottom) = (start.X, start.Y, start.Right, start.Bottom);
+
+        if (edge is SelectionEdge.Left or SelectionEdge.TopLeft or SelectionEdge.BottomLeft)
+            left = Clamp(start.X + dx, workArea.X, right - min);
+        if (edge is SelectionEdge.Right or SelectionEdge.TopRight or SelectionEdge.BottomRight)
+            right = Clamp(start.Right + dx, left + min, workArea.Right);
+        if (edge is SelectionEdge.Top or SelectionEdge.TopLeft or SelectionEdge.TopRight)
+            top = Clamp(start.Y + dy, workArea.Y, bottom - min);
+        if (edge is SelectionEdge.Bottom or SelectionEdge.BottomLeft or SelectionEdge.BottomRight)
+            bottom = Clamp(start.Bottom + dy, top + min, workArea.Bottom);
+
+        return new IntRect(left, top, right - left, bottom - top);
+    }
+
+    /// <summary>
     /// 再开一张贴图行不行。到上限时的文案要带上怎么办（关掉不用的那张），
     /// 而不是只说"不行"——这是 P-54 那条"提示与阻碍"的口径。
     /// </summary>

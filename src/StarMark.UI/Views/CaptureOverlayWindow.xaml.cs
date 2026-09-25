@@ -96,7 +96,29 @@ public sealed partial class CaptureOverlayWindow : Window
     private int? _editingIndex;             // 非空＝正在改历史里那一条（落笔时替换它，不再新增一条）
     private int _editorColourBgra;          // 那一条自己的颜色：改旧字时输入框不许改用现在的调色板（否则红白两层）
     private PixelPoint _textAnchor;
-    private AnnotationTool _tool = AnnotationTool.Rectangle;
+    /// <summary>
+    /// 当前armed的绘制工具；<b>null＝一支都没选</b>。
+    /// <para>框选完不再默认拿着一支矩形笔（真机反馈：那等于"自动进入编辑模式"）——
+    /// 未选工具时这一按是用来改框的（十字箭头，拖动/改大小在批次 PK-2 接上），
+    /// 每支工具都是"点一次选中、再点一次取消"，所以随时能退出编辑回到改框那一态。</para>
+    /// </summary>
+    private AnnotationTool? _tool;
+
+    /// <summary>是否已经选了一支工具（armed）。未 armed ⇒ 这一按不改画面，只预备改框。</summary>
+    private bool Armed => _tool is not null;
+
+    /// <summary>正在进行的那一笔用的是哪支笔。<b>拖动途中换工具不许改正在画的这一笔</b>：
+    /// 起点是按下那一刻定的，中途换成别的笔等于松手时按新笔重解释一遍（RH-3 那类错的同族）。</summary>
+    private AnnotationTool _strokeTool = AnnotationTool.Rectangle;
+
+    /// <summary>改框那一路：正在改哪一条边（None＝没在改）。按下时的选区与按下点都是快照，
+    /// 之后每一帧从这两份快照<b>重算</b>绝对矩形，不累加增量（贴图那条抖动教训同一口径）。</summary>
+    private CaptureGeometry.SelectionEdge _adjust = CaptureGeometry.SelectionEdge.None;
+    private IntRect _adjustStart;
+    private IntRect _adjustPending;
+    private PointInt32 _adjustPress;
+
+    private string WeightToolName => _tool is { } t ? Annotation.ToolName(t) : "未选工具";
     private int _colourIndex;
     private int _weightIndex = 1;
 
@@ -241,7 +263,7 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private void BuildToolBar()
     {
-        _shapeButton = IconButton(ToolIcon(_tool), ShapeButtonText());
+        _shapeButton = IconButton(ToolIcon(AnnotationTool.Rectangle), ShapeButtonText());
         _shapeButton.Click += (_, _) => ShowShapePicker(_shapeButton);
         BarRow.Children.Add(_shapeButton);
 
@@ -251,6 +273,7 @@ public sealed partial class CaptureOverlayWindow : Window
                 $"{Annotation.ToolName(tool)}：{Annotation.ToolHint(tool)}（再点一次换颜色和粗细）");
             button.Tag = tool;
             button.Click += BrushTool_Click;
+            button.RightTapped += BrushTool_RightTapped;   // 换颜色/粗细从"再点一次"挪到这里（点按那条按用户要求让给"取消选中"）
             _brushButtons.Add(button);
             BarRow.Children.Add(button);
         }
@@ -315,43 +338,79 @@ public sealed partial class CaptureOverlayWindow : Window
     private void BrushTool_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: AnnotationTool tool }) return;
-        if (tool == _tool)
-        {
-            // 再点一次当前工具＝换这支笔：条上已经排满图标，颜色和粗细若再各摆一个下拉就又回到"太大"
-            ToggleBrushPicker((FrameworkElement)sender);
-            return;
-        }
-        SetTool(tool);
+        // 用户口径：点一次选中，再点一次取消选中（回到"不动笔"＝可以改框的那一态）
+        if (tool == _tool) SetTool(null);
+        else SetTool(tool);
+    }
+
+    /// <summary>右键当前已选中的那支笔＝换颜色和粗细（这颗按钮本来就是"笔"，浮层留在它身上最省事）。</summary>
+    private void BrushTool_RightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: AnnotationTool tool } button || tool != _tool) return;
+        ToggleBrushPicker(button);
+        e.Handled = true;
     }
 
     /// <summary>换工具。<b>所有换工具的入口都必须走这里</b>：先落笔（正在打的那行字、正在点的折线），
-    /// 否则"换了个工具，刚画的东西凭空消失"。</summary>
-    private void SetTool(AnnotationTool tool)
+    /// 否则"换了个工具，刚画的东西凭空消失"。传 null＝取消选中（回到改框那一态）。</summary>
+    private void SetTool(AnnotationTool? tool)
     {
         EndTextEditing(commit: true);
         FinishPolyLine(commit: true);
         _tool = tool;
         SyncTools();
+        ApplyCursor();
+    }
+
+    /// <summary>
+    /// 光标跟着"这一按是画还是改框"走：<b>没选工具＝十字箭头</b>（用户要的"进入拖动模式"的可见信号），
+    /// 选了工具＝十字准线（要落笔的地方得看得清）。没有这一步，用户只能靠点一下才知道自己在哪一态。
+    /// </summary>
+    private void ApplyCursor()
+    {
+        if (_mode != CaptureMode.Toolbar) return;
+        // 正在改哪条边就用哪条边的双向箭头；没在改：选了笔＝十字准线，一支都没选＝十字箭头（可拖框）
+        InputSystemCursorShape? shape = _adjust switch
+        {
+            CaptureGeometry.SelectionEdge.Left or CaptureGeometry.SelectionEdge.Right => InputSystemCursorShape.SizeWestEast,
+            CaptureGeometry.SelectionEdge.Top or CaptureGeometry.SelectionEdge.Bottom => InputSystemCursorShape.SizeNorthSouth,
+            CaptureGeometry.SelectionEdge.TopLeft or CaptureGeometry.SelectionEdge.BottomRight => InputSystemCursorShape.SizeNorthwestSoutheast,
+            CaptureGeometry.SelectionEdge.TopRight or CaptureGeometry.SelectionEdge.BottomLeft => InputSystemCursorShape.SizeNortheastSouthwest,
+            CaptureGeometry.SelectionEdge.Move => InputSystemCursorShape.SizeAll,
+            _ => null,
+        };
+        Root.Cursor = Microsoft.UI.Input.InputSystemCursor.Create(
+            shape ?? (Armed ? InputSystemCursorShape.Cross : InputSystemCursorShape.SizeAll));
     }
 
     private string ShapeButtonText()
-        => $"图形：{Annotation.ToolName(_tool)}（点开换矩形 / 椭圆 / 直线 / 折线 / 箭头）";
+        => _tool is { } tool
+            ? $"图形：{Annotation.ToolName(tool)}（点开换矩形 / 椭圆 / 直线 / 折线 / 箭头；再点一次当前工具＝取消选中）"
+            : "没选工具＝改框那一态（十字箭头：可拖动选区、可改边缘大小）。点图标开始画";
 
     /// <summary>把"当前用的是哪种图形、哪一支笔"画出来（图标上没有文字，只能靠底色与那颗点说）。</summary>
     private void SyncTools()
     {
-        _shapeButton.Content = ToolIcon(AnnotationTools.IsShapeTool(_tool) ? _tool : AnnotationTool.Rectangle);
-        _shapeButton.Background = AnnotationTools.IsShapeTool(_tool) ? BarChecked : BarNormal;
+        var shape = _tool is { } current && AnnotationTools.IsShapeTool(current) ? current : AnnotationTool.Rectangle;
+        _shapeButton.Content = ToolIcon(shape);
+        // 没选工具时图形那颗不许看起来"被选中"：底色是这条链上唯一的"我在哪一态"信号
+        _shapeButton.Background = _tool is { } armed && AnnotationTools.IsShapeTool(armed) ? BarChecked : BarNormal;
         ToolTipService.SetToolTip(_shapeButton, ShapeButtonText());
         foreach (var button in _brushButtons)
             button.Background = (AnnotationTool)button.Tag! == _tool ? BarChecked : BarNormal;
         _brushButton.Content = BrushIcon();
+        if (_tool is not { } tool)
+        {
+            ToolTipService.SetToolTip(_brushButton,
+                "没选工具：这一按是改框（十字箭头）。点上面任一支笔开始画；已选中的笔右键＝换颜色和粗细");
+            return;
+        }
         var sizes = string.Join(" / ", Enumerable.Range(0, Annotation.ThicknessSteps.Length)
-            .Select(index => Annotation.ThicknessFor(_tool, index)));
+            .Select(index => Annotation.ThicknessFor(tool, index)));
         ToolTipService.SetToolTip(_brushButton,
             $"当前：{Annotation.Palette[Math.Clamp(_colourIndex, 0, Annotation.Palette.Count - 1)].Name}"
             + $" · {Annotation.ThicknessNames[Math.Clamp(_weightIndex, 0, Annotation.ThicknessNames.Count - 1)]}"
-            + $"（{Annotation.ToolName(_tool)} 的细 / 中 / 粗 ≈ {sizes} 像素）。点开换");
+            + $"（{Annotation.ToolName(tool)} 的细 / 中 / 粗 ≈ {sizes} 像素）。右键这支笔＝换颜色和粗细；再点一次＝取消选中");
     }
 
     // ────────── 选择浮层：图形 / 颜色 / 粗细（项同样按模型生成）──────────────────
@@ -367,7 +426,8 @@ public sealed partial class CaptureOverlayWindow : Window
             button.Background = shape == _tool ? BarChecked : BarNormal;
             button.Click += (_, _) =>
             {
-                SetTool(wanted);
+                // 浮层里也遵守同一条口径：再点当前这个图形＝取消选中（回到改框那一态）
+                SetTool(wanted == _tool ? null : wanted);
                 HidePicker();
             };
             row.Children.Add(button);
@@ -406,7 +466,7 @@ public sealed partial class CaptureOverlayWindow : Window
         {
             var wanted = index;
             var dot = IconButton(DotIcon(SolidWhite, selected: index == _weightIndex, diameter: 3 + index * 3),
-                $"{Annotation.ThicknessNames[index]}（{Annotation.ToolName(_tool)} 上约 {Annotation.ThicknessFor(_tool, index)} 像素）");
+                $"{Annotation.ThicknessNames[index]}（{WeightToolName} 上约 {Annotation.ThicknessFor(_tool ?? AnnotationTool.Pen, index)} 像素）");
             dot.Click += (_, _) =>
             {
                 _weightIndex = wanted;
@@ -583,7 +643,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private int ColourBgra => Annotation.Palette[Math.Clamp(_colourIndex, 0, Annotation.Palette.Count - 1)].Bgra;
 
-    private int ThicknessForTool => Annotation.ThicknessFor(_tool, _weightIndex);
+    private int ThicknessForTool => Annotation.ThicknessFor(_strokeTool, _weightIndex);
 
     private static Color ToColor(int bgra) => Color.FromArgb(
         (byte)(bgra >>> 24), (byte)(bgra >> 16 & 0xFF), (byte)(bgra >> 8 & 0xFF), (byte)(bgra & 0xFF));
@@ -599,13 +659,19 @@ public sealed partial class CaptureOverlayWindow : Window
         var physical = ToPhysical(point.Position.X, point.Position.Y);
         // 已经有选区、这次按在选区里面、而且是"给动作条"的那条链 ⇒ 这一按是**画**，不是重新框选。
         // 选区外面照旧起新框：用户想换个范围就换个范围，标注跟着作废（底图都换了，留着旧的只会对不上）。
+        // 一支笔都没选 ⇒ 这一按是用来改框的（整块移动 / 改边缘大小）。落在框外远处则放行给"重新框一块"。
+        if (_mode == CaptureMode.Toolbar && _base is not null && !Armed && TryBeginAdjust(physical, e.Pointer)) return;
         if (_mode == CaptureMode.Toolbar && _base is not null && InsideSelection(physical))
         {
             // 先问"这一按是不是在改已有的那一条"（选中框/把手就在那儿）；不是才轮到画新的
             if (TryBeginGrab(ToLocal(physical), e.Pointer)) return;
+            // 一支笔都没选＝不改画面，只预备改框（拖动/改大小在批次 PK-2 接上）。
+            // 这一条守卫是"未选工具还能不能画"的唯一出口——少了它，下面所有 _tool!.Value 都会是空引用。
+            if (_tool is not { } tool) return;
+            _strokeTool = tool;                        // 这一笔从头到尾用它，与中途会不会换工具无关
             // 折线是"点出来的"，没有按下-拖动-放开这一说：每一按钉一个顶点，收口用 Enter 或双击
-            if (_tool == AnnotationTool.PolyLine) PlaceVertex(ToLocal(physical));
-            else BeginStroke(ToLocal(physical), e.Pointer);
+            if (tool == AnnotationTool.PolyLine) PlaceVertex(ToLocal(physical));
+            else BeginStroke(ToLocal(physical), e.Pointer, tool);
             return;
         }
 
@@ -627,6 +693,11 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_dragOriginal is not null)
         {
             DragTo(ToLocal(ToPhysical(position.X, position.Y)));
+            return;
+        }
+        if (_adjust != CaptureGeometry.SelectionEdge.None)
+        {
+            AdjustTo(ToPhysical(position.X, position.Y));
             return;
         }
         if (_stroke is not null)
@@ -652,6 +723,12 @@ public sealed partial class CaptureOverlayWindow : Window
     private void Root_PointerReleased(object sender, PointerRoutedEventArgs e)
     {
         if (_settled) return;
+        if (_adjust != CaptureGeometry.SelectionEdge.None)
+        {
+            EndAdjust();
+            Root.ReleasePointerCapture(e.Pointer);
+            return;
+        }
         if (_dragOriginal is not null)
         {
             // 拖动改的是已有的那一条：这条链与"新画一笔"的收口（EndStroke）是两件事，别混在一起
@@ -821,7 +898,84 @@ public sealed partial class CaptureOverlayWindow : Window
         Rebake();
         ActionBar.Visibility = Visibility.Visible;
         PositionBar(selection);
+        SyncTools();            // 条上不该有任何一颗看起来是选中的：框选完是"改框"那一态
+        ApplyCursor();
         _copyButton.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>本屏工作区（物理像素，已扣任务栏）：选区挪动与改大小都只能在它里面。</summary>
+    private IntRect WorkArea()
+    {
+        var a = WindowInterop.GetWorkArea(this);
+        return new IntRect(a.X, a.Y, a.Width, a.Height);
+    }
+
+    /// <summary>这一按是不是在改框：落在边/角或框内才是改框；框外放行给"重新框一块"。</summary>
+    private bool TryBeginAdjust(PointInt32 physical, Pointer pointer)
+    {
+        if (_selection is not { } s) return false;
+        var edge = CaptureGeometry.SelectionEdgeAt(s, new PixelPoint(physical.X, physical.Y), SelectionSlop);
+        if (edge == CaptureGeometry.SelectionEdge.None) return false;
+        _adjust = edge;
+        _adjustStart = s;
+        _adjustPending = s;
+        _adjustPress = physical;
+        Root.CapturePointer(pointer);
+        ApplyCursor();
+        return true;
+    }
+
+    private void AdjustTo(PointInt32 physical)
+    {
+        var work = WorkArea();
+        var (dx, dy) = (physical.X - _adjustPress.X, physical.Y - _adjustPress.Y);
+        _adjustPending = _adjust == CaptureGeometry.SelectionEdge.Move
+            ? CaptureGeometry.MoveSelection(_adjustStart, dx, dy, work)
+            : CaptureGeometry.ResizeSelection(_adjustStart, _adjust, dx, dy, work, CaptureGeometry.MinSelectionSide);
+        DrawSelection(_adjustPending);
+    }
+
+    private void EndAdjust()
+    {
+        _adjust = CaptureGeometry.SelectionEdge.None;
+        ApplySelection(_adjustPending);
+        DrawSelection(_selection ?? _adjustStart);
+        ApplyCursor();
+    }
+
+    /// <summary>
+    /// 把选区挪到／改成 <paramref name="next"/>：<b>底图重裁一次，标注整体跟着画面平移</b>。
+    /// <para>两步必须成对：只挪框不挪标注，已画的矩形/文字就会对到另一块画面上（错位比丢框更难发现）。
+    /// 重裁失败时保留原框并说明原因——交出一张"框与内容不一致"的画面比不改更糟。</para>
+    /// </summary>
+    private void ApplySelection(IntRect next)
+    {
+        if (_selection is not { } old || old == next || next.Width < 1 || next.Height < 1) return;
+        var (ox, oy) = CaptureGeometry.CropOffset(next, _frame.Bounds);
+        byte[] cropped;
+        try
+        {
+            cropped = GdiScreenCapture.Crop(new FrameCopyRequest(_frame, ox, oy, next.Width, next.Height));
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("[CaptureOverlay] 改框后重取底图失败", ex);
+            ShowError("改完框之后这一块画面的像素没能取到：" + ex.Message);
+            return;
+        }
+        _selection = next;
+        _base = cropped;
+        _history.ShiftAllBy(old.X - next.X, old.Y - next.Y);   // 标注原点跟着画面走（不制造一步历史）
+        _preview = new WriteableBitmap(next.Width, next.Height);
+        AnnotateShot.Source = _preview;
+        var (x, y, w, h) = ToDip(next);
+        Canvas.SetLeft(AnnotateShot, x);
+        Canvas.SetTop(AnnotateShot, y);
+        AnnotateShot.Width = w;
+        AnnotateShot.Height = h;
+        Rebake();
+        DrawSelectionHandles();
+        PositionBar(next);
     }
 
     /// <summary>换选区或取消：标注与底图一起丢掉（留着旧的会和新的选区对不上）。</summary>
@@ -840,11 +994,11 @@ public sealed partial class CaptureOverlayWindow : Window
         _undoButton.IsEnabled = _clearButton.IsEnabled = false;
     }
 
-    private void BeginStroke(PixelPoint local, Pointer pointer)
+    private void BeginStroke(PixelPoint local, Pointer pointer, AnnotationTool tool)
     {
         ErrorChip.Visibility = Visibility.Collapsed;
         // 上一行字先落笔再动手：在画布上点第二下不该把刚打的字凭空清掉（真机反馈"文字编辑无效"的路径之一）。
-        if (_tool == AnnotationTool.Text)
+        if (tool == AnnotationTool.Text)
         {
             // 落笔必须排在命中<b>之前</b>：真机反馈"第二次编辑时已经输入了文字，点旧字之后刚打的字直接没了"，
             // 原因是这里原先按"先命中、再丢弃正在打的那一行"走（commit: false＝丢），而丢弃并不等于"那条不存在"。
@@ -870,10 +1024,10 @@ public sealed partial class CaptureOverlayWindow : Window
         DropSelection();
         // 打码的"一笔"从按下那一下就该看见：同一格糊掉与"还没糊"对用户是两个完全不同的结果，
         // 所以起点先按"一个点画两遍"存（MosaicBrush 走的是段，两个重合的点正好糊掉笔尖那一格）。
-        _stroke = _tool == AnnotationTool.Mosaic
+        _stroke = tool == AnnotationTool.Mosaic
             ? new List<PixelPoint> { local, local }
             : new List<PixelPoint> { local };
-        if (_tool == AnnotationTool.Mosaic) StartMosaicScratch(local);
+        if (tool == AnnotationTool.Mosaic) StartMosaicScratch(local);
         Root.CapturePointer(pointer);
         PaintPreview();
     }
@@ -909,7 +1063,7 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>拖动中的预览：画笔/荧光/形状走近似图元，打码走真像素（增量补段）。</summary>
     private void PaintPreview()
     {
-        if (_tool != AnnotationTool.Mosaic)
+        if (_strokeTool != AnnotationTool.Mosaic)
         {
             DrawLive();
             return;
@@ -937,7 +1091,7 @@ public sealed partial class CaptureOverlayWindow : Window
         // 两点工具（矩形/椭圆/直线/箭头）的形状只由"按下那点"与"放开那点"决定：中途的采样是走过的痕迹，
         // 覆盖掉而不是追加。留着它们，一条矩形会在历史里带着几十个点，而任何按"第二个点"取另一端的写法
         // 都会画出针尖大的框——预览取最后一点、落笔取第二点，就是"松手后图形变得非常小"的成因。
-        if (points.Count > 1 && Annotation.IsTwoPointTool(_tool)) points[^1] = local;
+        if (points.Count > 1 && Annotation.IsTwoPointTool(_strokeTool)) points[^1] = local;
         else points.Add(local);
         PaintPreview();
     }
@@ -948,14 +1102,14 @@ public sealed partial class CaptureOverlayWindow : Window
         _stroke = null;
         LiveLayer.Children.Clear();
         if (points is null) return;
-        if (points.Count < Annotation.MinPoints(_tool))
+        if (points.Count < Annotation.MinPoints(_strokeTool))
         {
             // 点了一下没拖：以前是静默丢掉（真机反馈"点了没反应"），现在改成"选中脚下那一条"。
             // 打码（点一下糊一格）与文字（点一下出输入框）走不到这里——它们的那一下本来就够点数。
             SelectAtTap(points[0]);
             return;
         }
-        var mark = new Annotation(_tool, points, ColourBgra, ThicknessForTool);
+        var mark = new Annotation(_strokeTool, points, ColourBgra, ThicknessForTool);
         if (mark.Problem() is { } problem)
         {
             ShowError(problem);
@@ -1220,7 +1374,7 @@ public sealed partial class CaptureOverlayWindow : Window
         var thickness = Math.Max(1.0, ThicknessForTool / _scale);
         var first = LocalToDip(points[0]);
 
-        switch (_tool)
+        switch (_strokeTool)
         {
             case AnnotationTool.Rectangle:
             {

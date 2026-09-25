@@ -65,6 +65,18 @@ public sealed class AnnotationHistory
         Push(next);
     }
 
+    /// <summary>
+    /// 把所有标注整体平移（改选区位置/大小之后，标注要跟着画面走，不能留在旧坐标上跑偏）。
+    /// <para><b>刻意不制造一步历史</b>：改的是"取景框"，不是任何一条标注——挪一下框就该能撤销的话，
+    /// 撤销栈里根本没有存框的几何，弹回去的只有标注，那会是"标注在、框不在"的半吊子状态。
+    /// 快照模型下这是安全的：每条 <see cref="Annotation"/> 不可变，换掉的只是当前那一份列表里的元素引用。</para>
+    /// </summary>
+    public void ShiftAllBy(int dx, int dy)
+    {
+        if ((dx == 0 && dy == 0) || Count == 0) return;
+        _states[_at] = Marks.Select(m => m.MovedBy(dx, dy)).ToList();
+    }
+
     /// <summary>删掉第 <paramref name="index"/> 条（选中后按 Delete）。算一步，能撤销回来。</summary>
     public void RemoveAt(int index)
     {
