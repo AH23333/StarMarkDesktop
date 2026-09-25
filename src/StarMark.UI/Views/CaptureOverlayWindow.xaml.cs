@@ -401,7 +401,9 @@ public sealed partial class CaptureOverlayWindow : Window
         BarRow.Children.Add(ocr);
         if (_pinned)
         {
-            var through = IconButton(ThroughIcon(), "鼠标穿透：让这张图不再收鼠标（全体恢复用 F5）");
+            // 这颗按下去动的是<b>所有</b>贴图（名册的既定口径：收不到鼠标的窗只能靠全局通道救回来），
+            // 说明写错范围会让人以为只有自己手上这张被点穿。
+            var through = IconButton(ThroughIcon(), "鼠标穿透：让所有贴图都不再收鼠标（再用这一颗或按 F5 恢复）");
             through.Click += Through_Click;
             BarRow.Children.Add(through);
         }

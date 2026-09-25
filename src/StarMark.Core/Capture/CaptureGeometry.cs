@@ -18,7 +18,10 @@ public static class CaptureGeometry
     /// <summary>选区最小边长：小于它说明用户只是点了一下没拖动，不该当成一张 1×1 的图。</summary>
     public const int MinSelectionSide = 3;
 
-    /// <summary>同时允许的贴图窗数。贴图按位图常驻内存，4K 全屏一张就几十 MB，必须有上限。</summary>
+    /// <summary>
+    /// 同时允许的贴图窗数，必须有上限：贴图要常驻像素。批次 PN 之后一张贴图＝编辑器本身，
+    /// 常驻的不止一份（底图 + 已合成的预览 + 那份位图缓冲 ≈ 3 份），4K 全屏一张就是上百 MB。
+    /// </summary>
     public const int MaxPins = 12;
 
     /// <summary>贴图缩放区间（D3 口径里的"能放大到当便签看、能缩小到不挡地方"）。</summary>
