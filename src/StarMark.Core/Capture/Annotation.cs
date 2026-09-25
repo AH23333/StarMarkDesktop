@@ -21,6 +21,10 @@ public enum AnnotationTool
     Highlighter,
     Mosaic,
     Text,
+    /// <summary>序号：每点一下放一个带编号的圆点（1、2、3…），Snipaste 同款。</summary>
+    Number,
+    /// <summary>橡皮擦：拖过已有标注时整条擦掉（同一次拖拭合并为一个撤销步）。</summary>
+    Eraser,
 }
 
 /// <summary>按下去那一下想改的是哪一样（<see cref="Annotation.GrabAt"/> 的返回值）。
@@ -49,10 +53,12 @@ public static class AnnotationTools
         AnnotationTool.PolyLine, AnnotationTool.Arrow,
     };
 
-    /// <summary>"笔"那一组：直接按在画布上走，各占一颗按钮（画法彼此差得远，收进浮层反而多一次点击）。</summary>
+    /// <summary>"笔"那一组：直接按在画布上走，各占一颗按钮（画法彼此差得远，收进浮层反而多一次点击）。
+    /// 顺序对齐 Snipaste：画笔 / 荧光 / 文字 / 序号 / 打码 / 橡皮。</summary>
     public static readonly AnnotationTool[] Brushes =
     {
-        AnnotationTool.Pen, AnnotationTool.Highlighter, AnnotationTool.Mosaic, AnnotationTool.Text,
+        AnnotationTool.Pen, AnnotationTool.Highlighter, AnnotationTool.Text,
+        AnnotationTool.Number, AnnotationTool.Mosaic, AnnotationTool.Eraser,
     };
 
     public static bool IsShapeTool(AnnotationTool tool) => Array.IndexOf(Shapes, tool) >= 0;
@@ -87,6 +93,12 @@ public sealed record Annotation(
     /// <summary>文字内容（只有 <see cref="AnnotationTool.Text"/> 用得上）。刻意做成 init 属性而不是
     /// 构造参数：位置参数的默认值必须能在类型体外面写死，而 <see cref="DefaultFontHeight"/> 是这个类型自己的数。</summary>
     public string? Text { get; init; }
+
+    /// <summary>序号标注上的编号（从 1 开始，仅 <see cref="AnnotationTool.Number"/> 使用）。</summary>
+    public int Number { get; init; }
+
+    /// <summary>序号圆点的半径（物理像素，1× 时）。</summary>
+    public const int NumberRadius = 15;
 
     /// <summary>
     /// 变换的轴点（可空）。<b>没指定时：几何类＝第一个点，文字＝字块自己的中心</b>（见 <see cref="Origin"/>）。
@@ -404,7 +416,8 @@ public sealed record Annotation(
     public int EffectiveColorBgra => Tool == AnnotationTool.Highlighter ? WithAlpha(ColorBgra, HighlighterAlpha) : ColorBgra;
 
     /// <summary>画这条标注至少要几个点；不够就是「用户点了一下还没拖」，不该画。</summary>
-    public static int MinPoints(AnnotationTool tool) => tool == AnnotationTool.Text ? 1 : 2;
+    public static int MinPoints(AnnotationTool tool)
+        => tool is AnnotationTool.Text or AnnotationTool.Number ? 1 : 2;
 
     /// <summary>这一类工具的形状<b>完全由「按下那一点」与「放开那一点」决定</b>（矩形/椭圆看对角，
     /// 直线/箭头看两端），拖动中途经过的采样点只是痕迹。
@@ -426,11 +439,13 @@ public sealed record Annotation(
     /// </summary>
     public string? Problem()
     {
+        if (Tool == AnnotationTool.Eraser) return "橡皮擦不是可绘制的标注";
         if (Points is null || Points.Count < MinPoints(Tool))
             return $"{ToolName(Tool)}至少需要 {MinPoints(Tool)} 个点";
         if (Tool == AnnotationTool.Text && string.IsNullOrEmpty(Text))
             return "文字是空的，没有可写上去的内容";
-        if (Tool != AnnotationTool.Text && (Thickness < MinThickness || Thickness > MaxThickness))
+        if (Tool != AnnotationTool.Text && Tool != AnnotationTool.Number
+            && (Thickness < MinThickness || Thickness > MaxThickness))
             return $"粗细 {Thickness} 不在 {MinThickness}–{MaxThickness} 之间";
         if (FontHeight is < 6 or > 200)
             return $"文字高度 {FontHeight} 太离谱（只接受 6–200 物理像素）";
@@ -453,6 +468,8 @@ public sealed record Annotation(
         AnnotationTool.Highlighter => "荧光",
         AnnotationTool.Mosaic => "打码",
         AnnotationTool.Text => "文字",
+        AnnotationTool.Number => "序号",
+        AnnotationTool.Eraser => "橡皮擦",
         _ => tool.ToString(),
     };
 
@@ -468,6 +485,8 @@ public sealed record Annotation(
         AnnotationTool.Highlighter => "半透明高亮：盖在字上还能读原来的字",
         AnnotationTool.Mosaic => "涂过的地方变成不可读的色块（发图前遮敏感信息）",
         AnnotationTool.Text => "点一下选区就开始打字，Enter 换行，Esc 结束编辑；点已写好的字可以接着改",
+        AnnotationTool.Number => "每点一下放一个带编号的圆点（1、2、3…），可拖动改位置",
+        AnnotationTool.Eraser => "按住拖过已有标注，整条擦掉（一次擦除可一次撤销）",
         _ => string.Empty,
     };
 
@@ -519,6 +538,14 @@ public sealed record Annotation(
             var box = StarMark.Integrations.Capture.TextGeometry.RotatedBox(minX, minY, width, height, Rotation);
             return new IntRect(box.Left, box.Top, Math.Max(1, box.Right - box.Left), Math.Max(1, box.Bottom - box.Top));
         }
+        if (Tool == AnnotationTool.Number)
+        {
+            // 点＝圆心，半径随整体缩放（旋转绕圆心，外接框不变）
+            var radius = (int)Math.Round(NumberRadius * Math.Clamp(Scale, MinScale, MaxScale), MidpointRounding.AwayFromZero);
+            var c = points[0];
+            return new IntRect(c.X - radius, c.Y - radius, radius * 2, radius * 2);
+        }
+
         var pad = Tool == AnnotationTool.Mosaic ? Thickness / 2 + MosaicBlockSize : Thickness;
         return new IntRect(minX - pad, minY - pad, maxX - minX + pad * 2, maxY - minY + pad * 2);
     }

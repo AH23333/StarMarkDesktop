@@ -180,7 +180,7 @@ public sealed class AnnotationTests
             new[] { AnnotationTool.Rectangle, AnnotationTool.Ellipse, AnnotationTool.Line, AnnotationTool.Arrow },
             corners);
         // 新加工具时这条先红：它属于"两个角"还是"一条折线"必须想清楚，不能默认落进某一组
-        Assert.Equal(9, Enum.GetValues<AnnotationTool>().Length);
+        Assert.Equal(11, Enum.GetValues<AnnotationTool>().Length);
     }
 
     [Fact]

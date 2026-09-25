@@ -285,4 +285,7 @@ public static class CaptureGeometry
             ? $"{stem}.{suffixText}"
             : $"{stem} ({collisionIndex}).{suffixText}";
     }
+    /// <summary>从 center 到 p 的方位角（度，0＝向右，逆时针为正）。角度换算只在模型里写一次。</summary>
+    public static double AngleDegrees(PixelPoint center, PixelPoint p)
+        => Math.Atan2(p.Y - center.Y, p.X - center.X) * 18d / Math.PI;
 }

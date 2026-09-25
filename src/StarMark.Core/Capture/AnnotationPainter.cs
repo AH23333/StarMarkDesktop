@@ -87,6 +87,10 @@ public static class AnnotationPainter
             case AnnotationTool.Mosaic:
                 MosaicBrush(bgra, width, height, points, radius);
                 break;
+
+            case AnnotationTool.Number:
+                DrawNumber(bgra, width, height, mark);
+                break;
         }
     }
 
@@ -107,6 +111,41 @@ public static class AnnotationPainter
     // ────────── 图元 ──────────
 
     /// <summary>矩形轮廓：四条边各一条线段（用线段而不是"填充再挖洞"，线宽与端点形状自动跟着走）。</summary>
+    private static void DrawNumber(byte[] bgra, int width, int height, Annotation mark)
+    {
+        var box = mark.Bounds();
+        var cx = box.X + box.Width / 2;
+        var cy = box.Y + box.Height / 2;
+        var radius = box.Width / 2;
+        if (radius < 4) return;
+        var color = mark.EffectiveColorBgra;
+
+        // 实心圆（逐扫描线，圆内直接写色，不走混合：序号底色本就该不透明）
+        for (var dy = -radius; dy <= radius; dy++)
+        {
+            var y = cy + dy;
+            if (y < 0 || y >= height) continue;
+            var span = (int)Math.Sqrt(Math.Max(0, radius * radius - dy * dy));
+            for (var dx = -span; dx <= span; dx++)
+            {
+                var x = cx + dx;
+                if (x < 0 || x >= width) continue;
+                var p = (y * width + x) * 4;
+                bgra[p] = (byte)(color & 0xFF);
+                bgra[p + 1] = (byte)((color >> 8) & 0xFF);
+                bgra[p + 2] = (byte)((color >> 16) & 0xFF);
+                bgra[p + 3] = 255;
+            }
+        }
+
+        // 白色编号居中
+        var label = mark.Number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var fontHeight = Math.Max(8, (int)(radius * 1.3));
+        var (tw, th) = GdiTextDrawer.Measure(label, fontHeight);
+        GdiTextDrawer.Draw(bgra, width, height, cx - tw / 2, cy - th / 2,
+            label, fontHeight, unchecked((int)0xFFFFFFFFu));
+    }
+
     private static void RectangleOutline(byte[] bgra, int width, int height,
         PixelPoint a, PixelPoint b, int radius, int color)
     {

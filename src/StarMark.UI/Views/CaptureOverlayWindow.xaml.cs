@@ -104,6 +104,25 @@ public sealed partial class CaptureOverlayWindow : Window
     private bool _awaitingRelease;
     private bool _settled;
 
+    // ── Snipaste 式选区辅助 ──
+    private WriteableBitmap? _magnifierBitmap;
+    private bool _autoDetect = true;                 // 窗口自动检测（按住 Ctrl 临时关闭）
+    private IReadOnlyList<IntRect> _windowCandidates = Array.Empty<IntRect>();
+    private IntRect? _detected;                      // 当前悬停命中的窗口
+    private int _numberCounter;                      // 序号计数（一次截图会话内连续）
+
+    // ── 橡皮擦 ──
+    private bool _erasing;
+    private readonly HashSet<Annotation> _eraseRemoved = new();
+
+    // ── 贴图旋转/镜像/透明度 ──
+    private bool _rotating;
+    private bool _suppressRightTap;
+    private double _bakedRotation;
+    private double _opacity = 1d;
+    private double _rotateStartAngle;
+    private PixelPoint _rotateCurrent;
+
     private byte[]? _base;                      // 选区那块底图（物理像素，合成时的固定起点）
     private WriteableBitmap? _preview;
     private byte[]? _composed;                  // 底图 + 全部已提交标注（每次重烤后留下，给拖动做起点）
@@ -197,6 +216,11 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
         Shot.Source = bitmap;
+
+        // 自动检测的候选窗口只枚举一次（画面已冻结，拓扑不会变）
+        _windowCandidates = CollectWindowCandidates();
+        // 键盘（方向键改框 / Enter 复制 / Esc 取消）需要 Root 持有焦点
+        Root.Loaded += (_, _) => Root.Focus(FocusState.Programmatic);
     }
 
     /// <summary>
@@ -262,9 +286,16 @@ public sealed partial class CaptureOverlayWindow : Window
         };
         Root.DoubleTapped += (_, e) =>
         {
-            if (_polyLine is null) return;
+            // 折线进行中：双击收笔（既有行为）
+            if (_polyLine is not null) { e.Handled = true; FinishPolyLine(commit: true); return; }
+            // 贴图：双击＝快速隐藏这一张（Snipaste；F4/托盘可全部找回）
+            if (_pinned) { e.Handled = true; HidePin(); return; }
+            if (_mode != CaptureMode.Toolbar) return;
+            // 选区阶段双击＝复制（没框就先取整屏），Snipaste 同款
             e.Handled = true;
-            FinishPolyLine(commit: true);
+            _selection ??= _monitor;
+            if (_base is null) EnterAnnotationMode(_selection.Value);
+            Commit(CommitAction.Copy);
         };
 
         // 遮罩不需要主题：画面是抓来的桌面，文字全画在暗底上并用硬编码白色 —— 这里刻意不调
@@ -726,6 +757,11 @@ public sealed partial class CaptureOverlayWindow : Window
             Fill(2.5, 8, 5, 5, InkDim), Fill(8, 8, 5, 5, Ink)),
         // 用线段拼出的 "A"：文字工具的通用记号，且不依赖任何字体（字形缺了就是个方块）
         AnnotationTool.Text => Icon(Curve(null, (2.5, 13), (8, 2.5), (13.5, 13)), Seg(5, 9.5, 11, 9.5)),
+        // 圆里一个 1：序号工具
+        AnnotationTool.Number => Icon(Ring(3, 3, 10, 10, 1.6), Seg(8, 5.5, 8, 11), Seg(6.8, 6.6, 8, 5.5)),
+        // 倾斜的橡皮块＋中间一道分界线
+        AnnotationTool.Eraser => Icon(Seg(5, 5, 11, 5), Seg(11, 5, 12.5, 11), Seg(12.5, 11, 6.5, 11),
+            Seg(6.5, 11, 5, 5), Seg(5.7, 8, 11.8, 8)),
         _ => Icon(Out(2.5, 4, 11, 8)),
     };
 
@@ -778,9 +814,17 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         if (_settled) return;
         var point = e.GetCurrentPoint(Root);
+        var physical = ToPhysical(point.Position.X, point.Position.Y);
+
+        // 贴图：右键按下＝开始绕中心旋转（右键未拖动＝RightTapped 弹菜单）
+        if (_pinned && point.Properties.IsRightButtonPressed)
+        {
+            BeginRotate(AsPixel(physical), e.Pointer);
+            return;
+        }
+
         if (!point.Properties.IsLeftButtonPressed) return;
 
-        var physical = ToPhysical(point.Position.X, point.Position.Y);
         // 已经有选区、这次按在选区里面、而且是"给动作条"的那条链 ⇒ 这一按是**画**，不是重新框选。
         // 选区外面照旧起新框：用户想换个范围就换个范围，标注跟着作废（底图都换了，留着旧的只会对不上）。
         // 一支笔都没选 ⇒ 这一按是用来改框的（整块移动 / 改边缘大小）。落在框外远处则放行给"重新框一块"。
@@ -797,6 +841,10 @@ public sealed partial class CaptureOverlayWindow : Window
                 return;
             }
             _strokeTool = tool;                        // 这一笔从头到尾用它，与中途会不会换工具无关
+            // 橡皮擦：按住拖过标注，整条擦掉
+            if (tool == AnnotationTool.Eraser) { BeginEraseStroke(ToLocal(physical), e.Pointer); return; }
+            // 序号：每按一下放一个编号圆点
+            if (tool == AnnotationTool.Number) { PlaceNumber(ToLocal(physical)); return; }
             // 折线是"点出来的"，没有按下-拖动-放开这一说：每一按钉一个顶点，收口用 Enter 或双击
             if (tool == AnnotationTool.PolyLine) PlaceVertex(ToLocal(physical));
             else BeginStroke(ToLocal(physical), e.Pointer, tool);
@@ -809,6 +857,14 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_pinned)
         {
             if (!Armed) BeginPinDrag(e.Pointer);
+            return;
+        }
+
+        // 自动检测窗口：点在候选窗口上即选中它（按住 Ctrl 时 _detected 为 null，退回手动拖框）
+        if (_detected is { } detected && ContainsPoint(detected, AsPixel(physical)))
+        {
+            if (_mode == CaptureMode.Toolbar) EnterAnnotationMode(detected);
+            else { _selection = detected; Commit(_mode == CaptureMode.Pin ? CommitAction.Pin : CommitAction.Ocr); }
             return;
         }
 
@@ -827,32 +883,47 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         if (_settled) return;
         if (_draggingPin) { PinDragTo(); return; }
-        var position = e.GetCurrentPoint(Root).Position;
+        var point = e.GetCurrentPoint(Root);
+        var physical = ToPhysical(point.Position.X, point.Position.Y);
+
+        if (_rotating) { RotateTo(AsPixel(physical)); return; }
+        if (_erasing) { EraseTo(ToLocal(physical)); return; }
         if (_dragOriginal is not null)
         {
-            DragTo(ToLocal(ToPhysical(position.X, position.Y)));
+            DragTo(ToLocal(physical));
             return;
         }
         if (_adjust != CaptureGeometry.SelectionEdge.None)
         {
-            AdjustTo(ToPhysical(position.X, position.Y));
+            AdjustTo(physical);
             return;
         }
         if (_stroke is not null)
         {
-            ExtendStroke(ToLocal(ToPhysical(position.X, position.Y)));
+            ExtendStroke(ToLocal(physical));
             return;
         }
         if (_polyLine is not null)
         {
             // 看不见"下一段会落在哪儿"，点出来的顶点就不是想要的形状 ⇒ 最后顶点到光标挂一段橡皮筋
-            _hoverLocal = ToLocal(ToPhysical(position.X, position.Y));
+            _hoverLocal = ToLocal(physical);
             DrawLive();
             return;
         }
+
+        // 选区阶段（还没进入标注）：放大镜一直跟；未拖框时做窗口自动检测
+        if (!_pinned && _base is null)
+        {
+            if (!_awaitingRelease)
+            {
+                if (_autoDetect && !IsControlDown()) UpdateDetected(AsPixel(physical));
+                else ClearDetected();
+            }
+            UpdateMagnifier(AsPixel(physical));
+        }
+
         if (!_awaitingRelease) return;
-        var current = ToPhysical(position.X, position.Y);
-        var selection = CaptureGeometry.Normalize(_startPhysical.X, _startPhysical.Y, current.X, current.Y);
+        var selection = CaptureGeometry.Normalize(_startPhysical.X, _startPhysical.Y, physical.X, physical.Y);
         // 夹回本屏：L1 按"每屏各截各的"处理跨屏拖拽（每屏一个遮罩窗，各拿各的选区，互不合并）
         _selection = CaptureGeometry.Intersect(selection, _monitor) ?? selection;
         if (_selection is { } box) DrawSelection(box);
@@ -864,6 +935,18 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_draggingPin)
         {
             _draggingPin = false;
+            Root.ReleasePointerCapture(e.Pointer);
+            return;
+        }
+        if (_rotating)
+        {
+            EndRotate(e.GetCurrentPoint(Root).Position);
+            Root.ReleasePointerCapture(e.Pointer);
+            return;
+        }
+        if (_erasing)
+        {
+            EndEraseStroke();
             Root.ReleasePointerCapture(e.Pointer);
             return;
         }
@@ -910,11 +993,16 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void Root_RightTapped(object sender, RightTappedRoutedEventArgs e)
     {
+        if (_suppressRightTap)
+        {
+            _suppressRightTap = false;
+            return;
+        }
         e.Handled = true;
-        // 截图时右键＝"这一屏不截"（与 Snipaste 一致）。贴图态右键<b>什么都不做</b>：
-        // 图已经画了一半，一次误触不该把它丢掉；贴图能做的动作全在这条工具条上
-        // （用户口径：那份右键菜单由截图时这条小菜单整体取代）。
+        // 截图时右键＝"这一屏不截"（Snipaste 同款）。
         if (!_pinned) Settle(null);
+        // 贴图：右键（未拖动）＝Snipaste 式贴图菜单
+        else ShowPinMenu(e.GetPosition(Root));
     }
 
     private void Root_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -947,6 +1035,16 @@ public sealed partial class CaptureOverlayWindow : Window
             FinishPolyLine(commit: e.Key == VirtualKey.Enter);
             return;
         }
+        // 方向键：选区阶段＝移动/缩放选区（Shift＝缩放）；标注阶段＝移动选中的标注（Shift＝10px）。
+        // Snipaste 同款，坐标为物理像素。
+        if (e.Key is VirtualKey.Left or VirtualKey.Right or VirtualKey.Up or VirtualKey.Down)
+        {
+            e.Handled = true;
+            if (_pinned || _base is not null) NudgeSelectedMark(e.Key, IsShiftDown());
+            else NudgeRegion(e.Key, IsShiftDown());
+            return;
+        }
+
         switch (e.Key)
         {
             case VirtualKey.Delete when _selected is not null && !_editingText:
@@ -972,6 +1070,10 @@ public sealed partial class CaptureOverlayWindow : Window
                     CaptureMode.Ocr => CommitAction.Ocr,
                     _ => CommitAction.Copy,
                 });
+                break;
+            case VirtualKey.C when IsControlDown():
+                e.Handled = true;
+                Commit(CommitAction.Copy);
                 break;
             case VirtualKey.S when IsControlDown():
                 e.Handled = true;
@@ -1003,6 +1105,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
     // ────────── 坐标换算 ──────────
 
+    private static PixelPoint AsPixel(PointInt32 p) => new(p.X, p.Y);
     /// <summary>窗口内 DIP → 虚拟桌面物理像素（先乘本屏缩放，再加本屏原点）。</summary>
     private PointInt32 ToPhysical(double dipX, double dipY)
         => new(
@@ -1082,6 +1185,8 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private void ShowBase(byte[] basePixels, int contentWidth, int contentHeight, IntRect selection)
     {
+        HideMagnifier();
+        ClearDetected();
         _base = basePixels;
         _contentWidth = Math.Max(1, contentWidth);
         _contentHeight = Math.Max(1, contentHeight);
@@ -1168,11 +1273,19 @@ public sealed partial class CaptureOverlayWindow : Window
     private void Root_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
     {
         if (!_pinned) return;
-        // 手上有未完成的一笔时不改倍率：那些点是按旧倍率换算的，中途改倍率等于让正在画的那一笔跑偏，
+        // 手上有未完成的一笔时不改倍率/透明度：那些点是按旧倍率换算的，中途改等于让正在画的那一笔跑偏，
         // 而"跑偏"只在松手合成之后才看得见（那时已经退不掉）。
         if (_stroke is not null || _polyLine is not null || _dragOriginal is not null
-            || _draggingPin || _editingText) return;
-        var next = CaptureGeometry.NextZoom(_zoom, e.GetCurrentPoint(Root).Properties.MouseWheelDelta);
+            || _draggingPin || _editingText || _rotating) return;
+        var delta = e.GetCurrentPoint(Root).Properties.MouseWheelDelta;
+        // Shift+滚轮＝整窗透明度（Snipaste 同款）
+        if (IsShiftDown())
+        {
+            SetOpacity(Math.Clamp(_opacity + (delta > 0 ? 0.1 : -0.1), 0.1, 1d));
+            e.Handled = true;
+            return;
+        }
+        var next = CaptureGeometry.NextZoom(_zoom, delta);
         if (Math.Abs(next - _zoom) < 0.0001) { SyncBadge(); return; }   // 已在端点：窗不动，角标仍要说清现在几倍
         _zoom = next;
         _sourceScale = next;
@@ -1377,6 +1490,9 @@ public sealed partial class CaptureOverlayWindow : Window
         DropSelection();
         _composed = null;
         _scratch = null;
+        _numberCounter = 0;
+        _detected = null;
+        HideMagnifier();
         _undoButton.IsEnabled = _clearButton.IsEnabled = false;
     }
 
@@ -1972,6 +2088,60 @@ public sealed partial class CaptureOverlayWindow : Window
     // 三个动作都只是移动历史指针（状态快照在 AnnotationHistory 里），
     // 所以"清空了又撤销回来"和"撤销两步再重做"不需要任何额外代码，也不会残留半条。
 
+    /// <summary>选区阶段的方向键：plain＝平移 1px，Shift＝缩放对应边 1px（物理像素）。</summary>
+    private void NudgeRegion(VirtualKey key, bool resize)
+    {
+        if (_selection is not { } sel) return;
+        IntRect next;
+        if (resize)
+        {
+            next = key switch
+            {
+                VirtualKey.Left => sel with { Width = Math.Max(1, sel.Width - 1) },
+                VirtualKey.Right => sel with { Width = sel.Width + 1 },
+                VirtualKey.Up => sel with { Height = Math.Max(1, sel.Height - 1) },
+                VirtualKey.Down => sel with { Height = sel.Height + 1 },
+                _ => sel,
+            };
+        }
+        else
+        {
+            next = key switch
+            {
+                VirtualKey.Left => sel with { X = sel.X - 1 },
+                VirtualKey.Right => sel with { X = sel.X + 1 },
+                VirtualKey.Up => sel with { Y = sel.Y - 1 },
+                VirtualKey.Down => sel with { Y = sel.Y + 1 },
+                _ => sel,
+            };
+        }
+        _selection = next;
+        DrawSelection(next);
+    }
+
+    /// <summary>标注阶段的方向键：移动选中的那条标注（plain 1px，Shift 10px）。</summary>
+    private void NudgeSelectedMark(VirtualKey key, bool big)
+    {
+        if (_selected is not int idx || idx < 0 || idx >= _history.Count) return;
+        var mark = _history.Marks[idx];
+        var step = big ? 10 : 1;
+        var dx = key switch
+        {
+            VirtualKey.Left => -step,
+            VirtualKey.Right => step,
+            _ => 0,
+        };
+        var dy = key switch
+        {
+            VirtualKey.Up => -step,
+            VirtualKey.Down => step,
+            _ => 0,
+        };
+        if (dx == 0 && dy == 0) return;
+        _history.ReplaceAt(idx, mark.MovedBy(dx, dy));
+        Rebake();
+    }
+
     private void Undo()
     {
         if (!_history.Undo()) return;
@@ -2186,4 +2356,369 @@ public sealed partial class CaptureOverlayWindow : Window
             ? ScreenshotService.TryCrop(frame, selection)
             : null;
     }
+
+    // ────────── Snipaste 式像素放大镜 ──────────
+
+    private const int MagnifierLens = 15;   // 放大 15×15 源像素
+    private const int MagnifierZoom = 10;   // 每源像素＝10 物理像素
+    private static readonly byte[] GridLineColor = { 0x00, 0x00, 0x00, 0x66 };
+    private static readonly byte[] CrossLineColor = { 0x30, 0x3B, 0xFF, 0xFF };
+
+    private void UpdateMagnifier(PixelPoint physical)
+    {
+        if (_frame is null) return;
+        var size = MagnifierLens * MagnifierZoom;
+        if (_magnifierBitmap is null)
+        {
+            _magnifierBitmap = new WriteableBitmap(size, size);
+            MagnifierImage.Source = _magnifierBitmap;
+            // 位图按物理像素画，显示尺寸换算成 DIP，保证"每源像素＝10 物理像素"
+            MagnifierImage.Width = size / _scale;
+            MagnifierImage.Height = size / _scale;
+        }
+
+        var cx = physical.X - _frame.Bounds.X;
+        var cy = physical.Y - _frame.Bounds.Y;
+        var startX = cx - MagnifierLens / 2;
+        var startY = cy - MagnifierLens / 2;
+        var magnified = new byte[size * size * 4];
+        for (var my = 0; my < MagnifierLens; my++)
+        {
+            for (var mx = 0; mx < MagnifierLens; mx++)
+            {
+                var sx = startX + mx;
+                var sy = startY + my;
+                byte b = 0, g = 0, r = 0;
+                if (sx >= 0 && sy >= 0 && sx < _frame.Width && sy < _frame.Height)
+                {
+                    var sp = (sy * _frame.Width + sx) * 4;
+                    b = _frame.Bgra[sp];
+                    g = _frame.Bgra[sp + 1];
+                    r = _frame.Bgra[sp + 2];
+                }
+                for (var by = 0; by < MagnifierZoom; by++)
+                {
+                    var dy = my * MagnifierZoom + by;
+                    for (var bx = 0; bx < MagnifierZoom; bx++)
+                    {
+                        var dx = mx * MagnifierZoom + bx;
+                        var dp = (dy * size + dx) * 4;
+                        magnified[dp] = b;
+                        magnified[dp + 1] = g;
+                        magnified[dp + 2] = r;
+                        magnified[dp + 3] = 255;
+                    }
+                }
+            }
+        }
+
+        // 像素网格（每格一条暗线）＋中心红色十字
+        for (var i = 0; i <= size; i += MagnifierZoom)
+        {
+            PaintHLine(magnified, size, i, GridLineColor);
+            PaintVLine(magnified, size, i, GridLineColor);
+        }
+        var center = size / 2;
+        PaintHLine(magnified, size, center, CrossLineColor);
+        PaintVLine(magnified, size, center, CrossLineColor);
+
+        using (var stream = _magnifierBitmap.PixelBuffer.AsStream())
+            stream.Write(magnified, 0, magnified.Length);
+        _magnifierBitmap.Invalidate();
+
+        if (cx >= 0 && cy >= 0 && cx < _frame.Width && cy < _frame.Height)
+        {
+            var cp = (cy * _frame.Width + cx) * 4;
+            MagnifierRgb.Text = $"RGB: {_frame.Bgra[cp + 2]},{_frame.Bgra[cp + 1]},{_frame.Bgra[cp]}";
+        }
+        MagnifierPos.Text = $"X: {physical.X} Y: {physical.Y}";
+
+        PositionMagnifier(physical);
+        Magnifier.Visibility = Visibility.Visible;
+    }
+
+    private void HideMagnifier() => Magnifier.Visibility = Visibility.Collapsed;
+
+    private void PositionMagnifier(PixelPoint physical)
+    {
+        var win = WindowInterop.GetWindowRect(this);
+        const int lensW = 162;
+        const int lensH = 196;
+        const int gap = 18;
+        var px = physical.X - win.X + gap;
+        var py = physical.Y - win.Y + gap;
+        // 靠近右/下边缘时翻到光标的左/上方
+        if (px + lensW > win.Width) px = physical.X - win.X - lensW - 6;
+        if (py + lensH > win.Height) py = physical.Y - win.Y - lensH - 6;
+        MagnifierTransform.X = Math.Max(0, px) / _scale;
+        MagnifierTransform.Y = Math.Max(0, py) / _scale;
+    }
+
+    private static void PaintHLine(byte[] bgra, int width, int y, byte[] color)
+    {
+        if (y < 0 || y >= width) return;
+        for (var x = 0; x < width; x++)
+        {
+            var p = (y * width + x) * 4;
+            bgra[p] = color[0];
+            bgra[p + 1] = color[1];
+            bgra[p + 2] = color[2];
+            bgra[p + 3] = color[3];
+        }
+    }
+
+    private static void PaintVLine(byte[] bgra, int width, int x, byte[] color)
+    {
+        if (x < 0 || x >= width) return;
+        for (var y = 0; y < width; y++)
+        {
+            var p = (y * width + x) * 4;
+            bgra[p] = color[0];
+            bgra[p + 1] = color[1];
+            bgra[p + 2] = color[2];
+            bgra[p + 3] = color[3];
+        }
+    }
+
+    // ────────── 窗口自动检测（按住 Ctrl 临时关闭） ──────────
+
+    private void UpdateDetected(PixelPoint physical)
+    {
+        foreach (var cand in _windowCandidates)
+        {
+            if (ContainsPoint(cand, physical))
+            {
+                if (_detected is { } d && d == cand) return;
+                _detected = cand;
+                DrawSelection(cand);
+                return;
+            }
+        }
+        ClearDetected();
+    }
+
+    private void ClearDetected()
+    {
+        if (_detected is null) return;
+        _detected = null;
+        ClearSelection();
+    }
+
+    private static bool ContainsPoint(IntRect rect, PixelPoint p)
+        => p.X >= rect.X && p.X < rect.Right && p.Y >= rect.Y && p.Y < rect.Bottom;
+
+    private List<IntRect> CollectWindowCandidates()
+    {
+        var list = new List<IntRect>();
+        var currentProcess = Environment.ProcessId;
+        WindowInterop.EnumWindows((hwnd, _) =>
+        {
+            if (!WindowInterop.IsWindowVisible(hwnd)) return true;
+            WindowInterop.GetWindowThreadProcessId(hwnd, out var pid);
+            if (pid == currentProcess) return true;     // 不把我们自己的窗口当候选
+            var r = WindowInterop.GetExtendedFrameBounds(hwnd);
+            var rect = new IntRect(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
+            if (rect.Width < 24 || rect.Height < 24) return true;
+            if (CaptureGeometry.Intersect(rect, _monitor) is { } clipped && !clipped.IsEmpty)
+                list.Add(rect);
+            return true;
+        }, IntPtr.Zero);
+        // 小窗排前：小窗叠在大窗上时，点小窗不该被后面的大窗抢先
+        list.Sort((a, b) => (a.Width * a.Height).CompareTo(b.Width * b.Height));
+        return list;
+    }
+
+    // ────────── 序号标注 ──────────
+
+    private void PlaceNumber(PixelPoint local)
+    {
+        _numberCounter++;
+        var mark = new Annotation(AnnotationTool.Number, new[] { local }, ColourBgra, 2)
+        {
+            Number = _numberCounter,
+        };
+        if (mark.Problem() is not null) { _numberCounter--; return; }
+        EndTextEditing(commit: true);
+        DropSelection();
+        _history.Add(mark);
+        Rebake();
+    }
+
+    // ────────── 橡皮擦 ──────────
+
+    private void BeginEraseStroke(PixelPoint local, Pointer pointer)
+    {
+        EndTextEditing(commit: true);
+        DropSelection();
+        _erasing = true;
+        _eraseRemoved.Clear();
+        _history.BeginErase();
+        Root.CapturePointer(pointer);
+        EraseTo(local);
+    }
+
+    private void EraseTo(PixelPoint local)
+    {
+        var changed = false;
+        while (true)
+        {
+            var hit = AnnotationPainter.HitTest(_history.Marks, local, SlopInSource(SelectionSlop));
+            if (hit is not int index) break;
+            _eraseRemoved.Add(_history.Marks[index]);
+            _history.ApplyErase(_eraseRemoved);
+            changed = true;
+        }
+        if (changed) Rebake();
+    }
+
+    private void EndEraseStroke()
+    {
+        _erasing = false;
+        _history.EndErase();
+        _eraseRemoved.Clear();
+        Rebake();
+    }
+
+    // ────────── 贴图旋转 / 翻转 / 透明度 / 右键菜单 ──────────
+
+    private PixelPoint PinCenterPhysical()
+    {
+        var r = WindowInterop.GetWindowRect(this);
+        return new PixelPoint(r.X + r.Width / 2, r.Y + r.Height / 2);
+    }
+
+    private static double AngleTo(PixelPoint center, PixelPoint p)
+        => CaptureGeometry.AngleDegrees(center, p);
+
+    private void BeginRotate(PixelPoint physical, Pointer pointer)
+    {
+        _rotating = true;
+        _suppressRightTap = true;
+        _rotateCurrent = physical;
+        _rotateStartAngle = AngleTo(PinCenterPhysical(), physical);
+        Root.CapturePointer(pointer);
+    }
+
+    private void RotateTo(PixelPoint physical)
+    {
+        _rotateCurrent = physical;
+        var total = CurrentRotation(physical);
+        SizeChip.Visibility = Visibility.Visible;
+        SizeText.Text = $"旋转 {total:0}°（Shift 吸附 15°）";
+    }
+
+    private double CurrentRotation(PixelPoint physical)
+    {
+        var total = _bakedRotation + AngleTo(PinCenterPhysical(), physical) - _rotateStartAngle;
+        if (IsShiftDown()) total = Math.Round(total / 15d) * 15d;
+        return total;
+    }
+
+    private void EndRotate(Point releaseDip)
+    {
+        var total = CurrentRotation(_rotateCurrent);
+        _rotating = false;
+        if (Math.Abs(total - _bakedRotation) < 0.5)
+        {
+            // 右键按下没拖动＝右键单击：直接弹贴图菜单（捕获指针可能吞掉 RightTapped）
+            ShowPinMenu(releaseDip);
+            return;
+        }
+        BakeRotation(total);
+    }
+
+    private void BakeRotation(double totalAngle)
+    {
+        // 先把当前标注合成进像素：旋转带着标注一起走
+        Rebake();
+        if (_composed is not { } composed) return;
+        var rotated = BitmapTransform.Rotate(composed, _contentWidth, _contentHeight,
+            totalAngle - _bakedRotation);
+        var center = PinCenterPhysical();
+        var newX = center.X - rotated.Width / 2;
+        var newY = center.Y - rotated.Height / 2;
+        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero,
+            newX, newY, rotated.Width, rotated.Height,
+            WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
+        SetMonitor(new IntRect(newX, newY, rotated.Width, rotated.Height));
+        _bakedRotation = totalAngle;
+        BeginEditingExisting(rotated.Pixels, rotated.Width, rotated.Height);
+        ApplyQuadRegion(rotated);
+        _zoom = 1d;
+        _sourceScale = 1d;
+        RefreshScaleIfChanged();
+        SyncBadge();
+    }
+
+    private void ApplyQuadRegion(RotatedImage rotated)
+    {
+        var pts = rotated.Quad.Select(q => new WindowInterop.POINT { X = q.X, Y = q.Y }).ToArray();
+        var rgn = WindowInterop.CreatePolygonRgn(pts, pts.Length, WindowInterop.WINDING_FILL);
+        if (rgn != IntPtr.Zero)
+            WindowInterop.SetWindowRgn(WindowInterop.GetHwnd(this), rgn, true);
+    }
+
+    private void BakeFlip(bool horizontal)
+    {
+        Rebake();
+        if (_composed is not { } composed) return;
+        var flipped = BitmapTransform.Flip(composed, _contentWidth, _contentHeight, horizontal);
+        BeginEditingExisting(flipped, _contentWidth, _contentHeight);
+        // 翻转后窗口区域恢复矩形（旋转四边形已失效）
+        WindowInterop.SetWindowRgn(WindowInterop.GetHwnd(this), IntPtr.Zero, true);
+        SyncBadge();
+    }
+
+    private void SetOpacity(double opacity)
+    {
+        _opacity = opacity;
+        WindowInterop.SetWindowOpacity(this, opacity);
+        SizeChip.Visibility = Visibility.Visible;
+        SizeText.Text = $"不透明度 {opacity * 100:0}%";
+    }
+
+    private void ShowPinMenu(Point localDip)
+    {
+        var menu = new MenuFlyout();
+        AddMenuItem(menu, "复制（Ctrl+C）", () => Commit(CommitAction.Copy));
+        AddMenuItem(menu, "保存（Ctrl+S）", () => Commit(CommitAction.Save));
+        menu.Items.Add(new MenuFlyoutSeparator());
+        AddMenuItem(menu, "缩放重置为 100%", ResetZoomTo1);
+        var opacityMenu = new MenuFlyoutSubItem { Text = "不透明度" };
+        foreach (var v in new[] { 1.0, 0.75, 0.5, 0.25 })
+        {
+            var value = v;
+            opacityMenu.Items.Add(NewMenuItem($"{v * 100:0}%", () => SetOpacity(value)));
+        }
+        menu.Items.Add(opacityMenu);
+        menu.Items.Add(new MenuFlyoutSeparator());
+        AddMenuItem(menu, "水平翻转", () => BakeFlip(horizontal: true));
+        AddMenuItem(menu, "垂直翻转", () => BakeFlip(horizontal: false));
+        AddMenuItem(menu, _clickThrough ? "取消鼠标穿透" : "鼠标穿透",
+            () => ApplyClickThrough(!_clickThrough));
+        menu.Items.Add(new MenuFlyoutSeparator());
+        AddMenuItem(menu, "关闭（Esc）", Close);
+        menu.ShowAt(Root, localDip);
+    }
+
+    private static MenuFlyoutItem NewMenuItem(string text, Action action)
+    {
+        var item = new MenuFlyoutItem { Text = text };
+        item.Click += (_, _) => action();
+        return item;
+    }
+
+    private static void AddMenuItem(MenuFlyout menu, string text, Action action)
+        => menu.Items.Add(NewMenuItem(text, action));
+
+    private void ResetZoomTo1()
+    {
+        if (Math.Abs(_zoom - 1d) < 0.0001) { SyncBadge(); return; }
+        _zoom = 1d;
+        _sourceScale = 1d;
+        ResizePinAnchoringTopLeft();
+        WindowInterop.SetWindowRgn(WindowInterop.GetHwnd(this), IntPtr.Zero, true);
+        SyncBadge();
+    }
+
 }

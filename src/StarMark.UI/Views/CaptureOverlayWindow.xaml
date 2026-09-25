@@ -163,5 +163,23 @@
                 Foreground="#FFFFFFFF"
                 Text="已选中：拖框内＝移动 · 拖角＝缩放 · 拖顶部圆点＝转方向 · 文字点住它＝接着改（Enter 换行） · Delete＝删除"/>
         </Border>
+
+        <!-- Snipaste 式像素放大镜：放大 15×15 源像素，每像素 10 物理像素，自带像素网格与十字线；
+             下方读数＝RGB 与屏幕坐标。位置由代码按光标摆放并自动翻边。 -->
+        <Border x:Name="Magnifier" Visibility="Collapsed"
+                HorizontalAlignment="Left" VerticalAlignment="Top"
+                Background="#CC000000" BorderBrush="#66FFFFFF" BorderThickness="1"
+                CornerRadius="4">
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="MagnifierTransform" X="0" Y="0" />
+            </Border.RenderTransform>
+            <StackPanel Padding="4">
+                <Image x:Name="MagnifierImage" Width="150" Height="150" Stretch="None" />
+                <TextBlock x:Name="MagnifierRgb" Foreground="White" FontSize="11"
+                           FontFamily="Consolas" Margin="2,2,2,0" Text="RGB: 0,0,0" />
+                <TextBlock x:Name="MagnifierPos" Foreground="#FFB347" FontSize="11"
+                           FontFamily="Consolas" Margin="2,0,2,2" Text="X: 0 Y: 0" />
+            </StackPanel>
+        </Border>
     </local:CursorLayer>
 </Window>

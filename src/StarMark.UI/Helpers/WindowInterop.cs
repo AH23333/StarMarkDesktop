@@ -121,6 +121,53 @@ internal static class WindowInterop
     public static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
 
     [DllImport("gdi32.dll")]
+    public static extern IntPtr CreatePolygonRgn(POINT[] points, int count, int fillMode);
+
+    public const int ALTERNATE_FILL = 1;
+    public const int WINDING_FILL = 2;
+
+    /// <summary>DWM 扩展窗口边界（含隐形边框修正，截图自动检测窗口用它比 GetWindowRect 准）。</summary>
+    public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmGetWindowAttributeRect(IntPtr hwnd, int attr, out RECT rect, int size);
+
+    /// <summary>取 DWM 修正后的窗口矩形；失败回退 GetWindowRect。</summary>
+    public static RECT GetExtendedFrameBounds(IntPtr hwnd)
+    {
+        if (DwmGetWindowAttributeRect(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out var rect,
+                Marshal.SizeOf<RECT>()) == 0)
+            return rect;
+        return GetWindowRect(hwnd, out var r) ? r : default;
+    }
+
+    public const uint LWA_ALPHA = 0x00000002;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
+
+    /// <summary>整窗不透明度（0..1）。按需补 WS_EX_LAYERED；失败静默（个别呈现路径不接受分层属性）。</summary>
+    public static bool SetWindowOpacity(Microsoft.UI.Xaml.Window window, double opacity)
+    {
+        try
+        {
+            var hwnd = GetHwnd(window);
+            var ex = GetWindowLong(hwnd, GWL_EXSTYLE).ToInt64();
+            if ((ex & WS_EX_LAYERED) == 0)
+            {
+                ex |= WS_EX_LAYERED;
+                SetWindowLong(hwnd, GWL_EXSTYLE, new IntPtr(ex));
+            }
+            var alpha = (byte)Math.Clamp(Math.Round(opacity * 255d), 0, 255);
+            var ok = SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
+            SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+            return ok;
+        }
+        catch { return false; }
+    }
+
+    [DllImport("gdi32.dll")]
     private static extern bool DeleteObject(IntPtr hObject);
 
     [DllImport("user32.dll")]
@@ -145,6 +192,9 @@ internal static class WindowInterop
 
     [DllImport("user32.dll")]
     public static extern bool IsWindow(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();

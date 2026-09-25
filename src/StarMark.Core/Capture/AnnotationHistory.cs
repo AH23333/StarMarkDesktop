@@ -86,6 +86,44 @@ public sealed class AnnotationHistory
         Push(next);
     }
 
+    // ── 橡皮擦的合并撤销：一次拖拭（可能擦掉好几条）只算一步 ──
+
+    private IReadOnlyList<Annotation>? _eraseBase;
+    private bool _erasing;
+
+    /// <summary>开始一次擦除拖拭：记下拖拭前的快照。</summary>
+    public void BeginErase()
+    {
+        _erasing = true;
+        _eraseBase = Marks.ToList();
+    }
+
+    /// <summary>擦除进行中：结果＝起点快照减去 <paramref name="removed"/>（引用身份），直接替换当前状态、不入栈。</summary>
+    public void ApplyErase(HashSet<Annotation> removed)
+    {
+        if (!_erasing || _eraseBase is null) return;
+        _states[_at] = removed.Count == 0
+            ? _eraseBase
+            : _eraseBase.Where(m => !removed.Contains(m)).ToList();
+    }
+
+    /// <summary>结束擦除：什么都没擦掉则恢复；擦掉了就在当前状态前插回旧快照（一次撤销回到擦除前）。</summary>
+    public void EndErase()
+    {
+        if (!_erasing) return;
+        var result = Marks;
+        _erasing = false;
+        if (_eraseBase is null || result.Count == _eraseBase.Count)
+        {
+            _states[_at] = _eraseBase ?? Array.Empty<Annotation>();
+            _eraseBase = null;
+            return;
+        }
+        _states.Insert(_at, _eraseBase);
+        _at++;
+        _eraseBase = null;
+    }
+
     /// <summary>退一步。已在最早的状态时返回 false（界面据此灰掉按钮，而不是点了没反应）。</summary>
     public bool Undo()
     {
@@ -105,6 +143,8 @@ public sealed class AnnotationHistory
     /// <summary>整条历史丢掉（换选区时调用：底图都换了，旧标注摆在新框里没有任何意义）。</summary>
     public void Reset()
     {
+        _erasing = false;
+        _eraseBase = null;
         _states.Clear();
         _states.Add(Array.Empty<Annotation>());
         _at = 0;
