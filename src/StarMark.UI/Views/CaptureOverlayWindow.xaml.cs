@@ -204,6 +204,11 @@ public sealed partial class CaptureOverlayWindow : Window
             _ => HintText.Text,
         };
 
+        // 自动检测的候选窗口只枚举一次（画面已冻结，拓扑不会变）。<b>必须发生在窗口上屏之前</b>：
+        // 这一步若抛异常，后面 SetWindowPos 已经把窗口摆上屏、名册里却没有它——
+        // 留下一块看得见、键盘焦点也没挂上的僵尸遮罩，用户只能看着它卡死整个屏幕。
+        _windowCandidates = CollectWindowCandidates();
+
         // 位置与尺寸走 Win32 物理像素：AppWindow 那套按 DIP 算，多屏混合 DPI 时每屏都会算偏。
         // SWP_NOACTIVATE：先就位再 Activate，避免用户看到窗口从别处滑过来。
         WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), WindowInterop.HWND_TOPMOST,
@@ -217,8 +222,6 @@ public sealed partial class CaptureOverlayWindow : Window
         }
         Shot.Source = bitmap;
 
-        // 自动检测的候选窗口只枚举一次（画面已冻结，拓扑不会变）
-        _windowCandidates = CollectWindowCandidates();
         // 键盘（方向键改框 / Enter 复制 / Esc 取消）需要 Root 持有焦点
         Root.Loaded += (_, _) => Root.Focus(FocusState.Programmatic);
     }
@@ -1377,7 +1380,11 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         var ok = WindowInterop.SetClickThrough(this, on);
         _clickThrough = ok ? on : _clickThrough;
-        if (_clickThrough) ActionBar.Visibility = Visibility.Collapsed;
+        if (_clickThrough)
+        {
+            ActionBar.Visibility = Visibility.Collapsed;
+            PinBorder.Visibility = Visibility.Collapsed;    // 穿透中的窗收不到鼠标，悬停高亮也永远等不来退出
+        }
         SyncBadge();
         return ok;
     }
@@ -1406,7 +1413,9 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>工具条平时收起（一屏十几张贴图就十几条横杠，会盖住画面），鼠标进窗即现。</summary>
     private void Root_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
-        if (_pinned) ActionBar.Visibility = Visibility.Visible;
+        if (!_pinned) return;
+        ActionBar.Visibility = Visibility.Visible;
+        PinBorder.Visibility = Visibility.Visible;      // 高亮边框：标出"这块画面是一张贴图"（真机点名缺它）
     }
 
     /// <summary>
@@ -1417,6 +1426,7 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         if (!_pinned || Armed || _editingText || _polyLine is not null || _selected is not null) return;
         ActionBar.Visibility = Visibility.Collapsed;
+        PinBorder.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>本屏工作区（物理像素，已扣任务栏）：选区挪动与改大小都只能在它里面。</summary>
@@ -2533,23 +2543,35 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private List<IntRect> CollectWindowCandidates()
     {
-        var list = new List<IntRect>();
-        var currentProcess = Environment.ProcessId;
-        WindowInterop.EnumWindows((hwnd, _) =>
+        // 窗口检测是<b>尽力而为</b>：它只服务于"点一下选窗口"这条捷径，任何失败（枚举失败、
+        // DWM 不可用、原生调用抛异常）都只能降级成"没有候选、退回手动拖框"，绝不能让截图
+        // 会话在构造函数里夭折——SP 那次一个写错的 P/Invoke 入口名让每次 F1 都直接"截图失败"，
+        // 就是缺这层兜底。
+        try
         {
-            if (!WindowInterop.IsWindowVisible(hwnd)) return true;
-            WindowInterop.GetWindowThreadProcessId(hwnd, out var pid);
-            if (pid == currentProcess) return true;     // 不把我们自己的窗口当候选
-            var r = WindowInterop.GetExtendedFrameBounds(hwnd);
-            var rect = new IntRect(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
-            if (rect.Width < 24 || rect.Height < 24) return true;
-            if (CaptureGeometry.Intersect(rect, _monitor) is { } clipped && !clipped.IsEmpty)
-                list.Add(rect);
-            return true;
-        }, IntPtr.Zero);
-        // 小窗排前：小窗叠在大窗上时，点小窗不该被后面的大窗抢先
-        list.Sort((a, b) => (a.Width * a.Height).CompareTo(b.Width * b.Height));
-        return list;
+            var list = new List<IntRect>();
+            var currentProcess = Environment.ProcessId;
+            WindowInterop.EnumWindows((hwnd, _) =>
+            {
+                if (!WindowInterop.IsWindowVisible(hwnd)) return true;
+                WindowInterop.GetWindowThreadProcessId(hwnd, out var pid);
+                if (pid == currentProcess) return true;     // 不把我们自己的窗口当候选
+                var r = WindowInterop.GetExtendedFrameBounds(hwnd);
+                var rect = new IntRect(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
+                if (rect.Width < 24 || rect.Height < 24) return true;
+                if (CaptureGeometry.Intersect(rect, _monitor) is { } clipped && !clipped.IsEmpty)
+                    list.Add(rect);
+                return true;
+            }, IntPtr.Zero);
+            // 小窗排前：小窗叠在大窗上时，点小窗不该被后面的大窗抢先
+            list.Sort((a, b) => (a.Width * a.Height).CompareTo(b.Width * b.Height));
+            return list;
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"[CaptureOverlay] 窗口候选收集失败，退回手动拖框：{ex.Message}");
+            return new List<IntRect>();
+        }
     }
 
     // ────────── 序号标注 ──────────

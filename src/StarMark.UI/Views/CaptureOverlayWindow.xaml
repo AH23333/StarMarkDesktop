@@ -95,6 +95,17 @@
         </Border>
 
         <!--
+            贴图态的悬停高亮：鼠标进来时给四边一圈亮边，标出"这是一张贴图、当前归它管"；
+            不吃命中（事件全归 Root），穿透时随工具条一起收起。
+        -->
+        <Rectangle
+            x:Name="PinBorder"
+            Stroke="#FF4CA0FF"
+            StrokeThickness="1.5"
+            IsHitTestVisible="False"
+            Visibility="Collapsed"/>
+
+        <!--
             一条窄窄的**纯图标**工具条（真机反馈：形状/颜色/粗细做成带文字的下拉，整条又高又占地方）。
             <para>
             这里连一个按钮都不写：<b>整条由代码按 <c>AnnotationTool</c> / <c>Annotation.Palette</c> /

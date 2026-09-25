@@ -73,7 +73,8 @@ public sealed class PinEditTests
     public void ClickThroughPutsTheBarAway_BecauseTheWindowNoLongerSeesTheMouse()
     {
         var through = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "public bool ApplyClickThrough");
-        Assert.Contains("if (_clickThrough) ActionBar.Visibility = Visibility.Collapsed;", through);
+        Assert.Contains("ActionBar.Visibility = Visibility.Collapsed;", through);
+        Assert.Contains("PinBorder.Visibility = Visibility.Collapsed;", through);
     }
 
     /// <summary>
@@ -185,6 +186,45 @@ public sealed class PinEditTests
         Assert.Contains("ApplyQuadRegion(rotated, _zoom)", bake);
         Assert.Contains("if (_lastRotated is not null) ApplyQuadRegion(_lastRotated, _zoom);",
             SourceGate.MethodBody(cs, "private void ResizePinAnchoringTopLeft"));
+    }
+
+    /// <summary>真机反馈"贴图边缘无高亮显示"：悬停时要有高亮边框，且与工具条同节奏出现/收起。</summary>
+    [Fact]
+    public void PinShowsAHighlightBorderWhileTheMouseIsOverIt()
+    {
+        var cs = SourceGate.ReadRepoFile(Overlay);
+        Assert.Contains("PinBorder", SourceGate.ReadRepoFile(OverlayXaml));
+        Assert.Contains("PinBorder.Visibility = Visibility.Visible;",
+            SourceGate.MethodBody(cs, "private void Root_PointerEntered"));
+        Assert.Contains("PinBorder.Visibility = Visibility.Collapsed;",
+            SourceGate.MethodBody(cs, "private void Root_PointerExited"));
+        // 穿透中的窗收不到鼠标，高亮若不主动收起会永远留在画面上
+        Assert.Contains("PinBorder.Visibility = Visibility.Collapsed;",
+            SourceGate.MethodBody(cs, "public bool ApplyClickThrough"));
+    }
+
+    /// <summary>
+    /// 窗口检测是尽力而为：<b>任何失败都只能降级成"没有候选"</b>，绝不能拖死截图会话。
+    /// <para>SP 曾把 DWM 导出名写成不存在的 DwmGetWindowAttributeRect，而候选收集在遮罩窗
+    /// 构造函数里跑——真机每次 F1 都死在"截图失败"。</para>
+    /// </summary>
+    [Fact]
+    public void WindowDetectionCanNeverKillTheCapture()
+    {
+        var cs = SourceGate.ReadRepoFile(Overlay);
+        var collect = SourceGate.MethodBody(cs, "private List<IntRect> CollectWindowCandidates");
+        Assert.Contains("catch (Exception ex)", collect);
+        Assert.Contains("return new List<IntRect>();", collect);
+        // 候选收集必须发生在窗口上屏之前：上屏之后抛异常＝一块看得见、键盘焦点也没挂上的僵尸遮罩
+        var ctor = SourceGate.MethodBody(cs, "ScreenFrame frame,");
+        Assert.True(
+            ctor.IndexOf("CollectWindowCandidates();", StringComparison.Ordinal)
+            < ctor.IndexOf("SWP_SHOWWINDOW", StringComparison.Ordinal),
+            "候选收集排在窗口上屏之后＝失败时留下看得见却关不掉的僵尸遮罩");
+        // P/Invoke 必须用真实存在的导出名
+        var interop = SourceGate.ReadRepoFile("src/StarMark.UI/Helpers/WindowInterop.cs");
+        Assert.Contains("DwmGetWindowAttribute(IntPtr hwnd, int attr, out RECT rect, int size)", interop);
+        Assert.DoesNotContain("DwmGetWindowAttributeRect", interop);
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 #nullable enable
 using System.Runtime.InteropServices;
 using Microsoft.UI.Windowing;
+using StarMark.Abstractions;
 using Windows.Graphics;
 using WinRT.Interop;
 
@@ -130,14 +131,26 @@ internal static class WindowInterop
     public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
 
     [DllImport("dwmapi.dll")]
-    private static extern int DwmGetWindowAttributeRect(IntPtr hwnd, int attr, out RECT rect, int size);
+    private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out RECT rect, int size);
 
-    /// <summary>取 DWM 修正后的窗口矩形；失败回退 GetWindowRect。</summary>
+    /// <summary>
+    /// 取 DWM 修正后的窗口矩形；DWM 不可用/调用失败回退 GetWindowRect。
+    /// <para><b>任何异常都必须就地吃掉</b>：这个函数在窗口候选收集的逐窗循环里跑，
+    /// 往上抛会让整个截图会话在遮罩窗构造函数里夭折——SP 曾把导出名拼错（多了一个 Rect 后缀），
+    /// 真机每次 F1 都死在"截图失败"。</para>
+    /// </summary>
     public static RECT GetExtendedFrameBounds(IntPtr hwnd)
     {
-        if (DwmGetWindowAttributeRect(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out var rect,
-                Marshal.SizeOf<RECT>()) == 0)
-            return rect;
+        try
+        {
+            if (DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out var rect,
+                    Marshal.SizeOf<RECT>()) == 0)
+                return rect;
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"[WindowInterop] DWM 扩展边界不可用，回退 GetWindowRect：{ex.Message}");
+        }
         return GetWindowRect(hwnd, out var r) ? r : default;
     }
 
