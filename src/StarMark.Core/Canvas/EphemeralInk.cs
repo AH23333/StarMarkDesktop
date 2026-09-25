@@ -1,0 +1,96 @@
+#nullable enable
+using System;
+using System.Collections.Generic;
+using StarMark.Abstractions.Capture;
+
+namespace StarMark.Core.Canvas;
+
+/// <summary>
+/// 荧光笔那一层的生命周期：<b>按住拖动＝画一段，松手后按 TTL 自动淡掉</b>。
+/// <para>
+/// 为什么不进 <see cref="CanvasInk"/>：讲解时指着屏幕说一句"看这里"的那一道光，
+/// 说完就该消失——留在板上会越画越糊，而"每画一条都要记得去擦"就不是随手比划了。
+/// 规格 §16.3 的分层正是按<b>生命周期</b>分的，不是按长相分的。
+/// </para>
+/// <para>
+/// 时间由调用方注入（<c>nowMs</c> 用 <see cref="Environment.TickCount64"/>，单调且不受改系统时钟影响）。
+/// <b>不用 <c>DateTimeOffset.Now</c></b>：那会让"改时钟/时区"把淡出算成瞬间或永不到期。
+/// </para>
+/// </summary>
+public sealed class EphemeralInk
+{
+    private readonly List<Segment> _segments = new();
+
+    /// <summary>一段荧光笔迹 + 它最后一次被添点的那一刻。</summary>
+    public sealed class Segment
+    {
+        public required CanvasStroke Stroke { get; init; }
+
+        /// <summary>最后一个采样点到达的时刻（<c>TickCount64</c> 毫秒）。淡出从这一刻起算。</summary>
+        public long LastPointTick { get; set; }
+
+        /// <summary>本帧该用多淡（1＝完全不淡，0＝该消失了）。渲染层把它当作 alpha 的乘数。</summary>
+        public double AlphaScale { get; set; } = 1d;
+    }
+
+    /// <summary>淡出时长。默认 1.5 秒——够指着讲一句，又不至于让痕迹攒成一团。</summary>
+    public TimeSpan Ttl { get; set; } = TimeSpan.FromMilliseconds(1500);
+
+    /// <summary>光标光晕（荧光笔态下跟着鼠标的那圈颜色）。关掉它就等于把"我在荧光笔模式"这件事
+    /// 只留给工具条上的高亮——穿透态收不到鼠标事件时，光晕是唯一还能告诉用户"模式还开着"的东西。</summary>
+    public bool CursorHaloEnabled { get; set; } = true;
+
+    /// <summary>光晕颜色（默认红：深浅背景都看得见，且与荧光笔本身区分）。
+    /// 位序走 <see cref="Capture.Annotation.Opaque"/>——全仓库只有那一处「字节→BGRA」的拼法。</summary>
+    public int HaloColorBgra { get; set; } = Capture.Annotation.Opaque(0x30, 0x30, 0xFF);
+
+    public IReadOnlyList<Segment> Segments => _segments;
+
+    public bool IsEmpty => _segments.Count == 0;
+
+    public void Clear() => _segments.Clear();
+
+    /// <summary>开始一段荧光笔迹（按下那一下）。</summary>
+    public Segment Begin(PixelPoint first, int colorBgra, int width, long nowMs)
+    {
+        var segment = new Segment
+        {
+            Stroke = new CanvasStroke(CanvasTool.Highlighter, colorBgra, width, first),
+            LastPointTick = nowMs,
+        };
+        _segments.Add(segment);
+        return segment;
+    }
+
+    /// <summary>
+    /// 给<b>最后一段</b>添点。<b>没有段可添时静默返回 false 而不是抛</b>：荧光笔在穿透态收不到事件，
+    /// 松手与移动的到达顺序在不同 DPI 缩放下不保证，追到这里抛异常只会变成"画布一动就崩"。
+    /// </summary>
+    public bool Extend(PixelPoint p, long nowMs)
+    {
+        if (_segments.Count == 0) return false;
+        var last = _segments[^1];
+        last.LastPointTick = nowMs;                          // 即使这一点太近被丢，也重新起算 TTL（还在比划＝没停）
+        last.Stroke.AddPoint(p);
+        return true;
+    }
+
+    /// <summary>
+    /// 每帧调用：按 TTL 淘汰到期段并刷新存活段的浓度，返回还能画的段。
+    /// <para>从后往前删——<see cref="List{T}"/> 从前删会让索引整体错位，
+    /// 而"漏掉一段没淡"会表现成屏幕上赖着不走的一道光。</para>
+    /// </summary>
+    public IReadOnlyList<Segment> Tick(long nowMs)
+    {
+        var ttlMs = Math.Max(1, Ttl.TotalMilliseconds);
+        for (var i = _segments.Count - 1; i >= 0; i--)
+        {
+            var segment = _segments[i];
+            var age = nowMs - segment.LastPointTick;
+            // age 为负＝TickCount64 回绕（几十天不关机才会遇到一次）：当作刚添过点，不因此把笔迹吞掉
+            segment.AlphaScale = age <= 0 ? 1d : Math.Clamp(1d - age / ttlMs, 0d, 1d);
+            if (segment.AlphaScale <= 0d) _segments.RemoveAt(i);
+        }
+        return _segments;
+    }
+}
