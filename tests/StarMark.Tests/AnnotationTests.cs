@@ -654,6 +654,62 @@ public sealed class AnnotationTests
             Math.Abs(corner.X - box.Right) <= 1 && Math.Abs(corner.Y - box.Bottom) <= 1);
     }
 
+    /// <summary>
+    /// 拖"位置"拖得再远，字高与倍数都不许动 —— 真机反馈"拖动文字会变大"的正身。
+    /// <para>这条缺陷原来在模型里查不到：判定（<see cref="GrabAt"/>）与算式（原来的 <c>Preview</c>）分处两层，
+    /// 而算式读的是界面的可变字段 <c>_grab</c>——松手前它已被清零，于是"移动"落进了缩放分支，
+    /// 倍数按"按下点到松手点"算，一路顶到上限 6×。日志原件：<c>[AnnoGrab] Move</c> ＋
+    /// <c>[AnnoDrag] Move font 22→132 scale 1.000→6.000</c>。算式搬成这里的纯函数后，这一拖能被直接断言。</para>
+    /// </summary>
+    [Fact]
+    public void DraggingToMoveNeverChangesTheGlyphHeightHoweverFar()
+    {
+        var mark = TextAt("拖着这一行走远一点");
+        var before = mark.Bounds();
+
+        var moved = mark.DraggedBy(new PixelPoint(386, 376), new PixelPoint(802, 406), AnnotationGrab.Move);
+        var after = moved.Bounds();
+
+        Assert.Equal(1d, moved.Scale);
+        Assert.Equal(mark.DrawFontHeight, moved.DrawFontHeight);
+        Assert.Equal(before.Width, after.Width);
+        Assert.Equal(before.X + 416, after.X);        // 位置该老实跟着手
+        Assert.Equal(before.Y + 30, after.Y);
+    }
+
+    /// <summary>反面的一半：缩放那一路要真的能变大，而"没判到任何一路"（None）必须什么都不改。
+    /// 旧版让 None 与缩放共用 <c>default</c> 分支——兜底哪个都不该像缩放。</summary>
+    [Fact]
+    public void ScalingStillScalesWhileAnUnclaimedPressChangesNothing()
+    {
+        var mark = TextAt("按住一头放大");
+        var box = mark.Bounds();
+        var anchored = mark.WithScalePivotTowards(new PixelPoint(box.X, box.Y));          // 抓左上 ⇒ 钉右下
+
+        var grown = anchored.DraggedBy(
+            new PixelPoint(box.X, box.Y), new PixelPoint(box.X - 120, box.Y - 120), AnnotationGrab.Scale);
+        Assert.True(grown.DrawFontHeight > mark.DrawFontHeight,
+            $"往外拖对角就该放大：{mark.DrawFontHeight} → {grown.DrawFontHeight}");
+
+        var untouched = mark.DraggedBy(new PixelPoint(0, 0), new PixelPoint(900, 900), AnnotationGrab.None);
+        Assert.Same(mark, untouched);
+    }
+
+    /// <summary>转方向那一路只改角度：不许像上面那样把字号顺手带上去。</summary>
+    [Fact]
+    public void RotatingDragChangesTheAngleButNeverTheGlyphHeight()
+    {
+        var mark = TextAt("按住旋转把手转一下");
+        var box = mark.Bounds();
+
+        var turned = mark.DraggedBy(
+            new PixelPoint(box.Right, box.Y), new PixelPoint(box.X, box.Bottom), AnnotationGrab.Rotate);
+
+        Assert.Equal(1d, turned.Scale);
+        Assert.Equal(mark.DrawFontHeight, turned.DrawFontHeight);
+        Assert.NotEqual(Annotation.NormalizeAngle(mark.Rotation), turned.Rotation);
+    }
+
     /// <summary>缩放这条路没有被砍窄：一行字在<b>框外</b>那一整圈（拿满容差）都还算按在把手上。
     /// 容差随短边收缩那条是为了不让角点区吃掉整行字，而框外本来就不与"移动"抢地方。</summary>
     [Fact]

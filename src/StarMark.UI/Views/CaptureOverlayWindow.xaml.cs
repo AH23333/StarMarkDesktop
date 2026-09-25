@@ -1028,7 +1028,7 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         _dragLast = local;
         if (_dragOriginal is not { } original || _grab == Grab.None) return;
-        var preview = Preview(original, local);
+        var preview = original.DraggedBy(_dragAnchor, local, _grab);
         if (_dragCanvas is { } canvas && _underDrag is { } under
             && _preview is { } previewBitmap && _selection is { } selection)
         {
@@ -1050,33 +1050,9 @@ public sealed partial class CaptureOverlayWindow : Window
         DrawSelectionHandles(preview);
     }
 
-    /// <summary>拖动后的那一条：几何一律由模型侧算（MovedBy / ScaledBy / RotatedBy），界面只递光标位置。</summary>
-    private Annotation Preview(Annotation original, PixelPoint local)
-    {
-        switch (_grab)
-        {
-            case Grab.Move:
-                return original.MovedBy(local.X - _dragAnchor.X, local.Y - _dragAnchor.Y);
-            case Grab.Rotate:
-            {
-                var pivot = original.Origin;
-                var from = Math.Atan2(_dragAnchor.Y - pivot.Y, _dragAnchor.X - pivot.X);
-                var to = Math.Atan2(local.Y - pivot.Y, local.X - pivot.X);
-                return original.RotatedBy((to - from) * 180d / Math.PI);
-            }
-            default:
-            {
-                // 缩放走 ScalePivot（按下的是哪一头，轴就在对面那一头）；旋转仍走 Origin（字块中心）。
-                var pivot = original.ScalePivot;
-                var start = Distance(_dragAnchor, pivot);
-                // 把手正好按在轴点上时比值没有意义（分母为 0）：保持原样，别让形状瞬间炸开
-                return start < 1 ? original : original.ScaledBy(Distance(local, pivot) / start);
-            }
-        }
-    }
-
-    private static double Distance(PixelPoint a, PixelPoint b)
-        => Math.Sqrt((double)(a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+    // 拖动的算式本身在模型里（Annotation.DraggedBy），界面不再自己 switch：
+    // 那一版读的是可变字段 _grab，而松手那一步会先把它清零 ⇒ "拖位置"在松手瞬间被算成"拖倍数"
+    // （真机反馈"拖动文字会变大"，日志原件：[AnnoGrab] Move 跟着 [AnnoDrag] Move scale 1.000→6.000）。
 
     /// <summary>松手：把这一改落进历史（算一步，撤销能回去）。没真的动过就不制造一步空历史。</summary>
     private void EndDrag()
@@ -1089,7 +1065,7 @@ public sealed partial class CaptureOverlayWindow : Window
         _dragCanvas = null;
         _grab = Grab.None;
         if (original is null || index is not { } i || grab == Grab.None) return;
-        var result = Preview(original, _dragLast);
+        var result = original.DraggedBy(_dragAnchor, _dragLast, grab);
         if (result == original) { DrawSelectionHandles(); return; }
 
         // 【临时诊断·批次 RH-3】与 [AnnoGrab] 同一批，定位完就摘：这一行说"这一拖到底改了什么"。

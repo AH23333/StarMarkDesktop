@@ -280,12 +280,11 @@ public sealed class CaptureOverlayGateTests
         Assert.DoesNotContain(".Corners().Any(", cs);            // 自己数角点＝把判据搬回不可测的那一层
         Assert.DoesNotContain("HandleSlop", grab);               // 容差由模型取，界面里不写死数字
         Assert.Contains("using Grab = StarMark.Core.Capture.AnnotationGrab;", cs);
-        // 批次 RH-2：缩放"钉住哪一头"同样只许模型说（界面里自己挑角点＝又一处测不到的判据）
-        Assert.Contains("mark.WithScalePivotTowards(local)", grab);
-        var preview = SourceGate.MethodBody(cs, "private Annotation Preview");
-        Assert.Contains("var pivot = original.ScalePivot;", preview);
-        // 旋转仍绕字块中心（Origin，RF-2 实测过的那条）；缩放才走 ScalePivot。各一处，多一处就是分岔
-        Assert.Equal(1, Count(preview, "original.Origin"));
+        Assert.Contains("mark.WithScalePivotTowards(local)", grab);    // 缩放轴由模型挑，界面不自己算角点
+        // 批次 RH-2/RH-3：缩放轴与拖动算式都不许留在界面里（现在它们住 Annotation.ScalePivot / DraggedBy，
+        // 前者由 AnnotationTests 逐角断言，后者由本文件末尾那条闸门钉调用形状）
+        Assert.DoesNotContain("original.ScalePivot", cs);
+        Assert.DoesNotContain("Math.Atan2", cs);           // 角度换算只有一处（模型），界面不再自己算
     }
 
     /// <summary>
@@ -383,6 +382,31 @@ public sealed class CaptureOverlayGateTests
         Assert.DoesNotContain("mark.Rotation", handles);
         Assert.DoesNotContain("Math.Sin", handles);
         Assert.DoesNotContain("Math.Cos", handles);
+    }
+
+    /// <summary>
+    /// 松手算结果时，"这一拖是什么"必须是<b>传进来的参数</b>，不许是读出来的字段。
+    /// <para>真机反馈"拖动文字会让文字变大"查到这一步才见底：`TryBeginGrab` 已正确判成 Move
+    /// （日志 <c>[AnnoGrab] Move</c> 为证），而 <c>EndDrag</c> 先 <c>_grab = Grab.None</c> 再调
+    /// <c>Preview</c>，<c>Preview</c> 里 <c>switch (_grab)</c> 拿到的就是 <c>None</c> ⇒ 落进
+    /// <c>default</c>（＝缩放分支），倍数按"按下点到松手点"算，一路夹到上限 6×。
+    /// 拖动过程中显示是对的（那时字段还在），只有松手才变——所以任何"看预览"的验证都抓不住它，
+    /// 模型层的逐像素用例也抓不住（它判的是 <c>GrabAt</c>，不是这一步）。</para>
+    /// <para>钉法用 <c>static</c>：静态方法读不到实例字段，这条不靠人自觉，编译器替我们守。</para>
+    /// </summary>
+    [Fact]
+    public void TheDragKindIsPassedInNotReadFromAFieldThatEndDragJustCleared()
+    {
+        var cs = ReadOverlay(xaml: false);
+        // 界面里不再有任何按可变字段分支的拖动算式
+        Assert.DoesNotContain("switch (_grab", cs);
+        var dragTo = SourceGate.MethodBody(cs, "private void DragTo");
+        var end = SourceGate.MethodBody(cs, "private void EndDrag");
+        Assert.Contains("original.DraggedBy(_dragAnchor, local, _grab)", dragTo);
+        // 松手这一步用的必须是"清掉之前抄下来的那份"——原地读 _grab 就是这条缺陷的原件
+        Assert.Contains("var grab = _grab;", end);
+        Assert.Contains("original.DraggedBy(_dragAnchor, _dragLast, grab)", end);
+        Assert.DoesNotContain("DraggedBy(_dragAnchor, _dragLast, _grab)", end);
     }
 
     /// <summary>选中说明要长在遮罩窗上（悬停到几像素的把手才看得见＝没有提示）。</summary>

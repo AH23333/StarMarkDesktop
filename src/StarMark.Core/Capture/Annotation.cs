@@ -228,6 +228,42 @@ public sealed record Annotation(
     public bool ScalesFromOutsideOnly => Tool == AnnotationTool.Text;
 
     /// <summary>
+    /// 拖动这一改落成了什么：<paramref name="grab"/> 说"按住的是哪一路"，<paramref name="anchor"/> 是按下那一点，
+    /// <paramref name="local"/> 是此刻（或松手）那一点。<b>整条算式住在模型里，而且只吃参数</b>。
+    /// <para>它原来长在遮罩窗的一个 <c>switch (_grab)</c> 方法里，于是出了真机反馈的那个缺陷：
+    /// <c>EndDrag</c> 先把拖动状态清零再算结果，<c>switch</c> 读到的是 <c>None</c>，落进 <c>default</c>＝缩放分支，
+    /// 倍数按"按下点到松手点"算 ⇒ 拖一下位置，松手的瞬间字放大到上限（日志原件：
+    /// <c>[AnnoGrab] Move</c> 后面跟着 <c>[AnnoDrag] Move font 22→132 scale 1.000→6.000</c>）。
+    /// 拖动过程中显示是对的，所以"看预览"验不出来，模型用例也管不到那一步——只有把它变成纯函数才能钉住。</para>
+    /// <para><c>None</c> 现在明确"什么都不改"，不再与缩放共用兜底分支：兜底哪个都不该像缩放。</para>
+    /// </summary>
+    public Annotation DraggedBy(PixelPoint anchor, PixelPoint local, AnnotationGrab grab) => grab switch
+    {
+        AnnotationGrab.Move => MovedBy(local.X - anchor.X, local.Y - anchor.Y),
+        AnnotationGrab.Rotate => RotatedBy(AngleTowards(local) - AngleTowards(anchor)),
+        AnnotationGrab.Scale => ScaleTowards(anchor, local),
+        _ => this,
+    };
+
+    /// <summary>绕缩放轴点按"离它多远"改倍数。按下点几乎就在轴点上时比值没有意义（分母为 0）：保持原样，别让形状瞬间炸开。</summary>
+    private Annotation ScaleTowards(PixelPoint anchor, PixelPoint local)
+    {
+        var pivot = ScalePivot;
+        var start = Distance(anchor, pivot);
+        return start < 1 ? this : ScaledBy(Distance(local, pivot) / start);
+    }
+
+    /// <summary>这一点相对旋转轴点的方位角（度）。</summary>
+    private double AngleTowards(PixelPoint at)
+    {
+        var pivot = Origin;
+        return Math.Atan2(at.Y - pivot.Y, at.X - pivot.X) * 180d / Math.PI;
+    }
+
+    private static double Distance(PixelPoint a, PixelPoint b)
+        => Math.Sqrt((double)(a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+
+    /// <summary>
     /// 画出去的那一组点：把 <see cref="Rotation"/> 与 <see cref="Scale"/> 作用上去
     /// （旋转绕 <see cref="Origin"/>，缩放绕 <see cref="ScalePivot"/>）。
     /// <para>放在模型里而不是绘制里，是因为<b>选择框、命中测试、四个落点的渲染都要用同一组点</b>——
