@@ -915,13 +915,23 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void Root_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        // 正在打字时键盘归那一行字：Enter＝落笔，Esc＝只丢掉这一行。
-        // 这一道是兜底——焦点真落进输入框时上面那条链会先把键处理掉（Handled 不再冒到这一层），
-        // 而焦点没进去时（表现就是"文字编辑无效"）至少不会把整张截图复制走或整场取消。
+        // 编辑文字时：Enter 提交、Esc 取消（不提交）
         if (_editingText && e.Key is VirtualKey.Enter or VirtualKey.Escape)
         {
             e.Handled = true;
             EndTextEditing(commit: e.Key == VirtualKey.Enter);
+            return;
+        }
+        // 编辑文字时 Ctrl+Z / Ctrl+Y 应作用于**编辑框内的输入文本**（TextBox 原生撤销），
+        // 而不是标注历史栈——否则历史回滚后编辑中的 index 失效、编辑框与画面错乱。
+        // 不设 Handled：让 TextBox 完成原生撤销/重做。
+        if (_editingText && IsControlDown() && e.Key is VirtualKey.Z or VirtualKey.Y) return;
+        // 编辑文字时 Ctrl+S：先提交这一行字再保存整图——否则保存结果会缺正在编辑的文字。
+        if (_editingText && IsControlDown() && e.Key is VirtualKey.S)
+        {
+            e.Handled = true;
+            EndTextEditing(commit: true);
+            Commit(CommitAction.Save);
             return;
         }
         if (_polyLine is not null && e.Key is VirtualKey.Enter or VirtualKey.Escape)
