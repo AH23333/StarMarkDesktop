@@ -87,6 +87,15 @@ public sealed class PinEditTests
         var wheel = SourceGate.MethodBody(cs, "private void Root_PointerWheelChanged");
         Assert.Contains("_sourceScale = next;", wheel);
         Assert.Contains("ResizePinAnchoringTopLeft()", wheel);
+        // 手上有未完成的一笔时倍率不许动：那些点是按旧除数换算的，中途改等于让这一笔跑偏，
+        // 而跑偏只有松手合成之后才看得见（那时已经退不掉）。
+        Assert.Contains("_stroke is not null || _polyLine is not null || _dragOriginal is not null", wheel);
+        // 贴图会被拖到另一块缩放不同的屏上：那块屏的 DPI 变了就要重算 DIP 除数并重摆内容，
+        // 否则画面比窗口大/小一圈，笔也整体偏（截图态每屏一窗，走不到这一步）。
+        Assert.Contains("if (RefreshScaleIfChanged()) RelayoutContent();",
+            SourceGate.MethodBody(cs, "private void PinDragTo"));
+        Assert.Contains("WindowInterop.GetScale(this)",
+            SourceGate.MethodBody(cs, "private bool RefreshScaleIfChanged"));
     }
 
     [Fact]

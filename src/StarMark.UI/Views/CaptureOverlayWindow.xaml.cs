@@ -63,7 +63,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private readonly ScreenFrame? _frame;       // 截图模式的整帧；就地编辑贴图时没有帧（底图由贴图交进来）
     private IntRect _monitor;                   // 本屏（截图态）／这张贴图（贴图态）在虚拟桌面里的物理矩形
-    private readonly double _scale;             // 本屏 DPI 缩放（1.0 / 1.25 / 1.5 …）
+    private double _scale;                  // 本屏 DPI 缩放（1.0 / 1.25 / 1.5 …）；贴图被拖到别的屏时要重量
     private readonly Action<CaptureOverlayWindow, IntRect?> _finish;
     private readonly CaptureMode _mode;         // 放开选区后做什么（F1 给条 / F3 贴 / 识字直接复制）
 
@@ -1099,12 +1099,33 @@ public sealed partial class CaptureOverlayWindow : Window
         _monitor = new IntRect(cx, cy, _monitor.Width, _monitor.Height);
         WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero, cx, cy, 0, 0,
             WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
+        // 换到一块缩放不同的屏：物理尺寸不用动（我们本来就按物理像素摆窗），但 DIP↔物理的除数变了，
+        // 不重算就是"拖到另一台显示器上画面突然比窗口大/小一圈，笔也落在偏的地方"。
+        if (RefreshScaleIfChanged()) RelayoutContent();
+    }
+
+    /// <summary>
+    /// 重量一次本窗所在屏的缩放，变了就更新 <see cref="_scale"/> 并回报 true。
+    /// <para>截图态不需要（每屏一窗，窗不会跨屏走）；贴图态会被用户拖到别的屏上，而那条链上
+    /// 每一处 DIP 都除以这个数——`SetWindowPos` 之后 WinUI 会按新屏的缩放重新排布局，
+    /// 除数留在旧屏的值，画面与窗口就对不上了。</para>
+    /// </summary>
+    private bool RefreshScaleIfChanged()
+    {
+        var next = WindowInterop.GetScale(this);
+        if (next <= 0 || Math.Abs(next - _scale) < 0.001) return false;
+        _scale = next;
+        return true;
     }
 
     /// <summary>滚轮＝缩放这张图（贴图态专属；截图态滚轮没有意义）。</summary>
     private void Root_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
     {
         if (!_pinned) return;
+        // 手上有未完成的一笔时不改倍率：那些点是按旧倍率换算的，中途改倍率等于让正在画的那一笔跑偏，
+        // 而"跑偏"只在松手合成之后才看得见（那时已经退不掉）。
+        if (_stroke is not null || _polyLine is not null || _dragOriginal is not null
+            || _draggingPin || _editingText) return;
         var next = CaptureGeometry.NextZoom(_zoom, e.GetCurrentPoint(Root).Properties.MouseWheelDelta);
         if (Math.Abs(next - _zoom) < 0.0001) { SyncBadge(); return; }   // 已在端点：窗不动，角标仍要说清现在几倍
         _zoom = next;
@@ -1127,6 +1148,7 @@ public sealed partial class CaptureOverlayWindow : Window
         _monitor = new IntRect(x, y, w, h);
         _lastAppliedX = x;
         _lastAppliedY = y;
+        RefreshScaleIfChanged();        // 收边可能把这张图整个推到另一块屏上
         RelayoutContent();
     }
 
