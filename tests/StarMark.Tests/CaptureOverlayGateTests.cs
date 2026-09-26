@@ -17,14 +17,29 @@ namespace StarMark.Tests;
 /// </summary>
 public sealed class CaptureOverlayGateTests
 {
+    /// <summary>
+    /// 读截图/贴图的 XAML 或代码侧。<b>代码侧要读整个 partial 文件集</b>（批次 WF-2b 把它拆成了
+    /// CaptureOverlayWindow.*.cs 若干份）：只读主文件的话，"XAML/代码里不许出现 X"这类禁项守门
+    /// 会因为方法搬了家而假绿——那是比红测更糟的失败方式。
+    /// </summary>
     private static string ReadOverlay(bool xaml)
+        => xaml
+            ? SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml")
+            : SourceGate.ReadRepoPartials("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
+
+    /// <summary>
+    /// <b>这条是给"守门本身"作的保</b>：截图/贴图的代码侧拆成多个 partial 文件之后，读法一旦退回单个文件
+    /// （<c>SourceGate</c> 里那个 <c>Foo.xaml.cs</c> 词干 bug 就是这么来的——glob 只命中主文件自己），
+    /// 那些"锚点必须命中 1 处"与"不许出现 X"的守门会<b>静默变成永远通过</b>，比红测危险得多。
+    /// 这里钉住：搬进分段文件的方法，读整套时必须还看得见。
+    /// </summary>
+    [Fact]
+    public void TheCodeSideGatesReadEveryPartialFile()
     {
-        var dir = Path.GetDirectoryName(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir, "src", "StarMark.UI")))
-            dir = Path.GetDirectoryName(dir);
-        var root = dir ?? throw new InvalidOperationException("未找到仓库根目录（src/StarMark.UI）");
-        var name = xaml ? "CaptureOverlayWindow.xaml" : "CaptureOverlayWindow.xaml.cs";
-        return File.ReadAllText(Path.Combine(root, "src", "StarMark.UI", "Views", name));
+        var all = SourceGate.ReadRepoPartials("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
+        Assert.Contains("private void DragTo", all);                       // 搬进 .Pointer.cs
+        Assert.Contains("private void DropSelection", all);                // 搬进 .Selection.cs
+        Assert.Contains("private void PlaceNumber", all);                  // 搬进 .Draw.cs
     }
 
     [Fact]

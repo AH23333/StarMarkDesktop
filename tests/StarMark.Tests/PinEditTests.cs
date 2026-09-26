@@ -33,7 +33,7 @@ public sealed class PinEditTests
     [Fact]
     public void PinnedWindowTurnsOffTheSelectionChrome()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         var ctor = SourceGate.MethodBody(cs, "double zoom)");
 
         // 整块都是内容：压暗、框选说明这些"选区外壳"必须收起，否则用户会去拖一圈不存在的边界
@@ -63,7 +63,7 @@ public sealed class PinEditTests
     [Fact]
     public void BarLivesInAStripOutsideTheImage_NeverScaledOntoThePicture()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         var bar = SourceGate.MethodBody(cs, "private void PositionBar");
         Assert.Contains("ApplyPinWindowRect();", bar);
         Assert.Contains("PlaceByMargin(ActionBar, 2, h + 2);", bar);      // 住在图下方那一条里
@@ -86,7 +86,7 @@ public sealed class PinEditTests
     [Fact]
     public void PinBarIsPlacedByLayoutTruthAndTheWindowFollowsItsRealSize()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         // 第一次布局才有真尺寸：量到了要重摆一次（含把窗口加高到能装下条子）
         Assert.Contains("ActionBar.SizeChanged += ",
             SourceGate.MethodBody(cs, "private void InitWindow"));
@@ -105,7 +105,7 @@ public sealed class PinEditTests
     [Fact]
     public void ClickThroughPutsTheBarAway_BecauseTheWindowNoLongerSeesTheMouse()
     {
-        var through = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "public bool ApplyClickThrough");
+        var through = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay), "public bool ApplyClickThrough");
         Assert.Contains("ActionBar.Visibility = Visibility.Collapsed;", through);
         Assert.Contains("PinBorder.Visibility = Visibility.Collapsed;", through);
     }
@@ -118,7 +118,7 @@ public sealed class PinEditTests
     [Fact]
     public void MovingOrResizingThePinKeepsTheSelectionInStep()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         Assert.Contains("if (_pinned) _selection = next;",
             SourceGate.MethodBody(cs, "private void SetMonitor(IntRect next)"));
         var drag = SourceGate.MethodBody(cs, "private void PinDragTo");
@@ -136,7 +136,7 @@ public sealed class PinEditTests
     [Fact]
     public void EveryPaintSizesOffTheBaseBuffer_NotTheSelection()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         foreach (var method in new[] { "private void Rebake()", "private byte[]? UnderDragBuffer", "private void DragTo" })
             Assert.Contains("_contentWidth, _contentHeight", SourceGate.MethodBody(cs, method));
         Assert.DoesNotContain("Render(basePixels, selection.Width", cs);
@@ -154,7 +154,7 @@ public sealed class PinEditTests
     [Fact]
     public void TheCapturePathNeverReliesOnAnUninitializedScale()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         Assert.Contains("private double _sourceScale = 1.0;", cs);
         Assert.DoesNotContain("private double _sourceScale;", cs);
         Assert.Contains("private double _zoom = 1.0;", cs);        // 同一族：贴图倍率也有明确初值
@@ -164,7 +164,7 @@ public sealed class PinEditTests
     [Fact]
     public void DoubleTapCommitsOnlyInTheSelectionStage()
     {
-        var tapped = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void OnDoubleTapped");
+        var tapped = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay), "private void OnDoubleTapped");
         Assert.Contains("if (_annotating) return;", tapped);         // 确认过选区：交给落笔/编辑那一层
         Assert.Contains("Commit(CommitAction.Copy);", tapped);       // 选区阶段才提交
         Assert.Contains("if (_pinned) { e.Handled = true; HidePin(); return; }", tapped);
@@ -174,7 +174,7 @@ public sealed class PinEditTests
     [Fact]
     public void ArrowNudgeStepsAreScreenSized()
     {
-        var nudge = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void NudgeSelectedMark");
+        var nudge = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay), "private void NudgeSelectedMark");
         Assert.Contains("SlopInSource(big ? 10 : 1)", nudge);
     }
 
@@ -182,9 +182,9 @@ public sealed class PinEditTests
     [Fact]
     public void NumberToolContinuesFromExistingMarks()
     {
-        var place = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void PlaceNumber");
+        var place = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay), "private void PlaceNumber");
         Assert.Contains("existing.Tool == AnnotationTool.Number) next = Math.Max(next, existing.Number + 1);", place);
-        Assert.DoesNotContain("_numberCounter", SourceGate.ReadRepoFile(Overlay));
+        Assert.DoesNotContain("_numberCounter", SourceGate.ReadRepoPartials(Overlay));
     }
 
     /// <summary>旋转保持当前倍率；四边形窗口区域随缩放按新倍率重套（否则放大后画面被裁得只剩一角）。</summary>
@@ -196,7 +196,7 @@ public sealed class PinEditTests
     [Fact]
     public void RotationIsQuarterTurnOnly_KeepsZoomAndStaysOnScreen()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         var bake = SourceGate.MethodBody(cs, "private void BakeQuarterTurn");
         Assert.Contains("BitmapTransform.Rotate90(composed, _contentWidth, _contentHeight, clockwise)", bake);
         Assert.Contains("PinPixelSize(rotated.Width, rotated.Height, _zoom)", bake);
@@ -220,7 +220,7 @@ public sealed class PinEditTests
     [Fact]
     public void CandidateClickStaysInTheSelectionStage()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         Assert.Contains("_selection = selection;", SourceGate.MethodBody(cs, "private void EnterEditing"));
         Assert.Contains("BeginCandidatePress(physical, e.Pointer);",
             SourceGate.MethodBody(cs, "private void Root_PointerPressed"));
@@ -235,7 +235,7 @@ public sealed class PinEditTests
     [Fact]
     public void PinShowsAHighlightBorderWhileTheMouseIsOverIt()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         Assert.Contains("PinBorder", SourceGate.ReadRepoFile(OverlayXaml));
         Assert.Contains("PinBorder.Visibility = Visibility.Visible;",
             SourceGate.MethodBody(cs, "private void Root_PointerEntered"));
@@ -254,7 +254,7 @@ public sealed class PinEditTests
     [Fact]
     public void WindowDetectionCanNeverKillTheCapture()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         var collect = SourceGate.MethodBody(cs, "private List<IntRect> CollectWindowCandidates");
         Assert.Contains("catch (Exception ex)", collect);
         Assert.Contains("return new List<IntRect>();", collect);
@@ -275,7 +275,7 @@ public sealed class PinEditTests
     {
         // 不除掉缩放，2.5× 的贴图就会"鼠标明明在字上、笔落在字外"；
         // 滚轮改了倍率却忘了同步这个除数，是同一缺陷的另一半。
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
 
         Assert.Contains("/ _sourceScale", SourceGate.MethodBody(cs, "private PixelPoint ToLocal"));
         Assert.Contains("* _sourceScale", SourceGate.MethodBody(cs, "private (double X, double Y) LocalToDip"));
@@ -298,7 +298,7 @@ public sealed class PinEditTests
     {
         // 贴图在 2.5× 时"窗口矩形"是显示尺寸；按它渲染会得到一张拉伸过的糊图。
         // 批次 PU 起 FinalPixels 分两条路：贴图＝按底图尺寸重烤，截图＝从合成图裁选区（裁剪用选区尺寸是对的）。
-        var body = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay),
+        var body = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay),
             "private (byte[] Pixels, int Width, int Height)? FinalPixels()");
 
         Assert.Contains("AnnotationPainter.Render(basePixels, _contentWidth, _contentHeight, _history.Marks)", body);
@@ -311,7 +311,7 @@ public sealed class PinEditTests
     {
         // 用户口径：贴图那份右键菜单"完全可以"由截图时这条小菜单取代。所以菜单删了，
         // 但它承担过的动作必须都在条上——少一项就是功能被删掉了。
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         Assert.DoesNotContain("AttachedFlyout", SourceGate.ReadRepoFile(OverlayXaml));
 
         var bar = SourceGate.MethodBody(cs, "private void BuildToolBar()");
@@ -333,7 +333,7 @@ public sealed class PinEditTests
     [Fact]
     public void BarStaysVisibleBecauseAHiddenBarWouldLeaveADeadStrip()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         var exited = SourceGate.MethodBody(cs, "private void Root_PointerExited");
         Assert.Contains("Armed || _editingText || _polyLine is not null || _selected is not null", exited);
         Assert.DoesNotContain("ActionBar.Visibility", exited);
@@ -345,7 +345,7 @@ public sealed class PinEditTests
     [Fact]
     public void EscapeAndCrossCloseThePin_WhileCaptureStillCancelsTheShot()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
 
         Assert.Contains("if (_pinned) Close();", SourceGate.MethodBody(cs, "private void Cancel_Click"));
         var keys = SourceGate.MethodBody(cs, "private void Root_KeyDown");
@@ -360,7 +360,7 @@ public sealed class PinEditTests
     public void PinnedWindowNeverDeliversASelectionToTheCaptureSession()
     {
         // 贴图不在截图会话里：交回选区会让服务去关"整场会话的遮罩窗"，那是一屏之外的另一批窗。
-        var settle = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void Settle(IntRect? selection)");
+        var settle = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay), "private void Settle(IntRect? selection)");
         Assert.Contains("if (!_pinned) _finish(this, selection);", settle);
     }
 }

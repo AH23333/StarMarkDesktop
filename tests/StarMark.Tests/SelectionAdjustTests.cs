@@ -149,7 +149,7 @@ public sealed class SelectionAdjustTests
     [Fact]
     public void TheUiGuardsStayInTheShapesTheTestsCanBeAbout()
     {
-        var cs = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
+        var cs = SourceGate.ReadRepoPartials("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
         // ① 未选工具 ⇒ 这一按是改框（Move 那条在抓标注之后接手），且改完不再走到"画一笔"
         var press = SourceGate.MethodBody(cs, "private void Root_PointerPressed");
         // 边与角优先于落笔（Snipaste 同款），但 SelectionEdgeAt 对框内一律回 Move——
@@ -189,7 +189,7 @@ public sealed class SelectionAdjustTests
     [Fact]
     public void NoToolIsSilentlyPreselected()
     {
-        var cs = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
+        var cs = SourceGate.ReadRepoPartials("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
         Assert.Contains("private AnnotationTool? _tool;", cs);              // 没有"默认那支笔"这回事
         Assert.DoesNotContain("_tool = AnnotationTool.Rectangle;", cs);     // 也不许在别处偷偷选上
         Assert.Contains("private void SetTool(AnnotationTool? tool)", cs);
@@ -201,7 +201,7 @@ public sealed class SelectionAdjustTests
     [Fact]
     public void AStrokeInFlightKeepsTheToolThatStartedIt()
     {
-        var cs = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
+        var cs = SourceGate.ReadRepoPartials("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
         // 批次 PU 起"框内/框外"两条落笔路共用一个分发（BeginToolStroke），笔种在按下那一刻钉进去
         var dispatch = SourceGate.MethodBody(cs, "private void BeginToolStroke");
         Assert.Contains("_strokeTool = tool;", dispatch);

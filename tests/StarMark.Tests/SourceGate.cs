@@ -43,9 +43,13 @@ internal static class SourceGate
         Assert.True(File.Exists(full), $"锚点主文件不存在：{relativePath}");
         var dir = Path.GetDirectoryName(full)!;
         var stem = Path.GetFileNameWithoutExtension(full);
+        // XAML 的代码侧叫 "Foo.xaml.cs"，GetFileNameWithoutExtension 会把 ".xaml" 也留下——
+        // 不剥掉就只会命中主文件自己，那些"不许出现 X"的禁项守门会因为方法搬了家而假绿。
+        if (stem.EndsWith(".xaml", StringComparison.Ordinal)) stem = stem[..^".xaml".Length];
         var parts = Directory.GetFiles(dir, stem + ".cs")
             .Concat(Directory.GetFiles(dir, stem + ".*.cs").Where(f => !f.EndsWith(".g.cs", StringComparison.Ordinal)))
             .Distinct(StringComparer.Ordinal).OrderBy(f => f, StringComparer.Ordinal).ToList();
+        Assert.True(parts.Count > 0, $"没找到 {relativePath} 的任何一份 partial（守门要先跟上）");
         return string.Join("\n", parts.Select(File.ReadAllText));
     }
 

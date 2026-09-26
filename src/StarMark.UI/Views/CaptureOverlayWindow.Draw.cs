@@ -1,0 +1,413 @@
+#nullable enable
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices.WindowsRuntime;
+using Microsoft.UI.Input;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Shapes;
+using StarMark.Abstractions;
+using StarMark.Abstractions.Capture;
+using StarMark.Core.Capture;
+using StarMark.Integrations.Capture;
+using StarMark.UI.Helpers;
+using StarMark.UI.Services;
+using Windows.Foundation;
+using Windows.Graphics;
+using Windows.System;
+using Windows.UI;
+// "按下这一想改什么"的枚举归模型（Core.Capture）所有：判定与取值同源，界面不再自己列一份
+// （原来那份私有 enum 就是让"拖动一行字变成放大字号"测不到的一半原因——政策在界面，测试引不到）。
+using Grab = StarMark.Core.Capture.AnnotationGrab;
+
+namespace StarMark.UI.Views;
+
+/// <summary>
+/// 落墨：折线、标注模型进出、逐像素绘制、序号标注与橡皮。
+/// <b>与同目录其余 CaptureOverlayWindow.*.cs 是同一个类</b>（partial，按「一件一个文件」拆开，不是新抽象层）。
+/// </summary>
+public sealed partial class CaptureOverlayWindow
+{
+    // ────────── 折线：点几下钉几个顶点 ──────────
+
+    /// <summary>点一下加一个顶点。<b>直线只能一段，而"沿一条边界描一圈"是截图标注最常见的指示</b>
+    /// （真机反馈点名缺它）。顶点是点出来的，所以它不进拖动那套 _stroke 状态。</summary>
+    private void PlaceVertex(PixelPoint local)
+    {
+        ErrorChip.Visibility = Visibility.Collapsed;
+        if (_polyLine is null)
+        {
+            DropSelection();                  // 开始钉新的顶点，就不该再指着上一条（把手也会被 DrawLive 抹掉）
+            _polyLine = new List<PixelPoint> { local };
+        }
+        else if (_polyLine[^1] != local) _polyLine.Add(local);
+        _hoverLocal = local;
+        DrawLive();
+    }
+
+    /// <summary>收口折线。<paramref name="commit"/> 为 false 只用于 Esc 与换选区——
+    /// 顶点不足两个不算一条（那只是一个点，画出来什么也指不了）。</summary>
+    private void FinishPolyLine(bool commit)
+    {
+        var points = _polyLine;
+        _polyLine = null;
+        LiveLayer.Children.Clear();
+        if (points is null) return;
+        if (!commit || points.Count < Annotation.MinPoints(AnnotationTool.PolyLine)) return;
+        var mark = new Annotation(AnnotationTool.PolyLine, points, ColourBgra, ThicknessForTool);
+        if (mark.Problem() is { } problem)
+        {
+            ShowError(problem);
+            return;
+        }
+        _history.Add(mark);
+        _selected = _history.Count - 1;       // 与 EndStroke 同一口径：刚画完的那条立刻可挪/可缩放
+        Rebake();
+        DrawSelectionHandles();
+    }
+
+    // ────────── 标注：进入、拖动一条、合成 ──────────
+
+    /// <summary>
+    /// 就地编辑贴图的第一帧：底图＝贴图像素，选区＝整个窗口（＝贴图当前显示的那块矩形），
+    /// 之后所有编辑动作与截图时<b>走的是同一批代码</b>（八种笔、文字、撤销重做、马赛克增量、复制存图识字）。
+    /// 历史在这里清空：贴图拿的是一份<b>新</b>底图（旋转/翻转烘焙后同理），旧标注已经烤在像素里；
+    /// 截图态确认选区不清历史（标注跟屏走），所以清不清是调用方的事，不放进 <see cref="EnterEditing"/>。
+    /// </summary>
+    private void BeginEditingExisting(byte[] pixels, int width, int height)
+    {
+        _selection = _monitor;
+        _history.Reset();
+        EnterEditing(pixels, width, height, _monitor);
+        HintText.Text = string.Empty;
+    }
+
+    /// <summary>
+    /// 把一份底图摆上屏幕并进入可编辑态。截图与贴图编辑共用这一句：两者唯一的差别是底图从哪来，
+    /// 摆法、重烤、工具条定位、光标态完全一致——分成两份写迟早会有一处不同步（本项目已栽过四次）。
+    /// <para>内容层永远<b>铺满整扇窗</b>（截图＝整屏帧、贴图＝整张贴图）：标注跟屏走、可以越出选区，
+    /// 不再按选区裁一小块摆——选区外的压暗改在合成图里烤（XAML 压暗层会盖住越界的标注）。</para>
+    /// </summary>
+    private void EnterEditing(byte[] basePixels, int contentWidth, int contentHeight, IntRect selection)
+    {
+        HideMagnifier();
+        ClearDetected();
+        // <b>selection 必须在这里落进 _selection</b>：手动拖框那条路在拖动时已赋过值，
+        // 但候选窗口点击把框直接递进来——不落的话 _selection 保持 null，
+        // 之后每一按都判不出"在选区里"（真机反馈"点击候选无反应、只能一直拖框"就是它）。
+        _selection = selection;
+        _base = basePixels;
+        _contentWidth = Math.Max(1, contentWidth);
+        _contentHeight = Math.Max(1, contentHeight);
+        if (_preview is null || _preview.PixelWidth != _contentWidth || _preview.PixelHeight != _contentHeight)
+        {
+            _preview = new WriteableBitmap(_contentWidth, _contentHeight);
+            // 截图态多一份"帧＋标注、无压暗"的显示位图：改框/重拖期间切到它＋XAML 压暗跟随（零重烤）
+            _flatPreview = _pinned ? null : new WriteableBitmap(_contentWidth, _contentHeight);
+        }
+        AnnotateShot.Source = _preview;
+        var (x, y, w, h) = ToDip(_monitor);
+        Canvas.SetLeft(AnnotateShot, x);
+        Canvas.SetTop(AnnotateShot, y);
+        AnnotateShot.Width = w;
+        AnnotateShot.Height = h;
+        AnnotateLayer.Visibility = Visibility.Visible;
+
+        Rebake();
+        ActionBar.Visibility = Visibility.Visible;
+        PositionBar(selection);
+        SyncTools();            // 条上不该有任何一颗看起来是选中的：确认选区后是"改框"那一态
+        ApplyCursor();
+        // 选区框<b>常驻</b>（真机反馈"框选会出现无框的情况"）：确认路径会路过 ClearDetected →
+        // ClearSelection 把框收掉，这里必须重新画上；提示条也一并压回去。
+        if (!_pinned)
+        {
+            DrawSelection(selection);
+            HintChip.Visibility = Visibility.Collapsed;
+        }
+        _copyButton.Focus(FocusState.Programmatic);
+    }
+
+    // ────────── 绘制 ──────────
+
+    private void ClearSelection()
+    {
+        SelRect.Visibility = Visibility.Collapsed;
+        foreach (var dim in new[] { DimTop, DimLeft, DimRight, DimBottom })
+            dim.Visibility = Visibility.Collapsed;
+        SizeChip.Visibility = Visibility.Collapsed;
+        HintChip.Visibility = Visibility.Visible;
+    }
+
+    private void DrawSelection(IntRect selection)
+    {
+        if (selection.Width <= 0 || selection.Height <= 0)
+        {
+            ClearSelection();
+            return;
+        }
+        var (x, y, w, h) = ToDip(selection);
+        var screenWidth = _monitor.Width / _scale;
+        var screenHeight = _monitor.Height / _scale;
+
+        SelRect.Visibility = Visibility.Visible;
+        PlaceOnCanvas(SelRect, x, y, w, h);
+
+        // 压暗层的分工（批次 PU/PV）：确认选区且不在拖框时，压暗烤在合成图里，XAML 这四块必须收起
+        //（否则叠在烤好的压暗上再暗一遍，还会把越出选区的标注一起盖掉）；
+        // 改框/重拖进行中内容源切到了无压暗的平面缓冲，四块重新出来实时跟随（零重烤，见 ShowFlatWhileDragging）。
+        var dim = !_annotating || IsFrameDragging ? Visibility.Visible : Visibility.Collapsed;
+        PlaceOnCanvas(DimTop, 0, 0, screenWidth, y);
+        PlaceOnCanvas(DimBottom, 0, y + h, screenWidth, Math.Max(0, screenHeight - y - h));
+        PlaceOnCanvas(DimLeft, 0, y, x, h);
+        PlaceOnCanvas(DimRight, x + w, y, Math.Max(0, screenWidth - x - w), h);
+        DimTop.Visibility = dim;
+        DimBottom.Visibility = dim;
+        DimLeft.Visibility = dim;
+        DimRight.Visibility = dim;
+
+        SizeChip.Visibility = Visibility.Visible;
+        SizeText.Text = CaptureGeometry.FormatSize(selection.Width, selection.Height);
+        PlaceByMargin(SizeChip, Math.Max(0, x), Math.Max(0, y - 22));
+    }
+
+    /// <summary>
+    /// 悬停光标（批次 PU，用户口径："光标位于区域内时为十字箭头，位于边缘时为拉伸的双向箭头"）：
+    /// 没拿笔时按光标落在选区的哪个部位给形状（框内＝移动、边/角＝拉伸、框外＝可以重新框一块）；
+    /// 拿着笔＝十字准线（要落笔的地方得看得清）。形状没变就不重建，PointerMoved 每帧都路过这里。
+    /// </summary>
+    private void UpdateHoverCursor(PointInt32 physical)
+    {
+        if (_adjust != CaptureGeometry.SelectionEdge.None) return;   // 拖动中由 ApplyCursor 定
+        var local = ToLocal(physical);
+        // 选中了某条标注（批次 PV，用户口径"文字编辑时光标位于框内为十字箭头、左上/左下/右下
+        // 为斜方向拉伸"）：框内（含边）＝移动，角点＝对应对角拉伸；文字的右上角是 ✕ 删除位，
+        // 给普通箭头（其余工具四角都是缩放把手）。没点中标注才落到选区的那套形状。
+        InputSystemCursorShape? OverSelectedMark()
+        {
+            if (_pinned || Armed || Selected is not { } mark) return null;
+            var slop = SlopInSource(SelectionSlop);
+            var box = mark.Bounds();
+            foreach (var corner in mark.Corners())
+            {
+                if (!Annotation.Near(corner, local, slop)) continue;
+                var north = Math.Abs(corner.Y - box.Y) <= Math.Abs(corner.Y - box.Bottom);
+                var west = Math.Abs(corner.X - box.X) <= Math.Abs(corner.X - box.Right);
+                if (mark.Tool == AnnotationTool.Text && north && !west) return InputSystemCursorShape.Arrow;
+                return north == west
+                    ? InputSystemCursorShape.SizeNorthwestSoutheast
+                    : InputSystemCursorShape.SizeNortheastSouthwest;
+            }
+            if (local.X >= box.X - slop && local.X < box.Right + slop
+                && local.Y >= box.Y - slop && local.Y < box.Bottom + slop) return InputSystemCursorShape.SizeAll;
+            return null;
+        }
+        var shape = OverSelectedMark();
+        if (shape is null)
+        {
+            if (!_annotating || Armed) shape = InputSystemCursorShape.Cross;
+            else if (_selection is { } box)
+            {
+                shape = CaptureGeometry.SelectionEdgeAt(box, AsPixel(physical), SelectionSlop) switch
+                {
+                    CaptureGeometry.SelectionEdge.Left or CaptureGeometry.SelectionEdge.Right => InputSystemCursorShape.SizeWestEast,
+                    CaptureGeometry.SelectionEdge.Top or CaptureGeometry.SelectionEdge.Bottom => InputSystemCursorShape.SizeNorthSouth,
+                    CaptureGeometry.SelectionEdge.TopLeft or CaptureGeometry.SelectionEdge.BottomRight => InputSystemCursorShape.SizeNorthwestSoutheast,
+                    CaptureGeometry.SelectionEdge.TopRight or CaptureGeometry.SelectionEdge.BottomLeft => InputSystemCursorShape.SizeNortheastSouthwest,
+                    CaptureGeometry.SelectionEdge.Move => InputSystemCursorShape.SizeAll,
+                    _ => InputSystemCursorShape.Cross,
+                };
+            }
+            else shape = InputSystemCursorShape.Cross;
+        }
+        if (_lastCursor == shape) return;
+        _lastCursor = shape;
+        Root.Cursor = Microsoft.UI.Input.InputSystemCursor.Create(shape.Value);
+    }
+
+    /// <summary>
+    /// 改框/重拖期间的显示切换（批次 PV，治真机反馈的"拖框明显卡顿"）：内容源切到
+    /// <b>无压暗</b>的平面缓冲（<see cref="_flatPreview"/>），压暗交给 XAML 四块实时跟随——
+    /// 拖动全程<b>零整帧重烤</b>。原先"每 16ms 烤一次 4K 整帧＋上传"会阻塞 UI 线程，
+    /// 连 SelRect 的 XAML 更新一起卡。代价：拖动期间越出选区的标注被 XAML 压暗暂时盖住（瞬态）。
+    /// </summary>
+    private void ShowFlatWhileDragging()
+    {
+        if (_pinned || !_annotating || _flatPreview is null) return;
+        if (!ReferenceEquals(AnnotateShot.Source, _flatPreview)) AnnotateShot.Source = _flatPreview;
+    }
+
+    /// <summary>把内容源切回<b>带压暗</b>的合成图（每次 Rebake 成功后调用）。已在位时不动。</summary>
+    private void RestoreComposedVisual()
+    {
+        if (_pinned || _preview is null) return;
+        if (!ReferenceEquals(AnnotateShot.Source, _preview)) AnnotateShot.Source = _preview;
+    }
+
+    /// <summary>
+    /// 贴图态工具条要占的那一条（物理像素）。<b>量实测值</b>：整条是代码生成的，
+    /// 用写死的数字就会在加一颗按钮后差几十像素——差的那几十像素正是"右边那几颗点不到"。
+    /// 还没量出来时用兜底常量（窗比条略高无害，反过来就是按钮缺一半）。
+    /// </summary>
+    private (int Width, int Height) PinBarStrip()
+    {
+        ActionBar.UpdateLayout();
+        var barWidth = ActionBar.ActualWidth > 0 ? ActionBar.ActualWidth : Bar_fallback_width;
+        var barHeight = (ActionBar.ActualHeight > 0 ? ActionBar.ActualHeight : Bar_fallback_height) + 4;
+        return ((int)Math.Round(barWidth * _scale) + 4, (int)Math.Round(barHeight * _scale));
+    }
+
+    /// <summary>
+    /// 把"图在虚拟桌面里的矩形"换成"要摆的窗口矩形"：<b>窗口 = 图 + 下面那一条（宽再让条子塞得下）</b>。
+    /// <para>
+    /// 批次 WD-6 发起人裁决：工具条永远在画面外侧。贴图窗本身就是那张图，所以"外侧"只能靠加高窗口实现；
+    /// 图仍钉在窗口左上角、尺寸一格不变（内容层 <see cref="AnnotateShot"/> 是按 DIP 显式摆的，
+    /// 不像 <see cref="Shot"/> 那样 Stretch=Fill，所以窗口变高不会把画面拉长）。
+    /// </para>
+    /// <para>
+    /// 屏底放不下就<b>整窗往上挪</b>（"外侧放不下就把贴图往里挪"），而不是把条子叠回画上；
+    /// 右边同理往左挪——小贴图常常没有一条工具条宽，这正是过去"整条被裁掉一半"的来源。
+    /// </para>
+    /// </summary>
+    private IntRect PinWindowRect(IntRect image)
+    {
+        if (!_pinned) return image;
+        var (barWidth, barHeight) = PinBarStrip();
+        var w = Math.Max(1, Math.Max(image.Width, barWidth));
+        var h = Math.Max(1, image.Height) + barHeight;
+        // 收边用贴图那一条老判据（PJ 口径）：塞得下就整块留屏内（⇒ 条子必然看得见），
+        // 图比屏还大时不强求整块可见，只保证每个方向都留一条边——与缩放/拖动同一个规则，
+        // 两处各算一套的话"拖一下就把条子挤出屏"这种错一定会出现。
+        var (x, y) = CaptureGeometry.PinOrigin(image.X, image.Y, w, h, WorkArea());
+        return new IntRect(x, y, w, h);
+    }
+
+    /// <summary>
+    /// 按当前条子实测尺寸把窗口摆成"图 + 下面那一条"。<b>只在贴图态调用</b>，
+    /// 且是这条链上唯一的窗口尺寸写点（尺寸与位置一起定，避免"先缩小再收边"两步各自收边）。
+    /// </summary>
+    private void ApplyPinWindowRect()
+    {
+        var win = PinWindowRect(_monitor);
+        var now = WindowInterop.GetWindowRect(this);
+        if (now.X == win.X && now.Y == win.Y && now.Width == win.Width && now.Height == win.Height) return;
+        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero, win.X, win.Y, win.Width, win.Height,
+            WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
+        _lastAppliedX = win.X;
+        _lastAppliedY = win.Y;
+    }
+
+    /// <summary>
+    /// 把工具条摆到选区下方（放不下就摆到上方），左右都夹进本屏。
+    /// <para>尺寸按<b>量出来的</b> ActualWidth/Height 算：三行都是代码生成的，按写死的数字摆
+    /// 一旦加个工具就会压住选区或掉到屏外。</para>
+    /// </summary>
+    private void PositionBar(IntRect selection)
+    {
+        ActionBar.UpdateLayout();
+        var barWidth = ActionBar.ActualWidth > 0 ? ActionBar.ActualWidth : Bar_fallback_width;
+        var barHeight = ActionBar.ActualHeight > 0 ? ActionBar.ActualHeight : Bar_fallback_height;
+        var (x, y, w, h) = ToDip(selection);
+        if (_pinned)
+        {
+            // 贴图态：条子住在"图下方那一条"里（窗口已经为它加高），既不在画上，也不会被窗边裁掉。
+            // 先把窗口按实测尺寸校正一次——按钮增减、换 DPI、缩放之后都从这条走。
+            ApplyPinWindowRect();
+            ActionBar.HorizontalAlignment = HorizontalAlignment.Left;
+            ActionBar.VerticalAlignment = VerticalAlignment.Top;
+            ActionBar.RenderTransform = null;       // 不再缩放条子：外侧那一条要多少地方有多少地方
+            PlaceByMargin(ActionBar, 2, h + 2);
+            // 悬停高亮那一圈只描画面，不描"画面 + 条子"（否则看上去像贴图变大了一圈）
+            PinBorder.HorizontalAlignment = HorizontalAlignment.Left;
+            PinBorder.VerticalAlignment = VerticalAlignment.Top;
+            PinBorder.Width = w;
+            PinBorder.Height = h;
+            return;
+        }
+        var screenWidth = _monitor.Width / _scale;
+        var screenHeight = _monitor.Height / _scale;
+        var left = Math.Clamp(x + w - barWidth, 4, Math.Max(4, screenWidth - barWidth - 4));
+        var below = y + h + 6 + barHeight <= screenHeight;
+        PlaceByMargin(ActionBar, left, below ? y + h + 6 : Math.Max(4, y - barHeight - 6));
+    }
+
+    private static void PlaceOnCanvas(FrameworkElement element, double x, double y, double w, double h)
+    {
+        Canvas.SetLeft(element, x);
+        Canvas.SetTop(element, y);
+        element.Width = Math.Max(0, w);
+        element.Height = Math.Max(0, h);
+        element.Visibility = w <= 0 || h <= 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>Grid 里的浮层元素：靠 Left/Top 对齐 + Margin 定位（Canvas 的附加属性在这里不起作用）。</summary>
+    private static void PlaceByMargin(FrameworkElement element, double x, double y)
+        => element.Margin = new Thickness(Math.Max(0, x), Math.Max(0, y), 0, 0);
+
+    private void ShowError(string reason)
+    {
+        ErrorText.Text = reason;
+        ErrorChip.Visibility = Visibility.Visible;
+    }
+
+    // ────────── 序号标注 ──────────
+
+    private void PlaceNumber(PixelPoint local)
+    {
+        // 编号取"现存最大号 + 1"而不是自增计数器：撤销/删除最大那颗之后再点，Snipaste 的手感是
+        // 接着已有的号往下走（画 1,2,3 → 撤销掉 3 → 再点仍是 3），全局计数器会让它跳成 4。
+        var next = 1;
+        foreach (var existing in _history.Marks)
+            if (existing.Tool == AnnotationTool.Number) next = Math.Max(next, existing.Number + 1);
+        var mark = new Annotation(AnnotationTool.Number, new[] { local }, ColourBgra, 2)
+        {
+            Number = next,
+        };
+        if (mark.Problem() is not null) { return; }
+        EndTextEditing(commit: true);
+        DropSelection();
+        _history.Add(mark);
+        Rebake();
+    }
+
+    // ────────── 橡皮擦 ──────────
+
+    private void BeginEraseStroke(PixelPoint local, Pointer pointer)
+    {
+        EndTextEditing(commit: true);
+        DropSelection();
+        _erasing = true;
+        _eraseRemoved.Clear();
+        _history.BeginErase();
+        Root.CapturePointer(pointer);
+        EraseTo(local);
+    }
+
+    private void EraseTo(PixelPoint local)
+    {
+        var changed = false;
+        while (true)
+        {
+            var hit = AnnotationPainter.HitTest(_history.Marks, local, SlopInSource(SelectionSlop));
+            if (hit is not int index) break;
+            _eraseRemoved.Add(_history.Marks[index]);
+            _history.ApplyErase(_eraseRemoved);
+            changed = true;
+        }
+        if (changed) Rebake();
+    }
+
+    private void EndEraseStroke()
+    {
+        _erasing = false;
+        _history.EndErase();
+        _eraseRemoved.Clear();
+        Rebake();
+    }
+
+}

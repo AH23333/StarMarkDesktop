@@ -31,7 +31,7 @@ public sealed class TwoStageCaptureTests
     [Fact]
     public void DrawingMayLeaveTheSelectionBounds()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         var press = SourceGate.MethodBody(cs, "private void Root_PointerPressed");
         Assert.Equal(2, SourceGate.Count(press, "BeginToolStroke(physical, e.Pointer);"));
         // 框外那条路必须先问过 Armed：没拿笔的框外按下仍是"重新框一块"
@@ -43,7 +43,7 @@ public sealed class TwoStageCaptureTests
     [Fact]
     public void RedrawingTheRegionKeepsTheMarks()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         Assert.DoesNotContain("ResetAnnotations", cs);
         var drag = SourceGate.MethodBody(cs, "private void BeginRegionDrag");
         Assert.DoesNotContain("_history.Reset()", drag);
@@ -57,7 +57,7 @@ public sealed class TwoStageCaptureTests
     [Fact]
     public void CommitCropsTheComposedFrame()
     {
-        var final = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay),
+        var final = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay),
             "private (byte[] Pixels, int Width, int Height)? FinalPixels()");
         Assert.Contains("BitmapTransform.Crop(composed, _contentWidth, _contentHeight,", final);
         Assert.Contains("_annotating", final);           // 只在确认过选区后走裁剪路
@@ -69,7 +69,7 @@ public sealed class TwoStageCaptureTests
     [Fact]
     public void DimIsBakedIntoTheComposedFrame()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         Assert.Contains("BitmapTransform.DimOutside(composed, _contentWidth, _contentHeight, hole, 0x66);",
             SourceGate.MethodBody(cs, "private void Rebake()"));
         Assert.Contains("_flatPreview", SourceGate.MethodBody(cs, "private void Rebake()"));
@@ -85,7 +85,7 @@ public sealed class TwoStageCaptureTests
     [Fact]
     public void TheToolbarAppearsOnlyAfterConfirmation()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         Assert.Contains("if (!_pinned && !_annotating)",
             SourceGate.MethodBody(cs, "private void Root_PointerMoved"));
         var enter = SourceGate.MethodBody(cs, "private void EnterEditing(");
@@ -97,7 +97,7 @@ public sealed class TwoStageCaptureTests
     [Fact]
     public void EscDisarmsThePenBeforeCancelingTheShot()
     {
-        var keys = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void Root_KeyDown");
+        var keys = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay), "private void Root_KeyDown");
         Assert.Contains("else if (Armed) SetTool(null);", keys);
         // 方向键的分态也必须跟着两阶段走：确认前＝挪/缩选区，确认后＝挪选中的标注
         Assert.Contains("if (_pinned || _annotating) NudgeSelectedMark(e.Key, IsShiftDown());", keys);
@@ -110,7 +110,7 @@ public sealed class TwoStageCaptureTests
     {
         var xaml = SourceGate.ReadRepoFile(OverlayXaml);
         Assert.Contains("x:Name=\"TextDeleteButton\"", xaml);
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         var handles = SourceGate.MethodBody(cs, "private void DrawSelectionHandles(Annotation? mark = null)");
         Assert.Contains("mark.Tool == AnnotationTool.Text", handles);
         Assert.Contains("TextDeleteButton.Visibility = Visibility.Visible;", handles);
@@ -124,7 +124,7 @@ public sealed class TwoStageCaptureTests
     [Fact]
     public void TheTextEditBoxFollowsTheRotation()
     {
-        var edit = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void BeginTextEdit");
+        var edit = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay), "private void BeginTextEdit");
         Assert.Contains("rotated.Rotation != 0", edit);
         Assert.Contains("Angle = rotated.Rotation", edit);
     }
@@ -133,7 +133,7 @@ public sealed class TwoStageCaptureTests
     [Fact]
     public void HoverCursorFollowsTheSelectionEdge()
     {
-        var hover = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void UpdateHoverCursor");
+        var hover = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay), "private void UpdateHoverCursor");
         Assert.Contains("CaptureGeometry.SelectionEdgeAt(box, AsPixel(physical), SelectionSlop)", hover);
         Assert.Contains("InputSystemCursorShape.SizeAll", hover);            // 框内＝十字箭头
         Assert.Contains("InputSystemCursorShape.SizeNorthwestSoutheast", hover);   // 边/角＝双向箭头
@@ -144,7 +144,7 @@ public sealed class TwoStageCaptureTests
     [Fact]
     public void TheWholeFrameIsTheBase_NotTheSelection()
     {
-        var ctor = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "ScreenFrame frame,");
+        var ctor = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay), "ScreenFrame frame,");
         Assert.Contains("_base = shot.Pixels;", ctor);
         Assert.Contains("_contentWidth = _monitor.Width;", ctor);
         Assert.Contains("_contentHeight = _monitor.Height;", ctor);
@@ -154,7 +154,7 @@ public sealed class TwoStageCaptureTests
     [Fact]
     public void TheDragPreviewUploadIsThrottled()
     {
-        var drag = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void DragTo");
+        var drag = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay), "private void DragTo");
         Assert.Contains("_lastDragPaint", drag);
         Assert.Contains(">= 16", drag);
     }
@@ -166,7 +166,7 @@ public sealed class TwoStageCaptureTests
     [Fact]
     public void TheSelectionBorderSurvivesConfirmation()
     {
-        var enter = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void EnterEditing(");
+        var enter = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay), "private void EnterEditing(");
         Assert.Contains("DrawSelection(selection);", enter);
         Assert.Contains("HintChip.Visibility = Visibility.Collapsed;", enter);
     }
@@ -176,11 +176,11 @@ public sealed class TwoStageCaptureTests
     [Fact]
     public void TappingDrawnContentSelectsItWithoutATool()
     {
-        var grab = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private bool TryBeginGrab");
+        var grab = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay), "private bool TryBeginGrab");
         Assert.Contains("AnnotationPainter.HitTest(_history.Marks, local, SlopInSource(SelectionSlop))", grab);
         Assert.Contains("fresh", grab);      // 首次选中与"点回去改字"是两回事
         // 文字"再点一次才进编辑"：首次选中的那一按松手不许直接弹输入框
-        var end = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void EndDrag");
+        var end = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay), "private void EndDrag");
         Assert.Contains("!fresh && grab == Grab.Move && original.Tool == AnnotationTool.Text", end);
     }
 
@@ -196,7 +196,7 @@ public sealed class TwoStageCaptureTests
     [Fact]
     public void RepeatingTheSelectedPenHolstersIt_AndThePickerOnlyOpensOnSelection()
     {
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         var click = SourceGate.MethodBody(cs, "private void BrushTool_Click");
         Assert.Contains("if (tool == _tool)", click);
         Assert.Contains("SetTool(null);", click);
@@ -218,7 +218,7 @@ public sealed class TwoStageCaptureTests
         Assert.Equal(new[] { 16, 22, 32 },
             new[] { 0, 1, 2 }.Select(step => StarMark.Core.Capture.Annotation.ThicknessFor(
                 StarMark.Core.Capture.AnnotationTool.Text, step)));
-        var cs = SourceGate.ReadRepoFile(Overlay);
+        var cs = SourceGate.ReadRepoPartials(Overlay);
         Assert.Contains("Annotation.ThicknessFor(AnnotationTool.Text, _weightIndex)",
             SourceGate.MethodBody(cs, "private void BeginTextEdit"));
         Assert.Contains("FontHeight = Annotation.ThicknessFor(AnnotationTool.Text, _weightIndex),",

@@ -79,7 +79,7 @@ public sealed class PinPlacementTests
     [Fact]
     public void TheUiOnlyAsksForTheOrigin_ItNoLongerAnchorsZoomAtTheCenter()
     {
-        var cs = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
+        var cs = SourceGate.ReadRepoPartials("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
         Assert.DoesNotContain("(current.Width - w) / 2", cs);
         Assert.DoesNotContain("ResizeKeepingCenter", cs);
         // 收边判据只有两处调用：拖动一处、"图 + 条"整窗一处（缩放与 90° 旋转都经 ApplyPinWindowRect
