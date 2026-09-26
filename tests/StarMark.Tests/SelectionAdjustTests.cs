@@ -181,8 +181,9 @@ public sealed class SelectionAdjustTests
     }
 
     /// <summary>
-    /// 工具的选中态没有"默认那支笔"。批次 PV 起口径变了：点笔一次＝选中＋弹出颜色/粗细浮层，
-    /// "收笔"统一走 Esc（见 TwoStageCaptureTests.APenClickSelectsItAndOpensThePalette）；
+    /// 工具的选中态没有"默认那支笔"。批次 WD-6 起口径：点笔一次＝选中＋弹出颜色/粗细浮层，
+    /// <b>再点当前这支＝收笔</b>（两条收笔出口：再点一次与 Esc，见
+    /// TwoStageCaptureTests.RepeatingTheSelectedPenHolstersIt_AndThePickerOnlyOpensOnSelection）；
     /// 这里只钉"不许有隐形默认工具"这条不变的底线。
     /// </summary>
     [Fact]

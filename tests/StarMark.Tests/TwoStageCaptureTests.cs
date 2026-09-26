@@ -184,18 +184,29 @@ public sealed class TwoStageCaptureTests
         Assert.Contains("!fresh && grab == Grab.Move && original.Tool == AnnotationTool.Text", end);
     }
 
-    /// <summary>笔类工具点一次＝选中＋弹出颜色/粗细浮层（换颜色永远一次点击就到）；收笔统一走 Esc。</summary>
+    /// <summary>
+    /// 笔类工具：<b>点一次＝选中＋弹出颜色/粗细浮层</b>（换颜色永远一次点击就到），
+    /// <b>再点当前这支＝收笔</b>回"改框 / 改已画内容位置大小"那一态。
+    /// <para>
+    /// 后者是批次 WD-6 的发起人裁决，<b>推翻批次 PV 那版"收笔只交给 Esc"</b>：画完想立刻挪动它的人
+    /// 手在鼠标上，逼他去找键盘就是多一步。浮层只在"选中那一下"弹——再点这一下是收笔，
+    /// 把颜色/粗细又摆回来等于否认他刚做的选择。Esc 仍然是收笔的另一条出口（两级 Esc 不动）。
+    /// </para>
+    /// </summary>
     [Fact]
-    public void APenClickSelectsItAndOpensThePalette()
+    public void RepeatingTheSelectedPenHolstersIt_AndThePickerOnlyOpensOnSelection()
     {
         var cs = SourceGate.ReadRepoFile(Overlay);
         var click = SourceGate.MethodBody(cs, "private void BrushTool_Click");
+        Assert.Contains("if (tool == _tool)", click);
+        Assert.Contains("SetTool(null);", click);
+        Assert.True(click.IndexOf("HidePicker();") < click.IndexOf("SetTool(tool);"),
+            "收笔那一支不能顺手把浮层再摆回来");
         Assert.Contains("SetTool(tool);", click);
         Assert.Contains("ShowBrushPicker(button);", click);
-        Assert.DoesNotContain("SetTool(null)", click);          // "再点取消"让位给 Esc
         Assert.Contains("SetTool(wanted);", cs);                 // 形状浮层同样只选中、不 toggle
         var keys = SourceGate.MethodBody(cs, "private void Root_KeyDown");
-        Assert.Contains("else if (Armed) SetTool(null);", keys); // 收笔的出口在 Esc
+        Assert.Contains("else if (Armed) SetTool(null);", keys); // Esc 仍是收笔出口，两条并存
     }
 
     /// <summary>文字的"细/中/粗"＝字号档（16/22/32）：输入框开框与落笔烤出去用的是同一个数——

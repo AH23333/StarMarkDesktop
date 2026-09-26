@@ -513,9 +513,15 @@ public sealed partial class CaptureOverlayWindow : Window
     private void BrushTool_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: AnnotationTool tool } button) return;
-        // 用户口径（批次 PV 复验）：点一次＝选中这支笔<b>并弹出颜色/粗细浮层</b>——
-        // 换颜色必须始终一次点击就到（真机反馈"没选工具时要点两次才能选颜色"）。
-        // "收笔回到改框那一态"交给 Esc（截图态两级 Esc 的第一级），不再占"再点一次"。
+        // 用户裁决（批次 WD-6，推翻批次 PV 那版"收笔交给 Esc"）：<b>再点当前这支笔＝收笔</b>，
+        // 回到"改框 / 改已画内容的位置大小"那一态。画完想立刻挪动它，人在鼠标上，不该逼他去摸键盘。
+        // 浮层只在"选中那一下"弹：再点这一下是收笔，把颜色/粗细浮层又摆回来等于否认他刚做的选择。
+        if (tool == _tool)
+        {
+            SetTool(null);
+            HidePicker();
+            return;
+        }
         SetTool(tool);
         ShowBrushPicker(button);
     }
