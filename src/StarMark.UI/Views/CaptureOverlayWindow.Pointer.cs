@@ -152,7 +152,7 @@ public sealed partial class CaptureOverlayWindow
         _candidate = null;
         _selection = null;
         HintChip.Visibility = Visibility.Collapsed;
-        ActionBar.Visibility = Visibility.Collapsed;
+        SetBarVisible(false);
         ErrorChip.Visibility = Visibility.Collapsed;
         _startPhysical = physical;
         _awaitingRelease = true;

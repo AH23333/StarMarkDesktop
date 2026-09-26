@@ -57,7 +57,7 @@ public sealed partial class CaptureOverlayWindow
 
     private void ToggleBrushPicker(FrameworkElement anchor)
     {
-        if (_pickerFlyout is not null) HidePicker();
+        if (_pickerOpen) HidePicker();
         else ShowBrushPicker(anchor);
     }
 
@@ -100,16 +100,25 @@ public sealed partial class CaptureOverlayWindow
         ShowPicker(anchor, rows);
     }
 
+    /// <summary>
+    /// 选择栏<b>摆在条子自己那一行里</b>，不是 Flyout（批次 WI 的真机结论）：贴图态条子住一扇 33 像素高的
+    /// 独立小窗，而 WinUI 3 把弹出层钉在宿主窗边界内——Flyout 出来只有半截，图形与颜色等于选不了。
+    /// 条子自己排版就能自己长高，那扇窗按实测尺寸跟着长（<c>ActionBar.SizeChanged</c> 那条链）。
+    /// </summary>
     private void ShowPicker(FrameworkElement anchor, UIElement content)
     {
-        _pickerFlyout = new Flyout { Content = content };
-        _pickerFlyout.ShowAt(anchor);
+        _ = anchor;                       // 摆位不再按锚点，整条第二行就是它的位置
+        BarPicker.Content = content;
+        BarPicker.Visibility = Visibility.Visible;
+        _pickerOpen = true;
     }
 
     private void HidePicker()
     {
-        _pickerFlyout?.Hide();
-        _pickerFlyout = null;
+        if (!_pickerOpen) return;
+        BarPicker.Content = null;
+        BarPicker.Visibility = Visibility.Collapsed;
+        _pickerOpen = false;
         SyncTools();
     }
 

@@ -58,7 +58,7 @@ public sealed partial class CaptureOverlayWindow
     private Button _redoButton = null!;
     private Button _clearButton = null!;
     private Button _copyButton = null!;
-    private Flyout? _pickerFlyout;
+    private bool _pickerOpen;
 
     /// <summary>正在点的折线（顶点＝选区内物理像素）；null＝没有正在画的折线。</summary>
     private List<PixelPoint>? _polyLine;
@@ -67,10 +67,11 @@ public sealed partial class CaptureOverlayWindow
     /// <summary>
     /// 生成整条工具条：一颗「图形」（矩形/椭圆/直线/折线/箭头收在同一层里，见
     /// <see cref="AnnotationTools.Shapes"/>）+ 四颗各占一位的笔（画笔/荧光/打码/文字）
-    /// +「当前这支笔」+ 撤销/重做/清空 + 四个动作。文字全部收进 ToolTip，条上只有图标。
+    /// +「当前这支笔」+ 撤销/重做/清空 + 四个动作。条上只有图标，说明写在下面那一行
+    /// （悬停哪颗就出现哪颗的说明——批次 WI：贴图态条子住独立小窗，ToolTip 那种弹出层会被钉在那扇窗的边界内）。
     /// <para>真机反馈两轮把它推到了这个形状：先嫌"带文字的下拉太大"（于是全上图标），
     /// 再嫌"图形一种占一颗太铺开"（于是图形收进一个选择栏，新增折线也不再撑长条）。</para>
-    /// <para>颜色与粗细收在「笔」那颗点开的浮层里（点当前工具图标也开同一层）：
+    /// <para>颜色与粗细收在「笔」那颗点开的那一栏里（就在图标下面一行）：
     /// 藏起来的是选择，不是状态——条上那颗点始终看得出当前颜色与粗细。</para>
     /// </summary>
     private void BuildToolBar()
@@ -145,7 +146,7 @@ public sealed partial class CaptureOverlayWindow
         Margin = new Thickness(3, 2, 3, 2),
     };
 
-    private static Button IconButton(UIElement icon, string tip)
+    private Button IconButton(UIElement icon, string tip)
     {
         var button = new Button
         {
@@ -160,8 +161,23 @@ public sealed partial class CaptureOverlayWindow
             VerticalAlignment = VerticalAlignment.Center,
         };
         ToolTipService.SetToolTip(button, tip);
+        // 悬停说明写在条子自己那一行，而不是交给 ToolTip：贴图态条子住独立小窗（批次 WI），
+        // 而 WinUI 3 把弹出层钉在宿主窗边界内——33 像素高的条子窗里 ToolTip 一个字都放不下。
+        // 读的是 ToolTipService 上那份（SyncTools 会换文案，悬停那一下拿到的才是当前含义）。
+        button.PointerEntered += (_, _) => ShowHint(ToolTipService.GetToolTip(button) as string);
+        button.PointerExited += (_, _) => HideHint();
         return button;
     }
+
+    /// <summary>把某颗按钮的说明写进条子那一行（说明为空就不动：宁可留着上一条，也不要闪一下空白）。</summary>
+    private void ShowHint(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        BarHint.Text = text;
+        BarHint.Visibility = Visibility.Visible;
+    }
+
+    private void HideHint() => BarHint.Visibility = Visibility.Collapsed;
 
     private void BrushTool_Click(object sender, RoutedEventArgs e)
     {
@@ -194,6 +210,9 @@ public sealed partial class CaptureOverlayWindow
         EndTextEditing(commit: true);
         FinishPolyLine(commit: true);
         _tool = tool;
+        // 收笔那一按必须连那一栏一起收掉：以前 Esc 之后 Flyout 会"点到外面自己没"，
+        // 现在那一栏是条子的一部分，不显式收就会一直占着第二行。
+        if (tool is null) HidePicker();
         SyncTools();
         ApplyCursor();
     }

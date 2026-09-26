@@ -138,8 +138,14 @@
             </para>
             <para>
             图标是代码画的矢量图元，<b>不用字体字形</b>：字形缺字会显示成方块，而遮罩一按 Esc 就没了，
-            没人能靠眼睛把八个字形逐个确认一遍。名字与说明全部收进 ToolTip（悬停读得到，按钮上不占地方）。
-            颜色与粗细收在"笔"那一颗点开的浮层里，当前用哪支笔、多粗，条上那颗点直接看得出来。
+            没人能靠眼睛把八个字形逐个确认一遍。名字与说明写在下面那一行（悬停那颗时现身）。
+            颜色与粗细收在"笔"那一颗点开的第二行里，当前用哪支笔、多粗，条上那颗点直接看得出来。
+            </para>
+            <para>
+            <b>为什么说明与浮层都住在条子里，而不是 ToolTip / Flyout</b>（批次 WI 的真机结论）：贴图态整条
+            住一扇自己那顶的小窗（批次 WI），而 WinUI 3 的弹出层（ToolTip、Flyout）被钉在宿主窗的边界内——
+            条子那扇窗只有 33 像素高，于是"图形选择栏"截掉半截、悬停说明一个字都不出现。
+            说明与选择栏必须由条子自己排版、自己长高（那扇窗按实测尺寸跟着长），不能交给弹出层。
             </para>
         -->
         <Border
@@ -150,7 +156,24 @@
             HorizontalAlignment="Left"
             VerticalAlignment="Top"
             Visibility="Collapsed">
-            <StackPanel x:Name="BarRow" Orientation="Horizontal" Spacing="2"/>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <StackPanel x:Name="BarRow" Grid.Row="0" Orientation="Horizontal" Spacing="2"/>
+                <ContentPresenter x:Name="BarPicker" Grid.Row="1" Visibility="Collapsed"/>
+                <TextBlock
+                    x:Name="BarHint"
+                    Grid.Row="2"
+                    Visibility="Collapsed"
+                    Margin="0,1,0,0"
+                    FontSize="11.5"
+                    MaxWidth="520"
+                    TextWrapping="Wrap"
+                    Foreground="#CCFFFFFF"/>
+            </Grid>
         </Border>
 
         <Border

@@ -81,7 +81,8 @@ public sealed class TwoStageCaptureTests
     }
 
     /// <summary>识别（悬停建议）阶段不出现菜单栏：自动检测与放大镜只在"未确认选区"时活动，
-    /// 工具条只在 EnterEditing（确认）里亮出来。</summary>
+    /// 工具条只在 EnterEditing（确认）里亮出来。批次 WI 起亮/收一律走那唯一的出口
+    /// （贴图态它住独立窗，直接写 Visibility 会留下"看不见但吃鼠标的空窗"）。</summary>
     [Fact]
     public void TheToolbarAppearsOnlyAfterConfirmation()
     {
@@ -89,7 +90,8 @@ public sealed class TwoStageCaptureTests
         Assert.Contains("if (!_pinned && !_annotating)",
             SourceGate.MethodBody(cs, "private void Root_PointerMoved"));
         var enter = SourceGate.MethodBody(cs, "private void EnterEditing(");
-        Assert.Contains("ActionBar.Visibility = Visibility.Visible;", enter);
+        Assert.Contains("SetBarVisible(true);", enter);
+        Assert.DoesNotContain("ActionBar.Visibility", enter);
         Assert.Contains("ToDip(_monitor)", enter);       // 内容层铺满整扇窗，不按选区摆
     }
 

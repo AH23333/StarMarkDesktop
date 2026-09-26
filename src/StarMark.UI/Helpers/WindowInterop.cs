@@ -29,7 +29,11 @@ internal static class WindowInterop
 
     /// <summary>鼠标穿透（须与 LAYERED 同设）与分层窗口位。贴图窗"让它不挡鼠标"用这一对。</summary>
     public const uint WS_EX_TRANSPARENT = 0x00000020;
-    public const uint WS_EX_LAYERED = 0x00080000;
+    /// <summary>
+    /// 点了也不激活这扇窗。<b>贴图的工具条窗要它</b>：Enter／Ctrl+Z／Esc 这些键归贴图窗，
+    /// 点一颗按钮就把前台抢走的话，症状是"点了按钮之后快捷键全没反应"。
+    /// </summary>
+    public const uint WS_EX_NOACTIVATE = 0x08000000;    public const uint WS_EX_LAYERED = 0x00080000;
 
     public static readonly IntPtr HWND_TOP = IntPtr.Zero;
     public static readonly IntPtr HWND_BOTTOM = new(1);

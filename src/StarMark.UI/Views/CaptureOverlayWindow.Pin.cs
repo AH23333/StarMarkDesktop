@@ -180,7 +180,7 @@ public sealed partial class CaptureOverlayWindow
         _clickThrough = ok ? on : _clickThrough;
         if (_clickThrough)
         {
-            ActionBar.Visibility = Visibility.Collapsed;
+            SetBarVisible(false);
             PinBorder.Visibility = Visibility.Collapsed;    // 穿透中的窗收不到鼠标，悬停高亮也永远等不来退出
         }
         SyncBadge();
@@ -212,7 +212,7 @@ public sealed partial class CaptureOverlayWindow
     private void Root_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
         if (!_pinned) return;
-        ActionBar.Visibility = Visibility.Visible;
+        SetBarVisible(true);
         PinBorder.Visibility = Visibility.Visible;      // 高亮边框：标出"这块画面是一张贴图"（真机点名缺它）
     }
 
@@ -223,9 +223,9 @@ public sealed partial class CaptureOverlayWindow
     private void Root_PointerExited(object sender, PointerRoutedEventArgs e)
     {
         if (!_pinned || Armed || _editingText || _polyLine is not null || _selected is not null) return;
-        // 条子<b>常驻</b>：批次 WD-6 起窗口本身为它留了下面那一条，鼠标离开再把条子收走
-        // 就只剩一条"看不见、但会吃掉鼠标"的空带——比原先压在画上更糟。高亮边框仍按悬停给，
-        // 它标的是"这块画面是一张贴图"，收走不损失任何出口。
+        // 条子<b>常驻</b>：批次 WI 起它住在自己那扇置顶窗里，鼠标一离开画面就收起的话，
+        // 用户永远走不到它身上（离开画面＝进了条子窗＝条子先没了＝没有一颗按钮点得到）。
+        // 高亮边框仍按悬停给，它标的是"这块画面是一张贴图"，收走不损失任何出口。
         PinBorder.Visibility = Visibility.Collapsed;
     }
 

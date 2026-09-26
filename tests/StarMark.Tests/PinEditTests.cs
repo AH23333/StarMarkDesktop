@@ -55,28 +55,29 @@ public sealed class PinEditTests
     }
 
     /// <summary>
-    /// 贴图的工具条<b>永远在画面外侧</b>（批次 WD-6 发起人裁决）：窗口 = 图 + 下面那一条
-    /// （宽还要再让整条塞得下），图仍钉在窗口左上角、一格不变。
-    /// <para>过去是"整条缩到 0.5× 压在画面上"——小贴图照样裁掉右边那几颗（复制 / 存图 / 识字 / 穿透 / 关闭），
-    /// 而裁掉的正好是要用的；没裁到的时候它也确实盖住了画面。</para>
+    /// 贴图态的工具条<b>不在画面那一扇窗里</b>（批次 WI 发起人裁决，推翻批次 WD-6 的"窗口下方外侧那一条"）：
+    /// 它住自己那扇置顶小窗，贴图窗的尺寸＝画面，一格不加。
+    /// <para>WD-6 那个方案按构造不成立：WinUI 3 的客户区不能整块透明，画面只填满"图那一段"，
+    /// 为条子加高的那一条没有像素可画 ⇒ 屏幕上一块黑（真机两次点名"菜单栏还是和贴图同框，会造成局部黑块"）。
+    /// 更早的一版是"整条缩到 0.5× 压在画面上"——小贴图照样把右边那几颗裁掉，而裁掉的正好是要用的。</para>
+    /// <para>这里同时钉住两种"退回旧方案"的写法：给窗口加高（<c>barHeight</c> 进矩形）和把条子缩放。</para>
     /// </summary>
     [Fact]
-    public void BarLivesInAStripOutsideTheImage_NeverScaledOntoThePicture()
+    public void ThePinnedBarLivesInItsOwnWindow_NeverAStripInsideThePictureAndNeverScaled()
     {
         var cs = SourceGate.ReadRepoPartials(Overlay);
         var bar = SourceGate.MethodBody(cs, "private void PositionBar");
-        Assert.Contains("ApplyPinWindowRect();", bar);
-        Assert.Contains("PlaceByMargin(ActionBar, 2, h + 2);", bar);      // 住在图下方那一条里
-        Assert.DoesNotContain("ScaleTransform", bar);                     // 不再靠缩放挤进画面
+        Assert.Contains("ApplyPinWindowRect();", bar);                  // 先把窗口收成画面
+        Assert.Contains("AttachBarWindow();", bar);                     // 再把条子交给它自己那扇窗
+        // 递给条子窗的是**贴图窗的实际矩形**（不是按选区算出来的理想值）：画面跟到哪儿，条子跟到哪儿
+        Assert.Contains("_barWindow!.Place(new IntRect(now.X, now.Y, now.Width, now.Height), WorkArea());", bar);
+        Assert.DoesNotContain("PlaceByMargin(ActionBar",
+            SourceGate.Between(bar, "if (_pinned)", "var screenWidth"));   // 贴图分支不再用窗内 Margin 摆它
+        Assert.DoesNotContain("ScaleTransform", bar);                   // 也不靠缩放挤进画面
         Assert.DoesNotContain("RenderTransformOrigin", bar);
-        var rect = SourceGate.MethodBody(cs, "private IntRect PinWindowRect(IntRect image)");
-        Assert.Contains("image.Height) + barHeight", rect);
-        Assert.Contains("Math.Max(image.Width, barWidth)", rect);          // 窄贴图也容得下整条
-        Assert.Contains("CaptureGeometry.PinOrigin(image.X, image.Y, w, h, WorkArea())", rect);
-        var strip = SourceGate.MethodBody(cs, "private (int Width, int Height) PinBarStrip()");
-        // 量布局真值，不写死：整条是代码生成的，写死的数字加一颗按钮就差几十像素
-        Assert.Contains("ActionBar.ActualWidth > 0 ? ActionBar.ActualWidth : Bar_fallback_width", strip);
-        Assert.Contains("ActionBar.ActualHeight > 0 ? ActionBar.ActualHeight : Bar_fallback_height", strip);
+        Assert.DoesNotContain("barHeight", SourceGate.MethodBody(cs, "private IntRect PinWindowRect"));
+        // 选区阶段仍在那扇全屏窗里（它本来就铺满整屏，没有"加高一条＝一块黑"的问题）
+        Assert.Contains("PlaceByMargin(ActionBar, left,", bar);
     }
 
     /// <summary>
@@ -87,7 +88,7 @@ public sealed class PinEditTests
     public void PinBarIsPlacedByLayoutTruthAndTheWindowFollowsItsRealSize()
     {
         var cs = SourceGate.ReadRepoPartials(Overlay);
-        // 第一次布局才有真尺寸：量到了要重摆一次（含把窗口加高到能装下条子）
+        // 条子自己的尺寸会随内容变（浮层、加一颗工具）：量到变化要重摆一次那扇条子窗
         Assert.Contains("ActionBar.SizeChanged += ",
             SourceGate.MethodBody(cs, "private void InitWindow"));
         var apply = SourceGate.MethodBody(cs, "private void ApplyPinWindowRect()");
@@ -101,12 +102,18 @@ public sealed class PinEditTests
             SourceGate.MethodBody(cs, "private void BeginTextEdit"));
     }
 
-    /// <summary>穿透中的贴图收不到鼠标，那条"悬停才收起"的工具条会一直留在画面上且没人点得动它。</summary>
+    /// <summary>
+    /// 穿透中的贴图收不到鼠标，那条工具条会一直留在画面上且没人点得动它 ⇒ 收起。
+    /// <para>批次 WI 起条子住独立窗，所以收起必须走 <see cref="CaptureOverlayWindow"/> 那唯一的出口
+    /// （它会叫上那扇窗一起藏）；直接写 <c>ActionBar.Visibility</c> 会留下"条子看不见、
+    /// 但那扇空窗还压在桌面上吃鼠标"。</para>
+    /// </summary>
     [Fact]
     public void ClickThroughPutsTheBarAway_BecauseTheWindowNoLongerSeesTheMouse()
     {
         var through = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay), "public bool ApplyClickThrough");
-        Assert.Contains("ActionBar.Visibility = Visibility.Collapsed;", through);
+        Assert.Contains("SetBarVisible(false);", through);
+        Assert.DoesNotContain("ActionBar.Visibility", through);
         Assert.Contains("PinBorder.Visibility = Visibility.Collapsed;", through);
     }
 
@@ -325,21 +332,25 @@ public sealed class PinEditTests
     }
 
     /// <summary>
-    /// 贴图态条子常驻（批次 WD-6 起它住在画面下方那一条里）。
-    /// <para>原来"鼠标离开就收条"是为了不让一条工具条盖住画面；现在它不盖画面了，收走反而留下
-    /// <b>一条看不见、却会吃掉鼠标的空带</b>——比原先更糟。穿透时仍然收起：那一刻整窗不吃鼠标，
-    /// 空带不存在，留着只会让人以为条子坏了。"画着画着条没了"的三条判据（拿笔/在打字/已选中）保留。</para>
+    /// 贴图态条子<b>常驻</b>（批次 WI 起它住在画面外面那扇置顶小窗里）。
+    /// <para>原来"鼠标离开画面就收条"是为了不让一条工具条盖住画面。现在它不盖画面了，而这条判据
+    /// 换成了更要命的理由：<b>用户从画面走向条子的那一步，本身就是"离开画面"</b>——一离开就收，
+    /// 条子会在手指到达按钮之前先消失，等于没有任何一颗按钮点得到。穿透时仍然收起（走那个唯一出口，
+    /// 连带把窗藏掉）：那一刻整窗不吃鼠标，留着只会让人以为条子坏了。
+    /// "画着画着条没了"的三条判据（拿笔/在打字/已选中）保留。</para>
     /// </summary>
     [Fact]
-    public void BarStaysVisibleBecauseAHiddenBarWouldLeaveADeadStrip()
+    public void BarStaysVisibleBecauseWalkingToItMeansLeavingThePicture()
     {
         var cs = SourceGate.ReadRepoPartials(Overlay);
         var exited = SourceGate.MethodBody(cs, "private void Root_PointerExited");
         Assert.Contains("Armed || _editingText || _polyLine is not null || _selected is not null", exited);
         Assert.DoesNotContain("ActionBar.Visibility", exited);
+        Assert.DoesNotContain("SetBarVisible(false)", exited);            // 离开画面绝不收起条子
         Assert.Contains("PinBorder.Visibility = Visibility.Collapsed;", exited);
-        Assert.Contains("ActionBar.Visibility = Visibility.Collapsed;",
+        Assert.Contains("SetBarVisible(false);",
             SourceGate.MethodBody(cs, "public bool ApplyClickThrough"));
+        Assert.Contains("SetBarVisible(true);", SourceGate.MethodBody(cs, "private void Root_PointerEntered"));
     }
 
     [Fact]

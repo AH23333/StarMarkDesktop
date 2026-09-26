@@ -54,8 +54,14 @@ public sealed class CaptureOverlayGateTests
         Assert.DoesNotContain("DropDownButton", bar);
         Assert.DoesNotContain("<RadioButton", bar);
         Assert.DoesNotContain("<Flyout", bar);
-        Assert.DoesNotContain("Content=\"", bar);      // 条上不写字：文字只出现在 ToolTip（悬停读得到，也不占地方）
-        Assert.DoesNotContain("<TextBlock", bar);
+        Assert.DoesNotContain("Content=\"", bar);      // 条上不写字：文字只出现在下面那一行（悬停哪颗读哪颗）
+        // 批次 WI：说明与选择栏改成条子自己的两行（贴图态那扇独立小窗里放不下弹出层）。
+        // 它们是<b>容器</b>不是内容：XAML 里各只许出现一次，且不许预先写一个字——
+        // 写了就又变成"有哪些工具 / 这句话是什么"的第二份事实。
+        Assert.Equal(1, Count(bar, "<TextBlock"));
+        Assert.DoesNotContain("Text=\"", bar);
+        Assert.Contains("x:Name=\"BarHint\"", bar);
+        Assert.Contains("x:Name=\"BarPicker\"", bar);
     }
 
     [Fact]
@@ -86,16 +92,22 @@ public sealed class CaptureOverlayGateTests
         Assert.Equal(Enum.GetValues<AnnotationTool>().Length, SourceGate.Count(body, "AnnotationTool."));
     }
 
+    /// <summary>
+    /// 条子<b>静息时仍是一行</b>（用户反馈的原话是"太大"）：按钮只许排一行，选择栏与说明行默认收起。
+    /// <para>批次 WI 之后条子会随内容长高（那扇独立小窗按实测尺寸跟着长），所以"一行"这条判据
+    /// 从"结构上只有一行"改成"多出来的行必须是收起的容器"——出现纵向 StackPanel 就是把按钮排成了两行，
+    /// 那才是真的又长回去了。</para>
+    /// </summary>
     [Fact]
-    public void ToolStripIsASingleCompactRow()
+    public void ToolStripRestsAsASingleCompactRow()
     {
-        // 用户反馈的原话是"太大"。这条闸门钉的是"别再长回两行、也别把图标换回带文字的下拉"：
-        // 工具条 Border 里只允许一个横向 StackPanel，出现纵向 StackPanel 就是又加了一行。
         var bar = ActionBar(ReadOverlay(xaml: true));
         Assert.Equal(1, Count(bar, "<StackPanel"));
         Assert.Contains("Orientation=\"Horizontal\"", bar);
         Assert.DoesNotContain("Orientation=\"Vertical\"", bar);
         Assert.True(Count(bar, "<Border") == 1, "工具条里再套一个 Border 就是又开了一层");
+        // 条子本体 + 选择栏 + 说明行：三处 Collapsed，缺一条就是"什么都没点的时候条子先胖了一行"
+        Assert.Equal(3, Count(bar, "Visibility=\"Collapsed\""));
     }
 
     /// <summary>工具条那一截 XAML（从 ActionBar 到下一个浮层）。</summary>
@@ -541,5 +553,102 @@ public sealed class CaptureOverlayGateTests
         Assert.DoesNotContain("Pivot =", cs);
         Assert.DoesNotContain(".Pivot", cs);
         Assert.Contains("mark.Bounds()", SourceGate.MethodBody(cs, "private void DrawSelectionHandles"));
+    }
+
+    // ────────── 批次 WI：贴图工具条住独立置顶窗（贴图窗＝画面，一格不加） ──────────
+
+    /// <summary>
+    /// 贴图窗的窗口矩形必须<b>等于画面矩形</b>。<para>
+    /// 批次 WD-6 的"窗口 = 图 + 下面那一条"按构造不成立：WinUI 3 的客户区不能整块透明，
+    /// 画面只填满"图那一段"，为条子加高的那一条没有像素可画 ⇒ 屏幕上一块黑
+    /// （真机反馈两次："菜单栏还是和贴图同框，会造成局部黑块"）。
+    /// 这里反钉那两个加法：一旦回来，黑块就回来。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void PinWindowIsExactlyTheImage_TheBarNeverGrowsIt()
+    {
+        var rect = SourceGate.MethodBody(ReadOverlay(false), "private IntRect PinWindowRect");
+        Assert.Contains("if (!_pinned) return image;", rect);
+        Assert.Contains("CaptureGeometry.PinOrigin(", rect);          // PJ 那条收边判据仍在
+        Assert.DoesNotContain("barHeight", rect);
+        Assert.DoesNotContain("barWidth", rect);
+        Assert.DoesNotContain("PinBarStrip", ReadOverlay(false));     // 那条"量一条加高的"整体作废
+    }
+
+    /// <summary>条子只搬一次，且搬完必须留下"随宿主窗一起关"的钩子（否则留下一扇没有主人的条子窗）。</summary>
+    [Fact]
+    public void TheBarIsReparentedOnceAndClosedWithItsPin()
+    {
+        var draw = SourceGate.MethodBody(ReadOverlay(false), "private void AttachBarWindow");
+        Assert.Contains("if (_barWindow is not null) return;", draw);
+        Assert.Contains("host.Children.Remove(ActionBar)", draw);
+        Assert.Contains("new CaptureBarWindow(ActionBar, _scale)", draw);
+        Assert.Contains("Closed += (_, _) => _barWindow?.Shutdown();", draw);
+        Assert.Contains("HorizontalAlignment.Stretch", draw);   // 铺满那扇窗，不留一条窗底色在右下
+        // 收/展只许走一个出口：WinUI 3 的 Border 没有 IsVisibleChanged 可订阅，
+        // 散落着直接写 Visibility 就会留下"条子看不见但那扇窗还在吃鼠标"
+        var whole = SourceGate.ReadRepoPartials("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
+        Assert.Equal(1, SourceGate.Count(whole, "ActionBar.Visibility = "));
+        Assert.Contains("private void SetBarVisible(bool visible)", whole);
+        Assert.Contains("_barWindow?.Reposition();", whole);
+    }
+
+    /// <summary>
+    /// 那一侧窗自己的四条硬约束：不抢前台（样式 + 点亮那一刻把前台还回去）、topmost 两步、收起时藏窗、
+    /// 底色钉暗；外加"上下摆位只看按钮那一行"。少任一条都有具体症状
+    /// （分别：贴图快捷键被吃掉／条子被应用盖住／留下一块看不见的空窗／浅色系统主题下白图标糊成一片／
+    /// 一点开选择栏整条跳到画面另一侧）。
+    /// </summary>
+    [Fact]
+    public void TheBarWindowKeepsItsFourHardRules()
+    {
+        var bar = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureBarWindow.cs");
+        Assert.Contains("WindowInterop.RemoveDefaultWindowFrame(this)", bar);   // 无框 + 不进任务栏/Alt+Tab
+        // 不抢前台靠"亮完把前台还回去"，不靠 WS_EX_NOACTIVATE：真机上给这扇窗加了不可激活样式，
+        // 条子看得见、颗颗点不动（XAML 的按钮点击收不到）——那是比黑块更坏的收尾。
+        Assert.DoesNotContain("WindowInterop.WS_EX_NOACTIVATE", bar);
+        Assert.Contains("AppWindow.Show();", bar);                              // 先亮出来再量
+        // AppWindow.Show() 必然把新窗提到前台：不记下来还回去，贴图的 Enter／Ctrl+Z／Esc 就跟着条子一起没了
+        Assert.Contains("var previous = WindowInterop.GetForegroundWindow();", bar);
+        Assert.Contains("WindowInterop.SetForegroundWindow(previous)", bar);
+        Assert.Contains("_content.Measure(new Size(", bar);
+        Assert.Contains("WindowInterop.HWND_TOPMOST", bar);
+        Assert.Contains("WindowInterop.HWND_TOP,", bar);                        // 进带之后还要带内重排
+        Assert.Contains("WindowInterop.SW_SHOWNOACTIVATE", bar);
+        Assert.Contains("WindowInterop.SW_HIDE", bar);                           // 收起那态必须藏窗
+        Assert.Contains("RequestedTheme = ElementTheme.Dark", bar);              // 图标按白色画的，跟主题走会糊
+        // WinUI 3 的 Window 没有 Background：客户区就是这层根 Grid。不钉死底色会在浅色系统主题下
+        // 露出一圈框架默认白，围着暗色条子——正是这条链要消掉的观感。
+        Assert.Contains("Background = new SolidColorBrush(Color.FromArgb(0xEE, 0x20, 0x20, 0x20))", bar);
+        Assert.Contains("below = image.Bottom + Gap + _baseHeight <= work.Bottom", bar);
+    }
+
+    /// <summary>
+    /// 选择栏与悬停说明<b>排在条子里面</b>，不许再走 Flyout / ToolTip（批次 WI 的真机结论）。
+    /// <para>那扇条子窗只有按钮那一行高，而 WinUI 3 把弹出层钉在宿主窗边界内：真机上"图形"点开只剩
+    /// 半截、悬停一颗按钮一个字的说明都不出现。弹出层在这扇窗里<b>按构造</b>放不下，
+    /// 所以说明与选择栏必须由条子自己排版、自己长高（窗按实测尺寸跟着长）。</para>
+    /// <para>收笔那条也钉在这里：Esc／再点当前工具时那一栏要跟着收，否则它会一直占着第二行。</para>
+    /// </summary>
+    [Fact]
+    public void ThePickerAndTheHintAreRowsOfTheBar_NotPopups()
+    {
+        var cs = ReadOverlay(false);
+        Assert.DoesNotContain("new Flyout", cs);
+        Assert.DoesNotContain("_pickerFlyout", cs);
+        var picker = SourceGate.MethodBody(cs, "private void ShowPicker");
+        Assert.Contains("BarPicker.Content = content;", picker);
+        Assert.Contains("BarPicker.Visibility = Visibility.Visible;", picker);
+        Assert.Contains("BarPicker.Content = null;", SourceGate.MethodBody(cs, "private void HidePicker"));
+        Assert.Contains("if (tool is null) HidePicker();", SourceGate.MethodBody(cs, "private void SetTool("));
+        // 说明行：悬停那颗的文案就地写进条子（读 ToolTipService 上那份，SyncTools 换文案后才是当前含义）
+        var icon = SourceGate.MethodBody(cs, "private Button IconButton");
+        Assert.Contains("button.PointerEntered += (_, _) => ShowHint(ToolTipService.GetToolTip(button) as string);", icon);
+        Assert.Contains("button.PointerExited += (_, _) => HideHint();", icon);
+        Assert.Contains("BarHint.Text = text;", SourceGate.MethodBody(cs, "private void ShowHint"));
+        var xaml = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml");
+        Assert.Contains("x:Name=\"BarPicker\"", xaml);
+        Assert.Contains("x:Name=\"BarHint\"", xaml);
     }
 }

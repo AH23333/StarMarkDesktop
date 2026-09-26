@@ -119,7 +119,7 @@ public sealed partial class CaptureOverlayWindow
         AnnotateLayer.Visibility = Visibility.Visible;
 
         Rebake();
-        ActionBar.Visibility = Visibility.Visible;
+        SetBarVisible(true);
         PositionBar(selection);
         SyncTools();            // 条上不该有任何一颗看起来是选中的：确认选区后是"改框"那一态
         ApplyCursor();
@@ -249,47 +249,65 @@ public sealed partial class CaptureOverlayWindow
         if (!ReferenceEquals(AnnotateShot.Source, _preview)) AnnotateShot.Source = _preview;
     }
 
+    /// <summary>贴图态那一侧的工具条窗（只在第一次摆位时创建；选区阶段一直是 <c>null</c>）。</summary>
+    private CaptureBarWindow? _barWindow;
+
     /// <summary>
-    /// 贴图态工具条要占的那一条（物理像素）。<b>量实测值</b>：整条是代码生成的，
-    /// 用写死的数字就会在加一颗按钮后差几十像素——差的那几十像素正是"右边那几颗点不到"。
-    /// 还没量出来时用兜底常量（窗比条略高无害，反过来就是按钮缺一半）。
+    /// 条子收起／展开的<b>唯一出口</b>：贴图被设为鼠标穿透、正在输入文字时条子是收着的，
+    /// 那扇独立窗必须跟着藏——一扇量出来是 0 的空窗停在原处，看不见却会把那一块的鼠标吃掉。
+    /// （WinUI 3 的 Border 没有 IsVisibleChanged 可订阅，所以收与展一律走这里，不留第二条路。）
     /// </summary>
-    private (int Width, int Height) PinBarStrip()
+    private void SetBarVisible(bool visible)
     {
-        ActionBar.UpdateLayout();
-        var barWidth = ActionBar.ActualWidth > 0 ? ActionBar.ActualWidth : Bar_fallback_width;
-        var barHeight = (ActionBar.ActualHeight > 0 ? ActionBar.ActualHeight : Bar_fallback_height) + 4;
-        return ((int)Math.Round(barWidth * _scale) + 4, (int)Math.Round(barHeight * _scale));
+        ActionBar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        _barWindow?.Reposition();
     }
 
     /// <summary>
-    /// 把"图在虚拟桌面里的矩形"换成"要摆的窗口矩形"：<b>窗口 = 图 + 下面那一条（宽再让条子塞得下）</b>。
+    /// 把工具条搬去它自己那扇置顶窗。<b>幂等</b>：贴图态每次摆位都会走进来，但一扇贴图只搬一次
+    /// （第二次它已经没有父元素可摘，条子也就再没有主人）。
     /// <para>
-    /// 批次 WD-6 发起人裁决：工具条永远在画面外侧。贴图窗本身就是那张图，所以"外侧"只能靠加高窗口实现；
-    /// 图仍钉在窗口左上角、尺寸一格不变（内容层 <see cref="AnnotateShot"/> 是按 DIP 显式摆的，
-    /// 不像 <see cref="Shot"/> 那样 Stretch=Fill，所以窗口变高不会把画面拉长）。
+    /// 摘下来而不是再做一条：条上每颗按钮的 Click 直接握着本窗的标注状态（工具、颜色、粗细、
+    /// 撤销重做、复制／存图／识字／✕）。再做一条就要在两扇窗之间架一层回调，两层事实迟早分岔，
+    /// 分岔的样子是"条上亮着矩形、画出去的是画笔"。
     /// </para>
+    /// </summary>
+    private void AttachBarWindow()
+    {
+        if (_barWindow is not null) return;
+        if (ActionBar.Parent is Panel host) host.Children.Remove(ActionBar);
+        ActionBar.Margin = new Thickness(0);
+        // 铺满那扇小窗（窗比它大的只有防取整的那一圈 slack）：留左/上对齐会在右下多出一条窗底色，
+        // 而这条暗色边的圆角就是贴图的观感边界，不能被拆成两层。
+        ActionBar.HorizontalAlignment = HorizontalAlignment.Stretch;
+        ActionBar.VerticalAlignment = VerticalAlignment.Stretch;
+        ActionBar.RenderTransform = null;
+        _barWindow = new CaptureBarWindow(ActionBar, _scale);
+        Closed += (_, _) => _barWindow?.Shutdown();
+    }
+
+    /// <summary>
+    /// 贴图窗的窗口矩形＝<b>画面的矩形，一格不加</b>（只做 PJ 那条收边：塞得下就整块留屏内）。
     /// <para>
-    /// 屏底放不下就<b>整窗往上挪</b>（"外侧放不下就把贴图往里挪"），而不是把条子叠回画上；
-    /// 右边同理往左挪——小贴图常常没有一条工具条宽，这正是过去"整条被裁掉一半"的来源。
+    /// 批次 WI 之前这里是"窗口 = 图 + 下面那一条（宽再让条子塞得下）"，那是按构造不成立的方案：
+    /// WinUI 3 的客户区不能整块透明，画面只填满"图那一段"，为条子加高的那一条没有像素可画，
+    /// 屏幕上就是一块黑（真机反馈："菜单栏还是和贴图同框，会造成局部黑块"）。
+    /// 条子现在住它自己那扇置顶窗（<see cref="CaptureBarWindow"/>），这里只剩下"图放在哪"这一件事。
     /// </para>
     /// </summary>
     private IntRect PinWindowRect(IntRect image)
     {
         if (!_pinned) return image;
-        var (barWidth, barHeight) = PinBarStrip();
-        var w = Math.Max(1, Math.Max(image.Width, barWidth));
-        var h = Math.Max(1, image.Height) + barHeight;
-        // 收边用贴图那一条老判据（PJ 口径）：塞得下就整块留屏内（⇒ 条子必然看得见），
-        // 图比屏还大时不强求整块可见，只保证每个方向都留一条边——与缩放/拖动同一个规则，
-        // 两处各算一套的话"拖一下就把条子挤出屏"这种错一定会出现。
+        var w = Math.Max(1, image.Width);
+        var h = Math.Max(1, image.Height);
         var (x, y) = CaptureGeometry.PinOrigin(image.X, image.Y, w, h, WorkArea());
         return new IntRect(x, y, w, h);
     }
 
     /// <summary>
-    /// 按当前条子实测尺寸把窗口摆成"图 + 下面那一条"。<b>只在贴图态调用</b>，
-    /// 且是这条链上唯一的窗口尺寸写点（尺寸与位置一起定，避免"先缩小再收边"两步各自收边）。
+    /// 把贴图窗摆成 <see cref="PinWindowRect"/> 算出来的那块画面矩形。<b>只在贴图态调用</b>，
+    /// 且是这条链上唯一的窗口尺寸写点（尺寸与位置一起定，避免"先缩小再收边"两步各自收边）——
+    /// 缩放、90° 旋转、拖动都从这里过。
     /// </summary>
     private void ApplyPinWindowRect()
     {
@@ -303,7 +321,8 @@ public sealed partial class CaptureOverlayWindow
     }
 
     /// <summary>
-    /// 把工具条摆到选区下方（放不下就摆到上方），左右都夹进本屏。
+    /// 摆工具条。选区阶段：摆在这扇全屏窗里、选区下方（放不下就上方），左右都夹进本屏。
+    /// 贴图阶段：搬进它自己那扇置顶窗（<see cref="CaptureBarWindow"/>，批次 WI），跟着画面走。
     /// <para>尺寸按<b>量出来的</b> ActualWidth/Height 算：三行都是代码生成的，按写死的数字摆
     /// 一旦加个工具就会压住选区或掉到屏外。</para>
     /// </summary>
@@ -315,14 +334,13 @@ public sealed partial class CaptureOverlayWindow
         var (x, y, w, h) = ToDip(selection);
         if (_pinned)
         {
-            // 贴图态：条子住在"图下方那一条"里（窗口已经为它加高），既不在画上，也不会被窗边裁掉。
-            // 先把窗口按实测尺寸校正一次——按钮增减、换 DPI、缩放之后都从这条走。
+            // 贴图态：条子住它自己那扇置顶窗（批次 WI）。先把窗口按画面矩形校正一次（缩放／拖动／
+            // 旋转之后都从这条走），再拿<b>窗口实际矩形</b>去摆条子——画面跟到哪儿，条子跟到哪儿。
             ApplyPinWindowRect();
-            ActionBar.HorizontalAlignment = HorizontalAlignment.Left;
-            ActionBar.VerticalAlignment = VerticalAlignment.Top;
-            ActionBar.RenderTransform = null;       // 不再缩放条子：外侧那一条要多少地方有多少地方
-            PlaceByMargin(ActionBar, 2, h + 2);
-            // 悬停高亮那一圈只描画面，不描"画面 + 条子"（否则看上去像贴图变大了一圈）
+            AttachBarWindow();
+            var now = WindowInterop.GetWindowRect(this);
+            _barWindow!.Place(new IntRect(now.X, now.Y, now.Width, now.Height), WorkArea());
+            // 悬停高亮那一圈只描画面：窗口此刻就是画面，描边跟着画面走
             PinBorder.HorizontalAlignment = HorizontalAlignment.Left;
             PinBorder.VerticalAlignment = VerticalAlignment.Top;
             PinBorder.Width = w;
