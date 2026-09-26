@@ -13,6 +13,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Graphics;
 using StarMark.Abstractions;
+using StarMark.Core.Health;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
@@ -834,6 +835,77 @@ public sealed partial class WidgetWindow : Window
         if (_contextMenu is { } menu) PopulateMenu(menu);
     }
 
+    /// <summary>
+    /// 时钟组件右键菜单里的「护眼 · 休息提醒」一节（批次 WC-3）。
+    /// <para>
+    /// 引擎<b>仍然只有一个</b> <see cref="EyeRestService"/>：这里给的是"就地开关 + 改间隔"的入口，
+    /// 写盘与起停都走设置页同一对出口（<c>SaveEyeRest</c> / <c>App.ApplyEyeRest</c>），
+    /// 所以两处不会各自攒一份状态——第二份事实迟早对不上，而对不上的那次是用户先看见。
+    /// </para>
+    /// <para>菜单每次打开都重建（<see cref="OnContextMenuOpening"/>），勾选与"下一次几点"因此总是当前值。</para>
+    /// </summary>
+    private void BuildEyeRestSection(MenuFlyout menu)
+    {
+        var settings = App.Services.GetRequiredService<SettingsStore>();
+        var enabled = settings.LoadEyeRestEnabled();
+        var interval = settings.LoadEyeRestIntervalMinutes();
+
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var section = new MenuFlyoutSubItem
+        {
+            Text = "护眼 · 休息提醒",
+            Icon = new FontIcon { Glyph = "\uE7BA", FontSize = 14 },   // TouchPointer：示意"该歇一下"
+        };
+
+        var toggle = new ToggleMenuFlyoutItem { Text = "开启休息提醒", IsChecked = enabled };
+        toggle.Click += (_, _) =>
+        {
+            // 强制休息 / 全屏让路这两项不在这里改，但要原样带过去，否则一按开关就把它们重置回默认
+            settings.SaveEyeRest(toggle.IsChecked, interval,
+                settings.LoadEyeRestEnforced(), settings.LoadEyeRestDeferOnFullscreen());
+            App.ApplyEyeRest(toggle.IsChecked);
+        };
+        section.Items.Add(toggle);
+
+        var gap = new MenuFlyoutSubItem { Text = $"间隔：{interval} 分钟", IsEnabled = enabled };
+        // 档位与文案都取 Core 的那一份（IntervalLabels 与 IntervalOptions 同序）：
+        // 这里自己拼"X 分钟"就会与设置页的下拉分岔成两处事实。
+        for (var i = 0; i < EyeRestPolicy.IntervalOptions.Length; i++)
+        {
+            var minutes = EyeRestPolicy.IntervalOptions[i];
+            var item = new RadioMenuFlyoutItem
+            {
+                Text = EyeRestPolicy.IntervalLabels[i],
+                IsChecked = minutes == interval,
+            };
+            item.Click += (_, _) =>
+            {
+                settings.SaveEyeRest(settings.LoadEyeRestEnabled(), minutes,
+                    settings.LoadEyeRestEnforced(), settings.LoadEyeRestDeferOnFullscreen());
+                App.ApplyEyeRest(settings.LoadEyeRestEnabled());
+            };
+            gap.Items.Add(item);
+        }
+        section.Items.Add(gap);
+
+        // 状态常驻一行：按完开关要立刻看得见"下一次是几点"，不然"按了没反应"与"生效了但没到点"分不开
+        var next = EyeRestService.NextDueAt;
+        section.Items.Add(new MenuFlyoutItem
+        {
+            Text = next is { } due
+                ? $"下一次大约 {due.ToLocalTime():HH:mm}（到点前还会看一眼前台是否全屏）"
+                : enabled ? "开关已开，但计时器没起来（设置页「健康与诊断」有原因）" : "未开启",
+            IsEnabled = false,
+        });
+
+        var full = new MenuFlyoutItem { Text = "完整设置（强制休息 / 全屏让路）…" };
+        // 直接落在「健康与诊断」页：跳进设置页却停在常规页，等于让人到了门口再自己找房间
+        full.Click += (_, _) => App.MainWindow?.Present(true, "健康与诊断");
+        section.Items.Add(full);
+
+        menu.Items.Add(section);
+    }
+
     private void PopulateMenu(MenuFlyout menu)
     {
         menu.Items.Clear();
@@ -862,6 +934,9 @@ public sealed partial class WidgetWindow : Window
         };
         removeThis.Click += (_, _) => _ = _manager.RemoveAsync(_instanceId);
         menu.Items.Add(removeThis);
+
+        // 护眼 · 休息提醒（批次 WC-3，用户裁决"护眼建议和时钟组件结合"）：只有时钟组件挂这一节。
+        if (_kind == WidgetKind.Clock) BuildEyeRestSection(menu);
 
         // 胶囊模式入口（Phase B）：受描述符 CanHideChrome 控制；Hidden 态标题栏不可见时仍可经根边框菜单切换
         menu.Items.Add(new MenuFlyoutSeparator());

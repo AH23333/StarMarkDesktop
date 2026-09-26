@@ -11,6 +11,10 @@
                        HorizontalAlignment="Center"/>
             <TextBlock x:Name="DateBlock" Text="{x:Bind ViewModel.DateText, Mode=OneWay}" FontSize="12" Opacity="0.7"
                        HorizontalAlignment="Center"/>
+            <!-- 护眼那一行只在提醒开着时占位（批次 WC-3：引擎仍是应用级那一个，这里只是把它的话说出来） -->
+            <TextBlock x:Name="RestBlock" Text="{x:Bind ViewModel.RestText, Mode=OneWay}" FontSize="12" Opacity="0.62"
+                       HorizontalAlignment="Center"
+                       Visibility="{x:Bind ViewModel.HasRestLine, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
         </StackPanel>
     </Grid>
 </UserControl>

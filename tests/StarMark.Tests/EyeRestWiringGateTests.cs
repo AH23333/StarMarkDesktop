@@ -22,6 +22,12 @@ public sealed class EyeRestWiringGateTests
     private const string Settings = "src/StarMark.UI/Helpers/SettingsStore.cs";
     private const string App = "src/StarMark.UI/App.xaml.cs";
     private const string SettingsVm = "src/StarMark.UI/ViewModels/SettingsPageViewModel.cs";
+    private const string WidgetWindow = "src/StarMark.UI/Views/WidgetWindow.xaml.cs";
+    private const string ClockVm = "src/StarMark.UI/ViewModels/ClockWidgetViewModel.cs";
+    private const string ClockXaml = "src/StarMark.UI/Views/ClockWidget.xaml";
+    private const string ClockXamlCs = "src/StarMark.UI/Views/ClockWidget.xaml.cs";
+    private const string MainWindow = "src/StarMark.UI/MainWindow.xaml.cs";
+    private const string SettingsPageXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
 
     // ────────── 幕布：不给任何提前跳过的出口，但不抢焦点 ──────────
 
@@ -238,5 +244,67 @@ public sealed class EyeRestWiringGateTests
         // 上一次演出来的已经不是新配置了：留着那行会读成"刚验证过现在的设置"
         Assert.Contains("EyeRestPreviewStatus = string.Empty;", apply);
         Assert.Contains("EyeRestStatus = BuildEyeRestStatus();", apply);
+    }
+
+    // ────────── 批次 WC-3：护眼与时钟组件整合 ──────────
+
+    /// <summary>时钟组件上那一节是<b>第二个入口，不是第二个引擎</b>。</summary>
+    [Fact]
+    public void TheClockWidgetMenuIsASecondEntry_NotASecondEngine()
+    {
+        var widget = SourceGate.ReadRepoFile(WidgetWindow);
+        var call = SourceGate.MethodBody(widget, "private void PopulateMenu(MenuFlyout menu)");
+        var section = SourceGate.MethodBody(widget, "private void BuildEyeRestSection(MenuFlyout menu)");
+
+        // 只挂在时钟上（用户裁决是"护眼和时钟组件结合"，不是"每个组件都长一个开关"）
+        Assert.Contains("if (_kind == WidgetKind.Clock) BuildEyeRestSection(menu);", call);
+        // 写盘与起停走设置页同一对出口：两处各攒一份状态，迟早对不上，而对不上的那次是用户先看见
+        Assert.Contains("settings.SaveEyeRest(", section);
+        Assert.Contains("App.ApplyEyeRest(", section);
+        // 档位与文案都取 Core 那一份（自己拼"X 分钟"就是第二份"有哪些档"）
+        Assert.Contains("EyeRestPolicy.IntervalOptions", section);
+        Assert.Contains("EyeRestPolicy.IntervalLabels", section);
+        Assert.DoesNotContain("15 分钟", section);
+        // 开关必须把它没管的两项原样带过去，否则一按开关就把「强制休息 / 全屏让路」重置回默认
+        Assert.Equal(2, SourceGate.Count(section, "settings.LoadEyeRestEnforced()"));
+        Assert.Equal(2, SourceGate.Count(section, "settings.LoadEyeRestDeferOnFullscreen()"));
+    }
+
+    /// <summary>时钟上那一行读的是引擎已有的状态，组件自己不另起一张表。</summary>
+    [Fact]
+    public void TheClockLineReadsTheEngine_InsteadOfKeepingItsOwnBeat()
+    {
+        var vm = SourceGate.ReadRepoFile(ClockVm);
+        Assert.Contains("EyeRestService.IsResting", vm);
+        Assert.Contains("EyeRestService.NextDueAt", vm);
+        // 禁的是方法体里的行为，不是注释里的字（类注释本来就要提"由组件的定时器每秒调用"）
+        var update = SourceGate.MethodBody(vm, "public void Update()");
+        var rest = SourceGate.MethodBody(vm, "private void RefreshRest(DateTime now)");
+        foreach (var forbidden in new[] { "DispatcherQueueTimer", "EyeRestPolicy", "SaveEyeRest", "IntervalOptions" })
+        {
+            Assert.DoesNotContain(forbidden, update);
+            Assert.DoesNotContain(forbidden, rest);
+        }
+
+        var xaml = SourceGate.ReadRepoFile(ClockXaml);
+        // 关着的人不该在时钟上多看见一行空位
+        Assert.Contains("ViewModel.HasRestLine, Mode=OneWay, Converter={StaticResource BoolToVis}", xaml);
+        // 第三行也要吃字号：早先漏乘缩放系数就是"放大文字后日期不动"那一类
+        var code = SourceGate.ReadRepoFile(ClockXamlCs);
+        Assert.Contains("RestBlock.FontSize = DateBlock.FontSize;", code);
+    }
+
+    /// <summary>从组件跳"完整设置"必须落在它点名的那一页——按标题选，所以标题要真的存在。</summary>
+    [Fact]
+    public void TheJumpFromTheWidgetLandsOnTheTabItNames()
+    {
+        var widget = SourceGate.ReadRepoFile(WidgetWindow);
+        var main = SourceGate.ReadRepoFile(MainWindow);
+        var page = SourceGate.ReadRepoFile(SettingsPageXaml);
+        var section = SourceGate.MethodBody(widget, "private void BuildEyeRestSection(MenuFlyout menu)");
+
+        Assert.Contains("Present(true, \"健康与诊断\")", section);
+        Assert.Contains("page.SelectTab(tab)", main);
+        Assert.Contains("<TabViewItem Header=\"健康与诊断\">", page);
     }
 }

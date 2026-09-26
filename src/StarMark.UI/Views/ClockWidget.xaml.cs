@@ -51,7 +51,7 @@ public sealed partial class ClockWidget : UserControl, IWidgetTicker
 
     private void ApplyAdaptiveFontSize()
     {
-        if (ClockBody is null || TimeBlock is null || DateBlock is null) return;
+        if (ClockBody is null || TimeBlock is null || DateBlock is null || RestBlock is null) return;
         var w = ClockBody.ActualWidth;
         var h = ClockBody.ActualHeight;
         if (w <= 0 || h <= 0) return;
@@ -63,6 +63,8 @@ public sealed partial class ClockWidget : UserControl, IWidgetTicker
         // 日期行同样要跟着系数走：早先漏乘 _textScale，于是「放大文字」后时间变了日期却不动。
         // 上下限按倍率同步缩放，否则系数 1.8 时会被夹回 22，看起来像没生效。
         DateBlock.FontSize = Math.Clamp(Math.Round(size * 0.34), 10 * _textScale, 22 * _textScale);
+        // 护眼那一行与日期行同大小：它是"顺手看一眼"的信息，不该比日期更显眼。
+        RestBlock.FontSize = DateBlock.FontSize;
     }
 
     /// <summary>按宿主窗口是否可见启停每秒刷新；启动时立即校准一次显示。</summary>

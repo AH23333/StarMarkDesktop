@@ -82,6 +82,24 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         BuildLayoutRows();
     }
 
+    /// <summary>
+    /// 按<b>页签标题</b>选中一页（从别处跳进来时用，例如时钟组件右键「完整设置」→「健康与诊断」）。
+    /// <para>用标题而不是下标：页签增删时调用方不该跟着改号。找不到就留在当前页并记一条日志——
+    /// 改名是这条路径唯一的失效方式，而它该留下话，而不是让人以为"点了没反应"。</para>
+    /// </summary>
+    public void SelectTab(string? header)
+    {
+        if (string.IsNullOrEmpty(header)) return;
+        foreach (var item in SettingsTabs.TabItems)
+        {
+            if (item is not TabViewItem tab) continue;
+            if (!string.Equals(tab.Header as string, header, StringComparison.Ordinal)) continue;
+            SettingsTabs.SelectedItem = tab;
+            return;
+        }
+        StarMark.Abstractions.StarLog.Warn($"[设置页] 没有标题为「{header}」的页签（被改名了？）");
+    }
+
     /// <summary>读取设置但不触发「实时保存」（加载本身产生的属性变更无须回写）。</summary>
     private void LoadFromStoreSilently()
     {

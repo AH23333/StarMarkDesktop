@@ -454,8 +454,8 @@ public sealed partial class MainWindow : Window
         ExitApp();
     }
 
-    /// <summary>唤起并前置主窗口；settings=true 时直接打开设置页。</summary>
-    public void Present(bool settings)
+    /// <summary>唤起并前置主窗口；settings=true 时直接打开设置页，可指定要落在哪个页签。</summary>
+    public void Present(bool settings, string? settingsTab = null)
     {
         try
         {
@@ -463,18 +463,23 @@ public sealed partial class MainWindow : Window
             Activate();
             WindowInterop.ShowWindow(MainHwnd, WindowInterop.SW_RESTORE);
             WindowInterop.SetForegroundWindow(MainHwnd);
-            if (settings) OpenSettingsPage();
+            if (settings) OpenSettingsPage(settingsTab);
         }
         catch (Exception ex) { StarLog.Error("唤起主窗口失败", ex); }
     }
 
-    private void OpenSettingsPage()
+    /// <summary>
+    /// 打开设置页。<paramref name="tab"/> 是页签标题（如「健康与诊断」）：从组件右键跳过来的人
+    /// 要的是那一栏，落在默认页等于让他到了门口再自己找房间。
+    /// </summary>
+    private void OpenSettingsPage(string? tab = null)
     {
         ViewModel.CurrentPageTag = "settings";
         NavView.SelectedItem = null;
         SetNavVisible(false);
         if (ContentFrame.Content is not SettingsPage)
             ContentFrame.Navigate(typeof(SettingsPage));
+        if (ContentFrame.Content is SettingsPage page) page.SelectTab(tab);
         PushToolbarToContent();
     }
 
