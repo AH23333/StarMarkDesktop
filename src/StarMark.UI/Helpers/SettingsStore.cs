@@ -157,6 +157,13 @@ public sealed class SettingsStore : IPerformanceSettingsSource
 
         /// <summary>前台是全屏应用时让路（放 PPT / 放映 / 全屏游戏不被遮罩砸）。默认开。</summary>
         public bool? EyeRestDeferOnFullscreen { get; set; }
+
+        /// <summary>
+        /// 屏幕画布总开关（<b>默认开</b>）：这是一条已经做完的功能，"从没表过态"不该被读成"用户关过"。
+        /// 关掉之后：九条画布快捷键不再注册（不去抢别的软件的键位）、托盘那一项整条消失，
+        /// 而按习惯键位仍会给一句"要先在设置里打开"——留一条哑键是最坏的做法。
+        /// </summary>
+        public bool? CanvasEnabled { get; set; }
     }
 
     public SettingsStore(string? path = null) => _path = path ?? ResolveSettingsPath();
@@ -944,6 +951,38 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         var d = Load() ?? new SettingsData();
         d.HotkeyBindingsJson = JsonSerializer.Serialize(bindings);
         Save(d);
+    }
+
+    /// <summary>屏幕画布总开关（<b>默认开</b>：这是一条做完了的功能，"没表过态"不等于"关过"）。</summary>
+    public bool LoadCanvasEnabled() => Load() is not { } d || d.CanvasEnabled != false;
+
+    public void SaveCanvasEnabled(bool enabled)
+    {
+        var d = Load() ?? new SettingsData();
+        d.CanvasEnabled = enabled;
+        Save(d);
+    }
+
+    /// <summary>
+    /// <b>注册给系统</b>的那份绑定＝磁盘上的绑定 + 功能总开关的闸门。与
+    /// <see cref="GetHotkeyBindings"/> 分开是有原因的：设置页要照实显示用户绑了什么（包括画布关掉时的
+    /// 那九条），而注册表不能替一个关掉的功能继续占着 Ctrl+Alt+字母。
+    /// <para>
+    /// 关掉时摘掉九条"只在画布里有用"的，<b>但 <c>canvas.toggle</c> 留着</b>：按自己习惯那颗键的人
+    /// 要听见一句"屏幕画布已在设置里关掉"，而不是一条什么也不发生的哑键。
+    /// </para>
+    /// </summary>
+    public IReadOnlyDictionary<string, HotkeyGesture> GetRegisterableHotkeyBindings()
+    {
+        var all = GetHotkeyBindings();
+        if (LoadCanvasEnabled()) return all;
+        var kept = new Dictionary<string, HotkeyGesture>();
+        foreach (var (action, gesture) in all)
+        {
+            if (HotkeyActions.IsCanvasAction(action) && action != HotkeyActions.CanvasToggle) continue;
+            kept[action] = gesture;
+        }
+        return kept;
     }
 
     public static string ResolveSettingsPath()

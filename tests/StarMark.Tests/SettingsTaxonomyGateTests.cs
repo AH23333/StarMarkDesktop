@@ -67,6 +67,7 @@ public sealed class SettingsTaxonomyGateTests
             "BackdropIndex", "MainWindowBackdropIndex", "WidgetOpacity", "MainWindowOpacity",
             "LocalDiskSearchEnabled", "EyeRestEnabled", "EyeRestEnforced", "EyeRestDeferOnFullscreen",
             "TrendingEnabled", "ClipboardHistoryEnabled", "EnableTray", "MinimizeToTray", "GithubToken",
+            "CanvasEnabled",
         };
 
         foreach (var p in writable)
@@ -96,6 +97,10 @@ public sealed class SettingsTaxonomyGateTests
         Assert.Contains("ViewModel.LocalDiskSearchEnabled", extras);
         Assert.Contains("网址来源（RSS / Atom）", extras);
         Assert.DoesNotContain("剪贴板历史", Markup(extras));
+        // 屏幕画布（批次 WD-5）：开关与那份只读键位一览都住在拓展功能页
+        Assert.Contains("<TextBlock Text=\"屏幕画布\" Style=\"{StaticResource SettingTitle}\"", extras);
+        Assert.Contains("ViewModel.CanvasEnabled", extras);
+        Assert.Contains("ViewModel.CanvasHotkeySheet", extras);
 
         var health = Between(xaml, "<TabViewItem Header=\"健康与诊断\">", "</TabViewItem>");
         Assert.Contains("护眼 · 休息提醒", health);

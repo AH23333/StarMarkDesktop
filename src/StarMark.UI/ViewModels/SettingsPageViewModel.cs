@@ -12,6 +12,7 @@ using Microsoft.UI.Xaml.Media;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Insights;
 using StarMark.Core.Backup;
+using StarMark.Core.Hotkeys;
 using StarMark.Core.Insights;
 using StarMark.Core.Performance;
 using StarMark.UI.Helpers;
@@ -235,6 +236,14 @@ public partial class SettingsPageViewModel : ObservableObject
         TrendingStatus = TrendingEnabled
             ? "已开启：导航栏「剪贴板」右侧有「热榜」。热榜本身不需要 Token，只有 Star 按钮需要。"
             : "未开启：不发请求、导航栏也没有「热榜」项。";
+
+        // 屏幕画布：只回灌开关与那份只读键位一览。副作用在回灌期间抑制——
+        // "进一趟设置页就把画布的热键全撤了"是最离谱的一种副作用。
+        _suppressCanvasApply = true;
+        CanvasEnabled = Safe(_settings.LoadCanvasEnabled, true, "屏幕画布");
+        _suppressCanvasApply = false;
+        CanvasHotkeySheet = BuildCanvasHotkeySheet();
+        CanvasStatus = BuildCanvasStatus();
 
         // RSS 总开关：回灌当前判定值（从没表过态时按"有没有启用的源"算，见 RssActivation）。
         _suppressRssApply = true;
@@ -513,6 +522,63 @@ public partial class SettingsPageViewModel : ObservableObject
 
     /// <summary>LoadFromStore 回灌初值期间抑制副作用（否则每次进设置页都重设可见性、甚至弹一次询问框）。</summary>
     private bool _suppressTrendingApply;
+
+    // ────────── 屏幕画布（批次 WD-5：总开关 + 键位只读一览）──────────
+
+    /// <summary>
+    /// 画布总开关（<b>默认开</b>）。关掉之后三件事同时发生：托盘里那一项整条消失、画布内九条快捷键
+    /// 不再注册（不替一个关掉的功能继续占着系统的 Ctrl+Alt+字母）、再按键位只会听见一句原因。
+    /// <para>
+    /// 正在画的时候关掉会<b>立刻收掉那块玻璃</b>——"我已经关了，屏幕上还压着一层吃鼠标的东西"是这条链
+    /// 最坏的收尾（与护眼 Stop 立刻收幕同一口径）。
+    /// </para>
+    /// </summary>
+    [ObservableProperty] private bool _canvasEnabled = true;
+
+    /// <summary>开关当前含义的一句话（看得见"关掉会发生什么"，不用猜）。</summary>
+    [ObservableProperty] private string _canvasStatus = string.Empty;
+
+    /// <summary>十条画布动作与它们<b>当前真实绑定</b>的键位，一行一条——生成，不写死。</summary>
+    [ObservableProperty] private string _canvasHotkeySheet = string.Empty;
+
+    private bool _suppressCanvasApply;
+
+    partial void OnCanvasEnabledChanged(bool value)
+    {
+        if (_suppressCanvasApply) return;
+        _settings.SaveCanvasEnabled(value);
+        if (!value) StarMark.UI.Services.CanvasService.Stop();
+        // 注册表当场跟着改：不重启、也不要用户再去点一次「保存快捷键」（多余的步骤算缺陷）
+        App.MainWindow?.ApplyTraySettings();
+        CanvasStatus = BuildCanvasStatus();
+    }
+
+    /// <summary>键位改了之后重算这一览（「保存快捷键」与「重试注册」两条路都调它，否则这里会显示旧键位）。</summary>
+    public void RefreshCanvasHotkeySheet()
+    {
+        CanvasHotkeySheet = BuildCanvasHotkeySheet();
+        CanvasStatus = BuildCanvasStatus();
+    }
+
+    private string BuildCanvasStatus()
+    {
+        var open = HotkeyText(HotkeyActions.CanvasToggle);
+        return CanvasEnabled
+            ? $"已开启：按 {open} 进入画布（进去是穿透态，下层应用照常操作，画布不会吃掉鼠标）。" +
+              "画布上的工具条有那颗「⌨」，随时能把下面这张表原样调出来。"
+            : $"已关闭：托盘里不再有「屏幕画布」，画布内那九条快捷键也不再占用系统组合键；" +
+              $"按 {open} 只会提示一句“要先在设置里打开”，不会静默。";
+    }
+
+    private string BuildCanvasHotkeySheet()
+        => string.Join("\n", HotkeyActions.Canvas.Select(a => $"{HotkeyActions.DisplayName(a)}　{HotkeyText(a)}"));
+
+    /// <summary>一条动作当前的键位文本（与画布那块面板同一个出处：设置页显示的与真生效的是同一份）。</summary>
+    private string HotkeyText(string action)
+    {
+        var gesture = _settings.GetHotkeyBindings().GetValueOrDefault(action);
+        return gesture is { IsEmpty: false } bound ? HotkeyDisplay.Display(bound) : "未绑定";
+    }
 
     partial void OnTrendingEnabledChanged(bool value)
     {

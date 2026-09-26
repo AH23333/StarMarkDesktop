@@ -318,7 +318,11 @@ public sealed partial class MainWindow : Window
             new("开机自动启动", TrayAutostart, Autostart().IsEnabled(), SeparatorBefore: true),
             new("全局快捷键已启用", TrayHotkeysEnabled, hotkeysOn),
         };
-        return list;
+        // 画布总开关关掉时整条不出现（发起人裁决："关掉就别留入口"）。按 Ctrl+Alt+D 仍会给一句
+        // "要先在设置里打开"——那是 CanvasService 的闸门，不是这条菜单项的职责（见 Start 里的开关检查）。
+        return _settings.LoadCanvasEnabled()
+            ? list
+            : list.Where(item => item.Tag != TrayCanvas).ToList();
     }
 
     /// <summary>贴图显隐那一项的标签：没有贴图时把状态写进文字，灰掉的项才知道自己为什么点不动。</summary>
@@ -400,7 +404,7 @@ public sealed partial class MainWindow : Window
         // 拨完当场不生效，要等重启或下一次点「保存快捷键」。
         if (App.Services.GetRequiredService<HotkeyService>() is { } hotkey)
             hotkey.ApplyBindings(hotkeyEnabled
-                ? _settings.GetHotkeyBindings()
+                ? _settings.GetRegisterableHotkeyBindings()
                 : new Dictionary<string, HotkeyGesture>());
     }
 

@@ -414,8 +414,10 @@ public partial class App : Application
                 };
 
                 hotkey.Initialize(WindowInterop.GetHwnd(_window));
-                var bindings = settings.LoadEnableGlobalHotKey()
-                    ? settings.GetHotkeyBindings()
+                // GetRegisterableHotkeyBindings 而不是 GetHotkeyBindings：功能总开关关掉的那几条不该继续
+                // 占着系统的组合键（设置页那边照旧显示用户绑的全部键位，两件事各自一份口径）
+                IReadOnlyDictionary<string, HotkeyGesture> bindings = settings.LoadEnableGlobalHotKey()
+                    ? settings.GetRegisterableHotkeyBindings()
                     : new Dictionary<string, HotkeyGesture>();
                 hotkey.ApplyBindings(bindings);
 

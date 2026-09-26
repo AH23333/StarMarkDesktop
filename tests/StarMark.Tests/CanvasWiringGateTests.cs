@@ -23,6 +23,8 @@ public sealed class CanvasWiringGateTests
     private const string Panel = "src/StarMark.UI/Views/CanvasHotkeyPanelWindow.xaml.cs";
     private const string PanelXaml = "src/StarMark.UI/Views/CanvasHotkeyPanelWindow.xaml";
     private const string App = "src/StarMark.UI/App.xaml.cs";
+    private const string SettingsPageCode = "src/StarMark.UI/Views/SettingsPage.xaml.cs";
+    private const string Store = "src/StarMark.UI/Helpers/SettingsStore.cs";
     private const string MainWindow = "src/StarMark.UI/MainWindow.xaml.cs";
 
     // ────────── 为什么是分层窗 ──────────
@@ -614,5 +616,63 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("gesture is { IsEmpty: false } bound", text);
         Assert.Contains("HotkeyDisplay.Display(bound)", text);
         Assert.Equal(3, SourceGate.Count(text, "\"未绑定\""));      // 没设置 / 没绑定 / 抛异常：三条兜底路都不能编出键位
+    }
+
+    // ────────── 批次 WD-5：总开关（设置 → 拓展功能）──────────
+
+    /// <summary>
+    /// 关掉一个功能要<b>同时</b>做到三件事，缺一条就是"关不掉"：
+    /// ① 功能自己不启动（闸门在 <c>Start()</c>，所有入口都汇到那里，所以只有一处）；
+    /// ② <b>九条快捷键不注册</b>——不替一个关掉的功能继续占着系统的组合键；
+    /// ③ 托盘整条消失（发起人裁决："关掉就别留入口"）。
+    /// <para>
+    /// 但 <c>canvas.toggle</c> 那条<b>必须继续注册</b>：按自己习惯那颗键的人要听见一句"要先在设置里打开"，
+    /// 而不是从此多了一条哑键——三条注册入口（启动 / 托盘与开关联动 / 设置页保存与重试）都得走
+    /// <c>GetRegisterableHotkeyBindings</c>，漏一条就等于"关掉之后快捷键还占着"。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void CanvasSwitchGatesStartRegistrationAndTray_AllThreeRegistrationSitesUseTheFilteredTable()
+    {
+        var store = SourceGate.ReadRepoFile(Store);
+        Assert.Contains("public bool LoadCanvasEnabled() => Load() is not { } d || d.CanvasEnabled != false;", store);
+        var reg = SourceGate.MethodBody(store,
+            "public IReadOnlyDictionary<string, HotkeyGesture> GetRegisterableHotkeyBindings()");
+        Assert.Contains("if (LoadCanvasEnabled()) return all;", reg);
+        Assert.Contains("action != HotkeyActions.CanvasToggle", reg);
+
+        Assert.Contains("settings.GetRegisterableHotkeyBindings()", SourceGate.ReadRepoFile(App));
+        var main = SourceGate.ReadRepoFile(MainWindow);
+        Assert.Contains("_settings.GetRegisterableHotkeyBindings()", main);
+        Assert.DoesNotContain("_settings.GetHotkeyBindings()", main);
+        var page = SourceGate.ReadRepoFile(SettingsPageCode);
+        Assert.Equal(2, SourceGate.Count(page, "GetRegisterableHotkeyBindings()"));   // 保存 + 重试注册
+
+        var service = SourceGate.ReadRepoFile(Service);
+        var start = SourceGate.MethodBody(service, "public static void Start()");
+        Assert.Contains("if (!EnabledBySetting)", start);
+        Assert.Contains("屏幕画布已关闭", start);
+        Assert.Contains("list.Where(item => item.Tag != TrayCanvas)", main);
+        // 关掉时正在画：立刻收玻璃（"我已经关了屏幕上还压着一层吃鼠标的东西"是最糟的收尾）
+        var vm = SourceGate.ReadRepoFile("src/StarMark.UI/ViewModels/SettingsPageViewModel.cs");
+        var changed = SourceGate.MethodBody(vm, "partial void OnCanvasEnabledChanged(bool value)");
+        Assert.Contains("if (!value) StarMark.UI.Services.CanvasService.Stop();", changed);
+        Assert.Contains("App.MainWindow?.ApplyTraySettings();", changed);   // 注册表当场跟着改，不重启、不再点保存
+    }
+
+    /// <summary>
+    /// 设置页那一览与画布面板<b>同源</b>：都从 <see cref="HotkeyActions.Canvas"/> + 当前绑定生成。
+    /// 两处各写一份键位，改天一定分岔（分岔的样子就是"照着说明按，没反应"）。
+    /// </summary>
+    [Fact]
+    public void SettingsSheetAndCanvasPanelReadTheSameTable()
+    {
+        var vm = SourceGate.ReadRepoFile("src/StarMark.UI/ViewModels/SettingsPageViewModel.cs");
+        Assert.Contains("HotkeyActions.Canvas.Select", vm);
+        Assert.Contains("HotkeyDisplay.Display(bound)", vm);
+        Assert.DoesNotContain("Ctrl+Alt+R", vm);                      // 一份字面键位都不许有
+        // 改完键要重算，否则那一览会一直显示旧键位
+        var page = SourceGate.ReadRepoFile(SettingsPageCode);
+        Assert.Equal(2, SourceGate.Count(page, "ViewModel.RefreshCanvasHotkeySheet();"));
     }
 }

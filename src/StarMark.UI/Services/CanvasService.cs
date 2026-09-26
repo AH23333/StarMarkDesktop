@@ -136,6 +136,14 @@ public static class CanvasService
             return;
         }
         if (_running || _busy) return;
+        // 总开关（设置 → 拓展功能 →「屏幕画布」）。所有入口都汇到 Start()，所以闸门只在这一处：
+        // 关着时热键那条只剩 canvas.toggle 还注册着（见 SettingsStore.GetRegisterableHotkeyBindings），
+        // 按它要听见这句原因——一条什么都不发生的哑键是最坏的收尾。
+        if (!EnabledBySetting)
+        {
+            Report("屏幕画布已关闭", "要在 设置 → 拓展功能 的「屏幕画布」里打开；打开后这条快捷键就回来了");
+            return;
+        }
         _busy = true;
         try
         {
@@ -630,17 +638,27 @@ public static class CanvasService
     public static void HotkeyPin() => RequireRunning("贴到桌面", SnapshotToPin);
 
     /// <summary>
+    /// 总开关读的是磁盘上那一份（不缓存）：设置页里改完立刻生效，不需要重启也不需要"通知一遍"，
+    /// 而漏通知正是"开关是关的、功能还在跑"这种鬼状态的来源。
+    /// </summary>
+    private static bool EnabledBySetting
+        => (App.Services?.GetService(typeof(SettingsStore)) as SettingsStore)?.LoadCanvasEnabled() ?? true;
+
+    /// <summary>
     /// 画布内动作的闸门：<b>板子没开着时按这些键要给一句看得见的原因</b>，不能"按了没反应"——
-    /// 那在用户眼里与功能坏了是同一件事。原因里带上真实的开关键位（用户可能改过，写死 Ctrl+Alt+D 是指错路）。
+    /// 那在用户眼里与功能坏了是同一件事。两种"没开着"要分开说：功能被关掉时指向快捷键是指错路，
+    /// 所以那里说的是"去设置里打开"。
     /// </summary>
     private static void RequireRunning(string what, Action run)
     {
-        if (!_running)
+        if (_running)
         {
-            Report("画布没开着", $"「{what}」要先打开屏幕画布（{BindingText(HotkeyActions.CanvasToggle)}，或托盘菜单「屏幕画布」）");
+            run();
             return;
         }
-        run();
+        Report("画布没开着", EnabledBySetting
+            ? $"「{what}」要先打开屏幕画布（{BindingText(HotkeyActions.CanvasToggle)}，或托盘菜单「屏幕画布」）"
+            : $"「{what}」要先在 设置 → 拓展功能 里打开「屏幕画布」");
     }
 
     /// <summary>某动作当前绑定的键位文本（没绑定／读不到设置时回"未绑定"，绝不回一个假键位）。</summary>
