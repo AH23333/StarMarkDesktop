@@ -237,51 +237,6 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- 护眼 / 休息提醒（默认关：不请自来的遮罩是最讨人嫌的一种"帮忙"） -->
-                        <Border Style="{StaticResource Card}">
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="护眼 · 休息提醒" Style="{StaticResource SettingTitle}"/>
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
-                                               Text="连续工作一段时间后提醒你休息。开着才建那张定时表，关掉后不探测前台窗口、也不会显示任何东西。"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
-                                                  IsOn="{x:Bind ViewModel.EyeRestEnabled, Mode=TwoWay}"/>
-                                </Grid>
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="间隔多久提醒一次"/>
-                                        <TextBlock Text="到点后还要看当前前台是不是全屏应用，所以实际时刻会有一两分钟浮动。" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
-                                    </StackPanel>
-                                    <ComboBox Grid.Column="1" MinWidth="120" VerticalAlignment="Center"
-                                              ItemsSource="{x:Bind ViewModel.EyeRestIntervalOptions}"
-                                              SelectedIndex="{x:Bind ViewModel.EyeRestIntervalIndex, Mode=TwoWay}"/>
-                                </Grid>
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
-                                               Text="强制休息：盖一层 20 秒暗幕，倒数期间按 Esc、点鼠标都不能提前跳过（只想被提醒一下就别开）。"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="强制" OffContent="只提醒" MinWidth="0"
-                                                  IsOn="{x:Bind ViewModel.EyeRestEnforced, Mode=TwoWay}"/>
-                                </Grid>
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
-                                               Text="前台是全屏应用时让路：放 PPT / 放映 / 全屏游戏不被打断，稍后再探一次。"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="让路" OffContent="不让路" MinWidth="0"
-                                                  IsOn="{x:Bind ViewModel.EyeRestDeferOnFullscreen, Mode=TwoWay}"/>
-                                </Grid>
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                    <Button Grid.Column="0" Content="试一试当前设置的效果"
-                                            Style="{StaticResource SecondaryButton}"
-                                            Command="{x:Bind ViewModel.PreviewEyeRestCommand}"/>
-                                    <!-- 演完必须有回执："按了没反应"与"演过了但没看见"在用户侧长得一样 -->
-                                    <TextBlock Grid.Column="1" VerticalAlignment="Center"
-                                               Text="{x:Bind ViewModel.EyeRestPreviewStatus, Mode=OneWay}"
-                                               Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
-                                </Grid>
-                                <TextBlock Text="{x:Bind ViewModel.EyeRestStatus, Mode=OneWay}"
-                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-
                         <!-- GitHub -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="10">
@@ -385,6 +340,28 @@
                             刻意做成"一格一改就地保存 + 状态常驻"：这一栏的每一项都要能立刻看出还差什么，
                             攒到按「保存」时才校验是扩展项目返工过的形状。
                         -->
+                        <!-- 先讲清"要填的三样各是什么、Key 去哪拿"：以前只有字段名，第一次配的人不知道该填什么，
+                             填错了又只看到"连接失败"，等于把文档藏进了试错里。 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="这三样分别要填什么" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                           Text="服务商地址（Base URL）＝用哪家的接口，也可以填自建或兼容 OpenAI 协议的网关地址；API Key＝那家公司发给你的一串secret，用来认账和计费，等同密码——别贴进聊天群，也不要提交进仓库；模型名＝具体调哪个模型，决定能力与价格。三项填好按「测试连接」，程序会真的发一次请求验证，不通过就把原因写在旁边，不会静默失败。"/>
+                                <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                           Text="DeepSeek：platform.deepseek.com 注册 → 进「API Keys」→ 新建 → 当场复制（页面刷新后就再也看不见全文）。Base URL 填 https://api.deepseek.com ，模型名填 deepseek-chat 。"/>
+                                <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                           Text="月之暗面 Kimi：platform.moonshot.cn 注册 → 左侧「API 管理」→ 创建 API Key。Base URL 填 https://api.moonshot.cn/v1 ，模型名照官网列的填（如 kimi-k2-0905-preview）。"/>
+                                <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                           Text="智谱 GLM：open.bigmodel.cn 注册并实名 → 「API Keys」→ 添加新的 API Key。Base URL 填 https://open.bigmodel.cn/api/paas/v4 ，模型名如 glm-4-plus 。"/>
+                                <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                           Text="OpenAI：platform.openai.com 登录 → Settings → API keys → Create new secret key。Base URL 填 https://api.openai.com/v1 ，模型名如 gpt-4o-mini 。需要海外支付方式，公司网络常拦这个域名。"/>
+                                <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                           Text="本地或自建（Ollama、LM Studio、vLLM 等）：Base URL 填本机地址（如 http://localhost:11434/v1 ），API Key 多数实现要求非空但内容随意，模型名填本地已拉取的那个。"/>
+                                <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                           Text="不配 Key 也能用这个软件：AI 只负责「批量整理标签」这一件事。没配好时那条功能会明确灰着并说明原因，不会连累别的功能，也不会不打招呼就联网发数据。"/>
+                            </StackPanel>
+                        </Border>
+
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="AI 助手" Style="{StaticResource SettingTitle}"/>
@@ -480,12 +457,12 @@
             </TabViewItem>
 
             <!-- ============ 组件 ============ -->
-            <TabViewItem Header="组件">
+            <TabViewItem Header="桌面工具（组件）">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
                     <controls:ColumnFlowPanel MinColumnWidth="420" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="桌面组件" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock Text="桌面工具（组件）" Style="{StaticResource SettingTitle}"/>
                                 <TextBlock Text="在桌面添加独立小组件：下方按类型折叠，标题直接写明「已添加 N 个 / 未添加」，展开后才是添加与各实例的显示 / 移除。组件可拖动、边缘吸附、置顶、缩放；标题栏 ✕ 只是移除，随时可在此或托盘菜单重新添加。"
                                            Style="{StaticResource SettingRowText}"/>
                                 <StackPanel x:Name="WidgetRows" Spacing="2" Margin="0,2,0,0"/>
@@ -813,6 +790,51 @@
             <TabViewItem Header="健康与诊断">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
                     <controls:ColumnFlowPanel MinColumnWidth="440" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
+
+                        <!-- 护眼 / 休息提醒（从「常规」挪来：这一页管"身体 + 体检"，常规页只留日常项） -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="护眼 · 休息提醒" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               Text="连续工作一段时间后提醒你休息。开着才建那张定时表，关掉后不探测前台窗口、也不会显示任何东西。"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.EyeRestEnabled, Mode=TwoWay}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="间隔多久提醒一次"/>
+                                        <TextBlock Text="到点后还要看当前前台是不是全屏应用，所以实际时刻会有一两分钟浮动。" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <ComboBox Grid.Column="1" MinWidth="120" VerticalAlignment="Center"
+                                              ItemsSource="{x:Bind ViewModel.EyeRestIntervalOptions}"
+                                              SelectedIndex="{x:Bind ViewModel.EyeRestIntervalIndex, Mode=TwoWay}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               Text="强制休息：盖一层 20 秒暗幕，倒数期间按 Esc、点鼠标都不能提前跳过（只想被提醒一下就别开）。"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="强制" OffContent="只提醒" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.EyeRestEnforced, Mode=TwoWay}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               Text="前台是全屏应用时让路：放 PPT / 放映 / 全屏游戏不被打断，稍后再探一次。"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="让路" OffContent="不让路" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.EyeRestDeferOnFullscreen, Mode=TwoWay}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                    <Button Grid.Column="0" Content="试一试当前设置的效果"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Command="{x:Bind ViewModel.PreviewEyeRestCommand}"/>
+                                    <!-- 演完必须有回执："按了没反应"与"演过了但没看见"在用户侧长得一样 -->
+                                    <TextBlock Grid.Column="1" VerticalAlignment="Center"
+                                               Text="{x:Bind ViewModel.EyeRestPreviewStatus, Mode=OneWay}"
+                                               Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                                </Grid>
+                                <TextBlock Text="{x:Bind ViewModel.EyeRestStatus, Mode=OneWay}"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
 
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="10">
