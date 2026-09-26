@@ -22,6 +22,70 @@ public sealed class CanvasWiringGateTests
 
     // ────────── 为什么是分层窗 ──────────
 
+    // ────────── 批次 WC：真机"看不见鼠标、点不到任何东西"三条 ──────────
+
+    [Fact]
+    public void SetCursorTakesOneArgument_AndSetCursorMessageIsAnsweredTrue()
+    {
+        // Win32 的 SetCursor 只有一个参数（光标句柄）。按"窗口+句柄"两个参数声明时，x64 上第一个实参
+        // 落到句柄位＝ SetCursor(NULL) ＝整块画布上光标直接消失（真机症状正是"看不见鼠标、点不到东西"）。
+        var native = SourceGate.ReadRepoFile(Native);
+        Assert.Contains("public static extern IntPtr SetCursor(IntPtr hCursor);", native);
+        Assert.DoesNotContain("SetCursor(IntPtr hWnd, IntPtr hCursor)", native);
+
+        var proc = SourceGate.MethodBody(SourceGate.ReadRepoFile(Layer), "private static IntPtr HandleMessage");
+        var setCursor = proc.IndexOf("WM_SETCURSOR", StringComparison.Ordinal);
+        var nextCase = proc.IndexOf("case CanvasNative.WM_ERASEBKGND", setCursor, StringComparison.Ordinal);
+        var handler = proc[setCursor..nextCase];
+        Assert.Contains("SetCursor(", handler);
+        Assert.Contains("return new IntPtr(1);", handler);
+        // 回 FALSE＝告诉系统"我没处理"，光标归属就悬了
+        Assert.DoesNotContain("return IntPtr.Zero;", handler);
+    }
+
+    [Fact]
+    public void RightClickOnTheCanvasHandsTheMouseBack_TheOnlyPureMouseExit()
+    {
+        var layer = SourceGate.MethodBody(SourceGate.ReadRepoFile(Layer), "private static IntPtr HandleMessage");
+        var service = SourceGate.ReadRepoFile(Service);
+        Assert.Contains("WM_RBUTTONDOWN", layer);
+        Assert.Contains("RightPressed?.Invoke()", layer);
+        Assert.Contains("window.RightPressed += () => SetClickThrough(true);", service);
+    }
+
+    [Fact]
+    public void ClickThroughToggleNeverReZOrdersTheCanvas()
+    {
+        // 切换穿透后补一发 FRAMECHANGED 让命中测试立刻生效，但绝不能顺手把自己提到 topmost 链顶端：
+        // 那会把工具条（穿透态下唯一的鼠标出口）盖掉。
+        var body = SourceGate.MethodBody(SourceGate.ReadRepoFile(Layer), "public void SetClickThrough(bool on)");
+        Assert.Contains("SWP_FRAMECHANGED", body);
+        Assert.Contains("SWP_NOZORDER", body);
+        Assert.DoesNotContain("HWND_TOPMOST", body);
+    }
+
+    [Fact]
+    public void ToolbarSizesToItsMeasuredContentAndKeepsItselfOnTop()
+    {
+        var toolbar = SourceGate.ReadRepoFile(Toolbar);
+        // 写死的尺寸会把 ✕ 挤出客户区（内容一多就发生，且只在真机看得见）
+        Assert.Contains("Root.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity))", toolbar);
+        Assert.Contains("Root.DesiredSize", toolbar);
+        Assert.Contains("RaiseAboveCanvas();", SourceGate.MethodBody(toolbar, "private void Refresh()"));
+    }
+
+    [Fact]
+    public void MonitorBoundsArePhysicalPixels()
+    {
+        // 画布按物理像素铺每块屏；ListMonitors 若哪天改成返回 DIP，缓冲尺寸与位置会一起错
+        var interop = SourceGate.ReadRepoFile("src/StarMark.UI/Helpers/WindowInterop.cs");
+        var list = SourceGate.MethodBody(interop, "public static IReadOnlyList<(string Device, RectInt32 Bounds, double Scale)> ListMonitors");
+        Assert.Contains("mi.RcMonitor.Left", list);
+        Assert.Contains("GetMonitorScale(hmon)", list);
+        Assert.True(list.IndexOf("RcMonitor") < list.IndexOf("GetMonitorScale"),
+            "矩形取整屏（含任务栏），缩放另算：两者都从同一个 hMonitor 来");
+    }
+
     [Fact]
     public void CanvasIsAPureWin32LayeredWindow_NotAWinUiWindow()
     {

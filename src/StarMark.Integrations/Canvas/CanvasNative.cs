@@ -50,9 +50,11 @@ internal static class CanvasNative
     public static readonly IntPtr HWND_NOTOPMOST = new(-2);
     public const uint SWP_NOSIZE = 0x0001;
     public const uint SWP_NOMOVE = 0x0002;
+    public const uint SWP_NOZORDER = 0x0004;
     public const uint SWP_NOACTIVATE = 0x0010;
     public const uint SWP_SHOWWINDOW = 0x0040;
     public const uint SWP_HIDEWINDOW = 0x0080;
+    public const uint SWP_FRAMECHANGED = 0x0020;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct SIZE
@@ -132,8 +134,13 @@ internal static class CanvasNative
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
+    /// <summary>
+    /// <c>SetCursor</c> 只有一个参数（光标句柄）。<b>传 NULL 就是"把光标藏起来"</b>——
+    /// 之前按 <c>SetCursor(hWnd, hCursor)</c> 两个参数声明过，x64 下第一个实参落到句柄位上，
+    /// 于是整块画布上鼠标直接消失（真机反馈："看不见鼠标、点不到任何东西"）。
+    /// </summary>
     [DllImport("user32.dll")]
-    public static extern bool SetCursor(IntPtr hWnd, IntPtr hCursor);
+    public static extern IntPtr SetCursor(IntPtr hCursor);
 
     [DllImport("user32.dll")]
     public static extern IntPtr BeginPaint(IntPtr hWnd, out PAINTSTRUCT lpPaint);

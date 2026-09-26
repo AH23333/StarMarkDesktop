@@ -21,9 +21,12 @@ namespace StarMark.UI.Views;
 /// </summary>
 public sealed partial class CanvasToolbarWindow : Window
 {
-    /// <summary>条子的尺寸（DIP）。物理尺寸按本屏缩放换算，混合 DPI 下才不会出现"半截在屏外"。</summary>
-    private const double WidthDip = 720;
-    private const double HeightDip = 88;
+    /// <summary>
+    /// 兜底尺寸（DIP）：只在内容还没量出来时用。正常路径按 <c>Root.DesiredSize</c> 实测——
+    /// 写死的数字在"按钮多一点/字体大一号"之后就是把 ✕ 挤出客户区，而条子被画布盖住时那是唯一的鼠标出口。
+    /// </summary>
+    private const double FallbackWidthDip = 960;
+    private const double FallbackHeightDip = 100;
     private const double TopMarginDip = 20;
 
     private static readonly SolidColorBrush ActiveBrush = new(Color.FromArgb(0xFF, 0x2D, 0x6E, 0xC4));
@@ -53,12 +56,19 @@ public sealed partial class CanvasToolbarWindow : Window
         Refresh();
     }
 
-    /// <summary>摆在所在屏的顶部居中。<paramref name="scale"/> 必须是那块屏自己的缩放。</summary>
+    /// <summary>
+    /// 摆在所在屏的顶部居中。<b>尺寸按内容实测，不写死</b>：写死的数字在"按钮多一点/字体大一号"之后
+    /// 就是把 ✕ 挤出客户区——而条子被画布盖住时那是唯一的鼠标出口（真机就是这么被关掉的）。
+    /// </summary>
     public void ShowAt(IntRect screen, double scale)
     {
         scale = scale <= 0 ? 1 : scale;
-        var width = (int)Math.Round(WidthDip * scale);
-        var height = (int)Math.Round(HeightDip * scale);
+        // 先按"无限大"量一次内容：UpdateLayout 之外没有别的方式能拿到自然尺寸，
+        // 而直接量到的是当前客户区大小（窗还没缩，量出来就是循环依赖）
+        Root.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+        var wanted = Root.DesiredSize;
+        var width = (int)Math.Round((wanted.Width > 1 ? wanted.Width : FallbackWidthDip) * scale);
+        var height = (int)Math.Round((wanted.Height > 1 ? wanted.Height : FallbackHeightDip) * scale);
         var x = screen.X + (int)Math.Round((screen.Width - width) / 2d);
         var y = screen.Y + (int)Math.Round(TopMarginDip * scale);
 
@@ -68,6 +78,17 @@ public sealed partial class CanvasToolbarWindow : Window
             WindowInterop.SWP_SHOWWINDOW | WindowInterop.SWP_NOACTIVATE);
         WindowInterop.ShowWindow(hwnd, WindowInterop.SW_SHOWNOACTIVATE);
         Refresh();
+    }
+
+    /// <summary>
+    /// 重新提到最上层。画布每屏一块也是 TOPMOST，topmost 链里谁在后谁在上——
+    /// 任何"觉得条子可能不见了"的时刻（切换穿透、重建、异常）都补一发，比让用户去找便宜。
+    /// </summary>
+    public void RaiseAboveCanvas()
+    {
+        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), WindowInterop.HWND_TOPMOST,
+            0, 0, 0, 0,
+            WindowInterop.SWP_NOMOVE | WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOACTIVATE);
     }
 
     public void CloseToolbar()
@@ -163,8 +184,11 @@ public sealed partial class CanvasToolbarWindow : Window
             _colourButtons[index].Background = index == CanvasService.ColorIndex ? ActiveBrush : IdleBrush;
 
         Status.Text = CanvasService.IsClickThrough
-            ? "穿透中：鼠标归下面的应用。再点「穿透」、按热键或托盘都能回到绘制"
+            ? "穿透中：鼠标归下面的应用。再点「穿透」、右键画布、按热键或托盘都能回到绘制"
             : $"{ToolName(CanvasService.Tool)} · {CanvasService.WidthStep + 1} 档 · {CanvasService.Palette[CanvasService.ColorIndex].Name}";
+        // 画布每屏一块也是 TOPMOST，topmost 链里谁最后被提谁在上。每次刷新都补一发：
+        // 条子被画布盖住＝唯一的鼠标出口消失（真机"看不见也点不到"就是这么来的）
+        RaiseAboveCanvas();
     }
 
     private static string ToolName(CanvasTool tool) => tool switch

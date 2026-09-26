@@ -64,6 +64,12 @@ public sealed class LayeredCanvasWindow : IDisposable
     public event Action<CanvasPointer>? PointerMoved;
     public event Action<CanvasPointer>? PointerReleased;
 
+    /// <summary>
+    /// 右键按下。<b>画布上右键没有别的用途</b>，所以它是"把鼠标交还给下面的应用"的唯一纯鼠标出口——
+    /// 光标看不见、工具条找不到的时候，人只剩下点鼠标这一件事可做（真机反馈定出来的设计）。
+    /// </summary>
+    public event Action? RightPressed;
+
     /// <summary>分辨率／显示器拓扑变了：这块缓冲的尺寸已经是错的，调用方要重建画布（不能凑合画）。</summary>
     public event Action? DisplayChanged;
 
@@ -147,6 +153,13 @@ public sealed class LayeredCanvasWindow : IDisposable
         if (on) ex |= CanvasNative.WS_EX_TRANSPARENT;
         else ex &= ~CanvasNative.WS_EX_TRANSPARENT;
         NativeMethods.SetWindowLongPtrW(_hwnd, CanvasNative.GWL_EXSTYLE, new IntPtr((long)ex));
+        // 改完扩展样式补一发 SWP_FRAMECHANGED：穿透能不能立刻生效在部分系统/远程会话上不只看样式位，
+        // "点了没关掉、也没画上"这种半生效状态最难查，宁可多发一条消息。
+        // <b>必须带 SWP_NOZORDER</b>：顺手把自己提到 topmost 链顶端的话，画布会盖到工具条之上，
+        // 而工具条是穿透态下唯一还能用鼠标点到的出口。
+        CanvasNative.SetWindowPos(_hwnd, IntPtr.Zero, 0, 0, 0, 0,
+            CanvasNative.SWP_NOMOVE | CanvasNative.SWP_NOSIZE | CanvasNative.SWP_NOACTIVATE
+                | CanvasNative.SWP_NOZORDER | CanvasNative.SWP_FRAMECHANGED);
         IsClickThrough = on;
     }
 
@@ -309,11 +322,20 @@ public sealed class LayeredCanvasWindow : IDisposable
                 window.PointerReleased?.Invoke(sample with { LeftDown = false });
                 return IntPtr.Zero;
 
+            case CanvasNative.WM_RBUTTONDOWN:
+                // 右键在画布上没有别的用途，就把它当"把鼠标交还给下面"的鼠标出口：
+                // 光标看不见、工具条找不到的时候，热键与托盘是键盘式出口，这一条不需要键盘。
+                CanvasNative.ReleaseCapture();
+                window.RightPressed?.Invoke();
+                return IntPtr.Zero;
+
             case CanvasNative.WM_SETCURSOR:
-                CanvasNative.SetCursor(IntPtr.Zero, window._crossCursor && !window.IsClickThrough
+                // 必须先 SetCursor 再回 TRUE：回 FALSE 等于告诉系统"我没处理"，
+                // 而这条链上一次的真实事故是把参数写错成两个（NULL 句柄＝光标直接消失）。
+                CanvasNative.SetCursor(window._crossCursor && !window.IsClickThrough
                     ? CanvasNative.IDC_CROSS
                     : CanvasNative.IDC_ARROW);
-                return IntPtr.Zero;
+                return new IntPtr(1);
 
             case CanvasNative.WM_ERASEBKGND:
                 return new IntPtr(1);   // 1＝背景已处理：这里没有背景可擦，真擦一下就是一闪

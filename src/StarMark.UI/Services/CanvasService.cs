@@ -142,6 +142,9 @@ public static class CanvasService
                     window.PointerPressed += p => OnPressed(screen, p);
                     window.PointerMoved += p => OnMoved(screen, p);
                     window.PointerReleased += p => OnReleased(screen, p);
+                    // 右键＝把鼠标交还给下面的应用。画布上右键没有别的用途，而"看不见光标、找不到工具条"时
+                    // 人只剩点鼠标这一件事可做——热键与托盘都是键盘式出口，不算自救路径。
+                    window.RightPressed += () => SetClickThrough(true);
                     // 分辨率/拓扑一变，这块缓冲的尺寸就是错的了：重建，不凑合画
                     window.DisplayChanged += () =>
                     {
