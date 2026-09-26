@@ -313,11 +313,12 @@ public sealed class CanvasShapesTests
             new[] { new PixelPoint(0, 0), new PixelPoint(9, 9) }).EffectiveColorBgra);
     }
 
-    /// <summary>四种图形都是"要留痕"的：选了它就该收回鼠标（与画笔同侧），这条判据仍由 CanvasModes 一处给。</summary>
+    /// <summary>五种图形都是"要留痕"的：选了它就该收回鼠标（与画笔同侧），这条判据仍由 CanvasModes 一处给。</summary>
     [Theory]
     [InlineData(CanvasTool.Rectangle)]
     [InlineData(CanvasTool.Ellipse)]
     [InlineData(CanvasTool.Line)]
+    [InlineData(CanvasTool.PolyLine)]
     [InlineData(CanvasTool.Arrow)]
     public void ShapesEnterTheDrawingState(CanvasTool shape)
     {
@@ -331,8 +332,32 @@ public sealed class CanvasShapesTests
         Assert.All(CanvasTools.Brushes, brush => Assert.False(brush.IsShape()));
         var names = CanvasTools.Brushes.Concat(CanvasTools.Shapes).Select(tool => tool.Name()).ToList();
         Assert.Equal(names.Count, names.Distinct().Count());          // 撞名＝条上两颗看起来是同一件事
-        Assert.Equal(7, names.Count);
+        // 钉的是"每个工具都归了组"，不是"现在有几个"：加一种工具而没进 Brushes/Shapes，
+        // 条上就不会有它、闸门也不会红——只有这一条会在建表当天就拦住
+        Assert.Equal(Enum.GetValues<CanvasTool>().Length, names.Count);
     }
+
+    /// <summary>
+    /// 折线的橡皮筋：<b>预览点列＝已定形顶点 + 光标那一段</b>，且少一种边界处理就会出现
+    /// "刚选折线，板上凭空多个圆点"（单点也画）或"顶点处叠一个重点，收口后笔迹自己拐了一下"。
+    /// </summary>
+    [Fact]
+    public void PolyLinePreviewAppendsTheRubberBand_WithoutDoublingTheLastVertex()
+    {
+        var a = new PixelPoint(10, 10);
+        var b = new PixelPoint(40, 25);
+        // 一个顶点都没有（刚切到工具）：什么都不画
+        Assert.Empty(CanvasShapes.PolyLinePreview(Array.Empty<PixelPoint>(), new PixelPoint(1, 1)));
+        Assert.Empty(CanvasShapes.PolyLinePreview(new[] { a }, null));
+        // 一个顶点 + 光标：那一段就是它两个端点
+        Assert.Equal(new[] { a, b }, CanvasShapes.PolyLinePreview(new[] { a }, b));
+        // 光标还停在最后那个顶点上（抬手之后还没动）：不重复添点，否则那一段长度为零
+        Assert.Equal(new[] { a, b }, CanvasShapes.PolyLinePreview(new[] { a, b }, b));
+        // 已定形的那几段原样在前，橡皮筋只追加在最后
+        Assert.Equal(new[] { a, b, new PixelPoint(20, 60) },
+            CanvasShapes.PolyLinePreview(new[] { a, b }, new PixelPoint(20, 60)));
+    }
+
 
     // ────────── 真的画得出来（逐像素，不是"看起来一样"） ──────────
     //

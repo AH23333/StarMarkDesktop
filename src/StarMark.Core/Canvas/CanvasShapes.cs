@@ -31,11 +31,25 @@ public static class CanvasShapes
             CanvasTool.Rectangle => RectanglePoints(from, to),
             CanvasTool.Ellipse => EllipsePoints(from, to, Math.Max(1, width / 2)),
             CanvasTool.Line => new List<PixelPoint> { from, to },
+            CanvasTool.PolyLine => new List<PixelPoint> { from, to },   // 一次拖拽定一段，多段见 PolyLinePreview
             CanvasTool.Arrow => ArrowPoints(from, to, Math.Max(1, width / 2)),
             // 不是图形（笔/橡皮）却走到这里＝接线错了。给它一条直线比静默画个圆更好查：
             // 症状会是"选了画笔却只能画出直线"，一眼能归到这条链上。
             _ => new List<PixelPoint> { from, to },
         };
+
+    /// <summary>
+    /// 折线<b>正在拖的那一帧</b>该画什么：已经定形的顶点，加上从最后一个顶点伸向光标的那一段橡皮筋。
+    /// <para>点不足两个就回<b>空列表</b>——刚按下还没动时什么都不画。落一个孤零零的点上去，
+    /// 在屏幕上就是"选了折线，板上凭空多了个圆点"。</para>
+    /// </summary>
+    public static List<PixelPoint> PolyLinePreview(IReadOnlyList<PixelPoint> vertices, PixelPoint? rubber)
+    {
+        var points = new List<PixelPoint>(vertices.Count + 1);
+        foreach (var vertex in vertices) points.Add(vertex);
+        if (points.Count > 0 && rubber is { } tip && !points[^1].Equals(tip)) points.Add(tip);
+        return points.Count < 2 ? new List<PixelPoint>() : points;
+    }
 
     /// <summary>
     /// 矩形：四个角走一圈并<b>回到起点闭口</b>。

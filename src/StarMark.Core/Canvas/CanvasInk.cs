@@ -29,6 +29,8 @@ public enum CanvasTool
     Ellipse,
     /// <summary>直线：起点到终点一段。</summary>
     Line,
+    /// <summary>折线：一次拖拽只定一段，接在已定的顶点后面（讲解时勾一个轮廓比连画五条直线省事）。</summary>
+    PolyLine,
     /// <summary>箭头：直线 + 终点一个开口头（指向拖拽结束那一端）。</summary>
     Arrow,
 }
@@ -40,9 +42,9 @@ public enum CanvasTool
 /// </summary>
 public static class CanvasTools
 {
-    /// <summary>四种图形，顺序＝工具条上按钮的顺序。</summary>
+    /// <summary>五种图形，顺序＝工具条上按钮的顺序。</summary>
     public static readonly CanvasTool[] Shapes =
-        { CanvasTool.Rectangle, CanvasTool.Ellipse, CanvasTool.Line, CanvasTool.Arrow };
+        { CanvasTool.Rectangle, CanvasTool.Ellipse, CanvasTool.Line, CanvasTool.PolyLine, CanvasTool.Arrow };
 
     /// <summary>三支笔，顺序＝工具条上按钮的顺序（图形不算在内：它们走另一排）。</summary>
     public static readonly CanvasTool[] Brushes =
@@ -59,6 +61,7 @@ public static class CanvasTools
         CanvasTool.Rectangle => "矩形",
         CanvasTool.Ellipse => "椭圆",
         CanvasTool.Line => "直线",
+        CanvasTool.PolyLine => "折线",
         CanvasTool.Arrow => "箭头",
         _ => "未知工具",
     };

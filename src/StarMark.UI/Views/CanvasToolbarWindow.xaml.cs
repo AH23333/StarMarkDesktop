@@ -35,6 +35,10 @@ public sealed partial class CanvasToolbarWindow : Window
 
     private readonly List<Button> _colourButtons = new();
 
+    /// <summary>图形那几颗：按 <see cref="CanvasTools.Shapes"/> 生成。换工具时亮哪一颗只认这张表，
+    /// 不在界面里另列一份工具清单（否则"条上有这颗、点下去走的却是另一支"只有真机才看得见）。</summary>
+    private readonly Dictionary<CanvasTool, Button> _shapeButtons = new();
+
     private IntRect _screen;
     private double _scale = 1d;
 
@@ -47,6 +51,7 @@ public sealed partial class CanvasToolbarWindow : Window
         InitializeComponent();
         WindowInterop.RemoveDefaultWindowFrame(this);
         BuildPalette();
+        BuildShapeButtons();
         // 状态回报是"按钮哪个亮着"这件事的唯一出口：画布那边改了，条子必须跟着改
         CanvasService.StateChanged += Refresh;
         Closed += (_, _) => CanvasService.StateChanged -= Refresh;
@@ -155,15 +160,12 @@ public sealed partial class CanvasToolbarWindow : Window
 
     private void Eraser_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleTool(CanvasTool.Eraser);
 
-    // 四颗图形与三支笔同一套语义：点一下选上、再点当前这颗＝收笔回穿透态。
-    // 落点交给 CanvasService（它认 Press.Shape），这里只负责"要哪一支"。
-    private void Rect_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleTool(CanvasTool.Rectangle);
-
-    private void Ellipse_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleTool(CanvasTool.Ellipse);
-
-    private void Line_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleTool(CanvasTool.Line);
-
-    private void Arrow_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleTool(CanvasTool.Arrow);
+    // 图形与三支笔同一套语义：点一下选上、再点当前这颗＝收笔回穿透态。
+    // 一颗都不在 XAML 里写（见 BuildShapeButtons），落点交给 CanvasService（它认 Press.Shape / Press.PolyLine）。
+    private void Shape_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: CanvasTool tool }) CanvasService.ToggleTool(tool);
+    }
 
     private void Thin_Click(object sender, RoutedEventArgs e) => CanvasService.SelectWidth(0);
 
@@ -232,16 +234,151 @@ public sealed partial class CanvasToolbarWindow : Window
         }
     }
 
+    /// <summary>
+    /// 图形那几颗按钮：整排由 <see cref="CanvasTools.Shapes"/> 生成，一颗都不在 XAML 里写。
+    /// <para>
+    /// <b>为什么只有这一段是图标、三支笔仍旧是汉字</b>：发起人点名的就是"图形编辑功能使用图标"，
+    /// 而图形这一段确实该换——五种图形若各占两个汉字，条子要长出十个字的宽度，
+    /// 而 <see cref="FallbackWidthDip"/> 之外的宽度是从 ✕ 那颗出口身上挤的。
+    /// 画笔／荧光笔／橡皮那三颗一字不差、且是全条最常被点的，留着字比留着一个需要认的记号好认。
+    /// </para>
+    /// <para>
+    /// <b>图标上没有文字，所以名字与手势只能靠状态行说</b>：条子只有两行高，而 WinUI 3 把 ToolTip
+    /// 那种弹出层钉在宿主窗边界内（批次 WI 的同一条真机结论）——悬停时把说明写进自己那一行才看得见。
+    /// ToolTip 仍然挂着：它才是这条文案的唯一出处，悬停处理只是把它显示到看得见的位置。
+    /// </para>
+    /// </summary>
+    private void BuildShapeButtons()
+    {
+        foreach (var tool in CanvasTools.Shapes)
+        {
+            var button = new Button
+            {
+                Content = ShapeIcon(tool),
+                Tag = tool,
+                Width = ShapeButtonWidth,
+                Height = ShapeButtonHeight,
+                Padding = new Thickness(0),
+                MinWidth = 0,
+                MinHeight = 0,
+                Background = IdleBrush,
+                BorderThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(3),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            var hint = ShapeHint(tool);
+            ToolTipService.SetToolTip(button, hint);
+            button.PointerEntered += (_, _) => ShowHint(hint);
+            button.PointerExited += (_, _) => HideHint();
+            button.Click += Shape_Click;
+            _shapeButtons[tool] = button;
+            ShapeRow.Children.Add(button);
+        }
+    }
+
+    private const double ShapeButtonWidth = 27;
+    private const double ShapeButtonHeight = 23;
+
+    /// <summary>悬停说明直接写进状态行（弹出层在这扇小窗里放不下，见 <see cref="BuildShapeButtons"/>）。</summary>
+    private void ShowHint(string hint)
+    {
+        Status.Text = hint;
+        Fit(centerOnScreen: false);       // 说明比常态那行长时，不重算窗高就会被截在窗外
+    }
+
+    private void HideHint()
+    {
+        Status.Text = StatusText();
+        Fit(centerOnScreen: false);
+    }
+
+    /// <summary>这颗按钮在说什么。名字一律取 <see cref="CanvasTools.Name"/>，界面不另写一份；
+    /// 手势说明只有这里知道（"按下与抬起是两个对角"和"抬手定一个顶点"不是一回事）。</summary>
+    private static string ShapeHint(CanvasTool tool) => tool switch
+    {
+        CanvasTool.Rectangle => $"{tool.Name()}：按住拖出，按下处与抬起处是两个对角。再点一次收笔",
+        CanvasTool.Ellipse => $"{tool.Name()}：按住拖出，拖拽的矩形就是它的外切框。再点一次收笔",
+        CanvasTool.Line => $"{tool.Name()}：按住拖出一条，起点到抬手处。再点一次收笔",
+        // 折线是唯一"跨按"的，所以它的说明必须把收口方式一并说清，否则用户会以为软件卡住了
+        CanvasTool.PolyLine => $"{tool.Name()}：按住拖出一段、抬手定一个顶点，可接着拖下一段。" +
+                               "Esc／再点一次／换工具收口（整条算一笔，撤销一次退整条）",
+        CanvasTool.Arrow => $"{tool.Name()}：按住拖出，箭头指向抬手那一端。再点一次收笔",
+        _ => $"{tool.Name()}：按住拖出。再点一次收笔",
+    };
+
+    // ────────── 图标：矢量图元画的，不用字体字形 ──────────
+    //
+    // 与截图/贴图那条工具条（CaptureOverlayWindow 的图标库）同一套几何与同样的 16×16 边长：
+    // 两边是同一族能力，用户在一边认得的记号到另一边不该换个画法。
+    // 不用图标字形的理由也同一条：缺字会显示成方块，而"这五种图形到底长什么样"得能当场逐个核对。
+
+    private static readonly SolidColorBrush IconInk = new(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF));
+
+    private static UIElement ShapeIcon(CanvasTool tool) => tool switch
+    {
+        CanvasTool.Rectangle => Icon(Out(2.5, 4, 11, 8)),                        // 空心方框
+        CanvasTool.Ellipse => Icon(Ring(2.5, 4, 11, 8)),                         // 空心椭圆
+        CanvasTool.Line => Icon(Seg(3, 13, 13, 3)),                              // 就是一条斜线，没头没尾
+        // 两段折 + 顶点小方块：一眼看得出"这是点出来的多段线"，不是一条直线
+        CanvasTool.PolyLine => Icon(Curve((2.5, 13), (7, 5.5), (13.5, 9.5)),
+            Dot(5.6, 4.1), Dot(12.1, 8.1)),
+        CanvasTool.Arrow => Icon(Seg(3, 13, 12, 4),                              // 斜线 + 终点一个开口头
+            Seg(12, 4, 7.6, 4.4), Seg(12, 4, 11.6, 8.4)),
+        _ => Icon(Out(2.5, 4, 11, 8)),
+    };
+
+    private const double IconSide = 16;
+
+    private static Canvas Icon(params UIElement[] parts)
+    {
+        var canvas = new Canvas { Width = IconSide, Height = IconSide };
+        foreach (var part in parts) canvas.Children.Add(part);
+        return canvas;
+    }
+
+    private static Line Seg(double x1, double y1, double x2, double y2)
+        => new() { X1 = x1, Y1 = y1, X2 = x2, Y2 = y2, Stroke = IconInk, StrokeThickness = 1.6 };
+
+    private static Polyline Curve(params (double X, double Y)[] pts)
+    {
+        var line = new Polyline { Stroke = IconInk, StrokeThickness = 1.5 };
+        foreach (var p in pts) line.Points.Add(new Windows.Foundation.Point(p.X, p.Y));
+        return line;
+    }
+
+    /// <summary>折线的顶点记号（2.8 见方的小实心块）。它才是"直线"与"折线"分得开的那一笔。</summary>
+    private static Rectangle Dot(double x, double y)
+    {
+        var square = new Rectangle { Width = 2.8, Height = 2.8, Fill = IconInk };
+        Canvas.SetLeft(square, x);
+        Canvas.SetTop(square, y);
+        return square;
+    }
+
+    private static Rectangle Out(double x, double y, double w, double h)
+    {
+        var box = new Rectangle { Width = w, Height = h, Stroke = IconInk, StrokeThickness = 1.5 };
+        Canvas.SetLeft(box, x);
+        Canvas.SetTop(box, y);
+        return box;
+    }
+
+    private static Ellipse Ring(double x, double y, double w, double h)
+    {
+        var ring = new Ellipse { Width = w, Height = h, Stroke = IconInk, StrokeThickness = 1.5 };
+        Canvas.SetLeft(ring, x);
+        Canvas.SetTop(ring, y);
+        return ring;
+    }
+
     private void Refresh()
     {
         // 按钮高亮只反映"现在是哪一个"，不反映悬停：两套状态画在一起就分不清了
         Highlight(PenButton, CanvasService.Tool == CanvasTool.Pen);
         Highlight(MarkerButton, CanvasService.Tool == CanvasTool.Highlighter);
         Highlight(EraserButton, CanvasService.Tool == CanvasTool.Eraser);
-        Highlight(RectButton, CanvasService.Tool == CanvasTool.Rectangle);
-        Highlight(EllipseButton, CanvasService.Tool == CanvasTool.Ellipse);
-        Highlight(LineButton, CanvasService.Tool == CanvasTool.Line);
-        Highlight(ArrowButton, CanvasService.Tool == CanvasTool.Arrow);
+        // 图形那颗不在这张硬编码清单里：按模型逐颗比，加一种图形不会漏亮
+        foreach (var (tool, button) in _shapeButtons) Highlight(button, CanvasService.Tool == tool);
         Highlight(ThinButton, CanvasService.WidthStep == 0);
         Highlight(MediumButton, CanvasService.WidthStep == 1);
         Highlight(ThickButton, CanvasService.WidthStep == 2);
@@ -271,7 +408,10 @@ public sealed partial class CanvasToolbarWindow : Window
         if (CanvasService.Notice is { } note) return note;
         var tool = CanvasService.Tool;
         var ink = $"{tool.Name()} · {CanvasService.WidthStep + 1} 档 · {CanvasService.Palette[CanvasService.ColorIndex].Name}";
-        if (!CanvasService.IsClickThrough) return $"绘制中（鼠标归画布）：{ink}。点「穿透」或右键交出鼠标";
+        if (!CanvasService.IsClickThrough)
+            // 折线是唯一"跨按还开着"的：不在这行说怎么收，用户就只能靠试——而试出来的那一下是 Esc＝退出画布
+            return $"绘制中（鼠标归画布）：{ink}。点「穿透」或右键交出鼠标"
+                   + (tool == CanvasTool.PolyLine ? "；勾折线时 Esc／再点「折线」＝收口这一条" : string.Empty);
         if (tool == CanvasTool.Highlighter) return $"穿透中 + 荧光笔已选：按住左键即画、松开自动穿透；{ink}";
         // 图形和画笔一样要真握住鼠标才画得出来。穿透态下选了它却不说明，就是"点了矩形、拖了半天什么都没画、
         // 还以为软件坏了"——那句"这一按仍归下层应用"是这条链上唯一能挡住这种误会的出口。
@@ -316,11 +456,12 @@ public sealed partial class CanvasToolbarWindow : Window
 
     private void Root_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        // Esc 退出画布模式（不是"收笔"——画布上没有需要逐级撤回的编辑态）
+        // Esc 是两级的：正在勾折线时先收口那一条（板子留着），没有手上一半的东西才退出画布。
+        // 只有一级会让"想停下这条折线"变成"整块板子连笔画一起没了"——退出即丢弃，那是最贵的一次误按。
         if (e.Key == Windows.System.VirtualKey.Escape)
         {
             e.Handled = true;
-            CanvasService.Stop();
+            CanvasService.Escape();
         }
     }
 }

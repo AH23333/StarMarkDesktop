@@ -450,6 +450,8 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("screen.Persistent", compose);
         Assert.Contains("OverlayOntoFrame", compose);
         Assert.DoesNotContain("Window.Pixels", compose);   // 那块缓冲里带着光晕，快照不该有一团红
+        // 正在拖的图形／还开着的折线只活在预览槽里：不叠它就出现"板上看得见一条，贴出来的图没有"
+        Assert.Contains("if (screen.Trail.Preview is { } preview)", compose);
     }
 
     [Fact]
@@ -468,10 +470,12 @@ public sealed class CanvasWiringGateTests
         var service = SourceGate.ReadRepoFile(Service);
         var moved = SourceGate.MethodBody(service, "private static void OnMoved(Screen screen, CanvasPointer pointer)");
         var released = SourceGate.MethodBody(service, "private static void OnReleased(Screen screen, CanvasPointer pointer)");
-        var finish = SourceGate.MethodBody(service, "private static void FinishPress(Screen? screen)");
+        var finish = SourceGate.MethodBody(service, "private static void FinishPress(Screen? screen, PixelPoint? at = null)");
         Assert.Contains("DragThrottleMs", moved);
-        // 收口集中在 FinishPress：轮询抢来的那一按（荧光笔 / Ctrl+Alt 圈画）与真实按下走同一条尾
-        Assert.Contains("FinishPress(screen);", released);
+        // 收口集中在 FinishPress：轮询抢来的那一按（荧光笔 / Ctrl+Alt 圈画）与真实按下走同一条尾。
+        // 抬手那一点只有折线用得上（它就是刚拖出来的那个顶点），所以它是参数而不是又一次 GetCursorPos——
+        // 后者会在多屏/缩放下取到与笔迹不同坐标系的数（踩坑 #55 那一族）
+        Assert.Contains("FinishPress(screen, pointer.At);", released);
         Assert.Contains("Flush(screen);", finish);
         // 松手必须立刻定形（增量提交只保证"看着跟手"，最终形态由全量重算保证）
         Assert.Contains("Recomposite(screen);", finish);
@@ -529,21 +533,42 @@ public sealed class CanvasWiringGateTests
         var toggle = SourceGate.MethodBody(service, "public static void ToggleTool(CanvasTool tool)");
         Assert.Contains("if (_tool == tool && !_clickThrough) SetClickThrough(true);", toggle);
         Assert.Contains("else SelectTool(tool);", toggle);
-        // 条上每一颗工具按钮都走 ToggleTool——直接绑 SelectTool 就没有"再点取消"了。
-        // 数量按模型算（三支笔＋四种图形）：加一种图形时这里跟着动，
-        // 而"某颗按钮偷偷绑了 SelectTool"仍然是红的（那一行 DoesNotContain 与它无关）。
+        // 三支笔各一颗按钮；图形那整排共用一颗处理器（按 Tag 分流，见 BuildShapeButtons）。
+        // 直接绑 SelectTool 就没有"再点取消"了，所以这条链上只许出现 ToggleTool。
         var toolbar = SourceGate.ReadRepoFile(Toolbar);
-        Assert.Equal(CanvasTools.Brushes.Length + CanvasTools.Shapes.Length,
-            SourceGate.Count(toolbar, "CanvasService.ToggleTool("));
+        Assert.Equal(CanvasTools.Brushes.Length + 1, SourceGate.Count(toolbar, "CanvasService.ToggleTool("));
         Assert.DoesNotContain("CanvasService.SelectTool(", toolbar);
-        // 四颗图形的按钮与高亮都得在场：漏一颗＝那种图形在模型里有、条上点不到（只有跑起来才看得见）
+        // 批次 WM：图形那几颗<b>整排由模型生成</b>，XAML 里一颗都不写（写死就是名字的第二份出处）。
+        // 漏一种图形的症状是"模型里有、条上点不到"，只有跑起来才看得见，所以在这里钉住生成与高亮两处都按表走。
+        var build = SourceGate.MethodBody(toolbar, "private void BuildShapeButtons()");
+        Assert.Contains("foreach (var tool in CanvasTools.Shapes)", build);
+        Assert.Contains("Content = ShapeIcon(tool)", build);                 // 图标，不是汉字
+        Assert.Contains("Tag = tool", build);
+        Assert.Contains("Click += Shape_Click", build);
+        Assert.Contains("foreach (var (tool, button) in _shapeButtons)",
+            SourceGate.MethodBody(toolbar, "private void Refresh()"));       // 亮哪一颗也按表算
+        Assert.DoesNotContain("RectButton", SourceGate.ReadRepoFile(ToolbarXaml));
+        // 图标是画出来的图元，不是字体字形（缺字就是一个方块，而这条窗上没有第二个地方能看出是哪颗）
+        Assert.Contains("private static Canvas Icon(params UIElement[] parts)", toolbar);
+        // 每种图形都要有自己的图元与一句说明：图标上没有字，说明是它唯一的解释
         foreach (var shape in CanvasTools.Shapes)
         {
-            Assert.Contains($"CanvasService.ToggleTool(CanvasTool.{shape})", toolbar);
-            Assert.Contains($"CanvasService.Tool == CanvasTool.{shape}", toolbar);
+            Assert.Contains($"CanvasTool.{shape} =>",
+                SourceGate.MethodBody(toolbar, "private static UIElement ShapeIcon("));
+            Assert.Contains($"CanvasTool.{shape} =>",
+                SourceGate.MethodBody(toolbar, "private static string ShapeHint("));
         }
+        // 直线与折线是这条排上最容易撞车的一对：折线的图标必须带顶点记号，否则两颗看起来是同一件事
+        Assert.Contains("Dot(5.6, 4.1)", SourceGate.MethodBody(toolbar, "private static UIElement ShapeIcon("));
         // 穿透态下选了图形必须说一句"这一按仍归下层应用"——不然就是"拖了半天什么都没画，以为软件坏了"
-        Assert.Contains("if (tool.IsShape())", SourceGate.MethodBody(toolbar, "private string StatusText()"));
+        var status = SourceGate.MethodBody(toolbar, "private string StatusText()");
+        Assert.Contains("if (tool.IsShape())", status);
+        // 折线是唯一"跨按还开着"的：绘制态那行要顺带说怎么收口（不然用户试出来的那一下是退出画布）
+        Assert.Contains("tool == CanvasTool.PolyLine", status);
+        // Esc 是两级的（先收口折线，再退出），而 ✕ 那颗仍旧一步退出
+        var esc = SourceGate.MethodBody(toolbar, "private void Root_KeyDown");
+        Assert.Contains("CanvasService.Escape();", esc);
+        Assert.DoesNotContain("CanvasService.Stop();", esc);
     }
 
     /// <summary>
@@ -562,13 +587,20 @@ public sealed class CanvasWiringGateTests
         var service = SourceGate.ReadRepoFile(Service);
         var begin = SourceGate.MethodBody(service, "private static void BeginPress(");
         Assert.Contains("else if (kind == Press.Shape)", begin);
-        Assert.Contains("screen.Dirty.Add(screen.Trail.SetPreview(ShapeStroke(at, at, colour)));", begin);
+        Assert.Contains("screen.Dirty.Add(screen.Trail.SetPreview(ShapeStroke(at, at)));", begin);
         // 整份编排里 <c>Ink.Begin</c> 只许出现一次（画笔/橡皮那条分支）：图形若在按下时就进持久层，
         // "拖到一半松开"会留下一条撤不掉的笔迹，而它本来什么都没画成
         Assert.Equal(1, SourceGate.Count(service, "Ink.Begin("));
 
         var moved = SourceGate.MethodBody(service, "private static void OnMoved(");
-        Assert.Contains("ShapeStroke(_shapeFrom, pointer.At, Palette[_colorIndex].Bgra)", moved);
+        Assert.Contains("ShapeStroke(_shapeFrom, pointer.At)", moved);
+
+        // 批次 WM：颜色与粗细<b>不作参数</b>，由 ShapeStroke 自己按当前设置取。
+        // 做成参数编译得过、也过得了"看起来在测它"的断言，真机上却是"预览一个色、落下另一个色"
+        // （批次 WF 那条口径的第三种形态：含义只在一处时，接线处现写就是必然出错）。
+        var shapeStroke = SourceGate.MethodBody(service, "private static CanvasStroke ShapeStroke(PixelPoint from, PixelPoint to)");
+        Assert.Contains("Palette[_colorIndex].Bgra", shapeStroke);
+        Assert.DoesNotContain("int colour)", shapeStroke);
 
         var finish = SourceGate.MethodBody(service, "private static void FinishPress(");
         Assert.Contains("var preview = screen.Trail.Preview;", finish);
@@ -586,8 +618,90 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("CanvasCompositor.PaintClipped(screen.Window.Pixels, width, height, preview, rect);", flush);
 
         // 换工具/换粗细/开穿透之前先收掉挂着的预览：否则它会一直挂在屏幕上，且下一按接到新工具
-        Assert.Contains("if (_press is Press.Ephemeral or Press.QuickPen or Press.Shape)",
+        Assert.Contains("if (_press is Press.Ephemeral or Press.QuickPen or Press.Shape or Press.PolyLine)",
             SourceGate.MethodBody(service, "private static void CommitOpenStroke()"));
+    }
+
+    /// <summary>
+    /// 批次 WM：<b>折线是唯一跨按的工具</b>——一次拖拽定一段，抬手只是把终点定成顶点，折线还开着。
+    /// 这条链上四处必须同时成立，少任何一处的症状都不一样：
+    /// ① 预览整条走临时层那<b>一个槽</b>（不是每段一条），且颜色与粗细在<b>起勾那一刻</b>定死
+    ///    ——否则中途换设置会画出"半条老颜色半条新颜色"；
+    /// ② 收口时<b>整条作为一条笔迹</b>进持久层（撤销一格＝整条折线，而不是它的一小段）；
+    /// ③ 收口入口要齐：Esc（两级）、换工具、换粗细、开穿透走 <c>CommitOpenStroke</c>，
+    ///    清屏与退出另走"丢掉不提交"——少一个就是"这条折线再也关不掉"；
+    /// ④ 抬手那一点要<b>判重</b>：原地按一下不算顶点，否则收口时留下一颗说不清的孤点。
+    /// </summary>
+    [Fact]
+    public void PolyLineSpansPresses_AndClosesIntoOneStroke()
+    {
+        var service = SourceGate.ReadRepoFile(Service);
+        // 按下分流：折线绝不能落进 Press.Shape（那会"这一按就是一条"，勾不出第二段的）
+        Assert.Contains("CanvasTool.PolyLine => Press.PolyLine,",
+            SourceGate.MethodBody(service, "private static void OnPressed(Screen screen, CanvasPointer pointer)"));
+
+        var begin = SourceGate.MethodBody(service, "private static void BeginPress(");
+        Assert.Contains("else if (kind == Press.PolyLine)", begin);
+        // 已经在勾时不能再添顶点：那一个点上一段的抬手已经定过了
+        Assert.Contains("_polyPoints ??= new List<PixelPoint> { at };", begin);
+        Assert.Contains("if (_polyScreen is null)", begin);
+        Assert.Contains("_polyColour = colour;", begin);                   // 起勾那一刻定死
+        Assert.Contains("_polyWidth = WidthFor(CanvasTool.PolyLine);", begin);
+        Assert.Contains("ShowPolyPreview(at);", begin);
+        // 折线不跨屏（顶点表整份是一块屏自己的物理像素）：换屏先收口，抬手也只在自己那块屏上定顶点
+        Assert.Contains("if (_polyScreen is not null && _polyScreen != screen) FinishOpenPolyLine();", begin);
+
+        // 没按住的时候橡皮筋也要跟着手走，否则"下一个顶点落在哪"全无预告
+        var moved = SourceGate.MethodBody(service, "private static void OnMoved(");
+        Assert.Contains("else if (_polyPoints is not null && screen == _polyScreen)", moved);
+        Assert.Contains("ShowPolyPreview(pointer.At);", moved);
+
+        // 抬手＝定顶点，不收口：这里既不能 Commit 也不能清 _polyPoints
+        var finish = SourceGate.MethodBody(service, "private static void FinishPress(");
+        Assert.Contains("else if (_press == Press.PolyLine)", finish);
+        Assert.Contains("AddVertex(at);", finish);
+        Assert.Contains("ShowPolyPreview(null);", finish);
+        var addVertex = SourceGate.MethodBody(service, "private static void AddVertex(PixelPoint? at)");
+        Assert.Contains("if (points.Count > 0 && points[^1].Equals(p)) return;", addVertex);   // 原地按一下
+
+        // 收口：整条一条笔迹，且收完必须忘掉状态（否则下一按接到这一条上）
+        var close = SourceGate.MethodBody(service, "private static void FinishOpenPolyLine()");
+        Assert.Contains("if (points.Count >= 2)", close);
+        Assert.Contains("screen.Ink.Commit(CanvasStroke.FromPoints(CanvasTool.PolyLine, _polyColour, _polyWidth, points));", close);
+        Assert.Contains("Recomposite(screen);", close);
+        Assert.Contains("screen.Dirty.Add(screen.Trail.DropPreview());", close);
+        Assert.Contains("_polyPoints = null;", close);
+        Assert.Contains("_polyScreen = null;", close);
+        // 定形只有这一条链（Shape 那条走预览换归属），多一处 Commit 就多一处"半条折线被当成整条"
+        Assert.Equal(2, SourceGate.Count(service, "Ink.Commit("));
+
+        // 收口入口齐：换工具/换粗细/开穿透都要先收；清屏与退出则是"丢掉不提交"
+        var commit = SourceGate.MethodBody(service, "private static void CommitOpenStroke()");
+        Assert.True(commit.IndexOf("FinishOpenPolyLine();", StringComparison.Ordinal) > 0,
+            "换工具时没收掉挂着的折线");
+        Assert.Contains("CancelOpenPolyLine();", SourceGate.MethodBody(service, "public static void ClearAll()"));
+        Assert.Contains("_polyPoints = null;", SourceGate.MethodBody(service, "public static void Stop()"));
+        var cancel = SourceGate.MethodBody(service, "private static void CancelOpenPolyLine()");
+        Assert.DoesNotContain("Ink.Commit", cancel);
+        Assert.Contains("screen.Dirty.Add(screen.Trail.DropPreview());", cancel);
+
+        // 两级 Esc：先收口这一条，没有手上一半的东西才退出画布（顺序反了＝误按一次把整块板子连笔迹弄没）
+        var escape = SourceGate.MethodBody(service, "public static void Escape()");
+        Assert.Contains("if (_polyPoints is not null)", escape);
+        Assert.True(escape.IndexOf("FinishOpenPolyLine();", StringComparison.Ordinal)
+                    < escape.IndexOf("Stop();", StringComparison.Ordinal), "Esc 必须先收口再退出");
+
+        // 勾到一半时"撤销"退的是最后一个顶点，不是板上那条旧笔迹（撤错对象比多按一次难受得多）
+        var undo = SourceGate.MethodBody(service, "public static void Undo()");
+        Assert.Contains("if (_polyPoints is { } open)", undo);
+        Assert.Contains("open.RemoveAt(open.Count - 1);", undo);
+        Assert.True(undo.IndexOf("CancelOpenPolyLine();", StringComparison.Ordinal)
+                    < undo.IndexOf("foreach (var screen in Screens)", StringComparison.Ordinal),
+            "折线还开着时不能直接去撤持久层");
+
+        // 橡皮筋那段几何只有一处出处：预览与收口都用 Core 那一份顶点表
+        Assert.Contains("CanvasShapes.PolyLinePreview(points, rubber)",
+            SourceGate.MethodBody(service, "private static void ShowPolyPreview(PixelPoint? rubber)"));
     }
 
     /// <summary>

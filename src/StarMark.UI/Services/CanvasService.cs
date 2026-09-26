@@ -91,12 +91,23 @@ public static class CanvasService
     /// 所以"荧光笔按住即画 / Ctrl+Alt 快速圈画"只能由帧循环轮询按键状态发现，
     /// 发现后临时摘掉穿透、自己补一次 SetCapture，抬起再恢复。
     /// </summary>
-    private enum Press { None, Drawing, Ephemeral, QuickPen, Shape }
+    private enum Press { None, Drawing, Ephemeral, QuickPen, Shape, PolyLine }
 
     private static Press _press;
 
     /// <summary>拖图形时那一按的起点（本屏物理像素）。终点就是当前光标，所以只留起点。</summary>
     private static PixelPoint _shapeFrom;
+
+    /// <summary>
+    /// 正在勾的<b>折线</b>：已经定形的顶点（本屏物理像素）。null＝没在勾。
+    /// <para>它与"一次拖拽定形"的四种图形不同，是<b>跨按</b>的：一次按下拖一段，抬手把终点定成顶点，
+    /// 折线还开着；收口由"再点当前工具／Esc／换工具／换粗细"负责。所以它必须有一份
+    /// 自己记下的颜色与粗细——中途换了设置，正在勾的这条不能悄悄变浓变细（症状："画着画着笔自己变了"）。</para>
+    /// </summary>
+    private static List<PixelPoint>? _polyPoints;
+    private static Screen? _polyScreen;
+    private static int _polyColour;
+    private static int _polyWidth;
 
     /// <summary>手上有笔时它属于哪块屏（抬起/轮询收尾都要用它，光标可能已经飘到别的屏）。</summary>
     private static Screen? _pressScreen;
@@ -248,6 +259,9 @@ public static class CanvasService
         // 下次进来还是穿透态（§16.5.2 的默认态）：把"拦截全屏"留成默认，等于让每次按热键都像把电脑弄死
         _clickThrough = true;
         _press = Press.None;
+        // 勾到一半的折线随窗口一起忘掉：层都没了，还留着点引用就是把已释放的对象留在静态字段上
+        _polyPoints = null;
+        _polyScreen = null;
         Notice = null;
         _yieldedTo = IntPtr.Zero;
         StateChanged?.Invoke();
@@ -347,6 +361,18 @@ public static class CanvasService
     /// <summary>每屏各撤各的最后一条：用户看的是"刚才那一笔"，而它落在哪块屏只有层自己知道。</summary>
     public static void Undo()
     {
+        if (_polyPoints is { } open)
+        {
+            // 勾到一半时"撤销"退的是<b>最后一个顶点</b>，不是板上那条旧笔迹：
+            // 用户眼睛正盯着这条折线，撤错对象比多按一次难受得多。退到只剩起点仍然开着
+            // （还能从那一点接着拖），一个点都不剩才整条丢掉。
+            var where = _polyScreen;
+            open.RemoveAt(open.Count - 1);
+            if (open.Count == 0) CancelOpenPolyLine();
+            else { ShowPolyPreview(null); if (where is not null) Flush(where); }
+            StateChanged?.Invoke();
+            return;
+        }
         var changed = false;
         foreach (var screen in Screens)
             if (screen.Ink.Undo())
@@ -359,6 +385,7 @@ public static class CanvasService
 
     public static void ClearAll()
     {
+        CancelOpenPolyLine();               // 勾到一半的折线不能被"清空"顺手提交出去
         foreach (var screen in Screens)
         {
             screen.Ink.Clear();
@@ -418,6 +445,8 @@ public static class CanvasService
         BeginPress(screen, pointer.At, _tool switch
         {
             CanvasTool.Highlighter => Press.Ephemeral,
+            // 折线要跨按接段，所以按下时不能像别的图形那样"这一按就是一条"
+            CanvasTool.PolyLine => Press.PolyLine,
             // 图形与画笔同为拦截态（CanvasModes 一处定），但落笔方式不同：一次拖拽定形，不是跟着手走
             { } tool when tool.IsShape() => Press.Shape,
             _ => Press.Drawing,
@@ -443,7 +472,23 @@ public static class CanvasService
         {
             // 预览落在临时层，不落持久层：拖到一半取消、拖过头再拉回来，都不该留下一条撤不掉的笔迹
             _shapeFrom = at;
-            screen.Dirty.Add(screen.Trail.SetPreview(ShapeStroke(at, at, colour)));
+            screen.Dirty.Add(screen.Trail.SetPreview(ShapeStroke(at, at)));
+        }
+        else if (kind == Press.PolyLine)
+        {
+            // <b>折线不跨屏</b>：顶点表整份是"那一块屏自己的物理像素"（坐标系原点在那块屏左上角），
+            // 在另一块屏上点第二下就会把两个坐标系的数写进同一条笔迹——症状是那一段飞到主屏的另一头。
+            // 所以换屏先把手上这条收口（用户已经画成的那几段不能丢），再从这一点起一条新的。
+            if (_polyScreen is not null && _polyScreen != screen) FinishOpenPolyLine();
+            // 已经在勾就只是"接着拖下一段"——顶点由上一段的抬手定，这里不能再加一个（否则每段开头都多一个重点）
+            _polyPoints ??= new List<PixelPoint> { at };
+            if (_polyScreen is null)
+            {
+                _polyScreen = screen;
+                _polyColour = colour;                       // 颜色与粗细在起勾那一刻定死，中途换设置不悄悄改它
+                _polyWidth = WidthFor(CanvasTool.PolyLine);
+            }
+            ShowPolyPreview(at);
         }
         else
         {
@@ -472,8 +517,14 @@ public static class CanvasService
         else if (_press == Press.Shape)
         {
             // 每一帧整份替换预览：脏区是"旧的那份 + 新的这份"，所以拖过去的那条影子会被擦回来
-            screen.Dirty.Add(screen.Trail.SetPreview(
-                ShapeStroke(_shapeFrom, pointer.At, Palette[_colorIndex].Bgra)));
+            screen.Dirty.Add(screen.Trail.SetPreview(ShapeStroke(_shapeFrom, pointer.At)));
+            dirty = true;
+        }
+        else if (_polyPoints is not null && screen == _polyScreen)
+        {
+            // 折线<b>跨按</b>开着：没按住的时候那根橡皮筋也要跟着手走，否则"下一个顶点落在哪"全无预告，
+            // 就只能凭感觉点。预览整份替换，脏区含旧那份，所以拖过的影子会被擦回来。
+            ShowPolyPreview(pointer.At);
             dirty = true;
         }
         else if (screen.Ink.Drawing is { } stroke && stroke.AddPoint(pointer.At))
@@ -487,17 +538,30 @@ public static class CanvasService
 
     private static void OnReleased(Screen screen, CanvasPointer pointer)
     {
-        FinishPress(screen);
+        FinishPress(screen, pointer.At);
         // 轮询接手的那两种按下（荧光笔按住 / Ctrl+Alt 圈画）是"临时摘掉穿透"换来的，
         // 抬起必须还回去——否则一次圈画之后整台机器的鼠标就被我们扣住了。
         if (_wasTemporary) EndTemporaryPress();
     }
 
-    /// <summary>收手上那一笔（不碰穿透态）：荧光段交给 TTL 淡出，持久笔迹要定形。</summary>
-    private static void FinishPress(Screen? screen)
+    /// <summary>
+    /// 收手上那一笔（不碰穿透态）：荧光段交给 TTL 淡出，持久笔迹要定形。
+    /// <paramref name="at"/> 只有折线用——抬手那一点就是它刚拖出来的那个顶点。
+    /// </summary>
+    private static void FinishPress(Screen? screen, PixelPoint? at = null)
     {
         if (screen is null) { _press = Press.None; return; }
         if (_press == Press.Ephemeral) Flush(screen);          // 段留在 Trail 里按 TTL 淡，不进持久层
+        else if (_press == Press.PolyLine)
+        {
+            // 抬手<b>不收口</b>：只是把这一段的终点定成顶点，折线还开着等下一按。
+            // 所以这里既不 Commit 也不 Recomposite——它眼下整条都还活在预览槽里。
+            // 只在折线自己那块屏上定顶点：顶点表是"那块屏自己的物理像素"，别的屏的坐标混进来，
+            // 那一段就会飞到另一块屏的另一头去。
+            if (screen == _polyScreen) AddVertex(at);
+            ShowPolyPreview(null);
+            Flush(screen);
+        }
         else if (_press == Press.Shape)
         {
             // 定形＝把预览那份"换个归属"：同一串点从临时层挪进持久层，不重算几何。
@@ -611,10 +675,91 @@ public static class CanvasService
     /// 按当前工具与粗细，把一次拖拽展成一条笔迹。<b>拖拽期间的预览与松手时的定形共用这一句</b>：
     /// 两处各算一遍几何，就会长成"拖的时候一个样、松手另一个样"。
     /// </summary>
-    private static CanvasStroke ShapeStroke(PixelPoint from, PixelPoint to, int colour)
+    /// <remarks>
+    /// 颜色与粗细<b>从当前设置里取</b>，不作参数：它们本就该跟着工具条上那颗走，
+    /// 而把 <c>colour</c> 做成参数会让"预览用 A 色、定形用 B 色"这种错法编译得过（批次 WF 那条口径：
+    /// 一个布尔/取值的含义只在一处时，接线处现写就是必然出错）。
+    /// </remarks>
+    private static CanvasStroke ShapeStroke(PixelPoint from, PixelPoint to)
     {
         var width = WidthFor(_tool);
-        return CanvasStroke.FromPoints(_tool, colour, width, CanvasShapes.Outline(_tool, from, to, width));
+        return CanvasStroke.FromPoints(_tool, Palette[_colorIndex].Bgra, width,
+            CanvasShapes.Outline(_tool, from, to, width));
+    }
+
+    /// <summary>
+    /// 折线的顶点：<b>抬手那一点只有在"真的拖出了一段"时才算一个顶点</b>。
+    /// 原地按一下也定顶点的话，屏幕上会攒出一串看不见的重点，而它们两两之间是零长度段——
+    /// 收口时就只剩"一个圆帽孤零零地留在板上"这种说不清的症状。
+    /// </summary>
+    private static void AddVertex(PixelPoint? at)
+    {
+        if (at is not { } p || _polyPoints is not { } points) return;
+        if (points.Count > 0 && points[^1].Equals(p)) return;
+        points.Add(p);
+    }
+
+    /// <summary>
+    /// 换掉折线的预览：<b>已定形的顶点 + 伸向光标的那一段橡皮筋</b>（<paramref name="rubber"/> 为 null＝刚抬手，
+    /// 只画已定形的部分）。点不足两个时丢掉预览而不是画一个点。
+    /// <para>它只弄脏 <see cref="Screen.Dirty"/>，<b>不提交</b>——提交时机由调用方决定（拖拽期要走节流）。</para>
+    /// </summary>
+    private static void ShowPolyPreview(PixelPoint? rubber)
+    {
+        if (_polyScreen is not { } screen || _polyPoints is not { } points) return;
+        var preview = CanvasShapes.PolyLinePreview(points, rubber);
+        screen.Dirty.Add(preview.Count < 2
+            ? screen.Trail.DropPreview()
+            : screen.Trail.SetPreview(CanvasStroke.FromPoints(CanvasTool.PolyLine, _polyColour, _polyWidth, preview)));
+    }
+
+    /// <summary>
+    /// 收口正在勾的折线：<b>整条作为一条笔迹</b>进持久层。
+    /// <para>为什么不是每个顶点一条：撤销一格要退掉"刚才画的那条折线"，而不是它的一小段
+    /// （用户按 Ctrl+Z 的心智单位是"我画的那个东西"）；而橡皮、存图、贴图全都按笔迹走，
+    /// 拆成多条只会让同一件事有五种表现。</para>
+    /// </summary>
+    private static void FinishOpenPolyLine()
+    {
+        var screen = _polyScreen;
+        var points = _polyPoints;
+        _polyPoints = null;
+        _polyScreen = null;
+        if (screen is null || points is null) return;
+        screen.Dirty.Add(screen.Trail.DropPreview());
+        if (points.Count >= 2)
+        {
+            screen.Ink.Commit(CanvasStroke.FromPoints(CanvasTool.PolyLine, _polyColour, _polyWidth, points));
+            Recomposite(screen);
+        }
+        Flush(screen);
+    }
+
+    /// <summary>丢掉正在勾的折线且<b>不提交</b>（清空笔迹／退出画布：手上一半的东西不该落进结果里）。</summary>
+    private static void CancelOpenPolyLine()
+    {
+        var screen = _polyScreen;
+        _polyPoints = null;
+        _polyScreen = null;
+        if (screen is null) return;
+        screen.Dirty.Add(screen.Trail.DropPreview());
+        Flush(screen);
+    }
+
+    /// <summary>
+    /// 画布里的 Esc：<b>两级</b>。正在勾折线时先收口这一条（板子继续开着），没有手上一半的东西才退出画布。
+    /// <para>只有一级"Esc＝退出画布"的话，勾到一半想停下就得整块板子一起没——而那条折线也没画成。
+    /// 真机症状会是"按 Esc 之后我的笔迹全没了"（退出即丢弃）。</para>
+    /// </summary>
+    public static void Escape()
+    {
+        if (_polyPoints is not null)
+        {
+            FinishOpenPolyLine();
+            StateChanged?.Invoke();
+            return;
+        }
+        Stop();
     }
 
     // ────────── 渲染 ──────────
@@ -775,11 +920,13 @@ public static class CanvasService
     {
         // 轮询抢来的那一按（荧光笔/Ctrl+Alt 圈画）也要在这里收口：换工具时它还挂着的话，
         // 抬起事件会被新工具吃掉，屏幕上就留下一条"永远在画"的笔迹
-        if (_press is Press.Ephemeral or Press.QuickPen or Press.Shape)
+        if (_press is Press.Ephemeral or Press.QuickPen or Press.Shape or Press.PolyLine)
         {
             FinishPress(_pressScreen);
             EndTemporaryPress();
         }
+        // 折线单独收：它按定义就是"跨按还开着"的那一条，上面那个 switch 只收了手上这一段
+        FinishOpenPolyLine();
         var changed = false;
         foreach (var screen in Screens)
             if (screen.Ink.Drawing is not null)
@@ -895,6 +1042,10 @@ public static class CanvasService
         Array.Copy(screen.Persistent, ink, Math.Min(screen.Persistent.Length, ink.Length));
         foreach (var segment in screen.Trail.Segments)
             CanvasCompositor.Paint(ink, crop.Width, crop.Height, segment.Stroke, segment.AlphaScale);
+        // 正在拖的那个图形／还开着的折线也算"屏幕上有"：不叠它就会出现"板上看得见一条，贴出来的图没有"。
+        // 顺序与 Flush 一致（叠在荧光段之后），这样同一帧里不会跳色。
+        if (screen.Trail.Preview is { } preview)
+            CanvasCompositor.Paint(ink, crop.Width, crop.Height, preview);
         CanvasCompositor.OverlayOntoFrame(crop.Pixels, crop.Width, crop.Height,
             new IntRect(0, 0, 0, 0), ink, screen.Window.Width, screen.Window.Height);
 
