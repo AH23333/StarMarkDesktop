@@ -88,6 +88,32 @@ public sealed class CanvasStroke
     /// <summary>笔还没落下（只有一个点）时也有一条包围盒：单点落笔要能画出一个圆点。</summary>
     public IntRect Bounds { get; private set; }
 
+    /// <summary>
+    /// <b>最后一步</b>扫过的那一小片（不含之前走过的地方）。
+    /// <para>
+    /// 拖动中每一帧真正需要重算的就是这一块。拿 <see cref="Bounds"/> 当脏区等于"每帧把整条笔迹
+    /// 从几何重画一遍"——笔迹越长越慢，4K 粗档实测一路涨到几百毫秒一帧（真机症状："荧光笔绘制过程非常卡"）。
+    /// </para>
+    /// <para>
+    /// 边界与 <c>CanvasCompositor.Walk</c> 返回的那块<b>用同一条式子</b>（半径 +1 是那条覆盖度斜坡，
+    /// 少一像素就留一圈残影）；两处不一致就会表现为"笔迹边缘有一圈画不上／擦不掉"。
+    /// </para>
+    /// </summary>
+    public IntRect TailBounds
+    {
+        get
+        {
+            if (_points.Count < 2) return Bounds;
+            var a = _points[^2];
+            var b = _points[^1];
+            return new IntRect(
+                Math.Min(a.X, b.X) - _radius - 1,
+                Math.Min(a.Y, b.Y) - _radius - 1,
+                Math.Abs(b.X - a.X) + _radius * 2 + 3,
+                Math.Abs(b.Y - a.Y) + _radius * 2 + 3);
+        }
+    }
+
     public CanvasStroke(CanvasTool tool, int colorBgra, int width, PixelPoint first)
     {
         Tool = tool;

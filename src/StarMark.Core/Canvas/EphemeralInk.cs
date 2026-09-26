@@ -31,6 +31,13 @@ public sealed class EphemeralInk
 
         /// <summary>本帧该用多淡（1＝完全不淡，0＝该消失了）。渲染层把它当作 alpha 的乘数。</summary>
         public double AlphaScale { get; set; } = 1d;
+
+        /// <summary>
+        /// 屏幕上此刻贴着的那一层有多淡。<b>与 <see cref="AlphaScale"/> 不等就意味着这一整段要重算</b>——
+        /// 而相等时（正按住拖的那一段每帧都被刷新，恒为 1）要重算的只有新走过的那一小条。
+        /// 这条判据就是"荧光笔拖动卡"与"不卡"的分界：以前每帧无条件把整段从几何重画一遍。
+        /// </summary>
+        public double PaintScale { get; set; } = 1d;
     }
 
     /// <summary>淡出时长。默认 1.5 秒——够指着讲一句，又不至于让痕迹攒成一团。</summary>
@@ -48,6 +55,21 @@ public sealed class EphemeralInk
 
     public bool IsEmpty => _segments.Count == 0;
 
+    /// <summary>
+    /// 现在还活着的这些段一共占过多大一片。<b>清空之前必须先拿它去弄脏屏幕</b>——
+    /// 段一旦被 list 丢掉就再没人画它，那块光却会永远留在分层窗的缓冲里。
+    /// </summary>
+    public IntRect LiveBounds
+    {
+        get
+        {
+            IntRect all = default;
+            foreach (var segment in _segments) all = Union(all, segment.Stroke.Bounds);
+            return all;
+        }
+    }
+
+    /// <summary>丢掉所有段（调用方负责把 <see cref="LiveBounds"/> 交回脏区）。</summary>
     public void Clear() => _segments.Clear();
 
     /// <summary>开始一段荧光笔迹（按下那一下）。</summary>
@@ -63,34 +85,57 @@ public sealed class EphemeralInk
     }
 
     /// <summary>
-    /// 给<b>最后一段</b>添点。<b>没有段可添时静默返回 false 而不是抛</b>：荧光笔在穿透态收不到事件，
+    /// 给<b>最后一段</b>添点。
+    /// <para>
+    /// <b>返回值说的是"这一段真的变长了吗"</b>（太近被 <c>CanvasStroke.MinPointDistance</c> 丢掉的不算）：
+    /// 调用方拿它决定要不要把新走的那一小条并进脏区。若这里"只要收到移动就算成功"，
+    /// 鼠标在原地抖一下也会触发一次整块重算——那正是这批要消掉的那类开销。
+    /// </para>
+    /// <para>
+    /// <b>没有段可添时静默返回 false 而不是抛</b>：荧光笔在穿透态收不到事件，
     /// 松手与移动的到达顺序在不同 DPI 缩放下不保证，追到这里抛异常只会变成"画布一动就崩"。
+    /// </para>
     /// </summary>
     public bool Extend(PixelPoint p, long nowMs)
     {
         if (_segments.Count == 0) return false;
         var last = _segments[^1];
         last.LastPointTick = nowMs;                          // 即使这一点太近被丢，也重新起算 TTL（还在比划＝没停）
-        last.Stroke.AddPoint(p);
-        return true;
+        return last.Stroke.AddPoint(p);
     }
 
     /// <summary>
-    /// 每帧调用：按 TTL 淘汰到期段并刷新存活段的浓度，返回还能画的段。
+    /// 每帧调用：按 TTL 淘汰到期段并刷新存活段的浓度。
     /// <para>从后往前删——<see cref="List{T}"/> 从前删会让索引整体错位，
     /// 而"漏掉一段没淡"会表现成屏幕上赖着不走的一道光。</para>
     /// </summary>
-    public IReadOnlyList<Segment> Tick(long nowMs)
+    /// <returns>
+    /// <b>被删掉的那些段占过的地方</b>（没删则为空）。渲染层必须把这块交回脏区：
+    /// 段一消失就没人再画它，而它贴过的那一层像素还留在屏幕上＝一道擦不掉的光。
+    /// </returns>
+    public IntRect Tick(long nowMs)
     {
         var ttlMs = Math.Max(1, Ttl.TotalMilliseconds);
+        IntRect expired = default;
         for (var i = _segments.Count - 1; i >= 0; i--)
         {
             var segment = _segments[i];
             var age = nowMs - segment.LastPointTick;
             // age 为负＝TickCount64 回绕（几十天不关机才会遇到一次）：当作刚添过点，不因此把笔迹吞掉
             segment.AlphaScale = age <= 0 ? 1d : Math.Clamp(1d - age / ttlMs, 0d, 1d);
-            if (segment.AlphaScale <= 0d) _segments.RemoveAt(i);
+            if (segment.AlphaScale > 0d) continue;
+            expired = Union(expired, segment.Stroke.Bounds);
+            _segments.RemoveAt(i);
         }
-        return _segments;
+        return expired;
+    }
+
+    private static IntRect Union(IntRect a, IntRect b)
+    {
+        if (a.IsEmpty) return b;
+        if (b.IsEmpty) return a;
+        var x = Math.Min(a.X, b.X);
+        var y = Math.Min(a.Y, b.Y);
+        return new IntRect(x, y, Math.Max(a.Right, b.Right) - x, Math.Max(a.Bottom, b.Bottom) - y);
     }
 }

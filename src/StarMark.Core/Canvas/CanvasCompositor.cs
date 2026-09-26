@@ -23,6 +23,8 @@ namespace StarMark.Core.Canvas;
 public static class CanvasCompositor
 {
     /// <summary>没有脏区时的返回值（<c>IsEmpty</c> 为真）。</summary>
+    private static IntRect Whole(int width, int height) => new(0, 0, width, height);
+
     public static readonly IntRect Nothing = new(0, 0, 0, 0);
 
     /// <summary>
@@ -58,28 +60,44 @@ public static class CanvasCompositor
     /// 调用方据此决定往屏幕上提交哪一块——<b>4K 全屏每帧整张提交是 33MB，规格 §16.7 明令禁止</b>。
     /// </summary>
     public static IntRect Paint(uint[] buffer, int width, int height, CanvasStroke stroke, double fade = 1d)
+        => PaintClipped(buffer, width, height, stroke, Whole(width, height), fade);
+
+    /// <summary>
+    /// 只往 <paramref name="clip"/> 里画（<b>结果与不裁剪时在那一块上逐像素相同</b>：取大规则下
+    /// 每一笔对每个像素的结论只看它自己，笔迹之间不互相削弱）。
+    /// <para>
+    /// 为什么必须有它：荧光笔每帧要重画的是"这次真正脏的那一小块"，而 <see cref="Paint"/> 会连着
+    /// 已经对的那些像素一起重算——一条划了两千像素的粗荧光笔，每帧几百万次逐像素运算，
+    /// 实测 4K 粗档 <b>643 ms/帧</b>（真机症状："荧光笔绘制过程非常卡"）。
+    /// </para>
+    /// </summary>
+    public static IntRect PaintClipped(uint[] buffer, int width, int height, CanvasStroke stroke,
+        IntRect clip, double fade = 1d)
     {
         var points = stroke.Points;
         if (points.Count == 0) return Nothing;
+        var area = Clamp(clip, width, height);
+        var brush = new Brush(stroke, fade);
 
-        Stamp(buffer, width, height, stroke, points[0], fade);
+        Stamp(buffer, width, height, area, brush, points[0]);
         for (var i = 1; i < points.Count; i++)
-            Walk(buffer, width, height, stroke, points[i - 1], points[i], fade);
+            Walk(buffer, width, height, area, brush, points[i - 1], points[i]);
         return Clamp(stroke.Bounds, width, height);
     }
 
     /// <summary>
     /// 只画<b>最后一段</b>（拖动中的增量）。这是画布能跟手的关键：每来一个点就全量重画整层，
     /// 笔迹一多就会从"跟手"掉到"一帧一顿"。
-    /// <para>增量为什么安全：这里的合成是<b>取大</b>（见 <see cref="BlendInk"/>），
+    /// <para>增量为什么安全：这里的合成是<b>取大</b>（见 <see cref="PaintDisc"/> 里那句"比这一层更浓的像素保持原样"），
     /// 同一条笔迹重复涂同一像素不会变浓，所以"补画新的一段"与"整条重画"的结果一致。</para>
     /// </summary>
     public static IntRect PaintTail(uint[] buffer, int width, int height, CanvasStroke stroke, double fade = 1d)
     {
         var points = stroke.Points;
         if (points.Count == 0) return Nothing;
-        if (points.Count == 1) return Stamp(buffer, width, height, stroke, points[0], fade);
-        return Walk(buffer, width, height, stroke, points[^2], points[^1], fade);
+        var brush = new Brush(stroke, fade);
+        if (points.Count == 1) return Stamp(buffer, width, height, Whole(width, height), brush, points[0]);
+        return Walk(buffer, width, height, Whole(width, height), brush, points[^2], points[^1]);
     }
 
     /// <summary>按顺序全量重画一层（撤销、清屏之后的重算）。</summary>
@@ -191,31 +209,131 @@ public static class CanvasCompositor
 
     // ────────── 逐像素 ──────────
 
-    private static IntRect Stamp(uint[] buffer, int width, int height, CanvasStroke stroke, PixelPoint p, double fade)
+    /// <summary>
+    /// 荧光笔三层的浓度（规格 §16.4 给定的值：内芯 90% / 中圈 45% / 外圈 25%）。
+    /// <para>
+    /// 一层线性衰减长得像雾而不像荧光笔，而"内芯最亮 + 外圈最淡"正是用户分辨"我在荧光还是在画"的视觉线索。
+    /// <b>这三个数只在这里出现一次</b>：圆盘的"覆盖度=1"那一档直接写预乘好的像素，
+    /// 边缘斜坡要按同一张表现算浓度，两处若各写一份就会长成"内芯和斜坡对不上"。
+    /// </para>
+    /// </summary>
+    private const float CoreDensity = 0.90f, MidDensity = 0.45f, OuterDensity = 0.25f;
+
+    /// <summary>
+    /// 一支笔在某一浓度（<c>fade</c>）下的全部预设值。
+    /// <para>
+    /// <b>为什么要有它</b>：一帧要判几百万个像素，而"这笔是什么色、多粗、几成浓"在整条笔迹里一个字都不变。
+    /// 原先这些算式（读笔色、算 alpha、预乘三个通道、开平方）直接写在像素循环里，Debug 构建下每像素
+    /// 几十纳秒，一条 4K 上的粗荧光笔就把 UI 线程钉死在几百毫秒一帧。
+    /// </para>
+    /// <para>
+    /// <b>几何判据一律用 d² 而不是 d</b>：d² 是整数，而 (r±0.5)²、core²、(2·core)² 都落在 float 能精确
+    /// 表示的 x.0／x.25 上，开平方又是单调且正确舍入的，所以"d² 与它比大小"与"开完平方再比"同结论。
+    /// 于是圆盘内部那一大片一个平方根都不用算，只有外缘那条约 1 像素宽的斜坡需要。
+    /// </para>
+    /// </summary>
+    private sealed class Brush
     {
-        var radius = CanvasWidths.RadiusFor(stroke.Tool, stroke.Width);
-        PaintDisc(buffer, width, height, stroke, p.X, p.Y, radius, fade);
+        public readonly int Radius;
+        public readonly int Scan;          // radius + 1：外缘斜坡要多吃一像素，脏区同理
+        public readonly int FullCoverMax;  // d² 不超过它 ⇒ 覆盖度必为 1（斜坡内侧）
+        public readonly int SkipFrom;      // d² 不小于它 ⇒ 这个像素一点都碰不到（斜坡外侧）
+        public readonly float RimStart;    // radius + 0.5f：斜坡的起点
+        public readonly bool Highlighter;
+        public readonly bool Eraser;
+        public readonly int CoreMax;       // 内芯的 d² 上界
+        public readonly int MidMax;        // 中圈的 d² 上界
+        public readonly uint SolidPixel;   // 覆盖度=1 时直接写入的预乘像素（画笔／橡皮之外那一档）
+        public readonly uint CorePixel;
+        public readonly uint MidPixel;
+        public readonly uint OuterPixel;
+        public readonly int MaxAlpha;      // 这一笔最多浓到什么程度：已经比它浓的像素一步跳过
+        public readonly int ColorBgra;     // 非预乘笔色（斜坡那圈按覆盖度现算）
+        public readonly int BaseAlpha;     // 笔色的 alpha 字节
+        public readonly float Factor;      // 整笔的淡出乘数（0–1）
+
+        public Brush(CanvasStroke stroke, double fade)
+        {
+            var tool = stroke.Tool;
+            Highlighter = tool == CanvasTool.Highlighter;
+            Eraser = tool == CanvasTool.Eraser;
+            var core = Highlighter ? Math.Max(1f, stroke.Width / 4f) : 0f;      // 内芯半径＝笔宽的 1/4
+            var coreOuter = core * 2f;
+            var colour = stroke.EffectiveColorBgra;
+            Radius = CanvasWidths.RadiusFor(tool, stroke.Width);
+            Scan = Radius + 1;
+            RimStart = Radius + 0.5f;
+            FullCoverMax = FloorOf((Radius - 0.5f) * (Radius - 0.5f));
+            SkipFrom = FloorOf((Radius + 0.5f) * (Radius + 0.5f)) + 1;
+            CoreMax = FloorOf(core * core);
+            MidMax = FloorOf(coreOuter * coreOuter);
+            Factor = (float)Math.Clamp(fade, 0d, 1d);
+            ColorBgra = colour;
+            BaseAlpha = colour >>> 24;
+            SolidPixel = PixelFor(BaseAlpha, 1f * Factor, colour);
+            CorePixel = PixelFor(BaseAlpha, CoreDensity * Factor, colour);
+            MidPixel = PixelFor(BaseAlpha, MidDensity * Factor, colour);
+            OuterPixel = PixelFor(BaseAlpha, OuterDensity * Factor, colour);
+            MaxAlpha = Highlighter ? (int)(CorePixel >>> 24) : (int)(SolidPixel >>> 24);
+        }
+
+        /// <summary>覆盖度=1 的那个像素上，这一笔给多浓（三层由 d² 决定）。</summary>
+        public uint LayerPixel(int d2) => Highlighter
+            ? d2 <= CoreMax ? CorePixel : d2 <= MidMax ? MidPixel : OuterPixel
+            : SolidPixel;
+
+        /// <summary>边缘斜坡那一圈：浓度还要再乘一条从 1 到 0 的覆盖度。</summary>
+        public float Density(int d2) => Highlighter
+            ? d2 <= CoreMax ? CoreDensity : d2 <= MidMax ? MidDensity : OuterDensity
+            : 1f;
+
+        /// <summary>
+        /// 边缘斜坡上的像素（<paramref name="ramp"/> 是那条从 1 到 0 的覆盖度）。
+        /// <b>乘法次序与重写前那句逐像素算式一致</b>：<c>(ramp × 层浓度) × 整笔浓度</c>——
+        /// float 乘法不满足结合律，换了次序就会在边界上差出 1/255。
+        /// </summary>
+        public uint RimPixel(int d2, float ramp) => PixelFor(BaseAlpha, (ramp * Density(d2)) * Factor, ColorBgra);
+
+        /// <summary>
+        /// 覆盖度 → 预乘像素。<b>alpha 必须先按 <c>Math.Round</c> 取整再预乘</b>（与原来写在
+        /// 像素循环里的那句同式：<c>int × float</c> 先算 float，再 <c>Math.Round</c>）。
+        /// </summary>
+        private static uint PixelFor(int baseAlpha, float coverage, int colour)
+        {
+            var alpha = (int)Math.Round(baseAlpha * coverage);
+            return alpha <= 0 ? 0u : Premultiply(colour, alpha);
+        }
+
+        private static int FloorOf(float square) => (int)Math.Floor((double)square);
+    }
+
+    private static IntRect Stamp(uint[] buffer, int width, int height, IntRect clip, Brush brush, PixelPoint p)
+    {
+        PaintDisc(buffer, width, height, clip, brush, p.X, p.Y);
+        var radius = brush.Radius;
         return Clamp(new IntRect(p.X - radius - 1, p.Y - radius - 1, radius * 2 + 3, radius * 2 + 3), width, height);
     }
 
-    private static IntRect Walk(uint[] buffer, int width, int height, CanvasStroke stroke,
-        PixelPoint a, PixelPoint b, double fade)
+    private static IntRect Walk(uint[] buffer, int width, int height, IntRect clip, Brush brush,
+        PixelPoint a, PixelPoint b)
     {
-        var radius = CanvasWidths.RadiusFor(stroke.Tool, stroke.Width);
+        var radius = brush.Radius;
+        var scan = brush.Scan;
         var steps = Math.Max(Math.Abs(b.X - a.X), Math.Abs(b.Y - a.Y));
         // 步长 1 像素：更密只是在同一像素上多叠几次（取大规则下无事发生），更疏会断线
         for (var i = 0; i <= steps; i++)
         {
-            if (steps == 0)
+            var x = a.X;
+            var y = a.Y;
+            if (steps > 0)
             {
-                PaintDisc(buffer, width, height, stroke, a.X, a.Y, radius, fade);
-                break;
+                var t = (double)i / steps;
+                x = (int)Math.Round(a.X + (b.X - a.X) * t, MidpointRounding.AwayFromZero);
+                y = (int)Math.Round(a.Y + (b.Y - a.Y) * t, MidpointRounding.AwayFromZero);
             }
-            var t = (double)i / steps;
-            PaintDisc(buffer, width, height, stroke,
-                (int)Math.Round(a.X + (b.X - a.X) * t, MidpointRounding.AwayFromZero),
-                (int)Math.Round(a.Y + (b.Y - a.Y) * t, MidpointRounding.AwayFromZero),
-                radius, fade);
+            // 整个圆盘都在裁剪区外就一个像素都不判——这是 PaintClipped 能省掉那几百毫秒的全部依据
+            if (x + scan < clip.X || x - scan >= clip.Right || y + scan < clip.Y || y - scan >= clip.Bottom) continue;
+            PaintDisc(buffer, width, height, clip, brush, x, y);
         }
         return Clamp(new IntRect(
             Math.Min(a.X, b.X) - radius - 1,
@@ -229,79 +347,79 @@ public static class CanvasCompositor
     /// <c>UpdateLayeredWindow</c> 是逐像素 alpha 合成，硬边圆直接画出来就是锯齿台阶；
     /// 而这条斜坡同时解释了"脏区为什么必须比半径多 1 像素"（少一像素就留一圈残影）。
     /// </summary>
-    private static void PaintDisc(uint[] buffer, int width, int height, CanvasStroke stroke,
-        int cx, int cy, int radius, double fade)
+    private static void PaintDisc(uint[] buffer, int width, int height, IntRect clip, Brush brush, int cx, int cy)
     {
-        var reach = radius + 1;
-        var top = Math.Max(0, cy - reach);
-        var bottom = Math.Min(height - 1, cy + reach);
-        var left = Math.Max(0, cx - reach);
-        var right = Math.Min(width - 1, cx + reach);
-        var factor = (float)Math.Clamp(fade, 0d, 1d);
-        var core = stroke.Tool == CanvasTool.Highlighter ? Math.Max(1f, stroke.Width / 4f) : 0f;
+        var left = Math.Max(cx - brush.Scan, clip.X);
+        var right = Math.Min(cx + brush.Scan, clip.Right - 1);
+        var top = Math.Max(cy - brush.Scan, clip.Y);
+        var bottom = Math.Min(cy + brush.Scan, clip.Bottom - 1);
+        if (right < left || bottom < top) return;
+        if (brush.Eraser)
+        {
+            EraseDisc(buffer, width, top, bottom, left, right, brush, cx, cy);
+            return;
+        }
         for (var y = top; y <= bottom; y++)
         {
             var dy = y - cy;
+            var row = y * width;
             for (var x = left; x <= right; x++)
             {
                 var dx = x - cx;
-                var distance = MathF.Sqrt(dx * dx + dy * dy);
-                var ramp = Math.Clamp(radius + 0.5f - distance, 0f, 1f);
-                if (ramp <= 0f) continue;
-                var density = DensityFor(stroke.Tool, distance, core);
-                if (density <= 0f) continue;
-                BlendInk(buffer, y * width + x, stroke, ramp * density * factor);
+                var d2 = dx * dx + dy * dy;
+                if (d2 >= brush.SkipFrom) continue;                       // 斜坡之外：一点不染
+                var index = row + x;
+                var pixel = buffer[index];
+                var destinationAlpha = (int)(pixel >>> 24);
+                if (destinationAlpha >= brush.MaxAlpha) continue;         // 取大规则：再算也不会更浓
+                var value = d2 <= brush.FullCoverMax
+                    ? brush.LayerPixel(d2)                                // 覆盖度=1：像素早就算好了
+                    : brush.RimPixel(d2, brush.RimStart - MathF.Sqrt(d2));   // 只有这一圈开平方
+                if ((int)(value >>> 24) <= destinationAlpha) continue;    // 比这一层更浓的像素保持原样
+                buffer[index] = value;
             }
         }
     }
 
     /// <summary>
-    /// 这支笔在这个距离上有多浓（0–1）。
+    /// 橡皮那一段：<b>按比例减 alpha</b>，所以它没有"取大"可借用（同一条橡皮走两次会擦过头——
+    /// 这就是松手必须整层重算的原因，见 <c>CanvasService.Recomposite</c>）。
     /// <para>
-    /// <b>荧光笔的三层是规格给定的值</b>（内芯 90% / 中圈 45% / 外圈 25%，§16.4）：一层线性衰减
-    /// 长得像雾而不像荧光笔，而"内芯最亮 + 外圈最淡"正是用户分辨"我在荧光还是在画"的视觉线索。
+    /// 已经是"空白"的像素也照原样写一次 <see cref="LayeredCanvasWindow.BlankPixel"/>，与重写前的
+    /// <c>BlendInk</c> 逐像素同结果；省下来的是那三次乘除。
     /// </para>
     /// </summary>
-    private static float DensityFor(CanvasTool tool, float distance, float coreRadius)
-        => tool switch
-        {
-            CanvasTool.Highlighter => distance <= coreRadius ? 0.90f
-                : distance <= coreRadius * 2f ? 0.45f
-                : 0.25f,
-            _ => 1f,
-        };
-
-    /// <summary>
-    /// 把一支笔的圆点合进一个像素（<paramref name="index"/> 已是缓冲下标）。
-    /// <para>
-    /// <b>墨水取大、橡皮按比例减</b>：取大＝同一支笔来回涂不会越涂越浓（荧光笔"盖在字上还能看见字"
-    /// 靠它成立），且后画的淡色不会把先画的浓色洗掉（荧光笔盖在黑笔上，黑笔仍透得出来——
-    /// 真实荧光笔就是这样）。橡皮把整像素按 <c>1-覆盖度</c> 缩小，预乘关系因此继续成立。
-    /// </para>
-    /// </summary>
-    private static void BlendInk(uint[] buffer, int index, CanvasStroke stroke, float coverage)
+    private static void EraseDisc(uint[] buffer, int width, int top, int bottom, int left, int right,
+        Brush brush, int cx, int cy)
     {
-        var destination = buffer[index];
-        var destinationAlpha = (int)(destination >>> 24);
-
-        if (stroke.Tool == CanvasTool.Eraser)
+        var blank = (int)(LayeredCanvasWindow.BlankPixel >>> 24);
+        for (var y = top; y <= bottom; y++)
         {
-            var keep = (int)Math.Round(destinationAlpha * (1d - coverage));
-            if (keep <= (int)(LayeredCanvasWindow.BlankPixel >>> 24))
+            var dy = y - cy;
+            var row = y * width;
+            for (var x = left; x <= right; x++)
             {
-                buffer[index] = LayeredCanvasWindow.BlankPixel;   // 擦到底＝回到"空白"，不是回到 0（0 会漏鼠标）
-                return;
+                var dx = x - cx;
+                var d2 = dx * dx + dy * dy;
+                if (d2 >= brush.SkipFrom) continue;
+                var index = row + x;
+                var pixel = buffer[index];
+                var destinationAlpha = (int)(pixel >>> 24);
+                var coverage = d2 <= brush.FullCoverMax
+                    ? brush.Factor                                        // ramp=1、浓度=1，剩下的就是整笔浓度
+                    : (brush.RimStart - MathF.Sqrt(d2)) * brush.Factor;
+                var keep = (int)Math.Round(destinationAlpha * (1d - coverage));
+                if (keep <= blank)
+                {
+                    buffer[index] = LayeredCanvasWindow.BlankPixel;       // 擦到底＝回到"空白"，不是 0（0 会漏鼠标）
+                    continue;
+                }
+                var blue = (int)(pixel & 0xFF) * keep / destinationAlpha;
+                var green = (int)(pixel >> 8 & 0xFF) * keep / destinationAlpha;
+                var red = (int)(pixel >> 16 & 0xFF) * keep / destinationAlpha;
+                buffer[index] = (uint)(blue | green << 8 | red << 16 | keep << 24);
             }
-            var blue = (int)(destination & 0xFF) * keep / destinationAlpha;
-            var green = (int)(destination >> 8 & 0xFF) * keep / destinationAlpha;
-            var red = (int)(destination >> 16 & 0xFF) * keep / destinationAlpha;
-            buffer[index] = (uint)(blue | green << 8 | red << 16 | keep << 24);
-            return;
         }
-
-        var sourceAlpha = (int)Math.Round((stroke.EffectiveColorBgra >>> 24) * coverage);
-        if (sourceAlpha <= destinationAlpha) return;             // 更淡的一笔不改已经更浓的像素
-        buffer[index] = Premultiply(stroke.EffectiveColorBgra, sourceAlpha);
     }
 
     /// <summary>非预乘色 → 预乘到指定 alpha。<b>三个通道乘同一个数</b>：漏一个就是彩色描边。</summary>

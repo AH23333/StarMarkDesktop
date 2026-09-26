@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Microsoft.UI.Dispatching;
 using StarMark.Abstractions;
@@ -49,8 +50,17 @@ public static class CanvasService
 
         public List<IntRect> Dirty { get; } = new();
 
-        /// <summary>上一帧叠过的地方（光晕 + 荧光段）。复原它们才需要这块记号。</summary>
-        public IntRect LastOverlay { get; set; }
+        /// <summary>
+        /// 上一帧那团光标光晕占的地方。<b>只有它需要无条件复原</b>：光晕跟着鼠标走，
+        /// 旧位置不擦就成一坨赖着不走的光斑。
+        /// <para>
+        /// 这里刻意<b>不再</b>记"上一帧所有荧光段叠过的地方"——那是批次 WG 之前的做法，
+        /// 它让每一帧的脏区等于整条笔迹的包围盒，而脏区一大，"从持久层重铺 + 整段重画"就跟着变大，
+        /// 一条长笔迹就能把 UI 线程钉到几百毫秒一帧。哪一帧该重算哪一块，现在由
+        /// <see cref="EphemeralInk.Segment.PaintScale"/> 与 <see cref="CanvasStroke.TailBounds"/> 分别说。
+        /// </para>
+        /// </summary>
+        public IntRect LastGlow { get; set; }
 
         /// <summary>这一帧要不要在光标处叠一团光晕、叠在哪（由帧循环按光标落在哪块屏决定）。</summary>
         public PixelPoint? GlowAt { get; set; }
@@ -332,10 +342,21 @@ public static class CanvasService
         foreach (var screen in Screens)
         {
             screen.Ink.Clear();
-            screen.Trail.Clear();
+            DropTrail(screen);
             Recomposite(screen);
         }
         FlushAll();
+    }
+
+    /// <summary>
+    /// 丢掉这块屏上所有还活着的荧光段。<b>必须先把它们占过的地方并进脏区</b>：段一从 list 里消失就再没人
+    /// 画它，而它贴过的那一层像素还留在分层窗缓冲里——症状是"清空之后屏幕上留着一块擦不掉的光"。
+    /// </summary>
+    private static void DropTrail(Screen screen)
+    {
+        var was = screen.Trail.LiveBounds;
+        screen.Trail.Clear();
+        if (!was.IsEmpty) screen.Dirty.Add(was);
     }
 
     /// <summary>把"屏幕 + 笔迹"合成一张钉到桌面上（§16.5 的"快照为贴图"）。</summary>
@@ -410,7 +431,9 @@ public static class CanvasService
         {
             if (screen.Trail.Extend(pointer.At, now))
             {
-                screen.Dirty.Add(screen.Trail.Segments[^1].Stroke.Bounds);
+                // 只把"新走的那一小条"并进脏区（不是整条笔迹的包围盒）：这一句加上 Flush 的裁剪，
+                // 才是"荧光笔拖动跟手"的全部凭据
+                screen.Dirty.Add(screen.Trail.Segments[^1].Stroke.TailBounds);
                 dirty = true;
             }
         }
@@ -558,18 +581,16 @@ public static class CanvasService
         PollPress(cursor.X, cursor.Y);
         foreach (var screen in Screens)
         {
-            // 上一帧叠过的地方必须先加进脏区：否则淡掉的那团光与走过的光晕会赖在屏幕上
-            screen.Dirty.Add(screen.LastOverlay);
-            screen.Trail.Tick(now);
-            // 本帧的叠盖范围<b>从空算起</b>，不能拿上一帧的当起点：那样这块记号只会越并越大，
-            // 几十帧后每帧的脏区就是一整块屏幕（真机反馈的"画几笔之后整屏发木"）。
-            var overlay = CanvasCompositor.Nothing;
+            // 到期那一段要把它占过的地方交回脏区：删掉之后没人再画它，那块光就赖在屏幕上了
+            var expired = screen.Trail.Tick(now);
+            if (!expired.IsEmpty) screen.Dirty.Add(expired);
+            // <b>只有"浓度与贴在屏幕上的那一层不一致"的段才整段重算</b>。正按住拖的那一段每帧都被
+            // 刷新（AlphaScale 恒为 1），于是它进脏区的只有新走过的那一小条（见 OnMoved）——
+            // 以前这里是无条件把每一段、每帧、整条从几何重画一遍，4K 粗档实测几百毫秒一帧。
             foreach (var segment in screen.Trail.Segments)
-            {
-                screen.Dirty.Add(segment.Stroke.Bounds);
-                overlay = Bigger(overlay, segment.Stroke.Bounds);
-            }
-
+                MarkSegmentIfFading(screen, segment);
+            // 光晕跟着鼠标走：旧位置要复原、新位置要叠上（两块都很小）
+            if (!screen.LastGlow.IsEmpty) screen.Dirty.Add(screen.LastGlow);
             screen.GlowAt = null;
             if (_tool == CanvasTool.Highlighter && screen.Trail.CursorHaloEnabled
                 && screen.Bounds.X <= cursor.X && cursor.X < screen.Bounds.Right
@@ -578,12 +599,29 @@ public static class CanvasService
                 var local = new PixelPoint(cursor.X - screen.Bounds.X, cursor.Y - screen.Bounds.Y);
                 var radius = CanvasWidths.RadiusFor(CanvasTool.Highlighter, CanvasWidths.At(_widthStep));
                 screen.GlowAt = local;
-                screen.Dirty.Add(new IntRect(local.X - radius, local.Y - radius, radius * 2 + 1, radius * 2 + 1));
-                overlay = Bigger(overlay, new IntRect(local.X - radius, local.Y - radius, radius * 2 + 1, radius * 2 + 1));
+                screen.LastGlow = new IntRect(local.X - radius, local.Y - radius, radius * 2 + 1, radius * 2 + 1);
+                screen.Dirty.Add(screen.LastGlow);
             }
-            screen.LastOverlay = overlay;
+            else
+            {
+                screen.LastGlow = default;
+            }
         }
         FlushAll();
+    }
+
+    /// <summary>
+    /// 这一段淡到与"屏幕上此刻那一层"不一致了吗？不一致才需要把整段重算，并把记号推到新浓度上。
+    /// <para>
+    /// <b>先记 <c>PaintScale</c> 再等 Flush</b>是有意的：Flush 由谁触发（帧循环、拖动节流、收笔）都不该
+    /// 改变"这一帧该用多淡"的结论，否则同一段在两次 Flush 之间会被画成两种浓度。
+    /// </para>
+    /// </summary>
+    private static void MarkSegmentIfFading(Screen screen, EphemeralInk.Segment segment)
+    {
+        if (Math.Abs(segment.PaintScale - segment.AlphaScale) <= 1e-9) return;
+        segment.PaintScale = segment.AlphaScale;
+        screen.Dirty.Add(segment.Stroke.Bounds);
     }
 
     private static void FlushAll()
@@ -591,7 +629,19 @@ public static class CanvasService
         foreach (var screen in Screens) Flush(screen);
     }
 
-    /// <summary>重算并提交一块屏的脏区：铺持久层 → 叠荧光段 → 叠光晕。</summary>
+    /// <summary>
+    /// 重算并提交一块屏的脏区：铺持久层 → 叠荧光段 → 叠光晕。
+    /// <para>
+    /// <b>叠的那一段只叠到脏区里</b>（<see cref="CanvasCompositor.PaintClipped"/>）：脏区外那些像素
+    /// 上一帧就已经贴对了，重画它们除了把 UI 线程拖住之外没有任何效果——裁剪之所以安全，
+    /// 是因为这里的合成是取大，每个像素的结论只取决于落在它身上那些笔点。
+    /// </para>
+    /// <para>
+    /// 浓度取 <c>PaintScale</c> 而不是 <c>AlphaScale</c>：前者是"此刻该贴在屏幕上的那一层"，
+    /// 由 <see cref="MarkSegmentIfFading"/> 与脏区一起更新。两者错开就会出现"淡出被反复重画"或
+    /// "淡到一半停住"。
+    /// </para>
+    /// </summary>
     private static void Flush(Screen screen)
     {
         var width = screen.Window.Width;
@@ -599,16 +649,41 @@ public static class CanvasService
         var rect = CanvasCompositor.Union(screen.Dirty, width, height);
         screen.Dirty.Clear();
         if (rect.IsEmpty) return;
+        var since = Stopwatch.GetTimestamp();
         CanvasCompositor.CopyRect(screen.Persistent, screen.Window.Pixels, width, height, rect);
         foreach (var segment in screen.Trail.Segments)
-            CanvasCompositor.Paint(screen.Window.Pixels, width, height, segment.Stroke, segment.AlphaScale);
+            CanvasCompositor.PaintClipped(screen.Window.Pixels, width, height, segment.Stroke, rect, segment.PaintScale);
         if (screen.GlowAt is { } glow)
             CanvasCompositor.PaintGlow(screen.Window.Pixels, width, height, glow,
                 CanvasWidths.RadiusFor(CanvasTool.Highlighter, CanvasWidths.At(_widthStep)),
                 screen.Trail.HaloColorBgra);
         screen.Window.Present(rect);
         screen.LastFlushMs = Environment.TickCount64;
+        ReportSlowFrame(since, rect, screen);
     }
+
+    /// <summary>
+    /// 一帧重算太慢就在日志里留一行带原因的（拖动帧、淡出帧都从这里走）。
+    /// <para>
+    /// <b>为什么值得留</b>：淡出期必须把"正在淡的那一段占过的整片"重算一遍，这在长笔迹上仍是
+    /// 随笔迹长度增长的开销（批次 WG 把拖动帧收敛成常数，淡出帧没收敛）。只报"有点卡"定不了改法，
+    /// 报"哪一块多大、几段几点、多少毫秒"才能判断要不要再上一层（缓存浓度图／快照位图）。
+    /// </para>
+    /// <para>阈值取 12 ms ≈ 30fps 那 33 ms 预算的三分之一；节流 10 秒，免得一行日志自己变成卡顿源。</para>
+    /// </summary>
+    private static void ReportSlowFrame(long since, IntRect rect, Screen screen)
+    {
+        var ms = (Stopwatch.GetTimestamp() - since) * 1000d / Stopwatch.Frequency;
+        if (ms < SlowFrameMs) return;
+        var points = 0;
+        foreach (var segment in screen.Trail.Segments) points += segment.Stroke.Points.Count;
+        StarLog.WarnThrottled("canvas:frame",
+            $"[Canvas] 一帧重算 {ms:F1} ms：脏区 {rect.Width}x{rect.Height}" +
+            $"（{rect.Width * (long)rect.Height / 1000}K 像素）、荧光 {screen.Trail.Segments.Count} 段共 {points} 点",
+            windowMs: 10_000);
+    }
+
+    private const double SlowFrameMs = 12;
 
     /// <summary>
     /// 持久层重算：清掉"所有笔迹可能碰到的地方"再按顺序全部重画一遍。
@@ -630,15 +705,6 @@ public static class CanvasService
         foreach (var stroke in screen.Ink.Strokes)
             CanvasCompositor.Paint(screen.Persistent, width, height, stroke);
         screen.Dirty.Add(region);
-    }
-
-    private static IntRect Bigger(IntRect a, IntRect b)
-    {
-        if (a.IsEmpty) return b;
-        if (b.IsEmpty) return a;
-        var x = Math.Min(a.X, b.X);
-        var y = Math.Min(a.Y, b.Y);
-        return new IntRect(x, y, Math.Max(a.Right, b.Right) - x, Math.Max(a.Bottom, b.Bottom) - y);
     }
 
     /// <summary>换工具/换粗细之前先把手上那条收掉，免得它接到新设置下去（症状："画着画着笔自己变粗了"）。</summary>

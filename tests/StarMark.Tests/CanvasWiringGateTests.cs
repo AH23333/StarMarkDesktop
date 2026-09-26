@@ -135,14 +135,117 @@ public sealed class CanvasWiringGateTests
         }, fields);
     }
 
-    /// <summary>每帧的"叠盖记号"必须从空算起。拿上一帧的当起点＝它只增不减＝脏区最终铺满全屏。</summary>
+    // ────────── 批次 WG：每帧只重算"真的变了的那一块"（真机："荧光笔绘制过程非常卡"） ──────────
+
+    /// <summary>
+    /// 帧循环的脏区必须由"这一帧到底变了什么"驱动。<b>反钉上一版那两句看着无害的写法</b>：
+    /// 无条件把"上一帧所有荧光段叠过的地方"并进脏区＝脏区等于整条笔迹的包围盒，
+    /// 于是"铺持久层 + 整段重画"每帧都按最长那条算（4K 粗档实测 643 ms/帧，越画越卡）。
+    /// </summary>
     [Fact]
-    public void OverlayMarkingIsRebuiltEachFrame_InsteadOfAccumulating()
+    public void FrameDirtyIsDrivenByWhatActuallyChanged()
     {
         var tick = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static void OnFrameTick");
-        Assert.Contains("screen.Dirty.Add(screen.LastOverlay);", tick);      // 上一帧叠过的地方要复原
-        Assert.Contains("var overlay = CanvasCompositor.Nothing;", tick);    // 本帧的记号从零开始并
-        Assert.DoesNotContain("var overlay = screen.LastOverlay;", tick);
+        Assert.Contains("MarkSegmentIfFading(screen, segment)", tick);     // 整段重算只由"淡出对不上"触发
+        Assert.Contains("var expired = screen.Trail.Tick(now);", tick);    // 到期段占过的地方要交回脏区
+        Assert.Contains("screen.Dirty.Add(expired)", tick);
+        Assert.Contains("if (!screen.LastGlow.IsEmpty) screen.Dirty.Add(screen.LastGlow);", tick);
+        Assert.DoesNotContain("LastOverlay", tick);
+        Assert.DoesNotContain("Dirty.Add(segment.Stroke.Bounds)", tick);   // 扫不到这行才算没退回旧写法
+    }
+
+    /// <summary>
+    /// 淡出的记号只在"浓度确实换了"时才推进——每帧无脑推＝每帧都判定成"要重算"，等于没有这条判据。
+    /// </summary>
+    [Fact]
+    public void FadeMarkerOnlyMovesWhenTheLevelChanges()
+    {
+        var mark = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service),
+            "private static void MarkSegmentIfFading");
+        Assert.Contains("if (Math.Abs(segment.PaintScale - segment.AlphaScale) <= 1e-9) return;", mark);
+        Assert.Contains("segment.PaintScale = segment.AlphaScale;", mark);
+        Assert.Contains("screen.Dirty.Add(segment.Stroke.Bounds);", mark);
+        // 先比再赋值：反过来源码看着一样，但每帧都会把整段划成脏区
+        Assert.True(mark.IndexOf("return;") < mark.IndexOf("segment.PaintScale ="),
+            "必须先比较再推进记号，否则这条判据永不生效");
+    }
+
+    /// <summary>
+    /// 提交那一层必须<b>裁到脏区</b>、并且按"屏幕上此刻那一层"的浓度画。
+    /// 少了裁剪，脏区再小也没用（整条笔迹照样重画一遍）；拿错浓度就会"淡到一半停住"或反复重画。
+    /// </summary>
+    [Fact]
+    public void FlushRepaintsOnlyTheDirtyRect_AtThePaintedFadeLevel()
+    {
+        var flush = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static void Flush(Screen screen)");
+        Assert.Contains(
+            "CanvasCompositor.PaintClipped(screen.Window.Pixels, width, height, segment.Stroke, rect, segment.PaintScale);",
+            flush);
+        Assert.DoesNotContain("CanvasCompositor.Paint(screen.Window.Pixels", flush);
+        Assert.DoesNotContain("segment.AlphaScale", flush);
+    }
+
+    /// <summary>拖动中只能把"新走的那一小条"并进脏区（整条包围盒＝把开销又养回去了）。</summary>
+    [Fact]
+    public void DraggingDirtiesOnlyTheNewlySweptStrip()
+    {
+        var moved = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static void OnMoved");
+        Assert.Contains("Stroke.TailBounds", moved);
+        Assert.DoesNotContain("Stroke.Bounds", moved);
+    }
+
+    /// <summary>
+    /// 荧光段被丢掉之前，<b>它占过的地方必须先并进脏区</b>：段一没就再没人画它，
+    /// 那块光会永远留在分层窗缓冲里（症状："清空后留一块擦不掉的光"）。
+    /// </summary>
+    [Fact]
+    public void DroppingTheTrailDirtiesWhatItCovered()
+    {
+        var drop = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static void DropTrail");
+        Assert.Contains("var was = screen.Trail.LiveBounds;", drop);
+        Assert.Contains("screen.Trail.Clear();", drop);
+        Assert.Contains("if (!was.IsEmpty) screen.Dirty.Add(was);", drop);
+        Assert.True(drop.IndexOf("LiveBounds") < drop.IndexOf("Trail.Clear()"), "先取范围再清，反了就取不到了");
+        // 服务里不许再有"直接 Clear 而不走 DropTrail"的漏口
+        var service = SourceGate.WithoutMethod(SourceGate.ReadRepoFile(Service), "private static void DropTrail");
+        Assert.DoesNotContain("Trail.Clear()", service);
+    }
+
+    /// <summary>
+    /// 慢帧要留一行带原因的日志。<b>淡出期仍是"整段重算"</b>（那块地方每一像素的浓度都变了），
+    /// 长笔迹上它还会随笔迹变长——这批把它收敛到"看得见数字"，下次才谈要不要再上一层。
+    /// </summary>
+    [Fact]
+    public void SlowFramesReportTheirCause()
+    {
+        var service = SourceGate.ReadRepoFile(Service);
+        var report = SourceGate.MethodBody(service, "private static void ReportSlowFrame");
+        Assert.Contains("Stopwatch.GetTimestamp()", report);            // TickCount64 只有 15.6ms 分辨率，量不出一帧
+        Assert.Contains("StarLog.WarnThrottled", report);
+        Assert.Contains("windowMs: 10_000", report);                    // 一行日志自己不许成为卡顿源
+        Assert.Contains("if (ms < SlowFrameMs) return;", report);
+        var flush = SourceGate.MethodBody(service, "private static void Flush(Screen screen)");
+        Assert.Contains("ReportSlowFrame(since, rect, screen);", flush);
+        Assert.True(flush.IndexOf("Present(rect)") < flush.IndexOf("ReportSlowFrame"),
+            "提交也算在这一帧里：UpdateLayeredWindowIndirect 才是那块脏区真正的代价");
+    }
+
+    /// <summary>
+    /// 合成核不许把"每条笔迹算一次"的东西放回像素循环里（那正是几百毫秒的来源）。
+    /// 这条扫的是形状而非性能数字：性能数字没法在 CI 上守，形状走样是守得住的。
+    /// </summary>
+    [Fact]
+    public void KernelKeepsLoopInvariantWorkOutOfThePixelLoop()
+    {
+        var compositor = SourceGate.ReadRepoFile(Compositor);
+        var disc = SourceGate.MethodBody(compositor, "private static void PaintDisc(");
+        Assert.DoesNotContain("stroke.EffectiveColorBgra", disc);       // 每条笔迹读一次就够
+        Assert.DoesNotContain("Math.Round", disc);                      // 预乘像素在 Brush 里算好了
+        Assert.DoesNotContain("CanvasWidths.RadiusFor", disc);
+        Assert.Contains("d2 >= brush.SkipFrom", disc);                  // 平方距离判据（内部大片不开平方）
+        Assert.Contains("destinationAlpha >= brush.MaxAlpha", disc);     // 取大规则下"不可能更浓"的早退
+        Assert.Contains("MathF.Sqrt", disc);                            // 只允许出现在边缘斜坡那一圈
+        Assert.Equal(1, SourceGate.Count(disc, "MathF.Sqrt"));
     }
 
     [Fact]
@@ -272,7 +375,7 @@ public sealed class CanvasWiringGateTests
         var flush = SourceGate.MethodBody(service, "private static void Flush(Screen screen)");
         // 淡出与光晕都要求"能回到这块地方原来画了什么"：合成到一处就回不去
         Assert.Contains("CopyRect(screen.Persistent, screen.Window.Pixels", flush);
-        Assert.Contains("Paint(screen.Window.Pixels", flush);
+        Assert.Contains("PaintClipped(screen.Window.Pixels", flush);
         Assert.True(flush.IndexOf("CopyRect", StringComparison.Ordinal)
             < flush.IndexOf("Trail.Segments", StringComparison.Ordinal),
             "必须先铺持久层再叠荧光段：反了的话每帧都会把上一层擦掉");

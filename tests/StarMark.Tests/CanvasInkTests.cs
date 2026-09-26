@@ -464,6 +464,76 @@ public sealed class CanvasInkTests
         Assert.True(ink.IsEmpty);
     }
 
+    // ────────── 批次 WG：谁该进脏区 ──────────
+
+    [Fact]
+    public void TickHandsBackTheBoundsOfWhatItDropped()
+    {
+        // 段一掉出去就再没人画它，而它贴过的那层像素还在缓冲里——Tick 必须把这块交回调用方，
+        // 否则症状是"荧光淡到一半就永远停在那儿"
+        var ink = Trail();
+        ink.Begin(new PixelPoint(10, 10), Red, 9, T0);
+        ink.Extend(new PixelPoint(90, 70), T0 + 10);
+        var covered = ink.Segments[0].Stroke.Bounds;
+        Assert.True(ink.Tick(T0 + 100).IsEmpty, "没删段就不该报范围：报了每帧都白重算一大片");
+        Assert.Equal(covered, ink.Tick(T0 + 1_600));                   // 过了 TTL：整块都要复原
+        Assert.True(ink.IsEmpty);
+    }
+
+    [Fact]
+    public void DroppedBoundsMergeWhenSeveralSegmentsExpireTogether()
+    {
+        var ink = Trail();
+        ink.Begin(new PixelPoint(10, 10), Red, 9, T0);
+        ink.Begin(new PixelPoint(400, 300), Red, 9, T0);
+        var dropped = ink.Tick(T0 + 1500);
+        Assert.False(dropped.IsEmpty);
+        Assert.True(dropped.Width > 390 && dropped.Height > 290, "两段离得远时并成的那块要盖住两边");
+    }
+
+    [Fact]
+    public void LiveBoundsIsWhatClearingMustDirty()
+    {
+        var ink = Trail();
+        var only = ink.Begin(new PixelPoint(10, 10), Red, 9, T0);
+        Assert.Equal(only.Stroke.Bounds, ink.LiveBounds);
+        ink.Begin(new PixelPoint(400, 300), Red, 9, T0 + 10);
+        // 两段各自是 (-5,-5,31,31) 与 (385,285,31,31)：并起来必须严丝合缝盖住两边
+        Assert.Equal(new IntRect(-5, -5, 421, 321), ink.LiveBounds);
+        ink.Clear();
+        Assert.True(ink.LiveBounds.IsEmpty, "已经清干净了还报一块范围＝每帧白重算");
+    }
+
+    [Fact]
+    public void ExtendReportsWhetherTheSegmentActuallyGrew()
+    {
+        // 太近的点被 CanvasStroke 丢掉时"段没变长"：调用方据此决定要不要重算——
+        // 若这里一律返回真，鼠标原地抖一下也要付一次合成
+        var ink = Trail();
+        ink.Begin(new PixelPoint(10, 10), Red, 9, T0);
+        Assert.False(ink.Extend(new PixelPoint(11, 10), T0 + 50));
+        Assert.Equal(T0 + 50, ink.Segments[0].LastPointTick);    // 点丢了但 TTL 要重新起算（还在比划＝没停）
+        Assert.True(ink.Extend(new PixelPoint(60, 10), T0 + 60));
+    }
+
+    [Fact]
+    public void TailBoundsCoversExactlyTheStepPaintTailDraws()
+    {
+        // 拖动时的脏区记号与真正画到的那一片必须是同一条式子：脏区小了就会在笔迹边缘留一圈残影
+        var stroke = new CanvasStroke(CanvasTool.Highlighter, Red, 9, new PixelPoint(20, 20));
+        Assert.Equal(stroke.Bounds, stroke.TailBounds);                  // 只有一个点时同一条
+        stroke.AddPoint(new PixelPoint(60, 20));
+        Assert.Equal(new IntRect(5, 5, 71, 31), stroke.TailBounds);      // 半径 14 + 那条 1 像素斜坡
+        stroke.AddPoint(new PixelPoint(60, 120));
+        stroke.AddPoint(new PixelPoint(200, 60));
+        Assert.True(stroke.TailBounds.Width < stroke.Bounds.Width
+            && stroke.TailBounds.Height < stroke.Bounds.Height,
+            "整条笔迹的包围盒当脏区＝每帧又回到整段重画，那正是这批要消掉的开销");
+        var buffer = Buffer(300, 300);
+        Assert.Equal(CanvasCompositor.Clamp(stroke.TailBounds, 300, 300),
+            CanvasCompositor.PaintTail(buffer, 300, 300, stroke));
+    }
+
     [Fact]
     public void TrailDefaultsAreTheSpecValues()
     {
