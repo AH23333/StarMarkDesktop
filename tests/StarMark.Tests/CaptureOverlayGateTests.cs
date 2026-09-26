@@ -651,4 +651,31 @@ public sealed class CaptureOverlayGateTests
         Assert.Contains("x:Name=\"BarPicker\"", xaml);
         Assert.Contains("x:Name=\"BarHint\"", xaml);
     }
+
+    /// <summary>
+    /// 批次 WL：贴图几何的<b>每一个写点</b>都必须叫上那扇条子窗。
+    /// <para>真机反馈"菜单栏已和贴图分离，但无法随着贴图位置变化而改变位置"——条子与贴图是两扇窗，
+    /// 移动贴图那一扇不会自动带走另一扇。原先只有"换了缩放不同的屏"才顺带重摆一次，
+    /// 于是绝大多数拖动都是"图走了、条子留在原地"。</para>
+    /// <para>所以这里钉三件事：平移（<c>PinDragTo</c>）自己跟上；窗口几何那个唯一写点
+    /// （<c>ApplyPinWindowRect</c>，缩放与 90° 旋转都从这里过）跟上；而跟上时<b>只摆条子</b>，
+    /// 不许顺手把窗内那一层整排重算（拖动每帧都进来）。</para>
+    /// </summary>
+    [Fact]
+    public void EveryPinGeometryWritePointMovesTheBarToo()
+    {
+        var cs = ReadOverlay(false);
+        var follow = SourceGate.MethodBody(cs, "private void FollowBarToImage()");
+        Assert.Contains("if (!_pinned || _barWindow is null) return;", follow);
+        Assert.Contains("var now = WindowInterop.GetWindowRect(this);", follow);   // 只问窗口实际矩形
+        Assert.Contains("_barWindow.Place(new IntRect(now.X, now.Y, now.Width, now.Height), WorkArea());", follow);
+        // 拖动期禁整帧重排：跟上条子不许连带强制窗内布局
+        Assert.DoesNotContain("UpdateLayout", follow);
+        Assert.DoesNotContain("RelayoutContent", follow);
+
+        Assert.Contains("FollowBarToImage();", SourceGate.MethodBody(cs, "private void PinDragTo"));
+        Assert.Contains("FollowBarToImage();", SourceGate.MethodBody(cs, "private void ApplyPinWindowRect"));
+        // 缩放与旋转都汇到那个唯一写点：这里钉住"它仍然是唯一写点"，否则新写点又会漏掉条子
+        Assert.Contains("ApplyPinWindowRect();", SourceGate.MethodBody(cs, "private void BakeQuarterTurn"));
+    }
 }

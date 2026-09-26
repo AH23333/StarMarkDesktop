@@ -63,6 +63,9 @@ public sealed partial class CaptureOverlayWindow
         SetMonitor(new IntRect(cx, cy, _monitor.Width, _monitor.Height));
         WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero, cx, cy, 0, 0,
             WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
+        // 条子是<b>另一扇窗</b>（批次 WI），贴图平移不会带着它走——真机反馈"菜单栏无法随贴图位置变化"。
+        // 换屏那条分支下面还会再摆一次（要按新缩放重排窗内那一层），这里先无条件跟上。
+        FollowBarToImage();
         // 换到一块缩放不同的屏：物理尺寸不用动（我们本来就按物理像素摆窗），但 DIP↔物理的除数变了，
         // 不重算就是"拖到另一台显示器上画面突然比窗口大/小一圈，笔也落在偏的地方"。
         if (RefreshScaleIfChanged()) RelayoutContent();

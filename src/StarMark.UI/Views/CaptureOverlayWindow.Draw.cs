@@ -305,9 +305,9 @@ public sealed partial class CaptureOverlayWindow
     }
 
     /// <summary>
-    /// 把贴图窗摆成 <see cref="PinWindowRect"/> 算出来的那块画面矩形。<b>只在贴图态调用</b>，
+    /// 把窗口摆成 <see cref="PinWindowRect"/> 算出来的那块画面矩形。<b>只在贴图态调用</b>，
     /// 且是这条链上唯一的窗口尺寸写点（尺寸与位置一起定，避免"先缩小再收边"两步各自收边）——
-    /// 缩放、90° 旋转、拖动都从这里过。
+    /// 缩放、90° 旋转都从这里过，所以它顺带叫上条子（<see cref="FollowBarToImage"/>）。
     /// </summary>
     private void ApplyPinWindowRect()
     {
@@ -318,6 +318,23 @@ public sealed partial class CaptureOverlayWindow
             WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
         _lastAppliedX = win.X;
         _lastAppliedY = win.Y;
+        FollowBarToImage();
+    }
+
+    /// <summary>
+    /// 让条子跟上画面现在的位置/大小。<b>只问窗口实际矩形</b>——画面跟到哪儿，条子跟到哪儿。
+    /// <para>真机反馈："菜单栏已和贴图分离，但无法随着贴图位置变化而改变位置"：平移贴图那条路
+    /// （<c>PinDragTo</c>）自己 <c>SetWindowPos</c> 之后就结束了，只有"换了缩放不同的屏"才会顺带重摆条子，
+    /// 于是拖完贴图，条子留在原地。条子与贴图是两扇窗，<b>谁移动谁得叫上它</b>，
+    /// 所以贴图几何的每一个写点都必须过这里。</para>
+    /// <para>这里刻意不走整条 <see cref="PositionBar"/>：拖动每一帧都进来，那条会连带
+    /// <c>UpdateLayout</c> 与窗内那一层的重新摆位（拖动期禁整帧重排，PV/WG 的教训）。</para>
+    /// </summary>
+    private void FollowBarToImage()
+    {
+        if (!_pinned || _barWindow is null) return;
+        var now = WindowInterop.GetWindowRect(this);
+        _barWindow.Place(new IntRect(now.X, now.Y, now.Width, now.Height), WorkArea());
     }
 
     /// <summary>
