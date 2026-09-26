@@ -321,10 +321,10 @@ public class LocalItemStateTests
 
     /// <summary>
     /// 契约护栏（DV-2）：<see cref="LocalItemState.EncodeSourceId"/> 的字面分隔符契约
-    /// （<c>LocalItemState.cs:16</c> 的 <c>$"{instanceId}|{localId}"</c>）。<c>'|'</c> 是**三处独立消费者**共享的
-    /// 承重边界：除本类的 Decode 外，<c>ItemRepository.cs:686/704</c> 把 <c>@prefix</c> 硬编码成
-    /// <c>instanceId + "|%"</c> 喂 <c>source_id LIKE @prefix</c> 做按实例前缀读写（<c>:674</c> 注释明载「'|' 作边界
-    /// 避免 '12' 命中 '123|…'」）。:115 的往返只校验 Decode 侧、对 Encode 的**字面量**完全不敏感——若有人把
+    /// （<c>LocalItemState.cs</c> 的 <c>$"{instanceId}|{localId}"</c>）。<c>'|'</c> 是**三处独立消费者**共享的
+    /// 承重边界：除本类的 Decode 外，<c>ItemRepository.Snapshots.cs</c> 把 <c>@prefix</c> 硬编码成
+    /// <c>instanceId + "|%"</c> 喂 <c>source_id LIKE @prefix</c> 做按实例前缀读写（那里的注释明载「'|' 作边界
+    /// 避免 '12' 命中 '123|…'」）。Encode/Decode 的往返只校验 Decode 侧、对 Encode 的**字面量**完全不敏感——若有人把
     /// Encode 与 Decode 的分隔符同步改成 ':'（:115 仍全绿），SQL 前缀 <c>"id|%"</c> 会静默匹配零行，
     /// 快照 Capture/Restore 的实例隔离失效、且此回归无纯测可拦。故在单元层直接钉死 Encode 的确切输出串 +
     /// Decode 回取实例段，锁住与 SQL 前缀共享的那一根 <c>'|'</c>。**刻意不测**多管道 "a|b|c"（真实

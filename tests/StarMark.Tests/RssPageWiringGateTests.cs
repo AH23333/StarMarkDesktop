@@ -312,7 +312,9 @@ public sealed class RssPageWiringGateTests
     [Fact]
     public void CollectedLookupIsAPrefixQueryWithoutARowWindow()
     {
-        var body = MethodBody(ReadRepoFile("src/StarMark.Data/ItemRepository.cs"),
+        // 仓储按访问面拆成了多个 partial 文件（批次 WF-2），所以这条守门读"整个类的全部文件"，
+        // 而不是钉某一个文件名——方法搬到哪一段都还拦得住。
+        var body = MethodBody(ReadRepoPartials("src/StarMark.Data/ItemRepository.cs"),
             "public async Task<IReadOnlyList<string>> GetCollectedRssLinksAsync");
         Assert.DoesNotContain("LIMIT", body, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("RssEntryIdentity.BookmarkSourcePrefix", body);   // 前缀只有一处定义，这里不抄字面量

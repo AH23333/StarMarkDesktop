@@ -30,6 +30,26 @@ internal static class SourceGate
         => File.ReadAllText(Path.Combine(RepoRoot(), relativePath.Replace('/', Path.DirectorySeparatorChar)));
 
     /// <summary>
+    /// 读<b>同一个类的全部 partial 文件</b>（主文件 + 同目录下的 <c>类名.分段名.cs</c>）拼成一份文本。
+    /// <para>
+    /// 一个上千行的大类按访问面拆成多个 partial 文件之后，钉在单个文件上的守门会"扫不到锚点"而红——
+    /// 这是设计如此（它逼接线跟上）。但如果只是把路径改到方法搬去的那个文件，下一次搬家它又断一次。
+    /// 所以凡是在<b>已拆分的类</b>里找方法的守门都走这里：文件怎么搬，判据都不减一分。
+    /// </para>
+    /// </summary>
+    internal static string ReadRepoPartials(string relativePath)
+    {
+        var full = Path.Combine(RepoRoot(), relativePath.Replace('/', Path.DirectorySeparatorChar));
+        Assert.True(File.Exists(full), $"锚点主文件不存在：{relativePath}");
+        var dir = Path.GetDirectoryName(full)!;
+        var stem = Path.GetFileNameWithoutExtension(full);
+        var parts = Directory.GetFiles(dir, stem + ".cs")
+            .Concat(Directory.GetFiles(dir, stem + ".*.cs").Where(f => !f.EndsWith(".g.cs", StringComparison.Ordinal)))
+            .Distinct(StringComparer.Ordinal).OrderBy(f => f, StringComparer.Ordinal).ToList();
+        return string.Join("\n", parts.Select(File.ReadAllText));
+    }
+
+    /// <summary>
     /// 切出一个方法：<b>块体</b>按大括号配对，<b>表达式体</b>（<c>=> ...;</c>）取到第一个分号行。
     /// 后者必须单独处理——否则"只是转发"的那个小方法会把下一个方法的 <c>{</c> 也算进体内。
     /// </summary>
