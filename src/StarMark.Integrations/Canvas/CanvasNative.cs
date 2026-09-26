@@ -183,6 +183,11 @@ internal static class CanvasNative
     /// 屏幕坐标上这一点"当前归哪个窗口"。分层窗在 <c>WS_EX_TRANSPARENT</c> 开着时会被跳过，
     /// 所以这条探测只在<b>绘制态</b>有意义（那时我们本来就该是最上面那个）——拿它回答
     /// "光标这一层到底是谁"，比猜前台窗口准得多。
+    /// <para>
+    /// <b>返回的是那一点上最深的那个 HWND，不是顶层窗</b>：WinUI 3 的窗把内容挂在它自己的子窗里，
+    /// tooltip／浮层还是另开的顶层窗。所以调用方拿它去和 <c>GetHwnd()</c> 比相等必然失败
+    /// （批次 WD-7 的症状＝光标一停在工具条上就被判成"别人的窗盖住了画布"），要认"自己人"只能比进程。
+    /// </para>
     /// </summary>
     [DllImport("user32.dll")]
     public static extern IntPtr WindowFromPoint(NativeMethods.POINT pt);

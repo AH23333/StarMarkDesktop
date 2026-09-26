@@ -486,8 +486,13 @@ public sealed class CanvasWiringGateTests
     /// <summary>
     /// 绘制态必须<b>每帧逐像素核实"光标这一层是谁"</b>（发起人点名的"没有实时监测光标位于哪一层"）：
     /// 画布声称"绘制中"却不再是顶层时，一次按下会被两家用——下面的应用当成框选/选文字，我们还在抢着画，
-    /// 这就是真机反馈的"画布和应用交互冲突"。判据要窄：只允许命中本屏玻璃、工具条、面板三者，
-    /// 其余一律主动交回鼠标；穿透态与"手上正有一笔"时都不判。
+    /// 这就是真机反馈的"画布和应用交互冲突"；穿透态与"手上正有一笔"时都不判。
+    /// <para>
+    /// <b>但"是不是我们"只认进程，绝不认句柄相等</b>（批次 WD-8 的真机教训，症状＝"永远退不出穿透态、
+    /// 点画笔没反应"）：<c>WindowFromPoint</c> 返回的是那一点上<b>最深</b>的 HWND，而 WinUI 3 的
+    /// 工具条内容住在它自己的子窗里、tooltip 与浮层还是另开的顶层窗——拿它跟 <c>Hwnd</c>/
+    /// <c>GetHwnd()</c> 比相等必然不等，于是光标一停在条子上就被判成"别人盖住了画布"，每帧退回穿透态。
+    /// </para>
     /// </summary>
     [Fact]
     public void DrawModeProbesTheLayerUnderTheCursorEveryFrameAndYields()
@@ -496,11 +501,14 @@ public sealed class CanvasWiringGateTests
         var yield = SourceGate.MethodBody(service, "private static void YieldIfNotOurLayer(int cursorX, int cursorY)");
         Assert.Contains("if (_clickThrough || _press != Press.None || !_running) return;", yield);
         Assert.Contains("LayeredCanvasWindow.WindowAt(cursorX, cursorY)", yield);   // 逐像素问，不猜前台窗口
-        Assert.Contains("hit == _toolbar?.Hwnd || hit == _panel?.Hwnd", yield);
-        Assert.Contains("screen.Window.Handle == hit", yield);
+        Assert.Contains("WindowInterop.GetWindowThreadProcessId(hit, out var pid) == 0", yield);
+        Assert.Contains("pid == (uint)Environment.ProcessId) return;", yield);      // 自己人不让位
+        Assert.DoesNotContain(".Hwnd", yield);                                      // 命中句柄不参与"是谁"的判断
+        Assert.DoesNotContain(".Handle", yield);
+        Assert.DoesNotContain("本程序的另一个窗口", yield);                             // 自家窗口不再触发让位
         Assert.Contains("hit == IntPtr.Zero || hit == _yieldedTo", yield);           // 同一个窗只说一次，不每帧刷
         Assert.Contains("SetClickThrough(true);", yield);
-        Assert.Contains("Notice = ", yield);
+        Assert.Contains("另一个程序的窗口", yield);                                    // 让位必须给得出原因
         var tick = SourceGate.MethodBody(service, "private static void OnFrameTick");
         Assert.True(tick.IndexOf("YieldIfNotOurLayer(") < tick.IndexOf("PollPress("),
             "先验层再决定抢不抢：反过来就是应用与画布同时接手同一次按下");

@@ -500,9 +500,9 @@ public static class CanvasService
     /// 按 Win 呼出开始菜单/搜索、系统弹窗、别的全屏应用——它们都是能盖住我们那块玻璃的顶层窗。
     /// </para>
     /// <para>
-    /// 判据是逐像素问 <see cref="LayeredCanvasWindow.WindowAt"/>（不是猜前台窗口）：答案只允许是
-    /// 本屏玻璃、工具条、快捷键面板三者之一，其余一律<b>主动交回鼠标并说明原因</b>。
-    /// 穿透态跳过这条（那时"不是我们"是设计本意）；手上正有一笔也跳过（那一笔已经归画布画完）。
+    /// 判据是逐像素问 <see cref="LayeredCanvasWindow.WindowAt"/>（不是猜前台窗口），而<b>分界只看进程</b>：
+    /// 命中窗口属于别的程序才交回鼠标。穿透态跳过这条（那时"不是我们"是设计本意）；
+    /// 手上正有一笔也跳过（那一笔已经归画布画完）。
     /// </para>
     /// </summary>
     private static void YieldIfNotOurLayer(int cursorX, int cursorY)
@@ -510,15 +510,16 @@ public static class CanvasService
         if (_clickThrough || _press != Press.None || !_running) return;
         var hit = LayeredCanvasWindow.WindowAt(cursorX, cursorY);
         if (hit == IntPtr.Zero || hit == _yieldedTo) return;               // 取不到不下判断；同一个窗只说一次
-        if (hit == _toolbar?.Hwnd || hit == _panel?.Hwnd) return;          // 条子与面板本来就压在画布之上
-        foreach (var screen in Screens)
-            if (screen.Window.Handle == hit) return;                       // 还是我们的玻璃：一切正常
-        var who = WindowInterop.GetWindowThreadProcessId(hit, out var pid) == 0 ? 0u : pid;
-        StarLog.Warn($"[Canvas] 绘制态发现光标那一层已经不是画布（命中窗口属于进程 {who}），主动交回鼠标");
+        if (WindowInterop.GetWindowThreadProcessId(hit, out var pid) == 0) return;
+        // 判据按进程，绝不按"句柄等于工具条/面板/玻璃"。真因（批次 WD-7 自己造成的回归）：
+        // WindowFromPoint 给的是这一点上<b>最深</b>的那个 HWND——WinUI 3 的条子内容住在它自己的子窗里，
+        // tooltip 与浮层更是另开的顶层窗，跟 GetHwnd() 拿到的那一个必然不相等。于是光标一停在条子上
+        // 就被判成"别人盖住了画布"，每帧把状态退回穿透：点「画笔」「穿透」全都"没反应"。
+        // 自家窗口拿走这一按不会造成"一次按下两家用"（消息根本到不了画布，最坏只是那块画不上）。
+        if (pid == (uint)Environment.ProcessId) return;
+        StarLog.Warn($"[Canvas] 绘制态发现光标那一层已被另一个程序占走（进程 {pid}），主动交回鼠标");
         SetClickThrough(true);
-        Notice = who == (uint)Environment.ProcessId
-            ? "已自动交回鼠标：本程序的另一个窗口（组件／主窗口）盖住了画布，要点「穿透」或再点「画笔」决定谁在上"
-            : "已自动交回鼠标：另一个程序的窗口（例如按 Win 呼出的开始菜单）盖住了画布；要接着画请再点「画笔」";
+        Notice = "已自动交回鼠标：另一个程序的窗口（例如按 Win 呼出的开始菜单）盖住了画布；要接着画请再点「画笔」";
         // 同一件事只说一次：不然那个窗一直压在上面的话，每帧都会"让位 + 一条 WARN"，
         // 状态行还会来回跳。用户下次自己动手（SetClickThrough）时这个记号就清掉。
         _yieldedTo = hit;

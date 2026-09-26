@@ -148,11 +148,10 @@ public sealed class LayeredCanvasWindow : IDisposable
     public static bool CtrlAltDown
         => CanvasNative.IsDown(CanvasNative.VK_CONTROL) && CanvasNative.IsDown(CanvasNative.VK_MENU);
 
-    /// <summary>这块玻璃的句柄：工具条与快捷键面板要靠它把自己插到画布之上。</summary>
-    public IntPtr Handle => _hwnd;
-
     /// <summary>
-    /// 屏幕坐标上这一点<b>当前归哪个窗口</b>（绘制态自校验用：那时答案必须是这块玻璃或条子自己）。
+    /// 屏幕坐标上这一点<b>当前归哪个窗口</b>（绘制态自校验用）。<b>返回的是这一点上最深的那个 HWND</b>：
+    /// WinUI 窗（工具条、快捷键面板）的内容住在它自己的子窗里，所以别拿它跟 <c>GetHwnd()</c> 比相等，
+    /// 要比就比进程归属（见 <c>CanvasService.YieldIfNotOurLayer</c>）。
     /// 穿透态下本窗被 <c>WS_EX_TRANSPARENT</c> 跳过，结果必然是别人，所以这条探测只在绘制态说话。
     /// </summary>
     public static IntPtr WindowAt(int screenX, int screenY)
