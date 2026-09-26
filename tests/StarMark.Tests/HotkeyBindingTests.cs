@@ -352,6 +352,28 @@ public sealed class HotkeyBindingTests
     }
 
     /// <summary>
+    /// 1409 不许一律写成"被其它程序占用"：本机还开着本程序的另一个实例时，那条键其实在<b>那边</b>好好生效着，
+    /// 用户照这句话去关别的软件、或给动作换个组合，都是白做工（真机一天里 43 条这种日志）。
+    /// 所以认出自己人就把实例与 pid 报出来；<b>探不到时不许凭空指认</b>，退回通用措辞。
+    /// </summary>
+    [Fact]
+    public void RegisterFailure_BlamesOtherProgramsOnlyWhenNoSiblingInstanceIsRunning()
+    {
+        var own = HotkeyErrorText.RegisterFailure(1409, new[] { 21648 });
+        Assert.Contains("本程序还另开着 1 个实例", own);
+        Assert.Contains("21648", own);
+        Assert.DoesNotContain("其它程序", own);
+        // 多个实例要一次报全：只报第一个的话，用户关掉一个还以为问题解决了
+        var two = HotkeyErrorText.RegisterFailure(1409, new[] { 7, 9 });
+        Assert.Contains("7", two);
+        Assert.Contains("9", two);
+        // 空列表＝没探到自己人 ⇒ 不能编出"自己人占的"这个结论
+        Assert.Equal("该组合键已被其它程序占用", HotkeyErrorText.RegisterFailure(1409, new int[0]));
+        // 非 1409 的码不被这条线索改写：仍然只给编号，不编造解释
+        Assert.Equal("系统拒绝注册（Win32 错误 5）", HotkeyErrorText.RegisterFailure(5, new[] { 21648 }));
+    }
+
+    /// <summary>
     /// 无论认不认识这个码，文案都必须带编号：用户拿着编号能查到根因，只看到"可能失败"就只能挨个猜。
     /// </summary>
     [Theory]

@@ -119,6 +119,7 @@ public sealed class HotkeyService : IDisposable
         var id = 1;
         var failed = new List<HotkeyRegistrationFailure>();
         var failingKeys = new HashSet<string>();
+        List<int>? siblings = null;
         foreach (var group in HotkeyBindings.GroupByGesture(bindings))
         {
             var g = group.Gesture;
@@ -132,7 +133,10 @@ public sealed class HotkeyService : IDisposable
             {
                 // 必须紧跟着取： SetLastError 只保留"最近一次 Win32 调用"的错误码，隔一次调用就脏了
                 var err = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
-                var f = new HotkeyRegistrationFailure(g, err);
+                // 一轮里只在第一个 1409 上探一次：枚举进程不便宜，而同一轮的所有失败共用同一个答案
+                if (err == HotkeyErrorText.ErrorHotkeyAlreadyRegistered && siblings is null)
+                    siblings = OtherInstancesOfThisProgram();
+                var f = new HotkeyRegistrationFailure(g, err, siblings);
                 failed.Add(f);
                 failingKeys.Add(group.Key);
                 // 只在"这次和上次记的不一样"时落一行：占用重试每 10 秒跑一轮（那是自愈设计，不能停），
@@ -141,7 +145,9 @@ public sealed class HotkeyService : IDisposable
                 var note = $"{f.Reason}，Win32 错误 {err}";
                 if (_warnedFailures.TryGetValue(group.Key, out var last) && last == note) continue;
                 _warnedFailures[group.Key] = note;
-                StarLog.Warn($"[Hotkey] 注册失败: {HotkeyDisplay.Display(g)}（{note}）");
+                // 带上"哪条动作"：只写组合键的话，用户还得自己回设置页反查这条键是给谁用的
+                StarLog.Warn($"[Hotkey] 注册失败: {HotkeyDisplay.Display(g)}" +
+                             $"（动作：{string.Join("、", group.Actions.Select(a => HotkeyActions.DisplayName(a)))}；{note}）");
             }
         }
         // 之前记过失败、这一轮不再失败的：说明占用方退出了，重试注册成功 —— 这条同样值得记一次
@@ -153,6 +159,32 @@ public sealed class HotkeyService : IDisposable
         RegistrationFailures = failed;
         RegistrationStateFlushed?.Invoke(failed);
         if (failed.Count > 0) StartOccupancyRetry(); else StopOccupancyRetry();
+    }
+
+    /// <summary>
+    /// 本机还活着的<b>本程序其它实例</b>的 pid（升序）。<b>这只用于把"1409 是谁占的"说准</b>：
+    /// Win32 不回答归属，所以退而求其次——我们自己的另一个实例是唯一能确定的常见占用方
+    /// （开发期同时开几份、或留着一个提权实例）。认"自己人"沿用既有口径：<b>进程名取自
+    /// <see cref="Environment.ProcessPath"/>，不写死</b>；拿不到就交回"其它程序"那句通用措辞，绝不瞎指。
+    /// </summary>
+    private static List<int> OtherInstancesOfThisProgram()
+    {
+        var found = new List<int>();
+        var path = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(path)) return found;
+        try
+        {
+            foreach (var p in System.Diagnostics.Process.GetProcessesByName(
+                         System.IO.Path.GetFileNameWithoutExtension(path)))
+                try
+                {
+                    if (p.Id != Environment.ProcessId) found.Add(p.Id);
+                }
+                finally { p.Dispose(); }
+        }
+        catch (Exception ex) { StarLog.Warn($"[Hotkey] 想报出占用方，但枚举进程失败：{ex.Message}"); }
+        found.Sort();
+        return found;
     }
 
     /// <summary>
@@ -225,15 +257,16 @@ public sealed class HotkeyService : IDisposable
 }
 
 /// <summary>
-/// 一次未能注册的手势及其 Win32 错误码。
+/// 一次未能注册的手势及其 Win32 错误码（外加"此刻本机还有没有本程序的其它实例"这条现场线索）。
 /// <para>
-/// 带上错误码而不是统称"可能被占用"：1409（ERROR_HOTKEY_ALREADY_REGISTERED）才是"已被别的程序占用"，
+/// 带上错误码而不是统称"可能被占用"：1409（ERROR_HOTKEY_ALREADY_REGISTERED）才是"这条键已被注册"，
 /// 还有句柄无效/参数非法等可能。已知事实时说模糊话会让用户去关本不相干的程序；
 /// 真因未知时至少给了能查的编号。
 /// </para>
 /// </summary>
-public sealed record HotkeyRegistrationFailure(HotkeyGesture Gesture, int ErrorCode)
+public sealed record HotkeyRegistrationFailure(HotkeyGesture Gesture, int ErrorCode,
+    IReadOnlyList<int>? SiblingInstancePids = null)
 {
     /// <summary>给用户看的原因（不含组合键本身——界面自己拼 <c>HotkeyDisplay.Display</c>）。措辞在 Core 的纯函数里，可单测。</summary>
-    public string Reason => HotkeyErrorText.RegisterFailure(ErrorCode);
+    public string Reason => HotkeyErrorText.RegisterFailure(ErrorCode, SiblingInstancePids);
 }

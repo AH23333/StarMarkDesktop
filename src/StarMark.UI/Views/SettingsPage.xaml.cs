@@ -902,7 +902,9 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
         RegisterErrorSummary = failed.Count == 0
             ? string.Empty
-            : $"提示：{failed.Count} 个组合键此刻被其它程序占用（{string.Join("、", failed.Select(f => $"{HotkeyDisplay.Display(f.Gesture)}：{f.Reason}"))}）。"
+            // 这里不写"被其它程序占用"：Win32 没回答归属，而实际占用方常是本程序自己的另一个实例。
+            // 具体是谁由每一条的 Reason 说（那边有 pid 就报 pid），汇总句只说"此刻没归这个实例"这个事实。
+            : $"提示：{failed.Count} 个组合键此刻没归这个实例（{string.Join("、", failed.Select(f => $"{HotkeyDisplay.Display(f.Gesture)}：{f.Reason}"))}）。"
               + "这些快捷键已经保存，程序会每 " + HotkeyService.OccupancyRetrySeconds + " 秒自己再注册一次，对方一退出就生效——不需要你做任何事；"
               + "急着现在就要生效可以点「重试注册」，或给这些动作换一个组合再点「保存快捷键」。";
     }

@@ -1,5 +1,8 @@
 #nullable enable
 
+using System.Collections.Generic;
+using System.Linq;
+
 namespace StarMark.Core.Hotkeys;
 
 /// <summary>
@@ -21,9 +24,20 @@ public static class HotkeyErrorText
     /// <summary>ERROR_HOOK_CREATION_FAILED：钩子创建失败。</summary>
     public const int ErrorHookCreationFailed = 1401;
 
-    /// <summary>注册全局热键失败的原因。</summary>
-    public static string RegisterFailure(int errorCode) => errorCode switch
+    /// <summary>
+    /// 注册全局热键失败的原因。
+    /// <para>
+    /// <paramref name="siblingInstancePids"/>＝本机还活着的**本程序其它实例**的 pid。为什么要单独传这个：
+    /// Win32 不回答"这条组合键被谁占了"，而 1409 最常见的一种占用方就是我们自己的另一个实例
+    /// （开发期同时开几份、或留着一个提权实例）。一律写成"被其它程序占用"，用户就会去关本不相干的软件、
+    /// 或者给这些键换个组合——两种都是白做工，而那条键其实一直在另一个实例那儿好好的生效着。
+    /// </para>
+    /// </summary>
+    public static string RegisterFailure(int errorCode, IReadOnlyList<int>? siblingInstancePids = null) => errorCode switch
     {
+        ErrorHotkeyAlreadyRegistered when siblingInstancePids is { Count: > 0 } =>
+            $"本程序还另开着 {siblingInstancePids.Count} 个实例（pid {string.Join("、", siblingInstancePids.Select(id => id.ToString()))}），"
+            + "这条键此刻由那边响应（按它动的就是那个实例）；这个实例会自己继续重试，那边退出后自动接回来",
         ErrorHotkeyAlreadyRegistered => "该组合键已被其它程序占用",
         _ => $"系统拒绝注册（Win32 错误 {errorCode}）",
     };
