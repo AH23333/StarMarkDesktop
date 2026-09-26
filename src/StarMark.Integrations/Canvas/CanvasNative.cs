@@ -40,6 +40,21 @@ internal static class CanvasNative
     public const int MK_LBUTTON = 0x0001;
     public const int MK_RBUTTON = 0x0002;
 
+    // ===== 穿透态下"按住即画"要用的按键轮询 =====
+    //
+    // <b>穿透态收不到任何鼠标消息</b>（这正是它的语义），所以"用户按下了左键"这件事只能自己看。
+    // 用 <c>GetAsyncKeyState</c>（即时状态，不排队、不消费）而不是低级钩子：钩子会看到所有程序的
+    // 鼠标事件，而这里每帧只需要"按着没有"一个布尔。
+    public const int VK_LBUTTON = 0x01;
+    public const int VK_CONTROL = 0x11;
+    public const int VK_MENU = 0x12;          // Alt
+
+    [DllImport("user32.dll")]
+    public static extern short GetAsyncKeyState(int vKey);
+
+    /// <summary>这个键现在按着吗（只看最高位：GetAsyncKeyState 的低位是"自上次调用以来按过"，不能用）。</summary>
+    public static bool IsDown(int vKey) => (GetAsyncKeyState(vKey) & unchecked((short)0x8000)) != 0;
+
     // ===== 分层窗提交标志（UpdateLayeredWindow / …Indirect 的 dwFlags） =====
 
     /// <summary>
@@ -57,6 +72,11 @@ internal static class CanvasNative
     public const int SW_SHOWNOACTIVATE = 4;
     public static readonly IntPtr HWND_TOPMOST = new(-1);
     public static readonly IntPtr HWND_NOTOPMOST = new(-2);
+
+    /// <summary>带内提到最前。<b>已经在 topmost 带里的窗口要再提层只能用它</b>：
+    /// 对这样的窗口再传一次 <c>HWND_TOPMOST</c> 只"换带"、不在带内重排，等于什么都没做
+    /// （真机症状：工具条被画布压在下面，「穿透」和 ✕ 都点不动）。</summary>
+    public static readonly IntPtr HWND_TOP = IntPtr.Zero;
     public const uint SWP_NOSIZE = 0x0001;
     public const uint SWP_NOMOVE = 0x0002;
     public const uint SWP_NOZORDER = 0x0004;

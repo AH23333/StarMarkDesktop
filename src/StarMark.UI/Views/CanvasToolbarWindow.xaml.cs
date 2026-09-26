@@ -111,21 +111,27 @@ public sealed partial class CanvasToolbarWindow : Window
         x = Math.Clamp(x, screen.X, Math.Max(screen.X, screen.Right - width));
         y = Math.Clamp(y, screen.Y, Math.Max(screen.Y, screen.Bottom - height));
 
-        WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOPMOST, x, y, width, height,
+        // 定位顺带提层：同 RaiseAboveCanvas，这里也不能传 HWND_TOPMOST——它已经在带里，
+        // 再传一次只"换带"不重排＝画布仍然压在条子上面（每屏一块 TOPMOST 的玻璃，谁最后被提谁在上）
+        WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOP, x, y, width, height,
             WindowInterop.SWP_SHOWWINDOW | WindowInterop.SWP_NOACTIVATE);
         WindowInterop.ShowWindow(hwnd, WindowInterop.SW_SHOWNOACTIVATE);
     }
 
     /// <summary>
-    /// 重新提到最上层。画布每屏一块也是 TOPMOST，topmost 链里谁在后谁在上——
-    /// 任何"觉得条子可能不见了"的时刻（切换穿透、重建、异常）都补一发，比让用户去找便宜。
+    /// 重新提到最上层。<b>必须用 HWND_TOP 而不是 HWND_TOPMOST</b>：这条窗本来就在 topmost 带里，
+    /// 对这样的窗口再传 HWND_TOPMOST 只"换带"、不在带内重排＝什么都没做
+    /// （真机症状：画布压在工具条上面，条上每颗按钮都点不动，而它是唯一看得见的出口）。
     /// </summary>
     public void RaiseAboveCanvas()
     {
-        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), WindowInterop.HWND_TOPMOST,
+        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), WindowInterop.HWND_TOP,
             0, 0, 0, 0,
             WindowInterop.SWP_NOMOVE | WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOACTIVATE);
     }
+
+    /// <summary>这块条子的句柄：画布层要靠它把自己插到条子之下（定序不能只靠提自己）。</summary>
+    public IntPtr Hwnd => WindowInterop.GetHwnd(this);
 
     public void CloseToolbar()
     {
@@ -135,11 +141,12 @@ public sealed partial class CanvasToolbarWindow : Window
 
     // ────────── 动作 ──────────
 
-    private void Pen_Click(object sender, RoutedEventArgs e) => CanvasService.SelectTool(CanvasTool.Pen);
+    // 三支笔都走 ToggleTool：再点当前这支＝收笔回穿透态（与截图/贴图那条"再点取消选择"同一交互语言）
+    private void Pen_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleTool(CanvasTool.Pen);
 
-    private void Marker_Click(object sender, RoutedEventArgs e) => CanvasService.SelectTool(CanvasTool.Highlighter);
+    private void Marker_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleTool(CanvasTool.Highlighter);
 
-    private void Eraser_Click(object sender, RoutedEventArgs e) => CanvasService.SelectTool(CanvasTool.Eraser);
+    private void Eraser_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleTool(CanvasTool.Eraser);
 
     private void Thin_Click(object sender, RoutedEventArgs e) => CanvasService.SelectWidth(0);
 
@@ -219,14 +226,26 @@ public sealed partial class CanvasToolbarWindow : Window
         for (var index = 0; index < _colourButtons.Count; index++)
             _colourButtons[index].Background = index == CanvasService.ColorIndex ? ActiveBrush : IdleBrush;
 
-        Status.Text = CanvasService.IsClickThrough
-            ? "穿透中：鼠标归下面的应用。再点「穿透」、右键画布、按热键或托盘都能回到绘制"
-            : $"{ToolName(CanvasService.Tool)} · {CanvasService.WidthStep + 1} 档 · {CanvasService.Palette[CanvasService.ColorIndex].Name}";
+        // 状态行要说清"现在这一按会发生什么"——三态最容易混的就是这里
+        Status.Text = StatusText();
         // 文本一变，行高就可能变（穿透那句会折成两行）→ 窗尺寸跟着重算，位置保持不动
         Fit(centerOnScreen: false);
         // 画布每屏一块也是 TOPMOST，topmost 链里谁最后被提谁在上。每次刷新都补一发：
         // 条子被画布盖住＝唯一的鼠标出口消失（真机"看不见也点不到"就是这么来的）
         RaiseAboveCanvas();
+    }
+
+    /// <summary>
+    /// 状态行要说清"<b>现在这一按会发生什么</b>"——三态里最容易混的就是"穿透态下选了荧光笔"
+    /// （看着什么都没开，其实按住就能画）。只写"穿透中"会让人以为功能坏了。
+    /// </summary>
+    private string StatusText()
+    {
+        var tool = CanvasService.Tool;
+        var ink = $"{ToolName(tool)} · {CanvasService.WidthStep + 1} 档 · {CanvasService.Palette[CanvasService.ColorIndex].Name}";
+        if (!CanvasService.IsClickThrough) return $"绘制中（鼠标归画布）：{ink}。点「穿透」或右键交出鼠标";
+        if (tool == CanvasTool.Highlighter) return $"穿透中 + 荧光笔已选：按住左键即画、松开自动穿透；{ink}";
+        return $"穿透中：下层应用照常操作。{ink}；按住 Ctrl+Alt 可直接圈画，点「画笔」进入留痕模式";
     }
 
     private static string ToolName(CanvasTool tool) => tool switch
@@ -259,7 +278,8 @@ public sealed partial class CanvasToolbarWindow : Window
     {
         if (!_dragging) return;
         if (!WindowInterop.GetCursorPos(out var cursor)) return;
-        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), WindowInterop.HWND_TOPMOST,
+        // 拖动途中也要压住画布：绘制态下画布是整块能吃到鼠标的玻璃，条子一旦被它盖住就"拖着拖着点不到了"
+        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), WindowInterop.HWND_TOP,
             cursor.X - _grabOffsetX, cursor.Y - _grabOffsetY, 0, 0,
             WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOACTIVATE);
     }

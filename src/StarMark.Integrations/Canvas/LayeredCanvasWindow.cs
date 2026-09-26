@@ -31,6 +31,21 @@ public sealed class LayeredCanvasWindow : IDisposable
 {
     private const string ClassName = "StarMarkCanvasLayer";
 
+    /// <summary>
+    /// "这里什么都没画"的那个像素值：<b>alpha=1 而不是 0</b>。
+    /// <para>
+    /// 分层窗的鼠标命中测试是逐像素看的——<b>alpha=0 的像素永远不算这个窗的</b>，消息直接给下层窗口。
+    /// 于是"擦干净"写成 0 的症状是：在擦过的那块地方点不动、也画不上（真机反馈的"选了中国画笔还是画不了"）。
+    /// alpha=1 肉眼不可见（1/255 ≈ 0.4%），但命中测试认它；至于到底拦不拦鼠标，由
+    /// <c>WS_EX_TRANSPARENT</c> 单独说话（<see cref="SetClickThrough"/>），两者各管一头。
+    /// </para>
+    /// <para>
+    /// <b>所有写"空白"的地方都必须用这个值</b>：构造时的初值、<c>Clear</c>/<c>ClearRect</c>、
+    /// 橡皮擦到见底。漏一处就有一块区域重新变成"点不动"，而且那块正好是用户刚刚画过的地方——最难复现的那种。
+    /// </para>
+    /// </summary>
+    public const uint BlankPixel = 0x01000000u;   // B=0 G=0 R=0 A=1
+
     /// <summary>静态持有：WndProc 的委托与"句柄→实例"的表。表要锁——消息可能来自同一线程的重入。</summary>
     private static NativeMethods.WndProcDelegate? _sharedProc;
     private static readonly Dictionary<IntPtr, LayeredCanvasWindow> Instances = new();
@@ -80,11 +95,9 @@ public sealed class LayeredCanvasWindow : IDisposable
         Bounds = boundsPhys;
         Width = boundsPhys.Width;
         Height = boundsPhys.Height;
-        // 空白像素 alpha=1（而非 0）：UpdateLayeredWindow 的 hit test 对 alpha=0 的像素
-        // 永远穿透到下层窗口——不设这个的话画布永远收不到鼠标事件，无法绘制。
-        // alpha=1 肉眼不可见但让 hit test 命中本窗；穿透/拦截由 WS_EX_TRANSPARENT 单独控制。
+        // 整块板子以"空白"起步（alpha=1，见 <see cref="BlankPixel"/>）：0 会让这块玻璃在鼠标眼里不存在
         Pixels = new uint[Width * Height];
-        Array.Fill(Pixels, 0x01000000u);   // BGRA: B=0 G=0 R=0 A=1
+        Array.Fill(Pixels, BlankPixel);
 
         EnsureClassRegistered();
         _hwnd = NativeMethods.CreateWindowExW(
@@ -122,6 +135,39 @@ public sealed class LayeredCanvasWindow : IDisposable
         NativeMethods.ShowWindow(_hwnd, CanvasNative.SW_SHOWNOACTIVATE);
         SetClickThrough(true);
     }
+
+    /// <summary>
+    /// 左键现在按着吗（全局状态，不是本窗收到的消息）。
+    /// <b>穿透态下本窗收不到任何鼠标消息</b>，而规格 §16.5.2 要"按住即画、松开即透"——
+    /// 那一次按下归了下层应用，我们只能自己看按键状态。原生细节留在 <c>CanvasNative</c> 里，
+    /// 这里只露两个布尔出去（那层是 internal，UI 侧不该看见 P/Invoke）。
+    /// </summary>
+    public static bool LeftButtonDown => CanvasNative.IsDown(CanvasNative.VK_LBUTTON);
+
+    /// <summary>Ctrl+Alt 是否同时按着（穿透态下的"快速圈画"修饰键，§16.5.3 第一行）。</summary>
+    public static bool CtrlAltDown
+        => CanvasNative.IsDown(CanvasNative.VK_CONTROL) && CanvasNative.IsDown(CanvasNative.VK_MENU);
+
+    /// <summary>这块玻璃的句柄：工具条与快捷键面板要靠它把自己插到画布之上。</summary>
+    public IntPtr Handle => _hwnd;
+
+    /// <summary>
+    /// 把自己插到某个窗口<b>之下</b>（同一 topmost 带内）。
+    /// 工具条"永远在画布之上"不能只靠提自己：对已在 topmost 带里的窗口再传 HWND_TOPMOST
+    /// 只换带、不在带内重排（＝没提），所以这里显式把画布按到工具条下面去，一次定序。
+    /// </summary>
+    public void PlaceBelow(IntPtr insertAfter)
+    {
+        if (_disposed || insertAfter == IntPtr.Zero) return;
+        CanvasNative.SetWindowPos(_hwnd, insertAfter, 0, 0, 0, 0,
+            CanvasNative.SWP_NOMOVE | CanvasNative.SWP_NOSIZE | CanvasNative.SWP_NOACTIVATE);
+    }
+
+    /// <summary>
+    /// 主动抓鼠标。<b>穿透态下"按住即画"是轮询发现的</b>：那一次 WM_LBUTTONDOWN 已经发给下层应用了，
+    /// 我们不会收到，所以摘掉穿透之后要自己补一次 SetCapture，否则抬起永远收不到＝笔"没松"。
+    /// </summary>
+    public void Capture() => CanvasNative.SetCapture(_hwnd);
 
     /// <summary>整块板子交出去（首帧、以及 WM_PAINT 要求重绘时）。</summary>
     public void PresentAll()

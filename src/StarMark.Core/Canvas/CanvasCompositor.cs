@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using StarMark.Abstractions.Capture;
+using StarMark.Integrations.Canvas;
 
 namespace StarMark.Core.Canvas;
 
@@ -10,7 +11,8 @@ namespace StarMark.Core.Canvas;
 /// <para>
 /// 这一层与截图标注那套 <c>AnnotationPainter</c> <b>刻意分开写</b>：那边永远画在不透明的底图上，
 /// <c>Blend</c> 出口处把 alpha 钉成 255（交出去的 PNG 不能留透明洞）；而这块板子要的恰恰相反——
-/// <b>没画到的地方必须是 alpha=0</b>，否则屏幕上就是一块涂满了东西的玻璃，穿透态下用户会看见一面墙。
+/// <b>没画到的地方必须是"空白"（<see cref="LayeredCanvasWindow.BlankPixel"/>：alpha=1，看不见但点得着）</b>，
+/// 既不能是实色（那是一面墙），也不能是 0（分层窗的命中测试会跳过 alpha=0，那块地方就画不上）。
 /// 把两种 alpha 语义塞进同一个函数，改的那一次一定会撞坏另一条链。
 /// </para>
 /// <para>
@@ -23,8 +25,11 @@ public static class CanvasCompositor
     /// <summary>没有脏区时的返回值（<c>IsEmpty</c> 为真）。</summary>
     public static readonly IntRect Nothing = new(0, 0, 0, 0);
 
-    /// <summary>整块板子擦干净（全 alpha=0，等于这块玻璃不存在）。</summary>
-    public static void Clear(uint[] buffer) => Array.Clear(buffer, 0, buffer.Length);
+    /// <summary>
+    /// 整块板子擦干净。<b>填的是"空白"（alpha=1）而不是 0</b>：0 会让分层窗在这一块上直接漏掉鼠标，
+    /// 擦过的地方就再也画不上（<see cref="LayeredCanvasWindow.BlankPixel"/> 记着为什么）。
+    /// </summary>
+    public static void Clear(uint[] buffer) => Array.Fill(buffer, LayeredCanvasWindow.BlankPixel);
 
     /// <summary>
     /// 只擦一块区域。<b>撤销与"擦掉一段荧光"靠的是这个而不是整块擦</b>：
@@ -34,7 +39,7 @@ public static class CanvasCompositor
     {
         var r = Clamp(rect, width, height);
         for (var y = r.Y; y < r.Bottom; y++)
-            Array.Clear(buffer, y * width + r.X, r.Width);
+            Array.Fill(buffer, LayeredCanvasWindow.BlankPixel, y * width + r.X, r.Width);
     }
 
     /// <summary>把一块区域从源缓冲拷进目标缓冲（合成时"先铺持久层，再叠荧光段与光晕"就靠它）。</summary>
@@ -171,7 +176,9 @@ public static class CanvasCompositor
                 if (frameX < 0 || frameX >= frameWidth) continue;
                 var pixel = ink[y * inkWidth + x];
                 var alpha = (int)(pixel >>> 24);
-                if (alpha == 0) continue;
+                // "空白"那一档（alpha=1）也跳过：它是给分层窗命中测试留的，不是墨。
+                // 不跳的话整张快照会被蒙上一层 1/255 的黑——差得看不见，但它确实存在。
+                if (alpha <= (int)(LayeredCanvasWindow.BlankPixel >>> 24)) continue;
                 var index = (frameY * frameWidth + frameX) * 4;
                 var keep = 255 - alpha;                    // 帧是实底：源 over 目标，且墨本身已预乘，直接相加
                 bgra[index] = (byte)((pixel & 0xFF) + (bgra[index] & 0xFF) * keep / 255);
@@ -280,7 +287,11 @@ public static class CanvasCompositor
         if (stroke.Tool == CanvasTool.Eraser)
         {
             var keep = (int)Math.Round(destinationAlpha * (1d - coverage));
-            if (keep <= 0) { buffer[index] = 0; return; }
+            if (keep <= (int)(LayeredCanvasWindow.BlankPixel >>> 24))
+            {
+                buffer[index] = LayeredCanvasWindow.BlankPixel;   // 擦到底＝回到"空白"，不是回到 0（0 会漏鼠标）
+                return;
+            }
             var blue = (int)(destination & 0xFF) * keep / destinationAlpha;
             var green = (int)(destination >> 8 & 0xFF) * keep / destinationAlpha;
             var red = (int)(destination >> 16 & 0xFF) * keep / destinationAlpha;

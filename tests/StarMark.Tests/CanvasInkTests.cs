@@ -5,6 +5,7 @@ using System.Linq;
 using StarMark.Abstractions.Capture;
 using StarMark.Core.Canvas;
 using StarMark.Core.Capture;
+using StarMark.Integrations.Canvas;
 using Xunit;
 
 namespace StarMark.Tests;
@@ -12,7 +13,8 @@ namespace StarMark.Tests;
 /// <summary>
 /// 屏幕画布的纯逻辑层（规格 §16.3 / §16.4）。这一层钉的都是"只有画出来才看得见"的事，
 /// 但它们全能在像素数组上断言——这正是把合成写成托管像素运算（而不是让界面画完再拍照）的回报：
-/// ① <b>没画到的地方必须 alpha=0</b>（否则那块"玻璃"会盖住整个桌面）；
+/// ① <b>没画到的地方必须是"空白"（alpha=1 那一档）</b>：实色＝一面墙，0＝分层窗在这一块上直接漏掉鼠标，
+///    症状是"刚擦过的地方画不上"（见 <see cref="LayeredCanvasWindow.BlankPixel"/>）；
 /// ② 荧光笔盖在字上还能看见字（浓度上限 + 取大规则）；
 /// ③ 同一条笔迹重复涂抹不变浓（增量绘制与全量重画必须同结果，否则跟手帧与最终帧不一样）；
 /// ④ 预乘不变量（通道 ≤ alpha），否则分层窗合成出白边；
@@ -21,9 +23,17 @@ namespace StarMark.Tests;
 public sealed class CanvasInkTests
 {
     private static readonly int Red = Annotation.Opaque(0x23, 0x11, 0xE8);      // 出厂红：B=23 G=11 R=E8
+    private const uint Blank = LayeredCanvasWindow.BlankPixel;
+    private const int BlankAlpha = (int)(Blank >>> 24);                 // 1：看不见，但命中测试认它
     private const int Width = 4;                                        // 半径 2
 
-    private static uint[] Buffer(int width = 100, int height = 100) => new uint[width * height];
+    /// <summary>新板子的初值——<b>不是全 0</b>，全 0 那块玻璃在鼠标眼里根本不存在。</summary>
+    private static uint[] Buffer(int width = 100, int height = 100)
+    {
+        var buffer = new uint[width * height];
+        Array.Fill(buffer, Blank);
+        return buffer;
+    }
 
     private static uint Pixel(uint[] buffer, int x, int y, int width = 100) => buffer[y * width + x];
 
@@ -121,11 +131,49 @@ public sealed class CanvasInkTests
     // ────────── 合成：透明底 + 取大 + 预乘 ──────────
 
     [Fact]
-    public void UntouchedPixelsStayFullyTransparent()
+    public void UntouchedPixelsStayAtTheBlankLevel_NotSolidNotZero()
     {
         var buffer = Buffer();
         CanvasCompositor.Paint(buffer, 100, 100, StrokeFrom(10, 10, to: 40));
-        Assert.Equal(0u, Pixel(buffer, 90, 90));                   // 这块玻璃没画到的地方必须真的没有像素
+        Assert.Equal(Blank, Pixel(buffer, 90, 90));   // 没画到的地方：看不见（alpha=1），但点得着（≠0）
+    }
+
+    [Fact]
+    public void EveryBlankPathUsesTheSamePixel()
+    {
+        // "擦干净"有三条路（整块擦、只擦一块、橡皮擦到底），三条都必须落在同一个"空白"值上。
+        // 漏一条的症状都是同一件事：那块地方鼠标点不动、笔也画不上，而且只在刚擦过的地方发作。
+        var whole = Buffer();
+        CanvasCompositor.Clear(whole);
+        var rect = Buffer();
+        CanvasCompositor.ClearRect(rect, 100, 100, new IntRect(10, 10, 25, 25));
+        var erased = Buffer();
+        CanvasCompositor.Paint(erased, 100, 100, Pen(50, 50));
+        CanvasCompositor.Paint(erased, 100, 100,
+            new CanvasStroke(CanvasTool.Eraser, Red, CanvasWidths.EraserDiameter, new PixelPoint(50, 50)));
+        Assert.Equal(Blank, Pixel(whole, 3, 7));
+        Assert.Equal(Blank, Pixel(rect, 20, 20));
+        Assert.Equal(Blank, Pixel(erased, 50, 50));
+        // 空白必须是"几乎不可见"：这一档一旦被人调成看得见的浓度，整块玻璃就变成一面墙
+        Assert.InRange(BlankAlpha, 1, 2);
+        Assert.Equal(0u, Blank & 0x00FF_FFFFu);
+    }
+
+    [Fact]
+    public void BlankPixelsAreLeftOutOfTheSnapshotOverlay()
+    {
+        // 快照/存图吃的是同一份缓冲。空白那 1/255 要是被当成墨叠上去，整张图每个像素都会被蒙一层黑
+        const int Side = 20;
+        var frame = new byte[Side * Side * 4];
+        Array.Fill(frame, (byte)200);
+        var ink = Buffer(Side, Side);
+        CanvasCompositor.Paint(ink, Side, Side, new CanvasStroke(CanvasTool.Pen, Red, Width, new PixelPoint(2, 2)));
+        CanvasCompositor.OverlayOntoFrame(frame, Side, Side, new IntRect(0, 0, 0, 0), ink, Side, Side);
+        var far = ((Side - 1) * Side + (Side - 1)) * 4;      // 离那一笔最远的一角：只有"空白"
+        Assert.Equal(200, frame[far]);
+        Assert.Equal(200, frame[far + 1]);
+        Assert.Equal(200, frame[far + 2]);
+        Assert.NotEqual(200, frame[(2 * Side + 2) * 4]);     // 笔芯那里必须真的改变了画面（否则这条测试是空的）
     }
 
     [Fact]
@@ -143,7 +191,7 @@ public sealed class CanvasInkTests
     {
         var buffer = Buffer();
         CanvasCompositor.Paint(buffer, 100, 100, Pen(50, 50));     // 半径 2
-        Assert.Equal(0, AlphaOf(Pixel(buffer, 53, 50)));            // 距离 3 ⇒ 斜坡之外
+        Assert.Equal(BlankAlpha, AlphaOf(Pixel(buffer, 53, 50)));   // 距离 3 ⇒ 斜坡之外，回到空白那一档
         var rim = AlphaOf(Pixel(buffer, 52, 50));                  // 距离 2 ⇒ 斜坡正中
         Assert.InRange(rim, 120, 135);
     }
@@ -206,13 +254,13 @@ public sealed class CanvasInkTests
     }
 
     [Fact]
-    public void EraserTakesTheInkBackToNothing()
+    public void EraserTakesTheInkBackToTheBlankLevel()
     {
         var buffer = Buffer();
         CanvasCompositor.Paint(buffer, 100, 100, Pen(50, 50));
         var dirty = CanvasCompositor.Paint(buffer, 100, 100,
             new CanvasStroke(CanvasTool.Eraser, Red, CanvasWidths.EraserDiameter, new PixelPoint(50, 50)));
-        Assert.Equal(0u, Pixel(buffer, 50, 50));
+        Assert.Equal(Blank, Pixel(buffer, 50, 50));
         Assert.False(dirty.IsEmpty);
     }
 
@@ -222,7 +270,7 @@ public sealed class CanvasInkTests
         var buffer = Buffer();
         CanvasCompositor.Paint(buffer, 100, 100,
             new CanvasStroke(CanvasTool.Eraser, Red, CanvasWidths.EraserDiameter, new PixelPoint(50, 50)));
-        Assert.All(buffer, pixel => Assert.Equal(0u, pixel));      // 空板子上擦：整块仍然是空的（也不该除零）
+        Assert.All(buffer, pixel => Assert.Equal(Blank, pixel));  // 空板子上擦：整块仍然是空白（也不该除零）
     }
 
     [Fact]
@@ -288,7 +336,7 @@ public sealed class CanvasInkTests
         CanvasCompositor.Paint(buffer, 100, 100, Pen(20, 20));
         CanvasCompositor.Paint(buffer, 100, 100, Pen(70, 70));
         CanvasCompositor.ClearRect(buffer, 100, 100, new IntRect(10, 10, 25, 25));
-        Assert.Equal(0u, Pixel(buffer, 20, 20));                     // 撤销走的就是这条路：只擦那一条的包围盒
+        Assert.Equal(Blank, Pixel(buffer, 20, 20));                // 撤销走的就是这条路：只擦那一条的包围盒
         Assert.True(AlphaOf(Pixel(buffer, 70, 70)) > 0, "别的地方不能被牵连");
     }
 

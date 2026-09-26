@@ -66,8 +66,29 @@ public static class CanvasService
     private static CanvasTool _tool = CanvasTool.Pen;
     private static int _colorIndex;
     private static int _widthStep = CanvasWidths.DefaultStepIndex;
-    private static bool _clickThrough;
+
+    /// <summary>
+    /// 是否穿透。<b>默认开</b>（规格 §16.5.2 的"③穿透态（默认）"）：进入画布模式不该把整台机器的
+    /// 鼠标吃掉——那样一来 PPT 翻不了、下层应用点不动，而"按了热键之后电脑像死了"就是它。
+    /// 要画持久笔迹得由工具条/热键显式进绘制态，或在穿透态里按住 Ctrl+Alt 直接圈画。
+    /// </summary>
+    private static bool _clickThrough = true;
     private static bool _haloEnabled = true;
+
+    /// <summary>
+    /// 手上一按是什么性质。<b>穿透态收不到 WM_LBUTTONDOWN</b>（那一次按下归了下层应用），
+    /// 所以"荧光笔按住即画 / Ctrl+Alt 快速圈画"只能由帧循环轮询按键状态发现，
+    /// 发现后临时摘掉穿透、自己补一次 SetCapture，抬起再恢复。
+    /// </summary>
+    private enum Press { None, Drawing, Ephemeral, QuickPen }
+
+    private static Press _press;
+
+    /// <summary>手上有笔时它属于哪块屏（抬起/轮询收尾都要用它，光标可能已经飘到别的屏）。</summary>
+    private static Screen? _pressScreen;
+
+    /// <summary>这一按是不是轮询"抢"来的（临时摘了穿透），抬起必须还回去。</summary>
+    private static bool _wasTemporary;
 
     /// <summary>画布模式是否开着。</summary>
     public static bool IsRunning => _running;
@@ -130,12 +151,16 @@ public static class CanvasService
                 try
                 {
                     var window = new LayeredCanvasWindow(bounds);
+                    // 持久层同样要以"空白"起步：它是 Flush 时铺到屏幕上的那张底图，
+                    // 留 0 就等于把"这块玻璃在鼠标眼里不存在"重新写回去（只在擦过的地方发作）
+                    var persistent = new uint[window.Width * window.Height];
+                    Array.Fill(persistent, LayeredCanvasWindow.BlankPixel);
                     var screen = new Screen
                     {
                         Window = window,
                         Bounds = bounds,
                         Scale = monitor.Scale,
-                        Persistent = new uint[window.Width * window.Height],
+                        Persistent = persistent,
                         Ink = new CanvasInk(),
                         Trail = new EphemeralInk { CursorHaloEnabled = _haloEnabled },
                     };
@@ -171,7 +196,8 @@ public static class CanvasService
             _frame.Start();
             _running = true;
             ShowToolbar();
-            StarLog.Info($"[Canvas] 画布模式开启：{Screens.Count} 屏，工具={_tool}，穿透={_clickThrough}");
+            StarLog.Info($"[Canvas] 画布模式开启：{Screens.Count} 屏，工具={_tool}，" +
+                         $"{(_clickThrough ? "穿透态（按住 Ctrl+Alt 直接圈画，或点工具条选画笔）" : "绘制态")}");
         }
         catch (Exception ex)
         {
@@ -197,8 +223,9 @@ public static class CanvasService
             catch (Exception ex) { StarLog.Warn($"[Canvas] 透明层没关干净：{ex.Message}"); }
         }
         Screens.Clear();
-        // 下次进来该是"能画"那一态：把穿透留在开着的状态会让下一次按热键像"画不上"
-        _clickThrough = false;
+        // 下次进来还是穿透态（§16.5.2 的默认态）：把"拦截全屏"留成默认，等于让每次按热键都像把电脑弄死
+        _clickThrough = true;
+        _press = Press.None;
         StateChanged?.Invoke();
         StarLog.Info("[Canvas] 画布模式关闭");
     }
@@ -214,11 +241,23 @@ public static class CanvasService
 
     // ────────── 工具与动作（工具条／热键／托盘都走这里）──────────
 
+    /// <summary>
+    /// 选工具＝顺带决定这一态拦不拦鼠标（规格 §16.5.2 的关键分岔）：
+    /// <b>画笔/橡皮要留痕、要能反复改 ⇒ 进绘制态（拦截）；荧光笔是"按住才有"的瞬时轨迹 ⇒ 回穿透态</b>。
+    /// 把这两件事塞进同一个模式开关正是冲突的来源。
+    /// </summary>
     public static void SelectTool(CanvasTool tool)
     {
         CommitOpenStroke();                       // 先收手上那条：不然它会接到新工具的设置上
         _tool = tool;
-        StateChanged?.Invoke();
+        SetClickThrough(tool != CanvasTool.Highlighter);
+    }
+
+    /// <summary>再点当前选中的笔＝收笔回穿透态（与截图/贴图那条"再点取消选择"同一交互语言）。</summary>
+    public static void ToggleTool(CanvasTool tool)
+    {
+        if (_tool == tool && !_clickThrough) SetClickThrough(true);
+        else SelectTool(tool);
     }
 
     public static void SelectColor(int index)
@@ -248,6 +287,9 @@ public static class CanvasService
             screen.Window.SetClickThrough(on);
             screen.Window.SetDrawCursor(!on);
         }
+        // 摘/加穿透时补的那一发 FRAMECHANGED 带了 NOZORDER，不会自己往上蹿；
+        // 但态一换就顺手把定序再做一遍——工具条点不动的代价是"整个功能出不去"。
+        PlaceLayersBelowChrome();
         StateChanged?.Invoke();
     }
 
@@ -319,19 +361,31 @@ public static class CanvasService
     private static void OnPressed(Screen screen, CanvasPointer pointer)
     {
         if (screen.Window.IsClickThrough) return;          // 穿透态不该收到，真收到也不能画（鼠标本来要给下面的应用）
+        BeginPress(screen, pointer.At, _tool == CanvasTool.Highlighter ? Press.Ephemeral : Press.Drawing);
+    }
+
+    /// <summary>
+    /// 落一笔。<paramref name="kind"/> 决定这一笔是什么，<b>不看 <c>_tool</c></b>：
+    /// 穿透态下按住 Ctrl+Alt 圈画时选中的可能是荧光笔，但墨迹要落进持久层。
+    /// </summary>
+    private static void BeginPress(Screen screen, PixelPoint at, Press kind)
+    {
+        _press = kind;
+        _pressScreen = screen;
         var colour = Palette[_colorIndex].Bgra;
-        var width = WidthFor(_tool);
         var now = Environment.TickCount64;
-        if (_tool == CanvasTool.Highlighter)
+        if (kind == Press.Ephemeral)
         {
-            var segment = screen.Trail.Begin(pointer.At, colour, width, now);
+            var segment = screen.Trail.Begin(at, colour, CanvasWidths.At(_widthStep), now);
             screen.Dirty.Add(segment.Stroke.Bounds);
-            Flush(screen);
-            return;
         }
-        var stroke = screen.Ink.Begin(_tool, colour, width, pointer.At);
-        screen.Dirty.Add(CanvasCompositor.Paint(
-            screen.Persistent, screen.Window.Width, screen.Window.Height, stroke));
+        else
+        {
+            var stroke = screen.Ink.Begin(kind == Press.QuickPen ? CanvasTool.Pen : _tool,
+                colour, WidthFor(kind == Press.QuickPen ? CanvasTool.Pen : _tool), at);
+            screen.Dirty.Add(CanvasCompositor.Paint(
+                screen.Persistent, screen.Window.Width, screen.Window.Height, stroke));
+        }
         Flush(screen);
     }
 
@@ -339,9 +393,9 @@ public static class CanvasService
     {
         var now = Environment.TickCount64;
         var dirty = false;
-        if (_tool == CanvasTool.Highlighter)
+        if (_press == Press.Ephemeral)
         {
-            if (pointer.LeftDown && screen.Trail.Extend(pointer.At, now))
+            if (screen.Trail.Extend(pointer.At, now))
             {
                 screen.Dirty.Add(screen.Trail.Segments[^1].Stroke.Bounds);
                 dirty = true;
@@ -358,15 +412,70 @@ public static class CanvasService
 
     private static void OnReleased(Screen screen, CanvasPointer pointer)
     {
-        if (_tool == CanvasTool.Highlighter)
+        FinishPress(screen);
+        // 轮询接手的那两种按下（荧光笔按住 / Ctrl+Alt 圈画）是"临时摘掉穿透"换来的，
+        // 抬起必须还回去——否则一次圈画之后整台机器的鼠标就被我们扣住了。
+        if (_wasTemporary) EndTemporaryPress();
+    }
+
+    /// <summary>收手上那一笔（不碰穿透态）：荧光段交给 TTL 淡出，持久笔迹要定形。</summary>
+    private static void FinishPress(Screen? screen)
+    {
+        if (screen is null) { _press = Press.None; return; }
+        if (_press == Press.Ephemeral) Flush(screen);          // 段留在 Trail 里按 TTL 淡，不进持久层
+        else
         {
-            Flush(screen);                 // 段留在Trail里按 TTL 淡，不进持久层
+            screen.Ink.End();
+            Recomposite(screen);                               // 定形：橡皮这类"取大不管"的结果要一次画成
+            Flush(screen);
+        }
+        _press = Press.None;
+        _wasTemporary = false;
+    }
+
+    /// <summary>
+    /// 穿透态下的"按住即画"。规格 §16.5.2 要的是<b>零模式切换摩擦</b>：荧光笔按住才有、
+    /// 松开即透；Ctrl+Alt+拖动直接圈画。可穿透态下我们收不到 <c>WM_LBUTTONDOWN</c>
+    /// （那一次按下归了下层应用），所以只能每帧看按键状态——发现按下才临时摘掉穿透，
+    /// 之后的移动与抬起才归我们。
+    /// </summary>
+    private static void PollPress(int cursorX, int cursorY)
+    {
+        var down = LayeredCanvasWindow.LeftButtonDown;
+
+        // 抬起发生在我们还没接管的那一帧里（<33ms 的短按）：轮询补一次收尾，否则笔永远"没松"
+        if (_press is Press.Ephemeral or Press.QuickPen && !down)
+        {
+            FinishPress(_pressScreen);
+            EndTemporaryPress();
             return;
         }
-        screen.Ink.End();
-        Recomposite(screen);               // 定形：橡皮这类"取大不管"的结果要从干净区域一次画成
-        Flush(screen);
+        if (_press != Press.None || !_clickThrough || !down) return;
+
+        var quick = LayeredCanvasWindow.CtrlAltDown;
+        if (!quick && _tool != CanvasTool.Highlighter) return;     // 这一按该归下层应用，别抢
+        var screen = ScreenAt(new PixelPoint(cursorX, cursorY));
+        if (screen is null) return;
+
+        foreach (var s in Screens) { s.Window.SetClickThrough(false); s.Window.SetDrawCursor(true); }
+        screen.Window.Capture();                                   // 那一次按下不会再来，抓取要自己补
+        _wasTemporary = true;
+        BeginPress(screen, new PixelPoint(cursorX - screen.Bounds.X, cursorY - screen.Bounds.Y),
+            quick ? Press.QuickPen : Press.Ephemeral);
     }
+
+    /// <summary>把临时摘掉的穿透还回去（<see cref="_clickThrough"/> 本身没动，所以工具条状态不会跳）。</summary>
+    private static void EndTemporaryPress()
+    {
+        _press = Press.None;
+        _wasTemporary = false;
+        if (!_clickThrough) return;                                // 本来就在绘制态，不用恢复
+        foreach (var s in Screens) { s.Window.SetClickThrough(true); s.Window.SetDrawCursor(false); }
+    }
+
+    private static Screen? ScreenAt(PixelPoint point)
+        => Screens.FirstOrDefault(s => s.Bounds.X <= point.X && point.X < s.Bounds.Right
+            && s.Bounds.Y <= point.Y && point.Y < s.Bounds.Bottom);
 
     private static int WidthFor(CanvasTool tool)
         => tool == CanvasTool.Eraser ? CanvasWidths.EraserDiameter : CanvasWidths.At(_widthStep);
@@ -387,6 +496,8 @@ public static class CanvasService
         if (!_running || Screens.Count == 0) return;
         var now = Environment.TickCount64;
         WindowInterop.GetCursorPos(out var cursor);
+        // 穿透态收不到鼠标消息，"这一按是不是要画"只能在这里看按键状态（§16.5.2 的零摩擦入口）
+        PollPress(cursor.X, cursor.Y);
         foreach (var screen in Screens)
         {
             // 上一帧叠过的地方必须先加进脏区：否则淡掉的那团光与走过的光晕会赖在屏幕上
@@ -475,6 +586,13 @@ public static class CanvasService
     /// <summary>换工具/换粗细之前先把手上那条收掉，免得它接到新设置下去（症状："画着画着笔自己变粗了"）。</summary>
     private static void CommitOpenStroke()
     {
+        // 轮询抢来的那一按（荧光笔/Ctrl+Alt 圈画）也要在这里收口：换工具时它还挂着的话，
+        // 抬起事件会被新工具吃掉，屏幕上就留下一条"永远在画"的笔迹
+        if (_press is Press.Ephemeral or Press.QuickPen)
+        {
+            FinishPress(_pressScreen);
+            EndTemporaryPress();
+        }
         var changed = false;
         foreach (var screen in Screens)
             if (screen.Ink.Drawing is not null)
@@ -543,12 +661,29 @@ public static class CanvasService
         {
             _toolbar ??= new CanvasToolbarWindow();
             _toolbar.ShowAt(Screens[0].Bounds, Screens[0].Scale);
+            PlaceLayersBelowChrome();
         }
         catch (Exception ex)
         {
             // 工具条建不起来不牵连画布本身：热键、Esc、托盘三条出口仍然在
             StarLog.Error("[Canvas] 工具条没出现（画布仍可用：热键／托盘都在）", ex);
         }
+    }
+
+    /// <summary>
+    /// 定序：工具条（以及快捷键面板）永远压在画布之上，画布再压住下层应用。
+    /// <para>
+    /// <b>不能只"提"工具条</b>：它本来就在 topmost 带里，对这样的窗口再传一次
+    /// <c>HWND_TOPMOST</c> 只换带、不在带内重排（＝什么都没做）。真机症状就是
+    /// "按过穿透／右键之后，工具条一颗按钮都点不动"——而工具条是唯一看得见的出口。
+    /// 所以这里反过来做：把每块画布显式插到工具条<b>之下</b>，一次定序，不靠运气。
+    /// </para>
+    /// </summary>
+    private static void PlaceLayersBelowChrome()
+    {
+        var chrome = _toolbar?.Hwnd ?? IntPtr.Zero;
+        if (chrome == IntPtr.Zero) return;
+        foreach (var screen in Screens) screen.Window.PlaceBelow(chrome);
     }
 
     private static void CloseToolbar()
