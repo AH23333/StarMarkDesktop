@@ -1446,14 +1446,11 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         var current = WindowInterop.GetWindowRect(this);
         var (w, h) = CaptureGeometry.PinPixelSize(_contentWidth, _contentHeight, _zoom);
-        var (x, y) = CaptureGeometry.PinOrigin(current.X, current.Y, w, h, WorkArea());
-        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero, x, y, w, h,
-            WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
-        SetMonitor(new IntRect(x, y, w, h));
-        _lastAppliedX = x;
-        _lastAppliedY = y;
-        RefreshScaleIfChanged();        // 收边可能把这张图整个推到另一块屏上
-        RelayoutContent();
+        // 钉住的是<b>图</b>的左上角；窗口＝图 + 下面那一条（条子在画面外），收边按整窗尺寸算。
+        SetMonitor(new IntRect(current.X, current.Y, w, h));
+        ApplyPinWindowRect();         // 只算物理像素：尺寸、收边、落位、_lastApplied 一起
+        RefreshScaleIfChanged();      // 收边可能把这张图整个推到另一块屏上
+        RelayoutContent();            // DIP 那一层（内容摆位 + 条子）按新缩放重摆，里面会再校一次窗口
     }
 
     /// <summary>窗口矩形变了（缩放）之后重摆内容与工具条：底图与预览的像素没动，动的只是显示尺寸。</summary>
@@ -1546,7 +1543,9 @@ public sealed partial class CaptureOverlayWindow : Window
     private void Root_PointerExited(object sender, PointerRoutedEventArgs e)
     {
         if (!_pinned || Armed || _editingText || _polyLine is not null || _selected is not null) return;
-        ActionBar.Visibility = Visibility.Collapsed;
+        // 条子<b>常驻</b>：批次 WD-6 起窗口本身为它留了下面那一条，鼠标离开再把条子收走
+        // 就只剩一条"看不见、但会吃掉鼠标"的空带——比原先压在画上更糟。高亮边框仍按悬停给，
+        // 它标的是"这块画面是一张贴图"，收走不损失任何出口。
         PinBorder.Visibility = Visibility.Collapsed;
     }
 
@@ -2475,6 +2474,59 @@ public sealed partial class CaptureOverlayWindow : Window
     }
 
     /// <summary>
+    /// 贴图态工具条要占的那一条（物理像素）。<b>量实测值</b>：整条是代码生成的，
+    /// 用写死的数字就会在加一颗按钮后差几十像素——差的那几十像素正是"右边那几颗点不到"。
+    /// 还没量出来时用兜底常量（窗比条略高无害，反过来就是按钮缺一半）。
+    /// </summary>
+    private (int Width, int Height) PinBarStrip()
+    {
+        ActionBar.UpdateLayout();
+        var barWidth = ActionBar.ActualWidth > 0 ? ActionBar.ActualWidth : Bar_fallback_width;
+        var barHeight = (ActionBar.ActualHeight > 0 ? ActionBar.ActualHeight : Bar_fallback_height) + 4;
+        return ((int)Math.Round(barWidth * _scale) + 4, (int)Math.Round(barHeight * _scale));
+    }
+
+    /// <summary>
+    /// 把"图在虚拟桌面里的矩形"换成"要摆的窗口矩形"：<b>窗口 = 图 + 下面那一条（宽再让条子塞得下）</b>。
+    /// <para>
+    /// 批次 WD-6 发起人裁决：工具条永远在画面外侧。贴图窗本身就是那张图，所以"外侧"只能靠加高窗口实现；
+    /// 图仍钉在窗口左上角、尺寸一格不变（内容层 <see cref="AnnotateShot"/> 是按 DIP 显式摆的，
+    /// 不像 <see cref="Shot"/> 那样 Stretch=Fill，所以窗口变高不会把画面拉长）。
+    /// </para>
+    /// <para>
+    /// 屏底放不下就<b>整窗往上挪</b>（"外侧放不下就把贴图往里挪"），而不是把条子叠回画上；
+    /// 右边同理往左挪——小贴图常常没有一条工具条宽，这正是过去"整条被裁掉一半"的来源。
+    /// </para>
+    /// </summary>
+    private IntRect PinWindowRect(IntRect image)
+    {
+        if (!_pinned) return image;
+        var (barWidth, barHeight) = PinBarStrip();
+        var w = Math.Max(1, Math.Max(image.Width, barWidth));
+        var h = Math.Max(1, image.Height) + barHeight;
+        // 收边用贴图那一条老判据（PJ 口径）：塞得下就整块留屏内（⇒ 条子必然看得见），
+        // 图比屏还大时不强求整块可见，只保证每个方向都留一条边——与缩放/拖动同一个规则，
+        // 两处各算一套的话"拖一下就把条子挤出屏"这种错一定会出现。
+        var (x, y) = CaptureGeometry.PinOrigin(image.X, image.Y, w, h, WorkArea());
+        return new IntRect(x, y, w, h);
+    }
+
+    /// <summary>
+    /// 按当前条子实测尺寸把窗口摆成"图 + 下面那一条"。<b>只在贴图态调用</b>，
+    /// 且是这条链上唯一的窗口尺寸写点（尺寸与位置一起定，避免"先缩小再收边"两步各自收边）。
+    /// </summary>
+    private void ApplyPinWindowRect()
+    {
+        var win = PinWindowRect(_monitor);
+        var now = WindowInterop.GetWindowRect(this);
+        if (now.X == win.X && now.Y == win.Y && now.Width == win.Width && now.Height == win.Height) return;
+        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero, win.X, win.Y, win.Width, win.Height,
+            WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
+        _lastAppliedX = win.X;
+        _lastAppliedY = win.Y;
+    }
+
+    /// <summary>
     /// 把工具条摆到选区下方（放不下就摆到上方），左右都夹进本屏。
     /// <para>尺寸按<b>量出来的</b> ActualWidth/Height 算：三行都是代码生成的，按写死的数字摆
     /// 一旦加个工具就会压住选区或掉到屏外。</para>
@@ -2485,21 +2537,20 @@ public sealed partial class CaptureOverlayWindow : Window
         var barWidth = ActionBar.ActualWidth > 0 ? ActionBar.ActualWidth : Bar_fallback_width;
         var barHeight = ActionBar.ActualHeight > 0 ? ActionBar.ActualHeight : Bar_fallback_height;
         var (x, y, w, h) = ToDip(selection);
-        // 贴图态这条只能压在画面上（窗口就是那张图）。这里<b>不自己算左边界</b>：直接靠右上对齐，
-        // 可用宽度量布局真值（Root.ActualWidth）而不是"物理宽 ÷ 缩放"——后者在建窗那一刻可能还没
-        // 拿到本窗真正的 DPI，算出来的边界会比窗口宽，结果整条被推到画面外，只剩右上角露一点，
-        // 真机反馈就是"要不停放大贴图，菜单才一点点挪出来"。
         if (_pinned)
         {
-            var available = Root.ActualWidth > 0 ? Root.ActualWidth : _monitor.Width / _scale;
-            // 小贴图常常没有一条工具条宽：整条缩到塞得进画面（贴着右上角往里收），
-            // 而不是把右边那几颗（复制/存图/识字/穿透/关闭）裁掉——裁掉的正好是要用的。
-            var fit = barWidth > 0 ? Math.Clamp((available - 8) / barWidth, 0.5, 1.0) : 1.0;
-            ActionBar.HorizontalAlignment = HorizontalAlignment.Right;
+            // 贴图态：条子住在"图下方那一条"里（窗口已经为它加高），既不在画上，也不会被窗边裁掉。
+            // 先把窗口按实测尺寸校正一次——按钮增减、换 DPI、缩放之后都从这条走。
+            ApplyPinWindowRect();
+            ActionBar.HorizontalAlignment = HorizontalAlignment.Left;
             ActionBar.VerticalAlignment = VerticalAlignment.Top;
-            ActionBar.Margin = new Thickness(0, 0, 4, 0);
-            ActionBar.RenderTransformOrigin = new Windows.Foundation.Point(1, 0);
-            ActionBar.RenderTransform = new ScaleTransform { ScaleX = fit, ScaleY = fit };
+            ActionBar.RenderTransform = null;       // 不再缩放条子：外侧那一条要多少地方有多少地方
+            PlaceByMargin(ActionBar, 2, h + 2);
+            // 悬停高亮那一圈只描画面，不描"画面 + 条子"（否则看上去像贴图变大了一圈）
+            PinBorder.HorizontalAlignment = HorizontalAlignment.Left;
+            PinBorder.VerticalAlignment = VerticalAlignment.Top;
+            PinBorder.Width = w;
+            PinBorder.Height = h;
             return;
         }
         var screenWidth = _monitor.Width / _scale;
@@ -2887,10 +2938,9 @@ public sealed partial class CaptureOverlayWindow : Window
         var rotated = BitmapTransform.Rotate90(composed, _contentWidth, _contentHeight, clockwise);
         var (w, h) = CaptureGeometry.PinPixelSize(rotated.Width, rotated.Height, _zoom);
         var current = WindowInterop.GetWindowRect(this);
-        var (x, y) = CaptureGeometry.PinOrigin(current.X, current.Y, w, h, WorkArea());
-        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero, x, y, w, h,
-            WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
-        SetMonitor(new IntRect(x, y, w, h));
+        // 转完仍要整块可见（PJ）：窗口＝图 + 下面那一条，收边按整窗算，图自己仍钉在窗口左上角
+        SetMonitor(new IntRect(current.X, current.Y, w, h));
+        ApplyPinWindowRect();
         BeginEditingExisting(rotated.Pixels, rotated.Width, rotated.Height);
         RefreshScaleIfChanged();
         SyncBadge();

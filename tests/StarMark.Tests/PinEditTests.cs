@@ -55,18 +55,50 @@ public sealed class PinEditTests
     }
 
     /// <summary>
-    /// 贴图这条工具条<b>只能压在画面上</b>（窗口就是那张图），而"截一小块钉住"常常没有一条工具条宽：
-    /// 不整条缩进画面的话，被裁掉的正好是右边那几颗（复制 / 存图 / 识字 / 穿透 / 关闭）。
+    /// 贴图的工具条<b>永远在画面外侧</b>（批次 WD-6 发起人裁决）：窗口 = 图 + 下面那一条
+    /// （宽还要再让整条塞得下），图仍钉在窗口左上角、一格不变。
+    /// <para>过去是"整条缩到 0.5× 压在画面上"——小贴图照样裁掉右边那几颗（复制 / 存图 / 识字 / 穿透 / 关闭），
+    /// 而裁掉的正好是要用的；没裁到的时候它也确实盖住了画面。</para>
     /// </summary>
     [Fact]
-    public void BarIsScaledDownSoTheRightHandButtonsStayReachable()
+    public void BarLivesInAStripOutsideTheImage_NeverScaledOntoThePicture()
     {
-        var bar = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void PositionBar");
-        // 小贴图整条缩进画面（下限 0.5），且缩的时候贴着右上角收——不然被裁掉的正是右边那几颗
-        Assert.Contains("Math.Clamp((available - 8) / barWidth, 0.5, 1.0)", bar);
-        // 贴图这条不许再自己算左边界：那是"整条被推到画面外、要靠放大才挪得出来"的成因
-        Assert.DoesNotContain("screenWidth - scaledWidth", bar);
-        Assert.Contains("return;", bar);
+        var cs = SourceGate.ReadRepoFile(Overlay);
+        var bar = SourceGate.MethodBody(cs, "private void PositionBar");
+        Assert.Contains("ApplyPinWindowRect();", bar);
+        Assert.Contains("PlaceByMargin(ActionBar, 2, h + 2);", bar);      // 住在图下方那一条里
+        Assert.DoesNotContain("ScaleTransform", bar);                     // 不再靠缩放挤进画面
+        Assert.DoesNotContain("RenderTransformOrigin", bar);
+        var rect = SourceGate.MethodBody(cs, "private IntRect PinWindowRect(IntRect image)");
+        Assert.Contains("image.Height) + barHeight", rect);
+        Assert.Contains("Math.Max(image.Width, barWidth)", rect);          // 窄贴图也容得下整条
+        Assert.Contains("CaptureGeometry.PinOrigin(image.X, image.Y, w, h, WorkArea())", rect);
+        var strip = SourceGate.MethodBody(cs, "private (int Width, int Height) PinBarStrip()");
+        // 量布局真值，不写死：整条是代码生成的，写死的数字加一颗按钮就差几十像素
+        Assert.Contains("ActionBar.ActualWidth > 0 ? ActionBar.ActualWidth : Bar_fallback_width", strip);
+        Assert.Contains("ActionBar.ActualHeight > 0 ? ActionBar.ActualHeight : Bar_fallback_height", strip);
+    }
+
+    /// <summary>
+    /// 窗口尺寸<b>只有这一个写点</b>：缩放、90° 旋转、拖动都从 <see cref="ApplyPinWindowRect"/> 过。
+    /// 两处各算一套收边，"拖一下就条子出屏"这种错一定会出现（PJ 那条判据是同一条）。
+    /// </summary>
+    [Fact]
+    public void PinBarIsPlacedByLayoutTruthAndTheWindowFollowsItsRealSize()
+    {
+        var cs = SourceGate.ReadRepoFile(Overlay);
+        // 第一次布局才有真尺寸：量到了要重摆一次（含把窗口加高到能装下条子）
+        Assert.Contains("ActionBar.SizeChanged += ",
+            SourceGate.MethodBody(cs, "private void InitWindow"));
+        var apply = SourceGate.MethodBody(cs, "private void ApplyPinWindowRect()");
+        Assert.Contains("WindowInterop.GetWindowRect(this)", apply);   // 与当前真值比过再发，不每帧重发窗口
+        Assert.Contains("SWP_NOACTIVATE", apply);
+        Assert.DoesNotContain("WindowInterop.SetWindowPos(",
+            SourceGate.MethodBody(cs, "private void ResizePinAnchoringTopLeft"));
+        Assert.Contains("ApplyPinWindowRect();", SourceGate.MethodBody(cs, "private void BakeQuarterTurn"));
+        // 输入框的字号也要过倍率这一层：只除 DPI 的话，放大过的贴图上"框里的字"比烤进去的那份小一个倍率
+        Assert.Contains("_sourceScale / _scale",
+            SourceGate.MethodBody(cs, "private void BeginTextEdit"));
     }
 
     /// <summary>穿透中的贴图收不到鼠标，那条"悬停才收起"的工具条会一直留在画面上且没人点得动它。</summary>
@@ -110,27 +142,6 @@ public sealed class PinEditTests
         Assert.DoesNotContain("Render(basePixels, selection.Width", cs);
         Assert.DoesNotContain("(scratch, selection.Width", cs);
         Assert.DoesNotContain("(canvas, selection.Width", cs);
-    }
-
-    /// <summary>
-    /// 贴图这条工具条只能压在画面上：摆它的那一处必须用<b>布局真值</b>量可用宽度，
-    /// 而不是"物理宽 ÷ 缩放"自己算左边界（建窗那一刻 DPI 还没落到本窗时算出来的数会比窗口宽，
-    /// 整条被推到画面外，只剩右上角露一点 —— 真机反馈"要不停放大才把菜单挪出来"）。
-    /// </summary>
-    [Fact]
-    public void PinBarIsPlacedByLayoutTruthAndKeepsItsOwnSize()
-    {
-        var bar = SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void PositionBar");
-        Assert.Contains("Root.ActualWidth", bar);
-        Assert.Contains("HorizontalAlignment = HorizontalAlignment.Right", bar);
-        Assert.Contains("RenderTransformOrigin = new Windows.Foundation.Point(1, 0)", bar);   // 贴着右上角往里收
-        Assert.Contains("_pinned", bar);
-        // 第一次布局才有真宽度：量到了要重摆一次
-        Assert.Contains("ActionBar.SizeChanged += ",
-            SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void InitWindow"));
-        // 输入框的字号也要过倍率这一层：只除 DPI 的话，放大过的贴图上"框里的字"比烤进去的那份小一个倍率
-        Assert.Contains("_sourceScale / _scale",
-            SourceGate.MethodBody(SourceGate.ReadRepoFile(Overlay), "private void BeginTextEdit"));
     }
 
     /// <summary>
@@ -189,7 +200,8 @@ public sealed class PinEditTests
         var bake = SourceGate.MethodBody(cs, "private void BakeQuarterTurn");
         Assert.Contains("BitmapTransform.Rotate90(composed, _contentWidth, _contentHeight, clockwise)", bake);
         Assert.Contains("PinPixelSize(rotated.Width, rotated.Height, _zoom)", bake);
-        Assert.Contains("PinOrigin(current.X, current.Y, w, h, WorkArea())", bake);   // 转完仍整块在屏内
+        // 转完仍整块在屏内：收边自批次 WD-6 起在 ApplyPinWindowRect 里按"图 + 条"的整窗算
+        Assert.Contains("ApplyPinWindowRect();", bake);
         Assert.DoesNotContain("_zoom = 1d", bake);                                    // 旋转不重置倍率
         // 自由角度旋转的全套机器必须清干净：填黑四角 / 区域裁切 / 角度累计
         Assert.DoesNotContain("SetWindowRgn", cs);
@@ -312,15 +324,22 @@ public sealed class PinEditTests
         Assert.Contains("OcrIcon()", bar);
     }
 
+    /// <summary>
+    /// 贴图态条子常驻（批次 WD-6 起它住在画面下方那一条里）。
+    /// <para>原来"鼠标离开就收条"是为了不让一条工具条盖住画面；现在它不盖画面了，收走反而留下
+    /// <b>一条看不见、却会吃掉鼠标的空带</b>——比原先更糟。穿透时仍然收起：那一刻整窗不吃鼠标，
+    /// 空带不存在，留着只会让人以为条子坏了。"画着画着条没了"的三条判据（拿笔/在打字/已选中）保留。</para>
+    /// </summary>
     [Fact]
-    public void BarHidesOnLeaveButNeverWhileTheUserIsUsingAPen()
+    public void BarStaysVisibleBecauseAHiddenBarWouldLeaveADeadStrip()
     {
-        // 一屏十几张贴图，条子常驻会盖住画面；但"画着画着条没了"比看不见更烦。
         var cs = SourceGate.ReadRepoFile(Overlay);
         var exited = SourceGate.MethodBody(cs, "private void Root_PointerExited");
-
         Assert.Contains("Armed || _editingText || _polyLine is not null || _selected is not null", exited);
-        Assert.Contains("ActionBar.Visibility = Visibility.Collapsed", exited);
+        Assert.DoesNotContain("ActionBar.Visibility", exited);
+        Assert.Contains("PinBorder.Visibility = Visibility.Collapsed;", exited);
+        Assert.Contains("ActionBar.Visibility = Visibility.Collapsed;",
+            SourceGate.MethodBody(cs, "public bool ApplyClickThrough"));
     }
 
     [Fact]
