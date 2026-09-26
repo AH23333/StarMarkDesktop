@@ -28,6 +28,8 @@
                 <Button Content="贴图" Click="Pin_Click" ToolTipService.ToolTip="屏幕画面 + 笔迹合成一张钉在桌面"/>
                 <Button Content="存图" Click="Save_Click"/>
                 <Button Content="复制" Click="Copy_Click"/>
+                <Button x:Name="KeysButton" Content="⌨" Click="Keys_Click" MinWidth="0"
+                        ToolTipService.ToolTip="快捷键一览（含不用键盘的三条出口）；再点一次收起"/>
                 <Button x:Name="CloseButton" Content="✕ 退出" Click="Close_Click"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="6">

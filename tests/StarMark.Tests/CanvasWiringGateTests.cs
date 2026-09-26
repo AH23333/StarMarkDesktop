@@ -20,6 +20,8 @@ public sealed class CanvasWiringGateTests
     private const string Service = "src/StarMark.UI/Services/CanvasService.cs";
     private const string Toolbar = "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs";
     private const string ToolbarXaml = "src/StarMark.UI/Views/CanvasToolbarWindow.xaml";
+    private const string Panel = "src/StarMark.UI/Views/CanvasHotkeyPanelWindow.xaml.cs";
+    private const string PanelXaml = "src/StarMark.UI/Views/CanvasHotkeyPanelWindow.xaml";
     private const string App = "src/StarMark.UI/App.xaml.cs";
     private const string MainWindow = "src/StarMark.UI/MainWindow.xaml.cs";
 
@@ -457,7 +459,7 @@ public sealed class CanvasWiringGateTests
         var service = SourceGate.ReadRepoFile(Service);
         var place = SourceGate.MethodBody(service, "private static void PlaceLayersBelowChrome()");
         Assert.Contains("_toolbar?.Hwnd ?? IntPtr.Zero", place);
-        Assert.Contains("screen.Window.PlaceBelow(chrome);", place);
+        Assert.Contains("screen.Window.PlaceBelow(above);", place);
         var placeBody = SourceGate.MethodBody(SourceGate.ReadRepoFile(Layer), "public void PlaceBelow(IntPtr insertAfter)");
         Assert.Contains("CanvasNative.SWP_NOACTIVATE", placeBody);
         Assert.DoesNotContain("HWND_TOPMOST", placeBody);
@@ -551,5 +553,66 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("Report(\"画布没开着\"", require);
         Assert.Contains("BindingText(HotkeyActions.CanvasToggle)", require);   // 键位取自真实绑定，不写死
         Assert.Equal(6, SourceGate.Count(service, "RequireRunning(\""));       // 六条：穿透/撤销/清屏/存图/复制/贴图
+    }
+
+    // ────────── 批次 WD-4：「⌨」快捷键面板 ──────────
+
+    /// <summary>
+    /// 面板是"看一眼"的东西，它最不能犯的错是<b>自己变成第二份事实</b>：
+    /// 行必须从 <see cref="HotkeyActions.Canvas"/> 与当前真实绑定生成。手写一份键位表的结局一定是
+    /// "面板写着 Ctrl+Alt+R，按了没反应"——正是这块面板要防的那件事。
+    /// 另外它<b>自己不穿透</b>（同工具条），并且关掉时要被编排忘掉。
+    /// </summary>
+    [Fact]
+    public void HotkeyPanelIsGenerated_NotHandWritten_AndNeverGoesClickThrough()
+    {
+        var panel = SourceGate.ReadRepoFile(Panel);
+        var xaml = SourceGate.ReadRepoFile(PanelXaml);
+        Assert.Contains("foreach (var action in HotkeyActions.Canvas)", panel);
+        Assert.Contains("HotkeyActions.DisplayName(action)", panel);
+        Assert.Contains("CanvasService.BindingText(action)", panel);
+        Assert.DoesNotContain("Ctrl+Alt", panel);                   // 代码里一处键面字面量都不许留
+        Assert.DoesNotContain("WS_EX_TRANSPARENT", panel);
+        Assert.DoesNotContain("GWL_EXSTYLE", panel);
+        Assert.DoesNotContain("TRANSPARENT", xaml);
+        // WC-4 那条同一课：窗没亮就量＝量到没套模板的空壳尺寸，面板会被截成一条
+        var show = SourceGate.MethodBody(panel, "public void ShowAt(IntRect anchorBelow, IntRect screen, double scale)");
+        Assert.True(show.IndexOf("AppWindow.Show()") < show.IndexOf("Root.UpdateLayout()"), "先亮窗");
+        Assert.True(show.IndexOf("Root.UpdateLayout()") < show.IndexOf("Fit(anchorBelow)"), "排一遍之后才量");
+        Assert.Contains("Math.Clamp(y,", SourceGate.MethodBody(panel, "private void Fit(IntRect anchorBelow)"));
+        // 关掉的三条路：面板上那颗 ✕、⌨ 再点一次、退出画布。前两条走这里，最后一条要求"忘得掉"
+        Assert.Contains("Closed += (_, _) => CanvasService.PanelClosed(this);", panel);
+        Assert.Contains("CanvasService.HideHotkeyPanel();", SourceGate.MethodBody(panel, "private void Close_Click"));
+    }
+
+    /// <summary>
+    /// 定序是一条链而不是一次提层：<b>工具条 → 面板 → 画布 → 下层应用</b>。
+    /// 面板若排在工具条之上，"再点一次 ⌨ 收起"那颗就会被自己的面板挡住（面板正好长在它下面）。
+    /// </summary>
+    [Fact]
+    public void ChromeOrderIsOneChain_ToolbarThenPanelThenCanvas()
+    {
+        var service = SourceGate.ReadRepoFile(Service);
+        var place = SourceGate.MethodBody(service, "private static void PlaceLayersBelowChrome()");
+        Assert.Contains("_panel.PlaceUnder(chrome);", place);
+        Assert.Contains("above = _panel.Hwnd;", place);
+        Assert.Contains("screen.Window.PlaceBelow(above);", place);
+        Assert.True(place.IndexOf("_panel.PlaceUnder") < place.IndexOf("PlaceBelow(above)"),
+            "面板先归位，画布再插到面板之下");
+        var close = SourceGate.MethodBody(service, "private static void CloseToolbar()");
+        Assert.True(close.IndexOf("HideHotkeyPanel();") < close.IndexOf("_toolbar is null"),
+            "收面板要早于那句提前返回：工具条已经没了时，面板更不能留在屏幕上");
+        Assert.Contains("StateChanged?.Invoke();",
+            SourceGate.MethodBody(service, "public static void PanelClosed(CanvasHotkeyPanelWindow panel)"));
+    }
+
+    /// <summary>面板上的键位文本取自真实绑定；读不到时说"未绑定"，绝不回一个看起来对的假键位。</summary>
+    [Fact]
+    public void BindingTextFallsBackToUnbound_NeverToABogusKey()
+    {
+        var text = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "public static string BindingText(string action)");
+        Assert.Contains("gesture is { IsEmpty: false } bound", text);
+        Assert.Contains("HotkeyDisplay.Display(bound)", text);
+        Assert.Equal(3, SourceGate.Count(text, "\"未绑定\""));      // 没设置 / 没绑定 / 抛异常：三条兜底路都不能编出键位
     }
 }

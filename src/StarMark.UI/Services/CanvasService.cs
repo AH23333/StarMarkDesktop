@@ -727,23 +727,87 @@ public static class CanvasService
     }
 
     /// <summary>
-    /// 定序：工具条（以及快捷键面板）永远压在画布之上，画布再压住下层应用。
+    /// 快捷键面板（工具条上那颗「⌨」调出来）。<b>它跟工具条一样不参与穿透</b>，
+    /// 定序时排在"工具条之下、画布之上"——它是来看一眼的，不该挡住手边的按钮。
+    /// </summary>
+    private static CanvasHotkeyPanelWindow? _panel;
+
+    /// <summary>
+    /// 「⌨」那颗按钮：开／收快捷键面板。走到"画布没开着"这一支说明状态已经不对了
+    /// （这颗按钮只可能在画布里出现）——仍然要说出来，不能静默。
+    /// </summary>
+    public static void ToggleHotkeyPanel()
+    {
+        if (_panel is not null) { HideHotkeyPanel(); return; }
+        if (!_running || Screens.Count == 0 || _toolbar is null)
+        {
+            Report("画布已经关了", "快捷键面板是画布的一部分，先重新打开屏幕画布");
+            return;
+        }
+        try
+        {
+            var anchor = WindowInterop.GetWindowRect(_toolbar);
+            _panel = new CanvasHotkeyPanelWindow();
+            _panel.ShowAt(new IntRect(anchor.X, anchor.Y, anchor.Width, anchor.Height),
+                Screens[0].Bounds, Screens[0].Scale);
+            PlaceLayersBelowChrome();
+            StateChanged?.Invoke();           // 那颗「⌨」要亮起来，否则"再点一次收起"看不出来
+        }
+        catch (Exception ex)
+        {
+            _panel = null;
+            StarLog.Error("[Canvas] 快捷键面板没出现（工具条与热键都还在）", ex);
+            Report("快捷键面板没打开", ex.Message);
+        }
+    }
+
+    /// <summary>面板是否开着——工具条那颗「⌨」据此画高亮，不然"再点一次收起"没有交代。</summary>
+    public static bool IsHotkeyPanelOpen => _panel is not null;
+
+    /// <summary>收掉面板（画布继续开着——这块面板只是"看一眼"）。</summary>
+    public static void HideHotkeyPanel()
+    {
+        if (_panel is null) return;
+        try { _panel.ClosePanel(); }
+        catch (Exception ex) { StarLog.Warn($"[Canvas] 快捷键面板没收掉：{ex.Message}"); }
+        _panel = null;
+        StateChanged?.Invoke();
+    }
+
+    /// <summary>面板自己关掉了（✕、退出画布、系统收尾）：编排这边必须忘掉它，不然「⌨」再点就打不开。</summary>
+    public static void PanelClosed(CanvasHotkeyPanelWindow panel)
+    {
+        if (!ReferenceEquals(_panel, panel)) return;
+        _panel = null;
+        StateChanged?.Invoke();       // 让那颗按钮的高亮跟着掉回去
+    }
+
+    /// <summary>
+    /// 定序：工具条 → 快捷键面板 → 画布 → 下层应用，一条链显式排出来。
     /// <para>
     /// <b>不能只"提"工具条</b>：它本来就在 topmost 带里，对这样的窗口再传一次
     /// <c>HWND_TOPMOST</c> 只换带、不在带内重排（＝什么都没做）。真机症状就是
     /// "按过穿透／右键之后，工具条一颗按钮都点不动"——而工具条是唯一看得见的出口。
-    /// 所以这里反过来做：把每块画布显式插到工具条<b>之下</b>，一次定序，不靠运气。
+    /// 所以这里反过来做：把每块画布显式插到面板之下、面板插到工具条之下，一次定序，不靠运气。
     /// </para>
     /// </summary>
     private static void PlaceLayersBelowChrome()
     {
         var chrome = _toolbar?.Hwnd ?? IntPtr.Zero;
         if (chrome == IntPtr.Zero) return;
-        foreach (var screen in Screens) screen.Window.PlaceBelow(chrome);
+        var above = chrome;
+        if (_panel is not null)
+        {
+            _panel.PlaceUnder(chrome);          // 面板在工具条之下：两个都要点得到，但按钮排在更上面
+            above = _panel.Hwnd;                // 画布压在面板之下
+        }
+        foreach (var screen in Screens) screen.Window.PlaceBelow(above);
     }
 
     private static void CloseToolbar()
     {
+        // 面板挂在工具条下面：条子收了还留着面板，它就成了一块"没有主人的浮窗"（退出画布后仍在屏幕上）
+        HideHotkeyPanel();
         if (_toolbar is null) return;
         try { _toolbar.CloseToolbar(); }
         catch (Exception ex) { StarLog.Warn($"[Canvas] 工具条没收掉：{ex.Message}"); }

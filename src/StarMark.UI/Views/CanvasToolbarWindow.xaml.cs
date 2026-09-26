@@ -169,6 +169,9 @@ public sealed partial class CanvasToolbarWindow : Window
 
     private void Copy_Click(object sender, RoutedEventArgs e) => CanvasService.SnapshotToClipboard();
 
+    /// <summary>「⌨」：开／收快捷键面板（发起人点名的兜底——"防止忘记快捷键，随时能打开查看"）。</summary>
+    private void Keys_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleHotkeyPanel();
+
     private void Close_Click(object sender, RoutedEventArgs e) => CanvasService.Stop();
 
     private void Colour_Click(object sender, RoutedEventArgs e)
@@ -223,6 +226,7 @@ public sealed partial class CanvasToolbarWindow : Window
         Highlight(ThickButton, CanvasService.WidthStep == 2);
         Highlight(ThroughButton, CanvasService.IsClickThrough, strong: false);
         Highlight(HaloButton, CanvasService.HaloEnabled, strong: false);
+        Highlight(KeysButton, CanvasService.IsHotkeyPanelOpen, strong: false);
         for (var index = 0; index < _colourButtons.Count; index++)
             _colourButtons[index].Background = index == CanvasService.ColorIndex ? ActiveBrush : IdleBrush;
 
