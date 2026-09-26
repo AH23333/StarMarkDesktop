@@ -476,6 +476,19 @@ public sealed class CanvasInkTests
 
     // ────────── 小工具 ──────────
 
+    /// <summary>
+    /// §16.5.2 三态判据的<b>方向</b>（批次 WF-1 的真机教训：这条写反时代码全绿而功能坏着）。
+    /// 画笔／橡皮选完＝<b>不</b>穿透（要在板上留痕、要能反复改）；荧光笔选完＝<b>保持</b>穿透
+    /// （"按住才有、松开即透"）。反向的两种症状分别是"点画笔永远画不上、状态一直说自己是穿透"
+    /// 与"拿荧光笔却把整块屏的鼠标吃掉"。
+    /// </summary>
+    [Theory]
+    [InlineData(CanvasTool.Pen, false)]
+    [InlineData(CanvasTool.Eraser, false)]
+    [InlineData(CanvasTool.Highlighter, true)]
+    public void SelectingAToolDecidesWhetherTheCanvasStaysClickThrough(CanvasTool tool, bool clickThrough)
+        => Assert.Equal(clickThrough, CanvasModes.IsClickThroughAfter(tool));
+
     private static CanvasStroke StrokeFrom(int x, int y, int to, int? toY = null, CanvasTool tool = CanvasTool.Pen)
     {
         var width = tool == CanvasTool.Eraser ? CanvasWidths.EraserDiameter : tool == CanvasTool.Highlighter ? 9 : Width;

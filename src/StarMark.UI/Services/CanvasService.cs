@@ -253,15 +253,15 @@ public static class CanvasService
     // ────────── 工具与动作（工具条／热键／托盘都走这里）──────────
 
     /// <summary>
-    /// 选工具＝顺带决定这一态拦不拦鼠标（规格 §16.5.2 的关键分岔）：
-    /// <b>画笔/橡皮要留痕、要能反复改 ⇒ 进绘制态（拦截）；荧光笔是"按住才有"的瞬时轨迹 ⇒ 回穿透态</b>。
-    /// 把这两件事塞进同一个模式开关正是冲突的来源。
+    /// 选工具＝顺带决定这一态拦不拦鼠标（规格 §16.5.2 的关键分岔）。<b>方向判据不在这里现写</b>，
+    /// 由 <see cref="CanvasModes.IsClickThroughAfter"/> 给（纯函数，可单测）：把两支笔塞进同一个模式
+    /// 开关正是冲突的来源，而布尔表达式写反在这里编译不过不了真机——它只会变成"点画笔永远画不上"。
     /// </summary>
     public static void SelectTool(CanvasTool tool)
     {
         CommitOpenStroke();                       // 先收手上那条：不然它会接到新工具的设置上
         _tool = tool;
-        SetClickThrough(tool != CanvasTool.Highlighter);
+        SetClickThrough(CanvasModes.IsClickThroughAfter(tool));
     }
 
     /// <summary>再点当前选中的笔＝收笔回穿透态（与截图/贴图那条"再点取消选择"同一交互语言）。</summary>

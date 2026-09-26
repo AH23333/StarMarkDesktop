@@ -358,13 +358,21 @@ public sealed class CanvasWiringGateTests
     /// <summary>
     /// 选工具＝顺带决定拦不拦鼠标，<b>而"再点当前那支笔"要能把鼠标交回去</b>（与截图/贴图同一交互语言：
     /// 再点已选中的工具＝取消选择）。把两支笔塞进同一个模式开关是 §16.5.1 点名的冲突来源。
+    /// <para>
+    /// <b>批次 WF-1 的教训就钉在这里</b>：原先这条闸门钉的是 <c>SetClickThrough(tool != Highlighter)</c>——
+    /// 一个方向写反的表达式（<c>SetClickThrough(true)</c> 是"加 WS_EX_TRANSPARENT"＝穿透开）。
+    /// 它编译得过、也过得了"看起来在测这件事"的断言，真机症状却是"点画笔永远画不上、状态一直说自己
+    /// 是穿透"，同时"点荧光笔反倒把整块屏的鼠标吃掉"。所以接线层只准钉<b>那条纯函数的调用</b>，
+    /// 反向写法直接钉成禁止，方向本身交给 <c>CanvasInkTests</c> 的三臂单测管。
+    /// </para>
     /// </summary>
     [Fact]
     public void ToolChoiceDecidesTheState_AndRepeatingItHandsTheMouseBack()
     {
         var service = SourceGate.ReadRepoFile(Service);
         var select = SourceGate.MethodBody(service, "public static void SelectTool(CanvasTool tool)");
-        Assert.Contains("SetClickThrough(tool != CanvasTool.Highlighter);", select);
+        Assert.Contains("SetClickThrough(CanvasModes.IsClickThroughAfter(tool));", select);
+        Assert.DoesNotContain("tool != CanvasTool.Highlighter", select);
         var toggle = SourceGate.MethodBody(service, "public static void ToggleTool(CanvasTool tool)");
         Assert.Contains("if (_tool == tool && !_clickThrough) SetClickThrough(true);", toggle);
         Assert.Contains("else SelectTool(tool);", toggle);
