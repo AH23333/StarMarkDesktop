@@ -119,13 +119,20 @@ public sealed partial class CanvasToolbarWindow : Window
     }
 
     /// <summary>
-    /// 重新提到最上层。<b>必须用 HWND_TOP 而不是 HWND_TOPMOST</b>：这条窗本来就在 topmost 带里，
-    /// 对这样的窗口再传 HWND_TOPMOST 只"换带"、不在带内重排＝什么都没做
-    /// （真机症状：画布压在工具条上面，条上每颗按钮都点不动，而它是唯一看得见的出口）。
+    /// 压在画布之上。<b>两发 SetWindowPos，各管一件事</b>（批次 WD-7 的真机教训）：
+    /// ① <c>HWND_TOPMOST</c> 只负责<b>进带</b>——WinUI 窗生下来不在 topmost 带里，只传 HWND_TOP 的话
+    ///    它永远留在普通层，于是任何应用一激活就把条子盖住（症状："选了画笔后菜单点不动"），
+    ///    而且把这样的窗当 <c>hwndInsertAfter</c> 递给画布，还会<b>把画布一起拽出 topmost 带</b>
+    ///    （Win32 文档："If a topmost window is repositioned … after any non-topmost window, it is no longer topmost"）
+    ///    ——那正是"绘制态下鼠标还在动桌面应用"的成因；
+    /// ② <c>HWND_TOP</c> 才负责<b>带内重排</b>：对已经在带里的窗再传 TOPMOST 只换带不重排＝什么都没做。
     /// </summary>
     public void RaiseAboveCanvas()
     {
-        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), WindowInterop.HWND_TOP,
+        var hwnd = WindowInterop.GetHwnd(this);
+        WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOPMOST, 0, 0, 0, 0,
+            WindowInterop.SWP_NOMOVE | WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOACTIVATE);
+        WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOP,
             0, 0, 0, 0,
             WindowInterop.SWP_NOMOVE | WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOACTIVATE);
     }
@@ -245,6 +252,9 @@ public sealed partial class CanvasToolbarWindow : Window
     /// </summary>
     private string StatusText()
     {
+        // 刚发生过"让位"就先说这一句：用户此刻最需要知道的是"为什么刚才还能画"，
+        // 而不是那行常态说明（下一次自己动工具/穿透时这句话就翻篇）
+        if (CanvasService.Notice is { } note) return note;
         var tool = CanvasService.Tool;
         var ink = $"{ToolName(tool)} · {CanvasService.WidthStep + 1} 档 · {CanvasService.Palette[CanvasService.ColorIndex].Name}";
         if (!CanvasService.IsClickThrough) return $"绘制中（鼠标归画布）：{ink}。点「穿透」或右键交出鼠标";

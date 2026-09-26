@@ -53,11 +53,16 @@ public sealed partial class CanvasHotkeyPanelWindow : Window
     /// 把自己插到 <paramref name="insertAbove"/> <b>之下</b>（同一 topmost 带内）。
     /// Win32 的 <c>hwndInsertAfter</c> 原话是"the window to <b>precede</b> the positioned window
     /// in the Z order"，Z 序自上而下数 ⇒ 传进来的那个在上面。
+    /// <para>先来一发 <c>HWND_TOPMOST</c> 建立带成员资格：WinUI 窗生下来不在 topmost 带里，
+    /// 只传 HWND_TOP 会一直留在普通层，一有应用激活就把这块面板盖住（与工具条同一教训，批次 WD-7）。</para>
     /// </summary>
     public void PlaceUnder(IntPtr insertAbove)
     {
         if (insertAbove == IntPtr.Zero) return;
-        WindowInterop.SetWindowPos(Hwnd, insertAbove, 0, 0, 0, 0,
+        var hwnd = Hwnd;
+        WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOPMOST, 0, 0, 0, 0,
+            WindowInterop.SWP_NOMOVE | WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOACTIVATE);
+        WindowInterop.SetWindowPos(hwnd, insertAbove, 0, 0, 0, 0,
             WindowInterop.SWP_NOMOVE | WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOACTIVATE);
     }
 

@@ -235,6 +235,8 @@ public static class CanvasService
         // 下次进来还是穿透态（§16.5.2 的默认态）：把"拦截全屏"留成默认，等于让每次按热键都像把电脑弄死
         _clickThrough = true;
         _press = Press.None;
+        Notice = null;
+        _yieldedTo = IntPtr.Zero;
         StateChanged?.Invoke();
         StarLog.Info("[Canvas] 画布模式关闭");
     }
@@ -290,6 +292,8 @@ public static class CanvasService
     public static void SetClickThrough(bool on)
     {
         _clickThrough = on;
+        Notice = null;                                // 用户自己动手了，上一条"为什么让位"就该翻篇
+        _yieldedTo = IntPtr.Zero;                     // 也允许对同一个窗再说一次（不然改了也没反馈）
         CommitOpenStroke();
         foreach (var screen in Screens)
         {
@@ -482,6 +486,47 @@ public static class CanvasService
         foreach (var s in Screens) { s.Window.SetClickThrough(true); s.Window.SetDrawCursor(false); }
     }
 
+    /// <summary>
+    /// "画布主动把鼠标交回去了"的原因（工具条状态行跟着显示一次）。没有这句话，用户只会觉得
+    /// "刚才能画现在不能画，这软件自己抽风了"。
+    /// </summary>
+    public static string? Notice { get; private set; }
+
+    /// <summary>
+    /// <b>绘制态每一帧问一句实话：光标这一层到底是谁？</b>（发起人点名的"没有实时监测光标位于哪一层"）
+    /// <para>
+    /// 画布声称"绘制中"却不再是最上层时，那一次按下会同时被两家用：下面那个应用把它当成框选/选文字，
+    /// 我们这边还可能去抢着画——真机反馈的"画布和应用交互冲突"就是这么来的。最常见的触发是
+    /// 按 Win 呼出开始菜单/搜索、系统弹窗、别的全屏应用——它们都是能盖住我们那块玻璃的顶层窗。
+    /// </para>
+    /// <para>
+    /// 判据是逐像素问 <see cref="LayeredCanvasWindow.WindowAt"/>（不是猜前台窗口）：答案只允许是
+    /// 本屏玻璃、工具条、快捷键面板三者之一，其余一律<b>主动交回鼠标并说明原因</b>。
+    /// 穿透态跳过这条（那时"不是我们"是设计本意）；手上正有一笔也跳过（那一笔已经归画布画完）。
+    /// </para>
+    /// </summary>
+    private static void YieldIfNotOurLayer(int cursorX, int cursorY)
+    {
+        if (_clickThrough || _press != Press.None || !_running) return;
+        var hit = LayeredCanvasWindow.WindowAt(cursorX, cursorY);
+        if (hit == IntPtr.Zero || hit == _yieldedTo) return;               // 取不到不下判断；同一个窗只说一次
+        if (hit == _toolbar?.Hwnd || hit == _panel?.Hwnd) return;          // 条子与面板本来就压在画布之上
+        foreach (var screen in Screens)
+            if (screen.Window.Handle == hit) return;                       // 还是我们的玻璃：一切正常
+        var who = WindowInterop.GetWindowThreadProcessId(hit, out var pid) == 0 ? 0u : pid;
+        StarLog.Warn($"[Canvas] 绘制态发现光标那一层已经不是画布（命中窗口属于进程 {who}），主动交回鼠标");
+        SetClickThrough(true);
+        Notice = who == (uint)Environment.ProcessId
+            ? "已自动交回鼠标：本程序的另一个窗口（组件／主窗口）盖住了画布，要点「穿透」或再点「画笔」决定谁在上"
+            : "已自动交回鼠标：另一个程序的窗口（例如按 Win 呼出的开始菜单）盖住了画布；要接着画请再点「画笔」";
+        // 同一件事只说一次：不然那个窗一直压在上面的话，每帧都会"让位 + 一条 WARN"，
+        // 状态行还会来回跳。用户下次自己动手（SetClickThrough）时这个记号就清掉。
+        _yieldedTo = hit;
+        StateChanged?.Invoke();
+    }
+
+    private static IntPtr _yieldedTo;
+
     private static Screen? ScreenAt(PixelPoint point)
         => Screens.FirstOrDefault(s => s.Bounds.X <= point.X && point.X < s.Bounds.Right
             && s.Bounds.Y <= point.Y && point.Y < s.Bounds.Bottom);
@@ -505,6 +550,9 @@ public static class CanvasService
         if (!_running || Screens.Count == 0) return;
         var now = Environment.TickCount64;
         WindowInterop.GetCursorPos(out var cursor);
+        // 先验层，再决定这一按要不要抢：别人已经把最上层占走了还去"按住即画"，
+        // 就会同时出现"应用在框选/选文字" + "画布在画"两件事（真机反馈的交互冲突）
+        YieldIfNotOurLayer(cursor.X, cursor.Y);
         // 穿透态收不到鼠标消息，"这一按是不是要画"只能在这里看按键状态（§16.5.2 的零摩擦入口）
         PollPress(cursor.X, cursor.Y);
         foreach (var screen in Screens)

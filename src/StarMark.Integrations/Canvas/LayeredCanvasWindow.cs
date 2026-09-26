@@ -152,6 +152,13 @@ public sealed class LayeredCanvasWindow : IDisposable
     public IntPtr Handle => _hwnd;
 
     /// <summary>
+    /// 屏幕坐标上这一点<b>当前归哪个窗口</b>（绘制态自校验用：那时答案必须是这块玻璃或条子自己）。
+    /// 穿透态下本窗被 <c>WS_EX_TRANSPARENT</c> 跳过，结果必然是别人，所以这条探测只在绘制态说话。
+    /// </summary>
+    public static IntPtr WindowAt(int screenX, int screenY)
+        => CanvasNative.WindowFromPoint(new NativeMethods.POINT { X = screenX, Y = screenY });
+
+    /// <summary>
     /// 把自己插到某个窗口<b>之下</b>（同一 topmost 带内）。
     /// <para>
     /// 工具条"永远在画布之上"不能只靠提自己：对已在 topmost 带里的窗口再传 HWND_TOPMOST
@@ -167,6 +174,11 @@ public sealed class LayeredCanvasWindow : IDisposable
     public void PlaceBelow(IntPtr insertAfter)
     {
         if (_disposed || insertAfter == IntPtr.Zero) return;
+        // <b>不能被一个非 topmost 的窗"接走"</b>：Win32 明写"topmost 窗被排到任何非 topmost 窗之后
+        // 就不再是 topmost"。真机症状是整块画布掉出 topmost 带 ⇒ 绘制态下鼠标其实还在动桌面应用，
+        // 而工具条也点不到（它自己那时有也不在带里）。带成员资格只能靠 TOPMOST 建立，不靠我们口头保证。
+        var ex = (ulong)NativeMethods.GetWindowLongPtrW(insertAfter, CanvasNative.GWL_EXSTYLE).ToInt64();
+        if ((ex & CanvasNative.WS_EX_TOPMOST) == 0) return;
         CanvasNative.SetWindowPos(_hwnd, insertAfter, 0, 0, 0, 0,
             CanvasNative.SWP_NOMOVE | CanvasNative.SWP_NOSIZE | CanvasNative.SWP_NOACTIVATE);
     }

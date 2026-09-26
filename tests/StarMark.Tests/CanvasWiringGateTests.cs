@@ -447,24 +447,28 @@ public sealed class CanvasWiringGateTests
     /// 的玻璃，它会把这些点击全吃下去。可靠做法是反过来：把画布显式插到工具条<b>之下</b>。
     /// </summary>
     [Fact]
-    public void ChromeStaysAboveTheCanvas_ByPushingTheCanvasDown_NotByReTopmostingItself()
+    public void ChromeEntersTheTopmostBandThenReordersWithinIt_CanvasNeverDemoted()
     {
         var native = SourceGate.ReadRepoFile(Native);
         Assert.Contains("public static readonly IntPtr HWND_TOP = IntPtr.Zero;", native);
         var toolbar = SourceGate.ReadRepoFile(Toolbar);
         var raise = SourceGate.MethodBody(toolbar, "public void RaiseAboveCanvas()");
-        Assert.Contains("WindowInterop.HWND_TOP", raise);
-        Assert.DoesNotContain("HWND_TOPMOST", raise);
-        // 整份工具条都不该再出现 HWND_TOPMOST：那三处（提层／定位／拖动）要的都是"带内重排"
-        Assert.DoesNotContain("WindowInterop.HWND_TOPMOST", toolbar);
+        Assert.Contains("WindowInterop.HWND_TOPMOST", raise);       // 先进带
+        Assert.Contains("WindowInterop.HWND_TOP,", raise);           // 再带内重排
+        Assert.True(raise.IndexOf("HWND_TOPMOST") < raise.IndexOf("WindowInterop.HWND_TOP,"),
+            "顺序反了等于没提层");
+        var under = SourceGate.MethodBody(SourceGate.ReadRepoFile(Panel), "public void PlaceUnder(IntPtr insertAbove)");
+        Assert.Contains("WindowInterop.HWND_TOPMOST", under);
+        Assert.Contains("WindowInterop.SetWindowPos(hwnd, insertAbove", under);
 
         var service = SourceGate.ReadRepoFile(Service);
         var place = SourceGate.MethodBody(service, "private static void PlaceLayersBelowChrome()");
         Assert.Contains("_toolbar?.Hwnd ?? IntPtr.Zero", place);
         Assert.Contains("screen.Window.PlaceBelow(above);", place);
+        // 画布这一侧也得自保：递进来一个非 topmost 的窗就拒绝，绝不跟着掉出 topmost 带
         var placeBody = SourceGate.MethodBody(SourceGate.ReadRepoFile(Layer), "public void PlaceBelow(IntPtr insertAfter)");
         Assert.Contains("CanvasNative.SWP_NOACTIVATE", placeBody);
-        Assert.DoesNotContain("HWND_TOPMOST", placeBody);
+        Assert.Contains("if ((ex & CanvasNative.WS_EX_TOPMOST) == 0) return;", placeBody);
         // 三个时刻定序：工具条出现、穿透态切换、以及工具条每次刷新自己提一次
         Assert.Contains("PlaceLayersBelowChrome();", SourceGate.MethodBody(service, "public static void SetClickThrough(bool on)"));
         Assert.Contains("PlaceLayersBelowChrome();", SourceGate.MethodBody(service, "private static void ShowToolbar()"));
@@ -477,6 +481,38 @@ public sealed class CanvasWiringGateTests
     {
         var tick = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static void OnFrameTick");
         Assert.Contains("if (_tool == CanvasTool.Highlighter && screen.Trail.CursorHaloEnabled", tick);
+    }
+
+    /// <summary>
+    /// 绘制态必须<b>每帧逐像素核实"光标这一层是谁"</b>（发起人点名的"没有实时监测光标位于哪一层"）：
+    /// 画布声称"绘制中"却不再是顶层时，一次按下会被两家用——下面的应用当成框选/选文字，我们还在抢着画，
+    /// 这就是真机反馈的"画布和应用交互冲突"。判据要窄：只允许命中本屏玻璃、工具条、面板三者，
+    /// 其余一律主动交回鼠标；穿透态与"手上正有一笔"时都不判。
+    /// </summary>
+    [Fact]
+    public void DrawModeProbesTheLayerUnderTheCursorEveryFrameAndYields()
+    {
+        var service = SourceGate.ReadRepoFile(Service);
+        var yield = SourceGate.MethodBody(service, "private static void YieldIfNotOurLayer(int cursorX, int cursorY)");
+        Assert.Contains("if (_clickThrough || _press != Press.None || !_running) return;", yield);
+        Assert.Contains("LayeredCanvasWindow.WindowAt(cursorX, cursorY)", yield);   // 逐像素问，不猜前台窗口
+        Assert.Contains("hit == _toolbar?.Hwnd || hit == _panel?.Hwnd", yield);
+        Assert.Contains("screen.Window.Handle == hit", yield);
+        Assert.Contains("hit == IntPtr.Zero || hit == _yieldedTo", yield);           // 同一个窗只说一次，不每帧刷
+        Assert.Contains("SetClickThrough(true);", yield);
+        Assert.Contains("Notice = ", yield);
+        var tick = SourceGate.MethodBody(service, "private static void OnFrameTick");
+        Assert.True(tick.IndexOf("YieldIfNotOurLayer(") < tick.IndexOf("PollPress("),
+            "先验层再决定抢不抢：反过来就是应用与画布同时接手同一次按下");
+        // 这条探测只在绘制态有意义（穿透态本窗被 WS_EX_TRANSPARENT 跳过，答案必然是别人）
+        Assert.Contains("public static IntPtr WindowAt(int screenX, int screenY)",
+            SourceGate.ReadRepoFile(Layer));
+        Assert.Contains("public static extern IntPtr WindowFromPoint(NativeMethods.POINT pt);",
+            SourceGate.ReadRepoFile(Native));
+        // 让位的话要说给用户听，且用户自己动手后翻篇
+        Assert.Contains("if (CanvasService.Notice is { } note) return note;",
+            SourceGate.MethodBody(SourceGate.ReadRepoFile(Toolbar), "private string StatusText()"));
+        Assert.Contains("Notice = null;", SourceGate.MethodBody(service, "public static void SetClickThrough(bool on)"));
     }
 
     // ────────── 批次 WD-3：画布动作的全局热键（发起人点名"九个全要，带修饰键"）──────────

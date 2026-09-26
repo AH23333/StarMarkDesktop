@@ -2,6 +2,7 @@
 using System;
 using System.Runtime.InteropServices;
 using StarMark.Abstractions.Capture;
+using StarMark.Integrations.SystemTray;   // POINT 的结构声明在那边，不再抄第二份（抄一次就对不齐一次）
 
 namespace StarMark.Integrations.Canvas;
 
@@ -177,6 +178,14 @@ internal static class CanvasNative
     /// </summary>
     [DllImport("user32.dll")]
     public static extern IntPtr SetCursor(IntPtr hCursor);
+
+    /// <summary>
+    /// 屏幕坐标上这一点"当前归哪个窗口"。分层窗在 <c>WS_EX_TRANSPARENT</c> 开着时会被跳过，
+    /// 所以这条探测只在<b>绘制态</b>有意义（那时我们本来就该是最上面那个）——拿它回答
+    /// "光标这一层到底是谁"，比猜前台窗口准得多。
+    /// </summary>
+    [DllImport("user32.dll")]
+    public static extern IntPtr WindowFromPoint(NativeMethods.POINT pt);
 
     [DllImport("user32.dll")]
     public static extern IntPtr BeginPaint(IntPtr hWnd, out PAINTSTRUCT lpPaint);
