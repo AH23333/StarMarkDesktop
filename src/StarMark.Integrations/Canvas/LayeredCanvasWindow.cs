@@ -80,7 +80,11 @@ public sealed class LayeredCanvasWindow : IDisposable
         Bounds = boundsPhys;
         Width = boundsPhys.Width;
         Height = boundsPhys.Height;
+        // 空白像素 alpha=1（而非 0）：UpdateLayeredWindow 的 hit test 对 alpha=0 的像素
+        // 永远穿透到下层窗口——不设这个的话画布永远收不到鼠标事件，无法绘制。
+        // alpha=1 肉眼不可见但让 hit test 命中本窗；穿透/拦截由 WS_EX_TRANSPARENT 单独控制。
         Pixels = new uint[Width * Height];
+        Array.Fill(Pixels, 0x01000000u);   // BGRA: B=0 G=0 R=0 A=1
 
         EnsureClassRegistered();
         _hwnd = NativeMethods.CreateWindowExW(
