@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using StarMark.Core.Hotkeys;
 using Xunit;
@@ -472,5 +473,83 @@ public sealed class CanvasWiringGateTests
     {
         var tick = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static void OnFrameTick");
         Assert.Contains("if (_tool == CanvasTool.Highlighter && screen.Trail.CursorHaloEnabled", tick);
+    }
+
+    // ────────── 批次 WD-3：画布动作的全局热键（发起人点名"九个全要，带修饰键"）──────────
+
+    /// <summary>
+    /// 十条画布动作各有各的默认键，<b>且必须带 Ctrl+Alt</b>。
+    /// <para>
+    /// 裸键在穿透态下必须留给下层应用（用户要选文本、要翻页），画布一旦吃下裸键就成了"开着画布
+    /// 别的软件都不能用"；而九条不带修饰键的字母键撞键概率极高。键位本身按"这件事叫什么"取字母
+    /// （T=Through、P=Pen、H=Highlighter、R=eRaser、U=Undo、C=Clear、S=Save、K=复制、G=贴图），
+    /// 猜得出比记得住更重要——工具条上那颗「⌨」也随时能把这张表调出来。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void EveryCanvasActionHasItsOwnCtrlAltKey_AndTheLettersMatchTheWords()
+    {
+        var defaults = HotkeyBindings.Defaults();
+        var expected = new Dictionary<string, uint>
+        {
+            [HotkeyActions.CanvasToggle] = 0x44,           // D
+            [HotkeyActions.CanvasClickThrough] = 0x54,     // T
+            [HotkeyActions.CanvasPen] = 0x50,              // P
+            [HotkeyActions.CanvasHighlighter] = 0x48,      // H
+            [HotkeyActions.CanvasEraser] = 0x52,           // R
+            [HotkeyActions.CanvasUndo] = 0x55,             // U
+            [HotkeyActions.CanvasClear] = 0x43,            // C
+            [HotkeyActions.CanvasSave] = 0x53,             // S
+            [HotkeyActions.CanvasCopy] = 0x4B,             // K（C 已被清屏占了）
+            [HotkeyActions.CanvasPin] = 0x47,              // G
+        };
+        Assert.Equal(expected.Keys.OrderBy(k => k, StringComparer.Ordinal),
+            HotkeyActions.Canvas.OrderBy(k => k, StringComparer.Ordinal));   // 目录＝这份表，不漏一条
+        var seen = new HashSet<uint>();
+        foreach (var (action, vk) in expected)
+        {
+            Assert.True(HotkeyActions.IsCanvasAction(action), $"「{action}」不在 canvas. 前缀里——分类会漏掉它");
+            Assert.Equal("屏幕画布", HotkeyActions.CategoryOf(action));
+            var gesture = Assert.Contains(action, defaults);
+            Assert.Equal(vk, gesture.VirtualKey);
+            Assert.Equal(HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.NoRepeat, gesture.Modifiers);
+            Assert.True(seen.Add(vk), $"两条画布动作抢了同一个键（0x{vk:X}）：后注册的那条永远按不出来");
+        }
+    }
+
+    /// <summary>
+    /// <b>动作表里每一颗都得有人接</b>：绑定了却没注册 handler 的症状是"设置页里明晃晃写着 Ctrl+Alt+R，
+    /// 按下去什么也没有"——这条链上最容易漏、也最难自查的一处（注册本身成功，所以没有任何报错）。
+    /// </summary>
+    [Fact]
+    public void EveryActionConstantIsWiredToAHandler_InApp()
+    {
+        var app = SourceGate.ReadRepoFile(App);
+        var constants = typeof(HotkeyActions)
+            .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            .Where(f => f.FieldType == typeof(string))
+            .Select(f => f.Name)
+            .ToList();
+        Assert.True(constants.Count >= 18, $"扫到的动作常量只有 {constants.Count} 条，反射口径是不是错了");
+        foreach (var name in constants)
+            Assert.Contains($"RegisterHandler(HotkeyActions.{name}", app);
+    }
+
+    /// <summary>
+    /// 画布没开着时按"画布内的动作"，<b>三支笔直接把画布开起来</b>（按画笔的人是要画画，不是要先按另一个键），
+    /// 其余六条给一句看得见的原因。"按了没反应"与"功能坏了"在用户眼里是同一件事。
+    /// </summary>
+    [Fact]
+    public void CanvasHotkeysEitherOpenTheBoardOrSayWhyTheyDidNot()
+    {
+        var service = SourceGate.ReadRepoFile(Service);
+        var tool = SourceGate.MethodBody(service, "public static void HotkeyTool(CanvasTool tool)");
+        Assert.Contains("if (!_running) Start();", tool);
+        Assert.Contains("ToggleTool(tool);", tool);
+        Assert.DoesNotContain("Report(", tool);                       // 开不起来时 Start() 已经报过，不再补一条
+        var require = SourceGate.MethodBody(service, "private static void RequireRunning(string what, Action run)");
+        Assert.Contains("Report(\"画布没开着\"", require);
+        Assert.Contains("BindingText(HotkeyActions.CanvasToggle)", require);   // 键位取自真实绑定，不写死
+        Assert.Equal(6, SourceGate.Count(service, "RequireRunning(\""));       // 六条：穿透/撤销/清屏/存图/复制/贴图
     }
 }

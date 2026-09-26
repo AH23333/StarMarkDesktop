@@ -383,6 +383,18 @@ public partial class App : Application
                 hotkey.RegisterHandler(HotkeyActions.ScreenPinToggleHidden, () => { StarMark.UI.Services.PinManager.ToggleHidden(); return Task.CompletedTask; });
                 hotkey.RegisterHandler(HotkeyActions.ScreenPinClickThrough, () => { StarMark.UI.Services.PinManager.ToggleClickThrough(); return Task.CompletedTask; });
                 hotkey.RegisterHandler(HotkeyActions.CanvasToggle, () => { StarMark.UI.Services.CanvasService.Toggle(); return Task.CompletedTask; });
+                // 画布内的九个动作（发起人点名"全部要"）。三支笔没开画布时会先把画布开起来再选那支笔：
+                // 按"画笔"的人是要画画，不是要先按另一个键；其余六条在画布没开时给一句看得见的原因，
+                // 而不是"按了没反应"（那与功能坏了在用户眼里是同一件事）。
+                hotkey.RegisterHandler(HotkeyActions.CanvasClickThrough, () => { StarMark.UI.Services.CanvasService.HotkeyClickThrough(); return Task.CompletedTask; });
+                hotkey.RegisterHandler(HotkeyActions.CanvasPen, () => { StarMark.UI.Services.CanvasService.HotkeyTool(StarMark.Core.Canvas.CanvasTool.Pen); return Task.CompletedTask; });
+                hotkey.RegisterHandler(HotkeyActions.CanvasHighlighter, () => { StarMark.UI.Services.CanvasService.HotkeyTool(StarMark.Core.Canvas.CanvasTool.Highlighter); return Task.CompletedTask; });
+                hotkey.RegisterHandler(HotkeyActions.CanvasEraser, () => { StarMark.UI.Services.CanvasService.HotkeyTool(StarMark.Core.Canvas.CanvasTool.Eraser); return Task.CompletedTask; });
+                hotkey.RegisterHandler(HotkeyActions.CanvasUndo, () => { StarMark.UI.Services.CanvasService.HotkeyUndo(); return Task.CompletedTask; });
+                hotkey.RegisterHandler(HotkeyActions.CanvasClear, () => { StarMark.UI.Services.CanvasService.HotkeyClear(); return Task.CompletedTask; });
+                hotkey.RegisterHandler(HotkeyActions.CanvasSave, () => { StarMark.UI.Services.CanvasService.HotkeySave(); return Task.CompletedTask; });
+                hotkey.RegisterHandler(HotkeyActions.CanvasCopy, () => { StarMark.UI.Services.CanvasService.HotkeyCopy(); return Task.CompletedTask; });
+                hotkey.RegisterHandler(HotkeyActions.CanvasPin, () => { StarMark.UI.Services.CanvasService.HotkeyPin(); return Task.CompletedTask; });
                 foreach (var k in WidgetStorage.AllKinds)
                 {
                     var kind = k;

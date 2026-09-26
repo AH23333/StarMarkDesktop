@@ -153,8 +153,16 @@ public sealed class LayeredCanvasWindow : IDisposable
 
     /// <summary>
     /// 把自己插到某个窗口<b>之下</b>（同一 topmost 带内）。
+    /// <para>
     /// 工具条"永远在画布之上"不能只靠提自己：对已在 topmost 带里的窗口再传 HWND_TOPMOST
-    /// 只换带、不在带内重排（＝没提），所以这里显式把画布按到工具条下面去，一次定序。
+    /// 只换带、不重排（＝没提），所以这里显式把画布按到工具条下面去，一次定序。
+    /// </para>
+    /// <para>
+    /// <b>参数方向别看反</b>：Win32 对 <c>hwndInsertAfter</c> 的原话是"A handle to the window to
+    /// <b>precede</b> the positioned window in the Z order"，而 Z 序是从上往下数（"The topmost window
+    /// ... is the first window in the Z order"）——所以传进来的那个窗口在<b>上面</b>，本窗在它下面。
+    /// 名字读成"插到它之后＝插到它上面"就会把这条链整个反过来，症状是工具条又点不动了。
+    /// </para>
     /// </summary>
     public void PlaceBelow(IntPtr insertAfter)
     {

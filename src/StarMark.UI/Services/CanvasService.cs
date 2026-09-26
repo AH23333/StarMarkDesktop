@@ -7,6 +7,7 @@ using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
 using StarMark.Core.Canvas;
 using StarMark.Core.Capture;
+using StarMark.Core.Hotkeys;
 using StarMark.Integrations.Canvas;
 using StarMark.Integrations.Capture;
 using StarMark.UI.Helpers;
@@ -602,6 +603,61 @@ public static class CanvasService
                 changed = true;
             }
         if (changed) FlushAll();
+    }
+
+    /// <summary>
+    /// 工具类全局键：<b>画布还没开就先把它开起来</b>再选这支笔。讲解的人按"画笔"是要画画，
+    /// 不是要先按另一个键把板子叫出来——多一步就是缺陷（发起人定的口径）。
+    /// 再按同一个键＝收笔回穿透态，与工具条上那颗同一语义。
+    /// </summary>
+    public static void HotkeyTool(CanvasTool tool)
+    {
+        if (!_running) Start();
+        if (!_running) return;            // Start 失败时它自己已经报过原因，这里不再补一条
+        ToggleTool(tool);
+    }
+
+    public static void HotkeyClickThrough() => RequireRunning("交出 / 收回鼠标", () => SetClickThrough(!_clickThrough));
+
+    public static void HotkeyUndo() => RequireRunning("撤销上一笔", Undo);
+
+    public static void HotkeyClear() => RequireRunning("清空笔迹", ClearAll);
+
+    public static void HotkeySave() => RequireRunning("存为图片", SavePng);
+
+    public static void HotkeyCopy() => RequireRunning("复制到剪贴板", SnapshotToClipboard);
+
+    public static void HotkeyPin() => RequireRunning("贴到桌面", SnapshotToPin);
+
+    /// <summary>
+    /// 画布内动作的闸门：<b>板子没开着时按这些键要给一句看得见的原因</b>，不能"按了没反应"——
+    /// 那在用户眼里与功能坏了是同一件事。原因里带上真实的开关键位（用户可能改过，写死 Ctrl+Alt+D 是指错路）。
+    /// </summary>
+    private static void RequireRunning(string what, Action run)
+    {
+        if (!_running)
+        {
+            Report("画布没开着", $"「{what}」要先打开屏幕画布（{BindingText(HotkeyActions.CanvasToggle)}，或托盘菜单「屏幕画布」）");
+            return;
+        }
+        run();
+    }
+
+    /// <summary>某动作当前绑定的键位文本（没绑定／读不到设置时回"未绑定"，绝不回一个假键位）。</summary>
+    public static string BindingText(string action)
+    {
+        try
+        {
+            var settings = App.Services?.GetService(typeof(SettingsStore)) as SettingsStore;
+            if (settings is null) return "未绑定";
+            var gesture = settings.GetHotkeyBindings().GetValueOrDefault(action);
+            return gesture is { IsEmpty: false } bound ? HotkeyDisplay.Display(bound) : "未绑定";
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"[Canvas] 键位文本没取到：{ex.Message}");
+            return "未绑定";
+        }
     }
 
     // ────────── 快照 ──────────

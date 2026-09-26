@@ -57,7 +57,43 @@ public static class HotkeyActions
     /// </summary>
     public const string CanvasToggle = "canvas.toggle";
 
+    /// <summary>
+    /// 画布内的九个动作（发起人点名要"全部带修饰键的全局热键"）。
+    /// <para>
+    /// <b>为什么每个都要占一个全局键位</b>：画布是"不吃键盘的覆盖层"里唯一有键盘诉求的地方——
+    /// 讲解时手在翻页笔与键盘之间换来换去，换工具如果必须先去找工具条点一下，讲的东西就断了。
+    /// 而 §16.5.4 那套裸键（1–6 换色 / E 橡皮 / X 清屏）在这里<b>刻意不做</b>：穿透态下画布收不到键盘，
+    /// 裸键要么得偷偷装全局钩子（与所有应用抢键），要么只在绘制态生效（同一按键两种结果），都更糟。
+    /// </para>
+    /// </summary>
+    public const string CanvasClickThrough = "canvas.through";
+    public const string CanvasPen = "canvas.pen";
+    public const string CanvasHighlighter = "canvas.highlighter";
+    public const string CanvasEraser = "canvas.eraser";
+    public const string CanvasUndo = "canvas.undo";
+    public const string CanvasClear = "canvas.clear";
+    public const string CanvasSave = "canvas.save";
+    public const string CanvasCopy = "canvas.copy";
+    public const string CanvasPin = "canvas.pin";
+
+    /// <summary>画布动作的前缀（分类与"总开关关掉时整批不注册"都按它判，见 <see cref="IsCanvasAction"/>）。</summary>
+    private const string CanvasPrefix = "canvas.";
+
+    /// <summary>这条动作属于屏幕画布吗（关掉画布总开关时整批不注册，也不在设置页出现）。</summary>
+    public static bool IsCanvasAction(string action) => action.StartsWith(CanvasPrefix);
+
     private const string LayoutPrefix = "layout.apply:";
+
+    /// <summary>
+    /// 屏幕画布的全部动作，一处定序：<b>开关在最前，之后是"交回鼠标 → 三支笔 → 撤销/清屏 → 三个产出"</b>。
+    /// 设置页那节与画布上的快捷键面板都枚举这份表——两处各写一遍，迟早和注册表分岔（那时症状是
+    /// "面板上写着 Ctrl+Alt+R，按了没反应"）。
+    /// </summary>
+    public static IReadOnlyList<string> Canvas { get; } = new[]
+    {
+        CanvasToggle, CanvasClickThrough, CanvasPen, CanvasHighlighter, CanvasEraser,
+        CanvasUndo, CanvasClear, CanvasSave, CanvasCopy, CanvasPin,
+    };
 
     public static string WidgetCreate(WidgetKind k) => $"widget.create:{k}";
     public static string WidgetShow(WidgetKind k) => $"widget.show:{k}";
@@ -80,7 +116,7 @@ public static class HotkeyActions
         if (action is MainToggle or MainShow or MainHide) return "主界面";
         if (action is WidgetsToggleAll or WidgetsShowAll or WidgetsHideAll or WidgetsToggleTopmostAll) return "组件总控";
         if (action.StartsWith("screen.")) return "截图 / 贴图 / 识字";
-        if (action == CanvasToggle) return "屏幕画布";
+        if (IsCanvasAction(action)) return "屏幕画布";
         if (IsLayoutAction(action)) return "布局方案";
         foreach (var k in WidgetStorage.AllKinds)
             if (action == WidgetCreate(k) || action == WidgetShow(k) || action == WidgetHide(k) || action == WidgetToggle(k))
@@ -107,8 +143,8 @@ public static class HotkeyActions
             MainToggle, MainShow, MainHide,
             WidgetsToggleAll, WidgetsShowAll, WidgetsHideAll, WidgetsToggleTopmostAll,
             ScreenCapture, ScreenPin, ScreenPinToggleHidden, ScreenPinClickThrough, ScreenOcr,
-            CanvasToggle,
         };
+        list.AddRange(Canvas);
         foreach (var k in WidgetStorage.AllKinds)
         {
             list.Add(WidgetToggle(k));
@@ -140,6 +176,15 @@ public static class HotkeyActions
             case ScreenPinClickThrough: return "切换贴图鼠标穿透（全部）";
             case ScreenOcr: return "识字（框选区域并复制文字）";
             case CanvasToggle: return "屏幕画布（开启 / 关闭）";
+            case CanvasClickThrough: return "画布 · 交出 / 收回鼠标（穿透切换）";
+            case CanvasPen: return "画布 · 画笔（留痕，未开画布时先开）";
+            case CanvasHighlighter: return "画布 · 荧光笔（按住即画、松开即透）";
+            case CanvasEraser: return "画布 · 橡皮";
+            case CanvasUndo: return "画布 · 撤销上一笔";
+            case CanvasClear: return "画布 · 清空笔迹";
+            case CanvasSave: return "画布 · 存为图片（屏幕 + 笔迹）";
+            case CanvasCopy: return "画布 · 复制到剪贴板（屏幕 + 笔迹）";
+            case CanvasPin: return "画布 · 贴到桌面（屏幕 + 笔迹）";
         }
 
         if (IsLayoutAction(action))

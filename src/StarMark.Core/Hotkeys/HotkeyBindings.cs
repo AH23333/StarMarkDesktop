@@ -50,30 +50,58 @@ public static class HotkeyBindings
     public const uint VirtualKeyD = 0x44;
 
     /// <summary>
+    /// 画布内九个动作的默认键（A–Z 的虚拟键码就是其 ASCII 码，这里逐个写出来是为了让
+    /// <see cref="Defaults"/> 那一段能读出"这条字母对应哪件事"）。
+    /// <para>
+    /// <b>九条全部带 Ctrl+Alt</b>：不带修饰键的裸键在穿透态下必须留给下层应用（用户要选文本、要翻页），
+    /// 而画布吃下 Ctrl+Alt+字母几乎不与人撞——唯一常见的是 Ctrl+Alt+T（某些终端/显卡面板用它），
+    /// 撞上时按批次 KL 的口径"只提示、不阻碍注册"，用户在设置页里一键改掉即可。
+    /// </para>
+    /// </summary>
+    public const uint VirtualKeyT = 0x54, VirtualKeyP = 0x50, VirtualKeyH = 0x48,
+        VirtualKeyR = 0x52, VirtualKeyU = 0x55, VirtualKeyC = 0x43, VirtualKeyS = 0x53,
+        VirtualKeyK = 0x4B, VirtualKeyG = 0x47;
+
+    /// <summary>
     /// 出厂默认：主界面呼出/关闭 = Ctrl+Alt+Space。
     /// 每次调用给出**新的可写字典**，调用方可以就地叠加而不污染默认表。
     /// </summary>
-    public static Dictionary<string, HotkeyGesture> Defaults() => new()
+    public static Dictionary<string, HotkeyGesture> Defaults()
     {
-        [HotkeyActions.MainToggle] = new HotkeyGesture(
-            HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.NoRepeat, VirtualKeySpace),
-        // 截图/贴图/隐藏贴图/穿透用裸 F1/F3/F4/F5（前三条与 Snipaste 默认一致，无修饰键）。
-        // 与主界面呼出键不冲突：那条是 Ctrl+Alt+Space。装了 Snipaste 的机器上会撞，
-        // 但批次 KL 已把冲突改成"只提示、不阻碍注册"，用户在设置里改一键即可，不必先关别的产品。
-        [HotkeyActions.ScreenCapture] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF1),
-        [HotkeyActions.ScreenPin] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF3),
-        [HotkeyActions.ScreenPinToggleHidden] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF4),
-        // 鼠标穿透**必须有全局键可以退出来**：穿透中的贴图收不到任何鼠标消息，
-        // 那时它的右键菜单、托盘勾选项之外的操作路径全断（发起人真机反馈：只能靠托盘关掉全部）。
-        // 所以给 F5——用户不需要知道是哪张被穿透了，按一下把这一组全部交还鼠标（见 VirtualKeyF5 注释）。
-        [HotkeyActions.ScreenPinClickThrough] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF5),
-        // 画布用 Ctrl+Alt+D（规格 §16.5 的默认键）。不占裸 F6：那一段留给截图那条链继续加动作，
-        // 而画布是"进出一次用一下"的模式，带修饰键反而不容易与游戏/放映软件撞。
-        [HotkeyActions.CanvasToggle] = new HotkeyGesture(
-            HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.NoRepeat, VirtualKeyD),
-        // 识字刻意**不占默认键**：它比截图低频，而入口已有三处（动作条「识字」、贴图工具条、托盘），
-        // 少占一个全局键位就少一处"与别的软件撞键"的可能（同 P-76 的口径）。
-    };
+        // 画布那九条共用一档修饰键：Ctrl+Alt（NoRepeat＝按住不放不连发，画布切换类动作连发会来回抖）
+        var canvasMods = HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.NoRepeat;
+        return new Dictionary<string, HotkeyGesture>
+        {
+            [HotkeyActions.MainToggle] = new HotkeyGesture(
+                HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.NoRepeat, VirtualKeySpace),
+            // 截图/贴图/隐藏贴图/穿透用裸 F1/F3/F4/F5（前三条与 Snipaste 默认一致，无修饰键）。
+            // 与主界面呼出键不冲突：那条是 Ctrl+Alt+Space。装了 Snipaste 的机器上会撞，
+            // 但批次 KL 已把冲突改成"只提示、不阻碍注册"，用户在设置里改一键即可，不必先关别的产品。
+            [HotkeyActions.ScreenCapture] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF1),
+            [HotkeyActions.ScreenPin] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF3),
+            [HotkeyActions.ScreenPinToggleHidden] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF4),
+            // 鼠标穿透**必须有全局键可以退出来**：穿透中的贴图收不到任何鼠标消息，
+            // 那时它的右键菜单、托盘勾选项之外的操作路径全断（发起人真机反馈：只能靠托盘关掉全部）。
+            // 所以给 F5——用户不需要知道是哪张被穿透了，按一下把这一组全部交还鼠标（见 VirtualKeyF5 注释）。
+            [HotkeyActions.ScreenPinClickThrough] = new HotkeyGesture(HotkeyModifiers.NoRepeat, VirtualKeyF5),
+            // 画布用 Ctrl+Alt+D（规格 §16.5 的默认键）。不占裸 F6：那一段留给截图那条链继续加动作，
+            // 而画布是"进出一次用一下"的模式，带修饰键反而不容易与游戏/放映软件撞。
+            [HotkeyActions.CanvasToggle] = new HotkeyGesture(canvasMods, VirtualKeyD),
+            // 画布内九条（发起人点名"全部要，带修饰键"）：字母按"这件事叫什么"取，
+            // 比让用户记住"第三个键是橡皮"可行得多——工具条上那颗「⌨」按钮随时能把这张表调出来。
+            [HotkeyActions.CanvasClickThrough] = new HotkeyGesture(canvasMods, VirtualKeyT),   // Through
+            [HotkeyActions.CanvasPen] = new HotkeyGesture(canvasMods, VirtualKeyP),            // Pen
+            [HotkeyActions.CanvasHighlighter] = new HotkeyGesture(canvasMods, VirtualKeyH),    // Highlighter
+            [HotkeyActions.CanvasEraser] = new HotkeyGesture(canvasMods, VirtualKeyR),         // eRaser
+            [HotkeyActions.CanvasUndo] = new HotkeyGesture(canvasMods, VirtualKeyU),           // Undo
+            [HotkeyActions.CanvasClear] = new HotkeyGesture(canvasMods, VirtualKeyC),          // Clear
+            [HotkeyActions.CanvasSave] = new HotkeyGesture(canvasMods, VirtualKeyS),           // Save
+            [HotkeyActions.CanvasCopy] = new HotkeyGesture(canvasMods, VirtualKeyK),           // ...K（C 被清屏占了）
+            [HotkeyActions.CanvasPin] = new HotkeyGesture(canvasMods, VirtualKeyG),            // Graphic 上屏
+            // 识字刻意**不占默认键**：它比截图低频，而入口已有三处（动作条「识字」、贴图工具条、托盘），
+            // 少占一个全局键位就少一处"与别的软件撞键"的可能（同 P-76 的口径）。
+        };
+    }
 
     /// <summary>
     /// 默认 + 已保存的合并结果：<b>已保存的每一项都覆盖默认，空手势也算覆盖</b>
