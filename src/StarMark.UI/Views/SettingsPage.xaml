@@ -254,84 +254,6 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- GitHub 热榜（默认关；关时导航栏连「热榜」项都不显示——用户裁决的可选浏览面） -->
-                        <Border Style="{StaticResource Card}">
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="GitHub 热榜" Style="{StaticResource SettingTitle}"/>
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
-                                               Text="开启后导航栏「剪贴板」右侧出现「热榜」。抓取只在你打开那一页时发生（每个周期每天至多一次，失败时回读上次结果并说明）；条目默认不进库——点 ⭐ 才是给 GitHub 远端加星（需 Token），点 🔖 才存进本机收藏。"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
-                                                  IsOn="{x:Bind ViewModel.TrendingEnabled, Mode=TwoWay}"/>
-                                </Grid>
-                                <TextBlock Text="{x:Bind ViewModel.TrendingStatus, Mode=OneWay}"
-                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
-
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
-                                               Text="在「今日速览」组件里显示热榜块（默认日榜）；关掉则该块消失、原「常看」回到顶部。"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="显示" OffContent="不显示" MinWidth="0"
-                                                  IsOn="{x:Bind ViewModel.TrendingGlanceEnabled, Mode=TwoWay}"/>
-                                </Grid>
-                                <TextBlock Text="热榜页上选的周期会记住，下次打开还是那一档。没配 Token 也能浏览热榜（读侧不依赖 Token），只是 Star 按钮会提示要配 Token。"
-                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap" Opacity="0.62" FontSize="12"/>
-                                <!-- 就地入口：刚开启的人多半想立刻看一眼，不该让他自己回导航栏找那一项 -->
-                                <Button Content="打开热榜页" Click="OpenTrending_Click" Style="{StaticResource SecondaryButton}"
-                                        HorizontalAlignment="Left"
-                                        Visibility="{x:Bind ViewModel.TrendingEnabled, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                            </StackPanel>
-                        </Border>
-
-                        <!--
-                            网址来源（RSS / Atom）：这一栏只管"有哪些源、每个开不开、这一栏整体开不开"。
-                            批次 RB 之前条目预览也住在这里，用户裁决要挪走——设置页是改配置的地方，
-                            挑文章是另一件事；两件事挤在一屏就长成了"设置页里嵌了个阅读器"的怪形状。
-                        -->
-                        <Border Style="{StaticResource Card}">
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="网址来源（RSS / Atom）" Style="{StaticResource SettingTitle}"/>
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
-                                               Text="开启后导航栏出现「RSS」：每个订阅源是它自己的一个文件夹，点条目直接在浏览器打开文章，点「收藏到文件夹」才会进本机库（并放进这个源自己的那一层）。抓取只在你到那一页按「刷新」时发生，没有后台定时。"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
-                                                  IsOn="{x:Bind ViewModel.RssEnabled, Mode=TwoWay}"/>
-                                </Grid>
-                                <TextBlock Text="{x:Bind ViewModel.RssStatus, Mode=OneWay}"
-                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
-
-                                <TextBlock x:Name="RssSourceEmpty" Text="还没有添加任何来源地址。" Opacity="0.62"
-                                           Style="{StaticResource SettingRowText}"/>
-                                <ItemsControl x:Name="RssSourceRows">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,2,0,2">
-                                                <StackPanel Grid.Column="0" Spacing="1">
-                                                    <TextBlock Text="{Binding Name}" FontSize="13" TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Text="{Binding Url}" FontSize="11" Opacity="0.62" TextTrimming="CharacterEllipsis"/>
-                                                </StackPanel>
-                                                <ToggleSwitch Grid.Column="1" OnContent="启用" OffContent="停用" MinWidth="0"
-                                                              IsOn="{Binding Enabled, Mode=OneTime}" Tag="{Binding}"
-                                                              Toggled="RssSource_Toggled"/>
-                                                <Button Grid.Column="2" Content="删除" Click="RssDelete_Click" Tag="{Binding}"
-                                                        Style="{StaticResource SecondaryButton}" VerticalAlignment="Center"/>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-
-                                <Grid ColumnDefinitions="2*,*,Auto" ColumnSpacing="6">
-                                    <TextBox Grid.Column="0" x:Name="RssUrlBox" PlaceholderText="订阅地址（https://…/feed）"
-                                             FontSize="12" HorizontalAlignment="Stretch"/>
-                                    <TextBox Grid.Column="1" x:Name="RssNameBox" PlaceholderText="名字（留空＝用域名）"
-                                             FontSize="12" HorizontalAlignment="Stretch"/>
-                                    <Button Grid.Column="2" Content="添加" Click="RssAdd_Click" Style="{StaticResource SecondaryButton}"/>
-                                </Grid>
-                                <!-- 就地入口：刚配好源的人多半想立刻看一眼，不该让他自己回导航栏找那一项 -->
-                                <Button Content="打开 RSS 页" Click="OpenRss_Click" Style="{StaticResource SecondaryButton}"
-                                        HorizontalAlignment="Left"
-                                        Visibility="{x:Bind ViewModel.RssEnabled, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                            </StackPanel>
-                        </Border>
 
                         <!--
                             AI 助手（批次 A：只到"通道能不能用"，批量整理在批次 B）。
@@ -589,6 +511,93 @@
                                 </ItemsRepeater>
                                 <TextBlock Text="（暂无保存的布局）" Style="{StaticResource MutedText}"
                                            Visibility="{x:Bind HasNoLayouts, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
+                        </Border>
+                    </controls:ColumnFlowPanel>
+                </ScrollViewer>
+            </TabViewItem>
+
+            <!-- ============ 拓展功能（可以整个不用、也不影响主流程的浏览面：热榜与订阅源） ============ -->
+            <TabViewItem Header="拓展功能">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
+                    <controls:ColumnFlowPanel MinColumnWidth="420" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
+
+                        <!-- GitHub 热榜（默认关；关时导航栏连「热榜」项都不显示——用户裁决的可选浏览面） -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="GitHub 热榜" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               Text="开启后导航栏「剪贴板」右侧出现「热榜」。抓取只在你打开那一页时发生（每个周期每天至多一次，失败时回读上次结果并说明）；条目默认不进库——点 ⭐ 才是给 GitHub 远端加星（需 Token），点 🔖 才存进本机收藏。"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.TrendingEnabled, Mode=TwoWay}"/>
+                                </Grid>
+                                <TextBlock Text="{x:Bind ViewModel.TrendingStatus, Mode=OneWay}"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               Text="在「今日速览」组件里显示热榜块（默认日榜）；关掉则该块消失、原「常看」回到顶部。"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="显示" OffContent="不显示" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.TrendingGlanceEnabled, Mode=TwoWay}"/>
+                                </Grid>
+                                <TextBlock Text="热榜页上选的周期会记住，下次打开还是那一档。没配 Token 也能浏览热榜（读侧不依赖 Token），只是 Star 按钮会提示要配 Token。"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap" Opacity="0.62" FontSize="12"/>
+                                <!-- 就地入口：刚开启的人多半想立刻看一眼，不该让他自己回导航栏找那一项 -->
+                                <Button Content="打开热榜页" Click="OpenTrending_Click" Style="{StaticResource SecondaryButton}"
+                                        HorizontalAlignment="Left"
+                                        Visibility="{x:Bind ViewModel.TrendingEnabled, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!--
+                            网址来源（RSS / Atom）：这一栏只管"有哪些源、每个开不开、这一栏整体开不开"。
+                            批次 RB 之前条目预览也住在这里，用户裁决要挪走——设置页是改配置的地方，
+                            挑文章是另一件事；两件事挤在一屏就长成了"设置页里嵌了个阅读器"的怪形状。
+                        -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="网址来源（RSS / Atom）" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               Text="开启后导航栏出现「RSS」：每个订阅源是它自己的一个文件夹，点条目直接在浏览器打开文章，点「收藏到文件夹」才会进本机库（并放进这个源自己的那一层）。抓取只在你到那一页按「刷新」时发生，没有后台定时。"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.RssEnabled, Mode=TwoWay}"/>
+                                </Grid>
+                                <TextBlock Text="{x:Bind ViewModel.RssStatus, Mode=OneWay}"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+
+                                <TextBlock x:Name="RssSourceEmpty" Text="还没有添加任何来源地址。" Opacity="0.62"
+                                           Style="{StaticResource SettingRowText}"/>
+                                <ItemsControl x:Name="RssSourceRows">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,2,0,2">
+                                                <StackPanel Grid.Column="0" Spacing="1">
+                                                    <TextBlock Text="{Binding Name}" FontSize="13" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding Url}" FontSize="11" Opacity="0.62" TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                                <ToggleSwitch Grid.Column="1" OnContent="启用" OffContent="停用" MinWidth="0"
+                                                              IsOn="{Binding Enabled, Mode=OneTime}" Tag="{Binding}"
+                                                              Toggled="RssSource_Toggled"/>
+                                                <Button Grid.Column="2" Content="删除" Click="RssDelete_Click" Tag="{Binding}"
+                                                        Style="{StaticResource SecondaryButton}" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <Grid ColumnDefinitions="2*,*,Auto" ColumnSpacing="6">
+                                    <TextBox Grid.Column="0" x:Name="RssUrlBox" PlaceholderText="订阅地址（https://…/feed）"
+                                             FontSize="12" HorizontalAlignment="Stretch"/>
+                                    <TextBox Grid.Column="1" x:Name="RssNameBox" PlaceholderText="名字（留空＝用域名）"
+                                             FontSize="12" HorizontalAlignment="Stretch"/>
+                                    <Button Grid.Column="2" Content="添加" Click="RssAdd_Click" Style="{StaticResource SecondaryButton}"/>
+                                </Grid>
+                                <!-- 就地入口：刚配好源的人多半想立刻看一眼，不该让他自己回导航栏找那一项 -->
+                                <Button Content="打开 RSS 页" Click="OpenRss_Click" Style="{StaticResource SecondaryButton}"
+                                        HorizontalAlignment="Left"
+                                        Visibility="{x:Bind ViewModel.RssEnabled, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                             </StackPanel>
                         </Border>
                     </controls:ColumnFlowPanel>
