@@ -67,7 +67,7 @@ public sealed class SettingsTaxonomyGateTests
             "BackdropIndex", "MainWindowBackdropIndex", "WidgetOpacity", "MainWindowOpacity",
             "LocalDiskSearchEnabled", "EyeRestEnabled", "EyeRestEnforced", "EyeRestDeferOnFullscreen",
             "TrendingEnabled", "ClipboardHistoryEnabled", "EnableTray", "MinimizeToTray", "GithubToken",
-            "CanvasEnabled",
+            "CanvasEnabled", "CanvasInScreenshots",
         };
 
         foreach (var p in writable)
@@ -101,6 +101,8 @@ public sealed class SettingsTaxonomyGateTests
         Assert.Contains("<TextBlock Text=\"屏幕画布\" Style=\"{StaticResource SettingTitle}\"", extras);
         Assert.Contains("ViewModel.CanvasEnabled", extras);
         Assert.Contains("ViewModel.CanvasHotkeySheet", extras);
+        // 「截图带画布」（批次 WH）跟着画布走：它说的是同一块玻璃，只不过影响的是截图那一帧
+        Assert.Contains("ViewModel.CanvasInScreenshots", extras);
 
         var health = Between(xaml, "<TabViewItem Header=\"健康与诊断\">", "</TabViewItem>");
         Assert.Contains("护眼 · 休息提醒", health);

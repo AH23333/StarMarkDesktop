@@ -324,6 +324,23 @@ public static class CanvasService
         StateChanged?.Invoke();
     }
 
+    /// <summary>
+    /// 截图抓那一帧时把画布那块玻璃收起来（<b>只给 <c>ScreenshotService.Grab</c> 用，那里成对调用</b>）。
+    /// <para>
+    /// 收的是玻璃本身，不是"擦掉笔迹"：笔迹留在 <see cref="Screen.Persistent"/> 与荧光段里，
+    /// 还回来之后一切照旧——用户按「截图带画布＝关」是要给别人一张干净的图，不是要把黑板擦掉。
+    /// </para>
+    /// <para>
+    /// <b>工具条不跟着收</b>：WinUI 窗重新点亮必然抢前台（见批次 WA 那条配方），把刚建起来的遮罩窗的
+    /// 焦点抢走会让整次截图失去键盘出口。工具条只是屏幕边上一条小条，不是"画布上的内容"。
+    /// </para>
+    /// </summary>
+    public static void SetHiddenForCapture(bool hidden)
+    {
+        if (!_running) return;
+        foreach (var screen in Screens) screen.Window.SetVisible(!hidden);
+    }
+
     /// <summary>每屏各撤各的最后一条：用户看的是"刚才那一笔"，而它落在哪块屏只有层自己知道。</summary>
     public static void Undo()
     {

@@ -688,6 +688,12 @@
                                 </Grid>
                                 <TextBlock Text="{x:Bind ViewModel.CanvasStatus, Mode=OneWay}"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               Text="截图带画布：开着时，截屏抓到的那一帧包含画布上的笔迹（所见即所得）。关掉后截图前会先把那块玻璃收起来再抓、抓完立刻放回——画布上画的东西一点不少，只是截走的图里没有它。画布工具条上的「贴图／复制／存图」不受这条影响（那三条本来就是要把笔迹留下）。"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="带上" OffContent="不带" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.CanvasInScreenshots, Mode=TwoWay}"/>
+                                </Grid>
                                 <TextBlock Text="快捷键一览（下面是当前真正生效的键位；要改到「快捷键」页的「屏幕画布」分组）"
                                            Style="{StaticResource SettingRowText}" FontWeight="SemiBold" TextWrapping="Wrap"/>
                                 <TextBlock Text="{x:Bind ViewModel.CanvasHotkeySheet, Mode=OneWay}"

@@ -18,6 +18,7 @@ public sealed class CanvasWiringGateTests
     private const string Native = "src/StarMark.Integrations/Canvas/CanvasNative.cs";
     private const string Compositor = "src/StarMark.Core/Canvas/CanvasCompositor.cs";
     private const string Service = "src/StarMark.UI/Services/CanvasService.cs";
+    private const string Screenshot = "src/StarMark.UI/Services/ScreenshotService.cs";
     private const string Toolbar = "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs";
     private const string ToolbarXaml = "src/StarMark.UI/Views/CanvasToolbarWindow.xaml";
     private const string Panel = "src/StarMark.UI/Views/CanvasHotkeyPanelWindow.xaml.cs";
@@ -228,6 +229,54 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("ReportSlowFrame(since, rect, screen);", flush);
         Assert.True(flush.IndexOf("Present(rect)") < flush.IndexOf("ReportSlowFrame"),
             "提交也算在这一帧里：UpdateLayeredWindowIndirect 才是那块脏区真正的代价");
+    }
+
+    // ────────── 批次 WH：截图带不带画布 ──────────
+
+    /// <summary>
+    /// 「截图不带画布」只允许有一个收/还点：<b>抓那一帧的当场收起来，<c>finally</c> 里还回去</b>。
+    /// <para>
+    /// 为什么只能这么干：画布是 topmost 的分层窗，抓屏抓到的是已经合成完的屏幕，笔迹事后减不回来，
+    /// 只有那一下不让它上屏。而"收起来"是会留下半个状态的操作——分开写到两处，
+    /// 早晚会有一条路径（抓屏抛异常、返回空、显示器数为 0）漏掉还，
+    /// 症状是"截了一次图，画布再也不显示了"，比不能切换严重得多。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void CanvasIsHiddenOnlyAroundTheGrab_AndAlwaysRestored()
+    {
+        var shot = SourceGate.ReadRepoFile(Screenshot);
+        var grab = SourceGate.MethodBody(shot, "private static CaptureResult Grab()");
+        Assert.Contains("|| !CanvasService.IsRunning) return GdiScreenCapture.CaptureVirtualScreen();", grab);
+        Assert.Contains("CanvasService.SetHiddenForCapture(true);", grab);
+        Assert.True(grab.IndexOf("finally", StringComparison.Ordinal)
+                < grab.IndexOf("CanvasService.SetHiddenForCapture(false);", StringComparison.Ordinal),
+            "还玻璃必须写在 finally 里——写在 try 后面就等于会漏");
+        // 抓屏只能从 Grab() 走：Start 里再出现一次直接抓屏，就等于绕过这条闸门
+        var start = SourceGate.MethodBody(shot, "public static void Start(");
+        Assert.Contains("var captured = Grab();", start);
+        Assert.DoesNotContain("GdiScreenCapture.CaptureVirtualScreen()", start);
+        // 画布自己的那三条快照动作（贴图／复制／存图）不受这条设置影响：那三条就是要笔迹进图
+        var compose = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static bool TryCompose");
+        Assert.DoesNotContain("CanvasInScreenshots", compose);
+    }
+
+    /// <summary>
+    /// 默认必须是"带上"（从没表过态不等于"想让画布从截图里消失"），且<b>只有一个编辑入口、
+    /// 截图那边只读盘不缓存</b>（缓存一份就会出现"改了设置截图照旧带上"这种半生效状态）。
+    /// </summary>
+    [Fact]
+    public void CanvasInScreenshotsDefaultsToOn_AndIsReadFreshFromTheOneEditor()
+    {
+        var store = SourceGate.ReadRepoFile(Store);
+        Assert.Contains(
+            "public bool LoadCanvasInScreenshots() => Load() is not { } d || d.CanvasInScreenshots != false;", store);
+        Assert.Contains("d.CanvasInScreenshots = include;", store);
+        var xaml = SourceGate.ReadRepoFile("src/StarMark.UI/Views/SettingsPage.xaml");
+        Assert.Equal(1, SourceGate.Count(xaml, "ViewModel.CanvasInScreenshots, Mode=TwoWay"));
+        var shot = SourceGate.ReadRepoFile(Screenshot);
+        Assert.Contains("SettingsStore)) as SettingsStore)?.LoadCanvasInScreenshots() ?? true", shot);
+        Assert.Equal(1, SourceGate.Count(shot, "LoadCanvasInScreenshots"));
     }
 
     /// <summary>

@@ -69,7 +69,7 @@ public static class ScreenshotService
             StarLog.Info("[Screenshot] 已有截图会话在进行，忽略这一次触发");
             return;
         }
-        var captured = GdiScreenCapture.CaptureVirtualScreen();
+        var captured = Grab();
         if (!captured.Ok || captured.Frame is not { } frame)
         {
             Report("截图失败", captured.Error ?? "系统没有返回画面");
@@ -100,6 +100,40 @@ public static class ScreenshotService
             Report("截图失败", ex.Message);
         }
     }
+
+    /// <summary>
+    /// 按「截图带画布」这条设置抓一帧桌面。
+    /// <para>
+    /// <b>为什么只能这么抓</b>：屏幕画布是一块 topmost 的分层窗，抓屏抓到的是已经合成完的屏幕——
+    /// 笔迹与底下的应用早就混成一张图了，事后"把笔迹减掉"减不回来。所以要就不要让它上屏（抓之前收起来），
+    /// 要么就认它进图。
+    /// </para>
+    /// <para>
+    /// <b>收与还写在这一处、且必须在 finally 里还</b>：这两句分开写到调用方，早晚有一条路径
+    /// （抓屏抛异常、或返回空）漏掉还，症状是"截了一次图，画布再也不显示了"。
+    /// 抓屏是同步的一次调用、跑在 UI 线程上，中间插不进画布的帧循环，所以那块玻璃只消失几毫秒。
+    /// </para>
+    /// </summary>
+    private static CaptureResult Grab()
+    {
+        if (IncludeCanvasInScreenshot || !CanvasService.IsRunning) return GdiScreenCapture.CaptureVirtualScreen();
+        CanvasService.SetHiddenForCapture(true);
+        try
+        {
+            return GdiScreenCapture.CaptureVirtualScreen();
+        }
+        finally
+        {
+            CanvasService.SetHiddenForCapture(false);
+        }
+    }
+
+    /// <summary>
+    /// 这条设置读的是磁盘上那一份（不缓存）：设置页里改完，下一次截图就照着走，
+    /// 不需要重启、也不需要"通知截图那边"。
+    /// </summary>
+    private static bool IncludeCanvasInScreenshot
+        => (App.Services?.GetService(typeof(SettingsStore)) as SettingsStore)?.LoadCanvasInScreenshots() ?? true;
 
     /// <summary>
     /// 某个遮罩窗交回了结果或取消：整场会话到此收摊。

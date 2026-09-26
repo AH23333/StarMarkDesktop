@@ -164,6 +164,15 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         /// 而按习惯键位仍会给一句"要先在设置里打开"——留一条哑键是最坏的做法。
         /// </summary>
         public bool? CanvasEnabled { get; set; }
+
+        /// <summary>
+        /// 「截图带画布」（<b>默认开</b>＝截图里能看到画布上的笔迹，与批次 WH 之前的行为一致）。
+        /// <para>
+        /// 关掉之后：抓那一帧之前先把画布那块玻璃收起来，抓完立刻还回去——于是"讲解时随手画的圈"
+        /// 不会跟着进图。要的是这张图给别人看、圈是给自己看的场合。
+        /// </para>
+        /// </summary>
+        public bool? CanvasInScreenshots { get; set; }
     }
 
     public SettingsStore(string? path = null) => _path = path ?? ResolveSettingsPath();
@@ -960,6 +969,20 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     {
         var d = Load() ?? new SettingsData();
         d.CanvasEnabled = enabled;
+        Save(d);
+    }
+
+    /// <summary>
+    /// 截图时画布算不算画面的一部分（<b>默认开</b>：从没表过态不等于"想让画布隐形"）。
+    /// 关掉之后 <c>ScreenshotService.Start</c> 抓那一帧前先把玻璃收起来。
+    /// 只影响"截屏抓到的那一帧"，不影响画布工具条上「贴图/复制/存图」那三条——那三条就是要把笔迹留下。
+    /// </summary>
+    public bool LoadCanvasInScreenshots() => Load() is not { } d || d.CanvasInScreenshots != false;
+
+    public void SaveCanvasInScreenshots(bool include)
+    {
+        var d = Load() ?? new SettingsData();
+        d.CanvasInScreenshots = include;
         Save(d);
     }
 

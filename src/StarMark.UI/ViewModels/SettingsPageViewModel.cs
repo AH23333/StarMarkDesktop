@@ -241,6 +241,7 @@ public partial class SettingsPageViewModel : ObservableObject
         // "进一趟设置页就把画布的热键全撤了"是最离谱的一种副作用。
         _suppressCanvasApply = true;
         CanvasEnabled = Safe(_settings.LoadCanvasEnabled, true, "屏幕画布");
+        CanvasInScreenshots = Safe(_settings.LoadCanvasInScreenshots, true, "截图带画布");
         _suppressCanvasApply = false;
         CanvasHotkeySheet = BuildCanvasHotkeySheet();
         CanvasStatus = BuildCanvasStatus();
@@ -535,6 +536,9 @@ public partial class SettingsPageViewModel : ObservableObject
     /// </summary>
     [ObservableProperty] private bool _canvasEnabled = true;
 
+    /// <summary>「截图带画布」（默认开＝与这条设置出现之前的行为一致：笔迹会进截图）。</summary>
+    [ObservableProperty] private bool _canvasInScreenshots = true;
+
     /// <summary>开关当前含义的一句话（看得见"关掉会发生什么"，不用猜）。</summary>
     [ObservableProperty] private string _canvasStatus = string.Empty;
 
@@ -551,6 +555,16 @@ public partial class SettingsPageViewModel : ObservableObject
         // 注册表当场跟着改：不重启、也不要用户再去点一次「保存快捷键」（多余的步骤算缺陷）
         App.MainWindow?.ApplyTraySettings();
         CanvasStatus = BuildCanvasStatus();
+    }
+
+    /// <summary>
+    /// 截图带不带画布。<b>只管"抓哪一帧时玻璃上不上屏"，不当擦笔迹的橡皮擦</b>：
+    /// 关掉之后画布照旧显示、笔迹照旧留着，只是别人截走的图里没有它。
+    /// </summary>
+    partial void OnCanvasInScreenshotsChanged(bool value)
+    {
+        if (_suppressCanvasApply) return;
+        _settings.SaveCanvasInScreenshots(value);
     }
 
     /// <summary>键位改了之后重算这一览（「保存快捷键」与「重试注册」两条路都调它，否则这里会显示旧键位）。</summary>
