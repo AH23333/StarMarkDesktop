@@ -28,7 +28,17 @@ public static class UIStallWatchdog
     private const int IntervalMs = 500;
     private const long StallMs = 1000;      // 超过即判定为一次卡顿
     private const long SuspendedMs = IntervalMs * 6L;
-    private const uint ThreadQueryLimitedInformation = 0x0400;
+
+    /// <summary>
+    /// <c>GetThreadTimes</c> 要求的访问权＝<b>THREAD_QUERY_INFORMATION（0x0040）</b>。
+    /// <para>
+    /// 这里原来写的是 <c>0x0400</c>——那是 <c>THREAD_DIRECT_IMPERSONATION</c>；而
+    /// <c>THREAD_QUERY_LIMITED_INFORMATION</c> 又是另一个数（0x0800）。三个数长得很像，
+    /// 写错的后果不是崩，是 <c>OpenThread</c> 返回 0 ⇒ CPU 列永远显示"未知"，
+    /// 而这根柱子正是"启动后 UI 冻结"唯一能定方向的数据（CPU≈墙钟＝忙在自己手上；CPU≪墙钟＝在等锁/IPC）。
+    /// </para>
+    /// </summary>
+    private const uint ThreadQueryInformation = 0x0040;
 
     private static Timer? _timer;
     private static long _lastAck;           // UI 线程最近一次执行回执的时刻
@@ -47,7 +57,15 @@ public static class UIStallWatchdog
         Interlocked.Exchange(ref _lastProbe, now);
         // Start 就在 UI 线程上调（App 里紧接主窗创建），所以这里取到的正是被观测的那根线程
         if (_uiThread == IntPtr.Zero)
-            _uiThread = OpenThread(ThreadQueryLimitedInformation, false, GetCurrentThreadId());
+        {
+            _uiThread = OpenThread(ThreadQueryInformation, false, GetCurrentThreadId());
+            // 取不到句柄就让日志当场说一次：否则整根 CPU 柱子中 locally 静默失效，
+            // 看到的只是"未知"，谁也不会去查为什么（这次的教训就是它默默坏了很久）
+            if (_uiThread == IntPtr.Zero)
+                StarLog.Warn($"[卡顿] UI 线程 CPU 取不到（OpenThread 失败 Win32 " +
+                             $"{System.Runtime.InteropServices.Marshal.GetLastWin32Error()}），" +
+                             "恢复行将只有墙钟时长");
+        }
         _timer = new Timer(_ => Probe(queue), null, IntervalMs, IntervalMs);
     }
 
@@ -123,7 +141,7 @@ public static class UIStallWatchdog
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     private static extern uint GetCurrentThreadId();
 
-    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr OpenThread(uint dwDesiredAccess, bool bInheritHandle, uint dwThreadId);
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
