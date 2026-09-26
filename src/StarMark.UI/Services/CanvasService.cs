@@ -91,9 +91,12 @@ public static class CanvasService
     /// 所以"荧光笔按住即画 / Ctrl+Alt 快速圈画"只能由帧循环轮询按键状态发现，
     /// 发现后临时摘掉穿透、自己补一次 SetCapture，抬起再恢复。
     /// </summary>
-    private enum Press { None, Drawing, Ephemeral, QuickPen }
+    private enum Press { None, Drawing, Ephemeral, QuickPen, Shape }
 
     private static Press _press;
+
+    /// <summary>拖图形时那一按的起点（本屏物理像素）。终点就是当前光标，所以只留起点。</summary>
+    private static PixelPoint _shapeFrom;
 
     /// <summary>手上有笔时它属于哪块屏（抬起/轮询收尾都要用它，光标可能已经飘到别的屏）。</summary>
     private static Screen? _pressScreen;
@@ -412,7 +415,13 @@ public static class CanvasService
     private static void OnPressed(Screen screen, CanvasPointer pointer)
     {
         if (screen.Window.IsClickThrough) return;          // 穿透态不该收到，真收到也不能画（鼠标本来要给下面的应用）
-        BeginPress(screen, pointer.At, _tool == CanvasTool.Highlighter ? Press.Ephemeral : Press.Drawing);
+        BeginPress(screen, pointer.At, _tool switch
+        {
+            CanvasTool.Highlighter => Press.Ephemeral,
+            // 图形与画笔同为拦截态（CanvasModes 一处定），但落笔方式不同：一次拖拽定形，不是跟着手走
+            { } tool when tool.IsShape() => Press.Shape,
+            _ => Press.Drawing,
+        });
     }
 
     /// <summary>
@@ -429,6 +438,12 @@ public static class CanvasService
         {
             var segment = screen.Trail.Begin(at, colour, CanvasWidths.At(_widthStep), now);
             screen.Dirty.Add(segment.Stroke.Bounds);
+        }
+        else if (kind == Press.Shape)
+        {
+            // 预览落在临时层，不落持久层：拖到一半取消、拖过头再拉回来，都不该留下一条撤不掉的笔迹
+            _shapeFrom = at;
+            screen.Dirty.Add(screen.Trail.SetPreview(ShapeStroke(at, at, colour)));
         }
         else
         {
@@ -454,6 +469,13 @@ public static class CanvasService
                 dirty = true;
             }
         }
+        else if (_press == Press.Shape)
+        {
+            // 每一帧整份替换预览：脏区是"旧的那份 + 新的这份"，所以拖过去的那条影子会被擦回来
+            screen.Dirty.Add(screen.Trail.SetPreview(
+                ShapeStroke(_shapeFrom, pointer.At, Palette[_colorIndex].Bgra)));
+            dirty = true;
+        }
         else if (screen.Ink.Drawing is { } stroke && stroke.AddPoint(pointer.At))
         {
             screen.Dirty.Add(CanvasCompositor.PaintTail(
@@ -476,6 +498,16 @@ public static class CanvasService
     {
         if (screen is null) { _press = Press.None; return; }
         if (_press == Press.Ephemeral) Flush(screen);          // 段留在 Trail 里按 TTL 淡，不进持久层
+        else if (_press == Press.Shape)
+        {
+            // 定形＝把预览那份"换个归属"：同一串点从临时层挪进持久层，不重算几何。
+            // 重算就会出现"预览一个样、落下另一个样"（拖的时候是圆的、松手变有角）。
+            var preview = screen.Trail.Preview;
+            screen.Dirty.Add(screen.Trail.DropPreview());
+            if (preview is not null) screen.Ink.Commit(preview);
+            Recomposite(screen);
+            Flush(screen);
+        }
         else
         {
             screen.Ink.End();
@@ -575,6 +607,16 @@ public static class CanvasService
     private static int WidthFor(CanvasTool tool)
         => tool == CanvasTool.Eraser ? CanvasWidths.EraserDiameter : CanvasWidths.At(_widthStep);
 
+    /// <summary>
+    /// 按当前工具与粗细，把一次拖拽展成一条笔迹。<b>拖拽期间的预览与松手时的定形共用这一句</b>：
+    /// 两处各算一遍几何，就会长成"拖的时候一个样、松手另一个样"。
+    /// </summary>
+    private static CanvasStroke ShapeStroke(PixelPoint from, PixelPoint to, int colour)
+    {
+        var width = WidthFor(_tool);
+        return CanvasStroke.FromPoints(_tool, colour, width, CanvasShapes.Outline(_tool, from, to, width));
+    }
+
     // ────────── 渲染 ──────────
 
     private static DispatcherQueueTimer BuildFrameTimer(DispatcherQueue queue)
@@ -670,6 +712,10 @@ public static class CanvasService
         CanvasCompositor.CopyRect(screen.Persistent, screen.Window.Pixels, width, height, rect);
         foreach (var segment in screen.Trail.Segments)
             CanvasCompositor.PaintClipped(screen.Window.Pixels, width, height, segment.Stroke, rect, segment.PaintScale);
+        // 正在拖的那个图形：它不在持久层里，所以每一帧都是从 Persistent 之上重新叠出来的一份——
+        // 叠在荧光段之后，与松手之后它作为一条持久笔迹所处的顺序一致（同一帧里不会跳色）。
+        if (screen.Trail.Preview is { } preview)
+            CanvasCompositor.PaintClipped(screen.Window.Pixels, width, height, preview, rect);
         if (screen.GlowAt is { } glow)
             CanvasCompositor.PaintGlow(screen.Window.Pixels, width, height, glow,
                 CanvasWidths.RadiusFor(CanvasTool.Highlighter, CanvasWidths.At(_widthStep)),
@@ -729,7 +775,7 @@ public static class CanvasService
     {
         // 轮询抢来的那一按（荧光笔/Ctrl+Alt 圈画）也要在这里收口：换工具时它还挂着的话，
         // 抬起事件会被新工具吃掉，屏幕上就留下一条"永远在画"的笔迹
-        if (_press is Press.Ephemeral or Press.QuickPen)
+        if (_press is Press.Ephemeral or Press.QuickPen or Press.Shape)
         {
             FinishPress(_pressScreen);
             EndTemporaryPress();

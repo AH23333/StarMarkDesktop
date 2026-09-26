@@ -23,6 +23,19 @@
                 <Button Content="清屏" Click="Clear_Click"/>
                 <Button x:Name="ThroughButton" Content="穿透" Click="Through_Click"
                         ToolTipService.ToolTip="点穿到下面的 PPT／桌面；再按一次或按热键回到绘制"/>
+                <!--
+                    四种图形：与截图/贴图那边同一族能力（发起人点名"给画布加图形编辑"）。
+                    按钮文字取自 Core 的 CanvasTools.Name()——名字只有一处出处，但 XAML 里不能调方法，
+                    所以这里写死并由闸门钉住"四个名字与 Core 一一对应"。
+                -->
+                <Button x:Name="RectButton" Content="矩形" Click="Rect_Click"
+                        ToolTipService.ToolTip="按住拖出一个矩形：按下处与抬起处是两个对角；再点一次收笔"/>
+                <Button x:Name="EllipseButton" Content="椭圆" Click="Ellipse_Click"
+                        ToolTipService.ToolTip="按住拖出一个椭圆：拖拽的矩形就是它的外切框；再点一次收笔"/>
+                <Button x:Name="LineButton" Content="直线" Click="Line_Click"
+                        ToolTipService.ToolTip="按住拖出一条直线；再点一次收笔"/>
+                <Button x:Name="ArrowButton" Content="箭头" Click="Arrow_Click"
+                        ToolTipService.ToolTip="按住拖出一条箭头，箭头指向抬手那一端；再点一次收笔"/>
                 <Button x:Name="HaloButton" Content="光晕" Click="Halo_Click"
                         ToolTipService.ToolTip="荧光笔态下那团跟着鼠标的光"/>
                 <Button Content="贴图" Click="Pin_Click" ToolTipService.ToolTip="屏幕画面 + 笔迹合成一张钉在桌面"/>

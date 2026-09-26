@@ -6,8 +6,14 @@ using StarMark.Abstractions.Capture;
 namespace StarMark.Core.Canvas;
 
 /// <summary>
-/// 画布上能画的三种东西。<b>刻意比截图标注窄</b>：讲解时手里要的是一支笔、一支荧光笔、一块橡皮，
-/// 把矩形/箭头/文字都搬进来只会把工具条挤到点不中（规格 §16.5 的工具条就是这一排）。
+/// 画布上能画的几种东西。<b>三种笔是"跟着手走"的，四种图形是"一次拖拽定形"的</b>：
+/// 图形不是新的渲染层——它被展成一条点列（<see cref="CanvasShapes.Outline"/>）后走同一支笔的合成、
+/// 同一条撤销、同一块橡皮，所以分层与生命周期口径（§16.3）一点没动。
+/// <para>
+/// 为什么图形值得进来（发起人点名"给画布加类似截图/贴图的图形编辑"）：讲课时圈一个重点、
+/// 指一条边界，用自由手抖三下不如一次拖出一个矩形；而"要不要按住才画"这件事仍由
+/// <see cref="CanvasModes.IsClickThroughAfter"/> 一处决定（图形与画笔同为拦截态）。
+/// </para>
 /// </summary>
 public enum CanvasTool
 {
@@ -17,6 +23,45 @@ public enum CanvasTool
     Highlighter,
     /// <summary>橡皮：只作用于<b>持久层</b>——荧光段自己会到期，擦它没有意义（规格 §16.6 的语义分离）。</summary>
     Eraser,
+    /// <summary>矩形：拖拽的两个对角定形，四条边闭口。</summary>
+    Rectangle,
+    /// <summary>椭圆：拖拽的矩形内切，按笔宽采样成一条连续轮廓。</summary>
+    Ellipse,
+    /// <summary>直线：起点到终点一段。</summary>
+    Line,
+    /// <summary>箭头：直线 + 终点一个开口头（指向拖拽结束那一端）。</summary>
+    Arrow,
+}
+
+/// <summary>
+/// 工具分组与名字。<b>分组只在这里说一次</b>：工具条按 <see cref="Shapes"/> 生成按钮，
+/// 编排按 <see cref="IsShape"/> 决定"这一按是拖形还是走笔"——两处各列一份的话，
+/// 加一种图形就会长成"条上有这颗、点下去走的却是笔"。
+/// </summary>
+public static class CanvasTools
+{
+    /// <summary>四种图形，顺序＝工具条上按钮的顺序。</summary>
+    public static readonly CanvasTool[] Shapes =
+        { CanvasTool.Rectangle, CanvasTool.Ellipse, CanvasTool.Line, CanvasTool.Arrow };
+
+    /// <summary>三支笔，顺序＝工具条上按钮的顺序（图形不算在内：它们走另一排）。</summary>
+    public static readonly CanvasTool[] Brushes =
+        { CanvasTool.Pen, CanvasTool.Highlighter, CanvasTool.Eraser };
+
+    public static bool IsShape(this CanvasTool tool) => Array.IndexOf(Shapes, tool) >= 0;
+
+    /// <summary>条上与状态行用的中文名。<b>不许在界面里另写一份</b>（同截图标注那条口径）。</summary>
+    public static string Name(this CanvasTool tool) => tool switch
+    {
+        CanvasTool.Pen => "画笔",
+        CanvasTool.Highlighter => "荧光笔",
+        CanvasTool.Eraser => "橡皮",
+        CanvasTool.Rectangle => "矩形",
+        CanvasTool.Ellipse => "椭圆",
+        CanvasTool.Line => "直线",
+        CanvasTool.Arrow => "箭头",
+        _ => "未知工具",
+    };
 }
 
 /// <summary>
@@ -125,6 +170,26 @@ public sealed class CanvasStroke
     }
 
     /// <summary>
+    /// 用一整串<b>已经算好的</b>点建一条笔迹（四种图形走这里）。
+    /// <para>
+    /// 刻意不复用 <see cref="AddPoint"/> 的"相邻点 &lt;2px 合并"：椭圆的采样点是按笔宽刻意排开的，
+    /// 再被那道过滤削一次就会露出棱角（症状："画出来的是八角形不是圆"）；而矩形/箭头的顶点
+    /// 本来就是要落准的转折点，不是采样噪声。
+    /// </para>
+    /// </summary>
+    public static CanvasStroke FromPoints(CanvasTool tool, int colorBgra, int width, IReadOnlyList<PixelPoint> points)
+    {
+        if (points.Count == 0) throw new ArgumentException("笔迹至少要有一个点", nameof(points));
+        var stroke = new CanvasStroke(tool, colorBgra, width, points[0]);
+        for (var i = 1; i < points.Count; i++)
+        {
+            stroke._points.Add(points[i]);
+            stroke.Bounds = Union(stroke.Bounds, stroke.RectAround(points[i]));
+        }
+        return stroke;
+    }
+
+    /// <summary>
     /// 追加一个采样点。<b>太近的点直接丢</b>：不然一条慢慢拖的笔迹会在同一像素上叠几十次，
     /// 荧光笔的"重复涂抹不变深"就靠这个 + 合成时的取大规则一起成立。
     /// </summary>
@@ -204,6 +269,12 @@ public sealed class CanvasInk
         _strokes.Add(stroke);
         return true;
     }
+
+    /// <summary>
+    /// 直接收下<b>一条已经算好的</b>笔迹（图形收笔走这条：拖拽期间它一直活在预览层里，
+    /// 定形时不需要再从起点重走一遍）。与 <see cref="End"/> 一样进撤销栈，所以撤销/清空/橡皮口径完全不变。
+    /// </summary>
+    public void Commit(CanvasStroke stroke) => _strokes.Add(stroke);
 
     /// <summary>撤销最后一条。返回有没有真的撤掉。</summary>
     public bool Undo()

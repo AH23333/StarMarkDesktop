@@ -53,10 +53,44 @@ public sealed class EphemeralInk
 
     public IReadOnlyList<Segment> Segments => _segments;
 
-    public bool IsEmpty => _segments.Count == 0;
+    /// <summary>
+    /// 正在拖的那个<b>图形预览</b>（没有则为 null）。它借同一层的原因是同一句话：
+    /// <b>不属于"留下来的东西"，就不许写进持久层</b>——预览一旦落进 <see cref="CanvasInk"/>，
+    /// 拖到一半取消、拖过头再拉回来，都会留下一条撤不掉的笔迹。
+    /// <para>它与荧光段的区别只有一条：<b>不按 TTL 淡出</b>（<see cref="Tick"/> 不看它），
+    /// 每帧被整份替换（<see cref="SetPreview"/>）。</para>
+    /// </summary>
+    public CanvasStroke? Preview => _preview?.Stroke;
+
+    private Segment? _preview;
 
     /// <summary>
-    /// 现在还活着的这些段一共占过多大一片。<b>清空之前必须先拿它去弄脏屏幕</b>——
+    /// 换掉预览（拖拽期间每一帧一次）。
+    /// </summary>
+    /// <returns>
+    /// <b>旧的那份 + 新的这份合起来占过的地方</b>。两份都要并进脏区：旧的从这一帧起再没人画它，
+    /// 不交回去就是"拖一个矩形，屏幕上留一条更宽的矩形影子"；新的不交回去就是"预览不跟手"。
+    /// </returns>
+    public IntRect SetPreview(CanvasStroke stroke)
+    {
+        var was = _preview?.Stroke.Bounds ?? default;
+        _preview = new Segment { Stroke = stroke, LastPointTick = 0 };
+        return Union(was, stroke.Bounds);
+    }
+
+    /// <summary>丢掉预览（定形、取消、清屏都走这里）。返回它占过的地方，调用方负责交回脏区。</summary>
+    public IntRect DropPreview()
+    {
+        if (_preview is null) return default;
+        var was = _preview.Stroke.Bounds;
+        _preview = null;
+        return was;
+    }
+
+    public bool IsEmpty => _segments.Count == 0 && _preview is null;
+
+    /// <summary>
+    /// 现在还活着的这些段（含预览）一共占过多大一片。<b>清空之前必须先拿它去弄脏屏幕</b>——
     /// 段一旦被 list 丢掉就再没人画它，那块光却会永远留在分层窗的缓冲里。
     /// </summary>
     public IntRect LiveBounds
@@ -65,12 +99,17 @@ public sealed class EphemeralInk
         {
             IntRect all = default;
             foreach (var segment in _segments) all = Union(all, segment.Stroke.Bounds);
+            if (_preview is { } preview) all = Union(all, preview.Stroke.Bounds);
             return all;
         }
     }
 
-    /// <summary>丢掉所有段（调用方负责把 <see cref="LiveBounds"/> 交回脏区）。</summary>
-    public void Clear() => _segments.Clear();
+    /// <summary>丢掉所有段与预览（调用方负责把 <see cref="LiveBounds"/> 交回脏区）。</summary>
+    public void Clear()
+    {
+        _segments.Clear();
+        _preview = null;
+    }
 
     /// <summary>开始一段荧光笔迹（按下那一下）。</summary>
     public Segment Begin(PixelPoint first, int colorBgra, int width, long nowMs)

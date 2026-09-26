@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using StarMark.Core.Canvas;
 using StarMark.Core.Hotkeys;
 using Xunit;
 
@@ -528,10 +529,65 @@ public sealed class CanvasWiringGateTests
         var toggle = SourceGate.MethodBody(service, "public static void ToggleTool(CanvasTool tool)");
         Assert.Contains("if (_tool == tool && !_clickThrough) SetClickThrough(true);", toggle);
         Assert.Contains("else SelectTool(tool);", toggle);
-        // 工具条上三支笔都走 ToggleTool——直接绑 SelectTool 就没有"再点取消"了
+        // 条上每一颗工具按钮都走 ToggleTool——直接绑 SelectTool 就没有"再点取消"了。
+        // 数量按模型算（三支笔＋四种图形）：加一种图形时这里跟着动，
+        // 而"某颗按钮偷偷绑了 SelectTool"仍然是红的（那一行 DoesNotContain 与它无关）。
         var toolbar = SourceGate.ReadRepoFile(Toolbar);
-        Assert.Equal(3, SourceGate.Count(toolbar, "CanvasService.ToggleTool("));
+        Assert.Equal(CanvasTools.Brushes.Length + CanvasTools.Shapes.Length,
+            SourceGate.Count(toolbar, "CanvasService.ToggleTool("));
         Assert.DoesNotContain("CanvasService.SelectTool(", toolbar);
+        // 四颗图形的按钮与高亮都得在场：漏一颗＝那种图形在模型里有、条上点不到（只有跑起来才看得见）
+        foreach (var shape in CanvasTools.Shapes)
+        {
+            Assert.Contains($"CanvasService.ToggleTool(CanvasTool.{shape})", toolbar);
+            Assert.Contains($"CanvasService.Tool == CanvasTool.{shape}", toolbar);
+        }
+        // 穿透态下选了图形必须说一句"这一按仍归下层应用"——不然就是"拖了半天什么都没画，以为软件坏了"
+        Assert.Contains("if (tool.IsShape())", SourceGate.MethodBody(toolbar, "private string StatusText()"));
+    }
+
+    /// <summary>
+    /// 批次 WK：图形这一按走的是<b>"临时层预览 → 松手定形"</b>这条链，不提前落进持久层。
+    /// <para>
+    /// 为什么值得钉：预览若直接 <c>Ink.Begin</c> 进持久层，"拖到一半松开在原地"就留下一条撤不掉的笔迹，
+    /// 而"拖过头再拉回来"会留下一个错形的框；反过来若松手时<b>重算一遍几何</b>，就会出现
+    /// "拖的时候是圆的、松手变有角"。两条都在这里钉住：落笔只 <c>SetPreview</c>，定形只 <c>DropPreview + Commit</c>，
+    /// 而两处用的是<b>同一个</b> <c>ShapeStroke(...)</c>。
+    /// </para>
+    /// <para>还钉住"预览必须被画出来"（Flush 里那一句）与"换工具/换粗细时必须收掉挂着的预览"。</para>
+    /// </summary>
+    [Fact]
+    public void ShapesPreviewInTheEphemeralLayerAndCommitTheSameGeometry()
+    {
+        var service = SourceGate.ReadRepoFile(Service);
+        var begin = SourceGate.MethodBody(service, "private static void BeginPress(");
+        Assert.Contains("else if (kind == Press.Shape)", begin);
+        Assert.Contains("screen.Dirty.Add(screen.Trail.SetPreview(ShapeStroke(at, at, colour)));", begin);
+        // 整份编排里 <c>Ink.Begin</c> 只许出现一次（画笔/橡皮那条分支）：图形若在按下时就进持久层，
+        // "拖到一半松开"会留下一条撤不掉的笔迹，而它本来什么都没画成
+        Assert.Equal(1, SourceGate.Count(service, "Ink.Begin("));
+
+        var moved = SourceGate.MethodBody(service, "private static void OnMoved(");
+        Assert.Contains("ShapeStroke(_shapeFrom, pointer.At, Palette[_colorIndex].Bgra)", moved);
+
+        var finish = SourceGate.MethodBody(service, "private static void FinishPress(");
+        Assert.Contains("var preview = screen.Trail.Preview;", finish);
+        Assert.Contains("screen.Dirty.Add(screen.Trail.DropPreview());", finish);
+        Assert.Contains("screen.Ink.Commit(preview);", finish);
+        Assert.Contains("Recomposite(screen);", finish);
+
+        // 一条几何算式两处用：预览与定形不可能长成两个样（定义那一处之外，只许 BeginPress 与 OnMoved 各一次）
+        Assert.Equal(3, SourceGate.Count(service, "ShapeStroke("));
+        Assert.Contains("CanvasShapes.Outline(_tool, from, to, width)", service);
+
+        // 预览必须被叠进提交缓冲，否则"拖的时候什么都看不见"
+        var flush = SourceGate.MethodBody(service, "private static void Flush(Screen screen)");
+        Assert.Contains("if (screen.Trail.Preview is { } preview)", flush);
+        Assert.Contains("CanvasCompositor.PaintClipped(screen.Window.Pixels, width, height, preview, rect);", flush);
+
+        // 换工具/换粗细/开穿透之前先收掉挂着的预览：否则它会一直挂在屏幕上，且下一按接到新工具
+        Assert.Contains("if (_press is Press.Ephemeral or Press.QuickPen or Press.Shape)",
+            SourceGate.MethodBody(service, "private static void CommitOpenStroke()"));
     }
 
     /// <summary>

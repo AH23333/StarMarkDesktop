@@ -155,6 +155,16 @@ public sealed partial class CanvasToolbarWindow : Window
 
     private void Eraser_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleTool(CanvasTool.Eraser);
 
+    // 四颗图形与三支笔同一套语义：点一下选上、再点当前这颗＝收笔回穿透态。
+    // 落点交给 CanvasService（它认 Press.Shape），这里只负责"要哪一支"。
+    private void Rect_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleTool(CanvasTool.Rectangle);
+
+    private void Ellipse_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleTool(CanvasTool.Ellipse);
+
+    private void Line_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleTool(CanvasTool.Line);
+
+    private void Arrow_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleTool(CanvasTool.Arrow);
+
     private void Thin_Click(object sender, RoutedEventArgs e) => CanvasService.SelectWidth(0);
 
     private void Medium_Click(object sender, RoutedEventArgs e) => CanvasService.SelectWidth(1);
@@ -228,6 +238,10 @@ public sealed partial class CanvasToolbarWindow : Window
         Highlight(PenButton, CanvasService.Tool == CanvasTool.Pen);
         Highlight(MarkerButton, CanvasService.Tool == CanvasTool.Highlighter);
         Highlight(EraserButton, CanvasService.Tool == CanvasTool.Eraser);
+        Highlight(RectButton, CanvasService.Tool == CanvasTool.Rectangle);
+        Highlight(EllipseButton, CanvasService.Tool == CanvasTool.Ellipse);
+        Highlight(LineButton, CanvasService.Tool == CanvasTool.Line);
+        Highlight(ArrowButton, CanvasService.Tool == CanvasTool.Arrow);
         Highlight(ThinButton, CanvasService.WidthStep == 0);
         Highlight(MediumButton, CanvasService.WidthStep == 1);
         Highlight(ThickButton, CanvasService.WidthStep == 2);
@@ -256,18 +270,14 @@ public sealed partial class CanvasToolbarWindow : Window
         // 而不是那行常态说明（下一次自己动工具/穿透时这句话就翻篇）
         if (CanvasService.Notice is { } note) return note;
         var tool = CanvasService.Tool;
-        var ink = $"{ToolName(tool)} · {CanvasService.WidthStep + 1} 档 · {CanvasService.Palette[CanvasService.ColorIndex].Name}";
+        var ink = $"{tool.Name()} · {CanvasService.WidthStep + 1} 档 · {CanvasService.Palette[CanvasService.ColorIndex].Name}";
         if (!CanvasService.IsClickThrough) return $"绘制中（鼠标归画布）：{ink}。点「穿透」或右键交出鼠标";
         if (tool == CanvasTool.Highlighter) return $"穿透中 + 荧光笔已选：按住左键即画、松开自动穿透；{ink}";
+        // 图形和画笔一样要真握住鼠标才画得出来。穿透态下选了它却不说明，就是"点了矩形、拖了半天什么都没画、
+        // 还以为软件坏了"——那句"这一按仍归下层应用"是这条链上唯一能挡住这种误会的出口。
+        if (tool.IsShape()) return $"穿透中 + {tool.Name()}已选：现在这一按仍归下层应用；点「穿透」收回鼠标再画{tool.Name()}";
         return $"穿透中：下层应用照常操作。{ink}；按住 Ctrl+Alt 可直接圈画，点「画笔」进入留痕模式";
     }
-
-    private static string ToolName(CanvasTool tool) => tool switch
-    {
-        CanvasTool.Highlighter => "荧光笔",
-        CanvasTool.Eraser => "橡皮",
-        _ => "画笔",
-    };
 
     private static void Highlight(Button button, bool on, bool strong = true)
         => button.Background = on ? (strong ? ActiveBrush : HaloBrush) : IdleBrush;
