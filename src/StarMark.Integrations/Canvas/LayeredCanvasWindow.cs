@@ -209,7 +209,7 @@ public sealed class LayeredCanvasWindow : IDisposable
                 }
             }
 
-            var srcPoint = new NativeMethods.POINT { X = 0, Y = 0 };
+            var srcOrigin = new NativeMethods.POINT { X = 0, Y = 0 };   // 整块缓冲就是这块玻璃，取样原点当然在左上角
             var size = new CanvasNative.SIZE { cx = Width, cy = Height };
             var blend = new CanvasNative.BLENDFUNCTION
             {
@@ -223,25 +223,25 @@ public sealed class LayeredCanvasWindow : IDisposable
             {
                 cbSize = (uint)sizeof(CanvasNative.UPDATELAYEREDWINDOWINFO),
                 hdcDst = IntPtr.Zero,
-                pptSrc = (IntPtr)(&srcPoint),
+                pptDst = IntPtr.Zero,              // NULL＝不动窗口位置（画布铺满这块屏，改位置只会闪）
                 psize = (IntPtr)(&size),
                 hdcSrc = _memDc,
-                pptDst = IntPtr.Zero,              // NULL＝不动窗口位置（画布是铺满屏的，改位置只会闪）
-                pwcrKey = IntPtr.Zero,
+                pptSrc = (IntPtr)(&srcOrigin),
+                crKey = 0,                         // 不用颜色键：透明度全在 alpha 通道里
                 pbcf = (IntPtr)(&blend),
-                dwFlags = 0,
+                dwFlags = CanvasNative.ULW_ALPHA,  // <b>少了这一位，上面整个 blend 结构就被系统忽略</b>
                 prcDirty = (IntPtr)(&dirty),
             };
             if (CanvasNative.UpdateLayeredWindowIndirect(_hwnd, ref info)) return;
 
-            // 兜底：Indirect 失手（驱动/远程会话上见过）就整帧走老接口。
-            // 这条路的代价是一次 33MB 提交，但"画布完全不出现"比慢一下严重得多。
+            // 兜底：Indirect 失手（驱动/远程会话上见过）就整帧走老接口——它没有脏区参数，整张交一次。
+            // 这条路的代价是一次全屏提交，但"画布完全不出现"比慢一下严重得多。
             var error = Marshal.GetLastWin32Error();
             var plainSize = size;
-            var plainSrc = srcPoint;
+            var plainSrc = srcOrigin;
             var plainBlend = blend;
             if (!CanvasNative.UpdateLayeredWindow(_hwnd, IntPtr.Zero, IntPtr.Zero, ref plainSize,
-                    _memDc, ref plainSrc, IntPtr.Zero, ref plainBlend, 0))
+                    _memDc, ref plainSrc, 0, ref plainBlend, CanvasNative.ULW_ALPHA))
             {
                 StarLog.WarnThrottled("canvas:present",
                     $"画布提交失败（Win32 {error}，兜底也失败 {Marshal.GetLastWin32Error()}）", windowMs: 30_000);

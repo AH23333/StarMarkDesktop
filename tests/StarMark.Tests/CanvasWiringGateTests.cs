@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Linq;
 using StarMark.Core.Hotkeys;
 using Xunit;
 
@@ -65,13 +66,77 @@ public sealed class CanvasWiringGateTests
     }
 
     [Fact]
-    public void ToolbarSizesToItsMeasuredContentAndKeepsItselfOnTop()
+    public void ToolbarIsMeasuredOnlyAfterTheWindowHasBeenLaidOutAndClampedInsideTheScreen()
     {
         var toolbar = SourceGate.ReadRepoFile(Toolbar);
+        var show = SourceGate.MethodBody(toolbar, "public void ShowAt(IntRect screen, double scale)");
+        var fit = SourceGate.MethodBody(toolbar, "private void Fit(bool centerOnScreen)");
         // 写死的尺寸会把 ✕ 挤出客户区（内容一多就发生，且只在真机看得见）
-        Assert.Contains("Root.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity))", toolbar);
-        Assert.Contains("Root.DesiredSize", toolbar);
-        Assert.Contains("RaiseAboveCanvas();", SourceGate.MethodBody(toolbar, "private void Refresh()"));
+        Assert.Contains("Root.DesiredSize", fit);
+        Assert.DoesNotContain("FallbackWidthDip * scale", fit);
+        // 但"窗还没亮就量"同样会出事：那时按钮模板尚未应用，量到的是十几颗空按钮的 MinWidth 之和，
+        // 条子只有约 360 宽，右边整段出口按钮在窗外（真机："顶部菜单栏右侧被截断"）。
+        Assert.True(show.IndexOf("AppWindow.Show()") < show.IndexOf("Root.UpdateLayout()"),
+            "必须先亮窗");
+        Assert.True(show.IndexOf("Root.UpdateLayout()") < show.IndexOf("Fit(centerOnScreen: true)"),
+            "排一遍之后才允许量尺寸");
+        Assert.Contains("Root.Measure(new Windows.Foundation.Size(availableDip, double.PositiveInfinity))", fit);
+        Assert.DoesNotContain("double.PositiveInfinity, double.PositiveInfinity", fit);   // 无限大测量＝比屏还宽
+        Assert.Contains("Math.Clamp(x,", fit);                                            // 左右都夹回屏内
+        // 状态文本会变长（穿透那句折两行）→ 刷新时必须重算尺寸，且不能把用户拖到的位置挪走
+        var refresh = SourceGate.MethodBody(toolbar, "private void Refresh()");
+        Assert.Contains("Fit(centerOnScreen: false);", refresh);
+        Assert.Contains("RaiseAboveCanvas();", refresh);
+        Assert.Contains("MaxWidth", SourceGate.ReadRepoFile(ToolbarXaml));                 // 长文本靠换行不靠撑窗
+    }
+
+    // ────────── 批次 WC-4：真机"一按画笔整块屏幕像卡死"（提交参数） ──────────
+
+    /// <summary>
+    /// 提交必须带 <c>ULW_ALPHA</c>。<b>dwFlags 留 0 不是"什么都不做"，而是"不要用混合函数"</b>：
+    /// 于是 BLENDFUNCTION（含 AC_SRC_ALPHA）整个被系统忽略，那块 alpha=0 的缓冲被按不透明贴图上，
+    /// 用户看到的是全屏 topmost 的一面黑墙，而它正吃着所有鼠标输入——症状写作"屏幕卡死"。
+    /// 两条出口（Indirect 与老接口兜底）都要带，缺一条就是"大多数时候好的、某些机器上是黑的"。
+    /// </summary>
+    [Fact]
+    public void EveryPresentPathCarriesUlwAlpha()
+    {
+        var push = SourceGate.MethodBody(SourceGate.ReadRepoFile(Layer), "private unsafe void Push");
+        Assert.Contains("dwFlags = CanvasNative.ULW_ALPHA", push);
+        Assert.DoesNotContain("dwFlags = 0", push);
+        Assert.Equal(2, SourceGate.Count(push, "CanvasNative.ULW_ALPHA"));
+        Assert.Contains("public const uint ULW_ALPHA = 0x0000_0002;", SourceGate.ReadRepoFile(Native));
+    }
+
+    /// <summary>
+    /// <c>UPDATELAYEREDWINDOWINFO</c> 的槽位逐字钉住。字段名写对而<b>槽位</b>写错时：
+    /// 大小对、cbSize 对、编译过、调用返回 TRUE——只有屏幕上看得见。
+    /// 上一版把第 3 槽命名为 <c>pptSrc</c>，于是每次提交都在"把窗口搬到 (0,0)"。
+    /// </summary>
+    [Fact]
+    public void UlwiStructSlotsMatchTheWin32Header()
+    {
+        var block = SourceGate.Between(SourceGate.ReadRepoFile(Native),
+            "public struct UPDATELAYEREDWINDOWINFO", "\n    }");
+        var fields = System.Text.RegularExpressions.Regex.Matches(block, @"public\s+(\S+)\s+(\w+);")
+            .Select(m => $"{m.Groups[1].Value} {m.Groups[2].Value}")
+            .ToList();
+
+        Assert.Equal(new[]
+        {
+            "uint cbSize", "IntPtr hdcDst", "IntPtr pptDst", "IntPtr psize", "IntPtr hdcSrc",
+            "IntPtr pptSrc", "uint crKey", "IntPtr pbcf", "uint dwFlags", "IntPtr prcDirty",
+        }, fields);
+    }
+
+    /// <summary>每帧的"叠盖记号"必须从空算起。拿上一帧的当起点＝它只增不减＝脏区最终铺满全屏。</summary>
+    [Fact]
+    public void OverlayMarkingIsRebuiltEachFrame_InsteadOfAccumulating()
+    {
+        var tick = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static void OnFrameTick");
+        Assert.Contains("screen.Dirty.Add(screen.LastOverlay);", tick);      // 上一帧叠过的地方要复原
+        Assert.Contains("var overlay = CanvasCompositor.Nothing;", tick);    // 本帧的记号从零开始并
+        Assert.DoesNotContain("var overlay = screen.LastOverlay;", tick);
     }
 
     [Fact]

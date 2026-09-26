@@ -37,7 +37,7 @@
                 <Button x:Name="ThinButton" Content="细" Click="Thin_Click"/>
                 <Button x:Name="MediumButton" Content="中" Click="Medium_Click"/>
                 <Button x:Name="ThickButton" Content="粗" Click="Thick_Click"/>
-                <TextBlock x:Name="Status" VerticalAlignment="Center" FontSize="12"
+                <TextBlock x:Name="Status" VerticalAlignment="Center" FontSize="12" MaxWidth="360"
                            Foreground="#BFFFFFFF" TextWrapping="Wrap"/>
             </StackPanel>
         </StackPanel>

@@ -35,6 +35,9 @@ public sealed partial class CanvasToolbarWindow : Window
 
     private readonly List<Button> _colourButtons = new();
 
+    private IntRect _screen;
+    private double _scale = 1d;
+
     private bool _dragging;
     private int _grabOffsetX;
     private int _grabOffsetY;
@@ -56,28 +59,61 @@ public sealed partial class CanvasToolbarWindow : Window
         Refresh();
     }
 
-    /// <summary>
-    /// 摆在所在屏的顶部居中。<b>尺寸按内容实测，不写死</b>：写死的数字在"按钮多一点/字体大一号"之后
-    /// 就是把 ✕ 挤出客户区——而条子被画布盖住时那是唯一的鼠标出口（真机就是这么被关掉的）。
-    /// </summary>
     public void ShowAt(IntRect screen, double scale)
     {
-        scale = scale <= 0 ? 1 : scale;
-        // 先按"无限大"量一次内容：UpdateLayout 之外没有别的方式能拿到自然尺寸，
-        // 而直接量到的是当前客户区大小（窗还没缩，量出来就是循环依赖）
-        Root.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
-        var wanted = Root.DesiredSize;
-        var width = (int)Math.Round((wanted.Width > 1 ? wanted.Width : FallbackWidthDip) * scale);
-        var height = (int)Math.Round((wanted.Height > 1 ? wanted.Height : FallbackHeightDip) * scale);
-        var x = screen.X + (int)Math.Round((screen.Width - width) / 2d);
-        var y = screen.Y + (int)Math.Round(TopMarginDip * scale);
+        _screen = screen;
+        _scale = scale <= 0 ? 1 : scale;
 
+        // 先亮出来再量：窗没亮过时按钮的控件模板尚未应用，那一次 Measure 量到的是十几颗空按钮的
+        // MinWidth 之和（真机症状：条子只有约 360 宽，右边「穿透／贴图／存图／复制／✕退出」整段在窗外，
+        // 而 ✕ 是唯一的鼠标出口）。
         AppWindow.Show();
+        Root.UpdateLayout();
+        Fit(centerOnScreen: true);
+        Refresh();
+    }
+
+    /// <summary>
+    /// 按内容重算窗尺寸。<b>每次状态刷新都要走一遍</b>：切到穿透态时那句说明长得多，
+    /// 只在 ShowAt 量一次的话，变高的那一行会被截在窗外（"按钮还在但看不见"最难查）。
+    /// <paramref name="centerOnScreen"/> 只在第一次出现——用户拖动过之后就留在原地。
+    /// </summary>
+    private void Fit(bool centerOnScreen)
+    {
+        var screen = _screen;
+        var scale = _scale;
+        if (screen.Width <= 0 || screen.Height <= 0) return;      // 还没 ShowAt 过（构造期那次 Refresh）
+
+        // 量内容时要按这块屏的宽度去约束它：无限大下状态文本会报出一行长文的自然宽，
+        // 整条窗因此比屏还宽，居中摆放就变成"左右各被截掉一截"。
+        var availableDip = Math.Max(360, screen.Width / scale - TopMarginDip * 2);
+        Root.Measure(new Windows.Foundation.Size(availableDip, double.PositiveInfinity));
+        var wanted = Root.DesiredSize;
+        var width = Math.Min((int)Math.Round((wanted.Width > 1 ? wanted.Width : FallbackWidthDip) * scale),
+            Math.Max(1, screen.Width));
+        var height = (int)Math.Round((wanted.Height > 1 ? wanted.Height : FallbackHeightDip) * scale);
+
         var hwnd = WindowInterop.GetHwnd(this);
+        int x, y;
+        if (centerOnScreen)
+        {
+            x = screen.X + (screen.Width - width) / 2;
+            y = screen.Y + (int)Math.Round(TopMarginDip * scale);
+        }
+        else
+        {
+            // 重算尺寸不该把条子挪回中间：用户刚拖到哪儿它就还该在哪儿
+            var now = WindowInterop.GetWindowRect(this);
+            x = now.X;
+            y = now.Y;
+        }
+        // 左右都夹回屏内：宁可贴边，也不要出现"看得见一半、点不到另一半"
+        x = Math.Clamp(x, screen.X, Math.Max(screen.X, screen.Right - width));
+        y = Math.Clamp(y, screen.Y, Math.Max(screen.Y, screen.Bottom - height));
+
         WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOPMOST, x, y, width, height,
             WindowInterop.SWP_SHOWWINDOW | WindowInterop.SWP_NOACTIVATE);
         WindowInterop.ShowWindow(hwnd, WindowInterop.SW_SHOWNOACTIVATE);
-        Refresh();
     }
 
     /// <summary>
@@ -186,6 +222,8 @@ public sealed partial class CanvasToolbarWindow : Window
         Status.Text = CanvasService.IsClickThrough
             ? "穿透中：鼠标归下面的应用。再点「穿透」、右键画布、按热键或托盘都能回到绘制"
             : $"{ToolName(CanvasService.Tool)} · {CanvasService.WidthStep + 1} 档 · {CanvasService.Palette[CanvasService.ColorIndex].Name}";
+        // 文本一变，行高就可能变（穿透那句会折成两行）→ 窗尺寸跟着重算，位置保持不动
+        Fit(centerOnScreen: false);
         // 画布每屏一块也是 TOPMOST，topmost 链里谁最后被提谁在上。每次刷新都补一发：
         // 条子被画布盖住＝唯一的鼠标出口消失（真机"看不见也点不到"就是这么来的）
         RaiseAboveCanvas();

@@ -40,6 +40,15 @@ internal static class CanvasNative
     public const int MK_LBUTTON = 0x0001;
     public const int MK_RBUTTON = 0x0002;
 
+    // ===== 分层窗提交标志（UpdateLayeredWindow / …Indirect 的 dwFlags） =====
+
+    /// <summary>
+    /// 按 <c>pblend</c> 逐像素合成。<b>0 不是"什么都不做"，而是"不要用混合函数"</b>：
+    /// 于是这块玻璃被按不透明贴图整块刷上去，笔迹一点没露出来，先露出来的是一面黑墙——
+    /// 全屏 topmost 的黑墙还吃掉所有鼠标，真机上报的就是"一按画笔整块屏幕像卡死了"。
+    /// </summary>
+    public const uint ULW_ALPHA = 0x0000_0002;
+
     // ===== 光标 =====
     public static readonly IntPtr IDC_ARROW = new(32512);
     public static readonly IntPtr IDC_CROSS = new(32515);
@@ -83,21 +92,28 @@ internal static class CanvasNative
     }
 
     /// <summary>
-    /// <c>UpdateLayeredWindowIndirect</c> 的参数块。<b>字段顺序与 Win32 头文件逐字对齐</b>；
-    /// 三个指针成员指向栈上（stackalloc）的结构，调用返回后即失效，不留悬挂。
+    /// <c>UpdateLayeredWindowIndirect</c> 的参数块。<b>字段顺序与 winuser.h 逐字对齐</b>
+    /// （cbSize / hdcDst / pptDst / psize / hdcSrc / pptSrc / crKey / pblend / dwFlags / prcDirty）；
+    /// 指针成员指向栈上（stackalloc）的结构，调用返回后即失效，不留悬挂。
+    /// <para>
+    /// <b>名字要按槽位起，不能按"我以为它是干什么的"起</b>：这一版原先第 3 个槽写作 <c>pptSrc</c>、
+    /// 第 6 个写作 <c>pptDst</c>，按名字赋值看着完全对称、编译通过、<c>cbSize</c> 也对，
+    /// 于是系统把那块全屏玻璃"搬"到了 (0,0)，而源原点反而是 NULL。这类错位不会有任何报错，
+    /// 只会让用户看见"一按下笔整块屏幕变成一面墙"。
+    /// </para>
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     public struct UPDATELAYEREDWINDOWINFO
     {
         public uint cbSize;
         public IntPtr hdcDst;              // 文档：Indirect 里不使用，置 NULL
-        public IntPtr pptSrc;              // POINT*
+        public IntPtr pptDst;              // POINT*：窗口的<b>新屏幕位置</b>，NULL＝不改位置
         public IntPtr psize;               // SIZE*
         public IntPtr hdcSrc;
-        public IntPtr pptDst;              // POINT*（NULL＝不改位置）
-        public IntPtr pwcrKey;             // COLORREF*（不用颜色键）
+        public IntPtr pptSrc;              // POINT*：源 DC 里这块图的取样原点
+        public uint crKey;                 // COLORREF（是值，不是指针——文档的槽位 7）
         public IntPtr pbcf;                // BLENDFUNCTION*
-        public uint dwFlags;
+        public uint dwFlags;               // 必须带 ULW_ALPHA，否则 pbcf 整个被忽略
         public IntPtr prcDirty;            // RECT*：<b>脏区就在这儿</b>，4K 全屏每帧整张提交是 33MB
     }
 
@@ -119,7 +135,7 @@ internal static class CanvasNative
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, IntPtr pptDst,
         ref SIZE psize, IntPtr hdcSrc, ref SystemTray.NativeMethods.POINT pptSrc,
-        IntPtr crKey, ref BLENDFUNCTION pblend, uint dwFlags);
+        uint crKey, ref BLENDFUNCTION pblend, uint dwFlags);
 
     /// <summary>按下时必须抓Mouse：不抓到，笔迹拖到屏幕边缘就再也收不到抬起消息＝笔永远"没松"。</summary>
     [DllImport("user32.dll")]

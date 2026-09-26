@@ -392,7 +392,9 @@ public static class CanvasService
             // 上一帧叠过的地方必须先加进脏区：否则淡掉的那团光与走过的光晕会赖在屏幕上
             screen.Dirty.Add(screen.LastOverlay);
             screen.Trail.Tick(now);
-            var overlay = screen.LastOverlay;
+            // 本帧的叠盖范围<b>从空算起</b>，不能拿上一帧的当起点：那样这块记号只会越并越大，
+            // 几十帧后每帧的脏区就是一整块屏幕（真机反馈的"画几笔之后整屏发木"）。
+            var overlay = CanvasCompositor.Nothing;
             foreach (var segment in screen.Trail.Segments)
             {
                 screen.Dirty.Add(segment.Stroke.Bounds);
