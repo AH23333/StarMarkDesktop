@@ -15,7 +15,7 @@ namespace StarMark.Tests;
 /// 两条都有断言。
 /// </para>
 /// </summary>
-public sealed class AnnotationHistoryTests
+public sealed class InkDocTests
 {
     private static Annotation Mark(int x)
         => new(AnnotationTool.Line, new[] { new PixelPoint(x, 0), new PixelPoint(x + 5, 5) },
@@ -24,7 +24,7 @@ public sealed class AnnotationHistoryTests
     [Fact]
     public void FreshHistoryIsNothingToUndoOrRedo()
     {
-        var history = new AnnotationHistory();
+        var history = new InkDoc();
         Assert.Empty(history.Marks);
         Assert.Equal(0, history.Count);
         Assert.False(history.CanUndo);
@@ -36,7 +36,7 @@ public sealed class AnnotationHistoryTests
     [Fact]
     public void AddUndoRedoRoundTrip()
     {
-        var history = new AnnotationHistory();
+        var history = new InkDoc();
         history.Add(Mark(1));
         history.Add(Mark(2));
         Assert.Equal(2, history.Count);
@@ -58,7 +58,7 @@ public sealed class AnnotationHistoryTests
     [Fact]
     public void DrawingAfterUndoDiscardsTheRedoBranch()
     {
-        var history = new AnnotationHistory();
+        var history = new InkDoc();
         history.Add(Mark(1));
         history.Add(Mark(2));
         history.Undo();
@@ -72,7 +72,7 @@ public sealed class AnnotationHistoryTests
     [Fact]
     public void ClearIsUndoableAndRestoresTheOriginalOrder()
     {
-        var history = new AnnotationHistory();
+        var history = new InkDoc();
         for (var i = 1; i <= 3; i++) history.Add(Mark(i));
         var before = history.Marks.Select(m => m.Points[0].X).ToList();
 
@@ -87,7 +87,7 @@ public sealed class AnnotationHistoryTests
     [Fact]
     public void ClearingAnEmptyHistoryAddsNoStep()
     {
-        var history = new AnnotationHistory();
+        var history = new InkDoc();
         history.Clear();
         history.Clear();
         Assert.False(history.CanUndo, "空历史再点清空不该产生步骤，否则要点两次撤销才回到有标注");
@@ -96,21 +96,21 @@ public sealed class AnnotationHistoryTests
     [Fact]
     public void HistoryIsBoundedSoItCanSnapShotEveryStroke()
     {
-        var history = new AnnotationHistory();
-        for (var i = 0; i < AnnotationHistory.MaxStates + 15; i++) history.Add(Mark(i));
-        Assert.Equal(AnnotationHistory.MaxStates + 15, history.Count);   // 标注本身不丢
+        var history = new InkDoc();
+        for (var i = 0; i < InkDoc.MaxStates + 15; i++) history.Add(Mark(i));
+        Assert.Equal(InkDoc.MaxStates + 15, history.Count);   // 标注本身不丢
 
         var steps = 0;
         while (history.Undo()) steps++;
-        Assert.InRange(steps, 1, AnnotationHistory.MaxStates);           // 只有有界的步数可退
-        Assert.Equal(AnnotationHistory.MaxStates + 15 - steps, history.Count);
+        Assert.InRange(steps, 1, InkDoc.MaxStates);           // 只有有界的步数可退
+        Assert.Equal(InkDoc.MaxStates + 15 - steps, history.Count);
     }
 
     [Fact]
     public void ResetWipesEverythingIncludingTheHistory()
     {
         // 换选区时调用：底图都换了，旧标注摆在新框里没有任何意义
-        var history = new AnnotationHistory();
+        var history = new InkDoc();
         history.Add(Mark(1));
         history.Add(Mark(2));
         history.Reset();
@@ -122,7 +122,7 @@ public sealed class AnnotationHistoryTests
     [Fact]
     public void MarksAreThePaintOrder()
     {
-        var history = new AnnotationHistory();
+        var history = new InkDoc();
         var first = Mark(1);
         var second = Mark(2);
         history.Add(first);
@@ -136,7 +136,7 @@ public sealed class AnnotationHistoryTests
     [Fact]
     public void ReplacingTheSelectedMarkIsExactlyOneUndoableStep()
     {
-        var history = new AnnotationHistory();
+        var history = new InkDoc();
         var original = Mark(1);
         history.Add(original);
         history.Add(Mark(2));
@@ -150,7 +150,7 @@ public sealed class AnnotationHistoryTests
     [Fact]
     public void UndoAfterAReplaceHandsBackThePreviousState()
     {
-        var history = new AnnotationHistory();
+        var history = new InkDoc();
         history.Add(Mark(1));
         history.Add(Mark(2));
         var moved = Mark(2).MovedBy(3, 0);
@@ -166,7 +166,7 @@ public sealed class AnnotationHistoryTests
     [Fact]
     public void RemovingTheSelectedMarkKeepsTheRestInPaintOrder()
     {
-        var history = new AnnotationHistory();
+        var history = new InkDoc();
         for (var i = 1; i <= 3; i++) history.Add(Mark(i));
 
         history.RemoveAt(1);
@@ -181,7 +181,7 @@ public sealed class AnnotationHistoryTests
     {
         // 界面上选中记下的是个下标：撤销/清空之后它可能已经不属于任何一条。
         // 这里抛异常等于把用户一次普通的按键变成遮罩窗崩溃（遮罩一崩，整场截图就没了）。
-        var history = new AnnotationHistory();
+        var history = new InkDoc();
         history.Add(Mark(1));
         history.Undo();                                 // 退回到"还没有标注"
 
@@ -195,7 +195,7 @@ public sealed class AnnotationHistoryTests
     [Fact]
     public void EditingAfterUndoDiscardsTheRedoBranch()
     {
-        var history = new AnnotationHistory();
+        var history = new InkDoc();
         history.Add(Mark(1));
         history.Add(Mark(2));
         history.Undo();
@@ -203,5 +203,72 @@ public sealed class AnnotationHistoryTests
         history.ReplaceAt(0, Mark(7).MovedBy(0, 5));
         Assert.False(history.CanRedo, "改过的分支必须作废：否则「前进」会把用户刚改的位置换回旧的那一份");
         Assert.Equal(5, history.Marks[0].Points[0].Y);
+    }
+
+    // ────────── 落笔序号（§7：撤销要跨叠比"谁最后落"） ──────────
+
+    [Fact]
+    public void EmptyDocOrdersLastSoItIsNeverPickedAsTheNewest()
+    {
+        var empty = new InkDoc();
+        Assert.Equal(InkOrder.None, empty.LastOrder);
+
+        var drawn = new InkDoc();
+        drawn.Add(Mark(1));
+        Assert.True(drawn.LastOrder > InkOrder.None, "没画过的那一叠必须排最后，不能被选成「最后落的那一笔」");
+    }
+
+    [Fact]
+    public void LastOrderFollowsTheNewestMarkAndStepsBackOnUndo()
+    {
+        var history = new InkDoc();
+        history.Add(Mark(1));
+        var first = history.Marks[0].Order;
+        history.Add(Mark(2));
+        var second = history.Marks[1].Order;
+
+        Assert.True(second > first, "后落的那一笔序号必须更大——跨叠比较靠的就是这个大小关系");
+        Assert.Equal(second, history.LastOrder);
+
+        Assert.True(history.Undo());
+        Assert.True(first == history.LastOrder,
+            "撤回去之后「最新」要跟着退回前一笔，不然撤销会指着一条已经不存在的笔迹");
+
+        Assert.True(history.Redo());
+        Assert.Equal(second, history.LastOrder);
+    }
+
+    [Fact]
+    public void MovingOrScalingAMarkKeepsItsOrder()
+    {
+        var history = new InkDoc();
+        history.Add(Mark(3));
+        var born = history.Marks[0].Order;
+
+        history.ReplaceAt(0, history.Marks[0].MovedBy(1, 1));
+        Assert.Equal(born, history.Marks[0].Order);
+        Assert.True(born == history.LastOrder,
+            "改几何是改那一条笔迹，不是又落了一笔：序号必须跟着走");
+    }
+
+    [Fact]
+    public void TwoIdenticalLookingMarksAreDistinctSoTheEraserTakesOne()
+    {
+        // 用户能画出两条一模一样的矩形（同样的两个对角），而"擦掉其中一个"不该把另一个也带走。
+        // 序号进到记录判等里就是为了这一条：从前 HashSet 按值判等，两条重影互相顶掉。
+        var a = Mark(4);
+        var b = Mark(4);
+        Assert.NotEqual(a, b);
+
+        var history = new InkDoc();
+        history.Add(a);
+        history.Add(b);
+
+        history.BeginErase();
+        history.ApplyErase(new HashSet<Annotation> { a });
+        history.EndErase();
+
+        Assert.Single(history.Marks);
+        Assert.Equal(b.Order, history.Marks[0].Order);
     }
 }

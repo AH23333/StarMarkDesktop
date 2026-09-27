@@ -6,19 +6,24 @@ using System.Linq;
 namespace StarMark.Core.Capture;
 
 /// <summary>
-/// 标注的编辑历史：画、撤销、重做、清空这四件事的<b>唯一状态</b>。
+/// 一块面上的笔迹与编辑历史：<b>画、撤销、重做、清空这四件事的唯一状态</b>（方案 §3.4 的 InkDoc）。
+/// <para>
+/// 它从前顶着"截图那条链的历史"这个名字。改名不是为了好听：整合之后它是<b>两侧唯一认的载体</b>——
+/// 截图与贴图今天就是用它，画布那几叠笔迹在 S2 也要归到同一个类型下（§3.4）。
+/// 叫 "History" 会让人以为它只管撤销，而它同时管着"这一面上现在到底有什么"，那才是别人要读的那一半。
+/// </para>
 /// <para>
 /// 存的是<b>整份快照</b>而不是"动作 + 反向动作"。理由有两条：① 反向动作要每种编辑各写一遍
-/// （加一条的反向是删、清空的反向是恢复整叠），任何一处写漏就是"撤销后残留半条"；
-/// ② 标注数量级很小（一次截图不会画过几百条），快照的内存代价可以忽略，
-/// 而正确性是白送的 ⇒ <see cref="Clear"/> 能撤销回来这种细节不需要额外代码。
+/// （加一条的反向是删、清空的反向是恢复整叠），任何一处写漏就是"撤销后残留半条"；② 标注数量级很小
+/// （一次截图不会画过几百条），快照的内存代价可以忽略，而正确性是白送的 ⇒ <see cref="Clear"/> 能撤销回来
+/// 这种细节不需要额外代码。
 /// </para>
 /// <para>
 /// 快照有上限（<see cref="MaxStates"/>）：有界才敢每画一条就存一份，
 /// 也才不会在"画一百条又撤销到底"之后还留着整条链的内存。
 /// </para>
 /// </summary>
-public sealed class AnnotationHistory
+public sealed class InkDoc
 {
     /// <summary>最多记住多少步（超出就丢最早的那一步：撤销到底也够用了）。</summary>
     public const int MaxStates = 40;
@@ -32,6 +37,14 @@ public sealed class AnnotationHistory
     public int Count => Marks.Count;
     public bool CanUndo => _at > 0;
     public bool CanRedo => _at < _states.Count - 1;
+
+    /// <summary>
+    /// 这一叠里<b>最后落的那一笔</b>是全机第几笔；空叠给 <see cref="InkOrder.None"/>，
+    /// 于是它在任何"谁最新"的比较里都排最后（没画过的东西不该被选中当成"最后落的那一笔"）。
+    /// <para>跨叠比的就是这个数：§7 要的是"Ctrl+Z 永远撤当前焦点域内最后落的那一笔"，
+    /// 而那一笔可能住在板子的某块屏上、也可能住在这张截图/贴图里。</para>
+    /// </summary>
+    public long LastOrder => Count == 0 ? InkOrder.None : Marks[^1].Order;
 
     /// <summary>画了一条新标注。<b>重做栈就此作废</b>：撤销两步再画一条，历史在这里分叉，
     /// 留着旧分支会让"前进"把用户刚画的东西换成一条他没选中的旧线。</summary>

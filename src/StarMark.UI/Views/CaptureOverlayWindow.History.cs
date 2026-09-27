@@ -34,7 +34,7 @@ namespace StarMark.UI.Views;
 public sealed partial class CaptureOverlayWindow
 {
     // ────────── 编辑历史：撤销 / 重做 / 清空 ──────────
-    // 三个动作都只是移动历史指针（状态快照在 AnnotationHistory 里），
+    // 三个动作都只是移动历史指针（状态快照在 InkDoc 里），
     // 所以"清空了又撤销回来"和"撤销两步再重做"不需要任何额外代码，也不会残留半条。
 
     /// <summary>选区阶段的方向键：plain＝平移 1px，Shift＝缩放对应边 1px（物理像素）。</summary>

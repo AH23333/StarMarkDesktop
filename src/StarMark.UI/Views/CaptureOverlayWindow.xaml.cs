@@ -100,7 +100,7 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>底图／最终图的尺寸（截图＝选区尺寸；编辑＝贴图的源尺寸，与显示尺寸无关）。</summary>
     private int _contentWidth, _contentHeight;
 
-    private readonly AnnotationHistory _history = new();
+    private readonly InkDoc _history = new();
 
     private PointInt32 _startPhysical;
     private IntRect? _selection;                // 虚拟桌面物理像素
