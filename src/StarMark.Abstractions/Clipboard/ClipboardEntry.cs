@@ -23,12 +23,27 @@ public static class ClipboardEntry
     private const string CopyCountKey = "clipCopyCount";
     private const string TruncatedKey = "clipTruncated";
     private const string FullLengthKey = "clipFullLength";
+    private const string WidthKey = "clipWidth";
+    private const string HeightKey = "clipHeight";
+    private const string BytesKey = "clipBytes";
+    private const string FileKey = "clipFile";
+    private const string ThumbKey = "clipThumb";
+    private const string MissingKey = "clipMissing";
 
-    /// <summary>条目格式：纯文本。与 <see cref="FormatFiles"/> 一起构成当前支持的两种负载。</summary>
+    /// <summary>条目格式：纯文本。与 <see cref="FormatFiles"/> 一起构成此前的两种负载。</summary>
     public const string FormatText = "text";
 
     /// <summary>条目格式：文件列表（CF_HDROP）。Title 为首个文件名，正文是所有路径。</summary>
     public const string FormatFiles = "files";
+
+    /// <summary>
+    /// 条目格式：图片。<b>正文一律空</b>——内容在 <c>%LOCALAPPDATA%\StarMark\clip</c> 下的那个文件里，
+    /// 库里再存一份字节就回到"同一张图两处真值"（§3-Q1 磁盘有界与 Q6 可见性都要求只有一份）。
+    /// </summary>
+    public const string FormatImage = "image";
+
+    /// <summary>图片条目的负载：文件名（相对 clip 目录）与三个显示要用的数。</summary>
+    public readonly record struct ImageMeta(string MainName, string ThumbName, int Width, int Height, long Bytes);
 
     /// <summary>
     /// 把一次复制动作映射成待 upsert 的条目。
@@ -65,8 +80,35 @@ public static class ClipboardEntry
         return lines > 1 ? $"{where} · {lines} 行 · {size}" : $"{where} · {size}";
     }
 
+    /// <summary>
+    /// 把一次"复制了图片"映射成待 upsert 的条目。
+    /// <para><paramref name="meta"/> 里的文件名是<b>候选名</b>：同图再复制时仓储会把旧行的名字合并回来
+    /// （见 <see cref="MergeForReplay"/>），因为名字一旦出现在用户目录里就是用户看得见的事实，
+    /// 每次回放都换个新时间戳＝攒孤儿。</para>
+    /// </summary>
+    public static Item BuildImage(string sourceId, ImageMeta meta, string? sourceApp, DateTimeOffset now)
+        => new()
+        {
+            Type = ItemType.Clipboard,
+            Source = ItemSources.Clipboard,
+            SourceId = sourceId,
+            Title = ClipAssets.DescribeTitle(meta.Width, meta.Height),
+            Subtitle = BuildImageSubtitle(sourceApp, meta),
+            Uri = string.Empty,                                     // 图片条目没有可打开的 URI；点击=复制回剪贴板
+            Description = string.Empty,                             // 正文在文件里，库里不存第二份
+            CreatedAt = now.ToUnixTimeSeconds(),
+            UpdatedAt = now.ToUnixTimeSeconds(),
+            ExtraJson = Write(null, sourceApp, FormatImage, 1, false, 0, meta),
+        };
+
+    private static string BuildImageSubtitle(string? sourceApp, ImageMeta meta)
+    {
+        var where = string.IsNullOrWhiteSpace(sourceApp) ? "未知来源" : ClipboardPolicy.CollapseControlChars(sourceApp!);
+        return $"{where} · {meta.Width}×{meta.Height} · {ClipAssets.DescribeBytes(meta.Bytes)}";
+    }
+
     private static string Write(string? existingJson, string? sourceApp, string format, long copyCount,
-        bool truncated, int fullLength)
+        bool truncated, int fullLength, ImageMeta? image = null)
     {
         var node = Parse(existingJson);
         if (!string.IsNullOrWhiteSpace(sourceApp)) node[AppKey] = ClipboardPolicy.CollapseControlChars(sourceApp!);
@@ -82,6 +124,17 @@ public static class ClipboardEntry
             // 没截断就把旧标记清掉（而不是写成 JSON null）：留着"已截断"会让 UI 永远挂着半句假话。
             node.Remove(TruncatedKey);
             node.Remove(FullLengthKey);
+        }
+        if (image is { } m)
+        {
+            // 文件名以<b>已存在的那一行</b>为准（见 BuildImage 的注释）；字节数与尺寸按最新一次写，
+            // clipMissing 一律清掉：走到这里意味着采集侧正要（重新）把文件写到那个名字上。
+            if (node[FileKey]?.GetValue<string>() is not { Length: > 0 }) node[FileKey] = m.MainName;
+            if (node[ThumbKey]?.GetValue<string>() is not { Length: > 0 }) node[ThumbKey] = m.ThumbName;
+            node[WidthKey] = m.Width;
+            node[HeightKey] = m.Height;
+            node[BytesKey] = m.Bytes;
+            node.Remove(MissingKey);
         }
         return node.ToJsonString();
     }
@@ -119,11 +172,15 @@ public static class ClipboardEntry
     }
 
     /// <summary>
-    /// 同一条文本再次复制时，在<b>旧</b> extra 上累加次数并刷新来源应用（其余键原样保留，
+    /// 同一条内容再次复制时，在<b>旧</b> extra 上累加次数并刷新来源应用（其余键原样保留，
     /// 例如以后可能加进来的用户标记）。次数由调用方（仓储层）从旧值算好后传进来，这里只做拼装。
+    /// <para>图片条目要把"<b>旧行已存的文件名</b>"保住（<see cref="Write"/> 里以 existing 为准），
+    /// 否则每次回放都写一个新时间戳的名字，旧文件立刻变孤儿——而 §3-Q6 说得很清楚：
+    /// 用户目录里的东西不许我们悄悄留下一堆没人认领。</para>
     /// </summary>
     public static string MergeForReplay(string? existingExtraJson, Item draft, long copyCount)
-        => Write(existingExtraJson, App(draft), Format(draft), copyCount, IsTruncated(draft), FullLength(draft));
+        => Write(existingExtraJson, App(draft), Format(draft), copyCount, IsTruncated(draft), FullLength(draft),
+            ImageOf(draft));
 
     /// <summary>条目格式（<see cref="FormatText"/> / <see cref="FormatFiles"/>；未知旧数据按文本）。</summary>
     public static string Format(Item item)
@@ -165,5 +222,72 @@ public static class ClipboardEntry
             return Parse(item.ExtraJson)?[FullLengthKey]?.GetValue<int>() ?? 0;
         }
         catch { return 0; }
+    }
+
+    // ==================== 图片条目的负载 ====================
+
+    /// <summary>图片尺寸（宽或高为 0＝这不是图片条目，UI 要退回文本行模板）。</summary>
+    public static (int Width, int Height) ImageSize(Item item)
+    {
+        try
+        {
+            var n = Parse(item.ExtraJson);
+            return (n[WidthKey]?.GetValue<int>() ?? 0, n[HeightKey]?.GetValue<int>() ?? 0);
+        }
+        catch { return (0, 0); }
+    }
+
+    /// <summary>落盘字节数（未记录/坏数据按 0；设置页的占用预估按它算，不 stat 单个文件）。</summary>
+    public static long ImageBytes(Item item)
+    {
+        try { return Parse(item.ExtraJson)?[BytesKey]?.GetValue<long>() ?? 0; }
+        catch { return 0; }
+    }
+
+    /// <summary>主图文件名（相对 clip 目录）。空＝这一行没有对应的文件记录。</summary>
+    public static string? FileName(Item item) => NameOf(item.ExtraJson, FileKey);
+
+    /// <summary>缩略图文件名（相对 clip 目录）。与主图同生同死，但缺失时分开报。</summary>
+    public static string? ThumbFileName(Item item) => NameOf(item.ExtraJson, ThumbKey);
+
+    private static string? NameOf(string? extraJson, string key)
+    {
+        try
+        {
+            var v = Parse(extraJson)?[key]?.GetValue<string>();
+            return string.IsNullOrWhiteSpace(v) ? null : v;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// <b>行有图无</b>的标记（§3-Q6 第一类：用户手删文件、旧备份恢复过来）。
+    /// 条目一律保留——"文件不见了"不是"这条历史没价值"，删行等于替用户决定他不再需要它。
+    /// </summary>
+    public static bool IsMissing(Item item)
+    {
+        try { return Parse(item.ExtraJson)?[MissingKey]?.GetValue<bool>() ?? false; }
+        catch { return false; }
+    }
+
+    /// <summary>置/清 <c>clipMissing</c>。清掉只在"文件真的又被写出来了"那一刻由采集侧调用。</summary>
+    public static string WithMissing(Item item, bool missing)
+    {
+        var node = Parse(item.ExtraJson);
+        if (missing) node[MissingKey] = true;
+        else node.Remove(MissingKey);
+        item.ExtraJson = node.ToJsonString();
+        return item.ExtraJson;
+    }
+
+    /// <summary>这条图片的负载（无文件名＝null，采集侧就不会以为自己有名字可以写）。</summary>
+    public static ImageMeta? ImageOf(Item item)
+    {
+        var main = FileName(item);
+        if (main is null) return null;
+        var (w, h) = ImageSize(item);
+        // 缩略图名字缺了就回落到主图名（坏数据的旧行）：UI 拿主图当缩略图用只是费点解码，
+        // 编一个"看着像临时件"的名字反而会误导对账去删它。
+        return new ImageMeta(main, ThumbFileName(item) ?? main, w, h, ImageBytes(item));
     }
 }

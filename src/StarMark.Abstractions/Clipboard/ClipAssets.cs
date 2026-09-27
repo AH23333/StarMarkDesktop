@@ -104,6 +104,23 @@ public static class ClipAssets
     private static bool IsHex(char c) => c is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F';
 
     /// <summary>
+    /// 一个<b>从库里读出来</b>的文件名能不能安全地拼到 clip 目录下。
+    /// <para>我们写出去的名字一定过这一关，但 <c>clipFile</c> 存在 <c>extra_json</c> 里，而备份文件是
+    /// 用户可以手改的文本：不校验就拼路径，"..\\" 会把删除与写入都带到 clip 目录之外——那就不再是
+    /// "清一张历史图片"，而是"按一个来路不明的字符串删文件"。宁可少删、不可乱删。</para>
+    /// </summary>
+    public static bool IsSafeFileName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 120) return false;
+        if (name.IndexOfAny(new[] { '/', '\\', ':', '?' }) >= 0) return false;
+        if (name.Contains("..", StringComparison.Ordinal)) return false;
+        if (name.StartsWith(' ') || name.EndsWith('.')) return false;      // Windows 会静默剥掉它们，两边就不是同一个文件了
+        return name.EndsWith(MainExtension, StringComparison.OrdinalIgnoreCase)
+               || name.EndsWith(ThumbExtension, StringComparison.OrdinalIgnoreCase)
+               || name.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// 占用统计的<b>唯一口径</b>：主图与缩略图分开计，设置页要说"图片 N 张 · 共 X，缩略图 Y"。
     /// <para>把两个数一起加总成一个"占用"是最省事的写法，也正是用户最先问的那一句答不上来：
     /// "我删了 100 张图为什么没少多少"——缩略图还在。分类计数是这份职责的形状。</para>

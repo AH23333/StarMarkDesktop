@@ -39,6 +39,34 @@ public static class ClipboardPolicy
     public const string SourceIdPrefix = "c-";
 
     /// <summary>
+    /// 图片条数上限的默认值（§4：200，用户可调范围 <see cref="ImageMaxEntriesCeil"/> 以内）。
+    /// <b>刻意与文本的 <see cref="MaxEntries"/> 分开</b>：一张 4K 截图的 PNG 常有几百 KB 到几 MB，
+    /// 500 张就是 GB 级——磁盘上界（Q1）要求图片自己一条线。
+    /// </summary>
+    public const int DefaultImageMaxEntries = 200;
+
+    /// <summary>条数上限的下界：低于这个数这条历史就没有意义了（一次复制可能直接把它挤掉）。</summary>
+    public const int MinEntries = 10;
+
+    /// <summary>图片条数上限的上界（§4）。</summary>
+    public const int ImageMaxEntriesCeil = 2000;
+
+    /// <summary>文本条数上限的上界（§4）。默认值仍是 <see cref="MaxEntries"/>，只是从常量变成可见可配。</summary>
+    public const int TextMaxEntriesCeil = 10_000;
+
+    /// <summary>
+    /// 图片条数上限的<b>唯一取整口径</b>：越界夹住，绝不出现 0 或负数（那等于"记一条删一条"）。
+    /// <para>设置页与仓储都问它——两处各写一遍 <c>Math.Clamp</c> 的话，上限改了其中一处，
+    /// 症状是"设置页显示 2000，实际只留 500"。</para>
+    /// </summary>
+    public static int ClampImageMaxEntries(int value)
+        => Math.Clamp(value <= 0 ? DefaultImageMaxEntries : value, MinEntries, ImageMaxEntriesCeil);
+
+    /// <summary>文本条数上限的唯一取整口径（默认 <see cref="MaxEntries"/>，现行为不变）。</summary>
+    public static int ClampTextMaxEntries(int value)
+        => Math.Clamp(value <= 0 ? MaxEntries : value, MinEntries, TextMaxEntriesCeil);
+
+    /// <summary>
     /// 单张剪贴板图片的字节上限。<b>刻意是内部常数、不进设置页</b>（§4 洞1）：它挡的是"异常帧灌进来"
     /// 这类与用户偏好无关的事故，给设置页一个能把它调大的框，等于把护栏做成可调的装饰。
     /// <para>也是采集侧唯一允许从 <c>ReadGlobal</c> 的 64MB 拷贝防护里收窄下来的数——
@@ -59,6 +87,43 @@ public static class ClipboardPolicy
         sb.Append(SourceIdPrefix);
         for (var i = 0; i < 16; i++) sb.Append(hash[i].ToString("x2"));
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// 短于此边长的图片不记录。图标、缩略图、拖拽选中残留都落在这里；与 20MB 那条同为**内部常数**：
+    /// 它挡的不是偏好，是"历史被一屏小图标刷满"这种没有商量余地的坏观感。
+    /// </summary>
+    public const int MinImageEdge = 16;
+
+    /// <summary>
+    /// 这一帧图片该不该进历史。<b>三层门禁的裁决集中在这一个纯函数</b>（§3-Q1/Q3）：
+    /// ① 单张字节上限（<see cref="MaxImageBytes"/>，采集侧在拷贝前就挡，这里再兜一次）；
+    /// ② 尺寸下限；③ 来源排除（密码管理器在前台时同样不记，与文本共用 <see cref="IsExcludedApp"/>）。
+    /// <para><b>图片内容一律不做敏感检查</b>——这不是遗漏而是 §3-Q3 的裁决：文本能扫卡号/私钥/JWT，
+    /// 图片扫不了，所以采集默认关，并在设置页开关旁原话写明"开启即包含一切屏幕内容"。
+    /// 拒绝时 <paramref name="reason"/> 是给状态行与日志看的原话（"哑丢弃是缺陷"，同 F10）。</para>
+    /// </summary>
+    public static bool ShouldRecordImage(int width, int height, long bytes, string? foregroundProcessName,
+        out string? reason)
+    {
+        if (bytes <= 0) { reason = "图片负载为空"; return false; }
+        if (bytes > MaxImageBytes)
+        {
+            reason = $"图片 {bytes / (1024 * 1024)} MB 超过 {MaxImageBytes / (1024 * 1024)} MB 上限，未记录";
+            return false;
+        }
+        if (width < MinImageEdge || height < MinImageEdge)
+        {
+            reason = $"图片 {width}×{height} 小于 {MinImageEdge}px，未记录（多半是图标）";
+            return false;
+        }
+        if (IsExcludedApp(foregroundProcessName))
+        {
+            reason = $"来源是密码管理器一类的应用（{foregroundProcessName}），图片未记录";
+            return false;
+        }
+        reason = null;
+        return true;
     }
 
     /// <summary>

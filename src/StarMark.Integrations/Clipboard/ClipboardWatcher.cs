@@ -38,6 +38,73 @@ public static class ClipboardCapture
             DateTimeOffset.FromUnixTimeMilliseconds(nowMs));
         return await repo.RecordClipboardAsync(draft, ct);
     }
+
+    /// <summary>
+    /// 处理一帧<b>图片</b>。被挡掉（回声、突发重复、门禁、密码管理器来源、解不出像素）时返回 null。
+    /// <para>
+    /// 顺序是刻意的：<b>先解像素 → 门禁 → 去重 → 算身份 → 落库 → 最后才写文件</b>。
+    /// 写盘放最后，是因为落库会告诉我们"这一条其实早就在历史里、该用哪个文件名"
+    /// （<see cref="ClipboardEntry.MergeForReplay"/> 保住旧名字）——先写文件就会每次回放都落一个新名字，
+    /// 旧文件立刻变孤儿，而 §3-Q6 明令不许在用户目录里攒没人认领的东西。
+    /// </para>
+    /// <para>全程线程池：PNG 编码与缩略图都是 WinRT 的异步调用，<b>不碰 UI 线程也不碰 STA</b>（§2/§5）。</para>
+    /// </summary>
+    internal static async Task<Item?> CaptureImageAsync(
+        IItemRepository repo, ClipboardDedupe dedupe, ClipboardNative.ImageRead frame,
+        string? foregroundApp, DateTimeOffset now, CancellationToken ct = default)
+    {
+        if (repo is null) throw new ArgumentNullException(nameof(repo));
+        if (dedupe is null) throw new ArgumentNullException(nameof(dedupe));
+
+        // 像素是这条链的唯一通货：身份哈希、缩略图、将来的贴图都吃它。PNG 路线也要先解出像素，
+        // 否则"我们写回的图被系统重排成 DIB 再回来"就会字节不同 ⇒ 一次自回声（§2 回声那条的根据）。
+        ClipboardPayload.ImageFrame? pixels = frame.Dib;
+        if (pixels is null && frame.Png is { Length: > 0 } png) pixels = await ClipboardImageStore.DecodePngAsync(png, ct);
+        if (pixels is not { } f)
+        {
+            StarLog.WarnThrottled("clip:image-decode", $"图片帧解不出像素（{frame.Container}），这一帧没有记录", windowMs: 60_000);
+            return null;
+        }
+
+        if (!ClipboardPolicy.ShouldRecordImage(f.Width, f.Height, f.Bgra.Length, foregroundApp, out var why))
+        {
+            StarLog.Info($"[剪贴板] 图片未记录：{why}");
+            return null;
+        }
+        var nowMs = now.ToUnixTimeMilliseconds();
+        if (dedupe.ShouldSkip(f.Bgra, nowMs)) return null;
+
+        var sourceId = ClipboardPolicy.BuildImageSourceId(f.Bgra);
+        // PNG 路线原样存字节（§2：不重编码，省下一次全图编解码，也保证"库里那份就是系统里那份"）；
+        // DIB 路线才走全仓唯一那处编码器。字节数记的是**将要落盘的那份**，不是 DIB 的原始大小。
+        var pngBytes = frame.Png ?? await ClipboardImageStore.EncodePngAsync(f.Bgra, f.Width, f.Height, ct);
+        if (pngBytes is null or { Length: 0 })
+        {
+            StarLog.WarnThrottled("clip:image-encode", "PNG 编码失败，这一帧图片没有进历史", windowMs: 60_000);
+            return null;
+        }
+
+        var draft = ClipboardEntry.BuildImage(sourceId,
+            new ClipboardEntry.ImageMeta(ClipAssets.MainNameOf(sourceId, now), ClipAssets.ThumbNameOf(sourceId, now),
+                f.Width, f.Height, pngBytes.LongLength),
+            foregroundApp, now);
+        var item = await repo.RecordClipboardAsync(draft, ct, ClipboardPolicy.DefaultImageMaxEntries);
+
+        // 名字以合并后的行为准（回放保旧名）。文件已经在＝纯粹的一次"又复制了同一张图"，不用重写。
+        var main = ClipboardEntry.FileName(item);
+        if (main is null || ClipboardImageStore.MainExists(main)) return item;
+
+        var thumb = ClipboardEntry.ThumbFileName(item);
+        var jpeg = await ClipboardImageStore.EncodeThumbnailAsync(f.Bgra, f.Width, f.Height, ct);
+        var (ok, error) = await ClipboardImageStore.WritePairAsync(main, thumb ?? main, pngBytes, jpeg);
+        if (!ok)
+            // 行已经在了、文件没写成：这是 §3-Q6 第一类的另一半来源。不静默——下一轮对账会打上
+            // clipMissing，而此刻的日志是唯一能说清"为什么库里多了一行打不开的图"的东西。
+            StarLog.Warn($"[剪贴板] 图片行已记录但文件写失败（{error}）：{main}");
+        else if (jpeg is null)
+            StarLog.Info($"[剪贴板] 缩略图没编出来（{frame.Container}），列表将回退解码主图：{main}");
+        return item;
+    }
 }
 
 /// <summary>
@@ -89,6 +156,12 @@ public sealed class ClipboardWatcher : IDisposable
 
     /// <summary>用户主动暂停（临时粘贴私密内容）。暂停期间通知照收、内容不落库。</summary>
     public volatile bool Paused;
+
+    /// <summary>
+    /// 图片采集分开关。<b>默认 false</b>（§4：图片采集默认关），关掉时纯图片帧照旧丢弃——
+    /// 那正是这个功能存在之前的行为，所以"没开"与"没装"在磁盘上完全一样。
+    /// </summary>
+    public volatile bool ImageCapture;
 
     /// <summary>
     /// 是否已在采集。<b>名字刻意不叫 IsAvailable</b>，且语义严格限定为"监听窗口已建立、派发已接上、
@@ -225,7 +298,20 @@ public sealed class ClipboardWatcher : IDisposable
                 if (Paused) continue;
 
                 var (raw, format, app) = ClipboardNative.ReadSnapshot();
-                if (raw is null) continue;   // 这一帧没内容/被占用：等下一次通知
+                ClipboardNative.ImageRead? image = null;
+                if (raw is null)
+                {
+                    // 文本/文件都没有才轮到图片：顺序就是优先级——一次复制既有文字又有图，
+                    // 记下来的是文字那条（图片那一路只在没有文本可记时才存在）。
+                    if (!ImageCapture) continue;        // 分开关关着＝与这个功能存在之前完全一样（连读都不读）
+                    var (frame, why) = ClipboardNative.ReadImage();
+                    if (frame is null)
+                    {
+                        if (why is not null) StarLog.Info($"[剪贴板] 图片帧没接：{why}");
+                        continue;
+                    }
+                    image = frame;
+                }
 
                 // 读一帧要几十毫秒，期间用户可能刚把开关关掉：落库前再判一次，
                 // 否则"关掉之后仍多记一条"正好是这个开关要避免的事。
@@ -235,9 +321,13 @@ public sealed class ClipboardWatcher : IDisposable
                 try
                 {
                     if (_stopped) break;
-                    var item = await ClipboardCapture.CaptureAsync(
-                        _repo, _dedupe, raw, format, app,
-                        DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), CancellationToken.None).ConfigureAwait(false);
+                    var at = DateTimeOffset.UtcNow;
+                    var item = image is { } img
+                        ? await ClipboardCapture.CaptureImageAsync(
+                            _repo, _dedupe, img, app, at, CancellationToken.None).ConfigureAwait(false)
+                        : await ClipboardCapture.CaptureAsync(
+                            _repo, _dedupe, raw, format, app,
+                            at.ToUnixTimeMilliseconds(), CancellationToken.None).ConfigureAwait(false);
                     // 只记标题（首行、已折控制符），正文绝不进日志——日志会把历史变成明文副本的第二份。
                     if (item is not null) StarLog.Info($"剪贴板历史已记录：{item.Title}");
                 }
