@@ -182,15 +182,8 @@ public static class ClipboardEntry
         => Write(existingExtraJson, App(draft), Format(draft), copyCount, IsTruncated(draft), FullLength(draft),
             ImageOf(draft));
 
-    /// <summary>条目格式（<see cref="FormatText"/> / <see cref="FormatFiles"/>；未知旧数据按文本）。</summary>
-    public static string Format(Item item)
-    {
-        try
-        {
-            return Parse(item.ExtraJson)?[FormatKey]?.GetValue<string>() is { Length: > 0 } f ? f : FormatText;
-        }
-        catch { return FormatText; }
-    }
+    /// <summary>条目格式（<see cref="FormatText"/> / <see cref="FormatFiles"/> / <see cref="FormatImage"/>；未知旧数据按文本）。</summary>
+    public static string Format(Item item) => FormatOf(item.ExtraJson);
 
     /// <summary>复制时所处的前台应用进程名（可能为 null＝当时没取到）。</summary>
     public static string? App(Item item)
@@ -259,6 +252,27 @@ public static class ClipboardEntry
         }
         catch { return null; }
     }
+
+    /// <summary>
+    /// 只有 <c>extra_json</c> 文本时读负载（<b>仓储层专用</b>：它手里是删除前后的一串 JSON，
+    /// 不该为拿两个文件名先造一个 <see cref="Item"/>——造出来的那份一半字段是空的，
+    /// 读错了没人发现）。两个名字都可以是 null：那代表这一行本来就没有文件（文本/文件列表条目）。
+    /// </summary>
+    public static (string? Main, string? Thumb) ClipFileNamesOf(string? extraJson)
+        => (NameOf(extraJson, FileKey), NameOf(extraJson, ThumbKey));
+
+    /// <summary>格式的字符串入口（<see cref="Format(Item)"/> 的同一份判据，缺字段/坏数据按文本）。</summary>
+    public static string FormatOf(string? extraJson)
+    {
+        try
+        {
+            return Parse(extraJson)?[FormatKey]?.GetValue<string>() is { Length: > 0 } f ? f : FormatText;
+        }
+        catch { return FormatText; }
+    }
+
+    /// <summary>这一行是不是图片条目（<b>轮转分桶与"删行要不要删文件"都问它，只许这一处定义</b>）。</summary>
+    public static bool IsImageOf(string? extraJson) => FormatOf(extraJson) == FormatImage;
 
     /// <summary>
     /// <b>行有图无</b>的标记（§3-Q6 第一类：用户手删文件、旧备份恢复过来）。

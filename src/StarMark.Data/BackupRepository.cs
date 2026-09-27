@@ -217,6 +217,14 @@ public sealed class BackupRepository : IBackupRepository
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// 覆盖恢复的第一步：清空整张 items。
+    /// <para><b>这里刻意不碰剪贴板图片目录</b>（§3-Q6 第二类）：清库会把图片行删掉，而 b 期备份不带图片本体，
+    /// 于是那些 PNG 一夜之间没有行认领。它们必须<b>留着</b>并由对账数出来、由用户点"清理孤儿"处理——
+    /// 一次"恢复备份"绝不该顺带删掉用户磁盘上看得见的文件，那是最难解释的一类越权。</para>
+    /// <para>反过来（恢复进来的行指向本机没有的文件）是 §3-Q6 第一类，由 <c>clipMissing</c> 如实标出来，
+    /// 恢复文案已经把这层意思说给用户了（<c>BackupService.RestoreAsync</c>）。</para>
+    /// </summary>
     public Task ClearItemsAsync(CancellationToken ct)
     {
         using var conn = _factory.Open();

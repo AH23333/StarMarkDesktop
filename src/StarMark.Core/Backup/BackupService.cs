@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Backup;
+using StarMark.Abstractions.Clipboard;
 using StarMark.Core.Widgets;
 using StarLog = StarMark.Abstractions.StarLog;
 
@@ -210,12 +211,23 @@ public sealed class BackupService
                 ? $" 但桌面组件数据未能写入（组件保持原状）：{widgetsError}"
                 : string.Empty;
 
+            // b 期（图片不进备份）的恢复文案——这一段不许在 a 期之前撤（§3-Q2 反批原文）：
+            // 备份里带着图片条目的名字，却没有图片本体，用户换机恢复后看到的是"历史里有图、点开打不开"。
+            // 不说清就成了假成功。措辞用"不带图片本体"，禁写"省空间"——PNG 已经是无损压缩，
+            // 打包的真实价值是封装完整性（洞 2），把 a 期的词提前用掉会让 a 上线时没有话可说。
+            var clipImageCount = p.Items.Count(i =>
+                i.Source == ItemSources.Clipboard && ClipboardEntry.IsImageOf(i.ExtraJson));
+            var clipImageNote = clipImageCount > 0
+                ? $" 其中 {clipImageCount} 条是剪贴板图片：当前版本的备份只带条目与文件名、不带图片本体，"
+                  + "所以这些条目只有在本机图片目录里还留着对应文件时才打得开，缺的会标成“文件缺失”。"
+                : string.Empty;
+
             return new RestoreResult
             {
                 Success = true,
                 Message = (mode == RestoreMode.Replace
                     ? $"已覆盖恢复 {p.Items.Count} 条条目。"
-                    : $"已合并恢复 {p.Items.Count} 条条目。") + widgetsNote,
+                    : $"已合并恢复 {p.Items.Count} 条条目。") + widgetsNote + clipImageNote,
                 SnapshotPath = snapshotPath,
                 ItemsRestored = p.Items.Count,
                 UserStatesRestored = p.UserState.Count,

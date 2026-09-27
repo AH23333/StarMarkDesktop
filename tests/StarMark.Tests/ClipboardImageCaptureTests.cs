@@ -33,12 +33,12 @@ public sealed class ClipboardImageCaptureTests : IDisposable
         var factory = new DbConnectionFactory(_db);
         new MigrationRunner(factory).EnsureSchema();
         _repo = new ItemRepository(factory);
-        ClipboardImageStore.FolderOverride = _dir;
+        ClipAssets.FolderOverride = _dir;
     }
 
     public void Dispose()
     {
-        ClipboardImageStore.FolderOverride = null;
+        ClipAssets.FolderOverride = null;
         foreach (var p in new[] { _db, _db + "-wal", _db + "-shm" })
             try { File.Delete(p); } catch { }
         try { Directory.Delete(_dir, true); } catch { }
@@ -62,7 +62,7 @@ public sealed class ClipboardImageCaptureTests : IDisposable
     private static DateTimeOffset When() => new(2026, 9, 27, 14, 32, 0, TimeSpan.FromHours(8));
 
     private Task<Item?> Cap(ClipboardDedupe d, ClipboardNative.ImageRead frame, string? app = "Code")
-        => ClipboardCapture.CaptureImageAsync(_repo, d, frame, app, When(), CancellationToken.None);
+        => ClipboardCapture.CaptureImageAsync(_repo, d, frame, app, When(), ct: CancellationToken.None);
 
     private async Task<int> Rows() => (await _repo.GetBySourceAsync(ItemSources.Clipboard, ItemType.Clipboard)).Count;
 

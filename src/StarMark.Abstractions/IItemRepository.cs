@@ -120,12 +120,22 @@ public interface IItemRepository
     /// <summary>
     /// 记录一条剪贴板历史（source=<see cref="ItemSources.Clipboard"/>）：按 (source, source_id) 幂等，
     /// 同一段文本再次复制 = 移回最近 + 复制次数累加，并<b>保留</b>用户在该条上的置顶/隐藏/笔记/标签。
-    /// 不写活动流；落库后按 <paramref name="maxEntries"/> 轮转，置顶条目豁免删除。
-    /// 返回带真实 Id 与合并后 extra_json 的条目。
+    /// 不写活动流；落库后按上限轮转，置顶条目豁免删除。返回带真实 Id 与合并后 extra_json 的条目。
     /// </summary>
-    Task<Item> RecordClipboardAsync(Item draft, CancellationToken ct = default, int maxEntries = Clipboard.ClipboardPolicy.MaxEntries);
+    /// <remarks>
+    /// 轮转<b>分桶</b>：这一行是图片还是文本/文件，由它自己的 <c>extra_json.clipFormat</c> 决定，
+    /// 不是由调用方说——所以两个上限都传进来、各归各的桶。§4 给图片和文本两条独立线（200 / 500），
+    /// 混成一桶的话"复制满 500 段文字"会把用户的截图裁出历史，反过来也一样，而两种都看不出成因。
+    /// 图片行被裁掉时，实现还要<b>尽力删掉它记着的主图与缩略图</b>（文件不在事务里，删不掉就出声，
+    /// 由启动对账数成孤儿）。
+    /// </remarks>
+    /// <param name="maxEntries">非图片那一路的上限（名字沿用不改：既有文本测试的调用点都写它）。</param>
+    /// <param name="imageMaxEntries">图片那一路的上限。</param>
+    Task<Item> RecordClipboardAsync(Item draft, CancellationToken ct = default,
+        int maxEntries = Clipboard.ClipboardPolicy.MaxEntries,
+        int imageMaxEntries = Clipboard.ClipboardPolicy.DefaultImageMaxEntries);
 
-    /// <summary>清空全部剪贴板历史（含置顶条目），返回删除条数。</summary>
+    /// <summary>清空全部剪贴板历史（含置顶条目），返回删除条数。图片行按行记着的文件名一并尽力删文件。</summary>
     Task<int> ClearClipboardHistoryAsync(CancellationToken ct = default);
 
     /// <summary>

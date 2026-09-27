@@ -30,16 +30,11 @@ namespace StarMark.Integrations.Clipboard;
 internal static class ClipboardImageStore
 {
     /// <summary>
-    /// 测试用的目录改道（与 <c>StarLog.DirectoryOverride</c> 同一课：单测不许往用户目录里写东西）。
-    /// <para>没有这一条，"图片真的落盘了"就只能靠真机验收；有了它，采集→编码→写盘→回放这条链
-    /// 能在单机上跑完整，而用户的 <c>clip</c> 目录里不会长出测试图。</para>
+    /// 图片目录。<b>只是 <see cref="ClipAssets.Folder"/> 的别名</b>——目录、改道、名字校验都住在 Abstractions，
+    /// 因为"删文件的那一侧"（仓储层的轮转/清空/删单条）也要读同一个值；两边各算一份路径，
+    /// 最早坏掉的就是"尽力删文件"这条（删不到、又不出声）。
     /// </summary>
-    internal static string? FolderOverride;
-
-    /// <summary>图片目录（<c>%LOCALAPPDATA%\StarMark\clip</c>，与 logs/sdk/downloads 同一根、同样不加密不藏）。</summary>
-    public static string Folder => FolderOverride
-        ?? ClipAssets.DirectoryFor(Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppConstants.AppName));
+    public static string Folder => ClipAssets.Folder;
 
     /// <summary>主图已经在了吗（同图再复制时靠这一句决定"只记一次回放，不再写文件"）。</summary>
     public static bool MainExists(string mainName) => SafeInFolder(mainName) is { } p && File.Exists(p);
@@ -47,10 +42,10 @@ internal static class ClipboardImageStore
     /// <summary>
     /// 把"从库里读出来的文件名"拼成绝对路径，<b>不合法就返回 null</b>。
     /// <para>这一步不能省：<c>clipFile</c> 是 <c>extra_json</c> 里的文本，而备份文件用户可以手改。
-    /// 不校验就 <c>Path.Combine</c>，"..\\" 能把删除与写入都带到 clip 目录之外去。</para>
+    /// 不校验就 <c>Path.Combine</c>，"..\\" 能把删除与写入都带到 clip 目录之外去。
+    /// 判据本体在 <see cref="ClipAssets.FullPathOf"/>，删除侧共用同一句。</para>
     /// </summary>
-    private static string? SafeInFolder(string? name)
-        => ClipAssets.IsSafeFileName(name) ? Path.Combine(Folder, name!) : null;
+    private static string? SafeInFolder(string? name) => ClipAssets.FullPathOf(name);
 
     /// <summary>
     /// 写一对文件（主图 + 缩略图）。<b>缩略图编码失败时只写主图并返回成功</b>：那一档失败是 WinRT

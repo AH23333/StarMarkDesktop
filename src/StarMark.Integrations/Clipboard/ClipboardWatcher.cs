@@ -24,9 +24,12 @@ public static class ClipboardCapture
     /// 密码管理器来源）时返回 null。
     /// </summary>
     /// <param name="foregroundApp">复制发生时前台应用的进程名（null＝取不到）。排除清单据此生效。</param>
+    /// <param name="textMaxEntries">文本/文件那一路的保留上限（设置页的值经 <see cref="ClipboardWatcher.TextMaxEntries"/> 递进来）。
+    /// 默认＝现行为，所以既有文本采集测试不必传它。</param>
     public static async Task<Item?> CaptureAsync(
         IItemRepository repo, ClipboardDedupe dedupe, string? rawText, string format,
-        string? foregroundApp, long nowMs, CancellationToken ct = default)
+        string? foregroundApp, long nowMs,
+        int textMaxEntries = ClipboardPolicy.MaxEntries, CancellationToken ct = default)
     {
         if (repo is null) throw new ArgumentNullException(nameof(repo));
         if (dedupe is null) throw new ArgumentNullException(nameof(dedupe));
@@ -36,7 +39,7 @@ public static class ClipboardCapture
 
         var draft = ClipboardEntry.Build(text, foregroundApp, format,
             DateTimeOffset.FromUnixTimeMilliseconds(nowMs));
-        return await repo.RecordClipboardAsync(draft, ct);
+        return await repo.RecordClipboardAsync(draft, ct, maxEntries: textMaxEntries);
     }
 
     /// <summary>
@@ -51,7 +54,8 @@ public static class ClipboardCapture
     /// </summary>
     internal static async Task<Item?> CaptureImageAsync(
         IItemRepository repo, ClipboardDedupe dedupe, ClipboardNative.ImageRead frame,
-        string? foregroundApp, DateTimeOffset now, CancellationToken ct = default)
+        string? foregroundApp, DateTimeOffset now,
+        int imageMaxEntries = ClipboardPolicy.DefaultImageMaxEntries, CancellationToken ct = default)
     {
         if (repo is null) throw new ArgumentNullException(nameof(repo));
         if (dedupe is null) throw new ArgumentNullException(nameof(dedupe));
@@ -88,7 +92,9 @@ public static class ClipboardCapture
             new ClipboardEntry.ImageMeta(ClipAssets.MainNameOf(sourceId, now), ClipAssets.ThumbNameOf(sourceId, now),
                 f.Width, f.Height, pngBytes.LongLength),
             foregroundApp, now);
-        var item = await repo.RecordClipboardAsync(draft, ct, ClipboardPolicy.DefaultImageMaxEntries);
+        // 上限按具名参数递进去（写成位置参数＝把它交给了文本桶，图片桶照旧吃默认值）：
+        // 仓储层是按"这一行的 clipFormat"选桶的，两个上限各归各的，串了位不会报错、只会少留或多留。
+        var item = await repo.RecordClipboardAsync(draft, ct, imageMaxEntries: imageMaxEntries);
 
         // 名字以合并后的行为准（回放保旧名）。文件已经在＝纯粹的一次"又复制了同一张图"，不用重写。
         var main = ClipboardEntry.FileName(item);
@@ -162,6 +168,27 @@ public sealed class ClipboardWatcher : IDisposable
     /// 那正是这个功能存在之前的行为，所以"没开"与"没装"在磁盘上完全一样。
     /// </summary>
     public volatile bool ImageCapture;
+
+    private int _textMaxEntries = ClipboardPolicy.MaxEntries;
+    private int _imageMaxEntries = ClipboardPolicy.DefaultImageMaxEntries;
+
+    /// <summary>
+    /// 文本/文件那一路的保留上限（§4：默认 500，设置页可改）。
+    /// <para><b>写入口就夹住</b>（<see cref="ClipboardPolicy.ClampTextMaxEntries"/>）：设置页给的是用户手打的数字，
+    /// 夹在读取侧等于"0 或负数也能存进去，只是用的时候再说"——而 0 会让轮转每记一条删一条。</para>
+    /// </summary>
+    public int TextMaxEntries
+    {
+        get => Volatile.Read(ref _textMaxEntries);
+        set => Volatile.Write(ref _textMaxEntries, ClipboardPolicy.ClampTextMaxEntries(value));
+    }
+
+    /// <summary>图片那一路的保留上限（§4：默认 200，与文本各自一条线——一张 4K PNG 常有几百 KB）。</summary>
+    public int ImageMaxEntries
+    {
+        get => Volatile.Read(ref _imageMaxEntries);
+        set => Volatile.Write(ref _imageMaxEntries, ClipboardPolicy.ClampImageMaxEntries(value));
+    }
 
     /// <summary>
     /// 是否已在采集。<b>名字刻意不叫 IsAvailable</b>，且语义严格限定为"监听窗口已建立、派发已接上、
@@ -322,12 +349,14 @@ public sealed class ClipboardWatcher : IDisposable
                 {
                     if (_stopped) break;
                     var at = DateTimeOffset.UtcNow;
+                    // 上限在这一刻现读（不是启动时快照一份）：用户刚在设置页把 200 改成 50，
+                    // 下一条复制就该按 50 裁——采集与设置之间不该有"要重启才生效"那种事。
                     var item = image is { } img
                         ? await ClipboardCapture.CaptureImageAsync(
-                            _repo, _dedupe, img, app, at, CancellationToken.None).ConfigureAwait(false)
+                            _repo, _dedupe, img, app, at, ImageMaxEntries, CancellationToken.None).ConfigureAwait(false)
                         : await ClipboardCapture.CaptureAsync(
                             _repo, _dedupe, raw, format, app,
-                            at.ToUnixTimeMilliseconds(), CancellationToken.None).ConfigureAwait(false);
+                            at.ToUnixTimeMilliseconds(), TextMaxEntries, CancellationToken.None).ConfigureAwait(false);
                     // 只记标题（首行、已折控制符），正文绝不进日志——日志会把历史变成明文副本的第二份。
                     if (item is not null) StarLog.Info($"剪贴板历史已记录：{item.Title}");
                 }

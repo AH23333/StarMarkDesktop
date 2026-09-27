@@ -130,6 +130,8 @@ public sealed partial class ItemRepository
     /// 删一条本地条目 +（可选）在同一事务里记一笔活动，返回被删掉的那行；
     /// 没删到就返回 null，且<b>什么都不写、也不通知</b>。
     /// 同事务的理由见接口注释：条目没了而时间线里找不到这一笔，是最难向用户解释的缺口。
+    /// <para><b>这里刻意不碰 clip 目录</b>：WHERE 里钉死了 <c>source=local</c>，剪贴板行根本不可能
+    /// 从这里被删掉；给一条走不到的路径加"尽力删文件"，只会让下一个读代码的人以为剪贴板删除有两条路。</para>
     /// </summary>
     public async Task<Item?> DeleteLocalItemAsync(
         long id, ItemType type, ActivityKind? activity = null, CancellationToken ct = default)
@@ -163,11 +165,26 @@ public sealed partial class ItemRepository
     public async Task DeleteBySourceIdAsync(string source, string sourceId, CancellationToken ct = default)
     {
         using var conn = _factory.Open();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM items WHERE source = @source AND source_id = @sid;";
-        cmd.Parameters.AddWithValue("@source", source);
-        cmd.Parameters.AddWithValue("@sid", sourceId);
-        await cmd.ExecuteNonQueryAsync(ct);
+        // 只有剪贴板那一路的键背后有文件，所以先按来源决定要不要读 extra（书签/Star/Ditto 的删除路径
+        // 一次都不该去碰 clip 目录——它们和"复制过的一张图"没有关系）。
+        string? extra = null;
+        if (source == ItemSources.Clipboard)
+        {
+            using var read = conn.CreateCommand();
+            read.CommandText = "SELECT extra_json FROM items WHERE source = @source AND source_id = @sid;";
+            read.Parameters.AddWithValue("@source", source);
+            read.Parameters.AddWithValue("@sid", sourceId);
+            extra = (await read.ExecuteScalarAsync(ct)) as string;
+        }
+
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "DELETE FROM items WHERE source = @source AND source_id = @sid;";
+            cmd.Parameters.AddWithValue("@source", source);
+            cmd.Parameters.AddWithValue("@sid", sourceId);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        TryDeleteClipFiles(new[] { extra });
         DataChangeHub.Notify();
     }
 
@@ -252,9 +269,20 @@ public sealed partial class ItemRepository
     /// （与 <c>UpsertOne</c> 对后台批量写入的同一口径）。
     /// </para>
     /// </summary>
-    /// <param name="maxEntries">未置顶条目的保留上限，默认 <see cref="ClipboardPolicy.MaxEntries"/>；
-    /// 测试与非默认策略可传更小值。小于 1 按 1 处理（至少留下刚写的这条）。</param>
-    public async Task<Item> RecordClipboardAsync(Item draft, CancellationToken ct = default, int maxEntries = ClipboardPolicy.MaxEntries)
+    /// <param name="maxEntries"><b>非图片那一路</b>（文本/文件列表）的保留上限，默认
+    /// <see cref="ClipboardPolicy.MaxEntries"/>；测试与非默认策略可传更小值。小于 1 按 1 处理
+    /// （至少留下刚写的这条）。<b>名字沿用不改</b>：这是既有文本测试的调用点，P1 的验收级前提就是
+    /// "文本那条一字不动仍全绿"。</param>
+    /// <param name="imageMaxEntries">图片那一路的上限（§4：默认 200，与文本分开——一张 4K PNG 常有几百 KB）。</param>
+    /// <remarks>
+    /// <b>轮转分桶，而且桶的判据只有一份</b>：<c>clipFormat</c> 是不是 <see cref="ClipboardEntry.FormatImage"/>。
+    /// SQL 里那个值走 <c>@image_format</c> 参数（由 C# 递进去），C# 侧问
+    /// <see cref="ClipboardEntry.IsImageOf"/>——两边各写一个字面量"image"的话，改天统一叫法就会只改一处，
+    /// 症状是"图片按文本的上限被裁掉"或反之，而这两种都只在用户删了图之后才看得见。
+    /// 分桶还顺带钉住一件事：文本记满 500 条不会把用户的截图裁到 500 之外，反之亦然。
+    /// </remarks>
+    public async Task<Item> RecordClipboardAsync(Item draft, CancellationToken ct = default,
+        int maxEntries = ClipboardPolicy.MaxEntries, int imageMaxEntries = ClipboardPolicy.DefaultImageMaxEntries)
     {
         if (draft is null) throw new ArgumentNullException(nameof(draft));
         // 轮转是按 source 圈定的，写错来源会把别的来源裁掉 ⇒ 直接拒，不做"尽力而为"。
@@ -328,21 +356,31 @@ public sealed partial class ItemRepository
         //     一起算进去，否则"给某条历史写了笔记→再次复制→笔记词从索引里消失"。
         await RebuildSearchTextAsync(conn, id, ct);
 
-        // ③ 轮转：只裁未置顶的，按"最近复制"倒排留 maxEntries 条。
+        // ③ 轮转：只裁未置顶的，按"最近复制"倒排留上限条。图片与文本各裁各的桶（判据见方法注释）。
+        var isImage = ClipboardEntry.IsImageOf(extraJson);
+        var keep = Math.Max(1, isImage ? imageMaxEntries : maxEntries);
+        // 图片桶要先读后删：DELETE 一旦执行，extra_json 里的文件名就没了，"尽力删文件"只能删个空气，
+        // 磁盘上留下一堆没人认领的 PNG——而那正是 §3-Q6 要避免的第二类脏。
+        var prunedExtras = isImage
+            ? await ReadPrunedClipExtrasAsync(conn, draft.Source, keep, ct)
+            : Array.Empty<string?>();
         using (var prune = conn.CreateCommand())
         {
-            prune.CommandText = @"
+            prune.CommandText = $@"
                 DELETE FROM items
-                WHERE source = @source AND pinned = 0
+                WHERE source = @source AND pinned = 0 {ClipBucketClause}
                   AND id NOT IN (
-                      SELECT id FROM items WHERE source = @source AND pinned = 0
+                      SELECT id FROM items WHERE source = @source AND pinned = 0 {ClipBucketClause}
                       ORDER BY updated_at DESC, id DESC LIMIT @keep);";
-            prune.Parameters.AddWithValue("@source", draft.Source);
-            prune.Parameters.AddWithValue("@keep", Math.Max(1, maxEntries));
+            AddClipBucketParameters(prune, draft.Source, isImage);
+            prune.Parameters.AddWithValue("@keep", keep);
             await prune.ExecuteNonQueryAsync(ct);
         }
 
         await tx.CommitAsync(ct);
+        // 文件删除放在提交<b>之后</b>（先读到的名字还攥在手里）：反过来做的话，提交一旦失败回滚，
+        // 就成了"行还在、文件已经没了"——那正是 §3-Q6 第一类里最不该由我们自己造成的一种。
+        if (isImage) TryDeleteClipFiles(prunedExtras);
         DataChangeHub.Notify();
 
         draft.Id = id;
@@ -354,17 +392,110 @@ public sealed partial class ItemRepository
     }
 
     /// <summary>
+    /// 剪贴板轮转的分桶判据（<b>唯一出处</b>）。
+    /// <para>图片与文本必须分开裁：§4 给了两条独立上限（200 / 500），一起裁的话"复制 500 段文字"
+    /// 会把用户的截图裁出历史，反过来"开了一天图片采集"会把文字历史挤掉——两种都是用户看不见成因的丢数据。</para>
+    /// <para><c>COALESCE(...,0)</c> 那一层不是装饰：<c>extra_json</c> 为空/坏/没有 clipFormat 的行，
+    /// <c>json_extract</c> 与那个格式值比出来的结果是 <b>NULL</b> 而不是 false，直接写进 WHERE 会让这些行
+    /// 既不进图片桶也不进文本桶 ⇒ 永远裁不掉，历史无限增长。</para>
+    /// </summary>
+    private const string ClipBucketClause =
+        "AND COALESCE(json_extract(extra_json, '$.clipFormat') = @image_format, 0) = @is_image";
+
+    /// <summary>桶参数的唯一拼装处（<c>@image_format</c> 由 <see cref="ClipboardEntry.FormatImage"/> 递进去，SQL 里不写字面量"image"）。</summary>
+    private static void AddClipBucketParameters(SqliteCommand cmd, string source, bool isImage)
+    {
+        cmd.Parameters.AddWithValue("@source", source);
+        cmd.Parameters.AddWithValue("@image_format", ClipboardEntry.FormatImage);
+        cmd.Parameters.AddWithValue("@is_image", isImage ? 1 : 0);
+    }
+
+    /// <summary>这次轮转将裁掉的图片行的 <c>extra_json</c>（<b>必须在 DELETE 之前读</b>，之后名字就没了）。</summary>
+    private static async Task<IReadOnlyList<string?>> ReadPrunedClipExtrasAsync(
+        SqliteConnection conn, string source, int keep, CancellationToken ct)
+    {
+        var list = new List<string?>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = $@"
+            SELECT extra_json FROM items
+            WHERE source = @source AND pinned = 0 {ClipBucketClause}
+              AND id NOT IN (
+                  SELECT id FROM items WHERE source = @source AND pinned = 0 {ClipBucketClause}
+                  ORDER BY updated_at DESC, id DESC LIMIT @keep);";
+        AddClipBucketParameters(cmd, source, isImage: true);
+        cmd.Parameters.AddWithValue("@keep", keep);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        while (await r.ReadAsync(ct)) list.Add(r.IsDBNull(0) ? null : r.GetString(0));
+        return list;
+    }
+
+    /// <summary>这个库里<b>所有</b>图片行的 <c>extra_json</c>（含置顶——"清空"连置顶一起删，文件也要跟着一起没）。</summary>
+    private static async Task<IReadOnlyList<string?>> ReadClipImageExtrasAsync(SqliteConnection conn, CancellationToken ct)
+    {
+        var list = new List<string?>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"SELECT extra_json FROM items WHERE source = @source {ClipBucketClause};";
+        AddClipBucketParameters(cmd, ItemSources.Clipboard, isImage: true);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        while (await r.ReadAsync(ct)) list.Add(r.IsDBNull(0) ? null : r.GetString(0));
+        return list;
+    }
+
+    /// <summary>
+    /// 删行之后<b>尽力</b>删掉它记着的主图与缩略图（§3-Q5"同生同死" ⇒ 一行两个文件；§3-Q6"尽力删 + 对账"）。
+    /// <para><b>只删这一行自己记着的那两个名字</b>：目录里用户拷进来的、或行还没落库的文件一律不碰——
+    /// "清空历史"要的是"不再留着我复制过的东西"，不是"清空那个目录"。</para>
+    /// <para>删不掉不抛：那一档失败多半是资源管理器正打开着预览或杀毒软件抓着，
+    /// 不该让用户点"删除这一条"变成一次失败的操作；剩下的孤儿由启动对账数出来。</para>
+    /// </summary>
+    private static void TryDeleteClipFiles(IEnumerable<string?> extras)
+    {
+        foreach (var extra in extras)
+        {
+            var (main, thumb) = ClipboardEntry.ClipFileNamesOf(extra);
+            DeleteClipFile(main);
+            if (thumb != main) DeleteClipFile(thumb);   // 旧坏数据里缩略图名回落成主图名，不重复删
+        }
+    }
+
+    private static void DeleteClipFile(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return;
+        if (ClipAssets.FullPathOf(name) is not { } path)
+        {
+            // 不安全＝这条来自手改过的备份或坏 extra。不出声的话，磁盘上就会永远留着一个没人说得清的件。
+            StarLog.Warn($"剪贴板图片文件名不安全，未删除：{name}");
+            return;
+        }
+        try
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"[剪贴板] 图片文件没删掉（{name}）：{ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// 清空全部剪贴板历史（<b>含置顶</b>），返回删除条数。
     /// <para>之所以连置顶一起删：用户点"清空"要的是"这台机器上不再留着我复制过的东西"，
     /// 留一堆"豁免项"既不符合直觉也违背这个功能的隐私目的。UI 侧必须在确认框里写明含多少条置顶。</para>
+    /// <para>图片文件按<b>行记着的名字</b>删（含置顶行），目录里那些没有行认领的文件不碰——
+    /// 那是 §3-Q6 第二类的孤儿，只能由对账数出来、由用户点"清理孤儿"处理，不由"清空"顺手代劳。</para>
     /// </summary>
     public async Task<int> ClearClipboardHistoryAsync(CancellationToken ct = default)
     {
         using var conn = _factory.Open();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM items WHERE source = @source;";
-        cmd.Parameters.AddWithValue("@source", ItemSources.Clipboard);
-        var deleted = await cmd.ExecuteNonQueryAsync(ct);
+        var imageExtras = await ReadClipImageExtrasAsync(conn, ct);
+        int deleted;
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "DELETE FROM items WHERE source = @source;";
+            cmd.Parameters.AddWithValue("@source", ItemSources.Clipboard);
+            deleted = await cmd.ExecuteNonQueryAsync(ct);
+        }
+        TryDeleteClipFiles(imageExtras);
         DataChangeHub.Notify();
         return deleted;
     }
@@ -379,12 +510,31 @@ public sealed partial class ItemRepository
     public async Task<bool> DeleteClipboardEntryAsync(long itemId, CancellationToken ct = default)
     {
         using var conn = _factory.Open();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM items WHERE id = @id AND source = @source;";
-        cmd.Parameters.AddWithValue("@id", itemId);
-        cmd.Parameters.AddWithValue("@source", ItemSources.Clipboard);
-        var removed = await cmd.ExecuteNonQueryAsync(ct);
-        if (removed > 0) DataChangeHub.Notify();
+        // 名字要在删之前拿到手：删完再查就查不到了，而"这条历史我删了"在用户那边等于"这张图不在我机器上了"。
+        string? extra = null;
+        using (var read = conn.CreateCommand())
+        {
+            read.CommandText = "SELECT extra_json FROM items WHERE id = @id AND source = @source;";
+            read.Parameters.AddWithValue("@id", itemId);
+            read.Parameters.AddWithValue("@source", ItemSources.Clipboard);
+            extra = (await read.ExecuteScalarAsync(ct)) as string;
+        }
+
+        int removed;
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "DELETE FROM items WHERE id = @id AND source = @source;";
+            cmd.Parameters.AddWithValue("@id", itemId);
+            cmd.Parameters.AddWithValue("@source", ItemSources.Clipboard);
+            removed = await cmd.ExecuteNonQueryAsync(ct);
+        }
+        if (removed > 0)
+        {
+            // 一行没删掉（0 行＝那条本来就不在）时<b>不碰文件</b>：那种文件是没有行认领的孤儿，
+            // 归 §3-Q6 第二类，只能由对账数出来给用户一个"清理孤儿"的按钮，不该由这次点击顺手删。
+            TryDeleteClipFiles(new[] { extra });
+            DataChangeHub.Notify();
+        }
         return removed > 0;
     }
 

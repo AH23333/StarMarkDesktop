@@ -39,6 +39,28 @@ public static class ClipAssets
     /// <summary>图片目录的绝对路径（<paramref name="storageRoot"/>＝<c>%LOCALAPPDATA%\StarMark</c>）。</summary>
     public static string DirectoryFor(string storageRoot) => Path.Combine(storageRoot, FolderName);
 
+    /// <summary>默认存储根（与 <c>logs</c>/<c>sdk</c>/<c>downloads</c> 同一根，同样不加密不藏）。</summary>
+    public static string DefaultStorageRoot => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppConstants.AppName);
+
+    /// <summary>
+    /// 测试/诊断用的目录改道。<b>写侧（Integrations）与删侧（Data 的轮转/清空/删单条）必须读同一个字段</b>：
+    /// 两边各留一份 override 时，测试里改了写侧、删侧照旧指向用户目录，症状是
+    /// "删除路径永远删不到东西，而用户的 clip 目录里悄悄长出测试图"——这条恰好是本轮要验的事，却测不出来。
+    /// </summary>
+    public static string? FolderOverride;
+
+    /// <summary>图片目录的绝对路径。凡是拼 clip 路径的地方都问它，不许自己 Combine 一遍。</summary>
+    public static string Folder => FolderOverride ?? DirectoryFor(DefaultStorageRoot);
+
+    /// <summary>
+    /// 库里读出来的文件名 → 绝对路径；<b>名字不安全就返回 null</b>（调用方据此"什么都不做"）。
+    /// <para>删除与读取都走这一句：校验只写在写盘那侧的话，"..\\" 这种从手改过的备份里回来的名字
+    /// 就只在写的时候被拦住，删的时候照样被拼进路径。</para>
+    /// </summary>
+    public static string? FullPathOf(string? name)
+        => IsSafeFileName(name) ? Path.Combine(Folder, name!) : null;
+
     /// <summary>
     /// 主/缩略两张图共用的名基：<c>2026-09-27_1432_9f2a3b8c</c>（本地时间到分 + 哈希前缀）。
     /// <para>日期在前＝资源管理器按名排序就是按时间排序，用户手翻也读得懂；
