@@ -46,10 +46,8 @@ public sealed class AiClassifyService
     public const int MaxCandidates = 500;
     public const int DefaultCandidates = 100;
 
-    private static readonly ItemType[] InScope =
-    {
-        ItemType.Bookmark, ItemType.GitHubStar, ItemType.File, ItemType.Todo, ItemType.Note,
-    };
+    // 类型范围下沉 Core（ClassifyRules.InScope）——测试覆盖得到、批量与即时两处永远读同一份。
+    private static readonly ItemType[] InScope = ClassifyRules.InScope;
 
     private readonly IItemRepository _repo;
     private readonly SettingsStore _store;
@@ -226,6 +224,63 @@ public sealed class AiClassifyService
             else into.Add(proposal);
         }
     }
+
+    // ────────── 收藏即时分类（§19 O5，口径裁定见 §20.4） ──────────
+
+    /// <summary>
+    /// 收藏即时分类：一条收藏动作派生的<b>异步</b>单条分类——用户按的是"收藏"，
+    /// 分类是这次动作的后续，符合 §20.4 的裁定口径（"能指出用户按了哪颗键"）。
+    /// <para><b>整方法吞掉一切异常只记日志</b>：收藏是主动作，AI 是顺风车——
+    /// 网络断了、模型回了垃圾，都不许变成"收藏失败"或弹任何窗。</para>
+    /// <para>规则先判（零 AI 零 token），没命中才单条问答。用量记 <c>feature="instant"</c>，
+    /// 与批量整理分开看得可见。</para>
+    /// </summary>
+    public async Task TryInstantClassifyAsync(Item item, CancellationToken ct = default)
+    {
+        try
+        {
+            var settings = _store.LoadAiSettings();
+            // 四关判据住在 ClassifyRules.ShouldInstant（Core，测试钉住）：这里只负责"取设置来问"
+            if (!ClassifyRules.ShouldInstant(item, settings, _store.LoadAiInstantEnabled())) return;
+
+            var (forAi, ruled) = ClassifyRules.Split(new[] { ToClassify(item) },
+                ClassifyRules.Merged(_store.LoadAiClassifyRulesJson()));
+            IReadOnlyList<string>? tags = ruled.Count > 0 ? ruled[0].Tags : null;
+
+            if (tags is null)
+            {
+                if (forAi.Count == 0) return;   // 理论到不了这儿；防御一句，别拿空条目发请求
+                var catalog = await ReferenceTagsAsync(ct);
+                var report = await ClassifyRunner.RunAsync(
+                    forAi, catalog,
+                    request => _gateway.CompleteAsync(settings.ForClassify(), request, ct),
+                    null, ct);
+                tags = report.Proposals.FirstOrDefault(p => p.Id == item.Id)?.Tags
+                       ?? Array.Empty<string>();
+                if (report.Batches.FirstOrDefault()?.Usage is { } used && _usage is { } ledger)
+                    await ledger.LogAsync(new AiUsageEntry(DateTimeOffset.UtcNow, "instant",
+                        settings.Provider.ToString().ToLowerInvariant(),
+                        string.IsNullOrWhiteSpace(settings.EffectiveClassifyModel) ? null : settings.EffectiveClassifyModel.Trim(),
+                        used), CancellationToken.None);   // 记账不跟取消走，同批量处的注释
+            }
+
+            if (tags.Count == 0) return;
+            // 与批量同一个应用口：一次事务、重建一次、通知一次——绝不逐条转圈
+            await _repo.TagItemsAsync(new[] { new ItemTagAssignment(item.Id, tags) }, ct);
+            StarLog.Info($"[AI 即时分类] {item.Id} → {string.Join("、", tags)}");
+        }
+        catch (OperationCanceledException) { /* 退出路上：本就没义务分完 */ }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"[AI 即时分类] 条 {item.Id} 分类没成（收藏本身不受影响）：{ex.Message}");
+        }
+    }
+
+    private ClassifyItem ToClassify(Item item)
+        => new(item.Id, item.Title,
+            string.IsNullOrWhiteSpace(item.Subtitle) ? null : item.Subtitle,
+            string.IsNullOrWhiteSpace(item.Description) ? null : item.Description,
+            NameOf(item), item.Tags ?? new List<string>());
 
     // ────────── 未应用方案的落盘 ──────────
 

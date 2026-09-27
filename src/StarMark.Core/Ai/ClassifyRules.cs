@@ -32,6 +32,24 @@ public sealed record ClassifyRule(string? SourceEquals, string? TitleContains, I
 
 public static class ClassifyRules
 {
+    /// <summary>整理与即时分类共同的类型范围（原住在 UI 服务里；下沉后测试可覆盖、且两处永远读同一份）。
+    /// <b>刻意不含 Clipboard</b>：它有自己的轮转生命周期，标签既进不了日常检索又会跟着清空消失。</summary>
+    public static readonly StarMark.Abstractions.ItemType[] InScope =
+    {
+        StarMark.Abstractions.ItemType.Bookmark, StarMark.Abstractions.ItemType.GitHubStar,
+        StarMark.Abstractions.ItemType.File, StarMark.Abstractions.ItemType.Todo, StarMark.Abstractions.ItemType.Note,
+    };
+
+    /// <summary>收藏即时分类的四关闸门（§19 O5）。<b>四关少一关就不发</b>：这一路最坏的失败形状
+    /// 不是"少分一条"，而是用户在没按任何 AI 键时感到外发请求/变慢——每一关都必须能把整件事关掉。
+    /// 已有标签的条目不补刀（增量语义，与 WithoutAlreadyTagged 同向）。</summary>
+    public static bool ShouldInstant(StarMark.Abstractions.Item item, AiSettings settings, bool instantEnabled)
+        => instantEnabled
+            && settings.Enabled
+            && settings.Problem() is null
+            && InScope.Contains(item.Type)
+            && item.Tags is not { Count: > 0 };
+
     /// <summary>内置规则。<b>刻意窄</b>：只钉"来源即类别"与"文档域名"三类，全部取自 §19.2 的例子中
     /// 现有字段可判的部分——语言级判定（github+C#→["开发","C#"]）要等条目带语言字段再补，
     /// 现在用标题猜语言错一片的代价高于省下的 token。</summary>

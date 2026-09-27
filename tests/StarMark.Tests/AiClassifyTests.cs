@@ -79,7 +79,8 @@ public sealed class AiClassifyTests
         var prompt = ClassifyPrompt.SystemPrompt(new[] { "前端", "工具" });
 
         Assert.Contains("前端、工具", prompt);
-        Assert.Contains("只输出一个 JSON 对象", prompt);           // 不写这句，模型会加"好的，下面是结果："
+        Assert.Contains("每行一条", prompt);                   // O4 行格式；不写死格式要求，模型会加"好的，下面是结果："
+        Assert.DoesNotContain("只输出一个 JSON 对象", prompt);   // 旧口径不许悄悄回潮（JSON 三态仍是解析兼容层，但提示词不再要求它）
         Assert.DoesNotContain("数据库", prompt);
         // 批次 QA-1：用户抱怨"出一堆各挂一条的标签"，"要能成类"这句必须真的写在提示词里，
         // 而不是只在应用侧偷偷砍——那样模型下一轮还会照旧造专有词。
@@ -150,6 +151,52 @@ public sealed class AiClassifyTests
     [Fact]
     public void NothingRequestedMeansNothingScheduled()
         => Assert.Empty(ClassifyPrompt.Batches(Array.Empty<ClassifyItem>()));
+
+    // ────────── O4 行格式（现在的第一个公民） ──────────
+
+    [Fact]
+    public void LineReplyMapsNumbersAndSplitsSeparators()
+    {
+        var parsed = ClassifyPrompt.Parse(
+            "1: 前端、工具\n2：笔记\n3: 读书",
+            Batch(10, 20, 30));
+        Assert.True(parsed.Readable);
+        Assert.Equal(3, parsed.Proposals.Count);
+        Assert.Equal(new[] { "前端", "工具" }, parsed.Proposals[0].Tags);
+        Assert.Equal(30L, parsed.Proposals[2].Id);              // 编号按批次内序号对回数据库 id
+        Assert.Empty(parsed.MissingIds);
+    }
+
+    [Fact]
+    public void LineFormatToleratesBulletsDanglingIdsAndDeliberateSkips()
+    {
+        var parsed = ClassifyPrompt.Parse(
+            "答：\n- 1: 工具\n  4: 越界\n2:",
+            Batch(7, 8, 9));
+        Assert.True(parsed.Readable);                            // 有可读行就不算"读不出"
+        Assert.Single(parsed.Proposals);                         // 只有第 1 行有效
+        Assert.Equal(new[] { 4L }, parsed.UnknownIds);           // 越界编号丢弃并回报（与 JSON 分支同口径）
+        Assert.Contains(8L, parsed.MissingIds);                  // "2:"空标签＝这条不给标签，合法缺行
+    }
+
+    [Fact]
+    public void ProseWithNoLinesAndNoJsonIsStillUnreadable()
+    {
+        var parsed = ClassifyPrompt.Parse("好的，下面是我为您整理的结果，希望有帮助。", Batch(1, 2));
+        Assert.False(parsed.Readable);
+        Assert.Contains("编号", parsed.Error);                    // 新话术要提行格式，让用户知道模型没按哪种形状回
+    }
+
+    [Fact]
+    public void TruncatedJsonStillFallsIntoLineParseWhenLinesAreThere()
+    {
+        // 半截 JSON 起头 + 其实逐行：行分支兜住，不因 JSON 解析异常整批作废
+        var parsed = ClassifyPrompt.Parse(
+            "{\"items\": [{\"id\": 1, \"tags\": [\"工具\"  ←被切断\n2: 前端",
+            Batch(1, 2));
+        Assert.True(parsed.Readable);
+        Assert.Equal(new[] { "前端" }, parsed.Proposals.Single(p => p.Id == 2).Tags);
+    }
 
     // ────────── 答复解读：三种形状 + 编号错位 ──────────
 

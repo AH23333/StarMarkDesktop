@@ -57,8 +57,11 @@ public static class RssItemActions
                 ? $"已收进「{folder}」：{item.Title}"
                 : $"已写进本机收藏，但仓储没有回 id（标题：{item.Title}）");
             if (id > 0)
+            {
                 await repo.LogActivityAsync(ActivityKind.BookmarkAdd, $"{ItemSources.Local}:{item.SourceId}",
                     item.Title, item.Uri, CancellationToken.None);
+                AiInstantClassifyHook.AfterCollect(item);   // §19 O5：收藏已完成，分类是异步后续，默认关/未配 AI 时一个包都不发
+            }
         }
         catch (Exception ex)
         {

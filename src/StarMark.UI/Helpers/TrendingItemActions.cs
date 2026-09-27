@@ -98,8 +98,11 @@ public static class TrendingItemActions
                 vm.SetTrendingState(vm.IsStarred, collected: true, hasToken: true);
                 Report(vm, $"已收进本机收藏：{fullName}（不影响 GitHub 的 Star 状态）");
                 if (id > 0)
+                {
                     await repo.LogActivityAsync(ActivityKind.BookmarkAdd, $"{ItemSources.Local}:{item.SourceId}",
                         item.Title, item.Uri, CancellationToken.None);
+                    AiInstantClassifyHook.AfterCollect(item);   // §19 O5：与 RSS 收藏同口径——主动作完成后的异步后续
+                }
             }
         }
         catch (Exception ex)

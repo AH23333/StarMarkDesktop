@@ -161,6 +161,11 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         /// 一格只绑架一件事——换分类小模型不许顺手把将来的生成任务也换小。</summary>
         public string? AiClassifyModel { get; set; }
 
+        /// <summary>收藏即时分类开关（§19 O5）。<b>默认关</b>：它会"用户没按下任何 AI 按键就发一个请求"——
+        /// 合法性由 §20.4 的裁定撑腰（收藏动作本身是用户显式触发），但"裁定合法"不等于"值得默认开"：
+        /// 只有 AI 总开关打开的人才会看见这格，打开后每次收藏多一发单条分类。</summary>
+        public bool? AiInstantClassify { get; set; }
+
         /// <summary>
         /// 护眼 / 休息提醒总开关（<b>默认关</b>）：默认开等于在谁都没要求的时候往屏幕上盖一层遮罩，
         /// 那是"程序替用户决定什么时候该休息"。关时连节拍定时器都不建（不占表、不探前台窗口）。
@@ -890,6 +895,16 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     {
         var d = Load() ?? new SettingsData();
         d.AiClassifyRulesJson = string.IsNullOrWhiteSpace(json) ? null : json;
+        Save(d);
+    }
+
+    /// <summary>收藏即时分类开关（§19 O5）。默认 false；setter 留给 3b 的 UI（本轮先支持手改生效）。</summary>
+    public bool LoadAiInstantEnabled() => Load()?.AiInstantClassify == true;
+
+    public void SaveAiInstantEnabled(bool enabled)
+    {
+        var d = Load() ?? new SettingsData();
+        d.AiInstantClassify = enabled;
         Save(d);
     }
 

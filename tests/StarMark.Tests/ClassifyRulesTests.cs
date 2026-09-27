@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Linq;
+using StarMark.Abstractions;
 using StarMark.Abstractions.Ai;
 using StarMark.Core.Ai;
 using Xunit;
@@ -108,5 +109,45 @@ public sealed class ClassifyModelSelectionTests
         var s = new AiSettings(Enabled: true, Model: "big", ClassifyModel: "   ");
         Assert.Same(s, s.ForClassify());                    // 没配分级＝原样，不造"Model 变空白"的中间态
         Assert.Equal("big", s.EffectiveClassifyModel);
+    }
+}
+
+/// <summary>§19 O5 即时分类的四关闸门（<c>ClassifyRules.ShouldInstant</c>，判据在 Core 才可测——
+/// 这一路最坏的失败形状不是"少分一条"，而是<b>用户在没按任何 AI 键时看到外发请求/弹窗/收藏变慢</b>——
+/// 所以每一关都要单独有一个"关掉就不发"的断言，而不是只测"全开时分了"。</summary>
+public sealed class InstantClassifyGateTests
+{
+    private static Item Item(ItemType type = ItemType.Bookmark, params string[] tags)
+        => new() { Id = 1, Type = type, Source = "chrome", SourceId = "u1", Title = "t", Tags = tags.ToList() };
+
+    private static readonly AiSettings Ready = new(Enabled: true, Provider: AiProviderKind.Ollama, Model: "m");
+    private static readonly AiSettings NoModel = new(Enabled: true);
+
+    [Fact] public void AllFourOpenClassifies()
+        => Assert.True(ClassifyRules.ShouldInstant(Item(), Ready, true));
+
+    [Fact] public void SwitchOffNeverSends()
+        => Assert.False(ClassifyRules.ShouldInstant(Item(), Ready, false));
+
+    [Fact] public void AiDisabledNeverSends()
+        => Assert.False(ClassifyRules.ShouldInstant(Item(), Ready with { Enabled = false }, true));
+
+    [Fact] public void MisconfiguredChannelNeverSends()
+        => Assert.False(ClassifyRules.ShouldInstant(Item(), NoModel, true));
+
+    [Fact] public void AlreadyTaggedItemIsNotSecondGuessed()
+        => Assert.False(ClassifyRules.ShouldInstant(Item(tags: "已有"), Ready, true));
+
+    [Fact] public void TagPresenceIsCountedNotInspected()
+    {
+        var blank = Item();
+        blank.Tags.Add("   ");
+        Assert.False(ClassifyRules.ShouldInstant(blank, Ready, true));   // 按"有没有"判，不为脏标签多引一套清洗逻辑
+    }
+
+    [Fact] public void ClipboardOutOfScope()
+    {
+        var clip = new Item { Id = 2, Type = ItemType.Clipboard, Source = "ditto", SourceId = "c", Title = "x" };
+        Assert.False(ClassifyRules.ShouldInstant(clip, Ready, true));
     }
 }

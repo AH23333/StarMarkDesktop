@@ -133,8 +133,8 @@ public static class ClassifyPrompt
             + "标签要能成类：一个标签至少要能套上 3 条条目，只适合一两次的宁可不给，"
             + "绝不为个别条目造专有词——宁可少分类，也不要一条一个标签；"
             + "不要重复该条已有的标签；不要给无信息量的词（如\u201c其他\u201d\u201c资料\u201d\u201c重要\u201d）。"
-            + "输出：只输出一个 JSON 对象，不要解释文字、不要代码围栏。格式："
-            + "{ \"items\": [ { \"id\": 1, \"tags\": [ \"标签一\" ] } ] }";
+            + "输出：每行一条，形如「编号: 标签一、标签二」（编号从 1 起，不要解释文字、不要代码围栏）；"
+            + "不需要打标签的条目直接省略那一行。";
     }
 
     /// <summary>一批的正文。<b>编号用条目在批次内的序号而不是数据库 id</b>：数据库 id 常常是九位数，
@@ -204,9 +204,10 @@ public static class ClassifyPrompt
 
 
     /// <summary>
-    /// 解读答复。<b>三种形状都认</b>（扩展侧实测：同一个模型在不同批次里会给出三种之一）：
+    /// 解读答复。<b>四种形状都认</b>（O4 后行格式是提示词要求的主输出，JSON 三态是旧习惯的兼容层）：
     /// ① <c>{"items":[{"id":1,"tags":["a"]}]}</c>；② <c>{"categories":{"前端":[1,2]}}</c>（按标签分组）；
-    /// ③ 裸数组 <c>[["a"],["b"]]</c>（按顺序对位）。先剥掉代码围栏与解说文字再按形状分支。
+    /// ③ 裸数组 <c>[["a"],["b"]]</c>（按顺序对位）；④ <c>1: 前端、工具</c> 行格式（提示词现在要的这份）。
+    /// 先剥代码围栏再按形状分支；<b>一个模型在同一批里混着给也不该丢字</b>。
     /// </summary>
     public static ClassifyParseResult Parse(string? reply, IReadOnlyList<ClassifyItem> batch, IReadOnlyList<string>? catalog = null)
     {
@@ -215,7 +216,9 @@ public static class ClassifyPrompt
 
         var json = ExtractJson(reply);
         if (json is null)
-            return empty with { Error = "答复里没有 JSON（模型可能只回了自然语言）" };
+            // O4：行格式现在是第一公民；"自然语言一整段"（既无 JSON 也无编号行）才是读不出来。
+            return ParseLineReply(reply, ids, catalog)
+                ?? empty with { Error = "答复里既没有 JSON，也没有可读的「编号: 标签」行（模型可能只回了自然语言）" };
 
         var proposals = new Dictionary<long, List<string>>();
         var unknown = new List<long>();
@@ -228,23 +231,65 @@ public static class ClassifyPrompt
             else if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("items", out var itemsNode))
             {
                 if (itemsNode.ValueKind != JsonValueKind.Array)
-                    return empty with { Error = "items 不是数组，读不出逐条结果" };
+                    return ParseLineReply(reply, ids, catalog)
+                        ?? empty with { Error = "items 不是数组，读不出逐条结果" };
                 ReadItems(itemsNode, ids, proposals, unknown);
             }
             else if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("categories", out var categoriesNode))
             {
                 if (categoriesNode.ValueKind != JsonValueKind.Object)
-                    return empty with { Error = "categories 不是对象，读不出按标签分组的结果" };
+                    return ParseLineReply(reply, ids, catalog)
+                        ?? empty with { Error = "categories 不是对象，读不出按标签分组的结果" };
                 ReadCategories(categoriesNode, ids, proposals, unknown);
             }
             else
-                return empty with { Error = "JSON 里没有 items / categories，读不出哪条配哪些标签" };
+                return ParseLineReply(reply, ids, catalog)
+                    ?? empty with { Error = "JSON 里没有 items / categories，也没有逐行「编号: 标签」" };
         }
         catch (JsonException ex)
         {
-            return empty with { Error = "JSON 读不下去：" + ex.Message };
+            // 半截 JSON（被 max_tokens 切断）：先试行格式——"JSON 起头没闭合但下面其实是逐行"
+            // 在真实答复里出现过；行也读不出才按坏 JSON 报（错误原文保留，别让它被行分支话术盖掉）。
+            return ParseLineReply(reply, ids, catalog)
+                ?? empty with { Error = "JSON 读不下去：" + ex.Message };
         }
 
+        return Finalize(proposals, unknown, ids, catalog, empty);
+    }
+
+    /// <summary>行格式解读：一行一条 <c>编号: 标签一、标签二</c>。<b>一行都读不出返回 null 而不是空结果</b>——
+    /// "这批模型干脆没按行回"与"它按行回了但每条都不要标签"是两句话，前者要回退报错路径、后者是合法空集。
+    /// 半角/全角冒号都认（中文模型爱打全角），越界编号与 JSON 分支同口径丢弃并回报。</summary>
+    private static ClassifyParseResult? ParseLineReply(string? reply, List<long> ids, IReadOnlyList<string>? catalog)
+    {
+        if (string.IsNullOrWhiteSpace(reply)) return null;
+        var proposals = new Dictionary<long, List<string>>();
+        var unknown = new List<long>();
+        var sawAnyLine = false;
+        foreach (var rawLine in reply.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = rawLine.Trim().TrimStart('-', '*', '·', '\u2022').Trim();
+            var colon = line.IndexOfAny(new[] { ':', '：' });
+            if (colon <= 0) continue;
+            var head = line[..colon].Trim();
+            if (head.Length == 0 || head.Length > 3 || !head.All(char.IsDigit)) continue;
+            var ordinal = int.Parse(head);
+            sawAnyLine = true;
+            if (!WithinBatch(ordinal, ids.Count))
+            {
+                if (ordinal > ids.Count) unknown.Add(ordinal);
+                continue;
+            }
+            AddTo(proposals, ids[ordinal - 1], SplitLoose(line[(colon + 1)..]));   // 标签切分与 JSON 分支同一把刀
+        }
+        if (!sawAnyLine) return null;
+        var empty = new ClassifyParseResult(Array.Empty<TagProposal>(), ids, Array.Empty<long>(), Array.Empty<string>());
+        return Finalize(proposals, unknown, ids, catalog, empty);
+    }
+
+    private static ClassifyParseResult Finalize(Dictionary<long, List<string>> proposals, List<long> unknown,
+        List<long> ids, IReadOnlyList<string>? catalog, ClassifyParseResult empty)
+    {
         var result = proposals
             .Select(pair => new TagProposal(pair.Key, TagText.Sanitize(pair.Value)))
             .Where(proposal => proposal.Tags.Count > 0)
