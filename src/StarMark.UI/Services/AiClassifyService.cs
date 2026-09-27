@@ -149,17 +149,33 @@ public sealed class AiClassifyService
             return new OrganiseOutcome(ClassifyPlan.Empty, 0, 0, 0, 0, 0, 0, 0, 0,
                 "没有待整理的条目（要么都有标签了，要么只剩剪贴板条目）");
 
+        // O2 规则预分类：命中的折算成提案、不进 AI 批次，但照常进预览确认（规则错了用户还是那一刀）。
+        // 自定义 JSON 坏了整份按"只有内置"生效，并随状态行出声——"加了规则没生效"必须当场可见，不能静默。
+        var (forAi, ruled) = ClassifyRules.Split(candidates,
+            ClassifyRules.Merged(_store.LoadAiClassifyRulesJson()));
+        var customRulesJson = _store.LoadAiClassifyRulesJson();
+        var customRulesBroken = customRulesJson is not null && ClassifyRules.Parse(customRulesJson).Count == 0
+            && !customRulesJson.Trim().StartsWith("[]", StringComparison.Ordinal);
+
         var catalog = await ReferenceTagsAsync(ct);
-        var total = ClassifyPrompt.Batches(candidates).Count;
-        onStatus($"共 {candidates.Count} 条待整理，分 {total} 批问模型…");
+        var total = ClassifyPrompt.Batches(forAi).Count;
+        var status = ruled.Count > 0
+            ? $"共 {candidates.Count} 条待整理：{ruled.Count} 条按规则先定了，其余 {forAi.Count} 条分 {total} 批问模型"
+            : $"共 {candidates.Count} 条待整理，分 {total} 批问模型…";
+        if (customRulesBroken)
+            status += "（⚠ 自定义规则没被读进去，本轮只用了内置规则）";
+        onStatus(status);
 
         // 从"上次整理好但还没应用"的方案接着写：<b>不种子就会让这一轮把旧结果整档覆盖掉</b>——
         // 用户上一次花掉的那次整理会在毫无提示的情况下消失（存档是整档写的，没有"追加"这回事）。
         // 同一条目若这轮又问了一遍，Merge 以新的一份为准，不会把两次的标签并起来。
         var proposals = LoadPending().Proposals.ToList();
+        Merge(proposals, ruled);                                  // 规则的份先垫上：即使后面一批 AI 都没问成，它也已经在方案里
         var report = await ClassifyRunner.RunAsync(
-            candidates, catalog,
-            request => _gateway.CompleteAsync(settings, request, ct),
+            forAi, catalog,
+            // O6 模型分级：分类这一路用 EffectiveClassifyModel（没单配就沿用主模型）——
+            // 降级的判定住在 AiSettings.ForClassify()，这里只负责"这一发确实是分类"。
+            request => _gateway.CompleteAsync(settings.ForClassify(), request, ct),
             async done =>
             {
                 // §20.1 计量：只记"服务真的答过"的批（失败批的 Usage 为 null，不猜消耗）。

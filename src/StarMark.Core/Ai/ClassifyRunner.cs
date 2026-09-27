@@ -53,7 +53,7 @@ public sealed record ClassifyRunReport(
 /// </summary>
 public static class ClassifyRunner
 {
-    /// <summary>一次问的时限。本地小模型对 50 条正常在几十秒内，给到 180 秒是留给冷启动；
+    /// <summary>一次问的时限。本地小模型对一批（O7 后 80 条上限）正常在几十秒内，给到 180 秒是留给冷启动；
     /// 再长就变成"用户不知道该等还是该停"。</summary>
     public const int DefaultTimeoutSeconds = 180;
 
@@ -127,7 +127,7 @@ public static class ClassifyRunner
                 ClassifyPrompt.SystemPrompt(catalog),
                 ClassifyPrompt.UserPrompt(batch),
                 TimeoutSeconds: timeoutSeconds,
-                // 一批 50 条 × 最多 4 个标签，留出 JSON 的标点与换行
+                // 一批（O7 后最多 80 条）× 最多 4 个标签，留出 JSON 的标点与换行
                 MaxTokens: Math.Clamp(batch.Count * 28, 400, 4000));
             var reply = await call(request);
             if (!reply.Ok)

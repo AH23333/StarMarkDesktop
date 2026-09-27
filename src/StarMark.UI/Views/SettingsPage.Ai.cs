@@ -30,6 +30,8 @@ public sealed partial class SettingsPage
     private bool _aiBusy;
     private CancellationTokenSource? _aiProbeCts;
     private IReadOnlyList<string> _aiModels = Array.Empty<string>();
+    /// <summary>分类专用模型（§19 O6）暂无输入格，保存整组时透传这一格，防止被"看不见=清掉"。</summary>
+    private string? _aiClassifyModelHeld;
 
     private void InitAiSection()
     {
@@ -46,6 +48,9 @@ public sealed partial class SettingsPage
             AiProviderBox.SelectedIndex = Array.IndexOf(
                 Enum.GetValues<AiProviderKind>(), stored.Provider);
             AiModelBox.Text = stored.Model ?? string.Empty;
+            // 分类模型暂无输入格（用量面板一并补齐）：先持有读到的值，保存时原样带回——
+            // 手改过 settings.json 的用户不该因为"按了一下总开关"被清零这一格。
+            _aiClassifyModelHeld = stored.ClassifyModel;
             AiOllamaUrlBox.Text = stored.OllamaBaseUrl ?? string.Empty;
             AiBaseUrlBox.Text = stored.BaseUrl ?? string.Empty;
             AiKeyBox.Password = stored.ApiKey ?? string.Empty;
@@ -67,7 +72,9 @@ public sealed partial class SettingsPage
         Model: AiModelBox.Text,
         ApiKey: AiKeyBox.Password,
         OllamaBaseUrl: AiOllamaUrlBox.Text,
-        BaseUrl: AiBaseUrlBox.Text);
+        BaseUrl: AiBaseUrlBox.Text,
+        // 分类模型目前没有控件：读"上次 Load 到的那份"——保存永远写回完整组，谁都不被顺手清零。
+        ClassifyModel: _aiClassifyModelHeld);
 
     private void AiEnabled_Toggled(object sender, RoutedEventArgs e) => PersistAiAndShow();
 

@@ -32,11 +32,23 @@ public sealed record AiSettings(
     string? Model = null,
     string? ApiKey = null,
     string? OllamaBaseUrl = null,
-    string? BaseUrl = null)
+    string? BaseUrl = null,
+    string? ClassifyModel = null)
 {
     /// <summary>Ollama 默认监听地址。<b>写 127.0.0.1 而不是 localhost</b>：后者在某些 hosts/IPv6 优先的配置下
     /// 先解析到 <c>::1</c>，而 Ollama 默认只监听 IPv4，于是"明明装了却说连不上"。</summary>
     public const string DefaultOllamaBaseUrl = "http://127.0.0.1:11434";
+
+    /// <summary>分类专用模型（§19 O6）：打标是封闭集分配任务，小模型足够且便宜十倍以上的档位——
+    /// 高端模型留给将来生成类任务，两者共用一格就会互相绑架（为了分类把主模型换小，
+    /// 将来「AI 润色」跟着变蠢）。空＝沿用 <see cref="Model"/>。</summary>
+    public string? EffectiveClassifyModel =>
+        string.IsNullOrWhiteSpace(ClassifyModel) ? Model : ClassifyModel.Trim();
+
+    /// <summary>把"这一轮是分类用"折叠进配置本身——<b>调用方不需要知道降级规则</b>，
+    /// 也不许在 Gateway/Runner 里各写一次"ClassifyModel 空就用 Model"（两处判一处漏是分岔的开始）。</summary>
+    public AiSettings ForClassify() =>
+        string.IsNullOrWhiteSpace(ClassifyModel) ? this : this with { Model = ClassifyModel.Trim() };
 
     /// <summary>OpenAI 兼容端点的默认地址（只有真的填了 Key 才会用到）。</summary>
     public const string DefaultOpenAiBaseUrl = "https://api.openai.com/v1";

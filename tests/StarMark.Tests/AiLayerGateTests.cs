@@ -168,7 +168,7 @@ public sealed class AiLayerGateTests
             .Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries)[2])
             .ToList();
 
-        Assert.Equal(9, aiProps.Count);           // 开关/通道/模型/Key/两个地址 + 待应用方案 + 预算/熔断位（§20.2 新增，各钉一件事）
+        Assert.Equal(11, aiProps.Count);          // 开关/通道/模型/Key/两个地址 + 待应用方案 + 预算/熔断位 + 规则覆盖 JSON + 分类模型
         Assert.All(aiProps, name => Assert.StartsWith("Ai", name)); // 同名覆盖那条事故的形状
     }
 }

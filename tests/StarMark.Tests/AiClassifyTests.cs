@@ -110,15 +110,41 @@ public sealed class AiClassifyTests
     {
         var many = Enumerable.Range(1, 120).Select(n => Item(n, "T" + n)).ToList();
         var byCount = ClassifyPrompt.Batches(many);
-        Assert.Equal(3, byCount.Count);                           // 120 → 50 / 50 / 20
+        Assert.Equal(2, byCount.Count);                           // O7 后 80/80 上限：120 → 80 / 40
         Assert.All(byCount, batch => Assert.InRange(batch.Count, 1, ClassifyPrompt.MaxItemsPerBatch));
 
-        var fat = Enumerable.Range(1, 40).Select(n => Item(n, new string('肥', 500))).ToList();
+        var fat = Enumerable.Range(1, 400).Select(n => Item(n, new string('肥', 500))).ToList();
         var byBudget = ClassifyPrompt.Batches(fat);
         Assert.True(byBudget.Count > 1, "只看条数上限时，一批全是长摘要会整批发不出去");
         Assert.All(byBudget, batch =>
             Assert.True(ClassifyPrompt.UserPrompt(batch).Length <= ClassifyPrompt.UserBudgetChars + 200,
                 "单批提示词要留在预算内（+200 给编号与固定表头）"));
+
+        // 双口径零漂移（§19.1 落地注）：分批用的 CostOf 永远 ≥ 实际渲染进提示词的字节
+        Assert.All(byCount.Concat(byBudget), batch =>
+            Assert.True(ClassifyPrompt.UserPrompt(batch).Length - "按编号逐条给标签：\n".Length
+                        <= batch.Sum(ClassifyPrompt.CostOf),
+                "预算口径与实际载荷分岔——改 ItemLine/CostOf 只改了一处"));
+    }
+
+    /// <summary>O1 载荷瘦身的形状：<b>标题是主证据；副标题与摘要各归各的去留规则，
+    /// 来源与已有标签整段不发</b>（来源由类型前缀可推断，已有标签在发出前就该被 Plan 过滤——
+    /// 让模型"别重复已有标签"是靠提示词里的一句话，而不是每多带一份清单）。</summary>
+    [Fact]
+    public void TrimmingKeepsTitleDropsTheRestOfTheOldPayload()
+    {
+        var rich = new ClassifyItem(1, new string('标', 60), "SENDME-副标题", "SENDME-描述", "test", new[] { "已有标签" });
+        var line = ClassifyPrompt.ItemLine(rich);
+        Assert.Equal(ClassifyPrompt.TitleChars + 1, line.Length);          // 40 字 + 省略号
+        Assert.DoesNotContain("SENDME-副标题", line);
+        Assert.DoesNotContain("SENDME-描述", line);                          // 标题够长，描述不顶
+        Assert.DoesNotContain("已有标签", line);
+        Assert.DoesNotContain("来源", ClassifyPrompt.UserPrompt(new[] { rich }));
+
+        var thin = new ClassifyItem(2, "报告", null, new string('描', 60), "test", Array.Empty<string>());
+        var thinLine = ClassifyPrompt.ItemLine(thin);
+        Assert.Contains("｜", thinLine);                                    // 标题薄 → Desc 兜底上屏
+        Assert.Contains(new string('描', ClassifyPrompt.DescFallbackChars), thinLine);
     }
 
     [Fact]
@@ -229,7 +255,7 @@ public sealed class AiClassifyTests
     [Fact]
     public async Task OneBrokenBatchNeitherStopsTheRunNorBlankTheGoodOnes()
     {
-        var items = Enumerable.Range(1, 60).Select(n => Item(n, "T" + n)).ToList();   // 两批：50 + 10
+        var items = Enumerable.Range(1, 95).Select(n => Item(n, "T" + n)).ToList();   // 两批（O7 后 80/15）：80 + 15
         var calls = 0;
 
         var report = await ClassifyRunner.RunAsync(items, new[] { "前端" },
@@ -258,7 +284,7 @@ public sealed class AiClassifyTests
     public async Task CancellingMidFlightReturnsTheRunInsteadOfThrowingItAway()
     {
         using var cts = new CancellationTokenSource();
-        var items = Enumerable.Range(1, 150).Select(n => Item(n, "T" + n)).ToList();      // 三批
+        var items = Enumerable.Range(1, 170).Select(n => Item(n, "T" + n)).ToList();      // 三批（O7 后 80/80/10）
         var calls = 0;
 
         var report = await ClassifyRunner.RunAsync(items, Array.Empty<string>(),
@@ -286,7 +312,7 @@ public sealed class AiClassifyTests
     public async Task CheckpointCallbackRunsOnEveryBatchBoundary()
     {
         var seen = new List<int>();
-        var items = Enumerable.Range(1, 60).Select(n => Item(n, "T" + n)).ToList();   // 两批
+        var items = Enumerable.Range(1, 95).Select(n => Item(n, "T" + n)).ToList();   // 两批（O7 后 80/15）
 
         await ClassifyRunner.RunAsync(items, Array.Empty<string>(),
             _ => Reply("""{"items":[{"id":1,"tags":["工具"]}]}"""),
@@ -301,7 +327,7 @@ public sealed class AiClassifyTests
     public async Task StoppingKeepsWhatWasAlreadyOrganisedAndCountsWhatWasNotAsked()
     {
         using var cts = new CancellationTokenSource();
-        var items = Enumerable.Range(1, 150).Select(n => Item(n, "T" + n)).ToList();  // 三批
+        var items = Enumerable.Range(1, 170).Select(n => Item(n, "T" + n)).ToList();  // 三批（O7 后 80/80/10）
         var calls = 0;
 
         var report = await ClassifyRunner.RunAsync(items, Array.Empty<string>(),

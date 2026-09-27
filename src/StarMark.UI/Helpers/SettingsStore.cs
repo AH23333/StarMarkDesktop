@@ -152,6 +152,15 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         /// §20.2 明写"重置＝手动点击"，防的就是"用户不知道为什么半夜恢复的调用在烧钱"。</summary>
         public bool? AiBudgetPaused { get; set; }
 
+        /// <summary>「AI 整理」规则预分类的用户追加规则（JSON 数组，§19 O2）。null/解析失败＝只有内置规则
+        /// （<c>ClassifyRules.Merged</c> 一条路管两种情况）。放得下也读得回的失败必须出声：<b>这条链的失败
+        /// 形态是"我明明加了规则却没生效"，所以坏 JSON 在读取侧就回报，而不是静默吞掉。</b></summary>
+        public string? AiClassifyRulesJson { get; set; }
+
+        /// <summary>分类专用模型（§19 O6）。null/空白＝沿用主模型。与 <see cref="AiModel"/> 分格是刻意的：
+        /// 一格只绑架一件事——换分类小模型不许顺手把将来的生成任务也换小。</summary>
+        public string? AiClassifyModel { get; set; }
+
         /// <summary>
         /// 护眼 / 休息提醒总开关（<b>默认关</b>）：默认开等于在谁都没要求的时候往屏幕上盖一层遮罩，
         /// 那是"程序替用户决定什么时候该休息"。关时连节拍定时器都不建（不占表、不探前台窗口）。
@@ -781,11 +790,15 @@ public sealed class SettingsStore : IPerformanceSettingsSource
             Model: d?.AiModel,
             ApiKey: d?.AiApiKey,
             OllamaBaseUrl: d?.AiOllamaBaseUrl,
-            BaseUrl: d?.AiBaseUrl);
+            BaseUrl: d?.AiBaseUrl,
+            ClassifyModel: d?.AiClassifyModel);
     }
 
     /// <summary>整组一次写入。<b>刻意不提供"只改一个字段"的写法</b>：这一组字段互相才有意义
-    /// （通道换了，Key 与地址的必填性跟着变），分开写会出现"Ollama 却带着 https 校验"的中间态。</summary>
+    /// （通道换了，Key 与地址的必填性跟着变），分开写会出现"Ollama 却带着 https 校验"的中间态。
+    /// <para>注意：全组语义意味着<b>调用方交回来的必须是自己读到的完整一份</b>——
+    /// 「分类模型」还没有界面输入（3b 批补上）前，设置页保存时把它从上一次 Load 的值原样带上，
+    /// 否则用户手改 settings.json 里这一格、设置页一按开关就清零（"改了没落盘"最难自查的一种）。</para></summary>
     public void SaveAiSettings(AiSettings settings)
     {
         var d = Load() ?? new SettingsData();
@@ -795,6 +808,7 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         d.AiApiKey = string.IsNullOrWhiteSpace(settings.ApiKey) ? null : settings.ApiKey.Trim();
         d.AiOllamaBaseUrl = string.IsNullOrWhiteSpace(settings.OllamaBaseUrl) ? null : settings.OllamaBaseUrl.Trim();
         d.AiBaseUrl = string.IsNullOrWhiteSpace(settings.BaseUrl) ? null : settings.BaseUrl.Trim();
+        d.AiClassifyModel = string.IsNullOrWhiteSpace(settings.ClassifyModel) ? null : settings.ClassifyModel.Trim();
         Save(d);
     }
 
@@ -865,6 +879,17 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         var d = Load() ?? new SettingsData();
         d.AiTokenBudget = budget.MonthlyTokenBudget;
         d.AiBudgetPaused = budget.PausedByBudget;
+        Save(d);
+    }
+
+    /// <summary>整理规则的原文（解析与"坏 JSON 出声"归 <c>ClassifyRules.Merged</c> 与用量面板，
+    /// store 不做二次校验——存档格式的认知不该漏到持久层去）。</summary>
+    public string? LoadAiClassifyRulesJson() => Load()?.AiClassifyRulesJson;
+
+    public void SaveAiClassifyRulesJson(string? json)
+    {
+        var d = Load() ?? new SettingsData();
+        d.AiClassifyRulesJson = string.IsNullOrWhiteSpace(json) ? null : json;
         Save(d);
     }
 

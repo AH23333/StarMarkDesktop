@@ -101,17 +101,26 @@ public sealed record ClassifyParseResult(
 /// </summary>
 public static class ClassifyPrompt
 {
-    /// <summary>一批最多几条。50 条沿用扩展侧的实测口径：再多模型会开始漏条，
-    /// 而漏条在批量场景里表现为"安静地少整理了一批"。</summary>
-    public const int MaxItemsPerBatch = 50;
+    /// <summary>一批最多几条。§19 O7：载荷按 O1 瘦身后每条只剩标题级（~44 字），
+    /// 50 的旧上限是"长摘要时代"为了压 18K 预算定的——瘦身前 50 条 ≈ 15K token 会撞预算，
+    /// 瘦身后 80 条 ≈ 3.5K，批次边界重新交还给"模型抄录可靠度"来定（再大漏抄率上升，扩展侧实测过的拐点之前）。</summary>
+    public const int MaxItemsPerBatch = 80;
 
     /// <summary>参考类别上限：把库里最常用的标签锚进提示词，<b>让模型优先沿用已有的</b>——
     /// 否则同一件事会出现"前端 / 前端开发 / 前端技术"三个标签，那正是用户要整理的原因。</summary>
     public const int MaxReferenceTags = 40;
 
-    /// <summary>用户那一段的字符预算。<b>刻意小于 <see cref="AiRequest.MaxPromptChars"/></b>：
-    /// 留出的余量给系统那一段与 JSON 标点。两处各算一次预算，结果一定是一处超。</summary>
+    /// <summary>用户那一段的字符预算。<b>O1 瘦身后它退居保险丝</b>（80 条 × ~44 字 ≈ 3.6K，
+    /// 永远够不到 18K）——不删它，防的是将来把 MaxItemsPerBatch 或截断参数调大时预算闸整段形同虚设。
+    /// 两处上限（条数与预算）都判的语义保留，见 <see cref="Batches"/>。</summary>
     public const int UserBudgetChars = 18_000;
+
+    /// <summary>O1 截断参数：分类要判"这是什么"，而这个判断的证据几乎全在标题——
+    /// 副标题删发，摘要只在标题薄到读不出是什么（<see cref="ThinTitleChars"/> 以下）时
+    /// 顶 <see cref="DescFallbackChars"/> 字兜底。</summary>
+    public const int TitleChars = 40;
+    public const int DescFallbackChars = 40;
+    public const int ThinTitleChars = 12;
 
     public static string SystemPrompt(IReadOnlyList<string> referenceTags)
     {
@@ -129,35 +138,47 @@ public static class ClassifyPrompt
     }
 
     /// <summary>一批的正文。<b>编号用条目在批次内的序号而不是数据库 id</b>：数据库 id 常常是九位数，
-    /// 模型抄错一位就会指到另一条真实存在的条目上；而序号错位会被"批次外编号一律丢掉"挡住。</summary>
+    /// 模型抄错一位就会指到另一条真实存在的条目上；而序号错位会被"批次外编号一律丢掉"挡住。
+    /// 行体与 <see cref="CostOf"/> 共用 <see cref="ItemLine"/>——<b>预算若按另一套口径算，
+    /// 就会出现"检查放行 18K、实际发出去 24K"的双口径漂移</b>（§19.1 落地注钉的就是这里）。</summary>
     public static string UserPrompt(IReadOnlyList<ClassifyItem> batch)
     {
         var builder = new StringBuilder();
         builder.Append("按编号逐条给标签：\n");
         for (var i = 0; i < batch.Count; i++)
-        {
-            var item = batch[i];
-            builder.Append(i + 1).Append(". ").Append(OneLine(item.Title, 90));
-            if (!string.IsNullOrWhiteSpace(item.Subtitle)) builder.Append(" | ").Append(OneLine(item.Subtitle, 60));
-            if (!string.IsNullOrWhiteSpace(item.Description)) builder.Append(" | ").Append(OneLine(item.Description, 120));
-            builder.Append(" | 来源=").Append(item.Source);
-            if (item.ExistingTags.Count > 0)
-                builder.Append(" | 已有=").Append(string.Join("、", item.ExistingTags.Take(6)));
-            builder.Append('\n');
-        }
+            builder.Append(i + 1).Append(". ").Append(ItemLine(batch[i])).Append('\n');
         return builder.ToString();
     }
+
+    /// <summary>一条的行体（O1 后的全部载荷）：Title(≤40)，标题薄时 Desc 顶 40 兜底；
+    /// 副标题/来源/已有标签一律不发——来源从标题就能认（仓库名、书签域名），
+    /// 已有标签由 <c>ClassifyPlan.WithoutAlreadyTagged</c> 在发出前过滤。</summary>
+    public static string ItemLine(ClassifyItem item)
+    {
+        var title = OneLine(item.Title, TitleChars);
+        if (FlatLength(item.Title) >= ThinTitleChars || string.IsNullOrWhiteSpace(item.Description))
+            return title;
+        return title + " ｜ " + OneLine(item.Description, DescFallbackChars);
+    }
+
+    /// <summary>这一行占用的预算：<b>行体 + 编号与前缀 ". " 与换行的最坏余量（+8：3 位编号也够）</b>。</summary>
+    public static int CostOf(ClassifyItem item) => ItemLine(item).Length + 8;
 
     /// <summary>摘要里的换行必须压掉：一行一条的清单被塞进多行文本后就对不上编号，
     /// 而"对不上编号"表现为标签打到别的条目上——静默的错。</summary>
     private static string OneLine(string? text, int max)
     {
-        var flat = (text ?? string.Empty).Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ').Trim();
+        var flat = FlatOf(text);
         return flat.Length <= max ? flat : flat[..max] + "…";
     }
 
-    /// <summary>按"每批最多 50 条 <b>且</b> 提示词不超预算"分批。<b>两个上限都要判</b>：
-    /// 只看条数时，一批全是长摘要的条目会整批发不出去。</summary>
+    private static string FlatOf(string? text)
+        => (text ?? string.Empty).Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ').Trim();
+
+    private static int FlatLength(string? text) => FlatOf(text).Length;
+
+    /// <summary>按"每批最多 <see cref="MaxItemsPerBatch"/> 条 <b>且</b> 提示词不超预算"分批。
+    /// <b>两个上限都要判</b>：只看条数时，一批全是长摘要的条目会整批发不出去。</summary>
     public static IReadOnlyList<IReadOnlyList<ClassifyItem>> Batches(IReadOnlyList<ClassifyItem> items)
     {
         var batches = new List<IReadOnlyList<ClassifyItem>>();
@@ -181,10 +202,6 @@ public static class ClassifyPrompt
         return batches;
     }
 
-    private static int CostOf(ClassifyItem item)
-        => 24 + (item.Title?.Length ?? 0)
-            + Math.Min(60, item.Subtitle?.Length ?? 0)
-            + Math.Min(120, item.Description?.Length ?? 0);
 
     /// <summary>
     /// 解读答复。<b>三种形状都认</b>（扩展侧实测：同一个模型在不同批次里会给出三种之一）：
