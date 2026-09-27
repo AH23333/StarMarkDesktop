@@ -1,0 +1,148 @@
+#nullable enable
+using System;
+using System.Text.RegularExpressions;
+using StarMark.Abstractions.Clipboard;
+using Xunit;
+using static StarMark.Tests.SourceGate;
+
+namespace StarMark.Tests;
+
+/// <summary>
+/// ClipIMG-2a（图片行的界面那一层）的守门。<b>测试工程不引用 StarMark.UI</b>，所以这里只能钉源码形状——
+/// 偏偏这一层的四条"必坏线"全都长在形状上：分流的先后、登记回声的先后、解码尺寸的出处、坏消息给不给出口。
+/// <para>每条都写明"破了会怎样"：这类闸门最坏的失效不是红，是安静地白过。</para>
+/// </summary>
+public sealed class ClipboardImageRowUiGateTests
+{
+    private const string CardVm = "src/StarMark.UI/ViewModels/ItemCardViewModel.cs";
+    private const string CardXaml = "src/StarMark.UI/Controls/ItemCard.xaml";
+    private const string PageVm = "src/StarMark.UI/ViewModels/ClipboardPageViewModel.cs";
+    private const string App = "src/StarMark.UI/App.xaml.cs";
+
+    // ────────── 分流：图片行不许掉进文本那条路 ──────────
+
+    [Fact]
+    public void ImageRowsLeaveTheTextPathBeforeAnyStringIsRead()
+    {
+        // 图片条目的 Description 刻意是空的（正文在文件里）。顺序写反——先读 Description 再分流——
+        // 症状是"点一张历史图，得到一句『这条历史没有可复制的正文』"：功能没坏，说了一句假话。
+        var body = MethodBody(ReadRepoFile(PageVm), "public async Task<bool> ReuseAsync(ItemCardViewModel vm)");
+        var branch = body.IndexOf("IsClipboardImageRow", StringComparison.Ordinal);
+        var reads = body.IndexOf("vm.Description", StringComparison.Ordinal);
+        Assert.True(branch >= 0, "ReuseAsync 里没有图片行的分流");
+        Assert.True(reads > branch, "分流必须在读 Description 之前");
+        Assert.Contains("return await ReuseImageAsync(vm);", body);
+    }
+
+    [Fact]
+    public void EchoIsRegisteredBeforeTheImageIsHandedToTheSystem()
+    {
+        // 这是整条链上唯一"顺序即正确性"的地方：WM_CLIPBOARDUPDATE 在 SetContent 之后就到了，
+        // 登记晚一步，那一次通知就变成历史里多出来的一条自回声（而且每点一次多一条）。
+        var body = MethodBody(ReadRepoFile(PageVm), "private async Task<bool> ReuseImageAsync(ItemCardViewModel vm)");
+        var note = body.IndexOf("NoteClipboardOwnImageWrite", StringComparison.Ordinal);
+        var setContent = body.IndexOf("Clipboard.SetContent", StringComparison.Ordinal);
+        Assert.True(note >= 0 && setContent >= 0, "要么没登记回声，要么根本没写剪贴板");
+        Assert.True(note < setContent, "回声登记必须早于 SetContent：晚一步就来不及挡那一帧通知");
+
+        // 通货是位图不是字符串：SetText 会让图片行"复制成功、粘出来是空的"。
+        Assert.Contains("SetBitmap", body);
+        Assert.DoesNotContain("SetText", body);
+        Assert.Contains("Clipboard.Flush()", body);              // 不 Flush，窗口一关内容就没了
+
+        // 像素从我们自己那份 PNG 解出来（登记的是身份哈希的原料，不是文件字节）。
+        Assert.Contains("DecodePngAsync", body);
+    }
+
+    [Fact]
+    public void MissingFilesAreRefusedInTheirOwnWords()
+    {
+        // 报坏消息的那句要给出口（P-54 同口径）：只说"复制不回去"，用户只能去猜该怎么办。
+        var body = MethodBody(ReadRepoFile(PageVm), "private async Task<bool> ReuseImageAsync(ItemCardViewModel vm)");
+        Assert.Contains("已经不在本机", body);
+        Assert.Contains("可置顶或删除", body);
+        // 先判文件在不在再去解它：漏了这一步，症状是一句"图片复制失败：找不到文件"式的系统原话。
+        Assert.Contains("File.Exists", body);
+        Assert.True(body.IndexOf("File.Exists", StringComparison.Ordinal)
+                    < body.IndexOf("ReadAllBytes", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void PixelIdentityIsCarriedThroughTheAppEntry()
+    {
+        // App 上那颗转发必须是<b>像素</b>重载：把它接成文件字节，登记与采集算的就不是同一种哈希，
+        // 编译得过、看起来也在登记，真机上却每条都多一条回声。
+        var body = MethodBody(ReadRepoFile(App), "public static void NoteClipboardOwnImageWrite(byte[]? pixels)");
+        Assert.Contains("NoteOwnWrite(pixels)", body);
+        Assert.DoesNotContain("FileName", body);
+    }
+
+    // ────────── 缩略图：一张小图的成本出处 ──────────
+
+    [Fact]
+    public void ThumbnailDecodeSizeComesFromTheCoreConstant()
+    {
+        var body = MethodBody(ReadRepoFile(CardVm),
+            "private (BitmapImage? Thumb, bool FileAbsent) BuildClipboardThumb(bool flaggedMissing)");
+        Assert.Contains("DecodePixelWidth = ClipAssets.ThumbnailMaxEdge", body);
+        // 反向钉住写死的数字：Core 那个长边改档时，字面量会安静地留在原地，而"回退解码主图"
+        // 正是唯一真正需要它的那条路（4K 主图按原尺寸解码一张就是几十 MB，列表一次摆几百张）。
+        Assert.DoesNotContain("DecodePixelWidth = 1", body);
+        // 优先缩略图、缺了才回退主图：两个来源都必须在名册里，且缩略图排在前面。
+        Assert.True(body.IndexOf("ThumbName", StringComparison.Ordinal)
+                    < body.IndexOf("MainName", StringComparison.Ordinal));
+        Assert.Equal(2, Count(body, "File.Exists"));             // 两个来源各 stat 一次，谁都不许裸用
+        Assert.Contains("UriSource = new Uri(source)", body);
+    }
+
+    [Fact]
+    public void ThumbnailIsBuiltOncePerCardNotOncePerBinding()
+    {
+        var vm = ReadRepoFile(CardVm);
+        // 只有构造函数那一次调用。绑定时建 = 每解析一次就多一个解码器实例（滚动变成反复新建同一张小图）。
+        Assert.Equal(1, Count(vm, "BuildClipboardThumb(flaggedMissing);"));
+        var ctor = MethodBody(vm, "public ItemCardViewModel(Item item)");
+        Assert.Contains("BuildClipboardThumb(flaggedMissing)", ctor);
+        // 判据一次解 extra_json 就够：历史页几百张卡片，三条判据各解一遍就是白付两次。
+        Assert.Equal(1, Count(ctor, "ClipboardEntry.IsImageOf("));
+        Assert.Equal(1, Count(ctor, "ClipboardEntry.IsMissing("));
+    }
+
+    // ────────── 那一格出现/说话的判据 ──────────
+
+    [Fact]
+    public void CardXamlShowsTheThumbAndExplainsItsAbsence()
+    {
+        var xaml = ReadRepoFile(CardXaml);
+        Assert.Equal(1, Count(xaml, "ViewModel.ClipboardThumb"));
+        Assert.Equal(1, Count(xaml, "ViewModel.HasClipboardThumb"));
+        Assert.Equal(1, Count(xaml, "ViewModel.ClipboardImageMissing"));
+
+        // 缺失必须说出来（空着不解释＝看起来像程序坏了），并给出口。
+        var banner = Regex.Match(xaml, "Text=\"(图片文件已不在本机[^\"]*)\"");
+        Assert.True(banner.Success, "缺失态那句原话没了");
+        Assert.Contains("可直接删掉", banner.Groups[1].Value);
+        Assert.DoesNotContain("图片文件已不在本机，请", xaml);       // 不许把责任推回给用户去"请…"
+
+        // 有图与缺图两块不许同时出现：判据是同一个属性的两个极性，写成两个独立条件就会分岔。
+        var thumbVis = xaml.Substring(xaml.IndexOf("ViewModel.HasClipboardThumb", StringComparison.Ordinal), 90);
+        Assert.Contains("BoolToVis", thumbVis);
+    }
+
+    [Fact]
+    public void CardBoxWidthMatchesTheDecodedEdge()
+    {
+        // 卡片那格的宽度与 Core 的长边是同一个决定的两处落点：分岔之后要么图被无谓缩小，要么留一块空白。
+        var xaml = ReadRepoFile(CardXaml);
+        var at = xaml.IndexOf("ViewModel.ClipboardThumb", StringComparison.Ordinal);
+        Assert.True(at > 0);
+        // 绑定写在 <Image ...> 标签<b>内部</b>，所以起点要往前找标签、终点往后找尖括号，不能从绑定处再找 <Image。
+        var open = xaml.LastIndexOf("<Image", at, StringComparison.Ordinal);
+        Assert.True(open >= 0, "ViewModel.ClipboardThumb 不在某枚 <Image> 标签里");
+        var tag = xaml[open..xaml.IndexOf('>', at)];
+        var width = Regex.Match(tag, "Width=\"(\\d+)\"");
+        Assert.True(width.Success, "那格没写 Width：尺寸只能来自 Core 那个长边");
+        Assert.Equal(ClipAssets.ThumbnailMaxEdge,
+            int.Parse(width.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture));
+    }
+}

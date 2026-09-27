@@ -100,6 +100,10 @@ public partial class ClipboardPageViewModel : ObservableObject
     /// <summary>把一条历史复制回剪贴板（点卡片即触发）。返回是否成功，页面据此给反馈。</summary>
     public async Task<bool> ReuseAsync(ItemCardViewModel vm)
     {
+        // 图片行先分流：它的"再复制"是 SetBitmap，而下面那条路径的通货是字符串——
+        // 图片条目的 Description 刻意是空的，落到文本分支就只会得到"没有可复制的正文"这句假话。
+        if (vm.IsClipboardImageRow) return await ReuseImageAsync(vm);
+
         var text = vm.Description ?? string.Empty;
         if (text.Length == 0)
         {
@@ -125,6 +129,49 @@ public partial class ClipboardPageViewModel : ObservableObject
         }
 
         await Task.CompletedTask;
+        return true;
+    }
+
+    /// <summary>
+    /// 把一条图片历史复制回剪贴板（<c>SetBitmap</c>）。
+    /// <para><b>回声必须按像素登记</b>：条目的身份是"归一后 BGRA"的哈希（§2），而不是 PNG 文件的字节——
+    /// 系统收到我们写进去的图后会自己重排成 CF_DIB 再广播回来，那时字节一定不同，
+    /// 只有从同一份像素算出的哈希才认得出"这是我自己刚写的这一张"。漏了这一步，
+    /// 用户每点一次"再复制"，历史就多一条自回声并挤到最前面（§3-Q4 明写的必坏线）。</para>
+    /// <para>解不出像素时<b>仍然把图写出去</b>：复制是用户按下的动作，不能因为"回声可能挡不住"而拒绝；
+    /// 代价只是历史里多一条重复，而那条重复会被字节去抖挡在 700ms 窗口外（同图再点一次也不会翻倍）。</para>
+    /// </summary>
+    private async Task<bool> ReuseImageAsync(ItemCardViewModel vm)
+    {
+        var name = ClipboardEntry.FileName(vm.GetItem());
+        var path = ClipAssets.FullPathOf(name);
+        if (path is null || !System.IO.File.Exists(path))
+        {
+            StatusText = "这条图片的文件已经不在本机，复制不回去（条目仍保留，可置顶或删除）";
+            return false;
+        }
+
+        try
+        {
+            var bytes = await System.Threading.Tasks.Task.Run(() => System.IO.File.ReadAllBytes(path));
+            var pixels = await StarMark.Integrations.Clipboard.ClipboardImageStore
+                .DecodePngAsync(bytes, CancellationToken.None);
+            if (pixels is { } f) App.NoteClipboardOwnImageWrite(f.Bgra);
+
+            var package = new DataPackage();
+            package.SetBitmap(Windows.Storage.Streams.RandomAccessStreamReference.CreateFromUri(
+                new Uri(path)));                                   // Windows.Foundation.Uri 在 C# 投影里就是 System.Uri
+            Clipboard.SetContent(package);
+            Clipboard.Flush();
+            StatusText = $"已把图片复制回剪贴板：{vm.Title}（去目标程序按粘贴即可）";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"图片复制失败：{ex.Message}";
+            StarLog.Error($"剪贴板历史再复制图片失败 (id={vm.Id})", ex);
+            return false;
+        }
+
         return true;
     }
 

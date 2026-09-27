@@ -94,12 +94,30 @@ public static class ClipboardEntry
             SourceId = sourceId,
             Title = ClipAssets.DescribeTitle(meta.Width, meta.Height),
             Subtitle = BuildImageSubtitle(sourceApp, meta),
-            Uri = string.Empty,                                     // 图片条目没有可打开的 URI；点击=复制回剪贴板
+            Uri = UriOf(meta.MainName),                               // 见 UriOf：图片行的"可打开的东西"就是那张 PNG
             Description = string.Empty,                             // 正文在文件里，库里不存第二份
             CreatedAt = now.ToUnixTimeSeconds(),
             UpdatedAt = now.ToUnixTimeSeconds(),
             ExtraJson = Write(null, sourceApp, FormatImage, 1, false, 0, meta),
         };
+
+    /// <summary>
+    /// 图片条目的 <c>Uri</c>：那张 PNG 的 <c>file://</c> 地址；文本/文件列表条目一律空串。
+    /// <para>为什么给而不是留空（留空是 1b 的原方案）：<b>应用既有的"预览"与"打开位置"都从 Uri 走</b>
+    /// （<c>PreviewHost</c> 按本地文件后缀分派图片/PDF/文本）。留空等于让"看得见存储"这条裁决
+    /// 只兑现在目录路径上，用户想原样打开那张 PNG 还得自己去翻文件夹。</para>
+    /// <para><b>点击卡片仍然是"复制回去"</b>——那条路径不看 Uri（<c>ClipboardPageViewModel.ReuseAsync</c>），
+    /// 所以给 Uri 不会改变页头写明了的那个动作语义。</para>
+    /// <para>名字不安全（手改过的备份）或没有名字时回空串：宁可不给预览，也不拼一个指不到文件的地址。</para>
+    /// </summary>
+    public static string UriOf(string? mainFileName)
+    {
+        if (ClipAssets.FullPathOf(mainFileName) is not { } path) return string.Empty;
+        try { return new Uri(path).AbsoluteUri; } catch (UriFormatException) { return string.Empty; }
+    }
+
+    /// <summary>合并后的 extra 决定地址：<b>名字被回放换掉时 Uri 必须跟着换</b>，否则预览指向一个不存在的文件。</summary>
+    public static string UriOfMerged(string? mergedExtraJson) => UriOf(NameOf(mergedExtraJson, FileKey));
 
     private static string BuildImageSubtitle(string? sourceApp, ImageMeta meta)
     {

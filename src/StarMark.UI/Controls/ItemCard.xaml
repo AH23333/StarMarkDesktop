@@ -79,6 +79,26 @@
                            HorizontalAlignment="Right"/>
             </StackPanel>
 
+            <!--
+                剪贴板图片行的小图（ClipIMG-2a）。放在标题之下、副标题之上：尺寸/来源那行才是这条历史
+                的主信息，图是它的证据。ImageSource 在卡片 VM 构造时建好一次（优先 160px 缩略图，
+                缩略图缺了才回退主图并按 160 解码）——绑定的代价不该出现在滚动路径上。
+            -->
+            <Border Margin="0,2,0,0" CornerRadius="4" BorderThickness="1" HorizontalAlignment="Left"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                    Visibility="{x:Bind ViewModel.HasClipboardThumb, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                <Image Source="{x:Bind ViewModel.ClipboardThumb, Mode=OneWay}"
+                       Width="160" Height="120" Stretch="Uniform"/>
+            </Border>
+            <!-- 图不在了必须说这一格：空着不解释，看起来像程序坏了，而不是"文件被删了但条目还在"。 -->
+            <Border Margin="0,2,0,0" Padding="8,6" CornerRadius="4" HorizontalAlignment="Left"
+                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                    Visibility="{x:Bind ViewModel.ClipboardImageMissing, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="图片文件已不在本机（条目仍保留，可直接删掉这一条；这一张复制不回去）"
+                           FontSize="11" Style="{StaticResource MutedText}"/>
+            </Border>
+
             <!-- 副标题 -->
             <TextBlock FontSize="11"
                        Style="{StaticResource MutedText}"

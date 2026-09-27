@@ -385,6 +385,10 @@ public sealed partial class ItemRepository
 
         draft.Id = id;
         draft.ExtraJson = extraJson;
+        // Uri 跟着<b>合并后</b>的名字走：回放时 <see cref="ClipboardEntry.MergeForReplay"/> 保住的是旧文件名，
+        // 而 draft.Uri 是按这次算出的新名字拼的——不校正就交出一个指不到文件的地址（预览/贴图都问它要）。
+        // 文本行与首次写入行都是恒等式（前者两边都空，后者名字没换），故零行为变化。
+        draft.Uri = ClipboardEntry.UriOfMerged(extraJson);
         draft.Hidden = hidden;
         draft.Pinned = pinned;
         draft.Notes = notes;

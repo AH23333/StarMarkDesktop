@@ -1,6 +1,7 @@
 #nullable enable
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Xaml.Media.Imaging;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Clipboard;
 using StarMark.UI.Helpers;
@@ -196,6 +197,66 @@ public partial class ItemCardViewModel : ObservableObject
 
     public bool HasSizeText => SizeText.Length > 0;
 
+    // ────────── 剪贴板图片行（ClipIMG-2a）──────────
+
+    /// <summary>
+    /// 这一行是不是剪贴板图片。<b>判据只有一份</b>（<see cref="ClipboardEntry.IsImageOf"/>，
+    /// 与仓储层轮转分桶用的是同一句）——卡片自己再认一遍"有没有 clipFile"就会分出两种"什么算图片行"。
+    /// </summary>
+    /// <remarks>图片那三条判据都在构造时算一次：每条都要解一遍 <c>extra_json</c>，写成表达式属性
+    /// 就是让一张卡片付两三次反序列化，而历史页一次要摆几百张。</remarks>
+    public bool IsClipboardImageRow { get; }
+
+    /// <summary>
+    /// 列表上那一张小图。<b>优先缩略图</b>（§3-Q5：4K 主图按行解码会把滚动的代价压到 UI 线程上），
+    /// 缩略图缺了才回退主图，并用 <c>DecodePixelWidth</c> 把解码尺寸钉在 Core 那个长边上——
+    /// 回退是为了"看得见"，钉尺寸是为了回退时仍然便宜。文件缺失（对账标的）一律不给图。
+    /// </summary>
+    public BitmapImage? ClipboardThumb { get; }
+
+    /// <summary>有图可显（决定卡片左侧那块小图占位出不出现）。</summary>
+    public bool HasClipboardThumb => ClipboardThumb is not null;
+
+    /// <summary>
+    /// 图<b>真的</b>不在了（对账打上的标记，或文件被用户手删）。这一格必须说出来：
+    /// 空着不解释，看起来像程序坏了，而不是"文件没了但条目还在"。
+    /// </summary>
+    public bool ClipboardImageMissing { get; }
+
+    /// <summary>
+    /// 取这一行的缩略图源。<paramref name="flaggedMissing"/>＝对账打上的"文件缺失"标记；
+    /// 返回值第二项＝<b>这一刻 stat 出来两张文件都不在</b>（用户刚手删，还没到下次对账）。
+    /// 两种都得报，但成因不能混：extra 读不出名字时<b>不许</b>冒充"文件没了"。
+    /// </summary>
+    private (BitmapImage? Thumb, bool FileAbsent) BuildClipboardThumb(bool flaggedMissing)
+    {
+        if (!IsClipboardImageRow || flaggedMissing) return (null, false);
+        var meta = ClipboardEntry.ImageOf(_item);
+        if (meta is null) return (null, false);
+        // 优先缩略图；缺了才回退主图——回退也必须 stat，否则给一个指不到文件的 UriSource，
+        // 症状是"那一格永远空白且不解释"（解码失败不抛到我们能看见的地方）。
+        var thumb = ClipAssets.FullPathOf(meta.Value.ThumbName);
+        var main = ClipAssets.FullPathOf(meta.Value.MainName);
+        var source = thumb is not null && System.IO.File.Exists(thumb) ? thumb
+                   : main is not null && System.IO.File.Exists(main) ? main : null;
+        if (source is null) return (null, true);
+        try
+        {
+            // DecodePixelWidth 在这条回退路上才真正值钱：主图常是 4K PNG，按原尺寸解码一张
+            // 就是几十 MB，而历史页一次摆几百张。
+            return (new BitmapImage
+            {
+                DecodePixelWidth = ClipAssets.ThumbnailMaxEdge,
+                UriSource = new Uri(source),
+            }, false);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"剪贴板缩略图没法显示（{Title}）：{ex.Message}");
+            return (null, false);
+        }
+    }
+
     public bool HasSubtitle => !string.IsNullOrEmpty(Subtitle);
     public bool HasDescription => !string.IsNullOrEmpty(Description);
     public bool HasNotes => !string.IsNullOrEmpty(Notes);
@@ -212,6 +273,13 @@ public partial class ItemCardViewModel : ObservableObject
         // 置顶状态必须从条目映射：否则置顶条目在主窗口永远显示为未置顶，
         // 「置顶/取消置顶」菜单点击只会再次写入 pinned=1，永远无法取消置顶。
         IsPinned = item.Pinned;
+        IsClipboardImageRow = item.Type == ItemType.Clipboard && ClipboardEntry.IsImageOf(item.ExtraJson);
+        var flaggedMissing = IsClipboardImageRow && ClipboardEntry.IsMissing(item);
+        // 缩略图在这里建一次而不是绑定时建：BitmapImage 每被 x:Bind 重解析一次就多一个解码器实例，
+        // 列表滚动会变成"反复新建同一张小图"。同一次 stat 顺带答出"文件还在不在"，不各查一遍。
+        var built = BuildClipboardThumb(flaggedMissing);
+        ClipboardThumb = built.Thumb;
+        ClipboardImageMissing = flaggedMissing || built.FileAbsent;
     }
 
     public void SetHidden(bool value) => IsHidden = value;

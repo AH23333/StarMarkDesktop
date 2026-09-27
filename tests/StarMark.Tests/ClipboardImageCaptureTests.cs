@@ -137,7 +137,9 @@ public sealed class ClipboardImageCaptureTests : IDisposable
 
         Assert.Equal(ItemType.Clipboard, item.Type);
         Assert.Equal(ItemSources.Clipboard, item.Source);
-        Assert.Equal(string.Empty, item.Uri);
+        // 图片行的"可打开的东西"就是那张 PNG（ClipIMG-2a）：预览与"打开位置"都从 Uri 走。
+        // 期望值在测试里独立拼一遍路径，这样"ThreeSlashes/正斜杠"这类 URI 形式写坏了才看得见。
+        Assert.Equal(new Uri(Path.Combine(ClipAssets.Folder, "a.png")).AbsoluteUri, item.Uri);
         Assert.Equal(string.Empty, item.Description);            // 正文在文件里，库里不存第二份
         Assert.Equal("3840×2160", item.Title);
         Assert.Contains("4 MB", item.Subtitle);

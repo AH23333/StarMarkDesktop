@@ -768,6 +768,19 @@ public partial class App : Application
         catch { /* 登记失败最多导致多记一条回声，不该影响复制本身 */ }
     }
 
+    /// <summary>
+    /// 登记"这张图是 StarMark 写回剪贴板的"（历史页"再复制图片"必须先在写之前调它）。
+    /// <b>像素身份</b>：系统会把我们写的 PNG 重排成 CF_DIB 再广播回来，按文件字节登记挡不住那一次。
+    /// </summary>
+    public static void NoteClipboardOwnImageWrite(byte[]? pixels)
+    {
+        try
+        {
+            Services.GetRequiredService<StarMark.Integrations.Clipboard.ClipboardWatcher>().NoteOwnWrite(pixels);
+        }
+        catch { /* 同上：登记失败只是多一条回声，复制本身已经完成 */ }
+    }
+
     /// <summary>隐藏主界面（快捷键动作用）：主进程继续驻留托盘。</summary>
     public static void HideMainWindow()
     {

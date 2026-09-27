@@ -384,6 +384,13 @@ public sealed class ClipboardWatcher : IDisposable
     public void NoteOwnWrite(string? text)
         => _dedupe.NoteOwnWrite(text, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
 
+    /// <summary>
+    /// 登记"这张图是 StarMark 自己写回剪贴板的"。<b>吃像素不吃文件名</b>：身份哈希算在归一后的 BGRA 上，
+    /// 而系统会把我们写的 PNG 重排成 CF_DIB 再广播回来，字节必然不同——按字节或按名字登记都挡不住这一次。
+    /// </summary>
+    public void NoteOwnWrite(byte[]? pixels)
+        => _dedupe.NoteOwnWrite(pixels, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+
     public void Dispose()
     {
         Stop();
