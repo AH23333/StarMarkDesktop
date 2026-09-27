@@ -20,7 +20,8 @@ namespace StarMark.UI.Services;
 /// 屏幕画布的编排（规格 §16）：热键进入 → 每屏一块透明玻璃 → 画笔／荧光笔／橡皮 → 快照或退出。
 /// <para>
 /// 三条设计线：
-/// ① <b>持久笔迹与荧光段分两张缓冲</b>——持久层（<see cref="CanvasInk"/>）留在
+/// ① <b>持久笔迹与荧光段分两张缓冲</b>——持久层（模型那一份是 <see cref="InkDoc"/>，缓冲是
+/// <c>Screen.Persistent</c>）留在
 /// <c>Screen.Persistent</c> 里，屏幕上那块 <c>Window.Pixels</c> 每次提交由"铺持久层 → 叠荧光段 →
 /// 叠光晕"重算。合成到一处写的代价是淡出/擦除时回不到"原来那块地方画了什么"。
 /// ② <b>只提交脏区</b>：4K 全屏整帧提交是 33MB/帧，60fps 下根本不可能（§16.7）。
@@ -45,7 +46,21 @@ public static class CanvasService
         /// <summary>这块屏自己的缩放。工具条的尺寸与摆位要用它，混屏时才不会半截在屏外。</summary>
         public required double Scale { get; init; }
         public required uint[] Persistent { get; init; }
-        public required CanvasInk Ink { get; init; }
+
+        /// <summary>
+        /// 这块屏上<b>留下来的</b>笔迹与它自己的历史——类型是两侧共用的那一个 <see cref="InkDoc"/>，
+        /// 归属标成 <see cref="SurfaceRole.Board"/>＋屏号（方案 §3.4／§7：渲放宿主只是 InkDoc 的窗口）。
+        /// </summary>
+        public required InkDoc Ink { get; init; }
+
+        /// <summary>
+        /// 手上正在拖的那一条（<b>还没落定</b>）。它刻意不住在 <see cref="Ink"/> 里：
+        /// 那一叠是"用户已经画成的东西"，而这条还在每个移动事件里变——把半成品放进历史载体，
+        /// 就会出现"撤销退到一半的椭圆"那一类只有真机看得见的错（批次 WO）。
+        /// 收手时整份 <c>ToAnnotation()</c> 落进 InkDoc，从此它只是模型里的一条。
+        /// </summary>
+        public CanvasStroke? Drawing { get; set; }
+
         public required EphemeralInk Trail { get; init; }
 
         public List<IntRect> Dirty { get; } = new();
@@ -204,7 +219,7 @@ public static class CanvasService
                         Bounds = bounds,
                         Scale = monitor.Scale,
                         Persistent = persistent,
-                        Ink = new CanvasInk(),
+                        Ink = new InkDoc(new InkSurface(SurfaceRole.Board, Screens.Count)),
                         Trail = new EphemeralInk { CursorHaloEnabled = _haloEnabled },
                     };
                     window.PointerPressed += p => OnPressed(screen, p);
@@ -426,7 +441,7 @@ public static class CanvasService
             StateChanged?.Invoke();
             return;
         }
-        var target = Screens.Where(s => !s.Ink.IsEmpty)
+        var target = Screens.Where(s => s.Ink.Count > 0)
             .OrderByDescending(s => s.Ink.LastOrder)
             .FirstOrDefault();
         if (target is null || !target.Ink.Undo()) return;
@@ -442,6 +457,9 @@ public static class CanvasService
         CancelOpenPolyLine();               // 勾到一半的折线不能被"清空"顺手提交出去
         foreach (var screen in Screens)
         {
+            // 连手上那条一起丢：清空之后鼠标还动着的话，那条"幽灵笔迹"会在清完的板子上补出一截
+            // （以前那个容器把清空与丢笔迹做成了一次，拆成"模型 + 实时缓冲"两层之后必须自己说清楚）
+            screen.Drawing = null;
             screen.Ink.Clear();
             DropTrail(screen);
             Recomposite(screen);
@@ -546,8 +564,9 @@ public static class CanvasService
         }
         else
         {
-            var stroke = screen.Ink.Begin(kind == Press.QuickPen ? CanvasTool.Pen : _tool,
-                colour, WidthFor(kind == Press.QuickPen ? CanvasTool.Pen : _tool), at);
+            var tool = kind == Press.QuickPen ? CanvasTool.Pen : _tool;
+            var stroke = new CanvasStroke(tool, colour, WidthFor(tool), at);
+            screen.Drawing = stroke;
             screen.Dirty.Add(CanvasCompositor.Paint(
                 screen.Persistent, screen.Window.Width, screen.Window.Height, stroke));
         }
@@ -581,7 +600,7 @@ public static class CanvasService
             ShowPolyPreview(pointer.At);
             dirty = true;
         }
-        else if (screen.Ink.Drawing is { } stroke && stroke.AddPoint(pointer.At))
+        else if (screen.Drawing is { } stroke && stroke.AddPoint(pointer.At))
         {
             screen.Dirty.Add(CanvasCompositor.PaintTail(
                 screen.Persistent, screen.Window.Width, screen.Window.Height, stroke));
@@ -622,7 +641,7 @@ public static class CanvasService
             // 重算就会出现"预览一个样、落下另一个样"（拖的时候是圆的、松手变有角）。
             var preview = screen.Trail.Preview;
             screen.Dirty.Add(screen.Trail.DropPreview());
-            if (preview is not null) screen.Ink.Commit(preview);
+            if (preview is not null) screen.Ink.Add(preview.ToAnnotation());
             Recomposite(screen);
             Flush(screen);
         }
@@ -630,13 +649,27 @@ public static class CanvasService
         {
             // 这一条如果不够格留下来（橡皮点一下），它按下时已经烤进持久层的那一小片要单独交回去擦——
             // 否则屏幕上留下一个"没有任何笔迹对应、撤销里也没有"的洞
-            var footprint = screen.Ink.Drawing?.Bounds ?? default;
-            if (!screen.Ink.End()) Recomposite(screen, footprint);
+            var footprint = screen.Drawing?.Bounds ?? default;
+            if (!CommitLiveStroke(screen)) Recomposite(screen, footprint);
             else Recomposite(screen);
             Flush(screen);
         }
         _press = Press.None;
         AnnotationHub.QuickPressInFlight = false;
+    }
+
+    /// <summary>
+    /// 把手上那条落成模型里的一笔：<b>整份转成 <see cref="Annotation"/> 交给这块屏的 InkDoc</b>，
+    /// 实时缓冲随即清空。够不够格留（橡皮点一下不算一笔）由笔迹自己说，留不下就返回 false，
+    /// 调用方要把它的落点交回去擦——屏幕上不能留一片"没有笔迹对应、撤销里也没有"的洞（批次 WO）。
+    /// </summary>
+    private static bool CommitLiveStroke(Screen screen)
+    {
+        var stroke = screen.Drawing;
+        screen.Drawing = null;
+        if (stroke is null || !stroke.WorthKeeping) return false;
+        screen.Ink.Add(stroke.ToAnnotation());
+        return true;
     }
 
     /// <summary>
@@ -751,7 +784,7 @@ public static class CanvasService
         screen.Dirty.Add(screen.Trail.DropPreview());
         if (points.Count >= 2)
         {
-            screen.Ink.Commit(CanvasStroke.FromPoints(CanvasTool.PolyLine, _polyColour, _polyWidth, points));
+            screen.Ink.Add(CanvasStroke.FromPoints(CanvasTool.PolyLine, _polyColour, _polyWidth, points).ToAnnotation());
             Recomposite(screen);
         }
         Flush(screen);
@@ -931,10 +964,23 @@ public static class CanvasService
         var height = screen.Window.Height;
         // 要擦的 = 上一次烤过的那一片 ∪ 这次被丢掉的那一条（区域算法与"为什么不能只擦剩下的"都在 Core 那条注释里）
         var toErase = CanvasCompositor.Union(new[] { screen.Composited, alsoErase }, width, height);
-        var erase = CanvasCompositor.Rebake(screen.Persistent, width, height, screen.Ink.Strokes,
+        var erase = CanvasCompositor.Rebake(screen.Persistent, width, height, Brushes(screen),
             toErase, out var remaining);
         screen.Composited = remaining;
         if (!erase.IsEmpty) screen.Dirty.Add(erase);
+    }
+
+    /// <summary>
+    /// 把这一叠模型还原成渲放要的笔迹串。<b>每次重烤现算，不留第二份缓存</b>：
+    /// 缓存一份"笔迹形状"就等于把同一叠墨存两处，撤销／清空之后两边对不对得上线程说了算（R2 双引擎的老路）。
+    /// 重烤只发生在落笔/撤销/清空这类离散动作上，一叠几百条的换算代价换掉的是"两份真值"这一整类缺陷。
+    /// </summary>
+    private static List<CanvasStroke> Brushes(Screen screen)
+    {
+        var marks = screen.Ink.Marks;
+        var strokes = new List<CanvasStroke>(marks.Count);
+        for (var i = 0; i < marks.Count; i++) strokes.Add(CanvasStroke.FromAnnotation(marks[i]));
+        return strokes;
     }
 
     /// <summary>换工具/换粗细之前先把手上那条收掉，免得它接到新设置下去（症状："画着画着笔自己变粗了"）。</summary>
@@ -951,9 +997,9 @@ public static class CanvasService
         FinishOpenPolyLine();
         var changed = false;
         foreach (var screen in Screens)
-            if (screen.Ink.Drawing is not null)
+            if (screen.Drawing is not null)
             {
-                screen.Ink.End();
+                CommitLiveStroke(screen);
                 Recomposite(screen);
                 changed = true;
             }

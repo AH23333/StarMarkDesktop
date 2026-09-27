@@ -665,9 +665,9 @@ public sealed class CanvasWiringGateTests
         var begin = SourceGate.MethodBody(service, "private static void BeginPress(");
         Assert.Contains("else if (kind == Press.Shape)", begin);
         Assert.Contains("screen.Dirty.Add(screen.Trail.SetPreview(ShapeStroke(at, at)));", begin);
-        // 整份编排里 <c>Ink.Begin</c> 只许出现一次（画笔/橡皮那条分支）：图形若在按下时就进持久层，
+        // 整份编排里"开口一条实时笔迹"只许出现一次（画笔/橡皮那条分支）：图形若在按下时就建一条，
         // "拖到一半松开"会留下一条撤不掉的笔迹，而它本来什么都没画成
-        Assert.Equal(1, SourceGate.Count(service, "Ink.Begin("));
+        Assert.Equal(1, SourceGate.Count(service, "new CanvasStroke("));
 
         var moved = SourceGate.MethodBody(service, "private static void OnMoved(");
         Assert.Contains("ShapeStroke(_shapeFrom, pointer.At)", moved);
@@ -682,7 +682,7 @@ public sealed class CanvasWiringGateTests
         var finish = SourceGate.MethodBody(service, "private static void FinishPress(");
         Assert.Contains("var preview = screen.Trail.Preview;", finish);
         Assert.Contains("screen.Dirty.Add(screen.Trail.DropPreview());", finish);
-        Assert.Contains("screen.Ink.Commit(preview);", finish);
+        Assert.Contains("screen.Ink.Add(preview.ToAnnotation());", finish);
         Assert.Contains("Recomposite(screen);", finish);
 
         // 一条几何算式两处用：预览与定形不可能长成两个样（定义那一处之外，只许 BeginPress 与 OnMoved 各一次）
@@ -744,22 +744,26 @@ public sealed class CanvasWiringGateTests
         // 收口：整条一条笔迹，且收完必须忘掉状态（否则下一按接到这一条上）
         var close = SourceGate.MethodBody(service, "private static void FinishOpenPolyLine()");
         Assert.Contains("if (points.Count >= 2)", close);
-        Assert.Contains("screen.Ink.Commit(CanvasStroke.FromPoints(CanvasTool.PolyLine, _polyColour, _polyWidth, points));", close);
+        Assert.Contains("screen.Ink.Add(CanvasStroke.FromPoints(CanvasTool.PolyLine, _polyColour, _polyWidth, points).ToAnnotation());", close);
         Assert.Contains("Recomposite(screen);", close);
         Assert.Contains("screen.Dirty.Add(screen.Trail.DropPreview());", close);
         Assert.Contains("_polyPoints = null;", close);
         Assert.Contains("_polyScreen = null;", close);
-        // 定形只有这一条链（Shape 那条走预览换归属），多一处 Commit 就多一处"半条折线被当成整条"
-        Assert.Equal(2, SourceGate.Count(service, "Ink.Commit("));
+        // 定形只有这一条链（Shape 那条走预览换归属），多一处 Ink.Add 就多一处"半条折线被当成整条"。
+        // 第三处是 CommitLiveStroke（画笔/橡皮收手），它是实时那条唯一进模型的口子。
+        Assert.Equal(3, SourceGate.Count(service, "Ink.Add("));
 
         // 收口入口齐：换工具/换粗细/开穿透都要先收；清屏与退出则是"丢掉不提交"
         var commit = SourceGate.MethodBody(service, "private static void CommitOpenStroke()");
         Assert.True(commit.IndexOf("FinishOpenPolyLine();", StringComparison.Ordinal) > 0,
             "换工具时没收掉挂着的折线");
         Assert.Contains("CancelOpenPolyLine();", SourceGate.MethodBody(service, "public static void ClearAll()"));
+        // 清空必须连"手上那条"一起丢：从前这是 CanvasInk.Clear 顺手做的，拆成两层之后没人做就得钉住——
+        // 否则清完屏鼠标一动，那一截会补成一条"没人画过"的幽灵笔迹（旧版 ExtendingWithoutAnOpenStroke 守的就是它）。
+        Assert.Contains("screen.Drawing = null;", SourceGate.MethodBody(service, "public static void ClearAll()"));
         Assert.Contains("_polyPoints = null;", SourceGate.MethodBody(service, "public static void CloseBoardHost()"));
         var cancel = SourceGate.MethodBody(service, "private static void CancelOpenPolyLine()");
-        Assert.DoesNotContain("Ink.Commit", cancel);
+        Assert.DoesNotContain("Ink.Add", cancel);
         Assert.Contains("screen.Dirty.Add(screen.Trail.DropPreview());", cancel);
 
         // 两级 Esc：先收口这一条，没有手上一半的东西才退出画布（顺序反了＝误按一次把整块板子连笔迹弄没）
@@ -857,18 +861,30 @@ public sealed class CanvasWiringGateTests
         var service = SourceGate.ReadRepoFile(Service);
         var recompute = SourceGate.MethodBody(service, "private static void Recomposite(Screen screen, IntRect alsoErase = default)");
         Assert.Contains("var toErase = CanvasCompositor.Union(new[] { screen.Composited, alsoErase }, width, height);", recompute);
-        Assert.Contains("CanvasCompositor.Rebake(screen.Persistent, width, height, screen.Ink.Strokes,", recompute);
+        Assert.Contains("CanvasCompositor.Rebake(screen.Persistent, width, height, Brushes(screen),", recompute);
         Assert.Contains("toErase, out var remaining);", recompute);
         Assert.Contains("screen.Composited = remaining;", recompute);
         Assert.Contains("if (!erase.IsEmpty) screen.Dirty.Add(erase);", recompute);
+
+        // 模型→渲放那一处换算：只有 Brushes 一个出口，且必须是"每次重烤现算"。
+        // 缓存一份笔迹形状＝同一叠墨存两处，撤销/清空之后两边对不对得上线程说了算（R2 双引擎的老路）。
+        var brushes = SourceGate.MethodBody(service, "private static List<CanvasStroke> Brushes(Screen screen)");
+        Assert.Contains("CanvasStroke.FromAnnotation(marks[i])", brushes);
         // 记号必须存在且是"曾经烤过的那一片"，不是"现在还剩的"
         Assert.Contains("public IntRect Composited { get; set; }", service);
 
         // 橡皮点一下那种"不够格进层"的一笔：落点要单独交回去擦，否则留下一个没有笔迹对应的洞
         var finish = SourceGate.MethodBody(service, "private static void FinishPress(");
-        Assert.Contains("var footprint = screen.Ink.Drawing?.Bounds ?? default;", finish);
-        Assert.Contains("if (!screen.Ink.End()) Recomposite(screen, footprint);", finish);
+        Assert.Contains("var footprint = screen.Drawing?.Bounds ?? default;", finish);
+        Assert.Contains("if (!CommitLiveStroke(screen)) Recomposite(screen, footprint);", finish);
         Assert.Contains("else Recomposite(screen);", finish);
+
+        // 实时那条进模型只许经过这一道门：够不够格留（橡皮点一下不算一笔）由笔迹自己说，
+        // 而且落完之后必须忘掉它——否则下一次移动接到上一条上（症状："画着画着笔自己变了"）。
+        var commitLive = SourceGate.MethodBody(service, "private static bool CommitLiveStroke(Screen screen)");
+        Assert.Contains("screen.Drawing = null;", commitLive);
+        Assert.Contains("!stroke.WorthKeeping", commitLive);
+        Assert.Contains("screen.Ink.Add(stroke.ToAnnotation());", commitLive);
     }
 
     /// <summary>

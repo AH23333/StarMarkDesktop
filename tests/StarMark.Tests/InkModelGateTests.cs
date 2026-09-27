@@ -21,6 +21,7 @@ public sealed class InkModelGateTests
     private const string AnnotationFile = "src/StarMark.Core/Capture/Annotation.cs";
     private const string CanvasInkFile = "src/StarMark.Core/Canvas/CanvasInk.cs";
     private const string InkDocFile = "src/StarMark.Core/Capture/InkDoc.cs";
+    private const string Service = "src/StarMark.UI/Services/CanvasService.cs";
 
     /// <summary>标注链的源码目录：序号这件事只许在这两格里有一份出处。</summary>
     private static readonly string[] ChainDirs =
@@ -51,19 +52,35 @@ public sealed class InkModelGateTests
     }
 
     [Fact]
-    public void BothKindsOfEmptyStackSortLast()
+    public void TheEmptyStackFallbackIsThatOneNumber()
     {
-        // "这一叠没画过"在两个世界里都必须是"排最后"，而且是同一个数：
-        // 各写一份兜底值（一边 long.MinValue、一边 -1）迟早会让跨叠比较挑中一块空白屏。
-        foreach (var (file, anchor) in new[]
-        {
-            (CanvasInkFile, "public long LastOrder"),
-            (InkDocFile, "public long LastOrder"),
-        })
-        {
-            var body = SourceGate.MethodBody(SourceGate.ReadRepoFile(file), anchor);
-            Assert.Contains("InkOrder.None", body);
-        }
+        // "这一叠没画过"必须用同一个兜底值。两处各写一个（一边 long.MinValue、一边 -1）看着都对，
+        // 而"谁最新"的比较一旦跨叠，就会挑中一块空白屏去撤销（批次 WO 那一族的成因）。
+        var body = SourceGate.MethodBody(SourceGate.ReadRepoFile(InkDocFile), "public long LastOrder");
+        Assert.Contains("InkOrder.None", body);
+
+        var root = SourceGate.RepoRoot();
+        var strays = ChainDirs
+            .SelectMany(dir => Directory.GetFiles(Path.Combine(root, dir.Replace('/', Path.DirectorySeparatorChar)), "*.cs"))
+            .Where(f => !f.EndsWith("InkOrder.cs", StringComparison.Ordinal))
+            .Where(f => File.ReadAllText(f).Contains("long.MinValue", StringComparison.Ordinal))
+            .Select(f => Path.GetFileName(f))
+            .ToList();
+        Assert.True(strays.Count == 0,
+            $"自己写\"空叠\"兜底值的文件（只许问 InkOrder.None）：{string.Join("、", strays)}");
+    }
+
+    [Fact]
+    public void TheBoardStoresItsMarksInTheSameDocAsTheSheet()
+    {
+        // 方案 §3.4：两侧只剩一个笔迹载体。画布那一叠必须真的换成 InkDoc（带归属），
+        // 而不是"看着像同一套、其实各存一份"——那正是 R2 双引擎的原样。
+        var screen = SourceGate.Between(SourceGate.ReadRepoFile(Service), "private sealed class Screen", "private static readonly List<Screen>");
+        Assert.Contains("public required InkDoc Ink { get; init; }", screen);
+        Assert.Contains("public CanvasStroke? Drawing { get; set; }", screen);
+        Assert.Contains("new InkDoc(new InkSurface(SurfaceRole.Board, Screens.Count))",
+            SourceGate.ReadRepoFile(Service));
+        Assert.DoesNotContain("CanvasInk", SourceGate.ReadRepoFile(Service));
     }
 
     [Fact]

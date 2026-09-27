@@ -19,14 +19,33 @@ namespace StarMark.Core.Capture;
 /// 这种细节不需要额外代码。
 /// </para>
 /// <para>
-/// 快照有上限（<see cref="MaxStates"/>）：有界才敢每画一条就存一份，
+/// 快照有上限（<see cref="StepsFor"/>，按面给）：有界才敢每画一条就存一份，
 /// 也才不会在"画一百条又撤销到底"之后还留着整条链的内存。
 /// </para>
 /// </summary>
 public sealed class InkDoc
 {
-    /// <summary>最多记住多少步（超出就丢最早的那一步：撤销到底也够用了）。</summary>
-    public const int MaxStates = 40;
+    /// <summary>
+    /// 各面的历史步数上限（<b>一张表两臂，不在两个文件里各写一个数</b>）。
+    /// <para>截图/贴图：一次截图不会画过几百条，40 步既够又让"画一百条又撤销到底"之后不留整条链的内存。</para>
+    /// <para>画布：这是讲解用的板子，一节课远不止 40 笔。从前它自己那一叠没有上限，
+    /// 换到这张表上如果沿用 40，症状是"画了 41 条就再也退不回最早那一条"——
+    /// <b>把架构统一做成用户能感觉到的能力缩水，就不算统一</b>。快照存的是引用不是像素，
+    /// 200 步 × 几百条标注的代价仍在几百 KB 量级。</para>
+    /// </summary>
+    public static int StepsFor(SurfaceRole role) => role == SurfaceRole.Board ? 200 : 40;
+
+    /// <summary>这一叠的面归属（撤销跨叠比"谁最后落"、渲放按面选合成臂都要问它）。</summary>
+    public InkSurface Surface { get; }
+
+    /// <summary>这一叠能记住多少步（来自 <see cref="StepsFor"/>，界面别处不许自己数）。</summary>
+    public int Cap { get; }
+
+    public InkDoc(InkSurface surface)
+    {
+        Surface = surface;
+        Cap = StepsFor(surface.Role);
+    }
 
     private readonly List<IReadOnlyList<Annotation>> _states = new() { Array.Empty<Annotation>() };
     private int _at;
@@ -167,7 +186,7 @@ public sealed class InkDoc
     {
         if (_at < _states.Count - 1) _states.RemoveRange(_at + 1, _states.Count - _at - 1);   // 丢掉作废的重做分支
         _states.Add(state);
-        if (_states.Count > MaxStates) _states.RemoveAt(0);                                   // 有界：丢最早那一步
+        if (_states.Count > Cap) _states.RemoveAt(0);                                           // 有界：丢最早那一步
         _at = _states.Count - 1;
     }
 }

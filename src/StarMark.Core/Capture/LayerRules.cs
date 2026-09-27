@@ -21,6 +21,17 @@ public enum SurfaceRole
 }
 
 /// <summary>
+/// 一叠笔迹<b>住在哪一块面上</b>（方案 §7：历史栈全局化、按 surface 记录归属）。
+/// <para>
+/// 角色不够用：<see cref="SurfaceRole.Board"/> 有 N 块屏、<see cref="SurfaceRole.Pin"/> 有 N 张贴图，
+/// 撤销要能说清"退的是哪一块上的最后那一笔"，所以带上序号。<see cref="Index"/> 的含义由角色决定——
+/// Board＝第几块屏（<c>Screens</c> 里的下标），Pin＝第几张贴图，Sheet＝0（同屏只有一块冻帧面）。</para>
+/// <para>它是值类型而不是引用：<b>归属是这一叠数据的属性，不是它住在哪个对象里</b>——
+/// 贴图被关掉、屏被重建时，那份历史该跟着走，而不是跟着某个窗的句柄一起失效。</para>
+/// </summary>
+public readonly record struct InkSurface(SurfaceRole Role, int Index);
+
+/// <summary>
 /// 全机 Z 序的<b>唯一排法</b>（方案 §4 的规则表）。<see cref="LayerDirector"/> 按它写窗口，别的任何地方不许提层。
 /// <para>
 /// 数字越小越靠上。之所以要有一张表而不是各处"顺手提一下自己"：同屏多块 topmost 窗时

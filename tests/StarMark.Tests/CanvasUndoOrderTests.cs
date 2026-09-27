@@ -8,23 +8,34 @@ using Xunit;
 namespace StarMark.Tests;
 
 /// <summary>
-/// 批次 S2-b：<b>撤销退的是"全机最后落的那一笔"</b>（方案 §7 的栈全局化、§13 用例 9 的 LIFO）。
+/// 批次 S2-b／S2-c：<b>撤销退的是"全机最后落的那一笔"</b>（方案 §7 的栈全局化、§13 用例 9 的 LIFO）。
 /// <para>从前画布的 <c>Undo()</c> 是 <c>foreach (screen) screen.Ink.Undo()</c>——一次按键把<b>每块屏各退一条</b>。
 /// 单屏看不出问题，双屏上按一次撤销，两块屏同时各掉一笔，而掉的那两条根本不是同一时刻画的：
 /// "撤错东西"比"撤不动"糟得多，因为它把用户没打算撤的东西悄悄抹了。
-/// 修法是把"哪一笔最后落"这个问题交给模型答（<see cref="CanvasStroke.Order"/>），编排只问它。</para>
+/// 修法是把"哪一笔最后落"这个问题交给模型答，编排只问它。</para>
+/// <para>这一叠现在就是 <see cref="InkDoc"/>（归属＝Board＋屏号），序号来自 <see cref="InkOrder"/>——
+/// 与截图/贴图那两叠同一个载体、同一份时钟，所以"谁最后落"在架构上只有一个答案。</para>
 /// </summary>
 public sealed class CanvasUndoOrderTests
 {
     private const string Service = "src/StarMark.UI/Services/CanvasService.cs";
 
-    private static CanvasInk Draw(PixelPoint from, PixelPoint to, CanvasTool tool = CanvasTool.Pen)
+    /// <summary>一块屏的那一叠（Index 只是归属记号，这里比较的是序号不是屏号）。</summary>
+    private static InkDoc Board() => new(new InkSurface(SurfaceRole.Board, 0));
+
+    private static InkDoc Draw(PixelPoint from, PixelPoint to, CanvasTool tool = CanvasTool.Pen)
     {
-        var ink = new CanvasInk();
-        ink.Begin(tool, Annotation.Opaque(0x23, 0x11, 0xE8), 9, from);
-        ink.Extend(to);
-        ink.End();
-        return ink;
+        var doc = Board();
+        doc.Add(Stroke(from, to, tool));
+        return doc;
+    }
+
+    /// <summary>走实时那条路（构造 + AddPoint），与真机上拖出来的那一条同形。</summary>
+    private static Annotation Stroke(PixelPoint from, PixelPoint to, CanvasTool tool = CanvasTool.Pen)
+    {
+        var stroke = new CanvasStroke(tool, Annotation.Opaque(0x23, 0x11, 0xE8), 9, from);
+        stroke.AddPoint(to);
+        return stroke.ToAnnotation();
     }
 
     [Fact]
@@ -32,7 +43,7 @@ public sealed class CanvasUndoOrderTests
     {
         var first = Draw(new PixelPoint(1, 1), new PixelPoint(30, 30));
         var second = Draw(new PixelPoint(400, 400), new PixelPoint(430, 430));
-        Assert.True(second.Strokes[0].Order > first.Strokes[0].Order,
+        Assert.True(second.Marks[0].Order > first.Marks[0].Order,
             "后落的那一笔序号必须更大——不然'谁最后'这件事没有答案，只能每屏各退一条");
     }
 
@@ -43,9 +54,7 @@ public sealed class CanvasUndoOrderTests
         var right = Draw(new PixelPoint(400, 400), new PixelPoint(430, 430));
         // 左边再画一笔之后，"最后落的那一笔"就换边了（撤销跟着手走，不是跟着屏的顺序走）
         Assert.True(right.LastOrder > left.LastOrder);
-        left.Begin(CanvasTool.Pen, Annotation.Opaque(0x23, 0x11, 0xE8), 9, new PixelPoint(60, 60));
-        left.Extend(new PixelPoint(90, 90));
-        left.End();
+        left.Add(Stroke(new PixelPoint(60, 60), new PixelPoint(90, 90)));
         Assert.True(left.LastOrder > right.LastOrder);
     }
 
@@ -53,26 +62,35 @@ public sealed class CanvasUndoOrderTests
     public void AnEmptyScreenNeverWinsTheUndoChoice()
     {
         var drawn = Draw(new PixelPoint(1, 1), new PixelPoint(30, 30));
-        Assert.Equal(long.MinValue, new CanvasInk().LastOrder);      // 空层排最后，不能被选中
-        Assert.True(drawn.LastOrder > new CanvasInk().LastOrder);
+        Assert.Equal(InkOrder.None, Board().LastOrder);      // 空层排最后，不能被选中
+        Assert.True(drawn.LastOrder > Board().LastOrder);
     }
 
     [Fact]
     public void UndoingOneStrokeMovesThePointerBackToThePreviousOne()
     {
-        var ink = new CanvasInk();
-        ink.Begin(CanvasTool.Pen, Annotation.Opaque(0x23, 0x11, 0xE8), 9, new PixelPoint(1, 1));
-        ink.Extend(new PixelPoint(30, 30));
-        ink.End();
-        var firstOrder = ink.LastOrder;
-        ink.Begin(CanvasTool.Pen, Annotation.Opaque(0x23, 0x11, 0xE8), 9, new PixelPoint(50, 50));
-        ink.Extend(new PixelPoint(80, 80));
-        ink.End();
-        Assert.True(ink.LastOrder > firstOrder);
-        Assert.True(ink.Undo());
-        Assert.Equal(firstOrder, ink.LastOrder);                     // 退一条，"这块屏最后落的那一笔"就退回前一条
-        Assert.True(ink.Undo());
-        Assert.False(ink.Undo());                                    // 没有笔迹可退时必须说"没退"，不能空转
+        var doc = Board();
+        doc.Add(Stroke(new PixelPoint(1, 1), new PixelPoint(30, 30)));
+        var firstOrder = doc.LastOrder;
+        doc.Add(Stroke(new PixelPoint(50, 50), new PixelPoint(80, 80)));
+        Assert.True(doc.LastOrder > firstOrder);
+        Assert.True(doc.Undo());
+        Assert.Equal(firstOrder, doc.LastOrder);                     // 退一条，"这块屏最后落的那一笔"就退回前一条
+        Assert.True(doc.Undo());
+        Assert.False(doc.Undo());                                    // 没有笔迹可退时必须说"没退"，不能空转
+    }
+
+    [Fact]
+    public void ClearingTheBoardIsUndoneLikeAnyOtherStroke()
+    {
+        // 换到 InkDoc 之后板子的"清空"和截图那侧同一套语义：误点一下不该把整块板子的墨一次性丢掉。
+        // 从前画布那条是自己数的列表，清空＝不可撤销的既成事实；这一条是这次统一顺带带来的能力，钉住它别退回去。
+        var doc = Draw(new PixelPoint(1, 1), new PixelPoint(30, 30));
+        doc.Add(Stroke(new PixelPoint(50, 50), new PixelPoint(80, 80)));
+        doc.Clear();
+        Assert.Equal(0, doc.Count);
+        Assert.True(doc.Undo());
+        Assert.Equal(2, doc.Count);
     }
 
     /// <summary>

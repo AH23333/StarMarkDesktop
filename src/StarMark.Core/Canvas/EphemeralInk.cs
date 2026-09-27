@@ -8,7 +8,7 @@ namespace StarMark.Core.Canvas;
 /// <summary>
 /// 荧光笔那一层的生命周期：<b>按住拖动＝画一段，松手后按 TTL 自动淡掉</b>。
 /// <para>
-/// 为什么不进 <see cref="CanvasInk"/>：讲解时指着屏幕说一句"看这里"的那一道光，
+/// 为什么不进 <see cref="Capture.InkDoc"/>：讲解时指着屏幕说一句"看这里"的那一道光，
 /// 说完就该消失——留在板上会越画越糊，而"每画一条都要记得去擦"就不是随手比划了。
 /// 规格 §16.3 的分层正是按<b>生命周期</b>分的，不是按长相分的。
 /// </para>
@@ -55,7 +55,7 @@ public sealed class EphemeralInk
 
     /// <summary>
     /// 正在拖的那个<b>图形预览</b>（没有则为 null）。它借同一层的原因是同一句话：
-    /// <b>不属于"留下来的东西"，就不许写进持久层</b>——预览一旦落进 <see cref="CanvasInk"/>，
+    /// <b>不属于"留下来的东西"，就不许写进持久层</b>——预览一旦落进 <see cref="Capture.InkDoc"/>，
     /// 拖到一半取消、拖过头再拉回来，都会留下一条撤不掉的笔迹。
     /// <para>它与荧光段的区别只有一条：<b>不按 TTL 淡出</b>（<see cref="Tick"/> 不看它），
     /// 每帧被整份替换（<see cref="SetPreview"/>）。</para>

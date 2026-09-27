@@ -100,7 +100,12 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>底图／最终图的尺寸（截图＝选区尺寸；编辑＝贴图的源尺寸，与显示尺寸无关）。</summary>
     private int _contentWidth, _contentHeight;
 
-    private readonly InkDoc _history = new();
+    /// <summary>
+    /// 这一面的笔迹与历史。<b>归属在构造时定死</b>：同一份编辑器代码既当截图那面（Sheet）也当贴图那张（Pin），
+    /// 而合成臂、历史深度、跨面撤销都要问"这是哪一面"——留给调用方随手 new 一个无归属的文档，
+    /// 就是让"这一叠住在哪"重新变成各处心里的一个猜测。
+    /// </summary>
+    private readonly InkDoc _history;
 
     private PointInt32 _startPhysical;
     private IntRect? _selection;                // 虚拟桌面物理像素
@@ -215,6 +220,7 @@ public sealed partial class CaptureOverlayWindow : Window
         CaptureMode mode)
     {
         _frame = frame;
+        _history = new InkDoc(new InkSurface(SurfaceRole.Sheet, 0));
         _monitor = new IntRect(monitor.Bounds.X, monitor.Bounds.Y, monitor.Bounds.Width, monitor.Bounds.Height);
         _scale = monitor.Scale <= 0 ? 1.0 : monitor.Scale;
         _finish = finish;
@@ -265,6 +271,9 @@ public sealed partial class CaptureOverlayWindow : Window
     public CaptureOverlayWindow(byte[] pixels, int width, int height, IntRect placement, double zoom)
     {
         _frame = null;
+        // 贴图这一叠的归属＝Pin。截图时画的那些笔迹已经烤进 pixels 里、不跟过来（§7：贴出之后
+        // 全局栈不再持有它们），这一面从今天起只记用户在贴图上新加的东西。
+        _history = new InkDoc(new InkSurface(SurfaceRole.Pin, 0));
         _scale = 1.0;                       // 真实缩放要等窗口就位、知道自己在哪块屏之后才量得到
         _finish = (_, _) => { };            // 贴图态没有"交回选区"这回事
         _mode = CaptureMode.Toolbar;        // 要的就是那条完整工具条

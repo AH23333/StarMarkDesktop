@@ -83,35 +83,45 @@ public sealed class CanvasInkTests
     }
 
     [Fact]
-    public void ExtendingWithoutAnOpenStrokeIsRejected()
+    public void OnlyAPressCanOpenAStrokeSoAMoveCannotExtendNothing()
     {
-        // 静默吞掉的话，症状是" Sometimes 画不上"——那种 bug 在这台机器上永远复现不出来
-        var ink = new CanvasInk();
-        Assert.Throws<InvalidOperationException>(() => ink.Extend(new PixelPoint(1, 1)));
+        // 从前这条由 CanvasInk.Extend 抛异常守着（"没在下笔却收到移动＝丢字，不能静默"）。
+        // 拆成两层之后（手上那条住在 Screen.Drawing，落定的住在 InkDoc），
+        // 这道防线改成"没有开口的笔迹就根本没有可拖的对象"——接线那里必须有 `Drawing is { }` 这一手，
+        // 由 CanvasWiringGateTests 钉住；这里钉模型侧的那半：一条笔迹从构造起就是完整的。
+        var stroke = Pen(10, 10);
+        Assert.True(stroke.AddPoint(new PixelPoint(30, 10)));
+        Assert.Equal(2, stroke.Points.Count);
+        Assert.False(stroke.AddPoint(new PixelPoint(30, 11)));      // 距离 1 < 2：这一帧不值得重画
+        Assert.Equal(2, stroke.Points.Count);
     }
 
     [Fact]
     public void FinishedStrokesEnterTheLayerAndUndoPopsThemBackOut()
     {
-        var ink = new CanvasInk();
-        ink.Begin(CanvasTool.Pen, Red, Width, new PixelPoint(10, 10));
-        ink.Extend(new PixelPoint(30, 10));
-        Assert.True(ink.End());
-        Assert.True(ink.Drawing is null, "收笔之后必须没有\"正在画\"的残留，否则下一次移动会接到上一条上");
-        Assert.True(ink.Undo());
-        Assert.False(ink.Undo());
-        Assert.True(ink.IsEmpty);
+        var doc = new InkDoc(new InkSurface(SurfaceRole.Board, 0));
+        var stroke = Pen(10, 10);
+        stroke.AddPoint(new PixelPoint(30, 10));
+        Assert.True(stroke.WorthKeeping);
+        doc.Add(stroke.ToAnnotation());
+        Assert.Equal(1, doc.Count);
+        Assert.True(doc.Undo());
+        Assert.False(doc.Undo());
+        Assert.Equal(0, doc.Count);
     }
 
     [Fact]
-    public void ClearAlsoDropsTheStrokeStillBeingDrawn()
+    public void ClearingTheBoardAlsoForgetsTheStrokeStillBeingDrawn()
     {
-        var ink = new CanvasInk();
-        ink.Begin(CanvasTool.Pen, Red, Width, new PixelPoint(5, 5));
-        ink.Clear();
-        Assert.True(ink.Drawing is null);
-        // 清屏之后不该还剩着"正在画"的那条：否则松手时会把清屏后又动了一下鼠标补成一条幽灵笔迹
-        Assert.Throws<InvalidOperationException>(() => ink.Extend(new PixelPoint(9, 9)));
+        // 幽灵笔迹那一条：清完屏之后鼠标还动着的话，手上那条会被补成一截没人画过的墨。
+        // 模型侧现在只保证"清空是整叠丢掉、并且能撤销回来"，而"手上那条必须一起丢"是接线的责任
+        // （CanvasWiringGateTests 钉 ClearAll 里那一句）。
+        var doc = new InkDoc(new InkSurface(SurfaceRole.Board, 0));
+        doc.Add(Pen(5, 5).ToAnnotation());
+        doc.Clear();
+        Assert.Equal(0, doc.Count);
+        Assert.True(doc.Undo());
+        Assert.Equal(1, doc.Count);
     }
 
     [Fact]

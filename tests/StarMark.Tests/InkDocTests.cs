@@ -17,6 +17,9 @@ namespace StarMark.Tests;
 /// </summary>
 public sealed class InkDocTests
 {
+    /// <summary>截图那块冻帧面（同屏只有一块，Index＝0）。</summary>
+    private static readonly InkSurface Sheet = new(SurfaceRole.Sheet, 0);
+
     private static Annotation Mark(int x)
         => new(AnnotationTool.Line, new[] { new PixelPoint(x, 0), new PixelPoint(x + 5, 5) },
             Annotation.Opaque(0, 0, 255), 4);
@@ -24,7 +27,7 @@ public sealed class InkDocTests
     [Fact]
     public void FreshHistoryIsNothingToUndoOrRedo()
     {
-        var history = new InkDoc();
+        var history = new InkDoc(Sheet);
         Assert.Empty(history.Marks);
         Assert.Equal(0, history.Count);
         Assert.False(history.CanUndo);
@@ -36,7 +39,7 @@ public sealed class InkDocTests
     [Fact]
     public void AddUndoRedoRoundTrip()
     {
-        var history = new InkDoc();
+        var history = new InkDoc(Sheet);
         history.Add(Mark(1));
         history.Add(Mark(2));
         Assert.Equal(2, history.Count);
@@ -58,7 +61,7 @@ public sealed class InkDocTests
     [Fact]
     public void DrawingAfterUndoDiscardsTheRedoBranch()
     {
-        var history = new InkDoc();
+        var history = new InkDoc(Sheet);
         history.Add(Mark(1));
         history.Add(Mark(2));
         history.Undo();
@@ -72,7 +75,7 @@ public sealed class InkDocTests
     [Fact]
     public void ClearIsUndoableAndRestoresTheOriginalOrder()
     {
-        var history = new InkDoc();
+        var history = new InkDoc(Sheet);
         for (var i = 1; i <= 3; i++) history.Add(Mark(i));
         var before = history.Marks.Select(m => m.Points[0].X).ToList();
 
@@ -87,7 +90,7 @@ public sealed class InkDocTests
     [Fact]
     public void ClearingAnEmptyHistoryAddsNoStep()
     {
-        var history = new InkDoc();
+        var history = new InkDoc(Sheet);
         history.Clear();
         history.Clear();
         Assert.False(history.CanUndo, "空历史再点清空不该产生步骤，否则要点两次撤销才回到有标注");
@@ -96,21 +99,36 @@ public sealed class InkDocTests
     [Fact]
     public void HistoryIsBoundedSoItCanSnapShotEveryStroke()
     {
-        var history = new InkDoc();
-        for (var i = 0; i < InkDoc.MaxStates + 15; i++) history.Add(Mark(i));
-        Assert.Equal(InkDoc.MaxStates + 15, history.Count);   // 标注本身不丢
+        var history = new InkDoc(Sheet);
+        var cap = history.Cap;
+        for (var i = 0; i < cap + 15; i++) history.Add(Mark(i));
+        Assert.Equal(cap + 15, history.Count);     // 标注本身不丢
 
         var steps = 0;
         while (history.Undo()) steps++;
-        Assert.InRange(steps, 1, InkDoc.MaxStates);           // 只有有界的步数可退
-        Assert.Equal(InkDoc.MaxStates + 15 - steps, history.Count);
+        Assert.InRange(steps, 1, cap);             // 只有有界的步数可退
+        Assert.Equal(cap + 15 - steps, history.Count);
+    }
+
+    [Fact]
+    public void TheBoardGetsDeeperHistoryThanTheSheet()
+    {
+        // 讲一节课远不止 40 笔。从前画布那一叠自己没上限，换到这张表上如果沿用截图那 40 步，
+        // 症状是"画了 41 条就再也退不回最早那一条"——把架构统一做成用户感觉得到的能力缩水就不算统一。
+        var board = new InkDoc(new InkSurface(SurfaceRole.Board, 0));
+        var sheet = new InkDoc(Sheet);
+
+        Assert.True(board.Cap > sheet.Cap,
+            $"板子的撤销深度必须不浅于截图那一叠（今天 {board.Cap} vs {sheet.Cap}）");
+        Assert.Equal(InkDoc.StepsFor(SurfaceRole.Board), board.Cap);   // 深度只问这张表，别处不许自己数
+        Assert.Equal(InkDoc.StepsFor(SurfaceRole.Pin), sheet.Cap);     // 贴图与截图同臂：都是"贴出来就定稿"
     }
 
     [Fact]
     public void ResetWipesEverythingIncludingTheHistory()
     {
         // 换选区时调用：底图都换了，旧标注摆在新框里没有任何意义
-        var history = new InkDoc();
+        var history = new InkDoc(Sheet);
         history.Add(Mark(1));
         history.Add(Mark(2));
         history.Reset();
@@ -122,7 +140,7 @@ public sealed class InkDocTests
     [Fact]
     public void MarksAreThePaintOrder()
     {
-        var history = new InkDoc();
+        var history = new InkDoc(Sheet);
         var first = Mark(1);
         var second = Mark(2);
         history.Add(first);
@@ -136,7 +154,7 @@ public sealed class InkDocTests
     [Fact]
     public void ReplacingTheSelectedMarkIsExactlyOneUndoableStep()
     {
-        var history = new InkDoc();
+        var history = new InkDoc(Sheet);
         var original = Mark(1);
         history.Add(original);
         history.Add(Mark(2));
@@ -150,7 +168,7 @@ public sealed class InkDocTests
     [Fact]
     public void UndoAfterAReplaceHandsBackThePreviousState()
     {
-        var history = new InkDoc();
+        var history = new InkDoc(Sheet);
         history.Add(Mark(1));
         history.Add(Mark(2));
         var moved = Mark(2).MovedBy(3, 0);
@@ -166,7 +184,7 @@ public sealed class InkDocTests
     [Fact]
     public void RemovingTheSelectedMarkKeepsTheRestInPaintOrder()
     {
-        var history = new InkDoc();
+        var history = new InkDoc(Sheet);
         for (var i = 1; i <= 3; i++) history.Add(Mark(i));
 
         history.RemoveAt(1);
@@ -181,7 +199,7 @@ public sealed class InkDocTests
     {
         // 界面上选中记下的是个下标：撤销/清空之后它可能已经不属于任何一条。
         // 这里抛异常等于把用户一次普通的按键变成遮罩窗崩溃（遮罩一崩，整场截图就没了）。
-        var history = new InkDoc();
+        var history = new InkDoc(Sheet);
         history.Add(Mark(1));
         history.Undo();                                 // 退回到"还没有标注"
 
@@ -195,7 +213,7 @@ public sealed class InkDocTests
     [Fact]
     public void EditingAfterUndoDiscardsTheRedoBranch()
     {
-        var history = new InkDoc();
+        var history = new InkDoc(Sheet);
         history.Add(Mark(1));
         history.Add(Mark(2));
         history.Undo();
@@ -210,10 +228,10 @@ public sealed class InkDocTests
     [Fact]
     public void EmptyDocOrdersLastSoItIsNeverPickedAsTheNewest()
     {
-        var empty = new InkDoc();
+        var empty = new InkDoc(Sheet);
         Assert.Equal(InkOrder.None, empty.LastOrder);
 
-        var drawn = new InkDoc();
+        var drawn = new InkDoc(Sheet);
         drawn.Add(Mark(1));
         Assert.True(drawn.LastOrder > InkOrder.None, "没画过的那一叠必须排最后，不能被选成「最后落的那一笔」");
     }
@@ -221,7 +239,7 @@ public sealed class InkDocTests
     [Fact]
     public void LastOrderFollowsTheNewestMarkAndStepsBackOnUndo()
     {
-        var history = new InkDoc();
+        var history = new InkDoc(Sheet);
         history.Add(Mark(1));
         var first = history.Marks[0].Order;
         history.Add(Mark(2));
@@ -241,7 +259,7 @@ public sealed class InkDocTests
     [Fact]
     public void MovingOrScalingAMarkKeepsItsOrder()
     {
-        var history = new InkDoc();
+        var history = new InkDoc(Sheet);
         history.Add(Mark(3));
         var born = history.Marks[0].Order;
 
@@ -260,7 +278,7 @@ public sealed class InkDocTests
         var b = Mark(4);
         Assert.NotEqual(a, b);
 
-        var history = new InkDoc();
+        var history = new InkDoc(Sheet);
         history.Add(a);
         history.Add(b);
 

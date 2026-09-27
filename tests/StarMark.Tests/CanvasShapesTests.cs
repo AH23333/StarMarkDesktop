@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using StarMark.Core.Capture;
 using System.Collections.Generic;
 using System.Linq;
 using StarMark.Abstractions.Capture;
@@ -287,18 +288,18 @@ public sealed class CanvasShapesTests
 
     // ────────── 定形之后一切照旧 ──────────
 
-    /// <summary>图形进的是<b>持久层</b>：撤销、清空、橡皮、存图都按笔迹那一套走，不需要任何特判。</summary>
+    /// <summary>图形进的是<b>模型那一份持久层</b>（InkDoc）：撤销、清空、橡皮、存图都按笔迹那一套走，不需要任何特判。</summary>
     [Fact]
     public void ACommittedShapeIsUndoableLikeAnyStroke()
     {
-        var ink = new CanvasInk();
-        Assert.True(ink.IsEmpty);
-        ink.Commit(CanvasStroke.FromPoints(CanvasTool.Rectangle, unchecked((int)0xFF00FF00), 9,
-            CanvasShapes.Outline(CanvasTool.Rectangle, new PixelPoint(0, 0), new PixelPoint(60, 40), 9)));
-        Assert.False(ink.IsEmpty);
-        Assert.Equal(CanvasTool.Rectangle, ink.Strokes[0].Tool);
-        Assert.True(ink.Undo());
-        Assert.True(ink.IsEmpty);
+        var doc = new InkDoc(new InkSurface(SurfaceRole.Board, 0));
+        Assert.Equal(0, doc.Count);
+        doc.Add(CanvasStroke.FromPoints(CanvasTool.Rectangle, unchecked((int)0xFF00FF00), 9,
+            CanvasShapes.Outline(CanvasTool.Rectangle, new PixelPoint(0, 0), new PixelPoint(60, 40), 9)).ToAnnotation());
+        Assert.NotEqual(0, doc.Count);
+        Assert.Equal(AnnotationTool.Rectangle, doc.Marks[0].Tool);
+        Assert.True(doc.Undo());
+        Assert.Equal(0, doc.Count);
     }
 
     /// <summary>图形不是荧光笔，颜色必须原样落下去（<see cref="CanvasStroke.EffectiveColorBgra"/> 只对荧光笔强制半透明）。</summary>

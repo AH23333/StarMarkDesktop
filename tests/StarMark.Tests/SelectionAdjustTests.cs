@@ -103,7 +103,7 @@ public sealed class SelectionAdjustTests
     [Fact]
     public void ShiftingTheMarksAnchorsPointsAndTheScalePivot()
     {
-        var history = new InkDoc();
+        var history = new InkDoc(new InkSurface(SurfaceRole.Sheet, 0));
         history.Add(new Annotation(AnnotationTool.Text, new[] { new PixelPoint(30, 40) }, Annotation.Opaque(0, 0, 255), 4)
         { Text = "一行字", FontHeight = 22, Pivot = new PixelPoint(10, 12) });
         history.Add(new Annotation(AnnotationTool.Rectangle, new[] { new PixelPoint(1, 2), new PixelPoint(9, 9) },
@@ -120,7 +120,7 @@ public sealed class SelectionAdjustTests
     [Fact]
     public void MovingTheFrameIsNotAnUndoStep()
     {
-        var history = new InkDoc();
+        var history = new InkDoc(new InkSurface(SurfaceRole.Sheet, 0));
         history.ShiftAllBy(7, 7);                       // 空栈上平移：不凭空造出一步
         Assert.False(history.CanUndo);
 
@@ -137,7 +137,7 @@ public sealed class SelectionAdjustTests
     [Fact]
     public void AZeroShiftChangesNothing_AndEmptyHistoryIsSafe()
     {
-        var history = new InkDoc();
+        var history = new InkDoc(new InkSurface(SurfaceRole.Sheet, 0));
         history.ShiftAllBy(0, 0);
         Assert.Empty(history.Marks);
     }
