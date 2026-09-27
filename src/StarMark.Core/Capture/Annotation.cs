@@ -487,7 +487,12 @@ public sealed record Annotation(
         return null;
     }
 
-    /// <summary>中文名（工具条与失败提示共用；枚举名直接进提示等于让用户读代码）。</summary>
+    /// <summary>
+    /// 中文名（工具条与失败提示共用；枚举名直接进提示等于让用户读代码）。
+    /// <para><b>全机只有这一张名字表</b>（方案 §3.4：工具语义一处重定义）：画布那条栏也问它。
+    /// "荧光／橡皮擦"与画布那边的"荧光笔／橡皮"从前各写一份，同一条链的两根栏上叫法就不一样。
+    /// 这里取两边都讲得通、且更完整的那一个。</para>
+    /// </summary>
     public static string ToolName(AnnotationTool tool) => tool switch
     {
         AnnotationTool.Rectangle => "矩形",
@@ -496,11 +501,11 @@ public sealed record Annotation(
         AnnotationTool.PolyLine => "折线",
         AnnotationTool.Arrow => "箭头",
         AnnotationTool.Pen => "画笔",
-        AnnotationTool.Highlighter => "荧光",
+        AnnotationTool.Highlighter => "荧光笔",
         AnnotationTool.Mosaic => "打码",
         AnnotationTool.Text => "文字",
         AnnotationTool.Number => "序号",
-        AnnotationTool.Eraser => "橡皮擦",
+        AnnotationTool.Eraser => "橡皮",
         _ => tool.ToString(),
     };
 

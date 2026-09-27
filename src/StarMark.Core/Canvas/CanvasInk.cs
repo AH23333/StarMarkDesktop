@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using StarMark.Abstractions.Capture;
 
 namespace StarMark.Core.Canvas;
@@ -36,35 +37,55 @@ public enum CanvasTool
 }
 
 /// <summary>
-/// 工具分组与名字。<b>分组只在这里说一次</b>：工具条按 <see cref="Shapes"/> 生成按钮，
-/// 编排按 <see cref="IsShape"/> 决定"这一按是拖形还是走笔"——两处各列一份的话，
-/// 加一种图形就会长成"条上有这颗、点下去走的却是笔"。
+/// 工具分组与名字。<b>分组与名字都只有一处出处</b>（方案 §3.4：工具语义一处重定义）：
+/// 画布这八颗就是截图标注那张表的一个子集，名字与"哪几颗算图形"都从 <see cref="Capture.AnnotationTools"/> 要答案。
+/// <para>
+/// 从前这里自己列两份（<c>Shapes</c>／<c>Brushes</c>）并自己写中文名，于是同一颗工具在两条栏上
+/// 一个叫「荧光笔」一个叫「荧光」、一个叫「橡皮」一个叫「橡皮擦」，而加一种工具要记得改四处——
+/// 批次 WM 那条"文字不许写死在 XAML"的同一种病，只是搬到了模型里。
+/// </para>
 /// </summary>
 public static class CanvasTools
 {
-    /// <summary>五种图形，顺序＝工具条上按钮的顺序。</summary>
-    public static readonly CanvasTool[] Shapes =
-        { CanvasTool.Rectangle, CanvasTool.Ellipse, CanvasTool.Line, CanvasTool.PolyLine, CanvasTool.Arrow };
-
-    /// <summary>三支笔，顺序＝工具条上按钮的顺序（图形不算在内：它们走另一排）。</summary>
-    public static readonly CanvasTool[] Brushes =
-        { CanvasTool.Pen, CanvasTool.Highlighter, CanvasTool.Eraser };
-
-    public static bool IsShape(this CanvasTool tool) => Array.IndexOf(Shapes, tool) >= 0;
-
-    /// <summary>条上与状态行用的中文名。<b>不许在界面里另写一份</b>（同截图标注那条口径）。</summary>
-    public static string Name(this CanvasTool tool) => tool switch
+    /// <summary>
+    /// 画布那八颗与截图那十一颗的<b>同一套词汇</b>之间唯一的一份映射。
+    /// 两边同名的工具语义完全一致（同一支笔、同一种形状）；截图独有的（文字／序号／打码）画布今天没有，
+    /// 所以 <see cref="Supports"/> 是这一侧的门槛，而它只被用来过滤那张总表。
+    /// </summary>
+    public static Capture.AnnotationTool ToAnnotation(this CanvasTool tool) => tool switch
     {
-        CanvasTool.Pen => "画笔",
-        CanvasTool.Highlighter => "荧光笔",
-        CanvasTool.Eraser => "橡皮",
-        CanvasTool.Rectangle => "矩形",
-        CanvasTool.Ellipse => "椭圆",
-        CanvasTool.Line => "直线",
-        CanvasTool.PolyLine => "折线",
-        CanvasTool.Arrow => "箭头",
-        _ => "未知工具",
+        CanvasTool.Pen => Capture.AnnotationTool.Pen,
+        CanvasTool.Highlighter => Capture.AnnotationTool.Highlighter,
+        CanvasTool.Eraser => Capture.AnnotationTool.Eraser,
+        CanvasTool.Rectangle => Capture.AnnotationTool.Rectangle,
+        CanvasTool.Ellipse => Capture.AnnotationTool.Ellipse,
+        CanvasTool.Line => Capture.AnnotationTool.Line,
+        CanvasTool.PolyLine => Capture.AnnotationTool.PolyLine,
+        CanvasTool.Arrow => Capture.AnnotationTool.Arrow,
+        _ => throw new ArgumentOutOfRangeException(nameof(tool), $"画布工具 {tool} 没有对应的标注语义"),
     };
+
+    /// <summary>画布这一侧认不认这颗工具（<b>只用来从总表里投影，不许拿它另列一份清单</b>）。</summary>
+    private static bool Supports(Capture.AnnotationTool tool)
+        => Enum.GetValues<CanvasTool>().Any(t => t.ToAnnotation() == tool);
+
+    /// <summary>五种图形，顺序＝那张总表里的顺序（＝工具条上按钮的顺序）。</summary>
+    public static readonly CanvasTool[] Shapes =
+        Capture.AnnotationTools.Shapes.Select(FromAnnotation).ToArray();
+
+    /// <summary>三支笔，顺序同上（图形不算在内：它们走另一排）。</summary>
+    public static readonly CanvasTool[] Brushes =
+        Capture.AnnotationTools.Brushes.Where(Supports).Select(FromAnnotation).ToArray();
+
+    /// <summary>反向映射：只有 <see cref="Supports"/> 认的那些才走得回来。</summary>
+    private static CanvasTool FromAnnotation(Capture.AnnotationTool tool)
+        => Enum.GetValues<CanvasTool>().First(t => t.ToAnnotation() == tool);
+
+    public static bool IsShape(this CanvasTool tool)
+        => Capture.AnnotationTools.IsShapeTool(tool.ToAnnotation());
+
+    /// <summary>条上与状态行用的中文名——<b>整条链只在这里问一次那张表</b>。</summary>
+    public static string Name(this CanvasTool tool) => Capture.Annotation.ToolName(tool.ToAnnotation());
 }
 
 /// <summary>
