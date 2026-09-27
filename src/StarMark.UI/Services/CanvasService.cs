@@ -311,6 +311,7 @@ public static class CanvasService
         CommitOpenStroke();
         var visible = stage.GlassVisible();
         var takes = stage.GlassTakesPointer();
+        if (!visible) LayeredCanvasWindow.ReleasePointerCapture();
         foreach (var screen in Screens)
         {
             screen.Window.SetVisible(visible);

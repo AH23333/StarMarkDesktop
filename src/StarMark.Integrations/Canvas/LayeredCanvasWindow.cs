@@ -162,7 +162,7 @@ public sealed class LayeredCanvasWindow : IDisposable
     /// <summary>
     /// 屏幕坐标上这一点<b>当前归哪个窗口</b>（绘制态自校验用）。<b>返回的是这一点上最深的那个 HWND</b>：
     /// WinUI 窗（工具条、快捷键面板）的内容住在它自己的子窗里，所以别拿它跟 <c>GetHwnd()</c> 比相等，
-    /// 要比就比进程归属（见 <c>CanvasService.YieldIfNotOurLayer</c>）。
+    /// 要比就比进程归属（判据在 <c>LayerDirector.Classify</c>，动作在 <c>AnnotationHub.AuditFrame</c>）。
     /// 穿透态下本窗被 <c>WS_EX_TRANSPARENT</c> 跳过，结果必然是别人，所以这条探测只在绘制态说话。
     /// </summary>
     public static IntPtr WindowAt(int screenX, int screenY)
@@ -173,6 +173,14 @@ public sealed class LayeredCanvasWindow : IDisposable
     /// 我们不会收到，所以摘掉穿透之后要自己补一次 SetCapture，否则抬起永远收不到＝笔"没松"。
     /// </summary>
     public void Capture() => CanvasNative.SetCapture(_hwnd);
+
+    /// <summary>
+    /// 把鼠标捕获交还系统。<b>这是整条线程级的动作，不是"这一扇窗的"</b>，所以做成静态的。
+    /// <para>玻璃被<b>藏起来</b>的那一刻必须叫一次：捕获不会因为窗被隐藏而失效，下一次"抬起"照样寄给
+    /// 那扇已经看不见的窗，而后来上屏的那扇（截图遮罩）永远等不到松手＝整场截图卡在暗幕上。
+    /// 窗被销毁时系统自己会放手，所以只有"收起但没拆"这条路需要手动还。</para>
+    /// </summary>
+    public static void ReleasePointerCapture() => CanvasNative.ReleaseCapture();
 
     /// <summary>整块板子交出去（首帧、以及 WM_PAINT 要求重绘时）。</summary>
     public void PresentAll()

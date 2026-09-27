@@ -104,12 +104,18 @@ public static class AnnotationHub
         return true;
     }
 
-    /// <summary>把 <see cref="Stage"/> 直接设为某个值（托盘/设置页那条"关掉屏幕画布"的路：先收会话再拆窗）。</summary>
+    /// <summary>
+    /// 把会话收干净（设置里关掉「屏幕画布」那颗开关、工具条那颗 ✕）。
+    /// <para><b>收尾必须重新看一眼状态，不能拿着进门时那份往下走</b>：先把截图会话取消掉，而"取消"
+    /// 会自己走一次 <c>EndSheet</c>——板子本来就开着时它落回冻结前那个子态（还得再 toggle 才到 Idle），
+    /// 板子没开时它直接落 <c>Idle</c>。后者要是还无条件补一发 toggle，就是"用户关画布，反手给他开了一块板子"
+    /// （真机可复现：只按 F1 截一张图，同时在设置里关掉「屏幕画布」）。</para>
+    /// </summary>
     public static void EnsureIdle()
     {
         if (Stage == AnnotationStage.Idle) return;
         if (Stage.IsSheet()) ScreenshotService.CancelActiveSession();
-        Raise(SessionEvent.ToggleBoard);
+        if (Stage.IsBoard()) Raise(SessionEvent.ToggleBoard);
     }
 
     /// <summary>
