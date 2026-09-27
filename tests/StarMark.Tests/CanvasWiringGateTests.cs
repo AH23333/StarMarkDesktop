@@ -253,19 +253,26 @@ public sealed class CanvasWiringGateTests
     public void CanvasIsHiddenOnlyAroundTheGrab_AndAlwaysRestored()
     {
         var shot = SourceGate.ReadRepoFile(Screenshot);
-        var grab = SourceGate.MethodBody(shot, "private static CaptureResult Grab()");
-        Assert.Contains("|| !CanvasService.IsRunning) return GdiScreenCapture.CaptureVirtualScreen();", grab);
-        Assert.Contains("CanvasService.SetHiddenForCapture(true);", grab);
-        Assert.True(grab.IndexOf("finally", StringComparison.Ordinal)
-                < grab.IndexOf("CanvasService.SetHiddenForCapture(false);", StringComparison.Ordinal),
+        // 收/还的那一处（批次 S2 起两条链共用：F1 的"不带画布"与画布自己出图都走它）
+        var hide = SourceGate.MethodBody(shot, "public static CaptureResult CaptureWithoutCanvas()");
+        Assert.Contains("CanvasService.SetHiddenForCapture(true);", hide);
+        Assert.True(hide.IndexOf("finally", StringComparison.Ordinal)
+                < hide.IndexOf("CanvasService.SetHiddenForCapture(false);", StringComparison.Ordinal),
             "还玻璃必须写在 finally 里——写在 try 后面就等于会漏");
+        var grab = SourceGate.MethodBody(shot, "private static CaptureResult Grab()");
+        Assert.Contains("IncludeCanvasInScreenshot || !CanvasService.IsRunning", grab);   // 设置只决定走不走那一处
+        Assert.Contains("CaptureWithoutCanvas();", grab);
         // 抓屏只能从 Grab() 走：Start 里再出现一次直接抓屏，就等于绕过这条闸门
         var start = SourceGate.MethodBody(shot, "public static void Start(");
         Assert.Contains("var captured = Grab();", start);
         Assert.DoesNotContain("GdiScreenCapture.CaptureVirtualScreen()", start);
-        // 画布自己的那三条快照动作（贴图／复制／存图）不受这条设置影响：那三条就是要笔迹进图
+        // C5 根治：画布出图（贴图／复制／存图）拿的必须是<b>干净桌面</b>，墨由自己叠一次。
+        // 从前它抓的是含玻璃的那一帧再叠一遍＝"图里有两份"；这条设置对它不适用（那三条就是要笔迹进图）。
         var compose = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static bool TryCompose");
         Assert.DoesNotContain("CanvasInScreenshots", compose);
+        Assert.Contains("ScreenshotService.CaptureWithoutCanvas();", compose);
+        Assert.DoesNotContain("GdiScreenCapture.CaptureVirtualScreen()", compose);
+        Assert.Contains("CanvasCompositor.OverlayOntoFrame(", compose);      // 干净桌面之上叠自己那份墨
     }
 
     /// <summary>

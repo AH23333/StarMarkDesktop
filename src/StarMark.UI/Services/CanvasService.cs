@@ -1026,7 +1026,10 @@ public static class CanvasService
         var screen = Screens.FirstOrDefault(s => s.Bounds.X <= cursor.X && cursor.X < s.Bounds.Right
             && s.Bounds.Y <= cursor.Y && cursor.Y < s.Bounds.Bottom) ?? Screens[0];
 
-        var captured = GdiScreenCapture.CaptureVirtualScreen();
+        // 抓的是<b>干净桌面</b>（那一帧里这块玻璃不上屏），墨由下面自己叠：抓屏抓到的是已经合成完的屏幕，
+        // 玻璃上的笔迹会在那一帧里进图一次，OverlayOntoFrame 又叠一次＝"图里有两份"（方案 §1 的 C5，
+        // 也是"屏幕上一份、图里另一份"这类对不上的总根源）。收/还只在 CaptureWithoutCanvas 那一处写。
+        var captured = ScreenshotService.CaptureWithoutCanvas();
         if (!captured.Ok || captured.Frame is not { } frame)
         {
             reason = captured.Error ?? "系统没有返回画面";

@@ -109,21 +109,28 @@ public static class ScreenshotService
     }
 
     /// <summary>
-    /// 按「截图带画布」这条设置抓一帧桌面。
-    /// <para>
-    /// <b>为什么只能这么抓</b>：屏幕画布是一块 topmost 的分层窗，抓屏抓到的是已经合成完的屏幕——
-    /// 笔迹与底下的应用早就混成一张图了，事后"把笔迹减掉"减不回来。所以要就不要让它上屏（抓之前收起来），
-    /// 要么就认它进图。
-    /// </para>
-    /// <para>
-    /// <b>收与还写在这一处、且必须在 finally 里还</b>：这两句分开写到调用方，早晚有一条路径
-    /// （抓屏抛异常、或返回空）漏掉还，症状是"截了一次图，画布再也不显示了"。
-    /// 抓屏是同步的一次调用、跑在 UI 线程上，中间插不进画布的帧循环，所以那块玻璃只消失几毫秒。
-    /// </para>
+    /// 按「截图带画布」这条设置抓一帧桌面：带上＝就认屏幕那一刻合成好的那份（笔迹已在图里）；
+    /// 不带＝走 <see cref="CaptureWithoutCanvas"/>，那一帧里根本不让玻璃上屏。
+    /// <para><b>为什么只能这么抓</b>：屏幕画布是一块 topmost 的分层窗，抓屏抓到的是已经合成完的屏幕——
+    /// 笔迹与底下的应用早就混成一张图了，事后"把笔迹减掉"减不回来。</para>
     /// </summary>
     private static CaptureResult Grab()
+        => IncludeCanvasInScreenshot || !CanvasService.IsRunning
+            ? GdiScreenCapture.CaptureVirtualScreen()
+            : CaptureWithoutCanvas();
+
+    /// <summary>
+    /// 抓一帧<b>不含画布玻璃</b>的桌面。两条链都从这里要：F1 在"截图不带画布"时用它，
+    /// 画布出图（贴图／复制／存图）无条件用它——那一条要的是"干净桌面 + 我自己那份墨"，
+    /// 抓到的帧里已经有墨再叠一次就是两份（方案 §1 的 C5）。
+    /// <para>
+    /// <b>收与还写在这一处、且必须在 finally 里还</b>：分开写到调用方，早晚有一条路径（抓屏抛异常、
+    /// 返回空）漏掉还，症状是"截一次图画布再也不显示了"。抓屏是同步的一次调用、跑在 UI 线程上，
+    /// 中间插不进画布的帧循环，所以那块玻璃只消失几毫秒。
+    /// </para>
+    /// </summary>
+    public static CaptureResult CaptureWithoutCanvas()
     {
-        if (IncludeCanvasInScreenshot || !CanvasService.IsRunning) return GdiScreenCapture.CaptureVirtualScreen();
         CanvasService.SetHiddenForCapture(true);
         try
         {
