@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 
 namespace StarMark.Abstractions;
 
@@ -87,6 +88,41 @@ public static class ItemCardPolicy
         => (starred ? "已在你的 Star 列表中，点击取消 Star" : "Star 这个仓库（需 GitHub Token）")
            + (hasToken ? string.Empty : "；当前未配置 Token，点击会提示失败")
            + "。判定取自本机已同步的 Star 列表，网页上刚 Star 的要等下次同步才显示。";
+
+    /// <summary>
+    /// 是否提供「复制图片」（把位图数据放进剪贴板，区别于"复制的是文字/路径"那一颗）。
+    /// 判据只有一件事：<b>这一行指的是本机一个图片文件</b>。
+    /// <para>为什么<b>不看条目类型</b>：文件夹树的结果行、剪贴板图片行（Uri 就是我们那张 PNG，见
+    /// <c>ClipboardEntry.UriOf</c>）与一条指向本机图片的书签说的是同一件事——"这里有一张图"。
+    /// 按类型列白名单就会长出第二种"什么算图片行"：书签里出现 <c>file://…/a.png</c> 是常见事，
+    /// 漏掉它＝用户只能先打开图片再另存，而那正是这一项要消灭的绕行。预览（<c>PreviewHost</c>）
+    /// 同样是看 Uri 的形状而不是看类型。</para>
+    /// <para><b>不在这里 stat 文件</b>：菜单构建是每行一次的批处理，而"文件这会儿还在不在"由动作自己
+    /// 报告（带原因）。判据只回答"这类行有没有这个动作"，掺进时态事实就会分出两种说法。</para>
+    /// </summary>
+    public static bool CanCopyAsImage(string? uri)
+    {
+        // 路径解析与动作那一侧共用同一句（LocalFileIdentity）：两处各剥一次前缀，
+        // 就会出现"菜单里有这一项、点下去说没有路径"。
+        if (!LocalFileIdentity.TryPathFromUri(uri, out var path)) return false;
+        return IsBitmapDecodableExtension(System.IO.Path.GetExtension(path));
+    }
+
+    /// <summary>
+    /// 「复制图片」认的扩展名：<b>只列 Windows 自带解码器保证认得的那些</b>。
+    /// <para>为什么不跟随 <c>PreviewHost</c> 那份显示用清单（它有 <c>.webp/.ico</c>）：预览只要"画得出一格"，
+    /// 这一项要的是"编得成位图交出去"。webp / heic 要靠后装的图像扩展才解得开，ico 系统根本没有解码器——
+    /// 给它们出这一颗就是出一颗点了只会报错的死项（与"RSS 候选不给预览"同一取舍）。
+    /// 真机若证明某台机器上 webp 确实解得开，加重启条件的理由记在实施方案 §6，不在这里赌。</para>
+    /// </summary>
+    public static bool IsBitmapDecodableExtension(string? extension) => !string.IsNullOrEmpty(extension)
+        && LocalImageExtensions.Contains(extension);
+
+    /// <summary>集合本身也是判据的一部分：加一类格式只有这一处可改，两处（清单与谓词）不能各写一半。</summary>
+    private static readonly HashSet<string> LocalImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png", ".jpg", ".jpeg", ".jfif", ".bmp", ".gif", ".tif", ".tiff",
+    };
 
     /// <summary>
     /// 卡片的「更新时间」行与「★ 星数」行是否出现。热榜候选两行都要关，理由各不相同：

@@ -187,7 +187,10 @@ public sealed class ClipboardImageRowTests : IDisposable
         Assert.Contains("没有文件", none, StringComparison.Ordinal);
         Assert.False(ClipboardImageStore.TryReadEntryFrame(ImageRowNamed("2026-09-28_0915_00000000.png"),
             out _, out var gone));                                  // 合法名字但文件不在：也不是异常，是一句原话
-        Assert.Contains("读不出来", gone, StringComparison.Ordinal);
+        Assert.Contains("不在本机", gone, StringComparison.Ordinal);
+        // 先 stat 再读：漏那一步，这里交出去的是"文件读不出来（FileNotFoundException）"——
+        // _exception 名对用户不是一句原话，而"已经不在这台机器上"是（2d 起两个入口共用同一句）。
+        Assert.DoesNotContain("Exception", gone, StringComparison.Ordinal);
     }
 
     /// <summary>一块"像截图"的像素：逐像素变化的 BGR，alpha 恒 255（剪贴板图没有半透明语义，见 ClipAssets 的 DIB 口径）。</summary>

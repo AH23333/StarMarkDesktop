@@ -39,6 +39,12 @@ public static class ClipboardImageStore
     /// </summary>
     public static string Folder => ClipAssets.Folder;
 
+    /// <summary>
+    /// "文件不在了"那一句原话。<b>两个入口共用一个常数</b>：历史行与本机文件行说的是同一件事，
+    /// 各写一份就会出现"同一屏幕上两种说法"，而用户只会以为其中一种是真的。
+    /// </summary>
+    private const string MissingFileReason = "文件已经不在本机";
+
     /// <summary>主图已经在了吗（同图再复制时靠这一句决定"只记一次回放，不再写文件"）。</summary>
     public static bool MainExists(string mainName) => SafeInFolder(mainName) is { } p && File.Exists(p);
 
@@ -191,18 +197,107 @@ public static class ClipboardImageStore
         reason = null;
         var path = ClipAssets.FullPathOf(ClipboardEntry.FileName(item));
         if (path is null) { reason = "这一条的文件名不安全或没有文件"; return false; }
+        // 先 stat 再去读：让 File.ReadAllBytes 抛，交出去的就是"文件读不出来（FileNotFoundException）"
+        // 这种系统原话。两句在界面上都像程序坏了，而"这一张已经不在这台机器上"是用户能懂的事实。
+        if (!File.Exists(path)) { reason = MissingFileReason; return false; }
         try
         {
-            pngBytes = File.ReadAllBytes(path);
-            if (ClipboardPayload.TryDecodePng(pngBytes, out frame, out reason)) return true;
-            pngBytes = null;      // 解不开的帧不许半交出去：调用方要么两样都拿到，要么一样都没有
-            return false;
+            return TryHandOutPng(File.ReadAllBytes(path), out pngBytes, out frame, out reason);
         }
         catch (Exception ex)
         {
             pngBytes = null;
             reason = $"文件读不出来（{ex.GetType().Name}）";
             return false;
+        }
+    }
+
+    /// <summary>
+    /// 本机一个图片文件 → 交给剪贴板的 <b>PNG 字节 ＋ 归一像素</b>（右键「复制图片」用；历史行走
+    /// <see cref="TryReadEntryImage"/>，因为那一侧的"是哪个文件"要过 <see cref="ClipAssets"/> 的名字名册）。
+    /// <para><b>PNG 原样透传，不重新编码</b>：重编一次就换掉字节，而"粘出去的字节"与"登记回声的像素"
+    /// 必须出自同一张。其余格式（bmp/jpg/gif/tiff）用 WinRT 解码后重编成 PNG——这里没有 System.Drawing，
+    /// 也不为这一件事加 NuGet，用的就是 <see cref="EncodeThumbnailAsync"/> 那同一套成像栈。</para>
+    /// <para>回声像素一律取<b>这次交出去的那份 PNG</b> 解出来的，不取解码器当场交出的：<b>身份只有一种算法</b>，
+    /// 两边各算一次就是"复制成功、历史多一条"（同 <see cref="TryReadEntryImage"/> 的理由）。</para>
+    /// <para>这一份不写盘、不进历史，只是把用户已有的文件换成位图负载。失败必须带得出原因。</para>
+    /// </summary>
+    public static async Task<(byte[]? Png, ClipboardPayload.ImageFrame Frame, string? Reason)>
+        TryReadFileAsPngAsync(string? path, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return (null, default, "没有给出文件路径");
+        try
+        {
+            if (!File.Exists(path!)) return (null, default, MissingFileReason);
+            var size = new FileInfo(path!).Length;
+            if (size > ClipboardPolicy.MaxImageBytes)
+                return (null, default,
+                    $"这张图 {size / (1024 * 1024)} MB 超过 {ClipboardPolicy.MaxImageBytes / (1024 * 1024)} MB，" +
+                    "位图太大没有复制（与采集侧同一道上限）");
+            var bytes = await File.ReadAllBytesAsync(path!, ct).ConfigureAwait(false);
+            if (TryHandOutPng(bytes, out var png, out var frame, out _)) return (png, frame, null);
+
+            // 到这里只剩两种可能：格式本来就不是 PNG（正常，走转码），或它带 PNG 头却解不开（坏文件）。
+            // 两种都由转码那一支给出最终说法——解不开的 PNG 重编也解不开，下面的失败原因cover住。
+            var transcoded = await EncodePngFromBytesAsync(bytes, ct).ConfigureAwait(false);
+            if (transcoded is null)
+                return (null, default,
+                    "本机把它解不开（系统没有这种格式的解码器，或文件本身坏了），所以位图没能复制出去");
+            return TryHandOutPng(transcoded, out png, out frame, out var why)
+                ? (png, frame, null)
+                : (null, default, $"转出来的 PNG 仍然读不出（{why}）");
+        }
+        catch (OperationCanceledException) { return (null, default, "复制已经取消"); }
+        catch (Exception ex) { return (null, default, $"文件读不出来（{ex.GetType().Name}）"); }
+    }
+
+    /// <summary>
+    /// 字节 → "能交出去的一份 PNG"（原字节 + 归一像素），<b>全类解 PNG 只有这一处调用点</b>。
+    /// <para>先验魔数再解：<see cref="ClipboardPayload.IsPng"/> 与解码一起构成"我们只透传自己认得的容器"，
+    /// 只验魔数会把截断文件当 PNG 交出去，只靠解码则让一份改过头的文件以 PNG 的名义进剪贴板。</para>
+    /// </summary>
+    private static bool TryHandOutPng(byte[] bytes, out byte[]? png,
+        out ClipboardPayload.ImageFrame frame, out string? reason)
+    {
+        png = null;
+        frame = default;
+        reason = null;
+        if (!ClipboardPayload.IsPng(bytes)) { reason = "不是 PNG"; return false; }
+        if (!ClipboardPayload.TryDecodePng(bytes, out frame, out reason)) return false;
+        png = bytes;
+        return true;
+    }
+
+    /// <summary>
+    /// 任意受支持图片字节 → PNG（<b>只当转码器用</b>：WinRT 在这里交出的像素一律不当身份）。
+    /// <para>多帧文件（gif/tiff）取第 0 帧——"复制图片"要的就是用户在那一格看到的那张，
+    /// 把动图整帧塞进位图负载既没有约定也没有对应语义。</para>
+    /// </summary>
+    private static async Task<byte[]?> EncodePngFromBytesAsync(byte[] source, CancellationToken ct)
+    {
+        try
+        {
+            using var input = new InMemoryRandomAccessStream();
+            var writer = input.AsStreamForWrite();
+            writer.Write(source, 0, source.Length);
+            writer.Flush();                 // 不 Flush 交出去的是 Size=0 的空流（同 StreamOf 那条）
+            input.Seek(0);
+
+            var decoder = await BitmapDecoder.CreateAsync(input).AsTask(ct).ConfigureAwait(false);
+            using var bitmap = await decoder
+                .GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore)
+                .AsTask(ct).ConfigureAwait(false);
+
+            using var output = new InMemoryRandomAccessStream();
+            var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, output)
+                .AsTask(ct).ConfigureAwait(false);
+            encoder.SetSoftwareBitmap(bitmap);
+            await encoder.FlushAsync().AsTask(ct).ConfigureAwait(false);
+            return await ToBytesAsync(output).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            return null;   // 失败形态只有"没有对应编解码器 / 文件坏了 / 编码器拒这个像素格式"，都由调用方说一句原话
         }
     }
 

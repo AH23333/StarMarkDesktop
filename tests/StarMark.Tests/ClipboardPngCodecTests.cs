@@ -231,11 +231,20 @@ public sealed class ClipboardPngCodecTests
         Assert.Contains("ClipboardPayload.TryDecodePng(png", watcher);
         // 读档侧只留一处解码、一处为解码而读盘：多一处就多一份"同一帧两个哈希"的可能。
         // 计数带左括号：文档注释里的 <c>see cref</c> 也写了那个名字，不带括号就会把注释数进去（#123 同族）。
+        // "ReadAllBytes(" 与 "ReadAllBytesAsync(" 是两个不同的串（少一个括号就会把异步那条数进同步这条），
+        // 2d 起读盘有两条：历史行按名字同步读、本机文件行按路径异步读——但解码仍然只有一处。
         Assert.Equal(1, SourceGate.Count(store, "ClipboardPayload.TryDecodePng("));
-        Assert.Equal(1, SourceGate.Count(store, "File.ReadAllBytes"));
-        // 解码不留第二份：BitmapDecoder 只许在"曾经解码"的地方消失，编码器（BitmapEncoder）照旧。
-        Assert.DoesNotContain("BitmapDecoder", store);
+        Assert.Equal(1, SourceGate.Count(store, "File.ReadAllBytes("));
+        Assert.Equal(1, SourceGate.Count(store, "File.ReadAllBytesAsync("));
+        // 解码不留第二份：交出去的 PNG 只许由上面那一处解。WinRT 的 <b>BitmapDecoder 在 2d 回来了，
+        // 但它的角色变了——只当"把 bmp/jpg/gif/tiff 转成 PNG"的转码器</b>，它的像素一律不当身份。
+        // 所以判据从"这个词不许出现"改成"它只许出现在转码那一个方法里"（帮凶教训：上一轮的半对不是定论）。
+        Assert.Equal(1, SourceGate.Count(store, "BitmapDecoder"));
+        Assert.Contains("BitmapDecoder", SourceGate.MethodBody(store,
+            "private static async Task<byte[]?> EncodePngFromBytesAsync"));
         Assert.Contains("BitmapEncoder", store);
+        // 身份哈希绝不在这一层算：它只在采集侧那一次算，两处各算就会出现两种哈希。
+        Assert.DoesNotContain("BuildImageSourceId", store);
     }
 
     [Theory]

@@ -80,6 +80,13 @@ public partial class ItemCardViewModel : ObservableObject
         => Type == ItemType.File && Uri.StartsWith("file://", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// 是否给「复制图片」（位图数据进剪贴板，与那颗"复制链接/路径"是两件事）。
+    /// 判据全在 <see cref="ItemCardPolicy.CanCopyAsImage"/>，菜单两处读同一个属性——
+    /// 分处各判一次就会出现"组件行右键有、主窗卡片没有"。
+    /// </summary>
+    public bool CanCopyAsImage => ItemCardPolicy.CanCopyAsImage(Uri);
+
+    /// <summary>
     /// 是否可"发送到桌面 · 快捷启动"。快捷启动存的是<b>可启动的 URI</b>，没有 URI 的条目
     /// （剪贴板正文、无链接的待办/随记）发过去只会是一条永远打不开的空入口，故不提供该动作。
     /// 启动器行与热榜候选同样排除（判据在 <see cref="ItemCardPolicy.CanSendToLauncher"/>）：

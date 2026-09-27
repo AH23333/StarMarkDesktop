@@ -13,9 +13,9 @@ namespace StarMark.UI.Helpers;
 /// 条目型桌面组件的紧凑行，弹出与主窗口 <see cref="Controls.ItemCard"/> 逐条一致的 ContextFlyout。
 /// <para>
 /// 菜单结构与 <c>Controls/ItemCard.xaml</c> 的 ContextFlyout 保持一一对应（打开／复制到剪贴板 / 打开所在位置
-/// / 复制链接·复制内容 / 预览 / 记录到本地 / 置顶 / 删除这条历史 / 发送到桌面·快捷启动 / 编辑笔记
+/// / 复制链接·复制内容 / 复制图片 / 预览 / 记录到本地 / 置顶 / 删除这条历史 / 发送到桌面·快捷启动 / 编辑笔记
 /// / 编辑标签 / 隐藏），动作全部走 <see cref="ItemCardActions"/>（已含 try/catch + 日志），
-/// 可见性规则（HasOpenLocation / CanDeletePermanently / CanSendToWidget / IsLauncherMode）也与之一致。
+/// 可见性规则（HasOpenLocation / CanCopyAsImage / CanDeletePermanently / CanSendToWidget / IsLauncherMode）也与之一致。
 /// 文案随条目类型变的几项取自 <see cref="ItemCardViewModel"/>，两处共用同一判据，不再各写一份。
 /// </para>
 /// <para>
@@ -72,6 +72,11 @@ internal static class ItemContextMenu
             flyout.Items.Add(Item("打开所在位置", (_, _) => ItemCardActions.OpenLocation(vm)));
 
         flyout.Items.Add(Item(vm.CopyMenuText, (_, _) => ItemCardActions.CopyUri(vm)));
+        // 「复制图片」与上面那颗是两件事：这一颗交<b>位图数据</b>，粘出来是一张图；上面那颗交的是一串文字。
+        // 判据与主窗卡片的 ContextFlyout 读同一个属性（ItemCardPolicy.CanCopyAsImage），两处各判一次就会出现
+        // "组件行右键有、主窗卡片没有"。
+        if (vm.CanCopyAsImage)
+            flyout.Items.Add(Item("复制图片", (_, _) => ItemCardActions.CopyImage(vm)));
         // 预览与卡片上那颗 🔎 读同一个判据（RSS 候选不给：点条目直接跳文章，正文解析暂不做）
         if (vm.ShowsPreview)
             flyout.Items.Add(Item("预览", async (_, _) => await PreviewAsync(vm, root)));

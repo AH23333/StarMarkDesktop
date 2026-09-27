@@ -124,6 +124,16 @@ public sealed partial class ItemCard : UserControl
         if (ViewModel != null) CopyLinkRequested?.Invoke(this, ViewModel);
     }
 
+    /// <summary>
+    /// 「复制图片」：交位图数据而不是路径（与上面那颗 CopyLink 是两件事）。
+    /// <b>刻意自包含、不走页面事件</b>（同 <see cref="DeleteClipboard_Click"/>）：这一项要出现在剪贴板页、
+    /// 文件夹树、搜索页与组件行等十余处，靠宿主逐个订阅就一定会有某一处"菜单里有、点了没反应"。
+    /// </summary>
+    private void Menu_CopyImage(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel != null) ItemCardActions.CopyImage(ViewModel);
+    }
+
     /// <summary>热榜行的 ⭐Star（图标按钮与右键菜单同一实现）。动作结果由宿主订阅 NoticeRaised 显示。</summary>
     private async void Star_Click(object sender, RoutedEventArgs e)
     {

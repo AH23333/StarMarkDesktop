@@ -289,11 +289,23 @@ public sealed class ClipboardImageCaptureTests : IDisposable
     [Fact]
     public void PngEncodingStillHasExactlyOneHome()
     {
-        // 全仓唯一一处 PNG 编码器在截图抓屏那边（它自己的注释立着这条纪律）。剪贴板只调它。
+        // 全仓唯一一处"把屏幕帧/剪贴板帧编成 PNG"的编码器在截图抓屏那边（它自己的注释立着这条纪律），
+        // 剪贴板侧只调它——因为采集时登记的像素身份必须与写回时交出去的那份 PNG 对得上。
         var store = SourceGate.ReadRepoFile("src/StarMark.Integrations/Clipboard/ClipboardImageStore.cs");
-        Assert.Contains("GdiScreenCapture.EncodePngAsync(bgra, width, height, ct)", store);
-        Assert.DoesNotContain("PngEncoderId", store);
-        Assert.DoesNotContain("System.Drawing", store);          // 也不许借 GDI+ 另开一条编码路
+        var captureSide = SourceGate.MethodBody(store, "public static async Task<byte[]?> EncodePngAsync");
+        Assert.Contains("GdiScreenCapture.EncodePngAsync(bgra, width, height, ct)", captureSide);
+        Assert.Equal(1, SourceGate.Count(store, "GdiScreenCapture.EncodePngAsync"));
+
+        // 2d 起了第二条编码路（BitmapEncoder.PngEncoderId），但它的角色被限定成"把用户本机的 bmp/jpg
+        // 转成一份 PNG 负载"：它的产物不进历史、不当身份（身份一律由 TryDecodePng 从交出去的那份 PNG 现解）。
+        // 所以判据从"PngEncoderId 不许出现在这个文件"改成"它只许出现在转码那一个方法里"——
+        // 上一轮那个整文件禁词是半对，照它把新功能钉掉才是真的丢了纪律（同 WD-2 / S2-h 那一课）。
+        Assert.Equal(1, SourceGate.Count(store, "PngEncoderId"));
+        Assert.Contains("PngEncoderId", SourceGate.MethodBody(store,
+            "private static async Task<byte[]?> EncodePngFromBytesAsync"));
+        // 也不许借 GDI+ 在剪贴板侧另开一条采集编码路。钉 using 而不是钉这个词：
+        // 文件注释里就写着"这里没有 System.Drawing"，数整个词会把注释算进去（#123 同族）。
+        Assert.DoesNotContain("using System.Drawing", store);
     }
 
 

@@ -4,13 +4,14 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Clipboard;
+using StarMark.Integrations.Clipboard;
 using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
 
 namespace StarMark.UI.Helpers;
 
 /// <summary>
-/// ItemCard 操作集中处理：打开条目 / 编辑笔记 / 编辑标签 / 隐藏 / 置顶 / 复制链接 / 打开所在位置。
+/// ItemCard 操作集中处理：打开条目 / 编辑笔记 / 编辑标签 / 隐藏 / 置顶 / 复制链接 / 复制图片 / 打开所在位置。
 /// 供所有页面复用，避免重复实现 ContentDialog 逻辑。
 /// 所有入口都有异常保护并写 StarLog——async void 中的未捕获异常会直接命中全局 UnhandledException。
 /// </summary>
@@ -127,6 +128,61 @@ public static class ItemCardActions
             StarLog.Error($"复制链接失败 (id={vm.Id})", ex);
         }
         await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 「复制图片」：把<b>位图数据</b>放进剪贴板。它与 <see cref="CopyUri"/> 是两件事，且这区别是用户看得见的——
+    /// 交路径时画图/Word/浏览器粘出来的是一串文字，交位图才粘出一张图（真机坏法见 ClipIMG-2c：
+    /// 把 <c>file://</c> 递给 <c>SetBitmap</c>，系统按"复制了一个文件"呈现，症状就是"只能复制路径"）。
+    /// <para><b>刻意自包含、不走页面事件</b>（同 <see cref="DeleteClipboard"/>）：卡片被剪贴板页 / 文件夹树 /
+    /// 搜索页 / 组件行十余处复用，靠宿主订阅的话，没订阅的那几处又是一个"看着能点其实没反应"的菜单项。</para>
+    /// <para>读盘与转码整段离 UI 线程：文件夹树里挑中的可能是一张几十 MB 的 TIFF。</para>
+    /// </summary>
+    public static async void CopyImage(ItemCardViewModel vm)
+    {
+        try
+        {
+            // 判据只有一份：菜单上不该出现这一项时，这里也不动剪贴板（否则宿主页面自己挂的按钮会绕过规则）。
+            if (!vm.CanCopyAsImage) return;
+
+            // 历史行走 TryReadEntryImage（"是哪个文件"要过 ClipAssets 的名字名册——备份文件里回来的
+            // Uri 可以是任意字符串）；文件行按路径问那一条读文件的入口。两条路共用同一个解码原语。
+            var (png, frame, why) = vm.IsClipboardImageRow
+                ? await Task.Run(() => ReadEntryImage(vm), CancellationToken.None)
+                : await Task.Run(() => ClipboardImageStore.TryReadFileAsPngAsync(
+                    LocalFileIdentity.TryPathFromUri(vm.Uri, out var localPath) ? localPath : null,
+                    CancellationToken.None), CancellationToken.None);
+
+            if (png is null)
+            {
+                // 坏消息要说得出为什么、并落在用户能做的那件事上（P-54 同口径）：
+                // 只回一句"复制失败"，他只能去猜是程序坏了还是这张图坏了。
+                App.MainWindow?.ShowError("没能复制图片", why ?? "这张图读不出来。");
+                return;
+            }
+
+            // 先登记像素回声再写剪贴板，顺序不能反：WM_CLIPBOARDUPDATE 在 SetContent 之后就到，
+            // 登记晚一步就挡不住那一帧——症状是"每右键复制一次图片，剪贴板历史多出一条"。
+            App.NoteClipboardOwnImageWrite(frame.Bgra);
+
+            var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+            package.SetBitmap(Windows.Storage.Streams.RandomAccessStreamReference
+                .CreateFromStream(ClipboardImageStore.StreamOf(png)));
+            Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+            Windows.ApplicationModel.DataTransfer.Clipboard.Flush();   // 不 Flush，窗口一挂起内容就没了
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error($"复制图片失败 (id={vm.Id}, uri={vm.Uri})", ex);
+            App.MainWindow?.ShowError("没能复制图片", ex.Message);
+        }
+    }
+
+    /// <summary>把历史行的读盘入口折成与文件侧同一个形状（两条路的失败都得带得出原因，不能一个抛一个返回）。</summary>
+    private static (byte[]? Png, ClipboardPayload.ImageFrame Frame, string? Reason) ReadEntryImage(ItemCardViewModel vm)
+    {
+        var ok = ClipboardImageStore.TryReadEntryImage(vm.GetItem(), out var bytes, out var frame, out var reason);
+        return ok ? (bytes, frame, null) : (null, default, reason);
     }
 
     /// <summary>
