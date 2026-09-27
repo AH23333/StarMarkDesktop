@@ -678,4 +678,35 @@ public sealed class CaptureOverlayGateTests
         // 缩放与旋转都汇到那个唯一写点：这里钉住"它仍然是唯一写点"，否则新写点又会漏掉条子
         Assert.Contains("ApplyPinWindowRect();", SourceGate.MethodBody(cs, "private void BakeQuarterTurn"));
     }
+
+    /// <summary>
+    /// 批次 WN：贴图态条子住独立置顶窗（批次 WI），而条子在那扇窗里是 <b>Stretch</b> 的——
+    /// 父窗只给它窗内那一点高度，于是它<b>永远量不出"我变高了"</b>，<c>ActionBar.SizeChanged</c> 不响，
+    /// 那扇窗就一直停在旧高度上把第二、三行截在窗外。真机反馈：
+    /// "所有菜单功能的二级菜单均会被菜单的高度限制遮挡，有时会无法显示或只能部分显示"。
+    /// <para>所以<b>每一处改条子内容的地方都必须叫上 <c>ReflowBar</c></b>：选择栏开／收、悬停说明开／收。
+    /// 钉的是"这四个写点各有一句"，不是"某处有几句"——加第五种行而忘了叫上窗，就是这次的复发。</para>
+    /// </summary>
+    [Fact]
+    public void EveryBarContentWritePointReflowsTheBarWindow()
+    {
+        var cs = ReadOverlay(false);
+        var reflow = SourceGate.MethodBody(cs, "private void ReflowBar()");
+        Assert.Contains("if (_pinned) FollowBarToImage();", reflow);
+        // 选区阶段条子住在全屏遮罩窗里，长多少看得见，不该被这条链牵连重排
+        Assert.DoesNotContain("PositionBar", reflow);
+
+        foreach (var writer in new[]
+        {
+            "private void ShowPicker(", "private void HidePicker(",
+            "private void ShowHint(", "private void HideHint(",
+        })
+            Assert.Contains("ReflowBar();", SourceGate.MethodBody(cs, writer));
+
+        // 内容写点只有这四颗：多一处（比如新加一行）就得同步出现在上面那张表里
+        Assert.Equal(4, SourceGate.Count(cs, "ReflowBar();"));
+        // 条子在窗里是 Stretch 的：这句话是"量不出自己变高"的前提，改成 Left/Top 就要重新论证这条链
+        Assert.Contains("ActionBar.VerticalAlignment = VerticalAlignment.Stretch;",
+            SourceGate.MethodBody(cs, "private void AttachBarWindow()"));
+    }
 }

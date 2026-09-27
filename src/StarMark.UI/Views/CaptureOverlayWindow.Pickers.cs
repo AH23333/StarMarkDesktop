@@ -103,7 +103,8 @@ public sealed partial class CaptureOverlayWindow
     /// <summary>
     /// 选择栏<b>摆在条子自己那一行里</b>，不是 Flyout（批次 WI 的真机结论）：贴图态条子住一扇 33 像素高的
     /// 独立小窗，而 WinUI 3 把弹出层钉在宿主窗边界内——Flyout 出来只有半截，图形与颜色等于选不了。
-    /// 条子自己排版就能自己长高，那扇窗按实测尺寸跟着长（<c>ActionBar.SizeChanged</c> 那条链）。
+    /// 条子自己排版能自己长高，但<b>那扇窗不会自己跟着长</b>：条子在窗里是 Stretch 的，父窗不给高度
+    /// 它就量不出自己变高了（<c>SizeChanged</c> 不响），所以每一处开关选择栏都必须叫 <see cref="ReflowBar"/>。
     /// </summary>
     private void ShowPicker(FrameworkElement anchor, UIElement content)
     {
@@ -111,6 +112,7 @@ public sealed partial class CaptureOverlayWindow
         BarPicker.Content = content;
         BarPicker.Visibility = Visibility.Visible;
         _pickerOpen = true;
+        ReflowBar();
     }
 
     private void HidePicker()
@@ -120,6 +122,7 @@ public sealed partial class CaptureOverlayWindow
         BarPicker.Visibility = Visibility.Collapsed;
         _pickerOpen = false;
         SyncTools();
+        ReflowBar();
     }
 
 }

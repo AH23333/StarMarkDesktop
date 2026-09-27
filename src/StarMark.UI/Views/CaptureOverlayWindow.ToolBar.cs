@@ -175,9 +175,14 @@ public sealed partial class CaptureOverlayWindow
         if (string.IsNullOrEmpty(text)) return;
         BarHint.Text = text;
         BarHint.Visibility = Visibility.Visible;
+        ReflowBar();                      // 说明那一行也是条子长出来的第二／三行：不叫上那扇窗就被截在窗外
     }
 
-    private void HideHint() => BarHint.Visibility = Visibility.Collapsed;
+    private void HideHint()
+    {
+        BarHint.Visibility = Visibility.Collapsed;
+        ReflowBar();
+    }
 
     private void BrushTool_Click(object sender, RoutedEventArgs e)
     {
