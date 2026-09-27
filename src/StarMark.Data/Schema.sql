@@ -153,3 +153,23 @@ CREATE TABLE IF NOT EXISTS activity (
 );
 
 CREATE INDEX IF NOT EXISTS idx_activity_at ON activity(at DESC);
+
+-- ============================================================
+-- AI 用量计量（组件功能扩展详解 §20.1）
+-- 一次调用一行，写侧是 AiUsageRepository，读侧是设置页用量面板与预算闸门。
+-- estimated=1 的行是"服务没回 usage、按字符折算"的估算值——面板要如实标注，
+-- 预算判定也带上它：宁可提前警告，也不让"看不见的消耗"绕过熔断。
+-- 月度窗口按表内最大 at 滚动而非墙钟（§20.5：防改系统时间绕预算）。
+-- ============================================================
+CREATE TABLE IF NOT EXISTS ai_usage (
+    id              INTEGER PRIMARY KEY,
+    at              INTEGER NOT NULL,             -- Unix 秒（收到答复那一刻）
+    feature         TEXT    NOT NULL,             -- 'classify' 等：哪个功能花的
+    provider        TEXT    NOT NULL,             -- 'ollama' | 'openai-compatible'
+    model           TEXT,                         -- 配置里的模型名（没填则空）
+    input_tokens    INTEGER NOT NULL,
+    output_tokens   INTEGER NOT NULL,
+    estimated       INTEGER NOT NULL DEFAULT 0    -- 0=服务原数 1=字符折算
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_usage_at ON ai_usage(at DESC);

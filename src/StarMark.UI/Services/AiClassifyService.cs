@@ -54,12 +54,15 @@ public sealed class AiClassifyService
     private readonly IItemRepository _repo;
     private readonly SettingsStore _store;
     private readonly StarMark.Integrations.Ai.AiGateway _gateway;
+    private readonly IAiUsageRepository? _usage;
 
-    public AiClassifyService(IItemRepository repo, SettingsStore store, StarMark.Integrations.Ai.AiGateway gateway)
+    public AiClassifyService(IItemRepository repo, SettingsStore store, StarMark.Integrations.Ai.AiGateway gateway,
+        IAiUsageRepository? usage = null)
     {
         _repo = repo;
         _store = store;
         _gateway = gateway;
+        _usage = usage;
     }
 
     /// <summary>
@@ -132,12 +135,22 @@ public sealed class AiClassifyService
         var report = await ClassifyRunner.RunAsync(
             candidates, catalog,
             request => _gateway.CompleteAsync(settings, request, ct),
-            done =>
+            async done =>
             {
+                // §20.1 计量：只记"服务真的答过"的批（失败批的 Usage 为 null，不猜消耗）。
+                // 在检查点同一批边界落账——进度、方案、用量三件事共享同一个"批"的时间戳，
+                // 用户停掉时看到的三张表永远互相能对得上。写侧吞异常（账本不拦功能，见 AiUsageRepository）。
+                if (done.Usage is { } used && _usage is { } ledger)
+                    await ledger.LogAsync(new AiUsageEntry(
+                        DateTimeOffset.UtcNow, "classify",
+                        settings.Provider.ToString().ToLowerInvariant(),
+                        string.IsNullOrWhiteSpace(settings.Model) ? null : settings.Model.Trim(), used),
+                        CancellationToken.None);   // <b>记账不跟叫停走</b>：这一批 token 已经花掉，
+                                                   // 若账随 ct 取消，停在检查点上的那一批会"花了钱没留账"，
+                                                   // 还会连累后面的方案落盘——账本必须比取消更硬。
                 Merge(proposals, done.Proposals);
                 SavePending(new ClassifyPlan(proposals.ToList(), DateTimeOffset.UtcNow));
                 onProgress(done.Index + 1, total);
-                return Task.CompletedTask;
             },
             ct);
 

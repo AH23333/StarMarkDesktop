@@ -124,6 +124,47 @@ public static class AiWire
         return AsText(error) ?? AsText(error?["message"]) ?? AsText(root["message"]);
     }
 
+    /// <summary>Ollama 的 token 账：<c>/api/chat</c> 回 <c>prompt_eval_count / eval_count</c>。
+    /// <b>读不到一律返回 null 而不是 0</b>——"这个模型没回计量"和"它说用了 0 个 token"
+    /// 在账单上是两回事；前者该转估算，后者可以直接入账。</summary>
+    public static AiUsage? ReadOllamaUsage(string? json)
+    {
+        var root = TryParse(json);
+        var input = AsInt(root?["prompt_eval_count"]);
+        var output = AsInt(root?["eval_count"]);
+        return input is null || output is null ? null : new AiUsage(input.Value, output.Value, Estimated: false);
+    }
+
+    /// <summary>OpenAI 兼容端的 token 账：<c>usage.prompt_tokens / usage.completion_tokens</c>。
+    /// 非流式响应默认带 usage（<c>stream_options</c> 只有流式才需要，本通道不发流式）。
+    /// 同样：<b>缺任何一侧都按读不到处理</b>。</summary>
+    public static AiUsage? ReadOpenAiUsage(string? json)
+    {
+        var usage = TryParse(json)?["usage"];
+        var input = AsInt(usage?["prompt_tokens"]);
+        var output = AsInt(usage?["completion_tokens"]);
+        return input is null || output is null ? null : new AiUsage(input.Value, output.Value, Estimated: false);
+    }
+
+    /// <summary>服务没回 usage 时的字符折算（§20.5）：<b>与中文检索侧同源，用
+    /// <see cref="Text.CjkTokenizer.IsCjk"/> 而不是再抄一份 Unicode 区间</b>——
+    /// 中文 1 字≈1 token、其余 4 字符≈1 token 都是粗颗粒近似，口径写进"估算"标签而不是假装精确。</summary>
+    public static AiUsage Approximate(string? prompt, string? reply)
+        => new(EstimateTokens(prompt), EstimateTokens(reply), Estimated: true);
+
+    public static int EstimateTokens(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return 0;
+        var cjk = 0;
+        var other = 0;
+        foreach (var ch in text)
+        {
+            if (Text.CjkTokenizer.IsCjk(ch)) cjk++;
+            else other++;
+        }
+        return cjk + other / 4 + (other % 4 == 0 ? 0 : 1);   // 非 CJK 余数向上取整：宁可估多不估少
+    }
+
     /// <summary>Ollama <c>/api/tags</c> 的模型名清单（<c>{"models":[{"name":...}]}</c>）。</summary>
     public static IReadOnlyList<string> ReadOllamaModelNames(string? json)
         => Names(TryParse(json)?["models"], "name");
@@ -185,4 +226,11 @@ public static class AiWire
         JsonValueKind.Number => node.ToString(),
         _ => null,      // 对象/数组/bool/null 都不是"一句话原因"
     };
+
+    /// <summary>token 计数读取：只认"数值类型且非负整数"。<b>字符串形态的数字不收</b>——
+    /// usage 字段没有哪家把它写成字符串，收了反而会把"字段其实是别的东西"误读成用量。</summary>
+    private static int? AsInt(JsonNode? node)
+        => node is JsonValue value && value.TryGetValue(out long v) && v >= 0 && v <= int.MaxValue
+            ? (int)v
+            : null;
 }

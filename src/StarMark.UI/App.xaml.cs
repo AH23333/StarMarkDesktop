@@ -147,6 +147,9 @@ public partial class App : Application
         // AI 通道网关（批次 A）。单例：它持有两个 HttpClient，按窗口创建会攒出连接池；
         // 批次 B 的批量整理也从这里取同一个实例，配置与"能不能用"的判定只此一份。
         services.AddSingleton<StarMark.Integrations.Ai.AiGateway>();
+        // §20.1 用量账本：一张 ai_usage 表、一个写入口（AiClassifyService 的检查点回调）。
+        // 注册在分类服务之前，构造顺序不成问题（容器按请求顺序现起）。
+        services.AddSingleton<IAiUsageRepository, StarMark.Data.AiUsageRepository>();
         services.AddSingleton<StarMark.UI.Services.AiClassifyService>();
 
         // 内置剪贴板历史：单例持有监听窗口与去重闸门。开关默认关 ⇒ 本会话绝不 TryStart（零读取、零落盘）。

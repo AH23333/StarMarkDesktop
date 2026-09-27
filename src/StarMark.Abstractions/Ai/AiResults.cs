@@ -4,11 +4,23 @@ using System.Collections.Generic;
 
 namespace StarMark.Abstractions.Ai;
 
+/// <summary>
+/// 一次调用的 token 账（§20.1 计量）。<b>可为 null 是常态而不是异常</b>：不少本地模型与代理
+/// 不回 usage 字段——没有实测数字时上层按"估算"口径补记（<see cref="Estimated"/> 分开两回事），
+/// "这个数能不能当账单用"必须在值层面就看得出来，而不是靠界面备注。
+/// </summary>
+/// <param name="Estimated">true＝服务没回 usage，这是按字符数折算的估计值；false＝服务报的原数。</param>
+public sealed record AiUsage(int InputTokens, int OutputTokens, bool Estimated)
+{
+    public int TotalTokens => InputTokens + OutputTokens;
+}
+
 /// <summary>一次补调的结果。<b>失败必须带种类，而且种类与原文原因都要留</b>：
 /// 种类决定"上哪儿改"，原文决定"改的时候该看哪一句"——只留一个都会让用户来回试。</summary>
-public sealed record AiReply(bool Ok, string? Text, AiFailureKind Failure = AiFailureKind.Unknown, string? Detail = null)
+public sealed record AiReply(bool Ok, string? Text, AiFailureKind Failure = AiFailureKind.Unknown, string? Detail = null,
+    AiUsage? Usage = null)
 {
-    public static AiReply Success(string text) => new(true, text);
+    public static AiReply Success(string text, AiUsage? usage = null) => new(true, text, Usage: usage);
 
     public static AiReply Fail(AiFailureKind kind, string? detail = null) => new(false, null, kind, detail);
 

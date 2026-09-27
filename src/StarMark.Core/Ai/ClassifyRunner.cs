@@ -18,6 +18,8 @@ namespace StarMark.Core.Ai;
 /// <param name="MissingCount">答复里漏掉的条数——<b>它不是失败，但必须被数出来</b>：
 /// 模型答了 43/50 与答了 50/50 在"整理完了"这句话上不该长得一样。</param>
 /// <param name="UnknownCount">答复里出现了但本批没有的编号数（被丢掉了）。</param>
+/// <param name="Usage">这一批的 token 账（§20.1）——<b>null＝这一批没成行，没得可记</b>：
+/// 失败的批不猜消耗（有些失败确实一个 token 都没花出去），入账只认服务回过答复的批。</param>
 public sealed record ClassifyBatchReport(
     int Index,
     int ItemCount,
@@ -25,7 +27,8 @@ public sealed record ClassifyBatchReport(
     string? Error,
     IReadOnlyList<TagProposal> Proposals,
     int MissingCount,
-    int UnknownCount);
+    int UnknownCount,
+    AiUsage? Usage = null);
 
 /// <summary>整轮的结果。</summary>
 /// <param name="StoppedBatches">因为叫停而没问成的批数——<b>正在飞的那一批也算在内</b>（它没拿到结果）。
@@ -135,7 +138,7 @@ public static class ClassifyRunner
                 return new ClassifyBatchReport(index, batch.Count, false, parsed.Error, Array.Empty<TagProposal>(), batch.Count, parsed.UnknownIds.Count);
 
             return new ClassifyBatchReport(index, batch.Count, true, null, parsed.Proposals,
-                parsed.MissingIds.Count, parsed.UnknownIds.Count);
+                parsed.MissingIds.Count, parsed.UnknownIds.Count, reply.Usage);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
