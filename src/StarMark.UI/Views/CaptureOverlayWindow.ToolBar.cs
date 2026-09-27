@@ -258,7 +258,7 @@ public sealed partial class CaptureOverlayWindow
         ToolTipService.SetToolTip(_brushButton,
             $"当前：{Annotation.Palette[Math.Clamp(_colourIndex, 0, Annotation.Palette.Count - 1)].Name}"
             + $" · {Annotation.ThicknessNames[Math.Clamp(_weightIndex, 0, Annotation.ThicknessNames.Count - 1)]}"
-            + $"（{Annotation.ToolName(tool)} 的细 / 中 / 粗 ≈ {sizes} 像素）。点这支笔＝换颜色和粗细；Esc 收笔");
+            + $"（{Annotation.ToolName(tool)} 的{Annotation.ThicknessUnit(tool)}：细 / 中 / 粗 ≈ {sizes} 像素）。点这支笔＝换颜色和粗细；Esc 收笔");
     }
 
     // ────────── 图标：矢量图元画的，不用字体字形 ──────────

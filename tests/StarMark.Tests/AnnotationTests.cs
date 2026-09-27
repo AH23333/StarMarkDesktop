@@ -141,8 +141,9 @@ public sealed class AnnotationTests
     {
         Assert.Contains("文字是空的", new Annotation(AnnotationTool.Text, new[] { new PixelPoint(1, 1) },
             Annotation.Opaque(255, 255, 255), 4).Problem());
-        Assert.Contains("粗细 0", Make(AnnotationTool.Rectangle, thickness: 0).Problem());
-        Assert.Contains("粗细 49", Make(AnnotationTool.Rectangle, thickness: 49).Problem());
+        // 原因要点名"哪个工具的哪一个量"越界了：同一句"粗细不在范围内"在序号那里说的是圆点半径，读的人按线宽去理解就找不到北
+        Assert.Contains("矩形的线宽 0", Make(AnnotationTool.Rectangle, thickness: 0).Problem());
+        Assert.Contains("矩形的线宽 49", Make(AnnotationTool.Rectangle, thickness: 49).Problem());
         Assert.Contains("文字高度 5", Make(AnnotationTool.Text, text: "字", fontHeight: 5).Problem());
         Assert.Contains("文字高度 201", Make(AnnotationTool.Text, text: "字", fontHeight: 201).Problem());
         // 全透明：画上去等于没画，必须在画之前就说
@@ -743,5 +744,69 @@ public sealed class AnnotationTests
         };
         foreach (var at in outside)
             Assert.Equal(AnnotationGrab.Scale, mark.GrabAt(at, handle, 6));
+    }
+
+    // ────────── 序号那一档"粗细"（批次 WR：改了没效果） ──────────
+
+    private static Annotation NumberAt(int thickness)
+        => new(AnnotationTool.Number, new[] { new PixelPoint(100, 80) }, Annotation.Opaque(255, 0, 0), thickness)
+        { Number = 1 };
+
+    /// <summary>
+    /// 序号的"粗细"量的是<b>圆点半径</b>，三档必须互不相同。
+    /// <para>真机反馈："序号功能更改粗细无效果"。这条链上它从前共用线宽那 2/4/8，而绘制端的半径是一个常量
+    /// ⇒ 那一档从来没被任何人读过。中档钉在 15：那是它一直以来的观感——<b>换档要看得见变，默认不许跟着变</b>。</para>
+    /// </summary>
+    [Fact]
+    public void NumberWeightsAreDistinctRadii()
+    {
+        Assert.Equal(3, Annotation.NumberRadii.Distinct().Count());
+        Assert.True(Annotation.NumberRadii.SequenceEqual(Annotation.NumberRadii.OrderBy(x => x)), "档位必须递增");
+        Assert.Equal(15, Annotation.NumberRadii[1]);
+        Assert.Equal(15, Annotation.DefaultThickness(AnnotationTool.Number));
+        foreach (var step in new[] { 0, 1, 2 })
+            Assert.Equal(Annotation.NumberRadii[step], Annotation.ThicknessFor(AnnotationTool.Number, step));
+        // 越界档位不能读出数列外的值（也不能顺手 fallthrough 到线宽那一档）
+        Assert.Equal(11, Annotation.ThicknessFor(AnnotationTool.Number, -5));
+        Assert.Equal(22, Annotation.ThicknessFor(AnnotationTool.Number, 99));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void NumberBoundsAreThatRadiusAroundTheDot(int step)
+    {
+        var radius = Annotation.NumberRadii[step];
+        Assert.Equal(new IntRect(100 - radius, 80 - radius, radius * 2, radius * 2),
+            NumberAt(Annotation.ThicknessFor(AnnotationTool.Number, step)).Bounds());
+    }
+
+    /// <summary>点多大就得有多好点中：粗档那颗覆盖到细档够不到的地方（命中走的是同一个包围盒）。</summary>
+    [Fact]
+    public void AHeavierNumberIsAlsoEasierToHit()
+    {
+        var thin = NumberAt(Annotation.NumberRadii[0]);
+        var thick = NumberAt(Annotation.NumberRadii[2]);
+        Assert.False(thin.Contains(new PixelPoint(100 + Annotation.NumberRadii[0] + 1, 80), 0));
+        Assert.True(thick.Contains(new PixelPoint(100 + Annotation.NumberRadii[0] + 1, 80), 0));
+    }
+
+    [Fact]
+    public void ScalingANumberMultipliesItsWeightRadius()
+    {
+        var half = NumberAt(22) with { Scale = 0.5 };
+        Assert.Equal(22, half.Bounds().Width);          // 半径 22 × 0.5 ＝ 11 ⇒ 直径 22
+    }
+
+    /// <summary>序号现在真的吃 Thickness，所以范围检查也一起管上它（从前豁免，是因为那值根本没人读）。</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(49)]
+    public void AnOutOfRangeNumberWeightIsRejectedWithAReason(int thickness)
+    {
+        var problem = NumberAt(thickness).Problem();
+        Assert.NotNull(problem);
+        Assert.Contains("圆点半径", problem);            // 报的是这个工具实际量的那个东西，不是泛泛的"粗细"
     }
 }

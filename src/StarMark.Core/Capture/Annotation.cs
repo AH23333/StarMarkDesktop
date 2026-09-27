@@ -97,8 +97,12 @@ public sealed record Annotation(
     /// <summary>序号标注上的编号（从 1 开始，仅 <see cref="AnnotationTool.Number"/> 使用）。</summary>
     public int Number { get; init; }
 
-    /// <summary>序号圆点的半径（物理像素，1× 时）。</summary>
-    public const int NumberRadius = 15;
+    /// <summary>
+    /// 序号圆点的三档<b>半径</b>（物理像素，与 <see cref="ThicknessSteps"/> 同序）。
+    /// <para>序号没有"线"可粗，所以它那一档表达的是点多大。中档 15 就是这条链一直以来的那颗点
+    /// ——换档必须看得见变化（真机反馈："序号功能更改粗细无效果"），而默认观感不许跟着变。</para>
+    /// </summary>
+    public static readonly int[] NumberRadii = { 11, 15, 22 };
 
     /// <summary>
     /// 变换的轴点（可空）。<b>没指定时：几何类＝第一个点，文字＝字块自己的中心</b>（见 <see cref="Origin"/>）。
@@ -372,10 +376,17 @@ public sealed record Annotation(
     /// 文字的「粗细」实际是<b>字号</b>（真机反馈：输入时的文字大小要为编辑后的文字大小——
     /// 给用户一个看得见、选得到的字号档，输入框与烤出去的字都按这一档走，所见即所得才有抓手）。
     /// </para>
+    /// <para>
+    /// 序号的「粗细」是<b>圆点半径</b>（<see cref="NumberRadii"/>）。从前这里 fallthrough 到 2/4/8，
+    /// 而绘制端的半径是一个常量，<b>这一档从来没被任何人读过</b>——条上点了粗档，序号一个像素都没变。
+    /// </para>
     /// </summary>
     public static int ThicknessFor(AnnotationTool tool, int stepIndex)
     {
-        var step = ThicknessSteps[Math.Clamp(stepIndex, 0, ThicknessSteps.Length - 1)];
+        var index = Math.Clamp(stepIndex, 0, ThicknessSteps.Length - 1);
+        // 序号点的直径就是它的"粗细"，不能拿线宽那一档去量
+        if (tool == AnnotationTool.Number) return NumberRadii[index];
+        var step = ThicknessSteps[index];
         return tool switch
         {
             AnnotationTool.Highlighter => step * 4,
@@ -384,6 +395,19 @@ public sealed record Annotation(
             _ => step,
         };
     }
+
+    /// <summary>
+    /// 那一档在某个工具上<b>量的到底是什么</b>——条上把数字报给用户时得带上单位，
+    /// 否则"序号 ≈ 22 像素"会被读成直径（它是半径），而马赛克那一档量的是格子边长。
+    /// </summary>
+    public static string ThicknessUnit(AnnotationTool tool) => tool switch
+    {
+        AnnotationTool.Number => "圆点半径",
+        AnnotationTool.Text => "字号",
+        AnnotationTool.Mosaic => "格子边长",
+        AnnotationTool.Highlighter => "笔刷直径",
+        _ => "线宽",
+    };
 
     /// <summary>切到某个工具时给用户的默认粗细（＝中间那一档）。</summary>
     public static int DefaultThickness(AnnotationTool tool) => ThicknessFor(tool, 1);
@@ -449,9 +473,11 @@ public sealed record Annotation(
             return $"{ToolName(Tool)}至少需要 {MinPoints(Tool)} 个点";
         if (Tool == AnnotationTool.Text && string.IsNullOrEmpty(Text))
             return "文字是空的，没有可写上去的内容";
-        if (Tool != AnnotationTool.Text && Tool != AnnotationTool.Number
+        // 文字不看 Thickness（字号是它自己的那条），序号看的正是 Thickness（＝圆点半径，批次 WR），
+        // 所以只有文字这一项豁免范围检查
+        if (Tool != AnnotationTool.Text
             && (Thickness < MinThickness || Thickness > MaxThickness))
-            return $"粗细 {Thickness} 不在 {MinThickness}–{MaxThickness} 之间";
+            return $"{ToolName(Tool)}的{ThicknessUnit(Tool)} {Thickness} 不在 {MinThickness}–{MaxThickness} 之间";
         if (FontHeight is < 6 or > 200)
             return $"文字高度 {FontHeight} 太离谱（只接受 6–200 物理像素）";
         if (Scale is < MinScale or > MaxScale)
@@ -545,10 +571,10 @@ public sealed record Annotation(
         }
         if (Tool == AnnotationTool.Number)
         {
-            // 点＝圆心，半径随整体缩放（旋转绕圆心，外接框不变）
-            var radius = (int)Math.Round(NumberRadius * Math.Clamp(Scale, MinScale, MaxScale), MidpointRounding.AwayFromZero);
+            // 点＝圆心，半径＝条上那一档"粗细"（<see cref="NumberRadii"/>），再随整体缩放（旋转绕圆心，外接框不变）
+            var radius = (int)Math.Round(Thickness * Math.Clamp(Scale, MinScale, MaxScale), MidpointRounding.AwayFromZero);
             var c = points[0];
-            return new IntRect(c.X - radius, c.Y - radius, radius * 2, radius * 2);
+            return new IntRect(c.X - radius, c.Y - radius, Math.Max(1, radius * 2), Math.Max(1, radius * 2));
         }
 
         var pad = Tool == AnnotationTool.Mosaic ? Thickness / 2 + MosaicBlockSize : Thickness;

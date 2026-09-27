@@ -740,4 +740,18 @@ public sealed class CaptureOverlayGateTests
         Assert.Contains("ActionBar.VerticalAlignment = VerticalAlignment.Stretch;",
             SourceGate.MethodBody(cs, "private void AttachBarWindow()"));
     }
+
+    /// <summary>
+    /// 序号那颗点必须<b>向模型要它的大小</b>（批次 WR）。
+    /// <para>真机反馈："序号功能更改粗细无效果"。这里两处各错一次，合起来正好是"那一档没人读"：
+    /// 构造时 thickness 写死 2（全链唯一没走档位表的一颗），而模型里序号的半径是一个常量、从不看 thickness。
+    /// 编译得过、测试也不红，只有眼睛看得出来——所以钉"调用了档位表"＋反向钉死那颗写死的 2。</para>
+    /// </summary>
+    [Fact]
+    public void TheNumberDotAsksTheModelForItsWeight()
+    {
+        var place = SourceGate.MethodBody(ReadOverlay(false), "private void PlaceNumber");
+        Assert.Contains("Annotation.ThicknessFor(AnnotationTool.Number, _weightIndex)", place);
+        Assert.DoesNotContain("ColourBgra, 2)", place);
+    }
 }

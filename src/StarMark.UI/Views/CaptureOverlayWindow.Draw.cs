@@ -421,7 +421,12 @@ public sealed partial class CaptureOverlayWindow
         var next = 1;
         foreach (var existing in _history.Marks)
             if (existing.Tool == AnnotationTool.Number) next = Math.Max(next, existing.Number + 1);
-        var mark = new Annotation(AnnotationTool.Number, new[] { local }, ColourBgra, 2)
+        // 半径按条上"粗细"那一档走（序号的粗细＝点多大）。这里从前写死 2，而绘制端的半径是一个常量，
+        // 于是那一档从来没被任何人读过——点了粗档，序号一个像素都不变（真机反馈，批次 WR）。
+        // 不写 ThicknessForTool：它读 _strokeTool，而序号这一档的量纲与线宽那一档<b>不是同一个数</b>
+        // （半径 vs 线宽），哪天有人从别处调用这颗（键盘落点、重放标注），错用别家的档位表会画出一颗 2 像素的点。
+        var mark = new Annotation(AnnotationTool.Number, new[] { local }, ColourBgra,
+            Annotation.ThicknessFor(AnnotationTool.Number, _weightIndex))
         {
             Number = next,
         };

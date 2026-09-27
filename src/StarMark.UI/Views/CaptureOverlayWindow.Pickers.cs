@@ -86,7 +86,7 @@ public sealed partial class CaptureOverlayWindow
         {
             var wanted = index;
             var dot = IconButton(DotIcon(SolidWhite, selected: index == _weightIndex, diameter: 3 + index * 3),
-                $"{Annotation.ThicknessNames[index]}（{WeightToolName} 上约 {Annotation.ThicknessFor(_tool ?? AnnotationTool.Pen, index)} 像素）");
+                $"{Annotation.ThicknessNames[index]}（{WeightToolName} 的{Annotation.ThicknessUnit(_tool ?? AnnotationTool.Pen)}约 {Annotation.ThicknessFor(_tool ?? AnnotationTool.Pen, index)} 像素）");
             dot.Click += (_, _) =>
             {
                 _weightIndex = wanted;

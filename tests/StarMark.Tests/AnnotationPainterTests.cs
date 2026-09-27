@@ -235,6 +235,52 @@ public sealed class AnnotationPainterTests
         Assert.Equal((200, 200, 200, 255), At(gray, 33, 16, 2));        // 笔刷半径之外不受影响
     }
 
+    // ────────── 序号：那一档"粗细"必须落在像素上（批次 WR） ──────────
+
+    private static int PaintedPixels(Annotation mark, int side)
+    {
+        var pixels = AnnotationPainter.Render(Canvas(side, side), side, side, new[] { mark });
+        var painted = 0;
+        for (var y = 0; y < side; y++)
+            for (var x = 0; x < side; x++)
+                if (!IsBackground(At(pixels, side, x, y))) painted++;
+        return painted;
+    }
+
+    /// <summary>
+    /// 三档必须画出<b>三种大小</b>。写死半径的那一版三档像素数完全相等——
+    /// 那就是用户报的"序号功能更改粗细无效果"，而它在源码里长得和"正常"一模一样，只有数像素才分得开。
+    /// </summary>
+    [Fact]
+    public void AHeavierNumberPaintsABiggerDot()
+    {
+        var counts = Annotation.NumberRadii
+            .Select(radius => PaintedPixels(new Annotation(AnnotationTool.Number,
+                new[] { new PixelPoint(30, 30) }, Red, radius) { Number = 7 }, 61))
+            .ToList();
+
+        Assert.True(counts[0] < counts[1] && counts[1] < counts[2],
+            $"细／中／粗 = {counts[0]}／{counts[1]}／{counts[2]} 像素，必须一档比一档大");
+        // 中档钉在这条链一直以来的那颗点：半径 15 的实心盘 ≈ π·15² ≈ 707（编号那几笔白像素也算进来）
+        Assert.InRange(counts[1], 700, 800);
+    }
+
+    /// <summary>序号圆点是<b>实心</b>底色盘＋白字，圆外一格不许动（脏矩形与"擦干净"都靠这个前提）。</summary>
+    [Fact]
+    public void TheNumberDotIsSolidInsideAndUntouchedOutside()
+    {
+        var pixels = AnnotationPainter.Render(Canvas(61, 61), 61, 61, new[]
+        {
+            new Annotation(AnnotationTool.Number, new[] { new PixelPoint(30, 30) }, Red, 22) { Number = 1 },
+        });
+
+        Assert.True(IsRed(At(pixels, 61, 11, 30)), "圆内偏左（编号之外）必须是实心底色");
+        Assert.True(IsRed(At(pixels, 61, 45, 45)), "对角 15+15≈21.2 还在半径内");
+        Assert.True(IsBackground(At(pixels, 61, 46, 46)), "对角 16+16≈22.6 已在半径外：一像素都不许多涂");
+        Assert.True(IsRed(At(pixels, 61, 52, 30)), "x=圆心+22 是扫描线的最后一格（含端点），该画到");
+        Assert.True(IsBackground(At(pixels, 61, 53, 30)), "再外一像素就不许动了");
+    }
+
     // ────────── 马赛克 ──────────
 
     [Fact]
