@@ -173,6 +173,39 @@ public static class ClipAssets
     }
 
     /// <summary>
+    /// 占用那句话（设置页打开时算一次，§3-Q1 第三层）。
+    /// <para>主图与缩略图<b>分开报</b>：合成一个总数，用户删了图却看见数字几乎没动，
+    /// 就会以为这个功能在骗人——而真相是缩略图还在。临时件单列（它只可能来自一次没写完的采集）。</para>
+    /// </summary>
+    public static string DescribeUsage(Footprint footprint, long tempBytes)
+    {
+        if (footprint.TotalFiles == 0 && tempBytes == 0)
+            return "图片目录还是空的。";
+        var sb = new System.Text.StringBuilder();
+        sb.Append(footprint.MainCount > 0
+            ? $"图片 {footprint.MainCount} 张 · 共 {DescribeBytes(footprint.MainBytes)}"
+            : "还没有图片");
+        if (footprint.ThumbCount > 0)
+            sb.Append($"；缩略图 {footprint.ThumbCount} 张 · {DescribeBytes(footprint.ThumbBytes)}");
+        if (tempBytes > 0)
+            sb.Append($"；另有 {DescribeBytes(tempBytes)} 未写完的临时件（不影响历史，可清理）");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 按当前的平均单张体积，估一下"上限调到 <paramref name="cap"/> 张大概占多少"。
+    /// <para>§3-Q1 要的是"让用户自己配"这件事<b>有数字可依</b>：只给一个条数框，用户不知道该填多少，
+    /// 结果就是要么不敢调、要么一口气调到 2000 然后发现磁盘满了。没样本时如实说估不了，不编一个数。</para>
+    /// </summary>
+    public static string DescribeProjection(Footprint footprint, int cap)
+    {
+        if (footprint.MainCount == 0) return $"当前一张都还没有，调到 {cap} 张的实际占用还估不出来。";
+        var avg = footprint.MainBytes / (double)footprint.MainCount;
+        return $"按现有平均单张 {DescribeBytes((long)avg)} 估算，上限 {cap} 张约 {DescribeBytes((long)(avg * cap))}"
+             + $"（缩略图另计，约为其 {ThumbnailMaxEdge}px 的 JPEG）。";
+    }
+
+    /// <summary>
     /// 人类可读体积（设置页与条目副标题共用一份，免得两处对"1.2 MB"的取整不一样）。
     /// <b>固定用不变文化</b>：小数点写成分号或逗号的地方，测试与用户看到的都不是同一个数。
     /// </summary>

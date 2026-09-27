@@ -52,6 +52,24 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         /// </summary>
         public bool? ClipboardHistoryEnabled { get; set; }
         /// <summary>
+        /// 剪贴板<b>图片</b>采集分开关。<b>默认关</b>（决议 §4）：图片做不了文本那种敏感扫描（私钥/卡号/JWT
+        /// 都在像素里），所以"开不开"必须是用户自己点的一下，不能随总开关一起默认生效。
+        /// 关着时连剪贴板图片格式都不去读——"没开"与"没装这个功能"在磁盘上完全一样。
+        /// </summary>
+        public bool? ClipboardImageEnabled { get; set; }
+        /// <summary>图片条数上限（决议 §4：默认 200，夹 10–2000）。null＝从没调过＝用默认。
+        /// 与文本分开一格：一张 4K 截图的 PNG 常有几百 KB，与一段文字共用一个上限等于让文字把图挤掉。</summary>
+        public int? ClipboardImageMaxEntries { get; set; }
+        /// <summary>文本条数上限（决议 §4：默认 500，夹 10–10000）。<b>默认值就是改之前的行为</b>，
+        /// 这一格只是把原来写死的常量变成用户看得见、可调的东西。</summary>
+        public int? ClipboardTextMaxEntries { get; set; }
+        /// <summary>
+        /// 备份是否携带剪贴板图片本体。<b>这一格是 a 期预埋，b 期没有任何副作用</b>（当前备份格式不含附件），
+        /// 所以<b>刻意不在设置页出现控件</b>：一个点了什么都不改变的开关比没有开关更糟。
+        /// 默认 true 与决议 §4 一致，等 a 期接入导出/恢复时直接读它，用户当时的选择不会跨版本变味。
+        /// </summary>
+        public bool? BackupClipboardImagesEnabled { get; set; }
+        /// <summary>
         /// GitHub 热榜浏览面总开关（<b>默认关</b>）。关时不发任何请求，且导航栏连「热榜」项都不显示——
         /// 这是用户主动开启的可选浏览面，留一个点进去只会说"未开启"的项更像故障
         /// （与剪贴板"入口常驻"刻意相反，两边的理由都写在蓝图 §5）。
@@ -655,6 +673,52 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         d.ClipboardHistoryEnabled = enabled;
         Save(d);
     }
+
+    // ────────── 剪贴板图片（批次 ClipIMG-P1-1d）──────────
+    //
+    // 这一组的读侧一律过一遍 ClipboardPolicy 的夹取口径：这个 JSON 文件用户可以手改，
+    // 而"上限"被改成 0 或负数在语义上不是"关掉"，是"每记一条就删一条"——那种坏值必须在门口挡掉。
+    // 写侧同样夹一次（存进去的就是能用的值，别让坏值在文件里过冬）。
+
+    /// <summary>图片采集分开关（<b>默认关</b>，决议 §4）。</summary>
+    public bool LoadClipboardImageEnabled() => Load() is { } d && d.ClipboardImageEnabled == true;
+
+    public void SaveClipboardImageEnabled(bool enabled)
+    {
+        var d = Load() ?? new SettingsData();
+        d.ClipboardImageEnabled = enabled;
+        Save(d);
+    }
+
+    /// <summary>图片条数上限（缺省/坏值 → 默认 200，并夹进 10–2000）。</summary>
+    public int LoadClipboardImageMaxEntries()
+        => StarMark.Abstractions.Clipboard.ClipboardPolicy.ClampImageMaxEntries(
+            Load()?.ClipboardImageMaxEntries ?? StarMark.Abstractions.Clipboard.ClipboardPolicy.DefaultImageMaxEntries);
+
+    /// <summary>文本条数上限（缺省/坏值 → 默认 500，并夹进 10–10000；500 就是改之前写死的那个常量）。</summary>
+    public int LoadClipboardTextMaxEntries()
+        => StarMark.Abstractions.Clipboard.ClipboardPolicy.ClampTextMaxEntries(
+            Load()?.ClipboardTextMaxEntries ?? StarMark.Abstractions.Clipboard.ClipboardPolicy.MaxEntries);
+
+    /// <summary>
+    /// 两个上限<b>一次整档写入</b>（P-43 A 的口径：一次读档 + 最多一次落盘）。
+    /// <para>为什么不给两个各写一格的方法：那两格数字在界面上是 <c>NumberBox</c>，每敲一位都会变更；
+    /// 分开写就是"敲四次数字、八次整档读写"。而它们本来就是同一个决定的两半，
+    /// 一起落盘也就不会出现"图片已改、文本还留着旧值"的中间态设置。</para>
+    /// </summary>
+    public void SaveClipboardMaxEntries(int imageEntries, int textEntries)
+    {
+        var d = Load() ?? new SettingsData();
+        d.ClipboardImageMaxEntries = StarMark.Abstractions.Clipboard.ClipboardPolicy.ClampImageMaxEntries(imageEntries);
+        d.ClipboardTextMaxEntries = StarMark.Abstractions.Clipboard.ClipboardPolicy.ClampTextMaxEntries(textEntries);
+        Save(d);
+    }
+
+    /// <summary>
+    /// 备份是否携带图片本体。<b>b 期只存不读</b>（导出格式里没有附件这一维），
+    /// 设置页也没有对应控件——所以改它不会影响任何东西，那是 a 期的接线点（决议 §3-Q2 先 b 后 a）。
+    /// </summary>
+    public bool LoadBackupClipboardImagesEnabled() => Load()?.BackupClipboardImagesEnabled ?? true;
 
     // ────────── 护眼 / 休息提醒（批次 WA）──────────
 

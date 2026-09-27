@@ -511,4 +511,52 @@ public sealed class ClipboardImagePayloadTests
         // §4：单张 20MB「不可调」——它挡的是异常帧灌入，与偏好无关；有测钉着，免得下次"顺手"挪进设置页。
         Assert.Equal(20 * 1024 * 1024, ClipboardPolicy.MaxImageBytes);
     }
+
+    // ────────── 设置页那两句话（占用 / 预估）：判据住 Core，XAML 只显示 ──────────
+
+    [Fact]
+    public void UsageSentenceSplitsMainFromThumb()
+    {
+        // 主图与缩略图分开报是这个功能对"存储可见"的一部分兑现：合起来报一个总数，
+        // 用户删完图看见数字几乎没动，结论就是"删了也没用"——那比不报更糟。
+        // 字节数刻意挑能整除的：这条测的是"分不分开报"，不是四舍五入。
+        var fp = ClipAssets.Summarize(new[]
+        {
+            ("2026-09-28_0915_aaaa1111.png", 700_000L), ("2026-09-28_0915_aaaa1111_thumb.jpg", 51_200L),
+            ("2026-09-28_0916_bbbb2222.png", 348_576L), ("2026-09-28_0916_bbbb2222_thumb.jpg", 10_240L),
+        }, out var temp);
+
+        var s = ClipAssets.DescribeUsage(fp, temp);
+        Assert.Contains("图片 2 张", s);
+        Assert.Contains("共 1 MB", s);                   // 700000 + 348576 = 1 MiB
+        Assert.Contains("缩略图 2 张", s);
+        Assert.Contains("60 KB", s);                     // 51200 + 10240 = 60 KiB
+        Assert.DoesNotContain("临时件", s);             // 没有临时件就别提，别叫用户去找不存在的东西
+    }
+
+    [Fact]
+    public void EmptyFolderSaysSo_AndTempFilesGetNamedWithAnExit()
+    {
+        Assert.Equal("图片目录还是空的。", ClipAssets.DescribeUsage(
+            ClipAssets.Summarize(Array.Empty<(string, long)>(), out var none), none));
+
+        var fp = ClipAssets.Summarize(new[] { ("2026-09-28_0915_cccc3333.png.tmp", 4096L) }, out var temp);
+        Assert.Equal(4096, temp);
+        Assert.Equal(0, fp.TotalFiles);                // 临时件既不计入主图也不计入缩略图
+        var s = ClipAssets.DescribeUsage(fp, temp);
+        Assert.Contains("未写完的临时件", s);
+        Assert.Contains("可清理", s);                   // 报坏消息的那句要同时给出口（P-54 同口径）
+    }
+
+    [Theory]
+    [InlineData(0L, 200, "估不出来")]                            // 一张都没有：不许编一个平均体积出来
+    [InlineData(1_048_576L, 200, "200 MB")]                       // 平均 1 MB × 200 张（默认上限）
+    [InlineData(2_097_152L, 2000, "3.91 GB")]                     // 平均 2 MB 拉到最高上限：句子要自己跳到 GB 档
+    public void ProjectionUsesTheSameSizeVocabularyAsTheOccupancyLine(long mainBytes, int cap, string fragment)
+    {
+        var fp = new ClipAssets.Footprint(mainBytes, mainBytes / 40, mainBytes > 0 ? 1 : 0, mainBytes > 0 ? 1 : 0);
+        var s = ClipAssets.DescribeProjection(fp, cap);
+        Assert.Contains(fragment, s, StringComparison.Ordinal);
+        Assert.Contains(cap.ToString(System.Globalization.CultureInfo.InvariantCulture), s);
+    }
 }

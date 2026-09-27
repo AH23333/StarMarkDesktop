@@ -632,6 +632,35 @@ public partial class App : Application
             StarLog.Error("切换剪贴板采集失败", ex);
             return false;
         }
+        finally
+        {
+            // 放在 finally：总开关有没有起来，图片开关与两个上限都得跟着设置走——
+            // 否则会出现"开关是照设置开的，上限还是上次会话的"这种看不见的错配。
+            RefreshClipboardLimits();
+        }
+    }
+
+    /// <summary>
+    /// 把设置里的三项（图片采集分开关、图片/文本各自条数上限）推给采集器。
+    /// <para>采集器上那几个字段是易失的，设置文件才是唯一真源：<b>启动推一次、每次改动再推一次</b>，
+    /// 于是"改了设置要重启才生效"这件事在这条链上根本不存在（也不该让用户去重启）。</para>
+    /// <para>上限的具体数值不在这里夹——<c>ClipboardWatcher</c> 的写入口自己夹
+    /// （<c>ClipboardPolicy.Clamp*</c>），设置页的读出口也夹；这里只是搬运。</para>
+    /// </summary>
+    public static void RefreshClipboardLimits()
+    {
+        try
+        {
+            var watcher = Services.GetRequiredService<StarMark.Integrations.Clipboard.ClipboardWatcher>();
+            var s = new StarMark.UI.Helpers.SettingsStore();
+            watcher.ImageCapture = s.LoadClipboardImageEnabled();
+            watcher.ImageMaxEntries = s.LoadClipboardImageMaxEntries();
+            watcher.TextMaxEntries = s.LoadClipboardTextMaxEntries();
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("应用剪贴板图片/上限设置失败（沿用上一次的值）", ex);
+        }
     }
 
     /// <summary>

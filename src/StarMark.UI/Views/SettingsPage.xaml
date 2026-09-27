@@ -855,6 +855,53 @@
                                 </Grid>
                                 <TextBlock Text="{x:Bind ViewModel.ClipboardHistoryStatus, Mode=OneWay}"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+
+                                <!--
+                                    图片采集：独立开关、默认关。下面这句是决议 §3-Q3 的原话，刻意不软化——
+                                    文本能扫掉卡号/私钥/令牌，图片扫不了（要扫就得在采集路径上跑 OCR，那是 §7 明令不做的事）。
+                                    所以"开不开"必须由用户自己点，且点之前得看见这句代价。
+                                -->
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               Text="同时记录复制到的图片（屏幕截图、图片文件、以及在图上右键「复制图片」）。图片无法做敏感检查，开启即包含一切屏幕内容。"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.ClipboardImageEnabled, Mode=TwoWay}"/>
+                                </Grid>
+                                <TextBlock Text="{x:Bind ViewModel.ClipboardImageStatus, Mode=OneWay}"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="图片最多留多少条"/>
+                                        <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                                   Text="超出后按最近复制的时间淘汰，置顶的那几条不会被挤掉。一张 4K 截图的 PNG 常有几百 KB，调高会明显多占磁盘。"/>
+                                    </StackPanel>
+                                    <NumberBox Grid.Column="1" Width="128" VerticalAlignment="Center" FontSize="12"
+                                               Minimum="10" Maximum="2000" SmallChange="10" LargeChange="50"
+                                               SpinButtonPlacementMode="Compact"
+                                               Value="{x:Bind ViewModel.ClipboardImageMaxValue, Mode=TwoWay}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="文本最多留多少条"/>
+                                        <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                                   Text="默认 500 条，就是以前写死的那个数字；正文过长的只存前 32 KB。文本与图片各自一条线，互不挤占。"/>
+                                    </StackPanel>
+                                    <NumberBox Grid.Column="1" Width="128" VerticalAlignment="Center" FontSize="12"
+                                               Minimum="10" Maximum="10000" SmallChange="50" LargeChange="100"
+                                               SpinButtonPlacementMode="Compact"
+                                               Value="{x:Bind ViewModel.ClipboardTextMaxValue, Mode=TwoWay}"/>
+                                </Grid>
+
+                                <!--
+                                    占用统计只在进这一页时算一次（不在每次复制时算），并给一颗就地重算的按钮：
+                                    数字是"要不要把上限调高"这个决定的唯一依据，看不见就等于把选择权给出去又收回来。
+                                    图片目录对用户直接可见（决议 §3-Q6），所以路径也一并写出来，不藏。
+                                -->
+                                <TextBlock Text="{x:Bind ViewModel.ClipboardUsage, Mode=OneWay}"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
+                                <Button Content="重新统计占用" Command="{x:Bind ViewModel.RefreshClipboardUsageCommand}"
+                                        Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
                             </StackPanel>
                         </Border>
                     </controls:ColumnFlowPanel>

@@ -68,6 +68,8 @@ public sealed class SettingsTaxonomyGateTests
             "LocalDiskSearchEnabled", "EyeRestEnabled", "EyeRestEnforced", "EyeRestDeferOnFullscreen",
             "TrendingEnabled", "ClipboardHistoryEnabled", "EnableTray", "MinimizeToTray", "GithubToken",
             "CanvasEnabled", "CanvasInScreenshots",
+            // ClipIMG-1d 新增的三格可写设置：注册进这份清单，否则"只有一个编辑入口"这条对它们根本不生效。
+            "ClipboardImageEnabled", "ClipboardImageMaxValue", "ClipboardTextMaxValue",
         };
 
         foreach (var p in writable)
@@ -109,6 +111,13 @@ public sealed class SettingsTaxonomyGateTests
         Assert.Contains("ViewModel.EyeRestEnabled", health);
 
         var data = Between(xaml, "<TabViewItem Header=\"数据\">", "</TabViewItem>");
+        // ClipIMG-1d：图片开关、两个上限、那句隐私警示，全部与"剪贴板历史"总开关同卡同页。
+        // 分开摆会造出"两个开关各在一页"的第三种状态——用户得先猜哪个管哪个。
+        Assert.Contains("ViewModel.ClipboardImageEnabled, Mode=TwoWay", data);
+        Assert.Contains("ViewModel.ClipboardImageMaxValue, Mode=TwoWay", data);
+        Assert.Contains("ViewModel.ClipboardTextMaxValue, Mode=TwoWay", data);
+        Assert.Contains("图片无法做敏感检查", data);
+        Assert.DoesNotContain("ViewModel.ClipboardImageEnabled", Between(xaml, "<TabViewItem Header=\"拓展功能\">", "</TabViewItem>"));
         // 「数据」页仍会在提权说明里提到本地磁盘搜索（那是一句原因，不是第二处开关），
         // 所以钉的是"这张卡不在这页"，而不是这个词不在这页。
         Assert.DoesNotContain("<TextBlock Text=\"本地磁盘搜索\" Style=\"{StaticResource SettingTitle}\"", data);

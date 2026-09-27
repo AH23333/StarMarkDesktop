@@ -217,6 +217,18 @@ public partial class SettingsPageViewModel : ObservableObject
                 ? "正在记录本机复制的内容（密码管理器与私钥 / 令牌 / 卡号形态除外）。"
                 : "开关是开着的，但本会话的剪贴板监听没建立起来，暂时不会记录新内容——关掉再打开本开关可重试。";
 
+        // 图片那三项同样"只回灌、不因为显示而写盘"；但占用统计要真算一次：
+        // §3-Q1 的第三层就是"让用户在填上限之前先看见现在占了多少"。
+        _suppressClipboardImageApply = true;
+        ClipboardImageEnabled = Safe(_settings.LoadClipboardImageEnabled, false, "剪贴板图片采集");
+        ClipboardImageMaxValue = Safe(_settings.LoadClipboardImageMaxEntries,
+            StarMark.Abstractions.Clipboard.ClipboardPolicy.DefaultImageMaxEntries, "图片条数上限");
+        ClipboardTextMaxValue = Safe(_settings.LoadClipboardTextMaxEntries,
+            StarMark.Abstractions.Clipboard.ClipboardPolicy.MaxEntries, "文本条数上限");
+        _suppressClipboardImageApply = false;
+        ClipboardImageStatus = ClipboardImageStatusText(App.IsClipboardCollecting, ClipboardImageEnabled);
+        ComputeClipboardUsage();
+
         // 护眼 / 休息提醒：进页面只回灌四项当前值，<b>不因为"显示"而去起停定时器</b>
         // （否则每次打开设置页都等于把节拍表重建一遍，"下一次几点"会被悄悄推后）。
         _suppressEyeRestApply = true;
@@ -382,6 +394,135 @@ public partial class SettingsPageViewModel : ObservableObject
                   + "想临时停一下，去「剪贴板」页点「暂停记录」。"
                 : "开关已打开，但系统剪贴板监听窗口没建起来（原因见日志）——当前仍不会记录任何内容。"
             : "已停止记录。之前存下的历史仍在「剪贴板」页，可在那里一键清空。";
+        ClipboardImageStatus = ClipboardImageStatusText(collecting, ClipboardImageEnabled);
+    }
+
+    // ===== 剪贴板图片（批次 ClipIMG-P1-1d）=====
+
+    /// <summary>
+    /// 图片采集分开关，<b>默认关</b>（决议 §4）。它与总开关是两件事：
+    /// 总开关管"读不读剪贴板"，这一颗管"要不要把屏幕上的像素写成 PNG 留在机器上"。
+    /// </summary>
+    [ObservableProperty] private bool _clipboardImageEnabled;
+
+    /// <summary>图片条数上限（NumberBox 的 Value 是 double，落盘时才取整并夹住）。</summary>
+    [ObservableProperty] private double _clipboardImageMaxValue;
+
+    /// <summary>文本条数上限（默认 500＝改之前的写死值，这一格只是把它变成看得见的东西）。</summary>
+    [ObservableProperty] private double _clipboardTextMaxValue;
+
+    [ObservableProperty] private string _clipboardImageStatus = string.Empty;
+
+    /// <summary>当前图片目录的实际占用 + 按上限的预估（决议 §3-Q1 第三层：让用户"按需配置"有数字可依）。</summary>
+    [ObservableProperty] private string _clipboardUsage = string.Empty;
+
+    /// <summary>回灌初值期间不许落盘/推参数，否则每次进设置页都把默认值写回用户设置里。</summary>
+    private bool _suppressClipboardImageApply;
+
+    /// <summary>
+    /// 图片那一段的状态行。<b>总开关与分开关的四种组合各有不同事实要说</b>，
+    /// 尤其"分开关开着但总开关关着"这一格——用户会以为图片正在被记录，而其实一条都没存。
+    /// </summary>
+    private static string ClipboardImageStatusText(bool collecting, bool imageOn) => !imageOn
+        ? "图片采集未开启：只记录文本与文件列表。"
+        : !collecting
+            ? "图片采集已打开，但剪贴板历史总开关没开（或监听没建立）——现在一条图片都不会记录。"
+            : "已开启：复制到的图片会存成 PNG，并预生成 160px 缩略图。"
+              + "单张超过 20 MB 或短边小于 16px 的不收；密码管理器在前台时一律不收。";
+
+    partial void OnClipboardImageEnabledChanged(bool value)
+    {
+        if (_suppressClipboardImageApply) return;
+        _settings.SaveClipboardImageEnabled(value);
+        App.RefreshClipboardLimits();
+        ClipboardImageStatus = ClipboardImageStatusText(App.IsClipboardCollecting, value);
+    }
+
+    partial void OnClipboardImageMaxValueChanged(double value)
+    {
+        if (_suppressClipboardImageApply) return;
+        QueueClipboardLimitsSave();
+    }
+
+    partial void OnClipboardTextMaxValueChanged(double value)
+    {
+        if (_suppressClipboardImageApply) return;
+        QueueClipboardLimitsSave();
+    }
+
+    /// <summary>两个数字框的合并窗口。400ms 是"手停下"的量级，不是"等一轮刷新"的量级。</summary>
+    private const int ClipboardLimitsMergeMs = 400;
+
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _clipLimitsTimer;
+
+    /// <summary>
+    /// 上限改动<b>延后一小段再落盘并推给采集器</b>。
+    /// <para><c>NumberBox</c> 每敲一位数字都会变更：立刻生效的话，"想把 200 改成 2000"这件事的中间态
+    /// 是 2 → 20 → 200 → 2000，而第一下就会被夹到 10 并推给采集器——下一次复制就会按 10 条轮转，
+    /// 用户为了<b>调高</b>上限反而丢了一批历史。合并窗口同时也把"敲四次数字写四次整档"收成一次。</para>
+    /// <para>主窗没有队列时（设置页刚关、进程在收尾）直接落，<b>不许把改动吞在等不到的定时器里</b>。</para>
+    /// </summary>
+    private void QueueClipboardLimitsSave()
+    {
+        var queue = App.MainWindow?.DispatcherQueue;
+        if (queue is null)
+        {
+            ApplyClipboardLimitsSave();
+            return;
+        }
+
+        if (_clipLimitsTimer is null)
+        {
+            _clipLimitsTimer = queue.CreateTimer();
+            _clipLimitsTimer.Interval = TimeSpan.FromMilliseconds(ClipboardLimitsMergeMs);
+            _clipLimitsTimer.IsRepeating = false;
+            _clipLimitsTimer.Tick += (_, _) =>
+            {
+                _clipLimitsTimer!.Stop();
+                ApplyClipboardLimitsSave();
+            };
+        }
+        _clipLimitsTimer.Stop();
+        _clipLimitsTimer.Start();
+    }
+
+    private void ApplyClipboardLimitsSave()
+    {
+        _settings.SaveClipboardMaxEntries((int)ClipboardImageMaxValue, (int)ClipboardTextMaxValue);
+        App.RefreshClipboardLimits();
+        ClipboardImageStatus = ClipboardImageStatusText(App.IsClipboardCollecting, ClipboardImageEnabled);
+    }
+
+    /// <summary>「重新统计」按钮：改动上限或清过历史之后，数字要能就地更新，而不是让人重开设置页。</summary>
+    [RelayCommand]
+    private void RefreshClipboardUsage() => ComputeClipboardUsage();
+
+    /// <summary>
+    /// 算一次目录占用。<b>放在池线程</b>：几百张图时的 stat 落到 UI 线程上，
+    /// 症状就是"一打开设置页卡半秒"，而这一页本来已经有好几处要读盘。
+    /// </summary>
+    private void ComputeClipboardUsage()
+    {
+        ClipboardUsage = "正在统计图片目录…";
+        _ = Task.Run(async () =>
+        {
+            string text;
+            try
+            {
+                var files = await Task.Run(StarMark.Integrations.Clipboard.ClipboardImageStore.ListFiles);
+                var footprint = StarMark.Abstractions.Clipboard.ClipAssets.Summarize(files, out var tempBytes);
+                text = StarMark.Abstractions.Clipboard.ClipAssets.DescribeUsage(footprint, tempBytes)
+                     + " " + StarMark.Abstractions.Clipboard.ClipAssets
+                         .DescribeProjection(footprint, _settings.LoadClipboardImageMaxEntries())
+                     + " 文件就放在：" + StarMark.Abstractions.Clipboard.ClipAssets.Folder;
+            }
+            catch (Exception ex)
+            {
+                StarLog.Error("统计剪贴板图片占用失败", ex);
+                text = $"没能算出图片占用（{ex.Message}）——数字缺失比编一个数好。";
+            }
+            App.MainWindow?.DispatcherQueue?.TryEnqueue(() => ClipboardUsage = text);
+        });
     }
 
     // ===== 护眼 / 休息提醒（批次 WA）=====

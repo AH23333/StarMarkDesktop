@@ -27,7 +27,10 @@ namespace StarMark.Integrations.Clipboard;
 /// <remarks>刻意不加 <c>[SupportedOSPlatform("windows")]</c>：那等于宣告"所有 Windows 版本都能用"，
 /// 而 WinRT 成像只从 10240 起（CA1416 会为此刷一片警告）。工程级 <c>SupportedOSPlatformVersion</c>
 /// 已经把下界钉在 19041，与 <c>GdiScreenCapture</c> 同一做法。</remarks>
-internal static class ClipboardImageStore
+/// <remarks><b>类是 public 的</b>：设置页要读 <see cref="ListFiles"/> 算占用。
+/// "目录里到底有多少字节"这件事只有这一份枚举口径，给 UI 另开一份 <c>Directory.EnumerateFiles</c>
+/// 就会分出两种"占用"数字。</remarks>
+public static class ClipboardImageStore
 {
     /// <summary>
     /// 图片目录。<b>只是 <see cref="ClipAssets.Folder"/> 的别名</b>——目录、改道、名字校验都住在 Abstractions，
