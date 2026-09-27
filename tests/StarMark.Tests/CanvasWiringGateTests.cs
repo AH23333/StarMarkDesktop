@@ -592,6 +592,13 @@ public sealed class CanvasWiringGateTests
         Assert.DoesNotContain("SetClickThrough(", select);
         Assert.DoesNotContain("tool != CanvasTool.Highlighter", select);
         Assert.DoesNotContain("tool == CanvasTool.Highlighter", select);
+        // 批次 S2：态不变的那一类切换（画笔↔橡皮，两支都在绘制态）里 Raise 走到 to == from 就短路，
+        // 一次广播都不发 ⇒ 条上高亮与光标停在上一支笔；用户多点的那一下又落进"再点当前工具＝取消选择"，
+        // 于是长成真机报的"切换时穿透状态乱变、而且切不过去"。所以 SelectTool 必须自己重放一次当前态。
+        Assert.Contains("ApplyStage(AnnotationHub.Stage);", select);
+        Assert.True(select.IndexOf("Raise(AnnotationSessions.ToolSelectEvent", StringComparison.Ordinal)
+                    < select.IndexOf("ApplyStage(AnnotationHub.Stage);", StringComparison.Ordinal),
+            "重放要排在迁移之后：抢在前面就是把旧态的样子又画了一遍");
         var toggle = SourceGate.MethodBody(service, "public static void ToggleTool(CanvasTool tool)");
         Assert.Contains("AnnotationHub.Raise(SessionEvent.GivePointerBack)", toggle);
         Assert.Contains("else SelectTool(tool);", toggle);

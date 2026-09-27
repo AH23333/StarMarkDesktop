@@ -335,6 +335,12 @@ public static class CanvasService
         _tool = tool;
         // 方向（这支笔要不要穿透）由 Core 的一处判据翻成事件，接线层不现写布尔（批次 WF-1）
         AnnotationHub.Raise(AnnotationSessions.ToolSelectEvent(tool));
+        // 态没变也要把"这一态该是什么样"重放一遍。画笔↔橡皮两支都在绘制态，Raise 走到
+        // <c>to == from</c> 就短路了，一次广播都不发 ⇒ 条上高亮与光标停在上一支笔（真机："点了橡皮
+        // 看到的还是画笔"），用户于是再点一次——那一下正好落进"再点当前工具＝取消选择"那一臂，
+        // 把穿透态翻掉，看起来就成了"切换时穿透状态乱变、而且切不过去"。
+        // 这里重放的是原语（可见性／穿透位／光标／条子可见／广播），全程不再进 Hub，不会再触发迁移。
+        ApplyStage(AnnotationHub.Stage);
     }
 
     /// <summary>再点当前选中的笔＝收笔回穿透态（与截图/贴图那条"再点取消选择"同一交互语言）。</summary>
