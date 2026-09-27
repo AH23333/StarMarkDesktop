@@ -7,6 +7,7 @@ using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
 using StarMark.Core.Capture;
 using StarMark.UI.Helpers;
+using StarMark.UI.Services;
 using Windows.Foundation;
 using Windows.UI;
 
@@ -120,13 +121,9 @@ public sealed class CaptureBarWindow : Window
         var (x, y) = CaptureGeometry.BarOrigin(image, work, width, height, _baseHeight,
             ToPixels(CaptureGeometry.BarGap), ToPixels(CaptureGeometry.BarMargin));
 
-        // 两步提层：①进 topmost 带（新窗生下来不在带里）②带内重排到最上（对已在带里的窗再传 TOPMOST
-        // 只换带不重排＝什么都没做），且必须带 NOACTIVATE/SWP_SHOWWINDOW 一并显形
-        WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOPMOST, 0, 0, 0, 0,
-            WindowInterop.SWP_NOMOVE | WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOACTIVATE);
-        WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOP, x, y, width, height,
-            WindowInterop.SWP_SHOWWINDOW | WindowInterop.SWP_NOACTIVATE);
-        WindowInterop.ShowWindow(hwnd, WindowInterop.SW_SHOWNOACTIVATE);
+        // 两步提层（进带 → 带内重排）与登记名册都在 LayerDirector 那一处做：这条条子是 Strip 角色，
+        // 画布玻璃每帧定序时要拿它当锚点。原来这里自己写两发 SetWindowPos，等于第二个层序写入点。
+        LayerDirector.ShowAt(SurfaceRole.Strip, hwnd, new IntRect(x, y, width, height));
     }
 
     /// <summary>模型给的间距与边距按 DIP 说话，这一侧整条链是物理像素。</summary>
@@ -142,6 +139,9 @@ public sealed class CaptureBarWindow : Window
     public void Shutdown()
     {
         if (_destroyed) return;
+        // 先从 Z 序名册里退掉再关窗：留着失效句柄当锚点，玻璃此后每次都定不了序（且静默不报错）。
+        try { LayerDirector.Unregister(WindowInterop.GetHwnd(this)); }
+        catch (Exception ex) { StarLog.Warn($"[贴图] 工具条退名册失败：{ex.Message}"); }
         try
         {
             // 先把条子从这扇窗的树里摘下来：窗一关，它承载的内容也就没了父元素，

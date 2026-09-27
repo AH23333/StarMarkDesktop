@@ -617,9 +617,10 @@ public sealed class CaptureOverlayGateTests
         Assert.Contains("var previous = WindowInterop.GetForegroundWindow();", bar);
         Assert.Contains("WindowInterop.SetForegroundWindow(previous)", bar);
         Assert.Contains("_content.Measure(new Size(", bar);
-        Assert.Contains("WindowInterop.HWND_TOPMOST", bar);
-        Assert.Contains("WindowInterop.HWND_TOP,", bar);                        // 进带之后还要带内重排
-        Assert.Contains("WindowInterop.SW_SHOWNOACTIVATE", bar);
+        // 批次 S1：两步提层与显形收进 LayerDirector.ShowAt 一处（条子自己再写一发 SetWindowPos＝第二个层序写入点，
+        // 名册里也就没有它这个角色——画布玻璃定序时拿不到锚点）。配方本体由 ChromeEntersTheTopmostBand 那条钉。
+        Assert.Contains("LayerDirector.ShowAt(SurfaceRole.Strip, hwnd", bar);
+        Assert.DoesNotContain("WindowInterop.SetWindowPos", bar);
         Assert.Contains("WindowInterop.SW_HIDE", bar);                           // 收起那态必须藏窗
         Assert.Contains("RequestedTheme = ElementTheme.Dark", bar);              // 图标按白色画的，跟主题走会糊
         // WinUI 3 的 Window 没有 Background：客户区就是这层根 Grid。不钉死底色会在浅色系统主题下

@@ -236,9 +236,9 @@ public sealed partial class CaptureOverlayWindow : Window
 
         // 位置与尺寸走 Win32 物理像素：AppWindow 那套按 DIP 算，多屏混合 DPI 时每屏都会算偏。
         // SWP_NOACTIVATE：先就位再 Activate，避免用户看到窗口从别处滑过来。
-        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), WindowInterop.HWND_TOPMOST,
-            _monitor.X, _monitor.Y, _monitor.Width, _monitor.Height,
-            WindowInterop.SWP_SHOWWINDOW | WindowInterop.SWP_NOACTIVATE);
+        // 登记＋置顶＋归位一次做完（LayerDirector 是全机唯一的层序写入点）：这张遮罩是 Sheet，
+        // 名册里有了它，玻璃才知道自己要退到它下面去。
+        LayerDirector.ShowAt(Role, WindowInterop.GetHwnd(this), _monitor);
 
         if (BuildMonitorBitmap() is not { } shot)
         {
@@ -282,9 +282,9 @@ public sealed partial class CaptureOverlayWindow : Window
         WindowInterop.SetWindowLong(hwnd, WindowInterop.GWL_EXSTYLE,
             new IntPtr(WindowInterop.GetWindowLong(hwnd, WindowInterop.GWL_EXSTYLE).ToInt64()
                 | WindowInterop.WS_EX_TOOLWINDOW));
-        WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOPMOST,
-            _monitor.X, _monitor.Y, _monitor.Width, _monitor.Height,
-            WindowInterop.SWP_SHOWWINDOW | WindowInterop.SWP_NOACTIVATE);
+        // 贴图是名册里的 Pin 角色：绘制态玻璃要压到它之上（能在贴图上圈注），
+        // 穿透态又得让到它之下（贴图可点）——这两臂都由 LayerDirector 按会话态翻，这里只管登记。
+        LayerDirector.ShowAt(SurfaceRole.Pin, hwnd, _monitor);
 
         // 缩放比要按"落在哪块屏"来量：多屏混合 DPI 下拿主屏的数会把选区整体算偏。
         _scale = WindowInterop.GetScale(this);
@@ -331,8 +331,16 @@ public sealed partial class CaptureOverlayWindow : Window
         WindowInterop.RemoveDefaultWindowFrame(this);
 
         // 被外部关掉（Alt+F4、任务管理器"切到"、系统注销）也要按取消回报，否则会话永远挂着。
-        Closed += (_, _) => Settle(null);
+        Closed += (_, _) =>
+        {
+            // 名册里忘掉它：留一个已销毁的句柄当锚点，玻璃每次定序都会"锚点不可用"而什么都不做。
+            LayerDirector.Unregister(WindowInterop.GetHwnd(this));
+            Settle(null);
+        };
     }
+
+    /// <summary>这扇窗在 Z 序名册里的角色：截图遮罩＝Sheet（盖住一切自家他窗），贴图＝Pin。</summary>
+    private SurfaceRole Role => _pinned ? SurfaceRole.Pin : SurfaceRole.Sheet;
 
     public string DeviceName { get; }
 

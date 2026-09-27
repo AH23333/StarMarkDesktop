@@ -95,7 +95,8 @@ public sealed class PinEditTests
             SourceGate.MethodBody(cs, "private void InitWindow"));
         var apply = SourceGate.MethodBody(cs, "private void ApplyPinWindowRect()");
         Assert.Contains("WindowInterop.GetWindowRect(this)", apply);   // 与当前真值比过再发，不每帧重发窗口
-        Assert.Contains("SWP_NOACTIVATE", apply);
+        // 批次 S1：这一发只改几何、不动层序，语义钉在 LayerDirector.Relocate（贴图拖动顺带提层＝整叠按先后洗牌）
+        Assert.Contains("LayerDirector.Relocate(", apply);
         Assert.DoesNotContain("WindowInterop.SetWindowPos(",
             SourceGate.MethodBody(cs, "private void ResizePinAnchoringTopLeft"));
         Assert.Contains("ApplyPinWindowRect();", SourceGate.MethodBody(cs, "private void BakeQuarterTurn"));
@@ -268,10 +269,11 @@ public sealed class PinEditTests
         Assert.Contains("catch (Exception ex)", collect);
         Assert.Contains("return new List<IntRect>();", collect);
         // 候选收集必须发生在窗口上屏之前：上屏之后抛异常＝一块看得见、键盘焦点也没挂上的僵尸遮罩
+        // （批次 S1：上屏那一发收进了 LayerDirector.ShowAt，这里问的就是它）
         var ctor = SourceGate.MethodBody(cs, "ScreenFrame frame,");
         Assert.True(
             ctor.IndexOf("CollectWindowCandidates();", StringComparison.Ordinal)
-            < ctor.IndexOf("SWP_SHOWWINDOW", StringComparison.Ordinal),
+            < ctor.IndexOf("LayerDirector.ShowAt(", StringComparison.Ordinal),
             "候选收集排在窗口上屏之后＝失败时留下看得见却关不掉的僵尸遮罩");
         // P/Invoke 必须用真实存在的导出名
         var interop = SourceGate.ReadRepoFile("src/StarMark.UI/Helpers/WindowInterop.cs");

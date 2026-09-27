@@ -62,13 +62,36 @@ public static class LayerDirector
     public static void ShowAt(SurfaceRole role, IntPtr hwnd, IntRect bounds)
     {
         if (hwnd == IntPtr.Zero) return;
-        Register(role, hwnd);
         WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOPMOST, 0, 0, 0, 0,
             WindowInterop.SWP_NOMOVE | WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOACTIVATE);
         WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOP,
             bounds.X, bounds.Y, bounds.Width, bounds.Height,
             WindowInterop.SWP_SHOWWINDOW | WindowInterop.SWP_NOACTIVATE);
         WindowInterop.ShowWindow(hwnd, WindowInterop.SW_SHOWNOACTIVATE);
+        Register(role, hwnd);
+        // 任何一扇自己的窗出现后都立刻按角色表归一次位：让"谁在上"这件事由名册决定，
+        // 而不是"谁最后被创建"——多一处"记得叫上定序"就多一处会被忘掉的地方（批次 WL 的同类教训）。
+        EnforceOrder(AnnotationHub.Stage);
+    }
+
+    /// <summary>
+    /// 只改几何、<b>不动层序</b>（贴图拖动与收边用的那发 <c>SWP_NOZORDER</c>）。
+    /// <para>这里"不提层"是有意的：贴图拖动时顺带提层会让整叠贴图按拖动的先后重新洗牌，
+    /// 用户看到的是"我没碰它，它自己跑到别人底下去了"（批次 MZ 的抖动教训同族）。</para>
+    /// </summary>
+    public static void Relocate(IntPtr hwnd, IntRect bounds)
+    {
+        if (hwnd == IntPtr.Zero) return;
+        WindowInterop.SetWindowPos(hwnd, IntPtr.Zero, bounds.X, bounds.Y, bounds.Width, bounds.Height,
+            WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
+    }
+
+    /// <summary>只挪位置、不改尺寸也不动层序（贴图拖着手走的那一发）。</summary>
+    public static void MoveTo(IntPtr hwnd, int x, int y)
+    {
+        if (hwnd == IntPtr.Zero) return;
+        WindowInterop.SetWindowPos(hwnd, IntPtr.Zero, x, y, 0, 0,
+            WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
     }
 
     /// <summary>只重排、不动几何（条子每次刷新自己提一次，防被画布盖回去）。</summary>

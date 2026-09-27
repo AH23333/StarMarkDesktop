@@ -949,6 +949,14 @@ public sealed class CanvasWiringGateTests
         var show = SourceGate.MethodBody(director, "public static void ShowAt");
         Assert.Contains("Register(role, hwnd);", show);              // 登记与置顶同一个调用点，新窗不会半秒不在名册里
         Assert.Contains("WindowInterop.SWP_SHOWWINDOW", show);
+        // 批次 S1 起条子/遮罩/贴图都从这一处上屏，配方本体在这里钉死：进带 → 带内重排 → 显形，且全程不抢前台
+        Assert.Contains("WindowInterop.HWND_TOPMOST", show);
+        Assert.True(show.IndexOf("WindowInterop.HWND_TOPMOST") < show.IndexOf("WindowInterop.HWND_TOP,"),
+            "只传 TOP 的窗永远留在普通层：任何应用一激活就把遮罩或贴图条盖住");
+        Assert.Contains("WindowInterop.SW_SHOWNOACTIVATE", show);
+        // 只改几何那两发必须带 NOZORDER：贴图拖动顺带提层＝整叠贴图按拖动先后重新洗牌（批次 MZ 同族）
+        foreach (var geometryOnly in new[] { "public static void Relocate", "public static void MoveTo" })
+            Assert.Contains("WindowInterop.SWP_NOZORDER", SourceGate.MethodBody(director, geometryOnly));
 
         // 递给 Win32 当锚点的那一个必须自己 topmost：递错会把玻璃连人带桌拽出带（WD-2 半对造成 WD-7 回归）
         var anchor = SourceGate.MethodBody(director, "public static IntPtr AnchorForBoard");

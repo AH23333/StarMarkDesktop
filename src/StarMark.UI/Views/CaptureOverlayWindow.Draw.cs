@@ -314,8 +314,7 @@ public sealed partial class CaptureOverlayWindow
         var win = PinWindowRect(_monitor);
         var now = WindowInterop.GetWindowRect(this);
         if (now.X == win.X && now.Y == win.Y && now.Width == win.Width && now.Height == win.Height) return;
-        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), IntPtr.Zero, win.X, win.Y, win.Width, win.Height,
-            WindowInterop.SWP_NOZORDER | WindowInterop.SWP_NOACTIVATE);
+        LayerDirector.Relocate(WindowInterop.GetHwnd(this), win);
         _lastAppliedX = win.X;
         _lastAppliedY = win.Y;
         FollowBarToImage();

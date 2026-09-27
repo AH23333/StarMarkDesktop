@@ -41,10 +41,14 @@ public enum CaptureMode
 public static class ScreenshotService
 {
     private static readonly List<CaptureOverlayWindow> Session = new();
-    private static bool _busy;
 
-    /// <summary>当前是否有一次截图会话在进行（供托盘/菜单决定要不要灰掉这一项）。</summary>
-    public static bool IsCapturing => _busy;
+    /// <summary>
+    /// 当前有没有截图会话在进行（托盘/菜单决定要不要灰掉这一项）。
+    /// <para><b>读的是会话态，不是本服务自己那份旗标</b>（方案 §3.2）：以前"在不在截图"这里记一份、
+    /// 遮罩窗里再记一份，两边一分岔就是"界面说在截、屏幕上没有遮罩"或反过来。整场会话的显与收
+    /// 都在 <see cref="AnnotationHub"/> 的一次迁移里做完，这里只是它的执行者。</para>
+    /// </summary>
+    public static bool IsCapturing => AnnotationHub.IsSheetActive;
 
     /// <summary>
     /// 按热键/托盘进入选区遮罩。抓不到画面时给原因，不铺一层空白暗幕。
@@ -64,7 +68,7 @@ public static class ScreenshotService
             queue.TryEnqueue(() => Start(mode));
             return;
         }
-        if (_busy)
+        if (AnnotationHub.IsSheetActive)
         {
             StarLog.Info("[Screenshot] 已有截图会话在进行，忽略这一次触发");
             return;
@@ -82,7 +86,10 @@ public static class ScreenshotService
             return;
         }
 
-        _busy = true;
+        // 冻帧已经拿到手了，这一刻起才改会话态：Hub 会一次做完"藏玻璃、收画布工具条、
+        // 摘画布九条热键、Z 序归位"（方案 §5）。放在抓帧之前会让"截图带画笔迹"这条设置失效，
+        // 放在建窗之后则会给用户一帧"玻璃还亮着、遮罩已经上来"的重影。
+        AnnotationHub.Raise(SessionEvent.BeginSheet);
         try
         {
             foreach (var monitor in monitors)
@@ -280,8 +287,6 @@ public static class ScreenshotService
 
     private static void CloseSession()
     {
-        _busy = false;
-        if (Session.Count == 0) return;
         var windows = Session.ToList();
         Session.Clear();
         foreach (var window in windows)
@@ -289,6 +294,11 @@ public static class ScreenshotService
             try { window.CloseWindow(); }
             catch (Exception ex) { StarLog.Error($"[Screenshot] 关闭遮罩失败（{window.DeviceName}）", ex); }
         }
+        // 遮罩真的收干净了才恢复会话（反过来会让玻璃先亮在还活着的遮罩旁边＝看见一次闪），
+        // 而恢复里包含"重新注册画布那九条键"——它必须晚于这一帧，否则截图收尾那一下还能唤起画布。
+        // 建窗半路抛异常时这里也要走到：那时 Session 可能是空的，但会话态已经是 Sheet，
+        // 少这一句就是"遮罩没了、画布键也再也回不来"。
+        AnnotationHub.Raise(SessionEvent.EndSheet);
     }
 
     /// <summary>
