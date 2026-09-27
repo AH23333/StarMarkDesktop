@@ -116,7 +116,9 @@ public static class LayerDirector
     public static int ReconcileStyles(AnnotationStage stage)
     {
         if (!stage.NeedsFrameAudit()) return 0;
-        var expect = !stage.GlassTakesPointer();          // 穿透位：绘制态关，穿透态开
+        // 期望位只有一个出处：Core 那张按态给的表。"点得到工具条"不归它管——那是命中测试当场的事
+        // （LayeredCanvasWindow.WM_NCHITTEST / ChromeUnderPoint），押在每帧翻样式位上必然晚一帧。
+        var expect = LayerRules.ShouldGlassBeClickThrough(stage);
         var repaired = 0;
         for (var i = 0; i < Entries.Count; i++)
         {
@@ -244,14 +246,30 @@ public static class LayerDirector
     }
 
     /// <summary>
-    /// 这一点落在<b>自家那两条要点的 chrome</b>（工具条／快捷键面板，名册里同为 Strip）上吗。
-    /// <para>抢按之前必须问这一句：抢按是轮询发现的，它不看光标在哪儿，于是"去点工具条那颗按钮"
-    /// 会被画布当成一次落笔吃掉（真机原话："绘制态下点击菜单栏依旧是绘制在菜单栏上"）。
-    /// 贴图（Pin）不算 chrome——穿透态下在贴图上 Ctrl+Alt 圈注是要保留的能力（§13 用例 5）。</para>
+    /// 这一点<b>落在自家那两条要点的 chrome（工具条／快捷键面板，名册里同为 Strip）的矩形里</b>吗。
+    /// <para>
+    /// <b>为什么按矩形问，而不是按"这一层命中到谁"问</b>：命中测试给的永远是<b>最上面</b>那一层——
+    /// 绘制态玻璃不穿透，于是"光标明明停在条子上"这件事在 <c>WindowFromPoint</c> 那里根本看不出来
+    /// （它答"玻璃"），拿句柄比又不相等（WD-8），拿角色比就得到"Board"。上一版那个按命中窗角色判的写法
+    /// 正是卡在这一步：它只在穿透态管用，而用户报的那一下是<b>绘制态点不动工具条</b>。
+    /// </para>
+    /// <para>几何问的是"鼠标在这块矩形里"，与谁在上面无关，所以它两边都成立：抢按之前问一句、
+    /// 命中测试决定"这一格玻璃存不存在"时也问同一句（同一个问题只有一个出处）。</para>
+    /// <para>看不见的条子窗不算：贴图被隐藏之后它的矩形还留在原处，拿一块不在屏幕上的窗拒绝落笔，
+    /// 症状是"这一片就是画不上，可什么都没挡着"。</para>
     /// </summary>
-    public static bool IsChromeUnder(int cursorX, int cursorY)
-        => Classify(cursorX, cursorY, out var hit) == LayerOwnership.Ours
-            && RoleOf(RootOf(hit)) == SurfaceRole.Strip;
+    public static bool IsPointOnChrome(int x, int y)
+    {
+        for (var i = 0; i < Entries.Count; i++)
+        {
+            if (Entries[i].Role != SurfaceRole.Strip) continue;
+            var hwnd = Entries[i].Hwnd;
+            if (!WindowInterop.IsWindowVisible(hwnd)) continue;
+            if (!WindowInterop.GetWindowRect(hwnd, out var r)) continue;
+            if (x >= r.Left && x < r.Right && y >= r.Top && y < r.Bottom) return true;
+        }
+        return false;
+    }
 
     /// <summary>名册清空（退出画布、程序收尾）。逐个退出不整批擦，避免把还在的贴图一起忘掉。</summary>
     public static void ForgetRole(SurfaceRole role)

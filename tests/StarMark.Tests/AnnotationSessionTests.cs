@@ -150,6 +150,29 @@ public class AnnotationSessionTests
     public void OnlyDrawingTakesThePointer(AnnotationStage stage, bool expected)
         => Assert.Equal(expected, stage.GlassTakesPointer());
 
+    /// <summary>
+    /// 整窗穿透位<b>只由会话态决定</b>（＝<see cref="AnnotationStage.GlassTakesPointer"/> 的反面）。
+    /// <para>"绘制态点得到工具条"曾经也塞进这里（光标压在条子上⇒整窗临时穿透），当天被真机否掉：
+    /// 样式位每帧才翻一次，晚一帧就是"点菜单栏却画出一条轨迹"。让位改由命中测试当场给，
+    /// 所以这张表重新只回答"这一态吃不吃鼠标"一个问题。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(AnnotationStage.Idle, true)]
+    [InlineData(AnnotationStage.BoardPenetrating, true)]
+    [InlineData(AnnotationStage.BoardDrawing, false)]          // 只有这一态吃鼠标
+    [InlineData(AnnotationStage.Sheet, true)]
+    public void TheStyleBitAnswersOnlyWhatTheStageSays(AnnotationStage stage, bool expected)
+        => Assert.Equal(expected, LayerRules.ShouldGlassBeClickThrough(stage));
+
+    [Theory]
+    [InlineData(AnnotationStage.Idle)]
+    [InlineData(AnnotationStage.BoardPenetrating)]
+    [InlineData(AnnotationStage.BoardDrawing)]
+    [InlineData(AnnotationStage.Sheet)]
+    public void StyleBitIsExactlyThePointerVerdictNegated(AnnotationStage stage)
+        => Assert.True(LayerRules.ShouldGlassBeClickThrough(stage) == !stage.GlassTakesPointer(),
+            "两处判据一旦分岔，症状就是「工具条说绘制中、点下去却画不上」");
+
     [Fact]
     public void SheetIsTheOnlyStageThatSuppressesCanvasHotkeys()
     {

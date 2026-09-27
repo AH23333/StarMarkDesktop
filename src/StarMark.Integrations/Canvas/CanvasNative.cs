@@ -41,6 +41,15 @@ internal static class CanvasNative
     public const int MK_LBUTTON = 0x0001;
     public const int MK_RBUTTON = 0x0002;
 
+    // ===== WM_NCHITTEST 的返回值 =====
+    //
+    // <c>HTTRANSPARENT</c> 不是"颜色透明"，是对<b>命中测试</b>说"这一格当我不存在"：系统随即去问它下面
+    // 那扇窗，于是这一次鼠标消息根本不会寄给我们（也不会 <c>SetCapture</c>）。
+    // 与整窗的 <c>WS_EX_TRANSPARENT</c> 相比，它是<b>按点、当场</b>生效的——不隔一帧，也不会因为
+    // 光标刚离开某块矩形而把该画的这一按让出去。
+    public const int HTTRANSPARENT = -1;
+    public const int HTCLIENT = 1;
+
     // ===== 穿透态下"按住即画"要用的按键轮询 =====
     //
     // <b>穿透态收不到任何鼠标消息</b>（这正是它的语义），所以"用户按下了左键"这件事只能自己看。

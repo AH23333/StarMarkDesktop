@@ -75,8 +75,19 @@ public static class LayerRules
         => stage == AnnotationStage.BoardDrawing && hitBelongsToOurProcess;
 
     /// <summary>
-    /// 穿透态要不要"让下层应用干活"。Sheet 态不谈这一位：那时玻璃整块不可见，
-    /// 返回 false 会让调用方误以为该把样式位清掉，所以显式跟着"不可见"走。
+    /// 这块玻璃此刻该不该带 <c>WS_EX_TRANSPARENT</c>——<b>只由会话态决定</b>，这里不许掺进光标位置。
+    /// <para>
+    /// 2026-09-27 这一版曾经加过第二臂（"光标压在自家条子上⇒整窗临时穿透"），当天又被真机否掉：
+    /// 样式位是<b>每帧</b>翻的，而"光标进条子"与"按下"可以挤在同一帧里——晚一帧就是用户报了三次的那句
+    /// "绘制态点工具条，画出一条轨迹"；反过来（刚离开条子就按）又成了"说绘制中却画不上"。
+    /// </para>
+    /// <para>
+    /// 让位改由<b>命中测试当场</b>给：<c>LayeredCanvasWindow.WM_NCHITTEST</c> 对压在自家条子上的那一格回
+    /// <c>HTTRANSPARENT</c>（判据＝"这一点在不在条子矩形里"，见 <c>LayerDirector.IsPointOnChrome</c>），
+    /// 与 Z 序谁在上面无关，也不隔帧。这一位因此退回它唯一该回答的问题：这一态吃不吃鼠标。
+    /// </para>
+    /// <para>Sheet 态不谈这一位：那时玻璃整块不可见，返回 false 会让调用方误以为该把样式位清掉，
+    /// 所以显式跟着"不可见"走。</para>
     /// </summary>
     public static bool ShouldGlassBeClickThrough(AnnotationStage stage) => !stage.GlassTakesPointer();
 

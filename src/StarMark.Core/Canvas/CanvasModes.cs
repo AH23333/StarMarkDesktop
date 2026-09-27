@@ -13,7 +13,7 @@ namespace StarMark.Core.Canvas;
 /// ① 荧光笔在穿透态长按仍能画（与"穿透＝鼠标归下层"这个说法自相矛盾）；
 /// ② 抢按不看光标落点，把点工具条那一下也吃掉（"点菜单栏却画出一条轨迹"）。
 /// 于是穿透态只保留一种抢按：<b>显式的 Ctrl+Alt 圈画</b>——修饰键按住了才抢，
-/// 且抢之前仍要先问落点是不是自家的条子（<c>LayerDirector.IsChromeUnder</c>：是则不吃，条子照旧可点）。
+/// 且抢之前仍要先问落点是不是自家的条子（<c>LayerDirector.IsPointOnChrome</c>：是则不吃，条子照旧可点）。
 /// </para>
 /// </summary>
 public static class CanvasModes

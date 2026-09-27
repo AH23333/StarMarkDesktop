@@ -808,9 +808,10 @@ public sealed class CanvasWiringGateTests
         // 2026-09-27 用户改判：穿透态<b>只抢 Ctrl+Alt 那一下</b>，与选了哪支笔无关（方向判据在 CanvasModes）
         Assert.Contains("CanvasModes.ClaimsPressInPenetrating(LayeredCanvasWindow.CtrlAltDown)", poll);
         Assert.DoesNotContain("_tool", poll);                                   // "荧光笔就抢按"那一臂不许回来
-        // §6.3：抢之前先问这一点落在谁的窗上——光标在自家工具条／面板上时那一按是点按钮，
-        // 抢走它就长成"点菜单栏却画出一条轨迹、那颗按钮没反应"（真机原话）
-        Assert.Contains("if (LayerDirector.IsChromeUnder(cursorX, cursorY)) return;", poll);
+        // §6.3：抢之前先问这一点<b>在不在自家工具条／面板的矩形里</b>——光标在那儿时那一按是点按钮，
+        // 抢走它就长成"点菜单栏却画出一条轨迹、那颗按钮没反应"（真机原话）。
+        // 问矩形而不是问命中：命中测试永远答最上面那一层，绘制态它就是玻璃自己（WD-8 那一族的最后一站）。
+        Assert.Contains("if (LayerDirector.IsPointOnChrome(cursorX, cursorY)) return;", poll);
         // 会话闸门（C2）：读态只在 Board·穿透态跑，判据在 Core 那张表里
         Assert.Contains("AnnotationHub.Stage != AnnotationStage.BoardPenetrating || !down", poll);
         Assert.Contains("s.Window.SetClickThrough(false);", poll);
@@ -832,7 +833,8 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("if (AnnotationHub.Stage != AnnotationStage.BoardPenetrating) return;", end);  // 本来就在绘制态就别乱恢复
         Assert.Contains("s.Window.SetClickThrough(true);", end);
         Assert.Contains("AnnotationHub.QuickPressInFlight = false;", end);
-        // 豁免本身由 Hub 的那一句读走（对账期间不许把这一按"修"回去——WO 定下的唯一合法不一致）
+        // 豁免本身由 Hub 的那一句读走（对账期间不许把这一按"修"回去——WO 定下的唯一合法不一致）。
+        // 这里<b>不再</b>豁免"手上真有一笔"：样式位现在只看会话态，笔拖到哪儿都不会改它，让位是命中测试当场的事。
         Assert.Contains("if (!QuickPressInFlight && LayerDirector.ReconcileStyles(Stage)",
             SourceGate.MethodBody(SourceGate.ReadRepoFile(Hub), "public static void AuditFrame"));
     }
@@ -905,19 +907,90 @@ public sealed class CanvasWiringGateTests
         Assert.DoesNotContain("YieldIfNotOurLayer(", service);
 
         var hub = SourceGate.MethodBody(SourceGate.ReadRepoFile(Hub), "public static void AuditFrame");
-        Assert.True(hub.IndexOf("ReconcileStyles(Stage)", StringComparison.Ordinal)
+        Assert.True(hub.IndexOf("ReconcileStyles(Stage", StringComparison.Ordinal)
                     < hub.IndexOf("Classify(cursorX, cursorY", StringComparison.Ordinal),
             "先对账再验层：状态本身就不实时，验层结论也是错的");
 
         var audit = SourceGate.MethodBody(SourceGate.ReadRepoFile(Director), "public static int ReconcileStyles");
         Assert.Contains("if (!stage.NeedsFrameAudit()) return 0;", audit);   // 没板子在场时不逐屏读样式位
-        Assert.Contains("var expect = !stage.GlassTakesPointer();", audit);  // 期望值来自会话态，不是宿主旗标
+        // 期望位只问 Core 那张按态表。这里绝不再掺光标位置：掺进去就把"点得到条子"押回每帧翻样式位，
+        // 而"光标进条子"与"按下"挤在同一帧时必然晚一帧（用户三次报同一件事的那句"点菜单栏却画出轨迹"）。
+        Assert.Contains("LayerRules.ShouldGlassBeClickThrough(stage)", audit);
+        Assert.DoesNotContain("var expect = !stage.GlassTakesPointer();", audit);
+        Assert.DoesNotContain("IsPointOnChrome(cursor", audit);
         Assert.Contains("entry.ReadStyle() == expect", audit);               // 读的是样式位本身
         Assert.Contains("entry.ApplyStyle?.Invoke(expect);", audit);         // 不一致就按状态改回来
         Assert.Contains("WarnThrottled(\"layer:style\"", audit);             // 别让它自己变成刷屏源
         // 窗口侧必须真的去读那一位（只比两个旗标等于什么都没查）
         Assert.Contains("WS_EX_TRANSPARENT) != 0;",
             SourceGate.MethodBody(SourceGate.ReadRepoFile(Layer), "public bool StyleClickThrough"));
+    }
+
+    /// <summary>
+    /// <b>绘制态也要能直接点工具条换工具</b>（用户 2026-09-27 连着三次报同一件事，第三次明确说这是他最初的要求）。
+    /// <para>
+    /// 第一版押"条子恰好排在玻璃之上"＝Z 序拉锯，输了还看不见痕迹；第二版押"每帧按光标位置翻整窗
+    /// <c>WS_EX_TRANSPARENT</c>"，晚一帧就把那一按画到条子上，而反过来（刚离开条子就按）又成了"画不上"。
+    /// 现在押的是<b>命中测试当场让开</b>：压在条子矩形里的那一格回 <c>HTTRANSPARENT</c>，系统随即去问它
+    /// 下面那扇窗——这一按既不归画布，也就不需要任何样式位或任何 Z 序赌局。
+    /// </para>
+    /// <para>闸门因此钉四件事：让位写在 WndProc 里、判据只有一份、样式位退回只看会话态、
+    /// 旧那两套写法（按命中窗角色判 / 按光标翻整窗位）都不许留在原地冒充已修。</para>
+    /// </summary>
+    [Fact]
+    public void DrawingStateYieldsTheToolbarAtHitTestTime()
+    {
+        var layer = SourceGate.ReadRepoFile(Layer);
+        var hit = SourceGate.MethodBody(layer, "case CanvasNative.WM_NCHITTEST:");
+        // ① 让位由命中测试给，且判据是"这一点在不在条子矩形里"——不是整窗样式位，也不是会话态
+        Assert.Contains("ChromeUnderPoint?.Invoke(at.X, at.Y) == true", hit);
+        Assert.Contains("return new IntPtr(CanvasNative.HTTRANSPARENT);", hit);
+        Assert.Contains("return new IntPtr(CanvasNative.HTCLIENT);", hit);
+        Assert.DoesNotContain("WM_LBUTTONDOWN", hit);            // 等按下再改主意就晚了：那一按已经被 SetCapture 抓走
+        Assert.Contains("public const int HTTRANSPARENT = -1;", SourceGate.ReadRepoFile(Native));
+
+        // ② 判据只有一份，接在名册读到的窗矩形上（不另存旗标、不另算一份几何）
+        var service = SourceGate.ReadRepoFile(Service);
+        Assert.Contains("LayeredCanvasWindow.ChromeUnderPoint = LayerDirector.IsPointOnChrome;", service);
+        var director = SourceGate.ReadRepoFile(Director);
+        Assert.Contains("public static bool IsPointOnChrome(int x, int y)", director);
+        Assert.Contains("if (!WindowInterop.IsWindowVisible(hwnd)) continue;", director);   // 藏着的条子不算矩形
+        Assert.DoesNotContain("IsChromeUnder", director);
+        Assert.DoesNotContain("IsChromeUnder", service);
+        Assert.DoesNotContain("IsChromeUnder", SourceGate.ReadRepoFile(Hub));
+
+        // ③ 整窗样式位退回它唯一该回答的问题：这一态吃不吃鼠标。掺光标位置＝回到第二版那个晚一帧
+        var apply = SourceGate.MethodBody(service, "public static void ApplyStage(AnnotationStage stage)");
+        Assert.Contains("LayerRules.ShouldGlassBeClickThrough(stage)", apply);
+        Assert.DoesNotContain("IsPointOnChrome", apply);
+        Assert.DoesNotContain("IsCursorOnChrome", service);
+        Assert.DoesNotContain("IsCursorOnChrome", layer);
+        Assert.DoesNotContain("ShouldGlassBeClickThrough(stage,", SourceGate.ReadRepoFile(LayerRulesFile));
+
+        // ④ 底线不依赖 Win32 行为：真的收到落在条子矩形里的按下，画布不接，并留下可查的证据
+        var pressed = SourceGate.MethodBody(service, "private static void OnPressed(Screen screen, CanvasPointer pointer)");
+        Assert.Contains("LayerDirector.IsPointOnChrome(screen.Bounds.X + pointer.At.X, screen.Bounds.Y + pointer.At.Y)", pressed);
+        Assert.Contains("canvas:chrome-press", pressed);
+        Assert.True(pressed.IndexOf("IsPointOnChrome", StringComparison.Ordinal)
+                    < pressed.IndexOf("BeginPress(", StringComparison.Ordinal),
+            "先问在不在条子上，再决定落不落笔：反过来就是先画了一笔再说不该画");
+    }
+
+    /// <summary>
+    /// 贴图被收起时<b>它那条工具条必须一起消失</b>（用户真机："对图片双击关闭后菜单栏依旧存在"）。
+    /// <para>批次 WI 起条子住自己那扇置顶窗：画面 <c>SW_HIDE</c> 之后那扇窗不会跟着没，
+    /// 而它 topmost、谁也盖不住、点 ✕ 管的又是一张已经不存在的图——屏幕上就留下一条赖着的横杠。</para>
+    /// </summary>
+    [Fact]
+    public void HidingAPinTakesItsBarWithIt_AndPresentBringsItBack()
+    {
+        var pin = SourceGate.ReadRepoPartials("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
+        var hide = SourceGate.MethodBody(pin, "public void HidePin()");
+        Assert.True(hide.IndexOf("SetBarVisible(false)", StringComparison.Ordinal)
+                    < hide.IndexOf("SW_HIDE", StringComparison.Ordinal),
+            "先收条子再藏画面：反过来会有一瞬那条杠浮在已经消失的图上面");
+        var present = SourceGate.MethodBody(pin, "public void Present()");
+        Assert.Contains("SetBarVisible(true);", present);     // 回来时对称，别让人靠"鼠标划过画面"才找回出口
     }
 
     /// <summary>

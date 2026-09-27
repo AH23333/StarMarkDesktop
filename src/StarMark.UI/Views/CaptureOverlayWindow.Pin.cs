@@ -192,6 +192,8 @@ public sealed partial class CaptureOverlayWindow
     /// <summary>
     /// 放回屏幕（F4 显示全部）。显示走"原生 ShowWindow 兜一遍"：批次 D4 量过 WinUI 的显示调用
     /// 在桌面窗 owned 的那层关系上并不可靠，贴图窗同样挂在桌面上，不该指望另一条路径。
+    /// <para><b>条子跟着画面一起回来</b>：藏的时候把它一起收了，回来却只亮回画面，
+    /// 用户就得靠"鼠标恰好划过画面上"才找回那排按钮（✕／穿透／缩放都在条子上）。</para>
     /// </summary>
     public void Present()
     {
@@ -199,14 +201,24 @@ public sealed partial class CaptureOverlayWindow
         {
             var hwnd = WindowInterop.GetHwnd(this);
             WindowInterop.ShowWindow(hwnd, WindowInterop.SW_SHOWNOACTIVATE);
+            SetBarVisible(true);
             Activate();
         }
         catch (Exception ex) { StarLog.Warn($"[Pin] 唤回贴图失败：{ex.Message}"); }
     }
 
+    /// <summary>
+    /// 双击／F4 收起这一张。<b>必须连它那条工具条一起收</b>：批次 WI 起条子住自己那扇置顶窗，
+    /// 画面被 <c>SW_HIDE</c> 藏起来之后，那扇窗不会跟着消失——它就是用户看到的"图没了，菜单栏还赖在屏幕上"，
+    /// 而且因为它是 topmost，谁也盖不住它、它又点不掉（条子上的 ✕ 管的是一张已经不存在的图）。
+    /// </summary>
     public void HidePin()
     {
-        try { WindowInterop.ShowWindow(WindowInterop.GetHwnd(this), WindowInterop.SW_HIDE); }
+        try
+        {
+            SetBarVisible(false);
+            WindowInterop.ShowWindow(WindowInterop.GetHwnd(this), WindowInterop.SW_HIDE);
+        }
         catch (Exception ex) { StarLog.Warn($"[Pin] 隐藏贴图失败：{ex.Message}"); }
     }
 

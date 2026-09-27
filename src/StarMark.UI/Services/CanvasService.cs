@@ -196,6 +196,9 @@ public static class CanvasService
         _busy = true;
         try
         {
+            // 玻璃的命中测试要问"这一点在不在自家条子上"。判据只有 LayerDirector 那一份（它读名册里
+            // 那些条子窗的矩形，不另存旗标），这里只把它接到那扇纯 Win32 窗上——那一层不认识工具条，也不认识 Core。
+            LayeredCanvasWindow.ChromeUnderPoint = LayerDirector.IsPointOnChrome;
             var monitors = WindowInterop.ListMonitors();
             if (monitors.Count == 0)
             {
@@ -325,13 +328,15 @@ public static class CanvasService
         // 而切到穿透态时那一笔永远不会收到"抬起"（穿透之后鼠标归了下层应用）。
         CommitOpenStroke();
         var visible = stage.GlassVisible();
-        var takes = stage.GlassTakesPointer();
+        // 穿透位怎么给，只问 Core 那张按态给的表。"点得到工具条"不押在这一位上（那是每帧翻的，晚一帧
+        // 就是把那一按画到条子上）——它由玻璃的命中测试当场让开，见 LayeredCanvasWindow.ChromeUnderPoint。
+        var glassThrough = LayerRules.ShouldGlassBeClickThrough(stage);
         if (!visible) LayeredCanvasWindow.ReleasePointerCapture();
         foreach (var screen in Screens)
         {
             screen.Window.SetVisible(visible);
-            screen.Window.SetClickThrough(!takes);
-            screen.Window.SetDrawCursor(takes);
+            screen.Window.SetClickThrough(glassThrough);
+            screen.Window.SetDrawCursor(!glassThrough);
         }
         if (_toolbar is not null) _toolbar.SetStripVisible(stage.BoardStripVisible());
         RaiseStateChanged();
@@ -514,12 +519,22 @@ public static class CanvasService
     private static void OnPressed(Screen screen, CanvasPointer pointer)
     {
         if (screen.Window.IsClickThrough) return;          // 穿透态不该收到，真收到也不能画（鼠标本来要给下面的应用）
+        // 这一按落在自家条子的矩形里 ⇒ 画布<b>不接</b>。正常情况下命中测试已经把那一格让开了
+        // （<c>HTTRANSPARENT</c>，按下根本不会寄给我们）；走到这里说明有条子窗没登记进名册，
+        // 或某个系统不认那个返回值。兜住它的价值是"绝不把轨迹画在自己的工具条上"这条底线
+        // 不依赖任何 Win32 行为；日志留着当下一次归因的证据（反复出现＝让位那一环没生效）。
+        if (LayerDirector.IsPointOnChrome(screen.Bounds.X + pointer.At.X, screen.Bounds.Y + pointer.At.Y))
+        {
+            StarLog.WarnThrottled("canvas:chrome-press",
+                "[Canvas] 绘制态收到落在工具条矩形内的按下：画布没有接这一按（下一次点击会归条子）", windowMs: 5_000);
+            return;
+        }
         BeginPress(screen, pointer.At, _tool switch
         {
             CanvasTool.Highlighter => Press.Ephemeral,
             // 折线要跨按接段，所以按下时不能像别的图形那样"这一按就是一条"
             CanvasTool.PolyLine => Press.PolyLine,
-            // 图形与画笔同为拦截态（CanvasModes 一处定），但落笔方式不同：一次拖拽定形，不是跟着手走
+            // 图形与画笔都吃"拦截态"那一按（穿透位由 Core 那张按态表给），但落笔方式不同：一次拖拽定形，不是跟着手走
             { } tool when tool.IsShape() => Press.Shape,
             _ => Press.Drawing,
         });
@@ -697,10 +712,11 @@ public static class CanvasService
         // 就抢按"那一臂——他要"穿透态按下去就是下层应用的点击"，要画荧光笔得先关掉穿透
         // （那颗按钮或 canvas.through）。方向判据在 CanvasModes 一处，接线层不许自己现写布尔（WF-1 口径）。
         if (!CanvasModes.ClaimsPressInPenetrating(LayeredCanvasWindow.CtrlAltDown)) return;
-        // 抢之前先问"这一点落在谁的窗上"（§6.3）：光标停在自家工具条／快捷键面板上时那一按是<b>点按钮</b>，
-        // 抢走它就长成"点菜单栏却画出一条轨迹、那颗按钮没反应"（真机原话）。贴图不算 chrome：穿透态下
-        // 在贴图上 Ctrl+Alt 圈注是要留的能力（§13 用例 5）。
-        if (LayerDirector.IsChromeUnder(cursorX, cursorY)) return;
+        // 抢之前先问"这一点落在自家条子的矩形里吗"（§6.3）：光标停在工具条／快捷键面板上时那一按是<b>点按钮</b>，
+        // 抢走它就长成"点菜单栏却画出一条轨迹、那颗按钮没反应"（真机原话）。问矩形而不问命中到谁——
+        // 命中测试永远答最上面那一层，绘制态它就是玻璃自己（同一问题只有一个出处）。
+        // 贴图不算 chrome：穿透态下在贴图上 Ctrl+Alt 圈注是要留的能力（§13 用例 5）。
+        if (LayerDirector.IsPointOnChrome(cursorX, cursorY)) return;
 
         var screen = ScreenAt(new PixelPoint(cursorX, cursorY));
         if (screen is null) return;

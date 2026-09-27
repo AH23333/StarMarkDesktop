@@ -25,7 +25,9 @@ public readonly record struct CanvasPointer(PixelPoint At, bool LeftDown);
 /// <para>① <b>按下必须 SetCapture</b>——不抓到鼠标，笔迹拖出屏幕边缘就再也收不到抬起，笔"永远没松"；</para>
 /// <para>② <b>WM_PAINT 必须 BeginPaint/EndPaint</b>——不验证更新区域，系统会不停重发 WM_PAINT，界面卡死；</para>
 /// <para>③ <b>WndProc 委托要有静态引用兜着</b>——它是非托管代码回调进来的唯一入口，被 GC 挪走/回收之后
-/// 症状是"消息忽然全没了"，而且不抛托管异常（<c>ClipboardWatcher</c> 那次同一课）。</para>
+/// 症状是"消息忽然全没了"，而且不抛托管异常（<c>ClipboardWatcher</c> 那次同一课）；</para>
+/// <para>④ <b>鼠标归谁由 WM_NCHITTEST 当场决定</b>——只靠每帧翻 <c>WS_EX_TRANSPARENT</c> 会晚一帧，
+/// 而那一格里落下的按就画到自家工具条上去了（见 <see cref="ChromeUnderPoint"/>）。</para>
 /// </summary>
 public sealed class LayeredCanvasWindow : IDisposable
 {
@@ -51,6 +53,17 @@ public sealed class LayeredCanvasWindow : IDisposable
     private static readonly Dictionary<IntPtr, LayeredCanvasWindow> Instances = new();
     private static readonly object Gate = new();
     private static ushort _classAtom;
+
+    /// <summary>
+    /// "这一点（物理屏幕坐标）是不是压在自家那条要点的 chrome 上"——由宿主层注入（本层不认识工具条窗）。
+    /// <para>
+    /// 画布在命中测试上当场查它（<see cref="HandleMessage"/> 的 <c>WM_NCHITTEST</c> 那一臂），
+    /// 而不是等下一帧去翻整窗的 <c>WS_EX_TRANSPARENT</c>：帧是 33ms 一格，"光标进条子"与"按下"挤进
+    /// 同一格时，样式位必然还没改，那一按就被玻璃吃了——真机症状"绘制态点工具条，画出一条轨迹"，
+    /// 用户连着报了三次。命中测试是<b>决定这一按归谁的那一刻</b>，所以答案在这里给才不会出现时间差。
+    /// </para>
+    /// </summary>
+    public static Func<int, int, bool>? ChromeUnderPoint;
 
     private readonly IntPtr _hwnd;
 
@@ -391,6 +404,17 @@ public sealed class LayeredCanvasWindow : IDisposable
 
         switch (msg)
         {
+            case CanvasNative.WM_NCHITTEST:
+            {
+                // 命中测试是"这一按归谁"被决定的那一刻，所以让位的答案就在这里给，不等下一帧去翻整窗样式位。
+                // HTTRANSPARENT＝对这一格说"我不存在"：系统随即去问它下面那扇窗（自家条子），
+                // 这一按既不寄给我们、也就不会被 SetCapture——与谁在 Z 序上面无关。
+                var at = CanvasNative.LoWordPoint(lParam);
+                if (!window.IsClickThrough && ChromeUnderPoint?.Invoke(at.X, at.Y) == true)
+                    return new IntPtr(CanvasNative.HTTRANSPARENT);
+                return new IntPtr(CanvasNative.HTCLIENT);
+            }
+
             case CanvasNative.WM_LBUTTONDOWN:
                 // 不抓鼠标就会漏掉抬起：笔停在"还在画"的状态，用户只能重开画布
                 CanvasNative.SetCapture(hWnd);
