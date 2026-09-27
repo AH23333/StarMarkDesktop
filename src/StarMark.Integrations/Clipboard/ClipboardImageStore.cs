@@ -170,51 +170,37 @@ public static class ClipboardImageStore
     }
 
     /// <summary>
-    /// PNG 字节 → BGRA。<b>只用于</b> CF_PNG 那一路：像素身份哈希与缩略图都要先拿到像素。
-    /// <para>解码格式由发送方决定：无 alpha 的 PNG 交出来是 <c>Bgr8</c>（每像素 3 字节），
-    /// 直接当 BGRA 用会让整幅图错位——所以这里补 alpha 并保留"到底给了几种格式"的事实（坑表续排）。</para>
-    /// <para>历史条目的解码走 2b 那份纯托管实现；这里不重复实现一份，因为这一处只在采集线程池上跑，
-    /// 同一条路上 WinRT 编码器已被截图链验证过。</para>
+    /// 那张 PNG → 归一 BGRA：<b>读档侧唯一的解码入口</b>（<see cref="ClipboardPayload.TryDecodePng"/>，
+    /// §2「解码」裁决＝纯托管自研）。
+    /// <para>
+    /// 这里以前另有一份 WinRT 解码：<b>它对 16 位与带 alpha 的 PNG 要么拒收、要么交出的像素与
+    /// "alpha 一律 255"的归一口径不同</b>（对照测试实测：16 位那条连每像素几字节都对不上）。
+    /// 两份解码并存最坏的坏法不是多写一份代码，而是<b>采集与读档对同一帧算出两个哈希</b>——
+    /// 那样用户每点一次"再复制"，历史就多一条自回声。
+    /// </para>
     /// </summary>
-    public static async Task<ClipboardPayload.ImageFrame?> DecodePngAsync(byte[] png, CancellationToken ct)
+    public static bool TryReadPngFrame(string? mainFileName, out ClipboardPayload.ImageFrame frame, out string? reason)
     {
+        frame = default;
+        reason = null;
+        var path = ClipAssets.FullPathOf(mainFileName);
+        if (path is null) { reason = "这一条的文件名不安全或没有文件"; return false; }
         try
         {
-            using var source = new InMemoryRandomAccessStream();
-            await source.WriteAsync(png.AsBuffer()).AsTask(ct);
-            source.Seek(0);
-            var decoder = await BitmapDecoder.CreateAsync(source).AsTask(ct);
-            var provider = await decoder.GetPixelDataAsync().AsTask(ct);
-            var pixels = provider.DetachPixelData();
-            var w = (int)decoder.PixelWidth;
-            var h = (int)decoder.PixelHeight;
-            // 不比对格式枚举（这一份投影里 BGR8 的名字都不一定在），只看**每像素几字节**：
-            // 4 字节即 BGRA 直接用；3 字节即 BGR 补上 alpha。其它形状（灰度/16 位）宁可不记，
-            // 也不要"看起来解出来了"其实每行错位——那会比不记坏得多。
-            if (pixels.Length == (long)w * h * 4) return new ClipboardPayload.ImageFrame(w, h, pixels);
-            if (pixels.Length == (long)w * h * 3)
-                return new ClipboardPayload.ImageFrame(w, h, ToBgra(pixels, w * h));
-            return null;
+            // 同步读 + 同步解：调用方（历史页/未来的贴图）自己决定放哪个线程，这里不偷偷起 Task。
+            return ClipboardPayload.TryDecodePng(File.ReadAllBytes(path), out frame, out reason);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            return null;
+            reason = $"文件读不出来（{ex.GetType().Name}）";
+            return false;
         }
     }
 
-    /// <summary>BGR(3 字节) → BGRA(4 字节)，alpha 一律 255（与 DIB 那一路同一口径：剪贴板图没有半透明语义）。</summary>
-    private static byte[] ToBgra(byte[] bgr, int count)
-    {
-        var bgra = new byte[count * 4];
-        for (var i = 0; i < count; i++)
-        {
-            bgra[i * 4] = bgr[i * 3];
-            bgra[i * 4 + 1] = bgr[i * 3 + 1];
-            bgra[i * 4 + 2] = bgr[i * 3 + 2];
-            bgra[i * 4 + 3] = 255;
-        }
-        return bgra;
-    }
+    /// <summary>条目 → 它那张 PNG → 归一 BGRA。<b>P3「历史图片贴到桌面」要的就是这一份</b>：
+    /// §Q4 终态把这条接口冻结在这里，实装接合等标注域 S3 之后（本批一个调用都不接）。</summary>
+    public static bool TryReadEntryFrame(Item item, out ClipboardPayload.ImageFrame frame, out string? reason)
+        => TryReadPngFrame(ClipboardEntry.FileName(item), out frame, out reason);
 
     private static async Task<byte[]> ToBytesAsync(InMemoryRandomAccessStream stream)
     {

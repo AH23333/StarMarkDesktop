@@ -132,9 +132,9 @@ public sealed class ClipboardImageRowTests : IDisposable
         var png = await ClipboardImageStore.EncodePngAsync(bgra, 8, 6, CancellationToken.None);
         Assert.NotNull(png);
 
-        var decoded = await ClipboardImageStore.DecodePngAsync(png!, CancellationToken.None);
-        Assert.True(decoded.HasValue, "编出去的 PNG 自己解不回来");      // 值类型：用 HasValue 而不是 Assert.NotNull
-        var back = decoded.Value;
+        // 走"那条读路"本身：把 PNG 落到 clip 目录，再用条目侧唯一的解码入口读回来。
+        File.WriteAllBytes(ClipAssets.FullPathOf("round_trip.png")!, png!);
+        Assert.True(ClipboardImageStore.TryReadPngFrame("round_trip.png", out var back, out var why), why ?? "读不出帧");
         Assert.Equal((8, 6), (back.Width, back.Height));
         Assert.Equal(bgra, back.Bgra);
         Assert.Equal(ClipboardPolicy.BuildImageSourceId(bgra), ClipboardPolicy.BuildImageSourceId(back.Bgra));
@@ -147,13 +147,24 @@ public sealed class ClipboardImageRowTests : IDisposable
         // 采集侧拿同一份像素去问 ShouldSkip 必须回 true。两边各自正确但键的算法不同，是这一处最难发现的坏法。
         var bgra = Screenshot(4, 4);
         var png = await ClipboardImageStore.EncodePngAsync(bgra, 4, 4, CancellationToken.None);
-        var decoded = await ClipboardImageStore.DecodePngAsync(png!, CancellationToken.None);
-        Assert.True(decoded.HasValue, "编出去的 PNG 自己解不回来");
-        var back = decoded.Value;
+        File.WriteAllBytes(ClipAssets.FullPathOf("echo_round.png")!, png!);
+        Assert.True(ClipboardImageStore.TryReadPngFrame("echo_round.png", out var back, out _));
 
         var dedupe = new ClipboardDedupe();
         dedupe.NoteOwnWrite(back.Bgra, 1_000);
         Assert.True(dedupe.ShouldSkip(bgra, 1_001));
+    }
+
+    [Fact]
+    public void UnsafeOrMissingNameIsRefusedInItsOwnWords()
+    {
+        // 这一句也是 P3 贴图要用的入口：它给不出帧时必须说得出为什么，否则"贴不出去"是一句猜谜。
+        Assert.False(ClipboardImageStore.TryReadPngFrame("../escape.png", out _, out var unsafeName));
+        Assert.Contains("不安全", unsafeName, StringComparison.Ordinal);
+        Assert.False(ClipboardImageStore.TryReadPngFrame(null, out _, out var none));
+        Assert.Contains("没有文件", none, StringComparison.Ordinal);
+        Assert.False(ClipboardImageStore.TryReadPngFrame("2026-09-28_0915_00000000.png", out _, out var gone));
+        Assert.Contains("读不出来", gone, StringComparison.Ordinal);      // 合法名字但文件不在：也不是异常，是一句原话
     }
 
     /// <summary>一块"像截图"的像素：逐像素变化的 BGR，alpha 恒 255（剪贴板图没有半透明语义，见 ClipAssets 的 DIB 口径）。</summary>

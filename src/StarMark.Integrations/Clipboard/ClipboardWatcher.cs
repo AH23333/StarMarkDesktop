@@ -64,10 +64,16 @@ public static class ClipboardCapture
         // 像素是这条链的唯一通货：身份哈希、缩略图、将来的贴图都吃它。PNG 路线也要先解出像素，
         // 否则"我们写回的图被系统重排成 DIB 再回来"就会字节不同 ⇒ 一次自回声（§2 回声那条的根据）。
         ClipboardPayload.ImageFrame? pixels = frame.Dib;
-        if (pixels is null && frame.Png is { Length: > 0 } png) pixels = await ClipboardImageStore.DecodePngAsync(png, ct);
+        string? whyNot = null;
+        if (pixels is null && frame.Png is { Length: > 0 } png
+            && ClipboardPayload.TryDecodePng(png, out var decoded, out whyNot)) pixels = decoded;
         if (pixels is not { } f)
         {
-            StarLog.WarnThrottled("clip:image-decode", $"图片帧解不出像素（{frame.Container}），这一帧没有记录", windowMs: 60_000);
+            // 原因要一起进日志：这一帧"没记上"是可接受的，"没人知道为什么没记上"不是
+            //（历史上最难查的那类故障，最后都是一条日志里的原话定下来的）。
+            StarLog.WarnThrottled("clip:image-decode",
+                $"图片帧解不出像素（{frame.Container}{(string.IsNullOrEmpty(whyNot) ? "" : "：" + whyNot)}），这一帧没有记录",
+                windowMs: 60_000);
             return null;
         }
 

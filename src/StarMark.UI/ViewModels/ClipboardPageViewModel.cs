@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Clipboard;
+using StarMark.Integrations.Clipboard;
 using StarMark.UI.Helpers;
 using Windows.ApplicationModel.DataTransfer;
 
@@ -143,8 +144,8 @@ public partial class ClipboardPageViewModel : ObservableObject
     /// </summary>
     private async Task<bool> ReuseImageAsync(ItemCardViewModel vm)
     {
-        var name = ClipboardEntry.FileName(vm.GetItem());
-        var path = ClipAssets.FullPathOf(name);
+        var item = vm.GetItem();
+        var path = ClipAssets.FullPathOf(ClipboardEntry.FileName(item));
         if (path is null || !System.IO.File.Exists(path))
         {
             StatusText = "这条图片的文件已经不在本机，复制不回去（条目仍保留，可置顶或删除）";
@@ -153,10 +154,11 @@ public partial class ClipboardPageViewModel : ObservableObject
 
         try
         {
-            var bytes = await System.Threading.Tasks.Task.Run(() => System.IO.File.ReadAllBytes(path));
-            var pixels = await StarMark.Integrations.Clipboard.ClipboardImageStore
-                .DecodePngAsync(bytes, CancellationToken.None);
-            if (pixels is { } f) App.NoteClipboardOwnImageWrite(f.Bgra);
+            // 读盘 + 解码整段放池线程：一张 4K PNG 解出来是几十 MB 的缓冲，压在 UI 线程上
+            // 就是"点一下就卡住"。（解码只有那一份自研实现——与采集侧同一句，见 TryReadPngFrame。）
+            var frame = await System.Threading.Tasks.Task.Run(() =>
+                ClipboardImageStore.TryReadEntryFrame(item, out var f, out _) ? f : (ClipboardPayload.ImageFrame?)null);
+            if (frame is { } pixels) App.NoteClipboardOwnImageWrite(pixels.Bgra);
 
             var package = new DataPackage();
             package.SetBitmap(Windows.Storage.Streams.RandomAccessStreamReference.CreateFromUri(

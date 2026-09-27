@@ -19,8 +19,12 @@ namespace StarMark.Abstractions.Clipboard;
 /// 通道顺序看 <c>biCompression</c> 与位掩码、调色板张数看 <c>biClrUsed</c> 是否为 0、行跨距要 4 字节对齐），
 /// 而这些错的代价是"屏幕上一张颜色不对的图"——只有把它做成能被字节级断言钉住的纯函数，才谈得上验过。
 /// </para>
+/// <para>
+/// <b>PNG 的像素解码不在这份文件里</b>：它另起一节 <c>ClipboardPayload.Png.cs</c>（同一个类的 partial 分段），
+/// 因为那是"自研 inflate + defilter"一整件事，与这里的"按字节搬移"是两种复杂度。
+/// </para>
 /// </summary>
-public static class ClipboardPayload
+public static partial class ClipboardPayload
 {
     /// <summary>文本格式：宽字符（Windows 上最常见的 CF_UNICODETEXT）。</summary>
     public const string FormatUnicodeText = "CF_UNICODETEXT";
