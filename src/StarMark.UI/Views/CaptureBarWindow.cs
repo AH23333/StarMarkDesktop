@@ -29,8 +29,11 @@ namespace StarMark.UI.Views;
 /// 只传 TOP 的窗永远留在普通层，任何应用一激活就把条子盖住；
 /// ④ 条子收起（<c>Visibility=Collapsed</c>）时量出来是 0，<b>那扇窗必须跟着藏起来</b>，
 /// 否则留下一块透明的空窗吃鼠标；⑤ <b>这扇窗里放不下任何弹出层</b>——真机验证：WinUI 3 把
-/// ToolTip 与 Flyout 钉在宿主窗边界内，33 像素高的条子窗里"图形选择栏"只剩半截、悬停说明一个字都不出现，
-/// 所以选择栏与说明都由条子自己排版（自己长高，那扇窗按实测尺寸跟着长）。
+/// ToolTip 与 Flyout 钉在宿主窗边界内，33 像素高的条子窗里"图形选择栏"只剩半截，
+/// 所以选择栏由条子自己排版、自己长高（<see cref="Place"/> 那条链，改内容时由 <c>ReflowBar</c> 叫上这里）。
+/// <para><b>代价是贴图态悬停看不到 ToolTip</b>。曾经为此在条子里加过一行"悬停说明"，
+/// 但那行字几百像素宽、而这扇窗的宽度＝内容实测宽度，悬停哪颗整条就变宽、左边缘跟着往左跑
+/// （居中于画面的条子来回跳）——用户裁决<b>删掉说明行</b>：宽度稳定比看得到解释重要。</para>
 /// </para>
 /// </summary>
 public sealed class CaptureBarWindow : Window
@@ -104,7 +107,7 @@ public sealed class CaptureBarWindow : Window
         }
         var width = (int)Math.Round(wanted.Width * _scale) + Slack * 2;
         var height = (int)Math.Round(wanted.Height * _scale) + Slack * 2;
-        // "摆上面还是下面"只看<b>按钮那一行</b>的高度：选择栏与悬停说明是条子自己长出来的第二、三行，
+        // "摆上面还是下面"只看<b>按钮那一行</b>的高度：选择栏是条子自己长出来的第二行，
         // 按整条的高度判会在用户刚点开选择栏时把整条翻到画面另一侧（手一伸过去它跑了）。
         if (_baseHeight == 0 || height < _baseHeight) _baseHeight = height;
         if (work.Width > 0) width = Math.Min(width, Math.Max(1, work.Width));

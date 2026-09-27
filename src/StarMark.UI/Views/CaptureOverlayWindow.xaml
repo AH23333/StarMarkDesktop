@@ -138,14 +138,22 @@
             </para>
             <para>
             图标是代码画的矢量图元，<b>不用字体字形</b>：字形缺字会显示成方块，而遮罩一按 Esc 就没了，
-            没人能靠眼睛把八个字形逐个确认一遍。名字与说明写在下面那一行（悬停那颗时现身）。
+            没人能靠眼睛把八个字形逐个确认一遍。名字与说明只挂在每颗按钮的 ToolTip 上。
             颜色与粗细收在"笔"那一颗点开的第二行里，当前用哪支笔、多粗，条上那颗点直接看得出来。
             </para>
             <para>
-            <b>为什么说明与浮层都住在条子里，而不是 ToolTip / Flyout</b>（批次 WI 的真机结论）：贴图态整条
-            住一扇自己那顶的小窗（批次 WI），而 WinUI 3 的弹出层（ToolTip、Flyout）被钉在宿主窗的边界内——
-            条子那扇窗只有 33 像素高，于是"图形选择栏"截掉半截、悬停说明一个字都不出现。
-            说明与选择栏必须由条子自己排版、自己长高（那扇窗按实测尺寸跟着长），不能交给弹出层。
+            <b>为什么条子里不再有"悬停说明"那一行</b>（用户裁决）：那一行原本是绕开
+            "WinUI 3 把 ToolTip 钉在宿主窗边界内"（批次 WI）加的，可它一句话就有几百像素宽，
+            而<b>条子那扇窗的宽度＝内容实测宽度</b>——悬停哪颗，整条就变宽、左边缘跟着往左跑，
+            贴图态那颗"居中于画面"的条子来回跳。<b>宽度稳定比看得到解释重要</b>，所以删掉说明行，
+            条子只剩按钮行＋选择栏行（选择栏永远比按钮行窄，撑不宽）。
+            </para>
+            <para>
+            <b>为什么选择栏住在条子里，而不是 Flyout</b>（批次 WI 的真机结论，仍然成立）：贴图态整条
+            住一扇自己那顶的小窗，而 WinUI 3 的弹出层被钉在宿主窗的边界内——那扇窗只有 33 像素高，
+            "图形选择栏"用 Flyout 出来只剩半截。选择栏必须由条子自己排版、自己长高
+            （那扇窗按实测尺寸跟着长，见 <c>ReflowBar</c>）。代价是贴图态悬停看不到 ToolTip——
+            这是"宽度稳定"换来的取舍，不是漏了。
             </para>
         -->
         <Border
@@ -160,19 +168,9 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 <StackPanel x:Name="BarRow" Grid.Row="0" Orientation="Horizontal" Spacing="2"/>
                 <ContentPresenter x:Name="BarPicker" Grid.Row="1" Visibility="Collapsed"/>
-                <TextBlock
-                    x:Name="BarHint"
-                    Grid.Row="2"
-                    Visibility="Collapsed"
-                    Margin="0,1,0,0"
-                    FontSize="11.5"
-                    MaxWidth="520"
-                    TextWrapping="Wrap"
-                    Foreground="#CCFFFFFF"/>
             </Grid>
         </Border>
 

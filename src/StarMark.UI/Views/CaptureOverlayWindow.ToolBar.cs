@@ -161,27 +161,10 @@ public sealed partial class CaptureOverlayWindow
             VerticalAlignment = VerticalAlignment.Center,
         };
         ToolTipService.SetToolTip(button, tip);
-        // 悬停说明写在条子自己那一行，而不是交给 ToolTip：贴图态条子住独立小窗（批次 WI），
-        // 而 WinUI 3 把弹出层钉在宿主窗边界内——33 像素高的条子窗里 ToolTip 一个字都放不下。
-        // 读的是 ToolTipService 上那份（SyncTools 会换文案，悬停那一下拿到的才是当前含义）。
-        button.PointerEntered += (_, _) => ShowHint(ToolTipService.GetToolTip(button) as string);
-        button.PointerExited += (_, _) => HideHint();
+        // 悬停说明<b>不写进条子</b>（用户裁决）：那一行几百像素宽，而窗宽＝内容宽，
+        // 悬停哪颗整条就变宽、左边缘跟着跑——贴图态那颗居中的条子会来回跳。
+        // 文案仍然只有一份，就是上面 ToolTip 那一句（选区阶段那扇全屏窗里它本来就显示得下）。
         return button;
-    }
-
-    /// <summary>把某颗按钮的说明写进条子那一行（说明为空就不动：宁可留着上一条，也不要闪一下空白）。</summary>
-    private void ShowHint(string? text)
-    {
-        if (string.IsNullOrEmpty(text)) return;
-        BarHint.Text = text;
-        BarHint.Visibility = Visibility.Visible;
-        ReflowBar();                      // 说明那一行也是条子长出来的第二／三行：不叫上那扇窗就被截在窗外
-    }
-
-    private void HideHint()
-    {
-        BarHint.Visibility = Visibility.Collapsed;
-        ReflowBar();
     }
 
     private void BrushTool_Click(object sender, RoutedEventArgs e)

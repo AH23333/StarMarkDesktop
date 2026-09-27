@@ -54,13 +54,14 @@ public sealed class CaptureOverlayGateTests
         Assert.DoesNotContain("DropDownButton", bar);
         Assert.DoesNotContain("<RadioButton", bar);
         Assert.DoesNotContain("<Flyout", bar);
-        Assert.DoesNotContain("Content=\"", bar);      // 条上不写字：文字只出现在下面那一行（悬停哪颗读哪颗）
-        // 批次 WI：说明与选择栏改成条子自己的两行（贴图态那扇独立小窗里放不下弹出层）。
-        // 它们是<b>容器</b>不是内容：XAML 里各只许出现一次，且不许预先写一个字——
-        // 写了就又变成"有哪些工具 / 这句话是什么"的第二份事实。
-        Assert.Equal(1, Count(bar, "<TextBlock"));
+        Assert.DoesNotContain("Content=\"", bar);      // 条上不写字：说明只挂在每颗按钮的 ToolTip 上
+        // 批次 WI 把选择栏改成条子自己的一行（贴图态那扇独立小窗里放不下弹出层）；
+        // 批次 WP 按用户裁决<b>删掉了"悬停说明"那一行</b>：窗宽＝内容宽，几百像素的一行字会把
+        // 居中于画面的条子整个推走（悬停哪颗就跳一次）。所以条子里只许有按钮行＋选择栏行，
+        // 一个文字元素都不留——写了字就又变成"这句话是什么"的第二份事实，而且宽度不稳。
+        Assert.Equal(0, Count(bar, "<TextBlock"));
         Assert.DoesNotContain("Text=\"", bar);
-        Assert.Contains("x:Name=\"BarHint\"", bar);
+        Assert.DoesNotContain("BarHint", bar);
         Assert.Contains("x:Name=\"BarPicker\"", bar);
     }
 
@@ -93,7 +94,7 @@ public sealed class CaptureOverlayGateTests
     }
 
     /// <summary>
-    /// 条子<b>静息时仍是一行</b>（用户反馈的原话是"太大"）：按钮只许排一行，选择栏与说明行默认收起。
+    /// 条子<b>静息时仍是一行</b>（用户反馈的原话是"太大"）：按钮只许排一行，选择栏默认收起。
     /// <para>批次 WI 之后条子会随内容长高（那扇独立小窗按实测尺寸跟着长），所以"一行"这条判据
     /// 从"结构上只有一行"改成"多出来的行必须是收起的容器"——出现纵向 StackPanel 就是把按钮排成了两行，
     /// 那才是真的又长回去了。</para>
@@ -106,8 +107,10 @@ public sealed class CaptureOverlayGateTests
         Assert.Contains("Orientation=\"Horizontal\"", bar);
         Assert.DoesNotContain("Orientation=\"Vertical\"", bar);
         Assert.True(Count(bar, "<Border") == 1, "工具条里再套一个 Border 就是又开了一层");
-        // 条子本体 + 选择栏 + 说明行：三处 Collapsed，缺一条就是"什么都没点的时候条子先胖了一行"
-        Assert.Equal(3, Count(bar, "Visibility=\"Collapsed\""));
+        // 条子本体 + 选择栏：两处 Collapsed，缺一条就是"什么都没点的时候条子先胖了一行"。
+        // （批次 WP 之后没有第三处——"悬停说明"那一行按用户裁决删了：窗宽＝内容宽，
+        // 那行字会让居中于画面的贴图条在悬停时变宽、左边缘跟着跑。）
+        Assert.Equal(2, Count(bar, "Visibility=\"Collapsed\""));
     }
 
     /// <summary>工具条那一截 XAML（从 ActionBar 到下一个浮层）。</summary>
@@ -625,14 +628,17 @@ public sealed class CaptureOverlayGateTests
     }
 
     /// <summary>
-    /// 选择栏与悬停说明<b>排在条子里面</b>，不许再走 Flyout / ToolTip（批次 WI 的真机结论）。
-    /// <para>那扇条子窗只有按钮那一行高，而 WinUI 3 把弹出层钉在宿主窗边界内：真机上"图形"点开只剩
-    /// 半截、悬停一颗按钮一个字的说明都不出现。弹出层在这扇窗里<b>按构造</b>放不下，
-    /// 所以说明与选择栏必须由条子自己排版、自己长高（窗按实测尺寸跟着长）。</para>
+    /// <summary>
+    /// 选择栏<b>排在条子里面</b>，不许再走 Flyout（批次 WI 的真机结论：那扇条子窗只有按钮那一行高，
+    /// WinUI 3 把弹出层钉在宿主窗边界内，"图形"点开只剩半截）。
+    /// <para>而"悬停说明"那一行是批次 WP 按用户裁决<b>删掉</b>的：它几百像素宽，而条子那扇窗的宽度＝
+    /// 内容实测宽度，悬停哪颗整条就变宽、左边缘跟着往左跑，贴图态那颗"居中于画面"的条子来回跳。
+    /// <b>宽度稳定比看得到解释重要</b>——这里把"不许再加回来说明行"钉住，免得下一轮有人"好心"补回来。
+    /// 说明的唯一出处仍是每颗按钮的 ToolTip（选区阶段那扇全屏窗里本来就显示得下）。</para>
     /// <para>收笔那条也钉在这里：Esc／再点当前工具时那一栏要跟着收，否则它会一直占着第二行。</para>
     /// </summary>
     [Fact]
-    public void ThePickerAndTheHintAreRowsOfTheBar_NotPopups()
+    public void ThePickerIsARowOfTheBarAndThereIsNoHintRow()
     {
         var cs = ReadOverlay(false);
         Assert.DoesNotContain("new Flyout", cs);
@@ -642,14 +648,15 @@ public sealed class CaptureOverlayGateTests
         Assert.Contains("BarPicker.Visibility = Visibility.Visible;", picker);
         Assert.Contains("BarPicker.Content = null;", SourceGate.MethodBody(cs, "private void HidePicker"));
         Assert.Contains("if (tool is null) HidePicker();", SourceGate.MethodBody(cs, "private void SetTool("));
-        // 说明行：悬停那颗的文案就地写进条子（读 ToolTipService 上那份，SyncTools 换文案后才是当前含义）
-        var icon = SourceGate.MethodBody(cs, "private Button IconButton");
-        Assert.Contains("button.PointerEntered += (_, _) => ShowHint(ToolTipService.GetToolTip(button) as string);", icon);
-        Assert.Contains("button.PointerExited += (_, _) => HideHint();", icon);
-        Assert.Contains("BarHint.Text = text;", SourceGate.MethodBody(cs, "private void ShowHint"));
+        // 说明行整套已经删净：没有 BarHint、没有 ShowHint/HideHint、按钮上也不挂悬停事件
+        Assert.DoesNotContain("BarHint", cs);
+        Assert.DoesNotContain("ShowHint", cs);
+        Assert.DoesNotContain("PointerEntered +=", cs);
+        // 文案仍然只有一份，挂在 ToolTipService 上（不是又抄一遍到别处）
+        Assert.Contains("ToolTipService.SetToolTip(button, tip);", SourceGate.MethodBody(cs, "private Button IconButton"));
         var xaml = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml");
         Assert.Contains("x:Name=\"BarPicker\"", xaml);
-        Assert.Contains("x:Name=\"BarHint\"", xaml);
+        Assert.DoesNotContain("BarHint", xaml);
     }
 
     /// <summary>
@@ -682,10 +689,11 @@ public sealed class CaptureOverlayGateTests
     /// <summary>
     /// 批次 WN：贴图态条子住独立置顶窗（批次 WI），而条子在那扇窗里是 <b>Stretch</b> 的——
     /// 父窗只给它窗内那一点高度，于是它<b>永远量不出"我变高了"</b>，<c>ActionBar.SizeChanged</c> 不响，
-    /// 那扇窗就一直停在旧高度上把第二、三行截在窗外。真机反馈：
+    /// 那扇窗就一直停在旧高度上把选择栏那一行截在窗外。真机反馈：
     /// "所有菜单功能的二级菜单均会被菜单的高度限制遮挡，有时会无法显示或只能部分显示"。
-    /// <para>所以<b>每一处改条子内容的地方都必须叫上 <c>ReflowBar</c></b>：选择栏开／收、悬停说明开／收。
-    /// 钉的是"这四个写点各有一句"，不是"某处有几句"——加第五种行而忘了叫上窗，就是这次的复发。</para>
+    /// <para>所以<b>每一处改条子内容的地方都必须叫上 <c>ReflowBar</c></b>：目前就是选择栏开／收两处
+    /// （"悬停说明"那一行已在批次 WP 按用户裁决删掉——它几百像素宽，会把居中的条子推得来回跳）。</para>
+    /// 钉的是"这两个写点各有一句"，不是"某处有几句"——加第三种行而忘了叫上窗，就是这次的复发。</para>
     /// </summary>
     [Fact]
     public void EveryBarContentWritePointReflowsTheBarWindow()
@@ -696,15 +704,11 @@ public sealed class CaptureOverlayGateTests
         // 选区阶段条子住在全屏遮罩窗里，长多少看得见，不该被这条链牵连重排
         Assert.DoesNotContain("PositionBar", reflow);
 
-        foreach (var writer in new[]
-        {
-            "private void ShowPicker(", "private void HidePicker(",
-            "private void ShowHint(", "private void HideHint(",
-        })
+        foreach (var writer in new[] { "private void ShowPicker(", "private void HidePicker(" })
             Assert.Contains("ReflowBar();", SourceGate.MethodBody(cs, writer));
 
-        // 内容写点只有这四颗：多一处（比如新加一行）就得同步出现在上面那张表里
-        Assert.Equal(4, SourceGate.Count(cs, "ReflowBar();"));
+        // 内容写点只有这两颗（批次 WP 之后说明行已经删净）：多一处就得同步出现在上面那张表里
+        Assert.Equal(2, SourceGate.Count(cs, "ReflowBar();"));
         // 条子在窗里是 Stretch 的：这句话是"量不出自己变高"的前提，改成 Left/Top 就要重新论证这条链
         Assert.Contains("ActionBar.VerticalAlignment = VerticalAlignment.Stretch;",
             SourceGate.MethodBody(cs, "private void AttachBarWindow()"));
