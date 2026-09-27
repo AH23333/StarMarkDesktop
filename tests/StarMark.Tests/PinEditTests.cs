@@ -76,8 +76,10 @@ public sealed class PinEditTests
         Assert.DoesNotContain("ScaleTransform", bar);                   // 也不靠缩放挤进画面
         Assert.DoesNotContain("RenderTransformOrigin", bar);
         Assert.DoesNotContain("barHeight", SourceGate.MethodBody(cs, "private IntRect PinWindowRect"));
-        // 选区阶段仍在那扇全屏窗里（它本来就铺满整屏，没有"加高一条＝一块黑"的问题）
-        Assert.Contains("PlaceByMargin(ActionBar, left,", bar);
+        // 选区阶段仍在那扇全屏窗里（它本来就铺满整屏，没有"加高一条＝一块黑"的问题），
+        // 而它摆哪儿的答案来自模型（批次 WQ：贴图那条也问同一个函数，两态不会分岔）
+        Assert.Contains("CaptureGeometry.BarOrigin(", bar);
+        Assert.Contains("PlaceByMargin(ActionBar, barX, barY)", bar);
     }
 
     /// <summary>

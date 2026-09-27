@@ -381,10 +381,17 @@ public sealed partial class CaptureOverlayWindow
         }
         var screenWidth = _monitor.Width / _scale;
         var screenHeight = _monitor.Height / _scale;
-        var left = Math.Clamp(x + w - barWidth, 4, Math.Max(4, screenWidth - barWidth - 4));
-        var below = y + h + 6 + barHeight <= screenHeight;
-        PlaceByMargin(ActionBar, left, below ? y + h + 6 : Math.Max(4, y - barHeight - 6));
+        // 摆位判据在模型里（批次 WQ）：贴图态那条工具条走的是同一个函数，两处不再各写一份。
+        // 这一态的坐标是窗口内 DIP，条子长高是同一句 ActualHeight 量出来的，判上下与摆放用同一个数。
+        var (barX, barY) = CaptureGeometry.BarOrigin(
+            new IntRect(ToInt(x), ToInt(y), ToInt(w), ToInt(h)),
+            new IntRect(0, 0, ToInt(screenWidth), ToInt(screenHeight)),
+            ToInt(barWidth), ToInt(barHeight), ToInt(barHeight));
+        PlaceByMargin(ActionBar, barX, barY);
     }
+
+    /// <summary>几何判据一律吃整数（物理像素或整 DIP），界面这边只负责把量到的尺寸舍入过去。</summary>
+    private static int ToInt(double value) => (int)Math.Round(value, MidpointRounding.AwayFromZero);
 
     private static void PlaceOnCanvas(FrameworkElement element, double x, double y, double w, double h)
     {

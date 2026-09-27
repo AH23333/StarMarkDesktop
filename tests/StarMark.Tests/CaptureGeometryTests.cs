@@ -241,6 +241,77 @@ public sealed class CaptureGeometryTests
         for (var i = 0; i < 20; i++) Assert.True(names.Add(CaptureGeometry.BuildFileName(now, "png", i)));
     }
 
+    // ────────── 工具条摆位（批次 WQ：截图与贴图两态共用这一条） ──────────
+
+    private static readonly IntRect Screen = new(0, 0, 1920, 1080);
+
+    /// <summary>
+    /// 右缘对齐到画面，<b>不是居中</b>。这是用户对贴图条提的口径，也是截图条一直的做法。
+    /// <para>顺带把"截图那一态的数字一个都没改"钉在这里：(40,406) 正是改判据之前那三行算出来的值。</para>
+    /// </summary>
+    [Fact]
+    public void BarOriginAlignsTheRightEdge_InsteadOfCentring()
+    {
+        var target = new IntRect(100, 100, 400, 300);
+        var (x, y) = CaptureGeometry.BarOrigin(target, Screen, 460, 34, 34);
+        Assert.Equal(target.Right - 460, x);          // 条子右缘＝画面右缘
+        Assert.Equal(406, y);                         // 画面下方 6 像素
+        Assert.NotEqual(70, x);                       // 居中会算出这个数（旧贴图条那份），不许回来
+    }
+
+    /// <summary>下方放得下就下方，放不下才翻到上方；边界按"留得下 margin"算。</summary>
+    [Theory]
+    [InlineData(400, 406)]                            // 画面下方还有大片地方：贴着下沿
+    [InlineData(1036, 1042)]                          // 恰好剩 6+34+4：仍然算放得下
+    [InlineData(1037, 60)]                            // 少 1 像素就换到上面去（画面顶在 100，条子 34＋缝 6）
+    public void BarOriginPrefersBelow_AndFlipsAboveAtTheBoundary(int bottom, int wantY)
+    {
+        var target = new IntRect(100, 100, 400, bottom - 100);
+        Assert.Equal(wantY, CaptureGeometry.BarOrigin(target, Screen, 460, 34, 34).Y);
+    }
+
+    /// <summary>
+    /// 判"放哪一侧"只看常驻那一行，摆放按整条的实际高度——<b>这两个高度不可互换</b>。
+    /// <para>点开"图形选择栏"时长出来的第二行若参与判侧，用户刚把手伸向那一栏，整条就翻到画面另一侧
+    /// （批次 WN 的真机症状）。这里同一输入下两个高度各给一个答案，正是那条跳变。</para>
+    /// </summary>
+    [Fact]
+    public void BarOriginJudgesTheSideByThePersistentRow_Only()
+    {
+        var target = new IntRect(100, 100, 400, 920);            // 下方只剩 54 像素
+        var stayedBelow = CaptureGeometry.BarOrigin(target, Screen, 460, 64, 34);
+        Assert.Equal(1012, stayedBelow.Y);                        // 仍在下侧，整条夹进屏内（与画面重叠一点）
+        Assert.Equal(30, CaptureGeometry.BarOrigin(target, Screen, 460, 64, 64).Y);   // 按长高后判＝跳走了
+    }
+
+    [Fact]
+    public void BarOriginKeepsTheWholeBarOnScreen()
+    {
+        // 画面贴着屏右：右缘对齐会把条子顶出去，夹回来留 4 像素
+        Assert.Equal(1456, CaptureGeometry.BarOrigin(new IntRect(1500, 100, 420, 300), Screen, 460, 34, 34).X);
+        // 条子比屏还宽：Math.Clamp 在 min>max 时是直接抛异常的，这里必须给出一个能看见的位置
+        Assert.Equal(4, CaptureGeometry.BarOrigin(new IntRect(100, 100, 400, 300), Screen, 2000, 34, 34).X);
+    }
+
+    /// <summary>副屏在主屏左边（原点为负）：夹取要相对那块屏，不能把条子吸附到 (0,0)。</summary>
+    [Fact]
+    public void BarOriginRespectsANegativeOriginMonitor()
+    {
+        var second = new IntRect(-1920, 0, 1920, 1080);
+        var (x, y) = CaptureGeometry.BarOrigin(new IntRect(-1500, 100, 400, 300), second, 460, 34, 34);
+        Assert.Equal(-1560, x);
+        Assert.Equal(406, y);
+    }
+
+    /// <summary>拿不到工作区（返回 0 尺寸）：照公式放在画面下方，不做夹取，也不许甩到 (0,0)。</summary>
+    [Fact]
+    public void BarOriginWithoutAWorkArea_StillStaysUnderTheImage()
+    {
+        Assert.Equal((40, 406), CaptureGeometry.BarOrigin(new IntRect(100, 100, 400, 300), default, 460, 34, 34));
+        // 量出来是 0（条子还没亮起来过）也不能抛
+        Assert.Equal((499, 406), CaptureGeometry.BarOrigin(new IntRect(100, 100, 400, 300), Screen, 0, 0, 0));
+    }
+
     // ────────── 像素缓冲 ──────────
 
     [Fact]

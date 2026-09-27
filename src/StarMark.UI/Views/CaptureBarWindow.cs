@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
+using StarMark.Core.Capture;
 using StarMark.UI.Helpers;
 using Windows.Foundation;
 using Windows.UI;
@@ -33,14 +34,12 @@ namespace StarMark.UI.Views;
 /// 所以选择栏由条子自己排版、自己长高（<see cref="Place"/> 那条链，改内容时由 <c>ReflowBar</c> 叫上这里）。
 /// <para><b>代价是贴图态悬停看不到 ToolTip</b>。曾经为此在条子里加过一行"悬停说明"，
 /// 但那行字几百像素宽、而这扇窗的宽度＝内容实测宽度，悬停哪颗整条就变宽、左边缘跟着往左跑
-/// （居中于画面的条子来回跳）——用户裁决<b>删掉说明行</b>：宽度稳定比看得到解释重要。</para>
+/// ——用户裁决<b>删掉说明行</b>：宽度稳定比看得到解释重要。（批次 WQ 之后条子改右缘对齐，变宽只往左扩，
+/// 但"整条忽宽忽窄"仍是要消掉的那个观感，这条裁决不因摆位改变而放松。）</para>
 /// </para>
 /// </summary>
 public sealed class CaptureBarWindow : Window
 {
-    /// <summary>条子与画面之间的缝隙（物理像素）。</summary>
-    private const int Gap = 3;
-
     /// <summary>窗口比条子本体多出的那一圈（防 DPI 取整把边框裁掉一半）。</summary>
     private const int Slack = 2;
 
@@ -72,8 +71,12 @@ public sealed class CaptureBarWindow : Window
     }
 
     /// <summary>
-    /// 按"画面现在在哪"摆放这一条：<b>优先画面下方，放不下就上方</b>（与选区阶段同一判据），
-    /// 水平居中于画面并左右夹进工作区——贴图常常比一条工具条窄，夹不住就会"只看得见半条"。
+    /// 按"画面现在在哪"摆放这一条。摆位判据不在这里写（批次 WQ）：<b>与截图（选区）阶段那条调的是同一个
+    /// <see cref="CaptureGeometry.BarOrigin"/>——右缘对齐画面右缘、优先画面下方、放不下才上方、整条夹回屏内。
+    /// </b>这里只负责三件本态特有的事：把条子量出来（<b>必须先亮窗再量</b>）、把 DIP 常量换成物理像素、
+    /// 以及那条"判上下只看按钮那一行"的口径。
+    /// <para>曾经这里自己写了一份"水平居中于画面"：同一个工具在两个阶段停在两个地方，而且居中让条子
+    /// <b>一变宽就往两边扩</b>（用户看到的正是"菜单来回跳"）。右缘对齐则把变化的那一条边留在了左边。</para>
     /// </summary>
     public void Place(IntRect image, IntRect work)
     {
@@ -112,15 +115,10 @@ public sealed class CaptureBarWindow : Window
         if (_baseHeight == 0 || height < _baseHeight) _baseHeight = height;
         if (work.Width > 0) width = Math.Min(width, Math.Max(1, work.Width));
 
-        var x = image.X + (image.Width - width) / 2;
-        var below = image.Bottom + Gap + _baseHeight <= work.Bottom;
-        var y = below ? image.Bottom + Gap : image.Y - height - Gap;
-        if (work.Width > 0)
-        {
-            x = Math.Clamp(x, work.X, Math.Max(work.X, work.Right - width));
-            // 上下都塞不下（贴图贴着屏边且很高）：贴着画面下沿放，至少条子整条可见可点
-            y = Math.Clamp(y, work.Y, Math.Max(work.Y, work.Bottom - height));
-        }
+        // 摆位判据在模型里，与截图（选区）阶段那条<b>完全同一个函数</b>（批次 WQ）。
+        // 这一侧的坐标是物理像素，所以模型给的 DIP 常量先按屏的缩放换算过去。
+        var (x, y) = CaptureGeometry.BarOrigin(image, work, width, height, _baseHeight,
+            ToPixels(CaptureGeometry.BarGap), ToPixels(CaptureGeometry.BarMargin));
 
         // 两步提层：①进 topmost 带（新窗生下来不在带里）②带内重排到最上（对已在带里的窗再传 TOPMOST
         // 只换带不重排＝什么都没做），且必须带 NOACTIVATE/SWP_SHOWWINDOW 一并显形
@@ -130,6 +128,9 @@ public sealed class CaptureBarWindow : Window
             WindowInterop.SWP_SHOWWINDOW | WindowInterop.SWP_NOACTIVATE);
         WindowInterop.ShowWindow(hwnd, WindowInterop.SW_SHOWNOACTIVATE);
     }
+
+    /// <summary>模型给的间距与边距按 DIP 说话，这一侧整条链是物理像素。</summary>
+    private int ToPixels(double dip) => (int)Math.Round(dip * _scale, MidpointRounding.AwayFromZero);
 
     /// <summary>画面被拖动／缩放／旋转之后重摆一次（沿用上一次的工作区，不必重新问系统）。</summary>
     public void Reposition()

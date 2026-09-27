@@ -162,7 +162,7 @@ public sealed partial class CaptureOverlayWindow
         };
         ToolTipService.SetToolTip(button, tip);
         // 悬停说明<b>不写进条子</b>（用户裁决）：那一行几百像素宽，而窗宽＝内容宽，
-        // 悬停哪颗整条就变宽、左边缘跟着跑——贴图态那颗居中的条子会来回跳。
+        // 悬停哪颗整条就变宽、边缘跟着跑（贴图态那颗条子因此跳位置）。
         // 文案仍然只有一份，就是上面 ToolTip 那一句（选区阶段那扇全屏窗里它本来就显示得下）。
         return button;
     }

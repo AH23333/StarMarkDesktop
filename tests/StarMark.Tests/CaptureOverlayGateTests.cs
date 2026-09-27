@@ -57,8 +57,9 @@ public sealed class CaptureOverlayGateTests
         Assert.DoesNotContain("Content=\"", bar);      // 条上不写字：说明只挂在每颗按钮的 ToolTip 上
         // 批次 WI 把选择栏改成条子自己的一行（贴图态那扇独立小窗里放不下弹出层）；
         // 批次 WP 按用户裁决<b>删掉了"悬停说明"那一行</b>：窗宽＝内容宽，几百像素的一行字会把
-        // 居中于画面的条子整个推走（悬停哪颗就跳一次）。所以条子里只许有按钮行＋选择栏行，
-        // 一个文字元素都不留——写了字就又变成"这句话是什么"的第二份事实，而且宽度不稳。
+        // 条子整个推宽（悬停哪颗跳一次；批次 WQ 改右缘对齐后跳的是左边缘）。
+        // 所以条子里只许有按钮行＋选择栏行，一个文字元素都不留——写了字就又变成"这句话是什么"的第二份事实，
+        // 而且宽度不稳。
         Assert.Equal(0, Count(bar, "<TextBlock"));
         Assert.DoesNotContain("Text=\"", bar);
         Assert.DoesNotContain("BarHint", bar);
@@ -109,7 +110,7 @@ public sealed class CaptureOverlayGateTests
         Assert.True(Count(bar, "<Border") == 1, "工具条里再套一个 Border 就是又开了一层");
         // 条子本体 + 选择栏：两处 Collapsed，缺一条就是"什么都没点的时候条子先胖了一行"。
         // （批次 WP 之后没有第三处——"悬停说明"那一行按用户裁决删了：窗宽＝内容宽，
-        // 那行字会让居中于画面的贴图条在悬停时变宽、左边缘跟着跑。）
+        // 那行字会让贴图条在悬停时变宽、边缘跟着跑。）
         Assert.Equal(2, Count(bar, "Visibility=\"Collapsed\""));
     }
 
@@ -624,7 +625,33 @@ public sealed class CaptureOverlayGateTests
         // WinUI 3 的 Window 没有 Background：客户区就是这层根 Grid。不钉死底色会在浅色系统主题下
         // 露出一圈框架默认白，围着暗色条子——正是这条链要消掉的观感。
         Assert.Contains("Background = new SolidColorBrush(Color.FromArgb(0xEE, 0x20, 0x20, 0x20))", bar);
-        Assert.Contains("below = image.Bottom + Gap + _baseHeight <= work.Bottom", bar);
+        // 判"上下哪一侧"只喂按钮那一行的高度（批次 WN 的口径，判据本体在模型里，见下面那条）
+        Assert.Contains("CaptureGeometry.BarOrigin(image, work, width, height, _baseHeight,", bar);
+        Assert.DoesNotContain("image.Width - width) / 2", bar);          // 旧的那份"水平居中"不许回来
+    }
+
+    /// <summary>
+    /// 两个阶段的工具条必须走<b>同一条摆位判据</b>（批次 WQ）。
+    /// <para>真机反馈："建议不要把贴图菜单栏居中，而是改成和截图的菜单栏一样"。贴图那一条曾经自己写了
+    /// 一份"水平居中于画面"，于是同一个工具在框选阶段贴着选区右缘、贴完图却跑到画面正中——用户看到的是
+    /// "菜单换地方了"。居中还有第二个毛病：条子一变宽就往两边扩，右半截常被夹回屏内，看着像左右跳。
+    /// 现在两态都调 <c>CaptureGeometry.BarOrigin</c>：右缘对齐、优先下方、夹回屏内。</para>
+    /// <para>这里钉的是"两处都只从模型要答案、都不再自己算 x"。贴图那一侧的坐标是物理像素，
+    /// 所以模型给的 DIP 常量必须换算过去（不换算＝150% 屏上缝隙与边距缩一半，两态又不同了）。</para>
+    /// </summary>
+    [Fact]
+    public void BothStagesPlaceTheBarWithTheSameRule()
+    {
+        var model = SourceGate.MethodBody(ReadOverlay(false), "private void PositionBar");
+        Assert.Contains("CaptureGeometry.BarOrigin(", model);
+        // 选区阶段：条子量到多高就按多高判侧（它长高不会外溢，两个高度是同一个数）
+        Assert.Contains("ToInt(barWidth), ToInt(barHeight), ToInt(barHeight));", model);
+        Assert.DoesNotContain("Math.Clamp(x + w - barWidth", model);     // 那三行自己算的摆位已经收进模型
+        Assert.DoesNotContain("y + h + 6 + barHeight", model);
+
+        var bar = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureBarWindow.cs");
+        Assert.Contains("ToPixels(CaptureGeometry.BarGap), ToPixels(CaptureGeometry.BarMargin));", bar);
+        Assert.DoesNotContain("private const int Gap", bar);             // 缝隙只剩模型里那一个数
     }
 
     /// <summary>
@@ -632,7 +659,7 @@ public sealed class CaptureOverlayGateTests
     /// 选择栏<b>排在条子里面</b>，不许再走 Flyout（批次 WI 的真机结论：那扇条子窗只有按钮那一行高，
     /// WinUI 3 把弹出层钉在宿主窗边界内，"图形"点开只剩半截）。
     /// <para>而"悬停说明"那一行是批次 WP 按用户裁决<b>删掉</b>的：它几百像素宽，而条子那扇窗的宽度＝
-    /// 内容实测宽度，悬停哪颗整条就变宽、左边缘跟着往左跑，贴图态那颗"居中于画面"的条子来回跳。
+    /// 内容实测宽度，悬停哪颗整条就变宽、左边缘跟着往左跑（批次 WQ 之后条子改右缘对齐，跳的仍是左边缘）。
     /// <b>宽度稳定比看得到解释重要</b>——这里把"不许再加回来说明行"钉住，免得下一轮有人"好心"补回来。
     /// 说明的唯一出处仍是每颗按钮的 ToolTip（选区阶段那扇全屏窗里本来就显示得下）。</para>
     /// <para>收笔那条也钉在这里：Esc／再点当前工具时那一栏要跟着收，否则它会一直占着第二行。</para>
@@ -692,7 +719,7 @@ public sealed class CaptureOverlayGateTests
     /// 那扇窗就一直停在旧高度上把选择栏那一行截在窗外。真机反馈：
     /// "所有菜单功能的二级菜单均会被菜单的高度限制遮挡，有时会无法显示或只能部分显示"。
     /// <para>所以<b>每一处改条子内容的地方都必须叫上 <c>ReflowBar</c></b>：目前就是选择栏开／收两处
-    /// （"悬停说明"那一行已在批次 WP 按用户裁决删掉——它几百像素宽，会把居中的条子推得来回跳）。</para>
+    /// （"悬停说明"那一行已在批次 WP 按用户裁决删掉——它几百像素宽，而窗宽＝内容宽，会把条子推得忽宽忽窄）。</para>
     /// 钉的是"这两个写点各有一句"，不是"某处有几句"——加第三种行而忘了叫上窗，就是这次的复发。</para>
     /// </summary>
     [Fact]

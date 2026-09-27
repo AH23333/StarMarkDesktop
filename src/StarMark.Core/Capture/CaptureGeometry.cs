@@ -159,6 +159,45 @@ public static class CaptureGeometry
                 Clamp(y, workArea.Y + keep - h, workArea.Bottom - keep));
     }
 
+    /// <summary>工具条与它服务的那块画面之间的缝隙（选区阶段是 DIP，贴图态按屏的缩放换算过再传）。</summary>
+    public const int BarGap = 6;
+
+    /// <summary>工具条离屏边的最小距离：夹住它，条子就不会被顶到任务栏后面或屏外面去。</summary>
+    public const int BarMargin = 4;
+
+    /// <summary>
+    /// 工具条左上角该落在哪儿。<b>截图（选区）阶段与贴图阶段共用这一条判据</b>（批次 WQ）：
+    /// 贴图那条曾经自己写了一份"水平居中于画面"，于是同一个工具在两个阶段停在两个地方，
+    /// 而且居中还带来一个额外毛病——那扇窗的宽度＝内容实测宽度，条子一变宽左边缘就跟着跑。
+    /// <para>口径（与用户熟悉的截图条一致）：① <b>右缘对齐</b>到画面的右缘；② 优先放在画面<b>下方</b>，
+    /// 下方放不下才放上方；③ 整条夹回屏内（<paramref name="margin"/> 那一圈留给任务栏与屏边）。</para>
+    /// <para>
+    /// <paramref name="sideHeight"/> 与 <paramref name="barHeight"/> 分开是贴图态那条具体的坑：点开"图形选择栏"
+    /// 时条子会长出第二行，用<b>长高之后</b>的高度去判上下，会在用户刚把手伸向那一栏的瞬间把整条翻到画面
+    /// 另一侧。所以判"放哪一侧"只看常驻的那一行（按钮行），摆放仍按整条的实际高度夹。
+    /// 选区阶段两者相同（条子住在全屏遮罩窗里，长高不外溢）。
+    /// </para>
+    /// <para>退化输入不许抛、也不许把条子甩到看不见的地方：拿不到屏（<paramref name="bounds"/> 为空）时
+    /// 照公式放在画面下方、不做夹取；条子比屏还宽/还高时贴到 <paramref name="margin"/> 处，
+    /// 而不是让 <c>Math.Clamp</c> 因为 min&gt;max 直接抛异常。</para>
+    /// </summary>
+    public static (int X, int Y) BarOrigin(
+        IntRect target, IntRect bounds, int barWidth, int barHeight, int sideHeight,
+        int gap = BarGap, int margin = BarMargin)
+    {
+        var width = Math.Max(1, barWidth);
+        var height = Math.Max(1, barHeight);
+        var side = Math.Max(1, sideHeight);
+        if (bounds.IsEmpty) return (target.Right - width, target.Bottom + gap);
+
+        int Clamp(int value, int lo, int hi) => hi < lo ? lo : Math.Clamp(value, lo, hi);
+
+        var x = Clamp(target.Right - width, bounds.X + margin, bounds.Right - width - margin);
+        var below = target.Bottom + gap + side <= bounds.Bottom - margin;
+        var y = below ? target.Bottom + gap : target.Y - height - gap;
+        return (x, Clamp(y, bounds.Y + margin, bounds.Bottom - height - margin));
+    }
+
     /// <summary>
     /// 选区上"这一点按下去要干什么"的答案：中间＝整块移动，八条边/四个角＝改大小，
     /// 完全在外面＝<see cref="SelectionEdge.None"/>（放行给"重新框一块"）。
