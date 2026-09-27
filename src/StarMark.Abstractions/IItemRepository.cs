@@ -145,6 +145,22 @@ public interface IItemRepository
     Task<bool> DeleteClipboardEntryAsync(long itemId, CancellationToken ct = default);
 
     /// <summary>
+    /// 列出<b>所有</b>图片行的文件名与缺失标记，供启动对账（§3-Q6 三分类）使用。
+    /// <para>实现必须无行数窗口：借一个带 limit 的查询来对账，窗口外的行会被当成"没人认领的文件"，
+    /// 于是本来完好的目录被报成一堆孤儿。也只需文件名——把正文捞进来是白付的内存。</para>
+    /// </summary>
+    Task<IReadOnlyList<Clipboard.ClipboardEntry.ClipAssetRow>> GetClipboardImageAssetsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// 批量置 / 清 <c>clipMissing</c>，返回<b>真正改动</b>的行数（已经标着的 / 坏 JSON 的行都不算，
+    /// 所以调用方可以用"要改的条数 − 返回条数"发现有一批行标不上去）。
+    /// <para>置标记是<b>唯一</b>允许因文件缺失而写回这些行的动作；<b>清库与删行都不许反过来删文件</b>，
+    /// 那些没人认领的文件只能数出来给用户看（决议 §3-Q6 第二类）。</para>
+    /// </summary>
+    Task<int> SetClipboardMissingFlagsAsync(
+        IReadOnlyList<long> markMissing, IReadOnlyList<long> clearMissing, CancellationToken ct = default);
+
+    /// <summary>
     /// 读取某一组件实例名下的全部本地条目（待办 + 随记），含隐藏/置顶/子标题/URI/描述/笔记与标签等用户状态。
     /// 以 <c>source_id</c> 前缀 <c>instanceId + "|"</c> 精确圈定本实例，无跨实例数量窗口（区别于
     /// <see cref="GetBySourceAsync"/> 的全局 limit 截断）。供快照忠实捕获使用。

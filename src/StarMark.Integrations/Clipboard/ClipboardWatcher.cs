@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading;
@@ -387,5 +388,54 @@ public sealed class ClipboardWatcher : IDisposable
     {
         Stop();
         _writeGate.Dispose();
+    }
+}
+
+/// <summary>
+/// 启动对账（批次 ClipIMG-1e，§3-Q6 三分类）：把"库里的图片行"与"clip 目录里的文件"对一次。
+/// <para>
+/// 判据本身在 <see cref="ClipAssets.Reconcile"/>（纯函数、可逐值断言）；这里只做三件 IO 事：
+/// 读行、读目录、写回标记。<b>只有"行有图无"那一类允许写库</b>——而"图有行无"的孤儿
+/// <b>一件都不删</b>：目录是给用户看的，静默批量删除是任何一次"我在帮你清理"都换不回来的一类动作。
+/// </para>
+/// <para>返回 null＝<b>没跑成</b>（权限、杀软、库被占）。调用方不许把 null 当成"一切正常"。</para>
+/// </summary>
+public static class ClipboardAssetAudit
+{
+    public static async Task<ClipAssets.ReconcileResult?> RunAsync(
+        IItemRepository repo, CancellationToken ct = default)
+    {
+        if (repo is null) throw new ArgumentNullException(nameof(repo));
+        try
+        {
+            var rows = await repo.GetClipboardImageAssetsAsync(ct);
+            var files = ClipboardImageStore.ListFiles();
+            if (rows.Count == 0 && files.Count == 0)
+                return ClipAssets.ReconcileResult.Empty;      // 没开过图片采集：连目录都不必存在，别为它写日志
+
+            var names = new string[files.Count];
+            for (var i = 0; i < files.Count; i++) names[i] = files[i].Name;
+            var result = ClipAssets.Reconcile(rows, names);
+
+            var requested = result.MissingRowIds.Count + result.RestoredRowIds.Count;
+            if (requested > 0)
+            {
+                var changed = await repo.SetClipboardMissingFlagsAsync(
+                    result.MissingRowIds, result.RestoredRowIds, ct);
+                if (changed < requested)
+                    StarLog.Warn($"[剪贴板] 对账有 {requested - changed} 行的缺失标记没能写上去（多半是 extra_json 坏了，下一轮还会再来）");
+            }
+
+            if (!result.NothingToDo)
+                StarLog.Info($"[剪贴板] 图片对账：标为缺失 {result.MissingRowIds.Count} 条、"
+                    + $"恢复 {result.RestoredRowIds.Count} 条、孤儿 {result.OrphanNames.Count} 件（按裁决未清理）、"
+                    + $"临时件 {result.TempNames.Count} 件");
+            return result;
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("剪贴板图片对账没跑成（不影响使用，下次启动再来）", ex);
+            return null;
+        }
     }
 }

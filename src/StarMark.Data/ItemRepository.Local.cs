@@ -395,12 +395,17 @@ public sealed partial class ItemRepository
     /// 剪贴板轮转的分桶判据（<b>唯一出处</b>）。
     /// <para>图片与文本必须分开裁：§4 给了两条独立上限（200 / 500），一起裁的话"复制 500 段文字"
     /// 会把用户的截图裁出历史，反过来"开了一天图片采集"会把文字历史挤掉——两种都是用户看不见成因的丢数据。</para>
-    /// <para><c>COALESCE(...,0)</c> 那一层不是装饰：<c>extra_json</c> 为空/坏/没有 clipFormat 的行，
-    /// <c>json_extract</c> 与那个格式值比出来的结果是 <b>NULL</b> 而不是 false，直接写进 WHERE 会让这些行
-    /// 既不进图片桶也不进文本桶 ⇒ 永远裁不掉，历史无限增长。</para>
+    /// <para><b>两层兜底各挡一种坏法：</b>
+    /// ① <c>json_valid</c>——<c>json_extract</c> 遇到<b>不合法 JSON 是抛错</b>而不是返回 NULL，
+    /// 于是一行被手改过的 <c>extra_json</c> 就能让整条轮转语句失败 ⇒ 剪贴板从此一条都记不上
+    /// （ClipIMG-1e 的对账测试实测踩到：坏 JSON 那一行让 <c>GetClipboardImageAssetsAsync</c> 整个抛出来）。
+    /// ② <c>COALESCE(...,0)</c>——<c>extra_json</c> 为空/没有 clipFormat 的行，与那个格式值比出来的结果是
+    /// <b>NULL</b> 而不是 false，直接写进 WHERE 会让这些行既不进图片桶也不进文本桶 ⇒ 永远裁不掉。</para>
+    /// <para>读不出格式的一律按<b>文本桶</b>处理：它仍然可被裁掉，不会因为"归不进任何桶"而长生不老。</para>
     /// </summary>
     private const string ClipBucketClause =
-        "AND COALESCE(json_extract(extra_json, '$.clipFormat') = @image_format, 0) = @is_image";
+        "AND COALESCE(json_extract(CASE WHEN json_valid(extra_json) THEN extra_json ELSE '{}' END, "
+        + "'$.clipFormat') = @image_format, 0) = @is_image";
 
     /// <summary>桶参数的唯一拼装处（<c>@image_format</c> 由 <see cref="ClipboardEntry.FormatImage"/> 递进去，SQL 里不写字面量"image"）。</summary>
     private static void AddClipBucketParameters(SqliteCommand cmd, string source, bool isImage)
@@ -536,6 +541,70 @@ public sealed partial class ItemRepository
             DataChangeHub.Notify();
         }
         return removed > 0;
+    }
+
+    /// <summary>
+    /// 对账要的"所有图片行"（批次 ClipIMG-1e）。<b>刻意不带行数窗口</b>：
+    /// 借 <c>GetBySourceAsync</c> 那份默认 1000 的 limit 来对账，窗口之外的行会被当成"没人认领的文件"，
+    /// 于是<b>一个本来完好的目录被报成一堆孤儿</b>——少报与错报一样难被发现（RSS 收藏键踩过同一坑）。
+    /// 也不带 description：图片行没有正文，而把 2000 行的正文捞进内存只为比一个文件名，是白付的代价。
+    /// </summary>
+    public async Task<IReadOnlyList<ClipboardEntry.ClipAssetRow>> GetClipboardImageAssetsAsync(CancellationToken ct = default)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"SELECT id, extra_json FROM items WHERE source = @source {ClipBucketClause};";
+        AddClipBucketParameters(cmd, ItemSources.Clipboard, isImage: true);
+        var list = new List<ClipboardEntry.ClipAssetRow>();
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        while (await r.ReadAsync(ct))
+            list.Add(ClipboardEntry.AssetOf(r.GetInt64(0), r.IsDBNull(1) ? null : r.GetString(1)));
+        return list;
+    }
+
+    /// <summary>
+    /// 批量置 / 清 <c>clipMissing</c>，返回<b>真正改动</b>的行数。
+    /// <para>用 <c>json_set</c>/<c>json_remove</c> 就地改一个键，而不是"读出来—反序列化—整列写回"：
+    /// 后者会为改一个布尔把 extra 里其它键一起过一遍手，任何一处读写口径不一致都会静默丢字段。</para>
+    /// <para><b><c>json_valid</c> 那道守卫不是可选项</b>：坏 JSON 喂给 <c>json_set</c> 得到的不是报错而是
+    /// <b>NULL</b>，那一行的 extra 会被整列抹掉——用户下次看到的就是"这条历史连尺寸都没了"。
+    /// 所以坏数据宁可这次不标（对账下一轮还会再来），也不能顺手清一遍用户的库。</para>
+    /// <para>WHERE 里 <c>source='clipboard'</c> 与 id 两个条件缺一不可（同 <see cref="DeleteClipboardEntryAsync"/>）。</para>
+    /// </summary>
+    public async Task<int> SetClipboardMissingFlagsAsync(
+        IReadOnlyList<long> markMissing, IReadOnlyList<long> clearMissing, CancellationToken ct = default)
+    {
+        var changed = 0;
+        changed += await ApplyMissingFlagAsync(markMissing, add: true, ct);
+        changed += await ApplyMissingFlagAsync(clearMissing, add: false, ct);
+        return changed;
+    }
+
+    private async Task<int> ApplyMissingFlagAsync(IReadOnlyList<long> ids, bool add, CancellationToken ct)
+    {
+        if (ids is null || ids.Count == 0) return 0;
+
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        var placeholders = new List<string>(ids.Count);
+        for (var i = 0; i < ids.Count; i++)
+        {
+            var name = "@i" + i;
+            placeholders.Add(name);
+            cmd.Parameters.AddWithValue(name, ids[i]);
+        }
+
+        cmd.CommandText = $@"
+            UPDATE items SET extra_json =
+                {(add ? "json_set(extra_json, '$.clipMissing', json('true'))"
+                      : "json_remove(extra_json, '$.clipMissing')")}
+            WHERE source = @source AND json_valid(extra_json) AND id IN ({string.Join(",", placeholders)})
+              AND COALESCE(json_extract(extra_json, '$.clipMissing'), 0) <> {(add ? 1 : 0)};";
+        cmd.Parameters.AddWithValue("@source", ItemSources.Clipboard);
+
+        var rows = await cmd.ExecuteNonQueryAsync(ct);
+        if (rows > 0) DataChangeHub.Notify();
+        return rows;
     }
 
 }

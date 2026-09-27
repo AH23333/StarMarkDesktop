@@ -220,4 +220,66 @@ public static class ClipAssets
     /// <summary>图片条目的标题（§1b 裁决：尺寸本身就是要说给用户看的第一个事实）。</summary>
     public static string DescribeTitle(int width, int height)
         => width > 0 && height > 0 ? $"{width}×{height}" : "图片";
+
+    // ==================== 启动对账（§3-Q6 三分类） ====================
+
+    /// <summary>
+    /// 对账结果。<b>三类各说一件事，且只有一类动数据库、零类动文件</b>：
+    /// <list type="bullet">
+    /// <item><description><c>MissingRowIds</c>：行有图无（用户手删文件 / 旧备份恢复过来）⇒ 条目<b>保留</b>，只打 <c>clipMissing</c>。删行等于替用户决定他不再需要它。</description></item>
+    /// <item><description><c>OrphanNames</c>：图有行无（删行时文件删失败 / 用户自己拷进来）⇒ <b>只数不删</b>。目录对用户可见，静默批量删除是最难解释的越权。</description></item>
+    /// <item><description><c>TempNames</c>：临时件（<c>*.tmp</c>）——写盘走"临时名 + 原子改名"，这一类本应由构造消灭，出现即说明有一次没写完。</description></item>
+    /// </list>
+    /// </summary>
+    public readonly record struct ReconcileResult(
+        IReadOnlyList<long> MissingRowIds,
+        IReadOnlyList<string> OrphanNames,
+        IReadOnlyList<long> RestoredRowIds,
+        IReadOnlyList<string> TempNames)
+    {
+        public static readonly ReconcileResult Empty = new(Array.Empty<long>(), Array.Empty<string>(),
+            Array.Empty<long>(), Array.Empty<string>());
+        public bool NothingToDo => MissingRowIds.Count == 0 && OrphanNames.Count == 0
+            && RestoredRowIds.Count == 0 && TempNames.Count == 0;
+    }
+
+    /// <summary>
+    /// 把"库里的图片行"与"目录里的文件"对一次账。
+    /// <para><b>比对一律 OrdinalIgnoreCase</b>：NTFS 大小写不敏感，而我们写出去的名字来自
+    /// <c>ToString("yyyy-MM-dd_HHmm")</c> 与十六进制哈希（可能是大写 A–F），备份恢复回来的名字
+    /// 却可能被改过大小写——按序数敏感比就会把"其实在"的图判成缺失，用户看到的是"我的图打不开了"。</para>
+    /// <para><paramref name="rows"/> 的 <c>HasFlag</c> 带进来是为了第三类反向：<b>文件又被用户放回来了</b>
+    /// （比如从别的机器拷回整个目录）时要把上次打的 <c>clipMissing</c> 清掉，否则那半句假话会永远挂着。</para>
+    /// </summary>
+    public static ReconcileResult Reconcile(
+        IEnumerable<ClipboardEntry.ClipAssetRow> rows, IEnumerable<string> fileNames)
+    {
+        var files = new HashSet<string>(fileNames, StringComparer.OrdinalIgnoreCase);
+        var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var missing = new List<long>();
+        var restored = new List<long>();
+
+        foreach (var (id, main, thumb, flagged) in rows)
+        {
+            if (!string.IsNullOrWhiteSpace(main)) claimed.Add(main!);
+            if (!string.IsNullOrWhiteSpace(thumb)) claimed.Add(thumb!);
+
+            var here = !string.IsNullOrWhiteSpace(main) && files.Contains(main!);
+            // 四格判据一格都不能串：文件在+标着 ⇒ 清标记；文件没+没标 ⇒ 打标记；
+            // 文件没+已标着 ⇒ 什么都不做（幂等，不然每启动都重写一遍全表）。
+            if (here && flagged) restored.Add(id);
+            if (here || string.IsNullOrWhiteSpace(main)) continue;
+            if (!flagged) missing.Add(id);
+        }
+
+        var orphans = new List<string>();
+        var temps = new List<string>();
+        foreach (var name in files)
+        {
+            if (IsTempName(name)) { temps.Add(name); continue; }
+            if (!claimed.Contains(name)) orphans.Add(name);
+        }
+
+        return new ReconcileResult(missing, orphans, restored, temps);
+    }
 }

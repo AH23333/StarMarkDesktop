@@ -278,20 +278,48 @@ public static class ClipboardEntry
     /// <b>行有图无</b>的标记（§3-Q6 第一类：用户手删文件、旧备份恢复过来）。
     /// 条目一律保留——"文件不见了"不是"这条历史没价值"，删行等于替用户决定他不再需要它。
     /// </summary>
-    public static bool IsMissing(Item item)
+    public static bool IsMissing(Item item) => IsMissingOf(item.ExtraJson);
+
+    /// <summary>置/清 <c>clipMissing</c>。清掉只在"文件真的又在了"那一刻由对账调用。</summary>
+    public static string WithMissing(Item item, bool missing)
     {
-        try { return Parse(item.ExtraJson)?[MissingKey]?.GetValue<bool>() ?? false; }
+        item.ExtraJson = WithMissingOf(item.ExtraJson, missing);
+        return item.ExtraJson;
+    }
+
+    /// <summary>
+    /// 字符串入口（<b>对账专用</b>：它手里是从库里读出来的一串 extra，不必为改一个布尔造一个 Item）。
+    /// 坏 JSON 走 <see cref="Parse"/> 的同一兜底：丢掉读不出的内容重开一个对象——
+    /// 这一行本来就是图片行，重建之后仍然打得开，只是那些读不懂的键没了。
+    /// </summary>
+    public static string WithMissingOf(string? extraJson, bool missing)
+    {
+        var node = Parse(extraJson);
+        if (missing) node[MissingKey] = true;
+        else node.Remove(MissingKey);
+        return node.ToJsonString();
+    }
+
+    /// <summary><c>clipMissing</c> 的字符串入口（对账要"已经标过的就别再标一次"）。</summary>
+    public static bool IsMissingOf(string? extraJson)
+    {
+        try { return Parse(extraJson)?[MissingKey]?.GetValue<bool>() ?? false; }
         catch { return false; }
     }
 
-    /// <summary>置/清 <c>clipMissing</c>。清掉只在"文件真的又被写出来了"那一刻由采集侧调用。</summary>
-    public static string WithMissing(Item item, bool missing)
+    /// <summary>
+    /// 对账要的一行图片资产（<b>刻意不带正文/描述</b>：对账只看"文件名在不在"，
+    /// 把 description 一并捞出来会让一次启动扫描把几十 MB 历史读进内存）。
+    /// </summary>
+    public readonly record struct ClipAssetRow(long Id, string? Main, string? Thumb, bool Flagged);
+
+    /// <summary>
+    /// 把一行的 <c>extra_json</c> 收成对账视角。<b>只给图片行用</b>（调用方按 clipFormat 分过桶）。
+    /// </summary>
+    public static ClipAssetRow AssetOf(long id, string? extraJson)
     {
-        var node = Parse(item.ExtraJson);
-        if (missing) node[MissingKey] = true;
-        else node.Remove(MissingKey);
-        item.ExtraJson = node.ToJsonString();
-        return item.ExtraJson;
+        var (main, thumb) = ClipFileNamesOf(extraJson);
+        return new ClipAssetRow(id, main, thumb, IsMissingOf(extraJson));
     }
 
     /// <summary>这条图片的负载（无文件名＝null，采集侧就不会以为自己有名字可以写）。</summary>
