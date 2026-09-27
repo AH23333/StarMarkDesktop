@@ -107,13 +107,38 @@ public sealed class AiClassifyService
     }
 
     /// <summary>
-    /// 跑一轮整理。<b>不写库</b>：整理出来的东西要用户在预览里点头才算数。
+    /// 预算裁决（§20.2 闸门唯一入口）。<b>窗口以账本最大 at 为"现在"往回推 30 天</b>（§20.5 防改墙钟），
+    /// 判出的越线就地落熔断位——"谁发现超了谁负责拉闸"只在这一处发生，界面只读结论。
+    /// 无账本（老库第一次跑、或写入一直没发生）＝没有消耗可谈，放行。
+    /// </summary>
+    public async Task<AiBudgetVerdict> BudgetVerdictAsync(CancellationToken ct)
+    {
+        var budget = _store.LoadAiBudget();
+        if (_usage is null) return budget.Judge(0);
+        var max = await _usage.MaxRecordedAtAsync(ct);
+        var totals = max is null ? new AiUsageTotals(0, 0, 0, 0)
+                                 : await _usage.TotalsSinceAsync(AiBudget.MonthlyFrom(max.Value), ct);
+        var verdict = budget.Judge(totals.TotalTokens);
+        if (verdict.State == AiBudgetState.Tripping)
+            _store.SaveAiBudget(budget with { PausedByBudget = true });   // 拉闸必须持久（跨会话）
+        return verdict;
+    }
+
+    /// <summary>跑一轮整理。<b>不写库</b>：整理出来的东西要用户在预览里点头才算数。
     /// <para>每批边界把"目前为止的方案"落一次盘——用户中途关窗口、进程被杀，
     /// 已经整理出来的部分都还在，回来还能看见「继续应用上次的整理结果」。</para>
+    /// <para><b>入口先过预算闸</b>（§20.2）：熔断亮着就不发一个包，原因原样带在 FirstError 里。</para>
     /// </summary>
     public async Task<OrganiseOutcome> OrganiseAsync(
         int limit, Action<string> onStatus, Action<int, int> onProgress, CancellationToken ct)
     {
+        var budget = await BudgetVerdictAsync(ct);
+        if (!budget.AllowsCall)
+            return new OrganiseOutcome(ClassifyPlan.Empty, 0, 0, 0, 0, 0, 0, 0, 0,
+                budget.State == AiBudgetState.Tripping
+                    ? $"这一轮会花约 {budget.Used} token，已达到月度预算——AI 已自动暂停，可在 设置 → AI 的用量面板调额或手动恢复"
+                    : "本月 token 预算已用完，AI 整理处于暂停；可在 设置 → AI 的用量面板点「恢复」或调整额度");
+
         var settings = _store.LoadAiSettings();
         if (settings.Problem() is { } bad)
             return new OrganiseOutcome(ClassifyPlan.Empty, 0, 0, 0, 0, 0, 0, 0, 0, "AI 通道还不能用：" + bad);

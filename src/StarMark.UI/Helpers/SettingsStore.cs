@@ -142,6 +142,16 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         /// 应用完或用户明确丢弃时清空。与 <c>Ai*</c> 那六个一样保持独立 key，谁也不覆盖谁。</summary>
         public string? AiPendingPlanJson { get; set; }
 
+        /// <summary>月度 token 预算（§20.2）。null＝从没设过＝用出厂默认 500K；
+        /// <b>不做"0＝无限"</b>：预算要关到最低有 MinMonthlyTokens 兜底，想彻底停 AI 该关总开关，
+        /// 一格只管一件事（这是扩展侧"storage key 语义化"教训的延续——同一份文件里
+        /// AiEnabled 和 AiTokenBudget 若混出一个"budget=0 也关 AI"的暗含义，两处判断迟早分岔）。</summary>
+        public long? AiTokenBudget { get; set; }
+
+        /// <summary>预算熔断位（跨会话保持）。true＝上次越线后被暂停，<b>窗口滚回去也不会自动放行</b>——
+        /// §20.2 明写"重置＝手动点击"，防的就是"用户不知道为什么半夜恢复的调用在烧钱"。</summary>
+        public bool? AiBudgetPaused { get; set; }
+
         /// <summary>
         /// 护眼 / 休息提醒总开关（<b>默认关</b>）：默认开等于在谁都没要求的时候往屏幕上盖一层遮罩，
         /// 那是"程序替用户决定什么时候该休息"。关时连节拍定时器都不建（不占表、不探前台窗口）。
@@ -834,6 +844,27 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     {
         var d = Load() ?? new SettingsData();
         d.AiPendingPlanJson = null;
+        Save(d);
+    }
+
+    /// <summary>读预算档位。两格都容错（这文件用户可以手改）：预算数字认不出来回默认、
+    /// 不抛；熔断位 null 按"没过"。<b>读出的值一律过一遍 <see cref="AiBudget.WithMonthlyTokens"/></b>——
+    /// 手改成 1 token 的档位在语义上不该等于"关了 AI"。</summary>
+    public AiBudget LoadAiBudget()
+    {
+        var d = Load();
+        var budget = new AiBudget(AiBudget.DefaultMonthlyTokens, d?.AiBudgetPaused == true);
+        return d?.AiTokenBudget is { } tokens ? budget.WithMonthlyTokens(tokens) : budget;
+    }
+
+    /// <summary>预算整组写入（额度 + 熔断位）。<b>不给"只改一位"的写法</b>：
+    /// 把"改额度"与"消熔断"分开调，会造出"额度升到天上、熔断位还亮着"的鬼状态——
+    /// 用户在面板上调了额、功能照旧被拒，且找不到按钮解释这件事。</summary>
+    public void SaveAiBudget(AiBudget budget)
+    {
+        var d = Load() ?? new SettingsData();
+        d.AiTokenBudget = budget.MonthlyTokenBudget;
+        d.AiBudgetPaused = budget.PausedByBudget;
         Save(d);
     }
 
