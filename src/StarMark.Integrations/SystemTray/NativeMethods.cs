@@ -23,6 +23,8 @@ internal static class NativeMethods
     public const uint WM_CLIPBOARDUPDATE = 0x031D;   // Vista+；旧的 WM_RENDERFORMAT 路线不需要
     public const uint CF_UNICODETEXT = 13;
     public const uint CF_HDROP = 15;
+    public const uint CF_DIB = 8;         // BITMAPINFOHEADER + 像素（复制图片最常见的给法）
+    public const uint CF_DIBV5 = 17;      // BITMAPV5HEADER + 像素（带位掩码，优先级最高）
 
     public const int GWL_USERDATA = -21;
     public const int SW_HIDE = 0;
@@ -232,6 +234,10 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr GetClipboardData(uint uFormat);
+
+    /// <summary>取私有格式（如 "PNG"）的运行时 id；返回 0＝这个格式没人注册过。</summary>
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern uint RegisterClipboardFormatW(string lpszFormat);
 
     [DllImport("kernel32.dll")]
     public static extern UIntPtr GlobalSize(IntPtr hMem);

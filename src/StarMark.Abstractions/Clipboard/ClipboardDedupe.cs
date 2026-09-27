@@ -52,25 +52,38 @@ public sealed class ClipboardDedupe
     /// 文字时会被当成回声挡掉一次＝这条复制静默丢失。5 s 足够覆盖"写入→系统发通知"的真实间隔。
     /// </para>
     /// </summary>
-    public void NoteOwnWrite(string? rawText, long nowMs)
-    {
-        var id = IdOf(rawText);
-        if (id is null) return;
-        lock (_gate)
-        {
-            _ownWrites.Add((id, nowMs));
-            // 双上限：时间过期由 ShouldSkip 负责，这里只保证"哪怕时钟疯跳也不会无界增长"。
-            while (_ownWrites.Count > OwnWriteCapacity) _ownWrites.RemoveAt(0);
-        }
-    }
+    public void NoteOwnWrite(string? rawText, long nowMs) => NoteId(IdOfText(rawText), nowMs);
+
+    /// <summary>
+    /// 图片版的登记：<b>身份是归一后的像素（BGRA）哈希，不是容器字节</b>。
+    /// <para>这是"字节身份"在这里唯一成立的取法：写回时我们交出去的是 PNG 字节，而系统再发通知时
+    /// 给采集侧的是它自己重排出来的 DIB（长度、位深、行填充都可能不同）。拿容器字节算哈希，
+    /// 自家那一次写入永远对不上登记 ⇒ 用户每点一次"复制图片"，历史就多一条自回声。</para>
+    /// </summary>
+    public void NoteOwnWrite(byte[]? bgra, long nowMs) => NoteId(IdOfPixels(bgra), nowMs);
 
     /// <summary>
     /// 这条通知要不要挡掉。<b>有副作用</b>：放行时会把"上一条"记成本次内容，
     /// 命中回声时会消费掉一个登记（所以同一次自己写入只挡一条，不影响用户随后手动复制别的东西）。
     /// </summary>
-    public bool ShouldSkip(string? rawText, long nowMs)
+    public bool ShouldSkip(string? rawText, long nowMs) => ShouldSkipId(IdOfText(rawText), nowMs);
+
+    /// <summary>图片版：<see cref="ShouldSkip(string,long)"/> 的同一条闸门，只是身份换成像素哈希。</summary>
+    public bool ShouldSkip(byte[]? bgra, long nowMs) => ShouldSkipId(IdOfPixels(bgra), nowMs);
+
+    private void NoteId(string? id, long nowMs)
     {
-        var id = IdOf(rawText);
+        if (id is null) return;
+        lock (_gate)
+        {
+            _ownWrites.Add((id, nowMs));
+            // 双上限：时间过期由 ShouldSkipId 负责，这里只保证"哪怕时钟疯跳也不会无界增长"。
+            while (_ownWrites.Count > OwnWriteCapacity) _ownWrites.RemoveAt(0);
+        }
+    }
+
+    private bool ShouldSkipId(string? id, long nowMs)
+    {
         if (id is null) return true;   // 归一后为空 ⇒ 没内容可记
 
         lock (_gate)
@@ -98,9 +111,13 @@ public sealed class ClipboardDedupe
     }
 
     /// <summary>用现成的幂等键做身份：与落库键同一口径，避免"两套归一"造成的漏挡/误挡。</summary>
-    private static string? IdOf(string? rawText)
+    private static string? IdOfText(string? rawText)
     {
         var normalized = ClipboardPolicy.NormalizeText(rawText);
         return normalized.Length == 0 ? null : ClipboardPolicy.BuildSourceId(normalized);
     }
+
+    /// <summary>图片身份与图片条目键同一口径（<see cref="ClipboardPolicy.BuildImageSourceId"/>）：一套哈希，两处共用。</summary>
+    private static string? IdOfPixels(byte[]? bgra)
+        => bgra is { Length: > 0 } ? ClipboardPolicy.BuildImageSourceId(bgra) : null;
 }

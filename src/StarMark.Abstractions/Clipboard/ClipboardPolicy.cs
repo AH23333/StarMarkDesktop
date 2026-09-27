@@ -39,6 +39,29 @@ public static class ClipboardPolicy
     public const string SourceIdPrefix = "c-";
 
     /// <summary>
+    /// 单张剪贴板图片的字节上限。<b>刻意是内部常数、不进设置页</b>（§4 洞1）：它挡的是"异常帧灌进来"
+    /// 这类与用户偏好无关的事故，给设置页一个能把它调大的框，等于把护栏做成可调的装饰。
+    /// <para>也是采集侧唯一允许从 <c>ReadGlobal</c> 的 64MB 拷贝防护里收窄下来的数——
+    /// 超过它就当场拒收，不再解码、不再编码，白付一次 20MB 以上的拷贝。</para>
+    /// </summary>
+    public const int MaxImageBytes = 20 * 1024 * 1024;
+
+    /// <summary>
+    /// 图片条目的幂等键：与文本 <b>同一形状</b>（<see cref="SourceIdPrefix"/> + 摘要前 16 字节的
+    /// 小写 hex），只是哈希对象从"归一文本"换成"归一后的 BGRA 像素"。
+    /// <para>哈希像素而不是容器字节，理由与 <c>ClipboardDedupe</c> 的图片登记同一处：
+    /// 同一张图经系统重排成 DIB/PNG 之后字节会变，像素不变。</para>
+    /// </summary>
+    public static string BuildImageSourceId(byte[] bgra)
+    {
+        var hash = SHA256.HashData(bgra);
+        var sb = new StringBuilder(SourceIdPrefix.Length + 16 * 2);
+        sb.Append(SourceIdPrefix);
+        for (var i = 0; i < 16; i++) sb.Append(hash[i].ToString("x2"));
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// 行分隔符归一（CRLF/CR → LF）+ 去首尾空白。
     /// <para>这一步直接决定幂等键的稳定性：同一段文本从不同应用复制出来时换行风格不一致
     /// （记事本 CRLF / 浏览器 LF / 老工具 CR），不归一会存成三条"看起来一模一样"的历史，
