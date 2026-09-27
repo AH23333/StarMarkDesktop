@@ -136,6 +136,17 @@ public static class ScreenshotService
         => (App.Services?.GetService(typeof(SettingsStore)) as SettingsStore)?.LoadCanvasInScreenshots() ?? true;
 
     /// <summary>
+    /// 取消正在进行的那场截图（Hub 的 Esc 与"先关截图再关画布"都走这里）。
+    /// 只通知第一扇窗就够：<see cref="OnFinished"/> 收到结果后统一收整场，逐扇通知会让收尾路过 N 次。
+    /// </summary>
+    public static void CancelActiveSession()
+    {
+        if (Session.Count == 0) return;
+        try { Session[0].CancelFromService(); }
+        catch (Exception ex) { StarLog.Error("[Screenshot] 取消会话失败", ex); CloseSession(); }
+    }
+
+    /// <summary>
     /// 某个遮罩窗交回了结果或取消：整场会话到此收摊。
     /// 实际的复制/存盘由那一扇窗在 Settle 之后直接调用本服务的公开入口（它手里有那一帧），
     /// 这里只做关窗——顺序反了会让用户在裁图期间还被困在暗幕里。

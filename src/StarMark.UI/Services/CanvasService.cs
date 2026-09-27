@@ -80,7 +80,6 @@ public static class CanvasService
     private static readonly List<Screen> Screens = new();
     private static CanvasToolbarWindow? _toolbar;
     private static DispatcherQueueTimer? _frame;
-    private static bool _running;
     private static bool _busy;
 
     private static CanvasTool _tool = CanvasTool.Pen;
@@ -88,11 +87,12 @@ public static class CanvasService
     private static int _widthStep = CanvasWidths.DefaultStepIndex;
 
     /// <summary>
-    /// 是否穿透。<b>默认开</b>（规格 §16.5.2 的"③穿透态（默认）"）：进入画布模式不该把整台机器的
-    /// 鼠标吃掉——那样一来 PPT 翻不了、下层应用点不动，而"按了热键之后电脑像死了"就是它。
-    /// 要画持久笔迹得由工具条/热键显式进绘制态，或在穿透态里按住 Ctrl+Alt 直接圈画。
+    /// 穿不穿透<b>不在这里存</b>（架构方案 §3.2：宿主不持模式布尔位）。
+    /// 状态机在 <see cref="AnnotationHub"/>，这一句只是给工具条那类旧接线留的读法——
+    /// 它读的是会话态，不是第二份旗标，所以"工具条说绘制中、窗口却带着穿透位"这种分岔
+    /// 少了一个来源（剩下的那一个由 <see cref="LayerDirector.ReconcileStyles"/> 每帧兜）。
     /// </summary>
-    private static bool _clickThrough = true;
+    private static bool ClickThroughHere => !AnnotationHub.Stage.GlassTakesPointer();
     private static bool _haloEnabled = true;
 
     /// <summary>
@@ -118,17 +118,20 @@ public static class CanvasService
     private static int _polyColour;
     private static int _polyWidth;
 
-    /// <summary>手上有笔时它属于哪块屏（抬起/轮询收尾都要用它，光标可能已经飘到别的屏）。</summary>
+    /// <summary>手上有笔时它属于哪块屏（抬起/读态收尾都要用它，光标可能已经飘到别的屏）。</summary>
     private static Screen? _pressScreen;
 
-    /// <summary>这一按是不是轮询"抢"来的（临时摘了穿透），抬起必须还回去。</summary>
-    private static bool _wasTemporary;
-
-    /// <summary>画布模式是否开着。</summary>
-    public static bool IsRunning => _running;
+    /// <summary>画布模式是否开着——问的是"有没有玻璃在场"，不再另存一份旗标。</summary>
+    public static bool IsRunning => Screens.Count > 0;
 
     /// <summary>当前是不是鼠标穿透态（工具条据此画那颗按钮的高亮）。</summary>
-    public static bool IsClickThrough => _clickThrough;
+    public static bool IsClickThrough => ClickThroughHere;
+
+    /// <summary>手上正有一笔吗（每帧验层要跳过它：那一笔已经归画布画完）。</summary>
+    public static bool PressInFlight => _press != Press.None;
+
+    /// <summary>有没有"半件事"在场（勾到一半的折线）——Esc 的第一级退的就是它。</summary>
+    public static bool HasWorkInProgress => _polyPoints is { Count: > 0 };
 
     public static CanvasTool Tool => _tool;
 
@@ -144,38 +147,36 @@ public static class CanvasService
     /// <summary>状态变了（工具/颜色/粗细/穿透/光晕）——工具条订阅它刷新高亮。</summary>
     public static event Action? StateChanged;
 
-    public static void Toggle()
-    {
-        if (_running) Stop();
-        else Start();
-    }
+    // ────────── 开关：都是递给 Hub 的事件，这里不自己改态 ──────────
 
-    /// <summary>
-    /// 进入画布模式。每屏一块玻璃；某一屏建不起来（刚拔屏、显存吃紧）不牵连别的屏，
-    /// 但<b>一块都没建起来时必须回报</b>——"按了热键屏幕什么都没变"是这套功能最坏的失败方式。
-    /// </summary>
+    /// <summary>开或关画板（热键、托盘、主窗菜单都走这一句）。</summary>
+    public static void Toggle() => AnnotationHub.Raise(SessionEvent.ToggleBoard);
+
+    /// <summary>旧接线名：开画板。画布已在场时什么都不做（截图期间玻璃也在场，不该被"重开"一次）。</summary>
     public static void Start()
     {
-        // 窗口与定时器都要在 UI 线程上建：托盘/菜单那类入口的回调线程不保证
-        var queue = App.MainWindow?.DispatcherQueue;
-        if (queue is { HasThreadAccess: false })
-        {
-            queue.TryEnqueue(Start);
-            return;
-        }
-        if (queue is null)
-        {
-            Report("画布打不开", "主窗还不存在（应用还没起完？）");
-            return;
-        }
-        if (_running || _busy) return;
+        if (!IsRunning) Toggle();
+    }
+
+    /// <summary>旧接线名：关画板（设置页把总开关关掉时调这里）。截图进行中先取消截图，再拆窗。</summary>
+    public static void Stop() => AnnotationHub.EnsureIdle();
+
+    /// <summary>
+    /// 进入画布模式的<b>宿主动作</b>：每屏一块玻璃。判据与状态都在 <see cref="AnnotationHub"/>，这里只建窗与起帧循环。
+    /// <para>某一屏建不起来（刚拔屏、显存吃紧）不牵连别的屏，但<b>一块都没建起来时必须回报并返回 false</b>
+    /// ——Hub 会把会话态退回原处，"按了热键屏幕什么都没变"是这套功能最坏的失败方式。</para>
+    /// </summary>
+    public static bool OpenBoardHost()
+    {
+        if (IsRunning) return true;
+        if (_busy) return false;
         // 总开关（设置 → 拓展功能 →「屏幕画布」）。所有入口都汇到 Start()，所以闸门只在这一处：
         // 关着时热键那条只剩 canvas.toggle 还注册着（见 SettingsStore.GetRegisterableHotkeyBindings），
         // 按它要听见这句原因——一条什么都不发生的哑键是最坏的收尾。
         if (!EnabledBySetting)
         {
             Report("屏幕画布已关闭", "要在 设置 → 拓展功能 的「屏幕画布」里打开；打开后这条快捷键就回来了");
-            return;
+            return false;
         }
         _busy = true;
         try
@@ -184,7 +185,7 @@ public static class CanvasService
             if (monitors.Count == 0)
             {
                 Report("画布打不开", "系统没有报告任何显示器");
-                return;
+                return false;
             }
             foreach (var monitor in monitors)
             {
@@ -216,10 +217,12 @@ public static class CanvasService
                     window.DisplayChanged += () =>
                     {
                         StarLog.Info("[Canvas] 分辨率或显示器变了，重建画布");
-                        Restart();
+                        RebuildHost();
                     };
-                    window.SetClickThrough(_clickThrough);
-                    window.SetDrawCursor(!_clickThrough);
+                    // 登记进 Z 序名册，并把"读样式位 / 按状态改样式位"两句话交给 LayerDirector：
+                    // 每帧对账要问的"窗口此刻真的带着穿透位吗"只有这一处答得出，别处再写一份就是第二把尺子。
+                    LayerDirector.Register(SurfaceRole.Board, window.Hwnd,
+                        () => window.StyleClickThrough, on => window.SetClickThrough(on));
                     Screens.Add(screen);
                 }
                 catch (Exception ex)
@@ -230,22 +233,30 @@ public static class CanvasService
             if (Screens.Count == 0)
             {
                 Report("画布打不开", "每一屏的透明层都没能建起来（原因见日志）");
-                return;
+                return false;
             }
 
+            // 帧循环与工具条都要在 UI 线程上建（Hub 的 Raise 已经把回调搬到 UI 线程，这里只是兜底）
+            var queue = App.MainWindow?.DispatcherQueue;
+            if (queue is null)
+            {
+                CloseBoardHost();
+                Report("画布打不开", "主窗还不存在（应用还没起完？）");
+                return false;
+            }
             _frame ??= BuildFrameTimer(queue);
             _frame.Stop();
             _frame.Start();
-            _running = true;
             ShowToolbar();
-            StarLog.Info($"[Canvas] 画布模式开启：{Screens.Count} 屏，工具={_tool}，" +
-                         $"{(_clickThrough ? "穿透态（按住 Ctrl+Alt 直接圈画，或点工具条选画笔）" : "绘制态")}");
+            StarLog.Info($"[Canvas] 画布宿主已就位：{Screens.Count} 屏，工具={_tool}");
+            return true;
         }
         catch (Exception ex)
         {
-            Stop();
+            CloseBoardHost();
             StarLog.Error("[Canvas] 开启画布模式失败", ex);
             Report("画布打不开", ex.Message);
+            return false;
         }
         finally
         {
@@ -253,57 +264,82 @@ public static class CanvasService
         }
     }
 
-    /// <summary>退出画布模式：笔迹随之丢弃（要留就先在工具条上"存图／贴图"）。</summary>
-    public static void Stop()
+    /// <summary>
+    /// 退出画布模式的<b>宿主动作</b>：拆窗、停帧循环、收条子。笔迹随之丢弃（要留就先"存图／贴图"）。
+    /// <para>穿透那位不在这里复位：下一次开板子落在哪一态由状态机定（默认穿透），
+    /// 在这里顺手改一次就是第四份状态书写点。</para>
+    /// </summary>
+    public static void CloseBoardHost()
     {
         _frame?.Stop();
-        _running = false;
         CloseToolbar();
         foreach (var screen in Screens)
         {
+            LayerDirector.Unregister(screen.Window.Hwnd);
             try { screen.Window.Dispose(); }
             catch (Exception ex) { StarLog.Warn($"[Canvas] 透明层没关干净：{ex.Message}"); }
         }
         Screens.Clear();
-        // 下次进来还是穿透态（§16.5.2 的默认态）：把"拦截全屏"留成默认，等于让每次按热键都像把电脑弄死
-        _clickThrough = true;
+        LayerDirector.ForgetRole(SurfaceRole.Board);
         _press = Press.None;
         // 勾到一半的折线随窗口一起忘掉：层都没了，还留着点引用就是把已释放的对象留在静态字段上
         _polyPoints = null;
         _polyScreen = null;
-        Notice = null;
-        _yieldedTo = IntPtr.Zero;
-        StateChanged?.Invoke();
+        AnnotationHub.QuickPressInFlight = false;
         StarLog.Info("[Canvas] 画布模式关闭");
     }
 
-    /// <summary>分辨率变了：先按新的拓扑重建（不能拿旧尺寸的缓冲接着画）。</summary>
-    private static void Restart()
+    /// <summary>分辨率/拓扑变了：按新拓扑重建宿主，<b>会话态原样保留</b>（用户没关画布，不该被重建顺手关掉）。</summary>
+    private static void RebuildHost()
     {
-        var wasClickThrough = _clickThrough;
-        Stop();
-        _clickThrough = wasClickThrough;
-        Start();
+        if (!IsRunning) return;
+        CloseBoardHost();
+        if (OpenBoardHost()) ApplyStage(AnnotationHub.Stage);
+        else AnnotationHub.Raise(SessionEvent.ToggleBoard);   // 一块都建不起来：会话态也得跟着退回 Idle
+    }
+
+    /// <summary>
+    /// 按会话态把<b>玻璃与条子的显隐、样式位</b>落一遍（Hub 副作用的第二步）。
+    /// <para><b>Sheet 期间玻璃与画布工具条都不在场</b>：遮罩窗显示的是冻帧，玻璃再亮着就是同一份笔迹的两份
+    /// （重影），两条栏同时飘着就是"哪一条管当前这件事"说不清。截图带不带笔迹只由
+    /// <c>ScreenshotService.Grab</c> 那一下决定，与会话进行中玻璃亮不亮无关。</para>
+    /// </summary>
+    public static void ApplyStage(AnnotationStage stage)
+    {
+        // 换态之前先把手上那条收掉：不先收的话，症状是"画着画着笔自己变粗/换了颜色还接到上一条上"，
+        // 而切到穿透态时那一笔永远不会收到"抬起"（穿透之后鼠标归了下层应用）。
+        CommitOpenStroke();
+        var visible = stage.GlassVisible();
+        var takes = stage.GlassTakesPointer();
+        foreach (var screen in Screens)
+        {
+            screen.Window.SetVisible(visible);
+            screen.Window.SetClickThrough(!takes);
+            screen.Window.SetDrawCursor(takes);
+        }
+        if (_toolbar is not null) _toolbar.SetStripVisible(stage.BoardStripVisible());
+        RaiseStateChanged();
     }
 
     // ────────── 工具与动作（工具条／热键／托盘都走这里）──────────
 
     /// <summary>
-    /// 选工具＝顺带决定这一态拦不拦鼠标（规格 §16.5.2 的关键分岔）。<b>方向判据不在这里现写</b>，
-    /// 由 <see cref="CanvasModes.IsClickThroughAfter"/> 给（纯函数，可单测）：把两支笔塞进同一个模式
-    /// 开关正是冲突的来源，而布尔表达式写反在这里编译不过不了真机——它只会变成"点画笔永远画不上"。
+    /// 选工具＝顺带决定这一态拦不拦鼠标，<b>但方向判据不在这儿也不在 Hub 现写</b>：
+    /// 由 <see cref="AnnotationSessions.BoardAfterToolSelect"/> 给（Core 纯函数，三臂单测）。
+    /// 这里只把"选了哪支笔"这个事实报给状态机，穿透位由状态机反过来指挥窗口。
     /// </summary>
     public static void SelectTool(CanvasTool tool)
     {
         CommitOpenStroke();                       // 先收手上那条：不然它会接到新工具的设置上
         _tool = tool;
-        SetClickThrough(CanvasModes.IsClickThroughAfter(tool));
+        // 方向（这支笔要不要穿透）由 Core 的一处判据翻成事件，接线层不现写布尔（批次 WF-1）
+        AnnotationHub.Raise(AnnotationSessions.ToolSelectEvent(tool));
     }
 
     /// <summary>再点当前选中的笔＝收笔回穿透态（与截图/贴图那条"再点取消选择"同一交互语言）。</summary>
     public static void ToggleTool(CanvasTool tool)
     {
-        if (_tool == tool && !_clickThrough) SetClickThrough(true);
+        if (_tool == tool && !ClickThroughHere) AnnotationHub.Raise(SessionEvent.GivePointerBack);
         else SelectTool(tool);
     }
 
@@ -311,44 +347,36 @@ public static class CanvasService
     {
         if (index < 0 || index >= Palette.Count) return;
         _colorIndex = index;
-        StateChanged?.Invoke();
+        RaiseStateChanged();
     }
 
     public static void SelectWidth(int step)
     {
         CommitOpenStroke();
         _widthStep = Math.Clamp(step, 0, CanvasWidths.Steps.Length - 1);
-        StateChanged?.Invoke();
+        RaiseStateChanged();
     }
 
     /// <summary>
     /// 鼠标穿透。<b>开启后画布收不到任何鼠标事件</b>，所以出口不能只有工具条上那一颗：
     /// 全局热键、托盘、以及"工具条自己始终能被点"三条一起兜着（§16.6 点名的"找不回"）。
+    /// <para>这一句现在只是<b>把意图折成事件递给 Hub</b>。以前它自己改那一位再逐屏写样式，
+    /// 于是"用户按穿透按钮"与"另一个程序占了那一层"和"截图结束复位"三条路各写一次同一位——
+    /// 那就是状态与样式分岔的三个来源（批次 WO）。收口之后只有一条路能改这一位。</para>
     /// </summary>
     public static void SetClickThrough(bool on)
-    {
-        _clickThrough = on;
-        Notice = null;                                // 用户自己动手了，上一条"为什么让位"就该翻篇
-        _yieldedTo = IntPtr.Zero;                     // 也允许对同一个窗再说一次（不然改了也没反馈）
-        CommitOpenStroke();
-        foreach (var screen in Screens)
-        {
-            screen.Window.SetClickThrough(on);
-            screen.Window.SetDrawCursor(!on);
-        }
-        // 摘/加穿透时补的那一发 FRAMECHANGED 带了 NOZORDER，不会自己往上蹿；
-        // 但态一换就顺手把定序再做一遍——工具条点不动的代价是"整个功能出不去"。
-        PlaceLayersBelowChrome();
-        StateChanged?.Invoke();
-    }
+        => AnnotationHub.Raise(on ? SessionEvent.GivePointerBack : SessionEvent.TakePointer);
 
     /// <summary>光标光晕开关（关掉＝荧光笔态下鼠标不再有那团颜色跟着走）。</summary>
     public static void SetHalo(bool on)
     {
         _haloEnabled = on;
         foreach (var screen in Screens) screen.Trail.CursorHaloEnabled = on;
-        StateChanged?.Invoke();
+        RaiseStateChanged();
     }
+
+    /// <summary>广播状态（工具/颜色/粗细/穿透/光晕/让位原因）——工具条的状态行是唯一读者。</summary>
+    public static void RaiseStateChanged() => StateChanged?.Invoke();
 
     /// <summary>
     /// 截图抓那一帧时把画布那块玻璃收起来（<b>只给 <c>ScreenshotService.Grab</c> 用，那里成对调用</b>）。
@@ -357,13 +385,13 @@ public static class CanvasService
     /// 还回来之后一切照旧——用户按「截图带画布＝关」是要给别人一张干净的图，不是要把黑板擦掉。
     /// </para>
     /// <para>
-    /// <b>工具条不跟着收</b>：WinUI 窗重新点亮必然抢前台（见批次 WA 那条配方），把刚建起来的遮罩窗的
-    /// 焦点抢走会让整次截图失去键盘出口。工具条只是屏幕边上一条小条，不是"画布上的内容"。
+    /// <b>工具条不跟着收</b>：这一句只活几毫秒，条子跟着闪一下比留着它更难解释。
+    /// 整场截图期间条子收起由 <see cref="ApplyStage"/> 负责（那是会话态的属性，不是抓帧的副作用）。
     /// </para>
     /// </summary>
     public static void SetHiddenForCapture(bool hidden)
     {
-        if (!_running) return;
+        if (!IsRunning) return;
         foreach (var screen in Screens) screen.Window.SetVisible(!hidden);
     }
 
@@ -550,7 +578,7 @@ public static class CanvasService
         FinishPress(screen, pointer.At);
         // 轮询接手的那两种按下（荧光笔按住 / Ctrl+Alt 圈画）是"临时摘掉穿透"换来的，
         // 抬起必须还回去——否则一次圈画之后整台机器的鼠标就被我们扣住了。
-        if (_wasTemporary) EndTemporaryPress();
+        if (AnnotationHub.QuickPressInFlight) EndTemporaryPress();
     }
 
     /// <summary>
@@ -591,7 +619,7 @@ public static class CanvasService
             Flush(screen);
         }
         _press = Press.None;
-        _wasTemporary = false;
+        AnnotationHub.QuickPressInFlight = false;
     }
 
     /// <summary>
@@ -611,7 +639,9 @@ public static class CanvasService
             EndTemporaryPress();
             return;
         }
-        if (_press != Press.None || !_clickThrough || !down) return;
+        // 会话闸门（方案 §4 的 C2）：读态<b>只在 Board·穿透态</b>跑。绘制态收得到按下，再叠一套读态
+        // 就是同一按两家用；截图期间这块玻璃连显示都不被允许，抢一次就把截图打断在别的程序手里。
+        if (_press != Press.None || AnnotationHub.Stage != AnnotationStage.BoardPenetrating || !down) return;
 
         var quick = LayeredCanvasWindow.CtrlAltDown;
         if (!quick && _tool != CanvasTool.Highlighter) return;     // 这一按该归下层应用，别抢
@@ -620,122 +650,19 @@ public static class CanvasService
 
         foreach (var s in Screens) { s.Window.SetClickThrough(false); s.Window.SetDrawCursor(true); }
         screen.Window.Capture();                                   // 那一次按下不会再来，抓取要自己补
-        _wasTemporary = true;
+        AnnotationHub.QuickPressInFlight = true;                   // 每帧对账这一刻要跳过（唯一合法的不一致）
         BeginPress(screen, new PixelPoint(cursorX - screen.Bounds.X, cursorY - screen.Bounds.Y),
             quick ? Press.QuickPen : Press.Ephemeral);
     }
 
-    /// <summary>把临时摘掉的穿透还回去（<see cref="_clickThrough"/> 本身没动，所以工具条状态不会跳）。</summary>
+    /// <summary>把临时摘掉的穿透还回去（<b>会话态没动过</b>，所以工具条那行字不会跳）。</summary>
     private static void EndTemporaryPress()
     {
         _press = Press.None;
-        _wasTemporary = false;
-        if (!_clickThrough) return;                                // 本来就在绘制态，不用恢复
+        AnnotationHub.QuickPressInFlight = false;
+        if (AnnotationHub.Stage != AnnotationStage.BoardPenetrating) return;    // 本来就在绘制态，不用恢复
         foreach (var s in Screens) { s.Window.SetClickThrough(true); s.Window.SetDrawCursor(false); }
     }
-
-    /// <summary>
-    /// <b>每帧核一次"状态说的"与"窗口实际做的"是否同一件事</b>，不一致就以状态为准改回来并留一行原因。
-    /// <para>真机反馈："有时在未穿透状态下进行穿透后的操作且无法绘制"——工具条那行字读
-    /// <see cref="_clickThrough"/>，而鼠标归谁归 <c>WS_EX_TRANSPARENT</c> 那一位管，两者一分岔，
-    /// 看到的就是"写着绘制中，点下去却归下层应用"，而用户除了反复点那颗按钮没有任何办法
-    /// （更糟的是他自己会以为是功能坏了）。分岔的来源不止一条：轮询抢来的那一按没还回去、
-    /// 某一屏建起来时没跟上、部分系统/远程会话改样式半生效。所以这里<b>不查原因，只兜结果</b>。</para>
-    /// <para>临时摘穿透的那一按（<see cref="_wasTemporary"/>）期间必须跳过：那正是"状态说穿透、
-    /// 窗口故意不穿透"的唯一合法时刻，按状态去"修"会把按住即画那一条打断。</para>
-    /// </summary>
-    private static void ReassertClickThrough()
-    {
-        if (_wasTemporary || !_running) return;
-        foreach (var screen in Screens)
-        {
-            var actual = screen.Window.StyleClickThrough;
-            if (actual == _clickThrough && screen.Window.IsClickThrough == _clickThrough) continue;
-            StarLog.WarnThrottled("canvas:style", $"[Canvas] 穿透状态与窗口样式不一致（期望={_clickThrough}，" +
-                $"记录={screen.Window.IsClickThrough}，实际={actual}），已按状态改回", windowMs: 5_000);
-            screen.Window.SetClickThrough(_clickThrough);
-            screen.Window.SetDrawCursor(!_clickThrough);
-            PlaceLayersBelowChrome();       // 样式位是刚补的，定序也顺手重来一次（工具条必须仍在最上）
-            StateChanged?.Invoke();         // 让状态行跟着说实话，别停在上一态的措辞上
-        }
-    }
-
-    /// <summary>
-    /// "画布主动把鼠标交回去了"的原因（工具条状态行跟着显示一次）。没有这句话，用户只会觉得
-    /// "刚才能画现在不能画，这软件自己抽风了"。
-    /// </summary>
-    public static string? Notice { get; private set; }
-
-    /// <summary>
-    /// <b>绘制态每一帧问一句实话：光标这一层到底是谁？</b>（发起人点名的"没有实时监测光标位于哪一层"）
-    /// <para>
-    /// 画布声称"绘制中"却不再是最上层时，那一次按下会同时被两家用：下面那个应用把它当成框选/选文字，
-    /// 我们这边还可能去抢着画——真机反馈的"画布和应用交互冲突"就是这么来的。最常见的触发是
-    /// 按 Win 呼出开始菜单/搜索、系统弹窗、别的全屏应用——它们都是能盖住我们那块玻璃的顶层窗。
-    /// </para>
-    /// <para>
-    /// 判据是逐像素问 <see cref="LayeredCanvasWindow.WindowAt"/>（不是猜前台窗口），而<b>分界只看进程</b>：
-    /// 命中窗口属于别的程序才交回鼠标。穿透态跳过这条（那时"不是我们"是设计本意）；
-    /// 手上正有一笔也跳过（那一笔已经归画布画完）。
-    /// </para>
-    /// </summary>
-    private static void YieldIfNotOurLayer(int cursorX, int cursorY)
-    {
-        if (_clickThrough || _press != Press.None || !_running) return;
-        var hit = LayeredCanvasWindow.WindowAt(cursorX, cursorY);
-        if (hit == IntPtr.Zero || hit == _yieldedTo) return;               // 取不到不下判断；同一个窗只说一次
-        if (WindowInterop.GetWindowThreadProcessId(hit, out var pid) == 0) return;
-        // 判据按进程，绝不按"句柄等于工具条/面板/玻璃"。真因（批次 WD-7 自己造成的回归）：
-        // WindowFromPoint 给的是这一点上<b>最深</b>的那个 HWND——WinUI 3 的条子内容住在它自己的子窗里，
-        // tooltip 与浮层更是另开的顶层窗，跟 GetHwnd() 拿到的那一个必然不相等。于是光标一停在条子上
-        // 就被判成"别人盖住了画布"，每帧把状态退回穿透：点「画笔」「穿透」全都"没反应"。
-        // 自家窗口拿走这一按不会造成"一次按下两家用"（消息根本到不了画布，最坏只是那块画不上）。
-        if (pid == (uint)Environment.ProcessId)
-        {
-            // 自家窗拿走这一按不会造成"一次按下两家用"（WD-8 的结论，仍然成立），但还有第二件事要管：
-            ReassertLayering(hit);
-            return;
-        }
-        StarLog.Warn($"[Canvas] 绘制态发现光标那一层已被另一个程序占走（进程 {pid}），主动交回鼠标");
-        SetClickThrough(true);
-        Notice = "已自动交回鼠标：另一个程序的窗口（例如按 Win 呼出的开始菜单）盖住了画布；要接着画请再点「画笔」";
-        // 同一件事只说一次：不然那个窗一直压在上面的话，每帧都会"让位 + 一条 WARN"，
-        // 状态行还会来回跳。用户下次自己动手（SetClickThrough）时这个记号就清掉。
-        _yieldedTo = hit;
-        StateChanged?.Invoke();
-    }
-
-    private static IntPtr _yieldedTo;
-
-    /// <summary>
-    /// <b>绘制态下，自家的桌面组件窗不该压在画布上面</b>——它压着的样子是"工具条说绘制中、
-    /// 点下去却画不上，还能顺手操作组件"（真机反馈），与"交回鼠标给别的程序"是两回事：
-    /// 那一次按下并没有被两家用，只是<b>根本没到画布</b>。
-    /// <para>组件窗与画布同在 topmost 带里，谁最后被交互谁在上（组件被点一下就会提到带上头），
-    /// 所以这里不"判断该谁在上"，直接把 <see cref="PlaceLayersBelowChrome"/> 重做一遍：
-    /// 画布回到"工具条／面板之下、其余一切之上"。节流一次，避免与组件自己的提层动作来回拉锯。</para>
-    /// <para>认"是不是自己的 chrome"<b>只能比顶层祖先</b>：命中窗是 XAML 内容那层子窗，
-    /// 与 <see cref="CanvasToolbarWindow.Hwnd"/> 必然不相等（WD-7 就是栽在比句柄上）。</para>
-    /// </summary>
-    private static void ReassertLayering(IntPtr hit)
-    {
-        var root = WindowInterop.GetAncestor(hit, WindowInterop.GA_ROOT);
-        if (root == IntPtr.Zero) root = hit;                       // 取不到根就拿命中窗本身比，绝不折成"是 chrome"
-        if (root == (_toolbar?.Hwnd ?? IntPtr.Zero) || root == (_panel?.Hwnd ?? IntPtr.Zero)) return;
-        foreach (var screen in Screens)
-            if (root == screen.Window.Hwnd) return;                // 就是画布自己：什么都不做
-        var now = Environment.TickCount64;
-        if (now - _lastLayerFixMs < LayerFixGapMs) return;
-        _lastLayerFixMs = now;
-        StarLog.Warn($"[Canvas] 绘制态发现自家窗口（{WindowInterop.GetClassName(root)}）压在画布上面，已把画布提回工具条之下");
-        PlaceLayersBelowChrome();
-    }
-
-    private static long _lastLayerFixMs;
-
-    /// <summary>与自家窗来回提层的拉锯要避免：这一句最多两秒做一次（一次 SetWindowPos 每屏一发，代价可忽略）。</summary>
-    private const long LayerFixGapMs = 2000;
-
     private static Screen? ScreenAt(PixelPoint point)
         => Screens.FirstOrDefault(s => s.Bounds.X <= point.X && point.X < s.Bounds.Right
             && s.Bounds.Y <= point.Y && point.Y < s.Bounds.Bottom);
@@ -823,15 +750,14 @@ public static class CanvasService
     /// <para>只有一级"Esc＝退出画布"的话，勾到一半想停下就得整块板子一起没——而那条折线也没画成。
     /// 真机症状会是"按 Esc 之后我的笔迹全没了"（退出即丢弃）。</para>
     /// </summary>
-    public static void Escape()
+    public static void Escape() => AnnotationHub.EscapeBoard();
+
+    /// <summary>Esc 的第一级：收掉手上那半件事（勾到一半的折线），板子继续开着。</summary>
+    public static void CloseWorkInProgress()
     {
-        if (_polyPoints is not null)
-        {
-            FinishOpenPolyLine();
-            StateChanged?.Invoke();
-            return;
-        }
-        Stop();
+        if (_polyPoints is null) return;
+        FinishOpenPolyLine();
+        RaiseStateChanged();
     }
 
     // ────────── 渲染 ──────────
@@ -847,16 +773,16 @@ public static class CanvasService
 
     private static void OnFrameTick(DispatcherQueueTimer sender, object args)
     {
-        if (!_running || Screens.Count == 0) return;
+        if (!IsRunning) return;
         var now = Environment.TickCount64;
         WindowInterop.GetCursorPos(out var cursor);
-        // 先对账再决定这一按给谁："绘制中"那行字读的是这里的旗标，而鼠标到底归谁读的是窗口那一位
-        ReassertClickThrough();
-        // 先验层，再决定这一按要不要抢：别人已经把最上层占走了还去"按住即画"，
-        // 就会同时出现"应用在框选/选文字" + "画布在画"两件事（真机反馈的交互冲突）
-        YieldIfNotOurLayer(cursor.X, cursor.Y);
-        // 穿透态收不到鼠标消息，"这一按是不是要画"只能在这里看按键状态（§16.5.2 的零摩擦入口）
-        PollPress(cursor.X, cursor.Y);
+        // 仲裁三件事全部交给 Hub 在这一处问：样式位与状态对不对账、光标那一层归谁、归谁之后做什么。
+        // 原来这里是三个本地方法各问一遍、各读一份自己认为的状态——那正是"状态说的与窗口做的不一致"的温床。
+        AnnotationHub.AuditFrame(cursor.X, cursor.Y);
+        // 穿透态收不到鼠标消息，"这一按是不是要画"只能在这里看按键状态（§16.5.2 的零摩擦入口）。
+        // 跑不跑这一问由会话态决定，而不是宿主自己再判一遍穿不穿（判据在 Core，QuickDrawReads）。
+        if (AnnotationHub.Stage.QuickDrawReads()) PollPress(cursor.X, cursor.Y);
+        if (Screens.Count == 0) return;
         foreach (var screen in Screens)
         {
             // 到期那一段要把它占过的地方交回脏区：删掉之后没人再画它，那块光就赖在屏幕上了
@@ -1018,12 +944,20 @@ public static class CanvasService
     /// </summary>
     public static void HotkeyTool(CanvasTool tool)
     {
-        if (!_running) Start();
-        if (!_running) return;            // Start 失败时它自己已经报过原因，这里不再补一条
+        // 这里不再自己写"没开就先 Start()"那条平行逻辑：Idle + 选一支要留痕的笔 ⇒ 绘制态，
+        // 由转移表给（讲解的人按「画笔」就是要画画，多一步先叫板子是缺陷）。
+        // 再按同一个键＝收笔回穿透态，与工具条上那颗同一语义（用户裁决，三条链统一）。
         ToggleTool(tool);
     }
 
-    public static void HotkeyClickThrough() => RequireRunning("交出 / 收回鼠标", () => SetClickThrough(!_clickThrough));
+    /// <summary>
+    /// 总开关读的是磁盘上那一份（不缓存）：设置页里改完立刻生效，不需要重启也不需要"通知一遍"，
+    /// 而漏通知正是"开关是关的、功能还在跑"这种鬼状态的来源。
+    /// </summary>
+    public static bool EnabledBySetting
+        => (App.Services?.GetService(typeof(SettingsStore)) as SettingsStore)?.LoadCanvasEnabled() ?? true;
+
+    public static void HotkeyClickThrough() => RequireRunning("交出 / 收回鼠标", () => SetClickThrough(!ClickThroughHere));
 
     public static void HotkeyUndo() => RequireRunning("撤销上一笔", Undo);
 
@@ -1036,20 +970,13 @@ public static class CanvasService
     public static void HotkeyPin() => RequireRunning("贴到桌面", SnapshotToPin);
 
     /// <summary>
-    /// 总开关读的是磁盘上那一份（不缓存）：设置页里改完立刻生效，不需要重启也不需要"通知一遍"，
-    /// 而漏通知正是"开关是关的、功能还在跑"这种鬼状态的来源。
-    /// </summary>
-    private static bool EnabledBySetting
-        => (App.Services?.GetService(typeof(SettingsStore)) as SettingsStore)?.LoadCanvasEnabled() ?? true;
-
-    /// <summary>
     /// 画布内动作的闸门：<b>板子没开着时按这些键要给一句看得见的原因</b>，不能"按了没反应"——
     /// 那在用户眼里与功能坏了是同一件事。两种"没开着"要分开说：功能被关掉时指向快捷键是指错路，
     /// 所以那里说的是"去设置里打开"。
     /// </summary>
     private static void RequireRunning(string what, Action run)
     {
-        if (_running)
+        if (IsRunning)
         {
             run();
             return;
@@ -1137,7 +1064,7 @@ public static class CanvasService
         {
             _toolbar ??= new CanvasToolbarWindow();
             _toolbar.ShowAt(Screens[0].Bounds, Screens[0].Scale);
-            PlaceLayersBelowChrome();
+            LayerDirector.EnforceOrder(AnnotationHub.Stage);
         }
         catch (Exception ex)
         {
@@ -1159,7 +1086,7 @@ public static class CanvasService
     public static void ToggleHotkeyPanel()
     {
         if (_panel is not null) { HideHotkeyPanel(); return; }
-        if (!_running || Screens.Count == 0 || _toolbar is null)
+        if (!IsRunning || Screens.Count == 0 || _toolbar is null)
         {
             Report("画布已经关了", "快捷键面板是画布的一部分，先重新打开屏幕画布");
             return;
@@ -1170,7 +1097,11 @@ public static class CanvasService
             _panel = new CanvasHotkeyPanelWindow();
             _panel.ShowAt(new IntRect(anchor.X, anchor.Y, anchor.Width, anchor.Height),
                 Screens[0].Bounds, Screens[0].Scale);
-            PlaceLayersBelowChrome();
+            // 面板排在工具条<b>之下</b>：两个都要点得到，但按钮排在更上面
+            // （面板长在条子下面，真重叠时把"再点一次收起"那颗挡住的就是它自己）
+            _panel.PlaceUnder(_toolbar.Hwnd);
+            // 面板自己已经登记进 Strip 组并插到工具条之下；这里只把画布按角色表归位
+            LayerDirector.EnforceOrder(AnnotationHub.Stage);
             StateChanged?.Invoke();           // 那颗「⌨」要亮起来，否则"再点一次收起"看不出来
         }
         catch (Exception ex)
@@ -1188,9 +1119,12 @@ public static class CanvasService
     public static void HideHotkeyPanel()
     {
         if (_panel is null) return;
+        LayerDirector.Unregister(_panel.Hwnd);
         try { _panel.ClosePanel(); }
         catch (Exception ex) { StarLog.Warn($"[Canvas] 快捷键面板没收掉：{ex.Message}"); }
         _panel = null;
+        // 面板是画布的锚点，它一走锚点就换回工具条：不重排一次，玻璃会留在"面板之下"那个已经不存在的位置上
+        LayerDirector.EnforceOrder(AnnotationHub.Stage);
         StateChanged?.Invoke();
     }
 
@@ -1198,30 +1132,10 @@ public static class CanvasService
     public static void PanelClosed(CanvasHotkeyPanelWindow panel)
     {
         if (!ReferenceEquals(_panel, panel)) return;
+        LayerDirector.Unregister(panel.Hwnd);
         _panel = null;
+        LayerDirector.EnforceOrder(AnnotationHub.Stage);
         StateChanged?.Invoke();       // 让那颗按钮的高亮跟着掉回去
-    }
-
-    /// <summary>
-    /// 定序：工具条 → 快捷键面板 → 画布 → 下层应用，一条链显式排出来。
-    /// <para>
-    /// <b>不能只"提"工具条</b>：它本来就在 topmost 带里，对这样的窗口再传一次
-    /// <c>HWND_TOPMOST</c> 只换带、不在带内重排（＝什么都没做）。真机症状就是
-    /// "按过穿透／右键之后，工具条一颗按钮都点不动"——而工具条是唯一看得见的出口。
-    /// 所以这里反过来做：把每块画布显式插到面板之下、面板插到工具条之下，一次定序，不靠运气。
-    /// </para>
-    /// </summary>
-    private static void PlaceLayersBelowChrome()
-    {
-        var chrome = _toolbar?.Hwnd ?? IntPtr.Zero;
-        if (chrome == IntPtr.Zero) return;
-        var above = chrome;
-        if (_panel is not null)
-        {
-            _panel.PlaceUnder(chrome);          // 面板在工具条之下：两个都要点得到，但按钮排在更上面
-            above = _panel.Hwnd;                // 画布压在面板之下
-        }
-        foreach (var screen in Screens) screen.Window.PlaceBelow(above);
     }
 
     private static void CloseToolbar()
@@ -1229,6 +1143,7 @@ public static class CanvasService
         // 面板挂在工具条下面：条子收了还留着面板，它就成了一块"没有主人的浮窗"（退出画布后仍在屏幕上）
         HideHotkeyPanel();
         if (_toolbar is null) return;
+        LayerDirector.Unregister(_toolbar.Hwnd);
         try { _toolbar.CloseToolbar(); }
         catch (Exception ex) { StarLog.Warn($"[Canvas] 工具条没收掉：{ex.Message}"); }
         _toolbar = null;

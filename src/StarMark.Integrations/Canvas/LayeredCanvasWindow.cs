@@ -169,31 +169,6 @@ public sealed class LayeredCanvasWindow : IDisposable
         => CanvasNative.WindowFromPoint(new NativeMethods.POINT { X = screenX, Y = screenY });
 
     /// <summary>
-    /// 把自己插到某个窗口<b>之下</b>（同一 topmost 带内）。
-    /// <para>
-    /// 工具条"永远在画布之上"不能只靠提自己：对已在 topmost 带里的窗口再传 HWND_TOPMOST
-    /// 只换带、不重排（＝没提），所以这里显式把画布按到工具条下面去，一次定序。
-    /// </para>
-    /// <para>
-    /// <b>参数方向别看反</b>：Win32 对 <c>hwndInsertAfter</c> 的原话是"A handle to the window to
-    /// <b>precede</b> the positioned window in the Z order"，而 Z 序是从上往下数（"The topmost window
-    /// ... is the first window in the Z order"）——所以传进来的那个窗口在<b>上面</b>，本窗在它下面。
-    /// 名字读成"插到它之后＝插到它上面"就会把这条链整个反过来，症状是工具条又点不动了。
-    /// </para>
-    /// </summary>
-    public void PlaceBelow(IntPtr insertAfter)
-    {
-        if (_disposed || insertAfter == IntPtr.Zero) return;
-        // <b>不能被一个非 topmost 的窗"接走"</b>：Win32 明写"topmost 窗被排到任何非 topmost 窗之后
-        // 就不再是 topmost"。真机症状是整块画布掉出 topmost 带 ⇒ 绘制态下鼠标其实还在动桌面应用，
-        // 而工具条也点不到（它自己那时有也不在带里）。带成员资格只能靠 TOPMOST 建立，不靠我们口头保证。
-        var ex = (ulong)NativeMethods.GetWindowLongPtrW(insertAfter, CanvasNative.GWL_EXSTYLE).ToInt64();
-        if ((ex & CanvasNative.WS_EX_TOPMOST) == 0) return;
-        CanvasNative.SetWindowPos(_hwnd, insertAfter, 0, 0, 0, 0,
-            CanvasNative.SWP_NOMOVE | CanvasNative.SWP_NOSIZE | CanvasNative.SWP_NOACTIVATE);
-    }
-
-    /// <summary>
     /// 主动抓鼠标。<b>穿透态下"按住即画"是轮询发现的</b>：那一次 WM_LBUTTONDOWN 已经发给下层应用了，
     /// 我们不会收到，所以摘掉穿透之后要自己补一次 SetCapture，否则抬起永远收不到＝笔"没松"。
     /// </summary>

@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Shapes;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
 using StarMark.Core.Canvas;
+using StarMark.Core.Capture;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
 using Windows.UI;
@@ -73,9 +74,34 @@ public sealed partial class CanvasToolbarWindow : Window
         // MinWidth 之和（真机症状：条子只有约 360 宽，右边「穿透／贴图／存图／复制／✕退出」整段在窗外，
         // 而 ✕ 是唯一的鼠标出口）。
         AppWindow.Show();
+        // 登记进 Z 序名册（Strip 角色）：画布玻璃每帧定序时要拿条子当锚点，不登记它就是"玻璃盖住唯一的出口"。
+        LayerDirector.Register(SurfaceRole.Strip, WindowInterop.GetHwnd(this));
         Root.UpdateLayout();
         Fit(centerOnScreen: true);
         Refresh();
+    }
+
+    /// <summary>
+    /// 截图期间收起、结束时还回来（会话态的读法，不是用户按的那颗 ✕）。
+    /// <para><b>还回来必须走"先记前台→Show→把前台还回去"那套配方</b>（批次 WA）：WinUI 窗点亮必然抢前台，
+    /// 而截图收尾那一下焦点本该属于用户原来在用那个程序；抢了就是"截完图键盘跑到一条已经看不见的栏上"。</para>
+    /// </summary>
+    public void SetStripVisible(bool visible)
+    {
+        // 在不在场问的是窗口自己（IsWindowVisible），不记第二份旗标：
+        // 这条链上"状态与窗口不一致"的每一课都始于多存了一份。
+        var hwnd = WindowInterop.GetHwnd(this);
+        if (visible)
+        {
+            if (WindowInterop.IsWindowVisible(hwnd)) return;
+            var previous = WindowInterop.GetForegroundWindow();
+            AppWindow.Show();
+            Root.UpdateLayout();
+            Fit(centerOnScreen: false);          // 用户拖到哪儿就还回哪儿
+            LayerDirector.RaiseWithinBand(hwnd);
+            if (previous != IntPtr.Zero && previous != hwnd) WindowInterop.SetForegroundWindow(previous);
+        }
+        else if (WindowInterop.IsWindowVisible(hwnd)) AppWindow.Hide();
     }
 
     /// <summary>
@@ -116,11 +142,9 @@ public sealed partial class CanvasToolbarWindow : Window
         x = Math.Clamp(x, screen.X, Math.Max(screen.X, screen.Right - width));
         y = Math.Clamp(y, screen.Y, Math.Max(screen.Y, screen.Bottom - height));
 
-        // 定位顺带提层：同 RaiseAboveCanvas，这里也不能传 HWND_TOPMOST——它已经在带里，
-        // 再传一次只"换带"不重排＝画布仍然压在条子上面（每屏一块 TOPMOST 的玻璃，谁最后被提谁在上）
-        WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOP, x, y, width, height,
-            WindowInterop.SWP_SHOWWINDOW | WindowInterop.SWP_NOACTIVATE);
-        WindowInterop.ShowWindow(hwnd, WindowInterop.SW_SHOWNOACTIVATE);
+        // 定位与提层一次做完，且只在 LayerDirector 那一处写 SetWindowPos：
+        // 条子已经在带里时再传一次 HWND_TOPMOST 只"换带"不重排＝画布仍然压在条子上面。
+        LayerDirector.ShowAt(SurfaceRole.Strip, hwnd, new IntRect(x, y, width, height));
     }
 
     /// <summary>
@@ -132,15 +156,7 @@ public sealed partial class CanvasToolbarWindow : Window
     ///    ——那正是"绘制态下鼠标还在动桌面应用"的成因；
     /// ② <c>HWND_TOP</c> 才负责<b>带内重排</b>：对已经在带里的窗再传 TOPMOST 只换带不重排＝什么都没做。
     /// </summary>
-    public void RaiseAboveCanvas()
-    {
-        var hwnd = WindowInterop.GetHwnd(this);
-        WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOPMOST, 0, 0, 0, 0,
-            WindowInterop.SWP_NOMOVE | WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOACTIVATE);
-        WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOP,
-            0, 0, 0, 0,
-            WindowInterop.SWP_NOMOVE | WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOACTIVATE);
-    }
+    public void RaiseAboveCanvas() => LayerDirector.RaiseWithinBand(WindowInterop.GetHwnd(this));
 
     /// <summary>这块条子的句柄：画布层要靠它把自己插到条子之下（定序不能只靠提自己）。</summary>
     public IntPtr Hwnd => WindowInterop.GetHwnd(this);
@@ -405,7 +421,8 @@ public sealed partial class CanvasToolbarWindow : Window
     {
         // 刚发生过"让位"就先说这一句：用户此刻最需要知道的是"为什么刚才还能画"，
         // 而不是那行常态说明（下一次自己动工具/穿透时这句话就翻篇）
-        if (CanvasService.Notice is { } note) return note;
+        // 让位原因是状态机的输出（"为什么交回了鼠标"是会话这件事的一部分），不是画布宿主的私事。
+        if (AnnotationHub.Notice is { } note) return note;
         var tool = CanvasService.Tool;
         var ink = $"{tool.Name()} · {CanvasService.WidthStep + 1} 档 · {CanvasService.Palette[CanvasService.ColorIndex].Name}";
         if (!CanvasService.IsClickThrough)
@@ -443,9 +460,8 @@ public sealed partial class CanvasToolbarWindow : Window
         if (!_dragging) return;
         if (!WindowInterop.GetCursorPos(out var cursor)) return;
         // 拖动途中也要压住画布：绘制态下画布是整块能吃到鼠标的玻璃，条子一旦被它盖住就"拖着拖着点不到了"
-        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), WindowInterop.HWND_TOP,
-            cursor.X - _grabOffsetX, cursor.Y - _grabOffsetY, 0, 0,
-            WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOACTIVATE);
+        LayerDirector.MoveWithinBand(WindowInterop.GetHwnd(this),
+            cursor.X - _grabOffsetX, cursor.Y - _grabOffsetY);
     }
 
     private void GripReleased(object sender, PointerRoutedEventArgs e)

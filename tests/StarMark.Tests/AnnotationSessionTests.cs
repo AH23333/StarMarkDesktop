@@ -29,6 +29,9 @@ public class AnnotationSessionTests
     [InlineData(AnnotationStage.BoardDrawing, SessionEvent.PickSpotlightPen, AnnotationStage.BoardPenetrating)]
     [InlineData(AnnotationStage.Idle, SessionEvent.PickSpotlightPen, AnnotationStage.BoardPenetrating)]
     [InlineData(AnnotationStage.BoardDrawing, SessionEvent.GivePointerBack, AnnotationStage.BoardPenetrating)]
+    [InlineData(AnnotationStage.BoardPenetrating, SessionEvent.TakePointer, AnnotationStage.BoardDrawing)]
+    [InlineData(AnnotationStage.BoardDrawing, SessionEvent.TakePointer, AnnotationStage.BoardDrawing)]
+    [InlineData(AnnotationStage.Idle, SessionEvent.TakePointer, AnnotationStage.Idle)]
     [InlineData(AnnotationStage.Idle, SessionEvent.GivePointerBack, AnnotationStage.Idle)]
     public void EachEventMovesToTheStagedTarget(
         AnnotationStage from, SessionEvent what, AnnotationStage expected)
@@ -111,8 +114,9 @@ public class AnnotationSessionTests
             {
                 var to = AnnotationSessions.Move(stage, what, AnnotationStage.BoardPenetrating);
                 Assert.Contains(to, All);
-                if (stage == AnnotationStage.Idle && what is SessionEvent.EndSheet or SessionEvent.GivePointerBack)
-                    Assert.Equal(AnnotationStage.Idle, to);      // 没有会话在场时，收尾与"交出鼠标"都不该凭空开出一块板子
+                if (stage == AnnotationStage.Idle
+                    && what is SessionEvent.EndSheet or SessionEvent.GivePointerBack or SessionEvent.TakePointer)
+                    Assert.Equal(AnnotationStage.Idle, to);      // 没有会话在场时，收尾与"交出/收回鼠标"都不该凭空开出一块板子
             }
     }
 

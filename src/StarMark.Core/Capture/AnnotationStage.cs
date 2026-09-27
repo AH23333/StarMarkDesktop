@@ -1,4 +1,6 @@
 #nullable enable
+using StarMark.Core.Canvas;
+
 namespace StarMark.Core.Capture;
 
 /// <summary>
@@ -47,6 +49,9 @@ public enum SessionEvent
 
     /// <summary>把鼠标交还给下层应用（点「穿透」／画布上右键／F5 那类）。</summary>
     GivePointerBack,
+
+    /// <summary>反过来：把鼠标收回给画布（那颗「交出/收回鼠标」按钮的另一个方向，或 F5 来回按）。</summary>
+    TakePointer,
 
     /// <summary>冻帧进截图（F1 给条／F3 直贴／识字）。</summary>
     BeginSheet,
@@ -97,6 +102,10 @@ public static class AnnotationSessions
             SessionEvent.GivePointerBack => from.IsBoard()
                 ? AnnotationStage.BoardPenetrating
                 : from,
+            // 反过来那半下：只在板子在场时才把鼠标收回给画布（Idle 里按它不该凭空开出一块板子）
+            SessionEvent.TakePointer => from.IsBoard()
+                ? AnnotationStage.BoardDrawing
+                : from,
             SessionEvent.BeginSheet => from.IsSheet() ? from : AnnotationStage.Sheet,
             // 只有真在 Sheet 里才收得回来：路过第二次的收尾不能把 Board 子态改写成快照里的那个值
             SessionEvent.EndSheet => from.IsSheet()
@@ -127,6 +136,16 @@ public static class AnnotationSessions
     /// 读态再抢一次就把截图交互打断在别的程序手里。</para>
     /// </summary>
     public static bool QuickDrawReads(this AnnotationStage stage) => stage == AnnotationStage.BoardPenetrating;
+
+    /// <summary>
+    /// 选这支笔＝向会话提交哪个事件。<b>穿透与否仍由 <see cref="Canvas.CanvasModes.IsClickThroughAfter"/>
+    /// 一处给</b>（批次 WF-1：方向只准有一个出处），这里只把那位翻译成事件——
+    /// 接线层因此不必自己写 <c>tool == Highlighter ? ... : ...</c>，那种写法编译得过、真机却可能整个反向。
+    /// </summary>
+    public static SessionEvent ToolSelectEvent(CanvasTool tool)
+        => CanvasModes.IsClickThroughAfter(tool)
+            ? SessionEvent.PickSpotlightPen
+            : SessionEvent.PickPersistentPen;
 
     /// <summary>画板玻璃这一态吃不吃鼠标（穿透＝不吃，绘制＝吃）。Sheet 不谈这一位：那时玻璃不可见。</summary>
     public static bool GlassTakesPointer(this AnnotationStage stage) => stage == AnnotationStage.BoardDrawing;

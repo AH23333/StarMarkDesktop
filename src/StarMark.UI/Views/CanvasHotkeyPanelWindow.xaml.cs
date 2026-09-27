@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using StarMark.Abstractions.Capture;
+using StarMark.Core.Capture;
 using StarMark.Core.Hotkeys;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
@@ -60,10 +61,9 @@ public sealed partial class CanvasHotkeyPanelWindow : Window
     {
         if (insertAbove == IntPtr.Zero) return;
         var hwnd = Hwnd;
-        WindowInterop.SetWindowPos(hwnd, WindowInterop.HWND_TOPMOST, 0, 0, 0, 0,
-            WindowInterop.SWP_NOMOVE | WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOACTIVATE);
-        WindowInterop.SetWindowPos(hwnd, insertAbove, 0, 0, 0, 0,
-            WindowInterop.SWP_NOMOVE | WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOACTIVATE);
+        LayerDirector.Register(SurfaceRole.Strip, hwnd);
+        LayerDirector.RaiseWithinBand(hwnd);      // 先进带（WinUI 窗生下来不在 topmost 带里）
+        LayerDirector.InsertBelow(hwnd, insertAbove);
     }
 
     /// <summary>
@@ -137,9 +137,7 @@ public sealed partial class CanvasHotkeyPanelWindow : Window
         x = Math.Clamp(x, screen.X, Math.Max(screen.X, screen.Right - width));
         y = Math.Clamp(y, screen.Y, Math.Max(screen.Y, screen.Bottom - height));
 
-        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), WindowInterop.HWND_TOP, x, y, width, height,
-            WindowInterop.SWP_SHOWWINDOW | WindowInterop.SWP_NOACTIVATE);
-        WindowInterop.ShowWindow(WindowInterop.GetHwnd(this), WindowInterop.SW_SHOWNOACTIVATE);
+        LayerDirector.ShowAt(SurfaceRole.Strip, WindowInterop.GetHwnd(this), new IntRect(x, y, width, height));
     }
 
     // ────────── 拖动（面板会挡住要讲的画面）──────────
@@ -160,8 +158,7 @@ public sealed partial class CanvasHotkeyPanelWindow : Window
         if (!WindowInterop.GetCursorPos(out var cursor)) return;
         var x = Math.Clamp(cursor.X - _grabOffsetX, _screen.X, Math.Max(_screen.X, _screen.Right - 40));
         var y = Math.Clamp(cursor.Y - _grabOffsetY, _screen.Y, Math.Max(_screen.Y, _screen.Bottom - 40));
-        WindowInterop.SetWindowPos(WindowInterop.GetHwnd(this), WindowInterop.HWND_TOP, x, y, 0, 0,
-            WindowInterop.SWP_NOSIZE | WindowInterop.SWP_NOACTIVATE);
+        LayerDirector.MoveWithinBand(WindowInterop.GetHwnd(this), x, y);
     }
 
     private void GripReleased(object sender, PointerRoutedEventArgs e)

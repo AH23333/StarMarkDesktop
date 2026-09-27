@@ -77,4 +77,27 @@ public static class LayerRules
     /// </summary>
     public static bool IsSafeInsertAfter(bool insertAfterIsTopmost, bool insertAfterIsUsable)
         => insertAfterIsTopmost && insertAfterIsUsable;
+
+    /// <summary>
+    /// 这个角色的窗此刻应当插到<b>哪一个角色之下</b>：在场角色里，排名严格高于它、且离它最近的那一个。
+    /// <para>取"最近"而不是"最高"是因为 Win32 只能把窗插到某个具体窗的<b>紧邻下方</b>：
+    /// 递最上面那一条会把玻璃塞进工具条与快捷键面板之间，面板就掉到玻璃下面去了（画布上的面板点不动）。</para>
+    /// <para>返回 null＝没有人在它上面，此时应当自己两步提层（先进带、再带内重排到顶）。</para>
+    /// </summary>
+    public static SurfaceRole? NearestAbove(
+        SurfaceRole role, AnnotationStage stage, IEnumerable<SurfaceRole> present)
+    {
+        var mine = Rank(role, stage);
+        SurfaceRole? best = null;
+        var bestRank = int.MinValue;
+        foreach (var other in present)
+        {
+            if (other == role) continue;
+            var rank = Rank(other, stage);
+            if (rank >= mine || rank <= bestRank) continue;
+            best = other;
+            bestRank = rank;
+        }
+        return best;
+    }
 }
