@@ -738,8 +738,10 @@ public sealed class CanvasWiringGateTests
         var undo = SourceGate.MethodBody(service, "public static void Undo()");
         Assert.Contains("if (_polyPoints is { } open)", undo);
         Assert.Contains("open.RemoveAt(open.Count - 1);", undo);
+        // 批次 S2：持久层那一侧从"每屏各退一条"改成"挑最后落笔那块屏退一条"，锚点跟着搬家；
+        // 钉的仍是同一件事——折线还开着时这条链必须在挑屏之前就走掉，不许顺手去撤持久层。
         Assert.True(undo.IndexOf("CancelOpenPolyLine();", StringComparison.Ordinal)
-                    < undo.IndexOf("foreach (var screen in Screens)", StringComparison.Ordinal),
+                    < undo.IndexOf(".OrderByDescending(s => s.Ink.LastOrder)", StringComparison.Ordinal),
             "折线还开着时不能直接去撤持久层");
 
         // 橡皮筋那段几何只有一处出处：预览与收口都用 Core 那一份顶点表

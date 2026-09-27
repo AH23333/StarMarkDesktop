@@ -396,7 +396,11 @@ public static class CanvasService
         foreach (var screen in Screens) screen.Window.SetVisible(!hidden);
     }
 
-    /// <summary>每屏各撤各的最后一条：用户看的是"刚才那一笔"，而它落在哪块屏只有层自己知道。</summary>
+    /// <summary>
+    /// 撤销<b>全机最后落的那一笔</b>（方案 §13 用例 9 的 LIFO，§7 的"栈全局化、按 surface 归属"）。
+    /// <para>从前这里是 <c>foreach (screen) screen.Ink.Undo()</c>——一次按键把<b>每块屏各退一条</b>：
+    /// 双屏上按一次撤销，两块屏同时各掉一笔，而掉的那两条根本不是同一时刻画的（"撤错东西"比"撤不动"更糟）。</para>
+    /// </summary>
     public static void Undo()
     {
         if (_polyPoints is { } open)
@@ -411,14 +415,15 @@ public static class CanvasService
             StateChanged?.Invoke();
             return;
         }
-        var changed = false;
-        foreach (var screen in Screens)
-            if (screen.Ink.Undo())
-            {
-                Recomposite(screen);
-                changed = true;
-            }
-        if (changed) FlushAll();
+        var target = Screens.Where(s => !s.Ink.IsEmpty)
+            .OrderByDescending(s => s.Ink.LastOrder)
+            .FirstOrDefault();
+        if (target is null || !target.Ink.Undo()) return;
+        // 只重烤这一块屏：它自己的落点与"曾经烤过的那一片"由 Recomposite 一起算（批次 WO），
+        // 别的屏的墨一笔没动，不该跟着重烤一遍（4K 上一帧是几十兆）。
+        Recomposite(target);
+        Flush(target);
+        StateChanged?.Invoke();
     }
 
     public static void ClearAll()

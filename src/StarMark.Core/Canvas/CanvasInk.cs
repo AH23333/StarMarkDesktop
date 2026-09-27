@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using StarMark.Abstractions.Capture;
 
 namespace StarMark.Core.Canvas;
@@ -131,6 +132,15 @@ public sealed class CanvasStroke
 {
     /// <summary>相邻两次采样近于此距离就合并（规格 §16.4："相邻点距离合并 &lt;2px"）。</summary>
     public const int MinPointDistance = 2;
+
+    private static long _clock;
+
+    /// <summary>
+    /// 这一笔是<b>全机第几笔</b>（跨屏共一个单调计数器；建好就定死，不再变）。
+    /// <para>撤销要退的是"最后落的那一笔"，而笔迹是分屏各存一叠的——没有这个序号，编排那边只能
+    /// "每块屏各退一条"（双屏真机症状：按一次撤销，两块屏同时各掉一笔，掉的两条还不是同一时刻画的）。</para>
+    /// </summary>
+    public long Order { get; } = Interlocked.Increment(ref _clock);
 
     private readonly List<PixelPoint> _points = new();
     private readonly int _radius;
@@ -264,6 +274,12 @@ public sealed class CanvasInk
     public IReadOnlyList<CanvasStroke> Strokes => _strokes;
 
     public bool IsEmpty => _strokes.Count == 0;
+
+    /// <summary>
+    /// 这块屏上<b>最后落的那一笔</b>是全机第几笔；空层给 <see cref="long.MinValue"/>，
+    /// 这样"哪块屏该退"的比较里它一定排最后（不是"没画过的屏反倒被选中"）。
+    /// </summary>
+    public long LastOrder => _strokes.Count == 0 ? long.MinValue : _strokes[^1].Order;
 
     /// <summary>正在画的那一条（没在下笔时为 null）。</summary>
     public CanvasStroke? Drawing { get; private set; }
