@@ -170,37 +170,59 @@ public static class ClipboardImageStore
     }
 
     /// <summary>
-    /// 那张 PNG → 归一 BGRA：<b>读档侧唯一的解码入口</b>（<see cref="ClipboardPayload.TryDecodePng"/>，
-    /// §2「解码」裁决＝纯托管自研）。
+    /// 条目 → 那张 PNG 的<b>内存字节</b> ＋ 归一后的像素。<b>全仓"为解码而读盘"与"解 PNG"各只有这一处</b>：
+    /// 两处各一份，最坏的就是采集与读档对同一帧算出两个哈希 ⇒ 用户每点一次"再复制"，历史多一条自回声。
     /// <para>
-    /// 这里以前另有一份 WinRT 解码：<b>它对 16 位与带 alpha 的 PNG 要么拒收、要么交出的像素与
-    /// "alpha 一律 255"的归一口径不同</b>（对照测试实测：16 位那条连每像素几字节都对不上）。
-    /// 两份解码并存最坏的坏法不是多写一份代码，而是<b>采集与读档对同一帧算出两个哈希</b>——
-    /// 那样用户每点一次"再复制"，历史就多一条自回声。
+    /// 为什么交字节而不只交像素：写回剪贴板要交出去的是<b>数据本身</b>。真机坏法是把
+    /// <c>file://</c> URI 交给 <c>SetBitmap</c>——系统按"复制了一个文件"呈现，目标程序粘出来是一串路径，
+    /// 而采集侧又把那行路径记成一条新历史（每点一次多一条，且都是路径）。
+    /// </para>
+    /// <para>
+    /// 解码走 <see cref="ClipboardPayload.TryDecodePng"/>（§2「解码」裁决＝纯托管自研）。这里以前另有一份
+    /// WinRT 解码，对照测试实测出两处底细：16 位的 PNG 它交不出"每像素 3 或 4 字节"的像素块 ⇒ 整帧被拒
+    /// （那样的图根本进不了历史）；带 alpha 的帧它交出的像素与"alpha 一律 255"的归一口径不同。
     /// </para>
     /// </summary>
-    public static bool TryReadPngFrame(string? mainFileName, out ClipboardPayload.ImageFrame frame, out string? reason)
+    public static bool TryReadEntryImage(Item item, out byte[]? pngBytes,
+        out ClipboardPayload.ImageFrame frame, out string? reason)
     {
+        pngBytes = null;
         frame = default;
         reason = null;
-        var path = ClipAssets.FullPathOf(mainFileName);
+        var path = ClipAssets.FullPathOf(ClipboardEntry.FileName(item));
         if (path is null) { reason = "这一条的文件名不安全或没有文件"; return false; }
         try
         {
-            // 同步读 + 同步解：调用方（历史页/未来的贴图）自己决定放哪个线程，这里不偷偷起 Task。
-            return ClipboardPayload.TryDecodePng(File.ReadAllBytes(path), out frame, out reason);
+            pngBytes = File.ReadAllBytes(path);
+            if (ClipboardPayload.TryDecodePng(pngBytes, out frame, out reason)) return true;
+            pngBytes = null;      // 解不开的帧不许半交出去：调用方要么两样都拿到，要么一样都没有
+            return false;
         }
         catch (Exception ex)
         {
+            pngBytes = null;
             reason = $"文件读不出来（{ex.GetType().Name}）";
             return false;
         }
     }
 
-    /// <summary>条目 → 它那张 PNG → 归一 BGRA。<b>P3「历史图片贴到桌面」要的就是这一份</b>：
-    /// §Q4 终态把这条接口冻结在这里，实装接合等标注域 S3 之后（本批一个调用都不接）。</summary>
+    /// <summary>条目 → 它那张 PNG → 归一 BGRA。<b>P3 贴图要的就是这一份</b>：§Q4 终态把这条接口
+    /// 冻结在这里，实装接合等标注域 S3 之后（本批一个贴图调用都不接）。</summary>
     public static bool TryReadEntryFrame(Item item, out ClipboardPayload.ImageFrame frame, out string? reason)
-        => TryReadPngFrame(ClipboardEntry.FileName(item), out frame, out reason);
+        => TryReadEntryImage(item, out _, out frame, out reason);
+
+    /// <summary>字节 → WinRT 内存流。剪贴板只收流引用，不收 <c>byte[]</c>——这一句就是"数据不是路径"的那一步。</summary>
+    public static Windows.Storage.Streams.InMemoryRandomAccessStream StreamOf(byte[] data)
+    {
+        var stream = new Windows.Storage.Streams.InMemoryRandomAccessStream();
+        // 必须 Flush：AsStreamForWrite 是一层带缓冲的包装，只 Write 不 Flush 时字节还没落进 WinRT 流，
+        // 交出去的 Size＝0 ——症状是"复制成功、粘出来什么都没有"，比抛异常更难查（单测一把就红）。
+        var writer = stream.AsStreamForWrite();
+        writer.Write(data);
+        writer.Flush();
+        stream.Seek(0);
+        return stream;
+    }
 
     private static async Task<byte[]> ToBytesAsync(InMemoryRandomAccessStream stream)
     {

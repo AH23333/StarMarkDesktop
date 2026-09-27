@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -119,25 +120,45 @@ public sealed class ClipboardImageRowTests : IDisposable
         Assert.Equal(2, ClipboardEntry.CopyCountOf(again.ExtraJson));   // 幂等回放本身没被改动碰坏
     }
 
-    // ────────── 写回：像素身份要活过一次 PNG 往返 ──────────
+    // ────────── 写回：交出去的是数据，不是路径；像素身份要活过一次 PNG 往返 ──────────
+
+    /// <summary>一条图片历史，文件名由测试给（安全不安全都照原样进 extra——校验归入口那一处）。</summary>
+    private static Item ImageRowNamed(string mainName) => ClipboardEntry.BuildImage(
+        ClipboardPolicy.BuildImageSourceId(Encoding.UTF8.GetBytes("row")),
+        new ClipboardEntry.ImageMeta(mainName, mainName + ".thumb.jpg", 8, 6, 2048), "Code", At(0));
 
     [Fact]
-    public async Task WriteBackIdentitySurvivesThePngRoundTrip()
+    public async Task WriteBackHandsOverBytesNotAFilePath()
     {
-        // "再复制一张图"能不能挡下自家回声，前提是我们写出去的 PNG 再解回来与当初<b>逐字节相等</b>：
-        // 采集侧登记的是"归一后 BGRA"的哈希，而不是文件字节（系统会把 PNG 重排成 CF_DIB 再广播回来）。
-        // 这一步不等，症状就是"每点一次重复制，历史多一条"——而且每次都多，不是偶发。
-        // （系统重排那一段仍只能真机验，见 §6；这里只保证我们自己那一半不出错。）
+        // 真机坏法复盘：把 file:// URI 交给 SetBitmap，系统按"复制了一个文件"呈现 ⇒
+        // 目标程序粘出来是一串路径，而采集侧把那行路径又记成一条新历史（每点一次多一条）。
+        // 所以入口必须一次给齐"字节 + 像素"：字节是要上交剪贴板的那份数据，像素是回声登记的原料。
         var bgra = Screenshot(8, 6);
         var png = await ClipboardImageStore.EncodePngAsync(bgra, 8, 6, CancellationToken.None);
         Assert.NotNull(png);
-
-        // 走"那条读路"本身：把 PNG 落到 clip 目录，再用条目侧唯一的解码入口读回来。
         File.WriteAllBytes(ClipAssets.FullPathOf("round_trip.png")!, png!);
-        Assert.True(ClipboardImageStore.TryReadPngFrame("round_trip.png", out var back, out var why), why ?? "读不出帧");
+
+        Assert.True(ClipboardImageStore.TryReadEntryImage(ImageRowNamed("round_trip.png"),
+            out var bytes, out var back, out var why), why ?? "读不出帧");
+        Assert.Equal(png, bytes);                                   // 交出去的那份就是文件里的 PNG 字节
         Assert.Equal((8, 6), (back.Width, back.Height));
         Assert.Equal(bgra, back.Bgra);
         Assert.Equal(ClipboardPolicy.BuildImageSourceId(bgra), ClipboardPolicy.BuildImageSourceId(back.Bgra));
+    }
+
+    [Fact]
+    public void StreamOfCarriesTheSameBytesOutOfProcess()
+    {
+        // "数据不是路径"落在 WinRT 上就是这一颗内存流：字节进出必须一致，且位置回到 0
+        //（流停在末尾的话，目标程序读到的是一段空数据 ⇒ "复制成功、粘出来什么都没有"）。
+        var blob = new byte[] { 1, 2, 3, 250, 251, 252 };
+        var stream = ClipboardImageStore.StreamOf(blob);
+        Assert.Equal(0L, (long)stream.Position);
+        using var inner = stream.AsStreamForRead();
+        var read = new byte[blob.Length];
+        inner.ReadExactly(read);
+        Assert.Equal(blob, read);
+        Assert.Equal(blob, read);
     }
 
     [Fact]
@@ -148,7 +169,7 @@ public sealed class ClipboardImageRowTests : IDisposable
         var bgra = Screenshot(4, 4);
         var png = await ClipboardImageStore.EncodePngAsync(bgra, 4, 4, CancellationToken.None);
         File.WriteAllBytes(ClipAssets.FullPathOf("echo_round.png")!, png!);
-        Assert.True(ClipboardImageStore.TryReadPngFrame("echo_round.png", out var back, out _));
+        Assert.True(ClipboardImageStore.TryReadEntryFrame(ImageRowNamed("echo_round.png"), out var back, out _));
 
         var dedupe = new ClipboardDedupe();
         dedupe.NoteOwnWrite(back.Bgra, 1_000);
@@ -156,15 +177,17 @@ public sealed class ClipboardImageRowTests : IDisposable
     }
 
     [Fact]
-    public void UnsafeOrMissingNameIsRefusedInItsOwnWords()
+    public void EntriesWithoutAReadableFileAreRefusedInTheirOwnWords()
     {
         // 这一句也是 P3 贴图要用的入口：它给不出帧时必须说得出为什么，否则"贴不出去"是一句猜谜。
-        Assert.False(ClipboardImageStore.TryReadPngFrame("../escape.png", out _, out var unsafeName));
+        Assert.False(ClipboardImageStore.TryReadEntryFrame(ImageRowNamed("../escape.png"), out _, out var unsafeName));
         Assert.Contains("不安全", unsafeName, StringComparison.Ordinal);
-        Assert.False(ClipboardImageStore.TryReadPngFrame(null, out _, out var none));
+        Assert.False(ClipboardImageStore.TryReadEntryFrame(
+            ClipboardEntry.Build("一段文字", "Code", ClipboardEntry.FormatText, At(0)), out _, out var none));
         Assert.Contains("没有文件", none, StringComparison.Ordinal);
-        Assert.False(ClipboardImageStore.TryReadPngFrame("2026-09-28_0915_00000000.png", out _, out var gone));
-        Assert.Contains("读不出来", gone, StringComparison.Ordinal);      // 合法名字但文件不在：也不是异常，是一句原话
+        Assert.False(ClipboardImageStore.TryReadEntryFrame(ImageRowNamed("2026-09-28_0915_00000000.png"),
+            out _, out var gone));                                  // 合法名字但文件不在：也不是异常，是一句原话
+        Assert.Contains("读不出来", gone, StringComparison.Ordinal);
     }
 
     /// <summary>一块"像截图"的像素：逐像素变化的 BGR，alpha 恒 255（剪贴板图没有半透明语义，见 ClipAssets 的 DIB 口径）。</summary>

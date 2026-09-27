@@ -229,7 +229,10 @@ public sealed class ClipboardPngCodecTests
         var watcher = SourceGate.ReadRepoFile("src/StarMark.Integrations/Clipboard/ClipboardWatcher.cs");
         var store = SourceGate.ReadRepoFile("src/StarMark.Integrations/Clipboard/ClipboardImageStore.cs");
         Assert.Contains("ClipboardPayload.TryDecodePng(png", watcher);
-        Assert.Contains("ClipboardPayload.TryDecodePng(File.ReadAllBytes(path)", store);
+        // 读档侧只留一处解码、一处为解码而读盘：多一处就多一份"同一帧两个哈希"的可能。
+        // 计数带左括号：文档注释里的 <c>see cref</c> 也写了那个名字，不带括号就会把注释数进去（#123 同族）。
+        Assert.Equal(1, SourceGate.Count(store, "ClipboardPayload.TryDecodePng("));
+        Assert.Equal(1, SourceGate.Count(store, "File.ReadAllBytes"));
         // 解码不留第二份：BitmapDecoder 只许在"曾经解码"的地方消失，编码器（BitmapEncoder）照旧。
         Assert.DoesNotContain("BitmapDecoder", store);
         Assert.Contains("BitmapEncoder", store);

@@ -155,14 +155,26 @@ public partial class ClipboardPageViewModel : ObservableObject
         try
         {
             // 读盘 + 解码整段放池线程：一张 4K PNG 解出来是几十 MB 的缓冲，压在 UI 线程上
-            // 就是"点一下就卡住"。（解码只有那一份自研实现——与采集侧同一句，见 TryReadPngFrame。）
-            var frame = await System.Threading.Tasks.Task.Run(() =>
-                ClipboardImageStore.TryReadEntryFrame(item, out var f, out _) ? f : (ClipboardPayload.ImageFrame?)null);
-            if (frame is { } pixels) App.NoteClipboardOwnImageWrite(pixels.Bgra);
+            // 就是"点一下就卡住"。（解码只有那一份自研实现——与采集侧同一句，见 TryReadEntryImage。）
+            var read = await System.Threading.Tasks.Task.Run(() =>
+            {
+                var ok = ClipboardImageStore.TryReadEntryImage(item, out var bytes, out var f, out var why);
+                return (ok, bytes, f, why);
+            });
+            if (!read.ok)
+            {
+                StatusText = $"这张图没能复制出去：{read.why}";
+                return false;
+            }
 
+            // 先登记回声再写：身份是"归一后像素"的哈希，而系统会把我们写出去的图重排成 CF_DIB 再广播回来。
+            App.NoteClipboardOwnImageWrite(read.f.Bgra);
+
+            // 交出去的是<b>位图数据</b>，不是文件位置：给 file URI 时系统按"复制了一个文件"呈现，
+            // 目标程序粘出来就是一串路径（真机坏法），而且采集侧还会把那行路径再记成一条新历史。
             var package = new DataPackage();
-            package.SetBitmap(Windows.Storage.Streams.RandomAccessStreamReference.CreateFromUri(
-                new Uri(path)));                                   // Windows.Foundation.Uri 在 C# 投影里就是 System.Uri
+            package.SetBitmap(Windows.Storage.Streams.RandomAccessStreamReference
+                .CreateFromStream(ClipboardImageStore.StreamOf(read.bytes!)));
             Clipboard.SetContent(package);
             Clipboard.Flush();
             StatusText = $"已把图片复制回剪贴板：{vm.Title}（去目标程序按粘贴即可）";

@@ -45,14 +45,19 @@ public sealed class ClipboardImageRowUiGateTests
         Assert.True(note >= 0 && setContent >= 0, "要么没登记回声，要么根本没写剪贴板");
         Assert.True(note < setContent, "回声登记必须早于 SetContent：晚一步就来不及挡那一帧通知");
 
-        // 通货是位图不是字符串：SetText 会让图片行"复制成功、粘出来是空的"。
+        // 通货是位图<b>数据</b>，不是字符串、也不是文件位置：
+        // SetText 会让图片行"复制成功、粘出来是空的"；而交 file URI 会被系统按"复制了一个文件"呈现，
+        // 目标程序粘出来就是一串路径（真机坏法），采集侧还会把那行路径再记成一条新历史。
         Assert.Contains("SetBitmap", body);
+        Assert.Contains("CreateFromStream", body);
+        Assert.DoesNotContain("CreateFromUri", body);
+        Assert.DoesNotContain("SetStorageItems", body);            // 那颗才是"复制文件"
         Assert.DoesNotContain("SetText", body);
         Assert.Contains("Clipboard.Flush()", body);              // 不 Flush，窗口一关内容就没了
 
         // 像素从我们自己那份 PNG 解出来（登记的是身份哈希的原料，不是文件字节），而且<b>只问那一处入口</b>：
-        // UI 自己再调一次解码器，就会与采集侧算出两种哈希（回声当场失效）。
-        Assert.Contains("ClipboardImageStore.TryReadEntryFrame", body);
+        // UI 自己再读一次盘、再解一次码，就会与采集侧算出两种哈希（回声当场失效）。
+        Assert.Contains("ClipboardImageStore.TryReadEntryImage", body);
         Assert.DoesNotContain("TryDecodePng", body);
         Assert.Contains("Task.Run", body);             // 读盘 + 解码整段离 UI 线程
     }
@@ -67,7 +72,7 @@ public sealed class ClipboardImageRowUiGateTests
         // 先判文件在不在再去读它：漏了这一步，症状是一句"图片复制失败：找不到文件"式的系统原话。
         Assert.Contains("File.Exists", body);
         Assert.True(body.IndexOf("File.Exists", StringComparison.Ordinal)
-                    < body.IndexOf("TryReadEntryFrame", StringComparison.Ordinal));
+                    < body.IndexOf("TryReadEntryImage", StringComparison.Ordinal));
         Assert.DoesNotContain("ReadAllBytes", body);   // 读盘留在入口那一处，UI 不自己开文件
     }
 
