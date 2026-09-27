@@ -41,11 +41,10 @@ public enum SessionEvent
     /// <summary>开 / 关画板（canvas.toggle、托盘那一项）。</summary>
     ToggleBoard,
 
-    /// <summary>选了一支要留痕的笔（画笔／橡皮／图形／折线／文字／序号）⇒ 进绘制态。</summary>
-    PickPersistentPen,
-
-    /// <summary>选荧光笔（按住才有、松手即透）⇒ 留在穿透态。</summary>
-    PickSpotlightPen,
+    // 2026-09-27 用户改判：原先这里有 PickPersistentPen／PickSpotlightPen——"选一支笔"顺手把穿透态翻了。
+    // 他要的是<b>换工具与能不能画解耦</b>：穿透态就是穿透态，要画一律先用那颗按钮或 canvas.through 关掉。
+    // 保留那两个事件等于让"点一下荧光笔"偷偷改掉鼠标归属（也正是"点工具条那一下被画布吃掉"的源头之一），
+    // 所以事件本身删掉：换工具不再产生迁移，见 CanvasService.SelectTool。
 
     /// <summary>把鼠标交还给下层应用（点「穿透」／画布上右键／F5 那类）。</summary>
     GivePointerBack,
@@ -93,12 +92,6 @@ public static class AnnotationSessions
                 AnnotationStage.Sheet => AnnotationStage.Sheet,
                 _ => AnnotationStage.Idle,
             },
-            SessionEvent.PickPersistentPen => from.IsSheet()
-                ? from
-                : AnnotationStage.BoardDrawing,
-            SessionEvent.PickSpotlightPen => from.IsSheet()
-                ? from
-                : AnnotationStage.BoardPenetrating,
             SessionEvent.GivePointerBack => from.IsBoard()
                 ? AnnotationStage.BoardPenetrating
                 : from,
@@ -136,16 +129,6 @@ public static class AnnotationSessions
     /// 读态再抢一次就把截图交互打断在别的程序手里。</para>
     /// </summary>
     public static bool QuickDrawReads(this AnnotationStage stage) => stage == AnnotationStage.BoardPenetrating;
-
-    /// <summary>
-    /// 选这支笔＝向会话提交哪个事件。<b>穿透与否仍由 <see cref="Canvas.CanvasModes.IsClickThroughAfter"/>
-    /// 一处给</b>（批次 WF-1：方向只准有一个出处），这里只把那位翻译成事件——
-    /// 接线层因此不必自己写 <c>tool == Highlighter ? ... : ...</c>，那种写法编译得过、真机却可能整个反向。
-    /// </summary>
-    public static SessionEvent ToolSelectEvent(CanvasTool tool)
-        => CanvasModes.IsClickThroughAfter(tool)
-            ? SessionEvent.PickSpotlightPen
-            : SessionEvent.PickPersistentPen;
 
     /// <summary>画板玻璃这一态吃不吃鼠标（穿透＝不吃，绘制＝吃）。Sheet 不谈这一位：那时玻璃不可见。</summary>
     public static bool GlassTakesPointer(this AnnotationStage stage) => stage == AnnotationStage.BoardDrawing;

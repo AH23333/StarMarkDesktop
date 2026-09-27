@@ -313,17 +313,18 @@ public sealed class CanvasShapesTests
             new[] { new PixelPoint(0, 0), new PixelPoint(9, 9) }).EffectiveColorBgra);
     }
 
-    /// <summary>五种图形都是"要留痕"的：选了它就该收回鼠标（与画笔同侧），这条判据仍由 CanvasModes 一处给。</summary>
+    /// <summary>五种图形都归"图形"那一组（工具条按这张表生成按钮、编排按它决定"拖形还是走笔"）。</summary>
     [Theory]
     [InlineData(CanvasTool.Rectangle)]
     [InlineData(CanvasTool.Ellipse)]
     [InlineData(CanvasTool.Line)]
     [InlineData(CanvasTool.PolyLine)]
     [InlineData(CanvasTool.Arrow)]
-    public void ShapesEnterTheDrawingState(CanvasTool shape)
+    public void ShapesAreGroupedAsShapes(CanvasTool shape)
     {
         Assert.True(shape.IsShape());
-        Assert.False(CanvasModes.IsClickThroughAfter(shape));
+        // 从前这里还断言"选了图形就该收回鼠标"（IsClickThroughAfter）。2026-09-27 用户改判：
+        // 换工具不再改穿透态，所以那条判据连同事件一起删了——留着一条没人读的判据正是 WR 那批的病因。
     }
 
     [Fact]

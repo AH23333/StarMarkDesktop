@@ -333,19 +333,24 @@ public static class CanvasService
     {
         CommitOpenStroke();                       // 先收手上那条：不然它会接到新工具的设置上
         _tool = tool;
-        // 方向（这支笔要不要穿透）由 Core 的一处判据翻成事件，接线层不现写布尔（批次 WF-1）
-        AnnotationHub.Raise(AnnotationSessions.ToolSelectEvent(tool));
-        // 态没变也要把"这一态该是什么样"重放一遍。画笔↔橡皮两支都在绘制态，Raise 走到
-        // <c>to == from</c> 就短路了，一次广播都不发 ⇒ 条上高亮与光标停在上一支笔（真机："点了橡皮
-        // 看到的还是画笔"），用户于是再点一次——那一下正好落进"再点当前工具＝取消选择"那一臂，
-        // 把穿透态翻掉，看起来就成了"切换时穿透状态乱变、而且切不过去"。
-        // 这里重放的是原语（可见性／穿透位／光标／条子可见／广播），全程不再进 Hub，不会再触发迁移。
+        // 2026-09-27 用户改判：<b>换工具不再翻穿透态</b>（从前选荧光笔留在穿透、选画笔进绘制，是 §16.5.2
+        // 的"零摩擦"，也是"点一下工具结果鼠标归属变了"的来源）。要画就用那颗「穿透」按钮或 canvas.through
+        // 关掉穿透，两态各管各的。所以这里没有 Raise：不产生迁移，只把当前态该长的样子重放一遍
+        // （高亮、光标、状态行都要跟着换笔走——Raise 在态没变时短路，不重放就会出现"点了没反应"）。
+        if (AnnotationHub.Stage == AnnotationStage.Idle)
+        {
+            // 唯一的例外：板子还没开着时按那三条工具热键（画笔／荧光笔／橡皮）不该是哑键——
+            // 这一按的意思是"我要开始标注了"，所以把板子开起来（默认落穿透态，由转移表保证）。
+            AnnotationHub.Raise(SessionEvent.ToggleBoard);
+        }
         ApplyStage(AnnotationHub.Stage);
     }
 
     /// <summary>再点当前选中的笔＝收笔回穿透态（与截图/贴图那条"再点取消选择"同一交互语言）。</summary>
     public static void ToggleTool(CanvasTool tool)
     {
+        // 换工具本身不再改穿透态（见 SelectTool）；这里只剩"再点当前那一支＝取消选择"，
+        // 它等价于把鼠标还给下层应用——所以仍然是一次真正的会话事件，不是特例。
         if (_tool == tool && !ClickThroughHere) AnnotationHub.Raise(SessionEvent.GivePointerBack);
         else SelectTool(tool);
     }
@@ -655,16 +660,22 @@ public static class CanvasService
         // 就是同一按两家用；截图期间这块玻璃连显示都不被允许，抢一次就把截图打断在别的程序手里。
         if (_press != Press.None || AnnotationHub.Stage != AnnotationStage.BoardPenetrating || !down) return;
 
-        var quick = LayeredCanvasWindow.CtrlAltDown;
-        if (!quick && _tool != CanvasTool.Highlighter) return;     // 这一按该归下层应用，别抢
+        // 穿透态只保留一种抢按：<b>显式的 Ctrl+Alt 圈画</b>。2026-09-27 用户改判，删掉"当前选的是荧光笔
+        // 就抢按"那一臂——他要"穿透态按下去就是下层应用的点击"，要画荧光笔得先关掉穿透
+        // （那颗按钮或 canvas.through）。方向判据在 CanvasModes 一处，接线层不许自己现写布尔（WF-1 口径）。
+        if (!CanvasModes.ClaimsPressInPenetrating(LayeredCanvasWindow.CtrlAltDown)) return;
+        // 抢之前先问"这一点落在谁的窗上"（§6.3）：光标停在自家工具条／快捷键面板上时那一按是<b>点按钮</b>，
+        // 抢走它就长成"点菜单栏却画出一条轨迹、那颗按钮没反应"（真机原话）。贴图不算 chrome：穿透态下
+        // 在贴图上 Ctrl+Alt 圈注是要留的能力（§13 用例 5）。
+        if (LayerDirector.IsChromeUnder(cursorX, cursorY)) return;
+
         var screen = ScreenAt(new PixelPoint(cursorX, cursorY));
         if (screen is null) return;
 
         foreach (var s in Screens) { s.Window.SetClickThrough(false); s.Window.SetDrawCursor(true); }
         screen.Window.Capture();                                   // 那一次按下不会再来，抓取要自己补
         AnnotationHub.QuickPressInFlight = true;                   // 每帧对账这一刻要跳过（唯一合法的不一致）
-        BeginPress(screen, new PixelPoint(cursorX - screen.Bounds.X, cursorY - screen.Bounds.Y),
-            quick ? Press.QuickPen : Press.Ephemeral);
+        BeginPress(screen, new PixelPoint(cursorX - screen.Bounds.X, cursorY - screen.Bounds.Y), Press.QuickPen);
     }
 
     /// <summary>把临时摘掉的穿透还回去（<b>会话态没动过</b>，所以工具条那行字不会跳）。</summary>

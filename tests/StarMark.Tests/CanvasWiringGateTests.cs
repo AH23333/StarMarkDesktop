@@ -583,28 +583,29 @@ public sealed class CanvasWiringGateTests
     /// </para>
     /// </summary>
     [Fact]
-    public void ToolChoiceDecidesTheState_AndRepeatingItHandsTheMouseBack()
+    public void ChoosingAToolNeverChangesWhoGetsTheMouse_AndRepeatingItHandsItBack()
     {
         var service = SourceGate.ReadRepoFile(Service);
         var select = SourceGate.MethodBody(service, "public static void SelectTool(CanvasTool tool)");
-        // 方向不在接线处现写：这里只把 Core 给的"这一支笔该提交哪个事件"递出去
-        Assert.Contains("AnnotationHub.Raise(AnnotationSessions.ToolSelectEvent(tool));", select);
+        // 2026-09-27 用户改判：<b>换工具不再改鼠标归属</b>。穿透／绘制只由那颗「穿透」按钮、
+        // canvas.through、右键交出与"再点当前工具"这四条改（都走 Hub 事件），选笔不再翻态。
         Assert.DoesNotContain("SetClickThrough(", select);
-        Assert.DoesNotContain("tool != CanvasTool.Highlighter", select);
-        Assert.DoesNotContain("tool == CanvasTool.Highlighter", select);
-        // 批次 S2：态不变的那一类切换（画笔↔橡皮，两支都在绘制态）里 Raise 走到 to == from 就短路，
-        // 一次广播都不发 ⇒ 条上高亮与光标停在上一支笔；用户多点的那一下又落进"再点当前工具＝取消选择"，
-        // 于是长成真机报的"切换时穿透状态乱变、而且切不过去"。所以 SelectTool 必须自己重放一次当前态。
+        Assert.DoesNotContain("Highlighter", select);                   // 更不许自己现写"哪支笔该穿透"的布尔
+        Assert.DoesNotContain("Raise(SessionEvent.TakePointer)", select);
+        Assert.DoesNotContain("Raise(SessionEvent.GivePointerBack)", select);
+        // 唯一的例外：板子还没开着时那三条工具热键不能是哑键——先把板子开起来（落穿透态）
+        Assert.Contains("if (AnnotationHub.Stage == AnnotationStage.Idle)", select);
+        Assert.Contains("AnnotationHub.Raise(SessionEvent.ToggleBoard);", select);
+        // 态没变也要重放当前态：不重放就是"点了橡皮看到的还是画笔"，用户多点的那一下才去翻态
         Assert.Contains("ApplyStage(AnnotationHub.Stage);", select);
-        Assert.True(select.IndexOf("Raise(AnnotationSessions.ToolSelectEvent", StringComparison.Ordinal)
+        Assert.True(select.IndexOf("Raise(SessionEvent.ToggleBoard);", StringComparison.Ordinal)
                     < select.IndexOf("ApplyStage(AnnotationHub.Stage);", StringComparison.Ordinal),
-            "重放要排在迁移之后：抢在前面就是把旧态的样子又画了一遍");
+            "重放要排在开板之后：抢在前面就是把旧态（没板子）的样子又画一遍");
         var toggle = SourceGate.MethodBody(service, "public static void ToggleTool(CanvasTool tool)");
         Assert.Contains("AnnotationHub.Raise(SessionEvent.GivePointerBack)", toggle);
         Assert.Contains("else SelectTool(tool);", toggle);
-        // 事件→态那一臂也在 Core：荧光笔那一支永远回到穿透，画笔那一支永远进绘制
-        Assert.Equal(SessionEvent.PickSpotlightPen, AnnotationSessions.ToolSelectEvent(CanvasTool.Highlighter));
-        Assert.Equal(SessionEvent.PickPersistentPen, AnnotationSessions.ToolSelectEvent(CanvasTool.Pen));
+        // 那张表里再没有"选某支笔"的事件：留着就是"点一下工具顺手把鼠标抢走"的入口
+        Assert.All(Enum.GetNames<SessionEvent>(), name => Assert.DoesNotContain("Pick", name));
         // 三支笔各一颗按钮；图形那整排共用一颗处理器（按 Tag 分流，见 BuildShapeButtons）。
         // 直接绑 SelectTool 就没有"再点取消"了，所以这条链上只许出现 ToggleTool。
         var toolbar = SourceGate.ReadRepoFile(Toolbar);
@@ -632,9 +633,13 @@ public sealed class CanvasWiringGateTests
         }
         // 直线与折线是这条排上最容易撞车的一对：折线的图标必须带顶点记号，否则两颗看起来是同一件事
         Assert.Contains("Dot(5.6, 4.1)", SourceGate.MethodBody(toolbar, "private static UIElement ShapeIcon("));
-        // 穿透态下选了图形必须说一句"这一按仍归下层应用"——不然就是"拖了半天什么都没画，以为软件坏了"
+        // 穿透态那一行必须说"这一按仍归下层应用"——不然就是"拖了半天什么都没画，以为软件坏了"。
+        // 2026-09-27 改判之后这句话对<b>每一支笔</b>都说（从前图形与荧光笔各写一份、措辞还不一致）：
+        // 按工具分支就是"有的说了有的没说"的来源，所以这里反向钉死"不许再按工具分叉"。
         var status = SourceGate.MethodBody(toolbar, "private string StatusText()");
-        Assert.Contains("if (tool.IsShape())", status);
+        Assert.Contains("仍归下层应用", status);
+        Assert.DoesNotContain("tool.IsShape()", status);
+        Assert.DoesNotContain("CanvasTool.Highlighter", status);
         // 折线是唯一"跨按还开着"的：绘制态那行要顺带说怎么收口（不然用户试出来的那一下是退出画布）
         Assert.Contains("tool == CanvasTool.PolyLine", status);
         // Esc 是两级的（先收口折线，再退出），而 ✕ 那颗仍旧一步退出
@@ -796,7 +801,12 @@ public sealed class CanvasWiringGateTests
         var service = SourceGate.ReadRepoFile(Service);
         var poll = SourceGate.MethodBody(service, "private static void PollPress(int cursorX, int cursorY)");
         Assert.Contains("LayeredCanvasWindow.LeftButtonDown", poll);
-        Assert.Contains("LayeredCanvasWindow.CtrlAltDown", poll);
+        // 2026-09-27 用户改判：穿透态<b>只抢 Ctrl+Alt 那一下</b>，与选了哪支笔无关（方向判据在 CanvasModes）
+        Assert.Contains("CanvasModes.ClaimsPressInPenetrating(LayeredCanvasWindow.CtrlAltDown)", poll);
+        Assert.DoesNotContain("_tool", poll);                                   // "荧光笔就抢按"那一臂不许回来
+        // §6.3：抢之前先问这一点落在谁的窗上——光标在自家工具条／面板上时那一按是点按钮，
+        // 抢走它就长成"点菜单栏却画出一条轨迹、那颗按钮没反应"（真机原话）
+        Assert.Contains("if (LayerDirector.IsChromeUnder(cursorX, cursorY)) return;", poll);
         // 会话闸门（C2）：读态只在 Board·穿透态跑，判据在 Core 那张表里
         Assert.Contains("AnnotationHub.Stage != AnnotationStage.BoardPenetrating || !down", poll);
         Assert.Contains("s.Window.SetClickThrough(false);", poll);
@@ -1146,9 +1156,10 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("ToggleTool(tool);", tool);
         Assert.DoesNotContain("Start();", tool);                  // "没开就先 Start()"那条平行逻辑不许回来
         Assert.DoesNotContain("Report(", tool);                   // 开不起来时 Hub/宿主已经报过，不再补一条
-        // 板子没开着时按画笔＝直接进绘制态（少一步＝用户要的效果），判据在 Core 的转移表
-        Assert.Equal(AnnotationStage.BoardDrawing,
-            AnnotationSessions.Move(AnnotationStage.Idle, AnnotationSessions.ToolSelectEvent(CanvasTool.Pen), null));
+        // 板子没开着时按工具热键＝把板子开起来，但<b>停在穿透态</b>（2026-09-27 改判：换工具不改鼠标归属，
+        // 要画再自己关穿透）。判据在 Core 的转移表，接线层只递"开板"这一个事件
+        Assert.Equal(AnnotationStage.BoardPenetrating,
+            AnnotationSessions.Move(AnnotationStage.Idle, SessionEvent.ToggleBoard, null));
         var require = SourceGate.MethodBody(service, "private static void RequireRunning(string what, Action run)");
         Assert.Contains("Report(\"画布没开着\"", require);
         Assert.Contains("BindingText(HotkeyActions.CanvasToggle)", require);   // 键位取自真实绑定，不写死

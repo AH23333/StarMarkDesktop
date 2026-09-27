@@ -429,11 +429,11 @@ public sealed partial class CanvasToolbarWindow : Window
             // 折线是唯一"跨按还开着"的：不在这行说怎么收，用户就只能靠试——而试出来的那一下是 Esc＝退出画布
             return $"绘制中（鼠标归画布）：{ink}。点「穿透」或右键交出鼠标"
                    + (tool == CanvasTool.PolyLine ? "；勾折线时 Esc／再点「折线」＝收口这一条" : string.Empty);
-        if (tool == CanvasTool.Highlighter) return $"穿透中 + 荧光笔已选：按住左键即画、松开自动穿透；{ink}";
-        // 图形和画笔一样要真握住鼠标才画得出来。穿透态下选了它却不说明，就是"点了矩形、拖了半天什么都没画、
-        // 还以为软件坏了"——那句"这一按仍归下层应用"是这条链上唯一能挡住这种误会的出口。
-        if (tool.IsShape()) return $"穿透中 + {tool.Name()}已选：现在这一按仍归下层应用；点「穿透」收回鼠标再画{tool.Name()}";
-        return $"穿透中：下层应用照常操作。{ink}；按住 Ctrl+Alt 可直接圈画，点「画笔」进入留痕模式";
+        // 2026-09-27 改判：穿透态下<b>没有任何一支笔</b>能直接画（从前荧光笔"按住即画"，与"穿透＝鼠标归下层"
+        // 这句话自相矛盾，而且那套轮询抢按不看光标落点，会把点工具条那一下也吃掉）。
+        // 所以这一行只说两件事：这一按归谁、以及怎么开始画。少了"仍归下层应用"这句，
+        // 就是"点了橡皮、拖了半天什么都没画、还以为软件坏了"那种误会。
+        return $"穿透中：这一按仍归下层应用；点「穿透」（或画布「穿透」快捷键）收回鼠标再画{tool.Name()}。{ink}";
     }
 
     private static void Highlight(Button button, bool on, bool strong = true)

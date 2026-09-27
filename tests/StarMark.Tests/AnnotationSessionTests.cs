@@ -19,15 +19,14 @@ public class AnnotationSessionTests
 
     // ────────── 转移表 ──────────
 
+    // 2026-09-27 用户改判：换工具不再翻穿透态，所以这里没有 Pick* 那两臂了——
+    // "选一支笔"不再产生迁移（见 CanvasService.SelectTool：它只重放当前态）。
     [Theory]
     [InlineData(AnnotationStage.Idle, SessionEvent.ToggleBoard, AnnotationStage.BoardPenetrating)]
     [InlineData(AnnotationStage.BoardPenetrating, SessionEvent.ToggleBoard, AnnotationStage.Idle)]
     [InlineData(AnnotationStage.BoardDrawing, SessionEvent.ToggleBoard, AnnotationStage.Idle)]
     [InlineData(AnnotationStage.Sheet, SessionEvent.ToggleBoard, AnnotationStage.Sheet)]
-    [InlineData(AnnotationStage.Idle, SessionEvent.PickPersistentPen, AnnotationStage.BoardDrawing)]
-    [InlineData(AnnotationStage.BoardPenetrating, SessionEvent.PickPersistentPen, AnnotationStage.BoardDrawing)]
-    [InlineData(AnnotationStage.BoardDrawing, SessionEvent.PickSpotlightPen, AnnotationStage.BoardPenetrating)]
-    [InlineData(AnnotationStage.Idle, SessionEvent.PickSpotlightPen, AnnotationStage.BoardPenetrating)]
+    [InlineData(AnnotationStage.BoardPenetrating, SessionEvent.GivePointerBack, AnnotationStage.BoardPenetrating)]
     [InlineData(AnnotationStage.BoardDrawing, SessionEvent.GivePointerBack, AnnotationStage.BoardPenetrating)]
     [InlineData(AnnotationStage.BoardPenetrating, SessionEvent.TakePointer, AnnotationStage.BoardDrawing)]
     [InlineData(AnnotationStage.BoardDrawing, SessionEvent.TakePointer, AnnotationStage.BoardDrawing)]
@@ -43,9 +42,10 @@ public class AnnotationSessionTests
         // 默认态是穿透：一开就吃掉全屏鼠标，在用户眼里等于"电脑死了"（PPT 翻不动、下层点不动）
         Assert.Equal(AnnotationStage.BoardPenetrating,
             AnnotationSessions.Move(AnnotationStage.Idle, SessionEvent.ToggleBoard, null));
-        // 工具热键那条也一样：没开过板子时按「画笔」是先开板再进绘制，不能停在穿透
+        // 改判之后没有第二条了：板子没开时按工具热键走的也是这一臂（先开板、停在穿透态），
+        // 想画再由那颗「穿透」按钮或 canvas.through 关掉——换工具本身永远不改鼠标归属。
         Assert.Equal(AnnotationStage.BoardDrawing,
-            AnnotationSessions.Move(AnnotationStage.Idle, SessionEvent.PickPersistentPen, null));
+            AnnotationSessions.Move(AnnotationStage.BoardPenetrating, SessionEvent.TakePointer, null));
     }
 
     [Theory]
@@ -70,7 +70,7 @@ public class AnnotationSessionTests
     {
         // 截图里换笔／交出鼠标／开关画板：全局态必须还站着 Sheet，否则"截图中把遮罩弄没了"
         Assert.Equal(AnnotationStage.Sheet,
-            AnnotationSessions.Move(AnnotationStage.Sheet, SessionEvent.PickPersistentPen, null));
+            AnnotationSessions.Move(AnnotationStage.Sheet, SessionEvent.TakePointer, null));
         Assert.Equal(AnnotationStage.Sheet,
             AnnotationSessions.Move(AnnotationStage.Sheet, SessionEvent.GivePointerBack, null));
         Assert.Equal(AnnotationStage.Sheet,

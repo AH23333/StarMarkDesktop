@@ -547,17 +547,16 @@ public sealed class CanvasInkTests
     // ────────── 小工具 ──────────
 
     /// <summary>
-    /// §16.5.2 三态判据的<b>方向</b>（批次 WF-1 的真机教训：这条写反时代码全绿而功能坏着）。
-    /// 画笔／橡皮选完＝<b>不</b>穿透（要在板上留痕、要能反复改）；荧光笔选完＝<b>保持</b>穿透
-    /// （"按住才有、松开即透"）。反向的两种症状分别是"点画笔永远画不上、状态一直说自己是穿透"
-    /// 与"拿荧光笔却把整块屏的鼠标吃掉"。
+    /// 穿透态抢按的<b>方向</b>（批次 WF-1 同一条纪律：这种布尔写反时代码全绿而功能坏着）。
+    /// <para>2026-09-27 用户改判：<b>只认 Ctrl+Alt，与选了哪支笔完全无关</b>——穿透态就是"鼠标归下层"，
+    /// 要画荧光笔得先关掉穿透。"不许看工具"这半条钉在调用点（CanvasWiringGateTests：抢按那几句里
+    /// 不许出现 <c>_tool</c>），这里只管两臂的方向。</para>
     /// </summary>
     [Theory]
-    [InlineData(CanvasTool.Pen, false)]
-    [InlineData(CanvasTool.Eraser, false)]
-    [InlineData(CanvasTool.Highlighter, true)]
-    public void SelectingAToolDecidesWhetherTheCanvasStaysClickThrough(CanvasTool tool, bool clickThrough)
-        => Assert.Equal(clickThrough, CanvasModes.IsClickThroughAfter(tool));
+    [InlineData(true)]
+    [InlineData(false)]
+    public void OnlyCtrlAltClaimsAPressInPenetrating(bool ctrlAltDown)
+        => Assert.Equal(ctrlAltDown, CanvasModes.ClaimsPressInPenetrating(ctrlAltDown));
 
     /// <summary>
     /// 批次 WO：<b>重烤必须擦掉"上一次烤过的那一片"，不是只擦"现在还剩的"</b>。

@@ -235,6 +235,24 @@ public static class LayerDirector
         return false;
     }
 
+    /// <summary>名册里这个窗是干什么用的（没登记＝null）。</summary>
+    public static SurfaceRole? RoleOf(IntPtr hwnd)
+    {
+        for (var i = 0; i < Entries.Count; i++)
+            if (Entries[i].Hwnd == hwnd) return Entries[i].Role;
+        return null;
+    }
+
+    /// <summary>
+    /// 这一点落在<b>自家那两条要点的 chrome</b>（工具条／快捷键面板，名册里同为 Strip）上吗。
+    /// <para>抢按之前必须问这一句：抢按是轮询发现的，它不看光标在哪儿，于是"去点工具条那颗按钮"
+    /// 会被画布当成一次落笔吃掉（真机原话："绘制态下点击菜单栏依旧是绘制在菜单栏上"）。
+    /// 贴图（Pin）不算 chrome——穿透态下在贴图上 Ctrl+Alt 圈注是要保留的能力（§13 用例 5）。</para>
+    /// </summary>
+    public static bool IsChromeUnder(int cursorX, int cursorY)
+        => Classify(cursorX, cursorY, out var hit) == LayerOwnership.Ours
+            && RoleOf(RootOf(hit)) == SurfaceRole.Strip;
+
     /// <summary>名册清空（退出画布、程序收尾）。逐个退出不整批擦，避免把还在的贴图一起忘掉。</summary>
     public static void ForgetRole(SurfaceRole role)
     {
