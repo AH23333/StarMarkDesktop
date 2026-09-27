@@ -342,9 +342,13 @@ public sealed class CanvasWiringGateTests
         var code = SourceGate.ReadRepoFile(Layer);
         var present = SourceGate.MethodBody(code, "public void Present(IntRect dirty)");
         Assert.Contains("if (clipped.IsEmpty) return;", present);
-        // 整帧那条路只允许<b>建窗</b>与<b>系统要求重绘</b>两处走（4K 整帧 = 33MB，§16.7 明令禁止每帧这么干）。
-        // 数的是调用点（带分号），把方法定义本身也算进去的话，改个方法名就会让这条闸门静默失真。
-        Assert.Equal(2, SourceGate.Count(code, "PresentAll();"));
+        // 整帧那条路只允许<b>三处</b>走：建窗首帧、系统要求重绘（WM_PAINT）、以及"从藏着回到显形"。
+        // 三处的共同点是"系统那份表面没有过 / 已经没有了"，没有一处是每帧（4K 整帧 = 33MB，§16.7 明令禁止每帧这么干）。
+        // 数的是调用点（带分号）：把方法定义本身也算进去的话，改个方法名就会让这条闸门静默失真。
+        Assert.Equal(3, SourceGate.Count(code, "PresentAll();"));
+        // 第三处逐个点名钉住：只数总数会允许"多一处但没人知道在哪"，那正是每帧整帧偷偷溜回来的路
+        Assert.Contains("if (visible && !wasShown) PresentAll();",
+            SourceGate.MethodBody(code, "public void SetVisible(bool visible)"));
         Assert.Contains("prcDirty", code);
     }
 
@@ -518,6 +522,30 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("return false;", start);
         var apply = SourceGate.MethodBody(SourceGate.ReadRepoFile(Hub), "private static bool Apply(AnnotationStage from, AnnotationStage to)");
         Assert.Contains("if (!CanvasService.OpenBoardHost()) return false;", apply);
+    }
+
+    /// <summary>
+    /// <b>截图态不许拆宿主</b>（真机反馈："画布上画的东西一按 F1 就全没了"）。
+    /// <para>Sheet <b>不是</b> Board：宿主开合若按 <c>from.IsBoard()</c>／<c>to.IsBoard()</c> 判，
+    /// Board→Sheet 必然落进"关宿主"那一臂，而 <c>CloseBoardHost()</c> 里的 <c>Screens.Clear()</c>
+    /// 把每块屏的笔迹连同撤销一起清掉，截图结束再建回一块空板子。
+    /// 该问的是"<b>这个态要不要板子</b>"＋"<b>它现在在不在</b>"；玻璃显不显是 <c>ApplyStage</c> 那一步的事，
+    /// 两件事一旦合成一件，"临时看不见"就变成了"内容没了"。</para>
+    /// </summary>
+    [Fact]
+    public void ASheetHidesTheGlassButNeverTearsDownTheBoardHost()
+    {
+        var apply = SourceGate.MethodBody(SourceGate.ReadRepoFile(Hub), "private static bool Apply(AnnotationStage from, AnnotationStage to)");
+        Assert.Contains("if (to.IsBoard() && !CanvasService.IsRunning)", apply);
+        Assert.Contains("else if (to == AnnotationStage.Idle && CanvasService.IsRunning) CanvasService.CloseBoardHost();", apply);
+        // 反向钉：只看 to（外加"在不在"），引入 from 就是这次缺陷的本体，别让它被"更对称"的写法请回来
+        Assert.DoesNotContain("from.IsBoard()", apply);
+        // 藏与显归 ApplyStage 管，而且"从藏着回到显形"要重交一次表面（分层内容可能在那一段被系统丢掉）
+        var stage = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "public static void ApplyStage(AnnotationStage stage)");
+        Assert.Contains("screen.Window.SetVisible(visible);", stage);
+        var show = SourceGate.MethodBody(SourceGate.ReadRepoFile(Layer), "public void SetVisible(bool visible)");
+        Assert.Contains("var wasShown = NativeMethods.IsWindowVisible(_hwnd);", show);
+        Assert.Contains("if (visible && !wasShown) PresentAll();", show);
     }
 
     // ────────── 批次 WD-1：三态状态机照 §16.5 落地 ──────────

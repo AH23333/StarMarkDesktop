@@ -88,13 +88,24 @@ public static class AnnotationHub
     /// <summary>
     /// 副作用四步。<b>返回 false＝这一步没做成</b>（画布宿主建不起来），调用方把状态退回去。
     /// </summary>
+    /// <summary>
+    /// 副作用四步。<b>返回 false＝这一步没做成</b>（画布宿主建不起来），调用方把状态退回去。
+    /// <para>
+    /// <b>宿主开／关问的是"这块板子该不该存在"与"它现在在不在"，不是"进没进截图态"</b>。
+    /// 截图态对画布只有一件事：把玻璃<b>藏起来</b>（§5——用户看到的是一次冻帧，不是板子被拆了又重建）。
+    /// 从前这两臂写的是 <c>!from.IsBoard() &amp;&amp; to.IsBoard()</c> / <c>from.IsBoard() &amp;&amp; !to.IsBoard()</c>，
+    /// 而 Sheet <b>不是</b> Board：Board→Sheet 正好落进"关宿主"那一臂，<c>CloseBoardHost()</c> 里的
+    /// <c>Screens.Clear()</c> 把每块屏的笔迹连同宿主一起清掉，截图结束再建回一块空板子。
+    /// 真机症状＝"画布上画的东西一按 F1 就全没了"（撤销栈里也没了，撤不回来）。
+    /// </para>
+    /// </summary>
     private static bool Apply(AnnotationStage from, AnnotationStage to)
     {
-        if (!from.IsBoard() && to.IsBoard())
+        if (to.IsBoard() && !CanvasService.IsRunning)
         {
             if (!CanvasService.OpenBoardHost()) return false;
         }
-        else if (from.IsBoard() && !to.IsBoard()) CanvasService.CloseBoardHost();
+        else if (to == AnnotationStage.Idle && CanvasService.IsRunning) CanvasService.CloseBoardHost();
 
         CanvasService.ApplyStage(to);
         LayerDirector.EnforceOrder(to);

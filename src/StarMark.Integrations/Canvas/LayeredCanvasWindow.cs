@@ -203,8 +203,19 @@ public sealed class LayeredCanvasWindow : IDisposable
     }
 
     /// <summary>显示／隐藏这块板子（隐藏后笔迹仍在内存里，回来还在）。</summary>
+    /// <summary>
+    /// 显／隐这块玻璃。<b>从"藏着"回到"显形"时必须整块重交一次表面</b>：
+    /// 分层窗的内容活在系统那份由 <c>UpdateLayeredWindow</c> 交出去的表面上，藏起来那一段它可能被丢掉
+    /// （不同系统／远程会话／休眠唤醒后更明显），而 <c>ShowWindow</c> 不保证会补一次 <c>WM_PAINT</c> 叫我们交。
+    /// 只 ShowWindow 的结果是"墨还在我们缓冲里、屏幕上却空了一块"——症状同首帧那条老坑：
+    /// 截图回来（或从穿透态切回绘制态）画布一片空白，撤销里明明还有内容。
+    /// </summary>
     public void SetVisible(bool visible)
-        => NativeMethods.ShowWindow(_hwnd, visible ? CanvasNative.SW_SHOWNOACTIVATE : NativeMethods.SW_HIDE);
+    {
+        var wasShown = NativeMethods.IsWindowVisible(_hwnd);
+        NativeMethods.ShowWindow(_hwnd, visible ? CanvasNative.SW_SHOWNOACTIVATE : NativeMethods.SW_HIDE);
+        if (visible && !wasShown) PresentAll();       // 读的是窗此刻真不真的可见，不是自己记的旗标
+    }
 
     /// <summary>
     /// 开／关鼠标穿透。开启后本窗收不到鼠标消息，笔迹仍然显示——
