@@ -26,6 +26,14 @@ public sealed record AiUsageTotals(int Calls, long InputTokens, long OutputToken
 /// <summary>窗口内某一项（功能名或模型名）的分布。</summary>
 public sealed record AiUsageSlice(string Name, int Calls, long TotalTokens, bool EstimatedOnly);
 
+/// <summary>面板一次读齐的快照（合计 + 两个分布。<b>三读取自同一窗口口径</b>——分开读会出现
+/// "合计与分布加起来对不上"的显示鬼态，因为两读之间又写进去了一行）。</summary>
+public sealed record AiUsageSnapshot(
+    long? MaxRecordedAt,
+    AiUsageTotals Window,
+    System.Collections.Generic.IReadOnlyList<AiUsageSlice> ByFeature,
+    System.Collections.Generic.IReadOnlyList<AiUsageSlice> ByModel);
+
 /// <summary>
 /// AI 用量计量的读写面（§20.1）。<b>写只有一处</b>：每次真正发出并获得答复的调用结束后记一行；
 /// "配置能连但还没干活"（测试连接）不记——那是探测不是消耗。

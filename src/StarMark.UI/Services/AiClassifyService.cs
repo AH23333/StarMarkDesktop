@@ -122,6 +122,20 @@ public sealed class AiClassifyService
         return verdict;
     }
 
+    /// <summary>面板的一次完整读（窗口合计 + 功能/模型分布）。null＝账本没接线（老调用方没注入仓储）。</summary>
+    public async Task<AiUsageSnapshot?> UsageSnapshotAsync(CancellationToken ct = default)
+    {
+        if (_usage is null) return null;
+        var max = await _usage.MaxRecordedAtAsync(ct);
+        if (max is null)
+            return new AiUsageSnapshot(null, new AiUsageTotals(0, 0, 0, 0), Array.Empty<AiUsageSlice>(), Array.Empty<AiUsageSlice>());
+        var from = AiBudget.MonthlyFrom(max.Value);
+        return new AiUsageSnapshot(max,
+            await _usage.TotalsSinceAsync(from, ct),
+            await _usage.ByFeatureSinceAsync(from, ct),
+            await _usage.ByModelSinceAsync(from, ct));
+    }
+
     /// <summary>跑一轮整理。<b>不写库</b>：整理出来的东西要用户在预览里点头才算数。
     /// <para>每批边界把"目前为止的方案"落一次盘——用户中途关窗口、进程被杀，
     /// 已经整理出来的部分都还在，回来还能看见「继续应用上次的整理结果」。</para>

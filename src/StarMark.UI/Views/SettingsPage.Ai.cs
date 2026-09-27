@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Ai;
+using StarMark.Core.Ai;
 using StarMark.Integrations.Ai;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
@@ -61,6 +62,7 @@ public sealed partial class SettingsPage
         }
         ShowAiProblem();
         InitAiOrganiseSection();
+        InitAiUsagePanel();     // §20.1 用量面板：读一次账本，失败只留一行解释不拦设置页
     }
 
     /// <summary>把界面上这一组控件读成一份配置。<b>只有这一个地方读控件</b>：
@@ -195,11 +197,29 @@ public sealed partial class SettingsPage
         AiApplyAllButton.IsEnabled = false;
         var cts = new CancellationTokenSource();
         _aiOrganiseCts = cts;
-        AiStatusText.Text = "正在准备…";
         try
         {
-            var outcome = await App.Services.GetRequiredService<AiClassifyService>()
-                .OrganiseAsync((int)Math.Round(AiScopeBox.Value), status => AiStatusText.Text = status,
+            var classifier = App.Services.GetRequiredService<AiClassifyService>();
+            var limit = (int)Math.Round(AiScopeBox.Value);
+
+            // §20.3 预估前置：发第一发之前把"N 批 ≈ X token"算给用户看，确认了才动手。
+            // 口径与 service 内部一致（LoadCandidates + ClassifyRules.Split + Estimate）——
+            // "弹窗说 15K 实际花 40K"比不报更伤信任，宁可多读一次候选也不许两处各算各的。
+            AiStatusText.Text = "正在算这一轮要花多少…";
+            var candidates = await classifier.LoadCandidatesAsync(limit, CancellationToken.None);
+            if (candidates.Count > 0)
+            {
+                var rulesJson = App.Services.GetRequiredService<SettingsStore>().LoadAiClassifyRulesJson();
+                var (forAi, ruled) = ClassifyRules.Split(candidates, ClassifyRules.Merged(rulesJson));
+                var catalog = await classifier.ReferenceTagsAsync(CancellationToken.None);
+                var (batchCount, approxTokens) = ClassifyPrompt.Estimate(forAi, catalog);
+                if (batchCount > 0 && !await ConfirmOrganiseAsync(candidates.Count, ruled.Count, batchCount, approxTokens))
+                    return;    // finally 把忙碌态收回去，什么都没发
+            }
+
+            AiStatusText.Text = "正在准备…";
+            var outcome = await classifier
+                .OrganiseAsync(limit, status => AiStatusText.Text = status,
                     (done, total) => AiStatusText.Text = $"第 {done} / {total} 批完成，继续中…", cts.Token);
 
             ShowPlan(outcome.Plan);
@@ -224,7 +244,27 @@ public sealed partial class SettingsPage
             AiStopButton.Visibility = Visibility.Collapsed;
             AiApplyAllButton.IsEnabled = !_aiPlan.IsEmpty;
             cts.Dispose();
+            _ = RefreshAiUsageAsync();          // 这一轮烧了多少，面板当场跟上
         }
+    }
+
+    /// <summary>确认那一下（§20.3 预估前置）。<b>默认按钮是"取消"</b>：一个会花用户 token 的动作，
+    /// 顺手回车等于没确认。</summary>
+    private async Task<bool> ConfirmOrganiseAsync(int total, int ruled, int batches, long approxTokens)
+    {
+        var detail = ruled > 0
+            ? $"共 {total} 条：{ruled} 条按高置信规则先定（不进模型）；其余分 {batches} 批问模型，约 {approxTokens:N0} token。"
+            : $"共 {total} 条，分 {batches} 批问模型，约 {approxTokens:N0} token。";
+        var dialog = new ContentDialog
+        {
+            Title = "开始 AI 整理？",
+            Content = detail + "\n预算与历史用量见下方「token 预算与用量」。",
+            PrimaryButtonText = "开始",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = this.XamlRoot,   // Page 自身就是 FrameworkElement，取自己挂靠的 XamlRoot
+        };
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
     }
 
     /// <summary>

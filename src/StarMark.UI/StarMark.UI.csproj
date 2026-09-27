@@ -24,15 +24,13 @@
     <EnableMsixTooling>false</EnableMsixTooling>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-  </PropertyGroup>
-
-  <!-- §21 性能提取（2026-09-26 修订落地）：R2R 在 **publish** 时预编译本机代码（启动 JIT 时间 -30~50%），
-       日常 dotnet build 开发环不受它拖累（只有发布那一发变慢）。
-       同批修订刻意的不做：TieredPGO 在 .NET 8+ 默认已开（写了是 no-op）；ServerGC 与"内存最小化"
-       铁律相顶，走 A/B 实测不写默认；InvariantGlobalization 等 XAML 本地化格式专项验证——三条都见
-       《组件功能扩展实现详解》§21。 -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <PublishReadyToRun>true</PublishReadyToRun>
+    <!-- §21 性能提取（2026-09-26 修订落地）：R2R 在 **publish** 时预编译本机代码（启动 JIT 时间 -30~50%），
+         日常 dotnet build 开发环不受它拖累（只有发布那一发变慢）。
+         同批三条刻意不做/缓做，理由见《组件功能扩展实现详解》§21：
+         TieredPGO——.NET 8+ 默认开启，写了是 no-op；
+         ServerGC——与"内存占用最小化"铁律相顶，改 A/B 真机实测再定，不写默认；
+         InvariantGlobalization——待 XAML 本地化日期/数字格式专项验证，通过后再开。 -->
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Release'">true</PublishReadyToRun>
   </PropertyGroup>
 
   <ItemGroup>

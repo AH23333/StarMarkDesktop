@@ -202,6 +202,20 @@ public static class ClassifyPrompt
         return batches;
     }
 
+    /// <summary>开跑前的可见预估（§20.3）：<b>用真实分批与真实提示词算出来，不是百分比猜价</b>——
+    /// "N 条 ≈ M 批 / 约 X token"与即将发出去的东西逐字同源（中文按字≈token 的粗口径，
+    /// 与 §20.5 的用量估算同一条尺子）。O2 规则截胡的条目不在入参里，预估天然只含真正会问的。</summary>
+    public static (int Batches, long ApproxTokens) Estimate(IReadOnlyList<ClassifyItem> items, IReadOnlyList<string> catalog)
+    {
+        var batches = Batches(items);
+        if (batches.Count == 0) return (0, 0);
+        var sys = SystemPrompt(catalog ?? Array.Empty<string>()).Length;
+        var total = 0L;
+        foreach (var batch in batches)
+            total += sys + UserPrompt(batch).Length;
+        return (batches.Count, total);
+    }
+
 
     /// <summary>
     /// 解读答复。<b>四种形状都认</b>（O4 后行格式是提示词要求的主输出，JSON 三态是旧习惯的兼容层）：

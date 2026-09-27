@@ -148,6 +148,26 @@ public sealed class AiClassifyTests
         Assert.Contains(new string('描', ClassifyPrompt.DescFallbackChars), thinLine);
     }
 
+    /// <summary>§20.3 预估：弹窗与将要真实发出的字节逐字同源（同一 Batches、同一份 UserPrompt 渲染结果）——
+    /// "弹窗说 15K 实际发 40K"比不预估更伤信任，所以这里钉的是<b>相等</b>，不是"同量级"。</summary>
+    [Fact]
+    public void EstimateEqualsWhatWouldActuallyBeSent()
+    {
+        var items = Enumerable.Range(1, 170).Select(n => Item(n, "标题" + n + new string('字', 50))).ToList();
+        var catalog = new[] { "前端", "工具" };
+
+        var (batches, tokens) = ClassifyPrompt.Estimate(items, catalog);
+        var real = ClassifyPrompt.Batches(items);
+        Assert.Equal(real.Count, batches);
+        Assert.Equal(
+            real.Sum(b => ClassifyPrompt.SystemPrompt(catalog).Length + ClassifyPrompt.UserPrompt(b).Length),
+            tokens);
+
+        var (none, zero) = ClassifyPrompt.Estimate(Array.Empty<ClassifyItem>(), catalog);
+        Assert.Equal(0, none);
+        Assert.Equal(0, zero);
+    }
+
     [Fact]
     public void NothingRequestedMeansNothingScheduled()
         => Assert.Empty(ClassifyPrompt.Batches(Array.Empty<ClassifyItem>()));

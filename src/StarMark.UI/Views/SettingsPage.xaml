@@ -329,6 +329,23 @@
                                         Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" Visibility="Collapsed"/>
 
                                 <!--
+                                    token 预算与用量（§20.1/§20.2）。判额、熔断、展示三家读同一份账本
+                                    （AiClassifyService.BudgetVerdictAsync 是唯一裁决口），这里只画结论。
+                                    「应用预算」独立一颗：改档位是显式动作，不随其它控件的自动写盘走顺带。
+                                -->
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                    <NumberBox Grid.Column="0" x:Name="AiBudgetBox" Header="月度 token 预算（到线自动暂停，手动恢复）"
+                                               Minimum="10000" Maximum="100000000" SmallChange="10000" LargeChange="50000"
+                                               SpinButtonPlacementMode="Compact" Value="500000" FontSize="12" HorizontalAlignment="Stretch"/>
+                                    <Button Grid.Column="1" x:Name="AiBudgetApplyButton" Content="应用预算" Click="AiBudget_Save_Click"
+                                            Style="{StaticResource SecondaryButton}" VerticalAlignment="Bottom"/>
+                                    <Button Grid.Column="2" x:Name="AiBudgetUnpauseButton" Content="恢复 AI" Click="AiBudget_Unpause_Click"
+                                            Style="{StaticResource SecondaryButton}" VerticalAlignment="Bottom" Visibility="Collapsed"/>
+                                </Grid>
+                                <TextBlock x:Name="AiUsageText" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                           Text="用量还没读。" Opacity="0.72"/>
+
+                                <!--
                                     预览以"组"为单位：三百条逐个看是没人会做的复核，
                                     而"这六条打同一组标签"一眼就能判断对不对。
                                 -->
