@@ -559,6 +559,57 @@ public sealed class CanvasInkTests
     public void SelectingAToolDecidesWhetherTheCanvasStaysClickThrough(CanvasTool tool, bool clickThrough)
         => Assert.Equal(clickThrough, CanvasModes.IsClickThroughAfter(tool));
 
+    /// <summary>
+    /// 批次 WO：<b>重烤必须擦掉"上一次烤过的那一片"，不是只擦"现在还剩的"</b>。
+    /// <para>真机反馈"撤销只能撤销绘制图形的部分（比如只撤销一个完整椭圆的一半）"——椭圆是一条笔迹，
+    /// <c>Undo</c> 已经把它从层里拿掉了，屏幕上却还留半只：因为重烤时清的区域按<b>剩余</b>笔迹的包围盒算，
+    /// 被撤那条没被盖到的地方从头到尾没有任何一步去擦它。而撤销栈里已经没有东西能再退一次，
+    /// 用户唯一的出路是清屏重画。</para>
+    /// <para>这里逐像素钉两件事：撤掉不相邻的那一条之后它<b>一个像素都不许留</b>，
+    /// 而另一条<b>一个像素都不许少</b>。</para>
+    /// </summary>
+    [Fact]
+    public void RebakeErasesWhatWasPreviouslyBaked_NotJustWhatRemains()
+    {
+        var buffer = Buffer();
+        var left = StrokeFrom(10, 10, 30, 30);          // 两块互不相交的位置：一半被留在屏幕上才看得出来
+        var right = StrokeFrom(60, 60, 90, 90);
+
+        var erase = CanvasCompositor.Rebake(buffer, 100, 100, new[] { left, right },
+            default, out var baked);
+        Assert.False(erase.IsEmpty);
+        Assert.NotEqual(Blank, Pixel(buffer, 20, 20));
+        Assert.NotEqual(Blank, Pixel(buffer, 75, 75));
+
+        // 撤掉右边那条：把"上一次烤过的那一片"交回去，它占过的地方必须整块回到空白
+        erase = CanvasCompositor.Rebake(buffer, 100, 100, new[] { left }, baked, out var remaining);
+        Assert.False(erase.IsEmpty);
+        Assert.Equal(remaining, CanvasCompositor.Union(new[] { left.Bounds }, 100, 100));
+        for (var y = 55; y <= 95; y++)
+            for (var x = 55; x <= 95; x++)
+                Assert.Equal(Blank, Pixel(buffer, x, y));       // 半只椭圆＝这一句会红
+        Assert.NotEqual(Blank, Pixel(buffer, 20, 20));           // 另一条一格不少
+        Assert.Equal(Blank, Pixel(buffer, 3, 97));               // 两块之外的地方一步都不许动
+    }
+
+    /// <summary>
+    /// 一笔落下去却<b>不够格留下来</b>（橡皮点一下）时，它按下那刻已经烤进持久层的那一小片要还回去擦：
+    /// 否则屏幕上留下一个"没有任何笔迹对应、撤销里也没有"的洞——比多一条笔迹更难解释。
+    /// </summary>
+    [Fact]
+    public void ADroppedStrokeFootprintIsErasedToo()
+    {
+        var buffer = Buffer();
+        var kept = StrokeFrom(10, 10, 40, 10);
+        CanvasCompositor.Rebake(buffer, 100, 100, new[] { kept }, default, out var baked);
+        Assert.NotEqual(Blank, Pixel(buffer, 25, 10));
+
+        var dropped = StrokeFrom(25, 10, 25, 10, CanvasTool.Eraser);   // 橡皮原地按一下：不够格进层
+        CanvasCompositor.Rebake(buffer, 100, 100, new[] { kept },
+            CanvasCompositor.Union(new[] { baked, dropped.Bounds }, 100, 100), out _);
+        Assert.NotEqual(Blank, Pixel(buffer, 25, 10));                 // 那一按不该把已画好的笔迹擦出一个洞
+    }
+
     private static CanvasStroke StrokeFrom(int x, int y, int to, int? toY = null, CanvasTool tool = CanvasTool.Pen)
     {
         var width = tool == CanvasTool.Eraser ? CanvasWidths.EraserDiameter : tool == CanvasTool.Highlighter ? 9 : Width;

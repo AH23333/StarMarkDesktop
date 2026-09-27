@@ -216,6 +216,18 @@ internal static class WindowInterop
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
 
+    /// <summary>
+    /// 取某个窗的<b>顶层祖先</b>（<c>GA_ROOT</c>）。判"这一点是不是我们自己某扇窗占的"只能比这个：
+    /// <c>WindowFromPoint</c> 给的是那一点上<b>最深</b>的 HWND，而 WinUI 3 的 XAML 内容住在
+    /// <c>Microsoft.UI.Content.DesktopChildSiteBridge</c> 那层子窗里，与 <see cref="GetHwnd"/> 必然不相等
+    /// （批次 WD-7/WD-8 就是栽在直接比句柄上）。先取根再比，才是同一层级的比较。
+    /// </summary>
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+
+    /// <summary><see cref="GetAncestor"/> 的 <c>GA_ROOT</c>：一路往上到那扇真正的窗口。</summary>
+    public const uint GA_ROOT = 2;
+
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);

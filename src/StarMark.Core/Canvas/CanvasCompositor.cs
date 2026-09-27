@@ -107,6 +107,32 @@ public static class CanvasCompositor
         foreach (var stroke in strokes) Paint(buffer, width, height, stroke);
     }
 
+    /// <summary>
+    /// 从"现在还剩的笔迹"<b>整块重烤</b>持久层：先擦掉 <paramref name="toErase"/>，再把剩下的每条按顺序画回去。
+    /// <para>擦哪一块由调用方说清楚，而不是这里"按剩下的笔迹算"——<b>撤销一条之后，它占过的地方
+    /// 往往不在剩余笔迹的包围盒里</b>，只擦剩下的就等于什么都不擦：屏幕上留下半只椭圆，
+    /// 而撤销栈里已经没有东西能把它退掉（真机反馈"只能撤销绘制图形的部分"）。
+    /// 调用方要把"上一次烤过的那一片"与"这次被丢掉的那一条"并进来传进来。</para>
+    /// <para>也不整块擦：4K 一帧是 33MB。橡皮那条不幂等（按比例减 alpha，走两次擦过头），
+    /// 所以必须一次画成，不能增量补。</para>
+    /// </summary>
+    /// <param name="toErase">要清回空白的区域（剩余笔迹之外的部分也必须包含在内）。</param>
+    /// <param name="remaining">重烤之后<b>还剩的笔迹</b>占多大一片——调用方把它记下来，
+    /// 下一次撤销时就是"上一次烤过的那一片"。</param>
+    /// <returns>这次真的擦／画过的那一片（调用方拿去弄脏屏幕）；什么都不用做时返回空。</returns>
+    public static IntRect Rebake(uint[] buffer, int width, int height, IReadOnlyList<CanvasStroke> strokes,
+        IntRect toErase, out IntRect remaining)
+    {
+        var bounds = new IntRect[strokes.Count];
+        for (var i = 0; i < strokes.Count; i++) bounds[i] = strokes[i].Bounds;
+        remaining = Union(bounds, width, height);
+        var erase = Union(new[] { remaining, toErase }, width, height);
+        if (erase.IsEmpty) return default;
+        ClearRect(buffer, width, height, erase);
+        foreach (var stroke in strokes) Paint(buffer, width, height, stroke);
+        return erase;
+    }
+
     /// <summary>把若干脏区合成一块（分层窗一次只吃一个矩形源）。</summary>
     public static IntRect Union(IReadOnlyCollection<IntRect> rects, int width, int height)
     {

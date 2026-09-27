@@ -53,6 +53,10 @@ public sealed class LayeredCanvasWindow : IDisposable
     private static ushort _classAtom;
 
     private readonly IntPtr _hwnd;
+
+    /// <summary>这块玻璃自己的顶层句柄。<b>只用来与别的窗的"顶层祖先"比</b>（见 CanvasService 的验层判据），
+    /// 不要拿它去等值比较 <c>WindowFromPoint</c> 的返回值——那比的是子窗，永远不相等。</summary>
+    public IntPtr Hwnd => _hwnd;
     private readonly IntPtr _memDc;
     private readonly IntPtr _dib;
     private readonly IntPtr _bits;
@@ -134,6 +138,13 @@ public sealed class LayeredCanvasWindow : IDisposable
         // 先以"穿透 + 隐藏"起步：进入绘制态由调用方显式打开（一开就挡住全屏鼠标是设计语义，不该是默认）
         NativeMethods.ShowWindow(_hwnd, CanvasNative.SW_SHOWNOACTIVATE);
         SetClickThrough(true);
+        // <b>开局就把整块"空白"表面交给系统</b>。托管侧那份 <c>BlankPixel</c> 只是我们自己的缓冲：
+        // 分层窗在第一次 <c>UpdateLayeredWindow</c> 之前，系统那边那层是<b>全 alpha=0</b>，
+        // 而 alpha=0 的像素对鼠标命中测试等于"这里没有窗"——<c>WindowFromPoint</c> 会一路穿到下层应用。
+        // 真机症状（批次 WO）：绘制态下光标只要停在<b>还没画过的地方</b>，自校验就误判成
+        // "别人占了那一层"并把鼠标交回去，于是"刚点画笔就画不上"；而有墨的地方一切正常，
+        // 看起来就像"有时能画有时不能"。空白像素必须是 alpha=1 并且<b>真的交上去</b>，两条缺一不可。
+        PresentAll();
     }
 
     /// <summary>
@@ -231,6 +242,16 @@ public sealed class LayeredCanvasWindow : IDisposable
                 | CanvasNative.SWP_NOZORDER | CanvasNative.SWP_FRAMECHANGED);
         IsClickThrough = on;
     }
+
+    /// <summary>
+    /// <b>窗口此刻实际带着 <c>WS_EX_TRANSPARENT</c> 吗</b>——读的是样式位本身，不是 <see cref="IsClickThrough"/>
+    /// 那个我们自己记的旗标。两者可以分岔（某条路只改了一边、或系统/远程会话把那位改回去），
+    /// 而分岔的样子是"工具条说绘制中、点下去却画不上"：界面读旗标，鼠标归谁读的是那一位。
+    /// 编排层（CanvasService）每帧拿它对一次账，并在不一致时按状态改回来。
+    /// </summary>
+    public bool StyleClickThrough
+        => ((ulong)NativeMethods.GetWindowLongPtrW(_hwnd, CanvasNative.GWL_EXSTYLE).ToInt64()
+            & CanvasNative.WS_EX_TRANSPARENT) != 0;
 
     /// <summary>绘制态给十字光标（"现在按下去就会画东西"这件事要有视觉交代），穿透态恢复箭头。</summary>
     public void SetDrawCursor(bool cross) => _crossCursor = cross;

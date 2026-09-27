@@ -51,6 +51,15 @@ public static class CanvasService
         public List<IntRect> Dirty { get; } = new();
 
         /// <summary>
+        /// <b>曾经被烤进持久层的那一片</b>（不是"现在还剩什么"）。撤销与丢弃一笔时，
+        /// <see cref="Recomposite"/> 必须把它连同剩下的笔迹一起擦掉——只按剩下的算区域，
+        /// 被撤掉那条自己占过、而剩余笔迹没覆盖到的地方就永远没人清。
+        /// <para>真机反馈："撤销只能撤销绘制图形的部分（比如只撤销一个完整椭圆的一半）"：
+        /// 椭圆是一条笔迹，撤掉它之后屏幕上还留半只，因为那半只在<b>剩余</b>笔迹的包围盒之外。</para>
+        /// </summary>
+        public IntRect Composited { get; set; }
+
+        /// <summary>
         /// 上一帧那团光标光晕占的地方。<b>只有它需要无条件复原</b>：光晕跟着鼠标走，
         /// 旧位置不擦就成一坨赖着不走的光斑。
         /// <para>
@@ -574,8 +583,11 @@ public static class CanvasService
         }
         else
         {
-            screen.Ink.End();
-            Recomposite(screen);                               // 定形：橡皮这类"取大不管"的结果要一次画成
+            // 这一条如果不够格留下来（橡皮点一下），它按下时已经烤进持久层的那一小片要单独交回去擦——
+            // 否则屏幕上留下一个"没有任何笔迹对应、撤销里也没有"的洞
+            var footprint = screen.Ink.Drawing?.Bounds ?? default;
+            if (!screen.Ink.End()) Recomposite(screen, footprint);
+            else Recomposite(screen);
             Flush(screen);
         }
         _press = Press.None;
@@ -623,6 +635,32 @@ public static class CanvasService
     }
 
     /// <summary>
+    /// <b>每帧核一次"状态说的"与"窗口实际做的"是否同一件事</b>，不一致就以状态为准改回来并留一行原因。
+    /// <para>真机反馈："有时在未穿透状态下进行穿透后的操作且无法绘制"——工具条那行字读
+    /// <see cref="_clickThrough"/>，而鼠标归谁归 <c>WS_EX_TRANSPARENT</c> 那一位管，两者一分岔，
+    /// 看到的就是"写着绘制中，点下去却归下层应用"，而用户除了反复点那颗按钮没有任何办法
+    /// （更糟的是他自己会以为是功能坏了）。分岔的来源不止一条：轮询抢来的那一按没还回去、
+    /// 某一屏建起来时没跟上、部分系统/远程会话改样式半生效。所以这里<b>不查原因，只兜结果</b>。</para>
+    /// <para>临时摘穿透的那一按（<see cref="_wasTemporary"/>）期间必须跳过：那正是"状态说穿透、
+    /// 窗口故意不穿透"的唯一合法时刻，按状态去"修"会把按住即画那一条打断。</para>
+    /// </summary>
+    private static void ReassertClickThrough()
+    {
+        if (_wasTemporary || !_running) return;
+        foreach (var screen in Screens)
+        {
+            var actual = screen.Window.StyleClickThrough;
+            if (actual == _clickThrough && screen.Window.IsClickThrough == _clickThrough) continue;
+            StarLog.WarnThrottled("canvas:style", $"[Canvas] 穿透状态与窗口样式不一致（期望={_clickThrough}，" +
+                $"记录={screen.Window.IsClickThrough}，实际={actual}），已按状态改回", windowMs: 5_000);
+            screen.Window.SetClickThrough(_clickThrough);
+            screen.Window.SetDrawCursor(!_clickThrough);
+            PlaceLayersBelowChrome();       // 样式位是刚补的，定序也顺手重来一次（工具条必须仍在最上）
+            StateChanged?.Invoke();         // 让状态行跟着说实话，别停在上一态的措辞上
+        }
+    }
+
+    /// <summary>
     /// "画布主动把鼠标交回去了"的原因（工具条状态行跟着显示一次）。没有这句话，用户只会觉得
     /// "刚才能画现在不能画，这软件自己抽风了"。
     /// </summary>
@@ -652,7 +690,12 @@ public static class CanvasService
         // tooltip 与浮层更是另开的顶层窗，跟 GetHwnd() 拿到的那一个必然不相等。于是光标一停在条子上
         // 就被判成"别人盖住了画布"，每帧把状态退回穿透：点「画笔」「穿透」全都"没反应"。
         // 自家窗口拿走这一按不会造成"一次按下两家用"（消息根本到不了画布，最坏只是那块画不上）。
-        if (pid == (uint)Environment.ProcessId) return;
+        if (pid == (uint)Environment.ProcessId)
+        {
+            // 自家窗拿走这一按不会造成"一次按下两家用"（WD-8 的结论，仍然成立），但还有第二件事要管：
+            ReassertLayering(hit);
+            return;
+        }
         StarLog.Warn($"[Canvas] 绘制态发现光标那一层已被另一个程序占走（进程 {pid}），主动交回鼠标");
         SetClickThrough(true);
         Notice = "已自动交回鼠标：另一个程序的窗口（例如按 Win 呼出的开始菜单）盖住了画布；要接着画请再点「画笔」";
@@ -663,6 +706,35 @@ public static class CanvasService
     }
 
     private static IntPtr _yieldedTo;
+
+    /// <summary>
+    /// <b>绘制态下，自家的桌面组件窗不该压在画布上面</b>——它压着的样子是"工具条说绘制中、
+    /// 点下去却画不上，还能顺手操作组件"（真机反馈），与"交回鼠标给别的程序"是两回事：
+    /// 那一次按下并没有被两家用，只是<b>根本没到画布</b>。
+    /// <para>组件窗与画布同在 topmost 带里，谁最后被交互谁在上（组件被点一下就会提到带上头），
+    /// 所以这里不"判断该谁在上"，直接把 <see cref="PlaceLayersBelowChrome"/> 重做一遍：
+    /// 画布回到"工具条／面板之下、其余一切之上"。节流一次，避免与组件自己的提层动作来回拉锯。</para>
+    /// <para>认"是不是自己的 chrome"<b>只能比顶层祖先</b>：命中窗是 XAML 内容那层子窗，
+    /// 与 <see cref="CanvasToolbarWindow.Hwnd"/> 必然不相等（WD-7 就是栽在比句柄上）。</para>
+    /// </summary>
+    private static void ReassertLayering(IntPtr hit)
+    {
+        var root = WindowInterop.GetAncestor(hit, WindowInterop.GA_ROOT);
+        if (root == IntPtr.Zero) root = hit;                       // 取不到根就拿命中窗本身比，绝不折成"是 chrome"
+        if (root == (_toolbar?.Hwnd ?? IntPtr.Zero) || root == (_panel?.Hwnd ?? IntPtr.Zero)) return;
+        foreach (var screen in Screens)
+            if (root == screen.Window.Hwnd) return;                // 就是画布自己：什么都不做
+        var now = Environment.TickCount64;
+        if (now - _lastLayerFixMs < LayerFixGapMs) return;
+        _lastLayerFixMs = now;
+        StarLog.Warn($"[Canvas] 绘制态发现自家窗口（{WindowInterop.GetClassName(root)}）压在画布上面，已把画布提回工具条之下");
+        PlaceLayersBelowChrome();
+    }
+
+    private static long _lastLayerFixMs;
+
+    /// <summary>与自家窗来回提层的拉锯要避免：这一句最多两秒做一次（一次 SetWindowPos 每屏一发，代价可忽略）。</summary>
+    private const long LayerFixGapMs = 2000;
 
     private static Screen? ScreenAt(PixelPoint point)
         => Screens.FirstOrDefault(s => s.Bounds.X <= point.X && point.X < s.Bounds.Right
@@ -778,6 +850,8 @@ public static class CanvasService
         if (!_running || Screens.Count == 0) return;
         var now = Environment.TickCount64;
         WindowInterop.GetCursorPos(out var cursor);
+        // 先对账再决定这一按给谁："绘制中"那行字读的是这里的旗标，而鼠标到底归谁读的是窗口那一位
+        ReassertClickThrough();
         // 先验层，再决定这一按要不要抢：别人已经把最上层占走了还去"按住即画"，
         // 就会同时出现"应用在框选/选文字" + "画布在画"两件事（真机反馈的交互冲突）
         YieldIfNotOurLayer(cursor.X, cursor.Y);
@@ -894,25 +968,24 @@ public static class CanvasService
     private const double SlowFrameMs = 12;
 
     /// <summary>
-    /// 持久层重算：清掉"所有笔迹可能碰到的地方"再按顺序全部重画一遍。
-    /// 区域不取整块屏幕（那是 33MB 的提交），也不取单条笔迹——<b>橡皮是按比例减 alpha 的，
-    /// 同一条橡皮走两次会擦过头</b>，所以必须从一块干净的区域一次画成。
+    /// 持久层重算：清掉"<b>现在还剩的笔迹</b> ∪ <b>曾经烤出去的那一片</b> ∪ <paramref name="alsoErase"/>"
+    /// 再按顺序全部重画一遍。
+    /// <para>为什么不能只清"现在还剩的"：<see cref="Screen.Composited"/> 那条——撤销一条笔迹之后，
+    /// 它占过的地方如果不在剩余笔迹的包围盒里，就<b>没有任何一步会去擦它</b>，屏幕上留下半只椭圆，
+    /// 而撤销栈里已经没有东西能把它退掉（真机反馈的"只能撤销图形的一半"）。</para>
+    /// <para>区域也不取整块屏幕（那是 33MB 的提交）。橡皮那条不幂等（按比例减 alpha，走两次擦过头），
+    /// 所以必须一次画成，不能增量补。</para>
     /// </summary>
-    private static void Recomposite(Screen screen)
+    private static void Recomposite(Screen screen, IntRect alsoErase = default)
     {
         var width = screen.Window.Width;
         var height = screen.Window.Height;
-        var region = CanvasCompositor.Union(screen.Ink.Strokes.Select(stroke => stroke.Bounds).ToList(), width, height);
-        if (region.IsEmpty)
-        {
-            CanvasCompositor.Clear(screen.Persistent);
-            screen.Dirty.Add(new IntRect(0, 0, width, height));
-            return;
-        }
-        CanvasCompositor.ClearRect(screen.Persistent, width, height, region);
-        foreach (var stroke in screen.Ink.Strokes)
-            CanvasCompositor.Paint(screen.Persistent, width, height, stroke);
-        screen.Dirty.Add(region);
+        // 要擦的 = 上一次烤过的那一片 ∪ 这次被丢掉的那一条（区域算法与"为什么不能只擦剩下的"都在 Core 那条注释里）
+        var toErase = CanvasCompositor.Union(new[] { screen.Composited, alsoErase }, width, height);
+        var erase = CanvasCompositor.Rebake(screen.Persistent, width, height, screen.Ink.Strokes,
+            toErase, out var remaining);
+        screen.Composited = remaining;
+        if (!erase.IsEmpty) screen.Dirty.Add(erase);
     }
 
     /// <summary>换工具/换粗细之前先把手上那条收掉，免得它接到新设置下去（症状："画着画着笔自己变粗了"）。</summary>

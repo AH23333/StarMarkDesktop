@@ -329,8 +329,9 @@ public sealed class CanvasWiringGateTests
         var code = SourceGate.ReadRepoFile(Layer);
         var present = SourceGate.MethodBody(code, "public void Present(IntRect dirty)");
         Assert.Contains("if (clipped.IsEmpty) return;", present);
-        // 整帧那条路只允许首帧与系统要求重绘时走（4K 整帧 = 33MB，§16.7 明令禁止每帧这么干）
-        Assert.Equal(2, SourceGate.Count(code, "PresentAll()"));
+        // 整帧那条路只允许<b>建窗</b>与<b>系统要求重绘</b>两处走（4K 整帧 = 33MB，§16.7 明令禁止每帧这么干）。
+        // 数的是调用点（带分号），把方法定义本身也算进去的话，改个方法名就会让这条闸门静默失真。
+        Assert.Equal(2, SourceGate.Count(code, "PresentAll();"));
         Assert.Contains("prcDirty", code);
     }
 
@@ -744,18 +745,121 @@ public sealed class CanvasWiringGateTests
         Assert.DoesNotContain("_press = _tool", begin);
     }
 
+    // ────────── 批次 WO：撤销要退干净＋"状态说的"与"窗口做的"必须同一件事 ──────────
+
+    /// <summary>
+    /// <b>重烤持久层必须把"上一次烤过的那一片"一起擦掉。</b>只按剩余笔迹的包围盒算区域的话，
+    /// 刚被 <c>Undo</c> 掉那条没被盖到的地方永远没人擦——真机症状就是"撤销只退掉椭圆的一半"，
+    /// 而撤销栈里已经没有东西能退第二次。所以这里钉三处：区域从 <c>Screen.Composited</c> 起算、
+    /// 烤完把新的那片记回去、以及"不够格留下来的那一笔"要把自己的落点交回去擦。
+    /// </summary>
+    [Fact]
+    public void RecompositeErasesThePreviouslyBakedRegion()
+    {
+        var service = SourceGate.ReadRepoFile(Service);
+        var recompute = SourceGate.MethodBody(service, "private static void Recomposite(Screen screen, IntRect alsoErase = default)");
+        Assert.Contains("var toErase = CanvasCompositor.Union(new[] { screen.Composited, alsoErase }, width, height);", recompute);
+        Assert.Contains("CanvasCompositor.Rebake(screen.Persistent, width, height, screen.Ink.Strokes,", recompute);
+        Assert.Contains("toErase, out var remaining);", recompute);
+        Assert.Contains("screen.Composited = remaining;", recompute);
+        Assert.Contains("if (!erase.IsEmpty) screen.Dirty.Add(erase);", recompute);
+        // 记号必须存在且是"曾经烤过的那一片"，不是"现在还剩的"
+        Assert.Contains("public IntRect Composited { get; set; }", service);
+
+        // 橡皮点一下那种"不够格进层"的一笔：落点要单独交回去擦，否则留下一个没有笔迹对应的洞
+        var finish = SourceGate.MethodBody(service, "private static void FinishPress(");
+        Assert.Contains("var footprint = screen.Ink.Drawing?.Bounds ?? default;", finish);
+        Assert.Contains("if (!screen.Ink.End()) Recomposite(screen, footprint);", finish);
+        Assert.Contains("else Recomposite(screen);", finish);
+    }
+
+    /// <summary>
+    /// <b>每帧对一次账：状态说的（工具条那行字）与窗口做的（<c>WS_EX_TRANSPARENT</c> 那一位）必须同一件事。</b>
+    /// 真机反馈"有时在未穿透状态下进行穿透后的操作且无法绘制"＝两者分岔：界面读旗标，鼠标归谁读那一位。
+    /// 分岔来源不止一条（轮询抢来的那一按没还回去、某一屏没跟上、部分系统改样式半生效），
+    /// 所以这里<b>不查原因只兜结果</b>：不一致就按状态改回来并留一行带三个值的日志。
+    /// <para>临时摘穿透那一按（按住即画／Ctrl+Alt 圈画）期间必须跳过——那是唯一"合法的不一致"。</para>
+    /// </summary>
+    [Fact]
+    public void ClickThroughStateIsReconciledWithTheWindowStyleEveryFrame()
+    {
+        var service = SourceGate.ReadRepoFile(Service);
+        var tick = SourceGate.MethodBody(service, "private static void OnFrameTick");
+        Assert.True(tick.IndexOf("ReassertClickThrough();", StringComparison.Ordinal)
+                    < tick.IndexOf("YieldIfNotOurLayer(", StringComparison.Ordinal),
+            "先对账再验层：状态本身就不实时，验层结论也是错的");
+
+        var reassert = SourceGate.MethodBody(service, "private static void ReassertClickThrough()");
+        Assert.Contains("if (_wasTemporary || !_running) return;", reassert);   // 按住即画那一段是合法的不一致
+        Assert.Contains("screen.Window.StyleClickThrough", reassert);           // 读的是样式位，不是自己记的旗标
+        Assert.Contains("screen.Window.IsClickThrough == _clickThrough", reassert);
+        Assert.Contains("screen.Window.SetClickThrough(_clickThrough);", reassert);
+        Assert.Contains("PlaceLayersBelowChrome();", reassert);                 // 补完样式把定序也重来一次
+        Assert.Contains("WarnThrottled(\"canvas:style\"", reassert);            // 别让它自己变成刷屏源
+        // 窗口侧必须真的去读那一位（只比两个旗标等于什么都没查）
+        Assert.Contains("WS_EX_TRANSPARENT) != 0;",
+            SourceGate.MethodBody(SourceGate.ReadRepoFile(Layer), "public bool StyleClickThrough"));
+    }
+
+    /// <summary>
+    /// 自家<b>桌面组件</b>窗压在画布上面时，那一次按下既没被两家用、也没到画布——
+    /// 症状同样是"显示绘制中却画不上"（还能顺手点组件）。WD-8 定的"比进程不比句柄"仍然成立，
+    /// 这里补的是后半句：<b>要比就拿顶层祖先比</b>（命中窗是 XAML 内容的子窗，与 <c>Hwnd</c> 永不相等），
+    /// 且判完要动手（把画布按回 chrome 之下），不是只记一行日志。
+    /// </summary>
+    [Fact]
+    public void OwnWidgetWindowAboveTheCanvasIsFixedByReordering_NotByYielding()
+    {
+        var service = SourceGate.ReadRepoFile(Service);
+        var yield = SourceGate.MethodBody(service, "private static void YieldIfNotOurLayer(int cursorX, int cursorY)");
+        // 自家进程不再"什么都不做"，但也绝不SetClickThrough（那才是 WD-8 修错的地方）
+        Assert.Contains("ReassertLayering(hit);", yield);
+        var reassert = SourceGate.MethodBody(service, "private static void ReassertLayering(IntPtr hit)");
+        Assert.Contains("WindowInterop.GetAncestor(hit, WindowInterop.GA_ROOT)", reassert);
+        Assert.Contains("if (root == IntPtr.Zero) root = hit;", reassert);      // 取不到根≠"是自己人"
+        Assert.Contains("root == (_toolbar?.Hwnd ?? IntPtr.Zero)", reassert);
+        Assert.Contains("root == screen.Window.Hwnd", reassert);
+        Assert.Contains("PlaceLayersBelowChrome();", reassert);
+        Assert.DoesNotContain("SetClickThrough(true)", reassert);               // 这里不该把鼠标交出去
+        Assert.Contains("if (now - _lastLayerFixMs < LayerFixGapMs) return;", reassert);
+        Assert.Contains("GetClassName(root)", reassert);                        // 复发时要能从日志认出是谁
+    }
+
+    /// <summary>工具条与快捷键面板的说明行：内容一改就得叫上那扇窗（截图那条链的同一课，见 CaptureOverlayGateTests）。</summary>
+    [Fact]
+    public void CanvasToolbarHintReflowsTheToolbarWindow()
+    {
+        var toolbar = SourceGate.ReadRepoFile(Toolbar);
+        foreach (var writer in new[] { "private void ShowHint(string hint)", "private void HideHint()" })
+            Assert.Contains("Fit(centerOnScreen: false);", SourceGate.MethodBody(toolbar, writer));
+    }
+
     // ────────── 批次 WD-2：工具条与面板永远压在画布之上 ──────────
 
     /// <summary>
     /// <b>空白像素不能是 0</b>：分层窗的命中测试跳过 alpha=0，那块地方直接漏给下层窗口，
     /// 于是"刚擦过的地方点不动、画不上"。擦干净有三条路（整块／区域／橡皮到底），加上持久层初值一共四处，
     /// 漏一处就留下一片"画不了的区域"，而且它正好在用户刚刚操作过的地方——最难复现的那种。
+    /// <para>批次 WO 补上<b>第五条、也是最前面的一条：那块表面必须真的交给系统一次。</b>
+    /// 托管缓冲填成 <c>BlankPixel</c> 还不够——分层窗在第一次 <c>UpdateLayeredWindow</c> 之前，
+    /// 系统那侧是全 alpha=0，于是绘制态下光标停在<b>还没画过的地方</b>时
+    /// <c>WindowFromPoint</c> 根本不报我们的窗，自校验误判成"别人占了那一层"就把鼠标交了回去
+    /// （真机症状："刚点画笔就画不上，而有墨的地方正常"，看起来像"有时能画有时不能"）。
+    /// 所以建窗那一刻必须 <c>PresentAll()</c> 一次，且要在后备位图建好之后。</para>
     /// </summary>
     [Fact]
     public void BlankIsTheOneHitTestablePixel_EveryClearPathUsesIt()
     {
         var layer = SourceGate.ReadRepoFile(Layer);
         Assert.Contains("public const uint BlankPixel = 0x01000000u;", layer);
+        // 建窗就整块交一次（顺序：后备位图 → 显形 → 定样式 → 交表面）
+        var ctor = SourceGate.MethodBody(layer, "public LayeredCanvasWindow(IntRect boundsPhys)");
+        Assert.True(ctor.IndexOf("CreateArgbDib", StringComparison.Ordinal)
+                    < ctor.IndexOf("PresentAll();", StringComparison.Ordinal),
+            "后备位图还没建好就交表面，等于什么都没交");
+        Assert.True(ctor.IndexOf("SetClickThrough(true);", StringComparison.Ordinal)
+                    < ctor.IndexOf("PresentAll();", StringComparison.Ordinal),
+            "样式还没定就先交，穿透态的命中语义会跟着错");
         Assert.Contains("Array.Fill(Pixels, BlankPixel);", layer);
         var compositor = SourceGate.ReadRepoFile(Compositor);
         Assert.Contains("Array.Fill(buffer, LayeredCanvasWindow.BlankPixel, y * width + r.X, r.Width);", compositor);
@@ -832,7 +936,10 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("if (_clickThrough || _press != Press.None || !_running) return;", yield);
         Assert.Contains("LayeredCanvasWindow.WindowAt(cursorX, cursorY)", yield);   // 逐像素问，不猜前台窗口
         Assert.Contains("WindowInterop.GetWindowThreadProcessId(hit, out var pid) == 0", yield);
-        Assert.Contains("pid == (uint)Environment.ProcessId) return;", yield);      // 自己人不让位
+        // 批次 WD-8 定的"自己人不让位"仍然成立（让位会把鼠标交出去，而那一次按下并没有被两家用）；
+        // 批次 WO 补的是后半句：自家组件窗压在画布上面时不"让位"，而是把定序重做一遍。
+        Assert.Contains("if (pid == (uint)Environment.ProcessId)", yield);
+        Assert.Contains("ReassertLayering(hit);", yield);
         Assert.DoesNotContain(".Hwnd", yield);                                      // 命中句柄不参与"是谁"的判断
         Assert.DoesNotContain(".Handle", yield);
         Assert.DoesNotContain("本程序的另一个窗口", yield);                             // 自家窗口不再触发让位
