@@ -77,8 +77,12 @@ public static class CanvasTools
     public static readonly CanvasTool[] Brushes =
         Capture.AnnotationTools.Brushes.Where(Supports).Select(FromAnnotation).ToArray();
 
-    /// <summary>反向映射：只有 <see cref="Supports"/> 认的那些才走得回来。</summary>
-    private static CanvasTool FromAnnotation(Capture.AnnotationTool tool)
+    /// <summary>
+    /// 反向映射：只有 <see cref="Supports"/> 认的那些才走得回来。
+    /// <para>公开是因为画布的持久层现在存的是模型那一份（<see cref="Capture.Annotation"/>），
+    /// 渲放时要从标注还原出笔刷形状——这条反向路也只有这里一份。</para>
+    /// </summary>
+    public static CanvasTool FromAnnotation(Capture.AnnotationTool tool)
         => Enum.GetValues<CanvasTool>().First(t => t.ToAnnotation() == tool);
 
     public static bool IsShape(this CanvasTool tool)
@@ -137,7 +141,7 @@ public sealed class CanvasStroke
     /// <para>撤销要退的是"最后落的那一笔"，而笔迹是分屏各存一叠的：没有共同时序，编排那边只能
     /// "每块屏各退一条"（双屏真机症状：按一次撤销，两块屏同时各掉一笔，掉的两条还不是同一时刻画的）。</para>
     /// </summary>
-    public long Order { get; } = Capture.InkOrder.Next();
+    public long Order { get; private set; } = Capture.InkOrder.Next();
 
     private readonly List<PixelPoint> _points = new();
     private readonly int _radius;
@@ -238,6 +242,29 @@ public sealed class CanvasStroke
 
     /// <summary>收笔时够不够格留下来：橡皮拖了不到两个点＝用户按了一下什么都没擦，别塞进撤销栈。</summary>
     public bool WorthKeeping => Tool != CanvasTool.Eraser || _points.Count >= 2;
+
+    /// <summary>
+    /// 落成模型里的那一条标注（方案 §3.4：画布的持久笔迹归 <see cref="Capture.InkDoc"/>，
+    /// <see cref="CanvasStroke"/> 从此只是<b>渲放层的输入形状</b>，不再是另一个世界）。
+    /// <para>点序<b>整份复制</b>而不是把活的列表交出去：这条笔迹在按下之后还在被追加，
+    /// 模型里存着一份会跟着变的引用，就成了"撤销之后屏幕上还多出一截"那一族缺陷的温床。</para>
+    /// <para>序号带过去（不是新建时重新领一个）：撤销比的是"全机第几笔"，
+    /// 换一次形状不该换一次时间位置。</para>
+    /// </summary>
+    public Capture.Annotation ToAnnotation()
+        => new(Tool.ToAnnotation(), _points.ToArray(), ColorBgra, Width) { Order = Order };
+
+    /// <summary>
+    /// 从模型里那一条标注还原渲放要的笔迹。<b>走 <see cref="FromPoints"/> 而不是 <see cref="AddPoint"/></b>：
+    /// 存下来的点序就是当时真的画出去的那一份，再被"相邻 &lt;2px 合并"削一次，椭圆就会露出棱角
+    /// （那条采样规则是给实时抖动用的，对已定形的点串是纯粹的破坏）。
+    /// </summary>
+    public static CanvasStroke FromAnnotation(Capture.Annotation ink)
+    {
+        var stroke = FromPoints(CanvasTools.FromAnnotation(ink.Tool), ink.ColorBgra, ink.Thickness, ink.Points);
+        stroke.Order = ink.Order;
+        return stroke;
+    }
 
     private IntRect RectAround(PixelPoint p)
     {
