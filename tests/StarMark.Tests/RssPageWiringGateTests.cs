@@ -83,7 +83,7 @@ public sealed class RssPageWiringGateTests
         Assert.Contains("x:Name=\"NavRssItem\"", xaml);
         Assert.Contains("Tag=\"rss\"", xaml);
 
-        var cs = ReadRepoFile(MainWindowCs);
+        var cs = ReadRepoPartials(MainWindowCs);
         Assert.Contains("\"rss\" => typeof(RssPage)", cs);
         Assert.Contains("public void ApplyRssNavVisibility(bool enabled)", cs);
         Assert.Contains("ApplyRssNavVisibility(_settings.LoadRssEnabled());", MethodBody(cs, "public MainWindow"));
@@ -97,7 +97,7 @@ public sealed class RssPageWiringGateTests
         Assert.Contains("_settings.SaveRssEnabled(value);", changed);
         Assert.Contains("App.MainWindow?.ApplyRssNavVisibility(value);", changed);
 
-        var apply = MethodBody(ReadRepoFile(MainWindowCs), "public void ApplyRssNavVisibility(bool enabled)");
+        var apply = MethodBody(ReadRepoPartials(MainWindowCs), "public void ApplyRssNavVisibility(bool enabled)");
         Assert.Contains("NavRssItem.Visibility", apply);
         Assert.Contains("ViewModel.CurrentPageTag == \"rss\"", apply);
         Assert.Contains("NavigateTo(\"tree\")", apply);

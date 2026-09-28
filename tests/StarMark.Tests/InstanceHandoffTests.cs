@@ -96,7 +96,7 @@ public sealed class InstanceHandoffTests
         // WinUI 3 的 Application.Exit 不带下线进程；这一条守的就是"退出＝进程真的没了"，
         // 也是"托盘图标早退了、dll 还被锁着"能否重开的唯一依赖。
         var body = SourceGate.MethodBody(
-            SourceGate.ReadRepoFile("src/StarMark.UI/MainWindow.xaml.cs"),
+            SourceGate.ReadRepoPartials("src/StarMark.UI/MainWindow.xaml.cs"),
             "private async void ExitApp()");
 
         Assert.Contains("Environment.Exit(0)", body);

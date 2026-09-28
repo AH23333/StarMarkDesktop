@@ -494,7 +494,7 @@ public sealed class CanvasWiringGateTests
         var service = SourceGate.ReadRepoFile(Service);
         var toolbar = SourceGate.ReadRepoFile(Toolbar);
         var app = SourceGate.ReadRepoFile(App);
-        var main = SourceGate.ReadRepoFile(MainWindow);
+        var main = SourceGate.ReadRepoPartials(MainWindow);
         Assert.Contains("VirtualKey.Escape", toolbar);                       // ① Esc
         Assert.Contains("CanvasService.Stop();", toolbar);                   // ② 工具条 ✕
         Assert.Contains("HotkeyActions.CanvasToggle", app);                  // ③ 全局热键
@@ -1463,7 +1463,7 @@ public sealed class CanvasWiringGateTests
             SourceGate.MethodBody(SourceGate.ReadRepoFile(Hub), "public static void ReapplyHotkeys"));
 
         Assert.Contains("settings.GetRegisterableHotkeyBindings()", SourceGate.ReadRepoFile(App));
-        var main = SourceGate.ReadRepoFile(MainWindow);
+        var main = SourceGate.ReadRepoPartials(MainWindow);
         Assert.Contains("_settings.GetRegisterableHotkeyBindings()", main);
         Assert.DoesNotContain("_settings.GetHotkeyBindings()", main);
         var page = SourceGate.ReadRepoPartials(SettingsPageCode);

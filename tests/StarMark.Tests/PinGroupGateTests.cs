@@ -69,7 +69,7 @@ public sealed class PinGroupGateTests
     public void OnlyCoreDecodesTheGroupCommandNumbers()
     {
         var pins = SourceGate.ReadRepoFile(Roster);
-        var main = SourceGate.ReadRepoFile(Main);
+        var main = SourceGate.ReadRepoPartials(Main);
         var policy = SourceGate.ReadRepoFile(Policy);
 
         Assert.Contains("public static int TagOf(int serial, Action action)", policy);
@@ -178,5 +178,25 @@ public sealed class PinGroupGateTests
         Assert.DoesNotContain("IsHidden =", name);                  // 名册只读不写
         var policy = SourceGate.ReadRepoFile(Policy);
         Assert.Contains("flags.Count > 0", policy);                 // 空集那一臂是判据的一部分，不是修饰
+    }
+
+    /// <summary>
+    /// <b>给"守门本身"作的保</b>（批次 S4-④）：主窗拆成 <c>MainWindow.*.cs</c> 若干份后，
+    /// 读法退回单文件就会让钉在搬家方法上的守门扫不到锚点（这条文件自己就有一条读主窗的）。
+    /// 每个分段各钉一个代表方法，钉的是"读整套时必须还看得见"。
+    /// </summary>
+    [Fact]
+    public void TheMainWindowGatesReadEveryPartialFile()
+    {
+        var all = SourceGate.ReadRepoPartials(Main);
+
+        Assert.Contains("private async void ExitApp(", all);                                    // 主文件
+        Assert.Contains("BuildTrayCommands(", all);                                             // Tray
+        Assert.Contains("private void SetupImmersiveTitleBar(", all);                           // Chrome
+        Assert.Contains("private void ApplyThemePreference(", all);                             // Theme
+        Assert.Contains("public void ApplyRssNavVisibility(", all);                             // Nav
+        Assert.Contains("private DispatcherTimer BuildDebounceTimer(", all);                    // Search
+        Assert.Contains("private void SetStatusDot(", all);                                     // Status
+        Assert.Contains("private MenuFlyout BuildWidgetsMenu(", all);                           // Menu
     }
 }

@@ -299,7 +299,7 @@ public sealed class EyeRestWiringGateTests
     public void TheJumpFromTheWidgetLandsOnTheTabItNames()
     {
         var widget = SourceGate.ReadRepoPartials(WidgetWindow);
-        var main = SourceGate.ReadRepoFile(MainWindow);
+        var main = SourceGate.ReadRepoPartials(MainWindow);
         var page = SourceGate.ReadRepoFile(SettingsPageXaml);
         var section = SourceGate.MethodBody(widget, "private void BuildEyeRestSection(MenuFlyout menu)");
 
