@@ -168,7 +168,7 @@ public sealed class EyeRestWiringGateTests
     [Fact]
     public void EverythingDefaultsToOff_ExceptTheFullscreenCourtesy()
     {
-        var store = SourceGate.ReadRepoFile(Settings);
+        var store = SourceGate.ReadRepoPartials(Settings);
         // 开关与强制模式默认关（"== true"）；让路默认开（"!= false"）——不请自来的遮罩是最讨人嫌的一种帮忙，
         // 而"放 PPT 被砸"是要默认防的那一侧。
         Assert.Contains("public bool LoadEyeRestEnabled() => Load() is { } d && d.EyeRestEnabled == true;", store);
@@ -182,7 +182,7 @@ public sealed class EyeRestWiringGateTests
     [Fact]
     public void SavedIntervalIsClampedOnTheWayIn_NotOnlyOnTheWayOut()
     {
-        var store = SourceGate.ReadRepoFile(Settings);
+        var store = SourceGate.ReadRepoPartials(Settings);
         var save = SourceGate.MethodBody(store, "public void SaveEyeRest(bool enabled, int intervalMinutes, bool enforced, bool deferOnFullscreen)");
         var load = SourceGate.MethodBody(store, "public int LoadEyeRestIntervalMinutes()");
         Assert.Contains("ClampInterval(intervalMinutes)", save);

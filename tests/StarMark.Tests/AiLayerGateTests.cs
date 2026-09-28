@@ -104,7 +104,7 @@ public sealed class AiLayerGateTests
         // 写盘只有一个出口：出现第二处 SaveAiSettings 调用就等于有了两套"什么算改完"
         Assert.Equal(1, lines.Count(l => l.Contains(".SaveAiSettings(")));
 
-        var store = Read("src/StarMark.UI/Helpers/SettingsStore.cs");
+        var store = SourceGate.ReadRepoPartials("src/StarMark.UI/Helpers/SettingsStore.cs");
         Assert.Contains("public void SaveAiSettings(AiSettings settings)", store);
         Assert.Contains("public AiSettings LoadAiSettings()", store);
     }
@@ -115,8 +115,7 @@ public sealed class AiLayerGateTests
     public void UsabilityGateIsNotDuplicated()
     {
         // 合法使用者：闸门自己、写盘时的空值归一、请求头要不要带 Bearer（"怎么发"不是"能不能用"）
-        var allowed = new[] { "AiSettings.cs", "SettingsStore.cs", "AiProviders.cs" };
-        var offenders = new System.Collections.Generic.List<string>();
+        var allowed = new[] { "AiSettings.cs", "SettingsStore.cs", "AiProviders.cs" };        var offenders = new System.Collections.Generic.List<string>();
         foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories))
         {
             if (file.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar) ||
@@ -128,7 +127,10 @@ public sealed class AiLayerGateTests
                 if (!line.Contains("ApiKey")) continue;
                 var trimmed = line.Trim();
                 if (trimmed.StartsWith("//") || trimmed.StartsWith("///")) continue;
-                if (allowed.Contains(Path.GetFileName(file))) continue;
+                // "写盘时把空串归一成 null"的合法判点是<b>设置存储这个类</b>，不是某一个文件名：
+                // 批次 S4-④ 之后那段住在 SettingsStore.Ai.cs，按类放行才不会被搬家绊倒。
+                if (Path.GetFileName(file).StartsWith("SettingsStore.", StringComparison.Ordinal)
+                    || allowed.Contains(Path.GetFileName(file))) continue;
                 if (trimmed.Contains("IsNullOrWhiteSpace") || trimmed.Contains("IsNullOrEmpty"))
                     offenders.Add(Path.GetFileName(file) + " → " + trimmed);
             }
@@ -161,7 +163,7 @@ public sealed class AiLayerGateTests
     [Fact]
     public void AiStorageKeysAreNamespaced()
     {
-        var store = Read("src/StarMark.UI/Helpers/SettingsStore.cs");
+        var store = SourceGate.ReadRepoPartials("src/StarMark.UI/Helpers/SettingsStore.cs");
         var aiProps = store.Split('\n')
             .Where(line => line.TrimStart().StartsWith("public ") && line.Contains("{ get; set; }")
                            && line.Contains(" Ai"))

@@ -358,7 +358,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void CanvasInScreenshotsDefaultsToOn_AndIsReadFreshFromTheOneEditor()
     {
-        var store = SourceGate.ReadRepoFile(Store);
+        var store = SourceGate.ReadRepoPartials(Store);
         Assert.Contains(
             "public bool LoadCanvasInScreenshots() => Load() is not { } d || d.CanvasInScreenshots != false;", store);
         Assert.Contains("d.CanvasInScreenshots = include;", store);
@@ -1446,7 +1446,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void CanvasSwitchGatesStartRegistrationAndTray_AllThreeRegistrationSitesUseTheFilteredTable()
     {
-        var store = SourceGate.ReadRepoFile(Store);
+        var store = SourceGate.ReadRepoPartials(Store);
         Assert.Contains("public bool LoadCanvasEnabled() => Load() is not { } d || d.CanvasEnabled != false;", store);
         var reg = SourceGate.MethodBody(store,
             "public IReadOnlyDictionary<string, HotkeyGesture> GetRegisterableHotkeyBindings()");

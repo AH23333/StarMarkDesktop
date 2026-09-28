@@ -116,7 +116,7 @@ public sealed class ClipboardCopyImageGateTests
     [Fact]
     public void WinrtDecoderIsATranscoderNotAnIdentitySource()
     {
-        var store = ReadRepoFile(Store);
+        var store = ReadRepoPartials(Store);
         // 解 PNG 只有一处，且交出去的字节与登记的像素出自同一张（两处各解一次＝两种哈希＝回声挡不住）。
         Assert.Equal(1, Count(store, "ClipboardPayload.TryDecodePng("));
         Assert.DoesNotContain("BuildImageSourceId", store);
@@ -137,7 +137,7 @@ public sealed class ClipboardCopyImageGateTests
     public void BothFileEntriesShareOneMissingFileSentence()
     {
         // "文件不在了"在历史行与本机文件行是同一件事，两份措辞就会让用户以为有两种成因。
-        var store = ReadRepoFile(Store);
+        var store = ReadRepoPartials(Store);
         Assert.Equal(1, Count(store, "private const string MissingFileReason"));   // 一句真话只有一个出处
         Assert.Equal(3, Count(store, "MissingFileReason"));                          // 声明 + 两个入口各用一次
         Assert.DoesNotContain("这个文件已经不在本机", store);                          // 反向钉：不许出现第二份写法

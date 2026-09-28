@@ -60,7 +60,7 @@ public sealed class ClipboardBackupAttachmentGateTests
         Assert.DoesNotContain("File.ReadAllBytes(", container);
         Assert.DoesNotContain("File.ReadAllText(", container);
         Assert.Contains("source.CopyToAsync(es", container);            // 打包：流→流
-        Assert.Contains("source.CopyToAsync(fs", ReadRepoFile(Store));   // 恢复：条目流→临时文件
+        Assert.Contains("source.CopyToAsync(fs", ReadRepoPartials(Store));   // 恢复：条目流→临时文件
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public sealed class ClipboardBackupAttachmentGateTests
         // 症状就是换机恢复后"条目都在、每张图都报没能写入"。行为面由
         // RestoringOntoAMachineWithoutTheClipFolderStillWritesThePicturesBack 覆盖，
         // 这里钉的是**顺序**：建目录必须在临时件之前（放在之后的话第一张照样撞 DirectoryNotFoundException）。
-        var write = MethodBody(ReadRepoFile(Store), "public static async Task<bool> WriteBackFromBackupAsync");
+        var write = MethodBody(ReadRepoPartials(Store), "public static async Task<bool> WriteBackFromBackupAsync");
         Assert.Contains("Directory.CreateDirectory(Folder)", write);
         Assert.True(write.IndexOf("Directory.CreateDirectory(Folder)", StringComparison.Ordinal)
                     < write.IndexOf("File.Create(temp)", StringComparison.Ordinal),

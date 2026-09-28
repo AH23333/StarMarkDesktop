@@ -18,15 +18,19 @@ public sealed class ClipboardImageSettingsGateTests
     private const string Xaml = "src/StarMark.UI/Views/SettingsPage.xaml";
     private const string Vm = "src/StarMark.UI/ViewModels/SettingsPageViewModel.cs";
     private const string Store = "src/StarMark.UI/Helpers/SettingsStore.cs";
+    private const string StoreClipboard = "src/StarMark.UI/Helpers/SettingsStore.Clipboard.cs";
     private const string App = "src/StarMark.UI/App.xaml.cs";
     private const string Watcher = "src/StarMark.Integrations/Clipboard/ClipboardWatcher.cs";
 
     /// <summary>设置页里"数据"那一页（剪贴板那张卡住这里）。</summary>
     private static string DataTab() => Between(ReadRepoFile(Xaml), "<TabViewItem Header=\"数据\">", "</TabViewItem>");
 
-    /// <summary>Store 里剪贴板图片那一段（从分节注释到下一个分节注释）。</summary>
-    private static string StoreImageRegion()
-        => Between(ReadRepoFile(Store), "────────── 剪贴板图片", "────────── 护眼");
+    /// <summary>
+    /// Store 里剪贴板图片那一段。批次 S4-④ 之后<b>这一段自己就是一枚 partial 文件</b>，
+    /// 所以这里读那一份而不是读整套：这条判据数的是"夹只在 Core 做一次"的<b>段内</b>计数
+    /// （读整套会把别的段一起数进来），也要求"段内不许出现 Math.Clamp"（读整套会被别处的 Clamp 误伤）。
+    /// </summary>
+    private static string StoreImageRegion() => ReadRepoFile(StoreClipboard);
 
     [Fact]
     public void WarningKeepsBothHalvesOfTheCost()
@@ -48,7 +52,7 @@ public sealed class ClipboardImageSettingsGateTests
         Assert.Contains("public volatile bool ImageCapture;", watcher);
         Assert.DoesNotContain("ImageCapture = true", watcher.Replace("public volatile bool ImageCapture;", "", StringComparison.Ordinal));
         // ② 设置读取：缺字段按"没开"（== true 而不是 ?? true）；
-        var store = ReadRepoFile(Store);
+        var store = ReadRepoPartials(Store);
         Assert.Contains("d.ClipboardImageEnabled == true", store);
         Assert.DoesNotContain("ClipboardImageEnabled ?? true", store);
         // ③ 设置页不许自己给个 true 初值。
@@ -125,7 +129,7 @@ public sealed class ClipboardImageSettingsGateTests
         // 所以三处都不许出现它：界面、VM、以及"为它开的写入口"。
         Assert.DoesNotContain("MaxImageBytes", DataTab());
         Assert.DoesNotContain("MaxImageBytes", ReadRepoPartials(Vm));
-        Assert.DoesNotContain("SaveClipboardImageMaxBytes", ReadRepoFile(Store));
+        Assert.DoesNotContain("SaveClipboardImageMaxBytes", ReadRepoPartials(Store));
         // 但用户要能知道有这条线——它写在图片开关的说明里（"20 MB"），是陈述不是控件。
         Assert.Contains("20 MB", ReadRepoPartials(Vm));
     }
@@ -136,7 +140,7 @@ public sealed class ClipboardImageSettingsGateTests
         // 1d 时这颗开关刻意不上界面：那时导出格式里还没有附件这一维，放上就是一颗点了什么都不改变的哑键。
         // a 期（批次 3b）把附件打包做出来了，闸门随之改判：**现在它必须出现，而且必须接线接全**。
         // 四种"看着在、其实没用"的失效各钉一条：
-        var store = ReadRepoFile(Store);
+        var store = ReadRepoPartials(Store);
         // ① 有 key、有读、有写——只落 key 不写 = 界面上拨完就忘；
         Assert.Contains("public bool? BackupClipboardImagesEnabled { get; set; }", store);
         Assert.Contains("public void SaveBackupClipboardImagesEnabled(bool enabled)", store);

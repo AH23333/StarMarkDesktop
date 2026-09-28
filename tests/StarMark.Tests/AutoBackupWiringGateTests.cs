@@ -52,7 +52,7 @@ public sealed class AutoBackupWiringGateTests
     [Fact]
     public void SavedIntervalIsClampedByCoreNotByTheStore()
     {
-        var save = MethodBody(ReadRepoFile(Store), "public void SaveAutoBackup(bool enabled, int intervalHours)");
+        var save = MethodBody(ReadRepoPartials(Store), "public void SaveAutoBackup(bool enabled, int intervalHours)");
         Assert.Contains("AutoBackupPolicy.ClampInterval(intervalHours)", save);
         Assert.Contains("d.AutoBackupEnabled = enabled;", save);
         // 一次写盘：这两格说的是同一件事，分开 Save 就是"改了间隔没改开关"的半套状态来源（P-43 同理）。
@@ -62,7 +62,7 @@ public sealed class AutoBackupWiringGateTests
     [Fact]
     public void LoadedIntervalGoesThroughTheSameFallback()
     {
-        var load = MethodBody(ReadRepoFile(Store), "public int LoadAutoBackupIntervalHours()");
+        var load = MethodBody(ReadRepoPartials(Store), "public int LoadAutoBackupIntervalHours()");
         Assert.Contains("AutoBackupPolicy.ClampInterval(", load);
         // 存储层不许自己再造一份"什么算合法"的表（那才是分岔的源头）。
         Assert.DoesNotContain("168", load);
@@ -73,7 +73,7 @@ public sealed class AutoBackupWiringGateTests
     public void AutoBackupIsOffWhenTheSettingIsMissingButOnByDefault()
     {
         // 默认值必须是"加这颗开关之前的行为"：?? true，而不是 && 那种"缺省＝关"。
-        var load = MethodBody(ReadRepoFile(Store), "public bool LoadAutoBackupEnabled()");
+        var load = MethodBody(ReadRepoPartials(Store), "public bool LoadAutoBackupEnabled()");
         Assert.Contains("?? true", load);
     }
 
@@ -253,5 +253,23 @@ public sealed class AutoBackupWiringGateTests
         Assert.Contains("private void BuildLayoutRows(", all);                  // Widgets
         Assert.Contains("private void BuildHotkeyRows(", all);                  // Hotkeys
         Assert.Contains("private async void DeleteBackup_Click(", all);         // Backup
+    }
+
+    /// <summary>
+    /// <b>给"守门本身"作的保</b>（批次 S4-④ 第 6 刀）：设置存储按设置域拆成 <c>SettingsStore.*.cs</c>，
+    /// 钉在某个 Load/Save 上的守门必须读整个类才看得见——每个分段各钉一个代表声明。
+    /// </summary>
+    [Fact]
+    public void TheSettingsStoreGatesReadEveryPartialFile()
+    {
+        var all = ReadRepoPartials(Store);
+
+        Assert.Contains("public ThemePreference LoadTheme()", all);                    // Appearance
+        Assert.Contains("public bool LoadAutoBackupEnabled()", all);                   // Backup
+        Assert.Contains("public int LoadAutoBackupIntervalHours()", all);              // Backup
+        Assert.Contains("public bool LoadCanvasEnabled()", all);                       // Canvas
+        Assert.Contains("public IReadOnlyList<string> LoadFileIndexRoots()", all);     // FileIndex
+        Assert.Contains("public void SaveWeatherCity(WeatherCity? city)", all);         // Weather
+        Assert.Contains("public void SaveAiSettings(AiSettings settings)", all);        // Ai
     }
 }
