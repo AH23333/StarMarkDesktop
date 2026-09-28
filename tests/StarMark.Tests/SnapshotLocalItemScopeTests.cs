@@ -178,7 +178,7 @@ public sealed class SnapshotScopeGateTests
     [Fact]
     public void BothSidesOfTheSnapshotAskTheScopeOnce()
     {
-        var manager = SourceGate.ReadRepoFile("src/StarMark.UI/Services/WidgetManager.cs");
+        var manager = SourceGate.ReadRepoPartials("src/StarMark.UI/Services/WidgetManager.cs");
 
         Assert.Equal(2, SourceGate.Count(manager, "GetInstancesWithLocalItemsAsync("));   // 捕获侧 + 还原侧
         var restore = SourceGate.Between(manager, "foreach (var (instanceId, items) in dataRestore)",

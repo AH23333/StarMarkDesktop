@@ -36,7 +36,7 @@ public sealed class QuickLaunchDropBatchGateTests
     [Fact]
     public void AWholeBatchReadsAndWritesTheStoreExactlyOnce()
     {
-        var body = MethodBody(ReadRepoFile(ManagerRelativePath), "public async Task<int> AddLinksAsync(");
+        var body = MethodBody(ReadRepoPartials(ManagerRelativePath), "public async Task<int> AddLinksAsync(");
 
         Assert.Contains("inst.Links.Add(new LinkItem", body);     // 反空转：确实扫到了写入口的那一段
         Assert.Equal(1, Count(body, "_storage.Load()"));
@@ -55,7 +55,7 @@ public sealed class QuickLaunchDropBatchGateTests
     [Fact]
     public void TheSingleLinkExitJustDelegatesToTheBatch()
     {
-        var manager = ReadRepoFile(ManagerRelativePath);
+        var manager = ReadRepoPartials(ManagerRelativePath);
         var body = MethodBody(manager, "public async Task<bool> AddLinkAsync(");
 
         Assert.Contains("=> await AddLinksAsync(", body);
@@ -127,8 +127,8 @@ public sealed class QuickLaunchDropBatchGateTests
             .ToList();
 
         Assert.Empty(hits);
-        Assert.Contains("RecordPathsToLibraryAsync(", File.ReadAllText(
-            Path.Combine(src, "StarMark.UI", "Services", "WidgetManager.cs"))); // 反空转：新出口还在
+        // 反空转：新出口还在。读整个 partial 类——批次 S4-④ 把它搬进了 WidgetManager.QuickLaunch.cs。
+        Assert.Contains("RecordPathsToLibraryAsync(", ReadRepoPartials(ManagerRelativePath));
     }
 
     /// <summary>

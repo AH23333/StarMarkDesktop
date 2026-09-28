@@ -36,17 +36,12 @@ public sealed class WidgetSnapshotSymmetryGateTests
         nameof(StarMark.Core.Widgets.WidgetSnapshotEntry.Appearance),
     ];
 
-    private static string ReadManagerSource()
-    {
-        var dir = Path.GetDirectoryName(AppContext.BaseDirectory);
-        for (var i = 0; i < 8 && dir is not null; i++)
-        {
-            var candidate = Path.Combine(dir, ManagerRelativePath.Replace('/', Path.DirectorySeparatorChar));
-            if (File.Exists(candidate)) return File.ReadAllText(candidate);
-            dir = Path.GetDirectoryName(dir);
-        }
-        throw new InvalidOperationException($"未找到 {ManagerRelativePath}（守门失效比红测更危险，故直接抛）");
-    }
+    /// <summary>
+    /// 采集/还原两侧的字段比对要读<b>整个 partial 类</b>（批次 S4-④ 把 WidgetManager 拆成
+    /// <c>WidgetManager.*.cs</c>，采集与还原都搬进了 <c>.Snapshot.cs</c>）：
+    /// 只读主文件会扫到 0 个字段，而"零差异"看起来和"完全对称"一模一样——那正是假绿的形状。
+    /// </summary>
+    private static string ReadManagerSource() => SourceGate.ReadRepoPartials(ManagerRelativePath);
 
     [Fact]
     public void Snapshot_CapturesExactlyWhatRestoreApplies()

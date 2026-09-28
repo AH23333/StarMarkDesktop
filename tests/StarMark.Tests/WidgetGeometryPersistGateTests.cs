@@ -44,7 +44,7 @@ public sealed class WidgetGeometryPersistGateTests
     [Fact]
     public void HidingAlwaysGoesThroughTheBatchExit()
     {
-        var manager = ReadRepoFile(ManagerPath);
+        var manager = ReadRepoPartials(ManagerPath);
         var outside = WithoutMethod(manager, "private void HideTemporaryAll(");
 
         Assert.True(Count(manager, "HideTemporaryAll(") >= 6,
@@ -56,7 +56,7 @@ public sealed class WidgetGeometryPersistGateTests
     [Fact]
     public void EveryCloseSiteStatesWhetherItPersists()
     {
-        var manager = ReadRepoFile(ManagerPath);
+        var manager = ReadRepoPartials(ManagerPath);
         var outside = WithoutMethod(WithoutMethod(manager, "private void CloseInternal("), "private void CloseAll(");
 
         var calls = outside.Split('\n')
@@ -71,7 +71,7 @@ public sealed class WidgetGeometryPersistGateTests
     [Fact]
     public void ThePersistFlagIsActuallyRead()
     {
-        var body = MethodBody(ReadRepoFile(ManagerPath), "private void CloseInternal(");
+        var body = MethodBody(ReadRepoPartials(ManagerPath), "private void CloseInternal(");
 
         Assert.Contains("if (persist)", body);                 // 曾经这个参数收下就丢，四个调用点的意图全部落空
         Assert.Contains("window.Shutdown()", body);
@@ -109,5 +109,26 @@ public sealed class WidgetGeometryPersistGateTests
         Assert.Equal(0, Count(body, "_storage.Load()"));
         Assert.Equal(0, Count(body, "_storage.Save("));
         Assert.Contains("inst.X = ", body);                    // 反空转：几何确实是在这里写的
+    }
+
+    /// <summary>
+    /// <b>给"守门本身"作的保</b>（批次 S4-④）：组件管理器拆成 <c>WidgetManager.*.cs</c> 若干份后，
+    /// 每个分段各钉一个代表方法，钉住"读整个 partial 类时必须还看得见"。
+    /// 这一条尤其要紧：<see cref="WidgetSnapshotSymmetryGateTests"/> 那种"扫两侧字段比对"的守门，
+    /// 读法退回单文件会扫到 <b>0 个字段</b>，而"零差异"与"完全对称"在断言上长得一模一样。
+    /// </summary>
+    [Fact]
+    public void TheWidgetManagerGatesReadEveryPartialFile()
+    {
+        var all = ReadRepoPartials(ManagerPath);
+
+        Assert.Contains("OnUiAsync(", all);                                                // 主文件
+        Assert.Contains("private void HideTemporaryAll(IReadOnlyList<WidgetWindow> windows)", all);  // Lifecycle
+        Assert.Contains("public Task ToggleAllTopmostAsync(", all);                         // Toggles
+        Assert.Contains("public IReadOnlyList<WidgetLayout> GetLayouts()", all);             // Layout
+        Assert.Contains("private async Task<bool> CaptureSnapshotInternalAsync(string name)", all); // Snapshot
+        Assert.Contains("public async Task<int> AddLinksAsync(", all);                       // QuickLaunch
+        Assert.Contains("public Task SaveCountdownsAsync(", all);                            // PerWidget
+        Assert.Contains("private async Task LogActivitiesAsync(ActivityKind kind", all);      // Activity
     }
 }
