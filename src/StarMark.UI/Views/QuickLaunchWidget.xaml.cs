@@ -51,6 +51,13 @@ public sealed partial class QuickLaunchWidget : UserControl
 
         // 入口来自本地存储（widgets.json），无异步数据源。
         ViewModel.ReloadLinks();
+
+        // 提权会话下从资源管理器拖进来的那一下被 Windows 静默拦掉（UIPI 按完整性级别过滤消息：不报错、不提示、无日志）。
+        // P-108 已由用户裁决为"不动系统服务"，所以这里唯一能做的是<b>把原因说实话</b>：常态那句"拖不动时…"
+        // 会让人以为是自己手势没做好，提权时要点名原因并指向这两颗与权限无关的选择器。
+        if (Privilege.IsElevated())
+            Hint.Text = "本程序正以管理员身份运行：系统会拦下从资源管理器拖进来的那一下（不是组件坏了）。" +
+                        "请用上面那两颗「选择文件／选择文件夹」加进来。";
     }
 
     private void QuickLaunchWidget_Unloaded(object sender, RoutedEventArgs e)

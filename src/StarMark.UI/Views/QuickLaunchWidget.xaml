@@ -56,8 +56,9 @@
                 </StackPanel>
             </StackPanel>
 
-            <TextBlock Text="提示：可把文件、文件夹或网址直接拖入本组件；拖不动时用上面那行「＋」里的「选择文件／选择文件夹」"
-                       FontSize="10" Opacity="0.6" TextWrapping="Wrap" Margin="2,4,0,0"/>
+            <!-- 常态这句就够（拖放是路过的常规手势）；提权会话下代码侧会换成说实话的那一句，见 PickFiles_Click 上方 -->
+            <TextBlock x:Name="Hint" FontSize="10" Opacity="0.6" TextWrapping="Wrap" Margin="2,4,0,0"
+                       Text="提示：可把文件、文件夹或网址直接拖入本组件；拖不动时用上面那行「＋」里的「选择文件／选择文件夹」"/>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

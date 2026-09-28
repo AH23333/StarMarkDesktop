@@ -126,6 +126,23 @@ public sealed class QuickLaunchDropBatchGateTests
             Path.Combine(src, "StarMark.UI", "Services", "WidgetManager.cs"))); // 反空转：新出口还在
     }
 
+    /// <summary>
+    /// 提权会话下拖放被 Windows 静默拦掉（P-108 已裁决：不装系统服务）⇒ 组件必须<b>把原因说实话</b>。
+    /// <para>留一句"拖不动时…"会让人怀疑自己的手势；这句是那条"任何『请重启/降权限/确认外部程序』都算缺陷"
+    /// 口径的正面写法：不改系统、不支使人，只把手边那两颗永远可用的入口指给他。</para>
+    /// </summary>
+    [Fact]
+    public void TheElevatedSessionSaysWhyDragIsBlocked()
+    {
+        var code = ReadRepoFile(WidgetCodeRelativePath);
+        Assert.Contains("if (Privilege.IsElevated())", code);
+        Assert.Contains("以管理员身份运行", code);
+        Assert.Contains("Hint.Text =", code);
+        var xaml = ReadRepoFile(WidgetXamlRelativePath);
+        Assert.Contains("x:Name=\"Hint\"", xaml);
+        Assert.Contains("选择文件／选择文件夹", xaml);              // 常态那句仍然指向两条可用的路
+    }
+
     private static int Count(string text, string needle) => SourceGate.Count(text, needle);
 
     private static string Between(string text, string from, string to) => SourceGate.Between(text, from, to);
