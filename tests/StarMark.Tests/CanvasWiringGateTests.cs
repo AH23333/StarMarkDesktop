@@ -27,6 +27,7 @@ public sealed class CanvasWiringGateTests
     private const string HotkeyGateFile = "src/StarMark.Core/Hotkeys/HotkeyGate.cs";
     private const string Screenshot = "src/StarMark.UI/Services/ScreenshotService.cs";
     private const string PinRoster = "src/StarMark.UI/Services/PinManager.cs";
+    private const string CaptureBar = "src/StarMark.UI/Views/CaptureBarWindow.cs";
     private const string Toolbar = "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs";
     private const string ToolbarXaml = "src/StarMark.UI/Views/CanvasToolbarWindow.xaml";
     private const string BarGlyphs = "src/StarMark.UI/Views/BarGlyphs.cs";
@@ -111,6 +112,40 @@ public sealed class CanvasWiringGateTests
         var reset = SourceGate.MethodBody(pins, "private static void ResetState()");
         Assert.Contains("AreHidden = false;", reset);
         Assert.Contains("ClickThrough = false;", reset);
+    }
+
+    /// <summary>
+    /// 方案 §3.3 那句"UI 是状态机的投影，不是第二个状态机"——两扇条子（画布条、截图/贴图条）今天<b>确实</b>是这样，
+    /// 这里钉的是<b>别让下一次改动把它退回去</b>。
+    /// <para>钉"投影不许写回"而不是钉"某颗按钮写了什么"，因为分岔的形状是：将来有人在 <c>Refresh</c> 里
+    /// 顺手"修一下不一致"（比如发现按钮没亮就自己调一次 <c>ToggleTool</c>），那一刻条子就从投影变成了第二个状态机
+    /// ——按下去的那一下与画布那边的真值开始互相纠，正是 C1/R3 那一族"状态说的与窗口做的不一致"的开头。</para>
+    /// <para>层序那两条用带前缀的字面判（<c>WindowInterop.SetWindowPos(</c>）：两个文件里都有<b>注释</b>提到
+    /// "SetWindowPos"，按裸名字判会假失败（坑表里记过这一族）。</para>
+    /// </summary>
+    [Fact]
+    public void TheBarsProjectStateAndNeverWriteItBackFromARefreshPath()
+    {
+        var toolbar = SourceGate.ReadRepoFile(Toolbar);
+        var bar = SourceGate.ReadRepoFile(CaptureBar);
+
+        var refresh = SourceGate.MethodBody(toolbar, "private void Refresh()");
+        foreach (var write in new[]
+                 {
+                     "CanvasService.Set", "CanvasService.Select", "CanvasService.Toggle",
+                     "CanvasService.Undo", "CanvasService.Redo", "CanvasService.ClearAll", "AnnotationHub.Raise(",
+                 })
+            Assert.DoesNotContain(write, refresh);
+
+        // "在不在场"问窗口自己：多存一份旗标＝这条链上每一课"状态与窗口不一致"的开头
+        var vis = SourceGate.MethodBody(toolbar, "public void SetStripVisible(bool visible)");
+        Assert.Contains("IsWindowVisible", vis);
+        Assert.DoesNotContain("_visible", vis);
+
+        Assert.DoesNotContain("WindowInterop.SetWindowPos(", toolbar);
+        Assert.DoesNotContain("WindowInterop.SetWindowPos(", bar);
+        Assert.Contains("LayerDirector.ShowAt(SurfaceRole.Strip", toolbar);
+        Assert.Contains("LayerDirector.ShowAt(SurfaceRole.Strip", bar);
     }
 
     [Fact]
