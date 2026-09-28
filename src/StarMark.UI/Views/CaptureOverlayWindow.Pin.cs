@@ -172,6 +172,14 @@ public sealed partial class CaptureOverlayWindow
     public bool IsClickThrough => _clickThrough;
 
     /// <summary>
+    /// 当前有没有被收起。<b>只有 <see cref="HidePin"/>／<see cref="Present"/> 两处会改它</b>，
+    /// 名册的"全部已隐藏"与"这一组已隐藏"都从每张窗自己这里现算。
+    /// <para>以前名册只存一个"全体"开关，而双击一张确实能只收起那一张——那个开关于是会说谎
+    /// （它说没隐藏，屏幕上却少了一张）。批次 S4-③ 起真值住在窗上。</para>
+    /// </summary>
+    public bool IsHidden { get; private set; }
+
+    /// <summary>
     /// 套用穿透状态并回报有没有真的套上。<b>失败不能静默</b>：那时用户看到的是"点了没反应"。
     /// <para>开成穿透时把工具条收掉：这张窗此后收不到鼠标，那条悬停才收起的条子会一直压在画面上，
     /// 而用户已经没有第二颗按钮能把它点掉（F5 恢复后再移进来就会重新出现）。</para>
@@ -203,6 +211,7 @@ public sealed partial class CaptureOverlayWindow
             WindowInterop.ShowWindow(hwnd, WindowInterop.SW_SHOWNOACTIVATE);
             SetBarVisible(true);
             Activate();
+            IsHidden = false;
         }
         catch (Exception ex) { StarLog.Warn($"[Pin] 唤回贴图失败：{ex.Message}"); }
     }
@@ -218,6 +227,7 @@ public sealed partial class CaptureOverlayWindow
         {
             SetBarVisible(false);
             WindowInterop.ShowWindow(WindowInterop.GetHwnd(this), WindowInterop.SW_HIDE);
+            IsHidden = true;
         }
         catch (Exception ex) { StarLog.Warn($"[Pin] 隐藏贴图失败：{ex.Message}"); }
     }

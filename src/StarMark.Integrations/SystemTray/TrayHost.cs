@@ -49,13 +49,16 @@ public sealed class TrayHost : IDisposable
     /// <summary>
     /// 一条附加命令。<see cref="Tag"/> 交给宿主解释；<b>TrayHost 只按"渲染顺序 + 起始号"发号</b>，
     /// 不让宿主直接给命令号——那样两个来源可能撞号（组件子菜单那次"序号≠kind"的教训同一族）。
+    /// <para><paramref name="Children"/> 非空 ⇒ 这一行渲染成子菜单（贴图组用的就是这层）。
+    /// 父行自己不发号也不响应点击，但<b>照样占一个号位</b>，否则它后面每一行整体错位一格。</para>
     /// </summary>
     public sealed record TrayCommandItem(
         string Label,
         int Tag,
         bool Checked = false,
         bool SeparatorBefore = false,
-        bool Enabled = true);
+        bool Enabled = true,
+        IReadOnlyList<TrayCommandItem>? Children = null);
 
     /// <summary>菜单打开时查询某组件是否已启用（勾选态）；参数同样是 WidgetKind 整数值。</summary>
     public Func<int, bool>? IsWidgetEnabled { get; set; }
@@ -211,17 +214,7 @@ public sealed class TrayHost : IDisposable
 
         // 宿主附加命令：按渲染顺序发号（HostCommandBase + 行号），点击后回传该行的 Tag。
         _hostCommands.Clear();
-        var provided = CommandProvider?.Invoke();
-        if (provided is { Count: > 0 })
-        {
-            foreach (var item in provided)
-            {
-                if (item.SeparatorBefore) AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null!);
-                var flags = MF_STRING | (item.Enabled ? 0 : MF_GRAYED) | (item.Checked ? MF_CHECKED : 0);
-                AppendMenuW(menu, (uint)flags, (IntPtr)(HostCommandBase + _hostCommands.Count), item.Label);
-                _hostCommands.Add(item);
-            }
-        }
+        if (CommandProvider?.Invoke() is { Count: > 0 } provided) AppendCommands(menu, provided);
 
         AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null!);
         AppendMenuW(menu, MF_STRING, (IntPtr)IDM_SETTINGS, "设置");
@@ -260,6 +253,33 @@ public sealed class TrayHost : IDisposable
                 if (offset >= 0 && offset < WidgetMenuItems.Count)
                     WidgetToggleRequested?.Invoke(WidgetMenuItems[offset].Kind);
                 break;
+        }
+    }
+
+    /// <summary>
+    /// 递归渲染宿主命令：带 <see cref="TrayCommandItem.Children"/> 的那一行渲染成一棵子菜单（贴图组用）。
+    /// <para><b>父行也占一个号位</b>：发号是"渲染顺序 + 起始号"，跳过父行会让后面每一行整体挪一格，
+    /// 后果是"点『收起这组』点到了『关闭这组』"——比点不动严重得多，而且只在加了子菜单之后才会出现。</para>
+    /// <para>子菜单句柄不用单独 Destroy：它挂进父菜单后由 <c>DestroyMenu(父)</c> 一并回收。</para>
+    /// </summary>
+    private void AppendCommands(IntPtr parent, IReadOnlyList<TrayCommandItem> items)
+    {
+        foreach (var item in items)
+        {
+            if (item.SeparatorBefore) AppendMenuW(parent, MF_SEPARATOR, IntPtr.Zero, null!);
+            var index = _hostCommands.Count;
+            _hostCommands.Add(item);                     // 父行也占位，号位才与渲染顺序对得上
+
+            if (item.Children is { Count: > 0 } children)
+            {
+                var sub = CreatePopupMenu();
+                AppendCommands(sub, children);
+                AppendMenuW(parent, MF_POPUP, sub, item.Label);
+                continue;
+            }
+
+            var flags = MF_STRING | (item.Enabled ? 0 : MF_GRAYED) | (item.Checked ? MF_CHECKED : 0);
+            AppendMenuW(parent, (uint)flags, (IntPtr)(HostCommandBase + index), item.Label);
         }
     }
 

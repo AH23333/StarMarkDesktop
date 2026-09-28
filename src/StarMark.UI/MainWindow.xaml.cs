@@ -12,6 +12,7 @@ using Windows.Graphics;
 using WinRT.Interop;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Language;
+using StarMark.Core.Capture;
 using StarMark.Core.Hotkeys;
 using StarMark.Core.Widgets;
 using StarMark.Integrations.SystemTray;
@@ -289,6 +290,30 @@ public sealed partial class MainWindow : Window
     private static StarMark.UI.Services.AutostartService Autostart()
         => App.Services.GetRequiredService<StarMark.UI.Services.AutostartService>();
 
+    /// <summary>
+    /// 「贴图组」那棵子菜单：每组一行，点开是这一组自己的三个动作。
+    /// <para>父行（组名那一行）只是容器，Tag 用 <see cref="TrayGroupParent"/>——它永远发不出命令，
+    /// 但照样占一个号位（发号规则见 <c>TrayHost.AppendCommands</c>）。真正的动作号由 Core 的
+    /// <see cref="StarMark.Core.Capture.PinGrouping"/> 编码，<b>这里不自己算号</b>。</para>
+    /// <para>一行都不剩的时候整棵子菜单不出现：那时它是一条只能盯着的空目录，比没有更让人以为分组丢了。</para>
+    /// </summary>
+    private const int TrayGroupParent = -1;
+
+    private static TrayHost.TrayCommandItem? GroupMenu()
+    {
+        var groups = StarMark.UI.Services.PinManager.Groups;
+        if (groups.Count == 0) return null;
+        return new TrayHost.TrayCommandItem("贴图组（整组隐藏 / 忽略鼠标 / 关闭）", TrayGroupParent,
+            Children: groups.Select(group => new TrayHost.TrayCommandItem(
+                PinGrouping.GroupLabel(group.Name, group.Members.Count), TrayGroupParent,
+                Children:
+                [
+                    new(PinGrouping.HideLabel(group.AllHidden), PinGrouping.TagOf(group.Serial, PinGrouping.Action.Show)),
+                    new(PinGrouping.ThroughLabel(group.AllThrough), PinGrouping.TagOf(group.Serial, PinGrouping.Action.Through)),
+                    new(PinGrouping.CloseLabel(group.Members.Count), PinGrouping.TagOf(group.Serial, PinGrouping.Action.Close)),
+                ])).ToList());
+    }
+
     /// <summary>右键那一刻现取托盘附加命令：勾选态反映当前设置，正在截图时不让人再点一次。</summary>
     private IReadOnlyList<TrayHost.TrayCommandItem> BuildTrayCommands()
     {
@@ -311,8 +336,7 @@ public sealed partial class MainWindow : Window
             // 只有"忽略鼠标"这项是状态开关，所以它用勾选态。
             new(PinLabel(pins, hidden), TrayPinsShowHide, SeparatorBefore: true, Enabled: pins > 0),
             new("贴图忽略鼠标", TrayPinsClickThrough, StarMark.UI.Services.PinManager.ClickThrough, Enabled: pins > 0),
-            new("关闭所有贴图", TrayPinsCloseAll, Enabled: pins > 0),
-            new("所有组件置顶 / 不置顶", TrayTopmostToggle, SeparatorBefore: true),
+            new("关闭所有贴图", TrayPinsCloseAll, Enabled: pins > 0),            new("所有组件置顶 / 不置顶", TrayTopmostToggle, SeparatorBefore: true),
             new("主题 · 跟随系统", TrayThemeDefault, _themePref == ThemePreference.Default, SeparatorBefore: true),
             new("主题 · 浅色", TrayThemeLight, _themePref == ThemePreference.Light),
             new("主题 · 深色", TrayThemeDark, _themePref == ThemePreference.Dark),
@@ -321,6 +345,9 @@ public sealed partial class MainWindow : Window
             new("开机自动启动", TrayAutostart, Autostart().IsEnabled(), SeparatorBefore: true),
             new("全局快捷键已启用", TrayHotkeysEnabled, hotkeysOn),
         };
+        // 有了组才多出这一棵，而且插在"所有贴图"那三条之后（先全局、后按组，与人的操作顺序一致）。
+        // 一组贴图收起后它的工具条跟着消失，托盘这一行就是那几张图唯一的出口——不能只在贴图条上给入口。
+        if (GroupMenu() is { } groupMenu) list.Insert(list.FindIndex(item => item.Tag == TrayPinsCloseAll) + 1, groupMenu);
         // 画布总开关关掉时整条不出现（发起人裁决："关掉就别留入口"）。按 Ctrl+Alt+D 仍会给一句
         // "要先在设置里打开"——那是 CanvasService 的闸门，不是这条菜单项的职责（见 Start 里的开关检查）。
         return _settings.LoadCanvasEnabled()
@@ -356,6 +383,11 @@ public sealed partial class MainWindow : Window
                 break;
             case TrayPinsCloseAll:
                 StarMark.UI.Services.PinManager.CloseAll();
+                break;
+            // 组命令的号由 Core 编码（组号 + 动作），这里只认号就交出去：不查那一组还在不在——
+            // 菜单行是右键那一刻的快照，走到这里时它可能已经被关掉；"点了没反应"由 PinManager 回一句原因。
+            case int groupTag when PinGrouping.IsGroupTag(groupTag):
+                StarMark.UI.Services.PinManager.RunGroupCommand(groupTag);
                 break;
             case TrayTopmostToggle:
                 _ = _widgetManager.ToggleAllTopmostAsync();

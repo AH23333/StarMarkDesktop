@@ -57,6 +57,7 @@ public sealed partial class CaptureOverlayWindow
     private Button _redoButton = null!;
     private Button _clearButton = null!;
     private Button _copyButton = null!;
+    private Button _groupButton = null!;      // 只有贴图态才建（选区态那扇窗上没有"这一张"可言）
     private bool _pickerOpen;
 
     /// <summary>正在点的折线（顶点＝选区内物理像素）；null＝没有正在画的折线。</summary>
@@ -124,9 +125,15 @@ public sealed partial class CaptureOverlayWindow
         BarRow.Children.Add(ocr);
         if (_pinned)
         {
-            // 这颗按下去动的是<b>所有</b>贴图（名册的既定口径：收不到鼠标的窗只能靠全局通道救回来），
-            // 说明写错范围会让人以为只有自己手上这张被点穿。
-            var through = IconButton(ThroughIcon(), "鼠标穿透：让所有贴图都不再收鼠标（再用这一颗或按 F5 恢复）");
+            // 「组」只在这条带子上出现：能无歧义说清"哪一张"的地方就是这一张自己的条子，
+            // 托盘那侧只负责按组下达命令（整组隐藏后条子跟着没了，出口必须是热键与托盘）。
+            _groupButton = IconButton(GroupIcon(), GroupButtonText());
+            _groupButton.Click += (_, _) => ToggleGroupPicker(_groupButton);
+            BarRow.Children.Add(_groupButton);
+
+            // 这颗按下去动的是<b>所有</b>贴图（想只动一组用旁边那颗「组」）。
+            // 说明写错范围会让人以为只有自己手上这张被点穿（批次 WF-1 那族极性事故）。
+            var through = IconButton(ThroughIcon(), "鼠标穿透：让所有贴图都不再收鼠标（再用这一颗或按 F5 恢复；只动一组请点「组」）");
             through.Click += Through_Click;
             BarRow.Children.Add(through);
         }
@@ -235,6 +242,17 @@ public sealed partial class CaptureOverlayWindow
                 ? "没选工具＝移动这张图（十字箭头：按住可拖走）。点图标开始画"
                 : "没选工具＝改框那一态（十字箭头：可拖动选区、可改边缘大小）。点图标开始画";
 
+    /// <summary>
+    /// 「组」那颗的说明：把"这一张现在在不在组里、那一组里有几张"直接写在句子里。
+    /// <para>条上没有文字（批次 WP 的取舍：窗宽＝内容宽，带字的说明会让整条在悬停时变宽跳位），
+    /// 所以这句只能待在 ToolTip 里——而贴图态那扇条子窗放不下长句，<b>这一句是短的、且只说这一张的事实</b>。
+    /// 组号与张数都从名册现取，不在界面上留第二份（并组之后 tooltip 立刻跟着变，见 <see cref="SyncTools"/>）。</para>
+    /// </summary>
+    private string GroupButtonText()
+        => PinManager.GroupOf(this) is { } group
+            ? $"已在「{group.Name}」（{group.Members.Count} 张）。点开＝换组或移出；整组动作在托盘「贴图组」"
+            : "分组：把这一张单独分成一组，或并进已有的一组（整组隐藏 / 忽略鼠标 / 关闭在托盘「贴图组」里）";
+
     /// <summary>把"当前用的是哪种图形、哪一支笔"画出来（图标上没有文字，只能靠底色与那颗点说）。</summary>
     private void SyncTools()
     {
@@ -246,6 +264,9 @@ public sealed partial class CaptureOverlayWindow
         foreach (var button in _brushButtons)
             button.Background = (AnnotationTool)button.Tag! == _tool ? BarChecked : BarNormal;
         _brushButton.Content = BrushIcon();
+        // 「组」那颗的说明跟着名册走：并组/移出之后不重建整条，但说明必须立刻是新的那一组
+        //（留着旧的组号，用户就会以为并组没生效而再点一次，第二次会真的又建一组）。
+        if (_pinned) ToolTipService.SetToolTip(_groupButton, GroupButtonText());
         if (_tool is not { } tool)
         {
             ToolTipService.SetToolTip(_brushButton,
@@ -333,6 +354,16 @@ public sealed partial class CaptureOverlayWindow
         BarGlyphs.Seg(Ink, 3.5, 3.5, 12.5, 12.5), BarGlyphs.Seg(Ink, 12.5, 3.5, 3.5, 12.5));
 
     /// <summary>穿透那颗：一个方框被一支箭头穿过——"鼠标会从它身上走过去"这件事得看得出来。</summary>
+    /// <summary>
+    /// 「组」那颗：上面两块小图、下面一道把它们拢在一起的托架。
+    /// <para>刻意与「打码」（2×2 实心格）和「复制」（两个描边方框错位）都不同形——这条带子上撞了形状
+    /// 就等于摆了颗用户猜不出作用的按钮（批次 WM 的图标口径：只看图形就要分得开）。</para>
+    /// </summary>
+    private static UIElement GroupIcon() => BarGlyphs.Icon(
+        BarGlyphs.Fill(Ink, 2.5, 2.5, 4.5, 4.5), BarGlyphs.Fill(InkDim, 9, 2.5, 4.5, 4.5),
+        BarGlyphs.Seg(Ink, 4.7, 8, 4.7, 10.5, 1.2), BarGlyphs.Seg(Ink, 11.2, 8, 11.2, 10.5, 1.2),
+        BarGlyphs.Seg(Ink, 4.7, 10.5, 11.2, 10.5, 1.2));
+
     private static UIElement ThroughIcon() => BarGlyphs.Icon(
         BarGlyphs.Ring(Ink, 4.5, 3, 8.5, 9, 1.4), BarGlyphs.Seg(Ink, 1.5, 14, 14.5, 1.5, 1.8),
         BarGlyphs.Seg(Ink, 10.5, 1.5, 14.5, 1.5, 1.8), BarGlyphs.Seg(Ink, 14.5, 1.5, 14.5, 5.5, 1.8));

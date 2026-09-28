@@ -101,6 +101,60 @@ public sealed partial class CaptureOverlayWindow
     }
 
     /// <summary>
+    /// 「组」那一栏：新建一组 / 并进已有的一组 / 移出当前组。整排按名册生成，颗上没有一颗是写死的
+    /// （批次 WM 的口径：文字与图标一律来自模型，否则加一组就少一颗），组号与张数都从
+    /// <see cref="PinManager"/> 现取——并完立刻 <see cref="HidePicker"/>→<c>SyncTools</c>，
+    /// 条上那颗的说明跟着换成新组号；留着旧组号会让人以为没生效而再点一次，那一次会真的又多建一组。
+    /// </summary>
+    private void ToggleGroupPicker(FrameworkElement anchor)
+    {
+        if (_pickerOpen) { HidePicker(); return; }
+        ShowGroupPicker(anchor);
+    }
+
+    private void ShowGroupPicker(FrameworkElement anchor)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Padding = new Thickness(4) };
+        row.Children.Add(GroupChip("新建一组", "把这一张单独分成一组", () => PinManager.NewGroup(this)));
+        foreach (var group in PinManager.Groups)
+        {
+            var target = group;
+            row.Children.Add(GroupChip(target.Name,
+                $"把这一张并进{target.Name}（现在 {target.Members.Count} 张）",
+                () => PinManager.JoinGroup(this, target.Serial)));
+        }
+        if (PinManager.GroupOf(this) is not null)
+            row.Children.Add(GroupChip("移出", "让这一张不再属于任何一组", () => PinManager.LeaveGroup(this)));
+        ShowPicker(anchor, row);
+    }
+
+    /// <summary>
+    /// 组栏里的一颗文字芯片。这里<b>刻意不画图标</b>：组号本来就是文字（"组 3"画成图形就没人认得出是第几组），
+    /// 而"图标排上不许写死文字"那条禁令管的是主排按钮——这一栏是点开才出现的选项列表，与浮层里的颜色名同类。
+    /// </summary>
+    private Button GroupChip(string text, string tip, Action apply)
+    {
+        var chip = new Button
+        {
+            Content = new TextBlock { Text = text, FontSize = 11, VerticalAlignment = VerticalAlignment.Center },
+            Height = ButtonHeight,
+            Padding = new Thickness(6, 0, 6, 0),
+            Margin = new Thickness(0),
+            Background = BarNormal,
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(3),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        ToolTipService.SetToolTip(chip, tip);
+        chip.Click += (_, _) =>
+        {
+            apply();
+            HidePicker();
+        };
+        return chip;
+    }
+
+    /// <summary>
     /// 选择栏<b>摆在条子自己那一行里</b>，不是 Flyout（批次 WI 的真机结论）：贴图态条子住一扇 33 像素高的
     /// 独立小窗，而 WinUI 3 把弹出层钉在宿主窗边界内——Flyout 出来只有半截，图形与颜色等于选不了。
     /// 条子自己排版能自己长高，但<b>那扇窗不会自己跟着长</b>：条子在窗里是 Stretch 的，父窗不给高度

@@ -108,10 +108,17 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("Pins", toggle);
         Assert.DoesNotContain("Raise(", toggle);
 
-        // 两个维度各自的状态位必须各自归零，不能"一起清"
-        var reset = SourceGate.MethodBody(pins, "private static void ResetState()");
-        Assert.Contains("AreHidden = false;", reset);
-        Assert.Contains("ClickThrough = false;", reset);
+        // 这两个维度在名册里<b>没有存储位</b>：真值住在每张贴图窗上，名册只现算（批次 S4-③ 改的正是这一条）。
+        // 以前这里是两个 bool，而"双击收起某一张"确实能让它说谎——名册说没隐藏，屏幕上却少了一张。
+        // 有了组之后更不能存：组说"已隐藏"而里面那张其实还在，就是名册与窗体两份账（WO/WD-7 那一族）。
+        Assert.DoesNotContain("AreHidden = ", pins);
+        Assert.DoesNotContain("ClickThrough = ", pins);
+        // 空名册不能算"已隐藏"：All() 对空序列为真，那会让一张图都没有时托盘写「显示所有贴图」。
+        // 两边都必须走 PinGrouping.AllIn（它把空集这一臂钉在单测里）。
+        Assert.Contains("public static bool AreHidden => AllIn(Pins, static pin => pin.IsHidden);", pins);
+        Assert.Contains("public static bool ClickThrough => AllIn(Pins, static pin => pin.IsClickThrough);", pins);
+        Assert.Contains("public bool AllHidden => PinGrouping.AllIn(", pins);
+        Assert.Contains("public bool AllThrough => PinGrouping.AllIn(", pins);
     }
 
     /// <summary>
