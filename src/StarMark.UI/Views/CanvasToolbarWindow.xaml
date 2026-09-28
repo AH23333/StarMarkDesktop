@@ -19,7 +19,10 @@
                 <Button x:Name="PenButton" Content="画笔" Click="Pen_Click"/>
                 <Button x:Name="MarkerButton" Content="荧光笔" Click="Marker_Click"/>
                 <Button x:Name="EraserButton" Content="橡皮" Click="Eraser_Click"/>
-                <Button Content="撤销" Click="Undo_Click" ToolTipService.ToolTip="撤掉这一块屏上的最后一笔"/>
+                <!-- 措辞要说准：撤销退的是"最后落的那一笔"，多屏时它可能不在鼠标所在那块屏上
+                     （从前这里写"这一块屏"，而代码早已改成按全机序号挑——屏幕说明与行为不一致＝用户以为撤错了东西）。 -->
+                <Button Content="撤销" Click="Undo_Click" ToolTipService.ToolTip="退掉最后落的那一笔（多块屏时按全机先后挑，不是只挑鼠标这块）"/>
+                <Button Content="重做" Click="Redo_Click" ToolTipService.ToolTip="把刚退掉的那一笔放回来"/>
                 <Button Content="清屏" Click="Clear_Click"/>
                 <Button x:Name="ThroughButton" Content="穿透" Click="Through_Click"
                         ToolTipService.ToolTip="点穿到下面的 PPT／桌面；再按一次或按热键回到绘制"/>

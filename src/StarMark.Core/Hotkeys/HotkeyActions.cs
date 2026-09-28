@@ -58,7 +58,7 @@ public static class HotkeyActions
     public const string CanvasToggle = "canvas.toggle";
 
     /// <summary>
-    /// 画布内的九个动作（发起人点名要"全部带修饰键的全局热键"）。
+    /// 画布内的那批动作（发起人点名要"全部带修饰键的全局热键"）。
     /// <para>
     /// <b>为什么每个都要占一个全局键位</b>：画布是"不吃键盘的覆盖层"里唯一有键盘诉求的地方——
     /// 讲解时手在翻页笔与键盘之间换来换去，换工具如果必须先去找工具条点一下，讲的东西就断了。
@@ -71,6 +71,7 @@ public static class HotkeyActions
     public const string CanvasHighlighter = "canvas.highlighter";
     public const string CanvasEraser = "canvas.eraser";
     public const string CanvasUndo = "canvas.undo";
+    public const string CanvasRedo = "canvas.redo";
     public const string CanvasClear = "canvas.clear";
     public const string CanvasSave = "canvas.save";
     public const string CanvasCopy = "canvas.copy";
@@ -92,7 +93,7 @@ public static class HotkeyActions
     public static IReadOnlyList<string> Canvas { get; } = new[]
     {
         CanvasToggle, CanvasClickThrough, CanvasPen, CanvasHighlighter, CanvasEraser,
-        CanvasUndo, CanvasClear, CanvasSave, CanvasCopy, CanvasPin,
+        CanvasUndo, CanvasRedo, CanvasClear, CanvasSave, CanvasCopy, CanvasPin,
     };
 
     public static string WidgetCreate(WidgetKind k) => $"widget.create:{k}";
@@ -181,6 +182,7 @@ public static class HotkeyActions
             case CanvasHighlighter: return "画布 · 荧光笔（按住即画、松开即透）";
             case CanvasEraser: return "画布 · 橡皮";
             case CanvasUndo: return "画布 · 撤销上一笔";
+            case CanvasRedo: return "画布 · 重做刚撤销的那一笔";
             case CanvasClear: return "画布 · 清空笔迹";
             case CanvasSave: return "画布 · 存为图片（屏幕 + 笔迹）";
             case CanvasCopy: return "画布 · 复制到剪贴板（屏幕 + 笔迹）";

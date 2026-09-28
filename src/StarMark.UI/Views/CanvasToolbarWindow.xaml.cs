@@ -191,6 +191,8 @@ public sealed partial class CanvasToolbarWindow : Window
 
     private void Undo_Click(object sender, RoutedEventArgs e) => CanvasService.Undo();
 
+    private void Redo_Click(object sender, RoutedEventArgs e) => CanvasService.Redo();
+
     private void Clear_Click(object sender, RoutedEventArgs e) => CanvasService.ClearAll();
 
     private void Through_Click(object sender, RoutedEventArgs e)

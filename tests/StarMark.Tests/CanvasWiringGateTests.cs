@@ -1205,6 +1205,7 @@ public sealed class CanvasWiringGateTests
             [HotkeyActions.CanvasHighlighter] = 0x48,      // H
             [HotkeyActions.CanvasEraser] = 0x52,           // R
             [HotkeyActions.CanvasUndo] = 0x55,             // U
+            [HotkeyActions.CanvasRedo] = 0x59,             // Y（redo 的惯用键；U+Shift 这种组合 RegisterHotKey 表达不了）
             [HotkeyActions.CanvasClear] = 0x43,            // C
             [HotkeyActions.CanvasSave] = 0x53,             // S
             [HotkeyActions.CanvasCopy] = 0x4B,             // K（C 已被清屏占了）
@@ -1261,7 +1262,10 @@ public sealed class CanvasWiringGateTests
         var require = SourceGate.MethodBody(service, "private static void RequireRunning(string what, Action run)");
         Assert.Contains("Report(\"画布没开着\"", require);
         Assert.Contains("BindingText(HotkeyActions.CanvasToggle)", require);   // 键位取自真实绑定，不写死
-        Assert.Equal(6, SourceGate.Count(service, "RequireRunning(\""));       // 六条：穿透/撤销/清屏/存图/复制/贴图
+        // 计数不写死：按动作表算。表里除「开关 + 三支笔」那四条（它们的活儿本身就是"把板子开起来/选那支笔"，
+        // 自带回执）之外，每一条都必须走 RequireRunning。写死数字的下场是加一条动作就红一次——
+        // 或者更糟：忘了改，于是一条新动作谁都没接而闸门仍然绿（批次 WD-3 之后加「重做」正是这一次）。
+        Assert.Equal(HotkeyActions.Canvas.Count - 4, SourceGate.Count(service, "RequireRunning(\""));
     }
 
     // ────────── 批次 WD-4：「⌨」快捷键面板 ──────────

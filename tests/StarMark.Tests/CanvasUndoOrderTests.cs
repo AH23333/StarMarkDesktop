@@ -110,4 +110,69 @@ public sealed class CanvasUndoOrderTests
         Assert.DoesNotContain("screen.Ink.Undo()", undo);
         Assert.DoesNotContain("FlushAll();", undo);      // 别的屏一笔没动，不该跟着整屏重烤（4K 一帧几十兆）
     }
+
+    // ────────── 重做（批次 S2-c3：画布也有 redo）──────────
+
+    [Fact]
+    public void NextOrderIsExactlyTheStrokeRedoBringsBack()
+    {
+        var doc = Board();
+        doc.Add(Stroke(new PixelPoint(1, 1), new PixelPoint(30, 30)));
+        doc.Add(Stroke(new PixelPoint(50, 50), new PixelPoint(80, 80)));
+        var newest = doc.LastOrder;
+        Assert.Equal(InkOrder.None, doc.NextOrder);               // 没撤销过时"重做"不该赢任何比较
+        doc.Undo();
+        Assert.Equal(newest, doc.NextOrder);
+        Assert.True(doc.Redo());
+        Assert.Equal(InkOrder.None, doc.NextOrder);               // 回到了栈顶
+    }
+
+    [Fact]
+    public void RedoTargetCannotBeChosenByLastOrder()
+    {
+        // 判别性输入（坑表 #150 的口径：随机采样采不出分歧）：左边画三条、右边画一条，
+        // 两边各撤销一次之后，"还留着的那一笔最新"的是<b>左边</b>，而"刚被撤掉的那一笔"在<b>右边</b>。
+        // 用 LastOrder 挑就退错一叠——放回去的不是用户刚撤的，比什么都不放更糟。
+        var left = Board();
+        left.Add(Stroke(new PixelPoint(1, 1), new PixelPoint(9, 9)));
+        left.Add(Stroke(new PixelPoint(10, 10), new PixelPoint(18, 18)));
+        left.Add(Stroke(new PixelPoint(20, 20), new PixelPoint(28, 28)));
+        var right = Board();
+        right.Add(Stroke(new PixelPoint(400, 400), new PixelPoint(430, 430)));
+
+        Assert.True(left.Undo());
+        Assert.True(right.Undo());
+        Assert.True(left.LastOrder > right.LastOrder, "这条用例的前提：LastOrder 会把选择指到左边（那是错的答案）");
+        Assert.True(right.NextOrder > left.NextOrder, "NextOrder 才指对用户刚撤掉的那一叠");
+
+        var picked = new[] { left, right }.OrderByDescending(d => d.NextOrder).First();
+        Assert.Same(right, picked);
+    }
+
+    [Fact]
+    public void RedoAfterClearBringsTheWholeBoardBack()
+    {
+        var doc = Draw(new PixelPoint(1, 1), new PixelPoint(30, 30));
+        doc.Add(Stroke(new PixelPoint(50, 50), new PixelPoint(80, 80)));
+        doc.Clear();
+        Assert.True(doc.Undo());                                  // 撤销"清空"＝整叠回来
+        Assert.True(doc.Redo());                                  // 再重做＝又清空
+        Assert.Equal(0, doc.Count);
+    }
+
+    /// <summary>接线闸门：重做与撤销同形——<b>只挑一叠、只重烤那一屏</b>，且挑的依据是 NextOrder。</summary>
+    [Fact]
+    public void TheBoardRedoesASingleScreenUsingTheOrderRedoWouldRestore()
+    {
+        var redo = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "public static void Redo()");
+        Assert.Contains("s.Ink.CanRedo", redo);
+        Assert.Contains(".OrderByDescending(s => s.Ink.NextOrder)", redo);
+        Assert.Contains("if (target is null || !target.Ink.Redo()) return;", redo);
+        Assert.Contains("Recomposite(target);", redo);
+        Assert.Contains("Flush(target);", redo);
+        Assert.DoesNotContain("screen.Ink.Redo()", redo);
+        Assert.DoesNotContain("FlushAll();", redo);
+        // 撤销那一条不能用 NextOrder、重做那一条不能用 LastOrder：两个问题不同，写反一次就是"退错东西"。
+        Assert.DoesNotContain("NextOrder", SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "public static void Undo()"));
+    }
 }

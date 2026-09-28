@@ -87,7 +87,7 @@ public static class ScreenshotService
         }
 
         // 冻帧已经拿到手了，这一刻起才改会话态：Hub 会一次做完"藏玻璃、收画布工具条、
-        // 摘画布九条热键、Z 序归位"（方案 §5）。放在抓帧之前会让"截图带画笔迹"这条设置失效，
+        // 摘画布那批热键、Z 序归位"（方案 §5）。放在抓帧之前会让"截图带画笔迹"这条设置失效，
         // 放在建窗之后则会给用户一帧"玻璃还亮着、遮罩已经上来"的重影。
         AnnotationHub.Raise(SessionEvent.BeginSheet);
         try
@@ -302,7 +302,7 @@ public static class ScreenshotService
             catch (Exception ex) { StarLog.Error($"[Screenshot] 关闭遮罩失败（{window.DeviceName}）", ex); }
         }
         // 遮罩真的收干净了才恢复会话（反过来会让玻璃先亮在还活着的遮罩旁边＝看见一次闪），
-        // 而恢复里包含"重新注册画布那九条键"——它必须晚于这一帧，否则截图收尾那一下还能唤起画布。
+        // 而恢复里包含"重新注册画布那批键"——它必须晚于这一帧，否则截图收尾那一下还能唤起画布。
         // 建窗半路抛异常时这里也要走到：那时 Session 可能是空的，但会话态已经是 Sheet，
         // 少这一句就是"遮罩没了、画布键也再也回不来"。
         AnnotationHub.Raise(SessionEvent.EndSheet);

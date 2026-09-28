@@ -134,7 +134,7 @@ public static class AnnotationSessions
     public static bool GlassTakesPointer(this AnnotationStage stage) => stage == AnnotationStage.BoardDrawing;
 
     /// <summary>
-    /// 会话要不要<b>拦住"退出键"之外的全局动作</b>——Sheet 期间九条画布快捷键都不该触发画布
+    /// 会话要不要<b>拦住"退出键"之外的全局动作</b>——Sheet 期间画布那批快捷键都不该触发画布
     /// （方案 §6.1）。注册投影与回执文案在 <c>HotkeyGate</c>，这里只回答"该不该收权"。
     /// </summary>
     public static bool SuppressesCanvasHotkeys(this AnnotationStage stage) => stage.IsSheet();

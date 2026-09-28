@@ -172,6 +172,14 @@ public sealed class InkDoc
         return true;
     }
 
+    /// <summary>
+    /// <b>重做会回来的那一笔</b>是全机第几笔；重做栈空、或回来的那一步是空叠时给 <see cref="InkOrder.None"/>。
+    /// <para>为什么不是复用 <see cref="LastOrder"/>：撤销之后 <c>LastOrder</c> 说的是"<b>还留着</b>的那一笔"，
+    /// 而跨屏挑"该把哪一笔放回去"要的是"哪一叠回来的那笔最新"。多块屏都撤销过的时候用 <c>LastOrder</c>
+    /// 会挑中另一块屏——放回去的东西不是用户刚撤掉的那一笔，比什么都不放更糟。</para>
+    /// </summary>
+    public long NextOrder => CanRedo && _states[_at + 1] is { Count: > 0 } next ? next[^1].Order : InkOrder.None;
+
     /// <summary>整条历史丢掉（换选区时调用：底图都换了，旧标注摆在新框里没有任何意义）。</summary>
     public void Reset()
     {

@@ -457,6 +457,25 @@ public static class CanvasService
         StateChanged?.Invoke();
     }
 
+    /// <summary>
+    /// 重做：把刚被撤销掉的那一笔放回去，<b>只放一块屏</b>。
+    /// <para>与 <see cref="Undo"/> 同一个形状：目标用的是 <see cref="InkDoc.NextOrder"/>
+    /// （这一叠"重做会回来的那一笔"是全机第几笔），不是 <c>LastOrder</c>——撤销之后
+    /// <c>LastOrder</c> 指的是"还留着的那一笔"，两块屏都撤销过时会挑错那一叠。</para>
+    /// <para>没有可重做的东西时安静地什么都不做（工具条那颗与「撤销」对称，不灰、不弹说明）；
+    /// 全局热键那一路由 <see cref="RequireRunning"/> 负责"板子没开着"的可见原因。</para>
+    /// </summary>
+    public static void Redo()
+    {
+        var target = Screens.Where(s => s.Ink.CanRedo)
+            .OrderByDescending(s => s.Ink.NextOrder)
+            .FirstOrDefault();
+        if (target is null || !target.Ink.Redo()) return;
+        Recomposite(target);
+        Flush(target);
+        StateChanged?.Invoke();
+    }
+
     public static void ClearAll()
     {
         CancelOpenPolyLine();               // 勾到一半的折线不能被"清空"顺手提交出去
@@ -1045,6 +1064,8 @@ public static class CanvasService
     public static void HotkeyClickThrough() => RequireRunning("交出 / 收回鼠标", () => SetClickThrough(!ClickThroughHere));
 
     public static void HotkeyUndo() => RequireRunning("撤销上一笔", Undo);
+
+    public static void HotkeyRedo() => RequireRunning("重做那一笔", Redo);
 
     public static void HotkeyClear() => RequireRunning("清空笔迹", ClearAll);
 

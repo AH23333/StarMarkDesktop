@@ -50,17 +50,17 @@ public static class HotkeyBindings
     public const uint VirtualKeyD = 0x44;
 
     /// <summary>
-    /// 画布内九个动作的默认键（A–Z 的虚拟键码就是其 ASCII 码，这里逐个写出来是为了让
+    /// 画布内那批动作的默认键（A–Z 的虚拟键码就是其 ASCII 码，这里逐个写出来是为了让
     /// <see cref="Defaults"/> 那一段能读出"这条字母对应哪件事"）。
     /// <para>
-    /// <b>九条全部带 Ctrl+Alt</b>：不带修饰键的裸键在穿透态下必须留给下层应用（用户要选文本、要翻页），
+    /// <b>这批全部带 Ctrl+Alt</b>：不带修饰键的裸键在穿透态下必须留给下层应用（用户要选文本、要翻页），
     /// 而画布吃下 Ctrl+Alt+字母几乎不与人撞——唯一常见的是 Ctrl+Alt+T（某些终端/显卡面板用它），
     /// 撞上时按批次 KL 的口径"只提示、不阻碍注册"，用户在设置页里一键改掉即可。
     /// </para>
     /// </summary>
     public const uint VirtualKeyT = 0x54, VirtualKeyP = 0x50, VirtualKeyH = 0x48,
         VirtualKeyR = 0x52, VirtualKeyU = 0x55, VirtualKeyC = 0x43, VirtualKeyS = 0x53,
-        VirtualKeyK = 0x4B, VirtualKeyG = 0x47;
+        VirtualKeyK = 0x4B, VirtualKeyG = 0x47, VirtualKeyY = 0x59;
 
     /// <summary>
     /// 出厂默认：主界面呼出/关闭 = Ctrl+Alt+Space。
@@ -68,7 +68,7 @@ public static class HotkeyBindings
     /// </summary>
     public static Dictionary<string, HotkeyGesture> Defaults()
     {
-        // 画布那九条共用一档修饰键：Ctrl+Alt（NoRepeat＝按住不放不连发，画布切换类动作连发会来回抖）
+        // 画布那批共用一档修饰键：Ctrl+Alt（NoRepeat＝按住不放不连发，画布切换类动作连发会来回抖）
         var canvasMods = HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.NoRepeat;
         return new Dictionary<string, HotkeyGesture>
         {
@@ -87,13 +87,16 @@ public static class HotkeyBindings
             // 画布用 Ctrl+Alt+D（规格 §16.5 的默认键）。不占裸 F6：那一段留给截图那条链继续加动作，
             // 而画布是"进出一次用一下"的模式，带修饰键反而不容易与游戏/放映软件撞。
             [HotkeyActions.CanvasToggle] = new HotkeyGesture(canvasMods, VirtualKeyD),
-            // 画布内九条（发起人点名"全部要，带修饰键"）：字母按"这件事叫什么"取，
+            // 画布内那批（发起人点名"全部要，带修饰键"）：字母按"这件事叫什么"取，
             // 比让用户记住"第三个键是橡皮"可行得多——工具条上那颗「⌨」按钮随时能把这张表调出来。
             [HotkeyActions.CanvasClickThrough] = new HotkeyGesture(canvasMods, VirtualKeyT),   // Through
             [HotkeyActions.CanvasPen] = new HotkeyGesture(canvasMods, VirtualKeyP),            // Pen
             [HotkeyActions.CanvasHighlighter] = new HotkeyGesture(canvasMods, VirtualKeyH),    // Highlighter
             [HotkeyActions.CanvasEraser] = new HotkeyGesture(canvasMods, VirtualKeyR),         // eRaser
             [HotkeyActions.CanvasUndo] = new HotkeyGesture(canvasMods, VirtualKeyU),           // Undo
+            // 重做用 Y 而不是"U 加 Shift"：全局热键的修饰键组合要能被 RegisterHotKey 表达，
+            // 而 Y 是"重做"在 Windows 上的第二个惯用键（Ctrl+Y），又不与画布那批里任何一颗撞。
+            [HotkeyActions.CanvasRedo] = new HotkeyGesture(canvasMods, VirtualKeyY),           // Windows 上 redo 的惯用键
             [HotkeyActions.CanvasClear] = new HotkeyGesture(canvasMods, VirtualKeyC),          // Clear
             [HotkeyActions.CanvasSave] = new HotkeyGesture(canvasMods, VirtualKeyS),           // Save
             [HotkeyActions.CanvasCopy] = new HotkeyGesture(canvasMods, VirtualKeyK),           // ...K（C 被清屏占了）

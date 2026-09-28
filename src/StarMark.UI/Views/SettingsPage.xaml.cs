@@ -863,7 +863,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
         if (App.Services.GetRequiredService<HotkeyService>() is HotkeyService hotkey)
             hotkey.ApplyBindings(ViewModel.EnableGlobalHotKey
-                ? settings.GetRegisterableHotkeyBindings()   // 刚写盘的那一份 + 功能总开关的闸门（关掉的九条不占键）
+                ? settings.GetRegisterableHotkeyBindings()   // 刚写盘的那一份 + 功能总开关的闸门（关掉的那批不占键）
                 : new Dictionary<string, HotkeyGesture>());
         MarkRegistrationFailures();   // 保存后立刻把"没注册上"的那几条说清楚
         // 「拓展功能」页那一览跟着重算：改完键却还显示旧键位，比不显示更容易误导人
@@ -915,7 +915,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         if (HotkeySvc() is { } hotkey && ViewModel.EnableGlobalHotKey)
         {
             var store = new SettingsStore();
-            hotkey.ApplyBindings(store.GetRegisterableHotkeyBindings());  // 磁盘上那份，不含未保存的录制；关掉的九条不占键
+            hotkey.ApplyBindings(store.GetRegisterableHotkeyBindings());  // 磁盘上那份，不含未保存的录制；关掉的那批不占键
             ViewModel.RefreshCanvasHotkeySheet();
         }
         MarkRegistrationFailures();
