@@ -190,7 +190,7 @@ public sealed class AutoBackupWiringGateTests
     [Fact]
     public void DeleteConfirmsThenDelegatesThenReportsAndRescans()
     {
-        var body = MethodBody(ReadRepoFile(PageCode), "private async void DeleteBackup_Click(");
+        var body = MethodBody(ReadRepoPartials(PageCode), "private async void DeleteBackup_Click(");
         var confirm = body.IndexOf("CenteredDialog.ConfirmAsync(", StringComparison.Ordinal);
         var guard = body.IndexOf("if (!confirm) return;", StringComparison.Ordinal);
         var del = body.IndexOf("BackupService.DeleteBackup(", StringComparison.Ordinal);
@@ -234,5 +234,24 @@ public sealed class AutoBackupWiringGateTests
         var service = ReadRepoFile(Service);
         Assert.DoesNotContain("PrunePlan", MethodBody(service, "public static string DeleteBackup(string? path)"));
         Assert.Contains("AutoBackupPolicy.PrunePlan", MethodBody(service, "public async Task<string?> RunAutoBackupAsync"));
+    }
+
+    /// <summary>
+    /// <b>给"守门本身"作的保</b>（批次 S4-④）：设置页代码侧拆成 <c>SettingsPage.*.cs</c> 若干份之后，
+    /// 读法一旦退回单个文件，钉在搬了家的方法上的守门就扫不到锚点。
+    /// 这里钉住"读整套时每个分段各一个代表方法仍看得见"。
+    /// </summary>
+    [Fact]
+    public void TheSettingsPageGatesReadEveryPartialFile()
+    {
+        var all = ReadRepoPartials(PageCode);
+
+        Assert.Contains("public void SelectTab(", all);                        // 主文件
+        Assert.Contains("private void OnPageActualThemeChanged(", all);         // Theme
+        Assert.Contains("private void RefreshEngineSize(", all);                // Engine
+        Assert.Contains("protected override void OnNavigatedTo(", all);         // Nav
+        Assert.Contains("private void BuildLayoutRows(", all);                  // Widgets
+        Assert.Contains("private void BuildHotkeyRows(", all);                  // Hotkeys
+        Assert.Contains("private async void DeleteBackup_Click(", all);         // Backup
     }
 }

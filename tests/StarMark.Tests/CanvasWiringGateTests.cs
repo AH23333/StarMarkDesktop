@@ -1466,7 +1466,7 @@ public sealed class CanvasWiringGateTests
         var main = SourceGate.ReadRepoFile(MainWindow);
         Assert.Contains("_settings.GetRegisterableHotkeyBindings()", main);
         Assert.DoesNotContain("_settings.GetHotkeyBindings()", main);
-        var page = SourceGate.ReadRepoFile(SettingsPageCode);
+        var page = SourceGate.ReadRepoPartials(SettingsPageCode);
         Assert.Equal(2, SourceGate.Count(page, "GetRegisterableHotkeyBindings()"));   // 保存 + 重试注册
 
         var service = SourceGate.ReadRepoFile(Service);
@@ -1493,7 +1493,7 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("HotkeyDisplay.Display(bound)", vm);
         Assert.DoesNotContain("Ctrl+Alt+R", vm);                      // 一份字面键位都不许有
         // 改完键要重算，否则那一览会一直显示旧键位
-        var page = SourceGate.ReadRepoFile(SettingsPageCode);
+        var page = SourceGate.ReadRepoPartials(SettingsPageCode);
         Assert.Equal(2, SourceGate.Count(page, "ViewModel.RefreshCanvasHotkeySheet();"));
     }
 }
