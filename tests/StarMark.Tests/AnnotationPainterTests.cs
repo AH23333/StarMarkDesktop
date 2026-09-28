@@ -301,6 +301,24 @@ public sealed class AnnotationPainterTests
             $"半径 {Annotation.MinNumberRadius} 的实心盘≈113 像素，数出 0 就是那颗序号又消失了");
     }
 
+    /// <summary>
+    /// 一个点都没有的序号<b>走不到绘制端</b>：`Paint` 第一句就问 `Problem()`，那种输入直接抛原因
+    /// （"画不出去时抛原因"那条契约在这里）。这条测钉的是"上游挡死了"，
+    /// 所以 <c>DrawNumber</c> 里不需要再自带一道"框宽为 0 就不画"——WT 一度补了这么一句，
+    /// 顺着调用链查实后被删（坑表 #145）。
+    /// </summary>
+    [Fact]
+    public void APointlessNumberIsRefusedBeforeAnyInk()
+    {
+        const int side = 61;
+        var canvas = Canvas(side, side);
+        var empty = new Annotation(AnnotationTool.Number, Array.Empty<PixelPoint>(), Red, 15) { Number = 1 };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => AnnotationPainter.Paint(canvas, side, side, empty));
+        Assert.Contains("至少需要 1 个点", ex.Message);
+        Assert.True(IsBackground(At(canvas, side, 0, 0)), "原点不许落一颗没有归属的墨");
+    }
+
     // ────────── 马赛克 ──────────
 
     [Fact]
