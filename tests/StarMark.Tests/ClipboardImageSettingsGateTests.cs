@@ -52,7 +52,7 @@ public sealed class ClipboardImageSettingsGateTests
         Assert.Contains("d.ClipboardImageEnabled == true", store);
         Assert.DoesNotContain("ClipboardImageEnabled ?? true", store);
         // ③ 设置页不许自己给个 true 初值。
-        Assert.DoesNotContain("ClipboardImageEnabled = true", ReadRepoFile(Vm));
+        Assert.DoesNotContain("ClipboardImageEnabled = true", ReadRepoPartials(Vm));
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public sealed class ClipboardImageSettingsGateTests
         // NumberBox 每敲一位都变更。逐键生效的坏法不是"多写几次盘"那么轻：
         // 把 200 改成 2000 的途中先经过 2，那一瞬间图片上限被夹成 10 并推给采集器，
         // 下一次复制就按 10 条轮转——用户为了调高上限反而丢掉一批历史。
-        var vm = ReadRepoFile(Vm);
+        var vm = ReadRepoPartials(Vm);
         var handler = MethodBody(vm, "partial void OnClipboardImageMaxValueChanged(double value)");
         Assert.Contains("QueueClipboardLimitsSave()", handler);
         Assert.DoesNotContain("_settings.Save", handler);
@@ -124,10 +124,10 @@ public sealed class ClipboardImageSettingsGateTests
         // 洞1：单张 20MB 是"挡事故"的内部常数，给设置页一个能把它调大的框，护栏就成了装饰。
         // 所以三处都不许出现它：界面、VM、以及"为它开的写入口"。
         Assert.DoesNotContain("MaxImageBytes", DataTab());
-        Assert.DoesNotContain("MaxImageBytes", ReadRepoFile(Vm));
+        Assert.DoesNotContain("MaxImageBytes", ReadRepoPartials(Vm));
         Assert.DoesNotContain("SaveClipboardImageMaxBytes", ReadRepoFile(Store));
         // 但用户要能知道有这条线——它写在图片开关的说明里（"20 MB"），是陈述不是控件。
-        Assert.Contains("20 MB", ReadRepoFile(Vm));
+        Assert.Contains("20 MB", ReadRepoPartials(Vm));
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public sealed class ClipboardImageSettingsGateTests
         Assert.Contains("BackupClipboardImagesEnabled ?? true", store);
         Assert.DoesNotContain("BackupClipboardImagesEnabled == true", store);
 
-        var vm = ReadRepoFile(Vm);
+        var vm = ReadRepoPartials(Vm);
         // ③ 回灌初值时不许写盘（否则每次进设置页都把用户的值按默认覆盖一次），且初值取自 store 而不是硬编 true；
         var apply = MethodBody(vm, "partial void OnBackupClipboardImagesEnabledChanged(bool value)");
         Assert.Contains("_settings.SaveBackupClipboardImagesEnabled(value)", apply);
@@ -177,7 +177,7 @@ public sealed class ClipboardImageSettingsGateTests
 
         // 两个改动入口各自都要到得了采集器：开关是直接推，两个数字框是合并窗口之后一次整档推。
         // （数字框只留一处调用是刻意的——它们共用一个决定，见 TypedNumbersLandAsOneCommitNotOnePerKeystroke。）
-        Assert.Equal(2, Count(ReadRepoFile(Vm), "App.RefreshClipboardLimits()"));
+        Assert.Equal(2, Count(ReadRepoPartials(Vm), "App.RefreshClipboardLimits()"));
     }
 
     [Fact]
@@ -185,7 +185,7 @@ public sealed class ClipboardImageSettingsGateTests
     {
         // 进设置页只是"回灌显示"，不许把默认值写回用户文件：那会让一个从没碰过这里的用户
         // 在某次打开设置页之后，悄悄拥有了"他其实没选过"的设置。
-        var body = MethodBody(ReadRepoFile(Vm), "public void LoadFromStore()");
+        var body = MethodBody(ReadRepoPartials(Vm), "public void LoadFromStore()");
         var guard = body.IndexOf("_suppressClipboardImageApply = true", StringComparison.Ordinal);
         var assign = body.IndexOf("ClipboardImageEnabled = Safe(", StringComparison.Ordinal);
         var release = body.IndexOf("_suppressClipboardImageApply = false", StringComparison.Ordinal);
@@ -202,7 +202,7 @@ public sealed class ClipboardImageSettingsGateTests
     public void UsageLineNamesTheFolderItMeasured()
     {
         // "存储对用户直接可见"（§3-Q6）如果只兑现成"没加密"，用户还是找不到东西在哪。
-        var vm = ReadRepoFile(Vm);
+        var vm = ReadRepoPartials(Vm);
         Assert.Contains("ClipAssets.Folder", vm);
         Assert.Contains("DescribeUsage", vm);
         Assert.Contains("DescribeProjection", vm);
@@ -210,5 +210,25 @@ public sealed class ClipboardImageSettingsGateTests
         var body = MethodBody(vm, "private void ComputeClipboardUsage()");
         Assert.Contains("Task.Run", body);
         Assert.Contains("DispatcherQueue", body);
+    }
+
+    /// <summary>
+    /// <b>给"守门本身"作的保</b>（承 <c>CaptureOverlayGateTests</c> 同名那条）：批次 S4-④ 把设置页 VM
+    /// 按访问面拆成 <c>SettingsPageViewModel.*.cs</c> 若干份，读法一旦退回单个文件，
+    /// 那些"锚点必须命中 1 处"与"某个字面不许出现"的守门会<b>静默扫不到</b>而红或直接空转。
+    /// 这里钉住每个分段各一个代表方法在"读整个类"时仍看得见。
+    /// </summary>
+    [Fact]
+    public void TheViewModelGatesReadEveryPartialFile()
+    {
+        var all = ReadRepoPartials(Vm);
+
+        Assert.Contains("public void LoadFromStore()", all);                          // 主文件
+        Assert.Contains("public async Task LoadHealthAsync()", all);                   // Health
+        Assert.Contains("private void ComputeClipboardUsage()", all);                  // Clipboard
+        Assert.Contains("private string BuildEyeRestStatus()", all);                   // EyeRest
+        Assert.Contains("public void RefreshRssEnabled()", all);                       // Feeds
+        Assert.Contains("private string BuildCanvasHotkeySheet()", all);               // Canvas
+        Assert.Contains("private void PrepareLocalDiskSearch()", all);                 // LocalDisk
     }
 }

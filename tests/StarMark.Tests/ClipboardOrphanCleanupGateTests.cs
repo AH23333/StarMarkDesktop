@@ -37,7 +37,7 @@ public sealed class ClipboardOrphanCleanupGateTests
     [Fact]
     public void NothingIsDeletedBeforeTheUserSeesTheList()
     {
-        var body = MethodBody(ReadRepoFile(Vm), CommandAnchor);
+        var body = MethodBody(ReadRepoPartials(Vm), CommandAnchor);
         var scan = body.IndexOf("ScanAsync", StringComparison.Ordinal);
         var dialog = body.IndexOf("ShowContentAsync", StringComparison.Ordinal);
         var clean = body.IndexOf("CleanAsync", StringComparison.Ordinal);
@@ -77,7 +77,7 @@ public sealed class ClipboardOrphanCleanupGateTests
     [Fact]
     public void TheResultSentenceKeepsTheThreeOutcomesApart()
     {
-        var body = MethodBody(ReadRepoFile(Vm), CommandAnchor);
+        var body = MethodBody(ReadRepoPartials(Vm), CommandAnchor);
         Assert.Contains("腾出约", body);                       // 全删成：删了几件 + 多少体积
         Assert.Contains("还在名单里", body);                     // 部分/全部删不掉：不许报"清理完成"
         Assert.Contains("一件都没删掉", body);
@@ -89,7 +89,7 @@ public sealed class ClipboardOrphanCleanupGateTests
     [Fact]
     public void AnUnavailableScanIsNeitherGreenLightNorFalseAllClear()
     {
-        var vm = ReadRepoFile(Vm);
+        var vm = ReadRepoPartials(Vm);
         var body = MethodBody(vm, "private void ComputeClipboardUsage()");
         Assert.Contains("清理按钮暂时不可用", body);
         Assert.DoesNotContain("没有孤儿", body);               // 扫不出差集时不许冒充"一切正常"
@@ -105,7 +105,7 @@ public sealed class ClipboardOrphanCleanupGateTests
         var assets = ReadRepoFile(Assets);
         Assert.Equal(1, Count(assets, "public const int CleanupPreviewLimit"));
         Assert.Equal(1, Count(assets, "public static string DescribeOrphans("));
-        var vm = ReadRepoFile(Vm);
+        var vm = ReadRepoPartials(Vm);
         // UI 不许手抄那个上限，也不许自己算"什么算孤儿"（判据只有一份＝ClipAssets.Reconcile）。
         Assert.DoesNotContain("CleanupPreviewLimit = 8", vm);
         Assert.DoesNotContain("Reconcile(", vm);

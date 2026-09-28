@@ -161,7 +161,7 @@ public sealed class QuickLaunchDropBatchGateTests
     public void NothingElevatesTheProcessToTalkToTheSearchEngine()
     {
         var app = ReadRepoFile("src/StarMark.UI/App.xaml.cs");
-        var vm = ReadRepoFile("src/StarMark.UI/ViewModels/SettingsPageViewModel.cs");
+        var vm = ReadRepoPartials("src/StarMark.UI/ViewModels/SettingsPageViewModel.cs");
 
         // 反空转：收残留那一条还在（别把它当"自我提权已删净"一起删掉——它是唯一合法的提权出口）
         Assert.Contains("Privilege.TryRelaunchSelfElevated($\"{ResolveGhostArg} {pid}\")", app);

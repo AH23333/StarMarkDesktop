@@ -204,7 +204,7 @@ public sealed class EyeRestWiringGateTests
     [Fact]
     public void OpeningTheSettingsPageDoesNotRestartTheClock()
     {
-        var vm = SourceGate.ReadRepoFile(SettingsVm);
+        var vm = SourceGate.ReadRepoPartials(SettingsVm);
         var backfill = SourceGate.Between(vm, "_suppressEyeRestApply = true;", "_suppressEyeRestApply = false;");
         Assert.Equal(4, SourceGate.Count(backfill, "Safe("));     // 四项只回灌显示
         Assert.DoesNotContain("ApplyEyeRest", backfill);           // 不因"显示"而起停定时器
@@ -214,7 +214,7 @@ public sealed class EyeRestWiringGateTests
     [Fact]
     public void StatusLineAdmitsWhenTheTimerIsNotActuallyRunning()
     {
-        var vm = SourceGate.ReadRepoFile(SettingsVm);
+        var vm = SourceGate.ReadRepoPartials(SettingsVm);
         var build = SourceGate.MethodBody(vm, "private string BuildEyeRestStatus()");
         Assert.Contains("EyeRestService.IsRunning", build);
         Assert.Contains("节拍表没挂上", build);
@@ -239,7 +239,7 @@ public sealed class EyeRestWiringGateTests
     [Fact]
     public void ChangingTheSettingInvalidatesTheLastPreview()
     {
-        var vm = SourceGate.ReadRepoFile(SettingsVm);
+        var vm = SourceGate.ReadRepoPartials(SettingsVm);
         var apply = SourceGate.MethodBody(vm, "private void ApplyEyeRestSwitch()");
         // 上一次演出来的已经不是新配置了：留着那行会读成"刚验证过现在的设置"
         Assert.Contains("EyeRestPreviewStatus = string.Empty;", apply);

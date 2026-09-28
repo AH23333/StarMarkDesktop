@@ -93,7 +93,7 @@ public sealed class RssPageWiringGateTests
     [Fact]
     public void TogglingTheSwitchMovesTheNavEntryAndEscapesThePage()
     {
-        var changed = MethodBody(ReadRepoFile(SettingsVm), "partial void OnRssEnabledChanged(bool value)");
+        var changed = MethodBody(ReadRepoPartials(SettingsVm), "partial void OnRssEnabledChanged(bool value)");
         Assert.Contains("_settings.SaveRssEnabled(value);", changed);
         Assert.Contains("App.MainWindow?.ApplyRssNavVisibility(value);", changed);
 

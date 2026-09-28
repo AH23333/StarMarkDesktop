@@ -46,7 +46,7 @@ public sealed class AutoBackupWiringGateTests
         var card = BackupCard();
         Assert.Contains("ItemsSource=\"{x:Bind ViewModel.AutoBackupIntervalOptions}\"", card);
         Assert.DoesNotContain("ComboBoxItem", card);
-        Assert.Contains("AutoBackupPolicy.IntervalLabels", ReadRepoFile(Vm));
+        Assert.Contains("AutoBackupPolicy.IntervalLabels", ReadRepoPartials(Vm));
     }
 
     [Fact]
@@ -82,7 +82,7 @@ public sealed class AutoBackupWiringGateTests
     [Fact]
     public void BackfillingThePageNeitherWritesNorReprobes()
     {
-        var vm = ReadRepoFile(Vm);
+        var vm = ReadRepoPartials(Vm);
         var backfill = Between(vm, "_suppressAutoBackupApply = true;", "_suppressAutoBackupApply = false;");
         Assert.Contains("AutoBackupEnabled = Safe(_settings.LoadAutoBackupEnabled", backfill);
         Assert.Contains("AutoBackupIntervalIndex = AutoBackupPolicy.IntervalIndexOf(", backfill);
@@ -94,7 +94,7 @@ public sealed class AutoBackupWiringGateTests
     [Fact]
     public void BothEditorsShareOneApplyPath()
     {
-        var vm = ReadRepoFile(Vm);
+        var vm = ReadRepoPartials(Vm);
         Assert.Equal(2, Count(vm, "ApplyAutoBackup();"));                 // 开关与档位两颗，各自指向同一条
         Assert.Equal(1, Count(vm, "_settings.SaveAutoBackup("));          // 写盘出口只有一处
     }
@@ -102,7 +102,7 @@ public sealed class AutoBackupWiringGateTests
     [Fact]
     public void ApplyWritesThenRestartsTheProbeThenRestates()
     {
-        var apply = MethodBody(ReadRepoFile(Vm), "private void ApplyAutoBackup()");
+        var apply = MethodBody(ReadRepoPartials(Vm), "private void ApplyAutoBackup()");
         var save = apply.IndexOf("_settings.SaveAutoBackup(", StringComparison.Ordinal);
         var reprobe = apply.IndexOf("AutoBackupScheduler.Start(", StringComparison.Ordinal);
         var status = apply.IndexOf("BuildAutoBackupStatus()", StringComparison.Ordinal);
@@ -167,7 +167,7 @@ public sealed class AutoBackupWiringGateTests
     [Fact]
     public void TheStatusLineDoesTheLookbackMathItself()
     {
-        var status = MethodBody(ReadRepoFile(Vm), "private string BuildAutoBackupStatus()");
+        var status = MethodBody(ReadRepoPartials(Vm), "private string BuildAutoBackupStatus()");
         Assert.Contains("AutoBackupPolicy.MaxLookbackDays(", status);
         Assert.Contains("AutoBackupPolicy.Keep", status);
         Assert.Contains("AutoBackupIntervalHours", status);

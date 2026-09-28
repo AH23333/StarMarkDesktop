@@ -1475,7 +1475,7 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("屏幕画布已关闭", start);
         Assert.Contains("list.Where(item => item.Tag != TrayCanvas)", main);
         // 关掉时正在画：立刻收玻璃（"我已经关了屏幕上还压着一层吃鼠标的东西"是最糟的收尾）
-        var vm = SourceGate.ReadRepoFile("src/StarMark.UI/ViewModels/SettingsPageViewModel.cs");
+        var vm = SourceGate.ReadRepoPartials("src/StarMark.UI/ViewModels/SettingsPageViewModel.cs");
         var changed = SourceGate.MethodBody(vm, "partial void OnCanvasEnabledChanged(bool value)");
         Assert.Contains("if (!value) StarMark.UI.Services.CanvasService.Stop();", changed);
         Assert.Contains("App.MainWindow?.ApplyTraySettings();", changed);   // 注册表当场跟着改，不重启、不再点保存
@@ -1488,7 +1488,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void SettingsSheetAndCanvasPanelReadTheSameTable()
     {
-        var vm = SourceGate.ReadRepoFile("src/StarMark.UI/ViewModels/SettingsPageViewModel.cs");
+        var vm = SourceGate.ReadRepoPartials("src/StarMark.UI/ViewModels/SettingsPageViewModel.cs");
         Assert.Contains("HotkeyActions.Canvas.Select", vm);
         Assert.Contains("HotkeyDisplay.Display(bound)", vm);
         Assert.DoesNotContain("Ctrl+Alt+R", vm);                      // 一份字面键位都不许有
