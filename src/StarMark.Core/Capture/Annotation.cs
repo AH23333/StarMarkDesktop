@@ -115,6 +115,24 @@ public sealed record Annotation(
     public static readonly int[] NumberRadii = { 11, 15, 22 };
 
     /// <summary>
+    /// 序号圆点<b>画出来</b>的最小半径（物理像素）。
+    /// <para>这不是美观下限而是"看得见"的下限：缩到 <see cref="MinScale"/> 时 11×0.2 只剩 2 像素，
+    /// 绘制端原先那句"半径不足 4 就整颗不画"会让序号<b>凭空消失</b>——图上什么都没有，
+    /// 而它在标注列表里还在、还占着一个编号，用户只会认为"点错了"
+    /// （批次 WR 收官时记下的遗留，批次 WT 做掉；不是用户新报的）。</para>
+    /// <para>它必须与命中框同源（<see cref="NumberRadius"/>），否则又会长成"画得出但点不中"或反过来。</para>
+    /// </summary>
+    public const int MinNumberRadius = 6;
+
+    /// <summary>
+    /// 序号那一档"粗细"×缩放之后<b>真正画出去</b>的半径，夹在 <see cref="MinNumberRadius"/> 之上。
+    /// <para>默认档（Scale＝1）就是 <see cref="NumberRadii"/> 里那个数，下限不参与；只有往小里缩才托住它。
+    /// 包围盒（<see cref="Bounds"/>）与像素（<c>AnnotationPainter.DrawNumber</c>）都必须问这里要答案。</para>
+    /// </summary>
+    public int NumberRadius => Math.Max(MinNumberRadius,
+        (int)Math.Round(Thickness * Math.Clamp(Scale, MinScale, MaxScale), MidpointRounding.AwayFromZero));
+
+    /// <summary>
     /// 变换的轴点（可空）。<b>没指定时：几何类＝第一个点，文字＝字块自己的中心</b>（见 <see cref="Origin"/>）。
     /// <para>留一个可空槽而不是写死，是因为"绕哪一点缩放"要跟着拖动语义走：抓住某一头的把手时该钉住它对面那头，
     /// 那一档由 <see cref="WithScalePivotTowards"/> 在按下把手时填上（模型自己填，不让调用方各算一遍）。</para>
@@ -586,10 +604,11 @@ public sealed record Annotation(
         }
         if (Tool == AnnotationTool.Number)
         {
-            // 点＝圆心，半径＝条上那一档"粗细"（<see cref="NumberRadii"/>），再随整体缩放（旋转绕圆心，外接框不变）
-            var radius = (int)Math.Round(Thickness * Math.Clamp(Scale, MinScale, MaxScale), MidpointRounding.AwayFromZero);
+            // 点＝圆心，半径＝<see cref="NumberRadius"/>（条上那一档再随整体缩放，并夹住"再也看不见"那一头）；
+            // 旋转绕圆心，外接框不变。这里不再自己算一遍半径——像素与命中框必须出自同一处。
+            var radius = NumberRadius;
             var c = points[0];
-            return new IntRect(c.X - radius, c.Y - radius, Math.Max(1, radius * 2), Math.Max(1, radius * 2));
+            return new IntRect(c.X - radius, c.Y - radius, radius * 2, radius * 2);
         }
 
         var pad = Tool == AnnotationTool.Mosaic ? Thickness / 2 + MosaicBlockSize : Thickness;

@@ -281,6 +281,26 @@ public sealed class AnnotationPainterTests
         Assert.True(IsBackground(At(pixels, 61, 53, 30)), "再外一像素就不许动了");
     }
 
+    /// <summary>
+    /// 缩到底的那一颗<b>必须真的有像素落出去</b>（批次 WT 的症状就是"画不出"：图上什么都没有，
+    /// 而列表里那条还在）。这里数的是像素，不是源码形状——上一版"半径不足 4 就 return"在源码里
+    /// 长得和正常一模一样，只有数像素才分得开（同 <see cref="AHeavierNumberPaintsABiggerDot"/>）。
+    /// </summary>
+    [Fact]
+    public void ANumberShrunkToTheMinimumIsStillPainted()
+    {
+        const int side = 61;
+        var tiny = new Annotation(AnnotationTool.Number, new[] { new PixelPoint(30, 30) }, Red, 11)
+        { Number = 1, Scale = Annotation.MinScale };
+        var pixels = AnnotationPainter.Render(Canvas(side, side), side, side, new[] { tiny });
+
+        Assert.False(IsBackground(At(pixels, side, 30, 30)), "圆心要有东西");
+        Assert.False(IsBackground(At(pixels, side, 30 + Annotation.MinNumberRadius - 1, 30)), "下限半径之内要有东西");
+        Assert.True(IsBackground(At(pixels, side, 30 + Annotation.MinNumberRadius + 1, 30)), "半径外一像素都不许动");
+        Assert.True(PaintedPixels(tiny, side) >= 100,
+            $"半径 {Annotation.MinNumberRadius} 的实心盘≈113 像素，数出 0 就是那颗序号又消失了");
+    }
+
     // ────────── 马赛克 ──────────
 
     [Fact]

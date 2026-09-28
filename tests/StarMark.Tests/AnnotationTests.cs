@@ -799,6 +799,37 @@ public sealed class AnnotationTests
         Assert.Equal(22, half.Bounds().Width);          // 半径 22 × 0.5 ＝ 11 ⇒ 直径 22
     }
 
+    /// <summary>
+    /// 缩到最小那一档时，半径只剩 2–4 像素，而绘制端从前写着"半径不足 4 就整颗不画"
+    /// ⇒ <b>序号凭空消失</b>：列表里那条还在、编号还占着、脏矩形还照着它擦，图上却什么都没有
+    /// （批次 WR 收官时留下的遗留，本批做掉——不是用户新报的，别再记成"用户没说过的话"）。
+    /// 下限必须<b>命中框与像素同源</b>，所以这里钉的是同一个数出自 <see cref="Annotation.NumberRadius"/>。
+    /// <para>取舍写明：缩到底时三档并成一颗（11/15/22 × 0.2 ＝ 2/3/4，全被同一个下限托住）。
+    /// 选"看得见"而不是"分得清"，因为看不见的序号会被用户当成程序坏了。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(11)]
+    [InlineData(15)]
+    [InlineData(22)]
+    public void AShrunkNumberStillHasARadiusYouCanSeeAndHit(int weight)
+    {
+        var tiny = NumberAt(weight) with { Scale = Annotation.MinScale };
+        Assert.Equal(Annotation.MinNumberRadius, tiny.NumberRadius);
+        Assert.Equal(new IntRect(100 - 6, 80 - 6, 12, 12), tiny.Bounds());
+        Assert.True(tiny.Contains(new PixelPoint(104, 80), 0), "缩到底也该点得中正身");
+        Assert.False(tiny.Contains(new PixelPoint(100 + Annotation.MinNumberRadius + 1, 80), 0),
+            "下限之外一像素不许还宣称是它（否则命中框比画出去的大）");
+    }
+
+    /// <summary>下限不许抬走默认观感：Scale＝1 时三档还是 11／15／22；半档那一截也还在下限之上。</summary>
+    [Fact]
+    public void TheRadiusFloorNeverLiftsTheDefaultWeights()
+    {
+        foreach (var radius in Annotation.NumberRadii)
+            Assert.Equal(radius, NumberAt(radius).NumberRadius);
+        Assert.Equal(8, (NumberAt(15) with { Scale = 0.5 }).NumberRadius);   // 7.5 → 8（没有吃下限）
+    }
+
     /// <summary>序号现在真的吃 Thickness，所以范围检查也一起管上它（从前豁免，是因为那值根本没人读）。</summary>
     [Theory]
     [InlineData(0)]

@@ -114,10 +114,12 @@ public static class AnnotationPainter
     private static void DrawNumber(byte[] bgra, int width, int height, Annotation mark)
     {
         var box = mark.Bounds();
+        if (box.Width <= 0) return;               // 一个点都没有的那一条没有圆心，别在屏幕原点落一颗
         var cx = box.X + box.Width / 2;
         var cy = box.Y + box.Height / 2;
-        var radius = box.Width / 2;
-        if (radius < 4) return;
+        // 半径与命中框必须出自模型那一处（NumberRadius）：从前这里还按半径大小决定"画不画"，
+        // 序号缩到 0.2× 就长成"图上没有、列表里还在"（批次 WT）。
+        var radius = mark.NumberRadius;
         var color = mark.EffectiveColorBgra;
 
         // 实心圆（逐扫描线，圆内直接写色，不走混合：序号底色本就该不透明）

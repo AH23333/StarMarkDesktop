@@ -755,4 +755,26 @@ public sealed class CaptureOverlayGateTests
         Assert.Contains("Annotation.ThicknessFor(AnnotationTool.Number, _weightIndex)", place);
         Assert.DoesNotContain("ColourBgra, 2)", place);
     }
+
+    /// <summary>
+    /// 序号"画多大"与"点哪里算点中它"必须出自模型里<b>同一个数</b>（<c>NumberRadius</c>）。
+    /// <para>批次 WT 的成因就是两处各算一遍：包围盒按 11×0.2＝2 算，绘制端另加一句"半径太小就不画"，
+    /// 于是命中框说这里有东西、屏幕上什么都没有——用户只认为"点错了"。这类分岔编译得过、旧测也不红。</para>
+    /// <para>这条只管形状（谁在算半径），事实由 <c>ANumberShrunkToTheMinimumIsStillPainted</c>
+    /// 与 <c>AShrunkNumberStillHasARadiusYouCanSeeAndHit</c> 那两测管——形状闸门不能替行为测
+    /// （剪贴板收官文档 ② 记的那条负面结论，这里再把下限调小时它照样绿）。</para>
+    /// </summary>
+    [Fact]
+    public void TheNumberRadiusIsComputedInExactlyOnePlace()
+    {
+        var model = SourceGate.ReadRepoFile("src/StarMark.Core/Capture/Annotation.cs");
+        var bounds = SourceGate.MethodBody(model, "public IntRect Bounds()");
+        Assert.Contains("var radius = NumberRadius;", bounds);
+        Assert.DoesNotContain("Thickness * Math.Clamp", bounds);       // 不在包围盒里再乘一遍缩放
+
+        var painter = SourceGate.ReadRepoFile("src/StarMark.Core/Capture/AnnotationPainter.cs");
+        var draw = SourceGate.MethodBody(painter, "private static void DrawNumber");
+        Assert.Contains("mark.NumberRadius", draw);
+        Assert.DoesNotContain("var radius = box.Width / 2", draw);     // 不从外接框反推（反推＝第二个出处）
+    }
 }
