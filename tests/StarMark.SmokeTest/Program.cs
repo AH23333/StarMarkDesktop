@@ -1,7 +1,11 @@
 #nullable enable
 using System.Diagnostics;
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Backup;
+using StarMark.Abstractions.Clipboard;
+using StarMark.Core.Backup;
 using StarMark.Core.Search;
 using StarMark.Core.Sync;
 using StarMark.Data;
@@ -74,6 +78,16 @@ if (args.Length >= 1 && args[0] == "annotate")
 if (args.Length >= 1 && args[0] == "ocr")
 {
     await OcrCheckAsync();
+    return;
+}
+
+if (args.Length >= 1 && args[0] == "clipimg")
+{
+    // clipimg            -> 用这台机器上真实的图片历史跑一遍"导出 + 换机恢复"
+    // clipimg <N>        -> 再灌 N 条合成历史，量出"几百上千张"这一档的耗时与体积
+    // 两种模式都只在 %TEMP% 里写，用户的库与 clip 目录一个字节都不动（详见函数注释）。
+    var n = args.Length >= 2 && int.TryParse(args[1], out var parsed) ? parsed : 0;
+    await ClipBackupAuditAsync(n);
     return;
 }
 
@@ -941,6 +955,181 @@ static void AssertColor(byte[] pixels, int width, int x, int y, int bgra, string
 }
 
 /// <summary>
+
+/// <summary>
+/// ClipIMG-P3 的<b>取证</b>：把收官文档 §6 与 ⑥ 里几条"只能真机量"的说法变成数字——
+/// 包体积、导出耗时、解回耗时、逐张字节是否一致，以及 3c 修的那个洞所在的场景
+/// （<b>新机器上 clip 目录整个不存在</b>时能不能写回）。
+/// <para>三条硬性安全线，动这条链之前先看清：</para>
+/// <list type="number">
+/// <item><description>库走 <c>%TEMP%</c> 里的<b>副本</b>：导出虽是只读，但连"在真库上开连接"这一步都不做。</description></item>
+/// <item><description><c>widgetsTargetPath</c> 必须给临时路径——传 null 会走 <c>WidgetStorage.DefaultPath()</c>，
+/// 那就是拿一份旧备份去覆盖用户<b>真机上的组件数据</b>（待办与随记不可重建，等于造成损失）。</description></item>
+/// <item><description>用户的 clip 目录<b>只读</b>：合成模式另建临时目录并把 <c>ClipAssets.FolderOverride</c> 指过去，
+/// 一个写操作都不落在真目录。</description></item>
+/// </list>
+/// </summary>
+static async Task ClipBackupAuditAsync(int synthRows)
+{
+    var work = Path.Combine(Path.GetTempPath(), $"starmark-clipimg-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(work);
+    var realClip = ClipAssets.Folder;
+    var realDb = DbConnectionFactory.DefaultDbPath();
+    Console.WriteLine("== ClipIMG 备份链取证（全部落在 %TEMP%，用户的一个字节都不动）==");
+    Console.WriteLine($"  工作目录：{work}");
+    Console.WriteLine($"  真实 clip 目录（只读）：{realClip}");
+    if (!File.Exists(realDb)) { Console.WriteLine($"  [跳过] 找不到库文件：{realDb}"); return; }
+
+    // ---- 1. 真库的副本 + 真目录的占用画像 ----
+    foreach (var suffix in new[] { "", "-wal", "-shm" })
+        if (File.Exists(realDb + suffix)) File.Copy(realDb + suffix, Path.Combine(work, "starmark-copy.db" + suffix), true);
+    var copyFactory = new DbConnectionFactory(Path.Combine(work, "starmark-copy.db"));
+    ClipAssets.FolderOverride = null;                       // 导出侧读真目录
+    var realFiles = Directory.Exists(realClip)
+        ? new DirectoryInfo(realClip).EnumerateFiles().Select(f => (f.Name, f.Length)).ToList()
+        : new List<(string Name, long Bytes)>();
+    var fp = ClipAssets.Summarize(realFiles, out var realTemp);
+    Console.WriteLine($"  真实目录画像：{ClipAssets.DescribeUsage(fp, realTemp)}");
+
+    var srcBackup = new BackupService(new BackupRepository(copyFactory));
+    var env0 = await srcBackup.ExportAsync();
+    var imageRows = env0.Payload.Items.Count(i =>
+        i.Source == ItemSources.Clipboard && ClipboardEntry.IsImageOf(i.ExtraJson));
+    Console.WriteLine($"  库里的图片历史：{imageRows} 条（条目总数 {env0.Payload.Items.Count}）");
+
+    // ---- 2. 导出：两份的建议名都故意写 .json，看"带图"那一份会不会自己换成 .zip ----
+    var sw = Stopwatch.StartNew();
+    var export = await srcBackup.ExportWithClipImagesAsync(Path.Combine(work, "out.json"));
+    sw.Stop();
+    var exportMs = sw.ElapsedMilliseconds;
+    var pkgBytes = File.Exists(export.Path) ? new FileInfo(export.Path).Length : 0;
+    var plainPath = await srcBackup.ExportToFileAsync(Path.Combine(work, "plain.json"));
+    var plainBytes = new FileInfo(plainPath).Length;
+    Console.WriteLine($"  导出：请求 out.json → 实际写出 {Path.GetFileName(export.Path)}（{exportMs} ms，"
+        + $"包体积 {pkgBytes / 1024.0 / 1024.0:0.##} MB）");
+    Console.WriteLine($"        只带条目那份：{Path.GetFileName(plainPath)}（{plainBytes / 1024.0:0.#} KB）"
+        + $" ⇒ 附件净增 {(pkgBytes - plainBytes) / 1024.0 / 1024.0:0.##} MB");
+    Console.WriteLine($"        条目 {export.ItemCount} · 带上 {export.ClipImages} 张（{export.ClipImageBytes / 1024.0 / 1024.0:0.##} MB）"
+        + $" · 本就没文件 {export.MissingImages} · 没进包 {export.FailedImages}");
+
+    // ---- 3. 换机恢复：目标 clip 目录刻意不存在，widgets/快照都改道到 %TEMP% ----
+    var newMachine = Path.Combine(work, "clip-new-machine");
+    BackupService.SnapshotDirectoryOverride = Path.Combine(work, "snapshots");
+    ClipAssets.FolderOverride = newMachine;
+    var freshFactory = new DbConnectionFactory(Path.Combine(work, "fresh.db"));
+    new MigrationRunner(freshFactory).EnsureSchema();
+    var env = await BackupService.ReadAsync(export.Path);
+    sw.Restart();
+    var rr = await new BackupService(new BackupRepository(freshFactory)).RestoreAsync(
+        env, RestoreMode.Merge, Path.Combine(work, "widgets.json"), CancellationToken.None, export.Path);
+    sw.Stop();
+    Console.WriteLine($"  恢复：耗时 {sw.ElapsedMilliseconds} ms，结果 {(rr.Success ? "成功" : "失败：" + rr.Message)}");
+    Console.WriteLine($"        写回 {rr.ClipImagesRestored} · 跳过 {rr.ClipImagesSkipped} · 没能写入 {rr.ClipImagesFailed}");
+    Console.WriteLine($"        新机器上 clip 目录被自动建出来：{Directory.Exists(newMachine)}；"
+        + $"落盘文件 {(Directory.Exists(newMachine) ? Directory.GetFiles(newMachine).Length : 0)} 个");
+    Console.WriteLine($"        状态栏那句话：{rr.Message}");
+
+    // ---- 4. 逐张验字节：包里的每一条与写回的那份必须逐字节相同（store 不改字节） ----
+    int compared = 0, differs = 0, missing = 0;
+    if (rr.Success && BackupContainer.IsContainer(export.Path))
+    {
+        using var zip = System.IO.Compression.ZipFile.OpenRead(export.Path);
+        foreach (var e in zip.Entries)
+        {
+            if (!e.FullName.StartsWith(BackupContainer.ClipPrefix, StringComparison.Ordinal)) continue;
+            var name = e.FullName[BackupContainer.ClipPrefix.Length..];
+            var onDisk = ClipAssets.FullPathOf(name);
+            if (onDisk is null || !File.Exists(onDisk)) { missing++; continue; }
+            using var es = e.Open();
+            using var ms = new MemoryStream();
+            es.CopyTo(ms);
+            if (!ms.ToArray().AsSpan().SequenceEqual(File.ReadAllBytes(onDisk))) differs++;
+            compared++;
+        }
+        Console.WriteLine($"  逐张比对：{compared} 张全等（不一致 {differs}、没落盘 {missing}）"
+            + $"；store 的直接证据：压缩后字节＝原始字节 {(zipEntriesStore(export.Path) ? "成立" : "不成立")}");
+    }
+
+    // ---- 5. 合成放大：把"几百上千张"这一档也量出来（只写 %TEMP%） ----
+    if (synthRows > 0)
+    {
+        var synthClip = Path.Combine(work, "clip-synth");
+        Directory.CreateDirectory(synthClip);
+        ClipAssets.FolderOverride = synthClip;
+        var bigFactory = new DbConnectionFactory(Path.Combine(work, "big.db"));
+        new MigrationRunner(bigFactory).EnsureSchema();
+        var bigRepo = new ItemRepository(bigFactory);
+        var seeds = realFiles.Where(f => f.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase)).ToList();
+        var filler = new byte[200 * 1024];                 // 真目录空得没法取材时的替身（备份不看内容）
+        sw.Restart();
+        for (var i = 0; i < synthRows; i++)
+        {
+            var when = new DateTimeOffset(2026, 9, 28, 9, 0, 0, TimeSpan.FromHours(8)).AddMinutes(i);
+            var sid = ClipboardPolicy.BuildImageSourceId(Encoding.UTF8.GetBytes($"synth-{i}"));
+            var main = ClipAssets.MainNameOf(sid, when);
+            var thumb = ClipAssets.ThumbNameOf(sid, when);
+            byte[] mainBytes = seeds.Count > 0
+                ? File.ReadAllBytes(Path.Combine(realClip, seeds[i % seeds.Count].Name))
+                : filler;
+            File.WriteAllBytes(Path.Combine(synthClip, main), mainBytes);
+            File.WriteAllText(Path.Combine(synthClip, thumb), "thumb");
+            await bigRepo.RecordClipboardAsync(ClipboardEntry.BuildImage(
+                sid, new ClipboardEntry.ImageMeta(main, thumb, 3840, 2160, mainBytes.Length), "SmokeAudit", when),
+                CancellationToken.None, imageMaxEntries: synthRows + 64);
+        }
+        var seedMs = sw.ElapsedMilliseconds;
+        sw.Stop();
+        var bigBackup = new BackupService(new BackupRepository(bigFactory));
+        var planned = await bigBackup.ExportAsync();
+        var withImages = planned.Payload.Items.Count(i => ClipboardEntry.IsImageOf(i.ExtraJson));
+        sw.Restart();
+        var bigExport = await bigBackup.ExportWithClipImagesAsync(Path.Combine(work, "big.json"));
+        var bigExportMs = sw.ElapsedMilliseconds;
+        sw.Stop();
+        var bigPkg = new FileInfo(bigExport.Path).Length;
+        Console.WriteLine($"  [合成] 灌 {synthRows} 条（库里图片行 {withImages}）用时 {seedMs} ms，"
+            + $"临时目录落盘 {Directory.GetFiles(synthClip).Length} 个文件、{Directory.GetFiles(synthClip).Sum(f => new FileInfo(f).Length) / 1024.0 / 1024.0:0.##} MB");
+        Console.WriteLine($"        请求 big.json → 实际写出 {Path.GetFileName(bigExport.Path)}："
+            + $"{bigExport.ClipImages} 张、{bigExport.ClipImageBytes / 1024.0 / 1024.0:0.##} MB，导出耗时 {bigExportMs} ms"
+            + $"（本就没文件 {bigExport.MissingImages}、没进包 {bigExport.FailedImages}）");
+        var env2 = await BackupService.ReadAsync(bigExport.Path);
+        var newMachine2 = Path.Combine(work, "clip-new-machine-2");
+        ClipAssets.FolderOverride = newMachine2;                 // 又一次"新机器"：目录整个不存在
+        var fresh2 = new DbConnectionFactory(Path.Combine(work, "fresh2.db"));
+        new MigrationRunner(fresh2).EnsureSchema();
+        sw.Restart();
+        var rr2 = await new BackupService(new BackupRepository(fresh2)).RestoreAsync(
+            env2, RestoreMode.Merge, Path.Combine(work, "widgets2.json"), CancellationToken.None, bigExport.Path);
+        var restoreMs = sw.ElapsedMilliseconds;
+        sw.Stop();
+        Console.WriteLine($"  [合成] 包体积 {bigPkg / 1024.0 / 1024.0:0.##} MB，平均单张 "
+            + $"{ClipAssets.DescribeBytes(bigPkg / Math.Max(1, bigExport.ClipImages))}");
+        Console.WriteLine($"  [合成] 解回 {rr2.ClipImagesRestored} 张（跳过 {rr2.ClipImagesSkipped}、失败 {rr2.ClipImagesFailed}）"
+            + $"用时 {restoreMs} ms ⇒ {rr2.ClipImagesRestored * 1000.0 / Math.Max(1, restoreMs):0.#} 张/秒；"
+            + $"目录自动建出：{Directory.Exists(newMachine2)}，落盘 {(Directory.Exists(newMachine2) ? Directory.GetFiles(newMachine2).Length : 0)} 个文件");
+        Console.WriteLine($"  [合成] 这一份包里附件是否全为 store：{(zipEntriesStore(bigExport.Path) ? "成立" : "不成立")}；"
+            + $"状态栏那句话：{rr2.Message}");
+
+        // UI 线程上那句"这份还带 N 张图"的代价必须当场量：代码注释写的是"几毫秒"，
+        // 3000 条目要是慢，就得跟着注释一起改（把数挪进 Task.Run），不能留着假话。
+        sw.Restart();
+        var peeked = BackupContainer.CountClipEntries(bigExport.Path);
+        var peekMs = sw.ElapsedMilliseconds;
+        sw.Stop();
+        Console.WriteLine($"  [合成] UI 线程上数附件（确认框那句『带 N 张』）：{peeked} 张，用时 {peekMs} ms");
+    }
+
+    Console.WriteLine($"  结论只覆盖\"备份链本身\"：真换机、各家粘贴、以及\"图看着对不对\"仍要在真机上看。");
+    Console.WriteLine($"  取证产物保留在：{work}");
+}
+
+/// <summary>包里所有附件都是 store（压缩后＝原始）吗——zip(store) 这条裁决的直接证据。</summary>
+static bool zipEntriesStore(string zipPath)
+{
+    using var zip = System.IO.Compression.ZipFile.OpenRead(zipPath);
+    return zip.Entries.Where(e => e.FullName.StartsWith(BackupContainer.ClipPrefix, StringComparison.Ordinal))
+        .All(e => e.CompressedLength == e.Length);
+}
 
 /// <summary>冒烟进程要自己声明 DPI 感知，否则与 PerMonitorV2 的应用本体看到的桌面尺寸不是一回事。</summary>
 internal static class CaptureSmokeNative{
