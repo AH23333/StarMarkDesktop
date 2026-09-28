@@ -344,7 +344,7 @@ public sealed class CanvasWiringGateTests
         Assert.DoesNotContain("GdiScreenCapture.CaptureVirtualScreen()", start);
         // C5 根治：画布出图（贴图／复制／存图）拿的必须是<b>干净桌面</b>，墨由自己叠一次。
         // 从前它抓的是含玻璃的那一帧再叠一遍＝"图里有两份"；这条设置对它不适用（那三条就是要笔迹进图）。
-        var compose = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static bool TryCompose");
+        var compose = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static Shot Compose()");
         Assert.DoesNotContain("CanvasInScreenshots", compose);
         Assert.Contains("ScreenshotService.CaptureWithoutCanvas();", compose);
         Assert.DoesNotContain("GdiScreenCapture.CaptureVirtualScreen()", compose);
@@ -548,7 +548,7 @@ public sealed class CanvasWiringGateTests
     public void SnapshotUsesTheInkNotTheScreenBuffer_WhichExcludesTheCursorHalo()
     {
         var service = SourceGate.ReadRepoFile(Service);
-        var compose = SourceGate.MethodBody(service, "private static bool TryCompose(out byte[] pixels");
+        var compose = SourceGate.MethodBody(service, "private static Shot Compose()");
         Assert.Contains("screen.Persistent", compose);
         Assert.Contains("OverlayOntoFrame", compose);
         Assert.DoesNotContain("Window.Pixels", compose);   // 那块缓冲里带着光晕，快照不该有一团红

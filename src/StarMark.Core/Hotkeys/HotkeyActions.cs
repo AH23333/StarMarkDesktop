@@ -202,7 +202,7 @@ public static class HotkeyActions
             case CanvasClear: return "画布 · 清空笔迹";
             case CanvasSave: return "画布 · 存为图片（屏幕 + 笔迹）";
             case CanvasCopy: return "画布 · 复制到剪贴板（屏幕 + 笔迹）";
-            case CanvasPin: return "画布 · 贴到桌面（屏幕 + 笔迹）";
+            case CanvasPin: return "画布 · 贴到桌面（笔迹那一块，钉回原位）";
         }
 
         if (IsLayoutAction(action))

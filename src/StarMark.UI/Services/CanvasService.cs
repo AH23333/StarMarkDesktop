@@ -543,35 +543,63 @@ public static class CanvasService
         if (!was.IsEmpty) screen.Dirty.Add(was);
     }
 
-    /// <summary>把"屏幕 + 笔迹"合成一张钉到桌面上（§16.5 的"快照为贴图"）。</summary>
+    /// <summary>
+    /// 把板子上<b>笔迹那一块</b>合成一张钉到桌面上，钉在它原来所在的位置（§16.5 的"快照为贴图"，S4-⑤ 定形）。
+    /// <para><b>刻意不贴整块屏</b>：贴图在 Z 序名册里压在画布玻璃之上（穿透态 Pin=3、Board=4），
+    /// 而且默认吃鼠标——整屏一张的意思就是"按一次贴图，整块桌面被一张静止的图盖住，之后每一按都落在它身上"。
+    /// 裁到笔迹那一块之后，它和截图链贴出来的那一张才是同一形态：看得见、能拖、能缩放、不占地方。</para>
+    /// <para>板子上那一份墨<b>原样留着</b>（2026-09-29 用户裁决）：这一条是"复制出去一份"，不是"收走"，
+    /// 讲完这一段还要在同一块板上接着写。</para>
+    /// </summary>
     public static void SnapshotToPin()
     {
-        if (!TryCompose(out var pixels, out var width, out var height, out var source, out var reason))
+        var shot = Compose();
+        if (!shot.Ok)
         {
-            Report("贴图失败", reason);
+            Report("贴图失败", shot.Reason);
             return;
         }
-        ScreenshotService.PinPixels(pixels, width, height, source);
+        if (shot.Ink.IsEmpty)
+        {
+            // 一块墨都没有就没有"哪一块"可贴。这里不能退回"那就贴整屏"——那正是本批修掉的病；
+            // 而"按了没反应"也不算交代，所以把另一条出口点名给用户，并说他**当前实际绑着的那颗键**
+            // （写死键名就是把人支使去按一颗可能没用的键）。
+            Report("贴图失败", "板上还没有笔迹可贴——「贴图」贴的就是笔迹那一块；" +
+                $"要截整块屏幕请用截图（{BindingText(HotkeyActions.ScreenCapture)}），框选后再贴出");
+            return;
+        }
+        // 边距是 DIP，必须按这块屏自己的缩放换算：写死像素数，150% 屏上的边就缩水一半（CanvasBackdropMath 同一条纪律）
+        var padding = (int)Math.Round(CanvasSnapshotMath.PaddingDip * shot.Scale);
+        var region = CanvasSnapshotMath.FrameOf(shot.Ink, shot.Width, shot.Height, padding);
+        // 落点＝这块屏的原点 + 裁块在这幅画面里的偏移 ⇒ 贴出来那一块正好盖在眼睛看到的那一块上
+        ScreenshotService.PinPixels(
+            CanvasSnapshotMath.CropBgra(shot.Pixels, shot.Width, shot.Height, region),
+            region.Width, region.Height,
+            new IntRect(shot.Screen.X + region.X, shot.Screen.Y + region.Y, region.Width, region.Height));
     }
 
+    /// <summary>把"屏幕 + 笔迹"合成一张交给剪贴板。<b>整幅交出去</b>（与存图同口径：留档的是一整页）。</summary>
     public static void SnapshotToClipboard()
     {
-        if (!TryCompose(out var pixels, out var width, out var height, out _, out var reason))
+        var shot = Compose();
+        if (!shot.Ok)
         {
-            Report("复制失败", reason);
+            Report("复制失败", shot.Reason);
             return;
         }
-        _ = ScreenshotService.CopyPixelsAsync(pixels, width, height, "画布");
+        _ = ScreenshotService.CopyPixelsAsync(shot.Pixels, shot.Width, shot.Height, "画布");
     }
 
+    /// <summary>把"屏幕 + 笔迹"合成一张存成 PNG。<b>整幅交出去</b>（与复制到剪贴板同口径）。</summary>
     public static void SavePng()
     {
-        if (!TryCompose(out var pixels, out var width, out var height, out _, out var reason))
+        var shot = Compose();
+        if (!shot.Ok)
         {
-            Report("存图失败", reason);
+            Report("存图失败", shot.Reason);
             return;
         }
-        _ = ScreenshotService.SavePixelsAsync(pixels, width, height, "画布");
+        _ = ScreenshotService.SavePixelsAsync(shot.Pixels, shot.Width, shot.Height, "画布");
     }
 
     // ────────── 输入 ──────────
@@ -1155,21 +1183,25 @@ public static class CanvasService
     // ────────── 快照 ──────────
 
     /// <summary>
+    /// 一次合成的全部产出：整幅画面、这块屏在虚拟桌面里的位置与缩放，以及<b>笔迹占的那一块</b>。
+    /// <para>三条落点（贴图／复制／存图）读的是同一份像素，差别只在贴图要照 <see cref="Shot.Ink"/> 裁一刀。
+    /// 做成一个返回值而不是三份 <c>out</c>：从前七个 <c>out</c> 的形状里，"哪一条落点用了哪个数"只能靠读调用点，
+    /// 而这一格的全部风险都在"落点之间悄悄分岔"（记忆 ⑧）。</para>
+    /// </summary>
+    private readonly record struct Shot(bool Ok, byte[] Pixels, int Width, int Height,
+        IntRect Screen, IntRect Ink, double Scale, string Reason);
+
+    /// <summary>合成就失败了：画面还没开始叠，reason 是给用户看得见的那一句。</summary>
+    private static Shot NoShot(string reason)
+        => new(false, Array.Empty<byte>(), 0, 0, new IntRect(), CanvasCompositor.Nothing, 1d, reason);
+
+    /// <summary>
     /// 取"鼠标所在那块屏"的画面 + 笔迹。<b>只合成一块屏</b>：跨屏一张大图会把另一块屏的内容也截进来，
     /// 而钉上去之后它既不属于这块屏也不属于那块——用户要的是"我圈的那块黑板"。
     /// </summary>
-    private static bool TryCompose(out byte[] pixels, out int width, out int height,
-        out IntRect source, out string reason)
+    private static Shot Compose()
     {
-        pixels = Array.Empty<byte>();
-        width = height = 0;
-        source = new IntRect();
-        reason = string.Empty;
-        if (Screens.Count == 0)
-        {
-            reason = "画布没开着";
-            return false;
-        }
+        if (Screens.Count == 0) return NoShot("画布没开着");
         WindowInterop.GetCursorPos(out var cursor);
         var screen = Screens.FirstOrDefault(s => s.Bounds.X <= cursor.X && cursor.X < s.Bounds.Right
             && s.Bounds.Y <= cursor.Y && cursor.Y < s.Bounds.Bottom) ?? Screens[0];
@@ -1193,15 +1225,9 @@ public static class CanvasService
         {
             var captured = ScreenshotService.CaptureWithoutCanvas();
             if (!captured.Ok || captured.Frame is not { } frame)
-            {
-                reason = captured.Error ?? "系统没有返回画面";
-                return false;
-            }
+                return NoShot(captured.Error ?? "系统没有返回画面");
             if (ScreenshotService.TryCrop(frame, screen.Bounds) is not { } crop)
-            {
-                reason = "这一块屏在截到的画面外面（显示器可能刚被拔掉）";
-                return false;
-            }
+                return NoShot("这一块屏在截到的画面外面（显示器可能刚被拔掉）");
             boardWidth = crop.Width;
             boardHeight = crop.Height;
             baseFrame = crop.Pixels;
@@ -1216,6 +1242,10 @@ public static class CanvasService
         // 顺序与 Flush 一致（叠在荧光段之后），这样同一帧里不会跳色。
         if (screen.Trail.Preview is { } preview)
             CanvasCompositor.Paint(ink, boardWidth, boardHeight, preview);
+        // <b>先量墨在哪，再叠幕布那层底</b>：底是半透明的，叠完之后每个像素的 alpha 都高过空白位，
+        // 这一句就会返回"整幅"，"只裁笔迹那一块"当场失效（症状：幕布开着时贴出来的又是整屏、桌面照样被盖住），
+        // 而 InkRegionOf 的单测照旧全绿——它测的是判据本身，不是顺序。所以顺序由接线闸门钉住。
+        var inkRegion = CanvasSnapshotMath.InkRegionOf(ink, boardWidth, boardHeight);
         // 幕布那块半透明的底也是"屏幕上有"的东西：把它叠进这张墨缓冲（亮区里不叠），交出去的才是眼睛看到的那一层。
         // 圆的几何与那条混合式只有窗口那一份（<c>CompositeForSnapshot</c>）——在这儿重算一次圆就是两份出处。
         // 白板底不走这里：它是不透明的，直接当整张图的底（上面那条臂），两者读的都是 <c>AnnotationHub.Backdrop</c>。
@@ -1223,11 +1253,7 @@ public static class CanvasService
         CanvasCompositor.OverlayOntoFrame(baseFrame, boardWidth, boardHeight,
             new IntRect(0, 0, 0, 0), ink, screen.Window.Width, screen.Window.Height);
 
-        pixels = baseFrame;
-        width = boardWidth;
-        height = boardHeight;
-        source = screen.Bounds;
-        return true;
+        return new Shot(true, baseFrame, boardWidth, boardHeight, screen.Bounds, inkRegion, screen.Scale, string.Empty);
     }
 
     /// <summary>

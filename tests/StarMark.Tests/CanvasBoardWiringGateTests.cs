@@ -143,7 +143,7 @@ public sealed class CanvasBoardWiringGateTests
     public void TheSnapshotUsesTheBoardAsItsBaseWhileTheWhiteboardIsOn()
     {
         var service = SourceGate.ReadRepoFile(Service);
-        var compose = SourceGate.MethodBody(service, "private static bool TryCompose");
+        var compose = SourceGate.MethodBody(service, "private static Shot Compose()");
         Assert.Contains("CanvasBackdropMath.IsOpaque(AnnotationHub.Backdrop)", compose);
         Assert.Contains("BoardFrame(boardWidth, boardHeight, CanvasBackdropMath.WhiteboardArgb)", compose);
         Assert.Equal(1, SourceGate.Count(compose, "CaptureWithoutCanvas()"));     // 抓屏只在那一条非白板臂里
