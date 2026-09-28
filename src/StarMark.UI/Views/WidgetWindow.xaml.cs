@@ -2098,21 +2098,17 @@ public sealed partial class WidgetWindow : Window
 
             if (v.Contains(StandardDataFormats.StorageItems))
             {
-                // 一次拖入可能有几十项：先只收集，再整批登记 + 整批添加。
+                // 一次拖入可能有几十项：先只收集，再交 AddPathsToLauncherAsync 整批登记 + 整批添加。
                 // 逐项 await 的话，每一项都要开一次库、并把 widgets.json 整档读一遍写一遍（见 AddLinksAsync）。
+                // 那条批处理与「选择文件」出口共用同一份（触发器2「拖入即入库」＝只写索引，绝不动磁盘文件）。
                 var items = await v.GetStorageItemsAsync();
                 var paths = new List<(string? Title, string Path)>();
-                var links = new List<(string Title, string Uri)>();
                 foreach (var item in items)
                 {
                     if (string.IsNullOrWhiteSpace(item.Path)) continue;
-                    // 触发器2「拖入即入库」：把拖入的本地文件/文件夹按路径登记进主库
-                    // （只写索引记录，绝不移动磁盘文件），令其可检索、可持久化置顶/标签/笔记。
                     paths.Add((item.Name, item.Path));
-                    links.Add((item.Name, new Uri(item.Path).AbsoluteUri));
                 }
-                await _manager.RecordPathsToLibraryAsync(paths);
-                await _manager.AddLinksAsync(_instanceId, links);
+                await _manager.AddPathsToLauncherAsync(_instanceId, paths);
             }
             else if (v.Contains(StandardDataFormats.WebLink))
             {

@@ -45,9 +45,18 @@
                             Style="{StaticResource WidgetActionButton}"
                             Click="AddLinkSubmit_Click"/>
                 </StackPanel>
+                <!-- 系统选择器这条路不是冗余：以管理员身份运行时 Windows 会静默拦下从资源管理器拖进来的那一下
+                     （UIPI 按完整性级别过滤消息，不报错、不提示，症状就是"拖了没反应"）。选择器跑在本进程里，
+                     与权限等级无关，所以"加文件"这条路永远有一条点得到的入口。 -->
+                <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0">
+                    <Button Content="选择文件…" Padding="10,3,10,3" Background="Transparent"
+                            Click="PickFiles_Click"/>
+                    <Button Content="选择文件夹…" Padding="10,3,10,3" Background="Transparent"
+                            Click="PickFolder_Click"/>
+                </StackPanel>
             </StackPanel>
 
-            <TextBlock Text="提示：可把文件、文件夹或网址直接拖入本组件"
+            <TextBlock Text="提示：可把文件、文件夹或网址直接拖入本组件；拖不动时用上面那行「＋」里的「选择文件／选择文件夹」"
                        FontSize="10" Opacity="0.6" TextWrapping="Wrap" Margin="2,4,0,0"/>
         </StackPanel>
     </ScrollViewer>

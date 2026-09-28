@@ -7,11 +7,13 @@ using Xunit;
 namespace StarMark.Tests;
 
 /// <summary>
-/// 一次拖入的"整批只往返一次"守门（批次 PA-6）。
+/// 快捷启动"一次加一批"的守门（批次 PA-6 起，S4 起扩到两条出口）。
 /// <para>
-/// 被测的三处都在 <c>StarMark.UI</c>，测试工程刻意不引用它（分层红线），所以这里<b>读源文件</b>比对结构。
+/// 被测的几处都在 <c>StarMark.UI</c>，测试工程刻意不引用它（分层红线），所以这里<b>读源文件</b>比对结构。
 /// 为什么值得这么守：<b>逐条 await 的形状一旦回来，功能一点都不会坏</b>——拖 20 个文件照样成功，
 /// 只是每次多 20 趟整档读写；只有秒表能看见，而这里没有可信的秒表。
+/// 另一条同样重要：<b>落库的配对只许有一处</b>（<c>AddPathsToLauncherAsync</c>），
+/// 拖放与系统选择器两条出口都走它——两处各配一遍的话，"登记了但没加进组件"这种半套状态只会在一处出现。
 /// </para>
 /// <para>每条守门都带"锚点必须扫到"的反空转断言：扫不到结构就抛，免得一条永不执行的检查冒充绿灯。</para>
 /// </summary>
@@ -19,6 +21,8 @@ public sealed class QuickLaunchDropBatchGateTests
 {
     private const string ManagerRelativePath = "src/StarMark.UI/Services/WidgetManager.cs";
     private const string WindowRelativePath = "src/StarMark.UI/Views/WidgetWindow.xaml.cs";
+    private const string WidgetXamlRelativePath = "src/StarMark.UI/Views/QuickLaunchWidget.xaml";
+    private const string WidgetCodeRelativePath = "src/StarMark.UI/Views/QuickLaunchWidget.xaml.cs";
 
     // 结构比对工具（仓库根 / 挖方法体 / 数出现次数）收在 SourceGate，两个守门文件共用一份。
     private static string ReadRepoFile(string path) => SourceGate.ReadRepoFile(path);
@@ -55,17 +59,54 @@ public sealed class QuickLaunchDropBatchGateTests
         Assert.Equal(1, Count(manager, "inst.Links.Add(new LinkItem"));
     }
 
-    /// <summary>拖放处理器：整批交给两个批量出口，收集循环里不再逐项打库。</summary>
+    /// <summary>拖放处理器：整批交给那<b>唯一一份</b>落库出口；收集循环里不再逐项打库，也不许自己配对两个批量出口。</summary>
     [Fact]
-    public void TheDropHandlerHandsTheWholeBatchToTheBulkExits()
+    public void TheDropHandlerHandsTheWholeBatchToTheSingleBulkExit()
     {
         var body = MethodBody(ReadRepoFile(WindowRelativePath), "private async void QuickLaunch_Drop(");
-        var loop = Between(body, "foreach (var item in items)", "await _manager.RecordPathsToLibraryAsync");
+        var loop = Between(body, "foreach (var item in items)", "await _manager.AddPathsToLauncherAsync");
 
         Assert.Contains("paths.Add((item.Name, item.Path));", loop);   // 反空转：确实扫到收集语句
         Assert.Equal(0, Count(loop, "await "));
-        Assert.Contains("_manager.RecordPathsToLibraryAsync(paths)", body);
-        Assert.Contains("_manager.AddLinksAsync(_instanceId, links)", body);
+        Assert.Contains("_manager.AddPathsToLauncherAsync(_instanceId, paths)", body);
+        // 配对只许发生在 WidgetManager 那一处：拖放侧再自己调一遍两个批量出口，
+        // 就成了"两处各写一份落库"，半套状态（登记了但没加进组件）迟早只在一处出现。
+        Assert.Equal(0, Count(body, "RecordPathsToLibraryAsync("));
+        Assert.Equal(0, Count(body, "AddLinksAsync("));
+    }
+
+    /// <summary>
+    /// 「选择文件／选择文件夹」这条出口必须存在、必须绑到本窗、必须与拖放共用同一份落库形状。
+    /// <para>它不是"多一份入口好看"：程序以管理员身份运行时（开着「本地磁盘搜索」就会提权去配提权运行的
+    /// Everything），Windows 的 UIPI 会<b>整条拦下</b>从资源管理器拖进来的消息流——不报错、不提示，
+    /// 症状就是"拖了没反应"。系统选择器跑在本进程的对话框里，与权限等级无关，
+    /// 于是"加本地文件"永远有一条点得到的路（而不是把用户支使去改权限——那按既定口径算缺陷）。</para>
+    /// </summary>
+    [Fact]
+    public void ThePickerExitExistsAndSharesTheSingleBulkExit()
+    {
+        var xaml = ReadRepoFile(WidgetXamlRelativePath);
+        Assert.Contains("Click=\"PickFiles_Click\"", xaml);
+        Assert.Contains("Click=\"PickFolder_Click\"", xaml);
+
+        var code = ReadRepoFile(WidgetCodeRelativePath);
+        var files = MethodBody(code, "private async void PickFiles_Click(");
+        var folder = MethodBody(code, "private async void PickFolder_Click(");
+
+        // 选择器不绑窗口就开不出来（WinUI 3 的硬性要求），两颗都要绑
+        foreach (var picked in new[] { files, folder })
+        {
+            Assert.Contains("InitializeWithWindow.Initialize(picker, WindowInterop.GetHwnd(_host))", picked);
+            Assert.Contains("FileTypeFilter.Add(\"*\")", picked);   // 限死扩展名＝挑不到，等于这个功能没做
+            Assert.Contains("AddPickedAsync(", picked);             // 两条都汇到那一个出口
+        }
+        Assert.Contains("PickMultipleFilesAsync(", files);          // 一次挑多个：逐个挑是把负担推给用户
+        Assert.Contains("PickSingleFolderAsync(", folder);
+
+        var shared = MethodBody(code, "private async Task AddPickedAsync(");
+        Assert.Contains("_manager.AddPathsToLauncherAsync(_instanceId,", shared);
+        Assert.Equal(0, Count(shared, "RecordPathsToLibraryAsync("));   // 同上：配对只许在 Manager 那一处
+        Assert.Equal(0, Count(shared, "AddLinksAsync("));
     }
 
     /// <summary>被取代的"逐条登记"出口要删净：留着就等于给后来人留一条能走回旧形状的路。</summary>
