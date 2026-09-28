@@ -273,7 +273,7 @@ public sealed class BackupService
             // 附件必须在条目落库<b>之后</b>解：白名单是"这一份备份里的条目认领哪些文件名"，
             // 而条目本身刚刚才写进库。放在清库之前解会出现"文件已落盘、行被 Replace 清掉"的孤儿。
             var clip = attachmentSourcePath is null
-                ? (Written: 0, Skipped: 0, Failed: 0, PackageEntries: 0, RowsWithoutPicture: 0)
+                ? (Written: 0, Skipped: 0, Failed: 0, PackageEntries: 0, RowsWithoutPicture: 0, Opened: true)
                 : await ExtractClipImagesAsync(p.Items, attachmentSourcePath, ct);
 
             // 还原走的是批量 DELETE + INSERT（绕开 ItemRepository 各写方法的 Notify），
@@ -305,6 +305,11 @@ public sealed class BackupService
             {
                 > 0 => ClipPackageSentence(clip),
                 0 when clipImageCount == 0 => string.Empty,
+                // 包打不开（被云盘抽成占位件、正被别的程序独占、或刚被删掉）：这时"这份备份不带图片本体"
+                // 是没资格说的——我们连里面有什么都没看见。单独一句，并把原因留在日志里。
+                0 when !clip.Opened
+                    => " 剪贴板图片：这次没能打开那份附件包（原因见日志），所以一张图片都没解出来；"
+                      + "条目已照常恢复，缺的会标成“文件缺失”，再导一次即可。",
                 // 调用方没把那份文件的路径递进来（只有不经 UI 的调用会这样）：谁也没打开过那个包，
                 // 因此"这份备份不带图片本体"这句没资格说——它是对文件内容的断言，得看过文件才配说。
                 0 when attachmentSourcePath is null
@@ -489,7 +494,7 @@ public sealed class BackupService
     /// 旧行只占一张），3b 自查时正是拿行减文件，得出"缺 0 条"而实际缺一条。唯一的算法是
     /// 按行认领的名字与包内条目名<b>取交集</b>。</para>
     /// </summary>
-    private static async Task<(int Written, int Skipped, int Failed, int PackageEntries, int RowsWithoutPicture)>
+    private static async Task<(int Written, int Skipped, int Failed, int PackageEntries, int RowsWithoutPicture, bool Opened)>
         ExtractClipImagesAsync(List<Item> items, string sourcePath, CancellationToken ct)
     {
         var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -504,13 +509,13 @@ public sealed class BackupService
             foreach (var name in names) claimed.Add(name);
         }
 
-        var (written, skipped, failed, packageNames) =
+        var (written, skipped, failed, packageNames, opened) =
             await BackupContainer.ExtractClipsAsync(sourcePath, claimed, ct);
-        if (packageNames.Count == 0) return (0, skipped, failed, 0, rows.Count);
+        if (packageNames.Count == 0) return (0, skipped, failed, 0, rows.Count, opened);
 
         var inPackage = new HashSet<string>(packageNames, StringComparer.OrdinalIgnoreCase);
         var covered = rows.Count(names => names.Any(inPackage.Contains));
-        return (written, skipped, failed, packageNames.Count, rows.Count - covered);
+        return (written, skipped, failed, packageNames.Count, rows.Count - covered, opened);
     }
 
     /// <summary>
@@ -518,7 +523,7 @@ public sealed class BackupService
     /// 用嵌套三元拼出来的句子在"没跳过也没失败，但有行没带着文件"时会写出"写回 2 个，；还有…"这种话。
     /// </summary>
     private static string ClipPackageSentence(
-        (int Written, int Skipped, int Failed, int PackageEntries, int RowsWithoutPicture) clip)
+        (int Written, int Skipped, int Failed, int PackageEntries, int RowsWithoutPicture, bool Opened) clip)
     {
         var sb = new StringBuilder();
         sb.Append($" 剪贴板图片：这份包里带着 {clip.PackageEntries} 个图片文件，写回 {clip.Written} 个");

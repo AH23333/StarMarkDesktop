@@ -69,11 +69,28 @@ public sealed class ClipboardBackupAttachmentGateTests
         // 前缀与"能不能落盘"是分开的两件事：包这边只认 clip/ 这一层，路径一律交回
         // ClipboardImageStore.WriteBackFromBackupAsync（它内部问 ClipAssets.FullPathOf 那道名册）。
         // 这里若能自己拼路径，Zip Slip 的防线就从"名册 + 白名单"退化成"字符串拼接"。
-        var extract = MethodBody(ReadRepoFile(Container), "public static async Task<(int Written, int Skipped, int Failed, IReadOnlyList<string> PackageNames)>");
+        var extract = MethodBody(ReadRepoFile(Container), "int Written, int Skipped, int Failed, IReadOnlyList<string> PackageNames, bool Opened");
         Assert.Contains("ClipboardImageStore.WriteBackFromBackupAsync", extract);
         Assert.Contains("MaxEntryBytes", extract);
         Assert.DoesNotContain("Path.Combine", extract);
         Assert.Equal(1, Count(ReadRepoFile(Container), "ClipPrefix = \"clip/\""));
+    }
+
+    [Fact]
+    public void WritingAnAttachmentBackCreatesTheClipFolderFirst()
+    {
+        // clip 目录是采集到第一张图时才建的，所以"新机器"上它可能不存在；写回那一步不建目录，
+        // 症状就是换机恢复后"条目都在、每张图都报没能写入"。行为面由
+        // RestoringOntoAMachineWithoutTheClipFolderStillWritesThePicturesBack 覆盖，
+        // 这里钉的是**顺序**：建目录必须在临时件之前（放在之后的话第一张照样撞 DirectoryNotFoundException）。
+        var write = MethodBody(ReadRepoFile(Store), "public static async Task<bool> WriteBackFromBackupAsync");
+        Assert.Contains("Directory.CreateDirectory(Folder)", write);
+        Assert.True(write.IndexOf("Directory.CreateDirectory(Folder)", StringComparison.Ordinal)
+                    < write.IndexOf("File.Create(temp)", StringComparison.Ordinal),
+                    "建目录那一句必须排在临时件之前");
+        // 且必须排在"本机已有同名文件"那道之后之前？不——不覆盖那道在前是对的：目录都不存在时不可能有同名文件，
+        // 顺序反过来只是多建一个空目录，而**建目录在写之前**才是不能翻的那一面。
+        Assert.Contains("if (File.Exists(path)) return false;", write);
     }
 
     [Fact]
@@ -123,12 +140,34 @@ public sealed class ClipboardBackupAttachmentGateTests
         Assert.Contains("var plain = await Task.Run(() => _backup.ExportToFileAsync", export);
 
         // 建议名的扩展名跟着开关走（开着却提示 .json，用户会以为导出的是纯清单）。
-        Assert.Contains("carry ? StarMark.Core.Backup.BackupContainer.ContainerExtension", export);
+        Assert.Contains("carry ? BackupContainer.ContainerExtension", export);
 
         // 恢复必须把"这一份文件自己的路径"递进去——附件只从这份包里解，调用方没机会指认别的包。
         var import = MethodBody(ui, "private async Task ImportFromPathAsync");
         Assert.Contains("_backup.RestoreAsync(", import);
         Assert.Contains("source)", import);
         Assert.Contains("BackupContainer.CountClipEntries(source)", import);
+    }
+
+    [Fact]
+    public void TheSystemFilePickersOfferBothCarriers()
+    {
+        // 普通权限会话走的是系统文件对话框（提权会话才退回输入框），而这条路上出过两个"看不见"的洞：
+        // ① 导入框的 FileTypeFilter 只列 .json ⇒ 刚导出的那一份 .zip 在对话框里根本不存在，
+        //    这个功能在最常见的那种会话里等于没做；② 导出框只给 .json 类型 ⇒ 挑到的名字与落盘的名字必然不同。
+        // 这里钉的是"两种载体都列出来"，而不是钉某段中文（中文是给用户看的标签，改文案不该撞红）。
+        var pick = MethodBody(ReadRepoPartials(Ui), "private static async Task<string?> PickNativeAsync");
+        Assert.Equal(2, Count(pick, "open.FileTypeFilter.Add("));
+        Assert.Contains("open.FileTypeFilter.Add(BackupContainer.ContainerExtension)", pick);
+        Assert.Contains("open.FileTypeFilter.Add(BackupContainer.ManifestExtension)", pick);
+        Assert.Equal(2, Count(pick, "picker.FileTypeChoices.Add("));   // 两种类型都在下拉里，用户能反过来挑
+        Assert.Equal(1, Count(pick, "picker.DefaultFileExtension =")); // 默认那一项只设一次，跟着开关走
+        Assert.Contains("CarrierLabel(primary)", pick);
+        Assert.Contains("CarrierLabel(secondary)", pick);
+        Assert.Contains("BackupContainer.ContainerExtension ? \"备份包",
+            MethodBody(ReadRepoPartials(Ui), "private static string CarrierLabel"));
+        // 类型表按"建议名的扩展名"分流，而建议名由那颗开关决定 ⇒ 这条链不许各写一份判据。
+        Assert.Contains("Path.GetExtension(fileName)", pick);
+        Assert.Contains("BackupContainer.ContainerExtension, StringComparison.OrdinalIgnoreCase)", pick);
     }
 }

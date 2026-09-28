@@ -375,6 +375,29 @@ public sealed class ClipboardBackupAttachmentTests : IDisposable
     }
 
     [Fact]
+    public async Task RestoringOntoAMachineWithoutTheClipFolderStillWritesThePicturesBack()
+    {
+        // 换机演练的第一步在单测里就是"整目录不存在"，不是"目录在、文件空"：
+        // clip 目录是采集第一张图时才建的（`WritePairAsync` 里那句 CreateDirectory），
+        // 一台从没开过图片采集的机器上它根本不存在。少一句建目录，恢复就变成
+        // "条目都回来了、每张图都报'没能写入'"——而这正是这批存在的理由那一条路。
+        await RecImage("A");
+        await RecImage("B", 60);
+        var export = await _backup.ExportWithClipImagesAsync(Target());
+        var env = await BackupService.ReadAsync(export.Path);
+
+        Directory.Delete(_clip, true);
+        Assert.False(Directory.Exists(_clip));
+
+        var result = await _backup.RestoreAsync(env, RestoreMode.Replace, null, CancellationToken.None, export.Path);
+
+        Assert.True(Directory.Exists(_clip));
+        Assert.Equal(4, result.ClipImagesRestored);
+        Assert.Equal(0, result.ClipImagesFailed);
+        Assert.Equal("像素[A]", Read(ClipAssets.MainNameOf(Sid("A"), At(0))));
+    }
+
+    [Fact]
     public async Task RestoringNeverOverwritesAFileThisMachineAlreadyHas()
     {
         await RecImage("A");
@@ -483,6 +506,28 @@ public sealed class ClipboardBackupAttachmentTests : IDisposable
         Assert.Equal(2, result.ClipImagesRestored);
         Assert.Contains("这份包里带着 2 个图片文件，写回 2 个", result.Message);
         Assert.Contains("还有 1 条图片历史在这份包里就没有对应的文件", result.Message);
+    }
+
+    [Fact]
+    public async Task APackageThatCannotBeOpenedIsNotReportedAsABackupWithoutImages()
+    {
+        // 清单已经读进来了，之后附件包才打不开（被云盘抽成占位件、正被别的程序独占、或刚被删掉）。
+        // 这时"这份备份不带图片本体"是没资格说的——我们连里面有什么都没看见；
+        // 而把它说成"没带"会让人以为备份白导了，其实再导一次就有。
+        await RecImage("A");
+        await RecImage("B", 60);
+        var export = await _backup.ExportWithClipImagesAsync(Target());
+        var env = await BackupService.ReadAsync(export.Path);
+        DropLocalImages();
+        File.Delete(export.Path);
+
+        var result = await _backup.RestoreAsync(env, RestoreMode.Replace, null, CancellationToken.None, export.Path);
+
+        Assert.True(result.Success);                      // 条目本体照常被恢复，附件这一步失败不该连带
+        Assert.Equal(0, result.ClipImagesRestored);
+        Assert.Equal(0, result.ClipImagesSkipped);
+        Assert.Contains("没能打开那份附件包", result.Message);
+        Assert.DoesNotContain("不带图片本体", result.Message);
     }
 
     [Fact]

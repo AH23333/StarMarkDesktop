@@ -996,6 +996,12 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// 系统文件对话框那一条路（普通权限会话）。**类型表必须与"实际会写出去/读进来的载体"一致**：
+    /// 只列 <c>.json</c> 时，导入框里"刚导出的那一份 .zip"根本看不见（等于这个功能在普通权限下用不了），
+    /// 导出框里挑到的名字也必然与实际落盘的那个差一个扩展名。
+    /// 建议名的扩展名已经跟着那颗开关走（见 <c>ExportBackup_Click</c>），这里就按它来定类型表。
+    /// </summary>
     private static async Task<string?> PickNativeAsync(bool save, string fileName)
     {
         var hwnd = WindowInterop.GetHwnd(App.MainWindow!);
@@ -1003,15 +1009,29 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         {
             var picker = new FileSavePicker();
             InitializeWithWindow.Initialize(picker, hwnd);
-            picker.FileTypeChoices.Add("JSON 备份", new[] { ".json" });
+            var carriesContainer = string.Equals(Path.GetExtension(fileName),
+                BackupContainer.ContainerExtension, StringComparison.OrdinalIgnoreCase);
+            var primary = carriesContainer ? BackupContainer.ContainerExtension : BackupContainer.ManifestExtension;
+            var secondary = carriesContainer ? BackupContainer.ManifestExtension : BackupContainer.ContainerExtension;
+            // 两种载体都列进下拉（默认那一项跟着开关走）：只给一种时，用户想反过来挑的那个名字会被对话框拦下，
+            // 而落盘的扩展名由内容决定——挑不到、写了另一个名字，两边就永远对不上。
+            picker.FileTypeChoices.Add(CarrierLabel(primary), new[] { primary });
+            picker.FileTypeChoices.Add(CarrierLabel(secondary), new[] { secondary });
+            picker.DefaultFileExtension = primary;
             picker.SuggestedFileName = Path.GetFileNameWithoutExtension(fileName);
             return (await PickAsync(picker))?.Path;
         }
         var open = new FileOpenPicker();
         InitializeWithWindow.Initialize(open, hwnd);
-        open.FileTypeFilter.Add(".json");
+        // 两种都列：只列 .json 的导入框里，唯一带图片的那一份是不存在的文件（这个功能在普通权限下等于没做）。
+        open.FileTypeFilter.Add(BackupContainer.ManifestExtension);
+        open.FileTypeFilter.Add(BackupContainer.ContainerExtension);
         return (await PickAsync(open))?.Path;
     }
+
+    /// <summary>对话框里那两项的中文标签（说的是"带不带图片本体"，不是"哪种压缩格式"——store 不压缩，别提"压缩"）。</summary>
+    private static string CarrierLabel(string extension)
+        => extension == BackupContainer.ContainerExtension ? "备份包（带剪贴板图片）" : "备份（只带条目与文件名）";
 
     /// <summary>
     /// 取得备份文件路径。普通权限会话仍用系统选择器（用户熟悉、能浏览）；提权会话里宿主调不通，
@@ -1060,7 +1080,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
             // 两种载体一起认：带图片的那份导出是 .zip，只认 .json 会让"最近一份"回退到旧的那份，
             // 用户在导入框里看到的默认值就成了一个几周前的备份。
             return new DirectoryInfo(dir).EnumerateFiles()
-                .Where(f => StarMark.Core.Backup.BackupContainer.IsBackupPath(f.Name))
+                .Where(f => BackupContainer.IsBackupPath(f.Name))
                 .OrderByDescending(f => f.LastWriteTimeUtc)
                 .Select(f => f.FullName)
                 .FirstOrDefault();
@@ -1087,8 +1107,8 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
             // 建议名里的扩展名跟着开关走：开着却提示 .json，用户会以为导出的是纯清单。
             var suggested = Path.Combine(BackupService.SnapshotDirectory,
                 $"starmark-backup-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}"
-                + (carry ? StarMark.Core.Backup.BackupContainer.ContainerExtension
-                         : StarMark.Core.Backup.BackupContainer.ManifestExtension));
+                + (carry ? BackupContainer.ContainerExtension
+                         : BackupContainer.ManifestExtension));
             var target = await RequestBackupPathAsync(save: true, suggested);
             if (target is null) return;
 
@@ -1207,7 +1227,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         // 三选一场景（合并导入 / 覆盖导入 / 取消）用 ShowContentAsync 的 primary+secondary 双按钮。
         // 附件张数：确认框上那句"这份还带 N 张图"必须来自包本身，而不是清单里的条目数——
         // 后者会说"带了"而其实一张都没进包。只读中央目录，不解压，故留在 UI 线程上是几毫秒的事。
-        var clipCount = StarMark.Core.Backup.BackupContainer.CountClipEntries(source);
+        var clipCount = BackupContainer.CountClipEntries(source);
         var detailBlock = new TextBlock
         {
             Text = $"{detail}\n\n合并导入：保留现有条目，仅补充/覆盖用户元数据（安全、可重复）。\n" +

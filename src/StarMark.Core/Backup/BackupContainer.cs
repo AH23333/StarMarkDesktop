@@ -152,16 +152,18 @@ public static class BackupContainer
     /// <para>名单外的条目、体积超过单张上限的条目、以及名字过不了 <see cref="ClipAssets"/> 名册的条目
     /// 一律不写：压缩包内容是不可信的外部输入。</para>
     /// </summary>
-    public static async Task<(int Written, int Skipped, int Failed, IReadOnlyList<string> PackageNames)>
+    public static async Task<(int Written, int Skipped, int Failed, IReadOnlyList<string> PackageNames, bool Opened)>
         ExtractClipsAsync(string path, HashSet<string> claimedNames, CancellationToken ct)
     {
         if (!IsContainer(path) || claimedNames.Count == 0)
-            return (0, 0, 0, Array.Empty<string>());
+            return (0, 0, 0, Array.Empty<string>(), true);     // 没东西可开＝没有失败：.json 与"条目不认领任何名字"都是这一档
         int written = 0, skipped = 0, failed = 0;
         var names = new List<string>();
+        var opened = false;
         try
         {
             using var zip = ZipFile.OpenRead(path);
+            opened = true;                                      // 打开成功了才有资格说"这份包里没带图片"
             foreach (var entry in zip.Entries)
             {
                 ct.ThrowIfCancellationRequested();
@@ -193,7 +195,7 @@ public static class BackupContainer
         {
             StarLog.Error("备份恢复：附件包打不开（条目本体已按无附件处理）", ex);
         }
-        return (written, skipped, failed, names);
+        return (written, skipped, failed, names, opened);
     }
 
     /// <summary>这个载体里带了几张图片本体（0＝没带；<c>.json</c> 恒 0）。只读目录区，不解压。</summary>

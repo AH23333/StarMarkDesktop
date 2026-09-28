@@ -407,6 +407,10 @@ public static class ClipboardImageStore
         try
         {
             if (File.Exists(path)) return false;                   // 本机已有：不覆盖（上面写了为什么）
+            // clip 目录是采集到第一张图时才建的（`WritePairAsync` 里那一句），换机/新机器上它可能还不存在。
+            // 这一句不能省：目录不在时每张附件都会撞 DirectoryNotFoundException，
+            // 于是"条目都回来了、N 个图片没能写入"——而换机恢复正是这批存在的理由。
+            Directory.CreateDirectory(Folder);
             var temp = Path.Combine(Folder, ClipAssets.TempNameOf(name));
             await using (var fs = File.Create(temp))
                 await source.CopyToAsync(fs, ct).ConfigureAwait(false);
