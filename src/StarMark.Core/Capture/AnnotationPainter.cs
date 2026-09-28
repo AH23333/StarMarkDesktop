@@ -292,8 +292,12 @@ public static class AnnotationPainter
 
     // ────────── 像素与工具 ──────────
 
-    /// <summary>画这条标注用的圆点半径。"该多粗"由 <see cref="Annotation.DefaultThickness"/> 决定，这里只换算。</summary>
-    private static int Radius(Annotation mark) => Math.Max(0, (mark.Thickness - 1) / 2);
+    /// <summary>
+    /// 画这条标注用的圆点半径。<b>公式在 <see cref="Annotation.InkRadius"/>（那一档"真正画多宽"的唯一出处）</b>：
+    /// 拖动中的预览要拿同一个数（<see cref="Annotation.InkWidth"/>），这里再算一遍就会出现
+    /// "屏幕上比贴出来的粗一点"（批次 XU）。
+    /// </summary>
+    private static int Radius(Annotation mark) => Annotation.InkRadius(mark.Thickness);
 
     private static void Write(byte[] bgra, int width, int height, int x, int y, int color)
     {

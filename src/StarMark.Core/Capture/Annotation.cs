@@ -115,6 +115,20 @@ public sealed record Annotation(
     public static readonly int[] NumberRadii = { 11, 15, 22 };
 
     /// <summary>
+    /// 一档"粗细"落到画上时的<b>圆点半径</b>（物理像素）：笔迹＝沿路径盖一串圆点，宽度由这个半径决定。
+    /// <para>整数除法让它<b>只认奇数档</b>：截图那三档 {2,4,8} 画出去是 {1,3,7}。这不是笔误，
+    /// 而是这条链一直的行为——改它等于改所有已存贴图的观感。</para>
+    /// </summary>
+    public static int InkRadius(int thickness) => Math.Max(0, (Math.Max(1, thickness) - 1) / 2);
+
+    /// <summary>
+    /// 那一档<b>真正占多宽</b>（<c>2 × <see cref="InkRadius"/> + 1</c>）。
+    /// <para><b>拖动中的预览必须问这里要数</b>，不许直接用档位值：XAML 描边按档位给宽就等于
+    /// "屏幕上比贴出来的粗 1 像素"——预览与提交各算一遍，两边就永远有得差（批次 X1）。</para>
+    /// </summary>
+    public static int InkWidth(int thickness) => 2 * InkRadius(thickness) + 1;
+
+    /// <summary>
     /// 序号圆点<b>画出来</b>的最小半径（物理像素）。
     /// <para>这不是美观下限而是"看得见"的下限：缩到 <see cref="MinScale"/> 时 11×0.2 只剩 2 像素，
     /// 绘制端原先那句"半径不足 4 就整颗不画"会让序号<b>凭空消失</b>——图上什么都没有，

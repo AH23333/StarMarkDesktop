@@ -316,7 +316,13 @@ public sealed partial class CaptureOverlayWindow
         _clearButton.IsEnabled = _history.Count > 0;
     }
 
-    /// <summary>拖动中的那一条用简单图元近似显示；松手立刻换成真像素。</summary>
+    /// <summary>
+    /// 拖动中的那一条用简单图元近似显示；松手立刻换成真像素。
+    /// <para><b>近似只许在"画法"上近似，不许另起一份几何</b>：宽窄取 <see cref="Annotation.InkWidth"/>
+    /// （与落笔同一个数），连接与端点一律圆角（见 <see cref="AsInked"/>）。真机反馈
+    /// "光标小范围来回抖时，预览明显超出抖动的范围，松手后轨迹又是对的"——成因就是默认的高角连接
+    /// （尖角顺角平分线甩出去，刺可达十几倍笔宽）加平头端点。</para>
+    /// </summary>
     private void DrawLive()
     {
         LiveLayer.Children.Clear();
@@ -327,7 +333,7 @@ public sealed partial class CaptureOverlayWindow
         }
         if (_stroke is not { Count: > 0 } points) return;
         var brush = new SolidColorBrush(ToColor(ColourBgra));
-        var thickness = Math.Max(1.0, ThicknessForTool / _scale);
+        var thickness = Math.Max(1.0, Annotation.InkWidth(ThicknessForTool) / _scale);
         var first = LocalToDip(points[0]);
 
         switch (_strokeTool)
@@ -365,20 +371,16 @@ public sealed partial class CaptureOverlayWindow
             }
         }
 
-        var polyline = new Polyline { Stroke = brush, StrokeThickness = thickness };
-        foreach (var point in points)
-        {
-            var (x, y) = LocalToDip(point);
-            polyline.Points.Add(new Point(x, y));
-        }
-        LiveLayer.Children.Add(polyline);
+        // 自由笔／荧光笔：走 Band 这一颗构造，不在这里再 new 一条 Polyline——两处各建一份的话，
+        // 圆角连接迟早只被其中一处记得（批次 XU）。
+        LiveLayer.Children.Add(Band(points.Select(LocalToDip).ToList(), brush, thickness));
     }
 
     /// <summary>正在点的折线：已定的段实线、最后一顶点到光标那段半透明，顶点各摆一颗白点
     /// （不画顶点就分不清"这里断了一段"与"这里只是一笔经过"）。</summary>
     private void DrawPolyLinePreview(IReadOnlyList<PixelPoint> vertices)
     {
-        var thickness = Math.Max(1.0, ThicknessForTool / _scale);
+        var thickness = Math.Max(1.0, Annotation.InkWidth(ThicknessForTool) / _scale);
         var corners = vertices.Select(LocalToDip).ToList();
         if (corners.Count >= 2) LiveLayer.Children.Add(Band(corners, Ink, thickness));
         var trailing = new List<(double X, double Y)>(corners) { LocalToDip(_hoverLocal) };
@@ -387,9 +389,26 @@ public sealed partial class CaptureOverlayWindow
             LiveLayer.Children.Add(BarGlyphs.Fill(Ink, corner.X - 2, corner.Y - 2, 4, 4));
     }
 
+    /// <summary>
+    /// 把一条预览描边摆成<b>与落笔同一份几何</b>：圆角连接 + 圆头端点。
+    /// <para>落笔画的是"沿路径的一串圆点"，其轮廓＝路径的圆盘并集；而 XAML 描边默认是
+    /// <c>Miter</c> 连接（上限 10 倍笔宽）+ <c>Flat</c> 端点。来回抖动就是连续的方向反转，
+    /// 每个反转点都顺角平分线甩出一根长刺——预览于是"比手抖的范围大得多"，松手换成真像素又对了（批次 XU）。
+    /// 改成圆角后，描边轮廓与圆盘并集是同一个集合，预览与提交不再有两份判据。</para>
+    /// <para>判据只写在这一处：所有预览描边都必须经过这里（闸门 <c>PreviewStrokesAreRoundJoined</c>）。</para>
+    /// </summary>
+    private static T AsInked<T>(T shape) where T : Shape
+    {
+        // WinUI 3 里这两个枚举叫 `PenLineJoin` / `PenLineCap`（UWP 那对 ShapeStroke* 名字不存在，
+        // 与 `ProtectedCursor` 同一族坑：名字照 UWP 写就是 CS0103）。
+        shape.StrokeLineJoin = PenLineJoin.Round;
+        shape.StrokeStartLineCap = shape.StrokeEndLineCap = PenLineCap.Round;
+        return shape;
+    }
+
     private static Polyline Band(IReadOnlyList<(double X, double Y)> pts, Brush brush, double thickness)
     {
-        var line = new Polyline { Stroke = brush, StrokeThickness = thickness };
+        var line = AsInked(new Polyline { Stroke = brush, StrokeThickness = thickness });
         foreach (var p in pts) line.Points.Add(new Point(p.X, p.Y));
         return line;
     }
@@ -400,12 +419,12 @@ public sealed partial class CaptureOverlayWindow
         Canvas.SetTop(shape, y);
         shape.Width = Math.Max(1, w);
         shape.Height = Math.Max(1, h);
-        LiveLayer.Children.Add(shape);
+        LiveLayer.Children.Add(AsInked(shape));     // 矩形那一圈角的预览也要与"四条线段＋圆点拐角"同形
     }
 
     private void AddLine(Brush brush, double thickness, (double X, double Y) from, (double X, double Y) to)
     {
-        var line = new Line { X1 = from.X, Y1 = from.Y, X2 = to.X, Y2 = to.Y, Stroke = brush, StrokeThickness = thickness };
+        var line = AsInked(new Line { X1 = from.X, Y1 = from.Y, X2 = to.X, Y2 = to.Y, Stroke = brush, StrokeThickness = thickness });
         LiveLayer.Children.Add(line);
     }
 

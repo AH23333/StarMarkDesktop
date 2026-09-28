@@ -235,6 +235,53 @@ public sealed class AnnotationPainterTests
         Assert.Equal((200, 200, 200, 255), At(gray, 33, 16, 2));        // 笔刷半径之外不受影响
     }
 
+    // ────────── 一档"粗细"到底画多宽：预览与提交共用一个出处（批次 XU） ──────────
+
+    /// <summary>
+    /// 三档"粗细"<b>画出去的宽度</b>必须等于 <see cref="Annotation.InkWidth"/>，一个像素都不许差。
+    /// <para>起因是真机反馈"预览比真图粗"：拖动中的预览按档位值当宽度，而落笔按半径 <c>(T-1)/2</c>
+    /// 盖圆点，两边各算一遍就一定有得差。修法不是把两边凑成同一个数，而是<b>让两边问同一个出处</b>——
+    /// 这里就是把那个出处钉在像素上：整数除法让截图那三档 {2,4,8} 实际是 {1,3,7}，
+    /// 那是这条链一直的观感（改它等于改所有已存贴图），不许被"顺手对齐成偶数"。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(4)]
+    [InlineData(8)]
+    [InlineData(15)]
+    public void TheCommittedWidthIsTheInkWidth(int thickness)
+    {
+        const int side = 25;
+        var centre = new PixelPoint(12, 12);
+        // 两个重合的点＝"原地按一下"：圆盘只盖一次，外接框正好就是那一笔的宽与高
+        var pixels = AnnotationPainter.Render(Canvas(side, side), side, side,
+            new[] { new Annotation(AnnotationTool.Line, new[] { centre, centre }, Red, thickness) });
+        var box = PaintedBox(pixels, side);
+        Assert.True(box.Width > 0 && box.Height > 0, $"厚度 {thickness} 一个像素都没画出去");
+        Assert.Equal(Annotation.InkWidth(thickness), box.Width);
+        Assert.Equal(Annotation.InkWidth(thickness), box.Height);
+    }
+
+    /// <summary>已画区域的外接框（行、列各自取极值，不做"它一定对称"的假设）。</summary>
+    private static StarMark.Abstractions.Capture.IntRect PaintedBox(byte[] pixels, int side)
+    {
+        var x1 = int.MaxValue;
+        var y1 = int.MaxValue;
+        var x2 = -1;
+        var y2 = -1;
+        for (var y = 0; y < side; y++)
+            for (var x = 0; x < side; x++)
+            {
+                if (IsBackground(At(pixels, side, x, y))) continue;
+                x1 = Math.Min(x1, x);
+                x2 = Math.Max(x2, x);
+                y1 = Math.Min(y1, y);
+                y2 = Math.Max(y2, y);
+            }
+        return new StarMark.Abstractions.Capture.IntRect(x1, y1, x2 - x1 + 1, y2 - y1 + 1);
+    }
+
     // ────────── 序号：那一档"粗细"必须落在像素上（批次 WR） ──────────
 
     private static int PaintedPixels(Annotation mark, int side)

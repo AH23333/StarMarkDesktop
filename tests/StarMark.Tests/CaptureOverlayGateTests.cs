@@ -42,6 +42,39 @@ public sealed class CaptureOverlayGateTests
         Assert.Contains("private void PlaceNumber", all);                  // 搬进 .Draw.cs
     }
 
+    /// <summary>
+    /// 拖动中的预览<b>不许自带一份几何</b>（批次 XU）。
+    /// <para>真机症状：光标小范围来回抖时，屏幕上那条预览笔画明显甩出抖动范围，松手后轨迹又是对的。
+    /// 成因是落笔画"沿路径的一串圆点"，而预览是一条 XAML 描边——默认<b>尖角连接</b>（刺可长到 10 倍笔宽）
+    /// 加<b>平头端点</b>，来回抖就是连续方向反转，每个反转点甩一根刺。宽窄也是各算一份：
+    /// 预览按档位值给宽，落笔按 <c>(T-1)/2</c> 的半径给宽。</para>
+    /// <para>钉法照本仓口径：<b>判据只留一份 + 反向钉死写错的样子</b>。这里"一份"指的是
+    /// 预览描边只能由 <c>Band</c> / <c>AddLine</c> / <c>AddShape</c> 三颗构造，圆角只在
+    /// <c>AsInked</c> 里设一次；宽窄只能问 <see cref="StarMark.Core.Capture.Annotation.InkWidth"/>。</para>
+    /// </summary>
+    [Fact]
+    public void PreviewStrokesShareTheCommittedGeometry()
+    {
+        var code = ReadOverlay(xaml: false);
+        // 圆角判据只许出现一次（在 AsInked 里）；出现第二处＝有人就地又摆了一份
+        Assert.Equal(1, SourceGate.Count(code, "= PenLineJoin.Round;"));
+        Assert.Equal(1, SourceGate.Count(code, "PenLineCap.Round;"));
+        Assert.Contains("private static T AsInked<T>(T shape) where T : Shape", code);
+        // 三颗构造都必须经过它：任何一条预览描边漏掉圆角，症状就只在抖动时出现（最难复现的那种）
+        Assert.Equal(3, SourceGate.Count(code, "AsInked("));            // Band + AddLine + AddShape
+        Assert.Contains("AsInked(new Polyline", code);
+        Assert.Contains("AsInked(new Line", code);
+        Assert.Contains("LiveLayer.Children.Add(AsInked(shape))", code);
+        // 条子上那些 1 像素细线（旋转把手引线等）是 chrome，不是墨，允许直接构造；
+        // 判据钉的是"凡宽度来自工具档位的描边，都只能在被 AsInked 包住的构造里出现"——
+        // 现在是四处：自由笔/折线（Band）、直线与箭头杆翼（AddLine）、矩形与椭圆预览（AddShape）。
+        Assert.Equal(4, SourceGate.Count(code, "StrokeThickness = thickness"));
+        Assert.Equal(2, SourceGate.Count(code, "AsInked(new "));      // 另两处走 AddShape，它在内部统一 AsInked
+        // 宽窄问同一个出处，且两处都问（自由笔 + 折线）
+        Assert.Equal(2, SourceGate.Count(code, "Annotation.InkWidth(ThicknessForTool)"));
+        Assert.DoesNotContain("Math.Max(1.0, ThicknessForTool / _scale)", code);
+    }
+
     [Fact]
     public void ToolStripIsGeneratedNotHandWritten()
     {
