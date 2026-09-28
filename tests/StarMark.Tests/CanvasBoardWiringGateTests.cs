@@ -119,7 +119,7 @@ public sealed class CanvasBoardWiringGateTests
         Assert.Contains("UpdateCurtainFocus(screen, cursor.X, cursor.Y);", tick);
         var focus = SourceGate.MethodBody(service, "private static void UpdateCurtainFocus");
         Assert.Contains("CanvasBackdropMath.HasFocusHole(AnnotationHub.Backdrop)", focus);
-        Assert.Contains("CanvasBackdropMath.FocusRadiusDip * screen.Scale", focus);
+        Assert.Contains("CursorCircle.RadiusInPixels(screen.Scale)", focus);
         Assert.Contains("if (!touched.IsEmpty) screen.Dirty.Add(touched);", focus);   // 旧圈也要并进脏区
     }
 

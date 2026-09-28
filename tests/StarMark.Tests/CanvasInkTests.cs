@@ -549,7 +549,9 @@ public sealed class CanvasInkTests
     {
         var ink = Trail();
         Assert.Equal(TimeSpan.FromMilliseconds(1500), ink.Ttl);
-        Assert.True(ink.CursorHaloEnabled, "光晕默认开：穿透态下它是\"模式还开着\"的唯一提示");
+        // 批次 S4-⑥：这里<b>不再存"光晕开不开"</b>——那一档要看档位、手上的笔与背景态三件事，
+        // 判据在 <c>CursorCircle.ShowsHalo</c>（默认档＝只荧光笔，见 <c>CursorCircleTests</c>）。
+        // 宿主再留一个 bool 就是第二份真值，症状是"条上常开着、屏幕上却什么都不跟"。
         Assert.Equal(Annotation.Opaque(0x30, 0x30, 0xFF), ink.HaloColorBgra);
         Assert.Equal(0xFF, ink.HaloColorBgra >>> 24);                  // 光晕自己不半透明
     }

@@ -41,13 +41,12 @@ public static class CanvasBackdropMath
     /// </summary>
     public const uint CurtainArgb = 0x80000000u;
 
-    /// <summary>
-    /// 焦点圈半径（<b>DIP</b>，不是物理像素）：混屏时按每块屏自己的缩放换算，
-    /// 写死像素数就是在 150% 屏上小一半（批次 ⑦ 那条分岔同源）。
-    /// </summary>
-    public const double FocusRadiusDip = 160d;
-
     /// <summary>这块底是不是不透明的（不透明的底提交时可以直接把 alpha 顶满）。</summary>
+    /// <remarks>
+    /// 那块跟着鼠标的圆（幕布亮区＝光标光晕，同一块圆）的半径住在 <see cref="CursorCircle.RadiusDip"/>。
+    /// 批次 S4-⑥ 之前这里另有一个 160 DIP 的数，而光晕按荧光笔笔宽档算 ⇒ <b>同一帧上鼠标处有两个大小不同的圆</b>，
+    /// 这类"同一件事两处各写一份"只有眼睛能看出来（记忆 ⑧）。
+    /// </remarks>
     public static bool IsOpaque(CanvasBackdrop backdrop) => backdrop == CanvasBackdrop.Whiteboard;
 
     /// <summary>底色的预乘 ARGB；透明底没有"底色"可言，返回 0 让调用方自己判。</summary>

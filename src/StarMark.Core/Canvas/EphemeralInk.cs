@@ -43,12 +43,13 @@ public sealed class EphemeralInk
     /// <summary>淡出时长。默认 1.5 秒——够指着讲一句，又不至于让痕迹攒成一团。</summary>
     public TimeSpan Ttl { get; set; } = TimeSpan.FromMilliseconds(1500);
 
-    /// <summary>光标光晕（荧光笔态下跟着鼠标的那圈颜色）。关掉它就等于把"我在荧光笔模式"这件事
-    /// 只留给工具条上的高亮——穿透态收不到鼠标事件时，光晕是唯一还能告诉用户"模式还开着"的东西。</summary>
-    public bool CursorHaloEnabled { get; set; } = true;
-
-    /// <summary>光晕颜色（默认红：深浅背景都看得见，且与荧光笔本身区分）。
-    /// 位序走 <see cref="Capture.Annotation.Opaque"/>——全仓库只有那一处「字节→BGRA」的拼法。</summary>
+    /// <summary>
+    /// 光晕颜色（默认红：深浅背景都看得见，且与荧光笔本身区分）。
+    /// 位序走 <see cref="Capture.Annotation.Opaque"/>——全仓库只有那一处「字节→BGRA」的拼法。
+    /// <para><b>"这一帧叠不叠光晕"不在这里存</b>（批次 S4-⑥）：那块圆的显示判据是
+    /// <see cref="CursorCircle.ShowsHalo"/>，它要同时看档位、手上的笔与背景态；这里再存一份开关，
+    /// 就是那一族"状态与窗口不一致"的又一个入口。</para>
+    /// </summary>
     public int HaloColorBgra { get; set; } = Capture.Annotation.Opaque(0x30, 0x30, 0xFF);
 
     public IReadOnlyList<Segment> Segments => _segments;

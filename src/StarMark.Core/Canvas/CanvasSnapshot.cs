@@ -23,7 +23,7 @@ public static class CanvasSnapshotMath
 {
     /// <summary>
     /// 笔迹那块的四周留多少 <b>DIP</b> 的边（不是物理像素：混屏时写死像素数，150% 屏上的边距就缩水一半，
-    /// 与 <see cref="CanvasBackdropMath.FocusRadiusDip"/> 同一条纪律）。
+    /// 与 <see cref="CursorCircle.RadiusDip"/> 同一条纪律）。
     /// <para>留边不是为了好看：墨贴着屏幕边缘时裁到边，得到的就是"被切掉半截的那一笔"，看起来像贴图把要的东西吃了。</para>
     /// </summary>
     public const double PaddingDip = 24d;

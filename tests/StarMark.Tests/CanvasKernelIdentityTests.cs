@@ -21,12 +21,19 @@ namespace StarMark.Tests;
 /// 参照实现<b>不许"顺手优化"</b>：它存在的唯一理由就是复现旧行为，包括那两次 <c>Math.Round</c>
 /// 与每像素一次 <c>MathF.Sqrt</c>。哪天它被改了，本文件就失去了意义。
 /// </para>
+/// <para>
+/// 批次 S4-⑥ 又添了第二份参照（<c>PaintGlowRef</c>）：光晕那一团改成"逐行只算一次开方"之后，
+/// 少算一像素没人报错、多算一像素没人看得见，只有对差分能说话。
+/// </para>
 /// </summary>
 public sealed class CanvasKernelIdentityTests
 {
     private const uint Blank = LayeredCanvasWindow.BlankPixel;
     private const int Yellow = 0x20A0F023;         // 任选一种不透明 BGRA（B=0x23 G=A0 R=F0）
     private const int Black = 0x00000000;
+
+    /// <summary>不透明的出厂红（与 <c>CanvasInkTests</c> 同一支笔色）：光晕按 alpha 取大，浓度上限要一起被测到。</summary>
+    private const int Opaque = unchecked((int)0xFFE81123);
 
     private static uint[] Blank_(int width, int height)
     {
@@ -47,6 +54,36 @@ public sealed class CanvasKernelIdentityTests
     }
 
     // ────────── 参照实现（＝批次 WG 之前的那段代码，逐字搬来） ──────────
+
+    /// <summary>
+    /// 改动前的 <c>PaintGlow</c>（批次 S4-⑥ 之前那一版：整块方框逐像素，圆外那句 <c>distance &gt; reach</c> 当场跳过）。
+    /// <b>同样不许"顺手优化"</b>——它存在的唯一理由就是复现旧行为，好让"逐行算跨度"这一刀被证伪或证实。
+    /// </summary>
+    private static IntRect PaintGlowRef(uint[] buffer, int width, int height, PixelPoint center, int radius, int colorBgra)
+    {
+        if (radius <= 0) return CanvasCompositor.Nothing;
+        var reach = radius;
+        var top = Math.Max(0, center.Y - reach);
+        var bottom = Math.Min(height - 1, center.Y + reach);
+        var left = Math.Max(0, center.X - reach);
+        var right = Math.Min(width - 1, center.X + reach);
+        for (var y = top; y <= bottom; y++)
+        {
+            var dy = y - center.Y;
+            for (var x = left; x <= right; x++)
+            {
+                var dx = x - center.X;
+                var distance = MathF.Sqrt(dx * dx + dy * dy);
+                if (distance > reach) continue;
+                var density = 1f - distance / reach;
+                var index = y * width + x;
+                var alpha = (int)Math.Round((colorBgra >>> 24) * density);
+                if (alpha <= (int)(buffer[index] >>> 24)) continue;
+                buffer[index] = PremultiplyRef(colorBgra, alpha);
+            }
+        }
+        return CanvasCompositor.Clamp(new IntRect(center.X - reach, center.Y - reach, reach * 2 + 1, reach * 2 + 1), width, height);
+    }
 
     private static void PaintRef(uint[] buffer, int width, int height, CanvasStroke stroke, double fade)
     {
@@ -282,5 +319,112 @@ public sealed class CanvasKernelIdentityTests
             CanvasCompositor.PaintTail(got, w, h, tail, 1d);
         }
         AssertSame(want, got, "增量补尾");
+    }
+
+    // ────────── 批次 S4-⑥：光晕那一团改成"逐行只算一次开方" ──────────
+
+    /// <summary>半径 160 DIP 换算到 150%/250% 屏上的物理像素，加上从前那档小光晕，一起进用例。</summary>
+    public static TheoryData<int, PixelPoint> GlowCases()
+    {
+        var data = new TheoryData<int, PixelPoint>();
+        foreach (var radius in new[] { 1, 3, 16, 60, 240, 400 })
+            foreach (var center in new[]
+            {
+                new PixelPoint(100, 75),      // 居中：整块圆都落在画布内
+                new PixelPoint(0, 0),         // 左上角：三条夹边同时生效
+                new PixelPoint(199, 149),     // 右下角
+                new PixelPoint(10, 140),      // 只夹左与下
+                new PixelPoint(199, 10),      // 只夹右与上
+            })
+                data.Add(radius, center);
+        return data;
+    }
+
+    /// <summary>
+    /// <b>逐像素与逐脏区都同结果</b>：新写法每行按圆算左右端（少算约 21% 的圆角像素），
+    /// 只要那一行的跨度少算 1 像素，症状就是"光晕的外缘缺一条"；多算则没人看得见——所以比对必须整幅做，
+    /// 而<b>脏区也要比</b>：脏区是"这一帧哪一块交给系统"，画到了却没进脏区＝那块像素永远不上屏
+    /// （症状＝光晕换位置时后面拖一条旧光）。
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(GlowCases))]
+    public void GlowRowPruningIsIdenticalToTheSquareLoop(int radius, PixelPoint center)
+    {
+        const int w = 200;
+        const int h = 150;
+        foreach (var colour in new[] { Yellow, Opaque })
+            foreach (var surface in new[] { "空白", "全零", "已有浓墨" })
+            {
+                var want = Surface(surface, w, h);
+                var got = Surface(surface, w, h);
+                var wantRect = PaintGlowRef(want, w, h, center, radius, colour);
+                var gotRect = CanvasCompositor.PaintGlow(got, w, h, center, radius, colour);
+                var at = FirstDifference(want, got);
+                Assert.True(at < 0, at < 0 ? string.Empty :
+                    $"{surface}面 r={radius} 圆心({center.X},{center.Y}) 色 {colour:X8}：" +
+                    $"第 {at / w} 行第 {at % w} 列不同（参照 {want[at]:X8} vs 现在 {got[at]:X8}）");
+                Assert.True(wantRect == gotRect,
+                    $"{surface}面 r={radius} 圆心({center.X},{center.Y})：脏区不同（参照 {wantRect} vs 现在 {gotRect}）");
+            }
+    }
+
+    /// <summary>三种"叠光之前那块玻璃长什么样"：空白（alpha=1）、全零（鼠标眼里没有这块玻璃）、已有一笔浓墨（取大要生效）。</summary>
+    private static uint[] Surface(string kind, int width, int height)
+    {
+        var buffer = new uint[width * height];
+        Array.Fill(buffer, kind == "空白" ? Blank : 0u);
+        if (kind != "已有浓墨") return buffer;
+        var ink = new CanvasStroke(CanvasTool.Pen, Opaque, 9, new PixelPoint(width / 2, height / 2));
+        ink.AddPoint(new PixelPoint(width / 2 + 30, height / 2 + 20));
+        CanvasCompositor.Paint(buffer, width, height, ink, 1d);
+        return buffer;
+    }
+
+    /// <summary>
+    /// 半径 0／负数：既不许画东西，也不许交出一块脏区。
+    /// <para>合并半径之后 <see cref="CursorCircle"/> 会把读不到的缩放兜到 1×，所以这一臂今天不可达；
+    /// 但它钉的是"<b>算不出圆</b>"这件事的兜底形状——少了那句守卫，0 会走到 <c>1 - d/0</c> 上，
+    /// 而负半径会算出一块原点为负的矩形，两者都表现为"提交了一次什么都没改的脏区"。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(-240)]
+    public void AGlowWithNoRadiusPaintsNothingAndReportsNothing(int radius)
+    {
+        const int w = 60;
+        const int h = 40;
+        var buffer = Blank_(w, h);
+        var dirty = CanvasCompositor.PaintGlow(buffer, w, h, new PixelPoint(30, 20), radius, Opaque);
+        Assert.Equal(CanvasCompositor.Nothing, dirty);
+        Assert.All(buffer, pixel => Assert.Equal(Blank, pixel));
+    }
+
+    /// <summary>
+    /// <b>交出去的脏区必须盖住它真的画到的每一颗像素</b>——这是光晕唯一"看不见"的失败方式：
+    /// 缓冲改了、脏区没带上那一块，系统就按旧内容贴，屏幕上留一条旧光晕。
+    /// </summary>
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(199, 149)]
+    [InlineData(100, 75)]
+    [InlineData(5, 143)]
+    public void GlowDirtyRectCoversEveryPixelItPainted(int cx, int cy)
+    {
+        const int w = 200;
+        const int h = 150;
+        var before = Surface("空白", w, h);
+        var buffer = (uint[])before.Clone();
+        var dirty = CanvasCompositor.PaintGlow(buffer, w, h, new PixelPoint(cx, cy), 240, Opaque);
+        var painted = 0;
+        for (var y = 0; y < h; y++)
+            for (var x = 0; x < w; x++)
+            {
+                if (buffer[y * w + x] == before[y * w + x]) continue;
+                painted++;
+                Assert.True(x >= dirty.X && x < dirty.Right && y >= dirty.Y && y < dirty.Bottom,
+                    $"圆心({cx},{cy}) 画到 ({x},{y}) 却没进脏区 {dirty}");
+            }
+        Assert.True(painted > 1000, $"半径 240 的圆不可能只画 {painted} 颗像素——这条判据在空转");
     }
 }

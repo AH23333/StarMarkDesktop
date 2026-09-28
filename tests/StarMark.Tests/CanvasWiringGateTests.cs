@@ -1215,12 +1215,71 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("RaiseAboveCanvas();", SourceGate.MethodBody(toolbar, "private void Refresh()"));
     }
 
-    /// <summary>光晕只在<b>选了荧光笔</b>时跟随光标（用户裁决）：拿着画笔却满屏跟着一团颜色是噪音。</summary>
+    /// <summary>
+    /// 光标那一块圆的<b>显示判据与半径都只有一份出处</b>（批次 S4-⑥，用户裁"合并成一块圆，两个读数"）。
+    /// <para>
+    /// 从前这里钉的是"光晕只在选了荧光笔时跟随光标"——那条裁决仍然成立，只是变成了三档里的<b>默认那一档</b>；
+    /// 而真正的风险换了形状：<b>光晕半径按笔宽档算、幕布亮区按一个 DIP 常量算</b>，同一帧上鼠标处两个圆大小不同，
+    /// 而两处各自乘一次 <c>Scale</c>，四舍五入还能差一像素。所以现在钉的是"两处都问同一个函数"。
+    /// </para>
+    /// <para>反向钉死两份旧出处：宿主里再出现 <c>CursorHaloEnabled</c> 或按笔宽算的光晕半径，就是第二份真值回来了。
+    /// 第四条钉的是<b>同一条判据不许换一副写法回来</b>：宿主若自己写 <c>!= HaloMode.Off</c> 来决定按钮亮不亮，
+    /// 将来加第四档时 <c>ShowsHalo</c> 改了、这一处没改，症状＝"按钮亮着却不叠光"或反之。</para>
+    /// </summary>
     [Fact]
-    public void CursorHaloFollowsOnlyWhileTheHighlighterIsSelected()
+    public void TheHaloAndTheCurtainHoleAskOneJudgementAndOneRadius()
     {
-        var tick = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static void OnFrameTick");
-        Assert.Contains("if (_tool == CanvasTool.Highlighter && screen.Trail.CursorHaloEnabled", tick);
+        var whole = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.MethodBody(whole, "private static void OnFrameTick");
+        var flush = SourceGate.MethodBody(whole, "private static void Flush(Screen screen)");
+        var focus = SourceGate.MethodBody(whole, "private static void UpdateCurtainFocus");
+
+        // ① 叠不叠那一团光：只问 Core 那张表（档位 × 手上的笔 × 背景态）
+        Assert.Contains("CursorCircle.ShowsHalo(_halo, _tool, AnnotationHub.Backdrop)", service);
+        Assert.DoesNotContain("_tool == CanvasTool.Highlighter", service);
+
+        // ② 半径：三处读者（脏区、叠光、亮区）都问同一个换算函数，且各一次
+        Assert.Contains("CursorCircle.RadiusInPixels(screen.Scale)", service);
+        Assert.Contains("CursorCircle.RadiusInPixels(screen.Scale)", flush);
+        Assert.Contains("CursorCircle.RadiusInPixels(screen.Scale)", focus);
+        Assert.DoesNotContain("RadiusFor(CanvasTool.Highlighter", service);
+        Assert.DoesNotContain("RadiusFor(CanvasTool.Highlighter", flush);
+
+        // ③ 那份开关不许回到宿主或荧光层里（判据在 Core，存两处迟早一处没更新）——负向钉整档文件，不钉一副方法体
+        Assert.DoesNotContain("CursorHaloEnabled", whole);
+        Assert.DoesNotContain("CursorHaloEnabled",
+            SourceGate.ReadRepoFile("src/StarMark.Core/Canvas/EphemeralInk.cs"));
+        Assert.DoesNotContain("FocusRadiusDip", whole);
+
+        // ④ "开着没有"（按钮亮不亮）也只问 Core：它若在自己那儿写 `!= Off`，加第四档时就静默漏判
+        Assert.Contains("CursorCircle.IsOn(_halo)", whole);
+        Assert.DoesNotContain("!= HaloMode.Off", whole);
+
+        // ⑤ "那块圆占的地方"也只有一处公式：帧循环算脏区、合成核算提交块，两份各写一次就会分岔
+        //    （症状＝光晕拖过去后面拖一条旧光／外缘缺一条，而两种写法都编译得过）
+        Assert.Contains("CursorCircle.BoxOf(local, radius)", whole);
+        Assert.DoesNotContain("radius * 2 + 1", whole);
+        var kernel = SourceGate.MethodBody(
+            SourceGate.ReadRepoFile("src/StarMark.Core/Canvas/CanvasCompositor.cs"), "public static IntRect PaintGlow");
+        Assert.Contains("CursorCircle.BoxOf(center, radius)", kernel);
+        Assert.DoesNotContain("reach * 2 + 1", kernel);
+    }
+
+    /// <summary>
+    /// 「光晕」那颗走<b>循环</b>而不是二值开关（三档：关 → 只荧光笔 → 常开），
+    /// 而<b>当前哪一档必须由状态行说出来</b>——只看按钮亮不亮，读不出是中间那一档还是常开。
+    /// <para>与白板/幕布那颗同一族语言：一颗按钮管的是一件多值的事时，界面要把现值写在看得见的位置。</para>
+    /// </summary>
+    [Fact]
+    public void TheHaloButtonCyclesAndTheStatusLineSaysWhichGear()
+    {
+        var toolbar = SourceGate.MethodBody(SourceGate.ReadRepoFile(Toolbar), "private void Halo_Click");
+        var status = SourceGate.MethodBody(SourceGate.ReadRepoFile(Toolbar), "private string StatusText()");
+
+        Assert.Contains("CanvasService.CycleHalo();", toolbar);
+        Assert.DoesNotContain("SetHalo(", toolbar);
+        Assert.Contains("光晕{CanvasService.HaloName}", status);
+        Assert.Contains("x:Name=\"HaloButton\"", SourceGate.ReadRepoFile(ToolbarXaml));
     }
 
     /// <summary>

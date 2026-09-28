@@ -167,38 +167,49 @@ public static class CanvasCompositor
     }
 
     /// <summary>
-    /// 在光标处盖一团光晕（荧光笔态下"我现在拿的是荧光笔"的常驻提示）。
+    /// 在光标处盖一团光晕（"模式还开着／光标在这儿"的常驻提示，档位见 <see cref="CursorCircle"/>）。
     /// <para>
     /// 与笔迹同一套取大规则，但它是<b>每帧重画</b>的：光晕跟着鼠标走，旧位置靠"那一块从持久层重铺"复原
-    /// （调用方把新旧两块都算进脏区）。因此这里不需要缓存一张光晕贴图——一次 128×128 的圆盘
-    /// 就是一帧的全部开销，而缓存位图会多一处"颜色改了没重建"的失效点。
+    /// （调用方把新旧两块都算进脏区）。因此这里不需要缓存一张光晕贴图——缓存位图会多一处"颜色改了没重建"的失效点。
+    /// </para>
+    /// <para>
+    /// <b>开销按半径的平方走，所以这里刻意做了两件事</b>：批次 S4-⑥ 把光晕与幕布亮区合并成一块圆
+    /// （160 DIP；从前是荧光笔笔宽档那几十像素），一帧要碰的像素从约 4k 涨到 10 万级（150% 屏上 23 万）。
+    /// ① <b>逐行只算一次开方</b>定出这一行的左右端（圆外那段直接跳过，与 <c>LayeredCanvasWindow.FocusSpan</c> 同一条手法）；
+    /// ② <b>不再往裁剪区外走</b>——注意"按脏区裁剪"在这里省不了什么：调用方把新旧两块圆都算进了脏区，
+    /// 新那块本来就在矩形里，所以省下来的只有圆角那 21%。真正的量在半径上，动它之前先想到这里。
     /// </para>
     /// </summary>
     public static IntRect PaintGlow(uint[] buffer, int width, int height, PixelPoint center, int radius, int colorBgra)
     {
         if (radius <= 0) return Nothing;
         var reach = radius;
+        var square = (long)reach * reach;
         var top = Math.Max(0, center.Y - reach);
         var bottom = Math.Min(height - 1, center.Y + reach);
-        var left = Math.Max(0, center.X - reach);
-        var right = Math.Min(width - 1, center.X + reach);
         for (var y = top; y <= bottom; y++)
         {
             var dy = y - center.Y;
+            var offset = (long)dy * dy;
+            if (offset >= square) continue;
+            // 这一行的跨度按圆算，不按方框算：方框的四个角上有约 21% 的像素根本在圆外
+            var half = (int)MathF.Sqrt(square - offset);
+            var left = Math.Max(0, center.X - half);
+            var right = Math.Min(width - 1, center.X + half);
+            var row = y * width;
             for (var x = left; x <= right; x++)
             {
                 var dx = x - center.X;
                 var distance = MathF.Sqrt(dx * dx + dy * dy);
-                if (distance > reach) continue;
                 // 中心最亮、外缘淡到 0：与荧光笔的"三层"不同，这里要的是连续的一团光
                 var density = 1f - distance / reach;
-                var index = y * width + x;
+                var index = row + x;
                 var alpha = (int)Math.Round((colorBgra >>> 24) * density);
                 if (alpha <= (int)(buffer[index] >>> 24)) continue;
                 buffer[index] = Premultiply(colorBgra, alpha);
             }
         }
-        return Clamp(new IntRect(center.X - reach, center.Y - reach, reach * 2 + 1, reach * 2 + 1), width, height);
+        return Clamp(CursorCircle.BoxOf(center, radius), width, height);
     }
 
     /// <summary>

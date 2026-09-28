@@ -108,7 +108,7 @@ public static class CanvasService
     /// 少了一个来源（剩下的那一个由 <see cref="LayerDirector.ReconcileStyles"/> 每帧兜）。
     /// </summary>
     private static bool ClickThroughHere => !AnnotationHub.Stage.GlassTakesPointer();
-    private static bool _haloEnabled = true;
+    private static HaloMode _halo = HaloMode.HighlighterOnly;
 
     /// <summary>
     /// 手上一按是什么性质。<b>穿透态收不到 WM_LBUTTONDOWN</b>（那一次按下归了下层应用），
@@ -154,7 +154,11 @@ public static class CanvasService
 
     public static int WidthStep => _widthStep;
 
-    public static bool HaloEnabled => _haloEnabled;
+    /// <summary>那一档开着没有（按钮亮不亮读它；"这一帧叠不叠"是另一件事，见 <see cref="CursorCircle.ShowsHalo"/>）。</summary>
+    public static bool HaloEnabled => CursorCircle.IsOn(_halo);
+
+    /// <summary>那一档叫什么（状态行与 tooltip 的唯一读者从这里取，界面不自己写中文）。</summary>
+    public static string HaloName => CursorCircle.NameOf(_halo);
 
     /// <summary>颜色表沿用截图标注那一份（一条事实一个出处：两处色表迟早分岔）。</summary>
     public static IReadOnlyList<AnnotationColor> Palette => Annotation.Palette;
@@ -226,7 +230,7 @@ public static class CanvasService
                         Scale = monitor.Scale,
                         Persistent = persistent,
                         Ink = new InkDoc(new InkSurface(SurfaceRole.Board, Screens.Count)),
-                        Trail = new EphemeralInk { CursorHaloEnabled = _haloEnabled },
+                        Trail = new EphemeralInk(),
                     };
                     window.PointerPressed += p => OnPressed(screen, p);
                     window.PointerMoved += p => OnMoved(screen, p);
@@ -402,11 +406,13 @@ public static class CanvasService
     public static void SetClickThrough(bool on)
         => AnnotationHub.Raise(on ? SessionEvent.GivePointerBack : SessionEvent.TakePointer);
 
-    /// <summary>光标光晕开关（关掉＝荧光笔态下鼠标不再有那团颜色跟着走）。</summary>
-    public static void SetHalo(bool on)
+    /// <summary>
+    /// 「光晕」那颗：关 → 只荧光笔 → 常开 → 关（判据在 Core 的 <see cref="CursorCircle"/>，这里只存档位）。
+    /// <para>不持久化，与工具/颜色/粗细同口径（批次 WB-⑤：这块板子的语义是"讲完就擦"，设置项要另议）。</para>
+    /// </summary>
+    public static void CycleHalo()
     {
-        _haloEnabled = on;
-        foreach (var screen in Screens) screen.Trail.CursorHaloEnabled = on;
+        _halo = CursorCircle.Next(_halo);
         RaiseStateChanged();
     }
 
@@ -425,13 +431,13 @@ public static class CanvasService
 
     /// <summary>
     /// 幕布那块亮区跟着鼠标走：把"旧圈 ∪ 新圈"那一小片并进脏区——只报新位置的话，旧位置那一圈就赖在"亮"上暗不回来。
-    /// <para>与光标光晕同一形状、同一预算（都很小，且只在幕布开着时才算）。半径按<b>这块屏自己的缩放</b>换算：
-    /// 写死像素数就是在 150% 屏上只剩半个亮区。</para>
+    /// <para><b>这块圆与光标光晕是同一块</b>（批次 S4-⑥，用户裁"合并成一块圆，两个读数"）：半径与换算只有
+    /// <see cref="CursorCircle.RadiusInPixels"/> 一份，两处各乘一次 <c>Scale</c> 迟早差一像素。</para>
     /// </summary>
     private static void UpdateCurtainFocus(Screen screen, int cursorX, int cursorY)
     {
         if (!CanvasBackdropMath.HasFocusHole(AnnotationHub.Backdrop)) return;
-        var radius = (int)Math.Round(CanvasBackdropMath.FocusRadiusDip * screen.Scale);
+        var radius = CursorCircle.RadiusInPixels(screen.Scale);
         var touched = screen.Window.SetFocus(new PixelPoint(cursorX - screen.Bounds.X, cursorY - screen.Bounds.Y), radius);
         if (!touched.IsEmpty) screen.Dirty.Add(touched);
     }
@@ -955,17 +961,19 @@ public static class CanvasService
                 MarkSegmentIfFading(screen, segment);
             // 幕布的亮区每帧跟着鼠标挪（只有幕布开着才算，代价与下面那个光晕同一量级）
             UpdateCurtainFocus(screen, cursor.X, cursor.Y);
-            // 光晕跟着鼠标走：旧位置要复原、新位置要叠上（两块都很小）
+            // 光晕跟着鼠标走：旧位置要复原、新位置要叠上。
+            // <b>这一块圆的半径与幕布亮区是同一个数、同一处换算</b>（批次 S4-⑥，用户裁"合并成一块圆，两个读数"）：
+            // 从前光晕按荧光笔笔宽档算、亮区按 160 DIP 算，同一帧上鼠标处就有两个不同大小的圆——只有眼睛能看出来。
             if (!screen.LastGlow.IsEmpty) screen.Dirty.Add(screen.LastGlow);
             screen.GlowAt = null;
-            if (_tool == CanvasTool.Highlighter && screen.Trail.CursorHaloEnabled
+            if (CursorCircle.ShowsHalo(_halo, _tool, AnnotationHub.Backdrop)
                 && screen.Bounds.X <= cursor.X && cursor.X < screen.Bounds.Right
                 && screen.Bounds.Y <= cursor.Y && cursor.Y < screen.Bounds.Bottom)
             {
                 var local = new PixelPoint(cursor.X - screen.Bounds.X, cursor.Y - screen.Bounds.Y);
-                var radius = CanvasWidths.RadiusFor(CanvasTool.Highlighter, CanvasWidths.At(_widthStep));
+                var radius = CursorCircle.RadiusInPixels(screen.Scale);
                 screen.GlowAt = local;
-                screen.LastGlow = new IntRect(local.X - radius, local.Y - radius, radius * 2 + 1, radius * 2 + 1);
+                screen.LastGlow = CursorCircle.BoxOf(local, radius);
                 screen.Dirty.Add(screen.LastGlow);
             }
             else
@@ -1025,8 +1033,7 @@ public static class CanvasService
             CanvasCompositor.PaintClipped(screen.Window.Pixels, width, height, preview, rect);
         if (screen.GlowAt is { } glow)
             CanvasCompositor.PaintGlow(screen.Window.Pixels, width, height, glow,
-                CanvasWidths.RadiusFor(CanvasTool.Highlighter, CanvasWidths.At(_widthStep)),
-                screen.Trail.HaloColorBgra);
+                CursorCircle.RadiusInPixels(screen.Scale), screen.Trail.HaloColorBgra);
         screen.Window.Present(rect);
         screen.LastFlushMs = Environment.TickCount64;
         ReportSlowFrame(since, rect, screen);
