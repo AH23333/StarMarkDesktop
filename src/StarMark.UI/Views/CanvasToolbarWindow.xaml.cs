@@ -324,7 +324,7 @@ public sealed partial class CanvasToolbarWindow : Window
 
     // ────────── 图标：矢量图元画的，不用字体字形 ──────────
     //
-    // 与截图/贴图那条工具条（CaptureOverlayWindow 的图标库）同一套几何与同样的 16×16 边长：
+    // 几何住在 BarGlyphs（批次 WS）：截图/贴图那条工具条用的是<b>同一份</b>，不是"另一份一样的"。
     // 两边是同一族能力，用户在一边认得的记号到另一边不该换个画法。
     // 不用图标字形的理由也同一条：缺字会显示成方块，而"这五种图形到底长什么样"得能当场逐个核对。
 
@@ -332,60 +332,13 @@ public sealed partial class CanvasToolbarWindow : Window
 
     private static UIElement ShapeIcon(CanvasTool tool) => tool switch
     {
-        CanvasTool.Rectangle => Icon(Out(2.5, 4, 11, 8)),                        // 空心方框
-        CanvasTool.Ellipse => Icon(Ring(2.5, 4, 11, 8)),                         // 空心椭圆
-        CanvasTool.Line => Icon(Seg(3, 13, 13, 3)),                              // 就是一条斜线，没头没尾
-        // 两段折 + 顶点小方块：一眼看得出"这是点出来的多段线"，不是一条直线
-        CanvasTool.PolyLine => Icon(Curve((2.5, 13), (7, 5.5), (13.5, 9.5)),
-            Dot(5.6, 4.1), Dot(12.1, 8.1)),
-        CanvasTool.Arrow => Icon(Seg(3, 13, 12, 4),                              // 斜线 + 终点一个开口头
-            Seg(12, 4, 7.6, 4.4), Seg(12, 4, 11.6, 8.4)),
-        _ => Icon(Out(2.5, 4, 11, 8)),
+        CanvasTool.Rectangle => BarGlyphs.RectangleGlyph(IconInk),
+        CanvasTool.Ellipse => BarGlyphs.EllipseGlyph(IconInk),
+        CanvasTool.Line => BarGlyphs.LineGlyph(IconInk),
+        CanvasTool.PolyLine => BarGlyphs.PolyLineGlyph(IconInk),
+        CanvasTool.Arrow => BarGlyphs.ArrowGlyph(IconInk),
+        _ => BarGlyphs.RectangleGlyph(IconInk),
     };
-
-    private const double IconSide = 16;
-
-    private static Canvas Icon(params UIElement[] parts)
-    {
-        var canvas = new Canvas { Width = IconSide, Height = IconSide };
-        foreach (var part in parts) canvas.Children.Add(part);
-        return canvas;
-    }
-
-    private static Line Seg(double x1, double y1, double x2, double y2)
-        => new() { X1 = x1, Y1 = y1, X2 = x2, Y2 = y2, Stroke = IconInk, StrokeThickness = 1.6 };
-
-    private static Polyline Curve(params (double X, double Y)[] pts)
-    {
-        var line = new Polyline { Stroke = IconInk, StrokeThickness = 1.5 };
-        foreach (var p in pts) line.Points.Add(new Windows.Foundation.Point(p.X, p.Y));
-        return line;
-    }
-
-    /// <summary>折线的顶点记号（2.8 见方的小实心块）。它才是"直线"与"折线"分得开的那一笔。</summary>
-    private static Rectangle Dot(double x, double y)
-    {
-        var square = new Rectangle { Width = 2.8, Height = 2.8, Fill = IconInk };
-        Canvas.SetLeft(square, x);
-        Canvas.SetTop(square, y);
-        return square;
-    }
-
-    private static Rectangle Out(double x, double y, double w, double h)
-    {
-        var box = new Rectangle { Width = w, Height = h, Stroke = IconInk, StrokeThickness = 1.5 };
-        Canvas.SetLeft(box, x);
-        Canvas.SetTop(box, y);
-        return box;
-    }
-
-    private static Ellipse Ring(double x, double y, double w, double h)
-    {
-        var ring = new Ellipse { Width = w, Height = h, Stroke = IconInk, StrokeThickness = 1.5 };
-        Canvas.SetLeft(ring, x);
-        Canvas.SetTop(ring, y);
-        return ring;
-    }
 
     private void Refresh()
     {

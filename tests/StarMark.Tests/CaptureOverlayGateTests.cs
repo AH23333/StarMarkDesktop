@@ -777,4 +777,41 @@ public sealed class CaptureOverlayGateTests
         Assert.Contains("mark.NumberRadius", draw);
         Assert.DoesNotContain("var radius = box.Width / 2", draw);     // 不从外接框反推（反推＝第二个出处）
     }
+
+    /// <summary>
+    /// 批次 WS：两条工具条的图标几何<b>只许有一份</b>。
+    /// <para>这条的症状不是崩，而是"同一个工具在两条上长得不一样"——用户在一边认得的记号，
+    /// 到另一边换了画法；两份各自都能编译、各自的测全绿（WM/WQ 都记过分岔的代价）。
+    /// 所以钉的是"定义只在一处"，不是"两边数字刚好相同"：数字相同也救不了下一次只改一边。</para>
+    /// </summary>
+    [Fact]
+    public void TheTwoBarsShareOneGlyphLibrary()
+    {
+        var glyphs = SourceGate.ReadRepoFile("src/StarMark.UI/Views/BarGlyphs.cs");
+        var capture = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.ToolBar.cs");
+        var canvas = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs");
+
+        foreach (var primitive in new[]
+                 {
+                     "Canvas Icon(params UIElement[] parts)", "Line Seg(", "Polyline Curve(",
+                     "Rectangle Out(", "Ellipse Ring(", "Rectangle Fill(", "T Placed<T>(",
+                 })
+        {
+            Assert.Equal(1, SourceGate.Count(glyphs, "public static " + primitive));   // 新家只写一次
+            Assert.Equal(0, SourceGate.Count(capture, primitive));                      // 两个宿主一份都不许留
+            Assert.Equal(0, SourceGate.Count(canvas, primitive));
+        }
+
+        foreach (var glyph in new[] { "RectangleGlyph", "EllipseGlyph", "LineGlyph", "PolyLineGlyph", "ArrowGlyph" })
+        {
+            Assert.Equal(1, SourceGate.Count(glyphs, $"public static UIElement {glyph}("));
+            Assert.Contains($"BarGlyphs.{glyph}(", capture);      // 两条都真的走到同一颗，不是各写一份同样的数字
+            Assert.Contains($"BarGlyphs.{glyph}(", canvas);
+        }
+
+        // 边长也只能有一份：两条各留一个 16，就是"同一排按钮对不齐"的第一处分歧
+        Assert.DoesNotContain("IconSide", capture);
+        Assert.DoesNotContain("IconSide", canvas);
+        Assert.Equal(1, SourceGate.Count(glyphs, "public const double Side = 16;"));
+    }
 }

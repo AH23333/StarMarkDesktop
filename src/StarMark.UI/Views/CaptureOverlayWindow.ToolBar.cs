@@ -35,9 +35,8 @@ public sealed partial class CaptureOverlayWindow
 {
     // ────────── 工具条（按钮、图标、颜色、粗细一律按 Core 的模型生成）──────────────────
 
-    /// <summary>图标边长与按钮尺寸（DIP）。整条上每个按钮都由这几个数决定：
-    /// 加一种画法就多一颗点或浮层里多一项，而不是把条撑成第二行（浮层多长一行就盖住用户正要标的东西）。</summary>
-    private const double IconSide = 16;
+    /// <summary>按钮尺寸（DIP）。整条上每个按钮都由这几个数决定：加一种画法就多一颗点或浮层里多一项，
+    /// 而不是把条撑成第二行（浮层多长一行就盖住用户正要标的东西）。图标自己的边长在 <see cref="BarGlyphs.Side"/>。</summary>
     private const double ButtonWidth = 27;
     private const double ButtonHeight = 23;
 
@@ -264,85 +263,51 @@ public sealed partial class CaptureOverlayWindow
     // ────────── 图标：矢量图元画的，不用字体字形 ──────────
     // 为什么不用图标字体：缺字会显示成方块，而遮罩窗一按 Esc 就没了，"这九个字形到底长什么样"
     // 没人能在真机上一眼逐个确认。画出来的图元至少几何是自己算出来的，撞了车也能在断言里看出来。
-
-    private static Canvas Icon(params UIElement[] parts)
-    {
-        var canvas = new Canvas { Width = IconSide, Height = IconSide };
-        foreach (var part in parts) canvas.Children.Add(part);
-        return canvas;
-    }
-
-    private static Line Seg(double x1, double y1, double x2, double y2, double thickness = 1.6, Brush? brush = null)
-        => new()
-        {
-            X1 = x1, Y1 = y1, X2 = x2, Y2 = y2,
-            Stroke = brush ?? Ink,
-            StrokeThickness = thickness,
-        };
-
-    private static Polyline Curve(Brush? brush, params (double X, double Y)[] pts)
-    {
-        var line = new Polyline { Stroke = brush ?? Ink, StrokeThickness = 1.5 };
-        foreach (var p in pts) line.Points.Add(new Point(p.X, p.Y));
-        return line;
-    }
-
-    private static T Placed<T>(T part, double x, double y) where T : UIElement
-    {
-        Canvas.SetLeft(part, x);
-        Canvas.SetTop(part, y);
-        return part;
-    }
-
-    private static Rectangle Out(double x, double y, double w, double h, double thickness = 1.5, Brush? brush = null)
-        => Placed(new Rectangle { Width = w, Height = h, Stroke = brush ?? Ink, StrokeThickness = thickness }, x, y);
-
-    private static Rectangle Fill(double x, double y, double w, double h, Brush brush)
-        => Placed(new Rectangle { Width = w, Height = h, Fill = brush }, x, y);
-
-    private static Ellipse Ring(double x, double y, double w, double h, double thickness = 1.5)
-        => Placed(new Ellipse { Width = w, Height = h, Stroke = Ink, StrokeThickness = thickness }, x, y);
+    //
+    // 图元与"同一族形状"住在 BarGlyphs（批次 WS）：画布那条工具条要的是<b>同一份</b>，
+    // 从前两边各写一份 Icon/Seg/Curve/Out/Ring 与各五个形状的坐标，任何一边改数字都不会传给另一边。
+    // 墨色（Ink / InkDim）留在这里——那是这条带的底色，不是形状的一部分。
 
     /// <summary>浮层里的一颗点：选中＝白圈加粗，未选中＝细灰圈（两种都要在暗底上看得出来）。</summary>
     private static UIElement DotIcon(int bgra, bool selected, double? diameter = null)
     {
         var side = diameter ?? 11d;
-        return Icon(Placed(new Ellipse
+        return BarGlyphs.Icon(BarGlyphs.Placed(new Ellipse
         {
             Width = side,
             Height = side,
             Fill = new SolidColorBrush(ToColor(bgra)),
             Stroke = new SolidColorBrush(selected ? Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF)),
             StrokeThickness = selected ? 2 : 1,
-        }, (IconSide - side) / 2, (IconSide - side) / 2));
+        }, (BarGlyphs.Side - side) / 2, (BarGlyphs.Side - side) / 2));
     }
 
     /// <summary>某个工具长什么样。<b>每种工具的差异必须只看图形就分得开</b>：条上没有文字，
     /// 图标撞车就等于把两个功能摆成同一个按钮（直线与折线的差别刻意做成"一段 / 两段带顶点"）。</summary>
     private static UIElement ToolIcon(AnnotationTool tool) => tool switch
     {
-        AnnotationTool.Rectangle => Icon(Out(2.5, 4, 11, 8)),                        // 空心方框
-        AnnotationTool.Ellipse => Icon(Ring(2.5, 4, 11, 8)),                         // 空心椭圆
-        AnnotationTool.Line => Icon(Seg(3, 13, 13, 3)),                              // 就是一条斜线，没头没尾
-        // 两段折 + 顶点小方块：一眼看得出"这是点出来的多段线"，不是一条直线
-        AnnotationTool.PolyLine => Icon(Curve(null, (2.5, 13), (7, 5.5), (13.5, 9.5)),
-            Fill(5.6, 4.1, 2.8, 2.8, Ink), Fill(12.1, 8.1, 2.8, 2.8, Ink)),
-        AnnotationTool.Arrow => Icon(Seg(3, 13, 12, 4),                              // 斜线 + 终点一个开口头
-            Seg(12, 4, 7.6, 4.4), Seg(12, 4, 11.6, 8.4)),
-        AnnotationTool.Pen => Icon(Curve(null, (2.5, 13), (5.5, 6.5), (8.5, 10.5), (13.5, 2.5))),
-        AnnotationTool.Highlighter => Icon(Fill(2.5, 6.5, 11, 5.5,                   // 粗而半透明的一横
-            new SolidColorBrush(Color.FromArgb(0x88, 0xFF, 0xFF, 0xFF))),
-            Seg(2.5, 13.5, 13.5, 13.5, 1.2, InkDim)),
-        AnnotationTool.Mosaic => Icon(Fill(2.5, 2.5, 5, 5, Ink), Fill(8, 2.5, 5, 5, InkDim),   // 2×2 格子
-            Fill(2.5, 8, 5, 5, InkDim), Fill(8, 8, 5, 5, Ink)),
+        AnnotationTool.Rectangle => BarGlyphs.RectangleGlyph(Ink),
+        AnnotationTool.Ellipse => BarGlyphs.EllipseGlyph(Ink),
+        AnnotationTool.Line => BarGlyphs.LineGlyph(Ink),
+        AnnotationTool.PolyLine => BarGlyphs.PolyLineGlyph(Ink),
+        AnnotationTool.Arrow => BarGlyphs.ArrowGlyph(Ink),
+        AnnotationTool.Pen => BarGlyphs.Icon(
+            BarGlyphs.Curve(Ink, (2.5, 13), (5.5, 6.5), (8.5, 10.5), (13.5, 2.5))),
+        AnnotationTool.Highlighter => BarGlyphs.Icon(                             // 粗而半透明的一横
+            BarGlyphs.Fill(new SolidColorBrush(Color.FromArgb(0x88, 0xFF, 0xFF, 0xFF)), 2.5, 6.5, 11, 5.5),
+            BarGlyphs.Seg(InkDim, 2.5, 13.5, 13.5, 13.5, 1.2)),
+        AnnotationTool.Mosaic => BarGlyphs.Icon(                                 // 2×2 格子
+            BarGlyphs.Fill(Ink, 2.5, 2.5, 5, 5), BarGlyphs.Fill(InkDim, 8, 2.5, 5, 5),
+            BarGlyphs.Fill(InkDim, 2.5, 8, 5, 5), BarGlyphs.Fill(Ink, 8, 8, 5, 5)),
         // 用线段拼出的 "A"：文字工具的通用记号，且不依赖任何字体（字形缺了就是个方块）
-        AnnotationTool.Text => Icon(Curve(null, (2.5, 13), (8, 2.5), (13.5, 13)), Seg(5, 9.5, 11, 9.5)),
-        // 圆里一个 1：序号工具
-        AnnotationTool.Number => Icon(Ring(3, 3, 10, 10, 1.6), Seg(8, 5.5, 8, 11), Seg(6.8, 6.6, 8, 5.5)),
-        // 倾斜的橡皮块＋中间一道分界线
-        AnnotationTool.Eraser => Icon(Seg(5, 5, 11, 5), Seg(11, 5, 12.5, 11), Seg(12.5, 11, 6.5, 11),
-            Seg(6.5, 11, 5, 5), Seg(5.7, 8, 11.8, 8)),
-        _ => Icon(Out(2.5, 4, 11, 8)),
+        AnnotationTool.Text => BarGlyphs.Icon(
+            BarGlyphs.Curve(Ink, (2.5, 13), (8, 2.5), (13.5, 13)), BarGlyphs.Seg(Ink, 5, 9.5, 11, 9.5)),
+        AnnotationTool.Number => BarGlyphs.Icon(BarGlyphs.Ring(Ink, 3, 3, 10, 10, 1.6),   // 圆里一个 1：序号工具
+            BarGlyphs.Seg(Ink, 8, 5.5, 8, 11), BarGlyphs.Seg(Ink, 6.8, 6.6, 8, 5.5)),
+        AnnotationTool.Eraser => BarGlyphs.Icon(                                 // 倾斜的橡皮块＋中间一道分界线
+            BarGlyphs.Seg(Ink, 5, 5, 11, 5), BarGlyphs.Seg(Ink, 11, 5, 12.5, 11), BarGlyphs.Seg(Ink, 12.5, 11, 6.5, 11),
+            BarGlyphs.Seg(Ink, 6.5, 11, 5, 5), BarGlyphs.Seg(Ink, 5.7, 8, 11.8, 8)),
+        _ => BarGlyphs.RectangleGlyph(Ink),
     };
 
     /// <summary>「当前这支笔」：实心点的颜色＝正在用的颜色，点的直径＝正在用的粗细。</summary>
@@ -352,34 +317,39 @@ public sealed partial class CaptureOverlayWindow
     /// <summary>撤销 / 重做：同一支箭头只差方向（形状不一样就会被看成两个不同的动作）。</summary>
     private static UIElement ArrowIcon(bool left)
     {
-        double X(double v) => left ? v : IconSide - v;
-        return Icon(Seg(X(13), 8, X(3.5), 8), Seg(X(3.5), 8, X(7.5), 4.2), Seg(X(3.5), 8, X(7.5), 11.8));
+        double X(double v) => left ? v : BarGlyphs.Side - v;
+        return BarGlyphs.Icon(BarGlyphs.Seg(Ink, X(13), 8, X(3.5), 8),
+            BarGlyphs.Seg(Ink, X(3.5), 8, X(7.5), 4.2), BarGlyphs.Seg(Ink, X(3.5), 8, X(7.5), 11.8));
     }
 
     private static UIElement EraserIcon()
-        => Icon(Placed(new Polygon
+        => BarGlyphs.Icon(BarGlyphs.Placed(new Polygon
         {
             Fill = InkDim,
             Points = new PointCollection { new(3, 12), new(9, 12), new(13.5, 4), new(7.5, 3) },
-        }, 0, 0), Seg(3, 13.5, 13.5, 13.5, 1.2, InkDim));
+        }, 0, 0), BarGlyphs.Seg(InkDim, 3, 13.5, 13.5, 13.5, 1.2));
 
-    private static UIElement CrossIcon() => Icon(Seg(3.5, 3.5, 12.5, 12.5), Seg(12.5, 3.5, 3.5, 12.5));
+    private static UIElement CrossIcon() => BarGlyphs.Icon(
+        BarGlyphs.Seg(Ink, 3.5, 3.5, 12.5, 12.5), BarGlyphs.Seg(Ink, 12.5, 3.5, 3.5, 12.5));
 
     /// <summary>穿透那颗：一个方框被一支箭头穿过——"鼠标会从它身上走过去"这件事得看得出来。</summary>
-    private static UIElement ThroughIcon() => Icon(
-        Ring(4.5, 3, 8.5, 9, 1.4), Seg(1.5, 14, 14.5, 1.5, 1.8),
-        Seg(10.5, 1.5, 14.5, 1.5, 1.8), Seg(14.5, 1.5, 14.5, 5.5, 1.8));
+    private static UIElement ThroughIcon() => BarGlyphs.Icon(
+        BarGlyphs.Ring(Ink, 4.5, 3, 8.5, 9, 1.4), BarGlyphs.Seg(Ink, 1.5, 14, 14.5, 1.5, 1.8),
+        BarGlyphs.Seg(Ink, 10.5, 1.5, 14.5, 1.5, 1.8), BarGlyphs.Seg(Ink, 14.5, 1.5, 14.5, 5.5, 1.8));
 
     private static UIElement CopyIcon()
-        => Icon(Out(2, 2.5, 8, 9, 1.3, InkDim), Out(6, 5, 8, 9, 1.3));
+        => BarGlyphs.Icon(BarGlyphs.Out(InkDim, 2, 2.5, 8, 9, 1.3), BarGlyphs.Out(Ink, 6, 5, 8, 9, 1.3));
 
     private static UIElement SaveIcon()
-        => Icon(Seg(8, 1.5, 8, 9.5), Seg(8, 9.5, 4.8, 6.3), Seg(8, 9.5, 11.2, 6.3), Seg(2.5, 13, 13.5, 13));
+        => BarGlyphs.Icon(BarGlyphs.Seg(Ink, 8, 1.5, 8, 9.5), BarGlyphs.Seg(Ink, 8, 9.5, 4.8, 6.3),
+            BarGlyphs.Seg(Ink, 8, 9.5, 11.2, 6.3), BarGlyphs.Seg(Ink, 2.5, 13, 13.5, 13));
 
     private static UIElement PinIcon()
-        => Icon(Ring(4.5, 2, 7, 5.5), Seg(8, 7.5, 8, 13.5), Seg(5, 13.5, 11, 13.5));
+        => BarGlyphs.Icon(BarGlyphs.Ring(Ink, 4.5, 2, 7, 5.5), BarGlyphs.Seg(Ink, 8, 7.5, 8, 13.5),
+            BarGlyphs.Seg(Ink, 5, 13.5, 11, 13.5));
 
-    private static UIElement OcrIcon() => Icon(Ring(2.5, 2.5, 8, 8, 1.6), Seg(9.8, 9.8, 14, 14, 1.8));
+    private static UIElement OcrIcon() => BarGlyphs.Icon(
+        BarGlyphs.Ring(Ink, 2.5, 2.5, 8, 8, 1.6), BarGlyphs.Seg(Ink, 9.8, 9.8, 14, 14, 1.8));
 
     private int ColourBgra => Annotation.Palette[Math.Clamp(_colourIndex, 0, Annotation.Palette.Count - 1)].Bgra;
 

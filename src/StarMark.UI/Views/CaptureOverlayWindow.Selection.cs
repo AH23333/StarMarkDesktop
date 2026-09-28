@@ -197,17 +197,17 @@ public sealed partial class CaptureOverlayWindow
         var box = mark.Bounds();
         var (left, top) = LocalToDip(new PixelPoint(box.X, box.Y));
         var (right, bottom) = LocalToDip(new PixelPoint(box.Right, box.Bottom));
-        LiveLayer.Children.Add(Out(left, top, Math.Max(1, right - left), Math.Max(1, bottom - top)));
+        LiveLayer.Children.Add(BarGlyphs.Out(Ink, left, top, Math.Max(1, right - left), Math.Max(1, bottom - top)));
         foreach (var corner in mark.Corners())
         {
             var (x, y) = LocalToDip(corner);
-            LiveLayer.Children.Add(Fill(x - 3, y - 3, 6, 6, Ink));
+            LiveLayer.Children.Add(BarGlyphs.Fill(Ink, x - 3, y - 3, 6, 6));
         }
         // 每一类标注都给旋转把手：文字的旋转走"字模覆盖率再铺回去"那条路（见 GdiTextDrawer），
         // 与几何类一样能被像素断言钉住，所以不必再对文字单独关一档。
         var (hx, hy) = LocalToDip(RotateHandle(mark));
         LiveLayer.Children.Add(new Line { X1 = hx, Y1 = hy, X2 = hx, Y2 = top, Stroke = Ink, StrokeThickness = 1 });
-        LiveLayer.Children.Add(Fill(hx - 3, hy - 3, 6, 6, Ink));
+        LiveLayer.Children.Add(BarGlyphs.Fill(Ink, hx - 3, hy - 3, 6, 6));
         // 文字标注的 ✕（用户口径："编辑框右上角为X号，可以点击删除该文字编辑框"）。
         // 只有文字给：形状类删起来没有"框住的是哪行字"的歧义，Delete 键与橡皮都够用。
         if (mark.Tool == AnnotationTool.Text)
@@ -384,7 +384,7 @@ public sealed partial class CaptureOverlayWindow
         var trailing = new List<(double X, double Y)>(corners) { LocalToDip(_hoverLocal) };
         if (trailing.Count >= 2) LiveLayer.Children.Add(Band(trailing, InkDim, thickness));
         foreach (var corner in corners)
-            LiveLayer.Children.Add(Placed(Fill(corner.X - 2, corner.Y - 2, 4, 4, Ink), corner.X - 2, corner.Y - 2));
+            LiveLayer.Children.Add(BarGlyphs.Fill(Ink, corner.X - 2, corner.Y - 2, 4, 4));
     }
 
     private static Polyline Band(IReadOnlyList<(double X, double Y)> pts, Brush brush, double thickness)

@@ -28,6 +28,7 @@ public sealed class CanvasWiringGateTests
     private const string Screenshot = "src/StarMark.UI/Services/ScreenshotService.cs";
     private const string Toolbar = "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs";
     private const string ToolbarXaml = "src/StarMark.UI/Views/CanvasToolbarWindow.xaml";
+    private const string BarGlyphs = "src/StarMark.UI/Views/BarGlyphs.cs";
     private const string Panel = "src/StarMark.UI/Views/CanvasHotkeyPanelWindow.xaml.cs";
     private const string PanelXaml = "src/StarMark.UI/Views/CanvasHotkeyPanelWindow.xaml";
     private const string App = "src/StarMark.UI/App.xaml.cs";
@@ -622,7 +623,11 @@ public sealed class CanvasWiringGateTests
             SourceGate.MethodBody(toolbar, "private void Refresh()"));       // 亮哪一颗也按表算
         Assert.DoesNotContain("RectButton", SourceGate.ReadRepoFile(ToolbarXaml));
         // 图标是画出来的图元，不是字体字形（缺字就是一个方块，而这条窗上没有第二个地方能看出是哪颗）
-        Assert.Contains("private static Canvas Icon(params UIElement[] parts)", toolbar);
+        // 批次 WS 搬家：图元与"同一族形状"现在只住在 BarGlyphs，这里改指新家，并把"这条上不许再有第二份"钉死。
+        var glyphs = SourceGate.ReadRepoFile(BarGlyphs);
+        Assert.Contains("public static Canvas Icon(params UIElement[] parts)", glyphs);
+        Assert.DoesNotContain("private static Canvas Icon(", toolbar);
+        Assert.DoesNotContain("private static Line Seg(", toolbar);
         // 每种图形都要有自己的图元与一句说明：图标上没有字，说明是它唯一的解释
         foreach (var shape in CanvasTools.Shapes)
         {
@@ -630,9 +635,13 @@ public sealed class CanvasWiringGateTests
                 SourceGate.MethodBody(toolbar, "private static UIElement ShapeIcon("));
             Assert.Contains($"CanvasTool.{shape} =>",
                 SourceGate.MethodBody(toolbar, "private static string ShapeHint("));
+            // 每一颗都必须真的走到共用库（漏一颗的症状是"这条上它长得和另一条不一样"）
+            Assert.Contains($"BarGlyphs.{shape}Glyph(",
+                SourceGate.MethodBody(toolbar, "private static UIElement ShapeIcon("));
         }
         // 直线与折线是这条排上最容易撞车的一对：折线的图标必须带顶点记号，否则两颗看起来是同一件事
-        Assert.Contains("Dot(5.6, 4.1)", SourceGate.MethodBody(toolbar, "private static UIElement ShapeIcon("));
+        Assert.Contains("Fill(ink, 5.6, 4.1, 2.8, 2.8)",
+            SourceGate.MethodBody(glyphs, "public static UIElement PolyLineGlyph("));
         // 穿透态那一行必须说"这一按仍归下层应用"——不然就是"拖了半天什么都没画，以为软件坏了"。
         // 2026-09-27 改判之后这句话对<b>每一支笔</b>都说（从前图形与荧光笔各写一份、措辞还不一致）：
         // 按工具分支就是"有的说了有的没说"的来源，所以这里反向钉死"不许再按工具分叉"。
