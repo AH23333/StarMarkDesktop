@@ -5,6 +5,7 @@ using System.Linq;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
 using StarMark.Core.Capture;
+using StarMark.UI.Helpers;
 using StarMark.UI.Views;
 
 namespace StarMark.UI.Services;
@@ -125,6 +126,25 @@ public static class PinManager
         if (!Pins.Remove(pin)) return;
         if (Pins.Count == 0) ResetState();
         else if (ClickThrough) ClickThrough = Pins.All(p => p.IsClickThrough);
+    }
+
+    /// <summary>
+    /// 全局「撤销／重做」交回<b>正在吃键盘的那张贴图</b>：按前台句柄在名册里找到它，把这一按还给它。
+    /// <para><b>那一张贴图没东西可撤时也算"处理了"</b>（返回 true 就不再回落画布）：注意力在这张图上时，
+    /// 凭空少掉别处的最后一笔比"这一按什么都没做"更糟，而且前者看起来是成功了。</para>
+    /// <para>返回 false＝名册里没有这一张（层名册与贴图名册是两份账，正在关闭的那一刻会错开）。
+    /// 那时调用方会回落到画布，而这里留一行日志——一次"按了没反应"是最难归因的缺陷形状。</para>
+    /// </summary>
+    public static bool UndoRedoAtFocusedPin(IntPtr foreground, bool redo)
+    {
+        foreach (var pin in Pins)
+        {
+            if (WindowInterop.GetHwnd(pin) != foreground) continue;
+            pin.HotkeyUndoRedo(redo);
+            return true;
+        }
+        StarLog.Warn($"[Pin] 撤销/重做没找到前台句柄对应的贴图（0x{foreground.ToInt64():X}），回落到画布");
+        return false;
     }
 
     /// <summary>

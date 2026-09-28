@@ -175,4 +175,45 @@ public sealed class CanvasUndoOrderTests
         // 撤销那一条不能用 NextOrder、重做那一条不能用 LastOrder：两个问题不同，写反一次就是"退错东西"。
         Assert.DoesNotContain("NextOrder", SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "public static void Undo()"));
     }
+
+    // ────────── 跨宿主落点（批次 S2-c3：全局撤销到底退哪一叠） ──────────
+
+    /// <summary>
+    /// 只有"前台那扇窗是贴图"时这一键才不归画布。桌面上挂着贴图 ≠ 用户在贴图上画画——
+    /// 按"有没有贴图"判会把画布的撤销抢走，交给一张他根本没在看的贴图。
+    /// </summary>
+    [Theory]
+    [InlineData(SurfaceRole.Pin, true)]
+    [InlineData(SurfaceRole.Board, false)]
+    [InlineData(SurfaceRole.Strip, false)]
+    [InlineData(SurfaceRole.Sheet, false)]      // Sheet 到这步之前就回不来了（那批热键整批不注册），臂仍要显式给答案
+    public void ThePinOnlyTakesTheGlobalUndoWhenItIsTheWindowInTheLight(SurfaceRole role, bool expected)
+        => Assert.Equal(expected, InkRouting.UndoBelongsToFocusedPin(role));
+
+    [Fact]
+    public void NoFocusedWindowOrAnUnknownOneIsNeverAPin()
+        => Assert.False(InkRouting.UndoBelongsToFocusedPin(null));
+
+    /// <summary>接线闸门：落点判据只准在 Core 一份，UI 只问"前台是谁"再分派（WF-1 那一族的口径）。</summary>
+    [Fact]
+    public void TheRoutingDecisionLivesInCore_AndTheWiringOnlyAsksIt()
+    {
+        var body = SourceGate.MethodBody(
+            SourceGate.ReadRepoFile("src/StarMark.UI/Services/AnnotationHub.cs"),
+            "public static void HotkeyUndoRedo(bool redo)");
+        Assert.Contains("InkRouting.UndoBelongsToFocusedPin(", body);
+        Assert.DoesNotContain("SurfaceRole.Pin", body);                   // 比对角色这件事不在接线层
+        Assert.Equal(1, SourceGate.Count(body, "GetForegroundWindow()")); // 前台窗只问一次（两次就可能问到不同的窗）
+        Assert.Contains("if (redo) CanvasService.HotkeyRedo();", body);
+        Assert.Contains("else CanvasService.HotkeyUndo();", body);
+
+        var app = SourceGate.ReadRepoFile("src/StarMark.UI/App.xaml.cs");
+        Assert.Contains("AnnotationHub.HotkeyUndoRedo(redo: false)", app);
+        Assert.Contains("AnnotationHub.HotkeyUndoRedo(redo: true)", app);
+
+        // 贴图自己那条豁免：正在输入文字时这一按属于输入框（撤字），不属于笔迹历史。
+        var overlay = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.History.cs");
+        Assert.Contains("if (_editingText) return;",
+            SourceGate.MethodBody(overlay, "internal void HotkeyUndoRedo(bool redo)"));
+    }
 }

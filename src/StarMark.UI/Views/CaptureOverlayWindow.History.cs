@@ -111,6 +111,18 @@ public sealed partial class CaptureOverlayWindow
     }
 
     /// <summary>
+    /// 全局热键把「撤销／重做」送进<b>这一张贴图</b>（批次 S2-c3 的跨面路由：前台窗是贴图时这一键归它）。
+    /// <para><b>正在输入文字时不碰笔迹历史</b>：键位本身不撞车（全局那条是 Ctrl+Alt+Z，输入框撤字是 Ctrl+Z），
+    /// 撞的是意图——那一行字还没落定，这时撤销撤到的是<b>它自己</b>（半成型的文字标注整条消失），
+    /// 而用户以为自己撤的是刚才那一笔。</para>
+    /// </summary>
+    internal void HotkeyUndoRedo(bool redo)
+    {
+        if (_editingText) return;
+        if (redo) Redo(); else Undo();
+    }
+
+    /// <summary>
     /// 输入框<b>不</b>因失去焦点而结束——这一条就是真机反馈"必须按住鼠标才在输入、松手就算编辑完"的成因：
     /// 按下那一下把焦点给了输入框，松开时焦点回到遮罩那一层，原先挂在 LostFocus 上的落笔于是把这一行当场结掉。
     /// 落笔的时机改由用户看得见的那几个动作明确决定：Enter、点画布别处、切工具、点动作按钮（各自都会调

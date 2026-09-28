@@ -145,6 +145,26 @@ public static class AnnotationHub
     }
 
     /// <summary>
+    /// 全局「撤销／重做」的落点（方案 §7：栈全局化、按 surface 归属）——<b>注意力在哪块面上就还给它</b>。
+    /// <para>
+    /// 从前这两条键无条件落在画布板上：桌面上挂着贴图时，用户在贴图里画完按 Ctrl+Alt+U，
+    /// 少的是画布上那一笔（他可能几分钟前就没在画布上画了）。"撤错东西"比"撤不动"糟得多，
+    /// 因为它看起来是成功了，只是动了不该动的。
+    /// </para>
+    /// <para>判据只有一份，在 <see cref="InkRouting"/>；这里只做"问前台窗是谁 + 分派"。
+    /// Sheet 不需要一条臂：截图会话期间画布那批热键整批不注册（<see cref="HotkeyGate"/>），
+    /// 而截图窗自己有窗口内的 Ctrl+Z／Ctrl+Y。</para>
+    /// </summary>
+    public static void HotkeyUndoRedo(bool redo)
+    {
+        var foreground = WindowInterop.GetForegroundWindow();
+        if (InkRouting.UndoBelongsToFocusedPin(LayerDirector.RoleOf(foreground))
+            && PinManager.UndoRedoAtFocusedPin(foreground, redo)) return;
+        if (redo) CanvasService.HotkeyRedo();
+        else CanvasService.HotkeyUndo();
+    }
+
+    /// <summary>
     /// <b>每帧的三件事，只在这一处问</b>：① 样式位与状态对不对得上；② 光标那一层到底归谁；③ 归谁之后该做什么。
     /// <para>②的判据只看进程（批次 WD-8：<c>WindowFromPoint</c> 返回那一点上<b>最深</b>的 HWND，
     /// WinUI 的条子内容住在子窗里，比句柄必然不相等）；自家窗拿走那一按不构成"一次按下两家用"，
