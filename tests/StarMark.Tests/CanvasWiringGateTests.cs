@@ -411,13 +411,17 @@ public sealed class CanvasWiringGateTests
         var code = SourceGate.ReadRepoFile(Layer);
         var present = SourceGate.MethodBody(code, "public void Present(IntRect dirty)");
         Assert.Contains("if (clipped.IsEmpty) return;", present);
-        // 整帧那条路只允许<b>三处</b>走：建窗首帧、系统要求重绘（WM_PAINT）、以及"从藏着回到显形"。
-        // 三处的共同点是"系统那份表面没有过 / 已经没有了"，没有一处是每帧（4K 整帧 = 33MB，§16.7 明令禁止每帧这么干）。
+        // 整帧那条路只允许<b>四处</b>走：建窗首帧、系统要求重绘（WM_PAINT）、"从藏着回到显形"、以及换底。
+        // 四处的共同点是"系统那份表面没有过 / 已经不是此刻该显示的那一层"，没有一处是每帧（4K 整帧 = 33MB，§16.7 明令禁止每帧这么干）。
         // 数的是调用点（带分号）：把方法定义本身也算进去的话，改个方法名就会让这条闸门静默失真。
-        Assert.Equal(3, SourceGate.Count(code, "PresentAll();"));
-        // 第三处逐个点名钉住：只数总数会允许"多一处但没人知道在哪"，那正是每帧整帧偷偷溜回来的路
+        Assert.Equal(4, SourceGate.Count(code, "PresentAll();"));
+        // 第四处逐个点名钉住：只数总数会允许"多一处但没人知道在哪"，那正是每帧整帧偷偷溜回来的路
         Assert.Contains("if (visible && !wasShown) PresentAll();",
             SourceGate.MethodBody(code, "public void SetVisible(bool visible)"));
+        // 换底必须整块重交：DIB 里存的是上一次<b>合成好</b>的结果，只补脏区会把脏区之外那些行留在旧底上
+        // （屏幕上就是一块洗不掉的白，或一片没有底的透明）。
+        Assert.Contains("BackdropArgb = argb;", SourceGate.MethodBody(code, "public void SetBackdrop(uint argb)"));
+        Assert.Contains("PresentAll();", SourceGate.MethodBody(code, "public void SetBackdrop(uint argb)"));
         Assert.Contains("prcDirty", code);
     }
 
@@ -606,7 +610,10 @@ public sealed class CanvasWiringGateTests
     {
         var apply = SourceGate.MethodBody(SourceGate.ReadRepoFile(Hub), "private static bool Apply(AnnotationStage from, AnnotationStage to)");
         Assert.Contains("if (to.IsBoard() && !CanvasService.IsRunning)", apply);
-        Assert.Contains("else if (to == AnnotationStage.Idle && CanvasService.IsRunning) CanvasService.CloseBoardHost();", apply);
+        Assert.Contains("else if (to == AnnotationStage.Idle && CanvasService.IsRunning)", apply);
+        Assert.Contains("CanvasService.CloseBoardHost();", apply);
+        // 板子收了，背景态跟着回默认：留着"白板开着"，下一次开板子就是一屏莫名其妙的白
+        Assert.Contains("Backdrop = CanvasBackdrop.Transparent;", apply);
         // 反向钉：只看 to（外加"在不在"），引入 from 就是这次缺陷的本体，别让它被"更对称"的写法请回来
         Assert.DoesNotContain("from.IsBoard()", apply);
         // 藏与显归 ApplyStage 管，而且"从藏着回到显形"要重交一次表面（分层内容可能在那一段被系统丢掉）
@@ -1230,7 +1237,12 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("hit == _yieldedTo", audit);                           // 同一个窗只说一次，不每帧刷
         Assert.Contains("Raise(SessionEvent.GivePointerBack);", audit);        // 让位走会话事件，不再直接改样式位
         Assert.Contains("另一个程序的窗口", audit);                              // 让位必须给得出原因
-        Assert.Contains("Notice = \"已自动交回鼠标", audit);
+        // 让位那句话现在有两臂：白板态要<b>先放下白板</b>才交得出鼠标（整屏白墙不许穿透，判据见 Core 的闸门）。
+        // 只钉"常态"那一臂的话，另一臂就成了编不出也测不到的空位——而它的症状是"点了穿透，屏幕还是白的"。
+        Assert.Contains("Notice = droppingBoard", audit);
+        Assert.Contains("已自动关掉白板底并交回鼠标", audit);
+        Assert.Contains("已自动交回鼠标", audit);
+        Assert.Contains("if (droppingBoard) Raise(SessionEvent.ToggleBackdrop);", audit);
         Assert.DoesNotContain("ReassertLayering", hub);
 
         // 逐像素问、按进程判——这两件事都在 LayerDirector 一处
@@ -1253,11 +1265,11 @@ public sealed class CanvasWiringGateTests
     // ────────── 批次 WD-3：画布动作的全局热键（发起人点名"九个全要，带修饰键"）──────────
 
     /// <summary>
-    /// 十条画布动作各有各的默认键，<b>且必须带 Ctrl+Alt</b>。
+    /// 十一条画布动作各有各的默认键，<b>且必须带 Ctrl+Alt</b>。
     /// <para>
     /// 裸键在穿透态下必须留给下层应用（用户要选文本、要翻页），画布一旦吃下裸键就成了"开着画布
-    /// 别的软件都不能用"；而九条不带修饰键的字母键撞键概率极高。键位本身按"这件事叫什么"取字母
-    /// （T=Through、P=Pen、H=Highlighter、R=eRaser、U=Undo、C=Clear、S=Save、K=复制、G=贴图），
+    /// 别的软件都不能用"；而一批不带修饰键的字母键撞键概率极高。键位本身按"这件事叫什么"取字母
+    /// （T=Through、P=Pen、H=Highlighter、R=eRaser、W=Whiteboard、U=Undo、C=Clear、S=Save、K=复制、G=贴图），
     /// 猜得出比记得住更重要——工具条上那颗「⌨」也随时能把这张表调出来。
     /// </para>
     /// </summary>
@@ -1272,6 +1284,7 @@ public sealed class CanvasWiringGateTests
             [HotkeyActions.CanvasPen] = 0x50,              // P
             [HotkeyActions.CanvasHighlighter] = 0x48,      // H
             [HotkeyActions.CanvasEraser] = 0x52,           // R
+            [HotkeyActions.CanvasBoard] = 0x57,            // W（Whiteboard）
             [HotkeyActions.CanvasUndo] = 0x55,             // U
             [HotkeyActions.CanvasRedo] = 0x59,             // Y（redo 的惯用键；U+Shift 这种组合 RegisterHotKey 表达不了）
             [HotkeyActions.CanvasClear] = 0x43,            // C
@@ -1312,8 +1325,9 @@ public sealed class CanvasWiringGateTests
     }
 
     /// <summary>
-    /// 画布没开着时按"画布内的动作"，<b>三支笔直接把画布开起来</b>（按画笔的人是要画画，不是要先按另一个键），
-    /// 其余六条给一句看得见的原因。"按了没反应"与"功能坏了"在用户眼里是同一件事。
+    /// 画布没开着时按"画布内的动作"，<b>三支笔与「白板」直接把画布开起来</b>（按画笔的人是要画画、
+    /// 按白板的人是要一块白板，不是要先按另一个键），其余各条给一句看得见的原因。
+    /// "按了没反应"与"功能坏了"在用户眼里是同一件事。
     /// </summary>
     [Fact]
     public void CanvasHotkeysEitherOpenTheBoardOrSayWhyTheyDidNot()
@@ -1330,10 +1344,19 @@ public sealed class CanvasWiringGateTests
         var require = SourceGate.MethodBody(service, "private static void RequireRunning(string what, Action run)");
         Assert.Contains("Report(\"画布没开着\"", require);
         Assert.Contains("BindingText(HotkeyActions.CanvasToggle)", require);   // 键位取自真实绑定，不写死
-        // 计数不写死：按动作表算。表里除「开关 + 三支笔」那四条（它们的活儿本身就是"把板子开起来/选那支笔"，
-        // 自带回执）之外，每一条都必须走 RequireRunning。写死数字的下场是加一条动作就红一次——
+        // 计数不写死：按动作表算。表里除「开关 + 三支笔 + 白板底」那五条之外，每一条都必须走 RequireRunning
+        // （那五条的活儿本身就是"把板子开起来/选那支笔/换那块底"，自带回执）。写死数字的下场是加一条动作就红一次——
         // 或者更糟：忘了改，于是一条新动作谁都没接而闸门仍然绿（批次 WD-3 之后加「重做」正是这一次）。
-        Assert.Equal(HotkeyActions.Canvas.Count - 4, SourceGate.Count(service, "RequireRunning(\""));
+        // 豁免名单按名字钉住：只留一个减数，将来"顺手多减一条"就把这条闸门变成了摆设。
+        var opensTheBoardItself = new[]
+        {
+            HotkeyActions.CanvasToggle, HotkeyActions.CanvasPen, HotkeyActions.CanvasHighlighter,
+            HotkeyActions.CanvasEraser, HotkeyActions.CanvasBoard,
+        };
+        Assert.Equal(HotkeyActions.Canvas.Count - opensTheBoardItself.Length,
+            SourceGate.Count(service, "RequireRunning(\""));
+        // 「白板」那条确实走的是"能开就开"的路（事件折给 Hub，由转移表决定落点），不是 RequireRunning
+        Assert.Contains("public static void ToggleBackdrop() => AnnotationHub.Raise(SessionEvent.ToggleBackdrop);", service);
     }
 
     // ────────── 批次 WD-4：「⌨」快捷键面板 ──────────

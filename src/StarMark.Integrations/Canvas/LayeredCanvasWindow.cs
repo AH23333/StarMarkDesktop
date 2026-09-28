@@ -260,6 +260,26 @@ public sealed class LayeredCanvasWindow : IDisposable
         => ((ulong)NativeMethods.GetWindowLongPtrW(_hwnd, CanvasNative.GWL_EXSTYLE).ToInt64()
             & CanvasNative.WS_EX_TRANSPARENT) != 0;
 
+    /// <summary>
+    /// 这块玻璃底下那块背景的颜色（ARGB）；<b>0＝透明底</b>，走一直以来的逐行快路。
+    /// <para><b>它只活在提交那一步，绝不写进 <see cref="Pixels"/></b>：托管缓冲永远是"预乘 + 透明"的墨，
+    /// 取大混合、橡皮减 alpha、增量＝全量那套语义因此一行没动（234 例逐像素参照钉的还是那一份）。
+    /// 底白一旦进了缓冲，"取大"就当场失效——白与任何墨逐通道取大＝白＝什么都看不见。</para>
+    /// </summary>
+    public uint BackdropArgb { get; private set; }
+
+    /// <summary>
+    /// 换底。<b>两个方向都必须整块重交</b>：DIB section 里存的是"上一次提交时合成好的结果"，
+    /// 只补脏区的话，脏区之外那些行还留着旧底（关白板时留下一块洗不掉的白，开白板时留下一块没有底的透明）。
+    /// 换底是用户点一下按钮才发生一次的事，一次整帧提交的代价可以接受；漏一块则是"画布花了"。
+    /// </summary>
+    public void SetBackdrop(uint argb)
+    {
+        if (BackdropArgb == argb) return;
+        BackdropArgb = argb;
+        PresentAll();
+    }
+
     /// <summary>绘制态给十字光标（"现在按下去就会画东西"这件事要有视觉交代），穿透态恢复箭头。</summary>
     public void SetDrawCursor(bool cross) => _crossCursor = cross;
 
@@ -296,13 +316,31 @@ public sealed class LayeredCanvasWindow : IDisposable
         {
             fixed (uint* managed = Pixels)
             {
-                var from = (byte*)managed;
-                var to = (byte*)_bits;
-                for (var y = source.Y; y < source.Bottom; y++)
+                if (BackdropArgb == 0)
                 {
-                    var offset = (y * Width + source.X) * 4;
-                    var bytes = source.Width * 4;
-                    Buffer.MemoryCopy(from + offset, to + offset, bytes, bytes);
+                    // 透明底：托管缓冲就是最终那一层，逐行原样搬（一直以来的快路）
+                    var from = (byte*)managed;
+                    var to = (byte*)_bits;
+                    for (var y = source.Y; y < source.Bottom; y++)
+                    {
+                        var offset = (y * Width + source.X) * 4;
+                        var bytes = source.Width * 4;
+                        Buffer.MemoryCopy(from + offset, to + offset, bytes, bytes);
+                    }
+                }
+                else
+                {
+                    // 不透明底（白板）：墨要在这一步才叠到底上。<b>分支在循环外</b>——每像素多一次判断
+                    // 就是每帧几百万次（批次 WG 的纪律），而"底"是整块屏一个值，一次决定就够了。
+                    var board = BackdropArgb;
+                    var ink = (uint*)managed;
+                    var dst = (uint*)_bits;
+                    for (var y = source.Y; y < source.Bottom; y++)
+                        for (var x = source.X; x < source.Right; x++)
+                        {
+                            var i = y * Width + x;
+                            dst[i] = BackdropBlend.OverOpaque(ink[i], board);
+                        }
                 }
             }
 

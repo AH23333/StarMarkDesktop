@@ -198,6 +198,9 @@ public sealed partial class CanvasToolbarWindow : Window
     private void Through_Click(object sender, RoutedEventArgs e)
         => CanvasService.SetClickThrough(!CanvasService.IsClickThrough);
 
+    /// <summary>「白板」：换这块玻璃底下的那块背景（事件折给 Hub，方向判据在 Core 那张表里）。</summary>
+    private void Board_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleBackdrop();
+
     private void Halo_Click(object sender, RoutedEventArgs e) => CanvasService.SetHalo(!CanvasService.HaloEnabled);
 
     private void Pin_Click(object sender, RoutedEventArgs e) => CanvasService.SnapshotToPin();
@@ -354,6 +357,7 @@ public sealed partial class CanvasToolbarWindow : Window
         Highlight(MediumButton, CanvasService.WidthStep == 1);
         Highlight(ThickButton, CanvasService.WidthStep == 2);
         Highlight(ThroughButton, CanvasService.IsClickThrough, strong: false);
+        Highlight(BoardButton, CanvasService.IsWhiteboard, strong: false);
         Highlight(HaloButton, CanvasService.HaloEnabled, strong: false);
         Highlight(KeysButton, CanvasService.IsHotkeyPanelOpen, strong: false);
         for (var index = 0; index < _colourButtons.Count; index++)
@@ -382,7 +386,11 @@ public sealed partial class CanvasToolbarWindow : Window
         var ink = $"{tool.Name()} · {CanvasService.WidthStep + 1} 档 · {CanvasService.Palette[CanvasService.ColorIndex].Name}";
         if (!CanvasService.IsClickThrough)
             // 折线是唯一"跨按还开着"的：不在这行说怎么收，用户就只能靠试——而试出来的那一下是 Esc＝退出画布
-            return $"绘制中（鼠标归画布）：{ink}。点「穿透」或右键交出鼠标"
+            // 白板开着时「交出鼠标」这条出口被背景态闸门拦住了（整屏白墙不许穿透）。这一行不说清楚，
+            // 用户点「穿透」只会得到"按钮坏了"的结论——被拦住的动作必须把拦住它的那句话讲出来。
+            return $"绘制中（鼠标归画布）：{ink}。" + (CanvasService.IsWhiteboard
+                ? "白板底开着：要先点「白板」关掉白底，才能交出鼠标"
+                : "点「穿透」或右键交出鼠标")
                    + (tool == CanvasTool.PolyLine ? "；勾折线时 Esc／再点「折线」＝收口这一条" : string.Empty);
         // 2026-09-27 改判：穿透态下<b>没有任何一支笔</b>能直接画（从前荧光笔"按住即画"，与"穿透＝鼠标归下层"
         // 这句话自相矛盾，而且那套轮询抢按不看光标落点，会把点工具条那一下也吃掉）。

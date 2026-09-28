@@ -52,6 +52,12 @@ public enum SessionEvent
     /// <summary>反过来：把鼠标收回给画布（那颗「交出/收回鼠标」按钮的另一个方向，或 F5 来回按）。</summary>
     TakePointer,
 
+    /// <summary>
+    /// 换背景态（透明 ⇄ 白板底）。它与 <see cref="GivePointerBack"/> 一样是"这块玻璃本身怎么样"的事件，
+    /// 不是"手上拿哪支笔"，所以走同一条 Raise 通道，不在宿主里另存一份旗标（§3.2）。
+    /// </summary>
+    ToggleBackdrop,
+
     /// <summary>冻帧进截图（F1 给条／F3 直贴／识字）。</summary>
     BeginSheet,
 
@@ -132,6 +138,31 @@ public static class AnnotationSessions
 
     /// <summary>画板玻璃这一态吃不吃鼠标（穿透＝不吃，绘制＝吃）。Sheet 不谈这一位：那时玻璃不可见。</summary>
     public static bool GlassTakesPointer(this AnnotationStage stage) => stage == AnnotationStage.BoardDrawing;
+
+    /// <summary>
+    /// 背景态会不会<b>拦住这条事件</b>：只有"交出鼠标"被白板底拦住。
+    /// <para>白板态那块玻璃是<b>整屏不透明的白</b>，一旦穿透，用户看见的是白墙、点着的是它后面那些窗——
+    /// 这正是 §16.6 与批次 WC-1 反复定性的"看得见却点不到 / 点得到却看不见"。让它不成立比事后解释便宜得多。</para>
+    /// <para>方向判据写在 Core 而不写在接线层（批次 WF-1 的口径）：这一条写反的样子是"白板态一点穿透按钮
+    /// 整屏变成点不动的白墙"，只有真机看得见，编译与旧闸门都不会红。</para>
+    /// </summary>
+    public static bool IsBlockedByBackdrop(SessionEvent what, CanvasBackdrop backdrop)
+        => what == SessionEvent.GivePointerBack && !CanvasBackdropMath.AllowsClickThrough(backdrop);
+
+    /// <summary>拦住那句事件时的<b>看得见的原因</b>（工具条状态行读它；哑按最坏，被拦更要说）。</summary>
+    public static string? ReasonBlockedByBackdrop(SessionEvent what, CanvasBackdrop backdrop)
+        => IsBlockedByBackdrop(what, backdrop)
+            ? "白板底时整屏是白墙，交出鼠标等于隔着白墙点桌面；先点「白板」关掉白底，再点「穿透」"
+            : null;
+
+    /// <summary>
+    /// 换上这个背景态之后<b>必须补的那一条鼠标事件</b>；null＝鼠标归属不用跟着动。
+    /// <para>与 <see cref="IsBlockedByBackdrop"/> 是同一枚的两面：白板不许穿透，所以<b>上白板那一刻就要把鼠标收回给画布</b>。
+    /// 少了这一臂，"在穿透态点白板"就会立刻落进上面说的那面白墙。</para>
+    /// <para>下白板返回 null：用户原本在绘制态就继续在绘制态，原本要交鼠标的不该被这次操作顺手改掉。</para>
+    /// </summary>
+    public static SessionEvent? PointerConsequenceOf(CanvasBackdrop next)
+        => CanvasBackdropMath.IsOpaque(next) ? SessionEvent.TakePointer : (SessionEvent?)null;
 
     /// <summary>
     /// 会话要不要<b>拦住"退出键"之外的全局动作</b>——Sheet 期间画布那批快捷键都不该触发画布

@@ -26,6 +26,10 @@
                 <Button Content="清屏" Click="Clear_Click"/>
                 <Button x:Name="ThroughButton" Content="穿透" Click="Through_Click"
                         ToolTipService.ToolTip="点穿到下面的 PPT／桌面；再按一次或按热键回到绘制"/>
+                <!-- 白板底：这块玻璃底下换成不透明白（演示/讲解用）。措辞要说清它与「穿透」互相拦着，
+                     否则"点了穿透没反应"只剩一种解释＝软件坏了。 -->
+                <Button x:Name="BoardButton" Content="白板" Click="Board_Click"
+                        ToolTipService.ToolTip="整屏换成白底，墨画在白底上（贴图／存图带这张白底）；白板开着不能穿透，先关掉它再交鼠标"/>
                 <!--
                     五种图形（发起人点名"给画布加图形编辑"，并要求用图标而不是汉字）。
                     这一段整排由代码按 Core 的 CanvasTools.Shapes 生成：

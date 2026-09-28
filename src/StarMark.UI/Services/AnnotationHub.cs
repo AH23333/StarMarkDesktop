@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using StarMark.Abstractions;
+using StarMark.Core.Canvas;
 using StarMark.Core.Capture;
 using StarMark.Core.Hotkeys;
 using StarMark.UI.Helpers;
@@ -40,6 +41,13 @@ public static class AnnotationHub
     public static string? Notice { get; private set; }
 
     /// <summary>
+    /// 画布玻璃<b>底下那块背景</b>（透明 / 白板底）——会话态的一部分，所以住在这里而不是宿主里。
+    /// <para>写入点只有 <see cref="ToggleBackdrop"/> 与"板子关掉时复位"两处；宿主（CanvasService / 那扇 Win32 窗）
+    /// 只是它的执行者。§3.2 那句话对这个开关同样成立：多存一份就必然分岔，这里的分岔形状是"按钮说白板开着、屏幕却是桌面"。</para>
+    /// </summary>
+    public static CanvasBackdrop Backdrop { get; private set; } = CanvasBackdrop.Transparent;
+
+    /// <summary>
     /// 临时摘掉穿透的那一按正在飞行中（按住即画）。<b>这是唯一合法的"状态说穿透、窗口不穿透"时刻</b>，
     /// 每帧对账必须跳过它——按状态去"修"会把按住即画那一条打断（批次 WO 定下来的豁免）。
     /// </summary>
@@ -70,6 +78,13 @@ public static class AnnotationHub
             return;
         }
         var from = Stage;
+        // 背景态是一条真正的事件（它改的是"这块玻璃底下是什么"），但它的落点不是一个新会话态，
+        // 所以在这里分派，不塞进 Move 那张按态表——那张表回答的始终是"此刻谁吃鼠标"。
+        if (what == SessionEvent.ToggleBackdrop)
+        {
+            ToggleBackdrop();
+            return;
+        }
         var to = AnnotationSessions.Move(from, what, _boardBeforeSheet);
         if (what == SessionEvent.ToggleBoard && from.IsSheet())
         {
@@ -78,6 +93,14 @@ public static class AnnotationHub
             return;
         }
         if (to == from) return;
+        // 背景态闸门（判据在 Core，与"上白板要收回鼠标"是同一枚的两面）：白板态不许落进穿透。
+        // 被拦时那句原因必须看得见——"点了没反应"与"功能坏了"在用户眼里是同一件事。
+        if (AnnotationSessions.IsBlockedByBackdrop(what, Backdrop))
+        {
+            Notice = AnnotationSessions.ReasonBlockedByBackdrop(what, Backdrop);
+            CanvasService.RaiseStateChanged();
+            return;
+        }
         if (what == SessionEvent.BeginSheet) _boardBeforeSheet = from.IsBoard() ? from : null;
         Stage = to;
         if (what == SessionEvent.EndSheet) _boardBeforeSheet = null;
@@ -105,7 +128,12 @@ public static class AnnotationHub
         {
             if (!CanvasService.OpenBoardHost()) return false;
         }
-        else if (to == AnnotationStage.Idle && CanvasService.IsRunning) CanvasService.CloseBoardHost();
+        else if (to == AnnotationStage.Idle && CanvasService.IsRunning)
+        {
+            // 板子收了，背景态跟着回到默认：留着"白板开着"下一次开板子就是一屏莫名其妙的白
+            Backdrop = CanvasBackdrop.Transparent;
+            CanvasService.CloseBoardHost();
+        }
 
         CanvasService.ApplyStage(to);
         LayerDirector.EnforceOrder(to);
@@ -113,6 +141,35 @@ public static class AnnotationHub
         Notice = null;
         _yieldedTo = IntPtr.Zero;
         return true;
+    }
+
+    /// <summary>
+    /// 换背景态（工具条那颗「白板」与 <c>canvas.board</c> 都折到这一句）。
+    /// <para><b>板子还没开着时按它＝先开板子再上白板</b>：讲解的人按「白板」就是要一块白板，
+    /// 多一步"先按另一颗键把板子叫出来"是缺陷（与三条工具热键同一口径，见 <see cref="CanvasService.SelectTool"/>）。</para>
+    /// <para>次序是<b>先落地那块底、再补鼠标事件</b>：补的那一条会走 <see cref="Apply"/> 把显隐与样式位按新态
+    /// 写一遍，底先落地就不会留下"白板已上、样式还是穿透"的那一帧（那正是批次 WO 定性过的"状态说的与窗口做的不一致"）。</para>
+    /// </summary>
+    private static void ToggleBackdrop()
+    {
+        if (Stage.IsSheet())
+        {
+            Report("画布现在按不动", HotkeyGate.ReasonNotRunning(
+                HotkeyActions.CanvasToggle, true, AnnotationStage.Sheet) ?? "截图进行中");
+            return;
+        }
+        var next = CanvasBackdropMath.Next(Backdrop);
+        if (!Stage.IsBoard())
+        {
+            Raise(SessionEvent.ToggleBoard);
+            if (!Stage.IsBoard()) return;         // 板子开不起来：那句原因由 OpenBoardHost 给过，不重复播报
+        }
+        Backdrop = next;
+        CanvasService.ApplyBackdrop(next);
+        // 上白板必须同时把鼠标收回给画布（Core 那一枚判据的另一面）；下白板不动鼠标归属——
+        // 用户原来在绘制态就继续绘制，原来要交出去的不该被这次操作顺手改掉。
+        if (AnnotationSessions.PointerConsequenceOf(next) is { } consequence) Raise(consequence);
+        else CanvasService.RaiseStateChanged();   // 态没挪时 Raise 会短路，这颗按钮的高亮得自己跟着改口
     }
 
     /// <summary>
@@ -202,8 +259,14 @@ public static class AnnotationHub
         if (!LayerRules.ShouldYieldPointer(Stage, ours)) return;
 
         StarLog.Warn($"[Hub] 绘制态发现光标那一层已被另一个程序占走，主动交回鼠标");
+        // 白板态的让位要<b>先放下白板</b>：交出鼠标会被背景态闸门拦住（整屏白墙不许穿透），
+        // 而"别人的窗盖在画布上面"这件事仍然得交代清楚。先关白板再按常态交，两句都是真的。
+        var droppingBoard = AnnotationSessions.IsBlockedByBackdrop(SessionEvent.GivePointerBack, Backdrop);
+        if (droppingBoard) Raise(SessionEvent.ToggleBackdrop);
         Raise(SessionEvent.GivePointerBack);
-        Notice = "已自动交回鼠标：另一个程序的窗口（例如按 Win 呼出的开始菜单）盖住了画布；要接着画请再点「画笔」";
+        Notice = droppingBoard
+            ? "已自动关掉白板底并交回鼠标：另一个程序的窗口（例如按 Win 呼出的开始菜单）盖住了画布；要接着用白板请再点「白板」"
+            : "已自动交回鼠标：另一个程序的窗口（例如按 Win 呼出的开始菜单）盖住了画布；要接着画请再点「画笔」";
         _yieldedTo = hit;
         StageChanged?.Invoke(Stage);
     }

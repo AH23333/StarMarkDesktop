@@ -397,6 +397,8 @@ public partial class App : Application
                 hotkey.RegisterHandler(HotkeyActions.CanvasPen, () => { StarMark.UI.Services.CanvasService.HotkeyTool(StarMark.Core.Canvas.CanvasTool.Pen); return Task.CompletedTask; });
                 hotkey.RegisterHandler(HotkeyActions.CanvasHighlighter, () => { StarMark.UI.Services.CanvasService.HotkeyTool(StarMark.Core.Canvas.CanvasTool.Highlighter); return Task.CompletedTask; });
                 hotkey.RegisterHandler(HotkeyActions.CanvasEraser, () => { StarMark.UI.Services.CanvasService.HotkeyTool(StarMark.Core.Canvas.CanvasTool.Eraser); return Task.CompletedTask; });
+                // 白板底折成一条会话事件（Hub 里顺带把鼠标收回给画布——白板与穿透不能并存，判据在 Core）
+                hotkey.RegisterHandler(HotkeyActions.CanvasBoard, () => { StarMark.UI.Services.CanvasService.ToggleBackdrop(); return Task.CompletedTask; });
                 // 撤销／重做走 Hub 的落点路由：前台窗是贴图就还给那张贴图，否则落画布板（批次 S2-c3）。
                 hotkey.RegisterHandler(HotkeyActions.CanvasUndo, () => { StarMark.UI.Services.AnnotationHub.HotkeyUndoRedo(redo: false); return Task.CompletedTask; });
                 hotkey.RegisterHandler(HotkeyActions.CanvasRedo, () => { StarMark.UI.Services.AnnotationHub.HotkeyUndoRedo(redo: true); return Task.CompletedTask; });

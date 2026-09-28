@@ -70,6 +70,13 @@ public static class HotkeyActions
     public const string CanvasPen = "canvas.pen";
     public const string CanvasHighlighter = "canvas.highlighter";
     public const string CanvasEraser = "canvas.eraser";
+
+    /// <summary>
+    /// 白板底（整屏换成白底，墨画在白底上）。与「交出鼠标」并列而不是排在笔后面：
+    /// 它改的是<b>这块玻璃底下是什么</b>，不是手上拿哪支笔。
+    /// </summary>
+    public const string CanvasBoard = "canvas.board";
+
     public const string CanvasUndo = "canvas.undo";
     public const string CanvasRedo = "canvas.redo";
     public const string CanvasClear = "canvas.clear";
@@ -86,13 +93,13 @@ public static class HotkeyActions
     private const string LayoutPrefix = "layout.apply:";
 
     /// <summary>
-    /// 屏幕画布的全部动作，一处定序：<b>开关在最前，之后是"交回鼠标 → 三支笔 → 撤销/清屏 → 三个产出"</b>。
+    /// 屏幕画布的全部动作，一处定序：<b>开关在最前，之后是"交回鼠标 → 三支笔 → 背景态 → 撤销/清屏 → 三个产出"</b>。
     /// 设置页那节与画布上的快捷键面板都枚举这份表——两处各写一遍，迟早和注册表分岔（那时症状是
     /// "面板上写着 Ctrl+Alt+R，按了没反应"）。
     /// </summary>
     public static IReadOnlyList<string> Canvas { get; } = new[]
     {
-        CanvasToggle, CanvasClickThrough, CanvasPen, CanvasHighlighter, CanvasEraser,
+        CanvasToggle, CanvasClickThrough, CanvasPen, CanvasHighlighter, CanvasEraser, CanvasBoard,
         CanvasUndo, CanvasRedo, CanvasClear, CanvasSave, CanvasCopy, CanvasPin,
     };
 
@@ -181,6 +188,7 @@ public static class HotkeyActions
             case CanvasPen: return "画布 · 画笔（留痕，未开画布时先开）";
             case CanvasHighlighter: return "画布 · 荧光笔（按住即画、松开即透）";
             case CanvasEraser: return "画布 · 橡皮";
+            case CanvasBoard: return "画布 · 白板底（整屏白底 / 恢复透明）";
             case CanvasUndo: return "画布 · 撤销上一笔";
             case CanvasRedo: return "画布 · 重做刚撤销的那一笔";
             case CanvasClear: return "画布 · 清空笔迹";

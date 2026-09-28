@@ -212,6 +212,9 @@ public static class CanvasService
                 try
                 {
                     var window = new LayeredCanvasWindow(bounds);
+                    // 换分辨率／拔屏之后的重建也要把背景态原样还回来（真值只在 Hub 那一份，这里只是交给新建的这扇窗）。
+                    // 少这一句的症状很具体：重新插一次显示器，别的屏还是白板、这块屏变成桌面。
+                    window.SetBackdrop(CanvasBackdropMath.ArgbOf(AnnotationHub.Backdrop));
                     // 持久层同样要以"空白"起步：它是 Flush 时铺到屏幕上的那张底图，
                     // 留 0 就等于把"这块玻璃在鼠标眼里不存在"重新写回去（只在擦过的地方发作）
                     var persistent = new uint[window.Width * window.Height];
@@ -406,6 +409,25 @@ public static class CanvasService
         foreach (var screen in Screens) screen.Trail.CursorHaloEnabled = on;
         RaiseStateChanged();
     }
+
+    /// <summary>
+    /// 把背景态落到每块屏的那扇玻璃上。<b>只由 <see cref="AnnotationHub"/> 调用</b>（事件那一侧）：
+    /// 宿主不自己翻这块底，否则"按钮说白板开着、屏幕却还是桌面"就有了第二个书写点（§3.2 同一课）。
+    /// <para>逐屏换底之后各窗自己整块重交一次（<c>SetBackdrop</c> 里做），因为 DIB 里存的是上一次合成好的结果，
+    /// 只补脏区会把脏区之外那些行留在旧底上——屏幕上就留下一块洗不掉的白或一块没有底的透明。</para>
+    /// </summary>
+    public static void ApplyBackdrop(CanvasBackdrop backdrop)
+    {
+        var argb = CanvasBackdropMath.ArgbOf(backdrop);
+        foreach (var screen in Screens) screen.Window.SetBackdrop(argb);
+        RaiseStateChanged();
+    }
+
+    /// <summary>白板底是否在场（工具条那颗据此高亮；读的是会话态，宿主不再记一份）。</summary>
+    public static bool IsWhiteboard => AnnotationHub.Backdrop == CanvasBackdrop.Whiteboard;
+
+    /// <summary>「白板」那颗按钮与 <c>canvas.board</c>：折成一条事件交给 Hub，这里不判方向。</summary>
+    public static void ToggleBackdrop() => AnnotationHub.Raise(SessionEvent.ToggleBackdrop);
 
     /// <summary>广播状态（工具/颜色/粗细/穿透/光晕/让位原因）——工具条的状态行是唯一读者。</summary>
     public static void RaiseStateChanged() => StateChanged?.Invoke();
@@ -1134,35 +1156,73 @@ public static class CanvasService
         // 抓的是<b>干净桌面</b>（那一帧里这块玻璃不上屏），墨由下面自己叠：抓屏抓到的是已经合成完的屏幕，
         // 玻璃上的笔迹会在那一帧里进图一次，OverlayOntoFrame 又叠一次＝"图里有两份"（方案 §1 的 C5，
         // 也是"屏幕上一份、图里另一份"这类对不上的总根源）。收/还只在 CaptureWithoutCanvas 那一处写。
-        var captured = ScreenshotService.CaptureWithoutCanvas();
-        if (!captured.Ok || captured.Frame is not { } frame)
+        //
+        // <b>白板态走另一条底</b>：那块玻璃本身就是不透明的整屏白，用户看见的就是"一张白纸 + 墨"，
+        // 抓来的桌面他根本没看见。仍按桌面当底就会出现"板上是白纸、贴出来是别人的桌面"——
+        // 与批次 WK 那条同一类缺口：凡是"屏幕上有"的东西（预览槽、背景态）都必须进这张图。
+        byte[] baseFrame;
+        int boardWidth, boardHeight;
+        if (CanvasBackdropMath.IsOpaque(AnnotationHub.Backdrop))
         {
-            reason = captured.Error ?? "系统没有返回画面";
-            return false;
+            boardWidth = screen.Window.Width;
+            boardHeight = screen.Window.Height;
+            baseFrame = BoardFrame(boardWidth, boardHeight, CanvasBackdropMath.WhiteboardArgb);
         }
-        if (ScreenshotService.TryCrop(frame, screen.Bounds) is not { } crop)
+        else
         {
-            reason = "这一块屏在截到的画面外面（显示器可能刚被拔掉）";
-            return false;
+            var captured = ScreenshotService.CaptureWithoutCanvas();
+            if (!captured.Ok || captured.Frame is not { } frame)
+            {
+                reason = captured.Error ?? "系统没有返回画面";
+                return false;
+            }
+            if (ScreenshotService.TryCrop(frame, screen.Bounds) is not { } crop)
+            {
+                reason = "这一块屏在截到的画面外面（显示器可能刚被拔掉）";
+                return false;
+            }
+            boardWidth = crop.Width;
+            boardHeight = crop.Height;
+            baseFrame = crop.Pixels;
         }
 
-        // 笔迹（持久层 + 还活着的荧光段）合成到这块屏的画面之上；光晕是"提示我在什么模式"，不进快照
-        var ink = new uint[crop.Width * crop.Height];
+        // 笔迹（持久层 + 还活着的荧光段）合成到这张底之上；光晕是"提示我在什么模式"，不进快照
+        var ink = new uint[boardWidth * boardHeight];
         Array.Copy(screen.Persistent, ink, Math.Min(screen.Persistent.Length, ink.Length));
         foreach (var segment in screen.Trail.Segments)
-            CanvasCompositor.Paint(ink, crop.Width, crop.Height, segment.Stroke, segment.AlphaScale);
+            CanvasCompositor.Paint(ink, boardWidth, boardHeight, segment.Stroke, segment.AlphaScale);
         // 正在拖的那个图形／还开着的折线也算"屏幕上有"：不叠它就会出现"板上看得见一条，贴出来的图没有"。
         // 顺序与 Flush 一致（叠在荧光段之后），这样同一帧里不会跳色。
         if (screen.Trail.Preview is { } preview)
-            CanvasCompositor.Paint(ink, crop.Width, crop.Height, preview);
-        CanvasCompositor.OverlayOntoFrame(crop.Pixels, crop.Width, crop.Height,
+            CanvasCompositor.Paint(ink, boardWidth, boardHeight, preview);
+        CanvasCompositor.OverlayOntoFrame(baseFrame, boardWidth, boardHeight,
             new IntRect(0, 0, 0, 0), ink, screen.Window.Width, screen.Window.Height);
 
-        pixels = crop.Pixels;
-        width = crop.Width;
-        height = crop.Height;
+        pixels = baseFrame;
+        width = boardWidth;
+        height = boardHeight;
         source = screen.Bounds;
         return true;
+    }
+
+    /// <summary>
+    /// 一块纯底色的 BGRA 帧（白板快照的那张底）。<b>字节序与分层窗缓冲一致</b>（B、G、R、A），
+    /// 所以这里的位移顺序不能照着"ARGB"那个名字念反——念反了白底看不出来，彩色底就是一张错色图。
+    /// </summary>
+    private static byte[] BoardFrame(int width, int height, uint argb)
+    {
+        var frame = new byte[width * height * 4];
+        var b = (byte)(argb & 0xFF);
+        var g = (byte)(argb >> 8 & 0xFF);
+        var r = (byte)(argb >> 16 & 0xFF);
+        for (var i = 0; i < frame.Length; i += 4)
+        {
+            frame[i] = b;
+            frame[i + 1] = g;
+            frame[i + 2] = r;
+            frame[i + 3] = 255;         // 交出去的图不能留透明洞（与 OverlayOntoFrame 那一句同一条纪律）
+        }
+        return frame;
     }
 
     // ────────── 工具条 ──────────
