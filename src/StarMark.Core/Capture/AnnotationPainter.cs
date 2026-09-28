@@ -198,20 +198,7 @@ public static class AnnotationPainter
     /// <summary>一段粗线：沿路径每约一个像素盖一个圆点。圆点保证端点是圆的，折线相接处不会出现缺口。</summary>
     private static void Segment(byte[] bgra, int width, int height,
         PixelPoint a, PixelPoint b, int radius, int color, byte[]? painted = null)
-    {
-        var dx = b.X - a.X;
-        var dy = b.Y - a.Y;
-        var steps = Math.Max(Math.Abs(dx), Math.Abs(dy));
-        if (steps == 0) { Disc(bgra, width, height, a.X, a.Y, radius, color, painted); return; }
-        for (var i = 0; i <= steps; i++)
-        {
-            var t = (double)i / steps;
-            Disc(bgra, width, height,
-                (int)Math.Round(a.X + dx * t, MidpointRounding.AwayFromZero),
-                (int)Math.Round(a.Y + dy * t, MidpointRounding.AwayFromZero),
-                radius, color, painted);
-        }
-    }
+        => InkPath.Each(a, b, (x, y) => Disc(bgra, width, height, x, y, radius, color, painted));
 
     private static void Disc(byte[] bgra, int width, int height, int cx, int cy, int radius, int color, byte[]? painted = null)
     {
@@ -254,7 +241,7 @@ public static class AnnotationPainter
         var any = false;
         for (var i = 1; i < points.Count; i++)
         {
-            Walk(points[i - 1], points[i], (x, y) =>
+            InkPath.Each(points[i - 1], points[i], (x, y) =>
             {
                 for (var by = (y - radius) / block; by <= (y + radius) / block; by++)
                 {
@@ -333,19 +320,5 @@ public static class AnnotationPainter
             bgra[p + channel] = (byte)((bgra[p + channel] * keep + src * alpha) / 255);
         }
         bgra[p + 3] = 255;
-    }
-
-    /// <summary>沿两点连线逐点回调（步长 1 像素，端点也算）。<see cref="MosaicBrush"/> 用它把笔刷路径铺开。</summary>
-    private static void Walk(PixelPoint a, PixelPoint b, Action<int, int> visit)
-    {
-        var steps = Math.Max(Math.Abs(b.X - a.X), Math.Abs(b.Y - a.Y));
-        if (steps == 0) { visit(a.X, a.Y); return; }
-        for (var i = 0; i <= steps; i++)
-        {
-            var t = (double)i / steps;
-            visit(
-                (int)Math.Round(a.X + (b.X - a.X) * t, MidpointRounding.AwayFromZero),
-                (int)Math.Round(a.Y + (b.Y - a.Y) * t, MidpointRounding.AwayFromZero));
-        }
     }
 }

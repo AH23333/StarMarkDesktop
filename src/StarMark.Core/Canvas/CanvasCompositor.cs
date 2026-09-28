@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using StarMark.Abstractions.Capture;
+using StarMark.Core.Capture;
 using StarMark.Integrations.Canvas;
 
 namespace StarMark.Core.Canvas;
@@ -345,22 +346,12 @@ public static class CanvasCompositor
     {
         var radius = brush.Radius;
         var scan = brush.Scan;
-        var steps = Math.Max(Math.Abs(b.X - a.X), Math.Abs(b.Y - a.Y));
-        // 步长 1 像素：更密只是在同一像素上多叠几次（取大规则下无事发生），更疏会断线
-        for (var i = 0; i <= steps; i++)
+        InkPath.Each(a, b, (x, y) =>
         {
-            var x = a.X;
-            var y = a.Y;
-            if (steps > 0)
-            {
-                var t = (double)i / steps;
-                x = (int)Math.Round(a.X + (b.X - a.X) * t, MidpointRounding.AwayFromZero);
-                y = (int)Math.Round(a.Y + (b.Y - a.Y) * t, MidpointRounding.AwayFromZero);
-            }
             // 整个圆盘都在裁剪区外就一个像素都不判——这是 PaintClipped 能省掉那几百毫秒的全部依据
-            if (x + scan < clip.X || x - scan >= clip.Right || y + scan < clip.Y || y - scan >= clip.Bottom) continue;
+            if (x + scan < clip.X || x - scan >= clip.Right || y + scan < clip.Y || y - scan >= clip.Bottom) return;
             PaintDisc(buffer, width, height, clip, brush, x, y);
-        }
+        });
         return Clamp(new IntRect(
             Math.Min(a.X, b.X) - radius - 1,
             Math.Min(a.Y, b.Y) - radius - 1,
