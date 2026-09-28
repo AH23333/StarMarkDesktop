@@ -26,6 +26,7 @@ public sealed class CanvasWiringGateTests
     private const string LayerRulesFile = "src/StarMark.Core/Capture/LayerRules.cs";
     private const string HotkeyGateFile = "src/StarMark.Core/Hotkeys/HotkeyGate.cs";
     private const string Screenshot = "src/StarMark.UI/Services/ScreenshotService.cs";
+    private const string PinRoster = "src/StarMark.UI/Services/PinManager.cs";
     private const string Toolbar = "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs";
     private const string ToolbarXaml = "src/StarMark.UI/Views/CanvasToolbarWindow.xaml";
     private const string BarGlyphs = "src/StarMark.UI/Views/BarGlyphs.cs";
@@ -78,6 +79,38 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("SWP_FRAMECHANGED", body);
         Assert.Contains("SWP_NOZORDER", body);
         Assert.DoesNotContain("HWND_TOPMOST", body);
+    }
+
+    /// <summary>
+    /// 方案 §13 用例 8 的后半句：<b>画板穿透与贴图穿透是两个独立维度，各管各的</b>。
+    /// <para>为什么值得单独钉：这两件事在用户眼里是同一个词（"穿透"），实现上却分住两家
+    /// （画板那条走会话态＋玻璃样式位，贴图那条是每张贴图自己的样式位＋名册聚合）。
+    /// 一旦有人"顺手统一"成一条开关，症状是"F5 让贴图透过去，画板也跟着不能画了"
+    /// 或反过来"退出画布把用户贴着的图全变成点不到"——两边都是"成功响应了热键"，只有用户知道动错了东西。</para>
+    /// <para>所以这里钉的是<b>不交叉</b>，不是判据本身（判据各自已有测）。</para>
+    /// </summary>
+    [Fact]
+    public void BoardPassThroughAndPinPassThroughAreTwoIndependentDimensions()
+    {
+        var pins = SourceGate.ReadRepoFile(PinRoster);
+        Assert.DoesNotContain("CanvasService", pins);
+        Assert.DoesNotContain("AnnotationHub", pins);
+        Assert.DoesNotContain(HotkeyActions.CanvasClickThrough, pins);
+
+        // 反向：画板那两条链（编排＋玻璃）也不许去按贴图的开关
+        var canvas = SourceGate.ReadRepoFile(Service) + SourceGate.ReadRepoFile(Layer);
+        Assert.DoesNotContain("PinManager", canvas);
+        Assert.DoesNotContain(HotkeyActions.ScreenPinClickThrough, canvas);
+
+        // 贴图那颗只在自己名册里操作：一次 ToggleClickThrough 不许改会话态
+        var toggle = SourceGate.MethodBody(pins, "public static void ToggleClickThrough()");
+        Assert.Contains("Pins", toggle);
+        Assert.DoesNotContain("Raise(", toggle);
+
+        // 两个维度各自的状态位必须各自归零，不能"一起清"
+        var reset = SourceGate.MethodBody(pins, "private static void ResetState()");
+        Assert.Contains("AreHidden = false;", reset);
+        Assert.Contains("ClickThrough = false;", reset);
     }
 
     [Fact]
