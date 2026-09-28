@@ -416,18 +416,54 @@ public sealed class BackupService
                    .ToList();
     }
 
-    // ==================== 自动备份（P-51） ====================
-
     /// <summary>
-    /// 每日自动备份：距最近一份 <c>auto-</c> 件超过 <see cref="AutoBackupPolicy.MinGap"/> 才落盘，
-    /// 落完后把自动件裁到最近 <see cref="AutoBackupPolicy.Keep"/> 份（手动导出与 pre-restore 快照不动）。
-    /// <para>返回写出的路径；本次跳过（间隔未到 / 空库）返回 null。<b>异常上抛</b>由调用方记日志——
-    /// 在这儿吞掉就会出现"以为备份了其实没有"，与本条存在的理由相反。</para>
+    /// 删掉列表里的某一份备份（设置页每行那颗「删除」）。
+    /// <para><b>先过 <see cref="AutoBackupPolicy.DeleteRefusal"/> 那道闸</b>再删：只认"备份目录里那一份
+    /// 文件名认得出是备份件"的文件。没有这道闸，"照传进来的路径删"就成了一条被改过的路径 ⇒
+    /// 程序删掉用户任意文件的入口。</para>
+    /// <para>返回给界面看的回执（成功与失败都要有下文，静默删或静默不删都不许）。</para>
     /// </summary>
-    public async Task<string?> RunAutoBackupAsync(CancellationToken ct = default)
+    public static string DeleteBackup(string? path)
     {
+        if (AutoBackupPolicy.DeleteRefusal(path, SnapshotDirectory) is { } refusal)
+        {
+            StarLog.Warn($"拒绝删除备份：{refusal}");
+            return refusal;
+        }
+        var full = Path.GetFullPath(path!);
+        try
+        {
+            File.Delete(full);
+            StarLog.Info($"已删除备份件：{Path.GetFileName(full)}");
+            return $"已删除 {Path.GetFileName(full)}。";
+        }
+        catch (Exception ex)
+        {
+            // 被云盘/杀软占用时的失败：说清没删掉，列表还在原地，别让人以为已经腾出空间了。
+            StarLog.Warn($"删除备份件失败（{Path.GetFileName(full)}）：{ex.Message}");
+            return $"没能删除：{ex.Message}";
+        }
+    }
+
+    // ==================== 自动备份（P-51） ====================
+    /// <summary>
+    /// 自动备份：<b>开关关掉就直接不跑</b>（连目录都不扫，界面上"关了还在写文件"是最难发现的那类不诚实）；
+    /// 开着时距最近一份 <c>auto-</c> 件超过 <paramref name="intervalHours"/> 才落盘，
+    /// 落完后把自动件裁到最近 <see cref="AutoBackupPolicy.Keep"/> 份（手动导出与 pre-restore 快照不动）。
+    /// <para>返回写出的路径；本次跳过（关着 / 间隔未到 / 空库）返回 null。<b>异常上抛</b>由调用方记日志——
+    /// 在这儿吞掉就会出现"以为备份了其实没有"，与本条存在的理由相反。</para>
+    /// <para>间隔为什么走参数而不是读设置：Core 不认 UI 的 <c>SettingsStore</c>，
+    /// 而"该不该跑"这件事必须留在这里（时钟异常那一段判断只写一遍）。</para>
+    /// </summary>
+    /// <param name="enabled">自动备份总开关。<b>关掉时连目录都不扫</b>（见下面那句短路）。</param>
+    /// <param name="intervalHours">用户选的间隔档位；脏值由 <see cref="AutoBackupPolicy"/> 回落到默认档。</param>
+    public async Task<string?> RunAutoBackupAsync(bool enabled, int intervalHours, CancellationToken ct = default)
+    {
+        // 这一句看着与 ShouldRun 里的 enabled 臂重复，作用却不是判据而是"不去扫盘"：
+        // ShouldRun 要先读目录里最近一份的时间戳，关着的时候那一次扫描本身就是一次可见的 IO。
+        if (!enabled) return null;
         var dir = SnapshotDirectory;
-        if (!AutoBackupPolicy.ShouldRun(DateTimeOffset.UtcNow, NewestAutoBackupUtc(dir)))
+        if (!AutoBackupPolicy.ShouldRun(DateTimeOffset.UtcNow, NewestAutoBackupUtc(dir), enabled, intervalHours))
             return null;
 
         var env = await ExportAsync(ct);

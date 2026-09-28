@@ -70,6 +70,14 @@ public sealed class SettingsStore : IPerformanceSettingsSource
         /// </summary>
         public bool? BackupClipboardImagesEnabled { get; set; }
         /// <summary>
+        /// 自动备份总开关。<b>缺省＝开</b>：设置页出现之前它就是"每次都跑"，
+        /// 加开关是为了让用户能关掉，不是为了顺手改掉既有行为（默认值就是改之前的行为）。
+        /// </summary>
+        public bool? AutoBackupEnabled { get; set; }
+        /// <summary>自动备份间隔（小时）。只认 <c>AutoBackupPolicy.IntervalOptions</c> 那几档，
+        /// 脏值/缺省都回默认 24；<b>存的是小时数而不是档位序号</b>，加一档不会让旧配置被读成别的间隔。</summary>
+        public int? AutoBackupIntervalHours { get; set; }
+        /// <summary>
         /// GitHub 热榜浏览面总开关（<b>默认关</b>）。关时不发任何请求，且导航栏连「热榜」项都不显示——
         /// 这是用户主动开启的可选浏览面，留一个点进去只会说"未开启"的项更像故障
         /// （与剪贴板"入口常驻"刻意相反，两边的理由都写在蓝图 §5）。
@@ -725,6 +733,30 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     {
         var d = Load() ?? new SettingsData();
         d.BackupClipboardImagesEnabled = enabled;
+        Save(d);
+    }
+
+    /// <summary>
+    /// 自动备份总开关（<b>默认开＝加这个开关之前的行为</b>）。
+    /// 关掉之后启动那条后台任务连目录都不扫——"看着关了其实还在写文件"是最难发现的不诚实。
+    /// </summary>
+    public bool LoadAutoBackupEnabled() => Load()?.AutoBackupEnabled ?? true;
+
+    /// <summary>自动备份间隔（小时）。缺省与脏值都走 <c>AutoBackupPolicy</c> 的回落，
+    /// 界面上看到的档位与真拿去判定的小时数必须是同一个数。</summary>
+    public int LoadAutoBackupIntervalHours()
+        => StarMark.Core.Backup.AutoBackupPolicy.ClampInterval(
+            Load()?.AutoBackupIntervalHours ?? StarMark.Core.Backup.AutoBackupPolicy.DefaultIntervalHours);
+
+    /// <summary>
+    /// 开关与间隔一次落盘：这两条说的是同一件事（自动备份怎么排程），
+    /// 分开写就是"改了间隔但没改开关"这类半套状态的来源（护眼那四项同一条口径，P-43 也省写盘次数）。
+    /// </summary>
+    public void SaveAutoBackup(bool enabled, int intervalHours)
+    {
+        var d = Load() ?? new SettingsData();
+        d.AutoBackupEnabled = enabled;
+        d.AutoBackupIntervalHours = StarMark.Core.Backup.AutoBackupPolicy.ClampInterval(intervalHours);
         Save(d);
     }
 

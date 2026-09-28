@@ -322,24 +322,16 @@ public partial class App : Application
             StarMark.Abstractions.StartupProfile.Mark("首帧提交");
             UIStallWatchdog.Start(_window.DispatcherQueue);   // 卡顿取证：把"卡死了"变成日志里的时长与当时的页面
 
-            // 3.1 每日自动备份（P-51）：不可重建的笔记/标签/组件数据不能只靠用户记得手动导出。
-            // 延后到首屏之后再起，避开与迁移、组件创建抢同一批磁盘 I/O；失败只进日志，不弹窗打断用户。
+            // 3.1 自动备份（P-51 → 批次 BK：间隔可调、可关，并且开着时真的按间隔巡查）：
+            // 不可重建的笔记/标签/组件数据不能只靠用户记得手动导出。
+            // 先延后 20 s 补一次（避开与迁移、组件创建抢同一批磁盘 I/O），再起巡查定时器。
             _ = Task.Run(async () =>
             {
-                try
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
-                    var svc = Services.GetRequiredService<BackupService>();
-                    var written = await svc.RunAutoBackupAsync();
-                    StarLog.Info(written is null
-                        ? "自动备份：本次跳过（距上次不足 24 小时，或库里没有可备份的内容）"
-                        : $"自动备份已落盘：{written}");
-                }
-                catch (Exception ex)
-                {
-                    StarLog.Error("自动备份失败（不影响使用，下次启动会再试）", ex);
-                }
+                await Task.Delay(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+                await AutoBackupScheduler.ProbeAsync(
+                    fileSettings, Services.GetRequiredService<BackupService>()).ConfigureAwait(false);
             });
+            AutoBackupScheduler.Start(fileSettings, Services.GetRequiredService<BackupService>());
 
             // 3.2 剪贴板历史（默认关）：开着才建监听窗口。必须在 UI 线程建——HWND_MESSAGE 的 WndProc
             // 由所属线程的消息泵驱动，线程池线程没有消息泵就永远收不到 WM_CLIPBOARDUPDATE。

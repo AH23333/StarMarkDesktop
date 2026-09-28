@@ -793,9 +793,32 @@
                                 <TextBlock Text="条目本体（书签/Star/文件）可重新同步，但手写笔记、标签体系、隐藏/置顶状态、桌面组件待办与随记全部不可重建。"
                                            Style="{StaticResource SettingRowText}"/>
                                 <!-- 原文案是「请定期导出备份」：把"别丢数据"托付给人的记性，且给用户加了一步。
-                                     现在程序自己按天落盘，故这里改成陈述事实 + 说明自动清理的边界。 -->
-                                <TextBlock Text="应用会自己备份：启动时距上次满 24 小时自动存一份到 %LOCALAPPDATA%\StarMark\backups，只保留最近 7 份 auto- 开头的自动件——你手动导出的备份与恢复前快照都不会被删。"
+                                     现在程序自己落盘，故这里改成陈述事实 + 说明自动清理的边界。
+                                     批次 BK 起间隔变成用户可调 ⇒ 这句里不能再出现"24 小时""7 份"这类写死的数：
+                                     写在卡片上就等于第二份事实，改了设置或改了保留份数之后它会变成假话，
+                                     而那几个数由下面的状态行按 Core 的常量与当前档位算出来。 -->
+                                <TextBlock Text="应用会自己备份：按下面设的间隔存一份到 %LOCALAPPDATA%\StarMark\backups。自动清理只动 auto- 开头的自动件，你手动导出的备份与恢复前快照都不在清理候选里。"
                                            Style="{StaticResource SettingRowText}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="自动备份" TextWrapping="Wrap"/>
+                                        <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                                   Text="关掉之后程序不再自动落任何份，能回滚的只剩你手动导出的那些（导入前的「恢复前快照」仍然每次都留）。关掉不会删掉已经落盘的自动件。"/>
+                                    </StackPanel>
+                                    <ToggleSwitch Grid.Column="1" OnContent="开" OffContent="关" MinWidth="0"
+                                                  VerticalAlignment="Center"
+                                                  IsOn="{x:Bind ViewModel.AutoBackupEnabled, Mode=TwoWay}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"
+                                               Text="自动备份间隔"/>
+                                    <ComboBox Grid.Column="1" MinWidth="120" VerticalAlignment="Center"
+                                              ToolTipService.ToolTip="两份自动件之间的最小间隔。应用开着时每 10 分钟问一次「到点没」，所以实际落盘最多比到点晚十分钟。保留份数是固定的，间隔越短能回溯的天数就越少——这笔账由下面那行按你选的档算给你看。"
+                                              ItemsSource="{x:Bind ViewModel.AutoBackupIntervalOptions}"
+                                              SelectedIndex="{x:Bind ViewModel.AutoBackupIntervalIndex, Mode=TwoWay}"/>
+                                </Grid>
+                                <TextBlock Text="{x:Bind ViewModel.AutoBackupStatus, Mode=OneWay}"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                 <TextBlock Text="导入会先自动生成「恢复前快照」（同上目录），任何恢复都可回滚：它就是下面列表里标着「恢复前快照」的那一行，点「用它回滚」即撤销这次导入。"
                                            Style="{StaticResource SettingRowText}"/>
                                 <!-- 提权会话下系统文件选择器跨不到中 IL 的对话框宿主（真机日志 E_FAIL 四连挂）。
@@ -818,7 +841,7 @@
                                     </StackPanel>
                                     <ToggleSwitch Grid.Column="1" OnContent="带" OffContent="不带" MinWidth="0"
                                                   VerticalAlignment="Center"
-                                                  ToolTipService.ToolTip="只影响手动「导出备份」。恢复前快照与每日自动件始终不带图片本体——它们是回滚点，一份几十 MB 的库配几百 MB 的图会把「随时能撤一步」变成「每次恢复先填一盘磁盘」。恢复时会把包里的图片写回本机图片目录，已有同名文件不覆盖。"
+                                                  ToolTipService.ToolTip="只影响手动「导出备份」。恢复前快照与自动件始终不带图片本体——它们是回滚点，一份几十 MB 的库配几百 MB 的图会把「随时能撤一步」变成「每次恢复先填一盘磁盘」。恢复时会把包里的图片写回本机图片目录，已有同名文件不覆盖。"
                                                   IsOn="{x:Bind ViewModel.BackupClipboardImagesEnabled, Mode=TwoWay}"/>
                                 </Grid>
                                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
@@ -844,14 +867,24 @@
                                                     <TextBlock Text="{x:Bind NameText}" Style="{StaticResource MutedText}"
                                                                FontSize="11" TextTrimming="CharacterEllipsis"/>
                                                 </StackPanel>
-                                                <Button Grid.Column="1" Content="{x:Bind RestoreLabel}" Tag="{x:Bind File}"
-                                                        Click="RestoreBackup_Click"
-                                                        Style="{StaticResource SecondaryButton}" Padding="10,2,10,2"/>
+                                                <!-- 「删除」与「恢复这份」并排：清理旧件这件事以前只能开资源管理器
+                                                     去目录里挑文件，而目录里几十个同类文件名长得一样——看得见列表却删不掉，
+                                                     等于把"腾地方/清掉误操作那一份"留成手工活。删除必先确认。 -->
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                                            VerticalAlignment="Center">
+                                                    <Button Content="{x:Bind RestoreLabel}" Tag="{x:Bind File}"
+                                                            Click="RestoreBackup_Click"
+                                                            Style="{StaticResource SecondaryButton}" Padding="10,2,10,2"/>
+                                                    <Button Content="删除" Tag="{x:Bind File}"
+                                                            Click="DeleteBackup_Click"
+                                                            ToolTipService.ToolTip="只删这一份导出文件，数据库本身不动；点下去会先确认一次，并说明这一份删掉之后有什么后果。"
+                                                            Style="{StaticResource SecondaryButton}" Padding="10,2,10,2"/>
+                                                </StackPanel>
                                             </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <TextBlock Text="还没有任何备份文件（自动备份在启动后按天落盘，也可以点上面「导出备份」立刻来一份）。"
+                                <TextBlock Text="还没有任何备份文件（自动备份按上面设的间隔落盘，也可以点上面「导出备份」立刻来一份）。"
                                            Style="{StaticResource MutedText}" TextWrapping="Wrap"
                                            Visibility="{x:Bind ViewModel.HasBackups, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
 

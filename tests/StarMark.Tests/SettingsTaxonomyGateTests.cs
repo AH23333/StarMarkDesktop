@@ -66,12 +66,16 @@ public sealed class SettingsTaxonomyGateTests
         {
             "BackdropIndex", "MainWindowBackdropIndex", "WidgetOpacity", "MainWindowOpacity",
             "LocalDiskSearchEnabled", "EyeRestEnabled", "EyeRestEnforced", "EyeRestDeferOnFullscreen",
+            // 护眼那颗下拉以前漏登记过（批次 BK 补上）：不登记的话"只有一个编辑入口"对它根本不成立。
+            "EyeRestIntervalIndex",
             "TrendingEnabled", "ClipboardHistoryEnabled", "EnableTray", "MinimizeToTray", "GithubToken",
             "CanvasEnabled", "CanvasInScreenshots",
             // ClipIMG-1d 新增的三格可写设置：注册进这份清单，否则"只有一个编辑入口"这条对它们根本不生效。
             "ClipboardImageEnabled", "ClipboardImageMaxValue", "ClipboardTextMaxValue",
             // ClipIMG-3b：导出带不带图片本体（开关住在备份卡里，见设置闸门那条摆位判据）。
             "BackupClipboardImagesEnabled",
+            // 批次 BK：自动备份的开关与间隔档（两颗都住在「数据」页的备份卡里）。
+            "AutoBackupEnabled", "AutoBackupIntervalIndex",
         };
 
         foreach (var p in writable)
@@ -119,6 +123,11 @@ public sealed class SettingsTaxonomyGateTests
         Assert.Contains("ViewModel.ClipboardImageMaxValue, Mode=TwoWay", data);
         Assert.Contains("ViewModel.ClipboardTextMaxValue, Mode=TwoWay", data);
         Assert.Contains("图片无法做敏感检查", data);
+        // 批次 BK：自动备份那颗开关与间隔下拉管的是"程序自己多久落一份"，与手动导出同属这张危险区卡；
+        // 搬到别页就会出现"在剪贴板页里改备份频率"这种找不到入口的改动。
+        Assert.Contains("ViewModel.AutoBackupEnabled, Mode=TwoWay", data);
+        Assert.Contains("ViewModel.AutoBackupIntervalIndex, Mode=TwoWay", data);
+        Assert.Contains("ViewModel.AutoBackupStatus", data);
         Assert.DoesNotContain("ViewModel.ClipboardImageEnabled", Between(xaml, "<TabViewItem Header=\"拓展功能\">", "</TabViewItem>"));
         // 「数据」页仍会在提权说明里提到本地磁盘搜索（那是一句原因，不是第二处开关），
         // 所以钉的是"这张卡不在这页"，而不是这个词不在这页。

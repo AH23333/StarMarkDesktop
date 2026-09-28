@@ -1179,6 +1179,27 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         finally { ViewModel.IsBackupBusy = false; }
     }
 
+    /// <summary>
+    /// 列表里某一行的「删除」：先确认、再删，成功与失败都要有一行回执。
+    /// <para>确认框里必须带上"这一份属于哪一类"的代价说明——三种类删掉之后的后果不同
+    /// （自动件还会再生成，手动件与恢复前快照不会），只看文件名分不出来。</para>
+    /// <para>真正的路径校验在 <see cref="BackupService.DeleteBackup"/> 里（Core 那道闸）：
+    /// 这里传的 <c>Tag</c> 来自目录扫描，但列表可能已经过期，不能当成"必然是备份件"。</para>
+    /// </summary>
+    private async void DeleteBackup_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Microsoft.UI.Xaml.Controls.Button { Tag: BackupService.BackupFile file }) return;
+        var confirm = await CenteredDialog.ConfirmAsync(
+            "删除这份备份",
+            $"将永久删除 {file.FileName}（{StarMark.Abstractions.FileSizeText.Human(file.LengthBytes)}，{file.ModifiedUtc.ToLocalTime():yyyy-MM-dd HH:mm}）。\n"
+            + $"{BackupRow.DeleteWarningFor(file.Kind)}\n数据库本身不受影响；删的只是这一份导出文件。确定删除？",
+            primaryText: "删除", cancelText: "取消",
+            owner: App.MainWindow, dedupeKey: "deletebackup-" + file.FileName);
+        if (!confirm) return;
+        ViewModel.BackupStatus = BackupService.DeleteBackup(file.Path);
+        ViewModel.RefreshBackups();
+    }
+
     /// <summary>打开备份目录（备份就在本机，"去看一眼/自己拷走"不该让用户去地址栏敲路径）。</summary>
     private void OpenBackupFolder_Click(object sender, RoutedEventArgs e)
     {

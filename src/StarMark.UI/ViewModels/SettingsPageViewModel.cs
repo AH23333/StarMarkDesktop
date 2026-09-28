@@ -136,6 +136,71 @@ public partial class SettingsPageViewModel : ObservableObject
         }
         OnPropertyChanged(nameof(HasBackups));
         OnPropertyChanged(nameof(BackupsHeader));
+        // 「下一次大约什么时候」是按列表里最新的自动件算的：列表重扫了就要跟着重算，
+        // 否则刚落盘的那份不会把状态行里的时间推后（导出/恢复/进页面三条路都走这里）。
+        AutoBackupStatus = BuildAutoBackupStatus();
+    }
+
+    // ===== 自动备份排程（批次 BK）=====
+
+    /// <summary>自动备份总开关。默认开＝加这颗开关之前的行为，关掉只是停止生成，不会删已有件。</summary>
+    [ObservableProperty] private bool _autoBackupEnabled;
+
+    /// <summary>间隔档位序号（持久化的是小时，界面只给序号）。</summary>
+    [ObservableProperty] private int _autoBackupIntervalIndex;
+
+    [ObservableProperty] private string _autoBackupStatus = string.Empty;
+
+    /// <summary>下拉的档位文案，与 <see cref="AutoBackupIntervalIndex"/> 同序（一处事实：档位与文案都在 Core）。</summary>
+    public IReadOnlyList<string> AutoBackupIntervalOptions => AutoBackupPolicy.IntervalLabels;
+
+    private int AutoBackupIntervalHours => AutoBackupPolicy.IntervalAt(AutoBackupIntervalIndex);
+
+    private bool _suppressAutoBackupApply;
+
+    partial void OnAutoBackupEnabledChanged(bool value)
+    {
+        if (_suppressAutoBackupApply) return;
+        ApplyAutoBackup();
+    }
+
+    partial void OnAutoBackupIntervalIndexChanged(int value)
+    {
+        if (_suppressAutoBackupApply) return;
+        ApplyAutoBackup();
+    }
+
+    /// <summary>
+    /// 落盘 + <b>当场</b>把巡查表按新设置重排。
+    /// <para>间隔既然变成用户可调的东西，"改了要等下次启动才认"就等于一句隐藏的重启指令——
+    /// 那正是本仓库反复定性的缺陷（与护眼、剪贴板、磁盘搜索那几条同一口径）。</para>
+    /// </summary>
+    private void ApplyAutoBackup()
+    {
+        _settings.SaveAutoBackup(AutoBackupEnabled, AutoBackupIntervalHours);
+        AutoBackupScheduler.Start(_settings, App.Services.GetRequiredService<BackupService>());
+        AutoBackupStatus = BuildAutoBackupStatus();
+    }
+
+    /// <summary>
+    /// 状态行：开着就说清"多久一份、能回溯多久、下一次大约什么时候"，关着就说清代价。
+    /// <para>保留份数仍是写死的 7，而间隔可调 ⇒ "最长能回到多久以前"跟着设置变（每 6 小时≈不到两天，
+    /// 每 7 天≈七周）。不把这笔账算出来给用户看，他会在真需要旧备份的那天才发现回溯不了那么久。</para>
+    /// </summary>
+    private string BuildAutoBackupStatus()
+    {
+        if (!AutoBackupEnabled)
+            return "已关闭：程序不再自动落盘，能回滚的只剩你手动导出的那些份（导入前的「恢复前快照」仍然每次都留）。";
+        var hours = AutoBackupIntervalHours;
+        var how = $"已开启：距上一份满 {hours} 小时自动落一份，保留最近 {AutoBackupPolicy.Keep} 份"
+            + $" ≈ 最长回溯 {AutoBackupPolicy.MaxLookbackDays(hours)} 天。";
+        var newestAuto = Backups.FirstOrDefault(r => r.File.Kind == AutoBackupPolicy.BackupKind.Auto)?.File.ModifiedUtc;
+        if (newestAuto is null)
+            return how + $"本机还没有自动件，最多 {AutoBackupScheduler.ProbePeriod.TotalMinutes:0} 分钟内就会落第一份。";
+        var nextDue = newestAuto.Value.AddHours(hours);
+        return how + (nextDue > DateTimeOffset.Now
+            ? $"下一次约 {nextDue:MM-dd HH:mm}。"
+            : $"已到间隔，下一次巡查（{AutoBackupScheduler.ProbePeriod.TotalMinutes:0} 分钟内）就会落盘。");
     }
 
     public SettingsPageViewModel()
@@ -241,6 +306,15 @@ public partial class SettingsPageViewModel : ObservableObject
         EyeRestDeferOnFullscreen = Safe(_settings.LoadEyeRestDeferOnFullscreen, true, "护眼全屏让路");
         _suppressEyeRestApply = false;
         EyeRestStatus = BuildEyeRestStatus();
+
+        // 自动备份：回灌开关与间隔档位，副作用在回灌期间抑制——否则每次进设置页都把巡查定时器
+        // 收掉再起（与护眼那条同理）。状态行在这里先算一版，紧接着的 RefreshBackups 会用真实列表再算一版。
+        _suppressAutoBackupApply = true;
+        AutoBackupEnabled = Safe(_settings.LoadAutoBackupEnabled, true, "自动备份");
+        AutoBackupIntervalIndex = AutoBackupPolicy.IntervalIndexOf(
+            Safe(_settings.LoadAutoBackupIntervalHours, AutoBackupPolicy.DefaultIntervalHours, "自动备份间隔"));
+        _suppressAutoBackupApply = false;
+        AutoBackupStatus = BuildAutoBackupStatus();
 
         // GitHub 热榜：回灌两个开关的当前值（副作用同样在回灌期间抑制）。
         _suppressTrendingApply = true;
@@ -1264,4 +1338,21 @@ public sealed class BackupRow
 
     /// <summary>快照那一份要说"用它回滚"：用户心里的动作是"撤销刚才那次导入"，不是"恢复一份备份"。</summary>
     public string RestoreLabel => File.Kind == AutoBackupPolicy.BackupKind.PreRestore ? "用它回滚" : "恢复这份";
+
+    /// <summary>
+    /// 「删除」确认框里那句代价说明——按类别分开说，因为三种类失去之后的后果完全不同：
+    /// 自动件还会再生成，手动件与恢复前快照都不会。
+    /// <para>写成静态判据（而不是行内字符串）是让确认框与列表用同一份说法：按钮的 <c>Tag</c> 绑的是
+    /// <see cref="BackupService.BackupFile"/>，拿不到行对象，两边各写一份就一定会有分岔。</para>
+    /// </summary>
+    public static string DeleteWarningFor(AutoBackupPolicy.BackupKind kind) => kind switch
+    {
+        AutoBackupPolicy.BackupKind.Auto
+            => "自动件会按你设的间隔继续生成，删这一份只是腾地方。",
+        AutoBackupPolicy.BackupKind.PreRestore
+            => "它是某次导入的回滚点：删掉之后就再也没法撤销那一次恢复了。",
+        _ => "手动导出的这份程序不会替你再生成，删掉就真的没了（除非你在别处拷过）。",
+    };
+
+    public string DeleteWarning => DeleteWarningFor(File.Kind);
 }
