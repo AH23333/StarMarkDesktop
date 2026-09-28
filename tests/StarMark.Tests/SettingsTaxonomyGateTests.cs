@@ -70,6 +70,8 @@ public sealed class SettingsTaxonomyGateTests
             "CanvasEnabled", "CanvasInScreenshots",
             // ClipIMG-1d 新增的三格可写设置：注册进这份清单，否则"只有一个编辑入口"这条对它们根本不生效。
             "ClipboardImageEnabled", "ClipboardImageMaxValue", "ClipboardTextMaxValue",
+            // ClipIMG-3b：导出带不带图片本体（开关住在备份卡里，见设置闸门那条摆位判据）。
+            "BackupClipboardImagesEnabled",
         };
 
         foreach (var p in writable)

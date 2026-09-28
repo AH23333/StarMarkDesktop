@@ -715,10 +715,18 @@ public sealed class SettingsStore : IPerformanceSettingsSource
     }
 
     /// <summary>
-    /// 备份是否携带图片本体。<b>b 期只存不读</b>（导出格式里没有附件这一维），
-    /// 设置页也没有对应控件——所以改它不会影响任何东西，那是 a 期的接线点（决议 §3-Q2 先 b 后 a）。
+    /// 导出备份时是否带上剪贴板图片本体（<b>默认开</b>，决议 §4）。
+    /// <para>只影响<b>用户主动点「导出备份」</b>那一条路：恢复前快照与每日自动件不带附件，
+    /// 所以这里存的不是"备份里有没有图"，而是"下一次手动导出带不带"。</para>
     /// </summary>
     public bool LoadBackupClipboardImagesEnabled() => Load()?.BackupClipboardImagesEnabled ?? true;
+
+    public void SaveBackupClipboardImagesEnabled(bool enabled)
+    {
+        var d = Load() ?? new SettingsData();
+        d.BackupClipboardImagesEnabled = enabled;
+        Save(d);
+    }
 
     // ────────── 护眼 / 休息提醒（批次 WA）──────────
 

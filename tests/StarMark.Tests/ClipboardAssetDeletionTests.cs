@@ -308,8 +308,10 @@ public sealed class ClipboardAssetDeletionTests : IDisposable
             var f2 = new DbConnectionFactory(db2);
             new MigrationRunner(f2).EnsureSchema();
             var env = await BackupService.ReadAsync(file, CancellationToken.None);
+            // 3b 起要<b>把这份文件自己的路径递进去</b>那句才成立：没看过文件的人没有资格断言"它不带图片本体"，
+            // 所以那条判据改由"这份文件的包里到底有没有 clip/ 条目"来支撑（界面那条路一直是这么调的）。
             var rr = await new BackupService(new BackupRepository(f2))
-                .RestoreAsync(env, RestoreMode.Merge, null, CancellationToken.None);
+                .RestoreAsync(env, RestoreMode.Merge, null, CancellationToken.None, file);
 
             Assert.True(rr.Success, rr.Message);
             Assert.Contains("1 条是剪贴板图片", rr.Message);

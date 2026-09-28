@@ -319,6 +319,107 @@ public static class ClipboardImageStore
         return stream;
     }
 
+    /// <summary>
+    /// 备份要携带的图片本体（§3-Q2 a 期）：<b>只挑此刻真在磁盘上、且过 <see cref="ClipAssets"/> 名字名册的那些</b>。
+    /// <para>刻意只交名字、<b>不读内容</b>：200 张 4K 截图一次全进内存是几百 MB 的瞬时峰值，
+    /// 而备份那一刻正是"用户最不想让应用崩在这里"的时候。打包侧逐张流式拷（<see cref="TryOpenForPackage"/>），
+    /// 报出去的张数与字节都以"真进了包"为准。</para>
+    /// <para>带 <c>clipMissing</c> 标记的行仍然问一次磁盘：标着缺失而文件又被用户放回来的行是合法状态
+    /// （§3-Q6 第三类反向），按标记跳过就会漏带它。</para>
+    /// </summary>
+    public static (List<string> Names, int Missing, int Failed) PlanBackup(IReadOnlyList<Item> items)
+    {
+        var names = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int missing = 0, failed = 0;
+        foreach (var item in items)
+        {
+            if (item.Type != ItemType.Clipboard || !ClipboardEntry.IsImageOf(item.ExtraJson)) continue;
+            var meta = ClipboardEntry.ImageOf(item);
+            if (meta is null) continue;
+            foreach (var name in new[] { meta.Value.MainName, meta.Value.ThumbName })
+            {
+                if (string.IsNullOrEmpty(name) || !seen.Add(name!)) continue;   // 旧行缩略图回落到主图名：别带两遍
+                var path = ClipAssets.FullPathOf(name);
+                if (path is null) { failed++; continue; }                       // 名字不过名册：不带，也不报它是什么
+                try
+                {
+                    if (!File.Exists(path)) { missing++; continue; }            // 本就没图：备份里也不该出现这个名字
+                    names.Add(name!);
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    StarLog.Warn($"备份计划跳过一张图片（{name}）：{ex.GetType().Name} {ex.Message}");
+                }
+            }
+        }
+        return (names, missing, failed);
+    }
+
+    /// <summary>
+    /// 打包前的一次"这张能不能带走"探问：名字不过名册、文件不在、或正被别的程序独占时返回 <c>null</c>，不抛。
+    /// <para><b>顺序是这里的全部要点：先开流、后建条目。</b>zip 的 Create 模式里条目一旦建出来就收不回，
+    /// "先 CreateEntry 再往里拷"会让一张带不走的图在包里留下一个零字节成员——而下一个人只数得出
+    /// "包里有 4 张"，数不出其中一张是空的。</para>
+    /// </summary>
+    public static Stream? TryOpenForPackage(string name)
+    {
+        var path = ClipAssets.FullPathOf(name);
+        if (path is null) return null;
+        try
+        {
+            return File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"备份带不走一张图片（{name}）：{ex.GetType().Name} {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>这一行条目认领的文件名（恢复侧据此建白名单；名单外的条目名一个字节都不落盘）。</summary>
+    public static IEnumerable<string> ClaimedNamesOf(Item item)
+    {
+        if (item.Type != ItemType.Clipboard || !ClipboardEntry.IsImageOf(item.ExtraJson))
+            return Array.Empty<string>();
+        var meta = ClipboardEntry.ImageOf(item);
+        return meta is null || string.IsNullOrEmpty(meta.Value.MainName)
+            ? Array.Empty<string>()
+            : new[] { meta.Value.MainName, meta.Value.ThumbName };
+    }
+
+    /// <summary>
+    /// 备份恢复侧：把包里那一条流写回 clip 目录。<b>只写被这一份备份的条目认领的名字</b>——
+    /// 压缩包里的条目名是外部数据：第一道防线是 <see cref="ClipAssets.FullPathOf"/> 那道名册
+    /// （它拒 <c>/</c>、<c>\\</c>、<c>:</c> 与超长名，所以构造上写不到目录之外；Zip Slip 那条审查结论走的正是这里），
+    /// 白名单是第二道。
+    /// <para><b>已存在的同名文件不覆盖</b>：本机那一张可能正是用户自己放回来的（§3-Q6 第三类反向），
+    /// 拿一份旧备份把它换掉是净损失。写盘仍是"临时名 + 同卷改名"（与采集侧同一条路），
+    /// 半途崩溃只会留下一个 <c>*.tmp</c>，下次启动对账按临时件清。</para>
+    /// </summary>
+    public static async Task<bool> WriteBackFromBackupAsync(
+        string name, Stream source, HashSet<string> claimed, CancellationToken ct)
+    {
+        if (!claimed.Contains(name)) return false;                 // 条目不认它：不是我们的文件，别碰
+        var path = ClipAssets.FullPathOf(name);
+        if (path is null) return false;
+        try
+        {
+            if (File.Exists(path)) return false;                   // 本机已有：不覆盖（上面写了为什么）
+            var temp = Path.Combine(Folder, ClipAssets.TempNameOf(name));
+            await using (var fs = File.Create(temp))
+                await source.CopyToAsync(fs, ct).ConfigureAwait(false);
+            File.Move(temp, path, overwrite: false);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            TryDelete(ClipAssets.TempNameOf(name));                // 半件不如没有：别让残货占着名册
+            StarLog.Warn($"备份恢复：图片写不进去（{name}）：{ex.GetType().Name} {ex.Message}");
+            return false;
+        }
+    }
     private static async Task<byte[]> ToBytesAsync(InMemoryRandomAccessStream stream)
     {
         stream.Seek(0);

@@ -75,6 +75,15 @@ public sealed class RestoreResult
     public int TagsRestored { get; init; }
     public int LinksRestored { get; init; }
     public bool WidgetsRestored { get; init; }
+
+    /// <summary>从包里解回 clip 目录的图片文件个数（三个数分开报，见 <see cref="RestoreResult"/> 那三条）。</summary>
+    public int ClipImagesRestored { get; init; }
+
+    /// <summary>跳过的个数：本机已有同名文件（不覆盖）与"这个名字不属于任何一条历史"（不认领）都算在这里。</summary>
+    public int ClipImagesSkipped { get; init; }
+
+    /// <summary>写失败的个数（磁盘、权限写不进去）。与"跳过"必须分开：一句"已恢复"会把失败说成一件好事。</summary>
+    public int ClipImagesFailed { get; init; }
 }
 
 /// <summary>备份文件损坏或不兼容。</summary>

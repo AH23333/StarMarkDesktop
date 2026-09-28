@@ -804,6 +804,23 @@
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
                                            Foreground="{ThemeResource SystemFillColorCautionBrush}"
                                            Visibility="{x:Bind ViewModel.IsElevatedSession, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                                <!--
+                                    带不带图片本体是"这一次导出"的决定，所以开关必须长在导出按钮正上方：
+                                    放在剪贴板那张卡里，用户点导出时看不到它，也就不知道自己拿到的是一份
+                                    "条目齐全、图片要靠本机还留着文件才打得开"的备份。
+                                    默认开（决议 §4）。这句代价按 §3-Q2 的两种事实分支，写在导出结果与恢复结果里。
+                                -->
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="导出时带上剪贴板图片本体" TextWrapping="Wrap"/>
+                                        <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                                   Text="带上就存成 .zip（清单 + 图片），只有一份文件、不会拷走一半。关掉则只带条目与文件名：恢复后这些图片条目要靠本机图片目录里还留着的文件才打得开，缺的会标成「文件缺失」。一张 4K 截图常有几百 KB，上限调到几百条时导出包会明显变大。"/>
+                                    </StackPanel>
+                                    <ToggleSwitch Grid.Column="1" OnContent="带" OffContent="不带" MinWidth="0"
+                                                  VerticalAlignment="Center"
+                                                  ToolTipService.ToolTip="只影响手动「导出备份」。恢复前快照与每日自动件始终不带图片本体——它们是回滚点，一份几十 MB 的库配几百 MB 的图会把「随时能撤一步」变成「每次恢复先填一盘磁盘」。恢复时会把包里的图片写回本机图片目录，已有同名文件不覆盖。"
+                                                  IsOn="{x:Bind ViewModel.BackupClipboardImagesEnabled, Mode=TwoWay}"/>
+                                </Grid>
                                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                     <Button Content="导出备份…" Click="ExportBackup_Click" Style="{StaticResource SecondaryButton}"/>
                                     <Button Content="导入备份…" Click="ImportBackup_Click" Style="{StaticResource SecondaryButton}"/>

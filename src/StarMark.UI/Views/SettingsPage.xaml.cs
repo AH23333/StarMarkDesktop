@@ -1057,7 +1057,10 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         {
             var dir = BackupService.SnapshotDirectory;
             if (!Directory.Exists(dir)) return null;
-            return new DirectoryInfo(dir).EnumerateFiles("*.json")
+            // 两种载体一起认：带图片的那份导出是 .zip，只认 .json 会让"最近一份"回退到旧的那份，
+            // 用户在导入框里看到的默认值就成了一个几周前的备份。
+            return new DirectoryInfo(dir).EnumerateFiles()
+                .Where(f => StarMark.Core.Backup.BackupContainer.IsBackupPath(f.Name))
                 .OrderByDescending(f => f.LastWriteTimeUtc)
                 .Select(f => f.FullName)
                 .FirstOrDefault();
@@ -1076,14 +1079,40 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         ViewModel.IsBackupBusy = true;      // 必须覆盖"弹对话框"阶段：否则等待期间可重复点，多个 picker 并存在提权下更是必挂
         try
         {
+            // 先读开关：它同时决定建议名的扩展名与走哪条导出路。
+            // 两条路是两个具名方法，不是一颗布尔参数——含义只写在被调方时，接线处写反是必然风险。
+            var carry = ViewModel.BackupClipboardImagesEnabled;
+
             // 默认落在备份目录（那里已有"恢复前快照"），用户回车即接受，不必从 C:\ 一路敲过来。
+            // 建议名里的扩展名跟着开关走：开着却提示 .json，用户会以为导出的是纯清单。
             var suggested = Path.Combine(BackupService.SnapshotDirectory,
-                $"starmark-backup-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.json");
+                $"starmark-backup-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}"
+                + (carry ? StarMark.Core.Backup.BackupContainer.ContainerExtension
+                         : StarMark.Core.Backup.BackupContainer.ManifestExtension));
             var target = await RequestBackupPathAsync(save: true, suggested);
             if (target is null) return;
 
-            await Task.Run(() => _backup.ExportToFileAsync(target, CancellationToken.None));
-            ViewModel.BackupStatus = $"已导出备份到：{target}";
+            var written = carry
+                ? await Task.Run(() => _backup.ExportWithClipImagesAsync(target, CancellationToken.None), CancellationToken.None)
+                : null;
+            if (written is not null)
+            {
+                ViewModel.BackupStatus = $"已导出备份到：{written.Path}"
+                    + $"（条目 {written.ItemCount} 条"
+                    + (written.ClipImages > 0
+                        ? $"，图片本体 {written.ClipImages} 张 · {StarMark.Abstractions.Clipboard.ClipAssets.DescribeBytes(written.ClipImageBytes)}"
+                        : "，没带图片本体：本机没有可带的图片文件")
+                    + (written.MissingImages > 0 ? $"；另有 {written.MissingImages} 条历史本就没有文件" : "")
+                    + (written.FailedImages > 0 ? $"；{written.FailedImages} 张读不出来，没进包（原因见日志）" : "")
+                    + "）";
+            }
+            else
+            {
+                // 报实际写出去的那个名字：开关关着时若用户手输了 x.zip，那份文件仍是纯清单，
+                // 名字会被改成 x.json（一个叫 .zip 的 JSON 会让下一个读它的人以为它坏了）。
+                var plain = await Task.Run(() => _backup.ExportToFileAsync(target, CancellationToken.None));
+                ViewModel.BackupStatus = $"已导出备份到：{plain}（只带条目与文件名，不带剪贴板图片本体）";
+            }
             ViewModel.RefreshBackups();     // 刚导出那份必须立刻出现在下面列表里，否则用户会以为没写成
         }
         catch (Exception ex)
@@ -1176,11 +1205,17 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
         // 统一走外部居中窗口（非 ContentDialog）：按用户主题着色、可拖动、不可重复。
         // 三选一场景（合并导入 / 覆盖导入 / 取消）用 ShowContentAsync 的 primary+secondary 双按钮。
+        // 附件张数：确认框上那句"这份还带 N 张图"必须来自包本身，而不是清单里的条目数——
+        // 后者会说"带了"而其实一张都没进包。只读中央目录，不解压，故留在 UI 线程上是几毫秒的事。
+        var clipCount = StarMark.Core.Backup.BackupContainer.CountClipEntries(source);
         var detailBlock = new TextBlock
         {
             Text = $"{detail}\n\n合并导入：保留现有条目，仅补充/覆盖用户元数据（安全、可重复）。\n" +
                    "覆盖导入：先清空再导入，精确还原到备份时刻（会丢掉备份之后新增的条目）。\n" +
-                   "两种都会先自动留下一份「恢复前快照」，想撤销就在列表里点它的「用它回滚」。",
+                   "两种都会先自动留下一份「恢复前快照」，想撤销就在列表里点它的「用它回滚」。"
+                   + (clipCount > 0
+                       ? $"\n\n这份备份还带 {clipCount} 张剪贴板图片本体，导入时会解回图片目录（同名文件不覆盖）。"
+                       : "\n\n这份备份不带剪贴板图片本体，图片历史只有在本机还留着文件时才打得开。"),
             TextWrapping = TextWrapping.Wrap,
         };
         var choice = await CenteredDialog.ShowContentAsync(
@@ -1192,7 +1227,10 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
             && choice != CenteredDialog.HostedDialogResult.Secondary) return;
 
         var mode = choice == CenteredDialog.HostedDialogResult.Secondary ? RestoreMode.Replace : RestoreMode.Merge;
-        var rr = await Task.Run(() => _backup.RestoreAsync(env, mode, null, CancellationToken.None));
+        // 附件从<b>这一份文件</b>里解：把路径一起递进去，服务层据此现算"条目认领哪些文件名"，
+        // 调用方就没有机会把别的包里的名字写进图片目录。
+        var rr = await Task.Run(() => _backup.RestoreAsync(
+            env, mode, null, CancellationToken.None, source));
         ViewModel.BackupStatus = rr.Success
             ? $"{rr.Message}（恢复前快照：{rr.SnapshotPath}）"
             : $"导入失败：{rr.Message}";

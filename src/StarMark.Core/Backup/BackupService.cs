@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Threading;
@@ -11,6 +12,7 @@ using System.Threading.Tasks;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Backup;
 using StarMark.Abstractions.Clipboard;
+using StarMark.Integrations.Clipboard;
 using StarMark.Core.Widgets;
 using StarLog = StarMark.Abstractions.StarLog;
 
@@ -85,21 +87,90 @@ public sealed class BackupService
         return env;
     }
 
-    public async Task ExportToFileAsync(string path, CancellationToken ct = default)
+    /// <summary>
+    /// 导出一份<b>带剪贴板图片本体</b>的备份（§3-Q2 的 a 期）。<b>刻意做成另一个方法而不是加一个布尔参数</b>：
+    /// 布尔的含义只写在被调方时，接线处写反是必然风险（本仓踩过两次，症状都是"全绿而功能是反的"）。
+    /// <para>只用在<b>用户主动点"导出备份"</b>那一条路上。恢复前快照与每日自动件<b>不带附件</b>
+    /// （见 <see cref="WriteSnapshotAsync"/> 与 <see cref="RunAutoBackupAsync"/>）：它们是回滚点，
+    /// 一份几十 MB 的库配几百 MB 的图会把"随时能撤一步"变成"每次恢复都先填一盘磁盘"。</para>
+    /// <para>没有图片可带时仍写 <c>.json</c>（与不带附件的导出逐字节相同）；有图片时写同名 <c>.zip</c>，
+    /// 返回值里的路径就是实际写出去的那一个——<b>扩展名跟着内容走</b>，
+    /// 一个叫 <c>.json</c> 的 zip 会让下一个拿它的人先输错一次。</para>
+    /// </summary>
+    public async Task<BackupExport> ExportWithClipImagesAsync(string path, CancellationToken ct = default)
     {
         var env = await ExportAsync(ct);
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(env, JsonOptions), ct);
+        var (names, missing, plannedFailed) = ClipboardImageStore.PlanBackup(env.Payload.Items);
+        var json = SerializeEnvelope(env);
+        var target = AgreeExtensionWithContent(path, names.Count > 0);
+        if (names.Count == 0)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            await File.WriteAllTextAsync(target, json, ct);
+            return new BackupExport(target, env.Payload.Items.Count, 0, 0, missing, plannedFailed);
+        }
+        var (carried, carriedBytes) = await BackupContainer.WriteAsync(target, json, names, ct);
+        // 计划要带、结果没进包的那些（此刻正被别的程序独占、或刚被删掉）并进"没能带上"这一档：
+        // 报出去的张数与字节都只算真在包里的，两个数说的是同一份东西。
+        return new BackupExport(target, env.Payload.Items.Count, carried, carriedBytes, missing,
+            plannedFailed + names.Count - carried);
     }
+
+    /// <summary>一次带附件导出的事实：实际写到哪儿、装了多少条、带了几张图、多少字节、几张没带上。</summary>
+    public sealed record BackupExport(
+        string Path, int ItemCount, int ClipImages, long ClipImageBytes, int MissingImages, int FailedImages);
+
+    /// <summary>
+    /// 写<b>不带附件</b>的备份（恢复前快照、每日自动件、以及"开关关着导出的那一份"）。
+    /// 返回实际写出去的路径：可能不是传进来的那一个，因为扩展名跟着内容走（见 <see cref="AgreeExtensionWithContent"/>）。
+    /// </summary>
+    public async Task<string> ExportToFileAsync(string path, CancellationToken ct = default)
+    {
+        var env = await ExportAsync(ct);
+        var target = AgreeExtensionWithContent(path, carriesImages: false);
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        await File.WriteAllTextAsync(target, SerializeEnvelope(env), ct);
+        return target;
+    }
+
+    /// <summary>
+    /// 扩展名跟着内容走：带图片本体的那份是 <c>.zip</c>，纯清单那份不许占着 <c>.zip</c> 这个名字。
+    /// <para>两个方向都要改：<b>一个叫 <c>.zip</c> 的 JSON</b>（开关开着但本机一张图都没有、或用户在开关关着时
+    /// 手输了 <c>x.zip</c>）会被下一个拿它的人按压缩包去读，而读它的人正是本程序的导入路径——
+    /// 报出来的是"这个备份包打不开"，让人以为文件坏了，其实只是名字错了。</para>
+    /// </summary>
+    private static string AgreeExtensionWithContent(string path, bool carriesImages)
+        => BackupContainer.IsContainer(path) == carriesImages
+            ? path
+            : BackupContainer.SwapExtension(path);
+
+    /// <summary>清单的序列化<b>只有这一处</b>：写盘、打包、校验和三处调用方共用同一串字节。</summary>
+    private static string SerializeEnvelope(BackupEnvelope env) => JsonSerializer.Serialize(env, JsonOptions);
 
     // ==================== 读取与校验 ====================
 
-    /// <summary>读取并校验备份文件。校验和不匹配或版本不兼容时抛 <see cref="BackupFormatException"/>。</summary>
+    /// <summary>
+    /// 读取并校验备份文件——<b>两种载体都从这一个门进</b>：<c>.json</c> 直接读，
+    /// 带附件的 <c>.zip</c> 读它里面那份清单（校验与版本判定完全同一套，附件不改变清单的字节）。
+    /// 校验和不匹配或版本不兼容时抛 <see cref="BackupFormatException"/>。
+    /// </summary>
     public static async Task<BackupEnvelope> ReadAsync(string path, CancellationToken ct = default)
     {
-        var text = await File.ReadAllTextAsync(path, ct);
-        var env = JsonSerializer.Deserialize<BackupEnvelope>(text, JsonOptions)
+        var text = await BackupContainer.ReadManifestAsync(path, ct);
+        BackupEnvelope env;
+        try
+        {
+            env = JsonSerializer.Deserialize<BackupEnvelope>(text, JsonOptions)
                   ?? throw new BackupFormatException("备份文件不是合法的 JSON。");
+        }
+        catch (JsonException ex)
+        {
+            // 半份文件、被改过后缀的压缩包、手改坏一个字符的清单都落到这里。
+            // 报成"读不懂"而不是把 .NET 那句英文（"The JSON value could not be converted to …"）递给用户：
+            // 前者是可执行的结论（这份文件不能用，换一份），后者只会让人以为是应用坏了。
+            throw new BackupFormatException(
+                $"这个备份文件读不懂（坏在 {(string.IsNullOrEmpty(ex.Path) ? "开头" : ex.Path)}）：可能没写完或已损坏，已拒绝导入。");
+        }
 
         if (!string.Equals(env.App, BackupEnvelope.AppId, StringComparison.Ordinal))
             throw new BackupFormatException($"这不是 StarMark 桌面版备份（app={env.App}）。");
@@ -136,12 +207,16 @@ public sealed class BackupService
 
     /// <summary>
     /// 恢复。<b>任何模式下都会先落一份当前数据的快照</b>，再动数据库。
+    /// <para><paramref name="attachmentSourcePath"/>＝<b>那份备份文件自己的路径</b>：带图片的包要在条目落库之后
+    /// 再按"这些条目认领哪些文件名"把附件解回 clip 目录。刻意传路径而不是传字节（几百张一次进内存＝几百 MB），
+    /// 也刻意不在此处重新解析清单——清单来自哪份文件，附件就该从同一份文件解，调用方只要把同一个路径递进来。</para>
     /// </summary>
     public async Task<RestoreResult> RestoreAsync(
         BackupEnvelope env,
         RestoreMode mode = RestoreMode.Merge,
         string? widgetsTargetPath = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? attachmentSourcePath = null)
     {
         // 规则 0（先于快照与清库）：Replace 会先清空 items/item_tags 再导入，若导入途中抛异常，
         // 已提交的清空不会回滚 → 库被毁却只报「恢复失败」。校验和只保证字节完整、不保证语义合法，
@@ -195,7 +270,14 @@ public sealed class BackupService
                 (widgetsRestored, widgetsError) = WriteWidgetsJson(p.WidgetsJson!, widgetsTargetPath);
             }
 
+            // 附件必须在条目落库<b>之后</b>解：白名单是"这一份备份里的条目认领哪些文件名"，
+            // 而条目本身刚刚才写进库。放在清库之前解会出现"文件已落盘、行被 Replace 清掉"的孤儿。
+            var clip = attachmentSourcePath is null
+                ? (Written: 0, Skipped: 0, Failed: 0, PackageEntries: 0, RowsWithoutPicture: 0)
+                : await ExtractClipImagesAsync(p.Items, attachmentSourcePath, ct);
+
             // 还原走的是批量 DELETE + INSERT（绕开 ItemRepository 各写方法的 Notify），
+
             // 而 ReindexAllSearchTextAsync 的注释约定「调用方收尾统一刷新」——
             // 但 SettingsPage 的调用方只更新了一行状态文本、并未刷新任何界面/组件。
             // 这里在成功返回前补一次广播：主界面计数/列表页与各组件的 DataChangeReloader 才会去抖重载，
@@ -211,16 +293,27 @@ public sealed class BackupService
                 ? $" 但桌面组件数据未能写入（组件保持原状）：{widgetsError}"
                 : string.Empty;
 
-            // b 期（图片不进备份）的恢复文案——这一段不许在 a 期之前撤（§3-Q2 反批原文）：
-            // 备份里带着图片条目的名字，却没有图片本体，用户换机恢复后看到的是"历史里有图、点开打不开"。
-            // 不说清就成了假成功。措辞用"不带图片本体"，禁写"省空间"——PNG 已经是无损压缩，
-            // 打包的真实价值是封装完整性（洞 2），把 a 期的词提前用掉会让 a 上线时没有话可说。
+            // 图片本体的那句必须按<b>这一份备份到底带没带</b>来说，三种事实三种话（§3-Q2 反批：b 期文案
+            // 在 a 期上线前不许撤——现在 a 上线了，就要按事实分支，留着它同样是假话）：
+            // ① 包里确实有附件 → 报"包里几张 / 写回几张 / 跳过几张 / 写不进几张"；
+            // ② 条目落库了但一张都没带（开关关着导的，或 a 期之前的老备份）→ 保留原来那句；
+            // ③ 带了、但仍有历史行在这份包里就没有对应文件 → 单独报，不许一句"已恢复"盖过去。
+            // 这里每一档说的都是"这一份文件里的事实"，不是"用户机器上现在一共有几张图"。
             var clipImageCount = p.Items.Count(i =>
                 i.Source == ItemSources.Clipboard && ClipboardEntry.IsImageOf(i.ExtraJson));
-            var clipImageNote = clipImageCount > 0
-                ? $" 其中 {clipImageCount} 条是剪贴板图片：当前版本的备份只带条目与文件名、不带图片本体，"
-                  + "所以这些条目只有在本机图片目录里还留着对应文件时才打得开，缺的会标成“文件缺失”。"
-                : string.Empty;
+            var clipImageNote = clip.PackageEntries switch
+            {
+                > 0 => ClipPackageSentence(clip),
+                0 when clipImageCount == 0 => string.Empty,
+                // 调用方没把那份文件的路径递进来（只有不经 UI 的调用会这样）：谁也没打开过那个包，
+                // 因此"这份备份不带图片本体"这句没资格说——它是对文件内容的断言，得看过文件才配说。
+                0 when attachmentSourcePath is null
+                    => $" 其中 {clipImageCount} 条是剪贴板图片：这次没有从备份包里解出任何图片文件，"
+                      + "这些条目只有在本机图片目录里还留着对应文件时才打得开，缺的会标成“文件缺失”。",
+                _ => $" 其中 {clipImageCount} 条是剪贴板图片：这份备份只带条目与文件名、不带图片本体"
+                      + "（导出时那颗开关是关的，或它是带附件之前的版本），所以这些条目只有在本机图片目录里"
+                      + "还留着对应文件时才打得开，缺的会标成“文件缺失”。",
+            };
 
             return new RestoreResult
             {
@@ -234,6 +327,9 @@ public sealed class BackupService
                 TagsRestored = p.Tags.Count,
                 LinksRestored = p.ItemTags.Count,
                 WidgetsRestored = widgetsRestored,
+                ClipImagesRestored = clip.Written,
+                ClipImagesSkipped = clip.Skipped,
+                ClipImagesFailed = clip.Failed,
             };
         }
         catch (Exception ex)
@@ -286,7 +382,10 @@ public sealed class BackupService
         try
         {
             if (!Directory.Exists(dir)) return list;
-            foreach (var f in new DirectoryInfo(dir).EnumerateFiles("*.json"))
+            // 两种载体都要盘点：带图片的导出是 .zip，只带条目的还是 .json。
+            // 少扫一种，界面上就是"我明明导出过三份，列表只有两份"——而那份 zip 恰恰是唯一带图的。
+            foreach (var f in new DirectoryInfo(dir).EnumerateFiles()
+                         .Where(f => BackupContainer.IsBackupPath(f.Name)))
             {
                 try
                 {
@@ -334,7 +433,7 @@ public sealed class BackupService
         Directory.CreateDirectory(dir);
         var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
         var path = Path.Combine(dir, $"{AutoBackupPolicy.Prefix}{stamp}.json");
-        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(env, JsonOptions), ct);
+        await File.WriteAllTextAsync(path, SerializeEnvelope(env), ct);
 
         foreach (var stale in AutoBackupPolicy.PrunePlan(EnumerateAutoBackups(dir)))
         {
@@ -379,6 +478,57 @@ public sealed class BackupService
         var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, CanonicalOptions);
         var hash = SHA256.HashData(bytes);
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// 把附件解回图片目录。白名单<b>由这一份备份的条目现算</b>（而不是由调用方传进来）：
+    /// "哪些文件名属于这次恢复"只有看着刚落库的那批条目才说得清，传字符串数组就等于让调用方可以
+    /// 递进任意名字——而下一个动作是往用户的图片目录里写文件。
+    /// <para>同时算出<b>在这份包里根本没有对应文件的图片行数</b>（<c>RowsWithoutPicture</c>）。
+    /// 这个数<b>不能用"包里的条目数 − 写回数"之类减法得到</b>：条目与文件是两种量纲（一行占两张文件，
+    /// 旧行只占一张），3b 自查时正是拿行减文件，得出"缺 0 条"而实际缺一条。唯一的算法是
+    /// 按行认领的名字与包内条目名<b>取交集</b>。</para>
+    /// </summary>
+    private static async Task<(int Written, int Skipped, int Failed, int PackageEntries, int RowsWithoutPicture)>
+        ExtractClipImagesAsync(List<Item> items, string sourcePath, CancellationToken ct)
+    {
+        var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var rows = new List<List<string>>();
+        foreach (var item in items)
+        {
+            var names = new List<string>();
+            foreach (var name in ClipboardImageStore.ClaimedNamesOf(item))
+                if (!string.IsNullOrEmpty(name)) names.Add(name!);
+            if (names.Count == 0) continue;
+            rows.Add(names);
+            foreach (var name in names) claimed.Add(name);
+        }
+
+        var (written, skipped, failed, packageNames) =
+            await BackupContainer.ExtractClipsAsync(sourcePath, claimed, ct);
+        if (packageNames.Count == 0) return (0, skipped, failed, 0, rows.Count);
+
+        var inPackage = new HashSet<string>(packageNames, StringComparer.OrdinalIgnoreCase);
+        var covered = rows.Count(names => names.Any(inPackage.Contains));
+        return (written, skipped, failed, packageNames.Count, rows.Count - covered);
+    }
+
+    /// <summary>
+    /// "这一份包到底把图片带回来了没有"那句话。<b>四个数分四档说，逗号跟着实际出现的那几档走</b>——
+    /// 用嵌套三元拼出来的句子在"没跳过也没失败，但有行没带着文件"时会写出"写回 2 个，；还有…"这种话。
+    /// </summary>
+    private static string ClipPackageSentence(
+        (int Written, int Skipped, int Failed, int PackageEntries, int RowsWithoutPicture) clip)
+    {
+        var sb = new StringBuilder();
+        sb.Append($" 剪贴板图片：这份包里带着 {clip.PackageEntries} 个图片文件，写回 {clip.Written} 个");
+        if (clip.Skipped > 0)
+            sb.Append($"，跳过 {clip.Skipped} 个（本机已有同名文件，或那个名字不属于任何一条历史）");
+        if (clip.Failed > 0)
+            sb.Append($"，另有 {clip.Failed} 个没能写入（原因见日志）");
+        if (clip.RowsWithoutPicture > 0)
+            sb.Append($"；还有 {clip.RowsWithoutPicture} 条图片历史在这份包里就没有对应的文件，会标成“文件缺失”");
+        return sb.Append("。").ToString();
     }
 
     /// <summary>

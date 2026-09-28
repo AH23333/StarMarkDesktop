@@ -131,16 +131,33 @@ public sealed class ClipboardImageSettingsGateTests
     }
 
     [Fact]
-    public void BackupImageSwitchStaysInvisibleUntilPhaseA()
+    public void BackupImageSwitchIsWiredAndSitsRightAboveTheExportButton()
     {
-        // 决议把"备份包含剪贴板图片"列成默认开的一项，但 b 期导出格式里没有附件这一维：
-        // 现在放上设置页，就是一颗点了什么都不改变的哑键（用户最不能容忍的一类）。
-        // key 先落盘（a 期直接读，跨版本语义不变），界面上刻意不出现。
+        // 1d 时这颗开关刻意不上界面：那时导出格式里还没有附件这一维，放上就是一颗点了什么都不改变的哑键。
+        // a 期（批次 3b）把附件打包做出来了，闸门随之改判：**现在它必须出现，而且必须接线接全**。
+        // 四种"看着在、其实没用"的失效各钉一条：
         var store = ReadRepoFile(Store);
+        // ① 有 key、有读、有写——只落 key 不写 = 界面上拨完就忘；
         Assert.Contains("public bool? BackupClipboardImagesEnabled { get; set; }", store);
-        Assert.Contains("LoadBackupClipboardImagesEnabled", store);
-        Assert.DoesNotContain("BackupClipboardImages", ReadRepoFile(Vm));
-        Assert.DoesNotContain("BackupClipboardImages", ReadRepoFile(Xaml));
+        Assert.Contains("public void SaveBackupClipboardImagesEnabled(bool enabled)", store);
+        // ② 默认开（决议 §4）：写成 == true 就成了"默认关"，而文案里没有一句会说这件事；
+        Assert.Contains("BackupClipboardImagesEnabled ?? true", store);
+        Assert.DoesNotContain("BackupClipboardImagesEnabled == true", store);
+
+        var vm = ReadRepoFile(Vm);
+        // ③ 回灌初值时不许写盘（否则每次进设置页都把用户的值按默认覆盖一次），且初值取自 store 而不是硬编 true；
+        var apply = MethodBody(vm, "partial void OnBackupClipboardImagesEnabledChanged(bool value)");
+        Assert.Contains("_settings.SaveBackupClipboardImagesEnabled(value)", apply);
+        Assert.Contains("if (_suppressClipboardImageApply) return;", apply);
+        Assert.Contains("BackupClipboardImagesEnabled = Safe(_settings.LoadBackupClipboardImagesEnabled, true,", vm);
+        Assert.DoesNotContain("BackupClipboardImagesEnabled = true", vm);
+
+        // ④ 摆位：这颗开关管的是"下一次导出会长成什么文件"，所以必须在<b>导出按钮之前</b>。
+        //    放进剪贴板那张卡（同页、离按钮很远）等于让用户点导出时看不见自己刚决定了什么。
+        var card = Between(DataTab(), "<TextBlock Text=\"数据备份与恢复\"", "Click=\"ExportBackup_Click\"");
+        Assert.Contains("ViewModel.BackupClipboardImagesEnabled, Mode=TwoWay", card);
+        // 关掉它的代价（图片条目要靠本机还留着文件才打得开）写在卡上，而不是只写在 tooltip 里。
+        Assert.Contains("关掉则只带条目与文件名", card);
     }
 
     [Fact]

@@ -21,7 +21,9 @@ public static class BackupPathPolicy
     };
 
     /// <summary>
-    /// 归一用户手输的导出目标：去引号/空白、补 <c>.json</c>、展开为绝对路径。
+    /// 归一用户手输的导出目标：去引号/空白、补扩展名、展开为绝对路径。
+    /// <para>只填文件名时补 <c>.json</c>——实际写出去的是什么载体由内容决定（带图就是同名 <c>.zip</c>），
+    /// 返回值里的路径与 <c>ExportWithClipImagesAsync</c> 报回来的路径可能差一个扩展名，界面因此要显示后者。</para>
     /// 返回 (可用路径, 错误)：错误非 null 时前者为 null，调用方把错误原样回显给用户再问一次。
     /// </summary>
     /// <param name="raw">用户输入（可为 null＝取消）。</param>
@@ -45,9 +47,9 @@ public static class BackupPathPolicy
             return (null, $"「{stem}」是 Windows 保留名，换一个文件名。");
 
         var ext = Path.GetExtension(full);
-        if (ext.Length == 0) full += ".json";
-        else if (!string.Equals(ext, ".json", StringComparison.OrdinalIgnoreCase))
-            return (null, "备份文件需用 .json 扩展名（直接删掉结尾的扩展名即可自动补上）。");
+        if (ext.Length == 0) full += BackupContainer.ManifestExtension;     // 默认仍是只带条目的 .json；带不带图由内容决定实际写出的载体
+        else if (!BackupContainer.IsBackupPath(full))
+            return (null, "备份文件要用 .json 或 .zip 扩展名（直接删掉结尾的扩展名即可自动补上）。");
 
         var dir = Path.GetDirectoryName(full);
         if (string.IsNullOrEmpty(dir)) return (null, "请填写包含目录的完整路径。");
@@ -56,7 +58,9 @@ public static class BackupPathPolicy
         return (full, null);
     }
 
-    /// <summary>归一用户手输的导入来源：必须是存在的 .json 文件。</summary>
+    /// <summary>归一用户手输的导入来源：必须是存在的备份文件（<c>.json</c> 或带附件的 <c>.zip</c>）。
+    /// <para>"哪些扩展名算备份"必须与 <see cref="BackupContainer.IsBackupPath"/> 同一份口径：
+    /// 这里各写一遍，就会出现"列表里看得见、输入框里说不是备份文件"这种自相矛盾。</para></summary>
     public static (string? Path, string? Error) ForImport(string? raw)
     {
         var text = Clean(raw);
@@ -66,8 +70,8 @@ public static class BackupPathPolicy
         var full = TryFull(text, out var err);
         if (full is null) return (null, err);
 
-        if (!string.Equals(Path.GetExtension(full), ".json", StringComparison.OrdinalIgnoreCase))
-            return (null, "请选择 .json 备份文件。");
+        if (!BackupContainer.IsBackupPath(full))
+            return (null, "请选择 .json 或 .zip 备份文件（带图片的那一份导出是 .zip）。");
         if (!File.Exists(full))
             return (null, $"文件不存在：{full}");
 

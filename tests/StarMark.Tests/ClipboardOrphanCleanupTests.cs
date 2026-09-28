@@ -136,8 +136,9 @@ public sealed class ClipboardOrphanCleanupTests : IDisposable
         Assert.Empty((await ClipboardAssetAudit.ScanAsync(_repo))!.Value.Result.MissingRowIds);
 
         // 现在"来了一条历史行用它"（名字与行里的完全一致，就是那份被认领的文件）。
+        // ImageMeta 的缩略图位不给 null：这个类型里"没有单独缩略图"的写法就是重复主图名（与读侧的 ?? main 同一口径）。
         var item = await _repo.RecordClipboardAsync(ClipboardEntry.BuildImage(
-            Sid("late"), new ClipboardEntry.ImageMeta("late.png", null, 8, 8, 700), "Code", At(30)),
+            Sid("late"), new ClipboardEntry.ImageMeta("late.png", "late.png", 8, 8, 700), "Code", At(30)),
             CancellationToken.None);
         Assert.Equal("late.png", ClipboardEntry.FileName(item));
 

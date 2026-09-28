@@ -218,7 +218,7 @@ public partial class SettingsPageViewModel : ObservableObject
                 ? "正在记录本机复制的内容（密码管理器与私钥 / 令牌 / 卡号形态除外）。"
                 : "开关是开着的，但本会话的剪贴板监听没建立起来，暂时不会记录新内容——关掉再打开本开关可重试。";
 
-        // 图片那三项同样"只回灌、不因为显示而写盘"；但占用统计要真算一次：
+        // 图片那三项 + 导出带不带图片本体同样"只回灌、不因为显示而写盘"；但占用统计要真算一次：
         // §3-Q1 的第三层就是"让用户在填上限之前先看见现在占了多少"。
         _suppressClipboardImageApply = true;
         ClipboardImageEnabled = Safe(_settings.LoadClipboardImageEnabled, false, "剪贴板图片采集");
@@ -226,6 +226,7 @@ public partial class SettingsPageViewModel : ObservableObject
             StarMark.Abstractions.Clipboard.ClipboardPolicy.DefaultImageMaxEntries, "图片条数上限");
         ClipboardTextMaxValue = Safe(_settings.LoadClipboardTextMaxEntries,
             StarMark.Abstractions.Clipboard.ClipboardPolicy.MaxEntries, "文本条数上限");
+        BackupClipboardImagesEnabled = Safe(_settings.LoadBackupClipboardImagesEnabled, true, "导出带图片本体");
         _suppressClipboardImageApply = false;
         ClipboardImageStatus = ClipboardImageStatusText(App.IsClipboardCollecting, ClipboardImageEnabled);
         ComputeClipboardUsage();
@@ -426,6 +427,13 @@ public partial class SettingsPageViewModel : ObservableObject
     /// <summary>清理那一步的结果行：删了几件、腾出多少、还有几件删不掉。<b>不许写成一句"清理完成"</b>。</summary>
     [ObservableProperty] private string _clipboardCleanupStatus = string.Empty;
 
+    /// <summary>
+    /// 手动导出是否带上剪贴板图片本体（决议 §4：<b>默认开</b>）。
+    /// 它只改"下一次导出"的载体（<c>.json</c> ↔ <c>.zip</c>），不改采集、不改已有备份文件，
+    /// 所以这条改动除了落盘不需要推给任何运行中的东西。
+    /// </summary>
+    [ObservableProperty] private bool _backupClipboardImagesEnabled;
+
     /// <summary>回灌初值期间不许落盘/推参数，否则每次进设置页都把默认值写回用户设置里。</summary>
     private bool _suppressClipboardImageApply;
 
@@ -458,6 +466,12 @@ public partial class SettingsPageViewModel : ObservableObject
     {
         if (_suppressClipboardImageApply) return;
         QueueClipboardLimitsSave();
+    }
+
+    partial void OnBackupClipboardImagesEnabledChanged(bool value)
+    {
+        if (_suppressClipboardImageApply) return;
+        _settings.SaveBackupClipboardImagesEnabled(value);
     }
 
     /// <summary>两个数字框的合并窗口。400ms 是"手停下"的量级，不是"等一轮刷新"的量级。</summary>
