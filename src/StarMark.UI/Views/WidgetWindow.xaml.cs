@@ -40,6 +40,7 @@ public sealed partial class WidgetWindow : Window
     private bool _shuttingDown;
     private WidgetInstanceConfig _config;
     private Border? _dropHint;
+    private bool _dropEnterLogged;      // 拖放进来的那句证词只记一次（见 QuickLaunch_DragEnter）
 
     // ── 拖动/缩放状态（全部使用 Win32 物理像素，避免 DIP 与 AppWindow 物理坐标混用）──
     private bool _dragging;
@@ -2048,7 +2049,7 @@ public sealed partial class WidgetWindow : Window
         RootBorder.AllowDrop = true;
         RootBorder.DragOver += QuickLaunch_DragOver;
         RootBorder.Drop += QuickLaunch_Drop;
-        RootBorder.DragEnter += (_, _) => SetDropHintVisible(true);
+        RootBorder.DragEnter += QuickLaunch_DragEnter;
         RootBorder.DragLeave += (_, _) => SetDropHintVisible(false);
 
         _dropHint = new Border
@@ -2074,6 +2075,31 @@ public sealed partial class WidgetWindow : Window
     private void SetDropHintVisible(bool visible)
     {
         if (_dropHint is not null) _dropHint.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// 「拖了没反应」的分水岭证词：这一行<b>记下了</b>＝拖拽消息真的送到了本进程，问题在后面的落库；
+    /// 一整段日志里<b>一行都没有</b>＝手势根本没进来（跨完整性级别被 UIPI 过滤，或组件没挂上放 target）。
+    /// <para>以前这两种在日志里长得完全一样——都是零行，只能靠猜，而猜错过一次（把系统拦的当成组件坏的）。
+    /// 只记第一次进入：DragEnter 在悬停进出时会反复触发，要的是"通不通"这一个事实，不是流量。</para>
+    /// </summary>
+    private void QuickLaunch_DragEnter(object sender, DragEventArgs e)
+    {
+        SetDropHintVisible(true);
+        if (_dropEnterLogged) return;
+        _dropEnterLogged = true;
+        StarLog.Info($"[拖放] 快捷启动收到 DragEnter：{DropFormats(e.DataView)}");
+    }
+
+    /// <summary>把"载荷里有什么格式"写成一短句——只有格式名，不含路径，日志里不会带出用户文件名。</summary>
+    private static string DropFormats(DataPackageView v)
+    {
+        var has = new List<string>();
+        if (v.Contains(StandardDataFormats.StorageItems)) has.Add("文件");
+        if (v.Contains(StandardDataFormats.WebLink)) has.Add("网页");
+        if (v.Contains(StandardDataFormats.ApplicationLink)) has.Add("应用");
+        if (v.Contains(StandardDataFormats.Text)) has.Add("文本");
+        return has.Count > 0 ? "格式[" + string.Join("/", has) + "]" : "格式[空]";
     }
 
     private async void QuickLaunch_DragOver(object sender, DragEventArgs e)
@@ -2108,7 +2134,18 @@ public sealed partial class WidgetWindow : Window
                     if (string.IsNullOrWhiteSpace(item.Path)) continue;
                     paths.Add((item.Name, item.Path));
                 }
-                await _manager.AddPathsToLauncherAsync(_instanceId, paths);
+                if (paths.Count == 0)
+                {
+                    // 收到了 Drop 却一个路径都拿不到＝载荷形状与预期不同（远端 shell 扩展、占位符之类），
+                    // 这种情况必须留下痕迹：否则它与"其实落库成功了但列表没变"在日志里一模一样。
+                    StarLog.Warn($"[拖放] 快捷启动 Drop：{DropFormats(v)}，但 {items.Count} 项都没有可用路径，未落库。");
+                    return;
+                }
+                // 「收到几项」与「净增几条」分开记：拖进来的东西早已在列表里时返回 0，
+                // 界面上确实"什么都没发生"。没有这一行的话，那种正常去重和"落库失败"长得一模一样。
+                var added = await _manager.AddPathsToLauncherAsync(_instanceId, paths);
+                StarLog.Info($"[拖放] 快捷启动 Drop：{DropFormats(v)}，收到 {paths.Count} 项，净新增入口 {added} 条"
+                             + (added == 0 ? "（这些都是已存在的入口，所以列表没变）" : ""));
             }
             else if (v.Contains(StandardDataFormats.WebLink))
             {

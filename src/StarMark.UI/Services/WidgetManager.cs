@@ -997,15 +997,16 @@ public sealed class WidgetManager
     /// <para>两条出口都调它：从资源管理器<b>拖入</b>（<c>WidgetWindow.QuickLaunch_Drop</c>）与点<b>「选择文件／选择文件夹」</b>
     /// （<c>QuickLaunchWidget</c>）。两处各写一遍的话，"登记进主库了但没加进组件"这类半套状态迟早只在一处出现——
     /// 而它看起来像另一个功能的 bug，最难归因。</para>
-    /// <para>选择器这条路不是锦上添花：以管理员身份运行时 Windows（UIPI）会整条拦下从资源管理器拖进来的消息流，
+    /// <para>选择器这条路不是锦上添花：程序以管理员身份运行时 Windows（UIPI）会整条拦下从资源管理器拖进来的消息流，
     /// 不报错也不提示，症状就是"拖了没反应"；对话框跑在本进程里，与权限等级无关。</para>
     /// </summary>
-    public async Task AddPathsToLauncherAsync(string instanceId, IReadOnlyList<(string? Title, string Path)> picked)
+    /// <returns>真正加进本组件的入口条数（去重后为 0 也是正常结果，由调用侧说出来，别让它静默）。</returns>
+    public async Task<int> AddPathsToLauncherAsync(string instanceId, IReadOnlyList<(string? Title, string Path)> picked)
     {
         var usable = picked.Where(p => !string.IsNullOrWhiteSpace(p.Path)).ToList();
-        if (usable.Count == 0) return;
+        if (usable.Count == 0) return 0;
         await RecordPathsToLibraryAsync(usable);
-        await AddLinksAsync(instanceId, usable.Select(p => (TitleOf(p.Title, p.Path), new Uri(p.Path).AbsoluteUri)).ToList());
+        return await AddLinksAsync(instanceId, usable.Select(p => (TitleOf(p.Title, p.Path), new Uri(p.Path).AbsoluteUri)).ToList());
     }
 
     /// <summary>没带名字就取路径末段；目录带尾斜杠时 <c>GetFileName</c> 会返回空串，退化成去掉斜杠的末段。</summary>

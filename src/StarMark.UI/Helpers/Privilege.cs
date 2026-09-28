@@ -6,9 +6,13 @@ using System.Runtime.InteropServices;
 namespace StarMark.UI.Helpers;
 
 /// <summary>
-/// 进程完整性/提权相关小工具。给「本地磁盘搜索」用：当用户的 Everything 以管理员运行（High IL）时，
-/// 普通 IL 的 StarMark 用 WM_COPYDATA 连不上它（UIPI），必须**同权限**才能对话。方案：让用户开启本地磁盘搜索后
-/// StarMark 自动以管理员身份重启一次，与新 Everything 客户端保持同 IL。见 App.xaml.cs / SettingsPageViewModel。
+/// 进程完整性/提权相关小工具。<b>本程序不再为了连上 Everything 而自我提权</b>（P-108 改判，2026-09-29 实测：
+/// 我们自己拉起的 Everything 跑在普通 IL，同权限的 WM_COPYDATA 本来就不被 UIPI 拦，提权对"能不能搜到"零增益，
+/// 代价却是资源管理器拖进／拖出双向失灵＋系统文件对话框调不起来＋每次启动弹 UAC）。
+/// <para>现在只剩两个用途：<see cref="IsElevated"/> 给会话日志与"提权会话下选择器不可用"这类说实话的文案用；
+/// <see cref="TryRelaunchSelfElevated"/> 只服务一处——收掉<b>权限比我们高</b>的上次残留进程（普通权限 end 不掉它，
+/// 而它锁着数据目录），见 <c>App.xaml.cs</c> 的 <c>--resolve-ghost</c>。方向区别要说清：那是"对面先提了权"，
+/// 不是"我们主动把权限抬上去"。</para>
 /// </summary>
 public static class Privilege
 {
@@ -36,7 +40,8 @@ public static class Privilege
     }
 
     /// <summary>
-    /// 以 <c>runas</c>（触发 UAC）重启当前 exe，附带 <paramref name="extraArgs"/> 以便新实例防死循环。
+    /// 以 <c>runas</c>（触发 UAC）重启当前 exe，<paramref name="extraArgs"/> 用来把"新实例该办的那一件、也只办那一件"
+    /// 交代清楚（现存唯一调用者交的是 <c>--resolve-ghost &lt;pid&gt;</c>＝收掉指定残留，因此不会再重复弹框）。
     /// 用户点"否" → <see cref="System.ComponentModel.Win32Exception"/>（error 1223）→ 返回 false，调用方继续普通运行。
     /// </summary>
     public static bool TryRelaunchSelfElevated(string? extraArgs = null)

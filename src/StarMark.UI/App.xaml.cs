@@ -247,23 +247,16 @@ public partial class App : Application
         try { PerformanceSettingsPolicy.Provider = fileSettings; }
         catch (Exception pex) { StarLog.Error("性能模式设置来源注入失败", pex); }
 
-        // 本地磁盘搜索「A 方案：与提权 Everything 同权限」——若已开启且当前非提权，以管理员重启一次
-        // （带 --elevate-retry 标记防死循环；用户取消 UAC 则继续普通运行，仅本地文件搜索用不了，其余不受影响）。
-        // 每次启动记一行提权自检，便于定位 IPC(2) 究竟出在"StarMark 没真提权"还是"Everything 没提权"。
-        // 冒烟/开发期要一台不提权的实例：带着 --elevate-retry 起就行（磁盘搜索开着时它就不再转提权），
-        // 提权只服务于 Everything 那一条链，其余功能与权限无关。
+        // 本地磁盘搜索<b>不再</b>把自己提权重启（P-108 改判，2026-09-29 实测）。
+        // 当年提权的理由是"要连上以管理员运行的 Everything"；真机量下来两边都不需要：
+        //   · 我们自带并拉起的引擎在 %LOCALAPPDATA%\StarMark\everything\Everything.exe，实测 IL = S-1-16-8192（普通）；
+        //   · 同权限的 WM_COPYDATA IPC 本来就不被 UIPI 拦，提权对"能不能搜到"没有任何增益。
+        // 而自我提权换回来的是整族跨完整性故障：资源管理器拖进／拖出被静默掐掉（快捷启动、拖出到桌面全废）、
+        // 系统文件对话框调不起来（备份那条链因此专门做过兜底）、每次启动弹一次 UAC。
+        // 保留的出口：App 仍会在启动行记 elev=，跨 IL 残留的收法（--resolve-ghost）也留着——那是"对面权限比我们先"
+        // 时的处置，不再是"我们主动把权限抬上去"。
         if (fileSettings.LoadLocalDiskSearchEnabled())
-        {
-            var alreadyRetried = false;
-            foreach (var a in Environment.GetCommandLineArgs())
-                if (string.Equals(a, "--elevate-retry", StringComparison.OrdinalIgnoreCase)) { alreadyRetried = true; break; }
-            StarLog.Info($"本地磁盘搜索：提权自检 IsElevated={Privilege.IsElevated()} · elevateRetry={alreadyRetried} · pid={Environment.ProcessId}");
-            if (!Privilege.IsElevated() && !alreadyRetried && Privilege.TryRelaunchSelfElevated("--elevate-retry"))
-            {
-                ReleaseSingleInstanceForHandoff();
-                Environment.Exit(0);
-            }
-        }
+            StarLog.Info("本地磁盘搜索：按普通权限运行（不自我提权），Everything 由下面的就绪流程就地准备。");
 
         // Everything 就绪流程（下载 SDK / 主程序未运行时自动安装）——仅在用户开启「本地磁盘搜索」后执行。
         // 默认关时绝不在此下载/安装/拉起 Everything，满足"轻度用户零打扰、默认零内存"。

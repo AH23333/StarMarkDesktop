@@ -966,12 +966,13 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
     // ==================== 数据备份与恢复（P0-2） ====================
 
-    // WinRT 的文件选择器要走系统对话框宿主（中 IL）。本地磁盘搜索会让 StarMark 以管理员运行，
-    // 此时 PickSaveFileAsync/PickSingleFileAsync 稳定抛 COMException E_FAIL（真机日志：提权 pid 内连挂 4 次），
+    // WinRT 的文件选择器要走系统对话框宿主（普通权限）。本进程权限高于宿主时——过去是"开本地磁盘搜索就自我提权"
+    // 造成的（P-108 已改判，程序不再自己抬权限），现在只剩"用户自己以管理员运行"这一种——
+    // PickSaveFileAsync/PickSingleFileAsync 稳定抛 COMException E_FAIL（真机日志：提权 pid 内连挂 4 次），
     // 且 try 若从 picker 之后才开始，异常就冲到 UI 兜底网、用户只看到"点了没反应"。
-    // 处置：picker 调用本身进 try；失败**不再要求用户换权限重启**，而是退回应用内路径输入框（见 RequestBackupPathAsync）。
+    // 处置：picker 调用本身进 try；失败**不写死成因、也不要求用户换权限重启**，而是退回应用内路径输入框（见 RequestBackupPathAsync）。
     private const string PickerBlockedHint =
-        "系统文件对话框在当前会话调不起来（StarMark 以管理员身份运行，而对话框宿主在普通权限）——改用路径输入框。";
+        "系统文件对话框在当前会话调不起来（本程序权限高于对话框宿主时就会这样）——改用路径输入框。";
 
     /// <summary>调起 WinRT 选择器；返回 null 表示用户取消。（提权下抛 InvalidOperationException＝对话框宿主不可用。）</summary>
     private static async Task<Windows.Storage.IStorageItem?> PickAsync(

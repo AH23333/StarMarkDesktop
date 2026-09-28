@@ -821,9 +821,10 @@
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                 <TextBlock Text="导入会先自动生成「恢复前快照」（同上目录），任何恢复都可回滚：它就是下面列表里标着「恢复前快照」的那一行，点「用它回滚」即撤销这次导入。"
                                            Style="{StaticResource SettingRowText}"/>
-                                <!-- 提权会话下系统文件选择器跨不到中 IL 的对话框宿主（真机日志 E_FAIL 四连挂）。
-                                     已改为自动退回应用内路径输入框，故这里只做状态说明，不再指挥用户换权限重启。 -->
-                                <TextBlock Text="当前以管理员身份运行（开启本地磁盘搜索时会这样）：系统文件对话框在这种会话里不可用，导出/导入会自动改用应用内的路径输入框，无需换权限或重启。"
+                                <!-- 进程权限高于对话框宿主时选择器跨不过去（真机日志 E_FAIL 四连挂）。
+                                     本程序不再为了连 Everything 抬自己的权限（P-108 改判），所以这句只在用户自己
+                                     "以管理员身份运行"时出现；处置同样是自动退回应用内路径输入框，不指挥人换权限。 -->
+                                <TextBlock Text="当前以管理员身份运行（由你启动时的选择决定，程序不会再自己提权）：系统文件对话框在这种会话里不可用，导出/导入会自动改用应用内的路径输入框，无需换权限或重启。"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
                                            Foreground="{ThemeResource SystemFillColorCautionBrush}"
                                            Visibility="{x:Bind ViewModel.IsElevatedSession, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>

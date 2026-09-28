@@ -94,8 +94,9 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty] private bool _isBackupBusy;
 
     /// <summary>
-    /// 本次会话是否以管理员权限运行（开本地磁盘搜索时会重启自己提权，见 P-46）。
-    /// 提权进程跨完整性调不到中 IL 的系统文件对话框宿主 ⇒ 导出/导入的选择器稳定失败，
+    /// 本次会话是否以管理员权限运行。程序自己不再抬权限（P-108 改判：抬上去只会让拖进／拖出与系统对话框失灵），
+    /// 所以这里为 true 只可能是用户手动"以管理员身份运行"的结果。
+    /// 那种进程跨完整性调不到普通 IL 的系统文件对话框宿主 ⇒ 导出/导入的选择器稳定失败，
     /// 与其让用户以为"备份功能坏了"，不如在备份卡片里先说明。进程存续期间不会变，故不做通知。
     /// </summary>
     public bool IsElevatedSession { get; } = Privilege.IsElevated();
@@ -1040,65 +1041,51 @@ public partial class SettingsPageViewModel : ObservableObject
     /// </summary>
     [ObservableProperty] private bool _canRetryLocalDiskPrepare;
 
-    /// <summary>按钮文字随会话权限而变：提权会话缺的是 Everything 起来，普通会话缺的是那一次 UAC。</summary>
-    public string LocalDiskSearchRetryLabel => Privilege.IsElevated() ? "重试准备 Everything" : "重试提权重启";
+    /// <summary>按钮只干一件事：就地重跑准备流程。以前这里按会话权限换文字（"重试提权重启"），
+    /// 因为开关会先把 StarMark 提上去；那条自我提权已经删掉（P-108 改判），所以措辞也只有一份。</summary>
+    public string LocalDiskSearchRetryLabel => "重试准备 Everything";
 
     /// <summary>
-    /// 开启本地磁盘搜索的准备流程：已提权就地拉起 Everything，未提权先请求提权重启（A 方案：
-    /// 让新实例与以管理员运行的 Everything 同 IL，WM_COPYDATA IPC 不再被 UIPI 拦）。
+    /// 开启本地磁盘搜索的准备流程：<b>就地</b>起 SDK / 拉起 Everything 客户端，不碰进程权限。
     /// <para>
     /// 之所以从开关回调里抽出来：失败分支原先的文案是「请确认 Everything 正在运行后稍候再试」
     /// 「请用开始菜单『以管理员身份运行』重启 StarMark」——把程序自己能做的动作写成给用户布置的作业。
     /// 抽成方法后「重试」按钮点的就是这同一段代码，不留第二条需要人照做的路（P-54）。
     /// </para>
+    /// <para>这里刻意不再请求提权：提权对连上引擎没有增益（引擎跑在普通 IL），却会顺带掐死
+    /// 资源管理器拖进／拖出并让系统文件对话框调不起来。见 <c>App.xaml.cs</c> 同一条改判注释。</para>
     /// </summary>
     private void PrepareLocalDiskSearch()
     {
         CanRetryLocalDiskPrepare = false;
         OnPropertyChanged(nameof(LocalDiskSearchRetryLabel));
 
-        if (Privilege.IsElevated())
+        LocalDiskSearchStatus = "已开启：正在准备 Everything（起 SDK / 拉起客户端）…";
+        _ = Task.Run(async () =>
         {
-            LocalDiskSearchStatus = "已开启（管理员）：正在准备 Everything（起 SDK / 拉起客户端）…";
-            _ = Task.Run(async () =>
+            string status;
+            bool needRetry;
+            try
             {
-                string status;
-                bool needRetry;
-                try
-                {
-                    var src = App.Services.GetRequiredService<StarMark.Integrations.Everything.EverythingSource>();
-                    var outcome = await src.EnableAsync(CancellationToken.None);
-                    needRetry = outcome != StarMark.Integrations.Everything.EverythingSource.LocalDiskSearchEnableOutcome.Ready;
-                    status = needRetry
-                        ? "已开启，但 Everything 尚未就绪（客户端没起来，或它正以另一种权限运行）。"
-                        : "已开启：本地文件将参与全盘搜索（快捷搜索 / 主窗即时生效）。";
-                }
-                catch (Exception ex)
-                {
-                    StarLog.Error("本地磁盘搜索：准备 Everything 失败", ex);
-                    needRetry = true;
-                    status = $"已开启，但准备 Everything 失败：{ex.Message}";
-                }
-                App.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
-                {
-                    LocalDiskSearchStatus = status;
-                    CanRetryLocalDiskPrepare = needRetry;
-                });
+                var src = App.Services.GetRequiredService<StarMark.Integrations.Everything.EverythingSource>();
+                var outcome = await src.EnableAsync(CancellationToken.None);
+                needRetry = outcome != StarMark.Integrations.Everything.EverythingSource.LocalDiskSearchEnableOutcome.Ready;
+                status = needRetry
+                    ? "已开启，但 Everything 尚未就绪（客户端没起来，或它正以另一种权限运行——那种情况下本程序不会替你去改它的权限）。"
+                    : "已开启：本地文件将参与全盘搜索（快捷搜索 / 主窗即时生效）。";
+            }
+            catch (Exception ex)
+            {
+                StarLog.Error("本地磁盘搜索：准备 Everything 失败", ex);
+                needRetry = true;
+                status = $"已开启，但准备 Everything 失败：{ex.Message}";
+            }
+            App.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+            {
+                LocalDiskSearchStatus = status;
+                CanRetryLocalDiskPrepare = needRetry;
             });
-            return;
-        }
-
-        LocalDiskSearchStatus = "已开启。正请求以管理员身份重启 StarMark（以便连上以管理员运行的 Everything）——请在 UAC 点「是」…";
-        if (Privilege.TryRelaunchSelfElevated("--elevate-retry"))
-        {
-            // 与 App 的启动期提权重启同一个坑：先让出单实例互斥体再 Exit，否则提权新实例抢锁失败
-            // 会去"激活"这个马上消失的旧窗口然后自己退出 ⇒ 两个进程都没了（表现为点开关于就闪退）。
-            App.ReleaseSingleInstanceForHandoff();
-            Environment.Exit(0);   // 交给提权实例（其启动自带 --elevate-retry，不再二次弹窗）
-            return;
-        }
-        LocalDiskSearchStatus = "已开启，但提权重启没有发生（UAC 被取消或被安全软件拦下），本地文件可能搜不到。";
-        CanRetryLocalDiskPrepare = true;
+        });
     }
 
     [RelayCommand]
@@ -1141,9 +1128,9 @@ public partial class SettingsPageViewModel : ObservableObject
         }
 
         CanRetryLocalDiskPrepare = true;
-        LocalDiskSearchStatus = Privilege.IsElevated()
-            ? "已开启，但 Everything 当前没在运行，本地文件还搜不到。"
-            : "已开启，但 Everything 未连上：它可能正以管理员权限运行，而 StarMark 是普通权限。";
+        // 两种成因都照实说，但不把用户支使去改权限：本程序不会为了连引擎而抬自己的权限，
+        // 抬上去的代价是拖进／拖出与系统对话框一起失灵（P-108 改判）。
+        LocalDiskSearchStatus = "已开启，但 Everything 没连上：它可能没在运行，也可能正以比本程序更高的权限运行。";
     }
 
     /// <summary>采集只读诊断信息（P2-8）。本地查询，零网络。</summary>

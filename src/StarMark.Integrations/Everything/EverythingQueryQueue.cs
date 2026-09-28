@@ -386,7 +386,7 @@ public sealed class EverythingSource : IItemSource
         var exe = await EnsureOwnedEverythingAsync(ct);
         if (exe is null) return false;
 
-        // 默认实例只能有一个：接管所有权，关掉其它 Everything（提权下可结束 High-IL repack；失败仅降级）。
+        // 默认实例只能有一个：接管所有权，关掉其它 Everything（同权限才关得掉；关不掉就只降级，不因此抬我们的权限）。
         CloseOtherEverything(exe);
         // 关掉的正是"上一只 IPC 窗口"⇒ 作废 IsRunning 的粘性，否则下面轮询会把它的命中当成自带实例就绪
         EverythingInterop.ForgetRunning();
@@ -442,7 +442,8 @@ public sealed class EverythingSource : IItemSource
         return false;
     }
 
-    /// <summary>关闭除待启动自带实例外的所有 Everything 进程（提权可结束 High-IL 的 repack）。单个失败仅记录并继续。</summary>
+    /// <summary>关闭除待启动自带实例外的所有 Everything 进程。单个失败仅记录并继续——
+    /// 本程序按普通权限运行，结束不了以管理员跑的第三方 repack，那种情况交给 IPC 失败原因那条文案说清楚。</summary>
     private static void CloseOtherEverything(string keepExePath)
     {
         try

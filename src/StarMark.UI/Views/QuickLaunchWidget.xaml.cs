@@ -52,9 +52,9 @@ public sealed partial class QuickLaunchWidget : UserControl
         // 入口来自本地存储（widgets.json），无异步数据源。
         ViewModel.ReloadLinks();
 
-        // 提权会话下从资源管理器拖进来的那一下被 Windows 静默拦掉（UIPI 按完整性级别过滤消息：不报错、不提示、无日志）。
-        // P-108 已由用户裁决为"不动系统服务"，所以这里唯一能做的是<b>把原因说实话</b>：常态那句"拖不动时…"
-        // 会让人以为是自己手势没做好，提权时要点名原因并指向这两颗与权限无关的选择器。
+        // 只有用户自己"以管理员身份运行"时才会进来（程序本身不再自我提权，P-108 改判）。
+        // 那种会话里从资源管理器拖进来的那一下被 Windows 静默拦掉（UIPI 按完整性级别过滤消息：不报错、不提示），
+        // 常态那句"拖不动时…"会让人以为是自己手势没做好，所以这里点名原因并指向这两颗与权限无关的选择器。
         if (Privilege.IsElevated())
             Hint.Text = "本程序正以管理员身份运行：系统会拦下从资源管理器拖进来的那一下（不是组件坏了）。" +
                         "请用上面那两颗「选择文件／选择文件夹」加进来。";
@@ -134,9 +134,9 @@ public sealed partial class QuickLaunchWidget : UserControl
 
     /// <summary>
     /// 「选择文件…」：一次挑多个，落进与拖放<b>同一对批处理出口</b>。
-    /// <para>存在理由不是"多一份入口好看"：程序以管理员身份运行时（开着「本地磁盘搜索」就会提权去配
-    /// 提权运行的 Everything），Windows 的 UIPI 会<b>按完整性级别把从资源管理器拖进来的那整条消息流拦掉</b>——
-    /// 不报错、不提示、组件看起来"就是不收"。系统选择器跑在本进程的对话框里，与权限等级无关，
+    /// <para>存在理由：程序运行在比资源管理器高的权限时（用户自己选"以管理员身份运行"；程序本身不再为连
+    /// Everything 而提权，P-108 改判），Windows 的 UIPI 会<b>按完整性级别把从资源管理器拖进来的那整条消息流
+    /// 拦掉</b>——不报错、不提示、组件看起来"就是不收"。系统选择器跑在本进程的对话框里，与权限等级无关，
     /// 所以"加本地文件"永远有一条点得到的路。</para>
     /// </summary>
     private async void PickFiles_Click(object sender, RoutedEventArgs e)
@@ -163,11 +163,15 @@ public sealed partial class QuickLaunchWidget : UserControl
     /// <summary>
     /// 两条选择器出口与拖放出口<b>共用的那一次落库</b>（<see cref="WidgetManager.AddPathsToLauncherAsync"/>）：
     /// 整批登记进主库 + 整批加进本组件，绝不逐条（逐条＝每项重读重写一次 <c>widgets.json</c> 并各开一次库，批次 PA-6）。
+    /// <para>挑完却"列表没变"同样要说得出原因（全是已存在的入口时净增 0 条），所以这里也留一行——
+    /// 与拖放那条出口共用一份落库形状，就该共用同一份取证口径。</para>
     /// </summary>
     private async Task AddPickedAsync(IReadOnlyList<(string Title, string Path)> picked)
     {
-        await _manager.AddPathsToLauncherAsync(_instanceId,
+        var added = await _manager.AddPathsToLauncherAsync(_instanceId,
             picked.Select(p => ((string?)p.Title, p.Path)).ToList());
+        StarLog.Info($"[选择器] 快捷启动挑了 {picked.Count} 项，净新增入口 {added} 条"
+                     + (added == 0 ? "（这些都是已存在的入口，所以列表没变）" : ""));
         AddForm.Visibility = Visibility.Collapsed;
     }
 }
