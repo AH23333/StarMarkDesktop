@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Text;
 
 namespace StarMark.Abstractions.Clipboard;
 
@@ -203,6 +204,47 @@ public static class ClipAssets
         var avg = footprint.MainBytes / (double)footprint.MainCount;
         return $"按现有平均单张 {DescribeBytes((long)avg)} 估算，上限 {cap} 张约 {DescribeBytes((long)(avg * cap))}"
              + $"（缩略图另计，约为其 {ThumbnailMaxEdge}px 的 JPEG）。";
+    }
+
+    /// <summary>确认框里最多列出几个名字：再多就变成一屏没人会读的清单，剩下的用总数说清。</summary>
+    public const int CleanupPreviewLimit = 8;
+
+    /// <summary>
+    /// 孤儿那一类的计数句（§3-Q6：这一类<b>只数不删</b>——但"数出来"必须让用户看得见，
+    /// 否则"目录里有些文件历史并不认识"这件事只存在于日志里）。
+    /// <para>0 时返回空串：没有孤儿不是一条需要占一行才能读到的事实（同一口径见"关着不占行"）。</para>
+    /// </summary>
+    public static string DescribeOrphans(int count, long bytes) => count <= 0
+        ? string.Empty
+        : $"另有 {count} 个文件不在历史里（共 {DescribeBytes(bytes)}）："
+          + "可能是某次删除没删干净的残留，也可能是你自己拷进来的。";
+
+    /// <summary>
+    /// 「清理」确认框的正文。<b>三件事必须写在同一屏里</b>：动的是哪个目录里的哪几个名字、
+    /// 一条历史条目都不动、<b>这份名单之外一个文件都不碰</b>。
+    /// <para>缺第二句，用户会以为这颗按钮是"清理剪贴板历史"；缺第三句，一次批量删除的想象空间
+    /// 就足够让人不敢按——而按不下去的结果是那些文件永远留在那里。名单被截断时必须说"其余 N 个没列出"，
+    /// 不许让用户以为列出来的就是全部。</para>
+    /// </summary>
+    public static string CleanupConfirmBody(IReadOnlyList<string> orphanNames, long orphanBytes,
+        int tempCount, long tempBytes, string folder)
+    {
+        var sb = new StringBuilder();
+        var shown = Math.Min(CleanupPreviewLimit, orphanNames.Count);
+        if (shown > 0)
+        {
+            sb.Append("这些文件在「").Append(folder).Append("」里，但历史中没有任何条目指向它们：\n");
+            for (var i = 0; i < shown; i++) sb.Append("· ").Append(orphanNames[i]).Append('\n');
+            if (orphanNames.Count > shown)
+                sb.Append("…其余 ").Append(orphanNames.Count - shown).Append(" 个没有列出。\n");
+            sb.Append("共 ").Append(orphanNames.Count).Append(" 个，约 ").Append(DescribeBytes(orphanBytes)).Append("。\n");
+        }
+        if (tempCount > 0)
+            sb.Append("另有 ").Append(tempCount).Append(" 个没写完的临时件（约 ")
+              .Append(DescribeBytes(tempBytes)).Append("）——那是我们自己留下的半件，不可能是你的文件。\n");
+        sb.Append("\n删掉这些文件不会动任何一条历史条目，也不会碰这份名单之外的任何一个文件。")
+          .Append("拿不准就先别删：它们除了占地方，不做任何事。");
+        return sb.ToString();
     }
 
     /// <summary>

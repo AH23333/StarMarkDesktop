@@ -274,18 +274,18 @@ public sealed class ClipboardReconcileTests : IDisposable
     }
 
     [Fact]
-    public void OrphanCleanupHasNoButtonInP1()
+    public void StartupAuditStillDeletesNothing()
     {
-        // 任务书：孤儿"暂不清理、仅留接口"。放一颗还没接判定的按钮＝会让人按下去什么都不知道。
-        // 计数与判定（ReconcileResult.OrphanNames）已经在了，P2 的"清理孤儿"入口直接接它。
-        foreach (var f in new[]
-        {
-            "src/StarMark.UI/Views/SettingsPage.xaml",
-            "src/StarMark.UI/ViewModels/SettingsPageViewModel.cs",
-            "src/StarMark.UI/Views/ClipboardPage.xaml",
-            "src/StarMark.UI/ViewModels/ClipboardPageViewModel.cs",
-        })
-            Assert.DoesNotContain("清理孤儿", ReadRepoFile(f));
+        // 判据从 1e 的"整界面不许出现清理孤儿"换成 3a 的"启动那一条一件都不删"：
+        // §3-Q6 要的是"只数不删 + 给一个要先确认的入口"，两件事分别钉在两处（入口那一处见
+        // ClipboardOrphanCleanupGateTests）。把上一轮那条禁词留着，就会把决议明列的入口判成违例。
+        var watcher = ReadRepoFile("src/StarMark.Integrations/Clipboard/ClipboardWatcher.cs");
+        var run = MethodBodyOf("public static async Task<ClipAssets.ReconcileResult?> RunAsync(");
+        Assert.DoesNotContain("TryDelete", run);
+        Assert.DoesNotContain("CleanAsync(", run);
+        Assert.Contains("启动只数不删", run);
+        // 而"计数与体积"这件事仍只有一份出处：孤儿口径不许在 UI 再算一遍。
+        Assert.Equal(1, SourceGate.Count(watcher, "ClipAssets.Reconcile(rows"));
     }
 
     [Fact]

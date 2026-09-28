@@ -902,6 +902,16 @@
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
                                 <Button Content="重新统计占用" Command="{x:Bind ViewModel.RefreshClipboardUsageCommand}"
                                         Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
+                                <!-- §3-Q6 的第二类（图有行无）：只数不删，但必须给得出出口。
+                                     没有东西可清时它是灰的，而上面那行"另有 N 个文件不在历史里"就是灰/亮的理由；
+                                     按下去先列名单再删（决议明写"不静默删用户目录"）。 -->
+                                <Button Content="清理孤儿与临时件"
+                                        Command="{x:Bind ViewModel.CleanClipboardAssetsCommand}"
+                                        IsEnabled="{x:Bind ViewModel.CanCleanClipboardAssets, Mode=OneWay}"
+                                        Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"
+                                        ToolTipService.ToolTip="删掉「不在历史里的那些文件」与没写完的临时件。点下去会先列名单让你确认，一条历史条目都不会动。"/>
+                                <TextBlock Text="{x:Bind ViewModel.ClipboardCleanupStatus, Mode=OneWay}"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
                             </StackPanel>
                         </Border>
                     </controls:ColumnFlowPanel>

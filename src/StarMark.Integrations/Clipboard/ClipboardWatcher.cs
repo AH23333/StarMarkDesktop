@@ -405,18 +405,25 @@ public sealed class ClipboardWatcher : IDisposable
 }
 
 /// <summary>
-/// 启动对账（批次 ClipIMG-1e，§3-Q6 三分类）：把"库里的图片行"与"clip 目录里的文件"对一次。
+/// 启动对账（批次 ClipIMG-1e，§3-Q6 三分类）与"孤儿/临时件"的那一条清理路（批次 ClipIMG-3a）。
 /// <para>
 /// 判据本身在 <see cref="ClipAssets.Reconcile"/>（纯函数、可逐值断言）；这里只做三件 IO 事：
-/// 读行、读目录、写回标记。<b>只有"行有图无"那一类允许写库</b>——而"图有行无"的孤儿
-/// <b>一件都不删</b>：目录是给用户看的，静默批量删除是任何一次"我在帮你清理"都换不回来的一类动作。
+/// 读行、读目录、写回标记。<b>启动那一条一件都不删</b>——目录是给用户看的，
+/// 静默批量删除是任何一次"我在帮你清理"都换不回来的一类动作。删除只发生在
+/// <see cref="CleanAsync"/>：那条路由设置页的确认框触发，且删前<b>自己重扫一次</b>。
 /// </para>
 /// <para>返回 null＝<b>没跑成</b>（权限、杀软、库被占）。调用方不许把 null 当成"一切正常"。</para>
 /// </summary>
 public static class ClipboardAssetAudit
 {
-    public static async Task<ClipAssets.ReconcileResult?> RunAsync(
-        IItemRepository repo, CancellationToken ct = default)
+    /// <summary>一次扫描的两份材料：对账结果 + 目录清单（要算孤儿那几件的字节数得留着清单）。</summary>
+    public readonly record struct Scan(ClipAssets.ReconcileResult Result, IReadOnlyList<(string Name, long Bytes)> Files);
+
+    /// <summary>
+    /// 读一次库 + 读一次目录，对出三分类。<b>启动审计、设置页那句孤儿计数、清理前的预览与清理本身
+    /// 全部只问这一处</b>：各处自己拼一份"什么算孤儿"，就会出现按旧名单删掉刚被历史认领的文件。
+    /// </summary>
+    public static async Task<Scan?> ScanAsync(IItemRepository repo, CancellationToken ct = default)
     {
         if (repo is null) throw new ArgumentNullException(nameof(repo));
         try
@@ -424,12 +431,41 @@ public static class ClipboardAssetAudit
             var rows = await repo.GetClipboardImageAssetsAsync(ct);
             var files = ClipboardImageStore.ListFiles();
             if (rows.Count == 0 && files.Count == 0)
-                return ClipAssets.ReconcileResult.Empty;      // 没开过图片采集：连目录都不必存在，别为它写日志
+                return new Scan(ClipAssets.ReconcileResult.Empty, files);   // 没开过图片采集：连目录都不必存在，别为它写日志
 
             var names = new string[files.Count];
             for (var i = 0; i < files.Count; i++) names[i] = files[i].Name;
-            var result = ClipAssets.Reconcile(rows, names);
+            return new Scan(ClipAssets.Reconcile(rows, names), files);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("剪贴板图片对账没跑成（不影响使用，下次启动再来）", ex);
+            return null;
+        }
+    }
 
+    /// <summary>孤儿 + 临时件各自的字节数（目录枚举已经带着每张的大小，这里只按名字归堆）。</summary>
+    public static (long OrphanBytes, long TempBytes) BytesOf(Scan scan)
+    {
+        // OrdinalIgnoreCase：NTFS 大小写不敏感，Reconcile 也是按它认"谁被认领"的——两处不同就会算出两种体积。
+        var want = new HashSet<string>(scan.Result.OrphanNames, StringComparer.OrdinalIgnoreCase);
+        var temp = new HashSet<string>(scan.Result.TempNames, StringComparer.OrdinalIgnoreCase);
+        long o = 0, t = 0;
+        foreach (var (name, bytes) in scan.Files)
+        {
+            if (want.Contains(name)) o += bytes;
+            else if (temp.Contains(name)) t += bytes;
+        }
+        return (o, t);
+    }
+
+    public static async Task<ClipAssets.ReconcileResult?> RunAsync(
+        IItemRepository repo, CancellationToken ct = default)
+    {
+        if (await ScanAsync(repo, ct) is not { } scan) return null;
+        var result = scan.Result;
+        try
+        {
             var requested = result.MissingRowIds.Count + result.RestoredRowIds.Count;
             if (requested > 0)
             {
@@ -441,7 +477,7 @@ public static class ClipboardAssetAudit
 
             if (!result.NothingToDo)
                 StarLog.Info($"[剪贴板] 图片对账：标为缺失 {result.MissingRowIds.Count} 条、"
-                    + $"恢复 {result.RestoredRowIds.Count} 条、孤儿 {result.OrphanNames.Count} 件（按裁决未清理）、"
+                    + $"恢复 {result.RestoredRowIds.Count} 条、孤儿 {result.OrphanNames.Count} 件（启动只数不删）、"
                     + $"临时件 {result.TempNames.Count} 件");
             return result;
         }
@@ -451,4 +487,51 @@ public static class ClipboardAssetAudit
             return null;
         }
     }
+
+    /// <summary>
+    /// 清理孤儿文件与自家临时残件。<b>不接界面传来的名单</b>：那份名单是用户读它那一刻的事实，
+    /// 中间一次"同图再复制"或备份恢复就可能让某个名字重新被历史条目认领——按旧名单删就等于删活文件。
+    /// <para>每一个名字都过 <see cref="ClipboardImageStore.TryDelete"/>（内含"必须在 clip 目录里、
+    /// 名字必须安全"那道名册），所以这一条路在构造上删不到目录之外；删不动的（占用、权限）
+    /// 计入 <c>Failed</c> 并逐件写日志，绝不当成"已经清理过了"。</para>
+    /// </summary>
+    public static async Task<CleanupOutcome?> CleanAsync(IItemRepository repo, CancellationToken ct = default)
+    {
+        if (await ScanAsync(repo, ct) is not { } scan) return null;
+        var names = scan.Result.OrphanNames;
+        var temps = scan.Result.TempNames;
+
+        if (names.Count + temps.Count == 0)
+            return new CleanupOutcome(0, 0, 0, 0, 0, 0);     // 没得清：这不是失败，也不许报"清理完成"
+
+        var (ok, okBytes, bad) = DeleteAll(names, ct);
+        var (okT, okTBytes, badT) = DeleteAll(temps, ct);
+        StarLog.Info($"[剪贴板] 清理孤儿：删掉 {ok} 件（约 {ClipAssets.DescribeBytes(okBytes)}）、"
+            + $"临时件 {okT} 件（约 {ClipAssets.DescribeBytes(okTBytes)}），{bad + badT} 件没能删掉");
+        return new CleanupOutcome(ok, okBytes, bad, okT, okTBytes, badT);
+    }
+
+    private static (int Deleted, long Bytes, int Failed) DeleteAll(IReadOnlyList<string> names, CancellationToken ct)
+    {
+        var deleted = 0; var failed = 0; var bytes = 0L;
+        foreach (var name in names)
+        {
+            ct.ThrowIfCancellationRequested();
+            // 体积要在删之前取：删完再问就什么都没有了，而"清掉了多少 MB"是用户按下去之后唯一想看的数。
+            long size = 0;
+            try { var p = ClipAssets.FullPathOf(name); if (p is not null && File.Exists(p)) size = new FileInfo(p).Length; }
+            catch (Exception) { /* 报 0：那是句子里的一项，不该让删除本身失败 */ }
+            if (ClipboardImageStore.TryDelete(name)) { deleted++; bytes += size; }
+            else
+            {
+                failed++;
+                StarLog.Warn($"[剪贴板] 这个文件没能删掉：{name}（多半正被别的程序占用）");
+            }
+        }
+        return (deleted, bytes, failed);
+    }
+
+    /// <summary>清理结果。<b>孤儿与临时件分开报</b>：合成一个数，用户分不清"历史残留"与"半件"这两种东西。</summary>
+    public readonly record struct CleanupOutcome(
+        int Deleted, long DeletedBytes, int Failed, int TempDeleted, long TempDeletedBytes, int TempFailed);
 }
