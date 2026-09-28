@@ -261,12 +261,23 @@ public sealed class LayeredCanvasWindow : IDisposable
             & CanvasNative.WS_EX_TRANSPARENT) != 0;
 
     /// <summary>
-    /// 这块玻璃底下那块背景的颜色（ARGB）；<b>0＝透明底</b>，走一直以来的逐行快路。
+    /// 这块玻璃底下那块背景的颜色（<b>预乘</b> ARGB）；<b>0＝没有底</b>，走一直以来的逐行快路。
+    /// 白板＝不透明白（0xFFFFFFFF），幕布＝半透明黑（0x80000000）：两块底用<b>同一条</b>混合式，
+    /// 差别只是那个值自己的 alpha。
     /// <para><b>它只活在提交那一步，绝不写进 <see cref="Pixels"/></b>：托管缓冲永远是"预乘 + 透明"的墨，
     /// 取大混合、橡皮减 alpha、增量＝全量那套语义因此一行没动（234 例逐像素参照钉的还是那一份）。
     /// 底白一旦进了缓冲，"取大"就当场失效——白与任何墨逐通道取大＝白＝什么都看不见。</para>
     /// </summary>
     public uint BackdropArgb { get; private set; }
+
+    /// <summary>
+    /// 跟着鼠标走的那块<b>不叠底</b>的圆（幕布的亮区）。0＝整屏都压暗；白板态永远是 0。
+    /// <para>亮区里交出去的是 <see cref="Pixels"/> 的原样（没墨的地方＝<see cref="BlankPixel"/>，alpha=1），
+    /// <b>不是</b> 0：alpha=0 的像素在鼠标眼里不属于这块玻璃，亮区里就会"点不动、也画不上"（批次 WO 那条坑）。
+    /// 亮区随鼠标移动 ⇒ 每帧要多提交"旧圈 ∪ 新圈"那一小片，与光标光晕同一形状、同一预算。</para>
+    /// </summary>
+    private int _focusRadius;
+    private PixelPoint _focusCenter;
 
     /// <summary>
     /// 换底。<b>两个方向都必须整块重交</b>：DIB section 里存的是"上一次提交时合成好的结果"，
@@ -277,7 +288,73 @@ public sealed class LayeredCanvasWindow : IDisposable
     {
         if (BackdropArgb == argb) return;
         BackdropArgb = argb;
+        _focusRadius = 0;                     // 亮区只在幕布那块底上有意义
         PresentAll();
+    }
+
+    /// <summary>
+    /// 挪动亮区。<b>返回这次改动波及的那一片</b>（旧圈 ∪ 新圈），调用方把它并进脏区——
+    /// 只报新位置的话，旧位置那一圈就赖在"亮"的状态上不暗回来。位置与半径都没变时返回空矩形（一帧都不该为此提交）。
+    /// </summary>
+    public IntRect SetFocus(PixelPoint center, int radius)
+    {
+        if (BackdropArgb == 0) return default;                     // 没有底就谈不上"不叠底的那块"
+        if (center.Equals(_focusCenter) && radius == _focusRadius) return default;
+        var was = CircleBounds(_focusCenter, _focusRadius);
+        _focusCenter = center;
+        _focusRadius = radius;
+        return Union(was, CircleBounds(center, radius));
+    }
+
+    /// <summary>那块圆占的矩形（半径 0＝空）。裁到屏内由提交侧统一做。</summary>
+    private static IntRect CircleBounds(PixelPoint center, int radius)
+        => radius <= 0
+            ? default
+            : new IntRect(center.X - radius, center.Y - radius, radius * 2 + 1, radius * 2 + 1);
+
+    private static IntRect Union(IntRect a, IntRect b)
+    {
+        if (a.IsEmpty) return b;
+        if (b.IsEmpty) return a;
+        var left = Math.Min(a.X, b.X);
+        var top = Math.Min(a.Y, b.Y);
+        return new IntRect(left, top, Math.Max(a.Right, b.Right) - left, Math.Max(a.Bottom, b.Bottom) - top);
+    }
+
+    /// <summary>
+    /// 把"此刻屏幕上那一层底"叠进一张同尺寸的预乘缓冲（亮区里不叠）。<b>快照那条路用它</b>：
+    /// 贴图／存图要交出去的必须是"眼睛看到的那一层"，而亮区的几何与叠底式子在这里已经有一份
+    /// （<see cref="FocusSpan"/> + <see cref="BackdropBlend.Over"/>）——在 UI 侧再算一次圆，
+    /// 就成了"板上是暗的、图里是亮的"那一类两份出处（批次 WK 同族）。
+    /// </summary>
+    public void CompositeForSnapshot(uint[] buffer)
+    {
+        if (BackdropArgb == 0) return;                     // 没有底就什么都不叠
+        for (var y = 0; y < Height; y++)
+        {
+            var (left, right) = FocusSpan(y);
+            var holeLeft = Math.Clamp(left, 0, Width);
+            var holeRight = Math.Clamp(right, holeLeft, Width);
+            var row = y * Width;
+            for (var x = 0; x < holeLeft; x++) buffer[row + x] = BackdropBlend.Over(buffer[row + x], BackdropArgb);
+            for (var x = holeRight; x < Width; x++) buffer[row + x] = BackdropBlend.Over(buffer[row + x], BackdropArgb);
+            // [holeLeft, holeRight) 原样留着：亮区里交出去的就是"只有墨"的那一层
+        }
+    }
+
+    /// <summary>
+    /// 这一行上亮区占的那一段（本屏局部坐标，左闭右开）。<b>没有亮区＝返回空段</b>（左≥右），调用方夹进行范围后
+    /// 就是"整行都叠底"。半径 0、或这一行在圈外，都走同一个出口——不留第二种"没有洞"的表示法。
+    /// </summary>
+    private (int Left, int Right) FocusSpan(int y)
+    {
+        if (_focusRadius <= 0) return (0, 0);
+        var dy = y - _focusCenter.Y;
+        var square = (long)_focusRadius * _focusRadius;
+        var offset = (long)dy * dy;
+        if (offset >= square) return (0, 0);
+        var dx = (int)MathF.Sqrt(square - offset);           // 每行一次开方，不是每像素一次
+        return (_focusCenter.X - dx, _focusCenter.X + dx + 1);
     }
 
     /// <summary>绘制态给十字光标（"现在按下去就会画东西"这件事要有视觉交代），穿透态恢复箭头。</summary>
@@ -318,7 +395,7 @@ public sealed class LayeredCanvasWindow : IDisposable
             {
                 if (BackdropArgb == 0)
                 {
-                    // 透明底：托管缓冲就是最终那一层，逐行原样搬（一直以来的快路）
+                    // 没有底：托管缓冲就是最终那一层，逐行原样搬（一直以来的快路）
                     var from = (byte*)managed;
                     var to = (byte*)_bits;
                     for (var y = source.Y; y < source.Bottom; y++)
@@ -330,17 +407,23 @@ public sealed class LayeredCanvasWindow : IDisposable
                 }
                 else
                 {
-                    // 不透明底（白板）：墨要在这一步才叠到底上。<b>分支在循环外</b>——每像素多一次判断
+                    // 有底（白板＝不透明、幕布＝半透明，同一条预乘 over）。<b>分支在循环外</b>——每像素多一次判断
                     // 就是每帧几百万次（批次 WG 的纪律），而"底"是整块屏一个值，一次决定就够了。
-                    var board = BackdropArgb;
+                    var bg = BackdropArgb;
                     var ink = (uint*)managed;
-                    var dst = (uint*)_bits;
+                    var to = (uint*)_bits;
                     for (var y = source.Y; y < source.Bottom; y++)
-                        for (var x = source.X; x < source.Right; x++)
-                        {
-                            var i = y * Width + x;
-                            dst[i] = BackdropBlend.OverOpaque(ink[i], board);
-                        }
+                    {
+                        // 幕布那块跟着鼠标的亮区按<b>行区间</b>切，而不是每像素判一次圆：慢路已经比快路贵，
+                        // 每像素再吃一次比较＋开方就是第三份代价。三段各自成环 ⇒ 逐像素无分支。
+                        var (left, right) = FocusSpan(y);
+                        var holeLeft = Math.Clamp(left, source.X, source.Right);
+                        var holeRight = Math.Clamp(right, holeLeft, source.Right);
+                        var row = y * Width;
+                        for (var x = source.X; x < holeLeft; x++) to[row + x] = BackdropBlend.Over(ink[row + x], bg);
+                        for (var x = holeLeft; x < holeRight; x++) to[row + x] = ink[row + x];
+                        for (var x = holeRight; x < source.Right; x++) to[row + x] = BackdropBlend.Over(ink[row + x], bg);
+                    }
                 }
             }
 

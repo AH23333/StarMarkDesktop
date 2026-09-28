@@ -30,6 +30,9 @@
                      否则"点了穿透没反应"只剩一种解释＝软件坏了。 -->
                 <Button x:Name="BoardButton" Content="白板" Click="Board_Click"
                         ToolTipService.ToolTip="整屏换成白底，墨画在白底上（贴图／存图带这张白底）；白板开着不能穿透，先关掉它再交鼠标"/>
+                <!-- 幕布：整屏压暗、只留鼠标那一圈亮。与白板互斥（背景只有一个真值），所以点它会把白板关掉。 -->
+                <Button x:Name="CurtainButton" Content="幕布" Click="Curtain_Click"
+                        ToolTipService.ToolTip="压暗整屏、只留鼠标周围一圈亮（讲解时收注意力）；幕布是半透明的，压暗着还能穿透"/>
                 <!--
                     五种图形（发起人点名"给画布加图形编辑"，并要求用图标而不是汉字）。
                     这一段整排由代码按 Core 的 CanvasTools.Shapes 生成：

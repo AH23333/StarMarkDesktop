@@ -77,6 +77,12 @@ public static class HotkeyActions
     /// </summary>
     public const string CanvasBoard = "canvas.board";
 
+    /// <summary>
+    /// 幕布（压暗整屏、只留鼠标那一圈亮）。与 <see cref="CanvasBoard"/> 同一族：改的是<b>这块玻璃底下是什么</b>，
+    /// 不是手上拿哪支笔。两块底互斥（背景只有一个真值），所以点这颗会关掉白板。
+    /// </summary>
+    public const string CanvasCurtain = "canvas.curtain";
+
     public const string CanvasUndo = "canvas.undo";
     public const string CanvasRedo = "canvas.redo";
     public const string CanvasClear = "canvas.clear";
@@ -99,7 +105,8 @@ public static class HotkeyActions
     /// </summary>
     public static IReadOnlyList<string> Canvas { get; } = new[]
     {
-        CanvasToggle, CanvasClickThrough, CanvasPen, CanvasHighlighter, CanvasEraser, CanvasBoard,
+        CanvasToggle, CanvasClickThrough, CanvasPen, CanvasHighlighter, CanvasEraser,
+        CanvasBoard, CanvasCurtain,
         CanvasUndo, CanvasRedo, CanvasClear, CanvasSave, CanvasCopy, CanvasPin,
     };
 
@@ -189,6 +196,7 @@ public static class HotkeyActions
             case CanvasHighlighter: return "画布 · 荧光笔（按住即画、松开即透）";
             case CanvasEraser: return "画布 · 橡皮";
             case CanvasBoard: return "画布 · 白板底（整屏白底 / 恢复透明）";
+            case CanvasCurtain: return "画布 · 幕布（压暗整屏，只亮鼠标那一圈）";
             case CanvasUndo: return "画布 · 撤销上一笔";
             case CanvasRedo: return "画布 · 重做刚撤销的那一笔";
             case CanvasClear: return "画布 · 清空笔迹";

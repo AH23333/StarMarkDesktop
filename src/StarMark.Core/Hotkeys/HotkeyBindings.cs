@@ -60,7 +60,7 @@ public static class HotkeyBindings
     /// </summary>
     public const uint VirtualKeyT = 0x54, VirtualKeyP = 0x50, VirtualKeyH = 0x48,
         VirtualKeyR = 0x52, VirtualKeyU = 0x55, VirtualKeyC = 0x43, VirtualKeyS = 0x53,
-        VirtualKeyK = 0x4B, VirtualKeyG = 0x47, VirtualKeyY = 0x59, VirtualKeyW = 0x57;
+        VirtualKeyK = 0x4B, VirtualKeyG = 0x47, VirtualKeyY = 0x59, VirtualKeyW = 0x57, VirtualKeyF = 0x46;
 
     /// <summary>
     /// 出厂默认：主界面呼出/关闭 = Ctrl+Alt+Space。
@@ -96,6 +96,8 @@ public static class HotkeyBindings
             // 白板底用 W（Whiteboard）。它与「交出鼠标」同为"这块玻璃的归属/背景"那一类，
             // 不跟在三支笔后面：按它换的是底下那块背景，不是手上拿哪支笔。
             [HotkeyActions.CanvasBoard] = new HotkeyGesture(canvasMods, VirtualKeyW),         // Whiteboard
+            // 幕布用 F（Focus：跟着鼠标那块亮区）。与白板并排，因为两者是同一族（这块玻璃底下是什么）
+            [HotkeyActions.CanvasCurtain] = new HotkeyGesture(canvasMods, VirtualKeyF),       // Focus
             [HotkeyActions.CanvasUndo] = new HotkeyGesture(canvasMods, VirtualKeyU),           // Undo
             // 重做用 Y 而不是"U 加 Shift"：全局热键的修饰键组合要能被 RegisterHotKey 表达，
             // 而 Y 是"重做"在 Windows 上的第二个惯用键（Ctrl+Y），又不与画布那批里任何一颗撞。

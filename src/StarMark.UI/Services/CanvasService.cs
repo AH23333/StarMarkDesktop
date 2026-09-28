@@ -423,11 +423,30 @@ public static class CanvasService
         RaiseStateChanged();
     }
 
+    /// <summary>
+    /// 幕布那块亮区跟着鼠标走：把"旧圈 ∪ 新圈"那一小片并进脏区——只报新位置的话，旧位置那一圈就赖在"亮"上暗不回来。
+    /// <para>与光标光晕同一形状、同一预算（都很小，且只在幕布开着时才算）。半径按<b>这块屏自己的缩放</b>换算：
+    /// 写死像素数就是在 150% 屏上只剩半个亮区。</para>
+    /// </summary>
+    private static void UpdateCurtainFocus(Screen screen, int cursorX, int cursorY)
+    {
+        if (!CanvasBackdropMath.HasFocusHole(AnnotationHub.Backdrop)) return;
+        var radius = (int)Math.Round(CanvasBackdropMath.FocusRadiusDip * screen.Scale);
+        var touched = screen.Window.SetFocus(new PixelPoint(cursorX - screen.Bounds.X, cursorY - screen.Bounds.Y), radius);
+        if (!touched.IsEmpty) screen.Dirty.Add(touched);
+    }
+
     /// <summary>白板底是否在场（工具条那颗据此高亮；读的是会话态，宿主不再记一份）。</summary>
     public static bool IsWhiteboard => AnnotationHub.Backdrop == CanvasBackdrop.Whiteboard;
 
-    /// <summary>「白板」那颗按钮与 <c>canvas.board</c>：折成一条事件交给 Hub，这里不判方向。</summary>
-    public static void ToggleBackdrop() => AnnotationHub.Raise(SessionEvent.ToggleBackdrop);
+    /// <summary>幕布是否在场（压暗 + 鼠标那块亮区）。</summary>
+    public static bool IsCurtain => AnnotationHub.Backdrop == CanvasBackdrop.Curtain;
+
+    /// <summary>「白板」那颗与 <c>canvas.board</c>：折成事件交给 Hub，这里不判方向。</summary>
+    public static void ToggleWhiteboard() => AnnotationHub.Raise(SessionEvent.ToggleWhiteboard);
+
+    /// <summary>「幕布」那颗与 <c>canvas.curtain</c>：同上。</summary>
+    public static void ToggleCurtain() => AnnotationHub.Raise(SessionEvent.ToggleCurtain);
 
     /// <summary>广播状态（工具/颜色/粗细/穿透/光晕/让位原因）——工具条的状态行是唯一读者。</summary>
     public static void RaiseStateChanged() => StateChanged?.Invoke();
@@ -906,6 +925,8 @@ public static class CanvasService
             // 以前这里是无条件把每一段、每帧、整条从几何重画一遍，4K 粗档实测几百毫秒一帧。
             foreach (var segment in screen.Trail.Segments)
                 MarkSegmentIfFading(screen, segment);
+            // 幕布的亮区每帧跟着鼠标挪（只有幕布开着才算，代价与下面那个光晕同一量级）
+            UpdateCurtainFocus(screen, cursor.X, cursor.Y);
             // 光晕跟着鼠标走：旧位置要复原、新位置要叠上（两块都很小）
             if (!screen.LastGlow.IsEmpty) screen.Dirty.Add(screen.LastGlow);
             screen.GlowAt = null;
@@ -1195,6 +1216,10 @@ public static class CanvasService
         // 顺序与 Flush 一致（叠在荧光段之后），这样同一帧里不会跳色。
         if (screen.Trail.Preview is { } preview)
             CanvasCompositor.Paint(ink, boardWidth, boardHeight, preview);
+        // 幕布那块半透明的底也是"屏幕上有"的东西：把它叠进这张墨缓冲（亮区里不叠），交出去的才是眼睛看到的那一层。
+        // 圆的几何与那条混合式只有窗口那一份（<c>CompositeForSnapshot</c>）——在这儿重算一次圆就是两份出处。
+        // 白板底不走这里：它是不透明的，直接当整张图的底（上面那条臂），两者读的都是 <c>AnnotationHub.Backdrop</c>。
+        if (CanvasBackdropMath.HasFocusHole(AnnotationHub.Backdrop)) screen.Window.CompositeForSnapshot(ink);
         CanvasCompositor.OverlayOntoFrame(baseFrame, boardWidth, boardHeight,
             new IntRect(0, 0, 0, 0), ink, screen.Window.Width, screen.Window.Height);
 

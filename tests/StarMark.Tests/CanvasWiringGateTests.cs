@@ -1242,7 +1242,7 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("Notice = droppingBoard", audit);
         Assert.Contains("已自动关掉白板底并交回鼠标", audit);
         Assert.Contains("已自动交回鼠标", audit);
-        Assert.Contains("if (droppingBoard) Raise(SessionEvent.ToggleBackdrop);", audit);
+        Assert.Contains("if (droppingBoard) ApplyBackdrop(CanvasBackdrop.Transparent);", audit);
         Assert.DoesNotContain("ReassertLayering", hub);
 
         // 逐像素问、按进程判——这两件事都在 LayerDirector 一处
@@ -1265,11 +1265,11 @@ public sealed class CanvasWiringGateTests
     // ────────── 批次 WD-3：画布动作的全局热键（发起人点名"九个全要，带修饰键"）──────────
 
     /// <summary>
-    /// 十一条画布动作各有各的默认键，<b>且必须带 Ctrl+Alt</b>。
+    /// 十三条画布动作各有各的默认键，<b>且必须带 Ctrl+Alt</b>。
     /// <para>
     /// 裸键在穿透态下必须留给下层应用（用户要选文本、要翻页），画布一旦吃下裸键就成了"开着画布
     /// 别的软件都不能用"；而一批不带修饰键的字母键撞键概率极高。键位本身按"这件事叫什么"取字母
-    /// （T=Through、P=Pen、H=Highlighter、R=eRaser、W=Whiteboard、U=Undo、C=Clear、S=Save、K=复制、G=贴图），
+    /// （T=Through、P=Pen、H=Highlighter、R=eRaser、W=Whiteboard、F=Focus、U=Undo、C=Clear、S=Save、K=复制、G=贴图），
     /// 猜得出比记得住更重要——工具条上那颗「⌨」也随时能把这张表调出来。
     /// </para>
     /// </summary>
@@ -1284,7 +1284,8 @@ public sealed class CanvasWiringGateTests
             [HotkeyActions.CanvasPen] = 0x50,              // P
             [HotkeyActions.CanvasHighlighter] = 0x48,      // H
             [HotkeyActions.CanvasEraser] = 0x52,           // R
-            [HotkeyActions.CanvasBoard] = 0x57,            // W（Whiteboard）
+            [HotkeyActions.CanvasBoard] = 0x57,             // W（Whiteboard）
+            [HotkeyActions.CanvasCurtain] = 0x46,           // F（Focus：跟着鼠标那块亮区）
             [HotkeyActions.CanvasUndo] = 0x55,             // U
             [HotkeyActions.CanvasRedo] = 0x59,             // Y（redo 的惯用键；U+Shift 这种组合 RegisterHotKey 表达不了）
             [HotkeyActions.CanvasClear] = 0x43,            // C
@@ -1325,8 +1326,8 @@ public sealed class CanvasWiringGateTests
     }
 
     /// <summary>
-    /// 画布没开着时按"画布内的动作"，<b>三支笔与「白板」直接把画布开起来</b>（按画笔的人是要画画、
-    /// 按白板的人是要一块白板，不是要先按另一个键），其余各条给一句看得见的原因。
+    /// 画布没开着时按"画布内的动作"，<b>三支笔与「白板」「幕布」直接把画布开起来</b>（按画笔的人是要画画、
+    /// 按白板/幕布的人是要那块底，不是要先按另一个键），其余各条给一句看得见的原因。
     /// "按了没反应"与"功能坏了"在用户眼里是同一件事。
     /// </summary>
     [Fact]
@@ -1344,19 +1345,20 @@ public sealed class CanvasWiringGateTests
         var require = SourceGate.MethodBody(service, "private static void RequireRunning(string what, Action run)");
         Assert.Contains("Report(\"画布没开着\"", require);
         Assert.Contains("BindingText(HotkeyActions.CanvasToggle)", require);   // 键位取自真实绑定，不写死
-        // 计数不写死：按动作表算。表里除「开关 + 三支笔 + 白板底」那五条之外，每一条都必须走 RequireRunning
-        // （那五条的活儿本身就是"把板子开起来/选那支笔/换那块底"，自带回执）。写死数字的下场是加一条动作就红一次——
+        // 计数不写死：按动作表算。表里除「开关 + 三支笔 + 两块底」那六条之外，每一条都必须走 RequireRunning
+        // （那六条的活儿本身就是"把板子开起来/选那支笔/换那块底"，自带回执）。写死数字的下场是加一条动作就红一次——
         // 或者更糟：忘了改，于是一条新动作谁都没接而闸门仍然绿（批次 WD-3 之后加「重做」正是这一次）。
         // 豁免名单按名字钉住：只留一个减数，将来"顺手多减一条"就把这条闸门变成了摆设。
         var opensTheBoardItself = new[]
         {
             HotkeyActions.CanvasToggle, HotkeyActions.CanvasPen, HotkeyActions.CanvasHighlighter,
-            HotkeyActions.CanvasEraser, HotkeyActions.CanvasBoard,
+            HotkeyActions.CanvasEraser, HotkeyActions.CanvasBoard, HotkeyActions.CanvasCurtain,
         };
         Assert.Equal(HotkeyActions.Canvas.Count - opensTheBoardItself.Length,
             SourceGate.Count(service, "RequireRunning(\""));
-        // 「白板」那条确实走的是"能开就开"的路（事件折给 Hub，由转移表决定落点），不是 RequireRunning
-        Assert.Contains("public static void ToggleBackdrop() => AnnotationHub.Raise(SessionEvent.ToggleBackdrop);", service);
+        // 「白板」「幕布」确实走的是"能开就开"的路（事件折给 Hub，由转移表决定落点），不是 RequireRunning
+        Assert.Contains("=> AnnotationHub.Raise(SessionEvent.ToggleWhiteboard);", service);
+        Assert.Contains("=> AnnotationHub.Raise(SessionEvent.ToggleCurtain);", service);
     }
 
     // ────────── 批次 WD-4：「⌨」快捷键面板 ──────────

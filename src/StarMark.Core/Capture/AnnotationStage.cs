@@ -53,10 +53,13 @@ public enum SessionEvent
     TakePointer,
 
     /// <summary>
-    /// 换背景态（透明 ⇄ 白板底）。它与 <see cref="GivePointerBack"/> 一样是"这块玻璃本身怎么样"的事件，
-    /// 不是"手上拿哪支笔"，所以走同一条 Raise 通道，不在宿主里另存一份旗标（§3.2）。
+    /// 换背景态的两颗按钮／两条热键各自的事件（<b>不是一个"翻一翻"事件</b>：三块底排成循环的话，
+    /// 用户看不出下一颗是什么，而"点当前这块＝关掉它"才是这条链一贯的交互语言）。
+    /// 与 <see cref="GivePointerBack"/> 一样属于"这块玻璃本身怎么样"，所以走同一条 Raise 通道，
+    /// 不在宿主里另存一份旗标（§3.2）。落点由 <see cref="AnnotationSessions.BackdropTargetOf"/> 给。
     /// </summary>
-    ToggleBackdrop,
+    ToggleWhiteboard,
+    ToggleCurtain,
 
     /// <summary>冻帧进截图（F1 给条／F3 直贴／识字）。</summary>
     BeginSheet,
@@ -163,6 +166,18 @@ public static class AnnotationSessions
     /// </summary>
     public static SessionEvent? PointerConsequenceOf(CanvasBackdrop next)
         => CanvasBackdropMath.IsOpaque(next) ? SessionEvent.TakePointer : (SessionEvent?)null;
+
+    /// <summary>
+    /// 这条事件要落到哪块底；null＝它不是背景态事件。
+    /// <para>事件→背景的映射放在这里（而不是在 Hub 里写 switch），是因为"哪个键管哪块底"与"哪块底不许穿透"
+    /// 是同一条知识的两面：分两处写迟早一处更新一处没更新，症状就是「幕布」那颗亮着、屏幕却是白板。</para>
+    /// </summary>
+    public static CanvasBackdrop? BackdropTargetOf(SessionEvent what) => what switch
+    {
+        SessionEvent.ToggleWhiteboard => CanvasBackdrop.Whiteboard,
+        SessionEvent.ToggleCurtain => CanvasBackdrop.Curtain,
+        _ => null,
+    };
 
     /// <summary>
     /// 会话要不要<b>拦住"退出键"之外的全局动作</b>——Sheet 期间画布那批快捷键都不该触发画布
