@@ -27,6 +27,10 @@ public sealed class QuickLaunchDropBatchGateTests
     // 结构比对工具（仓库根 / 挖方法体 / 数出现次数）收在 SourceGate，两个守门文件共用一份。
     private static string ReadRepoFile(string path) => SourceGate.ReadRepoFile(path);
 
+    // WidgetWindow 已按访问面拆成多个 partial（S4-④）：钉在它里面的方法必须读"整个类"，
+    // 否则方法搬到哪个分段文件，这条守门就扫不到锚点而红。
+    private static string ReadRepoPartials(string path) => SourceGate.ReadRepoPartials(path);
+
     private static string MethodBody(string source, string fragment) => SourceGate.MethodBody(source, fragment);
 
     [Fact]
@@ -63,7 +67,7 @@ public sealed class QuickLaunchDropBatchGateTests
     [Fact]
     public void TheDropHandlerHandsTheWholeBatchToTheSingleBulkExit()
     {
-        var body = MethodBody(ReadRepoFile(WindowRelativePath), "private async void QuickLaunch_Drop(");
+        var body = MethodBody(ReadRepoPartials(WindowRelativePath), "private async void QuickLaunch_Drop(");
         var loop = Between(body, "foreach (var item in items)", "await _manager.AddPathsToLauncherAsync");
 
         Assert.Contains("paths.Add((item.Name, item.Path));", loop);   // 反空转：确实扫到收集语句
@@ -186,7 +190,7 @@ public sealed class QuickLaunchDropBatchGateTests
     [Fact]
     public void TheDragPathLeavesEvidenceEitherWay()
     {
-        var win = ReadRepoFile(WindowRelativePath);
+        var win = ReadRepoPartials(WindowRelativePath);
 
         // 挂上来的必须是那个会留证的方法，不是一句什么都不记的 lambda
         Assert.Contains("RootBorder.DragEnter += QuickLaunch_DragEnter;", win);

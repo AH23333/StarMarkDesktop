@@ -252,7 +252,7 @@ public sealed class EyeRestWiringGateTests
     [Fact]
     public void TheClockWidgetMenuIsASecondEntry_NotASecondEngine()
     {
-        var widget = SourceGate.ReadRepoFile(WidgetWindow);
+        var widget = SourceGate.ReadRepoPartials(WidgetWindow);
         var call = SourceGate.MethodBody(widget, "private void PopulateMenu(MenuFlyout menu)");
         var section = SourceGate.MethodBody(widget, "private void BuildEyeRestSection(MenuFlyout menu)");
 
@@ -298,7 +298,7 @@ public sealed class EyeRestWiringGateTests
     [Fact]
     public void TheJumpFromTheWidgetLandsOnTheTabItNames()
     {
-        var widget = SourceGate.ReadRepoFile(WidgetWindow);
+        var widget = SourceGate.ReadRepoPartials(WidgetWindow);
         var main = SourceGate.ReadRepoFile(MainWindow);
         var page = SourceGate.ReadRepoFile(SettingsPageXaml);
         var section = SourceGate.MethodBody(widget, "private void BuildEyeRestSection(MenuFlyout menu)");

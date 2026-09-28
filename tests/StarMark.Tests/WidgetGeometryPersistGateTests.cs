@@ -20,6 +20,26 @@ public sealed class WidgetGeometryPersistGateTests
     private const string ManagerPath = "src/StarMark.UI/Services/WidgetManager.cs";
     private const string WindowPath = "src/StarMark.UI/Views/WidgetWindow.xaml.cs";
 
+    /// <summary>
+    /// <b>给"守门本身"作的保</b>（承 <c>CaptureOverlayGateTests.TheCodeSideGatesReadEveryPartialFile</c>）：
+    /// 批次 S4-④ 把组件窗按访问面拆成 <c>WidgetWindow.*.cs</c> 若干份之后，读法一旦退回单个文件，
+    /// 那些"锚点必须命中 1 处"的守门会<b>静默变成永远扫不到</b>——而 SourceGate 的规矩是扫不到就抛，
+    /// 所以这里钉住"搬进分段文件的方法，读整套时必须还看得见"，覆盖每个分段各一个代表。
+    /// </summary>
+    [Fact]
+    public void TheWidgetWindowGatesReadEveryPartialFile()
+    {
+        var all = ReadRepoPartials(WindowPath);
+
+        Assert.Contains("internal bool WriteBoundsInto(WidgetStoreData data)", all);      // Geometry
+        Assert.Contains("private void ApplyAppearanceCore(", all);                        // Appearance
+        Assert.Contains("private void PopulateMenu(MenuFlyout menu)", all);              // Menu
+        Assert.Contains("private void ApplyChromeMode(WidgetChromeMode mode)", all);      // Chrome
+        Assert.Contains("private void PersistPositionsAfterDrag()", all);                // DragResize
+        Assert.Contains("private async void QuickLaunch_Drop(", all);                     // QuickLaunchDrop
+        Assert.Contains("public void Reveal()", all);                                     // 主文件自己
+    }
+
     /// <summary>隐藏一批组件只能走"整批一次落盘"那一个出口。</summary>
     [Fact]
     public void HidingAlwaysGoesThroughTheBatchExit()
@@ -61,7 +81,7 @@ public sealed class WidgetGeometryPersistGateTests
     [Fact]
     public void TheWindowMethodsDoNotPersistThemselves()
     {
-        var window = ReadRepoFile(WindowPath);
+        var window = ReadRepoPartials(WindowPath);
 
         Assert.Equal(0, Count(MethodBody(window, "public void HideTemporary()"), "PersistBounds("));
         Assert.Equal(0, Count(MethodBody(window, "public void Shutdown()"), "PersistBounds("));
@@ -72,7 +92,7 @@ public sealed class WidgetGeometryPersistGateTests
     [Fact]
     public void ACoordinatedDragPersistsOnceForEveryone()
     {
-        var window = ReadRepoFile(WindowPath);
+        var window = ReadRepoPartials(WindowPath);
         var body = MethodBody(window, "private void PersistPositionsAfterDrag()");
 
         Assert.Equal(1, Count(body, "_storage.Mutate("));
@@ -84,7 +104,7 @@ public sealed class WidgetGeometryPersistGateTests
     [Fact]
     public void TheBoundsWriterNeverTouchesTheDisk()
     {
-        var body = MethodBody(ReadRepoFile(WindowPath), "internal bool WriteBoundsInto(WidgetStoreData data)");
+        var body = MethodBody(ReadRepoPartials(WindowPath), "internal bool WriteBoundsInto(WidgetStoreData data)");
 
         Assert.Equal(0, Count(body, "_storage.Load()"));
         Assert.Equal(0, Count(body, "_storage.Save("));

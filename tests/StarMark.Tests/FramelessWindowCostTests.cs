@@ -31,7 +31,7 @@ public sealed class FramelessWindowCostTests
     {
         // PO-1 的教训（RI-5 同族）：尺子要装在真的会被走到的那一段上。
         // 首装（样式/尺寸/外壳）与每次都要走的"点亮"必须分开量，否则一颗窗口 100 ms 到底是哪一步无从判断。
-        var source = SourceGate.ReadRepoFile("src/StarMark.UI/Views/WidgetWindow.xaml.cs");
+        var source = SourceGate.ReadRepoPartials("src/StarMark.UI/Views/WidgetWindow.xaml.cs");
 
         Assert.Contains("private void StyleForTheFirstTime()", source);
         Assert.Contains("private void ShowOnDesktop()", source);
