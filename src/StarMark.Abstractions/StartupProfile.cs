@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace StarMark.Abstractions;
 
@@ -15,9 +16,58 @@ namespace StarMark.Abstractions;
 public static class StartupProfile
 {
     private static readonly object _gate = new();
-    private static long _start = Environment.TickCount64;
+
+    /// <summary>
+    /// 唯一的时钟：<b>Stopwatch，不是 <c>Environment.TickCount64</c></b>。
+    /// <para>
+    /// 批次 WE-2 的起因就是这把尺子本身：TickCount64 的分辨率约 <b>15.6 ms</b>（跟着系统计时器节拍跳），
+    /// 于是日志里那一串"+15 ms / +16 ms / +31 ms"不是实测值，而是量化台阶——
+    /// 一颗真花 2 ms 的段与一颗花 15 ms 的段长得一模一样，"每颗组件都是 15 ms"那种整齐数字本身就是证据。
+    /// 拿这把尺子永远分不清"首屏之后那 1.5 s 到底是谁占着 UI 线程"。
+    /// </para>
+    /// </summary>
+    private static readonly Stopwatch Clock = Stopwatch.StartNew();
+
+    /// <summary>
+    /// 当前读数（毫秒）。<b>读数向下取整到整毫秒，但分辨率不是这个数</b>：
+    /// 它来自 <see cref="Stopwatch"/> 的高频刻度，而不是 15.6 ms 的系统计时器节拍。
+    /// </summary>
+    private static long NowMs => Clock.ElapsedMilliseconds;
+
+    private static long _start = NowMs;
     private static long _last = _start;
     private static readonly List<string> _segments = new();
+
+    /// <summary>本类计时源的分辨率（每秒刻度数）。测试用它钉"这把尺子比一个系统计时器节拍细"。</summary>
+    internal static long ClockTicksPerSecond => Stopwatch.Frequency;
+
+    /// <summary>
+    /// 最后一个<b>已经完成</b>的刻度（<see cref="Mark"/> 与 <see cref="Measure"/> 都算），形如「组件显示点亮 时钟 +210 ms」。
+    /// <para>
+    /// 为什么 <c>Segments</c> 的末尾不够用：启动里最重的那一段（建 19 个组件窗）只在<b>结束时</b> Mark 一次，
+    /// 所以卡在那段中间时，分段表末尾还是"首帧提交"——等于没报。而 <c>Measure</c> 是逐件打的，
+    /// 把它也算进刻度，卡顿日志才能指出"最后一个做完的动作是谁"。
+    /// </para>
+    /// <para>只赋字符串（引用写是原子的），且<b>不含锁</b>：它可能在被别的线程读（看门狗的观察线程）。</para>
+    /// </summary>
+    public static string? LastCheckpoint => _lastCheckpoint;
+
+    private static volatile string? _lastCheckpoint;
+
+    /// <summary>
+    /// 那把刻度是<b>多久以前</b>打的（毫秒）；一条刻度都没有时返回 null。
+    /// <para>没有这个数，"卡顿前最后一个完成的刻度"在程序跑了几分钟之后会变成一根误导人的指针：
+    /// 刻度表在启动之后就基本不再前进，于是任何一次后来的冻结都会指着"组件恢复任务返回"，
+    /// 读的人以为卡在启动里。带上年龄，日志自己就说清了"这是很久以前的刻度，不是刚刚"。</para>
+    /// </summary>
+    public static long? LastCheckpointAgeMs
+    {
+        // 64 位字段不能标 volatile（CS0677），所以成对用 Volatile.Read / Interlocked.Exchange：
+        // 读的人（看门狗的观察线程）不能看到写了一半的值。
+        get { var at = System.Threading.Volatile.Read(ref _lastCheckpointAt); return at < 0 ? null : NowMs - at; }
+    }
+
+    private static long _lastCheckpointAt = -1;
 
     /// <summary>
     /// 输出去处。<b>测试里必须换掉</b>：单测不该往用户真实的日志文件里写行。
@@ -25,7 +75,7 @@ public static class StartupProfile
     internal static Action<string> Sink = StarLog.Info;
 
     /// <summary>记一段（自上一段起的耗时 + 自会话开始的累计）。</summary>
-    public static void Mark(string segment) => Mark(segment, Environment.TickCount64);
+    public static void Mark(string segment) => Mark(segment, NowMs);
 
     /// <summary>带时刻的重载只为可测：真实时钟下"增量该是几毫秒"没法断言。</summary>
     internal static void Mark(string segment, long now)
@@ -36,6 +86,7 @@ public static class StartupProfile
             var sinceLast = now - _last;
             _last = now;
             _segments.Add($"{segment} +{sinceLast} ms");
+            NoteCheckpoint(segment, sinceLast);
             line = $"[启动] {segment}：+{sinceLast} ms（自会话开始累计 {now - _start} ms）";
         }
         Sink(line);
@@ -55,15 +106,30 @@ public static class StartupProfile
             _start = start;
             _last = start;
             _segments.Clear();
+            _lastCheckpoint = null;
+            System.Threading.Interlocked.Exchange(ref _lastCheckpointAt, -1);
         }
+    }
+
+    /// <summary>
+    /// 推进"最后一个完成的刻度"。<b>标签与年龄一起写</b>：只改标签会让年龄停在更早的那把刻度上，
+    /// 日志里就会出现"刚刚完成的刻度，其实是 3 分钟前"。
+    /// </summary>
+    private static void NoteCheckpoint(string label, long ms)
+    {
+        _lastCheckpoint = $"{label} +{ms} ms";
+        System.Threading.Interlocked.Exchange(ref _lastCheckpointAt, NowMs);   // 年龄一律按真实时钟算（带时刻的 Mark 重载不许拿合成值当基准）
     }
 
     /// <summary>量一段真实工作并按阈值写日志，返回它的返回值。</summary>
     public static T Measure<T>(string label, Func<T> work, long logWhenMs = 0)
     {
-        var from = Environment.TickCount64;
+        var from = NowMs;
         var result = work();
-        var ms = Environment.TickCount64 - from;
+        var ms = NowMs - from;
+        // 刻度**不论是否达到写日志的阈值都要记**：低于阈值的段正是卡顿时期仅有的刻度（见 LastCheckpoint）。
+        // 抛出的一段不记（它没完成），于是看门狗看到的是"最后一个做完的动作"，而不是卡住的那个。
+        NoteCheckpoint(label, ms);
         if (ms >= logWhenMs) Sink($"[耗时] {label}：{ms} ms");
         return result;
     }
@@ -71,9 +137,10 @@ public static class StartupProfile
     /// <summary>量一段没有返回值的工作并按阈值写日志。</summary>
     public static void Measure(string label, Action work, long logWhenMs = 0)
     {
-        var from = Environment.TickCount64;
+        var from = NowMs;
         work();
-        var ms = Environment.TickCount64 - from;
+        var ms = NowMs - from;
+        NoteCheckpoint(label, ms);
         if (ms >= logWhenMs) Sink($"[耗时] {label}：{ms} ms");
     }
 }

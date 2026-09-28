@@ -108,6 +108,9 @@ public sealed partial class MainWindow : Window
         {
             try { await _widgetManager.RestoreOnStartupAsync(); }
             catch (Exception ex) { StarLog.Error("恢复桌面组件失败", ex); }
+            // WE-2：恢复**之后**那一段以前没有刻度——日志里最后一个分段停在"桌面组件恢复"（它在恢复结束时才记），
+            // 而卡顿看门狗报的那 1.5 s 正好落在它后面，于是谁也说不清是谁占着 UI 线程。补上右半边刻度。
+            StarMark.Abstractions.StartupProfile.Mark("组件恢复任务返回（UI 队列）");
         });
 
         // 开发辅助：启动即搜索（STARMARK_START_QUERY），用于冒烟渲染卡片

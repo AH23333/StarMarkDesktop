@@ -43,4 +43,37 @@ public sealed class StallEvidenceGateTests
         Assert.Contains("StarLog.Warn", start);
         Assert.Contains("GetLastWin32Error()", start);
     }
+
+    /// <summary>
+    /// 卡顿的两条日志都要带上"卡住之前最后一个完成的刻度"（批次 WE-2）。
+    /// <para>
+    /// 只有时长的卡顿行是一段悬空数字：真机日志里那条"阻塞约 1500 ms"前后分别是"首帧提交"和
+    /// "桌面组件恢复"，而这两笔分段<b>一个在冻结前、一个在冻结后</b>，读的人无法把 1.5 s 归到任何一件具体的事上。
+    /// 把起点前的刻度一起报出来，冻结才被夹在两个刻度之间。
+    /// </para>
+    /// <para>
+    /// 钉"两条都有"而不是只钉一条：长冻结期间每隔一倍时长报一次"仍在进行"，
+    /// 缺了这条就等于中间那几行全是在报数、不报位置。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void StallLinesNameTheLastCompletedCheckpoint()
+    {
+        var code = ReadRepoFile(Watchdog);
+        var probe = MethodBody(code, "private static void Probe(");
+        Assert.Equal(2, Count(probe, "卡顿前最后一个完成的刻度"));
+        // 起点快照只在"判定为卡顿的那一刻"做一次：事后（恢复行）再读，读到的是卡顿期间才补上的刻度，
+        // 那会把"卡在哪之前"说成"卡在哪之后"——方向正好反过来。
+        Between(probe, "if (Interlocked.CompareExchange", "_stallCheckpoint = CheckpointAtStallStart();");
+        // 恢复行必须用"清空之前先取出的那份局部快照"：直接读字段的话，字段在上面几行已被清成 null，
+        // 于是最长、也最该说清位置的那一条永远报"无"。
+        Assert.Contains("{checkpointAtStart ?? \"无\"}", probe);
+        Between(probe, "var checkpointAtStart = _stallCheckpoint;", "_stallCheckpoint = null;");
+
+        // 读数只许有一个出口，且那个出口必须把"这把刻度放了多久"一起带上：
+        // 刻度表在启动之外几乎不动，只报标签会把十分钟后的冻结指回启动那条链。
+        Assert.Equal(1, Count(code, "StartupProfile.LastCheckpoint;"));
+        Assert.Contains("StartupProfile.LastCheckpointAgeMs",
+            MethodBody(code, "private static string? CheckpointAtStallStart("));
+    }
 }

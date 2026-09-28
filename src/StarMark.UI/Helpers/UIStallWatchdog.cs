@@ -17,6 +17,13 @@ namespace StarMark.UI.Helpers;
 /// 且进程被挂起/系统睡眠会被识别为"看门狗自己也没被调度"而不算应用卡顿。
 /// </para>
 /// <para>
+/// 两条日志都带上<b>卡顿之前最后一个完成的刻度</b>（<c>StartupProfile.LastCheckpoint</c>，
+/// 由 <c>Mark</c> 与 <c>Measure</c> 共同推进）。只有时长时，"启动后 1.5 s 卡住"是一段悬空的空档——
+/// 分段表只在整块工作<b>结束时</b>记一笔，卡在那块工作中间时它还是上一笔，等于没报。
+/// 夹住这一笔，空档才有左边的刻度。刻度还带上"当时已经放了多久"——启动之外它几乎不再前进，
+/// 光看标签会把十分钟后的冻结读成卡在启动里。
+/// </para>
+/// <para>
 /// 恢复那一行还带上<b>这段时间 UI 线程自己烧了多少 CPU</b>（<c>GetThreadTimes</c> 用户态＋内核态）。
 /// 两个数一比就能定方向：<b>CPU ≈ 墙钟＝忙在自己手上</b>（整表重读、几百个卡片元素、布局重排——该拆分或挪线程）；
 /// <b>CPU ≪ 墙钟＝在等别人</b>（写锁、IPC、外部进程、DWM——那种情况下优化 CPU 是白改）。
@@ -48,6 +55,13 @@ public static class UIStallWatchdog
     private static volatile string? _where; // 回执时刻顺带取的前台页（在 UI 线程上读）
     private static IntPtr _uiThread;        // UI 线程句柄：只为读它用了多少 CPU
     private static long _stallStartCpu = -1;
+
+    /// <summary>
+    /// 判定为卡顿那一刻的最后一条<b>已完成刻度</b>（快照，含当时的年龄）。
+    /// <para>WE-2 缺的就是这个：分段表停在"桌面组件恢复"，看门狗报的 1.5 s 落在它<b>之后</b>，
+    /// 于是只知道"卡了"、不知道"卡在哪件事之前"。带上这一条，悬空的空档就有了左边的刻度。</para>
+    /// </summary>
+    private static string? _stallCheckpoint;
 
     public static void Start(DispatcherQueue? queue)
     {
@@ -86,6 +100,7 @@ public static class UIStallWatchdog
             Interlocked.Exchange(ref _lastAck, now);
             Interlocked.Exchange(ref _stallStart, 0);
             _stallStartCpu = -1;
+            _stallCheckpoint = null;
             return;
         }
 
@@ -94,25 +109,31 @@ public static class UIStallWatchdog
         {
             // 基准取"进入卡顿那一刻快照的回执时刻"：此处若再读 _lastAck，可能已被刚排队的回执刷新成 now。
             var start = Interlocked.Exchange(ref _stallStart, 0);
-            var cpuAtStart = _stallStartCpu;      // _stallStartCpu 只有观察线程读写，不用原子
+            var cpuAtStart = _stallStartCpu;      // 这两个卡顿起点快照只有观察线程读写，不用原子
+            var checkpointAtStart = _stallCheckpoint;
             _stallStartCpu = -1;
+            _stallCheckpoint = null;
             if (start > 0)
             {
                 var wall = now - start;
                 var cpu = cpuAtStart < 0 ? null : CpuMs() - cpuAtStart;
                 StarLog.Warn($"[卡顿] UI 线程恢复，本轮阻塞约 {wall} ms" +
                              $"（其间 UI 线程自己用了约 {(cpu is { } c ? c.ToString() : "未知")} ms CPU，" +
-                             $"卡顿期间前台页={_where ?? "未知"}）");
+                             $"卡顿期间前台页={_where ?? "未知"}，卡顿前最后一个完成的刻度：{checkpointAtStart ?? "无"}）");
             }
         }
         else
         {
             if (Interlocked.CompareExchange(ref _stallStart, Interlocked.Read(ref _lastAck), 0) == 0)
+            {
                 _stallStartCpu = CpuMs() ?? -1;   // 只在判定为卡顿的那一刻取一次基线
+                _stallCheckpoint = CheckpointAtStallStart();   // 同上：事后读会把卡顿期间才补上的刻度当成起点
+            }
             if (stalled >= Math.Max(StallMs, Interlocked.Read(ref _reportedMs) * 2))
             {
                 Interlocked.Exchange(ref _reportedMs, stalled);
-                StarLog.Warn($"[卡顿] UI 线程已阻塞 {stalled} ms（仍在进行，前台页={_where ?? "未知"}）");
+                StarLog.Warn($"[卡顿] UI 线程已阻塞 {stalled} ms（仍在进行，前台页={_where ?? "未知"}，" +
+                             $"卡顿前最后一个完成的刻度：{_stallCheckpoint ?? "无"}）");
             }
         }
 
@@ -135,6 +156,23 @@ public static class UIStallWatchdog
         => _uiThread != IntPtr.Zero && GetThreadTimes(_uiThread, out _, out _, out var kernel, out var user)
             ? (kernel + user) / 10_000            // FILETIME 是 100 ns 刻度
             : null;
+
+    /// <summary>
+    /// 卡顿起点那一刻的刻度，连同它<b>当时已经放了多久</b>（形如「组件显示点亮 时钟 +210 ms，163 ms 前」）；
+    /// 一条刻度都没有则 null。
+    /// <para>为什么要带上年龄：刻度表主要在启动阶段前进，程序跑起来之后就几乎不再动。
+    /// 只报标签的话，一次发生在十分钟之后的冻结会被写成"卡在『组件恢复任务返回』之前"，
+    /// 读的人照着启动那条链去找，永远找不到。年龄让这一行自己说清"那是很久以前的刻度"。</para>
+    /// </summary>
+    private static string? CheckpointAtStallStart()
+    {
+        var label = StartupProfile.LastCheckpoint;
+        if (label is null) return null;
+        var ageText = StartupProfile.LastCheckpointAgeMs is not { } a ? "时间未知"
+            : a < 1000 ? $"{a} ms 前"
+            : $"{a / 1000.0:0.#} 秒前";
+        return $"{label}，{ageText}";
+    }
 
     // 这三个 kernel32 调用只服务"卡顿取证"这一件事，所以留在本文件里不外溢
     // （WindowInterop 那份全是窗口/显示器相关，混进去只会让两边都难查）。
