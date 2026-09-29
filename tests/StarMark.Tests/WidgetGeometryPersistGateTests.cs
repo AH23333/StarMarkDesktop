@@ -40,6 +40,29 @@ public sealed class WidgetGeometryPersistGateTests
         Assert.Contains("public void Reveal()", all);                                     // 主文件自己
     }
 
+    /// <summary>
+    /// <b>八向缩放 grip 必须进名册，收起时必须顺手清光标</b>（批次 RM，真机"画布上鼠标是横向双向箭头"）：
+    /// <c>AddGrip</c> 从前只 <c>rootGrid.Children.Add(grip)</c> 而<b>从不 <c>_grips.Add</c></b>，
+    /// 于是 <c>SetGripsVisible</c> 是一句空转——胶囊／隐藏态那八条隐形命中带照样吃鼠标，
+    /// 而光标是<b>线程级</b>状态（画布与组件窗同一条 UI 线程），Stuck 的 SizeWestEast 就漏到了画布上。
+    /// <para>另一半：元素被 Collapsed 的那一刻 <c>PointerExited</c> 不会投递，所以隐藏时必须显式清
+    /// <c>ProtectedCursor</c>——两道一起堵，少一道症状都会复发。</para>
+    /// </summary>
+    [Fact]
+    public void EveryResizeGripIsOnTheRosterAndItsCursorIsCleared()
+    {
+        var window = SourceGate.ReadRepoPartials(WindowPath);
+        var addGrip = SourceGate.MethodBody(window, "void AddGrip(string dir, double width,");
+
+        Assert.Contains("rootGrid.Children.Add(grip);", addGrip);         // 反空转：确实扫到了建 grip 那一段
+        Assert.Contains("_grips.Add(grip);", addGrip);                    // 建了就必须点名册，否则 SetGripsVisible 白写
+        Assert.Equal(8, SourceGate.Count(window, "AddGrip(\""));          // 八向一条都不能少（少一条＝那条边不能拉）
+
+        var hide = SourceGate.MethodBody(window, "private void SetGripsVisible(bool visible)");
+        Assert.Contains("g.ResetCursor();", hide);
+        Assert.Contains("public void ResetCursor() => ProtectedCursor = null;", window);
+    }
+
     /// <summary>隐藏一批组件只能走"整批一次落盘"那一个出口。</summary>
     [Fact]
     public void HidingAlwaysGoesThroughTheBatchExit()

@@ -236,6 +236,10 @@ public sealed partial class WidgetWindow
             grip.PointerReleased += ResizeGrip_PointerReleased;
             grip.PointerCanceled += ResizeGrip_PointerReleased;
             rootGrid.Children.Add(grip);
+            // 必须点名册：SetGripsVisible 只遍历 _grips，从前这里漏了一句 ⇒ 那八条隐形命中带
+            // 在胶囊态／隐藏态照样吃鼠标（光标变成 SizeWestEast／SizeNorthSouth 且不会自己清掉），
+            // 而"胶囊模式不响应"那两道守卫只挡住了拉伸，没挡住光标。
+            _grips.Add(grip);
         }
 
         // 命中带加宽（边 8px、角 18px）以便精准命中；全部 RowSpan=2 + z=100（见 AddGrip），
@@ -411,6 +415,14 @@ public sealed partial class WidgetWindow
 
         private void ResizeGrip_PointerExited(object sender, PointerRoutedEventArgs e)
             => ProtectedCursor = null;
+
+        /// <summary>
+        /// 把这只 grip 留下的光标改回默认。<b>收起时必须有这一步</b>：
+        /// 元素被 <c>Collapsed</c> 掉（或按住期间被别处抢走指针）时 <c>PointerExited</c> 不会投递，
+        /// 于是 <c>ProtectedCursor</c> 一直挂着——光标是<b>线程级</b>状态，画布与组件窗同一条 UI 线程，
+        /// 症状就成了"画布上鼠标是横向双向箭头"。
+        /// </summary>
+        public void ResetCursor() => ProtectedCursor = null;
     }
 
     private static bool FindAncestorButton(DependencyObject? start)

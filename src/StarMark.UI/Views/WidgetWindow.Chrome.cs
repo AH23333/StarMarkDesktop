@@ -255,7 +255,14 @@ public sealed partial class WidgetWindow
     private void SetGripsVisible(bool visible)
     {
         var v = visible ? Visibility.Visible : Visibility.Collapsed;
-        foreach (var g in _grips) g.Visibility = v;
+        foreach (var g in _grips)
+        {
+            g.Visibility = v;
+            // 收起时必须顺手把光标清回去：元素被 Collapsed 掉的那一刻 PointerExited 不会投递，
+            // 那只 grip 设进 ProtectedCursor 的尺寸光标就留在**整条 UI 线程**上了
+            // （画布与组件窗同线程 ⇒ 真机症状是"画布上鼠标变成横向双向箭头"）。
+            if (!visible) g.ResetCursor();
+        }
     }
 
     private void ToggleCompact() =>

@@ -362,6 +362,18 @@ public sealed class LayeredCanvasWindow : IDisposable
 
     private bool _crossCursor;
 
+    /// <summary>
+    /// 画布要用的那两个光标句柄。<b>必须是 <c>LoadCursorW</c> 取来的句柄</b>：
+    /// <see cref="CanvasNative.IDC_ARROW"/>／<see cref="CanvasNative.IDC_CROSS"/> 只是资源号（32512／32515），
+    /// 直接把资源号递给 <c>SetCursor</c> 是无效句柄⇒调用失败而返回值没人看，线程光标就<b>保持上一个</b>——
+    /// 真机症状是"画布上鼠标变成横向双向箭头"（组件窗那条 8px 隐形缩边 grip 留下的 SizeWestEast）。
+    /// <para>共享光标的 <c>hInstance</c> 要给 <see cref="IntPtr.Zero"/>（<c>TrayHost</c> 一直就是这么写的）。</para>
+    /// </summary>
+    private static readonly IntPtr ArrowCursor = NativeMethods.LoadCursorW(IntPtr.Zero, CanvasNative.IDC_ARROW);
+
+    /// <summary>同上，十字那一枚（取不到就是 <see cref="IntPtr.Zero"/>，走下面的默认处理兜）。</summary>
+    private static readonly IntPtr CrossCursor = NativeMethods.LoadCursorW(IntPtr.Zero, CanvasNative.IDC_CROSS);
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -496,7 +508,8 @@ public sealed class LayeredCanvasWindow : IDisposable
             style = 0,
             lpfnWndProc = _sharedProc,
             hInstance = instance,
-            hCursor = NativeMethods.LoadCursorW(instance, CanvasNative.IDC_ARROW),
+            // 共享系统光标要传 hInstance＝NULL（传模块句柄是"一般也能成"的写法，但这里已有现成的正确先例：TrayHost）
+            hCursor = NativeMethods.LoadCursorW(IntPtr.Zero, CanvasNative.IDC_ARROW),
             hbrBackground = IntPtr.Zero,      // 分层窗没有"背景刷"这件事：内容全靠 UpdateLayeredWindow 供
             lpszClassName = ClassName,
             hIcon = IntPtr.Zero,
@@ -561,9 +574,13 @@ public sealed class LayeredCanvasWindow : IDisposable
             case CanvasNative.WM_SETCURSOR:
                 // 必须先 SetCursor 再回 TRUE：回 FALSE 等于告诉系统"我没处理"，
                 // 而这条链上一次的真实事故是把参数写错成两个（NULL 句柄＝光标直接消失）。
-                CanvasNative.SetCursor(window._crossCursor && !window.IsClickThrough
-                    ? CanvasNative.IDC_CROSS
-                    : CanvasNative.IDC_ARROW);
+                // 第二道失守也在同一句上，而且更隐蔽：从前递的是 IDC_* 那个<b>资源号</b>而不是句柄，
+                // SetCursor 失败但没人看返回值，回 TRUE 又掐掉了 DefWindowProc 用类光标自纠的机会
+                // ⇒ 线程光标停在别处留下的那一枚（真机"画布上是横向双向箭头"）。
+                // 所以取不到句柄时宁可让它走默认处理，也不要"设了个寂寞还宣称已处理"。
+                var want = window._crossCursor && !window.IsClickThrough ? CrossCursor : ArrowCursor;
+                if (want == IntPtr.Zero) return NativeMethods.DefWindowProcW(hWnd, msg, wParam, lParam);
+                CanvasNative.SetCursor(want);
                 return new IntPtr(1);
 
             case CanvasNative.WM_ERASEBKGND:

@@ -51,11 +51,22 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("public static extern IntPtr SetCursor(IntPtr hCursor);", native);
         Assert.DoesNotContain("SetCursor(IntPtr hWnd, IntPtr hCursor)", native);
 
-        var proc = SourceGate.MethodBody(SourceGate.ReadRepoFile(Layer), "private static IntPtr HandleMessage");
+        // 第二条同族的坑（批次 RM，真机"画布上鼠标是横向双向箭头"）：**句柄 ≠ 资源号**。
+        // IDC_ARROW=32512 是 MAKEINTRESOURCE，直接递给 SetCursor 是无效句柄⇒调用失败、返回值没人看，
+        // 线程光标就停在别处留下的那一枚上；而这一案又回 TRUE，连 DefWindowProc 用类光标自纠的机会都掐掉了。
+        var layer = SourceGate.ReadRepoFile(Layer);
+        Assert.Contains("LoadCursorW(IntPtr.Zero, CanvasNative.IDC_ARROW)", layer);
+        Assert.Contains("LoadCursorW(IntPtr.Zero, CanvasNative.IDC_CROSS)", layer);
+        Assert.DoesNotContain("LoadCursorW(instance,", layer);            // 共享光标的 hInstance 必须是 NULL
+
+        var proc = SourceGate.MethodBody(layer, "private static IntPtr HandleMessage");
         var setCursor = proc.IndexOf("WM_SETCURSOR", StringComparison.Ordinal);
         var nextCase = proc.IndexOf("case CanvasNative.WM_ERASEBKGND", setCursor, StringComparison.Ordinal);
         var handler = proc[setCursor..nextCase];
-        Assert.Contains("SetCursor(", handler);
+        Assert.DoesNotContain("SetCursor(CanvasNative.IDC", handler);     // 反向钉死"递资源号"那一版
+        Assert.Contains("CanvasNative.SetCursor(want);", handler);
+        // 取不到句柄（返回 0）时<b>不宣称已处理</b>：让它走默认处理，系统还有类光标可退
+        Assert.Contains("if (want == IntPtr.Zero) return NativeMethods.DefWindowProcW(hWnd, msg, wParam, lParam);", handler);
         Assert.Contains("return new IntPtr(1);", handler);
         // 回 FALSE＝告诉系统"我没处理"，光标归属就悬了
         Assert.DoesNotContain("return IntPtr.Zero;", handler);
