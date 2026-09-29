@@ -94,12 +94,15 @@ public sealed class UriNormalizerTests
 
     /// <summary>
     /// 批次 DD：IsGitHub 的 `.github.com` 后缀子句（UriNormalizer.cs:68）此前零测——所有 github 用例都用裸
-    /// github.com。该子句决定 www.github.com / gist.github.com 等是否享受「/owner/repo 收窄 + tab 清空」，
+    /// github.com。该子句决定 gist.github.com 等子域是否享受「/owner/repo 收窄 + tab 清空」，
     /// 一旦回归（改成 == 比较）这些主机的 source_id 会静默不再收窄、同一仓库裂成多条。同时钉死反向：
     /// 仅以 "github.com" 结尾但**缺点号**的 notgithub.com 不是 GitHub，绝不能被误收窄（防过度匹配）。
+    /// <para>批次 RW 改过本条的一条期望值：`www.github.com` 现在会先折进主域再收窄，
+    /// 所以输出是 `github.com/...` 而不是 `www.github.com/...`。**这条测的仍是子域收窄**（意图未变），
+    /// 变的只是那台主机的标准形——它本来就是 RW 要修的分裂成因。</para>
     /// </summary>
     [Theory]
-    [InlineData("https://www.github.com/owner/repo/issues/5", "https://www.github.com/owner/repo")]
+    [InlineData("https://www.github.com/owner/repo/issues/5", "https://github.com/owner/repo")]
     [InlineData("https://gist.github.com/alice/abc?tab=example", "https://gist.github.com/alice/abc")]
     public void Normalize_GitHubSubdomain_NarrowsLikeApex(string input, string expected)
     {
@@ -132,5 +135,74 @@ public sealed class UriNormalizerTests
         Assert.DoesNotContain("?", once);
         Assert.Equal(input.Split('?')[0], once);   // 恰等于去 query 的裸形，无悬空 '?'
         Assert.Equal(once, UriNormalizer.Normalize(once));   // 幂等
+    }
+
+    /// <summary>
+    /// 批次 RW（P-118）：同一仓库的十种写法必须收敛成**一个** source_id。
+    /// 这条故意不比对"字符串长什么样"，只比对"是不是同一个键"——那才是去重的真判据，
+    /// 也是扩展 <c>normalize.ts:40-45</c> 那条"用户实测踩坑"注释对应的三件事：
+    /// <c>www.</c> 折叠、github 强制 https、<c>/owner/repo</c> 段折小写。
+    /// 三条里任何一条回归，这里都会重新裂成多行（且"疑似重复"会误报）。
+    /// </summary>
+    [Fact]
+    public void Normalize_SameGithubRepo_EverySpellingCollapsesToOneKey()
+    {
+        var variants = new[]
+        {
+            "https://github.com/owner/repo",
+            "http://github.com/owner/repo",
+            "https://www.github.com/owner/repo",
+            "http://www.github.com/Owner/Repo/",
+            "https://WWW.GitHub.COM/OWNER/REPO/",
+            "https://github.com/Owner/REPO/issues/123",
+            "https://github.com/owner/repo?tab=repositories",
+            "https://github.com:443/owner/repo",
+            "http://github.com:80/owner/repo",
+            "https://github.com/owner/repo/pulse?utm_source=share",
+        };
+        var keys = variants.Select(UriNormalizer.Normalize).Distinct(StringComparer.Ordinal).ToList();
+        Assert.Equal(new[] { "https://github.com/owner/repo" }, keys);
+        foreach (var k in keys) Assert.Equal(k, UriNormalizer.Normalize(k));   // 幂等
+    }
+
+    [Theory]
+    [InlineData("http://www.github.com/", "https://github.com/")]
+    [InlineData("https://github.com", "https://github.com/")]
+    [InlineData("https://GitHub.com/Owner", "https://github.com/owner")]
+    public void Normalize_GithubApex_RootAndSingleSegmentForms(string input, string expected)
+    {
+        var once = UriNormalizer.Normalize(input);
+        Assert.Equal(expected, once);
+        Assert.Equal(once, UriNormalizer.Normalize(once));   // 幂等
+    }
+
+    /// <summary>
+    /// 批次 RW：子域（gist 等）**只升协议**——主机不折进主域、路径大小写也不折。
+    /// 理由排序是"宁可裂也不许错并"：gist 的 id 段不保证大小写无关，一旦折小写，
+    /// 两个不同资源的标签/笔记会挂到同一条上——那比多出一行难发现得多。
+    /// </summary>
+    [Fact]
+    public void Normalize_GithubSubdomain_UpgradesHttpsButKeepsHostAndCase()
+    {
+        var once = UriNormalizer.Normalize("http://gist.github.com/alice/AbC123");
+        Assert.Equal("https://gist.github.com/alice/AbC123", once);
+        Assert.Equal(once, UriNormalizer.Normalize(once));
+    }
+
+    /// <summary>
+    /// 批次 RW 的反向闸门：三条 github 规则绝不能漏到别的站点上。
+    /// http 不升级、路径大小写不折——这两条若被"顺手统一"，会把成千上万条非 github 书签的键改掉、
+    /// 并把大小写敏感的服务器路径（/Docs 与 /docs 常是两个页面）错并成一条。
+    /// </summary>
+    [Theory]
+    [InlineData("http://example.com/x")]
+    [InlineData("https://example.com/Docs/FAQ")]
+    [InlineData("https://notgithub.com/Owner/Repo")]
+    [InlineData("https://github.com.evil.com/Owner/Repo")]
+    public void Normalize_NonGithub_UnaffectedByTheGithubRules(string input)
+    {
+        var once = UriNormalizer.Normalize(input);
+        Assert.Equal(input, once);
+        Assert.Equal(once, UriNormalizer.Normalize(once));
     }
 }

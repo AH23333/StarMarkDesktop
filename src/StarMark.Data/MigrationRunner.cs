@@ -33,6 +33,7 @@ public sealed class MigrationRunner
         if (version < 3) MigrateV3(conn);
         if (version < 4) MigrateV4(conn);
         if (version < 5) MigrateV5(conn);
+        if (version < 6) MigrateV6(conn);
 
         // 只在真正向前迁移后才推进版本号。若库里存的版本已高于本二进制（应用降级：
         // 新版建库后回退到旧版），无条件写回 CurrentVersion 会把 schema_version 倒拨，
@@ -40,7 +41,7 @@ public sealed class MigrationRunner
         if (version < CurrentVersion) WriteSchemaVersion(conn, CurrentVersion);
     }
 
-    public const int CurrentVersion = 5;
+    public const int CurrentVersion = 6;
 
     private static int ReadSchemaVersion(Microsoft.Data.Sqlite.SqliteConnection conn)
     {
@@ -146,6 +147,37 @@ public sealed class MigrationRunner
     /// </summary>
     private static void MigrateV4(Microsoft.Data.Sqlite.SqliteConnection conn)
     {
+        MergeByNormalizedKey(conn, onlyCollidingGroups: true);
+        // 合并改写了 keeper 的 notes 并新增了 item_tags，但都没经过 UpsertOne，
+        // 故其 search_text 仍是被合并前的旧值——不重建则「被合并进来的笔记/标签词」永久搜不到。
+        RebuildSearchTextAndIndex(conn);
+    }
+
+    /// <summary>
+    /// v6：批次 RW（P-118）给 <c>UriNormalizer</c> 补了三折（<c>www.github.com</c> 折进主域、
+    /// github 一律 https、主域 <c>/owner/repo</c> 折小写），而 <c>ItemRepository.UpsertOne</c>
+    /// 找旧行只看 <c>(source, source_id)</c>。存量行若不改键，下一次同步会按新键<b>另起一行</b>，
+    /// 把旧行连同它的标签/笔记/置顶<b>永久孤立</b>。
+    /// </summary>
+    /// <remarks>
+    /// v4 那次合并只处理"归一后撞在一起"的分组（<c>Count &gt; 1</c>），恰好漏掉 v6 要补的这一类：
+    /// <b>键变了但没有双胞胎的行</b>。所以这里对每个分组都落一次规范键——单行组就是纯改键，
+    /// 撞了才走合并。幂等：第二次跑时所有行已在规范形，UPDATE 写回同值，行数不变。
+    /// 索引重建与 v4 一样无条件做（一次升级一趟，不为省这一趟引入"到底改没改"的判定）。
+    /// </remarks>
+    private static void MigrateV6(Microsoft.Data.Sqlite.SqliteConnection conn)
+    {
+        MergeByNormalizedKey(conn, onlyCollidingGroups: false);
+        RebuildSearchTextAndIndex(conn);
+    }
+
+    /// <summary>
+    /// 按 <c>(source, Normalize(source_id))</c> 分组合并，并把每组的 keeper 落到规范键上。
+    /// <paramref name="onlyCollidingGroups"/> 为 true 时只处理撞在一起的多行组（v4 的原口径），
+    /// 为 false 时单行组也改键（v6：键变了但没撞上的行也必须改，否则下次同步另起一行）。
+    /// </summary>
+    private static void MergeByNormalizedKey(Microsoft.Data.Sqlite.SqliteConnection conn, bool onlyCollidingGroups)
+    {
         var rows = new List<(long Id, string Source, string SourceId, long CreatedAt, string? Notes, bool Hidden, bool Pinned)>();
         using (var sel = conn.CreateCommand())
         {
@@ -164,10 +196,11 @@ public sealed class MigrationRunner
             }
         }
 
-        // 仅对出现重复的分组合并（非 http(s) 源的 key 等于原 source_id，本就是去重）
+        // 仅对出现重复的分组合并（非 http(s) 源的 key 等于原 source_id，本就是去重）；
+        // v6 口径下单行组也要过一遍——它的键可能已经换了规范形，只是没有双胞胎。
         var groups = rows
             .GroupBy(r => (r.Source, StarMark.Abstractions.UriNormalizer.Normalize(r.SourceId)))
-            .Where(g => g.Count() > 1)
+            .Where(g => g.Count() > 1 || !onlyCollidingGroups)
             .ToList();
         if (groups.Count == 0) return;
 
@@ -242,11 +275,6 @@ public sealed class MigrationRunner
             }
         }
         tx.Commit();
-
-        // 合并改写了 keeper 的 notes 并新增了 item_tags，但都没经过 UpsertOne，
-        // 故其 search_text 仍是被合并前的旧值——不重建则「被合并进来的笔记/标签词」永久搜不到。
-        // 仅当本次真的合并过（groups>0）才需要，全表重算 + FTS rebuild 一次到位。
-        RebuildSearchTextAndIndex(conn);
     }
 
     private static bool ColumnExists(Microsoft.Data.Sqlite.SqliteConnection conn, string table, string column)
