@@ -87,6 +87,24 @@ public partial class ItemCardViewModel : ObservableObject
     public bool CanCopyAsImage => ItemCardPolicy.CanCopyAsImage(Uri);
 
     /// <summary>
+    /// 「贴到桌面」这一项点不点得动。<b>可见性与可点性是两件事</b>：前者问"这类行有没有这个动作"
+    /// （只认 <see cref="CanCopyAsImage"/>，不在这里第二判一次"什么算图片行"），后者多问一句
+    /// "这一张的像素还拿得到吗"。
+    /// <para>为什么这一句能白拿：<see cref="ClipboardImageMissing"/> 是构造卡片时算好的一个位
+    /// （对账标记，或那次为缩略图做的 stat 顺带答出来的），不新增一次盘查——菜单构建是每行一次的批处理，
+    /// 这条纪律就是这么保住的。</para>
+    /// </summary>
+    public bool CanPinAsImage => CanCopyAsImage && !ClipboardImageMissing;
+
+    /// <summary>
+    /// 灰项自己在标题上说原因（全程序口径）：置灰而不解释，用户只看到一个永远点不动的菜单项，
+    /// 分不清是"这个功能坏了"还是"这一条本来就不行"。
+    /// </summary>
+    public string PinImageMenuText => CanPinAsImage
+        ? "贴到桌面"
+        : "贴到桌面（这张图的文件已不在本机）";
+
+    /// <summary>
     /// 是否可"发送到桌面 · 快捷启动"。快捷启动存的是<b>可启动的 URI</b>，没有 URI 的条目
     /// （剪贴板正文、无链接的待办/随记）发过去只会是一条永远打不开的空入口，故不提供该动作。
     /// 启动器行与热榜候选同样排除（判据在 <see cref="ItemCardPolicy.CanSendToLauncher"/>）：

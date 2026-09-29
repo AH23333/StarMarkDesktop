@@ -97,7 +97,8 @@ public sealed class ClipboardCopyImageGateTests
         // 1→2 是 ClipIMG-P3 决议过的出口增长（「贴到桌面」与「复制图片」共用同一颗判据）：
         // 这里钉的不再是"只有一处图片出口"，而是"每一出口都只认同一颗属性、且各出口顺序一致"。
         Assert.Equal(2, Count(xaml, "ViewModel.CanCopyAsImage"));
-        Assert.Contains("Text=\"贴到桌面\"", xaml);
+        // P3 之后那颗的标题改由卡片给（缺文件时原因要写在标题上），XAML 里不再留字面量——
+        // "一句文案只有一个出处"由 ClipImgPinGateTests.PinGreyOutDerivesFromTheImageCriterion 钉。
         var pinAt = xaml.IndexOf("Click=\"Menu_PinToDesktop\"", StringComparison.Ordinal);
         Assert.True(pinAt > image, "「贴到桌面」要紧跟在「复制图片」之后（与组件行同序，两处菜单不许各排各的）");
         Assert.Contains("BoolToVis", xaml[image..(xaml.IndexOf("/>", image, StringComparison.Ordinal) + 2)]);

@@ -183,8 +183,9 @@ public static class ItemCardActions
     /// 剪贴板（所以要登记回声——不登记，每复制一次历史就多一条自采集），这颗<b>不经剪贴板</b>，
     /// 没有回声问题；成功也<b>不在此处另报一句</b>——"已钉住（共 N 张，上限 M 张）"由 PinManager
     /// 的通知卡统一说话，这里再报就成同一件事两种措辞。</para>
-    /// <para>判据只有一份：与「复制图片」同用 <c>CanCopyAsImage</c>，菜单不该长出第二套"什么算图片行"；
-    /// 文件这会儿在不在，由读盘那一步带着原因报告（P-54 同口径）。</para>
+    /// <para>判据只有一份："这类行有没有这个动作"仍是 <c>CanCopyAsImage</c>（菜单两处与这里都读它），
+    /// 这颗只再多问一句"这张的像素这会儿还在不在"（<c>CanPinAsImage</c>，用的是卡片构造时已经算好的那个位，
+    /// 不在菜单构建里 stat 文件）。文件真不在时那条路仍由读盘那一步带着原因报告（P-54 同口径）。</para>
     /// <para>摆放＝光标屏工作区居中（判据在 <c>ItemCardPolicy.CenteredPlacement</c>，可单测）；
     /// 探测不到光标屏时老实退回 (0,0) 并写日志——比"贴不出去"更贴近用户按下的意图，
     /// 那张窗仍可拖走，而拒绝执行没有第二次机会。</para></summary>
@@ -192,7 +193,7 @@ public static class ItemCardActions
     {
         try
         {
-            if (!vm.CanCopyAsImage) return;
+            if (!vm.CanPinAsImage) return;
 
             var (png, frame, why) = vm.IsClipboardImageRow
                 ? await Task.Run(() => ReadEntryImage(vm), CancellationToken.None)
