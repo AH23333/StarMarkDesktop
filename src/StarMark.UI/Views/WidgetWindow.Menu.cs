@@ -64,9 +64,9 @@ public sealed partial class WidgetWindow
         var toggle = new ToggleMenuFlyoutItem { Text = "开启休息提醒", IsChecked = enabled };
         toggle.Click += (_, _) =>
         {
-            // 强制休息 / 全屏让路这两项不在这里改，但要原样带过去，否则一按开关就把它们重置回默认
+            // 提醒形式 / 全屏让路这两项不在这里改，但要原样带过去，否则一按开关就把它们重置回默认
             settings.SaveEyeRest(toggle.IsChecked, interval,
-                settings.LoadEyeRestEnforced(), settings.LoadEyeRestDeferOnFullscreen());
+                settings.LoadEyeRestNotice(), settings.LoadEyeRestDeferOnFullscreen());
             App.ApplyEyeRest(toggle.IsChecked);
         };
         section.Items.Add(toggle);
@@ -85,7 +85,7 @@ public sealed partial class WidgetWindow
             item.Click += (_, _) =>
             {
                 settings.SaveEyeRest(settings.LoadEyeRestEnabled(), minutes,
-                    settings.LoadEyeRestEnforced(), settings.LoadEyeRestDeferOnFullscreen());
+                    settings.LoadEyeRestNotice(), settings.LoadEyeRestDeferOnFullscreen());
                 App.ApplyEyeRest(settings.LoadEyeRestEnabled());
             };
             gap.Items.Add(item);
@@ -102,7 +102,7 @@ public sealed partial class WidgetWindow
             IsEnabled = false,
         });
 
-        var full = new MenuFlyoutItem { Text = "完整设置（强制休息 / 全屏让路）…" };
+        var full = new MenuFlyoutItem { Text = "完整设置（提醒形式 / 全屏让路）…" };
         // 直接落在「健康与诊断」页：跳进设置页却停在常规页，等于让人到了门口再自己找房间
         full.Click += (_, _) => App.MainWindow?.Present(true, "健康与诊断");
         section.Items.Add(full);

@@ -174,6 +174,124 @@ public sealed class EyeRestPolicyTests
         Assert.Equal(EyeRestPolicy.IntervalOptions[^1], EyeRestPolicy.IntervalAt(999));
     }
 
+    // ────────── 提醒形式那三档（批次 RS：暗幕与"能不能提前退出"解耦）──────────
+
+    /// <summary>
+    /// 数值钉死：这一档是按整数落进 <c>settings.json</c> 的，中间插一档或换顺序会让用户已有的设置
+    /// <b>静默变成另一档</b>（同批次 EV 给 <c>ItemType</c>／<c>WidgetChromeMode</c> 立下的口径）。
+    /// </summary>
+    [Theory]
+    [InlineData(EyeRestNotice.Bubble, 0)]
+    [InlineData(EyeRestNotice.Curtain, 1)]
+    [InlineData(EyeRestNotice.Forced, 2)]
+    public void NoticeValues_ArePinned(EyeRestNotice notice, int raw)
+        => Assert.Equal(raw, (int)notice);
+
+    [Fact]
+    public void EveryNotice_IsKnownAndSurvivesClampUnchanged()
+    {
+        for (var i = 0; i < EyeRestPolicy.NoticeOptions.Length; i++)
+        {
+            var notice = EyeRestPolicy.NoticeOptions[i];
+            Assert.True(EyeRestPolicy.IsKnownNotice((int)notice));
+            Assert.Equal(notice, EyeRestPolicy.ClampNotice((int)notice));     // 某档被回落成默认的话，
+            Assert.Equal(notice, EyeRestPolicy.ClampNotice(notice));          // 用户选"强制"实际跑的是别的
+            Assert.Equal(i, EyeRestPolicy.NoticeIndexOf(notice));             // 下拉的选中项跟着档位走
+        }
+        Assert.Equal(EyeRestPolicy.NoticeOptions.Length, EyeRestPolicy.NoticeLabels.Count);
+    }
+
+    /// <summary>
+    /// 认不得的数值<b>回默认档，不夹到最近的一端</b>：3 紧挨着"强制"、-1 紧挨着"气泡"，
+    /// 夹过去就等于让一处存档损坏替用户挑一档——而挑到的那档可能是"把所有退出出口关掉"。
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(-1)]
+    [InlineData(3)]
+    [InlineData(7)]
+    [InlineData(9999)]
+    public void BrokenNotice_LandsOnTheDefault_NotOnTheNearestEdge(int? raw)
+        => Assert.Equal(EyeRestPolicy.DefaultNotice, EyeRestPolicy.ClampNotice(raw));
+
+    [Fact]
+    public void AnIllegalEnumValue_LandsOnTheDefaultToo()
+        => Assert.Equal(EyeRestPolicy.DefaultNotice, EyeRestPolicy.ClampNotice((EyeRestNotice)7));
+
+    [Fact]
+    public void NoticeAt_ClampsOutOfBoundsIndexes_InsteadOfThrowing()
+    {
+        Assert.Equal(EyeRestPolicy.NoticeOptions[0], EyeRestPolicy.NoticeAt(-7));
+        Assert.Equal(EyeRestPolicy.NoticeOptions[^1], EyeRestPolicy.NoticeAt(999));
+    }
+
+    /// <summary>
+    /// 这次改判的核心：三档各自回答<b>两个问题</b>，而且"盖暗幕"与"扣住用户"必须能分开成立。
+    /// 旧形状把两者绑成一颗布尔，于是 <c>(暗幕，可提前结束)</c> 这一格是空的——用户原话
+    /// "要么无法使用暗幕，要么使用暗幕时无法提前跳过"。这一枚测钉的就是那一格必须存在。
+    /// </summary>
+    [Theory]
+    [InlineData(EyeRestNotice.Bubble, false, true)]    // 什么都不盖
+    [InlineData(EyeRestNotice.Curtain, true, true)]    // 新增的那一格：盖幕布，但点得开
+    [InlineData(EyeRestNotice.Forced, true, false)]    // 盖幕布且扣住（原规格那条"防形同虚设"仍在）
+    public void TheCurtainAndTheExitAreTwoSeparateQuestions(EyeRestNotice notice, bool usesCurtain, bool skippable)
+    {
+        Assert.Equal(usesCurtain, EyeRestPolicy.UsesCurtain(notice));
+        Assert.Equal(skippable, EyeRestPolicy.IsSkippable(notice));
+    }
+
+    /// <summary>
+    /// 默认档必须是中间那一档：默认成"强制"＝一打开护眼就吃一次锁屏（惊吓），
+    /// 默认成"气泡"＝这次改判要治的原始形状又回来了（想看看暗幕必须先接受不能退出）。
+    /// </summary>
+    [Fact]
+    public void DefaultNotice_UsesTheCurtain_AndIsStillSkippable()
+    {
+        Assert.True(EyeRestPolicy.UsesCurtain(EyeRestPolicy.DefaultNotice));
+        Assert.True(EyeRestPolicy.IsSkippable(EyeRestPolicy.DefaultNotice));
+        Assert.Equal(EyeRestNotice.Curtain, EyeRestPolicy.DefaultNotice);
+    }
+
+    /// <summary>
+    /// 幕布上那句退出说明<b>不许承诺按键</b>：这扇窗不抢焦点，而按键只投递给有焦点的窗，
+    /// 所以写"按 Esc 可提前结束"是把一条做不到的出口印在屏幕上。给的出口是鼠标（点击不依赖焦点）。
+    /// </summary>
+    [Theory]
+    [InlineData(EyeRestNotice.Bubble)]
+    [InlineData(EyeRestNotice.Curtain)]
+    [InlineData(EyeRestNotice.Forced)]
+    public void NoticeHint_NeverPromisesAKeystroke_TheCurtainCannotReceive(EyeRestNotice notice)
+    {
+        var hint = EyeRestPolicy.NoticeHint(notice);
+        Assert.DoesNotContain("Esc", hint, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("按键", hint);
+        if (EyeRestPolicy.IsSkippable(notice)) Assert.Contains("点一下", hint);
+        else Assert.Contains("不能提前结束", hint);
+    }
+
+    /// <summary>状态行与下拉共用一份措辞；认不得的值也要说得出默认档那一句（不能空着）。</summary>
+    [Fact]
+    public void NoticeLabel_FallsBackToTheDefaultWordings_AsWell()
+    {
+        Assert.Equal(EyeRestPolicy.NoticeLabels[EyeRestPolicy.NoticeIndexOf(EyeRestPolicy.DefaultNotice)],
+            EyeRestPolicy.NoticeLabel(EyeRestPolicy.DefaultNotice));
+        Assert.Equal(EyeRestPolicy.NoticeLabel(EyeRestPolicy.DefaultNotice),
+            EyeRestPolicy.NoticeLabel((EyeRestNotice)7));
+    }
+
+    /// <summary>
+    /// 秒数只有一个出处：幕布上写的"20 秒走完"必须跟着 <see cref="EyeRestPolicy.RestSeconds"/> 动——
+    /// 倒数到 30 而说明写着 20 是用户第一眼看得见的自相矛盾（同批次 WR 那条"档位要落到最终产物"）。
+    /// </summary>
+    [Fact]
+    public void TheSecondsInTheWordingComeFromRestSeconds()
+    {
+        Assert.Contains(EyeRestPolicy.RestSeconds.ToString(),
+            EyeRestPolicy.NoticeHint(EyeRestNotice.Forced));
+        Assert.Contains(EyeRestPolicy.RestSeconds.ToString(),
+            EyeRestPolicy.NoticeLabel(EyeRestNotice.Forced));
+    }
+
     // ────────── 全屏几何判据 ──────────
 
     private static readonly IntRect Screen = new(0, 0, 1920, 1080);

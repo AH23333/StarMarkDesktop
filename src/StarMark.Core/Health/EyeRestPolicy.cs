@@ -7,6 +7,31 @@ using StarMark.Abstractions.Capture;
 namespace StarMark.Core.Health;
 
 /// <summary>
+/// 到点之后<b>用什么形式提醒</b>（批次 RS，用户裁决：把"暗幕"从"强制休息"里解出来）。
+/// <para>
+/// 旧形状是一个布尔（<c>EyeRestEnforced</c>）：<b>暗幕被绑在强制上</b>——不开强制就只有气泡，于是"试一试当前设置的效果"
+/// 试不到暗幕，而开了强制又 20 秒不能提前结束（发起人原话："要么无法使用暗幕，要么使用暗幕时无法提前跳过"）。
+/// 现在"出现什么"与"能不能提前退出"合成<b>一个三档选择</b>，两件事各有其位置：
+/// </para>
+/// <list type="bullet">
+/// <item><description><see cref="Bubble"/>：只发托盘气泡（最轻，什么都不盖）。</description></item>
+/// <item><description><see cref="Curtain"/>：盖一层暗幕，<b>点一下屏幕就提前结束</b>——这是新的默认档。</description></item>
+/// <item><description><see cref="Forced"/>：盖暗幕且<b>不接任何退出</b>，20 秒走完才恢复（原规格那条"Esc 不跳过，防形同虚设"仍在，只是不再是拿到暗幕的唯一代价）。</description></item>
+/// </list>
+/// <para><b>数值钉死，不靠声明顺序</b>：这个枚举按整数落进 <c>settings.json</c>（同 <c>ItemType</c>／<c>WidgetChromeMode</c>
+/// 批次 EV 立下的口径）——中间插一档或换顺序会让用户已有的设置静默变成另一档。</para>
+/// </summary>
+public enum EyeRestNotice
+{
+    /// <summary>只发托盘气泡。</summary>
+    Bubble = 0,
+    /// <summary>暗幕 + 可提前结束。</summary>
+    Curtain = 1,
+    /// <summary>暗幕 + 不可跳过。</summary>
+    Forced = 2,
+}
+
+/// <summary>
 /// 护眼节拍的纯逻辑：什么时候该提醒、前台全屏时怎么让路、一次提醒之后从哪里重新开始。
 /// <para>
 /// 之所以把这套判定从服务里抽出来：它每一条都对应一种"只有真机才看得见"的难受——
@@ -20,6 +45,9 @@ namespace StarMark.Core.Health;
 /// </summary>
 public sealed class EyeRestPolicy
 {
+    /// <summary>默认提醒形式＝<b>暗幕，可点一下提前结束</b>（批次 RS 用户裁决：暗幕不该被强制休息绑住）。</summary>
+    public const EyeRestNotice DefaultNotice = EyeRestNotice.Curtain;
+
     /// <summary>默认工作间隔（分钟）。规格 §2.7 定的 45 分钟。</summary>
     public const int DefaultIntervalMinutes = 45;
 
@@ -51,6 +79,78 @@ public sealed class EyeRestPolicy
             if (Math.Abs(IntervalOptions[i] - want) < Math.Abs(IntervalOptions[best] - want)) best = i;
         return best;
     }
+
+    /// <summary>
+    /// 提醒形式的三档（<b>顺序就是界面上的顺序</b>）。默认 <see cref="EyeRestNotice.Curtain"/>：
+    /// 发起人这次的裁决就是"暗幕不该被强制休息绑住"，所以默认给看得见效果的那一档。
+    /// </summary>
+    public static readonly EyeRestNotice[] NoticeOptions =
+        { EyeRestNotice.Bubble, EyeRestNotice.Curtain, EyeRestNotice.Forced };
+
+    /// <summary>给界面下拉用的三档文案（与 <see cref="NoticeOptions"/> 同序；文案与数值一处，理由同 <see cref="IntervalLabels"/>）。
+    /// <para><b>秒数从 <see cref="RestSeconds"/> 来，不写进字符串里</b>：档位话说"20 秒"而遮罩倒数到 30 是用户第一眼看得见的自相矛盾。</para></summary>
+    public static IReadOnlyList<string> NoticeLabels { get; } =
+    [
+        "只发托盘气泡（什么都不盖）",
+        "盖一层暗幕（点一下屏幕即可提前结束）",
+        $"盖一层暗幕且 {RestSeconds} 秒不可跳过（强制休息）",
+    ];
+
+    /// <summary>某一档在下拉里排第几（认不得的值先走 <c>ClampNotice</c> 回落，不抛）。</summary>
+    public static int NoticeIndexOf(EyeRestNotice notice) => Array.IndexOf(NoticeOptions, ClampNotice(notice));
+
+    /// <summary>
+    /// 某一档怎么说（下拉项、状态行、日志、「试一试」的回执共用这一条）。
+    /// <para>"这一档到底会发生什么"写两份就会有一份漏掉——批次 RS 之前正是两份（强制那句写了"不能提前跳过"，
+    /// 气泡那句没写"点一下屏幕"），所以这里只留一处出处，界面各处都来取。</para>
+    /// </summary>
+    public static string NoticeLabel(EyeRestNotice notice) => NoticeLabels[NoticeIndexOf(notice)];
+
+    /// <summary>第 <paramref name="index"/> 档是哪一种（下标越界夹到两端，不抛）。</summary>
+    public static EyeRestNotice NoticeAt(int index)
+        => NoticeOptions[Math.Clamp(index, 0, NoticeOptions.Length - 1)];
+
+    /// <summary>
+    /// 这一档是哪一种提醒形式。<b>读不出来（缺字段、或认不得的数值）回默认档</b>（＝暗幕可跳），
+    /// <b>不夹到最近一端</b>：万一将来多出一个第四档、或有人手改出一个 7，静默变成"强制不可跳"
+    /// ＝替一处数据损坏把用户所有退出出口关掉。
+    /// <para>同一个函数也兜"传进来的枚举值本身不合法"（<c>(EyeRestNotice)7</c> 这种）——
+    /// 判据只有一份，读取侧与使用侧走同一次夹（记忆 ⑧）。</para>
+    /// </summary>
+    public static EyeRestNotice ClampNotice(int? raw)
+        => raw is { } value && IsKnownNotice(value) ? (EyeRestNotice)value : DefaultNotice;
+
+    /// <summary>枚举版的同一道夹（调用方拿到的是枚举时用这条，别再自己判）。</summary>
+    public static EyeRestNotice ClampNotice(EyeRestNotice notice)
+        => IsKnownNotice((int)notice) ? notice : DefaultNotice;
+
+    /// <summary>
+    /// 存档里读出来的那个数是不是一个<b>认得的</b>档（0/1/2）。只由上面的 <c>ClampNotice</c> 使用——
+    /// 单独暴露它是为了让"设置页下拉的选项数"这类普查能问同一份事实，而不是各自数一遍。
+    /// </summary>
+    public static bool IsKnownNotice(int raw) => raw is (int)EyeRestNotice.Bubble or (int)EyeRestNotice.Curtain or (int)EyeRestNotice.Forced;
+
+    /// <summary>这一档要不要盖暗幕（气泡档之外都盖）。</summary>
+    public static bool UsesCurtain(EyeRestNotice notice) => notice != EyeRestNotice.Bubble;
+
+    /// <summary>
+    /// 这一档<b>允不允许用户提前结束</b>。只有强制档不允许——那是它唯一的语义，
+    /// 所以绝不能反过来推："盖了暗幕"不等于"扣住用户"（旧形状正是这么绑的，才产生那句"要么用不上、要么退不出"）。
+    /// </summary>
+    public static bool IsSkippable(EyeRestNotice notice) => notice != EyeRestNotice.Forced;
+
+    /// <summary>
+    /// 幕布上那一句退出说明。两档暗幕各说一条，且<b>只在这里写一次</b>：界面（设置页／组件菜单）要说同一件事时
+    /// 也来这儿取，免得"能不能提前退出"这类话在四处各写一份、其中一处漏掉。
+    /// <para><b>刻意不承诺 Esc</b>：幕布是"点亮但不抢焦点"的窗（抢了就会把用户正在填的表单的打字吞进一扇空窗），
+    /// 而按键只投递给有焦点的窗 ⇒ 不激活就收不到 Esc。可跳过档给的是<b>鼠标出口</b>（点一下即可，
+    /// 点击不依赖焦点），这也符合"不吃键盘的覆盖窗要留纯鼠标出口"那条既有口径。</para>
+    /// </summary>
+    public static string NoticeHint(EyeRestNotice notice) => notice switch
+    {
+        EyeRestNotice.Forced => $"这一轮是强制休息：{RestSeconds} 秒走完会自动恢复，中途不能提前结束。",
+        _ => "想提前结束就点一下屏幕任意处；什么都不做的话，时间到了会自动恢复。",
+    };
 
     /// <summary>强制模式下遮罩停留多久（秒）。20 秒是"看远处"够用的最短值，再长就从护眼变成惩罚。</summary>
     public const int RestSeconds = 20;

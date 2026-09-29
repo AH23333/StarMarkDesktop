@@ -14,7 +14,8 @@ namespace StarMark.UI.Services;
 
 /// <summary>
 /// 护眼 / 休息提醒的编排：一张 15 秒的表看节拍，到点决定"弹／让路／安静重来一轮"，
-/// 强制模式给每屏一张 20 秒暗幕，非强制模式只发一条托盘气泡。
+/// 再按<b>提醒形式那一档</b>演一次：气泡档只发一条托盘气泡，暗幕与强制档给每屏一张 20 秒暗幕
+/// （暗幕档点一下就收，强制档一条退出都不接）。
 /// <para>
 /// 三条设计要点都是"只有真机才看得见"的坑，写在这里备忘：
 /// ① <b>没到点不做任何 P/Invoke</b>（探前台窗口是每 15 秒的事，不是每秒的事——规格 §9 的性能条）；
@@ -118,14 +119,16 @@ public static class EyeRestService
         }
 
         policy.Reset(now);                                        // 先重置再展示（见类型注释 ②）
-        BeginRest(interval, settings.LoadEyeRestEnforced());
+        BeginRest(interval, settings.LoadEyeRestNotice());
     }
 
     /// <summary>
-    /// 演一次提醒：<b>开着强制就盖幕布，否则只发一条气泡</b>。回报"屏幕上真的有东西出来没有"——
+    /// 演一次提醒：<b>气泡档只发一条气泡，暗幕与强制档各盖一层幕布</b>（"出现什么"与"能不能提前退出"
+    /// 由 <see cref="EyeRestPolicy"/> 的 <c>UsesCurtain</c>／<c>IsSkippable</c> 两条各自回答，不再绑成一件事）。
+    /// 回报"屏幕上真的有东西出来没有"——
     /// 到点那条路不需要这个答案（它只管演），但设置页的「试一试」必须能区分"演过了"和"什么都没发生"。
     /// </summary>
-    private static bool BeginRest(int intervalMinutes, bool enforced)
+    private static bool BeginRest(int intervalMinutes, EyeRestNotice notice)
     {
         if (_overlays.Count > 0)
         {
@@ -134,10 +137,10 @@ public static class EyeRestService
             return false;
         }
 
-        if (!enforced)
+        if (!EyeRestPolicy.UsesCurtain(notice))
         {
             var shown = Notify("该休息一下了", RestBody(intervalMinutes));
-            StarLog.Info($"[EyeRest] 气泡提醒已发出（间隔 {intervalMinutes} 分钟，非强制）");
+            StarLog.Info($"[EyeRest] 气泡提醒已发出（间隔 {intervalMinutes} 分钟，提醒形式：{EyeRestPolicy.NoticeLabel(notice)}）");
             return shown;
         }
 
@@ -161,8 +164,9 @@ public static class EyeRestService
         {
             foreach (var monitor in monitors)
             {
-                var overlay = new EyeRestOverlayWindow(monitor);
-                overlay.SetMessage(intervalMinutes);
+                var overlay = new EyeRestOverlayWindow(monitor, notice);
+                overlay.SkipRequested += SkipRest;                 // 只有可跳档会挂输入，所以强制档发不出这一句
+                overlay.SetMessage(intervalMinutes, notice);
                 _overlays.Add(overlay);
             }
         }
@@ -187,12 +191,27 @@ public static class EyeRestService
         _rest.Tick += OnRestTick;
         _rest.Start();
         RestOnce();                                                // 读数先写上，别空一帧才出现"20"
-        StarLog.Info($"[EyeRest] 强制休息开始：{EyeRestPolicy.RestSeconds} 秒 × {_overlays.Count} 屏");
+        StarLog.Info($"[EyeRest] 暗幕已盖上：{EyeRestPolicy.RestSeconds} 秒 × {_overlays.Count} 屏"
+            + $"（{(EyeRestPolicy.IsSkippable(notice) ? "点一下屏幕即可提前结束" : "强制档，中途不能提前结束")}）");
         return true;
     }
 
     /// <summary>
-    /// 设置页的「试一试」：按<b>当前设置</b>原样演一次（开着强制＝盖 20 秒幕布，否则＝一条气泡）。
+    /// 提前结束这一轮暗幕（可跳档下用户点了一下屏幕）。幂等：倒数刚好走完时第二次点击不该报错。
+    /// <para><b>节拍不重新起算</b>——提醒在幕布盖上那一刻就已经计过一轮了，"点一下就当没休息过、
+    /// 再等 45 分钟"会变成对提前退出的惩罚，反而让人不敢点。</para>
+    /// </summary>
+    public static void SkipRest()
+    {
+        if (_overlays.Count == 0) return;
+        _rest?.Stop();
+        CloseOverlays();
+        StarLog.Info("[EyeRest] 用户点了一下屏幕，本轮暗幕提前结束");
+    }
+
+    /// <summary>
+    /// 设置页的「试一试」：按<b>当前那一档</b>原样演一次（气泡档＝一条气泡，暗幕／强制档＝盖 20 秒幕布，
+    /// 暗幕档点一下就能结束）。
     /// <b>不动节拍</b>——演一次不等于真休息过一轮，下一次该几点还是几点。
     /// 没有这条出口，用户只能等满间隔才知道自己配的到底是什么效果，而"等 15 分钟验证一个开关"
     /// 等于没给验证路径。
@@ -204,7 +223,7 @@ public static class EyeRestService
             StarLog.Info("[EyeRest] 护眼未开启（节拍表没挂上），试一试没有可演的东西");
             return false;
         }
-        return BeginRest(settings.LoadEyeRestIntervalMinutes(), settings.LoadEyeRestEnforced());
+        return BeginRest(settings.LoadEyeRestIntervalMinutes(), settings.LoadEyeRestNotice());
     }
 
     /// <summary>四处出口共用一条文案：差别只在"用什么形式出现"，内容不一样会让人以为是两件事。</summary>

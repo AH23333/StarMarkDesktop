@@ -65,9 +65,10 @@ public sealed class SettingsTaxonomyGateTests
         var writable = new[]
         {
             "BackdropIndex", "MainWindowBackdropIndex", "WidgetOpacity", "MainWindowOpacity",
-            "LocalDiskSearchEnabled", "EyeRestEnabled", "EyeRestEnforced", "EyeRestDeferOnFullscreen",
-            // 护眼那颗下拉以前漏登记过（批次 BK 补上）：不登记的话"只有一个编辑入口"对它根本不成立。
-            "EyeRestIntervalIndex",
+            "LocalDiskSearchEnabled", "EyeRestEnabled", "EyeRestDeferOnFullscreen",
+            // 护眼那两颗下拉以前漏登记过（批次 BK 补上，批次 RS 把"强制"开关换成提醒形式那一颗）：
+            // 不登记的话"只有一个编辑入口"对它根本不成立。
+            "EyeRestIntervalIndex", "EyeRestNoticeIndex",
             "TrendingEnabled", "ClipboardHistoryEnabled", "EnableTray", "MinimizeToTray", "GithubToken",
             "CanvasEnabled", "CanvasInScreenshots",
             // 批次 RN：光标那块圆的半径（滑杆）。不登记的话"只有一个编辑入口"对它根本不成立。

@@ -202,9 +202,10 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         /// <b>不夹到边界</b>：夹到 5 等于把一处存档损坏放大成"每 5 分钟打断一次"。</summary>
         public int? EyeRestIntervalMinutes { get; set; }
 
-        /// <summary>强制模式：全屏遮罩 + 20 秒倒数（按规格 Esc 不跳过，防形同虚设）。
-        /// <b>默认关</b>——刚打开护眼就吃一次锁屏是惊吓；先气泡，想要锁再勾这条。</summary>
-        public bool? EyeRestEnforced { get; set; }
+        /// <summary>提醒形式（0 气泡／1 暗幕可跳／2 强制不可跳，见 <c>EyeRestNotice</c>）。缺省与认不得的数值
+        /// 都由 <c>EyeRestPolicy.ClampNotice</c> 回落默认档（暗幕可跳），<b>不夹到最近一端</b>：
+        /// 把一处存档损坏静默放大成"强制不可跳"＝替它把用户所有退出出口关掉。</summary>
+        public int? EyeRestNotice { get; set; }
 
         /// <summary>前台是全屏应用时让路（放 PPT / 放映 / 全屏游戏不被遮罩砸）。默认开。</summary>
         public bool? EyeRestDeferOnFullscreen { get; set; }

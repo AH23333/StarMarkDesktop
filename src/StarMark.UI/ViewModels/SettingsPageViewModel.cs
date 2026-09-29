@@ -304,7 +304,8 @@ public partial class SettingsPageViewModel : ObservableObject
         EyeRestEnabled = Safe(_settings.LoadEyeRestEnabled, false, "护眼提醒");
         EyeRestIntervalIndex = StarMark.Core.Health.EyeRestPolicy.IntervalIndexOf(
             Safe(_settings.LoadEyeRestIntervalMinutes, StarMark.Core.Health.EyeRestPolicy.DefaultIntervalMinutes, "护眼间隔"));
-        EyeRestEnforced = Safe(_settings.LoadEyeRestEnforced, false, "护眼强制模式");
+        EyeRestNoticeIndex = StarMark.Core.Health.EyeRestPolicy.NoticeIndexOf(
+            Safe(_settings.LoadEyeRestNotice, StarMark.Core.Health.EyeRestPolicy.DefaultNotice, "护眼提醒形式"));
         EyeRestDeferOnFullscreen = Safe(_settings.LoadEyeRestDeferOnFullscreen, true, "护眼全屏让路");
         _suppressEyeRestApply = false;
         EyeRestStatus = BuildEyeRestStatus();

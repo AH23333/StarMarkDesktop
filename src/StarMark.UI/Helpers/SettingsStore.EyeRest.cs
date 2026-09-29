@@ -17,7 +17,7 @@ using StarMark.UI.Services;   // 热键注册投影要问"此刻的会话态"（
 namespace StarMark.UI.Helpers;
 
 /// <summary>
-/// SettingsStore 的这一段——护眼/休息提醒那组：开关、间隔、强制与全屏时暂缓。
+/// SettingsStore 的这一段——护眼/休息提醒那组：开关、间隔、提醒形式（气泡／暗幕／强制）与全屏时暂缓。
 /// <para>按访问面拆出来的 partial：<b>不持有任何状态</b>——字段与构造都住在主文件里，这里只放"同一件事的那几条出口"，好让主文件回到能一眼看完的尺寸。</para>
 /// </summary>
 public sealed partial class SettingsStore
@@ -35,8 +35,14 @@ public sealed partial class SettingsStore
                 ? d.EyeRestIntervalMinutes ?? StarMark.Core.Health.EyeRestPolicy.DefaultIntervalMinutes
                 : StarMark.Core.Health.EyeRestPolicy.DefaultIntervalMinutes);
 
-    /// <summary>强制模式（<b>默认关</b>：刚开护眼就吃一次锁屏是惊吓）。</summary>
-    public bool LoadEyeRestEnforced() => Load() is { } d && d.EyeRestEnforced == true;
+    /// <summary>
+    /// 提醒形式（<b>默认暗幕＋可点一下提前结束</b>）。批次 RS 之前这里是两个布尔：强制开＝暗幕且不能退出，
+    /// 强制关＝只有气泡——于是"想看看暗幕什么效果"必须先接受"被扣 20 秒"。
+    /// <para>存档里那个整数<b>只认 0/1/2</b>（<c>IsKnownNotice</c>）：认不得的一律回默认档，<b>不夹到最近一端</b>——
+    /// 万一将来多了第四档，旧版本读到它若静默变成"强制不可跳"，就是把一处数据损坏放大成"关掉所有退出出口"。</para>
+    /// </summary>
+    public StarMark.Core.Health.EyeRestNotice LoadEyeRestNotice()
+        => StarMark.Core.Health.EyeRestPolicy.ClampNotice(Load()?.EyeRestNotice);
 
     /// <summary>全屏让路（默认开）。</summary>
     public bool LoadEyeRestDeferOnFullscreen() => Load() is not { } d || d.EyeRestDeferOnFullscreen != false;
@@ -44,13 +50,15 @@ public sealed partial class SettingsStore
     /// <summary>
     /// 四项一次落盘：这四条说的是同一件事（怎么提醒），分开写就是"改了间隔但没改开关"这类半套状态的来源，
     /// 而且设置页的自动保存按 350 ms 节奏整档读写，一次写完比四次省（P-43 同一口径）。
+    /// 间隔与提醒形式<b>进门就夹</b>，不指望调用方先兜一遍（与 <see cref="LoadEyeRestIntervalMinutes"/> 两头各夹一次，
+    /// 漏一头就会出现"界面显示的与实际用的不是同一个数"）。
     /// </summary>
-    public void SaveEyeRest(bool enabled, int intervalMinutes, bool enforced, bool deferOnFullscreen)
+    public void SaveEyeRest(bool enabled, int intervalMinutes, StarMark.Core.Health.EyeRestNotice notice, bool deferOnFullscreen)
     {
         var d = Load() ?? new SettingsData();
         d.EyeRestEnabled = enabled;
         d.EyeRestIntervalMinutes = StarMark.Core.Health.EyeRestPolicy.ClampInterval(intervalMinutes);
-        d.EyeRestEnforced = enforced;
+        d.EyeRestNotice = (int)StarMark.Core.Health.EyeRestPolicy.ClampNotice(notice);
         d.EyeRestDeferOnFullscreen = deferOnFullscreen;
         Save(d);
     }

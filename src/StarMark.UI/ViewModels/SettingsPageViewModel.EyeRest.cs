@@ -40,8 +40,12 @@ public partial class SettingsPageViewModel
     /// <summary>间隔档位在 <see cref="StarMark.Core.Health.EyeRestPolicy.IntervalOptions"/> 里的下标（是档位不是滑杆）。</summary>
     [ObservableProperty] private int _eyeRestIntervalIndex;
 
-    /// <summary>强制模式：盖一层 20 秒暗幕（按规格 Esc 不跳过）。关＝只发托盘气泡。</summary>
-    [ObservableProperty] private bool _eyeRestEnforced;
+    /// <summary>
+    /// 提醒形式在那三档里的下标（气泡／暗幕可跳／强制不可跳）。
+    /// <para>批次 RS 之前这是一颗"强制模式"开关，于是<b>暗幕被绑在强制上</b>：想用暗幕就必须接受不能提前结束，
+    /// 「试一试」也试不到暗幕。现在它是三档里选一档，"出现什么"与"能不能退出"各有位置。</para>
+    /// </summary>
+    [ObservableProperty] private int _eyeRestNoticeIndex;
 
     /// <summary>前台是全屏应用时让路（放 PPT / 放映不被砸）。默认开。</summary>
     [ObservableProperty] private bool _eyeRestDeferOnFullscreen;
@@ -54,7 +58,13 @@ public partial class SettingsPageViewModel
     /// <summary>下拉的档位文案，与 <see cref="EyeRestIntervalIndex"/> 同序（一处事实：档位与文案都在 Core）。</summary>
     public IReadOnlyList<string> EyeRestIntervalOptions => StarMark.Core.Health.EyeRestPolicy.IntervalLabels;
 
+    /// <summary>提醒形式的三档文案，与 <see cref="EyeRestNoticeIndex"/> 同序。</summary>
+    public IReadOnlyList<string> EyeRestNoticeOptions => StarMark.Core.Health.EyeRestPolicy.NoticeLabels;
+
     private int EyeRestIntervalMinutes => StarMark.Core.Health.EyeRestPolicy.IntervalAt(EyeRestIntervalIndex);
+
+    /// <summary>下拉那一档是哪一种提醒形式（越界由 Core 夹到两端，不抛）。</summary>
+    private StarMark.Core.Health.EyeRestNotice CurrentEyeRestNotice => StarMark.Core.Health.EyeRestPolicy.NoticeAt(EyeRestNoticeIndex);
 
     private bool _suppressEyeRestApply;
 
@@ -70,7 +80,7 @@ public partial class SettingsPageViewModel
         ApplyEyeRestSwitch();
     }
 
-    partial void OnEyeRestEnforcedChanged(bool value)
+    partial void OnEyeRestNoticeIndexChanged(int value)
     {
         if (_suppressEyeRestApply) return;
         ApplyEyeRestSwitch();
@@ -84,7 +94,7 @@ public partial class SettingsPageViewModel
 
     private void ApplyEyeRestSwitch()
     {
-        _settings.SaveEyeRest(EyeRestEnabled, EyeRestIntervalMinutes, EyeRestEnforced, EyeRestDeferOnFullscreen);
+        _settings.SaveEyeRest(EyeRestEnabled, EyeRestIntervalMinutes, CurrentEyeRestNotice, EyeRestDeferOnFullscreen);
         App.ApplyEyeRest(EyeRestEnabled);
         EyeRestStatus = BuildEyeRestStatus();
         // 设置一变，上一次"试一试"演出来的就已经不是当前配置了：留着那行会读成"刚验证过现在的设置"
@@ -94,14 +104,14 @@ public partial class SettingsPageViewModel
     /// <summary>
     /// 状态行说三件事：怎么提醒、全屏时让不让路、下一次大约几点。
     /// "开着但表没挂上"必须自己承认——用户没法用眼睛验证一张定时器在不在跑。
+    /// <para>那一档怎么说取 <c>EyeRestPolicy.NoticeLabel</c>：与下拉里看到的是同一句，
+    /// 免得状态行自己攒第二份"这一档会发生什么"（漏掉"点一下可提前结束"就是这一族最典型的形状）。</para>
     /// </summary>
     private string BuildEyeRestStatus()
     {
         if (!EyeRestEnabled)
             return "已关闭：不建定时器、不探测前台窗口，屏幕上不会出现任何东西。";
-        var how = EyeRestEnforced
-            ? $"连续工作约 {EyeRestIntervalMinutes} 分钟后盖一层 20 秒暗幕（倒数期间 Esc 与点击都不能提前跳过）"
-            : $"连续工作约 {EyeRestIntervalMinutes} 分钟后发一条托盘气泡";
+        var how = $"连续工作约 {EyeRestIntervalMinutes} 分钟后：{StarMark.Core.Health.EyeRestPolicy.NoticeLabel(CurrentEyeRestNotice)}";
         var defer = EyeRestDeferOnFullscreen ? "；前台是全屏应用（放 PPT / 放映）时自己让路" : "；全屏应用下也照常提醒";
         var running = StarMark.UI.Services.EyeRestService.IsRunning;
         var next = running && StarMark.UI.Services.EyeRestService.NextDueAt is { } due
@@ -112,7 +122,7 @@ public partial class SettingsPageViewModel
     }
 
     /// <summary>
-    /// 「试一试」：按<b>当前设置</b>原样演一次。没有这条出口，用户只能等满间隔才知道自己配的到底是什么
+    /// 「试一试」：按<b>当前那一档</b>原样演一次。没有这条出口，用户只能等满间隔才知道自己配的到底是什么
     /// 效果——而"等 15 分钟验证一个开关"等于没给验证路径。演的内容不动节拍（见 <c>EyeRestService.Preview</c>）。
     /// </summary>
     [RelayCommand]
@@ -121,11 +131,13 @@ public partial class SettingsPageViewModel
         var did = StarMark.UI.Services.EyeRestService.Preview();
         EyeRestPreviewStatus = did switch
         {
+            // 盖上幕布时把幕布上那句退出说明同样说一遍：这一行与屏幕上那块幕布不许对不上（强制档可点不开，
+            // 让人以为"再点一下就行"，正是这次改判要治的那种措辞）。
             true when StarMark.UI.Services.EyeRestService.IsResting
-                => "已演一次：20 秒暗幕盖屏，倒数期间按 Esc、点鼠标都不能提前跳过。",
+                => "已演一次：暗幕已经盖上。" + StarMark.Core.Health.EyeRestPolicy.NoticeHint(CurrentEyeRestNotice),
             true => "已演一次：发了一条提醒（托盘在跑走气泡，否则走主窗提示条）。",
             false when StarMark.UI.Services.EyeRestService.IsResting
-                => "幕布还盖着屏，等这一轮倒数完再按。",
+                => "幕布还盖着屏，等这一轮结束再按（能不能提前点掉按上面那一档的说法）。",
             false => "没演成：护眼开关没打开时不建节拍表，也就没有可演的东西（先开启本卡片顶部的开关）。",
         };
     }

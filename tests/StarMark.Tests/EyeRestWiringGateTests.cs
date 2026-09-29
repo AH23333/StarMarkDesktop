@@ -9,7 +9,8 @@ namespace StarMark.Tests;
 /// <para>
 /// 节拍判据本身已经由 <see cref="EyeRestPolicyTests"/> 用注入时刻钉死了；这里守的是另一类错：
 /// <b>只有真机才看得见、但一写错就变成"打扰别人"或"整个功能失效"的那几条链路约束</b>——
-/// 幕布能不能被 Esc 提前揭开（规格点名"防形同虚设"）、幕布抢不抢焦点（抢了会把用户正在填的表单弄丢）、
+/// 幕布按档位决定接不接退出（可跳档必须点得开、强制档一条都不接，批次 RS 把这两件事解开了）、
+/// 幕布抢不抢焦点（抢了会把用户正在填的表单弄丢）、
 /// 没到点就去探前台窗口（每 15 秒一次 P/Invoke）、遮罩建不起来时有没有降级出口、
 /// 以及"关掉护眼之后屏幕还黑着"这种最糟糕的收尾。
 /// </para>
@@ -29,23 +30,42 @@ public sealed class EyeRestWiringGateTests
     private const string MainWindow = "src/StarMark.UI/MainWindow.xaml.cs";
     private const string SettingsPageXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
 
-    // ────────── 幕布：不给任何提前跳过的出口，但不抢焦点 ──────────
+    /// <summary>
+    /// <c>BeginRest</c> 的整条签名（三处闸门都要切进它的方法体）。写成一份常量而不是各写一遍：
+    /// 改签名时漏掉一处，那一处的判据就会静默永不生效（比红测危险）。
+    /// </summary>
+    private const string BeginRest = "private static bool BeginRest(int intervalMinutes, EyeRestNotice notice)";
+
+    // ────────── 幕布：键盘一条都不接，鼠标按档位接 ──────────
 
     [Fact]
-    public void OverlayRegistersNoKeyOrMouseHandling_SoEscCannotSkipIt()
+    public void TheCurtainNeverTakesKeys_ButASkippableNoticeTakesAMouseExit()
     {
         var xaml = SourceGate.ReadRepoFile(OverlayXaml);
         var code = SourceGate.ReadRepoFile(OverlayCode);
 
-        // 规格 §2.7：倒数期间 Esc 不跳过。只要注册了任何输入处理，就存在"某条键能揭开"的可能，
-        // 而这种口子一旦开，护眼就形同虚设——所以这里钉的是"一条都不注册"。
-        foreach (var forbidden in new[] { "KeyDown", "PreviewKeyDown", "KeyUp", "AcceleratorKey",
-                                          "PointerPressed", "PointerReleased", "Tapped", "AddHandler" })
+        // 幕布从来没有焦点，按键根本不会投递到它身上——"强制档不可跳过"是按构造成立的。
+        // 但这条不能靠"忘了写"来兜：挂键盘的那几种拼法一条都不许出现（出现了就说明有人在往回退这次改判）。
+        foreach (var forbidden in new[] { "KeyDown", "PreviewKeyDown", "KeyUp", "AcceleratorKey", "AddHandler", "Escape" })
         {
             Assert.DoesNotContain(forbidden, xaml);
             Assert.DoesNotContain(forbidden, code);
         }
-        Assert.DoesNotContain("Escape", code);
+
+        // 可跳档必须有鼠标出口（批次 RS 用户裁决：暗幕不该被"不能提前结束"绑住）。
+        var enable = SourceGate.MethodBody(code, "private void EnableSkipByClicking()");
+        Assert.Contains("Root.PointerPressed", enable);
+        // 第一次点击常被系统当作"激活这扇窗"而吞掉输入，所以激活那条也要认——但只认 PointerActivated：
+        // 点亮那一步（AppWindow.Show）自己带来的激活是 CodeActivated，认了它就会出现"幕布刚盖上就自己收了"。
+        Assert.Contains("WindowActivationState.PointerActivated", enable);
+
+        // 而挂不挂必须由档位决定：无条件挂＝强制档一点就开，那才是规格点名的"形同虚设"。
+        var ctor = SourceGate.MethodBody(code, "public EyeRestOverlayWindow((string Device");
+        Assert.Contains("if (EyeRestPolicy.IsSkippable(notice)) EnableSkipByClicking();", ctor);
+        // 挂在还原前台之后（同上：先挂上就把自己收了）
+        Assert.True(ctor.IndexOf("SetForegroundWindow(previous)", StringComparison.Ordinal)
+            < ctor.IndexOf("EnableSkipByClicking();", StringComparison.Ordinal),
+            "退出出口必须挂在点亮并还原前台之后");
     }
 
     [Fact]
@@ -109,11 +129,13 @@ public sealed class EyeRestWiringGateTests
     [Fact]
     public void EveryCurtainFailurePathDowngradesToABubble()
     {
-        var body = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static bool BeginRest(int intervalMinutes, bool enforced)");
-        // 一条正常出口（非强制＝只发气泡）+ 三条失败退路（取显示器列表抛／系统没报告显示器／遮罩建到一半抛）
+        var body = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), BeginRest);
+        // 一条正常出口（气泡档＝只发气泡）+ 三条失败退路（取显示器列表抛／系统没报告显示器／遮罩建到一半抛）
         // 都必须各有一条气泡出口，而不是静默不提醒——"到点了但什么都没发生"和"没到点"在用户侧长得一模一样。
         Assert.Equal(4, SourceGate.Count(body, "Notify(\"该休息一下了\""));
         Assert.Contains("CloseOverlays();", body);        // 建到一半失败：先收干净已建的，再降级
+        // 分流只看 Core 的两条判据，不看"这一档是不是强制"：合成就回到旧形状（想用暗幕必须先接受不能退出）。
+        Assert.Contains("if (!EyeRestPolicy.UsesCurtain(notice))", body);
     }
 
     [Fact]
@@ -169,25 +191,48 @@ public sealed class EyeRestWiringGateTests
     public void EverythingDefaultsToOff_ExceptTheFullscreenCourtesy()
     {
         var store = SourceGate.ReadRepoPartials(Settings);
-        // 开关与强制模式默认关（"== true"）；让路默认开（"!= false"）——不请自来的遮罩是最讨人嫌的一种帮忙，
+        // 开关默认关（"== true"）；让路默认开（"!= false"）——不请自来的遮罩是最讨人嫌的一种帮忙，
         // 而"放 PPT 被砸"是要默认防的那一侧。
         Assert.Contains("public bool LoadEyeRestEnabled() => Load() is { } d && d.EyeRestEnabled == true;", store);
-        Assert.Contains("public bool LoadEyeRestEnforced() => Load() is { } d && d.EyeRestEnforced == true;", store);
         Assert.Contains("public bool LoadEyeRestDeferOnFullscreen() => Load() is not { } d || d.EyeRestDeferOnFullscreen != false;", store);
+        // 提醒形式走 Core 的那道夹：认不得的数值回默认档，而不是"夹到最近的一端"（默认是哪一档由 Core 说）
+        Assert.Contains("public StarMark.Core.Health.EyeRestNotice LoadEyeRestNotice()", store);
+        Assert.Contains("EyeRestPolicy.ClampNotice(Load()?.EyeRestNotice)", store);
         foreach (var field in new[] { "public bool? EyeRestEnabled", "public int? EyeRestIntervalMinutes",
-                                      "public bool? EyeRestEnforced", "public bool? EyeRestDeferOnFullscreen" })
+                                      "public int? EyeRestNotice", "public bool? EyeRestDeferOnFullscreen" })
             Assert.Contains(field, store);               // 可空＝"没存过"与"存了 false"分得开，缺省才走上面的默认
+    }
+
+    /// <summary>
+    /// 那颗"强制模式"布尔必须<b>整条消失</b>：留着一个没人读的字段，下一轮就有人把它接回去，
+    /// 而接回去的症状正是这次改判治的那个（暗幕与能不能提前退出又被绑成一件事）。
+    /// </summary>
+    [Fact]
+    public void TheOldForcedBooleanIsGoneFromEveryLayer()
+    {
+        var sources = new[]
+        {
+            SourceGate.ReadRepoFile(Service),
+            SourceGate.ReadRepoFile(OverlayCode),
+            SourceGate.ReadRepoFile(OverlayXaml),
+            SourceGate.ReadRepoPartials(Settings),
+            SourceGate.ReadRepoPartials(SettingsVm),
+            SourceGate.ReadRepoFile(SettingsPageXaml),
+            SourceGate.ReadRepoPartials(WidgetWindow),
+        };
+        foreach (var source in sources) Assert.DoesNotContain("EyeRestEnforced", source);
     }
 
     [Fact]
     public void SavedIntervalIsClampedOnTheWayIn_NotOnlyOnTheWayOut()
     {
         var store = SourceGate.ReadRepoPartials(Settings);
-        var save = SourceGate.MethodBody(store, "public void SaveEyeRest(bool enabled, int intervalMinutes, bool enforced, bool deferOnFullscreen)");
+        var save = SourceGate.MethodBody(store, "public void SaveEyeRest(bool enabled, int intervalMinutes, StarMark.Core.Health.EyeRestNotice notice, bool deferOnFullscreen)");
         var load = SourceGate.MethodBody(store, "public int LoadEyeRestIntervalMinutes()");
         Assert.Contains("ClampInterval(intervalMinutes)", save);
         Assert.Contains("ClampInterval(", load);
         // 手改 settings.json 写进 0／99999 时，界面显示与真用到的必须是同一个数（两头都夹，不靠一头兜）
+        Assert.Contains("ClampNotice(notice)", save);      // 提醒形式同理：不指望每个调用方先自己夹一遍
     }
 
     [Fact]
@@ -221,6 +266,27 @@ public sealed class EyeRestWiringGateTests
         Assert.Contains("NextDueAt", build);                       // 下一次大约几点：用户唯一能核对的证据
     }
 
+    /// <summary>
+    /// 「怎么提醒」那一排必须<b>由 Core 那三档生成</b>：界面自己重写一遍选项，就会出现
+    /// "下拉里有 ClampNotice 不认的一档"、"状态行说的与幕布上写的不一样"这类分岔（记忆 ⑧），
+    /// 而分岔的这一次是用户看得见的。
+    /// </summary>
+    [Fact]
+    public void TheNoticePickerIsGeneratedFromCore_NotRetypedInThePage()
+    {
+        var page = SourceGate.ReadRepoFile(SettingsPageXaml);
+        Assert.Contains("ItemsSource=\"{x:Bind ViewModel.EyeRestNoticeOptions}\"", page);
+        Assert.Contains("SelectedIndex=\"{x:Bind ViewModel.EyeRestNoticeIndex, Mode=TwoWay}\"", page);
+        Assert.DoesNotContain("只发托盘气泡", page);                 // 三档的说法只在 Core 写一次
+
+        var vm = SourceGate.ReadRepoPartials(SettingsVm);
+        Assert.Contains("EyeRestPolicy.NoticeLabels", vm);                       // 下拉的项
+        Assert.Contains("EyeRestPolicy.NoticeAt(EyeRestNoticeIndex)", vm);        // 下标 → 哪一档
+        Assert.Contains("EyeRestPolicy.NoticeLabel(CurrentEyeRestNotice)", vm);   // 状态行取同一句
+        Assert.Contains("EyeRestPolicy.NoticeHint(CurrentEyeRestNotice)", vm);    // 「试一试」的回执也说同一句
+        Assert.DoesNotContain("只发托盘气泡", vm);
+    }
+
     // ────────── 「试一试」：给真机一条不用等满间隔的验证出口 ──────────
 
     [Fact]
@@ -231,9 +297,33 @@ public sealed class EyeRestWiringGateTests
         Assert.DoesNotContain("policy.Reset", preview);      // 演一次≠真休息过一轮：下一次该几点还是几点
         Assert.DoesNotContain(".Start(", preview);           // 也不替用户起表：没开启时答案是"没东西可演"
         Assert.Contains("BeginRest(", preview);
+        // 试一试演的必须就是当前那一档：读的是提醒形式而不是旧的那颗强制布尔，否则"试一试"验证的
+        // 是另一个东西，用户按下去看到的与下拉里选的对不上。
+        Assert.Contains("settings.LoadEyeRestNotice()", preview);
 
-        var begin = SourceGate.MethodBody(service, "private static bool BeginRest(int intervalMinutes, bool enforced)");
+        var begin = SourceGate.MethodBody(service, BeginRest);
         Assert.Contains("if (_overlays.Count > 0)", begin);   // 连按两次不叠第二层幕布（只会更黑，且不解释任何事）
+    }
+
+    /// <summary>
+    /// 点一下屏幕这条出口要真的接到"收幕"那件事上：中间任何一环断掉，症状都是"暗幕点不开"——
+    /// 而那正是这次改判要治的原始 complaint，全绿也照样是坏着的（记忆 ⑨ 那一族）。
+    /// </summary>
+    [Fact]
+    public void TheClickOnACurtainActuallyTakesTheCurtainDown()
+    {
+        var service = SourceGate.ReadRepoFile(Service);
+        var begin = SourceGate.MethodBody(service, BeginRest);
+        // 交出去的是"哪一档"而不是"可不可以在这里退出"那个布尔：布尔的方向只有被调方读得懂，
+        // 接线处写反编译得过、闸门也看不出来，真机上却是"强制档一点就开／暗幕档点不开"（记忆 ⑥）。
+        Assert.Contains("new EyeRestOverlayWindow(monitor, notice)", begin);
+        Assert.Contains("overlay.SkipRequested += SkipRest;", begin);
+
+        var skip = SourceGate.MethodBody(service, "public static void SkipRest()");
+        Assert.Contains("if (_overlays.Count == 0) return;", skip);   // 幂等：倒数刚好走完时的第二次点击不该报错
+        Assert.Contains("_rest?.Stop()", skip);                       // 不收那张表＝收完幕还在给已死的窗倒数
+        Assert.Contains("CloseOverlays()", skip);
+        Assert.DoesNotContain("policy.Reset", skip);                  // 提前结束不重新攒一轮（否则点一下反而更晚提醒）
     }
 
     [Fact]
@@ -258,15 +348,20 @@ public sealed class EyeRestWiringGateTests
 
         // 只挂在时钟上（用户裁决是"护眼和时钟组件结合"，不是"每个组件都长一个开关"）
         Assert.Contains("if (_kind == WidgetKind.Clock) BuildEyeRestSection(menu);", call);
-        // 写盘与起停走设置页同一对出口：两处各攒一份状态，迟早对不上，而对不上的那次是用户先看见
-        Assert.Contains("settings.SaveEyeRest(", section);
-        Assert.Contains("App.ApplyEyeRest(", section);
+        // 写盘与起停走设置页同一对出口：两处各攒一份状态，迟早对不上，而对不上的那次是用户先看见。
+        // 参数整条钉住（不是只钉"调用了它"）：这里把开关读反编译得过、也只少一行日志，
+        // 真机上却是"按下去关掉护眼、屏幕照旧每 45 分钟黑一次"（记忆 ⑥ 那一族）。
+        Assert.Contains("settings.SaveEyeRest(toggle.IsChecked, interval,", section);
+        Assert.Contains("App.ApplyEyeRest(toggle.IsChecked);", section);
+        // 改间隔那一支同理：它没动开关，所以要把"开关照原样"写死，否则 someday 顺手写成 !Load... 就是"改个间隔把护眼关了"
+        Assert.Contains("settings.SaveEyeRest(settings.LoadEyeRestEnabled(), minutes,", section);
+        Assert.Contains("App.ApplyEyeRest(settings.LoadEyeRestEnabled());", section);
         // 档位与文案都取 Core 那一份（自己拼"X 分钟"就是第二份"有哪些档"）
         Assert.Contains("EyeRestPolicy.IntervalOptions", section);
         Assert.Contains("EyeRestPolicy.IntervalLabels", section);
         Assert.DoesNotContain("15 分钟", section);
-        // 开关必须把它没管的两项原样带过去，否则一按开关就把「强制休息 / 全屏让路」重置回默认
-        Assert.Equal(2, SourceGate.Count(section, "settings.LoadEyeRestEnforced()"));
+        // 开关必须把它没管的两项原样带过去，否则一按开关就把「提醒形式 / 全屏让路」重置回默认
+        Assert.Equal(2, SourceGate.Count(section, "settings.LoadEyeRestNotice()"));
         Assert.Equal(2, SourceGate.Count(section, "settings.LoadEyeRestDeferOnFullscreen()"));
     }
 

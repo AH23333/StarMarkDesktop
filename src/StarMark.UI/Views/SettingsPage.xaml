@@ -1048,11 +1048,15 @@
                                               ItemsSource="{x:Bind ViewModel.EyeRestIntervalOptions}"
                                               SelectedIndex="{x:Bind ViewModel.EyeRestIntervalIndex, Mode=TwoWay}"/>
                                 </Grid>
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
-                                               Text="强制休息：盖一层 20 秒暗幕，倒数期间按 Esc、点鼠标都不能提前跳过（只想被提醒一下就别开）。"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="强制" OffContent="只提醒" MinWidth="0"
-                                                  IsOn="{x:Bind ViewModel.EyeRestEnforced, Mode=TwoWay}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="怎么提醒"/>
+                                        <TextBlock Text="改完直接按下面的「试一试」就能看见这一档的效果，不用等满间隔。"
+                                                   Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <ComboBox Grid.Column="1" MinWidth="250" MaxWidth="320" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                              ItemsSource="{x:Bind ViewModel.EyeRestNoticeOptions}"
+                                              SelectedIndex="{x:Bind ViewModel.EyeRestNoticeIndex, Mode=TwoWay}"/>
                                 </Grid>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
