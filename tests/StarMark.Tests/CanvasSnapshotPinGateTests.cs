@@ -31,7 +31,7 @@ public sealed class CanvasSnapshotPinGateTests
     [Fact]
     public void ThePinIsCroppedToTheInkRegionAndPinnedBackAtItsOwnPlace()
     {
-        var pin = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "public static void SnapshotToPin()");
+        var pin = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "public static void SnapshotToPin()");
 
         Assert.Contains("CanvasSnapshotMath.PaddingDip * shot.Scale", pin);   // 边是 DIP：要按这块屏的缩放换算
         Assert.Contains("CanvasSnapshotMath.FrameOf(shot.Ink, shot.Width, shot.Height, padding)", pin);
@@ -54,7 +54,7 @@ public sealed class CanvasSnapshotPinGateTests
     [Fact]
     public void TheInkRegionIsMeasuredBeforeTheBackdropIsBlendedIn()
     {
-        var compose = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static Shot Compose()");
+        var compose = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "private static Shot Compose()");
         const string measure = "var inkRegion = CanvasSnapshotMath.InkRegionOf(ink, boardWidth, boardHeight);";
         const string blend = "screen.Window.CompositeForSnapshot(ink);";
 
@@ -73,7 +73,7 @@ public sealed class CanvasSnapshotPinGateTests
     [Fact]
     public void OnlyThePinCrops_CopyAndSaveStillHandOverTheWholeFrame()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         foreach (var anchor in new[] { "public static void SnapshotToClipboard()", "public static void SavePng()" })
         {
             var body = SourceGate.MethodBody(service, anchor);
@@ -95,7 +95,7 @@ public sealed class CanvasSnapshotPinGateTests
     [Fact]
     public void AnEmptyBoardGivesAReasonAndTheOtherExitInsteadOfAFullScreenPin()
     {
-        var pin = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "public static void SnapshotToPin()");
+        var pin = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "public static void SnapshotToPin()");
 
         Assert.Contains("shot.Ink.IsEmpty", pin);
         Assert.Contains("板上还没有笔迹可贴", pin);
@@ -130,7 +130,7 @@ public sealed class CanvasSnapshotPinGateTests
     [Fact]
     public void TheJudgementsLiveInCoreAndAreNotReimplementedInTheUi()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var math = SourceGate.ReadRepoFile(SnapshotMath);
 
         Assert.Contains("public static IntRect InkRegionOf", math);

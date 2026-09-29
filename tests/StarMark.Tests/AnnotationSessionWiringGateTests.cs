@@ -54,7 +54,7 @@ public sealed class AnnotationSessionWiringGateTests
     [Fact]
     public void TheBoardHidesItselfByReadingTheStageRow_NotByReDerivingIt()
     {
-        var apply = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service),
+        var apply = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service),
             "public static void ApplyStage(AnnotationStage stage)");
         Assert.Contains("var visible = stage.GlassVisible();", apply);
         Assert.Contains("screen.Window.SetVisible(visible);", apply);
@@ -88,7 +88,7 @@ public sealed class AnnotationSessionWiringGateTests
     {
         var hub = SourceGate.ReadRepoFile(Hub);
         Assert.DoesNotContain("Stage = ", SourceGate.WithoutMethod(hub, "public static void Raise(SessionEvent what)"));
-        Assert.DoesNotContain("Stage = ", SourceGate.ReadRepoFile(Service));
+        Assert.DoesNotContain("Stage = ", SourceGate.ReadRepoPartials(Service));
         Assert.DoesNotContain("Stage = ", SourceGate.ReadRepoFile(Screenshot));
     }
 
@@ -149,7 +149,7 @@ public sealed class AnnotationSessionWiringGateTests
     [Fact]
     public void HidingTheGlassGivesTheMouseCaptureBack()
     {
-        var apply = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service),
+        var apply = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service),
             "public static void ApplyStage(AnnotationStage stage)");
         Assert.Contains("if (!visible) LayeredCanvasWindow.ReleasePointerCapture();", apply);
         Assert.True(apply.IndexOf("CommitOpenStroke();", StringComparison.Ordinal)

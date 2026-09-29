@@ -65,7 +65,7 @@ public sealed class CanvasWiringGateTests
     public void RightClickOnTheCanvasHandsTheMouseBack_TheOnlyPureMouseExit()
     {
         var layer = SourceGate.MethodBody(SourceGate.ReadRepoFile(Layer), "private static IntPtr HandleMessage");
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         Assert.Contains("WM_RBUTTONDOWN", layer);
         Assert.Contains("RightPressed?.Invoke()", layer);
         Assert.Contains("window.RightPressed += () => SetClickThrough(true);", service);
@@ -99,7 +99,7 @@ public sealed class CanvasWiringGateTests
         Assert.DoesNotContain(HotkeyActions.CanvasClickThrough, pins);
 
         // 反向：画板那两条链（编排＋玻璃）也不许去按贴图的开关
-        var canvas = SourceGate.ReadRepoFile(Service) + SourceGate.ReadRepoFile(Layer);
+        var canvas = SourceGate.ReadRepoPartials(Service) + SourceGate.ReadRepoFile(Layer);
         Assert.DoesNotContain("PinManager", canvas);
         Assert.DoesNotContain(HotkeyActions.ScreenPinClickThrough, canvas);
 
@@ -229,7 +229,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void FrameDirtyIsDrivenByWhatActuallyChanged()
     {
-        var tick = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static void OnFrameTick");
+        var tick = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "private static void OnFrameTick");
         Assert.Contains("MarkSegmentIfFading(screen, segment)", tick);     // 整段重算只由"淡出对不上"触发
         Assert.Contains("var expired = screen.Trail.Tick(now);", tick);    // 到期段占过的地方要交回脏区
         Assert.Contains("screen.Dirty.Add(expired)", tick);
@@ -244,7 +244,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void FadeMarkerOnlyMovesWhenTheLevelChanges()
     {
-        var mark = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service),
+        var mark = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service),
             "private static void MarkSegmentIfFading");
         Assert.Contains("if (Math.Abs(segment.PaintScale - segment.AlphaScale) <= 1e-9) return;", mark);
         Assert.Contains("segment.PaintScale = segment.AlphaScale;", mark);
@@ -261,7 +261,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void FlushRepaintsOnlyTheDirtyRect_AtThePaintedFadeLevel()
     {
-        var flush = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static void Flush(Screen screen)");
+        var flush = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "private static void Flush(Screen screen)");
         Assert.Contains(
             "CanvasCompositor.PaintClipped(screen.Window.Pixels, width, height, segment.Stroke, rect, segment.PaintScale);",
             flush);
@@ -273,7 +273,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void DraggingDirtiesOnlyTheNewlySweptStrip()
     {
-        var moved = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static void OnMoved");
+        var moved = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "private static void OnMoved");
         Assert.Contains("Stroke.TailBounds", moved);
         Assert.DoesNotContain("Stroke.Bounds", moved);
     }
@@ -285,13 +285,13 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void DroppingTheTrailDirtiesWhatItCovered()
     {
-        var drop = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static void DropTrail");
+        var drop = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "private static void DropTrail");
         Assert.Contains("var was = screen.Trail.LiveBounds;", drop);
         Assert.Contains("screen.Trail.Clear();", drop);
         Assert.Contains("if (!was.IsEmpty) screen.Dirty.Add(was);", drop);
         Assert.True(drop.IndexOf("LiveBounds") < drop.IndexOf("Trail.Clear()"), "先取范围再清，反了就取不到了");
         // 服务里不许再有"直接 Clear 而不走 DropTrail"的漏口
-        var service = SourceGate.WithoutMethod(SourceGate.ReadRepoFile(Service), "private static void DropTrail");
+        var service = SourceGate.WithoutMethod(SourceGate.ReadRepoPartials(Service), "private static void DropTrail");
         Assert.DoesNotContain("Trail.Clear()", service);
     }
 
@@ -302,7 +302,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void SlowFramesReportTheirCause()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var report = SourceGate.MethodBody(service, "private static void ReportSlowFrame");
         Assert.Contains("Stopwatch.GetTimestamp()", report);            // TickCount64 只有 15.6ms 分辨率，量不出一帧
         Assert.Contains("StarLog.WarnThrottled", report);
@@ -344,7 +344,7 @@ public sealed class CanvasWiringGateTests
         Assert.DoesNotContain("GdiScreenCapture.CaptureVirtualScreen()", start);
         // C5 根治：画布出图（贴图／复制／存图）拿的必须是<b>干净桌面</b>，墨由自己叠一次。
         // 从前它抓的是含玻璃的那一帧再叠一遍＝"图里有两份"；这条设置对它不适用（那三条就是要笔迹进图）。
-        var compose = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static Shot Compose()");
+        var compose = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "private static Shot Compose()");
         Assert.DoesNotContain("CanvasInScreenshots", compose);
         Assert.Contains("ScreenshotService.CaptureWithoutCanvas();", compose);
         Assert.DoesNotContain("GdiScreenCapture.CaptureVirtualScreen()", compose);
@@ -463,7 +463,7 @@ public sealed class CanvasWiringGateTests
     {
         var code = SourceGate.ReadRepoFile(Layer);
         Assert.Contains("WM_DISPLAYCHANGE", SourceGate.MethodBody(code, "private static IntPtr HandleMessage"));
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         // 重建走 RebuildHost（宿主拆了再建），会话态原样带过去——那不是用户重新进入画布，
         // 所以"下一次进来还是穿透态"那条默认不该在这里生效。
         var rebuild = SourceGate.MethodBody(service, "private static void RebuildHost()");
@@ -491,7 +491,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void ThereAreFourWaysOutOfCanvasMode()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var toolbar = SourceGate.ReadRepoFile(Toolbar);
         var app = SourceGate.ReadRepoFile(App);
         var main = SourceGate.ReadRepoPartials(MainWindow);
@@ -523,7 +523,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void PersistentAndOverlayLiveInSeparateBuffers()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var flush = SourceGate.MethodBody(service, "private static void Flush(Screen screen)");
         // 淡出与光晕都要求"能回到这块地方原来画了什么"：合成到一处就回不去
         Assert.Contains("CopyRect(screen.Persistent, screen.Window.Pixels", flush);
@@ -536,7 +536,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void ColoursComeFromTheOnePalette_AndAreGeneratedNotHandWritten()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var toolbar = SourceGate.ReadRepoFile(Toolbar);
         var xaml = SourceGate.ReadRepoFile(ToolbarXaml);
         Assert.Contains("Annotation.Palette", service);                     // 与截图标注同一张色表
@@ -547,7 +547,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void SnapshotUsesTheInkNotTheScreenBuffer_WhichExcludesTheCursorHalo()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var compose = SourceGate.MethodBody(service, "private static Shot Compose()");
         Assert.Contains("screen.Persistent", compose);
         Assert.Contains("OverlayOntoFrame", compose);
@@ -559,7 +559,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void ChangingToolOrWidthCommitsTheOpenStrokeFirst()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         // 不先收笔的话，症状是"画着画着笔自己变粗/换了颜色还接到上一条上"
         Assert.Contains("CommitOpenStroke();", SourceGate.MethodBody(service, "public static void SelectTool(CanvasTool tool)"));
         Assert.Contains("CommitOpenStroke();", SourceGate.MethodBody(service, "public static void SelectWidth(int step)"));
@@ -575,7 +575,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void DragIsThrottledButReleaseAlwaysFlushes()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var moved = SourceGate.MethodBody(service, "private static void OnMoved(Screen screen, CanvasPointer pointer)");
         var released = SourceGate.MethodBody(service, "private static void OnReleased(Screen screen, CanvasPointer pointer)");
         var finish = SourceGate.MethodBody(service, "private static void FinishPress(Screen? screen, PixelPoint? at = null)");
@@ -592,7 +592,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void EveryLayerIsPerMonitor_InPhysicalPixels()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var start = SourceGate.MethodBody(service, "public static bool OpenBoardHost()");
         Assert.Contains("foreach (var monitor in monitors)", start);
         Assert.Contains("monitor.Bounds.Width", start);                     // 物理像素，不做 DIP 换算
@@ -624,7 +624,7 @@ public sealed class CanvasWiringGateTests
         // 反向钉：只看 to（外加"在不在"），引入 from 就是这次缺陷的本体，别让它被"更对称"的写法请回来
         Assert.DoesNotContain("from.IsBoard()", apply);
         // 藏与显归 ApplyStage 管，而且"从藏着回到显形"要重交一次表面（分层内容可能在那一段被系统丢掉）
-        var stage = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "public static void ApplyStage(AnnotationStage stage)");
+        var stage = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "public static void ApplyStage(AnnotationStage stage)");
         Assert.Contains("screen.Window.SetVisible(visible);", stage);
         var show = SourceGate.MethodBody(SourceGate.ReadRepoFile(Layer), "public void SetVisible(bool visible)");
         Assert.Contains("var wasShown = NativeMethods.IsWindowVisible(_hwnd);", show);
@@ -643,7 +643,7 @@ public sealed class CanvasWiringGateTests
     {
         // 批次 S1 之后这一位不再由宿主存：CanvasService 里不许再有 _clickThrough 字段
         // （分岔的来源就是多存一份），默认那一臂在 Core 的转移表里，接线层只递事件。
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         Assert.DoesNotContain("_clickThrough", service);
         Assert.Contains("AnnotationHub.Raise(SessionEvent.ToggleBoard)", service);
         var close = SourceGate.MethodBody(service, "public static void CloseBoardHost()");
@@ -668,7 +668,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void ChoosingAToolNeverChangesWhoGetsTheMouse_AndRepeatingItHandsItBack()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var select = SourceGate.MethodBody(service, "public static void SelectTool(CanvasTool tool)");
         // 2026-09-27 用户改判：<b>换工具不再改鼠标归属</b>。穿透／绘制只由那颗「穿透」按钮、
         // canvas.through、右键交出与"再点当前工具"这四条改（都走 Hub 事件），选笔不再翻态。
@@ -752,7 +752,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void ShapesPreviewInTheEphemeralLayerAndCommitTheSameGeometry()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var begin = SourceGate.MethodBody(service, "private static void BeginPress(");
         Assert.Contains("else if (kind == Press.Shape)", begin);
         Assert.Contains("screen.Dirty.Add(screen.Trail.SetPreview(ShapeStroke(at, at)));", begin);
@@ -803,7 +803,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void PolyLineSpansPresses_AndClosesIntoOneStroke()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         // 按下分流：折线绝不能落进 Press.Shape（那会"这一按就是一条"，勾不出第二段的）
         Assert.Contains("CanvasTool.PolyLine => Press.PolyLine,",
             SourceGate.MethodBody(service, "private static void OnPressed(Screen screen, CanvasPointer pointer)"));
@@ -893,7 +893,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void PassThroughDrawingIsDiscoveredByPolling_AndTheMouseIsGivenBack()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var poll = SourceGate.MethodBody(service, "private static void PollPress(int cursorX, int cursorY)");
         Assert.Contains("LayeredCanvasWindow.LeftButtonDown", poll);
         // 2026-09-27 用户改判：穿透态<b>只抢 Ctrl+Alt 那一下</b>，与选了哪支笔无关（方向判据在 CanvasModes）
@@ -934,7 +934,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void QuickCircleUsesPenInk_RegardlessOfTheSelectedTool()
     {
-        var begin = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service),
+        var begin = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service),
             "private static void BeginPress(Screen screen, PixelPoint at, Press kind)");
         Assert.Contains("kind == Press.QuickPen ? CanvasTool.Pen : _tool", begin);
         Assert.DoesNotContain("_press = _tool", begin);
@@ -951,7 +951,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void RecompositeErasesThePreviouslyBakedRegion()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var recompute = SourceGate.MethodBody(service, "private static void Recomposite(Screen screen, IntRect alsoErase = default)");
         Assert.Contains("var toErase = CanvasCompositor.Union(new[] { screen.Composited, alsoErase }, width, height);", recompute);
         Assert.Contains("CanvasCompositor.Rebake(screen.Persistent, width, height, Brushes(screen),", recompute);
@@ -991,7 +991,7 @@ public sealed class CanvasWiringGateTests
     public void ClickThroughStateIsReconciledWithTheWindowStyleEveryFrame()
     {
         // 批次 S1：三处自愈合成一处——画布的帧循环只问 Hub，Hub 只问 LayerDirector。
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var tick = SourceGate.MethodBody(service, "private static void OnFrameTick");
         Assert.Contains("AnnotationHub.AuditFrame(cursor.X, cursor.Y);", tick);
         Assert.DoesNotContain("ReassertClickThrough", service);        // 旧那一份不许留在原地再存一处
@@ -1041,7 +1041,7 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("public const int HTTRANSPARENT = -1;", SourceGate.ReadRepoFile(Native));
 
         // ② 判据只有一份，接在名册读到的窗矩形上（不另存旗标、不另算一份几何）
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         Assert.Contains("LayeredCanvasWindow.ChromeUnderPoint = LayerDirector.IsPointOnChrome;", service);
         var director = SourceGate.ReadRepoFile(Director);
         Assert.Contains("public static bool IsPointOnChrome(int x, int y)", director);
@@ -1159,7 +1159,7 @@ public sealed class CanvasWiringGateTests
         // 全链路不许再出现"擦成全 0"
         Assert.DoesNotContain("Array.Clear(", compositor);
         Assert.DoesNotContain("Array.Clear(", layer);
-        var start = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "public static bool OpenBoardHost()");
+        var start = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "public static bool OpenBoardHost()");
         Assert.Contains("Array.Fill(persistent, LayeredCanvasWindow.BlankPixel);", start);
     }
 
@@ -1209,7 +1209,7 @@ public sealed class CanvasWiringGateTests
 
         // 三个时刻定序：工具条出现、每次会话迁移、条子每次刷新自己提一次
         Assert.Contains("LayerDirector.EnforceOrder(AnnotationHub.Stage);",
-            SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static void ShowToolbar()"));
+            SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "private static void ShowToolbar()"));
         Assert.Contains("LayerDirector.EnforceOrder(to);",
             SourceGate.MethodBody(SourceGate.ReadRepoFile(Hub), "private static bool Apply"));
         Assert.Contains("RaiseAboveCanvas();", SourceGate.MethodBody(toolbar, "private void Refresh()"));
@@ -1229,7 +1229,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void TheHaloAndTheCurtainHoleAskOneJudgementAndOneRadius()
     {
-        var whole = SourceGate.ReadRepoFile(Service);
+        var whole = SourceGate.ReadRepoPartials(Service);
         var service = SourceGate.MethodBody(whole, "private static void OnFrameTick");
         var flush = SourceGate.MethodBody(whole, "private static void Flush(Screen screen)");
         var focus = SourceGate.MethodBody(whole, "private static void UpdateCurtainFocus");
@@ -1399,7 +1399,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void CanvasHotkeysEitherOpenTheBoardOrSayWhyTheyDidNot()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var tool = SourceGate.MethodBody(service, "public static void HotkeyTool(CanvasTool tool)");
         Assert.Contains("ToggleTool(tool);", tool);
         Assert.DoesNotContain("Start();", tool);                  // "没开就先 Start()"那条平行逻辑不许回来
@@ -1464,7 +1464,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void ChromeOrderIsOneChain_ToolbarThenPanelThenCanvas()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var show = SourceGate.MethodBody(service, "public static void ToggleHotkeyPanel()");
         // 定序还是一条链：面板先归位到工具条之下，画布再插到（名册里最后那条 chrome＝）面板之下
         Assert.True(show.IndexOf("_panel.PlaceUnder", StringComparison.Ordinal)
@@ -1483,7 +1483,7 @@ public sealed class CanvasWiringGateTests
     [Fact]
     public void BindingTextFallsBackToUnbound_NeverToABogusKey()
     {
-        var text = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "public static string BindingText(string action)");
+        var text = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "public static string BindingText(string action)");
         Assert.Contains("gesture is { IsEmpty: false } bound", text);
         Assert.Contains("HotkeyDisplay.Display(bound)", text);
         Assert.Equal(3, SourceGate.Count(text, "\"未绑定\""));      // 没设置 / 没绑定 / 抛异常：三条兜底路都不能编出键位
@@ -1528,7 +1528,7 @@ public sealed class CanvasWiringGateTests
         var page = SourceGate.ReadRepoPartials(SettingsPageCode);
         Assert.Equal(2, SourceGate.Count(page, "GetRegisterableHotkeyBindings()"));   // 保存 + 重试注册
 
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var start = SourceGate.MethodBody(service, "public static bool OpenBoardHost()");
         Assert.Contains("if (!EnabledBySetting)", start);
         Assert.Contains("屏幕画布已关闭", start);
@@ -1538,6 +1538,29 @@ public sealed class CanvasWiringGateTests
         var changed = SourceGate.MethodBody(vm, "partial void OnCanvasEnabledChanged(bool value)");
         Assert.Contains("if (!value) StarMark.UI.Services.CanvasService.Stop();", changed);
         Assert.Contains("App.MainWindow?.ApplyTraySettings();", changed);   // 注册表当场跟着改，不重启、不再点保存
+    }
+
+    /// <summary>
+    /// <b>给"守门本身"作的保</b>（承 <c>WidgetGeometryPersistGateTests.TheWidgetWindowGatesReadEveryPartialFile</c>）：
+    /// 批次 S4-⑦ 把画布编排按访问面拆成 <c>CanvasService.*.cs</c> 八份分段之后，读法一旦退回单个文件，
+    /// 这里几十条"锚点必须命中 1 处"的守门会<b>静默永远扫不到</b>（禁项类守门尤其危险——扫不到就等于通过）。
+    /// <para>所以逐个分段各钉一个代表声明：文件怎么搬，读整套时必须还看得见。搬走某一段时这条会红，
+    /// 提醒改的是守门的读法而不是把判据放宽。</para>
+    /// </summary>
+    [Fact]
+    public void TheCanvasServiceGatesReadEveryPartialFile()
+    {
+        var all = SourceGate.ReadRepoPartials(Service);
+
+        Assert.Contains("private sealed class Screen", all);                            // 主文件（状态与嵌套类型都在这）
+        Assert.Contains("public static bool OpenBoardHost()", all);                     // Host
+        Assert.Contains("public static void CycleHalo()", all);                         // Control
+        Assert.Contains("private static void Recomposite(Screen screen", all);          // Editing
+        Assert.Contains("private static void PollPress(int cursorX, int cursorY)", all); // Pointer
+        Assert.Contains("private static void Flush(Screen screen)", all);               // Frame
+        Assert.Contains("private static Shot Compose()", all);                          // Snapshot
+        Assert.Contains("private static void RequireRunning(string what, Action run)", all); // Hotkey
+        Assert.Contains("private static void ShowToolbar()", all);                      // Strip
     }
 
     /// <summary>

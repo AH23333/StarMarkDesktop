@@ -101,7 +101,7 @@ public sealed class CanvasUndoOrderTests
     [Fact]
     public void TheBoardUndoesASingleScreenAndOnlyRepaintsThatOne()
     {
-        var undo = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "public static void Undo()");
+        var undo = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "public static void Undo()");
         Assert.Contains(".OrderByDescending(s => s.Ink.LastOrder)", undo);
         Assert.Contains("if (target is null || !target.Ink.Undo()) return;", undo);
         Assert.Contains("Recomposite(target);", undo);
@@ -164,7 +164,7 @@ public sealed class CanvasUndoOrderTests
     [Fact]
     public void TheBoardRedoesASingleScreenUsingTheOrderRedoWouldRestore()
     {
-        var redo = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "public static void Redo()");
+        var redo = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "public static void Redo()");
         Assert.Contains("s.Ink.CanRedo", redo);
         Assert.Contains(".OrderByDescending(s => s.Ink.NextOrder)", redo);
         Assert.Contains("if (target is null || !target.Ink.Redo()) return;", redo);
@@ -173,7 +173,7 @@ public sealed class CanvasUndoOrderTests
         Assert.DoesNotContain("screen.Ink.Redo()", redo);
         Assert.DoesNotContain("FlushAll();", redo);
         // 撤销那一条不能用 NextOrder、重做那一条不能用 LastOrder：两个问题不同，写反一次就是"退错东西"。
-        Assert.DoesNotContain("NextOrder", SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "public static void Undo()"));
+        Assert.DoesNotContain("NextOrder", SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "public static void Undo()"));
     }
 
     // ────────── 跨宿主落点（批次 S2-c3：全局撤销到底退哪一叠） ──────────

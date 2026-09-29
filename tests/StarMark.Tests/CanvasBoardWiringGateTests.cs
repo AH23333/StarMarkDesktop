@@ -70,7 +70,7 @@ public sealed class CanvasBoardWiringGateTests
         var hub = SourceGate.ReadRepoFile(Hub);
         Assert.Equal(2, SourceGate.Count(hub, "Backdrop = "));                   // ① ToggleBackdrop ② 板子关掉时复位
         Assert.Contains("public static CanvasBackdrop Backdrop { get; private set; }", hub);
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         Assert.DoesNotContain("Backdrop = ", service);                           // 宿主一份都不许存
         Assert.Equal(1, SourceGate.Count(SourceGate.MethodBody(service, "public static void ApplyBackdrop"),
             "screen.Window.SetBackdrop(argb);"));
@@ -103,7 +103,7 @@ public sealed class CanvasBoardWiringGateTests
         var audit = SourceGate.MethodBody(hub, "public static void AuditFrame");
         Assert.Contains("if (droppingBoard) ApplyBackdrop(CanvasBackdrop.Transparent);", audit);
         // 穿透那条旧出口不许自己判背景态（判据只有一份）
-        Assert.DoesNotContain("Whiteboard", SourceGate.MethodBody(SourceGate.ReadRepoFile(Service),
+        Assert.DoesNotContain("Whiteboard", SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service),
             "public static void SetClickThrough(bool on)"));
     }
 
@@ -114,7 +114,7 @@ public sealed class CanvasBoardWiringGateTests
     [Fact]
     public void TheCurtainFocusFollowsTheCursorEveryFrame_ScaledPerScreen()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var tick = SourceGate.MethodBody(service, "private static void OnFrameTick");
         Assert.Contains("UpdateCurtainFocus(screen, cursor.X, cursor.Y);", tick);
         var focus = SourceGate.MethodBody(service, "private static void UpdateCurtainFocus");
@@ -127,7 +127,7 @@ public sealed class CanvasBoardWiringGateTests
     [Fact]
     public void ARebuiltScreenIsSeededWithTheCurrentBackdrop()
     {
-        var start = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "public static bool OpenBoardHost()");
+        var start = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "public static bool OpenBoardHost()");
         Assert.Contains("window.SetBackdrop(CanvasBackdropMath.ArgbOf(AnnotationHub.Backdrop));", start);
         // 建窗之后立刻交：次序是"后备位图→显形→定样式→交表面"（批次 WO），换底排在建窗与登记之间，不动那条序
         Assert.True(start.IndexOf("new LayeredCanvasWindow(bounds)", System.StringComparison.Ordinal)
@@ -142,7 +142,7 @@ public sealed class CanvasBoardWiringGateTests
     [Fact]
     public void TheSnapshotUsesTheBoardAsItsBaseWhileTheWhiteboardIsOn()
     {
-        var service = SourceGate.ReadRepoFile(Service);
+        var service = SourceGate.ReadRepoPartials(Service);
         var compose = SourceGate.MethodBody(service, "private static Shot Compose()");
         Assert.Contains("CanvasBackdropMath.IsOpaque(AnnotationHub.Backdrop)", compose);
         Assert.Contains("BoardFrame(boardWidth, boardHeight, CanvasBackdropMath.WhiteboardArgb)", compose);

@@ -75,12 +75,12 @@ public sealed class InkModelGateTests
     {
         // 方案 §3.4：两侧只剩一个笔迹载体。画布那一叠必须真的换成 InkDoc（带归属），
         // 而不是"看着像同一套、其实各存一份"——那正是 R2 双引擎的原样。
-        var screen = SourceGate.Between(SourceGate.ReadRepoFile(Service), "private sealed class Screen", "private static readonly List<Screen>");
+        var screen = SourceGate.Between(SourceGate.ReadRepoPartials(Service), "private sealed class Screen", "private static readonly List<Screen>");
         Assert.Contains("public required InkDoc Ink { get; init; }", screen);
         Assert.Contains("public CanvasStroke? Drawing { get; set; }", screen);
         Assert.Contains("new InkDoc(new InkSurface(SurfaceRole.Board, Screens.Count))",
-            SourceGate.ReadRepoFile(Service));
-        Assert.DoesNotContain("CanvasInk", SourceGate.ReadRepoFile(Service));
+            SourceGate.ReadRepoPartials(Service));
+        Assert.DoesNotContain("CanvasInk", SourceGate.ReadRepoPartials(Service));
     }
 
     [Fact]
