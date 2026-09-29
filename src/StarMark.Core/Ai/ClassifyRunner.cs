@@ -57,6 +57,22 @@ public static class ClassifyRunner
     /// 再长就变成"用户不知道该等还是该停"。</summary>
     public const int DefaultTimeoutSeconds = 180;
 
+    /// <summary>可调的下界。低于这个数连本机模型冷启动都过不去，每一批都会立刻超时——
+    /// 那是"看着设了个更严的值，实际把功能关掉了"。</summary>
+    public const int MinTimeoutSeconds = 10;
+
+    /// <summary>可调的上界。一批发到刻钟以上，用户已经判断不出自己该等还是该停，
+    /// 而「停止」那颗按钮的出口本来就在界面上。</summary>
+    public const int MaxTimeoutSeconds = 900;
+
+    /// <summary>把"用户填的那个秒数"换算成能用的秒数：<b>没填或越界一律回默认，不静默夹到边上</b>
+    /// （夹边只该用在"想要但够不着"那一类，而 0 秒与 9999 秒不是够不着，是不成立）。
+    /// <para>判据只有这一处：设置页与仓储都调它，界面里不许再写第二份 10/900/180。</para></summary>
+    public static int NormalizeTimeoutSeconds(int? seconds)
+        => seconds is { } v && v >= MinTimeoutSeconds && v <= MaxTimeoutSeconds
+            ? v
+            : DefaultTimeoutSeconds;
+
     public static async Task<ClassifyRunReport> RunAsync(
         IReadOnlyList<ClassifyItem> items,
         IReadOnlyList<string> catalog,

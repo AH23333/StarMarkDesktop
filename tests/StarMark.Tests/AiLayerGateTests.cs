@@ -170,7 +170,19 @@ public sealed class AiLayerGateTests
             .Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries)[2])
             .ToList();
 
-        Assert.Equal(12, aiProps.Count);          // 开关/通道/模型/Key/两个地址 + 待应用方案 + 预算/熔断位 + 规则覆盖 JSON + 分类模型 + 即时分类开关
+        // 钉**名册**而不是钉个数（#181）：加一格就得在这里点名它，红的时候也能说出是哪一格动了——
+        // 只数个数会把"新加了一格该记的"与"某格被顺手改名/被别的域覆盖"报成同一条红。
+        // 名册＝开关/通道/模型/Key/两个地址 + 待应用方案 + 预算/熔断位/预警线 + 规则覆盖 JSON + 分类模型 + 单批超时 + 即时分类开关。
+        Assert.Equal(
+            new[]
+            {
+                "AiApiKey", "AiBaseUrl", "AiBatchTimeoutSeconds", "AiBudgetPaused", "AiClassifyModel",
+                "AiClassifyRulesJson", "AiEnabled", "AiInstantClassify", "AiModel", "AiOllamaBaseUrl",
+                "AiPendingPlanJson", "AiProvider", "AiTokenBudget", "AiWarnRatio",
+            },
+            aiProps.OrderBy(name => name, StringComparer.Ordinal));
         Assert.All(aiProps, name => Assert.StartsWith("Ai", name)); // 同名覆盖那条事故的形状
+        // 各自独立＝一格一 key：重名会让两次写互相冲掉（扩展侧那次事故的原形）
+        Assert.Equal(aiProps.Count, aiProps.Distinct(StringComparer.Ordinal).Count());
     }
 }

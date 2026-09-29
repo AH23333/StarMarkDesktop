@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,13 +23,62 @@ public sealed partial class SettingsPage
     {
         try
         {
-            AiBudgetBox.Value = App.Services.GetRequiredService<SettingsStore>().LoadAiBudget().MonthlyTokenBudget;
+            var budget = App.Services.GetRequiredService<SettingsStore>().LoadAiBudget();
+            AiBudgetBox.Value = budget.MonthlyTokenBudget;
+            // 置位这一格要压住 TextChanged：否则"打开设置页"这件事本身就是一次写盘（同 AiTimeoutBox 那条）。
+            _aiLoading = true;
+            try
+            {
+                AiWarnRatioBox.Text = budget.WarnRatioOverride is { } ratio
+                    ? PercentOfRatio(ratio)
+                    : string.Empty;
+            }
+            finally
+            {
+                _aiLoading = false;
+            }
+            RefreshAiWarnRatioNote();
         }
         catch (Exception ex)
         {
             StarLog.Warn($"[AI 用量] 预算档位没读出来（面板用默认显示）：{ex.Message}");
         }
         _ = RefreshAiUsageAsync();   // 面板是展示件：读失败只留一行解释，绝不让设置页开不了
+    }
+
+    /// <summary>界面按"百分之几"说话，存档与判额按小数比例走。<b>换算只有这一颗</b>，
+    /// 而"这个比例合不合法"全在 <see cref="AiBudget.WithWarnRatio"/> 里判——界面里不许长出第二份区间。</summary>
+    private static string PercentOfRatio(double ratio)
+        => (ratio * 100).ToString("0.#", CultureInfo.InvariantCulture);
+
+    private void RefreshAiWarnRatioNote()
+    {
+        var ratio = App.Services.GetRequiredService<SettingsStore>().LoadAiBudget().WarnRatio;
+        AiWarnRatioNoteText.Text =
+            $"用到预算的 {PercentOfRatio(ratio)}% 时先提醒（到线不拦，只说明；留空＝出厂 {PercentOfRatio(AiBudget.DefaultWarnRatio)}%）。";
+    }
+
+    private void AiWarnRatioBox_TextChanged(object sender, RoutedEventArgs e)
+    {
+        if (_aiLoading) return;               // 装载时的置位不写盘
+        var store = App.Services.GetRequiredService<SettingsStore>();
+        var text = AiWarnRatioBox.Text.Trim();
+        // 只认不带千位分隔的小数写法：同一份存档不该按机器的区域设置变含义（R3 那条核查管的就是这类数）。
+        var percent = double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            ? value / 100.0
+            : (double?)null;
+        var next = store.LoadAiBudget().WithWarnRatio(percent);
+        store.SaveAiBudget(next);
+        // "留空/打不进数字"与"采纳了"都回到同一句现状说明；只有"填了但被回默认"才需要单独解释，
+        // 判据是覆盖位里存进去的到底是不是我刚才那个数——不在界面再判一次合法区间。
+        if (percent is null || next.WarnRatioOverride == percent)
+        {
+            RefreshAiWarnRatioNote();
+            return;
+        }
+        AiWarnRatioNoteText.Text =
+            $"{PercentOfRatio(percent.Value)}% 不是 0 与 1 之间的比例（也就是只能填 1–99 这一档），"
+            + $"已按出厂 {PercentOfRatio(AiBudget.DefaultWarnRatio)}% 执行。";
     }
 
     private async Task RefreshAiUsageAsync()
@@ -70,7 +120,8 @@ public sealed partial class SettingsPage
             switch (verdict.State)
             {
                 case AiBudgetState.Warning:
-                    text += $"到 {budget.MonthlyTokenBudget:N0} 会自动暂停，还剩 {verdict.Remaining:N0} token。";
+                    text += $"到 {budget.MonthlyTokenBudget:N0} 会自动暂停（预警线设在预算的 {PercentOfRatio(budget.WarnRatio)}%），"
+                        + $"还剩 {verdict.Remaining:N0} token。";
                     break;
                 case AiBudgetState.Tripping:
                 case AiBudgetState.Blocked:

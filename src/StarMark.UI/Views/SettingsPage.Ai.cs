@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,8 +32,6 @@ public sealed partial class SettingsPage
     private bool _aiBusy;
     private CancellationTokenSource? _aiProbeCts;
     private IReadOnlyList<string> _aiModels = Array.Empty<string>();
-    /// <summary>分类专用模型（§19 O6）暂无输入格，保存整组时透传这一格，防止被"看不见=清掉"。</summary>
-    private string? _aiClassifyModelHeld;
 
     private void InitAiSection()
     {
@@ -49,9 +48,7 @@ public sealed partial class SettingsPage
             AiProviderBox.SelectedIndex = Array.IndexOf(
                 Enum.GetValues<AiProviderKind>(), stored.Provider);
             AiModelBox.Text = stored.Model ?? string.Empty;
-            // 分类模型暂无输入格（用量面板一并补齐）：先持有读到的值，保存时原样带回——
-            // 手改过 settings.json 的用户不该因为"按了一下总开关"被清零这一格。
-            _aiClassifyModelHeld = stored.ClassifyModel;
+            AiClassifyModelBox.Text = stored.ClassifyModel ?? string.Empty;
             AiOllamaUrlBox.Text = stored.OllamaBaseUrl ?? string.Empty;
             AiBaseUrlBox.Text = stored.BaseUrl ?? string.Empty;
             AiKeyBox.Password = stored.ApiKey ?? string.Empty;
@@ -75,8 +72,7 @@ public sealed partial class SettingsPage
         ApiKey: AiKeyBox.Password,
         OllamaBaseUrl: AiOllamaUrlBox.Text,
         BaseUrl: AiBaseUrlBox.Text,
-        // 分类模型目前没有控件：读"上次 Load 到的那份"——保存永远写回完整组，谁都不被顺手清零。
-        ClassifyModel: _aiClassifyModelHeld);
+        ClassifyModel: AiClassifyModelBox.Text);
 
     private void AiEnabled_Toggled(object sender, RoutedEventArgs e) => PersistAiAndShow();
 
@@ -173,7 +169,64 @@ public sealed partial class SettingsPage
         AiGroupList.ItemsSource = _aiGroups;
         ShowPlan(PendingPlan());
         if (_aiPlan.IsEmpty) AiResumeButton.Visibility = Visibility.Collapsed;
+        AiBatchLimitsText.Text = DescribeFixedBatchLimits();
+        // 置位这一格要压住 TextChanged：否则"打开设置页"这件事本身就是一次写盘（整档读写一遍）。
+        _aiLoading = true;
+        try
+        {
+            var seconds = App.Services.GetRequiredService<SettingsStore>().LoadAiBatchTimeout().Seconds;
+            // 存档里显式写着默认值与"留空"是同一件事，界面上就同一个样子——不许出现两处看着不同、行为相同。
+            AiTimeoutBox.Text = seconds == ClassifyRunner.DefaultTimeoutSeconds
+                ? string.Empty
+                : seconds.ToString(CultureInfo.InvariantCulture);
+        }
+        finally
+        {
+            _aiLoading = false;
+        }
+        RefreshAiTimeoutNote();
     }
+
+    /// <summary>三格只读展示。<b>数字全部取自代码里的常数</b>：写死在界面里就会和常数分岔（同一份预算两处各说一次）。
+    /// 不开放填写的理由也同批写出来——只留一句"这格不做"，用户无法判断这条决定对不对。</summary>
+    private static string DescribeFixedBatchLimits()
+        => $"每一批 {ClassifyPrompt.MaxItemsPerBatch} 条、发给模型的条目段不超过 {ClassifyPrompt.UserBudgetChars} 字、"
+         + $"参考标签取 {ClassifyPrompt.MaxReferenceTags} 个。这三格留在代码里，不开放填写："
+         + $"真会挡住的是单次请求 {AiRequest.MaxPromptChars} 字那道闸门，把前两格调大不会报错，"
+         + "而是让提示词越过模型窗口——超窗的表现是「模型开始编」，比一个红字更难发现。";
+
+    /// <summary>超时那一格的当前口径。<b>坏值必须当场说原因</b>：这一格用户可以手改存档，
+    /// 静默回默认等于"改了没落盘"里最难自查的一种。</summary>
+    private void RefreshAiTimeoutNote()
+    {
+        var (seconds, reason) = App.Services.GetRequiredService<SettingsStore>().LoadAiBatchTimeout();
+        AiTimeoutNoteText.Text = reason
+            ?? $"当前每批 {seconds} 秒：留空＝默认 {ClassifyRunner.DefaultTimeoutSeconds} 秒，"
+             + $"可在 {ClassifyRunner.MinTimeoutSeconds}–{ClassifyRunner.MaxTimeoutSeconds} 秒之间自选。";
+    }
+
+    private void AiTimeoutBox_TextChanged(object sender, RoutedEventArgs e)
+    {
+        if (_aiLoading) return;               // 同 PersistAiAndShow：装载时的置位不写盘
+        var text = AiTimeoutBox.Text.Trim();
+        var defaultSeconds = ClassifyRunner.DefaultTimeoutSeconds;
+        // 只认不分组、不带文化的整数写法：「1,000」这类字符串按当前区域可能 parses，那不是用户想说的数。
+        int? asked = int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+        var store = App.Services.GetRequiredService<SettingsStore>();
+        store.SaveAiBatchTimeout(asked);
+        AiTimeoutNoteText.Text = text.Length == 0
+            ? $"留空＝默认 {defaultSeconds} 秒，可在 {ClassifyRunner.MinTimeoutSeconds}–{ClassifyRunner.MaxTimeoutSeconds} 秒之间自选。"
+            : asked is null
+                ? $"「{text}」不是整数秒，已按默认 {defaultSeconds} 秒执行。"
+                : ClassifyRunner.NormalizeTimeoutSeconds(asked) == asked
+                    ? $"当前每批 {asked} 秒：留空＝默认 {defaultSeconds} 秒，"
+                      + $"可在 {ClassifyRunner.MinTimeoutSeconds}–{ClassifyRunner.MaxTimeoutSeconds} 秒之间自选。"
+                    : $"{asked} 秒不在 {ClassifyRunner.MinTimeoutSeconds}–{ClassifyRunner.MaxTimeoutSeconds} 之间，"
+                      + $"已按默认 {defaultSeconds} 秒执行。";
+    }
+
 
     /// <summary>"还没应用的方案"只从一个入口读（那条"砍掉不成类标签"的规则住在服务里）。
     /// 界面上再开一条直读存档的口子就是第二个事实源：旧档里的专有词会绕过那一刀又摆回预览。</summary>

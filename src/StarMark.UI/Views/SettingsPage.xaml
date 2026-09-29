@@ -293,6 +293,11 @@
                                 <PasswordBox x:Name="AiKeyBox" Header="API Key（选 Ollama 时不必填）"
                                              FontSize="12" PasswordChanged="AiField_TextChanged"/>
 
+                                <!-- 分类专用模型（§19 O6）：留空就沿用上面那个模型名，填了只影响打标这一路。 -->
+                                <TextBox x:Name="AiClassifyModelBox" Header="分类模型名（留空＝沿用上面的模型）"
+                                         HorizontalAlignment="Stretch" PlaceholderText="如 qwen2.5:1.5b"
+                                         FontSize="12" TextChanged="AiField_TextChanged"/>
+
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <Button x:Name="AiProbeButton" Content="测试连接" Click="AiProbe_Click"
                                             Style="{StaticResource SecondaryButton}"/>
@@ -325,6 +330,15 @@
                                             Style="{StaticResource SecondaryButton}" VerticalAlignment="Bottom" IsEnabled="False"/>
                                 </Grid>
 
+                                <!-- 三格只读展示（批次 R4）：数字全部从代码里的常数来，界面不写第二份。 -->
+                                <TextBlock x:Name="AiBatchLimitsText" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                           Opacity="0.72"/>
+
+                                <TextBox x:Name="AiTimeoutBox" Header="单批超时（秒，留空＝走默认）" HorizontalAlignment="Stretch"
+                                         FontSize="12" TextChanged="AiTimeoutBox_TextChanged"/>
+                                <TextBlock x:Name="AiTimeoutNoteText" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                           Opacity="0.72"/>
+
                                 <Button x:Name="AiResumeButton" Content="继续处理上次整理好的结果" Click="AiResume_Click"
                                         Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" Visibility="Collapsed"/>
 
@@ -342,6 +356,13 @@
                                     <Button Grid.Column="2" x:Name="AiBudgetUnpauseButton" Content="恢复 AI" Click="AiBudget_Unpause_Click"
                                             Style="{StaticResource SecondaryButton}" VerticalAlignment="Bottom" Visibility="Collapsed"/>
                                 </Grid>
+
+                                <!-- 预警比例（批次 R4）：到线不拦，只把话说明白；留空＝出厂值。 -->
+                                <TextBox x:Name="AiWarnRatioBox" Header="预警比例（%，留空＝走默认）" HorizontalAlignment="Stretch"
+                                         FontSize="12" TextChanged="AiWarnRatioBox_TextChanged"/>
+                                <TextBlock x:Name="AiWarnRatioNoteText" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                           Opacity="0.72"/>
+
                                 <TextBlock x:Name="AiUsageText" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
                                            Text="用量还没读。" Opacity="0.72"/>
 

@@ -205,7 +205,10 @@ public sealed class AiClassifyService
                 SavePending(new ClassifyPlan(proposals.ToList(), DateTimeOffset.UtcNow));
                 onProgress(done.Index + 1, total);
             },
-            ct);
+            ct,
+            // 单批超时这一格从存档读（判据住在 ClassifyRunner，界面不写第二份）：
+            // 本地大模型冷启动慢的机器上，"等不到"是能被用户自己调的，不该只能等程序改默认值。
+            timeoutSeconds: _store.LoadAiBatchTimeout().Seconds);
 
         Merge(proposals, report.Proposals);                 // 编排层给的汇总为准（含回调没覆盖到的情况）
         // 最后再砍一刀：整个方案里只挂上一条条目的标签不叫分类（用户要的正是"别再一条一个词"）。
@@ -268,7 +271,8 @@ public sealed class AiClassifyService
                 var report = await ClassifyRunner.RunAsync(
                     forAi, catalog,
                     request => _gateway.CompleteAsync(settings.ForClassify(), request, ct),
-                    null, ct);
+                    null, ct,
+                    timeoutSeconds: _store.LoadAiBatchTimeout().Seconds);   // 与批量那一路同一个档位：一条也是一批
                 tags = report.Proposals.FirstOrDefault(p => p.Id == item.Id)?.Tags
                        ?? Array.Empty<string>();
                 if (report.Batches.FirstOrDefault()?.Usage is { } used && _usage is { } ledger)

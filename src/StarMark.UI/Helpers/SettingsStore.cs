@@ -139,7 +139,8 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         public int? WeatherView { get; set; }
 
         // ===== AI 助手（批次 A：Provider 抽象 + 连接自检）=====
-        // 六个 key 全部带 Ai 前缀且各自独立。扩展项目出过一次"AI 域四个 key 同名"的事故：
+        // 这一组的 key 全部带 Ai 前缀且各自独立——<b>一格只管一件事</b>是硬性形状，加一格就多一个 key，
+        // 谁也不许覆盖谁。扩展项目出过一次"AI 域四个 key 同名"的事故：
         // 第一批分类结果落盘就把 AI 设置整个冲掉了，而两处写的是同一个字符串，看代码看不出来。
 
         /// <summary>AI 通道总开关。<b>默认关闭</b>（null 与 false 都算关）：这功能会把库里的标题/摘要发出去，
@@ -178,6 +179,11 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         /// §20.2 明写"重置＝手动点击"，防的就是"用户不知道为什么半夜恢复的调用在烧钱"。</summary>
         public bool? AiBudgetPaused { get; set; }
 
+        /// <summary>预警线（<b>小数比例</b>：0.8＝用到预算的 80% 时先提醒，界面上按百分数说话）。
+        /// null＝从没设过＝出厂 0.8；越界值（0 与 1 之外）在读取侧就回默认，
+        /// 判据只住在 <c>AiBudget.IsLegalWarnRatio</c> 一处。</summary>
+        public double? AiWarnRatio { get; set; }
+
         /// <summary>「AI 整理」规则预分类的用户追加规则（JSON 数组，§19 O2）。null/解析失败＝只有内置规则
         /// （<c>ClassifyRules.Merged</c> 一条路管两种情况）。放得下也读得回的失败必须出声：<b>这条链的失败
         /// 形态是"我明明加了规则却没生效"，所以坏 JSON 在读取侧就回报，而不是静默吞掉。</b></summary>
@@ -186,6 +192,11 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         /// <summary>分类专用模型（§19 O6）。null/空白＝沿用主模型。与 <see cref="AiModel"/> 分格是刻意的：
         /// 一格只绑架一件事——换分类小模型不许顺手把将来的生成任务也换小。</summary>
         public string? AiClassifyModel { get; set; }
+
+        /// <summary>一批问模型的时限（秒）。null＝从没设过＝走 <c>ClassifyRunner.DefaultTimeoutSeconds</c>；
+        /// <b>越界值在读取侧回默认并留一句原因</b>（判据住在 <c>ClassifyRunner.NormalizeTimeoutSeconds</c>，
+        /// 这一格是用户可手改的 JSON，静默采纳 0 秒等于"每批都立刻超时"）。</summary>
+        public int? AiBatchTimeoutSeconds { get; set; }
 
         /// <summary>收藏即时分类开关（§19 O5）。<b>默认关</b>：它会"用户没按下任何 AI 按键就发一个请求"——
         /// 合法性由 §20.4 的裁定撑腰（收藏动作本身是用户显式触发），但"裁定合法"不等于"值得默认开"：

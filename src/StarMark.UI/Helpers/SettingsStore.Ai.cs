@@ -7,6 +7,7 @@ using System.Text.Json;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Ai;
 using StarMark.Abstractions.Feed;
+using StarMark.Core.Ai;
 using StarMark.Core.Feed;
 using StarMark.Abstractions.Trending;
 using StarMark.Core.Hotkeys;
@@ -43,9 +44,9 @@ public sealed partial class SettingsStore
 
     /// <summary>整组一次写入。<b>刻意不提供"只改一个字段"的写法</b>：这一组字段互相才有意义
     /// （通道换了，Key 与地址的必填性跟着变），分开写会出现"Ollama 却带着 https 校验"的中间态。
-    /// <para>注意：全组语义意味着<b>调用方交回来的必须是自己读到的完整一份</b>——
-    /// 「分类模型」还没有界面输入（3b 批补上）前，设置页保存时把它从上一次 Load 的值原样带上，
-    /// 否则用户手改 settings.json 里这一格、设置页一按开关就清零（"改了没落盘"最难自查的一种）。</para></summary>
+    /// <para>注意：全组语义意味着<b>调用方交回来的必须是自己读到的完整一份</b>——界面少一格，
+    /// 保存时就会把那一格清零（"改了没落盘"最难自查的一种）。「分类模型」现在有输入格了，
+    /// 但它必须由 <see cref="ReadAiSettings"/> 一并读回来，不许在保存路径上补第二个事实源。</para></summary>
     public void SaveAiSettings(AiSettings settings)
     {
         var d = Load() ?? new SettingsData();
@@ -108,17 +109,21 @@ public sealed partial class SettingsStore
         Save(d);
     }
 
-    /// <summary>读预算档位。两格都容错（这文件用户可以手改）：预算数字认不出来回默认、
-    /// 不抛；熔断位 null 按"没过"。<b>读出的值一律过一遍 <see cref="AiBudget.WithMonthlyTokens"/></b>——
-    /// 手改成 1 token 的档位在语义上不该等于"关了 AI"。</summary>
+    /// <summary>读预算档位。三格都容错（这文件用户可以手改）：预算数字认不出来回默认、
+    /// 熔断位 null 按"没过"、预警线越界同样回默认，<b>都不抛</b>。<b>读出的值一律过一遍
+    /// <see cref="AiBudget.WithMonthlyTokens"/> 与 <see cref="AiBudget.WithWarnRatio"/></b>——
+    /// 手改成 1 token 的档位在语义上不该等于"关了 AI"，手改成 5 的"预警比例"更不该等于"预警永远不响"。
+    /// <para>消毒放在<b>读取</b>而不是展示：显示侧与判额侧读的是同一个实例属性，
+    /// 只有一边消毒就会出现"面板写 80%、裁决按 5 倍预算"的分岔。</para></summary>
     public AiBudget LoadAiBudget()
     {
         var d = Load();
         var budget = new AiBudget(AiBudget.DefaultMonthlyTokens, d?.AiBudgetPaused == true);
-        return d?.AiTokenBudget is { } tokens ? budget.WithMonthlyTokens(tokens) : budget;
+        if (d?.AiTokenBudget is { } tokens) budget = budget.WithMonthlyTokens(tokens);
+        return d?.AiWarnRatio is { } ratio ? budget.WithWarnRatio(ratio) : budget;
     }
 
-    /// <summary>预算整组写入（额度 + 熔断位）。<b>不给"只改一位"的写法</b>：
+    /// <summary>预算整组写入（额度 + 熔断位 + 预警线）。<b>不给"只改一位"的写法</b>：
     /// 把"改额度"与"消熔断"分开调，会造出"额度升到天上、熔断位还亮着"的鬼状态——
     /// 用户在面板上调了额、功能照旧被拒，且找不到按钮解释这件事。</summary>
     public void SaveAiBudget(AiBudget budget)
@@ -126,6 +131,28 @@ public sealed partial class SettingsStore
         var d = Load() ?? new SettingsData();
         d.AiTokenBudget = budget.MonthlyTokenBudget;
         d.AiBudgetPaused = budget.PausedByBudget;
+        d.AiWarnRatio = budget.WarnRatioOverride;   // null＝留空＝走默认；坏值在 Load 与 WithWarnRatio 两处都已消毒
+        Save(d);
+    }
+
+    /// <summary>读单批超时。<b>坏值回默认，并把"为什么不采纳"一起交出去</b>：这一格同样是用户可手改的
+    /// JSON 数字，静默按 0 秒执行等于每批一发出就超时，比回默认难查得多（界面上那句原因由调用方说）。</summary>
+    public (int Seconds, string? Reason) LoadAiBatchTimeout()
+    {
+        var stored = Load()?.AiBatchTimeoutSeconds;
+        var seconds = ClassifyRunner.NormalizeTimeoutSeconds(stored);
+        if (stored is null || stored == seconds) return (seconds, null);
+        return (seconds,
+            $"存档里写的 {stored} 秒不在 {ClassifyRunner.MinTimeoutSeconds}–{ClassifyRunner.MaxTimeoutSeconds} 之间，"
+            + $"已按默认 {seconds} 秒执行。");
+    }
+
+    /// <summary>写单批超时。<b>越界写成"没设"而不是把坏值存进去</b>：存一个下轮还要消毒的数，
+    /// 等于把同一个判断留给读侧和写侧各做一次。</summary>
+    public void SaveAiBatchTimeout(int? seconds)
+    {
+        var d = Load() ?? new SettingsData();
+        d.AiBatchTimeoutSeconds = ClassifyRunner.NormalizeTimeoutSeconds(seconds) == seconds ? seconds : null;
         Save(d);
     }
 
