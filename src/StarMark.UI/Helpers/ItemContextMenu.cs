@@ -159,7 +159,7 @@ internal static class ItemContextMenu
         try
         {
             var host = new Controls.PreviewHost { ViewModel = vm };
-            var title = vm.Title.Length <= 40 ? vm.Title : vm.Title[..40] + "…";
+            var title = ItemCardPolicy.TruncatedTitle(vm.Title);
             var owner = WindowInterop.ResolveWindow(root, App.MainWindow);
             var result = await CenteredDialog.ShowContentAsync(
                 title, host, owner: owner,

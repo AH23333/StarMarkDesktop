@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using StarMark.Abstractions;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
@@ -83,7 +84,7 @@ public sealed partial class ItemCard : UserControl
         var host = new PreviewHost { ViewModel = vm };
         // 统一走外部居中窗口（非 ContentDialog）：按用户主题着色、可拖动、不可重复。
         var result = await CenteredDialog.ShowContentAsync(
-            vm.Title.Length <= 40 ? vm.Title : vm.Title[..40] + "…",
+            ItemCardPolicy.TruncatedTitle(vm.Title),
             host, owner: App.MainWindow,
             dedupeKey: vm.PreviewDedupeKey, width: 820, height: 640,
             primaryText: vm.OpenMenuText, cancelText: "关闭");

@@ -98,6 +98,25 @@ public static class ItemCardPolicy
         _ => "•",
     };
 
+    /// <summary>预览窗标题的展示宽度（UTF-16 单元数；批次 SB，P-123 清单第二条）。</summary>
+    public const int TitleDisplayChars = 40;
+
+    /// <summary>
+    /// 预览窗标题的截断，<b>全应用唯一出处</b>：从卡片点开和从右键菜单点开是同一扇窗，
+    /// 而这条 40 字规则曾在两处逐字各写一遍 ⇒ 改一处就成了"同一个条目走两条路，标题断在不同字上"。
+    /// <para><b>为什么不是 <c>title[..40] + "…"</c> 那么简单</b>：一枚 emoji 在 UTF-16 里占两枚单元，
+    /// 第 40 枚正好落在代理对中间时会留下<b>半个 emoji</b>——实测切出的串里未配对代理＝1，界面上是个方块。
+    /// 标题就是文件名，而文件名可以带 emoji ⇒ 这条路是通的。所以下刀前退一格；
+    /// 其余形状的读数逐字不变（中文／ASCII／全角符号实测四种切法一致）。</para>
+    /// </summary>
+    public static string TruncatedTitle(string title)
+    {
+        if (title.Length <= TitleDisplayChars) return title;
+        var cut = TitleDisplayChars;
+        if (char.IsHighSurrogate(title[cut - 1])) cut--;
+        return title[..cut] + "…";
+    }
+
     /// <summary>Star 按钮的图标与文字：已 Star 必须一眼可辨（它是"再点会取消"的信号）。</summary>
     public static string StarGlyph(bool starred) => starred ? "★" : "☆";
 
