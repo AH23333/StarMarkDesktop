@@ -50,11 +50,35 @@ public partial class SettingsPageViewModel : ObservableObject
 
     // 性能模式 / 内存门禁（Phase B-8）
     [ObservableProperty] private int _performanceModeIndex;
-    [ObservableProperty] private double _cacheBudgetMb = 200;
-    [ObservableProperty] private int _maxCacheCount = 256;
+    // 初值与读取兜底都用判据那颗（批次 SA，P-123 第 3 条）：以前这里是 200/256 的第二份抄本
+    [ObservableProperty] private double _cacheBudgetMb = PerformanceSettingsPolicy.BudgetMbDefault;
+    [ObservableProperty] private int _maxCacheCount = PerformanceSettingsPolicy.CacheCountDefault;
 
     /// <summary>仅「自定义」性能模式显示预算 / 缓存上限控件。</summary>
     public bool CustomBudgetVisible => PerformanceModeIndex == (int)PerformanceMode.Custom;
+
+    /// <summary>
+    /// 两根滑杆的<b>范围与步进</b>，一律转发自 <see cref="PerformanceSettingsPolicy"/>。
+    /// <para>XAML 以前自己写着 <c>Maximum="2048"</c> 与 <c>Maximum="1024"</c>，而仓储允许到 4096：
+    /// 存档里一个合法且在生效的预算，在设置页<b>表达不出来</b>（滑杆指不到 2048 以上）。
+    /// 范围现在只有一个主人，界面上再也写不出第二个上限（<c>Mode=OneTime</c> 绑这几个属性）。</para>
+    /// </summary>
+    public double BudgetMbFloor => PerformanceSettingsPolicy.BudgetMbFloor;
+
+    /// <summary>进程内存预算上限（MB）。</summary>
+    public double BudgetMbCeiling => PerformanceSettingsPolicy.BudgetMbCeiling;
+
+    /// <summary>进程内存预算步进（MB）。</summary>
+    public double BudgetMbStep => PerformanceSettingsPolicy.BudgetMbStep;
+
+    /// <summary>缓存条目数下限。</summary>
+    public int CacheCountFloor => PerformanceSettingsPolicy.CacheCountFloor;
+
+    /// <summary>缓存条目数上限。</summary>
+    public int CacheCountCeiling => PerformanceSettingsPolicy.CacheCountCeiling;
+
+    /// <summary>缓存条目数步进。</summary>
+    public int CacheCountStep => PerformanceSettingsPolicy.CacheCountStep;
 
     /// <summary>进程内存预算读数文本（滑块右侧）。</summary>
     public string CacheBudgetText => $"{CacheBudgetMb:0} MB";
@@ -260,8 +284,8 @@ public partial class SettingsPageViewModel : ObservableObject
 
         // 性能模式 / 内存门禁
         PerformanceModeIndex = (int)Safe(_settings.LoadPerformanceMode, PerformanceMode.Balanced, "性能模式");
-        CacheBudgetMb = Safe(_settings.LoadCacheBudgetMb, 200.0, "缓存预算");
-        MaxCacheCount = Safe(_settings.LoadMaxImageCacheCount, 256, "缓存上限");
+        CacheBudgetMb = Safe(_settings.LoadCacheBudgetMb, PerformanceSettingsPolicy.BudgetMbDefault, "缓存预算");
+        MaxCacheCount = Safe(_settings.LoadMaxImageCacheCount, PerformanceSettingsPolicy.CacheCountDefault, "缓存上限");
 
         // 本地文件索引（P0-1b）：根目录每行一个；上限数字
         FileIndexRootsText = string.Join("\n", Safe(_settings.LoadFileIndexRoots, Array.Empty<string>(), "索引目录"));

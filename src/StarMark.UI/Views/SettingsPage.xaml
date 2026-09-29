@@ -514,7 +514,11 @@
                                         <TextBlock Text="超过即触发回收" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
-                                        <Slider Grid.Column="0" Minimum="32" Maximum="2048" StepFrequency="16" Width="150"
+                                        <!-- 范围与步进绑判据（批次 SA，P-123 第 3 条）：这里曾写死 32–2048 / 16–1024，
+                             而仓储允许到 4096 ⇒ 存档里合法且在生效的预算在这根条子上表达不出来。 -->
+                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.BudgetMbFloor, Mode=OneTime}"
+                                                Maximum="{x:Bind ViewModel.BudgetMbCeiling, Mode=OneTime}"
+                                                StepFrequency="{x:Bind ViewModel.BudgetMbStep, Mode=OneTime}" Width="150"
                                                 Value="{x:Bind ViewModel.CacheBudgetMb, Mode=TwoWay}"/>
                                         <TextBlock Grid.Column="1" VerticalAlignment="Center" Width="56"
                                                    Text="{x:Bind ViewModel.CacheBudgetText, Mode=OneWay}"
@@ -528,7 +532,9 @@
                                         <TextBlock Text="图片 / 头像等有界缓存上限" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
-                                        <Slider Grid.Column="0" Minimum="16" Maximum="1024" StepFrequency="16" Width="150"
+                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.CacheCountFloor, Mode=OneTime}"
+                                                Maximum="{x:Bind ViewModel.CacheCountCeiling, Mode=OneTime}"
+                                                StepFrequency="{x:Bind ViewModel.CacheCountStep, Mode=OneTime}" Width="150"
                                                 Value="{x:Bind ViewModel.MaxCacheCount, Mode=TwoWay}"/>
                                         <TextBlock Grid.Column="1" VerticalAlignment="Center" Width="46"
                                                    Text="{x:Bind ViewModel.MaxCacheCount, Mode=OneWay}"

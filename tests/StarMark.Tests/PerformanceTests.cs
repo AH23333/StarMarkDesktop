@@ -242,4 +242,72 @@ public sealed class PerformanceTests
         }
         finally { PerformanceSettingsPolicy.Provider = prev; }
     }
+
+    // ─────────── 批次 SA（P-123 第 3 条）：自定义档的范围/默认收成一颗之后的契约 ───────────
+
+    /// <summary>
+    /// 读档与落盘<b>共用同一颗</b> <c>Normalize</c>：两端各自夹住，中间原样。
+    /// <para>为什么要钉"中间原样"（2048 这一档）：界面曾把上限写成 2048，而仓储允许 4096 ⇒
+    /// 判据收口之后，<b>4096 以下任何值都不该被改动</b>；哪天有人把上限调小，这条会先红。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(0.0, 32.0)]            // 存档里的 0 走不到这里（`is > 0` 那道门在前面），这里钉的是"夹到下限"
+    [InlineData(-512.0, 32.0)]
+    [InlineData(31.9, 32.0)]
+    [InlineData(32.0, 32.0)]            // 下限本身不动
+    [InlineData(200.0, 200.0)]
+    [InlineData(2048.0, 2048.0)]        // 旧界面的上限：在判据的范围里，所以不该被改写
+    [InlineData(3000.0, 3000.0)]        // ★ 旧界面表达不出、但仓储认的那个值
+    [InlineData(4096.0, 4096.0)]
+    [InlineData(99999.0, 4096.0)]
+    public void PerformanceTier_BudgetNormalize_ClampsBothEdgesAndPassesTheMiddleThrough(double raw, double expected)
+        => Assert.Equal(expected, PerformanceSettingsPolicy.NormalizeBudgetMb(raw));
+
+    [Theory]
+    [InlineData(0, 16)]
+    [InlineData(15, 16)]
+    [InlineData(16, 16)]
+    [InlineData(256, 256)]
+    [InlineData(1024, 1024)]            // 旧界面的上限
+    [InlineData(2000, 2000)]            // ★ 旧界面表达不出、仓储认的值
+    [InlineData(4096, 4096)]
+    [InlineData(50000, 4096)]
+    public void PerformanceTier_CacheCountNormalize_ClampsBothEdgesAndPassesTheMiddleThrough(int raw, int expected)
+        => Assert.Equal(expected, PerformanceSettingsPolicy.NormalizeCacheCount(raw));
+
+    /// <summary>范围自身要成立，且默认值落在范围内——否则"没存过"的兜底一落到界面上就是非法值。</summary>
+    [Fact]
+    public void PerformanceTier_RangesAreOrderedAndDefaultsLieInsideThem()
+    {
+        Assert.True(PerformanceSettingsPolicy.BudgetMbFloor < PerformanceSettingsPolicy.BudgetMbCeiling);
+        Assert.True(PerformanceSettingsPolicy.CacheCountFloor < PerformanceSettingsPolicy.CacheCountCeiling);
+        Assert.InRange(PerformanceSettingsPolicy.BudgetMbDefault,
+            PerformanceSettingsPolicy.BudgetMbFloor, PerformanceSettingsPolicy.BudgetMbCeiling);
+        Assert.InRange(PerformanceSettingsPolicy.CacheCountDefault,
+            PerformanceSettingsPolicy.CacheCountFloor, PerformanceSettingsPolicy.CacheCountCeiling);
+        // 步进大于 0 且不超过量程：否则滑杆拖到底也够不到上限
+        Assert.True(PerformanceSettingsPolicy.BudgetMbStep > 0
+            && PerformanceSettingsPolicy.BudgetMbStep < PerformanceSettingsPolicy.BudgetMbCeiling - PerformanceSettingsPolicy.BudgetMbFloor);
+        Assert.True(PerformanceSettingsPolicy.CacheCountStep > 0
+            && PerformanceSettingsPolicy.CacheCountStep < PerformanceSettingsPolicy.CacheCountCeiling - PerformanceSettingsPolicy.CacheCountFloor);
+    }
+
+    /// <summary>
+    /// <b>这批真正的收获</b>：每个模式预设都必须落在"自定义"的量程内。
+    /// <para>SA 之前这条<b>不成立</b>——省资源/均衡的缓存条数（128 / 512）在旧界面（上限 1024）里还够得着，
+    /// 但预算量程两边一个是 32–2048（界面）一个是 32–4096（仓储）：同一个旋钮的两份范围一旦漂移，
+    /// "用户选到的"与"程序在用的"就不再是同一个数。钉住这条，漂移当场变红测（#175 同族）。</para>
+    /// </summary>
+    [Fact]
+    public void PerformanceTier_EveryModePresetIsExpressibleInTheCustomRange()
+    {
+        Assert.InRange(PerformanceSettingsPolicy.BalancedBudgetMb,
+            PerformanceSettingsPolicy.BudgetMbFloor, PerformanceSettingsPolicy.BudgetMbCeiling);
+        Assert.InRange(PerformanceSettingsPolicy.ResourceSaverBudgetMb,
+            PerformanceSettingsPolicy.BudgetMbFloor, PerformanceSettingsPolicy.BudgetMbCeiling);
+        Assert.InRange(PerformanceSettingsPolicy.BalancedMaxCacheCount,
+            PerformanceSettingsPolicy.CacheCountFloor, PerformanceSettingsPolicy.CacheCountCeiling);
+        Assert.InRange(PerformanceSettingsPolicy.ResourceSaverMaxCacheCount,
+            PerformanceSettingsPolicy.CacheCountFloor, PerformanceSettingsPolicy.CacheCountCeiling);
+    }
 }

@@ -38,33 +38,34 @@ public sealed partial class SettingsStore
         Save(d);
     }
 
-    /// <summary>自定义模式下的进程工作集预算（MB，默认 200）。</summary>
+    /// <summary>自定义模式下的进程工作集预算（MB）。范围与默认都取自 <see cref="PerformanceSettingsPolicy"/>——这里不再自己写边界（批次 SA，P-123 第 3 条）。</summary>
     public double LoadCacheBudgetMb()
     {
+        // `is > 0` 那一道不能省：存档里的 0 / 负数意思是"没存过"，要落默认值，而不是被夹成下限
         if (Load() is { } d && d.CacheBudgetMb is > 0)
-            return Math.Clamp(d.CacheBudgetMb.Value, 32.0, 4096.0);
-        return 200.0;
+            return PerformanceSettingsPolicy.NormalizeBudgetMb(d.CacheBudgetMb.Value);
+        return PerformanceSettingsPolicy.BudgetMbDefault;
     }
 
     public void SaveCacheBudgetMb(double mb)
     {
         var d = Load() ?? new SettingsData();
-        d.CacheBudgetMb = Math.Clamp(mb, 32.0, 4096.0);
+        d.CacheBudgetMb = PerformanceSettingsPolicy.NormalizeBudgetMb(mb);
         Save(d);
     }
 
-    /// <summary>自定义模式下的有界缓存最大条目数（默认 256）。</summary>
+    /// <summary>自定义模式下的有界缓存最大条目数。范围与默认同取自 <see cref="PerformanceSettingsPolicy"/>。</summary>
     public int LoadMaxImageCacheCount()
     {
         if (Load() is { } d && d.MaxImageCacheCount is > 0)
-            return Math.Clamp(d.MaxImageCacheCount.Value, 16, 4096);
-        return 256;
+            return PerformanceSettingsPolicy.NormalizeCacheCount(d.MaxImageCacheCount.Value);
+        return PerformanceSettingsPolicy.CacheCountDefault;
     }
 
     public void SaveMaxImageCacheCount(int count)
     {
         var d = Load() ?? new SettingsData();
-        d.MaxImageCacheCount = Math.Clamp(count, 16, 4096);
+        d.MaxImageCacheCount = PerformanceSettingsPolicy.NormalizeCacheCount(count);
         Save(d);
     }
 }
