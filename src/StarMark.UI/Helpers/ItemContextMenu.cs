@@ -77,6 +77,10 @@ internal static class ItemContextMenu
         // "组件行右键有、主窗卡片没有"。
         if (vm.CanCopyAsImage)
             flyout.Items.Add(Item("复制图片", (_, _) => ItemCardActions.CopyImage(vm)));
+        // 「贴到桌面」（ClipIMG-P3）：同一颗判据、同一个读、另一条出口——不经剪贴板直接把这张图钉起来。
+        // 2d 的教训就在下面这行曾经是唯一的图片出口：出口只长在一个入口家族上，用户在别的面上就找不到它。
+        if (vm.CanCopyAsImage)
+            flyout.Items.Add(Item("贴到桌面", (_, _) => ItemCardActions.PinImageToDesktop(vm)));
         // 预览与卡片上那颗 🔎 读同一个判据（RSS 候选不给：点条目直接跳文章，正文解析暂不做）
         if (vm.ShowsPreview)
             flyout.Items.Add(Item("预览", async (_, _) => await PreviewAsync(vm, root)));

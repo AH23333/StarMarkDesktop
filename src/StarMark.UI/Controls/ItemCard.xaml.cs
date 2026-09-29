@@ -134,6 +134,15 @@ public sealed partial class ItemCard : UserControl
         if (ViewModel != null) ItemCardActions.CopyImage(ViewModel);
     }
 
+    /// <summary>
+    /// 「贴到桌面」（ClipIMG-P3）：与「复制图片」同一族自包含出口——不走页面事件。
+    /// 卡片被剪贴板页 / 文件夹树 / 搜索页 / 组件行十余处复用，靠宿主订阅必有某一处"菜单里有、点了没反应"
+    /// （2d 那次就是出口只长在了一个入口上）；成功反馈由 PinManager 的通知卡统一说这里不重复。</summary>
+    private void Menu_PinToDesktop(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel != null) ItemCardActions.PinImageToDesktop(ViewModel);
+    }
+
     /// <summary>热榜行的 ⭐Star（图标按钮与右键菜单同一实现）。动作结果由宿主订阅 NoticeRaised 显示。</summary>
     private async void Star_Click(object sender, RoutedEventArgs e)
     {

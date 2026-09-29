@@ -81,6 +81,9 @@ public sealed class ClipboardCopyImageGateTests
         Assert.True(copy < image && image < preview, "「复制图片」必须紧跟在\"复制链接/路径\"之后、预览之前");
         // 出现与否只看那一处判据，不许在这里再 AND 上类型/来源（那会变成第二种"什么算图片行"）。
         Assert.Contains("if (vm.CanCopyAsImage)", body);
+        // ClipIMG-P3：「贴到桌面」与「复制图片」相邻且同判据——两出口一族挂，缺一个就是 2d 的坏形状。
+        var pin = body.IndexOf("ItemCardActions.PinImageToDesktop(vm)", StringComparison.Ordinal);
+        Assert.True(pin > image && pin < preview, "「贴到桌面」要紧跟复制图片之后、预览之前");
     }
 
     [Fact]
@@ -91,7 +94,12 @@ public sealed class ClipboardCopyImageGateTests
         var image = xaml.IndexOf("Click=\"Menu_CopyImage\"", StringComparison.Ordinal);
         Assert.True(copy > 0 && image > copy, "卡片的 ContextFlyout 里「复制图片」要紧跟在复制链接之后（与组件行同序）");
         Assert.Contains("Text=\"复制图片\"", xaml);
-        Assert.Equal(1, Count(xaml, "ViewModel.CanCopyAsImage"));
+        // 1→2 是 ClipIMG-P3 决议过的出口增长（「贴到桌面」与「复制图片」共用同一颗判据）：
+        // 这里钉的不再是"只有一处图片出口"，而是"每一出口都只认同一颗属性、且各出口顺序一致"。
+        Assert.Equal(2, Count(xaml, "ViewModel.CanCopyAsImage"));
+        Assert.Contains("Text=\"贴到桌面\"", xaml);
+        var pinAt = xaml.IndexOf("Click=\"Menu_PinToDesktop\"", StringComparison.Ordinal);
+        Assert.True(pinAt > image, "「贴到桌面」要紧跟在「复制图片」之后（与组件行同序，两处菜单不许各排各的）");
         Assert.Contains("BoolToVis", xaml[image..(xaml.IndexOf("/>", image, StringComparison.Ordinal) + 2)]);
 
         // 代码侧那颗必须自包含：卡片被十余处复用，走页面事件就会有一处"菜单里有、点了没反应"。

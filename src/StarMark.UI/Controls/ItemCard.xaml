@@ -28,6 +28,9 @@
                      判据与组件行右键同源（ItemCardPolicy.CanCopyAsImage）。 -->
                 <MenuFlyoutItem Text="复制图片" Click="Menu_CopyImage"
                                 Visibility="{x:Bind ViewModel.CanCopyAsImage, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                <!-- 「贴到桌面」（ClipIMG-P3）：同一颗判据、不经剪贴板的那条出口。与组件行右键同源。 -->
+                <MenuFlyoutItem Text="贴到桌面" Click="Menu_PinToDesktop"
+                                Visibility="{x:Bind ViewModel.CanCopyAsImage, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <!-- RSS 候选不给预览（用户裁决：点条目直接跳文章，正文解析暂不做）；判据与操作栏那颗按钮同一个属性 -->
                 <MenuFlyoutItem Text="预览" Click="Preview_Click"
                                 Visibility="{x:Bind ViewModel.ShowsPreview, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>

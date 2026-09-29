@@ -178,6 +178,51 @@ public static class ItemCardActions
         }
     }
 
+    /// <summary>把一条图片历史/图片文件贴到桌面上（ClipIMG-P3：接合贴图管线，收官格）。
+    /// <para>与 <see cref="CopyImage"/> 是两个动作，共用同一个读与同一套读不出的说法：那颗交像素给
+    /// 剪贴板（所以要登记回声——不登记，每复制一次历史就多一条自采集），这颗<b>不经剪贴板</b>，
+    /// 没有回声问题；成功也<b>不在此处另报一句</b>——"已钉住（共 N 张，上限 M 张）"由 PinManager
+    /// 的通知卡统一说话，这里再报就成同一件事两种措辞。</para>
+    /// <para>判据只有一份：与「复制图片」同用 <c>CanCopyAsImage</c>，菜单不该长出第二套"什么算图片行"；
+    /// 文件这会儿在不在，由读盘那一步带着原因报告（P-54 同口径）。</para>
+    /// <para>摆放＝光标屏工作区居中（判据在 <c>ItemCardPolicy.CenteredPlacement</c>，可单测）；
+    /// 探测不到光标屏时老实退回 (0,0) 并写日志——比"贴不出去"更贴近用户按下的意图，
+    /// 那张窗仍可拖走，而拒绝执行没有第二次机会。</para></summary>
+    public static async void PinImageToDesktop(ItemCardViewModel vm)
+    {
+        try
+        {
+            if (!vm.CanCopyAsImage) return;
+
+            var (png, frame, why) = vm.IsClipboardImageRow
+                ? await Task.Run(() => ReadEntryImage(vm), CancellationToken.None)
+                : await Task.Run(() => ClipboardImageStore.TryReadFileAsPngAsync(
+                    LocalFileIdentity.TryPathFromUri(vm.Uri, out var localPath) ? localPath : null,
+                    CancellationToken.None), CancellationToken.None);
+
+            if (png is null || frame.Width <= 0 || frame.Height <= 0)
+            {
+                App.MainWindow?.ShowError("没能贴出这张图", why ?? "这张图读不出来。");
+                return;
+            }
+
+            var cursorWork = WindowInterop.MonitorWorkAreaAtCursor();
+            if (cursorWork is null) StarLog.Info("[ClipIMG-P3] 光标所在屏没探到，贴图落 (0,0)");
+            var work = cursorWork?.Work;
+            var placement = ItemCardPolicy.CenteredPlacement(
+                work?.X ?? 0, work?.Y ?? 0, work?.Width ?? frame.Width, work?.Height ?? frame.Height,
+                frame.Width, frame.Height);
+
+            // 交出去即完：PinManager 自己判上限、自己广播，那扇窗本身就是编辑器（PN 口径）。
+            ScreenshotService.PinPixels(frame.Bgra, frame.Width, frame.Height, placement);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error($"剪贴板图片贴到桌面失败 (id={vm.Id}, uri={vm.Uri})", ex);
+            App.MainWindow?.ShowError("没能贴出这张图", ex.Message);
+        }
+    }
+
     /// <summary>把历史行的读盘入口折成与文件侧同一个形状（两条路的失败都得带得出原因，不能一个抛一个返回）。</summary>
     private static (byte[]? Png, ClipboardPayload.ImageFrame Frame, string? Reason) ReadEntryImage(ItemCardViewModel vm)
     {

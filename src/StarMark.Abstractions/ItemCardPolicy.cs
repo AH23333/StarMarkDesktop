@@ -141,4 +141,18 @@ public static class ItemCardPolicy
         => collected
             ? "已在本机收藏（书签）里，点击移除；不会动 GitHub 的 Star 状态"
             : "把它作为书签存进本机收藏；不会动 GitHub 的 Star 状态";
+
+    /// <summary>
+    /// 「贴到桌面」的摆放判据（ClipIMG-P3 的纯函数半格）。
+    /// <para><b>历史图没有"原位"</b>：截图 F3 贴图时摆放＝当时框选的那块矩形，而把一张已在磁盘上的图
+    /// 贴出去，只剩"用户手边那块屏"——<paramref name="workX/workY/workWidth/workHeight"/> 由调用方取
+    /// <b>光标所在屏的物理工作区</b>（与提示卡同一出处：多屏时贴主屏角落，副屏用户看不见，RV 已证）。
+    /// 图大于工作区时贴左上角（<c>Math.Max(0,…)</c>）：负的半屏偏移会把整张图推出屏外，
+    /// 而推出去的那半没有任何找回入口——贴图窗只在屏幕上才可拖。</para>
+    /// </summary>
+    public static Capture.IntRect CenteredPlacement(
+        int workX, int workY, int workWidth, int workHeight, int imageWidth, int imageHeight)
+        => new(workX + Math.Max(0, (workWidth - imageWidth) / 2),
+               workY + Math.Max(0, (workHeight - imageHeight) / 2),
+               Math.Max(0, imageWidth), Math.Max(0, imageHeight));
 }
