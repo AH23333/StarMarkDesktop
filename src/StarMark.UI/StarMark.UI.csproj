@@ -28,7 +28,9 @@
          日常 dotnet build 开发环不受它拖累（只有发布那一发变慢）。
          同批三条刻意不做/缓做，理由见《组件功能扩展实现详解》§21：
          TieredPGO——.NET 8+ 默认开启，写了是 no-op；
-         ServerGC——与"内存占用最小化"铁律相顶，改 A/B 真机实测再定，不写默认；
+         ServerGC——2026-09-29 已按 A/B 真机实测定案：不开（四份样本，工作集差异 <1%、CPU 测不出差异、
+                    唯一可复现的代价是私有承诺量 +5MB 与线程数 +12~14，而收益那一维 GC 停顿本机测不到；
+                    数据与"理由不是内存付不起"这条更正见《组件功能扩展实现详解》§21.3，P-127 已结案）。
          InvariantGlobalization——待 XAML 本地化日期/数字格式专项验证，通过后再开。 -->
     <PublishReadyToRun Condition="'$(Configuration)' == 'Release'">true</PublishReadyToRun>
   </PropertyGroup>
