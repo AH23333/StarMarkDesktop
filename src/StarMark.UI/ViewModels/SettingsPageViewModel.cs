@@ -201,7 +201,7 @@ public partial class SettingsPageViewModel : ObservableObject
             return how + $"本机还没有自动件，最多 {AutoBackupScheduler.ProbePeriod.TotalMinutes:0} 分钟内就会落第一份。";
         var nextDue = newestAuto.Value.AddHours(hours);
         return how + (nextDue > DateTimeOffset.Now
-            ? $"下一次约 {nextDue:MM-dd HH:mm}。"
+            ? $"下一次约 {DateTimeText.MonthDayMinute(nextDue)}。"
             : $"已到间隔，下一次巡查（{AutoBackupScheduler.ProbePeriod.TotalMinutes:0} 分钟内）就会落盘。");
     }
 
@@ -519,7 +519,7 @@ public sealed class BackupRow
     };
 
     /// <summary>列表一律说本地时间——用户记的是"我昨天下午导过一次"，不是 UTC。</summary>
-    public string WhenText => File.ModifiedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+    public string WhenText => DateTimeText.Minute(File.ModifiedUtc.ToLocalTime());
 
     public string SizeText => FileSizeText.Human(File.LengthBytes);
 

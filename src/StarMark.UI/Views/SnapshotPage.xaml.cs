@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using StarMark.Abstractions;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
@@ -83,7 +84,7 @@ public sealed partial class SnapshotPage : Page, INotifyPropertyChanged
     private static string FormatTime(long unixSeconds)
     {
         if (unixSeconds <= 0) return string.Empty;
-        try { return DateTimeOffset.FromUnixTimeSeconds(unixSeconds).ToLocalTime().ToString("yyyy-MM-dd HH:mm"); }
+        try { return DateTimeText.Minute(DateTimeOffset.FromUnixTimeSeconds(unixSeconds).ToLocalTime()); }
         catch { return string.Empty; }
     }
 

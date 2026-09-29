@@ -19,7 +19,7 @@ public static class BuildInfo
 
     /// <summary>给人看的那一句：<c>2026-09-25 00:31</c>；取不到时说实话，不假装是最新。</summary>
     public static string Display => LocalTime is { } time
-        ? time.ToString("yyyy-MM-dd HH:mm")
+        ? DateTimeText.Minute(time)
         : "未知（读不到可执行文件的写入时间）";
 
     private static DateTime? Read()

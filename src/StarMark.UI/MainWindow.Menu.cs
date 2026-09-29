@@ -90,7 +90,7 @@ public sealed partial class MainWindow
         diagTimer.Tick += (_, _) =>
         {
             var lines = new System.Text.StringBuilder();
-            lines.AppendLine($"[tick {DateTime.Now:HH:mm:ss.fff}] page={ViewModel.CurrentPageTag} searchbox=[{SearchBox.Text}]");
+            lines.AppendLine($"[tick {DateTimeText.TickStamp(DateTime.Now)}] page={ViewModel.CurrentPageTag} searchbox=[{SearchBox.Text}]");
             if (ContentFrame.Content is SearchPage sp)
             {
                 lines.AppendLine($"  SEARCH: query=[{sp.ViewModel.Query}] empty=[{sp.ViewModel.EmptyHint}] " +

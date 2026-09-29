@@ -2,6 +2,7 @@
 using System;
 using System.Globalization;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions;
 
 namespace StarMark.Core.Capture;
 
@@ -317,7 +318,7 @@ public static class CaptureGeometry
     /// </summary>
     public static string BuildFileName(DateTimeOffset now, string extension, int collisionIndex = 0)
     {
-        var stem = $"StarMark {now.LocalDateTime:yyyy-MM-dd HHmmss}";
+        var stem = $"StarMark {DateTimeText.CaptureStamp(now)}";
         var suffix = extension.StartsWith('.') ? extension[1..] : extension;
         var suffixText = string.IsNullOrWhiteSpace(suffix) ? "png" : suffix.Trim().ToLowerInvariant();
         return collisionIndex <= 0

@@ -145,7 +145,7 @@ public sealed partial class WidgetWindow
         section.Items.Add(new MenuFlyoutItem
         {
             Text = next is { } due
-                ? $"下一次大约 {due.ToLocalTime():HH:mm}（到点前还会看一眼前台是否全屏）"
+                ? $"下一次大约 {DateTimeText.Clock(due.ToLocalTime())}（到点前还会看一眼前台是否全屏）"
                 : enabled ? "开关已开，但计时器没起来（设置页「健康与诊断」有原因）" : "未开启",
             IsEnabled = false,
         });

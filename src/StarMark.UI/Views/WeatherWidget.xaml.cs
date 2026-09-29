@@ -198,7 +198,7 @@ public sealed partial class WeatherWidget : UserControl
         ShowEmpty(false);
 
         CityBlock.Text = report.City.Display;
-        UpdatedBlock.Text = report.FetchedAt.ToString("HH:mm", CultureInfo.InvariantCulture) + " 更新";
+        UpdatedBlock.Text = DateTimeText.Clock(report.FetchedAt) + " 更新";
 
         TempBlock.Text = WeatherUnits.TemperatureText(report.Now.TemperatureC, _unit);
         DescBlock.Text = WeatherCode.Describe(report.Now.Code);
@@ -239,9 +239,9 @@ public sealed partial class WeatherWidget : UserControl
         if (report.Now.PressureHpa > 0)
             items.Add(("气压", $"{Math.Round(report.Now.PressureHpa)} hPa"));
         if (today?.Sunrise is { } rise)
-            items.Add(("日出", rise.ToString("HH:mm", CultureInfo.InvariantCulture)));
+            items.Add(("日出", DateTimeText.Clock(rise)));
         if (today?.Sunset is { } set)
-            items.Add(("日落", set.ToString("HH:mm", CultureInfo.InvariantCulture)));
+            items.Add(("日落", DateTimeText.Clock(set)));
 
         MetricsHost.RowDefinitions.Clear();
         MetricsHost.ColumnDefinitions.Clear();
@@ -279,7 +279,7 @@ public sealed partial class WeatherWidget : UserControl
             var cell = new StackPanel { Spacing = 2, Width = 42 };
             cell.Children.Add(new TextBlock
             {
-                Text = hour.Time.ToString("HH:mm", CultureInfo.InvariantCulture),
+                Text = DateTimeText.Clock(hour.Time),
                 FontSize = 10,
                 Opacity = 0.6,
                 HorizontalAlignment = HorizontalAlignment.Center,

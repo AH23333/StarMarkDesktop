@@ -79,6 +79,6 @@ public sealed partial class ActivityItemViewModel : ObservableObject
         if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} 分钟前";
         if (diff.TotalHours < 24) return $"{(int)diff.TotalHours} 小时前";
         if (diff.TotalDays < 30) return $"{(int)diff.TotalDays} 天前";
-        return dt.ToString("yyyy-MM-dd");
+        return DateTimeText.Day(dt);
     }
 }

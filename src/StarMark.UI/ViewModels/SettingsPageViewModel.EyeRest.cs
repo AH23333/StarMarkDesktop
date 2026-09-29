@@ -115,7 +115,7 @@ public partial class SettingsPageViewModel
         var defer = EyeRestDeferOnFullscreen ? "；前台是全屏应用（放 PPT / 放映）时自己让路" : "；全屏应用下也照常提醒";
         var running = StarMark.UI.Services.EyeRestService.IsRunning;
         var next = running && StarMark.UI.Services.EyeRestService.NextDueAt is { } due
-            ? $"下一次大约 {due:HH:mm}。"
+            ? $"下一次大约 {DateTimeText.Clock(due)}。"
             : string.Empty;
         var warning = running ? string.Empty : "开关是开着的，但节拍表没挂上（原因见日志）——当前不会提醒。";
         return $"{how}{defer}。{next}{warning}";

@@ -3,6 +3,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
+using StarMark.Abstractions;
 using StarMark.Core.Widgets;
 
 namespace StarMark.UI.ViewModels;
@@ -67,7 +68,7 @@ public sealed partial class CountdownViewModel : ObservableObject
             return;
         }
         NewTitle = string.Empty;
-        NewDate = DateTime.Today.ToString("yyyy-MM-dd");
+        NewDate = DateTimeText.Day(DateTime.Today);
         NewTime = "09:00";
         NewYearly = false;
         AddError = string.Empty;

@@ -167,7 +167,7 @@ public sealed partial class SettingsPage
             // 默认落在备份目录（那里已有"恢复前快照"），用户回车即接受，不必从 C:\ 一路敲过来。
             // 建议名里的扩展名跟着开关走：开着却提示 .json，用户会以为导出的是纯清单。
             var suggested = Path.Combine(BackupService.SnapshotDirectory,
-                $"starmark-backup-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}"
+                $"starmark-backup-{DateTimeText.BackupStamp(DateTimeOffset.UtcNow)}"
                 + (carry ? BackupContainer.ContainerExtension
                          : BackupContainer.ManifestExtension));
             var target = await RequestBackupPathAsync(save: true, suggested);
@@ -252,7 +252,7 @@ public sealed partial class SettingsPage
         if (sender is not Microsoft.UI.Xaml.Controls.Button { Tag: BackupService.BackupFile file }) return;
         var confirm = await CenteredDialog.ConfirmAsync(
             "删除这份备份",
-            $"将永久删除 {file.FileName}（{StarMark.Abstractions.FileSizeText.Human(file.LengthBytes)}，{file.ModifiedUtc.ToLocalTime():yyyy-MM-dd HH:mm}）。\n"
+            $"将永久删除 {file.FileName}（{StarMark.Abstractions.FileSizeText.Human(file.LengthBytes)}，{DateTimeText.Minute(file.ModifiedUtc.ToLocalTime())}）。\n"
             + $"{BackupRow.DeleteWarningFor(file.Kind)}\n数据库本身不受影响；删的只是这一份导出文件。确定删除？",
             primaryText: "删除", cancelText: "取消",
             owner: App.MainWindow, dedupeKey: "deletebackup-" + file.FileName);
@@ -301,7 +301,7 @@ public sealed partial class SettingsPage
         // 摘要直接从已解析的 env 算：旧代码再调 Peek(file.Path)，等于把整份备份第二次读盘+反序列化。
         var summary = BackupService.Summarize(env);
         var detail = $"文件：{Path.GetFileName(source)}\n"
-            + $"导出时间：{DateTimeOffset.FromUnixTimeSeconds(summary.ExportedAt):yyyy-MM-dd HH:mm}\n"
+            + $"导出时间：{DateTimeText.Minute(DateTimeOffset.FromUnixTimeSeconds(summary.ExportedAt))}\n"
             + $"条目 {summary.ItemCount}　用户状态 {summary.UserStateCount}　标签 {summary.TagCount}"
             + (summary.HasWidgets ? "　组件数据：有" : "");
 

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
+using StarMark.Abstractions;
 using StarMark.Core.Widgets;
 
 namespace StarMark.UI.ViewModels;
@@ -24,10 +25,10 @@ namespace StarMark.UI.ViewModels;
 public sealed partial class ClockWidgetViewModel : ObservableObject
 {
     [ObservableProperty]
-    private string _timeText = DateTime.Now.ToString("HH:mm:ss");
+    private string _timeText = DateTimeText.Clock(DateTime.Now, withSeconds: true);
 
     [ObservableProperty]
-    private string _dateText = DateTime.Now.ToString("yyyy-MM-dd dddd");
+    private string _dateText = DateTimeText.DayWithWeekday(DateTime.Now);
 
     /// <summary>护眼那一行的文本；<see cref="HasRestLine"/> 为假时整行不占位。</summary>
     [ObservableProperty]
@@ -59,8 +60,8 @@ public sealed partial class ClockWidgetViewModel : ObservableObject
     public int Update()
     {
         var now = DateTime.Now;
-        TimeText = now.ToString("HH:mm:ss");
-        DateText = now.ToString("yyyy-MM-dd dddd");
+        TimeText = DateTimeText.Clock(now, withSeconds: true);
+        DateText = DateTimeText.DayWithWeekday(now);
         RefreshRest(now);
         // 时钟显示的是本机时间，闹钟的判定也按本机墙上时钟走：这里把 DateTime 换成带本机偏移的时刻，
         // 于是 Core 那一侧只看"绝对时刻 + 那天的第几分钟"，不需要知道机器在哪个时区。
@@ -85,7 +86,7 @@ public sealed partial class ClockWidgetViewModel : ObservableObject
         // 到点时刻是"大约"：节拍判据在 Core，界面上不承诺精确到分。
         var local = due.ToLocalTime();
         var sameDay = local.Date == now.Date;
-        RestText = $"休息 {(sameDay ? local.ToString("HH:mm") : local.ToString("M-d HH:mm"))}";
+        RestText = $"休息 {(sameDay ? DateTimeText.Clock(local) : DateTimeText.MonthDayClock(local))}";
         HasRestLine = true;
     }
 

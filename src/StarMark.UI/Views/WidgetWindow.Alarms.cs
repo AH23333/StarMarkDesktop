@@ -57,7 +57,7 @@ public sealed partial class WidgetWindow
             Text = pending > 0
                 ? $"到点了：按下面「停止待确认」就收（本程序运行时才提醒）"
                 : alarms.NextDueAt is { } due
-                    ? $"下一次大约 {due.ToString("HH:mm", CultureInfo.InvariantCulture)}（本程序运行时才提醒）"
+                    ? $"下一次大约 {DateTimeText.Clock(due)}（本程序运行时才提醒）"
                     : "还没有闹钟：加一条，例如「7:30 起床」（本程序运行时才提醒）",
             IsEnabled = false,
         });

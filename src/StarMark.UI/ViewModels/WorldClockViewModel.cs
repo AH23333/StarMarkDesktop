@@ -3,6 +3,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
+using StarMark.Abstractions;
 using StarMark.Core.Widgets;
 
 namespace StarMark.UI.ViewModels;
@@ -119,7 +120,7 @@ public sealed partial class WorldClockViewModel : ObservableObject
             }
             var at = nowUtc.ToOffset(zone.GetUtcOffset(nowUtc));
             row.Error = null;
-            row.TimeText = at.ToString("HH:mm:ss");
+            row.TimeText = DateTimeText.Clock(at, withSeconds: true);
             row.OffsetText = WorldClockPolicy.OffsetLabel(at.Offset);
             row.DayTag = WorldClockPolicy.DayLabel(
                 DateOnly.FromDateTime(at.DateTime).DayNumber - localToday.DayNumber);

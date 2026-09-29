@@ -1,5 +1,6 @@
 #nullable enable
 using System.Globalization;
+using StarMark.Abstractions;
 
 namespace StarMark.Core.Widgets;
 
@@ -152,13 +153,13 @@ public static class CountdownPolicy
     }
 
     private static string OccurrenceLine(CountdownItem item, DateTimeOffset occurrence)
-        => $"{occurrence:yyyy-MM-dd HH:mm}  {(item.Yearly ? YearNumber(item, occurrence) + " 周年" : "到期")}";
+        => $"{DateTimeText.Minute(occurrence)}  {(item.Yearly ? YearNumber(item, occurrence) + " 周年" : "到期")}";
 
     private static string AnniversaryLine(CountdownItem item, DateTimeOffset occurrence, DateTimeOffset now)
     {
-        if (!item.Yearly) return $"{occurrence:yyyy-MM-dd HH:mm} 已到期";
+        if (!item.Yearly) return $"{DateTimeText.Minute(occurrence)} 已到期";
         var years = now.Year - item.At.Year;
-        return $"{occurrence:MM-dd HH:mm} · 第 {years + 1} 个年头";
+        return $"{DateTimeText.MonthDayMinute(occurrence)} · 第 {years + 1} 个年头";
     }
 
     private static string YearNumber(CountdownItem item, DateTimeOffset occurrence)

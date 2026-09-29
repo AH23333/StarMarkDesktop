@@ -124,7 +124,7 @@ public sealed partial class WidgetManager
         // 1) 自动回滚点：应用前把当前状态先存成一个快照，结果不满意可「应用」它退回这一刻。
         //    快照是 Replace 语义（会覆盖当前待办/随记/摆位）——若这个回滚点没存成，一旦应用出错就无从退回，
         //    属于破坏性且不可逆，因此捕获失败必须中止、绝不继续落位。
-        if (!await CaptureSnapshotInternalAsync($"自动备份（应用前） · {DateTime.Now:MM-dd HH:mm}"))
+        if (!await CaptureSnapshotInternalAsync($"自动备份（应用前） · {DateTimeText.MonthDayMinute(DateTimeOffset.Now)}"))
             return false;
 
         // 2) 布局半 + 配置数据半（UI 线程）：落位几何/外观，并把 Links/Grid/Title/外壳/隐私写回匹配到的实例。

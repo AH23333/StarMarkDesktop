@@ -354,7 +354,7 @@ public sealed class BackupService
     {
         Directory.CreateDirectory(SnapshotDirectory);
         // 锁定 InvariantCulture：非公历区域（th-TH 佛历 / ar-SA 希吉来历）下不加锁定会得到错误年份，破坏回滚点按名排序的时间序。
-        var name = $"{AutoBackupPolicy.SnapshotPrefix}{DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.json";
+        var name = $"{AutoBackupPolicy.SnapshotPrefix}{DateTimeText.BackupStamp(DateTimeOffset.UtcNow)}.json";
         var path = Path.Combine(SnapshotDirectory, name);
         await ExportToFileAsync(path, ct);
         return path;
@@ -472,7 +472,7 @@ public sealed class BackupService
             return null;
 
         Directory.CreateDirectory(dir);
-        var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+        var stamp = DateTimeText.BackupStamp(DateTimeOffset.UtcNow);
         var path = Path.Combine(dir, $"{AutoBackupPolicy.Prefix}{stamp}.json");
         await File.WriteAllTextAsync(path, SerializeEnvelope(env), ct);
 

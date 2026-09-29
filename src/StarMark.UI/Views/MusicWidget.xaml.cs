@@ -322,8 +322,8 @@ public sealed partial class MusicWidget : UserControl
 
     private static string FormatTime(TimeSpan t) =>
         t.TotalHours >= 1
-            ? t.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture)
-            : t.ToString(@"m\:ss", CultureInfo.InvariantCulture);
+            ? DateTimeText.Duration(t, withHours: true)
+            : DateTimeText.Duration(t);
 
     // ── 进度跳转（seek）──
 
