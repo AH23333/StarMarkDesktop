@@ -13,6 +13,7 @@ using StarMark.Abstractions;
 using StarMark.Abstractions.Insights;
 using StarMark.Integrations.Clipboard;
 using StarMark.Core.Backup;
+using StarMark.Core.Canvas;
 using StarMark.Core.Hotkeys;
 using StarMark.Core.Insights;
 using StarMark.Core.Performance;
@@ -183,6 +184,19 @@ public partial class SettingsPageViewModel
     /// <summary>「截图带画布」（默认开＝与这条设置出现之前的行为一致：笔迹会进截图）。</summary>
     [ObservableProperty] private bool _canvasInScreenshots = true;
 
+    /// <summary>
+    /// 光标那块圆的半径（DIP）。<b>一个数管两块圆</b>：幕布开着时它是那块亮区，关着时它是光标光晕（批次 S4-⑥ 的合并结论）。
+    /// <para>改完<b>立刻生效、不用点保存也不用重启</b>：画布每帧现读这份档（与总开关同一口径），
+    /// 多一道"保存"按钮就是发起人算作缺陷的那种额外步骤。</para>
+    /// </summary>
+    [ObservableProperty] private double _cursorCircleRadiusDip = CursorCircle.DefaultRadiusDip;
+
+    /// <summary>
+    /// 滑杆右侧的读数。单位写死成 <b>DIP</b>：这块圆按屏的缩放换算成像素，150% 屏上那个数是它的 1.5 倍，
+    /// 写成"像素"会让人以为两根滑杆在同一条刻度上（批次 WR 那条"单位要进界面"的口径）。
+    /// </summary>
+    public string CursorCircleRadiusText => $"{(int)CursorCircle.ClampRadiusDip(CursorCircleRadiusDip)} DIP";
+
     /// <summary>开关当前含义的一句话（看得见"关掉会发生什么"，不用猜）。</summary>
     [ObservableProperty] private string _canvasStatus = string.Empty;
 
@@ -209,5 +223,17 @@ public partial class SettingsPageViewModel
     {
         if (_suppressCanvasApply) return;
         _settings.SaveCanvasInScreenshots(value);
+    }
+
+    /// <summary>
+    /// 半径一改就落盘（<b>读数刷新不受回灌闸门影响</b>：进设置页时回灌的那一版也要显示对，
+    /// 只是那一次不该顺手写一遍档）。画布侧每帧现读，所以这里不做任何"通知画布"的动作——
+    /// 通知迟早漏一处，而漏掉那一处的症状是"滑杆动了、屏幕上的圆没动"。
+    /// </summary>
+    partial void OnCursorCircleRadiusDipChanged(double value)
+    {
+        OnPropertyChanged(nameof(CursorCircleRadiusText));
+        if (_suppressCanvasApply) return;
+        _settings.SaveCursorCircleRadiusDip(value);
     }
 }

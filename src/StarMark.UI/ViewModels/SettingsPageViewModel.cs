@@ -13,6 +13,7 @@ using StarMark.Abstractions;
 using StarMark.Abstractions.Insights;
 using StarMark.Integrations.Clipboard;
 using StarMark.Core.Backup;
+using StarMark.Core.Canvas;
 using StarMark.Core.Hotkeys;
 using StarMark.Core.Insights;
 using StarMark.Core.Performance;
@@ -331,6 +332,7 @@ public partial class SettingsPageViewModel : ObservableObject
         _suppressCanvasApply = true;
         CanvasEnabled = Safe(_settings.LoadCanvasEnabled, true, "屏幕画布");
         CanvasInScreenshots = Safe(_settings.LoadCanvasInScreenshots, true, "截图带画布");
+        CursorCircleRadiusDip = Safe(_settings.LoadCursorCircleRadiusDip, CursorCircle.DefaultRadiusDip, "光标圆半径");
         _suppressCanvasApply = false;
         CanvasHotkeySheet = BuildCanvasHotkeySheet();
         CanvasStatus = BuildCanvasStatus();

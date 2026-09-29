@@ -711,6 +711,25 @@
                                     <ToggleSwitch Grid.Column="1" OnContent="带上" OffContent="不带" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.CanvasInScreenshots, Mode=TwoWay}"/>
                                 </Grid>
+                                <!--
+                                    光标那块圆的半径（批次 RN，应发起人点名"屏幕画布设置需要实现光晕半径调节设置"）。
+                                    一根滑杆、两块圆：幕布开着时这个半径就是亮区大小，关着时就是那团光的大小——
+                                    批次 S4-⑥ 已经把两块合成一块，拆成两根滑杆等于把那次合并重新拆开。
+                                -->
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="光标那块圆多大"/>
+                                        <TextBlock Text="画布上跟着光标的那团光，与「幕布」开着时鼠标周围那块亮区，用的是同一个半径（一根滑杆管两块圆）。单位是 DIP（与缩放无关的逻辑像素）：150% 的屏上实际像素数会是它的 1.5 倍。拖动立刻生效，不用点保存、不用重启。"
+                                                   Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
+                                        <Slider Grid.Column="0" Minimum="40" Maximum="400" StepFrequency="10" Width="150"
+                                                Value="{x:Bind ViewModel.CursorCircleRadiusDip, Mode=TwoWay}"/>
+                                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Width="60"
+                                                   Text="{x:Bind ViewModel.CursorCircleRadiusText, Mode=OneWay}"
+                                                   Style="{StaticResource MutedText}"/>
+                                    </Grid>
+                                </Grid>
                                 <TextBlock Text="快捷键一览（下面是当前真正生效的键位；要改到「快捷键」页的「屏幕画布」分组）"
                                            Style="{StaticResource SettingRowText}" FontWeight="SemiBold" TextWrapping="Wrap"/>
                                 <TextBlock Text="{x:Bind ViewModel.CanvasHotkeySheet, Mode=OneWay}"

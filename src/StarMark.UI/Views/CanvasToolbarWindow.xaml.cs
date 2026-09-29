@@ -204,8 +204,8 @@ public sealed partial class CanvasToolbarWindow : Window
     /// <summary>「幕布」：压暗整屏、只留鼠标那一圈亮。与白板互斥（背景只有一个真值），所以点它会关掉白板。</summary>
     private void Curtain_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleCurtain();
 
-    /// <summary>「光晕」那颗：关 → 只荧光笔 → 常开 循环（判据在 Core 的 <c>CursorCircle</c>，这里不判方向）。</summary>
-    private void Halo_Click(object sender, RoutedEventArgs e) => CanvasService.CycleHalo();
+    /// <summary>「光晕」那颗：开 ↔ 关（批次 RN 收成两档，判据在 Core 的 <c>CursorCircle</c>，这里不判方向）。</summary>
+    private void Halo_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleHalo();
 
     private void Pin_Click(object sender, RoutedEventArgs e) => CanvasService.SnapshotToPin();
 
@@ -363,7 +363,7 @@ public sealed partial class CanvasToolbarWindow : Window
         Highlight(ThroughButton, CanvasService.IsClickThrough, strong: false);
         Highlight(BoardButton, CanvasService.IsWhiteboard, strong: false);
         Highlight(CurtainButton, CanvasService.IsCurtain, strong: false);
-        Highlight(HaloButton, CanvasService.HaloEnabled, strong: false);   // 常开那一档不额外画：哪一档由状态行说
+        Highlight(HaloButton, CanvasService.HaloEnabled, strong: false);   // 两档：亮＝任何工具都跟着光标一团光
         Highlight(KeysButton, CanvasService.IsHotkeyPanelOpen, strong: false);
         for (var index = 0; index < _colourButtons.Count; index++)
             _colourButtons[index].Background = index == CanvasService.ColorIndex ? ActiveBrush : IdleBrush;
@@ -388,8 +388,9 @@ public sealed partial class CanvasToolbarWindow : Window
         // 让位原因是状态机的输出（"为什么交回了鼠标"是会话这件事的一部分），不是画布宿主的私事。
         if (AnnotationHub.Notice is { } note) return note;
         var tool = CanvasService.Tool;
-        // 光晕现在哪一档必须写在状态行里：那颗按钮是"关→只荧光笔→常开"三态循环，只看亮不亮读不出是哪一档
-        var ink = $"{tool.Name()} · {CanvasService.WidthStep + 1} 档 · {CanvasService.Palette[CanvasService.ColorIndex].Name} · 光晕{CanvasService.HaloName}";
+        // 光晕只有两档（批次 RN，用户裁），开没开由那颗按钮的亮灭说——状态行不再写它：
+        // 这行是「按了会发生什么」的唯一说明，多挂一段就少一段看得清的空间（幕布那句留着，它改的是半屏内容）。
+        var ink = $"{tool.Name()} · {CanvasService.WidthStep + 1} 档 · {CanvasService.Palette[CanvasService.ColorIndex].Name}";
         // 幕布开着时屏幕上少了一半内容：这一行不说，"屏幕怎么暗了、我的字怎么不见了"就只能靠猜
         var curtain = CanvasService.IsCurtain ? " · 幕布（只亮鼠标那一圈）" : string.Empty;
         if (!CanvasService.IsClickThrough)

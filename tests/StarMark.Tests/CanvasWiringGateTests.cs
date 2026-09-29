@@ -1227,15 +1227,13 @@ public sealed class CanvasWiringGateTests
     }
 
     /// <summary>
-    /// 光标那一块圆的<b>显示判据与半径都只有一份出处</b>（批次 S4-⑥，用户裁"合并成一块圆，两个读数"）。
+    /// 光标那一块圆的<b>显示判据与半径都只有一份出处</b>（批次 S4-⑥ 合圆，批次 RN 改两档 + 半径进设置页）。
     /// <para>
-    /// 从前这里钉的是"光晕只在选了荧光笔时跟随光标"——那条裁决仍然成立，只是变成了三档里的<b>默认那一档</b>；
-    /// 而真正的风险换了形状：<b>光晕半径按笔宽档算、幕布亮区按一个 DIP 常量算</b>，同一帧上鼠标处两个圆大小不同，
-    /// 而两处各自乘一次 <c>Scale</c>，四舍五入还能差一像素。所以现在钉的是"两处都问同一个函数"。
+    /// S4-⑥ 钉的是"两处各乘一次缩放迟早差一像素"；RN 之后半径成了<b>用户每帧都可能改</b>的量，
+    /// 于是多出一条同族的分岔：<b>算脏区时读一次设置、叠上去时再读一次</b>，中间正好被拖动，
+    /// 脏区圈住的是旧半径那一块，症状＝"调完半径屏幕上留一圈旧光"。所以叠光那一处现在不许再换算，
+    /// 只许用帧循环当场记下的 <c>screen.GlowRadius</c>（它与 <c>GlowAt</c>／<c>LastGlow</c> 同一处写）。
     /// </para>
-    /// <para>反向钉死两份旧出处：宿主里再出现 <c>CursorHaloEnabled</c> 或按笔宽算的光晕半径，就是第二份真值回来了。
-    /// 第四条钉的是<b>同一条判据不许换一副写法回来</b>：宿主若自己写 <c>!= HaloMode.Off</c> 来决定按钮亮不亮，
-    /// 将来加第四档时 <c>ShowsHalo</c> 改了、这一处没改，症状＝"按钮亮着却不叠光"或反之。</para>
     /// </summary>
     [Fact]
     public void TheHaloAndTheCurtainHoleAskOneJudgementAndOneRadius()
@@ -1245,14 +1243,18 @@ public sealed class CanvasWiringGateTests
         var flush = SourceGate.MethodBody(whole, "private static void Flush(Screen screen)");
         var focus = SourceGate.MethodBody(whole, "private static void UpdateCurtainFocus");
 
-        // ① 叠不叠那一团光：只问 Core 那张表（档位 × 手上的笔 × 背景态）
-        Assert.Contains("CursorCircle.ShowsHalo(_halo, _tool, AnnotationHub.Backdrop)", service);
+        // ① 叠不叠那一团光：只问 Core 那条判据（两档 × 背景态；RN 之后手上的工具不再参与）
+        Assert.Contains("CursorCircle.ShowsHalo(_haloAlways, AnnotationHub.Backdrop)", service);
         Assert.DoesNotContain("_tool == CanvasTool.Highlighter", service);
+        Assert.DoesNotContain("HaloMode", whole);                    // 三档那套枚举不许以别的名字回来
 
-        // ② 半径：三处读者（脏区、叠光、亮区）都问同一个换算函数，且各一次
-        Assert.Contains("CursorCircle.RadiusInPixels(screen.Scale)", service);
-        Assert.Contains("CursorCircle.RadiusInPixels(screen.Scale)", flush);
-        Assert.Contains("CursorCircle.RadiusInPixels(screen.Scale)", focus);
+        // ② 半径：只有两处换算（帧循环的脏区、幕布的亮区），而且都问设置里那个数
+        Assert.Contains("CursorCircle.RadiusInPixels(screen.Scale, CursorCircleRadiusDip)", service);
+        Assert.Contains("CursorCircle.RadiusInPixels(screen.Scale, CursorCircleRadiusDip)", focus);
+        Assert.Equal(2, SourceGate.Count(whole, "CursorCircle.RadiusInPixels(screen.Scale, CursorCircleRadiusDip)"));
+        // 叠的那一处<b>不读设置</b>：它用的必须是帧循环记下来的那一个半径
+        Assert.DoesNotContain("RadiusInPixels", flush);
+        Assert.Contains("screen.GlowRadius", flush);
         Assert.DoesNotContain("RadiusFor(CanvasTool.Highlighter", service);
         Assert.DoesNotContain("RadiusFor(CanvasTool.Highlighter", flush);
 
@@ -1262,9 +1264,10 @@ public sealed class CanvasWiringGateTests
             SourceGate.ReadRepoFile("src/StarMark.Core/Canvas/EphemeralInk.cs"));
         Assert.DoesNotContain("FocusRadiusDip", whole);
 
-        // ④ "开着没有"（按钮亮不亮）也只问 Core：它若在自己那儿写 `!= Off`，加第四档时就静默漏判
-        Assert.Contains("CursorCircle.IsOn(_halo)", whole);
-        Assert.DoesNotContain("!= HaloMode.Off", whole);
+        // ④ "开着没有"（按钮亮不亮）读的是那一位开关，<b>不是"这一帧叠没叠"</b>：
+        //    幕布开着时 ShowsHalo 为假，按钮却必须还亮着——合成一个读数的症状就是"开关看起来被取消了"
+        Assert.Contains("public static bool HaloEnabled => _haloAlways;", whole);
+        Assert.DoesNotContain("HaloEnabled => CursorCircle.ShowsHalo", whole);
 
         // ⑤ "那块圆占的地方"也只有一处公式：帧循环算脏区、合成核算提交块，两份各写一次就会分岔
         //    （症状＝光晕拖过去后面拖一条旧光／外缘缺一条，而两种写法都编译得过）
@@ -1277,20 +1280,53 @@ public sealed class CanvasWiringGateTests
     }
 
     /// <summary>
-    /// 「光晕」那颗走<b>循环</b>而不是二值开关（三档：关 → 只荧光笔 → 常开），
-    /// 而<b>当前哪一档必须由状态行说出来</b>——只看按钮亮不亮，读不出是中间那一档还是常开。
-    /// <para>与白板/幕布那颗同一族语言：一颗按钮管的是一件多值的事时，界面要把现值写在看得见的位置。</para>
+    /// 半径<b>真的从设置页走到那块圆</b>（批次 RN 应发起人点名"屏幕画布设置需要实现光晕半径调节设置"）。
+    /// <para>这条钉的是链上每一环都在，缺任一环的症状都是"滑杆拖了、屏幕上的圆没动"，
+    /// 而编译器与旧闸门都看不见它（同一族：批次 WR"这个设置改了没反应＝去查有没有人读它"）：</para>
+    /// <para>① 设置里存的那个量叫得出名字（<c>CursorCircleRadiusDip</c>）；② 读写两侧都夹（夹法只认 Core）；
+    /// ③ 宿主每帧现读它、不缓存（缓存＝"漏一次通知"那种鬼状态回来了）；④ 设置页有且只有一个编辑入口，
+    /// 且回灌那一次不许顺手写一遍档。</para>
     /// </summary>
     [Fact]
-    public void TheHaloButtonCyclesAndTheStatusLineSaysWhichGear()
+    public void TheRadiusSettingReachesTheCircleItIsSupposedToMove()
+    {
+        var store = SourceGate.ReadRepoPartials("src/StarMark.UI/Helpers/SettingsStore.cs");
+        Assert.Contains("public double? CursorCircleRadiusDip { get; set; }", store);
+        Assert.Contains("CursorCircle.ClampRadiusDip(Load()?.CursorCircleRadiusDip ?? CursorCircle.DefaultRadiusDip)", store);
+        Assert.Contains("d.CursorCircleRadiusDip = CursorCircle.ClampRadiusDip(radiusDip);", store);
+
+        var whole = SourceGate.ReadRepoPartials(Service);
+        Assert.Contains("?.LoadCursorCircleRadiusDip()", whole);
+        Assert.DoesNotContain("_cursorRadius", whole);              // 不许在宿主再缓存一份（改完立刻生效靠的是现读）
+
+        var vm = SourceGate.ReadRepoPartials("src/StarMark.UI/ViewModels/SettingsPageViewModel.cs");
+        var changed = SourceGate.MethodBody(vm, "partial void OnCursorCircleRadiusDipChanged(double value)");
+        Assert.Contains("_settings.SaveCursorCircleRadiusDip(value);", changed);
+        Assert.Contains("if (_suppressCanvasApply) return;", changed);   // 进设置页那一次回灌不写盘
+
+        var xaml = SourceGate.ReadRepoFile("src/StarMark.UI/Views/SettingsPage.xaml");
+        Assert.Equal(1, SourceGate.Count(xaml, "ViewModel.CursorCircleRadiusDip, Mode=TwoWay"));
+    }
+
+    /// <summary>
+    /// 「光晕」那颗是<b>两档开关</b>（批次 RN，用户裁"只有关和任何工具常开"）：点开／点关，不再循环，
+    /// 而<b>开没开只有那颗按钮的亮灭这一个读数</b>——状态行不再写它（写进去的那段文字长度会随状态变，
+    /// 而按钮本身已经把两档说清楚了；批次 WP 那条"宽度稳定优先于看得到解释"的同一取舍）。
+    /// </summary>
+    [Fact]
+    public void TheHaloButtonIsATwoStateSwitchAndItsLightIsTheOnlyReading()
     {
         var toolbar = SourceGate.MethodBody(SourceGate.ReadRepoFile(Toolbar), "private void Halo_Click");
+        var refresh = SourceGate.MethodBody(SourceGate.ReadRepoFile(Toolbar), "private void Refresh()");
         var status = SourceGate.MethodBody(SourceGate.ReadRepoFile(Toolbar), "private string StatusText()");
 
-        Assert.Contains("CanvasService.CycleHalo();", toolbar);
-        Assert.DoesNotContain("SetHalo(", toolbar);
-        Assert.Contains("光晕{CanvasService.HaloName}", status);
+        Assert.Contains("CanvasService.ToggleHalo();", toolbar);
+        Assert.DoesNotContain("CycleHalo(", toolbar);
+        Assert.Contains("Highlight(HaloButton, CanvasService.HaloEnabled", refresh);
+        Assert.DoesNotContain("光晕{", status);                     // 三档时代那句"当前哪一档"跟着档位一起删了
+        Assert.DoesNotContain("HaloName", SourceGate.ReadRepoFile(Toolbar));
         Assert.Contains("x:Name=\"HaloButton\"", SourceGate.ReadRepoFile(ToolbarXaml));
+        Assert.DoesNotContain("循环三档", SourceGate.ReadRepoFile(ToolbarXaml));   // tooltip 不许把旧三档说法留下
     }
 
     /// <summary>
@@ -1565,7 +1601,7 @@ public sealed class CanvasWiringGateTests
 
         Assert.Contains("private sealed class Screen", all);                            // 主文件（状态与嵌套类型都在这）
         Assert.Contains("public static bool OpenBoardHost()", all);                     // Host
-        Assert.Contains("public static void CycleHalo()", all);                         // Control
+        Assert.Contains("public static void ToggleHalo()", all);                        // Control
         Assert.Contains("private static void Recomposite(Screen screen", all);          // Editing
         Assert.Contains("private static void PollPress(int cursorX, int cursorY)", all); // Pointer
         Assert.Contains("private static void Flush(Screen screen)", all);               // Frame

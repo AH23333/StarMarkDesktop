@@ -224,6 +224,16 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         /// </para>
         /// </summary>
         public bool? CanvasInScreenshots { get; set; }
+
+        /// <summary>
+        /// 光标那块圆的半径（<b>DIP</b>，不是物理像素；批次 RN 应发起人点名"光晕半径要能调"）。
+        /// <para>
+        /// 一个数管两块圆：关掉幕布时它是光标光晕，开着幕布时它是那块亮区（批次 S4-⑥ 把它们合成了一块）。
+        /// 刻意<b>不</b>拆成两根滑杆——拆了就等于把那次合并重新拆开，还能调出"亮区比光晕大"这种两值同时成立的形状。
+        /// </para>
+        /// <para>读写两侧都过 <c>CursorCircle.ClampRadiusDip</c>（档里出现 0／负／NaN 都不许换算出"屏幕上什么都没有"的那块圆）。</para>
+        /// </summary>
+        public double? CursorCircleRadiusDip { get; set; }
     }
 
     public SettingsStore(string? path = null) => _path = path ?? ResolveSettingsPath();

@@ -63,13 +63,14 @@ public static partial class CanvasService
             // 从前光晕按荧光笔笔宽档算、亮区按 160 DIP 算，同一帧上鼠标处就有两个不同大小的圆——只有眼睛能看出来。
             if (!screen.LastGlow.IsEmpty) screen.Dirty.Add(screen.LastGlow);
             screen.GlowAt = null;
-            if (CursorCircle.ShowsHalo(_halo, _tool, AnnotationHub.Backdrop)
+            if (CursorCircle.ShowsHalo(_haloAlways, AnnotationHub.Backdrop)
                 && screen.Bounds.X <= cursor.X && cursor.X < screen.Bounds.Right
                 && screen.Bounds.Y <= cursor.Y && cursor.Y < screen.Bounds.Bottom)
             {
                 var local = new PixelPoint(cursor.X - screen.Bounds.X, cursor.Y - screen.Bounds.Y);
-                var radius = CursorCircle.RadiusInPixels(screen.Scale);
+                var radius = CursorCircle.RadiusInPixels(screen.Scale, CursorCircleRadiusDip);
                 screen.GlowAt = local;
+                screen.GlowRadius = radius;
                 screen.LastGlow = CursorCircle.BoxOf(local, radius);
                 screen.Dirty.Add(screen.LastGlow);
             }
@@ -130,7 +131,7 @@ public static partial class CanvasService
             CanvasCompositor.PaintClipped(screen.Window.Pixels, width, height, preview, rect);
         if (screen.GlowAt is { } glow)
             CanvasCompositor.PaintGlow(screen.Window.Pixels, width, height, glow,
-                CursorCircle.RadiusInPixels(screen.Scale), screen.Trail.HaloColorBgra);
+                screen.GlowRadius, screen.Trail.HaloColorBgra);
         screen.Window.Present(rect);
         screen.LastFlushMs = Environment.TickCount64;
         ReportSlowFrame(since, rect, screen);

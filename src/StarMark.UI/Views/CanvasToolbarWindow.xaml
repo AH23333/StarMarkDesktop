@@ -43,7 +43,7 @@
                 -->
                 <StackPanel x:Name="ShapeRow" Orientation="Horizontal" Spacing="6"/>
                 <Button x:Name="HaloButton" Content="光晕" Click="Halo_Click"
-                        ToolTipService.ToolTip="循环三档：关 → 只荧光笔 → 常开（讲解时指着屏幕看得见光标在哪儿）；幕布开着时那一块是亮区，不再叠光；当前哪一档写在下面那行"/>
+                        ToolTipService.ToolTip="点开＝任何工具都跟着光标一团光，再点关掉（默认关；讲解时指着屏幕看得见光标在哪儿）。幕布开着时那一块是亮区，不再叠光。圆多大在设置→拓展功能→屏幕画布里调"/>
                 <Button Content="贴图" Click="Pin_Click" ToolTipService.ToolTip="只裁笔迹那一块（连同它底下的画面）钉回原位，不挡桌面；要整屏请用截图"/>
                 <Button Content="存图" Click="Save_Click"/>
                 <Button Content="复制" Click="Copy_Click"/>

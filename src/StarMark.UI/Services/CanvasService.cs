@@ -89,6 +89,14 @@ public static partial class CanvasService
         /// <summary>这一帧要不要在光标处叠一团光晕、叠在哪（由帧循环按光标落在哪块屏决定）。</summary>
         public PixelPoint? GlowAt { get; set; }
 
+        /// <summary>
+        /// <see cref="GlowAt"/> 那一刻换算出来的半径（物理像素）。<b>提交时必须用这一个数，不许再读一次设置</b>：
+        /// 半径现在住在设置页、每帧现读，滑杆正好在"算脏区"与"叠上去"之间被拖动的话，
+        /// 脏区按旧半径圈、圆按新半径画，症状是"调完半径屏幕上留一圈旧光"。
+        /// <para>它与 <see cref="GlowAt"/>、<see cref="LastGlow"/> 由帧循环同一处一起写（三者是一套）。</para>
+        /// </summary>
+        public int GlowRadius { get; set; }
+
         public long LastFlushMs { get; set; }
     }
 
@@ -108,7 +116,7 @@ public static partial class CanvasService
     /// 少了一个来源（剩下的那一个由 <see cref="LayerDirector.ReconcileStyles"/> 每帧兜）。
     /// </summary>
     private static bool ClickThroughHere => !AnnotationHub.Stage.GlassTakesPointer();
-    private static HaloMode _halo = HaloMode.HighlighterOnly;
+    private static bool _haloAlways;
 
     /// <summary>
     /// 手上一按是什么性质。<b>穿透态收不到 WM_LBUTTONDOWN</b>（那一次按下归了下层应用），
@@ -154,11 +162,19 @@ public static partial class CanvasService
 
     public static int WidthStep => _widthStep;
 
-    /// <summary>那一档开着没有（按钮亮不亮读它；"这一帧叠不叠"是另一件事，见 <see cref="CursorCircle.ShowsHalo"/>）。</summary>
-    public static bool HaloEnabled => CursorCircle.IsOn(_halo);
+    /// <summary>光晕开没有（两档：关／任何工具常开）。按钮亮不亮读它；"这一帧叠不叠"是另一件事，见 <see cref="CursorCircle.ShowsHalo"/>。</summary>
+    public static bool HaloEnabled => _haloAlways;
 
-    /// <summary>那一档叫什么（状态行与 tooltip 的唯一读者从这里取，界面不自己写中文）。</summary>
-    public static string HaloName => CursorCircle.NameOf(_halo);
+    /// <summary>
+    /// 那块圆的半径（<b>DIP</b>，设置页里那根滑杆读写的同一个数）。
+    /// <para>每帧现读、不缓存：与 <see cref="EnabledBySetting"/> 同一口径——设置页改完立刻生效，
+    /// 不需要通知画布一遍，而"漏通知"正是"滑杆已经动了、屏幕上的圆还是旧的"的来源。</para>
+    /// <para><b>幕布亮区与光标光晕共用这一个数</b>（批次 S4-⑥ 合掉的那块圆，RN 搬进设置页时留下的硬约束）：
+    /// 名字带 Cursor 而不带 Halo 就是为了不把这件事说回"光晕专属"。</para>
+    /// </summary>
+    public static double CursorCircleRadiusDip
+        => (App.Services?.GetService(typeof(SettingsStore)) as SettingsStore)?.LoadCursorCircleRadiusDip()
+           ?? CursorCircle.DefaultRadiusDip;
 
     /// <summary>颜色表沿用截图标注那一份（一条事实一个出处：两处色表迟早分岔）。</summary>
     public static IReadOnlyList<AnnotationColor> Palette => Annotation.Palette;

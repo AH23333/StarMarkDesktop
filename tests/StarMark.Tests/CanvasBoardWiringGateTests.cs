@@ -108,8 +108,9 @@ public sealed class CanvasBoardWiringGateTests
     }
 
     /// <summary>
-    /// 幕布的亮区每帧跟着鼠标走，两件事必须同时成立：<b>帧循环里问</b>（穿透态收不到鼠标消息，与"按住即画"同一处境），
-    /// 以及<b>半径按这块屏的缩放换算</b>（写死像素数＝150% 屏上只剩半个亮区）。
+    /// 幕布的亮区每帧跟着鼠标走，三件事必须同时成立：<b>帧循环里问</b>（穿透态收不到鼠标消息，与"按住即画"同一处境）、
+    /// <b>半径按这块屏的缩放换算</b>（写死像素数＝150% 屏上只剩半个亮区），以及<b>那个半径读的是设置里那一个数</b>
+    /// （批次 RN 之后亮区与光晕共用一根滑杆：这里若还回退成常量，症状就是"滑杆只改得动光晕，改不动亮区"）。
     /// </summary>
     [Fact]
     public void TheCurtainFocusFollowsTheCursorEveryFrame_ScaledPerScreen()
@@ -119,7 +120,7 @@ public sealed class CanvasBoardWiringGateTests
         Assert.Contains("UpdateCurtainFocus(screen, cursor.X, cursor.Y);", tick);
         var focus = SourceGate.MethodBody(service, "private static void UpdateCurtainFocus");
         Assert.Contains("CanvasBackdropMath.HasFocusHole(AnnotationHub.Backdrop)", focus);
-        Assert.Contains("CursorCircle.RadiusInPixels(screen.Scale)", focus);
+        Assert.Contains("CursorCircle.RadiusInPixels(screen.Scale, CursorCircleRadiusDip)", focus);
         Assert.Contains("if (!touched.IsEmpty) screen.Dirty.Add(touched);", focus);   // 旧圈也要并进脏区
     }
 

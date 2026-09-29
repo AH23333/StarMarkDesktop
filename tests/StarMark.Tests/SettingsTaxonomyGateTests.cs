@@ -70,6 +70,8 @@ public sealed class SettingsTaxonomyGateTests
             "EyeRestIntervalIndex",
             "TrendingEnabled", "ClipboardHistoryEnabled", "EnableTray", "MinimizeToTray", "GithubToken",
             "CanvasEnabled", "CanvasInScreenshots",
+            // 批次 RN：光标那块圆的半径（滑杆）。不登记的话"只有一个编辑入口"对它根本不成立。
+            "CursorCircleRadiusDip",
             // ClipIMG-1d 新增的三格可写设置：注册进这份清单，否则"只有一个编辑入口"这条对它们根本不生效。
             "ClipboardImageEnabled", "ClipboardImageMaxValue", "ClipboardTextMaxValue",
             // ClipIMG-3b：导出带不带图片本体（开关住在备份卡里，见设置闸门那条摆位判据）。
@@ -111,6 +113,9 @@ public sealed class SettingsTaxonomyGateTests
         Assert.Contains("ViewModel.CanvasHotkeySheet", extras);
         // 「截图带画布」（批次 WH）跟着画布走：它说的是同一块玻璃，只不过影响的是截图那一帧
         Assert.Contains("ViewModel.CanvasInScreenshots", extras);
+        // 光标那块圆的半径（批次 RN）：同一块圆的尺寸设置，必须和那块圆所在的卡同页——
+        // 搬到「常规」就会出现"画布的设置分散在两页"，而它坏的时候没人知道去哪根滑杆
+        Assert.Contains("ViewModel.CursorCircleRadiusDip, Mode=TwoWay", extras);
 
         var health = Between(xaml, "<TabViewItem Header=\"健康与诊断\">", "</TabViewItem>");
         Assert.Contains("护眼 · 休息提醒", health);

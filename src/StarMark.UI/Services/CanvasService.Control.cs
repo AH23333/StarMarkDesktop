@@ -82,12 +82,13 @@ public static partial class CanvasService
         => AnnotationHub.Raise(on ? SessionEvent.GivePointerBack : SessionEvent.TakePointer);
 
     /// <summary>
-    /// 「光晕」那颗：关 → 只荧光笔 → 常开 → 关（判据在 Core 的 <see cref="CursorCircle"/>，这里只存档位）。
-    /// <para>不持久化，与工具/颜色/粗细同口径（批次 WB-⑤：这块板子的语义是"讲完就擦"，设置项要另议）。</para>
+    /// 「光晕」那颗：关 ↔ 任何工具常开（两档，判据在 Core 的 <see cref="CursorCircle"/>，这里只存那一位）。
+    /// <para>这一位<b>不持久化</b>，与工具/颜色/粗细同口径（批次 WB-⑤：这块板子的语义是"讲完就擦"）；
+    /// 持久化的是<b>半径</b>——用户裁"默认关 + 半径可调"，开关是每次讲课现翻的，圆多大是他定一次就够的事。</para>
     /// </summary>
-    public static void CycleHalo()
+    public static void ToggleHalo()
     {
-        _halo = CursorCircle.Next(_halo);
+        _haloAlways = !_haloAlways;
         RaiseStateChanged();
     }
 
@@ -107,12 +108,13 @@ public static partial class CanvasService
     /// <summary>
     /// 幕布那块亮区跟着鼠标走：把"旧圈 ∪ 新圈"那一小片并进脏区——只报新位置的话，旧位置那一圈就赖在"亮"上暗不回来。
     /// <para><b>这块圆与光标光晕是同一块</b>（批次 S4-⑥，用户裁"合并成一块圆，两个读数"）：半径与换算只有
-    /// <see cref="CursorCircle.RadiusInPixels"/> 一份，两处各乘一次 <c>Scale</c> 迟早差一像素。</para>
+    /// <see cref="CursorCircle.RadiusInPixels"/> 一份，两处各乘一次 <c>Scale</c> 迟早差一像素。
+    /// RN 把半径搬进设置页之后，这条更硬了——两处读的是<b>同一根滑杆</b>，谁再自己乘一次就当场看得见。</para>
     /// </summary>
     private static void UpdateCurtainFocus(Screen screen, int cursorX, int cursorY)
     {
         if (!CanvasBackdropMath.HasFocusHole(AnnotationHub.Backdrop)) return;
-        var radius = CursorCircle.RadiusInPixels(screen.Scale);
+        var radius = CursorCircle.RadiusInPixels(screen.Scale, CursorCircleRadiusDip);
         var touched = screen.Window.SetFocus(new PixelPoint(cursorX - screen.Bounds.X, cursorY - screen.Bounds.Y), radius);
         if (!touched.IsEmpty) screen.Dirty.Add(touched);
     }
