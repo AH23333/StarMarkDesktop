@@ -690,6 +690,27 @@
                         </Border>
 
                         <!--
+                            截屏总开关（批次 RP）：发起人点名"需要将截屏功能总开关放入拓展功能设置页"。
+                            这条只管"<b>能不能再发起一次框选</b>"：那三条入口的热键与托盘项一起收，
+                            已经贴在桌面上的图不受影响（显隐／忽略鼠标照常可用）——
+                            判据在 Core 的 CaptureGate（热键注册投影、托盘、ScreenshotService 三个读者共用它），
+                            这一处只是它的第四个读者；具体键位由 ViewModel 从当前绑定现取，这里不写死任何一颗键。
+                        -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="截屏（截图 / 贴图 / 识字）" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               Text="关掉之后：那三条发起框选的全局热键不再向系统注册（键位交还给当前窗口），托盘里的「截图 / 贴图 / 识字」三项一并消失。已经钉在桌面上的贴图不受影响——显示／隐藏、忽略鼠标、关闭全部照常可用。"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.CaptureEnabled, Mode=TwoWay}"/>
+                                </Grid>
+                                <TextBlock Text="{x:Bind ViewModel.CaptureStatus, Mode=OneWay}"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!--
                             屏幕画布（批次 WD-5）：发起人点名"这块设置要和画布上那颗 ⌨ 一样能随时看到，
                             并在主窗口设置的拓展功能里做同样的开关（功能一致即可，样式各自适应）"。
                             键位那一览是生成的：写死一份迟早和注册表分岔，分岔的症状是"照着说明按，没反应"。

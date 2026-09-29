@@ -72,6 +72,8 @@ public sealed class SettingsTaxonomyGateTests
             "CanvasEnabled", "CanvasInScreenshots",
             // 批次 RN：光标那块圆的半径（滑杆）。不登记的话"只有一个编辑入口"对它根本不成立。
             "CursorCircleRadiusDip",
+            // 批次 RP：截屏功能总开关（同一族，同一页）。
+            "CaptureEnabled",
             // ClipIMG-1d 新增的三格可写设置：注册进这份清单，否则"只有一个编辑入口"这条对它们根本不生效。
             "ClipboardImageEnabled", "ClipboardImageMaxValue", "ClipboardTextMaxValue",
             // ClipIMG-3b：导出带不带图片本体（开关住在备份卡里，见设置闸门那条摆位判据）。
@@ -116,6 +118,11 @@ public sealed class SettingsTaxonomyGateTests
         // 光标那块圆的半径（批次 RN）：同一块圆的尺寸设置，必须和那块圆所在的卡同页——
         // 搬到「常规」就会出现"画布的设置分散在两页"，而它坏的时候没人知道去哪根滑杆
         Assert.Contains("ViewModel.CursorCircleRadiusDip, Mode=TwoWay", extras);
+        // 截屏总开关（批次 RP）：发起人点名"放入拓展功能设置页"。它与画布那条是同一族（都是屏幕上的覆盖层），
+        // 散到「常规」就会出现"关掉截图要去常规页找开关、关掉画布在拓展页"这种找不着入口的改动
+        Assert.Contains("<TextBlock Text=\"截屏（截图 / 贴图 / 识字）\" Style=\"{StaticResource SettingTitle}\"", extras);
+        Assert.Contains("ViewModel.CaptureEnabled, Mode=TwoWay", extras);
+        Assert.DoesNotContain("ViewModel.CaptureEnabled", regular);
 
         var health = Between(xaml, "<TabViewItem Header=\"健康与诊断\">", "</TabViewItem>");
         Assert.Contains("护眼 · 休息提醒", health);

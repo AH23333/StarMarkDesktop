@@ -106,11 +106,31 @@ public sealed partial class MainWindow
                 ])).ToList());
     }
 
+    /// <summary>
+    /// 三条"发起一次框选"的入口＝（动作号，托盘号）成对写在这一处。
+    /// <para><b>为什么要成对</b>：关掉总开关时该收哪几项，问的是 Core 按<b>动作号</b>判的那份
+    /// （<see cref="StarMark.Core.Hotkeys.CaptureGate"/>，与热键注册共用同一个判据），而菜单只认<b>托盘号</b>。
+    /// 名单分两处写，加一条入口时就会出现"热键摘了、托盘还留着"那种看得见点不动的残骸（同批次 WL 那一族）。</para>
+    /// <para>两条"管理已经贴在那里的图"的项（显隐／穿透／关闭全部／贴图组）<b>不在这张表里</b>——
+    /// 它们不该被这条开关收掉，理由写在 <c>CaptureGate.IsSelectionAction</c> 上面那段。</para>
+    /// </summary>
+    private static readonly (string Action, int Tag)[] CaptureEntries =
+    {
+        (HotkeyActions.ScreenCapture, TrayScreenshot),
+        (HotkeyActions.ScreenPin, TrayScreenPin),
+        (HotkeyActions.ScreenOcr, TrayScreenOcr),
+    };
+
     /// <summary>右键那一刻现取托盘附加命令：勾选态反映当前设置，正在截图时不让人再点一次。</summary>
     private IReadOnlyList<TrayHost.TrayCommandItem> BuildTrayCommands()
     {
         var perf = _settings.LoadPerformanceMode();
         var hotkeysOn = _settings.LoadEnableGlobalHotKey();
+        var canvasOn = _settings.LoadCanvasEnabled();
+        var captureOn = _settings.LoadCaptureEnabled();
+        var hiddenCapture = new HashSet<int>(
+            CaptureEntries.Where(e => !StarMark.Core.Hotkeys.CaptureGate.ShowsTrayItem(e.Action, captureOn))
+                .Select(e => e.Tag));
         var (pins, hidden) = (StarMark.UI.Services.PinManager.Count, StarMark.UI.Services.PinManager.AreHidden);
         var list = new List<TrayHost.TrayCommandItem>
         {
@@ -140,11 +160,10 @@ public sealed partial class MainWindow
         // 有了组才多出这一棵，而且插在"所有贴图"那三条之后（先全局、后按组，与人的操作顺序一致）。
         // 一组贴图收起后它的工具条跟着消失，托盘这一行就是那几张图唯一的出口——不能只在贴图条上给入口。
         if (GroupMenu() is { } groupMenu) list.Insert(list.FindIndex(item => item.Tag == TrayPinsCloseAll) + 1, groupMenu);
-        // 画布总开关关掉时整条不出现（发起人裁决："关掉就别留入口"）。按 Ctrl+Alt+D 仍会给一句
-        // "要先在设置里打开"——那是 CanvasService 的闸门，不是这条菜单项的职责（见 Start 里的开关检查）。
-        return _settings.LoadCanvasEnabled()
-            ? list
-            : list.Where(item => item.Tag != TrayCanvas).ToList();
+        // 两条总开关各自关掉时，对应入口整条消失（发起人裁决："关掉就别留入口"）。
+        // 画布那条另有按 Ctrl+Alt+D 给的一句"要先在设置里打开"——那是 CanvasService 的闸门，不是菜单项的职责；
+        // 截屏那三条则连键一起放掉（F1/F3 是裸功能键），所以这里必须整条消失，不能留一项灰在那儿。
+        return list.Where(item => (canvasOn || item.Tag != TrayCanvas) && !hiddenCapture.Contains(item.Tag)).ToList();
     }
 
     /// <summary>贴图显隐那一项的标签：没有贴图时把状态写进文字，灰掉的项才知道自己为什么点不动。</summary>

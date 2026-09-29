@@ -90,6 +90,20 @@ public static class HotkeyActions
     public const string CanvasCopy = "canvas.copy";
     public const string CanvasPin = "canvas.pin";
 
+    /// <summary>
+    /// 截屏这一族的前缀（分类与总开关闸都按它判，见 <see cref="IsScreenAction"/>）。
+    /// <para><b>刻意保持 private</b>：动作表的公开常量会被"每一颗动作都得有人接"那枚闸门当成动作去查 handler，
+    /// 前缀不是动作，公开出去就是让那枚闸门莫名其妙地红一次（同类：上面的 <c>CanvasPrefix</c>）。</para>
+    /// </summary>
+    private const string ScreenPrefix = "screen.";
+
+    /// <summary>
+    /// 这条动作属于截屏这一族吗（截图 / 贴图 / 识字，外加两条贴图组管理）。
+    /// <para>分类（<see cref="CategoryOf"/>）与"关掉总开关时整族不注册"（<see cref="CaptureGate.RegistersHotkey"/>）
+    /// 用的<b>必须是同一个条件</b>：两处各判一次前缀，将来加一条 <c>screen.xxx</c> 就会只被其中一处认到。</para>
+    /// </summary>
+    public static bool IsScreenAction(string action) => action.StartsWith(ScreenPrefix, StringComparison.Ordinal);
+
     /// <summary>画布动作的前缀（分类与"总开关关掉时整批不注册"都按它判，见 <see cref="IsCanvasAction"/>）。</summary>
     private const string CanvasPrefix = "canvas.";
 
@@ -130,7 +144,7 @@ public static class HotkeyActions
     {
         if (action is MainToggle or MainShow or MainHide) return "主界面";
         if (action is WidgetsToggleAll or WidgetsShowAll or WidgetsHideAll or WidgetsToggleTopmostAll) return "组件总控";
-        if (action.StartsWith("screen.")) return "截图 / 贴图 / 识字";
+        if (IsScreenAction(action)) return "截图 / 贴图 / 识字";
         if (IsCanvasAction(action)) return "屏幕画布";
         if (IsLayoutAction(action)) return "布局方案";
         foreach (var k in WidgetStorage.AllKinds)

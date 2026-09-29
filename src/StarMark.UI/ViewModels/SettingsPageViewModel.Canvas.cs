@@ -28,12 +28,17 @@ namespace StarMark.UI.ViewModels;
 public partial class SettingsPageViewModel
 {
 
-    /// <summary>键位改了之后重算这一览（「保存快捷键」与「重试注册」两条路都调它，否则这里会显示旧键位）。</summary>
+    /// <summary>
+    /// 键位改了之后重算这几处（「保存快捷键」与「重试注册」两条路都调它，否则这里会显示旧键位）。
+    /// <para>画布那一览、画布状态行、截屏状态行<b>三处都引用键位文本</b>，所以三处一起重算——
+    /// 少带一处，那一处就会一直显示改之前的键，而"照着说明按，没反应"正是这类残骸的症状。</para>
+    /// </summary>
     public void RefreshCanvasHotkeySheet()
     {
         CanvasHotkeyRows = new System.Collections.ObjectModel.ObservableCollection<StarMark.UI.Views.CanvasHotkeyRow>(
             BuildCanvasHotkeyRows());
         CanvasStatus = BuildCanvasStatus();
+        CaptureStatus = BuildCaptureStatus();
     }
 
     /// <summary>

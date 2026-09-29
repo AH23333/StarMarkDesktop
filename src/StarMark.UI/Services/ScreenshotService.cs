@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
 using StarMark.Core.Capture;
+using StarMark.Core.Hotkeys;   // 发起一次框选的闸门在 Core（CaptureGate），这里只按它的结论分派
 using StarMark.Integrations.Capture;
 using StarMark.UI.Helpers;
 using StarMark.UI.Views;
@@ -68,10 +69,18 @@ public static class ScreenshotService
             queue.TryEnqueue(() => Start(mode));
             return;
         }
-        if (AnnotationHub.IsSheetActive)
+        // 两个条件合起来判（总开关排在会话之前，顺序为什么这样写在 Core 那段注释里）。
+        // 接线层不自己拼布尔（批次 WF-1 定案：方向判据一律下沉 Core，这里只准问一次再按结果分派）。
+        switch (CaptureGate.BlockOf(EnabledBySetting, AnnotationHub.IsSheetActive))
         {
-            StarLog.Info("[Screenshot] 已有截图会话在进行，忽略这一次触发");
-            return;
+            // 功能被关掉：屏幕上什么都没发生，必须给一句可见的话，否则用户只会以为"这个键坏了"
+            case CaptureBlock.Disabled:
+                Report("截屏功能已关闭", CaptureGate.ReasonFor(CaptureBlock.Disabled)!);
+                return;
+            // 会话中：那块遮罩本身就是原因，再弹一条会把框选的焦点抢走（抢走就等于取消截图），所以只记一行
+            case CaptureBlock.SessionBusy:
+                StarLog.Info("[Screenshot] 已有截图会话在进行，忽略这一次触发");
+                return;
         }
         var captured = Grab();
         if (!captured.Ok || captured.Frame is not { } frame)
@@ -148,6 +157,15 @@ public static class ScreenshotService
     /// </summary>
     private static bool IncludeCanvasInScreenshot
         => (App.Services?.GetService(typeof(SettingsStore)) as SettingsStore)?.LoadCanvasInScreenshots() ?? true;
+
+    /// <summary>
+    /// 截屏这一族的总开关（<b>每问现读，不缓存</b>，与上面那条同口径）：设置页改完立刻生效，
+    /// 不需要谁通知截图这边——"漏一次通知"正是"开关是关的、功能还在跑"这类鬼状态的来源。
+    /// <para>读它的是 <c>Start</c> 里那一道闸。托盘与热键注册<b>不问这里、直接读同一份设置</b>，
+    /// 三处都只判"这条设置"，没有第二份真值。</para>
+    /// </summary>
+    public static bool EnabledBySetting
+        => (App.Services?.GetService(typeof(SettingsStore)) as SettingsStore)?.LoadCaptureEnabled() ?? true;
 
     /// <summary>
     /// 取消正在进行的那场截图（Hub 的 Esc 与"先关截图再关画布"都走这里）。

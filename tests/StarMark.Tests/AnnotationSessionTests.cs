@@ -340,6 +340,82 @@ public class AnnotationSessionTests
             HotkeyGate.ReasonNotRunning(HotkeyActions.CanvasPen, false, AnnotationStage.Idle));
     }
 
+    // ────────── 截屏总开关的闸门（批次 RP）──────────
+
+    /// <summary>
+    /// <b>发起框选</b>那三条按总开关收放，<b>管理已经贴在那里的图</b>那两条不受这条影响。
+    /// <para>为什么要把这条线单独钉住：五者同用一个 <c>screen.</c> 前缀，"整族一起摘"这种写法编译得过、
+    /// 也过得了"只测了截图"的用例，真机上的症状却是关掉开关之后<b>桌上的贴图再也收不起来</b>——
+    /// 而 <c>screen.pinhidden</c> 是穿透态贴图唯一的键盘出口。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(HotkeyActions.ScreenCapture, false, false)]
+    [InlineData(HotkeyActions.ScreenPin, false, false)]
+    [InlineData(HotkeyActions.ScreenOcr, false, false)]
+    [InlineData(HotkeyActions.ScreenPinToggleHidden, false, true)]
+    [InlineData(HotkeyActions.ScreenPinClickThrough, false, true)]
+    [InlineData(HotkeyActions.MainToggle, false, true)]           // 别人的键不归这条闸管
+    [InlineData(HotkeyActions.CanvasPen, false, true)]
+    [InlineData(HotkeyActions.ScreenCapture, true, true)]
+    [InlineData(HotkeyActions.ScreenPinToggleHidden, true, true)]
+    public void OnlyTheSelectionEntriesAreUnregistered(string action, bool enabled, bool expected)
+        => Assert.Equal(expected, CaptureGate.RegistersHotkey(action, enabled));
+
+    /// <summary>
+    /// 托盘与热键注册<b>共用同一个判据</b>：这条开关一翻，两处收放的必须是同一批。
+    /// <para>两处各列一份名单，加一条入口就会出现"热键摘了、托盘还留着"——看得见点不动，
+    /// 而两种写法都编译得过（记忆 ⑧；本仓库同族：批次 WL"谁移动谁得叫上它"）。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TrayAndHotkeysReleaseTheSameSetOfEntries(bool enabled)
+    {
+        foreach (var action in new[]
+                 {
+                     HotkeyActions.ScreenCapture, HotkeyActions.ScreenPin, HotkeyActions.ScreenOcr,
+                     HotkeyActions.ScreenPinToggleHidden, HotkeyActions.ScreenPinClickThrough,
+                     HotkeyActions.MainToggle, HotkeyActions.CanvasToggle,
+                 })
+            Assert.Equal(CaptureGate.RegistersHotkey(action, enabled), CaptureGate.ShowsTrayItem(action, enabled));
+    }
+
+    /// <summary>
+    /// 这一族的名单<b>按动作号点名</b>，而设置页的分类按前缀归族——两处判法不同是有意的，
+    /// 但也因此必须普查一次：<b>凡是 <c>screen.</c> 开头的动作，要么是发起框选，要么是贴图管理，不能悬空</b>。
+    /// <para>悬空的那一条会同时躲开两道闸（既不注册也不收）＝一条永远按不动的键。</para>
+    /// </summary>
+    [Fact]
+    public void EveryScreenActionIsEitherASelectionEntryOrAManagementOne()
+    {
+        foreach (var action in HotkeyActions.All())
+        {
+            if (!HotkeyActions.IsScreenAction(action)) continue;
+            var isManagement = action is HotkeyActions.ScreenPinToggleHidden or HotkeyActions.ScreenPinClickThrough;
+            Assert.True(CaptureGate.IsSelectionAction(action) || isManagement,
+                $"{action} 归在 screen. 前缀里，却既不是发起框选也不是贴图管理——它会两头落空");
+        }
+        Assert.Equal(3, HotkeyActions.All().Where(CaptureGate.IsSelectionAction).Count());
+    }
+
+    [Theory]
+    [InlineData(true, false, CaptureBlock.None)]
+    [InlineData(true, true, CaptureBlock.SessionBusy)]
+    [InlineData(false, false, CaptureBlock.Disabled)]
+    [InlineData(false, true, CaptureBlock.Disabled)]      // 总开关排在会话之前（顺序的理由见 Core 那段注释）
+    public void TheSwitchOutranksTheSessionWhenBlockingANewCapture(
+        bool enabled, bool sessionBusy, CaptureBlock expected)
+        => Assert.Equal(expected, CaptureGate.BlockOf(enabled, sessionBusy));
+
+    [Fact]
+    public void ABlockedCaptureAlwaysHasSomethingToSay()
+    {
+        Assert.Null(CaptureGate.ReasonFor(CaptureBlock.None));                 // 放行＝没有话，别返回空字符串
+        Assert.Contains("设置", CaptureGate.ReasonFor(CaptureBlock.Disabled));   // 被关掉：给的是下一步（去哪打开）
+        Assert.Contains("Esc", CaptureGate.ReasonFor(CaptureBlock.SessionBusy)); // 会话中：给的是怎么结束它
+        Assert.NotEqual(CaptureGate.ReasonFor(CaptureBlock.Disabled), CaptureGate.ReasonFor(CaptureBlock.SessionBusy));
+    }
+
     // ────────── Esc 路由 ──────────
 
     [Theory]

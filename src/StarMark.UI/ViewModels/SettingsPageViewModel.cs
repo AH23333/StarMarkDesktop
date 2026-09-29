@@ -334,7 +334,15 @@ public partial class SettingsPageViewModel : ObservableObject
         CanvasInScreenshots = Safe(_settings.LoadCanvasInScreenshots, true, "截图带画布");
         CursorCircleRadiusDip = Safe(_settings.LoadCursorCircleRadiusDip, CursorCircle.DefaultRadiusDip, "光标圆半径");
         _suppressCanvasApply = false;
-        // 这张表与状态行都从当前绑定现生成（回灌也要生成一次，否则第一次进设置页会看到空表）
+
+        // 截屏总开关（批次 RP，发起人点名"截屏功能总开关放入拓展功能设置页"）：只回灌那一位，
+        // 副作用（写盘、重建托盘、重注册热键）在回灌期间抑制——否则进一趟设置页就把全局热键撤了再起一遍。
+        // 排在下面那次刷新<b>之前</b>：那一行状态文字要按刚回灌的值算，先刷后回灌就会显示成默认档的说法。
+        _suppressCaptureApply = true;
+        CaptureEnabled = Safe(_settings.LoadCaptureEnabled, true, "截屏功能");
+        _suppressCaptureApply = false;
+
+        // 两张状态行 + 那份只读键位一览都从当前绑定现生成（回灌也要生成一次，否则第一次进设置页会看到空表）
         RefreshCanvasHotkeySheet();
 
         // RSS 总开关：回灌当前判定值（从没表过态时按"有没有启用的源"算，见 RssActivation）。

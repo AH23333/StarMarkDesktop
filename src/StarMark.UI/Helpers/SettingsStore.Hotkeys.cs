@@ -49,26 +49,30 @@ public sealed partial class SettingsStore
     }
 
     /// <summary>
-    /// <b>注册给系统</b>的那份绑定＝磁盘上的绑定，过两道闸：<b>功能总开关</b>与<b>当前会话态</b>（架构方案 §6.1）。
-    /// 与 <see cref="GetHotkeyBindings"/> 分开是有原因的：设置页要照实显示用户绑了什么（包括画布关掉时的
+    /// <b>注册给系统</b>的那份绑定＝磁盘上的绑定，过三道闸：<b>画布总开关</b>、<b>截屏总开关</b>与<b>当前会话态</b>（架构方案 §6.1）。
+    /// 与 <see cref="GetHotkeyBindings"/> 分开是有原因的：设置页要照实显示用户绑了什么（包括功能关掉时的
     /// 那批），而注册表不能替一个关掉的功能、更不能在截图进行中替画布继续占着 Ctrl+Alt+字母。
     /// <para>
     /// 摘掉那批"只在画布里有用"的，<b>但 <c>canvas.toggle</c> 两条闸都留着</b>：按自己习惯那颗键的人
     /// 要听见一句"屏幕画布已在设置里关掉"或"截图进行中"，而不是一条什么也不发生的哑键。
+    /// 截屏那三条反过来——<b>关掉时整条不注册</b>，因为 F1／F3 是裸功能键，替一个关掉的功能占着它们
+    /// 等于让所有软件永久失去 Help／截图键（判据在 <see cref="CaptureGate.RegistersHotkey"/>，两族为何走法相反写在那儿）。
     /// </para>
     /// <para><b>这一处是投影的唯一出处</b>：启动、主窗菜单、设置页保存、设置页重试四个 ApplyBindings 入口
     /// 都调它，托盘与设置页读到的永远是"此刻真的生效的键"。判据本身在 Core 的 <see cref="HotkeyGate"/>
-    /// （纯函数、三臂单测），这里只接线——在接线处现写布尔就是本项目定案禁止的写法（批次 WF-1）。</para>
+    /// 与 <see cref="CaptureGate"/>（纯函数、逐臂单测），这里只接线——在接线处现写布尔就是本项目定案禁止的写法（批次 WF-1）。</para>
     /// </summary>
     public IReadOnlyDictionary<string, HotkeyGesture> GetRegisterableHotkeyBindings()
     {
         var all = GetHotkeyBindings();
         var canvasEnabled = LoadCanvasEnabled();
+        var captureEnabled = LoadCaptureEnabled();
         var stage = AnnotationHub.Stage;
-        if (canvasEnabled && !AnnotationHub.IsSheetActive) return all;
+        if (canvasEnabled && captureEnabled && !AnnotationHub.IsSheetActive) return all;
         var kept = new Dictionary<string, HotkeyGesture>();
         foreach (var (action, gesture) in all)
-            if (HotkeyGate.ShouldRegister(action, canvasEnabled, stage)) kept[action] = gesture;
+            if (HotkeyGate.ShouldRegister(action, canvasEnabled, stage)
+                && CaptureGate.RegistersHotkey(action, captureEnabled)) kept[action] = gesture;
         return kept;
     }
 }

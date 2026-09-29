@@ -1579,12 +1579,70 @@ public sealed class CanvasWiringGateTests
         var start = SourceGate.MethodBody(service, "public static bool OpenBoardHost()");
         Assert.Contains("if (!EnabledBySetting)", start);
         Assert.Contains("屏幕画布已关闭", start);
-        Assert.Contains("list.Where(item => item.Tag != TrayCanvas)", main);
+        // 两条总开关共用一次过滤（批次 RP 把截屏那条并进来）。旧写法是每条开关各写一句 `list.Where(...)`，
+        // 加第二条时就会有人新写一句而漏掉前一句的分支——两处 where 各对一半，症状是"某个开关关了菜单里还有"
+        Assert.Contains("(canvasOn || item.Tag != TrayCanvas) && !hiddenCapture.Contains(item.Tag)", main);
         // 关掉时正在画：立刻收玻璃（"我已经关了屏幕上还压着一层吃鼠标的东西"是最糟的收尾）
         var vm = SourceGate.ReadRepoPartials("src/StarMark.UI/ViewModels/SettingsPageViewModel.cs");
         var changed = SourceGate.MethodBody(vm, "partial void OnCanvasEnabledChanged(bool value)");
         Assert.Contains("if (!value) StarMark.UI.Services.CanvasService.Stop();", changed);
         Assert.Contains("App.MainWindow?.ApplyTraySettings();", changed);   // 注册表当场跟着改，不重启、不再点保存
+    }
+
+    /// <summary>
+    /// 截屏总开关（批次 RP）：一条设置，<b>四个读者都问 Core 那一份判据</b>，没有第二个出处。
+    /// <para>这四条缺一环都是用户看得见的坏：① 注册投影没摘＝关掉之后 F1 仍然被我们占着，别的软件永久失去 Help 键；
+    /// ② 托盘没摘＝"菜单里有截图，点了没反应"；③ <c>Start</c> 没闸＝从任何别的路径（将来的组件按钮、右键菜单）
+    /// 仍能发起一次框选，那条开关就成了摆设；④ 设置页没接线＝改了要重启（多一步就算缺陷）。</para>
+    /// <para>反向各钉一条：<b>接线层不许自己列名单、也不许自己重判会话</b>——名单一写两份，
+    /// 加一条入口时就会只改其中一份（同批次 WL"谁移动谁得叫上它"）。</para>
+    /// </summary>
+    [Fact]
+    public void CaptureSwitchHasFourReadersAndOneJudgementSource()
+    {
+        var store = SourceGate.ReadRepoPartials(Store);
+        Assert.Contains("public bool LoadCaptureEnabled() => Load() is not { } d || d.CaptureEnabled != false;", store);
+        Assert.Contains("public void SaveCaptureEnabled(bool enabled)", store);
+
+        // ① 注册投影：读一次开关，把结论交给 Core 的那一道闸；名单不在这里列
+        var reg = SourceGate.MethodBody(store,
+            "public IReadOnlyDictionary<string, HotkeyGesture> GetRegisterableHotkeyBindings()");
+        Assert.Contains("var captureEnabled = LoadCaptureEnabled();", reg);
+        Assert.Contains("CaptureGate.RegistersHotkey(action, captureEnabled)", reg);
+        Assert.DoesNotContain("IsSelectionAction", reg);
+        Assert.DoesNotContain("screen.", reg);                       // 接线层一条动作名都不许出现
+
+        // ② 托盘：三项发起入口按同一判据收放，且与画布那条开关共用一次过滤（两条各写一次 where 迟早漏一条）
+        var tray = SourceGate.MethodBody(SourceGate.ReadRepoPartials(MainWindow),
+            "private IReadOnlyList<TrayHost.TrayCommandItem> BuildTrayCommands()");
+        Assert.Contains("CaptureGate.ShowsTrayItem(e.Action, captureOn)", tray);
+        Assert.Contains("(canvasOn || item.Tag != TrayCanvas) && !hiddenCapture.Contains(item.Tag)", tray);
+        var roster = SourceGate.ReadRepoPartials(MainWindow);
+        Assert.Contains("(HotkeyActions.ScreenCapture, TrayScreenshot)", roster);   // 动作号与托盘号成对：三份各一处
+        Assert.Contains("(HotkeyActions.ScreenPin, TrayScreenPin)", roster);
+        Assert.Contains("(HotkeyActions.ScreenOcr, TrayScreenOcr)", roster);
+
+        // ③ 发起那一步：两个条件一起问 Core，会话那一臂不许自己再判一遍
+        var start = SourceGate.MethodBody(SourceGate.ReadRepoFile(Screenshot), "public static void Start(CaptureMode");
+        Assert.Contains("CaptureGate.BlockOf(EnabledBySetting, AnnotationHub.IsSheetActive)", start);
+        Assert.DoesNotContain("if (AnnotationHub.IsSheetActive)", start);
+        Assert.Contains("CaptureGate.ReasonFor(CaptureBlock.Disabled)", start);   // 被关掉必须给一句可见的话
+        Assert.Contains("public static bool EnabledBySetting", SourceGate.ReadRepoFile(Screenshot));
+
+        // ④ 设置页：写盘 + 当场重投影与重建托盘；回灌那一次不写盘
+        var vm = SourceGate.ReadRepoPartials("src/StarMark.UI/ViewModels/SettingsPageViewModel.cs");
+        var captureChanged = SourceGate.MethodBody(vm, "partial void OnCaptureEnabledChanged(bool value)");
+        Assert.Contains("_settings.SaveCaptureEnabled(value);", captureChanged);
+        Assert.Contains("if (_suppressCaptureApply) return;", captureChanged);
+        Assert.Contains("App.MainWindow?.ApplyTraySettings();", captureChanged);
+        // 状态行里的键位一律现取（写死"F1"就是一份会过期的假指引）
+        var status = SourceGate.MethodBody(vm, "private string BuildCaptureStatus()");
+        Assert.Contains("HotkeyText(HotkeyActions.ScreenCapture)", status);
+        Assert.Contains("HotkeyText(HotkeyActions.ScreenPin)", status);
+        Assert.Contains("HotkeyText(HotkeyActions.ScreenOcr)", status);
+
+        var xaml = SourceGate.ReadRepoFile("src/StarMark.UI/Views/SettingsPage.xaml");
+        Assert.Equal(1, SourceGate.Count(xaml, "ViewModel.CaptureEnabled, Mode=TwoWay"));
     }
 
     /// <summary>

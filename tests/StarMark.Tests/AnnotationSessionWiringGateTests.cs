@@ -37,7 +37,11 @@ public sealed class AnnotationSessionWiringGateTests
         Assert.DoesNotContain("_busy", service);                                  // 第二份旗标＝分岔的源头
         Assert.Contains("public static bool IsCapturing => AnnotationHub.IsSheetActive;", service);
         var start = SourceGate.MethodBody(service, "public static void Start(CaptureMode");
-        Assert.Contains("if (AnnotationHub.IsSheetActive)", start);                 // 重入也问同一个真值
+        // 重入问的是同一个真值，而且<b>与总开关合在同一道闸里判</b>（批次 RP）：
+        // 接线层自己 `if (IsSheetActive)` 再加一句 `if (!enabled)` 是两个条件各判一次——
+        // 将来加第三个条件时漏掉哪一个都不会报错，只会漏掉一条出口。
+        Assert.Contains("CaptureGate.BlockOf(EnabledBySetting, AnnotationHub.IsSheetActive)", start);
+        Assert.DoesNotContain("if (AnnotationHub.IsSheetActive)", start);
         Assert.True(start.IndexOf("Grab();", StringComparison.Ordinal)
                     < start.IndexOf("AnnotationHub.Raise(SessionEvent.BeginSheet);", StringComparison.Ordinal),
             "会话迁移既要在抓帧之后、又要在建窗之前——排错了就是上面那两个症状之一");

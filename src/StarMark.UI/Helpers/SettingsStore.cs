@@ -234,6 +234,16 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         /// <para>读写两侧都过 <c>CursorCircle.ClampRadiusDip</c>（档里出现 0／负／NaN 都不许换算出"屏幕上什么都没有"的那块圆）。</para>
         /// </summary>
         public double? CursorCircleRadiusDip { get; set; }
+
+        /// <summary>
+        /// 截屏这一族的总开关（<b>默认开</b>：截图 / 贴图 / 识字是一条已经做完的功能，
+        /// "从没表过态"不该被读成"用户关过"——与 <see cref="CanvasEnabled"/> 同一条判据）。
+        /// <para>关掉之后：三条"发起框选"的全局热键<b>整条不注册</b>（F1／F3 是裸功能键，
+        /// 替一个关掉的功能继续占着＝让所有软件永久失去 Help／截图键），托盘里那三项也整条消失。
+        /// 两条"管理已经贴在那里的图"的动作（显隐／穿透）<b>不受这条影响</b>——贴图窗可能还钉在桌面上，
+        /// 而显隐那条是"贴图忽然点不动了"唯一的键盘出口。判据在 <c>Core/Hotkeys/CaptureGate</c>。</para>
+        /// </summary>
+        public bool? CaptureEnabled { get; set; }
     }
 
     public SettingsStore(string? path = null) => _path = path ?? ResolveSettingsPath();
