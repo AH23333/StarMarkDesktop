@@ -22,8 +22,17 @@ public enum CaptureBlock { None, Disabled, SessionBusy }
 public static class CaptureGate
 {
     /// <summary>
-    /// 这条动作是不是"发起一次框选"。<b>按动作号点名判，不按 <c>screen.</c> 前缀判</b>：
-    /// 前缀里混着两条管理动作，用前缀就等于把它们也当成入口关掉（上面那条分工线）。
+    /// 截屏这一族的总开关（批次 RP，发起人 2026-09-29 点名"需要将截屏功能总开关放入拓展功能设置页"）。
+    /// <para>
+    /// 这一族五条动作同用 <c>screen.</c> 前缀，但里面混着两类不同的事，<b>关掉开关时只收前者</b>：
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description><b>发起一次框选</b>（<c>screen.capture</c>／<c>screen.pin</c>／<c>screen.ocr</c>）——随开关收放；</description></item>
+    /// <item><description><b>管理已经贴在桌面上的图</b>（<c>screen.pinhidden</c>／<c>screen.pinthrough</c>）——<b>不随开关收</b>：
+    /// 关掉一个功能不该顺手把用户桌上的东西变成拆不掉，而 <c>screen.pinhidden</c> 正是"贴图进入鼠标穿透态、
+    /// 收不到任何点击"时唯一的键盘出口。<b>这条裁量登记在 P-112 等产品定夺</b>，翻案时的正确改法是
+    /// "关的那一刻先问一句要不要一起收起"，而不是把出口摘掉。</description></item>
+    /// </list>
     /// </summary>
     public static bool IsSelectionAction(string action)
         => action is HotkeyActions.ScreenCapture or HotkeyActions.ScreenPin or HotkeyActions.ScreenOcr;
