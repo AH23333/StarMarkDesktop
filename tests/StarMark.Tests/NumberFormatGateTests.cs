@@ -159,8 +159,9 @@ public sealed class NumberFormatGateTests
     public void DescribeBytesIsAPureForwardNotASecondLadder()
     {
         var raw = ReadRepoFile("src/StarMark.Abstractions/Clipboard/ClipAssets.cs");
-        // 锚点用整个声明：方法名 "DescribeBytes" 在这个文件里还出现在别处（注释、调用点），只钉名字会让守门读到错误的方法体
-        var body = MethodBody(raw, "public static string DescribeBytes");
+        // 锚点钉**完整签名**，不钉前缀：`public static string DescribeBytes` 是 `DescribeBytesMoved(` 的前缀，
+        // 那颗转发哪天改名，守门会"命中一处、读到对的那段"而完全不红——等于把"搬家要跟上"这件事交给运气（变异 RZ12b 教的）。
+        var body = MethodBody(raw, "public static string DescribeBytes(long bytes)");
 
         Assert.Contains("FileSizeText.Human", body, StringComparison.Ordinal);
         Assert.DoesNotContain("1024", body, StringComparison.Ordinal);   // 自己换算＝梯子又长回来了
