@@ -164,7 +164,7 @@ public sealed partial class MainWindow
         => ShowInfoBar(InfoBarSeverity.Error, title, message, 8000);
 
     /// <summary>
-    /// 中性提示（不是错误也不是"操作完成"）：托盘气泡发不出去时的兜底出口。
+    /// 中性提示（不是错误也不是"操作完成"）：右下角提示卡贴不上屏幕时的兜底出口。
     /// 停留久一点——护眼这类提醒是"给你看一眼"，不该 8 秒就自己收走。
     /// </summary>
     public void ShowNotice(string title, string message)

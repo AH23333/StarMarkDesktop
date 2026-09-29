@@ -11,10 +11,10 @@ using StarMark.UI.ViewModels;
 namespace StarMark.UI.Views;
 
 /// <summary>
-/// 倒计时 / 纪念日组件：多条命名倒计时，每年重复项按年推进，到点发一次托盘气泡。
+/// 倒计时 / 纪念日组件：多条命名倒计时，每年重复项按年推进，到点发一次右下角提示卡。
 /// <para>
 /// 算术与提醒判定全在 <see cref="CountdownPolicy"/>；定时器走 <see cref="IWidgetTicker"/>
-/// （隐藏即停表）。气泡是"进程正好在跑"时的那一下，桌面上的到点高亮是常态可见的那一份——
+/// （隐藏即停表）。提示卡是"进程正好在跑"时的那一下，桌面上的到点高亮是常态可见的那一份——
 /// 两条都缺一条就会变成"提醒没到"，所以两者同时做。
 /// </para>
 /// </summary>
@@ -39,12 +39,12 @@ public sealed partial class CountdownWidget : UserControl, IWidgetTicker
 
     private void OnOccurrenceReached(CountdownItem item)
     {
-        var delivered = App.MainWindow?.TryShowTrayNotification("倒计时到点", item.Title) ?? false;
+        var delivered = NoticeCard.Show("倒计时到点", item.Title);
         if (!delivered)
         {
-            // 托盘没开时气泡发不出去 ⇒ 记一条日志说明"到点过、只是没能弹"，
+            // 卡片贴不上屏幕（不在 UI 线程、拿不到显示器）⇒ 记一条日志说明"到点过、只是没能弹"，
             // 否则用户事后回看只会得到"它根本没提醒我"。界面上的到点高亮仍在。
-            StarLog.Info($"倒计时到点（托盘未启用，仅组件内高亮）：{item.Title}");
+            StarLog.Info($"倒计时到点（提示卡没能贴上屏幕，仅组件内高亮）：{item.Title}");
         }
     }
 

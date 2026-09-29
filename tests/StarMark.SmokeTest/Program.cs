@@ -310,8 +310,10 @@ static void TraySmokeCheck()
     // 全局热键不在这里验：批次 JB 起 TrayHost 不再注册热键（它那份同名方法早已是只打日志的空壳），
     // 注册统一由 StarMark.UI 的 HotkeyService 挂在主窗口句柄上——冒烟程序没有那个窗口，验不了。
     Console.WriteLine("Hotkey registration owned by HotkeyService (not covered by this smoke check)");
-    host.ShowNotification("SmokeTest", "托盘冒烟自检");
-    Console.WriteLine("Tray balloon modify: ok");
+    // 通知也不在这里验：批次 RV 起托盘不再代发通知。系统在 Windows 11 上对那一发返回 TRUE 而屏幕上
+    // 什么都不显示，所以"冒烟打印 ok"从来不是证据；提醒改由 UI 侧那张右下角提示卡承担，
+    // 判据是窗口的实际矩形（冒烟程序没有 UI 线程与窗口，验不了，也不该假装验了）。
+    Console.WriteLine("Notification exit owned by NoticeCard in StarMark.UI (not covered by this smoke check)");
     Console.WriteLine("DONE");
 }
 

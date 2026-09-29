@@ -14,13 +14,13 @@ namespace StarMark.UI.Services;
 
 /// <summary>
 /// 护眼 / 休息提醒的编排：一张 15 秒的表看节拍，到点决定"弹／让路／安静重来一轮"，
-/// 再按<b>提醒形式那一档</b>演一次：气泡档只发一条托盘气泡，暗幕与强制档给每屏一张 20 秒暗幕
+/// 再按<b>提醒形式那一档</b>演一次：提示卡档只发一张右下角提示卡，暗幕与强制档给每屏一张 20 秒暗幕
 /// （暗幕档点一下就收，强制档一条退出都不接）。
 /// <para>
 /// 三条设计要点都是"只有真机才看得见"的坑，写在这里备忘：
 /// ① <b>没到点不做任何 P/Invoke</b>（探前台窗口是每 15 秒的事，不是每秒的事——规格 §9 的性能条）；
 /// ② <b>先重置节拍再展示</b>：遮罩窗建不起来（内存不足、显示器被拔掉）时宁可这次不提醒，
-///    也不能每 15 秒重试一次变成轰炸；展示失败一律降级成气泡，不静默吞掉；
+///    也不能每 15 秒重试一次变成轰炸；展示失败一律降级成提示卡，不静默吞掉；
 /// ③ <b>自己的窗不算"全屏应用"</b>：截图遮罩与暗幕本身是铺满屏幕的矩形，
 ///    把自己判成全屏会让护眼被自己延后掉（"自捕获顺序"那次教训的同一族）。
 /// </para>
@@ -123,7 +123,7 @@ public static class EyeRestService
     }
 
     /// <summary>
-    /// 演一次提醒：<b>气泡档只发一条气泡，暗幕与强制档各盖一层幕布</b>（"出现什么"与"能不能提前退出"
+    /// 演一次提醒：<b>提示卡档只发一张提示卡，暗幕与强制档各盖一层幕布</b>（"出现什么"与"能不能提前退出"
     /// 由 <see cref="EyeRestPolicy"/> 的 <c>UsesCurtain</c>／<c>IsSkippable</c> 两条各自回答，不再绑成一件事）。
     /// 回报"屏幕上真的有东西出来没有"——
     /// 到点那条路不需要这个答案（它只管演），但设置页的「试一试」必须能区分"演过了"和"什么都没发生"。
@@ -140,7 +140,7 @@ public static class EyeRestService
         if (!EyeRestPolicy.UsesCurtain(notice))
         {
             var shown = Notify("该休息一下了", RestBody(intervalMinutes));
-            StarLog.Info($"[EyeRest] 气泡提醒已发出（间隔 {intervalMinutes} 分钟，提醒形式：{EyeRestPolicy.NoticeLabel(notice)}）");
+            StarLog.Info($"[EyeRest] 提示卡提醒已发出（间隔 {intervalMinutes} 分钟，提醒形式：{EyeRestPolicy.NoticeLabel(notice)}）");
             return shown;
         }
 
@@ -151,12 +151,12 @@ public static class EyeRestService
         }
         catch (Exception ex)
         {
-            StarLog.Error("[EyeRest] 取显示器列表失败，降级为气泡提醒", ex);
+            StarLog.Error("[EyeRest] 取显示器列表失败，降级为提示卡提醒", ex);
             return Notify("该休息一下了", RestBody(intervalMinutes));
         }
         if (monitors.Count == 0)
         {
-            StarLog.Warn("[EyeRest] 系统没报告任何显示器，降级为气泡提醒");
+            StarLog.Warn("[EyeRest] 系统没报告任何显示器，降级为提示卡提醒");
             return Notify("该休息一下了", RestBody(intervalMinutes));
         }
 
@@ -173,7 +173,7 @@ public static class EyeRestService
         catch (Exception ex)
         {
             CloseOverlays();                                       // 建到一半失败也不能留几屏暗幕挂在那儿
-            StarLog.Error("[EyeRest] 遮罩窗没建起来，降级为气泡提醒", ex);
+            StarLog.Error("[EyeRest] 遮罩窗没建起来，降级为提示卡提醒", ex);
             return Notify("该休息一下了", RestBody(intervalMinutes));
         }
 
@@ -210,7 +210,7 @@ public static class EyeRestService
     }
 
     /// <summary>
-    /// 设置页的「试一试」：按<b>当前那一档</b>原样演一次（气泡档＝一条气泡，暗幕／强制档＝盖 20 秒幕布，
+    /// 设置页的「试一试」：按<b>当前那一档</b>原样演一次（提示卡档＝一张提示卡，暗幕／强制档＝盖 20 秒幕布，
     /// 暗幕档点一下就能结束）。
     /// <b>不动节拍</b>——演一次不等于真休息过一轮，下一次该几点还是几点。
     /// 没有这条出口，用户只能等满间隔才知道自己配的到底是什么效果，而"等 15 分钟验证一个开关"
@@ -286,8 +286,11 @@ public static class EyeRestService
     }
 
     /// <summary>
-    /// 托盘气泡优先（主窗收进托盘时也能看见），发不出去再用主窗的提示条兜底，
+    /// 右下角提示卡优先（主窗收进托盘时也能看见），贴不上去再用主窗的提示条兜底，
     /// 两条都不成就老实写日志——"提醒没弹出来"和"弹了但用户没看见"是两件事，日志里要分得出来。
+    /// <para>批次 RV 之前这里认的是"托盘气泡返回 true"，而那一发在 Windows 11 上根本不显示，
+    /// 于是日志写着"提醒已发出（走的是托盘气泡）"、屏幕上一次都没有。现在凭"卡真的贴在屏幕上"说话，
+    /// 措辞也由 <see cref="NoticeChannel"/> 一处给出，界面与日志说同一件事。</para>
     /// 回报有没有真的出现在屏幕上（<see cref="Preview"/> 据此说话）。
     /// </summary>
     private static bool Notify(string title, string body)
@@ -295,9 +298,9 @@ public static class EyeRestService
         var channel = "日志";
         try
         {
-            if (App.MainWindow?.TryShowTrayNotification(title, body) == true) channel = "托盘气泡";
+            if (NoticeCard.Show(title, body)) channel = NoticeChannel;
         }
-        catch (Exception ex) { StarLog.Warn($"[EyeRest] 托盘气泡没送出去：{ex.Message}"); }
+        catch (Exception ex) { StarLog.Warn($"[EyeRest] 提示卡没贴上去：{ex.Message}"); }
 
         if (channel == "日志")
         {
@@ -315,6 +318,9 @@ public static class EyeRestService
         StarLog.Info($"[EyeRest] 提醒已发出（走的是{channel}）：{title}：{body}");
         return channel != "日志";
     }
+
+    /// <summary>提示卡这一档在日志与界面上怎么说（只留一处出处：气泡那两个字已经不成立了）。</summary>
+    public const string NoticeChannel = "右下角提示卡";
 
     /// <summary>
     /// 前台窗口是否铺满某一块屏。<b>探不到就按"不是全屏"处理</b>：

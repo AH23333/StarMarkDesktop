@@ -78,7 +78,7 @@ public sealed class AlarmItem
 /// <summary>
 /// 闹钟的纯逻辑：哪一天响、今天这一轮是几点、该不该弹、挂着待确认多久、输入怎么解析、那一行怎么说。
 /// <para>全部以"传入 now"的形式可测——时钟组件里那张每秒的表只负责调它们（判据不在 UI 工程，
-/// 测试工程引用不到 UI）。到点的出口（托盘气泡）在 UI 侧，本类不碰。</para>
+/// 测试工程引用不到 UI）。到点的出口（右下角提示卡）在 UI 侧，本类不碰。</para>
 /// </summary>
 public static class AlarmPolicy
 {

@@ -194,7 +194,7 @@ public static partial class CanvasService
     private static void Report(string title, string message)
     {
         var shown = false;
-        try { shown = App.MainWindow?.TryShowTrayNotification(title, message) == true; }
+        try { shown = NoticeCard.Show(title, message); }
         catch (Exception ex) { StarLog.Warn($"[Canvas] 回报没送出去：{ex.Message}"); }
         if (!shown)
         {

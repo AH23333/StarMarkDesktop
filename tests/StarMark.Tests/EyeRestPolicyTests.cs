@@ -39,7 +39,7 @@ public sealed class EyeRestPolicyTests
         var now = T0 + Min(45);
         Assert.Equal(EyeRestPolicy.Decision.Due, policy.Decide(now, 45, false, false));
 
-        policy.Reset(now);                       // 遮罩淡出／气泡已发
+        policy.Reset(now);                       // 遮罩淡出／提示卡已发
         Assert.Equal(EyeRestPolicy.Decision.Waiting, policy.Decide(now + Min(1), 45, false, false));
         Assert.Equal(now + Min(45), policy.DueAt(45));
     }
@@ -181,7 +181,7 @@ public sealed class EyeRestPolicyTests
     /// <b>静默变成另一档</b>（同批次 EV 给 <c>ItemType</c>／<c>WidgetChromeMode</c> 立下的口径）。
     /// </summary>
     [Theory]
-    [InlineData(EyeRestNotice.Bubble, 0)]
+    [InlineData(EyeRestNotice.Card, 0)]
     [InlineData(EyeRestNotice.Curtain, 1)]
     [InlineData(EyeRestNotice.Forced, 2)]
     public void NoticeValues_ArePinned(EyeRestNotice notice, int raw)
@@ -202,7 +202,7 @@ public sealed class EyeRestPolicyTests
     }
 
     /// <summary>
-    /// 认不得的数值<b>回默认档，不夹到最近的一端</b>：3 紧挨着"强制"、-1 紧挨着"气泡"，
+    /// 认不得的数值<b>回默认档，不夹到最近的一端</b>：3 紧挨着"强制"、-1 紧挨着"提示卡"，
     /// 夹过去就等于让一处存档损坏替用户挑一档——而挑到的那档可能是"把所有退出出口关掉"。
     /// </summary>
     [Theory]
@@ -231,7 +231,7 @@ public sealed class EyeRestPolicyTests
     /// "要么无法使用暗幕，要么使用暗幕时无法提前跳过"。这一枚测钉的就是那一格必须存在。
     /// </summary>
     [Theory]
-    [InlineData(EyeRestNotice.Bubble, false, true)]    // 什么都不盖
+    [InlineData(EyeRestNotice.Card, false, true)]    // 什么都不盖
     [InlineData(EyeRestNotice.Curtain, true, true)]    // 新增的那一格：盖幕布，但点得开
     [InlineData(EyeRestNotice.Forced, true, false)]    // 盖幕布且扣住（原规格那条"防形同虚设"仍在）
     public void TheCurtainAndTheExitAreTwoSeparateQuestions(EyeRestNotice notice, bool usesCurtain, bool skippable)
@@ -242,7 +242,7 @@ public sealed class EyeRestPolicyTests
 
     /// <summary>
     /// 默认档必须是中间那一档：默认成"强制"＝一打开护眼就吃一次锁屏（惊吓），
-    /// 默认成"气泡"＝这次改判要治的原始形状又回来了（想看看暗幕必须先接受不能退出）。
+    /// 默认成"提示卡"＝这次改判要治的原始形状又回来了（想看看暗幕必须先接受不能退出）。
     /// </summary>
     [Fact]
     public void DefaultNotice_UsesTheCurtain_AndIsStillSkippable()
@@ -257,7 +257,7 @@ public sealed class EyeRestPolicyTests
     /// 所以写"按 Esc 可提前结束"是把一条做不到的出口印在屏幕上。给的出口是鼠标（点击不依赖焦点）。
     /// </summary>
     [Theory]
-    [InlineData(EyeRestNotice.Bubble)]
+    [InlineData(EyeRestNotice.Card)]
     [InlineData(EyeRestNotice.Curtain)]
     [InlineData(EyeRestNotice.Forced)]
     public void NoticeHint_NeverPromisesAKeystroke_TheCurtainCannotReceive(EyeRestNotice notice)
@@ -270,6 +270,18 @@ public sealed class EyeRestPolicyTests
     }
 
     /// <summary>状态行与下拉共用一份措辞；认不得的值也要说得出默认档那一句（不能空着）。</summary>
+    /// <summary>
+    /// 三档的文案不许再提"气泡"：批次 RV 起第一档真的是一张自绘的右下角提示卡，而托盘气泡在 Windows 11 上
+    /// <b>一次都没有显示过</b>——把做不到的事写在设置页上，用户就会照着那句话去找一个不存在的东西
+    /// （口径同"幕布上不承诺 Esc"）。
+    /// </summary>
+    [Fact]
+    public void NoNoticeLabelPromisesSomethingTheUserCannotSee()
+    {
+        foreach (var label in EyeRestPolicy.NoticeLabels) Assert.DoesNotContain("气泡", label);
+        Assert.Contains("提示卡", EyeRestPolicy.NoticeLabels[0]);
+    }
+
     [Fact]
     public void NoticeLabel_FallsBackToTheDefaultWordings_AsWell()
     {

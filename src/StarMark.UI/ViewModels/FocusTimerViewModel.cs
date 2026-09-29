@@ -38,7 +38,7 @@ public sealed partial class FocusTimerViewModel : ObservableObject
     public string? TaskTitle => _timer.TaskTitle;
 
     /// <summary>
-    /// 推进一秒。到点时翻文本、发提醒事件——提醒通道由组件决定（托盘气泡 + 界面常驻状态），
+    /// 推进一秒。到点时翻文本、发提醒事件——提醒通道由组件决定（右下角提示卡 + 界面常驻状态），
     /// 与倒计时那一批同一口径。
     /// </summary>
     public void Tick()

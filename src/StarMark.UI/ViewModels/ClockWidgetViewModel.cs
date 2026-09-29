@@ -17,7 +17,7 @@ namespace StarMark.UI.ViewModels;
 /// 组件与菜单/设置页各攒一套时间迟早对不上，而对不上的那次是用户先看见。
 /// </para>
 /// <para>
-/// <b>闹钟那一行只在"有得确认"时出现</b>（用户裁决：气泡＋常驻待确认，不出声、不盖屏）。
+/// <b>闹钟那一行只在"有得确认"时出现</b>（用户裁决：提示卡＋常驻待确认，不出声、不盖屏）。
 /// 把整个排期印在桌面上会让时钟变成第二块日程表，而这条需求要的是"别让我错过那一次"。
 /// </para>
 /// </summary>
@@ -46,7 +46,7 @@ public sealed partial class ClockWidgetViewModel : ObservableObject
 
     private readonly List<AlarmItem> _alarms = new();
 
-    /// <summary>某条闹钟到点了（组件据此发托盘气泡——<b>提醒的出口在 UI 侧，判据在 Core</b>）。</summary>
+    /// <summary>某条闹钟到点了（组件据此发右下角提示卡——<b>提醒的出口在 UI 侧，判据在 Core</b>）。</summary>
     public event Action<AlarmItem>? AlarmReached;
 
     /// <summary>当前这套闹钟（供右键菜单列条目）。<b>菜单每次打开重新取</b>，所以不存在"菜单里是旧的"。</summary>
@@ -91,7 +91,7 @@ public sealed partial class ClockWidgetViewModel : ObservableObject
 
     /// <summary>
     /// 到点判定 + 那一行的措辞。<b>先判后写</b>：刚弹掉的那一条立刻进待确认，
-    /// 于是气泡与桌面上那行说的是同一次，不会出现"弹了但桌上没痕迹"或反过来。
+    /// 于是提示卡与桌面上那行说的是同一次，不会出现"弹了但桌上没痕迹"或反过来。
     /// </summary>
     private int RefreshAlarms(DateTimeOffset now)
     {
@@ -166,7 +166,7 @@ public sealed partial class ClockWidgetViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 试响：<b>只发那一条的气泡</b>——不写待确认、不动开关、不落盘。
+    /// 试响：<b>只发那一条提示卡</b>——不写待确认、不动开关、不落盘。
     /// 没有这条出口，"托盘到底弹不弹得出来"只能等一个真实的早晨才能验（批次 WA 立下的口径）。
     /// </summary>
     public void TestFire(long id)

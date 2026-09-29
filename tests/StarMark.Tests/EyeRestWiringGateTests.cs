@@ -127,11 +127,11 @@ public sealed class EyeRestWiringGateTests
     }
 
     [Fact]
-    public void EveryCurtainFailurePathDowngradesToABubble()
+    public void EveryCurtainFailurePathDowngradesToANoticeCard()
     {
         var body = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), BeginRest);
-        // 一条正常出口（气泡档＝只发气泡）+ 三条失败退路（取显示器列表抛／系统没报告显示器／遮罩建到一半抛）
-        // 都必须各有一条气泡出口，而不是静默不提醒——"到点了但什么都没发生"和"没到点"在用户侧长得一模一样。
+        // 一条正常出口（提示卡档＝只发一张卡）+ 三条失败退路（取显示器列表抛／系统没报告显示器／遮罩建到一半抛）
+        // 都必须各有一条提示卡出口，而不是静默不提醒——"到点了但什么都没发生"和"没到点"在用户侧长得一模一样。
         Assert.Equal(4, SourceGate.Count(body, "Notify(\"该休息一下了\""));
         Assert.Contains("CloseOverlays();", body);        // 建到一半失败：先收干净已建的，再降级
         // 分流只看 Core 的两条判据，不看"这一档是不是强制"：合成就回到旧形状（想用暗幕必须先接受不能退出）。
@@ -165,15 +165,22 @@ public sealed class EyeRestWiringGateTests
         Assert.Contains("_policy ??=", body);            // 节拍起点跨开关保留：关掉再打开不该重新攒 45 分钟
     }
 
+    /// <summary>
+    /// 提醒的两级兜底：<b>先试右下角提示卡，贴不上屏幕才退到主窗提示条，两条都不成才只留日志</b>。
+    /// <para>顺序不能反过来：主窗收进托盘时 InfoBar 根本看不见。批次 RV 之前这一格钉的是"托盘气泡"，
+    /// 而那一发在 Windows 11 上返回成功却什么都不显示，于是第一级永远"成功"、后两级按构造走不到——
+    /// 这条链坏着的时候日志是全绿的（记忆 ⑨"全绿而功能坏"那一族）。</para>
+    /// </summary>
     [Fact]
-    public void BubbleFallsBackToTheMainWindowNoticeAndThenToTheLog()
+    public void TheNoticeCardFallsBackToTheMainWindowNoticeAndThenToTheLog()
     {
         var body = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static bool Notify(string title, string body)");
-        var tray = body.IndexOf("TryShowTrayNotification", StringComparison.Ordinal);
+        var card = body.IndexOf("NoticeCard.Show(title, body)", StringComparison.Ordinal);
         var notice = body.IndexOf("ShowNotice", StringComparison.Ordinal);
-        Assert.True(tray >= 0 && notice > tray, "主窗收进托盘时 InfoBar 是看不见的：气泡必须排在前面");
+        Assert.True(card >= 0 && notice > card, "主窗收进托盘时 InfoBar 是看不见的：提示卡必须排在前面");
         Assert.Contains("StarLog.Info", body);           // 两条出口都没接住时留痕，不静默吞掉
-        Assert.Contains("return channel != \"日志\";", body);   // 回报"有没有真的出现在屏幕上"，试一试据此说话
+        Assert.Contains("return channel != \"日志\";", body);   // 回报的是"有没有真的出现在屏幕上"，试一试据此说话
+        Assert.DoesNotContain("App.MainWindow?.TryShow", body);  // 别再从主窗转一道手：那正是谎报的入口
     }
 
     [Fact]
@@ -277,14 +284,14 @@ public sealed class EyeRestWiringGateTests
         var page = SourceGate.ReadRepoFile(SettingsPageXaml);
         Assert.Contains("ItemsSource=\"{x:Bind ViewModel.EyeRestNoticeOptions}\"", page);
         Assert.Contains("SelectedIndex=\"{x:Bind ViewModel.EyeRestNoticeIndex, Mode=TwoWay}\"", page);
-        Assert.DoesNotContain("只发托盘气泡", page);                 // 三档的说法只在 Core 写一次
+        Assert.DoesNotContain("只发一张右下角提示卡", page);                 // 三档的说法只在 Core 写一次
 
         var vm = SourceGate.ReadRepoPartials(SettingsVm);
         Assert.Contains("EyeRestPolicy.NoticeLabels", vm);                       // 下拉的项
         Assert.Contains("EyeRestPolicy.NoticeAt(EyeRestNoticeIndex)", vm);        // 下标 → 哪一档
         Assert.Contains("EyeRestPolicy.NoticeLabel(CurrentEyeRestNotice)", vm);   // 状态行取同一句
         Assert.Contains("EyeRestPolicy.NoticeHint(CurrentEyeRestNotice)", vm);    // 「试一试」的回执也说同一句
-        Assert.DoesNotContain("只发托盘气泡", vm);
+        Assert.DoesNotContain("只发一张右下角提示卡", vm);
     }
 
     // ────────── 「试一试」：给真机一条不用等满间隔的验证出口 ──────────
@@ -372,7 +379,7 @@ public sealed class EyeRestWiringGateTests
         Assert.Contains("EyeRestPolicy.NoticeLabels", section);
         Assert.Contains("EyeRestPolicy.NoticeLabel(notice)", section);   // 菜单标题上的当前档
         Assert.DoesNotContain("15 分钟", section);
-        Assert.DoesNotContain("只发托盘气泡", section);
+        Assert.DoesNotContain("只发一张右下角提示卡", section);
     }
 
     /// <summary>

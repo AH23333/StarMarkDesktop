@@ -124,9 +124,21 @@ public static class ScreenshotService
     /// 笔迹与底下的应用早就混成一张图了，事后"把笔迹减掉"减不回来。</para>
     /// </summary>
     private static CaptureResult Grab()
-        => IncludeCanvasInScreenshot || !CanvasService.IsRunning
-            ? GdiScreenCapture.CaptureVirtualScreen()
-            : CaptureWithoutCanvas();
+    {
+        // 提示卡也是自己人的顶层窗：抓屏抓的是已经合成好的屏幕，它进不进图只能在这一帧之前收起来决定
+        // （收/还写在这一处，并且成对；画布玻璃那条同一口径）。
+        NoticeCard.SetHiddenForCapture(true);
+        try
+        {
+            return IncludeCanvasInScreenshot || !CanvasService.IsRunning
+                ? GdiScreenCapture.CaptureVirtualScreen()
+                : CaptureWithoutCanvas();
+        }
+        finally
+        {
+            NoticeCard.SetHiddenForCapture(false);
+        }
+    }
 
     /// <summary>
     /// 抓一帧<b>不含画布玻璃</b>的桌面。两条链都从这里要：F1 在"截图不带画布"时用它，
@@ -140,6 +152,9 @@ public static class ScreenshotService
     /// </summary>
     public static CaptureResult CaptureWithoutCanvas()
     {
+        // 画布那条链出图时是直接调这一句的（不经过 Grab），所以提示卡的收/还这里也要有一份；
+        // 与 Grab 那一句套起来时按层数计数，里层不会把外层的"本来贴着"覆盖掉。
+        NoticeCard.SetHiddenForCapture(true);
         CanvasService.SetHiddenForCapture(true);
         try
         {
@@ -148,6 +163,7 @@ public static class ScreenshotService
         finally
         {
             CanvasService.SetHiddenForCapture(false);
+            NoticeCard.SetHiddenForCapture(false);
         }
     }
 
@@ -327,7 +343,7 @@ public static class ScreenshotService
     }
 
     /// <summary>
-    /// 结果回报：优先托盘气泡；托盘没启用时退到日志。
+    /// 结果回报：优先右下角提示卡；卡片贴不上屏幕时退到日志。
     /// 与番茄钟同一口径 —— 通道要报告它自己有没有真的把消息送出去，
     /// 否则"提示了"与"什么都没发生"在事后无从分辨。实现收在 <see cref="TrayReporter"/>（贴图共用）。
     /// </summary>

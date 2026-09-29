@@ -17,7 +17,7 @@ using StarMark.UI.Services;   // 热键注册投影要问"此刻的会话态"（
 namespace StarMark.UI.Helpers;
 
 /// <summary>
-/// SettingsStore 的这一段——护眼/休息提醒那组：开关、间隔、提醒形式（气泡／暗幕／强制）与全屏时暂缓。
+/// SettingsStore 的这一段——护眼/休息提醒那组：开关、间隔、提醒形式（提示卡／暗幕／强制）与全屏时暂缓。
 /// <para>按访问面拆出来的 partial：<b>不持有任何状态</b>——字段与构造都住在主文件里，这里只放"同一件事的那几条出口"，好让主文件回到能一眼看完的尺寸。</para>
 /// </summary>
 public sealed partial class SettingsStore
@@ -37,7 +37,7 @@ public sealed partial class SettingsStore
 
     /// <summary>
     /// 提醒形式（<b>默认暗幕＋可点一下提前结束</b>）。批次 RS 之前这里是两个布尔：强制开＝暗幕且不能退出，
-    /// 强制关＝只有气泡——于是"想看看暗幕什么效果"必须先接受"被扣 20 秒"。
+    /// 强制关＝只有一张提示卡——于是"想看看暗幕什么效果"必须先接受"被扣 20 秒"。
     /// <para>存档里那个整数<b>只认 0/1/2</b>（<c>IsKnownNotice</c>）：认不得的一律回默认档，<b>不夹到最近一端</b>——
     /// 万一将来多了第四档，旧版本读到它若静默变成"强制不可跳"，就是把一处数据损坏放大成"关掉所有退出出口"。</para>
     /// </summary>

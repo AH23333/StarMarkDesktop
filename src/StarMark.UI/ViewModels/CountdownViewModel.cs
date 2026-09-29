@@ -44,7 +44,7 @@ public sealed partial class CountdownViewModel : ObservableObject
 
     public bool IsFull => Rows.Count >= CountdownPolicy.MaxItems;
 
-    /// <summary>某一轮刚到点：组件借此发托盘气泡（进程不在跑时发不出，界面上的到点高亮是兜底）。</summary>
+    /// <summary>某一轮刚到点：组件借此发右下角提示卡（进程不在跑时发不出，界面上的到点高亮是兜底）。</summary>
     public event Action<CountdownItem>? OccurrenceReached;
 
     public void Load(IEnumerable<CountdownItem>? items)

@@ -22,7 +22,7 @@ public sealed record NetworkReading(bool Ok, IReadOnlyList<NetworkAdapterCounter
 /// 系统指标探针：CPU 时间、物理内存、逐网卡累计字节数。
 /// <para>
 /// 三条通道<b>各自独立失败并各自带上原因</b>。返回 void 或静默给 0 会让"没测到"和"测到 0"
-/// 在界面上长得一模一样——那是这个仓库反复收口过的一类缺陷（LC 的 ShowNotification、MH 的 Ditto 提示）。
+/// 在界面上长得一模一样——那是这个仓库反复收口过的一类缺陷（LC 的那条谎报成功的出口、MH 的 Ditto 提示）。
 /// </para>
 /// <para>
 /// 探针本身无状态、无后台线程：<b>采样节奏由组件按"窗口是否可见"决定</b>（D7），

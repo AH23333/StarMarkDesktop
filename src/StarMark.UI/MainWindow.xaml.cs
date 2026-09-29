@@ -39,7 +39,7 @@ public sealed partial class MainWindow : Window
     public ThemePreference CurrentThemePreference => _themePref;
     private TrayHost? _trayHost;
     private bool _allowExit;
-    private bool _balloonShown;
+    private bool _backgroundNoticeShown;
     private readonly WidgetManager _widgetManager;
     private MenuFlyout? _widgetsMenu;
     private int _diagSimStep;
@@ -50,15 +50,11 @@ public sealed partial class MainWindow : Window
     // （文件夹 / 标签 / 已隐藏 / 活动）全停在旧数据，要切页或重启才更新。这里补上订阅。
     private DataChangeReloader? _dataSync;
 
-    /// <summary>
-    /// 组件侧的托盘气泡出口（倒计时到点等）。<b>返回是否真的发出去了</b>：托盘没启用时是 false，
-    /// 调用方据此留下替代证据（日志 + 组件内的常驻高亮），而不是以为"已经提醒过用户了"。
-    /// </summary>
-    public bool TryShowTrayNotification(string title, string message)
-    {
-        var tray = _trayHost;
-        return tray is not null && tray.ShowNotification(title, message);
-    }
+    // 提醒出口不住在这里：批次 RV 起统一走 <see cref="NoticeCard"/>（右下角那张提示卡）。
+    // 这里原先替托盘转了一道手，最终落到系统那句"改图标附通知"的调用上；而那一发在 Windows 11 上
+    // <b>API 返回 TRUE、屏幕上什么都没有</b>：调用方把它读成"已经提醒过了"，于是主窗提示条与"只留日志"
+    // 两条兜底按构造永不触发——真机上"所有声称气泡效果的，均无提示效果"就是这么来的。
+    // 判据现在只能落在窗口的实际矩形上；而且主窗收进托盘时也该能提醒，所以这道转手整个删掉了。
 
     public MainWindow()
     {
@@ -172,10 +168,11 @@ public sealed partial class MainWindow : Window
             try
             {
                 AppWindow.Hide();
-                if (!_balloonShown)
+                if (!_backgroundNoticeShown && NoticeCard.Show("StarMark 正在后台运行", "Ctrl+Alt+Space 随时呼出窗口"))
                 {
-                    _trayHost.ShowNotification("StarMark 正在后台运行", "Ctrl+Alt+Space 随时呼出窗口");
-                    _balloonShown = true;
+                    // 只有真的贴上了屏幕才算"说过这一次"：上一版按"气泡返回 true"记账，于是那条提醒
+                    // 一辈子只发一次、而用户一次都没看见——记错了账就把唯一的补发机会也烧掉了。
+                    _backgroundNoticeShown = true;
                 }
             }
             catch { }

@@ -41,7 +41,7 @@ public partial class SettingsPageViewModel
     [ObservableProperty] private int _eyeRestIntervalIndex;
 
     /// <summary>
-    /// 提醒形式在那三档里的下标（气泡／暗幕可跳／强制不可跳）。
+    /// 提醒形式在那三档里的下标（提示卡／暗幕可跳／强制不可跳）。
     /// <para>批次 RS 之前这是一颗"强制模式"开关，于是<b>暗幕被绑在强制上</b>：想用暗幕就必须接受不能提前结束，
     /// 「试一试」也试不到暗幕。现在它是三档里选一档，"出现什么"与"能不能退出"各有位置。</para>
     /// </summary>
@@ -135,7 +135,7 @@ public partial class SettingsPageViewModel
             // 让人以为"再点一下就行"，正是这次改判要治的那种措辞）。
             true when StarMark.UI.Services.EyeRestService.IsResting
                 => "已演一次：暗幕已经盖上。" + StarMark.Core.Health.EyeRestPolicy.NoticeHint(CurrentEyeRestNotice),
-            true => "已演一次：发了一条提醒（托盘在跑走气泡，否则走主窗提示条）。",
+            true => "已演一次：右下角那张提示卡真的贴上了屏幕（贴不上时才会退到主窗提示条）。",
             false when StarMark.UI.Services.EyeRestService.IsResting
                 => "幕布还盖着屏，等这一轮结束再按（能不能提前点掉按上面那一档的说法）。",
             false => "没演成：护眼开关没打开时不建节拍表，也就没有可演的东西（先开启本卡片顶部的开关）。",

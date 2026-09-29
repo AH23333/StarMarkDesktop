@@ -126,33 +126,11 @@ public sealed class TrayHost : IDisposable
     }
 
     /// <summary>
-    /// 托盘气泡。<b>返回是否真的发出去了</b>：托盘没启用（未 Initialize 成功 / 用户关了托盘 / 图标被系统
-    /// 隐藏）时这里发不出去，而调用方（倒计时到点提醒）必须知道这一点才能留下别的证据——
-    /// 只有 void 返回值时，"提醒了"与"什么都没发生"在日志里长得一模一样。
+    /// 这里<b>不再有"发一条通知"的出口</b>（批次 RV）。原先那一发走系统的"改图标并附一条通知"：
+    /// 它在 Windows 11 上<b>返回 TRUE 而屏幕上什么都不显示</b>，而调用方一律把返回值读成"已经提醒过了"
+    /// ——于是"提醒了"与"什么都没发生"在日志里长得一模一样，各条兜底分支按构造永不触发。
+    /// 提醒统一由 StarMark.UI 的右下角提示卡承担，判据是窗口的实际矩形（可见 + 有尺寸 + 落在某块屏的工作区内）。
     /// </summary>
-    public bool ShowNotification(string title, string message)
-    {
-        if (!_added) return false;
-        try
-        {
-            var data = new NOTIFYICONDATA
-            {
-                cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATA>(),
-                hWnd = _hwnd,
-                uID = 1,
-                uFlags = NIF_INFO,
-                szInfoTitle = title.Length > 63 ? title[..63] : title,
-                szInfo = message.Length > 255 ? message[..255] : message,
-                dwInfoFlags = NIIF_INFO,
-            };
-            return Shell_NotifyIconW(NIM_MODIFY, ref data);
-        }
-        catch (Exception ex)
-        {
-            StarLog.Warn($"[TrayHost] 通知失败: {ex.Message}");
-            return false;
-        }
-    }
 
     /// <summary>本次右键实际渲染出来的宿主命令（点击时用行号回查其 Tag）。</summary>
     private readonly List<TrayCommandItem> _hostCommands = new();

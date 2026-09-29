@@ -100,7 +100,7 @@ public sealed class AnnotationSessionWiringGateTests
     /// §13 用例 6：截图进行中按画布那颗开关<b>要给得出原因</b>（另外九条这时是故意不注册的）。
     /// <para>顺序是关键：<c>Move</c> 对"Sheet 期间 ToggleBoard"给的就是 Sheet（会话不被快捷键打断），
     /// 于是 <c>to == from</c> 那条短路先跑的话，回执永远打不出来——变成最坏的一种：哑键。</para>
-    /// <para>这时画布工具条按 §5 是收起的，所以回执走托盘气泡/主窗提示条那条 <c>Report</c>，
+    /// <para>这时画布工具条按 §5 是收起的，所以回执走提示卡/主窗提示条那条 <c>Report</c>，
     /// 不是往条子状态行上写字。</para>
     /// </summary>
     [Fact]

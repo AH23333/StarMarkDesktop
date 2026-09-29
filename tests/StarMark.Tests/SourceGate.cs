@@ -30,6 +30,29 @@ internal static class SourceGate
         => File.ReadAllText(Path.Combine(RepoRoot(), relativePath.Replace('/', Path.DirectorySeparatorChar)));
 
     /// <summary>
+    /// 某个目录<b>之下</b>的全部手写 C# 源码（逐文件返回，红的时候能说出是哪个文件）。
+    /// <para>给"某个字面整条消失、全库不许再有"这类普查用：只扫一两个文件的禁项守门，会因为那条出口
+    /// 搬去第三个文件而假绿（记忆 ⑦ 讲拆分时的同一形状）。跳过 <c>obj</c>/<c>bin</c> 与生成物
+    /// （<c>*.g.cs</c>／<c>*.g.i.cs</c>），否则框架自己生成的代码会把锚点命中数撑歪。</para>
+    /// </summary>
+    internal static IReadOnlyList<(string RelativePath, string Text)> ReadRepoUnder(string relativeDir)
+    {
+        var root = Path.Combine(RepoRoot(), relativeDir.Replace('/', Path.DirectorySeparatorChar));
+        Assert.True(Directory.Exists(root), $"普查目录不存在：{relativeDir}（守门失效比红测更危险，故直接抛）");
+        var list = new List<(string, string)>();
+        foreach (var file in Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories))
+        {
+            var normalized = file.Replace(Path.DirectorySeparatorChar, '/');
+            if (normalized.Contains("/obj/") || normalized.Contains("/bin/")) continue;
+            if (normalized.EndsWith(".g.cs", StringComparison.Ordinal)
+                || normalized.EndsWith(".g.i.cs", StringComparison.Ordinal)) continue;
+            list.Add((relativeDir.TrimEnd('/') + '/' + Path.GetFileName(file), File.ReadAllText(file)));
+        }
+        Assert.True(list.Count > 0, $"{relativeDir} 下一个源文件都没扫到（普查路径错了）");
+        return list;
+    }
+
+    /// <summary>
     /// 读<b>同一个类的全部 partial 文件</b>（主文件 + 同目录下的 <c>类名.分段名.cs</c>）拼成一份文本。
     /// <para>
     /// 一个上千行的大类按访问面拆成多个 partial 文件之后，钉在单个文件上的守门会"扫不到锚点"而红——

@@ -202,7 +202,7 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         /// <b>不夹到边界</b>：夹到 5 等于把一处存档损坏放大成"每 5 分钟打断一次"。</summary>
         public int? EyeRestIntervalMinutes { get; set; }
 
-        /// <summary>提醒形式（0 气泡／1 暗幕可跳／2 强制不可跳，见 <c>EyeRestNotice</c>）。缺省与认不得的数值
+        /// <summary>提醒形式（0 提示卡／1 暗幕可跳／2 强制不可跳，见 <c>EyeRestNotice</c>）。缺省与认不得的数值
         /// 都由 <c>EyeRestPolicy.ClampNotice</c> 回落默认档（暗幕可跳），<b>不夹到最近一端</b>：
         /// 把一处存档损坏静默放大成"强制不可跳"＝替它把用户所有退出出口关掉。</summary>
         public int? EyeRestNotice { get; set; }

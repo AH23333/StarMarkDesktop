@@ -58,9 +58,9 @@ public sealed partial class ClockWidget : UserControl, IWidgetTicker, IAlarmEdit
     }
 
     /// <summary>
-    /// 到点那一发的出口：托盘气泡。<b>气泡是"进程正好在跑"时的那一下，桌面上那行"待确认"是常态可见的那一份</b>
+    /// 到点那一发的出口：右下角提示卡。<b>卡片是"进程正好在跑"时的那一下，桌面上那行"待确认"是常态可见的那一份</b>
     /// ——两条缺一条就会变成"提醒没到"，所以同时做（与倒计时/番茄钟同口径）。
-    /// 托盘没启用时 TrayReporter 会自己留下日志，不会静默吞掉。
+    /// 卡片贴不上屏幕时 TrayReporter 会自己留下日志，不会静默吞掉。
     /// </summary>
     private static void OnAlarmReached(AlarmItem item)
         => TrayReporter.Report("闹钟", AlarmPolicy.LineOf(item), "到点了。在时钟组件右键「闹钟」里可以停止或改。");

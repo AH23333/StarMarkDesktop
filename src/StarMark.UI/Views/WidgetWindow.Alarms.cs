@@ -36,7 +36,7 @@ public sealed partial class WidgetWindow
 
     /// <summary>
     /// 「闹钟」一节：状态一行（下一次几点／待确认几条）＋ 停止待确认 ＋ 加一条 ＋ 每条一子排。
-    /// <para>为什么把"待确认"做成一颗按钮而不是等它自己消失：用户裁决的是"气泡＋常驻，不出声"，
+    /// <para>为什么把"待确认"做成一颗按钮而不是等它自己消失：用户裁决的是"提示卡＋常驻，不出声"，
     /// 那么<b>桌面上那一行必须有一个明确的关掉的地方</b>——否则"挂在那儿的红字"就成了第二个问题。</para>
     /// </summary>
     private void BuildAlarmSection(MenuFlyout menu, IAlarmEditor alarms)

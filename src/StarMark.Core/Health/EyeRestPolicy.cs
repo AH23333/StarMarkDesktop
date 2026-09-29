@@ -9,12 +9,12 @@ namespace StarMark.Core.Health;
 /// <summary>
 /// 到点之后<b>用什么形式提醒</b>（批次 RS，用户裁决：把"暗幕"从"强制休息"里解出来）。
 /// <para>
-/// 旧形状是一个布尔（<c>EyeRestEnforced</c>）：<b>暗幕被绑在强制上</b>——不开强制就只有气泡，于是"试一试当前设置的效果"
+/// 旧形状是一个布尔（<c>EyeRestEnforced</c>）：<b>暗幕被绑在强制上</b>——不开强制就只有一张提示卡，于是"试一试当前设置的效果"
 /// 试不到暗幕，而开了强制又 20 秒不能提前结束（发起人原话："要么无法使用暗幕，要么使用暗幕时无法提前跳过"）。
 /// 现在"出现什么"与"能不能提前退出"合成<b>一个三档选择</b>，两件事各有其位置：
 /// </para>
 /// <list type="bullet">
-/// <item><description><see cref="Bubble"/>：只发托盘气泡（最轻，什么都不盖）。</description></item>
+/// <item><description><see cref="Card"/>：只发一张右下角提示卡（最轻，什么都不盖）。</description></item>
 /// <item><description><see cref="Curtain"/>：盖一层暗幕，<b>点一下屏幕就提前结束</b>——这是新的默认档。</description></item>
 /// <item><description><see cref="Forced"/>：盖暗幕且<b>不接任何退出</b>，20 秒走完才恢复（原规格那条"Esc 不跳过，防形同虚设"仍在，只是不再是拿到暗幕的唯一代价）。</description></item>
 /// </list>
@@ -23,8 +23,8 @@ namespace StarMark.Core.Health;
 /// </summary>
 public enum EyeRestNotice
 {
-    /// <summary>只发托盘气泡。</summary>
-    Bubble = 0,
+    /// <summary>只发一张右下角提示卡（批次 RV：托盘气泡在 Windows 11 上"API 返回成功、屏幕上什么都没有"）。</summary>
+    Card = 0,
     /// <summary>暗幕 + 可提前结束。</summary>
     Curtain = 1,
     /// <summary>暗幕 + 不可跳过。</summary>
@@ -85,13 +85,13 @@ public sealed class EyeRestPolicy
     /// 发起人这次的裁决就是"暗幕不该被强制休息绑住"，所以默认给看得见效果的那一档。
     /// </summary>
     public static readonly EyeRestNotice[] NoticeOptions =
-        { EyeRestNotice.Bubble, EyeRestNotice.Curtain, EyeRestNotice.Forced };
+        { EyeRestNotice.Card, EyeRestNotice.Curtain, EyeRestNotice.Forced };
 
     /// <summary>给界面下拉用的三档文案（与 <see cref="NoticeOptions"/> 同序；文案与数值一处，理由同 <see cref="IntervalLabels"/>）。
     /// <para><b>秒数从 <see cref="RestSeconds"/> 来，不写进字符串里</b>：档位话说"20 秒"而遮罩倒数到 30 是用户第一眼看得见的自相矛盾。</para></summary>
     public static IReadOnlyList<string> NoticeLabels { get; } =
     [
-        "只发托盘气泡（什么都不盖）",
+        "只发一张右下角提示卡（什么都不盖）",
         "盖一层暗幕（点一下屏幕即可提前结束）",
         $"盖一层暗幕且 {RestSeconds} 秒不可跳过（强制休息）",
     ];
@@ -102,7 +102,7 @@ public sealed class EyeRestPolicy
     /// <summary>
     /// 某一档怎么说（下拉项、状态行、日志、「试一试」的回执共用这一条）。
     /// <para>"这一档到底会发生什么"写两份就会有一份漏掉——批次 RS 之前正是两份（强制那句写了"不能提前跳过"，
-    /// 气泡那句没写"点一下屏幕"），所以这里只留一处出处，界面各处都来取。</para>
+    /// 提示卡那句没写"点一下屏幕"），所以这里只留一处出处，界面各处都来取。</para>
     /// </summary>
     public static string NoticeLabel(EyeRestNotice notice) => NoticeLabels[NoticeIndexOf(notice)];
 
@@ -128,10 +128,10 @@ public sealed class EyeRestPolicy
     /// 存档里读出来的那个数是不是一个<b>认得的</b>档（0/1/2）。只由上面的 <c>ClampNotice</c> 使用——
     /// 单独暴露它是为了让"设置页下拉的选项数"这类普查能问同一份事实，而不是各自数一遍。
     /// </summary>
-    public static bool IsKnownNotice(int raw) => raw is (int)EyeRestNotice.Bubble or (int)EyeRestNotice.Curtain or (int)EyeRestNotice.Forced;
+    public static bool IsKnownNotice(int raw) => raw is (int)EyeRestNotice.Card or (int)EyeRestNotice.Curtain or (int)EyeRestNotice.Forced;
 
-    /// <summary>这一档要不要盖暗幕（气泡档之外都盖）。</summary>
-    public static bool UsesCurtain(EyeRestNotice notice) => notice != EyeRestNotice.Bubble;
+    /// <summary>这一档要不要盖暗幕（提示卡档之外都盖）。</summary>
+    public static bool UsesCurtain(EyeRestNotice notice) => notice != EyeRestNotice.Card;
 
     /// <summary>
     /// 这一档<b>允不允许用户提前结束</b>。只有强制档不允许——那是它唯一的语义，

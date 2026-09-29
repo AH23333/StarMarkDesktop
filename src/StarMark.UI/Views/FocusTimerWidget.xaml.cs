@@ -58,8 +58,8 @@ public sealed partial class FocusTimerWidget : UserControl, IWidgetTicker
         var body = ended == FocusPhase.Focusing
             ? (restSkippedAsStale ? "时间早已到点（机器可能睡眠过），不自动进休息" : "该休息一下了")
             : "休息结束，可以开始下一轮";
-        if (App.MainWindow?.TryShowTrayNotification("番茄钟 · " + title, body) != true)
-            StarLog.Info($"番茄钟提醒（托盘未启用，仅组件内显示）：{title} — {body}");
+        if (!NoticeCard.Show("番茄钟 · " + title, body))
+            StarLog.Info($"番茄钟提醒（提示卡没能贴上屏幕，仅组件内显示）：{title} — {body}");
     }
 
     private void Primary_Click(object sender, RoutedEventArgs e) => ViewModel.Primary();

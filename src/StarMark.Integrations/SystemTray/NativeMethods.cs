@@ -46,15 +46,15 @@ internal static class NativeMethods
 
     // NotifyIcon
     public const uint NIM_ADD = 0x0000;
-    public const uint NIM_MODIFY = 0x0001;
     public const uint NIM_DELETE = 0x0002;
     public const uint NIM_SETVERSION = 0x0004;
     public const uint NIF_MESSAGE = 0x0001;
     public const uint NIF_ICON = 0x0002;
     public const uint NIF_TIP = 0x0004;
-    public const uint NIF_INFO = 0x0010;
     public const uint NOTIFYICON_VERSION_4 = 4;
-    public const uint NIIF_INFO = 0x0001;
+    // 批次 RV 删掉了"改图标并附一条通知"那三个旗标：本程序不再向系统请求通知气泡。
+    // 那一发在 Windows 11 上返回 TRUE 而屏幕上什么都不显示，被调用方读成"已经提醒过了"，
+    // 于是各条兜底按构造永不触发——留一个会谎报成功的面板，比没有面板更糟。
 
     public static readonly IntPtr HWND_MESSAGE = new(-3);
     public static readonly IntPtr IDC_ARROW = new(32512);

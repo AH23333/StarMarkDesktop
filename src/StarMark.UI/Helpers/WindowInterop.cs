@@ -190,6 +190,10 @@ internal static class WindowInterop
     [DllImport("user32.dll")]
     public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
 
+    /// <summary>某个<b>物理像素点</b>属于哪块屏（坐标落在屏外时按最近的那块算）。</summary>
+    [DllImport("user32.dll")]
+    public static extern IntPtr MonitorFromPoint(POINT pt, uint dwFlags);
+
     [DllImport("user32.dll")]
     public static extern bool GetMonitorInfoW(IntPtr hMonitor, ref MONITORINFO lpmi);
 
@@ -623,6 +627,24 @@ internal static class WindowInterop
             return true;      // 继续枚举下一块
         }, IntPtr.Zero);
         return list;
+    }
+
+    /// <summary>
+    /// <b>光标所在那块屏</b>的工作区（物理像素，已去掉任务栏）与该屏的有效缩放。
+    /// <para>提示卡用它定位：多屏时"提醒"要出现在用户手边那一块屏的角落，钉在主屏右下角的话，
+    /// 光标在副屏上的人根本不会看到（真机上"托盘气泡看不见"里就有这一份）。探不到返回 null，
+    /// 调用方据此老实报告"这条提醒没能贴上屏幕"。</para>
+    /// </summary>
+    public static (RectInt32 Work, double Scale)? MonitorWorkAreaAtCursor()
+    {
+        if (!GetCursorPos(out var pt)) return null;
+        var hmonitor = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+        if (hmonitor == IntPtr.Zero) return null;
+        var mi = new MONITORINFOEX { CbSize = Marshal.SizeOf<MONITORINFOEX>() };
+        if (!GetMonitorInfoExW(hmonitor, ref mi)) return null;
+        return (new RectInt32(mi.RcWork.Left, mi.RcWork.Top,
+            mi.RcWork.Right - mi.RcWork.Left, mi.RcWork.Bottom - mi.RcWork.Top),
+            GetMonitorScale(hmonitor));
     }
 
     /// <summary>主显示器工作区（物理像素）。</summary>
