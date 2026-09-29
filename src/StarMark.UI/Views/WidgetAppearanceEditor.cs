@@ -507,7 +507,7 @@ public static class WidgetAppearanceEditor
         }, out var sScale, v =>
         {
             var s = SnapTextScale(v);
-            return Math.Abs(s - 1.0) < 1e-6 ? "默认" : $"{s:0.##}";
+            return Math.Abs(s - 1.0) < 1e-6 ? "默认" : NumberText.UpTo2(s);
         });
         root.Children.Add(cThick);
         root.Children.Add(cRadius);
@@ -722,7 +722,7 @@ public static class WidgetAppearanceEditor
         };
         var tb = new TextBlock
         {
-            Text = format?.Invoke(value) ?? $"{value:0.##}",
+            Text = format?.Invoke(value) ?? NumberText.UpTo2(value),
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
             Foreground = Brush("TextFillColorSecondaryBrush", Colors.Gray),
@@ -730,7 +730,7 @@ public static class WidgetAppearanceEditor
         slider.ValueChanged += (_, e) =>
         {
             onChange(e.NewValue);
-            tb.Text = format?.Invoke(e.NewValue) ?? $"{e.NewValue:0.##}";
+            tb.Text = format?.Invoke(e.NewValue) ?? NumberText.UpTo2(e.NewValue);
         };
         var row = new Grid
         {

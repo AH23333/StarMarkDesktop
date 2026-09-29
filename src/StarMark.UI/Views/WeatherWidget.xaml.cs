@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
@@ -154,7 +153,7 @@ public sealed partial class WeatherWidget : UserControl
             return;
         }
 
-        var key = $"{city.Latitude:F3},{city.Longitude:F3}";
+        var key = $"{NumberText.Fixed3(city.Latitude)},{NumberText.Fixed3(city.Longitude)}";
         if (!force && s_cached is not null && s_cachedCityKey == key) return;
 
         // 多实例同时创建时会并发打同一接口，用信号量合并成一次
@@ -235,7 +234,7 @@ public sealed partial class WeatherWidget : UserControl
         if (today is not null)
             items.Add(("降水概率", $"{today.PrecipitationProbabilityMax}%"));
         if (report.Now.UvIndex > 0)
-            items.Add(("紫外线", report.Now.UvIndex.ToString("0.#", CultureInfo.InvariantCulture)));
+            items.Add(("紫外线", NumberText.UpTo1(report.Now.UvIndex)));
         if (report.Now.PressureHpa > 0)
             items.Add(("气压", $"{Math.Round(report.Now.PressureHpa)} hPa"));
         if (today?.Sunrise is { } rise)

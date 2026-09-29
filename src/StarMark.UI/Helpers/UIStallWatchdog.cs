@@ -170,7 +170,7 @@ public static class UIStallWatchdog
         if (label is null) return null;
         var ageText = StartupProfile.LastCheckpointAgeMs is not { } a ? "时间未知"
             : a < 1000 ? $"{a} ms 前"
-            : $"{a / 1000.0:0.#} 秒前";
+            : $"{NumberText.UpTo1(a / 1000.0)} 秒前";
         return $"{label}，{ageText}";
     }
 

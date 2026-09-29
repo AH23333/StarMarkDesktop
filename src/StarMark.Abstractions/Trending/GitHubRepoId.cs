@@ -100,7 +100,7 @@ public static class TrendingItemDraft
             Source = ItemSources.Local,
             SourceId = BookmarkSourceId(fullName),
             Title = fullName,
-            Subtitle = repo.Language is { Length: > 0 } lang ? $"{lang} · ★ {repo.Stars:N0}" : $"★ {repo.Stars:N0}",
+            Subtitle = repo.Language is { Length: > 0 } lang ? $"{lang} · ★ {NumberText.Grouped(repo.Stars)}" : $"★ {NumberText.Grouped(repo.Stars)}",
             Uri = repo.Url,
             Description = string.IsNullOrWhiteSpace(repo.Description) ? null : repo.Description.Trim(),
             StarsCount = repo.Stars,

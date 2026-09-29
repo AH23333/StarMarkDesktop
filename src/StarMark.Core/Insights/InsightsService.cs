@@ -69,7 +69,7 @@ public static class InsightsService
                     Key = "untagged",
                     Label = "未打标签比例偏高",
                     Deduction = d,
-                    Detail = $"{untagged}/{total}（{ratio:P0}）的条目没有标签",
+                    Detail = $"{untagged}/{total}（{NumberText.Percent(ratio)}）的条目没有标签",
                 });
             }
         }
@@ -89,7 +89,7 @@ public static class InsightsService
                     Key = "stale",
                     Label = "大量条目长期未整理",
                     Deduction = d,
-                    Detail = $"{stale}/{total}（{ratio:P0}）超过 {StaleDays} 天未更新",
+                    Detail = $"{stale}/{total}（{NumberText.Percent(ratio)}）超过 {StaleDays} 天未更新",
                 });
             }
         }

@@ -48,7 +48,7 @@ public sealed partial class SettingsPage
     private async void DeleteEngine_Click(object sender, RoutedEventArgs e)
     {
         var bytes = StarMark.Integrations.Everything.EverythingSource.GetEngineOccupancyBytes();
-        var sizeHint = bytes > 0 ? $"（约 {FormatBytes(bytes)}）" : "";
+        var sizeHint = bytes > 0 ? $"（约 {FileSizeText.Human(bytes)}）" : "";
         var confirm = await CenteredDialog.ConfirmAsync(
             "删除本地搜索引擎",
             $"将删除本地磁盘搜索所用的 Everything 引擎及其 SDK{sizeHint}。书签 / Star / 标签数据不受影响；" +
@@ -64,14 +64,7 @@ public sealed partial class SettingsPage
     private void RefreshEngineSize()
     {
         var bytes = StarMark.Integrations.Everything.EverythingSource.GetEngineOccupancyBytes();
-        EngineSizeText.Text = bytes > 0 ? $"约 {FormatBytes(bytes)}" : "未安装";
+        EngineSizeText.Text = bytes > 0 ? $"约 {FileSizeText.Human(bytes)}" : "未安装";
     }
 
-    private static string FormatBytes(long b) => b switch
-    {
-        < 1024 => $"{b} B",
-        < 1024 * 1024 => $"{b / 1024.0:0.#} KB",
-        < 1024L * 1024 * 1024 => $"{b / (1024.0 * 1024):0.#} MB",
-        _ => $"{b / (1024.0 * 1024 * 1024):0.##} GB",
-    };
 }

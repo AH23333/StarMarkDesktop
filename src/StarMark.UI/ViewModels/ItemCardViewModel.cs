@@ -278,7 +278,7 @@ public partial class ItemCardViewModel : ObservableObject
     public bool HasNotes => !string.IsNullOrEmpty(Notes);
     /// <summary>独立星数行（热榜候选的星数已在副标题里与语言、本期新增一并给出，不再重复一行）。</summary>
     public bool HasStars => ItemCardPolicy.ShowsTimeAndStarsLines(IsTrendingRepo, IsRssCandidate) && StarsCount is long s && s > 0;
-    public string StarsText => HasStars && StarsCount is long s ? $"★ {s:N0}" : string.Empty;
+    public string StarsText => HasStars && StarsCount is long s ? $"★ {NumberText.Grouped(s)}" : string.Empty;
 
     public Windows.UI.Color TagColor(string tag) => TagColorHelper.GetTagColor(tag);
 

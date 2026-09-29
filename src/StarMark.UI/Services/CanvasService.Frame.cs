@@ -153,7 +153,7 @@ public static partial class CanvasService
         var points = 0;
         foreach (var segment in screen.Trail.Segments) points += segment.Stroke.Points.Count;
         StarLog.WarnThrottled("canvas:frame",
-            $"[Canvas] 一帧重算 {ms:F1} ms：脏区 {rect.Width}x{rect.Height}" +
+            $"[Canvas] 一帧重算 {NumberText.Fixed1(ms)} ms：脏区 {rect.Width}x{rect.Height}" +
             $"（{rect.Width * (long)rect.Height / 1000}K 像素）、荧光 {screen.Trail.Segments.Count} 段共 {points} 点",
             windowMs: 10_000);
     }

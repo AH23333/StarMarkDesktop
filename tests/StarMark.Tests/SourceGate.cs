@@ -46,7 +46,12 @@ internal static class SourceGate
             if (normalized.Contains("/obj/") || normalized.Contains("/bin/")) continue;
             if (normalized.EndsWith(".g.cs", StringComparison.Ordinal)
                 || normalized.EndsWith(".g.i.cs", StringComparison.Ordinal)) continue;
-            list.Add((relativeDir.TrimEnd('/') + '/' + Path.GetFileName(file), File.ReadAllText(file)));
+            // 报"仓根相对路径"而不是拍平的文件名：同一个类拆成多个 partial 之后，
+            // Views/ 与 ViewModels/ 里会有同名前缀的文件，拍平了红测指不出该打开哪一个（批次 RZ）
+            var repoRoot = RepoRoot().Replace(Path.DirectorySeparatorChar, '/').TrimEnd('/');
+            list.Add((normalized.StartsWith(repoRoot + "/", StringComparison.Ordinal)
+                ? normalized[(repoRoot.Length + 1)..]
+                : Path.GetFileName(file), File.ReadAllText(file)));
         }
         Assert.True(list.Count > 0, $"{relativeDir} 下一个源文件都没扫到（普查路径错了）");
         return list;

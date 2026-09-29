@@ -306,8 +306,8 @@ public sealed partial class SettingsPage
     private async Task<bool> ConfirmOrganiseAsync(int total, int ruled, int batches, long approxTokens)
     {
         var detail = ruled > 0
-            ? $"共 {total} 条：{ruled} 条按高置信规则先定（不进模型）；其余分 {batches} 批问模型，约 {approxTokens:N0} token。"
-            : $"共 {total} 条，分 {batches} 批问模型，约 {approxTokens:N0} token。";
+            ? $"共 {total} 条：{ruled} 条按高置信规则先定（不进模型）；其余分 {batches} 批问模型，约 {NumberText.Grouped(approxTokens)} token。"
+            : $"共 {total} 条，分 {batches} 批问模型，约 {NumberText.Grouped(approxTokens)} token。";
         var dialog = new ContentDialog
         {
             Title = "开始 AI 整理？",

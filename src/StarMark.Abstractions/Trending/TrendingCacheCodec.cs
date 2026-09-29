@@ -73,7 +73,7 @@ public static class TrendingCacheCodec
         if (span < TimeSpan.FromHours(1))
             return $"{(int)span.TotalMinutes} 分钟前";
         if (span < TimeSpan.FromDays(1))
-            return string.Format(CultureInfo.InvariantCulture, "{0:N0} 小时前", span.TotalHours);
+            return $"{NumberText.Grouped(span.TotalHours)} 小时前";
         return $"{(int)span.TotalDays} 天前";
     }
 }

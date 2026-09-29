@@ -47,9 +47,10 @@ public sealed partial class SettingsPage
     }
 
     /// <summary>界面按"百分之几"说话，存档与判额按小数比例走。<b>换算只有这一颗</b>，
-    /// 而"这个比例合不合法"全在 <see cref="AiBudget.WithWarnRatio"/> 里判——界面里不许长出第二份区间。</summary>
+    /// 而"这个比例合不合法"全在 <see cref="AiBudget.WithWarnRatio"/> 里判——界面里不许长出第二份区间。
+    /// 形状走 <see cref="NumberText"/>：这一格显示的是可带一位小数的百分数，德式会变成 <c>85,3</c>。</summary>
     private static string PercentOfRatio(double ratio)
-        => (ratio * 100).ToString("0.#", CultureInfo.InvariantCulture);
+        => NumberText.UpTo1(ratio * 100);
 
     private void RefreshAiWarnRatioNote()
     {
@@ -110,18 +111,18 @@ public sealed partial class SettingsPage
 
             var used = snapshot.Window;
             var text = snapshot.MaxRecordedAt is null
-                ? $"本月还没花过 token（预算 {verdict.Used + verdict.Remaining:N0}）"
-                : $"近 30 天（按账本最后一条起算）已用 {used.TotalTokens:N0} / 预算 {budget.MonthlyTokenBudget:N0}，"
+                ? $"本月还没花过 token（预算 {NumberText.Grouped(verdict.Used + verdict.Remaining)}）"
+                : $"近 30 天（按账本最后一条起算）已用 {NumberText.Grouped(used.TotalTokens)} / 预算 {NumberText.Grouped(budget.MonthlyTokenBudget)}，"
                   + $"共 {used.Calls} 次调用";
             if (used.EstimatedCalls > 0)
                 text += $"（其中 {used.EstimatedCalls} 次是按字符估算的，服务没回计量）";
             if (used.Calls > 0)
-                text += "。" + string.Join("；", snapshot.ByFeature.Select(f => $"{f.Name} {f.TotalTokens:N0}")) + "。";
+                text += "。" + string.Join("；", snapshot.ByFeature.Select(f => $"{f.Name} {NumberText.Grouped(f.TotalTokens)}")) + "。";
             switch (verdict.State)
             {
                 case AiBudgetState.Warning:
-                    text += $"到 {budget.MonthlyTokenBudget:N0} 会自动暂停（预警线设在预算的 {PercentOfRatio(budget.WarnRatio)}%），"
-                        + $"还剩 {verdict.Remaining:N0} token。";
+                    text += $"到 {NumberText.Grouped(budget.MonthlyTokenBudget)} 会自动暂停（预警线设在预算的 {PercentOfRatio(budget.WarnRatio)}%），"
+                        + $"还剩 {NumberText.Grouped(verdict.Remaining)} token。";
                     break;
                 case AiBudgetState.Tripping:
                 case AiBudgetState.Blocked:

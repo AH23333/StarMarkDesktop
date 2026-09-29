@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using StarMark.Abstractions;
 using System.Collections.Generic;
 using System.Globalization;
 
@@ -56,7 +57,7 @@ public static class QuickMath
 
     /// <summary>普通数字：最多两位小数，整数不带小数点。</summary>
     public static string Number(decimal value)
-        => Math.Round(value, 2, MidpointRounding.AwayFromZero).ToString("0.##", CultureInfo.InvariantCulture);
+        => NumberText.UpTo2(Math.Round(value, 2, MidpointRounding.AwayFromZero));
 
     // ─────────────── 打折与满减 ───────────────
 

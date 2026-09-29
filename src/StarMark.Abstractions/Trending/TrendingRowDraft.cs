@@ -11,11 +11,11 @@ public static class TrendingStarsText
     /// <b>不显示 0</b>：把"不知道"画成"没涨"是编数据。兜底这件事由页面顶部一句来源标注说清，不逐行重复。
     /// </summary>
     public static string? PeriodGain(long? starsToday, string periodLabel)
-        => starsToday is null ? null : string.Format(CultureInfo.InvariantCulture, "＋{0:N0} {1}", starsToday.Value, periodLabel);
+        => starsToday is null ? null : $"＋{NumberText.Grouped(starsToday.Value)} {periodLabel}";
 
     /// <summary>总数一律带千分位；null 与负数（异常输入）都显示为 0，不显示空白（空白看着像坏了）。</summary>
     public static string Total(long? stars)
-        => string.Format(CultureInfo.InvariantCulture, "★ {0:N0}", stars is > 0 ? stars.Value : 0);
+        => $"★ {NumberText.Grouped(stars is > 0 ? stars.Value : 0)}";
 }
 
 /// <summary>

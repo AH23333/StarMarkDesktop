@@ -250,14 +250,11 @@ public static class ClipAssets
     /// <summary>
     /// 人类可读体积（设置页与条目副标题共用一份，免得两处对"1.2 MB"的取整不一样）。
     /// <b>固定用不变文化</b>：小数点写成分号或逗号的地方，测试与用户看到的都不是同一个数。
+    /// <para>批次 RZ：这颗从"自己写一遍梯子"改成<b>转发</b> <see cref="FileSizeText.Human"/>——
+    /// 原先两份的档位与取整恰好一样，但一个锁了文化一个没锁，同一个体积在卡片与占用行里会不同形。
+    /// 留着这个名字是因为它有 12 个调用方；<b>转发不许长出自己的判断</b>（RX 的同一条口径，由闸门钉）。</para>
     /// </summary>
-    public static string DescribeBytes(long bytes) => bytes switch
-    {
-        < 1024 => $"{bytes} B",
-        < 1024 * 1024 => (bytes / 1024.0).ToString("0.#", CultureInfo.InvariantCulture) + " KB",
-        < 1024L * 1024 * 1024 => (bytes / (1024.0 * 1024)).ToString("0.#", CultureInfo.InvariantCulture) + " MB",
-        _ => (bytes / (1024.0 * 1024 * 1024)).ToString("0.##", CultureInfo.InvariantCulture) + " GB",
-    };
+    public static string DescribeBytes(long bytes) => FileSizeText.Human(bytes);
 
     /// <summary>图片条目的标题（§1b 裁决：尺寸本身就是要说给用户看的第一个事实）。</summary>
     public static string DescribeTitle(int width, int height)

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
 
 namespace StarMark.Core.Capture;
@@ -523,7 +524,7 @@ public sealed record Annotation(
         if (FontHeight is < 6 or > 200)
             return $"文字高度 {FontHeight} 太离谱（只接受 6–200 物理像素）";
         if (Scale is < MinScale or > MaxScale)
-            return $"缩放倍数 {Scale:0.##} 超出 {MinScale:0.##}–{MaxScale:0.##}（缩到底会再也点不中，放到最大会撑破画面）";
+            return $"缩放倍数 {NumberText.UpTo2(Scale)} 超出 {NumberText.UpTo2(MinScale)}–{NumberText.UpTo2(MaxScale)}（缩到底会再也点不中，放到最大会撑破画面）";
         if (EffectiveColorBgra >>> 24 == 0)
             return "颜色是全透明的，画上去等于没画";
         return null;
