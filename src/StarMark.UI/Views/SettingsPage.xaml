@@ -1075,7 +1075,7 @@
                                 </Grid>
                                 <!-- 两处入口要互相认账（批次 WC-3）：这里说清"时钟组件上也能开关"，
                                      否则用户在组件上改了间隔，回到这页会以为这里才是真值。 -->
-                                <TextBlock Text="想少两步：桌面「时钟」组件右键就有「护眼 · 休息提醒」，开关与间隔在那儿改也一样生效（改的是同一份设置），时钟上还会多显示一行「休息 HH:mm」。"
+                                <TextBlock Text="想少两步：桌面「时钟」组件右键就有「护眼 · 休息提醒」，开关、间隔、提醒形式与「试一试」在那儿改也一样生效（改的是同一份设置），时钟上还会多显示一行「休息 HH:mm」。"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap" Opacity="0.62" FontSize="12"/>
                                 <TextBlock Text="{x:Bind ViewModel.EyeRestStatus, Mode=OneWay}"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>

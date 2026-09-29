@@ -338,7 +338,7 @@ public sealed class EyeRestWiringGateTests
 
     // ────────── 批次 WC-3：护眼与时钟组件整合 ──────────
 
-    /// <summary>时钟组件上那一节是<b>第二个入口，不是第二个引擎</b>。</summary>
+    /// <summary>时钟组件上那一节是<b>第二个入口，不是第二个引擎</b>（批次 RT 补齐提醒形式与「试一试」）。</summary>
     [Fact]
     public void TheClockWidgetMenuIsASecondEntry_NotASecondEngine()
     {
@@ -350,19 +350,46 @@ public sealed class EyeRestWiringGateTests
         Assert.Contains("if (_kind == WidgetKind.Clock) BuildEyeRestSection(menu);", call);
         // 写盘与起停走设置页同一对出口：两处各攒一份状态，迟早对不上，而对不上的那次是用户先看见。
         // 参数整条钉住（不是只钉"调用了它"）：这里把开关读反编译得过、也只少一行日志，
-        // 真机上却是"按下去关掉护眼、屏幕照旧每 45 分钟黑一次"（记忆 ⑥ 那一族）。
-        Assert.Contains("settings.SaveEyeRest(toggle.IsChecked, interval,", section);
+        // 真机上却是"按下去关掉护眼、屏幕照旧每 45 分钟黑一次"（记忆 ⑥ 那一族，坑表 #177）。
+        Assert.Contains("settings.SaveEyeRest(toggle.IsChecked, settings.LoadEyeRestIntervalMinutes(),", section);
         Assert.Contains("App.ApplyEyeRest(toggle.IsChecked);", section);
-        // 改间隔那一支同理：它没动开关，所以要把"开关照原样"写死，否则 someday 顺手写成 !Load... 就是"改个间隔把护眼关了"
         Assert.Contains("settings.SaveEyeRest(settings.LoadEyeRestEnabled(), minutes,", section);
-        Assert.Contains("App.ApplyEyeRest(settings.LoadEyeRestEnabled());", section);
-        // 档位与文案都取 Core 那一份（自己拼"X 分钟"就是第二份"有哪些档"）
+        Assert.Contains("settings.SaveEyeRest(settings.LoadEyeRestEnabled(), settings.LoadEyeRestIntervalMinutes(),", section);
+        Assert.Equal(2, SourceGate.Count(section, "App.ApplyEyeRest(settings.LoadEyeRestEnabled());"));
+
+        // 每一项只管自己那一件，其余三项都<b>当场重新读</b>再带过去（拿打开菜单那一刻的快照写回去＝把别的项退回旧值）。
+        // 钉的是<b>整段实参尾巴</b>而不是"这个名字出现几次"：方法开头那三行是显示用的读数，
+        // 数裸方法名会把它们一起算进来，计数就失去了含义（#177 同族——锚点要钉在真正要守的那件事上）。
+        Assert.Equal(3, SourceGate.Count(section, "settings.SaveEyeRest("));
+        Assert.Equal(2, SourceGate.Count(section, "settings.LoadEyeRestNotice(), settings.LoadEyeRestDeferOnFullscreen());"));
+        Assert.Equal(3, SourceGate.Count(section, "settings.LoadEyeRestDeferOnFullscreen());"));
+        Assert.Equal(2, SourceGate.Count(section, "App.ApplyEyeRest(settings.LoadEyeRestEnabled());"));
+
+        // 档位与文案都取 Core 那一份（自己拼"X 分钟"或把三档重打一遍就是第二份"有哪些档"）
         Assert.Contains("EyeRestPolicy.IntervalOptions", section);
         Assert.Contains("EyeRestPolicy.IntervalLabels", section);
+        Assert.Contains("EyeRestPolicy.NoticeOptions", section);
+        Assert.Contains("EyeRestPolicy.NoticeLabels", section);
+        Assert.Contains("EyeRestPolicy.NoticeLabel(notice)", section);   // 菜单标题上的当前档
         Assert.DoesNotContain("15 分钟", section);
-        // 开关必须把它没管的两项原样带过去，否则一按开关就把「提醒形式 / 全屏让路」重置回默认
-        Assert.Equal(2, SourceGate.Count(section, "settings.LoadEyeRestNotice()"));
-        Assert.Equal(2, SourceGate.Count(section, "settings.LoadEyeRestDeferOnFullscreen()"));
+        Assert.DoesNotContain("只发托盘气泡", section);
+    }
+
+    /// <summary>
+    /// 组件上的「试一试」必须演<b>当前那一档</b>、失败要有可见的原因、而且不许自己起表。
+    /// <para>"按了没反应"与"演过了但没看见"在用户侧长得一样；而开关没开时那颗灰项若不写清为什么灰，
+    /// 用户只会认为这条功能坏了（P-54 那条"不许留需要他猜的中间态"）。</para>
+    /// </summary>
+    [Fact]
+    public void TheClockWidgetsTryItEntryPreviewsTheCurrentNotice_AndExplainsWhyItCannot()
+    {
+        var section = SourceGate.MethodBody(SourceGate.ReadRepoPartials(WidgetWindow), "private void BuildEyeRestSection(MenuFlyout menu)");
+        Assert.Contains("EyeRestService.Preview()", section);
+        Assert.Contains("IsEnabled = running,", section);                                  // running＝节拍表真的挂着
+        Assert.Contains("试一试（要先开启休息提醒，上面第一项）", section);                  // 灰着的那一句要自己说清原因
+        Assert.Contains("App.MainWindow?.ShowNotice(\"没演成\"", section);                  // 按下去没演成要看得见
+        Assert.Contains("EyeRestService.IsResting", section);                               // "幕布还盖着"与"表没挂上"要分开说
+        Assert.DoesNotContain("EyeRestService.Start(", section);                            // 组件这一头不替用户起表
     }
 
     /// <summary>时钟上那一行读的是引擎已有的状态，组件自己不另起一张表。</summary>

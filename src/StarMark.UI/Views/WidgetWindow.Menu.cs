@@ -40,11 +40,15 @@ public sealed partial class WidgetWindow
     }
 
     /// <summary>
-    /// 时钟组件右键菜单里的「护眼 · 休息提醒」一节（批次 WC-3）。
+    /// 时钟组件右键菜单里的「护眼 · 休息提醒」一节（批次 WC-3 起，批次 RT 补齐提醒形式与「试一试」）。
     /// <para>
-    /// 引擎<b>仍然只有一个</b> <see cref="EyeRestService"/>：这里给的是"就地开关 + 改间隔"的入口，
+    /// 引擎<b>仍然只有一个</b> <see cref="EyeRestService"/>：这里给的是"就地开关 + 改间隔 + 换提醒形式 + 演一次"的入口，
     /// 写盘与起停都走设置页同一对出口（<c>SaveEyeRest</c> / <c>App.ApplyEyeRest</c>），
     /// 所以两处不会各自攒一份状态——第二份事实迟早对不上，而对不上的那次是用户先看见。
+    /// </para>
+    /// <para>
+    /// 这一节为什么值得摆在这儿：发起人点的原话是"护眼设置开启后需要在时钟组件内即可直接设置，
+    /// 而非需要用户每次都去主窗口的设置内进行设置"。改完当场生效（服务在到点那一刻现读），不需要"保存"按钮。
     /// </para>
     /// <para>菜单每次打开都重建（<see cref="OnContextMenuOpening"/>），勾选与"下一次几点"因此总是当前值。</para>
     /// </summary>
@@ -53,6 +57,7 @@ public sealed partial class WidgetWindow
         var settings = App.Services.GetRequiredService<SettingsStore>();
         var enabled = settings.LoadEyeRestEnabled();
         var interval = settings.LoadEyeRestIntervalMinutes();
+        var notice = settings.LoadEyeRestNotice();
 
         menu.Items.Add(new MenuFlyoutSeparator());
         var section = new MenuFlyoutSubItem
@@ -64,8 +69,9 @@ public sealed partial class WidgetWindow
         var toggle = new ToggleMenuFlyoutItem { Text = "开启休息提醒", IsChecked = enabled };
         toggle.Click += (_, _) =>
         {
-            // 提醒形式 / 全屏让路这两项不在这里改，但要原样带过去，否则一按开关就把它们重置回默认
-            settings.SaveEyeRest(toggle.IsChecked, interval,
+            // 每一项只管自己那一件，其余三项<b>当场重新读一遍</b>带过去：拿"菜单打开那一刻"的快照写回去，
+            // 就等于在本项生效的同时把别的项退回旧值（"改了间隔但开关把它重置了"这类半套状态的来源）。
+            settings.SaveEyeRest(toggle.IsChecked, settings.LoadEyeRestIntervalMinutes(),
                 settings.LoadEyeRestNotice(), settings.LoadEyeRestDeferOnFullscreen());
             App.ApplyEyeRest(toggle.IsChecked);
         };
@@ -92,6 +98,48 @@ public sealed partial class WidgetWindow
         }
         section.Items.Add(gap);
 
+        // 提醒形式那一排（批次 RT）：菜单标题带上当前档怎么说，用户不用展开就知道现在配的是什么；
+        // 文案一律取 Core（NoticeLabels／NoticeLabel）——这一档"能不能点掉"在两处各写一份迟早对不上。
+        var how = new MenuFlyoutSubItem
+        {
+            Text = $"提醒形式：{EyeRestPolicy.NoticeLabel(notice)}",
+            IsEnabled = enabled,
+        };
+        for (var i = 0; i < EyeRestPolicy.NoticeOptions.Length; i++)
+        {
+            var option = EyeRestPolicy.NoticeOptions[i];
+            var item = new RadioMenuFlyoutItem
+            {
+                Text = EyeRestPolicy.NoticeLabels[i],
+                IsChecked = option == notice,
+            };
+            item.Click += (_, _) =>
+            {
+                settings.SaveEyeRest(settings.LoadEyeRestEnabled(), settings.LoadEyeRestIntervalMinutes(),
+                    option, settings.LoadEyeRestDeferOnFullscreen());
+                App.ApplyEyeRest(settings.LoadEyeRestEnabled());
+            };
+            how.Items.Add(item);
+        }
+        section.Items.Add(how);
+
+        // 「试一试」：这一条是给"想看看暗幕长什么样、点一下是不是真能开"的那次判断用的，
+        // 不该让人先等满间隔。没起表时它是灰的，而灰的原因直接写在标题上（不让人按了才知道为什么）。
+        var running = EyeRestService.IsRunning;
+        var tryIt = new MenuFlyoutItem
+        {
+            Text = running ? "试一试当前效果（不动节拍）" : "试一试（要先开启休息提醒，上面第一项）",
+            IsEnabled = running,
+        };
+        tryIt.Click += (_, _) =>
+        {
+            if (EyeRestService.Preview()) return;                 // 屏幕上已经有东西了，不需要再补一句话
+            App.MainWindow?.ShowNotice("没演成", EyeRestService.IsResting
+                ? "上一轮的暗幕还盖着屏，等这一轮结束再按。"
+                : "节拍表没挂上（原因见日志），先在本节第一项开启休息提醒。");
+        };
+        section.Items.Add(tryIt);
+
         // 状态常驻一行：按完开关要立刻看得见"下一次是几点"，不然"按了没反应"与"生效了但没到点"分不开
         var next = EyeRestService.NextDueAt;
         section.Items.Add(new MenuFlyoutItem
@@ -102,7 +150,7 @@ public sealed partial class WidgetWindow
             IsEnabled = false,
         });
 
-        var full = new MenuFlyoutItem { Text = "完整设置（提醒形式 / 全屏让路）…" };
+        var full = new MenuFlyoutItem { Text = "完整设置（全屏让路 / 下一次几点）…" };
         // 直接落在「健康与诊断」页：跳进设置页却停在常规页，等于让人到了门口再自己找房间
         full.Click += (_, _) => App.MainWindow?.Present(true, "健康与诊断");
         section.Items.Add(full);
