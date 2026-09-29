@@ -110,7 +110,7 @@ public sealed class SettingsTaxonomyGateTests
         // 屏幕画布（批次 WD-5）：开关与那份只读键位一览都住在拓展功能页
         Assert.Contains("<TextBlock Text=\"屏幕画布\" Style=\"{StaticResource SettingTitle}\"", extras);
         Assert.Contains("ViewModel.CanvasEnabled", extras);
-        Assert.Contains("ViewModel.CanvasHotkeySheet", extras);
+        Assert.Contains("ViewModel.CanvasHotkeyRows", extras);
         // 「截图带画布」（批次 WH）跟着画布走：它说的是同一块玻璃，只不过影响的是截图那一帧
         Assert.Contains("ViewModel.CanvasInScreenshots", extras);
         // 光标那块圆的半径（批次 RN）：同一块圆的尺寸设置，必须和那块圆所在的卡同页——

@@ -87,21 +87,34 @@ public sealed partial class CanvasHotkeyPanelWindow : Window
         Close();
     }
 
-    /// <summary>键位表：动作名取自 <see cref="HotkeyActions.DisplayName"/>，键位取自当前绑定。</summary>
+    /// <summary>
+    /// 键位表：动作名取自 <see cref="HotkeyActions.DisplayName"/>，键位取自当前绑定。
+    /// <para><b>两列必须一列 Star 一列 Auto</b>：两列都给 Auto 时列宽＝各自内容宽，Grid 右侧那段多出来的空间没人认领，
+    /// 键位就贴在名字后面——整张表挤在左半边，而面板右半边一片空（用户原话："文字全部挤在一起，而右侧却有很大空间"）。
+    /// 名字那一列吃掉剩余宽度，键位才真的贴到右缘，读起来才是一张能对齐的表。</para>
+    /// </summary>
     private void RebuildRows()
     {
         foreach (var row in _rows) Rows.Children.Remove(row);
         _rows.Clear();
         foreach (var action in HotkeyActions.Canvas)
         {
-            var grid = new Grid { ColumnDefinitions = { new ColumnDefinition(), new ColumnDefinition() } };
+            var grid = new Grid
+            {
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                    new ColumnDefinition { Width = GridLength.Auto },
+                },
+            };
             grid.Children.Add(new TextBlock
             {
                 Text = HotkeyActions.DisplayName(action),
                 FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
+                HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 1, 10, 1),
+                Margin = new Thickness(0, 0, 12, 0),   // 列间缝隙留在名字这一头，右缘才是干净的
             });
             grid.Children.Add(new TextBlock
             {

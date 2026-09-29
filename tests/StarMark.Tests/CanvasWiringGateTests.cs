@@ -1611,18 +1611,51 @@ public sealed class CanvasWiringGateTests
     }
 
     /// <summary>
-    /// 设置页那一览与画布面板<b>同源</b>：都从 <see cref="HotkeyActions.Canvas"/> + 当前绑定生成。
-    /// 两处各写一份键位，改天一定分岔（分岔的样子就是"照着说明按，没反应"）。
+    /// 设置页那一览与画布面板<b>同源</b>：都从 <see cref="HotkeyActions.Canvas"/> + 当前绑定生成，
+    /// 键位文本只有 <c>CanvasService.BindingText</c> <b>一份实现</b>。
+    /// <para>两处各写一份键位，改天一定分岔（分岔的样子就是"照着说明按，没反应"）；
+    /// 两处各判一次"没绑定时显示什么"也是同一件事——旧写法里 VM 自己读一次注册表、面板再读一次，
+    /// 异常兜底那条只有一边有，症状就是"面板写未绑定、设置页写一个空"。</para>
     /// </summary>
     [Fact]
     public void SettingsSheetAndCanvasPanelReadTheSameTable()
     {
         var vm = SourceGate.ReadRepoPartials("src/StarMark.UI/ViewModels/SettingsPageViewModel.cs");
         Assert.Contains("HotkeyActions.Canvas.Select", vm);
-        Assert.Contains("HotkeyDisplay.Display(bound)", vm);
+        Assert.Contains("StarMark.UI.Services.CanvasService.BindingText(action)", vm);   // 键位文本只从这一处取
+        Assert.DoesNotContain("GetHotkeyBindings()", vm);                                 // VM 不再自己读一遍注册表
         Assert.DoesNotContain("Ctrl+Alt+R", vm);                      // 一份字面键位都不许有
+        Assert.Contains("CanvasService.BindingText(action)", SourceGate.ReadRepoFile(Panel));   // 面板读的是同一个出处
         // 改完键要重算，否则那一览会一直显示旧键位
         var page = SourceGate.ReadRepoPartials(SettingsPageCode);
         Assert.Equal(2, SourceGate.Count(page, "ViewModel.RefreshCanvasHotkeySheet();"));
+    }
+
+    /// <summary>
+    /// 那张键位表<b>一行两列、键位贴右缘</b>（批次 RO，用户点名"文字全部挤在一起，而右侧却有很大空间"）。
+    /// <para>画布上的 ⌨ 面板与设置页那张一览是同一张表的两副面孔，两边都必须是两列：
+    /// 面板里 <c>ColumnDefinition</c> 不给宽度＝两列全 Auto ⇒ 列宽只等于内容宽，Grid 右侧多出来的那段<b>没人认领</b>，
+    /// 键位就贴在名字后面；设置页里拼成一条字符串则是十个左对齐段落，键位起点跟着名字长度跑。</para>
+    /// </summary>
+    [Fact]
+    public void HotkeyTablesAreTwoColumnsSoTheKeysLineUp()
+    {
+        var rows = SourceGate.MethodBody(SourceGate.ReadRepoFile(Panel), "private void RebuildRows");
+        Assert.Contains("new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }", rows);
+        Assert.Contains("new ColumnDefinition { Width = GridLength.Auto }", rows);
+        Assert.Contains("HorizontalAlignment = HorizontalAlignment.Right", rows);
+        Assert.DoesNotContain("new ColumnDefinition(), new ColumnDefinition()", rows);   // 旧形状＝两列全 Auto
+
+        var sheet = SourceGate.ReadRepoFile("src/StarMark.UI/Views/SettingsPage.xaml");
+        Assert.Contains("ItemsSource=\"{x:Bind ViewModel.CanvasHotkeyRows, Mode=OneWay}\"", sheet);
+        Assert.Contains("<DataTemplate x:DataType=\"local:CanvasHotkeyRow\">", sheet);
+        Assert.Contains("ColumnDefinitions=\"*,Auto\"", sheet);
+        // 反向钉死那个形状：名字与键位拼成一句、再用一个 TextBlock 打印，就回到"十个左对齐段落"
+        Assert.DoesNotContain("ViewModel.CanvasHotkeySheet", sheet);
+        var build = SourceGate.MethodBody(
+            SourceGate.ReadRepoPartials("src/StarMark.UI/ViewModels/SettingsPageViewModel.cs"),
+            "private IEnumerable<StarMark.UI.Views.CanvasHotkeyRow> BuildCanvasHotkeyRows()");
+        Assert.DoesNotContain("string.Join", build);
+        Assert.DoesNotContain("　{", build);                                             // 全角空格当列分隔＝这次要治的形状
     }
 }

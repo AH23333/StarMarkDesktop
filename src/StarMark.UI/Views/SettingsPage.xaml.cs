@@ -187,6 +187,15 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         ThemeBrush.For(ActualTheme, key) ?? new SolidColorBrush(fallback);
 }
 
+/// <summary>
+/// 只读键位一览的一行（设置页「屏幕画布」卡用它，画布上那块 ⌨ 面板是同一张表的另一副面孔）。
+/// <para>刻意<b>不</b>复用 <see cref="HotkeyRow"/>：那一行带录制按钮与冲突标注，把可编辑的控件塞进
+/// "这里显示的就是那边当前绑的键"那块只读卡，就等于在同一页摆出两个编辑入口（设置闸门会当场红）。</para>
+/// </summary>
+/// <param name="Label">动作名（取自 <c>HotkeyActions.DisplayName</c>，界面不自己写中文）。</param>
+/// <param name="Gesture">键位文本（取自 <c>CanvasService.BindingText</c>，读的是真实绑定）。</param>
+public sealed record CanvasHotkeyRow(string Label, string Gesture);
+
 /// <summary>快捷键录制列表的单行模型（动作名 + 当前绑定显示 + 录制态 + 冲突标注）。</summary>
 public sealed class HotkeyRow : INotifyPropertyChanged
 {

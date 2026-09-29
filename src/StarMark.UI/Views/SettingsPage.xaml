@@ -732,9 +732,24 @@
                                 </Grid>
                                 <TextBlock Text="快捷键一览（下面是当前真正生效的键位；要改到「快捷键」页的「屏幕画布」分组）"
                                            Style="{StaticResource SettingRowText}" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                <TextBlock Text="{x:Bind ViewModel.CanvasHotkeySheet, Mode=OneWay}"
-                                           Style="{StaticResource SettingRowText}" FontFamily="Consolas"
-                                           TextWrapping="Wrap" Opacity="0.85"/>
+                                <!--
+                                    批次 RO：这张表过去是一整块拼好的多行字符串（名字 + 全角空格 + 键位）。
+                                    那样渲染出来是十个左对齐的段落——键位的起点跟着名字长度跑，十行没有一个共同的右界，
+                                    卡片右侧那一大片始终空着（发起人原话："文字全部挤在一起，而右侧却有很大空间"）。
+                                    现在一行两个字段、名字那列吃掉剩余宽度，键位贴右缘，才成其为一张表。
+                                -->
+                                <ItemsControl ItemsSource="{x:Bind ViewModel.CanvasHotkeyRows, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:CanvasHotkeyRow">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="0,2">
+                                                <TextBlock Grid.Column="0" Text="{x:Bind Label}" VerticalAlignment="Center"
+                                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                                                <TextBlock Grid.Column="1" Text="{x:Bind Gesture}" VerticalAlignment="Center"
+                                                           HorizontalAlignment="Right" FontFamily="Consolas" Opacity="0.9"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
                             </StackPanel>
                         </Border>
                     </controls:ColumnFlowPanel>

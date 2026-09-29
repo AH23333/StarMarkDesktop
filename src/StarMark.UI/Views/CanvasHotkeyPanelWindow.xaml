@@ -22,7 +22,8 @@
                         VerticalAlignment="Center" ToolTipService.ToolTip="收起这块面板（画布继续开着）"/>
             </StackPanel>
             <Border Height="1" Background="#33FFFFFF"/>
-            <StackPanel x:Name="Rows" Spacing="1"/>
+            <!-- 行距 4：12px 的字挤在 1 的间距上就是"全部糊成一坨"（发起人点名的另一半症状） -->
+            <StackPanel x:Name="Rows" Spacing="4"/>
             <Border Height="1" Background="#33FFFFFF"/>
             <TextBlock x:Name="MouseExits" FontSize="11.5" Foreground="#BFFFFFFF" TextWrapping="Wrap"
                        Text="不用键盘的三条出口：画布上右键＝把鼠标交还给下面的应用；荧光笔按住才画、松开即透；穿透态下按住 Ctrl+Alt 拖动＝直接圈画。"/>

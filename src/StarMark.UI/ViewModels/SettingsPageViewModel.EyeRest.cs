@@ -200,8 +200,12 @@ public partial class SettingsPageViewModel
     /// <summary>开关当前含义的一句话（看得见"关掉会发生什么"，不用猜）。</summary>
     [ObservableProperty] private string _canvasStatus = string.Empty;
 
-    /// <summary>十条画布动作与它们<b>当前真实绑定</b>的键位，一行一条——生成，不写死。</summary>
-    [ObservableProperty] private string _canvasHotkeySheet = string.Empty;
+    /// <summary>
+    /// 十条画布动作与它们<b>当前真实绑定</b>的键位，一行一条——生成，不写死。
+    /// <para>一行是<b>两个字段</b>（名字＋键位）而不是一句拼好的字符串：拼串渲染出来是十个左对齐段落，
+    /// 键位起点跟着名字长度跑、右侧一大片没人占（批次 RO 点名的"文字全部挤在一起，而右侧却有很大空间"）。</para>
+    /// </summary>
+    [ObservableProperty] private ObservableCollection<StarMark.UI.Views.CanvasHotkeyRow> _canvasHotkeyRows = new();
 
     private bool _suppressCanvasApply;
 

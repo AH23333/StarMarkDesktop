@@ -232,7 +232,7 @@ public sealed class ClipboardImageSettingsGateTests
         Assert.Contains("private void ComputeClipboardUsage()", all);                  // Clipboard
         Assert.Contains("private string BuildEyeRestStatus()", all);                   // EyeRest
         Assert.Contains("public void RefreshRssEnabled()", all);                       // Feeds
-        Assert.Contains("private string BuildCanvasHotkeySheet()", all);               // Canvas
+        Assert.Contains("private IEnumerable<StarMark.UI.Views.CanvasHotkeyRow> BuildCanvasHotkeyRows()", all);   // Canvas
         Assert.Contains("private void PrepareLocalDiskSearch()", all);                 // LocalDisk
     }
 }

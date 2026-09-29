@@ -334,8 +334,8 @@ public partial class SettingsPageViewModel : ObservableObject
         CanvasInScreenshots = Safe(_settings.LoadCanvasInScreenshots, true, "截图带画布");
         CursorCircleRadiusDip = Safe(_settings.LoadCursorCircleRadiusDip, CursorCircle.DefaultRadiusDip, "光标圆半径");
         _suppressCanvasApply = false;
-        CanvasHotkeySheet = BuildCanvasHotkeySheet();
-        CanvasStatus = BuildCanvasStatus();
+        // 这张表与状态行都从当前绑定现生成（回灌也要生成一次，否则第一次进设置页会看到空表）
+        RefreshCanvasHotkeySheet();
 
         // RSS 总开关：回灌当前判定值（从没表过态时按"有没有启用的源"算，见 RssActivation）。
         _suppressRssApply = true;

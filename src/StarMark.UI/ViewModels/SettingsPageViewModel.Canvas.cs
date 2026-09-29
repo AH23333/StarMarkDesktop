@@ -31,9 +31,19 @@ public partial class SettingsPageViewModel
     /// <summary>键位改了之后重算这一览（「保存快捷键」与「重试注册」两条路都调它，否则这里会显示旧键位）。</summary>
     public void RefreshCanvasHotkeySheet()
     {
-        CanvasHotkeySheet = BuildCanvasHotkeySheet();
+        CanvasHotkeyRows = new System.Collections.ObjectModel.ObservableCollection<StarMark.UI.Views.CanvasHotkeyRow>(
+            BuildCanvasHotkeyRows());
         CanvasStatus = BuildCanvasStatus();
     }
+
+    /// <summary>
+    /// 一张表生成十行，<b>每行两个字段</b>：动作名与键位各归各的列。
+    /// <para>旧做法是拼成一条多行字符串（<c>$"{名字}　{键位}"</c>）。那样渲染出来的是<b>十个左对齐的段落</b>：
+    /// 键位的起点跟着名字的长度跑，十行里没有一个共同的右界，卡片右侧那一大片始终空着——
+    /// 这就是发起人点名的"文字全部挤在一起，而右侧却有很大空间"。分成两列之后名字吃掉剩余宽度，键位贴右缘，读起来才是一张表。</para>
+    /// </summary>
+    private IEnumerable<StarMark.UI.Views.CanvasHotkeyRow> BuildCanvasHotkeyRows()
+        => HotkeyActions.Canvas.Select(a => new StarMark.UI.Views.CanvasHotkeyRow(HotkeyActions.DisplayName(a), HotkeyText(a)));
 
     private string BuildCanvasStatus()
     {
@@ -45,15 +55,12 @@ public partial class SettingsPageViewModel
               $"按 {open} 只会提示一句“要先在设置里打开”，不会静默。";
     }
 
-    private string BuildCanvasHotkeySheet()
-        => string.Join("\n", HotkeyActions.Canvas.Select(a => $"{HotkeyActions.DisplayName(a)}　{HotkeyText(a)}"));
-
-    /// <summary>一条动作当前的键位文本（与画布那块面板同一个出处：设置页显示的与真生效的是同一份）。</summary>
-    private string HotkeyText(string action)
-    {
-        var gesture = _settings.GetHotkeyBindings().GetValueOrDefault(action);
-        return gesture is { IsEmpty: false } bound ? HotkeyDisplay.Display(bound) : "未绑定";
-    }
+    /// <summary>
+    /// 一条动作当前的键位文本。<b>整条链只有 <c>CanvasService.BindingText</c> 一份实现</b>：
+    /// 设置页这一览、画布上那块 ⌨ 面板、还有"要先打开屏幕画布（××键…）"那句里引用的，都是它。
+    /// 两处各判一次"没绑定时显示什么"，迟早有一处编出一个看着对、按下去没反应的键位（那正是这块面板要防的事）。
+    /// </summary>
+    private static string HotkeyText(string action) => StarMark.UI.Services.CanvasService.BindingText(action);
 
     partial void OnTrendingEnabledChanged(bool value)
     {
