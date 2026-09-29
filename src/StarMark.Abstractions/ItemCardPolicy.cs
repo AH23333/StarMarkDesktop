@@ -75,6 +75,29 @@ public static class ItemCardPolicy
         ? $"已经在「{folderPath}」里了。要移除请到资料库对应那一行"
         : $"作为书签存进本机，并放进「{folderPath}」（第一次收藏这个源时会建出这一层文件夹）";
 
+    /// <summary>
+    /// 条目类型 → 行首图标，<b>全应用唯一出处</b>（批次 RX，P-123 第一条）。
+    /// <para>为什么收在这里：这条映射一度有三份——库管理卡片一张、两张组件各一张——而且已经漂移过两次：
+    /// ① <see cref="ItemType.File"/> 在卡片是 📄、在组件是 📁，同一类条目在两个界面读成两种东西；
+    /// ② 剪贴板条目立项那次只补了卡片那张表，两张组件表把它渲染成了兜底图标（报告 §IG 那条口径）。</para>
+    /// <para><b>File 取 📁 而不是 📄 的依据</b>：这一类<b>含文件夹</b>——Everything 的结果与"拖入即登记"
+    /// 都会落目录（<c>LocalFileIdentity.FromPath</c> 的注释自己写了"目录或根"），「类型」多选里还有
+    /// 一档"只看文件夹"；而主窗的来源分段控件早就把这一类标成 📁（<c>MainWindow.xaml</c> 的 SourceFile）。
+    /// 两处既有事实都指向 📁，卡片那个 📄 是少数派。</para>
+    /// </summary>
+    public static string GlyphOf(ItemType type) => type switch
+    {
+        ItemType.GitHubStar => "⭐",
+        ItemType.Bookmark => "🔖",
+        ItemType.File => "📁",
+        ItemType.Clipboard => "📋",
+        ItemType.Todo => "✅",
+        ItemType.Note => "📝",
+        // 兜底不许长得像任何一种"用户状态"：旧的两张组件表用 📌，于是漏补臂的类型在界面上看起来像被置顶了——
+        // 一个假信号比一个中性点难发现得多。走到这里只可能是库里存着本二进制不认识的类型序号（降级打开新库）。
+        _ => "•",
+    };
+
     /// <summary>Star 按钮的图标与文字：已 Star 必须一眼可辨（它是"再点会取消"的信号）。</summary>
     public static string StarGlyph(bool starred) => starred ? "★" : "☆";
 

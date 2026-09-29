@@ -197,16 +197,7 @@ public partial class ItemCardViewModel : ObservableObject
 
     public void RaiseCollectRequested() => CollectRequested?.Invoke(this);
 
-    public string SourceIcon => Type switch
-    {
-        ItemType.GitHubStar => "⭐",
-        ItemType.Bookmark => "🔖",
-        ItemType.File => "📄",
-        ItemType.Clipboard => "📋",
-        ItemType.Todo => "✅",
-        ItemType.Note => "📝",
-        _ => "•",
-    };
+    public string SourceIcon => ItemCardPolicy.GlyphOf(Type);
 
     /// <summary>更新时间（热榜候选不显示：它们没有"本机更新时间"，缺省 0 会印成 1970-01-01）。</summary>
     public string RelativeTime => ItemCardPolicy.ShowsTimeAndStarsLines(IsTrendingRepo, IsRssCandidate)

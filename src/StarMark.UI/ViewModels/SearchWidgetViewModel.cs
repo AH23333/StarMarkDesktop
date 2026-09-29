@@ -215,7 +215,7 @@ public sealed class SearchWidgetViewModel
                         new BrowseFilter { Sort = Sort == "name" ? "name" : "recent", Limit = 60 }, ct);
                     if (ct.IsCancellationRequested) return;
                     foreach (var it in recent)
-                        Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type), it.Type, it.Source, it.SourceId));
+                        Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId));
                     ResetSelectionAfterPopulate();
                 }
                 EmptyHint = Results.Count == 0 ? "暂无最近条目，输入关键词或选择标签开始搜索" : "最近条目";
@@ -230,7 +230,7 @@ public sealed class SearchWidgetViewModel
                 var result = await _search.SearchAsync(q, new SearchFilter { Tags = selected, MaxResults = 200, Sort = Sort }, ct);
                 if (ct.IsCancellationRequested) return;   // 已被更新的搜索取代，丢弃本次结果（即便 provider 未提前中断）
                 foreach (var it in result.Items)
-                    Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type), it.Type, it.Source, it.SourceId));
+                    Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId));
                 ResetSelectionAfterPopulate();
                 EmptyHint = EmptyMessageFor(q, selected);
                 return;
@@ -251,7 +251,7 @@ public sealed class SearchWidgetViewModel
             }
             if (ct.IsCancellationRequested) return;
             foreach (var it in items)
-                Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type), it.Type, it.Source, it.SourceId));
+                Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId));
             ResetSelectionAfterPopulate();
             EmptyHint = EmptyMessageFor(q, selected);
         }
@@ -284,15 +284,4 @@ public sealed class SearchWidgetViewModel
             return $"没有同时带 {string.Join(" + ", selected.Select(t => "#" + t))} 的条目";
         return $"未找到与 \"{q}\" 相关的条目";
     }
-
-    public static string EmojiFor(ItemType t) => t switch
-    {
-        ItemType.File => "📁",
-        ItemType.Bookmark => "🔖",
-        ItemType.GitHubStar => "⭐",
-        ItemType.Clipboard => "📋",
-        ItemType.Todo => "✅",
-        ItemType.Note => "📝",
-        _ => "📌",
-    };
 }

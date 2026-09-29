@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -149,7 +149,7 @@ public sealed class ItemGridWidgetViewModel
             };
 
             var rows = items
-                .Select(it => new ItemRowItem(it.Id, it.Title, it.Subtitle, it.Uri, EmojiFor(it.Type), it.Type, it.Source, it.SourceId))
+                .Select(it => new ItemRowItem(it.Id, it.Title, it.Subtitle, it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId))
                 .ToList();
             ApplyRows(rows);
         }
@@ -237,15 +237,4 @@ public sealed class ItemGridWidgetViewModel
         inst.GridTag = GridTag;
         _storage.Save(data);
     }
-
-    public static string EmojiFor(ItemType t) => t switch
-    {
-        ItemType.File => "📁",
-        ItemType.Bookmark => "🔖",
-        ItemType.GitHubStar => "⭐",
-        ItemType.Clipboard => "📋",
-        ItemType.Todo => "✅",
-        ItemType.Note => "📝",
-        _ => "📌",
-    };
 }
