@@ -50,7 +50,8 @@ public sealed class WidgetContentFactory
         factory.Register(WidgetKind.QuickLaunch, w => new QuickLaunchWidget(w.Storage, w.Manager, w.InstanceId, w));
         factory.Register(WidgetKind.Todo, w => new TodoWidget(w.Repository, w.InstanceId));
         factory.Register(WidgetKind.QuickNote, w => new QuickNoteWidget(w.Repository, w.InstanceId));
-        factory.Register(WidgetKind.Clock, w => new ClockWidget());
+        // 时钟现在带着"这个实例的闹钟"（批次 RU），所以要拿到自己的配置与管理器才能读写与落盘。
+        factory.Register(WidgetKind.Clock, w => new ClockWidget(w.Config, w.Manager));
         factory.Register(WidgetKind.Search, w => new SearchWidget(w.Repository));
         // 差异化条目格：四种模式共用一个 ItemGridWidget，按 WidgetKind 决定查询策略。
         factory.Register(WidgetKind.TagGrid, w => new ItemGridWidget(ItemGridMode.Tag, w));

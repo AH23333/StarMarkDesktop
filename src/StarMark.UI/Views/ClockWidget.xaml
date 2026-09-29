@@ -15,6 +15,10 @@
             <TextBlock x:Name="RestBlock" Text="{x:Bind ViewModel.RestText, Mode=OneWay}" FontSize="12" Opacity="0.62"
                        HorizontalAlignment="Center"
                        Visibility="{x:Bind ViewModel.HasRestLine, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+            <!-- 闹钟那一行只在"有得确认"时占位（批次 RU：判据在 AlarmPolicy，这里只说"该你了"） -->
+            <TextBlock x:Name="AlarmBlock" Text="{x:Bind ViewModel.AlarmText, Mode=OneWay}" FontSize="12" Opacity="0.8"
+                       HorizontalAlignment="Center"
+                       Visibility="{x:Bind ViewModel.HasAlarmLine, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
         </StackPanel>
     </Grid>
 </UserControl>

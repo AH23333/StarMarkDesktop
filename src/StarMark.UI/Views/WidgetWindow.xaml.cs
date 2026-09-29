@@ -36,6 +36,12 @@ public sealed partial class WidgetWindow : Window
     private readonly WidgetManager _manager;
 
     private IWidgetTicker? _ticker;
+    /// <summary>
+    /// 内容自己带闹钟时才有值（批次 RU：目前只有时钟）。<b>宿主不另存一份闹钟</b>——
+    /// 菜单改的一律是这个组件实例里的真值，改完由它自己落盘；宿主这里只是"把入口递过去"。
+    /// 与 <see cref="_ticker"/> 同一形状：没实现这个接口的内容，<c>as</c> 出来就是 null。
+    /// </summary>
+    private IAlarmEditor? _alarms;
     private bool _styled;
     private bool _shuttingDown;
     private WidgetInstanceConfig _config;
@@ -338,6 +344,7 @@ public sealed partial class WidgetWindow : Window
         ContentHost.Children.Clear();
         var content = WidgetContentFactory.Default.Build(_kind, this);
         _ticker = content as IWidgetTicker;
+        _alarms = content as IAlarmEditor;         // 内容重建后要重新认一次：旧的那一份已经随组件一起没了
         ContentHost.Children.Add(content);
 
         // 内容重建后必须补一次外观套用，原因有二：

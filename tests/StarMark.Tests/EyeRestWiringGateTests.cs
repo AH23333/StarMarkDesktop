@@ -400,7 +400,7 @@ public sealed class EyeRestWiringGateTests
         Assert.Contains("EyeRestService.IsResting", vm);
         Assert.Contains("EyeRestService.NextDueAt", vm);
         // 禁的是方法体里的行为，不是注释里的字（类注释本来就要提"由组件的定时器每秒调用"）
-        var update = SourceGate.MethodBody(vm, "public void Update()");
+        var update = SourceGate.MethodBody(vm, "public int Update()");     // 批次 RU：返回值＝这一拍弹掉几条
         var rest = SourceGate.MethodBody(vm, "private void RefreshRest(DateTime now)");
         foreach (var forbidden in new[] { "DispatcherQueueTimer", "EyeRestPolicy", "SaveEyeRest", "IntervalOptions" })
         {
@@ -414,6 +414,13 @@ public sealed class EyeRestWiringGateTests
         // 第三行也要吃字号：早先漏乘缩放系数就是"放大文字后日期不动"那一类
         var code = SourceGate.ReadRepoFile(ClockXamlCs);
         Assert.Contains("RestBlock.FontSize = DateBlock.FontSize;", code);
+
+        // 闹钟那一行同一条口径（批次 RU）：不占位就不许露，露出来就得吃字号
+        Assert.Contains("ViewModel.HasAlarmLine, Mode=OneWay, Converter={StaticResource BoolToVis}", xaml);
+        Assert.Contains("AlarmBlock.FontSize = DateBlock.FontSize;", code);
+        // 组件的 VM 不起第二张表、也不自己落盘：表在宿主时钟那一只手里，落盘在控件那一步
+        Assert.DoesNotContain("CreateTimer", vm);
+        Assert.DoesNotContain("SaveAlarmsAsync", vm);
     }
 
     /// <summary>从组件跳"完整设置"必须落在它点名的那一页——按标题选，所以标题要真的存在。</summary>

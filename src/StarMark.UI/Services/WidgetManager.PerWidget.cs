@@ -76,6 +76,20 @@ public sealed partial class WidgetManager
             _storage.Save(data);
         });
 
+    /// <summary>
+    /// 保存闹钟列表（整表替换，理由同倒计时：到点标记写在条目里，弹过之后必须落盘，否则重启会再弹一次）。
+    /// 空表照写——那是"用户把闹钟都删了"，与"从没配过"要能分辨（同 <see cref="SaveWorldClockZonesAsync"/> 那条口径）。
+    /// </summary>
+    public Task SaveAlarmsAsync(string instanceId, IReadOnlyList<AlarmItem> alarms)
+        => OnUiAsync(() =>
+        {
+            var data = _storage.Load();
+            var inst = data.Instances.FirstOrDefault(i => i.Id == instanceId);
+            if (inst is null) return;
+            inst.Alarms = alarms.ToList();
+            _storage.Save(data);
+        });
+
     /// <summary>保存番茄钟时长设置（只存时长；进行中的轮次刻意不持久化）。</summary>
     public Task SaveFocusConfigAsync(string instanceId, FocusTimerConfig config)
         => OnUiAsync(() =>

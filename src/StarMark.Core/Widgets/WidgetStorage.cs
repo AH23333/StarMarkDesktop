@@ -162,6 +162,14 @@ public sealed class WidgetInstanceConfig
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<CountdownItem>? Countdowns { get; set; }
 
+    /// <summary>
+    /// 时钟组件上的闹钟（批次 RU）。<b>按实例存</b>：与"闹钟住在时钟组件里"这条裁决一致——
+    /// 两个时钟实例各自一套，删掉那个组件时这一套跟着走，不留一份没人显示的真值。
+    /// null 与空列表都是"没有闹钟"（这类内容没有合理的默认值可预置：预置一个会在半夜响的东西是最坏的默认）。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<AlarmItem>? Alarms { get; set; }
+
     /// <summary>番茄钟时长设置（只存时长；进行中的轮次与统计刻意不存，见 <c>FocusTimer</c>）。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public FocusTimerConfig? Focus { get; set; }

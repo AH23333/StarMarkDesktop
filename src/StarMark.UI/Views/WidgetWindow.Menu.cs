@@ -189,6 +189,9 @@ public sealed partial class WidgetWindow
 
         // 护眼 · 休息提醒（批次 WC-3，用户裁决"护眼建议和时钟组件结合"）：只有时钟组件挂这一节。
         if (_kind == WidgetKind.Clock) BuildEyeRestSection(menu);
+        // 闹钟那一节挂在"内容自己带闹钟"的组件上（今天只有时钟），而不是再按类型判一次：
+        // 类型判据与"有没有这套数据"是两件事，写成两处将来必然分岔（记忆 ⑧）。
+        if (_alarms is { } alarms) BuildAlarmSection(menu, alarms);
 
         // 胶囊模式入口（Phase B）：受描述符 CanHideChrome 控制；Hidden 态标题栏不可见时仍可经根边框菜单切换
         menu.Items.Add(new MenuFlyoutSeparator());
