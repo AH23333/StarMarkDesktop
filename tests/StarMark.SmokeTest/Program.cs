@@ -90,6 +90,15 @@ if (args.Length >= 1 && args[0] == "clipimg")
     await ClipBackupAuditAsync(n);
     return;
 }
+if (args.Length >= 1 && args[0] == "aiusage")
+{
+    // aiusage            -> 读这台机器真库的 ai_usage 表，把 §19.6 那四条"什么时候重开 O3"的阈值逐条报数（默认 30 天窗口）
+    // aiusage <天>       -> 换窗口长度；<天> 之后再跟一个路径就是指定库
+    // 只读取证：连 -wal/-shm 一起复制到 %TEMP% 再打开，用户的库一个字节都不动（同 clipimg 那档的做法）。
+    // 空表/没这张表都不算失败——"没有账"与"读不到账"分开说，见函数注释。
+    await AiUsageAuditAsync(args);
+    return;
+}
 
 await SmokeModeAsync();
 
@@ -114,6 +123,133 @@ static async Task SmokeModeAsync()
 
     await PrintStateAsync(sp);
     Console.WriteLine("DONE");
+}
+
+// ===== AI 用量取证档（批次 R5）：把 §19.6 那四条"什么时候重开 O3"变成一条命令能复跑的数 =====
+/// <summary>
+/// 读一台机器上的 <c>ai_usage</c> 账本，按 <c>docs/组件功能扩展实现详解.md</c> §19.6 的四条重开阈值逐条报数。
+/// <para><b>只读</b>：真库连 <c>-wal</c>／<c>-shm</c> 一起复制到 %TEMP% 再打开，用户的库一个字节都不动——
+/// <see cref="DbConnectionFactory.Open"/> 每次都要跑一遍 <c>PRAGMA journal_mode=WAL</c>，
+/// 那是对文件的写，直接拿真库路径就等于"取证工具改了被取证的东西"。</para>
+/// <para><b>"没有账"与"读不到账"是两句话</b>：表空是正常状态（这台机器还没真跑过一轮 AI 整理），
+/// 表不存在／库打不开／没读权限才是失败，两者都要说清是哪一种，且都不许以异常栈收尾。</para>
+/// </summary>
+static async Task AiUsageAuditAsync(string[] args)
+{
+    // §19.6 的四条阈值（那张表是唯一出处，代码不是——改了文档这里要跟着改，两边都指向同一节）。
+    const long InputPerRoundThreshold = 20_000;   // 单轮 sum(input_tokens) > 20K
+    const int EstimatedRatioPercent = 50;          // 一轮里 estimated=1 的行占比 > 50%
+    const long EstimatedTotalThreshold = 10_000;   //   且 sum > 10K（两条同时成立才算）
+    const int UntaggedThreshold = 2_000;           // 未打标条目数 > 2000（⇒ 25 批以上）
+
+    Console.WriteLine("=== AI 用量取证（§19.6 重开阈值的出口，批次 R5）===");
+    var days = 30;
+    string? dbArg = null;
+    if (args.Length >= 2 && int.TryParse(args[1], out var parsedDays)) days = parsedDays;
+    else if (args.Length >= 2) dbArg = args[1];
+    if (args.Length >= 3) dbArg = args[2];
+    if (days is < 1 or > 3650)
+    {
+        Console.WriteLine($"⚠ 窗口 {days} 天不在 1–3650 之间，按 30 天报（坏值回默认，不夹到边上）。");
+        days = 30;
+    }
+
+    var realDb = dbArg ?? DbConnectionFactory.DefaultDbPath();
+    Console.WriteLine($"库：{realDb}");
+    if (!File.Exists(realDb))
+    {
+        Console.WriteLine($"✗ 这个路径上没有库文件（{realDb}）。");
+        Console.WriteLine("  要么这台机器还没用过 StarMark，要么库在别处——把路径作为第二个参数再跑一次：");
+        Console.WriteLine("    dotnet run --project tests/StarMark.SmokeTest -- aiusage 30 <starmark.db 的完整路径>");
+        return;
+    }
+
+    var work = Path.Combine(Path.GetTempPath(), $"starmark-aiusage-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(work);
+    var copy = Path.Combine(work, "starmark-copy.db");
+    try
+    {
+        foreach (var suffix in new[] { "", "-wal", "-shm" })
+            if (File.Exists(realDb + suffix)) File.Copy(realDb + suffix, copy + suffix, true);
+        Console.WriteLine($"读法：副本 {copy}（{new FileInfo(copy).Length:N0} 字节），真库只被复制、没被打开写入。");
+
+        var factory = new DbConnectionFactory(copy);
+        using (var probe = factory.Open())
+        {
+            using var cmd = probe.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='ai_usage';";
+            if (Convert.ToInt64(cmd.ExecuteScalar()) == 0)
+            {
+                Console.WriteLine("✗ 这份库里没有 ai_usage 表（schema 早于 §20.1 的计量表）。");
+                Console.WriteLine("  这不是「没花过 token」，是「这台机器的库还没有账本这一张表」——两码事。");
+                return;
+            }
+        }
+
+        var usage = new AiUsageRepository(factory);
+        var maxAt = await usage.MaxRecordedAtAsync();
+        Console.WriteLine(maxAt is null
+            ? "账本状态：ai_usage 存在但一行都没有 ⇒ 这台机器还没真跑过一轮 AI 整理（不是失败，下面四条全按「没有数」报）。"
+            : $"账本状态：最后一条账 {DateTimeOffset.FromUnixTimeSeconds(maxAt.Value).LocalDateTime:yyyy-MM-dd HH:mm:ss}"
+              + $"（窗口锚在这条往回 {days} 天，同 §20.5 的口径——不看墙钟）");
+
+        var from = maxAt is null ? 0L : maxAt.Value - (long)days * 86_400;
+        var totals = await usage.TotalsSinceAsync(from);
+        var byFeature = await usage.ByFeatureSinceAsync(from);
+        var byModel = await usage.ByModelSinceAsync(from);
+
+        Console.WriteLine();
+        Console.WriteLine($"窗口内合计：{totals.Calls} 次调用，input {totals.InputTokens:N0} / output {totals.OutputTokens:N0}"
+            + $"，合计 {totals.TotalTokens:N0} token；其中估算 {totals.EstimatedCalls} 次"
+            + (totals.Calls > 0 ? $"（{100.0 * totals.EstimatedCalls / totals.Calls:F1}%）" : "（占比没法算：没有行）"));
+        Console.WriteLine("按功能：" + (byFeature.Count == 0 ? "（窗口内没有行）"
+            : string.Join("；", byFeature.Select(f => $"{(string.IsNullOrWhiteSpace(f.Name) ? "(空)" : f.Name)} {f.Calls} 次 / {f.TotalTokens:N0} token{(f.EstimatedOnly ? "，全是估算" : "")}"))));
+        Console.WriteLine("按模型：" + (byModel.Count == 0 ? "（窗口内没有行）"
+            : string.Join("；", byModel.Select(m => $"{(string.IsNullOrWhiteSpace(m.Name) ? "(没记模型名)" : m.Name)} {m.Calls} 次 / {m.TotalTokens:N0} token"))));
+        var classify = byFeature.FirstOrDefault(f => f.Name == "classify");
+        var classifyInput = totals.InputTokens;   // 见下面第 1 条的说明：没有轮次 id，只能给窗口合计这个上界
+
+        Console.WriteLine();
+        Console.WriteLine("--- §19.6 四条重开阈值，逐条 ---");
+        Console.WriteLine($"1) 单轮 sum(input_tokens) > {InputPerRoundThreshold:N0}"
+            + $"　⇒ 现在：窗口内合计 {classifyInput:N0}（classify 一档 {classify?.Calls ?? 0} 次调用）"
+            + $"　判定：{(classifyInput > InputPerRoundThreshold ? "越线，重开 §19.6" : "没越线")}");
+        Console.WriteLine("    口径边界：ai_usage 没有「轮」这个字段，所以这条只能按窗口合计给上界——"
+            + "上界都没到就一定没到；到了才需要按 at 时间戳分段复核（那是改表的事，本档不改）。");
+        var ratio = totals.Calls > 0 ? 100.0 * totals.EstimatedCalls / totals.Calls : 0.0;
+        var hit2 = ratio > EstimatedRatioPercent && totals.TotalTokens > EstimatedTotalThreshold;
+        Console.WriteLine($"2) estimated=1 的行占比 > {EstimatedRatioPercent}% 且 sum > {EstimatedTotalThreshold:N0}"
+            + $"　⇒ 现在：{ratio:F1}% 且 {totals.TotalTokens:N0} token　判定：{(hit2 ? "越线，先修计量再谈优化" : "没越线")}");
+
+        var repo = new ItemRepository(factory);
+        var cap = UntaggedThreshold + 1;      // 只数到"比阈值多一条"就停：阈值问的是"过没过"，不是精确总数
+        var untagged = await repo.GetUntaggedAsync(StarMark.Core.Ai.ClassifyRules.InScope, cap, CancellationToken.None);
+        Console.WriteLine($"3) 未打标条目数 > {UntaggedThreshold}"
+            + $"　⇒ 现在：{(untagged.Count >= cap ? $"≥{cap}（到上限就停，没继续数）" : untagged.Count.ToString())} 条"
+            + $"（类型范围读 ClassifyRules.InScope，与批量整理选候选同一份）　判定：{(untagged.Count > UntaggedThreshold ? "越线，重开 §19.6" : "没越线")}");
+        Console.WriteLine($"4) 一轮产出的新标签数 > 80　⇒ 本档测不到：ai_usage 只有 token 列，不记每轮新标签数。");
+        Console.WriteLine("    要测这条得让 ClassifyRunner 把 newTags 落一行账——那是改代码，不属于取证工具，登记见 R5 文档。");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"✗ 读这份库没成功：{ex.Message}");
+        Console.WriteLine("  这是「读不到账」，不是「没有账」。常见原因是权限或文件被占用；换一条路径或关掉正在跑的实例再试。");
+    }
+    finally
+    {
+        // 必须先清连接池再删：Microsoft.Data.Sqlite 默认按连接串池化连接，连接即便 Dispose 掉，
+        // 池里的实体仍占着副本文件的句柄 ⇒ "删掉临时副本"这一步会稳定失败（AiUsageTests.cs:149 同一手法）。
+        // 本工具的纪律是**不给用户留要手动删的东西**，所以这里失败也只报告位置，不写"请手动清理"。
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try
+        {
+            Directory.Delete(work, true);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"（临时副本还留在 {work}——{ex.Message}；下一次跑会另建一份，不影响读数。）");
+        }
+    }
 }
 
 // ===== Everything CSV 解析自检（不依赖 Everything 运行） =====
