@@ -1,6 +1,7 @@
 #nullable enable
 using Microsoft.Data.Sqlite;
 using StarMark.Abstractions.Clipboard;
+using StarMark.Integrations.Clipboard;
 
 namespace StarMark.Integrations.Ditto;
 
@@ -174,7 +175,7 @@ public sealed class DittoDatabaseReader : IDisposable
 
             if (hdrop != null)
             {
-                clip.Files = ClipboardPayload.ParseDropFiles(hdrop);
+                clip.Files = ClipboardPayload.ParseDropFiles(hdrop, AnsiText.DecodeSystemAnsi);
                 if (clip.Files.Count > 0)
                     clip.Format = ClipboardPayload.FormatHDrop;
             }

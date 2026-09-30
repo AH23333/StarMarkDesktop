@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using StarMark.Abstractions.Clipboard;
+using StarMark.Integrations.Clipboard;
 using Xunit;
 
 namespace StarMark.Tests;
@@ -42,7 +43,7 @@ public sealed class ClipboardPayloadTests
     public void ParseDropFiles_Wide_ListEndsAtDoubleNull_AndIgnoresTrailingGarbage()
     {
         var data = BuildDropFiles(wide: true, header: 20, @"C:\a.txt", @"D:\目录\b.docx");
-        var files = ClipboardPayload.ParseDropFiles(data);
+        var files = ClipboardPayload.ParseDropFiles(data, AnsiText.DecodeSystemAnsi);
 
         Assert.Equal(new[] { @"C:\a.txt", @"D:\目录\b.docx" }, files);
     }
@@ -51,18 +52,18 @@ public sealed class ClipboardPayloadTests
     public void ParseDropFiles_Ansi_ProducesSameList()
     {
         var data = BuildDropFiles(wide: false, header: 20, @"C:\a.txt", @"D:\b.docx");
-        Assert.Equal(new[] { @"C:\a.txt", @"D:\b.docx" }, ClipboardPayload.ParseDropFiles(data));
+        Assert.Equal(new[] { @"C:\a.txt", @"D:\b.docx" }, ClipboardPayload.ParseDropFiles(data, AnsiText.DecodeSystemAnsi));
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData(new byte[] { })]
     public void ParseDropFiles_MissingOrEmpty_ReturnsEmpty(byte[]? data)
-        => Assert.Empty(ClipboardPayload.ParseDropFiles(data));
+        => Assert.Empty(ClipboardPayload.ParseDropFiles(data, AnsiText.DecodeSystemAnsi));
 
     [Fact]
     public void ParseDropFiles_HeaderShorterThan20Bytes_ReturnsEmpty()
-        => Assert.Empty(ClipboardPayload.ParseDropFiles(new byte[19]));   // 连头部都不完整
+        => Assert.Empty(ClipboardPayload.ParseDropFiles(new byte[19], AnsiText.DecodeSystemAnsi));   // 连头部都不完整
 
     [Fact]
     public void ParseDropFiles_AbsurdPFilesOffset_IsClampedNotNegative()
@@ -71,7 +72,7 @@ public sealed class ClipboardPayloadTests
         var data = BuildDropFiles(wide: true, header: 20, @"C:\a.txt");
         BitConverter.TryWriteBytes(data.AsSpan(0, 4), uint.MaxValue);
 
-        Assert.Empty(ClipboardPayload.ParseDropFiles(data));
+        Assert.Empty(ClipboardPayload.ParseDropFiles(data, AnsiText.DecodeSystemAnsi));
     }
 
     [Fact]
@@ -79,7 +80,7 @@ public sealed class ClipboardPayloadTests
     {
         // 有些发送方给的 pFiles 大于 20（头部后面还有拖放效果等字段），路径列表起点必须按它来。
         var data = BuildDropFiles(wide: true, header: 32, @"C:\a.txt");
-        Assert.Equal(new[] { @"C:\a.txt" }, ClipboardPayload.ParseDropFiles(data));
+        Assert.Equal(new[] { @"C:\a.txt" }, ClipboardPayload.ParseDropFiles(data, AnsiText.DecodeSystemAnsi));
     }
 
     private static byte[] BuildDropFiles(bool wide, int header, params string[] paths)

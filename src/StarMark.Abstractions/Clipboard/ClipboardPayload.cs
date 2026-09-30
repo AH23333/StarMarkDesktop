@@ -81,11 +81,19 @@ public static partial class ClipboardPayload
     /// 解析 <c>CF_HDROP</c> 的 DROPFILES 结构：头部（pFiles 指向列表起点）+ 双 NUL 结束的路径列表。
     /// <para>刻意不假设头部固定 20 字节：不同发送方给的 <c>pFiles</c> 不一样，越界一律按数据末尾夹住
     /// （<c>(int)pFiles</c> 直接强转一个 uint 会得到负数偏移，故必须先判上界）。</para>
+    /// <para>
+    /// <paramref name="decodeAnsi"/> <b>没有默认值</b>（P-35）：非宽（<c>fWide==0</c>）那半的路径字节属于
+    /// <b>某个字符编码</b>，而"是哪一个"是操作系统的事实——本层不放 Win32 调用（见类型注释），所以由调用方
+    /// 把码页解码器交进来（生产两个调用方交的都是 <c>StarMark.Integrations</c> 的 <c>AnsiText.DecodeSystemAnsi</c>）。
+    /// 旧写法在这里直接 <c>(char)byte</c>，等于假定"ANSI＝Latin-1"，中文路径读出来是乱码、
+    /// 那条剪辑的「打开」目标失效。留一个默认值＝给未来的调用方留一条静默退回乱码的路，所以不留。
+    /// </para>
     /// </summary>
-    public static List<string> ParseDropFiles(byte[]? data)
+    public static List<string> ParseDropFiles(byte[]? data, Func<byte[], int, int, string> decodeAnsi)
     {
         var files = new List<string>();
         if (data is null || data.Length < 20) return files;
+        ArgumentNullException.ThrowIfNull(decodeAnsi);
 
         var pFiles = BitConverter.ToUInt32(data, 0);
         var wide = BitConverter.ToUInt32(data, 16) != 0;
@@ -115,22 +123,15 @@ public static partial class ClipboardPayload
         }
         else
         {
-            var sb = new StringBuilder();
-            var i = offset;
-            while (i < data.Length)
+            // 先按单字节 NUL 切段（段的边界与编码无关），再把整段交给码页解码——
+            // 反过来"一边逐字节宽化一边切"就等于把编码这件事写死在切分里（P-35 的旧错法）。
+            var start = offset;
+            for (var i = offset; i < data.Length; i++)
             {
-                var ch = (char)data[i++];
-                if (ch == 0)
-                {
-                    if (sb.Length > 0)
-                    {
-                        files.Add(sb.ToString());
-                        sb.Clear();
-                    }
-                    if (i < data.Length && data[i] == 0) break;
-                    continue;
-                }
-                sb.Append(ch);
+                if (data[i] != 0) continue;
+                if (i == start) break;      // 连续 NUL＝列表结束（与旧写法同源；空段不进结果）
+                files.Add(decodeAnsi(data, start, i - start));
+                start = i + 1;
             }
         }
         return files;

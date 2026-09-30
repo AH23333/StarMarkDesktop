@@ -137,7 +137,7 @@ internal static class ClipboardNative
     {
         if (!NativeMethods.IsClipboardFormatAvailable(NativeMethods.CF_HDROP)) return new();
         var payload = ReadGlobal(NativeMethods.GetClipboardData(NativeMethods.CF_HDROP), CopyLimitBytes, out _);
-        return payload is null ? new() : ClipboardPayload.ParseDropFiles(payload);
+        return payload is null ? new() : ClipboardPayload.ParseDropFiles(payload, AnsiText.DecodeSystemAnsi);
     }
 
     /// <summary>
