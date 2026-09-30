@@ -28,16 +28,24 @@ public sealed partial class ItemRepository
         using var conn = _factory.Open();
         // 阶段 1：FTS5 MATCH 先缩小文本范围（命中倒排索引，毫秒级）
         // 阶段 2：JOIN 主表做数值过滤 + 完整字段 hydration
+        //
+        // 判腿先算：它同时决定三件事——CTE 取不取 rank、外层用什么平序兜底、LIMIT 落在哪一腿（见下面 P-33）。
+        var relevanceFirst = SearchSortPolicy.IsRelevanceFirst(filter.Sort);
+        // bm25() 只能活在带 MATCH 的那一层。把 LIMIT 挪出 CTE 之后 SQLite 会把这个 CTE **平面化**，
+        // 外层再引用 rank 就报 "unable to use function bm25 in the requested context"
+        // （本批第一次跑就是这样抛的，不是断言失配）。所以非相关度腿干脆不取 rank，
+        // 平序兜底改用一个不依赖 FTS 的稳定键 i.id——反正这一腿的最终次序本来就由用户选的列决定。
+        var tieBreak = relevanceFirst ? "MIN(f.rank)" : "i.id";
         var orderBy = filter.Sort switch
         {
-            "stars" => "i.stars_count DESC NULLS LAST, MIN(f.rank)",
-            "name" => "i.title COLLATE NOCASE ASC, MIN(f.rank)",
-            "recent" => "i.updated_at DESC, MIN(f.rank)",
+            "stars" => $"i.stars_count DESC NULLS LAST, {tieBreak}",
+            "name" => $"i.title COLLATE NOCASE ASC, {tieBreak}",
+            "recent" => $"i.updated_at DESC, {tieBreak}",
             // 最近 Star：GitHubStar 用 extra_json 的 starredAt（无则退回 updated_at）。
-            "starred" => $"COALESCE(CAST(json_extract({ExtraJsonGuard.Safe("i.extra_json")}, '$.StarredAt') AS INTEGER), i.updated_at) DESC, MIN(f.rank)",
+            "starred" => $"COALESCE(CAST(json_extract({ExtraJsonGuard.Safe("i.extra_json")}, '$.StarredAt') AS INTEGER), i.updated_at) DESC, {tieBreak}",
             // 最近收藏：条目入库时间。
-            "collected" => "i.created_at DESC, MIN(f.rank)",
-            _ => "MIN(f.rank)",
+            "collected" => $"i.created_at DESC, {tieBreak}",
+            _ => tieBreak,
         };
         // 语言闸门只约束 GitHubStar：LanguageDetector.EnsureLanguage 会给任意来源（含本地文件）
         // 按扩展名兜底打 Language，所以 @lang 若不加豁免，选中语言就会把已入库的本地文件行
@@ -57,14 +65,25 @@ public sealed partial class ItemRepository
               AND (@include_hidden = 1 OR i.hidden = 0)"
             + BuildTagClause(filter.Tags, "i");
 
+        // P-33（2026-09-30 他裁决：只改非默认排序那条路）：截断落在哪一腿由 `SearchSortPolicy` 判。
+        //   相关度腿——"取前 N"与最终排序是同一个次序，CTE 内 `ORDER BY rank LIMIT` 短路照旧
+        //     （省掉整轮 join+分组，P-49 已把谓词挪在它前面，所以名额数的是真正通过筛选的行）；
+        //   其它排序——CTE **不截断**，LIMIT 挪到外层 GROUP BY + ORDER BY <用户选的排序> 之后。
+        // 反过来的写法＝让相关度前排的行占住名额、外层只重排幸存的那一小撮，后果是"按名字排却看不到
+        // 名字最靠前的那些"，而且界面只表现为"排序没生效"。代价＝非默认排序要把全部 FTS 命中 join+分组
+        // 一遍，实测数字见冒烟模式 `searchsort`（不是猜的）。
+        var cteHead = relevanceFirst
+            ? "SELECT items_fts.rowid AS rowid, bm25(items_fts) AS rank"
+            : "SELECT items_fts.rowid AS rowid";
+        var innerTail = relevanceFirst ? "\n                ORDER BY rank\n                LIMIT @limit" : string.Empty;
+        var outerTail = relevanceFirst ? string.Empty : "\n            LIMIT @limit";
+
         var sql = @"
             WITH fts_hits AS (
-                SELECT items_fts.rowid AS rowid, bm25(items_fts) AS rank
+                " + cteHead + @"
                 FROM items_fts
                 JOIN items i ON i.id = items_fts.rowid"
-            + filteredWhere + @"
-                ORDER BY rank
-                LIMIT @limit
+            + filteredWhere + innerTail + @"
             )
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
@@ -75,7 +94,7 @@ public sealed partial class ItemRepository
             FROM fts_hits f
             JOIN items i ON i.id = f.rowid
             GROUP BY i.id
-            ORDER BY " + orderBy + ";";
+            ORDER BY " + orderBy + outerTail + ";";
 
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;

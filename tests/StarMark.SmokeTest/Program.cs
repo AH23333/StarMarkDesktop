@@ -90,6 +90,14 @@ if (args.Length >= 1 && args[0] == "clipimg")
     await ClipBackupAuditAsync(n);
     return;
 }
+if (args.Length >= 1 && args[0] == "searchsort")
+{
+    // searchsort          -> 用合成库量"搜索两条腿"各自的耗时（P-33 的代价，不靠猜）
+    // searchsort <最大规模> -> 把最大那一档换成指定行数（默认 30000，逐档翻倍到它）
+    // 只在 %TEMP% 里建临时库，用户的库一个字节都不动。
+    await SearchSortAuditAsync(args.Length >= 2 && int.TryParse(args[1], out var rows) ? rows : 30_000);
+    return;
+}
 if (args.Length >= 1 && args[0] == "aiusage")
 {
     // aiusage            -> 读这台机器真库的 ai_usage 表，把 §19.6 那四条"什么时候重开 O3"的阈值逐条报数（默认 30 天窗口）
@@ -1107,6 +1115,86 @@ static void AssertColor(byte[] pixels, int width, int x, int y, int bgra, string
 /// 一个写操作都不落在真目录。</description></item>
 /// </list>
 /// </summary>
+static async Task SearchSortAuditAsync(int maxSize)
+{
+    // P-33 的代价要有数，不能只说"会慢一点"。修完之后非默认排序那条腿不再让相关度先吃掉名额，
+    // 代价是它要把全部 FTS 命中 join + 分组一遍。这里在 %TEMP% 造合成库逐档量，
+    // 报的是"同一句关键词、同一页大小，相关度腿 vs 其它腿"的毫秒差。
+    // 用户机上的库到底多大没人知道，所以逐档报（2000 起、每次 ×5，直到 maxSize）。
+    Console.WriteLine("== 搜索两条腿耗时取证（合成库，只写 %TEMP%，用户的库一个字节都不动）==");
+    const int pageSize = 200;                     // 与搜索页一页的量级对齐（MaxResults）
+    const string keyword = "rag";
+
+    for (var size = 2_000; ; size *= 5)
+    {
+        var rows = Math.Min(size, maxSize);
+        var path = Path.Combine(Path.GetTempPath(), $"starmark-searchsort-{rows}-{Guid.NewGuid():N}.db");
+        try
+        {
+            var factory = new DbConnectionFactory(path);
+            new MigrationRunner(factory).EnsureSchema();
+            var repo = new ItemRepository(factory);
+
+            var swSeed = Stopwatch.StartNew();
+            await SeedSearchCorpusAsync(repo, rows);
+            swSeed.Stop();
+            Console.WriteLine($"  {rows} 条全部命中 \"{keyword}\"，一页取 {pageSize}（灌库 {swSeed.ElapsedMilliseconds} ms）");
+
+            foreach (var (label, sort) in new[] { ("相关度腿", "relevance"), ("名字序腿", "name"), ("最近腿", "recent") })
+            {
+                var samples = new List<long>();
+                int returned = 0, total = 0;
+                for (var round = 0; round < 5; round++)
+                {
+                    var sw = Stopwatch.StartNew();
+                    var res = await repo.SearchAsync(keyword,
+                        new SearchFilter { Sort = sort, MaxResults = pageSize }, default);
+                    sw.Stop();
+                    samples.Add(sw.ElapsedMilliseconds);
+                    returned = res.Items.Count;
+                    total = res.Total;
+                }
+                samples.Sort();
+                Console.WriteLine($"    {label}：返回 {returned} 条／FTS 命中 {total}，"
+                    + $"中位 {samples[samples.Count / 2]} ms（最快 {samples[0]}／最慢 {samples[^1]}）");
+            }
+        }
+        finally
+        {
+            foreach (var suffix in new[] { "", "-wal", "-shm" })
+                try { File.Delete(path + suffix); } catch { /* 临时库删不掉不影响读数 */ }
+        }
+
+        if (rows >= maxSize) break;
+    }
+}
+
+/// <summary>
+/// 合成语料：词频、字母序、时间序三者<b>刻意互相错开</b>。
+/// 这样"相关度前排的那批"与"名字最靠前/最新的那批"不是同一批，两条腿的工作量才真的不同
+/// ——否则量出来的差值只反映了一个碰巧同序的夹具。
+/// </summary>
+static async Task SeedSearchCorpusAsync(ItemRepository repo, int rows)
+{
+    const long BaseTime = 1_700_000_000L;
+    var batch = new List<Item>(2_000);
+    for (var i = 0; i < rows; i++)
+    {
+        var repeats = 1 + i % 7;
+        batch.Add(new Item
+        {
+            Type = ItemType.Bookmark,
+            Source = "synth",
+            SourceId = $"s{i}",
+            Title = $"doc{i:X5} " + string.Join(' ', Enumerable.Repeat("rag", repeats)),
+            UpdatedAt = BaseTime + (rows - i),
+            StarsCount = i % 500,
+        });
+        if (batch.Count >= 2_000) { await repo.UpsertAsync(batch, default); batch.Clear(); }
+    }
+    if (batch.Count > 0) await repo.UpsertAsync(batch, default);
+}
+
 static async Task ClipBackupAuditAsync(int synthRows)
 {
     var work = Path.Combine(Path.GetTempPath(), $"starmark-clipimg-{Guid.NewGuid():N}");
