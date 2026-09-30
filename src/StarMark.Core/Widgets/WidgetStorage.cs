@@ -329,24 +329,8 @@ public sealed class WidgetStorage
 
     public string StorePath => _path;
 
-    public static string DefaultPath()
-    {
-        // 与 settings.json 同目录（复刻 SettingsStore.ResolveSettingsPath 的路径约定：
-        // STARMARK_SETTINGS_PATH > STARMARK_DB_PATH 同目录 > %APPDATA%\StarMark）
-        var overridePath = Environment.GetEnvironmentVariable("STARMARK_SETTINGS_PATH");
-        if (!string.IsNullOrWhiteSpace(overridePath))
-            return Path.Combine(Path.GetDirectoryName(overridePath) ?? ".", "widgets.json");
-
-        var dbPath = Environment.GetEnvironmentVariable("STARMARK_DB_PATH");
-        if (!string.IsNullOrWhiteSpace(dbPath))
-        {
-            var dir = Path.GetDirectoryName(dbPath);
-            if (!string.IsNullOrWhiteSpace(dir)) return Path.Combine(dir, "widgets.json");
-        }
-
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, StarMark.Abstractions.AppConstants.AppName, "widgets.json");
-    }
+    /// <summary>与 settings.json / github.json 同目录；整条优先规则只有一处（<see cref="StarMark.Abstractions.UserDataPaths"/>）。</summary>
+    public static string DefaultPath() => StarMark.Abstractions.UserDataPaths.Sibling("widgets.json");
 
     /// <summary>全部组件类型（设置页 / 托盘菜单遍历用），来源为 <see cref="WidgetRegistry"/>。</summary>
     public static IReadOnlyList<WidgetKind> AllKinds { get; } =

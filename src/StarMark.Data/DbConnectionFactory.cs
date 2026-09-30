@@ -17,8 +17,9 @@ public sealed class DbConnectionFactory
     public DbConnectionFactory(string? dbPath = null)
     {
         // 开发期允许通过 STARMARK_DB_PATH 环境变量覆盖默认路径
-        // （避免沙盒限制 %APPDATA% 写入；生产环境走 %APPDATA%\StarMark\starmark.db）
-        DbPath = dbPath ?? Environment.GetEnvironmentVariable("STARMARK_DB_PATH") ?? DefaultDbPath();
+        // （避免沙盒限制 %APPDATA% 写入；生产环境走 %APPDATA%\StarMark\starmark.db）。
+        // 两个变量的名字与优先顺序只写在 StarMark.Abstractions.UserDataPaths 那一处。
+        DbPath = dbPath ?? StarMark.Abstractions.UserDataPaths.Database();
         Directory.CreateDirectory(Path.GetDirectoryName(DbPath)!);
         // SQLite 数据库文件位于 %APPDATA%\StarMark\starmark.db。
         // 用 builder 而非裸拼接：路径里的 ';' / '=' 是连接串保留字符（Windows 文件名合法，如用户名含 ';'），
@@ -59,11 +60,7 @@ public sealed class DbConnectionFactory
         return conn;
     }
 
-    public static string DefaultDbPath()
-    {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, StarMark.Abstractions.AppConstants.AppName, "starmark.db");
-    }
+    public static string DefaultDbPath() => StarMark.Abstractions.UserDataPaths.Database();
 }
 
 /// <summary>

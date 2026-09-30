@@ -25,23 +25,9 @@ public sealed class RssCacheStore(string? path = null)
 {
     private readonly string _path = path ?? DefaultPath();
 
-    /// <summary>与 settings.json / widgets.json 同目录（同一套环境变量优先规则，测试才能整体重定向）。</summary>
-    public static string DefaultPath()
-    {
-        var overridePath = Environment.GetEnvironmentVariable("STARMARK_SETTINGS_PATH");
-        if (!string.IsNullOrWhiteSpace(overridePath))
-            return Path.Combine(Path.GetDirectoryName(overridePath) ?? ".", "rss-cache.json");
-
-        var dbPath = Environment.GetEnvironmentVariable("STARMARK_DB_PATH");
-        if (!string.IsNullOrWhiteSpace(dbPath))
-        {
-            var dir = Path.GetDirectoryName(dbPath);
-            if (!string.IsNullOrWhiteSpace(dir)) return Path.Combine(dir, "rss-cache.json");
-        }
-
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, AppConstants.AppName, "rss-cache.json");
-    }
+    /// <summary>与 settings.json / widgets.json 同目录（同一套环境变量优先规则，测试才能整体重定向）。
+    /// 规则本体只有一处：<see cref="StarMark.Abstractions.UserDataPaths"/>。</summary>
+    public static string DefaultPath() => StarMark.Abstractions.UserDataPaths.Sibling("rss-cache.json");
 
     public string StorePath => _path;
 

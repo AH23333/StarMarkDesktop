@@ -410,20 +410,6 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         get { lock (_cacheGate) return _lastWriteError; }
     }
 
-    public static string ResolveSettingsPath()
-    {
-        var overridePath = Environment.GetEnvironmentVariable("STARMARK_SETTINGS_PATH");
-        if (!string.IsNullOrWhiteSpace(overridePath)) return overridePath;
-
-        // 开发期跟随数据库路径所在目录，避免沙盒拒绝 %APPDATA% 写入
-        var dbPath = Environment.GetEnvironmentVariable("STARMARK_DB_PATH");
-        if (!string.IsNullOrWhiteSpace(dbPath))
-        {
-            var dir = Path.GetDirectoryName(dbPath);
-            if (!string.IsNullOrWhiteSpace(dir)) return Path.Combine(dir, "settings.json");
-        }
-
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, StarMark.Abstractions.AppConstants.AppName, "settings.json");
-    }
+    /// <summary>落点规则本体在 <see cref="StarMark.Abstractions.UserDataPaths"/>（五份用户数据档共用一条）。</summary>
+    public static string ResolveSettingsPath() => StarMark.Abstractions.UserDataPaths.Settings();
 }

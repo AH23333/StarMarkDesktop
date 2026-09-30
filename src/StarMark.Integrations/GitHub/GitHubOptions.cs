@@ -22,9 +22,13 @@ public sealed class GitHubOptions
     /// <summary>UIA 用户名（可选，用于 UI 显示）。</summary>
     public string? Username { get; set; }
 
-    /// <summary>配置文件路径：&lt;APPDATA&gt;/StarMark/github.json</summary>
-    public static string DefaultConfigPath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), StarMark.Abstractions.AppConstants.AppName, "github.json");
+    /// <summary>
+    /// 配置文件路径：与 settings.json / widgets.json 同一套优先规则（环境变量 ＞ %APPDATA%\StarMark）。
+    /// <para>这里原先是硬拼 <c>%APPDATA%\StarMark\github.json</c>，是五份用户数据档里唯一漏掉环境变量那一档的一份。
+    /// 后果不是"路径不好看"：这一份存的是 <b>GitHub Token</b>，漏掉改道就意味着单测与沙盒取证都在读写
+    /// 用户真目录里的那一份密钥档（见 <see cref="StarMark.Abstractions.UserDataPaths"/>）。</para>
+    /// </summary>
+    public static string DefaultConfigPath => StarMark.Abstractions.UserDataPaths.Sibling("github.json");
 
     /// <summary>从文件加载配置。文件不存在则返回空对象。</summary>
     public static GitHubOptions Load(string? path = null)

@@ -26,7 +26,11 @@ namespace StarMark.Tests;
 /// 但<b>不能多抓一次都不说</b>——写盘失败要回报，否则"我明明刷新了，怎么下次还是旧的"无从归因。</item>
 /// </list>
 /// <para>判据全在 Core：这份档的读写落在 UI 层的 <c>SettingsStore</c> 旁边就一条都断言不到（批次 NF 同一课）。</para>
+/// <para>与 <see cref="UserDataPathsTests"/> 同集合：<see cref="TheCacheFileSitsNextToSettingsJson"/> 会改
+/// <c>STARMARK_DB_PATH</c>／<c>STARMARK_SETTINGS_PATH</c> 这两个<b>进程级</b>变量，而那边按同一组变量断言默认落点
+/// ——两个集合并行时，任何一边都可能读到对方那一刻的值（xUnit 默认并行，进程环境变量却是全局的）。</para>
 /// </summary>
+[Collection("UserDataPaths")]
 public sealed class RssFeedCacheTests : IDisposable
 {
     private const long Day = 86_400;
