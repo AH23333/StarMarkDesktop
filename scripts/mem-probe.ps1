@@ -1,5 +1,5 @@
 ﻿# 内存基线探针（批次 SS）。用法：
-#   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\mem-probe.ps1 -ExePath <...\StarMark.UI.exe> [-Scenario base|noWidgets] [-SettleSec 60]
+#   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\mem-probe.ps1 -ExePath <...\StarMark.UI.exe> [-Scenario base|noWidgets] [-KeepInstances N] [-SettleSec 60]
 # 它做四件事：
 #   1) 把 %APPDATA%\StarMark 的档复制成一份沙盒（数据库／settings.json／widgets.json），进程用 STARMARK_DB_PATH 指过去；
 #      真库与真配置一个字节都不动（脚本结束会打印沙盒里出现了 -wal 作为跑过副本的证据）。
@@ -7,11 +7,15 @@
 #      关不掉就直接拒绝启动：拿副本把他真图缩略图删掉，那不是取证，那是事故。
 #   3) 起进程、等主窗句柄、按节拍采样工作集/私有字节/句柄/线程数，结束时只杀**自己起的**那个 pid。
 #   4) 从真日志里把这一次会话的 [启动]/[内存] 行摘出来——进程内读数（托管堆、程序集数）只有那里有。
+#
+# -KeepInstances N（批次 SU 加，P-137 的边际曲线）：只把**沙盒副本**里的组件实例削到前 N 颗，真档不动。
+#   写回后一定读回来验数量，凑不出 N 颗就直接抛——"场景其实是空操作"比没数更坏（坑表 #185/#218 同一族）。
 param(
     [Parameter(Mandatory = $true)][string]$ExePath,
     [ValidateSet('base', 'noWidgets')][string]$Scenario = 'base',
     [int]$SettleSec = 60,
-    [int]$SampleEverySec = 10
+    [int]$SampleEverySec = 10,
+    [int]$KeepInstances = -1
 )
 
 $ErrorActionPreference = 'Stop'
@@ -19,7 +23,8 @@ $ErrorActionPreference = 'Stop'
 if (-not (Test-Path -LiteralPath $ExePath)) { throw "找不到要量的产物：$ExePath" }
 
 $srcProfile = Join-Path $env:APPDATA 'StarMark'
-$sandbox = Join-Path $env:TEMP ('StarMarkMemProbe\' + $Scenario)
+$sandboxTag = if ($KeepInstances -ge 0) { $Scenario + '-' + $KeepInstances } else { $Scenario }
+$sandbox = Join-Path $env:TEMP ('StarMarkMemProbe\' + $sandboxTag)
 $logDir = Join-Path $env:LOCALAPPDATA 'StarMark\logs'
 $stamp = Get-Date
 $rowFile = Join-Path $sandbox 'rows.csv'
@@ -52,23 +57,34 @@ foreach ($key in $risky) {
 }
 
 $widgetsPath = Join-Path $sandbox 'widgets.json'
-# 场景 noWidgets：把沙盒档里的实例清空，量"一颗组件窗都不建"要多少钱。
+# 削实例数＝量"每颗组件窗值多少钱"的唯一可靠办法：同一份副本、同一个产物，只差实例数。
 # ⚠ 不要走 ShowOnStartup 那条路：v3 的 WidgetInstanceConfig 里没有这个字段（它只是 v1 迁移的历史名），
 #   改它等于什么都没改——两次跑的数字会被当成"组件不要钱"的证据，那是假证据（坑表 #185 同一族）。
 $instances = 0
+$widgetDoc = $null
 if (Test-Path -LiteralPath $widgetsPath) {
-    $w = Get-Content -LiteralPath $widgetsPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($w.PSObject.Properties['Instances'] -and $w.Instances) { $instances = @($w.Instances).Count }
+    $widgetDoc = Get-Content -LiteralPath $widgetsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($widgetDoc.PSObject.Properties['Instances'] -and $widgetDoc.Instances) { $instances = @($widgetDoc.Instances).Count }
 }
-Write-Output ('沙盒里的组件实例数=' + $instances)
-if ($Scenario -eq 'noWidgets' -and (Test-Path -LiteralPath $widgetsPath)) {
-    $w.Instances = @()
-    $w | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $widgetsPath -Encoding UTF8
+Write-Output ('沙盒标签=' + $sandboxTag + '，副本里的组件实例数=' + $instances)
+# 一个漏斗管两种"削实例"的写法：noWidgets 等价于 KeepInstances=0，别在两个分支里各抄一套校验。
+$target = if ($Scenario -eq 'noWidgets') { 0 } elseif ($KeepInstances -ge 0) { $KeepInstances } else { -1 }
+if ($target -ge 0) {
+    if ($null -eq $widgetDoc) { throw ('沙盒里没有 widgets.json，' + $sandboxTag + ' 这一格会与对照组是同一份配置——不出这种数') }
+    if ($instances -lt $target) { throw ('副本里只有 ' + $instances + ' 个实例，凑不出 ' + $target + ' 个——两格会是同一份配置，不出这种数') }
+    $all = @($widgetDoc.Instances)
+    # ⚠ 必须"先赋给变量、再直接赋属性"，不能写成 `$widgetDoc.Instances = if (...) { @(...) } else { @(...) }`：
+    #   PowerShell 5.1 会把 if 表达式里**只有一颗**的数组在赋值时脱成单个对象，于是落盘的档变成
+    #   "Instances": { … } 而不是 [ … ]，产品读到的是 JsonException ⇒ 组件配置损坏回退默认 ⇒ 恢复 0 颗，
+    #   而我自己的"读回来数一遍"照样数得出 1 颗（坑表 #216 那一族：自己写的工具自己验＝空转。2026-10-01 02:15 踩过）。
+    $keptList = @()
+    if ($target -gt 0) { $keptList = @($all[0..($target - 1)]) }
+    $widgetDoc.Instances = $keptList
+    $widgetDoc | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $widgetsPath -Encoding UTF8
     $check = (Get-Content -LiteralPath $widgetsPath -Raw -Encoding UTF8) | ConvertFrom-Json
-    if (@($check.Instances).Count -ne 0) { throw '沙盒里的实例没能清空，拒绝启动（否则两个场景是同一份配置）' }
-    Write-Output ('scenario=noWidgets：已从沙盒档删掉 ' + $instances + ' 个实例（真档未动）')
-} elseif ($Scenario -eq 'noWidgets') {
-    throw '沙盒里没有 widgets.json，noWidgets 场景与 base 会是同一份配置——不出这种数'
+    $kept = @($check.Instances)
+    if ($kept.Count -ne $target) { throw ('沙盒里的实例数没改成 ' + $target + '（读回是 ' + $kept.Count + '），拒绝启动') }
+    Write-Output ('保留 ' + $target + ' 颗（真档未动）：Kind=' + (($kept | ForEach-Object { $_.Kind }) -join ','))
 }
 
 $logFile = Join-Path $logDir ('starmark-' + $stamp.ToString('yyyyMMdd') + '.log')
@@ -131,7 +147,22 @@ if (Test-Path -LiteralPath $logFile) {
     $lines = Get-Content -LiteralPath $logFile -Encoding UTF8
     $from = [array]::IndexOf($lines, ($lines | Where-Object { $_ -match ('会话开始 pid=' + $pid2 + '\b') } | Select-Object -First 1))
     if ($from -ge 0) {
-        $lines[$from..($lines.Count - 1)] | Where-Object { $_ -match '\[内存\]|\[启动\]|\[耗时\]|自动备份|Ditto|二次启动' } | Select-Object -First 60 | ForEach-Object { Write-Output $_ }
+        $session = $lines[$from..($lines.Count - 1)]
+        # 场景自证必须由**产品自己**在日志里说，不能由我"写完再读回来数一遍"——后者连我写坏格式都验不出来。
+        $corrupt = $session | Where-Object { $_ -match '组件配置损坏' } | Select-Object -First 1
+        if ($corrupt) { Write-Output ('✗ 这一跑产品读组件档就失败（回退默认），实例数不是我要的那格——读数不采信：' + $corrupt) }
+        $restored = $session | Where-Object { $_ -match '桌面组件恢复（(\d+) 个实例）' } | Select-Object -First 1
+        if ($restored) {
+            $n = [int][regex]::Match($restored, '桌面组件恢复（(\d+) 个实例）').Groups[1].Value
+            $want = if ($target -ge 0) { [string]$target } else { '不削（副本原样）' }
+            $verdict = if ($target -lt 0) { '（本格不削实例＝对照组，只记录不判定）' }
+                        elseif ($n -ne $target) { '⇒ 不一致：这一跑不能当成 ' + $target + ' 颗的成本' }
+                        else { '⇒ 与场景一致' }
+            Write-Output ('产品自己恢复的实例数=' + $n + '（场景要求=' + $want + '）' + $verdict)
+        } else {
+            Write-Output '日志里没有"桌面组件恢复（N 个实例）"那一行——场景没法自证，读数不采信'
+        }
+        $session | Where-Object { $_ -match '\[内存\]|\[启动\]|\[耗时\]|自动备份|Ditto|二次启动' } | Select-Object -First 60 | ForEach-Object { Write-Output $_ }
     } else {
         Write-Output ('日志里没找到 pid=' + $pid2 + ' 的会话开始行——读数不采信，先查日志目录/滚动')
     }
