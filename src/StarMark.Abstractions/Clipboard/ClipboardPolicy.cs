@@ -145,6 +145,29 @@ public static class ClipboardPolicy
               + $"单张超过 {ClipAssets.DescribeBytes(MaxImageBytes)} 或短边小于 {MinImageEdge}px 的不收；"
               + "密码管理器在前台时一律不收。";
 
+    // ==================== 「那张图的文件不在了」的那几句原话 ====================
+
+    /// <summary>
+    /// 「图的文件不在了」这一族话里<b>事实的那半句</b>——全程序唯一出处（批次 SI）。
+    /// <para>为什么要并：四个出口在屏幕上可能同时在场（读取失败交出去的那句原因、历史页的状态行、
+    /// 灰掉的「贴到桌面」标题、卡片里那一格），各写一份就会长出四种说法，而用户报障时只复述其中一句——
+    /// 对不上的那一句会让人以为坏的是别的地方（ClipIMG 2d 那一族教训，也是 P-131 清单 #6 登记的那条）。</para>
+    /// <para>为什么只并这半句、不并成一句：四个出口<b>各自要交代的事不同</b>——读取侧只报事实，
+    /// 状态行还要说"复制不回去"并给出口，菜单灰项要说清"这一项为什么点不动"，那一格要说"条目还在、可以删"。
+    /// 并成一句就会把别的宿主用不上的话也塞进去。所以<b>事实只有一个出处，解释各归各的宿主</b>。</para>
+    /// <para>不跟着并的那一处：启动器那句"本机上的这个路径已经不在了（…）"说的是任意本地路径、
+    /// 还要带出地址，与"这一张图的像素拿不到了"不是同一件事（有意分岔，闸门按文件名点名）。</para>
+    /// </summary>
+    public const string MissingFileClause = "文件已不在本机";
+
+    /// <summary>历史页点「再复制」而文件已经不在了：事实（<see cref="MissingFileClause"/>）＋ 后果 ＋ 出口。</summary>
+    public static string DescribeMissingImageForReuse()
+        => $"这条图片的{MissingFileClause}，复制不回去（条目仍保留，可置顶或删除）";
+
+    /// <summary>卡片里那一格：图不在了不许空着不解释——空着看起来像程序坏了，而不是"文件没了但条目还在"。</summary>
+    public static string DescribeMissingImageBanner()
+        => $"图片{MissingFileClause}（条目仍保留，可直接删掉这一条；这一张复制不回去）";
+
     /// <summary>
     /// 行分隔符归一（CRLF/CR → LF）+ 去首尾空白。
     /// <para>这一步直接决定幂等键的稳定性：同一段文本从不同应用复制出来时换行风格不一致

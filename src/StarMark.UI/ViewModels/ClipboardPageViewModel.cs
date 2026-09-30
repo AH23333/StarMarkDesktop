@@ -148,7 +148,7 @@ public partial class ClipboardPageViewModel : ObservableObject
         var path = ClipAssets.FullPathOf(ClipboardEntry.FileName(item));
         if (path is null || !System.IO.File.Exists(path))
         {
-            StatusText = "这条图片的文件已经不在本机，复制不回去（条目仍保留，可置顶或删除）";
+            StatusText = ClipboardPolicy.DescribeMissingImageForReuse();
             return false;
         }
 

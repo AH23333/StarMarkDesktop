@@ -66,9 +66,11 @@ public sealed class ClipboardImageRowUiGateTests
     public void MissingFilesAreRefusedInTheirOwnWords()
     {
         // 报坏消息的那句要给出口（P-54 同口径）：只说"复制不回去"，用户只能去猜该怎么办。
+        // 批次 SI 把那句整句搬进 ClipboardPolicy.DescribeMissingImageForReuse ⇒ 读数改由契约测逐字钉
+        // （ClipboardMissingImageTextTests）；这里只守"这一处问了它、且没在原地留一份抄本"。
         var body = MethodBody(ReadRepoFile(PageVm), "private async Task<bool> ReuseImageAsync(ItemCardViewModel vm)");
-        Assert.Contains("已经不在本机", body);
-        Assert.Contains("可置顶或删除", body);
+        Assert.Contains("ClipboardPolicy.DescribeMissingImageForReuse()", body);
+        Assert.DoesNotContain("不在本机", Code(body));
         // 先判文件在不在再去读它：漏了这一步，症状是一句"图片复制失败：找不到文件"式的系统原话。
         Assert.Contains("File.Exists", body);
         Assert.True(body.IndexOf("File.Exists", StringComparison.Ordinal)
@@ -123,15 +125,16 @@ public sealed class ClipboardImageRowUiGateTests
     public void CardXamlShowsTheThumbAndExplainsItsAbsence()
     {
         var xaml = ReadRepoFile(CardXaml);
-        Assert.Equal(1, Count(xaml, "ViewModel.ClipboardThumb"));
+        // 逗号是必需的：少写它，这颗旗标会把下面那条 …MissingText 一起数进来（前缀相撞＝计数凭空多一）。
+        Assert.Equal(1, Count(xaml, "ViewModel.ClipboardImageMissing,"));
         Assert.Equal(1, Count(xaml, "ViewModel.HasClipboardThumb"));
-        Assert.Equal(1, Count(xaml, "ViewModel.ClipboardImageMissing"));
+        Assert.Equal(1, Count(xaml, "ViewModel.ClipboardThumb"));
 
-        // 缺失必须说出来（空着不解释＝看起来像程序坏了），并给出口。
-        var banner = Regex.Match(xaml, "Text=\"(图片文件已不在本机[^\"]*)\"");
-        Assert.True(banner.Success, "缺失态那句原话没了");
-        Assert.Contains("可直接删掉", banner.Groups[1].Value);
-        Assert.DoesNotContain("图片文件已不在本机，请", xaml);       // 不许把责任推回给用户去"请…"
+        // 缺失必须说出来（空着不解释＝看起来像程序坏了），并给出口。批次 SI 起句子不在 XAML 里：
+        // 写死在页面上它就只属于这一格，而同一句事实还要在状态行与灰项标题上说（WM 是同一条）。
+        Assert.Equal(1, Count(xaml, "ViewModel.ClipboardImageMissingText"));
+        Assert.DoesNotContain("不在本机", xaml);                       // 反向钉：XAML 不许再抄一份
+        // 读数（"条目仍保留，可直接删掉这一条"）改由契约测逐字钉，见 ClipboardMissingImageTextTests。
 
         // 有图与缺图两块不许同时出现：判据是同一个属性的两个极性，写成两个独立条件就会分岔。
         var thumbVis = xaml.Substring(xaml.IndexOf("ViewModel.HasClipboardThumb", StringComparison.Ordinal), 90);

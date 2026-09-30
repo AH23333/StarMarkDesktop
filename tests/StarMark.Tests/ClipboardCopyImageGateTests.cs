@@ -146,9 +146,15 @@ public sealed class ClipboardCopyImageGateTests
     public void BothFileEntriesShareOneMissingFileSentence()
     {
         // "文件不在了"在历史行与本机文件行是同一件事，两份措辞就会让用户以为有两种成因。
+        // 批次 SI 把这句的出处从"这个类里的私有常数"升成"政策层那一颗"：同一句事实还在状态行、
+        // 灰项标题与卡片那一格上说过，常数只并了这两个入口，另外两处照旧各写一份。
         var store = ReadRepoPartials(Store);
-        Assert.Equal(1, Count(store, "private const string MissingFileReason"));   // 一句真话只有一个出处
-        Assert.Equal(3, Count(store, "MissingFileReason"));                          // 声明 + 两个入口各用一次
-        Assert.DoesNotContain("这个文件已经不在本机", store);                          // 反向钉：不许出现第二份写法
+        Assert.DoesNotContain("MissingFileReason", Code(store));                       // 旧的那颗常数已经没了
+        Assert.Equal(2, Count(Code(store), "ClipboardPolicy.MissingFileClause"));      // 只有两个入口引用它（注释里再提不算）
+        Assert.DoesNotContain("文件已不在本机", Code(store));                            // 反向钉：不许在这儿抄第二份
+        // 接线钉在各自动作的方法体里（#196）：整文件 Contains 会被同文件另一处合法用法顶住。
+        Assert.Contains("ClipboardPolicy.MissingFileClause", MethodBody(store, "public static bool TryReadEntryImage"));
+        Assert.Contains("ClipboardPolicy.MissingFileClause",
+            MethodBody(store, "TryReadFileAsPngAsync(string? path, CancellationToken ct)"));
     }
 }

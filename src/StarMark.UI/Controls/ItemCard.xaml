@@ -102,11 +102,12 @@
                 <Image Source="{x:Bind ViewModel.ClipboardThumb, Mode=OneWay}"
                        Width="160" Height="120" Stretch="Uniform"/>
             </Border>
-            <!-- 图不在了必须说这一格：空着不解释，看起来像程序坏了，而不是"文件被删了但条目还在"。 -->
+            <!-- 图不在了必须说这一格：空着不解释，看起来像程序坏了，而不是"文件被删了但条目还在"。
+                句子从 ViewModel 来（全程序那半句事实只有一个出处，见 ClipboardPolicy.MissingFileClause）。 -->
             <Border Margin="0,2,0,0" Padding="8,6" CornerRadius="4" HorizontalAlignment="Left"
                     Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
                     Visibility="{x:Bind ViewModel.ClipboardImageMissing, Mode=OneWay, Converter={StaticResource BoolToVis}}">
-                <TextBlock Text="图片文件已不在本机（条目仍保留，可直接删掉这一条；这一张复制不回去）"
+                <TextBlock Text="{x:Bind ViewModel.ClipboardImageMissingText, Mode=OneWay}"
                            FontSize="11" Style="{StaticResource MutedText}"/>
             </Border>
 

@@ -39,11 +39,9 @@ public static class ClipboardImageStore
     /// </summary>
     public static string Folder => ClipAssets.Folder;
 
-    /// <summary>
-    /// "文件不在了"那一句原话。<b>两个入口共用一个常数</b>：历史行与本机文件行说的是同一件事，
-    /// 各写一份就会出现"同一屏幕上两种说法"，而用户只会以为其中一种是真的。
-    /// </summary>
-    private const string MissingFileReason = "文件已经不在本机";
+    // "文件不在了"那一句原话住在政策层（ClipboardPolicy.MissingFileClause），这两个入口只引用它。
+    // 这里曾经是两个入口共用一个私有常数——方向对，但范围太小：同一句事实还在历史页状态行、
+    // 灰掉的菜单标题与卡片那一格各写了一份，四种说法照样长出来（批次 SI 收口）。
 
     /// <summary>主图已经在了吗（同图再复制时靠这一句决定"只记一次回放，不再写文件"）。</summary>
     public static bool MainExists(string mainName) => SafeInFolder(mainName) is { } p && File.Exists(p);
@@ -199,7 +197,7 @@ public static class ClipboardImageStore
         if (path is null) { reason = "这一条的文件名不安全或没有文件"; return false; }
         // 先 stat 再去读：让 File.ReadAllBytes 抛，交出去的就是"文件读不出来（FileNotFoundException）"
         // 这种系统原话。两句在界面上都像程序坏了，而"这一张已经不在这台机器上"是用户能懂的事实。
-        if (!File.Exists(path)) { reason = MissingFileReason; return false; }
+        if (!File.Exists(path)) { reason = ClipboardPolicy.MissingFileClause; return false; }
         try
         {
             return TryHandOutPng(File.ReadAllBytes(path), out pngBytes, out frame, out reason);
@@ -228,7 +226,7 @@ public static class ClipboardImageStore
         if (string.IsNullOrWhiteSpace(path)) return (null, default, "没有给出文件路径");
         try
         {
-            if (!File.Exists(path!)) return (null, default, MissingFileReason);
+            if (!File.Exists(path!)) return (null, default, ClipboardPolicy.MissingFileClause);
             var size = new FileInfo(path!).Length;
             if (size > ClipboardPolicy.MaxImageBytes)
                 return (null, default,

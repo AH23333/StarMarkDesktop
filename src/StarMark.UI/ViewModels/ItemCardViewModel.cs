@@ -99,10 +99,12 @@ public partial class ItemCardViewModel : ObservableObject
     /// <summary>
     /// 灰项自己在标题上说原因（全程序口径）：置灰而不解释，用户只看到一个永远点不动的菜单项，
     /// 分不清是"这个功能坏了"还是"这一条本来就不行"。
+    /// <para>动作名「贴到桌面」归本类（菜单项的名字只有一个主人），原因那半句归政策层——
+    /// 抄一份「这张图的文件已不在本机」就会与状态行、卡片那一格各说各话（批次 SI）。</para>
     /// </summary>
     public string PinImageMenuText => CanPinAsImage
         ? "贴到桌面"
-        : "贴到桌面（这张图的文件已不在本机）";
+        : $"贴到桌面（这张图的{ClipboardPolicy.MissingFileClause}）";
 
     /// <summary>
     /// 是否可"发送到桌面 · 快捷启动"。快捷启动存的是<b>可启动的 URI</b>，没有 URI 的条目
@@ -238,6 +240,12 @@ public partial class ItemCardViewModel : ObservableObject
     /// 空着不解释，看起来像程序坏了，而不是"文件没了但条目还在"。
     /// </summary>
     public bool ClipboardImageMissing { get; }
+
+    /// <summary>
+    /// 那一格说的话。<b>不写在 XAML 里</b>：同一句事实今天还要在状态行与灰项标题上说一遍，
+    /// 写死在页面上它就只属于这一格，改了这里别处照旧（句子本体在 <see cref="ClipboardPolicy"/>）。
+    /// </summary>
+    public string ClipboardImageMissingText => ClipboardPolicy.DescribeMissingImageBanner();
 
     /// <summary>
     /// 取这一行的缩略图源。<paramref name="flaggedMissing"/>＝对账打上的"文件缺失"标记；

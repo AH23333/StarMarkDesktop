@@ -123,6 +123,13 @@ internal static class SourceGate
         => text.Split(new[] { needle }, StringSplitOptions.None).Length - 1;
 
     /// <summary>
+    /// 抹掉注释后的源码。<b>"某句话全库只许有一个出处"这类禁项一律读这个</b>：
+    /// 注释里引用一句旧话是为了讲清为什么，不是又开一个出口——按原文数会把这种引用算成违规，
+    /// 而假失败最坏，因为它教人把闸门改松而不是改对（#123；形状口径见 #195）。
+    /// </summary>
+    internal static string Code(string text) => FormatScanner.Scan(text).Code;
+
+    /// <summary>
     /// 把某个方法的体从源码里挖掉。<b>"某个调用只允许出现在某一个方法里"这类守门就靠它</b>：
     /// 直接数整个文件的出现次数会连那个合法出口一起数进去，判不准。
     /// </summary>

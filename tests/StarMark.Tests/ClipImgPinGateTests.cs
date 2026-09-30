@@ -110,7 +110,8 @@ public sealed class ClipImgPinGateTests
         Assert.Contains("public bool CanPinAsImage => CanCopyAsImage && !ClipboardImageMissing;", vm);
         // 缺文件时原因写在标题上（灰项自己在标题上说原因；置灰而不解释＝用户只能猜是程序坏了）。
         Assert.Equal(1, Count(vm, "\"贴到桌面\""));                 // 亮着的那一句只有一份
-        Assert.Contains("贴到桌面（这张图的文件已不在本机）", vm);   // 灰着的那一句也只有一份
+        // 灰着的那一句：动作名归本类（菜单项的名字只有一个主人），事实那半句归政策层（批次 SI）。
+        Assert.Contains("贴到桌面（这张图的{ClipboardPolicy.MissingFileClause}）", vm);
 
         // 两处宿主都不许自带一份字面量——只许读上面那两个属性。
         Assert.DoesNotContain("\"贴到桌面\"", Read(Path.Combine("src", "StarMark.UI", "Controls", "ItemCard.xaml")));
