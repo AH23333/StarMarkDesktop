@@ -20,8 +20,8 @@ namespace StarMark.Abstractions;
 /// ① <b>纯数字</b>日期/时刻 ⇒ 锁 <see cref="CultureInfo.InvariantCulture"/>（与文件名同口径；
 /// 在 <c>zh-CN</c> 下输出的字面串与今天<b>逐字相同</b>，所以没动用户已经看惯的样子）；
 /// ② <b>星期名</b>（旧代码用 <c>dddd</c> 取本地化全称）⇒ <b>不许</b>照搬"锁 InvariantCulture"，
-/// 那会把"星期日"打成英文 <c>Sunday</c>——中文界面里那是另一种坏。改为走 <see cref="Weekday"/> 这张表，
-/// 全称在这里只写一遍。
+/// 那会把"星期日"打成英文 <c>Sunday</c>——中文界面里那是另一种坏。改为走 <see cref="Weekday"/> 这张表
+/// （它和 <see cref="WeekdayShort"/>、月历表头共用 <see cref="WeekdayStem"/> 一颗词根）。
 /// </para>
 /// <para>
 /// <b>为什么不叫 <c>DateText</c></b>：时钟组件的 VM 已经有一颗叫 <c>DateText</c> 的显示属性
@@ -29,9 +29,14 @@ namespace StarMark.Abstractions;
 /// <c>string</c> 属性而不是判据——编译直接报错还好，怕的是将来在某处恰好解析对、读起来又像在说属性。
 /// </para>
 /// <para>
-/// 星期<b>短名</b>（"周日…"）今天另有三处出处（<c>GlanceCalendar.WeekdayText</c>／<c>AlarmPolicy</c> 的标签表／
-/// <c>LocalItemState</c> 的"周+切片"），本批<b>没有</b>并进来：它们各有逐字钉住的用例，动它是另一批的活。
-/// 已登记为新挂账，免得下一次往这里加第四份。
+/// <b>批次 SF 补的一刀</b>：RY 当时在这里写下"全称在这里只写一遍"，那句话<b>不成立</b>——
+/// 星期名一共<b>六处</b>各有抄本（账本 P-128 只数到"短名三处"）：短名整表三处
+/// （<c>GlanceCalendar.WeekdayText</c>／<c>AlarmPolicy.DaysLabel</c>／<c>WidgetWindow.Alarms.DayOrder</c>）、
+/// "周＋切片"一处（<c>LocalItemState.DescribeDue</c>）、只印词根的表一处（<c>MonthGrid.WeekHeaders</c>）、
+/// 全称又一处（UI 的 <c>GlanceWidget.WeekdayFull</c>）。多出来那两处的原因不是运气：
+/// 测试工程不引用 <c>StarMark.UI</c>（#184），所以"数有几处"这一步从来没照过 UI 那一侧。
+/// 现在词根只有 <see cref="WeekdayStem"/> 一张表，<see cref="Weekday"/>／<see cref="WeekdayShort"/>／
+/// 月历表头都从它拼出来；<b>阅读顺序（周一在前）仍留在各宿主</b>，那是排列习惯、不是同一份真值。
 /// </para>
 /// </summary>
 public static class DateTimeText
@@ -98,18 +103,34 @@ public static class DateTimeText
         => value.ToString(withHours ? @"h\:mm\:ss" : @"m\:ss", CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// 中文<b>全称</b>星期，<b>唯一出处</b>。位序跟 <see cref="DayOfWeek"/> 走（Sunday＝0），
+    /// 中文<b>全称</b>星期：<c>星期日…星期六</c>。位序跟 <see cref="DayOfWeek"/> 走（Sunday＝0），
     /// 与 <c>AlarmPolicy.BitFor</c> 同一套位序口径——按"周一是第一天"的直觉排这张表就会整体错一天。
     /// </summary>
-    public static string Weekday(DayOfWeek day) => day switch
+    public static string Weekday(DayOfWeek day) => "星期" + WeekdayStem(day);
+
+    /// <summary>中文<b>短名</b>星期：<c>周日…周六</c>（组件里那些窄列用这一颗）。</summary>
+    public static string WeekdayShort(DayOfWeek day) => "周" + WeekdayStem(day);
+
+    /// <summary>
+    /// 星期名里那个<b>词根</b>（<c>日 / 一 / 二 / 三 / 四 / 五 / 六</c>）——全称、短名、月历表头三副面孔共用的唯一一张表。
+    /// <para>
+    /// 越界（库里存着本二进制不认识的序号）落到 <c>日</c>：宁可错印成周日，也不许什么都不印——
+    /// 空字符串在界面上表现为"那一格凭空消失"，比错一天更难报障。
+    /// </para>
+    /// <para>
+    /// 表的次序就是 <c>(int)DayOfWeek</c>（Sunday＝0）。<c>MonthGrid.FirstSlot</c> 用同一个序号决定网格开头补几天，
+    /// 所以"第 0 列是周日"不是排版习惯而是硬约束：这张表哪天被谁改成周一在前，月历就会行行错位。
+    /// </para>
+    /// </summary>
+    public static string WeekdayStem(DayOfWeek day) => day switch
     {
-        DayOfWeek.Sunday => "星期日",
-        DayOfWeek.Monday => "星期一",
-        DayOfWeek.Tuesday => "星期二",
-        DayOfWeek.Wednesday => "星期三",
-        DayOfWeek.Thursday => "星期四",
-        DayOfWeek.Friday => "星期五",
-        DayOfWeek.Saturday => "星期六",
-        _ => "星期日",   // 越界（库里存着本二进制不认识的序号）不许什么都不印
+        DayOfWeek.Sunday => "日",
+        DayOfWeek.Monday => "一",
+        DayOfWeek.Tuesday => "二",
+        DayOfWeek.Wednesday => "三",
+        DayOfWeek.Thursday => "四",
+        DayOfWeek.Friday => "五",
+        DayOfWeek.Saturday => "六",
+        _ => "日",
     };
 }

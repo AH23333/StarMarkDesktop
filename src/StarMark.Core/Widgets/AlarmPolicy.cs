@@ -198,15 +198,16 @@ public static class AlarmPolicy
         if (days == AlarmDays.Daily) return "每天";
         if (days == AlarmDays.Weekdays) return "工作日";
         if (days == AlarmDays.Weekends) return "周末";
-        var names = new[]
+        // 这里只拥有一件事：列出来的次序（周一在前）。那个中文名字归 DateTimeText，别在这儿再抄一张表。
+        var readOrder = new[]
         {
-            (DayOfWeek.Monday, "周一"), (DayOfWeek.Tuesday, "周二"), (DayOfWeek.Wednesday, "周三"),
-            (DayOfWeek.Thursday, "周四"), (DayOfWeek.Friday, "周五"), (DayOfWeek.Saturday, "周六"),
-            (DayOfWeek.Sunday, "周日"),
+            DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
+            DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday,
+            DayOfWeek.Sunday,
         };
         var picked = new List<string>();
-        foreach (var (day, name) in names)
-            if (Matches(days, day)) picked.Add(name);
+        foreach (var day in readOrder)
+            if (Matches(days, day)) picked.Add(DateTimeText.WeekdayShort(day));
         return string.Join(" ", picked);
     }
 

@@ -100,7 +100,7 @@ public sealed partial class GlanceWidget : UserControl
 
         DayBlock.Text = today.Day.ToString();
         MonthBlock.Text = $"{today.Year}年{today.Month}月";
-        WeekBlock.Text = WeekdayFull(today.DayOfWeek);
+        WeekBlock.Text = DateTimeText.Weekday(today.DayOfWeek);
 
         var lunar = GlanceCalendar.LunarText(today);
         var festival = GlanceCalendar.Festival(today);
@@ -440,16 +440,4 @@ public sealed partial class GlanceWidget : UserControl
         EmptyHint.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
         ItemsHost.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
     }
-
-    private static string WeekdayFull(DayOfWeek day) => day switch
-    {
-        DayOfWeek.Monday => "星期一",
-        DayOfWeek.Tuesday => "星期二",
-        DayOfWeek.Wednesday => "星期三",
-        DayOfWeek.Thursday => "星期四",
-        DayOfWeek.Friday => "星期五",
-        DayOfWeek.Saturday => "星期六",
-        DayOfWeek.Sunday => "星期日",
-        _ => string.Empty,
-    };
 }

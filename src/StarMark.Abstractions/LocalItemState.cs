@@ -153,7 +153,7 @@ public static class LocalItemState
             if (days < 0) return days == -1 ? "昨天" : $"逾期 {-days} 天";
             if (days == 0) return "今天";
             if (days == 1) return "明天";
-            if (days < 7) return "周" + "日一二三四五六"[due.DayOfWeek == DayOfWeek.Sunday ? 0 : (int)due.DayOfWeek];
+            if (days < 7) return DateTimeText.WeekdayShort(due.DayOfWeek);
             return $"{due.Month}月{due.Day}日";
         }
         catch

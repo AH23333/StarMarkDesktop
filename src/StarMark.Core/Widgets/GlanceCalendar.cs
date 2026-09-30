@@ -108,19 +108,6 @@ public static class GlanceCalendar
         return null;
     }
 
-    /// <summary>星期的中文短名（周一 … 周日）。</summary>
-    public static string WeekdayText(DateOnly date) => date.DayOfWeek switch
-    {
-        DayOfWeek.Monday => "周一",
-        DayOfWeek.Tuesday => "周二",
-        DayOfWeek.Wednesday => "周三",
-        DayOfWeek.Thursday => "周四",
-        DayOfWeek.Friday => "周五",
-        DayOfWeek.Saturday => "周六",
-        DayOfWeek.Sunday => "周日",
-        _ => string.Empty,
-    };
-
     // ── 公历固定节日（DeskBox 没有，StarMark 补充）──
     private static string? SolarFestival(DateOnly date) => (date.Month, date.Day) switch
     {

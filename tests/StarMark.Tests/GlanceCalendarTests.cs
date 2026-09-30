@@ -88,12 +88,16 @@ public sealed class GlanceCalendarTests
         Assert.Null(GlanceCalendar.Festival(new DateOnly(1800, 1, 1)));
     }
 
-    [Theory]
-    [InlineData(2026, 9, 18, "周五")]
-    [InlineData(2026, 9, 20, "周日")]
-    public void WeekdayText_Matches(int y, int m, int d, string expected)
+    /// <summary>
+    /// 批次 SF 之前这里钉的是 <c>GlanceCalendar.WeekdayText</c>——那颗<b>没有任何读者</b>（界面走的是
+    /// <c>GlanceWidget</c> 自己的全称表），是一张没人看的抄本，已删。星期名的逐字覆盖面搬去
+    /// <see cref="DateTimeTextTests"/>（判据七格全称+七格短名）与 <see cref="WeekdayNameTests"/>（三个真读者）。
+    /// </summary>
+    [Fact]
+    public void GlanceCalendarHoldsNoWeekdayTableAnymore()
     {
-        Assert.Equal(expected, GlanceCalendar.WeekdayText(new DateOnly(y, m, d)));
+        var code = FormatScanner.Scan(SourceGate.ReadRepoFile("src/StarMark.Core/Widgets/GlanceCalendar.cs")).Code;
+        Assert.DoesNotContain("WeekdayText", code, StringComparison.Ordinal);
     }
 
     /// <summary>

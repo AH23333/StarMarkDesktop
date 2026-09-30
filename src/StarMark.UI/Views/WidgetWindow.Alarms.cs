@@ -26,12 +26,15 @@ public sealed partial class WidgetWindow
         ("周末（周六周日）", AlarmDays.Weekends),
     ];
 
-    /// <summary>星期那一排的阅读顺序（周一在前）。<b>位权仍按 <see cref="DayOfWeek"/> 算</b>——这里只是列出来的次序。</summary>
-    private static readonly (string Name, DayOfWeek Day)[] DayOrder =
+    /// <summary>
+    /// 星期那一排的阅读顺序（周一在前）。<b>位权仍按 <see cref="DayOfWeek"/> 算</b>——这里只是列出来的次序，
+    /// 而那一格上写的中文名字归 <see cref="DateTimeText.WeekdayShort"/>（批次 SF 前这里自己抄了一份标签表）。
+    /// </summary>
+    private static readonly DayOfWeek[] DayOrder =
     [
-        ("周一", DayOfWeek.Monday), ("周二", DayOfWeek.Tuesday), ("周三", DayOfWeek.Wednesday),
-        ("周四", DayOfWeek.Thursday), ("周五", DayOfWeek.Friday), ("周六", DayOfWeek.Saturday),
-        ("周日", DayOfWeek.Sunday),
+        DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
+        DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday,
+        DayOfWeek.Sunday,
     ];
 
     /// <summary>
@@ -110,9 +113,13 @@ public sealed partial class WidgetWindow
         }
         // 星期逐天勾：四个快捷档覆盖不到的组合（"只有周三和周六"）用这一排。勾完之后标题那一行立刻跟着变。
         var pick = new MenuFlyoutSubItem { Text = "按星期勾" };
-        foreach (var (name, day) in DayOrder)
+        foreach (var day in DayOrder)
         {
-            var check = new ToggleMenuFlyoutItem { Text = name, IsChecked = AlarmPolicy.Matches(item.Days, day) };
+            var check = new ToggleMenuFlyoutItem
+            {
+                Text = DateTimeText.WeekdayShort(day),
+                IsChecked = AlarmPolicy.Matches(item.Days, day),
+            };
             // 加一天/减一天的算法全在 AlarmPolicy（TurnOn／TurnOff／Matches）：这一层不许自己摆位权，
             // 位权在 UI 里再算一遍就是第二份真值（错的时候是"勾了周三、响在周四"）。
             check.Click += (_, _) => alarms.SetDays(item.Id,

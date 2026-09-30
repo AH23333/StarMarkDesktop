@@ -1,4 +1,5 @@
 #nullable enable
+using StarMark.Abstractions;
 
 namespace StarMark.Core.Widgets;
 
@@ -14,7 +15,17 @@ public readonly record struct MonthCell(int Day, bool InMonth, bool IsToday, boo
 /// </summary>
 public static class MonthGrid
 {
-    public static readonly string[] WeekHeaders = { "日", "一", "二", "三", "四", "五", "六" };
+    /// <summary>
+    /// 表头那七个字。<b>字由 <see cref="DateTimeText.WeekdayStem"/> 给，"周日起排"这个次序才是这里的事实</b>——
+    /// 它与 <see cref="FirstSlot"/> 用同一个序号（Sunday＝0）决定每格落在第几列，两处不同序就会行行错位。
+    /// </summary>
+    public static readonly string[] WeekHeaders =
+    [
+        DateTimeText.WeekdayStem(DayOfWeek.Sunday), DateTimeText.WeekdayStem(DayOfWeek.Monday),
+        DateTimeText.WeekdayStem(DayOfWeek.Tuesday), DateTimeText.WeekdayStem(DayOfWeek.Wednesday),
+        DateTimeText.WeekdayStem(DayOfWeek.Thursday), DateTimeText.WeekdayStem(DayOfWeek.Friday),
+        DateTimeText.WeekdayStem(DayOfWeek.Saturday),
+    ];
 
     public const int Columns = 7;
 

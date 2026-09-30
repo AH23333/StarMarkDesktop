@@ -235,18 +235,22 @@ public class LocalItemStateTests
         Assert.NotNull(LocalItemState.GetDue(item));
     }
 
-    // ── 周内星期映射（批次 DE：钉死「周X」的取字符映射，而非仅前缀）──
+    // ── 周内星期映射（批次 DE 立；批次 SF 起「字」由 DateTimeText.WeekdayStem 给）──
 
     private static DateTimeOffset LocalNoon(int y, int m, int d)
         => new(new DateTime(y, m, d, 12, 0, 0, DateTimeKind.Local));
 
     /// <summary>
     /// 既有 <c>DescribeDue_WithinAWeek</c> 只断言 <c>StartsWith("周")</c>，从不校验后一个字——
-    /// 即映射串 <c>"日一二三四五六"</c>（周日索引 0、周一..周六索引 1..6）整体未测：
-    /// 旋转/错位一位（如误写成 "一二三四五六日"）都能通过全部现有断言。该文案是待办组件列表
-    /// 每天给用户看的日期，映射错=直接可见的错误日期。本 [Theory] 用 days=3（恒落在 2..6 的
-    /// 「本周内」窗口）覆盖全部 7 个绝对星期，把七字映射逐一钉死，含 <c>== Sunday ? 0</c> 那条特殊索引。
+    /// 七字映射（周日索引 0、周一..周六索引 1..6）整体未测：旋转/错位一位（如误写成 "一二三四五六日"）
+    /// 都能通过全部现有断言。该文案是待办组件列表每天给用户看的日期，映射错=直接可见的错误日期。
+    /// 本 [Theory] 用 days=3（恒落在 2..6 的「本周内」窗口）覆盖全部 7 个绝对星期，把七字映射逐一钉死。
+    /// <para>
+    /// DE 当时这里还额外钉着"<c>== Sunday ? 0</c> 那条特殊索引"，因为映射是本地切片写的；
+    /// 批次 SF 把切片换成 <c>DateTimeText.WeekdayShort</c> 之后那条分支不存在了——
+    /// <b>用例的价值没降</b>：它现在同时是"待办这一格的字来自判据"的凭据（判据哪天被换词根，这七条一起红）。
     /// 全用 <c>Kind=Local</c> 正午构造，避免 UTC→本地换日的时区脆弱性。
+    /// </para>
     /// </summary>
     [Theory]
     [InlineData(2026, 9, 17, 2026, 9, 20, "周日")]   // due 落周日→索引 0（特殊三元路径）
