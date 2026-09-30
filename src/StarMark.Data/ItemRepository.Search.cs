@@ -34,7 +34,7 @@ public sealed partial class ItemRepository
             "name" => "i.title COLLATE NOCASE ASC, MIN(f.rank)",
             "recent" => "i.updated_at DESC, MIN(f.rank)",
             // 最近 Star：GitHubStar 用 extra_json 的 starredAt（无则退回 updated_at）。
-            "starred" => "COALESCE(CAST(json_extract(i.extra_json, '$.StarredAt') AS INTEGER), i.updated_at) DESC, MIN(f.rank)",
+            "starred" => $"COALESCE(CAST(json_extract({ExtraJsonGuard.Safe("i.extra_json")}, '$.StarredAt') AS INTEGER), i.updated_at) DESC, MIN(f.rank)",
             // 最近收藏：条目入库时间。
             "collected" => "i.created_at DESC, MIN(f.rank)",
             _ => "MIN(f.rank)",
@@ -48,12 +48,12 @@ public sealed partial class ItemRepository
         // HasMore 还会提前判 false（用户读作"才 60 条就到底了"）。谓词下进 CTE 后，LIMIT 数的是
         // 真正通过筛选的行。代价是 join+谓词要跑在全部 FTS 命中上——但 bm25 排序本来就要给每条
         // 命中算 rank 并排序，这里只是常数级增加，且标签 EXISTS 走 idx_item_tags_tag。
-        var filteredWhere = @"
+        var filteredWhere = $@"
             WHERE items_fts MATCH @keyword
               AND (@type_filter IS NULL OR i.type = @type_filter)
               AND (@stars_min IS NULL OR i.stars_count >= @stars_min)
               AND (@date_from IS NULL OR i.updated_at >= @date_from)
-              AND (@lang IS NULL OR i.type = 'file' OR json_extract(i.extra_json, '$.Language') = @lang)
+              AND (@lang IS NULL OR i.type = 'file' OR json_extract({ExtraJsonGuard.Safe("i.extra_json")}, '$.Language') = @lang)
               AND (@include_hidden = 1 OR i.hidden = 0)"
             + BuildTagClause(filter.Tags, "i");
 
@@ -147,12 +147,14 @@ public sealed partial class ItemRepository
     {
         using var conn = _factory.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
-            SELECT DISTINCT trim(json_extract(i.extra_json, '$.Language')) AS lang
+        // 守卫一次拼好、四处复用：这一列里混进坏 JSON 时，取不出语言 ≠ 整条语句失败（P-17）。
+        var langOf = $"json_extract({ExtraJsonGuard.Safe("i.extra_json")}, '$.Language')";
+        cmd.CommandText = $@"
+            SELECT DISTINCT trim({langOf}) AS lang
             FROM items i
             WHERE i.type = 'githubstar'
-              AND json_extract(i.extra_json, '$.Language') IS NOT NULL
-              AND trim(json_extract(i.extra_json, '$.Language')) <> ''
+              AND {langOf} IS NOT NULL
+              AND trim({langOf}) <> ''
             ORDER BY lang;";
         var list = new List<string>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);

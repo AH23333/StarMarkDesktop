@@ -400,15 +400,14 @@ public sealed partial class ItemRepository
     /// <para>图片与文本必须分开裁：§4 给了两条独立上限（200 / 500），一起裁的话"复制 500 段文字"
     /// 会把用户的截图裁出历史，反过来"开了一天图片采集"会把文字历史挤掉——两种都是用户看不见成因的丢数据。</para>
     /// <para><b>两层兜底各挡一种坏法：</b>
-    /// ① <c>json_valid</c>——<c>json_extract</c> 遇到<b>不合法 JSON 是抛错</b>而不是返回 NULL，
-    /// 于是一行被手改过的 <c>extra_json</c> 就能让整条轮转语句失败 ⇒ 剪贴板从此一条都记不上
-    /// （ClipIMG-1e 的对账测试实测踩到：坏 JSON 那一行让 <c>GetClipboardImageAssetsAsync</c> 整个抛出来）。
+    /// ① <see cref="ExtraJsonGuard.Safe"/>——坏 JSON 会让整条轮转语句失败 ⇒ 剪贴板从此一条都记不上
+    /// （ClipIMG-1e 的对账测试实测踩过这一条；机制与"为什么 <c>AND json_valid</c> 挡不住"写在判据那节）。
     /// ② <c>COALESCE(...,0)</c>——<c>extra_json</c> 为空/没有 clipFormat 的行，与那个格式值比出来的结果是
     /// <b>NULL</b> 而不是 false，直接写进 WHERE 会让这些行既不进图片桶也不进文本桶 ⇒ 永远裁不掉。</para>
     /// <para>读不出格式的一律按<b>文本桶</b>处理：它仍然可被裁掉，不会因为"归不进任何桶"而长生不老。</para>
     /// </summary>
-    private const string ClipBucketClause =
-        "AND COALESCE(json_extract(CASE WHEN json_valid(extra_json) THEN extra_json ELSE '{}' END, "
+    private static readonly string ClipBucketClause =
+        $"AND COALESCE(json_extract({ExtraJsonGuard.Safe("extra_json")}, "
         + "'$.clipFormat') = @image_format, 0) = @is_image";
 
     /// <summary>桶参数的唯一拼装处（<c>@image_format</c> 由 <see cref="ClipboardEntry.FormatImage"/> 递进去，SQL 里不写字面量"image"）。</summary>
@@ -603,7 +602,7 @@ public sealed partial class ItemRepository
                 {(add ? "json_set(extra_json, '$.clipMissing', json('true'))"
                       : "json_remove(extra_json, '$.clipMissing')")}
             WHERE source = @source AND json_valid(extra_json) AND id IN ({string.Join(",", placeholders)})
-              AND COALESCE(json_extract(extra_json, '$.clipMissing'), 0) <> {(add ? 1 : 0)};";
+              AND COALESCE(json_extract({ExtraJsonGuard.Safe("extra_json")}, '$.clipMissing'), 0) <> {(add ? 1 : 0)};";
         cmd.Parameters.AddWithValue("@source", ItemSources.Clipboard);
 
         var rows = await cmd.ExecuteNonQueryAsync(ct);

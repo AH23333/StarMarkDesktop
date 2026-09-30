@@ -260,7 +260,8 @@ public sealed class ClipboardReconcileTests : IDisposable
         var body = MethodBodyOf("private async Task<int> ApplyMissingFlagAsync");
         Assert.Contains("json_valid(extra_json)", body);
         Assert.Contains("json_remove(extra_json, '$.clipMissing')", body);
-        Assert.Contains("COALESCE(json_extract(extra_json, '$.clipMissing'), 0) <> ", body);   // 幂等
+        // 幂等判据问的是那颗守卫（SK 起措辞只有一份），不再是裸 extra_json。
+        Assert.Contains("COALESCE(json_extract({ExtraJsonGuard.Safe(\"extra_json\")}, '$.clipMissing'), 0) <> ", body);   // 幂等
     }
 
     [Fact]
@@ -268,9 +269,12 @@ public sealed class ClipboardReconcileTests : IDisposable
     {
         // 判据本体必须带 json_valid：sqlite 的 json_extract 遇到不合法 JSON 是<b>抛错</b>，
         // 一行坏数据就会让"记一条历史"这条日常路径整个失败（这比少记一条严重得多）。
+        // 批次 SK 起，<b>守卫的措辞</b>不再抄在各条 SQL 里，而是住在 ExtraJsonGuard（全仓唯一一份，
+        // 由 ExtraJsonGuardGateTests 钉住）；这里钉的是"分桶那一句真的问了它"——
+        // 只读磁盘源码，不依赖运行时拼接，所以"以后有人把这一句改回裸列"会当场红。
         var repo = ReadRepoFile("src/StarMark.Data/ItemRepository.Local.cs");
-        Assert.Contains("CASE WHEN json_valid(extra_json) THEN extra_json ELSE '{}' END", repo);
-        Assert.Equal(1, StarMark.Tests.SourceGate.Count(repo, "private const string ClipBucketClause"));
+        Assert.Contains("json_extract({ExtraJsonGuard.Safe(\"extra_json\")}, ", repo);
+        Assert.Equal(1, StarMark.Tests.SourceGate.Count(repo, "private static readonly string ClipBucketClause"));
     }
 
     [Fact]

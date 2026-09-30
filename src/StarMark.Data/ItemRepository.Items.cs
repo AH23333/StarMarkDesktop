@@ -110,7 +110,7 @@ public sealed partial class ItemRepository
             // 语言下拉的语义是「按编程语言筛选 star」（见 LanguageDetector / FolderTreePage 注释）。
             // 但 LanguageDetector.EnsureLanguage 会给任意来源（含本地文件/书签）按扩展名兜底打 Language，
             // 「所有来源」视图下若不加 type 闸门，一个 .py 本地文件会冒充 Python star 混入结果集。
-            where.Add("(i.type = 'githubstar' AND json_extract(i.extra_json, '$.Language') = @lang)");
+            where.Add($"(i.type = 'githubstar' AND json_extract({ExtraJsonGuard.Safe("i.extra_json")}, '$.Language') = @lang)");
 
         // 标签过滤：AND 语义（必须同时具备全部标签）。
         // 原实现用 `JOIN + t.name IN (...) + GROUP BY` 实际是 OR —— 多选标签时结果反而变多，
@@ -122,7 +122,7 @@ public sealed partial class ItemRepository
             "name" => "i.pinned DESC, i.title COLLATE NOCASE ASC",
             // 最近 Star / 最近收藏：与 SearchAsync 的同名分支口径一致（starredAt 取 extra_json，无则退
             // updated_at；collected 取入库时间）。此前浏览模式漏了这两支，落入 default 变成「最近更新」。
-            "starred" => "i.pinned DESC, COALESCE(CAST(json_extract(i.extra_json, '$.StarredAt') AS INTEGER), i.updated_at) DESC",
+            "starred" => $"i.pinned DESC, COALESCE(CAST(json_extract({ExtraJsonGuard.Safe("i.extra_json")}, '$.StarredAt') AS INTEGER), i.updated_at) DESC",
             "collected" => "i.pinned DESC, i.created_at DESC",
             "recent" or _ => "i.pinned DESC, i.updated_at DESC",
         };

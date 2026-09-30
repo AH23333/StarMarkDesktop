@@ -574,8 +574,9 @@ public sealed class BackupService
 
     /// <summary>
     /// 动数据前的语义校验（校验和只保证字节完整，不保证载荷可用）。缺业务键的条目直接拒绝导入并原样
-    /// 返回错误；null 元素与空白键行剔除；可空字符串/集合归一到安全值——把「Replace 清库后才崩、
-    /// 留下半截空库」的载荷挡在清库之前。合法备份恒满足，行为不变。返回 null 表示通过。
+    /// 返回错误；null 元素与空白键行剔除；可空字符串/集合归一到安全值，<c>extra_json</c> 归一到
+    /// "<b>要么是可读对象、要么是 null</b>"（P-17）——把「Replace 清库后才崩、留下半截空库」的载荷挡在
+    /// 清库之前。合法备份恒满足，行为不变。返回 null 表示通过。
     /// </summary>
     private static string? ValidatePayload(BackupPayload? p)
     {
@@ -601,6 +602,9 @@ public sealed class BackupService
             it.Uri ??= string.Empty;
             it.SearchText ??= string.Empty;
             it.Tags ??= new List<string>();
+            // extra_json 不许带着"读不出"的形状进库：坏串与空串会让 SQL 侧的 json_extract 整句抛
+            // （P-17），而归 null 只是"这条没有元数据"——C# 侧读者本来就把 null 与坏串同样兜底。
+            it.ExtraJson = ExtraJsonGuard.SanitizeForStore(it.ExtraJson);
         }
         return null;
     }

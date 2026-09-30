@@ -372,7 +372,7 @@ public sealed class ClipboardAssetDeletionTests : IDisposable
         Assert.Contains("ClipboardEntry.FormatImage", repo);
         Assert.Contains("ClipboardEntry.IsImageOf", repo);
         Assert.DoesNotContain("'image'", repo);
-        Assert.Equal(1, SourceGate.Count(repo, "private const string ClipBucketClause"));
+        Assert.Equal(1, SourceGate.Count(repo, "private static readonly string ClipBucketClause"));
         Assert.True(SourceGate.Count(repo, "ClipBucketClause") >= 4,
             "分桶判据被复制成了两份以上——它必须只有一处定义");
     }
