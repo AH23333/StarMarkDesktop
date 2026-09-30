@@ -39,7 +39,7 @@ public sealed class TitleTruncationGateTests
     public void TitleSlicingExistsNowhereButTheJudge()
     {
         var offenders = new List<string>();
-        foreach (var (path, code, _) in FormatScanner.SourcesUnder("src", JudgeFile))
+        foreach (var (path, code, _, _) in FormatScanner.SourcesUnder("src", JudgeFile))
         {
             foreach (var line in SplitLines(code))
                 if (TitleSlicers.Any(rx => rx.IsMatch(line)))

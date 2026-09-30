@@ -63,7 +63,7 @@ public sealed class NumberFormatGateTests
     {
         var offenders = new List<string>();
         var pinned = 0;
-        foreach (var (path, code, _) in FormatScanner.SourcesUnder("src"))
+        foreach (var (path, code, _, _) in FormatScanner.SourcesUnder("src"))
             foreach (var args in FormatScanner.ToStringArgumentLists(code))
             {
                 if (!FormatScanner.Scan(args).Literals.Any(FormatScanner.IsNumberFormatLiteral)) continue;
@@ -90,7 +90,7 @@ public sealed class NumberFormatGateTests
     {
         var offenders = new List<string>();
         var seen = 0;
-        foreach (var (path, code, _) in FormatScanner.SourcesUnder("src"))
+        foreach (var (path, code, _, _) in FormatScanner.SourcesUnder("src"))
             foreach (Match m in BareStandard.Matches(code))
             {
                 seen++;
@@ -174,7 +174,7 @@ public sealed class NumberFormatGateTests
     [Fact]
     public void TheJudgeItselfHoldsTheFormats()
     {
-        var (code, literals) = FormatScanner.Scan(ReadRepoFile(NumberJudgeFile));
+        var (code, literals, _) = FormatScanner.Scan(ReadRepoFile(NumberJudgeFile));
         var held = literals.Count(FormatScanner.IsNumberFormatLiteral);
         Assert.True(held >= 6, $"NumberText 里只剩 {held} 个数字格式串——它不该是空壳");
         Assert.Contains("InvariantCulture", code, StringComparison.Ordinal);

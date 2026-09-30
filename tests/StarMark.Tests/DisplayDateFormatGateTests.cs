@@ -41,7 +41,7 @@ public sealed class DisplayDateFormatGateTests
     public void InterpolatedDateFormatsExistNowhereButTheJudge()
     {
         var hits = new List<string>();
-        foreach (var (path, _, literals) in FormatScanner.SourcesUnder("src", Skip(JudgeFile)))
+        foreach (var (path, _, literals, _) in FormatScanner.SourcesUnder("src", Skip(JudgeFile)))
             foreach (var (hole, format) in literals.SelectMany(FormatScanner.HoleFormats))
                 if (FormatScanner.IsDateFormatLiteral(format))
                     hits.Add($"{path}: {hole}");
@@ -58,7 +58,7 @@ public sealed class DisplayDateFormatGateTests
     {
         var offenders = new List<string>();
         var pinned = 0;
-        foreach (var (path, code, _) in FormatScanner.SourcesUnder("src"))
+        foreach (var (path, code, _, _) in FormatScanner.SourcesUnder("src"))
             foreach (var args in FormatScanner.ToStringArgumentLists(code))
             {
                 // 实参表里的字面量识别复用同一次扫描，不再各写一套走法
@@ -119,7 +119,7 @@ public sealed class DisplayDateFormatGateTests
     [Fact]
     public void TheJudgeItselfHoldsTheFormats()
     {
-        var (code, literals) = FormatScanner.Scan(ReadRepoFile(JudgeFile));
+        var (code, literals, _) = FormatScanner.Scan(ReadRepoFile(JudgeFile));
         var held = literals.Count(FormatScanner.IsDateFormatLiteral);
         Assert.True(held >= 8, $"判据文件里只剩 {held} 个日期格式串——它不该是空壳");
         Assert.Contains("InvariantCulture", code, StringComparison.Ordinal);

@@ -36,7 +36,7 @@ public sealed class FormatScannerTests
             var url = "https://example.com/a"; var t = now.ToString("HH:mm");
             /* 也举一次 "dd-MM-yyyy" */ var m = "MM-dd";
             """;
-        var (code, literals) = FormatScanner.Scan(snippet);
+        var (code, literals, _) = FormatScanner.Scan(snippet);
 
         Assert.DoesNotContain("yyyy-MM-dd", literals);
         Assert.DoesNotContain("dd-MM-yyyy", literals);

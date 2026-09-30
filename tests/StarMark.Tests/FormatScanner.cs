@@ -59,17 +59,23 @@ internal static class FormatScanner
     private static string Strip(string literal) => literal.Contains('\\') ? literal.Replace("\\", string.Empty) : literal;
 
     /// <summary>
-    /// 一次遍历同时产出两样东西：<b>抹掉注释后的代码</b>（字符串原样留着，闸门要看实参表）
-    /// 和<b>全部字符串字面量</b>（含内插孔里再套的串）。
+    /// 一次遍历同时产出三样东西：<b>抹掉注释后的代码</b>（字符串原样留着，闸门要看实参表）、
+    /// <b>全部字符串字面量</b>（含内插孔里再套的串），以及<b>只有内插字面量</b>那一份。
     /// <para>
     /// 为什么不能"按行切掉 <c>//</c> 之后"：那会把 <c>"https://…"</c> 里的双斜杠当成注释，
     /// 于是<b>同一行后半段的真违规一起消失</b>——注释要跳过，但不能靠截行（#190 的 RI9）。
     /// </para>
+    /// <para>
+    /// 为什么要单列<b>内插</b>那一份（批次 SG）：判"裸 <c>{expr}</c> 会不会打出小数点"得先知道
+    /// 那对花括号<b>是不是内插孔</b>——普通串里的 <c>{</c>、SQL 里的 <c>{</c>、对象初始化器的 <c>{</c>
+    /// 长得都一样，混在一起扫出来的就是要人肉分类的噪声，"可判定谓词"就没了（#193）。
+    /// </para>
     /// </summary>
-    internal static (string Code, List<string> Literals) Scan(string text)
+    internal static (string Code, List<string> Literals, List<string> Interpolated) Scan(string text)
     {
         var code = text.ToCharArray();
         var literals = new List<string>();
+        var interpolated = new List<string>();
 
         for (var i = 0; i < text.Length; i++)
         {
@@ -98,11 +104,19 @@ internal static class FormatScanner
             var literal = ReadLiteral(text, i);
             literals.Add(literal.Content);
             literals.AddRange(literal.Nested);
+            if (InterpolatedAt(text, i)) interpolated.Add(literal.Content);
             i = literal.Next - 1;
         }
 
-        return (new string(code), literals);
+        return (new string(code), literals, interpolated);
     }
+
+    /// <summary>
+    /// 这个引号是不是<b>内插串</b>的开头：<c>$"…"</c>、<c>$@"…"</c>、<c>@$"…"</c> 三种写法都要认
+    /// （后两种的 <c>$</c> 分别在引号前一格与前两格）。
+    /// </summary>
+    private static bool InterpolatedAt(string text, int quote)
+        => quote >= 1 && text[quote - 1] == '$' || quote >= 2 && text[quote - 2] == '$';
 
     /// <summary>注释区间的结束下标（行注释不含那个换行，块注释含 <c>*/</c>；未闭合就到文件尾）。</summary>
     private static int CommentEnd(string text, int at)
@@ -245,17 +259,26 @@ internal static class FormatScanner
         }
     }
 
-    /// <summary>某目录下全部手写源码：扁平路径、抹掉注释后的代码、同一趟扫出的字面量表。</summary>
-    internal static List<(string Path, string Code, List<string> Literals)> SourcesUnder(
+    /// <summary>某目录下全部手写源码：扁平路径、抹掉注释后的代码、同一趟扫出的字面量表、内插字面量表。</summary>
+    internal static List<(string Path, string Code, List<string> Literals, List<string> Interpolated)> SourcesUnder(
         string dir, string? skipJudgeFileName = null)
         => SourceGate.ReadRepoUnder(dir)
             .Where(f => skipJudgeFileName == null || !f.RelativePath.EndsWith(skipJudgeFileName, StringComparison.Ordinal))
             .Select(f =>
             {
-                var (code, literals) = Scan(f.Text);
-                return (f.RelativePath, code, literals);
+                var (code, literals, interpolated) = Scan(f.Text);
+                return (f.RelativePath, code, literals, interpolated);
             })
             .ToList();
+
+    /// <summary>
+    /// 内插串里<b>不带格式说明符</b>的孔（表达式原样吐出）。
+    /// <para>带冒号的交给 RY/RZ 那两批（它们判的就是格式串）。代价是 <c>{x &gt; 1 ? a : b}</c>
+    /// 这种"表达式里自带冒号"的孔也会被当成有格式而放过——与 <see cref="HoleFormats"/> 同一个
+    /// 已知简化（一层花括号、第一枚冒号之后全当格式），要收口就两条一起收。</para>
+    /// </summary>
+    internal static IEnumerable<string> BareHoles(string interpolatedLiteral)
+        => AnyHole.Matches(interpolatedLiteral).Select(m => m.Groups[1].Value).Where(body => !body.Contains(':'));
 
     /// <summary>
     /// "自己切片再补省略号"的形状（批次 SB 立、SC 搬进共用扫描器）：

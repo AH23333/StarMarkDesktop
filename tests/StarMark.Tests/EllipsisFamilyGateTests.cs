@@ -42,7 +42,7 @@ public sealed class EllipsisFamilyGateTests
     public void HandRolledEllipsisSurvivesOnlyInTheNamedExceptions()
     {
         var hits = new List<string>();
-        foreach (var (path, code, _) in FormatScanner.SourcesUnder("src", JudgeFile))
+        foreach (var (path, code, _, _) in FormatScanner.SourcesUnder("src", JudgeFile))
         {
             if (KnownExceptions.Any(e => path.EndsWith(e, StringComparison.Ordinal))) continue;
             hits.AddRange(SplitLines(code).Where(l => FormatScanner.HandRolledEllipsis.IsMatch(l)).Select(l => $"{path}: {l.Trim()}"));
@@ -74,7 +74,7 @@ public sealed class EllipsisFamilyGateTests
     public void EveryConvertedHostStillRoutesThroughTheJudge()
     {
         var missing = new List<string>();
-        foreach (var (path, code, _) in FormatScanner.SourcesUnder("src"))
+        foreach (var (path, code, _, _) in FormatScanner.SourcesUnder("src"))
         {
             var file = ConvertedHosts.FirstOrDefault(h => path.EndsWith(h, StringComparison.Ordinal));
             if (file is null) continue;
