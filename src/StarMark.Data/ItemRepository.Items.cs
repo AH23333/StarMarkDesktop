@@ -219,15 +219,17 @@ public sealed partial class ItemRepository
         return items;
     }
 
-    public async Task SetHiddenAsync(long itemId, bool hidden, CancellationToken ct)
+    public async Task<bool> SetHiddenAsync(long itemId, bool hidden, CancellationToken ct)
     {
         using var conn = _factory.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "UPDATE items SET hidden = @hidden WHERE id = @id";
         cmd.Parameters.AddWithValue("@hidden", hidden ? 1 : 0);
         cmd.Parameters.AddWithValue("@id", itemId);
-        await cmd.ExecuteNonQueryAsync(ct);
+        var rows = await cmd.ExecuteNonQueryAsync(ct);
+        if (rows == 0) { LogNoRowLanded("隐藏状态", $"id={itemId}"); return false; }   // P-40：库里没那一行，别翻旗也别广播
         DataChangeHub.Notify();
+        return true;
     }
 
     public async Task<IReadOnlyList<Item>> GetRecentAsync(int limit, CancellationToken ct)

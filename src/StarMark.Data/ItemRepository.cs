@@ -25,6 +25,16 @@ public sealed partial class ItemRepository : IItemRepository
         _factory = factory;
     }
 
+    /// <summary>
+    /// 「按 id 的单行状态写落到 0 行」的统一取证行（P-40）。
+    /// <para>这类写过去把返回值丢掉、又无条件 <c>DataChangeHub.Notify()</c>：库里那一行其实不在了，
+    /// 界面却已经把它改成用户要的样子，重载后再弹回原状——<b>无异常、无日志、用户只看得到"没反应"</b>。
+    /// 现在每处都把行数收下来：0 行就留这一句、返回 <c>false</c>、并且<b>不广播</b>（没变化可刷，
+    /// 广播只会让常驻组件各重读一遍库）。怎么告诉用户归调用方（见 <c>StateWriteNotice</c>）。</para>
+    /// </summary>
+    private static void LogNoRowLanded(string op, string target)
+        => StarLog.Warn($"{op}没落到任何行（{target}）：库里那一行大概已经不在，这次不广播，也不把它报成成功。");
+
     // ===== 标签 AND 过滤辅助 =====
 
     /// <summary>

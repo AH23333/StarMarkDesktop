@@ -52,9 +52,15 @@ public partial class HiddenPageViewModel : ObservableObject
     {
         try
         {
-            await _repository.SetHiddenAsync(item.Id, false, CancellationToken.None);
             // 落库成功才从列表里摘掉。旧写法是"先摘再吞异常"：失败时界面当场少一条，
             // 用户以为还原好了，下次进这页它又回来——比报错更难查的是"看起来成功了"。
+            // 0 行（那一行已经不在了）走同一条口径：不摘行，并把原因当面说出来，不靠这页没有的状态行（P-40）。
+            if (!await _repository.SetHiddenAsync(item.Id, false, CancellationToken.None))
+            {
+                var word = "还原（取消隐藏）";
+                App.MainWindow?.ShowError(StateWriteNotice.Title(word), StateWriteNotice.RowGone(word));
+                return;
+            }
             HiddenItems.Remove(item);
             HasItems = HiddenItems.Count > 0;
             EmptyHint = HiddenItems.Count == 0 ? "没有隐藏的条目" : string.Empty;

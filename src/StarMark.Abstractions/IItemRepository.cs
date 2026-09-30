@@ -46,15 +46,30 @@ public interface IItemRepository
 
     Task<List<string>> GetTagsForItemAsync(long itemId, CancellationToken ct);
 
-    /// <summary>给条目打标签。幂等。</summary>
-    Task AddTagAsync(long itemId, string tagName, CancellationToken ct);
+    /// <summary>
+    /// 给条目打标签。幂等。
+    /// <para><b>返回值＝这次真的挂上了一个新挂接吗</b>（P-40）：<c>false</c> 只有一种解释——<b>这个挂接本来就存在</b>。
+    /// （目标条目不存在时<b>不是</b>返回 <c>false</c>，而是抛：<c>INSERT OR IGNORE</c> 只咽 UNIQUE/主键/CHECK 那类冲突，
+    /// <b>外键违例照常报错</b>——这是本批复验时纠正的一条旧说法。）
+    /// 没变化就不广播，所以基元内部<b>连带 <c>DataChangeHub.Notify()</c> 一起不发</b>。</para>
+    /// </summary>
+    Task<bool> AddTagAsync(long itemId, string tagName, CancellationToken ct);
 
-    Task RemoveTagAsync(long itemId, string tagName, CancellationToken ct);
+    /// <summary>
+    /// 摘掉一个标签挂接。幂等。<b>返回值＝这次真的删掉了一行挂接吗</b>（P-40，理由同 <see cref="AddTagAsync"/>）。
+    /// </summary>
+    Task<bool> RemoveTagAsync(long itemId, string tagName, CancellationToken ct);
 
     /// <summary>笔记。</summary>
     Task<string?> GetNoteAsync(long itemId, CancellationToken ct);
 
-    Task SetNoteAsync(long itemId, string content, CancellationToken ct);
+    /// <summary>
+    /// 写笔记。<b>返回值＝<c>UPDATE ... WHERE id</c> 真的落到了那一行吗</b>（P-40）。
+    /// <para>SQLite 对"值没变"的 UPDATE 也报 1 行，所以 <c>false</c> 只有一个解释：<b>那条条目已经不在了</b>
+    /// （被并发改删）。这种写必须让调用方知道——否则界面上笔记框显示着新内容、活动流记下一笔"修改"，
+    /// 而库里什么都没有（与 <see cref="DeleteClipboardEntryAsync"/> 已有的 bool 约定同一条口径）。</para>
+    /// </summary>
+    Task<bool> SetNoteAsync(long itemId, string content, CancellationToken ct);
 
     /// <summary>条目总数（按类型分桶）。对应侧边栏状态栏 "Stars: X / Bookmarks: Y / Files: Z"。</summary>
     Task<Dictionary<ItemType, int>> GetCountsByTypeAsync(CancellationToken ct);
@@ -71,11 +86,16 @@ public interface IItemRepository
     /// <summary>获取隐藏条目列表。</summary>
     Task<IReadOnlyList<Item>> GetHiddenAsync(CancellationToken ct);
 
-    /// <summary>设置条目隐藏状态。</summary>
-    Task SetHiddenAsync(long itemId, bool hidden, CancellationToken ct);
+    /// <summary>
+    /// 设置条目隐藏状态。<b>返回值＝真的落到了那一行吗</b>（P-40，判读同 <see cref="SetNoteAsync"/>：
+    /// <c>false</c> ⇒ 那条条目已经不在了，调用方不许把界面翻成"已隐藏"就完事）。
+    /// </summary>
+    Task<bool> SetHiddenAsync(long itemId, bool hidden, CancellationToken ct);
 
-    /// <summary>设置条目置顶状态（用户状态，同步不覆盖）。</summary>
-    Task SetPinnedAsync(long itemId, bool pinned, CancellationToken ct);
+    /// <summary>
+    /// 设置条目置顶状态（用户状态，同步不覆盖）。<b>返回值＝真的落到了那一行吗</b>（P-40，同上）。
+    /// </summary>
+    Task<bool> SetPinnedAsync(long itemId, bool pinned, CancellationToken ct);
 
     /// <summary>获取最近更新的条目（活动时间线）。</summary>
     Task<IReadOnlyList<Item>> GetRecentAsync(int limit, CancellationToken ct);
@@ -108,8 +128,12 @@ public interface IItemRepository
     /// </summary>
     Task<IReadOnlyList<string>> GetCollectedRssLinksAsync(CancellationToken ct = default);
 
-    /// <summary>按来源 + source_id 删除一条本地条目。</summary>
-    Task DeleteBySourceIdAsync(string source, string sourceId, CancellationToken ct = default);
+    /// <summary>
+    /// 按来源 + source_id 删除一条本地条目。<b>返回值＝真的删掉了一行吗</b>（P-40）。
+    /// <para>这里 <c>false</c> 是<b>合法的幂等结果</b>（同步/收藏那一路可能重复调到同一键），所以基元只负责
+    /// "没删到就不广播、也不去碰 clip 目录"，<b>不</b>替调用方把它报成失败；要不要说、怎么说归调用方。</para>
+    /// </summary>
+    Task<bool> DeleteBySourceIdAsync(string source, string sourceId, CancellationToken ct = default);
 
     /// <summary>写入本地条目（待办/随记）：只写 items 表，不写活动流、不跑 UriNormalizer/LanguageDetector。</summary>
     /// <param name="activity">带上它，那一笔活动就<b>与本次写落在同一事务里</b>（调用方因此不必

@@ -267,7 +267,14 @@ public static class ItemCardActions
             // 未入库的实时源虚拟条目（Everything，Id=0）没有可写 pinned 的主库行：先按路径登记拿真实 Id。
             if (vm.Id == 0 && await EnsureRecordedAsync(vm.GetItem()) == 0) return;
             var newState = !vm.IsPinned;
-            await GetRepo().SetPinnedAsync(vm.Id, newState, CancellationToken.None);
+            var word = newState ? "置顶" : "取消置顶";
+            // 库里没那一行时不许翻旗：从前它翻完就没人管，150 ms 后重载把它弹回去，
+            // 用户看到的只是"点了一下没反应"（P-40）。
+            if (!await GetRepo().SetPinnedAsync(vm.Id, newState, CancellationToken.None))
+            {
+                App.MainWindow?.ShowError(StateWriteNotice.Title(word), StateWriteNotice.RowGone(word));
+                return;
+            }
             vm.SetPinned(newState);
         }
         catch (Exception ex)
@@ -306,7 +313,12 @@ public static class ItemCardActions
             if (string.Equals(oldNotes, text, StringComparison.Ordinal)) return;
             // 虚拟条目（Everything，Id=0）无主库行可写 notes：先按路径登记拿真实 Id，再落笔。
             if (vm.Id == 0 && await EnsureRecordedAsync(vm.GetItem()) == 0) return;
-            await GetRepo().SetNoteAsync(vm.Id, text, CancellationToken.None);
+            if (!await GetRepo().SetNoteAsync(vm.Id, text, CancellationToken.None))
+            {
+                // 笔记没落到那一行上：既不改笔记框，也不往活动流记一笔"修改"（那是条假事件，比没改更难解释）。
+                App.MainWindow?.ShowError(StateWriteNotice.Title("保存笔记"), StateWriteNotice.RowGone("保存笔记"));
+                return;
+            }
             vm.ApplyNotes(string.IsNullOrWhiteSpace(text) ? null : text);
             await LogModify(vm);
         }
@@ -366,7 +378,13 @@ public static class ItemCardActions
             if (vm.Id == 0 && await EnsureRecordedAsync(vm.GetItem()) == 0) return vm.IsHidden;
             var repo = GetRepo();
             var newState = !vm.IsHidden;
-            await repo.SetHiddenAsync(vm.Id, newState, CancellationToken.None);
+            var word = newState ? "隐藏" : "取消隐藏";
+            if (!await repo.SetHiddenAsync(vm.Id, newState, CancellationToken.None))
+            {
+                // 回传"未改变"（调用方据此不摘行、不整表重载），并把原因当面对他说（P-40）。
+                App.MainWindow?.ShowError(StateWriteNotice.Title(word), StateWriteNotice.RowGone(word));
+                return vm.IsHidden;
+            }
             vm.SetHidden(newState);
             return newState;
         }
@@ -381,9 +399,11 @@ public static class ItemCardActions
     {
         try
         {
-            await GetRepo().RemoveTagAsync(vm.Id, tag, CancellationToken.None);
+            var unlinked = await GetRepo().RemoveTagAsync(vm.Id, tag, CancellationToken.None);
+            // 挂接本来就不在库里时芯片照样收（那才是现状），但**不往活动流记一笔"修改"**——
+            // 库里这次什么都没发生（P-40）。
             vm.ApplyTags(vm.Tags.Where(t => !string.Equals(t, tag, StringComparison.OrdinalIgnoreCase)).ToArray());
-            await LogModify(vm);
+            if (unlinked) await LogModify(vm);
             ItemTagsChanged?.Invoke();
         }
         catch (Exception ex)

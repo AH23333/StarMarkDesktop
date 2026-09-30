@@ -162,7 +162,7 @@ public sealed partial class ItemRepository
     }
 
 
-    public async Task DeleteBySourceIdAsync(string source, string sourceId, CancellationToken ct = default)
+    public async Task<bool> DeleteBySourceIdAsync(string source, string sourceId, CancellationToken ct = default)
     {
         using var conn = _factory.Open();
         // 只有剪贴板那一路的键背后有文件，所以先按来源决定要不要读 extra（书签/Star/Ditto 的删除路径
@@ -177,15 +177,18 @@ public sealed partial class ItemRepository
             extra = (await read.ExecuteScalarAsync(ct)) as string;
         }
 
+        int rows;
         using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = "DELETE FROM items WHERE source = @source AND source_id = @sid;";
             cmd.Parameters.AddWithValue("@source", source);
             cmd.Parameters.AddWithValue("@sid", sourceId);
-            await cmd.ExecuteNonQueryAsync(ct);
+            rows = await cmd.ExecuteNonQueryAsync(ct);
         }
+        if (rows == 0) return false;          // 没删到＝这一键本来就不在库里（幂等）：不碰 clip 目录、也不广播（P-40）
         TryDeleteClipFiles(new[] { extra });
         DataChangeHub.Notify();
+        return true;
     }
 
     /// <summary>

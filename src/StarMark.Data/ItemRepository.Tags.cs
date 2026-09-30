@@ -61,7 +61,7 @@ public sealed partial class ItemRepository
         return tags;
     }
 
-    public async Task AddTagAsync(long itemId, string tagName, CancellationToken ct)
+    public async Task<bool> AddTagAsync(long itemId, string tagName, CancellationToken ct)
     {
         using var conn = _factory.Open();
         using var tx = conn.BeginTransaction();
@@ -87,14 +87,25 @@ public sealed partial class ItemRepository
             }
         }
 
-        // 关联（幂等：INSERT OR IGNORE）
+        // 关联（幂等：INSERT OR IGNORE）。落到 0 行在这里只有一种解释——这个挂接本来就存在；
+        // 目标条目不存在时 SQLite 直接抛 FOREIGN KEY 违例，OR IGNORE 并不咽它（P-40 复验时纠正的旧说法）。
+        int linkRows;
         using (var link = conn.CreateCommand())
         {
             link.CommandText = "INSERT OR IGNORE INTO item_tags(item_id, tag_id, created_at) VALUES(@item, @tag, @now)";
             link.Parameters.AddWithValue("@item", itemId);
             link.Parameters.AddWithValue("@tag", tagId);
             link.Parameters.AddWithValue("@now", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-            await link.ExecuteNonQueryAsync(ct);
+            linkRows = await link.ExecuteNonQueryAsync(ct);
+        }
+
+        if (linkRows == 0)
+        {
+            // 到这里只有一个解释：这个挂接本来就存在（**外键违例不会被 OR IGNORE 咽掉**——SQLite 对 FK 直接抛，
+            // 本批的 `AddingATagToAMissingItemThrows...` 就是量这件事的）。撤掉这笔事务是把它写成结构而不是运气：
+            // "没挂上"就不该留下任何别的东西，比如一颗顺手新建、却谁都没用的空标签。
+            await tx.RollbackAsync(ct);
+            return false;
         }
 
         // 标签参与全文搜索：在同一事务内用 C# 侧 CJK 展开重建 search_text。
@@ -102,6 +113,7 @@ public sealed partial class ItemRepository
 
         await tx.CommitAsync(ct);
         DataChangeHub.Notify();
+        return true;
     }
 
     /// <summary>
@@ -328,7 +340,7 @@ public sealed partial class ItemRepository
         DataChangeHub.Notify();   // 活动事件本身也是「数据」：让常驻的最近活动格即时跟上，整批一次
     }
 
-    public async Task RemoveTagAsync(long itemId, string tagName, CancellationToken ct)
+    public async Task<bool> RemoveTagAsync(long itemId, string tagName, CancellationToken ct)
     {
         using var conn = _factory.Open();
         using var cmd = conn.CreateCommand();
@@ -338,10 +350,12 @@ public sealed partial class ItemRepository
               AND tag_id = (SELECT id FROM tags WHERE name = @name COLLATE NOCASE);";
         cmd.Parameters.AddWithValue("@item", itemId);
         cmd.Parameters.AddWithValue("@name", tagName);
-        await cmd.ExecuteNonQueryAsync(ct);
+        var rows = await cmd.ExecuteNonQueryAsync(ct);
+        if (rows == 0) return false;      // 那个挂接本来就不在（或标签名不存在）：没变化，不重建索引也不广播（P-40）
         // 删标签同样影响 search_text（标签词应随之从索引移除）。
         await RebuildSearchTextAsync(conn, itemId, ct);
         DataChangeHub.Notify();
+        return true;
     }
 
     /// <summary>
@@ -549,7 +563,7 @@ public sealed partial class ItemRepository
         return result == DBNull.Value ? null : (string?)result;
     }
 
-    public async Task SetNoteAsync(long itemId, string content, CancellationToken ct)
+    public async Task<bool> SetNoteAsync(long itemId, string content, CancellationToken ct)
     {
         using var conn = _factory.Open();
         using var cmd = conn.CreateCommand();
@@ -558,9 +572,17 @@ public sealed partial class ItemRepository
         cmd.CommandText = "UPDATE items SET notes = @content WHERE id = @id;";
         cmd.Parameters.AddWithValue("@content", content);
         cmd.Parameters.AddWithValue("@id", itemId);
-        await cmd.ExecuteNonQueryAsync(ct);
+        var rows = await cmd.ExecuteNonQueryAsync(ct);
+        if (rows == 0)
+        {
+            // 值没变 SQLite 也报 1 行 ⇒ 0 行只有一个解释：那一行不在了。调用方必须知道，
+            // 否则笔记框显示着新内容、活动流记下一笔"修改"，而库里什么都没有（P-40）。
+            LogNoRowLanded("笔记", $"id={itemId}");
+            return false;
+        }
         await RebuildSearchTextAsync(conn, itemId, ct);
         DataChangeHub.Notify();
+        return true;
     }
 
     /// <summary>
@@ -619,15 +641,22 @@ public sealed partial class ItemRepository
         await upd.ExecuteNonQueryAsync(ct);
     }
 
-    public async Task SetPinnedAsync(long itemId, bool pinned, CancellationToken ct)
+    public async Task<bool> SetPinnedAsync(long itemId, bool pinned, CancellationToken ct)
     {
         using var conn = _factory.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "UPDATE items SET pinned = @pinned WHERE id = @id";
         cmd.Parameters.AddWithValue("@pinned", pinned ? 1 : 0);
         cmd.Parameters.AddWithValue("@id", itemId);
-        await cmd.ExecuteNonQueryAsync(ct);
+        var rows = await cmd.ExecuteNonQueryAsync(ct);
+        if (rows == 0)
+        {
+            // 0 行＝库里没那一行（值没变也报 1 行）。翻旗与广播都撤回来：让调用方说实话（P-40）。
+            LogNoRowLanded("置顶", $"id={itemId}");
+            return false;
+        }
         DataChangeHub.Notify();   // 置顶条目组件、快捷启动格都靠这条实时跟上
+        return true;
     }
 
 }

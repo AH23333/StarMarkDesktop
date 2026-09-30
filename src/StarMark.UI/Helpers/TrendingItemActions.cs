@@ -83,11 +83,18 @@ public static class TrendingItemActions
             if (vm.IsCollected)
             {
                 var removedId = TrendingItemDraft.BookmarkSourceId(fullName);
-                await repo.DeleteBySourceIdAsync(ItemSources.Local, removedId);
+                var removed = await repo.DeleteBySourceIdAsync(ItemSources.Local, removedId);
                 vm.SetTrendingState(vm.IsStarred, collected: false, hasToken: true);
-                Report(vm, $"已从本机收藏移除：{fullName}（不影响 GitHub 的 Star 状态）");
-                await repo.LogActivityAsync(ActivityKind.BookmarkRemove, $"{ItemSources.Local}:{removedId}",
-                    fullName, vm.Uri, CancellationToken.None);
+                // 回执要说这次到底发生了什么。删到 0 行是<b>合法的幂等结果</b>（这一键本来就不在库里），
+                // 但那不等于"我从收藏里移除了它"，更不该往活动流记一笔"移除"（P-40）。
+                // 措辞刻意避开"不在本机"三个字：那是剪贴板缺图那句事实的指纹（`ClipboardMissingImageTextGateTests`），
+                // 两件事各说各的，别共用一个字面串。
+                Report(vm, removed
+                    ? $"已从本机收藏移除：{fullName}（不影响 GitHub 的 Star 状态）"
+                    : $"这条本来就没在本机收藏里：{fullName}");
+                if (removed)
+                    await repo.LogActivityAsync(ActivityKind.BookmarkRemove, $"{ItemSources.Local}:{removedId}",
+                        fullName, vm.Uri, CancellationToken.None);
             }
             else
             {
