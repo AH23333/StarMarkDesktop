@@ -188,6 +188,74 @@ public sealed partial class WidgetManager
         if (windows.Count == 0) return;
         PersistBoundsFor(windows);
         foreach (var w in windows) w.HideTemporary();
+        // 隐藏的窗口不释放＝12 颗 80 MB 私有／771 句柄的来源（真机量在报告 §二百零八）。
+        // 这里起一次性定时器，而不是每颗挂一张表：一次巡查就能把整群做完。
+        ArmHiddenWindowReclaim();
+    }
+
+    /// <summary>
+    /// 给"持续隐藏满宽限期"的组件窗排一次回收。<b>不在这个时刻收</b>：藏起来又马上调出来是最常做的动作，
+    /// 而重建一颗窗口实测 33–52 ms——宽限期（<see cref="WidgetReclaimPolicy.HiddenGrace"/>）就是给这个动作留的。
+    /// </summary>
+    private void ArmHiddenWindowReclaim()
+    {
+        var timer = _reclaimTimer ??= BuildReclaimTimer();
+        // 每次新的隐藏都从头给满整段宽限期（"你刚动过，说明还要用"）。
+        timer.Stop();
+        timer.Interval = WidgetReclaimPolicy.HiddenGrace;
+        timer.Start();
+    }
+
+    private DispatcherQueueTimer BuildReclaimTimer()
+    {
+        // 必须挂在 UI 线程的队列上：回调里要 Close 窗口，线程池定时器做不到这件事（内存门禁那张表就是线程池的）。
+        var t = Ui().CreateTimer();
+        t.IsRepeating = false;
+        t.Tick += (_, _) => ReclaimHiddenWindows();
+        return t;
+    }
+
+    /// <summary>
+    /// 关掉"持续隐藏满宽限期、且这一类被点名可收"的组件窗。
+    /// <para>哪一类能收<b>不写在这里</b>——判据只有 <see cref="WidgetReclaimPolicy"/> 一颗：
+    /// 宿主这里再写一份"隐藏的都可以收"，就会在新增组件类型的那天悄悄丢掉用户的字。</para>
+    /// <para>没收的每一颗都记一句原因。少了这句，"点了清理但内存没降"永远归不了因，
+    /// 而那恰好是这一条最可能被问到的事。</para>
+    /// </summary>
+    private void ReclaimHiddenWindows()
+    {
+        var reclaimed = 0;
+        TimeSpan? remaining = null;      // 还差多久才有下一轮可收的
+        foreach (var (id, window) in _windows.ToList())
+        {
+            if (window.IsVisible) continue;
+            var hiddenFor = window.HiddenFor();
+            if (!WidgetReclaimPolicy.ShouldReclaim(window.Kind, hiddenFor))
+            {
+                if (hiddenFor < WidgetReclaimPolicy.HiddenGrace)
+                {
+                    var left = WidgetReclaimPolicy.HiddenGrace - hiddenFor;
+                    if (remaining is null || left < remaining) remaining = left;
+                }
+                StarLog.Info($"[内存] 不收 {WidgetStorage.KindTitle(window.Kind)}：{WidgetReclaimPolicy.Reason(window.Kind, hiddenFor)}");
+                continue;
+            }
+            // persist:false——几何在 HideTemporaryAll 那一刻已经整批落过盘，隐藏期间它不会自己变。
+            // 这里再写一趟就是每轮回收 N 趟整档读写（AU 那批专门收掉过这件事，别再引回来）。
+            CloseInternal(id, persist: false);
+            reclaimed++;
+            StarLog.Info($"[内存] 回收隐藏组件窗口 {WidgetStorage.KindTitle(window.Kind)}"
+                + $"（已隐藏 {WidgetReclaimPolicy.Format(hiddenFor)}，关闭后在册 {_windows.Count} 颗）");
+        }
+        if (reclaimed > 0)
+            StarLog.Info($"[内存] 本轮回收 {reclaimed} 颗隐藏组件窗口，在册 {_windows.Count} 颗");
+        // 还有"藏得还不够久"的：按剩下的时间再排一次（加 1 秒余量，免得差几十毫秒空转一轮）。
+        if (remaining is { } wait)
+        {
+            _reclaimTimer!.Stop();
+            _reclaimTimer.Interval = wait + TimeSpan.FromSeconds(1);
+            _reclaimTimer.Start();
+        }
     }
 
     /// <summary>

@@ -256,6 +256,8 @@ public sealed partial class WidgetWindow : Window
     /// <summary>显示窗口（首次显示时完成样式、位置、置顶初始化）。</summary>
     public void Reveal()
     {
+        // 一亮就清零：宽限期是"持续隐藏"的时长，漏清一次就会让下一次隐藏提前被收（年龄带着上一轮的）。
+        HiddenSince = null;
         // 首装（样式/尺寸/外壳）与每次都要走的"点亮"分开量：PO-2 就是靠这条分段把"一颗组件 ≈100 ms"
         // 追到 <c>SetBorderAndTitleBar</c> 那一句（≈68 ms/颗），合并回去就只剩"就是慢"这一句可说。
         if (!_styled)
@@ -309,6 +311,12 @@ public sealed partial class WidgetWindow : Window
     private void RaiseTransient() =>
         WidgetLayerService.RaiseTransient(WindowInterop.GetHwnd(this));
 
+    /// <summary>从什么时候开始<b>一直</b>藏着（显示中或刚点亮＝null）。窗口回收的宽限期只看这一个数。</summary>
+    public DateTimeOffset? HiddenSince { get; private set; }
+
+    /// <summary>已经持续藏了多久；没在藏时给 0，不返回 null（免得每个调用点各写一套兜底，写漏一个就永远不收）。</summary>
+    public TimeSpan HiddenFor() => HiddenSince is { } at ? DateTimeOffset.UtcNow - at : TimeSpan.Zero;
+
     /// <summary>临时隐藏（实例保留，托盘/设置可一键恢复）。
     /// <b>不负责落盘</b>：几何由调用侧整批写好（<c>WidgetManager.HideTemporaryAll</c>）——
     /// 逐个 Save 时"隐藏全部组件"＝N 趟整档读写，而隐藏本身并不改几何，那一趟多半是白写的。</summary>
@@ -319,6 +327,9 @@ public sealed partial class WidgetWindow : Window
         WindowInterop.ShowWindow(WindowInterop.GetHwnd(this), WindowInterop.SW_HIDE);
         AppWindow.Hide();
         _ticker?.UpdateRunning(AppWindow.IsVisible);
+        // 隐藏不收窗口是 80 MB／12 颗的来源（见 WidgetReclaimPolicy）。这里只记时刻，
+        // 什么时候真的收、哪些类型不能收，判据全在 Core 那一颗，宿主不另写一份。
+        HiddenSince = DateTimeOffset.UtcNow;
     }
 
     /// <summary>彻底关闭（组件被移除时调用）。<b>不负责落盘</b>，理由同 <c>HideTemporary</c>：

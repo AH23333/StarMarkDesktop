@@ -22,6 +22,13 @@ public sealed partial class WidgetManager
     private readonly Dictionary<string, WidgetWindow> _windows = new();
     private DispatcherQueue? _ui;
 
+    /// <summary>
+    /// "隐藏满宽限期后收窗口"的<b>一次性</b>定时器（批次 ST）。
+    /// <para>整群共用一个，不是每颗一个：每颗一个的话，12 颗组件就是 12 张常转的表，
+    /// 而那件事一次巡查就能全做完。</para>
+    /// </summary>
+    private DispatcherQueueTimer? _reclaimTimer;
+
     /// <summary>某实例的快捷入口数据变化（新增/删除/外部发送），携带实例 ID 供快捷启动格增量刷新。</summary>
     public event Action<string>? LinksChanged;
 
