@@ -164,9 +164,7 @@ public sealed class DittoSource : IItemSource
         var idx = text.IndexOfAny(new[] { '\r', '\n' });
         var line = idx >= 0 ? text[..idx] : text;
         line = line.Trim();
-        if (line.Length > maxLen)
-            line = line[..maxLen] + "…";
-        return line;
+        return TextTrim.Ellipsize(line, maxLen);
     }
 
     private static string ToFileUri(string path)

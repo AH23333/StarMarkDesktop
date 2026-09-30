@@ -413,8 +413,7 @@ public sealed class TodoWidgetViewModel : ObservableObject
         }
     }
 
-    private static string Trim(string s) =>
-        s.Length <= 12 ? s : string.Concat(s.AsSpan(0, 12), "…");
+    private static string Trim(string s) => TextTrim.Ellipsize(s, 12);
 
     private void RunOnUi(Action action)
     {

@@ -185,7 +185,7 @@ public static class ClipboardPolicy
 
         var suffix = nl < 0 ? string.Empty : "…";              // 提示"下面还有内容"
         var budget = MaxTitleChars - suffix.Length - 1;        // 再给截断省略号留一位
-        if (collapsed.Length > budget) collapsed = collapsed[..budget] + "…";
+        collapsed = TextTrim.Ellipsize(collapsed, budget);
         return collapsed + suffix;
     }
 

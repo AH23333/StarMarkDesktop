@@ -28,6 +28,6 @@ public static class SourceAvailabilityText
         if (available) return Available;
         var why = hint?.Trim();
         if (string.IsNullOrEmpty(why)) return "没有这项数据：" + UnknownReason;
-        return why.Length > MaxHintLength ? "没有这项数据：" + why[..MaxHintLength] + "…" : "没有这项数据：" + why;
+        return "没有这项数据：" + TextTrim.Ellipsize(why, MaxHintLength);
     }
 }

@@ -89,7 +89,12 @@ public static class OcrText
             if (sb.Length >= maxChars) break;
         }
         // 只有"确实还有内容没显示"才加省略号：正好在结尾处截断会给出一个假"还有更多"
-        return sb.ToString().TrimEnd() + (HasMoreThan(text, maxChars) ? "…" : string.Empty);    }
+        var cut = sb.ToString();
+        // 这一把是"逐枚累加到上限就停"，不走 TextTrim 的切片，但同一后果要同样挡：
+        // 停在哪一枚高代理上就会留半个 emoji（界面上是个方块）⇒ 就地退一格。
+        if (cut.Length > 0 && char.IsHighSurrogate(cut[^1])) cut = cut[..^1];
+        return cut.TrimEnd() + (HasMoreThan(text, maxChars) ? "…" : string.Empty);
+    }
 
     /// <summary>识别结果能不能用。返回 null＝可以；否则是给界面直接显示的原因。</summary>
     public static string? ResultProblem(string assembled)

@@ -256,4 +256,14 @@ internal static class FormatScanner
                 return (f.RelativePath, code, literals);
             })
             .ToList();
+
+    /// <summary>
+    /// "自己切片再补省略号"的形状（批次 SB 立、SC 搬进共用扫描器）：
+    /// 切片族（<c>[..x]</c>／<c>AsSpan(0, x)</c>／<c>Substring(0, x)</c>）之后同行出现 <c>"…"</c>。
+    /// <para>只认<b>写法</b>，所以认不出"逐枚累加到上限就停"那类（<c>OcrText.Preview</c>）——
+    /// 那种由行为测兜（#193）。两处闸门（标题、家族）共用这一条，别各写一份正则。</para>
+    /// </summary>
+    internal static readonly Regex HandRolledEllipsis = new(
+        @"(\[\s*\.\.\s*[\w]+\s*\]|AsSpan\(\s*0\s*,\s*[\w]+\s*\)|Substring\(\s*0\s*,\s*[\w]+\s*\))[^\n""]*""\s*…",
+        RegexOptions.Compiled);
 }

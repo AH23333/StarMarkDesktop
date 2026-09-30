@@ -76,7 +76,7 @@ public sealed class DiagnosticsService
         entries.Add(new DiagnosticEntry("上次 GitHub 同步", FormatUnixSeconds(lastSynced)));
         var etag = await _repository.GetSyncStateAsync("github:etag", ct);
         entries.Add(new DiagnosticEntry("GitHub ETag",
-            string.IsNullOrEmpty(etag) ? "（无，下次全量拉取）" : Shorten(etag)));
+            string.IsNullOrEmpty(etag) ? "（无，下次全量拉取）" : ShortenEtag(etag)));
 
         return entries;
     }
@@ -140,8 +140,20 @@ public sealed class DiagnosticsService
         return DateTimeOffset.FromUnixTimeSeconds(sec).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
     }
 
-    private static string Shorten(string value, int max = 24)
-        => value.Length <= max ? value : value[..12] + "…" + value[^6..];
+    /// <summary>ETag 这类"中段没信息、两头才认得出"的串用<b>中间省略</b>：头 12 ＋ … ＋ 尾 6；不超过 24 枚单元的原样过。</summary>
+    private const int EtagUnchangedUpTo = 24, EtagHeadChars = 12, EtagTailChars = 6;
+
+    /// <summary>
+    /// 旧签名是 <c>Shorten(string value, int max = 24)</c>——<b>那个 <code>max</code> 只管闸门、不管输出</b>
+    /// （切多长是写死的 12/6），传 40 也只会拿到 19 枚单元，属于"看起来在管、其实没管"的开关（P-130）。
+    /// 只有一个调用点，所以把参数换成三颗有名字的常数：读数逐字不变，撒谎没有了。
+    /// 本处<b>有意不走 <see cref="TextTrim"/></b>：那是"尾部截断＋省略号"的切法，与中间省略不是一种语义；
+    /// 而 ETag 是十六进制串，代理对不可达。
+    /// </summary>
+    private static string ShortenEtag(string value)
+        => value.Length <= EtagUnchangedUpTo
+            ? value
+            : value[..EtagHeadChars] + "…" + value[^EtagTailChars..];
 
     private static string FormatBytes(long bytes) => FileSizeText.Human(bytes);
 }

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using StarMark.Abstractions;
 
 namespace StarMark.Core.Widgets;
 
@@ -216,12 +217,9 @@ public static class AlarmPolicy
         return $"{FormatMinute(item.MinuteOfDay)}{label} · {DaysLabel(item.Days)}";
     }
 
-    /// <summary>标签截断（只截不换行：菜单不换行，长标签会把整排挤没）。</summary>
+    /// <summary>标签截断（只截不换行：菜单不换行，长标签会把整排挤没）。切法在 <see cref="TextTrim"/>。</summary>
     public static string TrimLabel(string? label)
-    {
-        var trimmed = (label ?? string.Empty).Trim();
-        return trimmed.Length <= MaxLabelLength ? trimmed : trimmed[..MaxLabelLength] + "…";
-    }
+        => TextTrim.Ellipsize((label ?? string.Empty).Trim(), MaxLabelLength);
 
     /// <summary>
     /// 时钟上那一行待确认的话：最早那条的钟点，多于一条时报条数。没有待确认时返回空串（整行不占位）。

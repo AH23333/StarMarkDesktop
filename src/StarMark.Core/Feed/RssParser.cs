@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
+using StarMark.Abstractions;
 using StarMark.Abstractions.Feed;
 
 namespace StarMark.Core.Feed;
@@ -268,7 +269,7 @@ public static class RssParser
         var text = Tag.Replace(withoutScripts, " ");
         text = UnescapeHtml(text);
         text = Whitespace.Replace(text, " ").Trim();
-        return text.Length > MaxSummaryChars ? text[..MaxSummaryChars].TrimEnd() + "…" : text;
+        return text.Length > MaxSummaryChars ? TextTrim.Cut(text, MaxSummaryChars).TrimEnd() + "…" : text;
     }
 
     /// <summary>只解这六个：源里出现率极高，而完整的 HTML 实体表要引一张 250 行的对照，不值。</summary>
@@ -296,7 +297,7 @@ public static class RssParser
         }
     }
 
-    private static string Shorten(string text, int max) => text.Length <= max ? text : text[..max] + "…";
+    private static string Shorten(string text, int max) => TextTrim.Ellipsize(text, max);
 
     /// <summary>
     /// 按链接去重（同一链接在源里出现两次＝重复条目），<b>保留第一次出现的那条</b>：

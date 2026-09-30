@@ -12,8 +12,8 @@ namespace StarMark.Tests;
 /// 批次 SB 的形状闸门：预览窗标题的 40 字截断只许住在一颗判据里（P-123 清单第二条）。
 /// <para>规则①是禁项，但它<b>今天零命中</b>——零命中和"没扫到"在绿灯上长得一样（#161），
 /// 所以反空转由两处一起顶：② 钉"确实有两个读者、而且实参槽位里传的就是那一行的标题"，
-/// ⑤ 用合成串自证扫描器认得出违规写法。④ 把"UI 里还剩下的省略号欠账"钉成<b>有名字的 1 处</b>
-/// （待办撤销提示，预算 12，走 P-130 那批一起收），加一处就红。</para>
+/// ③ 钉"宽度住这里、切法已上交 <see cref="StarMark.Abstractions.TextTrim"/>（批次 SC）"。
+/// ④ 是 SC 收紧的那一条：<b>UI 工程里"切片＋省略号"的欠账计数从 1 归 0</b>（SB 那批留下的是待办撤销提示）。</para>
 /// </summary>
 public sealed class TitleTruncationGateTests
 {
@@ -30,10 +30,8 @@ public sealed class TitleTruncationGateTests
         new(@"\.Title\.Substring\(\s*0\s*,", RegexOptions.Compiled),
     };
 
-    /// <summary>"切片 + 省略号"的形状：字面量宽度或变量宽度都算（④ 用）。</summary>
-    private static readonly Regex EllipsisCut = new(
-        @"(\[\s*\.\.\s*[\w]+\s*\]|AsSpan\(\s*0\s*,\s*[\w]+\s*\)|Substring\(\s*0\s*,\s*[\w]+\s*\))[^\n""]*""\s*…",
-        RegexOptions.Compiled);
+    /// <summary>"切片 + 省略号"的形状（SC 起与家族闸门共用扫描器那一份，#161：扫描器只许一个主人）。</summary>
+    private static readonly Regex EllipsisCut = FormatScanner.HandRolledEllipsis;
 
     // ────────── ① 判据外不许再切标题 ──────────
 
@@ -73,33 +71,33 @@ public sealed class TitleTruncationGateTests
         Assert.Equal(2, readers.Count);                   // 读者只有这两家；多出来的一律先问"是不是第二条真值"
     }
 
-    // ────────── ③ 宽度与省略号住在判据里，且不自带内联数字 ──────────
+    // ────────── ③ 宽度住判据里，而切法已上交 TextTrim（批次 SC）──────────
 
     [Fact]
-    public void TheJudgeHoldsTheBudgetAndTheEllipsisOnce()
+    public void TheJudgeHoldsTheBudgetAndIsAPureForwardForTheCut()
     {
         var code = FormatScanner.Scan(ReadRepoFile(JudgeFile)).Code;
 
         Assert.Equal(1, Count(code, "TitleDisplayChars = 40"));
-        Assert.Equal(1, Count(code, "+ \"…\""));      // 尾巴只许有一处出处
-        Assert.Contains("title.Length <= TitleDisplayChars", code, StringComparison.Ordinal);
-        Assert.Contains("var cut = TitleDisplayChars", code, StringComparison.Ordinal);
-        Assert.Equal(0, Count(code, "title[..40"));  // 判据自己也不许把宽度内联进切片
+        // SC 之后省略号与切法都住在 TextTrim：这里再自己切一刀就是第二份切法（RZ 的 DescribeBytes 同一条）
+        Assert.Equal(0, Count(code, "…"));
+        Assert.Equal(0, Count(code, "title[.."));
+        Assert.Contains("public static string TruncatedTitle(string title) => TextTrim.Ellipsize(title, TitleDisplayChars);",
+            code, StringComparison.Ordinal);
     }
 
-    // ────────── ④ 剩下的省略号欠账：有名字、封顶一处 ──────────
+    // ────────── ④ 省略号欠账：UI 侧已清零（批次 SC 把最后一把改道）──────────
 
     [Fact]
-    public void RemainingEllipsisDebtInUiIsOneNamedSite()
+    public void NoEllipsisCutRemainsInUiProject()
     {
         var debt = FormatScanner.SourcesUnder("src/StarMark.UI")
             .SelectMany(f => SplitLines(f.Code).Where(l => EllipsisCut.IsMatch(l)).Select(l => $"{f.Path}: {l.Trim()}"))
             .ToList();
 
-        Assert.True(debt.Count == 1,
-            $"UI 工程里\"切片＋省略号\"的写法今天恰好 1 处（待办撤销提示，见 P-130），实际 {debt.Count} 处：\n"
+        Assert.True(debt.Count == 0,
+            "UI 工程里不许再自己\"切片＋省略号\"（该调 TextTrim.Ellipsize；批次 SC 起这是硬口径），实际 " + debt.Count + " 处：\n"
             + string.Join("\n", debt));
-        Assert.Contains("TodoWidgetViewModel.cs", debt[0], StringComparison.Ordinal);
     }
 
     // ────────── ⑤ 扫描器自证（正反两面）──────────

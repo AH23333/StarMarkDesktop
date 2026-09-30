@@ -74,7 +74,7 @@ public static class AiFailures
     {
         if (string.IsNullOrWhiteSpace(detail)) return string.Empty;
         var flat = detail.Replace('\r', ' ').Replace('\n', ' ').Trim();
-        return "　" + (flat.Length <= 160 ? flat : flat[..160] + "…");
+        return "　" + TextTrim.Ellipsize(flat, 160);
     }
 
     public static string NameOf(AiFailureKind kind) => kind switch
