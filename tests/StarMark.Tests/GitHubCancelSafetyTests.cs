@@ -200,7 +200,42 @@ public sealed class GitHubCancelSafetyTests : IDisposable
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => source.FetchAsync(new SyncContext(), cts.Token));
 
+        // 抛出之后就算"补一次提交"也不许写出任何东西：协调器正是在载荷落库之后才提交检查点的。
+        await source.CommitCheckpointAsync(CancellationToken.None);
+
         // 两个检查点都必须仍是空：写下任何一个，下一次同步就可能被 304 短路而永不补齐。
+        Assert.Null(await repo.GetSyncStateAsync("github:etag", CancellationToken.None));
+        Assert.Null(await repo.GetSyncStateAsync("github:last_synced_at", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Fetch_CompletedPull_LeavesCheckpointsUnwrittenUntilCommitted()
+    {
+        // P-19 的正身：载荷还没落库之前，检查点不许已经进库。旧写法在 FetchAsync 内部就写库，
+        // 而 upsert 是协调器拿到返回之后才做的 ⇒ 崩在这两步之间＝新 ETag 已提交、条目没提交，
+        // 下一轮首页带 If-None-Match 命中 304 返回零条，那批新 Star 再也不会被拉回来。
+        var repo = Repo();
+        var client = new GitHubClient(Options(3), new HttpClient(new FakeGitHub(perPage: 3, lastPage: 2)));
+        await using var source = new GitHubSource(Options(3), repo, client);
+
+        var items = await source.FetchAsync(new SyncContext(), CancellationToken.None);
+
+        Assert.Equal(5, items.Count);                                   // 载荷拉到了，但这一轮还没资格留下检查点
+        Assert.Null(await repo.GetSyncStateAsync("github:etag", CancellationToken.None));
+        Assert.Null(await repo.GetSyncStateAsync("github:last_synced_at", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CommitCheckpointWithoutAFetch_WritesNothing()
+    {
+        // 暂存的必须是"这一轮的"：一次都没拉过的源没资格写时间戳（否则诊断页会显示一次从未发生过的同步），
+        // 上一轮没提交成的也不许被下一次提交顺手带进库。
+        var repo = Repo();
+        await using var source = new GitHubSource(Options(), repo,
+            new GitHubClient(Options(), new HttpClient(new FakeGitHub(perPage: 3, lastPage: 1))));
+
+        await source.CommitCheckpointAsync(CancellationToken.None);
+
         Assert.Null(await repo.GetSyncStateAsync("github:etag", CancellationToken.None));
         Assert.Null(await repo.GetSyncStateAsync("github:last_synced_at", CancellationToken.None));
     }
@@ -209,12 +244,14 @@ public sealed class GitHubCancelSafetyTests : IDisposable
     public async Task Fetch_CompletedPull_WritesBothCheckpoints()
     {
         // 正向对照：取消护栏不能顺手把 P1-4 的检查点写回也关掉。
+        // 提交这一步现在归协调器在 UpsertAsync 之后调用（断言一条未减，只是把它接到"提交之后"）。
         var repo = Repo();
         using var cts = new CancellationTokenSource();
         var client = new GitHubClient(Options(3), new HttpClient(new FakeGitHub(perPage: 3, lastPage: 2)));
         await using var source = new GitHubSource(Options(3), repo, client);
 
         var items = await source.FetchAsync(new SyncContext(), cts.Token);
+        await source.CommitCheckpointAsync(cts.Token);
 
         Assert.Equal(5, items.Count);
         Assert.Equal(FreshEtag, await repo.GetSyncStateAsync("github:etag", CancellationToken.None));

@@ -60,6 +60,10 @@ public sealed class SyncCoordinator
                     if (syncable.Count > 0)
                         await _repository.UpsertAsync(syncable, ct);
                 }
+                // 载荷已在库里，才允许源提交自己的检查点（ETag 那一类）。顺序反过来＝崩溃窗口：
+                // ETag 先进库、条目没进 ⇒ 下一轮命中 304 返回零条 ⇒ 那批新数据永不补齐（P-19）。
+                // 提交失败会让这一轮被记成"该源失败"，代价只是下一轮多拉一次，不会少数据。
+                await source.CommitCheckpointAsync(ct);
                 StarLog.Info($"源 {source.SourceId} 拉取 {items.Count} 条");
                 results.Add(new SourceSyncResult
                 {

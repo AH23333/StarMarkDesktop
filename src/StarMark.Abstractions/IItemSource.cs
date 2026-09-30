@@ -32,6 +32,22 @@ public interface IItemSource
     /// <summary>从源拉取全量条目，写入 items 表。同步协调器调用。</summary>
     Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct);
 
+    /// <summary>
+    /// <b>载荷已经落库</b>，源可以提交自己的检查点了（ETag / 游标那一类）。默认什么都不做。
+    /// <para>
+    /// 为什么要有它（P-19）：检查点与载荷不在同一个原子边界里＝一次崩就永久少一批。
+    /// 从前 <c>GitHubSource.FetchAsync</c> 在自己内部就把新 ETag 写进 <c>sync_state</c>，
+    /// 而 upsert 是协调器拿到返回之后才做的：中间崩溃 ⇒ 下一轮首页带 <c>If-None-Match</c> 命中 304、
+    /// 返回零条 ⇒ <b>上一轮已拉到却没落库的那批 Star 再也不会被重新拉回来</b>。
+    /// 现在顺序固定成"拉 → 落库 → 提交检查点"，任何一步失败都只会导致<b>下一轮多拉一次</b>，不会少数据。
+    /// </para>
+    /// <para>
+    /// 走默认实现（与 <see cref="AvailabilityHint"/> 同一条路子）：既有源与测试桩都可以不动，
+    /// 只有"自己带检查点"的源需要覆写——加成员不改老成员签名，就不会牵连整条同步链。
+    /// </para>
+    /// </summary>
+    Task CommitCheckpointAsync(CancellationToken ct) => Task.CompletedTask;
+
     /// <summary>从源实时搜索（不依赖 SQLite）。供统一搜索跨源混排使用。</summary>
     /// <param name="query">关键词。</param>
     /// <param name="filter">过滤条件（类型、来源、数值范围）。</param>

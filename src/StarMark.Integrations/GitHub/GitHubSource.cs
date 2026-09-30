@@ -20,6 +20,12 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
     private readonly IItemRepository _repository;
     private bool _disposed;
 
+    /// <summary>
+    /// 这一轮拉到、但<b>还没资格落库</b>的检查点（P-19）。null＝这一轮没跑完（取消/抛出/源不可用），
+    /// 所以 <see cref="CommitCheckpointAsync"/> 什么都不写。Etag 可为 null（GitHub 没回 ETag 时只提交时间）。
+    /// </summary>
+    private (string? Etag, long At)? _pendingCheckpoint;
+
     public GitHubSource(GitHubOptions options, IItemRepository repository)
         : this(options, repository, new GitHubClient(options))
     {
@@ -44,19 +50,24 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
         => "未配置 GitHub Token（设置 → GitHub Stars 同步 里填入带 public_repo 范围的 Token 才会同步 Star；书签 / 本地文件 / 热榜浏览都不受影响）";
 
     /// <summary>
-    /// 全量拉取 starred 列表。
-    /// 对应技术文档 §4.7 sync_state（P1-4 兑现）：此处把 etag + last_synced_at 写入 DB 的 sync_state 表。
+    /// 全量拉取 starred 列表。<b>本方法不写检查点</b>——它只把"这一轮拉到了什么检查点"暂存起来，
+    /// 等 <see cref="CommitCheckpointAsync"/> 在协调器把载荷落库之后再写（P-19）。
+    /// 对应技术文档 §4.7 sync_state（P1-4 兑现）：etag + last_synced_at 存 DB 的 sync_state 表。
     /// 同步策略：
     ///   - 拉取前载入上次 ETag，用于条件请求（命中 304 省掉整轮拉取）
-    ///   - 拉取后回写最新 ETag 与 last_synced_at 检查点
+    ///   - 拉取后暂存最新 ETag 与 last_synced_at，落库成功后才提交
     /// <para>
-    /// <b>检查点一律在 <c>GetAllStarredAsync</c> 正常返回之后才写</b>：中途取消/失败的那一轮会抛出，
-    /// 于是 etag 与 last_synced_at 都停在上一轮，下一次同步仍会真去拉全量。反过来（先写检查点再拉完、
-    /// 或把取消当成"少拉几页也算成功"）会让下一次首页条件请求直接命中 304 ⇒ 缺失部分永不补齐（P-19/P-55）。
+    /// <b>两道时序都要，缺一道都会永久丢数据</b>：
+    /// ① <b>整轮分页跑完</b>才暂存（中途取消/失败的那一轮抛出 ⇒ 什么都不留，P-55）；
+    /// ② <b>载荷已 <c>UpsertAsync</c> 进库</b>才落检查点（P-19）——旧写法在 <c>FetchAsync</c> 内部就写库，
+    /// 而 upsert 是协调器拿到返回后才做的，中间那一崩＝<b>新 ETag 已进、条目没进</b>，
+    /// 下一轮首页带 <c>If-None-Match</c> 命中 304 ⇒ 返回零条 ⇒ 那批新 Star 再也不会被拉回来，
+    /// 直到用户的 starred 列表再次变动产生新 ETag。
     /// </para>
     /// </summary>
     public async Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
     {
+        _pendingCheckpoint = null;      // 上一轮没提交成的（崩溃/异常）一律不带进这一轮：宁可重复提交，不可提交空结果
         if (!IsAvailable) return Array.Empty<Item>();
 
         // P1-4：载入上次 ETag，用于条件请求（命中 304 直接短路整轮拉取）
@@ -65,11 +76,11 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
 
         var repos = await _client.GetAllStarredAsync(ct);
 
-        // P1-4：兑现注释——落 etag + last_synced_at 到 sync_state
-        if (!string.IsNullOrEmpty(_client.CachedETag))
-            await _repository.SetSyncStateAsync("github:etag", _client.CachedETag, ct);
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        await _repository.SetSyncStateAsync("github:last_synced_at", now.ToString(), ct);
+        // P1-4：整轮跑完才暂存 etag + last_synced_at（落库交给 CommitCheckpointAsync，见上面②）
+        _pendingCheckpoint = _client.CachedETag is { Length: > 0 } freshEtag
+            ? (freshEtag, DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+            : (null, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        var now = _pendingCheckpoint.Value.At;
 
         if (repos.Count == 0) return Array.Empty<Item>();
 
@@ -79,6 +90,24 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
             items.Add(MapToItem(repo, now));
         }
         return items;
+    }
+
+    /// <summary>
+    /// 提交这一轮的检查点（etag + last_synced_at）到 sync_state。<b>由同步协调器在载荷 <c>UpsertAsync</c>
+    /// 成功之后调用</b>（P-19）——顺序反过来就是缺陷本身：ETag 先进库、条目没进，下一轮命中 304 返回零条，
+    /// 那批新 Star 就永远不会被重新拉回来。
+    /// <para>这里刻意<b>不吞异常</b>：提交失败意味着这一轮的条目其实已经落库了，下一次同步会带着旧 ETag
+    /// 再全量拉一遍（多花一次请求），而不是反过来丢数据——报错比悄悄少一批好。</para>
+    /// </summary>
+    public async Task CommitCheckpointAsync(CancellationToken ct)
+    {
+        var pending = _pendingCheckpoint;
+        if (pending is null) return;                      // 没跑完的一轮：什么都不写，下一次照样全量拉
+        _pendingCheckpoint = null;
+
+        if (pending.Value.Etag is { Length: > 0 } etag)
+            await _repository.SetSyncStateAsync("github:etag", etag, ct);
+        await _repository.SetSyncStateAsync("github:last_synced_at", pending.Value.At.ToString(), ct);
     }
 
     /// <summary>
