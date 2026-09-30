@@ -102,15 +102,17 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         public bool? RssEnabled { get; set; }
         /// <summary>组件拖动 / 缩放时的边缘磁吸总开关（默认开启）。关闭后用户可自由摆位。</summary>
         public bool? WidgetSnapEnabled { get; set; }
-        /// <summary>磁吸对齐间距（物理像素，默认 8）：两组件贴合时保留的间隙。</summary>
+        /// <summary>磁吸对齐间距（<b>逻辑像素</b>，拖动时才按缩放比换成物理像素）：两组件贴合时保留的间隙。
+        /// 默认与量程都在 <see cref="StarMark.Core.Appearance.AppearanceSettingsPolicy"/>，这里不重述数字。</summary>
         public int? WidgetSnapSpacing { get; set; }
-        /// <summary>磁吸吸附强度→进入阈值（物理像素，默认 24）：越大越早吸附（更易吸、更难微调）。</summary>
+        /// <summary>磁吸吸附强度→进入阈值（<b>逻辑像素</b>）：越大越早吸附（更易吸、更难微调）。默认与量程同上。</summary>
         public int? WidgetSnapStrength { get; set; }
         /// <summary>半透明材质：0=亚克力 1=云母 2=不透明（默认 0）。</summary>
         public int? WidgetBackdrop { get; set; }
-        /// <summary>组件背景不透明度 0.3–1.0（默认 0.72），配合半透明材质使用。</summary>
+        /// <summary>组件背景不透明度（配合半透明材质使用）。默认与量程见
+        /// <see cref="StarMark.Core.Appearance.AppearanceSettingsPolicy"/>。</summary>
         public double? WidgetOpacity { get; set; }
-        /// <summary>毛玻璃材质浓度 0–1（默认 0.65，DeskBox 的 WidgetMaterialIntensity）。</summary>
+        /// <summary>毛玻璃材质浓度（DeskBox 的 WidgetMaterialIntensity）。默认与量程同上。</summary>
         public double? WidgetMaterialIntensity { get; set; }
         /// <summary>主窗口是否也使用同一套半透明材质（默认开启）。已被 <see cref="MainWindowBackdrop"/> 取代，仅为旧配置迁移保留。</summary>
         public bool? MainWindowTranslucent { get; set; }

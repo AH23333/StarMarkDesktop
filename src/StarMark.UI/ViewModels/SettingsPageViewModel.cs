@@ -12,6 +12,7 @@ using Microsoft.UI.Xaml.Media;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Insights;
 using StarMark.Integrations.Clipboard;
+using StarMark.Core.Appearance;
 using StarMark.Core.Backup;
 using StarMark.Core.Canvas;
 using StarMark.Core.Hotkeys;
@@ -44,9 +45,29 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty] private int _backdropIndex;
     /// <summary>主窗口材质下拉索引（批次 J：与组件材质各自独立；= <see cref="WidgetBackdropKind"/> 整数值，None=不透明）。</summary>
     [ObservableProperty] private int _mainWindowBackdropIndex;
-    [ObservableProperty] private double _widgetOpacity = 0.72;
+    [ObservableProperty] private double _widgetOpacity = AppearanceSettingsPolicy.OpacityDefault;
     /// <summary>主窗口背景不透明度（独立于组件 <see cref="WidgetOpacity"/>）。批次 J 已拆材质，这里补齐拆不透明度。</summary>
-    [ObservableProperty] private double _mainWindowOpacity = 0.72;
+    [ObservableProperty] private double _mainWindowOpacity = AppearanceSettingsPolicy.OpacityDefault;
+
+    /// <summary>
+    /// 三根滑杆的<b>量程与步进</b>，一律转发自 <see cref="AppearanceSettingsPolicy"/>（批次 SD，P-123 清单 #4）。
+    /// <para>以前 XAML 自己写着 <c>0.3–1</c>／<c>4–64</c>／<c>0–40</c>，而仓储的 <c>Math.Clamp</c> 各写一遍、
+    /// VM 的初值与读取兜底又各写一遍 ⇒ 同一个旋钮最多有五个主人（#175：SA 那批已经因为这种分岔真咬过一次）。
+    /// 现在界面上写不出第二个量程（<c>Mode=OneTime</c> 绑这几个属性）。</para>
+    /// </summary>
+    public double OpacityFloor => AppearanceSettingsPolicy.OpacityFloor;
+    public double OpacityCeiling => AppearanceSettingsPolicy.OpacityCeiling;
+    public double OpacityStep => AppearanceSettingsPolicy.OpacityStep;
+
+    /// <summary>磁吸强度（逻辑像素）滑杆的量程与步进。</summary>
+    public int SnapStrengthFloor => AppearanceSettingsPolicy.SnapStrengthFloor;
+    public int SnapStrengthCeiling => AppearanceSettingsPolicy.SnapStrengthCeiling;
+    public int SnapStrengthStep => AppearanceSettingsPolicy.SnapStrengthStep;
+
+    /// <summary>对齐间距（逻辑像素）滑杆的量程与步进。</summary>
+    public int SnapSpacingFloor => AppearanceSettingsPolicy.SnapSpacingFloor;
+    public int SnapSpacingCeiling => AppearanceSettingsPolicy.SnapSpacingCeiling;
+    public int SnapSpacingStep => AppearanceSettingsPolicy.SnapSpacingStep;
 
     // 性能模式 / 内存门禁（Phase B-8）
     [ObservableProperty] private int _performanceModeIndex;
@@ -91,10 +112,10 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty] private bool _enableWidgetSnap = true;
 
     /// <summary>磁吸贴合后的目标间距（逻辑像素，0＝边边紧贴）。</summary>
-    [ObservableProperty] private double _snapSpacing = 8;
+    [ObservableProperty] private double _snapSpacing = AppearanceSettingsPolicy.SnapSpacingDefault;
 
     /// <summary>磁吸强度：距参照线多近即吸附（逻辑像素）。越大越容易吸上。</summary>
-    [ObservableProperty] private double _snapStrength = 24;
+    [ObservableProperty] private double _snapStrength = AppearanceSettingsPolicy.SnapStrengthDefault;
 
     public string SnapSpacingText => $"{(int)SnapSpacing} px";
     public string SnapStrengthText => $"{(int)SnapStrength} px";
@@ -276,11 +297,11 @@ public partial class SettingsPageViewModel : ObservableObject
         // 外观 + 磁吸
         BackdropIndex = (int)Safe(_settings.LoadWidgetBackdrop, WidgetBackdropKind.Acrylic, "组件材质");
         MainWindowBackdropIndex = (int)Safe(_settings.LoadMainWindowBackdrop, WidgetBackdropKind.Acrylic, "主窗口材质");
-        WidgetOpacity = Safe(_settings.LoadWidgetOpacity, WidgetAppearance.DefaultOpacity, "不透明度");
-        MainWindowOpacity = Safe(_settings.LoadMainWindowOpacity, WidgetAppearance.DefaultOpacity, "主窗口不透明度");
+        WidgetOpacity = Safe(_settings.LoadWidgetOpacity, AppearanceSettingsPolicy.OpacityDefault, "不透明度");
+        MainWindowOpacity = Safe(_settings.LoadMainWindowOpacity, AppearanceSettingsPolicy.OpacityDefault, "主窗口不透明度");
         EnableWidgetSnap = Safe(_settings.LoadWidgetSnapEnabled, true, "边缘磁吸");
-        SnapSpacing = Safe(_settings.LoadWidgetSnapSpacing, 8, "磁吸间距");
-        SnapStrength = Safe(_settings.LoadWidgetSnapStrength, 24, "磁吸强度");
+        SnapSpacing = Safe(_settings.LoadWidgetSnapSpacing, AppearanceSettingsPolicy.SnapSpacingDefault, "磁吸间距");
+        SnapStrength = Safe(_settings.LoadWidgetSnapStrength, AppearanceSettingsPolicy.SnapStrengthDefault, "磁吸强度");
 
         // 性能模式 / 内存门禁
         PerformanceModeIndex = (int)Safe(_settings.LoadPerformanceMode, PerformanceMode.Balanced, "性能模式");

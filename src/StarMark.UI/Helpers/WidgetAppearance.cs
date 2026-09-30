@@ -4,6 +4,7 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using StarMark.Abstractions;
+using StarMark.Core.Appearance;
 
 namespace StarMark.UI.Helpers;
 
@@ -44,19 +45,20 @@ public static class WidgetAppearance
     /// <summary>拖动 / 缩放时的边缘磁吸总开关（关闭 = 用户自由摆位，不做任何自动贴合）。</summary>
     public static bool SnapEnabled() => Try(() => Store.LoadWidgetSnapEnabled(), true);
 
-    /// <summary>磁吸对齐间距（逻辑像素，默认 8）。用户可在设置页调节。</summary>
+    /// <summary>磁吸对齐间距（<b>逻辑像素</b>）。量程与默认都住在 <see cref="AppearanceSettingsPolicy"/>；
+    /// 调用方按屏幕缩放比换成物理像素后再交给求解器（<see cref="StarMark.Core.Widgets.WidgetSnapCalculator"/> 只吃物理像素）。</summary>
     public static int SnapSpacing() => Try(
-        () => Store.LoadWidgetSnapSpacing(), StarMark.Core.Widgets.WidgetSnapCalculator.DefaultSpacing);
+        () => Store.LoadWidgetSnapSpacing(), AppearanceSettingsPolicy.SnapSpacingDefault);
 
-    /// <summary>磁吸吸附强度＝进入吸附阈值（逻辑像素，默认 24）。越大越早吸附。</summary>
+    /// <summary>磁吸吸附强度＝进入吸附阈值（<b>逻辑像素</b>）。越大越早吸附。</summary>
     public static int SnapEngageThreshold() => Try(
-        () => Store.LoadWidgetSnapStrength(), StarMark.Core.Widgets.WidgetSnapCalculator.DefaultEngageThreshold);
+        () => Store.LoadWidgetSnapStrength(), AppearanceSettingsPolicy.SnapStrengthDefault);
 
     public static WidgetBackdropKind Backdrop()
         => Try(() => Store.LoadWidgetBackdrop(), WidgetBackdropKind.Acrylic);
 
     public static double Opacity()
-        => Try(() => Store.LoadWidgetOpacity(), DefaultOpacity);
+        => Try(() => Store.LoadWidgetOpacity(), AppearanceSettingsPolicy.OpacityDefault);
 
     /// <summary>
     /// 系统强调色（DeskBox 取 <c>ThemeService.GetEffectiveAccentColor()</c>）。
@@ -71,9 +73,6 @@ public static class WidgetAppearance
             ? WidgetMaterialVisualCalculator.DefaultAccentColor
             : Windows.UI.Color.FromArgb(0xFF, c.R, c.G, c.B);
     }, WidgetMaterialVisualCalculator.DefaultAccentColor);
-
-    /// <summary>默认不透明度（0.72），与 SettingsStore 默认值保持一致。</summary>
-    public const double DefaultOpacity = 0.72;
 
     private static T Try<T>(Func<T> read, T fallback)
     {

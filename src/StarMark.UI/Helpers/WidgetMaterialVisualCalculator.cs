@@ -1,6 +1,7 @@
 #nullable enable
 using Windows.UI;
 using StarMark.Abstractions;
+using StarMark.Core.Appearance;
 
 namespace StarMark.UI.Helpers;
 
@@ -11,14 +12,11 @@ namespace StarMark.UI.Helpers;
 /// 每个材质产出一个 <see cref="Color"/>（含 alpha）交给 <c>TransparentTintBackdrop</c> 铺满整窗：
 /// 纯色（Solid）的 alpha 由用户「背景不透明度」驱动，其余材质用各自固定 alpha（见
 /// <see cref="BuildMaterialBackdropColor"/>）。「材质浓度」滑杆已废弃，内部统一取
-/// <see cref="DefaultWidgetMaterialIntensity"/>，仅影响染色浓淡、不再对外可调。
+/// <see cref="AppearanceSettingsPolicy.MaterialIntensityDefault"/>，仅影响染色浓淡、不再对外可调。
 /// </para>
 /// </summary>
 internal static class WidgetMaterialVisualCalculator
 {
-    public const double MinWidgetMaterialIntensity = 0.0;
-    public const double MaxWidgetMaterialIntensity = 1.0;
-    public const double DefaultWidgetMaterialIntensity = 0.65;
 
     /// <summary>默认强调色（用于给底色掺一点点彩，呈 macOS 那种淡冷调）。</summary>
     public static readonly Color DefaultAccentColor = Color.FromArgb(0xFF, 0x3B, 0x82, 0xF6);
@@ -89,11 +87,11 @@ internal static class WidgetMaterialVisualCalculator
         => kind switch
         {
             WidgetBackdropKind.Solid => BuildContentSolidSurfaceColor(isDark, accentColor, solidOpacity),
-            WidgetBackdropKind.AcrylicBase => BuildNativeSurfaceColor(isDark, accentColor, 0.62, DefaultWidgetMaterialIntensity, kind),
-            WidgetBackdropKind.Mica => BuildNativeSurfaceColor(isDark, accentColor, 0.90, DefaultWidgetMaterialIntensity, kind),
-            WidgetBackdropKind.MicaAlt => BuildNativeSurfaceColor(isDark, accentColor, 0.82, DefaultWidgetMaterialIntensity, kind),
+            WidgetBackdropKind.AcrylicBase => BuildNativeSurfaceColor(isDark, accentColor, 0.62, AppearanceSettingsPolicy.MaterialIntensityDefault, kind),
+            WidgetBackdropKind.Mica => BuildNativeSurfaceColor(isDark, accentColor, 0.90, AppearanceSettingsPolicy.MaterialIntensityDefault, kind),
+            WidgetBackdropKind.MicaAlt => BuildNativeSurfaceColor(isDark, accentColor, 0.82, AppearanceSettingsPolicy.MaterialIntensityDefault, kind),
             WidgetBackdropKind.None => isDark ? Color.FromArgb(0xFF, 0x00, 0x00, 0x00) : Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF),
-            _ /* Acrylic 薄 */ => BuildNativeSurfaceColor(isDark, accentColor, 0.46, DefaultWidgetMaterialIntensity, kind),
+            _ /* Acrylic 薄 */ => BuildNativeSurfaceColor(isDark, accentColor, 0.46, AppearanceSettingsPolicy.MaterialIntensityDefault, kind),
         };
 
     public static Color BuildContentSolidSurfaceColor(
@@ -113,10 +111,12 @@ internal static class WidgetMaterialVisualCalculator
             NormalizeOpacity(surfaceOpacity));
     }
 
+    /// <summary>浓度夹取走判据那颗；<b>非有限值（NaN／±∞）另有一层</b>：那是批次 10 真机踩过的
+    /// "NaN 浓度 ⇒ 整窗面板隐形"，判据只管范围、管不了 NaN。</summary>
     private static double NormalizeMaterialIntensity(double value) =>
         double.IsFinite(value)
-            ? Math.Clamp(value, MinWidgetMaterialIntensity, MaxWidgetMaterialIntensity)
-            : DefaultWidgetMaterialIntensity;
+            ? AppearanceSettingsPolicy.NormalizeMaterialIntensity(value)
+            : AppearanceSettingsPolicy.MaterialIntensityDefault;
 
     /// <summary>
     /// 背景不透明度归一。注意 <see cref="Math.Clamp(double,double,double)"/> 对 NaN 两比较皆 false 会<b>原样返回 NaN</b>，

@@ -158,7 +158,9 @@
                                         <TextBlock Text="只影响主窗口的「纯色 · Solid」材质，与组件互不影响；其余材质用各自固定的透明度性格。" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
-                                        <Slider Grid.Column="0" Minimum="0.3" Maximum="1" StepFrequency="0.02" Width="150"
+                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.OpacityFloor, Mode=OneTime}"
+                                                Maximum="{x:Bind ViewModel.OpacityCeiling, Mode=OneTime}"
+                                                StepFrequency="{x:Bind ViewModel.OpacityStep, Mode=OneTime}" Width="150"
                                                 Value="{x:Bind ViewModel.MainWindowOpacity, Mode=TwoWay}"/>
                                         <TextBlock Grid.Column="1" VerticalAlignment="Center" Width="46"
                                                    Text="{x:Bind ViewModel.MainWindowOpacityPercentText, Mode=OneWay}"
@@ -441,7 +443,9 @@
                                         <TextBlock Text="只影响桌面组件的「纯色 · Solid」材质：越低越透、能看见桌面壁纸。主窗口的不透明度在「常规」页单独设置。" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
-                                        <Slider Grid.Column="0" Minimum="0.3" Maximum="1" StepFrequency="0.02" Width="150"
+                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.OpacityFloor, Mode=OneTime}"
+                                                Maximum="{x:Bind ViewModel.OpacityCeiling, Mode=OneTime}"
+                                                StepFrequency="{x:Bind ViewModel.OpacityStep, Mode=OneTime}" Width="150"
                                                 Value="{x:Bind ViewModel.WidgetOpacity, Mode=TwoWay}"/>
                                         <TextBlock Grid.Column="1" VerticalAlignment="Center" Width="46"
                                                    Text="{x:Bind ViewModel.OpacityPercentText, Mode=OneWay}"
@@ -467,7 +471,9 @@
                                         <TextBlock Text="距其它组件边线 / 屏幕边缘多近就贴上（像素）。数值越大越容易吸住，越大手感越「粘」；调小则更接近自由摆放。" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
-                                        <Slider Grid.Column="0" Minimum="4" Maximum="64" StepFrequency="2" Width="150"
+                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.SnapStrengthFloor, Mode=OneTime}"
+                                                Maximum="{x:Bind ViewModel.SnapStrengthCeiling, Mode=OneTime}"
+                                                StepFrequency="{x:Bind ViewModel.SnapStrengthStep, Mode=OneTime}" Width="150"
                                                 Value="{x:Bind ViewModel.SnapStrength, Mode=TwoWay}"/>
                                         <TextBlock Grid.Column="1" VerticalAlignment="Center" Width="46"
                                                    Text="{x:Bind ViewModel.SnapStrengthText, Mode=OneWay}"
@@ -481,7 +487,9 @@
                                         <TextBlock Text="吸住之后组件之间保留的缝隙（像素）。0＝边边紧贴，越大排得越松。" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
-                                        <Slider Grid.Column="0" Minimum="0" Maximum="40" StepFrequency="1" Width="150"
+                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.SnapSpacingFloor, Mode=OneTime}"
+                                                Maximum="{x:Bind ViewModel.SnapSpacingCeiling, Mode=OneTime}"
+                                                StepFrequency="{x:Bind ViewModel.SnapSpacingStep, Mode=OneTime}" Width="150"
                                                 Value="{x:Bind ViewModel.SnapSpacing, Mode=TwoWay}"/>
                                         <TextBlock Grid.Column="1" VerticalAlignment="Center" Width="46"
                                                    Text="{x:Bind ViewModel.SnapSpacingText, Mode=OneWay}"

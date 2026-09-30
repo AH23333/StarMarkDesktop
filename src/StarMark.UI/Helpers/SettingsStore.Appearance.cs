@@ -9,6 +9,7 @@ using StarMark.Abstractions.Ai;
 using StarMark.Abstractions.Feed;
 using StarMark.Core.Feed;
 using StarMark.Abstractions.Trending;
+using StarMark.Core.Appearance;
 using StarMark.Core.Hotkeys;
 using StarMark.Core.Performance;
 using StarMark.Integrations.Weather;
@@ -44,29 +45,29 @@ public sealed partial class SettingsStore
         Save(d);
     }
 
-    /// <summary>磁吸对齐间距（逻辑像素，默认 8，范围 0–40）：两组件贴合时保留的间隙。</summary>
+    /// <summary>磁吸对齐间距（逻辑像素，默认与范围都在 <see cref="AppearanceSettingsPolicy"/>）：两组件贴合时保留的间隙。</summary>
     public int LoadWidgetSnapSpacing()
         => Load() is { } d && d.WidgetSnapSpacing is { } v
-            ? Math.Clamp(v, 0, 40)
-            : StarMark.Core.Widgets.WidgetSnapCalculator.DefaultSpacing;
+            ? AppearanceSettingsPolicy.NormalizeSnapSpacing(v)
+            : AppearanceSettingsPolicy.SnapSpacingDefault;
 
     public void SaveWidgetSnapSpacing(int px)
     {
         var d = Load() ?? new SettingsData();
-        d.WidgetSnapSpacing = Math.Clamp(px, 0, 40);
+        d.WidgetSnapSpacing = AppearanceSettingsPolicy.NormalizeSnapSpacing(px);
         Save(d);
     }
 
-    /// <summary>磁吸吸附强度＝进入吸附阈值（逻辑像素，默认 24，范围 4–64）：越大越早吸附。</summary>
+    /// <summary>磁吸吸附强度＝进入吸附阈值（逻辑像素，默认与范围同上）：越大越早吸附。</summary>
     public int LoadWidgetSnapStrength()
         => Load() is { } d && d.WidgetSnapStrength is { } v
-            ? Math.Clamp(v, 4, 64)
-            : StarMark.Core.Widgets.WidgetSnapCalculator.DefaultEngageThreshold;
+            ? AppearanceSettingsPolicy.NormalizeSnapStrength(v)
+            : AppearanceSettingsPolicy.SnapStrengthDefault;
 
     public void SaveWidgetSnapStrength(int px)
     {
         var d = Load() ?? new SettingsData();
-        d.WidgetSnapStrength = Math.Clamp(px, 4, 64);
+        d.WidgetSnapStrength = AppearanceSettingsPolicy.NormalizeSnapStrength(px);
         Save(d);
     }
 
@@ -92,18 +93,18 @@ public sealed partial class SettingsStore
         Save(d);
     }
 
-    /// <summary>组件背景不透明度（默认 0.72）。越接近 1 越不透明。</summary>
+    /// <summary>组件背景不透明度（默认与范围见 <see cref="AppearanceSettingsPolicy"/>）。越接近 1 越不透明。</summary>
     public double LoadWidgetOpacity()
     {
         if (Load() is { } d && d.WidgetOpacity is > 0)
-            return Math.Clamp(d.WidgetOpacity.Value, 0.3, 1.0);
-        return WidgetAppearance.DefaultOpacity;
+            return AppearanceSettingsPolicy.NormalizeOpacity(d.WidgetOpacity.Value);
+        return AppearanceSettingsPolicy.OpacityDefault;
     }
 
     public void SaveWidgetOpacity(double opacity)
     {
         var d = Load() ?? new SettingsData();
-        d.WidgetOpacity = Math.Clamp(opacity, 0.3, 1.0);
+        d.WidgetOpacity = AppearanceSettingsPolicy.NormalizeOpacity(opacity);
         Save(d);
     }
 
@@ -111,14 +112,14 @@ public sealed partial class SettingsStore
     public double LoadMainWindowOpacity()
     {
         if (Load() is { } d && d.MainWindowOpacity is > 0)
-            return Math.Clamp(d.MainWindowOpacity.Value, 0.3, 1.0);
+            return AppearanceSettingsPolicy.NormalizeOpacity(d.MainWindowOpacity.Value);
         return LoadWidgetOpacity();
     }
 
     public void SaveMainWindowOpacity(double opacity)
     {
         var d = Load() ?? new SettingsData();
-        d.MainWindowOpacity = Math.Clamp(opacity, 0.3, 1.0);
+        d.MainWindowOpacity = AppearanceSettingsPolicy.NormalizeOpacity(opacity);
         Save(d);
     }
 
@@ -126,14 +127,14 @@ public sealed partial class SettingsStore
     public double LoadWidgetMaterialIntensity()
     {
         if (Load() is { } d && d.WidgetMaterialIntensity is >= 0)
-            return Math.Clamp(d.WidgetMaterialIntensity.Value, 0.0, 1.0);
-        return 0.65;
+            return AppearanceSettingsPolicy.NormalizeMaterialIntensity(d.WidgetMaterialIntensity.Value);
+        return AppearanceSettingsPolicy.MaterialIntensityDefault;
     }
 
     public void SaveWidgetMaterialIntensity(double intensity)
     {
         var d = Load() ?? new SettingsData();
-        d.WidgetMaterialIntensity = Math.Clamp(intensity, 0.0, 1.0);
+        d.WidgetMaterialIntensity = AppearanceSettingsPolicy.NormalizeMaterialIntensity(intensity);
         Save(d);
     }
 

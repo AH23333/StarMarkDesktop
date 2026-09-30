@@ -50,10 +50,19 @@ public readonly record struct WidgetMoveSnapResult(
 /// </summary>
 public static class WidgetSnapCalculator
 {
-    /// <summary>组件贴合时的默认间距（物理像素）。</summary>
+    /// <summary>
+    /// 组件贴合时的默认间距（<b>物理像素</b>）。今天两个读者：求解器省略实参时的兜底，以及
+    /// <c>WidgetWindow</c> 那三个吸附字段在<b>第一次会话开始前</b>的占位初值（会话一开就被缩放后的实际值盖掉）。
+    /// <para>设置页那根「对齐间距」滑杆的默认<b>不</b>住在这里——那是<b>逻辑像素</b>，住在
+    /// <see cref="StarMark.Core.Appearance.AppearanceSettingsPolicy.SnapSpacingDefault"/>。
+    /// 批次 SD 之前两处共用这一颗，等于在赌屏幕缩放恒为 100%。</para>
+    /// </summary>
     public const int DefaultSpacing = 8;
 
-    /// <summary>进入吸附的默认阈值（物理像素）。</summary>
+    /// <summary>
+    /// 进入吸附的默认阈值（<b>物理像素</b>，读者同上）。它与 <see cref="DefaultReleaseThreshold"/> 的差
+    /// 还被当成"迟滞宽度"用（<c>WidgetWindow.DragResize</c>：release 恒比 engage 宽一档）。
+    /// </summary>
     public const int DefaultEngageThreshold = 24;
 
     /// <summary>脱离吸附的默认阈值（物理像素），必须 ≥ engage 才能形成迟滞区间。</summary>
