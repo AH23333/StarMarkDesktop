@@ -627,12 +627,25 @@ public sealed class WidgetStorage
         data.Layouts = WidgetLayoutCollection.Normalize(data.Layouts);
         data.Snapshots = WidgetSnapshotCollection.Normalize(data.Snapshots);
 
-        // 每个实例的内容分别规范化（排序/限量），避免多实例数据相互覆盖。
+        // 每个实例的内容分别规范化（滤脏 + 排序），避免多实例数据相互覆盖。
         // 先剔除实例数组里的显式 null 元素（坏写入 / 手改 JSON / OneDrive 截断可达），与下方 Todos/Notes/
         // Links 及 Layouts/Snapshots 各兄弟集合一律滤 null 的口径一致。缺此过滤时，紧接 foreach 里的
         // inst.Todos 取属性即抛 NullReferenceException——它落在 Load 的 try 内、被 catch-all 当作「文件被
         // 临时占用」，于是 _loadDegraded 被永久置位（每次重载重抛同一形状错误，成功 Load 永不再发生），
         // 反把整个组件持久化锁死且恒返回空。属确定性、非 IO 的缺陷，不在 AA/R10-1 的「损坏 vs 瞬时占用」二分内。
+        //
+        // <b>这里刻意不限量</b>（P-10）：<see cref="Normalize"/> 同时被 <see cref="Load"/> 与 <see cref="Save"/> 调用，
+        // 所以任何一道 `Take(n)` 都是<b>读一次少几条</b>——`Load()` 交出去的内存模型已被裁，
+        // 随后任何 `Load()→改→Save()` 都把超出部分当作从来不存在。
+        // 丢的时候<b>一声不响</b>：常规 Save 不留 `.bak`、日志里一个字都没有、界面上那条只是"没了"。
+        // 唯一的挽回面是<b>更早的一次备份导出</b>（备份信封连着存 widgets.json 原文，见 BackupEnvelope.WidgetsJson），
+        // 而且回档是把整套组件状态退到那一次；没导过就没处找回。
+        // 今天最现实的触发面是快捷启动格：攒到 101 条后"发送到快捷启动"再多一条，就静默删掉最旧一条。
+        //
+        // "要不要给用户内容设硬顶、顶在哪里"是产品口径，但<b>答案不该由读路径来实现</b>：
+        // 展示层可以有自己的窗口（随记 `QuickNoteWidgetViewModel.DisplayLimit = 30`；快捷启动今天没顶＝加多少摆多少），
+        // 真要收，做的应是<b>看得见、要先确认的清理入口</b>（同 ClipIMG-3a 那条"孤儿只数不删"的口径），
+        // 而不是让一次读取替用户做决定。要恢复限量也必须只挂在写路径上，并配一条"裁掉了什么"的可见告知。
         data.Instances.RemoveAll(inst => inst is null);
         foreach (var inst in data.Instances)
         {
@@ -644,17 +657,14 @@ public sealed class WidgetStorage
                 .Where(t => t is not null && !string.IsNullOrWhiteSpace(t.Text))
                 .OrderBy(t => t.Done)                    // 未完成(false)在前，已完成在后
                 .ThenByDescending(t => t.CreatedAt)
-                .Take(200)
                 .ToList();
             inst.Notes = inst.Notes
                 .Where(n => n is not null && !string.IsNullOrWhiteSpace(n.Text))
                 .OrderByDescending(n => n.CreatedAt)
-                .Take(100)
                 .ToList();
             inst.Links = inst.Links
                 .Where(l => l is not null && !string.IsNullOrWhiteSpace(l.Uri))
                 .OrderByDescending(l => l.CreatedAt)
-                .Take(100)
                 .ToList();
         }
         return data;
