@@ -4,7 +4,9 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Text;
+using StarMark.Abstractions;
+using StarMark.Abstractions.Text;
+using StarMark.Integrations.Clipboard;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -99,7 +101,7 @@ public sealed class RssClient : IDisposable
                 return new RssFetchResult(RssFetchStatus.Failure, null, null, null,
                     $"这个源返回的内容超过 {MaxBodyBytes / 1024 / 1024}MB，已中止读取");
 
-            return new RssFetchResult(RssFetchStatus.Content, Decode(bytes),
+            return new RssFetchResult(RssFetchStatus.Content, Decode(bytes, response.Content.Headers.ContentType?.CharSet),
                 response.Headers.ETag?.Tag ?? First(response, "ETag"),
                 First(response, "Last-Modified"), null);
         }
@@ -143,14 +145,26 @@ public sealed class RssClient : IDisposable
     }
 
     /// <summary>
-    /// 按声明的编码解码，没有声明就按 UTF-8（并吃掉 BOM）。
-    /// <b>不能直接用 <c>ReadAsStringAsync</c></b>：那会把整份响应无上限读进内存，
-    /// 而上面那条限长就没有意义了。
+    /// 按<b>载荷自己的声明</b>解码；没声明（或声明认不得）时先严格探 UTF-8，探不通才按本机 ANSI 码页读（P-132）。
+    /// <para>
+    /// <b>不能直接用 <c>ReadAsStringAsync</c></b>：那会把整份响应无上限读进内存，而上面那条限长就没有意义了。
+    /// 换成 <c>Encoding.UTF8.GetString</c> 也不行——中文订阅源里 <c>encoding="gb2312"</c> 是常见形状，
+    /// 而 UTF-8 解码走的是 replacement fallback，从不抛，只把整源变成怪字（这就是 P-132 当年的症状）。
+    /// </para>
     /// </summary>
-    private static string Decode(byte[] bytes)
+    internal static string Decode(byte[] bytes, string? httpCharset)
     {
-        var text = Encoding.UTF8.GetString(bytes);
-        return text.Length > 0 && text[0] == '﻿' ? text[1..] : text;
+        // 声明有两个来源：贴着正文的 XML 前奏，和外层 HTTP 的 charset。前奏赢——它说的是这份字节流本身，
+        // charset 是传输层的说法，而中文源常以「text/xml（不带 charset）＋前奏写 GBK」的形状出现。
+        var declared = ExternalText.PrologLabel(bytes, bytes.Length) ?? httpCharset;
+        var decoded = ExternalText.Decode(bytes, bytes.Length, declared, AnsiText.Decode, AnsiText.SystemAnsiCodePage);
+
+        // 声明了却认不得：那不是「没声明」，得留一句话，否则下次查「这个源的字为什么不对」又只能从头猜。
+        if (!string.IsNullOrWhiteSpace(declared)
+            && decoded.Basis is not (ExternalTextBasis.DeclaredLabel or ExternalTextBasis.ByteOrderMark))
+            StarLog.Warn($"订阅源声明的编码「{declared}」不在我们的码页表里，改按 {(decoded.Basis == ExternalTextBasis.Utf8Probe ? "UTF-8" : "本机 ANSI 码页")} 读");
+
+        return decoded.Text;
     }
 
     public void Dispose()

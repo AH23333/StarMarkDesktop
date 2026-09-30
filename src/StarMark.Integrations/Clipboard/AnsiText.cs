@@ -2,6 +2,7 @@
 using System;
 using System.Runtime.InteropServices;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Text;
 
 namespace StarMark.Integrations.Clipboard;
 
@@ -69,6 +70,12 @@ public static class AnsiText
         // 越界不猜：交空串，让调用方按"这一段没有"处理（这里出错没有"半对的中文名"可比）。
         if (start < 0 || length > data.Length - start) return string.Empty;
 
+        // UTF-16 的两个码页必须先接住：<c>MultiByteToWideChar</c> 只服务"多字节→宽字符"，
+        // 把 1200/1201 交给它，实测返回 0 ⇒ 走到下面的宽化兜底，症状是"每个字节各变成一个字符"
+        // （PowerShell 存出来的 UTF-16 文本文件正好就是这副样子）。
+        if (codePage == ExternalText.Utf16LeCodePage || codePage == ExternalText.Utf16BeCodePage)
+            return FromUtf16(data, start, length, codePage == ExternalText.Utf16BeCodePage);
+
         // 段起点交给系统：`byte[]` 参数只能从头封送，所以按 (start,length) 切出这一条路径的字节。
         // 一次复制几十字节，换掉一整层 unsafe 指针——这里的量级不值得为它开 unsafe。
         var segment = data.AsSpan(start, length).ToArray();
@@ -81,6 +88,25 @@ public static class AnsiText
         if (wrote <= 0) return WidenedInstead(data, start, length, codePage, "转换");
 
         return new string(wide, 0, wrote);
+    }
+
+    /// <summary>
+    /// UTF-16 的两个字节序：这里不需要"猜编码"——字节序是 BOM 已经说了的，剩下的只是配对。
+    /// 尾部凑不成一对的那一个字节交掉（它本来就是半截字符，猜出来的那个字符比不猜更坏）。
+    /// </summary>
+    private static string FromUtf16(byte[] data, int start, int length, bool bigEndian)
+    {
+        var count = length / 2;
+        var chars = new char[count];
+        for (var i = 0; i < count; i++)
+        {
+            var first = data[start + i * 2];
+            var second = data[start + i * 2 + 1];
+            chars[i] = bigEndian
+                ? (char)((first << 8) | second)
+                : (char)(first | (second << 8));
+        }
+        return new string(chars);
     }
 
     /// <summary>

@@ -1,9 +1,11 @@
-﻿#nullable enable
+#nullable enable
 using System.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Text;
+using StarMark.Integrations.Clipboard;
 using StarMark.UI.ViewModels;
 using Windows.Storage;
 using Windows.Storage.Streams;
@@ -258,7 +260,8 @@ public sealed partial class PreviewHost : UserControl
         var bytes = new byte[Math.Min(new FileInfo(path).Length, 200_000)];
         await using var fs = File.OpenRead(path);
         var read = await fs.ReadAsync(bytes.AsMemory(0, bytes.Length));
-        var text = Encoding.UTF8.GetString(bytes, 0, read);
+        // P-132：磁盘上的文本文件不归我们定编码——BOM / 声明 / UTF-8 探测都不通才跟随本机 ANSI 码页。
+        var text = ExternalText.Decode(bytes, read, null, AnsiText.Decode, AnsiText.SystemAnsiCodePage).Text;
         ShowText(text);
     }
 
