@@ -18,26 +18,69 @@ public sealed class ClipboardPayloadTests
 {
     private static byte[] U(string s) => Encoding.Unicode.GetBytes(s + "\0");
 
+    private const uint Cp936 = 936;      // GBK：只在断言里当参数用，不把它抄进 src
+
     [Fact]
-    public void DecodeText_Unicode_StripsOnlyFullZeroCodeUnits_KeepsLastAsciiChar()
+    public void DecodeUnicodeText_StripsOnlyFullZeroCodeUnits_KeepsLastAsciiChar()
     {
         // 'A' = 0x41 0x00：那个 0x00 是高字节，不是终止符。按字节剥尾零会把它当终止符吃掉，
         // 再把配对的 0x41 一起丢掉 ⇒ "…A" 的末字符静默消失。
-        Assert.Equal("abcA", ClipboardPayload.DecodeText(U("abcA"), ansi: false));
-        Assert.Equal("中文", ClipboardPayload.DecodeText(U("中文"), ansi: false));
-        Assert.Equal("", ClipboardPayload.DecodeText(new byte[] { 0, 0 }, ansi: false));   // 只有终止符
+        Assert.Equal("abcA", ClipboardPayload.DecodeUnicodeText(U("abcA")));
+        Assert.Equal("中文", ClipboardPayload.DecodeUnicodeText(U("中文")));
+        Assert.Equal("", ClipboardPayload.DecodeUnicodeText(new byte[] { 0, 0 }));   // 只有终止符
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData(new byte[] { })]
     [InlineData(new byte[] { 0x41 })]              // 奇数长度：对齐到偶数字节，不能抛
-    public void DecodeText_OddOrEmptyInput_DoesNotThrow(byte[]? data)
-        => Assert.DoesNotContain('\u0000', ClipboardPayload.DecodeText(data, ansi: false));
+    public void DecodeUnicodeText_OddOrEmptyInput_DoesNotThrow(byte[]? data)
+        => Assert.DoesNotContain('\u0000', ClipboardPayload.DecodeUnicodeText(data));
 
     [Fact]
-    public void DecodeText_Ani_StripsSingleByteTerminator()
-        => Assert.Equal("hi", ClipboardPayload.DecodeText(new byte[] { (byte)'h', (byte)'i', 0 }, ansi: true));
+    public void DecodeAnsiText_StripsSingleByteTerminator()
+        => Assert.Equal("hi", ClipboardPayload.DecodeAnsiText(new byte[] { (byte)'h', (byte)'i', 0 },
+            (b, s, n) => Encoding.ASCII.GetString(b, s, n)));
+
+    [Fact]
+    public void DecodeAnsiText_DecodesByTheGivenCodePage_NotAsUtf8()
+    {
+        // P-18 的意义：同一串 GBK 字节按交进来的码页解出中文；旧写法在这里写死 UTF-8，
+        // 而 `Encoding.UTF8` 用 replacement fallback ⇒ 只产一串 U+FFFD、从不抛（所以这条缺陷从没以异常暴露过）。
+        // 字节是算定后逐字节抄下来的：.NET Core 里 `Encoding.GetEncoding(936)` 需要额外的包，
+        // 测试不许依赖它（依赖了就等于把这批要避免的"码页表隐依赖"请回来）。
+        byte[] gbk = { 0xBC, 0xF4, 0xCC, 0xF9, 0xB0, 0xE5 };      // "剪贴板" 的 GBK 形式
+
+        var decoded = ClipboardPayload.DecodeAnsiText(gbk, (b, s, n) => AnsiText.Decode(b, s, n, Cp936));
+
+        Assert.Equal("剪贴板", decoded);
+        Assert.DoesNotContain('\ufffd', decoded);
+        Assert.Contains('\ufffd', Encoding.UTF8.GetString(gbk));   // 旧读法确实坏（这条钉的是"缺陷被换掉了"）
+    }
+
+    [Fact]
+    public void DecodeAnsiText_TerminatorOnlyAndEmpty_ReturnEmpty()
+    {
+        Assert.Equal("", ClipboardPayload.DecodeAnsiText(new byte[] { 0, 0 }, (b, s, n) => "不该被调用"));
+        Assert.Equal("", ClipboardPayload.DecodeAnsiText(Array.Empty<byte>(), (b, s, n) => "不该被调用"));
+        Assert.Equal("", ClipboardPayload.DecodeAnsiText(null, (b, s, n) => "不该被调用"));
+    }
+
+    [Fact]
+    public void DecodeAnsiText_KeepsWholeBufferWhenProducerSentNoTerminator()
+    {
+        // 有的发送方不留尾零（Ditto 里老 clip 两种都有）：不许把最后一个字节当终止符吃掉。
+        var bytes = new byte[] { (byte)'a', (byte)'b', (byte)'c' };
+        Assert.Equal("abc", ClipboardPayload.DecodeAnsiText(bytes, (b, s, n) => Encoding.ASCII.GetString(b, s, n)));
+    }
+
+    [Fact]
+    public void DecodeAnsiText_SwallowsADecoderThatThrows()
+    {
+        // 交进来的解码器坏 ⇒ 按"拿不到"处理，绝不让一条 clip 把整轮 Ditto 读取带崩（与改前同口径）。
+        Assert.Equal("", ClipboardPayload.DecodeAnsiText(new byte[] { 0x41 },
+            (_, _, _) => throw new InvalidOperationException("坏解码器")));
+    }
 
     [Fact]
     public void ParseDropFiles_Wide_ListEndsAtDoubleNull_AndIgnoresTrailingGarbage()

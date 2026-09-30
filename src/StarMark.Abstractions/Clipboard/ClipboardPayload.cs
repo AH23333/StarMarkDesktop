@@ -47,22 +47,13 @@ public static partial class ClipboardPayload
     public const string FormatPng = "CF_PNG";
 
     /// <summary>
-    /// 把文本类剪贴板负载解成字符串。
-    /// <paramref name="ansi"/> 为真按单字节（UTF-8 容错读法）处理，否则按 UTF-16LE。
+    /// 把<b>宽字符</b>文本负载（<c>CF_UNICODETEXT</c>）解成字符串：按 UTF-16LE，尾零按整个码元剥。
     /// </summary>
-    public static string DecodeText(byte[]? data, bool ansi)
+    public static string DecodeUnicodeText(byte[]? data)
     {
         if (data is null || data.Length == 0) return string.Empty;
         try
         {
-            if (ansi)
-            {
-                // ANSI/UTF-8：NUL 终止符是单字节，按字节剥离安全。
-                var end = data.Length;
-                while (end > 0 && data[end - 1] == 0) end--;
-                return Encoding.UTF8.GetString(data, 0, end);
-            }
-
             // UTF-16LE：NUL 终止符是「码元」= 2 字节 0x0000，必须按整个码元剥离。
             // 逐「字节」剥尾零再 `end & ~1` 会把以 ASCII 结尾的文本（'A' = 0x41,0x00）的合法高位
             // 字节 0x00 误当终止符吃掉，再 &~1 丢弃配对的 0x41 → 末字符被静默截断。
@@ -74,6 +65,37 @@ public static partial class ClipboardPayload
         catch
         {
             return string.Empty;   // 调用方（后台采集 / 只读第三方库）都按"拿不到就当没有"处理
+        }
+    }
+
+    /// <summary>
+    /// 把<b>单字节</b>文本负载（旧程序写入的 <c>CF_TEXT</c>）解成字符串（P-18）。
+    /// <para>
+    /// 旧签名是 <c>DecodeText(data, bool ansi)</c>，而那个 <c>ansi</c> 分支实际写的是
+    /// <c>Encoding.UTF8.GetString</c>——等于假定"发送方把 UTF-8 塞进了一个单字节格式"。
+    /// Win32 的 <c>CF_TEXT</c> 是<b>码页文本</b>（按约定为当前 OEM 码页），中文正文的 <c>&gt;0x7F</c> 字节
+    /// 于是解成一堆 <c>U+FFFD</c>（<c>Encoding.UTF8</c> 用 replacement fallback，只坏数据、从不抛，
+    /// 所以这条缺陷从来不会以异常的形式暴露）。
+    /// </para>
+    /// <para>
+    /// 与 <see cref="ParseDropFiles"/> 同一形状：码页解码由调用方<b>必填</b>交进来（本层不放 Win32 调用），
+    /// 不留默认值——留一个"默认＝按 UTF-8 读"的可选参数，就是给未来的调用方留一条静默乱码的路（#209）。
+    /// </para>
+    /// </summary>
+    public static string DecodeAnsiText(byte[]? data, Func<byte[], int, int, string> decodeAnsi)
+    {
+        if (data is null || data.Length == 0) return string.Empty;
+        ArgumentNullException.ThrowIfNull(decodeAnsi);
+        try
+        {
+            // 单字节文本的终止符就是一个 0x00 字节，按字节剥离与码页无关。
+            var end = data.Length;
+            while (end > 0 && data[end - 1] == 0) end--;
+            return end == 0 ? string.Empty : decodeAnsi(data, 0, end);
+        }
+        catch
+        {
+            return string.Empty;   // 同上：交进来的解码器坏时按"拿不到"处理，绝不让一条 clip 把整轮读取带崩
         }
     }
 

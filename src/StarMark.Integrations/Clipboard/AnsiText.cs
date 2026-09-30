@@ -27,6 +27,9 @@ public static class AnsiText
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern uint GetACP();
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern uint GetOEMCP();
+
     /// <summary>
     /// <see cref="CharSet"/> 必须显式写成 <see cref="CharSet.Unicode"/>：默认是 Ansi，
     /// 那时 <c>char[]</c> 按<b>一个字节一个字符</b>封送——函数写回来的 UTF-16 会被拆成一堆 <c>\0</c>，
@@ -39,9 +42,22 @@ public static class AnsiText
     /// <summary>这台机器的 ANSI 码页（诊断与测试都用它，而不是把 936 之类的数字抄进代码）。</summary>
     public static uint SystemAnsiCodePage => GetACP();
 
-    /// <summary>按<b>系统 ACP</b>翻一段字节（<c>ParseDropFiles</c> 的两个调用方交的就是这个）。</summary>
+    /// <summary>这台机器的 OEM 码页（<c>CF_TEXT</c> 按 Win32 约定用它，见 <see cref="DecodeSystemOemText"/>）。</summary>
+    public static uint SystemOemCodePage => GetOEMCP();
+
+    /// <summary>按<b>系统 ACP</b>翻一段字节（<c>CF_HDROP</c> 那两个调用方交的就是这个）。</summary>
     public static string DecodeSystemAnsi(byte[] data, int start, int length)
         => Decode(data, start, length, SystemAnsiCodePage);
+
+    /// <summary>
+    /// 按<b>系统 OEM 码页</b>翻整段字节，供 <c>CF_TEXT</c> 用（P-18）。
+    /// <para>为什么不干脆复用 ACP：Win32 把 <c>CF_TEXT</c> 定义为"当前 OEM 码页的多字节文本"，
+    /// 而 <c>CF_HDROP</c> 的非宽形式是 ANSI——两个格式各有各的约定，按约定走才不猜。</para>
+    /// <para>简体中文 Windows 上两者都是 936 ⇒ 这个区分对用户今天看到的读数<b>没有差别</b>；
+    /// 差别只出现在 OEM≠ACP 的机器上（如英文机 437 vs 1252），那里按约定走才有一致的期望。</para>
+    /// </summary>
+    public static string DecodeSystemOemText(byte[] data, int start, int length)
+        => Decode(data, start, length, SystemOemCodePage);
 
     /// <summary>
     /// 显式给码页的那一档：单测靠它把"同一串字节在 936 下是中文、在 1252 下是另一回事"钉成确定断言，

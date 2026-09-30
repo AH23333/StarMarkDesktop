@@ -130,7 +130,7 @@ internal static class ClipboardNative
     {
         if (!NativeMethods.IsClipboardFormatAvailable(NativeMethods.CF_UNICODETEXT)) return null;
         var payload = ReadGlobal(NativeMethods.GetClipboardData(NativeMethods.CF_UNICODETEXT), CopyLimitBytes, out _);
-        return payload is null ? null : ClipboardPayload.DecodeText(payload, ansi: false);
+        return payload is null ? null : ClipboardPayload.DecodeUnicodeText(payload);
     }
 
     private static System.Collections.Generic.List<string> ReadFiles()

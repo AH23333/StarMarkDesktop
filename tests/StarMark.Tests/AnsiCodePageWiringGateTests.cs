@@ -64,4 +64,63 @@ public sealed class AnsiCodePageWiringGateTests
         Assert.Contains("AnsiText.DecodeSystemAnsi", native, StringComparison.Ordinal);
         Assert.Contains("AnsiText.DecodeSystemAnsi", ditto, StringComparison.Ordinal);
     }
+
+    // ===== 文本那一半（P-18，批次 SQ）：同一族，所以闸门也在同一处 =====
+
+    private const string DittoReader = "src/StarMark.Integrations/Ditto/DittoDatabaseReader.cs";
+    private const string Native = "src/StarMark.Integrations/Clipboard/ClipboardNative.cs";
+
+    [Fact]
+    public void TheAnsiTextBranchNoLongerAssumesUtf8AndTakesNoDefaultDecoder()
+    {
+        var code = SourceGate.Code(SourceGate.ReadRepoFile(Payload));
+        var body = SourceGate.Code(SourceGate.MethodBody(SourceGate.ReadRepoFile(Payload),
+            "public static string DecodeAnsiText(byte[]? data, Func<byte[], int, int, string> decodeAnsi)"));
+
+        // 那个 `bool ansi` 把"单字节"与"UTF-8"混为一谈——旧缺陷就是这么写进签名的。
+        Assert.DoesNotContain("DecodeText(byte[]? data, bool", code, StringComparison.Ordinal);
+        // CF_TEXT 那一支不许自己选定编码：整段交给交进来的解码器。
+        Assert.DoesNotContain("Encoding.UTF8", body, StringComparison.Ordinal);
+        // #209：留默认值＝给未来的调用方留一条静默乱码的路。
+        Assert.Contains("Func<byte[], int, int, string> decodeAnsi)", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EachProducerPicksItsOwnEntryPoint()
+    {
+        var native = SourceGate.Code(SourceGate.MethodBody(SourceGate.ReadRepoFile(Native),
+            "private static string? ReadText()"));
+        var ditto = SourceGate.Code(SourceGate.MethodBody(SourceGate.ReadRepoFile(DittoReader),
+            "private void FillData(DittoClip clip)"));
+
+        // 实时采集只读 CF_UNICODETEXT ⇒ 它不该问码页要任何东西。
+        Assert.Contains("DecodeUnicodeText(payload)", native, StringComparison.Ordinal);
+        // Ditto 两种文本格式各走各的入口，且 CF_TEXT 交的是 **OEM** 码页解码器（Win32 对该格式的约定）。
+        Assert.Contains("ClipboardPayload.DecodeUnicodeText(data)", ditto, StringComparison.Ordinal);
+        Assert.Contains("ClipboardPayload.DecodeAnsiText(data, AnsiText.DecodeSystemOemText)", ditto, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TextPrecedenceIsDecidedOutsideTheRowLoop()
+    {
+        var ditto = SourceGate.Code(SourceGate.MethodBody(SourceGate.ReadRepoFile(DittoReader),
+            "private void FillData(DittoClip clip)"));
+
+        // 那句 SELECT 没有 ORDER BY ⇒ "谁后到谁赢"就是行序在替我们做决定（P-18 的第二半）。
+        Assert.DoesNotContain("clip.Format = fmt.ToUpperInvariant();", ditto, StringComparison.Ordinal);
+        Assert.Contains("if (wideText is not null)", ditto, StringComparison.Ordinal);
+        Assert.Contains("else if (ansiText is not null)", ditto, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OemAndAnsiCodePagesAreTwoNamedEntryPointsNotOneGuess()
+    {
+        var ansi = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.Integrations/Clipboard/AnsiText.cs"));
+
+        // 两个格式两种约定：CF_HDROP＝ANSI、CF_TEXT＝OEM。合成一个"反正中文机器上都是 936"就没人会去查别的机器。
+        Assert.Contains("private static extern uint GetACP();", ansi, StringComparison.Ordinal);
+        Assert.Contains("private static extern uint GetOEMCP();", ansi, StringComparison.Ordinal);
+        Assert.Contains("public static uint SystemOemCodePage => GetOEMCP();", ansi, StringComparison.Ordinal);
+        Assert.Contains("Decode(data, start, length, SystemOemCodePage)", ansi, StringComparison.Ordinal);
+    }
 }

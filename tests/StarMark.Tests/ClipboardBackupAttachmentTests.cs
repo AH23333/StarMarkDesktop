@@ -201,12 +201,21 @@ public sealed class ClipboardBackupAttachmentTests : IDisposable
         var export = await _backup.ExportWithClipImagesAsync(Target());
 
         var manifest = ManifestOf(export.Path);
-        Assert.Equal(File.ReadAllText(plain), manifest);
+        // 清单里带一个**秒级**导出时间戳（`exportedAt = UtcNow.ToUnixTimeSeconds()`），两次导出只要跨了那一秒，
+        // 全文比对就必然红——批次 SQ 的反向探针就白白把它算成一次"命中"。归一化只中和这一个字段，
+        // 其余一个字节都不许不同（放宽的是那块表，不是"清单不许变"这件事）。
+        Assert.Equal(WithoutExportStamp(File.ReadAllText(plain)), WithoutExportStamp(manifest));
         Assert.Equal(BackupService.ComputeChecksum(
             (await BackupService.ReadAsync(plain)).Payload),
             (await BackupService.ReadAsync(export.Path)).Checksum);
         Assert.Equal(2, BackupContainer.CountClipEntries(export.Path));      // 一行两张：主图 + 缩略图
+        // 正向对照：那份时间戳本身仍必须真的写进去（归一化不许变成"整个字段没了"）。
+        Assert.Contains("\"exportedAt\":", manifest, StringComparison.Ordinal);
     }
+
+    /// <summary>把清单里那个秒级导出时间戳归一成同一个值——这是两次导出之间唯一允许不同的字段。</summary>
+    private static string WithoutExportStamp(string manifest)
+        => System.Text.RegularExpressions.Regex.Replace(manifest, "\"exportedAt\"\\s*:\\s*-?[0-9]+", "\"exportedAt\":0");
 
     [Fact]
     public async Task ChecksumStillGuardsTheManifest_WhenOneByteOfThePackageChanges()

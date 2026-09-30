@@ -147,6 +147,8 @@ public sealed class DittoDatabaseReader : IDisposable
             cmd.Parameters.AddWithValue("$id", clip.Id);
 
             byte[]? hdrop = null;
+            string? wideText = null;
+            string? ansiText = null;
             using (var reader = cmd.ExecuteReader())
             {
                 while (reader.Read())
@@ -158,19 +160,33 @@ public sealed class DittoDatabaseReader : IDisposable
                     switch (fmt.ToUpperInvariant())
                     {
                         case "CF_UNICODETEXT":
+                            var w = ClipboardPayload.DecodeUnicodeText(data);
+                            if (!string.IsNullOrWhiteSpace(w)) wideText = w;
+                            break;
                         case "CF_TEXT":
-                            var text = ClipboardPayload.DecodeText(data, ansi: fmt.ToUpperInvariant() == "CF_TEXT");
-                            if (!string.IsNullOrWhiteSpace(text))
-                            {
-                                clip.Text = text;
-                                clip.Format = fmt.ToUpperInvariant();
-                            }
+                            // P-18：CF_TEXT 是码页文本，不是 UTF-8（按 Win32 约定是 OEM 码页）。
+                            var a = ClipboardPayload.DecodeAnsiText(data, AnsiText.DecodeSystemOemText);
+                            if (!string.IsNullOrWhiteSpace(a)) ansiText = a;
                             break;
                         case "CF_HDROP":
                             hdrop = data;
                             break;
                     }
                 }
+            }
+
+            // P-18 的另一半：那句 SELECT 没有 ORDER BY ⇒ 谁后到谁赢是**行序**在替我们做决定。
+            // 两种文本格式各存各的，出了循环再按"宽字符优先"定夺 ⇒ 同一 clip 的读数与行序无关。
+            // （同一格式内仍是后到的赢，与改前一致；这里改的是跨格式的裁决，不是新增防御分支。）
+            if (wideText is not null)
+            {
+                clip.Text = wideText;
+                clip.Format = ClipboardPayload.FormatUnicodeText;
+            }
+            else if (ansiText is not null)
+            {
+                clip.Text = ansiText;
+                clip.Format = ClipboardPayload.FormatAnsiText;
             }
 
             if (hdrop != null)
