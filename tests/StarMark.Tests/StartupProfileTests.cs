@@ -21,15 +21,111 @@ public sealed class StartupProfileTests : IDisposable
 {
     private readonly List<string> _lines = new();
     private readonly Action<string> _previousSink;
+    private readonly Func<string> _previousMemoryReader;
 
     public StartupProfileTests()
     {
         // 单测绝不往用户真实的日志文件里写行
         _previousSink = StartupProfile.Sink;
         StartupProfile.Sink = _lines.Add;
+        // 也不许把真系统的读数带进断言：那会造出一条只会在某些时刻为真的"契约"（同 #212 那一族）
+        _previousMemoryReader = StartupProfile.MemoryReader;
+        StartupProfile.MemoryReader = () => "读数占位";
     }
 
-    public void Dispose() => StartupProfile.Sink = _previousSink;
+    public void Dispose()
+    {
+        StartupProfile.Sink = _previousSink;
+        StartupProfile.MemoryReader = _previousMemoryReader;
+    }
+
+    // ===== 内存读数（批次 SS：先装尺子，再谈懒加载） =====
+
+    [Fact]
+    public void EveryMarkIsFollowedByItsOwnMemoryLine()
+    {
+        StartupProfile.ResetForTests(1_000);
+        StartupProfile.Mark("迁移", 1_040);
+
+        Assert.Equal(2, _lines.Count);
+        Assert.StartsWith("[启动] 迁移：", _lines[0], StringComparison.Ordinal);
+        // 成对且同名：两条分开或标签错位，读表的人就会把上一段的内存涨幅安到这一段头上
+        Assert.Equal("[内存] 迁移：读数占位", _lines[1]);
+    }
+
+    [Fact]
+    public void TheSecondMarkPairsWithItsOwnLabelNotTheFirst()
+    {
+        StartupProfile.ResetForTests(1_000);
+        StartupProfile.Mark("第一段", 1_010);
+        StartupProfile.Mark("第二段", 1_020);
+
+        Assert.Equal("[内存] 第一段：读数占位", _lines[1]);
+        Assert.Equal("[内存] 第二段：读数占位", _lines[3]);
+    }
+
+    /// <summary>高频计时壳（逐组件、逐源）不配内存行：每段都读一次系统，开销就跑进被量的那段里。</summary>
+    [Fact]
+    public void MeasureStaysSilentAboutMemory()
+    {
+        StartupProfile.Measure("逐组件的细段", () => { });
+        Assert.Single(_lines);
+        Assert.StartsWith("[耗时] 逐组件的细段", _lines[0], StringComparison.Ordinal);
+    }
+
+    /// <summary>尺子自己也得有一条真调用的证人：断言<b>形状</b>而不是数值（数值随机器与时序变）。</summary>
+    [Fact]
+    public void TheRealMemoryLineCarriesEveryField()
+    {
+        var line = StartupProfile.SystemMemoryLine();
+        var match = System.Text.RegularExpressions.Regex.Match(line,
+            @"工作集 (\d+) MB · 私有 (\d+) MB · 托管堆 (\d+) MB · 句柄 (\d+) · 程序集 (\d+)");
+
+        Assert.True(match.Success, $"真实读数形状不对，前后没法对比：{line}");
+        Assert.True(int.Parse(match.Groups[5].Value) > 0, "程序集数为 0 ⇒ 这一格是空的，量不到加载");
+        Assert.True(int.Parse(match.Groups[4].Value) > 0, "句柄数为 0 ⇒ 窗口/句柄泄漏那条证据是空的");
+    }
+
+    /// <summary>
+    /// 每一行读数都必须真的重问系统（批次 SS）。
+    /// <para>起因是 SS 的第一跑：读<b>自己</b>这个进程时，<c>Process</c> 对象会把首次读到的值缓存下来，
+    /// 于是整条启动链上那五格内存读数一字不差（工作集 109 MB、句柄 561 从头到尾不动），
+    /// 而同一时刻外部采样同一个 PID 明明是 292 MB／2044 句柄。
+    /// 一条"看着有、其实恒定"的读数比空白更误导人——读表的人会得出"这一段没涨"的结论。</para>
+    /// <para>断言只借<b>我自己</b>新开的那批内核句柄：200 个的量，别的用例再怎么开合也抵不掉，
+    /// 所以这条不会随时序飘红；而它恰好就是"删掉 <c>Refresh()</c>"那个变异的证人。</para>
+    /// </summary>
+    [Fact]
+    public void TheRealMemoryLineReReadsTheSystemEveryTime()
+    {
+        var before = HandleCountOf(StartupProfile.SystemMemoryLine());
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            $"StarMarkRuler_{Guid.NewGuid():N}.tmp");
+        System.IO.File.WriteAllText(path, "probe");
+        var held = new List<IDisposable>();
+        try
+        {
+            for (var i = 0; i < 200; i++)
+                held.Add(System.IO.File.Open(path, System.IO.FileMode.Open,
+                    System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite));
+
+            var after = HandleCountOf(StartupProfile.SystemMemoryLine());
+            Assert.True(after - before >= 100,
+                $"自己开了 200 个句柄，读数却只动了 {after - before}（{before} → {after}）⇒ 尺子把首次读数缓存住了");
+        }
+        finally
+        {
+            foreach (var h in held) h.Dispose();
+            System.IO.File.Delete(path);
+        }
+    }
+
+    private static int HandleCountOf(string line)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(line, "句柄 (\\d+)");
+        Assert.True(match.Success, $"读数里没有句柄那一格，前后没法对比：{line}");
+        return int.Parse(match.Groups[1].Value);
+    }
 
     [Fact]
     public void MarkReportsSinceLastSegment_AndCumulativeSinceSessionStart()

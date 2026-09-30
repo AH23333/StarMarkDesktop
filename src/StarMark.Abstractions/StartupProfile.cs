@@ -74,6 +74,41 @@ public static class StartupProfile
     /// </summary>
     internal static Action<string> Sink = StarLog.Info;
 
+    /// <summary>
+    /// 一条刻度的<b>内存读数</b>从哪来（批次 SS）。默认走真系统 API；测试注入固定读数——
+    /// 真实值不许进断言（同 #212 那一族：钉住一个会变的数，得到的只是一条随时序飘红的"契约"）。
+    /// </summary>
+    internal static Func<string> MemoryReader = SystemMemoryLine;
+
+    private static Process? _self;
+
+    /// <summary>
+    /// 工作集／私有字节／托管堆／句柄／已加载程序集。<b>只给形状不给判断</b>：
+    /// 这五个数要能前后对比，"这一档值不值"是读表的人定的，不是这把尺子定的。
+    /// <para>句柄与程序集数是<b>懒加载是否真的生效</b>的唯一廉价证据：一个功能关着却仍在加载，
+    /// 数字会先于任何界面症状变胖（而"关着也在跑"这件事在屏幕上根本看不见）。</para>
+    /// </summary>
+    internal static string SystemMemoryLine()
+    {
+        try
+        {
+            var p = _self ??= Process.GetCurrentProcess();
+            // 必须 Refresh：同一进程里读自己时，Process 对象会把首次读到的值缓存下来——
+            // 不刷新的那把尺子一整轮启动都报同一个数（SS 第一跑就是这样：工作集 109 MB、句柄 561 一路不动，
+            // 而外部采样同一进程明明是 292 MB / 2044 句柄）。一条永远不变的读数比没有读数更误导人。
+            p.Refresh();
+            const long Mb = 1024L * 1024L;
+            return "工作集 " + p.WorkingSet64 / Mb + " MB · 私有 " + p.PrivateMemorySize64 / Mb
+                + " MB · 托管堆 " + GC.GetTotalMemory(false) / Mb + " MB · 句柄 " + p.HandleCount
+                + " · 程序集 " + AppDomain.CurrentDomain.GetAssemblies().Length;
+        }
+        catch (Exception ex)
+        {
+            // 尺子不许把被量的东西弄崩：这一段跑在启动路径上，读不到就照实说读不到（不许静默少一行）
+            return "读数不可得（" + ex.GetType().Name + "）";
+        }
+    }
+
     /// <summary>记一段（自上一段起的耗时 + 自会话开始的累计）。</summary>
     public static void Mark(string segment) => Mark(segment, NowMs);
 
@@ -90,6 +125,9 @@ public static class StartupProfile
             line = $"[启动] {segment}：+{sinceLast} ms（自会话开始累计 {now - _start} ms）";
         }
         Sink(line);
+        // 计时行与内存行**成对**：只发一条的话，读表的人得自己猜"这堆内存是在哪一段之间涨的"。
+        // Measure 不发——它按阈值过滤噪声、且逐组件高频调用，每段都读一次系统开销就跑到被量的那段里去了。
+        Sink($"[内存] {segment}：{MemoryReader()}");
     }
 
     /// <summary>本次启动已记下的分段表（诊断面板用，按记录顺序）。</summary>
