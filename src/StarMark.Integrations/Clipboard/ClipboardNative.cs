@@ -97,7 +97,7 @@ internal static class ClipboardNative
                             ClipboardPolicy.MaxImageBytes, out var overLimit);
                         if (bytes is null or { Length: 0 })
                         {
-                            if (overLimit) reason ??= $"{container} 超过 {ClipboardPolicy.MaxImageBytes / (1024 * 1024)}MB 上限，未采集";
+                            if (overLimit) reason ??= $"{container} 超过 {ClipAssets.DescribeBytes(ClipboardPolicy.MaxImageBytes)} 上限，未采集";
                             continue;
                         }
 

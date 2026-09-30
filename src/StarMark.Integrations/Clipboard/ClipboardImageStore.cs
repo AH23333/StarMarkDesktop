@@ -232,7 +232,7 @@ public static class ClipboardImageStore
             var size = new FileInfo(path!).Length;
             if (size > ClipboardPolicy.MaxImageBytes)
                 return (null, default,
-                    $"这张图 {size / (1024 * 1024)} MB 超过 {ClipboardPolicy.MaxImageBytes / (1024 * 1024)} MB，" +
+                    $"这张图 {ClipAssets.DescribeBytes(size)} 超过 {ClipAssets.DescribeBytes(ClipboardPolicy.MaxImageBytes)}，" +
                     "位图太大没有复制（与采集侧同一道上限）");
             var bytes = await File.ReadAllBytesAsync(path!, ct).ConfigureAwait(false);
             if (TryHandOutPng(bytes, out var png, out var frame, out _)) return (png, frame, null);

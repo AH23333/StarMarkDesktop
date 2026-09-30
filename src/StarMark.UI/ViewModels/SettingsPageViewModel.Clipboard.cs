@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml.Media;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Clipboard;
 using StarMark.Abstractions.Insights;
 using StarMark.Integrations.Clipboard;
 using StarMark.Core.Backup;
@@ -80,15 +81,12 @@ public partial class SettingsPageViewModel
     private bool _suppressClipboardImageApply;
 
     /// <summary>
-    /// 图片那一段的状态行。<b>总开关与分开关的四种组合各有不同事实要说</b>，
-    /// 尤其"分开关开着但总开关关着"这一格——用户会以为图片正在被记录，而其实一条都没存。
+    /// 图片那一段的状态行。<b>三格各说什么、以及句子里那三个实测值（缩略图边长／单张上限／短边下限）</b>
+    /// 全在 <see cref="ClipboardPolicy.DescribeImageIntake"/>（批次 SE）——这里以前把数字写死在句子里，
+    /// 改任何一颗判据，设置页就会替它撒谎。
     /// </summary>
-    private static string ClipboardImageStatusText(bool collecting, bool imageOn) => !imageOn
-        ? "图片采集未开启：只记录文本与文件列表。"
-        : !collecting
-            ? "图片采集已打开，但剪贴板历史总开关没开（或监听没建立）——现在一条图片都不会记录。"
-            : "已开启：复制到的图片会存成 PNG，并预生成 160px 缩略图。"
-              + "单张超过 20 MB 或短边小于 16px 的不收；密码管理器在前台时一律不收。";
+    private static string ClipboardImageStatusText(bool collecting, bool imageOn)
+        => ClipboardPolicy.DescribeImageIntake(collecting, imageOn);
 
     partial void OnClipboardImageEnabledChanged(bool value)
     {

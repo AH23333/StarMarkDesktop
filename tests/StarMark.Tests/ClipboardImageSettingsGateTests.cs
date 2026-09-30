@@ -130,8 +130,14 @@ public sealed class ClipboardImageSettingsGateTests
         Assert.DoesNotContain("MaxImageBytes", DataTab());
         Assert.DoesNotContain("MaxImageBytes", ReadRepoPartials(Vm));
         Assert.DoesNotContain("SaveClipboardImageMaxBytes", ReadRepoPartials(Store));
-        // 但用户要能知道有这条线——它写在图片开关的说明里（"20 MB"），是陈述不是控件。
-        Assert.Contains("20 MB", ReadRepoPartials(Vm));
+        // 但用户要能知道有这条线。批次 SE 之前这句钉的是"VM 源码里写着 20 MB"——那句话整颗搬进了
+        // ClipboardPolicy.DescribeImageIntake（数字由判据插值，界面上写不出第二份），所以这里改钉两件事：
+        // ① VM 确实把那一格转发自判据；② 判据那侧的上限读数是<b>算</b>出来的（走"字节→人话"的梯子）。
+        // "这句话今天真的打成 单张超过 20 MB"由行为测逐字钉住：
+        // ClipboardImageIntakeTextTests.TodaySentence_ReadsWordForWordLikeBeforeTheBatch。
+        Assert.Contains("ClipboardPolicy.DescribeImageIntake", ReadRepoPartials(Vm));
+        Assert.Contains("ClipAssets.DescribeBytes(MaxImageBytes)",
+            ReadRepoFile("src/StarMark.Abstractions/Clipboard/ClipboardPolicy.cs"), StringComparison.Ordinal);
     }
 
     [Fact]

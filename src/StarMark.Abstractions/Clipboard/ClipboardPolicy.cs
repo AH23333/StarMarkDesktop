@@ -109,7 +109,9 @@ public static class ClipboardPolicy
         if (bytes <= 0) { reason = "图片负载为空"; return false; }
         if (bytes > MaxImageBytes)
         {
-            reason = $"图片 {bytes / (1024 * 1024)} MB 超过 {MaxImageBytes / (1024 * 1024)} MB 上限，未记录";
+            // 体积一律走那颗"字节→人话"的梯子：旧写法是 `bytes / (1024 * 1024)`（整数除法），
+            // 于是一张 20.5 MB 的图会被写成"图片 20 MB 超过 20 MB 上限"——一句话自己跟自己矛盾（批次 SE）。
+            reason = $"图片 {ClipAssets.DescribeBytes(bytes)} 超过 {ClipAssets.DescribeBytes(MaxImageBytes)} 上限，未记录";
             return false;
         }
         if (width < MinImageEdge || height < MinImageEdge)
@@ -125,6 +127,23 @@ public static class ClipboardPolicy
         reason = null;
         return true;
     }
+
+    /// <summary>
+    /// 设置页「图片采集」那一段的状态行：<b>三种情形各说一件事</b>（批次 SE 从 <c>SettingsPageViewModel.Clipboard</c> 搬进来）。
+    /// <para>搬它的理由有两层。① 这句话原本把三个实测值写死在句子里（<c>160px</c>／<c>20 MB</c>／<c>16px</c>），
+    /// 而真值分别是 <see cref="ClipAssets.ThumbnailMaxEdge"/>、<see cref="MaxImageBytes"/>、<see cref="MinImageEdge"/>
+    /// ⇒ 改任何一颗，设置页就在替判据撒谎（同 #144）。② 更要紧的是：<b>这三格"谁该说什么"今天没有任何测钉着</b>，
+    /// 而它管的是"用户以为图片在被记录、其实一条都没存"这一格（开关组合里最容易误判的一格）。</para>
+    /// <para>注意 <c>160</c> 在这个文件里有两颗且互不相干：<see cref="MaxTitleChars"/>（标题字符数）与
+    /// <see cref="ClipAssets.ThumbnailMaxEdge"/>（缩略图长边像素）。这里用的是后者。</para>
+    /// </summary>
+    public static string DescribeImageIntake(bool collecting, bool imageOn) => !imageOn
+        ? "图片采集未开启：只记录文本与文件列表。"
+        : !collecting
+            ? "图片采集已打开，但剪贴板历史总开关没开（或监听没建立）——现在一条图片都不会记录。"
+            : $"已开启：复制到的图片会存成 PNG，并预生成 {ClipAssets.ThumbnailMaxEdge}px 缩略图。"
+              + $"单张超过 {ClipAssets.DescribeBytes(MaxImageBytes)} 或短边小于 {MinImageEdge}px 的不收；"
+              + "密码管理器在前台时一律不收。";
 
     /// <summary>
     /// 行分隔符归一（CRLF/CR → LF）+ 去首尾空白。
