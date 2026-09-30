@@ -29,7 +29,9 @@ public static class ItemDragHelper
         data.SetText(uri);
 
         // 本地文件 / 文件夹：取 IStorageItem 需要异步，挂 deferral 保活到填充完成后再放行拖放。
-        if (LocalFileIdentity.TryPathFromUri(uri, out var path) && (File.Exists(path) || Directory.Exists(path)))
+        // 还原走 LocalFileIdentity 那颗（两类互补的 file:// 生产者）——只试原始形态时，剪贴板图片行那种
+        // percent 编码的 Uri 判不出"存在"，拖出去会静默退成一行文本（用户以为交出了文件）。
+        if (LocalFileIdentity.TryExistingPath(uri, ExistsOnDisk, out var path))
         {
             var deferral = args.GetDeferral();
             _ = FillStorageItemAsync(data, path, deferral);
@@ -43,6 +45,8 @@ public static class ItemDragHelper
             data.SetWebLink(parsed);
         }
     }
+
+    private static bool ExistsOnDisk(string path) => File.Exists(path) || Directory.Exists(path);
 
     private static async Task FillStorageItemAsync(DataPackage data, string path, DragOperationDeferral deferral)
     {

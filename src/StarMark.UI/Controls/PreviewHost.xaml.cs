@@ -140,22 +140,16 @@ public sealed partial class PreviewHost : UserControl
         }
     }
 
+    /// <summary>
+    /// 预览只接"磁盘上真的存在、且已归一的绝对路径"那一个候选。
+    /// 还原规则本身（两类互补的 <c>file://</c> 生产者）归 <c>LocalFileIdentity.TryExistingPath</c> 一颗，
+    /// 这里只交本宿主的判定语义：<b>文件</b>（目录不预览）＋ <see cref="Path.GetFullPath"/> 相等（拒绝 <c>..</c>／相对遍历）。
+    /// </summary>
     private static bool TryGetLocalFile(string? uri, out string path)
-    {
-        path = string.Empty;
-        if (string.IsNullOrWhiteSpace(uri) || !uri.StartsWith("file://", StringComparison.OrdinalIgnoreCase)) return false;
-        // 两类 file:// 生产者互补：TryPathFromUri 保裸 '#'（Everything/LocalFileIdentity 的原始形态，不解 %XX），
-        // new Uri().LocalPath 解 '%XX'（快捷启动经 AbsoluteUri 存的编码形态，但会把裸 '#' 当片段截断）。
-        // 取磁盘上确实存在的规范文件路径；两者都不存在才判失败。GetFullPath 相等以拒绝 '..'/相对遍历。
-        StarMark.Abstractions.LocalFileIdentity.TryPathFromUri(uri, out var raw);
-        string decoded;
-        try { decoded = new Uri(uri).LocalPath; } catch { decoded = string.Empty; }
-        if (IsExistingFile(raw) && Path.GetFullPath(raw) == raw) { path = raw; return true; }
-        if (IsExistingFile(decoded) && Path.GetFullPath(decoded) == decoded) { path = decoded; return true; }
-        return false;
-    }
+        => StarMark.Abstractions.LocalFileIdentity.TryExistingPath(uri, IsPreviewableFile, out path);
 
-    private static bool IsExistingFile(string? p) => !string.IsNullOrEmpty(p) && File.Exists(p);
+    private static bool IsPreviewableFile(string p)
+        => !string.IsNullOrEmpty(p) && File.Exists(p) && Path.GetFullPath(p) == p;
 
     private async System.Threading.Tasks.Task ShowImageAsync(string path)
     {

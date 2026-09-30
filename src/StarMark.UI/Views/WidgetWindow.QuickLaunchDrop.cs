@@ -151,9 +151,10 @@ public sealed partial class WidgetWindow
                 var text = (await v.GetTextAsync()).Trim();
                 if (QuickLaunchWidgetViewModel.TryParseUri(text, out var uri) && uri is not null)
                     await _manager.AddLinkAsync(_instanceId,
-                        // 含 '#' 的本地文件名：TryPathFromUri 保留 '#'（LocalPath 会截断成 "C"）。
+                        // 文本拖进来的地址同样会被 new Uri() 规范化成 percent 编码 ⇒ 默认标题走判据（先问磁盘）。
                         uri.IsFile ? System.IO.Path.GetFileName(
-                            StarMark.Abstractions.LocalFileIdentity.TryPathFromUri(uri.AbsoluteUri, out var fp) ? fp : uri.LocalPath) : uri.Host,
+                            StarMark.Abstractions.LocalFileIdentity.PreferredPathFromUri(uri.AbsoluteUri,
+                                p => System.IO.File.Exists(p) || System.IO.Directory.Exists(p))) : uri.Host,
                         uri.AbsoluteUri);
             }
 

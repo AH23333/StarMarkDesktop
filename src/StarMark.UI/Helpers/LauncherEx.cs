@@ -45,16 +45,11 @@ public static class LauncherEx
 
             if (parsed.Scheme == Uri.UriSchemeFile)
             {
-                // file:// 有两类互补的生产者，单靠一种还原法都会错：
-                //  · Everything / LocalFileIdentity.UriForPath → 原始两斜杠，'#'、空格、非 ASCII 一律不编码。
-                //    只有 TryPathFromUri 能原样还原（parsed.LocalPath 会把裸 '#' 之后当片段截断）。
-                //  · 快捷启动经 new Uri(path).AbsoluteUri → percent 编码（%20 / %23 / %E5%B7%A5…）。
-                //    只有 parsed.LocalPath 能解码还原（TryPathFromUri 故意不解 %XX，以维持与 UriForPath 的往返契约）。
-                // 取磁盘上确实存在的那个候选（优先原始形态），两类输入都能打开，且不改动任何存储格式。
-                StarMark.Abstractions.LocalFileIdentity.TryPathFromUri(uri, out var rawPath);
-                var decodedPath = SafeLocalPath(parsed);
-                var path = FirstExisting(rawPath, decodedPath);
-                if (path is null)
+                // 还原规则（两类互补的生产者、原始形态优先）归 LocalFileIdentity.TryExistingPath 一颗，
+                // 这里只交出本宿主自己的判定语义：文件与目录都算"在"（目录要在资源管理器里打开）。
+                var opened = StarMark.Abstractions.LocalFileIdentity.TryExistingPath(
+                    uri, static p => System.IO.File.Exists(p) || System.IO.Directory.Exists(p), out var path);
+                if (!opened)
                 {
                     // 两种还原都不存在（文件已删）：退化为 URI 激活（可能无效果，但不抛异常），
                     // 同时把"这一台机器上已经没有这个文件了"说给用户听——只退化不回报，就是点了没反应。
@@ -87,18 +82,5 @@ public static class LauncherEx
             StarMark.Abstractions.StarLog.Error($"打开条目失败: {uri}", ex);
             return "打开失败：" + ex.Message;
         }
-    }
-
-    private static string SafeLocalPath(Uri parsed)
-    {
-        try { return parsed.LocalPath; } catch { return string.Empty; }
-    }
-
-    /// <summary>返回第一个"磁盘上存在"的候选路径；都不存在返回 null。</summary>
-    private static string? FirstExisting(string? a, string? b)
-    {
-        if (!string.IsNullOrEmpty(a) && (File.Exists(a) || Directory.Exists(a))) return a;
-        if (!string.IsNullOrEmpty(b) && (File.Exists(b) || Directory.Exists(b))) return b;
-        return null;
     }
 }

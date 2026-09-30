@@ -123,9 +123,12 @@ public sealed partial class QuickLaunchWidget : UserControl
         var name = (AddNameBox.Text ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(name))
         {
-            // 含 '#' 的本地文件名默认标题：TryPathFromUri 保留 '#'（LocalPath 会截断成 "C"）。
-            var filePath = LocalFileIdentity.TryPathFromUri(parsed.AbsoluteUri, out var fp) ? fp : parsed.LocalPath;
-            name = parsed.IsFile ? Path.GetFileName(filePath) : parsed.Host;
+            // 默认标题走判据：手输/粘贴进来的地址会先被 new Uri() 规范化成 percent 编码，
+            // 只剥前缀就会把名字印成 %E5%B7%A5… 这种乱码——先问一次磁盘上有没有这个东西再选形态。
+            name = parsed.IsFile
+                ? Path.GetFileName(LocalFileIdentity.PreferredPathFromUri(
+                    parsed.AbsoluteUri, p => File.Exists(p) || Directory.Exists(p)))
+                : parsed.Host;
         }
         await _manager.AddLinkAsync(_instanceId, name, parsed.AbsoluteUri);
         AddNameBox.Text = AddUriBox.Text = string.Empty;
