@@ -133,4 +133,48 @@ public static class DateTimeText
         DayOfWeek.Saturday => "六",
         _ => "日",
     };
+
+    // ==================== 「多久以前」那四档人话 ====================
+
+    /// <summary>
+    /// 「多久以前」这一族话里<b>措辞</b>的唯一出处（批次 SJ，P-131 清单 #5）。
+    /// <para>登记时写的是"两份实现"（卡片与活动列表各一份 if 链，措辞逐字相同）。按<b>后果</b>重扫＝
+    /// 四份 if 链（另加热榜缓存年龄、RSS 源状态那一句"上次抓取 …"），而<b>没有任何一条用例钉过其中任何一份</b>。
+    /// 两份逐字相同的那对已经真分岔出一天：活动列表把 <c>FromUnixTimeSeconds</c> 得到的<b>零偏移</b>直接交
+    /// <see cref="Day(DateTimeOffset)"/>，卡片交的是 <c>.LocalDateTime</c> ⇒ 本地 00:00–08:00 那段里，
+    /// 同一个超过 30 天的时间在两处差一天（<see cref="Relative"/> 把这一条收在本地那一侧）。</para>
+    /// <para><b>并的是措辞，不是档位</b>："多旧还算刚刚"（60 秒还是 2 分钟）、"超过一天要不要落回日期"
+    /// 都是宿主自己的判断，留在那一句的调用点；这里只保证"分钟／小时／天"这三档<b>怎么写、怎么取整</b>
+    /// 只有一份。取整一律<b>向下截断</b>：热榜那份原本走 <c>NumberText.Grouped(double)</c>（"N0"＝四舍五入），
+    /// 于是 3 小时 59 分在那儿写"4 小时前"、在 RSS 那儿写"3 小时前"——同一句年龄两处差一小时（本批统一成截断）。</para>
+    /// </summary>
+    public const string JustNow = "刚刚";
+
+    /// <summary>「N 分钟前」这一档（<paramref name="count"/> 由调用点向下截断后交出）。</summary>
+    public static string MinutesAgo(long count) => $"{count} 分钟前";
+
+    /// <summary>「N 小时前」这一档。</summary>
+    public static string HoursAgo(long count) => $"{count} 小时前";
+
+    /// <summary>「N 天前」这一档。</summary>
+    public static string DaysAgo(long count) => $"{count} 天前";
+
+    /// <summary>
+    /// 一个本机时刻（Unix 秒）离 <paramref name="now"/> 多久：<b>刚刚／分钟前／小时前／天前</b>四档，
+    /// 超过 30 天落回 <see cref="Day(DateTimeOffset)"/> 那个日期（<b>按 <paramref name="zone"/> 换算</b>）。
+    /// <para>档位写死在这里：60 秒／60 分／24 小时／30 天。比这更宽的那两处（"2 分钟内都算刚刚"）
+    /// 用的是上面三颗档 builder，不是这一颗——差别是宿主的判断，不是两份真值。</para>
+    /// <para>时刻在 <paramref name="now"/> 之后（机器时钟被改过、或库里存了未来值）落进"刚刚"那一档：
+    /// 负数不印，也不为此猜一个数。日期兜底要把时区交进来——同量级的事实在 <c>TrendingCacheCodec</c> 的
+    /// "跨日"判据里同样靠偏移算，不靠这台机器的默认设置，用例才能钉死跨日那一格。</para>
+    /// </summary>
+    public static string Relative(long unixSeconds, DateTimeOffset now, TimeZoneInfo zone)
+    {
+        var diff = now.ToUnixTimeSeconds() - unixSeconds;
+        if (diff < 60) return JustNow;
+        if (diff < 3_600) return MinutesAgo(diff / 60);
+        if (diff < 86_400) return HoursAgo(diff / 3_600);
+        if (diff < AppConstants.ThirtyDaysInSeconds) return DaysAgo(diff / 86_400);
+        return Day(TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(unixSeconds), zone));
+    }
 }

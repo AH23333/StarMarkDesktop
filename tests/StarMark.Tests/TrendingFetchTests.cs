@@ -359,4 +359,22 @@ public sealed class TrendingCacheCodecTests
         // 机器时钟被往回调过：不显示"-2 小时"这种荒谬值
         Assert.Equal("刚刚", TrendingCacheCodec.DescribeAge(now.AddHours(2).ToUnixTimeSeconds(), now));
     }
+
+    /// <summary>
+    /// 小时那一档<b>截断而不是四舍五入</b>（批次 SJ）。上面那句只写 <c>Contains("小时前")</c>，
+    /// 挡不住"3 小时 59 分写成 4 小时前"——而那正是热榜与 RSS 两处曾差一小时的成因
+    /// （<c>NumberText.Grouped(double)</c> 的 "N0" 会四舍五入）。取整方式必须有逐字断言，
+    /// 边界要挑<b>真的会翻档</b>的那个值（#194 的空转教训）。
+    /// </summary>
+    [Fact]
+    public void DescribeAge_TruncatesHoursRatherThanRoundingThem()
+    {
+        var now = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+        Assert.Equal("3 小时前",
+            TrendingCacheCodec.DescribeAge(now.AddHours(-3).AddMinutes(-59).ToUnixTimeSeconds(), now));
+        Assert.Equal("59 分钟前",
+            TrendingCacheCodec.DescribeAge(now.AddMinutes(-59).AddSeconds(-40).ToUnixTimeSeconds(), now));
+        Assert.Equal("2 天前",
+            TrendingCacheCodec.DescribeAge(now.AddDays(-2).AddHours(-20).ToUnixTimeSeconds(), now));
+    }
 }

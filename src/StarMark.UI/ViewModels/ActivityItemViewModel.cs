@@ -1,7 +1,7 @@
 #nullable enable
-using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using StarMark.Abstractions;
+using StarMark.UI.Helpers;
 
 namespace StarMark.UI.ViewModels;
 
@@ -26,7 +26,7 @@ public sealed partial class ActivityItemViewModel : ObservableObject
         Title = rec.Title;
         Uri = rec.Uri;
         KindLabel = KindLabelOf(rec.Kind);
-        AtText = FormatRelative(rec.At);
+        AtText = RelativeTimeHelper.Format(rec.At);
         Change = ChangeOf(rec.Kind);
     }
 
@@ -70,15 +70,4 @@ public sealed partial class ActivityItemViewModel : ObservableObject
             or ActivityKind.ClipRemove or ActivityKind.ItemDelete => ActivityChange.Removed,
         _ => ActivityChange.Added,   // 各 *Add 与 ItemAdd
     };
-
-    private static string FormatRelative(long at)
-    {
-        var dt = DateTimeOffset.FromUnixTimeSeconds(at);
-        var diff = DateTimeOffset.UtcNow - dt;
-        if (diff.TotalSeconds < 60) return "刚刚";
-        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} 分钟前";
-        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours} 小时前";
-        if (diff.TotalDays < 30) return $"{(int)diff.TotalDays} 天前";
-        return DateTimeText.Day(dt);
-    }
 }

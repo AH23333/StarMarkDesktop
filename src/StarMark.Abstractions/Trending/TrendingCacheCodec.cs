@@ -69,11 +69,12 @@ public static class TrendingCacheCodec
         if (fetchedAtUnixSeconds <= 0) return string.Empty;
         var span = now - DateTimeOffset.FromUnixTimeSeconds(fetchedAtUnixSeconds);
         if (span < TimeSpan.Zero) span = TimeSpan.Zero;      // 机器时钟被往回调过时不显示"-3 小时"
-        if (span < TimeSpan.FromMinutes(2)) return "刚刚";
-        if (span < TimeSpan.FromHours(1))
-            return $"{(int)span.TotalMinutes} 分钟前";
-        if (span < TimeSpan.FromDays(1))
-            return $"{NumberText.Grouped(span.TotalHours)} 小时前";
-        return $"{(int)span.TotalDays} 天前";
+        // 档位（两分钟内都算"刚刚"、超过一天不回落日期）是热榜这一页的判断；
+        // 四档措辞与取整归 DateTimeText（批次 SJ）。这里原先小时那一档走 NumberText.Grouped(double)
+        // ＝"N0" 四舍五入，于是 3 小时 59 分写"4 小时前"，而 RSS 那页同一句写"3 小时前"——本批统一成截断。
+        if (span < TimeSpan.FromMinutes(2)) return DateTimeText.JustNow;
+        if (span < TimeSpan.FromHours(1)) return DateTimeText.MinutesAgo((long)span.TotalMinutes);
+        if (span < TimeSpan.FromDays(1)) return DateTimeText.HoursAgo((long)span.TotalHours);
+        return DateTimeText.DaysAgo((long)span.TotalDays);
     }
 }

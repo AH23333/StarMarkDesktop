@@ -301,7 +301,7 @@ public sealed partial class SettingsPage
         // 摘要直接从已解析的 env 算：旧代码再调 Peek(file.Path)，等于把整份备份第二次读盘+反序列化。
         var summary = BackupService.Summarize(env);
         var detail = $"文件：{Path.GetFileName(source)}\n"
-            + $"导出时间：{DateTimeText.Minute(DateTimeOffset.FromUnixTimeSeconds(summary.ExportedAt))}\n"
+            + $"导出时间：{DateTimeText.Minute(DateTimeOffset.FromUnixTimeSeconds(summary.ExportedAt).LocalDateTime)}\n"
             + $"条目 {summary.ItemCount}　用户状态 {summary.UserStateCount}　标签 {summary.TagCount}"
             + (summary.HasWidgets ? "　组件数据：有" : "");
 

@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using StarMark.Abstractions;
 using StarMark.Abstractions.Feed;
 
 namespace StarMark.Core.Feed;
@@ -24,10 +25,11 @@ public static class RssSourceStatus
     public static string FromCache(RssCachedSource cached, long nowUnix)
     {
         var age = TimeSpan.FromSeconds(Math.Max(0, nowUnix - cached.FetchedAtUnix));
-        var when = age < TimeSpan.FromMinutes(2) ? "刚刚"
-            : age < TimeSpan.FromHours(1) ? $"{(int)age.TotalMinutes} 分钟前"
-            : age < TimeSpan.FromDays(1) ? $"{(int)age.TotalHours} 小时前"
-            : $"{age.Days} 天前";
+        // 档位（两分钟内都算"刚刚"）是这一页的判断；四档措辞与取整归 DateTimeText（批次 SJ）。
+        var when = age < TimeSpan.FromMinutes(2) ? DateTimeText.JustNow
+            : age < TimeSpan.FromHours(1) ? DateTimeText.MinutesAgo((long)age.TotalMinutes)
+            : age < TimeSpan.FromDays(1) ? DateTimeText.HoursAgo((long)age.TotalHours)
+            : DateTimeText.DaysAgo(age.Days);
         var next = RssFeedCache.UntilDue(cached, nowUnix);
         var tail = next <= TimeSpan.Zero ? "现在到期，会自动补抓" : $"约 {(int)Math.Ceiling(next.TotalHours)} 小时后自动刷新";
         return $"上次抓取 {when} · 共 {cached.Entries.Count} 条 · {tail}";
