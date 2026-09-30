@@ -54,17 +54,19 @@ public sealed class GitHubCancelSafetyTests : IDisposable
         private readonly int? _cancelFromPage;
         private readonly int? _failFromPage;
         private readonly CancellationTokenSource? _cancelWith;
+        private readonly bool _withEtag;
 
         public int Requests { get; private set; }
 
         public FakeGitHub(int perPage, int? lastPage = null, int? cancelFromPage = null,
-            int? failFromPage = null, CancellationTokenSource? cancelWith = null)
+            int? failFromPage = null, CancellationTokenSource? cancelWith = null, bool withEtag = true)
         {
             _perPage = perPage;
             _lastPage = lastPage;
             _cancelFromPage = cancelFromPage;
             _failFromPage = failFromPage;
             _cancelWith = cancelWith;
+            _withEtag = withEtag;
         }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
@@ -89,7 +91,7 @@ public sealed class GitHubCancelSafetyTests : IDisposable
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json"),
             };
-            resp.Headers.ETag = new EntityTagHeaderValue(FreshEtag);
+            if (_withEtag) resp.Headers.ETag = new EntityTagHeaderValue(FreshEtag);
             return Task.FromResult(resp);
         }
 
@@ -259,5 +261,26 @@ public sealed class GitHubCancelSafetyTests : IDisposable
         Assert.NotNull(stamped);
         Assert.True(long.Parse(stamped!) > 0);
         // client 由 source.DisposeAsync 一并释放（它持有并 Dispose 注入进来的客户端）。
+    }
+
+    [Fact]
+    public async Task Fetch_WithoutAnEtagHeader_CommitsOnlyTheTimestamp()
+    {
+        // 文档里那句「Etag 可为 null（GitHub 没回 ETag 时只提交时间）」必须有它会响的用例（#205）：
+        // 没有这一条，"没 ETag 就整轮什么都不提交"那种改法会把诊断页「上次 GitHub 同步」永远停在旧值，
+        // 而那是一轮真真实实跑完并落了库的同步。
+        var repo = Repo();
+        var client = new GitHubClient(Options(3),
+            new HttpClient(new FakeGitHub(perPage: 3, lastPage: 2, withEtag: false)));
+        await using var source = new GitHubSource(Options(3), repo, client);
+
+        var items = await source.FetchAsync(new SyncContext(), CancellationToken.None);
+        await source.CommitCheckpointAsync(CancellationToken.None);
+
+        Assert.Equal(5, items.Count);
+        Assert.Null(await repo.GetSyncStateAsync("github:etag", CancellationToken.None));
+        var stamped = await repo.GetSyncStateAsync("github:last_synced_at", CancellationToken.None);
+        Assert.NotNull(stamped);
+        Assert.True(long.Parse(stamped!) > 0);
     }
 }
