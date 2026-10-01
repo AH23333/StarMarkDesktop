@@ -110,7 +110,7 @@ if (args.Length >= 1 && args[0] == "aiusage")
 
 if (args.Length >= 1 && args[0] == "srcprobe")
 {
-    // srcprobe      -> 量"这台机器上 Ditto 那笔探测税是多少毫秒"（P-135 的前后数字；默认 5 轮）
+    // srcprobe      -> 量"这台机器上 Ditto 那笔探测税、以及 GitHub 那颗客户端的构造税是多少毫秒"（P-135 前后数字；默认 5 轮）
     // srcprobe <N>  -> 换轮数
     // 只读：全程只碰文件系统与进程表，不写任何库、不碰用户档。输出刻意用 ASCII——这台机器的控制台码页会把中文打成乱码。
     SrcProbeAudit(args.Length >= 2 && int.TryParse(args[1], out var rounds) && rounds > 0 ? rounds : 5);
@@ -148,11 +148,38 @@ static void SrcProbeAudit(int rounds)
         var chosen = StarMark.Integrations.Ditto.DittoSource.FindDbPath(candidates);
         findSw.Stop();
 
+        // GitHub 那一颗源（批次 SY）：旧写法在源的构造链里直接 new GitHubClient（内含 HttpClient+handler），
+        // 这里量的是"没配 Token 的人启动期白挂的那一对"值多少毫秒、多少句柄——新写法这些都不该发生。
+        var ghOptions = new StarMark.Integrations.GitHub.GitHubOptions { Token = null };
+        // 数句柄得用同一个 Process 实例并显式 Refresh：不自刷新读到的是缓存（记忆里那条 Win32 事实）。
+        var self = System.Diagnostics.Process.GetCurrentProcess();
+        self.Refresh();
+        var handlesBefore = self.HandleCount;
+        var clientSw = Stopwatch.StartNew();
+        using (var ghClient = new StarMark.Integrations.GitHub.GitHubClient(ghOptions))
+        {
+            _ = ghClient.IsConfigured;
+        }
+        clientSw.Stop();
+        self.Refresh();
+        var handlesAfter = self.HandleCount;
+
+        var srcSw = Stopwatch.StartNew();
+        var built = 0;
+        var ghSource = new StarMark.Integrations.GitHub.GitHubSource(ghOptions, null!,
+            () => { built++; return new StarMark.Integrations.GitHub.GitHubClient(ghOptions); });
+        var availNow = ghSource.IsAvailable;
+        srcSw.Stop();
+
         Console.WriteLine($"round {i}: ctor={ctorSw.Elapsed.TotalMilliseconds:F3}ms ctorProbes={ctorProbes} "
                           + $"firstAsk={firstSw.Elapsed.TotalMilliseconds:F3}ms secondAsk={againSw.Elapsed.TotalMilliseconds:F3}ms "
                           + $"probes={source.ProbeCount} | enumPaths={enumSw.Elapsed.TotalMilliseconds:F3}ms "
                           + $"findDb={findSw.Elapsed.TotalMilliseconds:F3}ms candidates={candidates.Count} "
                           + $"available={available} chosen={chosen}");
+        Console.WriteLine($"  github: oldShapeCtor(new client)={clientSw.Elapsed.TotalMilliseconds:F3}ms "
+                          + $"handlesAroundClient={handlesAfter - handlesBefore:+0;-0;0} "
+                          + $"| newShapeSourceCtor={srcSw.Elapsed.TotalMilliseconds:F3}ms clientsBuilt={built} "
+                          + $"isAvailable={availNow}");
     }
 }
 
