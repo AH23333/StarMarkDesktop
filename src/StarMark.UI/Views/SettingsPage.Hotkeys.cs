@@ -430,19 +430,23 @@ public sealed partial class SettingsPage
         foreach (var row in HotkeyRowsItems)
         {
             // 措辞刻意不是"失败/未注册"：绑定已经存下并在自动重试，这一行只是"此刻还归别人"的事实提示。
+            // 出路要**点在同一行上说**（P-136）：页底那句汇总离这一行有十几行之远，"给这些动作换一个组合"
+            // 到底点哪里，用户得自己猜——而入口就是这一行那颗显示键位的按钮。文案在 Core 那颗里，界面不重写一份。
             row.RegisterErrorText =
                 _hotkeyBindings.TryGetValue(row.Action, out var g) && !g.IsEmpty
                 && reasons.TryGetValue(HotkeyGesture.GestureKey(g), out var why)
-                    ? $"提示：{why}（设置已保存，占用者退出后自动生效）" : string.Empty;
+                    ? $"提示：{why}（设置已保存，占用者退出后自动生效）。{HotkeyErrorText.RebindHint}" : string.Empty;
         }
 
         RegisterErrorSummary = failed.Count == 0
             ? string.Empty
             // 这里不写"被其它程序占用"：Win32 没回答归属，而实际占用方常是本程序自己的另一个实例。
             // 具体是谁由每一条的 Reason 说（那边有 pid 就报 pid），汇总句只说"此刻没归这个实例"这个事实。
+            // 汇总句**不再重复教他怎么换键**——那句话只有一个出处（Core 的 RebindHint），由每一行自己说；
+            // 同一件事在两处各写一遍，下次改措辞就会只改到一半（P-123/P-130 那条线）。
             : $"提示：{failed.Count} 个组合键此刻没归这个实例（{string.Join("、", failed.Select(f => $"{HotkeyDisplay.Display(f.Gesture)}：{f.Reason}"))}）。"
               + "这些快捷键已经保存，程序会每 " + HotkeyService.OccupancyRetrySeconds + " 秒自己再注册一次，对方一退出就生效——不需要你做任何事；"
-              + "急着现在就要生效可以点「重试注册」，或给这些动作换一个组合再点「保存快捷键」。";
+              + "急着现在就要生效可以点「重试注册」，具体每一行怎么换一个键，写在该行的提示里。";
     }
 
     /// <summary>重试注册：不改绑定内容，只再向系统注册一次（用户可能刚关掉占用该组合键的程序）。</summary>
