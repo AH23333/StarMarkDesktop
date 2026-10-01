@@ -226,6 +226,37 @@
                                 </Grid>
                             </StackPanel>
                         </Border>
+
+                        <!-- 关于与更新（批次 UE）：只检测、只说清结果；下载与安装是另一件事，本程序不做 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="关于与更新" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="当前版本"/>
+                                        <TextBlock Text="这份产物是哪一个版本；构建时间在「健康与诊断」页的「诊断」里。" Style="{StaticResource SettingRowText}"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{x:Bind ViewModel.LocalVersionText, Mode=OneWay}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="每天自动检查一次"/>
+                                        <TextBlock Text="只问一句「这个仓库发布了哪一版」，不下载任何东西、不改动本机文件，也不替换正在运行的程序。关掉之后只有点「立即检查」那一下才会联网。"
+                                                   Style="{StaticResource SettingRowText}"/>
+                                    </StackPanel>
+                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.UpdateAutoCheckEnabled, Mode=TwoWay}"/>
+                                </Grid>
+                                <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Button x:Name="UpdateCheckButton" Content="立即检查" Click="UpdateCheck_Click"
+                                            Style="{StaticResource SecondaryButton}"/>
+                                    <!-- 只有「确实有一版更新」才出现：在"还没有发布过"那一格放一颗下载按钮，等于承诺了一个不存在的产物 -->
+                                    <Button x:Name="UpdateOpenPageButton" Content="打开下载页" Click="UpdateOpenPage_Click"
+                                            Style="{StaticResource SecondaryButton}" Visibility="Collapsed"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
                     </controls:ColumnFlowPanel>
                 </ScrollViewer>
             </TabViewItem>

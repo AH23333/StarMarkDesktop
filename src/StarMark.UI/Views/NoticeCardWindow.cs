@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -54,6 +55,7 @@ public sealed class NoticeCardWindow : Window
     private readonly Border _card;
     private readonly TextBlock _title;
     private readonly TextBlock _body;
+    private readonly TextBlock _hint;
     private readonly DispatcherQueueTimer? _hide;
 
     private bool _shown;
@@ -62,6 +64,21 @@ public sealed class NoticeCardWindow : Window
     private int _captureDepth;                      // 抓帧那几句套了几层，见 SetHiddenForCapture
     private bool _wasOnScreenBeforeCapture;         // 最外层收起来之前，这张卡是不是真的贴着
     private RectInt32 _rect;                        // 最近一次摆上去的实际矩形（物理像素），只用于日志
+
+    /// <summary>
+    /// 这一条消息附带的动作（批次 UE）：一个<b>由本程序自己拼出来</b>的地址，点整张卡就打开它。
+    /// <para>出口只能是"点整张卡"而不是"卡里一颗按钮"：这张卡从不抢前台，而第一次点击常被系统当作
+    /// "激活这扇窗"而吞掉输入（<see cref="MountClickToClose"/> 因此两路一起挂）。挂在卡上的按钮
+    /// 会碰上同一件事，症状正是"按下下载没反应、卡还收掉了"。整张卡都是那一下，两路里哪一条先通都算点中。</para>
+    /// </summary>
+    private string? _actionUrl;
+    private string? _actionLabel;
+
+    /// <summary>底部那一行的两种说法——停留秒数只有 <see cref="KeepSeconds"/> 一个出处，这里不许另写一份。</summary>
+    private static string HintFor(bool hasAction, string? label)
+        => hasAction
+            ? $"点一下打开{label ?? "链接"} · {KeepSeconds} 秒后自动消失"
+            : $"点一下关闭 · {KeepSeconds} 秒后自动消失";
 
     public NoticeCardWindow()
     {
@@ -83,6 +100,12 @@ public sealed class NoticeCardWindow : Window
             MaxHeight = BodyMaxHeightDip,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
+        _hint = new TextBlock
+        {
+            Text = HintFor(false, null),
+            FontSize = 11,
+            Foreground = new SolidColorBrush(Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF)),
+        };
         _card = new Border
         {
             Width = CardWidthDip,
@@ -98,12 +121,7 @@ public sealed class NoticeCardWindow : Window
                 {
                     _title,
                     _body,
-                    new TextBlock
-                    {
-                        Text = $"点一下关闭 · {KeepSeconds} 秒后自动消失",
-                        FontSize = 11,
-                        Foreground = new SolidColorBrush(Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF)),
-                    },
+                    _hint,
                 },
             },
         };
@@ -233,6 +251,53 @@ public sealed class NoticeCardWindow : Window
         {
             if (e.WindowActivationState == WindowActivationState.PointerActivated) HideCard();
         };
+        // 动作与关闭两路一起挂：同一次点击要么走 PointerPressed、要么被系统当成"激活"而走 Activated，
+        // 只挂一路的症状就是"点了下载没反应"。处理器读的是当时的 _actionUrl，所以复用这扇窗时
+        // 上一条消息的动作不会留给下一条（SetAction 每条都重设，没动作就清成 null）。
+        _card.PointerPressed += (_, _) => OpenAction();
+        Activated += (_, e) =>
+        {
+            if (e.WindowActivationState == WindowActivationState.PointerActivated) OpenAction();
+        };
+    }
+
+    /// <summary>
+    /// 给这一条消息挂一个动作（批次 UE：发现有新版时，点整张卡就打开它自己的发布页）。
+    /// <para><b>由调用方决定给哪个地址</b>，而且只给本程序自己拼出来的那一种
+    /// （<c>UpdatePolicy.ReleasePageUrl</c>）——远端回的 <c>html_url</c> 从解析那一步就不进数据结构，
+    /// 否则"点一下卡片"就变成了"打开外部服务器想让你打开的东西"。</para>
+    /// </summary>
+    public void SetAction(string? url, string? label)
+    {
+        _actionUrl = string.IsNullOrWhiteSpace(url) ? null : url;
+        _actionLabel = _actionUrl is null ? null : label;
+        _hint.Text = HintFor(_actionUrl is not null, _actionLabel);
+    }
+
+    private void OpenAction()
+    {
+        var url = _actionUrl;
+        if (url is null) return;
+        // 一次消息只走一次：点开之后这张卡就回到"点一下关闭"，同一条消息被再点一次不该再开一扇浏览器。
+        SetAction(null, null);
+        _ = ReportIfRefusedAsync(url);
+    }
+
+    /// <summary>
+    /// 那句返回值是"系统有没有找到一个能处理这个地址的程序"，不接住它就是"点了没反应"而日志里什么都没有
+    /// （浏览器没注册 http 处理程序时正是这种一次都看不见的失败）。卡已经收掉了，所以只能落日志。
+    /// </summary>
+    private static async Task ReportIfRefusedAsync(string url)
+    {
+        try
+        {
+            var reason = await LauncherEx.TryOpenAsync(url);
+            if (reason is not null) StarLog.Warn($"[提示卡] 链接没能交出去：{reason}（{url}）");
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"[提示卡] 打开链接失败：{ex.GetType().Name} {ex.Message}");
+        }
     }
 
     /// <summary>

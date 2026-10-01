@@ -398,6 +398,10 @@ public partial class SettingsPageViewModel : ObservableObject
         RssStatus = RssEnabled
             ? "已开启：导航栏有「RSS」这一栏，每个订阅源是它自己的一个文件夹。这一栏只管来源地址。"
             : "未开启：导航栏没有「RSS」项，也不会去抓任何地址。添加一个启用中的来源就会自动开启。";
+
+        // 关于与更新（批次 UE）：只回灌那颗开关 + 上一次检查留下的那一句。
+        // 这一屏打开时一个请求都不发——否则"想看一眼版本"就变成每进一次设置页上一次网。
+        BackfillUpdateState();
     }
 
     [RelayCommand]

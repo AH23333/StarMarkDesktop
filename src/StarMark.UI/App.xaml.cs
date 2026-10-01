@@ -206,6 +206,20 @@ public partial class App : Application
         // 「已 Star / 已收藏」的会话态：远端 Star 成功后先记在这里，避免同步前刷新又显示成未 Star。
         services.AddSingleton<StarMark.Abstractions.Trending.TrendingStarState>();
 
+        // 检查更新（批次 UE）：契约在 Abstractions、抓取在 Integrations、编排在 Core，这里只把它们接起来。
+        // 这条链**只读**——往磁盘上写的只有"上次查的结果"那五格设置；下载与替换正在运行的程序是另一件事，
+        // 前置条件还没落地（见 docs/待决策事项.md），所以这里也刻意不给它任何写文件的口子。
+        // Token 仍走 tokenProvider 现取（热榜同一条）：改完 Token 不必重启就能按新配额问。
+        services.AddSingleton<StarMark.Abstractions.Updates.IReleaseSource>(sp =>
+            new StarMark.Integrations.Updates.GitHubReleaseSource(
+                tokenProvider: () => sp.GetRequiredService<StarMark.Integrations.GitHub.GitHubOptions>().Token));
+        // 状态宿主就是设置档那一份（必须复用容器里那颗单例：两处各 new 一个 SettingsStore 会互相盖写）
+        services.AddSingleton<StarMark.Core.Updates.IUpdateStateStore>(
+            sp => sp.GetRequiredService<StarMark.UI.Helpers.SettingsStore>());
+        services.AddSingleton(sp => new StarMark.Core.Updates.UpdateService(
+            sp.GetRequiredService<StarMark.Abstractions.Updates.IReleaseSource>(),
+            sp.GetRequiredService<StarMark.Core.Updates.IUpdateStateStore>()));
+
         // 浏览器书签源（Chrome / Edge）
         services.AddSingleton<StarMark.Integrations.Bookmarks.ChromeBookmarksSource>();
         services.AddSingleton<IItemSource>(sp => sp.GetRequiredService<StarMark.Integrations.Bookmarks.ChromeBookmarksSource>());
@@ -335,6 +349,19 @@ public partial class App : Application
                     fileSettings, Services.GetRequiredService<BackupService>()).ConfigureAwait(false);
             });
             AutoBackupScheduler.Start(fileSettings, Services.GetRequiredService<BackupService>());
+
+            // 3.1b 检查更新（批次 UE）：与自动备份同一配方——先让出首屏那 20 秒再问第一次，之后每小时巡查
+            // "距上次满 24 小时了没"。开关关着时连定时器都不建（"看着关了其实还在上网问"是最难发现的不诚实）。
+            try
+            {
+                var updates = Services.GetRequiredService<StarMark.Core.Updates.UpdateService>();
+                UpdateScheduler.ScheduleFirstProbe(fileSettings, updates);
+                UpdateScheduler.Start(fileSettings, updates);
+            }
+            catch (Exception uex)
+            {
+                StarLog.Error("更新检查排程没起来（不影响其它功能，设置里点「立即检查」仍然可用）", uex);
+            }
 
             // 3.2 剪贴板历史（默认关）：开着才建监听窗口。必须在 UI 线程建——HWND_MESSAGE 的 WndProc
             // 由所属线程的消息泵驱动，线程池线程没有消息泵就永远收不到 WM_CLIPBOARDUPDATE。

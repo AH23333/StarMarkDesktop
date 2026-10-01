@@ -23,8 +23,13 @@ internal static class NoticeCard
 {
     private static NoticeCardWindow? _window;
 
-    /// <summary>发一条提醒，返回它<b>是否真的贴在了屏幕上</b>。</summary>
-    public static bool Show(string title, string message)
+    /// <summary>
+    /// 发一条提醒，返回它<b>是否真的贴在了屏幕上</b>。
+    /// <para><paramref name="actionUrl"/>／<paramref name="actionLabel"/> 是给"看完就能做一步"的那类消息用的
+    /// （批次 UE：有新版本时点整张卡就打开它自己的发布页）。传进来的一律必须是<b>本程序自己拼出来的</b>地址，
+    /// 调用方不许把外部服务器给的回链直接递到这里（理由见 <c>NoticeCardWindow.SetAction</c>）。</para>
+    /// </summary>
+    public static bool Show(string title, string message, string? actionUrl = null, string? actionLabel = null)
     {
         try
         {
@@ -35,6 +40,9 @@ internal static class NoticeCard
                 // 并且每次都诚实地回答"没贴上屏幕"——那条兜底链就在替一个永不重来的 bug 打掩护。
                 _window.Closed += (_, _) => _window = null;
             }
+            // 动作要先落到窗上再换内容：那条"点一下…"的说明行是卡片自己按有没有动作生成的，
+            // 晚一步就会先贴上屏幕再改字（一帧的字面跳动）。没有动作的消息也必须走这一句，否则上一条的动作会留着。
+            _window.SetAction(actionUrl, actionLabel);
             return _window.Apply(title, message);
         }
         catch (Exception ex)

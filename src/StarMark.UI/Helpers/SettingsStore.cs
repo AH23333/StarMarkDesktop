@@ -265,6 +265,33 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         /// 而显隐那条是"贴图忽然点不动了"唯一的键盘出口。判据在 <c>Core/Hotkeys/CaptureGate</c>。</para>
         /// </summary>
         public bool? CaptureEnabled { get; set; }
+
+        // ===== 检测版本更新（批次 UE）=====
+        // 这一格只管"开不开自动检查"，另三格是<b>上次问到的结果</b>：设置页打开时要当场说得出
+        // "上次查到的是什么、几点查的"，而不是为了显示先发一次网。
+
+        /// <summary>
+        /// 自动检查更新的总开关（<b>默认开</b>）。
+        /// <para>与剪贴板那类默认关的开关不同，这一条<b>不发出去任何本机数据</b>：一次匿名 GET 问一个公开仓库
+        /// 的"最新是哪一版"，回来的只是一个版本号。默认关着等于把用户点名要的功能藏起来——
+        /// 而他随时可以关掉，关掉后程序一次网也不上（判据只在 <c>UpdatePolicy.ShouldAutoProbe</c> 一处）。</para>
+        /// </summary>
+        public bool? UpdateAutoCheckEnabled { get; set; }
+
+        /// <summary>上一次<b>真的拿到对方答复</b>的时刻（UTC）。离线那种失败不写这里，所以联网后会自己补问。</summary>
+        public long? UpdateLastProbeUnix { get; set; }
+
+        /// <summary>
+        /// 上一次的结局，<b>存名字不存序号</b>：枚举哪天插一项，序号会把旧档解释成另一个结论，
+        /// 而"上次检查说过什么"串味就是界面在说一件没发生过的事（ItemType 那批立过这条规矩）。
+        /// </summary>
+        public string? UpdateLastVerdict { get; set; }
+
+        /// <summary>上一次问到的远端标签（配合上一格把那句话拼回来）。</summary>
+        public string? UpdateLastRemoteTag { get; set; }
+
+        /// <summary>已经为哪一版弹过卡。<b>只记标签不记时间</b>：记住的是"这一版说过了"。</summary>
+        public string? UpdateAnnouncedTag { get; set; }
     }
 
     public SettingsStore(string? path = null) => _path = path ?? ResolveSettingsPath();

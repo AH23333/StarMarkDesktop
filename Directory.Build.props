@@ -1,0 +1,22 @@
+<Project>
+
+  <!--
+    全仓唯一的版本号出处（批次 UE）。
+
+    为什么要有这个文件：这批要加"检测版本更新"，而比较的前提是两边都有数。查过：加这批之前
+    全仓没有任何 <Version>／<AssemblyVersion>／<InformationalVersion>（只有 SDK 生成的
+    obj\*AssemblyInfo.cs 里默认的 1.0.0），界面与日志露的是**构建时间**（BuildInfo.Display）——
+    "是不是新版"这个问题当时根本没有可比的量，而"2026-10-01 17:14 构建"也没法拿去和 Release 标签比。
+
+    写在这里而不是每个 csproj 各写一份：一处事实、六个工程共享。改版本号只改这一行；
+    运行期读的是**正在跑的那颗程序集**的 InformationalVersion（AppVersion.Current），
+    所以"源码里的数与产物里的数不一致"这件事会被当场看见，而不是等日志解释。
+
+    发布口径（远端还没有任何 Release，本批复查过）：标签写成 v+这里的那一串
+    （1.0.0 ⇒ 标签 v1.0.0）；AppVersion 的解析容忍 v 前缀、缺省段与 -beta.1 这类预发布尾巴。
+  -->
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+</Project>

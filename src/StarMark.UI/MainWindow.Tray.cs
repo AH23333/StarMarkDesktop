@@ -78,6 +78,7 @@ public sealed partial class MainWindow
     private const int TrayPerfSaver = 21;
     private const int TrayAutostart = 30;
     private const int TrayHotkeysEnabled = 31;
+    private const int TrayCheckUpdate = 32;
 
     private static StarMark.UI.Services.AutostartService Autostart()
         => App.Services.GetRequiredService<StarMark.UI.Services.AutostartService>();
@@ -156,6 +157,9 @@ public sealed partial class MainWindow
             new("性能 · 省资源", TrayPerfSaver, perf == StarMark.Core.Performance.PerformanceMode.ResourceSaver),
             new("开机自动启动", TrayAutostart, Autostart().IsEnabled(), SeparatorBefore: true),
             new("全局快捷键已启用", TrayHotkeysEnabled, hotkeysOn),
+            // 检查更新：永远点得动——它不依赖任何开关状态（自动那颗开关只管"程序自己要不要上网问"，
+            // 不管"他能不能自己问一次"）。结果由提示卡当场说，包括问不上的那几种原因。
+            new("检查更新", TrayCheckUpdate, SeparatorBefore: true),
         };
         // 有了组才多出这一棵，而且插在"所有贴图"那三条之后（先全局、后按组，与人的操作顺序一致）。
         // 一组贴图收起后它的工具条跟着消失，托盘这一行就是那几张图唯一的出口——不能只在贴图条上给入口。
@@ -228,6 +232,29 @@ public sealed partial class MainWindow
                 _settings.SaveEnableGlobalHotKey(enable);
                 ApplyTraySettings();
                 break;
+            case TrayCheckUpdate:
+                // 菜单当场就关了，所以结果只能走"看得见"的那条出口（提示卡 → 退到日志），
+                // 而不是等设置页恰好打开。
+                _ = CheckUpdateFromTrayAsync();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 托盘那一下＝他现在就想知道答案：绕过 24 小时的节奏真问一次，并把结局当场说给他看。
+    /// <para>这里<b>不看设置里那颗开关</b>——关掉自动检查的含义是"别自己上网问"，不是"不许我问"；
+    /// 把它当成禁用整条功能，症状就是"点了菜单没反应"。</para>
+    /// </summary>
+    private async Task CheckUpdateFromTrayAsync()
+    {
+        try
+        {
+            var service = App.Services.GetRequiredService<StarMark.Core.Updates.UpdateService>();
+            StarMark.UI.Helpers.UpdateScheduler.AnnounceOnDemand(await service.CheckAsync(manual: true));
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("托盘检查更新没走完（不影响使用）", ex);
         }
     }
 
