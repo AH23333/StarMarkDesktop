@@ -83,10 +83,25 @@ public sealed partial class WidgetManager
             .Where(w => w.InstanceId != excludeInstanceId && w.IsVisible && !w.IsDragBusy)
             .ToList();
 
-    /// <summary>启动时恢复组件：若存在默认布局则自动套用它（恢复「最后一次选择的布局」），否则逐个显示全部实例。</summary>
-    public Task RestoreOnStartupAsync() => OnUiAsync(() =>
+    /// <summary>
+    /// 启动时恢复组件：若存在默认布局则自动套用它（恢复「最后一次选择的布局」），否则逐个显示全部实例。
+    /// <para>
+    /// <paramref name="loadOnStartup"/>＝设置页那颗「开机自动加载组件」（用户裁决：取舍给他自己选，默认开＝今天的观感）。
+    /// 关掉时<b>一颗都不建</b>，而不是"先建再收"——后者退不回来是真机量出来的（报告 §二百零九：私有内存 0 变化）。
+    /// </para>
+    /// </summary>
+    public Task RestoreOnStartupAsync(bool loadOnStartup = true) => OnUiAsync(() =>
     {
         var data = _storage.Load();
+
+        if (!loadOnStartup)
+        {
+            // 这句日志不能省：开机内存突然少了几十兆，第一种猜测会是"组件功能坏了"，而不是"你上周关过那个开关"。
+            StarLog.Info($"[内存] {WidgetStartupPolicy.DescribeSkipped(data.Instances.Count)}");
+            StarMark.Abstractions.StartupProfile.Mark($"桌面组件未加载（{data.Instances.Count} 个实例在册）");
+            return;
+        }
+
         var layout = !string.IsNullOrEmpty(data.DefaultLayoutId)
             ? _storage.FindLayout(data.DefaultLayoutId!)
             : null;
@@ -192,6 +207,24 @@ public sealed partial class WidgetManager
         // 这里起一次性定时器，而不是每颗挂一张表：一次巡查就能把整群做完。
         ArmHiddenWindowReclaim();
     }
+
+    /// <summary>
+    /// 就地收起并<b>释放</b>全部组件窗——给「开机自动加载组件」关掉那一下用，不要求重启
+    /// （"要用户重启"在本项目里按缺陷算）。
+    /// <para>
+    /// 与「全部隐藏」不是一件事，也不复用它的出口：隐藏只是 <c>SW_HIDE</c>，窗口与组合面都留着，
+    /// 那 ≈8 MB/颗 一分不退（真机数在报告 §二百零九）；这里走既有的整批关闭出口——
+    /// 几何一次落盘、实例留在档里，下次点亮按存档重建。
+    /// </para>
+    /// </summary>
+    public Task CollapseAllAsync() => OnUiAsync(() =>
+    {
+        var ids = _windows.Keys.ToList();
+        if (ids.Count == 0) return;
+        CloseAll(ids, persist: true);
+        StarLog.Info($"[内存] 开机自动加载已关：收起并释放 {ids.Count} 颗组件窗"
+                     + $"（约 {WidgetStartupPolicy.EstimatedPrivateMb(ids.Count)} MB 私有），实例仍在档里，点亮即重建");
+    });
 
     /// <summary>
     /// 给"持续隐藏满宽限期"的组件窗排一次回收。<b>不在这个时刻收</b>：藏起来又马上调出来是最常做的动作，

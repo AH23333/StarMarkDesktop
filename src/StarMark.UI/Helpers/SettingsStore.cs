@@ -47,6 +47,12 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         /// </summary>
         public bool? LocalDiskSearchEnabled { get; set; }
         /// <summary>
+        /// 「开机自动加载组件」。<b>默认开</b>——这一条与上面那些总开关相反是有意的：
+        /// 组件本来就摆在桌面上，把默认改成关会让一次软件更新<b>悄悄收起用户的桌面</b>，那是观感事故不是性能优化。
+        /// 省下的是每颗约 8 MB 私有内存（实测见报告 §二百一十），所以取舍交给用户点这一下。
+        /// </summary>
+        public bool? WidgetsLoadOnStartup { get; set; }
+        /// <summary>
         /// 内置剪贴板历史总开关。<b>默认关</b>：剪贴板是全机器敏感度最高的数据（密码、卡号、私钥都会路过它），
         /// 默认开等于在用户不知情时把这些抄进一个明文 SQLite 文件。开启后采集全自动，无需任何后续步骤。
         /// </summary>

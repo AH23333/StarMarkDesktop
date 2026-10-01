@@ -100,10 +100,10 @@ public sealed partial class MainWindow : Window
         ApplyTrendingNavVisibility(_settings.LoadTrendingEnabled());
         ApplyRssNavVisibility(_settings.LoadRssEnabled());
 
-        // 启动时恢复已启用的桌面组件
+        // 启动时恢复已启用的桌面组件（「开机自动加载组件」关掉时一颗都不建，见 WidgetManager.RestoreOnStartupAsync）
         DispatcherQueue.TryEnqueue(async () =>
         {
-            try { await _widgetManager.RestoreOnStartupAsync(); }
+            try { await _widgetManager.RestoreOnStartupAsync(_settings.LoadWidgetsLoadOnStartup()); }
             catch (Exception ex) { StarLog.Error("恢复桌面组件失败", ex); }
             // WE-2：恢复**之后**那一段以前没有刻度——日志里最后一个分段停在"桌面组件恢复"（它在恢复结束时才记），
             // 而卡顿看门狗报的那 1.5 s 正好落在它后面，于是谁也说不清是谁占着 UI 线程。补上右半边刻度。

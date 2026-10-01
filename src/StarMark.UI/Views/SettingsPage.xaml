@@ -413,6 +413,24 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- 「开机自动加载组件」（用户裁决：这笔性能取舍由他自己选，别替他决定桌面长什么样）。
+                             默认开＝今天的观感。关掉的收益是实测出来的（每颗组件窗的私有成本，见 Core 的
+                             WidgetStartupPolicy 与报告 §二百一十），而"先建再关"退不回来（§二百零九量过），
+                             所以只能走"不建"这一侧。数字不在这里重抄一遍——下面那行说明绑的是政策那颗。 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="开机自动加载组件" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Text="关掉后开机不再把这些小窗口摆到桌面上，省下的内存按颗算（下面那行写着每颗约多少）。已添加的组件不会丢，随时可就地点亮。"
+                                               Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                    <ToggleSwitch Grid.Column="1" OnContent="加载" OffContent="不加载" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.WidgetsLoadOnStartup, Mode=TwoWay}"/>
+                                </Grid>
+                                <TextBlock Text="{x:Bind ViewModel.WidgetsLoadHint, Mode=OneWay}"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
                         <!-- 组件外观（从「常规 · 外观」搬来）：用户裁决——改组件的东西就该住在组件页，
                              常规页只留主窗口自己的外观。 -->
                         <Border Style="{StaticResource Card}">

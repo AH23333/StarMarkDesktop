@@ -38,6 +38,20 @@ public sealed partial class SettingsStore
         Save(d);
     }
 
+    /// <summary>
+    /// 开机要不要把组件窗全建出来。<b>只有存档明确写着 false 才关</b>——旧档没这个字段、
+    /// 或值被别的程序写坏，都按"照今天的样子开"处理：宁可多占内存，也不要在用户不知情时收起他的桌面。
+    /// </summary>
+    public bool LoadWidgetsLoadOnStartup()
+        => Load()?.WidgetsLoadOnStartup is not false;
+
+    public void SaveWidgetsLoadOnStartup(bool enabled)
+    {
+        var d = Load() ?? new SettingsData();
+        d.WidgetsLoadOnStartup = enabled;
+        Save(d);
+    }
+
     /// <summary>自定义模式下的进程工作集预算（MB）。范围与默认都取自 <see cref="PerformanceSettingsPolicy"/>——这里不再自己写边界（批次 SA，P-123 第 3 条）。</summary>
     public double LoadCacheBudgetMb()
     {
