@@ -10,12 +10,16 @@
 #
 # -KeepInstances N（批次 SU 加，P-137 的边际曲线）：只把**沙盒副本**里的组件实例削到前 N 颗，真档不动。
 #   写回后一定读回来验数量，凑不出 N 颗就直接抛——"场景其实是空操作"比没数更坏（坑表 #185/#218 同一族）。
+# -LoadOnStartup off（批次 SV 加，P-138 的那颗开关）：只改**沙盒副本**的 settings.json 把「开机自动加载组件」写成 false，
+#   实例一颗不少留在档里——这一格量的正是"档里 12 颗、开机一颗都不建"值多少钱，与 -KeepInstances 0 不是一件事
+#   （后者是把档改小，产品根本不知道有那些实例）。自证靠产品自己那句「桌面组件未加载（N 个实例在册）」。
 param(
     [Parameter(Mandatory = $true)][string]$ExePath,
     [ValidateSet('base', 'noWidgets')][string]$Scenario = 'base',
     [int]$SettleSec = 60,
     [int]$SampleEverySec = 10,
-    [int]$KeepInstances = -1
+    [int]$KeepInstances = -1,
+    [ValidateSet('keep', 'off')][string]$LoadOnStartup = 'keep'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,6 +28,7 @@ if (-not (Test-Path -LiteralPath $ExePath)) { throw "找不到要量的产物：
 
 $srcProfile = Join-Path $env:APPDATA 'StarMark'
 $sandboxTag = if ($KeepInstances -ge 0) { $Scenario + '-' + $KeepInstances } else { $Scenario }
+if ($LoadOnStartup -eq 'off') { $sandboxTag = $sandboxTag + '-noLoad' }
 $sandbox = Join-Path $env:TEMP ('StarMarkMemProbe\' + $sandboxTag)
 $logDir = Join-Path $env:LOCALAPPDATA 'StarMark\logs'
 $stamp = Get-Date
@@ -48,12 +53,20 @@ $doc = $text | ConvertFrom-Json
 foreach ($key in $risky) {
     if ($doc.PSObject.Properties[$key]) { $doc.$key = $false } else { $doc | Add-Member -NotePropertyName $key -NotePropertyValue $false }
 }
+# 「开机自动加载组件」这一颗只在明确要 off 时写；keep 那一格保持副本原样（对照组＝他档里是什么就是什么）
+if ($LoadOnStartup -eq 'off') {
+    if ($doc.PSObject.Properties['WidgetsLoadOnStartup']) { $doc.WidgetsLoadOnStartup = $false }
+    else { $doc | Add-Member -NotePropertyName 'WidgetsLoadOnStartup' -NotePropertyValue $false }
+}
 $doc | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $settingsPath -Encoding UTF8
 
 # 读回来验一遍：写进去没生效，等于让探针去动他的真图目录
 $back = (Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8) | ConvertFrom-Json
 foreach ($key in $risky) {
     if ($back.$key -ne $false) { throw "沙盒里 $key 没能关掉，拒绝启动（宁可不出数，也不拿他的真目录跑）" }
+}
+if ($LoadOnStartup -eq 'off' -and $back.WidgetsLoadOnStartup -ne $false) {
+    throw '沙盒里 WidgetsLoadOnStartup 没能写成 false，拒绝启动——这一格会与对照组同一份配置，省下的钱数不出来'
 }
 
 $widgetsPath = Join-Path $sandbox 'widgets.json'
@@ -151,14 +164,27 @@ if (Test-Path -LiteralPath $logFile) {
         # 场景自证必须由**产品自己**在日志里说，不能由我"写完再读回来数一遍"——后者连我写坏格式都验不出来。
         $corrupt = $session | Where-Object { $_ -match '组件配置损坏' } | Select-Object -First 1
         if ($corrupt) { Write-Output ('✗ 这一跑产品读组件档就失败（回退默认），实例数不是我要的那格——读数不采信：' + $corrupt) }
+        $notLoaded = $session | Where-Object { $_ -match '桌面组件未加载（(\d+) 个实例在册）' } | Select-Object -First 1
         $restored = $session | Where-Object { $_ -match '桌面组件恢复（(\d+) 个实例）' } | Select-Object -First 1
-        if ($restored) {
+        if ($LoadOnStartup -eq 'off') {
+            # 关开关那一格的正证是"未加载"这一句，不是"没看到恢复"——没有事件是需要被证明的结论（坑表 #219）。
+            if (-not $notLoaded) {
+                Write-Output '✗ 开关格不自证：日志里没有「桌面组件未加载（N 个实例在册）」那一行——这一跑不能当成"关了开关"的成本'
+            } else {
+                $n2 = [int][regex]::Match($notLoaded, '桌面组件未加载（(\d+) 个实例在册）').Groups[1].Value
+                $want2 = if ($target -ge 0) { $target } else { $instances }
+                $verdict2 = if ($n2 -ne $want2) { '⇒ 不一致：沙盒档里是 ' + $want2 + ' 颗' } else { '⇒ 与沙盒档一致' }
+                Write-Output ('产品自己说在册的实例数=' + $n2 + '（沙盒档里=' + $want2 + '，一颗都没建）' + $verdict2)
+                if ($restored) { Write-Output '✗ 同一跑里还出现了「桌面组件恢复」——开关没挡住建窗，这一格作废' }
+            }
+        } elseif ($restored) {
             $n = [int][regex]::Match($restored, '桌面组件恢复（(\d+) 个实例）').Groups[1].Value
             $want = if ($target -ge 0) { [string]$target } else { '不削（副本原样）' }
             $verdict = if ($target -lt 0) { '（本格不削实例＝对照组，只记录不判定）' }
                         elseif ($n -ne $target) { '⇒ 不一致：这一跑不能当成 ' + $target + ' 颗的成本' }
                         else { '⇒ 与场景一致' }
             Write-Output ('产品自己恢复的实例数=' + $n + '（场景要求=' + $want + '）' + $verdict)
+            if ($notLoaded) { Write-Output '✗ 开关开着却出现「桌面组件未加载」——读数不采信' }
         } else {
             Write-Output '日志里没有"桌面组件恢复（N 个实例）"那一行——场景没法自证，读数不采信'
         }
