@@ -52,11 +52,18 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
 
     private readonly HttpClient _http;
     private readonly Func<string> _stagingDir;
+    private readonly Func<HttpResponseMessage, CancellationToken, ValueTask<Stream>> _openPackageStream;
 
     /// <param name="handler">测试缝：假传输。不注入时用"关自动跳转"的默认处理器（跳转由本类自己判）。</param>
     /// <param name="stagingDirProvider">临时载荷放哪儿。默认 <c>%TEMP%\StarMarkUpdate</c>——
     /// <b>刻意不是安装目录</b>：往正在运行的那堆文件旁边写东西，才是这条链最不该有的半径。</param>
-    public GitHubUpdatePackageSource(HttpMessageHandler? handler = null, Func<string>? stagingDirProvider = null)
+    /// <param name="packageStreamProvider">载荷那条流<b>怎么来</b>的另一道缝，理由不是解耦好看而是取证：
+    /// 测试用的 <c>HttpContent</c> 会在 <c>ReadAsStreamAsync</c> 里被整个先收进内存，
+    /// 于是"字节已经到过磁盘、然后断线"这一族形状在假传输上<b>做不出来</b>——
+    /// 少了这道缝，"半截文件不许冒充完整文件"那条不变量就只能永远没有见证（坑表 #230，台架 UF18）。
+    /// 生产调用不传它，走的还是 <c>response.Content</c>。</param>
+    public GitHubUpdatePackageSource(HttpMessageHandler? handler = null, Func<string>? stagingDirProvider = null,
+        Func<HttpResponseMessage, CancellationToken, ValueTask<Stream>>? packageStreamProvider = null)
     {
         _http = handler is null
             ? new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }, disposeHandler: true)
@@ -64,6 +71,7 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
         // 时限分两档挂在每次请求上（见 <c>AiHttp</c> 里同一条口径：两种时限混在客户端上就分不清了）
         _http.Timeout = Timeout.InfiniteTimeSpan;
         _stagingDir = stagingDirProvider ?? DefaultStagingDir;
+        _openPackageStream = packageStreamProvider ?? DefaultOpenPackageStream;
     }
 
     public async Task<PackageFetchResult> FetchAsync(PackageAssetAddresses addresses, CancellationToken ct = default)
@@ -216,7 +224,7 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
     /// <para>复制那一段收在独立方法里也是有原因的：句柄没关掉就 <c>File.Delete</c>／<c>File.Move</c>
     /// 在 Windows 上必定失败，清理写在 <c>using</c> 块里面就等于每次都清不掉。</para>
     /// </summary>
-    private static async Task<Fetched> WriteToDiskAsync(HttpResponseMessage response, long cap, string staging,
+    private async Task<Fetched> WriteToDiskAsync(HttpResponseMessage response, long cap, string staging,
         CancellationToken ct)
     {
         var part = Path.Combine(staging, Guid.NewGuid().ToString("N") + ".part");
@@ -233,6 +241,11 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
         catch (PackageTooLargeException ex)
         {
             return Failed(PackageFetchStatus.TooLarge, ex.Message);
+        }
+        catch (PackageStreamBrokenException ex)
+        {
+            // 从对方那条流里读出来的失败：这台机器到对方那段不通，不是"本机磁盘写不下去"，更不是"重装程序"
+            return Failed(PackageFetchStatus.NotReachable, ex.Inner.GetType().Name);
         }
         catch (OperationCanceledException)
         {
@@ -256,10 +269,15 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
         }
     }
 
-    private static async Task<(string Hash, long Bytes)> CopyAsync(HttpResponseMessage response, string part,
+    /// <summary>
+    /// 边读边写边算哈希。<b>"从网络读"与"往磁盘写"的异常必须分开接</b>：
+    /// 两条路都可能抛 <c>IOException</c>，混在一个 catch 里就会把一次断线说成"这台机器的临时目录写不下去"
+    /// （那道缝刚照出来的错，见 <see cref="PackageStreamBrokenException"/>）。
+    /// </summary>
+    private async Task<(string Hash, long Bytes)> CopyAsync(HttpResponseMessage response, string part,
         long cap, CancellationToken ct)
     {
-        await using var source = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        await using var source = await _openPackageStream(response, ct).ConfigureAwait(false);
         await using var target = new FileStream(part, new FileStreamOptions
         {
             Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None, BufferSize = 64 * 1024,
@@ -267,8 +285,19 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var chunk = new byte[64 * 1024];
         long total = 0;
-        while (await source.ReadAsync(chunk, ct).ConfigureAwait(false) is var read and > 0)
+        while (true)
         {
+            int read;
+            try
+            {
+                read = await source.ReadAsync(chunk, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or HttpRequestException)
+            {
+                throw new PackageStreamBrokenException(ex);
+            }
+            if (read <= 0) break;
+
             total += read;
             if (total > cap) throw new PackageTooLargeException($"超过 {cap} 字节");
             hash.AppendData(chunk, 0, read);
@@ -278,10 +307,20 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
         return (UpdateHashHex.ToHex(hash.GetHashAndReset()), total);
     }
 
-    /// <summary>载荷比上限还长：这不是"磁盘坏了"，而是"对方在骗我们一个尺寸"。</summary>
+    /// <summary>载荷字节比上限还长：这不是"磁盘坏了"，而是"对方在骗我们一个尺寸"。</summary>
     private sealed class PackageTooLargeException : IOException
     {
         public PackageTooLargeException(string message) : base(message) { }
+    }
+
+    /// <summary>
+    /// 载荷那条流在半路断了。<b>刻意不继承 IOException</b>：继承了就会掉回"磁盘写不下去"那一档，
+    /// 而这一族的正确处置是"下次联网自己补问"，不是让用户去查临时目录。
+    /// </summary>
+    private sealed class PackageStreamBrokenException : Exception
+    {
+        public PackageStreamBrokenException(Exception inner) : base(inner.Message, inner) => Inner = inner;
+        public Exception Inner { get; }
     }
 
     private static void DeleteQuietly(string path)
@@ -297,6 +336,9 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
             StarLog.Warn($"[更新] 临时载荷没删掉：{ex.GetType().Name}");
         }
     }
+
+    private static async ValueTask<Stream> DefaultOpenPackageStream(HttpResponseMessage response, CancellationToken ct)
+        => await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
 
     private static string DefaultStagingDir()
         => Path.Combine(Path.GetTempPath(), "StarMarkUpdate");
