@@ -26,7 +26,7 @@ public sealed class HotkeyOccupancyHintGateTests
     [Fact]
     public void TheFailingRowCarriesTheWayOut()
         => Assert.Contains("HotkeyErrorText.RebindHint",
-            Between(Code(Partial), "row.RegisterErrorText =", "RegisterErrorSummary ="), StringComparison.Ordinal);
+            SourceGate.Between(Code(Partial), "row.RegisterErrorText =", "RegisterErrorSummary ="), StringComparison.Ordinal);
 
     /// <summary>
     /// 反向也钉：<b>换键那句话在界面里一份都不许有</b>，在判据那颗里恰好一份。
@@ -46,7 +46,7 @@ public sealed class HotkeyOccupancyHintGateTests
     [Fact]
     public void TheSummaryStillPointsAtTheImmediateRetry()
     {
-        var summary = Between(Code(Partial), "RegisterErrorSummary =", "private void RetryHotkeyRegister_Click");
+        var summary = SourceGate.Between(Code(Partial), "RegisterErrorSummary =", "private void RetryHotkeyRegister_Click");
 
         Assert.Contains("重试注册", summary, StringComparison.Ordinal);
         Assert.Contains("该行的提示", summary, StringComparison.Ordinal);
