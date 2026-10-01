@@ -104,6 +104,32 @@ $logFile = Join-Path $logDir ('starmark-' + $stamp.ToString('yyyyMMdd') + '.log'
 $logMark = 0
 if (Test-Path -LiteralPath $logFile) { $logMark = (Get-Item -LiteralPath $logFile).Length }
 
+# 取证条件快照（批次 SX）。为什么加这一段：SU-0 那次把"12 颗那一跑随时间上涨"登记成了配置的性质，
+# 还按"只有这六类才有"排了嫌疑清单；两小时后同一份档、同一产物复跑却是**缓降**，而且嫌疑清单里
+# 那三样（音乐 1 秒表／天气 60 秒表／速览 30 秒表）在没人碰它的跑里**根本不会开火**（无曲目就停表、
+# 缓存没过期就不联网、没跨天就不重算）。教训不是"数读错了"，是**跑的条件没被记下来**：
+# 事后我分不清"这一跑为什么涨"，也分不清"这一跑为什么不动"。
+# ⚠ 这些是**代理指标**：播放器进程数为 0 不能否证系统里有媒体会话（浏览器／后台应用也会注册会话），
+#   构建进程数只说明"我当时在旁边烧 CPU"，两者都只能用来**排除**明显的混淆项，不能拿来定结论。
+$condFile = Join-Path $sandbox 'conditions.txt'
+function Write-Conditions([string]$when)
+{
+    $kinds = ''
+    if ($null -ne $widgetDoc -and $widgetDoc.PSObject.Properties['Instances'] -and $widgetDoc.Instances) {
+        $kinds = (@($widgetDoc.Instances) | ForEach-Object { $_.Kind }) -join ','
+    }
+    $others = (Get-Process -Name 'StarMark.UI' -ErrorAction SilentlyContinue | Measure-Object).Count
+    $all = Get-Process -ErrorAction SilentlyContinue
+    $builders = (@($all | Where-Object { $_.Name -match '^(dotnet|MSBuild|testhost|node)$' })).Count
+    $players = (@($all | Where-Object { $_.Name -match '^(Spoti|CloudMusic|QQMusic|NetEase|wmplayer|vlc|mpv|MusicApp)' })).Count
+    $line = ('{0}|{1}|实例数={2}|Kind 序列={3}|同机其他 StarMark={4}|旁边构建进程={5}|播放器进程(代理)={6}' -f `
+        $when, (Get-Date).ToString('HH:mm:ss'), $instances, $kinds, $others, $builders, $players)
+    Add-Content -LiteralPath $condFile -Value $line
+    Write-Output ('取证条件 ' + $line)
+}
+'取证条件快照｜⚠ 播放器那列是代理指标，命中 0 不等于没有媒体会话' | Set-Content -LiteralPath $condFile -Encoding UTF8
+Write-Conditions '起进程前'
+
 $env:STARMARK_DB_PATH = (Join-Path $sandbox 'starmark.db')
 $started = Get-Date
 $proc = Start-Process -FilePath $ExePath -PassThru
@@ -146,6 +172,9 @@ if ($proc.HasExited) {
 }
 
 $pid2 = $proc.Id
+# 结束时再记一次：这一段里"旁边构建进程／播放器进程"变了没有，是判读这一跑能不能拿去比较的第一道关。
+# ⚠ 这一行的"同机其他 StarMark"会把我自己起的那个算进去（正常是 1），别读成"他机器上还开着一份"。
+Write-Conditions '采样结束时'
 try {
     $mine = Get-Process -Id $pid2 -ErrorAction SilentlyContinue
     if ($mine -and $mine.StartTime -ge $started.AddSeconds(-5)) { $mine | Stop-Process -Force }
