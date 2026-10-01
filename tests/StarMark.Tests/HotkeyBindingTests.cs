@@ -383,4 +383,31 @@ public sealed class HotkeyBindingTests
     [InlineData(9999)]
     public void HookInstallFailure_AlwaysCarriesTheCodeNumber(int code)
         => Assert.Contains(code.ToString(), HotkeyErrorText.HookInstallFailure(code));
+
+    // ===== 组合键被占用时，那一行要把出路说出来（批次 SW，P-136） =====
+
+    /// <summary>
+    /// 报完"被占用"不能就地停手：<b>换键的入口本来就在那一行</b>（那颗显示键位的按钮点下去就是重录），
+    /// 以前缺的只是把它说出来的一句。措辞住在 Core，所以能逐字钉住。
+    /// </summary>
+    [Fact]
+    public void RebindHint_NamesTheEntryOnThatVeryRow()
+    {
+        Assert.Contains("这一行", HotkeyErrorText.RebindHint, StringComparison.Ordinal);
+        Assert.Contains("键位", HotkeyErrorText.RebindHint, StringComparison.Ordinal);
+        // 只说"重录"不够——重录完不点「保存快捷键」是不生效（JE/KL 定的两步流程），指路要指到底
+        Assert.Contains("保存快捷键", HotkeyErrorText.RebindHint, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 三条"不许"各有出处：<b>重启</b>（本项目按缺陷算）、<b>请你／手动</b>（把活儿推回用户，P-54 口径）、
+    /// <b>已自动</b>（程序不许替他改掉他选的那颗键——那是动用户配置）。
+    /// </summary>
+    [Theory]
+    [InlineData("重启")]
+    [InlineData("请你")]
+    [InlineData("手动")]
+    [InlineData("已自动")]
+    public void RebindHint_NeverPushesWorkBackToTheUser(string banned)
+        => Assert.DoesNotContain(banned, HotkeyErrorText.RebindHint, StringComparison.Ordinal);
 }
