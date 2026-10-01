@@ -295,4 +295,22 @@ public static class UpdatePolicy
         UpdateIntegrity.Outcome.PackageSizeMismatch => "包的大小与清单里说的不一致，已拒绝",
         _ => "更新包没有通过校验，没装",
     };
+
+    /// <summary>
+    /// 摊包（把载荷变成一堆待换文件）那一步的结局措辞（批次 UG-1）。
+    /// <para>与上面两套一样必须<b>逐格穷举</b>：这一层的失败都不是"再试一次就好"，
+    /// 而是"这份包与它的清单不是一套"——说成"网络问题"会把一个发布事故藏成一次重试。</para>
+    /// <para>口径照旧：没摊成的树已经被删掉了，所以每一句都在说"没往下走"，不许出现"部分替换成功"这种半句真话。</para>
+    /// </summary>
+    public static string Describe(StageStatus status) => status switch
+    {
+        StageStatus.Staged => "更新包已经摊开并逐颗对过账（还没开始换文件）",
+        StageStatus.NotTrusted => "这份包没通过校验，压根不该来摊——一步都没往下走",
+        StageStatus.PackageUnreadable => "更新包不是一颗读得开的压缩包（多半是发布机上打包那一步错了），没装",
+        StageStatus.FileMissing => "清单列出的文件在包里找不到，没装",
+        StageStatus.UnexpectedEntry => "包里有清单没记的文件（或重名条目），已拒绝",
+        StageStatus.FileHashMismatch => "摊出来的文件与清单里的哈希对不上（可能被换过），已拒绝",
+        StageStatus.DiskWriteFailed => "本机写不出暂存文件（磁盘满或没权限），更新没有开始",
+        _ => "更新包没摊开，没装",
+    };
 }

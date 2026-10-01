@@ -84,8 +84,8 @@ static IReadOnlyList<ReleaseManifestFile> ReadZip(string packagePath)
     using var archive = ZipFile.OpenRead(packagePath);
     foreach (var entry in archive.Entries)
     {
-        var path = entry.FullName.Replace('\\', '/').TrimStart('/');
-        if (path.Length == 0 || path.EndsWith("/")) continue;               // 目录项不是文件
+        var path = UpdateAssets.NormalizeEntryName(entry.FullName);
+        if (!UpdateAssets.IsFileEntry(path)) continue;                       // 目录项不是文件（判据与摊包那侧同一颗）
         if (!UpdateManifestCodec.IsSafeRelativePath(path))
             throw new InvalidDataException($"包里的名字不成话，装的时候会把文件放到安装目录之外：{path}");
 

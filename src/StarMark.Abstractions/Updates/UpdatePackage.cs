@@ -151,6 +151,19 @@ public static class UpdateAssets
     /// 而清单里那一欄留着做<b>交叉核对</b>：两边说的不是同一个名字，就是有人在拼装的哪一步错乱了。</para>
     /// </summary>
     public static string PackageNameFor(string version) => $"StarMark-{version}-win-x64.zip";
+
+    /// <summary>
+    /// 把 zip 条目名归一成"清单里那种写法"（反斜杠改正斜杠、去掉开头的斜杠）。
+    /// <para><b>发布机与摊包两侧必须共用这一句</b>：两侧各写一份的话，"签出来的名字"与
+    /// "摊的时候查表用的名字"迟早漂开，而那种漂移的表现是每一颗都报"清单列了、包里没有"，
+    /// 于是全线更新不可用（#189/#193 那一族）。这里只转换名字——
+    /// 归一之后的名字仍然只用来<b>查表</b>，绝不拿它拼写写出去的路径（见 <c>UpdateStaging</c>）。</para>
+    /// </summary>
+    public static string NormalizeEntryName(string fullName) => fullName.Replace('\\', '/').TrimStart('/');
+
+    /// <summary>归一后的这颗名字代不代表"一颗要落盘的文件"：目录项（以 <c>/</c> 结尾）与空名都不代表。</summary>
+    public static bool IsFileEntry(string normalizedEntryName)
+        => normalizedEntryName.Length > 0 && !normalizedEntryName.EndsWith("/", StringComparison.Ordinal);
 }
 
 /// <summary>
@@ -166,4 +179,45 @@ public sealed record PackageAssetAddresses(string ManifestUrl, string SignatureU
 public interface IUpdatePackageSource
 {
     Task<PackageFetchResult> FetchAsync(PackageAssetAddresses addresses, CancellationToken ct = default);
+}
+
+/// <summary>
+/// 把已验签的载荷<b>摊成一堆待换的文件</b>（逐颗对账）的结局分类（批次 UG-1）。
+/// <para>与 <see cref="PackageFetchStatus"/> 一样另立一枚枚举：那一套说的是"取字节取得怎么样"，
+/// 这一套说的是"摊开之后每颗文件与清单说没说得上话"。合在一起会让"连不上 GitHub"与
+/// "清单列了包里没有"变成同一个答案，而前者下次联网会自己补问、后者是发布产物自己坏了。</para>
+/// </summary>
+public enum StageStatus
+{
+    /// <summary>清单列的每一颗都在、每一颗的哈希都对得上（<see cref="StageResult.StagedRoot"/> 可交给更新器）。</summary>
+    Staged,
+
+    /// <summary>没有一份"可信"判决就想开工——<b>这一档的存在就是它自己的理由</b>：
+    /// 摊包的入口只认 <c>UpdateIntegrity</c> 的判决，绕开判决就没有暂存树。</summary>
+    NotTrusted,
+
+    /// <summary>载荷不是一颗读得开的 zip（多半是发布机上打包那一步错了，而不是网络上出了事）。</summary>
+    PackageUnreadable,
+
+    /// <summary>清单列了这颗，包里没有——签的内容与装的东西不是一套。</summary>
+    FileMissing,
+
+    /// <summary>包里有清单没列出的字节（或重名条目）。<b>没背书的字节不许进安装目录</b>。</summary>
+    UnexpectedEntry,
+
+    /// <summary>摊出来的这颗与清单上那颗哈希不是同一颗。</summary>
+    FileHashMismatch,
+
+    /// <summary>本机写不下去（暂存位置所在盘满、没权限，或给来的路径串本身不能用）。</summary>
+    DiskWriteFailed,
+}
+
+/// <summary>
+/// 摊包的结局。<see cref="StagedRoot"/> 只有 <see cref="StageStatus.Staged"/> 时才非空——
+/// 半途失败的树在返回之前就已经被删掉了（"摊了一半"与"摊好了"在磁盘上必须看得出区别）。
+/// </summary>
+public sealed record StageResult(StageStatus Status, string? StagedRoot = null, string? Detail = null)
+{
+    /// <summary>能不能交给更新器去换文件。</summary>
+    public bool IsStaged => Status == StageStatus.Staged && StagedRoot is not null;
 }
