@@ -180,7 +180,13 @@ public partial class App : Application
         services.AddSingleton(sp =>
             StarMark.Integrations.GitHub.GitHubOptions.Load().WithEnvironmentOverrides());
         services.AddSingleton<StarMark.Integrations.GitHub.GitHubClient>();
-        services.AddSingleton<StarMark.Integrations.GitHub.GitHubSource>();
+        // 客户端**延迟到第一次真要发请求时**才从容器取（P-135 剩半边：没配 Token 的人启动期不该多建一对 HttpClient），
+        // 且取的就是容器里那唯一一颗——设置页保存 Token 后推凭据推的也是它（P-140：旧写法源自己 new 第二颗，
+        // 于是"填了 Token、界面说已配置、点同步却 401"，只能重启）。
+        services.AddSingleton(sp => new StarMark.Integrations.GitHub.GitHubSource(
+            sp.GetRequiredService<StarMark.Integrations.GitHub.GitHubOptions>(),
+            sp.GetRequiredService<IItemRepository>(),
+            () => sp.GetRequiredService<StarMark.Integrations.GitHub.GitHubClient>()));
         services.AddSingleton<IItemSource>(sp => sp.GetRequiredService<StarMark.Integrations.GitHub.GitHubSource>());
 
         // GitHub 热榜（不入库的候选流）：抓取在 Integrations、编排在 Core、缓存写在 sync_state（键前缀 trending:）。

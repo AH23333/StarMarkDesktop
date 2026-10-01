@@ -71,8 +71,12 @@ public sealed class GitHubClient : IDisposable
             : new AuthenticationHeaderValue("Bearer", _options.Token);
     }
 
-    /// <summary>检测 Token 是否配置。MVP 阶段不主动验证 Token 有效性（懒失败）。</summary>
-    public bool IsConfigured => !string.IsNullOrEmpty(_options.Token);
+    /// <summary>
+    /// 检测 Token 是否配置。MVP 阶段不主动验证 Token 有效性（懒失败）。
+    /// <b>判据本体在 <see cref="GitHubOptions.IsConfigured"/>，这里只是转发</b>——
+    /// 源的 <c>IsAvailable</c> 要在不建客户端的情况下问同一件事，两处各写一遍就会分岔。
+    /// </summary>
+    public bool IsConfigured => _options.IsConfigured;
 
     /// <summary>
     /// 拉取当前用户 starred 仓库列表（分页）。

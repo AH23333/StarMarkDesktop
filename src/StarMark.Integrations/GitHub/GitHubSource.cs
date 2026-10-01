@@ -15,9 +15,14 @@ namespace StarMark.Integrations.GitHub;
 /// </summary>
 public sealed class GitHubSource : IItemSource, IAsyncDisposable
 {
-    private readonly GitHubClient _client;
     private readonly GitHubOptions _options;
     private readonly IItemRepository _repository;
+    private readonly Func<GitHubClient> _clientFactory;
+    private readonly object _gate = new();
+
+    /// <summary>只有"这颗客户端是我这颗源自己的"时才由源释放它（见 <see cref="DisposeAsync"/>）。</summary>
+    private readonly bool _ownsClient;
+    private GitHubClient? _client;
     private bool _disposed;
 
     /// <summary>
@@ -26,24 +31,52 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
     /// </summary>
     private (string? Etag, long At)? _pendingCheckpoint;
 
-    public GitHubSource(GitHubOptions options, IItemRepository repository)
-        : this(options, repository, new GitHubClient(options))
-    {
-    }
-
-    /// <summary>测试缝：注入带假 HTTP 的客户端，用来钉死"取消/失败的一轮绝不推进 sync_state 检查点"。</summary>
-    internal GitHubSource(GitHubOptions options, IItemRepository repository, GitHubClient client)
+    /// <summary>
+    /// DI 用的形状：客户端<b>不在构造时建</b>，第一次真要发请求时才经工厂取<b>容器里那唯一一颗</b>。
+    /// <para>
+    /// 为什么不沿用旧的"构造期 <c>new GitHubClient(options)</c>"：那样一来容器里注册的那颗
+    /// 与这里新造的是<b>两个对象</b>，而设置页保存 Token 后推凭据（<c>SyncCredentials</c>）推的是容器那颗
+    /// ⇒ 真正跑 Star 同步的这颗仍带着<b>启动那一刻</b>的 Authorization 头，
+    /// 表现就是"填了 Token、界面说已配置，点同步却 401，只能重启"（P-140；重启在本项目按缺陷算）。
+    /// </para>
+    /// </summary>
+    public GitHubSource(GitHubOptions options, IItemRepository repository, Func<GitHubClient> clientFactory)
     {
         _options = options;
         _repository = repository;
+        _clientFactory = clientFactory;
+    }
+
+    /// <summary>
+    /// 测试缝：注入带假 HTTP 的客户端，用来钉死"取消/失败的一轮绝不推进 sync_state 检查点"。
+    /// 走这条时源<b>拥有</b>那颗客户端 ⇒ <see cref="DisposeAsync"/> 照旧把它一并释放（既有契约，未放宽）。
+    /// </summary>
+    internal GitHubSource(GitHubOptions options, IItemRepository repository, GitHubClient client)
+        : this(options, repository, () => client)
+    {
         _client = client;
+        _ownsClient = true;
+    }
+
+    /// <summary>惰性取客户端：并发下也只会建/取一次（工厂背后是容器单例，重复取回的是同一颗）。</summary>
+    private GitHubClient Client
+    {
+        get
+        {
+            var built = _client;
+            if (built is not null) return built;
+            lock (_gate)
+            {
+                return _client ??= _clientFactory();
+            }
+        }
     }
 
     public string SourceId => ItemSources.GitHub;
 
     public string DisplayName => "GitHub Stars";
 
-    public bool IsAvailable => _client.IsConfigured;
+    public bool IsAvailable => _options.IsConfigured;
 
     /// <summary>"不可用"在这里的成因是<b>没配 Token</b>，不是坏了；且只影响 Star 同步这一条源。</summary>
     public string? AvailabilityHint
@@ -72,12 +105,12 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
 
         // P1-4：载入上次 ETag，用于条件请求（命中 304 直接短路整轮拉取）
         var priorEtag = await _repository.GetSyncStateAsync("github:etag", ct);
-        if (!string.IsNullOrEmpty(priorEtag)) _client.CachedETag = priorEtag;
+        if (!string.IsNullOrEmpty(priorEtag)) Client.CachedETag = priorEtag;
 
-        var repos = await _client.GetAllStarredAsync(ct);
+        var repos = await Client.GetAllStarredAsync(ct);
 
         // P1-4：整轮跑完才暂存 etag + last_synced_at（落库交给 CommitCheckpointAsync，见上面②）
-        _pendingCheckpoint = _client.CachedETag is { Length: > 0 } freshEtag
+        _pendingCheckpoint = Client.CachedETag is { Length: > 0 } freshEtag
             ? (freshEtag, DateTimeOffset.UtcNow.ToUnixTimeSeconds())
             : (null, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
         var now = _pendingCheckpoint.Value.At;
@@ -183,6 +216,7 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        await Task.Run(() => _client.Dispose());
+        if (!_ownsClient) return;   // DI 那条路上客户端是容器的单例：这里 dispose 会把共享实例打死，容器关机时自己收
+        if (_client is { } owned) await Task.Run(() => owned.Dispose());
     }
 }

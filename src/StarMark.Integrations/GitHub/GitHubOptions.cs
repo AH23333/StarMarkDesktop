@@ -13,6 +13,14 @@ public sealed class GitHubOptions
     /// <summary>GitHub Personal Access Token（classic 或 fine-grained，需 public_repo 或 read:user 范围）。</summary>
     public string? Token { get; set; }
 
+    /// <summary>
+    /// 有没有配 Token——<b>这条判据只写在这里一次</b>：客户端的 <c>IsConfigured</c> 与源的 <c>IsAvailable</c> 都读它，
+    /// 于是"没配 Token 就不该建客户端"与"界面说没说已配置"这两件事不会分岔（P-123 那条线）。
+    /// 语义逐字沿用旧写法（<c>!IsNullOrEmpty</c>）：<b>只填空格</b>也算"配了"，那是既有行为，不在这批顺手改。
+    /// </summary>
+    [JsonIgnore]
+    public bool IsConfigured => !string.IsNullOrEmpty(Token);
+
     /// <summary>同步间隔（秒）。默认 1 小时。0 表示不自动同步。</summary>
     public int SyncIntervalSeconds { get; set; } = 3600;
 
