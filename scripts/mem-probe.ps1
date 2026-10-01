@@ -217,7 +217,11 @@ if (Test-Path -LiteralPath $logFile) {
         } else {
             Write-Output '日志里没有"桌面组件恢复（N 个实例）"那一行——场景没法自证，读数不采信'
         }
-        $session | Where-Object { $_ -match '\[内存\]|\[启动\]|\[耗时\]|自动备份|Ditto|二次启动' } | Select-Object -First 60 | ForEach-Object { Write-Output $_ }
+        # 分段（刻度）行与明细行**分开设上限**（批次 SZ）：12 颗组件的逐窗 [耗时] 有二十几条，
+        # 它们会把统一的 -First 60 用光——于是"首帧之后"那几行（本批最想要的那几行）从来没被打印过，
+        # 而这台探针的名字就叫取证。刻度行成对出现、条数由 Mark 决定（有上限），整段打出来不会淹没人。
+        $session | Where-Object { $_ -match '\[启动\]|\[内存\]' } | ForEach-Object { Write-Output $_ }
+        $session | Where-Object { $_ -match '\[耗时\]|\[卡顿\]|自动备份|Ditto|二次启动' } | Select-Object -First 60 | ForEach-Object { Write-Output $_ }
     } else {
         Write-Output ('日志里没找到 pid=' + $pid2 + ' 的会话开始行——读数不采信，先查日志目录/滚动')
     }
