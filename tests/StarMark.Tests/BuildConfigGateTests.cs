@@ -94,4 +94,37 @@ public sealed class BuildConfigGateTests
     [Fact]
     public void TheUiProjectDeclaresX64AsItsOnlyPlatform()
         => Assert.Equal("x64", Regex.Match(ReadRepoFile(UiProject), @"<Platforms>([^<]*)</Platforms>").Groups[1].Value);
+
+    /// <summary>
+    /// <b>解决方案那一层</b>只准有 x64 这一对配置，且它点名的每一颗工程都得真在磁盘上。
+    /// <para>起因（批次 UF，当场复现）：把签名工具加进 sln 时用了 <c>dotnet sln add</c>，它照一份
+    /// "全平台模板"重写了整个 <c>GlobalSection</c>，把 <c>Debug|Any CPU</c>／<c>Debug|x86</c> 连项目映射
+    /// 一起加回来，还给首行添了个 BOM。§5.1 那句"已恢复 x64-only 解决方案"此后<b>一直没有见证</b>，
+    /// 所以它被第二次破坏时没有任何一条测会红——这正是 #226 说的"该红而没红"。</para>
+    /// <para>多出来的那几档不是无害的装饰：解决方案一旦挑中 Any CPU，WinAppSDK(SelfContained) 就炸在
+    /// RG-1/RG-2 那句天书上，而报错指向的是 SDK 目录，没人会往解决方案文件里找。</para>
+    /// <para>断法按形状而不是按一个具体数字：解决方案级 x64 恰两行、"Any CPU"/"x86" 一个字都不许出现、
+    /// 每颗被点名的工程在配置表里恰有 4 行（Debug|x64 与 Release|x64 各 ActiveCfg＋Build.0）——
+    /// 这样"再加一档"与"删掉一档"都会红，而不是要人来改常数。</para>
+    /// </summary>
+    [Fact]
+    public void TheSolutionOffersNoPlatformButX64AndEveryProjectItNamesExists()
+    {
+        var sln = ReadRepoFile("StarMark.sln");
+
+        Assert.Equal(2, Count(sln, "|x64 = "));            // Debug|x64 = Debug|x64 ＋ Release|x64 = Release|x64
+        Assert.DoesNotContain("Any CPU", sln);
+        Assert.DoesNotContain("|x86", sln);
+
+        var named = Regex.Matches(sln, @"Project\(""[^""]*""\) = ""[^""]*"", ""([^""]+\.csproj)"", ""(\{[^}]*\})""");
+        Assert.True(named.Count >= 6,
+            $"sln 里只认出 {named.Count} 颗工程——这条闸门本身失效了（守门失效比红测更危险，故直接判红）");
+        foreach (System.Text.RegularExpressions.Match m in named)
+        {
+            var declared = m.Groups[1].Value;
+            var file = Path.Combine(RepoRoot(), declared.Replace('\\', Path.DirectorySeparatorChar));
+            Assert.True(File.Exists(file), $"sln 点名了 {declared}，磁盘上没有这颗工程（§5.1 那半边）");
+            Assert.Equal(4, Count(sln, m.Groups[2].Value + "."));
+        }
+    }
 }
