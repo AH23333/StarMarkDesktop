@@ -37,20 +37,30 @@ public sealed class WidgetStartupPolicyTests
 
     private static string Code(string file) => SourceGate.Code(SourceGate.ReadRepoFile(file));
 
+    /// <summary>
+    /// 「数字＋MB」这个形状。<b>闸门禁的是形状，不是某一个具体的数</b>——见 <see cref="TheUserFacingFilesDoNotHardCodeTheNumber"/>。
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex MbLiteral
+        = new(@"\d+\s*MB", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
     // ───────── 判据与数字 ─────────
 
-    /// <summary>每颗的私有成本是<b>量出来的那个数</b>（0/1/6/12 颗四跑，报告 §二百一十）。</summary>
+    /// <summary>
+    /// 每颗的私有成本是<b>量出来的那个数</b>。7 来自本批那一对"只差这颗开关"的 A/B（12 颗：省 82.2 MB ⇒ 6.85/颗），
+    /// SU-0 那条"删空档 vs 12 颗"的曲线给的是 95 MB ⇒ 7.9/颗；两跑同一格差 ~14 MB＝这把尺子的跨跑噪声，
+    /// 所以取<b>靠下那一格</b>并在界面写"约"。改这个数必须是"又量了一次"（报告 §二百一十二）。
+    /// </summary>
     [Fact]
     public void ThePerWindowCostIsTheMeasuredOne()
-        => Assert.Equal(8, WidgetStartupPolicy.PerWindowPrivateMb);
+        => Assert.Equal(7, WidgetStartupPolicy.PerWindowPrivateMb);
 
-    /// <summary>线性外推：这台机器上 12 颗实测差 95 MB，这里给 96——宁可说"约"也不报小。</summary>
+    /// <summary>线性外推：12 颗＝84 MB（本批 A/B 实测 82.2，SU-0 那跑 95），6 颗＝42，1 颗＝7。</summary>
     [Fact]
     public void TheEstimateScalesWithInstances()
     {
-        Assert.Equal(96, WidgetStartupPolicy.EstimatedPrivateMb(12));
-        Assert.Equal(48, WidgetStartupPolicy.EstimatedPrivateMb(6));
-        Assert.Equal(8, WidgetStartupPolicy.EstimatedPrivateMb(1));
+        Assert.Equal(84, WidgetStartupPolicy.EstimatedPrivateMb(12));
+        Assert.Equal(42, WidgetStartupPolicy.EstimatedPrivateMb(6));
+        Assert.Equal(7, WidgetStartupPolicy.EstimatedPrivateMb(1));
     }
 
     /// <summary>0 颗与脏数据（负数）都说"没得省"，不许报出一个负 MB——那是"关了开关反而更占内存"的错觉来源。</summary>
@@ -69,7 +79,8 @@ public sealed class WidgetStartupPolicyTests
 
         Assert.Contains("开机自动加载已关", line, StringComparison.Ordinal);
         Assert.Contains("12 颗", line, StringComparison.Ordinal);
-        Assert.Contains("96 MB", line, StringComparison.Ordinal);
+        // 钱数本身由上面两条钉死；这里只验"那句里确实带了钱数"——再抄一遍数字就成了第二份出处
+        Assert.Contains($"{WidgetStartupPolicy.EstimatedPrivateMb(12)} MB", line, StringComparison.Ordinal);
         Assert.Contains("设置", line, StringComparison.Ordinal);
         Assert.Contains("托盘", line, StringComparison.Ordinal);
         Assert.Contains("重建", line, StringComparison.Ordinal);
@@ -98,13 +109,19 @@ public sealed class WidgetStartupPolicyTests
 
     /// <summary>
     /// <b>"每颗几 MB"全仓只许有一个出处</b>（P-123/P-130 那条线）。
-    /// 界面与日志都从政策取数；哪里再手写一遍"8 MB"，下一次重量就只改得到一半。
+    /// <para>禁的是<b>"数字＋MB"这个形状</b>，不是某一个具体的数：本批就把 8 重量成了 7——
+    /// 闸门钉住具体数字的话，下一次重量得跟着改闸门，而界面/日志里那份写死的读数却不会跟着动，
+    /// 留下的正是"半新半旧两份数"。插值（<c>{政策} MB</c>）里没有数字，天然不撞这一条。</para>
     /// </summary>
     [Fact]
     public void TheUserFacingFilesDoNotHardCodeTheNumber()
     {
         foreach (var file in new[] { VmWidgets, SettingsXaml, Lifecycle })
-            Assert.DoesNotContain("8 MB", Code(file), StringComparison.Ordinal);
+        {
+            var hit = MbLiteral.Match(Code(file));
+            Assert.False(hit.Success,
+                $"{file} 里写死了读数「{hit.Value}」——钱数只许从 WidgetStartupPolicy 取");
+        }
     }
 
     // ───────── 接线（形状闸门）─────────

@@ -213,8 +213,8 @@ public sealed partial class WidgetManager
     /// （"要用户重启"在本项目里按缺陷算）。
     /// <para>
     /// 与「全部隐藏」不是一件事，也不复用它的出口：隐藏只是 <c>SW_HIDE</c>，窗口与组合面都留着，
-    /// 那 ≈8 MB/颗 一分不退（真机数在报告 §二百零九）；这里走既有的整批关闭出口——
-    /// 几何一次落盘、实例留在档里，下次点亮按存档重建。
+    /// 那按颗算的私有内存一分不退（真机数在报告 §二百零九／§二百一十二，钱数只有 <see cref="WidgetStartupPolicy"/> 一处）；
+    /// 这里走既有的整批关闭出口——几何一次落盘、实例留在档里，下次点亮按存档重建。
     /// </para>
     /// </summary>
     public Task CollapseAllAsync() => OnUiAsync(() =>
