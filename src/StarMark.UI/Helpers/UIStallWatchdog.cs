@@ -57,6 +57,18 @@ public static class UIStallWatchdog
     private static long _stallStartCpu = -1;
 
     /// <summary>
+    /// 一次回执的<b>两个读数</b>：UI 线程空闲到那一刻的时刻，与那一刻它已累计的 CPU。
+    /// <para>
+    /// 为什么必须成对（批次 TB）：恢复行要说的是"这段墙钟里 UI 烧了多少 CPU"，
+    /// 两个数就得取自<b>同一个瞬间</b>。拆成两个字段各写各的（时刻一份、CPU 一份），
+    /// 观测线程就可能读到"新时刻＋旧 CPU"的错配一对——又是一个不崩、不报错、只把结论偏掉的形状。
+    /// </para>
+    /// </summary>
+    private sealed record AckMark(long AtMs, long Cpu);
+
+    private static volatile AckMark? _mark;
+
+    /// <summary>
     /// 判定为卡顿那一刻的最后一条<b>已完成刻度</b>（快照，含当时的年龄）。
     /// <para>WE-2 缺的就是这个：分段表停在"桌面组件恢复"，看门狗报的 1.5 s 落在它<b>之后</b>，
     /// 于是只知道"卡了"、不知道"卡在哪件事之前"。带上这一条，悬空的空档就有了左边的刻度。</para>
@@ -124,9 +136,15 @@ public static class UIStallWatchdog
         }
         else
         {
-            if (Interlocked.CompareExchange(ref _stallStart, Interlocked.Read(ref _lastAck), 0) == 0)
+            // 起点与 CPU 基线**取自同一个回执快照**（批次 TB）。CPU 基线早先是在"判定为卡顿"那一刻才取的，
+            // 于是恢复行里的 CPU 只覆盖"越过 1 s 阈值之后"那一段，而 wall 覆盖整段——
+            // 两者相减会凭空多出约一个阈值的"看起来在等"的时间：那行字面写着"其间用了 Y ms CPU"，
+            // 量的却不是"其间"。缺陷不崩、不报错、LastError 也不动，只有结论会被偏掉。
+            var mark = _mark;
+            var startMs = mark?.AtMs ?? Interlocked.Read(ref _lastAck);
+            if (Interlocked.CompareExchange(ref _stallStart, startMs, 0) == 0)
             {
-                _stallStartCpu = CpuMs() ?? -1;   // 只在判定为卡顿的那一刻取一次基线
+                _stallStartCpu = mark?.Cpu ?? -1;
                 _stallCheckpoint = CheckpointAtStallStart();   // 同上：事后读会把卡顿期间才补上的刻度当成起点
             }
             if (stalled >= Math.Max(StallMs, Interlocked.Read(ref _reportedMs) * 2))
@@ -145,7 +163,11 @@ public static class UIStallWatchdog
 
     private static void Ack()
     {
-        Interlocked.Exchange(ref _lastAck, Environment.TickCount64);
+        var now = Environment.TickCount64;
+        // 时刻与 CPU 一次写进同一个快照（一次 GetThreadTimes，每根心跳 500 ms 一把，代价是 µs 级）：
+        // 分开写两个字段，观测线程读到的就可能是"这一次的时刻＋上一次的 CPU"。
+        _mark = new AckMark(now, CpuMs() ?? -1);
+        Interlocked.Exchange(ref _lastAck, now);
         Interlocked.Exchange(ref _reportedMs, 0);
         var tag = App.MainWindow?.ViewModel?.CurrentPageTag;
         _where = string.IsNullOrWhiteSpace(tag) ? null : tag;
