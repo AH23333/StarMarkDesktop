@@ -22,6 +22,7 @@ public sealed class StartupProfileTests : IDisposable
     private readonly List<string> _lines = new();
     private readonly Action<string> _previousSink;
     private readonly Func<string> _previousMemoryReader;
+    private readonly Func<long?>? _previousCpuReader;
 
     public StartupProfileTests()
     {
@@ -31,12 +32,15 @@ public sealed class StartupProfileTests : IDisposable
         // 也不许把真系统的读数带进断言：那会造出一条只会在某些时刻为真的"契约"（同 #212 那一族）
         _previousMemoryReader = StartupProfile.MemoryReader;
         StartupProfile.MemoryReader = () => "读数占位";
+        _previousCpuReader = StartupProfile.ThreadCpuMsReader;
+        StartupProfile.ThreadCpuMsReader = () => 7;
     }
 
     public void Dispose()
     {
         StartupProfile.Sink = _previousSink;
         StartupProfile.MemoryReader = _previousMemoryReader;
+        StartupProfile.ThreadCpuMsReader = _previousCpuReader;
     }
 
     // ===== 内存读数（批次 SS：先装尺子，再谈懒加载） =====
@@ -72,6 +76,135 @@ public sealed class StartupProfileTests : IDisposable
         Assert.Single(_lines);
         Assert.StartsWith("[耗时] 逐组件的细段", _lines[0], StringComparison.Ordinal);
     }
+
+    // ===== 本线程 CPU（批次 TC：让"首帧→让出"这种不到 1 秒的段也能算出"在算还是在等"） =====
+    //
+    // 起因（批次 TB）：卡顿恢复行那句"其间用了 843 ms CPU"量的不是"其间"（CPU 基线取在判定为卡顿那一刻，
+    // 比墙钟起点晚 1~1.5 秒）。修好之后还剩一个够不着的地方——看门狗那一列只在**连续阻塞 ≥1 s** 时才出现，
+    // 于是 6 颗（首帧→让出 761 ms）与 1 颗（141 ms）两格根本没有 CPU 读数。这两把刻度之间要能直接相减，
+    // 就得出 CPU 的第三格，而且必须与那两个时长**取自同一瞬间**。
+
+    [Fact]
+    public void TheCpuReadingIsSampledAtTheMarkNotOncePerSession()
+    {
+        var readings = new Queue<long?>(new long?[] { 7, 41 });
+        StartupProfile.ThreadCpuMsReader = () => readings.Count > 0 ? readings.Dequeue() : 99;
+        StartupProfile.ResetForTests(1_000);
+        StartupProfile.Mark("第一段", 1_010);
+        StartupProfile.Mark("第二段", 1_080);
+
+        // 每把刻度各取各的：整条链共用一个读数，相邻两行相减永远是 0，"这段烧了多少"就又量不出来了
+        Assert.Contains("CPU 累计 7 ms）", _lines[0]);
+        Assert.Contains("CPU 累计 41 ms）", _lines[2]);
+    }
+
+    /// <summary>取不到就写"未知"，<b>不许退化成 0</b>——0 会伪装成"这段几乎没烧 CPU"，那正是把批次 TB 带错方向的那个结论。</summary>
+    [Fact]
+    public void AnUnmeasurableThreadCpuStaysUnknownNotZero()
+    {
+        StartupProfile.ThreadCpuMsReader = () => null;
+        StartupProfile.ResetForTests(1_000);
+        StartupProfile.Mark("迁移", 1_040);
+
+        Assert.Contains("CPU 累计 未知）", _lines[0]);
+        Assert.DoesNotContain("CPU 累计 0", _lines[0]);
+    }
+
+    /// <summary>
+    /// 读数必须<b>点明它是哪根线程的</b>：启动里的刻度大多在 UI 线程上打，但不是全部（恢复任务、后台服务启动点都有）。
+    /// 没有这个号，两把分别打在不同线程上的刻度就能被当成同一段相减——批次 TB 那个错只是换了个载体重来一遍。
+    /// </summary>
+    [Fact]
+    public void TheCpuFieldNamesTheThreadItWasSampledOn()
+        => Assert.Contains($"线程#{Environment.CurrentManagedThreadId} CPU 累计", LineOfFirstMark());
+
+    private string LineOfFirstMark()
+    {
+        StartupProfile.ResetForTests(1_000);
+        StartupProfile.Mark("第一段", 1_010);
+        return _lines[0];
+    }
+
+    /// <summary>高频计时壳同样不配 CPU 行：它逐组件、逐源地打，每段都读一次就把量具放进了被量的那段。</summary>
+    [Fact]
+    public void MeasureStaysSilentAboutThreadCpu()
+    {
+        StartupProfile.Measure("逐组件的细段", () => { });
+        Assert.DoesNotContain("CPU 累计", Assert.Single(_lines));
+    }
+
+    /// <summary>没接线（宿主没把读数交进来）也写"未知"，不许写成 0——0 会被读成"这段几乎没烧 CPU"。</summary>
+    [Fact]
+    public void AnUnwiredRulerSaysUnknownInsteadOfLookingLikeAMeasurement()
+    {
+        StartupProfile.ThreadCpuMsReader = null;
+        StartupProfile.ResetForTests(1_000);
+        StartupProfile.Mark("第一段", 1_010);
+
+        Assert.Contains("CPU 累计 未知）", _lines[0]);
+        Assert.DoesNotContain("CPU 累计 0", _lines[0]);
+    }
+
+    // ---- 互操作放在哪一层、什么时候接线（层次闸门把我从 Abstractions 里赶出来之后补的三条钉） ----
+
+    /// <summary>刻度这一层只留一个可注入的读数口子，不许出现 Win32 互操作（SP 立的层次闸门守着这件事）。</summary>
+    [Fact]
+    public void TheRulerLayerStaysFreeOfWin32()
+    {
+        var code = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.Abstractions/StartupProfile.cs"));
+        Assert.DoesNotContain("DllImport", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetThreadTimes", code, StringComparison.Ordinal);
+        Assert.Contains("public static Func<long?>? ThreadCpuMsReader", code, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 自读与跨线程读<b>同一个主人</b>：都住在卡顿看门狗那份文件里、共用那一个 <c>GetThreadTimes</c> 声明；
+    /// 读自己走当前线程<b>伪句柄</b>，那条路上没有权利位可写错（批次 WJ 栽的就是权利位）。
+    /// </summary>
+    [Fact]
+    public void TheSelfReadLivesWithTheOtherThreadTimesInterop()
+    {
+        var code = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.UI/Helpers/UIStallWatchdog.cs"));
+        Assert.Contains("GetThreadTimes(CurrentThreadHandle", code, StringComparison.Ordinal);
+        Assert.Contains("CurrentThreadHandle = new(-2)", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenThread",
+            SourceGate.MethodBody(code, "long? SelfThreadCpuMs"), StringComparison.Ordinal);
+        // 换算口径只许有一份 per 用途：两处（跨线程／自读）都写 (kernel + user) / 10_000，改了其中一处就要分岔
+        Assert.Equal(2, SourceGate.Count(code, "(kernel + user) / 10_000"));
+    }
+
+    /// <summary>接线必须早于第一把刻度：晚一步，启动最前面那几段就永远"未知"，而那几段正是最想看的。</summary>
+    [Fact]
+    public void TheRulerIsWiredBeforeTheFirstMark()
+    {
+        var code = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.UI/App.xaml.cs"));
+        var wired = code.IndexOf("InstallSelfCpuReader()", StringComparison.Ordinal);
+        var firstMark = code.IndexOf("StartupProfile.Mark(", StringComparison.Ordinal);
+        Assert.True(wired >= 0, "App 里找不到接线那一行 ⇒ 刻度行的 CPU 列会一路空白");
+        Assert.True(firstMark >= 0, "App 里已经没有刻度了？那这条闸门要去看真正的调用点");
+        Assert.True(wired < firstMark,
+            $"接线（偏移 {wired}）晚于第一把刻度（偏移 {firstMark}）⇒ 启动最前面那几段量不到 CPU");
+    }
+
+    /// <summary>
+    /// "这一列拿不到"必须**当场说一句、且只说一次**：它不崩、不报错、LastError 也不动，
+    /// 唯一的症状是那根柱子从此空白——而它是"这段到底是算还是等"唯一能定方向的数据（批次 WJ／TB）。
+    /// </summary>
+    [Fact]
+    public void TheUnavailabilityIsReportedOnce()
+    {
+        var body = SourceGate.MethodBody(
+            SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.Abstractions/StartupProfile.cs")),
+            "string CpuUnknown");
+        Assert.Contains("StarLog.Warn", body, StringComparison.Ordinal);
+        Assert.Contains("_cpuUnavailableReported", body, StringComparison.Ordinal);   // 只说一次，别把量具变成噪声源
+    }
+
+    /// <summary>那句 CPU 只许有一个出处：写在两处，两处的口径迟早分岔（P-122/P-123 那条线上量过不止一次）。</summary>
+    [Fact]
+    public void TheCpuFieldIsFormattedInExactlyOnePlace()
+        => Assert.Equal(1, SourceGate.Count(
+            SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.Abstractions/StartupProfile.cs")), "CPU 累计"));
 
     /// <summary>尺子自己也得有一条真调用的证人：断言<b>形状</b>而不是数值（数值随机器与时序变）。</summary>
     [Fact]
@@ -134,9 +267,11 @@ public sealed class StartupProfileTests : IDisposable
         StartupProfile.Mark("迁移", 1_040);
         StartupProfile.Mark("首帧", 1_090);
 
-        Assert.Contains("[启动] 迁移：+40 ms（自会话开始累计 40 ms）", _lines);
+        // 批次 TC 起，这一行还带着"这根线程到这里为止烧了多少 CPU"（断言里用注入值，不许带真读数）
+        var tail = $"｜线程#{Environment.CurrentManagedThreadId} CPU 累计 7 ms）";
+        Assert.Contains("[启动] 迁移：+40 ms（自会话开始累计 40 ms" + tail, _lines);
         // 第二段自上一段起＝50，而不是自起点起的 90——把两者混了就等于每段都被高估
-        Assert.Contains("[启动] 首帧：+50 ms（自会话开始累计 90 ms）", _lines);
+        Assert.Contains("[启动] 首帧：+50 ms（自会话开始累计 90 ms" + tail, _lines);
     }
 
     [Fact]

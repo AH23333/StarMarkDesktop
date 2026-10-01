@@ -76,11 +76,34 @@ public sealed class UiStallWatchdogBaselineGateTests
     public void TheStallSpanStillRunsOffTheAckClock()
         => Assert.Contains("now - Interlocked.Read(ref _lastAck)", ProbeBody(), StringComparison.Ordinal);
 
-    /// <summary>心跳采样只准在回执端发生一次：探测线程每次 tick 都读 CPU，就把量具放进被量的那段了。</summary>
+    /// <summary>心跳采样只准在回执端发生一次：探测线程每次 tick 都读 CPU，就把量具放进被量的那段了。
+    /// （<c>Start()</c> 里那一份是"起点快照的第一版"，一个进程只取一次，由下一条门看着。）</summary>
     [Fact]
     public void CpuIsSampledOnTheAckNotOnEveryProbeTick()
     {
         Assert.Equal(1, SourceGate.Count(ProbeBody(), "CpuMs()"));     // 只在恢复那一刻用来求差
         Assert.Equal(1, SourceGate.Count(AckBody(), "CpuMs()"));       // 基线在这一端采
+    }
+
+    /// <summary>
+    /// 起点快照在 <c>Start()</c> 里就要有一份，<b>不能等第一次回执</b>（批次 TC）。
+    /// <para>
+    /// 真机 6 颗那一跑的恢复行写的是「其间 UI 线程自己用了约 <b>未知</b> ms CPU」，而 12 颗那一跑同一列是
+    /// 「1828 ms 墙钟／1703 ms CPU」。原因是那一段长阻塞开始得比<b>第一次回执</b>还早，<c>_mark</c> 还是 null；
+    /// 同一行「前台页=未知」是同一根因的第二症状（回执那条链整条都没跑过）。
+    /// 结果就是这一列<b>在最该有数的地方空白</b>——最早、也最重的那一段。
+    /// </para>
+    /// <para>
+    /// 钉三点：Start 里确实种了一份、那份是<b>成对</b>的（时刻与 CPU 同一个 <c>now</c>，口径同批次 TB），
+    /// 并且它排在 <c>OpenThread</c> 之后、计时器起来之前——排在句柄之前种下去的就是一份 -1，排在计时器之后则第一段已经没人量。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void TheBaselineExistsBeforeTheFirstAck()
+    {
+        var start = SourceGate.MethodBody(Code(), "static void Start(");
+        Assert.Equal(1, SourceGate.Count(start, "_mark = new AckMark("));
+        SourceGate.Between(start, "_uiThread = OpenThread(", "_mark = new AckMark(now, CpuMs() ?? -1);");
+        SourceGate.Between(start, "_mark = new AckMark(now, CpuMs() ?? -1);", "_timer = new Timer(");
     }
 }
