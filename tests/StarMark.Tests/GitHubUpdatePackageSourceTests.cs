@@ -218,9 +218,8 @@ public sealed class GitHubUpdatePackageSourceTests : IDisposable
     /// 断线发生在"已经被缓冲"的那一段（<c>HttpContent</c> 默认先把内容收进内存再交出来）：
     /// 这一格只管<b>分类</b>——它得说"这台机器现在到对方那段不通"，而不是把异常抛到界面上。
     /// <para><b>它证不了"半截文件不许留在盘上"</b>：那种形状下磁盘上从来没建过文件。
-    /// 台架 UF18 把 <c>finally</c> 里的清理拆成永假，这一格照样绿——那就是这条不变量今天<b>没有见证</b>的实测结论，
-    /// 已按实登记（进度报告 §二百二十二"没证到的那一格"与坑表 #230），解包/替换那批（UG）会用真文件系统的
-    /// 部分写入把它钉住；在这里假一条"证过了"才是问题。</para>
+    /// UF 那批把这格登记成"这条不变量没有见证"（台架 UF18 当时报绿），并由此升坑表 #230；
+    /// 下一格（走流的那道缝）才是它的证人——两格合起来才是完整的口径：<b>一种分类，两种失败位置</b>。</para>
     /// </summary>
     [Fact]
     public void ABrokenStreamBeforeItReachesTheDiskIsClassifiedAsUnreachable()
@@ -235,9 +234,32 @@ public sealed class GitHubUpdatePackageSourceTests : IDisposable
         Assert.Equal("IOException", result.Detail);          // 说得清是流断了，而不是泛泛一句"连不上"
     }
 
+    /// <summary>
+    /// 这一格与上面那格<b>只差在字节有没有到过磁盘</b>：载荷那条流先老老实实交出 256 KB，再当场断。
+    /// 于是 <c>.part</c> 在盘上真存在过，"半途的尾巴一条都不许留下"这条不变量<b>第一次有了见证</b>——
+    /// 台架 UF18（把 <c>finally</c> 里的清理拆成永假）在这一格上必须红。
+    /// <para>为什么走 <c>packageStream</c> 那道缝而不是假传输：<see cref="HttpContent"/> 在
+    /// <c>ReadAsStreamAsync</c> 里会先把整段收进内存，"到过磁盘再断"这个形状在假传输上<b>做不出来</b>——
+    /// 那正是 UF 那批只能把这条不变量登记为"没有见证"的原因（坑表 #230）。缝只换"字节怎么来"，
+    /// 写盘、改名、<c>finally</c> 清理走的还是生产那一段。</para>
+    /// <para>顺带被这一格照出来的真缺陷：从网络读出来的 <c>IOException</c> 原先和写盘失败落在同一个 catch 上，
+    /// 一次断线会被说成"这台机器的临时目录写不下去"。现在读与写分开接，所以这里断言的是 <c>NotReachable</c>。</para>
+    /// </summary>
+    [Fact]
+    public async Task APayloadThatDiesAfterBytesReachedTheDiskLeavesNoHalfWrittenFileBehind()
+    {
+        using var transport = new FakeTransport(Route());
+        using var source = new GitHubUpdatePackageSource(transport, () => _staging,
+            (_, _) => new ValueTask<Stream>(new DripThenThrowsStream()));
+        var result = await source.FetchAsync(_addresses);
+
+        Assert.Equal(PackageFetchStatus.NotReachable, result.Status);
+        Assert.Equal("IOException", result.Detail);              // 说的是"那段路不通"，不是"你磁盘坏了"
+        Assert.Empty(Directory.GetFiles(_staging));              // 写过、又被无条件删掉：这一条才是 UF18 的证人
+    }
+
     [Theory]
-    [InlineData(HttpStatusCode.InternalServerError, PackageFetchStatus.ServerError)]
-    [InlineData(HttpStatusCode.Unauthorized, PackageFetchStatus.Unauthorized)]
+    [InlineData(HttpStatusCode.InternalServerError, PackageFetchStatus.ServerError)]    [InlineData(HttpStatusCode.Unauthorized, PackageFetchStatus.Unauthorized)]
     [InlineData(HttpStatusCode.Forbidden, PackageFetchStatus.Unauthorized)]
     [InlineData(HttpStatusCode.RequestTimeout, PackageFetchStatus.ManifestUnreadable)]   // 认不出的答复不许冒充"服务端坏了"
     public void ServerSideAnswersKeepTheirOwnName(HttpStatusCode code, PackageFetchStatus expected)
@@ -357,6 +379,38 @@ public sealed class GitHubUpdatePackageSourceTests : IDisposable
         {
             length = PayloadBytes.LongLength;
             return true;
+        }
+    }
+
+    /// <summary>
+    /// 先把 256 KB 老老实实交出去，再当场断。<b>不这么写就证不到"到过磁盘"</b>：
+    /// 一开头就抛的话读取方一个字节都没拿到，那条 <c>finally</c> 清理分支一次都不会走到（UF18 当初报绿的真正原因）。
+    /// <para>只实现异步读：这条链上取字节的就是 <c>ReadAsync(Memory)</c>，别的面包在这格里没有意义。</para>
+    /// </summary>
+    private sealed class DripThenThrowsStream : Stream
+    {
+        private long _left = 4 * 64 * 1024;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        {
+            await Task.Yield();
+            if (_left <= 0) throw new IOException("送到一半断了");
+            var take = Math.Min(buffer.Length, (int)_left);
+            buffer.Span[..take].Fill(0);
+            _left -= take;
+            return take;
         }
     }
 
