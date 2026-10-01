@@ -108,6 +108,14 @@ public sealed partial class MainWindow : Window
             // WE-2：恢复**之后**那一段以前没有刻度——日志里最后一个分段停在"桌面组件恢复"（它在恢复结束时才记），
             // 而卡顿看门狗报的那 1.5 s 正好落在它后面，于是谁也说不清是谁占着 UI 线程。补上右半边刻度。
             StarMark.Abstractions.StartupProfile.Mark("组件恢复任务返回（UI 队列）");
+            // P-134 选项 (A)：上面那把刻度**之后**到组件真出现在屏幕上之间，进程内仍是一条空白——
+            // 真机外部采样在同一 PID 上 1.5 秒后读到私有 610 MB，而最后一条 Mark 还停在 99 MB，
+            // 于是"创建期那 400 MB 花在哪一刻"归不了因（没刻度就只能猜，见坑表 #160）。
+            // 下面两把把这段夹住：① UI 线程被再次调度（＝这一批工作交回消息泵）；② 合成器给出第一帧
+            // （＝DWM 合成面建立，材质与重定向表面最可能在这里付钱）。两把的先后本身就是读数。
+            // ⚠ 只许往后挂：插进创建循环就等于同时改掉 P-133 要量的那个东西（两批不许混）。
+            MarkUiHandback();
+            MarkFirstComposedFrame();
         });
 
         // 开发辅助：启动即搜索（STARMARK_START_QUERY），用于冒烟渲染卡片
@@ -130,6 +138,36 @@ public sealed partial class MainWindow : Window
         // 订阅数据广播（去抖 250ms）：别处（组件写随记/待办、同步、备份还原）落库后，
         // 刷新侧栏计数并重载当前列表页。构造必须在 UI 线程且 ContentFrame 已就绪之后。
         _dataSync = new DataChangeReloader(RefreshOnDataChangedAsync);
+    }
+
+    /// <summary>
+    /// 点亮后的第一把刻度：UI 线程把这批工作交回消息泵、又被再次调度的那一刻（<b>Low</b> 档，不插队、只排一次）。
+    /// <para>
+    /// 为什么用它而不是"等 UI 空闲"：<c>DispatcherQueuePriority</c> 只有 Low/Normal/High 三档，
+    /// <b>没有 Idle</b>——写"空闲"就是在报一个这把尺子给不出的数。Low 档说明的是"后面的活儿都排在我后头"，
+    /// 至于界面静下来没有，由第二把刻度回答。
+    /// </para>
+    /// </summary>
+    private void MarkUiHandback()
+        => DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+            () => StarMark.Abstractions.StartupProfile.Mark("组件点亮后 UI 让出（Low 档）"));
+
+    /// <summary>
+    /// 点亮后的第二把刻度：合成器给出<b>第一帧</b>。回调里<b>先退订再打刻度</b>——
+    /// 留着就是每帧写两行日志，把量具本身变成噪声源（正是 P-134 拒掉选项 (B) 的那个理由）。
+    /// <para>
+    /// 界面彻底静止后可能不再出帧，所以这一把<b>可能不来</b>；来了与没来都是信息，
+    /// 也因此它必须和第一把刻度是<b>两条独立的 Mark</b>——合并成一条就会变成"刻度看着有，其实一条都没有"。
+    /// </para>
+    /// </summary>
+    private void MarkFirstComposedFrame()
+    {
+        void OnRendering(object? sender, object args)
+        {
+            CompositionTarget.Rendering -= OnRendering;
+            StarMark.Abstractions.StartupProfile.Mark("组件首个组合帧提交");
+        }
+        CompositionTarget.Rendering += OnRendering;
     }
 
     private IntPtr MainHwnd => WindowNative.GetWindowHandle(this);
