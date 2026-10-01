@@ -173,6 +173,8 @@ public sealed class NoticeCardGateTests
             "src/StarMark.UI/MainWindow.xaml.cs",
             "src/StarMark.UI/Views/CountdownWidget.xaml.cs",
             "src/StarMark.UI/Views/FocusTimerWidget.xaml.cs",
+            // 批次 UE：更新检查的出声也走这一张卡（它不是第二条提醒出口，只是多一个调用方）。
+            "src/StarMark.UI/Helpers/UpdateScheduler.cs",
         })
             Assert.Contains("NoticeCard.Show(", SourceGate.ReadRepoFile(file));
 

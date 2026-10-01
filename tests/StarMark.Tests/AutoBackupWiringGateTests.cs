@@ -253,6 +253,7 @@ public sealed class AutoBackupWiringGateTests
         Assert.Contains("private void BuildLayoutRows(", all);                  // Widgets
         Assert.Contains("private void BuildHotkeyRows(", all);                  // Hotkeys
         Assert.Contains("private async void DeleteBackup_Click(", all);         // Backup
+        Assert.Contains("private async void UpdateCheck_Click(", all);          // Updates
     }
 
     /// <summary>
@@ -271,5 +272,6 @@ public sealed class AutoBackupWiringGateTests
         Assert.Contains("public IReadOnlyList<string> LoadFileIndexRoots()", all);     // FileIndex
         Assert.Contains("public void SaveWeatherCity(WeatherCity? city)", all);         // Weather
         Assert.Contains("public void SaveAiSettings(AiSettings settings)", all);        // Ai
+        Assert.Contains("public UpdateState LoadUpdateState()", all);                   // Updates
     }
 }

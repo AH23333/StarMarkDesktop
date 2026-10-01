@@ -81,6 +81,8 @@ public sealed class SettingsTaxonomyGateTests
             "BackupClipboardImagesEnabled",
             // 批次 BK：自动备份的开关与间隔档（两颗都住在「数据」页的备份卡里）。
             "AutoBackupEnabled", "AutoBackupIntervalIndex",
+            // 批次 UE：自动检查更新那一颗（住在「常规」页的「关于与更新」卡里，挨着它要用的 Token）。
+            "UpdateAutoCheckEnabled",
         };
 
         foreach (var p in writable)
@@ -99,6 +101,12 @@ public sealed class SettingsTaxonomyGateTests
         Assert.Contains("ViewModel.GithubToken", regular);   // Token 是"库"的日常配置，留在常规页
         Assert.DoesNotContain("这三样分别要填什么", regular);
         Assert.DoesNotContain("AI 助手", Markup(regular));    // 说明卡与表单一起走，不能一份表单搬家、一份说明书留下
+        // 批次 UE：「关于与更新」留在常规页——它用的凭据就在同一页，而"版本号 + 有没有新版"是日常一件事，
+        // 不属于「数据」（那一页管的是本机那些不可重建的东西）也不属于「健康与诊断」（那一页是取证）。
+        // 读<b>抹掉注释之后</b>的那一份：UE24 那一格实测出来，卡片上方那行注释会把标题替它答上，
+        // 于是"卡搬走了"这种结构改动在这一格里没有凭据（同一族：#171/#179 锚点要认代码不认注释）。
+        Assert.Contains("关于与更新", Markup(regular));
+        Assert.Contains("ViewModel.UpdateAutoCheckEnabled", regular);
 
         var widgets = Between(xaml, "<TabViewItem Header=\"桌面工具（组件）\">", "</TabViewItem>");
         Assert.Contains("组件材质", widgets);

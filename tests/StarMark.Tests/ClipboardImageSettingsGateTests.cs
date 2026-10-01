@@ -241,5 +241,6 @@ public sealed class ClipboardImageSettingsGateTests
         Assert.Contains("private IEnumerable<StarMark.UI.Views.CanvasHotkeyRow> BuildCanvasHotkeyRows()", all);   // Canvas
         Assert.Contains("private string BuildCaptureStatus()", all);                        // Capture
         Assert.Contains("private void PrepareLocalDiskSearch()", all);                 // LocalDisk
+        Assert.Contains("public void BackfillUpdateState()", all);                      // Updates
     }
 }
