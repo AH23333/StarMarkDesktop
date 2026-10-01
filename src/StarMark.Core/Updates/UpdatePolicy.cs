@@ -179,13 +179,7 @@ public static class UpdatePolicy
             ? $"https://github.com/{RepositoryOf(repository)}/releases/tag/{tag}"
             : $"https://github.com/{RepositoryOf(repository)}/releases";
 
-    private static bool IsPlainTag(string? tag)
-    {
-        if (string.IsNullOrWhiteSpace(tag) || tag.Length > 100) return false;
-        foreach (var c in tag)
-            if (!char.IsAsciiLetterOrDigit(c) && c is not ('.' or '-' or '_')) return false;
-        return true;
-    }
+    private static bool IsPlainTag(string? tag) => IsPlainPath(tag, 100);
 
     /// <summary>
     /// 这个结局算不算"一次真的问过了"（决定要不要把 <c>LastProbeUtc</c> 写下去）。
@@ -195,4 +189,110 @@ public static class UpdatePolicy
     /// </summary>
     public static bool CountsAsProbed(UpdateVerdict verdict)
         => verdict is not (UpdateVerdict.NotReachable or UpdateVerdict.TimedOut);
+
+    // ===== 取包（批次 UF）：地址仍然是我们拼，措辞仍然只在这一处 =====
+
+    /// <summary>
+    /// 某一顆发布资产的下载地址：<b>由本程序按"仓库 + 标签 + 资产名"拼出来</b>，
+    /// 与 <see cref="ReleasePageUrl"/> 同一条口径，理由在这里更硬一档。
+    /// <para>GitHub 的响应里本来就带着现成的下载地址（<c>assets[].browser_download_url</c>），
+    /// 读它更省事——但那等于<b>把"从哪儿取代码"这个决定交给一个外部服务器</b>：一次被改写的响应
+    /// 就能让"帮你更新"变成"帮你运行别人选的字节"。三段输入各有各的来源：仓库出自配置、标签出自
+    /// 已经比过新旧的那一次探测、资产名一颗来自常量、一颗来自<b>签名之内</b>的清单字段。</para>
+    /// <para>任一段认不出字符集就返回 null（不猜、也不"先把能改的改掉再试"）。</para>
+    /// </summary>
+    public static string? ReleaseAssetUrl(string repository, string tag, string assetName)
+    {
+        if (!IsPlainPath(tag, 100) || !IsPlainPath(assetName, 120)) return null;
+        var path = RepositoryOf(repository);
+        return IsPlainRepositoryPath(path)
+            ? $"https://github.com/{path}/releases/download/{tag}/{assetName}"
+            : null;
+    }
+
+    /// <summary>
+    /// 一次取包要的<b>三个地址</b>：清单、签名、载荷。
+    /// <para>三顆一次拼齐，是为了让<b>传输层拿到的是死地址</b>——它不需要、也不允许再去读清单里的任何字段
+    /// 才能决定下一发请求打到哪儿（依赖方向 <c>Core → Integrations</c> 在这里正好帮了一把：
+    /// Integrations 连清单的读法都看不见）。载荷那顆的名字出自 <see cref="UpdateAssets.PackageNameFor"/>，
+    /// 输入只有标签，而标签在探测那一步已经过字符集与新旧两道判。</para>
+    /// <para>任一顆拼不出来 ⇒ null（宁可不发请求，也不带着半套地址去试）。
+    /// 清单里那一欄与这里的算出的名字是否同一顆，由 <c>UpdateIntegrity</c> 在<b>验签之后</b>核对。</para>
+    /// </summary>
+    public static PackageAssetAddresses? ReleaseAssetAddresses(string repository, string tag)
+    {
+        if (!AppVersion.TryParse(tag, out var parsed)) return null;
+        var manifest = ReleaseAssetUrl(repository, tag, UpdateAssets.ManifestAssetName);
+        var signature = ReleaseAssetUrl(repository, tag, UpdateAssets.SignatureAssetName);
+        var package = ReleaseAssetUrl(repository, tag, UpdateAssets.PackageNameFor(AppVersion.Describe(parsed)));
+        return manifest is null || signature is null || package is null
+            ? null
+            : new PackageAssetAddresses(manifest, signature, package);
+    }
+
+    /// <summary>"一段光秃秃的路径分量"：非空、限长、只含 GitHub 实际允许的字符（<b>不含斜杠</b>）。</summary>
+    private static bool IsPlainPath(string? value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value) || value!.Length > maxLength) return false;
+        foreach (var c in value)
+            if (!char.IsAsciiLetterOrDigit(c) && c is not ('.' or '-' or '_')) return false;
+        return true;
+    }
+
+    /// <summary>仓库那一段：字符集同上，而斜杠<b>只许 owner 与 name 之间那一根</b>。</summary>
+    private static bool IsPlainRepositoryPath(string? value)
+    {
+        if (string.IsNullOrEmpty(value) || value!.Length > 200) return false;
+        var slashes = 0;
+        foreach (var c in value)
+        {
+            if (c == '/') { slashes++; continue; }
+            if (!char.IsAsciiLetterOrDigit(c) && c is not ('.' or '-' or '_')) return false;
+        }
+        return slashes == 1;
+    }
+
+    /// <summary>
+    /// 取一次包的结局要说的那句话。<b>与 <see cref="Describe(UpdateVerdict)"/> 分开是两套枚举的代价</b>
+    /// （见 <c>PackageFetchStatus</c> 的注释），重合的那几句刻意保持同一说法。
+    /// </summary>
+    public static string Describe(PackageFetchStatus status) => status switch
+    {
+        PackageFetchStatus.Fetched => "更新包已经取到，校验也过了（还没开始装）",
+        PackageFetchStatus.AssetMissing => "这一版没带更新包（发布时漏传了清单或载荷），只能打开发布页看",
+        PackageFetchStatus.AddressRefused => "更新地址拼不出来：仓库或标签的写法认不出来",
+        PackageFetchStatus.OffHostRedirect => "下载中途被引到了 GitHub 之外的站点，已当场拒绝",
+        PackageFetchStatus.TooLarge => "取回的字节超过这一档上限，没当它是更新包",
+        PackageFetchStatus.ManifestUnreadable => "更新清单读不懂（多半是清单格式比这个程序新）",
+        PackageFetchStatus.NotReachable => "这台机器现在连不上 GitHub（离线或代理挡着），下次联网会自己补问",
+        PackageFetchStatus.TimedOut => "GitHub 没在限时内把包送完，过一会儿会自己再试",
+        PackageFetchStatus.ServerError => "GitHub 那边报错了，过一会儿会自己再试",
+        PackageFetchStatus.Unauthorized => "凭据被拒：GitHub Token 已失效或作用域不够，重新填一次即可",
+        PackageFetchStatus.RateLimited => $"GitHub 暂时限流，{ProbeGapHours} 小时后会自己再问一次",
+        PackageFetchStatus.DiskWriteFailed => "本机临时目录写不下去（磁盘满或没权限），更新没有开始",
+        _ => "取更新包没有结果",
+    };
+
+    /// <summary>
+    /// 一份取回来的包<b>审不过</b>时的那句话。
+    /// <para>签名／哈希那两格与其余不同：它们不是"再试一次就好"，而是"这里有人在换东西"。
+    /// 所以这几句必须照实说，不许折成一句通用的"更新失败"（P-54 同口径，也免得安全事件被降噪成噪声）。</para>
+    /// <para>另一条口径上的洁癖：这一层的每一格都发生在<b>临时载荷已经落下</b>之后，所以哪一格都不许说
+    /// "没动本机任何文件"——那句说的是"什么都没写"，而这里确实写过一颗临时文件。
+    /// 能担保的是弱一点但真的那一件：<b>装目录里的东西一个字没换</b>，故统一落在"没装"／"已拒绝"上。</para>
+    /// </summary>
+    public static string Describe(UpdateIntegrity.Outcome outcome) => outcome switch
+    {
+        UpdateIntegrity.Outcome.Trusted => "这份包签得对、字节也对得上清单",
+        UpdateIntegrity.Outcome.SignatureInvalid => "签名对不上：这份清单不是我们发出去的，已拒绝",
+        UpdateIntegrity.Outcome.ManifestUnreadable => "更新清单读不懂（多半是清单格式比这个程序新），没装",
+        UpdateIntegrity.Outcome.SchemaUnsupported => "清单格式比这个程序新，先升级程序再更新，没装",
+        UpdateIntegrity.Outcome.FieldRejected => "清单里有认不出的值（路径越界、哈希形状不对、或没有主程序），已拒绝",
+        UpdateIntegrity.Outcome.VersionMismatch => "清单写的版本与要取的那一版不是同一版，没装",
+        UpdateIntegrity.Outcome.RollbackRefused => "这一版不比本机现在的更新，装了是往回退，所以没装",
+        UpdateIntegrity.Outcome.LocalVersionUnknown => "本机版本号读不到，判断不了新旧，所以没装",
+        UpdateIntegrity.Outcome.PackageHashMismatch => "包的内容与清单里的哈希对不上（可能被换过），已拒绝",
+        UpdateIntegrity.Outcome.PackageSizeMismatch => "包的大小与清单里说的不一致，已拒绝",
+        _ => "更新包没有通过校验，没装",
+    };
 }

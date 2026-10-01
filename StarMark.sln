@@ -20,6 +20,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StarMark.SmokeTest", "tests
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StarMark.Tests", "tests\StarMark.Tests\StarMark.Tests.csproj", "{3771A661-B9A1-45C6-B779-7777E6C42C45}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{E3E3E3E3-3333-3333-3333-333333333333}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StarMark.UpdateSigner", "tools\StarMark.UpdateSigner\StarMark.UpdateSigner.csproj", "{71BB394B-790F-464C-9996-5556FD03F8FC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -54,6 +58,10 @@ Global
 		{3771A661-B9A1-45C6-B779-7777E6C42C45}.Debug|x64.Build.0 = Debug|x64
 		{3771A661-B9A1-45C6-B779-7777E6C42C45}.Release|x64.ActiveCfg = Release|x64
 		{3771A661-B9A1-45C6-B779-7777E6C42C45}.Release|x64.Build.0 = Release|x64
+		{71BB394B-790F-464C-9996-5556FD03F8FC}.Debug|x64.ActiveCfg = Debug|x64
+		{71BB394B-790F-464C-9996-5556FD03F8FC}.Debug|x64.Build.0 = Debug|x64
+		{71BB394B-790F-464C-9996-5556FD03F8FC}.Release|x64.ActiveCfg = Release|x64
+		{71BB394B-790F-464C-9996-5556FD03F8FC}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -66,5 +74,6 @@ Global
 		{A1A1A1A1-0006-0006-0006-000000000006} = {E1E1E1E1-1111-1111-1111-111111111111}
 		{B1B1B1B1-0003-0003-0003-000000000003} = {E2E2E2E2-2222-2222-2222-222222222222}
 		{3771A661-B9A1-45C6-B779-7777E6C42C45} = {E2E2E2E2-2222-2222-2222-222222222222}
+		{71BB394B-790F-464C-9996-5556FD03F8FC} = {E3E3E3E3-3333-3333-3333-333333333333}
 	EndGlobalSection
 EndGlobal

@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    发布用的签名工具（批次 UF）。它不是应用的一部分，也不进任何用户拿到的产物：
+    它唯一的活是"把一颗 zip 变成一份应用认账的清单 + 那份清单的签名"。
+
+    为什么要单独立一个工程而不是在 publish.ps1 里现写一段：签名的字节与验签的字节必须是同一串，
+    而"同一串"只能由同一颗函数保证（<c>UpdateManifestCodec.Write</c>）。脚本里各写一份 JSON 拼接，
+    下一次加一欄就会漂成"签名方盖了、验签方不认"——那条漂移的表现是全线更新不可用，
+    而且只在用户机器上出现（#189/#193 那一族：两处实现必漂移）。
+
+    私钥<b>不入库</b>：默认在 <c>%USERPROFILE%\.starmark\update-signing.pk8.pem</c>。
+    仓库里只有公钥（在 <c>UpdateIntegrity.cs</c> 内嵌），所以读得到这个公开仓库的人伪造不出一份能被认账的清单。
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>StarMark.UpdateSigner</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\StarMark.Core\StarMark.Core.csproj" />
+    <ProjectReference Include="..\..\src\StarMark.Abstractions\StarMark.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>
