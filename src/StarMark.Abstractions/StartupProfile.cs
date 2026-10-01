@@ -80,6 +80,53 @@ public static class StartupProfile
     /// </summary>
     internal static Func<string> MemoryReader = SystemMemoryLine;
 
+    /// <summary>
+    /// 一条刻度的<b>本线程 CPU 读数</b>从哪来（批次 TC）。<b>由宿主在启动最早处接进来</b>——
+    /// <c>UIStallWatchdog.InstallSelfCpuReader()</c>（App 构造里、第一把刻度之前）。
+    /// <para>
+    /// 为什么不自己读：这一层写明不许有 Win32 互操作（层次闸门
+    /// <c>AnsiCodePageWiringGateTests.AbstractionsLayerStillContainsNoWin32</c> 就钉着这件事），
+    /// 而"按线程的 CPU 时间"在 net9 的 BCL 里根本没有（<c>Thread.ProcessorTime</c>／
+    /// <c>Thread.GetCurrentProcessorTime()</c> 都是 CS0117），只能是 kernel32 的活。
+    /// </para>
+    /// <para>
+    /// <b>没接线就是 null</b> ⇒ 刻度行老实写"未知"，并在第一次用到时说一次。这个形状不崩、不报错、
+    /// 只是那一列从此空白——而它是"这段到底是算还是等"唯一能定方向的数据（批次 WJ／TB 各栽过一次）。
+    /// </para>
+    /// </summary>
+    public static Func<long?>? ThreadCpuMsReader;
+
+    /// <summary>刻度行上那半句 CPU 的<b>唯一出处</b>。没接线／读不到都写"未知"，<b>不许退化成 0</b>。</summary>
+    private static string ThreadCpuField()
+    {
+        if (ThreadCpuMsReader is not { } read) return CpuUnknown("未接线：宿主没把本线程 CPU 读数交给刻度");
+        try
+        {
+            return read() is { } ms ? $"{ms} ms" : CpuUnknown("接线方返回 null（系统没给这个数）");
+        }
+        catch (Exception ex)
+        {
+            return CpuUnknown(ex.GetType().Name);   // 读不到就少一个数，不许静默补 0
+        }
+    }
+
+    private static bool _cpuUnavailableReported;
+
+    /// <summary>
+    /// 失效要说一次，但只说一次：这根柱子跑在每一把刻度上，每次都念一遍就成了噪声源。
+    /// 不说则是另一种坏——它不崩、不报错、LastError 也不动，只是那一列从此空白，
+    /// 而它是"这段到底是算还是等"唯一能定方向的数据（批次 WJ／TB 各栽过一次）。
+    /// </summary>
+    private static string CpuUnknown(string why)
+    {
+        if (!_cpuUnavailableReported)
+        {
+            _cpuUnavailableReported = true;
+            StarLog.Warn($"[启动] 本线程 CPU 读数不可得（{why}），刻度行的 CPU 列将一直是\"未知\"");
+        }
+        return "未知";
+    }
+
     private static Process? _self;
 
     /// <summary>
@@ -122,7 +169,11 @@ public static class StartupProfile
             _last = now;
             _segments.Add($"{segment} +{sinceLast} ms");
             NoteCheckpoint(segment, sinceLast);
-            line = $"[启动] {segment}：+{sinceLast} ms（自会话开始累计 {now - _start} ms）";
+            // CPU 读数与那两个时长**写在同一行**（批次 TC）：TB 的教训是"同一行印出来"不等于"同一段量出来"——
+            // 分在两行（或另取时刻）就给了读的人做错减法的机会。写在一行、且带着线程号，
+            // 相邻两把刻度就能直接求"这段墙钟里这根线程烧了多少 CPU"，跨线程的两行则一眼就能看出不能相减。
+            line = $"[启动] {segment}：+{sinceLast} ms（自会话开始累计 {now - _start} ms" +
+                   $"｜线程#{Environment.CurrentManagedThreadId} CPU 累计 {ThreadCpuField()}）";
         }
         Sink(line);
         // 计时行与内存行**成对**：只发一条的话，读表的人得自己猜"这堆内存是在哪一段之间涨的"。

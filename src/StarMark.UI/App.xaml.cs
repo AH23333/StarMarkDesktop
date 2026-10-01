@@ -39,6 +39,10 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        // 启动刻度的"本线程 CPU"这一列由这里接线（批次 TC）：刻度本身在 Abstractions 层，那一层不许碰 Win32，
+        // 而按线程的 CPU 时间在 net9 只能是 kernel32 的活。**必须在第一把刻度之前接上**，
+        // 没接线不是崩溃而是那一列一直空白，所以刻度侧会在第一次用到时说一次（UIStallWatchdog.InstallSelfCpuReader）。
+        UIStallWatchdog.InstallSelfCpuReader();
         // 全局未处理异常：写日志并置 Handled=true 兜住，绝不让单次 UI 异常杀掉整个进程。
         // 关键背景：WinUI 3 中若这里不设 e.Handled，任何从点击处理里冒出的未处理异常
         // （例如组件落盘时 WidgetStorage.Save 撞上 OneDrive/杀软文件锁抛 IOException，

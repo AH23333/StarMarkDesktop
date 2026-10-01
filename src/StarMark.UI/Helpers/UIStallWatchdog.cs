@@ -85,13 +85,17 @@ public static class UIStallWatchdog
         if (_uiThread == IntPtr.Zero)
         {
             _uiThread = OpenThread(ThreadQueryInformation, false, GetCurrentThreadId());
-            // 取不到句柄就让日志当场说一次：否则整根 CPU 柱子中 locally 静默失效，
+            // 取不到句柄就让日志当场说一次：否则整根 CPU 柱子静默失效，
             // 看到的只是"未知"，谁也不会去查为什么（这次的教训就是它默默坏了很久）
             if (_uiThread == IntPtr.Zero)
                 StarLog.Warn($"[卡顿] UI 线程 CPU 取不到（OpenThread 失败 Win32 " +
                              $"{System.Runtime.InteropServices.Marshal.GetLastWin32Error()}），" +
                              "恢复行将只有墙钟时长");
         }
+        // 起点快照必须在这里先放一份，不能等第一次回执：真机 6 颗那一跑里，第一段长阻塞就发生在那之前，
+        // 于是 `_mark` 还是 null ⇒ 恢复行只能写"其间用了约 未知 ms CPU"（同时"前台页=未知"，同一根因）。
+        // 时刻与 CPU 仍取自同一个 now——批次 TB 立的规矩在这一格同样成立。
+        _mark = new AckMark(now, CpuMs() ?? -1);
         _timer = new Timer(_ => Probe(queue), null, IntervalMs, IntervalMs);
     }
 
@@ -178,6 +182,32 @@ public static class UIStallWatchdog
         => _uiThread != IntPtr.Zero && GetThreadTimes(_uiThread, out _, out _, out var kernel, out var user)
             ? (kernel + user) / 10_000            // FILETIME 是 100 ns 刻度
             : null;
+
+    /// <summary>
+    /// 把"<b>当前线程</b>的 CPU 读数"接进启动刻度（批次 TC，由 <c>App</c> 构造里、第一把刻度之前调用）。
+    /// <para>
+    /// 为什么不写在 <c>StartupProfile</c> 里：那一层写明不许碰 Win32（层次闸门
+    /// <c>AnsiCodePageWiringGateTests.AbstractionsLayerStillContainsNoWin32</c> 守着），而 net9 的 BCL
+    /// 根本没有按线程的 CPU 时间（<c>Thread.ProcessorTime</c> 与 <c>Thread.GetCurrentProcessorTime()</c> 都是
+    /// CS0117，<c>GetCurrentThreadTimes</c> 又不在 kernel32 的直接导出里）⇒ 只能是这里的活。
+    /// 放本文件而不是另开一处：线程时间的互操作只许有一个主人，跨线程读（<see cref="CpuMs"/>）与自读
+    /// 共用同一个 <c>GetThreadTimes</c> 声明。
+    /// </para>
+    /// </summary>
+    public static void InstallSelfCpuReader() => StartupProfile.ThreadCpuMsReader = SelfThreadCpuMs;
+
+    /// <summary>
+    /// 读<b>自己</b>这根线程用的是当前线程<b>伪句柄</b>（<c>GetCurrentThread()</c> 即 <c>(HANDLE)-2</c>，
+    /// 内联定义不是导出符号，所以按值写）。这条路上<b>没有权利位可写错</b>——而 <see cref="CpuMs"/>
+    /// 那种跨线程读要的 <c>THREAD_QUERY_INFORMATION</c> 一旦写错，不崩不报错，只是整列从此"未知"
+    /// （批次 WJ 栽过的就是那一位）。
+    /// </summary>
+    private static long? SelfThreadCpuMs()
+        => GetThreadTimes(CurrentThreadHandle, out _, out _, out var kernel, out var user)
+            ? (kernel + user) / 10_000            // 与 CpuMs 同一个口径，两边相减才是同一种数
+            : null;
+
+    private static readonly IntPtr CurrentThreadHandle = new(-2);
 
     /// <summary>
     /// 卡顿起点那一刻的刻度，连同它<b>当时已经放了多久</b>（形如「组件显示点亮 时钟 +210 ms，163 ms 前」）；
