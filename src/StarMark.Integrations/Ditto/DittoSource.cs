@@ -11,31 +11,61 @@ public sealed class DittoSource : IItemSource
 {
     private const int MaxSync = 500;
 
-    private readonly string? _dbPath;
+    private string? _dbPath;
 
     /// <summary>探测过的位置清单——提示里要说清"找过哪里"，否则用户只知道"没有"却无从判断是自己没装、还是装在别处。</summary>
-    private readonly IReadOnlyList<string> _probed;
+    private IReadOnlyList<string> _probed = Array.Empty<string>();
+
+    private bool _probeDone;
+
+    /// <summary>这台机器上真探过几次（诊断/测试用）。<b>构造期必须是 0</b>——那是"没装 Ditto 就不该付这笔税"的证据。</summary>
+    internal int ProbeCount;
 
     public string SourceId => ItemSources.Ditto;
 
     public string DisplayName => "Ditto 剪贴板";
 
-    public bool IsAvailable => _dbPath != null && File.Exists(_dbPath);
+    /// <summary>问一次就够：<c>IsAvailable</c> 在一次搜索里会被问两遍（Core 侧筛源＋队列查询前），探两遍是白花。</summary>
+    public bool IsAvailable
+    {
+        get
+        {
+            EnsureProbed();
+            return _dbPath != null && File.Exists(_dbPath);
+        }
+    }
 
     /// <summary>Ditto 是外部程序：没装就没有数据库，这一项本来就该是空的（与内置剪贴板历史是两回事）。</summary>
     public string? AvailabilityHint
-        => $"没在本机找到 Ditto 的数据库（找过：{string.Join("；", _probed)}）。"
-         + "没用过 Ditto 属正常，StarMark 自带的「剪贴板历史」不依赖它——在设置里开启后即可用";
+    {
+        get
+        {
+            EnsureProbed();
+            return $"没在本机找到 Ditto 的数据库（找过：{string.Join("；", _probed)}）。"
+                 + "没用过 Ditto 属正常，StarMark 自带的「剪贴板历史」不依赖它——在设置里开启后即可用";
+        }
+    }
 
-    /// <param name="dbPath">显式指定库路径（测试/自定义安装位置）；为 null 时自动探测 <see cref="CandidateDbPaths"/>。</param>
+    /// <param name="dbPath">显式指定库路径（测试/自定义安装位置）；为 null 时<b>推迟到第一次真要答案时</b>才探测。</param>
     public DittoSource(string? dbPath = null)
     {
-        if (dbPath is not null)
-        {
-            _dbPath = dbPath;
-            _probed = new[] { dbPath };
-            return;
-        }
+        if (dbPath is null) return;
+        _dbPath = dbPath;
+        _probed = new[] { dbPath };
+        _probeDone = true;
+    }
+
+    /// <summary>
+    /// 探测只做一次，而且<b>不在构造里做</b>。为什么这条值得单独立：候选路径含"枚举进程 + 读别的进程的 MainModule"，
+    /// 而 DI 在主窗构造那一刻就把这五颗源全建出来（P-135）——本机没装 Ditto 时（今天就是：库不存在、进程也没有），
+    /// 这笔钱<b>每次启动都付、且永远为空</b>。推到这里付的第一个代价是"第一次问可用性时多等几毫秒"，
+    /// 而那一次本来就要开库读数据，不差这点。
+    /// </summary>
+    private void EnsureProbed()
+    {
+        if (_probeDone) return;
+        _probeDone = true;
+        ProbeCount++;
         _probed = CandidateDbPaths();
         _dbPath = FindDbPath(_probed);
     }

@@ -108,7 +108,53 @@ if (args.Length >= 1 && args[0] == "aiusage")
     return;
 }
 
+if (args.Length >= 1 && args[0] == "srcprobe")
+{
+    // srcprobe      -> 量"这台机器上 Ditto 那笔探测税是多少毫秒"（P-135 的前后数字；默认 5 轮）
+    // srcprobe <N>  -> 换轮数
+    // 只读：全程只碰文件系统与进程表，不写任何库、不碰用户档。输出刻意用 ASCII——这台机器的控制台码页会把中文打成乱码。
+    SrcProbeAudit(args.Length >= 2 && int.TryParse(args[1], out var rounds) && rounds > 0 ? rounds : 5);
+    return;
+}
+
 await SmokeModeAsync();
+
+// ===== 构造期探测税（P-135）=====
+// 把"没装 Ditto 的机器上白付的那笔税"拆成两段量出来：枚举进程（CandidateDbPaths）与逐条探盘（FindDbPath）。
+// 批次 SU 之前这两段都在构造里跑，而 DI 在主窗构造时就把五颗源全建出来；改后构造 ≈0 ms，
+// 代价挪到"第一次问可用性"那一次。第二次问必须是 0 毫秒且不涨 ProbeCount——那是"只探一次"的证据。
+static void SrcProbeAudit(int rounds)
+{
+    for (var i = 0; i < rounds; i++)
+    {
+        var ctorSw = Stopwatch.StartNew();
+        var source = new StarMark.Integrations.Ditto.DittoSource();
+        ctorSw.Stop();
+        var ctorProbes = source.ProbeCount;
+
+        var firstSw = Stopwatch.StartNew();
+        var available = source.IsAvailable;
+        firstSw.Stop();
+
+        var againSw = Stopwatch.StartNew();
+        _ = source.IsAvailable;
+        againSw.Stop();
+
+        // 旧构造体里干的就是这两件事，分开量才知道钱在"枚举进程"还是"探盘"上。
+        var enumSw = Stopwatch.StartNew();
+        var candidates = StarMark.Integrations.Ditto.DittoSource.CandidateDbPaths();
+        enumSw.Stop();
+        var findSw = Stopwatch.StartNew();
+        var chosen = StarMark.Integrations.Ditto.DittoSource.FindDbPath(candidates);
+        findSw.Stop();
+
+        Console.WriteLine($"round {i}: ctor={ctorSw.Elapsed.TotalMilliseconds:F3}ms ctorProbes={ctorProbes} "
+                          + $"firstAsk={firstSw.Elapsed.TotalMilliseconds:F3}ms secondAsk={againSw.Elapsed.TotalMilliseconds:F3}ms "
+                          + $"probes={source.ProbeCount} | enumPaths={enumSw.Elapsed.TotalMilliseconds:F3}ms "
+                          + $"findDb={findSw.Elapsed.TotalMilliseconds:F3}ms candidates={candidates.Count} "
+                          + $"available={available} chosen={chosen}");
+    }
+}
 
 // ===== 全新 DB 自检 =====
 static async Task SmokeModeAsync()
