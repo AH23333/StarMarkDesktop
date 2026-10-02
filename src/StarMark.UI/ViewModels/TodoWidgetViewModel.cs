@@ -337,13 +337,18 @@ public sealed class TodoWidgetViewModel : ObservableObject
     /// 设置截止日期。<paramref name="dayOffset"/> 为相对今天的天数（0=今天，1=明天）；
     /// null 表示清除。统一存「当日 0 点」以按天比较。
     /// </summary>
+    /// <summary>
+    /// 设置截止日期。<paramref name="dayOffset"/> 为相对今天的<b>日历日</b>数（0=今天，1=明天）；
+    /// null 表示清除。统一存「当日 0 点」以按天比较，跨夏令时那两天由
+    /// <see cref="LocalItemState.DayOffsetStartUnix"/> 保证跳的是邻居日而不是 24 小时（P-37）。
+    /// </summary>
     public Task SetDueAsync(long id, int? dayOffset) => GuardAsync("更新待办截止日期失败", async () =>
     {
         var it = await FindItemAsync(id);
         if (it is null) return;
         LocalItemState.SetDue(it, dayOffset is null
             ? null
-            : LocalItemState.DayStartUnix(DateTimeOffset.Now.AddDays(dayOffset.Value)));
+            : LocalItemState.DayOffsetStartUnix(DateTimeOffset.Now, dayOffset.Value));
         it.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         await _repo!.UpsertLocalItemAsync(it);
         await LoadAsync();

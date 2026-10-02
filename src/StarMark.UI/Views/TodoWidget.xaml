@@ -65,6 +65,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
@@ -101,7 +102,24 @@
                             </Button.Flyout>
                         </Button>
 
-                        <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="4,0,0,0">
+                        <!-- 截止日期：点开才给「今天 / 明天 / 清除」三个出口，与旁边那颗颜色点同一个交互形状。
+                             写入侧（SetDueAsync）自批次 2c6ec59 起就存在但一直没接（批次 UM 补上），
+                             行内那颗日历点就是它唯一的入口——闸门 TodoWriterWiringGateTests 盯着这条接线。 -->
+                        <Button Grid.Column="2" Padding="4,2,4,2" MinWidth="16" MinHeight="16"
+                                Background="Transparent" BorderThickness="0"
+                                VerticalAlignment="Center"
+                                ToolTipService.ToolTip="截止日期">
+                            <FontIcon Glyph="&#xE787;" FontSize="11" Opacity="0.75"/>
+                            <Button.Flyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem Text="今天" Tag="{x:Bind Id}" Click="TodoDue_Click"/>
+                                    <MenuFlyoutItem Text="明天" Tag="{x:Bind Id}" Click="TodoDue_Click"/>
+                                    <MenuFlyoutItem Text="清除" Tag="{x:Bind Id}" Click="TodoDue_Click"/>
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
+
+                        <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="4,0,0,0">
                             <TextBlock Text="{x:Bind Text}" FontSize="12"
                                        TextTrimming="CharacterEllipsis"
                                        Opacity="{x:Bind Done, Mode=OneTime, Converter={StaticResource DoneOpacity}}"
@@ -112,7 +130,7 @@
                                        Visibility="{x:Bind DueText, Mode=OneTime, Converter={StaticResource TextToVisibility}}"/>
                         </StackPanel>
 
-                        <Button Grid.Column="3" Content="✕" FontSize="9" Padding="5,3,5,3"
+                        <Button Grid.Column="4" Content="✕" FontSize="9" Padding="5,3,5,3"
                                 Background="Transparent" BorderThickness="0"
                                 Click="DeleteTodo_Click" Tag="{x:Bind Id}"/>
                     </Grid>

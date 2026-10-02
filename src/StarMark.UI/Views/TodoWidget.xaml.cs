@@ -143,6 +143,18 @@ public sealed partial class TodoWidget : UserControl
         _ = ViewModel.SetColorAsync(id, color);
     }
 
+    /// <summary>
+    /// 截止日期菜单：与上面那颗颜色点同一形状——<c>Tag</c> 带条目 id，档位靠菜单项**顺序**认
+    /// （固定为 [今天, 明天, 清除] ⇒ 偏移 0 / 1 / null）。清除走 <c>null</c>，由 <c>LocalItemState.SetDue</c> 删键。
+    /// </summary>
+    private void TodoDue_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuFlyoutItem { Tag: long id } item) return;
+        if (item.Parent is not MenuFlyout menu) return;
+        int? dayOffset = menu.Items.IndexOf(item) switch { 0 => 0, 1 => 1, _ => null };
+        _ = ViewModel.SetDueAsync(id, dayOffset);
+    }
+
     private async void Undo_Click(object sender, RoutedEventArgs e) => await ViewModel.UndoDeleteAsync();
 
     private void UndoDismiss_Click(object sender, RoutedEventArgs e) => ViewModel.DismissUndo();

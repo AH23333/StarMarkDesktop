@@ -138,6 +138,26 @@ public static class LocalItemState
     }
 
     /// <summary>
+    /// 取「相对<paramref name="now"/> 所在<b>日历日</b>第 <paramref name="dayOffset"/> 天」那天的 0 点（Unix 秒）。
+    /// <para>
+    /// <b>为什么不用 <c>now.AddDays(n)</c> 再取当日 0 点</b>（P-37）：<c>DateTimeOffset.AddDays</c> 加的是
+    /// <b>定长 24 绝对小时</b>并保留当下偏移，而夏令时回拨那天的本地长有 25 小时——
+    /// 例：标准偏移 +1、夏令 +2，回拨发生在当地 03:00→02:00 那天 D 的 00:30@+2 点「明天」，
+    /// +24 小时落回 <b>同一个日历日 D</b> 的 21:30（已换成 +1 偏移）⇒ 存成 D 的 0 点，"明天"当场变成"今天到期"。
+    /// 这里先取该时区的日历日、<b>在日期上</b>加减天数、再按<b>目标那天</b>的偏移还原 0 点，
+    /// 23/25 小时那种日子也只会跳到正确的邻居日。
+    /// </para>
+    /// </summary>
+    /// <param name="zone">按哪个时区过日历日；默认本机。<b>测试必须注入自己的时区</b>，
+    /// 否则这条判据的成败随构建机的系统设置而变（与"不许靠本机状态活着"同一条纪律）。</param>
+    public static long DayOffsetStartUnix(DateTimeOffset now, int dayOffset, TimeZoneInfo? zone = null)
+    {
+        var z = zone ?? TimeZoneInfo.Local;
+        var day = TimeZoneInfo.ConvertTime(now, z).Date.AddDays(dayOffset);
+        return new DateTimeOffset(day, z.GetUtcOffset(day)).ToUnixTimeSeconds();
+    }
+
+    /// <summary>
     /// 截止时间的中文短描述（组件列表显示用）。
     /// 逾期 / 今天 / 明天 / 本周内星期X / 具体月日 —— 按这个优先级，远的才显示日期。
     /// </summary>

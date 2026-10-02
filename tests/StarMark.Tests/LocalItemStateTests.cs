@@ -342,4 +342,91 @@ public class LocalItemStateTests
         Assert.Equal("f3a9|42", LocalItemState.EncodeSourceId("f3a9", 42));
         Assert.Equal("f3a9", LocalItemState.DecodeInstanceId("f3a9|42"));
     }
+
+    // ── 「相对日历日」推进（批次 UM，P-37 的修法落点）：待办的"明天"必须跳**邻居日历日**，
+    //     不是加 24 绝对小时——夏令时回拨那天本地长 25 小时，定长加法会在凌晨把"明天"过成"今天"。──
+
+    /// <summary>
+    /// 一个<b>真有夏令时</b>的时区：中欧（标准 +1／夏令 +2，3 月最后一个周日 02:00 进、10 月最后一个周日 03:00 出，
+    /// 2025 年即 3/30 与 10/26）。取法是按 <b>Windows 时区别名</b>查，<b>不是取本机时区</b>——
+    /// Windows 自带整份时区库，所以在中国大陆这台没有夏令时的机器上照样进得到回拨/春令那两个分支
+    /// （P-37 说的"真机可达"在这里换成了可机检；"判据不许靠本机状态活着"是同一条纪律）。
+    /// <para>⚠ 查不到就直接抛＝这一格红，<b>刻意不写跳过</b>：跳过会被汇总行读成通过（坑表 #242）。</para>
+    /// </summary>
+    private static readonly TimeZoneInfo DstZone = TimeZoneInfo.FindSystemTimeZoneById("W. Europe Standard Time");
+
+    /// <summary>把"某时区那一刻的日历日"读回来——只走 <see cref="TimeZoneInfo.ConvertTime(DateTimeOffset, TimeZoneInfo)"/>，
+    /// 不用 <c>ToOffset</c>（它只收 <see cref="TimeSpan"/>，写错就变成拿固定偏移冒充时区）。
+    /// <para>⚠ 必须用 <see cref="DateTimeOffset.FromUnixTimeSeconds"/>：<c>new DateTimeOffset(long, TimeSpan)</c>
+    /// 的第一个参数是 <b>ticks</b>，拿 Unix 秒直接喂进去会静默得到公元 1 年（本批头一遍就是这么红的）。</para>
+    /// </summary>
+    private static DateTime LocalDateInDstZone(long unix)
+        => TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(unix), DstZone).Date;
+
+    /// <summary>同一时刻在该时区的"几点几分"——用来钉"存的必须是当日 0 点"。</summary>
+    private static TimeSpan LocalTimeOfDayInDstZone(long unix)
+        => TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(unix), DstZone).TimeOfDay;
+
+    /// <summary>
+    /// 回拨日（本地 25 小时）凌晨 00:30 点「明天」：必须落在 <b>10-27</b> 的 0 点（且用回拨后的偏移 +1）。
+    /// <para>同时把"定长 24 小时"那一版量成反证：同一条 <c>now</c> 加 86400 秒之后，本地日历日仍是 10-26
+    /// ⇒ 用户看到的症状是"我明明设了明天，当天就变成了今天到期／已逾期"（P-37 原话）。</para>
+    /// </summary>
+    [Fact]
+    public void DayOffsetStartUnix_OnFallBackEarlyMorning_NextCalendarDayNotNext24Hours()
+    {
+        var now = new DateTimeOffset(2025, 10, 26, 0, 30, 0, TimeSpan.FromHours(2));      // 还在夏令（当天 03:00 才回拨）
+        var expected = new DateTimeOffset(2025, 10, 27, 0, 0, 0, TimeSpan.FromHours(1));  // 回拨后是标准偏移
+        Assert.Equal(expected.ToUnixTimeSeconds(), LocalItemState.DayOffsetStartUnix(now, 1, DstZone));
+
+        var naiveLocalDate = LocalDateInDstZone(now.ToUnixTimeSeconds() + 86_400);
+        Assert.Equal(new DateTime(2025, 10, 26), naiveLocalDate);   // ← 旧写法落回同一天，这行就是那次回归的现场
+
+        Assert.Equal(new DateTime(2025, 10, 26),
+            LocalDateInDstZone(LocalItemState.DayOffsetStartUnix(now, 0, DstZone)));      // "今天"＝抹掉时分秒，不回退也不前进
+    }
+
+    /// <summary>春令日（本地 23 小时）同样按日历日跳；这一向定长加法偶然也对，所以只钉正解不许漂。</summary>
+    [Fact]
+    public void DayOffsetStartUnix_OnSpringForwardDay_StillLandsOnNextCalendarDay()
+    {
+        var now = new DateTimeOffset(2025, 3, 30, 0, 30, 0, TimeSpan.FromHours(1));       // 当天 02:00 才进夏令
+        var expected = new DateTimeOffset(2025, 3, 31, 0, 0, 0, TimeSpan.FromHours(2));
+        Assert.Equal(expected.ToUnixTimeSeconds(), LocalItemState.DayOffsetStartUnix(now, 1, DstZone));
+    }
+
+    [Theory]
+    [InlineData(0)]      // 今天
+    [InlineData(1)]      // 明天
+    [InlineData(7)]      // 一周后
+    [InlineData(-1)]     // 昨天（"改到昨天"这种手滑也得落在正确的日历日）
+    public void DayOffsetStartUnix_OffsetsLandOnMidnightOfNeighbourDays(int dayOffset)
+    {
+        var now = new DateTimeOffset(2025, 6, 10, 13, 45, 0, TimeSpan.FromHours(2));     // 普通夏令日
+        var unix = LocalItemState.DayOffsetStartUnix(now, dayOffset, DstZone);
+        Assert.Equal(new DateTime(2025, 6, 10).AddDays(dayOffset), LocalDateInDstZone(unix));
+        Assert.Equal(TimeSpan.Zero, LocalTimeOfDayInDstZone(unix));  // 恒 0 点，才能按天比（DescribeDue／IsOverdue 的前提）
+    }
+
+    [Fact]
+    public void DayOffsetStartUnix_CrossesYearBoundary()
+    {
+        var now = new DateTimeOffset(2025, 12, 31, 23, 59, 0, TimeSpan.FromHours(1));
+        Assert.Equal(new DateTime(2026, 1, 1), LocalDateInDstZone(LocalItemState.DayOffsetStartUnix(now, 1, DstZone)));
+    }
+
+    /// <summary>
+    /// 不传 <c>zone</c> 时必须走本机时区，且与"显式把本机时区传进来"逐秒相等——
+    /// 否则 UI 那条默认分支与测试那条分支就是两套算法（两份真值）。
+    /// </summary>
+    [Fact]
+    public void DayOffsetStartUnix_DefaultZoneEqualsExplicitLocalZone()
+    {
+        var now = DateTimeOffset.Now;
+        Assert.Equal(
+            LocalItemState.DayOffsetStartUnix(now, 1, TimeZoneInfo.Local),
+            LocalItemState.DayOffsetStartUnix(now, 1));
+        // 旧语义不漂：dayOffset=0 与 DayStartUnix 在本机同一时刻必须同值（写侧换了算法，读数不许变）
+        Assert.Equal(LocalItemState.DayStartUnix(now), LocalItemState.DayOffsetStartUnix(now, 0));
+    }
 }
