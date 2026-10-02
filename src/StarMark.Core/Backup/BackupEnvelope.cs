@@ -15,7 +15,8 @@ public sealed class BackupEnvelope
     /// 两边的载荷形状本就不兼容（items 层级、时间单位 ms↔s、type 字符串↔整数、扩展那份没有校验和），
     /// 而 P-68 已裁决两库之间不建数据通道。这两个字符串是互斥<b>唯一</b>的闸门——
     /// 桌面读侧 <c>BackupService.ReadAsync</c> 按 <see cref="AppId"/> 逐字拒绝，
-    /// 扩展读侧 <c>backup.ts:93</c> 只认 <c>'starmark'</c>；名字一旦统一，"读错档"就从报错变成静默改库。
+    /// 扩展读侧 <c>backup.ts</c> 的 <c>parseBackup</c> 里那句 <c>parsed.app !== 'starmark'</c> 只认 <c>'starmark'</c>；
+    /// 名字一旦统一，"读错档"就从报错变成静默改库。<b>对面那仓的行号不写在这里</b>（一次合法编辑就会漂）。
     /// </summary>
     public const string AppId = "starmark-desktop";
 

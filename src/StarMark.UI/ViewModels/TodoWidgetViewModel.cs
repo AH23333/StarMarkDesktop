@@ -334,10 +334,6 @@ public sealed class TodoWidgetViewModel : ObservableObject
     });
 
     /// <summary>
-    /// 设置截止日期。<paramref name="dayOffset"/> 为相对今天的天数（0=今天，1=明天）；
-    /// null 表示清除。统一存「当日 0 点」以按天比较。
-    /// </summary>
-    /// <summary>
     /// 设置截止日期。<paramref name="dayOffset"/> 为相对今天的<b>日历日</b>数（0=今天，1=明天）；
     /// null 表示清除。统一存「当日 0 点」以按天比较，跨夏令时那两天由
     /// <see cref="LocalItemState.DayOffsetStartUnix"/> 保证跳的是邻居日而不是 24 小时（P-37）。

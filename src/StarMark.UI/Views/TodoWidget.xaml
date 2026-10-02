@@ -74,49 +74,29 @@
                                   VerticalAlignment="Center"
                                   Click="TodoCheck_Click" Tag="{x:Bind Id}"/>
 
-                        <!-- 颜色标记：点击弹菜单改色；无颜色时是一个极淡的占位点，保持行内不跳动 -->
+                        <!-- 颜色标记：菜单在 code-behind 现建（行 id 用被点按钮的 Tag 带，不再从菜单项反查）。
+                             无颜色时是一个极淡的占位点，保持行内不跳动。 -->
                         <Button Grid.Column="1" Padding="4,2,4,2" MinWidth="16" MinHeight="16"
                                 Background="Transparent" BorderThickness="0"
                                 VerticalAlignment="Center" Tag="{x:Bind Id}"
+                                Click="ColorButton_Click"
                                 ToolTipService.ToolTip="颜色标记">
                             <Ellipse Width="9" Height="9"
                                      Fill="{x:Bind Color, Mode=OneTime, Converter={StaticResource TodoColor}}"
                                      Opacity="{x:Bind Color, Mode=OneTime, Converter={StaticResource TodoColor}}"
                                      Stroke="{ThemeResource ControlStrongStrokeColorDefaultBrush}"
                                      StrokeThickness="0.5"/>
-                            <Button.Flyout>
-                                <MenuFlyout>
-                                    <MenuFlyoutItem Text="无" Tag="{x:Bind Id}" Click="TodoColor_Click">
-                                        <MenuFlyoutItem.Icon>
-                                            <FontIcon Glyph="&#xE711;" FontSize="12"/>
-                                        </MenuFlyoutItem.Icon>
-                                    </MenuFlyoutItem>
-                                    <MenuFlyoutSeparator/>
-                                    <MenuFlyoutItem Text="红（紧急）" Tag="{x:Bind Id}" Click="TodoColor_Click"/>
-                                    <MenuFlyoutItem Text="橙（重要）" Tag="{x:Bind Id}" Click="TodoColor_Click"/>
-                                    <MenuFlyoutItem Text="黄（提醒）" Tag="{x:Bind Id}" Click="TodoColor_Click"/>
-                                    <MenuFlyoutItem Text="绿（常规）" Tag="{x:Bind Id}" Click="TodoColor_Click"/>
-                                    <MenuFlyoutItem Text="蓝（稍后）" Tag="{x:Bind Id}" Click="TodoColor_Click"/>
-                                    <MenuFlyoutItem Text="紫（灵感）" Tag="{x:Bind Id}" Click="TodoColor_Click"/>
-                                </MenuFlyout>
-                            </Button.Flyout>
                         </Button>
 
-                        <!-- 截止日期：点开才给「今天 / 明天 / 清除」三个出口，与旁边那颗颜色点同一个交互形状。
-                             写入侧（SetDueAsync）自批次 2c6ec59 起就存在但一直没接（批次 UM 补上），
-                             行内那颗日历点就是它唯一的入口——闸门 TodoWriterWiringGateTests 盯着这条接线。 -->
+                        <!-- 截止日期：点开才给「今天 / 明天 / 清除」三个出口，与旁边那颗颜色点同一个形状。
+                             这颗点是它的唯一入口（写入侧自 2c6ec59 起就没人接，批次 UM 补上），
+                             闸门 TodoWriterWiringGateTests 盯着这条接线。 -->
                         <Button Grid.Column="2" Padding="4,2,4,2" MinWidth="16" MinHeight="16"
                                 Background="Transparent" BorderThickness="0"
-                                VerticalAlignment="Center"
+                                VerticalAlignment="Center" Tag="{x:Bind Id}"
+                                Click="DueButton_Click"
                                 ToolTipService.ToolTip="截止日期">
                             <FontIcon Glyph="&#xE787;" FontSize="11" Opacity="0.75"/>
-                            <Button.Flyout>
-                                <MenuFlyout>
-                                    <MenuFlyoutItem Text="今天" Tag="{x:Bind Id}" Click="TodoDue_Click"/>
-                                    <MenuFlyoutItem Text="明天" Tag="{x:Bind Id}" Click="TodoDue_Click"/>
-                                    <MenuFlyoutItem Text="清除" Tag="{x:Bind Id}" Click="TodoDue_Click"/>
-                                </MenuFlyout>
-                            </Button.Flyout>
                         </Button>
 
                         <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="4,0,0,0">

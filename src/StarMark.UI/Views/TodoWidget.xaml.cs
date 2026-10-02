@@ -120,39 +120,70 @@ public sealed partial class TodoWidget : UserControl
         => _ = ViewModel.PersistVisibleOrderAsync();
 
     /// <summary>
-    /// 颜色菜单：靠 MenuFlyoutItem 在父 MenuFlyout 中的**索引**反推颜色层级。
-    /// 直接按 Text 比对会在改文案时失效，按索引又不直观 —— 故两者都不用：
-    /// 菜单项顺序固定为 [无, 分隔线, 红, 橙, 黄, 绿, 蓝, 紫]，索引 → 颜色即下面的映射。
+    /// 颜色档位与文案：<b>只这一份</b>。0＝无（清掉标记），1～6 对应 <see cref="TodoColorConverter"/> 的调色板序号。
     /// </summary>
-    private void TodoColor_Click(object sender, RoutedEventArgs e)
+    private static readonly (int Tier, string Label)[] ColorTiers =
     {
-        if (sender is not MenuFlyoutItem { Tag: long id } item) return;
-        if (item.Parent is not MenuFlyout menu) return;
-        var index = menu.Items.IndexOf(item);
-        int color = index switch
+        (0, "无"), (1, "红（紧急）"), (2, "橙（重要）"), (3, "黄（提醒）"),
+        (4, "绿（常规）"), (5, "蓝（稍后）"), (6, "紫（灵感）"),
+    };
+
+    /// <summary>截止日档位与文案：null＝清除。<b>0＝今天、1＝明天</b>，都是"日历日"，不是 24 小时（✅P-37）。</summary>
+    private static readonly (int? Offset, string Label)[] DueTiers =
+    {
+        (0, "今天"), (1, "明天"), (null, "清除"),
+    };
+
+    /// <summary>
+    /// 点颜色那颗 → <b>现建</b>菜单，行 id 与档位都用捕获变量带进每一次点击。
+    /// <para>
+    /// 为什么不走 XAML 里那份 <c>Button.Flyout</c>：它要把 id 从被点的菜单项反查回来
+    /// （<c>item.Tag</c> 或 <c>item.Parent</c>），而<b>这条反查在这台机器上从来没通过</b>——
+    /// 库里 8 条待办没有一个 <c>color</c> 键，而同一模板里那颗<b>不套 flyout</b>、直接 <c>Tag="{x:Bind Id}"</c>
+    /// 的 CheckBox 却写过 <c>done</c>（⇒ 模板元素上的 Tag 带得出 id，flyout 里那一层带不出/接不上）。
+    /// 原来那两处 <c>return</c> 一声不出，所以它静默了一年多——现在认不到 id 会记一行 Warn（P-54 那一族）。
+    /// </para>
+    /// </summary>
+    private void ColorButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryRowId(sender, out var id)) return;
+        var menu = new MenuFlyout();
+        foreach (var (tier, label) in ColorTiers)
         {
-            0 => 0,          // 无
-            2 => 1,          // 红
-            3 => 2,          // 橙
-            4 => 3,          // 黄
-            5 => 4,          // 绿
-            6 => 5,          // 蓝
-            7 => 6,          // 紫
-            _ => 0,
-        };
-        _ = ViewModel.SetColorAsync(id, color);
+            var item = new MenuFlyoutItem { Text = label };
+            if (tier == 0) item.Icon = new FontIcon { Glyph = "\uE711", FontSize = 12 };
+            menu.Items.Add(item);
+            var chosen = tier;                       // 捕获：档位不再靠菜单项索引反推
+            item.Click += (_, _) => _ = ViewModel.SetColorAsync(id, chosen);
+        }
+        menu.ShowAt((FrameworkElement)sender);
+    }
+
+    /// <summary>点日历那颗：今天／明天／清除，同一套形状（id 与偏移都是捕获变量）。</summary>
+    private void DueButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryRowId(sender, out var id)) return;
+        var menu = new MenuFlyout();
+        foreach (var (offset, label) in DueTiers)
+        {
+            var item = new MenuFlyoutItem { Text = label };
+            menu.Items.Add(item);
+            var chosen = offset;
+            item.Click += (_, _) => _ = ViewModel.SetDueAsync(id, chosen);
+        }
+        menu.ShowAt((FrameworkElement)sender);
     }
 
     /// <summary>
-    /// 截止日期菜单：与上面那颗颜色点同一形状——<c>Tag</c> 带条目 id，档位靠菜单项**顺序**认
-    /// （固定为 [今天, 明天, 清除] ⇒ 偏移 0 / 1 / null）。清除走 <c>null</c>，由 <c>LocalItemState.SetDue</c> 删键。
+    /// 行 id 只从<b>被点的那颗按钮</b>的 <c>Tag</c> 取——模板元素上的 <c>x:Bind</c> 是这条链里唯一被证过带得出 id 的一环。
+    /// 认不到不静默：<b>记一行 Warn</b>，否则又是"点了没反应、日志一声不出"（那颗颜色点就这么哑了一年多）。
     /// </summary>
-    private void TodoDue_Click(object sender, RoutedEventArgs e)
+    private static bool TryRowId(object sender, out long id)
     {
-        if (sender is not MenuFlyoutItem { Tag: long id } item) return;
-        if (item.Parent is not MenuFlyout menu) return;
-        int? dayOffset = menu.Items.IndexOf(item) switch { 0 => 0, 1 => 1, _ => null };
-        _ = ViewModel.SetDueAsync(id, dayOffset);
+        if (sender is FrameworkElement { Tag: long v }) { id = v; return true; }
+        StarLog.Warn("[待办] 行内那颗按钮认不出这一行的 id（Tag 不是 long），这次点击没有落库");
+        id = 0;
+        return false;
     }
 
     private async void Undo_Click(object sender, RoutedEventArgs e) => await ViewModel.UndoDeleteAsync();
