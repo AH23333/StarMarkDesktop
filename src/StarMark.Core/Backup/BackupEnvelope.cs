@@ -10,7 +10,21 @@ namespace StarMark.Core.Backup;
 /// <summary>备份信封。对应浏览器扩展 <c>backup.ts</c> 的导出结构，补充其缺失的校验和与分层。</summary>
 public sealed class BackupEnvelope
 {
+    /// <summary>
+    /// 信封归属标记。<b>与扩展那边的 <c>'starmark'</c> 刻意不统一，别"顺手改名"统一它</b>（P-117）：
+    /// 两边的载荷形状本就不兼容（items 层级、时间单位 ms↔s、type 字符串↔整数、扩展那份没有校验和），
+    /// 而 P-68 已裁决两库之间不建数据通道。这两个字符串是互斥<b>唯一</b>的闸门——
+    /// 桌面读侧 <c>BackupService.ReadAsync</c> 按 <see cref="AppId"/> 逐字拒绝，
+    /// 扩展读侧 <c>backup.ts:93</c> 只认 <c>'starmark'</c>；名字一旦统一，"读错档"就从报错变成静默改库。
+    /// </summary>
     public const string AppId = "starmark-desktop";
+
+    /// <summary>
+    /// 桌面自己的版本号。<b>不要为了与扩展同号去动它</b>（同上）：扩展导出写 <c>version: 2</c> 且读时不校验，
+    /// 两边同号也不会互读（上面那道 app 名先挡）；而这里的 <see cref="CurrentVersion"/> 同时是读侧的
+    /// <b>前向拒绝上限</b>（<c>env.Version &gt; CurrentVersion</c> 直接拒），抬高它＝同时放宽"未来版本的文件现在就能导入"，
+    /// 压低它＝把自己以前写过的档变成"版本过高"。两库真正要错开的是<b>语义</b>，不是这个数字。
+    /// </summary>
     public const int CurrentVersion = 1;
 
     [JsonPropertyName("app")]

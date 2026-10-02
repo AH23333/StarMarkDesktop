@@ -59,7 +59,9 @@ public static class TagText
     }
 
     /// <summary>一组标签的收口：规范化 → 大小写不敏感去重 → 按原顺序保留 → 截到 max。
-    /// <b>上限取 3（对齐扩展侧实测）</b>：一条给四个已经够分类用了，而多出来的那一个往往就是
+    /// <b>上限取 3 是"与扩展取同一个值"，不是实测结论</b>（扩展 <c>classify.ts:52</c> <c>CLASSIFY_MAX_TAGS_PER_ITEM = 3</c>；
+    /// 原先这里写着"对齐扩展侧实测"，那句依据在两库都找不到出处，批次 UL 按 P-116 更正）。
+    /// 这条自己的理由：一条给四个已经够分类用了，而多出来的那一个往往就是
     /// "给这一条单独造的专有词"——正是整理要消灭的东西。</summary>
     public static IReadOnlyList<string> Sanitize(IEnumerable<string?> proposed, int max = 3)
     {
@@ -102,8 +104,11 @@ public sealed record ClassifyParseResult(
 public static class ClassifyPrompt
 {
     /// <summary>一批最多几条。§19 O7：载荷按 O1 瘦身后每条只剩标题级（~44 字），
-    /// 50 的旧上限是"长摘要时代"为了压 18K 预算定的——瘦身前 50 条 ≈ 15K token 会撞预算，
-    /// 瘦身后 80 条 ≈ 3.5K，批次边界重新交还给"模型抄录可靠度"来定（再大漏抄率上升，扩展侧实测过的拐点之前）。</summary>
+    /// 50 的旧上限是"长摘要时代"为了压 18K 预算定的——瘦身前 50 条 ≈ 15K token 会撞预算，瘦身后 80 条 ≈ 3.5K。
+    /// <b>80 这个数没有实测依据</b>（P-116；原先那句"扩展侧实测过的拐点"是假出处，批次 UL 删掉——
+    /// 扩展用的是 50，见 <c>classify.ts:50</c>，两库都没做过那次实测）：
+    /// 它只是"预算已经宽裕"与"批次越大漏抄率越高"之间取的一个中间值。
+    /// 要给它真依据：跑一轮整理并按 <c>ai_usage</c> 档统计漏抄率随批次大小的变化（R5 那个出口），别再去另一库找现成的数。</summary>
     public const int MaxItemsPerBatch = 80;
 
     /// <summary>参考类别上限：把库里最常用的标签锚进提示词，<b>让模型优先沿用已有的</b>——
