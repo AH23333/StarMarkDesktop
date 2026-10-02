@@ -127,7 +127,10 @@ public sealed class UpdateStagingTests : IDisposable
         Assert.Empty(Directory.GetFileSystemEntries(_stagingRoot));
     }
 
-    /// <summary>判决在手、包却是空的：也不能凭空摊出一棵树来。</summary>
+    /// <summary>
+    /// 判决在手、包却是<b>空的</b>：不能凭空摊出一棵树，而且<b>那句不许说"这份包没通过校验"</b>——
+    /// 它验过了，真相是"没递过来"（批次 UG-3 把这一格从 <c>NotTrusted</c> 里拆出来，坑表 #234 同族）。
+    /// </summary>
     [Fact]
     public async Task AMissingPayloadIsRefusedEvenWithAGoodVerdict()
     {
@@ -137,8 +140,58 @@ public sealed class UpdateStagingTests : IDisposable
 
         var staged = await UpdateStaging.PrepareAsync(Verdict(key, Signed(_zip, entries), _zip), null, _stagingRoot);
 
-        Assert.Equal(StageStatus.NotTrusted, staged.Status);
+        Assert.Equal(StageStatus.PayloadUnavailable, staged.Status);
+        Assert.False(string.IsNullOrEmpty(staged.Detail));                     // 要带"从哪儿看出来的"
         Assert.Empty(Directory.GetFileSystemEntries(_stagingRoot));
+    }
+
+    /// <summary>
+    /// <b>载荷在判决之后被删掉</b>（临时目录被清理程序／杀软回收是复杂环境里的常事，不是假设）：
+    /// 这一格以前会顺着 <c>FileNotFoundException</c> 掉进 <c>DiskWriteFailed</c>，
+    /// 于是界面会说"本机写不出暂存文件（磁盘满或没权限）"——<b>读不到 ≠ 写不下去</b>，
+    /// 那句话会让人去查自己好好的磁盘。现在它说自己那句，且盘上不留半棵树。
+    /// </summary>
+    [Fact]
+    public async Task APayloadDeletedAfterTheVerdictSaysItsOwnSentenceNotTheDisks()
+    {
+        var entries = new[] { File15, Entry("a/lib.dll", 3) };
+        WriteZip(_zip, entries);
+        using var key = new TestKey();
+        var manifest = Signed(_zip, entries);
+        var package = Bundle(key, manifest, _zip);
+        var verdict = Verdict(key, manifest, _zip);
+
+        File.Delete(_zip);                                                      // 判决之后、摊之前被人收走
+        var staged = await UpdateStaging.PrepareAsync(verdict, package, _stagingRoot);
+
+        Assert.Equal(StageStatus.PayloadUnavailable, staged.Status);
+        Assert.Null(staged.StagedRoot);
+        Assert.Empty(Directory.GetFileSystemEntries(_stagingRoot));
+    }
+
+    /// <summary>
+    /// 两种因由（没递来／已不在）<b>合在同一档是判据</b>（盘上现状与用户的决定都相同，#234），
+    /// 但<em>日志必须还分得开</em>——合档不许把因由合没。
+    /// </summary>
+    [Fact]
+    public async Task TheTwoPayloadCausesShareAnArmButNotTheirDetails()
+    {
+        var entries = new[] { File15 };
+        WriteZip(_zip, entries);
+        using var key = new TestKey();
+        var manifest = Signed(_zip, entries);
+        var verdict = Verdict(key, manifest, _zip);
+
+        var notHanded = await UpdateStaging.PrepareAsync(verdict, null, _stagingRoot);
+        var package = Bundle(key, manifest, _zip);
+        File.Delete(_zip);
+        var gone = await UpdateStaging.PrepareAsync(verdict, package, _stagingRoot);
+
+        Assert.Equal(StageStatus.PayloadUnavailable, notHanded.Status);
+        Assert.Equal(gone.Status, notHanded.Status);
+        Assert.False(string.IsNullOrEmpty(notHanded.Detail));
+        Assert.False(string.IsNullOrEmpty(gone.Detail));
+        Assert.NotEqual(notHanded.Detail, gone.Detail);
     }
 
     // ===== 逐颗对账：这一层的存在理由 =====
