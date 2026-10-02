@@ -127,4 +127,28 @@ public sealed class BuildConfigGateTests
             Assert.Equal(4, Count(sln, m.Groups[2].Value + "."));
         }
     }
+
+    /// <summary>
+    /// 反方向也必须成立：<b>磁盘上每一颗工程都得被 sln 点名</b>（批次 UG-2 加 <c>StarMark.Updater</c> 时补的）。
+    /// <para>少了这一条，"新加一颗工程忘了入解决方案"是这一族里最安静的一种坏：<c>dotnet build StarMark.sln</c>
+    /// 照过、全量测试照跑（那颗工程<b>根本没被构建</b>，更没有被它的闸门测过），于是"全绿"说的其实是
+    /// "除了新写的那部分之外全绿"（#226/#231 同一族：该红而没红）。UG-2 这一批恰好是第三种：
+    /// 全绿但没人编译过那颗 exe 的壳。）</para>
+    /// </summary>
+    [Fact]
+    public void EveryProjectOnDiskIsNamedByTheSolution()
+    {
+        var sln = ReadRepoFile("StarMark.sln");
+        var onDisk = new[] { "src", "tests", "tools" }
+            .SelectMany(dir => Directory.EnumerateFiles(Path.Combine(RepoRoot(), dir), "*.csproj",
+                SearchOption.AllDirectories))
+            .Select(f => Path.GetRelativePath(RepoRoot(), f).Replace(Path.DirectorySeparatorChar, '\\'))
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(onDisk.Count >= 8,
+            $"只扫到 {onDisk.Count} 颗工程——这条闸门本身失效了（守门失效比红测更危险，故直接判红）");
+        foreach (var declared in onDisk)
+            Assert.Contains("\"" + declared + "\"", sln, StringComparison.Ordinal);
+    }
 }
