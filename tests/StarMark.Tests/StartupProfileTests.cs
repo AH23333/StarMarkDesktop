@@ -17,6 +17,19 @@ namespace StarMark.Tests;
 /// 这些错了，下一个读日志的人就会被数字骗到——比没有度量更糟。
 /// </para>
 /// </summary>
+/// <summary>
+/// 这一族要独占一段时间：<c>StartupProfile</c> 的 <c>Sink</c> 与两根读数委托是<b>进程级静态</b>，
+/// 而 <see cref="StartupProfileTests.TheRealMemoryLineReReadsTheSystemEveryTime"/> 数的是<b>本进程的句柄增量</b>——
+/// 与别的集合并行跑就会被别人在同一进程里开开合合的句柄踩到。
+/// <para>批次 UI 实测：全量那一跑 delta 只剩 83（阈值 100）而单跑三连绿。那条测自己的注释写着
+/// "200 个的量别的用例抵不掉 ⇒ 不会随时序飘红"，这句前提是伪的（登记 ✅P-148）。</para>
+/// </summary>
+[CollectionDefinition("StartupProfile", DisableParallelization = true)]
+public sealed class StartupProfileCollection
+{
+}
+
+[Collection("StartupProfile")]
 public sealed class StartupProfileTests : IDisposable
 {
     private readonly List<string> _lines = new();
@@ -225,8 +238,11 @@ public sealed class StartupProfileTests : IDisposable
     /// 于是整条启动链上那五格内存读数一字不差（工作集 109 MB、句柄 561 从头到尾不动），
     /// 而同一时刻外部采样同一个 PID 明明是 292 MB／2044 句柄。
     /// 一条"看着有、其实恒定"的读数比空白更误导人——读表的人会得出"这一段没涨"的结论。</para>
-    /// <para>断言只借<b>我自己</b>新开的那批内核句柄：200 个的量，别的用例再怎么开合也抵不掉，
-    /// 所以这条不会随时序飘红；而它恰好就是"删掉 <c>Refresh()</c>"那个变异的证人。</para>
+    /// <para>断言只借<b>我自己</b>新开的那批内核句柄，而它<b>必须与别的集合不同窗跑</b>（见类上那个
+    /// <c>[Collection("StartupProfile")]</c>）：批次 UI 全量那一跑实测 delta 只剩 83（阈值 100），
+    /// 单跑三连绿——同一进程里并行集合开合句柄就抵得掉这 200 个。原先这里写的是
+    /// "别的用例再怎么开合也抵不掉，所以不会随时序飘红"，那句是<b>伪前提</b>（✅P-148）；
+    /// 它恰好也是"删掉 <c>Refresh()</c>"那个变异的证人，所以留着断言、把窗口独占。</para>
     /// </summary>
     [Fact]
     public void TheRealMemoryLineReReadsTheSystemEveryTime()
