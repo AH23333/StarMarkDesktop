@@ -22,6 +22,10 @@ obj/
 *.userosscache
 *.sln.docstates
 publish/
+# 发布三颗（zip + 清单 + 签名）与打包用的中间树：一百多兆产物，而且里面每一颗都能被脚本重新算出来。
+# 这条不是整洁问题：dist/ 没被忽略的话，一次 `git add` 就会把载荷 zip 推进仓库，
+# 而那份 zip 里装着这台机器上那一版的全部字节。
+dist/
 artifacts/
 
 # ===== Windows App SDK generated =====
