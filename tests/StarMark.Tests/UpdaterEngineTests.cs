@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions.Updates;
 using StarMark.Core.Updates;
@@ -281,7 +282,10 @@ public sealed class UpdaterEngineTests : IDisposable
         // 复杂环境里的常态：杀软／索引器／另一个进程只是"此刻"占着这颗文件。
         // 这一格证明的是"过一会儿就好"这一族我们自己扛，不写进任何一句界面话里（P-54）。
         var live = new FileStream(Path.Combine(_install, "data.txt"), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-        _ = Task.Run(async () => { await Task.Delay(120); live.Dispose(); });     // 另一头自己松手
+        // 松手用专用线程而不是 Task.Run：引擎的重试预算只有 40×25 ms，而 Task.Run 的续体排在**线程池注入速率**
+        // 后面——全量并行跑时池是饱和的，"120 ms 后松手"可能变成"一秒之后才松手"，红的就是这一格（批次 UJ，与 ✅P-148 同族）。
+        var releaser = new Thread(() => { Thread.Sleep(120); live.Dispose(); }) { IsBackground = true };
+        releaser.Start();
 
         var result = UpdaterEngine.Run(Req(), new UpdaterEngine.Options
         {
@@ -289,6 +293,7 @@ public sealed class UpdaterEngineTests : IDisposable
             RunningExePath = Path.Combine(_root, "runner", "StarMark.Updater.exe"),
             Attempts = 40, RetryDelay = TimeSpan.FromMilliseconds(25), Ceiling = TimeSpan.FromMilliseconds(50),
         });
+        releaser.Join();                       // 别在还占着句柄的那颗线程没跑完时就把目录交出去
 
         Assert.Equal(UpdaterOutcome.Success, result.Status);
         Assert.Equal(NewMarker, ReadInstalledEntry());

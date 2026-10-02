@@ -118,12 +118,40 @@ public sealed class SystemMetricsProbeTests
     }
 
     /// <summary>
+    /// 这台机器有没有一条"包真的会离开物理网卡"的路。
+    /// <para>回环流量一个字节都不进 IFRow2 的八进制计数（批次 UJ 实测：256×1400 B 自打，delta 恒为 0），
+    /// 所以"计数没涨"有两种完全不同的原因：偏移读错了，或这台机器根本没把包送出网卡。
+    /// 后者不是缺陷——硬断言只会把它变成"只在我电脑上过"的假缺陷。</para>
+    /// <para>边界要说清：走这条出口的机器上，这一格<b>什么都没测到</b>（跳过，不是通过）。
+    /// 台架 V1 臂证明这条出口真的会走到；它换来的是离线机不再假红。</para>
+    /// </summary>
+    private static string? WhyNoByteWouldLeaveThisMachine(IReadOnlyList<NetworkAdapterCounters> rows)
+    {
+        // "哪些网卡该计数"这条判据已经在 Core 有一处，这里不许再写一份第二种形状（批次 UI 的同一条教训）。
+        if (SystemMonitorPolicy.SumCountedAdapters(rows).CountedAdapters == 0)
+            return "没有任何会计数的链路在线（离线／只有隧道与回环）";
+
+        var outbound = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+            .Where(ni => ni.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+            .SelectMany(ni => ni.GetIPProperties().DnsAddresses)
+            .Where(a => !System.Net.IPAddress.IsLoopback(a))
+            .ToList();
+        return outbound.Count == 0
+            ? "配置的 DNS 全在回环上（本机跑着解析器，查询就地答复，不经过网卡）"
+            : null;
+    }
+
+    /// <summary>
     /// 累计计数只会往前走，而且必须真的在动。
     /// <para>
     /// <b>比较的是"所有接口之和"，不是"计入展示的那几个"</b>：这一条要验的是"偏移读到的到底是不是真计数器"，
     /// 而展示口径该包含哪些网卡另有 <see cref="SystemMonitorPolicy"/> 的用例在守。两件判据混进同一个断言，
     /// 就会出现"这台机器恰好走在一块不计入的网卡上"那种误报——偏移读错时所有接口都是常量，换基数照样抓得住。
     /// </para>
+    /// <para><b>这一条钉的是"读数随真实流量在动"，不是"动的就是我发的那些"</b>：活体计数上做不到后者——
+    /// 本机实测静置 3 秒，所有接口之和自己就涨 ↑964,927（计入展示的那一份 ↑137,659），
+    /// 而我造的流只有几十 KB 量级。把它写成"对得上我发的字节数"会是一条永远满足不了的判据，
+    /// 或者更糟：成了一条永远走"不适用"出口的空转（批次 UJ 用广播造流时就这样空转过一次）。</para>
     /// </summary>
     [Fact]
     public void Probe_Network_CountersAdvanceWithTraffic()
@@ -132,12 +160,31 @@ public sealed class SystemMetricsProbeTests
         var first = probe.ReadNetwork();
         Assert.True(first.Ok, first.Error);
         if (first.Adapters.Count == 0) return;         // 这台机器当时没有任何链路：无话可说，不算失败
+        var noPath = WhyNoByteWouldLeaveThisMachine(first.Adapters);
+        if (noPath is not null)
+        {
+            _out.WriteLine($"这台机器一个字节都不会离开网卡（{noPath}）：本条按不适用跳过，不算通过也不算失败");
+            return;
+        }
         var before = Total(first.Adapters);
         var beforeCounted = SystemMonitorPolicy.SumCountedAdapters(first.Adapters);
 
         ConsumeNetworkTraffic();
         var second = probe.ReadNetwork();
         Assert.True(second.Ok, second.Error);
+        var after = Total(second.Adapters);
+
+        // 不再用"固定等 400 ms"赌驱动什么时候把计数刷出来：等到涨为止，等不到才是证据。
+        // 这里只问"动不动"，不问"动的是不是我发的那些"——见上面那段，本机背景 3 秒就有 0.9 MB 量级。
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        while (waited.ElapsedMilliseconds < GrowthCeilingMs
+               && after.InBytes <= before.InBytes && after.OutBytes <= before.OutBytes)
+        {
+            System.Threading.Thread.Sleep(50);
+            second = probe.ReadNetwork();
+            Assert.True(second.Ok, second.Error);
+            after = Total(second.Adapters);
+        }
 
         // 中途有网卡上线/掉线（插拔、VPN 切换）时两份清单不可比：这不算读错，也不算通过
         if (second.Adapters.Count != first.Adapters.Count)
@@ -146,40 +193,45 @@ public sealed class SystemMetricsProbeTests
             return;
         }
 
-        var after = Total(second.Adapters);
         var counted = SystemMonitorPolicy.SumCountedAdapters(second.Adapters);
-
         Assert.True(counted.InBytes >= beforeCounted.InBytes && counted.OutBytes >= beforeCounted.OutBytes,
             $"计入展示的合计倒退：↓{beforeCounted.InBytes}→{counted.InBytes} ↑{beforeCounted.OutBytes}→{counted.OutBytes}");
         Assert.True(after.InBytes >= before.InBytes && after.OutBytes >= before.OutBytes,
             $"计数倒退：↓{before.InBytes}→{after.InBytes} ↑{before.OutBytes}→{after.OutBytes}");
         Assert.True(after.OutBytes > before.OutBytes || after.InBytes > before.InBytes,
-            $"发过真实查询（{TrafficQueries} 次递归解析）后全机字节数一点没涨：↓{before.InBytes}→{after.InBytes} " +
-            $"↑{before.OutBytes}→{after.OutBytes}——先怀疑偏移读错了字段");
+            $"确认这台机器有会出网卡的解析器、也发过 {TrafficQueries} 次递归查询，等满 {waited.ElapsedMilliseconds} ms " +
+            $"全机累计一点没动：↓{before.InBytes}→{after.InBytes} ↑{before.OutBytes}→{after.OutBytes}——先怀疑偏移读错了字段");
     }
 
     /// <summary>全部接口的累计字节（不含任何"该不该计入"的判断）。</summary>
     private static (long InBytes, long OutBytes) Total(IReadOnlyList<NetworkAdapterCounters> adapters)
         => (adapters.Sum(a => a.InBytes), adapters.Sum(a => a.OutBytes));
 
+    /// <summary>造流之后最多等多久：驱动刷计数是即时的事，等到这个上限还没涨就已经是证据而不是慢了。</summary>
+    private const int GrowthCeilingMs = 3000;
+
     /// <summary>
-    /// 制造一点真实流量。<b>必须是真的会离开这块网卡的包</b>：原先解析 "localhost" 由 hosts 文件/缓存
-    /// 就地答完，一个字节都不上网线，于是"有网卡却一次没涨"变成了必然失败（本机实测踩过）。
-    /// <para>这里查 <c>*.example</c>——<c>.example</c> 是 RFC 2606 Reserved TLD，永远不会被注册，
-    /// 每次都是一次确定性的 NXDOMAIN 递归查询，走的正是默认路由那块网卡；结果注定是失败，所以不依赖外网可达。</para>
+    /// 造流：三次注定 NXDOMAIN 的递归解析，走的是默认路由那块网卡。
+    /// <para><b>必须是真会离开网卡的包</b>：原先解析 "localhost" 由 hosts/缓存就地答完，一个字节都不上网线，
+    /// 于是"有网卡却一次没涨"变成必然失败（本机实测踩过）。这里查 <c>*.example</c>——RFC 2606 保留 TLD，
+    /// 永远不会被注册，每次都是一次确定性的递归查询；结果注定失败，所以不依赖外网可达。</para>
+    /// <para>试过也否掉的两种造流：①回环自打——实测 256×1400 B 一个字节都不进 IFRow2 的计数；
+    /// ②子网 UDP 广播——这台机器的防火墙直接拒发（<c>WSAEACCES</c>），于是那条判据只会走"不适用"出口变成空转。</para>
+    /// <para>每一次解析注定抛，所以 <b>try 收在每一发里面</b>：原先整个循环套在一个 try 里，
+    /// 第一次抛就跳出去，<see cref="TrafficQueries"/> 恒为 0，失败信息里那个数字从来不是它自称的那件事。</para>
     /// </summary>
     private static int TrafficQueries;
 
     private static void ConsumeNetworkTraffic()
     {
-        try
+        for (TrafficQueries = 0; TrafficQueries < 3; TrafficQueries++)
         {
-            for (TrafficQueries = 0; TrafficQueries < 3; TrafficQueries++)
+            try
+            {
                 System.Net.Dns.GetHostAddresses("starmark-probe-" + Guid.NewGuid().ToString("N") + ".example");
-            System.Net.Dns.GetHostEntry("localhost");
-            System.Threading.Thread.Sleep(400);
+            }
+            catch (Exception) { /* 预期的失败（NXDOMAIN）：包已经真的出去了 */ }
         }
-        catch (Exception) { /* 没有流量也无妨：上面的断言在有流量时才要求增长 */ }
     }
 
     // ────────── 哪些网卡该计入（真机上最容易翻车的一条判定） ──────────
