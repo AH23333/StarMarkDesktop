@@ -6,7 +6,7 @@
 # 三颗缺一颗，这条链就在用户机器上少一步，而且少的那一步说的还是别的错：
 #   少 zip      ⇒ 点「立即更新」只会得到"这一版没带更新包"。
 #   少清单/签名 ⇒ 探测能报"有新版"（那一发只看标签），但审包必须拒：没有可信清单就没有任何字节可信。
-# 所以这里三颗一起产、一起点名，并把标签一起打出来给人推。
+# 所以这里三颗一起产、一起点名，并把该敲的那两句念出来（发 Release 由 scripts\publish-release.ps1 做）。
 #
 # 版本号**从 Directory.Build.props 读**，不在这里写第二份：产物里露的是那一颗
 # （AppVersion 读的是入口程序集的 InformationalVersion），这里若另写一串，
@@ -66,6 +66,7 @@ foreach ($f in @($zipName, "update-manifest.json", "update-manifest.sig")) {
     Write-Host ("  {0,-28} {1,10:N0} 字节" -f $f, (Get-Item $p).Length)
 }
 Write-Host ""
-Write-Host "接下来（发布那一步由人推，这里只把该敲的命令念出来）："
-Write-Host "  git tag $tag; git push origin $tag"
-Write-Host "  建 Release：标签 $tag，把上面三颗作为资产一并上传"
+Write-Host "接下来（标签与 Release 都由 scripts\publish-release.ps1 发；它在公开之前会把三颗读回来比内容）："
+Write-Host "  git push origin $tag        （标签还没推过才需要；已发出去的那版不追改标签）"
+Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1 -Tag $tag"
+Write-Host "  那一版已经公开过、要换载荷时再加 -ReplaceAssets（不给这句它会拒绝：那会改变别人机器上下一发检查拿到的东西）"
