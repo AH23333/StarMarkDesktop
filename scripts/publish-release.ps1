@@ -83,19 +83,45 @@ if (-not $existing) {
     Write-Host ("    那个标签已经有 Release：沿用这条（上面已挂 {0} 颗资产）" -f $release.assets.Count) -ForegroundColor DarkGray
 }
 
-Write-Host "==> 2/5 三颗就位（同名先删后传，一颗都不落）" -ForegroundColor Cyan
-# 同名资产先删再传，是为了让"换过的字节"真的换过去；只删我们自己那三颗名字，别人挂在这条 Release 上的东西不碰。
+Write-Host "==> 2/5 先把新字节挂成临时名，三颗都传成了才撤旧名、归位" -ForegroundColor Cyan
+# upload_url 是 GitHub 的 **URI 模板**（结尾带 {?name,label}），不是能直接拼参数的地址：
+# 原样拼上 "?name=..." 打出去的是畸形请求，而 API 回的那句是"Multipart form data required"——
+# 它说的是另一件事（以为你在发表单），照着那句去改表单会一路走偏。所以先把模板那段大括号摘掉，
+# 再自证一句"确实摘掉了"：这条路上任何一次静默拼错，报出来的都是不相干的原因。
+$uploadBase = $release.upload_url -replace '\{[^}]*\}$', ''
+if ($uploadBase -eq $release.upload_url) { throw "upload_url 结尾不是 URI 模板那对大括号，不敢猜该怎么拼：$($release.upload_url)" }
+# 为什么绕这一圈临时名：同一条 Release 上两颗同名资产会被拒（实测 already_exists），换载荷必须先撤后挂；
+# 而"撤了再传"意味着一次 72 MB 的上传失败就当颗少一颗可下载的文件——这一次真踩到了（地址拼错，旧 zip 已撤、新 zip 没上去）。
+# 挂临时名不需要撤任何东西，所以传砸的时候旧的三颗一颗没动，那一版还是它原来的载荷。
+$suffix = ".uploading-$PID"
+$staged = @()
+try {
+    foreach ($u in $uploads) {
+        $staged += Invoke-RestMethod -Method Post -Uri ($uploadBase + "?name=$($u.Name)$suffix") `
+            -Headers $headers -ContentType $u.Mime -InFile (Join-Path $DistDir $u.Name)
+        Write-Host ("  临时名已挂上 {0}" -f $u.Name)
+    }
+} catch {
+    foreach ($s in $staged) {
+        try { Invoke-RestMethod -Method Delete -Uri $s.url -Headers $headers | Out-Null }
+        catch { Write-Warning ("  临时那颗自己撤不掉，得人工去删：{0}" -f $s.name) }
+    }
+    throw "挂新字节这一步就失败了，没有动旧资产（那一版还是它原来的载荷）：$($_.Exception.Message)"
+}
+# 到这里新字节已经在服务器上了，剩下的只是几次短请求
 $remote = @{}
 foreach ($a in @($release.assets)) { $remote[$a.name] = $a }
 foreach ($u in $uploads) {
     if ($remote.ContainsKey($u.Name)) {
         Invoke-RestMethod -Method Delete -Uri $remote[$u.Name].url -Headers $headers | Out-Null
-        Write-Host ("  先撤下旧的 {0}" -f $u.Name)
+        Write-Host ("  撤下旧的 {0}" -f $u.Name)
     }
-    $path = Join-Path $DistDir $u.Name
-    Invoke-RestMethod -Method Post -Uri "$($release.upload_url)?name=$($u.Name)" `
-        -Headers $headers -ContentType $u.Mime -InFile $path | Out-Null
-    Write-Host ("  已传 {0}" -f $u.Name)
+}
+foreach ($s in $staged) {
+    $finalName = $s.name -replace [regex]::Escape($suffix), ''
+    Invoke-RestMethod -Method Patch -Uri ($api + "/releases/assets/$($s.id)") -Headers $headers -ContentType "application/json" `
+        -Body (@{ name = $finalName } | ConvertTo-Json) | Out-Null
+    Write-Host ("  已归位 {0}" -f $finalName)
 }
 
 Write-Host "==> 3/5 从 API 读回来对账（远端给了摘要就比 sha256，没给才退回比字节数）" -ForegroundColor Cyan
