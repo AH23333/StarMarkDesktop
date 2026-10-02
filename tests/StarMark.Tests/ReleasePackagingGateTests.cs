@@ -24,6 +24,7 @@ public sealed class ReleasePackagingGateTests
 {
     private const string TreeScript = "scripts/publish-tree.ps1";
     private const string PackageScript = "scripts/release-package.ps1";
+    private const string PublishScript = "scripts/publish-release.ps1";
     private const string LocalPublish = "publish.ps1";
 
     /// <summary>仓库里所有 .ps1（跳过产物目录）。扫不到任何一颗就抛——守门失效比红测危险。</summary>
@@ -208,5 +209,45 @@ public sealed class ReleasePackagingGateTests
             .ToList();
         Assert.Contains("dist/", rules);
         Assert.Contains("publish/", rules);
+    }
+
+    // ===== 建 Release 那一颗：凭据只进 header，公开只在账对完之后 =====
+
+    [Fact]
+    public void ThePublisherTargetsTheSameRepositoryTheAppProbes()
+    {
+        var code = PsCode(ReadRepoFile(PublishScript));
+        // 桌面版问的是 UpdatePolicy.DefaultRepository，发布发到别处 ⇒ 那一版永远不被任何人看见，
+        // 而两边的输出各自都"成功"。默认值必须与那颗常量同一串（C# 侧改了名而这里没跟上就红）。
+        Assert.Contains($"\"{UpdatePolicy.DefaultRepository}\"", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheCredentialThePublisherReadsIsNeverPrintedNorEmbedded()
+    {
+        var code = PsCode(ReadRepoFile(PublishScript));
+        // 它读的是应用自己存的那把 Token（P-144 的裁决），所以这条不是形式：
+        // 一次把 $token 打进输出台日志，就等于把那把"能给所有在线安装签更新"的钥匙抄进一堆没人管的文件里。
+        Assert.Contains(".Token", code, StringComparison.Ordinal);          // 从应用的凭据文件读，不写死
+        Assert.DoesNotMatch(@"Write-Host[^\n]*\$token", code);              // 不许被打出来
+        Assert.DoesNotMatch(@"\$token[^\n]*(Out-File|Add-Content|Tee-Object)", code);   // 不许被写进文件
+        Assert.DoesNotContain("github_pat_", code, StringComparison.Ordinal);   // 也不许被贴进脚本本身
+        Assert.DoesNotContain("ghp_", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GoingLiveIsGatedOnReadingTheAssetsBackFromTheApi()
+    {
+        var code = PsCode(ReadRepoFile(PublishScript));
+        var draft = code.IndexOf("-Method Post", StringComparison.Ordinal);
+        var read = code.IndexOf("-Method Get", StringComparison.Ordinal);
+        var live = code.IndexOf("-Method Patch", StringComparison.Ordinal);
+        // 三步的顺序就是这一颗脚本的全部判据：先草稿 → 从 API 读回来 → 才对账完的字节公开。
+        // 这一版一旦公开，装着的程序下一发就会真去下载并替换自己，而那一步没有"撤回已经装上去的文件"。
+        Assert.True(draft >= 0 && read >= 0 && live >= 0, "建草稿 / 读回来 / 转正式这三步都得是显式的 API 调用");
+        Assert.True(draft < read, "必须先有草稿，再往里挂东西");
+        Assert.True(read < live, "对账必须挡在公开前面");
+        // 读回来之后还要真比一次数，否则那句"读回来"只是又发一个请求（形状对、内容空的闸门最危险）
+        Assert.Contains("-ne", code[read..live], StringComparison.Ordinal);
     }
 }
