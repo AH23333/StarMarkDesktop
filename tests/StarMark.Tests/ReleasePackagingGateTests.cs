@@ -98,9 +98,24 @@ public sealed class ReleasePackagingGateTests
         var guards = code.Split('\n')
             .Where(line => line.Contains("Test-Path", StringComparison.Ordinal))
             .ToList();
-        Assert.Equal(2, guards.Count);            // 主程序一句、更新器一句
+        // 主程序、更新器、编译后的 XAML、资源索引——四样各有一句当场拒绝（少于四句就是有一样不再被自证）
+        Assert.True(guards.Count >= 4, $"这棵树的自证只剩 {guards.Count} 句（该有四句）");
         foreach (var guard in guards)
             Assert.Contains("throw", guard, StringComparison.Ordinal);   // 只查不拒＝那句检查是装饰
+    }
+
+    [Fact]
+    public void TheTreeCarriesTheCompiledXamlTheRuntimeNeeds()
+    {
+        var code = PsCode(ReadRepoFile(TreeScript));
+        // 非打包的 WinUI 3 运行时要 *.xbf（每个页面编译后的 XAML）与 <程序名>.pri（ms-appx:/// 的索引）。
+        // dotnet publish 天生不把它们复制出去，所以搬运那一刀在 Directory.Build.targets 里；
+        // 而"少搬了"的表现不是构建红，是**发布产物双击抛 XamlParseException**（坑表 #237：真发过一次的话，
+        // 用户装完新版连程序都打不开）。这里钉的是"产树那一侧不许不查这两样"。
+        var appPri = Path.GetFileNameWithoutExtension(UpdateAssets.EntryExeName) + ".pri";
+        Assert.Contains("\"App.xbf\"", code, StringComparison.Ordinal);
+        Assert.Contains($"\"{appPri}\"", code, StringComparison.Ordinal);
+        // 搬运那一刀在 Directory.Build.targets 里（另一颗闸门守它），这里只钉"产树那一侧不许不查这两样"。
     }
 
     [Fact]
