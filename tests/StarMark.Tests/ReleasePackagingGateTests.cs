@@ -254,16 +254,20 @@ public sealed class ReleasePackagingGateTests
     public void GoingLiveIsGatedOnReadingTheAssetsBackFromTheApi()
     {
         var code = PsCode(ReadRepoFile(PublishScript));
-        var live = code.IndexOf("-Method Patch", StringComparison.Ordinal);
-        Assert.True(live >= 0, "转正式那一步得是显式的 API 调用");
+        // "转正式"认的是那一次把 draft 置假的请求。不能写成"第一次 -Method Patch"：
+        // 换载荷时先把新字节挂成临时名，归位也是一次 PATCH，它在转正式之前（按位置数就会钉错那一次）。
+        var makeLive = code.IndexOf("draft = $false", StringComparison.Ordinal);
+        Assert.True(makeLive >= 0, "转正式那一步得是把 draft 置假");
+        var live = code.LastIndexOf("-Method Patch", makeLive, StringComparison.Ordinal);
+        Assert.True(live >= 0, "转正式得是显式的 API 调用");
         // 对账那一次读回＝离公开最近的那次 GET。脚本里还会有"先看那个标签上挂着什么"的 GET，
         // 所以钉的是"公开之前最后一次读回"，而不是"第一次 GET 在第几次 POST 之后"这种位置巧合。
         var read = code.LastIndexOf("-Method Get", live, StringComparison.Ordinal);
-        Assert.True(read >= 0, "公开之前必须从 API 读回来一次");
+        Assert.True(read >= 0 && read < live, "公开之前必须从 API 读回来一次");
         // 读回来之后还要真比一次数，否则那句"读回来"只是又发一个请求（形状对、内容空的闸门最危险）
         Assert.Contains("-ne", code[read..live], StringComparison.Ordinal);
         // 三颗必须先挂上去再读回来对账（比对空气容易得多，也绿得多）
-        var upload = code.IndexOf("upload_url", StringComparison.Ordinal);
+        var upload = code.IndexOf("-InFile", StringComparison.Ordinal);
         Assert.True(upload >= 0 && upload < read, "先把三颗挂上去，再读回来对账");
         // 公开这一步自己也不许被读成成功：PATCH 之后要再读一次，看它是不是真不再是草稿
         // （否则"发了"而装着的程序永远看不见那一版，而脚本的输出已经说了"已发布"）
@@ -280,13 +284,21 @@ public sealed class ReleasePackagingGateTests
         var code = PsCode(ReadRepoFile(PublishScript));
         var sw = Regex.Match(code, @"\[switch\]\s*\$(\w+)");
         Assert.True(sw.Success, "换已经公开的一版得由人当面点头：脚本要有个开关参数");
+        var up = code.IndexOf("-InFile", StringComparison.Ordinal);
         var del = code.IndexOf("-Method Delete", StringComparison.Ordinal);
-        var up = code.IndexOf("upload_url", StringComparison.Ordinal);
-        Assert.True(del >= 0 && up > del, "先撤后传：同名资产不撤就传不干净");
-        // 撤与传各只有一处，且都由同一个逐颗循环驱动——按颗点名（"只撤 zip"）留下的是"新包配旧清单"，
-        // 那一版在用户那边永远审不过，而 Release 看起来三颗齐全。
-        Assert.Single(Regex.Matches(code, "-Method Delete"));
+        // 同一条 Release 上两颗同名资产会被拒（实测 already_exists），所以换载荷非撤不可；
+        // 但撤必须发生在新字节已经挂上临时名之后——先撤再传的话，一次 72 MB 的上传失败就当颗少一颗
+        // 可下载的文件（这一版真踩到：地址拼错，旧 zip 已撤、新 zip 没上去）。
+        Assert.True(up >= 0 && del > up, "先把新字节挂成临时名，传成了才动旧名");
+        // 传与撤都不许按颗点名：逐颗循环只有一处；撤恰好两处（失败清理一处、撤旧名一处）
         Assert.Single(Regex.Matches(code, "-InFile"));
+        Assert.Equal(2, Regex.Matches(code, "-Method Delete").Count);
+        // 归位也得是一次显式的资产改名请求（临时名留在服务器上不算发出去了）：PATCH 恰好两处（归位、转正式）
+        Assert.Equal(2, Regex.Matches(code, "-Method Patch").Count);
+        // 挂新字节失败必须中止，不许接着撤旧名：第一次撤与**第二次撤（撤旧名）**之间必须有 throw
+        var retire = code.IndexOf("-Method Delete", del + 1, StringComparison.Ordinal);
+        Assert.True(retire >= 0 && code[up..retire].Contains("throw", StringComparison.Ordinal),
+            "上传阶段没中止就往下撤，等于把旧的先删了");
         // 点头之前就得拒绝，而且拒绝要真拒绝（同一行 throw）；这里钉的是"那道拒绝用到了那个开关"，不钉开关叫什么
         var guard = code[..del].Split('\n').LastOrDefault(line => line.Contains(".draft", StringComparison.Ordinal));
         Assert.NotNull(guard);
@@ -295,6 +307,23 @@ public sealed class ReleasePackagingGateTests
         // 本地长度只许在传完之后读：拿它当"这颗要不要传"的判据会把旧签名留下——
         // 重新签一次名出来的串和原来一样长，长度证得了"传丢了没有"，证不了"内容变了没有"。
         Assert.True(code.IndexOf("(Get-Item", StringComparison.Ordinal) > up, "本地长度只能在传之后读，不能用来跳过上传");
+    }
+
+    [Fact]
+    public void TheUploadUrlTemplateIsExpandedAndThenProved()
+    {
+        var code = PsCode(ReadRepoFile(PublishScript));
+        // API 给的 upload_url 结尾是 {?name,label}——那是 **URI 模板**，不是地址。原样拼上 "?name=..."
+        // 打出去的是畸形请求，而它回的那句是"Multipart form data required"，说的是另一件事
+        // （以为你在发表单），照着那句话去改表单会一路走偏：先摘模板，再自证确实摘掉了。
+        var strip = code.Split('\n').FirstOrDefault(line => line.Contains("upload_url", StringComparison.Ordinal)
+            && line.Contains("-replace", StringComparison.Ordinal));
+        Assert.NotNull(strip);                                       // 有一句把模板段摘掉
+        Assert.Contains("{", strip!, StringComparison.Ordinal);        // 摘的对象确实是那对大括号，不是别的
+        var guard = code.Split('\n').FirstOrDefault(line => line.Contains("upload_url", StringComparison.Ordinal)
+            && line.Contains("-eq", StringComparison.Ordinal));
+        Assert.NotNull(guard);                                        // 摘完还等于原串就拒绝
+        Assert.Contains("throw", guard!, StringComparison.Ordinal);
     }
 
     [Fact]
