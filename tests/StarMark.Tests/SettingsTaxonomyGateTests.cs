@@ -69,7 +69,10 @@ public sealed class SettingsTaxonomyGateTests
             // 护眼那两颗下拉以前漏登记过（批次 BK 补上，批次 RS 把"强制"开关换成提醒形式那一颗）：
             // 不登记的话"只有一个编辑入口"对它根本不成立。
             "EyeRestIntervalIndex", "EyeRestNoticeIndex",
-            "TrendingEnabled", "ClipboardHistoryEnabled", "EnableTray", "MinimizeToTray", "GithubToken",
+            "TrendingEnabled", "ClipboardHistoryEnabled", "EnableTray", "MinimizeToTray",
+            // GithubToken 从这张表里移出去了（批次 UI/P-146）：那一格改成 PasswordBox，而 PasswordBox 的
+            // Password 不可绑定，所以"只有一个编辑入口"对它不能再用 `Mode=TwoWay` 计数——
+            // 同一件事由 CredentialInputGateTests 按"代码里那一对同名读写"的形状钉住，两处都不许松。
             "CanvasEnabled", "CanvasInScreenshots",
             // 批次 RN：光标那块圆的半径（滑杆）。不登记的话"只有一个编辑入口"对它根本不成立。
             "CursorCircleRadiusDip",
@@ -98,7 +101,11 @@ public sealed class SettingsTaxonomyGateTests
         var ai = Between(xaml, "<TabViewItem Header=\"AI 增强\">", "</TabViewItem>");
         Assert.Contains("这三样分别要填什么", ai);
         var regular = Between(xaml, "<TabViewItem Header=\"常规\">", "</TabViewItem>");
-        Assert.Contains("ViewModel.GithubToken", regular);   // Token 是"库"的日常配置，留在常规页
+        // Token 那一格是"库"的日常配置，卡留在常规页。批次 UI/P-146 之后这里**不再数绑定**：
+        // 那颗编辑格换成了 PasswordBox（Password 不可绑定），编辑入口的形状与"只有一处读写"
+        // 由 CredentialInputGateTests 钉；本文件只钉"这张卡住在哪一页"这一件事。
+        // 读抹掉注释之后那一份（#228：注释会替被改掉的标题答题）。
+        Assert.Contains("GitHub Stars 同步", Markup(regular));
         Assert.DoesNotContain("这三样分别要填什么", regular);
         Assert.DoesNotContain("AI 助手", Markup(regular));    // 说明卡与表单一起走，不能一份表单搬家、一份说明书留下
         // 批次 UE：「关于与更新」留在常规页——它用的凭据就在同一页，而"版本号 + 有没有新版"是日常一件事，
