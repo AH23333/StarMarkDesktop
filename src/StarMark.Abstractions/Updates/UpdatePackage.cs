@@ -218,6 +218,17 @@ public enum StageStatus
     /// <summary>摊出来的这颗与清单上那颗哈希不是同一颗。</summary>
     FileHashMismatch,
 
+    /// <summary>
+    /// 判决在手而<b>那颗包读不到</b>：没递过来（我们自己的调用点漏了），或递来了却在摊之前被本机删掉
+    /// （临时目录被清理程序/杀软回收在复杂环境里是常事）。
+    /// <para><b>这一档不许并进 <see cref="NotTrusted"/>，也不许并进 <see cref="DiskWriteFailed"/></b>：
+    /// 前者的那句是"这份包没通过校验"（<b>它验过了</b>），后者的那句是"本机写不下去（磁盘满或没权限）"
+    /// （<b>读不到 ≠ 写不下去</b>，指错方向会让人去查磁盘）。两种因由（没递来／已不在）走同一档是
+    /// 因为<b>盘上现状与用户能做的决定完全相同</b>（一个字节没动，再点一次会重新下载）；
+    /// 因由本身写在 <c>Detail</c> 里进日志（判据见坑表 #234）。</para>
+    /// </summary>
+    PayloadUnavailable,
+
     /// <summary>本机写不下去（暂存位置所在盘满、没权限，或给来的路径串本身不能用）。</summary>
     DiskWriteFailed,
 }

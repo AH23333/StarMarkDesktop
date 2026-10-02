@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.DependencyInjection;
@@ -100,6 +101,36 @@ public partial class SettingsPageViewModel
     {
         if (string.IsNullOrWhiteSpace(reason)) return;
         UpdateStatus = reason;
+    }
+
+    private static UpdateApplier Apply() => App.Services.GetRequiredService<UpdateApplier>();
+
+    /// <summary>
+    /// 「立即更新」那一下（批次 UG-3）。<b>界面只递"上一次问出来的那一版"这一个事实</b>：
+    /// 地址由 Core 按配置里的仓库拼，落点由 Core 按正在跑的这颗 exe 算——能被参数改动的东西就能被改成别的落点。
+    /// </summary>
+    public Task<UpdateApplier.ApplyResult> ApplyUpdateAsync(
+        Action<ApplyPhase> onPhase, CancellationToken ct)
+        => Apply().ApplyAsync(Updates().LastReport()?.RemoteTag, onPhase, ct);
+
+    /// <summary>走到哪一步的那行字：措辞出自 <see cref="UpdatePolicy"/>，界面这一侧一个字都不抄。</summary>
+    public void ShowApplyPhase(ApplyPhase phase) => UpdateStatus = UpdatePolicy.Describe(phase);
+
+    /// <summary>没装成的那句：原样念各步已有的那一句（不许在这里补一句"没关系"把它抹平，#232）。</summary>
+    public void ShowApplyResult(UpdateApplier.ApplyResult result)
+        => UpdateStatus = result.Sentence ?? UpdatePolicy.Describe(result.Status);
+
+    /// <summary>他自己掐掉那一发：这不是失败，那句也不许写成失败（什么都没改，出口还在同一颗按钮上）。</summary>
+    public void ShowApplyCancelled() => UpdateStatus = UpdatePolicy.UpdateCancelledSentence;
+
+    /// <summary>
+    /// 这条链漏出来的一种（编排本身不该有；与检查那侧同一口径）：当场说出来，
+    /// 留着上一行"正在摊开…"会看着像还在跑，而那颗按钮已经回到「立即更新」了。
+    /// </summary>
+    public void ReportApplyCrash(Exception ex)
+    {
+        StarLog.Error("更新没走完", ex);
+        UpdateStatus = $"这次更新没走完（{ex.GetType().Name}），原因在日志里。";
     }
 
     /// <summary>

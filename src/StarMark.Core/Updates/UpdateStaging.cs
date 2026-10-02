@@ -45,7 +45,7 @@ public static class UpdateStaging
                 Detail: $"判决是 {verdict.Outcome}，没有\"可信\"就不许往盘上摊一个字节");
         var manifest = verdict.Manifest!;
         if (package is null)
-            return new StageResult(StageStatus.NotTrusted, Detail: "判决说有清单，包却不在手上");
+            return new StageResult(StageStatus.PayloadUnavailable, Detail: "判决说有清单，那颗包却没递过来");
 
         string? target = null;
         var staged = false;
@@ -57,7 +57,7 @@ public static class UpdateStaging
             if (Directory.Exists(target)) Directory.Delete(target, recursive: true);
             Directory.CreateDirectory(target);
 
-            using var zip = ZipFile.OpenRead(package.PackagePath);
+            using var zip = OpenPayload(package.PackagePath);
             var byName = Index(zip, out var duplicate);
             if (duplicate is not null)
                 return new StageResult(StageStatus.UnexpectedEntry, Detail: $"包里有重名条目：{duplicate}");
@@ -89,6 +89,10 @@ public static class UpdateStaging
         catch (InvalidDataException ex)
         {
             return new StageResult(StageStatus.PackageUnreadable, Detail: ex.GetType().Name);
+        }
+        catch (PayloadGoneException ex)
+        {
+            return new StageResult(StageStatus.PayloadUnavailable, Detail: ex.Reason);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException
                 or ArgumentException)
@@ -150,6 +154,27 @@ public static class UpdateStaging
         }
         await output.FlushAsync(ct).ConfigureAwait(false);
         return (UpdateHashHex.ToHex(hash.GetHashAndReset()), total);
+    }
+
+    /// <summary>
+    /// 打开载荷那颗文件。<b>"判决之后它不见了"必须和"本机写不下去"分成两格</b>：
+    /// 临时目录是本机可写的，清理程序与杀软把它收走是复杂环境里的常事，而读不到 ≠ 磁盘满／没权限——
+    /// 指错方向会让人去查自己的磁盘（同 <c>PackageStreamBrokenException</c> 那一族的口径：<b>刻意不从
+    /// <see cref="IOException"/> 派生</b>，否则会被下面那道"盘写不下去"的兜底接走，说得像在说别人的盘）。
+    /// </summary>
+    private static ZipArchive OpenPayload(string path)
+    {
+        try { return ZipFile.OpenRead(path); }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            throw new PayloadGoneException($"判决在手，那颗包却读不到（{ex.GetType().Name}）：{Path.GetFileName(path)}");
+        }
+    }
+
+    /// <summary>载荷那颗文件读不到——<b>不是</b> <see cref="IOException"/>，为的就是不被"盘写不下去"那一档接走。</summary>
+    private sealed class PayloadGoneException(string reason) : Exception(reason)
+    {
+        public string Reason { get; } = reason;
     }
 
     private static void DeleteQuietly(string target)

@@ -172,6 +172,18 @@ public sealed partial class MainWindow : Window
 
     private IntPtr MainHwnd => WindowNative.GetWindowHandle(this);
 
+    /// <summary>
+    /// 「立即更新」交棒之后的退出。<b>必须先把单实例锁让出去，再走同一条收尾</b>：
+    /// 不让锁的症状是更新器起的新一版去抢锁失败、转而去唤起这个马上要消失的旧窗口，
+    /// 于是两个进程都没了——用户看到的就是"更新完程序打不开了"（见 <see cref="App.ReleaseSingleInstanceForHandoff"/>）。
+    /// </summary>
+    public void ExitForUpdateHandoff()
+    {
+        StarLog.Info("退出：更新已交给更新器，让出单实例锁后收尾");
+        App.ReleaseSingleInstanceForHandoff();
+        ExitApp();
+    }
+
     private async void ExitApp()
     {
         _allowExit = true;

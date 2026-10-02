@@ -207,8 +207,7 @@ public partial class App : Application
         services.AddSingleton<StarMark.Abstractions.Trending.TrendingStarState>();
 
         // 检查更新（批次 UE）：契约在 Abstractions、抓取在 Integrations、编排在 Core，这里只把它们接起来。
-        // 这条链**只读**——往磁盘上写的只有"上次查的结果"那五格设置；下载与替换正在运行的程序是另一件事，
-        // 前置条件还没落地（见 docs/待决策事项.md），所以这里也刻意不给它任何写文件的口子。
+        // **自动那一路仍然只读**：每天那一发只问"这个仓库发布了哪一版"，往磁盘上写的只有"上次查的结果"那五格设置。
         // Token 仍走 tokenProvider 现取（热榜同一条）：改完 Token 不必重启就能按新配额问。
         services.AddSingleton<StarMark.Abstractions.Updates.IReleaseSource>(sp =>
             new StarMark.Integrations.Updates.GitHubReleaseSource(
@@ -219,6 +218,13 @@ public partial class App : Application
         services.AddSingleton(sp => new StarMark.Core.Updates.UpdateService(
             sp.GetRequiredService<StarMark.Abstractions.Updates.IReleaseSource>(),
             sp.GetRequiredService<StarMark.Core.Updates.IUpdateStateStore>()));
+        // 「立即更新」（批次 UG-3）：**只有他点那一下才会下载与替换**，所以这一对也接进容器。
+        // 取包那颗不带 Token（发布资产是匿名可下的）：把凭据递进一条"往盘上写字节"的链路是多余的攻击面。
+        // 编排在 Core（UpdateApplier），UI 只递给它一个标签——落点、地址、验签全在 Core 里自己算。
+        services.AddSingleton<StarMark.Abstractions.Updates.IUpdatePackageSource>(
+            _ => new StarMark.Integrations.Updates.GitHubUpdatePackageSource());
+        services.AddSingleton(sp => new StarMark.Core.Updates.UpdateApplier(
+            sp.GetRequiredService<StarMark.Abstractions.Updates.IUpdatePackageSource>()));
 
         // 浏览器书签源（Chrome / Edge）
         services.AddSingleton<StarMark.Integrations.Bookmarks.ChromeBookmarksSource>();

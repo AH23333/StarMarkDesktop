@@ -310,6 +310,7 @@ public static class UpdatePolicy
         StageStatus.FileMissing => "清单列出的文件在包里找不到，没装",
         StageStatus.UnexpectedEntry => "包里有清单没记的文件（或重名条目），已拒绝",
         StageStatus.FileHashMismatch => "摊出来的文件与清单里的哈希对不上（可能被换过），已拒绝",
+        StageStatus.PayloadUnavailable => "那颗更新包在这台机器上读不到了（下载完被本机清理掉是常事），更新没有开始——本机什么都没改，再查一次会重新下载",
         StageStatus.DiskWriteFailed => "本机写不出暂存文件（磁盘满或没权限），更新没有开始",
         _ => "更新包没摊开，没装",
     };
@@ -347,4 +348,38 @@ public static class UpdatePolicy
         LaunchStatus.NotStarted => "这台机器上的更新器没能跑起来，这次没有自动装——程序还是原来那一版",
         _ => "更新器没有起来，没动安装目录",
     };
+
+    /// <summary>
+    /// 「立即更新」整条链的结局（批次 UG-3）。
+    /// <para><see cref="ApplyStatus.HandedOff"/> 那句<b>直接取启动侧那一条</b>而不是另写一句：
+    /// 两处各写一份，迟早一处写"已装好"、另一处写"交出去了"，而界面念的是其中随机一句（#189/#193 那一族）。
+    /// <b>两格都不许出现"已安装/成功"</b>——这一层真的不知道换没换成，那是更新器那一侧的 <c>UpdaterOutcome</c>。</para>
+    /// </summary>
+    public static string Describe(ApplyStatus status) => status switch
+    {
+        ApplyStatus.HandedOff => Describe(LaunchStatus.Started),
+        ApplyStatus.NothingApplied => "这次什么都没换，程序还是原来那一版",
+        _ => "更新没有开始，本机什么都没改",
+    };
+
+    /// <summary>
+    /// 走到哪一步的那行字（只在这一步还在走的时候显示；<b>说的时候不许像结局</b>——
+    /// 所以这几句一律以"正在"开头，且不许出现"好了/完成/成功"）。
+    /// </summary>
+    public static string Describe(ApplyPhase phase) => phase switch
+    {
+        ApplyPhase.Downloading => "正在下载新版本（这台机器上不改动任何东西）…",
+        ApplyPhase.Inspecting => "正在核对这份包的签名与逐颗哈希…",
+        ApplyPhase.Staging => "正在把新版本摊开（安装目录还没动）…",
+        ApplyPhase.HandingOff => "正在把替换交给更新器…",
+        _ => "正在准备更新…",
+    };
+
+    /// <summary>
+    /// 他自己掐掉那一发的那句话（批次 UG-3）。<b>它不是失败，也不许写成失败</b>：
+    /// 停下来的时候安装目录一个字节都没动，而"再点一次"就在同一颗按钮上（P-54：不许把人支到别处）。
+    /// 出处只有这一颗——界面那侧不许再抄一遍（有闸门钉着）。
+    /// </summary>
+    public const string UpdateCancelledSentence =
+        "这次更新停在半路，本机什么都没改；要装的话再点一次「立即更新」。";
 }

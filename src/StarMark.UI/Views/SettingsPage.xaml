@@ -227,7 +227,8 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- 关于与更新（批次 UE）：只检测、只说清结果；下载与安装是另一件事，本程序不做 -->
+                        <!-- 关于与更新（批次 UE 检测，UG-3 才接上「立即更新」）：
+                             自动那一发仍然只问版本、不下载；装新版只有点那一下才会发生。 -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="10">
                                 <TextBlock Text="关于与更新" Style="{StaticResource SettingTitle}"/>
@@ -241,7 +242,7 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock Text="每天自动检查一次"/>
-                                        <TextBlock Text="只问一句「这个仓库发布了哪一版」，不下载任何东西、不改动本机文件，也不替换正在运行的程序。关掉之后只有点「立即检查」那一下才会联网。"
+                                        <TextBlock Text="自动那一发只问「这个仓库发布了哪一版」：不下载、不改动本机文件，也不替换正在运行的程序。关掉这个开关后，只有点「立即检查」那一下才会联网。装新版是另一件事——只有点「立即更新」才真的下载并替换（换不成会自动退回原来那一版）。"
                                                    Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
@@ -251,6 +252,9 @@
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <Button x:Name="UpdateCheckButton" Content="立即检查" Click="UpdateCheck_Click"
                                             Style="{StaticResource SecondaryButton}"/>
+                                    <!-- 与「打开下载页」同时出现，但排在它前面：能自动装的时候，把人支去浏览器是多余的一步 -->
+                                    <Button x:Name="UpdateApplyButton" Content="立即更新" Click="UpdateApply_Click"
+                                            Style="{StaticResource SecondaryButton}" Visibility="Collapsed"/>
                                     <!-- 只有「确实有一版更新」才出现：在"还没有发布过"那一格放一颗下载按钮，等于承诺了一个不存在的产物 -->
                                     <Button x:Name="UpdateOpenPageButton" Content="打开下载页" Click="UpdateOpenPage_Click"
                                             Style="{StaticResource SecondaryButton}" Visibility="Collapsed"/>
