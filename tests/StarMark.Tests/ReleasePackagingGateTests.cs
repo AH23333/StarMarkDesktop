@@ -254,15 +254,66 @@ public sealed class ReleasePackagingGateTests
     public void GoingLiveIsGatedOnReadingTheAssetsBackFromTheApi()
     {
         var code = PsCode(ReadRepoFile(PublishScript));
-        var draft = code.IndexOf("-Method Post", StringComparison.Ordinal);
-        var read = code.IndexOf("-Method Get", StringComparison.Ordinal);
         var live = code.IndexOf("-Method Patch", StringComparison.Ordinal);
-        // 三步的顺序就是这一颗脚本的全部判据：先草稿 → 从 API 读回来 → 才对账完的字节公开。
-        // 这一版一旦公开，装着的程序下一发就会真去下载并替换自己，而那一步没有"撤回已经装上去的文件"。
-        Assert.True(draft >= 0 && read >= 0 && live >= 0, "建草稿 / 读回来 / 转正式这三步都得是显式的 API 调用");
-        Assert.True(draft < read, "必须先有草稿，再往里挂东西");
-        Assert.True(read < live, "对账必须挡在公开前面");
+        Assert.True(live >= 0, "转正式那一步得是显式的 API 调用");
+        // 对账那一次读回＝离公开最近的那次 GET。脚本里还会有"先看那个标签上挂着什么"的 GET，
+        // 所以钉的是"公开之前最后一次读回"，而不是"第一次 GET 在第几次 POST 之后"这种位置巧合。
+        var read = code.LastIndexOf("-Method Get", live, StringComparison.Ordinal);
+        Assert.True(read >= 0, "公开之前必须从 API 读回来一次");
         // 读回来之后还要真比一次数，否则那句"读回来"只是又发一个请求（形状对、内容空的闸门最危险）
         Assert.Contains("-ne", code[read..live], StringComparison.Ordinal);
+        // 三颗必须先挂上去再读回来对账（比对空气容易得多，也绿得多）
+        var upload = code.IndexOf("upload_url", StringComparison.Ordinal);
+        Assert.True(upload >= 0 && upload < read, "先把三颗挂上去，再读回来对账");
+        // 公开这一步自己也不许被读成成功：PATCH 之后要再读一次，看它是不是真不再是草稿
+        // （否则"发了"而装着的程序永远看不见那一版，而脚本的输出已经说了"已发布"）
+        var after = code[live..];
+        Assert.True(after.IndexOf("-Method Get", StringComparison.Ordinal) >= 0, "转正式之后要再读回来一次");
+        Assert.Contains(".draft", after, StringComparison.Ordinal);
+        Assert.True(after.Split('\n').Any(line => line.Contains(".draft", StringComparison.Ordinal)
+            && line.Contains("throw", StringComparison.Ordinal)), "读到还是草稿就得拒绝收工");
+    }
+
+    [Fact]
+    public void ReplacingALiveReleaseIsAllThreeOrNothingAndNeedsAnExplicitYes()
+    {
+        var code = PsCode(ReadRepoFile(PublishScript));
+        var sw = Regex.Match(code, @"\[switch\]\s*\$(\w+)");
+        Assert.True(sw.Success, "换已经公开的一版得由人当面点头：脚本要有个开关参数");
+        var del = code.IndexOf("-Method Delete", StringComparison.Ordinal);
+        var up = code.IndexOf("upload_url", StringComparison.Ordinal);
+        Assert.True(del >= 0 && up > del, "先撤后传：同名资产不撤就传不干净");
+        // 撤与传各只有一处，且都由同一个逐颗循环驱动——按颗点名（"只撤 zip"）留下的是"新包配旧清单"，
+        // 那一版在用户那边永远审不过，而 Release 看起来三颗齐全。
+        Assert.Single(Regex.Matches(code, "-Method Delete"));
+        Assert.Single(Regex.Matches(code, "-InFile"));
+        // 点头之前就得拒绝，而且拒绝要真拒绝（同一行 throw）；这里钉的是"那道拒绝用到了那个开关"，不钉开关叫什么
+        var guard = code[..del].Split('\n').LastOrDefault(line => line.Contains(".draft", StringComparison.Ordinal));
+        Assert.NotNull(guard);
+        Assert.Contains("throw", guard!, StringComparison.Ordinal);
+        Assert.Contains("$" + sw.Groups[1].Value, guard!, StringComparison.Ordinal);
+        // 本地长度只许在传完之后读：拿它当"这颗要不要传"的判据会把旧签名留下——
+        // 重新签一次名出来的串和原来一样长，长度证得了"传丢了没有"，证不了"内容变了没有"。
+        Assert.True(code.IndexOf("(Get-Item", StringComparison.Ordinal) > up, "本地长度只能在传之后读，不能用来跳过上传");
+    }
+
+    [Fact]
+    public void TheReconciliationUsesTheRemoteDigestWhenThereIsOne()
+    {
+        var code = PsCode(ReadRepoFile(PublishScript));
+        // 摘要比字节数强：重新签一次名出来的串**和原来一样长**，只比长度的对账会把旧内容读成"没变"
+        // （GitHub 在资产的 digest 字段里直接给 sha256，本地 Get-FileHash 就能对上——v1.0.0 那次实测逐字相同）。
+        Assert.Contains("Get-FileHash", code, StringComparison.Ordinal);
+        var digest = code.Split('\n')
+            .FirstOrDefault(line => line.Contains(".digest", StringComparison.Ordinal)
+                && line.Contains("-ne", StringComparison.Ordinal));
+        Assert.NotNull(digest);                                   // 真比过一次摘要，不是又发一个请求
+        Assert.Contains("throw", digest!, StringComparison.Ordinal);   // 只查不拒＝那句比较是装饰
+        // 摘要不是保证有的（还没算出来、或那颗不是走 API 传的）：那种时候退回比长度，并把"退到了哪一档"说出来
+        var fallback = code.Split('\n')
+            .FirstOrDefault(line => line.Contains(".size", StringComparison.Ordinal)
+                && line.Contains("-ne", StringComparison.Ordinal));
+        Assert.NotNull(fallback);
+        Assert.Contains("Write-Warning", code, StringComparison.Ordinal);
     }
 }
