@@ -117,6 +117,15 @@ if (args.Length >= 1 && args[0] == "srcprobe")
     return;
 }
 
+if (args.Length >= 2 && args[0] == "updatechain")
+{
+    // updatechain <安装目录> [本地版本] [swap]  -> 把"问 → 下载 → 审包 → 摊包"四条腿用生产代码对真仓库跑一遍（默认本地版本 1.0.0）。
+    // 末尾带 swap 才加第五段"交棒"：真更新器整带复制出去、等真进程退出、两次改名、把新版起来。输出用 ASCII 标记行（VERDICT=），控制台码页会把中文打成乱码。
+    await UpdateChainAuditAsync(args[1], args.Length >= 3 ? args[2] : "1.0.0",
+        args.Length >= 4 && string.Equals(args[3], "swap", StringComparison.OrdinalIgnoreCase));
+    return;
+}
+
 await SmokeModeAsync();
 
 // ===== 构造期探测税（P-135）=====
@@ -1428,6 +1437,241 @@ static bool zipEntriesStore(string zipPath)
     using var zip = System.IO.Compression.ZipFile.OpenRead(zipPath);
     return zip.Entries.Where(e => e.FullName.StartsWith(BackupContainer.ClipPrefix, StringComparison.Ordinal))
         .All(e => e.CompressedLength == e.Length);
+}
+
+/// <summary>
+/// 更新链的"四条腿"探针（批次 UH）：问 → 下载 → 审包 → 摊包，全用生产代码对真仓库跑。
+/// <para>为什么值得单独立一颗：这四步每一格在单测里都是从缝进去的（假源、假包、假目录、假清单），
+/// 而"发出去的那 72 MB 真能被另一台机器摊成一棵能起的树"这件事只有真网络、真磁盘、真解包能证。
+/// 坑表 #237/#238 两条都是这么抓出来的：绿灯量的是构建那棵树，出货的是另一棵。</para>
+/// <para><b>默认不交棒</b>（跑到摊包就停）：<see cref="StarMark.Core.Updates.UpdateApplier"/> 认的安装目录＝正在跑的那颗 exe
+/// 所在目录，而且不接受调用方指定（换错树比不换更糟）。探针要是自己造一个 applier 去指别处，
+/// 就是在给那条设计开后门。带 <c>swap</c> 时第五段走的是 <see cref="StarMark.Core.Updates.UpdaterLauncher"/>
+/// ——它本来就是"把指令交给真更新器"那一层，只把副本的落点换成临时目录（<c>RunnerHomeOverride</c> 那格存在的理由
+/// 正是"不许为了测去动真那一块"），起进程、等进程、两次改名、回滚判据全是生产那一套。</para>
+/// <para>本地版本默认按 1.0.0 传：审包那一格会比对"远端标签 vs 本机版本"，这是产品侧的判断而不是探针的判断。</para>
+/// </summary>
+static async Task UpdateChainAuditAsync(string installDir, string localVersion, bool swap)
+{
+    var repository = StarMark.Core.Updates.UpdatePolicy.DefaultRepository;
+    // 凭据取法与生产同一颗（App.xaml.cs 注册 GitHubOptions 那行）：探针不自带第二套读法。
+    // 只有"问"那一发带 Token（匿名配额 60/小时，这台机器的 IP 已经用满过一次）；
+    // 下载那颗刻意不带——发布资产是匿名可下的，把凭据递进一条"往盘上写字节"的链路是多余的攻击面。
+    var git = StarMark.Integrations.GitHub.GitHubOptions.Load().WithEnvironmentOverrides();
+    Console.WriteLine($"仓库 {repository}｜本机版本 {localVersion}｜安装目录 {installDir}｜问那一发带凭据={git.IsConfigured}");
+
+    var service = new StarMark.Core.Updates.UpdateService(
+        new StarMark.Integrations.Updates.GitHubReleaseSource(tokenProvider: () => git.Token),
+        new UpdateChainState(), () => localVersion);
+    var sw = Stopwatch.StartNew();
+    var report = await service.CheckAsync(manual: true);
+    Console.WriteLine($"1) 问：{report.Verdict}｜远端标签 {report.RemoteTag ?? "(无)"}｜{sw.ElapsedMilliseconds} ms");
+    Console.WriteLine($"   那句给用户的话：{report.Text}");
+    var tag = report.RemoteTag;
+    if (string.IsNullOrWhiteSpace(tag))
+    {
+        Console.WriteLine("VERDICT=chain-stopped:probe");
+        return;
+    }
+
+    var addresses = StarMark.Core.Updates.UpdatePolicy.ReleaseAssetAddresses(repository, tag);
+    if (addresses is null)
+    {
+        Console.WriteLine($"VERDICT=chain-stopped:addresses（{tag} 拼不出资产地址）");
+        return;
+    }
+
+    var scratch = Path.Combine(Path.GetTempPath(), "StarMarkUpdateChain");
+    Directory.CreateDirectory(scratch);
+    var source = new StarMark.Integrations.Updates.GitHubUpdatePackageSource(stagingDirProvider: () => scratch);
+    sw.Restart();
+    var fetch = await source.FetchAsync(addresses);
+    Console.WriteLine($"2) 下载：{fetch.Status}｜{StarMark.Core.Updates.UpdatePolicy.Describe(fetch.Status)}"
+        + $"｜{sw.ElapsedMilliseconds} ms｜{fetch.Detail ?? ""}");
+    if (!fetch.HasPackage)
+    {
+        Console.WriteLine("VERDICT=chain-stopped:fetch");
+        return;
+    }
+    var package = fetch.Package!;
+    Console.WriteLine($"   包 {package.PackageBytes:N0} 字节 sha256 {package.PackageSha256[..12]}…"
+        + $"｜清单 {package.ManifestBytes.Length} 字节｜签名 {package.SignatureBytes.Length} 字节");
+
+    var verdict = StarMark.Core.Updates.UpdateIntegrity.Inspect(package, repository, tag, localVersion);
+    Console.WriteLine($"3) 审包：{verdict.Outcome}｜{StarMark.Core.Updates.UpdatePolicy.Describe(verdict.Outcome)}"
+        + $"｜可信={verdict.IsTrusted}｜{verdict.Detail ?? ""}");
+    if (!verdict.IsTrusted || verdict.Manifest is null)
+    {
+        Console.WriteLine("VERDICT=chain-stopped:inspect");
+        return;
+    }
+    Console.WriteLine($"   清单声明：版本 {verdict.Manifest.Version}｜包名 {verdict.Manifest.Package}"
+        + $"｜{verdict.Manifest.PackageBytes:N0} 字节｜文件 {verdict.Manifest.Files.Count} 颗");
+
+    var stagingRoot = StarMark.Abstractions.Updates.UpdaterPaths.StagingRootFor(installDir);
+    sw.Restart();
+    var staged = await StarMark.Core.Updates.UpdateStaging.PrepareAsync(verdict, package, stagingRoot);
+    Console.WriteLine($"4) 摊包：{staged.Status}｜{StarMark.Core.Updates.UpdatePolicy.Describe(staged.Status)}"
+        + $"｜{sw.ElapsedMilliseconds} ms｜{staged.Detail ?? ""}");
+    if (!staged.IsStaged || staged.StagedRoot is null)
+    {
+        Console.WriteLine("VERDICT=chain-stopped:staging");
+        return;
+    }
+
+    var root = staged.StagedRoot;
+    var all = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).ToList();
+    var xbf = all.Count(f => f.EndsWith(".xbf", StringComparison.OrdinalIgnoreCase));
+    var hasEntry = File.Exists(Path.Combine(root, StarMark.Abstractions.Updates.UpdateAssets.EntryExeName));
+    var hasUpdater = File.Exists(Path.Combine(root, StarMark.Abstractions.Updates.UpdaterPaths.UpdaterFolderName,
+        StarMark.Abstractions.Updates.UpdaterPaths.UpdaterExeName));
+    Console.WriteLine($"   落点 {root}");
+    Console.WriteLine($"   文件 {all.Count} 颗（清单列 {verdict.Manifest.Files.Count} 颗）｜.xbf {xbf} 颗"
+        + $"｜入口 exe {hasEntry}｜更新器 {hasUpdater}");
+    File.Delete(package.PackagePath);           // 摊完了就不该在 %TEMP% 里留一百多兆（产品侧同一口径）
+    Console.WriteLine($"   那颗 zip 已删（探针不留东西）：{package.PackagePath}");
+    if (!swap)
+    {
+        Console.WriteLine("VERDICT=chain-staged");
+        return;
+    }
+    await UpdaterHandOffAsync(installDir, root, verdict.Manifest.Version);
+}
+
+/// <summary>
+/// 第五段「交棒」：把这条指令交给<b>那一版发布产物里带的那颗更新器</b>跑完（批次 UH）。
+/// <para>两层都用生产的：<see cref="StarMark.Core.Updates.UpdaterLauncher"/> 把 <c>Updater\</c> 整带复制到安装目录之外
+/// 再起进程，被起来的 <c>StarMark.Updater.exe</c> 等进程、两次改名、摔了当场退回。</para>
+/// <para>换掉的只有两处，而这两处都是"探针不该动的东西"：等的那个进程号给了一个 3 秒后自退的替身
+/// （探针自己先退，就没人回来数结局了）；副本落点给了临时目录——<c>RunnerHomeOverride</c> 那格存在的理由
+/// 正是"不许为了测去动真那一块"。起新版那一发是真起：外层脚本把 <c>STARMARK_DB_PATH</c> 指到用户档副本，
+/// 所以它落的是副本而不是他的真档。</para>
+/// <para>结局从两处对账，两处都过了才叫换好：更新器自己写进日志的那一行，与盘上现在的样子
+/// （入口 exe 自报的版本、文件颗数、旧树有没有留、暂存根清没清）。只看日志不够——那一句是它<b>说</b>的；
+/// 只看盘上也不够——版本没变而树被挪花的那种坏，日志上是"成功"。</para>
+/// </summary>
+static async Task UpdaterHandOffAsync(string installDir, string stagedRoot, string remoteVersion)
+{
+    var logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        AppConstants.AppName, "logs", $"starmark-{DateTime.Now:yyyyMMdd}.log");
+    var outcomeBefore = LogLinesTouching(logPath, "更新器结局").Count;
+    var crashBefore = LogLinesTouching(logPath, "XamlParseException").Count;
+
+    var standby = new ProcessStartInfo("powershell") { UseShellExecute = false, CreateNoWindow = true };
+    standby.ArgumentList.Add("-NoProfile");
+    standby.ArgumentList.Add("-Command");
+    standby.ArgumentList.Add("Start-Sleep -Seconds 3");
+    var parent = Process.Start(standby)!;
+    Console.WriteLine($"   等的那个进程＝替身 {parent.Id}（3 秒后自退）；探针自己不退，退了就没人数结局");
+
+    var runnerHome = Path.Combine(Path.GetTempPath(), "StarMarkUpdaterRunner");
+    var sw = Stopwatch.StartNew();
+    var launch = StarMark.Core.Updates.UpdaterLauncher.PrepareAndStart(
+        new StarMark.Abstractions.Updates.UpdaterRequest(parent.Id, stagedRoot, installDir),
+        new StarMark.Core.Updates.UpdaterLauncher.Options { RunnerHomeOverride = runnerHome });
+    Console.WriteLine($"5) 交棒：{launch.Status}｜{launch.Detail ?? ""}｜副本 {launch.RunnerPath ?? "(没起来)"}");
+    if (!launch.IsStarted)
+    {
+        Console.WriteLine("VERDICT=chain-stopped:launch");
+        return;
+    }
+
+    while (sw.Elapsed < StarMark.Abstractions.Updates.UpdaterContract.ParentExitCeiling
+        && CountRunning("StarMark.Updater") > 0)
+        await Task.Delay(500);
+    Console.WriteLine($"   更新器收了尾（{sw.ElapsedMilliseconds} ms）｜还在跑={CountRunning("StarMark.Updater") > 0}");
+    foreach (var line in LogLinesTouching(logPath, "更新器结局").Skip(outcomeBefore))
+        Console.WriteLine($"   它说：{line}");
+
+    await Task.Delay(8000);                     // 新版起窗要一两秒，别把"还没起好"读成"起不来"
+    var entry = Path.Combine(installDir, StarMark.Abstractions.Updates.UpdateAssets.EntryExeName);
+    var claimed = File.Exists(entry) ? FileVersionInfo.GetVersionInfo(entry).ProductVersion : null;
+    var all = Directory.EnumerateFiles(installDir, "*", SearchOption.AllDirectories).ToList();
+    var xbf = all.Count(f => f.EndsWith(".xbf", StringComparison.OrdinalIgnoreCase));
+    var parent2 = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(installDir))!;
+    var stem = Path.GetFileName(Path.TrimEndingDirectorySeparator(installDir));
+    var olds = Directory.EnumerateDirectories(parent2, stem + StarMark.Abstractions.Updates.UpdateAssets.OldTreeSuffix + "*")
+        .Select(Path.GetFileName).ToList();
+    var stagingRoot = StarMark.Abstractions.Updates.UpdaterPaths.StagingRootFor(installDir);
+    var leftover = Directory.Exists(stagingRoot)
+        ? Directory.EnumerateFileSystemEntries(stagingRoot).ToList() : new List<string>();
+    var instances = PidsUnder(installDir);
+    Console.WriteLine($"   安装目录现在：文件 {all.Count} 颗｜.xbf {xbf} 颗｜入口 exe 自报 {claimed ?? "(不在)"}");
+    Console.WriteLine($"   旧树残留 {olds.Count} 颗｜暂存根里剩 {leftover.Count} 项｜新版实例 {instances.Count} 颗"
+        + $"（pid {string.Join(",", instances)}）");
+    var freshCrash = LogLinesTouching(logPath, "XamlParseException").Count - crashBefore;
+    if (freshCrash > 0) Console.WriteLine($"   这一跑新添的 XamlParseException {freshCrash} 行——换过去的树起不来");
+
+    foreach (var pid in instances)
+    {
+        try { using var p = Process.GetProcessById(pid); p.Kill(entireProcessTree: true); }
+        catch (Exception) { /* 它已经自己退了：探针不追 */ }
+    }
+    Console.WriteLine($"   那 {instances.Count} 颗是探针起的，已按 pid 收尾；副本目录删掉={TryDeleteDir(runnerHome)}");
+
+    Console.WriteLine(claimed is not null && claimed.StartsWith(remoteVersion, StringComparison.Ordinal)
+        && olds.Count == 0 && leftover.Count == 0 && freshCrash == 0 && instances.Count > 0
+        ? "VERDICT=chain-swapped" : "VERDICT=chain-swap-unclean");
+}
+
+/// <summary>读今天那档日志里带某个词的行。<b>以共享读写方式打开</b>：写它的是另一颗进程，独占打开会撞。</summary>
+static List<string> LogLinesTouching(string path, string needle)
+{
+    var hits = new List<string>();
+    if (!File.Exists(path)) return hits;
+    try
+    {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new StreamReader(fs, Encoding.UTF8);
+        while (reader.ReadLine() is { } line)
+            if (line.Contains(needle, StringComparison.Ordinal)) hits.Add(line);
+    }
+    catch (Exception ex) { hits.Add($"(日志读不了：{ex.GetType().Name})"); }   // 尺子读不动要说出来，不许静默成"没有这行"
+    return hits;
+}
+
+/// <summary>此刻叫这个名字的进程有几颗。<b>读完就放句柄</b>：探针不是采样器，不该攒着别人的进程。</summary>
+static int CountRunning(string processName)
+{
+    var found = Process.GetProcessesByName(processName);
+    foreach (var p in found) p.Dispose();
+    return found.Length;
+}
+
+/// <summary>exe 落在这棵树里的进程号。<b>读不到模块表的一律不算</b>：那不是它的进程，杀错了就是别人的程序。</summary>
+static List<int> PidsUnder(string dir)
+{
+    var prefix = Path.TrimEndingDirectorySeparator(dir) + Path.DirectorySeparatorChar;
+    var hits = new List<int>();
+    foreach (var candidate in Process.GetProcesses())
+    {
+        using (candidate)
+        {
+            try
+            {
+                if (candidate.MainModule?.FileName is { } path
+                    && path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) hits.Add(candidate.Id);
+            }
+            catch (Exception) { /* 权限不够：与这台机器上别的进程一样，不是探针起的 */ }
+        }
+    }
+    return hits;
+}
+
+static bool TryDeleteDir(string dir)
+{
+    try { Directory.Delete(dir, recursive: true); return true; }
+    catch (Exception) { return false; }
+}
+
+/// <summary>探针用的更新状态档：只在内存里，<b>不碰 %LOCALAPPDATA% 那档用户设置</b>。</summary>
+internal sealed class UpdateChainState : StarMark.Core.Updates.IUpdateStateStore
+{
+    private StarMark.Core.Updates.UpdateState _state = new(true);
+
+    public StarMark.Core.Updates.UpdateState Read() => _state;
+
+    public void Write(StarMark.Core.Updates.UpdateState state) => _state = state;
 }
 
 /// <summary>冒烟进程要自己声明 DPI 感知，否则与 PerMonitorV2 的应用本体看到的桌面尺寸不是一回事。</summary>
