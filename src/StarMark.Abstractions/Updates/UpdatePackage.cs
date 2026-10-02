@@ -144,6 +144,16 @@ public static class UpdateAssets
     public const string EntryExeName = "StarMark.UI.exe";
 
     /// <summary>
+    /// 摊出来的那棵新树的后缀。<b>定义在 Abstractions 而不在摊包那一层</b>：
+    /// 造这棵树的人（<c>UpdateStaging</c>）与换这棵树的人（<c>UpdaterEngine</c>）说的是同一个名字，
+    /// 两侧各写一份就会漂成"摊在一边、换的是另一边"，而那种漂移不报错，只是永远换不到东西（#189/#193）。
+    /// </summary>
+    public const string NewTreeSuffix = ".new";
+
+    /// <summary>旧树挪开之后叫这个。<b>它同时是"上一次替换走到哪一步"的凭据</b>：在盘上就代表还没换完。</summary>
+    public const string OldTreeSuffix = "_old";
+
+    /// <summary>
     /// 载荷那颗的名字<b>由版本号算</b>，不由清单说。
     /// <para>为什么反过来定：清单要能读，得先把它的字节取回来；而"取哪颗"若由清单说，
     /// 就等于让一份<b>还没验过签名</b>的东西决定我们的下一个请求打到哪儿去。

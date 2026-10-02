@@ -313,4 +313,38 @@ public static class UpdatePolicy
         StageStatus.DiskWriteFailed => "本机写不出暂存文件（磁盘满或没权限），更新没有开始",
         _ => "更新包没摊开，没装",
     };
+
+    /// <summary>
+    /// 替换（把摊好的树换进安装目录）那一步的结局措辞（批次 UG-2）。
+    /// <para>这一族说的<b>只有"盘上现在是什么状态"</b>：哪一步摔的写在 <c>Detail</c> 里（进日志），
+    /// 因为用户能做的决定只跟现状有关——什么都没动、已退回原样、还是必须重装。
+    /// 把"哪一步"也做成格子，同一件现状就会有两句话可说（#232 那条纪律在这里的反面用法）。</para>
+    /// <para>口径：只有 <see cref="UpdaterOutcome.RollbackFailed"/> 那一格允许说"请你重装"——
+    /// 那不是把麻烦推给用户，那是唯一一条我们自己走不出来的路；其余每一句都必须自带"没动／已退回"，
+    /// 不许出现"请稍后再试""请先关闭程序"（P-54：那一类话在这里一律是缺陷）。</para>
+    /// </summary>
+    public static string Describe(UpdaterOutcome outcome) => outcome switch
+    {
+        UpdaterOutcome.Success => "新版本已经换好并起来了",
+        UpdaterOutcome.InvalidRequest => "这条更新指令本身不对（路径不对、跨了盘、或不像一棵摊好的树），安装目录没动",
+        UpdaterOutcome.ParentStillRunning => "旧的那一版迟迟没有退出，替换没有开始——安装目录还是原来的",
+        UpdaterOutcome.OldTreeNotMoved => "旧目录此刻挪不动（有别的东西在用它），替换没有开始——安装目录还是原来的",
+        UpdaterOutcome.RolledBack => "这次更新没换成，已经退回原来那一版并重新起来了",
+        UpdaterOutcome.RolledBackButNotRunning => "这次更新没换成，文件已退回原来那一版，但它没能自己起来——程序此刻没开着",
+        UpdaterOutcome.RollbackFailed => "替换中途摔了，而且没能退回原样：请重新安装本程序（旧文件还留在盘上，日志里写着在哪儿）",
+        UpdaterOutcome.Unknown => "更新器没能说清走到了哪一步：程序此刻开不开得起来，它自己也不知道（日志的最后几行写着它知道的）",
+        _ => "替换没有完成，没动安装目录",
+    };
+
+    /// <summary>
+    /// 启动侧（"活有没有交出去"）的措辞。<b>这一族与上面那几族量纲不同</b>：
+    /// <see cref="LaunchStatus.Started"/> 只担保"更新器接手了"，不担保"换好了"——
+    /// 把它演成后者就是界面在承诺一件还没发生的事（同一口径见设置页那句"不替换正在运行的程序"要到 UG-3 才改）。</summary>
+    public static string Describe(LaunchStatus status) => status switch
+    {
+        LaunchStatus.Started => "替换已经交给更新器，程序马上会重开",
+        LaunchStatus.InvalidRequest => "这条更新指令不对，没有去起更新器",
+        LaunchStatus.NotStarted => "这台机器上的更新器没能跑起来，这次没有自动装——程序还是原来那一版",
+        _ => "更新器没有起来，没动安装目录",
+    };
 }

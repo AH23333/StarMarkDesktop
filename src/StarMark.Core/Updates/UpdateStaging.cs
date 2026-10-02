@@ -33,9 +33,6 @@ namespace StarMark.Core.Updates;
 /// </summary>
 public static class UpdateStaging
 {
-    /// <summary>暂存树的名字后缀：读代码的人与更新器都靠它认出"这是我们要换的那一堆"。</summary>
-    internal const string NewTreeSuffix = ".new";
-
     /// <summary>
     /// 摊开载荷。<paramref name="stagingRoot"/> 由调用方给（<b>必须是安装目录所在那一块盘</b>，
     /// 跨盘的"挪过去"就不是改名而是复制，而更新器要靠改名才谈得上原子）。
@@ -54,7 +51,7 @@ public static class UpdateStaging
         var staged = false;
         try
         {
-            target = Path.Combine(stagingRoot, manifest.Version + NewTreeSuffix);
+            target = Path.Combine(stagingRoot, manifest.Version + UpdateAssets.NewTreeSuffix);
             Directory.CreateDirectory(stagingRoot);
             // 上一次失败留下的半截树不算"已经摊好"：先清干净再摊。这是自愈，不是让用户去删目录（P-54 同口径）。
             if (Directory.Exists(target)) Directory.Delete(target, recursive: true);
