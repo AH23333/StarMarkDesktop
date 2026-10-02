@@ -217,7 +217,12 @@
                                 <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
                                     <StackPanel Grid.Column="0" Spacing="4">
                                         <TextBlock Text="Personal Access Token（可选，仅需 public_repo）" Style="{StaticResource SettingRowText}"/>
-                                        <TextBox PlaceholderText="ghp_..." Text="{x:Bind ViewModel.GithubToken, Mode=TwoWay}"/>
+                                        <!-- 用 PasswordBox 而不是 TextBox（批次 UI，P-146）：TextBox 的内容在 UIA 树里
+                                             就是可读的 Value，读屏、自动化、截图都能把 Token 带走，而且不需要权限。
+                                             PasswordBox 的 Password 不可绑定（WinUI 刻意如此），所以这一格改走
+                                             SettingsPage.xaml.cs 里那一对读写，与同一页的「AI API Key」同形。 -->
+                                        <PasswordBox x:Name="GithubTokenBox" PlaceholderText="ghp_..."
+                                                     PasswordChanged="GithubTokenBox_Changed"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Spacing="4">
                                         <TextBlock Text="用户名（可选，用于显示）" Style="{StaticResource SettingRowText}"/>

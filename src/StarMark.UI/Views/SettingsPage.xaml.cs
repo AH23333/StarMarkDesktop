@@ -107,6 +107,11 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         try
         {
             ViewModel.LoadFromStore();
+            // Token 这一格是 PasswordBox：它的 Password 不可绑定（WinUI 刻意如此，批次 UI/P-146），
+            // 所以"档里的值→界面"只能在这里手写一次。写在 _suppressSave 里是必须的——
+            // 赋 Password 会当场触发 PasswordChanged，而那个处理器要往 ViewModel 里推值；
+            // 不在抑制区内就会被去抖保存当成"用户改了"，于是每次打开设置页都整档重写一次凭据档。
+            GithubTokenBox.Password = ViewModel.GithubToken;
             // 进设置页就重扫一次备份目录：列表要反映"刚刚那份自动备份真的落盘了没"，
             // 只看启动时缓存的话，用户永远看不到今天的新件。
             ViewModel.RefreshBackups();
@@ -119,6 +124,13 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         }
         finally { _suppressSave = false; }
     }
+
+    /// <summary>界面那一头的 Token → ViewModel（批次 UI/P-146）。<b>这是"读回"的唯一下方</b>：
+    /// PasswordBox 不能双向绑定，所以这条链靠这一对赋值撑起来，两头各一处、不许分散到别处去读
+    /// （分散读就会出现"改了但没进保存"的漏，与 <c>ReadAiSettings</c> 那条同一口径）。
+    /// 值本身不落日志、不进诊断档——那一族的账在 P-30。</summary>
+    private void GithubTokenBox_Changed(object sender, RoutedEventArgs e)
+        => ViewModel.GithubToken = GithubTokenBox.Password;
 
     // ───────── 实时生效（去抖保存）─────────
 
