@@ -16,7 +16,7 @@
     （1.0.0 ⇒ 标签 v1.0.0）；AppVersion 的解析容忍 v 前缀、缺省段与 -beta.1 这类预发布尾巴。
   -->
   <PropertyGroup>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
   </PropertyGroup>
 
 </Project>
