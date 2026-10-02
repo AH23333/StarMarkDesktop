@@ -28,4 +28,33 @@
     </PropertyGroup>
   </Target>
 
+  <!-- ── 把 XAML 的编译产物带进发布目录（批次 UH）────────────────────────────────
+       非打包的 WinUI 3 应用运行时靠两样东西找到自己的界面：*.xbf（每个页面/窗口编译后的 XAML，
+       连 Views/、Controls/、Themes/ 那些子目录一起）与 <程序集名>.pri（ms-appx:/// 那套 URI 的索引）。
+       这两样由 XAML 编译目标产出到 $(OutDir)，**但 publish 的复制清单里没有它们**：
+       实测 dotnet publish 出来的目录 xbf=0、少 StarMark.UI.pri，双击只会得到
+       "XamlParseException: XAML parsing failed."（栈停在 MainWindow 的 InitializeComponent），
+       而构建 0 Warning、测试全绿、从 bin 目录跑的界面一切正常 —— 见坑表 #237。
+       后果最坏的地方在于这份产物是"更新包"：换完文件之后新版本起不来，用户连旧版都回不去。
+
+       这一颗 target 只做搬运、不做挑选：$(OutDir) 里有多少 .xbf/.pri 就搬多少。
+       按通配而不是按文件名清单，是因为少搬一个页面的表现是"那个页面打不开"，
+       而那种坏只在点进去的那一下才露头（#189/#193 那一族：列清单就会漏）。
+       搬不到东西时当场 Error，而不是静默产出一棵起不来的树。
+
+       条件只在"这一颗是那个界面工程"时成立（全仓只有 StarMark.UI 设 WindowsAppSDKSelfContained），
+       对其他工程是死代码——与上面那颗 target 同一个取舍口径。 -->
+  <Target Name="CopyCompiledXamlToPublishDirectory" AfterTargets="Publish"
+          Condition="'$(WindowsAppSDKSelfContained)' == 'true' And '$(PublishDir)' != ''">
+    <ItemGroup>
+      <_CompiledXaml Include="$(OutDir)**\*.xbf" />
+      <_CompiledXaml Include="$(OutDir)$(AssemblyName).pri" />
+    </ItemGroup>
+    <Error Text="发布前自证失败：$(OutDir) 里既没有 .xbf 也找不到 $(AssemblyName).pri——XAML 编译产物不在预期位置，这颗搬运 target 的判据要重新核对。"
+           Condition="@(_CompiledXaml->Count()) == 0" />
+    <Copy SourceFiles="@(_CompiledXaml)"
+          DestinationFiles="@(_CompiledXaml->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

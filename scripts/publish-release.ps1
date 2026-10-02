@@ -36,8 +36,16 @@ $body = @{ tag_name = $Tag; name = "StarMark $Tag"; body = "桌面版 $version�
 try {
     $release = Invoke-RestMethod -Method Post -Uri "$api/releases" -Headers $headers -ContentType "application/json" -Body $body
 } catch {
-    # 同一标签已存在时不猜：让人来看，因为"覆盖一版已经发出去的 Release"是会改变别人机器上行为的动作
-    throw "建草稿失败：$($_.Exception.Message)（若该标签的 Release 已存在，请人工确认后再动它）"
+    # 三种失败说的话不一样，混成一句就会指错方向（这一版真踩到过一次：403 权限问题被报成了"标签已存在"）：
+    #   401/403 ⇒ 这把凭据没有建仓 Release 的权限，要去 GitHub 上调，不是重跑一次能好的；
+    #   422     ⇒ 那个标签已经有 Release 了，覆盖它会改变别人机器上已经装到的东西，必须人来确认；
+    #   其它    ⇒ 照实说，并把 API 的原话带上。
+    $code = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
+    $detail = $_.ErrorDetails.Message
+    if ($code -eq 401 -or $code -eq 403) {
+        throw "这把 Token 没有建仓 Release 的权限（HTTP $code）：去 GitHub 把细粒度令牌的 Contents 改成 Read and write（只给这一个仓库就够）。API 原话：$detail"
+    }
+    throw "建草稿失败（HTTP $code）：$detail —— 若那个标签已经有 Release，别覆盖它：那会改变别人机器上已经装到的一版"
 }
 
 Write-Host "==> 2/4 上传三颗资产" -ForegroundColor Cyan

@@ -32,7 +32,17 @@ $entry = Join-Path $OutDir "StarMark.UI.exe"
 if (-not (Test-Path $entry)) { throw "树里没有主程序：$entry" }
 $updater = Join-Path $OutDir "Updater\StarMark.Updater.exe"
 if (-not (Test-Path $updater)) { throw "树里没有更新器：$updater（这一版发出去就再也更新不了）" }
+# 第三样是"看得见的界面"：非打包的 WinUI 3 靠 *.xbf（编译后的 XAML）与 StarMark.UI.pri（ms-appx 的索引）
+# 找自己的每个页面，而 dotnet publish 天生不带它们（批次 UH 真踩到：构建 0 Warning、测试全绿、
+# 从 bin 跑一切正常，唯独发布产物双击只会抛 XamlParseException —— 见坑表 #237）。
+# 搬运那一步在 Directory.Build.targets 的 CopyCompiledXamlToPublishDirectory；这里只负责"没搬成就别出货"：
+# 一棵起不来的树被当成更新包发出去，后果是用户连旧版都用不了，而这条链上没有任何一句错误会先喊出来。
+$xbf = Join-Path $OutDir "App.xbf"
+if (-not (Test-Path $xbf)) { throw "树里没有编译后的 XAML：$xbf（publish 少了 XAML 产物，装了也起不来）" }
+$pri = Join-Path $OutDir "StarMark.UI.pri"
+if (-not (Test-Path $pri)) { throw "树里没有资源索引：$pri（ms-appx 找不到的表现是某个页面打不开）" }
 
 Write-Host "产物树：$OutDir"
 Write-Host "  主程序 : $entry"
 Write-Host "  更新器 : $updater"
+Write-Host "  界面   : $xbf + $pri（.xbf 共 $((Get-ChildItem -Recurse -Filter *.xbf -Path $OutDir).Count) 颗）"
