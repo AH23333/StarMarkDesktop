@@ -273,7 +273,48 @@ public sealed class UpdaterEngineTests : IDisposable
         Assert.Equal(UpdaterOutcome.OldTreeNotMoved, result.Status);
         Assert.Equal(OldMarker, ReadInstalledEntry());
         Assert.True(Directory.Exists(_staged));
-        Assert.Empty(_starts);
+        // 交棒那一刻界面对用户说的是"程序马上会重开"，而父进程此刻已经退出、屏上没有一个窗口。
+        // 这一条出口不把他原来那一版重新起来，那句真话就成了一句谎，而用户手上只剩一行日志（P-54）。
+        Assert.Equal(new[] { Path.Combine(_install, Entry) }, _starts);
+        Assert.Contains("重新起来", result.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WhenTheOldVersionCantBeStartedEitherThatGetsItsOwnOutcome()
+    {
+        // "盘上没改动"与"程序还开着"是两件事。折成一格就会拿后者担保前者（#234 那一族），
+        // 而这一格的盘上比 RolledBackButNotRunning 那一格更干净——它连一次改名都没发生过。
+        Hold(Path.Combine(_install, "data.txt"));
+
+        var result = UpdaterEngine.Run(Req(), new UpdaterEngine.Options
+        {
+            WaitForExit = (_, _) => true,
+            StartExe = _ => throw new InvalidOperationException("这台机器不肯起新进程"),
+            RunningExePath = Path.Combine(_root, "runner", "StarMark.Updater.exe"),
+            Attempts = 3,
+            RetryDelay = TimeSpan.FromMilliseconds(5),
+            Ceiling = TimeSpan.FromMilliseconds(50),
+        });
+
+        Assert.Equal(UpdaterOutcome.UntouchedButNotRunning, result.Status);
+        Assert.Equal(OldMarker, ReadInstalledEntry());
+        Assert.True(Directory.Exists(_staged));
+        Assert.Contains("没能起来", result.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFilledUpOldTreeSlotAlsoGivesTheOldVersionBack()
+    {
+        // 这一格走的也是"改名之前就得停"：旧树原位完好无损，所以它同样不许把人留在空屏幕上。
+        var first = _install + UpdateAssets.OldTreeSuffix;
+        Directory.CreateDirectory(first);
+        for (var n = 1; n <= 9; n++) Directory.CreateDirectory($"{first}.{n}");
+
+        var result = UpdaterEngine.Run(Req(), Opts());
+
+        Assert.Equal(UpdaterOutcome.InvalidRequest, result.Status);
+        Assert.Equal(OldMarker, ReadInstalledEntry());
+        Assert.Equal(new[] { Path.Combine(_install, Entry) }, _starts);
     }
 
     [Fact]
@@ -470,6 +511,28 @@ public sealed class UpdaterEngineTests : IDisposable
             Assert.DoesNotContain("稍后", text, StringComparison.Ordinal);
             if (value != UpdaterOutcome.Success) Assert.DoesNotContain("已经换好", text, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void TheSentenceAboutRestartingIsBackedByTheExitThatActuallyRestarts()
+    {
+        // 那句话现在写着"程序也已经重新起来"。它一旦能从一条没起过程序的出口返回，就成了第二句谎——
+        // 而这一次谎的方向是把"屏幕空了"说成"一切正常"（#234：措辞与实现各走各的）。
+        var engine = ReadRepoFile("src/StarMark.Core/Updates/UpdaterEngine.cs");
+        var body = MethodBody(engine, "private static UpdaterResult NothingSwapped");
+        Assert.Contains("TryStart(entryExe", body, StringComparison.Ordinal);
+        Assert.Contains("UpdaterOutcome.UntouchedButNotRunning", body, StringComparison.Ordinal);
+
+        var code = Code(engine);
+        Assert.Equal(0, Count(code, "new(UpdaterOutcome.OldTreeNotMoved"));
+        Assert.Equal(1, Count(code, "NothingSwapped(UpdaterOutcome.OldTreeNotMoved"));
+        Assert.Equal(1, Count(code, "NothingSwapped(UpdaterOutcome.InvalidRequest"));
+
+        // 反方向也要钉：这一族的两句话分别承诺了"程序已经重开"与"不猜成因"。
+        // 话被抹平或把猜写回事实，都不会让上面任何一格红——只有这两行会。
+        var notMoved = UpdatePolicy.Describe(UpdaterOutcome.OldTreeNotMoved);
+        Assert.Contains("重新起来", notMoved, StringComparison.Ordinal);
+        Assert.DoesNotContain("有别的东西", notMoved, StringComparison.Ordinal);
     }
 
     [Fact]

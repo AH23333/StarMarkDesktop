@@ -16,13 +16,16 @@ namespace StarMark.Core.Updates;
 /// 正在运行的程序脚下那块地，所以它<b>只能被一个不在那块地里的进程调用</b>
 /// （<c>StarMark.Updater</c> 跑的是 <c>%LOCALAPPDATA%\StarMark\Updater\</c> 里那份副本）。
 /// </para>
-/// <para>三件判据：
+/// <para>四件判据：
 /// ① <b>只改名，不复制</b>——同盘改名是"要么整个要么没有"，复制有一段"半棵树正被当成安装目录"的窗口，
 ///    而那一段没有任何办法守住。<see cref="UpdaterContract.Validate"/> 因此先拒跨盘。
 /// ② <b>动过之后不许留半截</b>——把旧树挪开之后，后面每一步的失败都必须落进"回滚"或"如实说清旧树在哪儿"，
 ///    所以回滚写在一条公共出口上（不是各 catch 一份，#230/#232 那条纪律在这一层同样成立）。
 /// ③ <b>不喊人帮忙</b>——文件此刻被占用就自己重试（<see cref="UpdaterContract.MoveAttempts"/> 次），
 ///    等不到那个进程退出就什么都不动；不会出现"请先关闭程序再试"那一类话（P-54）。</para>
+/// <para>④ <b>交出去了就得有人接着</b>——父进程一退，唯一还知道安装目录在哪儿的就是这一个进程。
+///    所以"还没碰盘就不得不停"那一族出口要把原来那一版重新起来（<see cref="NothingSwapped"/>）：
+///    屏幕上什么都不剩不叫"本机没改动"，那叫把人的程序弄丢了。</para>
 /// </summary>
 public static class UpdaterEngine
 {
@@ -60,12 +63,12 @@ public static class UpdaterEngine
                 $"等了 {o.Ceiling.TotalSeconds:0} 秒，进程 {request.ParentPid} 还在；什么都没动");
 
         var oldPath = ChooseOldPath(install);
-        if (oldPath is null) return Invalid("旧树的位置排满了（上一次替换留下的 _old 没清掉）；什么都没动");
+        if (oldPath is null)
+            return NothingSwapped(UpdaterOutcome.InvalidRequest, "旧树的位置排满了（上一次替换留下的 _old 没清掉）", install, o);
 
         var (movedOld, oldError) = TryMove(install, oldPath, o);
         if (!movedOld)
-            return new(UpdaterOutcome.OldTreeNotMoved,
-                $"旧目录挪不动，什么都没动：{oldError}");
+            return NothingSwapped(UpdaterOutcome.OldTreeNotMoved, $"旧目录挪不动：{oldError}", install, o);
 
         // —— 从这里起，盘上有一棵不在安装位置的旧树：任何一条出口都要么换好，要么退回 ——
         var (movedNew, newError) = TryMove(staged, install, o);
@@ -91,6 +94,24 @@ public static class UpdaterEngine
         var leftover = SweepOldTrees(install, o);
         return new(UpdaterOutcome.Success,
             leftover is null ? "旧树已清掉" : $"新版本已经起来了；旧树没清干净（{leftover}），不影响这次更新");
+    }
+
+    /// <summary>
+    /// 等到了那个进程退出、却在还没碰安装目录之前就不得不停：<b>把原来那一版重新起来再走</b>。
+    /// <para>这一条不是修饰话。交棒那一刻界面对用户说的是"程序马上会重开"
+    /// （<see cref="LaunchStatus.Started"/>），而父进程此刻已经退出、屏上一个窗口都没有；
+    /// 留它在地上，那句话就成了谎，而用户手上只剩一行日志（P-54：不许把人支到"你自己再开一次"上）。</para>
+    /// <para>盘上一个字节都没改，所以起来的就是他原来那一版。<b>起不来时如实换一格</b>
+    /// （<see cref="UpdaterOutcome.UntouchedButNotRunning"/>）——"没改动"与"程序还开着"是两件事，
+    /// 折成一格就会拿后者担保前者（#234 那一族）。</para>
+    /// </summary>
+    private static UpdaterResult NothingSwapped(UpdaterOutcome cause, string why, string install, Options o)
+    {
+        var entryExe = Path.Combine(install, UpdateAssets.EntryExeName);
+        if (TryStart(entryExe, o, out var startError))
+            return new(cause, $"{why}；什么都没动，原来那一版已经重新起来");
+        return new(UpdaterOutcome.UntouchedButNotRunning,
+            $"{why}；什么都没动，而原来那一版也没能起来：{startError}");
     }
 
     /// <summary>

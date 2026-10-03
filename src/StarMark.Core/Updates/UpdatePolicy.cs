@@ -323,15 +323,19 @@ public static class UpdatePolicy
     /// <para>口径：只有 <see cref="UpdaterOutcome.RollbackFailed"/> 那一格允许说"请你重装"——
     /// 那不是把麻烦推给用户，那是唯一一条我们自己走不出来的路；其余每一句都必须自带"没动／已退回"，
     /// 不许出现"请稍后再试""请先关闭程序"（P-54：那一类话在这里一律是缺陷）。</para>
+    /// <para>两格 <c>*ButNotRunning</c> 说的是同一件用户当场能看见的事：屏幕上一个窗口都没有。
+    /// 它们不是"没动／已退回"那几格的重复——那几格默认程序还在跑。把"本机没改动"与"程序还开着"
+    /// 折成一格，界面就会拿前者担保后者（#234），而交棒之后能起程序的只剩更新器这一个进程。</para>
     /// </summary>
     public static string Describe(UpdaterOutcome outcome) => outcome switch
     {
         UpdaterOutcome.Success => "新版本已经换好并起来了",
         UpdaterOutcome.InvalidRequest => "这条更新指令本身不对（路径不对、跨了盘、或不像一棵摊好的树），安装目录没动",
         UpdaterOutcome.ParentStillRunning => "旧的那一版迟迟没有退出，替换没有开始——安装目录还是原来的",
-        UpdaterOutcome.OldTreeNotMoved => "旧目录此刻挪不动（有别的东西在用它），替换没有开始——安装目录还是原来的",
+        UpdaterOutcome.OldTreeNotMoved => "旧目录此刻挪不动，替换没有开始——本机还是原来那一版，程序也已经重新起来",
         UpdaterOutcome.RolledBack => "这次更新没换成，已经退回原来那一版并重新起来了",
         UpdaterOutcome.RolledBackButNotRunning => "这次更新没换成，文件已退回原来那一版，但它没能自己起来——程序此刻没开着",
+        UpdaterOutcome.UntouchedButNotRunning => "本机一个字节都没改，可原来那一版也没能重新起来——程序此刻没开着（日志里写着挪不动的原因）",
         UpdaterOutcome.RollbackFailed => "替换中途摔了，而且没能退回原样：请重新安装本程序（旧文件还留在盘上，日志里写着在哪儿）",
         UpdaterOutcome.Unknown => "更新器没能说清走到了哪一步：程序此刻开不开得起来，它自己也不知道（日志的最后几行写着它知道的）",
         _ => "替换没有完成，没动安装目录",

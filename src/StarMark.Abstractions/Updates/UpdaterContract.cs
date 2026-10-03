@@ -146,6 +146,8 @@ public static class UpdaterContract
         UpdaterOutcome.RolledBackButNotRunning => 6,
         UpdaterOutcome.RollbackFailed => 7,
         UpdaterOutcome.Unknown => 8,
+        // 9 是"新增一格而这里忘了配"的专用兜底（有闸门钉着不许被真格子占用），所以这一格往后一位。
+        UpdaterOutcome.UntouchedButNotRunning => 10,
         _ => 9,
     };
 
@@ -188,7 +190,9 @@ public enum UpdaterOutcome
     /// <summary>等不到那个进程退出——一个字节都没动。</summary>
     ParentStillRunning,
 
-    /// <summary>旧目录挪不动（有别的东西占着它）——一个字节都没动。</summary>
+    /// <summary>旧目录挪不动——一个字节都没动。
+    /// 被别的进程占着、ACL 不许改名、这台机器不让这颗目录改名，引擎分不出这三样，
+    /// 所以这一格与它那句话说出口时<b>只许讲"挪不动"</b>：把成因写进格子，就是把猜写进事实。</summary>
     OldTreeNotMoved,
 
     /// <summary>没换成，但已退回原来那一版，而且它重新起来了（盘上＝改动之前）。</summary>
@@ -196,6 +200,13 @@ public enum UpdaterOutcome
 
     /// <summary>退回原来那一版了，但旧版也没能起来：磁盘是完好的，程序没开着。</summary>
     RolledBackButNotRunning,
+
+    /// <summary>安装目录一个字节都没动，而<b>连原来那一版也没能重新起来</b>：程序此刻没开着。
+    /// <para>与 <see cref="RolledBackButNotRunning"/> 是同一对的两半——那一格是"动过之后退回来了"，
+    /// 这一格是"压根没动过"。分两格是因为用户这一刻要做的决定不同：前者盘上刚被我们碰过（要留意日志），
+    /// 后者盘上还是他原来那一版（直接再开一次就完事）。而两格都不许被折回"什么都没动"那一族，
+    /// 因为那一族的每一句都默认程序还在屏幕上（#234：把"还在跑"演成"没影响"）。</para></summary>
+    UntouchedButNotRunning,
 
     /// <summary>回滚也失败。<b>安装目录此刻不完整</b>——这一族里唯一一句必须让人去重装的话。</summary>
     RollbackFailed,
