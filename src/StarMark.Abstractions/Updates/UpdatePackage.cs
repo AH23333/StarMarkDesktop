@@ -183,12 +183,40 @@ public static class UpdateAssets
 public sealed record PackageAssetAddresses(string ManifestUrl, string SignatureUrl, string PackageUrl);
 
 /// <summary>
+/// 下载载荷时的<b>字节读数</b>（批次 VW）。两个数都取自"实际落到盘上的字节"与"对方声明的总长"，
+/// 不是取自清单——清单在这一步还没验过签名，拿它当分母就是让一份没背书的东西给界面定调子。
+/// <para><paramref name="BytesTotal"/> 为 null 是常态之一：不写明长度的响应合法存在，
+/// 那一刻这句话只报"已经下了多少"，<b>不许猜一个总数出来把百分比凑满</b>。</para>
+/// <para>这一格只描述"走到哪"，永远不描述"到了没有"：<see cref="Percent"/> 在上限里被压到 99，
+/// 因为"下完了"也不等于"换好了"，而界面那一行字接下来就会被下一步换掉（#234 那条纪律）。</para>
+/// </summary>
+public readonly record struct DownloadProgress(long BytesDone, long? BytesTotal)
+{
+    /// <summary>拿不到总长时每隔这么多字节报一次（报得太密是白烧 UI 线程，太稀看着像卡死）。</summary>
+    public const long UnknownTotalStep = 1L * 1024 * 1024;
+
+    /// <summary>
+    /// 每隔多少字节报一次。<b>这一格的判据只有这一颗</b>：知道总长就百分之一，不知道就每 1 MB 一次。
+    /// 写成"每隔多少毫秒"的话，测试就得依赖时钟，而假传输里根本没有真实节奏。
+    /// </summary>
+    public long StepBytes => BytesTotal is > 0 ? Math.Max(1L, BytesTotal.Value / 100) : UnknownTotalStep;
+
+    /// <summary>已下的比例（0~99）。总长不知道时给 null——那一格界面上就不该出现百分号。</summary>
+    public long? Percent => BytesTotal is > 0
+        ? Math.Min(99L, Math.Max(0L, BytesDone) * 100 / BytesTotal.Value)
+        : null;
+}
+
+/// <summary>
 /// 取一次更新包（清单＋签名＋载荷）。<b>这一层不做信任判定，也不装任何东西</b>——
 /// 验签与"这版能不能覆盖你现在这版"在 <c>StarMark.Core</c>，替换正在运行的程序是另一批（见账本 P-144）。
 /// </summary>
 public interface IUpdatePackageSource
 {
-    Task<PackageFetchResult> FetchAsync(PackageAssetAddresses addresses, CancellationToken ct = default);
+    /// <param name="progress">载荷那一条流的字节读数（清单与签名那两条太短，不报）。可以为 null。
+    /// <b>它在哪个线程上调不作保证</b>——接过去的那一侧自己回 UI 线程（界面那条接线有闸门钉着）。</param>
+    Task<PackageFetchResult> FetchAsync(PackageAssetAddresses addresses, CancellationToken ct = default,
+        Action<DownloadProgress>? progress = null);
 }
 
 /// <summary>

@@ -78,8 +78,13 @@ public sealed class UpdateApplier
     /// 落点由 <see cref="ProcessDirectory"/> 与 <see cref="UpdaterPaths"/> 定。
     /// </summary>
     /// <param name="onPhase">每进下一步叫一次（界面据此改那一行字）。可以为 null。</param>
+    /// <param name="onBytes">下载载荷期间的字节读数（批次 VW）。<b>它在哪个线程上叫不作保证</b>——
+    /// 传输层那边是 <c>ConfigureAwait(false)</c> 之后的续接，所以接过去的那一侧（界面）必须自己回 UI 线程。
+    /// 刻意与 <paramref name="onPhase"/> 分成两条：那一条说"走到哪一步"，这一条说"这一步走了多少"，
+    /// 混成一条回调就会有人把"下了 40 MB"演成"装好了"（#234）。</param>
     public async Task<ApplyResult> ApplyAsync(
-        string? remoteTag, Action<ApplyPhase>? onPhase = null, CancellationToken ct = default, Options? options = null)
+        string? remoteTag, Action<ApplyPhase>? onPhase = null, CancellationToken ct = default,
+        Options? options = null, Action<DownloadProgress>? onBytes = null)
     {
         var o = options ?? new Options();
         var inspect = o.InspectPackage ?? UpdateIntegrity.Inspect;
@@ -98,7 +103,7 @@ public sealed class UpdateApplier
         PackageFetchResult fetch;
         try
         {
-            fetch = await _packages.FetchAsync(addresses, ct).ConfigureAwait(false);
+            fetch = await _packages.FetchAsync(addresses, ct, onBytes).ConfigureAwait(false);
         }
         catch (OperationCanceledException) { throw; }          // 掐掉就是掐掉：不写结局、不兜底（P-55）
         catch (Exception ex)

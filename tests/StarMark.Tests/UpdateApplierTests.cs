@@ -121,6 +121,42 @@ public sealed class UpdateApplierTests : IDisposable
         }, seen);
     }
 
+    /// <summary>
+    /// 字节读数必须<b>一路走到开口要它的那个人</b>（批次 VW）。这一格的存在理由：
+    /// 回调在 Core 这一层是可以被"忘了传"的——忘了传之后界面还是照常转圈、照常报四步，
+    /// 只是那一行字永远停在"正在下载…"，而这种坏没有任何别的格子会红。
+    /// </summary>
+    [Fact]
+    public async Task TheByteReadoutsTravelToTheCallerWhoAskedForThem()
+    {
+        var seen = new List<DownloadProgress>();
+        var (applier, options) = Fixture(Files(), startRunner: new());
+
+        await applier.ApplyAsync(Tag, _ => { }, CancellationToken.None, options, seen.Add);
+
+        Assert.Equal(new[] { new DownloadProgress(1024, 2048), new DownloadProgress(2048, 2048) }, seen);
+    }
+
+    /// <summary>
+    /// 接了读数<b>不许改变这条链的任何一步</b>：四步仍然各报一次、顺序不变，
+    /// 而假源报几格就只有几格到达（不重复、不放大）。少了这一格，"把回调塞进编排"这件事只有一半证据。
+    /// </summary>
+    [Fact]
+    public async Task ReadoutsDoNotChangeAnyStepOfTheChain()
+    {
+        var seen = new List<ApplyPhase>();
+        var marks = 0;
+        var (applier, options) = Fixture(Files(), startRunner: new());
+
+        await applier.ApplyAsync(Tag, seen.Add, CancellationToken.None, options, _ => marks++);
+
+        Assert.Equal(new[]
+        {
+            ApplyPhase.Downloading, ApplyPhase.Inspecting, ApplyPhase.Staging, ApplyPhase.HandingOff,
+        }, seen);
+        Assert.Equal(2, marks);
+    }
+
     /// <summary>安装目录在这一层<b>一个字节都不许变</b>：它只负责把活交出去（连成功那一格也是）。</summary>
     [Fact]
     public async Task TheInstallDirectoryIsUntouchedWhenTheHandoffSucceeds()
@@ -335,6 +371,43 @@ public sealed class UpdateApplierTests : IDisposable
             Assert.DoesNotContain(banned, text, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 读数那句的<b>头一句必须是从四步那一句取来的</b>，不是抄一份一模一样的字。
+    /// <para>为什么要按源码形状判：两份完全相同的串在行为测上永远一致（<c>StartsWith</c> 照样过），
+    /// 而"抄一份"之后改一处另一处不会跟着改——那是 #189/#193 那一族最典型的静默漂移。
+    /// 判据形状＝方法体里要有 <c>Describe(ApplyPhase.Downloading)</c> 这一手，且不出现那句字面。</para>
+    /// </summary>
+    [Fact]
+    public void TheReadoutHeadIsTakenFromThePhaseSentenceRatherThanCopied()
+    {
+        var body = MethodBody(Code(ReadRepoFile("src/StarMark.Core/Updates/UpdatePolicy.cs")),
+            "public static string Describe(DownloadProgress progress)");
+        Assert.Contains("Describe(ApplyPhase.Downloading)", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("正在下载", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 带读数的下载那一句（批次 VW）：<b>头一句必须就是四步那一句</b>（措辞只有一个出处），
+    /// 而接上去的读数不许把这句话变成结局。两种分母各判一次：知道总长才给百分比。
+    /// </summary>
+    [Fact]
+    public void TheReadoutSentenceIsThePhaseSentencePlusNumbers()
+    {
+        var head = UpdatePolicy.Describe(ApplyPhase.Downloading);
+        var known = UpdatePolicy.Describe(new DownloadProgress(1_048_576, 2_097_152));
+        var unknown = UpdatePolicy.Describe(new DownloadProgress(1_048_576, null));
+
+        Assert.StartsWith(head, known, StringComparison.Ordinal);
+        Assert.StartsWith(head, unknown, StringComparison.Ordinal);
+        Assert.Contains("50%", known, StringComparison.Ordinal);         // 有分母才有百分比
+        Assert.DoesNotContain("%", unknown, StringComparison.Ordinal);   // 没分母就不许编一个出来
+        foreach (var banned in new[] { "完成", "成功", "已装", "请", "稍后" })
+        {
+            Assert.DoesNotContain(banned, known, StringComparison.Ordinal);
+            Assert.DoesNotContain(banned, unknown, StringComparison.Ordinal);
+        }
+    }
+
     /// <summary>结局那两格不许把"交出去了"演成"装好了"（#234：两种量纲并成一族就是一句谎）。</summary>
     [Theory]
     [MemberData(nameof(EveryApplyStatus))]
@@ -414,10 +487,21 @@ public sealed class UpdateApplierTests : IDisposable
             Bundle(key, Signed(Files(), _payload), _payload), null));
     }
 
+    /// <summary>
+    /// 定值取包装置。<b>它自己"下"两格</b>（<paramref name="progress"/> 每格叫一次）：
+    /// 这一格证的不是传输层的节奏（那一半在 <c>GitHubUpdatePackageSourceTests</c> 用真流照），
+    /// 而是<b>界面那条回调有没有一路走到取包这一层</b>——Core 要是把 <c>onBytes</c> 掉了，
+    /// 这里数出来就是空表，而"进度不显示"那种坏在别处全都看不出来。
+    /// </summary>
     private sealed class FixedSource(PackageFetchResult result) : IUpdatePackageSource
     {
-        public Task<PackageFetchResult> FetchAsync(PackageAssetAddresses addresses, CancellationToken ct = default)
-            => Task.FromResult(result);
+        public Task<PackageFetchResult> FetchAsync(PackageAssetAddresses addresses, CancellationToken ct = default,
+            Action<DownloadProgress>? progress = null)
+        {
+            progress?.Invoke(new DownloadProgress(1024, 2048));
+            progress?.Invoke(new DownloadProgress(2048, 2048));
+            return Task.FromResult(result);
+        }
     }
 
     /// <summary>带计数的取包装置：<b>"没出门"这件事只能由它自己数出来</b>（递一个失败的结局不算证明没被叫）。</summary>
@@ -425,7 +509,8 @@ public sealed class UpdateApplierTests : IDisposable
     {
         private int _calls;
         public int Calls => Volatile.Read(ref _calls);
-        public Task<PackageFetchResult> FetchAsync(PackageAssetAddresses addresses, CancellationToken ct = default)
+        public Task<PackageFetchResult> FetchAsync(PackageAssetAddresses addresses, CancellationToken ct = default,
+            Action<DownloadProgress>? progress = null)
         {
             Interlocked.Increment(ref _calls);
             return Task.FromResult(result);

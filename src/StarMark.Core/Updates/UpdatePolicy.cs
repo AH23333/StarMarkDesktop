@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using StarMark.Abstractions;
 using StarMark.Abstractions.Updates;
 
 namespace StarMark.Core.Updates;
@@ -378,6 +379,22 @@ public static class UpdatePolicy
         ApplyPhase.HandingOff => "正在把替换交给更新器…",
         _ => "正在准备更新…",
     };
+
+    /// <summary>
+    /// 下载那一句<b>带数字</b>的样子（批次 VW）。措辞的唯一出处仍然是 <see cref="Describe(ApplyPhase)"/>
+    /// 那一句——这里只在它后面接读数，界面与传输层都不许自己另拼一份（两处写法迟早漂成两种话）。
+    /// <para>拿不到总长（对方没写 <c>Content-Length</c>）时<b>只报已经下了多少</b>：
+    /// 编一个分母出来就能编出一个百分比，而那一句会看着比它证到的更有把握。
+    /// <see cref="DownloadProgress.Percent"/> 自己压不到 100，所以这句话永远读起来不像结局（#234）。</para>
+    /// </summary>
+    public static string Describe(DownloadProgress progress)
+    {
+        var head = Describe(ApplyPhase.Downloading);
+        var done = FileSizeText.Human(progress.BytesDone);
+        return progress.Percent is not { } percent
+            ? $"{head} 已下 {done}"
+            : $"{head} 已下 {done}／共 {FileSizeText.Human(progress.BytesTotal!.Value)}（{NumberText.Grouped(percent)}%）";
+    }
 
     /// <summary>
     /// 他自己掐掉那一发的那句话（批次 UG-3）。<b>它不是失败，也不许写成失败</b>：

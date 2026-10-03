@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.DependencyInjection;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Updates;
 using StarMark.Core.Updates;
 using StarMark.UI.Helpers;
 
@@ -106,15 +107,24 @@ public partial class SettingsPageViewModel
     private static UpdateApplier Apply() => App.Services.GetRequiredService<UpdateApplier>();
 
     /// <summary>
-    /// 「立即更新」那一下（批次 UG-3）。<b>界面只递"上一次问出来的那一版"这一个事实</b>：
+    /// 「立即更新」那一下（批次 UG-3，读数那一条批次 VW 补）。
+    /// <b>界面只递"上一次问出来的那一版"这一个事实</b>：
     /// 地址由 Core 按配置里的仓库拼，落点由 Core 按正在跑的这颗 exe 算——能被参数改动的东西就能被改成别的落点。
+    /// <paramref name="onBytes"/> 不是第三个"事实"而是同一件事的读数：它只能被写进那一行字，
+    /// 不参与"装哪一版、装到哪儿"的任何判断（有闸门钉着这条接线仍然只递标签）。
     /// </summary>
     public Task<UpdateApplier.ApplyResult> ApplyUpdateAsync(
-        Action<ApplyPhase> onPhase, CancellationToken ct)
-        => Apply().ApplyAsync(Updates().LastReport()?.RemoteTag, onPhase, ct);
+        Action<ApplyPhase> onPhase, Action<DownloadProgress> onBytes, CancellationToken ct)
+        => Apply().ApplyAsync(Updates().LastReport()?.RemoteTag, onPhase, ct, onBytes: onBytes);
 
     /// <summary>走到哪一步的那行字：措辞出自 <see cref="UpdatePolicy"/>，界面这一侧一个字都不抄。</summary>
     public void ShowApplyPhase(ApplyPhase phase) => UpdateStatus = UpdatePolicy.Describe(phase);
+
+    /// <summary>
+    /// 下载期间的读数（批次 VW）。<b>这一句不许变成结局</b>：它写的是"已下多少"，而 <c>Percent</c> 自己压不到 100；
+    /// 措辞同样出自 <see cref="UpdatePolicy"/>，界面不另拼一份数字写法（P-122 那一族：两处写法迟早漂成两种读数）。
+    /// </summary>
+    public void ShowDownloadProgress(DownloadProgress progress) => UpdateStatus = UpdatePolicy.Describe(progress);
 
     /// <summary>没装成的那句：原样念各步已有的那一句（不许在这里补一句"没关系"把它抹平，#232）。</summary>
     public void ShowApplyResult(UpdateApplier.ApplyResult result)

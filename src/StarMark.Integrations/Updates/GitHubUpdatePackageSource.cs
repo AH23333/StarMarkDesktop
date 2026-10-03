@@ -74,7 +74,8 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
         _openPackageStream = packageStreamProvider ?? DefaultOpenPackageStream;
     }
 
-    public async Task<PackageFetchResult> FetchAsync(PackageAssetAddresses addresses, CancellationToken ct = default)
+    public async Task<PackageFetchResult> FetchAsync(PackageAssetAddresses addresses, CancellationToken ct = default,
+        Action<DownloadProgress>? progress = null)
     {
         if (addresses is null)
             return new PackageFetchResult(PackageFetchStatus.AddressRefused, Detail: "Core 没给出地址");
@@ -89,8 +90,9 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
         if (signature.Failure is not null)
             return new PackageFetchResult(signature.Failure.Value, Detail: signature.Detail);
 
+        // 只有载荷那一条报字节读数：清单与签名各是几十 KB，报它们只会把界面刷成闪烁（VW）。
         var package = await GetAsync(addresses.PackageUrl, UpdateAssets.MaxPackageBytes,
-            PackageTimeout, staging: _stagingDir(), ct).ConfigureAwait(false);
+            PackageTimeout, staging: _stagingDir(), ct, progress).ConfigureAwait(false);
         if (package.Failure is not null)
             return new PackageFetchResult(package.Failure.Value, Detail: package.Detail);
 
@@ -104,7 +106,8 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
     /// <summary>
     /// 一次带"逐跳重验"的取字节。<paramref name="staging"/> 为 null 时读进内存，否则流式写进那里并算哈希。
     /// </summary>
-    private async Task<Fetched> GetAsync(string url, long cap, TimeSpan gap, string? staging, CancellationToken ct)
+    private async Task<Fetched> GetAsync(string url, long cap, TimeSpan gap, string? staging, CancellationToken ct,
+        Action<DownloadProgress>? progress = null)
     {
         var current = url;
         using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -152,7 +155,7 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
 
                 return staging is null
                     ? await ReadIntoMemoryAsync(response, cap, bounded.Token).ConfigureAwait(false)
-                    : await WriteToDiskAsync(response, cap, staging, bounded.Token).ConfigureAwait(false);
+                    : await WriteToDiskAsync(response, cap, staging, bounded.Token, progress).ConfigureAwait(false);
             }
         }
         return Failed(PackageFetchStatus.OffHostRedirect, $"跳了 {MaxHops} 跳还没拿到东西");
@@ -225,7 +228,7 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
     /// 在 Windows 上必定失败，清理写在 <c>using</c> 块里面就等于每次都清不掉。</para>
     /// </summary>
     private async Task<Fetched> WriteToDiskAsync(HttpResponseMessage response, long cap, string staging,
-        CancellationToken ct)
+        CancellationToken ct, Action<DownloadProgress>? progress = null)
     {
         var part = Path.Combine(staging, Guid.NewGuid().ToString("N") + ".part");
         var final = Path.ChangeExtension(part, ".zip");
@@ -233,7 +236,7 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
         try
         {
             Directory.CreateDirectory(staging);
-            var (hashText, written) = await CopyAsync(response, part, cap, ct).ConfigureAwait(false);
+            var (hashText, written) = await CopyAsync(response, part, cap, ct, progress).ConfigureAwait(false);
             File.Move(part, final, overwrite: true);
             moved = true;
             return new Fetched(final, hashText, written, null, null, null);
@@ -274,8 +277,15 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
     /// 两条路都可能抛 <c>IOException</c>，混在一个 catch 里就会把一次断线说成"这台机器的临时目录写不下去"
     /// （那道缝刚照出来的错，见 <see cref="PackageStreamBrokenException"/>）。
     /// </summary>
+    /// <summary>
+    /// 边读边写边算哈希。<b>"从网络读"与"往磁盘写"的异常必须分开接</b>：
+    /// 两条路都可能抛 <c>IOException</c>，混在一个 catch 里就会把一次断线说成"这台机器的临时目录写不下去"
+    /// （那道缝刚照出来的错，见 <see cref="PackageStreamBrokenException"/>）。
+    /// <para>进度报的是<b>已经写到盘上的字节</b>（在 <c>WriteAsync</c> 之后叫），不是"读到的字节"——
+    /// 那一格的区别在断线时才会露出来：读了 40 MB 只写成 12 MB 的时候，界面不该说"已下 40 MB"。</para>
+    /// </summary>
     private async Task<(string Hash, long Bytes)> CopyAsync(HttpResponseMessage response, string part,
-        long cap, CancellationToken ct)
+        long cap, CancellationToken ct, Action<DownloadProgress>? progress = null)
     {
         await using var source = await _openPackageStream(response, ct).ConfigureAwait(false);
         await using var target = new FileStream(part, new FileStreamOptions
@@ -285,6 +295,21 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var chunk = new byte[64 * 1024];
         long total = 0;
+        // 分母取对方在响应头里声明的长度。清单这时候还没验过签名，拿它的 packageBytes 当分母
+        // 就是让一份没背书的东西给界面定调子（同一理由见 UpdateAssets.PackageNameFor 为什么反过来定）。
+        var declared = response.Content.Headers.ContentLength;
+        var step = new DownloadProgress(0, declared).StepBytes;
+        var nextMark = step;
+        var lastReported = -1L;
+        // 同一格字节数不报两次：最后一块读完后"过格"与"收尾"撞在同一个数上，
+        // 让界面多刷一行没有意义，而"读数一格比一格多"这条判据也就没法钉（真机那一段每秒能刷几十次）。
+        void Report(long done)
+        {
+            if (progress is null || done == lastReported) return;
+            lastReported = done;
+            progress.Invoke(new DownloadProgress(done, declared));
+        }
+
         while (true)
         {
             int read;
@@ -302,8 +327,15 @@ public sealed class GitHubUpdatePackageSource : IUpdatePackageSource, IDisposabl
             if (total > cap) throw new PackageTooLargeException($"超过 {cap} 字节");
             hash.AppendData(chunk, 0, read);
             await target.WriteAsync(chunk.AsMemory(0, read), ct).ConfigureAwait(false);
+            if (total >= nextMark)
+            {
+                Report(total);
+                nextMark = total + step;
+            }
         }
         await target.FlushAsync(ct).ConfigureAwait(false);
+        // 收尾这一发让界面看见"字节到齐了"；它仍然只说走到哪——下完不等于换好（#234）。
+        Report(total);
         return (UpdateHashHex.ToHex(hash.GetHashAndReset()), total);
     }
 

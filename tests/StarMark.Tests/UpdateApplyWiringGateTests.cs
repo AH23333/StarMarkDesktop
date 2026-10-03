@@ -81,11 +81,31 @@ public sealed class UpdateApplyWiringGateTests
         Assert.Contains(".Dispose();", body, StringComparison.Ordinal);   // 掐掉了也要把那颗 CTS 还回去
     }
 
-    [Fact]
-    public void TheProgressLineComesBackOnTheUIThread()
+    /// <summary>
+    /// 两条进度出口<b>都必须回到 UI 线程再写</b>（批次 VW 把字节读数加成第二条）。
+    /// 只钉 <c>ShowApplyPhase</c> 的那一格不够：读数那一条是每下一格就叫一次的，
+    /// 跨线程写绑定属性的表现是随机崩，而它偏偏只在真下载时才有量。
+    /// </summary>
+    [Theory]
+    [InlineData("private void ShowApplyPhase(ApplyPhase phase)")]
+    [InlineData("private void ShowDownloadProgress(DownloadProgress progress)")]
+    public void TheProgressLineComesBackOnTheUIThread(string method)
     {
-        var body = MethodBody(Code(ReadRepoFile(View)), "private void ShowApplyPhase(ApplyPhase phase)");
+        var body = MethodBody(Code(ReadRepoFile(View)), method);
         Assert.Contains("DispatcherQueue.TryEnqueue", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 读数那句的<b>措辞出处只有一处</b>：界面拿 <see cref="StarMark.Core.Updates.UpdatePolicy"/> 的那一句，
+    /// 不自己拼"已下多少 MB"。数字写法与字节梯子也都不许在界面里另抄一份（P-122 那一族：两处写法迟早漂成两种读数）。
+    /// </summary>
+    [Fact]
+    public void TheReadoutSentenceComesFromTheSamePlaceAsThePhaseSentence()
+    {
+        var vm = MethodBody(Code(ReadRepoFile(Vm)), "public void ShowDownloadProgress(DownloadProgress progress)");
+        Assert.Contains("UpdatePolicy.Describe(progress)", vm, StringComparison.Ordinal);
+        Assert.DoesNotContain("MB", vm, StringComparison.Ordinal);
+        Assert.DoesNotContain("FileSizeText", vm, StringComparison.Ordinal);
     }
 
     // ===== 措辞唯一出处：界面一个字都不抄 =====

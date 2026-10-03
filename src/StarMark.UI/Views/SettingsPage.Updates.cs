@@ -3,6 +3,7 @@ using System;
 using System.Threading;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using StarMark.Abstractions.Updates;
 using StarMark.Core.Updates;
 using StarMark.UI.Helpers;
 
@@ -24,6 +25,10 @@ public sealed partial class SettingsPage
     private bool _updateBusy;
     private bool _applyBusy;
     private CancellationTokenSource? _applyCts;
+
+    /// <summary>正在飞的字节读数只留最新那一条，加一把"已经排过队"的闩（见 <see cref="ShowDownloadProgress"/>）。</summary>
+    private DownloadProgress _latestProgress;
+    private bool _progressQueued;
 
     private async void UpdateCheck_Click(object sender, RoutedEventArgs e)
     {
@@ -71,7 +76,7 @@ public sealed partial class SettingsPage
         UpdateCheckButton.IsEnabled = false;
         try
         {
-            var result = await ViewModel.ApplyUpdateAsync(ShowApplyPhase, _applyCts.Token);
+            var result = await ViewModel.ApplyUpdateAsync(ShowApplyPhase, ShowDownloadProgress, _applyCts.Token);
             ViewModel.ShowApplyResult(result);
             if (result.IsHandedOff) App.MainWindow?.ExitForUpdateHandoff();
         }
@@ -99,6 +104,24 @@ public sealed partial class SettingsPage
     /// </summary>
     private void ShowApplyPhase(ApplyPhase phase)
         => DispatcherQueue.TryEnqueue(() => ViewModel.ShowApplyPhase(phase));
+
+    /// <summary>
+    /// 字节读数同一条规矩（批次 VW）：它是从传输层那条 <c>ConfigureAwait(false)</c> 的续接上叫上来的，
+    /// <b>不回到 UI 线程就是跨线程改绑定属性</b>。回 UI 之外还多做一件"合"：
+    /// 下载那一发每秒能报几十次，而这一行字只有最后一个数有人看得懂——
+    /// 排队时若已经压着一条没消费的读数，就把旧的换掉而不是攒成一串让界面闪。
+    /// </summary>
+    private void ShowDownloadProgress(DownloadProgress progress)
+    {
+        _latestProgress = progress;
+        if (_progressQueued) return;
+        _progressQueued = true;
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            _progressQueued = false;
+            ViewModel.ShowDownloadProgress(_latestProgress);
+        });
+    }
 
     private async void UpdateOpenPage_Click(object sender, RoutedEventArgs e)
     {

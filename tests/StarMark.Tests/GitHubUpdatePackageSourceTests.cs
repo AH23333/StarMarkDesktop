@@ -304,6 +304,139 @@ public sealed class GitHubUpdatePackageSourceTests : IDisposable
     }
 
     /// <summary>
+    /// 载荷那一发必须<b>把字节读数报出来</b>（批次 VW）。四个方向各判一次：
+    /// ① 有东西可报（一格都没有的那种坏，界面上只会永远停在"正在下载…"，别的格子全看不出来）；
+    /// ② 最后一次正好等于载荷长度（报的是<b>写到盘上的</b>字节，不是"读到的"）；
+    /// ③ 读数一格比一格多（跳步与倒退在用户侧读起来都像下载出了事）；
+    /// ④ 每一格的分母都只能是载荷那颗的长度——清单与签名那两条不报。
+    /// <para>故意用一发<b>比 64 KB 缓冲大几倍</b>的载荷：拿更小的一颗来测，复制循环一次就读完了，
+    /// "多格读数"这件事根本无从发生（第一版我就在这里踩空过一次）。</para>
+    /// </summary>
+    [Fact]
+    public async Task ThePackageDownloadReportsBytesWhileItGoes()
+    {
+        var big = new byte[300_000];
+        var seen = new List<DownloadProgress>();
+        using var transport = new FakeTransport(url => url == _addresses.PackageUrl
+            ? Response(HttpStatusCode.OK, big)
+            : Small(url));
+        using var source = new GitHubUpdatePackageSource(transport, () => _staging);
+
+        var result = await source.FetchAsync(_addresses, CancellationToken.None, seen.Add);
+
+        Assert.Equal(PackageFetchStatus.Fetched, result.Status);
+        Assert.True(seen.Count >= 2, $"读数只收到 {seen.Count} 格");
+        Assert.Equal(big.LongLength, seen[^1].BytesDone);
+        Assert.All(seen.Zip(seen.Skip(1), (a, b) => b.BytesDone > a.BytesDone), grew => Assert.True(grew));
+        Assert.All(seen, s => Assert.Equal(big.LongLength, s.BytesTotal));
+    }
+
+    /// <summary>
+    /// 节流的判据：<b>百分之一报一次</b>，不是"每块都报"（批次 VW）。
+    /// <para>拿一颗 100 KB 的载荷、对方声明 100 KB，再从 <paramref name="packageStreamProvider"/>
+    /// 那道缝里<b>每次只递 100 个字节</b>：读满要 1000 次。没有节流就是 1000 格（界面那一行字每秒刷几十次），
+    /// 按百分之一就是 100 格。这一格之所以能数出来，全靠那道缝——走 <c>HttpContent</c> 的正常路径
+    /// 一次就给 64 KB，"报多少格"这件事在小载荷上根本分不开（两道缝存在的理由，见类注释②）。</para>
+    /// </summary>
+    [Fact]
+    public async Task ReadoutsComeAboutOncePerPercentNotOncePerChunk()
+    {
+        const long total = 100_000;
+        var seen = new List<DownloadProgress>();
+        using var transport = new FakeTransport(url => url == _addresses.PackageUrl
+            ? Response(HttpStatusCode.OK, new byte[total])
+            : Small(url));
+        using var source = new GitHubUpdatePackageSource(transport, () => _staging,
+            (_, _) => new ValueTask<Stream>(new DripStream(total, 100)));
+
+        var result = await source.FetchAsync(_addresses, CancellationToken.None, seen.Add);
+
+        Assert.Equal(PackageFetchStatus.Fetched, result.Status);
+        Assert.Equal(100, seen.Count);                                   // 百分之一，不多不少
+        Assert.Equal(total, seen[^1].BytesDone);
+        Assert.All(seen, s => Assert.Equal(total, s.BytesTotal));
+    }
+
+    /// <summary>
+    /// 对方<b>不声明长度</b>的那一发（HTTP 里合法存在）：<b>收尾那一格必须是唯一的读数</b>，
+    /// 而那一格的分母是 null——界面上那句因此只报"已下多少"，不带百分比。
+    /// <para>这一格是"收尾报一次"那条动作<em>唯一</em>的证人：载荷比一节（1 MB）短时，
+    /// 过格那一支一次都不会走到，把它删掉别的格子全都不会红（本批台架就是这么抓出来的）。</para>
+    /// </summary>
+    [Fact]
+    public async Task AnUnlengthedPayloadStillReportsOnceAtTheEnd()
+    {
+        const long total = 200_000;
+        var seen = new List<DownloadProgress>();
+        using var transport = new FakeTransport(url =>
+        {
+            if (url != _addresses.PackageUrl) return Small(url);
+            var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Array.Empty<byte>()) };
+            response.Content.Headers.ContentLength = null;         // 明说"我不知道总共多少"
+            return response;
+        });
+        using var source = new GitHubUpdatePackageSource(transport, () => _staging,
+            (_, _) => new ValueTask<Stream>(new DripStream(total, 100)));
+
+        var result = await source.FetchAsync(_addresses, CancellationToken.None, seen.Add);
+
+        Assert.Equal(PackageFetchStatus.Fetched, result.Status);
+        Assert.Equal(new DownloadProgress(total, null), Assert.Single(seen));
+        Assert.DoesNotContain("%", UpdatePolicy.Describe(seen[0]), StringComparison.Ordinal);
+    }
+
+    /// <summary>比一个缓冲块还短的载荷只能报出一格——那一格也必须报，界面不该一个数字都拿不到。</summary>
+    [Fact]
+    public async Task EvenASubBufferPayloadReportsItsFinalReadout()
+    {
+        var seen = new List<DownloadProgress>();
+        using var transport = new FakeTransport(Route());
+        using var source = new GitHubUpdatePackageSource(transport, () => _staging);
+
+        var result = await source.FetchAsync(_addresses, CancellationToken.None, seen.Add);
+
+        Assert.Equal(PackageFetchStatus.Fetched, result.Status);
+        Assert.Equal(new DownloadProgress(PayloadBytes.LongLength, PayloadBytes.LongLength), seen[^1]);
+    }
+
+    /// <summary>回调为 null 是常态（检查那一条与冒烟都不传）：<b>那条路必须照样把包取回来，不许因为没人听就少走一步</b>。</summary>
+    [Fact]
+    public void NoCallbackMeansNoReadoutsAreProduced()
+    {
+        using var transport = new FakeTransport(Route());
+        using var source = new GitHubUpdatePackageSource(transport, () => _staging);
+
+        Assert.Equal(PackageFetchStatus.Fetched, Run(source).Status);
+    }
+
+    /// <summary>
+    /// 读数这一格的算术（<c>DownloadProgress</c>）。<b>在飞的任何一次都不许说 100%</b>：
+    /// 那一格一旦允许出现，界面就有一个"正在下载…"写着"下完了"的样子，
+    /// 而"下完"与"换好"是两件事（#234）。分母不知道时给 null，界面上那句就不带百分比——
+    /// <b>不许编一个分母把百分比凑出来</b>。
+    /// </summary>
+    [Theory]
+    [InlineData(0, 2000, 0)]           // 刚起步
+    [InlineData(1000, 2000, 50)]       // 一半
+    [InlineData(1980, 2000, 99)]       // 差 1% 到齐
+    [InlineData(2000, 2000, 99)]       // 真到齐也压着 99：这句话永远不许像结局
+    [InlineData(9000, 2000, 99)]       // 对方声明得比实际少（谎报的分母）：也只能 99，不报 450%
+    [InlineData(-5, 2000, 0)]          // 负数不往界面上交（取 0，不取 -1%）
+    public void InFlightReadoutsNeverClaimCompletion(long done, long total, long expectPercent)
+        => Assert.Equal(expectPercent, new DownloadProgress(done, total).Percent);
+
+    [Fact]
+    public void AnUnknownTotalGivesNoPercentAndReportsOneMegabyteAtATime()
+    {
+        Assert.Null(new DownloadProgress(5000, null).Percent);
+        Assert.Equal(DownloadProgress.UnknownTotalStep, new DownloadProgress(5000, null).StepBytes);
+        // 知道总长就按百分之一走；小于 100 字节时至少一格一颗，免得算出 0 变成"每个字节都报一次"
+        Assert.Equal(20, new DownloadProgress(0, 2000).StepBytes);
+        Assert.Equal(1, new DownloadProgress(0, 50).StepBytes);
+        Assert.Equal(DownloadProgress.UnknownTotalStep, new DownloadProgress(0, 0).StepBytes);
+    }
+
+    /// <summary>
     /// 时限挂在<b>每一次请求</b>上而不是挂在客户端上：这条链两档时限差 40 倍（小资产 15 秒、载荷 10 分钟），
     /// 混在一处就成了"清单也等十分钟"或"载荷永远下不完"（<c>AiHttp</c> 里同一条口径）。
     /// </summary>
@@ -408,6 +541,39 @@ public sealed class GitHubUpdatePackageSourceTests : IDisposable
             await Task.Yield();
             if (_left <= 0) throw new IOException("送到一半断了");
             var take = Math.Min(buffer.Length, (int)_left);
+            buffer.Span[..take].Fill(0);
+            _left -= take;
+            return take;
+        }
+    }
+
+    /// <summary>
+    /// 老老实实每次只交 <paramref name="chunk"/> 个字节、交满 <paramref name="total"/> 就结束的流。
+    /// <b>不为造故障，只为把"报多少格"这件事量出来</b>：正常那条 <c>HttpContent</c> 一次给 64 KB，
+    /// 在小载荷上"每块报一次"与"每一百分报一次"数出来是一样的，判据就成了空话。
+    /// </summary>
+    private sealed class DripStream(long total, int chunk) : Stream
+    {
+        private long _left = total;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        {
+            await Task.Yield();
+            ct.ThrowIfCancellationRequested();
+            if (_left <= 0) return 0;
+            var take = (int)Math.Min(buffer.Length, Math.Min(chunk, _left));
             buffer.Span[..take].Fill(0);
             _left -= take;
             return take;
