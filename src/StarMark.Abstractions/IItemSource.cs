@@ -86,7 +86,11 @@ public sealed class SearchFilter
     /// <summary>是否包含隐藏条目（默认排除）。</summary>
     public bool IncludeHidden { get; init; }
 
-    /// <summary>排序：relevance(默认，按 FTS 相关度) / recent / starred(最近 Star) / collected(最近收藏) / stars / name。</summary>
+    /// <summary>排序：relevance(默认，按 FTS 相关度) / recent / starred / collected(最近收藏) / stars / name。
+    /// <para><c>starred</c> 排的是 <c>extra_json.StarredAt</c>，而 GitHub 源今天把那颗<b>填成仓库最后一次 push
+    /// 时间</b>（不是"用户点 Star 的时间"，P-6）。因此展示这一档的地方必须说"推送"而不是"Star"——
+    /// <c>GitHubTruthInLabelingGateTests</c> 钉的就是这三环那条链。哪天真去取 starred_at 它会当场红，
+    /// 数据变准确的同一天才轮得到把标签改短。</para></summary>
     public string? Sort { get; init; }
 
     /// <summary>

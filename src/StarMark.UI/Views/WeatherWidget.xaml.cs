@@ -371,6 +371,14 @@ public sealed partial class WeatherWidget : UserControl
         if (string.IsNullOrWhiteSpace(input)) return;
 
         var matches = await s_client.SearchCityAsync(input.Trim(), 8, "zh", CancellationToken.None);
+        // 失败与"查无此城"分两句话说（P-11）：过去两者都是空列表，于是离线/超时那一次在界面上长成
+        // 「未找到「北京」」＝把网络问题报成用户拼错了城市名，人会去改一个字，而那趟根本没通。
+        // 措辞只说这一趟的事实＋下一步就在当前这颗按钮上（P-54：不给用户加步骤）。
+        if (matches is null)
+        {
+            CityBlock.Text = "没连上 Open-Meteo，再点一次试试";
+            return;
+        }
         if (matches.Count == 0)
         {
             CityBlock.Text = $"未找到「{input.Trim()}」";

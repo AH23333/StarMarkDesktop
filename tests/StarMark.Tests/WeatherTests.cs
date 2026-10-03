@@ -1,5 +1,6 @@
 #nullable enable
 using System.Globalization;
+using System.Net;
 using StarMark.Core.Widgets;
 using StarMark.Integrations.Weather;
 using Xunit;
@@ -481,5 +482,101 @@ public class WeatherTests
         {
             CultureInfo.CurrentCulture = original;
         }
+    }
+
+    // ── 城市搜索：<b>失败</b>与"查无此城"必须是两个返回值（P-11）──
+    //
+    // 本类开头那句"真正的网络请求不进单测"没被破：下面的假 handler 只在进程内把预设字节交回去，
+    // 一次都不出机器。它要钉的是过去那副 <c>catch { return []; }</c>——
+    // 超时/连不上/HTTP 非 200/JSON 读不懂，四种失败与"服务端真的一个都没匹配上"折叠成同一个空数组，
+    // 于是界面那句「未找到「北京」」把网络问题报成了用户拼错城市名（改拼写正是不该让用户走的那一步，P-54）。
+
+    private sealed class Stub : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _respond;
+        public int Requests { get; private set; }
+
+        public Stub(Func<HttpRequestMessage, HttpResponseMessage> respond) => _respond = respond;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Requests++;
+            return Task.FromResult(_respond(request));
+        }
+    }
+
+    private static HttpResponseMessage Json(string body)
+        => new(HttpStatusCode.OK) { Content = new StringContent(body) };
+
+    [Fact]
+    public async Task SearchCity_TransportFailure_ReturnsNull_InsteadOfAnEmptyList()
+    {
+        // 断的是那一侧：抛异常＝"没通"，只能回 null；回 [] 就等于在UI 上说"你没搜到是因为名字不对"。
+        var handler = new Stub(_ => throw new HttpRequestException("模拟：连不上 open-meteo.com"));
+        using var client = new OpenMeteoClient(new HttpClient(handler));
+
+        Assert.Null(await client.SearchCityAsync("北京"));
+        Assert.Equal(1, handler.Requests);
+    }
+
+    [Fact]
+    public async Task SearchCity_HttpServerError_ReturnsNull()
+    {
+        var handler = new Stub(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        using var client = new OpenMeteoClient(new HttpClient(handler));
+
+        Assert.Null(await client.SearchCityAsync("北京"));
+    }
+
+    [Fact]
+    public async Task SearchCity_UnparsableBody_ReturnsNull_NotEmpty()
+    {
+        // 200 但正文不是 JSON：这也是"没通"（服务端坏了），不许被读成"没有这个城市"。
+        var handler = new Stub(_ => Json("{ not json"));
+        using var client = new OpenMeteoClient(new HttpClient(handler));
+
+        Assert.Null(await client.SearchCityAsync("北京"));
+    }
+
+    [Fact]
+    public async Task SearchCity_ResponseWithoutResultsArray_ReturnsNull_NotEmpty()
+    {
+        // 200 但响应里没有 results 数组（服务端改版、或回了一张 HTML 错误页）：这也是"没通"。
+        // 批次 VP 的反向台架抓到这一臂当时仍 return []——它与上面那三臂是同一个病，只是藏在 if 里而不是 catch 里。
+        foreach (var body in new[] { "{}", """{"results":{}}""", """{"results":"oops"}""" })
+        {
+            using var client = new OpenMeteoClient(new HttpClient(new Stub(_ => Json(body))));
+            Assert.Null(await client.SearchCityAsync("北京"));
+        }
+    }
+
+    [Fact]
+    public async Task SearchCity_GenuinelyNoMatches_ReturnsEmptyList_AndIsNotNull()
+    {
+        // 这一格与上面三格是<b>同一枚判据的两边</b>：只有它回 []、其余回 null，
+        // "未找到"与"没连上"才分得开。把 null 与 [] 写反（或干脆退回旧形状）必须当场红。
+        var handler = new Stub(_ => Json("""{"results":[]}"""));
+        using var client = new OpenMeteoClient(new HttpClient(handler));
+
+        var matches = await client.SearchCityAsync("不存在的城市名");
+        Assert.NotNull(matches);
+        Assert.Empty(matches!);
+    }
+
+    [Fact]
+    public async Task SearchCity_MapsResults_AndKeepsTheCancelArmThrowing()
+    {
+        var handler = new Stub(_ => Json("""{"results":[{"id":1,"name":"北京","country":"中国","latitude":39.9,"longitude":116.4}]}"""));
+        using var client = new OpenMeteoClient(new HttpClient(handler));
+
+        var matches = await client.SearchCityAsync("北京");
+        Assert.Single(matches!);
+        Assert.Equal("北京", matches![0].Name);
+
+        // 取消不是失败：它要上抛，调用方才不会把"用户按停"记成"Open-Meteo 挂了"
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => client.SearchCityAsync("北京", 8, "zh", cts.Token));
     }
 }

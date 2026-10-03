@@ -1,4 +1,5 @@
 #nullable enable
+using StarMark.Abstractions;
 using StarMark.Abstractions.Trending;
 using System.Net;
 using System.Net.Http;
@@ -37,9 +38,19 @@ public sealed class GitHubClient : IDisposable
     private readonly int _perPage;
 
     /// <summary>
+    /// 一轮最多拉这么多条 star（<b>唯一出处</b>：翻页封顶、裁回、日志里那句"上限"都读它）。
+    /// <para>它是个"防跑飞"的预算，不是产品口径——而<b>用到它就该露一声</b>：
+    /// 旧写法悄悄裁掉真数据、还把 ETag 留在原地，于是下一次同步 304 短路，被裁掉的那些<b>永远拉不到</b>
+    /// （P-57；界面上那句"同步完成"因此对超限用户不成立＝P-58）。今天裁的时候复位检查点＋记一条 Warn，
+    /// "5000 这个上限该不该存在／要不要做成可配"仍是待拍项，本批不擅自扩。</para>
+    /// </summary>
+    internal const int MaxStarredItems = 5000;
+
+    /// <summary>
     /// 条件请求缓存的 ETag（P1-4）。非 null 时首页请求带 If-None-Match，命中 304 直接短路整轮拉取。
     /// <para><b>不变式：它只代表"完整拉完的一轮"</b>——页 1 的 ETag 描述的是全量列表，中途取消/失败的
     /// 一轮若也把它前移，下一轮就会被 304 短路而永远补不回缺失部分（见 <see cref="GetAllStarredAsync"/>）。</para>
+    /// <para>被 <see cref="MaxStarredItems"/> 掐断的一轮<b>同属"没拉完"</b>，走的是同一条复位（P-57 那个漏臂）。</para>
     /// </summary>
     public string? CachedETag { get; set; }
 
@@ -140,7 +151,8 @@ public sealed class GitHubClient : IDisposable
         var page = 1;
         // 安全上限按"条目数"而非"固定页数"封顶。过去 maxPages 固定 50，使真实上限 = 50 × _perPage，
         // AZ-3 让 _perPage 可随 PageSize 调小后，PageSize=10 会把可拉取量从宣称的 5000 静默砍到 500。
-        const int maxItems = 5000;  // 安全上限：5000 仓库已远超常见用户的 starred 数
+        const int maxItems = MaxStarredItems;
+        var truncated = false;
         try
         {
             while (true)
@@ -150,7 +162,11 @@ public sealed class GitHubClient : IDisposable
                 if (pageList.Count == 0) break;
                 all.AddRange(pageList);
                 if (pageList.Count < _perPage) break;   // 末页：返回数不足一页
-                if (all.Count >= maxItems) break;        // 条目预算封顶
+                if (all.Count >= maxItems)              // 条目预算封顶：这一轮**不是**完整轮（P-57）
+                {
+                    truncated = true;
+                    break;
+                }
                 page++;
             }
         }
@@ -160,6 +176,15 @@ public sealed class GitHubClient : IDisposable
             throw;
         }
         if (all.Count > maxItems) all.RemoveRange(maxItems, all.Count - maxItems);
+        if (truncated)
+        {
+            // 被预算掐掉的一轮与取消的一轮是同一形状（上面那个 catch 已经管着后者）：
+            // 页 1 带回的 ETag 描述的是**全量**列表，把它留在原地，下一轮就会 If-None-Match 命中 304 直接返回空
+            // ⇒ 第 5001 条起连"再试一次"的机会都没有。复位之后至少每轮都重拉前 5000 条（HTTP 请求数与今天一样）。
+            CachedETag = etagBefore;
+            StarLog.Warn($"GitHub star 数已达 {maxItems} 条上限，本轮只导入前 {maxItems} 条，其余未拉取"
+                         + "（不是同步失败：下一次同步会重拉这一批）");
+        }
         return all;
     }
 

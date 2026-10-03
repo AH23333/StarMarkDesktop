@@ -77,7 +77,13 @@
             <ComboBox x:Name="SortCombo" MinWidth="90" SelectedIndex="0"
                       SelectionChanged="SortCombo_SelectionChanged">
                 <ComboBoxItem Content="最近" Tag="recent"/>
-                <ComboBoxItem Content="最近 Star" Tag="starred"/>
+                <!-- 措辞即判据（P-6）：这一档排的是「仓库最后一次 git push」——
+                     `GitHubSource.MapToItem` 把 `StarredAt` 填成 `repo.PushedAt`，
+                     而 GitHub 要换 `Accept: …star+json` 才拿得到真正的"我点 Star 的时间"。
+                     原来那句"最近 Star"对老仓库被新近 Star 的情形是假话（它排在很后面）。
+                     Tag 仍是 `starred`：那是数据层的排序键，被 `ItemRepositoryTests` 钉着，不动。 -->
+                <ComboBoxItem Content="Star 最近推送" Tag="starred"
+                              ToolTipService.ToolTip="按仓库最后一次 push 排（不是“我点 Star 的时间”——那个值 API 默认不回传）"/>
                 <ComboBoxItem Content="最近收藏" Tag="collected"/>
                 <ComboBoxItem Content="Stars 数" Tag="stars"/>
                 <ComboBoxItem Content="名称" Tag="name"/>

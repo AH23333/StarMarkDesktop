@@ -161,13 +161,115 @@ public sealed class CredentialInputGateTests
 
     /// <summary>打码不是只把界面挡住：<b>那一条链上任何一环都不许把密码写进日志</b>。
     /// （凭据落盘的账在 P-30，本格只管这一族新加的那条路——改成 code-behind 之后，
-    /// 代码里读密码的地方从"没有"变成"有"，所以这条要当场跟上。）</summary>
+    /// 代码里读密码的地方从"没有"变成"有"，所以这条要当场跟上。）
+    /// <para>与 <see cref="NoLogLineAnywhereCarriesACredentialValue"/> 是定点与普查两份证人：同一把尺子
+    /// （<see cref="LogCallsCarryingCredentialValues"/>），定点那份红的时候能直接说出是哪一页，
+    /// 普查那份保证"把这页改名或搬家"也躲不掉。</para></summary>
     [Fact]
     public void NoLogLineReadsAPasswordField()
+        => Assert.Empty(LogCallsCarryingCredentialValues(Code(ReadRepoPartials(PageCode))));
+
+    // ────────── P-30 的两张"净结论"证人（批次 VP）──────────
+    //
+    // CC 批普查出"全仓无一处把 Token 值写进日志"与"备份载荷不含 GitHubOptions"，两句都记进了账本，
+    // 但**当时没有任何一格会替它们红**——那正是坑表 #231 那一族（"已修复"没有证人就会被改掉第二次）。
+    // 这两格把它们从"读过一遍"变成"改坏了会响"。
+
+    /// <summary>凭据<b>取值</b>的读法（带点号，所以中文说明里写"Token"两个字不会被误伤）。
+    /// <para>表里同时收 <c>.GithubToken</c> 与 <c>.AiApiKey</c>：属性名带前缀的那两颗是真凭据，
+    /// 而 <c>\w*Token</c> 那种松口径会把 <c>.TotalToken</c>／<c>.AiTokenBudget</c>／<c>.ContinuationToken</c>
+    /// 一起卷进来（那些是<b>计数</b>，不是秘密）——误伤一次的代价是天天红，最后被人整个绕过（#144）。
+    /// 所以这里按<b>本仓实际存在的凭据属性名</b>逐颗登记，而不是按字根猜。</para></summary>
+    private static readonly string[] CredentialValueMarks =
+        [".Token", ".Password", ".ApiKey", ".Secret", ".Credential", ".GithubToken", ".AiApiKey"];
+
+    /// <summary>字段名是不是凭据形状（与 <see cref="CredentialNameMarks"/> 同一批标记）。</summary>
+    private static bool LooksLikeCredential(string name)
+        => CredentialNameMarks.Any(mark => name.Contains(mark, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// 从每一处 <c>StarLog.Xxx(</c> 起<b>按括号配对切出实参表</b>，看里面有没有凭据取值。
+    /// <para>为什么不是"扫当前行"：日志文案折行是常见写法，而那个<b>值往往就落在续行上</b>
+    /// （<c>StarLog.Warn($"…"{exn} + options.Token)</c>）。按行数会把这种形状整个放过——
+    /// 守门只认一行，等于教人把违规写成两行（#54 那一族：判据要钉在<b>会出事的那一处</b>）。</para>
+    /// <para>与 <c>FormatScanner.ToStringArgumentLists</c> 同一简化：括号按字面配对，因此串里出现
+    /// 落单的 <c>)</c> 时会<b>少读</b>而不是多读。宁可漏一条极端写法，也不要天天假失败逼人放宽判据（#123/#144）。</para>
+    /// </summary>
+    private static List<string> LogCallsCarryingCredentialValues(string code)
     {
-        var offenders = Code(ReadRepoPartials(PageCode)).Split('\n')
-            .Where(l => l.Contains("StarLog", StringComparison.Ordinal) && l.Contains(".Password", StringComparison.Ordinal))
-            .ToList();
-        Assert.Empty(offenders);
+        var hits = new List<string>();
+        for (var at = code.IndexOf("StarLog.", StringComparison.Ordinal); at >= 0;
+             at = code.IndexOf("StarLog.", at + "StarLog.".Length, StringComparison.Ordinal))
+        {
+            var open = code.IndexOf('(', at);
+            if (open < 0) break;
+            var depth = 0;
+            var end = open;
+            for (; end < code.Length; end++)
+            {
+                if (code[end] == '(') depth++;
+                else if (code[end] == ')' && --depth == 0) break;
+            }
+            var args = code[open..Math.Min(end + 1, code.Length)];
+            if (!CredentialValueMarks.Any(m => args.Contains(m, StringComparison.Ordinal))) continue;
+            hits.Add($"第 {1 + code.Take(at).Count(c => c == '\n')} 行：{args.Replace('\n', ' ').Replace('\r', ' ').Trim()}");
+        }
+        return hits;
+    }
+
+    /// <summary>先自证这颗尺子两头都灵：会咬住真正的取值（<b>单行与续行两种形状都算</b>），
+    /// 也不会把"名字里没有凭据字样"的字段冤枉进来。</summary>
+    [Fact]
+    public void TheCredentialLogScannerActuallyBites()
+    {
+        Assert.Single(LogCallsCarryingCredentialValues("StarLog.Warn($\"Token 被拒：{options.Token}\");"));
+        // 反规避：值写在续行上一样要抓到——按行数的那份尺子在这一格就会假绿
+        Assert.Single(LogCallsCarryingCredentialValues("StarLog.Warn(\"Token 被拒：\"\n    + options.Token);"));
+        // 属性名带前缀的那一颗也得认（ViewModel.GithubToken 才是设置页今天真正的凭据读法）
+        Assert.Single(LogCallsCarryingCredentialValues("StarLog.Info($\"当前 Token = {ViewModel.GithubToken}\");"));
+        // 口径不许宽到把「计数」当凭据：那几颗名字里都有 token，但打出去的是一个数
+        Assert.Empty(LogCallsCarryingCredentialValues("StarLog.Info($\"月度用量 {usage.TotalToken} / 上限 {budget.AiTokenBudget}\");"));
+        // 说明性文字里出现"Token"三个字不算（那是人话，不是值）
+        Assert.Empty(LogCallsCarryingCredentialValues("StarLog.Warn(\"github.json 里没有配置 Token，同步跳过\");"));
+        // 注释里引用一句旧写法也不算（守门读的是抹掉注释之后的那一份，与上面几格同一口径）
+        Assert.Empty(LogCallsCarryingCredentialValues(Code("// StarLog.Warn(options.Token);\nStarLog.Info(\"配置已读取\");")));
+        Assert.True(LooksLikeCredential("GithubToken") && !LooksLikeCredential("ExportedAt"));
+    }
+
+    /// <summary>
+    /// 全仓（<c>src/</c> 下每一颗 .cs）都不许有"日志调用里读凭据取值"的形状。
+    /// <para>为什么扫整仓而不是这一页：CC 那条普查说的就是"全仓零处"，只守设置页等于把其余几百个文件
+    /// 当作不会有人动——而加一行日志是"顺手"级别的改动。</para>
+    /// </summary>
+    [Fact]
+    public void NoLogLineAnywhereCarriesACredentialValue()
+    {
+        var scanned = 0;
+        var offenders = new List<string>();
+        foreach (var (path, text) in ReadRepoUnder("src"))
+        {
+            offenders.AddRange(LogCallsCarryingCredentialValues(Code(text)).Select(h => $"{path} {h}"));
+            scanned++;
+        }
+        Assert.True(scanned >= 100, $"只扫了 {scanned} 个源文件——普查路径错了，守门不许白过");
+        Assert.True(offenders.Count == 0, "有日志调用把凭据取值带出去了：\n" + string.Join("\n", offenders));
+    }
+
+    /// <summary>
+    /// 备份档的<b>载荷形状</b>里不许出现凭据字段：用户会把这个 <c>.json</c> 发到群里、传网盘、
+    /// 交给别人排查——"顺手把设置也备进去"那一步一旦做了，泄露的就是活的 GitHub 凭据。
+    /// 今天它不含 <c>GitHubOptions</c>（CC 已核实），这一格钉的是"以后也别加"。
+    /// </summary>
+    [Fact]
+    public void TheBackupPayloadHasNoCredentialShapedField()
+    {
+        var envelope = Code(ReadRepoPartials("src/StarMark.Core/Backup/BackupEnvelope.cs"));
+        var fields = Regex.Matches(envelope, @"public\s+[\w\?<>,\s]+?\s(\w+)\s*\{\s*get;")
+            .Select(m => m.Groups[1].Value).ToList();
+        // 锚点自证：这个文件今天确实有 8 个以上的序列化字段，认不出来就是正则死了而非"干净"
+        Assert.True(fields.Count >= 8, $"只从 BackupEnvelope.cs 认出 {fields.Count} 个字段——锚点失效，守门不许白过");
+        Assert.True(fields.Contains("Checksum") && fields.Contains("WidgetsJson"),
+            "认出来的字段里没有 Checksum/WidgetsJson ⇒ 扫描范围不对，'没有凭据字段'这句话就没证人");
+        Assert.DoesNotContain(fields, LooksLikeCredential);
     }
 }

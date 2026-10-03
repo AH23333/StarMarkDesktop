@@ -1,4 +1,5 @@
 #nullable enable
+using StarMark.Abstractions;
 using System.Globalization;
 using System.Net.Http;
 using System.Text.Json;
@@ -268,8 +269,16 @@ public sealed class OpenMeteoClient : IDisposable
                $"&timezone=auto&forecast_days={forecastDays}";
     }
 
-    /// <summary>按城市名查询（中文可直接查）。失败时返回空列表，绝不把异常冒到 UI 线程。</summary>
-    public async Task<List<WeatherCity>> SearchCityAsync(
+    /// <summary>
+    /// 按城市名查询（中文可直接查）。<b>失败返回 <c>null</c>，"服务端确实一个都没匹配上"返回空列表</b>——
+    /// 两者过去被同一句 <c>catch { return []; }</c> 折叠成一个空数组，于是离线／超时／Open-Meteo 抖动的那一次，
+    /// 界面上长成「未找到「北京」」＝把网络问题说成用户拼错了城市名，而"改拼写再试"恰好是不该让用户做的那一步
+    /// （P-11；P-54 那一族：失败要说得出是谁失败的）。形状照兄弟 <see cref="GetReportAsync"/>（失败也是 null）。
+    /// <para>"没通"一共有三张脸，全部回 <c>null</c>：传输/超时、HTTP 非 200、200 但响应里没有 <c>results</c> 数组。
+    /// <c>{"results":[]}</c> 是第四张脸，也是唯一一张"服务端答上了、只是没人匹配上"——它回空列表，
+    /// 界面据此才配说「未找到」。空查询不算搜过，同样回空列表。</para>
+    /// </summary>
+    public async Task<List<WeatherCity>?> SearchCityAsync(
         string query, int count = 8, string language = "zh", CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(query)) return [];
@@ -278,7 +287,10 @@ public sealed class OpenMeteoClient : IDisposable
             var json = await _http.GetStringAsync(BuildGeocodingUrl(query, count, language), ct);
             using var doc = JsonDocument.Parse(json);
             if (!doc.RootElement.TryGetProperty("results", out var arr) ||
-                arr.ValueKind != JsonValueKind.Array) return [];
+                arr.ValueKind != JsonValueKind.Array)
+                // 200 但响应里没有 results 数组：这是服务端换了形状或回了一张错误页，与「一个城市都没匹配上」
+                // 不是一回事——把它读成空列表，界面就又只能说"你名字写错了"（P-11 剩下的那一臂）。
+                return null;
 
             var list = new List<WeatherCity>();
             foreach (var e in arr.EnumerateArray())
@@ -300,9 +312,11 @@ public sealed class OpenMeteoClient : IDisposable
         {
             throw;
         }
-        catch
+        catch (Exception ex)
         {
-            return [];
+            // 日志留原因（超时？连不上？HTTP 非 200？），界面留出口（WeatherWidget 那两个分支）
+            StarLog.Warn($"[天气] 城市搜索没通：{ex.GetType().Name} — 这不是「{query}」这个名字写错了");
+            return null;
         }
     }
 

@@ -164,6 +164,28 @@ public sealed class GitHubCancelSafetyTests : IDisposable
         Assert.Equal(PriorEtag, client.CachedETag);
     }
 
+    /// <summary>
+    /// <b>被条目预算掐掉的一轮，与取消的一轮是同一形状</b>（P-57 那个漏臂）。
+    /// <para>旧写法封顶时 <c>break</c> 之后照样返回"看起来完整"的 5000 条，而页 1 早已把新 ETag 写进
+    /// <see cref="GitHubClient.CachedETag"/> ⇒ 下一次同步首页 If-None-Match 命中 304 直接返回空，
+    /// 第 5001 条起<b>连"再试一次"的机会都没有</b>，日志里也没有任何"被截断"的痕迹。
+    /// 上限本身该不该存在是产品口径（仍挂账），但<b>用到它就必须说出来、并且不许把检查点留在原地</b>——
+    /// 这条不需要新裁决，它是本文件开头那条既有不变式的另一臂。</para>
+    /// </summary>
+    [Fact]
+    public async Task TruncatedByItemBudget_DoesNotAdvanceCachedETag()
+    {
+        var handler = new FakeGitHub(perPage: 100);   // 每页都满 ⇒ 永远翻不到末页，只能被 5000 预算掐停
+        using var client = new GitHubClient(Options(), new HttpClient(handler)) { CachedETag = PriorEtag };
+
+        var all = await client.GetAllStarredAsync(CancellationToken.None);
+
+        Assert.Equal(GitHubClient.MaxStarredItems, all.Count);
+        Assert.Equal(GitHubClient.MaxStarredItems / 100, handler.Requests);   // 恰好翻到封顶那一页
+        Assert.Equal(PriorEtag, client.CachedETag);
+        Assert.NotEqual(FreshEtag, client.CachedETag);
+    }
+
     [Fact]
     public async Task CompletedPagination_AdvancesCachedETag()
     {
