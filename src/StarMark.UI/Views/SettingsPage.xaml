@@ -264,6 +264,16 @@
                                     <Button x:Name="UpdateOpenPageButton" Content="打开下载页" Click="UpdateOpenPage_Click"
                                             Style="{StaticResource SecondaryButton}" Visibility="Collapsed"/>
                                 </StackPanel>
+                                <!-- 这一版的更新说明（批次 VX）：正文由对方写、只在真的问过一次的这一场里给看，
+                                     不落设置档（所以重开程序这一格是收着的，再点一次「立即检查」就回来）。
+                                     排在按钮之后：别让刚点过的那一排跟着长高往下跳。 -->
+                                <Expander x:Name="UpdateNotesExpander" Header="这一版的更新说明" Visibility="Collapsed"
+                                          HorizontalAlignment="Stretch">
+                                    <ScrollViewer MaxHeight="260" VerticalScrollBarVisibility="Auto">
+                                        <TextBlock Text="{x:Bind ViewModel.ReleaseNotesText, Mode=OneWay}"
+                                                   Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                                    </ScrollViewer>
+                                </Expander>
                             </StackPanel>
                         </Border>
                     </controls:ColumnFlowPanel>

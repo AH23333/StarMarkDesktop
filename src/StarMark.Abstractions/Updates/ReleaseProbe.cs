@@ -16,13 +16,19 @@ namespace StarMark.Abstractions.Updates;
 /// <param name="Tag">发布标签（GitHub 惯例形如 <c>v1.1.0</c>）——版本比较与那句话都只读这一格。</param>
 /// <param name="Name">发布标题，可空。<b>只用于展示，绝不拿来当版本号</b>（缺 <c>tag_name</c> 时按"读不懂"处理）。</param>
 /// <param name="Prerelease">是不是预发布。</param>
-/// <param name="PublishedUtc">发布时间，取不到为 null。
+/// <param name="PublishedUtc">发布时间，取不到为 null。</param>
+/// <param name="Body">对方写的那一版说明文字（GitHub 的 <c>body</c>，markdown）。可空。
+/// <para><b>它是给人读的材料，不是可执行的东西</b>：进屏幕前必须先过 Core 那一侧的收敛
+/// （见 <c>StarMark.Core.Updates.ReleaseNotes</c>），而且<b>永远不落设置档</b>——
+/// 一段由外部服务器说了算、长度不定的自由文本一旦进了设置文件，就会被自动备份与同步一起带走，
+/// 还会在下一版发布后继续躺在档里冒充"这一版的说明"。它只活在这一次检查的答复里。</para>
 /// <para><b>这里刻意没有 <c>Url</c> 一格</b>：对方还会回一个 <c>html_url</c>，而那个串是远端说了算的字符串。
 /// 检查更新唯一往屏幕外走的一步是"用浏览器打开发布页"，把一个外部服务器给的地址直接交给系统去开，
 /// 等于让它在"你的应用有新版本"这句话的授权下换掉落地站点。发布页地址由本程序按<b>配置里的仓库</b>自己拼
 /// （<c>UpdatePolicy.ReleasePageUrl</c>），远端那个字段从解析那一步起就不进任何数据结构。</para>
 /// </param>
-public sealed record RemoteRelease(string Tag, string? Name, bool Prerelease, DateTimeOffset? PublishedUtc);
+public sealed record RemoteRelease(string Tag, string? Name, bool Prerelease, DateTimeOffset? PublishedUtc,
+    string? Body = null);
 
 /// <summary>
 /// 一次探测的<b>结局分类</b>。<b>为什么要有这个枚举而不是一个异常</b>：

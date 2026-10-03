@@ -47,9 +47,17 @@ public sealed record UpdateState(
 /// <see cref="PageUrl"/> 是界面那颗「打开下载页」要用的地址——<b>由 Core 按配置里的仓库拼出来</b>，
 /// 不是远端回的那条 <c>html_url</c>（理由见 <see cref="UpdatePolicy.ReleasePageUrl"/>）。
 /// </summary>
+/// <param name="Notes">这一版说明的<b>可读文本</b>（已过 <see cref="ReleaseNotes.Clean"/>）。
+/// <para>两种 null 都要分得清：<b>不是"有新版"那一格就没有</b>（在"已经最新"那一格摊开下一版的改动，
+/// 读的人会以为那些改动已经在自己机器上），而"有新版但对方没写说明"也是 null——后者界面要收起那一格，
+/// 不能摆一个点开是空的折叠区。</para>
+/// <para><b>它只活在这一次答复里，绝不进设置档</b>（<see cref="UpdateState"/> 没有对应那一格）：
+/// 一段外部服务器说了算、长度不定的自由文本一旦落盘，就会被自动备份与同步一起带走，
+/// 并且在新版发布之后继续冒充"这一版的说明"。代价是重启程序后这一格空着——那是可以接受的，
+/// 因为重新问一次的出口就在同一张卡上（「立即检查」）。有闸门钉着这条边界。</param>
 public sealed record UpdateReport(
     UpdateVerdict Verdict, string? RemoteTag, string PageUrl,
-    DateTimeOffset CheckedUtc, bool Announced, string Text);
+    DateTimeOffset CheckedUtc, bool Announced, string Text, string? Notes = null);
 
 /// <summary>
 /// 检查更新的编排：<b>问 → 判 → 记 → （只在必要时）出声</b>（批次 UE）。
@@ -104,13 +112,18 @@ public sealed class UpdateService
         }
     }
 
-    /// <summary>上次留下的那条答复（只为界面显示；<b>不联网</b>——打开设置页不该顺手发一个请求）。</summary>
+    /// <summary>
+    /// 上次留下的那条答复（只为界面显示；<b>不联网</b>——打开设置页不该顺手发一个请求）。
+    /// <para>这一份是从档里重算的，所以 <see cref="UpdateReport.Notes"/> 必然是 null：正文不落盘。
+    /// 界面那一格"这一版的更新说明"因此只在真的问过一次的会话里出现。</para>
+    /// </summary>
     public UpdateReport? LastReport()
     {
         var stored = _state.Read();
         if (stored.LastVerdict is not { } verdict) return null;
         var release = stored.LastRemoteTag is { Length: > 0 } tag
             ? new RemoteRelease(tag, null, false, null) : null;
+        // 这一份没有 Notes 那一格可填：正文不落盘，档里也没有它（见 UpdateReport.Notes）。
         return new UpdateReport(verdict, stored.LastRemoteTag, PageUrl(stored.LastRemoteTag),
             stored.LastProbeUtc ?? DateTimeOffset.MinValue, Announced: false,
             UpdatePolicy.Describe(verdict, release, LocalText()));
@@ -188,11 +201,14 @@ public sealed class UpdateService
         _state.Write(updated);
 
         var text = UpdatePolicy.Describe(verdict, release, local);
+        // 说明文字只有"确实有一版更新"这一格才给：在"已经最新"那一格摊开这一版的改动，
+        // 读的人会以为那些改动已经在自己机器上了（与那颗下载按钮同一判据，不在两处各判一次）。
+        var notes = UpdatePolicy.HasDownloadableRelease(verdict) ? ReleaseNotes.Clean(release?.Body) : null;
         StarLog.Info($"[更新] {verdict}：{text}（问的仓库 {repository}，本机 {local ?? AppVersion.Unknown}"
             + (release is null ? "" : $"，远端 {release.Tag}")
             + (probe.Detail is null ? "" : $"，对方补话：{probe.Detail}") + "）");
         return new UpdateReport(verdict, release?.Tag, UpdatePolicy.ReleasePageUrl(repository, release?.Tag),
-            now, showCard, text);
+            now, showCard, text, notes);
     }
 
     private string? LocalText()

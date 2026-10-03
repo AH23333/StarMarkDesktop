@@ -37,6 +37,7 @@ public sealed partial class SettingsPage
         UpdateCheckButton.Content = "正在问…";
         UpdateOpenPageButton.Visibility = Visibility.Collapsed;
         UpdateApplyButton.Visibility = Visibility.Collapsed;
+        UpdateNotesExpander.Visibility = Visibility.Collapsed;   // 同一批：上一发的正文也不许替这一发承诺
         try
         {
             await ViewModel.CheckForUpdatesAsync();
@@ -46,6 +47,8 @@ public sealed partial class SettingsPage
                 UpdateApplyButton.Visibility = Visibility.Visible;
                 UpdateOpenPageButton.Visibility = Visibility.Visible;
             }
+            // 这一格跟着"这一次真带回了可读正文"走，不跟着"有没有新版"走：对方没写说明时点开是空的。
+            if (ViewModel.HasReleaseNotes) UpdateNotesExpander.Visibility = Visibility.Visible;
         }
         catch (Exception ex)
         {

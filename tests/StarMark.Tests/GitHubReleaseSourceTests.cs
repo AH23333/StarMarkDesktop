@@ -80,6 +80,37 @@ public sealed class GitHubReleaseSourceTests
         Assert.DoesNotContain("javascript", result.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// 说明文字（<c>body</c>）<b>逐字带回来，在这里一个字都不清</b>（批次 VX）。
+    /// 清 markdown 是 Core 那一处的事：抓取器清一次、编排再清一次，同一份正文就有两副样子，
+    /// 而"屏幕上读到的是哪一副"没人说得清。
+    /// </summary>
+    [Fact]
+    public async Task TheReleaseBodyTravelsOutVerbatimForTheCoreSideToClean()
+    {
+        var handler = new FakeHandler { Respond = _ => Json("{\"tag_name\":\"v1.1.0\",\"body\":\"## 修了两件事\\n- 那条**不再**丢窗口\"}") };
+
+        var result = await new GitHubReleaseSource(null, handler).ProbeAsync("a/b");
+
+        Assert.Equal("## 修了两件事\n- 那条**不再**丢窗口", result.Release!.Body);
+    }
+
+    /// <summary>没写、写了 null、写成了别的类型——三种都是"没有正文"，不许凑一个出来。</summary>
+    [Theory]
+    [InlineData("{\"tag_name\":\"v1.1.0\"}")]
+    [InlineData("{\"tag_name\":\"v1.1.0\",\"body\":null}")]
+    [InlineData("{\"tag_name\":\"v1.1.0\",\"body\":4096}")]
+    [InlineData("{\"tag_name\":\"v1.1.0\",\"body\":[\"一行\",\"两行\"]}")]
+    public async Task ABodyThatIsNotTextIsNotGuessedIntoOne(string body)
+    {
+        var handler = new FakeHandler { Respond = _ => Json(body) };
+
+        var result = await new GitHubReleaseSource(null, handler).ProbeAsync("a/b");
+
+        Assert.Equal(ReleaseProbeStatus.Found, result.Status);   // 读不到正文不影响"问到了哪一版"
+        Assert.Null(result.Release!.Body);
+    }
+
     /// <summary>没配凭据就<b>根本不发 Authorization</b>：这条功能匿名可读，凭据不是必需品。</summary>
     [Fact]
     public async Task NoTokenMeansNoAuthorizationHeaderAtAll()

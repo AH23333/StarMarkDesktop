@@ -30,6 +30,14 @@ public partial class SettingsPageViewModel
 
     private bool _suppressUpdateApply;
 
+    /// <summary>
+    /// <b>这一次会话里真问过的那一发</b>（批次 VX）。只有它带着说明正文——<see cref="UpdateService.LastReport"/>
+    /// 那一读是<b>从设置档重算的</b>，而正文不落盘（理由写在 <see cref="UpdateReport.Notes"/>），
+    /// 所以重启后进这一屏看到的是同一句话、没有那一格折叠区。
+    /// <para>界面因此不许把这一格当"上一次检查的存档"读：它是这一次答复的一部分，与那两颗出口按钮同一批。</para>
+    /// </summary>
+    private UpdateReport? _thisSessionReport;
+
     /// <summary>本机版本号。读不到就照实说"未知"——写 0.0.0 会让界面看着像一个很旧的版本。</summary>
     public string LocalVersionText => AppVersion.LocalDisplay;
 
@@ -53,8 +61,27 @@ public partial class SettingsPageViewModel
 
     private static UpdateService Updates() => App.Services.GetRequiredService<UpdateService>();
 
-    /// <summary>问一次（他点了「立即检查」）。手动那一发绕过节奏，但同一个版本仍然只提醒一次。</summary>
-    public Task<UpdateReport> CheckForUpdatesAsync() => Updates().CheckAsync(manual: true);
+    /// <summary>问一次（他点了「立即检查」）。手动那一发绕过节奏，但同一个版本仍然只提醒一次。
+    /// 回来的那一发顺手留在这一场里：<b>只有它带着这一版的说明正文</b>（批次 VX）。</summary>
+    public async Task<UpdateReport> CheckForUpdatesAsync()
+    {
+        var report = await Updates().CheckAsync(manual: true);
+        _thisSessionReport = report;
+        return report;
+    }
+
+    /// <summary>
+    /// 这一版的说明文字（<b>界面只读，不改</b>：markdown 的收敛在 Core 那一处，
+    /// 这里再 <c>Replace</c> 一次就是开出第二份写法）。没有正文时给空串，那一格折叠区整个收起。
+    /// </summary>
+    public string ReleaseNotesText => _thisSessionReport?.Notes ?? string.Empty;
+
+    /// <summary>
+    /// 那一格折叠区出不出现。<b>判据只有"Core 这一次真给回了可读正文"这一条</b>：
+    /// "有没有新版"那一格 Core 已经判过（不在"已经最新"那一格摊开改动），
+    /// 而"对方压根没写说明"也是没有——摆一个点开是空的折叠区，与一颗点了没反应的按钮是同一种坏。
+    /// </summary>
+    public bool HasReleaseNotes => !string.IsNullOrWhiteSpace(ReleaseNotesText);
 
     /// <summary>这一版有没有东西可下：只有"确实有新版"才出现那颗「打开下载页」（判据在 Core，这里不重写）。</summary>
     public bool HasDownloadableRelease
@@ -69,6 +96,8 @@ public partial class SettingsPageViewModel
         UpdateStatus = BuildUpdateStatus();
         OnPropertyChanged(nameof(LocalVersionText));
         OnPropertyChanged(nameof(HasDownloadableRelease));
+        // 那一格正文绑在 XAML 上（OneWay），得由这里报一声；它读的正是这一次带回来的那一发。
+        OnPropertyChanged(nameof(ReleaseNotesText));
     }
 
     /// <summary>

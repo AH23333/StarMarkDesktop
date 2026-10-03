@@ -246,9 +246,11 @@ public sealed class GitHubReleaseSource : IReleaseSource, IDisposable
             tag.GetString()!,
             root.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String ? name.GetString() : null,
             root.TryGetProperty("prerelease", out var pre) && pre.ValueKind == JsonValueKind.True,
-            published);
+            published,
+            root.TryGetProperty("body", out var notes) && notes.ValueKind == JsonValueKind.String ? notes.GetString() : null);
         // 对方回的 html_url 不读：那条链接由外部服务器说了算，见 RemoteRelease 的注释。
         // 发布页地址是 Core 按配置里的仓库自己拼的（UpdatePolicy.ReleasePageUrl）。
+        // body 读，但只当"给人读的文字"读：它进屏幕前要在 Core 那边收敛一遍，且不落设置档。
         return new ReleaseProbeResult(ReleaseProbeStatus.Found, release);
     }
 
