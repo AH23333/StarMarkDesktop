@@ -761,24 +761,27 @@
                                 </Grid>
                                 <TextBlock Text="删除只清理本地搜索引擎（Everything 及其 SDK），书签 / Star / 标签数据不受影响；即使误删，下次开启本地磁盘搜索会自动重新下载。"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap" Opacity="0.62" FontSize="12"/>
-                                <TextBlock Text="以下为「索引进库」的目录（供文件夹树 / 标签使用，每行一个，留空默认桌面 / 下载 / 文档）；全盘实时搜索不受此限制。"
-                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
-                                <TextBox Text="{x:Bind ViewModel.FileIndexRootsText, Mode=TwoWay}"
-                                         AcceptsReturn="True" TextWrapping="Wrap" Height="72"
-                                         PlaceholderText="C:\Users\You\Desktop"/>
-                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-                                    <TextBlock Grid.Column="0" Text="每目录上限" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Column="1" Text="{x:Bind ViewModel.MaxFileIndexCountText, Mode=TwoWay}"
-                                             Width="100" HorizontalAlignment="Left" InputScope="Number"/>
-                                    <!-- 多行目录列表属「需编辑后确认」项，单独给一个保存按钮 -->
-                                    <Button Grid.Column="2" Content="保存索引目录" Click="SaveRoots_Click"
-                                            Style="{StaticResource SecondaryButton}"/>
+                                <!-- 「索引进库」那一整块（目录多行框＋每目录上限＋保存按钮＋不可用目录提示）
+                                     已按用户裁决拆掉（批次 VQ）：那颗按钮只把配置落盘，真进库要等顶栏「同步」，
+                                     而"引擎没跑／没配目录／目录当前不存在／IPC 返回半截"四条出口全都无声，
+                                     同步完还无条件弹一句「索引同步完成」⇒ 用户读作"已进库"，实际一条没有。
+                                     实时全盘搜索（快捷搜索 / 主窗搜索里的本地文件）不受影响——那是另一条链。 -->
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <!-- 这句话的可见性只管"有没有话要说"（含扫描失败与"都还在"两种），
+                                         不跟"有没有可删的行"绑——否则失败那句会被一起藏掉。 -->
+                                    <TextBlock Grid.Column="0" Text="{x:Bind ViewModel.MissingFileRowsStatus, Mode=OneWay}"
+                                               Style="{StaticResource SettingRowText}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                               Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                               Visibility="{x:Bind ViewModel.HasMissingFileRowsNotice, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                                    <!-- 库里那些"盘上已经没有"的行：今天删得掉了（批次 VQ 把删除这一族对本机文件条目放开），
+                                         也说得出口了。这里给一次点清的能力，但不替用户悄悄删——见 VM 上那段理由。 -->
+                                    <Button Grid.Column="1" Content="清掉这些行" VerticalAlignment="Center"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Command="{x:Bind ViewModel.CleanMissingFilesCommand}"
+                                            Visibility="{x:Bind ViewModel.HasMissingFileRows, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                                 </Grid>
-                                <!-- 不可用的根目录不再被静默剔除：照实列出，并说明"配置已保留、暂时不入库"（P-56）。 -->
-                                <TextBlock Text="{x:Bind ViewModel.FileIndexRootsStatus, Mode=OneWay}"
-                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
-                                           Foreground="{ThemeResource SystemFillColorCautionBrush}"
-                                           Visibility="{x:Bind ViewModel.HasFileIndexRootsWarning, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                                <Button Content="重新扫描本机文件条目" Command="{x:Bind ViewModel.RescanMissingFilesCommand}"
+                                        Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
                             </StackPanel>
                         </Border>
 

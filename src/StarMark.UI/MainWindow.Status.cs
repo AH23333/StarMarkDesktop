@@ -164,17 +164,38 @@ public sealed partial class MainWindow
         => ShowInfoBar(InfoBarSeverity.Error, title, message, 8000);
 
     /// <summary>
+    /// 坏消息 ＋ <b>就地那一颗按钮</b>（批次 VQ）。
+    /// <para>为什么要多这一格：只说"这个文件已经不在了"，用户仍停在原地——他真正要问的是"那这一行怎么办"。
+    /// P-54 的口径是<b>程序能做的动作不许写成用户作业</b>，所以"从库里删掉这一行"必须贴在这句话旁边，
+    /// 而不是让他去某个设置页找一个清理入口（今天也确实没有那一页）。
+    /// 按钮只在"删得掉、且删是对的动作"那一类失败里出现——"系统里没有能开它的程序"给同一颗按钮就是错的。</para>
+    /// </summary>
+    public void ShowErrorWithAction(string title, string message, string actionLabel, Action onAction)
+    {
+        var button = new Button { Content = actionLabel };
+        button.Click += (_, _) =>
+        {
+            SyncInfoBar.IsOpen = false;
+            onAction();
+        };
+        ShowInfoBar(InfoBarSeverity.Error, title, message, 15000, button);
+    }
+
+    /// <summary>
     /// 中性提示（不是错误也不是"操作完成"）：右下角提示卡贴不上屏幕时的兜底出口。
     /// 停留久一点——护眼这类提醒是"给你看一眼"，不该 8 秒就自己收走。
     /// </summary>
     public void ShowNotice(string title, string message)
         => ShowInfoBar(InfoBarSeverity.Informational, title, message, 15000);
 
-    private void ShowInfoBar(InfoBarSeverity severity, string title, string message, int autoCloseMs = -1)
+    private void ShowInfoBar(InfoBarSeverity severity, string title, string message, int autoCloseMs = -1, object? action = null)
     {
         SyncInfoBar.Severity = severity;
         SyncInfoBar.Title = title;
         SyncInfoBar.Message = message;
+        // 每次都写：上一句留下的按钮不清掉，下一次"已完成"旁边就挂着一颗对不上号的按钮。
+        // （WinUI 的 InfoBar 没有 ActionContent 那一格，能挂东西的位置就是 Content——按钮放进去即可。）
+        SyncInfoBar.Content = action;
         SyncInfoBar.IsOpen = true;
         if (autoCloseMs > 0)
             _ = Task.Delay(autoCloseMs).ContinueWith(_ =>

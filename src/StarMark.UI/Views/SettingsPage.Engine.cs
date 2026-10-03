@@ -34,13 +34,6 @@ namespace StarMark.UI.Views;
 public sealed partial class SettingsPage
 {
 
-    private void SaveRoots_Click(object sender, RoutedEventArgs e)
-    {
-        // 多行目录列表属需编辑确认项：点击时输入框已失焦 TwoWay 回写，此处显式落盘
-        _autoSaveTimer?.Stop();
-        ViewModel.SaveCommand.Execute(null);
-    }
-
     // ===== 本地搜索引擎管理（占用 / 打开所在目录 / 删除）=====
     private void OpenEngineFolder_Click(object sender, RoutedEventArgs e)
         => StarMark.Integrations.Everything.EverythingSource.OpenEngineFolder();

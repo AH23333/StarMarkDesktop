@@ -36,6 +36,39 @@ public static class ItemCardPolicy
     public static bool ShowsTrendingActions(bool isTrendingRepo) => isTrendingRepo;
 
     /// <summary>
+    /// 这一行是不是<b>本机文件条目</b>——库里 <c>type=File</c> 且物主是我们自己的那两类来源
+    /// （「记录到本地」/拖入快捷启动即入库写 <c>local</c>，历史遗留的索引行是 <c>filesystem</c>）。
+    /// <para>只问 (type, source)：它决定"这一行归谁"，<b>不</b>问盘上还在不在（那是另一件事，见
+    /// <see cref="MissingRowMessage"/>，且只在真要打开时才查一次盘）。</para>
+    /// </summary>
+    public static bool IsLocalFileRow(string? source, ItemType type)
+        => type == ItemType.File
+           && (source == ItemSources.FileSystem || source == ItemSources.Local);
+
+    /// <summary>
+    /// 是否给「删除这一行」＝<b>永久移除</b>（与「隐藏」相对）。两族：内置剪贴板历史 ＋ 本机文件条目。
+    /// <para>文件行是批次 VQ 新加的一族，起因是用户报"文件夹树里留着早已删掉的文件路径，既不让删、
+    /// 点开了也没人告诉我它已经没了"。书签 / Star <b>仍然不给</b>，理由一条没变：它们会被下次同步原样拉回来
+    /// ＝看着无效的动作，那两类的正确出口是「隐藏」。</para>
+    /// <para>⚠ 这一条判据有一个<b>前提</b>：文件行不再有任何"同步时会重新拉回来"的生产者。
+    /// 那个生产者原本叫「索引进库」（Everything 全量索引），已在批次 VQ 拆掉；
+    /// 谁把它接回来，就必须同时把这里改回去，否则"删了又冒出来"会比"删不掉"更难解释。</para>
+    /// </summary>
+    public static bool CanDeletePermanently(string? source, ItemType type, bool isLauncherMode, bool isBuiltinClipboard)
+        => !isLauncherMode && (isBuiltinClipboard || IsLocalFileRow(source, type));
+
+    /// <summary>
+    /// 点开一行而盘上已经没有这个东西时，说给用户的那句话。
+    /// <para>事实那半句（"文件已不在本机"）仍归 <c>ClipboardPolicy.MissingFileClause</c> 一颗——
+    /// 批次 SI 立的口径：同一件事全程序只许一个出处，状态行、菜单灰项与这一格都从这里取。
+    /// 这里多出的两半是这一族独有的：<b>后果</b>（打开没东西可开）与<b>出口</b>（条目还在库里，可以删）。
+    /// 只说"已经不在了"就等于把用户停在原地——他真正要问的是"那这行怎么办"。</para>
+    /// </summary>
+    public static string MissingRowMessage(string uri)
+        => $"本机的这个{StarMark.Abstractions.Clipboard.ClipboardPolicy.MissingFileClause}（{uri}），"
+           + "打开没有东西可开——条目还留在库里，可以删掉这一行";
+
+    /// <summary>
     /// 是否显示「收藏」这一项：热榜候选与 RSS 候选<b>共用同一个按钮位</b>，但落点与文案各不相同
     /// （热榜收进本机书签；RSS 收进"RSS订阅 / 源名"那一层，见 <see cref="RssCollectTip"/>）。
     /// <para>刻意只留一个判据：两处各写一遍的话，加一类候选就会只补上一处，另一处变成一个

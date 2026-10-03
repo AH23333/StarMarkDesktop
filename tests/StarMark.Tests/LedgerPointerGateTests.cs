@@ -40,8 +40,10 @@ public sealed class LedgerPointerGateTests
     /// <summary>
     /// 只出现在"当初为什么删掉它"那类叙述里的文件——而且必须带着它的出处（<c>git log</c> 那条命令）出现，
     /// 否则就是有人把"今天也在这里"的指针重新写活了。豁免的<see cref="TheExemptionsAreStillNeededAndHonest">理由本身也被钉着</see>。
+    /// <para><c>SeedData.cs</c> 是批次 VQ 删掉的那颗空库 seeder：账本要说清"用户看到的那条死路径从哪来"就绕不开它，
+    /// 而它在今天的仓库里确实不存在——正是这一类豁免的用途（不是给闸门开洞，是它本来就属于那一类）。</para>
     /// </summary>
-    private static readonly string[] GitHistoryOnlyFiles = { "TimestampConverter.cs" };
+    private static readonly string[] GitHistoryOnlyFiles = { "TimestampConverter.cs", "SeedData.cs" };
 
     /// <summary>
     /// 形如 <c>Foo.cs</c>／<c>src/Bar/Foo.cs:123</c>／<c>Foo.xaml:40</c>／<c>run.ps1</c>／<c>StarMark.sln</c>。

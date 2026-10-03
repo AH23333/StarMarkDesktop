@@ -76,18 +76,22 @@ public sealed class ClipboardMissingImageTextGateTests
     }
 
     /// <summary>
-    /// 启动器那句"本机上的这个路径已经不在了"是<b>有意分岔</b>，按文件名点名钉住：
-    /// 它说的是任意本地路径、还要带出地址，并且"可能被移动或删除"是给用户的成因猜测——
-    /// 与"这一张图的像素拿不到了"不是同一件事。将来要合并，得先有人决定合并后那句话怎么说。
+    /// 启动器那一句「本机上的这个路径已经不在了」在批次 SI 记的是<b>有意分岔</b>，批次 VQ <b>把它合掉了</b>：
+    /// 用户报"点开没反应"之后，同一件事要在三处说（打开失败的提示卡、卡片/右键那句删行说明、设置页那句失联条数），
+    /// 再留两份说法＝同一件事两个主人。SI 那条注释等的就是"先有人决定合并后那句话怎么说"——
+    /// 决定落在 Abstractions 的 <c>ItemCardPolicy.MissingRowMessage</c>：
+    /// 事实半截仍引 <c>ClipboardPolicy.MissingFileClause</c>，再补"打开没有东西可开、条目还留在库里可以删掉这一行"。
+    /// <para>所以本格从"分岔不许被合并"翻成"<b>分岔不许回来</b>"：宿主抄回自己那一句、或另写一句新的，都在这里红。</para>
     /// </summary>
     [Fact]
-    public void TheLauncherKeepsItsOwnDivergenceOnPurpose()
+    public void TheLauncherAsksTheSharedRowSentence()
     {
         const string launcher = "src/StarMark.UI/Helpers/LauncherEx.cs";
         var code = Code(ReadRepoFile(launcher));
-        Assert.Contains("本机上的这个路径已经不在了", code);
-        Assert.DoesNotContain("MissingFileClause", code);
-        Assert.DoesNotContain(Fact, code);
+        Assert.Contains("ItemCardPolicy.MissingRowMessage", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("本机上的这个路径已经不在了", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("MissingFileClause", code, StringComparison.Ordinal);   // 也不许越过政策句直接引剪贴板那颗片段
+        Assert.DoesNotContain(Fact, code, StringComparison.Ordinal);
     }
 
     private static IEnumerable<(string Path, string Text)> XamlUnderSrc()

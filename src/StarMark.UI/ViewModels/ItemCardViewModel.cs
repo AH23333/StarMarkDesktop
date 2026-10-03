@@ -116,15 +116,24 @@ public partial class ItemCardViewModel : ObservableObject
         => ItemCardPolicy.CanSendToLauncher(IsLauncherMode, IsTrendingRepo, !string.IsNullOrWhiteSpace(Uri), IsRssCandidate);
 
     /// <summary>
-    /// 是否提供"删除这一条"（<b>永久移除</b>，与「隐藏」相对）。只给<b>内置</b>剪贴板历史：
-    /// 它的正文是可再复制的一次性内容，删了不心疼；而书签 / Star / 文件条目删掉要么被下次同步
-    /// 再拉回来（＝看着无效的动作）、要么连不可重建的用户状态一起丢（＝危险），
-    /// 那两类条目的正确动作是「隐藏」。待办 / 随记的删除在它们自己的页面里。
+    /// 是否提供"删除这一条"（<b>永久移除</b>，与「隐藏」相对）。真值表在 <see cref="ItemCardPolicy.CanDeletePermanently"/>，
+    /// 这里只回答"这一行是什么"：内置剪贴板历史（正文可再复制，删了不心疼）＋ <b>本机文件条目</b>（批次 VQ 新加的一族）。
+    /// <para>书签 / Star 仍不给，理由一条没变：要么被下次同步原样拉回来（＝看着无效的动作）、
+    /// 要么连不可重建的用户状态一起丢（＝危险），那两类的正确动作是「隐藏」。
+    /// 而文件行今天<b>已经不会被拉回来了</b>——那台生产者（「索引进库」的全量索引）与本批一起拆掉了，
+    /// 这条前提写在 <see cref="ItemCardPolicy"/> 的注释里，也有闸门盯着。</para>
     /// <para>判据必须含 source：<b>Ditto 派条目类型也是 <see cref="ItemType.Clipboard"/></b>，
-    /// 但那是外部程序的库，我们从这里删既越界也删不掉（仓储 WHERE 限定 <c>source='clipboard'</c>），
+    /// 但那是外部程序的库，我们从这里删既越界也删不掉（仓储的 WHERE 限定了 source），
     /// 菜单上就会多出一个只会报"记录已经不在"的死项。"能删"与"删得掉"必须是同一个判据。</para>
     /// </summary>
-    public bool CanDeletePermanently => !IsLauncherMode && ClipboardPolicy.IsBuiltinEntry(Source, Type);
+    public bool CanDeletePermanently
+        => ItemCardPolicy.CanDeletePermanently(Source, Type, IsLauncherMode, ClipboardPolicy.IsBuiltinEntry(Source, Type));
+
+    /// <summary>
+    /// 那颗删除项的文字。<b>动作名归本类</b>（口径同 <see cref="PinImageMenuText"/>：菜单项的名字只有一个主人），
+    /// 而"能不能出现"归上一条判据——两者分开才不会出现"文案写着删历史、点的却是文件行"。
+    /// </summary>
+    public string DeleteMenuText => Type == ItemType.File ? "删除这一行" : "删除这条历史";
 
     /// <summary>
     /// 这一行是不是 GitHub 热榜候选（外部数据、<b>不入库</b>）。判据收在 <see cref="ItemCardPolicy"/>：

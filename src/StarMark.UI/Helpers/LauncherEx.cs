@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using Windows.System;
+using StarMark.Abstractions;
 
 namespace StarMark.UI.Helpers;
 
@@ -22,26 +23,29 @@ public static class LauncherEx
 {
     public static async Task OpenAsync(string? uri) => await TryOpenAsync(uri);
 
+    /// <summary>打开并回报到底开没开成（只有话、没有种类）。与 <see cref="TryOpenDetailedAsync"/> 是同一条代码、两种问法。</summary>
+    public static async Task<string?> TryOpenAsync(string? uri) => (await TryOpenDetailedAsync(uri)).Message;
+
     /// <summary>
-    /// 打开并<b>回报到底开没开成</b>：返回 null＝已交给系统，否则是一句能直接显示给用户的原因。
+    /// 打开并回报<b>坏在哪一步</b>＋能直接显示的那句话。
     /// <para>为什么要有这个出口：这条路径上有五种"点了什么都没发生"（地址是空的、协议被闸门挡下、
     /// 认不出是完整地址、本地文件已删、系统里没有能处理这个协议的程序），原来四种只写日志。
     /// RSS 页点条目跳文章就落在这条路上——按 <see cref="OpenAsync"/> 那种"不返回话"的用法，
     /// 用户只会看到"点了一下没反应"，那正是本仓库"打不开应用"那条老缺陷的形状。</para>
     /// </summary>
-    public static async Task<string?> TryOpenAsync(string? uri)
+    public static async Task<(OpenFailure Kind, string? Message)> TryOpenDetailedAsync(string? uri)
     {
-        if (string.IsNullOrWhiteSpace(uri)) return "这一行没有可打开的地址";
+        if (string.IsNullOrWhiteSpace(uri)) return (OpenFailure.NothingToOpen, "这一行没有可打开的地址");
         // 协议白名单闸门：条目 URI 是可被导入/同步/外部数据影响的字符串，
         // 只放行 http/https/file，拒绝 javascript:/data:/ms-msdt:/自定义协议等借 Shell 协议处理器执行的记录。
         if (!StarMark.Abstractions.LaunchGuard.IsAllowedScheme(uri))
         {
             StarMark.Abstractions.StarLog.Warn($"拒绝以非法协议打开条目：{uri}");
-            return "这个地址的协议不在允许范围内（只支持 http / https / 本机文件），已拒绝打开";
+            return (OpenFailure.SchemeRejected, "这个地址的协议不在允许范围内（只支持 http / https / 本机文件），已拒绝打开");
         }
         try
         {
-            if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed)) return "认不出这是一个完整地址";
+            if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed)) return (OpenFailure.NotAbsolute, "认不出这是一个完整地址");
 
             if (parsed.Scheme == Uri.UriSchemeFile)
             {
@@ -54,7 +58,9 @@ public static class LauncherEx
                     // 两种还原都不存在（文件已删）：退化为 URI 激活（可能无效果，但不抛异常），
                     // 同时把"这一台机器上已经没有这个文件了"说给用户听——只退化不回报，就是点了没反应。
                     await Launcher.LaunchUriAsync(parsed);
-                    return "本机上的这个路径已经不在了（文件可能被移动或删除）：" + uri;
+                    // 这句话归 ItemCardPolicy.MissingRowMessage 一颗（批次 SI 的口径：同一件事只许一个出处），
+                    // 种类那一格才是宿主判断"要不要就地递出删掉这一行"的依据。
+                    return (OpenFailure.MissingOnDisk, StarMark.Abstractions.ItemCardPolicy.MissingRowMessage(uri));
                 }
                 else
                 {
@@ -65,22 +71,22 @@ public static class LauncherEx
                     catch (Exception ex)
                     {
                         StarMark.Abstractions.StarLog.Error($"打开本地路径失败（ShellExecute）：{path}", ex);
-                        return "启动这个本机路径失败：" + ex.Message;
+                        return (OpenFailure.Error, "启动这个本机路径失败：" + ex.Message);
                     }
                 }
-                return null;
+                return (OpenFailure.None, null);
             }
 
             // LaunchUriAsync 返回的是"系统有没有找到能处理这个协议的程序"，不是"有没有抛异常"——
             // 不接住它，浏览器没注册 http 处理程序时就是一次彻底静默的点击。
             return await Launcher.LaunchUriAsync(parsed)
-                ? null
-                : "系统里没有能打开这个地址的默认程序（多半是浏览器未注册为 http 处理程序）";
+                ? (OpenFailure.None, null)
+                : (OpenFailure.NoHandler, "系统里没有能打开这个地址的默认程序（多半是浏览器未注册为 http 处理程序）");
         }
         catch (Exception ex)
         {
             StarMark.Abstractions.StarLog.Error($"打开条目失败: {uri}", ex);
-            return "打开失败：" + ex.Message;
+            return (OpenFailure.Error, "打开失败：" + ex.Message);
         }
     }
 }

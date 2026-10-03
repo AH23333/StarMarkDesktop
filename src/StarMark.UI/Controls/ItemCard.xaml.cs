@@ -187,9 +187,15 @@ public sealed partial class ItemCard : UserControl
         if (ViewModel != null) DeleteRequested?.Invoke(this, ViewModel);
     }
 
-    /// <summary>删除一条剪贴板历史：动作自包含（不要求宿主页面订阅），失败由主窗 InfoBar 说出来。</summary>
+    /// <summary>
+    /// 删除这一条。<b>一颗菜单项、两种落点</b>（批次 VQ）：剪贴板行删行并顺带删我们自己 <c>clip/</c> 目录里的附件；
+    /// 本机文件行<b>只删行，绝不碰磁盘</b>——那个文件归用户（甚至在可移动盘上），这一行只是库里的一个索引。
+    /// 分支写在宿主这一侧、判据（能不能出现）写在 <see cref="ItemCardPolicy"/> 那一侧，两处各自只有一个主人。
+    /// </summary>
     private void DeleteClipboard_Click(object sender, RoutedEventArgs e)
     {
-        if (ViewModel != null) ItemCardActions.DeleteClipboard(ViewModel);
+        if (ViewModel is null) return;
+        if (ViewModel.Type == StarMark.Abstractions.ItemType.File) ItemCardActions.DeleteFileRow(ViewModel.Id);
+        else ItemCardActions.DeleteClipboard(ViewModel);
     }
 }

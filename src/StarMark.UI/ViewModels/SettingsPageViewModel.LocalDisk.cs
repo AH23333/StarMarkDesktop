@@ -28,28 +28,111 @@ namespace StarMark.UI.ViewModels;
 public partial class SettingsPageViewModel
 {
 
-    // ===== 本地文件索引（P0-1b）=====
-    [ObservableProperty] private string _fileIndexRootsText = string.Empty;
-    [ObservableProperty] private string _maxFileIndexCountText = string.Empty;
+    // ===== 库里留着、盘上已经没有的本机文件条目（批次 VQ；「索引进库」那三行输入格的位置）=====
+
+    /// <summary>扫描结果那句话（含"读不到库"与"扫描失败"两种坏消息）；<b>空＝还没扫过</b>。非空就一定显示。</summary>
+    [ObservableProperty] private string _missingFileRowsStatus = string.Empty;
+
+    /// <summary>待清理的 Id 清单（只读扫描的结果，清理命令按它删；<b>不</b>是"每次点按钮重新数一遍"的两份真相）。</summary>
+    private List<long> _missingIds = new();
+
+    /// <summary>有没有可清理的行（只管那颗「清掉这些行」按钮）。</summary>
+    public bool HasMissingFileRows => _missingIds.Count > 0;
 
     /// <summary>
-    /// 「已配置但当前不可用」的索引目录说明（空＝全部可用，控件据此隐藏）。
-    /// 过去这类目录是被 <c>Directory.Exists</c> 静默剔除的：用户看到的文本框少了一行、
-    /// 下次保存就永久没了，而搜索结果少了一批文件却无任何解释（P-56）。
+    /// 那句话该不该显示。<b>与上一条刻意分开</b>：把说明的可见性绑在"有没有可删的行"上，
+    /// "扫描失败"与"读不到库"这两句就跟着一起被藏起来——点了按钮既没反应也没人说话，
+    /// 那正是本批要消掉的症状（与批次 IJ 那颗 <c>HasItems</c> 未复位导致失败提示看不见同族）。
     /// </summary>
-    [ObservableProperty] private string _fileIndexRootsStatus = string.Empty;
+    public bool HasMissingFileRowsNotice => !string.IsNullOrEmpty(MissingFileRowsStatus);
 
-    /// <summary>有无"当前不可用目录"要提示（XAML 用现成的 BoolToVisibility 控制该行的显示）。</summary>
-    public bool HasFileIndexRootsWarning => !string.IsNullOrEmpty(FileIndexRootsStatus);
-
-    partial void OnFileIndexRootsStatusChanged(string value) => OnPropertyChanged(nameof(HasFileIndexRootsWarning));
-
-    private void RefreshFileIndexRootsStatus()
+    partial void OnMissingFileRowsStatusChanged(string value)
     {
-        var unavailable = Safe(_settings.UnavailableFileIndexRoots, Array.Empty<string>(), "索引目录可用性");
-        FileIndexRootsStatus = unavailable.Count == 0
-            ? string.Empty
-            : $"以下索引目录当前不可用（不存在 / 盘未插 / 无权限），配置已保留、恢复后无需重填，但暂时不会索引进库：{string.Join("、", unavailable)}";
+        OnPropertyChanged(nameof(HasMissingFileRows));
+        OnPropertyChanged(nameof(HasMissingFileRowsNotice));
+    }
+
+    /// <summary>扫描一次要读多宽：与文件夹树同一页窗口（2000）。撞到窗口就照实说，不把"没扫完"报成"都扫过了"。</summary>
+    private const int MissingScanWindow = 2000;
+
+    /// <summary>
+    /// 数一遍库里的本机文件条目，把"盘上已经指不到东西"的那几条挑出来。
+    /// <para>为什么放在设置页、要人点一下，而不是启动时自动删：<b>"文件不在"与"该删"不是同一件事</b>——
+    /// 移动硬盘没插、U 盘拔了、网络盘暂不可达、OneDrive 还没同步，都会让存在性判定假阴性，
+    /// 而那些行身上挂着用户的标签与笔记。程序能自愈的是"把它挑出来、说清楚、给一颗按钮"，
+    /// 悄悄删掉用户数据不在自愈的范围内（P-54 说的是别把动作写成用户作业，不是别让他确认）。</para>
+    /// <para>读 <see cref="IItemRepository.GetAllAsync"/> 的 file 档而不是新加一条 SQL：这条链要的就是"所有文件行"，
+    /// 现成的浏览路径正是这个语义，多一条 SQL 就多一个会与浏览口径分岔的地方。</para>
+    /// </summary>
+    [RelayCommand]
+    private async Task RescanMissingFilesAsync()
+    {
+        _missingIds = new List<long>();
+        if (_repository is not { } repo)
+        {
+            MissingFileRowsStatus = "现在还读不到库里的条目（稍后再点一次『重新扫描』）。";
+            return;
+        }
+        try
+        {
+            var rows = await repo.GetAllAsync(new BrowseFilter
+            {
+                TypeFilter = "file",
+                IncludeHidden = true,          // 隐藏的行也算：它只是不显示，没说不存在
+                Limit = MissingScanWindow,
+            }, CancellationToken.None);
+
+            var gone = rows.Where(static i => StarMark.Abstractions.ItemCardPolicy.IsLocalFileRow(i.Source, i.Type)
+                                              && !StarMark.Abstractions.LocalFileIdentity.TryExistingPath(
+                                                  i.Uri, static p => System.IO.File.Exists(p) || System.IO.Directory.Exists(p), out _))
+                           .ToList();
+            _missingIds = gone.Select(static i => i.Id).ToList();
+            // 扫过之后"一条没有"也要说一声：这一句与"坏消息"共用同一个可见性判据——
+            // 点了按钮既不消失也不出声，就是本批要消掉的那个症状本身。
+            // 撞到窗口时照实写"前 N 条"，不把"没扫完"报成"都扫过了"。
+            var scanned = rows.Count >= MissingScanWindow
+                ? $"扫过前 {MissingScanWindow} 条（窗口之外可能还有）"
+                : $"扫过 {rows.Count} 条";
+            MissingFileRowsStatus = gone.Count == 0
+                ? $"本机文件条目都还在（{scanned}）。"
+                : $"库里有 {gone.Count} 条本机文件路径在这台机器上已经找不到（文件被移动或删除，或所在的盘现在没插）——{scanned}。";
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("扫描失联的本机文件条目失败", ex);
+            MissingFileRowsStatus = "扫描失败：" + ex.Message;
+        }
+        OnPropertyChanged(nameof(HasMissingFileRows));
+    }
+
+    /// <summary>
+    /// 清掉刚才数出来的那几行。<b>只删库里的记录，绝不动磁盘上的文件</b>（仓储那条 SQL 的 WHERE 也限定了
+    /// type+source，见 <see cref="IItemRepository.DeleteFileEntriesAsync"/>）。
+    /// <para>先报条数再确认：一次点掉几十行而没有回看的机会，等于把"清理"做成第二个缺陷。
+    /// 删完再扫一次，让那句说明与屏幕上剩下的行同步——留着上一轮的计数就是新的一份假话。</para>
+    /// </summary>
+    [RelayCommand]
+    private async Task CleanMissingFilesAsync()
+    {
+        var ids = _missingIds.ToList();
+        if (ids.Count == 0 || _repository is not { } repo) return;
+        if (!await CenteredDialog.ConfirmAsync("清掉这些行？",
+                $"将从库里删掉 {ids.Count} 条已经找不到文件的本机路径。只删记录，磁盘上的文件不会被改动；"
+                + "这些行上挂的标签与笔记也会一并删掉。",
+                "清掉", "先留着", dedupeKey: "clean-missing-file-rows")) return;
+        try
+        {
+            var removed = await repo.DeleteFileEntriesAsync(ids, CancellationToken.None);
+            App.MainWindow?.ShowNotice(removed > 0 ? "已清掉" : "已经没有这些行了",
+                removed > 0 ? $"删掉 {removed} 条记录；磁盘上的文件没有被改动。"
+                            : "它们在你点这一下之前就已经不在库里了（可能刚清过一遍）。");
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("清理失联的本机文件条目失败", ex);
+            App.MainWindow?.ShowError("清理失败", ex.Message);
+        }
+        await RescanMissingFilesAsync();
     }
 
     /// <summary>

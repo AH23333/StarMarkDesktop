@@ -37,10 +37,8 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         public bool? EnableTray { get; set; }
         public bool? EnableGlobalHotKey { get; set; }
         public bool? MinimizeToTray { get; set; }
-        /// <summary>本地文件索引根目录（P0-1b）。null/空表示使用默认（桌面/下载/文档）。</summary>
-        public List<string>? FileIndexRoots { get; set; }
-        /// <summary>每目录索引数量上限（P0-1b）。≤0 表示使用默认 5000。</summary>
-        public int? MaxFileIndexCount { get; set; }
+        // FileIndexRoots / MaxFileIndexCount（「索引进库」的两颗）已随该功能整条拆掉（批次 VQ）：
+        // 老配置里残留的这两个 json 键没有读者，反序列化默认忽略，不需要迁移。
         /// <summary>
         /// 本地磁盘搜索（全盘文件索引）总开关。默认关：轻度用户零打扰、且后台提权服务/Everything 绝不启动、不加载索引（0 内存）。
         /// 旧配置无此字段时按未开启处理。

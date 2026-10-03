@@ -53,15 +53,13 @@ public class EverythingSourceTests
     }
 
     [Fact]
-    public async Task FetchAsync_ReturnsEmpty_ForNonexistentRoots()
+    public async Task FetchAsync_IsAlwaysEmpty_BecauseTheBulkIndexingArmWasRemoved()
     {
-        // 根目录不存在时无论 Everything 是否运行都应返回空（不抛异常、不入库）。
-        var options = new FileIndexOptions { Roots = new[] { @"Z:\__starmark_nonexistent_root__\xyz" } };
-        var source = new EverythingSource(new EverythingQueryQueue(), options);
-
-        var items = await source.FetchAsync(new SyncContext(), CancellationToken.None);
-
-        Assert.Empty(items);
+        // 批次 VQ：「索引进库」整条拆掉（那颗按钮只落盘配置、真进库要等顶栏同步、四条失败出口全都无声，
+        // 而同步完无条件弹一句「索引同步完成」）。本源现在只服务实时搜索，FetchAsync 恒空。
+        // 这条断言是 ItemCardPolicy.CanDeletePermanently 放开文件行的前提：删了不会被同步拉回来。
+        var source = new EverythingSource(new EverythingQueryQueue(), new FileIndexOptions { Enabled = true });
+        Assert.Empty(await source.FetchAsync(new SyncContext(), CancellationToken.None));
     }
 
     [Fact]

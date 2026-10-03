@@ -169,6 +169,14 @@ public interface IItemRepository
     Task<bool> DeleteClipboardEntryAsync(long itemId, CancellationToken ct = default);
 
     /// <summary>
+    /// 删掉若干条<b>本机文件条目</b>（库里 <c>type=file</c> 且 <c>source</c> 是 filesystem/local 的那些行），
+    /// 返回真正删掉的行数。实现必须在 SQL 里同时限定 Id 与 (type, source)——否则误传的 Id 会连书签 / Star / 待办一起删掉。
+    /// <para>⚠ <b>只删行，绝不碰磁盘上的文件</b>：那一行只是我们自己库里的索引，文件归用户（剪贴板图片那一族
+    /// 删行时顺带删文件，是因为那些附件是写进我们目录的，两类所有权不同）。</para>
+    /// </summary>
+    Task<int> DeleteFileEntriesAsync(IReadOnlyList<long> itemIds, CancellationToken ct = default);
+
+    /// <summary>
     /// 列出<b>所有</b>图片行的文件名与缺失标记，供启动对账（§3-Q6 三分类）使用。
     /// <para>实现必须无行数窗口：借一个带 limit 的查询来对账，窗口外的行会被当成"没人认领的文件"，
     /// 于是本来完好的目录被报成一堆孤儿。也只需文件名——把正文捞进来是白付的内存。</para>

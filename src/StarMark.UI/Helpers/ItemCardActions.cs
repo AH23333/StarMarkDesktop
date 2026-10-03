@@ -50,7 +50,7 @@ public static class ItemCardActions
             // 所以在这里收口一次即可；否则搜索页右键一条剪贴板记录点"打开"会静默无事发生。
             if (ClipboardPolicy.OpensAsCopy(item.Type, item.Uri)) { CopyUri(new ItemCardViewModel(item)); return; }
             if (!string.IsNullOrEmpty(item.Uri))
-                await LauncherEx.OpenAsync(item.Uri);
+                ReportOpenFailure(new ItemCardViewModel(item), await LauncherEx.TryOpenDetailedAsync(item.Uri));
         }
         catch (Exception ex)
         {
@@ -64,11 +64,52 @@ public static class ItemCardActions
     /// <see cref="LauncherEx"/>（ShellExecute：文件交系统关联程序，无关联则由 Windows 提示选应用；文件夹在资源管理器打开）；
     /// 已入库条目仍按 Id 取最新库值，行为不变。
     /// </summary>
-    public static void Open(XamlRoot xamlRoot, ItemCardViewModel? vm)
+    public static async void Open(XamlRoot xamlRoot, ItemCardViewModel? vm)
     {
         if (vm is null) return;
-        if (vm.Id <= 0) { _ = LauncherEx.OpenAsync(vm.Uri); return; }
+        if (vm.Id <= 0) { ReportOpenFailure(vm, await LauncherEx.TryOpenDetailedAsync(vm.Uri)); return; }
         Open(xamlRoot, vm.Id);
+    }
+
+    /// <summary>
+    /// 「点开这一行」的坏消息要说得出、并且落在用户能做的那件事上（批次 VQ，P-53/P-54 同口径）。
+    /// <para>原来这里 <c>await LauncherEx.OpenAsync(...)</c> 把回报的那句话丢掉了——而那句话其实一直写得好好的，
+    /// 只是没人递到界面：<b>症状"点了毫无反应"不是缺文案，是把已有的文案扔在了 await 的返回值里</b>。</para>
+    /// <para>只有 <see cref="OpenFailure.MissingOnDisk"/> 这一类才递出「从库里删掉这一行」：那一行是我们自己的索引、
+    /// 盘上已经没有东西可指。其余四类不给这颗按钮——"系统里没有能开它的程序"删行反而是把用户想开的东西弄丢，
+    /// 没地址／协议被挡／认不出地址就更不该由用户来清理数据。</para>
+    /// </summary>
+    private static void ReportOpenFailure(ItemCardViewModel vm, (OpenFailure Kind, string? Message) outcome)
+    {
+        var (kind, message) = outcome;
+        if (kind == OpenFailure.None || string.IsNullOrEmpty(message)) return;
+        if (kind != OpenFailure.MissingOnDisk || vm.Id <= 0)
+        {
+            App.MainWindow?.ShowError("打不开这一行", message);
+            return;
+        }
+        App.MainWindow?.ShowErrorWithAction("打不开这一行", message, "从库里删掉这一行", () => DeleteFileRow(vm.Id));
+    }
+
+    /// <summary>
+    /// 删掉一条本机文件条目（<b>只删行，绝不动磁盘</b>）。删完当场说删了几条——静默删掉会让人以为"还是没反应"，
+    /// 而那正是这一批要消掉的那个症状。
+    /// </summary>
+    public static async void DeleteFileRow(long itemId)
+    {
+        try
+        {
+            var removed = await GetRepo().DeleteFileEntriesAsync(new[] { itemId }, CancellationToken.None);
+            App.MainWindow?.ShowNotice(
+                removed > 0 ? "已删掉这一行" : "这一行本来就不在库里了",
+                removed > 0 ? "磁盘上的文件没有被改动（它本来也已经不在了）。"
+                            : "可能刚被清掉过；刷新一下就看不到它了。");
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error($"删除本机文件条目失败 (id={itemId})", ex);
+            App.MainWindow?.ShowError("删除失败", ex.Message);
+        }
     }
 
     /// <summary>打开所在位置：本地文件 → 资源管理器定位；其余类型无位置概念。</summary>

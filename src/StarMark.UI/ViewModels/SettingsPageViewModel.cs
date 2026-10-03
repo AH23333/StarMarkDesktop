@@ -308,10 +308,7 @@ public partial class SettingsPageViewModel : ObservableObject
         CacheBudgetMb = Safe(_settings.LoadCacheBudgetMb, PerformanceSettingsPolicy.BudgetMbDefault, "缓存预算");
         MaxCacheCount = Safe(_settings.LoadMaxImageCacheCount, PerformanceSettingsPolicy.CacheCountDefault, "缓存上限");
 
-        // 本地文件索引（P0-1b）：根目录每行一个；上限数字
-        FileIndexRootsText = string.Join("\n", Safe(_settings.LoadFileIndexRoots, Array.Empty<string>(), "索引目录"));
-        MaxFileIndexCountText = Safe(_settings.LoadMaxFileIndexCount, 5000, "索引上限").ToString();
-        RefreshFileIndexRootsStatus();
+        // 「索引进库」的目录与上限输入格已在批次 VQ 随该功能一起拆掉（库里剩下的文件行只可能是用户自己登记的）。
 
         // 本地磁盘搜索开关：回灌初值时抑制副作用（见 _suppressLocalDiskApply）。
         _suppressLocalDiskApply = true;
@@ -456,35 +453,9 @@ public partial class SettingsPageViewModel : ObservableObject
                     StarLog.Error("GitHub 凭据推送到运行实例失败（重启应用后仍会生效）", gx);
                 }
 
-                // 本地文件索引（P0-1b）：上限需为正整数。
-                // P-56：这里不再用 Directory.Exists 过滤目录——文本框读的是同一份配置，过滤即等于
-                // "盘没插就把那条根删了"，而且全程没有一句话。暂不可用的根由索引侧逐根跳过，
-                // 并在下方 FileIndexRootsStatus 里如实列出。
-                var roots = FileIndexRootsText
-                    .Split(new[] { '\n', '\r', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(s => s.Trim())
-                    .Where(s => s.Length > 0)
-                    .ToList();
-                _settings.SaveFileIndexRoots(roots);
-                if (int.TryParse(MaxFileIndexCountText, out var cap) && cap > 0)
-                    _settings.SaveMaxFileIndexCount(cap);
+                // 「索引进库」的目录与上限（旧 FileIndexRoots / MaxFileIndexCount）已在批次 VQ 随该功能一起拆掉：
+                // 那颗按钮只落盘配置，真进库要等顶栏「同步」，而四条失败出口全都无声。
             }
-
-            // 即时把根目录 / 上限推给 FileIndexOptions 单例，令后台重扫无需重启即生效（与开关同为方案 B）。
-            // 读回持久化值而非直接用 roots：空 roots 时 LoadFileIndexRoots 会回退默认（桌面/下载/文档），与建库时口径一致。
-            try
-            {
-                var fo = App.Services.GetRequiredService<StarMark.Integrations.Everything.FileIndexOptions>();
-                fo.Roots = _settings.LoadFileIndexRoots().ToList();
-                fo.MaxCount = _settings.LoadMaxFileIndexCount();
-            }
-            catch (Exception fox)
-            {
-                StarLog.Error("本地文件索引配置即时应用失败（下次重启仍会生效）", fox);
-            }
-
-            // 保存完立刻按磁盘现状复核"哪几条根当前不可用"，让用户当场看到而不是下次才发现少搜了目录。
-            RefreshFileIndexRootsStatus();
 
             // 写盘失败原先只进日志（P-53）：SaveCore 吞异常 ⇒ 界面表现为"已保存"，用户下次启动
             // 发现设置全回退。日志不是用户能看到的反馈面，故这里把"未落盘"当成保存失败呈现，

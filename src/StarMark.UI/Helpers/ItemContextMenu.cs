@@ -123,7 +123,12 @@ internal static class ItemContextMenu
 
         flyout.Items.Add(Item(vm.PinMenuText, (_, _) => ItemCardActions.TogglePin(vm)));
         if (vm.CanDeletePermanently)
-            flyout.Items.Add(Item("删除这条历史", (_, _) => ItemCardActions.DeleteClipboard(vm)));
+            // 与主窗卡片同一判据、同一分支（一颗菜单项两种落点：剪贴板行删附件，文件行只删行）。
+            flyout.Items.Add(Item(vm.DeleteMenuText, (_, _) =>
+            {
+                if (vm.Type == StarMark.Abstractions.ItemType.File) ItemCardActions.DeleteFileRow(vm.Id);
+                else ItemCardActions.DeleteClipboard(vm);
+            }));
         if (vm.CanSendToWidget)
             flyout.Items.Add(Item("发送到桌面 · 快捷启动", (_, _) => _ = SendToQuickLaunchAsync(vm)));
         // 只对"这是一条待办"出现：别的类型没有"这一项要做多久"的语境，出现即成为点了没反应的死项。
@@ -143,15 +148,14 @@ internal static class ItemContextMenu
     }
 
     /// <summary>
-    /// 打开条目：已入库条目（Id&gt;0）沿用 <see cref="ItemCardActions.Open"/>（按最新库值打开）；
+    /// 打开条目：已入库条目（Id&gt;0）沿用 <see cref="ItemCardActions.Open(XamlRoot, long)"/>（按最新库值打开）；
     /// 未入库的实时源虚拟条目（Everything，Id=0）库里查不到，直接按行 URI 打开，与左侧单击
     /// （<c>ResultOpen_Click</c> 走 <see cref="LauncherEx"/>）行为一致——否则右键「打开」对其静默失效。
+    /// <para>批次 VQ 之后两条都汇进 <see cref="ItemCardActions.Open(XamlRoot, ItemCardViewModel?)"/> 一颗：
+    /// 那里才有"打开失败要当场说、且只在盘上确实没这东西时递出删行按钮"的那条回报链。
+    /// 两个入口各写一遍，坏消息就会只从一个入口冒出来（那正是"有的地方点了有提示、有的没有"的形状）。</para>
     /// </summary>
-    private static void OpenByRow(XamlRoot root, ItemCardViewModel vm)
-    {
-        if (vm.Id != 0) { ItemCardActions.Open(root, vm.Id); return; }
-        _ = LauncherEx.OpenAsync(vm.Uri);
-    }
+    private static void OpenByRow(XamlRoot root, ItemCardViewModel vm) => ItemCardActions.Open(root, vm);
 
     /// <summary>预览（QuickLook 式内嵌预览窗）：与主窗口 ItemCard.Preview_Click 同一宿主、同一提交行为。</summary>
     private static async Task PreviewAsync(ItemCardViewModel vm, XamlRoot root)

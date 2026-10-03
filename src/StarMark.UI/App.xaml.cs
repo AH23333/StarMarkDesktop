@@ -168,10 +168,10 @@ public partial class App : Application
         // InvalidOperationException（No service for type ... SettingsStore），被 UI 线程未处理异常安全网吞掉后
         // 组件既不显示也不套主题/材质——表现为"材质不切换、数据不同步、四种材质看不出区别"。
         services.AddSingleton(fileSettings);
+        // 本地磁盘搜索总开关（P0-1b 的 Roots/MaxCount 已在批次 VQ 随「索引进库」一起拆掉：那颗按钮只落盘配置、
+        // 真进库要等顶栏同步，而四条失败出口全都无声 ⇒ 用户读作"已进库"，实际一条没有）。
         services.AddSingleton(new StarMark.Integrations.Everything.FileIndexOptions
         {
-            Roots = fileSettings.LoadFileIndexRoots().ToList(),
-            MaxCount = fileSettings.LoadMaxFileIndexCount(),
             Enabled = fileSettings.LoadLocalDiskSearchEnabled(),
         });
         services.AddSingleton<StarMark.Integrations.Everything.EverythingQueryQueue>();
@@ -312,17 +312,11 @@ public partial class App : Application
             Services.GetRequiredService<StarMark.Data.MigrationRunner>().EnsureSchema();
             StarMark.Abstractions.StartupProfile.Mark("DI 与数据库迁移完成");
 
-            // 2.1 种子数据
-            try
-            {
-                var repo = Services.GetRequiredService<IItemRepository>();
-                Task.Run(() => SeedData.SeedIfEmptyAsync(repo, CancellationToken.None)).GetAwaiter().GetResult();
-            }
-            catch (Exception ex)
-            {
-                StarLog.Error("种子数据失败", ex);
-            }
-            StarMark.Abstractions.StartupProfile.Mark("种子数据");
+            // 2.1 「种子数据」整段删除（批次 VQ）。那颗 seeder 的自述就是"接入同步后可移除"，而那一天早到了：
+            // 它会把三条假 GitHub/书签条目和一条**指向不存在的文件**的假路径（技术文档.md）灌进用户真库——
+            // 用户报的"文件夹树里留着早已删除的测试用例路径、点开没反应又删不掉"，第一颗就是它。
+            // 现在库里有什么＝用户自己登记或同步来的，空库就照实显示"暂无条目"。
+            StarMark.Abstractions.StartupProfile.Mark("种子数据（已移除，空库不再灌假条目）");
 
             // 2.2 本地条目（待办/随记）迁移进统一 items 表（幂等，一次）
             try

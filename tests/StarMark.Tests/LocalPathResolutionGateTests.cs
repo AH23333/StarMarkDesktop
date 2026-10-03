@@ -27,7 +27,9 @@ public sealed class LocalPathResolutionGateTests
     /// <summary>必须走"两个候选 + 宿主判定"的动作／显示宿主（文件 → 方法体锚点）。</summary>
     private static readonly (string Path, string Signature)[] ActionHosts =
     [
-        ("src/StarMark.UI/Helpers/LauncherEx.cs", "public static async Task<string?> TryOpenAsync("),
+        // 批次 VQ 把这条出口拆成"只要话"与"话＋种类"两份，真正调用判据的那一份搬到 TryOpenDetailedAsync
+        // （前者现在只是转发）。锚点跟着搬家，判据（方法体里必须真调 TryExistingPath）一字未动。
+        ("src/StarMark.UI/Helpers/LauncherEx.cs", "public static async Task<(OpenFailure Kind, string? Message)> TryOpenDetailedAsync("),
         ("src/StarMark.UI/Controls/PreviewHost.xaml.cs", "private static bool TryGetLocalFile("),
         ("src/StarMark.UI/Helpers/ItemCardActions.cs", "public static async void OpenLocation("),
         ("src/StarMark.UI/Helpers/ItemCardActions.cs", "public static async void CopyUri("),

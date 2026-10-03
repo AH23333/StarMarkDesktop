@@ -550,6 +550,41 @@ public sealed partial class ItemRepository
     }
 
     /// <summary>
+    /// 删掉<b>若干条本机文件条目</b>（库里 <c>type=File</c> 且 source 是 filesystem/local 的那些行），
+    /// 返回<b>真正删掉的行数</b>（0＝那些行本来就不在，或根本不是文件条目）。
+    /// <para>WHERE 里 <b>id 与 (type, source) 三样缺一不可</b>（同 <see cref="DeleteClipboardEntryAsync"/>）：
+    /// 只按 id 删的签名挡不住调用方把书签 / Star / 待办的 Id 递进来，而那种误用的表现是
+    /// "用户点掉一条打不开的文件路径，结果丢了一条不可重建的条目"。种类条件写进 SQL 而不是写在 C# 里，
+    /// 是因为<b>这条语句必须自己就是安全的</b>——多一个调用点、少一次上游校验，都不该变成数据丢失。</para>
+    /// <para>⚠ <b>绝不碰磁盘上的文件</b>：这一行只是"我们自己库里的一个索引"，那个文件归用户（甚至在可移动盘上）。
+    /// 剪贴板图片那一族删行时顺带删文件，是因为那些文件是我们自己写进 <c>clip/</c> 目录的附件；两类所有权不同，
+    /// 别照抄。用户报的现场恰恰是"文件早删了、行还在" ⇒ 删行就够，删文件会二次伤害。</para>
+    /// <para>标签关联与 FTS 索引不需这里处理：<c>item_tags</c> 等表是 <c>ON DELETE CASCADE</c>。</para>
+    /// </summary>
+    public async Task<int> DeleteFileEntriesAsync(IReadOnlyList<long> itemIds, CancellationToken ct = default)
+    {
+        if (itemIds is null || itemIds.Count == 0) return 0;
+        using var conn = _factory.Open();
+        using var tx = conn.BeginTransaction();
+        var removed = 0;
+        foreach (var id in itemIds)
+        {
+            ct.ThrowIfCancellationRequested();
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = "DELETE FROM items WHERE id = @id AND type = @type AND source IN (@fs, @local);";
+            cmd.Parameters.AddWithValue("@id", id);
+            cmd.Parameters.AddWithValue("@type", ItemType.File.ToString().ToLowerInvariant());
+            cmd.Parameters.AddWithValue("@fs", ItemSources.FileSystem);
+            cmd.Parameters.AddWithValue("@local", ItemSources.Local);
+            removed += await cmd.ExecuteNonQueryAsync(ct);
+        }
+        await tx.CommitAsync(ct);
+        if (removed > 0) DataChangeHub.Notify();   // 摘掉的行要立刻从树／组件里消失，否则看起来像"没删掉"
+        return removed;
+    }
+
+    /// <summary>
     /// 对账要的"所有图片行"（批次 ClipIMG-1e）。<b>刻意不带行数窗口</b>：
     /// 借 <c>GetBySourceAsync</c> 那份默认 1000 的 limit 来对账，窗口之外的行会被当成"没人认领的文件"，
     /// 于是<b>一个本来完好的目录被报成一堆孤儿</b>——少报与错报一样难被发现（RSS 收藏键踩过同一坑）。

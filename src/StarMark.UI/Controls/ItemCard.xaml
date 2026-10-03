@@ -47,7 +47,7 @@
                                 Visibility="{x:Bind ViewModel.ShowsCollect, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutItem Text="删除" Click="Delete_Click"
                                 Visibility="{x:Bind ViewModel.IsLauncherMode, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                <MenuFlyoutItem Text="删除这条历史" Click="DeleteClipboard_Click"
+                <MenuFlyoutItem Text="{x:Bind ViewModel.DeleteMenuText, Mode=OneWay}" Click="DeleteClipboard_Click"
                                 Visibility="{x:Bind ViewModel.CanDeletePermanently, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutSeparator Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutItem Click="Pin_Click"

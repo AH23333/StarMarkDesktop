@@ -269,7 +269,7 @@ public sealed class AutoBackupWiringGateTests
         Assert.Contains("public bool LoadAutoBackupEnabled()", all);                   // Backup
         Assert.Contains("public int LoadAutoBackupIntervalHours()", all);              // Backup
         Assert.Contains("public bool LoadCanvasEnabled()", all);                       // Canvas
-        Assert.Contains("public IReadOnlyList<string> LoadFileIndexRoots()", all);     // FileIndex
+        Assert.Contains("public bool LoadLocalDiskSearchEnabled()", all);               // FileIndex（「索引进库」拆掉后这一族的代表声明换成本地磁盘搜索开关，批次 VQ）
         Assert.Contains("public void SaveWeatherCity(WeatherCity? city)", all);         // Weather
         Assert.Contains("public void SaveAiSettings(AiSettings settings)", all);        // Ai
         Assert.Contains("public UpdateState LoadUpdateState()", all);                   // Updates

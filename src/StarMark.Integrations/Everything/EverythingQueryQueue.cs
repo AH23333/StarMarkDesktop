@@ -13,16 +13,14 @@ namespace StarMark.Integrations.Everything;
 /// </summary>
 public sealed class FileIndexOptions
 {
-    /// <summary>需要索引的本地根目录。空表示使用默认（桌面/下载/文档）。</summary>
-    public IReadOnlyList<string> Roots { get; set; } = new List<string>();
-
-    /// <summary>每个根目录的索引数量上限。默认 5000。</summary>
-    public int MaxCount { get; set; } = 5000;
-
     /// <summary>
     /// 本地磁盘搜索总开关（默认关）。关时 <see cref="EverythingSource.IsAvailable"/> 恒 false，
-    /// 统一搜索直接跳过该源（不发 IPC 查询），且启动流程绝不下载 SDK / 安装 / 拉起 Everything——保障默认零内存零打扰。
+    /// 统一搜索直接跳过本源（不发 IPC 查询），且启动流程绝不下载 SDK / 安装 / 拉起 Everything——保障默认零内存零打扰。
     /// 由 UI 层从 SettingsStore 读取注入，避免 Integrations 反向依赖 UI。
+    /// <para>这里过去还有 <c>Roots</c>／<c>MaxCount</c> 两颗（「索引进库」=把若干目录下的文件全量写进 items 表），
+    /// 批次 VQ 按用户裁决整条拆掉了：那颗按钮只落盘配置、要等顶栏「同步」才生效，而 Everything 没在跑时
+    /// <c>FetchAsync</c> 与"根目录不存在"都是无声返回空 ⇒ 界面照样弹「索引同步完成」。
+    /// <b>实时全盘搜索（<see cref="EverythingSource.SearchAsync"/>）一字未动</b>——那才是他天天用的那一半。</para>
     /// </summary>
     public bool Enabled { get; set; }
 }
@@ -152,35 +150,18 @@ public sealed class EverythingSource : IItemSource
         : "Everything 引擎当前没在运行（开启本地磁盘搜索时 StarMark 会自带并拉起一份；也可手动启动 Everything）";
 
     /// <summary>
-    /// 全量拉取（P0-1b）：把用户配置的本地根目录下的文件索引进 items 表，落库为 ItemType.File。
-    /// 只索引指定根目录（不扫全盘）、每目录带数量上限；source_id 用路径哈希保证幂等，
-    /// 重复同步不会产生多余条目。Everything 未运行或根目录为空时返回空列表。
+    /// <b>本源不做全量入库</b>（批次 VQ，用户裁决拆掉「索引进库」）。
+    /// <para>为什么留着一个恒返回空的 <c>FetchAsync</c> 而不是整个删掉：Everything 同时是<b>实时全盘搜索</b>的源，
+    /// <c>SearchService</c> 与 <c>SyncCoordinator</c> 注入的是同一批 <see cref="IItemSource"/>，
+    /// 摘掉注册会连他天天用的那一半一起摘掉；接口又要求实现这个方法，所以把内容退化成空、把理由写在这里。</para>
+    /// <para>旧写法有四条静默出口（开关没关但引擎没跑／没配目录／根目录当前不存在／IPC 返回半截），
+    /// 全都不吭声，而顶栏同步结束后无条件弹一句「索引同步完成」⇒ 用户读作"进了库"，实际一条没有。
+    /// <b>库里剩下的文件行只可能来自用户自己登记的</b>（「记录到本地」／拖入快捷启动即入库），
+    /// 所以那些行现在删得掉、也不会"删了又被拉回来"——这正是 <c>ItemCardPolicy.CanDeletePermanently</c>
+    /// 放开文件行的前提，谁把这半截接回来就必须同时把那里改回去。</para>
     /// </summary>
-    public async Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
-    {
-        if (!IsAvailable || _options.Roots.Count == 0)
-            return Array.Empty<Item>();
-
-        var results = new List<Item>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var root in _options.Roots)
-        {
-            ct.ThrowIfCancellationRequested();
-            if (!Directory.Exists(root))
-                continue;
-
-            // 以根目录路径作为 Everything 查询词，匹配其下（含子目录）全部文件。
-            var filter = new SearchFilter { IncludeSize = true, MaxResults = _options.MaxCount };
-            // preemptPrevious:false ＝这一轮不被前台键入取消（P-52）；外部 ct 仍能停它。
-            var items = await _queue.QueryAsync(root, filter, ct, preemptPrevious: false);
-            foreach (var item in items)
-            {
-                if (seen.Add(item.SourceId))
-                    results.Add(item);
-            }
-        }
-        return results;
-    }
+    public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
 
     public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct)
     {
