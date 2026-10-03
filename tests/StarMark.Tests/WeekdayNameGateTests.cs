@@ -31,7 +31,8 @@ public sealed class WeekdayNameGateTests
     private const string MonthGridFile = "src/StarMark.Core/Widgets/MonthGrid.cs";
     private const string AlarmPolicyFile = "src/StarMark.Core/Widgets/AlarmPolicy.cs";
     private const string LocalItemStateFile = "src/StarMark.Abstractions/LocalItemState.cs";
-    private const string AlarmsUiFile = "src/StarMark.UI/Views/WidgetWindow.Alarms.cs";
+    /// <summary>批次 VO 之后"逐天那一排"住在两个入口共用的动作表里，不再住在宿主菜单那半文件。</summary>
+    private const string AlarmTableFile = "src/StarMark.UI/Views/AlarmMenu.cs";
     private const string GlanceUiFile = "src/StarMark.UI/Views/GlanceWidget.xaml.cs";
 
     /// <summary>
@@ -157,11 +158,15 @@ public sealed class WeekdayNameGateTests
             "UI 层又自己写了一遍星期名（测试工程够不着那一侧，只能靠这条拦）：\n" + string.Join("\n", offenders));
     }
 
-    /// <summary>闹钟那一排的逐天标签、速览那一行的全称：两处都必须现取判据。</summary>
+    /// <summary>
+    /// 闹钟那一排的逐天标签、速览那一行的全称：两处都必须现取判据。
+    /// <para>批次 VO 之后逐天那一排搬进了共用的动作表（表面上那一行与右键菜单同一份），
+    /// 锚点跟着搬到 <c>AlarmMenu.RowItems</c>——<b>不是改判据，是改落点</b>：那颗点还是只能问 DateTimeText。</para>
+    /// </summary>
     [Fact]
     public void TheTwoUiScreensForwardToTheJudge()
     {
-        var alarmRow = MethodBody(ReadRepoFile(AlarmsUiFile), "private MenuFlyoutSubItem BuildAlarmRow(");
+        var alarmRow = MethodBody(ReadRepoFile(AlarmTableFile), "public static IEnumerable<MenuFlyoutItemBase> RowItems(");
         Assert.Contains("DateTimeText.WeekdayShort(day)", alarmRow, StringComparison.Ordinal);
 
         var refresh = MethodBody(ReadRepoFile(GlanceUiFile), "private void RefreshDate()");

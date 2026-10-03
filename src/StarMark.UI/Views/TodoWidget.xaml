@@ -46,7 +46,8 @@
                   CanReorderItems="{x:Bind ViewModel.CanReorder, Mode=OneWay}"
                   AllowDrop="True"
                   DragItemsCompleted="TodoList_DragItemsCompleted"
-                  Padding="0" Margin="0" Background="Transparent">
+                  Padding="0" Margin="0" Background="Transparent"
+                  ScrollViewer.VerticalScrollBarVisibility="Hidden">
             <ListView.ItemContainerStyle>
                 <!-- 压掉 ListViewItem 默认的内边距/选中底/最小高度，保持原来 ItemsRepeater 的紧凑观感 -->
                 <Style TargetType="ListViewItem">

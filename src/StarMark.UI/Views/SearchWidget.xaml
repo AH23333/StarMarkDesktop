@@ -45,7 +45,7 @@
                     Background="Transparent" BorderThickness="0"
                     Click="ClearTags_Click"/>
         </StackPanel>
-        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" MaxHeight="132">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Hidden" MaxHeight="132">
             <ItemsControl ItemsSource="{x:Bind ViewModel.Tags, Mode=OneWay}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>

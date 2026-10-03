@@ -243,6 +243,44 @@ public static class AlarmPolicy
         return count == 1 ? $"闹钟 {at} 待确认" : $"闹钟 {at} 等 {count} 条待确认";
     }
 
+    /// <summary>时钟表面上一行闹钟：给界面画的，不是第二份真值（判据仍在这里，界面只摆盘子）。</summary>
+    /// <param name="Id">这一条的身份，点击回来时只认它。</param>
+    /// <param name="Text"><c>07:30 起床 · 每天</c>——<b>只由定义组成，不含"现在几点／还有多久"</b>，见 <see cref="FaceSignature"/>。</param>
+    /// <param name="Enabled">开着（表面那颗点的实心/空心）。</param>
+    /// <param name="Pending">正挂着这一轮没确认（表面把它标出来，出口仍是同一句 <c>ConfirmPending</c>）。</param>
+    public sealed record AlarmFaceRow(long Id, string Text, bool Enabled, bool Pending);
+
+    /// <summary>
+    /// 时钟表面上那一排：<b>按钟点升序，无效的那条垫底</b>。
+    /// <para>
+    /// 无效（分钟数越界，多半是手改存档或旧版本留下的）不藏起来：<see cref="FormatMinute"/> 会把它写成"时间无效"，
+    /// 于是表面上看得见"这一条不会响"。藏起来的后果是他以为自己那条还在，到第二天才发现没响。
+    /// </para>
+    /// <para>关掉的照旧占一行（灰着）：闹钟"关了"与"删了"是两件事，关掉的那条要留得下来才谈得上再开。</para>
+    /// </summary>
+    public static List<AlarmFaceRow> FaceRows(IEnumerable<AlarmItem> items, DateTimeOffset now)
+    {
+        var list = items.ToList();
+        list.Sort(static (a, b) =>
+        {
+            // 先按"有效/无效"分组，再按钟点。用显式比较器而不是 OrderBy/ThenBy：
+            // 这里要的是"无效一律垫底"这一条规则本身可读，不依赖 LINQ 的稳定排序假设。
+            var rankA = HasValidMinute(a.MinuteOfDay) ? 0 : 1;
+            var rankB = HasValidMinute(b.MinuteOfDay) ? 0 : 1;
+            return rankA != rankB ? rankA.CompareTo(rankB) : a.MinuteOfDay.CompareTo(b.MinuteOfDay);
+        });
+        return list.Select(item => new AlarmFaceRow(item.Id, LineOf(item), item.Enabled, IsPending(item, now))).ToList();
+    }
+
+    /// <summary>
+    /// 那一排要不要重画。<b>只看定义与状态，一次都不看"现在是几点"</b>：
+    /// 时钟每秒刷一整张表，签名里若掺进钟点或"还有多久"，表面就变成<b>每秒销毁重建一遍控件</b>——
+    /// 那是把"每秒改一次文本"升级成"每秒一次布局重排"，而代价正好由最不该卡的地方（常驻桌面的小窗）付。
+    /// 判"要不要重画"住在 Core，是为了让这条纪律有证人（<c>AlarmPolicyTests</c> 钉"时间走一秒不换签名"）。
+    /// </summary>
+    public static string FaceSignature(IReadOnlyList<AlarmFaceRow> rows)
+        => string.Join("|", rows.Select(static r => $"{r.Id}{(r.Enabled ? 'o' : 'x')}{(r.Pending ? '!' : '.')}{r.Text}"));
+
     /// <summary>
     /// 解析"新建/修改"那一个输入框：<b>时间与名字写在同一行</b>（<c>7:30 起床</c>）。
     /// 拆成两个输入框会让"改名"和"改时间"变成两趟弹窗，而在小窗右键菜单里，多一步就是不做这一步。

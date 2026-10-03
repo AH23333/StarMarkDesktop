@@ -6,7 +6,7 @@
     xmlns:controls="using:StarMark.UI.Controls"
     xmlns:vm="using:StarMark.UI.ViewModels">
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Padding="12,8,12,12" Spacing="6">
             <!-- 只做"快捷入口"。置顶条目此前也在这一格里展示，与「置顶条目」组件重复，经用户裁决摘除。 -->
             <StackPanel Orientation="Horizontal" Margin="0,4,0,2">

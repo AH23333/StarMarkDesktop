@@ -35,7 +35,7 @@
                     <TextBlock x:Name="HintBlock" Text="" FontSize="10" Opacity="0.6" TextWrapping="Wrap"
                                Visibility="Collapsed"/>
                     <TextBlock Text="历史（点一下填回输入框）" FontSize="11" Opacity="0.7"/>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="190">
+                    <ScrollViewer VerticalScrollBarVisibility="Hidden" MaxHeight="190">
                         <ItemsRepeater ItemsSource="{x:Bind ViewModel.History, Mode=OneWay}">
                             <ItemsRepeater.ItemTemplate>
                                 <DataTemplate x:DataType="vm:CalcHistoryEntry">

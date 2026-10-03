@@ -94,6 +94,14 @@ public sealed partial class WidgetManager
     /// <summary>全部组件实例（设置页 / 托盘菜单遍历用）。</summary>
     public IReadOnlyList<WidgetInstanceConfig> Instances => _storage.Load().Instances;
 
+    /// <summary>
+    /// 这颗实例<b>当前那扇宿主窗口</b>；没在册（未显示 / 隐藏后被回收）时为 null。
+    /// <para>组件想"在自己那块屏幕上弹输入框"时问这一句。不去爬可视树：窗口的 <c>Content</c> 之上
+    /// 并没有一条指向 <see cref="WidgetWindow"/> 的父子链，爬是爬不到的；而"组件与宿主各认一份父窗"
+    /// 迟早与册内那份对不上（同一件判据两处各写一份，记忆 ⑧）。</para>
+    /// </summary>
+    public WidgetWindow? WindowOf(string instanceId) => _windows.GetValueOrDefault(instanceId);
+
     // ───────────────────────── 吸附支持 ─────────────────────────
 
     /// <summary>其他可见组件窗口的当前矩形（物理像素），供拖动吸附。</summary>

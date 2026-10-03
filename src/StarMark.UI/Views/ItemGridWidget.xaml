@@ -32,7 +32,7 @@
         </StackPanel>
 
         <!-- 结果列表：非活动格用 Items（可点开/右键），最近活动格（#51）用 Events 事件流（仅展示、三色圆点） -->
-        <ScrollViewer Grid.Row="1" Padding="12,4,12,12">
+        <ScrollViewer Grid.Row="1" Padding="12,4,12,12" VerticalScrollBarVisibility="Hidden">
             <StackPanel>
                 <ItemsRepeater x:Name="ResultsRepeater" ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}">
                     <ItemsRepeater.ItemTemplate>

@@ -31,6 +31,15 @@ public interface IAlarmEditor
 
     void Add(int minute, string label, AlarmDays days);
     void SetEnabled(long id, bool enabled);
+
+    /// <summary>
+    /// 翻一下这一条的开关。<b>时钟表面那颗点走这条</b>，不走 <see cref="SetEnabled"/>：
+    /// 表面上看到的 <c>Enabled</c> 是<b>建行那一刻的快照</b>，而同一条还有第二个入口（右键菜单里那颗
+    /// <c>ToggleMenuFlyoutItem</c>）能改它——拿快照回写的症状是"按下没反应、再按一次才关"。
+    /// 当前状态只从条目本身读，翻动作本身在 VM 一处做。
+    /// </summary>
+    void ToggleEnabled(long id);
+
     void SetDays(long id, AlarmDays days);
     void SetTime(long id, int minute, string label);
     void Remove(long id);

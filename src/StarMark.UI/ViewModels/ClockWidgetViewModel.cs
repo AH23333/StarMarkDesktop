@@ -50,6 +50,23 @@ public sealed partial class ClockWidgetViewModel : ObservableObject
     /// <summary>某条闹钟到点了（组件据此发右下角提示卡——<b>提醒的出口在 UI 侧，判据在 Core</b>）。</summary>
     public event Action<AlarmItem>? AlarmReached;
 
+    /// <summary>
+    /// 时钟表面那一排闹钟的内容（<b>不是每秒重算的那份</b>：只有定义/开关/待确认真变了才换，见 <see cref="AlarmFaceChanged"/>）。
+    /// </summary>
+    public IReadOnlyList<AlarmPolicy.AlarmFaceRow> FaceRows { get; private set; } = Array.Empty<AlarmPolicy.AlarmFaceRow>();
+
+    /// <summary>那一排的内容签名，住在 Core（<see cref="AlarmPolicy.FaceSignature"/>），这里只保存上一次那一份。</summary>
+    public string FaceSignature { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// 那一排<b>确实变了</b>（加了/删了/改了钟点或名字/开关翻了一下/挂上或收掉一次待确认）。
+    /// <para>组件订阅它来重画，<b>不订阅每秒那趟</b>：时钟每秒都要刷时间文本，
+    /// 若按那一趟重画就是每秒销毁重建一遍控件——把"改一行字"升级成"一次布局重排"，
+    /// 而且正是他此刻盯着看的那个小窗。</para>
+    /// </summary>
+    public event Action? AlarmFaceChanged;
+
+
     /// <summary>当前这套闹钟（供右键菜单列条目）。<b>菜单每次打开重新取</b>，所以不存在"菜单里是旧的"。</summary>
     public IReadOnlyList<AlarmItem> Alarms => _alarms;
 
@@ -107,18 +124,36 @@ public sealed partial class ClockWidgetViewModel : ObservableObject
         }
         AlarmText = AlarmPolicy.PendingLine(_alarms, now);
         HasAlarmLine = AlarmText.Length > 0;
+        RebuildFace(now);
         return notified;
     }
 
-    // ────────── 以下由右键菜单调用（每一个改动都要跟着落盘，见 ClockWidget）──────────
+    /// <summary>
+    /// 算出时钟表面那一排，并且<b>只在它真的变了</b>才通知重画。
+    /// <para>"变没变"的比较交给 Core 的签名（<see cref="AlarmPolicy.FaceSignature"/>），这里不判内容——
+    /// 每秒那趟 <see cref="Update"/> 也要走这个方法的邻路，比较写在这儿就会顺手把钟点也掺进签名，
+    /// 于是每秒重画一次控件。</para>
+    /// </summary>
+    private void RebuildFace(DateTimeOffset now)
+    {
+        var rows = AlarmPolicy.FaceRows(_alarms, now);
+        var signature = AlarmPolicy.FaceSignature(rows);
+        if (signature == FaceSignature) return;
+        FaceRows = rows;
+        FaceSignature = signature;
+        AlarmFaceChanged?.Invoke();
+    }
+
+    // ────────── 以下由两个入口调用：时钟表面那一排 + 宿主右键菜单（每个改动都要落盘，见 ClockWidget）──────────
 
     /// <summary>从存档灌入（<b>逐条 Clone</b>：菜单改的是这一份，存档读回来的那份不该跟着一起变）。</summary>
     public void Load(IEnumerable<AlarmItem>? items)
     {
         _alarms.Clear();
-        if (items is null) return;
-        foreach (var item in items)
-            if (item is not null) _alarms.Add(item.Clone());
+        if (items is not null)
+            foreach (var item in items)
+                if (item is not null) _alarms.Add(item.Clone());
+        RebuildFace(DateTimeOffset.Now);      // 不判到点：到点那一发由每秒那趟与宿主启动校准负责，重画排本身不用等
     }
 
     /// <summary>交给持久化的副本（同样逐条 Clone，避免存出去的东西与在用的共享对象）。</summary>
@@ -146,6 +181,14 @@ public sealed partial class ClockWidgetViewModel : ObservableObject
 
     /// <summary>开／关这一条（关掉的闹钟不删：留着那条才谈得上"再开回来"）。</summary>
     public void SetEnabled(long id, bool enabled) => Mutate(id, item => item.Enabled = enabled);
+
+    /// <summary>
+    /// 翻一下这一条。<b>表面那颗点走这条，而不是把界面上看到的 bool 传回来</b>：
+    /// 界面上那份是建行那一刻的快照，而同一条目有两个入口能改它（表面＋右键菜单里那颗
+    /// <c>ToggleMenuFlyoutItem</c>）——拿快照回写的症状是"我按下去没反应，再按一下才关"。
+    /// 当前状态只从条目本身读。
+    /// </summary>
+    public void ToggleEnabled(long id) => Mutate(id, item => item.Enabled = !item.Enabled);
 
     public void SetDays(long id, AlarmDays days) => Mutate(id, item => item.Days = days);
 

@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Linq;
 using System.Text.Json;
 using StarMark.Core.Widgets;
 using Xunit;
@@ -256,6 +257,95 @@ public sealed class AlarmPolicyTests
         Assert.Equal(AlarmPolicy.MaxLabelLength + 1, trimmed.Length);       // 截到上限再补一个省略号
         Assert.EndsWith("…", trimmed, StringComparison.Ordinal);
         Assert.Equal("短", AlarmPolicy.TrimLabel("  短  "));                 // 两头空白先去掉
+    }
+
+    // ────────── 时钟表面那一排（批次 VO）──────────
+
+    /// <summary>表面那一排要的是<b>各条有自己的 id</b>（签名带 id），上面的 <see cref="Item"/> 恒等 id＝1 不够用。</summary>
+    private static AlarmItem Row(long id, int minute, AlarmDays days = AlarmDays.Daily, bool enabled = true,
+                                 string label = "", DateTimeOffset? pending = null)
+        => new()
+        {
+            Id = id,
+            MinuteOfDay = minute,
+            Days = days,
+            Enabled = enabled,
+            Label = label,
+            PendingSince = pending,
+        };
+
+    /// <summary>
+    /// 表面的行序：<b>按钟点升序，坏值垫底但绝不被藏起来</b>。
+    /// 关掉的那条照旧占一行（"关了"与"删了"是两件事，留着那条才谈得上再开），
+    /// 而手改存档来的越界分钟要看得见——藏起来的后果是他以为那条还在，到第二天才发现没响。
+    /// </summary>
+    [Fact]
+    public void FaceRows_AreInClockOrder_AndKeepBothTheClosedAndTheBroken()
+    {
+        var rows = AlarmPolicy.FaceRows(new[]
+        {
+            Row(2, 540, label: "跑步"),
+            Row(1, 450, label: "起床"),
+            Row(3, 60, enabled: false, label: "早课"),
+            Row(4, 2000, label: "坏值"),                  // 越界：LineOf 写成"时间无效"，垫在最后
+        }, At(8, 0));
+
+        Assert.Equal(new[] { "01:00 早课 · 每天", "07:30 起床 · 每天", "09:00 跑步 · 每天", "时间无效 坏值 · 每天" },
+                     rows.Select(row => row.Text).ToArray());
+        Assert.Equal(new long[] { 3, 1, 2, 4 }, rows.Select(row => row.Id).ToArray());
+        Assert.Equal(new[] { false, true, true, true }, rows.Select(row => row.Enabled).ToArray());
+        Assert.All(rows, row => Assert.False(row.Pending));   // 谁都没弹过 ⇒ 一行"待确认"都不该有
+    }
+
+    /// <summary>到点没确认的那一条要在表面上标出来（<c>Pending</c>），确认掉就退回常态。</summary>
+    [Fact]
+    public void FaceRows_MarkTheRoundStillAwaitingConfirmation()
+    {
+        var fired = Row(1, 450, AlarmDays.None, pending: At(7, 30));
+        var quiet = Row(2, 540);
+        var rows = AlarmPolicy.FaceRows(new[] { quiet, fired }, At(8, 0));
+        Assert.Equal(new[] { true, false }, rows.Select(row => row.Pending).ToArray());
+
+        AlarmPolicy.Confirm(fired);
+        Assert.All(AlarmPolicy.FaceRows(new[] { quiet, fired }, At(8, 0)), row => Assert.False(row.Pending));
+    }
+
+    /// <summary>
+    /// 那一排"变没变"的签名<b>一次都不看现在是几点</b>：时钟每秒刷一整张表，签名里掺进钟点或倒计时，
+    /// 表面就变成每秒销毁重建一遍控件（把"改一行字"升级成"一次布局重排"，代价由常驻桌面的小窗付）。
+    /// 反过来，开关翻一下、改个钟点、挂上一次待确认都必须换签名——否则点了没反应。
+    /// </summary>
+    [Fact]
+    public void FaceSignature_IgnoresTheTickingClock_ButNotAnyRealChange()
+    {
+        var baseline = AlarmPolicy.FaceSignature(
+            AlarmPolicy.FaceRows(new[] { Row(1, 450, label: "起床"), Row(2, 540, enabled: false) }, At(8, 0)));
+
+
+        // 同一套定义，时刻走到半夜：签名不许变（这一句钉的是"每秒那趟不会重画"）
+        Assert.Equal(baseline, AlarmPolicy.FaceSignature(
+            AlarmPolicy.FaceRows(new[] { Row(1, 450, label: "起床"), Row(2, 540, enabled: false) }, At(23, 59))));
+
+        // 开关翻一下
+        Assert.NotEqual(baseline, AlarmPolicy.FaceSignature(
+            AlarmPolicy.FaceRows(new[] { Row(1, 450, label: "起床"), Row(2, 540) }, At(8, 0))));
+
+        // 改名字／改钟点
+        Assert.NotEqual(baseline, AlarmPolicy.FaceSignature(
+            AlarmPolicy.FaceRows(new[] { Row(1, 450, label: "起床啦"), Row(2, 540, enabled: false) }, At(8, 0))));
+        Assert.NotEqual(baseline, AlarmPolicy.FaceSignature(
+            AlarmPolicy.FaceRows(new[] { Row(1, 451, label: "起床"), Row(2, 540, enabled: false) }, At(8, 0))));
+
+        // 挂上一次待确认
+        Assert.NotEqual(baseline, AlarmPolicy.FaceSignature(
+            AlarmPolicy.FaceRows(new[] { Row(1, 450, label: "起床", pending: At(7, 30)), Row(2, 540, enabled: false) }, At(8, 0))));
+
+        // 两条互不相干的闹钟不能撞签名（每一位都带上自己的源字段，不是"条数＋长度"那种退化形状）
+        Assert.NotEqual(
+            AlarmPolicy.FaceSignature(AlarmPolicy.FaceRows(new[] { Row(1, 450, label: "起床") }, At(8, 0))),
+            AlarmPolicy.FaceSignature(AlarmPolicy.FaceRows(new[] { Row(2, 450, label: "起床") }, At(8, 0))));
+
+        Assert.Equal(string.Empty, AlarmPolicy.FaceSignature(Array.Empty<AlarmPolicy.AlarmFaceRow>()));
     }
 
     // ────────── 输入解析 ──────────

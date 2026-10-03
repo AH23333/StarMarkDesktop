@@ -62,7 +62,7 @@
                         Padding="6,2" Click="TrendingRefresh_Click"
                         ToolTipService.ToolTip="强制重抓今日榜（每个周期每天至多自动抓一次）"/>
             </Grid>
-            <ScrollViewer MaxHeight="168" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ScrollViewer MaxHeight="168" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel x:Name="TrendingHost" Spacing="4"/>
             </ScrollViewer>
             <!-- 空与失败分开说：抓失败时留一句原因，不让用户以为"今天 GitHub 没有热榜" -->
@@ -84,7 +84,7 @@
 
             <TextBlock Grid.Row="0" Text="常看" FontSize="12" Opacity="0.6"/>
 
-            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel x:Name="ItemsHost" Spacing="4"/>
             </ScrollViewer>
 

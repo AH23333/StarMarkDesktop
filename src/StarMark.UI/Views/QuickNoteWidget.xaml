@@ -9,6 +9,7 @@
         <TextBox x:Name="NoteBox" PlaceholderText="随手记一笔，Ctrl+Enter 保存…" FontSize="12"
                  Style="{StaticResource WidgetInputBox}"
                  AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70"
+                 ScrollViewer.VerticalScrollBarVisibility="Hidden"
                  KeyDown="NoteBox_KeyDown"/>
         <Button Content="保存随记" HorizontalAlignment="Right" Padding="12,3,12,3"
                 Style="{StaticResource WidgetActionButton}"
