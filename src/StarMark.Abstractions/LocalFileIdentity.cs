@@ -137,7 +137,7 @@ public static class LocalFileIdentity
     /// 给<b>人看</b>的那条路径——<b>只用于显示，绝不拿去动作</b>（要动作请用 <see cref="TryExistingPath"/>）。
     /// <para>为什么需要它：库里的 <c>file://</c> 有两类生产者，一类原样、一类 percent 编码
     /// （<c>new Uri(path).AbsoluteUri</c>）。原样那格直接拿去分组或写进提示句，用户就会看到
-    /// <c>D:\Visual%20Studio%20Code\…</c> 这种字面串（批次 VR，用户真机报的"弹出的文件夹是编码的"，
+    /// <c>D:\Visual%20Studio%20Code\…</c> 这种字面串（批次 VR 起于用户原话「文件路径中的空格会被展示为%20」，
     /// 本机库里今天就躺着一条这样的历史行）。</para>
     /// <para><b>选哪一格这件事不许有第二次决定</b>：直接交回 <see cref="PreferredPathFromUri"/>（先问磁盘，
     /// 原始那格在盘上就用原始那格——所以真名叫 <c>100%20.txt</c> 的文件不会被"解码"展示）。这里只补它一种情形：

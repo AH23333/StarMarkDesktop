@@ -25,8 +25,9 @@ public static class LauncherEx
     /// "这台机器上确实放着这个东西"——文件与目录都算存在，全程序<b>只有这一颗</b>（批次 VR）。
     /// <para>它过去在 <c>LauncherEx</c>／<c>ItemCardActions</c>／<c>ItemDragHelper</c>／快捷启动的拖入与手输／
     /// 设置页的失联扫描里各写一遍（<c>p =&gt; File.Exists(p) || Directory.Exists(p)</c>）。
-    /// <b>少写一半 <c>Directory.Exists</c> 的那一份，症状就是"文件夹明明还在、点开设成已经不在了"</b>
-    /// （批次 210 修过一次同款）；而"盘上有没有"这种事实判断一旦有五份，就永远说不清用户报的那次是哪一份。</para>
+    /// <b>少写一半 <c>Directory.Exists</c> 的那一份会造出的成因形状是"文件夹明明还在、却被说不在了"</b>
+    /// （批次 210 修过一次同款；⚠ 这是<b>读码推出来的形状，本机没有任何一行命中它</b>——批次 VS 更正过这里的措辞，坑表 #252）。
+    /// 收成一颗的真正理由不需要那条症状：同一个磁盘事实分五份写，将来任何一方说不清"当时是哪一份在答话"。</para>
     /// <para>住在 UI 而不是 <c>Abstractions</c>：本地路径那颗判据刻意<b>不碰磁盘</b>（存在与否一律由调用方注入，
     /// 由 <c>LocalPathResolutionTests.TheJudgeNeverTouchesTheDiskItself</c> 钉着），所以磁盘事实归宿主这一侧。</para>
     /// </summary>

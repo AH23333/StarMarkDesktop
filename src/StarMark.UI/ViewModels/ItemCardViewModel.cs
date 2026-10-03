@@ -23,7 +23,7 @@ public partial class ItemCardViewModel : ObservableObject
 
     /// <summary>
     /// 卡片 tooltip 上那一条：<b>给人看的路径</b>（库里存的是 percent 编码的历史行时，别把
-    /// <c>file:///D:/Visual%20Studio%20Code/…</c> 原样印出来——批次 VR，用户真机报的"是编码的不是解码的"）。
+    /// <c>file:///D:/Visual%20Studio%20Code/…</c> 原样印出来——批次 VR，用户原话「文件路径中的空格会被展示为%20」）。
     /// <para>只有 <c>file://</c> 且两格里"解码那格在盘上、原样那格不在"时才换；其余一律原文。
     /// ⚠ 它<b>只用于显示</b>——复制地址、打开、去重键都仍用 <see cref="Uri"/> 原文，
     /// 否则会把"库里存的那一串"偷偷改掉（那是 <c>source_id</c> 与往返契约的口径）。</para>

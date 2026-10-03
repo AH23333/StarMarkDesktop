@@ -65,7 +65,7 @@ public static class ItemCardPolicy
     /// 只说"已经不在了"就等于把用户停在原地——他真正要问的是"那这行怎么办"。</para>
     /// <para>⚠ 参数是<b>给人看的那条路径</b>（<c>LocalFileIdentity.DisplayPath</c>）而不是库里的 uri 原文：
     /// 历史行里有一类是 percent 编码的，原文念出来就是 <c>D:\Visual%20Studio%20Code\…</c>
-    /// （批次 VR，用户真机报的"是编码的，不是解码的"）。</para>
+    /// （批次 VR 起于用户原话「文件路径中的空格会被展示为%20」）。</para>
     /// </summary>
     public static string MissingRowMessage(string shownPath)
         => $"本机的这个{StarMark.Abstractions.Clipboard.ClipboardPolicy.MissingFileClause}（{shownPath}），"

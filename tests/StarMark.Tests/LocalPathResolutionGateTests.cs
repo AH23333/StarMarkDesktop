@@ -59,7 +59,7 @@ public sealed class LocalPathResolutionGateTests
         "src/StarMark.Core/Search/SearchService.cs",
         "src/StarMark.Abstractions/ItemCardPolicy.cs",
         // ⚠ 批次 VR 把 `FolderPathUtil.cs` 从这份名单里<b>移出去了</b>，不是漏收：树里那一段是要印给人看的
-        //   （用户真机报"弹出的文件夹是编码的"），所以它改成"先问磁盘哪一格是真的"＝走 PreferredPathFromUri。
+        //   （用户原话：「文件路径中的空格会被展示为%20」），所以它改成"先问磁盘哪一格是真的"＝走 PreferredPathFromUri。
         //   登记它当年留在 raw-only 的理由（"改它会动到键与层级"）依然成立一半——键与显示同源正是我们要的：
         //   名字解开了，分组也跟着换过去，绝不允许出现"标题是解码的、点进去按编码的找"。
     ];

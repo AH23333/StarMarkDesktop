@@ -91,8 +91,9 @@ public sealed class StaleFileRowGateTests
         Assert.Contains("itemId <= 0", body, StringComparison.Ordinal);   // 没入库的行库里没有可删的东西
         // 那句话本身不许在这里另写一份（同一件事只许一个出处，批次 SI 立的口径）
         Assert.DoesNotContain("已经不在了", body, StringComparison.Ordinal);
-        // 每一次"打不开"都要落一行日志：界面上那句话没人截图就取不到证据（批次 VR 用户报"存在的文件夹被判缺失"，
-        // 当时日志里一个字都没有，只能靠只读查库反推）。
+        // 每一次"打不开"都要落一行日志：界面上那句话没人截图就取不到证据。
+        // 这笔欠账出自用户 VQ 那条原话（「点击也无反应…也没有告知」）；⚠ 批次 VR 曾给它挂过一条"用户报的症状"，
+        // 逐字核对后那条不是他说的（坑表 #252），但"这一族以前一个字不写日志"是真的。
         Assert.Contains("StarLog.Warn", body, StringComparison.Ordinal);
     }
 

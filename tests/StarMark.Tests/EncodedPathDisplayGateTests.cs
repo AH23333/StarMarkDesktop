@@ -12,7 +12,7 @@ namespace StarMark.Tests;
 /// <para>
 /// 病一＝<b>编码态印给人看</b>。库里 <c>file://</c> 有两类互补生产者（原样的 <c>UriForPath</c> 与 percent 编码的
 /// <c>new Uri(path).AbsoluteUri</c>），而文件夹树的层级、卡片的 tooltip、"已经不在本机"那句提示以前都直接念
-/// 库里那一串 ⇒ 用户看到的是 <c>D:\Visual%20Studio%20Code\…</c>（真机报的第三条症状）。
+/// 库里那一串 ⇒ 用户看到的是 <c>D:\Visual%20Studio%20Code\…</c>（用户原话：「文件路径中的空格会被展示为%20」）。
 /// 修法不是"到处 Unescape"：<b>选哪一格仍归 <c>LocalFileIdentity</c> 那一颗</b>（先问磁盘，原始那格在盘上就用它，
 /// 否则真名叫 <c>100%20.txt</c> 的文件会被改名展示），显示侧只是改用那颗的出口。
 /// </para>
