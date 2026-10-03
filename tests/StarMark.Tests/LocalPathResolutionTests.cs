@@ -139,15 +139,23 @@ public sealed class LocalPathResolutionTests
         Assert.Equal(2, disk.Asked.Count);                             // 先问原始、再问解码
     }
 
+    /// <summary>
+    /// 两格<b>真的不同</b>且<b>都在盘上</b>时必须取原始那一格：真名叫 <c>100%20.txt</c> 的文件与它的解码影子
+    /// <c>"100 .txt"</c> 可以同名并存，定序反了就会指到另一个人的文件上去。
+    /// <para>⚠ 这一格原先用的是 <c>UriForPath(@"C:\My Doc\x.png")</c>——那条 uri 里没有 <c>%XX</c>，
+    /// 两格算出来是<b>同一个串</b>，所以"反了也照样绿"（批次 VR 台架 B2 把定序调反，只有问次数那格替它认了罪）。
+    /// 夹具换成两格确实分岔的形态，这颗才真的在钉定序。</para>
+    /// </summary>
     [Fact]
     public void RawStillWinsWhenBothAreOnDisk()
     {
-        const string path = @"C:\My Doc\x.png";
-        var uri = LocalFileIdentity.UriForPath(path);                  // 原始三斜杠形态（本地不存在 %XX）
+        const string uri = "file://C:/b/100%20.txt";
         var (raw, decoded) = LocalFileIdentity.PathCandidates(uri);
-        var disk = new FakeDisk(raw, decoded);
+        Assert.NotEqual(raw, decoded);                                 // 夹具自证：两格确实不是一个串
+        var disk = new FakeDisk(raw, decoded);                         // 盘上真的同时放着两个名字
         Assert.True(LocalFileIdentity.TryExistingPath(uri, disk.Exists, out var resolved));
         Assert.Equal(raw, resolved);                                   // 定序不许反：反了就会解掉真名叫 %XX 的文件
+        Assert.Equal(raw, Assert.Single(disk.Asked));                   // 且命中就不必再问第二格
     }
 
     /// <summary>两个候选都不在磁盘上 ⇒ false，且<b>不吐一条造出来的路径</b>；兜法（报原因／照抄原串／退成文本）归宿主。</summary>
@@ -218,5 +226,74 @@ public sealed class LocalPathResolutionTests
         Assert.DoesNotContain("File.Exists", body, StringComparison.Ordinal);
         Assert.DoesNotContain("Directory.Exists", body, StringComparison.Ordinal);
         Assert.Contains("existsOnDisk", body, StringComparison.Ordinal);
+    }
+
+    // ────────── 批次 VR：给人看的那一格（显示侧）──────────
+
+    /// <summary>
+    /// <b>没有任何 %XX 可解时不去问磁盘</b>：两格本来就是同一条（裸 <c>#</c> 我们要的也正是原始那格）。
+    /// <para>这条不是微优化而是行为不变式：文件夹树重建对<b>每一行</b>文件条目都走这里，
+    /// 几千行 ⇒ 每行一次 stat 是启动刻度上看得见的耗时；而结果与问了磁盘完全一致。</para>
+    /// </summary>
+    [Fact]
+    public void PreferredPathSkipsTheDiskWhenThereIsNothingToDecode()
+    {
+        var disk = new FakeDisk();                       // 空磁盘：任何一格都不在
+        const string uri = "file://C:/docs/C#入门.docx";
+        Assert.Equal(@"C:\docs\C#入门.docx", LocalFileIdentity.PreferredPathFromUri(uri, disk.Exists));
+        Assert.Empty(disk.Asked);
+        // 空格／中文都不算 %XX，一样不必问
+        Assert.Equal(@"D:\工作 报告\x.pdf",
+            LocalFileIdentity.PreferredPathFromUri(LocalFileIdentity.UriForPath(@"D:\工作 报告\x.pdf"), disk.Exists));
+        Assert.Empty(disk.Asked);
+    }
+
+    /// <summary>带 %XX 时仍按"先问磁盘"的老口径：原始那格在就用原始那格，真名叫 <c>100%20.txt</c> 的不许被解码展示。</summary>
+    [Fact]
+    public void DisplayPathStillPrefersTheLiteralPercentNameWhenItIsTheOneOnDisk()
+    {
+        var disk = new FakeDisk(@"C:\b\100%20.txt");
+        Assert.Equal(@"C:\b\100%20.txt", LocalFileIdentity.DisplayPath("file://C:/b/100%20.txt", disk.Exists));
+    }
+
+    /// <summary>编码那格才是盘上真名时，显示侧交回人话（VR 修的那一条：树上不许印 <c>Visual%20Studio%20Code</c>）。</summary>
+    [Fact]
+    public void DisplayPathGivesTheHumanNameWhenTheEncodedFormIsTheOneOnDisk()
+    {
+        const string real = @"D:\Visual Studio Code\Something";
+        var disk = new FakeDisk(real);
+        var shown = LocalFileIdentity.DisplayPath(new Uri(real).AbsoluteUri, disk.Exists);
+        Assert.Equal(real, shown);
+        Assert.DoesNotContain("%", shown, StringComparison.Ordinal);
+    }
+
+    /// <summary>两格都不在盘上时<b>不许凭空造一个名字</b>：仍给库里那一串（与 VR 之前逐字一致）。</summary>
+    [Fact]
+    public void DisplayPathKeepsTheStoredFormWhenNeitherCandidateExists()
+        => Assert.Equal(@"Q:\Never%20Here\x.md",
+            LocalFileIdentity.DisplayPath("file:///Q:/Never%20Here/x.md", _ => false));
+
+    /// <summary>
+    /// <b>非 <c>file://</c> 那一臂是这颗与 <see cref="LocalFileIdentity.PreferredPathFromUri"/> 唯一的分工</b>：
+    /// 显示侧要原样给出串本身，因为它的调用点是卡片 tooltip——回空串等于把书签行的地址从界面上抹掉。
+    /// </summary>
+    [Theory]
+    [InlineData("https://example.com/x")]
+    [InlineData("starmark://item/7")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void DisplayPathNeverReturnsBlankForSomethingTheCardHasToPrint(string? uri)
+    {
+        var shown = LocalFileIdentity.DisplayPath(uri, _ => false);
+        if (string.IsNullOrEmpty(uri)) Assert.Equal(string.Empty, shown);
+        else Assert.Equal(uri, shown);
+    }
+
+    /// <summary>缺盘符／UNC 没有原始那一格，解码那一格照样能还原成人话（与 <c>LauncherEx</c> 的既有能力同一口径）。</summary>
+    [Fact]
+    public void DisplayPathResolvesUncThroughTheDecodedCandidate()
+    {
+        const string unc = @"\\server\share";
+        Assert.Equal(unc, LocalFileIdentity.DisplayPath("file://server/share", p => p == unc));
     }
 }

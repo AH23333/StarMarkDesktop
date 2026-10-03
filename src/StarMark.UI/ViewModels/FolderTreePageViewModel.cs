@@ -180,7 +180,8 @@ public partial class FolderTreePageViewModel : ObservableObject
                 foreach (var item in items)
                 {
                     if (item.Pinned) pinnedItems.Add(item);
-                    var path = FolderPathUtil.GetSegments(item);
+                    // 层级里那串文件夹名要给用户看，所以由政策层"先问磁盘哪一格是真的"来选（编码态 URI 不再被原样印出来）。
+                    var path = FolderPathUtil.GetSegments(item, StarMark.UI.Helpers.LauncherEx.ExistsOnDisk);
                     var node = GetOrCreateNode(nodeMap, path);
                     node.Items.Add(item);
                 }

@@ -308,8 +308,9 @@ public sealed partial class PreviewHost : UserControl
         var uri = _viewModel?.Uri;
         if (!string.IsNullOrWhiteSpace(uri))
         {
-            // 经统一入口打开：套用协议白名单闸门，并让 file:// 走 LaunchFile/Folder（直调 LaunchUriAsync 对 file:// 静默失效）。
-            _ = StarMark.UI.Helpers.LauncherEx.OpenAsync(uri);
+            // 经统一入口打开：套用协议白名单闸门，并让 file:// 走 ShellExecute（直调 LaunchUriAsync 对 file:// 静默失效）。
+            // 批次 VR：这里原来是 `_ = LauncherEx.OpenAsync(uri)`——预览窗里点"打开"没反应时，连一句为什么都听不到。
+            StarMark.UI.Helpers.ItemCardActions.OpenUriAndReport(uri, _viewModel?.Id ?? 0);
         }
     }
 }

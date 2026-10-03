@@ -363,7 +363,7 @@ public sealed partial class GlanceWidget : UserControl
             HorizontalContentAlignment = HorizontalAlignment.Left,
         };
         ToolTipService.SetToolTip(button, "左键打开仓库 · 右键可 Star / 收进收藏");
-        button.Click += (_, _) => _ = LauncherEx.OpenAsync(repo.Url);
+        button.Click += (_, _) => StarMark.UI.Helpers.ItemCardActions.OpenUriAndReport(repo.Url);
         WireTrendingRowContext(button);
         return button;
     }
@@ -429,10 +429,11 @@ public sealed partial class GlanceWidget : UserControl
         return button;
     }
 
-    private static async void Item_Click(object sender, RoutedEventArgs e)
+    private static void Item_Click(object sender, RoutedEventArgs e)
     {
+        // 批次 VR：这条也接住回报——速览里点一条 RSS 条目没反应时，以前连一句为什么都听不到。
         if (sender is Button { Tag: string uri })
-            await LauncherEx.OpenAsync(uri);
+            StarMark.UI.Helpers.ItemCardActions.OpenUriAndReport(uri);
     }
 
     private void ShowEmpty(bool empty)

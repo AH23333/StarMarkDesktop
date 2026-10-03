@@ -67,7 +67,7 @@ public sealed class QuickLaunchWidgetViewModel
             uri = parsed;
             return true;
         }
-        if (File.Exists(text) || Directory.Exists(text))
+        if (StarMark.UI.Helpers.LauncherEx.ExistsOnDisk(text))
         {
             uri = new Uri(text);
             return true;

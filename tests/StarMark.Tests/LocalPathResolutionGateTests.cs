@@ -50,8 +50,6 @@ public sealed class LocalPathResolutionGateTests
     /// <list type="bullet">
     /// <item><c>SearchService.CanonicalizeUri</c>＝去重键。键一旦跟着 <c>%XX</c> 解码变，
     ///   <c>My Doc\x</c> 与 <c>My%20Doc\x</c> 这两个<b>真实不同的文件</b>就会塌成一条；而键是存量行的主键，改它要迁移。</item>
-    /// <item><c>FoldPathUtil.FileSegments</c>＝文件夹树的层级。层级只要"这个字符串是不是我的路径形状"，不碰磁盘，
-    ///   拿解码格反而会把名字里真带 <c>%20</c> 的文件夹解错。</item>
     /// <item><c>ItemCardPolicy</c>／<c>ItemCardActions</c> 的"这张图能不能按路径读"两处——问的是后缀与能否读到，
     ///   且剪贴板图片行另有主路（按 <c>ClipAssets</c> 的名字名册读，不经 Uri）。</item>
     /// </list>
@@ -59,8 +57,11 @@ public sealed class LocalPathResolutionGateTests
     private static readonly string[] IntentionalRawOnly =
     [
         "src/StarMark.Core/Search/SearchService.cs",
-        "src/StarMark.Abstractions/FolderPathUtil.cs",
         "src/StarMark.Abstractions/ItemCardPolicy.cs",
+        // ⚠ 批次 VR 把 `FolderPathUtil.cs` 从这份名单里<b>移出去了</b>，不是漏收：树里那一段是要印给人看的
+        //   （用户真机报"弹出的文件夹是编码的"），所以它改成"先问磁盘哪一格是真的"＝走 PreferredPathFromUri。
+        //   登记它当年留在 raw-only 的理由（"改它会动到键与层级"）依然成立一半——键与显示同源正是我们要的：
+        //   名字解开了，分组也跟着换过去，绝不允许出现"标题是解码的、点进去按编码的找"。
     ];
 
     /// <summary>解码那格（<c>Uri.LocalPath</c>）只许出现在判据文件里——别处再写一遍就是第二主人。</summary>
@@ -105,7 +106,7 @@ public sealed class LocalPathResolutionGateTests
         Assert.DoesNotContain("TryPathFromUri", body, StringComparison.Ordinal);   // 别再自己拼"要么这个要么那个"
     }
 
-    /// <summary>名单里那三处<b>不许</b>被"顺手统一"成走磁盘的还原——它们改的是键与层级，不是显示。</summary>
+    /// <summary>名单里的每一处<b>不许</b>被"顺手统一"成走磁盘的还原——它们改的是键与资格，不是显示。</summary>
     [Theory]
     [MemberData(nameof(RawOnlyData))]
     public void TheNamedRawOnlySitesStayRaw(string path, string signature)
@@ -157,7 +158,7 @@ public sealed class LocalPathResolutionGateTests
     public static TheoryData<string, string> RawOnlyData()
         => Hosts([
             ("src/StarMark.Core/Search/SearchService.cs", "private static string CanonicalizeUri("),
-            ("src/StarMark.Abstractions/FolderPathUtil.cs", "public static string[] FileSegments("),
+            // FolderPathUtil.FileSegments 已移出（批次 VR，理由见 IntentionalRawOnly）：它现在走 PreferredPathFromUri。
             ("src/StarMark.Abstractions/ItemCardPolicy.cs", "public static bool CanCopyAsImage("),
         ]);
 

@@ -80,7 +80,7 @@
                            VerticalAlignment="Center"
                            Tapped="Title_Tapped"
                            local:HighlightHelper.Segments="{x:Bind ViewModel.TitleSegments, Mode=OneWay}"
-                           ToolTipService.ToolTip="{x:Bind ViewModel.Uri, Mode=OneWay}"/>
+                           ToolTipService.ToolTip="{x:Bind ViewModel.UriForDisplay, Mode=OneWay}"/>
                 <TextBlock Text="{x:Bind ViewModel.SizeText, Mode=OneWay}" Margin="8,0,0,0"
                            FontSize="11" Style="{StaticResource MutedText}"
                            ToolTipService.ToolTip="文件大小"

@@ -86,7 +86,8 @@ public sealed partial class TrendingPage : Page
     /// </summary>
     private void Card_OpenRequested(object sender, long itemId)
     {
-        if (sender is Controls.ItemCard { ViewModel: { } vm }) _ = LauncherEx.OpenAsync(vm.Uri);
+        // 批次 VR：统一回报链——热榜候选点开没反应时，也要说得出是"浏览器没注册 http"还是"这行没地址"。
+        if (sender is Controls.ItemCard { ViewModel: { } vm }) ItemCardActions.OpenUriAndReport(vm.Uri, vm.Id);
     }
 
     private void Card_CopyRequested(object? sender, ItemCardViewModel vm) => ItemCardActions.CopyUri(vm);

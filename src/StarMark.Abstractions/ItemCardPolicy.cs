@@ -63,9 +63,12 @@ public static class ItemCardPolicy
     /// 批次 SI 立的口径：同一件事全程序只许一个出处，状态行、菜单灰项与这一格都从这里取。
     /// 这里多出的两半是这一族独有的：<b>后果</b>（打开没东西可开）与<b>出口</b>（条目还在库里，可以删）。
     /// 只说"已经不在了"就等于把用户停在原地——他真正要问的是"那这行怎么办"。</para>
+    /// <para>⚠ 参数是<b>给人看的那条路径</b>（<c>LocalFileIdentity.DisplayPath</c>）而不是库里的 uri 原文：
+    /// 历史行里有一类是 percent 编码的，原文念出来就是 <c>D:\Visual%20Studio%20Code\…</c>
+    /// （批次 VR，用户真机报的"是编码的，不是解码的"）。</para>
     /// </summary>
-    public static string MissingRowMessage(string uri)
-        => $"本机的这个{StarMark.Abstractions.Clipboard.ClipboardPolicy.MissingFileClause}（{uri}），"
+    public static string MissingRowMessage(string shownPath)
+        => $"本机的这个{StarMark.Abstractions.Clipboard.ClipboardPolicy.MissingFileClause}（{shownPath}），"
            + "打开没有东西可开——条目还留在库里，可以删掉这一行";
 
     /// <summary>

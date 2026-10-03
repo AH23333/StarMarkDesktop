@@ -30,16 +30,11 @@ public sealed partial class ActivityPage : Page
         ViewModel.LoadCommand.Execute(null);
     }
 
-    private async void Activity_Click(object sender, RoutedEventArgs e)
+    private void Activity_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: string uri } || string.IsNullOrEmpty(uri)) return;
-        try
-        {
-            await StarMark.UI.Helpers.LauncherEx.OpenAsync(uri);
-        }
-        catch (Exception ex)
-        {
-            StarLog.Warn($"活动条目打开失败: {uri} ({ex.Message})");
-        }
+        // 批次 VR：以前这里 await 完就把回报丢了——活动流里点一条打不开的记录，界面上一个字都不出现。
+        // 异常兜底与"为什么打不开"都在 LauncherEx／ItemCardActions 那一侧统一说，这里不再各写一份 try。
+        StarMark.UI.Helpers.ItemCardActions.OpenUriAndReport(uri);
     }
 }

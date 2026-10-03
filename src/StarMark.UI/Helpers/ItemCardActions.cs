@@ -50,7 +50,7 @@ public static class ItemCardActions
             // 所以在这里收口一次即可；否则搜索页右键一条剪贴板记录点"打开"会静默无事发生。
             if (ClipboardPolicy.OpensAsCopy(item.Type, item.Uri)) { CopyUri(new ItemCardViewModel(item)); return; }
             if (!string.IsNullOrEmpty(item.Uri))
-                ReportOpenFailure(new ItemCardViewModel(item), await LauncherEx.TryOpenDetailedAsync(item.Uri));
+                ReportOpenFailure(item.Id, await LauncherEx.TryOpenDetailedAsync(item.Uri));
         }
         catch (Exception ex)
         {
@@ -67,9 +67,19 @@ public static class ItemCardActions
     public static async void Open(XamlRoot xamlRoot, ItemCardViewModel? vm)
     {
         if (vm is null) return;
-        if (vm.Id <= 0) { ReportOpenFailure(vm, await LauncherEx.TryOpenDetailedAsync(vm.Uri)); return; }
+        if (vm.Id <= 0) { ReportOpenFailure(vm.Id, await LauncherEx.TryOpenDetailedAsync(vm.Uri)); return; }
         Open(xamlRoot, vm.Id);
     }
+
+    /// <summary>
+    /// 只有一条地址时的打开入口（组件行、预览窗内按钮这类"手上没有视图模型"的宿主）。
+    /// <para>批次 VR 加的：同一句"打开的回报"原来在六个宿主各被 <c>await LauncherEx.OpenAsync(...)</c>／
+    /// <c>_ = ...</c> 扔掉一次——<b>症状与 VQ 那条一模一样，只是换了宿主</b>。现在所有入口都汇到这里或
+    /// <see cref="Open(XamlRoot, ItemCardViewModel?)"/>，坏消息只有一条出路。</para>
+    /// <para><paramref name="itemId"/> 传 0（实时源虚拟行／快捷入口合成行）＝库里没这东西，按"只说不删"处理。</para>
+    /// </summary>
+    public static async void OpenUriAndReport(string? uri, long itemId = 0)
+        => ReportOpenFailure(itemId, await LauncherEx.TryOpenDetailedAsync(uri));
 
     /// <summary>
     /// 「点开这一行」的坏消息要说得出、并且落在用户能做的那件事上（批次 VQ，P-53/P-54 同口径）。
@@ -77,18 +87,21 @@ public static class ItemCardActions
     /// 只是没人递到界面：<b>症状"点了毫无反应"不是缺文案，是把已有的文案扔在了 await 的返回值里</b>。</para>
     /// <para>只有 <see cref="OpenFailure.MissingOnDisk"/> 这一类才递出「从库里删掉这一行」：那一行是我们自己的索引、
     /// 盘上已经没有东西可指。其余四类不给这颗按钮——"系统里没有能开它的程序"删行反而是把用户想开的东西弄丢，
-    /// 没地址／协议被挡／认不出地址就更不该由用户来清理数据。</para>
+    /// 没地址／协议被挡／认不出地址就更不该由用户来清理数据。<paramref name="itemId"/> 为 0＝这行没有库身份，同样只说不删。</para>
+    /// <para>⚠ 每一次"打不开"都同时写一行日志：这条出口以前只在界面上停 8 秒，界面上的话没人截图我就取不到证据
+    /// （批次 VR 用户报"存在的文件夹被判成已不在本机"，日志里一个字都没有，只能靠只读查库反推）。</para>
     /// </summary>
-    private static void ReportOpenFailure(ItemCardViewModel vm, (OpenFailure Kind, string? Message) outcome)
+    private static void ReportOpenFailure(long itemId, (OpenFailure Kind, string? Message) outcome)
     {
         var (kind, message) = outcome;
         if (kind == OpenFailure.None || string.IsNullOrEmpty(message)) return;
-        if (kind != OpenFailure.MissingOnDisk || vm.Id <= 0)
+        StarLog.Warn($"打不开这一行（{kind}，id={itemId}）：{message}");
+        if (kind != OpenFailure.MissingOnDisk || itemId <= 0)
         {
             App.MainWindow?.ShowError("打不开这一行", message);
             return;
         }
-        App.MainWindow?.ShowErrorWithAction("打不开这一行", message, "从库里删掉这一行", () => DeleteFileRow(vm.Id));
+        App.MainWindow?.ShowErrorWithAction("打不开这一行", message, "从库里删掉这一行", () => DeleteFileRow(itemId));
     }
 
     /// <summary>
@@ -144,7 +157,7 @@ public static class ItemCardActions
                 // 复制出去的东西要"粘进资源管理器就能用"：先取磁盘上真存在的那个候选——
                 // 剪贴板图片行/快捷启动那些 percent 编码形态，只试原始形态会复制出一条带 %XX 的假路径。
                 // 两个候选都不存在时照抄原始形态（保留 '#'/%，与改道前一致），不猜、不静默造路径。
-                if (LocalFileIdentity.TryExistingPath(text, ExistsOnDisk, out var real)) text = real;
+                if (LocalFileIdentity.TryExistingPath(text, LauncherEx.ExistsOnDisk, out var real)) text = real;
                 else if (LocalFileIdentity.TryPathFromUri(text, out var localPath)) text = localPath;
             }
             else if (ClipboardPolicy.OpensAsCopy(vm.Type, text))
@@ -193,7 +206,7 @@ public static class ItemCardActions
             var (png, frame, why) = vm.IsClipboardImageRow
                 ? await Task.Run(() => ReadEntryImage(vm), CancellationToken.None)
                 : await Task.Run(() => ClipboardImageStore.TryReadFileAsPngAsync(
-                    LocalFileIdentity.TryExistingPath(vm.Uri, ExistsOnDisk, out var localPath) ? localPath : null,
+                    LocalFileIdentity.TryExistingPath(vm.Uri, LauncherEx.ExistsOnDisk, out var localPath) ? localPath : null,
                     CancellationToken.None), CancellationToken.None);
 
             if (png is null)
@@ -241,7 +254,7 @@ public static class ItemCardActions
             var (png, frame, why) = vm.IsClipboardImageRow
                 ? await Task.Run(() => ReadEntryImage(vm), CancellationToken.None)
                 : await Task.Run(() => ClipboardImageStore.TryReadFileAsPngAsync(
-                    LocalFileIdentity.TryExistingPath(vm.Uri, ExistsOnDisk, out var localPath) ? localPath : null,
+                    LocalFileIdentity.TryExistingPath(vm.Uri, LauncherEx.ExistsOnDisk, out var localPath) ? localPath : null,
                     CancellationToken.None), CancellationToken.None);
 
             if (png is null || frame.Width <= 0 || frame.Height <= 0)
@@ -514,14 +527,11 @@ public static class ItemCardActions
         }
     }
 
-    /// <summary>「这台机器上确实放着这个东西」——打开／定位／复制三类动作共用的磁盘判定（目录也算，文件也算）。</summary>
-    private static bool ExistsOnDisk(string path) => System.IO.File.Exists(path) || System.IO.Directory.Exists(path);
-
     /// <summary>
     /// 「打开所在位置」的宿主判定：<b>两个候选都要过这两道</b>——
     /// ① <see cref="LaunchGuard.IsSafeShellSelectTarget"/>（这条启动点不经协议白名单，路径直拼进
     ///    <c>explorer.exe</c> 命令行、被子进程重切参数 → 含引号者可越界注入额外参数）；
-    /// ② 磁盘上真有这个东西（对已删除／伪造路径，explorer 本就无意义）。
+    /// ② 磁盘上真有这个东西（对已删除／伪造路径，explorer 本就无意义）——"在不在"问 <see cref="LauncherEx.ExistsOnDisk"/> 那颗唯一出处。
     /// </summary>
-    private static bool IsShellSelectTarget(string path) => LaunchGuard.IsSafeShellSelectTarget(path) && ExistsOnDisk(path);
+    private static bool IsShellSelectTarget(string path) => LaunchGuard.IsSafeShellSelectTarget(path) && LauncherEx.ExistsOnDisk(path);
 }

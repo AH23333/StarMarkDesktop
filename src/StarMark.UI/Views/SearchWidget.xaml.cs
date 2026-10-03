@@ -89,7 +89,8 @@ public sealed partial class SearchWidget : UserControl
             case VirtualKey.Enter:
                 if (ViewModel.Selected is { } sel)
                 {
-                    await LauncherEx.OpenAsync(sel.Uri);
+                    // 以前这里是 `await LauncherEx.OpenAsync(...)`——返回值没人接，打不开就等于"按回车没反应"。
+                    ItemCardActions.OpenUriAndReport(sel.Uri, sel.Id);
                 }
                 else
                 {
@@ -125,9 +126,10 @@ public sealed partial class SearchWidget : UserControl
 
     private void ClearTags_Click(object sender, RoutedEventArgs e) => ViewModel.ClearTags();
 
-    private async void ResultOpen_Click(object sender, RoutedEventArgs e)
+    private void ResultOpen_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: SearchResultItem row }) await LauncherEx.OpenAsync(row.Uri);
+        // 同回车那条：坏消息必须被接住（组件里没有状态行可写，就走主窗那张提示卡）。
+        if (sender is Button { Tag: SearchResultItem row }) ItemCardActions.OpenUriAndReport(row.Uri, row.Id);
     }
 
     /// <summary>拖出（CanDrag/DragStarting）：把该行本地文件/文件夹以存储项引用拖到桌面/资源管理器，网页则拖为快捷方式。Everything 虚拟行与已入库行同源，均可拖出。</summary>

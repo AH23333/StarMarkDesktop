@@ -124,9 +124,32 @@ public static class LocalFileIdentity
     /// </summary>
     public static string PreferredPathFromUri(string? uri, Func<string, bool> existsOnDisk)
     {
-        if (TryExistingPath(uri, existsOnDisk, out var found)) return found;
         var (raw, decoded) = PathCandidates(uri);
+        // 纯文本短路：原始那格里一个 %XX 都没有时，解码那格与它本来就是同一条（裸 '#' 我们要的也正是原始那格），
+        // 再问一次磁盘只是白问——文件夹树重建会对每一行文件条目走一次这里，几千行的库上这就是看得见的耗时。
+        if (raw.Length > 0 && !raw.Contains('%')) return raw;
+        // 只有真带 %XX 时才需要事实：选哪一格的排序仍归 TryExistingPath 一颗（这里不许再写一遍顺序）。
+        if (TryExistingPath(uri, existsOnDisk, out var found)) return found;
         return raw.Length > 0 ? raw : decoded;
+    }
+
+    /// <summary>
+    /// 给<b>人看</b>的那条路径——<b>只用于显示，绝不拿去动作</b>（要动作请用 <see cref="TryExistingPath"/>）。
+    /// <para>为什么需要它：库里的 <c>file://</c> 有两类生产者，一类原样、一类 percent 编码
+    /// （<c>new Uri(path).AbsoluteUri</c>）。原样那格直接拿去分组或写进提示句，用户就会看到
+    /// <c>D:\Visual%20Studio%20Code\…</c> 这种字面串（批次 VR，用户真机报的"弹出的文件夹是编码的"，
+    /// 本机库里今天就躺着一条这样的历史行）。</para>
+    /// <para><b>选哪一格这件事不许有第二次决定</b>：直接交回 <see cref="PreferredPathFromUri"/>（先问磁盘，
+    /// 原始那格在盘上就用原始那格——所以真名叫 <c>100%20.txt</c> 的文件不会被"解码"展示）。这里只补它一种情形：
+    /// <b>不是 <c>file://</c>／缺盘符时原样给出串本身</b>，因为这一颗的调用点是卡片 tooltip 与提示句，
+    /// 回空串等于把书签行的地址从界面上抹掉。</para>
+    /// <para><paramref name="existsOnDisk"/> 与 <see cref="TryExistingPath"/> 同一含义、由宿主注入：
+    /// 本类<b>不碰磁盘</b>（这条边界由 <c>LocalPathResolutionTests.TheJudgeNeverTouchesTheDiskItself</c> 钉着）。</para>
+    /// </summary>
+    public static string DisplayPath(string? uri, Func<string, bool> existsOnDisk)
+    {
+        var shown = PreferredPathFromUri(uri, existsOnDisk);
+        return shown.Length > 0 ? shown : uri ?? string.Empty;
     }
 
     /// <summary>

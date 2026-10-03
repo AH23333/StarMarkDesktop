@@ -73,7 +73,8 @@ public sealed partial class QuickLaunchWidget : UserControl
     private void Card_OpenRequested(object sender, long itemId)
     {
         // 快捷入口是合成条目，主库里没有对应 Item ⇒ 按 URI 打开（协议闸门在 LauncherEx 内）。
-        if (sender is ItemCard { ViewModel: { } vm }) _ = LauncherEx.OpenAsync(vm.Uri);
+        // 批次 VR：走统一回报（原来是 `_ = LauncherEx.OpenAsync(...)`，打不开就是点了没反应）。
+        if (sender is ItemCard { ViewModel: { } vm }) ItemCardActions.OpenUriAndReport(vm.Uri, vm.Id);
     }
 
     private void Card_CopyLinkRequested(object sender, ItemCardViewModel vm)
@@ -126,8 +127,7 @@ public sealed partial class QuickLaunchWidget : UserControl
             // 默认标题走判据：手输/粘贴进来的地址会先被 new Uri() 规范化成 percent 编码，
             // 只剥前缀就会把名字印成 %E5%B7%A5… 这种乱码——先问一次磁盘上有没有这个东西再选形态。
             name = parsed.IsFile
-                ? Path.GetFileName(LocalFileIdentity.PreferredPathFromUri(
-                    parsed.AbsoluteUri, p => File.Exists(p) || Directory.Exists(p)))
+                ? Path.GetFileName(LocalFileIdentity.PreferredPathFromUri(parsed.AbsoluteUri, LauncherEx.ExistsOnDisk))
                 : parsed.Host;
         }
         await _manager.AddLinkAsync(_instanceId, name, parsed.AbsoluteUri);

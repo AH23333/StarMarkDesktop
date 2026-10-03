@@ -84,7 +84,7 @@ public partial class SettingsPageViewModel
 
             var gone = rows.Where(static i => StarMark.Abstractions.ItemCardPolicy.IsLocalFileRow(i.Source, i.Type)
                                               && !StarMark.Abstractions.LocalFileIdentity.TryExistingPath(
-                                                  i.Uri, static p => System.IO.File.Exists(p) || System.IO.Directory.Exists(p), out _))
+                                                  i.Uri, StarMark.UI.Helpers.LauncherEx.ExistsOnDisk, out _))
                            .ToList();
             _missingIds = gone.Select(static i => i.Id).ToList();
             // 扫过之后"一条没有"也要说一声：这一句与"坏消息"共用同一个可见性判据——

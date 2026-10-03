@@ -82,13 +82,34 @@ public sealed class StaleFileRowGateTests
     [Fact]
     public void OnlyTheMissingOnDiskArmOffersToDeleteTheRow()
     {
+        // 锚点跟着批次 VR 搬家：ReportOpenFailure 原先收整个视图模型，而组件宿主手上只有 (uri, id)——
+        // 为了让六个宿主都能汇进这一处，参数改收成 itemId。判据（只有一臂递按钮、那句话不在此另写）一字未动。
         var body = MethodBody(Code(ReadRepoFile(Actions)),
-            "private static void ReportOpenFailure(ItemCardViewModel vm, (OpenFailure Kind, string? Message) outcome)");
+            "private static void ReportOpenFailure(long itemId, (OpenFailure Kind, string? Message) outcome)");
         Assert.Equal(1, Count(body, "ShowErrorWithAction"));
         Assert.Contains("OpenFailure.MissingOnDisk", body, StringComparison.Ordinal);
-        Assert.Contains("vm.Id <= 0", body, StringComparison.Ordinal);   // 没入库的行库里没有可删的东西
+        Assert.Contains("itemId <= 0", body, StringComparison.Ordinal);   // 没入库的行库里没有可删的东西
         // 那句话本身不许在这里另写一份（同一件事只许一个出处，批次 SI 立的口径）
         Assert.DoesNotContain("已经不在了", body, StringComparison.Ordinal);
+        // 每一次"打不开"都要落一行日志：界面上那句话没人截图就取不到证据（批次 VR 用户报"存在的文件夹被判缺失"，
+        // 当时日志里一个字都没有，只能靠只读查库反推）。
+        Assert.Contains("StarLog.Warn", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 那条<b>把话扔掉的出口</b>（<c>Task OpenAsync</c>，返回值只剩 Task）必须一直缺席。
+    /// <para>批次 VR 摘掉它不是清理死代码：只要这颗还在，下一个宿主就会照着它写一句"点了没反应"——
+    /// 六个宿主各扔过一次，靠人记得住是假的不存在，靠 API 里没有才是真的不存在。</para>
+    /// </summary>
+    [Fact]
+    public void TheReportDiscardingOpenOverloadStaysDeleted()
+    {
+        var launcher = Code(ReadRepoFile(Launcher));
+        Assert.DoesNotContain("public static async Task OpenAsync(", launcher, StringComparison.Ordinal);
+        // 两种问法都要留着：按 Id 的宿主问种类，只有一行状态Label 的宿主（RSS 页／提示卡／更新页）只要话
+        Assert.Contains("public static async Task<string?> TryOpenAsync(", launcher, StringComparison.Ordinal);
+        Assert.Contains("public static async Task<(OpenFailure Kind, string? Message)> TryOpenDetailedAsync(",
+            launcher, StringComparison.Ordinal);
     }
 
     /// <summary>话与种类都出自 <c>LauncherEx</c> 同一处代码，且那句话归 Abstractions 那颗唯一出处。</summary>
@@ -96,7 +117,8 @@ public sealed class StaleFileRowGateTests
     public void TheMissingRowSentenceHasExactlyOneOwner()
     {
         Assert.Contains("ItemCardPolicy.MissingRowMessage", Code(ReadRepoFile(Launcher)), StringComparison.Ordinal);
-        Assert.Contains("public static string MissingRowMessage(string uri)", Code(ReadRepoFile(Policy)), StringComparison.Ordinal);
+        // 参数改名（批次 VR：递进去的是给人看的那条路径，不是库里的 uri 原文）——锚点跟着走，判据不变
+        Assert.Contains("public static string MissingRowMessage(string shownPath)", Code(ReadRepoFile(Policy)), StringComparison.Ordinal);
         // 那句话的"事实"半截仍归 ClipboardPolicy 那颗唯一出处；宿主侧不许另写一份由 G_ARM 那格钉
         Assert.Contains("MissingFileClause", Code(ReadRepoFile(Policy)), StringComparison.Ordinal);
     }

@@ -159,7 +159,8 @@ public sealed class RssRowPolicyTests
         item.ExtraJson = JsonSerializer.Serialize(meta);
 
         Assert.Equal(new[] { "RSS订阅", "开源中国" }, FolderPathUtil.BookmarkSegments(item));
-        Assert.Equal(new[] { "RSS订阅", "开源中国" }, FolderPathUtil.GetSegments(item));
+        // 书签这一支不碰磁盘（VR 把「问哪一格是真的」做成了必传参数，这里给一条恒不成立的判据即等价于旧行为）
+        Assert.Equal(new[] { "RSS订阅", "开源中国" }, FolderPathUtil.GetSegments(item, _ => false));
         // 没写 ExtraJson 的书签仍落兜底，不能因为 RSS 这一栏而变
         Assert.Equal(new[] { FolderPathUtil.OtherBookmarkGroup },
             FolderPathUtil.BookmarkSegments(new Item { Type = ItemType.Bookmark, Title = "t" }));

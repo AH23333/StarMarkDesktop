@@ -21,7 +21,17 @@ namespace StarMark.UI.Helpers;
 /// </summary>
 public static class LauncherEx
 {
-    public static async Task OpenAsync(string? uri) => await TryOpenAsync(uri);
+    /// <summary>
+    /// "这台机器上确实放着这个东西"——文件与目录都算存在，全程序<b>只有这一颗</b>（批次 VR）。
+    /// <para>它过去在 <c>LauncherEx</c>／<c>ItemCardActions</c>／<c>ItemDragHelper</c>／快捷启动的拖入与手输／
+    /// 设置页的失联扫描里各写一遍（<c>p =&gt; File.Exists(p) || Directory.Exists(p)</c>）。
+    /// <b>少写一半 <c>Directory.Exists</c> 的那一份，症状就是"文件夹明明还在、点开设成已经不在了"</b>
+    /// （批次 210 修过一次同款）；而"盘上有没有"这种事实判断一旦有五份，就永远说不清用户报的那次是哪一份。</para>
+    /// <para>住在 UI 而不是 <c>Abstractions</c>：本地路径那颗判据刻意<b>不碰磁盘</b>（存在与否一律由调用方注入，
+    /// 由 <c>LocalPathResolutionTests.TheJudgeNeverTouchesTheDiskItself</c> 钉着），所以磁盘事实归宿主这一侧。</para>
+    /// </summary>
+    public static bool ExistsOnDisk(string? path)
+        => !string.IsNullOrEmpty(path) && (File.Exists(path!) || Directory.Exists(path!));
 
     /// <summary>打开并回报到底开没开成（只有话、没有种类）。与 <see cref="TryOpenDetailedAsync"/> 是同一条代码、两种问法。</summary>
     public static async Task<string?> TryOpenAsync(string? uri) => (await TryOpenDetailedAsync(uri)).Message;
@@ -30,7 +40,8 @@ public static class LauncherEx
     /// 打开并回报<b>坏在哪一步</b>＋能直接显示的那句话。
     /// <para>为什么要有这个出口：这条路径上有五种"点了什么都没发生"（地址是空的、协议被闸门挡下、
     /// 认不出是完整地址、本地文件已删、系统里没有能处理这个协议的程序），原来四种只写日志。
-    /// RSS 页点条目跳文章就落在这条路上——按 <see cref="OpenAsync"/> 那种"不返回话"的用法，
+    /// RSS 页点条目跳文章就落在这条路上——按"不返回话"的那种用法（本类曾有的一颗 <c>OpenAsync</c>，
+    /// 批次 VR 摘掉：留着就等于允许新宿主再一次把话扔在返回值里），
     /// 用户只会看到"点了一下没反应"，那正是本仓库"打不开应用"那条老缺陷的形状。</para>
     /// </summary>
     public static async Task<(OpenFailure Kind, string? Message)> TryOpenDetailedAsync(string? uri)
@@ -50,17 +61,19 @@ public static class LauncherEx
             if (parsed.Scheme == Uri.UriSchemeFile)
             {
                 // 还原规则（两类互补的生产者、原始形态优先）归 LocalFileIdentity.TryExistingPath 一颗，
-                // 这里只交出本宿主自己的判定语义：文件与目录都算"在"（目录要在资源管理器里打开）。
+                // 这里只交出本宿主自己的判定语义：文件与目录都算"在"（目录要在资源管理器里打开）——那颗判据就是本类上面的 ExistsOnDisk。
                 var opened = StarMark.Abstractions.LocalFileIdentity.TryExistingPath(
-                    uri, static p => System.IO.File.Exists(p) || System.IO.Directory.Exists(p), out var path);
+                    uri, ExistsOnDisk, out var path);
                 if (!opened)
                 {
                     // 两种还原都不存在（文件已删）：退化为 URI 激活（可能无效果，但不抛异常），
                     // 同时把"这一台机器上已经没有这个文件了"说给用户听——只退化不回报，就是点了没反应。
                     await Launcher.LaunchUriAsync(parsed);
                     // 这句话归 ItemCardPolicy.MissingRowMessage 一颗（批次 SI 的口径：同一件事只许一个出处），
+                    // 但递进去的是 DisplayPath 解过的那一串：库里存的是编码态时，别把 %E5%B7%A5… 念给用户听（批次 VR）。
                     // 种类那一格才是宿主判断"要不要就地递出删掉这一行"的依据。
-                    return (OpenFailure.MissingOnDisk, StarMark.Abstractions.ItemCardPolicy.MissingRowMessage(uri));
+                    return (OpenFailure.MissingOnDisk, StarMark.Abstractions.ItemCardPolicy.MissingRowMessage(
+                        StarMark.Abstractions.LocalFileIdentity.DisplayPath(uri, ExistsOnDisk)));
                 }
                 else
                 {
