@@ -293,8 +293,9 @@ public sealed class ReleasePackagingGateTests
         // 传与撤都不许按颗点名：逐颗循环只有一处；撤恰好两处（失败清理一处、撤旧名一处）
         Assert.Single(Regex.Matches(code, "-InFile"));
         Assert.Equal(2, Regex.Matches(code, "-Method Delete").Count);
-        // 归位也得是一次显式的资产改名请求（临时名留在服务器上不算发出去了）：PATCH 恰好两处（归位、转正式）
-        Assert.Equal(2, Regex.Matches(code, "-Method Patch").Count);
+        // 归位也得是一次显式的资产改名请求（临时名留在服务器上不算发出去了）：
+        // PATCH 恰好三处（改正文与标题、归位、转正式）——批次 VT 加了第一处，那一处管的是"发出去的说辞对不对"。
+        Assert.Equal(3, Regex.Matches(code, "-Method Patch").Count);
         // 挂新字节失败必须中止，不许接着撤旧名：第一次撤与**第二次撤（撤旧名）**之间必须有 throw
         var retire = code.IndexOf("-Method Delete", del + 1, StringComparison.Ordinal);
         Assert.True(retire >= 0 && code[up..retire].Contains("throw", StringComparison.Ordinal),
@@ -344,5 +345,108 @@ public sealed class ReleasePackagingGateTests
                 && line.Contains("-ne", StringComparison.Ordinal));
         Assert.NotNull(fallback);
         Assert.Contains("Write-Warning", code, StringComparison.Ordinal);
+    }
+
+    // ===== 正文与标题：一句中文不许被码页换掉（批次 VT） =====
+
+    /// <summary>
+    /// 凡带非 ASCII 的 .ps1 必须以 UTF-8 BOM 开头。
+    /// <para><b>为什么这条值得钉</b>：Windows PowerShell 5.1 读<b>没有 BOM</b> 的 UTF-8 脚本时按系统 ANSI 码页解，
+    /// 一个中文字节的第二半会把紧跟其后的 ASCII（包括 <c>}</c>）当"双字节字的后半"吞掉。
+    /// 本批写临时脚本时连踩两次：一次报"缺少语句块"，一次把 header 哈希表吃掉半截，
+    /// 于是<b>一次正常的凭据请求被报成 401</b>——差点把"令牌过期"当成结论写进账本（坑表 #198 那一族：
+    /// 说谎的是取证工具，不是被测的东西）。仓库里现有六颗 .ps1 全带 BOM，这条不是新习惯，是把已有习惯钉住。</para>
+    /// </summary>
+    [Fact]
+    public void EveryPowerShellScriptThatSaysAnythingInChineseCarriesABom()
+    {
+        var root = RepoRoot();
+        foreach (var (relative, _) in EveryPowerShellScript())
+        {
+            var bytes = File.ReadAllBytes(Path.Combine(root, relative));
+            var saysAnything = bytes.Any(b => b > 0x7F);
+            var hasBom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
+            Assert.True(!saysAnything || hasBom,
+                $"{relative} 里有非 ASCII 文本却没有 UTF-8 BOM——Windows PowerShell 会把中文的尾字节当双字节字吃掉");
+        }
+    }
+
+    /// <summary>
+    /// "怎么把 JSON 交给 GitHub"只许有一颗 helper，而它必须自己转 UTF-8 字节并明写 charset。
+    /// <para>症状不是红，是<b>安静地错</b>：字符串 body 会被按系统码页编码后才发出去，
+    /// 远端正文里的中文整段变成 '?'（v1.0.1 实测：40 个字符里非 ASCII 0 个、'?' 9 个，
+    /// 全角冒号与逗号还被写成半角），而脚本退出码 0、Release 也确实建出来了。</para>
+    /// </summary>
+    [Fact]
+    public void JsonGoesToTheApiAsUtf8BytesFromASingleHelper()
+    {
+        var code = PsCode(ReadRepoFile(PublishScript));
+        Assert.Single(Regex.Matches(code, @"function\s+Invoke-GitHubJson"));
+        Assert.Single(Regex.Matches(code, @"UTF8\.GetBytes\("));      // 编码那一刀只许有一处
+        Assert.Single(Regex.Matches(code, "application/json; charset=utf-8"));
+        // 四处 JSON 请求（建草稿、改正文、归位、转正式）全走 helper
+        Assert.Equal(4, Regex.Matches(code, @"Invoke-GitHubJson\s+-Method\s+(Post|Patch)").Count);
+        // 禁项：不许再有一颗把 hashtable 就地序列化后交给 Invoke-RestMethod 的调用（那正是走码页的那条形）
+        Assert.DoesNotMatch(@"-Body\s*\(@\{", code);
+        Assert.DoesNotMatch(@"-Body\s+\$body\b", code);
+        // 也不许有不带 charset 的 JSON ContentType——上传资产用的 MIME（application/zip 与那颗清单的
+        // "application/json"）在 $uploads 表里，那是**文件类型**不是请求头，所以这里禁的是"-ContentType 后紧跟它"
+        Assert.DoesNotMatch(@"-ContentType\s+\x22application/json\x22", code);
+    }
+
+    /// <summary>正文发过去之后必须逐字读回来比，而且归一化只许管行尾——放宽比较就等于没有这条证人。</summary>
+    [Fact]
+    public void TheRemoteBodyIsReadBackAndComparedVerbatim()
+    {
+        var code = PsCode(ReadRepoFile(PublishScript));
+        Assert.Single(Regex.Matches(code, @"function\s+Normalize-Body"));
+        var normalizer = Between(code, "function Normalize-Body", "Write-Host \"==> 1/6");
+        Assert.Contains("\"`r`n\", \"`n\"", normalizer, StringComparison.Ordinal);   // 只折行尾
+        Assert.DoesNotContain("ToLower", normalizer, StringComparison.Ordinal);      // 不许顺手把大小写也"归"掉
+        Assert.DoesNotContain("Trim(\" ", normalizer, StringComparison.Ordinal);
+        // 三次比：事前（决定要不要发 PATCH）、发完读回、公开之后再看一眼
+        Assert.Equal(3, Regex.Matches(code, @"-ne\s*\(Normalize-Body").Count);
+        // 只查不拒＝那些比较是装饰；而且报出来的数必须能说出"非 ASCII 掉了几颗"，
+        // 因为这一族的失败脸恰恰是"字数看着对、中文没了"。
+        var readBack = Between(code, "(Normalize-Body ([string]$back.body)", "已同步并逐字读回");
+        Assert.Contains("throw", readBack, StringComparison.Ordinal);
+        Assert.Contains("非 ASCII", readBack, StringComparison.Ordinal);
+        // 公开之后那一次也一样要拒（"载荷与草稿都对、说明是错的"仍然是发了一版在骗人）
+        var afterLive = Between(code, "(Normalize-Body ([string]$done.body)", "==> 收工");
+        Assert.Contains("throw", afterLive, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 正文只有一个落点（<c>docs\发布说明\&lt;标签&gt;.md</c>），脚本里不许再留一句硬写的"发布说明"；
+    /// 而 <c>-NotesOnly</c> 那条路一颗资产都不许碰。
+    /// </summary>
+    [Fact]
+    public void TheNotesHaveOneHomeAndTheBackfillPathCannotTouchAssets()
+    {
+        var code = PsCode(ReadRepoFile(PublishScript));
+        Assert.Single(Regex.Matches(code, @"docs\\发布说明\\"));
+        Assert.Equal(2, Regex.Matches(code, @"body = \$notes").Count);   // 建草稿与改正文用同一颗变量
+        Assert.DoesNotMatch(@"body\s*=\s*\x22", code);                   // 硬写的那句"桌面版 …框架依赖"不许回来
+        // 缺正文文件要拒绝，而不是退回一句兜底话——兜底话正是这一批要删掉的东西
+        Assert.True(code.Split('\n').Any(line => line.Contains("Test-Path $NotesPath", StringComparison.Ordinal)
+            && line.Contains("throw", StringComparison.Ordinal)), "读不到正文就得拒绝，不许自己编一句");
+        // -NotesOnly：没有现成 Release 就拒绝（那正是"把 404 当成已回填"的那一步）
+        Assert.True(code.Split('\n').Any(line => line.Contains("$NotesOnly", StringComparison.Ordinal)
+            && line.Contains("throw", StringComparison.Ordinal)), "-NotesOnly 在没有 Release 时必须拒绝");
+        // 反过来：它**不许**被"换载荷要当面点头"那道闸挡住——回填公开那一版的正文与标题正是它的用途，
+        // 而那颗闸管的是载荷。哪天有人把这道闸改回"公开版一律拒绝"，两版旧说明就再也修不好了。
+        var liveGuard = code.Split('\n').FirstOrDefault(line => line.Contains(".draft", StringComparison.Ordinal)
+            && line.Contains("throw", StringComparison.Ordinal)
+            && line.Contains("ReplaceAssets", StringComparison.Ordinal));
+        Assert.NotNull(liveGuard);
+        Assert.Contains("-not $NotesOnly", liveGuard!, StringComparison.Ordinal);
+        // 同理，"dist 里三颗齐不齐"那道预检也不该挡回填：回填旧那两版时本地根本没有那一版的载荷。
+        var distGuard = code.Split('\n').FirstOrDefault(line => line.Contains("Join-Path $DistDir $u.Name", StringComparison.Ordinal));
+        Assert.NotNull(distGuard);
+        Assert.Contains("$NotesOnly", distGuard!, StringComparison.Ordinal);
+        // 而且它必须在第一次上传之前收工
+        var exitAt = code.IndexOf("exit 0", StringComparison.Ordinal);
+        var upload = code.IndexOf("-InFile", StringComparison.Ordinal);
+        Assert.True(exitAt >= 0 && exitAt < upload, "-NotesOnly 那条路必须在任何资产被动之前收工");
     }
 }
