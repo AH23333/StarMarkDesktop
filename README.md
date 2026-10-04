@@ -260,8 +260,10 @@ StarMark/
 ├── publish.ps1                        # 本地产物（内部调用 scripts\publish-tree.ps1）
 ├── scripts/
 │   ├── publish-tree.ps1               # 产出"这一版的那棵树"：主程序 + 更新器，同一目录
-│   ├── release-package.ps1            # 打发布三颗：载荷 zip + update-manifest.json + .sig
-│   ├── publish-release.ps1            # 把三颗挂成 GitHub Release（先对账再公开）
+│   ├── release-package.ps1            # 打发布四颗：载荷 zip + update-manifest.json + .sig + setup.exe
+│   ├── make-installer.ps1             # 用 Inno Setup 把同一棵树编成 setup.exe（首装入口）
+│   ├── installer/StarMark.iss         # 那颗安装包的定义（卸载登记、快捷方式、运行时检测）
+│   ├── publish-release.ps1            # 把四颗挂成 GitHub Release（先对账再公开）
 │   ├── mem-probe.ps1                  # 内存取证
 │   └── gc-ab-probe.ps1                # ServerGC A/B 取证
 ├── src/
@@ -293,11 +295,11 @@ dotnet test tests\StarMark.Tests\StarMark.Tests.csproj -c Debug -p:Platform=x64
   测试从磁盘读源文件、抹掉注释后检查形状（某颗判据是否只有一处、某个已删的出口有没有回来、某段文字是否只在一个出处）。
   代价是**改了被闸门读的那份文件就得重编重量**，收益是"同一个事实写两遍"这类退化会被当场拦下。
 - 每批收口都登记基线：`-t:Rebuild` 的警告数 + 全量测试通过数。
-- 发布（按顺序，三颗资产缺一颗那条链就少一步）：
+- 发布（按顺序；四颗产物缺一颗就少一件事，其中少 zip／清单／签名会直接少掉更新链上的一步）：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\publish-tree.ps1 -OutDir <绝对路径>
-powershell -ExecutionPolicy Bypass -File scripts\release-package.ps1          # → dist\ 三颗
+powershell -ExecutionPolicy Bypass -File scripts\release-package.ps1          # → dist\ 四颗
 powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1 -Tag v1.0.2
 ```
 

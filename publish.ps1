@@ -42,5 +42,5 @@ Write-Host "  更新器   : $(Join-Path $root 'publish\Updater\StarMark.Updater.
 Write-Host "  快捷方式 : $lnkPath"
 if ($icoCandidates) { Write-Host "  图标     : $($icoCandidates.FullName)" }
 Write-Host ""
-Write-Host "要打成发得出去的三颗（zip + 清单 + 签名）：powershell -ExecutionPolicy Bypass -File scripts\release-package.ps1"
+Write-Host "要打成发得出去的四颗（zip + 清单 + 签名 + setup.exe）：powershell -ExecutionPolicy Bypass -File scripts\release-package.ps1"
 Write-Host "提示：开机自启可在应用内 设置 → 组件 → 「开机自动启动」开启（HKCU Run，无需管理员）。"

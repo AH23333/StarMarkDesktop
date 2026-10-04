@@ -1,12 +1,13 @@
-﻿# 把 dist\ 里那三颗挂成一个 Release（批次 UH）。
+﻿# 把 dist\ 里那四颗挂成一个 Release（批次 UH 立前三颗，批次 VB 加第四颗 setup.exe）。
 # 用法：powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1 -Tag v1.0.0
 #       那一版已经公开过、要换载荷：再加 -ReplaceAssets（不给这一句就直接拒绝，理由见下）
 #
-# 顺序是刻意排的：**先问那个标签上挂着什么 → 草稿（或沿用现有那条）→ 三颗就位 → 从 API 读回来对账 → 才公开**。
+# 顺序是刻意排的：**先问那个标签上挂着什么 → 草稿（或沿用现有那条）→ 四颗就位 → 从 API 读回来对账 → 才公开**。
 # 为什么：这一版一旦公开，所有装着的程序下一发检查就会看见它并真去下载替换——
 # 那一步没有"撤回已经装上去的文件"这种操作，所以它只能在证据齐了之后发生。
-# 读回来的判据是名字与字节数（三颗一个都不能少、一个都不能错）：
-# 少 zip ⇒ 用户点「立即更新」只得到"这一版没带更新包"；少清单或签名 ⇒ 探测报有新版而审包必拒。
+# 读回来的判据是名字与字节数（四颗一个都不能少、一个都不能错）：
+# 少 zip ⇒ 用户点「立即更新」只得到"这一版没带更新包"；少清单或签名 ⇒ 探测报有新版而审包必拒；
+# 少 setup.exe ⇒ 更新链一点事没有（它不在这条链上），事的是**还没装过的人**少了一个能双击的入口（✅P-166）。
 #
 # 换载荷为什么必须三颗一起换：清单里的哈希对着 zip，签名又对着清单那串字节。只换 zip 留下的是
 # "新包配旧清单"，用户那一侧的表现是审包永远拒收，而这一版在界面上一直显示"有更新"却装不上。
@@ -67,8 +68,11 @@ function Normalize-Body([string]$s) {
 $uploads = @(
     @{ Name = "StarMark-$version-win-x64.zip"; Mime = "application/zip" },
     @{ Name = "update-manifest.json";          Mime = "application/json" },
-    @{ Name = "update-manifest.sig";           Mime = "application/octet-stream" })
-# -NotesOnly 一颗资产都不碰，所以它不该被"dist 里少一颗"挡住——回填旧那两版时，dist 里根本没有那一版的三颗。
+    @{ Name = "update-manifest.sig";           Mime = "application/octet-stream" },
+    @{ Name = "StarMark-$version-setup.exe";   Mime = "application/x-msdownload" })
+# 第四颗不在审包链上（名字里也不带 zip/清单/签名那三节的任何一颗）：它只服务"第一次装"这个人手动作。
+# 所以它照样要传、照样要读回来对字节，但**不许进 update-manifest.json 的 files**——那是自更新的资产清单，不是发布页的文件列表。
+# -NotesOnly 一颗资产都不碰，所以它不该被"dist 里少一颗"挡住——回填旧那两版时，dist 里根本没有那一版的那几颗。
 if (-not $NotesOnly) { foreach ($u in $uploads) { if (-not (Test-Path (Join-Path $DistDir $u.Name))) { throw "少一颗：$($u.Name)（先跑 scripts\release-package.ps1）" } } }
 
 $cfgPath = Join-Path $env:APPDATA "StarMark\github.json"
@@ -142,12 +146,12 @@ if ($remoteBody -ne (Normalize-Body $notes) -or [string]$release.name -ne $title
 
 if ($NotesOnly) {
     Write-Host ""
-    Write-Host "只改了正文与标题：$($release.html_url)（三颗资产一颗没动）"
+    Write-Host "只改了正文与标题：$($release.html_url)（那一版挂着的资产一颗没动）"
     exit 0
 }
 
 
-Write-Host "==> 3/6 先把新字节挂成临时名，三颗都传成了才撤旧名、归位" -ForegroundColor Cyan
+Write-Host "==> 3/6 先把新字节挂成临时名，四颗都传成了才撤旧名、归位" -ForegroundColor Cyan
 # upload_url 是 GitHub 的 **URI 模板**（结尾带 {?name,label}），不是能直接拼参数的地址：
 # 原样拼上 "?name=..." 打出去的是畸形请求，而 API 回的那句是"Multipart form data required"——
 # 它说的是另一件事（以为你在发表单），照着那句去改表单会一路走偏。所以先把模板那段大括号摘掉，
@@ -156,7 +160,7 @@ $uploadBase = $release.upload_url -replace '\{[^}]*\}$', ''
 if ($uploadBase -eq $release.upload_url) { throw "upload_url 结尾不是 URI 模板那对大括号，不敢猜该怎么拼：$($release.upload_url)" }
 # 为什么绕这一圈临时名：同一条 Release 上两颗同名资产会被拒（实测 already_exists），换载荷必须先撤后挂；
 # 而"撤了再传"意味着一次 72 MB 的上传失败就当颗少一颗可下载的文件——这一次真踩到了（地址拼错，旧 zip 已撤、新 zip 没上去）。
-# 挂临时名不需要撤任何东西，所以传砸的时候旧的三颗一颗没动，那一版还是它原来的载荷。
+# 挂临时名不需要撤任何东西，所以传砸的时候旧的那几颗一颗没动，那一版还是它原来的载荷。
 $suffix = ".uploading-$PID"
 $staged = @()
 try {
@@ -207,7 +211,7 @@ foreach ($u in $uploads) {
         if ([int64]$asset.size -ne (Get-Item $path).Length) { throw "这颗字节数对不上：$($u.Name) 本地 $((Get-Item $path).Length) / 远端 $($asset.size)" }
     }
 }
-Write-Host ("  三颗已在，内容与本地一致（载荷 {0:N0} 字节）" -f [int64]$byName["StarMark-$version-win-x64.zip"].size)
+Write-Host ("  四颗已在，内容与本地一致（载荷 {0:N0} 字节）" -f [int64]$byName["StarMark-$version-win-x64.zip"].size)
 
 Write-Host "==> 5/6 证据齐了才公开" -ForegroundColor Cyan
 Invoke-GitHubJson -Method Patch -Uri "$api/releases/$($release.id)" -Payload @{ draft = $false } | Out-Null
