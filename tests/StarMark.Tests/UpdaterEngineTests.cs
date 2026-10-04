@@ -533,6 +533,13 @@ public sealed class UpdaterEngineTests : IDisposable
         var notMoved = UpdatePolicy.Describe(UpdaterOutcome.OldTreeNotMoved);
         Assert.Contains("重新起来", notMoved, StringComparison.Ordinal);
         Assert.DoesNotContain("有别的东西", notMoved, StringComparison.Ordinal);
+
+        // ✅P-161 裁的是"不搬家、只说实话"，那"实话"就得真的在话里：这一台机器下次还要从头再下一遍。
+        // 钉的是这句话有没有那一维（删掉那半句就红），不是钉整句字形。
+        Assert.Contains("下次", notMoved, StringComparison.Ordinal);
+        // 而它不许越到另一头去：挪不动的成因我们不知道，所以也不许把"以后一定还不行"写成事实。
+        Assert.DoesNotContain("一定", notMoved, StringComparison.Ordinal);
+        Assert.DoesNotContain("每次都会失败", notMoved, StringComparison.Ordinal);
     }
 
     [Fact]

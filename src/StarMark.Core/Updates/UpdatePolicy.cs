@@ -342,13 +342,17 @@ public static class UpdatePolicy
     /// <para>两格 <c>*ButNotRunning</c> 说的是同一件用户当场能看见的事：屏幕上一个窗口都没有。
     /// 它们不是"没动／已退回"那几格的重复——那几格默认程序还在跑。把"本机没改动"与"程序还开着"
     /// 折成一格，界面就会拿前者担保后者（#234），而交棒之后能起程序的只剩更新器这一个进程。</para>
+    /// <para><see cref="UpdaterOutcome.OldTreeNotMoved"/> 那句末尾还带一遍代价（"下次检查更新还要从头再下一遍"），
+    /// 因为 P-161 裁的是<b>不搬家、只说实话</b>：这台机器不会自己好起来，而"这次白下载"是唯一能诚实说出口的部分。
+    /// ⚠ 那句话<b>不许说"以后每次都失败"</b>——挪不动的成因（ACL／只读卷／过滤驱动／别的进程持句柄）我们并不知道，
+    /// 把成因的永久性写进事实，就是把 VU 刚摘掉的那种猜测又写回来（✅P-159 那一族的反面）。</para>
     /// </summary>
     public static string Describe(UpdaterOutcome outcome) => outcome switch
     {
         UpdaterOutcome.Success => "新版本已经换好并起来了",
         UpdaterOutcome.InvalidRequest => "这条更新指令本身不对（路径不对、跨了盘、或不像一棵摊好的树），安装目录没动",
         UpdaterOutcome.ParentStillRunning => "旧的那一版迟迟没有退出，替换没有开始——安装目录还是原来的",
-        UpdaterOutcome.OldTreeNotMoved => "旧目录此刻挪不动，替换没有开始——本机还是原来那一版，程序也已经重新起来",
+        UpdaterOutcome.OldTreeNotMoved => "旧目录此刻挪不动，替换没有开始——本机还是原来那一版，程序也已经重新起来；这一版没装上，下次检查更新还要从头再下一遍",
         UpdaterOutcome.RolledBack => "这次更新没换成，已经退回原来那一版并重新起来了",
         UpdaterOutcome.RolledBackButNotRunning => "这次更新没换成，文件已退回原来那一版，但它没能自己起来——程序此刻没开着",
         UpdaterOutcome.UntouchedButNotRunning => "本机一个字节都没改，可原来那一版也没能重新起来——程序此刻没开着（日志里写着挪不动的原因）",
