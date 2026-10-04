@@ -118,7 +118,7 @@ if (-not $iscc) {
         # ⚠ /DIR 的值**必须自己带引号**：Start-Process 的 -ArgumentList 不会替含空格的元素加引号，
         #   而仓库路径里就有空格（D:\Visual Studio Code\…）。不加引号它切在第一个空格处，
         #   安装器去建 "D:\Visual"，回的是 Error 183、退出码 4——那一发我把它读成了"那道 UAC 没人点"，
-        #   连着追了三轮授权（坑表 #198 那一族：说谎的是我这句预设，不是被测的东西）。
+        #   连着追了三轮授权（坑表 #261：那句"多半是 UAC"是**在没有读数之前写好的诊断**，它替我把自己的引号 bug 归责成了用户的一次点击）。
         # 所以现在带 /LOG，并且失败时把日志尾巴贴出来：它一句话就能说出卡在哪一步。
         $toolLog = Join-Path $env:TEMP ("innosetup-install-" + [guid]::NewGuid().ToString("N").Substring(0, 8) + ".log")
         $silentArgs = @("/PORTABLE=1", "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-",
