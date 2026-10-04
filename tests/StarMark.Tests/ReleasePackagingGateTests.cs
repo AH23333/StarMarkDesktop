@@ -35,8 +35,7 @@ public sealed class ReleasePackagingGateTests
         foreach (var file in Directory.GetFiles(root, "*.ps1", SearchOption.AllDirectories))
         {
             var normalized = file.Replace(Path.DirectorySeparatorChar, '/');
-            if (normalized.Contains("/bin/") || normalized.Contains("/obj/")
-                || normalized.Contains("/publish/") || normalized.Contains("/dist/")) continue;
+            if (IsGeneratedOrThirdPartyCopy(file)) continue;   // 产物目录 + 第三方工具的便携副本（Inno 自带 Examples\*.ps1）
             list.Add((normalized[(root.Replace(Path.DirectorySeparatorChar, '/').TrimEnd('/').Length + 1)..],
                 File.ReadAllText(file)));
         }
@@ -45,20 +44,10 @@ public sealed class ReleasePackagingGateTests
     }
 
     /// <summary>
-    /// PowerShell 版的"抹掉注释"。<b>禁项一律读这个</b>（与 <see cref="SourceGate.Code"/> 同一个道理：
-    /// 注释里写一句"私钥在 %USERPROFILE%…"是为了讲清为什么，不是又开一条出口）。
-    /// <para>口径：一颗脚本里<b>不许把 `#` 写进字符串字面量</b>——这条在这里成立，改脚本时请保持。</para>
+    /// PowerShell 版的"抹掉注释"——<b>住在 <see cref="SourceGate"/>，与安装器那一族闸门共用一颗</b>。
+    /// <para>这里曾经留着自己的那份：同一件"禁项一律读抹掉注释后的文本"的规矩写两遍，
+    /// 改一遍漏一遍就会变成"一边看注释、一边不看"，而那正是 #189/#193 那一族。</para>
     /// </summary>
-    private static string PsCode(string text)
-    {
-        var kept = text.Split('\n').Select(line =>
-        {
-            var cut = line.IndexOf('#');
-            return (cut >= 0 ? line[..cut] : line).TrimEnd('\r');
-        });
-        return string.Join("\n", kept.Where(l => !string.IsNullOrWhiteSpace(l)));
-    }
-
     // ===== 一棵树：只许有一处产出，而且两半都得当场自证 =====
 
     [Fact]

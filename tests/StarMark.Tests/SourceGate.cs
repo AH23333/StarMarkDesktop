@@ -30,6 +30,25 @@ internal static class SourceGate
         => File.ReadAllText(Path.Combine(RepoRoot(), relativePath.Replace('/', Path.DirectorySeparatorChar)));
 
     /// <summary>
+    /// 磁盘普查要跳开的树：<b>产物目录</b>与<b>第三方工具的便携副本</b>。
+    /// <para>后一半是批次 VB 逼出来的：造安装包那颗 <c>ISCC.exe</c> 缺失时会下到 <c>tools\InnoSetup6\</c>，
+    /// 而那颗目录里带着 Inno 自己的 <c>Examples\</c>（含 <c>*.csproj</c>）——
+    /// "磁盘上每颗工程都得被 sln 点名"这条闸门当场把它读成"你新加了一颗工程忘了入解决方案"。
+    /// 更糟的是这类红看着像真缺陷，人会去把第三方示例塞进解决方案。</para>
+    /// <para>所以这一条住在这里而不是各普查自己写一份：三颗普查（<c>*.csproj</c>／<c>*.props|targets|csproj</c>／<c>*.ps1</c>）
+    /// 少改一颗，下一次装完工具就只有一半闸门知道该跳开（#189/#193 那一族）。</para>
+    /// </summary>
+    internal static bool IsGeneratedOrThirdPartyCopy(string absolutePath)
+    {
+        var p = absolutePath.Replace(Path.DirectorySeparatorChar, '/');
+        return p.Contains("/bin/", StringComparison.Ordinal)
+            || p.Contains("/obj/", StringComparison.Ordinal)
+            || p.Contains("/publish/", StringComparison.Ordinal)
+            || p.Contains("/dist/", StringComparison.Ordinal)
+            || p.Contains("/tools/InnoSetup6/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// 某个目录<b>之下</b>的全部手写 C# 源码（逐文件返回，红的时候能说出是哪个文件）。
     /// <para>给"某个字面整条消失、全库不许再有"这类普查用：只扫一两个文件的禁项守门，会因为那条出口
     /// 搬去第三个文件而假绿（记忆 ⑦ 讲拆分时的同一形状）。跳过 <c>obj</c>/<c>bin</c> 与生成物
@@ -128,6 +147,22 @@ internal static class SourceGate
     /// 而假失败最坏，因为它教人把闸门改松而不是改对（#123；形状口径见 #195）。
     /// </summary>
     internal static string Code(string text) => FormatScanner.Scan(text).Code;
+
+    /// <summary>
+    /// PowerShell 版的 <see cref="Code"/>：抹掉整行注释后的脚本文本。
+    /// <para><b>"某句禁项全库只许有一个出处"这类闸门一律读这个</b>——注释里写一句"私钥在 %USERPROFILE%…"
+    /// 是为了讲清为什么，不是又开一条出口。批次 VB 起发布与安装器两族闸门共用这一颗：
+    /// 这条规矩原本住在 <c>ReleasePackagingGateTests</c> 里，而"同一件事写两遍"正是 #189/#193 那一族。</para>
+    /// <para>口径：一颗脚本里<b>不许把 <c>#</c> 写进字符串字面量</b>——现在成立，改脚本时请保持。</para>
+    /// </summary>
+    internal static string PsCode(string text)
+        => string.Join("\n", text.Split('\n')
+            .Select(line =>
+            {
+                var cut = line.IndexOf('#');
+                return (cut >= 0 ? line[..cut] : line).TrimEnd('\r');
+            })
+            .Where(l => !string.IsNullOrWhiteSpace(l)));
 
     /// <summary>
     /// 把某个方法的体从源码里挖掉。<b>"某个调用只允许出现在某一个方法里"这类守门就靠它</b>：

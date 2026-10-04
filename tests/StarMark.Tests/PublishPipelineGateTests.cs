@@ -48,8 +48,7 @@ public sealed class PublishPipelineGateTests
             foreach (var file in Directory.GetFiles(root, pattern, SearchOption.AllDirectories))
             {
                 var normalized = file.Replace(Path.DirectorySeparatorChar, '/');
-                if (normalized.Contains("/bin/") || normalized.Contains("/obj/")
-                    || normalized.Contains("/publish/") || normalized.Contains("/dist/")) continue;
+                if (SourceGate.IsGeneratedOrThirdPartyCopy(file)) continue;   // 产物目录 + 第三方工具的便携副本
                 list.Add((normalized[(prefix.Length + 1)..], File.ReadAllText(file)));
             }
         Assert.True(list.Count >= 8, $"只扫到 {list.Count} 份工程文件，普查路径错了");

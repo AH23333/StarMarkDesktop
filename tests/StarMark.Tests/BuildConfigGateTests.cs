@@ -142,6 +142,9 @@ public sealed class BuildConfigGateTests
         var onDisk = new[] { "src", "tests", "tools" }
             .SelectMany(dir => Directory.EnumerateFiles(Path.Combine(RepoRoot(), dir), "*.csproj",
                 SearchOption.AllDirectories))
+            // ⚠ 造安装包那颗外部工具的便携副本里有 Inno 自己的 Examples\*.csproj（批次 VB 第一次装上它就撞了这条）：
+            //   它不是"新加一颗工程忘了入解决方案"，是别人的树。跳过判据与另两颗普查共用一颗（见 SourceGate）。
+            .Where(f => !IsGeneratedOrThirdPartyCopy(f))
             .Select(f => Path.GetRelativePath(RepoRoot(), f).Replace(Path.DirectorySeparatorChar, '\\'))
             .OrderBy(p => p, StringComparer.Ordinal)
             .ToList();
