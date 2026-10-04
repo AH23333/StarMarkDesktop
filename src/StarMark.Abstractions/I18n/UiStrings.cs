@@ -94,6 +94,12 @@ public static class UiStrings
         // ===== 首启那份引导的两个按键（批次 VC-3）=====
         new Entry("guide.primary", "看完整使用说明", "Read the full guide"),
         new Entry("guide.secondary", "知道了", "Got it"),
+        // 首启向导的三步车（批次 WJ-1）。计数那句两列必须给同一组编号 {0}{1}——
+        // 少给一个号，英文那版会当场抛 FormatException（Locale.Fmt 刻意不 catch，就是要它在这里红）。
+        new Entry("guide.next", "下一步", "Next"),
+        new Entry("guide.prev", "上一步", "Back"),
+        new Entry("guide.jump", "带我去这一页", "Take me there"),
+        new Entry("guide.step", "第 {0} / {1} 步", "Step {0} of {1}"),
 
         // ===== 设置页「常规」里那颗界面语言 =====
         new Entry("settings.languageTitle", "界面语言", "Interface language"),
