@@ -37,7 +37,14 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf}\{#MyAppName}
+; ⚠ 默认落**每用户可写**的位置，不是 Program Files（批次 VC，他裁的）。理由是一条实测读数，不是偏好：
+;   C:\Program Files 的 ACL 给 BUILTIN\Users 只有 RX（子项继承 GR,GE），而自更新那条链要
+;   "把旧树挪开 + 把新树写进去"，跑的是**普通权限**（永不自我提权）⇒ 装在 Program Files 时
+;   更新器必然失败，只能回那句"这一版没装上"。本机 D:\StarMark 恰好宽 ACL（Authenticated Users 有 M）
+;   才躲过——那是运气，不是设计。（2026-10-04 实测：icacls ＋ 只读写入/改名探针。）
+;   仍然允许用户在向导里明确选"为所有用户装"（下面 PrivilegesRequiredOverridesAllowed=dialog），
+;   那条路我们**照旧支持**，只是不再当默认，也不假装它还能自动更新。
+DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 DisableWelcomePage=no
@@ -52,9 +59,10 @@ SolidCompression=yes
 ; 载荷就是 publish-tree 那一棵 x64 树，没有 x86 分支可发。
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-; 默认机器级（{autopf} ⇒ Program Files，UAC 一次，这是 Windows 正常安装形状）；
-; 也允许用户明确选"只给我装"（那条不需要 UAC）。⛔ 程序自己不许在安装之外再搬位置（✅P-161）。
-PrivilegesRequired=admin
+; 默认**每用户安装**（不弹 UAC、装完普通权限就能自更新）；仍把"为所有用户装"留给用户明确选。
+; ⛔ 程序自己永远不为了写机身而提权（✅P-161／XP 改判）：所以这里不是"想办法绕过 UAC"，
+;   而是把默认位置选在一个不需要绕过就能写的地方。
+PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 WizardStyle=modern
 ShowLanguageDialog=no
@@ -104,12 +112,13 @@ Type: files; Name: "{app}\安装信息.txt"
 //   于是每一个其实有运行时的用户都要被问一次。症状不是崩，是白问，测试全绿没人红。
 //   C:\Program Files\dotnet\shared\<框架>\<版本> 才是宿主自己找运行时的地方，两侧同一颗事实。
 //
-// ⚠ 这一刀放在 PrepareToInstall 而不是 InitializeSetup：后者跑在**提权之前**，
-//   而机器级装运行时那一次 MSI 必须要管理员——放在 InitializeSetup 里的 winget 会稳定失败在权限上，
-//   然后走到分支 ③，症状是"明明能自动装却每次都问用户"。
-// ⚠ 已知够不到的形状：按用户装的 dotnet（%LOCALAPPDATA%\Microsoft\dotnet）——提权后的 {localappdata}
-//   指向的是批准 UAC 的那个人而不是当前用户，读它没有意义。那种机器会走到分支 ③，
-//   而那里给的是"否＝照样装"，不会被锁死。
+// ⚠ 这一刀放在 PrepareToInstall 而不是 InitializeSetup：那里已经在"要装什么"的阶段，且
+//   **权限模型已经定了**——InitializeSetup 跑在权限决定之前，读不到 IsAdminInstallMode。
+// ⚠ 机器级装运行时那一次 MSI 必须要管理员，而默认形状现在是**每用户安装（不提升）**
+//   ⇒ 非提升时根本不去跑那发注定失败的 winget，直接走分支 ③ 给一条能点的出口。
+//   只有用户明确选了"为所有用户装"（dialog 覆盖 ⇒ IsAdminInstallMode=True）才试 winget。
+// ⚠ 已知够不到的形状：按用户装的 dotnet（%LOCALAPPDATA%\Microsoft\dotnet）——这一支读的是
+//   {commonpf64}（机器级那一棵），所以那种机器会走到分支 ③，而那里给的是"否＝照样装"，不会被锁死。
 
 const
   SharedRoot       = '{commonpf64}\dotnet\shared\Microsoft.WindowsDesktop.App';
@@ -188,28 +197,41 @@ function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Choice: Integer;
   Tries: Integer;
+  Why: String;
 begin
   Result := '';
   if DesktopRuntimeInstalled then
   begin
-    Log('[runtime] 找到 .NET 桌面运行时（主版本 >= ' + IntToStr(RequiredMajor) + '），不装任何东西');
+    Log('[runtime] 找到 .NET 桌面运行时（主版本 = ' + IntToStr(RequiredMajor) + '），不装任何东西');
     Exit;
   end;
 
-  Log('[runtime] 没找到 .NET 9 桌面运行时，先试 winget');
-  if TryInstallRuntimeWithWinget then
+  // 机器级装运行时那一次 MSI 必须要管理员，而默认形状现在是**每用户安装（不提升）**
+  // ⇒ 非提升时不去跑那发注定失败的 winget。白跑一次的代价不是慢，是用户看见"自动安装没成功"
+  //   而把它读成 winget 坏了——那句谎话的成本我们付过（坑表 #261：别在没有读数之前替失败原因下结论）。
+  //   只有他明确选了"为所有用户装"才进机器级那一支。
+  if IsAdminInstallMode then
   begin
-    Log('[runtime] winget 装好了（重新检测通过）');
-    Exit;
+    Log('[runtime] 没找到 .NET 9 桌面运行时；这是机器级安装 ⇒ 试 winget');
+    if TryInstallRuntimeWithWinget then
+    begin
+      Log('[runtime] winget 装好了（重新检测通过）');
+      Exit;
+    end;
+    Why := '自动安装没成功——多半是没有 winget，或它被组织策略挡住了。';
+  end
+  else
+  begin
+    Log('[runtime] 没找到 .NET 9 桌面运行时；这是每用户安装（无管理员权限）⇒ 跳过 winget，直接给出口');
+    Why := '这一份是「只给我装」，没有管理员权限，所以不替你机器级装运行时。';
   end;
 
   while True do
   begin
     Choice := MsgBox(
-      'StarMark 需要 .NET 9 桌面运行时（Microsoft.WindowsDesktop.App），这台机器上没检测到，' +
-      '而自动安装没成功（多半是没有 winget，或它被组织策略挡住了）。' + #13#10#13#10 +
+      'StarMark 需要 .NET 9 桌面运行时（Microsoft.WindowsDesktop.App），这台机器上没检测到。' + Why + #13#10#13#10 +
       '"是"：打开官方下载页。装好后回到这里它会自己重新检测，不用重跑整个向导。' + #13#10 +
-      '"否"：不装运行时，先把程序装上（若它其实存在、只是没写进注册表，程序照样能起）。' + #13#10 +
+      '"否"：不装运行时，先把程序装上（若它其实存在、只是不在我们读的那棵目录下，程序照样能起）。' + #13#10 +
       '"取消"：现在什么都不做。',
       mbInformation, MB_YESNOCANCEL);
     if Choice = mrCancel then

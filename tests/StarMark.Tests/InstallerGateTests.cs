@@ -288,18 +288,43 @@ public sealed class InstallerGateTests
     /// 那件事的不可逆性与"卸载"完全不成比例；清理要从程序内的数据维护入口做。</para>
     /// </summary>
     [Fact]
-    public void TheInstallerDefaultsToTheMachineFolderAndNeverDeletesUserData()
+    public void TheInstallerDefaultsToThePerUserWritableFolderAndNeverDeletesUserData()
     {
         var iss = IssText();
-        Assert.Contains("DefaultDirName={autopf}\\{#MyAppName}", iss, StringComparison.Ordinal);
-        Assert.Contains("PrivilegesRequired=admin", iss, StringComparison.Ordinal);
+        Assert.Contains(@"DefaultDirName={localappdata}\Programs\{#MyAppName}", iss, StringComparison.Ordinal);
+        Assert.Contains("PrivilegesRequired=lowest", iss, StringComparison.Ordinal);
         Assert.Contains("PrivilegesRequiredOverridesAllowed=dialog", iss, StringComparison.Ordinal);
-        Assert.DoesNotContain("DefaultDirName={localappdata}", iss, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("PrivilegesRequired=admin", iss, StringComparison.Ordinal);
+        Assert.DoesNotContain(@"DefaultDirName={autopf}", iss, StringComparison.OrdinalIgnoreCase);
         // 禁项读**抹掉注释后**的那一段：注释里写"%LOCALAPPDATA%\StarMark 刻意不列"是为了讲清为什么，
         // 按原文数会把这句解释当成违规（#123 同一条口径，Inno 的注释行以 ; 开头）。
         var directives = IssDirectives(Between(iss, "[UninstallDelete]", "[Code]"));
         Assert.DoesNotContain("LocalAppData", directives, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("StarMark.UI.exe", directives, StringComparison.Ordinal);   // 卸载只由 Inno 登记的清单决定
+    }
+
+    /// <summary>
+    /// 缺运行时那一刀：<b>没有管理员权限时不许去跑那发机器级 winget</b>。
+    /// <para>默认形状是每用户安装（不提升），而 winget 装 .NET 桌面运行时走的是 MSI 机器级那一档 ⇒
+    /// 非提升时它<b>注定失败</b>。白跑一次的代价不是慢，是用户看见"自动安装没成功"并把它读成
+    /// winget 坏了——那是替自己的权限模型编一个假原因（坑表 #261 同族）。</para>
+    /// <para>⚠ 一条实测事实，别拿这条闸门当"这台机器已经是 per-user"的证据：同一 <c>AppId</c> 只要机器上
+    /// 还留着"为所有用户装"的记录，Inno 就沿用那一档模式与那个目录去升级（VC 那跑的 setup log：
+    /// <c>Administrative install mode: Yes</c>、<c>Directory for uninstall files: D:\StarMark</c>）。
+    /// 所以"默认每用户"只对<b>新机器</b>成立；老机器要先卸干净才会落到 <c>%LOCALAPPDATA%\Programs</c>。</para>
+    /// </summary>
+    [Fact]
+    public void TheRuntimeStepOnlyTriesWingetInAnElevatedInstall()
+    {
+        var iss = IssText();
+        // Pascal 的函数体不是大括号配对，SourceGate.MethodBody（C# 那把刀）在这里切不出来 ⇒ 按段首切。
+        var body = IssDirectives(Between(iss, "function PrepareToInstall", "procedure CurStepChanged"));
+        Assert.Contains("if IsAdminInstallMode then", body, StringComparison.Ordinal);
+        Assert.True(body.IndexOf("if IsAdminInstallMode then", StringComparison.Ordinal)
+                    < body.IndexOf("TryInstallRuntimeWithWinget", StringComparison.Ordinal),
+            "winget 那一发必须坐在 IsAdminInstallMode 的分支里——非提升时它注定失败");
+        Assert.Equal(1, Count(body, "TryInstallRuntimeWithWinget"));
+        Assert.Equal(1, Count(body, "IsAdminInstallMode"));
     }
 
     /// <summary>
