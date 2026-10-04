@@ -22,11 +22,14 @@ obj/
 *.userosscache
 *.sln.docstates
 publish/
-# 发布三颗（zip + 清单 + 签名）与打包用的中间树：一百多兆产物，而且里面每一颗都能被脚本重新算出来。
+# 发布四颗（zip + 清单 + 签名 + setup.exe）与打包用的中间树：一百多兆产物，而且里面每一颗都能被脚本重新算出来。
 # 这条不是整洁问题：dist/ 没被忽略的话，一次 `git add` 就会把载荷 zip 推进仓库，
 # 而那份 zip 里装着这台机器上那一版的全部字节。
 dist/
 artifacts/
+# 造安装包那颗外部工具（Inno Setup）的便携副本：make-installer 缺失时才会下到这儿来。
+# 它不是我们的产物，也不许被顺手提交——一百多颗第三方二进制进仓后没人能审。
+tools/InnoSetup6/
 
 # ===== Windows App SDK generated =====
 *.winmd
