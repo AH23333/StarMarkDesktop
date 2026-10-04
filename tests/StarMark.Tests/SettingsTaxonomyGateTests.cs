@@ -24,9 +24,15 @@ public sealed class SettingsTaxonomyGateTests
 {
     private const string Xaml = "src/StarMark.UI/Views/SettingsPage.xaml";
 
+    /// <summary>
+    /// 页签清单。批次 VC-3 多出一栏「使用说明」——<b>那是用户当场点的第三条裁决</b>
+    /// （"进入软件后没有教程／说明"→ 首启一次性引导＋每页「？」＋设置页说明），不是我自己加的。
+    /// 位置排在「常规」之后：日常项仍在最前、默认落地的还是「常规」（改默认页会让一次更新悄悄换掉用户的入口），
+    /// 可选能力与诊断照旧在后。
+    /// </summary>
     private static readonly string[] ExpectedTabs =
     {
-        "常规", "AI 增强", "桌面工具（组件）", "拓展功能", "快捷键", "数据", "健康与诊断",
+        "常规", "使用说明", "AI 增强", "桌面工具（组件）", "拓展功能", "快捷键", "数据", "健康与诊断",
     };
 
     private static string Markup(string xaml)

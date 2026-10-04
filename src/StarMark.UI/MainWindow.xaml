@@ -56,6 +56,18 @@
                             ToolTipService.ToolTip="桌面组件" Click="WidgetsButton_Click">
                         <FontIcon Glyph="&#xE710;" FontSize="14"/>
                     </Button>
+                    <!-- 「？」说的是**当前这一页**（批次 VC-3）。刻意做成顶栏一颗而不是每页塞一颗：
+                         页面切换只有一处状态（ViewModel.CurrentPageTag），九页各塞一颗就是九处接线，
+                         漏一页的表现是"那一页没有说明"——而浮层内容在打开那一刻现取，永远不会说错页。
+                         文字版全貌在设置「使用说明」栏，那颗按钮也在这里。 -->
+                    <Button x:Name="GuideButton" Style="{StaticResource SecondaryButton}" Content="？"
+                            ToolTipService.ToolTip="这一页怎么用">
+                        <Button.Flyout>
+                            <Flyout x:Name="GuideFlyout" Opening="GuideFlyout_Opening">
+                                <StackPanel x:Name="GuidePanel" Width="380" Spacing="6"/>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
                     <Button x:Name="SettingsButton" Style="{StaticResource SecondaryButton}" Content="⚙" Click="SettingsButton_Click"/>
                 </StackPanel>
             </Grid>

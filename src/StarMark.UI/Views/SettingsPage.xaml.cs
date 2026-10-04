@@ -80,6 +80,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         BuildWidgetRows();
         BuildHotkeyRows();
         BuildLayoutRows();
+        BuildGuideTab();      // 「使用说明」那一栏：正文在 Core 的 PageGuides，这里只是宿主
     }
 
     /// <summary>

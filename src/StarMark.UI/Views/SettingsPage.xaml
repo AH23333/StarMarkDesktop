@@ -280,6 +280,23 @@
                 </ScrollViewer>
             </TabViewItem>
 
+            <!-- ============ 使用说明（批次 VC-3） ============
+                 这一栏刻意不写任何文字：正文只在 Core 的 PageGuides 一处（顶栏「？」与首启引导说的是同一批话），
+                 这里只放宿主。写第二份的下场就是"三处说法不一样，用户不知道哪句作数"。 -->
+            <TabViewItem Header="使用说明">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
+                    <StackPanel Spacing="12" MaxWidth="820" HorizontalAlignment="Left">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Button x:Name="ReplayGuideButton" Content="重看首启引导" Style="{StaticResource SecondaryButton}"
+                                    Click="ReplayGuideButton_Click"/>
+                            <TextBlock Text="那份引导只弹一次；跳过或关掉之后，从这里回来。"
+                                       Style="{StaticResource MutedText}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel x:Name="GuideTabPanel" Spacing="6"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabViewItem>
+
             <!-- ============ AI 增强（要接外部服务或本机模型才成立的功能：从「常规」拆出，用户裁决） ============ -->
             <TabViewItem Header="AI 增强">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">

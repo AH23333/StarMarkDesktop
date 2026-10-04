@@ -107,6 +107,9 @@ public sealed partial class MainWindow : Window
         ApplyTrendingNavVisibility(_settings.LoadTrendingEnabled());
         ApplyRssNavVisibility(_settings.LoadRssEnabled());
 
+        // 首启那份引导（批次 VC-3）：排在导航之后，对话框才落在已经成形的首屏上而不是空白窗上。
+        MaybeShowFirstRunGuide();
+
         // 启动时恢复已启用的桌面组件（「开机自动加载组件」关掉时一颗都不建，见 WidgetManager.RestoreOnStartupAsync）
         DispatcherQueue.TryEnqueue(async () =>
         {

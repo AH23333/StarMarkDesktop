@@ -191,6 +191,14 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         /// 判据只住在 <c>AiBudget.IsLegalWarnRatio</c> 一处。</summary>
         public double? AiWarnRatio { get; set; }
 
+        /// <summary>
+        /// 首启那份引导<b>已经给这位用户看过</b>（批次 VC-3）。三态是有意的：
+        /// <c>null</c>＝从没看过（这一版之前的老配置里根本没有这一格，那些用户也该看一次），
+        /// <c>true</c>＝看过并关掉了（含"跳过"，跳过就不再出现——用户裁决的是"一次性"）。
+        /// 不设"每周再提醒一次"那种回头路：真要重看，设置「使用说明」栏里有一颗按钮。
+        /// </summary>
+        public bool? FirstRunGuideShown { get; set; }
+
         /// <summary>「AI 整理」规则预分类的用户追加规则（JSON 数组，§19 O2）。null/解析失败＝只有内置规则
         /// （<c>ClassifyRules.Merged</c> 一条路管两种情况）。放得下也读得回的失败必须出声：<b>这条链的失败
         /// 形态是"我明明加了规则却没生效"，所以坏 JSON 在读取侧就回报，而不是静默吞掉。</b></summary>
