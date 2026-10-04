@@ -141,12 +141,20 @@ public static class LocText
         return null;
     }
 
-    /// <summary>按 CLR 属性名找到那颗依赖属性（<c>XxxProperty</c> 静态字段）。</summary>
+    /// <summary>
+    /// 按 CLR 属性名找到那颗依赖属性标识符。
+    /// <para><b>字段与属性两条路都必须查</b>：托管辅助类（<c>ToolTipService.ToolTipProperty</c>）是
+    /// 公开静态字段，而 <b>WinUI 3 的控件是 CsWinRT 投影出来的，<c>TextBlock.TextProperty</c> 是静态属性</b>。
+    /// 只查字段的那一版在真机上的表现不是崩，是<b>整窗文案空白</b>（33 条"贴不上"）——
+    /// 而 <c>StarMark.Tests</c> 引用不到 UI，这一族只有真机能看见。</para>
+    /// </summary>
     private static DependencyProperty? FindProperty(DependencyObject target, string name)
     {
-        var field = target.GetType().GetField(name + "Property",
-            BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
-        return field?.GetValue(null) as DependencyProperty;
+        const BindingFlags Flags = BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy;
+        var type = target.GetType();
+        if (type.GetField(name + "Property", Flags)?.GetValue(null) is DependencyProperty field) return field;
+        if (type.GetProperty(name + "Property", Flags)?.GetValue(null) is DependencyProperty property) return property;
+        return null;
     }
 
     private static void WarnUnwritableOnce(DependencyObject target, string key, string why)

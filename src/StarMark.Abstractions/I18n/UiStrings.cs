@@ -98,14 +98,19 @@ public static class UiStrings
         // ===== 设置页「常规」里那颗界面语言 =====
         new Entry("settings.languageTitle", "界面语言", "Interface language"),
         new Entry("settings.languageFollowSystem", "跟随系统", "Follow system"),
-        // 这一句是产品对用户的承诺，所以它必须说出**这一版真正没铺开的地方**：设置页正文、软件内说明、日志。
-        // 含糊成"只覆盖主界面骨架"会被读成"设置页也跟着翻了"——那一格就在设置页里，而它周围全是中文。
+        // 这一句是产品对用户的承诺，所以它必须说出**这一版真正没铺开的地方**。
+        // 真机截图当场把第一版证伪了：它只点了"设置页正文／说明／日志"，而屏幕上还能看见
+        // 页面正文（空状态那句）与工具栏那颗语言筛选下拉是中文——漏了两个最显眼的。
+        // 英文列不许出现中文原文（`EveryRowCarriesBothLanguagesAndTheEnglishColumnIsReallyEnglish` 会红），
+        // 所以那两处只能意译，不能像中文列那样把界面上的原句抄进来。
         new Entry("settings.languageNote",
-            "改完立刻生效，不用重启。这一版只换主窗口顶部那一排（页签、搜索框、排序与筛选）；"
-            + "设置页里除了眼前这一格，其余栏目、软件内说明和日志都还是中文，下一批铺开。",
-            "Takes effect at once — no restart needed. This pass only covers the main window's top rows "
-            + "(tabs, the search box, sorting and filters); in Settings only this very card is translated — "
-            + "every other section, the in-app guide and the log stay in Chinese until the next batch."),
+            "改完立刻生效，不用重启。这一版只换主窗口顶部那一排（页签、搜索框、排序与筛选按钮）和眼前这一格；"
+            + "页面正文里的字（含「暂无条目，请先同步数据」这类空状态）、工具栏那颗「语言：全部」下拉、"
+            + "设置页其余栏目、软件内说明和日志都还是中文，下一批铺开。",
+            "Takes effect at once — no restart needed. This pass only covers the main window's top row "
+            + "(tabs, the search box, the sort and filter buttons) and this very card. Still Chinese for now: "
+            + "the page bodies (including empty-state lines), the language filter dropdown on the toolbar, "
+            + "every other settings section, the in-app guide and the log. The next batch widens the reach."),
     };
 
     private static readonly Dictionary<string, Entry> ByKey = Build();

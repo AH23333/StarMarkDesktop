@@ -283,4 +283,35 @@ public sealed class I18nWiringGateTests
         Assert.Equal(3, Count(loc, "DependencyProperty.RegisterAttached"));   // 正文／提示／占位符，三条各一
         Assert.Contains("FindProperty(d, \"PlaceholderText\")", loc, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// 找那颗依赖属性标识符必须<b>字段与属性两条路都查</b>。
+    /// <para>真机第一跑整窗文案空白（日志里 33 条"贴不上"）就是这么来的：WinUI 3 的控件是 CsWinRT 投影出来的，
+    /// <c>TextBlock.TextProperty</c> 是静态<b>属性</b>，只有托管辅助类（<c>ToolTipService</c>）才是静态字段。
+    /// 这一族 <c>StarMark.Tests</c> 引用不到 UI、反射又只能在运行期跑，所以只能钉<b>读法本身</b>：
+    /// 它挡不住"两条路都写错"，但挡得住"只写了一条"——而那正是今天踩中的那个形状。</para>
+    /// </summary>
+    [Fact]
+    public void TheDependencyPropertyLookupChecksBothFieldAndPropertyShapes()
+    {
+        var lookup = MethodBody(Code(ReadRepoFile(LocTextCs)), "FindProperty(DependencyObject");
+        Assert.Contains("GetField(", lookup, StringComparison.Ordinal);
+        Assert.Contains("GetProperty(", lookup, StringComparison.Ordinal);
+        Assert.Contains("\"Property\"", lookup, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>贴不上必须出声</b>：上面那些形状判据的兜底。真机上那 33 处空白之所以能一步定位到反射读法，
+    /// 靠的就是"找不到可写的那一颗"这条 WARN（连元素类型一起报）。把出声改成静默 return，
+    /// 界面就退化成"整片空白而日志里什么都没有"。
+    /// </summary>
+    [Fact]
+    public void AnUnwritableTargetSpeaksInsteadOfStayingBlank()
+    {
+        var loc = Code(ReadRepoFile(LocTextCs));
+        var warn = MethodBody(loc, "private static void WarnUnwritableOnce");
+        Assert.Contains("StarLog.Warn(", warn, StringComparison.Ordinal);
+        Assert.Contains("GetType().Name", warn, StringComparison.Ordinal);   // 说得出是哪一类元素贴不上
+        Assert.Equal(2, Count(loc, "WarnUnwritableOnce(d, "));               // 正文与占位符两条路各自出声
+    }
 }
