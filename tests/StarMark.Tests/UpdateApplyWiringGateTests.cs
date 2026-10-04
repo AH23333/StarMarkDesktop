@@ -153,7 +153,12 @@ public sealed class UpdateApplyWiringGateTests
     {
         var vm = Code(ReadRepoFile(Vm));
         var body = MethodBody(vm, "public Task<UpdateApplier.ApplyResult> ApplyUpdateAsync");
-        Assert.Contains("LastReport()?.RemoteTag", body, StringComparison.Ordinal);
+        // 两个实参取自<b>同一份</b>答复（批次 VZ）：分两次读就可能配成"新标签＋旧发布时刻"那一对讲不通的组合。
+        Assert.Contains("var report = Updates().LastReport();", body, StringComparison.Ordinal);
+        Assert.Contains("report?.RemoteTag", body, StringComparison.Ordinal);
+        Assert.Contains("releasePublishedUtc: report?.PublishedUtc", body, StringComparison.Ordinal);
+        // 从那份答复里取出来的东西<b>只有这两样</b>：多取一格（哪怕取的是路径）都会先红在这里。
+        Assert.Equal(2, Count(body, "report?."));
         // 路径／落点／更新器本体都不许从界面递过去（递过去就等于能被改成别的落点）
         foreach (var banned in new[] { "UpdaterPaths", "installDir", "UpdaterRequest", "UpdateApplier.Options", "Staging" })
             Assert.DoesNotContain(banned, vm, StringComparison.Ordinal);

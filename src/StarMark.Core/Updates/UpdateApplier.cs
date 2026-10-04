@@ -68,7 +68,7 @@ public sealed class UpdateApplier
     /// </summary>
     public sealed class Options
     {
-        public Func<FetchedPackage, string, string, string?, UpdateIntegrity.Result>? InspectPackage { get; init; }
+        public Func<FetchedPackage, string, string, string?, DateTimeOffset?, UpdateIntegrity.Result>? InspectPackage { get; init; }
         public UpdaterLauncher.Options? Launcher { get; init; }
     }
 
@@ -84,7 +84,8 @@ public sealed class UpdateApplier
     /// 混成一条回调就会有人把"下了 40 MB"演成"装好了"（#234）。</param>
     public async Task<ApplyResult> ApplyAsync(
         string? remoteTag, Action<ApplyPhase>? onPhase = null, CancellationToken ct = default,
-        Options? options = null, Action<DownloadProgress>? onBytes = null)
+        Options? options = null, Action<DownloadProgress>? onBytes = null,
+        DateTimeOffset? releasePublishedUtc = null)
     {
         var o = options ?? new Options();
         var inspect = o.InspectPackage ?? UpdateIntegrity.Inspect;
@@ -119,10 +120,14 @@ public sealed class UpdateApplier
         try
         {
             onPhase?.Invoke(ApplyPhase.Inspecting);
-            var verdict = inspect(package, repository, tag, _localVersion());
+            var verdict = inspect(package, repository, tag, _localVersion(), releasePublishedUtc);
             if (!verdict.IsTrusted)
                 return NotApplied(UpdatePolicy.Describe(verdict.Outcome), $"审包：{verdict.Outcome} {verdict.Detail}");
 
+            // 审包通过之后才说这份纸的年纪（VZ）：它是<b>事实</b>不是判决——拦不拦上面已经判完了。
+            // 写在日志而不是界面：这一句对"要不要装"没有影响，而界面那一行字接下来就被下一步换掉。
+            StarLog.Info($"[更新] 审包通过（{tag}）：{UpdatePolicy.DescribeManifestAge(ManifestFreshness.DaysOld(
+                verdict.Manifest!.GeneratedAtUtc, DateTimeOffset.UtcNow))}");
             var install = _installDir();
             var stagingRoot = UpdaterPaths.StagingRootFor(install);
             onPhase?.Invoke(ApplyPhase.Staging);

@@ -20,13 +20,23 @@ public sealed record ReleaseManifestFile(string Path, string Sha256, long Bytes)
 /// <b>唯一的例外是载荷那颗的名字</b>：它按 <see cref="UpdateAssets.PackageNameFor"/> 从标签算出来，
 /// 清单里那一栏只用来交叉核对（在读清单之前就得先决定去哪儿读——见那里的注释）。</para>
 /// </summary>
+/// <param name="GeneratedAtUtc">这份清单<b>是什么时候签出来的</b>（UTC），null＝这一份没写。
+/// <para>它是<b>可选欄</b>，而且刻意<b>不占 schema 号</b>：读法按名字取字段、未知字段天然被忽略，
+/// 而签名盖的是整串原文 ⇒ 装上"不会读这一欄"的那几版照旧读得动带这一欄的清单。
+/// 反过来若把 <c>schema</c> 抬到 2，读字段之前就先被 <c>SchemaTooNew</c>／"不是这一档"挡掉
+/// ⇒ 现在装着的机器一律升不上下一版，而这一维没有任何自愈出口（比 ✅P-162 那条更硬：那条还能等一版，
+/// 这条要等的是"所有人都已经装上会读 2 的那一版"）。理由与判据都在 Core 的 <c>ManifestFreshness</c>。</para>
+/// <para>为什么值得进签名字节：<b>只有盖在签名里的时刻才是被背书的事实</b>——对方响应里的
+/// <c>published_at</c>／资产 <c>updated_at</c> 都是另一份纸上的话。它让"这份清单与这一版发布隔了多久"
+/// 变成一个可判、可记、可核对的事实。</para></param>
 public sealed record ReleaseManifest(
     int Schema,
     string Version,
     string Package,
     string PackageSha256,
     long PackageBytes,
-    IReadOnlyList<ReleaseManifestFile> Files);
+    IReadOnlyList<ReleaseManifestFile> Files,
+    DateTimeOffset? GeneratedAtUtc = null);
 
 /// <summary>
 /// 一次"取包"取回来的三样东西的搬运袋：清单原文、签名原文、已经落到临时盘的载荷。

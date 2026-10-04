@@ -96,16 +96,21 @@ public sealed class UpdateNotesWiringGateTests
     // ===== 边界：正文绝不进设置档 =====
 
     /// <summary>
-    /// 宿主那五格<b>就是五格</b>：读五行＋写五行＝十处，多一处就是给那段外部文本开了一格存档。
+    /// 宿主那几格<b>就是那几格</b>：读六行＋写六行＝十二处，多一处就是给那段外部文本开了一格存档。
     /// 这条比"文件里有没有 Notes 这个词"硬：它钉的是形状，改名字躲不过去。
+    /// <para>批次 VZ 把 10 改成 12：多出来那一格是 <c>UpdateLastPublishedUnix</c>（这一版何时发布），
+    /// 它不是那段正文、也不会冒充别的东西，而这条闸门要挡的两样都还挡着——<b>数量对得上</b>、
+    /// <b>正文类的名字一格都不许出现</b>。改数字的正当理由留在这里，下次它再动要先回答同一问。</para>
     /// </summary>
     [Fact]
-    public void TheSettingsFileStillCarriesOnlyTheFiveVerdictKeys()
+    public void TheSettingsFileStillCarriesOnlyTheVerdictKeys()
     {
         var store = Code(ReadRepoFile(Store));
-        Assert.Equal(10, Count(store, "d.Update"));
+        Assert.Equal(12, Count(store, "d.Update"));
         foreach (var banned in new[] { "Notes", "Body", "Markdown" })
             Assert.DoesNotContain(banned, store, StringComparison.Ordinal);
+        // 唯一允许进档的"对方给的时刻"就是发布时刻，而且它必须与标签同进同出（配错就没法判新鲜度）。
+        Assert.Equal(2, Count(store, "UpdateLastPublishedUnix"));
     }
 
     /// <summary>

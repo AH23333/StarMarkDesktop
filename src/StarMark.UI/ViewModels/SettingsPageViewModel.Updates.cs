@@ -136,15 +136,22 @@ public partial class SettingsPageViewModel
     private static UpdateApplier Apply() => App.Services.GetRequiredService<UpdateApplier>();
 
     /// <summary>
-    /// 「立即更新」那一下（批次 UG-3，读数那一条批次 VW 补）。
-    /// <b>界面只递"上一次问出来的那一版"这一个事实</b>：
-    /// 地址由 Core 按配置里的仓库拼，落点由 Core 按正在跑的这颗 exe 算——能被参数改动的东西就能被改成别的落点。
-    /// <paramref name="onBytes"/> 不是第三个"事实"而是同一件事的读数：它只能被写进那一行字，
-    /// 不参与"装哪一版、装到哪儿"的任何判断（有闸门钉着这条接线仍然只递标签）。
+    /// 「立即更新」那一下（批次 UG-3，读数那一条批次 VW 补，发布时刻那一条批次 VZ 补）。
+    /// <b>界面只递"上一次问出来的那一版"这一个事实的两个半边</b>：哪一版、以及它是什么时候发布的。
+    /// 地址由 Core 按配置里的仓库拼，落点由 Core 按正在跑的这颗 exe 算——能被参数改动的东西就能被改成别的落点；
+    /// 而发布时刻<b>不参与"去哪儿取、往哪儿写"的任何判断</b>，它只进"这份清单对不对得上这一版"那道算术。
+    /// <paramref name="onBytes"/> 也不是第三个"事实"而是同一件事的读数：它只能被写进那一行字
+    /// （有闸门钉着这条接线仍然只递这两样）。
     /// </summary>
     public Task<UpdateApplier.ApplyResult> ApplyUpdateAsync(
         Action<ApplyPhase> onPhase, Action<DownloadProgress> onBytes, CancellationToken ct)
-        => Apply().ApplyAsync(Updates().LastReport()?.RemoteTag, onPhase, ct, onBytes: onBytes);
+    {
+        // 两个值取自<b>同一份</b>答复：分两次读就可能配成"新标签＋旧时刻"那一对，
+        // 而那一刻是清单新鲜度唯一的参照——配错了会把一份正常发布的清单判成"不是为这一版签的"。
+        var report = Updates().LastReport();
+        return Apply().ApplyAsync(report?.RemoteTag, onPhase, ct, onBytes: onBytes,
+            releasePublishedUtc: report?.PublishedUtc);
+    }
 
     /// <summary>走到哪一步的那行字：措辞出自 <see cref="UpdatePolicy"/>，界面这一侧一个字都不抄。</summary>
     public void ShowApplyPhase(ApplyPhase phase) => UpdateStatus = UpdatePolicy.Describe(phase);

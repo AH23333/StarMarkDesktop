@@ -468,7 +468,8 @@ public sealed class UpdateApplierTests : IDisposable
             installDir: () => _install, localVersion: () => localVersion, environment: () => Repository);
         var options = new UpdateApplier.Options
         {
-            InspectPackage = (p, repo, tag, local) => UpdateIntegrity.Inspect(p, repo, tag, local, anchor),
+            InspectPackage = (p, repo, tag, local, published) =>
+                UpdateIntegrity.Inspect(p, repo, tag, local, anchor, published),
             Launcher = new UpdaterLauncher.Options
             {
                 StartRunner = (exe, args) => sink.Add((exe, args)),

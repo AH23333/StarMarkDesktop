@@ -290,6 +290,13 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
 
         /// <summary>已经为哪一版弹过卡。<b>只记标签不记时间</b>：记住的是"这一版说过了"。</summary>
         public string? UpdateAnnouncedTag { get; set; }
+
+        /// <summary>
+        /// 上一次问到的那一版<b>是什么时候发布的</b>（UTC 秒，与上面几格同口径）。
+        /// 它与 <see cref="UpdateLastRemoteTag"/> 是一对，只喂给清单新鲜度那道算术（批次 VZ）；
+        /// 单独留下它没有意义，所以两侧同生同死（见 <c>UpdateService.RunAsync</c> 那个写入块）。
+        /// </summary>
+        public long? UpdateLastPublishedUnix { get; set; }
     }
 
     public SettingsStore(string? path = null) => _path = path ?? ResolveSettingsPath();

@@ -290,11 +290,26 @@ public static class UpdatePolicy
         UpdateIntegrity.Outcome.SchemaUnsupported => "清单格式比这个程序新，先升级程序再更新，没装",
         UpdateIntegrity.Outcome.FieldRejected => "清单里有认不出的值（路径越界、哈希形状不对、或没有主程序），已拒绝",
         UpdateIntegrity.Outcome.VersionMismatch => "清单写的版本与要取的那一版不是同一版，没装",
+        UpdateIntegrity.Outcome.ManifestPredatesRelease => "这份清单比它要发布的那一版还早得多，不像是为它签的，没装",
         UpdateIntegrity.Outcome.RollbackRefused => "这一版不比本机现在的更新，装了是往回退，所以没装",
         UpdateIntegrity.Outcome.LocalVersionUnknown => "本机版本号读不到，判断不了新旧，所以没装",
         UpdateIntegrity.Outcome.PackageHashMismatch => "包的内容与清单里的哈希对不上（可能被换过），已拒绝",
         UpdateIntegrity.Outcome.PackageSizeMismatch => "包的大小与清单里说的不一致，已拒绝",
         _ => "更新包没有通过校验，没装",
+    };
+
+    /// <summary>
+    /// 审包成功之后<b>关于清单生成时间的那一句话</b>（批次 VZ，日志用；界面不摆——它对"要不要装"没有影响）。
+    /// <para>三种下落各有各的说法，不许把"没写"与"写了但不算旧"混成同一句：
+    /// 排查一份装错了的包时，"这一份根本没带时间戳"与"这份是三天前签的"是两个完全不同的下一步。</para>
+    /// </summary>
+    public static string DescribeManifestAge(long? daysOld) => daysOld switch
+    {
+        null => "清单没写生成时间（这一份不判新鲜度）",
+        0 => "清单是今天签的",
+        long d when !ManifestFreshness.WorthMentioning(d) => $"清单签于 {DateTimeText.DaysAgo(d)}",
+        long d => $"清单签于 {DateTimeText.DaysAgo(d)}（超过 {(int)ManifestFreshness.NoticeAfter.TotalDays} 天，"
+                 + "值得核一眼远端挂的是不是很久以前那一份）",
     };
 
     /// <summary>

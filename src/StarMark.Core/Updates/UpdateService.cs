@@ -35,12 +35,19 @@ public interface IUpdateStateStore
 /// <param name="LastVerdict">上一次的结局（null＝从没检查过）。界面打开时照着它说话，不为此发请求。</param>
 /// <param name="LastRemoteTag">上一次问到的远端标签（配合上一格拼出那句话）。</param>
 /// <param name="AnnouncedTag">已经为哪一版出过声。<b>只记标签、不记时间</b>：记住的是"这一版通知过了"。</param>
+/// <param name="LastPublishedUtc">上一次问到的那一版<b>是什么时候发布的</b>（批次 VZ）。
+/// <para>它与 <see cref="LastRemoteTag"/> <b>同生同死</b>（同一次写入、同一个"counts as probed"条件）：
+/// 单独存一个时刻没有意义，它的用处只在"给这一版的清单定一个参照"，而那件事必须与标签配成一对才成立。</para>
+/// <para>它进档而 <see cref="UpdateReport.Notes"/> 不进档，不是双标：这是一个<b>固定宽度的瞬间</b>，
+/// 不会冒充别的东西、也不会随时间变得不真实（"这一版发布于那天"永远为真）；
+/// 而一段外部自由文本会在下一版发布后继续冒充"这一版的说明"。</para></param>
 public sealed record UpdateState(
     bool AutoCheckEnabled,
     DateTimeOffset? LastProbeUtc = null,
     UpdateVerdict? LastVerdict = null,
     string? LastRemoteTag = null,
-    string? AnnouncedTag = null);
+    string? AnnouncedTag = null,
+    DateTimeOffset? LastPublishedUtc = null);
 
 /// <summary>
 /// 一次检查的完整答复。<see cref="Text"/> 是给界面与日志用的那一句（出自 <see cref="UpdatePolicy.Describe"/>），
@@ -55,9 +62,13 @@ public sealed record UpdateState(
 /// 一段外部服务器说了算、长度不定的自由文本一旦落盘，就会被自动备份与同步一起带走，
 /// 并且在新版发布之后继续冒充"这一版的说明"。代价是重启程序后这一格空着——那是可以接受的，
 /// 因为重新问一次的出口就在同一张卡上（「立即检查」）。有闸门钉着这条边界。</param>
+/// <param name="PublishedUtc">问到的那一版<b>是什么时候发布的</b>（null＝对方没给，或这是从档里重算的那一份里没有）。
+/// 它存在的理由只有一个：装的那一刻要把清单上的生成时间与它比一下（<see cref="ManifestFreshness"/>）。
+/// 与 <see cref="Notes"/> 不同，这一格<b>会</b>进设置档——它必须与那个标签配成一对才作数（见 <see cref="UpdateState.LastPublishedUtc"/>）。</param>
 public sealed record UpdateReport(
     UpdateVerdict Verdict, string? RemoteTag, string PageUrl,
-    DateTimeOffset CheckedUtc, bool Announced, string Text, string? Notes = null);
+    DateTimeOffset CheckedUtc, bool Announced, string Text, string? Notes = null,
+    DateTimeOffset? PublishedUtc = null);
 
 /// <summary>
 /// 检查更新的编排：<b>问 → 判 → 记 → （只在必要时）出声</b>（批次 UE）。
@@ -122,11 +133,13 @@ public sealed class UpdateService
         var stored = _state.Read();
         if (stored.LastVerdict is not { } verdict) return null;
         var release = stored.LastRemoteTag is { Length: > 0 } tag
-            ? new RemoteRelease(tag, null, false, null) : null;
+            ? new RemoteRelease(tag, null, false, stored.LastPublishedUtc) : null;
         // 这一份没有 Notes 那一格可填：正文不落盘，档里也没有它（见 UpdateReport.Notes）。
+        // 发布时刻<b>有</b>：它跟标签是一对，装的那一步要靠它判清单的年纪。
         return new UpdateReport(verdict, stored.LastRemoteTag, PageUrl(stored.LastRemoteTag),
             stored.LastProbeUtc ?? DateTimeOffset.MinValue, Announced: false,
-            UpdatePolicy.Describe(verdict, release, LocalText()));
+            UpdatePolicy.Describe(verdict, release, LocalText()),
+            PublishedUtc: stored.LastPublishedUtc);
     }
 
     /// <summary>发布页地址：只认配置里那个仓库，远端回的连接串一个字节都不参与（见 <see cref="UpdatePolicy.ReleasePageUrl"/>）。</summary>
@@ -196,6 +209,9 @@ public sealed class UpdateService
             LastProbeUtc = UpdatePolicy.CountsAsProbed(verdict) ? now : stored.LastProbeUtc,
             LastVerdict = UpdatePolicy.CountsAsProbed(verdict) ? verdict : stored.LastVerdict,
             LastRemoteTag = UpdatePolicy.CountsAsProbed(verdict) ? release?.Tag : stored.LastRemoteTag,
+            // 与标签同一条件写入：只留一个的话就会出现"标签是新的、发布时刻是旧的"那种配对错误，
+            // 而那个错恰好会喂给清单新鲜度那道算术一个假参照。
+            LastPublishedUtc = UpdatePolicy.CountsAsProbed(verdict) ? release?.PublishedUtc : stored.LastPublishedUtc,
             AnnouncedTag = recordAnnounced ? release!.Tag : stored.AnnouncedTag,
         };
         _state.Write(updated);
@@ -208,7 +224,7 @@ public sealed class UpdateService
             + (release is null ? "" : $"，远端 {release.Tag}")
             + (probe.Detail is null ? "" : $"，对方补话：{probe.Detail}") + "）");
         return new UpdateReport(verdict, release?.Tag, UpdatePolicy.ReleasePageUrl(repository, release?.Tag),
-            now, showCard, text, notes);
+            now, showCard, text, notes, release?.PublishedUtc);
     }
 
     private string? LocalText()

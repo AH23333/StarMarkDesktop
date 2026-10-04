@@ -1497,9 +1497,17 @@ static async Task UpdateChainAuditAsync(string installDir, string localVersion, 
     Console.WriteLine($"   包 {package.PackageBytes:N0} 字节 sha256 {package.PackageSha256[..12]}…"
         + $"｜清单 {package.ManifestBytes.Length} 字节｜签名 {package.SignatureBytes.Length} 字节");
 
-    var verdict = StarMark.Core.Updates.UpdateIntegrity.Inspect(package, repository, tag, localVersion);
+    // 发布时刻从"问"那一步原样递进去（批次 VZ）：探针在这里走的是生产那条判断，
+    // 少递一个参数就等于探针比所有真机器多放行一种东西。
+    var verdict = StarMark.Core.Updates.UpdateIntegrity.Inspect(
+        package, repository, tag, localVersion, report.PublishedUtc);
     Console.WriteLine($"3) 审包：{verdict.Outcome}｜{StarMark.Core.Updates.UpdatePolicy.Describe(verdict.Outcome)}"
         + $"｜可信={verdict.IsTrusted}｜{verdict.Detail ?? ""}");
+    // 这一行是把"这份清单是哪时候签的、与这一版发布隔多久"打成数字（VZ）：
+    // 真机验这一批时，要看的就是这两个数在不在、对不对得上远端那两个标签页上的时刻。
+    Console.WriteLine($"   {StarMark.Core.Updates.UpdatePolicy.DescribeManifestAge(
+            StarMark.Core.Updates.ManifestFreshness.DaysOld(verdict.Manifest?.GeneratedAtUtc, DateTimeOffset.UtcNow))}"
+        + $"｜问到的发布时刻={report.PublishedUtc?.ToUniversalTime().ToString("yyyy-MM-dd HH:mm") ?? "(对方没给)"}");
     if (!verdict.IsTrusted || verdict.Manifest is null)
     {
         Console.WriteLine("VERDICT=chain-stopped:inspect");

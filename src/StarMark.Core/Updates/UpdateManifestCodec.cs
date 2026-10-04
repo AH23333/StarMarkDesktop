@@ -48,6 +48,12 @@ public static class UpdateManifestCodec
     private const int MaxVersionLength = 100;
     private const int MaxPackageNameLength = 120;
     private const int MaxPathLength = 260;
+    private const int MaxGeneratedAtLength = 40;
+
+    /// <summary><c>generatedAt</c> 唯一的写法：<b>UTC 的往返格式</b>（尾缀 <c>Z</c>）。
+    /// 只认这一种是有理由的——不带偏移的时间串（"2026-10-04T05:00:00"）在两台时区不同的机器上
+    /// 说的是两个瞬间，而这一欄要参与的就是"隔了多久"这道算术。</summary>
+    private const string GeneratedAtFormat = "O";
 
     /// <summary>把清单写成那串"要被签名、也要被原样上传"的字节。</summary>
     public static byte[] Write(ReleaseManifest manifest)
@@ -61,6 +67,10 @@ public static class UpdateManifestCodec
             writer.WriteString("package", manifest.Package);
             writer.WriteString("packageSha256", manifest.PackageSha256);
             writer.WriteNumber("packageBytes", manifest.PackageBytes);
+            // 时刻排在标量这一段里、files 之前；没有这一欄就<b>整个不写</b>（不写 null 串占位）：
+            // 老清单读出来必须是"没写"，而不是"写了个读不懂的东西"。
+            if (manifest.GeneratedAtUtc is { } when)
+                writer.WriteString("generatedAt", when.ToUniversalTime().ToString(GeneratedAtFormat, CultureInfo.InvariantCulture));
             writer.WriteStartArray("files");
             foreach (var file in manifest.Files)
             {
@@ -171,7 +181,29 @@ public static class UpdateManifestCodec
         }
         if (!TryReadFiles(files, out var list, out reject)) return false;
 
-        manifest = new ReleaseManifest(schemaValue, version!, package!, packageSha!, packageSize, list);
+        // 可选欄：<b>没有＝"这一份没写生成时间"</b>（老清单、或另一条产线签的），判新鲜度那一步据此选"不判"。
+        // 但一旦写了就必须是我们写的那种形状：读不懂的时间串不能当成"没写"——
+        // 那等于把一份坏掉的清单降级成一份少一欄的清单，而少的那一欄恰恰是唯一被背书的那个时刻。
+        DateTimeOffset? generatedAt = null;
+        if (root.TryGetProperty("generatedAt", out var when))
+        {
+            if (when.ValueKind != JsonValueKind.String)
+            {
+                reject = new ManifestReject(ManifestRejectKind.FieldRejected, "generatedAt 不是字符串");
+                return false;
+            }
+            var text = when.GetString();
+            if (string.IsNullOrEmpty(text) || text.Length > MaxGeneratedAtLength
+                || !DateTimeOffset.TryParseExact(text, GeneratedAtFormat, CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind, out var parsed))
+            {
+                reject = new ManifestReject(ManifestRejectKind.FieldRejected, "generatedAt 不是 UTC 的往返时间串");
+                return false;
+            }
+            generatedAt = parsed.ToUniversalTime();
+        }
+
+        manifest = new ReleaseManifest(schemaValue, version!, package!, packageSha!, packageSize, list, generatedAt);
         return true;
     }
 

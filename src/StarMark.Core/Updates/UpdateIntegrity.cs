@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using StarMark.Abstractions;
 using StarMark.Abstractions.Updates;
 
 namespace StarMark.Core.Updates;
@@ -53,6 +54,11 @@ public static class UpdateIntegrity
         /// <summary>清单里的版本与要去取的那个标签<b>不是同一版</b>（拿旧清单冒充新版、或发布时填错了版本）。</summary>
         VersionMismatch,
 
+        /// <summary>清单的生成时间<b>比这一版发布还早得多</b>：它多半不是为这一版签的（批次 VZ，判据见 <see cref="ManifestFreshness"/>）。
+        /// <para>这一档与 <see cref="VersionMismatch"/> 分开，因为两者的处置完全不同：版本号对不上是"你我要的东西不是一件"，
+        /// 而这一刻度对不上是"这件东西的纸是另一次打印的"——后者要去查的是发布链的哪一环错乱了。</para></summary>
+        ManifestPredatesRelease,
+
         /// <summary>清单这一版<b>不比本机新</b>（同版或更旧）——装它就是往回退。</summary>
         RollbackRefused,
 
@@ -75,18 +81,25 @@ public static class UpdateIntegrity
     /// <summary>
     /// 生产入口：<b>用内嵌的那把公钥</b>审一份取回来的包。
     /// <para>参数里刻意没有"公钥"一格：调用方一旦能传公钥，就有把校验降级成"信任何一方"的一天。
-    /// 测试要自造密钥时走 <see cref="Inspect(FetchedPackage,string,string,string?,UpdateTrustAnchor)"/>
-    /// 那一个重载，而界面上唯一的接线点用这个四参版本（有闸门盯着）。</para>
+    /// 测试要自造密钥时走 <see cref="Inspect(FetchedPackage,string,string,string?,UpdateTrustAnchor,DateTimeOffset?)"/>
+    /// 那一个重载，而界面上唯一的接线点用这个五参版本（有闸门盯着）。</para>
     /// </summary>
-    public static Result Inspect(FetchedPackage package, string repository, string tag, string? localVersion)
-        => Inspect(package, repository, tag, localVersion, UpdateTrustAnchor.Embedded);
+    /// <param name="releasePublishedUtc"><b>这一版是什么时候发布的</b>（探测那一步拿到的 <c>published_at</c>，
+    /// 由调用方一路递进来）。null＝这一次没拿到（老服务器字段缺、或跨会话从档里恢复）——
+    /// 那一刻新鲜度这一档<b>不判</b>而不是"判不过"，理由见 <see cref="ManifestFreshness"/>。</param>
+    public static Result Inspect(FetchedPackage package, string repository, string tag, string? localVersion,
+        DateTimeOffset? releasePublishedUtc)
+        => Inspect(package, repository, tag, localVersion, UpdateTrustAnchor.Embedded, releasePublishedUtc);
 
     /// <summary>
-    /// 逐项审。<b>顺序是有讲究的</b>：先验签名（不看内容），再读字段，再对版本，最后才比哈希——
+    /// 逐项审。<b>顺序是有讲究的</b>：先验签名（不看内容），再读字段，再对版本与时刻，最后才比哈希——
     /// 反过来做就等于"照一份没验过的清单去解释这台机器上的字节"。
+    /// <para>信任根排在发布时刻<b>之前</b>是刻意的：这个重载的调用点全是测试，
+    /// 把新加的可选参数放在末尾，就不必让二十多处既有用例集体改参数顺序——
+    /// 一批改动里混进几十处机械改签名，真正接错的那一处就会被淹没在里面（#251 那一族）。</para>
     /// </summary>
     public static Result Inspect(FetchedPackage package, string repository, string tag, string? localVersion,
-        UpdateTrustAnchor anchor)
+        UpdateTrustAnchor anchor, DateTimeOffset? releasePublishedUtc = null)
     {
         if (package is null) return new Result(Outcome.ManifestUnreadable, Detail: "没有包可审");
         if (anchor is null) return new Result(Outcome.SignatureInvalid, Detail: "没有信任根");
@@ -114,6 +127,15 @@ public static class UpdateIntegrity
         if (!string.Equals(manifest.Package, UpdateAssets.PackageNameFor(AppVersion.Describe(declared)),
                 StringComparison.Ordinal))
             return new Result(Outcome.FieldRejected, Detail: "清单里的载荷名与按标签算出来的那颗不是同一颗");
+
+        // ③′ 时刻：这份纸是不是为这一版打印的（批次 VZ）。两个数都不出自这台机器的钟，
+        //     所以这一档可以硬拒而年龄那一档不行（取舍与理由在 ManifestFreshness 的注释里）。
+        if (ManifestFreshness.Decide(manifest.GeneratedAtUtc, releasePublishedUtc)
+            == ManifestFreshnessVerdict.PredatesRelease)
+            return new Result(Outcome.ManifestPredatesRelease,
+                Detail: $"清单签于 {DateTimeText.Day(manifest.GeneratedAtUtc!.Value)}，"
+                      + $"而 {tag} 发布于 {DateTimeText.Day(releasePublishedUtc!.Value)}");
+
         if (!AppVersion.TryParse(localVersion, out var local))
             return new Result(Outcome.LocalVersionUnknown);
         if (AppVersion.Compare(local, declared) >= 0)

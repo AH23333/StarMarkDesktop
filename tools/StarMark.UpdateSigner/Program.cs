@@ -55,7 +55,10 @@ var manifest = new ReleaseManifest(
     expectedPackage,
     packageSha256,
     packageBytes,
-    files);
+    files,
+    // 签出来的这一刻就是这份清单的年龄起点（批次 VZ）。它盖在签名里，所以是<b>被背书的事实</b>：
+    // 对方响应里的 published_at／资产 updated_at 都是另一份纸上的话，而"这份清单什么时候做的"只有这里说了算。
+    DateTimeOffset.UtcNow);
 
 var manifestBytes = UpdateManifestCodec.Write(manifest);
 var signature = Sign(keyPath, manifestBytes);

@@ -5,7 +5,7 @@ using StarMark.Core.Updates;
 namespace StarMark.UI.Helpers;
 
 /// <summary>
-/// SettingsStore 的这一段——检查更新那五格（批次 UE）。
+/// SettingsStore 的这一段——检查更新那六格（批次 UE，第六格由 VZ 加）。
 /// <para>
 /// 这里是 <see cref="IUpdateStateStore"/> 在真宿主上的<b>唯一</b>实现：Core 那边只管"读一次、算完、写一次"，
 /// 怎么落到 settings.json、脏值怎么回落都只住在这几行。
@@ -14,6 +14,12 @@ namespace StarMark.UI.Helpers;
 /// 两处刻意的写法：① <b>结局按名字存</b>（认不出来的名字一律当"没查过"，而不是猜一个最接近的枚举值——
 /// 猜错就是界面在说一件没发生过的事）；② <b>时间戳按 UTC 秒存</b>，与自动备份那条同口径，
 /// 于是调本地时钟不会把"上次几点查的"挪走。
+/// </para>
+/// <para>
+/// 第六格（<c>UpdateLastPublishedUnix</c>）与标签那一格是一对，<b>只用来给清单的生成时间当参照</b>（见
+/// <see cref="UpdateState.LastPublishedUtc"/>）。它是这一批里唯一进档的"对方给的时刻"：
+/// 一个固定宽度的瞬间不会随时间变得不真实，也不会冒充别的东西——
+/// 这两条正是 release 正文被挡在档外的那两条理由，它都不犯。
 /// </para>
 /// </summary>
 public sealed partial class SettingsStore : IUpdateStateStore
@@ -27,7 +33,8 @@ public sealed partial class SettingsStore : IUpdateStateStore
             UnixToUtc(d.UpdateLastProbeUnix),
             ParseVerdict(d.UpdateLastVerdict),
             d.UpdateLastRemoteTag,
-            d.UpdateAnnouncedTag);
+            d.UpdateAnnouncedTag,
+            UnixToUtc(d.UpdateLastPublishedUnix));
     }
 
     /// <summary>整批写回（见 <see cref="IUpdateStateStore"/>：这几格说的是同一件事，不许分开落盘）。</summary>
@@ -39,6 +46,7 @@ public sealed partial class SettingsStore : IUpdateStateStore
         d.UpdateLastVerdict = state.LastVerdict?.ToString();
         d.UpdateLastRemoteTag = state.LastRemoteTag;
         d.UpdateAnnouncedTag = state.AnnouncedTag;
+        d.UpdateLastPublishedUnix = state.LastPublishedUtc?.ToUnixTimeSeconds();
         Save(d);
     }
 

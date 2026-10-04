@@ -317,11 +317,17 @@ public sealed class UpdateIntegrityTests
     {
         using var key = new TestKey();
         var manifest = Manifest(packageHash: HexOf(Payload));
-        var result = UpdateIntegrity.Inspect(Bundle(key, manifest), Repository, Tag, "1.0.0");
+        // 发布时刻用**具名实参**传 null：两个重载的第五参分别是 DateTimeOffset? 与 UpdateTrustAnchor，
+        // 裸 null 会歧义（而"歧义"恰好说明这两个入口在调用方看来分得不够开——这里要的就是分得开）。
+        var result = UpdateIntegrity.Inspect(Bundle(key, manifest), Repository, Tag, "1.0.0",
+            releasePublishedUtc: null);
         Assert.Equal(UpdateIntegrity.Outcome.SignatureInvalid, result.Outcome);
         var code = Code(ReadRepoFile("src/StarMark.Core/Updates/UpdateIntegrity.cs"));
         Assert.Equal(1, Count(code, "UpdateTrustAnchor.Embedded"));
-        Assert.Contains("Inspect(FetchedPackage package, string repository, string tag, string? localVersion)", code);
+        Assert.Contains("Inspect(FetchedPackage package, string repository, string tag, string? localVersion,", code);
+        Assert.Contains("DateTimeOffset? releasePublishedUtc)", code);
+        // 全库只有一处声明收"信任根"这个参数＝那个测试专用重载；生产入口没有它，也就没人能把公钥换着传。
+        Assert.Equal(1, Count(code, "UpdateTrustAnchor anchor"));
     }
 
     [Fact]
@@ -563,6 +569,111 @@ public sealed class UpdateIntegrityTests
         return data;
     }
 
+    // ===== 清单的生成时间（批次 VZ）=====
+
+    /// <summary>
+    /// 不带 <c>generatedAt</c> 的那一形状必须<b>与加这一欄之前逐字节相同</b>——这不是"顺手对一下"，
+    /// 这是整批"不升 schema"的立论所在：远端已经公开的那几版清单就是这个形状，
+    /// 它们要是读不动了，这一批就变成了把老机器关在更新之外的那种改动。
+    /// 这一格与上面那颗 openssl 黄金用例合起来才叫证据：字节没变 ⇒ 那份老签名照样验得过。
+    /// </summary>
+    [Fact]
+    public void AnOldShapeManifestStillHasTheBytesItAlwaysHad()
+    {
+        var bytes = UpdateManifestCodec.Write(Manifest());
+        Assert.Equal(GoldenManifestBase64, Convert.ToBase64String(bytes));
+        Assert.DoesNotContain("generatedAt", Encoding.UTF8.GetString(bytes), StringComparison.Ordinal);
+        Assert.Null(ReadOk(bytes).GeneratedAtUtc);
+    }
+
+    [Fact]
+    public void AGenerationTimeRoundTripsThroughTheSignedBytes()
+    {
+        var when = new DateTimeOffset(2026, 10, 4, 5, 6, 7, TimeSpan.Zero).AddTicks(8901234);
+        Assert.True(UpdateManifestCodec.TryRead(UpdateManifestCodec.Write(Manifest(generatedAtUtc: when)),
+            out var read, out var reject), reject.Detail);
+        Assert.Equal(when, read!.GeneratedAtUtc);
+    }
+
+    /// <summary><b>写了但读不懂 ≠ 没写</b>：那一欄是这份清单里唯一被签名背书的时刻，
+    /// 把它当成"缺省"就等于让一份坏掉的清单降级成一份少一欄的清单。</summary>
+    [Theory]
+    [InlineData("\"2026-10-04T05:06:07\"")]      // 不带偏移：换一台机器就是另一个瞬间
+    [InlineData("\"2026-10-04\"")]                // 只有日期
+    [InlineData("\"05:06:07\"")]
+    [InlineData("\"\"")]
+    [InlineData("42")]
+    [InlineData("null")]
+    [InlineData("{\"utc\":\"2026-10-04\"}")]
+    public void AGenerationTimeWeCannotReadIsRefusedRatherThanTreatedAsMissing(string literal)
+    {
+        var json = ManifestJson(new Dictionary<string, string> { ["generatedAt"] = literal });
+        Assert.False(UpdateManifestCodec.TryRead(Encoding.UTF8.GetBytes(json), out var read, out var reject));
+        Assert.Null(read);
+        Assert.Equal(ManifestRejectKind.FieldRejected, reject.Kind);
+    }
+
+    [Fact]
+    public void AManifestSignedLongBeforeThatReleaseWentOutIsRefused()
+    {
+        using var key = new TestKey();
+        var published = new DateTimeOffset(2026, 10, 4, 12, 0, 0, TimeSpan.Zero);
+        var manifest = Manifest(packageHash: HexOf(Payload), generatedAtUtc: published.AddDays(-3));
+        var result = UpdateIntegrity.Inspect(Bundle(key, manifest), Repository, Tag, "1.0.0", key.Anchor, published);
+        Assert.Equal(UpdateIntegrity.Outcome.ManifestPredatesRelease, result.Outcome);
+        Assert.Contains("2026-10-01", result.Detail, StringComparison.Ordinal);   // 日志里要说得出是哪一天
+    }
+
+    /// <summary>容差之内的正常形状不许红：<b>负数＝清单签在发布之后</b>（换载荷重签就是这种，天天可能发生）。</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(6)]
+    [InlineData(23)]
+    [InlineData(-30)]
+    public void AGenerationTimeInsideTheToleranceIsNotAnIncident(double hoursBeforeRelease)
+    {
+        using var key = new TestKey();
+        var published = new DateTimeOffset(2026, 10, 4, 12, 0, 0, TimeSpan.Zero);
+        var manifest = Manifest(packageHash: HexOf(Payload), generatedAtUtc: published.AddHours(-hoursBeforeRelease));
+        var result = UpdateIntegrity.Inspect(
+            Bundle(key, manifest), Repository, Tag, "1.0.0", key.Anchor, published);
+        Assert.Equal(UpdateIntegrity.Outcome.Trusted, result.Outcome);
+    }
+
+    [Fact]
+    public void WithoutAReleaseTimeTheFreshnessJudgementIsSkippedNotFailed()
+    {
+        using var key = new TestKey();
+        var manifest = Manifest(packageHash: HexOf(Payload), generatedAtUtc: new DateTimeOffset(2001, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var result = UpdateIntegrity.Inspect(
+            Bundle(key, manifest), Repository, Tag, "1.0.0", key.Anchor, null);
+        Assert.Equal(UpdateIntegrity.Outcome.Trusted, result.Outcome);
+    }
+
+    /// <summary>
+    /// <b>年龄本身永远不拦</b>（本批那条被否掉的方案留下的证人）：一份十年前的清单，
+    /// 只要签得对、版本对得上、字节对得上，就照样能装。
+    /// 任何有限的年龄硬界都会把<b>作者的发布节奏</b>变成<b>用户的更新闸门</b>，
+    /// 而那种坏在用户这一侧没有出口（只能等有人重签）——它不算安全收益，算自伤。
+    /// </summary>
+    [Fact]
+    public void AgeAloneNeverBlocksAnUpdate()
+    {
+        using var key = new TestKey();
+        var published = new DateTimeOffset(2016, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var manifest = Manifest(packageHash: HexOf(Payload), generatedAtUtc: published);
+        var result = UpdateIntegrity.Inspect(
+            Bundle(key, manifest), Repository, Tag, "1.0.0", key.Anchor, published);
+        Assert.Equal(UpdateIntegrity.Outcome.Trusted, result.Outcome);
+        Assert.Equal(published, result.Manifest!.GeneratedAtUtc);
+    }
+
+    private static ReleaseManifest ReadOk(byte[] bytes)
+    {
+        Assert.True(UpdateManifestCodec.TryRead(bytes, out var manifest, out var reject), reject.Detail);
+        return manifest!;
+    }
+
     // ===== 小工具 =====
 
     private static readonly byte[] Payload = Filler(0);
@@ -579,12 +690,13 @@ public sealed class UpdateIntegrityTests
     private static string HexOf(byte[] bytes) => UpdateHashHex.ToHex(SHA256.HashData(bytes));
 
     private static ReleaseManifest Manifest(string version = "1.0.1", string package = PackageName,
-        int schema = UpdateAssets.SupportedSchema, string? packageHash = null)
+        int schema = UpdateAssets.SupportedSchema, string? packageHash = null,
+        DateTimeOffset? generatedAtUtc = null)
         => new(schema, version, package, packageHash ?? PayloadHash, 244, new[]
         {
             new ReleaseManifestFile("StarMark.UI.exe", EntryHash, 15),
             new ReleaseManifestFile("a/lib.dll", LibraryHash, 3),
-        });
+        }, generatedAtUtc);
 
     private static string ManifestJson(IReadOnlyDictionary<string, string>? overrides = null)
     {
