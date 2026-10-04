@@ -164,7 +164,10 @@ public sealed class UpdaterEngineTests : IDisposable
         Assert.Equal(UpdaterOutcome.InvalidRequest, result.Status);
         Assert.Equal(OldMarker, ReadInstalledEntry());       // 没换
         Assert.True(Directory.Exists(_staged));              // 也没挪走
-        Assert.Empty(_starts);                               // 更没起任何进程
+        // ✅P-160 走法 A：这一条从前"拒了就走"，把屏幕留在空地上。盘上确实一个字节没动，
+        // 但交棒那一刻界面已经说过"程序马上会重开"——所以这一格也要把原来那一版交回去。
+        Assert.Equal(new[] { Path.Combine(_install, Entry) }, _starts);
+        Assert.Contains("重新起来", result.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -176,6 +179,7 @@ public sealed class UpdaterEngineTests : IDisposable
 
         Assert.Equal(UpdaterOutcome.InvalidRequest, result.Status);
         Assert.Equal(OldMarker, ReadInstalledEntry());
+        Assert.Equal(new[] { Path.Combine(_install, Entry) }, _starts);   // 同上：那一版还起得来（原位没动过）
     }
 
     [Fact]
@@ -191,7 +195,82 @@ public sealed class UpdaterEngineTests : IDisposable
 
         Assert.Equal(UpdaterOutcome.InvalidRequest, result.Status);
         Assert.Equal(OldMarker, ReadInstalledEntry());
+        // 不动那棵树 ≠ 把人留在地上：旧树此刻完好，所以这一格同样要交回原来那一版（✅P-160）。
+        Assert.Equal(new[] { Path.Combine(_install, Entry) }, _starts);
+    }
+
+    [Fact]
+    public void AnEarlyStopDoesNotStartASecondCopyWhileTheParentIsStillUp()
+    {
+        // 这一格钉的是走法 A 的顺序，不是"起不起程序"：父进程还开着时那份第二实例会被单实例互斥挡掉，
+        // 而 TryStart 只看"进程起起来了没有"——被挡掉那一次它照样回成功，
+        // 于是"原来那一版已经重新起来"就成了谎（比"屏幕空了"更坏，因为它把空屏幕说成一切正常）。
+        Directory.Delete(_staged, recursive: true);
+
+        var result = UpdaterEngine.Run(Req(), Opts(parentGone: false));
+
+        Assert.Equal(UpdaterOutcome.ParentStillRunning, result.Status);
         Assert.Empty(_starts);
+        Assert.Equal(OldMarker, ReadInstalledEntry());
+        Assert.Contains("没有再起第二份", result.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnInstallDirectoryThatIsNotOnDiskDoesNotPromiseARestart()
+    {
+        // 这一格是 P-160 那条范围的**边界**，也是它唯一留在"不起程序"那一族的早退：
+        // 安装目录本身不在盘上 ⇒ 原位连一颗可读的 exe 都没有，"原来那一版已经重新起来"在这里说不出口。
+        // 没有这一格，把这三条一起塞进那颗公共出口看起来全绿——只有"起错了对象"这句话会被读出来。
+        Directory.Delete(_install, recursive: true);
+
+        var result = UpdaterEngine.Run(Req(), Opts());
+
+        Assert.Equal(UpdaterOutcome.InvalidRequest, result.Status);
+        Assert.Empty(_starts);
+        Assert.Contains("安装目录不在盘上", result.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("重新起来", result.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnEarlyStopThatCannotRestartEitherSaysTheProgramIsNotRunning()
+    {
+        // 早退现在也走 `NothingSwapped` 那一条边 ⇒ 它欠着的"起不来要换一格"必须在这一族里真的被钉一次，
+        // 否则"绕过公共出口、自己把进程起掉"那种改法只会让一句措辞红，行为面全绿（台架 PD4 现场）。
+        Directory.Delete(_staged, recursive: true);
+
+        var o = Opts();
+        var result = UpdaterEngine.Run(Req(), new UpdaterEngine.Options
+        {
+            WaitForExit = (_, _) => true,
+            StartExe = _ => throw new InvalidOperationException("这台机器不肯起新进程"),
+            RunningExePath = o.RunningExePath, Ceiling = o.Ceiling,
+            Attempts = o.Attempts, RetryDelay = o.RetryDelay,
+        });
+
+        Assert.Equal(UpdaterOutcome.UntouchedButNotRunning, result.Status);
+        Assert.Contains("没能起来", result.Detail, StringComparison.Ordinal);
+        Assert.Equal(OldMarker, ReadInstalledEntry());     // 盘上一个字节没动，只是起不动
+    }
+
+    [Fact]
+    public void AnEarlyStopConfirmsTheParentIsGoneBeforeItRestartsTheOldVersion()
+    {
+        // "先确认再补那一格"必须能从两条边的**先后**里读出来，而不是从我钉的字面上读出来：
+        // 只把 WaitForExit 挪到 NothingSwapped 之后，上面那格仍旧全绿（它只看有没有起）。
+        var order = new List<string>();
+        var o = Opts();
+        Directory.Delete(_staged, recursive: true);
+
+        var result = UpdaterEngine.Run(Req(), new UpdaterEngine.Options
+        {
+            WaitForExit = (pid, _) => { order.Add($"wait:{pid}"); return true; },
+            StartExe = path => order.Add($"start:{path}"),
+            RunningExePath = o.RunningExePath, Ceiling = o.Ceiling,
+            Attempts = o.Attempts, RetryDelay = o.RetryDelay,
+        });
+
+        Assert.Equal(UpdaterOutcome.InvalidRequest, result.Status);
+        Assert.Equal(new[] { "wait:12345", $"start:{Path.Combine(_install, Entry)}" }, order);
     }
 
     [Fact]
@@ -526,7 +605,19 @@ public sealed class UpdaterEngineTests : IDisposable
         var code = Code(engine);
         Assert.Equal(0, Count(code, "new(UpdaterOutcome.OldTreeNotMoved"));
         Assert.Equal(1, Count(code, "NothingSwapped(UpdaterOutcome.OldTreeNotMoved"));
-        Assert.Equal(1, Count(code, "NothingSwapped(UpdaterOutcome.InvalidRequest"));
+        // 会说"原来那一版已经重新起来"的出口只有这两条：一条是改名之前位置排满了（VU），
+        // 一条是 ✅P-160 那三条早退共用的那一颗。第三条一旦出现，它必须先回答"那个进程真的退了没有"。
+        Assert.Equal(2, Count(code, "NothingSwapped(UpdaterOutcome.InvalidRequest"));
+
+        // ✅P-160 走法 A 的形状：三条早退一条都不许绕过那颗公共出口，而那颗出口**先等、后起**。
+        Assert.Equal(3, Count(code, "StoppedBeforeDisk(request,"));
+        var early = MethodBody(engine, "private static UpdaterResult StoppedBeforeDisk");
+        Assert.Contains("o.WaitForExit(request.ParentPid", early, StringComparison.Ordinal);
+        Assert.Contains("NothingSwapped(UpdaterOutcome.InvalidRequest", early, StringComparison.Ordinal);
+        // 这里不许自己起进程：起程序只许走 NothingSwapped 那一条边（它会按起没起换成两句不同的话）。
+        Assert.DoesNotContain("TryStart(", early, StringComparison.Ordinal);
+        // 留在"不起程序"那一族的那一格只有一条：安装目录本身不在盘上，原位连一颗可读的 exe 都没有。
+        Assert.Equal(2, Count(code, "return Invalid("));
 
         // 反方向也要钉：这一族的两句话分别承诺了"程序已经重开"与"不猜成因"。
         // 话被抹平或把猜写回事实，都不会让上面任何一格红——只有这两行会。

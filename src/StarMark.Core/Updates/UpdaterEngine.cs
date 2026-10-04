@@ -25,7 +25,9 @@ namespace StarMark.Core.Updates;
 ///    等不到那个进程退出就什么都不动；不会出现"请先关闭程序再试"那一类话（P-54）。</para>
 /// <para>④ <b>交出去了就得有人接着</b>——父进程一退，唯一还知道安装目录在哪儿的就是这一个进程。
 ///    所以"还没碰盘就不得不停"那一族出口要把原来那一版重新起来（<see cref="NothingSwapped"/>）：
-///    屏幕上什么都不剩不叫"本机没改动"，那叫把人的程序弄丢了。</para>
+///    屏幕上什么都不剩不叫"本机没改动"，那叫把人的程序弄丢了。
+///    <b>而"起一份"要说得出口，得先确认那个进程真的退了</b>（<see cref="StoppedBeforeDisk"/>，✅P-160）——
+///    它还开着时起的第二份会被单实例互斥挡掉，那句"已经重新起来"就成了一句谎。</para>
 /// </summary>
 public static class UpdaterEngine
 {
@@ -51,12 +53,17 @@ public static class UpdaterEngine
 
         var staged = Path.TrimEndingDirectorySeparator(request.StagedTree);
         var install = Path.TrimEndingDirectorySeparator(request.InstallDir);
-        if (!Directory.Exists(staged)) return Invalid($"摊好的那棵树不在盘上了：{staged}");
+        // 这三条都在"等父进程退出"之前就返回（✅P-160 走法 A）：交棒那一刻界面对用户说的是"程序马上会重开"，
+        // 所以它们与 OldTreeNotMoved 那一格是同一件事，只是时刻更早——早到那个进程**可能还没退**。
+        if (!Directory.Exists(staged))
+            return StoppedBeforeDisk(request, $"摊好的那棵树不在盘上了：{staged}", install, o);
         if (!File.Exists(Path.Combine(staged, UpdateAssets.EntryExeName)))
-            return Invalid($"摊好的那棵树里没有 {UpdateAssets.EntryExeName}——换过去会得到一个启动不了的目录");
+            return StoppedBeforeDisk(request,
+                $"摊好的那棵树里没有 {UpdateAssets.EntryExeName}——换过去会得到一个启动不了的目录", install, o);
+        // 这一格留在"不起程序"那一族：原位连一颗可读的 exe 都没有，"原来那一版已经重新起来"在这里说不出口。
         if (!Directory.Exists(install)) return Invalid($"安装目录不在盘上：{install}");
         if (o.RunningExePath is { Length: > 0 } me && Inside(me, install))
-            return Invalid("更新器正站在要被换掉的那棵树里跑——先把自己复制到别处再来");
+            return StoppedBeforeDisk(request, "更新器正站在要被换掉的那棵树里跑——先把自己复制到别处再来", install, o);
 
         if (!o.WaitForExit(request.ParentPid, o.Ceiling))
             return new(UpdaterOutcome.ParentStillRunning,
@@ -94,6 +101,24 @@ public static class UpdaterEngine
         var leftover = SweepOldTrees(install, o);
         return new(UpdaterOutcome.Success,
             leftover is null ? "旧树已清掉" : $"新版本已经起来了；旧树没清干净（{leftover}），不影响这次更新");
+    }
+
+    /// <summary>
+    /// 还没碰安装目录就不得不停（✅P-160 走法 A）：<b>先有界确认那个进程真的退了，才把原来那一版交回去</b>。
+    /// <para>这个顺序不是谨慎，是这一句能不能说真话。主程序还开着时起的第二份会被单实例互斥挡掉，
+    /// 而 <see cref="TryStart"/> 只看"进程起起来了没有"——被挡掉那一次它照样回成功，
+    /// 于是 <see cref="NothingSwapped"/> 末尾那句"原来那一版已经重新起来"就成了谎，
+    /// 而这一批要消灭的正是这类话。</para>
+    /// <para>父进程没退时既不撒谎也不硬起：<b>屏幕上那一份就是原来那一版</b>（盘上一个字节都没动），
+    /// 所以这一格交回 <see cref="UpdaterOutcome.ParentStillRunning"/>，一句"没重开"都不必说。</para>
+    /// </summary>
+    private static UpdaterResult StoppedBeforeDisk(UpdaterRequest request, string why, string install, Options o)
+    {
+        if (!o.WaitForExit(request.ParentPid, o.Ceiling))
+            return new(UpdaterOutcome.ParentStillRunning,
+                $"{why}；什么都没动，而且等了 {o.Ceiling.TotalSeconds:0} 秒，进程 {request.ParentPid} 还在"
+                + "——那一份还开着，所以没有再起第二份");
+        return NothingSwapped(UpdaterOutcome.InvalidRequest, why, install, o);
     }
 
     /// <summary>
