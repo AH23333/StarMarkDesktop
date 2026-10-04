@@ -62,3 +62,5 @@ Desktop.ini
 .test.txt
 build-fix.txt
 test-fix.txt
+# 图标生成器的肉眼比对图（每次 node scripts/make-app-icon.mjs 都会重写；入库的是那两份 .ico，不是预览）
+assets/app/preview/

@@ -94,13 +94,14 @@ public sealed class TrayHost : IDisposable
             _selfHandle = GCHandle.Alloc(this);
             SetWindowLongPtrW(_hwnd, GWL_USERDATA, GCHandle.ToIntPtr(_selfHandle));
 
-            _hIcon = CreateStarIcon(16);
+            _hIcon = LoadTrayIcon();
             var data = new NOTIFYICONDATA
             {
                 cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATA>(),
                 hWnd = _hwnd,
                 uID = 1,
-                uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP,
+                // 取不到图标时宁可少一颗 NIF_ICON，也不交一颗空白句柄过去（下面那行 Error 会把它报出来）。
+                uFlags = NIF_MESSAGE | NIF_TIP | (_hIcon != IntPtr.Zero ? NIF_ICON : 0u),
                 uCallbackMessage = TRAY_CALLBACK,
                 hIcon = _hIcon,
                 szTip = "StarMark — 本地索引",
@@ -292,64 +293,23 @@ public sealed class TrayHost : IDisposable
     }
 
     /// <summary>
-    /// 运行时绘制一颗黄色五角星托盘图标（不依赖 ApplicationIcon/嵌入资源）。
+    /// 托盘图标从<b>随包那份 <c>StarMarkTray.ico</c></b> 里取（批次 VC）。
+    /// <para>原来这里逐像素画一颗金色五角星——那是"同一颗星有两个出处"的第二处：
+    /// 应用图标在 <c>scripts/make-app-icon.mjs</c> 里算，托盘在这里算，两边迟早分岔（#123 那一族）。
+    /// 现在几何只在生成器一处，运行时只负责<b>按系统小图标尺寸取一档</b>（<c>SM_CXSMICON</c>），
+    /// 所以 100% 与 200% 缩放下拿到的都是清晰的那一颗，而不是把 16px 拉糊。</para>
+    /// <para>取不到就返回 <see cref="IntPtr.Zero"/>，调用方据此<b>少交一颗 <c>NIF_ICON</c></b>，
+    /// 并在这里留一行 Error：托盘没图标是用户立刻看得见的退化，不许静默（P-53 那一族）。</para>
     /// </summary>
-    private static IntPtr CreateStarIcon(int size)
+    private static IntPtr LoadTrayIcon()
     {
-        var hdc = GetDC(IntPtr.Zero);
-        var bmi = new BITMAPINFO
-        {
-            biSize = Marshal.SizeOf<BITMAPINFO>(),
-            biWidth = size,
-            biHeight = -size, // 自上而下
-            biPlanes = 1,
-            biBitCount = 32,
-            biCompression = 0,
-        };
-        var bits = IntPtr.Zero;
-        var hBitmap = CreateDIBSection(hdc, ref bmi, 0, out bits, IntPtr.Zero, 0);
-        ReleaseDC(IntPtr.Zero, hdc);
-
-        var cx = (size - 1) / 2.0;
-        var cy = (size - 1) / 2.0;
-        var outer = size * 0.46;
-        var inner = outer * 0.42;
-        var raw = new byte[size * size * 4];
-        for (var y = 0; y < size; y++)
-        {
-            for (var x = 0; x < size; x++)
-            {
-                var dx = x - cx;
-                var dy = y - cy;
-                var dist = Math.Sqrt(dx * dx + dy * dy);
-                var angle = Math.Atan2(dy, dx) + Math.PI / 2;
-                var seg = (angle + Math.PI * 2) % (Math.PI / 5);
-                var rr = outer - (outer - inner) * Math.Abs(seg - Math.PI / 10) / (Math.PI / 10);
-                var idx = (y * size + x) * 4;
-                if (dist <= rr)
-                {
-                    raw[idx + 0] = 0x30; // B
-                    raw[idx + 1] = 0xB6; // G
-                    raw[idx + 2] = 0xFC; // R
-                    raw[idx + 3] = 0xFF; // A
-                }
-            }
-        }
-        if (bits != IntPtr.Zero) Marshal.Copy(raw, 0, bits, raw.Length);
-
-        // 单色 mask（全 0：全部不透明）
-        var mask = CreateBitmap(size, size, 1, 1, new byte[(size * size + 7) / 8]);
-        var iconInfo = new ICONINFO
-        {
-            fIcon = true,
-            xHotspot = size / 2,
-            yHotspot = size / 2,
-            hbmMask = mask,
-            hbmColor = hBitmap,
-        };
-        var hIcon = CreateIconIndirect(ref iconInfo);
-        DeleteObject(mask);
-        DeleteObject(hBitmap);
+        var path = Path.Combine(AppContext.BaseDirectory, "StarMarkTray.ico");
+        var size = GetSystemMetrics(SM_CXSMICON);
+        if (size <= 0) size = 16;
+        var hIcon = LoadImageW(IntPtr.Zero, path, IMAGE_ICON, size, size, LR_LOADFROMFILE);
+        if (hIcon == IntPtr.Zero)
+            StarLog.Error($"[TrayHost] 取不到托盘图标 {path}（Win32Error={Marshal.GetLastWin32Error()}）" +
+                          "——托盘仍可点，只是没有我们那颗星");
         return hIcon;
     }
 }

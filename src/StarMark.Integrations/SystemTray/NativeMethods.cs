@@ -129,16 +129,6 @@ internal static class NativeMethods
         public int biClrImportant;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    public struct ICONINFO
-    {
-        public bool fIcon;
-        public int xHotspot;
-        public int yHotspot;
-        public IntPtr hbmMask;
-        public IntPtr hbmColor;
-    }
-
     // ===== Win32 函数 =====
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     public static extern ushort RegisterClassExW(ref WNDCLASSEX lpwcx);
@@ -177,28 +167,37 @@ internal static class NativeMethods
     public static extern bool SetForegroundWindow(IntPtr hWnd);
 
     [DllImport("user32.dll")]
-    public static extern IntPtr GetDC(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    public static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
-
-    [DllImport("user32.dll")]
     public static extern bool GetCursorPos(out POINT lpPoint);
 
     [DllImport("user32.dll")]
     public static extern bool DestroyIcon(IntPtr hIcon);
 
-    [DllImport("gdi32.dll")]
-    public static extern IntPtr CreateDIBSection(IntPtr hdc, ref BITMAPINFO pbmi, uint usage, out IntPtr ppvBits, IntPtr hSection, uint dwOffset);
+    /// <summary>取系统小图标边长（托盘那一档，随 DPI 变）——批次 VC 起托盘不再自己画像素，改从 .ico 里取一档。</summary>
+    [DllImport("user32.dll")]
+    public static extern int GetSystemMetrics(int nIndex);
 
-    [DllImport("gdi32.dll")]
-    public static extern IntPtr CreateBitmap(int nWidth, int nHeight, uint cPlanes, uint cBitsPerPel, byte[]? lpvBits);
+    public const int SM_CXSMICON = 49;
+    public const int IMAGE_ICON = 1;
+    public const int LR_LOADFROMFILE = 0x00000010;
+
+    /// <summary>从文件按<b>想要的尺寸</b>载入图标：.ico 里多档时 shell 会挑最接近的一颗，所以 100% 与 200% 缩放都用同一份资产。</summary>
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr LoadImageW(IntPtr hInst, [MarshalAs(UnmanagedType.LPWStr)] string lpszName,
+        int uType, int cxDesired, int cyDesired, int fuLoad);
+
+    // ⚠ 下面四颗**不是托盘在用**，是 Canvas/LayeredCanvasWindow（抓屏 DIB 那条链）在用——
+    //   这颗类住在 SystemTray 命名空间下，按目录数引用会把它们当死代码删掉（本批就删错过一次，编译当场红）。
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetDC(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
 
     [DllImport("gdi32.dll")]
     public static extern bool DeleteObject(IntPtr hObject);
 
-    [DllImport("user32.dll")]
-    public static extern IntPtr CreateIconIndirect(ref ICONINFO piconinfo);
+    [DllImport("gdi32.dll")]
+    public static extern IntPtr CreateDIBSection(IntPtr hdc, ref BITMAPINFO pbmi, uint usage, out IntPtr ppvBits, IntPtr hSection, uint dwOffset);
 
     [DllImport("user32.dll")]
     public static extern IntPtr CreatePopupMenu();

@@ -42,6 +42,17 @@ if (-not (Test-Path $xbf)) { throw "树里没有编译后的 XAML：$xbf（publi
 $pri = Join-Path $OutDir "StarMark.UI.pri"
 if (-not (Test-Path $pri)) { throw "树里没有资源索引：$pri（ms-appx 找不到的表现是某个页面打不开）" }
 
+# 第四样是那两颗图标（批次 VC）：运行时**从 BaseDirectory 按文件名读它们**（MainWindow 的 SetIcon、
+# TrayHost 的 LoadTrayIcon），csproj 里它们是 Content 而不是嵌入资源——所以"构建 0 Warning、测试全绿"
+# 完全可能配上一棵没有图标的树，而表现不是崩：标题栏回到通用图，托盘连一颗图标都不交（NIF_ICON 被省掉）。
+# 上面 .xbf 那一节讲的正是同一形状（坑表 #237）：dotnet publish 天生会漏东西，这条链上一句错误都不会先喊出来。
+# ⚠ "查"与"拒"必须写在**同一行**：ReleasePackagingGateTests 那句"只查不拒＝那句检查是装饰"是按行读的，
+#   把 throw 挪到下一行它就红（那条口径今天仍然成立，所以改这里而不是改它）。
+foreach ($ico in @("StarMark.ico", "StarMarkTray.ico")) {
+    $p = Join-Path $OutDir $ico
+    if (-not (Test-Path -LiteralPath $p)) { throw "树里没有 $p（图标不在树里＝装完没有那颗星；安装包读的也是树里这一份，ISCC 会在编译期一起停下）" }
+}
+
 Write-Host "产物树：$OutDir"
 Write-Host "  主程序 : $entry"
 Write-Host "  更新器 : $updater"

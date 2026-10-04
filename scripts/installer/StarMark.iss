@@ -52,8 +52,10 @@ OutputDir={#OutputDir}
 OutputBaseFilename={#MyAppName}-{#MyAppVersion}-setup
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
-; 仓库里没有 .ico（图标走 Windows 应用图标那套），所以不设 SetupIconFile：
-; 指一个不存在的文件是**编译期就报错**，比悄悄用默认图标更难查的是反过来。
+; 向导与 setup.exe 自己的图标：读**载荷树里那一份**（由 StarMark.UI.csproj 的 Content 带进来），
+; 所以"打包时看到的星"与"装完跑起来的星"是同一颗文件，不可能分岔。
+; ⚠ 这里指一个不存在的文件是**编译期就报错**——比悄悄用默认图标好查得多（ISCC 会直接停下）。
+SetupIconFile={#SourceDir}\StarMark.ico
 Compression=lzma2/max
 SolidCompression=yes
 ; 载荷就是 publish-tree 那一棵 x64 树，没有 x86 分支可发。

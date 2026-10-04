@@ -20,6 +20,10 @@
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWinUI>true</UseWinUI>
+    <!-- 那颗星（批次 VC）：这一行决定**资源管理器／快捷方式／卸载面板**里看到的 exe 图标。
+         窗口与托盘另有两处（MainWindow 的 SetIcon、TrayHost 的 LoadTrayIcon），三处都读同一份资产目录，
+         几何只在 scripts/make-app-icon.mjs 一处——少了这一行就是"标题栏有星、任务栏是通用图"。 -->
+    <ApplicationIcon>..\..\assets\app\StarMark.ico</ApplicationIcon>
     <WindowsPackageSchemaVersion>8.0</WindowsPackageSchemaVersion>
     <EnableMsixTooling>false</EnableMsixTooling>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
@@ -34,6 +38,13 @@
          InvariantGlobalization——待 XAML 本地化日期/数字格式专项验证，通过后再开。 -->
     <PublishReadyToRun Condition="'$(Configuration)' == 'Release'">true</PublishReadyToRun>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 两份 .ico 随包走：运行时窗口与托盘都从 BaseDirectory 读它们，安装包那颗 SetupIconFile 也读**树里这一份**
+         （不再指第二条路径 ⇒ 打包的图标与跑起来的图标不可能不一致）。 -->
+    <Content Include="..\..\assets\app\StarMark.ico" Link="StarMark.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\app\StarMarkTray.ico" Link="StarMarkTray.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.4.0" />

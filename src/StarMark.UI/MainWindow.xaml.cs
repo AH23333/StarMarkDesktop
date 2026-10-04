@@ -18,6 +18,7 @@ using StarMark.Core.Widgets;
 using StarMark.Integrations.SystemTray;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
+using WinUIEx;
 using StarMark.UI.ViewModels;
 using StarMark.UI.Views;
 
@@ -70,6 +71,12 @@ public sealed partial class MainWindow : Window
         RefreshAppearance();
 
         SetupImmersiveTitleBar();
+
+        // 那颗星从随包 .ico 取（几何只在 scripts/make-app-icon.mjs 一处算）。
+        // ⚠ 这一发只管**标题栏与任务栏按钮**；资源管理器里那颗 exe 图标由 csproj 的 ApplicationIcon 决定，
+        //   两处缺一处就会出现"标题栏有星、任务栏/快捷方式还是通用图"——那是两件不同的事，不许互相顶掉。
+        this.SetIcon(Path.Combine(AppContext.BaseDirectory, "StarMark.ico"));
+
         SetSourceButtonsHighlight("all");
 
         // 恢复并应用上次主题偏好
