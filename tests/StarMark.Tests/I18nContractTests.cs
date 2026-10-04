@@ -1,0 +1,290 @@
+#nullable enable
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
+using StarMark.Abstractions.I18n;
+using Xunit;
+
+namespace StarMark.Tests;
+
+/// <summary>
+/// 界面语言那一族的<b>纯逻辑</b>契约（批次 WI-1）：认代码、挑语言、取词、换语言那一次出声。
+/// <para>这一族坏掉的表现都不是崩溃，而是"话说得比实现满"或"半中半英"：</para>
+/// <list type="number">
+/// <item>选项里出现一门表里没有整列的语言 → 选了之后满屏仍是中文；</item>
+/// <item>启动时把系统语言读成"用户没表态" → 他改的那一项永远不算数；</item>
+/// <item>设置档里一个认不得的代码被就近猜成中文 → 用户找不到自己那一项；</item>
+/// <item>换语言时静默不出声 → 已经建好的元素留着上一版的词，屏幕上两种语言并存。</item>
+/// </list>
+/// <para><b>这里只查 Abstractions 那一层</b>：XAML 有没有真的按键取词、启动接线有没有排在建窗之前，
+/// 那些归 <see cref="I18nWiringGateTests"/>（<c>StarMark.Tests</c> 引用不到 UI 项目，只能按源码形状钉）。</para>
+/// </summary>
+public sealed class I18nContractTests : IDisposable
+{
+    private readonly AppLanguage _languageBefore = Locale.Current;
+
+    public void Dispose() => Locale.TrySet(_languageBefore);
+
+    private static string TextOf(AppLanguage language, string key)
+    {
+        Assert.True(UiStrings.TryGet(key, out var entry), $"表里没这颗键：{key}");
+        return UiStrings.TextOf(entry, language);
+    }
+
+    // ===== 表本身 =====
+
+    /// <summary>
+    /// <b>每一行都必须有两门语言的整句</b>，且英文那一列不许夹汉字。
+    /// <para>两列都"必填"不是格式洁癖：<c>Entry</c> 的构造要求三个实参，漏一门就编不过；
+    /// 但"编得过而留一串空格/复制中文"编得过——那句在英文界面上看起来像"翻译丢了"，
+    /// 而它是从表里读出来的，没有任何一条运行期路径会发现。所以这一格查的是<b>内容</b>。</para>
+    /// <para>禁的只是中日韩那几段码位：标点（「」）、箭头（↑↓）、星星（⭐）在两列里都合法，
+    /// 把它们一起禁掉只会逼人把符号从文案里删了。</para>
+    /// </summary>
+    [Fact]
+    public void EveryRowCarriesBothLanguagesAndTheEnglishColumnIsReallyEnglish()
+    {
+        Assert.True(UiStrings.All.Count >= 40,
+            $"表里只有 {UiStrings.All.Count} 行（现场量过是 47，少这么多＝整段被清空，不是有意删行）");
+        foreach (var entry in UiStrings.All)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(entry.Zh), $"{entry.Key} 的中文列是空的");
+            Assert.False(string.IsNullOrWhiteSpace(entry.En), $"{entry.Key} 的英文列是空的");
+            Assert.DoesNotMatch("[\\u3040-\\u30ff\\u3400-\\u4dbf\\uf900-\\ufaff\\u4e00-\\u9fff]", entry.En);
+        }
+    }
+
+    /// <summary>
+    /// <b>表里的文本不过 XAML 解析器</b>，所以任何一列都不许出现 <c>&gt;</c> 这类转义写法。
+    /// <para>从表里取出的 <c>&gt;</c> 会照原样显示成四个字符——而它写在 XAML 里才是对的。
+    /// 这条判据是句式（禁转义形状），不是逐字禁某一处，所以新加一行带尖括号的文案时会正常放过原文。</para>
+    /// </summary>
+    [Fact]
+    public void TableTextIsFinalDisplayTextNotXmlMarkup()
+    {
+        foreach (var entry in UiStrings.All)
+        {
+            foreach (var text in new[] { entry.Zh, entry.En })
+            {
+                Assert.DoesNotContain("&gt;", text, StringComparison.Ordinal);
+                Assert.DoesNotContain("&lt;", text, StringComparison.Ordinal);
+                Assert.DoesNotContain("&amp;", text, StringComparison.Ordinal);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 同一行的两列必须用<b>同一组位置式占位符</b>（<c>{0}</c>／<c>{1}</c>…）。
+    /// <para>换语序就得换编号：中文"还剩 {0} 条"翻成 "{1} items left" 那种配错，
+    /// 界面上是一个看起来完全合法的数字挂错了句子（#234 那一族）。这条判据今天<b>没有输入</b>
+    /// （现场量过：47 行里 0 行带占位符——带读数的句子还在 WI-2），它是句式哨兵而不是"跑过了什么"，
+    /// 所以这里同时钉住"遍历确实在跑"，别让空遍历读成通过。</para>
+    /// </summary>
+    [Fact]
+    public void BothColumnsOfARowUseTheSamePlaceholderNumbers()
+    {
+        Assert.NotEmpty(UiStrings.All);   // 抽取器活着的前提：遍历的对象不是空表
+        foreach (var entry in UiStrings.All)
+        {
+            Assert.Equal(Slots(entry.Zh), Slots(entry.En));
+        }
+    }
+
+    /// <summary>取一行里的占位符编号，去重后按数字序。<b>返回数组而不是集合</b>：
+    /// <c>Assert.Equal</c> 对 <c>SortedSet</c> 走引用相等，那样的判据永远红，写的人只会去改判据。</summary>
+    private static string[] Slots(string text)
+        => Regex.Matches(text, @"\{(\d+)\}").Cast<Match>()
+            .Select(m => m.Groups[1].Value).Distinct().OrderBy(n => int.Parse(n)).ToArray();
+
+    /// <summary>
+    /// 键的形状：<b>每段以小写字母开头</b>、点分段、至少两段，段内允许 camelCase。
+    /// <para>段内允许大写不是让步而是原样：这些键名会照抄进 C# 代码（<c>Locale.T("top.syncCancel")</c>），
+    /// 全小写的 <c>top.synccancel</c> 只是把同一句词拆成难以读的一坨。而被钉死的是<b>首字符必须小写</b>
+    /// 与<b>至少两段</b>：单段的名字（<c>tree</c>）看不出它属于哪一屏，两三个月后就会出现第三处也叫
+    /// <c>tree</c> 的东西；大写开头的段则会让同一族键在设置档与代码里出现两种写法。</para>
+    /// </summary>
+    [Fact]
+    public void KeysAreDottedWithLowerCamelSegmentsAndAtLeastTwoOfThem()
+    {
+        foreach (var key in UiStrings.Keys())
+        {
+            Assert.Matches(@"^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+$", key);
+            Assert.DoesNotContain("..", key, StringComparison.Ordinal);
+        }
+    }
+
+    // ===== 认代码与挑语言 =====
+
+    /// <summary>只认表里那两串；<b>认不得的一律 null，不做"像中文就给中文"的就近猜测</b>。
+    /// <para>手改设置档、或旧版本写过别的写法，被猜成一门语言的表现是"我明明写了 en 他偏给我中文"，
+    /// 而那件事在界面上没有任何一条线索能看出来。</para></summary>
+    [Theory]
+    [InlineData("zh", AppLanguage.Chinese)]
+    [InlineData("en", AppLanguage.English)]
+    [InlineData("  EN ", AppLanguage.English)]
+    [InlineData("zh-CN", null)]          // 带子标签的写法不是这一层的事（见 PickFrom）
+    [InlineData("ja", null)]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    public void OnlyTheTwoCodesAreRecognisedAndEverythingElseIsNoStatement(string? code, AppLanguage? expected)
+        => Assert.Equal(expected, AppLanguages.FromCode(code));
+
+    /// <summary>语言代码<b>存进设置档的必须是代码本身</b>，不能是序号：
+    /// 往 <c>Pickable</c> 中间插一门语言会把所有已存的序号平移一位，而那种坏读不出来——它看起来完全合法。</summary>
+    [Fact]
+    public void CodesRoundTripThroughTheEnumAndAreNotOrdinals()
+    {
+        foreach (var language in new[] { AppLanguage.Chinese, AppLanguage.English })
+        {
+            var code = AppLanguages.CodeOf(language);
+            Assert.Equal(language, AppLanguages.FromCode(code));
+            Assert.DoesNotMatch(@"\d", code);   // 存的是代码，不是 Pickable 里的下标
+        }
+        // 新增一格而 CodeOf 没配 → 当场炸，而不是静默给个"最近的"
+        Assert.Throws<ArgumentOutOfRangeException>(() => AppLanguages.CodeOf((AppLanguage)99));
+    }
+
+    /// <summary>系统的语言列表是<b>优先级表</b>：按顺序取第一个认得的，而不是只看第一条。
+    /// <para>"日文为主、英文为二"的用户在没有日文时应拿到英文；只看第一条就等于替他决定了他看不懂英文。</para></summary>
+    [Fact]
+    public void SystemTagsArePickedInOrderAndUnknownTagsAreSkippedNotGuessed()
+    {
+        Assert.Equal(AppLanguage.English, AppLanguages.PickFrom(new[] { "ja-JP", "en-GB" }));
+        Assert.Equal(AppLanguage.Chinese, AppLanguages.PickFrom(new[] { "zh-Hans-CN" }));
+        Assert.Equal(AppLanguage.Chinese, AppLanguages.PickFrom(new[] { "  ", "ZH-hant-tw" }));
+        Assert.Null(AppLanguages.PickFrom(new[] { "de-DE", "fr-FR" }));
+        Assert.Null(AppLanguages.PickFrom(Array.Empty<string>()));
+        Assert.Null(AppLanguages.PickFrom(null!));
+    }
+
+    /// <summary>读环境那一手不许抛：受限配置下拿不到文化，应当是"没有信号"，不是启动失败。</summary>
+    [Fact]
+    public void ReadingTheMachineLanguagesNeverThrowsAndNeverYieldsBlanks()
+    {
+        var tags = AppLanguages.SystemLanguageTags();
+        Assert.NotNull(tags);
+        Assert.All(tags, tag => Assert.False(string.IsNullOrWhiteSpace(tag)));
+    }
+
+    /// <summary>
+    /// 语言名<b>用它自己的写法，且不跟着界面语言变</b>。
+    /// <para>这条看着像口味，其实是可用性：语言选择器是拿去认自己母语的。把「日本語」印成 "Japanese"，
+    /// 一位只认得假名的用户在那一列里找不到自己。所以这里必须换一次界面语言再读一次名。</para>
+    /// </summary>
+    [Fact]
+    public void LanguageNamesAreEndonymsAndDoNotFollowTheInterfaceLanguage()
+    {
+        var before = Locale.Current;
+        try
+        {
+            Locale.TrySet(AppLanguage.Chinese);
+            var chineseUi = AppLanguages.Pickable.Select(AppLanguages.SelfName).ToArray();
+            Locale.TrySet(AppLanguage.English);
+            Assert.Equal(chineseUi, AppLanguages.Pickable.Select(AppLanguages.SelfName).ToArray());
+        }
+        finally
+        {
+            Locale.TrySet(before);
+        }
+    }
+
+    // ===== 该用哪一版 =====
+
+    /// <summary><b>用户表过态优先</b>，没表过态才看系统，两样都读不到才落默认档。</summary>
+    [Fact]
+    public void AStatementFromTheUserOutranksTheMachineLanguage()
+        => Assert.Equal(AppLanguage.English, Locale.Resolve("en", new[] { "zh-CN" }));
+
+    /// <summary>没表态时看系统；<b>设置档里那串认不得也算"没表态"</b>，于是仍然看系统，
+    /// 而不是"读坏了就回默认档"——后者会让一次手改把用户永久钉在中文上。</summary>
+    [Fact]
+    public void AnUnreadableSavedCodeFallsBackToTheMachineNotToTheDefault()
+    {
+        Assert.Equal(AppLanguage.English, Locale.Resolve(null, new[] { "en-US" }));
+        Assert.Equal(AppLanguage.English, Locale.Resolve("zz", new[] { "en-US" }));
+    }
+
+    /// <summary>两样都没有信号才落默认档（＝这份文案作者的语言）。</summary>
+    [Fact]
+    public void WithNoSignalAtAllTheDefaultColumnWins()
+    {
+        Assert.Equal(AppLanguage.Chinese, Locale.Resolve("zz", new[] { "de-DE" }));
+        Assert.Equal(AppLanguages.Default, Locale.Resolve(null, Array.Empty<string>()));
+    }
+
+    // ===== 取词与换语言那一次出声 =====
+
+    /// <summary>换语言<b>只出声一次，而且相同就不出声</b>。
+    /// <para>这两半都在防同一种坏：出声太多次，订阅方（把已注册的元素重贴一遍）就白跑几轮；
+    /// 该出声却不出声，屏幕上留下的就是上一版的词——半中半英。
+    /// 打开设置页看完又原样点回去，是最常见的"原样点回去"，不该重贴整窗。</para></summary>
+    [Fact]
+    public void ChangingTheLanguageRaisesTheEventExactlyOnceAndNotWhenUnchanged()
+    {
+        var hits = 0;
+        void OnChanged() => hits++;
+        Locale.Changed += OnChanged;
+        try
+        {
+            var other = Locale.Current == AppLanguage.Chinese ? AppLanguage.English : AppLanguage.Chinese;
+            Assert.True(Locale.TrySet(other), "换成另一门语言必须报告化");
+            Assert.Equal(1, hits);
+            Assert.False(Locale.TrySet(other), "原样点回去必须报告没变");
+            Assert.Equal(1, hits);
+            Assert.True(Locale.TrySet(Locale.Current == AppLanguage.Chinese ? AppLanguage.English : AppLanguage.Chinese));
+            Assert.Equal(2, hits);
+        }
+        finally
+        {
+            Locale.Changed -= OnChanged;
+        }
+    }
+
+    /// <summary>同一句界面文案在两列里都取得到，而且<b>换语言当场就换词</b>（不需要重建元素）。</summary>
+    [Fact]
+    public void TheSameKeyAnswersInBothLanguagesAndChangesAtOnce()
+    {
+        var before = Locale.Current;
+        try
+        {
+            Locale.TrySet(AppLanguage.Chinese);
+            var zh = Locale.T("nav.tree");
+            Locale.TrySet(AppLanguage.English);
+            Assert.Equal(TextOf(AppLanguage.Chinese, "nav.tree"), zh);
+            Assert.Equal(TextOf(AppLanguage.English, "nav.tree"), Locale.T("nav.tree"));
+            Assert.NotEqual(zh, Locale.T("nav.tree"));
+        }
+        finally
+        {
+            Locale.TrySet(before);
+        }
+    }
+
+    /// <summary>
+    /// 键没登记时<b>不抛、也不装没看见</b>：屏幕上出现 <c>⟨nav.tree⟩</c> 这种形状，用户会截图来问，
+    /// 日志里也留着那句。相比之下"那一颗按钮显示成上一个语言的词"既看不见也查不到。
+    /// <para>这里必须用一颗表里真没有的键，所以先断言它确实不在表里——否则哪天有人把它写进表，
+    /// 这一格会静默变成"取到了词"，而它就不再查任何东西了。</para>
+    /// </summary>
+    [Fact]
+    public void AnUnregisteredKeyShowsItselfOnScreenInsteadOfASilentWrongWord()
+    {
+        const string key = "nav.thisKeyIsDeliberatelyAbsent";
+        Assert.False(UiStrings.TryGet(key, out _));
+        Assert.Equal("⟨" + key + "⟩", Locale.T(key));
+    }
+
+    /// <summary>带读数的句子走 <c>Fmt</c>，数字一律走 <see cref="System.IFormatProvider"/> 的不变文化
+    /// （这一族在 <c>DisplayDateFormatGateTests</c>／批次 RZ 已经定死：读数不许跟着界面语言变小数点）。
+    /// <para><b>覆盖面登记</b>：今天表里没有带占位符的行（见 <see cref="BothColumnsOfARowUseTheSamePlaceholderNumbers"/>），
+    /// 所以这一格只钉住"多给的实参不炸、没有占位符时原样返回"。真正配错号的句子进表时，
+    /// 那条判据住在 <see cref="BothColumnsOfARowUseTheSamePlaceholderNumbers"/>，这一格要一起补实参。</para></summary>
+    [Fact]
+    public void FormattingAnEntryWithoutSlotsReturnsItUnchanged()
+    {
+        Assert.Equal(Locale.T("nav.tree"), Locale.Fmt("nav.tree"));
+        Assert.Equal(Locale.T("nav.tree"), Locale.Fmt("nav.tree", 1234.5));
+        Assert.Equal("1234.5", 1234.5.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+}

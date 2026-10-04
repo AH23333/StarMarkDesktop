@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Backup;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Backup;
 using StarMark.Core.Hotkeys;
 using StarMark.Core.Widgets;
@@ -332,6 +333,9 @@ public partial class App : Application
             StarMark.Abstractions.StartupProfile.Mark("本地条目迁移");
 
             // 3. 显示主窗口
+            // 界面语言要在第一个窗口建出来之前定（批次 WI-1）：晚一步的表现不是"晚一点才变英文"，
+            // 而是先按默认档建一整窗、再重贴一遍——那一闪用户看得见，注册表里还会留下一批只按旧语言取过词的元素。
+            Locale.TrySet(Locale.Resolve(fileSettings.LoadUiLanguageCode(), AppLanguages.SystemLanguageTags()));
             _window = new MainWindow();
             MainWindow = _window as StarMark.UI.MainWindow;
             StarMark.Abstractions.StartupProfile.Mark("主窗构造（含首屏导航）");

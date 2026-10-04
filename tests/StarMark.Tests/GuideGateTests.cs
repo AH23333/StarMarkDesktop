@@ -34,10 +34,18 @@ public sealed class GuideGateTests
         => Regex.Matches(Code(ReadRepoFile(NavCode)), @"""([a-z]+)""\s*=>\s*typeof\(")
             .Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal).ToList();
 
-    /// <summary>侧栏上摆出来的那几页（XAML 里的 NavigationViewItem）。</summary>
+    /// <summary>侧栏上摆出来的那几页（XAML 里的 NavigationViewItem）。
+    /// <para>批次 WI-1 起这些项不再有 <c>Content</c> 字面量，而是各带一颗 <c>i18n:LocText.Key</c>。
+    /// 这里顺手钉住<b>键的后缀必须等于那一页的 Tag</b>：<c>nav.tags</c> 挂在 <c>Tag="tree"</c> 上
+    /// 既不会编译错也不会红在别的格子上，它只会在用户切换语言之后让某一页顶着另一页的名字。</para></summary>
     private static List<string> NavItemTags()
-        => Regex.Matches(ReadRepoFile(NavXaml), @"NavigationViewItem x:Name=""[^""]+"" Content=""[^""]*"" Tag=""([a-z]+)""")
-            .Select(m => m.Groups[1].Value).ToList();
+    {
+        var matches = Regex.Matches(ReadRepoFile(NavXaml),
+            @"NavigationViewItem x:Name=""[^""]+"" i18n:LocText\.Key=""nav\.([a-z]+)"" Tag=""([a-z]+)""");
+        foreach (Match match in matches)
+            Assert.Equal(match.Groups[2].Value, match.Groups[1].Value);
+        return matches.Select(m => m.Groups[2].Value).ToList();
+    }
 
     // ===== 内容 =====
 

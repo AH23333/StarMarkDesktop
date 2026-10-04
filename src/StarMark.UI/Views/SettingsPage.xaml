@@ -11,6 +11,7 @@
     xmlns:viewModels="using:StarMark.UI.ViewModels"
     xmlns:local="using:StarMark.UI.Views"
     xmlns:ab="using:StarMark.Abstractions.Insights"
+    xmlns:i18n="using:StarMark.UI.Helpers"
     xmlns:diag="using:StarMark.Core.Diagnostics"
     mc:Ignorable="d">
 
@@ -124,6 +125,22 @@
                                         <ComboBoxItem Content="浅色"/>
                                         <ComboBoxItem Content="深色"/>
                                     </ComboBox>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 界面语言（批次 WI-1）。
+                             选项**不在这里列**：语言名单只有一个出处（AppLanguages.Pickable），
+                             由 SettingsPage.I18n.cs 现场生成——在这里多写一行 ComboBoxItem，
+                             就等于让"能不能选日文"这件事同时住在两个地方。 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="10">
+                                <TextBlock i18n:LocText.Key="settings.languageTitle" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <TextBlock Grid.Column="0" i18n:LocText.Key="settings.languageNote"
+                                               Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
+                                    <ComboBox Grid.Column="1" x:Name="LanguageSelect" MinWidth="180"
+                                              SelectionChanged="LanguageSelect_SelectionChanged"/>
                                 </Grid>
                             </StackPanel>
                         </Border>

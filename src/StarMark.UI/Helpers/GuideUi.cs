@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Guide;
 using StarMark.Core.Hotkeys;
 
@@ -70,8 +71,8 @@ public static class GuideUi
         {
             Title = FirstRunGuide.Title,
             Content = new ScrollViewer { Content = panel, MaxHeight = 460 },
-            PrimaryButtonText = "看完整使用说明",
-            CloseButtonText = "知道了",
+            PrimaryButtonText = Locale.T("guide.primary"),
+            CloseButtonText = Locale.T("guide.secondary"),
             // 默认停在"知道了"：一个介绍性的框不该把回车预置成"跳去别的地方"。
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = root,

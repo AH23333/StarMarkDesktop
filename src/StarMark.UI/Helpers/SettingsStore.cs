@@ -199,6 +199,13 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         /// </summary>
         public bool? FirstRunGuideShown { get; set; }
 
+        /// <summary>
+        /// 界面语言（批次 WI-1）：<c>"zh"</c>／<c>"en"</c>。<b>null＝这位用户从没表过态</b>，
+        /// 那时按系统语言挑（挑不到才落默认那一版）——所以"清空这一格"就是"改回跟随系统"，
+        /// 不需要再造一个"自动"的哨兵值。<b>存代码不存序号</b>：序号会被插入新语言这件事悄悄改写。
+        /// </summary>
+        public string? UiLanguageCode { get; set; }
+
         /// <summary>「AI 整理」规则预分类的用户追加规则（JSON 数组，§19 O2）。null/解析失败＝只有内置规则
         /// （<c>ClassifyRules.Merged</c> 一条路管两种情况）。放得下也读得回的失败必须出声：<b>这条链的失败
         /// 形态是"我明明加了规则却没生效"，所以坏 JSON 在读取侧就回报，而不是静默吞掉。</b></summary>

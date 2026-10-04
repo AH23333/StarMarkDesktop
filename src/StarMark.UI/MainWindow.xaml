@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:StarMark.UI"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:i18n="using:StarMark.UI.Helpers"
     Title="StarMark">
 
     <Grid x:Name="RootGrid" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
@@ -42,18 +43,18 @@
                     <Button x:Name="SyncButton" Style="{StaticResource SecondaryButton}" Click="SyncButton_Click">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <ProgressRing x:Name="SyncProgress" Width="12" Height="12" IsActive="False" Visibility="Collapsed"/>
-                            <TextBlock Text="同步"/>
+                            <TextBlock i18n:LocText.Key="top.sync"/>
                         </StackPanel>
                     </Button>
                     <!-- 同步中途原先唯一的出路是"等它跑完或杀进程"（入口硬传 CancellationToken.None，
                          大账号/慢网下要几十秒到几分钟）。只在同步中出现的取消键（P-55）。 -->
-                    <Button x:Name="SyncCancelButton" Style="{StaticResource SecondaryButton}" Content="取消同步"
+                    <Button x:Name="SyncCancelButton" Style="{StaticResource SecondaryButton}" i18n:LocText.Key="top.syncCancel"
                             Click="SyncCancelButton_Click" Visibility="Collapsed"/>
                     <Button x:Name="ThemeButton" Style="{StaticResource SecondaryButton}" Click="ThemeButton_Click">
                         <FontIcon x:Name="ThemeIcon" Glyph="&#xE895;" FontSize="14"/>
                     </Button>
                     <Button x:Name="WidgetsButton" Style="{StaticResource SecondaryButton}"
-                            ToolTipService.ToolTip="桌面组件" Click="WidgetsButton_Click">
+                            i18n:LocText.ToolTipKey="top.widgetsTip" Click="WidgetsButton_Click">
                         <FontIcon Glyph="&#xE710;" FontSize="14"/>
                     </Button>
                     <!-- 「？」说的是**当前这一页**（批次 VC-3）。刻意做成顶栏一颗而不是每页塞一颗：
@@ -61,7 +62,7 @@
                          漏一页的表现是"那一页没有说明"——而浮层内容在打开那一刻现取，永远不会说错页。
                          文字版全貌在设置「使用说明」栏，那颗按钮也在这里。 -->
                     <Button x:Name="GuideButton" Style="{StaticResource SecondaryButton}" Content="？"
-                            ToolTipService.ToolTip="这一页怎么用">
+                            i18n:LocText.ToolTipKey="top.guideTip">
                         <Button.Flyout>
                             <Flyout x:Name="GuideFlyout" Opening="GuideFlyout_Opening">
                                 <StackPanel x:Name="GuidePanel" Width="380" Spacing="6"/>
@@ -76,7 +77,7 @@
         <!-- 搜索框 -->
         <Border Grid.Row="1" Padding="16,10,16,4">
             <TextBox x:Name="SearchBox"
-                     PlaceholderText="搜索本地文件 / Star / 书签… 支持 ext: size: dm: folder:  (↑↓ 选择 · Enter 打开 · Ctrl+Enter 位置)"
+                     i18n:LocText.PlaceholderKey="search.placeholder"
                      CornerRadius="8"
                      Padding="12,9"
                      FontSize="14"
@@ -88,73 +89,73 @@
         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="16,6,16,2" Spacing="8" VerticalAlignment="Center">
             <ComboBox x:Name="SortCombo" MinWidth="90" SelectedIndex="0"
                       SelectionChanged="SortCombo_SelectionChanged">
-                <ComboBoxItem Content="最近" Tag="recent"/>
+                <ComboBoxItem i18n:LocText.Key="sort.recent" Tag="recent"/>
                 <!-- 措辞即判据（P-6）：这一档排的是「仓库最后一次 git push」——
                      `GitHubSource.MapToItem` 把 `StarredAt` 填成 `repo.PushedAt`，
                      而 GitHub 要换 `Accept: …star+json` 才拿得到真正的"我点 Star 的时间"。
                      原来那句"最近 Star"对老仓库被新近 Star 的情形是假话（它排在很后面）。
                      Tag 仍是 `starred`：那是数据层的排序键，被 `ItemRepositoryTests` 钉着，不动。 -->
-                <ComboBoxItem Content="Star 最近推送" Tag="starred"
-                              ToolTipService.ToolTip="按仓库最后一次 push 排（不是“我点 Star 的时间”——那个值 API 默认不回传）"/>
-                <ComboBoxItem Content="最近收藏" Tag="collected"/>
-                <ComboBoxItem Content="Stars 数" Tag="stars"/>
-                <ComboBoxItem Content="名称" Tag="name"/>
+                <ComboBoxItem i18n:LocText.Key="sort.starred" Tag="starred"
+                              i18n:LocText.ToolTipKey="sort.starredTip"/>
+                <ComboBoxItem i18n:LocText.Key="sort.collected" Tag="collected"/>
+                <ComboBoxItem i18n:LocText.Key="sort.stars" Tag="stars"/>
+                <ComboBoxItem i18n:LocText.Key="sort.name" Tag="name"/>
             </ComboBox>
 
             <!-- 来源分段控件（唯一一处，全局生效） -->
             <Border x:Name="SourceGroup"
                     BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4">
                 <StackPanel Orientation="Horizontal">
-                    <Button x:Name="SourceAll" Content="全部" Click="SourceFilter_Click" Tag="all"
-                            ToolTipService.ToolTip="全部来源"
+                    <Button x:Name="SourceAll" i18n:LocText.Key="source.all" Click="SourceFilter_Click" Tag="all"
+                            i18n:LocText.ToolTipKey="source.allTip"
                             Background="Transparent" BorderThickness="0" Padding="10,4"/>
                     <Button x:Name="SourceStar" Content="⭐" Click="SourceFilter_Click" Tag="star"
-                            ToolTipService.ToolTip="Star"
+                            i18n:LocText.ToolTipKey="source.starTip"
                             Background="Transparent" BorderThickness="0" Padding="10,4"/>
                     <Button x:Name="SourceBookmark" Content="🔖" Click="SourceFilter_Click" Tag="bookmark"
-                            ToolTipService.ToolTip="收藏夹"
+                            i18n:LocText.ToolTipKey="source.bookmarkTip"
                             Background="Transparent" BorderThickness="0" Padding="10,4"/>
                     <Button x:Name="SourceFile" Content="📁" Click="SourceFilter_Click" Tag="file"
-                            ToolTipService.ToolTip="本地文件（需先在设置开启本地磁盘搜索）"
+                            i18n:LocText.ToolTipKey="source.fileTip"
                             Background="Transparent" BorderThickness="0" Padding="10,4"/>
                 </StackPanel>
             </Border>
 
             <!-- 类型多选：只给本地文件用，翻成 Everything 检索式（不进搜索框，见 FileKindQuery） -->
-            <Button x:Name="FileKindButton" Content="类型筛选" FontSize="12" Padding="8,4"
-                    ToolTipService.ToolTip="按文件类型筛选本地文件；不输关键词也能浏览该类型的全部文件">
+            <Button x:Name="FileKindButton" i18n:LocText.Key="kind.button" FontSize="12" Padding="8,4"
+                    i18n:LocText.ToolTipKey="kind.buttonTip">
                 <Button.Flyout>
                     <Flyout>
                         <StackPanel Spacing="4" MinWidth="176">
-                            <TextBlock Text="文件类型" FontWeight="SemiBold"/>
+                            <TextBlock i18n:LocText.Key="kind.fileTypes" FontWeight="SemiBold"/>
                             <StackPanel x:Name="FileKindPanel" Spacing="0">
-                                <CheckBox Content="文件夹" Tag="Folder" FontSize="13"
+                                <CheckBox i18n:LocText.Key="kind.folder" Tag="Folder" FontSize="13"
                                           Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
-                                <CheckBox Content="文档" Tag="Document" FontSize="13"
+                                <CheckBox i18n:LocText.Key="kind.document" Tag="Document" FontSize="13"
                                           Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
-                                <CheckBox Content="图片" Tag="Picture" FontSize="13"
+                                <CheckBox i18n:LocText.Key="kind.picture" Tag="Picture" FontSize="13"
                                           Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
-                                <CheckBox Content="音乐" Tag="Music" FontSize="13"
+                                <CheckBox i18n:LocText.Key="kind.music" Tag="Music" FontSize="13"
                                           Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
-                                <CheckBox Content="视频" Tag="Video" FontSize="13"
+                                <CheckBox i18n:LocText.Key="kind.video" Tag="Video" FontSize="13"
                                           Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
-                                <CheckBox Content="压缩包" Tag="Archive" FontSize="13"
+                                <CheckBox i18n:LocText.Key="kind.archive" Tag="Archive" FontSize="13"
                                           Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
                             </StackPanel>
-                            <TextBlock Text="条件" FontWeight="SemiBold" Margin="0,6,0,0"/>
+                            <TextBlock i18n:LocText.Key="kind.conditions" FontWeight="SemiBold" Margin="0,6,0,0"/>
                             <StackPanel x:Name="FileCondPanel" Spacing="0">
-                                <CheckBox Content="大文件（&gt;100 MB）" Tag="Large" FontSize="13"
+                                <CheckBox i18n:LocText.Key="kind.large" Tag="Large" FontSize="13"
                                           Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
-                                <CheckBox Content="最近改动（7 天内）" Tag="Recent" FontSize="13"
+                                <CheckBox i18n:LocText.Key="kind.recent" Tag="Recent" FontSize="13"
                                           Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
                             </StackPanel>
                             <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7"
-                                       Text="仅作用于本地文件；「文件夹」与类型互斥，勾选后只列文件夹。"
+                                       i18n:LocText.Key="kind.noteScope"
                                        TextWrapping="Wrap"/>
                             <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7"
-                                       Text="也可直接在搜索框键入语法：ext:、size:、dm:、folder:"
+                                       i18n:LocText.Key="kind.noteSyntax"
                                        TextWrapping="Wrap"/>
-                            <Button Content="清除类型筛选" HorizontalAlignment="Left" Margin="0,4,0,0"
+                            <Button i18n:LocText.Key="kind.clear" HorizontalAlignment="Left" Margin="0,4,0,0"
                                     Click="FileKind_Clear_Click"/>
                         </StackPanel>
                     </Flyout>
@@ -163,11 +164,11 @@
 
             <!-- 语言筛选：常态显示（对齐扩展工具栏），选项由搜索页结果聚合；全部 = 不过滤 -->
             <ComboBox x:Name="LanguageCombo" MinWidth="116" FontSize="12"
-                      PlaceholderText="语言：全部"
-                      ToolTipService.ToolTip="按 Star 的编程语言筛选（对本地文件无效）"
+                      i18n:LocText.PlaceholderKey="searchLang.placeholder"
+                      i18n:LocText.ToolTipKey="searchLang.tip"
                       SelectionChanged="LanguageCombo_SelectionChanged"/>
 
-            <CheckBox x:Name="ShowHiddenCheck" Content="显示隐藏" Click="ShowHidden_Click" FontSize="12" VerticalAlignment="Center"/>
+            <CheckBox x:Name="ShowHiddenCheck" i18n:LocText.Key="top.showHidden" Click="ShowHidden_Click" FontSize="12" VerticalAlignment="Center"/>
         </StackPanel>
 
         <!-- 全局通知栏 -->
@@ -185,33 +186,33 @@
                         IsSettingsVisible="False" IsPaneToggleButtonVisible="False"
                         SelectionChanged="NavView_SelectionChanged">
             <NavigationView.MenuItems>
-                <NavigationViewItem x:Name="NavTreeItem" Content="文件夹" Tag="tree">
+                <NavigationViewItem x:Name="NavTreeItem" i18n:LocText.Key="nav.tree" Tag="tree">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE838;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem x:Name="NavTagsItem" Content="标签" Tag="tags">
+                <NavigationViewItem x:Name="NavTagsItem" i18n:LocText.Key="nav.tags" Tag="tags">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE8EC;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem x:Name="NavActivityItem" Content="动态" Tag="activity">
+                <NavigationViewItem x:Name="NavActivityItem" i18n:LocText.Key="nav.activity" Tag="activity">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE823;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem x:Name="NavHiddenItem" Content="隐藏" Tag="hidden">
+                <NavigationViewItem x:Name="NavHiddenItem" i18n:LocText.Key="nav.hidden" Tag="hidden">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE7B3;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem x:Name="NavSnapshotItem" Content="快照" Tag="snapshot">
+                <NavigationViewItem x:Name="NavSnapshotItem" i18n:LocText.Key="nav.snapshot" Tag="snapshot">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE787;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <!-- 剪贴板历史（默认关；关着时页面自己说明"去设置开启"，不藏入口——藏了等于用户找不到） -->
-                <NavigationViewItem x:Name="NavClipboardItem" Content="剪贴板" Tag="clipboard">
+                <NavigationViewItem x:Name="NavClipboardItem" i18n:LocText.Key="nav.clipboard" Tag="clipboard">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE8CB;"/>
                     </NavigationViewItem.Icon>
@@ -221,7 +222,7 @@
                     热榜是用户主动开启的可选浏览面，留一个点进去只会说"未开启"的项更像故障。
                     可见性在 MainWindow.ApplyTrendingNavVisibility 里按设置即时开关（不需要重启）。
                 -->
-                <NavigationViewItem x:Name="NavTrendingItem" Content="热榜" Tag="trending">
+                <NavigationViewItem x:Name="NavTrendingItem" i18n:LocText.Key="nav.trending" Tag="trending">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE735;"/>
                     </NavigationViewItem.Icon>
@@ -232,7 +233,7 @@
                     图标用 E8A1（一张带文字行的卡片）：这个码位在 Segoe Fluent Icons 与 Segoe MDL2 Assets
                     里都实测存在且形状一致（两套字体分别渲染比对过）——缺字会显示成方块，而方块没有任何断言能抓到。
                 -->
-                <NavigationViewItem x:Name="NavRssItem" Content="RSS" Tag="rss">
+                <NavigationViewItem x:Name="NavRssItem" i18n:LocText.Key="nav.rss" Tag="rss">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE8A1;"/>
                     </NavigationViewItem.Icon>

@@ -1,6 +1,7 @@
 #nullable enable
 using System.Linq;
 using System.Text.RegularExpressions;
+using StarMark.Abstractions.I18n;
 using Xunit;
 using static StarMark.Tests.SourceGate;
 
@@ -29,11 +30,23 @@ public sealed class GitHubTruthInLabelingGateTests
     private static string Markup()
         => Regex.Replace(ReadRepoFile(MainWindowXaml), "<!--.*?-->", string.Empty, RegexOptions.Singleline);
 
+    /// <summary>取表里那一行。没登记就直接抛：这一族要的是"话与数据对得上"，
+    /// 而取不到词的那一格既不算红也不算绿，静默放行等于把判据换成"什么都没查"。</summary>
+    private static UiStrings.Entry Entry(string key)
+    {
+        Assert.True(UiStrings.TryGet(key, out var entry), $"界面文案没登记这颗键：{key}");
+        return entry;
+    }
+
     /// <summary>
     /// 「那一档叫什么」＝<b>它实际按什么排</b>。这条链有三环，缺一环那句标签就成了假话：
     /// 档名 <c>starred</c> → SQL 按 <c>$.StarredAt</c> 排 → 而 <c>StarredAt</c> 填的是 <c>repo.PushedAt</c>。
     /// <para>三环都当<b>前提</b>钉住：<b>哪天真去取 starred_at（P-6 的选项 A），这一格会红——那是故意的</b>。
     /// 数据变准确的同一天，才轮得到把标签改回"最近 Star"；只改标签不改数据，才是这条闸门要拦的方向。</para>
+    /// <para>批次 WI-1 之后 XAML 里不再有那句中文，它只许指向表里那颗键，所以这一格分成两段：
+    /// <b>接线</b>（那一档确实从表里取词，而不是自带一份字面量）＋ <b>内容</b>（表里<b>两种说法</b>都得
+    /// 说出真正的排序键）。第二段是净增的覆盖面：原来只查中文那一列，将来补译文时把英文写成
+    /// "Recently starred"，这里就会红。</para>
     /// </summary>
     [Fact]
     public void TheStarSortTierIsNamedAfterWhatItActuallySortsBy()
@@ -41,11 +54,20 @@ public sealed class GitHubTruthInLabelingGateTests
         var tier = Regex.Matches(Markup(), @"<ComboBoxItem\b[^>]*>", RegexOptions.Singleline)
             .Cast<Match>().Single(m => m.Value.Contains("Tag=\"starred\""));
 
-        Assert.Contains("推送", tier.Value, System.StringComparison.Ordinal);   // 说出真正的排序键
-        Assert.DoesNotContain("Content=\"最近 Star\"", tier.Value, System.StringComparison.Ordinal);
-        Assert.Contains("ToolTipService.ToolTip", tier.Value, System.StringComparison.Ordinal);   // 差异就地解释，不靠人记
+        // ① 接线：档名与那句解释都从表里来
+        Assert.Contains("i18n:LocText.Key=\"sort.starred\"", tier.Value, System.StringComparison.Ordinal);
+        Assert.Contains("i18n:LocText.ToolTipKey=\"sort.starredTip\"", tier.Value, System.StringComparison.Ordinal);
 
-        // ② 那一档排的确实是 StarredAt（浏览与搜索两条 SQL 都得是，否则"档名"与"排序键"在两条路径上分岔）
+        // ② 内容：两种说法都说出 push，且都不说"最近 Star"
+        var label = Entry("sort.starred");
+        Assert.Contains("推送", label.Zh, System.StringComparison.Ordinal);
+        Assert.Contains("push", label.En, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("最近 Star", label.Zh, System.StringComparison.Ordinal);
+        var tip = Entry("sort.starredTip");
+        Assert.Contains("push", tip.Zh, System.StringComparison.Ordinal);
+        Assert.Contains("push", tip.En, System.StringComparison.OrdinalIgnoreCase);
+
+        // ③ 那一档排的确实是 StarredAt（浏览与搜索两条 SQL 都得是，否则"档名"与"排序键"在两条路径上分岔）
         foreach (var repo in new[] { "src/StarMark.Data/ItemRepository.Search.cs", "src/StarMark.Data/ItemRepository.Items.cs" })
         {
             var sql = Code(ReadRepoFile(repo));
@@ -53,7 +75,7 @@ public sealed class GitHubTruthInLabelingGateTests
             Assert.Equal(1, Count(sql, "'$.StarredAt'"));
         }
 
-        // ③ 而 StarredAt 今天装的是 push 时间（改这条代码的人请连同上面三句一起改，别只改标签）
+        // ④ 而 StarredAt 今天装的是 push 时间（改这条代码的人请连同上面几句一起改，别只改标签）
         var mapped = Code(ReadRepoFile(Source));
         Assert.Contains("var starredAt = ParseUnixTime(repo.PushedAt) ?? now;", mapped, System.StringComparison.Ordinal);
         Assert.Contains("StarredAt = starredAt,", mapped, System.StringComparison.Ordinal);
