@@ -170,30 +170,69 @@ public sealed class I18nWiringGateTests
             }
         }
         Assert.True(offenders.Count == 0, string.Join("\n", offenders));
-        // 现场读数（2026-10-05 为批次 WI-2g 重测：全应用的开关标签 22 对，全住在设置页——已进表 19 对
-        // ＝常规 5＋健康 2＋数据 4＋拓展 8，还写死在 XAML 里 3 对＝AI 增强那 1 对＋桌面工具那 2 对；
+        // 现场读数（2026-10-05 为批次 WI-2h 重测：全应用的开关标签 22 对，全住在设置页——已进表 21 对
+        // ＝常规 5＋健康 2＋数据 4＋拓展 8＋桌面工具 2，还写死在 XAML 里 1 对＝AI 增强那一栏那 1 对；
         // 组件窗与条目卡片上没有开关标签）：只钉下界——往后的每一批要把它往上推。
-        Assert.True(Count(Markup(ReadRepoFile(SettingsXaml)), "i18n:LocText.OnContentKey=\"") >= 19,
+        Assert.True(Count(Markup(ReadRepoFile(SettingsXaml)), "i18n:LocText.OnContentKey=\"") >= 21,
             "开关两侧的标签要住在表里，不是写在 XAML 里");
     }
 
     /// <summary>
-    /// 已经铺过的六栏（常规／使用说明／快捷键／数据／健康与诊断／拓展功能）<b>自己那份标记</b>里一句中文都不许剩
-    /// （批次 WI-2d 立的收口判据，WI-2e 推到四栏，批次 WI-2f 推到五栏，批次 WI-2g 推到六栏）。
-    /// <para>判据分两头：① 这六栏的 <c>Text</c>／<c>Content</c>／<c>Header</c>／开关两侧／提示里不能再有汉字；
+    /// 材质那一族<b>只许有一份措辞</b>：「桌面工具」的下拉复用「常规」页那六行
+    /// <c>settings.general.material.*</c>，⛔ 不许为组件再造六行同名文案。
+    /// <para>症状形状：同一句字两个出处之后，改一漏一——换语言时主窗口翻了、组件那一栏没翻，
+    /// 而两栏的<b>中文</b>看起来都还在（因为键不同、对账的两颗闸门各看各的）。</para>
+    /// </summary>
+    [Fact]
+    public void TheWidgetMaterialListIsNotASecondCopy()
+    {
+        var page = Markup(ReadRepoFile(SettingsXaml));
+        var block = Between(page, "i18n:LocText.Key=\"settings.widgets.materialLabel\"", "</ComboBox>");
+        var asked = Regex.Matches(block, @"settings\.[a-z]+\.material\.\w+").Cast<Match>()
+            .Select(m => m.Value).ToArray();
+
+        Assert.Equal(6, asked.Length);
+        Assert.All(asked, k => Assert.StartsWith("settings.general.material.", k, StringComparison.Ordinal));
+        Assert.DoesNotContain("settings.widgets.material.", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 「大文件（&gt;100 MB）」那颗标签里的数与查询串里的数<b>必须是同一个数</b>（坑表 #289 的第二面：
+    /// 这次读出的不是"没有出处"，而是<b>有两个出处</b>——<c>FileKindQuery</c> 写死 <c>size:&gt;100mb</c>，
+    /// 标签写死"100 MB"，改一处另一处不会红，屏幕上就成了"指着错阈值的按钮"）。
+    /// <para>判据读的是<b>两边各自的现场串</b>：从查询那一支抓出数字，再要求表里那两列逐字等于按它拼出来的标签。</para>
+    /// </summary>
+    [Fact]
+    public void TheLargeFileLabelNamesTheSameThresholdTheQueryUses()
+    {
+        var query = ReadRepoFile("src/StarMark.Abstractions/FileKindQuery.cs");
+        var hit = Regex.Match(query, @"size:>(\d+)mb", RegexOptions.CultureInvariant);
+        Assert.True(hit.Success, "查询那一支里找不到 \"size:>Nmb\"——这一格钉的是两个数对不对得上，先要有数");
+
+        var threshold = hit.Groups[1].Value;
+        var row = UiStrings.All.Single(e => e.Key == "kind.large");
+        Assert.Equal("大文件（>" + threshold + " MB）", row.Zh);
+        Assert.Equal("Large files (>" + threshold + " MB)", row.En);
+    }
+
+    /// <summary>
+    /// 已经铺过的七栏（常规／使用说明／快捷键／数据／健康与诊断／拓展功能／桌面工具）<b>自己那份标记</b>里一句中文都不许剩
+    /// （批次 WI-2d 立的收口判据，WI-2e 推到四栏，批次 WI-2f 推到五栏，批次 WI-2g 推到六栏，批次 WI-2h 推到七栏）。
+    /// <para>判据分两头：① 这七栏的 <c>Text</c>／<c>Content</c>／<c>Header</c>／开关两侧／提示里不能再有汉字；
     /// ② 整页剩余量只钉<b>上界</b>——下一批要把它往下推，往上加才是事故。把等号钉在剩余量上，
     /// 等于让每一批改完都得先来改一次判据，那正是"闸门替改动让路"的形状。</para>
     /// <para>⚠ <b>这一格的射程止于标记</b>：同一屏上还有中文是<b>程序算出来或拼出来</b>的（顶栏那颗索引状态、
     /// 「关于与更新」里那行检查结果、快捷键这一栏每一行的动作名与键位、数据这一栏那几行状态读数与备份列表
     /// 每行的「恢复前快照」标签、拓展功能这一栏那五行状态读数（热榜／RSS／本地磁盘搜索／截屏／画布）、
-    /// 那行引擎占用大小的「约」字与画布那串快捷键的动作名）——第一版覆盘照片拍到它们之后，名字就从"没有中文正文"
+    /// 那行引擎占用大小的「约」字与画布那串快捷键的动作名、桌面工具这一栏每一类组件那行标题与它下面每行两颗按钮的字、开机加载那行说每颗约多少的读数与布局每行的名字与摘要）——第一版覆盘照片拍到它们之后，名字就从"没有中文正文"
     /// 改成了"自己那份标记"。
     /// 那几处要翻，得先把状态改成按键推（P-169 的一格），不是往这里再挂一颗键（坑表 #276）。</para>
     /// <para>⚠ 数的时候<b>跳过 <c>&lt;Run&gt;</c> 那一行</b>：那是"半个句子＋一个读数"的胶水，
     /// 它有自己的登记格（下面那一颗证人），把它算进这一格就等于宣布它已经翻了。</para>
     /// </summary>
+
     [Fact]
-    public void TheSixKeyedTabsHoldNoChineseMarkupAndTheRestOnlyShrinks()
+    public void TheSevenKeyedTabsHoldNoChineseMarkupAndTheRestOnlyShrinks()
     {
         const string Attributes = @"(?:Text|Content|Header|OnContent|OffContent|ToolTip|PlaceholderText)=""([^""]*)""";
         var page = Markup(ReadRepoFile(SettingsXaml));
@@ -201,7 +240,7 @@ public sealed class I18nWiringGateTests
                  {
                      ("TabGeneral", "general"), ("TabGuide", "guide"),
                      ("TabHotkeys", "hotkeys"), ("TabData", "data"), ("TabHealth", "health"),
-                     ("TabExtend", "extend"),
+                     ("TabExtend", "extend"), ("TabWidgets", "widgets"),
                  })
         {
             var tab = Between(page, $"<TabViewItem x:Name=\"{name}\" Tag=\"{tag}\"", "</TabViewItem>");
@@ -216,7 +255,7 @@ public sealed class I18nWiringGateTests
 
         var whole = Regex.Matches(page, Attributes).Cast<Match>()
             .Count(m => Regex.IsMatch(m.Groups[1].Value, @"[\u4e00-\u9fff]"));
-        Assert.True(whole <= 88, $"整页中文正文从 88 涨到了 {whole}（这一族只许往下减）");
+        Assert.True(whole <= 44, $"整页中文正文从 44 涨到了 {whole}（这一族只许往下减）");
     }
 
     /// <summary>

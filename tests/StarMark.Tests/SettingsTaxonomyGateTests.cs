@@ -108,7 +108,7 @@ public sealed class SettingsTaxonomyGateTests
             titles.Add(entry!.Zh);
         }
 
-        // 现场读数（2026-10-05 批次 WI-2g 重测）：整页 26 张卡（8 张仍是字面量＝AI 增强／桌面工具那两栏，18 张已挂键）。
+        // 现场读数（2026-10-05 批次 WI-2h 重测）：整页 26 张卡（2 张仍是字面量＝AI 增强那一栏，24 张已挂键）。
         // 下界取 20 而不是 26：往后的批次只该把"挂键"那一半推上去，总数不该掉——掉了就是锚点又漏了一族写法。
         Assert.True(titles.Count >= 20, $"只扫到 {titles.Count} 张卡——锚点本身失效了，守门不能白过");
         Assert.Equal(titles.Count, titles.Distinct(StringComparer.Ordinal).Count());
@@ -178,7 +178,7 @@ public sealed class SettingsTaxonomyGateTests
         Assert.Contains("ViewModel.UpdateAutoCheckEnabled", regular);
 
         var widgets = Between(xaml, "<TabViewItem x:Name=\"TabWidgets\" Tag=\"widgets\"", "</TabViewItem>");
-        Assert.Contains("组件材质", widgets);
+        Assert.Contains("i18n:LocText.Key=\"settings.widgets.materialLabel\"", widgets);
         Assert.Contains("ViewModel.BackdropIndex", widgets);
         Assert.DoesNotContain("ViewModel.MainWindowBackdropIndex", widgets);
 
