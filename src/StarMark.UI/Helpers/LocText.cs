@@ -64,6 +64,18 @@ public static class LocText
     public static readonly DependencyProperty PlaceholderKeyProperty = DependencyProperty.RegisterAttached(
         "PlaceholderKey", typeof(string), typeof(LocText), new PropertyMetadata(null, OnPlaceholderKeyChanged));
 
+    /// <summary><see cref="ToggleSwitch"/> 那一族<b>亮着时</b>旁边那两个字。
+    /// <para>为什么不给 <see cref="KeyProperty"/> 顺路处理：① 一颗键只能出一句字，而开关有<b>两句</b>；
+    /// ② <c>ToggleSwitch</c> 同时有 <c>Header</c> 与 <c>Content</c>，按 <see cref="ResolveTextProperty"/>
+    /// 那条"有 Header 就不碰 Content"的规矩，正文键会去写 <c>Header</c>——屏幕上开关上方多出一行字，
+    /// 而真正该换的 <c>OnContent</c> 一个字都不动（坑表 #274 同一族，只是这次是反向的）。</para></summary>
+    public static readonly DependencyProperty OnContentKeyProperty = DependencyProperty.RegisterAttached(
+        "OnContentKey", typeof(string), typeof(LocText), new PropertyMetadata(null, OnOnContentKeyChanged));
+
+    /// <summary><see cref="ToggleSwitch"/> <b>关掉时</b>那两个字，与 <see cref="OnContentKeyProperty"/> 成对。</summary>
+    public static readonly DependencyProperty OffContentKeyProperty = DependencyProperty.RegisterAttached(
+        "OffContentKey", typeof(string), typeof(LocText), new PropertyMetadata(null, OnOffContentKeyChanged));
+
     public static void SetKey(DependencyObject element, string value) => element.SetValue(KeyProperty, value);
 
     public static string GetKey(DependencyObject element) => (string)element.GetValue(KeyProperty);
@@ -75,6 +87,14 @@ public static class LocText
     public static void SetPlaceholderKey(DependencyObject element, string value) => element.SetValue(PlaceholderKeyProperty, value);
 
     public static string GetPlaceholderKey(DependencyObject element) => (string)element.GetValue(PlaceholderKeyProperty);
+
+    public static void SetOnContentKey(DependencyObject element, string value) => element.SetValue(OnContentKeyProperty, value);
+
+    public static string GetOnContentKey(DependencyObject element) => (string)element.GetValue(OnContentKeyProperty);
+
+    public static void SetOffContentKey(DependencyObject element, string value) => element.SetValue(OffContentKeyProperty, value);
+
+    public static string GetOffContentKey(DependencyObject element) => (string)element.GetValue(OffContentKeyProperty);
 
     private static void OnKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
@@ -106,6 +126,26 @@ public static class LocText
         if (target is null)
         {
             WarnUnwritableOnce(d, key!, "没有 PlaceholderText");
+            return;
+        }
+        Register(d, target, key!);
+        d.SetValue(target, Locale.T(key!));
+    }
+
+    private static void OnOnContentKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        => PasteOntoNamedProperty(d, e.NewValue as string, "OnContent");
+
+    private static void OnOffContentKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        => PasteOntoNamedProperty(d, e.NewValue as string, "OffContent");
+
+    /// <summary>把一句键贴到<b>点名要的那一颗</b>属性上（不像 <see cref="ResolveTextProperty"/> 那样去挑）。</summary>
+    private static void PasteOntoNamedProperty(DependencyObject d, string? key, string propertyName)
+    {
+        if (string.IsNullOrEmpty(key)) return;
+        var target = FindProperty(d, propertyName);
+        if (target is null)
+        {
+            WarnUnwritableOnce(d, key!, $"没有 {propertyName}");
             return;
         }
         Register(d, target, key!);

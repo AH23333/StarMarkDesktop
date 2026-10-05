@@ -19,9 +19,17 @@ namespace StarMark.UI.Views;
 /// ③「立即更新」在跑的那一段<b>同一颗按钮变成「取消更新」</b>：一条十分钟没上限的下载不许只有一条转圈的路
 /// （P-55 那条"取消要真能停"在此，批次 QA-2 同一形状）。
 /// </para>
+/// <para><b>换文案换的是那颗键，不是那句字</b>（批次 WI-2d）：这两颗按钮的正文从这一批起住在文案表上，
+/// 而换语言那一刻 <c>LocText</c> 会把<b>当前挂着的那颗键</b>重贴一遍。代码要是继续直接写
+/// <c>Content = "立即检查"</c>，两件事会同时发生——英文界面上点完一次检查按钮就变回中文，
+/// 以及更要紧的那一件：正在跑的那一颗被重贴成"空闲"那句，界面改口说它没在做事。</para>
 /// </summary>
 public sealed partial class SettingsPage
 {
+    private const string CheckNowKey = "settings.general.checkNow";
+    private const string CheckingKey = "settings.general.checking";
+    private const string UpdateNowKey = "settings.general.updateNow";
+    private const string CancelUpdateKey = "settings.general.cancelUpdate";
     private bool _updateBusy;
     private bool _applyBusy;
     private CancellationTokenSource? _applyCts;
@@ -34,7 +42,7 @@ public sealed partial class SettingsPage
     {
         if (_updateBusy || _applyBusy) return;      // 正在装新版时，"再问一次"只会把那一行字改回上一次的答案
         _updateBusy = true;
-        UpdateCheckButton.Content = "正在问…";
+        LocText.SetKey(UpdateCheckButton, CheckingKey);
         UpdateOpenPageButton.Visibility = Visibility.Collapsed;
         UpdateApplyButton.Visibility = Visibility.Collapsed;
         UpdateNotesExpander.Visibility = Visibility.Collapsed;   // 同一批：上一发的正文也不许替这一发承诺
@@ -57,7 +65,7 @@ public sealed partial class SettingsPage
         finally
         {
             _updateBusy = false;
-            UpdateCheckButton.Content = "立即检查";
+            LocText.SetKey(UpdateCheckButton, CheckNowKey);
         }
     }
 
@@ -75,7 +83,7 @@ public sealed partial class SettingsPage
         }
         _applyBusy = true;
         _applyCts = new CancellationTokenSource();
-        UpdateApplyButton.Content = "取消更新";
+        LocText.SetKey(UpdateApplyButton, CancelUpdateKey);
         UpdateCheckButton.IsEnabled = false;
         try
         {
@@ -96,7 +104,7 @@ public sealed partial class SettingsPage
             _applyCts.Dispose();
             _applyCts = null;
             _applyBusy = false;
-            UpdateApplyButton.Content = "立即更新";
+            LocText.SetKey(UpdateApplyButton, UpdateNowKey);
             UpdateCheckButton.IsEnabled = true;
         }
     }
