@@ -133,26 +133,32 @@ public static class UiStrings
         // 第三版（批次 WI-2e）改的是<b>覆盖面</b>而不是措辞：四栏的标记已经进表，所以那句"只覆盖常规栏"
         // 成了假话（反方向的那种）；同时把"程序拼出来／算出来的字"单列一句说清，因为用户在同一栏里
         // 两种都会看见——快捷键那一栏上半段是英文、每一行还是中文，不写这句就等于藏着。
+        // 第四版（批次 WI-2f）动的还是<b>覆盖面</b>：「数据」那一栏的标记也进表了，所以"其余四栏"成了三栏；
+        // 同时把那几行程序写的读数点名到"数据栏的状态行与备份列表每行那颗按钮"——枚举读起来就是穷尽，
+        // 少写一行等于把同一屏上还在的中文藏回去（WI-2e 那一版就是被照片证伪过一次）。
         new Entry("settings.languageNote",
             "改完立刻生效，不用重启。这一版换掉了主窗口顶部那一排（页签、搜索框、排序与筛选按钮）、"
-            + "设置页的页眉与那八栏的标题，和「常规」「使用说明」「快捷键」「健康与诊断」这四栏里由界面标记写出来的那排字。"
-            + "还没铺开的是其余四栏（AI 增强／桌面工具／拓展功能／数据）的正文、页面正文里的字"
+            + "设置页的页眉与那八栏的标题，和「常规」「使用说明」「快捷键」「数据」「健康与诊断」这五栏里由界面标记写出来的那排字。"
+            + "还没铺开的是其余三栏（AI 增强／桌面工具／拓展功能）的正文、页面正文里的字"
             + "（含「暂无条目，请先同步数据」这类空状态）、工具栏那颗「语言：全部」下拉、软件内说明和日志，按批往前推。"
             + "同一栏里由程序拼出来或算出来的字也不在这批范围里：顶栏那行索引状态、「关于与更新」里那行检查结果、"
             + "快捷键这一栏的分类名与每一行的动作名和键位、健康页那两排下拉的选项、那一页「诊断」的整列标签、"
-            + "以及「语言 Top：」这类带数字的读数。"
+            + "数据这一栏那几行状态读数、备份列表那行标题与每行那颗按钮的字、那颗备份间隔下拉的选项，"
+            + "以及「语言 Top：」这类把句子拆成半句＋读数的排法。"
             + "另有两处不彻底：下拉框展开的列表当场换语言，但闭着的那一格要等你重新选一次才跟着换；"
             + "而上面那些程序写的字要翻，得先把它们改成按键取词，那是后面一批的事。",
             "Takes effect at once — no restart needed. Translated so far: the main window's top row "
             + "(nav tabs, the search box, the sort and filter buttons), the Settings page header, its eight "
-            + "section titles, and everything the General, Guide, Hotkeys and Health screens write themselves. "
-            + "Still Chinese for now: the bodies of the other four sections (AI, Desktop tools, Extensions, Data), "
+            + "section titles, and everything the General, Guide, Hotkeys, Data and Health screens write themselves. "
+            + "Still Chinese for now: the bodies of the other three sections (AI, Desktop tools, Extensions), "
             + "the page bodies (including empty-state lines), the language filter dropdown on the toolbar, "
             + "the in-app guide and the log — more sections land with each following pass. Words the program "
             + "assembles or computes are out of this batch's reach too: the index-status line on the top bar, "
             + "the last check result under About & updates, each hotkey category and every row's action name and "
             + "key, the two option lists on the Health page, the whole label column under Diagnostics there, "
-            + "and the number-bearing readouts. Two things aren't complete: in a "
+            + "the status lines on the Data page, that backup list's own header and every row's button, "
+            + "the options in the backup-interval dropdown, and the lines built as half a sentence plus a number. "
+            + "Two things aren't complete: in a "
             + "dropdown the opened list switches at once while the closed box keeps its old label until you pick "
             + "again; and those program-written strings have to be reworked to read from the table before they can "
             + "switch — that's a later pass."),
@@ -275,11 +281,79 @@ public static class UiStrings
             "会把下面每一行的键位都还原成出厂默认——不止你改过的那几颗。这一步不能撤销。",
             "This resets every row below to its factory key, not just the ones you changed. It can't be undone."),
 
-        // ===== 对话框上那颗"取消" =====
+        // ===== 「数据」那一栏的正文（批次 WI-2f，P-169 ① 第四刀）=====
+        // ⚠ 这一族里有一句带 Windows 路径，路径里的 <c>\S</c> 与 <c>\b</c> 在普通字符串里是转义起点
+        // （<c>"\b"</c> 是一个退格符，屏幕上看不见、日志里也看不见，只有"备份目录那行怪怪的"这种报告）。
+        // 所以那一行<b>必须写成 verbatim 字符串</b>，而 <c>NoRowCarriesAnInvisibleControlCharacter</c>
+        // 给这件事配了证人——它读的是编进 dll 的实际字符，不是源码长相。
+        new Entry("settings.data.backupTitle", "数据备份与恢复", "Backup & restore"),
+        new Entry("settings.data.backupNote",
+            "条目本体（书签/Star/文件）可重新同步，但手写笔记、标签体系、隐藏/置顶状态、桌面组件待办与随记全部不可重建。",
+            "The items themselves (bookmarks / Stars / files) can be re-synced; handwritten notes, the tag system, hidden and pinned states, and the widgets' todos and quick notes cannot be rebuilt."),
+        new Entry("settings.data.autoBackupNote",
+            @"应用会自己备份：按下面设的间隔存一份到 %LOCALAPPDATA%\StarMark\backups。自动清理只动 auto- 开头的自动件，你手动导出的备份与恢复前快照都不在清理候选里。",
+            "The app backs itself up: one copy per interval you set below, into %LOCALAPPDATA%\\StarMark\\backups. Automatic cleanup only touches auto- files — your manual exports and pre-restore snapshots are never candidates."),
+        new Entry("settings.data.autoBackup", "自动备份", "Automatic backups"),
+        new Entry("settings.data.autoBackupOffNote",
+            "关掉之后程序不再自动落任何份，能回滚的只剩你手动导出的那些（导入前的「恢复前快照」仍然每次都留）。关掉不会删掉已经落盘的自动件。",
+            "Switch this off and the app stops writing any automatic copy — the only things left to roll back to are the ones you exported by hand (the “pre-restore snapshot” taken before each import still happens). Turning it off deletes nothing already on disk."),
+        new Entry("settings.data.autoBackupInterval", "自动备份间隔", "Backup interval"),
+        new Entry("settings.data.autoBackupIntervalTip",
+            "两份自动件之间的最小间隔。应用开着时每 10 分钟问一次「到点没」，所以实际落盘最多比到点晚十分钟。保留份数是固定的，间隔越短能回溯的天数就越少——这笔账由下面那行按你选的档算给你看。",
+            "The minimum gap between two automatic copies. While the app is open it asks “is it time?” every 10 minutes, so a copy can land up to ten minutes late. How many copies are kept is fixed — the shorter the interval, the fewer days back you can reach; the line below works that out for the interval you picked."),
+        new Entry("settings.data.restoreSnapshotNote",
+            "导入会先自动生成「恢复前快照」（同上目录），任何恢复都可回滚：它就是下面列表里标着「恢复前快照」的那一行，点「用它回滚」即撤销这次导入。",
+            "Before an import, the first thing that happens is a “pre-restore snapshot” in the same folder — which is what makes every restore reversible. It's the row labelled “pre-restore snapshot” below; “Roll back with this” undoes the import."),
+        new Entry("settings.data.elevatedNote",
+            "当前以管理员身份运行（由你启动时的选择决定，程序不会再自己提权）：系统文件对话框在这种会话里不可用，导出/导入会自动改用应用内的路径输入框，无需换权限或重启。",
+            "Running elevated because you launched it that way (the app never elevates itself): the system file dialog isn't usable in such a session, so export and import fall back to the in-app path field — no permission changes, no restarts."),
+        new Entry("settings.data.includeImages", "导出时带上剪贴板图片本体", "Include clipboard image files when exporting"),
+        new Entry("settings.data.includeImagesNote",
+            "带上就存成 .zip（清单 + 图片），只有一份文件、不会拷走一半。关掉则只带条目与文件名：恢复后这些图片条目要靠本机图片目录里还留着的文件才打得开，缺的会标成「文件缺失」。一张 4K 截图常有几百 KB，上限调到几百条时导出包会明显变大。",
+            "With images you get a single .zip (manifest + images), so nothing is half-copied. Without them the backup carries entries and file names only: after a restore an image opens only if its file is still in this machine's image folder, and missing ones are marked “file missing”. A 4K screenshot is often a few hundred KB, so raising the cap to hundreds of entries makes the export noticeably bigger."),
+        new Entry("settings.data.includeImagesOn", "带", "Include"),
+        new Entry("settings.data.includeImagesOff", "不带", "Skip"),
+        new Entry("settings.data.includeImagesTip",
+            "只影响手动「导出备份」。恢复前快照与自动件始终不带图片本体——它们是回滚点，一份几十 MB 的库配几百 MB 的图会把「随时能撤一步」变成「每次恢复先填一盘磁盘」。恢复时会把包里的图片写回本机图片目录，已有同名文件不覆盖。",
+            "Affects manual exports only. Pre-restore snapshots and automatic copies never carry image files — they are rollback points, and pairing a tens-of-MB database with hundreds of MB of images would turn “step back any time” into “fill a disk before every restore”. A restore writes bundled images back into this machine's image folder and never overwrites an existing file of the same name."),
+        new Entry("settings.data.export", "导出备份…", "Export backup…"),
+        new Entry("settings.data.import", "导入备份…", "Import backup…"),
+        new Entry("settings.data.openFolder", "打开备份目录", "Open the backup folder"),
+        new Entry("settings.data.deleteTip",
+            "只删这一份导出文件，数据库本身不动；点下去会先确认一次，并说明这一份删掉之后有什么后果。",
+            "Deletes this one exported file and nothing in the database. It asks for confirmation first and says what you lose by deleting it."),
+        new Entry("settings.data.noBackups",
+            "还没有任何备份文件（自动备份按上面设的间隔落盘，也可以点上面「导出备份」立刻来一份）。",
+            "No backup files yet (automatic ones land on the interval set above, or press “Export backup…” for one right now)."),
+        new Entry("settings.data.clipboardTitle", "剪贴板历史", "Clipboard history"),
+        // 这句以前写死"最近 500 条"：批次 ClipIMG-1d 起上限归用户调（10–10000），
+        // 卡片上再留一个数就是第二份事实，用户调高之后它当场变成假话（同族：坑表 #279）。
+        new Entry("settings.data.clipboardNote",
+            "开启后自动记录本机复制过的文本与文件列表（留多少条由下面「文本最多留多少条」那一格决定），在主窗「剪贴板」页点一条即可再复制回去。密码管理器复制的内容、以及私钥 / 登录令牌 / 银行卡号形态一律不入库。",
+            "When on, text and file lists you copy on this machine are recorded (how many are kept is the “text entries” box below), and clicking one on the main window's Clipboard page copies it back. Anything copied from a password manager, plus private-key / auth-token / card-number shapes, never enters the store."),
+        new Entry("settings.data.clipboardImageNote",
+            "同时记录复制到的图片（屏幕截图、图片文件、以及在图上右键「复制图片」）。图片无法做敏感检查，开启即包含一切屏幕内容。",
+            "Also records images you copy (screen captures, image files, and right-click “Copy image” on one). Images can't be scanned for sensitive content, so switching this on means everything that ever appears on screen."),
+        new Entry("settings.data.imageMax", "图片最多留多少条", "How many images to keep"),
+        new Entry("settings.data.imageMaxNote",
+            "超出后按最近复制的时间淘汰，置顶的那几条不会被挤掉。一张 4K 截图的 PNG 常有几百 KB，调高会明显多占磁盘。",
+            "Past the cap the oldest copies are dropped; pinned entries are never squeezed out. A 4K screenshot PNG is often a few hundred KB, so raising this costs disk space."),
+        new Entry("settings.data.textMax", "文本最多留多少条", "How many text entries to keep"),
+        new Entry("settings.data.textMaxNote",
+            "默认 500 条，就是以前写死的那个数字；正文过长的只存前 32 KB。文本与图片各自一条线，互不挤占。",
+            "500 by default — the number that used to be hardcoded; overly long bodies keep their first 32 KB. Text and images have separate caps and never evict each other."),
+        new Entry("settings.data.recount", "重新统计占用", "Re-measure usage"),
+        new Entry("settings.data.cleanOrphans", "清理孤儿与临时件", "Clean up orphans and partial files"),
+        new Entry("settings.data.cleanOrphansTip",
+            "删掉「不在历史里的那些文件」与没写完的临时件。点下去会先列名单让你确认，一条历史条目都不会动。",
+            "Deletes the files “not in the history any more” plus half-written temporary ones. It lists them for confirmation first, and no history entry is touched."),
+
+        // ===== 对话框与列表上那几个共用动词 =====
         // 与 settings.general.cancelUpdate 不是一句：那颗管的是"停掉正在跑的下载／替换"，这颗只是"不做了"。
         new Entry("dialog.cancel", "取消", "Cancel"),
+        new Entry("dialog.delete", "删除", "Delete"),
 
-        // ===== 「健康与诊断」那一栏的正文 =====
+        // ===== 「健康与诊断」那一栏的正文（批次 WI-2e）=====
         new Entry("settings.health.eyeRestTitle", "护眼 · 休息提醒", "Eye comfort · break reminders"),
         new Entry("settings.health.eyeRestNote",
             "连续工作一段时间后提醒你休息。开着才建那张定时表，关掉后不探测前台窗口、也不会显示任何东西。",

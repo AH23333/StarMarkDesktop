@@ -75,6 +75,35 @@ public sealed class I18nContractTests : IDisposable
     }
 
     /// <summary>
+    /// 任何一列都不许混进<b>看不见的控制字符</b>（现实读数：162 行里 0 行含换行、制表或退格）。
+    /// <para>这一格是批次 WI-2f 现场立起来的。表里 <c>settings.data.autoBackupNote</c> 那句要写出备份目录
+    /// <c>%LOCALAPPDATA%\StarMark\backups</c>——而普通 C# 字符串里 <c>\b</c> 是一个退格符、<c>\S</c> 是非法转义：
+    /// 少了 <c>@</c> 的话前一种写错<b>编得过</b>，屏幕上那行只是"怪怪的"（中间少一个字符、日志里也看不出来），
+    /// 而后一种直接编不过。两种坏法里只有一种会被编译器抓住，所以这一格读的是<b>编进程序集的实际字符</b>
+    /// （<see cref="UiStrings.All"/>），不是源码长相——源码里看着像 <c>\b</c> 的两个字符，运行时可能已经是一个 0x08。</para>
+    /// <para>禁的是 U+0000–U+001F 整段（含换行／制表）：那是"这一版所有句子都是单行"的现实，
+    /// 真要一句多行时，改这一格并把理由写在这里，而不是让一个手滑的转义悄悄上线。</para>
+    /// </summary>
+    [Fact]
+    public void NoRowCarriesAnInvisibleControlCharacter()
+    {
+        Assert.NotEmpty(UiStrings.All);   // 遍历活着的前提：不是拿空表读出"零违规"
+        foreach (var entry in UiStrings.All)
+        {
+            foreach (var (text, column) in new[] { (entry.Zh, "中文"), (entry.En, "英文") })
+            {
+                for (var i = 0; i < text.Length; i++)
+                {
+                    var c = text[i];
+                    Assert.False(c < '\u0020',
+                        $"{entry.Key} 的{column}列第 {i} 个字符是控制字符 U+{(int)c:X4}" +
+                        "（路径里的 \\b 在普通字符串里是退格 ⇒ 那一行必须写成 verbatim）");
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// 「快捷键」这一族的句子<b>不许点名任何组合键</b>（Ctrl／Alt／Win 那种）。
     /// <para>这一栏的键位是用户可改的，而表里的句子是死的：抄进去的那一刻起，用户改一次键，
     /// 那句话就变成假话（批次 VC 的裁决；「这几件事的按键」那一节之所以从绑定表现场渲染，同一个理由）。

@@ -3,6 +3,7 @@ using System;
 using System.Linq;
 using System.Text.RegularExpressions;
 using StarMark.Abstractions.Clipboard;
+using StarMark.Abstractions.I18n;
 using Xunit;
 using static StarMark.Tests.SourceGate;
 
@@ -32,15 +33,32 @@ public sealed class ClipboardImageSettingsGateTests
     /// </summary>
     private static string StoreImageRegion() => ReadRepoFile(StoreClipboard);
 
+    /// <summary>
+    /// 一句代价话的"两半"都要在：缺任一半，那句话听起来仍像说全了。
+    /// <para>§3-Q3 那张卡里两半各挡一种误解——只剩前半像在向用户道歉，只剩后半像在给功能做广告，
+    /// 而那笔代价本身（这才是裁决要的字）就没了。同一条形状用在「不带图会付出什么」那句上。</para>
+    /// </summary>
+    private static void AssertBothHalves(string text, string firstHalf, string secondHalf, string row)
+    {
+        Assert.True(text.Contains(firstHalf, StringComparison.OrdinalIgnoreCase),
+            $"{row} 丢了前半句代价「{firstHalf}」：{text}");
+        Assert.True(text.Contains(secondHalf, StringComparison.OrdinalIgnoreCase),
+            $"{row} 丢了后半句代价「{secondHalf}」：{text}");
+    }
+
     [Fact]
     public void WarningKeepsBothHalvesOfTheCost()
     {
         // §3-Q3 裁决要求"文案明说"。两半各挡一种误解：
         //   前半——图片扫不出敏感内容（不是我们偷懒，是这条路根本没有）；
         //   后半——开启之后屏幕上出现过的东西都可能被留下（用户最想知道的那句代价）。
-        var xaml = DataTab();
-        Assert.Contains("图片无法做敏感检查", xaml);
-        Assert.Contains("开启即包含一切屏幕内容", xaml);
+        // 批次 WI-2f 起这句话住在字符串表里 ⇒ 判据跟着分两截：① 界面上那颗开关旁边挂的<b>确实是这颗键</b>
+        // （换成别的键＝这句代价从屏幕上消失，而表里那一行还活着，运行期没有任何一条路径会发现）；
+        // ② 表里那一行<b>两列各自都还说全两半</b>（只查中文列会让英文列先烂掉，而它才是"整列齐才上架"那一族的前置）。
+        Assert.Contains("i18n:LocText.Key=\"settings.data.clipboardImageNote\"", DataTab());
+        Assert.True(UiStrings.TryGet("settings.data.clipboardImageNote", out var row), "表里没这颗键");
+        AssertBothHalves(row.Zh, "敏感检查", "屏幕内容", "clipboardImageNote 中文列");
+        AssertBothHalves(row.En, "sensitive", "screen", "clipboardImageNote 英文列");
     }
 
     [Fact]
@@ -57,6 +75,25 @@ public sealed class ClipboardImageSettingsGateTests
         Assert.DoesNotContain("ClipboardImageEnabled ?? true", store);
         // ③ 设置页不许自己给个 true 初值。
         Assert.DoesNotContain("ClipboardImageEnabled = true", ReadRepoPartials(Vm));
+    }
+
+    /// <summary>
+    /// 文本上限那个默认数<b>只许有一个出处</b>：它只能出现在管着这颗上限的那一行说明里。
+    /// <para>批次 WI-2f 搬字进表时逐字读那几句，读出一处真缺陷（坑表 #279 同一族）：
+    /// <c>settings.data.clipboardNote</c> 还写着"最近 500 条"，而 500 正是 ClipIMG-1d 起用户能改的数——
+    /// 他调到 2000 之后，卡片开头那句话当场变成假话，而它是从表里读出来的，运行期没人会发现。</para>
+    /// <para>判据写成句式而不是逐字禁"500"：这一族里"32 KB""4K 截图"那些数是常量，不许被误伤。</para>
+    /// </summary>
+    [Fact]
+    public void RetentionNumberHasOneHomeNotTwo()
+    {
+        var owners = UiStrings.All
+            .Where(e => e.Key.StartsWith("settings.data.", StringComparison.Ordinal))
+            .Where(e => e.Zh.Contains("500", StringComparison.Ordinal)
+                     || e.En.Contains("500", StringComparison.Ordinal))
+            .Select(e => e.Key)
+            .ToArray();
+        Assert.Equal(new[] { "settings.data.textMaxNote" }, owners);
     }
 
     [Fact]
@@ -164,10 +201,15 @@ public sealed class ClipboardImageSettingsGateTests
 
         // ④ 摆位：这颗开关管的是"下一次导出会长成什么文件"，所以必须在<b>导出按钮之前</b>。
         //    放进剪贴板那张卡（同页、离按钮很远）等于让用户点导出时看不见自己刚决定了什么。
-        var card = Between(DataTab(), "<TextBlock Text=\"数据备份与恢复\"", "Click=\"ExportBackup_Click\"");
+        //    批次 WI-2f 起卡片标题住在表里 ⇒ 起点锚换成那颗键（改锚不改判，仍是"标题→导出按钮"这一段）。
+        var card = Between(DataTab(), "i18n:LocText.Key=\"settings.data.backupTitle\"", "Click=\"ExportBackup_Click\"");
         Assert.Contains("ViewModel.BackupClipboardImagesEnabled, Mode=TwoWay", card);
-        // 关掉它的代价（图片条目要靠本机还留着文件才打得开）写在卡上，而不是只写在 tooltip 里。
-        Assert.Contains("关掉则只带条目与文件名", card);
+        // 关掉它的代价（图片条目要靠本机还留着文件才打得开）写在卡上，而不是只写在 tooltip 里：
+        // 于是①这颗开关旁边挂的就是那句说明的键，②那一行的两列都还在说"不带图会付出什么"。
+        Assert.Contains("i18n:LocText.Key=\"settings.data.includeImagesNote\"", card);
+        Assert.True(UiStrings.TryGet("settings.data.includeImagesNote", out var note), "表里没这颗键");
+        AssertBothHalves(note.Zh, "只带条目与文件名", "文件缺失", "includeImagesNote 中文列");
+        AssertBothHalves(note.En, "file names only", "file missing", "includeImagesNote 英文列");
     }
 
     [Fact]

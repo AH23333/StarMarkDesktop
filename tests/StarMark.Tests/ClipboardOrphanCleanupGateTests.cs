@@ -24,14 +24,19 @@ public sealed class ClipboardOrphanCleanupGateTests
     public void TheEntryExistsAndIsGreyedWithAReason()
     {
         var xaml = ReadRepoFile(Page);
-        Assert.Contains("清理孤儿", xaml);
+        // 批次 WI-2f 起这颗按钮的字面量住在字符串表里 ⇒ 锚点搬按键（改锚不改判）。
+        // 下面这几句钉的是"这一个动作在这页有出口、且给得出灰的理由"，与那颗键叫什么无关。
+        Assert.Contains("i18n:LocText.Key=\"settings.data.cleanOrphans\"", xaml);
         Assert.Equal(1, Count(xaml, "ViewModel.CleanClipboardAssetsCommand"));
         Assert.Equal(1, Count(xaml, "ViewModel.CanCleanClipboardAssets, Mode=OneWay"));
         Assert.Equal(1, Count(xaml, "ViewModel.ClipboardCleanupStatus, Mode=OneWay"));
         // 灰着的时候必须看得见为什么：那句"另有 N 个文件不在历史里"就在同一张卡片里，由占用那行念出来。
         Assert.Contains("ClipboardUsage", xaml);
         // 但剪贴板页不许再长一颗（同一个动作两个入口＝两处确认框文案会分岔）。
-        Assert.DoesNotContain("清理孤儿", ReadRepoFile("src/StarMark.UI/Views/ClipboardPage.xaml"));
+        // 钉的是<b>命令</b>与那颗键而不是"清理孤儿"那四个字：换了语言或改了措辞，第二个入口仍然是同一个命令。
+        var clipboardPage = ReadRepoFile("src/StarMark.UI/Views/ClipboardPage.xaml");
+        Assert.DoesNotContain("CleanClipboardAssetsCommand", clipboardPage);
+        Assert.DoesNotContain("settings.data.cleanOrphans", clipboardPage);
     }
 
     [Fact]

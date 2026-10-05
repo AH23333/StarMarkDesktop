@@ -193,7 +193,10 @@ public sealed class SettingsTaxonomyGateTests
         Assert.Contains("ViewModel.ClipboardImageEnabled, Mode=TwoWay", data);
         Assert.Contains("ViewModel.ClipboardImageMaxValue, Mode=TwoWay", data);
         Assert.Contains("ViewModel.ClipboardTextMaxValue, Mode=TwoWay", data);
-        Assert.Contains("图片无法做敏感检查", data);
+        // 批次 WI-2f 起那句隐私警示住在表里 ⇒ 锚点搬到那颗键（改锚不改判）：
+        // "这句代价必须挂在这张卡上"这件事仍由同一格钉着，而句子本身的两半由
+        // ClipboardImageSettingsGateTests.WarningKeepsBothHalvesOfTheCost 直接读表去管。
+        Assert.Contains("i18n:LocText.Key=\"settings.data.clipboardImageNote\"", data);
         // 批次 BK：自动备份那颗开关与间隔下拉管的是"程序自己多久落一份"，与手动导出同属这张危险区卡；
         // 搬到别页就会出现"在剪贴板页里改备份频率"这种找不到入口的改动。
         Assert.Contains("ViewModel.AutoBackupEnabled, Mode=TwoWay", data);

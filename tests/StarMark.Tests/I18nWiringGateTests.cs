@@ -170,34 +170,35 @@ public sealed class I18nWiringGateTests
             }
         }
         Assert.True(offenders.Count == 0, string.Join("\n", offenders));
-        // 现场读数（2026-10-05 数过：全应用 22 对开关标签，全住在设置页；表里已进 7 对——常规页 5 对＋健康页 2 对）：
-        // 只钉下界——往后的每一批要把它往上推。
-        Assert.True(Count(Markup(ReadRepoFile(SettingsXaml)), "i18n:LocText.OnContentKey=\"") >= 7,
+        // 现场读数（2026-10-05 为批次 WI-2f 重测：全应用的开关标签 22 对，全住在设置页——已进表 11 对
+        // ＝常规 5＋健康 2＋数据 4，还写死在 XAML 里 11 对＝AI 增强／桌面工具／拓展功能那三栏；
+        // 组件窗与条目卡片上没有开关标签）：只钉下界——往后的每一批要把它往上推。
+        Assert.True(Count(Markup(ReadRepoFile(SettingsXaml)), "i18n:LocText.OnContentKey=\"") >= 11,
             "开关两侧的标签要住在表里，不是写在 XAML 里");
     }
 
     /// <summary>
-    /// 已经铺过的四栏（常规／使用说明／快捷键／健康与诊断）<b>自己那份标记</b>里一句中文都不许剩
-    /// （批次 WI-2d 立的收口判据，批次 WI-2e 把射程从一栏推到四栏）。
-    /// <para>判据分两头：① 这四栏的 <c>Text</c>／<c>Content</c>／<c>Header</c>／开关两侧／提示里不能再有汉字；
+    /// 已经铺过的五栏（常规／使用说明／快捷键／数据／健康与诊断）<b>自己那份标记</b>里一句中文都不许剩
+    /// （批次 WI-2d 立的收口判据，WI-2e 推到四栏，批次 WI-2f 推到五栏）。
+    /// <para>判据分两头：① 这五栏的 <c>Text</c>／<c>Content</c>／<c>Header</c>／开关两侧／提示里不能再有汉字；
     /// ② 整页剩余量只钉<b>上界</b>——下一批要把它往下推，往上加才是事故。把等号钉在剩余量上，
     /// 等于让每一批改完都得先来改一次判据，那正是"闸门替改动让路"的形状。</para>
     /// <para>⚠ <b>这一格的射程止于标记</b>：同一屏上还有中文是<b>程序算出来或拼出来</b>的（顶栏那颗索引状态、
-    /// 「关于与更新」里那行检查结果、快捷键这一栏每一行的动作名与键位）——第一版覆盘照片拍到它们之后，
-    /// 名字就从"没有中文正文"改成了"自己那份标记"。那几处要翻，得先把状态改成按键推（P-169 的一格），
-    /// 不是往这里再挂一颗键（坑表 #276）。</para>
+    /// 「关于与更新」里那行检查结果、快捷键这一栏每一行的动作名与键位、数据这一栏那几行状态读数与备份列表
+    /// 每行的「恢复前快照」标签）——第一版覆盘照片拍到它们之后，名字就从"没有中文正文"改成了"自己那份标记"。
+    /// 那几处要翻，得先把状态改成按键推（P-169 的一格），不是往这里再挂一颗键（坑表 #276）。</para>
     /// <para>⚠ 数的时候<b>跳过 <c>&lt;Run&gt;</c> 那一行</b>：那是"半个句子＋一个读数"的胶水，
     /// 它有自己的登记格（下面那一颗证人），把它算进这一格就等于宣布它已经翻了。</para>
     /// </summary>
     [Fact]
-    public void TheFourKeyedTabsHoldNoChineseMarkupAndTheRestOnlyShrinks()
+    public void TheFiveKeyedTabsHoldNoChineseMarkupAndTheRestOnlyShrinks()
     {
         const string Attributes = @"(?:Text|Content|Header|OnContent|OffContent|ToolTip|PlaceholderText)=""([^""]*)""";
         var page = Markup(ReadRepoFile(SettingsXaml));
         foreach (var (name, tag) in new[]
                  {
                      ("TabGeneral", "general"), ("TabGuide", "guide"),
-                     ("TabHotkeys", "hotkeys"), ("TabHealth", "health"),
+                     ("TabHotkeys", "hotkeys"), ("TabData", "data"), ("TabHealth", "health"),
                  })
         {
             var tab = Between(page, $"<TabViewItem x:Name=\"{name}\" Tag=\"{tag}\"", "</TabViewItem>");
@@ -212,7 +213,7 @@ public sealed class I18nWiringGateTests
 
         var whole = Regex.Matches(page, Attributes).Cast<Match>()
             .Count(m => Regex.IsMatch(m.Groups[1].Value, @"[\u4e00-\u9fff]"));
-        Assert.True(whole <= 169, $"整页中文正文从 169 涨到了 {whole}（这一族只许往下减）");
+        Assert.True(whole <= 133, $"整页中文正文从 133 涨到了 {whole}（这一族只许往下减）");
     }
 
     /// <summary>

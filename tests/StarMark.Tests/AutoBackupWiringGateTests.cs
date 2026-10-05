@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Text.RegularExpressions;
+using StarMark.Abstractions.I18n;
 using Xunit;
 using static StarMark.Tests.SourceGate;
 
@@ -33,9 +34,16 @@ public sealed class AutoBackupWiringGateTests
     private static string Markup(string xaml)
         => Regex.Replace(xaml, "<!--.*?-->", string.Empty, RegexOptions.Singleline);
 
-    /// <summary>备份那张卡的正文（从卡片标题到下一张卡「剪贴板历史」之前）。</summary>
+    /// <summary>
+    /// 备份那张卡的正文（从卡片标题到下一张卡「剪贴板历史」之前）。
+    /// <para>批次 WI-2f 起这两个标题都住在字符串表里，屏幕上那句话不再出现在 XAML 上，
+    /// 所以锚点从"那五个字"搬到"那颗键"——<b>改锚不改判</b>：这张卡的边界仍然由同样的两行钉着，
+    /// 只是钉的是接线而不是字形（把中文抄回 XAML 反而会红，因为那一行成了第二份出处）。</para>
+    /// </summary>
     private static string BackupCard()
-        => Between(Markup(ReadRepoFile(PageXaml)), "数据备份与恢复", "剪贴板历史");
+        => Between(Markup(ReadRepoFile(PageXaml)),
+            "i18n:LocText.Key=\"settings.data.backupTitle\"",
+            "i18n:LocText.Key=\"settings.data.clipboardTitle\"");
 
     // ────────── ① 设置真的有人读 ──────────
 
@@ -162,6 +170,23 @@ public sealed class AutoBackupWiringGateTests
             Assert.DoesNotContain(stale, card);
         // 间隔/份数/回溯多久这些数只能在状态行里出现，而状态行是算出来的（下一条）。
         Assert.Contains("ViewModel.AutoBackupStatus", card);
+
+        // 批次 WI-2f 把卡片上那两句说明搬进了字符串表 ⇒ 上面那个循环的真实射程缩水成
+        // "别把中文抄回 XAML"。这条判据管的是<b>那句话本身</b>，所以两列都得按同一串禁词过一遍：
+        // 间隔是用户可调的（那颗档位下拉），把"每天"这类节拍抄进说明里，他改一次档那句话就成了假话——
+        // 这正是本文件③ 那一类错误的定义，跟字住在哪一侧重。
+        foreach (var key in new[] { "settings.data.autoBackupNote", "settings.data.autoBackupIntervalTip" })
+        {
+            Assert.True(UiStrings.TryGet(key, out var row), $"表里没这颗键：{key}");
+            foreach (var text in new[] { row.Zh, row.En })
+            {
+                foreach (var stale in new[] { "24 小时", "每天", "每日", "按天", "7 份", "daily", "every day", "24 hours" })
+                {
+                    Assert.False(text.Contains(stale, StringComparison.OrdinalIgnoreCase),
+                        $"{key} 里出现了写死的节拍「{stale}」，而间隔是用户可调的");
+                }
+            }
+        }
     }
 
     [Fact]

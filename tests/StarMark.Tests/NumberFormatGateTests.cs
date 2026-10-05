@@ -24,7 +24,8 @@ namespace StarMark.Tests;
 ///    这一条比日期侧宽，而宽是<b>有意分岔</b>：计算器的 <c>G15</c> 管的是"给多少位有效数字"而不是"显示成什么形状"，
 ///    为它单开一颗 <c>NumberText</c> 出口是假抽象（它只有一个读者，而那读数也不是给人看的形状）；
 /// ③ <b>UI 工程里一个数字格式串都不许出现</b>（连已锁不变文化的也不行——界面口径只许有一个主人）；
-/// ④ 字节→人话那把梯子只许有一份（单位字面量 ≥2 种出现在同一个非判据文件里＝又长出一份梯子）；
+/// ④ 字节→人话那把梯子只许有一份（同一个非判据文件里既摆出 ≥2 枚单位、又真的动过基数＝又长出一份梯子；
+///    只提单位的散文不算，WI-2f 现场把这条口径改窄到这里）；
 /// ⑤ <c>ClipAssets.DescribeBytes</c> 只能是<b>纯转发</b>，不许长出自己的判断（RX 的"转发不是第二决策点"同一条）；
 /// ⑥ 判据不许是空壳 + 扫描器自检（正反两面都撞：该红的红、该放过的放过）。
 /// </para>
@@ -135,22 +136,38 @@ public sealed class NumberFormatGateTests
     /// <summary>
     /// 本仓曾有<b>四份</b>"字节 → 人话"的梯子（<c>FileSizeText</c>／<c>ClipAssets</c>／<c>DiagnosticsService</c>／
     /// <c>SettingsPage.Engine</c>），档位一样但一份锁文化一份没锁 ⇒ 同一个体积在两处不同形。
-    /// 判"梯子"而不是判"出现过 MB 这个词"：像 <c>"超过 20MB 上限"</c> 这种文案是引用上限，不是第二份换算
-    /// ⇒ 规则是<b>同一文件里出现两枚以上单位字面量</b>（那只有在做换算阶梯时才会发生）。
+    /// 判"梯子"而不是判"出现过 MB 这个词"：像 <c>"超过 20MB 上限"</c> 这种文案是引用上限，不是第二份换算。
+    /// <para>批次 WI-2f 把设置页那两句隐私代价说明搬进字符串表之后，这条口径被现场证伪了一次：
+    /// <c>UiStrings.cs</c> 里"一张 4K 截图常有几百 KB"与"几十 MB 的图"分属两句<b>散文</b>，
+    /// 那个文件<b>一行计算都没有</b>，却因"同一文件 ≥2 枚单位"被判成第二份梯子。
+    /// ⇒ 判据补上梯子真正的那一件：<b>基数</b>。一把换算阶梯必然要动 <c>1024</c>（除、乘、或按位右移），
+    /// 只提单位不提基数的文件从此不算梯子；原来那条"≥2 枚单位"留着当另一半，两半合取才红。</para>
+    /// <para>⚠ 加了合取就有"整条判据空转"的新失效形状，所以这里同格自证：<b>判据自己</b>
+    /// （<c>FileSizeText.cs</c>）在两半上都成立。哪天基数写法换了、或扫描器读不到字面量了，这一格会红。</para>
     /// </summary>
     [Fact]
     public void ByteLadderExistsNowhereButTheJudge()
     {
+        static int Units(List<string> literals)
+            => UnitLiterals.Count(u => literals.Any(lit => lit.Contains(u, StringComparison.Ordinal)));
+        static bool HasBase(string code)
+            => Regex.IsMatch(code, @"1[_,]?024|Math\.Pow\s*\(\s*2|>>\s*(10|20|30)\b");
+
         var offenders = FormatScanner.SourcesUnder("src")
             .Where(f => !f.Path.EndsWith(Path.GetFileName(ByteJudgeFile), StringComparison.Ordinal))
-            .Select(f => (f.Path, Units: UnitLiterals.Count(u => f.Literals.Any(lit => lit.Contains(u, StringComparison.Ordinal)))))
-            .Where(x => x.Units >= 2)
-            .Select(x => $"{x.Path}: 同时出现 {x.Units} 种单位字面量")
+            .Where(f => Units(f.Literals) >= 2 && HasBase(f.Code))
+            .Select(f => $"{f.Path}: 同时出现 {Units(f.Literals)} 种单位字面量，还带着换算基数")
             .ToList();
 
         Assert.True(offenders.Count == 0,
             "又长出一份字节换算梯子（各处取整/进制一旦不同，同一个文件在卡片与设置页就会写成两个体积）——请调 FileSizeText.Human：\n"
             + string.Join("\n", offenders));
+
+        // 反空转凭证：判据自己必须被这两半同时认出，否则"零违规"可能只是判据瞎了。
+        var judge = FormatScanner.SourcesUnder("src/StarMark.Abstractions")
+            .Single(f => f.Path.EndsWith(Path.GetFileName(ByteJudgeFile), StringComparison.Ordinal));
+        Assert.True(Units(judge.Literals) >= 2 && HasBase(judge.Code),
+            "判据文件自己都不像一把梯子了（单位或基数那一半读不出来）⇒ 上面那条绿灯不算数");
     }
 
     // ────────── ⑤ 转发不许变成第二个决策点 ──────────
