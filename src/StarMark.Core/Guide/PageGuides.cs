@@ -34,8 +34,13 @@ public sealed record PageGuide(string Tag, string Title, IReadOnlyList<string> L
 /// </summary>
 public static class PageGuides
 {
-    /// <summary>设置页里那一栏的标题；<c>OpenSettingsPage</c> 与 <c>SelectTab</c> 都按这一串匹配，不许各写一份。</summary>
-    public const string SettingsTabHeader = "使用说明";
+    /// <summary>
+    /// 设置页里「使用说明」那一栏的<b>身份</b>，不是屏幕上那几个字。
+    /// <para>批次 WI-2 起页签标题进了界面语言表（跟着语言走），而"带我去那一栏"的调用方是编译期写死的：
+    /// 拿标题当地址，切了英文之后就是"点了「完整设置」落在默认页"。所以这里只留身份串，
+    /// <c>OpenSettingsPage</c>／<c>SelectTab</c> 一律按它匹配；XAML 那八颗 <c>Tag</c> 与 UI 侧那张身份表由闸门两侧对账。</para>
+    /// </summary>
+    public const string SettingsTabKey = "guide";
 
     /// <summary>「？」在设置页上要说的那一页的键（与 <c>ViewModel.CurrentPageTag</c> 同一套字面）。</summary>
     public const string SettingsTag = "settings";

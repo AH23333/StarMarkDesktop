@@ -101,6 +101,24 @@ public static class UiStrings
         new Entry("guide.jump", "带我去这一页", "Take me there"),
         new Entry("guide.step", "第 {0} / {1} 步", "Step {0} of {1}"),
 
+        // ===== 设置页那八栏的标题（批次 WI-2 第一批）=====
+        // 键的后缀＝页签身份（`SettingsTabIds`），不是屏幕上那几个字：跳转按身份走，标题跟着语言走。
+        // 顺序即页签从左到右的顺序，闸门拿这张表与 XAML 的 Tag 两侧对账。
+        new Entry("settings.tab.general", "常规", "General"),
+        new Entry("settings.tab.guide", "使用说明", "Guide"),
+        new Entry("settings.tab.ai", "AI 增强", "AI"),
+        new Entry("settings.tab.widgets", "桌面工具（组件）", "Desktop tools"),
+        new Entry("settings.tab.extend", "拓展功能", "Extensions"),
+        new Entry("settings.tab.hotkeys", "快捷键", "Hotkeys"),
+        new Entry("settings.tab.data", "数据", "Data"),
+        new Entry("settings.tab.health", "健康与诊断", "Health & diagnostics"),
+
+        // ===== 设置页自己的页眉（标题 + 右上角那颗返回）=====
+        // 它们与八栏标题同一层级（页面外壳，不是某一栏的正文），所以同一批改掉；
+        // 覆盘照片拍到「设置／返回」孤零零留在中文、而承诺句没点它，就是这一格要补的原因。
+        new Entry("settings.pageTitle", "设置", "Settings"),
+        new Entry("settings.back", "返回", "Back"),
+
         // ===== 设置页「常规」里那颗界面语言 =====
         new Entry("settings.languageTitle", "界面语言", "Interface language"),
         new Entry("settings.languageFollowSystem", "跟随系统", "Follow system"),
@@ -109,14 +127,22 @@ public static class UiStrings
         // 页面正文（空状态那句）与工具栏那颗语言筛选下拉是中文——漏了两个最显眼的。
         // 英文列不许出现中文原文（`EveryRowCarriesBothLanguagesAndTheEnglishColumnIsReallyEnglish` 会红），
         // 所以那两处只能意译，不能像中文列那样把界面上的原句抄进来。
+        // 第二版又被同一台真机证伪一次：漏了页眉那两句，以及排序下拉<b>闭着的那一格</b>不换语言
+        // （展开的列表换了）。后者不是漏翻，是 WinUI 把闭合显示做成快照——所以它要说的是"不彻底"，
+        // 而不是"下一批就好"：那条路要改的是条目本身的样子，见账本 P-169 与坑表 #274。
         new Entry("settings.languageNote",
-            "改完立刻生效，不用重启。这一版只换主窗口顶部那一排（页签、搜索框、排序与筛选按钮）和眼前这一格；"
+            "改完立刻生效，不用重启。这一版换掉了主窗口顶部那一排（页签、搜索框、排序与筛选按钮）、"
+            + "设置页的页眉与那八栏的标题，和眼前这一格；还没铺开的是设置栏里的卡片标题与说明正文、"
             + "页面正文里的字（含「暂无条目，请先同步数据」这类空状态）、工具栏那颗「语言：全部」下拉、"
-            + "设置页其余栏目、软件内说明和日志都还是中文，下一批铺开。",
-            "Takes effect at once — no restart needed. This pass only covers the main window's top row "
-            + "(tabs, the search box, the sort and filter buttons) and this very card. Still Chinese for now: "
-            + "the page bodies (including empty-state lines), the language filter dropdown on the toolbar, "
-            + "every other settings section, the in-app guide and the log. The next batch widens the reach."),
+            + "软件内说明和日志，按批往前推。另有一处不彻底：工具栏那颗排序下拉，展开的列表当场换语言，"
+            + "但闭着的那一格要等你重新选一次才跟着换。",
+            "Takes effect at once — no restart needed. Translated so far: the main window's top row "
+            + "(nav tabs, the search box, the sort and filter buttons), the Settings page header and its "
+            + "eight section titles, and this very card. Still Chinese for now: the card titles and body text "
+            + "within each settings section, the page bodies (including empty-state lines), the language filter "
+            + "dropdown on the toolbar, the in-app guide and the log. More sections land with each following "
+            + "pass. One thing isn't complete: on the sort dropdown, the opened list switches at once but the "
+            + "closed box keeps its old label until you pick a sort again."),
     };
 
     private static readonly Dictionary<string, Entry> ByKey = Build();

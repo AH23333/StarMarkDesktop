@@ -78,7 +78,7 @@ public sealed partial class MainWindow
         });
     }
 
-    private void OpenFullGuide() => OpenSettingsPage(PageGuides.SettingsTabHeader);
+    private void OpenFullGuide() => OpenSettingsPage(PageGuides.SettingsTabKey);
 
     private Button GuideJumpButton()
     {

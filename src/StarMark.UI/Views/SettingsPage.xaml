@@ -89,7 +89,8 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                <TextBlock Text="设置" FontSize="20" FontWeight="SemiBold"
+                <TextBlock i18n:LocText.Key="settings.pageTitle"
+                           FontSize="20" FontWeight="SemiBold"
                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
                 <!-- 设置改动实时生效、没有底部保存按钮，因此"没保存成功"这种反面事实必须自己露头，
                      否则用户唯一能发现的时间点是下次启动设置悄悄回退（P-53）。 -->
@@ -98,7 +99,8 @@
                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                            Visibility="{x:Bind ViewModel.HasSaveError, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
             </StackPanel>
-            <Button Grid.Column="1" Content="返回" Click="Back_Click"
+            <Button Grid.Column="1" Click="Back_Click"
+                    i18n:LocText.Key="settings.back"
                     Style="{StaticResource SecondaryButton}"/>
         </Grid>
 
@@ -109,7 +111,7 @@
                  Background="Transparent">
 
             <!-- ============ 常规 ============ -->
-            <TabViewItem Header="常规">
+            <TabViewItem x:Name="TabGeneral" Tag="general" i18n:LocText.Key="settings.tab.general">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
                     <!-- 自适应分栏：宽屏两列铺满，窄屏自动单列 -->
                     <controls:ColumnFlowPanel MinColumnWidth="420" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
@@ -300,7 +302,7 @@
             <!-- ============ 使用说明（批次 VC-3） ============
                  这一栏刻意不写任何文字：正文只在 Core 的 PageGuides 一处（顶栏「？」与首启引导说的是同一批话），
                  这里只放宿主。写第二份的下场就是"三处说法不一样，用户不知道哪句作数"。 -->
-            <TabViewItem Header="使用说明">
+            <TabViewItem x:Name="TabGuide" Tag="guide" i18n:LocText.Key="settings.tab.guide">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
                     <StackPanel Spacing="12" MaxWidth="820" HorizontalAlignment="Left">
                         <StackPanel Orientation="Horizontal" Spacing="10">
@@ -315,7 +317,7 @@
             </TabViewItem>
 
             <!-- ============ AI 增强（要接外部服务或本机模型才成立的功能：从「常规」拆出，用户裁决） ============ -->
-            <TabViewItem Header="AI 增强">
+            <TabViewItem x:Name="TabAi" Tag="ai" i18n:LocText.Key="settings.tab.ai">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
                     <controls:ColumnFlowPanel MinColumnWidth="420" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
 
@@ -481,7 +483,7 @@
             </TabViewItem>
 
             <!-- ============ 组件 ============ -->
-            <TabViewItem Header="桌面工具（组件）">
+            <TabViewItem x:Name="TabWidgets" Tag="widgets" i18n:LocText.Key="settings.tab.widgets">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
                     <controls:ColumnFlowPanel MinColumnWidth="420" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
                         <Border Style="{StaticResource Card}">
@@ -690,7 +692,7 @@
             </TabViewItem>
 
             <!-- ============ 拓展功能（可以整个不用、也不影响主流程的浏览面：热榜与订阅源） ============ -->
-            <TabViewItem Header="拓展功能">
+            <TabViewItem x:Name="TabExtend" Tag="extend" i18n:LocText.Key="settings.tab.extend">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
                     <controls:ColumnFlowPanel MinColumnWidth="420" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
 
@@ -918,7 +920,7 @@
             </TabViewItem>
 
             <!-- ============ 快捷键 ============ -->
-            <TabViewItem Header="快捷键">
+            <TabViewItem x:Name="TabHotkeys" Tag="hotkeys" i18n:LocText.Key="settings.tab.hotkeys">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
                     <controls:ColumnFlowPanel MinColumnWidth="460" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
 
@@ -976,7 +978,7 @@
             </TabViewItem>
 
             <!-- ============ 数据 ============ -->
-            <TabViewItem Header="数据">
+            <TabViewItem x:Name="TabData" Tag="data" i18n:LocText.Key="settings.tab.data">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
                     <controls:ColumnFlowPanel MinColumnWidth="420" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
 
@@ -1165,7 +1167,7 @@
             </TabViewItem>
 
             <!-- ============ 健康 + 诊断（合并：两项内容都不多，放同一页两列） ============ -->
-            <TabViewItem Header="健康与诊断">
+            <TabViewItem x:Name="TabHealth" Tag="health" i18n:LocText.Key="settings.tab.health">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
                     <controls:ColumnFlowPanel MinColumnWidth="440" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
 

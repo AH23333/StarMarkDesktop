@@ -85,21 +85,24 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     }
 
     /// <summary>
-    /// 按<b>页签标题</b>选中一页（从别处跳进来时用，例如时钟组件右键「完整设置」→「健康与诊断」）。
-    /// <para>用标题而不是下标：页签增删时调用方不该跟着改号。找不到就留在当前页并记一条日志——
-    /// 改名是这条路径唯一的失效方式，而它该留下话，而不是让人以为"点了没反应"。</para>
+    /// 按<b>页签身份</b>（<see cref="SettingsTabIds"/>）选中一页，<b>不按屏幕上那几个字</b>。
+    /// <para>批次 WI-2 起标题进了语言表：中文档叫「健康与诊断」、英文档叫 "Health &amp; diagnostics"，
+    /// 而调用方编译期就写死了。用标题当地址，切语言的那一刻"完整设置"就会安静地落在默认页——
+    /// 不报错、不出声，用户到了门口自己找房间（这正是当初做"跳到那一栏"要消灭的样子）。</para>
+    /// <para>找不到就留在当前页并记一条日志：漏写 <c>Tag</c> 与删掉一栏是这条路径仅有的失效方式，
+    /// 两种都该留下话。</para>
     /// </summary>
-    public void SelectTab(string? header)
+    public void SelectTab(string? tabId)
     {
-        if (string.IsNullOrEmpty(header)) return;
+        if (string.IsNullOrEmpty(tabId)) return;
         foreach (var item in SettingsTabs.TabItems)
         {
             if (item is not TabViewItem tab) continue;
-            if (!string.Equals(tab.Header as string, header, StringComparison.Ordinal)) continue;
+            if (!string.Equals(tab.Tag as string, tabId, StringComparison.Ordinal)) continue;
             SettingsTabs.SelectedItem = tab;
             return;
         }
-        StarMark.Abstractions.StarLog.Warn($"[设置页] 没有标题为「{header}」的页签（被改名了？）");
+        StarMark.Abstractions.StarLog.Warn($"[设置页] 没有身份为「{tabId}」的页签（那一栏的 Tag 漏写了，还是整栏被删了？）");
     }
 
     /// <summary>读取设置但不触发「实时保存」（加载本身产生的属性变更无须回写）。</summary>

@@ -152,7 +152,7 @@ public sealed partial class WidgetWindow
 
         var full = new MenuFlyoutItem { Text = "完整设置（全屏让路 / 下一次几点）…" };
         // 直接落在「健康与诊断」页：跳进设置页却停在常规页，等于让人到了门口再自己找房间
-        full.Click += (_, _) => App.MainWindow?.Present(true, "健康与诊断");
+        full.Click += (_, _) => App.MainWindow?.Present(true, SettingsTabIds.Health);
         section.Items.Add(full);
 
         menu.Items.Add(section);

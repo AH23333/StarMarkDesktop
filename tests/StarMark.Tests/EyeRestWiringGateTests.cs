@@ -439,8 +439,8 @@ public sealed class EyeRestWiringGateTests
         var page = SourceGate.ReadRepoFile(SettingsPageXaml);
         var section = SourceGate.MethodBody(widget, "private void BuildEyeRestSection(MenuFlyout menu)");
 
-        Assert.Contains("Present(true, \"健康与诊断\")", section);
-        Assert.Contains("page.SelectTab(tab)", main);
-        Assert.Contains("<TabViewItem Header=\"健康与诊断\">", page);
+        Assert.Contains("Present(true, SettingsTabIds.Health)", section);
+        Assert.Contains("page.SelectTab(tabId)", main);   // 身份串从这里一路透传到 SelectTab，中间不许换成标题
+        Assert.Contains("<TabViewItem x:Name=\"TabHealth\" Tag=\"health\"", page);
     }
 }

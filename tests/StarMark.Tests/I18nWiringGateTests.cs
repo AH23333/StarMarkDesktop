@@ -285,6 +285,52 @@ public sealed class I18nWiringGateTests
     }
 
     /// <summary>
+    /// 那颗"正文"属性的挑法必须避开两个坑（批次 WI-2 第一次给设置页八栏挂键时真机照出来的）：
+    /// <para>① 元素<b>同时</b>有 <c>Content</c> 与 <c>Header</c> 时（<c>TabViewItem</c>／<c>Expander</c>／
+    /// <c>ToggleSwitch</c> 这一族），<c>Content</c> 装的是<b>整页正文</b>。把标题写进去，屏幕上的症状
+    /// 不是"字被覆盖"而是<b>标题一颗都不出现、整栏空白</b>——XAML 里属性先于子元素解析，
+    /// 正文随后又被子元素盖回来，于是没有任何地方留下那句字。当时 <b>5435 格全绿</b>。</para>
+    /// <para>② 输入框的 <c>Text</c> 是用户正在打的字，换语言那一刻覆写它等于吃掉输入；
+    /// 这类元素真正的标签是 <c>Header</c>。</para>
+    /// <para>⚠ 与 <c>TheDependencyPropertyLookupChecksBothFieldAndPropertyShapes</c> 同一档口径：
+    /// 这一格钉的是<b>读法本身</b>，挡得住"守卫被删回去"，挡不住"两条守卫都写反"——
+    /// 后者只有真机那张照片能看见（坑表 #271 同族）。</para>
+    /// </summary>
+    [Fact]
+    public void ThePlainContentKeyNeverWritesIntoThePayloadOrTheUsersInput()
+    {
+        var resolve = MethodBody(Code(ReadRepoFile(LocTextCs)), "private static DependencyProperty? ResolveTextProperty");
+        Assert.Contains("name == \"Content\" && hasHeader", resolve, StringComparison.Ordinal);
+        Assert.Contains("name == \"Text\" && isInputBox", resolve, StringComparison.Ordinal);
+        Assert.Contains("FindProperty(target, \"Header\")", resolve, StringComparison.Ordinal);
+        Assert.Contains("FindProperty(target, \"PlaceholderText\")", resolve, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 重贴那一段<b>不许去敲下拉框的条目集合</b>——这条路已经试过并且证伪了。
+    /// <para>背景：下拉框<b>闭着</b>的那一格显示的不是条目本身，而是选中那一刻从
+    /// <c>ComboBoxItem.Content</c> 抄走的一份快照，所以重贴完 <c>Content</c> 之后屏幕上会看见
+    /// "展开的列表已经是新语言、闭着的那格还写着旧语言"（批次 WI-2 覆盘照片，坑表 #274）。
+    /// 第一反应是逼它重抄一次，即 <c>((IList&lt;object&gt;)combo.Items)[i] = item;</c>。真机跑回来的
+    /// 不是修好，是<b>那颗下拉只要被打开过一次就抛</b> <c>COMException 0x800F1000
+    /// （Element is already the child of another element）</c>——条目那时已经挂在弹出层里。
+    /// 更糟的是它抛在重贴循环<b>中间</b>：<c>Locale.Current</c> 已经翻过去、屏幕还停在旧语言，
+    /// 比原来那句"闭着的那格慢一步"严重一档（日志里三发 ERROR 就是这么来的）。</para>
+    /// <para>所以这一格钉的是<b>别再走这条路</b>：要让闭合显示跟着语言走，只能改条目本身的形状
+    /// （数据项＋模板，那一格才渲染得出活元素）——那是 P-169 的一格，不是一次原地 Replace。</para>
+    /// </summary>
+    [Fact]
+    public void ReapplyingNeverTriesToForceTheDropdownToReSnapshotItsItems()
+    {
+        var loc = Code(ReadRepoFile(LocTextCs));
+        var reapply = MethodBody(loc, "private static void ReapplyAll");
+        Assert.DoesNotContain("Items", reapply, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectionBox", reapply, StringComparison.Ordinal);
+        // 那颗 helper 整个不许留下：留着它就算没人调用，下一次也会被人接回循环里。
+        Assert.DoesNotContain("RefreshSelectionBox", loc, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 找那颗依赖属性标识符必须<b>字段与属性两条路都查</b>。
     /// <para>真机第一跑整窗文案空白（日志里 33 条"贴不上"）就是这么来的：WinUI 3 的控件是 CsWinRT 投影出来的，
     /// <c>TextBlock.TextProperty</c> 是静态<b>属性</b>，只有托管辅助类（<c>ToolTipService</c>）才是静态字段。

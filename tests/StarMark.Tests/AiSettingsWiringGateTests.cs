@@ -23,7 +23,7 @@ public sealed class AiSettingsWiringGateTests
 
     /// <summary>设置页「AI 增强」整页。</summary>
     private static string AiTab()
-        => Between(ReadRepoFile(Xaml), "<TabViewItem Header=\"AI 增强\">", "</TabViewItem>");
+        => Between(ReadRepoFile(Xaml), "<TabViewItem x:Name=\"TabAi\" Tag=\"ai\"", "</TabViewItem>");
 
     // ───────── 1）三格都在页上，且各自有名字（画了格子） ─────────
 

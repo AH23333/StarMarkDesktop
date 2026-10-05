@@ -31,17 +31,18 @@ public sealed partial class MainWindow
 {
 
     /// <summary>
-    /// 打开设置页。<paramref name="tab"/> 是页签标题（如「健康与诊断」）：从组件右键跳过来的人
-    /// 要的是那一栏，落在默认页等于让他到了门口再自己找房间。
+    /// 打开设置页。<paramref name="tabId"/> 是<b>页签身份</b>（<see cref="Views.SettingsTabIds"/>，如
+    /// <see cref="Views.SettingsTabIds.Health"/>）而不是屏幕上那几个字：从组件右键跳过来的人要的是那一栏，
+    /// 落在默认页等于让他到了门口再自己找房间；而标题从批次 WI-2 起跟着语言走，拿它当地址会在切语言那天失效。
     /// </summary>
-    private void OpenSettingsPage(string? tab = null)
+    private void OpenSettingsPage(string? tabId = null)
     {
         ViewModel.CurrentPageTag = "settings";
         NavView.SelectedItem = null;
         SetNavVisible(false);
         if (ContentFrame.Content is not SettingsPage)
             ContentFrame.Navigate(typeof(SettingsPage));
-        if (ContentFrame.Content is SettingsPage page) page.SelectTab(tab);
+        if (ContentFrame.Content is SettingsPage page) page.SelectTab(tabId);
         PushToolbarToContent();
     }
 

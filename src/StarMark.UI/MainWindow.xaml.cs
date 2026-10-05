@@ -245,8 +245,11 @@ public sealed partial class MainWindow : Window
         ExitApp();
     }
 
-    /// <summary>唤起并前置主窗口；settings=true 时直接打开设置页，可指定要落在哪个页签。</summary>
-    public void Present(bool settings, string? settingsTab = null)
+    /// <summary>
+    /// 唤起并前置主窗口；settings=true 时直接打开设置页，<paramref name="settingsTabId"/> 给要落在哪一栏的
+    /// <b>身份</b>（<see cref="Views.SettingsTabIds"/>）——不是标题，标题会跟着界面语言变。
+    /// </summary>
+    public void Present(bool settings, string? settingsTabId = null)
     {
         try
         {
@@ -254,7 +257,7 @@ public sealed partial class MainWindow : Window
             Activate();
             WindowInterop.ShowWindow(MainHwnd, WindowInterop.SW_RESTORE);
             WindowInterop.SetForegroundWindow(MainHwnd);
-            if (settings) OpenSettingsPage(settingsTab);
+            if (settings) OpenSettingsPage(settingsTabId);
         }
         catch (Exception ex) { StarLog.Error("唤起主窗口失败", ex); }
     }

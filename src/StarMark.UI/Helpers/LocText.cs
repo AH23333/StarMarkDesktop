@@ -24,11 +24,18 @@ namespace StarMark.UI.Helpers;
 /// </summary>
 public static class LocText
 {
-    /// <summary>按顺序找元素上<b>确实存在</b>的那一颗"正文"属性。顺序是有意的：
-    /// 同一颗 <c>ContentControl</c> 既有 <c>Content</c> 又有派生来的 <c>Header</c> 时先写 <c>Content</c>。
-    /// <para><b>这里刻意没有 <c>PlaceholderText</c></b>：<c>TextBox</c> 同时有 <c>Text</c> 与
-    /// <c>PlaceholderText</c>，把"提示词"和"输入的内容"混在同一颗键下，最坏的情况是
-    /// 换语言时把用户正在输入的东西覆盖掉。所以占位符走 <see cref="PlaceholderKeyProperty"/>。</para></summary>
+    /// <summary>按顺序找元素上<b>确实存在</b>的那一颗"正文"属性。
+    /// <para>同一颗键在 <c>TextBlock</c> 上是 <c>Text</c>、在 <c>Button</c> 上是 <c>Content</c>、
+    /// 在 <c>TabViewItem</c>／<c>Expander</c> 上是 <c>Header</c>。顺序不是随手排的，两条排除规则是踩过之后加的：</para>
+    /// <para>① <b><c>Content</c> 只在元素没有 <c>Header</c> 时才当标签用</b>。<c>TabViewItem</c> 与 <c>Expander</c>
+    /// 这一族里 <c>Content</c> 装的是<b>整页正文</b>，把标题写进去等于把那一栏换成一句字。
+    /// 症状尤其骗人：XAML 里属性先于子元素解析，所以正文随后又被子元素盖回来，屏幕上看不见那句字——
+    /// 只剩下<b>标题一颗都不出现</b>（批次 WI-2 第一次给设置页八栏挂键时真机照出来的就是这个，
+    /// 而 5435 格测试全绿）。</para>
+    /// <para>② <b><c>Text</c> 不写给输入框</b>（认 <c>PlaceholderText</c> 这颗属性）。那是用户正在打的字，
+    /// 换语言那一刻覆盖它等于吃掉输入；这类元素真正的标签是 <c>Header</c>。</para>
+    /// <para><b>这里刻意没有 <c>PlaceholderText</c></b>：提示词与输入的内容混在同一颗键下，
+    /// 最坏的情况就是上面第②条。所以占位符走 <see cref="PlaceholderKeyProperty"/>。</para></summary>
     private static readonly string[] TextProperties =
     {
         "Text", "Content", "Header", "Title", "Message", "Description",
@@ -134,8 +141,14 @@ public static class LocText
 
     private static DependencyProperty? ResolveTextProperty(DependencyObject target)
     {
+        // 有 Header 的元素：Content 是正文容器，不是标签（见上面第①条）。
+        var hasHeader = FindProperty(target, "Header") is not null;
+        // 有 PlaceholderText 的元素是输入框：Text 里是用户正在打的字（见上面第②条）。
+        var isInputBox = FindProperty(target, "PlaceholderText") is not null;
         foreach (var name in TextProperties)
         {
+            if (name == "Content" && hasHeader) continue;
+            if (name == "Text" && isInputBox) continue;
             if (FindProperty(target, name) is { } property) return property;
         }
         return null;

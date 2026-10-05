@@ -30,7 +30,7 @@ public sealed partial class SettingsPage
     {
         try
         {
-            await GuideUi.ShowFirstRunAsync(XamlRoot, new SettingsStore(), () => SelectTab(PageGuides.SettingsTabHeader));
+            await GuideUi.ShowFirstRunAsync(XamlRoot, new SettingsStore(), () => SelectTab(PageGuides.SettingsTabKey));
         }
         catch (Exception ex)
         {

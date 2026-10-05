@@ -36,7 +36,7 @@ public sealed class UpdateWiringGateTests
         => Regex.Replace(text, "<!--.*?-->", string.Empty, RegexOptions.Singleline);
 
     private static string GeneralTab(string xaml)
-        => Between(xaml, "<TabViewItem Header=\"常规\">", "</TabViewItem>");
+        => Between(xaml, "<TabViewItem x:Name=\"TabGeneral\" Tag=\"general\"", "</TabViewItem>");
 
     // ────────── 屏幕上那一颗开关：一个编辑入口、落在这张页、按下去当场生效 ──────────
 

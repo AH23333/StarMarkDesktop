@@ -184,7 +184,7 @@ public sealed class GuideGateTests
     public void TheSettingsTabHostsTheGuidesInsteadOfRetypingThem()
     {
         var xaml = ReadRepoFile(SettingsXaml);
-        Assert.Equal(1, Count(xaml, $@"Header=""{PageGuides.SettingsTabHeader}"""));
+        Assert.Equal(1, Count(xaml, $@"Tag=""{PageGuides.SettingsTabKey}"""));
         Assert.Equal(1, Count(xaml, "x:Name=\"GuideTabPanel\""));
         Assert.Equal(1, Count(xaml, "ReplayGuideButton_Click"));
 
@@ -197,7 +197,7 @@ public sealed class GuideGateTests
 
         // 这一栏的 XAML 里只许有"一颗按钮 + 一句说明按钮干什么"，正文一条都不许落在这里。
         // 抄一段进 XAML 是最省事的写法（不用回 Core 改表），而它正是这一族第二个出处的开始。
-        var tab = Between(xaml, $@"Header=""{PageGuides.SettingsTabHeader}""", @"Header=""AI 增强""");
+        var tab = Between(xaml, $@"<TabViewItem x:Name=""TabGuide"" Tag=""{PageGuides.SettingsTabKey}""", @"""TabAi""");
         Assert.Equal(1, Count(tab, "<TextBlock"));
         Assert.Equal(1, Count(tab, "<Button"));
         Assert.DoesNotContain("GuideTabPanel.Children.Add", code, StringComparison.Ordinal);   // 手写条目＝绕过那张表

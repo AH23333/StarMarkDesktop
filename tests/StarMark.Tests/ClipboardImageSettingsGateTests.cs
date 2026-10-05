@@ -23,7 +23,7 @@ public sealed class ClipboardImageSettingsGateTests
     private const string Watcher = "src/StarMark.Integrations/Clipboard/ClipboardWatcher.cs";
 
     /// <summary>设置页里"数据"那一页（剪贴板那张卡住这里）。</summary>
-    private static string DataTab() => Between(ReadRepoFile(Xaml), "<TabViewItem Header=\"数据\">", "</TabViewItem>");
+    private static string DataTab() => Between(ReadRepoFile(Xaml), "<TabViewItem x:Name=\"TabData\" Tag=\"data\"", "</TabViewItem>");
 
     /// <summary>
     /// Store 里剪贴板图片那一段。批次 S4-④ 之后<b>这一段自己就是一枚 partial 文件</b>，
