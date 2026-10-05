@@ -15,6 +15,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Backup;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Backup;
 using StarMark.Core.Hotkeys;
 using StarMark.Core.Widgets;
@@ -369,10 +370,14 @@ public sealed partial class SettingsPage
     private async void ResetHotkeys_Click(object sender, RoutedEventArgs e)
     {
         // 破坏性操作：先确认（统一走外部居中窗口：按用户主题着色、可拖动、不可重复）
+        // 那句确认文字原先写死在代码里，还顺手抄了一颗键位（"只保留默认的 Ctrl + Alt + Space"）：
+        // ① 抄键位＝用户改过键之后这句话成假话（键位只有一个出处＝每一行自己显示的那份绑定）；
+        // ② "只保留那一颗"本身也是假的——出厂默认里有截图／贴图／穿透／画布那一整批，
+        //    恢复默认还原的是<b>每一行</b>。两列现在都说"每一行都还原成出厂默认"。
         var confirm = await CenteredDialog.ConfirmAsync(
-            "恢复默认快捷键",
-            "将清空所有自定义快捷键，只保留默认的「Ctrl + Alt + Space（切换主界面）」。此操作不可撤销。",
-            primaryText: "恢复默认", cancelText: "取消",
+            Locale.T("settings.hotkeys.reset"),
+            Locale.T("settings.hotkeys.resetConfirm"),
+            primaryText: Locale.T("settings.hotkeys.reset"), cancelText: Locale.T("dialog.cancel"),
             owner: App.MainWindow, dedupeKey: "resethotkeys");
         if (!confirm) return;
 

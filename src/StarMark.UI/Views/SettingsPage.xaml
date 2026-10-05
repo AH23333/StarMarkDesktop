@@ -318,9 +318,10 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,0,12">
                     <StackPanel Spacing="12" MaxWidth="820" HorizontalAlignment="Left">
                         <StackPanel Orientation="Horizontal" Spacing="10">
-                            <Button x:Name="ReplayGuideButton" Content="重看首启引导" Style="{StaticResource SecondaryButton}"
+                            <Button x:Name="ReplayGuideButton" i18n:LocText.Key="settings.guide.replay"
+                                    Style="{StaticResource SecondaryButton}"
                                     Click="ReplayGuideButton_Click"/>
-                            <TextBlock Text="那份引导只弹一次；跳过或关掉之后，从这里回来。"
+                            <TextBlock i18n:LocText.Key="settings.guide.replayNote"
                                        Style="{StaticResource MutedText}" VerticalAlignment="Center"/>
                         </StackPanel>
                         <StackPanel x:Name="GuideTabPanel" Spacing="6"/>
@@ -938,25 +939,25 @@
 
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="10">
-                                <TextBlock Text="全局快捷键" Style="{StaticResource SettingTitle}"/>
-                                <TextBlock Text="点击右侧按钮开始录制：按钮文字会清空并实时显示你按下的按键，最多 3 个键；录满 3 个键自动结束，只录了 1~2 个键时按 Esc 结束录入（一个键都没录时按 Esc 取消）。"
+                                <TextBlock i18n:LocText.Key="settings.hotkeys.title" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock i18n:LocText.Key="settings.hotkeys.recordNote"
                                            Style="{StaticResource SettingRowText}"/>
-                                <TextBlock Text="录制结束不会立即生效——必须点击「保存快捷键」后才注册生效（避免刚录完「隐藏主界面」就把窗口藏了）。Backspace / Delete 可清除该动作。"
+                                <TextBlock i18n:LocText.Key="settings.hotkeys.saveNote"
                                            Style="{StaticResource SettingRowText}"/>
-                                <TextBlock Text="同一组合可绑定多个动作——触发时会依次执行（例如一次同时呼出主界面并显示所有组件），这是允许的「冲突」，只会在动作右侧标记，你可以直接忽略。"
+                                <TextBlock i18n:LocText.Key="settings.hotkeys.conflictNote"
                                            Style="{StaticResource SettingRowText}"/>
 
                                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
-                                    <Button Content="保存快捷键" Click="SaveHotkeys_Click"
+                                    <Button i18n:LocText.Key="settings.hotkeys.save" Click="SaveHotkeys_Click"
                                             IsEnabled="{x:Bind HasUnsavedHotkeys, Mode=OneWay}"
                                             Style="{StaticResource AccentButton}"/>
-                                    <Button Content="撤销更改" Click="DiscardHotkeys_Click"
+                                    <Button i18n:LocText.Key="settings.hotkeys.discard" Click="DiscardHotkeys_Click"
                                             IsEnabled="{x:Bind HasUnsavedHotkeys, Mode=OneWay}"
                                             Style="{StaticResource SecondaryButton}"/>
-                                    <Button Content="恢复默认快捷键" Click="ResetHotkeys_Click"
+                                    <Button i18n:LocText.Key="settings.hotkeys.reset" Click="ResetHotkeys_Click"
                                             Style="{StaticResource SecondaryButton}"/>
                                 </StackPanel>
-                                <TextBlock Text="⚠ 有未保存的快捷键改动，点击「保存快捷键」后才会生效。"
+                                <TextBlock i18n:LocText.Key="settings.hotkeys.unsaved"
                                            Foreground="{ThemeResource SystemFillColorCautionBrush}"
                                            Style="{StaticResource SettingRowText}"
                                            Visibility="{x:Bind HasUnsavedHotkeys, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
@@ -965,7 +966,7 @@
                                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                                            Style="{StaticResource SettingRowText}"
                                            Visibility="{x:Bind HasRegisterErrors, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                                <Button Content="重试注册" Click="RetryHotkeyRegister_Click" HorizontalAlignment="Left"
+                                <Button i18n:LocText.Key="settings.hotkeys.retry" Click="RetryHotkeyRegister_Click" HorizontalAlignment="Left"
                                         Style="{StaticResource SecondaryButton}"
                                         Visibility="{x:Bind HasRegisterErrors, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                                 <!-- 钩子装不上＝一个键都收不到；原先只写日志，界面却仍进入"正在录制"并清空按钮文字 -->
@@ -978,8 +979,8 @@
 
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="6">
-                                <TextBlock Text="动作 → 快捷键" Style="{StaticResource SettingTitle}"/>
-                                <TextBlock Text="按分类折叠。展开某类后逐行点击右侧按钮录制；同一组合可绑定多个动作（允许的「冲突」只就地标注）。"
+                                <TextBlock i18n:LocText.Key="settings.hotkeys.mapTitle" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock i18n:LocText.Key="settings.hotkeys.mapNote"
                                            Style="{StaticResource SettingRowText}"/>
                                 <!-- 按分类（主界面 / 组件总控 / 各组件 / 布局方案）折叠成多级结构，消除扁平长列表的重复感 -->
                                 <StackPanel x:Name="HotkeyGroups" Spacing="6"/>
@@ -1186,17 +1187,17 @@
                         <!-- 护眼 / 休息提醒（从「常规」挪来：这一页管"身体 + 体检"，常规页只留日常项） -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="护眼 · 休息提醒" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock i18n:LocText.Key="settings.health.eyeRestTitle" Style="{StaticResource SettingTitle}"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
-                                               Text="连续工作一段时间后提醒你休息。开着才建那张定时表，关掉后不探测前台窗口、也不会显示任何东西。"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                               i18n:LocText.Key="settings.health.eyeRestNote"/>
+                                    <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.EyeRestEnabled, Mode=TwoWay}"/>
                                 </Grid>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="间隔多久提醒一次"/>
-                                        <TextBlock Text="到点后还要看当前前台是不是全屏应用，所以实际时刻会有一两分钟浮动。" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                                        <TextBlock i18n:LocText.Key="settings.health.eyeRestInterval"/>
+                                        <TextBlock i18n:LocText.Key="settings.health.eyeRestIntervalNote" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                     </StackPanel>
                                     <ComboBox Grid.Column="1" MinWidth="120" VerticalAlignment="Center"
                                               ItemsSource="{x:Bind ViewModel.EyeRestIntervalOptions}"
@@ -1204,8 +1205,8 @@
                                 </Grid>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="怎么提醒"/>
-                                        <TextBlock Text="改完直接按下面的「试一试」就能看见这一档的效果，不用等满间隔。"
+                                        <TextBlock i18n:LocText.Key="settings.health.eyeRestNotice"/>
+                                        <TextBlock i18n:LocText.Key="settings.health.eyeRestNoticeNote"
                                                    Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                     </StackPanel>
                                     <ComboBox Grid.Column="1" MinWidth="250" MaxWidth="320" VerticalAlignment="Center" HorizontalAlignment="Right"
@@ -1214,12 +1215,14 @@
                                 </Grid>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
-                                               Text="前台是全屏应用时让路：放 PPT / 放映 / 全屏游戏不被打断，稍后再探一次。"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="让路" OffContent="不让路" MinWidth="0"
+                                               i18n:LocText.Key="settings.health.deferFullscreen"/>
+                                    <ToggleSwitch Grid.Column="1" MinWidth="0"
+                                                  i18n:LocText.OnContentKey="settings.health.deferOn"
+                                                  i18n:LocText.OffContentKey="settings.health.deferOff"
                                                   IsOn="{x:Bind ViewModel.EyeRestDeferOnFullscreen, Mode=TwoWay}"/>
                                 </Grid>
                                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                    <Button Grid.Column="0" Content="试一试当前设置的效果"
+                                    <Button Grid.Column="0" i18n:LocText.Key="settings.health.eyeRestPreview"
                                             Style="{StaticResource SecondaryButton}"
                                             Command="{x:Bind ViewModel.PreviewEyeRestCommand}"/>
                                     <!-- 演完必须有回执："按了没反应"与"演过了但没看见"在用户侧长得一样 -->
@@ -1229,7 +1232,7 @@
                                 </Grid>
                                 <!-- 两处入口要互相认账（批次 WC-3）：这里说清"时钟组件上也能开关"，
                                      否则用户在组件上改了间隔，回到这页会以为这里才是真值。 -->
-                                <TextBlock Text="想少两步：桌面「时钟」组件右键就有「护眼 · 休息提醒」，开关、间隔、提醒形式与「试一试」在那儿改也一样生效（改的是同一份设置），时钟上还会多显示一行「休息 HH:mm」。"
+                                <TextBlock i18n:LocText.Key="settings.health.eyeRestClockHint"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap" Opacity="0.62" FontSize="12"/>
                                 <TextBlock Text="{x:Bind ViewModel.EyeRestStatus, Mode=OneWay}"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
@@ -1238,8 +1241,8 @@
 
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="10">
-                                <TextBlock Text="收藏健康度" Style="{StaticResource SettingTitle}"/>
-                                <TextBlock Text="本地聚合，零网络。把「收藏夹腐败」变成可行动清单。" Style="{StaticResource SettingRowText}"/>
+                                <TextBlock i18n:LocText.Key="settings.health.scoreTitle" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock i18n:LocText.Key="settings.health.scoreNote" Style="{StaticResource SettingRowText}"/>
 
                                 <!-- 评分 + 扣分明细 -->
                                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16" VerticalAlignment="Center">
@@ -1265,7 +1268,7 @@
                                 <!-- 趋势图与统计摘要并排（原来上下堆叠，右侧空一大块） -->
                                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="4">
-                                        <TextBlock Text="近 14 天新增" Style="{StaticResource MutedText}" FontSize="12"/>
+                                        <TextBlock i18n:LocText.Key="settings.health.trend" Style="{StaticResource MutedText}" FontSize="12"/>
                                         <ItemsRepeater ItemsSource="{x:Bind ViewModel.TrendBars, Mode=OneWay}">
                                             <ItemsRepeater.Layout>
                                                 <StackLayout Orientation="Horizontal" Spacing="3"/>
@@ -1309,7 +1312,7 @@
 
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="诊断" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock i18n:LocText.Key="settings.health.diagnosticsTitle" Style="{StaticResource SettingTitle}"/>
                                 <ItemsRepeater ItemsSource="{x:Bind ViewModel.DiagnosticEntries, Mode=OneWay}">
                                     <ItemsRepeater.Layout>
                                         <StackLayout Spacing="4"/>
