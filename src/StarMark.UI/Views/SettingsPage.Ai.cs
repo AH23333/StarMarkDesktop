@@ -97,6 +97,11 @@ public sealed partial class SettingsPage
             : settings.DescribeWhere() + " —— 可以点「测试连接」确认服务真的答话。";
     }
 
+    /// <summary>这两句字<b>走键不走字</b>（坑表 #276）：直接写 <c>Content = "…"</c> 的话，
+    /// 换语言那一刻 <c>LocText</c> 会按标记里那颗"空闲"键把话重贴回去——界面替一件还在跑的事改了口。</summary>
+    private const string ProbeIdleKey = "settings.ai.testConnection";
+    private const string ProbeCancelKey = "dialog.cancel";
+
     /// <summary>
     /// 「测试连接」：问服务有哪些模型，并核对模型名在不在。
     /// <para>抓取期间同一个按钮变成「取消」：本机模型冷启动时这一下可能要十几秒，
@@ -113,7 +118,7 @@ public sealed partial class SettingsPage
 
         var settings = ReadAiSettings();
         _aiBusy = true;
-        AiProbeButton.Content = "取消";
+        LocText.SetKey(AiProbeButton, ProbeCancelKey);
         AiFillModelButton.Visibility = Visibility.Collapsed;
         AiStatusText.Text = "正在问服务有哪些模型…";
         var cts = new CancellationTokenSource();
@@ -144,7 +149,7 @@ public sealed partial class SettingsPage
         {
             _aiBusy = false;
             _aiProbeCts = null;
-            AiProbeButton.Content = "测试连接";
+            LocText.SetKey(AiProbeButton, ProbeIdleKey);
             cts.Dispose();
         }
     }

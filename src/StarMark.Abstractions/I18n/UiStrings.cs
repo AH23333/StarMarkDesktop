@@ -142,23 +142,26 @@ public static class UiStrings
         // 而这一屏上的中文还有三样是程序现写的（每一类那行标题、展开后每行两颗按钮、布局那栏每行的名字与摘要）。
         new Entry("settings.languageNote",
             "改完立刻生效，不用重启。这一版换掉了主窗口顶部那一排（页签、搜索框、排序与筛选按钮）、"
-            + "设置页的页眉与那八栏的标题，和「常规」「使用说明」「快捷键」「数据」「健康与诊断」「拓展功能」「桌面工具（组件）」这七栏里由界面标记写出来的那排字。"
-            + "还没铺开的是剩下那一栏（AI 增强）的正文、页面正文里的字"
-            + "（含「暂无条目，请先同步数据」这类空状态）、工具栏那颗「语言：全部」下拉、软件内说明和日志，按批往前推。"
+            + "设置页的页眉与那八栏的标题，和「常规」「使用说明」「快捷键」「数据」「健康与诊断」「拓展功能」「桌面工具（组件）」「AI 增强」这八栏里由界面标记写出来的那排字。"
+            + "还没铺开的是页面正文里的字（含「暂无条目，请先同步数据」这类空状态）、"
+            + "工具栏那颗「语言：全部」下拉、软件内说明和日志，按批往前推。"
             + "同一栏里由程序拼出来或算出来的字也不在这批范围里：顶栏那行索引状态、「关于与更新」里那行检查结果、"
             + "快捷键这一栏的分类名与每一行的动作名和键位、健康页那两排下拉的选项、那一页「诊断」的整列标签、"
             + "数据这一栏那几行状态读数、备份列表那行标题与每行那颗按钮的字、那颗备份间隔下拉的选项、"
             + "拓展功能这一栏那五行状态读数（热榜／RSS／本地磁盘搜索／截屏／画布）、那行引擎占用大小的「约」字"
             + "与画布快捷键一览每行的动作名，桌面工具这一栏每一类组件那行标题与展开后每行两颗按钮的字，"
             + "开机加载那行说每颗约多少的读数、布局那一栏每行的名字与摘要，"
+            + "AI 增强这一栏那行测试结果与那行用量读数、那些写着出厂数值与当前设置的只读展示、"
+            + "通道下拉里由枚举现生成的那些通道名，还有那些把当场算出来的值写进标签的按钮"
+            + "（写着要改用的模型名、写着上次整理好的条数），"
             + "以及「语言 Top：」这类把句子拆成半句＋读数的排法。"
             + "另有两处不彻底：下拉框展开的列表当场换语言，但闭着的那一格要等你重新选一次才跟着换；"
             + "而上面那些程序写的字要翻，得先把它们改成按键取词，那是后面一批的事。",
             "Takes effect at once — no restart needed. Translated so far: the main window's top row "
             + "(nav tabs, the search box, the sort and filter buttons), the Settings page header, its eight "
-            + "section titles, and everything the General, Guide, Hotkeys, Data, Health, Extensions and Desktop tools screens write themselves. "
-            + "Still Chinese for now: the body of the last section (AI), "
-            + "the page bodies (including empty-state lines), the language filter dropdown on the toolbar, "
+            + "section titles, and everything the General, Guide, Hotkeys, Data, Health, Extensions, Desktop tools "
+            + "and AI screens write themselves. "
+            + "Still Chinese for now: the page bodies (including empty-state lines), the language filter dropdown on the toolbar, "
             + "the in-app guide and the log — more sections land with each following pass. Words the program "
             + "assembles or computes are out of this batch's reach too: the index-status line on the top bar, "
             + "the last check result under About & updates, each hotkey category and every row's action name and "
@@ -167,7 +170,10 @@ public static class UiStrings
             + "the options in the backup-interval dropdown, the five status lines on the Extensions page, the word "
             + "in front of the engine's size and every canvas shortcut's action name there, on the Desktop tools page each widget "
             + "type's own header and the two buttons under it, the per-window cost line under the startup switch and every "
-            + "layout row's name and summary, and the lines built as half a sentence plus a number. "
+            + "layout row's name and summary, on the AI page the probe-result and usage lines, the three read-only rows "
+            + "quoting built-in limits against the current settings, the channel names the dropdown builds from an enum "
+            + "and those buttons whose labels carry a value computed on the spot (naming the model it would "
+            + "switch to, or how many rows were saved in the last run), and the lines built as half a sentence plus a number. "
             + "Two things aren't complete: in a "
             + "dropdown the opened list switches at once while the closed box keeps its old label until you pick "
             + "again; and those program-written strings have to be reworked to read from the table before they can "
@@ -500,6 +506,85 @@ public static class UiStrings
         new Entry("settings.widgets.layoutNote", "在组件窗口标题栏点右键，那排动作里有一颗能把当前这一屏存成纯模板：存下来的是各组件的位置、大小与外观配置（不含条目内容数据）。同一时刻只会启用一套布局，切换它的快捷键可在「快捷键」那一栏录制。", "Right-click a widget's title bar and one of those actions saves the current screen as a pure template: positions, sizes and appearance settings for every widget (never the items themselves). Only one layout is active at a time, and the hotkey that switches between them is recorded under the “Hotkeys” tab."),
         new Entry("settings.widgets.applyLayout", "应用", "Apply"),
         new Entry("settings.widgets.noLayouts", "（暂无保存的布局）", "(no saved layouts yet)"),
+        // ===== 「AI 增强」那一栏（批次 WI-2i：标记进表，宽尺 39 → 0）=====
+        // ⚠ 这一栏没有一句能复用：35 句逐字拿去表的中文列比过一遍，一处逐字相同都没有
+        //   （最接近的两处是开关那两个字——这一栏写「开／关」，共用那颗键是「开启／关闭」，
+        //   差一个字就不算同一句 ⇒ 这一栏改用共用的 toggle.on／toggle.off，屏幕上多出"启"这一个字，
+        //   与 WI-2f 那次"开关两侧统一成开启／关闭"同口径）。
+        // ⚠ 这一刀有四处**没能逐字照抄**（坑表 #280 那一族），前三种因都在"抄了屏幕上别处那几个字"上，
+        //   第四种是照抄了一句**过期承诺**：
+        //   ① fieldGuide 与 note 原本都写着按「测试连接」——那颗按钮的字今天自己也是一行表，
+        //      抄进另一句＝同一句字两个出处，改一漏一 ⇒ 改成描述那颗按钮，不再逐字引用；
+        //   ② whatToFill 原本写"这三样"、fieldGuide 原本写"三项"——那个数是**第二个出处**
+        //      （这一栏有几格输入由 XAML 数着）⇒ 都不写数（坑表 #289）；
+        //   ③ noKeyNote 原本写着「批量整理标签」——屏幕上没有一处叫这个名字（那颗按钮叫"开始整理"），
+        //      引用一个不存在于屏幕的名字＝假话 ⇒ 改成描述那条功能；
+        //   ④ note 原本还写着"批量整理标签的入口在下一批接上"——那是批次 A 留下的路线图，而那颗入口
+        //      （整理条数／开始／停止／全部应用）今天就在同一栏里 ⇒ 逐字照抄会把一句过期承诺一起搬进表，
+        //      而表从此是它唯一的出处（坑表 #297）⇒ 就地改成实话，并给这一族配了证人
+        //      ShippedUiTextNeverPromisesAFutureBatch。
+        // ⚠ 两颗按钮的字**不进表、留在 code-behind**：AiFillModelButton 与 AiResumeButton 的标签
+        //   各带一个当场算出来的值（第一个可用模型名 / 上次整理好的条数）＝组合句那一族（P-169 单列着），
+        //   而这一族还没有"按语言重算"的机制。标记里那两处字面量整颗摘掉（两颗按钮都由代码在现出来之前
+        //   先把字写定），⛔ 不许给它们挂静态键——挂了键屏幕上是静态那句，代码随后又把它换成带数的那句，
+        //   换语言那一刻会把带数的那句重贴回静态句＝界面替一件已经算完的事改口（坑表 #276）。
+        new Entry("settings.ai.whatToFill", "每一项分别要填什么", "What each field actually wants"),
+        new Entry("settings.ai.fieldGuide",
+            "服务商地址（Base URL）＝用哪家的接口，也可以填自建或兼容 OpenAI 协议的网关地址；API Key＝那家公司发给你的一串secret，用来认账和计费，等同密码——别贴进聊天群，也不要提交进仓库；模型名＝具体调哪个模型，决定能力与价格。这些都填好就按下面那颗测试按钮，程序会真的发一次请求验证，不通过就把原因写在旁边，不会静默失败。",
+            "Base URL = whose API you're calling, or a self-hosted / OpenAI-compatible gateway; API key = the secret that provider issued you, used to bill and to authenticate — treat it as a password: never paste it into a chat, never commit it; model name = the exact model you call, which decides both capability and price. Fill these in and press the test button below: the app really sends a request, and if it fails it prints why right beside it instead of failing silently."),
+        new Entry("settings.ai.deepseekGuide",
+            "DeepSeek：platform.deepseek.com 注册 → 进「API Keys」→ 新建 → 当场复制（页面刷新后就再也看不见全文）。Base URL 填 https://api.deepseek.com ，模型名填 deepseek-chat 。",
+            "DeepSeek: register at platform.deepseek.com → “API Keys” → create → copy it immediately (once the page refreshes you never see the full text again). Base URL https://api.deepseek.com , model name deepseek-chat ."),
+        new Entry("settings.ai.kimiGuide",
+            "月之暗面 Kimi：platform.moonshot.cn 注册 → 左侧「API 管理」→ 创建 API Key。Base URL 填 https://api.moonshot.cn/v1 ，模型名照官网列的填（如 kimi-k2-0905-preview）。",
+            "Moonshot Kimi: register at platform.moonshot.cn → “API Management” on the left → create an API key. Base URL https://api.moonshot.cn/v1 , model name as listed on the site (e.g. kimi-k2-0905-preview)."),
+        new Entry("settings.ai.zhipuGuide",
+            "智谱 GLM：open.bigmodel.cn 注册并实名 → 「API Keys」→ 添加新的 API Key。Base URL 填 https://open.bigmodel.cn/api/paas/v4 ，模型名如 glm-4-plus 。",
+            "Zhipu GLM: register and verify at open.bigmodel.cn → “API Keys” → add a new key. Base URL https://open.bigmodel.cn/api/paas/v4 , model name e.g. glm-4-plus ."),
+        new Entry("settings.ai.openaiGuide",
+            "OpenAI：platform.openai.com 登录 → Settings → API keys → Create new secret key。Base URL 填 https://api.openai.com/v1 ，模型名如 gpt-4o-mini 。需要海外支付方式，公司网络常拦这个域名。",
+            "OpenAI: sign in at platform.openai.com → Settings → API keys → Create new secret key. Base URL https://api.openai.com/v1 , model name e.g. gpt-4o-mini . Needs an overseas payment method, and corporate networks often block this domain."),
+        new Entry("settings.ai.localGuide",
+            "本地或自建（Ollama、LM Studio、vLLM 等）：Base URL 填本机地址（如 http://localhost:11434/v1 ），API Key 多数实现要求非空但内容随意，模型名填本地已拉取的那个。",
+            "Local or self-hosted (Ollama, LM Studio, vLLM …): Base URL is your machine's address (e.g. http://localhost:11434/v1 ); most implementations want a non-empty key but accept any text, and the model name must be one you've already pulled locally."),
+        new Entry("settings.ai.noKeyNote",
+            "不配 Key 也能用这个软件：AI 只负责批量整理标签这一项功能。没配好时那条功能会明确灰着并说明原因，不会连累别的功能，也不会不打招呼就联网发数据。",
+            "The app works without any key: AI only powers the bulk tag-organising feature. Until it's configured that feature is visibly greyed out with the reason, it never drags other features down, and it never sends data off the machine without asking."),
+        new Entry("settings.ai.title", "AI 助手", "AI assistant"),
+        new Entry("settings.ai.note",
+            "把模型通道接进来。本机装了 Ollama 就选 Ollama（不需要任何 Key）；有别的 OpenAI 兼容端点（各类代理、LM Studio 的开放服务）也可以填地址与 Key。通道接好之后，这一栏还有那颗测试按钮，以及批量整理标签的入口和它的超时、预算那几格。",
+            "Wire up a model channel. If Ollama is installed locally, pick it (no key needed); any OpenAI-compatible endpoint (proxies, LM Studio's local server) also works with an address and key. Once a channel is in, this section also holds the test button, the bulk-organising entry point, and its timeout and budget fields."),
+        new Entry("settings.ai.enable", "启用 AI 助手", "Turn on the AI assistant"),
+        new Entry("settings.ai.channel", "通道", "Channel"),
+        new Entry("settings.ai.model", "模型名", "Model name"),
+        new Entry("settings.ai.modelPlaceholder", "如 qwen2.5:7b（要与服务侧列表一致）",
+            "e.g. qwen2.5:7b (must match the service's list)"),
+        new Entry("settings.ai.ollamaUrl", "Ollama 地址", "Ollama address"),
+        new Entry("settings.ai.ollamaUrlPlaceholder", "留空＝http://127.0.0.1:11434",
+            "blank = http://127.0.0.1:11434"),
+        new Entry("settings.ai.endpoint", "OpenAI 兼容端点（填到 /v1）", "OpenAI-compatible endpoint (up to /v1)"),
+        new Entry("settings.ai.endpointPlaceholder", "留空＝https://api.openai.com/v1",
+            "blank = https://api.openai.com/v1"),
+        new Entry("settings.ai.apiKey", "API Key（选 Ollama 时不必填）", "API key (not needed for Ollama)"),
+        new Entry("settings.ai.classifyModel", "分类模型名（留空＝沿用上面的模型）",
+            "Classify model name (blank = use the one above)"),
+        new Entry("settings.ai.classifyModelPlaceholder", "如 qwen2.5:1.5b", "e.g. qwen2.5:1.5b"),
+        new Entry("settings.ai.testConnection", "测试连接", "Test connection"),
+        new Entry("settings.ai.notTested", "还没测过。", "Not tested yet."),
+        new Entry("settings.ai.scope", "整理多少条还没有标签的条目", "How many untagged items to organise"),
+        new Entry("settings.ai.start", "开始整理", "Start"),
+        new Entry("settings.ai.stop", "停止", "Stop"),
+        new Entry("settings.ai.applyAll", "全部应用", "Apply all"),
+        new Entry("settings.ai.timeout", "单批超时（秒，留空＝走默认）", "Per-batch timeout (seconds, blank = default)"),
+        new Entry("settings.ai.budget", "月度 token 预算（到线自动暂停，手动恢复）",
+            "Monthly token budget (pauses at the line; resume by hand)"),
+        new Entry("settings.ai.applyBudget", "应用预算", "Apply budget"),
+        new Entry("settings.ai.unpause", "恢复 AI", "Resume AI"),
+        new Entry("settings.ai.warnRatio", "预警比例（%，留空＝走默认）",
+            "Warning ratio (%, blank = default)"),
+        new Entry("settings.ai.usagePending", "用量还没读。", "Usage hasn't been read yet."),
+        new Entry("settings.ai.applyGroup", "应用这组", "Apply this group"),
+        new Entry("settings.ai.rejectGroup", "不要", "Skip"),
 
         // ===== 对话框与列表上那几个共用动词 =====
         // 与 settings.general.cancelUpdate 不是一句：那颗管的是"停掉正在跑的下载／替换"，这颗只是"不做了"。
