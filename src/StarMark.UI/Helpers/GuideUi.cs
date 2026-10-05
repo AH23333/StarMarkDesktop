@@ -75,9 +75,12 @@ public static class GuideUi
     public static async Task ShowFirstRunAsync(XamlRoot? root, SettingsStore settings, Action openFullGuide)
     {
         var steps = FirstRunGuide.Steps;
-        var ink = ThemeBrush.For(ElementTheme.Default, "TextFillColorPrimaryBrush")
+        // 主题按<b>设置档折算出具体的 Light/Dark</b>，不写 ElementTheme.Default：
+        // Default 会让画笔判定落到 OS 实时主题，于是「OS 深色＋应用强制浅色」时这张向导在浅底上画出近白的字。
+        var theme = ThemeManager.ResolveEffectiveTheme(settings.LoadTheme());
+        var ink = ThemeBrush.For(theme, "TextFillColorPrimaryBrush")
                   ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130));
-        var accent = ThemeBrush.For(ElementTheme.Default, "AccentFillColorDefaultBrush")
+        var accent = ThemeBrush.For(theme, "AccentFillColorDefaultBrush")
                      ?? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 120, 215));
 
         var art = new ContentControl { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) };
