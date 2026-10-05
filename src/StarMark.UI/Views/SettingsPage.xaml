@@ -712,11 +712,11 @@
                         <!-- GitHub 热榜（默认关；关时导航栏连「热榜」项都不显示——用户裁决的可选浏览面） -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="GitHub 热榜" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock i18n:LocText.Key="settings.extend.trendingTitle" Style="{StaticResource SettingTitle}"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
-                                               Text="开启后导航栏「剪贴板」右侧出现「热榜」。抓取只在你打开那一页时发生（每个周期每天至多一次，失败时回读上次结果并说明）；条目默认不进库——点 ⭐ 才是给 GitHub 远端加星（需 Token），点 🔖 才存进本机收藏。"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                               i18n:LocText.Key="settings.extend.trendingNote"/>
+                                    <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.TrendingEnabled, Mode=TwoWay}"/>
                                 </Grid>
                                 <TextBlock Text="{x:Bind ViewModel.TrendingStatus, Mode=OneWay}"
@@ -724,14 +724,14 @@
 
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
-                                               Text="在「今日速览」组件里显示热榜块（默认日榜）；关掉则该块消失、原「常看」回到顶部。"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="显示" OffContent="不显示" MinWidth="0"
+                                               i18n:LocText.Key="settings.extend.glanceNote"/>
+                                    <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="settings.extend.glanceOn" i18n:LocText.OffContentKey="settings.extend.glanceOff" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.TrendingGlanceEnabled, Mode=TwoWay}"/>
                                 </Grid>
-                                <TextBlock Text="热榜页上选的周期会记住，下次打开还是那一档。没配 Token 也能浏览热榜（读侧不依赖 Token），只是 Star 按钮会提示要配 Token。"
+                                <TextBlock i18n:LocText.Key="settings.extend.trendingPeriodNote"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap" Opacity="0.62" FontSize="12"/>
                                 <!-- 就地入口：刚开启的人多半想立刻看一眼，不该让他自己回导航栏找那一项 -->
-                                <Button Content="打开热榜页" Click="OpenTrending_Click" Style="{StaticResource SecondaryButton}"
+                                <Button i18n:LocText.Key="settings.extend.openTrending" Click="OpenTrending_Click" Style="{StaticResource SecondaryButton}"
                                         HorizontalAlignment="Left"
                                         Visibility="{x:Bind ViewModel.TrendingEnabled, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                             </StackPanel>
@@ -744,17 +744,17 @@
                         -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="网址来源（RSS / Atom）" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock i18n:LocText.Key="settings.extend.rssTitle" Style="{StaticResource SettingTitle}"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
-                                               Text="开启后导航栏出现「RSS」：每个订阅源是它自己的一个文件夹，点条目直接在浏览器打开文章，点「收藏到文件夹」才会进本机库（并放进这个源自己的那一层）。抓取只在你到那一页按「刷新」时发生，没有后台定时。"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                               i18n:LocText.Key="settings.extend.rssNote"/>
+                                    <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.RssEnabled, Mode=TwoWay}"/>
                                 </Grid>
                                 <TextBlock Text="{x:Bind ViewModel.RssStatus, Mode=OneWay}"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
 
-                                <TextBlock x:Name="RssSourceEmpty" Text="还没有添加任何来源地址。" Opacity="0.62"
+                                <TextBlock x:Name="RssSourceEmpty" i18n:LocText.Key="settings.extend.rssEmpty" Opacity="0.62"
                                            Style="{StaticResource SettingRowText}"/>
                                 <ItemsControl x:Name="RssSourceRows">
                                     <ItemsControl.ItemTemplate>
@@ -764,10 +764,10 @@
                                                     <TextBlock Text="{Binding Name}" FontSize="13" TextTrimming="CharacterEllipsis"/>
                                                     <TextBlock Text="{Binding Url}" FontSize="11" Opacity="0.62" TextTrimming="CharacterEllipsis"/>
                                                 </StackPanel>
-                                                <ToggleSwitch Grid.Column="1" OnContent="启用" OffContent="停用" MinWidth="0"
+                                                <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="settings.extend.rssOn" i18n:LocText.OffContentKey="settings.extend.rssOff" MinWidth="0"
                                                               IsOn="{Binding Enabled, Mode=OneTime}" Tag="{Binding}"
                                                               Toggled="RssSource_Toggled"/>
-                                                <Button Grid.Column="2" Content="删除" Click="RssDelete_Click" Tag="{Binding}"
+                                                <Button Grid.Column="2" i18n:LocText.Key="dialog.delete" Click="RssDelete_Click" Tag="{Binding}"
                                                         Style="{StaticResource SecondaryButton}" VerticalAlignment="Center"/>
                                             </Grid>
                                         </DataTemplate>
@@ -775,14 +775,14 @@
                                 </ItemsControl>
 
                                 <Grid ColumnDefinitions="2*,*,Auto" ColumnSpacing="6">
-                                    <TextBox Grid.Column="0" x:Name="RssUrlBox" PlaceholderText="订阅地址（https://…/feed）"
+                                    <TextBox Grid.Column="0" x:Name="RssUrlBox" i18n:LocText.PlaceholderKey="settings.extend.rssUrlPlaceholder"
                                              FontSize="12" HorizontalAlignment="Stretch"/>
-                                    <TextBox Grid.Column="1" x:Name="RssNameBox" PlaceholderText="名字（留空＝用域名）"
+                                    <TextBox Grid.Column="1" x:Name="RssNameBox" i18n:LocText.PlaceholderKey="settings.extend.rssNamePlaceholder"
                                              FontSize="12" HorizontalAlignment="Stretch"/>
-                                    <Button Grid.Column="2" Content="添加" Click="RssAdd_Click" Style="{StaticResource SecondaryButton}"/>
+                                    <Button Grid.Column="2" i18n:LocText.Key="settings.extend.add" Click="RssAdd_Click" Style="{StaticResource SecondaryButton}"/>
                                 </Grid>
                                 <!-- 就地入口：刚配好源的人多半想立刻看一眼，不该让他自己回导航栏找那一项 -->
-                                <Button Content="打开 RSS 页" Click="OpenRss_Click" Style="{StaticResource SecondaryButton}"
+                                <Button i18n:LocText.Key="settings.extend.openRss" Click="OpenRss_Click" Style="{StaticResource SecondaryButton}"
                                         HorizontalAlignment="Left"
                                         Visibility="{x:Bind ViewModel.RssEnabled, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                             </StackPanel>
@@ -792,11 +792,11 @@
                              住「拓展功能」；关掉时它一个字节都不写，开着时「引擎在哪、占多大、怎么删」也在这同一张卡里说清） -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="本地磁盘搜索" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock i18n:LocText.Key="settings.extend.diskSearchTitle" Style="{StaticResource SettingTitle}"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                    <TextBlock Grid.Column="0" Text="开启后可像 Everything 一样全盘秒搜本地文件，结果并入快捷搜索 / 主窗搜索。首次开启会自动准备 Everything（可能需要一次 UAC）。"
+                                    <TextBlock Grid.Column="0" i18n:LocText.Key="settings.extend.diskSearchNote"
                                                Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                    <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.LocalDiskSearchEnabled, Mode=TwoWay}"/>
                                 </Grid>
                                 <TextBlock Text="{x:Bind ViewModel.LocalDiskSearchStatus, Mode=OneWay}"
@@ -810,15 +810,15 @@
                                 <!-- 自带引擎管理：占用大小 + 打开所在目录 + 删除（误删无妨，下次开启自愈式重下） -->
                                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
                                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
-                                        <TextBlock Text="本地搜索引擎占用" Style="{StaticResource SettingRowText}"/>
+                                        <TextBlock i18n:LocText.Key="settings.extend.engineUsage" Style="{StaticResource SettingRowText}"/>
                                         <TextBlock x:Name="EngineSizeText" Text="—" Style="{StaticResource SettingRowText}" Opacity="0.7"/>
                                     </StackPanel>
-                                    <Button Grid.Column="1" Content="打开所在目录" Click="OpenEngineFolder_Click"
+                                    <Button Grid.Column="1" i18n:LocText.Key="settings.extend.openEngineFolder" Click="OpenEngineFolder_Click"
                                             Style="{StaticResource SecondaryButton}" VerticalAlignment="Center"/>
-                                    <Button Grid.Column="2" Content="删除" Click="DeleteEngine_Click"
+                                    <Button Grid.Column="2" i18n:LocText.Key="dialog.delete" Click="DeleteEngine_Click"
                                             Style="{StaticResource SecondaryButton}" VerticalAlignment="Center"/>
                                 </Grid>
-                                <TextBlock Text="删除只清理本地搜索引擎（Everything 及其 SDK），书签 / Star / 标签数据不受影响；即使误删，下次开启本地磁盘搜索会自动重新下载。"
+                                <TextBlock i18n:LocText.Key="settings.extend.engineDeleteNote"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap" Opacity="0.62" FontSize="12"/>
                                 <!-- 「索引进库」那一整块（目录多行框＋每目录上限＋保存按钮＋不可用目录提示）
                                      已按用户裁决拆掉（批次 VQ）：那颗按钮只把配置落盘，真进库要等顶栏「同步」，
@@ -834,12 +834,12 @@
                                                Visibility="{x:Bind ViewModel.HasMissingFileRowsNotice, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                                     <!-- 库里那些"盘上已经没有"的行：今天删得掉了（批次 VQ 把删除这一族对本机文件条目放开），
                                          也说得出口了。这里给一次点清的能力，但不替用户悄悄删——见 VM 上那段理由。 -->
-                                    <Button Grid.Column="1" Content="清掉这些行" VerticalAlignment="Center"
+                                    <Button Grid.Column="1" i18n:LocText.Key="settings.extend.cleanMissing" VerticalAlignment="Center"
                                             Style="{StaticResource SecondaryButton}"
                                             Command="{x:Bind ViewModel.CleanMissingFilesCommand}"
                                             Visibility="{x:Bind ViewModel.HasMissingFileRows, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                                 </Grid>
-                                <Button Content="重新扫描本机文件条目" Command="{x:Bind ViewModel.RescanMissingFilesCommand}"
+                                <Button i18n:LocText.Key="settings.extend.rescan" Command="{x:Bind ViewModel.RescanMissingFilesCommand}"
                                         Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
                             </StackPanel>
                         </Border>
@@ -853,11 +853,11 @@
                         -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="截屏（截图 / 贴图 / 识字）" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock i18n:LocText.Key="settings.extend.captureTitle" Style="{StaticResource SettingTitle}"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
-                                               Text="关掉之后：那三条发起框选的全局热键不再向系统注册（键位交还给当前窗口），托盘里的「截图 / 贴图 / 识字」三项一并消失。已经钉在桌面上的贴图不受影响——显示／隐藏、忽略鼠标、关闭全部照常可用。"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                               i18n:LocText.Key="settings.extend.captureNote"/>
+                                    <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.CaptureEnabled, Mode=TwoWay}"/>
                                 </Grid>
                                 <TextBlock Text="{x:Bind ViewModel.CaptureStatus, Mode=OneWay}"
@@ -872,19 +872,19 @@
                         -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="屏幕画布" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock i18n:LocText.Key="settings.extend.canvasTitle" Style="{StaticResource SettingTitle}"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
-                                               Text="讲解时直接在屏幕上画（不冻结画面）。进入后是穿透态：PPT 翻页、点下层应用都不受影响，选「画笔」或按住 Ctrl+Alt 拖动才留痕。关掉之后托盘里这一项一并消失，画布内的九条快捷键也不再占用系统组合键。"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                               i18n:LocText.Key="settings.extend.canvasNote"/>
+                                    <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.CanvasEnabled, Mode=TwoWay}"/>
                                 </Grid>
                                 <TextBlock Text="{x:Bind ViewModel.CanvasStatus, Mode=OneWay}"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
-                                               Text="截图带画布：开着时，截屏抓到的那一帧包含画布上的笔迹（所见即所得）。关掉后截图前会先把那块玻璃收起来再抓、抓完立刻放回——画布上画的东西一点不少，只是截走的图里没有它。画布工具条上的「贴图／复制／存图」不受这条影响（那三条本来就是要把笔迹留下）。"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="带上" OffContent="不带" MinWidth="0"
+                                               i18n:LocText.Key="settings.extend.canvasInShotNote"/>
+                                    <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="settings.extend.canvasInShotOn" i18n:LocText.OffContentKey="settings.extend.canvasInShotOff" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.CanvasInScreenshots, Mode=TwoWay}"/>
                                 </Grid>
                                 <!--
@@ -894,8 +894,8 @@
                                 -->
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="光标那块圆多大"/>
-                                        <TextBlock Text="画布上跟着光标的那团光，与「幕布」开着时鼠标周围那块亮区，用的是同一个半径（一根滑杆管两块圆）。单位是 DIP（与缩放无关的逻辑像素）：150% 的屏上实际像素数会是它的 1.5 倍。拖动立刻生效，不用点保存、不用重启。"
+                                        <TextBlock i18n:LocText.Key="settings.extend.glowTitle"/>
+                                        <TextBlock i18n:LocText.Key="settings.extend.glowNote"
                                                    Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
@@ -906,7 +906,7 @@
                                                    Style="{StaticResource MutedText}"/>
                                     </Grid>
                                 </Grid>
-                                <TextBlock Text="快捷键一览（下面是当前真正生效的键位；要改到「快捷键」页的「屏幕画布」分组）"
+                                <TextBlock i18n:LocText.Key="settings.extend.hotkeyListTitle"
                                            Style="{StaticResource SettingRowText}" FontWeight="SemiBold" TextWrapping="Wrap"/>
                                 <!--
                                     批次 RO：这张表过去是一整块拼好的多行字符串（名字 + 全角空格 + 键位）。

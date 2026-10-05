@@ -136,28 +136,33 @@ public static class UiStrings
         // 第四版（批次 WI-2f）动的还是<b>覆盖面</b>：「数据」那一栏的标记也进表了，所以"其余四栏"成了三栏；
         // 同时把那几行程序写的读数点名到"数据栏的状态行与备份列表每行那颗按钮"——枚举读起来就是穷尽，
         // 少写一行等于把同一屏上还在的中文藏回去（WI-2e 那一版就是被照片证伪过一次）。
+        // 第五版（批次 WI-2g）同一形状再来一次：「拓展功能」那一栏的标记进表，"其余三栏"成了两栏；
+        // 那一屏上还有五行状态读数是 VM／code-behind 现写的中文（已逐条读到赋值点），不点名就等于藏着。
         new Entry("settings.languageNote",
             "改完立刻生效，不用重启。这一版换掉了主窗口顶部那一排（页签、搜索框、排序与筛选按钮）、"
-            + "设置页的页眉与那八栏的标题，和「常规」「使用说明」「快捷键」「数据」「健康与诊断」这五栏里由界面标记写出来的那排字。"
-            + "还没铺开的是其余三栏（AI 增强／桌面工具／拓展功能）的正文、页面正文里的字"
+            + "设置页的页眉与那八栏的标题，和「常规」「使用说明」「快捷键」「数据」「健康与诊断」「拓展功能」这六栏里由界面标记写出来的那排字。"
+            + "还没铺开的是其余两栏（AI 增强／桌面工具）的正文、页面正文里的字"
             + "（含「暂无条目，请先同步数据」这类空状态）、工具栏那颗「语言：全部」下拉、软件内说明和日志，按批往前推。"
             + "同一栏里由程序拼出来或算出来的字也不在这批范围里：顶栏那行索引状态、「关于与更新」里那行检查结果、"
             + "快捷键这一栏的分类名与每一行的动作名和键位、健康页那两排下拉的选项、那一页「诊断」的整列标签、"
-            + "数据这一栏那几行状态读数、备份列表那行标题与每行那颗按钮的字、那颗备份间隔下拉的选项，"
+            + "数据这一栏那几行状态读数、备份列表那行标题与每行那颗按钮的字、那颗备份间隔下拉的选项、"
+            + "拓展功能这一栏那五行状态读数（热榜／RSS／本地磁盘搜索／截屏／画布）、那行引擎占用大小的「约」字"
+            + "与画布快捷键一览每行的动作名，"
             + "以及「语言 Top：」这类把句子拆成半句＋读数的排法。"
             + "另有两处不彻底：下拉框展开的列表当场换语言，但闭着的那一格要等你重新选一次才跟着换；"
             + "而上面那些程序写的字要翻，得先把它们改成按键取词，那是后面一批的事。",
             "Takes effect at once — no restart needed. Translated so far: the main window's top row "
             + "(nav tabs, the search box, the sort and filter buttons), the Settings page header, its eight "
-            + "section titles, and everything the General, Guide, Hotkeys, Data and Health screens write themselves. "
-            + "Still Chinese for now: the bodies of the other three sections (AI, Desktop tools, Extensions), "
+            + "section titles, and everything the General, Guide, Hotkeys, Data, Health and Extensions screens write themselves. "
+            + "Still Chinese for now: the bodies of the other two sections (AI, Desktop tools), "
             + "the page bodies (including empty-state lines), the language filter dropdown on the toolbar, "
             + "the in-app guide and the log — more sections land with each following pass. Words the program "
             + "assembles or computes are out of this batch's reach too: the index-status line on the top bar, "
             + "the last check result under About & updates, each hotkey category and every row's action name and "
             + "key, the two option lists on the Health page, the whole label column under Diagnostics there, "
             + "the status lines on the Data page, that backup list's own header and every row's button, "
-            + "the options in the backup-interval dropdown, and the lines built as half a sentence plus a number. "
+            + "the options in the backup-interval dropdown, the five status lines on the Extensions page, the word "
+            + "in front of the engine's size and every canvas shortcut's action name there, and the lines built as half a sentence plus a number. "
             + "Two things aren't complete: in a "
             + "dropdown the opened list switches at once while the closed box keeps its old label until you pick "
             + "again; and those program-written strings have to be reworked to read from the table before they can "
@@ -347,6 +352,81 @@ public static class UiStrings
         new Entry("settings.data.cleanOrphansTip",
             "删掉「不在历史里的那些文件」与没写完的临时件。点下去会先列名单让你确认，一条历史条目都不会动。",
             "Deletes the files “not in the history any more” plus half-written temporary ones. It lists them for confirmation first, and no history entry is touched."),
+
+        // ===== 「拓展功能」那一栏的正文（批次 WI-2g，P-169 ① 第五刀）=====
+        // 口径与前几刀一致：中文列逐字照抄**屏幕上的那一句**，英文列是它的对译。
+        // ⚠ 这一刀有<b>七句</b>没能逐字照抄，全因那句里<b>引用了屏幕上别处的几个字</b>（坑表 #280：
+        //   两列一行的表里，抄了其中一列的另一句必然成假话——中文列抄是真话，英文列抄就是假话）：
+        //   ① 画布工具条那三项（贴图／复制／存图）与托盘那三项（截图／贴图／识字）今天<b>还没进表</b>，
+        //      屏幕上是死的中文 ⇒ 两列都改成<b>描述那些动作</b>，不加引号（「画笔」那一支同理）；
+        //   ② 「屏幕画布」这颗热键<b>分组名</b>住在 Core（`HotkeyActions.CategoryOf`，程序写的字）⇒
+        //      那句改成"请到「快捷键」那一栏里画布那一组"：「快捷键」<b>已进表</b>所以照旧加引号，
+        //      分组名不进引号只描述，指针没丢、两句都还是真话；
+        //   ③ 组件窗那两块（「今日速览」与「常看」）和 RSS 页上那颗「收藏到文件夹」「刷新」也还没进表
+        //      ⇒ 同样改成描述（"速览那个组件""原来那块回到顶部""点收藏那个动作""主动刷新"）。
+        //   导航栏那三项（剪贴板／热榜／RSS）是<b>已按键取词</b>的，所以两列各按本语言的名字写，不算抄。
+        //   ⚠ 「按住 Ctrl+Alt 拖动才留痕」那颗 Ctrl+Alt <b>不是</b>用户可改的绑定：它是 `CtrlAltDown`
+        //   直接轮询物理键（S2-g 定的"穿透态只抢 Ctrl+Alt 那一下"，有证人在 CanvasWiringGateTests），
+        //   改了热键也不会变这句话，所以它不算"文案里抄全局热键"那一族。
+        new Entry("settings.extend.trendingTitle", "GitHub 热榜", "GitHub trending"),
+        new Entry("settings.extend.trendingNote",
+            "开启后导航栏「剪贴板」右侧出现「热榜」。抓取只在你打开那一页时发生（每个周期每天至多一次，失败时回读上次结果并说明）；条目默认不进库——点 ⭐ 才是给 GitHub 远端加星（需 Token），点 🔖 才存进本机收藏。",
+            "Turn this on and “Trending” appears to the right of “Clipboard” in the nav rail. Nothing is fetched until you open that page (at most once a day per period; if a fetch fails you get the last result back and a reason). Entries stay out of the library by default — ⭐ stars the repository on GitHub itself (needs a token), 🔖 is what saves a copy locally."),
+        new Entry("settings.extend.glanceNote",
+            "在速览那个组件里显示热榜块（默认日榜）；关掉则该块消失、下面那块常看回到顶部。",
+            "Shows a trending block in the glance widget (daily list by default); switch it off and it disappears, letting the usual block underneath move back to the top."),
+        new Entry("settings.extend.glanceOn", "显示", "Show"),
+        new Entry("settings.extend.glanceOff", "不显示", "Hide"),
+        new Entry("settings.extend.trendingPeriodNote",
+            "热榜页上选的周期会记住，下次打开还是那一档。没配 Token 也能浏览热榜（读侧不依赖 Token），只是 Star 按钮会提示要配 Token。",
+            "The period you pick on the trending page is remembered and is still it next time. Browsing needs no token — only the Star button asks for one."),
+        new Entry("settings.extend.openTrending", "打开热榜页", "Open the trending page"),
+        new Entry("settings.extend.rssTitle", "网址来源（RSS / Atom）", "Feed sources (RSS / Atom)"),
+        new Entry("settings.extend.rssNote",
+            "开启后导航栏出现「RSS」：每个订阅源是它自己的一个文件夹，点条目直接在浏览器打开文章，只有点收藏那个动作才会进本机库（并放进这个源自己的那一层）。抓取只在你到那一页主动刷新时发生，没有后台定时。",
+            "Turn this on and “RSS” appears in the nav rail: every feed is a folder of its own, clicking an entry opens the article in your browser, and only the bookmark action copies it into the local library (into that feed's own folder). Feeds are fetched when you go to that page and refresh — nothing runs in the background."),
+        new Entry("settings.extend.rssEmpty", "还没有添加任何来源地址。", "No feed addresses added yet."),
+        new Entry("settings.extend.rssOn", "启用", "Enable"),
+        new Entry("settings.extend.rssOff", "停用", "Disable"),
+        new Entry("settings.extend.rssUrlPlaceholder", "订阅地址（https://…/feed）", "Feed address (https://…/feed)"),
+        new Entry("settings.extend.rssNamePlaceholder", "名字（留空＝用域名）", "Name (blank = use the domain)"),
+        new Entry("settings.extend.add", "添加", "Add"),
+        new Entry("settings.extend.openRss", "打开 RSS 页", "Open the RSS page"),
+        new Entry("settings.extend.diskSearchTitle", "本地磁盘搜索", "Local disk search"),
+        new Entry("settings.extend.diskSearchNote",
+            "开启后可像 Everything 一样全盘秒搜本地文件，结果并入快捷搜索 / 主窗搜索。首次开启会自动准备 Everything（可能需要一次 UAC）。",
+            "Once on, local files are searched across whole volumes as fast as Everything does, and the hits merge into the quick-search and main-window results. The first time you turn it on the app prepares Everything for you (which may take one UAC prompt)."),
+        new Entry("settings.extend.engineUsage", "本地搜索引擎占用", "Search engine footprint"),
+        new Entry("settings.extend.openEngineFolder", "打开所在目录", "Open its folder"),
+        new Entry("settings.extend.engineDeleteNote",
+            "删除只清理本地搜索引擎（Everything 及其 SDK），书签 / Star / 标签数据不受影响；即使误删，下次开启本地磁盘搜索会自动重新下载。",
+            "Deleting clears only the search engine (Everything and its SDK) — bookmarks, Stars and tags are untouched; and if you delete it by mistake, the next time you turn local disk search on it downloads again."),
+        new Entry("settings.extend.cleanMissing", "清掉这些行", "Clear those rows"),
+        new Entry("settings.extend.rescan", "重新扫描本机文件条目", "Rescan local file entries"),
+        new Entry("settings.extend.captureTitle", "截屏（截图 / 贴图 / 识字）", "Screen capture (snip / pin / OCR)"),
+        new Entry("settings.extend.captureNote",
+            "关掉之后：那三条发起框选的全局热键不再向系统注册（键位交还给当前窗口），托盘里那三项截图入口一并消失。已经钉在桌面上的贴图不受影响——显示／隐藏、忽略鼠标、关闭全部照常可用。",
+            "Switched off, the three global hotkeys that start a region selection are unregistered (their keys go back to whatever window has focus) and the three capture entries leave the tray menu. Pins already on the desktop are unaffected — showing, hiding, ignoring the mouse and closing all still work."),
+        new Entry("settings.extend.canvasTitle", "屏幕画布", "Screen canvas"),
+        new Entry("settings.extend.canvasNote",
+            // 中文列原本写死"画布内的<b>九条</b>快捷键"（批次 WD-3 那一批确实是九条）。这一刀搬字时逐字读那句，
+            // 数了一下 `HotkeyActions.Canvas`：今天已经是<b>十三条</b>（后来 WK/WM/P3 各加了图形、复制、贴出）。
+            // 条数没有出处可接（LocText 只会整句重贴，接不上那个数＝组合句那一族），所以这里<b>不写数</b>——
+            // 留着"九条"就是一句屏幕上对不上的假话，而这一栏下面那张表会自己数给人看。
+            "讲解时直接在屏幕上画（不冻结画面）。进入后是穿透态：PPT 翻页、点下层应用都不受影响，选画笔那一支、或按住 Ctrl+Alt 拖动才留痕。关掉之后托盘里这一项一并消失，画布那一组快捷键也不再占用系统组合键。",
+            "Draw straight on the screen while explaining, without freezing the picture. It opens pass-through: paging a PPT or clicking the app underneath keeps working, and ink only appears once you pick the pen or hold Ctrl+Alt while dragging. Switching this off also drops the tray entry and stops the canvas shortcuts from holding system combinations."),
+        new Entry("settings.extend.canvasInShotNote",
+            "截图带画布：开着时，截屏抓到的那一帧包含画布上的笔迹（所见即所得）。关掉后截图前会先把那块玻璃收起来再抓、抓完立刻放回——画布上画的东西一点不少，只是截走的图里没有它。画布工具条上那三条产出动作不受这条影响（那三条本来就是要把笔迹留下）。",
+            "Capture the canvas: while this is on, the frame a screenshot grabs includes whatever is drawn on the canvas (what you see is what is captured). With it off, that glass is lifted just before the grab and put straight back — nothing you drew is lost, the screenshot simply does not contain it. The three output actions on the canvas toolbar are unaffected; those keep the ink by design."),
+        new Entry("settings.extend.canvasInShotOn", "带上", "Include"),
+        new Entry("settings.extend.canvasInShotOff", "不带", "Skip"),
+        new Entry("settings.extend.glowTitle", "光标那块圆多大", "How big the cursor circle is"),
+        new Entry("settings.extend.glowNote",
+            "画布上跟着光标的那团光，与幕布开着时鼠标周围那块亮区，用的是同一个半径（一根滑杆管两块圆）。单位是 DIP（与缩放无关的逻辑像素）：150% 的屏上实际像素数会是它的 1.5 倍。拖动立刻生效，不用点保存、不用重启。",
+            "The halo that follows the cursor on the canvas and the bright area around the mouse while the curtain is up share one radius — a single slider for both circles. The unit is DIP (logical pixels, independent of scaling), so a 150% screen shows 1.5 times as many actual pixels. Dragging takes effect immediately: no save button, no restart."),
+        new Entry("settings.extend.hotkeyListTitle",
+            "快捷键一览（下面是当前真正生效的键位；要改请到「快捷键」那一栏里画布那一组）",
+            "Shortcut list (below are the keys actually in effect right now; to change them, use the canvas group under the Hotkeys tab)"),
 
         // ===== 对话框与列表上那几个共用动词 =====
         // 与 settings.general.cancelUpdate 不是一句：那颗管的是"停掉正在跑的下载／替换"，这颗只是"不做了"。
