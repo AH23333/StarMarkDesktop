@@ -182,7 +182,9 @@ public sealed class SettingsTaxonomyGateTests
         Assert.DoesNotContain("ViewModel.CaptureEnabled", regular);
 
         var health = Between(xaml, "<TabViewItem x:Name=\"TabHealth\" Tag=\"health\"", "</TabViewItem>");
-        Assert.Contains("护眼 · 休息提醒", health);
+        // 批次 WI-2e 把这一栏的标记换了按键（屏幕上还是那句话），所以锚点从"那四个字"搬到"那颗键"：
+        // 改锚不改判——这张卡必须留在这一栏，这件事仍然由同一格钉着。
+        Assert.Contains("i18n:LocText.Key=\"settings.health.eyeRestTitle\"", health);
         Assert.Contains("ViewModel.EyeRestEnabled", health);
 
         var data = Between(xaml, "<TabViewItem x:Name=\"TabData\" Tag=\"data\"", "</TabViewItem>");

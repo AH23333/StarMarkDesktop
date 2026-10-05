@@ -75,6 +75,34 @@ public sealed class I18nContractTests : IDisposable
     }
 
     /// <summary>
+    /// 「快捷键」这一族的句子<b>不许点名任何组合键</b>（Ctrl／Alt／Win 那种）。
+    /// <para>这一栏的键位是用户可改的，而表里的句子是死的：抄进去的那一刻起，用户改一次键，
+    /// 那句话就变成假话（批次 VC 的裁决；「这几件事的按键」那一节之所以从绑定表现场渲染，同一个理由）。
+    /// 原先写在 <c>ResetHotkeys_Click</c> 里的那句确认就抄了一颗 <c>Ctrl + Alt + Space</c>，
+    /// 还把它说成"只保留这一颗"——出厂默认里其实还有截图／贴图／穿透／画布那一整批。</para>
+    /// <para>判据按<b>键的前缀</b>划射程，不是全表：搜索框那句里的 <c>Ctrl+Enter</c> 说的是本地固定按键、
+    /// 不随用户改全局热键而变化，不许被这一格误伤。录制说明里那句"按 Esc 结束／Backspace 清除"
+    /// 也不在禁列——那两颗是录制器自己的控制键，代码里没给它们留改的入口。</para>
+    /// </summary>
+    [Fact]
+    public void HotkeyFamilySentencesNeverNameAGesture()
+    {
+        var rows = UiStrings.All
+            .Where(e => e.Key.StartsWith("settings.hotkeys.", StringComparison.Ordinal))
+            .ToArray();
+        Assert.True(rows.Length >= 12,
+            $"这一族只剩 {rows.Length} 行（现场量过是 12）——整段被清空不是改措辞");
+        foreach (var entry in rows)
+        {
+            foreach (var text in new[] { entry.Zh, entry.En })
+            {
+                Assert.DoesNotMatch(@"\b(Ctrl|Alt|Win)\b", text);
+                Assert.DoesNotMatch(@"\bF[1-9]\b", text);
+            }
+        }
+    }
+
+    /// <summary>
     /// 同一行的两列必须用<b>同一组位置式占位符</b>（<c>{0}</c>／<c>{1}</c>…）。
     /// <para>换语序就得换编号：中文"还剩 {0} 条"翻成 "{1} items left" 那种配错，
     /// 界面上是一个看起来完全合法的数字挂错了句子（#234 那一族）。这条判据今天<b>没有输入</b>

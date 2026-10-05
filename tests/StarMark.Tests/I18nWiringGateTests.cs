@@ -26,6 +26,7 @@ public sealed class I18nWiringGateTests
     private const string SettingsXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
     private const string LocTextCs = "src/StarMark.UI/Helpers/LocText.cs";
     private const string SettingsI18nCs = "src/StarMark.UI/Views/SettingsPage.I18n.cs";
+    private const string SettingsHotkeysCs = "src/StarMark.UI/Views/SettingsPage.Hotkeys.cs";
     private const string GuideUiCs = "src/StarMark.UI/Helpers/GuideUi.cs";
     private const string AppCs = "src/StarMark.UI/App.xaml.cs";
 
@@ -169,36 +170,72 @@ public sealed class I18nWiringGateTests
             }
         }
         Assert.True(offenders.Count == 0, string.Join("\n", offenders));
-        // 现场读数（2026-10-04 数过：全应用 22 对开关标签，全住在设置页；本批进了常规页那 5 对）：
+        // 现场读数（2026-10-05 数过：全应用 22 对开关标签，全住在设置页；表里已进 7 对——常规页 5 对＋健康页 2 对）：
         // 只钉下界——往后的每一批要把它往上推。
-        Assert.True(Count(Markup(ReadRepoFile(SettingsXaml)), "i18n:LocText.OnContentKey=\"") >= 5,
-            "常规页那几颗开关的两侧标签要住在表里，不是写在 XAML 里");
+        Assert.True(Count(Markup(ReadRepoFile(SettingsXaml)), "i18n:LocText.OnContentKey=\"") >= 7,
+            "开关两侧的标签要住在表里，不是写在 XAML 里");
     }
 
     /// <summary>
-    /// 「常规」那一栏<b>自己那份标记</b>里一句中文都不许剩（批次 WI-2d 的收口判据）。
-    /// <para>判据分两头：① 这一栏内 <c>Text</c>／<c>Content</c>／<c>Header</c>／开关两侧／提示里不能再有汉字；
+    /// 已经铺过的四栏（常规／使用说明／快捷键／健康与诊断）<b>自己那份标记</b>里一句中文都不许剩
+    /// （批次 WI-2d 立的收口判据，批次 WI-2e 把射程从一栏推到四栏）。
+    /// <para>判据分两头：① 这四栏的 <c>Text</c>／<c>Content</c>／<c>Header</c>／开关两侧／提示里不能再有汉字；
     /// ② 整页剩余量只钉<b>上界</b>——下一批要把它往下推，往上加才是事故。把等号钉在剩余量上，
     /// 等于让每一批改完都得先来改一次判据，那正是"闸门替改动让路"的形状。</para>
-    /// <para>⚠ <b>这一格的射程止于标记</b>：同一屏上还有两行中文是<b>程序算出来</b>的（顶栏那颗索引状态、
-    /// 「关于与更新」里那行检查结果）——第一版覆盘照片拍到它们之后，名字就从"没有中文正文"改成了
-    /// "自己那份标记"。那两行要翻，得先把状态改成按键推（P-169 的一格），不是往这里再挂一颗键。</para>
+    /// <para>⚠ <b>这一格的射程止于标记</b>：同一屏上还有中文是<b>程序算出来或拼出来</b>的（顶栏那颗索引状态、
+    /// 「关于与更新」里那行检查结果、快捷键这一栏每一行的动作名与键位）——第一版覆盘照片拍到它们之后，
+    /// 名字就从"没有中文正文"改成了"自己那份标记"。那几处要翻，得先把状态改成按键推（P-169 的一格），
+    /// 不是往这里再挂一颗键（坑表 #276）。</para>
+    /// <para>⚠ 数的时候<b>跳过 <c>&lt;Run&gt;</c> 那一行</b>：那是"半个句子＋一个读数"的胶水，
+    /// 它有自己的登记格（下面那一颗证人），把它算进这一格就等于宣布它已经翻了。</para>
     /// </summary>
     [Fact]
-    public void TheGeneralTabsOwnMarkupHasNoChineseLeftAndTheRestOnlyShrinks()
+    public void TheFourKeyedTabsHoldNoChineseMarkupAndTheRestOnlyShrinks()
     {
         const string Attributes = @"(?:Text|Content|Header|OnContent|OffContent|ToolTip|PlaceholderText)=""([^""]*)""";
         var page = Markup(ReadRepoFile(SettingsXaml));
-        var general = Between(page, "<TabViewItem x:Name=\"TabGeneral\" Tag=\"general\"", "</TabViewItem>");
-        var left = Regex.Matches(general, Attributes).Cast<Match>()
-            .Select(m => m.Groups[1].Value)
-            .Where(v => Regex.IsMatch(v, @"[\u4e00-\u9fff]"))
-            .ToArray();
-        Assert.True(left.Length == 0, $"「常规」栏还剩 {left.Length} 句中文正文：\n{string.Join("\n", left)}");
+        foreach (var (name, tag) in new[]
+                 {
+                     ("TabGeneral", "general"), ("TabGuide", "guide"),
+                     ("TabHotkeys", "hotkeys"), ("TabHealth", "health"),
+                 })
+        {
+            var tab = Between(page, $"<TabViewItem x:Name=\"{name}\" Tag=\"{tag}\"", "</TabViewItem>");
+            var left = tab.Split('\n')
+                .Where(line => !line.Contains("<Run ", StringComparison.Ordinal))
+                .SelectMany(line => Regex.Matches(line, Attributes).Cast<Match>())
+                .Select(m => m.Groups[1].Value)
+                .Where(v => Regex.IsMatch(v, @"[\u4e00-\u9fff]"))
+                .ToArray();
+            Assert.True(left.Length == 0, $"「{name}」栏还剩 {left.Length} 句中文标记：\n{string.Join("\n", left)}");
+        }
 
         var whole = Regex.Matches(page, Attributes).Cast<Match>()
             .Count(m => Regex.IsMatch(m.Groups[1].Value, @"[\u4e00-\u9fff]"));
-        Assert.True(whole <= 199, $"整页中文正文从 199 涨到了 {whole}（这一族只许往下减）");
+        Assert.True(whole <= 169, $"整页中文正文从 169 涨到了 {whole}（这一族只许往下减）");
+    }
+
+    /// <summary>
+    /// 「健康与诊断」里那<b>五句挂在 <c>&lt;Run&gt;</c> 上的胶水</b>＝登记在案的缺口，一格数清、不许悄悄长大。
+    /// <para>它们不是漏翻，是<b>这一族还没有能用的机制</b>：每一句都是"半个句子＋一个程序算出来的读数"
+    /// 拼起来的（<c>语言 Top：{读数}</c>、<c>{因子}： -{扣分} 分（{明细}）</c>）。
+    /// <c>Locale.Fmt</c> 早就有位置式占位符，但 <c>LocText</c> 只会"按键重贴整句"——读数是另一颗绑定的属性，
+    /// 两者要一起翻就得先让那一行按语言重算。那一刀属于 P-169 的"组合句"那一族，不在标记这一族里。</para>
+    /// <para>钉子＝<b>逐字列出这五句</b>。将来谁把它们翻掉了，这一格会红，那是刻意的：
+    /// 翻掉的人要顺带来这里把清单改短，而不是让"缺口"这件事从闸门口径里消失。</para>
+    /// </summary>
+    [Fact]
+    public void TheHealthTabsComposedReadoutsAreTheOnlyChineseMarkupLeftInTheKeyedTabs()
+    {
+        var page = Markup(ReadRepoFile(SettingsXaml));
+        var health = Between(page, "<TabViewItem x:Name=\"TabHealth\" Tag=\"health\"", "</TabViewItem>");
+        var glue = health.Split('\n')
+            .Where(line => line.Contains("<Run ", StringComparison.Ordinal))
+            .SelectMany(line => Regex.Matches(line, @"Text=""([^""]*)""").Cast<Match>())
+            .Select(m => m.Groups[1].Value)
+            .Where(v => Regex.IsMatch(v, @"[\u4e00-\u9fff]"))
+            .ToArray();
+        Assert.Equal(new[] { " 分（", "语言 Top：", "独立域名：", "疑似重复 Top：", "标签 Top：" }, glue);
     }
 
     /// <summary>
@@ -434,5 +471,28 @@ public sealed class I18nWiringGateTests
         var switchPath = MethodBody(loc, "private static void PasteOntoNamedProperty");
         Assert.Contains("WarnUnwritableOnce(d, ", switchPath, StringComparison.Ordinal);
         Assert.Contains("没有 {propertyName}", loc, StringComparison.Ordinal);   // 说不出哪一颗属性贴不上＝白报
+    }
+
+    /// <summary>
+    /// 「恢复默认快捷键」那颗确认框的三句字全部<b>按键推</b>，方法体里一句字面量都不许留（批次 WI-2e）。
+    /// <para>它是坑表 #276 那一族在这一栏的落点：原先三句话写在代码里，其中一句还<b>抄了键位</b>
+    /// （"只保留默认的 Ctrl + Alt + Space（切换主界面）"）。抄键位＝用户改过键之后那句成假话；
+    /// 而"只保留一颗"本身就是错的——出厂默认里还有截图／贴图／穿透／画布那一整批，
+    /// 恢复默认还原的是<b>每一行</b>。现在两件事都由表里那一行说。</para>
+    /// <para>判据读的是<b>抹掉注释之后</b>的方法体：注释里写"原先那句抄了键位"是给人看的理由，
+    /// 不是第二条还在用的出口（<c>Code()</c> 那一族的口径）。</para>
+    /// </summary>
+    [Fact]
+    public void TheResetHotkeysConfirmPushesKeysInsteadOfNamingAGesture()
+    {
+        var body = MethodBody(Code(ReadRepoFile(SettingsHotkeysCs)), "private async void ResetHotkeys_Click");
+        Assert.Contains("Locale.T(\"settings.hotkeys.reset\")", body, StringComparison.Ordinal);
+        Assert.Contains("Locale.T(\"settings.hotkeys.resetConfirm\")", body, StringComparison.Ordinal);
+        Assert.Contains("Locale.T(\"dialog.cancel\")", body, StringComparison.Ordinal);
+        // 实参不许再是引号里的那句话（与"跳转实参不许是中文"同一形状）
+        Assert.DoesNotContain("primaryText: \"", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("cancelText: \"", body, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"""[^""\r\n]*[一-鿿]", body);
+        Assert.DoesNotContain("Ctrl", body, StringComparison.Ordinal);
     }
 }
