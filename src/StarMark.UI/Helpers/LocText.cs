@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -45,6 +46,21 @@ public static class LocText
     private static readonly List<Registration> Live = new();
     private static readonly HashSet<string> ReportedUnwritable = new(StringComparer.Ordinal);
 
+    /// <summary><see cref="KeyProperty"/> 那句正文的实参（配 <c>Locale.Fmt</c> 的位置式占位符）。
+    /// <para>为什么要有这一颗：状态行那一族的话是"半句固定的话＋一个当场算出来的读数"
+    /// （抓了多少条、哪几个源到期、还剩多少 MB）。没有这一颗时只有两条坏路：①把整句留在 code-behind
+    /// 里拼（换语言那一刻没人重贴＝那句永远中文，正是坑表 #276 那一族）；②把读数抄进句子（写死的数，
+    /// P-171 那一族）。</para>
+    /// <para><b>⛔ 这一颗不能做成依赖属性</b>（批次 WI-2l：它原本是第六颗附带属性
+    /// <c>RegisterAttached("Args", typeof(object[]))</c>）。WinUI 3 的依赖属性类型必须投得到 WinRT，
+    /// 而托管数组（SZARRAY）没有可调用包装——症状不是托管异常，是<b>启动即原生访问违例</b>
+    /// （coreclr.dll+0x2E5102，三档语言全崩，5474 格测试全绿；坑表 #316）。
+    /// 弱表按元素回收，语义与附带属性一致，且只此一处写、只此一处读。</para>
+    /// <para>只配 <see cref="KeyProperty"/> 用：<b>提示词、占位符与开关那两侧今天都不带读数</b>，
+    /// 给它们各配一份是五份可以各自漂移的实现，⛔ 等哪一条真带读数了再加。</para>
+    /// </summary>
+    private static readonly ConditionalWeakTable<DependencyObject, ArgsBox> ArgStore = new();
+
     static LocText()
     {
         // 只订阅一次，且回调里只做"重贴"这一件事：重建页面、重查数据都不属于这里。
@@ -76,14 +92,19 @@ public static class LocText
     public static readonly DependencyProperty OffContentKeyProperty = DependencyProperty.RegisterAttached(
         "OffContentKey", typeof(string), typeof(LocText), new PropertyMetadata(null, OnOffContentKeyChanged));
 
-    public static void SetKey(DependencyObject element, string value) => element.SetValue(KeyProperty, value);
+    public static void SetKey(DependencyObject element, string value)
+    {
+        // 不带读数的那一路也要过一次信箱：留着上一句的实参＝下一次换语言按旧读数填空。
+        RememberArgs(element, null);
+        element.SetValue(KeyProperty, value);
+    }
 
-    /// <summary>贴一句<b>带读数</b>的话（批次 WI-2k）：键先存进 <c>Key</c>，实参存进 <see cref="ArgsProperty"/>。</summary>
+    /// <summary>贴一句<b>带读数</b>的话（批次 WI-2k）：实参先进信箱，随后那颗键的回调才知道要填空。</summary>
     public static void SetKey(DependencyObject element, string value, params object?[] args)
     {
         // 顺序是有原因的：实参先落，随后那颗键的回调才知道自己要以"带读数"的方式贴；
         // 反过来先设键再设实参，第一次贴上去的就是没填空的句子（界面上是 {0}）。
-        element.SetValue(ArgsProperty, args);
+        RememberArgs(element, args);
         element.SetValue(KeyProperty, value);
     }
 
@@ -102,22 +123,6 @@ public static class LocText
         }
         SetKey(element, message.Key, message.Args ?? Array.Empty<object?>());
     }
-
-    /// <summary>
-    /// <see cref="KeyProperty"/> 那句正文的<b>实参</b>（配 <c>Locale.Fmt</c> 的位置式占位符）。
-    /// <para>为什么要有这一颗：状态行那一族的话是"半句固定的话＋一个当场算出来的读数"
-    /// （抓了多少条、哪几个源到期、还剩多少 MB）。没有这一颗时只有两条坏路：①把整句留在 code-behind
-    /// 里拼（换语言那一刻没人重贴＝那句永远中文，正是坑表 #276 那一族）；②把读数抄进句子（写死的数，
-    /// P-171 那一族）。健康栏那五行 <c>&lt;Run&gt;</c> 胶水卡的也是这一颗。</para>
-    /// <para>只配 <see cref="KeyProperty"/> 用：<b>提示词、占位符与开关那两侧今天都不带读数</b>，
-    /// 给它们各配一颗实参是五份可以各自漂移的实现，⛔ 等哪一条真带读数了再加。</para>
-    /// </summary>
-    public static readonly DependencyProperty ArgsProperty = DependencyProperty.RegisterAttached(
-        "Args", typeof(object[]), typeof(LocText), new PropertyMetadata(null, OnArgsChanged));
-
-    public static void SetArgs(DependencyObject element, params object?[] args) => element.SetValue(ArgsProperty, args);
-
-    public static object?[]? GetArgs(DependencyObject element) => element.GetValue(ArgsProperty) as object?[];
 
     public static string GetKey(DependencyObject element) => (string)element.GetValue(KeyProperty);
 
@@ -144,6 +149,7 @@ public static class LocText
         {
             // 键被清空＝这一处不再由表管（状态行回到"没有话要说"）。⚠ 必须把注册项一起摘掉：
             // 只把界面上的字清掉而留着注册项，下一次换语言会把**上一次那句**又贴回来。
+            RememberArgs(d, null);
             Drop(d, ResolveTextProperty(d));
             return;
         }
@@ -153,7 +159,7 @@ public static class LocText
             WarnUnwritableOnce(d, key, "找不到可写文字的属性");
             return;
         }
-        Paste(d, target, key!, ArgsOf(d));
+        Paste(d, target, key!, TakeArgs(d));
     }
 
     /// <summary>摘掉一处注册并清回空：状态行"没话了"与"换语言别把旧句子贴回来"必须是同一条路。</summary>
@@ -167,15 +173,15 @@ public static class LocText
         target.SetValue(property, string.Empty);
     }
 
-    /// <summary>实参换了（读数变了或换了语言之后重算）：按当前那颗键重贴一次，界面才不会被"上一次算出来的句子"钉住。</summary>
-    private static void OnArgsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    /// <summary>把那句正文的实参记到信箱里（<c>null</c>／空数组＝这一句不带读数，把旧的抹掉）。</summary>
+    private static void RememberArgs(DependencyObject element, object?[]? args)
     {
-        if (GetKey(d) is not { Length: > 0 } key) return;   // 没有键＝这颗实参还没有对象可贴
-        // 贴不上时不在这里再报一次：那处"找不到可写文字的属性"由 <see cref="OnKeyChanged"/> 出声，
-        // 一颗元素两句 Warn 只会把日志里真正那条挤掉（#236 那条节流口径）。
-        if (ResolveTextProperty(d) is not { } target) return;
-        Paste(d, target, key, e.NewValue as object?[]);
+        if (args is { Length: > 0 }) ArgStore.AddOrUpdate(element, new ArgsBox(args));
+        else ArgStore.Remove(element);
     }
+
+    private static object?[]? TakeArgs(DependencyObject element)
+        => ArgStore.TryGetValue(element, out var box) ? box.Value : null;
 
     /// <summary>取词＋填空的唯一一处：贴的时候与换语言重贴的时候走的是同一条路，⛔ 不许两份实现。</summary>
     private static void Paste(DependencyObject d, DependencyProperty target, string key, object?[]? args)
@@ -186,8 +192,6 @@ public static class LocText
 
     private static string Text(string key, object?[]? args)
         => args is { Length: > 0 } ? Locale.Fmt(key, args) : Locale.T(key);
-
-    private static object?[]? ArgsOf(DependencyObject d) => d.GetValue(ArgsProperty) as object?[];
 
     private static void OnToolTipKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
@@ -296,6 +300,14 @@ public static class LocText
             if (!ReportedUnwritable.Add(key + "|" + why)) return;
         }
         StarLog.Warn($"界面文案 {key} 贴不上：{target.GetType().Name} {why}（那一处会保持原样，不是漏翻）");
+    }
+
+    /// <summary>信箱的装法：<see cref="ConditionalWeakTable"/> 的值必须是引用类型，而数组本身当不了那颗"值壳"。</summary>
+    private sealed class ArgsBox
+    {
+        public ArgsBox(object?[]? value) => Value = value;
+
+        public object?[]? Value { get; }
     }
 
     private sealed class Registration

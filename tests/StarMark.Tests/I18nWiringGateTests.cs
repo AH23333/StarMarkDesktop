@@ -685,12 +685,69 @@ public sealed class I18nWiringGateTests
         var table = loc[loc.IndexOf("TextProperties =", StringComparison.Ordinal)..];
         Assert.DoesNotContain("\"PlaceholderText\"", table[..table.IndexOf("};", StringComparison.Ordinal)],
             StringComparison.Ordinal);
-        // 正文／提示／开关两侧各一条＝现场数过 5 颗（批次 WI-2d 给开关那两颗开的口），
-        // 批次 WI-2k 再加第六颗 `Args`：带读数的那句正文要能"按键＋实参当场重算"，否则状态行只能整句留在 code-behind 里拼（＝换语言不翻）。
+        // 正文／提示／开关两侧各一条＝现场数过 5 颗（批次 WI-2d 给开关那两颗开的口）。
         // 这条计数<b>不是</b>为了让改动便宜：它是"每颗附带属性都得有自己的取词路"的证人——
         // 少一颗就是有一类元素贴不上而日志里不出声。
-        Assert.Equal(6, Count(loc, "DependencyProperty.RegisterAttached"));
+        // ⚠ 批次 WI-2k 曾加出第六颗 `Args`（带读数的那句正文），批次 WI-2l 又把它摘回：
+        // 那颗的实参是托管数组，而 WinUI 3 的依赖属性类型必须投得到 WinRT——它换来的不是托管异常，
+        // 是<b>启动即原生访问违例</b>（下一格 <see cref="NoUiDependencyPropertyIsRegisteredAsAnArrayType"/>
+        // 与坑表 #316）。实参现在住在 <c>LocText</c> 的弱表信箱里，取词路仍然只有一条。
+        Assert.Equal(5, Count(loc, "DependencyProperty.RegisterAttached"));
         Assert.Contains("FindProperty(d, \"PlaceholderText\")", loc, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>UI 层每颗依赖属性的类型必须投得到 WinRT；注册成数组＝整扇窗口启动即崩</b>（批次 WI-2l）。
+    /// <para>真机读数（三档语言各一跑，全崩）：异常 <c>0xC0000005</c>，落在 <c>coreclr.dll+0x2E5102</c>，
+    /// 异常记录里的参数个数是 0，而属性变更回调<b>一次都没进去</b>（临时探针只打出 <c>cctor</c> 那一行）。
+    /// 单变量实验：把那颗 <c>RegisterAttached("Args", typeof(object[]))</c> 的类型换成 <c>typeof(string)</c>，
+    /// 同一版源码当场起得来（主窗 38 处文案全贴上）。<b>而 5474 格测试全绿</b>——UI 工程引用不进测试工程。</para>
+    /// <para>射程<b>只点名数组</b>：<c>IReadOnlyList&lt;TextSegment&gt;</c>（<c>HighlightHelper</c>）与
+    /// <c>IEnumerable&lt;string&gt;</c>（<c>TagEditor</c>）现场都活着——泛型接口投成 <c>IIterable&lt;T&gt;</c>，
+    /// 死的是托管数组（SZARRAY 没有可调用包装）。⛔ 不许顺手把泛型一起写进拒绝表，那是假话。</para>
+    /// </summary>
+    [Fact]
+    public void NoUiDependencyPropertyIsRegisteredAsAnArrayType()
+    {
+        const string Shape =
+            @"DependencyProperty\.Register(?:Attached)?\(\s*(?:nameof\([^)]*\)|""[^""]*"")\s*,\s*typeof\((?<type>[^)]*)\)";
+        var seen = 0;
+        foreach (var (path, text) in ReadRepoUnder("src/StarMark.UI"))
+        {
+            foreach (Match match in Regex.Matches(Code(text), Shape, RegexOptions.Singleline))
+            {
+                seen++;
+                var type = match.Groups["type"].Value;
+                Assert.False(type.EndsWith("[]", StringComparison.Ordinal),
+                    $"{path} 把依赖属性注册成数组类型 {type}：换语言那一刻不是翻不动，是启动即原生访问违例");
+            }
+        }
+        // 现场数到的注册点：LocText 5＋HighlightHelper 1＋WidgetTextScale 2＋TagEditor 2＋ItemCard 1＋
+        // SearchWidget 里那颗 WrapPanel 2＝13。这里是<b>下界</b>而不是精确值：写法一变（比如不再用
+        // typeof(...)）扫描面就瞎了，那一格要报"看不见了"，不许悄悄绿。
+        Assert.True(seen >= 13, $"依赖属性注册只数到 {seen} 颗（下界 13）——扫描面或写法变了，这一格现在是空的");
+    }
+
+    /// <summary>
+    /// <b>换语言之前先抹掉上一句的实参</b>（批次 WI-2l：实参从依赖属性搬进弱表信箱之后，这颗证人管的是搬家后的新形状）。
+    /// <para>信箱比那颗依赖属性多一个洞：<c>SetKey(element, value)</c> 那一趟（XAML 与"没话"那一路都走它）
+    /// 如果不清信箱，元素上<b>上一次带读数那句</b>的实参就一直躺着；下一次这颗元素挂上一颗带 <c>{0}</c> 的键时，
+    /// 填空填的是<b>上一个读数的旧值</b>——屏幕上是一句语法正确、数字过期的假话，比半中半英更难报障（#276／#277 同族）。</para>
+    /// <para>⛔ 这一格钉的是"清信箱这一行在两处都在"，不是钉方法名：摘掉任一处都会让屏幕读到过期读数，
+    /// 而测试工程引用不到 UI，只有这颗形状证人拦得住。</para>
+    /// </summary>
+    [Fact]
+    public void TheReadoutMailboxIsClearedBeforeAPlainKeyIsPasted()
+    {
+        var loc = ReadRepoFile(LocTextCs);
+        var setter = MethodBody(Code(loc), "public static void SetKey(DependencyObject element, string value)");
+        Assert.Contains("RememberArgs(element, null);", setter, StringComparison.Ordinal);
+        Assert.Contains("element.SetValue(KeyProperty, value);", setter, StringComparison.Ordinal);
+
+        var changed = MethodBody(Code(loc), "private static void OnKeyChanged");
+        Assert.Contains("RememberArgs(d, null);", changed, StringComparison.Ordinal);
+        // 实参只许有一个读者：搬回依赖属性＝把 WI-2l 那颗启动崩溃请回来（上一格也会同批红）
+        Assert.DoesNotContain("GetValue(ArgsProperty", Code(loc), StringComparison.Ordinal);
     }
 
     /// <summary>
