@@ -52,6 +52,8 @@ public sealed class I18nContractTests : IDisposable
             Assert.False(string.IsNullOrWhiteSpace(entry.Zh), $"{entry.Key} 的中文列是空的");
             Assert.False(string.IsNullOrWhiteSpace(entry.En), $"{entry.Key} 的英文列是空的");
             Assert.DoesNotMatch("[\\u3040-\\u30ff\\u3400-\\u4dbf\\uf900-\\ufaff\\u4e00-\\u9fff]", entry.En);
+        // 中文列反过来也不许夹假名（那说明那一行被写成了日文）——同一条形状，反方向也得成立。
+        Assert.DoesNotMatch("[\\u3040-\\u30ff]", entry.Zh);
         }
     }
 
@@ -65,7 +67,7 @@ public sealed class I18nContractTests : IDisposable
     {
         foreach (var entry in UiStrings.All)
         {
-            foreach (var text in new[] { entry.Zh, entry.En })
+            foreach (var text in new[] { entry.Zh, entry.En, entry.Ja })
             {
                 Assert.DoesNotContain("&gt;", text, StringComparison.Ordinal);
                 Assert.DoesNotContain("&lt;", text, StringComparison.Ordinal);
@@ -90,7 +92,7 @@ public sealed class I18nContractTests : IDisposable
         Assert.NotEmpty(UiStrings.All);   // 遍历活着的前提：不是拿空表读出"零违规"
         foreach (var entry in UiStrings.All)
         {
-            foreach (var (text, column) in new[] { (entry.Zh, "中文"), (entry.En, "英文") })
+            foreach (var (text, column) in new[] { (entry.Zh, "中文"), (entry.En, "英文"), (entry.Ja, "日文") })
             {
                 for (var i = 0; i < text.Length; i++)
                 {
@@ -123,7 +125,7 @@ public sealed class I18nContractTests : IDisposable
             $"这一族只剩 {rows.Length} 行（现场量过是 12）——整段被清空不是改措辞");
         foreach (var entry in rows)
         {
-            foreach (var text in new[] { entry.Zh, entry.En })
+            foreach (var text in new[] { entry.Zh, entry.En, entry.Ja })
             {
                 Assert.DoesNotMatch(@"\b(Ctrl|Alt|Win)\b", text);
                 Assert.DoesNotMatch(@"\bF[1-9]\b", text);
@@ -147,7 +149,7 @@ public sealed class I18nContractTests : IDisposable
     public void CanvasCopyNoLongerCountsItsOwnShortcuts()
     {
         var row = UiStrings.All.Single(e => e.Key == "settings.extend.canvasNote");
-        foreach (var (column, text) in new[] { ("中文", row.Zh), ("英文", row.En) })
+        foreach (var (column, text) in new[] { ("中文", row.Zh), ("英文", row.En), ("日文", row.Ja) })
         {
             Assert.DoesNotMatch(@"[一二三四五六七八九十两0-9]+\s*[条项个支]\s*(快捷键|热键)", text);
             Assert.DoesNotMatch(
@@ -157,20 +159,67 @@ public sealed class I18nContractTests : IDisposable
     }
 
     /// <summary>
-    /// 同一行的两列必须用<b>同一组位置式占位符</b>（<c>{0}</c>／<c>{1}</c>…）。
+    /// 同一行的<b>各列</b>必须用同一组位置式占位符（<c>{0}</c>／<c>{1}</c>…）；批次 WI-3 起是中英日三列。
     /// <para>换语序就得换编号：中文"还剩 {0} 条"翻成 "{1} items left" 那种配错，
     /// 界面上是一个看起来完全合法的数字挂错了句子（#234 那一族）。这条判据今天<b>没有输入</b>
     /// （现场量过：47 行里 0 行带占位符——带读数的句子还在 WI-2），它是句式哨兵而不是"跑过了什么"，
     /// 所以这里同时钉住"遍历确实在跑"，别让空遍历读成通过。</para>
     /// </summary>
     [Fact]
-    public void BothColumnsOfARowUseTheSamePlaceholderNumbers()
+    public void EveryColumnOfARowUsesTheSamePlaceholderNumbers()
     {
         Assert.NotEmpty(UiStrings.All);   // 抽取器活着的前提：遍历的对象不是空表
         foreach (var entry in UiStrings.All)
         {
             Assert.Equal(Slots(entry.Zh), Slots(entry.En));
+            Assert.Equal(Slots(entry.Zh), Slots(entry.Ja));
         }
+    }
+
+
+    /// <summary>
+    /// <b>日文那一列必须整列有字，而且不许是中文列的抄本</b>（批次 WI-3）。
+    /// <para>为什么不拿"必须含假名"当尺子（我先在这把尺子上摔过一次）：现场数过，表里有<b>二十多行正确的日文是纯汉字</b>
+    /// ——<c>非表示</c>／<c>設定</c>／<c>今日</c>／<c>追加</c>／<c>診断</c>，那正是日语的写法。
+    /// "必须含假名"会把它们一起判死，而它想拦的那件事（照抄中文）反倒照样看不见：抄过来的中文常常也没假名。</para>
+    /// <para>所以判据换成<b>逐字相等</b>：日文列与中文列一个字不差＝那行没翻。确有同形的例外
+    /// （<c>RSS</c>／<c>Star</c> 这类专有名词、「最近／条件／停止」这类两语同词、以及三行纯胶水 <c>{0}·{1}</c>）
+    /// 必须在这里<b>点名并写理由</b>。名单是<b>双向</b>的：不在名单里却相同＝红；在名单里但两列其实已经不同＝也红
+    /// （<b>过期的名单比没有名单更坏</b>，它会让下一批以为那一行还抄着中文）。</para>
+    /// <para>⛔ 不许为了变绿把整行摘进名单——那等于当场承认那一行没翻。</para>
+    /// </summary>
+    [Fact]
+    public void TheJapaneseColumnIsFullAndNotTheChineseColumnCopied()
+    {
+        Assert.NotEmpty(UiStrings.All);       // 空表读出来的"零违规"不算证据
+        foreach (var entry in UiStrings.All)
+            Assert.False(string.IsNullOrWhiteSpace(entry.Ja), $"{entry.Key} 的日文列是空的");
+
+        var reasons = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["nav.rss"] = "专有名词 RSS，两语同形",
+            ["source.starTip"] = "动作名 Star（GitHub 术语），两语同形",
+            ["sort.stars"] = "“Stars 数”两语同形",
+            ["sort.recent"] = "最近：日语也写「最近」",
+            ["kind.conditions"] = "条件：日语也写「条件」",
+            ["settings.ai.stop"] = "停止：日语也写「停止」",
+            ["trending.daily"] = "今日：日语也写「今日」",
+            ["trending.statusViaAge"] = "纯胶水行「{0}·{1}」，没有词可翻",
+            ["trending.statusNotice"] = "纯胶水行「{0}｜{1}」，没有词可翻",
+            ["rss.statusJoin"] = "纯胶水行「{0}{1}」，没有词可翻",
+        };
+
+        var actual = UiStrings.All
+            .Where(e => string.Equals(e.Zh, e.Ja, StringComparison.Ordinal))
+            .Select(e => e.Key)
+            .OrderBy(k => k, StringComparer.Ordinal)
+            .ToArray();
+        var listed = reasons.Keys.OrderBy(k => k, StringComparer.Ordinal).ToArray();
+
+        // 两份名单必须逐字相等：多一颗＝有人抄中文，少一颗＝有人删了那行而名单没跟着改。
+        Assert.Equal(listed, actual);
+        foreach (var key in actual)
+            Assert.True(reasons.ContainsKey(key), $"{key} 两列相同却没写理由");
     }
 
     /// <summary>取一行里的占位符编号，去重后按数字序。<b>返回数组而不是集合</b>：
@@ -198,7 +247,8 @@ public sealed class I18nContractTests : IDisposable
 
     // ===== 认代码与挑语言 =====
 
-    /// <summary>只认表里那两串；<b>认不得的一律 null，不做"像中文就给中文"的就近猜测</b>。
+    /// <summary>只认 <see cref="AppLanguages"/> 里那几串（zh／en／ja）；
+    /// <b>认不得的一律 null，不做"像日文就先给中文"的就近猜测</b>。
     /// <para>手改设置档、或旧版本写过别的写法，被猜成一门语言的表现是"我明明写了 en 他偏给我中文"，
     /// 而那件事在界面上没有任何一条线索能看出来。</para></summary>
     [Theory]
@@ -206,10 +256,12 @@ public sealed class I18nContractTests : IDisposable
     [InlineData("en", AppLanguage.English)]
     [InlineData("  EN ", AppLanguage.English)]
     [InlineData("zh-CN", null)]          // 带子标签的写法不是这一层的事（见 PickFrom）
-    [InlineData("ja", null)]
+    [InlineData("ja", AppLanguage.Japanese)]
+    [InlineData(" JA ", AppLanguage.Japanese)]
+    [InlineData("jpx", null)]            // 认不得的那串仍然是"没表态"，⛔ 不许就近猜
     [InlineData("", null)]
     [InlineData(null, null)]
-    public void OnlyTheTwoCodesAreRecognisedAndEverythingElseIsNoStatement(string? code, AppLanguage? expected)
+    public void OnlyTheListedCodesAreRecognisedAndEverythingElseIsNoStatement(string? code, AppLanguage? expected)
         => Assert.Equal(expected, AppLanguages.FromCode(code));
 
     /// <summary>语言代码<b>存进设置档的必须是代码本身</b>，不能是序号：
@@ -217,7 +269,7 @@ public sealed class I18nContractTests : IDisposable
     [Fact]
     public void CodesRoundTripThroughTheEnumAndAreNotOrdinals()
     {
-        foreach (var language in new[] { AppLanguage.Chinese, AppLanguage.English })
+        foreach (var language in new[] { AppLanguage.Chinese, AppLanguage.English, AppLanguage.Japanese })
         {
             var code = AppLanguages.CodeOf(language);
             Assert.Equal(language, AppLanguages.FromCode(code));
@@ -228,11 +280,13 @@ public sealed class I18nContractTests : IDisposable
     }
 
     /// <summary>系统的语言列表是<b>优先级表</b>：按顺序取第一个认得的，而不是只看第一条。
-    /// <para>"日文为主、英文为二"的用户在没有日文时应拿到英文；只看第一条就等于替他决定了他看不懂英文。</para></summary>
+    /// <para>"德文为主、英文为二"的用户拿不到德文界面时应落到英文；只看第一条就等于替他决定了他看不懂英文。
+    /// 批次 WI-3 起 <c>ja-JP</c> 本身是认得的，所以那一例仍然留着，只是它不再演示"跳过"。</para></summary>
     [Fact]
     public void SystemTagsArePickedInOrderAndUnknownTagsAreSkippedNotGuessed()
     {
-        Assert.Equal(AppLanguage.English, AppLanguages.PickFrom(new[] { "ja-JP", "en-GB" }));
+        Assert.Equal(AppLanguage.Japanese, AppLanguages.PickFrom(new[] { "ja-JP", "en-GB" }));
+        Assert.Equal(AppLanguage.English, AppLanguages.PickFrom(new[] { "de-DE", "en-GB" }));
         Assert.Equal(AppLanguage.Chinese, AppLanguages.PickFrom(new[] { "zh-Hans-CN" }));
         Assert.Equal(AppLanguage.Chinese, AppLanguages.PickFrom(new[] { "  ", "ZH-hant-tw" }));
         Assert.Null(AppLanguages.PickFrom(new[] { "de-DE", "fr-FR" }));
@@ -264,6 +318,8 @@ public sealed class I18nContractTests : IDisposable
             var chineseUi = AppLanguages.Pickable.Select(AppLanguages.SelfName).ToArray();
             Locale.TrySet(AppLanguage.English);
             Assert.Equal(chineseUi, AppLanguages.Pickable.Select(AppLanguages.SelfName).ToArray());
+            // 现场读数：选项三颗，其中「日本語」必须原样在那一列里（翻成 Japanese 就没人认得自己了）
+            Assert.Contains("日本語", chineseUi);
         }
         finally
         {
@@ -323,19 +379,26 @@ public sealed class I18nContractTests : IDisposable
         }
     }
 
-    /// <summary>同一句界面文案在两列里都取得到，而且<b>换语言当场就换词</b>（不需要重建元素）。</summary>
+    /// <summary>同一句界面文案在<b>每一列</b>里都取得到，而且<b>换语言当场就换词</b>（不需要重建元素）。</summary>
     [Fact]
-    public void TheSameKeyAnswersInBothLanguagesAndChangesAtOnce()
+    public void TheSameKeyAnswersInEveryLanguageAndChangesAtOnce()
     {
         var before = Locale.Current;
         try
         {
+            foreach (var language in AppLanguages.Pickable)
+            {
+                Locale.TrySet(language);
+                // ⛔ 这里不能给 Assert.Equal 传第三颗"消息"参数：xunit 会把三参重载解析到
+                // IAsyncEnumerable／IEqualityComparer 那一族上，报出来的是一句看不懂的类型错。
+                Assert.Equal(TextOf(language, "nav.tree"), Locale.T("nav.tree"));
+            }
+
             Locale.TrySet(AppLanguage.Chinese);
             var zh = Locale.T("nav.tree");
-            Locale.TrySet(AppLanguage.English);
-            Assert.Equal(TextOf(AppLanguage.Chinese, "nav.tree"), zh);
-            Assert.Equal(TextOf(AppLanguage.English, "nav.tree"), Locale.T("nav.tree"));
+            Locale.TrySet(AppLanguage.Japanese);
             Assert.NotEqual(zh, Locale.T("nav.tree"));
+            Assert.Equal(TextOf(AppLanguage.Japanese, "nav.tree"), Locale.T("nav.tree"));
         }
         finally
         {
@@ -361,7 +424,7 @@ public sealed class I18nContractTests : IDisposable
     /// （这一族在 <c>DisplayDateFormatGateTests</c>／批次 RZ 已经定死：读数不许跟着界面语言变小数点）。
     /// <para><b>覆盖面登记</b>：表里<b>已经</b>有带占位符的行（批次 WI-2j／WI-2k 起，如 trending.emptyNoMatch
     /// 与 time.minutesAgo），所以这一格钉的是"多给的实参不炸、没有占位符时原样返回"；
-    /// 配错号那一头由 <see cref="BothColumnsOfARowUseTheSamePlaceholderNumbers"/> 逐行比对钉住。</para></summary>
+    /// 配错号那一头由 <see cref="EveryColumnOfARowUsesTheSamePlaceholderNumbers"/> 逐行比对钉住。</para></summary>
     [Fact]
     public void FormattingAnEntryWithoutSlotsReturnsItUnchanged()
     {
@@ -387,5 +450,9 @@ public sealed class I18nContractTests : IDisposable
 
         Locale.TrySet(AppLanguage.English);
         Assert.Equal("Source: GitHub trending page · 10 minutes ago in cache", composed.Render());
+
+        // 批次 WI-3：同一颗对象第三次阅读必须换第三种语言——嵌套的那半没有第二份主人
+        Locale.TrySet(AppLanguage.Japanese);
+        Assert.Equal("出所：GitHub 熱榜ページ·10 分前キャッシュ済み", composed.Render());
     }
 }

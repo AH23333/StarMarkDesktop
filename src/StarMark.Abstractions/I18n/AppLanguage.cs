@@ -7,44 +7,52 @@ using System.Linq;
 namespace StarMark.Abstractions.I18n;
 
 /// <summary>
-/// 界面语言。<b>这一版只有两格是有意的</b>：表里没有那一语言的整列，就不该出现在选项里——
+/// 界面语言。<b>能选的那几格由表决定</b>：表里没有那一语言的整列，就不该出现在选项里——
 /// 给用户一颗选了之后仍然满屏中文的「日本語」，等于用界面暗示一件还没做到的事。
+/// <para>批次 WI-3 补齐了日文整列（351 行逐行有 Ja），所以这一格多了 <see cref="Japanese"/>；
+/// 顺序即 <see cref="AppLanguages.Pickable"/> 的列序，新增一格而表里没那一列时会当场编不过
+/// （<c>Entry</c> 的四个参数都是必填）。</para>
 /// </summary>
 public enum AppLanguage
 {
     Chinese,
     English,
+    Japanese,
 }
 
 /// <summary>
-/// 语言代码的认与不认。<b>三个入口都只认得死的两串</b>：认不得的一律回 <c>null</c>，
+/// 语言代码的认与不认。<b>三个入口都只认得那几串死的</b>：认不得的一律回 <c>null</c>，
 /// 由调用方决定回落哪一档——"像日文就先给中文"这种就近猜测会让用户找不到自己那一项。
 /// </summary>
 public static class AppLanguages
 {
     public const string ChineseCode = "zh";
     public const string EnglishCode = "en";
+    public const string JapaneseCode = "ja";
 
     /// <summary>语言默认档：这台机器上没有任何认得的信号时用哪一版（＝这份文案的作者语言）。</summary>
     public const AppLanguage Default = AppLanguage.Chinese;
 
     /// <summary>能选的语言（设置页那一颗下拉就按这个顺序列）。新语言要进这一列，表里必须先有整行。</summary>
-    public static IReadOnlyList<AppLanguage> Pickable { get; } = new[] { AppLanguage.Chinese, AppLanguage.English };
+    public static IReadOnlyList<AppLanguage> Pickable { get; } =
+        new[] { AppLanguage.Chinese, AppLanguage.English, AppLanguage.Japanese };
 
     public static string CodeOf(AppLanguage language) => language switch
     {
         AppLanguage.Chinese => ChineseCode,
         AppLanguage.English => EnglishCode,
+        AppLanguage.Japanese => JapaneseCode,
         _ => throw new ArgumentOutOfRangeException(nameof(language), language, "新增一格而这里没配，就该红在这里"),
     };
 
-    /// <summary>设置档里那串代码：只认 <c>zh</c>／<c>en</c>（大小写与首尾空白不敏感），其余 <c>null</c>。
+    /// <summary>设置档里那串代码：只认 <c>zh</c>／<c>en</c>／<c>ja</c>（大小写与首尾空白不敏感），其余 <c>null</c>。
     /// <c>null</c> 的含义是"这位用户从没表过态"，不是"给他一个近的"。</summary>
     public static AppLanguage? FromCode(string? code)
         => code?.Trim().ToLowerInvariant() switch
         {
             ChineseCode => AppLanguage.Chinese,
             EnglishCode => AppLanguage.English,
+            JapaneseCode => AppLanguage.Japanese,
             _ => null,
         };
 
@@ -92,6 +100,7 @@ public static class AppLanguages
     {
         AppLanguage.Chinese => "简体中文",
         AppLanguage.English => "English",
+        AppLanguage.Japanese => "日本語",
         _ => throw new ArgumentOutOfRangeException(nameof(language)),
     };
 }

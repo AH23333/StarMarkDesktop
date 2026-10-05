@@ -448,7 +448,7 @@ public sealed class I18nWiringGateTests
     public void ShippedUiTextNeverPromisesAFutureBatch()
     {
         var offenders = (from e in UiStrings.All
-                         from side in new[] { ("中文列", e.Zh), ("英文列", e.En) }
+                         from side in new[] { ("中文列", e.Zh), ("英文列", e.En), ("日文列", e.Ja) }
                          where Regex.IsMatch(side.Item2,
                              @"下一批|下一个版本|下批|后续版本|未来的版本|即将|待实现|暂未|尚未提供"
                              + @"|后面一批|后面再|下一版|以后会|之后会|将来会"
