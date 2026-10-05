@@ -87,20 +87,13 @@
 
         <!-- 工具栏 -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="16,6,16,2" Spacing="8" VerticalAlignment="Center">
+            <!-- 排序档位：措辞住在表里，身份（recent／starred／…）住在 SortOptions 那一份清单里。
+                 ⛔ 不在这里列 <ComboBoxItem>：闭着的那一格显示的是选中那一刻从 Content 抄走的快照，
+                 换语言时它不会跟着改口（批次 WI-2c 治的就是这一处）。 -->
             <ComboBox x:Name="SortCombo" MinWidth="90" SelectedIndex="0"
-                      SelectionChanged="SortCombo_SelectionChanged">
-                <ComboBoxItem i18n:LocText.Key="sort.recent" Tag="recent"/>
-                <!-- 措辞即判据（P-6）：这一档排的是「仓库最后一次 git push」——
-                     `GitHubSource.MapToItem` 把 `StarredAt` 填成 `repo.PushedAt`，
-                     而 GitHub 要换 `Accept: …star+json` 才拿得到真正的"我点 Star 的时间"。
-                     原来那句"最近 Star"对老仓库被新近 Star 的情形是假话（它排在很后面）。
-                     Tag 仍是 `starred`：那是数据层的排序键，被 `ItemRepositoryTests` 钉着，不动。 -->
-                <ComboBoxItem i18n:LocText.Key="sort.starred" Tag="starred"
-                              i18n:LocText.ToolTipKey="sort.starredTip"/>
-                <ComboBoxItem i18n:LocText.Key="sort.collected" Tag="collected"/>
-                <ComboBoxItem i18n:LocText.Key="sort.stars" Tag="stars"/>
-                <ComboBoxItem i18n:LocText.Key="sort.name" Tag="name"/>
-            </ComboBox>
+                      SelectionChanged="SortCombo_SelectionChanged"
+                      ItemsSource="{x:Bind SortOptions, Mode=OneTime}"
+                      ItemTemplate="{StaticResource LocOptionTemplate}"/>
 
             <!-- 来源分段控件（唯一一处，全局生效） -->
             <Border x:Name="SourceGroup"

@@ -24,6 +24,9 @@ public sealed class I18nWiringGateTests
 {
     private const string MainWindowXaml = "src/StarMark.UI/MainWindow.xaml";
     private const string SettingsXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
+    private const string SettingsOptionsCs = "src/StarMark.UI/Views/SettingsPage.Options.cs";
+    private const string MainWindowSearchCs = "src/StarMark.UI/MainWindow.Search.cs";
+    private const string ThemeXaml = "src/StarMark.UI/Themes/StarMarkTheme.xaml";
     private const string LocTextCs = "src/StarMark.UI/Helpers/LocText.cs";
     private const string SettingsI18nCs = "src/StarMark.UI/Views/SettingsPage.I18n.cs";
     private const string SettingsHotkeysCs = "src/StarMark.UI/Views/SettingsPage.Hotkeys.cs";
@@ -47,17 +50,31 @@ public sealed class I18nWiringGateTests
     private static string Markup(string xaml)
         => Regex.Replace(xaml, "<!--.*?-->", string.Empty, RegexOptions.Singleline);
 
-    /// <summary>UI 里被问到的所有键（三种附带属性＋代码里 <c>Locale.T</c>／<c>Fmt</c> 的字面量实参）。</summary>
+    /// <summary>
+    /// UI 里被问到的所有键（三种附带属性＋代码里 <c>Locale.T</c>／<c>Fmt</c> 的字面量实参
+    /// ＋<b>下拉数据项清单里的那几颗</b>）。
+    /// <para>最后一条臂是批次 WI-2c 补的：选项从标记搬进 <c>LocOption.T("…")</c> 之后，
+    /// "只看 XAML 与 <c>Locale.T</c>"的那两臂就<b>问不到它们了</b>——拼错一颗键名照样编译、照样跑，
+    /// 屏幕上是一串 <c>⟨settings.general.themeLigt⟩</c>。⛔ 提示一律按 <c>tipKey:</c> 具名实参认：
+    /// <c>LocOption.T</c> 的第 2 位是身份串（<c>"starred"</c>），按位置认键会把身份当键去查表。</para>
+    /// <para>XAML 那一臂<b>只认字面量</b>（<c>(?!{)</c>）：共用模板上那颗 <c>Key="{Binding Key}"</c>
+    /// 的取值住在数据项里，把它当一颗键去查表，红的是一句假话。</para>
+    /// </summary>
     private static IEnumerable<(string Where, string Key)> AskedKeys()
     {
         foreach (var (path, text) in XamlUnder("src/StarMark.UI"))
         {
-            foreach (Match m in Regex.Matches(Markup(text), @"i18n:LocText\.\w*Key=""([^""]+)"""))
+            foreach (Match m in Regex.Matches(Markup(text), @"i18n:LocText\.\w*Key=""(?!{)([^""]+)"""))
                 yield return (path, m.Groups[1].Value);
         }
         foreach (var (path, text) in ReadRepoUnder("src/StarMark.UI"))
         {
-            foreach (Match m in Regex.Matches(Code(text), @"Locale\.(?:T|Fmt)\(""([^""]+)"""))
+            var code = Code(text);
+            foreach (Match m in Regex.Matches(code, @"Locale\.(?:T|Fmt)\(""([^""]+)"""))
+                yield return (path, m.Groups[1].Value);
+            foreach (Match m in Regex.Matches(code, @"LocOption\.T\(\s*""([^""]+)"""))
+                yield return (path, m.Groups[1].Value);
+            foreach (Match m in Regex.Matches(code, @"tipKey:\s*""([^""]+)"""))
                 yield return (path, m.Groups[1].Value);
         }
     }
@@ -182,18 +199,115 @@ public sealed class I18nWiringGateTests
     /// <c>settings.general.material.*</c>，⛔ 不许为组件再造六行同名文案。
     /// <para>症状形状：同一句字两个出处之后，改一漏一——换语言时主窗口翻了、组件那一栏没翻，
     /// 而两栏的<b>中文</b>看起来都还在（因为键不同、对账的两颗闸门各看各的）。</para>
+    /// <para><b>批次 WI-2c 把这六行从标记搬进了 <c>MaterialOptions</c></b>（闭着的那格要跟着语言走，
+    /// 只有"数据项＋模板"这一条路），所以这一格的读点从"两颗 <c>&lt;ComboBoxItem&gt;</c> 之间的标记"
+    /// 改成了"那份清单本身＋两颗下拉确实都指向它"。<b>判据守的那件事没变</b>，变的是它读的那份文件——
+    /// 这正是坑表 #286 那一族：锚点只认旧形状时，改对了反而会红。</para>
     /// </summary>
     [Fact]
     public void TheWidgetMaterialListIsNotASecondCopy()
     {
-        var page = Markup(ReadRepoFile(SettingsXaml));
-        var block = Between(page, "i18n:LocText.Key=\"settings.widgets.materialLabel\"", "</ComboBox>");
+        var options = Code(ReadRepoFile(SettingsOptionsCs));
+        var block = Between(options, "IReadOnlyList<LocOption> MaterialOptions", "];");
         var asked = Regex.Matches(block, @"settings\.[a-z]+\.material\.\w+").Cast<Match>()
             .Select(m => m.Value).ToArray();
 
         Assert.Equal(6, asked.Length);
         Assert.All(asked, k => Assert.StartsWith("settings.general.material.", k, StringComparison.Ordinal));
-        Assert.DoesNotContain("settings.widgets.material.", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("settings.widgets.material.", options, StringComparison.Ordinal);
+
+        // 两颗下拉都得指向这一份清单——只有一份清单、却有人自带列表，就等于回到两个出处。
+        var page = Markup(ReadRepoFile(SettingsXaml));
+        Assert.Equal(2, Count(page, "ItemsSource=\"{x:Bind MaterialOptions, Mode=OneTime}\""));
+    }
+
+    /// <summary>
+    /// 下拉里的项数<b>与枚举的成员数必须是同一个数</b>（材质三档／性能三档那两处的"档位表只能有一份"）。
+    /// <para>为什么不是写死 6 与 3：写死的数本身就是第二个出处——加一档材质改了枚举没改清单，
+    /// 屏幕上就少一格、而设置档里那颗 5 会安静地指到不存在的东西上（坑表 #291：同一个数有两个出处
+    /// 比没有出处更坏）。这一格从<b>类型现场</b>抓数再对账，⛔ 不把那个数抄进判据。</para>
+    /// </summary>
+    [Fact]
+    public void TheMaterialOptionListHasOneRowPerBackdropKind()
+        => AssertOneRowPerEnumMember("MaterialOptions", typeof(StarMark.Abstractions.WidgetBackdropKind));
+
+    [Fact]
+    public void ThePerformanceOptionListHasOneRowPerMode()
+        => AssertOneRowPerEnumMember("PerformanceOptions", typeof(StarMark.Core.Performance.PerformanceMode));
+
+    private static void AssertOneRowPerEnumMember(string list, Type enumType)
+    {
+        var block = Between(Code(ReadRepoFile(SettingsOptionsCs)), $"IReadOnlyList<LocOption> {list}", "];");
+        var rows = Regex.Matches(block, @"LocOption\.T\(""[^""\s]+""").Count;
+        Assert.Equal(Enum.GetNames(enumType).Length, rows);
+    }
+
+    /// <summary>
+    /// <b>选项不再躺在标记里</b>：本批扫过的两份标记里不许再有一颗 <c>&lt;ComboBoxItem&gt;</c>，
+    /// 而凡是指定了 <c>ItemsSource</c> 的下拉<b>必须同时</b>指定那颗共用的 <c>ItemTemplate</c>。
+    /// <para>合取的另一半才是这一格的存在理由：只挂 <c>ItemsSource</c> 不挂模板，WinUI 会去
+    /// <c>ToString()</c> 那颗数据项——屏幕上是一整排 <c>LocOption { Key = settings…, … }</c>。
+    /// 编译过、测试全绿、启动不抛，只有眼睛看得见（坑表 #180 同族）。</para>
+    /// <para><b>射程说清楚</b>：这一格只管设置页与主窗这两份标记。热榜那颗「今日／本周／本月」
+    /// （<c>TrendingPage.xaml</c>）与搜索组件那三档（<c>SearchWidget.xaml</c>）今天还是
+    /// <c>&lt;ComboBoxItem Content="中文"&gt;</c>，它们的表行还没建，归后面一批（P-169）。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(MainWindowXaml)]
+    [InlineData(SettingsXaml)]
+    public void DropdownOptionsLiveInCodeNotInTheMarkup(string relativePath)
+    {
+        var page = Markup(ReadRepoFile(relativePath));
+        Assert.DoesNotContain("<ComboBoxItem", page, StringComparison.Ordinal);
+        var withItems = Regex.Matches(page, @"<ComboBox\b[^>]*ItemsSource=""\{x:Bind (\w+), Mode=OneTime\}""[^>]*>",
+            RegexOptions.Singleline).Cast<Match>().ToList();
+        Assert.True(withItems.Count >= 1,
+            $"{relativePath} 认不出任何一颗按清单填的下拉——抽取器没跑对，这一格就守不住");
+        foreach (var box in withItems)
+        {
+            Assert.Contains("ItemTemplate=\"{StaticResource LocOptionTemplate}\"", box.Value, StringComparison.Ordinal);
+            Assert.DoesNotContain("</ComboBox>", box.Value, StringComparison.Ordinal);   // 自封闭＝项不在标记里
+        }
+    }
+
+    /// <summary>
+    /// 那颗共用模板<b>必须按绑定贴词</b>——整套机制只有这一处落地，它一丢，所有下拉一起退回旧行为，
+    /// 而 XAML 与清单的形状看起来都还"对"。
+    /// </summary>
+    [Fact]
+    public void TheSharedOptionTemplatePastesByBinding()
+    {
+        var theme = Markup(ReadRepoFile(ThemeXaml));
+        var template = Between(theme, "<DataTemplate x:Key=\"LocOptionTemplate\">", "</DataTemplate>");
+        Assert.Contains("i18n:LocText.Key=\"{Binding Key}\"", template, StringComparison.Ordinal);
+        Assert.Contains("i18n:LocText.ToolTipKey=\"{Binding TipKey}\"", template, StringComparison.Ordinal);
+        // 正文那颗属性只许由 LocText 写：绑定与重贴同指一处时，赢的是重贴（本地值压过绑定），
+        // 但那份绑定就是"没人挂键时显示什么"的出口（语言自名），⛔ 不许顺手删掉。
+        Assert.Contains("Text=\"{Binding Text}\"", template, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 排序档那五颗<b>身份</b>必须逐个是数据层真认得的键。
+    /// <para>坏法：改个名（<c>starred</c>→<c>pushed</c>）只改了 UI 那一侧，SQL 的 switch 落入
+    /// <c>default</c>＝"最近更新"——屏幕上的档名与实际的排序顺序就此分岔，而两边都不报错。
+    /// 所以这一格从 <c>ItemRepository</c> <b>现场抓出它认得的那几个词</b>再对账（与
+    /// <c>GitHubTruthInLabelingGateTests</c> 同一个道理的两端：档名要说出真正按什么排）。</para>
+    /// </summary>
+    [Fact]
+    public void EverySortOptionValueIsAKeyTheRepositoryActuallySortsBy()
+    {
+        var repo = Code(ReadRepoFile("src/StarMark.Data/ItemRepository.Items.cs"));
+        var arms = Between(repo, "filter.Sort switch", "};");
+        var known = Regex.Matches(arms, @"""(\w+)""(?: or _)? =>").Cast<Match>()
+            .Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+        Assert.True(known.Count >= 4, $"从浏览那条 switch 只认出 {known.Count} 个排序键，抽取器没跑对");
+
+        var options = Between(Code(ReadRepoFile(MainWindowSearchCs)), "IReadOnlyList<LocOption> SortOptions", "];");
+        var values = Regex.Matches(options, @"LocOption\.T\(""[^""\s]+"",\s*""(\w+)""").Cast<Match>()
+            .Select(m => m.Groups[1].Value).ToList();
+        Assert.Equal(5, values.Count);
+        Assert.All(values, v => Assert.True(known.Contains(v), $"排序档 {v} 数据层不认，它会静默落入默认档"));
+        Assert.Equal(values.Count, values.Distinct(StringComparer.Ordinal).Count());
     }
 
     /// <summary>
@@ -264,7 +378,10 @@ public sealed class I18nWiringGateTests
     /// <para>判据按<b>句式</b>写（中文那几种说法＋英文那几种对译），⛔ 不是只钉今天这一句：
     /// 换个措辞（"下个版本见"／"coming soon"）也在这条射程里——台架按中英两种措辞各咬一次（J1／J2）。
     /// ⚠ 这一格管的是<b>承诺</b>，不管状态读数：<c>settings.ai.notTested</c>「还没测过。」说的是
-    /// "此刻还没"，不是"以后才有"，所以那些词刻意不在清单里（把它们钉进去会把闸门拗成背字符串）。</para>
+    /// "此刻还没"，不是"以后才有"，所以那些词刻意不在清单里（把它们钉进去会把闸门拗成背字符串）。
+    /// <para>批次 WI-2c 又删掉两句这种承诺（中文那句"那是后面一批的事"、英文那句 "a later pass"），
+    /// 而<b>这两种措辞当时都不在词表里</b>——旧射程只认"下一批／in a later release"。
+    /// 所以删话的同一批要把词表补宽：只改界面不改闸门，下一次换个词再写一遍承诺照样绿。</para></para>
     /// </summary>
     [Fact]
     public void ShippedUiTextNeverPromisesAFutureBatch()
@@ -273,8 +390,10 @@ public sealed class I18nWiringGateTests
                          from side in new[] { ("中文列", e.Zh), ("英文列", e.En) }
                          where Regex.IsMatch(side.Item2,
                              @"下一批|下一个版本|下批|后续版本|未来的版本|即将|待实现|暂未|尚未提供"
+                             + @"|后面一批|后面再|下一版|以后会|之后会|将来会"
                              + @"|arrives? with the next|in a (?:later|future) (?:release|batch)|coming soon"
-                             + @"|not (?:yet )?implemented|planned for",
+                             + @"|not (?:yet )?implemented|planned for"
+                             + @"|(?:later|following|next) (?:pass|batch|round)",
                              RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)
                          select $"{e.Key}（{side.Item1}）").ToList();
 
@@ -352,9 +471,12 @@ public sealed class I18nWiringGateTests
 
     /// <summary>
     /// 第一里程碑<b>铺到哪一行、故意留在哪一行</b>，都要当场看得见。
-    /// <para>三个数字是现场量出来的（主窗：正文键 31／提示键 9／占位符键 2）。把它们钉住不是为了一次改文案
-    /// 就要来改判据，而是因为"覆盖面"这件事本身只有数字能证——<c>settings.languageNote</c> 那句
-    /// "这一版只覆盖主界面骨架"是产品对用户的承诺，它得有一个对应的数。</para>
+    /// <para>三个数字是现场量出来的（主窗标记：正文键 26／提示键 8／占位符键 2；批次 WI-2c 之前是
+    /// 31／9／2，少掉的那 5＋1 颗是排序档——选项改成"数据项＋模板"之后它们住在
+    /// <c>MainWindow.Search.cs</c> 的 <c>SortOptions</c> 里，所以这一格同批补了一条<b>配对账</b>：
+    /// 标记里少的颗数必须等于代码里多的颗数，⛔ 不许"搬着搬着少了一颗"。
+    /// 把它们钉住不是为了一次改文案就要来改判据，而是因为"覆盖面"这件事本身只有数字能证——
+    /// <c>settings.languageNote</c> 那句"这一版只覆盖主界面骨架"是产品对用户的承诺，它得有一个对应的数。）</para>
     /// <para>剩下那一颗 <c>Text="索引就绪"</c> 是<b>登记在案的缺口</b>（不是漏翻）：那颗状态是代码在写的
     /// （同步中／取消中／失败都往同一颗 <c>TextBlock</c> 上推），给它挂键的后果不是"少翻一句"，
     /// 而是<b>换语言那一刻把"同步中…"覆盖成"索引就绪"</b>——一句谎话。要翻它得先把状态改成按键推，
@@ -364,10 +486,15 @@ public sealed class I18nWiringGateTests
     public void FirstMilestoneCoversTheMainWindowAndDeliberatelyLeavesOneDynamicString()
     {
         var xaml = ReadRepoFile(MainWindowXaml);
-        Assert.Equal(31, Count(xaml, "i18n:LocText.Key=\""));
-        Assert.Equal(9, Count(xaml, "i18n:LocText.ToolTipKey=\""));
+        Assert.Equal(26, Count(xaml, "i18n:LocText.Key=\""));
+        Assert.Equal(8, Count(xaml, "i18n:LocText.ToolTipKey=\""));
         Assert.Equal(2, Count(xaml, "i18n:LocText.PlaceholderKey=\""));
         Assert.Equal(1, Count(xaml, "xmlns:i18n="));
+
+        // 排序档那五颗的配对账：标记里少了 5 颗正文键／1 颗提示键，代码里就必须正好多出这些。
+        var sort = Code(ReadRepoFile(MainWindowSearchCs));
+        Assert.Equal(5, Count(sort, "LocOption.T(\"sort."));
+        Assert.Equal(1, Count(sort, "tipKey: \"sort."));
 
         var stillLiteral = Markup(xaml).Split('\n')
             .SelectMany(line => Regex.Matches(line, @"(ToolTip|Title|Header|Content|Text|Message|Description|PlaceholderText)=""([^""]*)""")

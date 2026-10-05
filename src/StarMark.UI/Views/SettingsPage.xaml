@@ -122,11 +122,10 @@
                                 <TextBlock i18n:LocText.Key="settings.general.themeTitle" Style="{StaticResource SettingTitle}"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <TextBlock Grid.Column="0" i18n:LocText.Key="settings.general.themeNote" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
-                                    <ComboBox Grid.Column="1" MinWidth="180" SelectedIndex="{x:Bind ViewModel.ThemeIndex, Mode=TwoWay}">
-                                        <ComboBoxItem i18n:LocText.Key="settings.languageFollowSystem"/>
-                                        <ComboBoxItem i18n:LocText.Key="settings.general.themeLight"/>
-                                        <ComboBoxItem i18n:LocText.Key="settings.general.themeDark"/>
-                                    </ComboBox>
+                                    <ComboBox Grid.Column="1" x:Name="ThemeSelect" MinWidth="180"
+                                              SelectedIndex="{x:Bind ViewModel.ThemeIndex, Mode=TwoWay}"
+                                              ItemsSource="{x:Bind ThemeOptions, Mode=OneTime}"
+                                              ItemTemplate="{StaticResource LocOptionTemplate}"/>
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -142,7 +141,9 @@
                                     <TextBlock Grid.Column="0" i18n:LocText.Key="settings.languageNote"
                                                Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
                                     <ComboBox Grid.Column="1" x:Name="LanguageSelect" MinWidth="180"
-                                              SelectionChanged="LanguageSelect_SelectionChanged"/>
+                                              SelectionChanged="LanguageSelect_SelectionChanged"
+                                              ItemsSource="{x:Bind LanguageOptions, Mode=OneTime}"
+                                              ItemTemplate="{StaticResource LocOptionTemplate}"/>
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -160,15 +161,12 @@
                                         <TextBlock i18n:LocText.Key="settings.general.mainBackdrop"/>
                                         <TextBlock i18n:LocText.Key="settings.general.mainBackdropNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
-                                    <!-- 顺序即枚举值，与「组件材质」一致：0=亚克力(薄) 1=云母 2=实色 3=云母Alt 4=亚克力(厚) 5=纯色 -->
-                                    <ComboBox Grid.Column="1" MinWidth="200" SelectedIndex="{x:Bind ViewModel.MainWindowBackdropIndex, Mode=TwoWay}">
-                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.acrylicThin"/>
-                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.mica"/>
-                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.opaque"/>
-                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.micaAlt"/>
-                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.acrylicThick"/>
-                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.solid"/>
-                                    </ComboBox>
+                                    <!-- 顺序即枚举值，与「组件材质」一致：0=亚克力(薄) 1=云母 2=实色 3=云母Alt 4=亚克力(厚) 5=纯色；
+                                         清单住在 SettingsPage.Options.cs 的 MaterialOptions（两颗下拉共用一份措辞，坑表 #290） -->
+                                    <ComboBox Grid.Column="1" x:Name="MainBackdropSelect" MinWidth="200"
+                                              SelectedIndex="{x:Bind ViewModel.MainWindowBackdropIndex, Mode=TwoWay}"
+                                              ItemsSource="{x:Bind MaterialOptions, Mode=OneTime}"
+                                              ItemTemplate="{StaticResource LocOptionTemplate}"/>
                                 </Grid>
 
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
@@ -543,15 +541,12 @@
                                         <TextBlock i18n:LocText.Key="settings.widgets.materialLabel"/>
                                         <TextBlock i18n:LocText.Key="settings.widgets.materialNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
-                                    <!-- 顺序即枚举值：0=亚克力(薄) 1=云母 2=实色 3=云母Alt 4=亚克力(厚) 5=纯色，追加新项不影响已保存的设置 -->
-                                    <ComboBox Grid.Column="1" MinWidth="200" SelectedIndex="{x:Bind ViewModel.BackdropIndex, Mode=TwoWay}">
-                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.acrylicThin"/>
-                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.mica"/>
-                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.opaque"/>
-                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.micaAlt"/>
-                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.acrylicThick"/>
-                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.solid"/>
-                                    </ComboBox>
+                                    <!-- 顺序即枚举值：0=亚克力(薄) 1=云母 2=实色 3=云母Alt 4=亚克力(厚) 5=纯色，追加新项不影响已保存的设置；
+                                         措辞与「主窗口材质」同一份清单（⛔ 不许在这里再列六行同义键，坑表 #290） -->
+                                    <ComboBox Grid.Column="1" x:Name="WidgetBackdropSelect" MinWidth="200"
+                                              SelectedIndex="{x:Bind ViewModel.BackdropIndex, Mode=TwoWay}"
+                                              ItemsSource="{x:Bind MaterialOptions, Mode=OneTime}"
+                                              ItemTemplate="{StaticResource LocOptionTemplate}"/>
                                 </Grid>
 
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
@@ -626,11 +621,10 @@
                                            Style="{StaticResource SettingRowText}"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <TextBlock Grid.Column="0" i18n:LocText.Key="settings.widgets.perfLabel" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
-                                    <ComboBox Grid.Column="1" MinWidth="200" SelectedIndex="{x:Bind ViewModel.PerformanceModeIndex, Mode=TwoWay}">
-                                        <ComboBoxItem i18n:LocText.Key="settings.widgets.perfBalanced"/>
-                                        <ComboBoxItem i18n:LocText.Key="settings.widgets.perfSavings"/>
-                                        <ComboBoxItem i18n:LocText.Key="settings.widgets.perfCustom"/>
-                                    </ComboBox>
+                                    <ComboBox Grid.Column="1" x:Name="PerformanceSelect" MinWidth="200"
+                                              SelectedIndex="{x:Bind ViewModel.PerformanceModeIndex, Mode=TwoWay}"
+                                              ItemsSource="{x:Bind PerformanceOptions, Mode=OneTime}"
+                                              ItemTemplate="{StaticResource LocOptionTemplate}"/>
                                 </Grid>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16"
                                       Visibility="{x:Bind ViewModel.CustomBudgetVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">

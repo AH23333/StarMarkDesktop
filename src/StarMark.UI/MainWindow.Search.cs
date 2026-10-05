@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Composition.SystemBackdrops;
@@ -277,6 +278,25 @@ public sealed partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// 工具栏那颗排序下拉的数据项：一句措辞（住在表里）＋一颗<b>数据层的排序键</b>（住在 <c>Value</c> 里）。
+    /// <para>⛔ 不许拿显示文字当排序键：换语言之后屏幕上那行字是英文，而查询参数得一直是
+    /// <c>recent</c>／<c>starred</c> 这几个（<c>ItemRepositoryTests</c> 钉着它们）。</para>
+    /// <para>那颗提示键一律写成 <c>tipKey:</c> <b>具名实参</b>——这一族的第 2、3 位都可能是普通字符串
+    /// （排序键就是第 2 位），按位置认"哪个字面量是键"迟早把 <c>"starred"</c> 当成键去查表。</para>
+    /// </summary>
+    public IReadOnlyList<LocOption> SortOptions { get; } =
+    [
+        LocOption.T("sort.recent", "recent"),
+        // 措辞即判据（P-6）：这一档排的是「仓库最后一次 git push」——GitHubSource.MapToItem 把 StarredAt
+        // 填成 repo.PushedAt，而 GitHub 要换 Accept: …star+json 才拿得到真正的"我点 Star 的时间"。
+        // 原来那句"最近 Star"对老仓库被新近 Star 的情形是假话（它排在很后面）。值仍是 starred。
+        LocOption.T("sort.starred", "starred", tipKey: "sort.starredTip"),
+        LocOption.T("sort.collected", "collected"),
+        LocOption.T("sort.stars", "stars"),
+        LocOption.T("sort.name", "name"),
+    ];
+
     private string CurrentSortTag()
-        => SortCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag ? tag : "recent";
+        => SortCombo.SelectedItem is LocOption option && option.Value is string tag ? tag : "recent";
 }

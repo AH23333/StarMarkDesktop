@@ -23,12 +23,8 @@ namespace StarMark.Tests;
 /// </summary>
 public sealed class GitHubTruthInLabelingGateTests
 {
-    private const string MainWindowXaml = "src/StarMark.UI/MainWindow.xaml";
     private const string Client = "src/StarMark.Integrations/GitHub/GitHubClient.cs";
     private const string Source = "src/StarMark.Integrations/GitHub/GitHubSource.cs";
-
-    private static string Markup()
-        => Regex.Replace(ReadRepoFile(MainWindowXaml), "<!--.*?-->", string.Empty, RegexOptions.Singleline);
 
     /// <summary>取表里那一行。没登记就直接抛：这一族要的是"话与数据对得上"，
     /// 而取不到词的那一格既不算红也不算绿，静默放行等于把判据换成"什么都没查"。</summary>
@@ -51,12 +47,17 @@ public sealed class GitHubTruthInLabelingGateTests
     [Fact]
     public void TheStarSortTierIsNamedAfterWhatItActuallySortsBy()
     {
-        var tier = Regex.Matches(Markup(), @"<ComboBoxItem\b[^>]*>", RegexOptions.Singleline)
-            .Cast<Match>().Single(m => m.Value.Contains("Tag=\"starred\""));
+        // 档名的出处（批次 WI-2c 之后）：不是标记里的一颗 <ComboBoxItem>，而是 MainWindow.Search.cs
+        // 里那份 SortOptions——那一格闭着的显示要跟着语言走，选项就必须是"数据项＋模板"。
+        // ⚠ 这一处改的是<b>读点</b>，判据守的那件事没变（坑表 #286 同族：锚点只认旧形状时，改对了反而红）。
+        var tier = Regex.Matches(Code(ReadRepoFile("src/StarMark.UI/MainWindow.Search.cs")),
+                @"LocOption\.T\(.*", RegexOptions.Singleline)
+            .Cast<Match>().Single(m => m.Value.Contains("\"sort.starred\""));
 
-        // ① 接线：档名与那句解释都从表里来
-        Assert.Contains("i18n:LocText.Key=\"sort.starred\"", tier.Value, System.StringComparison.Ordinal);
-        Assert.Contains("i18n:LocText.ToolTipKey=\"sort.starredTip\"", tier.Value, System.StringComparison.Ordinal);
+        // ① 接线：档名与那句解释都从表里来，那颗身份仍是 starred（数据层的排序键）
+        Assert.Contains("LocOption.T(\"sort.starred\"", tier.Value, System.StringComparison.Ordinal);
+        Assert.Contains("\"starred\"", tier.Value, System.StringComparison.Ordinal);
+        Assert.Contains("tipKey: \"sort.starredTip\"", tier.Value, System.StringComparison.Ordinal);
 
         // ② 内容：两种说法都说出 push，且都不说"最近 Star"
         var label = Entry("sort.starred");

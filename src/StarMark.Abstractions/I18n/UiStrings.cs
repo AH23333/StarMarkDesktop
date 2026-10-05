@@ -155,14 +155,14 @@ public static class UiStrings
             + "通道下拉里由枚举现生成的那些通道名，还有那些把当场算出来的值写进标签的按钮"
             + "（写着要改用的模型名、写着上次整理好的条数），"
             + "以及「语言 Top：」这类把句子拆成半句＋读数的排法。"
-            + "另有两处不彻底：下拉框展开的列表当场换语言，但闭着的那一格要等你重新选一次才跟着换；"
-            + "而上面那些程序写的字要翻，得先把它们改成按键取词，那是后面一批的事。",
+            + "选项还没进表的那几颗下拉也照旧写着中文：热榜那排时间范围、搜索组件那三档排序、组件外观编辑器里那几颗。"
+            + "上面这些由程序写出来的字与没进表的选项，要先改成按键取词才谈得上翻。",
             "Takes effect at once — no restart needed. Translated so far: the main window's top row "
             + "(nav tabs, the search box, the sort and filter buttons), the Settings page header, its eight "
             + "section titles, and everything the General, Guide, Hotkeys, Data, Health, Extensions, Desktop tools "
             + "and AI screens write themselves. "
-            + "Still Chinese for now: the page bodies (including empty-state lines), the language filter dropdown on the toolbar, "
-            + "the in-app guide and the log — more sections land with each following pass. Words the program "
+            + "Still Chinese: the page bodies (including empty-state lines), the language filter dropdown on the toolbar, "
+            + "the in-app guide and the log. Words the program "
             + "assembles or computes are out of this batch's reach too: the index-status line on the top bar, "
             + "the last check result under About & updates, each hotkey category and every row's action name and "
             + "key, the two option lists on the Health page, the whole label column under Diagnostics there, "
@@ -174,10 +174,9 @@ public static class UiStrings
             + "quoting built-in limits against the current settings, the channel names the dropdown builds from an enum "
             + "and those buttons whose labels carry a value computed on the spot (naming the model it would "
             + "switch to, or how many rows were saved in the last run), and the lines built as half a sentence plus a number. "
-            + "Two things aren't complete: in a "
-            + "dropdown the opened list switches at once while the closed box keeps its old label until you pick "
-            + "again; and those program-written strings have to be reworked to read from the table before they can "
-            + "switch — that's a later pass."),
+            + "Dropdowns whose options aren't in the table yet are still Chinese too: the hot-list range, the "
+            + "search widget's three sort tiers and the ones in the widget appearance editor. Those "
+            + "program-written strings and untabled options have to be reworked to read from the table first."),
 
         // ===== 「常规」那一栏的正文（批次 WI-2d，P-169 ① 第二刀）=====
         // 中文列<b>逐字取自改键前 XAML 里的那一句</b>：这一刀只搬地方，不顺手改措辞——

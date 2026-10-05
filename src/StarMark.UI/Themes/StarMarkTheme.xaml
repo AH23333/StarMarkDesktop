@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ResourceDictionary
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:i18n="using:StarMark.UI.Helpers">
 
     <!--
         全局样式（中性）：只保留结构化样式（字号 / 间距 / 圆角 / 卡片），
@@ -169,5 +170,15 @@
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="CornerRadius" Value="4"/>
     </Style>
+
+    <!-- 下拉的"数据项＋模板"（批次 WI-2c）：展开的列表与<b>闭着的那一格</b>共用这一颗模板，
+         格子里那颗 TextBlock 自己带着键 ⇒ 换语言那一刻它和其他被重贴的元素一起改口。
+         ⛔ 两颗属性不许并成一行：`LocText.Key` 与 `Text=` 同在一行会被
+         「同一行不许既有键、又留着它该取代的那句字面量」那颗闸门红掉（坑表 #276 一族）。 -->
+    <DataTemplate x:Key="LocOptionTemplate">
+        <TextBlock Text="{Binding Text}"
+                   i18n:LocText.Key="{Binding Key}"
+                   i18n:LocText.ToolTipKey="{Binding TipKey}"/>
+    </DataTemplate>
 
 </ResourceDictionary>
