@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using StarMark.Abstractions.I18n;
 using Xunit;
 using static StarMark.Tests.SourceGate;
 
@@ -81,15 +82,35 @@ public sealed class SettingsTaxonomyGateTests
         }).ToArray();
     }
 
-    /// <summary>每张卡的标题在全页唯一：搬家时漏删旧副本，第一现场就是这里。</summary>
+    /// <summary>每张卡的标题在全页唯一：搬家时漏删旧副本，第一现场就是这里。
+    /// <para>批次 WI-2g 起标题有<b>两种写法</b>（还没铺开的栏是字面量，铺过的栏挂键），所以锚点两种都扫，
+    /// 并且<b>挂键的那一句按表里的中文列还原之后再比</b>：比的是屏幕上会出现的那句话，不是它的代号。
+    /// 只按键名比的话，"旧副本还写着 <c>Text=…</c>、新那份已经挂上键"这种没搬干净的形状正好从指缝里漏掉——
+    /// 而那恰是这一格唯一要抓的事。上一版的锚点只认字面量，随着各栏陆续进表，它数到的卡片一路往下掉，
+    /// 是下面那道"扫到几张"的下界先出声的（不是判据松了）。</para></summary>
     [Fact]
     public void NoCardTitleIsDuplicated()
     {
-        var titles = Regex.Matches(ReadRepoFile(Xaml),
-                "<TextBlock Text=\"([^\"]+)\" Style=\"\\{StaticResource SettingTitle\\}\"")
-            .Select(m => m.Groups[1].Value).ToList();
+        var byKey = UiStrings.All.ToDictionary(e => e.Key, StringComparer.Ordinal);
+        const string Anchor =
+            @"<TextBlock (?<attr>Text|i18n:LocText\.Key)=""(?<val>[^""]+)"" Style=""\{StaticResource SettingTitle\}""";
+        var titles = new List<string>();
+        foreach (Match m in Regex.Matches(ReadRepoFile(Xaml), Anchor))
+        {
+            var value = m.Groups["val"].Value;
+            if (m.Groups["attr"].Value == "Text")
+            {
+                titles.Add(value);
+                continue;
+            }
+            Assert.True(byKey.TryGetValue(value, out var entry),
+                $"卡片标题挂了键「{value}」，但表里没有这一行——那一处屏幕上根本不出字");
+            titles.Add(entry!.Zh);
+        }
 
-        Assert.True(titles.Count > 10, $"只扫到 {titles.Count} 张卡——锚点本身失效了，守门不能白过");
+        // 现场读数（2026-10-05 批次 WI-2g 重测）：整页 26 张卡（8 张仍是字面量＝AI 增强／桌面工具那两栏，18 张已挂键）。
+        // 下界取 20 而不是 26：往后的批次只该把"挂键"那一半推上去，总数不该掉——掉了就是锚点又漏了一族写法。
+        Assert.True(titles.Count >= 20, $"只扫到 {titles.Count} 张卡——锚点本身失效了，守门不能白过");
         Assert.Equal(titles.Count, titles.Distinct(StringComparer.Ordinal).Count());
     }
 
@@ -162,12 +183,13 @@ public sealed class SettingsTaxonomyGateTests
         Assert.DoesNotContain("ViewModel.MainWindowBackdropIndex", widgets);
 
         var extras = Between(xaml, "<TabViewItem x:Name=\"TabExtend\" Tag=\"extend\"", "</TabViewItem>");
-        Assert.Contains("本地磁盘搜索", extras);
+        // 批次 WI-2g 把这一栏的标记换了按键（屏幕上还是那句"本地磁盘搜索"）⇒ 锚点搬到那颗键，改锚不改判。
+        Assert.Contains("i18n:LocText.Key=\"settings.extend.diskSearchTitle\"", extras);
         Assert.Contains("ViewModel.LocalDiskSearchEnabled", extras);
-        Assert.Contains("网址来源（RSS / Atom）", extras);
+        Assert.Contains("i18n:LocText.Key=\"settings.extend.rssTitle\"", extras);
         Assert.DoesNotContain("剪贴板历史", Markup(extras));
         // 屏幕画布（批次 WD-5）：开关与那份只读键位一览都住在拓展功能页
-        Assert.Contains("<TextBlock Text=\"屏幕画布\" Style=\"{StaticResource SettingTitle}\"", extras);
+        Assert.Contains("i18n:LocText.Key=\"settings.extend.canvasTitle\" Style=\"{StaticResource SettingTitle}\"", extras);
         Assert.Contains("ViewModel.CanvasEnabled", extras);
         Assert.Contains("ViewModel.CanvasHotkeyRows", extras);
         // 「截图带画布」（批次 WH）跟着画布走：它说的是同一块玻璃，只不过影响的是截图那一帧
@@ -177,7 +199,7 @@ public sealed class SettingsTaxonomyGateTests
         Assert.Contains("ViewModel.CursorCircleRadiusDip, Mode=TwoWay", extras);
         // 截屏总开关（批次 RP）：发起人点名"放入拓展功能设置页"。它与画布那条是同一族（都是屏幕上的覆盖层），
         // 散到「常规」就会出现"关掉截图要去常规页找开关、关掉画布在拓展页"这种找不着入口的改动
-        Assert.Contains("<TextBlock Text=\"截屏（截图 / 贴图 / 识字）\" Style=\"{StaticResource SettingTitle}\"", extras);
+        Assert.Contains("i18n:LocText.Key=\"settings.extend.captureTitle\" Style=\"{StaticResource SettingTitle}\"", extras);
         Assert.Contains("ViewModel.CaptureEnabled, Mode=TwoWay", extras);
         Assert.DoesNotContain("ViewModel.CaptureEnabled", regular);
 
@@ -205,7 +227,7 @@ public sealed class SettingsTaxonomyGateTests
         Assert.DoesNotContain("ViewModel.ClipboardImageEnabled", Between(xaml, "<TabViewItem x:Name=\"TabExtend\" Tag=\"extend\"", "</TabViewItem>"));
         // 「数据」页仍会在提权说明里提到本地磁盘搜索（那是一句原因，不是第二处开关），
         // 所以钉的是"这张卡不在这页"，而不是这个词不在这页。
-        Assert.DoesNotContain("<TextBlock Text=\"本地磁盘搜索\" Style=\"{StaticResource SettingTitle}\"", data);
+        Assert.DoesNotContain("i18n:LocText.Key=\"settings.extend.diskSearchTitle\"", data);
         Assert.DoesNotContain("ViewModel.LocalDiskSearchEnabled", data);
     }
 

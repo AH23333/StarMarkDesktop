@@ -42,7 +42,7 @@ public sealed class RssPageWiringGateTests
     public void SettingsPageNoLongerHostsTheReader()
     {
         var code = ReadRepoFile(SettingsRss);
-        var xaml = Markup(Between(ReadRepoFile(SettingsXaml), "网址来源（RSS / Atom）", "</controls:ColumnFlowPanel>"));
+        var xaml = Markup(Between(ReadRepoFile(SettingsXaml), "i18n:LocText.Key=\"settings.extend.rssTitle\"", "</controls:ColumnFlowPanel>"));
 
         Assert.Contains("InitRssSection", code);            // 锚点：这一栏还在
         foreach (var gone in new[] { "RssClient", "RssAggregator", "CancellationTokenSource", "RecordItemAsync", "LogActivityAsync" })
@@ -56,7 +56,7 @@ public sealed class RssPageWiringGateTests
     public void RssCardHasItsOwnMasterSwitchBoundToTheViewModel()
     {
         // 终点取该页容器的收尾：RSS 卡片自批次 WC-2 起住进「拓展功能」页，不再是「AI 助手」的邻居
-        var xaml = Between(ReadRepoFile(SettingsXaml), "网址来源（RSS / Atom）", "</controls:ColumnFlowPanel>");
+        var xaml = Between(ReadRepoFile(SettingsXaml), "i18n:LocText.Key=\"settings.extend.rssTitle\"", "</controls:ColumnFlowPanel>");
 
         Assert.Equal(2, Count(xaml, "ViewModel.RssEnabled"));
         Assert.Contains("ViewModel.RssStatus", xaml);

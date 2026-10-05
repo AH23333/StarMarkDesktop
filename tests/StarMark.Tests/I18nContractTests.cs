@@ -132,6 +132,31 @@ public sealed class I18nContractTests : IDisposable
     }
 
     /// <summary>
+    /// 「屏幕画布」那一栏的说明句<b>不许再写它自己那一组有几条快捷键</b>（批次 WI-2g）。
+    /// <para>搬那句进表时逐字读它，读出一句已经和屏幕对不上的话：原文写"画布内的<b>九条</b>快捷键"
+    /// （WD-3 那批确实是九条），而 <c>HotkeyActions.Canvas</c> 今天是<b>十三条</b>——WK/WM/P3 各加了图形、
+    /// 复制、贴出，谁都没回头看这句死在标记里的话。数接不上出处（<c>LocText</c> 只会整句重贴，
+    /// 读数得走组合句那一族，坑表 #279），所以这里的口径是<b>那一行不写数</b>：
+    /// 下面那张生成的表会自己把每一条列出来，不缺这一个数字。</para>
+    /// <para>⚠ 射程<b>只画在这一行</b>，不是全表：同栏「截屏」那句的"那三条发起框选的全局热键"
+    /// 与「截图带画布」那句的"那三条产出动作"今天<b>都对得上</b>（截图 F1／贴图 F3／识字，与工具条那三个产出）。
+    /// 把禁字面扩到全表＝拿判据去改两句真话，那是另一回事——那两句欠的是"数要接出处"，
+    /// 已按开放项登记在账本（P-170），不在这一格里顺手改掉。</para>
+    /// </summary>
+    [Fact]
+    public void CanvasCopyNoLongerCountsItsOwnShortcuts()
+    {
+        var row = UiStrings.All.Single(e => e.Key == "settings.extend.canvasNote");
+        foreach (var (column, text) in new[] { ("中文", row.Zh), ("英文", row.En) })
+        {
+            Assert.DoesNotMatch(@"[一二三四五六七八九十两0-9]+\s*[条项个支]\s*(快捷键|热键)", text);
+            Assert.DoesNotMatch(
+                @"(?i)\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|\d+)\s+(canvas\s+)?(shortcut|hotkey)",
+                text);
+        }
+    }
+
+    /// <summary>
     /// 同一行的两列必须用<b>同一组位置式占位符</b>（<c>{0}</c>／<c>{1}</c>…）。
     /// <para>换语序就得换编号：中文"还剩 {0} 条"翻成 "{1} items left" 那种配错，
     /// 界面上是一个看起来完全合法的数字挂错了句子（#234 那一族）。这条判据今天<b>没有输入</b>
