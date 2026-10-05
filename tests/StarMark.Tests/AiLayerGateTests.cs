@@ -34,9 +34,10 @@ public sealed class AiLayerGateTests
     public void ProviderPickerIsGeneratedNotHandWritten()
     {
         var xaml = Read(Xaml);
-        var aiCard = xaml[xaml.IndexOf("AI 助手", StringComparison.Ordinal)..];
-        var upToNext = aiCard.IndexOf("还没测过", StringComparison.Ordinal);
-        Assert.True(upToNext > 0, "AI 那一栏的结尾锚点没找到，闸门本身要看一眼");
+        // 锚点搬过家（批次 WI-2i：这一栏的字面量都进了表）——改锚不改判，钉的还是"通道下拉不许手写项"。
+        var aiCard = xaml[xaml.IndexOf("i18n:LocText.Key=\"settings.ai.title\"", StringComparison.Ordinal)..];
+        var upToNext = aiCard.IndexOf("x:Name=\"AiStatusText\"", StringComparison.Ordinal);
+        Assert.True(upToNext > 0, "AI 那一栏的结尾锚点（状态那行）没找到，闸门本身要看一眼");
         Assert.DoesNotContain("<ComboBoxItem", aiCard[..upToNext]);
 
         Assert.Contains("Enum.GetValues<AiProviderKind>()", Read(Page));
@@ -48,7 +49,7 @@ public sealed class AiLayerGateTests
     public void ConnectionTestHasAnExitWhileItRuns()
     {
         var page = Read(Page);
-        Assert.Contains("AiProbeButton.Content = \"取消\"", page);
+        Assert.Contains("LocText.SetKey(AiProbeButton, ProbeCancelKey)", page);
         Assert.Contains("_aiProbeCts?.Cancel()", page);
     }
 

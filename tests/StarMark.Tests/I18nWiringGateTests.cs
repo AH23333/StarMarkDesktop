@@ -170,10 +170,10 @@ public sealed class I18nWiringGateTests
             }
         }
         Assert.True(offenders.Count == 0, string.Join("\n", offenders));
-        // 现场读数（2026-10-05 为批次 WI-2h 重测：全应用的开关标签 22 对，全住在设置页——已进表 21 对
-        // ＝常规 5＋健康 2＋数据 4＋拓展 8＋桌面工具 2，还写死在 XAML 里 1 对＝AI 增强那一栏那 1 对；
-        // 组件窗与条目卡片上没有开关标签）：只钉下界——往后的每一批要把它往上推。
-        Assert.True(Count(Markup(ReadRepoFile(SettingsXaml)), "i18n:LocText.OnContentKey=\"") >= 21,
+        // 现场读数（2026-10-06 为批次 WI-2i 重测：整页开关标签 22 对，全住在设置页——<b>已全数进表</b>
+        // ＝常规 5＋健康 2＋数据 4＋拓展 8＋桌面工具 2＋AI 增强 1；组件窗与条目卡片上没有开关标签）。
+        // ⚠ 这一格从本批起没有余量可推：下界＝现场读数，往后新加的开关也必须走键，否则这里红。
+        Assert.True(Count(Markup(ReadRepoFile(SettingsXaml)), "i18n:LocText.OnContentKey=\"") >= 22,
             "开关两侧的标签要住在表里，不是写在 XAML 里");
     }
 
@@ -216,15 +216,84 @@ public sealed class I18nWiringGateTests
     }
 
     /// <summary>
-    /// 已经铺过的七栏（常规／使用说明／快捷键／数据／健康与诊断／拓展功能／桌面工具）<b>自己那份标记</b>里一句中文都不许剩
-    /// （批次 WI-2d 立的收口判据，WI-2e 推到四栏，批次 WI-2f 推到五栏，批次 WI-2g 推到六栏，批次 WI-2h 推到七栏）。
-    /// <para>判据分两头：① 这七栏的 <c>Text</c>／<c>Content</c>／<c>Header</c>／开关两侧／提示里不能再有汉字；
+    /// 「测试连接」那颗按钮的<b>忙闲两句都走键</b>（坑表 #276 在「AI 增强」这一栏的第二次兑现）。
+    /// <para>写成 <c>Content = "取消"</c> 的那一版，红脸的时刻是"抓取期间换一下语言"：
+    /// <c>LocText</c> 按标记里那颗"空闲"键把按钮重贴成"测试连接"——一件还在跑的事被界面改了口，
+    /// 而那一刻用户最需要知道的恰恰是"这一按能不能中断"。</para>
+    /// </summary>
+    [Fact]
+    public void TheProbeButtonSwitchesKeysNotWords()
+    {
+        var page = Code(ReadRepoFile("src/StarMark.UI/Views/SettingsPage.Ai.cs"));
+        Assert.Contains("LocText.SetKey(AiProbeButton, ProbeCancelKey)", page);
+        Assert.Contains("LocText.SetKey(AiProbeButton, ProbeIdleKey)", page);
+        // 回来路＝直接改字。这一句读的是整档：注释里出现它不算（Code() 已抹注释）。
+        Assert.DoesNotContain("AiProbeButton.Content = \"", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 两颗把<b>当场算出来的值</b>写进标签的按钮（那颗"改用本机有的模型"里是模型名、那颗"继续处理…"里是条数）
+    /// <b>留在 code-behind，标记里不许挂静态键</b>：挂了键，换语言那一刻静态那句会盖掉带值的这句，
+    /// 用户看到的就是一个和实际要改的东西不一样的名字。
+    /// <para>这一格钉的是<b>登记在案的缺口</b>（P-169 的"组合句"那一族，`settings.languageNote` 里点名了这两颗）。
+    /// 将来那一族有了"按语言重算"的机制，这里会红——改法是连着把两颗按钮换成"按键＋占位符重算"，
+    /// 不是把静态键一挂了事（与坑表 #276 同一件事的镜像面：那边是"别在键之外再写字"，这边是"别给带值的字挂静态键"）。</para>
+    /// </summary>
+    [Fact]
+    public void TheTwoComposedButtonLabelsStayWithTheCode()
+    {
+        var ai = Between(Markup(ReadRepoFile(SettingsXaml)),
+                         "<TabViewItem x:Name=\"TabAi\" Tag=\"ai\"", "</TabViewItem>");
+        foreach (var name in new[] { "AiFillModelButton", "AiResumeButton" })
+        {
+            var tag = Regex.Match(ai, "<Button[^>]*x:Name=\"" + name + "\"[^>]*>", RegexOptions.CultureInvariant);
+            Assert.True(tag.Success, $"「AI 增强」那一栏里找不到 {name} 的开标签——搬家了就来这里改地址，别把这一格删掉");
+            Assert.DoesNotContain("LocText", tag.Value, StringComparison.Ordinal);
+        }
+
+        var page = Code(ReadRepoFile("src/StarMark.UI/Views/SettingsPage.Ai.cs"));
+        Assert.Contains("AiFillModelButton.Content = \"模型名改用", page);
+        Assert.Contains("继续处理上次整理好的", page);
+    }
+
+    /// <summary>
+    /// 已经 shipped 的界面文本<b>不许承诺"这一版还没有、以后才有"</b>（坑表 #297）。
+    /// <para>这一族最坏的地方是它<b>只会变旧、不会变红</b>：「AI 增强」那句"批量整理标签的入口在下一批接上"
+    /// 是批次 A 写的，入口在批次 B 就接上了，而屏幕上那句话一直挂着；到批次 WI-2i 搬字进表时，
+    /// 它已经从"标记里的一句过期路线图"变成"表里唯一的出处"——再逐字照抄一次就等于把它锁死。</para>
+    /// <para>判据按<b>句式</b>写（中文那几种说法＋英文那几种对译），⛔ 不是只钉今天这一句：
+    /// 换个措辞（"下个版本见"／"coming soon"）也在这条射程里——台架按中英两种措辞各咬一次（J1／J2）。
+    /// ⚠ 这一格管的是<b>承诺</b>，不管状态读数：<c>settings.ai.notTested</c>「还没测过。」说的是
+    /// "此刻还没"，不是"以后才有"，所以那些词刻意不在清单里（把它们钉进去会把闸门拗成背字符串）。</para>
+    /// </summary>
+    [Fact]
+    public void ShippedUiTextNeverPromisesAFutureBatch()
+    {
+        var offenders = (from e in UiStrings.All
+                         from side in new[] { ("中文列", e.Zh), ("英文列", e.En) }
+                         where Regex.IsMatch(side.Item2,
+                             @"下一批|下一个版本|下批|后续版本|未来的版本|即将|待实现|暂未|尚未提供"
+                             + @"|arrives? with the next|in a (?:later|future) (?:release|batch)|coming soon"
+                             + @"|not (?:yet )?implemented|planned for",
+                             RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)
+                         select $"{e.Key}（{side.Item1}）").ToList();
+
+        Assert.True(offenders.Count == 0,
+            "界面文本在承诺一件今天还没做的事：" + string.Join("、", offenders)
+            + "\n要么那句话本来就是过期的路线图（就地改成今天的事实），要么那件事真没做——"
+            + "那它就不该出现在 shipped 的界面里（账本 P-169 的批量里也不许先挂键再留承诺）");
+    }
+
+    /// <summary>
+    /// 已经铺过的八栏（常规／使用说明／快捷键／数据／健康与诊断／拓展功能／桌面工具／AI 增强）<b>自己那份标记</b>里一句中文都不许剩
+    /// （批次 WI-2d 立的收口判据，WI-2e 推到四栏，批次 WI-2f 推到五栏，批次 WI-2g 推到六栏，批次 WI-2h 推到七栏、本批 WI-2i 推到八栏（八栏齐了）。
+    /// <para>判据分两头：① 这八栏的 <c>Text</c>／<c>Content</c>／<c>Header</c>／开关两侧／提示里不能再有汉字；
     /// ② 整页剩余量只钉<b>上界</b>——下一批要把它往下推，往上加才是事故。把等号钉在剩余量上，
     /// 等于让每一批改完都得先来改一次判据，那正是"闸门替改动让路"的形状。</para>
     /// <para>⚠ <b>这一格的射程止于标记</b>：同一屏上还有中文是<b>程序算出来或拼出来</b>的（顶栏那颗索引状态、
     /// 「关于与更新」里那行检查结果、快捷键这一栏每一行的动作名与键位、数据这一栏那几行状态读数与备份列表
     /// 每行的「恢复前快照」标签、拓展功能这一栏那五行状态读数（热榜／RSS／本地磁盘搜索／截屏／画布）、
-    /// 那行引擎占用大小的「约」字与画布那串快捷键的动作名、桌面工具这一栏每一类组件那行标题与它下面每行两颗按钮的字、开机加载那行说每颗约多少的读数与布局每行的名字与摘要）——第一版覆盘照片拍到它们之后，名字就从"没有中文正文"
+    /// 那行引擎占用大小的「约」字与画布那串快捷键的动作名、桌面工具这一栏每一类组件那行标题与它下面每行两颗按钮的字、开机加载那行说每颗约多少的读数与布局每行的名字与摘要）、AI 增强这一栏那行测试结果与那行用量读数、那三格"这几格的出厂值/上限是多少"的只读展示，以及两颗字里带着当场算出来的值的按钮（那颗"改用本机有的模型"里是模型名、那颗"继续处理…"里是条数）——第一版覆盘照片拍到它们之后，名字就从"没有中文正文"
     /// 改成了"自己那份标记"。
     /// 那几处要翻，得先把状态改成按键推（P-169 的一格），不是往这里再挂一颗键（坑表 #276）。</para>
     /// <para>⚠ 数的时候<b>跳过 <c>&lt;Run&gt;</c> 那一行</b>：那是"半个句子＋一个读数"的胶水，
@@ -232,7 +301,7 @@ public sealed class I18nWiringGateTests
     /// </summary>
 
     [Fact]
-    public void TheSevenKeyedTabsHoldNoChineseMarkupAndTheRestOnlyShrinks()
+    public void TheEightKeyedTabsHoldNoChineseMarkupAndTheRestOnlyShrinks()
     {
         const string Attributes = @"(?:Text|Content|Header|OnContent|OffContent|ToolTip|PlaceholderText)=""([^""]*)""";
         var page = Markup(ReadRepoFile(SettingsXaml));
@@ -240,7 +309,7 @@ public sealed class I18nWiringGateTests
                  {
                      ("TabGeneral", "general"), ("TabGuide", "guide"),
                      ("TabHotkeys", "hotkeys"), ("TabData", "data"), ("TabHealth", "health"),
-                     ("TabExtend", "extend"), ("TabWidgets", "widgets"),
+                     ("TabExtend", "extend"), ("TabWidgets", "widgets"), ("TabAi", "ai"),
                  })
         {
             var tab = Between(page, $"<TabViewItem x:Name=\"{name}\" Tag=\"{tag}\"", "</TabViewItem>");
@@ -255,7 +324,7 @@ public sealed class I18nWiringGateTests
 
         var whole = Regex.Matches(page, Attributes).Cast<Match>()
             .Count(m => Regex.IsMatch(m.Groups[1].Value, @"[\u4e00-\u9fff]"));
-        Assert.True(whole <= 44, $"整页中文正文从 44 涨到了 {whole}（这一族只许往下减）");
+        Assert.True(whole <= 5, $"整页中文正文从 5 涨到了 {whole}（只剩「健康与诊断」那五行 <Run> 胶水，这一族只许往下减）");
     }
 
     /// <summary>

@@ -159,7 +159,8 @@ public sealed class SettingsTaxonomyGateTests
         var xaml = ReadRepoFile(Xaml);
 
         var ai = Between(xaml, "<TabViewItem x:Name=\"TabAi\" Tag=\"ai\"", "</TabViewItem>");
-        Assert.Contains("这三样分别要填什么", ai);
+        // 批次 WI-2i 把这一栏的标记搬进了表 ⇒ 锚点从"屏幕上那几个字"搬到那颗键（改锚不改判，同 170 行那一步的口径）。
+        Assert.Contains("i18n:LocText.Key=\"settings.ai.whatToFill\"", ai);
         var regular = Between(xaml, "<TabViewItem x:Name=\"TabGeneral\" Tag=\"general\"", "</TabViewItem>");
         // Token 那一格是"库"的日常配置，卡留在常规页。批次 UI/P-146 之后这里**不再数绑定**：
         // 那颗编辑格换成了 PasswordBox（Password 不可绑定），编辑入口的形状与"只有一处读写"
@@ -168,8 +169,8 @@ public sealed class SettingsTaxonomyGateTests
         // 批次 WI-2d 起这张卡的标题进了文案表 ⇒ 锚点从"屏幕上那几个字"搬到那颗键：
         // 判的仍是"这张卡住在常规页"，改的只是地址（同一批把页签身份解耦时定下的口径）。
         Assert.Contains("i18n:LocText.Key=\"settings.general.githubTitle\"", Markup(regular));
-        Assert.DoesNotContain("这三样分别要填什么", regular);
-        Assert.DoesNotContain("AI 助手", Markup(regular));    // 说明卡与表单一起走，不能一份表单搬家、一份说明书留下
+        Assert.DoesNotContain("i18n:LocText.Key=\"settings.ai.whatToFill\"", regular);
+        Assert.DoesNotContain("i18n:LocText.Key=\"settings.ai.title\"", Markup(regular));    // 说明卡与表单一起走，不能一份表单搬家、一份说明书留下
         // 批次 UE：「关于与更新」留在常规页——它用的凭据就在同一页，而"版本号 + 有没有新版"是日常一件事，
         // 不属于「数据」（那一页管的是本机那些不可重建的东西）也不属于「健康与诊断」（那一页是取证）。
         // 读<b>抹掉注释之后</b>的那一份：UE24 那一格实测出来，卡片上方那行注释会把标题替它答上，
