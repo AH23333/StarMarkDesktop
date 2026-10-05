@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.DependencyInjection;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Trending;
 using StarMark.Core.Trending;
 using StarMark.Integrations.GitHub;
@@ -49,8 +50,11 @@ public partial class TrendingPageViewModel : ObservableObject
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private bool _failed;
     [ObservableProperty] private bool _isStale;
-    [ObservableProperty] private string _statusText = string.Empty;
-    [ObservableProperty] private string _emptyHint = string.Empty;
+    /// <summary>状态行（来源标注／时刻／动作结果）同 <see cref="_emptyHint"/>：交回键＋实参，⛔ 不在这里拼句子。</summary>
+    [ObservableProperty] private LocMessage? _statusText;
+    /// <summary>空态／失败态那一行：交回<b>键＋实参</b>而不是拼好的句子（批次 WI-2k），
+    /// 换语言那一刻由 <c>LocText</c> 按新语言重算。⛔ 这里拼字符串＝把语言定死在上一次算的那一刻。</summary>
+    [ObservableProperty] private LocMessage? _emptyHint;
 
     /// <summary>有没有配 Token：只决定那一行提示与「去设置配 Token」按钮，<b>不</b>决定 Star 按钮能不能点。</summary>
     [ObservableProperty] private bool _hasToken;
@@ -77,7 +81,7 @@ public partial class TrendingPageViewModel : ObservableObject
         TrendingItemActions.NoticeRaised += m => StatusText = m;
     }
 
-    public bool HasStatus => !string.IsNullOrEmpty(StatusText);
+    public bool HasStatus => StatusText is not null;
     public bool HasRows => Rows.Count > 0;
 
     /// <summary>没配 Token 时才提示（配了就不占一行）；按钮永远可用，点了会说要配什么。</summary>
@@ -85,7 +89,7 @@ public partial class TrendingPageViewModel : ObservableObject
 
     public bool IsBusy => IsLoading;
 
-    partial void OnStatusTextChanged(string value) => OnPropertyChanged(nameof(HasStatus));
+    partial void OnStatusTextChanged(LocMessage? value) => OnPropertyChanged(nameof(HasStatus));
     partial void OnIsLoadingChanged(bool value) => OnPropertyChanged(nameof(IsBusy));
 
     partial void OnPeriodCodeChanged(string value)
@@ -115,8 +119,8 @@ public partial class TrendingPageViewModel : ObservableObject
             HasRowsChanged();
             Failed = false;
             IsStale = false;
-            StatusText = string.Empty;
-            EmptyHint = "热榜未开启：到「设置 → GitHub 热榜」打开后，这里才会抓取 GitHub 热榜。";
+            StatusText = null;
+            EmptyHint = LocMessage.Of("trending.emptyDisabled");
             return;
         }
 
@@ -124,7 +128,7 @@ public partial class TrendingPageViewModel : ObservableObject
         var cts = _cts = new CancellationTokenSource();
         IsLoading = true;
         Failed = false;
-        StatusText = string.Empty;
+        StatusText = null;
         HasToken = !string.IsNullOrWhiteSpace(_githubOptions.Token);
         try
         {
@@ -138,7 +142,7 @@ public partial class TrendingPageViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            StatusText = "已取消本次抓取，列表保持原样。";
+            StatusText = LocMessage.Of("trending.statusCancelled");
         }
         catch (Exception ex)
         {
@@ -147,8 +151,8 @@ public partial class TrendingPageViewModel : ObservableObject
             Failed = true;
             Rows.Clear();
             HasRowsChanged();
-            EmptyHint = $"抓取失败：{ex.Message}";
-            StatusText = "抓取失败，下面给出的是原因；点「重试」可以再抓一次。";
+            EmptyHint = LocMessage.Of("trending.emptyFailed", ex.Message);
+            StatusText = LocMessage.Of("trending.statusFailed");
             StarLog.Warn($"热榜页抓取失败（{PeriodCode}）：{ex.Message}");
         }
         finally
@@ -173,10 +177,10 @@ public partial class TrendingPageViewModel : ObservableObject
         }
         HasRowsChanged();
         EmptyHint = _last.Count == 0
-            ? "本期没有拿到候选。可能是 GitHub 热榜页暂时不可用——点「重试」换一次试试。"
+            ? LocMessage.Of("trending.emptyNoCandidates")
             : Rows.Count == 0
-                ? $"本期 {(_last.Count)} 个候选里没有匹配「{needle}」的（标题 / 描述 / 语言）。清空筛选即可看全部。"
-                : string.Empty;
+                ? LocMessage.Of("trending.emptyNoMatch", _last.Count, needle)
+                : null;
 
         _ = RefreshRowStatesAsync();
     }
@@ -197,19 +201,22 @@ public partial class TrendingPageViewModel : ObservableObject
     /// 来源标注：一句话讲清"这批数据来自哪条腿、什么时候、有没有降级"。
     /// 兜底与 stale 都必须显式——它们都是"看着正常但语义不同"的状态。
     /// </summary>
-    private static string Describe(TrendingResult r)
+    private static LocMessage Describe(TrendingResult r)
     {
         var via = r.Via switch
         {
-            TrendingSource.SearchApi => "来源：GitHub 搜索接口兜底（没有“本期新增星数”）",
-            TrendingSource.TrendingHtml => "来源：GitHub 热榜页",
-            _ => "来源：上次缓存（未记录来源）",
+            TrendingSource.SearchApi => LocMessage.Of("trending.viaSearchApi"),
+            TrendingSource.TrendingHtml => LocMessage.Of("trending.viaTrendingPage"),
+            _ => LocMessage.Of("trending.viaCacheUnknown"),
         };
+        // 读数句子交的也是键＋实参：它们由 LocMessage.ToString 在<b>贴上去的那一刻</b>才取词，
+        // 所以换语言重贴时整句（含"N 分钟前"）一起改口。
         var age = TrendingCacheCodec.DescribeAge(r.FetchedAt, DateTimeOffset.Now);
         var head = r.Stale
-            ? $"抓取失败·已显示上次结果（{age}）"
-            : r.FromCache ? $"{via}·{age}已缓存" : via + (age.Length > 0 ? $"·{age}" : "");
-        return r.Notice is { Length: > 0 } notice ? head + "｜" + notice : head;
+            ? LocMessage.Of("trending.statusStale", age)
+            : r.FromCache ? LocMessage.Of("trending.statusCached", via, age)
+            : age is null ? via : LocMessage.Of("trending.statusViaAge", via, age);
+        return r.Notice is { Length: > 0 } notice ? LocMessage.Of("trending.statusNotice", head, notice) : head;
     }
 
     private void HasRowsChanged() => OnPropertyChanged(nameof(HasRows));

@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Globalization;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions;
 
@@ -136,8 +137,11 @@ public static class DateTimeText
 
     // ==================== 「多久以前」那四档人话 ====================
 
+    // ==================== 「多久以前」那四档人话 ====================
+
     /// <summary>
-    /// 「多久以前」这一族话里<b>措辞</b>的唯一出处（批次 SJ，P-131 清单 #5）。
+    /// 「多久以前」这一族话里<b>措辞</b>的唯一出处（批次 SJ，P-131 清单 #5；批次 WI-2k 起<b>措辞本身进了界面文案表</b>，
+    /// 这里只留<b>键</b>与<b>档位</b>）。
     /// <para>登记时写的是"两份实现"（卡片与活动列表各一份 if 链，措辞逐字相同）。按<b>后果</b>重扫＝
     /// 四份 if 链（另加热榜缓存年龄、RSS 源状态那一句"上次抓取 …"），而<b>没有任何一条用例钉过其中任何一份</b>。
     /// 两份逐字相同的那对已经真分岔出一天：活动列表把 <c>FromUnixTimeSeconds</c> 得到的<b>零偏移</b>直接交
@@ -147,17 +151,49 @@ public static class DateTimeText
     /// 都是宿主自己的判断，留在那一句的调用点；这里只保证"分钟／小时／天"这三档<b>怎么写、怎么取整</b>
     /// 只有一份。取整一律<b>向下截断</b>：热榜那份原本走 <c>NumberText.Grouped(double)</c>（"N0"＝四舍五入），
     /// 于是 3 小时 59 分在那儿写"4 小时前"、在 RSS 那儿写"3 小时前"——同一句年龄两处差一小时（本批统一成截断）。</para>
+    /// <para><b>WI-2k 为什么把字交回表</b>：这四档会<b>嵌进</b>热榜与 RSS 的状态行（"来源…·N 分钟前已缓存"）。
+    /// 字写死在这里，外层那句换了语言也填不回新语言——屏幕上就是半中半英。交回表之后
+    /// <see cref="MinutesAgoMessage(long)"/> 那几颗交出的是<b>还没取词</b>的句子，
+    /// 由贴它的那一刻按当时的语言填空（<c>LocMessage.ToString</c>）。</para>
     /// </summary>
-    public const string JustNow = "刚刚";
+    public const string JustNowKey = "time.justNow";
+
+    /// <summary>「N 分钟前」那一档的<b>键</b>（读数由调用点向下截断后交出）。</summary>
+    public const string MinutesAgoKey = "time.minutesAgo";
+
+    /// <summary>「N 小时前」那一档的<b>键</b>。</summary>
+    public const string HoursAgoKey = "time.hoursAgo";
+
+    /// <summary>「N 天前」那一档的<b>键</b>。</summary>
+    public const string DaysAgoKey = "time.daysAgo";
+
+    /// <summary>「刚刚」这一档（<b>按当前语言</b>当场取词）。</summary>
+    public static string JustNow => Locale.T(JustNowKey);
 
     /// <summary>「N 分钟前」这一档（<paramref name="count"/> 由调用点向下截断后交出）。</summary>
-    public static string MinutesAgo(long count) => $"{count} 分钟前";
+    public static string MinutesAgo(long count) => Locale.Fmt(MinutesAgoKey, count);
 
     /// <summary>「N 小时前」这一档。</summary>
-    public static string HoursAgo(long count) => $"{count} 小时前";
+    public static string HoursAgo(long count) => Locale.Fmt(HoursAgoKey, count);
 
     /// <summary>「N 天前」这一档。</summary>
-    public static string DaysAgo(long count) => $"{count} 天前";
+    public static string DaysAgo(long count) => Locale.Fmt(DaysAgoKey, count);
+
+    /// <summary>四档的<b>还没取词</b>版本：要嵌进别句子里的读数一律走这几颗，⛔ 别在这里先拼成字符串。</summary>
+    public static LocMessage JustNowMessage()
+        => LocMessage.Of(JustNowKey);
+
+    /// <summary>「N 分钟前」那一档，交<b>键＋读数</b>。</summary>
+    public static LocMessage MinutesAgoMessage(long count)
+        => LocMessage.Of(MinutesAgoKey, count);
+
+    /// <summary>「N 小时前」那一档，交<b>键＋读数</b>。</summary>
+    public static LocMessage HoursAgoMessage(long count)
+        => LocMessage.Of(HoursAgoKey, count);
+
+    /// <summary>「N 天前」那一档，交<b>键＋读数</b>。</summary>
+    public static LocMessage DaysAgoMessage(long count)
+        => LocMessage.Of(DaysAgoKey, count);
 
     /// <summary>
     /// 一个本机时刻（Unix 秒）离 <paramref name="now"/> 多久：<b>刚刚／分钟前／小时前／天前</b>四档，

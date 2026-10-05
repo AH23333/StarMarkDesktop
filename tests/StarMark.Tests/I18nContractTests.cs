@@ -359,14 +359,33 @@ public sealed class I18nContractTests : IDisposable
 
     /// <summary>带读数的句子走 <c>Fmt</c>，数字一律走 <see cref="System.IFormatProvider"/> 的不变文化
     /// （这一族在 <c>DisplayDateFormatGateTests</c>／批次 RZ 已经定死：读数不许跟着界面语言变小数点）。
-    /// <para><b>覆盖面登记</b>：今天表里没有带占位符的行（见 <see cref="BothColumnsOfARowUseTheSamePlaceholderNumbers"/>），
-    /// 所以这一格只钉住"多给的实参不炸、没有占位符时原样返回"。真正配错号的句子进表时，
-    /// 那条判据住在 <see cref="BothColumnsOfARowUseTheSamePlaceholderNumbers"/>，这一格要一起补实参。</para></summary>
+    /// <para><b>覆盖面登记</b>：表里<b>已经</b>有带占位符的行（批次 WI-2j／WI-2k 起，如 trending.emptyNoMatch
+    /// 与 time.minutesAgo），所以这一格钉的是"多给的实参不炸、没有占位符时原样返回"；
+    /// 配错号那一头由 <see cref="BothColumnsOfARowUseTheSamePlaceholderNumbers"/> 逐行比对钉住。</para></summary>
     [Fact]
     public void FormattingAnEntryWithoutSlotsReturnsItUnchanged()
     {
         Assert.Equal(Locale.T("nav.tree"), Locale.Fmt("nav.tree"));
         Assert.Equal(Locale.T("nav.tree"), Locale.Fmt("nav.tree", 1234.5));
         Assert.Equal("1234.5", 1234.5.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// <b>嵌在句子里的那颗读数跟着语言当场改口</b>（批次 WI-2k 的机制核心；能真跑所以住在这一族）。
+    /// <para>热榜状态行那句是"外层句子＋内层读数句子"两层。如果内层在交出前就取完词，换语言那一刻
+    /// 外层翻了、内层留在旧语言里——屏幕上就是半中半英，而形状闸门（属性类型那条）看不见它。
+    /// 所以这一格钉的是<b>同一颗对象、只换语言</b>：两次渲染必须分别是两种语言。</para>
+    /// </summary>
+    [Fact]
+    public void ANestedReadingIsRenderedInTheLanguageOfTheMoment()
+    {
+        var composed = LocMessage.Of("trending.statusCached",
+            LocMessage.Of("trending.viaTrendingPage"), LocMessage.Of("time.minutesAgo", 10));
+
+        Locale.TrySet(AppLanguage.Chinese);
+        Assert.Equal("来源：GitHub 热榜页·10 分钟前已缓存", composed.Render());
+
+        Locale.TrySet(AppLanguage.English);
+        Assert.Equal("Source: GitHub trending page · 10 minutes ago in cache", composed.Render());
     }
 }

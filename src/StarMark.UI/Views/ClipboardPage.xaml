@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:i18n="using:StarMark.UI.Helpers"
     xmlns:controls="using:StarMark.UI.Controls"
     xmlns:helpers="using:StarMark.UI.Helpers"
     xmlns:viewModels="using:StarMark.UI.ViewModels"
@@ -19,15 +20,15 @@
         <!-- 页头：主操作提示（点一条=复制回去）+ 两个即时开关 -->
         <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="12,12,12,4">
             <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                <TextBlock Text="剪贴板历史" FontSize="18" FontWeight="SemiBold"
+                <TextBlock i18n:LocText.Key="settings.data.clipboardTitle" FontSize="18" FontWeight="SemiBold"
                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                <TextBlock Text="点一条 = 再复制回剪贴板（可直接去粘贴）。右键可置顶、加标签、写笔记或删除。"
+                <TextBlock i18n:LocText.Key="clipboard.note"
                            Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
             </StackPanel>
             <ToggleButton Grid.Column="1" x:Name="PauseButton" IsChecked="{x:Bind ViewModel.Paused, Mode=TwoWay}"
-                          Content="暂停记录" Checked="Pause_Changed" Unchecked="Pause_Changed"
-                          ToolTipService.ToolTip="临时粘贴密码等私密内容时暂停；暂停期间不再记录新内容"/>
-            <Button Grid.Column="2" x:Name="ClearButton" Content="清空历史…" Click="Clear_Click"/>
+                          i18n:LocText.Key="clipboard.pause" Checked="Pause_Changed" Unchecked="Pause_Changed"
+                          i18n:LocText.ToolTipKey="clipboard.pauseTip"/>
+            <Button Grid.Column="2" x:Name="ClearButton" i18n:LocText.Key="clipboard.clear" Click="Clear_Click"/>
         </Grid>
 
         <!-- 未开启 / 暂停中：都在这一行照实说明，不要让列表空着让人猜 -->

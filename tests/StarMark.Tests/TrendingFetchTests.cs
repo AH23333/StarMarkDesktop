@@ -341,23 +341,39 @@ public sealed class TrendingCacheCodecTests
         Assert.True(TrendingCacheCodec.IsSameLocalDay(before, before, TimeSpan.FromHours(8)));
     }
 
+    /// <summary>
+    /// 取"还没取词"那句的<b>键＋读数</b>（批次 WI-2k 起 <c>DescribeAge</c> 交回 <c>LocMessage</c>）。
+    /// <para>断言从"渲染后的中文字串"换成"键＋读数"有两个原因：① 措辞搬进界面文案表后，
+    /// 渲染结果跟着<b>进程当前语言</b>走，而 xUnit 会并行跑别的用例——那句逐字比较会变成随机红；
+    /// ② 这一族要钉的是<b>档位与取整</b>，不是字面串（字面串由表那颗占位符闸门钉）。</para>
+    /// </summary>
+    private static void AssertAge(string expectedKey, long expectedCount, long fetchedAtUnix, DateTimeOffset now)
+    {
+        var message = TrendingCacheCodec.DescribeAge(fetchedAtUnix, now);
+        Assert.NotNull(message);
+        Assert.Equal(expectedKey, message!.Key);
+        // 没有读数的那一档（"刚刚"）交空数组，⛔ 不是 new object?[]{ } 之外的一切形状——档位选错才是本族要拦的事。
+        Assert.Equal(expectedCount < 0 ? Array.Empty<object?>() : new object?[] { expectedCount },
+            message.Args ?? Array.Empty<object?>());
+    }
+
     [Theory]
     [InlineData(0)]         // 没有抓取时刻
     [InlineData(-5)]        // 非法
     public void DescribeAge_OnMissingTimestamp_SaysNothing(long fetchedAt)
-        => Assert.Equal(string.Empty, TrendingCacheCodec.DescribeAge(fetchedAt, DateTimeOffset.UtcNow));
+        => Assert.Null(TrendingCacheCodec.DescribeAge(fetchedAt, DateTimeOffset.UtcNow));
 
     [Fact]
     public void DescribeAge_UsesMinutesHoursDays()
     {
         var now = DateTimeOffset.UtcNow;
 
-        Assert.Equal("刚刚", TrendingCacheCodec.DescribeAge(now.AddSeconds(30).ToUnixTimeSeconds(), now));
-        Assert.Equal("10 分钟前", TrendingCacheCodec.DescribeAge(now.AddMinutes(-10).ToUnixTimeSeconds(), now));
-        Assert.Contains("小时前", TrendingCacheCodec.DescribeAge(now.AddHours(-3).AddMinutes(-20).ToUnixTimeSeconds(), now));
-        Assert.Contains("天前", TrendingCacheCodec.DescribeAge(now.AddDays(-2).ToUnixTimeSeconds(), now));
+        AssertAge("time.justNow", -1, now.AddSeconds(30).ToUnixTimeSeconds(), now);
+        AssertAge("time.minutesAgo", 10, now.AddMinutes(-10).ToUnixTimeSeconds(), now);
+        AssertAge("time.hoursAgo", 3, now.AddHours(-3).AddMinutes(-20).ToUnixTimeSeconds(), now);
+        AssertAge("time.daysAgo", 2, now.AddDays(-2).ToUnixTimeSeconds(), now);
         // 机器时钟被往回调过：不显示"-2 小时"这种荒谬值
-        Assert.Equal("刚刚", TrendingCacheCodec.DescribeAge(now.AddHours(2).ToUnixTimeSeconds(), now));
+        AssertAge("time.justNow", -1, now.AddHours(2).ToUnixTimeSeconds(), now);
     }
 
     /// <summary>
@@ -370,11 +386,8 @@ public sealed class TrendingCacheCodecTests
     public void DescribeAge_TruncatesHoursRatherThanRoundingThem()
     {
         var now = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
-        Assert.Equal("3 小时前",
-            TrendingCacheCodec.DescribeAge(now.AddHours(-3).AddMinutes(-59).ToUnixTimeSeconds(), now));
-        Assert.Equal("59 分钟前",
-            TrendingCacheCodec.DescribeAge(now.AddMinutes(-59).AddSeconds(-40).ToUnixTimeSeconds(), now));
-        Assert.Equal("2 天前",
-            TrendingCacheCodec.DescribeAge(now.AddDays(-2).AddHours(-20).ToUnixTimeSeconds(), now));
+        AssertAge("time.hoursAgo", 3, now.AddHours(-3).AddMinutes(-59).ToUnixTimeSeconds(), now);
+        AssertAge("time.minutesAgo", 59, now.AddMinutes(-59).AddSeconds(-40).ToUnixTimeSeconds(), now);
+        AssertAge("time.daysAgo", 2, now.AddDays(-2).AddHours(-20).ToUnixTimeSeconds(), now);
     }
 }

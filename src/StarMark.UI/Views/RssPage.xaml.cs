@@ -44,6 +44,10 @@ public sealed partial class RssPage : Page
     {
         InitializeComponent();
         ViewModel = App.Services.GetRequiredService<RssPageViewModel>();
+        // 状态行／空态／那颗按钮的字都由 VM 交回"键＋实参"，这里只负责钉到元素上
+        // （换语言的重贴由 LocText 那一条订阅做，批次 WI-2k）。
+        ViewModel.PropertyChanged += (_, e) => ApplyVmMessages();
+        ApplyVmMessages();
         // 主题切换会改变代码构建处的画笔解析，重建一次才能刷新颜色（与文件夹页同一处理）
         ActualThemeChanged += (_, _) => RebuildSources();
     }
@@ -64,6 +68,14 @@ public sealed partial class RssPage : Page
         base.OnNavigatedFrom(e);
         ViewModel.StructureChanged -= RebuildSources;
         ViewModel.CancelLoading();
+    }
+
+    /// <summary>三句都会随状态变（抓不抓、有没有源、这一轮的结果），所以每次属性通知都重推一遍。</summary>
+    private void ApplyVmMessages()
+    {
+        LocText.SetMessage(StatusTextText, ViewModel.StatusText);
+        LocText.SetMessage(EmptyHintText, ViewModel.EmptyHint);
+        LocText.SetMessage(RefreshButton, ViewModel.RefreshLabel);
     }
 
     private void Refresh_Click(object sender, RoutedEventArgs e) => _ = ViewModel.RefreshAsync();

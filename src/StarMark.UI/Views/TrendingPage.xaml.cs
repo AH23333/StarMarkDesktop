@@ -1,10 +1,12 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using StarMark.Abstractions.I18n;
 using StarMark.UI.Helpers;
 using StarMark.UI.ViewModels;
 
@@ -22,6 +24,18 @@ public sealed partial class TrendingPage : Page
     public TrendingPageViewModel ViewModel { get; }
 
     /// <summary>
+    /// 榜单周期那三档走「数据项＋模板」（批次 WI-2c 那颗共用模板）：闭着的那一格才跟着语言当场改口。
+    /// <para>⚠ <see cref="LocOption.Value"/> 那串代码是**存进设置档的东西**（<c>SaveTrendingPeriod</c>），
+    /// 而清单顺序只是展示顺序——按序号存的话，中间插一档会让所有已存的档安静地指向另一个周期。</para>
+    /// </summary>
+    public IReadOnlyList<LocOption> PeriodOptions { get; } =
+    [
+        LocOption.T("trending.daily", "daily"),
+        LocOption.T("trending.weekly", "weekly"),
+        LocOption.T("trending.monthly", "monthly"),
+    ];
+
+    /// <summary>
     /// 回填周期下拉时抑制一次"选择变化"事件。没有这个闸门，进入页面回填选中项就会立刻再发一次抓取，
     /// 表现为每次切回这一页都白抓一遍（缓存明明命中）。
     /// </summary>
@@ -31,7 +45,23 @@ public sealed partial class TrendingPage : Page
     {
         InitializeComponent();
         ViewModel = App.Services.GetRequiredService<TrendingPageViewModel>();
+        // 状态行与空态那两行由 VM 交回"键＋实参"，这里只负责钉到元素上（换语言的重贴由 LocText 那一条订阅做）。
+        ViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ViewModel.EmptyHint)) ApplyEmptyHint();
+            if (e.PropertyName == nameof(ViewModel.StatusText)) ApplyStatusText();
+        };
+        ApplyEmptyHint();
+        ApplyStatusText();
     }
+
+    /// <summary>
+    /// 把 VM 那句"键＋实参"推给 <see cref="LocText"/>。<b>没有话要说时也要设一次空键</b>：
+    /// 清空会把注册项一起摘掉，否则留着上一条的注册，换语言那一刻会把已经不该出现的句子又贴回来。
+    /// </summary>
+    private void ApplyEmptyHint() => LocText.SetMessage(EmptyHintText, ViewModel.EmptyHint);
+
+    private void ApplyStatusText() => LocText.SetMessage(StatusTextText, ViewModel.StatusText);
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
@@ -40,9 +70,8 @@ public sealed partial class TrendingPage : Page
         ViewModel.Enabled = App.Services.GetRequiredService<SettingsStore>().LoadTrendingEnabled();
 
         _syncing = true;
-        for (var i = 0; i < PeriodCombo.Items.Count; i++)
-            if (PeriodCombo.Items[i] is ComboBoxItem { Tag: string code } && code == ViewModel.PeriodCode)
-            { PeriodCombo.SelectedIndex = i; break; }
+        var restored = IndexOfPeriod(ViewModel.PeriodCode);
+        if (restored >= 0) PeriodCombo.SelectedIndex = restored;   // 认不得的代码不就近给一档
         _syncing = false;
 
         await ViewModel.ReloadAsync(force: false);
@@ -57,9 +86,17 @@ public sealed partial class TrendingPage : Page
 
     private void Period_Changed(object sender, SelectionChangedEventArgs e) => ApplyPeriod();
 
+    /// <summary>按代码找那一档的下标；找不到回 -1（＝下拉保持未选中，⛔ 不就近挑一个"近的周期"）。</summary>
+    private int IndexOfPeriod(string? code)
+    {
+        for (var i = 0; i < PeriodOptions.Count; i++)
+            if (PeriodOptions[i].Value is string value && value == code) return i;
+        return -1;
+    }
+
     private void ApplyPeriod()
     {
-        if (_syncing || PeriodCombo.SelectedItem is not ComboBoxItem { Tag: string code }) return;
+        if (_syncing || PeriodCombo.SelectedItem is not LocOption { Value: string code }) return;
         ViewModel.PeriodCode = code;
         App.Services.GetRequiredService<SettingsStore>().SaveTrendingPeriod(code);
     }
@@ -75,7 +112,9 @@ public sealed partial class TrendingPage : Page
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
         ViewModel.CancelLoading();
-        ViewModel.StatusText = "已停止本次抓取，列表保持原样。";
+        // 与"抓取消那一条出口"共用同一颗键（trending.statusCancelled）：这句话曾有两份可各自被改的抄本
+        // （一份在按钮里、一份在 catch 里），差一个字（停止／取消）也是差一处出处（坑表 #290 同一族）。
+        ViewModel.StatusText = LocMessage.Of("trending.statusCancelled");
     }
 
     private void GoSettings_Click(object sender, RoutedEventArgs e) => App.MainWindow?.NavigateTo("settings");

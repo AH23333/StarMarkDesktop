@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:i18n="using:StarMark.UI.Helpers"
     xmlns:helpers="using:StarMark.UI.Helpers"
     mc:Ignorable="d">
 
@@ -22,19 +23,22 @@
 
         <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="12,12,12,4">
             <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                <TextBlock Text="RSS 订阅" FontSize="18" FontWeight="SemiBold"
+                <TextBlock i18n:LocText.Key="rss.title" FontSize="18" FontWeight="SemiBold"
                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                <TextBlock Text="点文件夹展开这个源的文章；点标题＝在浏览器打开这篇文章。只有点「收藏到文件夹」的那一条才会进本机库，并放进它自己的文件夹（RSS订阅 / 源名）；不点就不进库。打开这一页先摆本机缓存（rss-cache.json），自动补抓有自己的节奏——隔多久抓一次、哪几个到期了，都写在下面那一行状态里；要立刻看新的点「刷新」。"
+                <TextBlock i18n:LocText.Key="rss.note"
                            Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
             </StackPanel>
-            <Button Grid.Column="1" x:Name="RefreshButton" Content="{x:Bind ViewModel.RefreshLabel, Mode=OneWay}"
+            <!-- 这颗按钮的字随"在不在抓"换键（停止抓取 / 刷新），由 code-behind 推给 LocText：
+                 带读数的标签⛔不许挂静态键（挂了＝静态那句盖掉带值那句，坑表 #295），
+                 而 {x:Bind} 交回拼好的句子又把语言定死在上一次算出的那一刻（#276）。 -->
+            <Button Grid.Column="1" x:Name="RefreshButton"
                     VerticalAlignment="Center" Click="Refresh_Click"
-                    ToolTipService.ToolTip="无视自动补抓的节奏，现在就去问一遍所有启用的源（源没变化时只花一个来回；再点一次就是停止，已经抓到的会留下）"/>
-            <Button Grid.Column="2" Content="去设置改来源" VerticalAlignment="Center" Click="GoSettings_Click"
-                    ToolTipService.ToolTip="添加 / 停用 / 删除订阅地址，以及这一栏的总开关"/>
+                    i18n:LocText.ToolTipKey="rss.refreshTip"/>
+            <Button Grid.Column="2" i18n:LocText.Key="rss.sourcesButton" VerticalAlignment="Center" Click="GoSettings_Click"
+                    i18n:LocText.ToolTipKey="rss.sourcesTip"/>
         </Grid>
 
-        <TextBlock Grid.Row="1" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+        <TextBlock Grid.Row="1" x:Name="StatusTextText"
                    Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="12,4,12,4" VerticalAlignment="Center"
                    Visibility="{x:Bind ViewModel.HasStatus, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
 
@@ -46,9 +50,9 @@
         <!-- 空态与进度：都放在最后一行，不占走列表的位置（源一多，滚动位置不该被顶掉） -->
         <StackPanel Grid.Row="3" HorizontalAlignment="Center" Margin="12,0,12,20" Spacing="8"
                     Visibility="{x:Bind ViewModel.HasSections, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
-            <TextBlock Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}" Style="{StaticResource MutedText}"
+            <TextBlock x:Name="EmptyHintText" Style="{StaticResource MutedText}"
                        TextWrapping="Wrap" MaxWidth="520" TextAlignment="Center"/>
-            <Button Content="去设置里开启 RSS" HorizontalAlignment="Center" Click="GoSettings_Click"
+            <Button i18n:LocText.Key="rss.switchButton" HorizontalAlignment="Center" Click="GoSettings_Click"
                     Visibility="{x:Bind ViewModel.Enabled, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
         </StackPanel>
 

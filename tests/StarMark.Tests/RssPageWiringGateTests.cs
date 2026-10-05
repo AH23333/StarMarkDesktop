@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using StarMark.Abstractions.I18n;
 using Xunit;
 using static StarMark.Tests.SourceGate;
 
@@ -170,7 +171,10 @@ public sealed class RssPageWiringGateTests
     {
         var open = MethodBody(ReadRepoFile(RssPageVm), "public async Task OpenAsync(ItemCardViewModel vm)");
         Assert.Contains("LauncherEx.TryOpenAsync(vm.Uri)", open);
-        Assert.Contains("没能打开：", open);
+        // 批次 WI-2k 起这句进表：这一格要钉的是<b>"打不开一定有话、且那句话在表里"</b>，
+        // 而不是钉代码里那几个汉字（字有了两份主人：表与代码，那才是这条原判据要拦的形状）。
+        Assert.Contains(@"LocMessage.Of(""rss.openFailed"", reason)", open);
+        Assert.Contains("没能打开：", UiStrings.TryGet("rss.openFailed", out var row) ? row.Zh : string.Empty);
         Assert.DoesNotContain("LauncherEx.OpenAsync", open);
     }
 
@@ -286,9 +290,14 @@ public sealed class RssPageWiringGateTests
     [Fact]
     public void ThePageTellsTheTruthAboutWhenItGoesOnline()
     {
+        // 批次 WI-2j 把顶部那句说明搬进了表，所以这两条断言的主人跟着搬：
+        // 钉在标记上只会看见一个键名，钉在表里那一行才量得到"页面到底说了什么"。
         var xaml = Markup(ReadRepoFile(RssPageXaml));
-        Assert.DoesNotContain("只有按「刷新」时才发请求", xaml);       // 这句在每天一次之后就是假话
-        Assert.Contains("rss-cache.json", xaml);                        // 说的是本机缓存，就得让人找得到那份文件
+        Assert.Contains(@"i18n:LocText.Key=""rss.note""", xaml);
+        Assert.True(UiStrings.TryGet("rss.note", out var note), "顶部那句说明必须已在表里（rss.note）");
+        Assert.DoesNotContain("只有按「刷新」时才发请求", note.Zh, StringComparison.Ordinal);   // 每天一次之后这就是假话
+        Assert.Contains("rss-cache.json", note.Zh, StringComparison.Ordinal);   // 说的是本机缓存，就得让人找得到那份文件
+        Assert.Contains("rss-cache.json", note.En, StringComparison.Ordinal);
     }
 
     /// <summary>"隔多久自动补抓一次"这个节奏只许有一处在说话（<c>RssFeedCache.AutoRefreshGap</c>）。
@@ -299,8 +308,12 @@ public sealed class RssPageWiringGateTests
     public void TheCadenceIsStatedInExactlyOnePlace()
     {
         var vm = ReadRepoFile(RssPageVm);
-        Assert.True(Count(vm, "RssFeedCache.GapText") >= 4,
-            "界面那句节奏必须四处都从 RssFeedCache.GapText 取（改了 AutoRefreshGap 才不会留下四句假话）");
+        Assert.True(Count(vm, "RssFeedCache.GapMessage") >= 4,
+            "界面那句节奏必须四处都从 RssFeedCache.GapMessage 取（改了 AutoRefreshGap 才不会留下四句假话）");
+        // 批次 WI-2k：界面拿的必须是**还没取词**的那颗。GapText（取完词的）只留给日志与用例逐字对账——
+        // 界面要是退回那一颗，换语言那一刻状态行就半中半英，而这一格正好拦得住。
+        Assert.False(vm.Contains("RssFeedCache.GapText"),
+            "界面那句节奏不许再取已渲染的 GapText（那是把语言定死在算出它的那一刻）");
 
         var xaml = Markup(ReadRepoFile(RssPageXaml));
         foreach (var stray in new[] { "一天", "每天", "24 小时" })

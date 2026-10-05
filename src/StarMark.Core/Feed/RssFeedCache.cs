@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using StarMark.Abstractions.Feed;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Feed;
 
@@ -111,16 +112,24 @@ public static class RssFeedCache
     /// <para>为什么要有这个函数而不是把"一天"写进界面文案：那样一改 <see cref="AutoRefreshGap"/>
     /// 就会留下三句假话（数字写在句子和常数里，编译器不响）。现在句子只从这里取。</para>
     /// </summary>
-    public static string GapTextFor(TimeSpan gap)
+    public static LocMessage GapMessageFor(TimeSpan gap)
     {
         var hours = (int)Math.Round(gap.TotalHours);
-        if (hours < 1) return $"{(int)Math.Round(gap.TotalMinutes)} 分钟";
-        if (hours < 24) return $"{hours} 小时";
-        return hours % 24 == 0 ? (hours == 24 ? "一天" : $"{hours / 24} 天") : $"{hours / 24} 天多";
+        if (hours < 1) return LocMessage.Of("rss.gapMinutes", (int)Math.Round(gap.TotalMinutes));
+        if (hours < 24) return LocMessage.Of("rss.gapHours", hours);
+        return hours % 24 == 0
+            ? (hours == 24 ? LocMessage.Of("rss.gapOneDay") : LocMessage.Of("rss.gapDays", hours / 24))
+            : LocMessage.Of("rss.gapDaysPlus", hours / 24);
     }
 
+    /// <summary><see cref="GapMessageFor"/> 取完词的那一份：留给<b>不上屏幕</b>的消费者（日志、用例逐字对账）。</summary>
+    public static string GapTextFor(TimeSpan gap) => GapMessageFor(gap).Render();
+
     /// <summary><see cref="GapTextFor"/> 按当前生效的间隔取的那一份（界面上写节奏的地方只用它）。</summary>
-    public static string GapText => GapTextFor(AutoRefreshGap);
+    /// <summary>界面上写节奏的地方用这一颗（<b>还没取词</b>的那句，批次 WI-2k）；<see cref="GapText"/> 只留给日志与用例。</summary>
+    public static LocMessage GapMessage => GapMessageFor(AutoRefreshGap);
+
+    public static string GapText => GapMessage.Render();
 
     /// <summary>
     /// 条目的身份键＝<b>条目自己的链接</b>（去首尾空白，忽略大小写）。

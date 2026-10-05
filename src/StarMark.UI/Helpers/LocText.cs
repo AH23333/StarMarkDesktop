@@ -78,6 +78,47 @@ public static class LocText
 
     public static void SetKey(DependencyObject element, string value) => element.SetValue(KeyProperty, value);
 
+    /// <summary>贴一句<b>带读数</b>的话（批次 WI-2k）：键先存进 <c>Key</c>，实参存进 <see cref="ArgsProperty"/>。</summary>
+    public static void SetKey(DependencyObject element, string value, params object?[] args)
+    {
+        // 顺序是有原因的：实参先落，随后那颗键的回调才知道自己要以"带读数"的方式贴；
+        // 反过来先设键再设实参，第一次贴上去的就是没填空的句子（界面上是 {0}）。
+        element.SetValue(ArgsProperty, args);
+        element.SetValue(KeyProperty, value);
+    }
+
+    /// <summary>
+    /// 把 ViewModel 交回的那句<b>「键＋实参」</b>钉到元素上（批次 WI-2k）。
+    /// <para>为什么要有这一颗而不是让每个页面自己拆：<b>没有话</b>与<b>有话但不带读数</b>这两种情况
+    /// 在调用点必须走同一条路——漏掉前者就留下一条注册项，换语言那一刻把<b>上一次那句已经不该出现的</b>
+    /// 句子又贴回来（坑表 #276 那一族的反向）。拆在十几个页面里就会漂移成十几种漏法。</para>
+    /// </summary>
+    public static void SetMessage(DependencyObject element, LocMessage? message)
+    {
+        if (message is null)
+        {
+            SetKey(element, string.Empty);
+            return;
+        }
+        SetKey(element, message.Key, message.Args ?? Array.Empty<object?>());
+    }
+
+    /// <summary>
+    /// <see cref="KeyProperty"/> 那句正文的<b>实参</b>（配 <c>Locale.Fmt</c> 的位置式占位符）。
+    /// <para>为什么要有这一颗：状态行那一族的话是"半句固定的话＋一个当场算出来的读数"
+    /// （抓了多少条、哪几个源到期、还剩多少 MB）。没有这一颗时只有两条坏路：①把整句留在 code-behind
+    /// 里拼（换语言那一刻没人重贴＝那句永远中文，正是坑表 #276 那一族）；②把读数抄进句子（写死的数，
+    /// P-171 那一族）。健康栏那五行 <c>&lt;Run&gt;</c> 胶水卡的也是这一颗。</para>
+    /// <para>只配 <see cref="KeyProperty"/> 用：<b>提示词、占位符与开关那两侧今天都不带读数</b>，
+    /// 给它们各配一颗实参是五份可以各自漂移的实现，⛔ 等哪一条真带读数了再加。</para>
+    /// </summary>
+    public static readonly DependencyProperty ArgsProperty = DependencyProperty.RegisterAttached(
+        "Args", typeof(object[]), typeof(LocText), new PropertyMetadata(null, OnArgsChanged));
+
+    public static void SetArgs(DependencyObject element, params object?[] args) => element.SetValue(ArgsProperty, args);
+
+    public static object?[]? GetArgs(DependencyObject element) => element.GetValue(ArgsProperty) as object?[];
+
     public static string GetKey(DependencyObject element) => (string)element.GetValue(KeyProperty);
 
     public static void SetToolTipKey(DependencyObject element, string value) => element.SetValue(ToolTipKeyProperty, value);
@@ -99,22 +140,60 @@ public static class LocText
     private static void OnKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var key = e.NewValue as string;
-        if (string.IsNullOrEmpty(key)) return;
+        if (string.IsNullOrEmpty(key))
+        {
+            // 键被清空＝这一处不再由表管（状态行回到"没有话要说"）。⚠ 必须把注册项一起摘掉：
+            // 只把界面上的字清掉而留着注册项，下一次换语言会把**上一次那句**又贴回来。
+            Drop(d, ResolveTextProperty(d));
+            return;
+        }
         var target = ResolveTextProperty(d);
         if (target is null)
         {
             WarnUnwritableOnce(d, key, "找不到可写文字的属性");
             return;
         }
-        Register(d, target, key!);
-        d.SetValue(target, Locale.T(key!));
+        Paste(d, target, key!, ArgsOf(d));
     }
+
+    /// <summary>摘掉一处注册并清回空：状态行"没话了"与"换语言别把旧句子贴回来"必须是同一条路。</summary>
+    private static void Drop(DependencyObject target, DependencyProperty? property)
+    {
+        if (property is null) return;
+        lock (Gate)
+        {
+            Live.RemoveAll(r => r.TryGetTarget(out var t) && ReferenceEquals(t, target) && r.Property == property);
+        }
+        target.SetValue(property, string.Empty);
+    }
+
+    /// <summary>实参换了（读数变了或换了语言之后重算）：按当前那颗键重贴一次，界面才不会被"上一次算出来的句子"钉住。</summary>
+    private static void OnArgsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (GetKey(d) is not { Length: > 0 } key) return;   // 没有键＝这颗实参还没有对象可贴
+        // 贴不上时不在这里再报一次：那处"找不到可写文字的属性"由 <see cref="OnKeyChanged"/> 出声，
+        // 一颗元素两句 Warn 只会把日志里真正那条挤掉（#236 那条节流口径）。
+        if (ResolveTextProperty(d) is not { } target) return;
+        Paste(d, target, key, e.NewValue as object?[]);
+    }
+
+    /// <summary>取词＋填空的唯一一处：贴的时候与换语言重贴的时候走的是同一条路，⛔ 不许两份实现。</summary>
+    private static void Paste(DependencyObject d, DependencyProperty target, string key, object?[]? args)
+    {
+        Register(d, target, key, args);
+        d.SetValue(target, Text(key, args));
+    }
+
+    private static string Text(string key, object?[]? args)
+        => args is { Length: > 0 } ? Locale.Fmt(key, args) : Locale.T(key);
+
+    private static object?[]? ArgsOf(DependencyObject d) => d.GetValue(ArgsProperty) as object?[];
 
     private static void OnToolTipKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var key = e.NewValue as string;
         if (string.IsNullOrEmpty(key)) return;
-        Register(d, ToolTipService.ToolTipProperty, key!);
+        Register(d, ToolTipService.ToolTipProperty, key!, null);
         ToolTipService.SetToolTip(d, Locale.T(key!));
     }
 
@@ -128,7 +207,7 @@ public static class LocText
             WarnUnwritableOnce(d, key!, "没有 PlaceholderText");
             return;
         }
-        Register(d, target, key!);
+        Register(d, target, key!, null);
         d.SetValue(target, Locale.T(key!));
     }
 
@@ -148,18 +227,18 @@ public static class LocText
             WarnUnwritableOnce(d, key!, $"没有 {propertyName}");
             return;
         }
-        Register(d, target, key!);
+        Register(d, target, key!, null);
         d.SetValue(target, Locale.T(key!));
     }
 
-    private static void Register(DependencyObject target, DependencyProperty property, string key)
+    private static void Register(DependencyObject target, DependencyProperty property, string key, object?[]? args)
     {
         lock (Gate)
         {
             // 同一元素同一颗属性只留一条：XAML 里改过键、或同一实例被二次设置时，
             // 留着旧的那条会让换语言把旧文案又贴回去。
             Live.RemoveAll(r => r.TryGetTarget(out var t) && ReferenceEquals(t, target) && r.Property == property);
-            Live.Add(new Registration(new WeakReference<DependencyObject>(target), property, key));
+            Live.Add(new Registration(new WeakReference<DependencyObject>(target), property, key, args));
         }
     }
 
@@ -175,7 +254,7 @@ public static class LocText
         foreach (var registration in snapshot)
         {
             if (!registration.TryGetTarget(out var target)) continue;
-            target.SetValue(registration.Property, Locale.T(registration.Key));
+            target.SetValue(registration.Property, Text(registration.Key, registration.Args));
         }
     }
 
@@ -221,11 +300,13 @@ public static class LocText
 
     private sealed class Registration
     {
-        public Registration(WeakReference<DependencyObject> target, DependencyProperty property, string key)
+        public Registration(WeakReference<DependencyObject> target, DependencyProperty property, string key,
+                           object?[]? args)
         {
             Target = target;
             Property = property;
             Key = key;
+            Args = args;
         }
 
         public WeakReference<DependencyObject> Target { get; }
@@ -233,6 +314,9 @@ public static class LocText
         public DependencyProperty Property { get; }
 
         public string Key { get; }
+
+        /// <summary>那句正文的实参（没有＝<c>null</c>，走整句取词）。换语言重贴时要按它重新填空。</summary>
+        public object?[]? Args { get; }
 
         public bool TryGetTarget(out DependencyObject target) => Target.TryGetTarget(out target!);
     }

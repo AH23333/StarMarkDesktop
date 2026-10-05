@@ -128,6 +128,12 @@ public sealed class StateWriteRowGateTests
             SourceGate.ReadRepoFile("src/StarMark.UI/Helpers/TrendingItemActions.cs"),
             "public static async Task ToggleCollectAsync"));
         Assert.Contains("if (removed)", trending, StringComparison.Ordinal);
-        Assert.Contains("这条本来就没在本机收藏里", trending, StringComparison.Ordinal);
+        // 批次 WI-2k 把那句回执搬进表之后，这里钉两件事：**代码问的是那颗键**（幂等那一路不能说成"已移除"），
+        // 以及**表里那一行确实还在说"本来就没在本机收藏里"**——两头分开钉，⛔ 只钉字面串会把搬字这件事读成缺陷。
+        Assert.Contains("LocMessage.Of(removed ? \"trending.uncollected\" : \"trending.neverCollected\", fullName)",
+            trending, StringComparison.Ordinal);
+        Assert.True(StarMark.Abstractions.I18n.UiStrings.TryGet("trending.neverCollected", out var gone),
+            "热榜收藏那句回执没进表（进了表才知道它被谁问、有没有翻）");
+        Assert.Contains("这条本来就没在本机收藏里", gone!.Zh, StringComparison.Ordinal);
     }
 }

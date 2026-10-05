@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.DependencyInjection;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Feed;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Feed;
 using StarMark.Integrations.Feed;
 using StarMark.UI.Helpers;
@@ -80,8 +81,8 @@ public partial class RssPageViewModel : ObservableObject
 
     [ObservableProperty] private bool _enabled;
     [ObservableProperty] private bool _isBusy;
-    [ObservableProperty] private string _statusText = string.Empty;
-    [ObservableProperty] private string _emptyHint = string.Empty;
+    [ObservableProperty] private LocMessage? _statusText;
+    [ObservableProperty] private LocMessage? _emptyHint;
 
     public RssPageViewModel()
     {
@@ -95,12 +96,14 @@ public partial class RssPageViewModel : ObservableObject
     public bool HasSections => Sections.Count > 0;
 
     /// <summary>状态行有没有内容（没有时整行不占位，避免一屏空白）。</summary>
-    public bool HasStatus => !string.IsNullOrEmpty(StatusText);
+    public bool HasStatus => StatusText is not null;
 
-    partial void OnStatusTextChanged(string value) => OnPropertyChanged(nameof(HasStatus));
+    partial void OnStatusTextChanged(LocMessage? value) => OnPropertyChanged(nameof(HasStatus));
 
-    /// <summary>同一个按钮在抓取期间就是「停止抓取」：另起一个按钮要多占一处布局，而用户要的只是"别等了"。</summary>
-    public string RefreshLabel => IsBusy ? "停止抓取" : "刷新";
+    /// <summary>同一个按钮在抓取期间就是「停止抓取」：另起一个按钮要多占一处布局，而用户要的只是"别等了"。
+    /// <b>这里交回键</b>（批次 WI-2k）：那两个词都是表里的行，页面按这颗状态推给 <c>LocText</c>，
+    /// 换语言那一刻跟着重贴——留在 VM 里拼成字符串就等于把语言定死在这一次。</summary>
+    public LocMessage RefreshLabel => IsBusy ? LocMessage.Of("rss.stop") : LocMessage.Of("dialog.refresh");
 
     partial void OnIsBusyChanged(bool value) => OnPropertyChanged(nameof(RefreshLabel));
 
@@ -112,7 +115,7 @@ public partial class RssPageViewModel : ObservableObject
         {
             Sections.Clear();
             HasSectionsChanged();
-            EmptyHint = "RSS 未开启：到「设置 → 网址来源（RSS / Atom）」打开总开关，这里才会出现各个订阅源。";
+            EmptyHint = LocMessage.Of("rss.emptyDisabled");
         }
     }
 
@@ -149,15 +152,16 @@ public partial class RssPageViewModel : ObservableObject
         // 这一句只在"一个源都没有"时看得见（页面上的空态块按 HasSections 反向显示），
         // 所以它只说这一种情况；有源但还没抓到东西时该说什么，由下面的 StatusText 负责（它永远在）。
         EmptyHint = Sections.Count == 0
-            ? "还没有添加任何来源地址：到「设置 → 网址来源（RSS / Atom）」填一个订阅地址再回来。"
-            : string.Empty;
+            ? LocMessage.Of("rss.emptyNoSources")
+            : null;
         var due = DueCount();
         StatusText = Sections.Count == 0
-            ? string.Empty
-            : $"{Sections.Count} 个来源，{Sections.Count(s => s.Config.Enabled)} 个启用中；上面摆的是本机缓存"
-              + (due > 0
-                    ? $"，{due} 个已超过{RssFeedCache.GapText}没抓（打开这一页时自动补抓，不用点按钮）。"
-                    : $"，都在{RssFeedCache.GapText}之内抓过，不会再联网；要看新的点「刷新」。");
+            ? null
+            : due > 0
+                ? LocMessage.Of("rss.statusCacheDue", Sections.Count,
+                    Sections.Count(s => s.Config.Enabled), due, RssFeedCache.GapMessage)
+                : LocMessage.Of("rss.statusCacheFresh", Sections.Count,
+                    Sections.Count(s => s.Config.Enabled), RssFeedCache.GapMessage);
     }
 
     /// <summary>把某个源的缓存行与"上次抓取/什么时候再自动刷新"摆到它那一行上。</summary>
@@ -210,14 +214,14 @@ public partial class RssPageViewModel : ObservableObject
         if (IsBusy)
         {
             _rounds?.Cancel();
-            StatusText = "正在停止…（已经抓到的会留在上面）";
+            StatusText = LocMessage.Of("rss.stopping");
             return;
         }
         ReloadSources();
         if (!Enabled) return;
         if (Sections.Count == 0)
         {
-            StatusText = "还没有添加任何来源地址。";
+            StatusText = LocMessage.Of("rss.noSources");
             return;
         }
         await StartRoundAsync(auto: false);
@@ -246,7 +250,7 @@ public partial class RssPageViewModel : ObservableObject
         catch (Exception ex)
         {
             StarLog.Error("[RSS] 刷新失败", ex);
-            StatusText = "抓取没能完成：" + ex.Message;
+            StatusText = LocMessage.Of("rss.roundFailed", ex.Message);
         }
         finally
         {
@@ -268,8 +272,8 @@ public partial class RssPageViewModel : ObservableObject
         if (targets.Count == 0) return;
 
         StatusText = auto
-            ? $"正在补抓 {targets.Count} 个已超过{RssFeedCache.GapText}的来源…"
-            : $"正在抓取 {targets.Count} 个来源…（再点一下可以停）";
+            ? LocMessage.Of("rss.fetchingDue", targets.Count, RssFeedCache.GapMessage)
+            : LocMessage.Of("rss.fetchingAll", targets.Count);
 
         // 校验符的"上一次是什么"在这一轮开始时定死（读 _file），抓回来的新值只在轮末串行落盘：
         // 抓取那一路是并发的，Dictionary 不能一边被读一边被写。
@@ -331,8 +335,9 @@ public partial class RssPageViewModel : ObservableObject
 
         // 这里刻意不写 EmptyHint：页面上那块空态按"有没有源"显示，有源时它根本不可见，
         // 而"哪几个源没给条目"已经逐行写在标题上了（写在看不见的地方＝给后来人撒假线索）。
-        StatusText = Summarise(run, shown, added, auto)
-            + (saved ? string.Empty : "　缓存没能写进磁盘（下次进这一页还得重抓）");
+        StatusText = saved
+            ? Summarise(run, shown, added, auto)
+            : LocMessage.Of("rss.statusJoin", Summarise(run, shown, added, auto), LocMessage.Of("rss.cacheWriteFailed"));
     }
 
     /// <summary>离开页面只掐掉在途请求：已经抓到的那一轮结果留在单例 VM 上，回来不必重抓。</summary>
@@ -342,7 +347,7 @@ public partial class RssPageViewModel : ObservableObject
     public async Task OpenAsync(ItemCardViewModel vm)
     {
         var reason = await LauncherEx.TryOpenAsync(vm.Uri);
-        if (reason is not null) StatusText = "没能打开：" + reason;
+        if (reason is not null) StatusText = LocMessage.Of("rss.openFailed", reason);
     }
 
     private static ItemCardViewModel RowFor(RssEntry entry, HashSet<string> collected)
@@ -357,17 +362,17 @@ public partial class RssPageViewModel : ObservableObject
     /// <para>自动那一轮必须自己说清楚"这页为什么只显示这些"：<see cref="RssFeedCache.AutoRefreshGap"/>
     /// 之外的那些源这一轮根本没被问，报告只写"共 N 条"就会被当成实时结果，看不到新文章就判定功能坏了。</para>
     /// </summary>
-    private string Summarise(RssRunResult run, int shown, int added, bool auto)
+    private LocMessage Summarise(RssRunResult run, int shown, int added, bool auto)
     {
         var okCount = run.Outcomes.Count(o => o.Ok);
         var text = shown == 0
-            ? $"{run.Outcomes.Count} 个来源里有 {okCount} 个通了，但没有给出任何条目"
+            ? LocMessage.Of("rss.summaryNone", run.Outcomes.Count, okCount)
             : auto
-                ? $"按「{RssFeedCache.GapText}一次」的节奏，本轮补抓了 {run.Outcomes.Count} 个到期的来源、新增 {added} 条，"
-                  + $"现在共 {shown} 条（其余是缓存）。要看最新的点「刷新」。"
-                : $"共 {shown} 条（{okCount} 个源给了内容，本轮新增 {added} 条）。点条目直接跳文章，点「收藏到文件夹」才进库。";
-        if (run.FailedCount > 0) text += $"　{run.FailedCount} 个源失败，原因写在对应那一行";
-        if (run.StoppedCount > 0) text += $"　已停止，还有 {run.StoppedCount} 个源没抓（再点一次接着抓）";
+                ? LocMessage.Of("rss.summaryAuto", RssFeedCache.GapMessage, run.Outcomes.Count, added, shown)
+                : LocMessage.Of("rss.summaryManual", shown, okCount, added);
+        // 附加那两句各是一整行表里的话，用同一个连接句拼：⛔ 不许在这里 += 字符串（那又把语言定死了）。
+        if (run.FailedCount > 0) text = LocMessage.Of("rss.statusJoin", text, LocMessage.Of("rss.summaryFailed", run.FailedCount));
+        if (run.StoppedCount > 0) text = LocMessage.Of("rss.statusJoin", text, LocMessage.Of("rss.summaryStopped", run.StoppedCount));
         return text;
     }
 

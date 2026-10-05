@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Trending;
 using StarMark.Integrations.GitHub;
 using StarMark.UI.Services;
@@ -29,10 +30,10 @@ public static class TrendingItemActions
     /// <para>早先这里还往卡片写一个 <c>LastTrendingNotice</c> 属性，但没有任何一处读它——
     /// 一个从不被显示的结果槽只会让后来人以为"卡片上会显示"，故连属性一起删掉（批次 RB）。</para>
     /// </summary>
-    public static event Action<string>? NoticeRaised;
+    public static event Action<LocMessage>? NoticeRaised;
 
     /// <summary>结果落点：广播给页面/组件的状态行（提示必须长在用户看得见的那一页）。</summary>
-    private static void Report(ItemCardViewModel vm, string message) => NoticeRaised?.Invoke(message);
+    private static void Report(ItemCardViewModel vm, LocMessage message) => NoticeRaised?.Invoke(message);
 
     /// <summary>Star / 取消 Star（远端写操作）。成功后记入会话状态，避免"刷新一下又显示未 Star"。</summary>
     public static async Task ToggleStarAsync(ItemCardViewModel vm)
@@ -40,7 +41,7 @@ public static class TrendingItemActions
         var fullName = RepoOf(vm);
         if (fullName is null)
         {
-            Report(vm, "这一行不是有效的 GitHub 仓库（owner/repo），无法 Star");
+            Report(vm, LocMessage.Of("trending.badRepoStar"));
             return;
         }
 
@@ -53,12 +54,12 @@ public static class TrendingItemActions
             // 只有远端确认成功才改本地状态：先改后改错的显示会让人以为已经生效
             App.Services.GetRequiredService<TrendingStarState>().Record(fullName, wantStarred);
             vm.SetTrendingState(wantStarred, vm.IsCollected, hasToken: true);
-            Report(vm, (wantStarred ? "已 Star：" : "已取消 Star：") + fullName);
+            Report(vm, LocMessage.Of(wantStarred ? "trending.starred" : "trending.unstarred", fullName));
         }
         catch (Exception ex)
         {
             StarLog.Warn($"热榜 Star 操作失败（{fullName} → {(wantStarred ? "加星" : "取消星")}）：{ex.Message}");
-            Report(vm, "Star 失败：" + ex.Message);
+            Report(vm, LocMessage.Of("trending.starFailed", ex.Message));
         }
         vm.RaiseStarRequested();
     }
@@ -73,7 +74,7 @@ public static class TrendingItemActions
         var fullName = RepoOf(vm);
         if (fullName is null)
         {
-            Report(vm, "这一行不是有效的 GitHub 仓库（owner/repo），无法收藏");
+            Report(vm, LocMessage.Of("trending.badRepoCollect"));
             return;
         }
 
@@ -89,9 +90,7 @@ public static class TrendingItemActions
                 // 但那不等于"我从收藏里移除了它"，更不该往活动流记一笔"移除"（P-40）。
                 // 措辞刻意避开"不在本机"三个字：那是剪贴板缺图那句事实的指纹（`ClipboardMissingImageTextGateTests`），
                 // 两件事各说各的，别共用一个字面串。
-                Report(vm, removed
-                    ? $"已从本机收藏移除：{fullName}（不影响 GitHub 的 Star 状态）"
-                    : $"这条本来就没在本机收藏里：{fullName}");
+                Report(vm, LocMessage.Of(removed ? "trending.uncollected" : "trending.neverCollected", fullName));
                 if (removed)
                     await repo.LogActivityAsync(ActivityKind.BookmarkRemove, $"{ItemSources.Local}:{removedId}",
                         fullName, vm.Uri, CancellationToken.None);
@@ -103,7 +102,7 @@ public static class TrendingItemActions
                     DateTimeOffset.UtcNow.ToUnixTimeSeconds());
                 var id = await repo.RecordItemAsync(item, CancellationToken.None);
                 vm.SetTrendingState(vm.IsStarred, collected: true, hasToken: true);
-                Report(vm, $"已收进本机收藏：{fullName}（不影响 GitHub 的 Star 状态）");
+                Report(vm, LocMessage.Of("trending.collected", fullName));
                 if (id > 0)
                 {
                     await repo.LogActivityAsync(ActivityKind.BookmarkAdd, $"{ItemSources.Local}:{item.SourceId}",
@@ -115,7 +114,7 @@ public static class TrendingItemActions
         catch (Exception ex)
         {
             StarLog.Error($"热榜收藏操作失败（{fullName}）", ex);
-            Report(vm, (vm.IsCollected ? "移出收藏失败：" : "收进收藏失败：") + ex.Message);
+            Report(vm, LocMessage.Of(vm.IsCollected ? "trending.uncollectFailed" : "trending.collectFailed", ex.Message));
         }
         vm.RaiseCollectRequested();
     }

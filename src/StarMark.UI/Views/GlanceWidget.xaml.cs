@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 using Microsoft.Extensions.DependencyInjection;
@@ -74,11 +75,12 @@ public sealed partial class GlanceWidget : UserControl
     /// <para>组件上的右键菜单没有主窗那条状态行，而 ⭐Star 改的是远端、本机列表当下看不出变化 ⇒
     /// 不写这一行就是"点了没反应"（P-54）。通知可能来自别的窗口线程，统一切回本组件的 DispatcherQueue。</para>
     /// </summary>
-    private void OnTrendingNotice(string message)
+    private void OnTrendingNotice(LocMessage message)
         => DispatcherQueue.TryEnqueue(() =>
         {
             if (TrendingBlock.Visibility != Visibility.Visible) return;
-            TrendingAction.Text = message;
+            // 组件窗那一族"换语言当场重贴"还没接线，所以这里按当前语言取一次词（句子本身住在表里）。
+            TrendingAction.Text = message.Render();
             TrendingAction.Visibility = Visibility.Visible;
         });
 
@@ -314,9 +316,12 @@ public sealed partial class GlanceWidget : UserControl
             TrendingEmpty.Text = none ? "本期没有候选：去主窗「热榜」页看原因与「重试」。" : string.Empty;
             TrendingEmpty.Visibility = none ? Visibility.Visible : Visibility.Collapsed;
 
+            // 这两句的字住在表里，且与主窗热榜页共用同一颗键（⛔ 不另写一份"这是上次结果"——那是 P-131 #5 那一族差一天的前身）。
+            // 组件窗那一族"换语言当场重贴"还没接线，所以这里按当前语言取一次词。
             var notes = new System.Collections.Generic.List<string>();
-            if (result.Stale) notes.Add($"抓取失败·这是上次结果（{StarMark.Abstractions.Trending.TrendingCacheCodec.DescribeAge(result.FetchedAt, DateTimeOffset.Now)}）");
-            if (result.Via == StarMark.Abstractions.Trending.TrendingSource.SearchApi) notes.Add("来源：GitHub 搜索接口兜底");
+            if (result.Stale) notes.Add(LocMessage.Of("trending.statusStale",
+                StarMark.Abstractions.Trending.TrendingCacheCodec.DescribeAge(result.FetchedAt, DateTimeOffset.Now)).Render());
+            if (result.Via == StarMark.Abstractions.Trending.TrendingSource.SearchApi) notes.Add(Locale.T("trending.viaSearchApiShort"));
             if (!string.IsNullOrWhiteSpace(result.Notice)) notes.Add(result.Notice!);
             TrendingStatus.Text = string.Join("｜", notes);
             TrendingStatus.Visibility = notes.Count > 0 ? Visibility.Visible : Visibility.Collapsed;

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Feed;
+using StarMark.Abstractions.I18n;
 using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
 
@@ -26,7 +27,7 @@ public static class RssItemActions
 {
     /// <summary>每一次收藏的结果（成功与失败都广播）。页面订阅一次即可——静默的收藏与静默的失败一样，
     /// 用户都只能靠"列表有没有变"来猜自己点到了什么。</summary>
-    public static event Action<string>? NoticeRaised;
+    public static event Action<LocMessage>? NoticeRaised;
 
     /// <summary>
     /// 把这一行收进本机书签，并放进「RSS订阅 / 源名」。
@@ -38,12 +39,12 @@ public static class RssItemActions
         var folder = vm.RssFolderPath;
         if (vm.IsCollected)
         {
-            Report(vm, $"这一条已经在「{folder}」里了；要改动请到「文件夹」页对应那一行");
+            Report(vm, LocMessage.Of("rss.alreadyCollected", folder));
             return;
         }
         if (string.IsNullOrWhiteSpace(vm.Uri))
         {
-            Report(vm, "这一行没有链接，收藏不了（订阅源没给出条目地址）");
+            Report(vm, LocMessage.Of("rss.noLink"));
             return;
         }
 
@@ -53,9 +54,8 @@ public static class RssItemActions
             var item = RssRowDraft.ForCollect(vm.GetItem(), DateTimeOffset.UtcNow.ToUnixTimeSeconds());
             var id = await repo.RecordItemAsync(item, CancellationToken.None);
             vm.SetCollected(true);
-            Report(vm, id > 0
-                ? $"已收进「{folder}」：{item.Title}"
-                : $"已写进本机收藏，但仓储没有回 id（标题：{item.Title}）");
+            if (id > 0) Report(vm, LocMessage.Of("rss.collected", folder, item.Title));
+            else Report(vm, LocMessage.Of("rss.collectedNoId", item.Title));
             if (id > 0)
             {
                 await repo.LogActivityAsync(ActivityKind.BookmarkAdd, $"{ItemSources.Local}:{item.SourceId}",
@@ -66,14 +66,15 @@ public static class RssItemActions
         catch (Exception ex)
         {
             StarLog.Error($"RSS 收藏失败（{vm.Uri}）", ex);
-            Report(vm, "收藏没能完成：" + ex.Message);
+            Report(vm, LocMessage.Of("rss.collectFailed", ex.Message));
         }
     }
 
-    private static void Report(ItemCardViewModel vm, string message)
+    private static void Report(ItemCardViewModel vm, LocMessage message)
     {
         NoticeRaised?.Invoke(message);
-        StarLog.Info($"[RSS] {message}");
+        // 日志按<b>当前</b>语言渲染一次：交出去的是已经算完的那句，不是"等着被重贴"的键（LocMessage.Render 的那条出路）。
+        StarLog.Info($"[RSS] {message.Render()}");
     }
 }
 

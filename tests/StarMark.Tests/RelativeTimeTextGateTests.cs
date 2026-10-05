@@ -17,7 +17,9 @@ namespace StarMark.Tests;
 /// </summary>
 public sealed class RelativeTimeTextGateTests
 {
+    // 批次 WI-2k 起这一族有两位主人，而且必须分开钉：**措辞**住在界面文案表，**档位与取整**住在判据那颗。
     private const string Judge = "src/StarMark.Abstractions/DateTimeText.cs";
+    private const string Table = "src/StarMark.Abstractions/I18n/UiStrings.cs";
     private const string Helper = "src/StarMark.UI/Helpers/RelativeTimeHelper.cs";
     private const string ActivityVm = "src/StarMark.UI/ViewModels/ActivityItemViewModel.cs";
     private const string CardVm = "src/StarMark.UI/ViewModels/ItemCardViewModel.cs";
@@ -26,7 +28,7 @@ public sealed class RelativeTimeTextGateTests
 
     private static readonly string[] Phrases = { "刚刚", "分钟前", "小时前", "天前" };
 
-    /// <summary>四档措辞在<b>整个 src 的代码里</b>各只出现一次，而且就在判据那颗上。</summary>
+    /// <summary>四档措辞在<b>整个 src 的代码里</b>各只出现一次，而且就在界面文案表那一颗上（批次 WI-2k 起的主人）。</summary>
     [Fact]
     public void EachWordingBucketExistsNowhereButTheJudge()
     {
@@ -39,10 +41,26 @@ public sealed class RelativeTimeTextGateTests
                 .Where(f => f.Item2 > 0)
                 .ToList();
             Assert.True(hits.Count == 1,
-                $"「{phrase}」在 {hits.Count} 个文件的代码里出现（应只剩判据一颗）：{string.Join("、", hits)}");
-            Assert.Equal(Judge, hits[0].RelativePath);
+                $"「{phrase}」在 {hits.Count} 个文件的代码里出现（应只剩文案表一颗）：{string.Join("、", hits)}");
+            Assert.Equal(Table, hits[0].RelativePath);
             Assert.Equal(1, hits[0].Item2);
         }
+    }
+
+    /// <summary>
+    /// 判据那颗<b>只留键与档位</b>：字搬进表之后，如果代码里又出现一句中文措辞，就是"两份可各自被改"回来了
+    /// （批次 WI-2k 之所以要有这一格——搬字这件事最容易搬成"表里有、代码里也留一份兜底"）。
+    /// </summary>
+    [Fact]
+    public void TheJudgeHoldsKeysNotWords()
+    {
+        var code = Code(ReadRepoFile(Judge));
+        foreach (var phrase in Phrases) Assert.DoesNotContain(phrase, code, StringComparison.Ordinal);
+        foreach (var key in new[] { "time.justNow", "time.minutesAgo", "time.hoursAgo", "time.daysAgo" })
+            Assert.Contains(key, code, StringComparison.Ordinal);
+        // 取词与交键两条路都必须问表，⛔ 不许在这里自己拼一句。
+        Assert.Contains("Locale.T(JustNowKey)", code, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(MinutesAgoKey, count)", code, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -68,9 +86,11 @@ public sealed class RelativeTimeTextGateTests
         Assert.Contains("DateTimeText.Relative(", MethodBody(ReadRepoFile(Helper), "public static string Format(long unixSeconds)"));
         Assert.Contains("RelativeTimeHelper.Format(", MethodBody(ReadRepoFile(ActivityVm), "public ActivityItemViewModel(ActivityRecord rec)"));
         Assert.Contains("RelativeTimeHelper.Format(", MethodBody(ReadRepoFile(CardVm), "public string RelativeTime =>"));
-        var trending = MethodBody(ReadRepoFile(Trending), "public static string DescribeAge(long fetchedAtUnixSeconds, DateTimeOffset now)");
-        Assert.Contains("DateTimeText.JustNow", trending);
-        Assert.Contains("DateTimeText.HoursAgo(", trending);
+        // 签名交回的是**还没取词**的那句（LocMessage?）——这一格按现场形状重定锚（坑表 #278：改了被守的那份文件，
+        // 判据的锚点必须跟着改，且那一格要带重编重跑）。
+        var trending = MethodBody(ReadRepoFile(Trending), "public static LocMessage? DescribeAge(long fetchedAtUnixSeconds, DateTimeOffset now)");
+        Assert.Contains("DateTimeText.JustNowMessage()", trending);
+        Assert.Contains("DateTimeText.HoursAgoMessage(", trending);
         var rss = MethodBody(ReadRepoFile(RssStatus), "public static string FromCache(RssCachedSource cached, long nowUnix)");
         Assert.Contains("DateTimeText.JustNow", rss);
         Assert.Contains("DateTimeText.DaysAgo(", rss);

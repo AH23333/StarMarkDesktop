@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions.Trending;
 
@@ -63,18 +64,21 @@ public static class TrendingCacheCodec
     private static DateTime LocalDate(long unixSeconds, TimeSpan offset)
         => DateTimeOffset.FromUnixTimeSeconds(unixSeconds).ToOffset(offset).Date;
 
-    /// <summary>给界面的一句话："上次更新于 …"。缓存缺失或时刻非法（≤0）时返回空串，不显示"1970/1/1"。</summary>
-    public static string DescribeAge(long fetchedAtUnixSeconds, DateTimeOffset now)
+    /// <summary>给界面的一句话："上次更新于 …"。缓存缺失或时刻非法（≤0）时返回 <b>null</b>，
+    /// 不显示"1970/1/1"，也不显示一句"0 分钟前"。
+    /// <para>批次 WI-2k 起交出的是<b>还没取词</b>的那句（键＋读数），不是字符串：这一句会被嵌进
+    /// 热榜与速览的状态行，交出字符串等于把语言定死在算出它的那一刻，换语言后屏幕上就是半中半英。</para></summary>
+    public static LocMessage? DescribeAge(long fetchedAtUnixSeconds, DateTimeOffset now)
     {
-        if (fetchedAtUnixSeconds <= 0) return string.Empty;
+        if (fetchedAtUnixSeconds <= 0) return null;
         var span = now - DateTimeOffset.FromUnixTimeSeconds(fetchedAtUnixSeconds);
         if (span < TimeSpan.Zero) span = TimeSpan.Zero;      // 机器时钟被往回调过时不显示"-3 小时"
         // 档位（两分钟内都算"刚刚"、超过一天不回落日期）是热榜这一页的判断；
         // 四档措辞与取整归 DateTimeText（批次 SJ）。这里原先小时那一档走 NumberText.Grouped(double)
         // ＝"N0" 四舍五入，于是 3 小时 59 分写"4 小时前"，而 RSS 那页同一句写"3 小时前"——本批统一成截断。
-        if (span < TimeSpan.FromMinutes(2)) return DateTimeText.JustNow;
-        if (span < TimeSpan.FromHours(1)) return DateTimeText.MinutesAgo((long)span.TotalMinutes);
-        if (span < TimeSpan.FromDays(1)) return DateTimeText.HoursAgo((long)span.TotalHours);
-        return DateTimeText.DaysAgo((long)span.TotalDays);
+        if (span < TimeSpan.FromMinutes(2)) return DateTimeText.JustNowMessage();
+        if (span < TimeSpan.FromHours(1)) return DateTimeText.MinutesAgoMessage((long)span.TotalMinutes);
+        if (span < TimeSpan.FromDays(1)) return DateTimeText.HoursAgoMessage((long)span.TotalHours);
+        return DateTimeText.DaysAgoMessage((long)span.TotalDays);
     }
 }

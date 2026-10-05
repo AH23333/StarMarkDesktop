@@ -25,6 +25,13 @@ public sealed class I18nWiringGateTests
     private const string MainWindowXaml = "src/StarMark.UI/MainWindow.xaml";
     private const string SettingsXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
     private const string SettingsOptionsCs = "src/StarMark.UI/Views/SettingsPage.Options.cs";
+    private const string TrendingXaml = "src/StarMark.UI/Views/TrendingPage.xaml";
+    private const string SnapshotXaml = "src/StarMark.UI/Views/SnapshotPage.xaml";
+    private const string RssXaml = "src/StarMark.UI/Views/RssPage.xaml";
+    private const string ClipboardXaml = "src/StarMark.UI/Views/ClipboardPage.xaml";
+    private const string TagsXaml = "src/StarMark.UI/Views/TagsPage.xaml";
+    private const string FolderTreeXaml = "src/StarMark.UI/Views/FolderTreePage.xaml";
+    private const string SearchPageXaml = "src/StarMark.UI/Views/SearchPage.xaml";
     private const string MainWindowSearchCs = "src/StarMark.UI/MainWindow.Search.cs";
     private const string ThemeXaml = "src/StarMark.UI/Themes/StarMarkTheme.xaml";
     private const string LocTextCs = "src/StarMark.UI/Helpers/LocText.cs";
@@ -32,6 +39,9 @@ public sealed class I18nWiringGateTests
     private const string SettingsHotkeysCs = "src/StarMark.UI/Views/SettingsPage.Hotkeys.cs";
     private const string GuideUiCs = "src/StarMark.UI/Helpers/GuideUi.cs";
     private const string AppCs = "src/StarMark.UI/App.xaml.cs";
+
+    /// <summary>标记上那些"会显示给人看"的属性值（一颗正则，两处收口判据共用＝⛔ 不许各写一份）。</summary>
+    const string Attributes = @"(?:Text|Content|Header|OnContent|OffContent|ToolTip|PlaceholderText)=""([^""]*)""";
 
     /// <summary>XAML 全部（跳过 <c>bin</c>/<c>obj</c> 与生成的 <c>*.g.cs</c> 那一类产物）。</summary>
     private static IReadOnlyList<(string RelativePath, string Text)> XamlUnder(string relativeDir)
@@ -67,11 +77,27 @@ public sealed class I18nWiringGateTests
             foreach (Match m in Regex.Matches(Markup(text), @"i18n:LocText\.\w*Key=""(?!{)([^""]+)"""))
                 yield return (path, m.Groups[1].Value);
         }
-        foreach (var (path, text) in ReadRepoUnder("src/StarMark.UI"))
+        // 批次 WI-2k 起<b>取词的调用点不再只住在 UI</b>：状态读数那一族（"N 分钟前"、节奏那句）
+        // 的措辞搬进表之后，问键的地方搬到了 Abstractions／Core。扫描面必须跟着搬到整个 src，
+        // 否则"问了一颗没登记的键"与"表里这一行没人问"两臂同时看不见那一半——两向都漏＝假绿。
+        foreach (var (path, text) in ReadRepoUnder("src"))
         {
             var code = Code(text);
             foreach (Match m in Regex.Matches(code, @"Locale\.(?:T|Fmt)\(""([^""]+)"""))
                 yield return (path, m.Groups[1].Value);
+            foreach (Match m in Regex.Matches(code, @"LocMessage\.Of\(\s*""([^""]+)"""))
+                yield return (path, m.Groups[1].Value);
+            // 键名住在 const 里的那些（`MinutesAgoKey = "time.minutesAgo"`／`FollowSystemKey`）：
+            // 取词调用写的是 `Locale.Fmt(MinutesAgoKey, count)`，上面那几臂按**字面量实参**认，一律看不见 ⇒
+            // 拼错这种键名今天两臂都不红（台架 WI-K8 量到的就是这一个洞）。按形状补这一臂：
+            // 只认"点分小驼峰、至少两段"那颗值——那正是表自己的键形状，
+            // ⛔ 不许宽成"任何带 Key 的常量"，否则 `DoneKey = "done"`、`AppKey = "clipApp"` 那些 JSON 字段名全被当界面键。
+            foreach (Match m in Regex.Matches(code, @"const string \w*[Kk]ey\w*\s*=\s*""([^""]+)"""))
+            {
+                var value = m.Groups[1].Value;
+                if (Regex.IsMatch(value, @"^[a-z][a-z0-9]*(\.[a-z][A-Za-z0-9]*)+$", RegexOptions.CultureInvariant))
+                    yield return (path, value);
+            }
             foreach (Match m in Regex.Matches(code, @"LocOption\.T\(\s*""([^""]+)"""))
                 yield return (path, m.Groups[1].Value);
             foreach (Match m in Regex.Matches(code, @"tipKey:\s*""([^""]+)"""))
@@ -89,7 +115,9 @@ public sealed class I18nWiringGateTests
     public void EveryKeyTheUiAsksForIsRegisteredInTheTable()
     {
         var asked = AskedKeys().ToList();
-        Assert.True(asked.Count >= 40, $"UI 里只认出 {asked.Count} 处取词（现场量过是 46 处），抽取器大概没跑对");
+        // 下界按现场读数留余量（批次 WI-2k 把状态读数那一族接进来之后现场是 130 处上下）：
+        // 这一格拦的是"抽取器没跑起来"，不是"改动必须等于某个数"。
+        Assert.True(asked.Count >= 100, $"整个 src 只认出 {asked.Count} 处取词（现场量过是 130 处上下），抽取器大概没跑对");
         foreach (var (where, key) in asked)
             Assert.True(UiStrings.TryGet(key, out _), $"{where} 问了表里没有的键：{key}");
     }
@@ -107,8 +135,13 @@ public sealed class I18nWiringGateTests
     [Fact]
     public void TheTableHasNoRowNothingAsksFor()
     {
+        // 与 AskedKeys 同一扫描面（整个 src）：⛔ 两头用不同目录，那是把"没人问的一行"变成只有 UI 那一半才拦得住。
+        // 但必须**跳过文案表自己**：每一颗键都在那一行里带引号出现过，把它算进"问过"就等于这一格永久绿
+        // （#293 同一族：判据自己把自己喂绿了）。
         var askedLiterals = XamlUnder("src/StarMark.UI").Select(s => Markup(s.Text))
-            .Concat(ReadRepoUnder("src/StarMark.UI").Select(s => Code(s.Text)))
+            .Concat(ReadRepoUnder("src")
+                .Where(s => !s.RelativePath.EndsWith("I18n/UiStrings.cs", StringComparison.Ordinal))
+                .Select(s => Code(s.Text)))
             .ToList();
         foreach (var key in UiStrings.Keys())
         {
@@ -255,6 +288,7 @@ public sealed class I18nWiringGateTests
     [Theory]
     [InlineData(MainWindowXaml)]
     [InlineData(SettingsXaml)]
+    [InlineData(TrendingXaml)]
     public void DropdownOptionsLiveInCodeNotInTheMarkup(string relativePath)
     {
         var page = Markup(ReadRepoFile(relativePath));
@@ -268,6 +302,33 @@ public sealed class I18nWiringGateTests
             Assert.Contains("ItemTemplate=\"{StaticResource LocOptionTemplate}\"", box.Value, StringComparison.Ordinal);
             Assert.DoesNotContain("</ComboBox>", box.Value, StringComparison.Ordinal);   // 自封闭＝项不在标记里
         }
+    }
+
+    /// <summary>
+    /// <b>已扫过的那几页，标记里不许留中文</b>：一颗按页推进的收口判据，扫过的文件逐颗列在 <c>[InlineData]</c>。
+    /// <para>为什么不一次扫整棵树：`&lt;Run&gt;` 那种"半个句子＋一个读数"的组合句今天还没有机制
+    /// （P-169 那一族），整树扫会在还没轮到那一页时红成噪音，然后被人整颗关掉。⇒ 这一颗<b>按页加</b>：
+    /// 加一颗文件就必须<b>同批</b>把那一页的标记全部进表，⛔ 不许先加 InlineData 再补翻译。</para>
+    /// <para>每一臂只该红自己那一页（规则 76）：这是 Theory，加一颗文件就多一条测试。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(TrendingXaml)]
+    [InlineData(SnapshotXaml)]
+    [InlineData(RssXaml)]
+    [InlineData(ClipboardXaml)]
+    [InlineData(TagsXaml)]
+    [InlineData(FolderTreeXaml)]
+    [InlineData(SearchPageXaml)]
+    public void ScannedPagesHoldNoChineseMarkup(string relativePath)
+    {
+        var page = Markup(ReadRepoFile(relativePath));
+        var left = page.Split('\n')
+            .Where(line => !line.Contains("<Run ", StringComparison.Ordinal))
+            .SelectMany(line => Regex.Matches(line, Attributes).Cast<Match>())
+            .Select(m => m.Groups[1].Value)
+            .Where(v => Regex.IsMatch(v, @"[\u4e00-\u9fff]"))
+            .ToArray();
+        Assert.True(left.Length == 0, $"「{relativePath}」还剩 {left.Length} 句中文标记：\n{string.Join("\n", left)}");
     }
 
     /// <summary>
@@ -422,7 +483,6 @@ public sealed class I18nWiringGateTests
     [Fact]
     public void TheEightKeyedTabsHoldNoChineseMarkupAndTheRestOnlyShrinks()
     {
-        const string Attributes = @"(?:Text|Content|Header|OnContent|OffContent|ToolTip|PlaceholderText)=""([^""]*)""";
         var page = Markup(ReadRepoFile(SettingsXaml));
         foreach (var (name, tag) in new[]
                  {
@@ -625,10 +685,11 @@ public sealed class I18nWiringGateTests
         var table = loc[loc.IndexOf("TextProperties =", StringComparison.Ordinal)..];
         Assert.DoesNotContain("\"PlaceholderText\"", table[..table.IndexOf("};", StringComparison.Ordinal)],
             StringComparison.Ordinal);
-        // 正文／提示／开关两侧各一条＝现场数过 5 颗（批次 WI-2d 给开关那两颗开的口）。
+        // 正文／提示／开关两侧各一条＝现场数过 5 颗（批次 WI-2d 给开关那两颗开的口），
+        // 批次 WI-2k 再加第六颗 `Args`：带读数的那句正文要能"按键＋实参当场重算"，否则状态行只能整句留在 code-behind 里拼（＝换语言不翻）。
         // 这条计数<b>不是</b>为了让改动便宜：它是"每颗附带属性都得有自己的取词路"的证人——
         // 少一颗就是有一类元素贴不上而日志里不出声。
-        Assert.Equal(5, Count(loc, "DependencyProperty.RegisterAttached"));
+        Assert.Equal(6, Count(loc, "DependencyProperty.RegisterAttached"));
         Assert.Contains("FindProperty(d, \"PlaceholderText\")", loc, StringComparison.Ordinal);
     }
 
@@ -733,5 +794,59 @@ public sealed class I18nWiringGateTests
         Assert.DoesNotContain("cancelText: \"", body, StringComparison.Ordinal);
         Assert.DoesNotMatch(@"""[^""\r\n]*[一-鿿]", body);
         Assert.DoesNotContain("Ctrl", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>VM 那句"键＋实参"到元素之间只许有一颗门</b>（<c>LocText.SetMessage</c>，批次 WI-2k）。
+    /// <para>为什么要有这一格：这一族最坏的坏法不是"没翻"，是<b>翻了一半的两种各自漏法</b>——
+    /// ① 页面自己拆 <c>Key</c>／<c>Args</c>，忘了一片就贴歪；② 忘了"没话"那一路，
+    /// 留着上一次的注册项，换语言那一刻把<b>已经不该出现的那句</b>又贴回屏幕上。
+    /// 这两个洞在十几个页面上各写一遍就会各漏一遍，所以门只许有一颗，且空键必须由那颗门处理。</para>
+    /// </summary>
+    [Theory]
+    [InlineData("src/StarMark.UI/Views/TrendingPage.xaml.cs")]
+    [InlineData("src/StarMark.UI/Views/RssPage.xaml.cs")]
+    public void APagePushesItsViewModelMessageThroughOneDoor(string relativePath)
+    {
+        var code = Code(ReadRepoFile(relativePath));
+        Assert.Contains("LocText.SetMessage(", code, StringComparison.Ordinal);
+        // 拆成 SetKey ＋ Args 自己传＝那一页要自己记得"没话"怎么走；这一族只许走门。
+        Assert.DoesNotContain("LocText.SetKey(", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("LocText.SetArgs(", code, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>状态行与空态那两颗属性交回的是键，不是拼好的句子</b>（批次 WI-2k 钉住这一族的形状）。
+    /// <para>判据读抹掉注释后的代码：<c>StatusText = "…"</c> 这种整句赋值一旦出现，
+    /// 语言就被定死在算出它的那一刻，而换语言那一刻<b>没有任何人回去重算</b>（坑表 #276）。
+    /// 这一格拦的是"退回字符串"这个方向，不是拦某一句具体的话。</para>
+    /// </summary>
+    [Theory]
+    [InlineData("src/StarMark.UI/ViewModels/TrendingPageViewModel.cs")]
+    [InlineData("src/StarMark.UI/ViewModels/RssPageViewModel.cs")]
+    public void TheStatusLinesHandBackKeysNotSentences(string relativePath)
+    {
+        var code = Code(ReadRepoFile(relativePath));
+        Assert.Contains("[ObservableProperty] private LocMessage? _statusText;", code, StringComparison.Ordinal);
+        Assert.Contains("[ObservableProperty] private LocMessage? _emptyHint;", code, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"(StatusText|EmptyHint) = """, code);
+        Assert.DoesNotMatch(@"(StatusText|EmptyHint) = .*\+\s*(ex\.Message|fullName|reason)", code);
+    }
+
+    /// <summary>
+    /// <b>套娃那句必须一层都没取过词</b>（批次 WI-2k 的机制核心）：状态行的实参交出的还是 <c>LocMessage</c>，
+    /// 不是 <c>.Render()</c>／<c>Locale.T(...)</c> 的结果。
+    /// <para>一旦有人"顺手先把读数算成字符串"，外层跟着语言翻了、嵌进去那半句留在原地——
+    /// 屏幕上就是半中半英，而形状闸门（上一格）看不见，因为它只看属性类型。</para>
+    /// </summary>
+    [Fact]
+    public void NestedReadingsArePassedUnrendered()
+    {
+        var trending = Code(ReadRepoFile("src/StarMark.UI/ViewModels/TrendingPageViewModel.cs"));
+        Assert.Contains(@"LocMessage.Of(""trending.statusCached"", via, age)", trending, StringComparison.Ordinal);
+        Assert.DoesNotContain("age.Render()", trending, StringComparison.Ordinal);
+        var rss = Code(ReadRepoFile("src/StarMark.UI/ViewModels/RssPageViewModel.cs"));
+        Assert.Contains("RssFeedCache.GapMessage", rss, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Render()", rss, StringComparison.Ordinal);       // 界面那一路一个都不许先取词
     }
 }

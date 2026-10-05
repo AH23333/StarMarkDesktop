@@ -6,6 +6,34 @@ using System.Globalization;
 namespace StarMark.Abstractions.I18n;
 
 /// <summary>
+/// 一句"<b>还没取词</b>"的界面话：键＋可选实参（批次 WI-2k）。
+/// <para>为什么要有这一颗而不是让 VM 直接返回字符串：VM 拼出句子的那一刻就把语言定死了，
+/// 换语言那一刻<b>没人会回去重算</b>——那正是坑表 #276 那一族（"挂键≠那句字只有一处出处"的反面：
+/// 句子压根没进表）。交回键与实参，界面侧用 <c>LocText.SetKey</c> 钉在元素上，
+/// 换语言由那一条唯一的订阅当场按新语言重算。</para>
+/// <para><see cref="Render"/> 只留给<b>不上屏幕</b>的消费者（日志、通知文本）：那条路一旦走到界面上，
+/// 就是"界面显示的是上一次算出来的那句"。</para>
+/// </summary>
+public sealed record LocMessage(string Key, object?[]? Args = null)
+{
+    public static LocMessage Of(string key) => new(key);
+
+    public static LocMessage Of(string key, params object?[] args) => new(key, args);
+
+    /// <summary>按<b>当前</b>语言取一次词（不是缓存：每次调用都重取）。</summary>
+    public string Render() => Args is { Length: > 0 } ? Locale.Fmt(Key, Args) : Locale.T(Key);
+
+    /// <summary>
+    /// <b>为什么这一颗必须是 <c>ToString</c> 而不是让调用点先 <see cref="Render"/> 再交出字符串</b>：
+    /// 状态行那句是<b>套娃</b>的（"来源…·N 分钟前已缓存"＝外层句子里嵌着读数句子）。
+    /// 实参交出去的那一刻若已拼成字符串，语言就被<b>定死在算出它的那一瞬间</b>，换语言只会重贴外层，
+    /// 屏幕上剩下半中半英——正是这一族要消灭的东西。<c>string.Format</c> 对实参调的正是 <c>ToString</c>，
+    /// 于是嵌套的那一句<b>在贴上去的那一刻</b>（含换语言重贴的那一次）才按当前语言取词。
+    /// </summary>
+    public override string ToString() => Render();
+}
+
+/// <summary>
 /// 当前界面语言＋取词的唯一入口（批次 WI-1）。
 /// <para>进程里<b>只有这一颗可变状态</b>：谁要按语言取词都从这里走，于是"换语言"这一件事
 /// 只有一个要重画的时刻，而不是每个控件自己记得去读一遍。</para>

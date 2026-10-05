@@ -7,6 +7,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:controls="using:StarMark.UI.Controls"
     xmlns:helpers="using:StarMark.UI.Helpers"
+    xmlns:i18n="using:StarMark.UI.Helpers"
     xmlns:viewModels="using:StarMark.UI.ViewModels"
     mc:Ignorable="d">
 
@@ -19,41 +20,48 @@
         <!-- 页头：一句话讲清两个按钮的落点差别（远端 Star vs 本机收藏），右侧是周期 / 语言 / 刷新 / 停止 -->
         <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8" Margin="12,12,12,4">
             <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                <TextBlock Text="GitHub 热榜" FontSize="18" FontWeight="SemiBold"
+                <TextBlock FontSize="18" FontWeight="SemiBold"
+                           i18n:LocText.Key="settings.extend.trendingTitle"
                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                <TextBlock Text="点标题 = 在浏览器打开仓库。⭐ 改的是 GitHub 远端的 Star（需 Token），🔖 才是存进本机收藏；没点过这两个按钮的候选不进库、也搜不到。"
-                           Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
+                <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap"
+                           i18n:LocText.Key="trending.note"/>
             </StackPanel>
+            <!-- ⚠ 选项走「数据项＋模板」（批次 WI-2c 那同一颗模板）：把 <ComboBoxItem Content="今日"> 写回标记里，
+                 闭着的那一格就又是选中那一刻从 Content 抄走的快照——换语言时展开的列表翻了、这一格不翻（坑表 #272／#275）。 -->
             <ComboBox Grid.Column="1" x:Name="PeriodCombo" MinWidth="86" VerticalAlignment="Center"
-                      ToolTipService.ToolTip="榜单周期（同一台机器上每个周期每天只抓一次，切回来不会重抓）"
-                      SelectionChanged="Period_Changed">
-                <ComboBoxItem Content="今日" Tag="daily"/>
-                <ComboBoxItem Content="本周" Tag="weekly"/>
-                <ComboBoxItem Content="本月" Tag="monthly"/>
-            </ComboBox>
-            <Button Grid.Column="2" Content="刷新" VerticalAlignment="Center" Click="Refresh_Click"
-                    ToolTipService.ToolTip="强制重抓本期（跳过“今天已抓过”的短路）"/>
-            <Button Grid.Column="3" Content="停止" VerticalAlignment="Center" Click="Cancel_Click"
-                    Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVis}}"
-                    ToolTipService.ToolTip="掐掉本次抓取，列表保持原样（取消不会被当成失败去走兜底）"/>
+                      i18n:LocText.ToolTipKey="trending.periodTip"
+                      SelectionChanged="Period_Changed"
+                      ItemsSource="{x:Bind PeriodOptions, Mode=OneTime}"
+                      ItemTemplate="{StaticResource LocOptionTemplate}"/>
+            <Button Grid.Column="2" VerticalAlignment="Center" Click="Refresh_Click"
+                    i18n:LocText.Key="dialog.refresh"
+                    i18n:LocText.ToolTipKey="trending.refreshTip"/>
+            <Button Grid.Column="3" VerticalAlignment="Center" Click="Cancel_Click"
+                    i18n:LocText.Key="settings.ai.stop"
+                    i18n:LocText.ToolTipKey="trending.stopTip"
+                    Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
         </Grid>
 
-        <!-- 状态行：来源标注 / stale / 动作结果都写在这一行，旁边给对应的下一步按钮 -->
+        <!-- 状态行：来源标注 / stale / 动作结果都写在这一行，旁边给对应的下一步按钮。
+             和下面那一行空态同理，这里绑的是<b>键＋实参</b>（由 code-behind 推给 LocText），
+             ⛔ 不是拼好的句子——那会把语言定死在上一次算出的那一刻（坑表 #276）。 -->
         <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="12,4,12,4">
-            <TextBlock Grid.Column="0" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+            <TextBlock Grid.Column="0" x:Name="StatusTextText"
                        Style="{StaticResource MutedText}" TextWrapping="Wrap" VerticalAlignment="Center"
                        Visibility="{x:Bind ViewModel.HasStatus, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-            <Button Grid.Column="1" Content="重试" VerticalAlignment="Center" Click="Refresh_Click"
+            <Button Grid.Column="1" VerticalAlignment="Center" Click="Refresh_Click"
+                    i18n:LocText.Key="dialog.retry"
                     Visibility="{x:Bind ViewModel.Failed, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
             <!-- 没配 Token 时不藏提示也不禁按钮：给一句原因 + 一个真到设置里的入口（P-54 口径） -->
-            <Button Grid.Column="2" Content="去设置里配 Token" VerticalAlignment="Center"
+            <Button Grid.Column="2" VerticalAlignment="Center"
+                    i18n:LocText.Key="trending.tokenButton"
                     Click="GoSettings_Click"
                     Visibility="{x:Bind ViewModel.NeedsTokenHint, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
         </Grid>
 
         <!-- 页内筛选：这批数据不落库 ⇒ 统一搜索里没有它，所以筛选必须在这一页上给 -->
         <TextBox Grid.Row="2" x:Name="FilterBox" Margin="12,4,12,4"
-                 PlaceholderText="在本期候选里筛选：仓库名 / 描述 / 语言（只筛这一页，不动主库、不影响榜单本身）"
+                 i18n:LocText.PlaceholderKey="trending.filterPlaceholder"
                  TextChanged="Filter_Changed"
                  Text="{x:Bind ViewModel.Filter, Mode=OneWay}"/>
 
@@ -79,9 +87,13 @@
                       Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
         <StackPanel Grid.Row="4" HorizontalAlignment="Center" Margin="12,0,12,20" Spacing="8"
                     Visibility="{x:Bind ViewModel.HasRows, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}">
-            <TextBlock Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}" Style="{StaticResource MutedText}"
+            <!-- 这一行绑的不是"拼好的句子"：VM 交回**键＋实参**，由 code-behind 推给 LocText（批次 WI-2k）。
+                 ⛔ 别改回 Text="{x:Bind ViewModel.EmptyHint}"——那等于把语言定死在上一次算出的那一刻，
+                 换语言那一刻没人回来重贴（坑表 #276 那一族）。 -->
+            <TextBlock x:Name="EmptyHintText" Style="{StaticResource MutedText}"
                        TextWrapping="Wrap" MaxWidth="520" TextAlignment="Center"/>
-            <Button Content="去设置里开启热榜" HorizontalAlignment="Center" Click="GoSettings_Click"
+            <Button HorizontalAlignment="Center" Click="GoSettings_Click"
+                    i18n:LocText.Key="trending.switchButton"
                     Visibility="{x:Bind ViewModel.Enabled, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
         </StackPanel>
     </Grid>
