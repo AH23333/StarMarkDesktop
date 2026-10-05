@@ -138,23 +138,26 @@ public static class UiStrings
         // 少写一行等于把同一屏上还在的中文藏回去（WI-2e 那一版就是被照片证伪过一次）。
         // 第五版（批次 WI-2g）同一形状再来一次：「拓展功能」那一栏的标记进表，"其余三栏"成了两栏；
         // 那一屏上还有五行状态读数是 VM／code-behind 现写的中文（已逐条读到赋值点），不点名就等于藏着。
+        // 第六版（批次 WI-2h）同一形状再来一次：「桌面工具」那一栏的标记进表，剩下的正文只剩一栏；
+        // 而这一屏上的中文还有三样是程序现写的（每一类那行标题、展开后每行两颗按钮、布局那栏每行的名字与摘要）。
         new Entry("settings.languageNote",
             "改完立刻生效，不用重启。这一版换掉了主窗口顶部那一排（页签、搜索框、排序与筛选按钮）、"
-            + "设置页的页眉与那八栏的标题，和「常规」「使用说明」「快捷键」「数据」「健康与诊断」「拓展功能」这六栏里由界面标记写出来的那排字。"
-            + "还没铺开的是其余两栏（AI 增强／桌面工具）的正文、页面正文里的字"
+            + "设置页的页眉与那八栏的标题，和「常规」「使用说明」「快捷键」「数据」「健康与诊断」「拓展功能」「桌面工具（组件）」这七栏里由界面标记写出来的那排字。"
+            + "还没铺开的是剩下那一栏（AI 增强）的正文、页面正文里的字"
             + "（含「暂无条目，请先同步数据」这类空状态）、工具栏那颗「语言：全部」下拉、软件内说明和日志，按批往前推。"
             + "同一栏里由程序拼出来或算出来的字也不在这批范围里：顶栏那行索引状态、「关于与更新」里那行检查结果、"
             + "快捷键这一栏的分类名与每一行的动作名和键位、健康页那两排下拉的选项、那一页「诊断」的整列标签、"
             + "数据这一栏那几行状态读数、备份列表那行标题与每行那颗按钮的字、那颗备份间隔下拉的选项、"
             + "拓展功能这一栏那五行状态读数（热榜／RSS／本地磁盘搜索／截屏／画布）、那行引擎占用大小的「约」字"
-            + "与画布快捷键一览每行的动作名，"
+            + "与画布快捷键一览每行的动作名，桌面工具这一栏每一类组件那行标题与展开后每行两颗按钮的字，"
+            + "开机加载那行说每颗约多少的读数、布局那一栏每行的名字与摘要，"
             + "以及「语言 Top：」这类把句子拆成半句＋读数的排法。"
             + "另有两处不彻底：下拉框展开的列表当场换语言，但闭着的那一格要等你重新选一次才跟着换；"
             + "而上面那些程序写的字要翻，得先把它们改成按键取词，那是后面一批的事。",
             "Takes effect at once — no restart needed. Translated so far: the main window's top row "
             + "(nav tabs, the search box, the sort and filter buttons), the Settings page header, its eight "
-            + "section titles, and everything the General, Guide, Hotkeys, Data, Health and Extensions screens write themselves. "
-            + "Still Chinese for now: the bodies of the other two sections (AI, Desktop tools), "
+            + "section titles, and everything the General, Guide, Hotkeys, Data, Health, Extensions and Desktop tools screens write themselves. "
+            + "Still Chinese for now: the body of the last section (AI), "
             + "the page bodies (including empty-state lines), the language filter dropdown on the toolbar, "
             + "the in-app guide and the log — more sections land with each following pass. Words the program "
             + "assembles or computes are out of this batch's reach too: the index-status line on the top bar, "
@@ -162,7 +165,9 @@ public static class UiStrings
             + "key, the two option lists on the Health page, the whole label column under Diagnostics there, "
             + "the status lines on the Data page, that backup list's own header and every row's button, "
             + "the options in the backup-interval dropdown, the five status lines on the Extensions page, the word "
-            + "in front of the engine's size and every canvas shortcut's action name there, and the lines built as half a sentence plus a number. "
+            + "in front of the engine's size and every canvas shortcut's action name there, on the Desktop tools page each widget "
+            + "type's own header and the two buttons under it, the per-window cost line under the startup switch and every "
+            + "layout row's name and summary, and the lines built as half a sentence plus a number. "
             + "Two things aren't complete: in a "
             + "dropdown the opened list switches at once while the closed box keeps its old label until you pick "
             + "again; and those program-written strings have to be reworked to read from the table before they can "
@@ -181,12 +186,14 @@ public static class UiStrings
         new Entry("settings.general.appearanceTitle", "外观 · 主窗口材质与不透明度",
             "Appearance · main window material and opacity"),
         new Entry("settings.general.appearanceNote",
-            "给主窗口选毛玻璃材质（照搬 DeskBox 的 Desktop Acrylic / Mica 控制器）。桌面组件的材质与不透明度在「桌面工具（组件）」页，两者互不影响。",
+            "给主窗口选毛玻璃材质（照搬 DeskBox 的 Desktop Acrylic / Mica 控制器）。桌面组件的材质与不透明度在「桌面工具（组件）」那一栏，两者互不影响。",
             "Choose the frosted material for the main window (the Desktop Acrylic / Mica controllers, taken from DeskBox). Widget material and opacity are set on the “Desktop tools” page; the two are independent."),
         new Entry("settings.general.mainBackdrop", "主窗口材质", "Main window material"),
         // 英文列里 "Opaque" 必须与下面 material.opaque 那句的开头一致：这句在指着那颗选项说话。
+        // ⚠ 那句引用照抄的是**页签名**：可达性树现场读出的 TabItem 名字就是「桌面工具（组件）」，
+        // 而这一栏第一张卡的标题与它逐字相同（settings.widgets.title），所以两个名字不是两件事。
         new Entry("settings.general.mainBackdropNote",
-            "桌面组件的材质在「桌面工具（组件）」页单独设置，两边互不影响；选「实色」即不透明。",
+            "桌面组件的材质在「桌面工具（组件）」那一栏单独设置，两边互不影响；选「实色」即不透明。",
             "Widget material is set separately on the “Desktop tools” page; the two are independent. Pick “Opaque” for a fully solid surface."),
         // 六颗材质的顺序＝枚举值，XAML 那行注释已经写明；这里换序不会报错，只会让设置档里的数字指向另一种材质。
         new Entry("settings.general.material.acrylicThin", "亚克力 · 薄（推荐，苹果风格）",
@@ -427,6 +434,72 @@ public static class UiStrings
         new Entry("settings.extend.hotkeyListTitle",
             "快捷键一览（下面是当前真正生效的键位；要改请到「快捷键」那一栏里画布那一组）",
             "Shortcut list (below are the keys actually in effect right now; to change them, use the canvas group under the Hotkeys tab)"),
+
+        // ===== 「桌面工具（组件）」那一栏的正文（批次 WI-2h，P-169 ① 第六刀）=====
+        // 口径与前五刀一致：中文列逐字照把**屏幕上的那一句**，英文列是它的对译。
+        // ⚠ 这一栏下拉那六颗材质选项**不新建行**——它们与「常规」页主窗口那六颗是**同一批措辞**
+        //   （逐字对过：六句中文一字不差），所以复用 settings.general.material.*；
+        //   再造一份同名行＝同一句字两个出处，改一漏一（证人 TheWidgetMaterialListIsNotASecondCopy 钉住）。
+        // ⚠ 这一刀有三句没能逐字照把，全因那句里**抄了屏幕上别处那几个字 / 一个数**（坑表 #280，第四面）：
+        //   ① widgetsNote 原本写着「标题直接写明「已添加 N 个 / 未添加」」——那几个字是**程序算出来的行标题**
+        //      （SettingsPage.Widgets.cs 那一排），不在这批射程、也没有英文对译 ⇒ 改成描述；
+        //   ② layoutNote 原本写着「点右键 →「保存当前组件布局…」」——那颗菜单项由 code-behind 现建、
+        //      同样没进表 ⇒ 改成描述“那排动作里有一颗”，指针没丢但不再逐字引用；
+        //   ③ materialNote 原本结尾写着“（对齐 DeskBox **六种**材质）”——这个数是**第二个出处**（下拉里有几颗由
+        //      XAML 数着）⇒ 删数（坑表 #289），改说“每一档的名字都说清了它是什么”。
+        new Entry("settings.widgets.title", "桌面工具（组件）", "Desktop tools (widgets)"),
+        new Entry("settings.widgets.note", "在桌面添加独立小组件：下方按类型折叠，每一类的标题直接写着已经摆上几颗、一颗都没加就明说没加，展开后才是添加与各个实例的显示 / 移除。组件可拖动、边缘吸附、置顶、缩放；组件标题栏那颗关闭按钮只是把它从桌面上撤下，随时可在此或托盘菜单重新添加。",
+            "Add standalone widgets to the desktop. They're grouped by type, and each header says how many are up (or that none are yet); open one to add it or to show / remove its instances. Widgets drag, snap to edges, stay on top and resize; the close button on a widget's title bar only takes it off the desktop — you can add it back here or from the tray menu at any time."),
+        new Entry("settings.widgets.showAll", "全部显示", "Show all"),
+        new Entry("settings.widgets.hideAll", "全部隐藏", "Hide all"),
+        new Entry("settings.widgets.startupTitle", "开机自动加载组件", "Load widgets at startup"),
+        new Entry("settings.widgets.startupNote",
+            "关掉后开机不再把这些小窗口摆到桌面上，省下的内存按颗算（下面那行写着每颗约多少）。已添加的组件不会丢，随时就地可亮。",
+            "Switched off, these small windows are no longer placed on the desktop at boot; the memory you save is counted per window (the line below says roughly how much). Widgets you've added aren't lost — light any of them back up right here."),
+        new Entry("settings.widgets.loadOn", "加载", "Load"),
+        new Entry("settings.widgets.loadOff", "不加载", "Don't load"),
+        new Entry("settings.widgets.appearanceTitle", "组件外观 · 材质与不透明度", "Widget look · material and opacity"),
+        new Entry("settings.widgets.appearanceNote",
+            "为桌面组件选毛玻璃材质；这一页只管组件，主窗口的材质在「常规」页，两者互不影响。",
+            "Pick the frosted material for your widgets. This section is widgets only — the main window's material lives under “General”, and the two don't affect each other."),
+        new Entry("settings.widgets.materialLabel", "组件材质", "Widget material"),
+        new Entry("settings.widgets.materialNote", "亚克力最像 macOS；云母更克制；纯色带强调色且吃不透明度；实色最省资源。这一族与 DeskBox 同款，每一档的名字都说清了它是什么。",
+            "Acrylic looks closest to macOS; Mica is more restrained; Solid carries the accent colour and responds to opacity; Opaque costs the least. Same family as DeskBox — each option's name says what it is."),
+        new Entry("settings.widgets.opacityLabel", "组件背景不透明度（仅纯色材质）",
+            "Widget background opacity (Solid only)"),
+        new Entry("settings.widgets.opacityNote",
+            "只影响桌面组件的「纯色 · Solid」材质：越低越透、能看见桌面壁纸。主窗口的不透明度在「常规」页单独设置。",
+            "Affects only the widgets' Solid material: lower is more see-through, with the wallpaper behind it. The main window's opacity is set separately under “General”."),
+        new Entry("settings.widgets.snapTitle", "边缘磁吸", "Edge snapping"),
+        new Entry("settings.widgets.snapRowLabel", "拖动 / 缩放时自动吸附对齐", "Snap into line while dragging / resizing"),
+        new Entry("settings.widgets.snapStrengthLabel", "磁吸强度", "Snap strength"),
+        new Entry("settings.widgets.snapStrengthNote",
+            "距其它组件边线 / 屏幕边缘多近就贴上（像素）。数值越大越容易吸住，越大手感越「粘」；调小则更接近自由摆放。",
+            "How close to another widget's edge or the screen edge before it sticks (pixels). Higher grabs more eagerly and feels stickier; lower lets you place things freely."),
+        new Entry("settings.widgets.snapSpacingLabel", "对齐间距", "Snap gap"),
+        new Entry("settings.widgets.snapSpacingNote",
+            "吸住之后组件之间保留的缝隙（像素）。0＝边边紧贴，越大排得越松。",
+            "The gap widgets keep after snapping (pixels). 0 means edge to edge; larger spreads them out."),
+        new Entry("settings.widgets.snapOnNote",
+            "开启后：拖动组件会与其它组件的边线、屏幕边缘自动贴合；调整边缘时会同步对齐宽 / 高，让参差不齐的组件一次拉齐。想自己随手摆放就关掉它。",
+            "While this is on, dragging a widget lines it up with the other widgets' edges and the screen edge; resizing aligns width / height too, so a ragged group squares up in one pull. Turn it off to place things by eye."),
+        new Entry("settings.widgets.perfTitle", "性能模式 / 内存门禁", "Performance mode / memory gates"),
+        new Entry("settings.widgets.perfNote",
+            "常驻应用按预算回收内存与缓存（DeskBox 同款 MemoryReclaimer）。低内存机器选「省资源」；需要精细控制选「自定义」。",
+            "A resident app reclaims memory and cache against a budget (the same MemoryReclaimer idea DeskBox uses). Pick “Saver” on a low-memory machine; pick “Custom” to tune it yourself."),
+        new Entry("settings.widgets.perfLabel", "性能模式", "Performance mode"),
+        new Entry("settings.widgets.perfBalanced", "均衡（默认，体验优先）", "Balanced (default, responsiveness first)"),
+        new Entry("settings.widgets.perfSavings", "省资源（低内存 / 笔记本）", "Saver (low memory / laptops)"),
+        new Entry("settings.widgets.perfCustom", "自定义", "Custom"),
+        new Entry("settings.widgets.budgetLabel", "进程内存预算（MB）", "Process memory budget (MB)"),
+        new Entry("settings.widgets.budgetNote", "超过即触发回收", "Reclaim starts once this is exceeded"),
+        new Entry("settings.widgets.cacheLabel", "缓存最大条目数", "Cache entry limit"),
+        new Entry("settings.widgets.cacheNote", "图片 / 头像等有界缓存上限",
+            "The cap for bounded caches (images / avatars and the like)"),
+        new Entry("settings.widgets.layoutTitle", "布局方案", "Layout presets"),
+        new Entry("settings.widgets.layoutNote", "在组件窗口标题栏点右键，那排动作里有一颗能把当前这一屏存成纯模板：存下来的是各组件的位置、大小与外观配置（不含条目内容数据）。同一时刻只会启用一套布局，切换它的快捷键可在「快捷键」那一栏录制。", "Right-click a widget's title bar and one of those actions saves the current screen as a pure template: positions, sizes and appearance settings for every widget (never the items themselves). Only one layout is active at a time, and the hotkey that switches between them is recorded under the “Hotkeys” tab."),
+        new Entry("settings.widgets.applyLayout", "应用", "Apply"),
+        new Entry("settings.widgets.noLayouts", "（暂无保存的布局）", "(no saved layouts yet)"),
 
         // ===== 对话框与列表上那几个共用动词 =====
         // 与 settings.general.cancelUpdate 不是一句：那颗管的是"停掉正在跑的下载／替换"，这颗只是"不做了"。

@@ -501,13 +501,13 @@
                     <controls:ColumnFlowPanel MinColumnWidth="420" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="桌面工具（组件）" Style="{StaticResource SettingTitle}"/>
-                                <TextBlock Text="在桌面添加独立小组件：下方按类型折叠，标题直接写明「已添加 N 个 / 未添加」，展开后才是添加与各实例的显示 / 移除。组件可拖动、边缘吸附、置顶、缩放；标题栏 ✕ 只是移除，随时可在此或托盘菜单重新添加。"
+                                <TextBlock i18n:LocText.Key="settings.widgets.title" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock i18n:LocText.Key="settings.widgets.note"
                                            Style="{StaticResource SettingRowText}"/>
                                 <StackPanel x:Name="WidgetRows" Spacing="2" Margin="0,2,0,0"/>
                                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
-                                    <Button x:Name="WidgetShowAllButton" Content="全部显示" Style="{StaticResource SecondaryButton}" Click="WidgetShowAll_Click"/>
-                                    <Button x:Name="WidgetHideAllButton" Content="全部隐藏" Style="{StaticResource SecondaryButton}" Click="WidgetHideAll_Click"/>
+                                    <Button x:Name="WidgetShowAllButton" i18n:LocText.Key="settings.widgets.showAll" Style="{StaticResource SecondaryButton}" Click="WidgetShowAll_Click"/>
+                                    <Button x:Name="WidgetHideAllButton" i18n:LocText.Key="settings.widgets.hideAll" Style="{StaticResource SecondaryButton}" Click="WidgetHideAll_Click"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
@@ -518,11 +518,11 @@
                              所以只能走"不建"这一侧。数字不在这里重抄一遍——下面那行说明绑的是政策那颗。 -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="开机自动加载组件" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock i18n:LocText.Key="settings.widgets.startupTitle" Style="{StaticResource SettingTitle}"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                    <TextBlock Grid.Column="0" Text="关掉后开机不再把这些小窗口摆到桌面上，省下的内存按颗算（下面那行写着每颗约多少）。已添加的组件不会丢，随时可就地点亮。"
+                                    <TextBlock Grid.Column="0" i18n:LocText.Key="settings.widgets.startupNote"
                                                Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="加载" OffContent="不加载" MinWidth="0"
+                                    <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="settings.widgets.loadOn" i18n:LocText.OffContentKey="settings.widgets.loadOff" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.WidgetsLoadOnStartup, Mode=TwoWay}"/>
                                 </Grid>
                                 <TextBlock Text="{x:Bind ViewModel.WidgetsLoadHint, Mode=OneWay}"
@@ -534,30 +534,30 @@
                              常规页只留主窗口自己的外观。 -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="10">
-                                <TextBlock Text="组件外观 · 材质与不透明度" Style="{StaticResource SettingTitle}"/>
-                                <TextBlock Text="为桌面组件选毛玻璃材质；这一页只管组件，主窗口的材质在「常规」页，两者互不影响。"
+                                <TextBlock i18n:LocText.Key="settings.widgets.appearanceTitle" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock i18n:LocText.Key="settings.widgets.appearanceNote"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
 
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="组件材质"/>
-                                        <TextBlock Text="亚克力最像 macOS；云母更克制；纯色带强调色且吃不透明度；实色最省资源（对齐 DeskBox 六种材质）。" Style="{StaticResource SettingRowText}"/>
+                                        <TextBlock i18n:LocText.Key="settings.widgets.materialLabel"/>
+                                        <TextBlock i18n:LocText.Key="settings.widgets.materialNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <!-- 顺序即枚举值：0=亚克力(薄) 1=云母 2=实色 3=云母Alt 4=亚克力(厚) 5=纯色，追加新项不影响已保存的设置 -->
                                     <ComboBox Grid.Column="1" MinWidth="200" SelectedIndex="{x:Bind ViewModel.BackdropIndex, Mode=TwoWay}">
-                                        <ComboBoxItem Content="亚克力 · 薄（推荐，苹果风格）"/>
-                                        <ComboBoxItem Content="云母 · Mica（更克制的桌面色调）"/>
-                                        <ComboBoxItem Content="实色（省资源，不使用材质）"/>
-                                        <ComboBoxItem Content="云母 · Alt（取更多桌面壁纸色调）"/>
-                                        <ComboBoxItem Content="亚克力 · 厚（更浓的霜化，隐私更好）"/>
-                                        <ComboBoxItem Content="纯色 · Solid（带强调色，可调不透明度）"/>
+                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.acrylicThin"/>
+                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.mica"/>
+                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.opaque"/>
+                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.micaAlt"/>
+                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.acrylicThick"/>
+                                        <ComboBoxItem i18n:LocText.Key="settings.general.material.solid"/>
                                     </ComboBox>
                                 </Grid>
 
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="组件背景不透明度（仅纯色材质）"/>
-                                        <TextBlock Text="只影响桌面组件的「纯色 · Solid」材质：越低越透、能看见桌面壁纸。主窗口的不透明度在「常规」页单独设置。" Style="{StaticResource SettingRowText}"/>
+                                        <TextBlock i18n:LocText.Key="settings.widgets.opacityLabel"/>
+                                        <TextBlock i18n:LocText.Key="settings.widgets.opacityNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
                                         <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.OpacityFloor, Mode=OneTime}"
@@ -575,17 +575,17 @@
                         <!-- 边缘磁吸 -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="边缘磁吸" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock i18n:LocText.Key="settings.widgets.snapTitle" Style="{StaticResource SettingTitle}"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
-                                    <TextBlock Grid.Column="0" Text="拖动 / 缩放时自动吸附对齐" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
-                                    <ToggleSwitch Grid.Column="1" OnContent="开启" OffContent="关闭" MinWidth="0"
+                                    <TextBlock Grid.Column="0" i18n:LocText.Key="settings.widgets.snapRowLabel" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
+                                    <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.EnableWidgetSnap, Mode=TwoWay}"/>
                                 </Grid>
 
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="磁吸强度"/>
-                                        <TextBlock Text="距其它组件边线 / 屏幕边缘多近就贴上（像素）。数值越大越容易吸住，越大手感越「粘」；调小则更接近自由摆放。" Style="{StaticResource SettingRowText}"/>
+                                        <TextBlock i18n:LocText.Key="settings.widgets.snapStrengthLabel"/>
+                                        <TextBlock i18n:LocText.Key="settings.widgets.snapStrengthNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
                                         <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.SnapStrengthFloor, Mode=OneTime}"
@@ -600,8 +600,8 @@
 
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="对齐间距"/>
-                                        <TextBlock Text="吸住之后组件之间保留的缝隙（像素）。0＝边边紧贴，越大排得越松。" Style="{StaticResource SettingRowText}"/>
+                                        <TextBlock i18n:LocText.Key="settings.widgets.snapSpacingLabel"/>
+                                        <TextBlock i18n:LocText.Key="settings.widgets.snapSpacingNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
                                         <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.SnapSpacingFloor, Mode=OneTime}"
@@ -613,7 +613,7 @@
                                                    Style="{StaticResource MutedText}"/>
                                     </Grid>
                                 </Grid>
-                                <TextBlock Text="开启后：拖动组件会与其它组件的边线、屏幕边缘自动贴合；调整边缘时会同步对齐宽 / 高，让参差不齐的组件一次拉齐。想自己随手摆放就关掉它。"
+                                <TextBlock i18n:LocText.Key="settings.widgets.snapOnNote"
                                            Style="{StaticResource SettingRowText}"/>
                             </StackPanel>
                         </Border>
@@ -621,22 +621,22 @@
                         <!-- 性能模式 / 内存门禁 -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="性能模式 / 内存门禁" Style="{StaticResource SettingTitle}"/>
-                                <TextBlock Text="常驻应用按预算回收内存与缓存（DeskBox 同款 MemoryReclaimer）。低内存机器选「省资源」；需要精细控制选「自定义」。"
+                                <TextBlock i18n:LocText.Key="settings.widgets.perfTitle" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock i18n:LocText.Key="settings.widgets.perfNote"
                                            Style="{StaticResource SettingRowText}"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
-                                    <TextBlock Grid.Column="0" Text="性能模式" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="0" i18n:LocText.Key="settings.widgets.perfLabel" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
                                     <ComboBox Grid.Column="1" MinWidth="200" SelectedIndex="{x:Bind ViewModel.PerformanceModeIndex, Mode=TwoWay}">
-                                        <ComboBoxItem Content="均衡（默认，体验优先）"/>
-                                        <ComboBoxItem Content="省资源（低内存 / 笔记本）"/>
-                                        <ComboBoxItem Content="自定义"/>
+                                        <ComboBoxItem i18n:LocText.Key="settings.widgets.perfBalanced"/>
+                                        <ComboBoxItem i18n:LocText.Key="settings.widgets.perfSavings"/>
+                                        <ComboBoxItem i18n:LocText.Key="settings.widgets.perfCustom"/>
                                     </ComboBox>
                                 </Grid>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16"
                                       Visibility="{x:Bind ViewModel.CustomBudgetVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="进程内存预算（MB）"/>
-                                        <TextBlock Text="超过即触发回收" Style="{StaticResource SettingRowText}"/>
+                                        <TextBlock i18n:LocText.Key="settings.widgets.budgetLabel"/>
+                                        <TextBlock i18n:LocText.Key="settings.widgets.budgetNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
                                         <!-- 范围与步进绑判据（批次 SA，P-123 第 3 条）：这里曾写死 32–2048 / 16–1024，
@@ -653,8 +653,8 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16"
                                       Visibility="{x:Bind ViewModel.CustomBudgetVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                        <TextBlock Text="缓存最大条目数"/>
-                                        <TextBlock Text="图片 / 头像等有界缓存上限" Style="{StaticResource SettingRowText}"/>
+                                        <TextBlock i18n:LocText.Key="settings.widgets.cacheLabel"/>
+                                        <TextBlock i18n:LocText.Key="settings.widgets.cacheNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
                                         <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.CacheCountFloor, Mode=OneTime}"
@@ -672,8 +672,8 @@
                         <!-- 布局方案 -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="布局方案" Style="{StaticResource SettingTitle}"/>
-                                <TextBlock Text="在组件窗口标题栏点右键 →「保存当前组件布局…」即可把这一屏存为纯模板：各组件的位置、大小与外观配置（不含条目内容数据）。同一时刻只会显示一套布局，切换快捷键可在「快捷键」标签页录制。"
+                                <TextBlock i18n:LocText.Key="settings.widgets.layoutTitle" Style="{StaticResource SettingTitle}"/>
+                                <TextBlock i18n:LocText.Key="settings.widgets.layoutNote"
                                            Style="{StaticResource SettingRowText}"/>
                                 <ItemsRepeater ItemsSource="{x:Bind LayoutRowsItems, Mode=OneWay}">
                                     <ItemsRepeater.Layout>
@@ -686,17 +686,17 @@
                                                     <TextBlock Text="{x:Bind Name}" VerticalAlignment="Center"/>
                                                     <TextBlock Text="{x:Bind Summary}" Style="{StaticResource MutedText}" FontSize="11"/>
                                                 </StackPanel>
-                                                <Button Grid.Column="1" Content="应用"
+                                                <Button Grid.Column="1" i18n:LocText.Key="settings.widgets.applyLayout"
                                                         Tag="{x:Bind Id}" Click="ApplyLayout_Click"
                                                         Style="{StaticResource SecondaryButton}" Padding="10,2,10,2"/>
-                                                <Button Grid.Column="2" Content="删除"
+                                                <Button Grid.Column="2" i18n:LocText.Key="dialog.delete"
                                                         Tag="{x:Bind Id}" Click="DeleteLayout_Click"
                                                         Style="{StaticResource SecondaryButton}" Padding="10,2,10,2"/>
                                             </Grid>
                                         </DataTemplate>
                                     </ItemsRepeater.ItemTemplate>
                                 </ItemsRepeater>
-                                <TextBlock Text="（暂无保存的布局）" Style="{StaticResource MutedText}"
+                                <TextBlock i18n:LocText.Key="settings.widgets.noLayouts" Style="{StaticResource MutedText}"
                                            Visibility="{x:Bind HasNoLayouts, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                             </StackPanel>
                         </Border>
