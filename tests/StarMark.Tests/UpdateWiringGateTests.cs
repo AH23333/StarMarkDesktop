@@ -44,7 +44,9 @@ public sealed class UpdateWiringGateTests
     public void TheSwitchHasExactlyOneEditorAndSitsOnTheGeneralTab()
     {
         var tab = GeneralTab(Markup(ReadRepoFile(Xaml)));
-        Assert.Equal(1, Count(tab, "<TextBlock Text=\"关于与更新\" Style=\"{StaticResource SettingTitle}\""));
+        // 标题进了文案表（批次 WI-2d）⇒ 锚点搬那颗键，判的还是"这张卡在这一页、只有一颗"。
+        // 不搬字面而搬属性名：属性顺序与样式归属都是会在重构里漂的东西（#33 的对价）。
+        Assert.Equal(1, Count(tab, "i18n:LocText.Key=\"settings.general.aboutTitle\""));
         Assert.Equal(1, Count(tab, "ViewModel.UpdateAutoCheckEnabled, Mode=TwoWay"));
         // 版本号与上一次的结果都要看得见（只给一颗开关而说不出"上次查到了什么"＝不能自证）
         Assert.Equal(1, Count(tab, "ViewModel.LocalVersionText, Mode=OneWay"));

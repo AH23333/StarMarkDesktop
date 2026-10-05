@@ -144,14 +144,16 @@ public sealed class SettingsTaxonomyGateTests
         // 那颗编辑格换成了 PasswordBox（Password 不可绑定），编辑入口的形状与"只有一处读写"
         // 由 CredentialInputGateTests 钉；本文件只钉"这张卡住在哪一页"这一件事。
         // 读抹掉注释之后那一份（#228：注释会替被改掉的标题答题）。
-        Assert.Contains("GitHub Stars 同步", Markup(regular));
+        // 批次 WI-2d 起这张卡的标题进了文案表 ⇒ 锚点从"屏幕上那几个字"搬到那颗键：
+        // 判的仍是"这张卡住在常规页"，改的只是地址（同一批把页签身份解耦时定下的口径）。
+        Assert.Contains("i18n:LocText.Key=\"settings.general.githubTitle\"", Markup(regular));
         Assert.DoesNotContain("这三样分别要填什么", regular);
         Assert.DoesNotContain("AI 助手", Markup(regular));    // 说明卡与表单一起走，不能一份表单搬家、一份说明书留下
         // 批次 UE：「关于与更新」留在常规页——它用的凭据就在同一页，而"版本号 + 有没有新版"是日常一件事，
         // 不属于「数据」（那一页管的是本机那些不可重建的东西）也不属于「健康与诊断」（那一页是取证）。
         // 读<b>抹掉注释之后</b>的那一份：UE24 那一格实测出来，卡片上方那行注释会把标题替它答上，
         // 于是"卡搬走了"这种结构改动在这一格里没有凭据（同一族：#171/#179 锚点要认代码不认注释）。
-        Assert.Contains("关于与更新", Markup(regular));
+        Assert.Contains("i18n:LocText.Key=\"settings.general.aboutTitle\"", Markup(regular));
         Assert.Contains("ViewModel.UpdateAutoCheckEnabled", regular);
 
         var widgets = Between(xaml, "<TabViewItem x:Name=\"TabWidgets\" Tag=\"widgets\"", "</TabViewItem>");

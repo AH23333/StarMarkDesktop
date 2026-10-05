@@ -33,10 +33,15 @@ public sealed class UpdateNotesWiringGateTests
     public void TheNotesPanelLivesInTheUpdateCardAndStartsHidden()
     {
         var xaml = ReadRepoFile(Xaml);
-        // 排在「关于与更新」这张卡里、按钮之后：长高的是一格补充阅读，不该把刚点过的那一排顶下去
-        Between(xaml, "Text=\"关于与更新\"", "UpdateNotesExpander");
-        Assert.Contains("UpdateNotesExpander\" Header=\"这一版的更新说明\" Visibility=\"Collapsed\"", xaml,
-            StringComparison.Ordinal);
+        // 排在「关于与更新」这张卡里、按钮之后：长高的是一格补充阅读，不该把刚点过的那一排顶下去。
+        // 批次 WI-2d 起那张卡的标题进了文案表 ⇒ 锚点搬那颗键（判的还是"顺序"，不是字面）。
+        Between(xaml, "i18n:LocText.Key=\"settings.general.aboutTitle\"", "UpdateNotesExpander");
+        var expander = Between(xaml, "x:Name=\"UpdateNotesExpander\"", ">");
+        Assert.Contains("i18n:LocText.Key=\"settings.general.releaseNotes\"", expander, StringComparison.Ordinal);
+        // 默认收着：那一格的正文只能由这一次检查带回来（落设置档＝留下没人读的旧版正文）
+        Assert.Contains("Visibility=\"Collapsed\"", expander, StringComparison.Ordinal);
+        // 标题只许由表给：挂上键又留一份 Header 字面量，换语言后那份就是没人读也不消失的副本
+        Assert.DoesNotContain("Header=\"", expander, StringComparison.Ordinal);
         Assert.Contains("Text=\"{x:Bind ViewModel.ReleaseNotesText, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
     }
 

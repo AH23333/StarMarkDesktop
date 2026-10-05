@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Linq;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Updates;
 using Xunit;
 using static StarMark.Tests.SourceGate;
@@ -29,8 +30,11 @@ public sealed class UpdateApplyWiringGateTests
         var xaml = ReadRepoFile(Xaml);
         Assert.Contains("x:Name=\"UpdateApplyButton\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Click=\"UpdateApply_Click\"", xaml, StringComparison.Ordinal);
-        // 默认收起：在"还没有发布过"那一格摆一颗「立即更新」，等于承诺了一个不存在的产物
-        Assert.Contains("UpdateApplyButton\" Content=\"立即更新\"", xaml, StringComparison.Ordinal);
+        // 默认收起：在"还没有发布过"那一格摆一颗「立即更新」，等于承诺了一个不存在的产物。
+        // 批次 WI-2d 之后那颗字进了文案表 ⇒ 这里钉的是"这颗按钮的词由表里那一行给"，
+        // 且按元素自己的范围取（不钉属性顺序：那会在无关重构里漂）。
+        Assert.Contains("i18n:LocText.Key=\"settings.general.updateNow\"",
+            Between(xaml, "x:Name=\"UpdateApplyButton\"", "/>"), StringComparison.Ordinal);
         Assert.True(Between(xaml, "x:Name=\"UpdateApplyButton\"", "/>").Contains("Visibility=\"Collapsed\"", StringComparison.Ordinal),
             "那颗按钮的初始可见性必须是 Collapsed");
     }
@@ -76,7 +80,12 @@ public sealed class UpdateApplyWiringGateTests
         var body = MethodBody(Code(ReadRepoFile(View)), "private async void UpdateApply_Click");
         // 钉的是"这一发被掐了"这个动作与它的三条出口，不钉那颗字段叫什么（改名的合法重构不该把门撞红，#33 的对价）
         Assert.Contains("?.Cancel();", body, StringComparison.Ordinal);
-        Assert.Contains("UpdateApplyButton.Content = \"取消更新\"", body, StringComparison.Ordinal);
+        // 批次 WI-2d：那颗按钮在跑的一段换成"取消"那句<b>键</b>。判据跟着搬地址，判定没变——
+        // 同一颗按钮要真的变成出口；而直接写字面量那一族不许回来：换语言那一刻它会被重贴成"空闲"那句，
+        // 界面就等于替一件还在跑的事改口。
+        Assert.Contains("LocText.SetKey(UpdateApplyButton, CancelUpdateKey)", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("UpdateApplyButton.Content = \"", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("UpdateCheckButton.Content = \"", body, StringComparison.Ordinal);
         Assert.Contains("catch (OperationCanceledException)", body, StringComparison.Ordinal);
         Assert.Contains(".Dispose();", body, StringComparison.Ordinal);   // 掐掉了也要把那颗 CTS 还回去
     }
@@ -131,8 +140,13 @@ public sealed class UpdateApplyWiringGateTests
         // 旧那句"本程序不做下载与安装"已经成谎：它现在能做，只有点下去那一发才做
         Assert.DoesNotContain("下载与安装是另一件事，本程序不做", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Text=\"只问一句", xaml, StringComparison.Ordinal);   // 没限定主语的那句全局承诺
-        Assert.Contains("自动那一发只问", xaml, StringComparison.Ordinal);            // "不下载不替换"只属于自动那一发
-        Assert.Contains("只有点「立即更新」才真的下载并替换", xaml, StringComparison.Ordinal);
+        // 批次 WI-2d 把这句搬进了文案表 ⇒ 判据跟着搬到<b>表里那一行</b>：两件事仍然必须分开说，
+        // 只是地址从 XAML 换成了那一行。读的是跑起来真会给用户看的那两列，不是文件里的形状。
+        Assert.True(UiStrings.TryGet("settings.general.autoCheckNote", out var note),
+            "那句措辞不在表里（它搬走了，判据也该跟着搬）");
+        Assert.Contains("自动那一发只问", note.Zh, StringComparison.Ordinal);            // "不下载不替换"只属于自动那一发
+        Assert.Contains("只有点「立即更新」才真的下载并替换", note.Zh, StringComparison.Ordinal);
+        Assert.Contains("only “Update now” downloads", note.En, StringComparison.Ordinal);
     }
 
     // ===== 容器与射程：路径与落点不经界面之手 =====

@@ -129,7 +129,76 @@ public sealed class I18nWiringGateTests
             if (line.Contains("i18n:LocText.PlaceholderKey=\"", StringComparison.Ordinal)
                 && line.Contains("PlaceholderText=", StringComparison.Ordinal))
                 Assert.Fail($"{relativePath}:{i + 1} 同时带 PlaceholderKey 与 PlaceholderText 字面量");
+            // 开关两侧是<b>两颗</b>属性、两句字：漏掉任何一侧，换语言后那一排就是半中半英。
+            foreach (var (keySide, literalSide) in new[]
+                     { ("i18n:LocText.OnContentKey=\"", "OnContent=\""), ("i18n:LocText.OffContentKey=\"", "OffContent=\"") })
+            {
+                if (line.Contains(keySide, StringComparison.Ordinal)
+                    && line.Contains(literalSide, StringComparison.Ordinal))
+                    Assert.Fail($"{relativePath}:{i + 1} 同时带 {keySide} 与 {literalSide} 字面量");
+            }
         }
+    }
+
+    /// <summary>
+    /// <b>开关那颗元素只许挂 On／Off 两颗键，而且必须成对</b>。
+    /// <para>把 <c>LocText.Key</c> 挂到 <c>ToggleSwitch</c> 上不会报错：那颗元素同时有 <c>Header</c> 与
+    /// <c>Content</c>，按 <see cref="LocText"/> 的排除规则正文键会去写 <c>Header</c>——屏幕上开关上方
+    /// 多出一行字，而真正该换的 <c>OnContent</c> 一个字不动（批次 WI-2d，与坑表 #274 同一族的反向形状）。
+    /// 只挂上一侧同样安静：另一侧继续是旧语言，没人会去对比一颗开关的两种状态。</para>
+    /// </summary>
+    [Fact]
+    public void ASwitchCarriesBothOfItsLabelsAndNeverAPayloadKey()
+    {
+        var offenders = new List<string>();
+        foreach (var (path, text) in XamlUnder("src/StarMark.UI"))
+        {
+            var markup = Markup(text);
+            foreach (Match tag in Regex.Matches(markup, @"<ToggleSwitch[^>]*>", RegexOptions.Singleline))
+            {
+                var open = tag.Value;
+                var at = markup.Take(tag.Index).Count(c => c == '\n') + 1;
+                var on = open.Contains("i18n:LocText.OnContentKey=\"", StringComparison.Ordinal);
+                var off = open.Contains("i18n:LocText.OffContentKey=\"", StringComparison.Ordinal);
+                // 只挂一侧＝换语言后那一颗开关半中半英；挂上正文键＝写进 Header，该换的那个字没换。
+                // 这两条是<b>全域</b>判据（还没铺开的栏也必须成立）；"还剩几句中文"另见下一格的上界判据。
+                if (on != off) offenders.Add($"{path}:{at} 开关的两侧键没成对（另一侧会留在旧语言）");
+                if (open.Contains("i18n:LocText.Key=\"", StringComparison.Ordinal)
+                    && !open.Contains("i18n:LocText.OnContentKey=\"", StringComparison.Ordinal))
+                    offenders.Add($"{path}:{at} 开关挂了正文键（那会写进 Header，OnContent 一个字都不动）");
+            }
+        }
+        Assert.True(offenders.Count == 0, string.Join("\n", offenders));
+        // 现场读数（2026-10-04 数过：全应用 22 对开关标签，全住在设置页；本批进了常规页那 5 对）：
+        // 只钉下界——往后的每一批要把它往上推。
+        Assert.True(Count(Markup(ReadRepoFile(SettingsXaml)), "i18n:LocText.OnContentKey=\"") >= 5,
+            "常规页那几颗开关的两侧标签要住在表里，不是写在 XAML 里");
+    }
+
+    /// <summary>
+    /// 「常规」那一栏<b>自己那份标记</b>里一句中文都不许剩（批次 WI-2d 的收口判据）。
+    /// <para>判据分两头：① 这一栏内 <c>Text</c>／<c>Content</c>／<c>Header</c>／开关两侧／提示里不能再有汉字；
+    /// ② 整页剩余量只钉<b>上界</b>——下一批要把它往下推，往上加才是事故。把等号钉在剩余量上，
+    /// 等于让每一批改完都得先来改一次判据，那正是"闸门替改动让路"的形状。</para>
+    /// <para>⚠ <b>这一格的射程止于标记</b>：同一屏上还有两行中文是<b>程序算出来</b>的（顶栏那颗索引状态、
+    /// 「关于与更新」里那行检查结果）——第一版覆盘照片拍到它们之后，名字就从"没有中文正文"改成了
+    /// "自己那份标记"。那两行要翻，得先把状态改成按键推（P-169 的一格），不是往这里再挂一颗键。</para>
+    /// </summary>
+    [Fact]
+    public void TheGeneralTabsOwnMarkupHasNoChineseLeftAndTheRestOnlyShrinks()
+    {
+        const string Attributes = @"(?:Text|Content|Header|OnContent|OffContent|ToolTip|PlaceholderText)=""([^""]*)""";
+        var page = Markup(ReadRepoFile(SettingsXaml));
+        var general = Between(page, "<TabViewItem x:Name=\"TabGeneral\" Tag=\"general\"", "</TabViewItem>");
+        var left = Regex.Matches(general, Attributes).Cast<Match>()
+            .Select(m => m.Groups[1].Value)
+            .Where(v => Regex.IsMatch(v, @"[\u4e00-\u9fff]"))
+            .ToArray();
+        Assert.True(left.Length == 0, $"「常规」栏还剩 {left.Length} 句中文正文：\n{string.Join("\n", left)}");
+
+        var whole = Regex.Matches(page, Attributes).Cast<Match>()
+            .Count(m => Regex.IsMatch(m.Groups[1].Value, @"[\u4e00-\u9fff]"));
+        Assert.True(whole <= 199, $"整页中文正文从 199 涨到了 {whole}（这一族只许往下减）");
     }
 
     /// <summary>
@@ -280,7 +349,10 @@ public sealed class I18nWiringGateTests
         var table = loc[loc.IndexOf("TextProperties =", StringComparison.Ordinal)..];
         Assert.DoesNotContain("\"PlaceholderText\"", table[..table.IndexOf("};", StringComparison.Ordinal)],
             StringComparison.Ordinal);
-        Assert.Equal(3, Count(loc, "DependencyProperty.RegisterAttached"));   // 正文／提示／占位符，三条各一
+        // 正文／提示／开关两侧各一条＝现场数过 5 颗（批次 WI-2d 给开关那两颗开的口）。
+        // 这条计数<b>不是</b>为了让改动便宜：它是"每颗附带属性都得有自己的取词路"的证人——
+        // 少一颗就是有一类元素贴不上而日志里不出声。
+        Assert.Equal(5, Count(loc, "DependencyProperty.RegisterAttached"));
         Assert.Contains("FindProperty(d, \"PlaceholderText\")", loc, StringComparison.Ordinal);
     }
 
@@ -358,6 +430,9 @@ public sealed class I18nWiringGateTests
         var warn = MethodBody(loc, "private static void WarnUnwritableOnce");
         Assert.Contains("StarLog.Warn(", warn, StringComparison.Ordinal);
         Assert.Contains("GetType().Name", warn, StringComparison.Ordinal);   // 说得出是哪一类元素贴不上
-        Assert.Equal(2, Count(loc, "WarnUnwritableOnce(d, "));               // 正文与占位符两条路各自出声
+        Assert.Equal(3, Count(loc, "WarnUnwritableOnce(d, "));   // 正文／占位符／开关两侧（那两颗共用一条出口）
+        var switchPath = MethodBody(loc, "private static void PasteOntoNamedProperty");
+        Assert.Contains("WarnUnwritableOnce(d, ", switchPath, StringComparison.Ordinal);
+        Assert.Contains("没有 {propertyName}", loc, StringComparison.Ordinal);   // 说不出哪一颗属性贴不上＝白报
     }
 }
