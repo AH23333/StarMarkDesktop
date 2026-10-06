@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Hotkeys;
 
@@ -69,8 +70,8 @@ public static class CaptureGate
     /// </summary>
     public static string? ReasonFor(CaptureBlock block) => block switch
     {
-        CaptureBlock.Disabled => "要先在 设置 → 拓展功能 里打开「截屏（截图 / 贴图 / 识字）」",
-        CaptureBlock.SessionBusy => "已经有一次截图在场，先把它结束（Esc 取消）再截下一张",
+        CaptureBlock.Disabled => Locale.T("hotkey.gate.captureDisabled"),
+        CaptureBlock.SessionBusy => Locale.T("hotkey.gate.captureBusy"),
         _ => null,
     };
 }

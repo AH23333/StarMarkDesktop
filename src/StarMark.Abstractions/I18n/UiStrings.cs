@@ -763,6 +763,10 @@ public static class UiStrings
         new Entry("hotkey.err.rowNotice", "提示：{0}（设置已保存，占用者退出后自动生效）。{1}", "Note: {0} (settings are saved; it takes effect automatically once the other program exits). {1}", "ヒント：{0}（設定は保存済み。占有側が終了すると自動で有効になります）。{1}"),
         new Entry("hotkey.err.summary", "提示：{0} 个组合键此刻没归这个实例（{1}）。这些快捷键已经保存，程序会每 {2} 秒自己再注册一次，对方一退出就生效——不需要你做任何事；急着现在就要生效可以点「重试注册」，具体每一行怎么换一个键，写在该行的提示里。", "Note: {0} key combination(s) are not held by this instance right now ({1}). These hotkeys are already saved — the app retries registration every {2} seconds on its own and takes over once the other program exits, so you don't need to do anything; if you need it working right away, click Retry registration. How to change the key on each row is written in that row's hint.", "ヒント：{0} 個のキーの組み合わせが現在このインスタンスにありません（{1}）。これらのショートカットは保存済みで、アプリが {2} 秒ごとに自動で再登録し、相手が終了すると引き継ぎます。操作は不要です。今すぐ有効にしたい場合は「再登録」をクリックしてください。各行のキーの変更方法はその行のヒントに書かれています。"),
         new Entry("hotkey.err.summaryItem", "{0}：{1}", "{0}: {1}", "{0}：{1}"),
+        new Entry("hotkey.gate.captureDisabled", "要先在 设置 → 拓展功能 里打开「截屏（截图 / 贴图 / 识字）」", "First turn on Screenshot (capture / pin / OCR) in Settings → Extensions", "先に設定 → 拡張機能 で「スクリーンショット（キャプチャ／貼り付け／文字起こし）」をオンにしてください"),
+        new Entry("hotkey.gate.captureBusy", "已经有一次截图在场，先把它结束（Esc 取消）再截下一张", "A screenshot session is already running — finish it first (Esc to cancel) before starting another", "すでにスクリーンショットが実行中です。先に終了して（Esc でキャンセル）から次を撮ってください"),
+        new Entry("hotkey.gate.canvasBusySheet", "截图进行中，这条快捷键要等截图结束才归画布", "A screenshot is in progress — this hotkey goes back to the canvas once it ends", "スクリーンショットが進行中です。このショートカットは終了後にキャンバスに戻ります"),
+        new Entry("hotkey.gate.canvasDisabled", "要先在 设置 → 拓展功能 里打开「屏幕画布」", "First turn on Screen canvas in Settings → Extensions", "先に設定 → 拡張機能 で「画面キャンバス」をオンにしてください"),
 
         // ===== 「热榜」那一页（批次 WI-2j）=====
         // 页面标题逐字与设置页那颗开关同名 ⇒ 复用 settings.extend.trendingTitle，⛔ 不造第二份措辞（坑表 #290）；

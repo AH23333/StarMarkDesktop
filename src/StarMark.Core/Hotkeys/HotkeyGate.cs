@@ -1,4 +1,5 @@
 #nullable enable
+using StarMark.Abstractions.I18n;
 using System.Collections.Generic;
 using StarMark.Core.Capture;
 
@@ -47,9 +48,9 @@ public static class HotkeyGate
     {
         if (!HotkeyActions.IsCanvasAction(action)) return null;
         if (stage.SuppressesCanvasHotkeys())
-            return "截图进行中，这条快捷键要等截图结束才归画布";
+            return Locale.T("hotkey.gate.canvasBusySheet");
         if (!canvasEnabled)
-            return "要先在 设置 → 拓展功能 里打开「屏幕画布」";
+            return Locale.T("hotkey.gate.canvasDisabled");
         return null;
     }
 
