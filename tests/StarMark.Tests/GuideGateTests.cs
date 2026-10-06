@@ -67,7 +67,7 @@ public sealed class GuideGateTests
             Assert.NotNull(guide);
             Assert.Equal(tag, guide!.Tag);      // 说明与页对不上号＝浮层说出上一页的话（比没有说明更坏）
         }
-        Assert.Equal(navigable.Count, PageGuides.InOrder.Count);   // 多一条＝有一条永远说不出口
+        Assert.Equal(navigable.Count, PageGuides.InOrder().Count);   // 多一条＝有一条永远说不出口
     }
 
     /// <summary>
@@ -77,13 +77,13 @@ public sealed class GuideGateTests
     [Fact]
     public void EachGuideSaysSeveralThingsRatherThanAnEmptyShell()
     {
-        foreach (var guide in PageGuides.InOrder)
+        foreach (var guide in PageGuides.InOrder())
         {
             Assert.False(string.IsNullOrWhiteSpace(guide.Title), $"{guide.Tag} 没有标题");
             Assert.True(guide.Lines.Count >= 2, $"{guide.Tag} 只有 {guide.Lines.Count} 行说明，说不到两件事");
             Assert.All(guide.Lines, line => Assert.True(line.Trim().Length >= 8, $"{guide.Tag} 有一行太短：「{line}」"));
         }
-        Assert.All(FirstRunGuide.Steps, step => Assert.True(step.Lines.Count >= 2, $"首启那一段「{step.Title}」少于两行"));
+        Assert.All(FirstRunGuide.Steps(), step => Assert.True(step.Lines.Count >= 2, $"首启那一段「{step.Title}」少于两行"));
     }
 
     /// <summary>
@@ -97,9 +97,9 @@ public sealed class GuideGateTests
     public void NoGuideLineCopiesAGlobalHotkeyIntoText()
     {
         var forbidden = new[] { "Ctrl+Alt", "Ctrl + Alt", "F1", "F3", "F4", "F5" };
-        var all = PageGuides.InOrder.SelectMany(g => new[] { g.Title }.Concat(g.Lines))
-            .Concat(FirstRunGuide.Steps.SelectMany(s => new[] { s.Title }.Concat(s.Lines)))
-            .Concat(new[] { FirstRunGuide.Title });
+        var all = PageGuides.InOrder().SelectMany(g => new[] { g.Title }.Concat(g.Lines))
+            .Concat(FirstRunGuide.Steps().SelectMany(s => new[] { s.Title }.Concat(s.Lines)))
+            .Concat(new[] { FirstRunGuide.Title() });
         foreach (var line in all)
         {
             foreach (var token in forbidden) Assert.DoesNotContain(token, line, StringComparison.Ordinal);
@@ -123,7 +123,7 @@ public sealed class GuideGateTests
             @"自行(查阅|参考|备份|处理)",
             @"(文档|官网|issue)\s*(里|上|中)?\s*(有|见)?说明",
         };
-        var lines = PageGuides.InOrder.SelectMany(g => g.Lines).Concat(FirstRunGuide.Steps.SelectMany(s => s.Lines));
+        var lines = PageGuides.InOrder().SelectMany(g => g.Lines).Concat(FirstRunGuide.Steps().SelectMany(s => s.Lines));
         foreach (var line in lines)
         {
             foreach (var pattern in pushes)
@@ -176,7 +176,7 @@ public sealed class GuideGateTests
 
     /// <summary>
     /// 设置页那一栏是<b>宿主而不是第二份文字</b>：XAML 里只许有栏标题与那颗"重看"按钮，
-    /// 正文一律由 <c>PageGuides.InOrder</c> 铺出来。
+    /// 正文一律由 <c>PageGuides.InOrder()</c> 铺出来。
     /// <para>判据写成"这一栏的 XAML 里出现不了成段的中文说明"：把文字搬进 XAML 是最省事的写法，
     /// 也正是这一族最不该有的第二个出处。</para>
     /// </summary>
@@ -189,7 +189,7 @@ public sealed class GuideGateTests
         Assert.Equal(1, Count(xaml, "ReplayGuideButton_Click"));
 
         var code = Code(ReadRepoFile(SettingsGuide));
-        Assert.Contains("foreach (var page in PageGuides.InOrder)", code, StringComparison.Ordinal);
+        Assert.Contains("foreach (var page in PageGuides.InOrder())", code, StringComparison.Ordinal);
         Assert.Contains("GuideUi.HotkeyHints(", code, StringComparison.Ordinal);
         Assert.Equal(1, Count(Code(ReadRepoFile(SettingsCtor)), "BuildGuideTab();"));
         // 重看之后仍然记"已看过"：这一颗是"再看一遍"，不是"取消一次性"

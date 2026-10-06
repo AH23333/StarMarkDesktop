@@ -50,12 +50,13 @@ public static class GuideUi
         {
             // 取不到绑定就说"没有绑定"，而不是把这一行悄悄丢掉：少一行与多一行"没绑"是两件事，
             // 前者用户永远不会知道。
+            var name = HotkeyActions.DisplayName(action);
             lines.Add(bindings.TryGetValue(action, out var gesture) && gesture is not null
-                ? $"{HotkeyActions.DisplayName(action)}：{HotkeyDisplay.Display(gesture)}"
-                : $"{HotkeyActions.DisplayName(action)}：没绑定按键（在设置「快捷键」里给一颗）");
+                ? Locale.Fmt("guide.hotkey.bound", name, HotkeyDisplay.Display(gesture))
+                : Locale.Fmt("guide.hotkey.unbound", name));
         }
         if (!settings.LoadEnableGlobalHotKey())
-            lines.Add("（全局热键现在关着：在设置「快捷键」里打开才生效。）");
+            lines.Add(Locale.T("guide.hotkey.disabled"));
         return lines;
     }
 
@@ -74,7 +75,7 @@ public static class GuideUi
     /// </summary>
     public static async Task ShowFirstRunAsync(XamlRoot? root, SettingsStore settings, Action openFullGuide)
     {
-        var steps = FirstRunGuide.Steps;
+        var steps = FirstRunGuide.Steps();
         // 主题按<b>设置档折算出具体的 Light/Dark</b>，不写 ElementTheme.Default：
         // Default 会让画笔判定落到 OS 实时主题，于是「OS 深色＋应用强制浅色」时这张向导在浅底上画出近白的字。
         var theme = ThemeManager.ResolveEffectiveTheme(settings.LoadTheme());
@@ -120,7 +121,7 @@ public static class GuideUi
 
         var dialog = new ContentDialog
         {
-            Title = FirstRunGuide.Title,
+            Title = FirstRunGuide.Title(),
             // 右侧留 16px：内容一超高就出垂直滚动条，而它压在进度点那一行上（真机截图查出来的，
             // 形状闸门看不见"被盖住"这件事）。
             Content = new ScrollViewer { Content = layout, MaxHeight = 470, Padding = new Thickness(0, 0, 16, 0) },

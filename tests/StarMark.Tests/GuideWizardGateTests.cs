@@ -41,7 +41,7 @@ public sealed class GuideWizardGateTests
     {
         Assert.True(NavigableTags().Count >= 9, $"只认出 {NavigableTags().Count} 页 ⇒ switch 形状变了，闸门要先跟上");
         Assert.True(DrawnArt().Count >= GuideArt.All.Count, "示意图的 case 形状变了，先看扫描器再判红绿");
-        Assert.True(FirstRunGuide.Steps.Count >= 4, $"向导只剩 {FirstRunGuide.Steps.Count} 步，先怀疑表被截断");
+        Assert.True(FirstRunGuide.Steps().Count >= 4, $"向导只剩 {FirstRunGuide.Steps().Count} 步，先怀疑表被截断");
     }
 
     [Fact]
@@ -49,9 +49,9 @@ public sealed class GuideWizardGateTests
     {
         AssertScannersSeeSomething();
         var reachable = new HashSet<string>(NavigableTags(), StringComparer.Ordinal);
-        var jumps = FirstRunGuide.Steps.Where(s => s.JumpTag is not null).Select(s => s.JumpTag!).ToList();
+        var jumps = FirstRunGuide.Steps().Where(s => s.JumpTag is not null).Select(s => s.JumpTag!).ToList();
         Assert.True(jumps.Count >= 3, "向导里几乎每步都该能把人带到那一页，只剩一两颗跳转说明表被改坏了");
-        foreach (var step in FirstRunGuide.Steps)
+        foreach (var step in FirstRunGuide.Steps())
         {
             if (step.JumpTag is null) continue;
             Assert.True(reachable.Contains(step.JumpTag),
@@ -69,13 +69,13 @@ public sealed class GuideWizardGateTests
     {
         AssertScannersSeeSomething();
         var drawn = new HashSet<string>(DrawnArt(), StringComparer.OrdinalIgnoreCase);
-        foreach (var step in FirstRunGuide.Steps)
+        foreach (var step in FirstRunGuide.Steps())
         {
             Assert.True(step.Art is not null, $"「{step.Title}」没配图：向导里出现纯文字的一步＝退回 VC-3 那一版");
             Assert.True(GuideArt.IsReal(step.Art), $"「{step.Title}」配了一张不存在的示意图：{step.Art}");
             Assert.True(drawn.Contains(step.Art!), $"名字认得但 UI 没画：{step.Art}（那一步会是一片空白）");
         }
-        var used = new HashSet<string>(FirstRunGuide.Steps.Select(s => s.Art!), StringComparer.Ordinal);
+        var used = new HashSet<string>(FirstRunGuide.Steps().Select(s => s.Art!), StringComparer.Ordinal);
         Assert.True(used.SetEquals(GuideArt.All.Where(GuideArt.IsReal)), "名字表里有画了却没人引用的图");
     }
 
@@ -87,7 +87,7 @@ public sealed class GuideWizardGateTests
     [Fact]
     public void TheWizardTitleDoesNotBakeInAStepCount()
     {
-        Assert.DoesNotMatch(@"[一二三四五六七八九十0-9]\s*步|这[一两三四五六七八九十0-9]件事", FirstRunGuide.Title);
+        Assert.DoesNotMatch(@"[一二三四五六七八九十0-9]\s*步|这[一两三四五六七八九十0-9]件事", FirstRunGuide.Title());
         Assert.True(LocaleStepCounterComesFromTheTable(),
             "第几步／共几步必须由表算出来（Locale.Fmt + steps.Count），不许再写一个数字进 UI");
     }
@@ -105,7 +105,7 @@ public sealed class GuideWizardGateTests
     public void TheWizardRendersTheTableRatherThanWritingItsOwnWords()
     {
         var code = Code(ReadRepoFile(GuideRender));
-        Assert.Equal(1, Count(code, "var steps = FirstRunGuide.Steps;"));
+        Assert.Equal(1, Count(code, "var steps = FirstRunGuide.Steps();"));
         Assert.Equal(0, Count(code, "new GuideSection("));
         Assert.Equal(0, Count(code, "ButtonText = \""));
         Assert.Equal(0, Count(code, "Content = \""));

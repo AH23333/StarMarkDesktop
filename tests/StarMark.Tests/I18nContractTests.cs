@@ -205,6 +205,8 @@ public sealed class I18nContractTests : IDisposable
             ["settings.ai.stop"] = "停止：日语也写「停止」",
                         ["tray.tip"] = "产品名 StarMark，三语同形",
                         ["dialog.save"] = "「保存」日文同字（WI-2p）",
+                        ["guide.hotkey.bound"] = "占位骨架「{0}：{1}」三语同形（WI-2q）",
+                        ["guide.page.rss"] = "RSS 三语同字（WI-2q）",
 ["trending.daily"] = "今日：日语也写「今日」",
             ["widget.calc.tabQuick"] = "常用：日语也写「常用」（常用ツール）",
             ["widget.cd.save"] = "保存：日语也写「保存」",
@@ -245,7 +247,9 @@ public sealed class I18nContractTests : IDisposable
     {
         foreach (var key in UiStrings.Keys())
         {
-            Assert.Matches(@"^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+$", key);
+            // WI-2q 起"有序行"的键允许纯数字尾段（guide.page.search.1／guide.first.s2.3）——
+            // 行号是它唯一的语义，编个词反而造假；其余段仍必须小驼峰开头。
+            Assert.Matches(@"^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*|\.\d+)+$", key);
             Assert.DoesNotContain("..", key, StringComparison.Ordinal);
         }
     }
