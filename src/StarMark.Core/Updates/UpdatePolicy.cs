@@ -2,6 +2,7 @@
 using System;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Updates;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Updates;
 
@@ -115,22 +116,24 @@ public static class UpdatePolicy
     public static string Describe(UpdateVerdict verdict, RemoteRelease? release = null, string? localVersionText = null)
         => verdict switch
         {
+            // WI-2v 起字进语言表（upd.verdict.*，键逐颗写字面＝坑表 #331）；tag/版本号/限额数都是 {n} 实参。
             UpdateVerdict.NewerAvailable =>
-                $"有新版本 {release?.Tag ?? "?"}（本机 {localVersionText ?? AppVersion.Unknown}）",
-            UpdateVerdict.UpToDate => $"已经是最新（{localVersionText ?? AppVersion.Unknown}）",
+                Locale.Fmt("upd.verdict.newer", release?.Tag ?? "?", localVersionText ?? AppVersion.Unknown),
+            UpdateVerdict.UpToDate => Locale.Fmt("upd.verdict.upToDate", localVersionText ?? AppVersion.Unknown),
             UpdateVerdict.LocalAhead =>
-                $"本机版本 {localVersionText ?? AppVersion.Unknown} 比远端 {release?.Tag ?? "?"} 更新（这通常是预发布或自己编的版）",
-            UpdateVerdict.NothingPublished => "这个仓库还没有发布过版本",
-            UpdateVerdict.RepositoryNotVisible => $"查不到仓库 {DefaultRepository}（改名或私有而没配凭据）",
-            UpdateVerdict.Unauthorized => "凭据被拒：GitHub Token 已失效或作用域不够，重新填一次即可",
-            UpdateVerdict.RateLimited => $"GitHub 暂时限流（匿名每小时 {60} 次），{ProbeGapHours} 小时后会自己再问一次",
-            UpdateVerdict.NotReachable => "这台机器现在连不上 GitHub（离线或代理挡着），下次联网会自己补问",
-            UpdateVerdict.TimedOut => "GitHub 没在限时内回答，过一会儿会自己再问一次",
-            UpdateVerdict.ServerError => "GitHub 那边报错了，过一会儿会自己再问一次",
+                Locale.Fmt("upd.verdict.localAhead", localVersionText ?? AppVersion.Unknown, release?.Tag ?? "?"),
+            UpdateVerdict.NothingPublished => Locale.T("upd.verdict.nothingPublished"),
+            UpdateVerdict.RepositoryNotVisible => Locale.Fmt("upd.verdict.repoNotVisible", DefaultRepository),
+            UpdateVerdict.Unauthorized => Locale.T("upd.verdict.unauthorized"),
+            // 匿名限额 60/h 是 GitHub 的数、重问间隔是 ProbeGapHours——都作实参传，不许把数抄进翻译（P-171）。
+            UpdateVerdict.RateLimited => Locale.Fmt("upd.verdict.rateLimited", "60", ProbeGapHours.ToString()),
+            UpdateVerdict.NotReachable => Locale.T("upd.verdict.notReachable"),
+            UpdateVerdict.TimedOut => Locale.T("upd.verdict.timedOut"),
+            UpdateVerdict.ServerError => Locale.T("upd.verdict.serverError"),
             UpdateVerdict.UnreadableRemoteTag =>
-                $"远端那个版本标签读不懂（{release?.Tag ?? "空"}），所以不猜新旧",
-            UpdateVerdict.LocalVersionUnknown => "本机版本号读不到（这份产物没写版本号），无法比较",
-            _ => "检查更新没有结果",
+                Locale.Fmt("upd.verdict.unreadableTag", release?.Tag ?? Locale.T("upd.verdict.emptyTag")),
+            UpdateVerdict.LocalVersionUnknown => Locale.T("upd.verdict.localVersionUnknown"),
+            _ => Locale.T("upd.verdict.noResult"),
         };
 
     /// <summary>
@@ -305,11 +308,13 @@ public static class UpdatePolicy
     /// </summary>
     public static string DescribeManifestAge(long? daysOld) => daysOld switch
     {
-        null => "清单没写生成时间（这一份不判新鲜度）",
-        0 => "清单是今天签的",
-        long d when !ManifestFreshness.WorthMentioning(d) => $"清单签于 {DateTimeText.DaysAgo(d)}",
-        long d => $"清单签于 {DateTimeText.DaysAgo(d)}（超过 {(int)ManifestFreshness.NoticeAfter.TotalDays} 天，"
-                 + "值得核一眼远端挂的是不是很久以前那一份）",
+        // WI-2v 起进表（upd.manifest.*）；相对时间（DateTimeText，已键化）与天数是实参。
+        null => Locale.T("upd.manifest.missing"),
+        0 => Locale.T("upd.manifest.today"),
+        long d when !ManifestFreshness.WorthMentioning(d) =>
+            Locale.Fmt("upd.manifest.recent", DateTimeText.DaysAgo(d)),
+        long d => Locale.Fmt("upd.manifest.stale", DateTimeText.DaysAgo(d),
+            ((int)ManifestFreshness.NoticeAfter.TotalDays).ToString()),
     };
 
     /// <summary>

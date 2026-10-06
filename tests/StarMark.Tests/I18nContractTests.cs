@@ -207,6 +207,7 @@ public sealed class I18nContractTests : IDisposable
                         ["dialog.save"] = "「保存」日文同字（WI-2p）",
                         ["guide.hotkey.bound"] = "占位骨架「{0}：{1}」三语同形（WI-2q）",
                         ["guide.page.rss"] = "RSS 三语同字（WI-2q）",
+                        ["upd.verdict.emptyTag"] = "「空」三语同字（WI-2v）",
                         ["hotkey.err.pidJoin"] = "pid 分隔符「、」三语同字（WI-2s）",
                         ["hotkey.err.summaryItem"] = "占位骨架「{0}：{1}」三语同形（WI-2s）",
 ["trending.daily"] = "今日：日语也写「今日」",
