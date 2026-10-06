@@ -16,10 +16,13 @@ public readonly record struct MonthCell(int Day, bool InMonth, bool IsToday, boo
 public static class MonthGrid
 {
     /// <summary>
-    /// 表头那七个字。<b>字由 <see cref="DateTimeText.WeekdayStem"/> 给，"周日起排"这个次序才是这里的事实</b>——
+    /// 表头那七格。<b>字由 <see cref="DateTimeText.WeekdayStem"/> 给，"周日起排"这个次序才是这里的事实</b>——
     /// 它与 <see cref="FirstSlot"/> 用同一个序号（Sunday＝0）决定每格落在第几列，两处不同序就会行行错位。
+    /// <para>曾经是 <c>static readonly string[]</c>：静态字段在类首次触碰时构建<b>一次</b>，语言就冻在
+    /// 那一刻——用户从没切过语言的首绘没事，切过语言再开月历就是旧语言表头（WI-31 普查抓出的现行案，
+    /// <c>DateTimeText</c> 注释里"只印词根的表"点名的就是它）。改逐取：每次开月历现问表。</para>
     /// </summary>
-    public static readonly string[] WeekHeaders =
+    public static string[] WeekHeaders() =>
     [
         DateTimeText.WeekdayStem(DayOfWeek.Sunday), DateTimeText.WeekdayStem(DayOfWeek.Monday),
         DateTimeText.WeekdayStem(DayOfWeek.Tuesday), DateTimeText.WeekdayStem(DayOfWeek.Wednesday),

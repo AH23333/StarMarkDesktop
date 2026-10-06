@@ -141,7 +141,7 @@ public sealed class WeekdayNameTests
     {
         Assert.Equal(
             Enum.GetValues<DayOfWeek>().Select(DateTimeText.WeekdayStem),
-            MonthGrid.WeekHeaders);
+            MonthGrid.WeekHeaders());
     }
 
     /// <summary>
@@ -164,20 +164,20 @@ public sealed class WeekdayNameTests
             for (var c = 0; c < rows[r].Count; c++)
             {
                 var date = start.AddDays(r * MonthGrid.Columns + c);
-                Assert.Equal(MonthGrid.WeekHeaders[c], DateTimeText.WeekdayStem(date.DayOfWeek));
+                Assert.Equal(MonthGrid.WeekHeaders()[c], DateTimeText.WeekdayStem(date.DayOfWeek));
             }
         }
     }
 
     /// <summary>
     /// 表头列与格子落位必须对得上，用<b>独立事实</b>钉：2026-09-01 是周二 ⇒ 首行开头补两格，
-    /// 而那一天的格子要落在写着"二"的那一列底下。<see cref="FirstSlot"/> 与 <see cref="MonthGrid.WeekHeaders"/>
+    /// 而那一天的格子要落在写着"二"的那一列底下。<see cref="FirstSlot"/> 与 <see cref="MonthGrid.WeekHeaders()"/>
     /// 共用同一个序号，这条红的时候就是"1 号写在别的星期底下"那种肉眼错位。
     /// </summary>
     [Fact]
     public void FirstSlot_IsTheSundayFirstIndexTheHeadersAssume()
     {
         Assert.Equal(2, MonthGrid.FirstSlot(2026, 9));
-        Assert.Equal("二", MonthGrid.WeekHeaders[2]);
+        Assert.Equal("二", MonthGrid.WeekHeaders()[2]);
     }
 }

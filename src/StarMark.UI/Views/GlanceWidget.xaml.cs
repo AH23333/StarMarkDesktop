@@ -101,20 +101,34 @@ public sealed partial class GlanceWidget : UserControl
         _shownDate = today;
 
         DayBlock.Text = today.Day.ToString();
-        MonthBlock.Text = $"{today.Year}年{today.Month}月";
+        MonthBlock.Text = Locale.Fmt("widget.glance.ym", today.Year, today.Month);
         WeekBlock.Text = DateTimeText.Weekday(today.DayOfWeek);
 
-        var lunar = GlanceCalendar.LunarText(today);
-        var festival = GlanceCalendar.Festival(today);
-        LunarBlock.Text = string.IsNullOrEmpty(lunar)
-            ? (festival ?? string.Empty)
-            : festival is null ? $"农历{lunar}" : $"农历{lunar} · {festival}";
+        // 农历区（农历文本＋节日＋倒计时）＝中文文化成品词，只在中文档出现；其余语言整区折叠
+        // ——判据与理由在 GlanceCalendar.ShowsLunarZone（WI-31 的 P-172 收官口径，非漏翻）。
+        if (GlanceCalendar.ShowsLunarZone(Locale.Current))
+        {
+            LunarBlock.Visibility = Visibility.Visible;
+            var lunar = GlanceCalendar.LunarText(today);
+            var festival = GlanceCalendar.Festival(today);
+            LunarBlock.Text = string.IsNullOrEmpty(lunar)
+                ? (festival ?? string.Empty)
+                : festival is null ? $"农历{lunar}" : $"农历{lunar} · {festival}";
 
-        // 今天已经是节日时，倒计时展示「下一个」节日，避免与上方重复。
-        var next = GlanceCalendar.NextFestival(today.AddDays(1));
-        CountdownBlock.Text = next is null
-            ? string.Empty
-            : $"距「{next.Name}」还有 {next.Days + 1} 天（{next.Date.Month}月{next.Date.Day}日）";
+            // 今天已经是节日时，倒计时展示「下一个」节日，避免与上方重复。
+            var next = GlanceCalendar.NextFestival(today.AddDays(1));
+            CountdownBlock.Visibility = Visibility.Visible;
+            CountdownBlock.Text = next is null
+                ? string.Empty
+                : $"距「{next.Name}」还有 {next.Days + 1} 天（{next.Date.Month}月{next.Date.Day}日）";
+        }
+        else
+        {
+            LunarBlock.Text = string.Empty;
+            LunarBlock.Visibility = Visibility.Collapsed;
+            CountdownBlock.Text = string.Empty;
+            CountdownBlock.Visibility = Visibility.Collapsed;
+        }
     }
 
     private void StartTimer()
@@ -184,7 +198,7 @@ public sealed partial class GlanceWidget : UserControl
     {
         var today = DateOnly.FromDateTime(DateTime.Now);
         var rows = MonthGrid.Build(_calendarYear, _calendarMonth, today);
-        CalendarTitle.Text = $"{_calendarYear}年{_calendarMonth}月";
+        CalendarTitle.Text = Locale.Fmt("widget.glance.ym", _calendarYear, _calendarMonth);   // 与主行同一颗键（此前两处各写一份＝第二个主人）
         CalendarHost.Children.Clear();
         CalendarHost.ColumnDefinitions.Clear();
         CalendarHost.RowDefinitions.Clear();
@@ -199,7 +213,7 @@ public sealed partial class GlanceWidget : UserControl
         {
             var head = new TextBlock
             {
-                Text = MonthGrid.WeekHeaders[c],
+                Text = MonthGrid.WeekHeaders()[c],   // 逐取：静态表头会把语言冻在首次构建那一刻（WI-31）
                 FontSize = 10,
                 Opacity = c is 0 or 6 ? 0.75 : 0.55,
                 HorizontalAlignment = HorizontalAlignment.Center,

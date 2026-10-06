@@ -68,9 +68,9 @@ public sealed class MonthGridTests
     [Fact]
     public void WeekHeaders_AreSevenAndStartOnSunday()
     {
-        Assert.Equal(7, MonthGrid.WeekHeaders.Length);
-        Assert.Equal("日", MonthGrid.WeekHeaders[0]);
-        Assert.Equal("六", MonthGrid.WeekHeaders[^1]);
+        Assert.Equal(7, MonthGrid.WeekHeaders().Length);
+        Assert.Equal("日", MonthGrid.WeekHeaders()[0]);
+        Assert.Equal("六", MonthGrid.WeekHeaders()[^1]);
     }
 
     [Theory]

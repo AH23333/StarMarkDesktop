@@ -15,6 +15,12 @@ namespace StarMark.Core.Widgets;
 /// </summary>
 public static class GlanceCalendar
 {
+    /// <summary>「农历区」（农历文本＋节日＋节日倒计时）是否在界面上出现。<b>只有中文档出现</b>：
+    /// 农历日序（"八月廿六"）与节日名是中文文化的成品词，en/ja 没有能一一对上的口径——
+    /// 编一份"从不露面的翻译"进表＝登记假词（2026-10-06 用户口径：可调整、可不显示；定案为折叠）。
+    /// 折叠是**整区**的：宁可少一块信息，不给 ja/en 屏塞一排读不懂的字。</summary>
+    public static bool ShowsLunarZone(StarMark.Abstractions.I18n.AppLanguage language)
+        => language == StarMark.Abstractions.I18n.AppLanguage.Chinese;
     /// <summary>下一个节日的倒计时信息。</summary>
     /// <param name="Name">节日名。</param>
     /// <param name="Date">节日日期。</param>

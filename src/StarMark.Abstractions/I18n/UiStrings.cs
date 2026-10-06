@@ -665,6 +665,10 @@ public static class UiStrings
         new Entry("clip.dialog.clearTitle", "清空剪贴板历史", "Clear clipboard history", "クリップボード履歴を消去"),
         new Entry("clip.dialog.clearBody", "将删除本机记录的 {0} 条复制内容（含你置顶的条目），删除后无法恢复。书签 / Star / 待办 / 随记不受影响。", "This deletes {0} recorded copies on this machine — including pinned entries — and cannot be undone. Bookmarks, Stars, todos and notes are untouched.", "この PC の記録 {0} 件（ピン留めを含む）を削除すると戻せません。ブックマーク / Star / 待办 / メモは影響を受けません。"),
         new Entry("clip.dialog.clearGo", "清空", "Clear", "消去"),
+        // 今日速览的月题（批次 WI-31，P-172 收官）：主行与月历头部**同一个键**——此前两处各写一份
+        // $"{年}年{月}月"，正是"同一句话两个主人"的现行案。en 走"2026/10"：不补零、不造 12 颗月名装平行
+        //（组件位读得出就够；带格式的 {1:00} 会让占位符闸门眼盲——形状守闸门的，不是反过来）。
+        new Entry("widget.glance.ym", "{0}年{1}月", "{0}/{1}", "{0}年{1}月"),
         new Entry("card.open.fail", "打不开这一行", "Can't open this row", "この行を開けません"),
         new Entry("card.deleteRow.remove", "从库里删掉这一行", "Remove it from the library", "ライブラリからこの行を削除"),
         new Entry("card.deleteRow.done", "已删掉这一行", "Row removed", "行を削除しました"),
