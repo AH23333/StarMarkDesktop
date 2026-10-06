@@ -259,22 +259,24 @@ public static class UpdatePolicy
     /// <summary>
     /// 取一次包的结局要说的那句话。<b>与 <see cref="Describe(UpdateVerdict)"/> 分开是两套枚举的代价</b>
     /// （见 <c>PackageFetchStatus</c> 的注释），重合的那几句刻意保持同一说法。
+    /// <para>WI-2w 起字进语言表（upd.fetch.*，键逐颗写字面＝坑表 #331）；限额后的重问间隔是
+    /// <see cref="ProbeGapHours"/>，作实参传，不许把数抄进翻译（P-171）。</para>
     /// </summary>
     public static string Describe(PackageFetchStatus status) => status switch
     {
-        PackageFetchStatus.Fetched => "更新包已经取到，校验也过了（还没开始装）",
-        PackageFetchStatus.AssetMissing => "这一版没带更新包（发布时漏传了清单或载荷），只能打开发布页看",
-        PackageFetchStatus.AddressRefused => "更新地址拼不出来：仓库或标签的写法认不出来",
-        PackageFetchStatus.OffHostRedirect => "下载中途被引到了 GitHub 之外的站点，已当场拒绝",
-        PackageFetchStatus.TooLarge => "取回的字节超过这一档上限，没当它是更新包",
-        PackageFetchStatus.ManifestUnreadable => "更新清单读不懂（多半是清单格式比这个程序新）",
-        PackageFetchStatus.NotReachable => "这台机器现在连不上 GitHub（离线或代理挡着），下次联网会自己补问",
-        PackageFetchStatus.TimedOut => "GitHub 没在限时内把包送完，过一会儿会自己再试",
-        PackageFetchStatus.ServerError => "GitHub 那边报错了，过一会儿会自己再试",
-        PackageFetchStatus.Unauthorized => "凭据被拒：GitHub Token 已失效或作用域不够，重新填一次即可",
-        PackageFetchStatus.RateLimited => $"GitHub 暂时限流，{ProbeGapHours} 小时后会自己再问一次",
-        PackageFetchStatus.DiskWriteFailed => "本机临时目录写不下去（磁盘满或没权限），更新没有开始",
-        _ => "取更新包没有结果",
+        PackageFetchStatus.Fetched => Locale.T("upd.fetch.fetched"),
+        PackageFetchStatus.AssetMissing => Locale.T("upd.fetch.assetMissing"),
+        PackageFetchStatus.AddressRefused => Locale.T("upd.fetch.addressRefused"),
+        PackageFetchStatus.OffHostRedirect => Locale.T("upd.fetch.offHostRedirect"),
+        PackageFetchStatus.TooLarge => Locale.T("upd.fetch.tooLarge"),
+        PackageFetchStatus.ManifestUnreadable => Locale.T("upd.fetch.manifestUnreadable"),
+        PackageFetchStatus.NotReachable => Locale.T("upd.fetch.notReachable"),
+        PackageFetchStatus.TimedOut => Locale.T("upd.fetch.timedOut"),
+        PackageFetchStatus.ServerError => Locale.T("upd.fetch.serverError"),
+        PackageFetchStatus.Unauthorized => Locale.T("upd.fetch.unauthorized"),
+        PackageFetchStatus.RateLimited => Locale.Fmt("upd.fetch.rateLimited", ProbeGapHours.ToString()),
+        PackageFetchStatus.DiskWriteFailed => Locale.T("upd.fetch.diskWriteFailed"),
+        _ => Locale.T("upd.fetch.noResult"),
     };
 
     /// <summary>
@@ -287,18 +289,18 @@ public static class UpdatePolicy
     /// </summary>
     public static string Describe(UpdateIntegrity.Outcome outcome) => outcome switch
     {
-        UpdateIntegrity.Outcome.Trusted => "这份包签得对、字节也对得上清单",
-        UpdateIntegrity.Outcome.SignatureInvalid => "签名对不上：这份清单不是我们发出去的，已拒绝",
-        UpdateIntegrity.Outcome.ManifestUnreadable => "更新清单读不懂（多半是清单格式比这个程序新），没装",
-        UpdateIntegrity.Outcome.SchemaUnsupported => "清单格式比这个程序新，先升级程序再更新，没装",
-        UpdateIntegrity.Outcome.FieldRejected => "清单里有认不出的值（路径越界、哈希形状不对、或没有主程序），已拒绝",
-        UpdateIntegrity.Outcome.VersionMismatch => "清单写的版本与要取的那一版不是同一版，没装",
-        UpdateIntegrity.Outcome.ManifestPredatesRelease => "这份清单比它要发布的那一版还早得多，不像是为它签的，没装",
-        UpdateIntegrity.Outcome.RollbackRefused => "这一版不比本机现在的更新，装了是往回退，所以没装",
-        UpdateIntegrity.Outcome.LocalVersionUnknown => "本机版本号读不到，判断不了新旧，所以没装",
-        UpdateIntegrity.Outcome.PackageHashMismatch => "包的内容与清单里的哈希对不上（可能被换过），已拒绝",
-        UpdateIntegrity.Outcome.PackageSizeMismatch => "包的大小与清单里说的不一致，已拒绝",
-        _ => "更新包没有通过校验，没装",
+        UpdateIntegrity.Outcome.Trusted => Locale.T("upd.integrity.trusted"),
+        UpdateIntegrity.Outcome.SignatureInvalid => Locale.T("upd.integrity.signatureInvalid"),
+        UpdateIntegrity.Outcome.ManifestUnreadable => Locale.T("upd.integrity.manifestUnreadable"),
+        UpdateIntegrity.Outcome.SchemaUnsupported => Locale.T("upd.integrity.schemaUnsupported"),
+        UpdateIntegrity.Outcome.FieldRejected => Locale.T("upd.integrity.fieldRejected"),
+        UpdateIntegrity.Outcome.VersionMismatch => Locale.T("upd.integrity.versionMismatch"),
+        UpdateIntegrity.Outcome.ManifestPredatesRelease => Locale.T("upd.integrity.manifestPredatesRelease"),
+        UpdateIntegrity.Outcome.RollbackRefused => Locale.T("upd.integrity.rollbackRefused"),
+        UpdateIntegrity.Outcome.LocalVersionUnknown => Locale.T("upd.integrity.localVersionUnknown"),
+        UpdateIntegrity.Outcome.PackageHashMismatch => Locale.T("upd.integrity.packageHashMismatch"),
+        UpdateIntegrity.Outcome.PackageSizeMismatch => Locale.T("upd.integrity.packageSizeMismatch"),
+        _ => Locale.T("upd.integrity.noResult"),
     };
 
     /// <summary>
@@ -325,15 +327,15 @@ public static class UpdatePolicy
     /// </summary>
     public static string Describe(StageStatus status) => status switch
     {
-        StageStatus.Staged => "更新包已经摊开并逐颗对过账（还没开始换文件）",
-        StageStatus.NotTrusted => "这份包没通过校验，压根不该来摊——一步都没往下走",
-        StageStatus.PackageUnreadable => "更新包不是一颗读得开的压缩包（多半是发布机上打包那一步错了），没装",
-        StageStatus.FileMissing => "清单列出的文件在包里找不到，没装",
-        StageStatus.UnexpectedEntry => "包里有清单没记的文件（或重名条目），已拒绝",
-        StageStatus.FileHashMismatch => "摊出来的文件与清单里的哈希对不上（可能被换过），已拒绝",
-        StageStatus.PayloadUnavailable => "那颗更新包在这台机器上读不到了（下载完被本机清理掉是常事），更新没有开始——本机什么都没改，再查一次会重新下载",
-        StageStatus.DiskWriteFailed => "本机写不出暂存文件（磁盘满或没权限），更新没有开始",
-        _ => "更新包没摊开，没装",
+        StageStatus.Staged => Locale.T("upd.stage.staged"),
+        StageStatus.NotTrusted => Locale.T("upd.stage.notTrusted"),
+        StageStatus.PackageUnreadable => Locale.T("upd.stage.packageUnreadable"),
+        StageStatus.FileMissing => Locale.T("upd.stage.fileMissing"),
+        StageStatus.UnexpectedEntry => Locale.T("upd.stage.unexpectedEntry"),
+        StageStatus.FileHashMismatch => Locale.T("upd.stage.fileHashMismatch"),
+        StageStatus.PayloadUnavailable => Locale.T("upd.stage.payloadUnavailable"),
+        StageStatus.DiskWriteFailed => Locale.T("upd.stage.diskWriteFailed"),
+        _ => Locale.T("upd.stage.noResult"),
     };
 
     /// <summary>
@@ -354,16 +356,16 @@ public static class UpdatePolicy
     /// </summary>
     public static string Describe(UpdaterOutcome outcome) => outcome switch
     {
-        UpdaterOutcome.Success => "新版本已经换好并起来了",
-        UpdaterOutcome.InvalidRequest => "这条更新指令本身不对（路径不对、跨了盘、或不像一棵摊好的树），安装目录没动",
-        UpdaterOutcome.ParentStillRunning => "旧的那一版迟迟没有退出，替换没有开始——安装目录还是原来的",
-        UpdaterOutcome.OldTreeNotMoved => "旧目录此刻挪不动，替换没有开始——本机还是原来那一版，程序也已经重新起来；这一版没装上，下次检查更新还要从头再下一遍",
-        UpdaterOutcome.RolledBack => "这次更新没换成，已经退回原来那一版并重新起来了",
-        UpdaterOutcome.RolledBackButNotRunning => "这次更新没换成，文件已退回原来那一版，但它没能自己起来——程序此刻没开着",
-        UpdaterOutcome.UntouchedButNotRunning => "本机一个字节都没改，可原来那一版也没能重新起来——程序此刻没开着（日志里写着挪不动的原因）",
-        UpdaterOutcome.RollbackFailed => "替换中途摔了，而且没能退回原样：请重新安装本程序（旧文件还留在盘上，日志里写着在哪儿）",
-        UpdaterOutcome.Unknown => "更新器没能说清走到了哪一步：程序此刻开不开得起来，它自己也不知道（日志的最后几行写着它知道的）",
-        _ => "替换没有完成，没动安装目录",
+        UpdaterOutcome.Success => Locale.T("upd.updater.success"),
+        UpdaterOutcome.InvalidRequest => Locale.T("upd.updater.invalidRequest"),
+        UpdaterOutcome.ParentStillRunning => Locale.T("upd.updater.parentStillRunning"),
+        UpdaterOutcome.OldTreeNotMoved => Locale.T("upd.updater.oldTreeNotMoved"),
+        UpdaterOutcome.RolledBack => Locale.T("upd.updater.rolledBack"),
+        UpdaterOutcome.RolledBackButNotRunning => Locale.T("upd.updater.rolledBackButNotRunning"),
+        UpdaterOutcome.UntouchedButNotRunning => Locale.T("upd.updater.untouchedButNotRunning"),
+        UpdaterOutcome.RollbackFailed => Locale.T("upd.updater.rollbackFailed"),
+        UpdaterOutcome.Unknown => Locale.T("upd.updater.unknown"),
+        _ => Locale.T("upd.updater.noResult"),
     };
 
     /// <summary>
@@ -372,10 +374,10 @@ public static class UpdatePolicy
     /// 把它演成后者就是界面在承诺一件还没发生的事（同一口径见设置页那句"不替换正在运行的程序"要到 UG-3 才改）。</summary>
     public static string Describe(LaunchStatus status) => status switch
     {
-        LaunchStatus.Started => "替换已经交给更新器，程序马上会重开",
-        LaunchStatus.InvalidRequest => "这条更新指令不对，没有去起更新器",
-        LaunchStatus.NotStarted => "这台机器上的更新器没能跑起来，这次没有自动装——程序还是原来那一版",
-        _ => "更新器没有起来，没动安装目录",
+        LaunchStatus.Started => Locale.T("upd.launch.started"),
+        LaunchStatus.InvalidRequest => Locale.T("upd.launch.invalidRequest"),
+        LaunchStatus.NotStarted => Locale.T("upd.launch.notStarted"),
+        _ => Locale.T("upd.launch.noResult"),
     };
 
     /// <summary>
@@ -387,8 +389,8 @@ public static class UpdatePolicy
     public static string Describe(ApplyStatus status) => status switch
     {
         ApplyStatus.HandedOff => Describe(LaunchStatus.Started),
-        ApplyStatus.NothingApplied => "这次什么都没换，程序还是原来那一版",
-        _ => "更新没有开始，本机什么都没改",
+        ApplyStatus.NothingApplied => Locale.T("upd.apply.nothingApplied"),
+        _ => Locale.T("upd.apply.noResult"),
     };
 
     /// <summary>
@@ -397,11 +399,11 @@ public static class UpdatePolicy
     /// </summary>
     public static string Describe(ApplyPhase phase) => phase switch
     {
-        ApplyPhase.Downloading => "正在下载新版本（这台机器上不改动任何东西）…",
-        ApplyPhase.Inspecting => "正在核对这份包的签名与逐颗哈希…",
-        ApplyPhase.Staging => "正在把新版本摊开（安装目录还没动）…",
-        ApplyPhase.HandingOff => "正在把替换交给更新器…",
-        _ => "正在准备更新…",
+        ApplyPhase.Downloading => Locale.T("upd.phase.downloading"),
+        ApplyPhase.Inspecting => Locale.T("upd.phase.inspecting"),
+        ApplyPhase.Staging => Locale.T("upd.phase.staging"),
+        ApplyPhase.HandingOff => Locale.T("upd.phase.handingOff"),
+        _ => Locale.T("upd.phase.preparing"),
     };
 
     /// <summary>
@@ -413,18 +415,22 @@ public static class UpdatePolicy
     /// </summary>
     public static string Describe(DownloadProgress progress)
     {
+        // 头一句仍从四步那一句取来（形状闸门钉着这一手）；两段读数模板各三语，数全部作实参。
         var head = Describe(ApplyPhase.Downloading);
         var done = FileSizeText.Human(progress.BytesDone);
         return progress.Percent is not { } percent
-            ? $"{head} 已下 {done}"
-            : $"{head} 已下 {done}／共 {FileSizeText.Human(progress.BytesTotal!.Value)}（{NumberText.Grouped(percent)}%）";
+            ? Locale.Fmt("upd.progress.noTotal", head, done)
+            : Locale.Fmt("upd.progress.withTotal", head, done,
+                FileSizeText.Human(progress.BytesTotal!.Value), NumberText.Grouped(percent));
     }
 
     /// <summary>
     /// 他自己掐掉那一发的那句话（批次 UG-3）。<b>它不是失败，也不许写成失败</b>：
     /// 停下来的时候安装目录一个字节都没动，而"再点一次"就在同一颗按钮上（P-54：不许把人支到别处）。
-    /// 出处只有这一颗——界面那侧不许再抄一遍（有闸门钉着）。
+    /// 出处只有这一颗——界面那侧不许再抄一遍（有闸门钉着）。WI-2w 起字进表（upd.cancelled）；
+    /// <see cref="UpdateCancelledSentenceKey"/> 留作编译期锚，闸门按它对账。
     /// </summary>
-    public const string UpdateCancelledSentence =
-        "这次更新停在半路，本机什么都没改；要装的话再点一次「立即更新」。";
+    public const string UpdateCancelledSentenceKey = "upd.cancelled";
+
+    public static string UpdateCancelledSentence => Locale.T(UpdateCancelledSentenceKey);
 }
