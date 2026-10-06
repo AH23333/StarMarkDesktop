@@ -78,6 +78,32 @@ ShowLanguageDialog=no
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 #endif
 Name: "english"; MessagesFile: "compiler:Default.isl"
+; 日文与中文相反，它**是 Inno 官方自带**的那一颗（tools\InnoSetup6\Languages\Japanese.isl 实测在仓）；但"仓内有"≠"每台发布机的 CompilerPath 里都有"
+; ⇒ 仍按中文那同一个 FileExists 形状决定收不收：没收上＝向导少一档日文而不是构建失败，make-installer 收尾打印，不许静默。
+#define HasJapanese FileExists(AddBackslash(CompilerPath) + "Languages\Japanese.isl")
+#if HasJapanese
+Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
+#endif
+
+[CustomMessages]
+; 装向导里**我们自己写的**这几句——它们由脚本段现场弹出，向导标准字来自各 .isl，这几句不会跟着翻：
+; 只补语言格不补它们，就是"日文/英文向导配中文弹窗"＝#286 反对的半中半英（英文屏那半是今天就存在的洞，本批同补）。
+; 默认列＝中文，措辞与原字面逐字一致；键前缀 = [Languages] 的 Name。choices 里的 %n 由 [Code] 换成 #13#10（各语言换行位置归各列自定）。
+runtimeLead=StarMark 需要 .NET 9 桌面运行时（Microsoft.WindowsDesktop.App），这台机器上没检测到。
+runtimeWhyAdmin=自动安装没成功——多半是没有 winget，或它被组织策略挡住了。
+runtimeWhyLow=这一份是「只给我装」，没有管理员权限，所以不替你机器级装运行时。
+runtimeChoices="是"：打开官方下载页。装好后回到这里它会自己重新检测，不用重跑整个向导。%n"否"：不装运行时，先把程序装上（若它其实存在、只是不在我们读的那棵目录下，程序照样能起）。%n"取消"：现在什么都不做。
+runtimeCancelled=没有安装：这台机器上缺少 .NET 9 桌面运行时，而你选择了取消。
+english.runtimeLead=StarMark requires the .NET 9 Desktop Runtime (Microsoft.WindowsDesktop.App), which was not detected on this machine.
+english.runtimeWhyAdmin=Automatic installation did not succeed — most likely winget is missing, or it is blocked by organizational policy.
+english.runtimeWhyLow=This session installs "just for me" without administrator rights, so the runtime will not be installed machine-wide.
+english.runtimeChoices="Yes": open the official download page. Come back here after installing and it will re-detect on its own — no need to restart the wizard.%n"No": install the program without the runtime (if it actually exists, just outside the directories we can read, the program will still run).%n"Cancel": do nothing for now.
+english.runtimeCancelled=Not installed: the .NET 9 Desktop Runtime is missing on this machine, and you chose Cancel.
+japanese.runtimeLead=StarMark は .NET 9 デスクトップランタイム（Microsoft.WindowsDesktop.App）を必要としますが、この PC では検出されませんでした。
+japanese.runtimeWhyAdmin=自動インストールは成功しませんでした — おそらく winget が存在しないか、組織ポリシーによってブロックされています。
+japanese.runtimeWhyLow=今回は「このユーザーのみ」のインストールで管理者権限がないため、PC 全体のランタイムインストールは行いません。
+japanese.runtimeChoices=[はい]：公式ダウンロードページを開きます。インストール後にもう一度ここへ戻れば、自動的に再検出され、ウィザードのやり直しは不要です。%n[いいえ]：ランタイムを入れずにプログラム本体だけインストールします（実際に存在するが私たちが読むディレクトリの外にあるだけで、プログラムは起動できます）。%n[キャンセル]：今は何も行いません。
+japanese.runtimeCancelled=インストールされませんでした：この PC では .NET 9 デスクトップランタイムが検出されず、ウィザードで「キャンセル」が選ばれました。
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
@@ -198,6 +224,7 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Choice: Integer;
+  Choices: String;   // 「换行占位已展开」那份 choices 句（%n→#13#10 就地换）
   Tries: Integer;
   Why: String;
 begin
@@ -220,26 +247,27 @@ begin
       Log('[runtime] winget 装好了（重新检测通过）');
       Exit;
     end;
-    Why := '自动安装没成功——多半是没有 winget，或它被组织策略挡住了。';
+    Why := CustomMessage('runtimeWhyAdmin');
   end
   else
   begin
     Log('[runtime] 没找到 .NET 9 桌面运行时；这是每用户安装（无管理员权限）⇒ 跳过 winget，直接给出口');
-    Why := '这一份是「只给我装」，没有管理员权限，所以不替你机器级装运行时。';
+    Why := CustomMessage('runtimeWhyLow');
   end;
 
   while True do
   begin
-    Choice := MsgBox(
-      'StarMark 需要 .NET 9 桌面运行时（Microsoft.WindowsDesktop.App），这台机器上没检测到。' + Why + #13#10#13#10 +
-      '"是"：打开官方下载页。装好后回到这里它会自己重新检测，不用重跑整个向导。' + #13#10 +
-      '"否"：不装运行时，先把程序装上（若它其实存在、只是不在我们读的那棵目录下，程序照样能起）。' + #13#10 +
-      '"取消"：现在什么都不做。',
+  // choices 句的行内占位 %n 就地换成真换行——各语言的换行位置由该行自定（StringChange 是 Inno
+  // 自带的最稳那颗：var 参数就地全换、无 flags 形状；StringReplace 是 VCL 的不存在，2026-10-06 真编纠过一次）。
+  Choices := CustomMessage('runtimeChoices');
+  StringChange(Choices, '%n', #13#10);
+  Choice := MsgBox(
+      CustomMessage('runtimeLead') + Why + #13#10#13#10 + Choices,
       mbInformation, MB_YESNOCANCEL);
     if Choice = mrCancel then
     begin
       Log('[runtime] 用户取消：运行时缺失，安装没有开始');
-      Result := '没有安装：这台机器上缺少 .NET 9 桌面运行时，而你选择了取消。';
+      Result := CustomMessage('runtimeCancelled');
       Exit;
     end;
     if Choice = mrNo then

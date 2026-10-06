@@ -148,6 +148,9 @@ if (-not $iscc) {
 $isl = Join-Path (Split-Path -Parent $iscc) "Languages\ChineseSimplified.isl"
 if (Test-Path -LiteralPath $isl) { Write-Host "  中文语言包在：向导走简体中文" }
 else { Write-Host "  ! 没有简体中文语言包（Inno 官方不自带它）⇒ 这次编出来的向导是英文。不是失败，但别让它无声" -ForegroundColor DarkYellow }
+$ja = Join-Path (Split-Path -Parent $iscc) "Languages\Japanese.isl"
+if (Test-Path -LiteralPath $ja) { Write-Host "  日文语言包在（Inno 官方自带）：向导带日文一档，日语系统按 OS 语言进日文向导" }
+else { Write-Host "  ! 没有日文语言包 ⇒ 这次的向导没有日文一档（日语系统会落到第一档语言）。不是失败，但别让它无声" -ForegroundColor DarkYellow }
 
 # ---- 4. 编 ----
 $iss = Join-Path $PSScriptRoot "installer\StarMark.iss"

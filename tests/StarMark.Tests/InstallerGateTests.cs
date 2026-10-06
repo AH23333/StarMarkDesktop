@@ -231,13 +231,22 @@ public sealed class InstallerGateTests
     /// <para>这不是风格：ISCC 只把 <c>//</c> 与 <c>{ }</c> 当脚本注释，<c>;</c> 在别的段是注释、在 <c>[Code]</c> 里
     /// 是空语句——回的是 <c>'BEGIN' expected</c>，编译直接断（2026-10-04 这颗闸门就是被它逼出来的）。
     /// 那一发如果只靠"发版时才发现"，代价是一整条流水线跑到最后一步炸。</para>
+    /// <para>段起点按<b>行首形</b>认（整行恰好 <c>[Code]</c>），不能按"文中任意提到"认——
+    /// 批次 WI-2x 自己的段说明注释里写了那句被加 [Code] 括号，第一次就骗过 IndexOf：
+    /// 从那句注释起到文件尾全被当成脚本段，别处的正常 <c>;</c> 注释一起被误报。锚点跟形状走（#286）。</para>
     /// </summary>
     [Fact]
     public void TheCodeSectionNeverUsesSemicolonComments()
     {
         var iss = IssText();
-        var at = iss.IndexOf("[Code]", StringComparison.Ordinal);
-        Assert.True(at >= 0, "这颗 .iss 里没有 [Code] 段（结构变了，闸门先跟上）");
+        var at = -1;
+        var offset = 0;
+        foreach (var raw in iss.Split('\n'))
+        {
+            if (raw.TrimEnd('\r').Trim() == "[Code]") { at = offset; break; }
+            offset += raw.Length + 1;
+        }
+        Assert.True(at >= 0, "这颗 .iss 里没有以行首形出现的 [Code] 段头（结构变了，闸门先跟上）");
         var bad = iss[at..].Split('\n').Select(l => l.TrimEnd('\r'))
             .Select((l, i) => (l, i)).Where(t => t.l.TrimStart().StartsWith(';')).ToList();
         Assert.True(bad.Count == 0,
