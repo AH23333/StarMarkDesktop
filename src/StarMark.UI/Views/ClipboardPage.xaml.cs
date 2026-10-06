@@ -68,18 +68,18 @@ public sealed partial class ClipboardPage : Page
         ViewModel.Paused = PauseButton.IsChecked == true;
         App.SetClipboardPaused(PauseButton.IsChecked == true);
         ViewModel.StatusText = PauseButton.IsChecked == true
-            ? "已暂停记录：期间不再写入新内容。要恢复请再点一次。"
-            : "已恢复记录。";
+            ? StarMark.Abstractions.I18n.Locale.T("clip.pause.on")
+            : StarMark.Abstractions.I18n.Locale.T("clip.pause.off");
     }
 
     private async void Clear_Click(object sender, RoutedEventArgs e)
     {
         var count = ViewModel.Entries.Count;
         var confirmed = await Helpers.CenteredDialog.ConfirmAsync(
-            "清空剪贴板历史",
-            $"将删除本机记录的 {count} 条复制内容（含你置顶的条目），删除后无法恢复。书签 / Star / 待办 / 随记不受影响。",
-            primaryText: "清空",
-            cancelText: "取消",
+            StarMark.Abstractions.I18n.Locale.T("clip.dialog.clearTitle"),
+            StarMark.Abstractions.I18n.Locale.Fmt("clip.dialog.clearBody", count),
+            primaryText: StarMark.Abstractions.I18n.Locale.T("clip.dialog.clearGo"),
+            cancelText: StarMark.Abstractions.I18n.Locale.T("dialog.cancel"),
             owner: App.MainWindow,
             dedupeKey: "clearclipboard");
         if (!confirmed) return;

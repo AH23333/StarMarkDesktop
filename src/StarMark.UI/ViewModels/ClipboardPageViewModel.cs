@@ -82,15 +82,15 @@ public partial class ClipboardPageViewModel : ObservableObject
 
             HasItems = Entries.Count > 0;
             EmptyHint = !Enabled
-                ? "剪贴板历史未开启：到「设置 → 剪贴板历史」打开后，从这里复制过的内容会自动出现在这里。"
-                : HasItems ? string.Empty : "还没有记录到任何复制内容。";
+                ? StarMark.Abstractions.I18n.Locale.T("clip.empty.off")
+                : HasItems ? string.Empty : StarMark.Abstractions.I18n.Locale.T("clip.empty.none");
         }
         catch (Exception ex)
         {
             // HasItems 必须一起复位：那一行的可见性绑的就是它，留着 true 会让"加载失败"这句话
             // 直接被折叠掉——用户看到的是空白页加一句"还没有记录"，比报错更难查。
             HasItems = false;
-            EmptyHint = $"加载失败：{ex.Message}";
+            EmptyHint = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.load", ex.Message);
         }
         finally
         {
@@ -108,7 +108,7 @@ public partial class ClipboardPageViewModel : ObservableObject
         var text = vm.Description ?? string.Empty;
         if (text.Length == 0)
         {
-            StatusText = "这条历史没有可复制的正文";
+            StatusText = StarMark.Abstractions.I18n.Locale.T("clip.status.noBody");
             return false;
         }
 
@@ -120,11 +120,11 @@ public partial class ClipboardPageViewModel : ObservableObject
             package.SetText(text);
             Clipboard.SetContent(package);
             Clipboard.Flush();
-            StatusText = $"已复制到剪贴板：{vm.Title}";
+            StatusText = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.copied", vm.Title);
         }
         catch (Exception ex)
         {
-            StatusText = $"复制失败：{ex.Message}";
+            StatusText = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.copyFail", ex.Message);
             StarLog.Error($"剪贴板历史再复制失败 (id={vm.Id})", ex);
             return false;
         }
@@ -163,7 +163,7 @@ public partial class ClipboardPageViewModel : ObservableObject
             });
             if (!read.ok)
             {
-                StatusText = $"这张图没能复制出去：{read.why}";
+                StatusText = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.imgFail", read.why);
                 return false;
             }
 
@@ -177,11 +177,11 @@ public partial class ClipboardPageViewModel : ObservableObject
                 .CreateFromStream(ClipboardImageStore.StreamOf(read.bytes!)));
             Clipboard.SetContent(package);
             Clipboard.Flush();
-            StatusText = $"已把图片复制回剪贴板：{vm.Title}（去目标程序按粘贴即可）";
+            StatusText = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.imgCopied", vm.Title);
         }
         catch (Exception ex)
         {
-            StatusText = $"图片复制失败：{ex.Message}";
+            StatusText = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.imgCopyFail", ex.Message);
             StarLog.Error($"剪贴板历史再复制图片失败 (id={vm.Id})", ex);
             return false;
         }
@@ -203,15 +203,15 @@ public partial class ClipboardPageViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            StatusText = $"清空失败：{ex.Message}（列表未变动，可再点一次）";
+            StatusText = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.clearFail", ex.Message);
             StarLog.Error("清空剪贴板历史失败", ex);
             return -1;
         }
 
-        StatusText = $"已清空 {deleted} 条剪贴板历史";
+        StatusText = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.cleared", deleted);
         Entries.Clear();
         HasItems = false;
-        EmptyHint = Enabled ? "还没有记录到任何复制内容。" : EmptyHint;
+        EmptyHint = Enabled ? StarMark.Abstractions.I18n.Locale.T("clip.empty.none") : EmptyHint;
         return deleted;
     }
 }
