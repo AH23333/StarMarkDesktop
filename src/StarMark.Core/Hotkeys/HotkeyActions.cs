@@ -1,6 +1,7 @@
 #nullable enable
 using System.Collections.Generic;
 using System.Linq;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 
 namespace StarMark.Core.Hotkeys;
@@ -187,52 +188,59 @@ public static class HotkeyActions
         return list;
     }
 
-    /// <summary>动作的中文展示名（layouts 提供布局名称）。</summary>
+    /// <summary>
+    /// 动作的展示名（layouts 提供布局名称）。批次 WI-2r 起字进语言表：
+    /// ⚠ 键<b>逐颗写字面</b>（<c>hotkey.act.</c>＋动作 ID），不许 <c>$"hotkey.act.{action}"</c> 内插——
+    /// 对账闸门认字面量（坑表 #331，WI-2q 首跑的教训）；布局/组件那四颗带 {0} 的模板走 <see cref="Locale.Fmt"/>，
+    /// {0} 是用户数据（布局名）或已键化的组件名，不是语言内容。
+    /// </summary>
     public static string DisplayName(string action, IReadOnlyList<WidgetLayout>? layouts = null)
     {
         switch (action)
         {
-            case MainToggle: return "切换主界面（显示 / 隐藏）";
-            case MainShow: return "显示主界面";
-            case MainHide: return "隐藏主界面";
-            case WidgetsShowAll: return "显示所有组件";
-            case WidgetsHideAll: return "隐藏所有组件";
-            case WidgetsToggleAll: return "切换所有组件（显示 / 隐藏）";
-            case WidgetsToggleTopmostAll: return "切换所有组件置顶（置顶 / 不置顶）";
-            case ScreenCapture: return "截图（框选区域）";
-            case ScreenPin: return "贴图（框选后钉在桌面）";
-            case ScreenPinToggleHidden: return "切换贴图显示 / 隐藏（全部）";
-            case ScreenPinClickThrough: return "切换贴图鼠标穿透（全部）";
-            case ScreenOcr: return "识字（框选区域并复制文字）";
-            case CanvasToggle: return "屏幕画布（开启 / 关闭）";
-            case CanvasClickThrough: return "画布 · 交出 / 收回鼠标（穿透切换）";
-            case CanvasPen: return "画布 · 画笔（留痕，未开画布时先开）";
-            case CanvasHighlighter: return "画布 · 荧光笔（按住即画、松开即透）";
-            case CanvasEraser: return "画布 · 橡皮";
-            case CanvasBoard: return "画布 · 白板底（整屏白底 / 恢复透明）";
-            case CanvasCurtain: return "画布 · 幕布（压暗整屏，只亮鼠标那一圈）";
-            case CanvasUndo: return "画布 · 撤销上一笔";
-            case CanvasRedo: return "画布 · 重做刚撤销的那一笔";
-            case CanvasClear: return "画布 · 清空笔迹";
-            case CanvasSave: return "画布 · 存为图片（屏幕 + 笔迹）";
-            case CanvasCopy: return "画布 · 复制到剪贴板（屏幕 + 笔迹）";
-            case CanvasPin: return "画布 · 贴到桌面（笔迹那一块，钉回原位）";
+            case MainToggle: return Locale.T("hotkey.act.main.toggle");
+            case MainShow: return Locale.T("hotkey.act.main.show");
+            case MainHide: return Locale.T("hotkey.act.main.hide");
+            case WidgetsShowAll: return Locale.T("hotkey.act.widgets.showall");
+            case WidgetsHideAll: return Locale.T("hotkey.act.widgets.hideall");
+            case WidgetsToggleAll: return Locale.T("hotkey.act.widgets.toggleall");
+            case WidgetsToggleTopmostAll: return Locale.T("hotkey.act.widgets.topmostall");
+            case ScreenCapture: return Locale.T("hotkey.act.screen.capture");
+            case ScreenPin: return Locale.T("hotkey.act.screen.pin");
+            case ScreenPinToggleHidden: return Locale.T("hotkey.act.screen.pinhidden");
+            case ScreenPinClickThrough: return Locale.T("hotkey.act.screen.pinthrough");
+            case ScreenOcr: return Locale.T("hotkey.act.screen.ocr");
+            case CanvasToggle: return Locale.T("hotkey.act.canvas.toggle");
+            case CanvasClickThrough: return Locale.T("hotkey.act.canvas.through");
+            case CanvasPen: return Locale.T("hotkey.act.canvas.pen");
+            case CanvasHighlighter: return Locale.T("hotkey.act.canvas.highlighter");
+            case CanvasEraser: return Locale.T("hotkey.act.canvas.eraser");
+            case CanvasBoard: return Locale.T("hotkey.act.canvas.board");
+            case CanvasCurtain: return Locale.T("hotkey.act.canvas.curtain");
+            case CanvasUndo: return Locale.T("hotkey.act.canvas.undo");
+            case CanvasRedo: return Locale.T("hotkey.act.canvas.redo");
+            case CanvasClear: return Locale.T("hotkey.act.canvas.clear");
+            case CanvasSave: return Locale.T("hotkey.act.canvas.save");
+            case CanvasCopy: return Locale.T("hotkey.act.canvas.copy");
+            case CanvasPin: return Locale.T("hotkey.act.canvas.pin");
         }
 
         if (IsLayoutAction(action))
         {
             var id = LayoutIdOf(action);
             var name = layouts?.FirstOrDefault(l => l.Id == id)?.Name;
-            return string.IsNullOrEmpty(name) ? "切换布局（已删除）" : $"切换布局 · {name}";
+            return string.IsNullOrEmpty(name)
+                ? Locale.T("hotkey.act.layoutGone")
+                : Locale.Fmt("hotkey.act.layout", name);
         }
 
         foreach (var k in WidgetStorage.AllKinds)
         {
             var title = WidgetStorage.KindTitle(k);
-            if (action == WidgetToggle(k)) return $"切换组件 · {title}（显示 / 隐藏）";
-            if (action == WidgetCreate(k)) return $"新建组件 · {title}";
-            if (action == WidgetShow(k)) return $"显示组件 · {title}";
-            if (action == WidgetHide(k)) return $"隐藏组件 · {title}";
+            if (action == WidgetToggle(k)) return Locale.Fmt("hotkey.act.widget.toggle", title);
+            if (action == WidgetCreate(k)) return Locale.Fmt("hotkey.act.widget.create", title);
+            if (action == WidgetShow(k)) return Locale.Fmt("hotkey.act.widget.show", title);
+            if (action == WidgetHide(k)) return Locale.Fmt("hotkey.act.widget.hide", title);
         }
         return action;
     }
