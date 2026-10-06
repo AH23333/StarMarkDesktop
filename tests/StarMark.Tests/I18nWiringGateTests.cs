@@ -779,6 +779,72 @@ public sealed class I18nWiringGateTests
     }
 
     /// <summary>
+    /// 托盘这一族的措辞<b>只许从表里取</b>（批次 WI-2o）：右键菜单是 Win32 <c>AppendMenuW</c>、
+    /// 每次右键重建 ⇒ 取词写在构建那一刻就能跟着语言走；托盘 tooltip 是 Win32 资源（<c>NIM_MODIFY</c> 重发）；
+    /// 贴图组四颗标签的方向判据在 <c>PinGrouping</c>（字进表、判据只认键）。
+    /// <para>⛔ 直交中文菜单串在这四颗文件里从此是禁项——注释不算（<see cref="Code"/> 已剥）。
+    /// 扫描按<b>会产界面串的方法体</b>收口，不扫整文件：日志（<c>StarLog.*</c>）本就不过这把尺子
+    /// （Tray.cs 的检查更新兜底日志是中文，与 TrayHost 同一口径）；
+    /// <c>NamePrefix "组 "</c> 是<b>持久化数据</b>（组名存档），<c>LimitProblem</c> 是还没键化的错误提示
+    /// （P-172 那一族按行推进），两处刻意不在这一格的射程里。</para>
+    /// </summary>
+    [Fact]
+    public void TrayStringsAreKeysNotLiterals()
+    {
+        var offenders = new List<string>();
+
+        // TrayHost：只扫会渲染 UI 的两颗方法体（右键菜单 + tooltip）。日志串（StarLog.*）不归这一格：
+        // 日志跟语言走是另一族（用户口径里日志本就不过闸），且 Error 那颗的续行会骗过行级过滤。
+        var trayHost = Code(ReadRepoFile("src/StarMark.Integrations/SystemTray/TrayHost.cs"));
+        foreach (var body in new[] { MethodBody(trayHost, "private void ShowContextMenu()"),
+                                     MethodBody(trayHost, "public void SetTip(string tip)") })
+            foreach (Match m in Regex.Matches(body, @"""[^""]*[\u4e00-\u9fff][^""]*"""))
+                offenders.Add($"TrayHost.cs：{m.Value}");
+
+        // MainWindow 两颗：只扫会产界面串的方法体（菜单构建 + 标签）。日志串不归这一格——
+        // Tray.cs 的检查更新兜底日志（StarLog.Error）是中文，与 TrayHost 同一口径。
+        var trayPartial = Code(ReadRepoFile("src/StarMark.UI/MainWindow.Tray.cs"));
+        foreach (var (fragment, name) in new[]
+                 {
+                     ("private static TrayHost.TrayCommandItem? GroupMenu()", "GroupMenu"),
+                     ("private IReadOnlyList<TrayHost.TrayCommandItem> BuildTrayCommands()", "BuildTrayCommands"),
+                     ("private static string PinLabel(int pins, bool hidden)", "PinLabel"),
+                 })
+            foreach (Match m in Regex.Matches(MethodBody(trayPartial, fragment), @"""[^""]*[\u4e00-\u9fff][^""]*"""))
+                offenders.Add($"MainWindow.Tray.cs {name}：{m.Value}");
+
+        var menuPartial = Code(ReadRepoFile("src/StarMark.UI/MainWindow.Menu.cs"));
+        foreach (Match m in Regex.Matches(MethodBody(menuPartial, "private MenuFlyout BuildWidgetsMenu()"),
+                                          @"""[^""]*[\u4e00-\u9fff][^""]*"""))
+            offenders.Add($"MainWindow.Menu.cs BuildWidgetsMenu：{m.Value}");
+
+        // PinGrouping：只扫四颗 label 方法体（方向判据留 Core、字进表）。NamePrefix "组 " 是持久化数据
+        // （组名存档，⛔ 不是显示模板）；LimitProblem 是还没键化的错误提示（P-172 按行推进）——两处刻意不在射程。
+        var grouping = Code(ReadRepoFile("src/StarMark.Core/Capture/PinGrouping.cs"));
+        foreach (var (fragment, name) in new[]
+                 {
+                     ("public static string GroupLabel(", "GroupLabel"),
+                     ("public static string HideLabel(", "HideLabel"),
+                     ("public static string ThroughLabel(", "ThroughLabel"),
+                     ("public static string CloseLabel(", "CloseLabel"),
+                 })
+        {
+            var body = MethodBody(grouping, fragment);
+            foreach (Match m in Regex.Matches(body, @"""[^""]*[\u4e00-\u9fff][^""]*"""))
+                offenders.Add($"PinGrouping.{name}：{m.Value}");
+        }
+
+        // 附带的三颗"只要还在就绿"的锚点：四颗文件的取词出口必须真的存在，否则禁项恒真（#189 家族）。
+        Assert.Contains("Locale.T(\"tray.show\")", Code(ReadRepoFile("src/StarMark.Integrations/SystemTray/TrayHost.cs")), StringComparison.Ordinal);
+        Assert.Contains("Locale.T(\"tray.tip\")", Code(ReadRepoFile("src/StarMark.Integrations/SystemTray/TrayHost.cs")), StringComparison.Ordinal);
+        Assert.Contains("LocText.SetKey(item, WidgetStorage.KindTitleKey(kind))",
+            Code(ReadRepoFile("src/StarMark.UI/MainWindow.Menu.cs")), StringComparison.Ordinal);
+
+        Assert.True(offenders.Count == 0,
+            "托盘/贴图组的菜单串直交了中文（换语言那一刻它不跟着改）：\n" + string.Join("\n", offenders));
+    }
+
+    /// <summary>
     /// 一颗附带属性<b>实际会贴哪几颗属性</b>→ 那些属性在代码里的"第二个主人"长什么样。
     /// <para>顺序照 UI 那边 <c>LocText.ResolveTextProperty</c> 的分工写：正文键会挑 Text/Content/Header/Title/Message/Description
     /// 里确实存在的那一颗，所以六颗都要问；提示条有两种写法（<c>NAME.ToolTip =</c> 与

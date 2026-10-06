@@ -431,9 +431,9 @@ public sealed partial class WidgetWindow
         }
     }
 
-    /// <summary>组件类型的默认标题（未重命名时的显示名）。</summary>
+    /// <summary>组件类型的默认标题（未重命名时的显示名）。取词在那一刻定（Locale.T）。</summary>
     private string DefaultKindTitle()
-        => WidgetRegistry.Default.TryGet(_kind, out var d) ? d.Title : _kind.ToString();
+        => WidgetStorage.KindTitle(_kind);
 
     /// <summary>当前显示名：优先用户重命名的名字，未命名/null 时回退到类型默认标题。</summary>
     private string DisplayTitle()

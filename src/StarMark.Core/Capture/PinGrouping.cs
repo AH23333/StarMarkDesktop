@@ -1,5 +1,7 @@
 namespace StarMark.Core.Capture;
 
+using StarMark.Abstractions.I18n;
+
 /// <summary>
 /// 贴图组（成组显示 / 隐藏 / 穿透）里<b>能被机器检的那部分判据</b>：命名、上限、聚合态、
 /// 菜单标签的方向措辞、以及托盘命令号的编解码。
@@ -49,7 +51,7 @@ public static class PinGrouping
     public static string NameOf(int serial) => NamePrefix + serial;
 
     /// <summary>组标签：名字后面永远带成员数——"组 2"看不出是几张，用户就不敢点关闭。</summary>
-    public static string GroupLabel(string name, int members) => $"{name}（{members} 张）";
+    public static string GroupLabel(string name, int members) => Locale.Fmt("pin.groupLabel", name, members);
 
     /// <summary>
     /// 聚合态：组里<b>每一张</b>都处于该状态才算这个状态成立。
@@ -66,13 +68,13 @@ public static class PinGrouping
     }
 
     /// <summary>这一组是不是已经整组收起了 ⇒ 决定那条菜单写「显示」还是「隐藏」。</summary>
-    public static string HideLabel(bool allHidden) => allHidden ? "显示这一组" : "隐藏这一组";
+    public static string HideLabel(bool allHidden) => Locale.T(allHidden ? "pin.groupShow" : "pin.groupHide");
 
     /// <summary>这一组是不是已经整组穿透 ⇒ 同样只出措辞，不做决定。</summary>
-    public static string ThroughLabel(bool allThrough) => allThrough ? "取消这组忽略鼠标" : "这组忽略鼠标";
+    public static string ThroughLabel(bool allThrough) => Locale.T(allThrough ? "pin.groupThroughOn" : "pin.groupThroughOff");
 
     /// <summary>关闭那一条要带数量：关掉的是一张张真实的窗，不是"一个概念"。</summary>
-    public static string CloseLabel(int members) => $"关闭这组（{members} 张）";
+    public static string CloseLabel(int members) => Locale.Fmt("pin.groupClose", members);
 
     /// <summary>
     /// 下一次点"显示 / 收起"要落到哪个状态。

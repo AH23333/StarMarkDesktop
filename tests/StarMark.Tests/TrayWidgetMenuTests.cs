@@ -47,14 +47,14 @@ public sealed class TrayWidgetMenuTests
     public void InjectedRows_CarryUniqueNonEmptyTitledRowsForEveryCreatableKind()
     {
         var titles = WidgetStorage.AllKinds
-            .Select(k => new TrayWidgetItem((int)k, WidgetStorage.KindTitle(k)))
+            .Select(k => new TrayWidgetItem((int)k, WidgetStorage.KindTitleKey(k)))
             .ToList();
 
-        Assert.All(titles, row => Assert.False(string.IsNullOrWhiteSpace(row.Title)));
-        Assert.Equal(titles.Count, titles.Select(t => t.Title).Distinct().Count());
+        Assert.All(titles, row => Assert.False(string.IsNullOrWhiteSpace(row.TitleKey)));
+        Assert.Equal(titles.Count, titles.Select(t => t.TitleKey).Distinct().Count());
         Assert.Equal(titles.Count, titles.Select(t => t.Kind).Distinct().Count());
 
-        // 展示名带图标（DisplayTitle = "{Glyph} {Title}"），用户在托盘里就靠它认出是哪一格。
+        // 展示名带图标（DisplayTitle = "{Glyph} {Locale.T(TitleKey)}"），用户在托盘里就靠它认出是哪一格。
         Assert.Equal("📋 剪贴板", WidgetStorage.KindTitle(WidgetKind.Clipboard));
         Assert.StartsWith("★", WidgetStorage.KindTitle(WidgetKind.QuickLaunch));
     }

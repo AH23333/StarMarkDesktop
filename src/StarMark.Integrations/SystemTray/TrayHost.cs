@@ -1,6 +1,7 @@
 #nullable enable
 using System.Runtime.InteropServices;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using static StarMark.Integrations.SystemTray.NativeMethods;
 
 namespace StarMark.Integrations.SystemTray;
@@ -104,7 +105,7 @@ public sealed class TrayHost : IDisposable
                 uFlags = NIF_MESSAGE | NIF_TIP | (_hIcon != IntPtr.Zero ? NIF_ICON : 0u),
                 uCallbackMessage = TRAY_CALLBACK,
                 hIcon = _hIcon,
-                szTip = "StarMark — 本地索引",
+                szTip = Locale.T("tray.tip"),
             };
             _added = Shell_NotifyIconW(NIM_ADD, ref data);
             if (!_added)
@@ -117,6 +118,7 @@ public sealed class TrayHost : IDisposable
 
             // 全局快捷键不在这里注册：它统一由 HotkeyService 挂在 MainWindow 句柄上
             // （支持多动作 / 允许冲突），TrayHost 曾经也有一个 RegisterHotKey，两边会抢同一手势。
+            Locale.Changed += OnLocaleChanged;   // 第二颗订阅（LocText 是第一颗）：tooltip 是 Win32 资源，进不了附带属性那棵树，只能在这里重发
             return true;
         }
         catch (Exception ex)
@@ -169,13 +171,34 @@ public sealed class TrayHost : IDisposable
         return DefWindowProcW(hWnd, msg, wParam, lParam);
     }
 
+    /// <summary>
+    /// 换语言那一刻把 tooltip 重发一遍（NIM_MODIFY）。
+    /// <para>语言变更事件全库只有两颗订阅：<c>LocText</c>（XAML 那棵树的重贴）与本类——
+    /// tooltip 是 Win32 资源，元素不在任何 XAML 树里，附带属性那套机制够不到它，只能在这里重发。</para>
+    /// </summary>
+    public void SetTip(string tip)
+    {
+        if (!_added) return;
+        var data = new NOTIFYICONDATA
+        {
+            cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATA>(),
+            hWnd = _hwnd,
+            uID = 1,
+            uFlags = NIF_TIP,
+            szTip = tip,
+        };
+        Shell_NotifyIconW(NIM_MODIFY, ref data);
+    }
+
+    private void OnLocaleChanged() => SetTip(Locale.T("tray.tip"));
+
     private void ShowContextMenu()
     {
         var menu = CreatePopupMenu();
 
-        AppendMenuW(menu, MF_STRING, (IntPtr)IDM_SHOW, "显示 StarMark");
+        AppendMenuW(menu, MF_STRING, (IntPtr)IDM_SHOW, Locale.T("tray.show"));
         AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null!);
-        AppendMenuW(menu, MF_STRING, (IntPtr)IDM_WIDGETS, "显示/隐藏全部组件");
+        AppendMenuW(menu, MF_STRING, (IntPtr)IDM_WIDGETS, Locale.T("widget.menuToggleAll"));
 
         // 桌面组件子菜单：逐项勾选 + 全部显示/隐藏。行由宿主注入（注册表为唯一事实来源）。
         var items = WidgetMenuItems;
@@ -184,20 +207,20 @@ public sealed class TrayHost : IDisposable
         {
             var enabled = IsWidgetEnabled?.Invoke(items[i].Kind) ?? false;
             var flags = MF_STRING | (enabled ? MF_CHECKED : 0);
-            AppendMenuW(sub, (uint)flags, (IntPtr)(TrayWidgetMenu.Base + i), items[i].Title);
+            AppendMenuW(sub, (uint)flags, (IntPtr)(TrayWidgetMenu.Base + i), Locale.T(items[i].TitleKey));
         }
         AppendMenuW(sub, MF_SEPARATOR, IntPtr.Zero, null!);
-        AppendMenuW(sub, MF_STRING, (IntPtr)TrayWidgetMenu.ShowAll, "全部显示");
-        AppendMenuW(sub, MF_STRING, (IntPtr)TrayWidgetMenu.HideAll, "全部隐藏");
-        AppendMenuW(menu, MF_POPUP, sub, "桌面组件");
+        AppendMenuW(sub, MF_STRING, (IntPtr)TrayWidgetMenu.ShowAll, Locale.T("widget.menuShowAll"));
+        AppendMenuW(sub, MF_STRING, (IntPtr)TrayWidgetMenu.HideAll, Locale.T("widget.menuHideAll"));
+        AppendMenuW(menu, MF_POPUP, sub, Locale.T("tray.widgetsMenu"));
 
         // 宿主附加命令：按渲染顺序发号（HostCommandBase + 行号），点击后回传该行的 Tag。
         _hostCommands.Clear();
         if (CommandProvider?.Invoke() is { Count: > 0 } provided) AppendCommands(menu, provided);
 
         AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, null!);
-        AppendMenuW(menu, MF_STRING, (IntPtr)IDM_SETTINGS, "设置");
-        AppendMenuW(menu, MF_STRING, (IntPtr)IDM_EXIT, "退出");
+        AppendMenuW(menu, MF_STRING, (IntPtr)IDM_SETTINGS, Locale.T("tray.settings"));
+        AppendMenuW(menu, MF_STRING, (IntPtr)IDM_EXIT, Locale.T("tray.exit"));
 
         GetCursorPos(out var pt);
 
@@ -267,6 +290,7 @@ public sealed class TrayHost : IDisposable
         // 全局热键由 HotkeyService.Dispose 统一注销：TrayHost 从不注册热键，所以这里也没有对应操作。
         try
         {
+            Locale.Changed -= OnLocaleChanged;   // 与 Initialize 那颗订阅配对，防泄漏
             if (_added)
             {
                 var data = new NOTIFYICONDATA

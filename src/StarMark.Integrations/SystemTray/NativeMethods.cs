@@ -47,6 +47,8 @@ internal static class NativeMethods
     // NotifyIcon
     public const uint NIM_ADD = 0x0000;
     public const uint NIM_DELETE = 0x0002;
+    /// <summary>改一个已有图标的数据（tooltip 换语言重发用）。</summary>
+    public const uint NIM_MODIFY = 0x00000001;
     public const uint NIM_SETVERSION = 0x0004;
     public const uint NIF_MESSAGE = 0x0001;
     public const uint NIF_ICON = 0x0002;

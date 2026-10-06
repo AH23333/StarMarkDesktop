@@ -29,20 +29,34 @@ public sealed class NoticeCardGateTests
     // ────────── 那条谎报的出口必须整条消失，而不是"以后别再用" ──────────
 
     /// <summary>
-    /// 全库普查：托盘代发的出口与它那三个旗标一个都不许留下。
+    /// 全库普查：托盘代发的出口与它的谎报旗标一个都不许留下。
     /// <para>留着的不是"没人用的代码"而是<b>一条会谎报成功的出口</b>——下一轮有人图省事把它接回去，
     /// 症状与这次完全一样，而且日志照旧全绿（记忆 ⑦：改判删掉的东西要整条消失）。</para>
+    /// <para>WI-2o 起换口径：托盘 tooltip 的换语言重发（<c>NIM_MODIFY</c>＋<c>NIF_TIP</c>）是合法出口，
+    /// 它不附通知——气泡要弹出来非 <c>NIF_INFO</c> 不可。所以 <c>NIM_MODIFY</c> 从"全库禁字"
+    /// 降为"只许住在 TrayHost"（SetTip 一颗），气泡那三个字面（NIF_INFO／NIIF_INFO／两个方法名）仍是全库禁项。</para>
     /// </summary>
     [Fact]
     public void TheTrayBalloonExitIsGoneFromEverySource()
     {
         foreach (var forbidden in new[] { "ShowNotification", "TryShowTrayNotification",
-                                          "NIM_MODIFY", "NIF_INFO", "NIIF_INFO" })
+                                          "NIF_INFO", "NIIF_INFO" })
         {
             var hits = 0;
             foreach (var (_, text) in SourceGate.ReadRepoUnder("src"))
                 if (text.Contains(forbidden, StringComparison.Ordinal)) hits++;
             Assert.Equal(0, hits);      // 命中数说话：哪个文件还留着，红的时候能顺着字面找过去
+        }
+        // NIM_MODIFY 只许两处：TrayHost 的 tooltip 重发（合法主人）与 NativeMethods 的那一行声明
+        // （常量的家，只许声明不许用）。在别处出现＝气泡那条路被接回去了。
+        foreach (var (path, text) in SourceGate.ReadRepoUnder("src"))
+        {
+            if (!text.Contains("NIM_MODIFY", StringComparison.Ordinal)) continue;
+            if (path.EndsWith("TrayHost.cs", StringComparison.Ordinal)) continue;
+            if (path.EndsWith("NativeMethods.cs", StringComparison.Ordinal)
+                && text.Split("NIM_MODIFY").Length - 1 == 1
+                && text.Contains("const uint NIM_MODIFY", StringComparison.Ordinal)) continue;
+            Assert.Fail($"NIM_MODIFY 溜出了 TrayHost（气泡出口的形状又回来了）：{path}");
         }
     }
 

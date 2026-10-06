@@ -11,6 +11,7 @@ using Windows.Foundation;
 using Windows.Graphics;
 using WinRT.Interop;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Language;
 using StarMark.Core.Capture;
 using StarMark.Core.Hotkeys;
@@ -39,7 +40,7 @@ public sealed partial class MainWindow
         // 子菜单直接从组件注册表生成：以前这是 TrayHost 里一份手写的 5 条标题数组，
         // 注册表长出到 12 种后，7 种组件（含新的剪贴板格）在托盘里既看不到也关不掉（P-62b）。
         _trayHost.WidgetMenuItems = WidgetStorage.AllKinds
-            .Select(k => new TrayWidgetItem((int)k, WidgetStorage.KindTitle(k)))
+            .Select(k => new TrayWidgetItem((int)k, WidgetStorage.KindTitleKey(k)))
             .ToList();
         _trayHost.IsWidgetEnabled = kind => _widgetManager.IsEnabled((WidgetKind)kind);
         _trayHost.ShowRequested += () => DispatcherQueue.TryEnqueue(() => Present(false));
@@ -96,7 +97,7 @@ public sealed partial class MainWindow
     {
         var groups = StarMark.UI.Services.PinManager.Groups;
         if (groups.Count == 0) return null;
-        return new TrayHost.TrayCommandItem("贴图组（整组隐藏 / 忽略鼠标 / 关闭）", TrayGroupParent,
+        return new TrayHost.TrayCommandItem(Locale.T("tray.groupParent"), TrayGroupParent,
             Children: groups.Select(group => new TrayHost.TrayCommandItem(
                 PinGrouping.GroupLabel(group.Name, group.Members.Count), TrayGroupParent,
                 Children:
@@ -135,31 +136,31 @@ public sealed partial class MainWindow
         var (pins, hidden) = (StarMark.UI.Services.PinManager.Count, StarMark.UI.Services.PinManager.AreHidden);
         var list = new List<TrayHost.TrayCommandItem>
         {
-            new("截图（框选区域）", TrayScreenshot,
+            new(Locale.T("tray.screenshot"), TrayScreenshot,
                 Enabled: !StarMark.UI.Services.ScreenshotService.IsCapturing, SeparatorBefore: true),
-            new("贴图（框选后钉在桌面）", TrayScreenPin,
+            new(Locale.T("tray.pin"), TrayScreenPin,
                 Enabled: !StarMark.UI.Services.ScreenshotService.IsCapturing),
-            new("识字（框选后复制文字）", TrayScreenOcr,
+            new(Locale.T("tray.ocr"), TrayScreenOcr,
                 Enabled: !StarMark.UI.Services.ScreenshotService.IsCapturing),
             // 画布的开关。穿透态下画布收不到任何鼠标事件，托盘这一项与全局热键是"找回来"的两条路（§16.6）。
-            new("屏幕画布（讲解时在屏幕上画）", TrayCanvas,
+            new(Locale.T("tray.canvas"), TrayCanvas,
                 StarMark.UI.Services.CanvasService.IsRunning, SeparatorBefore: true),
             // 三条"所有贴图"的动作。一张都没有时点它们都是空动作 ⇒ 灰掉并把状态写进标签，
             // 比"点了没反应"好（P-54 口径）。标签按要执行的动作说人话（菜单惯例），
             // 只有"忽略鼠标"这项是状态开关，所以它用勾选态。
             new(PinLabel(pins, hidden), TrayPinsShowHide, SeparatorBefore: true, Enabled: pins > 0),
-            new("贴图忽略鼠标", TrayPinsClickThrough, StarMark.UI.Services.PinManager.ClickThrough, Enabled: pins > 0),
-            new("关闭所有贴图", TrayPinsCloseAll, Enabled: pins > 0),            new("所有组件置顶 / 不置顶", TrayTopmostToggle, SeparatorBefore: true),
-            new("主题 · 跟随系统", TrayThemeDefault, _themePref == ThemePreference.Default, SeparatorBefore: true),
-            new("主题 · 浅色", TrayThemeLight, _themePref == ThemePreference.Light),
-            new("主题 · 深色", TrayThemeDark, _themePref == ThemePreference.Dark),
-            new("性能 · 均衡", TrayPerfBalanced, perf == StarMark.Core.Performance.PerformanceMode.Balanced, SeparatorBefore: true),
-            new("性能 · 省资源", TrayPerfSaver, perf == StarMark.Core.Performance.PerformanceMode.ResourceSaver),
-            new("开机自动启动", TrayAutostart, Autostart().IsEnabled(), SeparatorBefore: true),
-            new("全局快捷键已启用", TrayHotkeysEnabled, hotkeysOn),
+            new(Locale.T("tray.pinsThrough"), TrayPinsClickThrough, StarMark.UI.Services.PinManager.ClickThrough, Enabled: pins > 0),
+            new(Locale.T("tray.pinsCloseAll"), TrayPinsCloseAll, Enabled: pins > 0),            new(Locale.T("tray.topmostAll"), TrayTopmostToggle, SeparatorBefore: true),
+            new(Locale.T("tray.themeDefault"), TrayThemeDefault, _themePref == ThemePreference.Default, SeparatorBefore: true),
+            new(Locale.T("tray.themeLight"), TrayThemeLight, _themePref == ThemePreference.Light),
+            new(Locale.T("tray.themeDark"), TrayThemeDark, _themePref == ThemePreference.Dark),
+            new(Locale.T("tray.perfBalanced"), TrayPerfBalanced, perf == StarMark.Core.Performance.PerformanceMode.Balanced, SeparatorBefore: true),
+            new(Locale.T("tray.perfSaver"), TrayPerfSaver, perf == StarMark.Core.Performance.PerformanceMode.ResourceSaver),
+            new(Locale.T("tray.autostart"), TrayAutostart, Autostart().IsEnabled(), SeparatorBefore: true),
+            new(Locale.T("tray.hotkeysOn"), TrayHotkeysEnabled, hotkeysOn),
             // 检查更新：永远点得动——它不依赖任何开关状态（自动那颗开关只管"程序自己要不要上网问"，
             // 不管"他能不能自己问一次"）。结果由提示卡当场说，包括问不上的那几种原因。
-            new("检查更新", TrayCheckUpdate, SeparatorBefore: true),
+            new(Locale.T("tray.checkUpdate"), TrayCheckUpdate, SeparatorBefore: true),
         };
         // 有了组才多出这一棵，而且插在"所有贴图"那三条之后（先全局、后按组，与人的操作顺序一致）。
         // 一组贴图收起后它的工具条跟着消失，托盘这一行就是那几张图唯一的出口——不能只在贴图条上给入口。
@@ -172,7 +173,8 @@ public sealed partial class MainWindow
 
     /// <summary>贴图显隐那一项的标签：没有贴图时把状态写进文字，灰掉的项才知道自己为什么点不动。</summary>
     private static string PinLabel(int pins, bool hidden)
-        => pins == 0 ? "显示 / 收起所有贴图（当前没有贴图）" : hidden ? "显示所有贴图" : "收起所有贴图";
+        => pins == 0 ? Locale.T("tray.pinsShowHideNone")
+           : hidden ? Locale.T("tray.pinsShowAll") : Locale.T("tray.pinsHideAll");
 
     private void RunTrayCommand(int tag)
     {

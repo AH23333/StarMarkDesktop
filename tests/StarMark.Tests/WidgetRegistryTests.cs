@@ -3,6 +3,7 @@ using System;
 using System.Linq;
 using Xunit;
 using StarMark.Core.Widgets;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Tests;
 
@@ -116,9 +117,13 @@ public sealed class WidgetRegistryTests
     [Fact]
     public void DisplayTitles_NeverCarryTheGridSuffix()
     {
-        // 用户口径（批次 IY）：组件名统一不带「格」字。名字只在描述符里写一次，
+        // 用户口径（批次 IY）：组件名统一不带「格」字。名字只住描述符的键那一处（WI-2o 起交键不交字），
         // 托盘子菜单 / 新建入口 / 组件标题栏 / 快照摘要全部由它派生 ⇒ 钉这一处就等于钉住全域。
         foreach (var d in WidgetRegistry.Default.All)
-            Assert.False(d.Title.Contains('格'), $"组件「{d.Kind}」的显示名带了「格」字：{d.Title}");
+        {
+            Assert.True(UiStrings.TryGet(d.TitleKey, out var entry),
+                $"组件「{d.Kind}」的展示名键 {d.TitleKey} 没登记进表（托盘与顶栏会显示 ⟨键⟩）");
+            Assert.False(entry.Zh.Contains('格'), $"组件「{d.Kind}」的显示名带了「格」字：{entry.Zh}");
+        }
     }
 }

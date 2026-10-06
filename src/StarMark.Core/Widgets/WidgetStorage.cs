@@ -355,6 +355,9 @@ public sealed class WidgetStorage
     /// <summary>组件展示名（含图标）；未知类型回退为类型名。</summary>
     public static string KindTitle(WidgetKind kind) =>
         WidgetRegistry.Default.TryGet(kind, out var d) ? d.DisplayTitle : kind.ToString();
+    /// <summary>组件展示名的<b>键</b>（托盘子菜单注入用：注入键而不是成品串，渲染那一刻才取词）。</summary>
+    public static string KindTitleKey(WidgetKind kind) =>
+        WidgetRegistry.Default.TryGet(kind, out var d) ? d.TitleKey : kind.ToString();
 
     /// <summary>取某组件的窗口配置（无记录时按类型给默认尺寸并级联摆放）。</summary>
     public WidgetConfig GetConfig(WidgetStoreData data, WidgetKind kind, int index)

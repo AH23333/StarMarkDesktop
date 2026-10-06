@@ -45,24 +45,30 @@ public sealed partial class MainWindow
         var menu = new MenuFlyout();
         foreach (var kind in WidgetStorage.AllKinds)
         {
-            var item = new ToggleMenuFlyoutItem { Text = WidgetStorage.KindTitle(kind) };
+            var item = new ToggleMenuFlyoutItem();
+            // 菜单只建一次（??= 缓存）⇒ 行项必须挂键而不是塞成品串，换语言那一刻才跟着重贴（WI-2o）。
+            LocText.SetKey(item, WidgetStorage.KindTitleKey(kind));
             var captured = kind;
             item.Click += (_, _) =>
                 _ = _widgetManager.SetEnabledAsync(captured, !_widgetManager.IsEnabled(captured));
             menu.Items.Add(item);
         }
         menu.Items.Add(new MenuFlyoutSeparator());
-        var showAll = new MenuFlyoutItem { Text = "全部显示" };
+        var showAll = new MenuFlyoutItem();
+        LocText.SetKey(showAll, "widget.menuShowAll");
         showAll.Click += (_, _) => _ = _widgetManager.ShowAllAsync();
-        var hideAll = new MenuFlyoutItem { Text = "全部隐藏" };
+        var hideAll = new MenuFlyoutItem();
+        LocText.SetKey(hideAll, "widget.menuHideAll");
         hideAll.Click += (_, _) => _ = _widgetManager.HideAllAsync();
         menu.Items.Add(showAll);
         menu.Items.Add(hideAll);
         menu.Items.Add(new MenuFlyoutSeparator());
-        var toggle = new MenuFlyoutItem { Text = "显示/隐藏全部组件" };
+        var toggle = new MenuFlyoutItem();
+        LocText.SetKey(toggle, "widget.menuToggleAll");
         toggle.Click += (_, _) => _ = _widgetManager.ToggleAllAsync();
         menu.Items.Add(toggle);
-        var manage = new MenuFlyoutItem { Text = "在设置中管理…" };
+        var manage = new MenuFlyoutItem();
+        LocText.SetKey(manage, "widget.menuManage");
         manage.Click += (_, _) => OpenSettingsPage();
         menu.Items.Add(manage);
 

@@ -1,5 +1,6 @@
 #nullable enable
 using System.Linq;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Widgets;
 
@@ -44,7 +45,7 @@ public enum WidgetChromeMode
 /// </summary>
 public sealed record WidgetDescriptor(
     WidgetKind Kind,
-    string Title,
+    string TitleKey,
     string Glyph,
     int DefaultWidth,
     int DefaultHeight,
@@ -60,7 +61,7 @@ public sealed record WidgetDescriptor(
     bool CanHideChrome = true)
 {
     /// <summary>带图标的展示名，用于托盘菜单 / 设置页。</summary>
-    public string DisplayTitle => $"{Glyph} {Title}";
+    public string DisplayTitle => $"{Glyph} {Locale.T(TitleKey)}";
 
     public bool HasImplementedContent => Stage == WidgetContentStage.Implemented;
     public bool IsAvailable => Availability == WidgetContentAvailability.Available;
@@ -122,74 +123,74 @@ public sealed class WidgetRegistry
     private static IEnumerable<WidgetDescriptor> CreateDefaults()
     {
         yield return new WidgetDescriptor(
-            WidgetKind.QuickLaunch, "快捷启动", "★", 320, 460);
+            WidgetKind.QuickLaunch, "widget.kind.quickLaunch", "★", 320, 460);
 
         yield return new WidgetDescriptor(
-            WidgetKind.Todo, "待办", "✅", 300, 380);
+            WidgetKind.Todo, "widget.kind.todo", "✅", 300, 380);
 
         yield return new WidgetDescriptor(
-            WidgetKind.QuickNote, "随记", "📝", 300, 340);
+            WidgetKind.QuickNote, "widget.kind.quickNote", "📝", 300, 340);
 
         yield return new WidgetDescriptor(
             // 时钟同样可以缩放（字号随窗口自适应，见 ClockWidget.ApplyAdaptiveFontSize）
-            WidgetKind.Clock, "时钟", "🕒", 240, 170, IsResizable: true);
+            WidgetKind.Clock, "widget.kind.clock", "🕒", 240, 170, IsResizable: true);
 
         yield return new WidgetDescriptor(
-            WidgetKind.Search, "快捷搜索", "🔍", 300, 130);
+            WidgetKind.Search, "widget.kind.search", "🔍", 300, 130);
 
         // ── 差异化条目格（StarMark 护城河：全部基于统一 items 表，DeskBox 结构上做不到）──
         yield return new WidgetDescriptor(
-            WidgetKind.TagGrid, "标签", "🏷️", 300, 400);
+            WidgetKind.TagGrid, "widget.kind.tagGrid", "🏷️", 300, 400);
 
         yield return new WidgetDescriptor(
-            WidgetKind.Clipboard, "剪贴板", "📋", 320, 420);
+            WidgetKind.Clipboard, "widget.kind.clipboard", "📋", 320, 420);
 
         yield return new WidgetDescriptor(
-            WidgetKind.Activity, "最近活动", "🕘", 300, 400);
+            WidgetKind.Activity, "widget.kind.activity", "🕘", 300, 400);
 
         yield return new WidgetDescriptor(
-            WidgetKind.Pinned, "置顶条目", "⏫", 300, 380);
+            WidgetKind.Pinned, "widget.kind.pinned", "⏫", 300, 380);
 
         // ── Phase C：今日速览（Glance）──
         // 节日 / 农历算法照搬 DeskBox 的 GlanceFestivalService（基于 .NET 内置 ChineseLunisolarCalendar）。
         yield return new WidgetDescriptor(
-            WidgetKind.Glance, "今日速览", "📅", 300, 360);
+            WidgetKind.Glance, "widget.kind.glance", "📅", 300, 360);
 
         // ── Phase C：天气 ──
         // 数据源 Open-Meteo（免费、无需 API Key）；WMO 码映射照搬 DeskBox 的 WeatherCodeMapper。
         yield return new WidgetDescriptor(
-            WidgetKind.Weather, "天气", "🌤️", 300, 320);
+            WidgetKind.Weather, "widget.kind.weather", "🌤️", 300, 320);
 
         // ── Phase C：音乐 ──
         // 走 Windows SMTC，读取系统当前播放会话并控制播放，不需要对接任何第三方播放器。
         yield return new WidgetDescriptor(
-            WidgetKind.Music, "音乐", "🎵", 300, 240);
+            WidgetKind.Music, "widget.kind.music", "🎵", 300, 240);
 
         // ── 效率组件批次 LA：计算器 ──
         // 表达式求值 / 单位换算 / 时间戳换算三页；换算率是内置静态表，断网可用，刻意不含汇率（发起人裁决）。
         yield return new WidgetDescriptor(
-            WidgetKind.Calc, "计算器", "🧮", 300, 400);
+            WidgetKind.Calc, "widget.kind.calc", "🧮", 300, 400);
 
         // ── 效率组件批次 LB：世界时钟 ──
         // 只用 Windows 自带时区 Id（不引 TimeZoneConverter）；缺时区的极端环境逐行给原因，不静默少一行。
         yield return new WidgetDescriptor(
-            WidgetKind.WorldClock, "世界时钟", "🌍", 300, 360);
+            WidgetKind.WorldClock, "widget.kind.worldClock", "🌍", 300, 360);
 
         // ── 效率组件批次 LC：倒计时 / 纪念日 ──
         // 存"墙上时钟 + 时区"而非 UTC 瞬间：每年重复项若按 UTC 月日推进，跨时区会把纪念日错开一整天。
         yield return new WidgetDescriptor(
-            WidgetKind.Countdown, "倒计时", "⏳", 300, 400);
+            WidgetKind.Countdown, "widget.kind.countdown", "⏳", 300, 400);
 
         // ── 效率组件批次 LD：番茄钟 ──
         // 纯状态机在 Core（FocusTimer），UI 只传 now 与显示文本；第一版不做统计，重启即回空闲。
         // 必须可缩放：用户要把倒计时拉大成"桌面时钟"用（真机反馈：不可缩放等于少一种用法）。
         yield return new WidgetDescriptor(
-            WidgetKind.Focus, "番茄钟", "🍅", 250, 330);
+            WidgetKind.Focus, "widget.kind.focus", "🍅", 250, 330);
 
         // ── 效率组件批次 MM：系统监控 ──
         // 判据在 Core（SystemMonitorPolicy），原生读数在 Integrations（SystemMetricsProbe）；
         // 采样只在有可见实例时进行（D7），所以隐藏起来的组件一次 P/Invoke 都不发。
         yield return new WidgetDescriptor(
-            WidgetKind.SystemMonitor, "系统监控", "📊", 260, 300);
+            WidgetKind.SystemMonitor, "widget.kind.systemMonitor", "📊", 260, 300);
     }
 }

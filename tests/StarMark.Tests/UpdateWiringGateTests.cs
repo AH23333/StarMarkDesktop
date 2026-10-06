@@ -192,7 +192,8 @@ public sealed class UpdateWiringGateTests
     {
         var tray = Code(ReadRepoPartials(MainWindow));
         Assert.Equal(3, Count(tray, "TrayCheckUpdate"));
-        Assert.Contains("new(\"检查更新\", TrayCheckUpdate, SeparatorBefore: true),", tray, StringComparison.Ordinal);
+        // WI-2o 起菜单行走键（Locale.T），字面只在 UiStrings 表里——锚点跟着新形状走。
+        Assert.Contains("new(Locale.T(\"tray.checkUpdate\"), TrayCheckUpdate, SeparatorBefore: true),", tray, StringComparison.Ordinal);
         Assert.Contains("case TrayCheckUpdate:", tray, StringComparison.Ordinal);
         // 手动那一发不看自动开关（关掉自动＝"别自己问"，不是"不许我问"），也不看任何功能总开关
         var handler = MethodBody(tray, "private async Task CheckUpdateFromTrayAsync()");

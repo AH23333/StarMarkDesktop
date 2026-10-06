@@ -29,5 +29,7 @@ public static class TrayWidgetMenu
 /// <summary>
 /// 子菜单里的一行。<paramref name="Kind"/> 存 <c>WidgetKind</c> 的<b>整数值</b>：本程序集不引用
 /// StarMark.Core，故由宿主（主窗）从组件注册表注入，而不是在这儿另立一份手写清单。
+/// <paramref name="TitleKey"/> 交的是<b>键</b>而不是成品串：托盘常驻，注入成品串等于把语言钉死在
+/// 创建托盘那一刻（P-172 卡片那一行的同族病）；渲染那一刻才取词（批次 WI-2o）。
 /// </summary>
-public sealed record TrayWidgetItem(int Kind, string Title);
+public sealed record TrayWidgetItem(int Kind, string TitleKey);

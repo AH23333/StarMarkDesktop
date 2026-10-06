@@ -35,7 +35,7 @@ public sealed class WidgetContentFactory
             return builder(host);
         }
 
-        string title = WidgetRegistry.Default.TryGet(kind, out var d) ? d.Title : kind.ToString();
+        string title = WidgetStorage.KindTitle(kind);
         return new TextBlock
         {
             Text = $"「{title}」暂未实现",
