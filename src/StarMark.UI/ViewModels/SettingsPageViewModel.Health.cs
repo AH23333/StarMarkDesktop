@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml.Media;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Insights;
+using StarMark.Abstractions.I18n;
 using StarMark.Integrations.Clipboard;
 using StarMark.Core.Backup;
 using StarMark.Core.Hotkeys;
@@ -41,6 +42,11 @@ public partial class SettingsPageViewModel
     [ObservableProperty] private string _duplicateSummary = string.Empty;
     [ObservableProperty] private string _tagSummary = string.Empty;
     [ObservableProperty] private List<HealthTrendBar> _trendBars = new();
+    // 四行"外壳＋读数"的整句（WI-32）：外壳住表、读数进实参——标记里不再留半句。
+    [ObservableProperty] private string _languageLine = string.Empty;
+    [ObservableProperty] private string _domainsLine = string.Empty;
+    [ObservableProperty] private string _duplicateLine = string.Empty;
+    [ObservableProperty] private string _tagLine = string.Empty;
 
     /// <summary>拉取全部条目并构建健康度报告（P2-6）。本地聚合，零网络。</summary>
     public async Task LoadHealthAsync()
@@ -88,14 +94,19 @@ public partial class SettingsPageViewModel
             : "待优化：" + string.Join("、", r.Factors.Select(f => f.Label));
 
         LanguageSummary = r.LanguageTop.Count == 0
-            ? "（无）"
+            ? Locale.T("health.stat.none")
             : string.Join(" · ", r.LanguageTop.Take(5).Select(s => $"{s.Language} {s.Count}"));
         DuplicateSummary = r.DuplicateTop.Count == 0
-            ? "（无）"
+            ? Locale.T("health.stat.none")
             : string.Join("、", r.DuplicateTop.Take(5).Select(d => $"{d.Title}（{d.Count}）"));
         TagSummary = r.TagHistogram.Count == 0
-            ? "（无）"
+            ? Locale.T("health.stat.none")
             : string.Join(" · ", r.TagHistogram.Take(5).Select(t => $"{t.Tag} {t.Count}"));
+        // 整句在重算那一刻按键取词（进这一页必过 LoadHealthAsync＝组合句一族的"按语言重算"时机）。
+        LanguageLine = Locale.Fmt("health.stat.lang", LanguageSummary);
+        DomainsLine = Locale.Fmt("health.stat.domains", r.DistinctDomains);
+        DuplicateLine = Locale.Fmt("health.stat.dup", DuplicateSummary);
+        TagLine = Locale.Fmt("health.stat.tag", TagSummary);
 
         var max = r.NewTrend.Count == 0 ? 0 : r.NewTrend.Max(t => t.Count);
         TrendBars = r.NewTrend

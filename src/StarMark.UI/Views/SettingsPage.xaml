@@ -1288,16 +1288,16 @@
 
                                     <StackPanel Grid.Column="1" Spacing="3">
                                         <TextBlock Style="{StaticResource SettingRowText}">
-                                            <Run Text="语言 Top："/><Run Text="{x:Bind ViewModel.LanguageSummary, Mode=OneWay}"/>
+                                            <Run Text="{x:Bind ViewModel.LanguageLine, Mode=OneWay}"/>
                                         </TextBlock>
                                         <TextBlock Style="{StaticResource SettingRowText}">
-                                            <Run Text="独立域名："/><Run Text="{x:Bind ViewModel.HealthReport.DistinctDomains, Mode=OneWay}"/>
+                                            <Run Text="{x:Bind ViewModel.DomainsLine, Mode=OneWay}"/>
                                         </TextBlock>
                                         <TextBlock Style="{StaticResource SettingRowText}">
-                                            <Run Text="疑似重复 Top："/><Run Text="{x:Bind ViewModel.DuplicateSummary, Mode=OneWay}"/>
+                                            <Run Text="{x:Bind ViewModel.DuplicateLine, Mode=OneWay}"/>
                                         </TextBlock>
                                         <TextBlock Style="{StaticResource SettingRowText}">
-                                            <Run Text="标签 Top："/><Run Text="{x:Bind ViewModel.TagSummary, Mode=OneWay}"/>
+                                            <Run Text="{x:Bind ViewModel.TagLine, Mode=OneWay}"/>
                                         </TextBlock>
                                     </StackPanel>
                                 </Grid>

@@ -522,17 +522,15 @@ public sealed class I18nWiringGateTests
 
         var whole = Regex.Matches(page, Attributes).Cast<Match>()
             .Count(m => Regex.IsMatch(m.Groups[1].Value, @"[\u4e00-\u9fff]"));
-        Assert.True(whole <= 5, $"整页中文正文从 5 涨到了 {whole}（只剩「健康与诊断」那五行 <Run> 胶水，这一族只许往下减）");
+        Assert.True(whole <= 1, $"整页中文正文从 1 涨到了 {whole}（只剩「健康与诊断」扣分行那一句胶水——四行统计已整句化（WI-32）；这一族只许往下减）");
     }
 
     /// <summary>
-    /// 「健康与诊断」里那<b>五句挂在 <c>&lt;Run&gt;</c> 上的胶水</b>＝登记在案的缺口，一格数清、不许悄悄长大。
-    /// <para>它们不是漏翻，是<b>这一族还没有能用的机制</b>：每一句都是"半个句子＋一个程序算出来的读数"
-    /// 拼起来的（<c>语言 Top：{读数}</c>、<c>{因子}： -{扣分} 分（{明细}）</c>）。
-    /// <c>Locale.Fmt</c> 早就有位置式占位符，但 <c>LocText</c> 只会"按键重贴整句"——读数是另一颗绑定的属性，
-    /// 两者要一起翻就得先让那一行按语言重算。那一刀属于 P-169 的"组合句"那一族，不在标记这一族里。</para>
-    /// <para>钉子＝<b>逐字列出这五句</b>。将来谁把它们翻掉了，这一格会红，那是刻意的：
-    /// 翻掉的人要顺带来这里把清单改短，而不是让"缺口"这件事从闸门口径里消失。</para>
+    /// 「健康与诊断」里<b>扣分那一行</b>的胶水＝仍在案的缺口；四行统计的胶水已交键（批次 WI-32）。
+    /// <para>缺口不是漏翻，是"半个句子＋程序读数"的组合句一族要整链翻（扣分行的因子名与明细文案还住在
+    /// Core 的成品串里，等组合句的下半刀）；统计四行已改成"整句进表＋读数进实参"（health.stat.*），
+    /// 本格同时负账（只剩这一句在案）与正账（四颗键真的被 VM 用着）——翻掉的顺带来改短清单，
+    /// 清单里的句子从闸门口径里消失＝缺口这件事被藏起来了，红给你看是刻意。</para>
     /// </summary>
     [Fact]
     public void TheHealthTabsComposedReadoutsAreTheOnlyChineseMarkupLeftInTheKeyedTabs()
@@ -545,7 +543,10 @@ public sealed class I18nWiringGateTests
             .Select(m => m.Groups[1].Value)
             .Where(v => Regex.IsMatch(v, @"[\u4e00-\u9fff]"))
             .ToArray();
-        Assert.Equal(new[] { " 分（", "语言 Top：", "独立域名：", "疑似重复 Top：", "标签 Top：" }, glue);
+        Assert.Equal(new[] { " 分（" }, glue);                       // 负账：只剩扣分外壳还在案
+        var vm = ReadRepoFile("src/StarMark.UI/ViewModels/SettingsPageViewModel.Health.cs");
+        foreach (var key in new[] { "health.stat.lang", "health.stat.domains", "health.stat.dup", "health.stat.tag" })
+            Assert.Contains($"Locale.Fmt(\"{key}\",", vm, StringComparison.Ordinal);   // 正账：四行整句都从表出
     }
 
     /// <summary>

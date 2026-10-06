@@ -175,7 +175,7 @@ public static class UiStrings
             + "AI 增强这一栏那行测试结果与那行用量读数、那些写着出厂数值与当前设置的只读展示、"
             + "通道下拉里由枚举现生成的那些通道名，还有那些把当场算出来的值写进标签的按钮"
             + "（写着要改用的模型名、写着上次整理好的条数），"
-            + "以及「语言 Top：」这类把句子拆成半句＋读数的排法。"
+            + "以及健康那一栏的扣分行还是半句＋读数拼的（语言／域名那四行统计已改成整句键，批次 WI-32）。"
             + "选项还没进表的那几颗下拉也照旧写着中文：热榜那排时间范围、搜索组件那三档排序、组件外观编辑器里那几颗。"
             + "上面这些由程序写出来的字与没进表的选项，要先改成按键取词才谈得上翻。",
             "Takes effect at once — no restart needed. Translated so far: the main window's top row "
@@ -669,6 +669,13 @@ public static class UiStrings
         // $"{年}年{月}月"，正是"同一句话两个主人"的现行案。en 走"2026/10"：不补零、不造 12 颗月名装平行
         //（组件位读得出就够；带格式的 {1:00} 会让占位符闸门眼盲——形状守闸门的，不是反过来）。
         new Entry("widget.glance.ym", "{0}年{1}月", "{0}/{1}", "{0}年{1}月"),
+        // 健康页四行统计的外壳（批次 WI-32，P-169 组合句一族的统计半）：<b>整句进表、读数当实参</b>——
+        // 旧排法把「语言 Top：」当标记半句、读数另绑一颗，正是 languageNote 点名的那种拆句。
+        new Entry("health.stat.lang", "语言 Top：{0}", "Top languages: {0}", "言語 Top：{0}"),
+        new Entry("health.stat.domains", "独立域名：{0}", "Distinct domains: {0}", "独立ドメイン：{0}"),
+        new Entry("health.stat.dup", "疑似重复 Top：{0}", "Top likely duplicates: {0}", "重複候補 Top：{0}"),
+        new Entry("health.stat.tag", "标签 Top：{0}", "Top tags: {0}", "タグ Top：{0}"),
+        new Entry("health.stat.none", "（无）", "(none)", "（なし）"),
         new Entry("card.open.fail", "打不开这一行", "Can't open this row", "この行を開けません"),
         new Entry("card.deleteRow.remove", "从库里删掉这一行", "Remove it from the library", "ライブラリからこの行を削除"),
         new Entry("card.deleteRow.done", "已删掉这一行", "Row removed", "行を削除しました"),
