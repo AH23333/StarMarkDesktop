@@ -8,14 +8,16 @@ using static StarMark.Tests.SourceGate;
 
 namespace StarMark.Tests;
 
-/// <summary>
-/// 「那张图的文件不在了」这一族话的接线守门（批次 SI，P-131 清单 #6）。
-/// <para>要守的只有一件事：<b>同一句事实不许有两个出处</b>。登记时这句记的是"两处各写一遍"，
-/// 按后果复算其实是四处（读取侧的两个入口、历史页状态行、灰掉的菜单标题、卡片那一格）——
-/// 与 #193 同一形状：普查要按后果扫，不能按写法扫。</para>
-/// <para>句子本体已搬进 Abstractions，所以读数改由 <see cref="ClipboardMissingImageTextTests"/> 逐字钉；
-/// 这里只守"每一处宿主确实问了政策层，而且别处没留抄本"（#196：接线断言钉在方法体里）。</para>
-/// </summary>
+    /// <summary>
+    /// 「那张图的文件不在了」这一族话的接线守门（批次 SI，P-131 清单 #6；批次 WI-2y 改键后口径升级）。
+    /// <para>要守的只有一件事：<b>同一句事实不许有两个出处</b>。登记时这句记的是"两处各写一遍"，
+    /// 按后果复算其实是四处（读取侧的两个入口、历史页状态行、灰掉的菜单标题、卡片那一格）——
+    /// 与 #193 同一形状：普查要按后果扫，不能按写法扫。</para>
+    /// <para>WI-2y 之后事实句的<b>唯一出处是措辞表里的那一行</b>（政策层改成交键）：本格从
+    /// "只剩政策层一颗常数"升级为"只剩表里一行"——宿主（含政策层自己）再抄任何一处字面都在这里红。
+    /// 句子本体由 <see cref="ClipboardMissingImageTextTests"/> 在默认语言下逐字钉；
+    /// 这里只守"每一处宿主确实问了政策层，而且别处没留抄本"（#196：接线断言钉在方法体里）。</para>
+    /// </summary>
 public sealed class ClipboardMissingImageTextGateTests
 {
     private const string Fact = "不在本机";          // 那颗事实的指纹：谁抄了这句话，扫字面就抓得到
@@ -35,16 +37,17 @@ public sealed class ClipboardMissingImageTextGateTests
     };
 
     [Fact]
-    public void ThePhraseExistsNowhereButThePolicy()
+    public void ThePhraseExistsNowhereButTheTable()
     {
         var files = ReadRepoUnder("src");
         Assert.True(files.Count >= 200, $"只扫到 {files.Count} 个源文件（普查路径错了＝闸门在空转）");
+        const string Strings = "src/StarMark.Abstractions/I18n/UiStrings.cs";
         var hits = files
             .Select(f => (f.RelativePath, Count(Code(f.Text), Fact)))
             .Where(f => f.Item2 > 0)
             .ToList();
-        // 一整个 src 只剩政策层那一颗常数：任何一处再抄一遍（或把抄本留在原地）都在这里红。
-        Assert.Equal(new[] { (Policy, 1) }, hits.Select(h => (h.RelativePath, h.Item2)).ToArray());
+        // WI-2y 后的形状：一整个 src 只剩措辞表那一行（政策层改成交键——它自己抄回来也在这里红）。
+        Assert.Equal(new[] { (Strings, 1) }, hits.Select(h => (h.RelativePath, h.Item2)).ToArray());
     }
 
     [Fact]

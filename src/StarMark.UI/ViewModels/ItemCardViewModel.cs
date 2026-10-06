@@ -115,7 +115,7 @@ public partial class ItemCardViewModel : ObservableObject
     /// </summary>
     public string PinImageMenuText => CanPinAsImage
         ? Locale.T("card.pinImage.ok")
-        : $"贴到桌面（这张图的{ClipboardPolicy.MissingFileClause}）";
+        : Locale.Fmt("card.pinImage.missing", ClipboardPolicy.MissingFileClause);   // WI-2y：骨架按各语言句法排；「灰项自己在标题上说原因」口径不变
 
     /// <summary>
     /// 是否可"发送到桌面 · 快捷启动"。快捷启动存的是<b>可启动的 URI</b>，没有 URI 的条目

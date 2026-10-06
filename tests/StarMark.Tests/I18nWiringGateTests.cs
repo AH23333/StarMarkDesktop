@@ -850,9 +850,9 @@ public sealed class I18nWiringGateTests
     /// <c>StateWriteNotice</c> 的骨架——五处全部只许从表里取词。
     /// <para>扫描按<b>会产界面串的方法体</b>收口（#329 同款），StarLog 的中文日志按行摘掉后再扫
     /// （这些 catch 里的日志都是单行；跨行续行会漏过行级过滤＝假红，人工处置即可）。</para>
-    /// <para>⚠ <c>PinImageMenuText</c> 的灰路（<c>$"贴到桌面（这张图的{MissingFileClause}）"</c>）是
-    /// P-172 在案的豁免：外壳单翻会造出半中半英，比现状更坏——它不进扫描面，
-    /// 亮路改由"必须交键"的断言钉住（见下）。</para>
+    /// <para>批次 WI-2y 起 <c>PinImageMenuText</c> 的灰路也已交键——P-172 的在案豁免正式收回：
+    /// 事实从句改成完整可换语言的从句后，中文属格骨架在日英会散架，"灰着整句留原文"失去存在条件。
+    /// 亮灰两路都由"必须交键＋旧字面不许回来"两颗断言钉住（见下）。</para>
     /// </summary>
     [Fact]
     public void ItemContextMenusAreKeysNotLiterals()
@@ -910,9 +910,11 @@ public sealed class I18nWiringGateTests
                 offenders.Add($"ItemCardViewModel {prop.Split(' ')[^1]}：字面量回来了或属性不见了");
         }
 
-        // ④ 亮路交键；灰路的中文字面量必须还钉在原处（P-172 的在案豁免不许悄悄漂走）。
+        // ④ 亮路与灰路都交键（WI-2y 收回 P-172 的在案豁免：事实从句改键后旧属格骨架在日英散架，
+        // 半中半英从"不该"升级成"编不过式不该"）。旧字面按"不许回来"钉回原处。
         Assert.Contains("Locale.T(\"card.pinImage.ok\")", vm, StringComparison.Ordinal);
-        Assert.Contains("贴到桌面（这张图的{ClipboardPolicy.MissingFileClause}）", vm, StringComparison.Ordinal);
+        Assert.Contains("Locale.Fmt(\"card.pinImage.missing\", ClipboardPolicy.MissingFileClause)", vm, StringComparison.Ordinal);
+        Assert.DoesNotContain("贴到桌面（这张图的{ClipboardPolicy", vm, StringComparison.Ordinal);
 
         // ⑤ 隐藏页还原词（StateWriteNotice 的 word 实参要按当前语言取）。
         Assert.Contains("Locale.T(\"card.restore.word\")",

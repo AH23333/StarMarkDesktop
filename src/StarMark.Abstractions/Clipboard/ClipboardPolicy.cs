@@ -158,15 +158,15 @@ public static class ClipboardPolicy
     /// <para>不跟着并的那一处：启动器那句"本机上的这个路径已经不在了（…）"说的是任意本地路径、
     /// 还要带出地址，与"这一张图的像素拿不到了"不是同一件事（有意分岔，闸门按文件名点名）。</para>
     /// </summary>
-    public const string MissingFileClause = "文件已不在本机";
+    public static string MissingFileClause => StarMark.Abstractions.I18n.Locale.T("clip.miss.clause");
 
     /// <summary>历史页点「再复制」而文件已经不在了：事实（<see cref="MissingFileClause"/>）＋ 后果 ＋ 出口。</summary>
     public static string DescribeMissingImageForReuse()
-        => $"这条图片的{MissingFileClause}，复制不回去（条目仍保留，可置顶或删除）";
+        => StarMark.Abstractions.I18n.Locale.Fmt("clip.miss.reuse", MissingFileClause);
 
     /// <summary>卡片里那一格：图不在了不许空着不解释——空着看起来像程序坏了，而不是"文件没了但条目还在"。</summary>
     public static string DescribeMissingImageBanner()
-        => $"图片{MissingFileClause}（条目仍保留，可直接删掉这一条；这一张复制不回去）";
+        => StarMark.Abstractions.I18n.Locale.Fmt("clip.miss.banner", MissingFileClause);
 
     /// <summary>
     /// 行分隔符归一（CRLF/CR → LF）+ 去首尾空白。

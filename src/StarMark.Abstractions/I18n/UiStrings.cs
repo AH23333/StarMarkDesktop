@@ -640,6 +640,13 @@ public static class UiStrings
         new Entry("card.delete.fileRow", "删除这一行", "Remove this row", "この行を削除"),
         new Entry("card.delete.history", "删除这条历史", "Delete this history", "この履歴を削除"),
         new Entry("card.pinImage.ok", "贴到桌面", "Pin to desktop", "デスクトップへ貼り付け"),
+        // 「那张图的文件不在了」一族（批次 WI-2y，P-172 第五行＋灰路同批收回）：事实半句一颗、宿主骨架各一颗。
+        // 骨架按各语言自己的句法排——{0} 是完整从句，硬套中文属格位在日英会散架（那正是豁免被收回的理由）。
+        new Entry("clip.miss.clause", "文件已不在本机", "the file is no longer on this device", "ファイルがこの PC 上に存在しません"),
+        new Entry("clip.miss.reuse", "这条图片的{0}，复制不回去（条目仍保留，可置顶或删除）", "This image cannot be copied back — {0}. The entry stays; you can pin it or delete it.", "この画像は{0}ため、コピーし戻せません（項目は残ります — ピン留めか削除ができます）。"),
+        new Entry("clip.miss.banner", "图片{0}（条目仍保留，可直接删掉这一条；这一张复制不回去）", "{0} — the entry stays and you can delete this row, but this picture cannot be copied back.", "{0}（項目は残っています。この行は削除できますが、この画像はコピーし戻せません）"),
+        new Entry("card.missRow", "本机的这个{0}（{1}），打开没有东西可开——条目还留在库里，可以删掉这一行", "{0} — this local entry cannot be opened ({1}). The record stays in your library; you can delete this row.", "{0}（{1}）— 開ける対象がありません。記録はライブラリに残っており、この行を削除できます。"),
+        new Entry("card.pinImage.missing", "贴到桌面（这张图的{0}）", "Pin to desktop — {0}", "デスクトップへ貼り付け — {0}"),
         new Entry("card.open.fail", "打不开这一行", "Can't open this row", "この行を開けません"),
         new Entry("card.deleteRow.remove", "从库里删掉这一行", "Remove it from the library", "ライブラリからこの行を削除"),
         new Entry("card.deleteRow.done", "已删掉这一行", "Row removed", "行を削除しました"),

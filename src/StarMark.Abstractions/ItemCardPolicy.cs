@@ -68,8 +68,8 @@ public static class ItemCardPolicy
     /// （批次 VR 起于用户原话「文件路径中的空格会被展示为%20」）。</para>
     /// </summary>
     public static string MissingRowMessage(string shownPath)
-        => $"本机的这个{StarMark.Abstractions.Clipboard.ClipboardPolicy.MissingFileClause}（{shownPath}），"
-           + "打开没有东西可开——条目还留在库里，可以删掉这一行";
+        => StarMark.Abstractions.I18n.Locale.Fmt("card.missRow",
+               StarMark.Abstractions.Clipboard.ClipboardPolicy.MissingFileClause, shownPath);
 
     /// <summary>
     /// 是否显示「收藏」这一项：热榜候选与 RSS 候选<b>共用同一个按钮位</b>，但落点与文案各不相同
