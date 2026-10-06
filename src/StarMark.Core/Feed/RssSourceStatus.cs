@@ -2,6 +2,7 @@
 using System;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Feed;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Feed;
 
@@ -10,11 +11,13 @@ namespace StarMark.Core.Feed;
 /// <para>原来这份写法住在设置页里，于是它一条都断言不到；而"没抓到"这件事有五种截然不同的原因，
 /// <b>混成一句"没有内容"用户就不知道该改地址还是该查网络</b>（批次 NF 的教训）。搬到 Core 之后
 /// 每一种状态各有一条用例钉着，改坏了会红。</para>
+/// <para>批次 WI-2u 起字进语言表（<c>rss.src.*</c>，键逐颗写字面＝坑表 #331）；
+/// 取词发生在<b>调用那一刻</b>（建行/刷新那一下），切语言后已铺出的状态行要重进那一页＝绑定族口径。</para>
 /// </summary>
 public static class RssSourceStatus
 {
     /// <summary>还没抓过的行给的不是空字符串：空着看着像渲染坏了。</summary>
-    public const string NeverFetched = "还没抓过";
+    public static string NeverFetched => Locale.T("rss.src.neverFetched");
 
     /// <summary>
     /// 从<b>缓存</b>摆出来时的那句（还没轮到这一源的抓取）。
@@ -31,8 +34,10 @@ public static class RssSourceStatus
             : age < TimeSpan.FromDays(1) ? DateTimeText.HoursAgo((long)age.TotalHours)
             : DateTimeText.DaysAgo(age.Days);
         var next = RssFeedCache.UntilDue(cached, nowUnix);
-        var tail = next <= TimeSpan.Zero ? "现在到期，会自动补抓" : $"约 {(int)Math.Ceiling(next.TotalHours)} 小时后自动刷新";
-        return $"上次抓取 {when} · 共 {cached.Entries.Count} 条 · {tail}";
+        var tail = next <= TimeSpan.Zero
+            ? Locale.T("rss.src.dueNow")
+            : Locale.Fmt("rss.src.dueIn", ((int)Math.Ceiling(next.TotalHours)).ToString());
+        return Locale.Fmt("rss.src.cacheLine", when, cached.Entries.Count.ToString(), tail);
     }
 
     /// <summary>
@@ -44,20 +49,21 @@ public static class RssSourceStatus
     /// </summary>
     public static string Describe(RssSourceOutcome? outcome, int? cachedTotal = null) => outcome switch
     {
-        null => "没有参与这一轮",
-        var o when o.Stopped => "没抓到它（已停止或整轮到时）" + StillThere(cachedTotal),
-        var o when !o.Source.Enabled => "已停用，这一轮没有抓",
-        { NotModified: true } => "没有新内容（源说未变化）" + StillThere(cachedTotal),
-        { Ok: false } o => "失败：" + o.Error + StillThere(cachedTotal),
-        var o when o.Entries.Count == 0 => "通了，但没有条目" + StillThere(cachedTotal),
-        var o => $"抓到 {o.Entries.Count} 条" + Grew(o, cachedTotal),
+        null => Locale.T("rss.src.notInRound"),
+        var o when o.Stopped => Locale.T("rss.src.stopped") + StillThere(cachedTotal),
+        var o when !o.Source.Enabled => Locale.T("rss.src.disabled"),
+        { NotModified: true } => Locale.T("rss.src.notModified") + StillThere(cachedTotal),
+        { Ok: false } o => Locale.Fmt("rss.src.failed", o.Error) + StillThere(cachedTotal),
+        var o when o.Entries.Count == 0 => Locale.T("rss.src.emptyOk") + StillThere(cachedTotal),
+        var o => Locale.Fmt("rss.src.fetched", o.Entries.Count.ToString()) + Grew(o, cachedTotal),
     };
 
     /// <summary>只在两个数真的不相等时才补那半句（相等时重复一遍数字是噪音）。</summary>
     private static string Grew(RssSourceOutcome outcome, int? cachedTotal)
-        => cachedTotal is int total && total != outcome.Entries.Count ? $"，缓存共 {total} 条" : string.Empty;
+        => cachedTotal is int total && total != outcome.Entries.Count
+            ? Locale.Fmt("rss.src.grew", total.ToString()) : string.Empty;
 
     /// <summary>这一轮没拿到新条目，但界面上仍留着上次缓存的那一列：不说的话看上去就像"内容被清空了"。</summary>
     private static string StillThere(int? cachedTotal)
-        => cachedTotal is > 0 ? $"，仍然摆着缓存里的 {cachedTotal} 条" : string.Empty;
+        => cachedTotal is > 0 ? Locale.Fmt("rss.src.stillThere", cachedTotal.Value.ToString()) : string.Empty;
 }

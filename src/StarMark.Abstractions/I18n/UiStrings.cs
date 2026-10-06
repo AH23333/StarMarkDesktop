@@ -767,6 +767,19 @@ public static class UiStrings
         new Entry("hotkey.gate.captureBusy", "已经有一次截图在场，先把它结束（Esc 取消）再截下一张", "A screenshot session is already running — finish it first (Esc to cancel) before starting another", "すでにスクリーンショットが実行中です。先に終了して（Esc でキャンセル）から次を撮ってください"),
         new Entry("hotkey.gate.canvasBusySheet", "截图进行中，这条快捷键要等截图结束才归画布", "A screenshot is in progress — this hotkey goes back to the canvas once it ends", "スクリーンショットが進行中です。このショートカットは終了後にキャンバスに戻ります"),
         new Entry("hotkey.gate.canvasDisabled", "要先在 设置 → 拓展功能 里打开「屏幕画布」", "First turn on Screen canvas in Settings → Extensions", "先に設定 → 拡張機能 で「画面キャンバス」をオンにしてください"),
+        new Entry("rss.src.neverFetched", "还没抓过", "Not fetched yet", "まだ取得していません"),
+        new Entry("rss.src.cacheLine", "上次抓取 {0} · 共 {1} 条 · {2}", "Last fetched {0} · {1} entries · {2}", "前回の取得 {0} · 全 {1} 件 · {2}"),
+        new Entry("rss.src.dueNow", "现在到期，会自动补抓", "due now — it will be re-fetched automatically", "今が更新時刻です。自動で再取得します"),
+        new Entry("rss.src.dueIn", "约 {0} 小时后自动刷新", "auto-refresh in about {0} h", "約 {0} 時間後に自動更新"),
+        new Entry("rss.src.notInRound", "没有参与这一轮", "Not part of this round", "このラウンドには含まれていません"),
+        new Entry("rss.src.stopped", "没抓到它（已停止或整轮到时）", "Not fetched (stopped, or the round ran out of time)", "取得できませんでした（停止中、またはラウンドの時間切れ）"),
+        new Entry("rss.src.disabled", "已停用，这一轮没有抓", "Disabled — not fetched this round", "無効化されているため、このラウンドでは取得しませんでした"),
+        new Entry("rss.src.notModified", "没有新内容（源说未变化）", "No new content (the feed says not modified)", "新しい内容はありません（フィードが未変更と応答）"),
+        new Entry("rss.src.failed", "失败：{0}", "Failed: {0}", "失敗：{0}"),
+        new Entry("rss.src.emptyOk", "通了，但没有条目", "Reached, but no entries", "接続できましたが、項目がありません"),
+        new Entry("rss.src.fetched", "抓到 {0} 条", "Fetched {0} entries", "{0} 件を取得"),
+        new Entry("rss.src.grew", "，缓存共 {0} 条", ", {0} entries in the cache in total", "。キャッシュには合計 {0} 件"),
+        new Entry("rss.src.stillThere", "，仍然摆着缓存里的 {0} 条", ", still showing {0} cached entries", "。キャッシュの {0} 件を引き続き表示中"),
 
         // ===== 「热榜」那一页（批次 WI-2j）=====
         // 页面标题逐字与设置页那颗开关同名 ⇒ 复用 settings.extend.trendingTitle，⛔ 不造第二份措辞（坑表 #290）；
