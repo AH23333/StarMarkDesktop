@@ -43,7 +43,8 @@ public sealed partial class WidgetWindow
             // 按钮始终可见：置顶时高亮强调色
             PinIcon.Foreground = ThemeBrush.Resolve(dark, "AppAccentBrush");
             PinButton.Background = ThemeBrush.Resolve(dark, "AppAccentSoftBrush");
-            ToolTipService.SetToolTip(PinButton, "取消置顶");
+            // 交键而不是交字：这句随"钉没钉"变，写字面量进来就成了那颗按钮的第二个主人（换语言时静态那句会盖掉它）。
+            LocText.SetToolTipKey(PinButton, "widget.win.unpinTip");
         }
         else
         {
@@ -52,7 +53,7 @@ public sealed partial class WidgetWindow
             if (!_layerAttached) AttachToDesktopLayer();
             PinIcon.Foreground = ThemeBrush.Resolve(dark, "TextFillColorSecondaryBrush");
             PinButton.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            ToolTipService.SetToolTip(PinButton, "置顶显示");
+            LocText.SetToolTipKey(PinButton, "widget.win.pinTip");
         }
     }
 

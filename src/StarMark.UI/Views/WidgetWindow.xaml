@@ -2,7 +2,8 @@
 <Window
     x:Class="StarMark.UI.Views.WidgetWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:i18n="using:StarMark.UI.Helpers">
 
     <Border x:Name="RootBorder"
             Background="{ThemeResource WidgetBackgroundBrush}"
@@ -38,23 +39,25 @@
                         Margin="0,0,6,0"
                         Canvas.ZIndex="200">
                 <Button x:Name="CollapseButton" Style="{StaticResource WidgetChromeButton}"
-                        ToolTipService.ToolTip="收起 / 展开为胶囊" Click="CollapseButton_Click">
+                        i18n:LocText.ToolTipKey="widget.win.collapseTip" Click="CollapseButton_Click">
                     <FontIcon x:Name="CollapseIcon" Glyph="&#xE70E;" FontSize="12"/>
                 </Button>
+                <!-- 这颗按钮的提示条<b>只有 <c>ApplyTopmost</c> 一个主人</b>（按键写，不写字面量）：
+                     那里按"现在钉没钉"交两句不同的话，这里挂一颗静态键会在换语言那一刻盖掉带状态的那句。 -->
                 <Button x:Name="PinButton" Style="{StaticResource WidgetChromeButton}"
-                        ToolTipService.ToolTip="置顶显示" Click="PinButton_Click">
+                        Click="PinButton_Click">
                     <FontIcon x:Name="PinIcon" Glyph="&#xE718;" FontSize="12"/>
                 </Button>
                 <Button x:Name="AddButton" Style="{StaticResource WidgetChromeButton}"
-                        ToolTipService.ToolTip="添加/管理组件" Click="AddButton_Click">
+                        i18n:LocText.ToolTipKey="widget.win.addTip" Click="AddButton_Click">
                     <FontIcon Glyph="&#xE710;" FontSize="12"/>
                 </Button>
                 <Button x:Name="HideButton" Style="{StaticResource WidgetChromeButton}"
-                        ToolTipService.ToolTip="隐藏（托盘/设置中可恢复）" Click="HideButton_Click">
+                        i18n:LocText.ToolTipKey="widget.win.hideTip" Click="HideButton_Click">
                     <FontIcon Glyph="&#xE921;" FontSize="11"/>
                 </Button>
                 <Button x:Name="CloseButton" Style="{StaticResource WidgetChromeButton}"
-                        ToolTipService.ToolTip="移除组件（设置中可重新添加）" Click="CloseButton_Click">
+                        i18n:LocText.ToolTipKey="widget.win.removeTip" Click="CloseButton_Click">
                     <FontIcon Glyph="&#xE8BB;" FontSize="11"/>
                 </Button>
             </StackPanel>

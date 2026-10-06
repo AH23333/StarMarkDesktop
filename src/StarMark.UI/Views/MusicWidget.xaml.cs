@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using StarMark.Abstractions;
 using StarMark.Core.Media;
+using StarMark.UI.Helpers;
 using StarMark.UI.Services;
 
 namespace StarMark.UI.Views;
@@ -63,6 +64,9 @@ public sealed partial class MusicWidget : UserControl
     public MusicWidget()
     {
         InitializeComponent();
+        // 第一帧也要有那句提示：SMTC 拿不到会话时 Render 走的是"没有快照"那条出口，不会走到下面的赋值。
+        // 交的是键而不是字（坑表 #276/#295），且与那颗图标的初始态一致（XAML 里 PlayIcon 初始是播放）。
+        LocText.SetToolTipKey(PlayButton, "widget.music.play");
 
         Unloaded += (_, _) =>
         {
@@ -230,7 +234,8 @@ public sealed partial class MusicWidget : UserControl
         // 图标表示「点击后会发生什么」：播放中显示暂停键，暂停时显示播放键（与系统播放控件一致）。
         // 之前显示反了是因为刷新在非 UI 线程上失败（RPC_E_WRONG_THREAD），UI 拿到的是上一次的陈旧快照。
         PlayIcon.Glyph = snapshot.IsPlaying ? "\uE769" : "\uE768";   // 暂停 / 播放
-        ToolTipService.SetToolTip(PlayButton, snapshot.IsPlaying ? "暂停" : "播放");
+        // 交键而不是交字：这一句随"放没放"变，XAML 里再挂一颗静态键就成了第二个主人（坑表 #276/#295）。
+        LocText.SetToolTipKey(PlayButton, snapshot.IsPlaying ? "widget.music.pause" : "widget.music.play");
         PrevButton.IsEnabled = snapshot.CanSkipPrevious;
         NextButton.IsEnabled = snapshot.CanSkipNext;
         PlayButton.IsEnabled = snapshot.CanPlayPause;

@@ -3,15 +3,16 @@
     x:Class="StarMark.UI.Views.QuickNoteWidget"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:i18n="using:StarMark.UI.Helpers"
     xmlns:vm="using:StarMark.UI.ViewModels">
 
     <StackPanel Padding="12,8,12,12" Spacing="6">
-        <TextBox x:Name="NoteBox" PlaceholderText="随手记一笔，Ctrl+Enter 保存…" FontSize="12"
+        <TextBox x:Name="NoteBox" i18n:LocText.PlaceholderKey="widget.note.hint" FontSize="12"
                  Style="{StaticResource WidgetInputBox}"
                  AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70"
                  ScrollViewer.VerticalScrollBarVisibility="Hidden"
                  KeyDown="NoteBox_KeyDown"/>
-        <Button Content="保存随记" HorizontalAlignment="Right" Padding="12,3,12,3"
+        <Button i18n:LocText.Key="widget.note.save" HorizontalAlignment="Right" Padding="12,3,12,3"
                 Style="{StaticResource WidgetActionButton}"
                 Click="SaveNote_Click"/>
 

@@ -3,6 +3,7 @@
     x:Class="StarMark.UI.Views.ItemGridWidget"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:i18n="using:StarMark.UI.Helpers"
     xmlns:vm="using:StarMark.UI.ViewModels"
     xmlns:helpers="using:StarMark.UI.Helpers"
     xmlns:local="using:StarMark.UI.Views">
@@ -26,7 +27,7 @@
                          Style="{StaticResource WidgetInputBox}"
                          Padding="8,6,8,6" HorizontalAlignment="Stretch" MinWidth="140"
                          KeyDown="ConfigBox_KeyDown"/>
-                <Button Content="应用" Padding="10,4,10,4" Style="{StaticResource WidgetActionButton}" Click="Apply_Click"/>
+                <Button i18n:LocText.Key="widget.grid.apply" Padding="10,4,10,4" Style="{StaticResource WidgetActionButton}" Click="Apply_Click"/>
             </StackPanel>
             <Border Height="1" Margin="0,2,0,2" Background="{ThemeResource WidgetDividerBrush}"/>
         </StackPanel>

@@ -201,7 +201,9 @@ public sealed partial class MainWindow
     {
         if (_suppressFileKindEvents || FileKindButton == null) return;
         var kinds = CurrentFileKinds();
-        FileKindButton.Content = kinds.Count == 0 ? "类型筛选" : $"类型筛选 · {kinds.Count}";
+        // 交键而不是交字：这句随"选中了几个类型"变，XAML 里挂静态键＝换语言那一刻盖掉带值那句（#295）。
+        if (kinds.Count == 0) LocText.SetKey(FileKindButton, "kind.button");
+        else LocText.SetKey(FileKindButton, "kind.buttonCount", kinds.Count);
         // 只下发给搜索页：书签/Star 没有扩展名与体积概念，类型筛选对它们无意义。
         if (ContentFrame?.Content is SearchPage sp) sp.ViewModel.SetFileKinds(kinds);
     }

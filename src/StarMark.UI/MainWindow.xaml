@@ -115,7 +115,9 @@
             </Border>
 
             <!-- 类型多选：只给本地文件用，翻成 Everything 检索式（不进搜索框，见 FileKindQuery） -->
-            <Button x:Name="FileKindButton" i18n:LocText.Key="kind.button" FontSize="12" Padding="8,4"
+            <!-- 这颗按钮的字面<b>只有 MainWindow.Search.cs 一个主人</b>：它随"选中了几个类型"变
+                 （"类型筛选 · N"），标记上挂静态键＝换语言那一刻把带值的句子盖回光杆那句（#295）。 -->
+            <Button x:Name="FileKindButton" FontSize="12" Padding="8,4"
                     i18n:LocText.ToolTipKey="kind.buttonTip">
                 <Button.Flyout>
                     <Flyout>

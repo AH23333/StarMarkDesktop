@@ -3,10 +3,11 @@
     x:Class="StarMark.UI.Views.WorldClockWidget"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:i18n="using:StarMark.UI.Helpers"
     xmlns:vm="using:StarMark.UI.ViewModels">
 
     <StackPanel Padding="12,8,12,12" Spacing="6">
-        <ComboBox x:Name="AddBox" PlaceholderText="＋ 添加时区…" FontSize="12"
+        <ComboBox x:Name="AddBox" i18n:LocText.PlaceholderKey="widget.clock.addZone" FontSize="12"
                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                   DisplayMemberPath="Name"
                   ItemsSource="{x:Bind ViewModel.AddableZones, Mode=OneWay}"
@@ -42,7 +43,7 @@
                         </StackPanel>
                         <Button Grid.Column="2" Content="✕" FontSize="11" Padding="6,0,6,0"
                                 VerticalAlignment="Center" Background="Transparent" BorderThickness="0"
-                                ToolTipService.ToolTip="移除这个点位"
+                                i18n:LocText.ToolTipKey="widget.clock.removePin"
                                 Click="RemoveRow_Click" Tag="{x:Bind}"/>
                     </Grid>
                 </DataTemplate>

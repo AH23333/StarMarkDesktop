@@ -90,6 +90,22 @@ public sealed class I18nWiringGateTests
                 yield return (path, m.Groups[1].Value);
             foreach (Match m in Regex.Matches(code, @"LocMessage\.Of\(\s*""([^""]+)"""))
                 yield return (path, m.Groups[1].Value);
+            // 批次 WI-2n：提示条与占位符<b>随状态变</b>的那一族，主人只能是代码（代码交键、不交字，见
+            // <see cref="AWiredElementNeverGetsItsPropertyWrittenFromCodeToo"/>）。⛔ 不补这一臂，
+            // "把键交给 <c>SetToolTipKey</c>"这种写法在正向对账里全程隐身，拼错也没人问。
+            // ⚠ 抽法按<b>行</b>收而不按"第二个实参紧跟逗号"收：键可以写成三元式
+            // （<c>snapshot.IsPlaying ? "widget.music.pause" : "widget.music.play"</c>——台架 N9 的该红没红就是它），
+            // 所以把那一行里所有<b>键形</b>字面量都当取词问一遍；非键形的串（自然语句）过不了那颗形状门。
+            foreach (var line in code.Split('\n'))
+            {
+                if (!line.Contains("LocText.Set", StringComparison.Ordinal)) continue;
+                foreach (Match m in Regex.Matches(line, @"""([^""\n]+)"""))
+                {
+                    var value = m.Groups[1].Value;
+                    if (Regex.IsMatch(value, @"^[a-z][a-z0-9]*(\.[A-Za-z0-9]+)+$", RegexOptions.CultureInvariant))
+                        yield return (path, value);
+                }
+            }
             // 键名住在 const 里的那些（`MinutesAgoKey = "time.minutesAgo"`／`FollowSystemKey`）：
             // 取词调用写的是 `Locale.Fmt(MinutesAgoKey, count)`，上面那几臂按**字面量实参**认，一律看不见 ⇒
             // 拼错这种键名今天两臂都不红（台架 WI-K8 量到的就是这一个洞）。按形状补这一臂：
@@ -441,8 +457,8 @@ public sealed class I18nWiringGateTests
     /// 它已经从"标记里的一句过期路线图"变成"表里唯一的出处"——再逐字照抄一次就等于把它锁死。</para>
     /// <para>判据按<b>句式</b>写（中文那几种说法＋英文那几种对译），⛔ 不是只钉今天这一句：
     /// 换个措辞（"下个版本见"／"coming soon"）也在这条射程里——台架按中英两种措辞各咬一次（J1／J2）。
-    /// ⚠ 这一格管的是<b>承诺</b>，不管状态读数：<c>settings.ai.notTested</c>「还没测过。」说的是
-    /// "此刻还没"，不是"以后才有"，所以那些词刻意不在清单里（把它们钉进去会把闸门拗成背字符串）。
+    /// ⚠ 这一格管的是<b>承诺</b>，不管状态读数：状态行那类"此刻还没"的句子（自检没完成、用量还没读出来）
+    /// 说的是"此刻还没"，不是"以后才有"，所以那些词刻意不在清单里（把它们钉进去会把闸门拗成背字符串）。
     /// <para>批次 WI-2c 又删掉两句这种承诺（中文那句"那是后面一批的事"、英文那句 "a later pass"），
     /// 而<b>这两种措辞当时都不在词表里</b>——旧射程只认"下一批／in a later release"。
     /// 所以删话的同一批要把词表补宽：只改界面不改闸门，下一次换个词再写一遍承诺照样绿。</para></para>
@@ -534,10 +550,12 @@ public sealed class I18nWiringGateTests
 
     /// <summary>
     /// 第一里程碑<b>铺到哪一行、故意留在哪一行</b>，都要当场看得见。
-    /// <para>三个数字是现场量出来的（主窗标记：正文键 26／提示键 8／占位符键 2；批次 WI-2c 之前是
+    /// <para>三个数字是现场量出来的（主窗标记：正文键 <b>26</b>／提示键 8／占位符键 2；批次 WI-2c 之前是
     /// 31／9／2，少掉的那 5＋1 颗是排序档——选项改成"数据项＋模板"之后它们住在
     /// <c>MainWindow.Search.cs</c> 的 <c>SortOptions</c> 里，所以这一格同批补了一条<b>配对账</b>：
     /// 标记里少的颗数必须等于代码里多的颗数，⛔ 不许"搬着搬着少了一颗"。
+    /// 批次 WI-2n 又收掉一颗（<c>FileKindButton</c>：它的字面随"选中了几个类型"变，改由代码交键＝
+    /// <see cref="AWiredElementNeverGetsItsPropertyWrittenFromCodeToo"/> 抓出来的第 3 颗两个主人）⇒ 27 → 26。
     /// 把它们钉住不是为了一次改文案就要来改判据，而是因为"覆盖面"这件事本身只有数字能证——
     /// <c>settings.languageNote</c> 那句"这一版只覆盖主界面骨架"是产品对用户的承诺，它得有一个对应的数。）</para>
     /// <para>曾经剩下那一颗 <c>Text="索引就绪"</c> 是<b>登记在案的缺口</b>（不是漏翻）：那颗状态是代码在写的
@@ -550,7 +568,7 @@ public sealed class I18nWiringGateTests
     public void FirstMilestoneCoversTheMainWindowAndDeliberatelyLeavesOneDynamicString()
     {
         var xaml = ReadRepoFile(MainWindowXaml);
-        Assert.Equal(27, Count(xaml, "i18n:LocText.Key=\""));
+        Assert.Equal(26, Count(xaml, "i18n:LocText.Key=\""));
         Assert.Equal(8, Count(xaml, "i18n:LocText.ToolTipKey=\""));
         Assert.Equal(2, Count(xaml, "i18n:LocText.PlaceholderKey=\""));
         Assert.Equal(1, Count(xaml, "xmlns:i18n="));
@@ -638,6 +656,170 @@ public sealed class I18nWiringGateTests
             Assert.DoesNotContain(word, label, StringComparison.Ordinal);
         // 存进设置档与缓存的必须是代码（daily／weekly／monthly），⛔ 不是人话——换语言不能改坏存着的东西
         Assert.Contains("\"weekly\"", Code(ReadRepoFile(TrendingRepoCs)), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>组件窗这一族第一次有覆盖面证人</b>（批次 WI-2n）。
+    /// <para>为什么非立不可：设置页与主窗各有一颗"数还剩几句中文"的证人，而<b>组件窗这一族一格都没有</b>——
+    /// "这一族翻没翻"在三批里只能靠我读码说一句"应该都挂了"，那种话没有数字撑着就是悬空的。</para>
+    /// <para><b>射程按文件名形状认</b>（含 <c>Widget</c> 的 <c>.xaml</c>＝现场 15 颗：14 颗组件＋
+    /// <c>WidgetWindow.xaml</c> 那颗宿主；其中 <c>ClockWidget.xaml</c> 面上一句可翻的话都没有，见下面那颗断言）。
+    /// 新添一颗组件不必改判据就会落进这一格（⛔ 不许改成点文件名单——#318 那条教训的另一面：
+    /// 名单式射程会在"搬个家／新加一颗"时静默失效）。</para>
+    /// <para>⛔ <b>下面那 17 句是登记在案的缺口，不是漏翻</b>，两类各有各的坏法：
+    /// <b>①</b>14 句是<b>代码当场写过同一个属性</b>的（<c>MonthBlock.Text</c>＝"2026年9月"、
+    /// <c>TitleBlock.Text</c>、<c>ConfigBox.PlaceholderText</c>…）——给这类挂静态键的后果不是少翻一句，
+    /// 是<b>换语言那一刻用默认那句盖掉带值那句</b>（屏幕上写着"2026年9月"而那天是 10 月＝一句当场可见的假话，
+    /// 坑表 #276／#295）；要翻它们得先让宿主交出 <c>LocMessage</c>＝P-172。<b>②</b>搜索组件那颗排序下拉的三颗
+    /// <c>ComboBoxItem</c>：闭着的那一格是选中时从 <c>Content</c> 抄走的快照（#272／#275），只挂键＝
+    /// "列表跟着翻、闭着那格不翻"的半接状态 ⇒ 那一族要走 WI-2c 的「数据项＋模板」，⛔ 不许当成"已翻"。</para>
+    /// <para>名单<b>双向</b>钉（与日文列那颗同一口径）：多一句＝有人写回中文，少一句＝有人翻掉了却没来把这条改短。</para>
+    /// </summary>
+    [Fact]
+    public void WidgetMarkupIsCoveredAndTheLeftoversAreNamed()
+    {
+        var widgets = XamlUnder("src/StarMark.UI")
+            .Where(f => Path.GetFileName(f.RelativePath).Contains("Widget", StringComparison.Ordinal))
+            .ToList();
+        Assert.True(widgets.Count >= 15,
+            $"组件窗标记只扫到 {widgets.Count} 个文件（现场 15 个：14 颗组件＋WidgetWindow.xaml 那颗宿主）");
+
+        var all = string.Join("\n", widgets.Select(f => Markup(f.Text)));
+        Assert.Equal(46, Count(all, "i18n:LocText.Key=\""));
+        // 20 而不是 22：批次 WI-2n 收掉两颗<b>随状态变</b>的提示条（播放/暂停、置顶/取消置顶）。
+        // 它们在标记上挂静态键＝给同一颗按钮开第二个主人（代码那句带状态的会被静态那句盖掉），
+        // 改由代码交键；判据见 <see cref="AWiredElementNeverGetsItsPropertyWrittenFromCodeToo"/>。
+        Assert.Equal(20, Count(all, "i18n:LocText.ToolTipKey=\""));
+        Assert.Equal(9, Count(all, "i18n:LocText.PlaceholderKey=\""));
+        // 用了键的文件必须自己声明那颗命名空间（缺了＝那一颗组件整个不翻，而编得过也跑得起来）。
+        // ⛔ 不是"每个文件都要声明"：<c>ClockWidget.xaml</c> 面上只有数字与指针，一句可翻的话都没有，
+        // 给它补一颗没人用的 xmlns 是凑数。
+        var needing = widgets.Count(f => Markup(f.Text).Contains("i18n:LocText.", StringComparison.Ordinal));
+        Assert.Equal(needing, Count(all, "xmlns:i18n="));
+
+        var left = widgets.SelectMany(f => Regex.Matches(Markup(f.Text), @"<(?:[A-Za-z][\w.]*)([^>]*)>",
+                    RegexOptions.Singleline).Cast<Match>()
+                .SelectMany(tag => Regex.Matches(tag.Groups[1].Value,
+                    @"(ToolTipService\.ToolTip|ToolTip|Title|Header|Content|Text|Message|Description|PlaceholderText)=""([^""]*)""")
+                    .Cast<Match>().Where(v => Regex.IsMatch(v.Groups[2].Value, @"[\u4e00-\u9fff]"))
+                    .Select(v => $"{Path.GetFileName(f.RelativePath)}|{v.Groups[1].Value}|{v.Groups[2].Value}")))
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(new[]
+        {
+            "GlanceWidget.xaml|Text|2026年9月",
+            "GlanceWidget.xaml|Text|2026年9月",
+            "GlanceWidget.xaml|Text|农历八月初八",
+            "GlanceWidget.xaml|Text|星期五",
+            "ItemGridWidget.xaml|PlaceholderText|输入标签名…",
+            "ItemGridWidget.xaml|Text|暂无条目",
+            "MusicWidget.xaml|Text|打开任意播放器后这里会显示曲目",
+            "MusicWidget.xaml|Text|未在播放",
+            "QuickLaunchWidget.xaml|Text|提示：可把文件、文件夹或网址直接拖入本组件；拖不动时用上面那行「＋」里的「选择文件／选择文件夹」",
+            "SearchWidget.xaml|Content|名称",
+            "SearchWidget.xaml|Content|最近更新",
+            "SearchWidget.xaml|Content|相关度",
+            "SearchWidget.xaml|Text|输入关键词或选择标签开始搜索",
+            "WeatherWidget.xaml|Content|今日逐时",
+            "WeatherWidget.xaml|Text|暂无数据",
+            "WeatherWidget.xaml|Text|未来三天",
+            "WeatherWidget.xaml|Text|选择城市",
+        }, left);
+    }
+
+    /// <summary>
+    /// <b>挂了键的那颗元素，同一颗属性只许一个主人</b>（批次 WI-2n 的第二颗证人）。
+    /// <para>这一族的坏法不是"少翻一句"，是<b>两份可各自被改的出处</b>（P-171 那种"有两个出处比没出处更坏"
+    /// 的界面版）。现场抓到三颗：组件窗两颗（<c>PlayButton</c> 的提示条由代码按"放没放"交"暂停／播放"，
+    /// <c>PinButton</c> 钉着时代码说"取消置顶"＝#323 那颗写入形状普查读出来的），主窗一颗
+    /// （<c>FileKindButton</c> 的字面随"选中了几个类型"变——这一颗是判据放宽到词边界之后
+    /// <b>净树上自己红出来的</b>，证明"按标记形状解析落点"那一步不能省）。
+    /// 后果不是难看：<b>换语言那一刻静态那句盖掉带状态那句</b>——屏幕上那颗按钮在播放中写着"播放"，
+    /// 是一句当场可见的假话（坑表 #295 同一族），而 5480 格测试里没有任何一格看得见。</para>
+    /// <para><b>射程按"那颗 <c>x:Name</c> 的字段住在谁家里"收</b>：读那颗类的<b>全部 partial</b>，
+    /// ⛔ 不按名字扫整个项目——<c>SearchBox</c> 在主窗与搜索组件各有一颗，按名字扫会把邻居算成违规
+    /// （#318 的假红那一面：判据必须排除同名邻居）。</para>
+    /// <para><b>无名元素不在这一格的射程里</b>：代码引用不到它，写不出第二个主人；那一族由真机照片守。
+    /// <b>写"另一颗属性"不算违规</b>：输入框的 <c>PlaceholderKey</c> 与代码写的 <c>.Text</c> 是两回事
+    /// （<c>ExprBox.Text = entry.Expression</c> 是历史回填，合法），所以判据按<b>键那一颗键实际会贴的属性</b>配对。</para>
+    /// </summary>
+    [Fact]
+    public void AWiredElementNeverGetsItsPropertyWrittenFromCodeToo()
+    {
+        var offenders = new List<string>();
+        var watched = 0;
+        foreach (var (path, text) in XamlUnder("src/StarMark.UI"))
+        {
+            foreach (Match tag in Regex.Matches(Markup(text), @"<([A-Za-z][\w.]*)([^>]*?i18n:LocText\.\w*Key=""[^""]*""[^>]*?)>",
+                         RegexOptions.Singleline))
+            {
+                var tagName = tag.Groups[1].Value;
+                var name = Regex.Match(tag.Groups[2].Value, @"x:Name=""([^""]+)""");
+                if (!name.Success) continue;
+                // 代码侧读那颗类的全部 partial：方法搬去 Foo.Options.cs 也算它写的（#318 的射程口径）。
+                var code = Code(ReadRepoPartials(path + ".cs"));
+                foreach (Match key in Regex.Matches(tag.Groups[2].Value, @"i18n:LocText\.(\w*Key)="""))
+                {
+                    watched++;
+                    foreach (var pattern in SecondOwnerPatterns(key.Groups[1].Value, name.Groups[1].Value, tagName, tag.Groups[2].Value))
+                    {
+                        var hit = Regex.Match(code, pattern);
+                        if (hit.Success)
+                            offenders.Add($"{Path.GetFileName(path)} 的 {name.Groups[1].Value}" +
+                                        $"（i18n:LocText.{key.Groups[1].Value}）← 代码又写了同一颗属性：{hit.Value}");
+                    }
+                }
+            }
+        }
+        // 下界拦的是"抽取器没跑起来"（现场量过是 89 处上下，逐键数）：这一格红在扫描面缩水时，⛔ 不许红在措辞上。
+        Assert.True(watched >= 70, $"只认出 {watched} 处「带名字的键」（现场量过是 89 处上下）——抽取器没跑对，这一格不作数");
+        Assert.True(offenders.Count == 0,
+            "挂了键的元素被代码写了同一颗属性＝两个主人（换语言那一刻静态那句盖掉带状态那句）：\n" +
+            string.Join("\n", offenders.Distinct(StringComparer.Ordinal)));
+    }
+
+    /// <summary>
+    /// 一颗附带属性<b>实际会贴哪几颗属性</b>→ 那些属性在代码里的"第二个主人"长什么样。
+    /// <para>顺序照 UI 那边 <c>LocText.ResolveTextProperty</c> 的分工写：正文键会挑 Text/Content/Header/Title/Message/Description
+    /// 里确实存在的那一颗，所以六颗都要问；提示条有两种写法（<c>NAME.ToolTip =</c> 与
+    /// <c>ToolTipService.SetToolTip(NAME,</c>）；开关那两侧各点自己那一颗。</para>
+    /// <para>⛔ 不许宽成"代码里动过那颗元素就算"：输入框的 <c>.Text</c> 是用户正在打的字或历史回填，
+    /// 与占位符键不是同一颗属性。</para>
+    /// </summary>
+    private static IEnumerable<string> SecondOwnerPatterns(string keyKind, string elementName, string tagName, string tagAttributes)
+    {
+        // ⛔ 不能写成 `\.{name}\.`：x:Name 生成的字段是直写的（`MonthBlock.Text = …`），前面没有点——
+        // 台架 N3 的该红没红就是这一颗点。词边界就够：`SomeOther.MonthBlock.Text` 同样落网。
+        var name = Regex.Escape(elementName);
+        if (keyKind == "Key")
+        {
+            // 落点要照 UI 侧 LocText.ResolveTextProperty 那两条让路规则从标记近似（台架 N9 之后的又一课：
+            // 第一版把"正文键"宽成 Text|Content|Header|… 全查，结果把 AI 那批输入框装数据的
+            // `AiModelBox.Text = stored.Model` 也算成违规——输入框的键写的是 Header，.Text 是用户的数据）。
+            return new[] { $@"\b{name}\.({string.Join("|", KeyWriteTargets(tagName, tagAttributes))})\s*=" };
+        }
+        return keyKind switch
+        {
+            "ToolTipKey" => new[] { $@"\b{name}\.ToolTip\s*=", $@"SetToolTip\(\s*{name}\b" },
+            "PlaceholderKey" => new[] { $@"\b{name}\.PlaceholderText\s*=" },
+            "OnContentKey" => new[] { $@"\b{name}\.OnContent\s*=" },
+            "OffContentKey" => new[] { $@"\b{name}\.OffContent\s*=" },
+            _ => Array.Empty<string>(),
+        };
+    }
+
+    /// <summary>正文键在这颗元素上<b>实际会贴哪颗属性</b>（照 <c>LocText.ResolveTextProperty</c> 从标记近似）。
+    /// <para>① 带 <c>PlaceholderText</c> 的输入框：Text 是用户数据，键写 Header（WinUI 3 的 TextBox 有 Header）；
+    /// ② 页签/折叠组/下拉/开关这一族 Content 装的是整页正文，键写 Header；③ 其余按 Text→Content 顺序认。</para></summary>
+    private static string[] KeyWriteTargets(string tagName, string tagAttributes)
+    {
+        if (tagAttributes.Contains("PlaceholderText=", StringComparison.Ordinal)) return new[] { "Header" };
+        if (tagName is "PivotItem" or "TabViewItem" or "Expander" or "ComboBox" or "ToggleSwitch"
+            or "NumberBox" or "TextBox" or "PasswordBox") return new[] { "Header" };
+        if (tagName is "TextBlock" or "Run") return new[] { "Text" };
+        if (tagName is "Button" or "ToggleButton" or "CheckBox" or "RadioButton" or "ComboBoxItem"
+            or "MenuFlyoutItem" or "RadioMenuFlyoutItem" or "ToggleMenuFlyoutItem") return new[] { "Content" };
+        return new[] { "Text", "Content", "Header", "Title", "Message", "Description" };
     }
 
     /// <summary>

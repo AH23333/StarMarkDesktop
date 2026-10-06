@@ -3,6 +3,7 @@
     x:Class="StarMark.UI.Views.SearchWidget"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:i18n="using:StarMark.UI.Helpers"
     xmlns:vm="using:StarMark.UI.ViewModels"
     xmlns:local="using:StarMark.UI.Views">
 
@@ -14,25 +15,25 @@
     <StackPanel Padding="12,8,12,12" Spacing="8">
         <!-- 关键词 -->
         <StackPanel Orientation="Horizontal" Spacing="6">
-            <TextBox x:Name="SearchBox" PlaceholderText="关键词，边输入边搜索…" FontSize="13"
+            <TextBox x:Name="SearchBox" i18n:LocText.PlaceholderKey="widget.sw.searchHint" FontSize="13"
                      Style="{StaticResource WidgetInputBox}"
                      Padding="8,6,8,6" HorizontalAlignment="Stretch" MinWidth="120"
                      TextChanged="SearchBox_TextChanged"
                      KeyDown="SearchBox_KeyDown"/>
-            <Button Content="搜索" Padding="10,4,10,4" Style="{StaticResource WidgetActionButton}" Click="Search_Click"/>
+            <Button i18n:LocText.Key="widget.sw.search" Padding="10,4,10,4" Style="{StaticResource WidgetActionButton}" Click="Search_Click"/>
         </StackPanel>
 
         <!-- 排序（批次 P 内联轻量增强）：相关度 / 最近更新 / 名称。对照 DeskBox 弹窗可点列排序，
              这里收敛为小组件适配的一枚下拉。索引→键见 SortKeys，浏览态（空词）只认 名称/最近更新。 -->
         <StackPanel Orientation="Horizontal" Spacing="6">
-            <TextBlock Text="排序" FontSize="11" Opacity="0.7" VerticalAlignment="Center"/>
+            <TextBlock i18n:LocText.Key="widget.sw.sortTitle" FontSize="11" Opacity="0.7" VerticalAlignment="Center"/>
             <ComboBox x:Name="SortBox" FontSize="11" SelectedIndex="0" MinWidth="104"
                       SelectionChanged="SortBox_SelectionChanged">
                 <ComboBoxItem Content="相关度"/>
                 <ComboBoxItem Content="最近更新"/>
                 <ComboBoxItem Content="名称"/>
             </ComboBox>
-            <TextBlock Text="↑↓ 选择 · 回车打开" FontSize="9" Opacity="0.5" VerticalAlignment="Center" Margin="4,0,0,0"/>
+            <TextBlock i18n:LocText.Key="widget.sw.keysHint" FontSize="9" Opacity="0.5" VerticalAlignment="Center" Margin="4,0,0,0"/>
         </StackPanel>
 
         <!-- 标签筛选（多选 = AND 语义）。换行面板 + 垂直滚动：
@@ -40,8 +41,8 @@
              WinUI 3 无内置 WrapLayout（WMC0001）、ItemsRepeater 不接受非虚拟化布局，
              故用自写 WrapPanel（见 SearchWidget.xaml.cs）配合 ItemsControl 换行铺开。 -->
         <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0">
-            <TextBlock Text="标签" FontSize="11" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
-            <Button Content="清除标签" FontSize="10" Padding="6,2,6,2"
+            <TextBlock i18n:LocText.Key="widget.sw.tagsTitle" FontSize="11" FontWeight="SemiBold" Opacity="0.7" VerticalAlignment="Center"/>
+            <Button i18n:LocText.Key="widget.sw.clearTags" FontSize="10" Padding="6,2,6,2"
                     Background="Transparent" BorderThickness="0"
                     Click="ClearTags_Click"/>
         </StackPanel>
@@ -71,7 +72,7 @@
         <Border Height="1" Margin="0,2,0,2" Background="{ThemeResource WidgetDividerBrush}"/>
 
         <!-- 结果 -->
-        <TextBlock Text="结果" FontSize="11" FontWeight="SemiBold" Opacity="0.7"/>
+        <TextBlock i18n:LocText.Key="widget.sw.results" FontSize="11" FontWeight="SemiBold" Opacity="0.7"/>
         <TextBlock x:Name="EmptyHint" Text="输入关键词或选择标签开始搜索"
                    FontSize="10" Opacity="0.55" TextWrapping="Wrap" Margin="2,2,2,4"/>
         <ItemsRepeater x:Name="ResultsRepeater" ItemsSource="{x:Bind ViewModel.Results, Mode=OneWay}">

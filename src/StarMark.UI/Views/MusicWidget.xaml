@@ -2,7 +2,8 @@
 <UserControl
     x:Class="StarMark.UI.Views.MusicWidget"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:i18n="using:StarMark.UI.Helpers">
 
     <Grid Padding="12,10,12,12" RowSpacing="10">
         <Grid.RowDefinitions>
@@ -26,9 +27,9 @@
                 <TextBlock x:Name="SourceBlock" Text="" FontSize="10" Opacity="0.5"
                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                 <Button x:Name="SourceButton" Grid.Column="1" Height="20" Padding="6,0"
-                        FontSize="10" Visibility="Collapsed" Content="切换音源"
+                        FontSize="10" Visibility="Collapsed" i18n:LocText.Key="widget.music.source"
                         Style="{StaticResource WidgetActionButton}"
-                        ToolTipService.ToolTip="选择要控制的播放器（默认跟随系统当前播放）">
+                        i18n:LocText.ToolTipKey="widget.music.sourceTip">
                     <Button.Flyout>
                         <MenuFlyout x:Name="SourceFlyout" Placement="BottomEdgeAlignedRight"/>
                     </Button.Flyout>
@@ -42,7 +43,7 @@
             <TextBlock x:Name="PositionBlock" Grid.Column="0" Text="0:00" FontSize="10" Opacity="0.6"
                        VerticalAlignment="Center"/>
             <Grid x:Name="SeekHost" Grid.Column="1" Height="16" Background="Transparent"
-                  ToolTipService.ToolTip="点击或拖动可跳转进度"
+                  i18n:LocText.ToolTipKey="widget.music.seekTip"
                   PointerPressed="SeekHost_PointerPressed" PointerMoved="SeekHost_PointerMoved"
                   PointerReleased="SeekHost_PointerReleased" PointerCanceled="SeekHost_PointerReleased"
                   PointerCaptureLost="SeekHost_PointerReleased">
@@ -57,17 +58,18 @@
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="6">
             <Button x:Name="PrevButton" Width="36" Height="36" Padding="0" Click="PrevButton_Click"
                     Style="{StaticResource WidgetActionButton}"
-                    ToolTipService.ToolTip="上一首">
+                    i18n:LocText.ToolTipKey="widget.music.prev">
                 <FontIcon Glyph="&#xE892;" FontSize="14"/>
             </Button>
+            <!-- 这颗按钮的提示条<b>只有 code-behind 一个主人</b>（按"现在放没放"交键）：
+                 这里挂一颗静态键＝换语言那一刻用"播放 / 暂停"盖掉当时那一句（坑表 #295 同一族）。 -->
             <Button x:Name="PlayButton" Width="44" Height="44" Padding="0" Click="PlayButton_Click"
-                    Style="{StaticResource WidgetActionButton}"
-                    ToolTipService.ToolTip="播放 / 暂停">
+                    Style="{StaticResource WidgetActionButton}">
                 <FontIcon x:Name="PlayIcon" Glyph="&#xE768;" FontSize="18"/>
             </Button>
             <Button x:Name="NextButton" Width="36" Height="36" Padding="0" Click="NextButton_Click"
                     Style="{StaticResource WidgetActionButton}"
-                    ToolTipService.ToolTip="下一首">
+                    i18n:LocText.ToolTipKey="widget.music.next">
                 <FontIcon Glyph="&#xE893;" FontSize="14"/>
             </Button>
             <Button x:Name="ModeButton" Width="36" Height="36" Padding="0" Click="ModeButton_Click"

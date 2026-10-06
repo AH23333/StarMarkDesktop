@@ -2,7 +2,8 @@
 <UserControl
     x:Class="StarMark.UI.Views.FocusTimerWidget"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:i18n="using:StarMark.UI.Helpers">
 
     <StackPanel Padding="12,10,12,12" Spacing="8">
         <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" FontSize="11" Opacity="0.7"/>
@@ -11,7 +12,7 @@
         <TextBlock Text="{x:Bind ViewModel.TaskText, Mode=OneWay}" FontSize="11" Opacity="0.8"
                    TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="32"/>
 
-        <TextBox x:Name="TitleBox" PlaceholderText="这一轮在做什么？（可留空）" FontSize="12"
+        <TextBox x:Name="TitleBox" i18n:LocText.PlaceholderKey="widget.pomo.taskHint" FontSize="12"
                  Style="{StaticResource WidgetInputBox}" Padding="8,5,8,5"
                  Text="{x:Bind ViewModel.EditTitle, Mode=TwoWay}"/>
 
@@ -19,7 +20,7 @@
             <Button x:Name="PrimaryButton" Content="{x:Bind ViewModel.PrimaryText, Mode=OneWay}"
                     FontSize="12" Padding="12,4,12,4" Style="{StaticResource WidgetActionButton}"
                     Click="Primary_Click"/>
-            <Button Content="停止" FontSize="12" Padding="12,4,12,4" IsEnabled="{x:Bind ViewModel.CanStop, Mode=OneWay}"
+            <Button i18n:LocText.Key="widget.pomo.stop" FontSize="12" Padding="12,4,12,4" IsEnabled="{x:Bind ViewModel.CanStop, Mode=OneWay}"
                     Style="{StaticResource WidgetActionButton}" Click="Stop_Click"/>
         </StackPanel>
 
@@ -30,7 +31,7 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="专注" FontSize="11" Opacity="0.7" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="0" i18n:LocText.Key="widget.pomo.focus" FontSize="11" Opacity="0.7" VerticalAlignment="Center"/>
             <!-- 不用上下调节按钮：SpinButtonPlacementMode=Compact 在组件小窗里会弹出一块巨大的 +/- 浮层，
                  正好盖住输入框且 Esc 关不掉。改为直接输入 + 滚轮微调（见 code-behind 的 PointerWheelChanged）。 -->
             <NumberBox Grid.Column="1" x:Name="FocusBox" FontSize="12" Minimum="1" Maximum="180"
@@ -38,7 +39,7 @@
                        Value="{x:Bind ViewModel.FocusMinutes, Mode=OneWay}"
                        ValueChanged="FocusBox_ValueChanged"
                        PointerWheelChanged="FocusBox_PointerWheelChanged"/>
-            <TextBlock Grid.Column="2" Text="休息" FontSize="11" Opacity="0.7" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="2" i18n:LocText.Key="widget.pomo.rest" FontSize="11" Opacity="0.7" VerticalAlignment="Center"/>
             <NumberBox Grid.Column="3" x:Name="RestBox" FontSize="12" Minimum="1" Maximum="180"
                        SpinButtonPlacementMode="Hidden" SmallChange="1" LargeChange="5"
                        Value="{x:Bind ViewModel.RestMinutes, Mode=OneWay}"

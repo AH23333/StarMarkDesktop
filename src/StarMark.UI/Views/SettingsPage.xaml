@@ -405,8 +405,11 @@
                                             Style="{StaticResource SecondaryButton}" Visibility="Collapsed"/>
                                 </StackPanel>
 
+                                <!-- 这两行的字面<b>只有 code-behind 一个主人</b>：它们是随操作变的读数
+                                     （测试/整理/写回各有好几句，批次 WI-2i 起就由代码写），
+                                     标记上挂初始句的静态键＝换语言那一刻把当时的读数盖回初始句（#295）。 -->
                                 <TextBlock x:Name="AiStatusText" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
-                                           i18n:LocText.Key="settings.ai.notTested" Opacity="0.72"/>
+                                           Opacity="0.72"/>
 
                                 <!--
                                     批量整理。"开始"只有一个入口（扩展教训：两个功能重叠的按钮引发多次返工），
@@ -463,7 +466,7 @@
                                            Opacity="0.72"/>
 
                                 <TextBlock x:Name="AiUsageText" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
-                                           i18n:LocText.Key="settings.ai.usagePending" Opacity="0.72"/>
+                                           Opacity="0.72"/>
 
                                 <!--
                                     预览以"组"为单位：三百条逐个看是没人会做的复核，
