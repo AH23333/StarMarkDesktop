@@ -33,6 +33,9 @@ public sealed class I18nWiringGateTests
     private const string FolderTreeXaml = "src/StarMark.UI/Views/FolderTreePage.xaml";
     private const string SearchPageXaml = "src/StarMark.UI/Views/SearchPage.xaml";
     private const string MainWindowSearchCs = "src/StarMark.UI/MainWindow.Search.cs";
+    private const string MainWindowStatusCs = "src/StarMark.UI/MainWindow.Status.cs";
+    private const string SyncCoordinatorCs = "src/StarMark.Core/Sync/SyncCoordinator.cs";
+    private const string TrendingRepoCs = "src/StarMark.Abstractions/Trending/TrendingRepo.cs";
     private const string ThemeXaml = "src/StarMark.UI/Themes/StarMarkTheme.xaml";
     private const string LocTextCs = "src/StarMark.UI/Helpers/LocText.cs";
     private const string SettingsI18nCs = "src/StarMark.UI/Views/SettingsPage.I18n.cs";
@@ -537,16 +540,17 @@ public sealed class I18nWiringGateTests
     /// 标记里少的颗数必须等于代码里多的颗数，⛔ 不许"搬着搬着少了一颗"。
     /// 把它们钉住不是为了一次改文案就要来改判据，而是因为"覆盖面"这件事本身只有数字能证——
     /// <c>settings.languageNote</c> 那句"这一版只覆盖主界面骨架"是产品对用户的承诺，它得有一个对应的数。）</para>
-    /// <para>剩下那一颗 <c>Text="索引就绪"</c> 是<b>登记在案的缺口</b>（不是漏翻）：那颗状态是代码在写的
-    /// （同步中／取消中／失败都往同一颗 <c>TextBlock</c> 上推），给它挂键的后果不是"少翻一句"，
-    /// 而是<b>换语言那一刻把"同步中…"覆盖成"索引就绪"</b>——一句谎话。要翻它得先把状态改成按键推，
-    /// 那一刀在 WI-2。</para>
+    /// <para>曾经剩下那一颗 <c>Text="索引就绪"</c> 是<b>登记在案的缺口</b>（不是漏翻）：那颗状态是代码在写的
+    /// （同步中／取消中／失败都往同一颗 <c>TextBlock</c> 上推），当时给它挂键的后果不是"少翻一句"，
+    /// 而是<b>换语言那一刻把"同步中…"覆盖成"索引就绪"</b>——一句谎话。
+    /// 批次 WI-2m 按当时写的补法把那三个读数改成按键推（<see cref="TheTopBarStatusLineGoesThroughTheDoor"/>），
+    /// 于是标记里那颗静态字面量一起摘掉：主窗标记的中文<b>归零</b>。</para>
     /// </summary>
     [Fact]
     public void FirstMilestoneCoversTheMainWindowAndDeliberatelyLeavesOneDynamicString()
     {
         var xaml = ReadRepoFile(MainWindowXaml);
-        Assert.Equal(26, Count(xaml, "i18n:LocText.Key=\""));
+        Assert.Equal(27, Count(xaml, "i18n:LocText.Key=\""));
         Assert.Equal(8, Count(xaml, "i18n:LocText.ToolTipKey=\""));
         Assert.Equal(2, Count(xaml, "i18n:LocText.PlaceholderKey=\""));
         Assert.Equal(1, Count(xaml, "xmlns:i18n="));
@@ -561,7 +565,79 @@ public sealed class I18nWiringGateTests
                 .Cast<Match>().Where(m => Regex.IsMatch(m.Groups[2].Value, @"[\u4e00-\u9fff]")))
             .Select(m => m.Value)
             .ToArray();
-        Assert.Equal(new[] { "Text=\"索引就绪\"" }, stillLiteral);
+        // 这一格是<b>零格</b>：主窗标记里再不留一句中文。将来谁写回去，它给的是"哪一句"而不是"少了几个"。
+        Assert.Equal(Array.Empty<string>(), stillLiteral);
+    }
+
+    /// <summary>
+    /// <b>顶栏那一行状态只许走"键＋读数"那一颗门</b>（批次 WI-2m，把 WI-1 留在案上的最后一颗静态状态字摘掉）。
+    /// <para>那颗 <c>TextBlock</c> 现在挂着 <c>LocText.Key="top.indexReady"</c>（常态那句）。代码若还像以前那样
+    /// 直接写 <c>StatusText.Text = "同步中..."</c>，注册项里留着的仍是<b>标记那颗键</b>：
+    /// 换语言那一刻界面会把"同步中…"重贴成"索引就绪"＝界面替一件还在跑的事改口（坑表 #295 的镜像，
+    /// 而这一次是<b>静态那句盖掉进行时那句</b>）。所以标记与代码两头都要钉：标记不许留字面量，
+    /// 代码不许绕过那颗门，而那颗门在 <c>SetStatusText</c> 里只许出现一次（⛔ 不是数一下"看起来差不多"）。</para>
+    /// <para>扫描面是<b>整个 <c>src/StarMark.UI</c></b>，不是主窗那一个 partial：<c>MainWindow</c> 现在有六份
+    /// partial，直写落在哪一份都一样坏，而按文件名点名的判据在有人<b>新搬一份 partial</b> 那一刻就失去射程。
+    /// ⚠ 那颗正则必须带"前面不是标识符字符"的排除——设置页另有一颗 <c>AiStatusText</c>（它属于 P-172
+    /// 那一族、本批没动），按子串认会把它的十几处直写算进这一格，红的是一句假话（坑表 #293 同族）。</para>
+    /// </summary>
+    [Fact]
+    public void TheTopBarStatusLineGoesThroughTheDoor()
+    {
+        var xaml = Markup(ReadRepoFile(MainWindowXaml));
+        Assert.Contains("<TextBlock x:Name=\"StatusText\" Style=\"{StaticResource MutedText}\" i18n:LocText.Key=\"top.indexReady\"/>",
+            xaml, StringComparison.Ordinal);
+
+        var direct = new Regex(@"(?<![A-Za-z0-9_])StatusText\.Text");
+        var offenders = ReadRepoUnder("src/StarMark.UI")
+            .Where(f => direct.IsMatch(Code(f.Text)))
+            .Select(f => f.RelativePath)
+            .ToArray();
+        Assert.Equal(Array.Empty<string>(), offenders);   // 直接改字＝注册项不知情
+
+        var status = Code(ReadRepoFile(MainWindowStatusCs));
+        Assert.Equal(1, Count(status, "LocText.SetMessage(StatusText,")); // 那颗门只许一处
+        Assert.True(Count(status, "SetStatusText(") >= 5,
+            "顶栏状态那一族的出口少于 5 处（现场＝取消中／同步中／汇总／已取消／失败 各一次＋那颗 helper 的定义）");
+        Assert.Contains("summary.Message()", status, StringComparison.Ordinal);  // Core 交回的是没取词的那句
+    }
+
+    /// <summary>
+    /// <b>同步汇总那句得住键，不许在 Core 里拼成品</b>（批次 WI-2m）。
+    /// <para>症状不是"没翻"，是<b>那一行的语言被钉死在同步完成的那一刻</b>：拼好字符串之后换语言，
+    /// 界面上那句就永远不动（坑表 #276）。读数是实参、句子是键，两件事各归一处；
+    /// 旧的 <c>FormatText()</c> 一起删掉——留着它就是给"就地拼一句"留一条回头路。</para>
+    /// </summary>
+    [Fact]
+    public void TheSyncSummaryHandsWithKeysNotWithAComposedSentence()
+    {
+        var core = Code(ReadRepoFile(SyncCoordinatorCs));
+        var message = MethodBody(core, "public LocMessage Message()");
+        Assert.Contains("LocMessage.Of(\"top.syncDone\", TotalPulled, ElapsedMs)", message, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"top.syncPartial\", TotalPulled, FailedCount, ElapsedMs)", message,
+            StringComparison.Ordinal);
+        Assert.Equal(0, Count(core, "FormatText"));
+        Assert.DoesNotContain("同步完成:", core, StringComparison.Ordinal);
+        Assert.DoesNotContain("同步部分失败:", core, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>周期那一个词只许有一个主人＝表</b>（批次 WI-2m 收掉批次 WI-2l 在屏幕上量到的那一处）。
+    /// <para>现场：英文屏读到「JavaScript · ★ 77,054 · ＋4,242 <b>本周</b>」，日文屏读到同一句中文。
+    /// 措辞住在 <c>TrendingRepo.cs</c> 的 <c>Label</c> 里，而表里 <c>trending.weekly</c> 另有其话
+    /// （<c>This week</c>／<c>今週</c>，那颗周期下拉问的就是它）——<b>同一句字两个主人，两份可各自被改</b>，
+    /// 比"没出处"更坏（P-171；坑表 #291）。修法是把那一族退回"只问表"。</para>
+    /// </summary>
+    [Fact]
+    public void ThePeriodWordHasExactlyOneOwner()
+    {
+        var periods = Code(ReadRepoFile(TrendingRepoCs));
+        var label = MethodBody(periods, "public static string Label(TrendingPeriod period)");
+        Assert.Contains("Locale.T(period switch", label, StringComparison.Ordinal);
+        foreach (var word in new[] { "今日", "本周", "本月" })
+            Assert.DoesNotContain(word, label, StringComparison.Ordinal);
+        // 存进设置档与缓存的必须是代码（daily／weekly／monthly），⛔ 不是人话——换语言不能改坏存着的东西
+        Assert.Contains("\"weekly\"", Code(ReadRepoFile(TrendingRepoCs)), StringComparison.Ordinal);
     }
 
     /// <summary>

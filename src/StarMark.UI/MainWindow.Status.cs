@@ -11,6 +11,7 @@ using Windows.Foundation;
 using Windows.Graphics;
 using WinRT.Interop;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Language;
 using StarMark.Core.Capture;
 using StarMark.Core.Hotkeys;
@@ -88,6 +89,13 @@ public sealed partial class MainWindow
         }
     }
 
+    /// <summary>顶栏那一行状态<b>唯一的出口</b>（批次 WI-2m）：只把"键＋读数"交给 <c>LocText.SetMessage</c> 那颗门。</summary>
+    /// <remarks>那颗元素上挂着 <c>i18n:LocText.Key="top.indexReady"</c>（没有同步在跑时的那句常态）。
+    /// 直接写 <c>StatusText.Text</c> 会留下一个洞：换语言那一刻它按<b>注册项里那句</b>重贴，
+    /// 而注册项还停在标记那颗键上＝"同步中…"被"索引就绪"盖掉——界面替一件还在跑的事改口（坑表 #295 的镜像）。
+    /// 走门＝把"当前这一句"记进注册项，重贴时贴回的是同一句、按当时的语言重新取词。</remarks>
+    private void SetStatusText(LocMessage? message) => LocText.SetMessage(StatusText, message);
+
     private void SyncButton_Click(object sender, RoutedEventArgs e) => _ = DoSyncAsync();
 
     /// <summary>在途同步的取消源。null＝没有同步在跑。</summary>
@@ -100,7 +108,7 @@ public sealed partial class MainWindow
         // 取消是"请求"：正在 await 的那一页要等 HTTP 回包或抛异常才退出。按钮就地禁用，
         // 免得用户连点三下以为没反应、转去杀进程。
         SyncCancelButton.IsEnabled = false;
-        StatusText.Text = "正在取消同步…";
+        SetStatusText(LocMessage.Of("top.statusCancelling"));
     }
 
     private async Task DoSyncAsync()
@@ -111,7 +119,7 @@ public sealed partial class MainWindow
         SyncCancelButton.IsEnabled = true;
         SyncCancelButton.Visibility = Visibility.Visible;
         SetStatusDot(StatusKind.Caution);
-        StatusText.Text = "同步中...";
+        SetStatusText(LocMessage.Of("top.statusSyncing"));
         SyncInfoBar.IsOpen = false;
 
         var cts = _syncCts = new CancellationTokenSource();
@@ -120,9 +128,9 @@ public sealed partial class MainWindow
             var syncCoordinator = App.Services.GetRequiredService<StarMark.Core.Sync.SyncCoordinator>();
             {
                 var summary = await syncCoordinator.SyncAllAsync(cts.Token);
-                var text = summary.FormatText();
-                StatusText.Text = text;
-                ShowInfoBar(InfoBarSeverity.Success, "索引同步完成", string.Empty, 6500);
+                // Core 交回的是"还没取词"的那句话：在这里 Render 一次＝那句话的语言被钉死在同步完成的那一刻
+                SetStatusText(summary.Message());
+                ShowInfoBar(InfoBarSeverity.Success, Locale.T("top.syncDoneTitle"), string.Empty, 6500);
             }
             SetStatusDot(StatusKind.Success);
             await ViewModel.LoadCountsAsync();
@@ -132,17 +140,18 @@ public sealed partial class MainWindow
         {
             // 用户主动取消不是故障：与「同步失败」分开报。已拉完的源逐源提交过（幂等 upsert），
             // 所以这句话必须说清"部分结果留下了、缺的下次补齐"，否则用户以为白点了一次同步。
-            const string cancelled = "已取消同步：已拉完的源已入库，未拉完的下次同步继续补齐。";
-            StatusText.Text = cancelled;
+            var cancelled = LocMessage.Of("top.syncCancelledBody");
+            SetStatusText(cancelled);
             SetStatusDot(StatusKind.Success);
-            ShowInfoBar(InfoBarSeverity.Informational, "已取消同步", cancelled, 6500);
+            ShowInfoBar(InfoBarSeverity.Informational, Locale.T("top.syncCancelledTitle"), cancelled.Render(), 6500);
             await ViewModel.LoadCountsAsync();
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"同步失败: {ex.Message}";
+            // 异常原文是数据不是措辞：它当实参进去，句子本身仍由表管
+            SetStatusText(LocMessage.Of("top.statusFailed", ex.Message));
             SetStatusDot(StatusKind.Caution);
-            ShowInfoBar(InfoBarSeverity.Error, "同步失败", ex.Message);
+            ShowInfoBar(InfoBarSeverity.Error, Locale.T("top.syncFailedTitle"), ex.Message);
         }
         finally
         {

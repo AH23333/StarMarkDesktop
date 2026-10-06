@@ -1,4 +1,5 @@
 #nullable enable
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions.Trending;
 
@@ -34,13 +35,19 @@ public static class TrendingPeriods
         _ => 7,
     };
 
-    /// <summary>周期的人话标签（筛选按钮与来源标注共用）。</summary>
-    public static string Label(TrendingPeriod period) => period switch
-    {
-        TrendingPeriod.Daily => "今日",
-        TrendingPeriod.Monthly => "本月",
-        _ => "本周",
-    };
+    /// <summary>周期的那一个词（热榜行"＋230 本周"尾巴上那一截）。
+    /// <para>⚠ 措辞<b>只有一个主人＝表里那三行</b>（<c>trending.daily／weekly／monthly</c>，
+    /// 同一族键已被页面上那颗周期下拉问过）。批次 WI-2l 之前这里是三句代码字面量，
+    /// 于是英文屏读到「＋4,242 本周」、日文屏读到同一句中文——<b>同一句字两个主人，两份可各自被改</b>
+    /// （P-171 那一族，坑表 #291）。这里取词发生在<b>建行那一刻</b> ⇒ 当场换语言要重进那一页才跟着改，
+    /// 那一半仍记在 P-172（卡片那一行是绑定出来的字符串，不是挂键的元素）。</para></summary>
+    public static string Label(TrendingPeriod period)
+        => Locale.T(period switch
+        {
+            TrendingPeriod.Daily => "trending.daily",
+            TrendingPeriod.Monthly => "trending.monthly",
+            _ => "trending.weekly",
+        });
 
     /// <summary>缓存与展示都用代码字符串，避免两套写法。</summary>
     public static bool TryParse(string? code, out TrendingPeriod period)

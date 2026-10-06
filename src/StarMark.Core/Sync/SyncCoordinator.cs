@@ -1,6 +1,7 @@
 #nullable enable
 using System.Diagnostics;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Integrations.GitHub;
 
 namespace StarMark.Core.Sync;
@@ -148,15 +149,15 @@ public sealed class SyncSummary
     public int TotalPulled => Sources.Sum(s => s.PulledCount);
     public int FailedCount => Sources.Count(s => !s.Success);
 
-    public string FormatText()
-    {
-        var ok = TotalPulled;
-        var fail = FailedCount;
-        var elapsed = ElapsedMs;
-        if (fail == 0)
-            return $"同步完成: {ok} 条 · {elapsed}ms";
-        return $"同步部分失败: 成功 {ok} 条 · 失败 {fail} 源 · {elapsed}ms";
-    }
+    /// <summary>
+    /// 这一次同步的<b>那句汇总话（还没取词）</b>：键＋读数交出去，由界面在贴上去的那一刻按当时的语言取词
+    /// （批次 WI-2m；口径同 <see cref="LocMessage"/>——在这里先 Render 一次＝外层跟着语言翻、
+    /// 这一行留在中文，屏幕上就是半中半英，且换语言那一刻没人重贴）。
+    /// </summary>
+    public LocMessage Message()
+        => FailedCount == 0
+            ? LocMessage.Of("top.syncDone", TotalPulled, ElapsedMs)
+            : LocMessage.Of("top.syncPartial", TotalPulled, FailedCount, ElapsedMs);
 }
 
 /// <summary>同步错误分类（P1-4），供设置页/同步状态给出可操作文案。</summary>

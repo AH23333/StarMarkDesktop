@@ -44,6 +44,22 @@ public static class UiStrings
         // ===== 顶栏按钮与提示 =====
         new Entry("top.sync", "同步", "Sync", "同期"),
         new Entry("top.syncCancel", "取消同步", "Cancel sync", "同期をキャンセル"),
+        // 顶栏那一行状态（批次 WI-2m）：它平时写的是**程序当场算出来的话**，所以每一句都得住键，
+        // 否则换语言那一刻要么贴着旧语言、要么被静态键盖掉正在跑的那件事（坑表 #276／#295）。
+        new Entry("top.indexReady", "索引就绪", "Index ready", "索引準備完了"),
+        new Entry("top.statusCancelling", "正在取消同步…", "Cancelling the sync…", "同期をキャンセル中…"),
+        new Entry("top.statusSyncing", "同步中...", "Syncing...", "同期中..."),
+        new Entry("top.statusFailed", "同步失败: {0}", "Sync failed: {0}", "同期失敗: {0}"),
+        new Entry("top.syncDone", "同步完成: {0} 条 · {1}ms", "Sync done: {0} items · {1}ms", "同期完了: {0} 件 · {1}ms"),
+        new Entry("top.syncPartial", "同步部分失败: 成功 {0} 条 · 失败 {1} 源 · {2}ms",
+            "Sync partially failed: {0} items ok · {1} sources failed · {2}ms",
+            "同期は一部失敗：成功 {0} 件 · 失敗 {1} 源 · {2}ms"),
+        new Entry("top.syncDoneTitle", "索引同步完成", "Index sync finished", "索引の同期が完了しました"),
+        new Entry("top.syncFailedTitle", "同步失败", "Sync failed", "同期に失敗"),
+        new Entry("top.syncCancelledTitle", "已取消同步", "Sync cancelled", "同期をキャンセルしました"),
+        new Entry("top.syncCancelledBody", "已取消同步：已拉完的源已入库，未拉完的下次同步继续补齐。",
+            "Sync cancelled: the sources already pulled are stored; the rest come with the next sync.",
+            "同期をキャンセルしました：取得済みの源は保存済み、未取得の源は次回以降の同期で補います。"),
         new Entry("top.widgetsTip", "桌面组件", "Desktop widgets", "デスクトップウィジェット"),
         new Entry("top.guideTip", "这一页怎么用", "How this page works", "このページの使い方"),
         new Entry("top.showHidden", "显示隐藏", "Show hidden", "非表示を表示"),

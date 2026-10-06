@@ -620,7 +620,7 @@ static async Task BookmarkSyncCheckAsync(string filePath)
     sp.GetRequiredService<MigrationRunner>().EnsureSchema();
     var coord = sp.GetRequiredService<SyncCoordinator>();
     var summary = await coord.SyncAllAsync(CancellationToken.None);
-    Console.WriteLine($"Sync: {summary.FormatText()}");
+    Console.WriteLine($"Sync: {summary.Message().Render()}");
 
     var counts = await sp.GetRequiredService<IItemRepository>().GetCountsByTypeAsync(CancellationToken.None);
     Console.WriteLine("Counts: " + string.Join(", ", counts.Select(kv => $"{kv.Key}={kv.Value}")));
@@ -689,7 +689,7 @@ static async Task SyncModeAsync()
     var coord = sp.GetRequiredService<SyncCoordinator>();
     Console.WriteLine("Triggering sync...");
     var summary = await coord.SyncAllAsync(CancellationToken.None);
-    Console.WriteLine($"Sync: {summary.FormatText()}");
+    Console.WriteLine($"Sync: {summary.Message().Render()}");
     foreach (var s in summary.Sources)
     {
         var status = s.Success ? "OK" : "FAIL";
