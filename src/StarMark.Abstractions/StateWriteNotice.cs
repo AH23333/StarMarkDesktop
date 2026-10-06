@@ -1,5 +1,7 @@
 #nullable enable
 
+using StarMark.Abstractions.I18n;
+
 namespace StarMark.Abstractions;
 
 /// <summary>
@@ -17,12 +19,13 @@ namespace StarMark.Abstractions;
 /// </summary>
 public static class StateWriteNotice
 {
-    /// <summary>弹窗标题：谁没生效就说谁。</summary>
-    public static string Title(string action) => $"{action}没生效";
+    /// <summary>弹窗标题：谁没生效就说谁。<b>骨架与动作词都走表</b>（批次 WI-2p；动作词由调用方按当前语言传）。</summary>
+    public static string Title(string action) => Locale.Fmt("state.title", action);
 
     /// <summary>
     /// 正文：一句到位，并给出<b>下一步</b>（刷新这一页），不留"请稍后重试"那种要用户猜的话。
+    /// 骨架进表（<c>state.rowGone</c>），<paramref name="action"/> 是调用方按当前语言取好的词。
     /// </summary>
     public static string RowGone(string action) =>
-        $"{action}没落上去：这条已经不在这台机器的库里了（可能在别处被删掉）。刷新这一页就能看到它的现状。";
+        Locale.Fmt("state.rowGone", action);
 }

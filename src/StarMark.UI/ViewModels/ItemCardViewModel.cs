@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Clipboard;
+using StarMark.Abstractions.I18n;
 using StarMark.UI.Helpers;
 
 namespace StarMark.UI.ViewModels;
@@ -70,17 +71,17 @@ public partial class ItemCardViewModel : ObservableObject
     public string Source => _item.Source;
     public long UpdatedAt => _item.UpdatedAt;
 
-    public string HideMenuText => IsHidden ? "显示" : "隐藏";
-    public string PinMenuText => IsPinned ? "取消置顶" : "置顶";
+    public string HideMenuText => IsHidden ? Locale.T("card.hide.show") : Locale.T("card.hide.hide");
+    public string PinMenuText => IsPinned ? Locale.T("card.pin.unpin") : Locale.T("card.pin.pin");
 
     /// <summary>
     /// 「打开」这一项对该条目到底做什么。剪贴板历史条目没有可启动的目标，
     /// 它的"打开"＝把正文再复制回剪贴板；文案若仍写"打开"，用户点之前无从知道会发生什么。
     /// </summary>
-    public string OpenMenuText => ClipboardPolicy.OpensAsCopy(Type, Uri) ? "复制到剪贴板" : "打开";
+    public string OpenMenuText => ClipboardPolicy.OpensAsCopy(Type, Uri) ? Locale.T("card.open.asCopy") : Locale.T("card.open.open");
 
     /// <summary>同上：对没有链接的条目，这一项复制的是正文而不是"链接/路径"。</summary>
-    public string CopyMenuText => ClipboardPolicy.OpensAsCopy(Type, Uri) ? "复制内容" : "复制链接/路径";
+    public string CopyMenuText => ClipboardPolicy.OpensAsCopy(Type, Uri) ? Locale.T("card.copy.content") : Locale.T("card.copy.link");
 
     partial void OnIsHiddenChanged(bool value) => OnPropertyChanged(nameof(HideMenuText));
     partial void OnIsPinnedChanged(bool value) => OnPropertyChanged(nameof(PinMenuText));
@@ -113,7 +114,7 @@ public partial class ItemCardViewModel : ObservableObject
     /// 抄一份「这张图的文件已不在本机」就会与状态行、卡片那一格各说各话（批次 SI）。</para>
     /// </summary>
     public string PinImageMenuText => CanPinAsImage
-        ? "贴到桌面"
+        ? Locale.T("card.pinImage.ok")
         : $"贴到桌面（这张图的{ClipboardPolicy.MissingFileClause}）";
 
     /// <summary>
@@ -143,7 +144,7 @@ public partial class ItemCardViewModel : ObservableObject
     /// 那颗删除项的文字。<b>动作名归本类</b>（口径同 <see cref="PinImageMenuText"/>：菜单项的名字只有一个主人），
     /// 而"能不能出现"归上一条判据——两者分开才不会出现"文案写着删历史、点的却是文件行"。
     /// </summary>
-    public string DeleteMenuText => Type == ItemType.File ? "删除这一行" : "删除这条历史";
+    public string DeleteMenuText => Type == ItemType.File ? Locale.T("card.delete.fileRow") : Locale.T("card.delete.history");
 
     /// <summary>
     /// 这一行是不是 GitHub 热榜候选（外部数据、<b>不入库</b>）。判据收在 <see cref="ItemCardPolicy"/>：

@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
 
@@ -69,14 +70,14 @@ internal static class ItemContextMenu
         flyout.Items.Add(Item(vm.OpenMenuText, (_, _) => OpenByRow(root, vm)));
 
         if (vm.HasOpenLocation)
-            flyout.Items.Add(Item("打开所在位置", (_, _) => ItemCardActions.OpenLocation(vm)));
+            flyout.Items.Add(Item(Locale.T("card.menu.openLoc"), (_, _) => ItemCardActions.OpenLocation(vm)));
 
         flyout.Items.Add(Item(vm.CopyMenuText, (_, _) => ItemCardActions.CopyUri(vm)));
         // 「复制图片」与上面那颗是两件事：这一颗交<b>位图数据</b>，粘出来是一张图；上面那颗交的是一串文字。
         // 判据与主窗卡片的 ContextFlyout 读同一个属性（ItemCardPolicy.CanCopyAsImage），两处各判一次就会出现
         // "组件行右键有、主窗卡片没有"。
         if (vm.CanCopyAsImage)
-            flyout.Items.Add(Item("复制图片", (_, _) => ItemCardActions.CopyImage(vm)));
+            flyout.Items.Add(Item(Locale.T("card.menu.copyImage"), (_, _) => ItemCardActions.CopyImage(vm)));
         // 「贴到桌面」（ClipIMG-P3）：同一颗判据、同一个读、另一条出口——不经剪贴板直接把这张图钉起来。
         // 2d 的教训就在下面这行曾经是唯一的图片出口：出口只长在一个入口家族上，用户在别的面上就找不到它。
         if (vm.CanCopyAsImage)
@@ -89,7 +90,7 @@ internal static class ItemContextMenu
         }
         // 预览与卡片上那颗 🔎 读同一个判据（RSS 候选不给：点条目直接跳文章，正文解析暂不做）
         if (vm.ShowsPreview)
-            flyout.Items.Add(Item("预览", async (_, _) => await PreviewAsync(vm, root)));
+            flyout.Items.Add(Item(Locale.T("card.menu.preview"), async (_, _) => await PreviewAsync(vm, root)));
 
         // RSS 候选行（同样未入库）：这一页按用户裁决不提供搜索/排序，右键因此只是主窗右键的一个子集——
         // "按 URI 的动作" + 收藏到文件夹。置顶/笔记/标签/隐藏一律不出现（会经按需登记把一次性候选灌进 items）。
@@ -112,12 +113,12 @@ internal static class ItemContextMenu
         // 未入库的实时源虚拟条目（Everything 文件结果，Id=0）：显式「记录到本地」把路径登记为主库条目，
         // 之后便可在库中被检索、并被置顶/标签格持久化（这些操作自身也会按需自动登记，此处提供主动入口）。
         if (vm.Id == 0 && !vm.IsLauncherMode)
-            flyout.Items.Add(Item("记录到本地", (_, _) => _ = RecordToLocalAsync(vm)));
+            flyout.Items.Add(Item(Locale.T("card.menu.record"), (_, _) => _ = RecordToLocalAsync(vm)));
 
         if (vm.IsLauncherMode)
         {
             // 启动器态（快捷启动的合成入口）：只保留按 URI 移除，隐藏一切会误写主库的操作。
-            flyout.Items.Add(Item("删除", (_, _) => RemoveLauncherEntry(vm)));
+            flyout.Items.Add(Item(Locale.T("dialog.delete"), (_, _) => RemoveLauncherEntry(vm)));
             return flyout;
         }
 
@@ -130,12 +131,12 @@ internal static class ItemContextMenu
                 else ItemCardActions.DeleteClipboard(vm);
             }));
         if (vm.CanSendToWidget)
-            flyout.Items.Add(Item("发送到桌面 · 快捷启动", (_, _) => _ = SendToQuickLaunchAsync(vm)));
+            flyout.Items.Add(Item(Locale.T("card.menu.sendTo"), (_, _) => _ = SendToQuickLaunchAsync(vm)));
         // 只对"这是一条待办"出现：别的类型没有"这一项要做多久"的语境，出现即成为点了没反应的死项。
         if (vm.Type == ItemType.Todo)
-            flyout.Items.Add(Item("开始专注这一项", (_, _) => _ = StartFocusAsync(vm)));
-        flyout.Items.Add(Item("编辑笔记", (_, _) => ItemCardActions.EditNote(root, vm)));
-        flyout.Items.Add(Item("编辑标签", (_, _) => ItemCardActions.EditTags(root, vm)));
+            flyout.Items.Add(Item(Locale.T("card.menu.focus"), (_, _) => _ = StartFocusAsync(vm)));
+        flyout.Items.Add(Item(Locale.T("card.note.title"), (_, _) => ItemCardActions.EditNote(root, vm)));
+        flyout.Items.Add(Item(Locale.T("card.tags.title"), (_, _) => ItemCardActions.EditTags(root, vm)));
         flyout.Items.Add(Item(vm.HideMenuText, (_, _) => _ = ItemCardActions.ToggleHidden(root, vm)));
         return flyout;
     }
@@ -168,7 +169,7 @@ internal static class ItemContextMenu
             var result = await CenteredDialog.ShowContentAsync(
                 title, host, owner: owner,
                 dedupeKey: vm.PreviewDedupeKey, width: 820, height: 640,
-                primaryText: vm.OpenMenuText, cancelText: "关闭");
+                primaryText: vm.OpenMenuText, cancelText: Locale.T("dialog.close"));
             if (result == CenteredDialog.HostedDialogResult.Committed)
                 OpenByRow(root, vm);
         }

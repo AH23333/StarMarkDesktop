@@ -845,6 +845,89 @@ public sealed class I18nWiringGateTests
     }
 
     /// <summary>
+    /// 条目右键族（批次 WI-2p）：主窗卡片 ContextFlyout（XAML 挂键）、共享菜单工厂 <c>ItemContextMenu</c>
+    /// （每次右键现建）、卡片动作 <c>ItemCardActions</c> 的对话框/提示（每次现建）、隐藏页还原词（现取）、
+    /// <c>StateWriteNotice</c> 的骨架——五处全部只许从表里取词。
+    /// <para>扫描按<b>会产界面串的方法体</b>收口（#329 同款），StarLog 的中文日志按行摘掉后再扫
+    /// （这些 catch 里的日志都是单行；跨行续行会漏过行级过滤＝假红，人工处置即可）。</para>
+    /// <para>⚠ <c>PinImageMenuText</c> 的灰路（<c>$"贴到桌面（这张图的{MissingFileClause}）"</c>）是
+    /// P-172 在案的豁免：外壳单翻会造出半中半英，比现状更坏——它不进扫描面，
+    /// 亮路改由"必须交键"的断言钉住（见下）。</para>
+    /// </summary>
+    [Fact]
+    public void ItemContextMenusAreKeysNotLiterals()
+    {
+        var offenders = new List<string>();
+
+        // ① 共享菜单工厂：Build（八颗菜单项）＋ PreviewAsync（预览对话框）。
+        var factory = Code(ReadRepoFile("src/StarMark.UI/Helpers/ItemContextMenu.cs"));
+        foreach (var fragment in new[]
+                 {
+                     "private static MenuFlyout Build(ItemCardViewModel vm, XamlRoot root)",
+                     "private static async Task PreviewAsync(ItemCardViewModel vm, XamlRoot root)",
+                 })
+        {
+            // factory 的 catch 里也有中文日志（#329 同款：日志不归这把尺子）——按行摘掉再扫。
+            var body = MethodBody(factory, fragment);
+            var withoutLogs = string.Join("\n", body.Split('\n')
+                .Where(l => !l.Contains("StarLog.", StringComparison.Ordinal)));
+            foreach (Match m in Regex.Matches(withoutLogs, @"""[^""]*[\u4e00-\u9fff][^""]*"""))
+                offenders.Add($"ItemContextMenu {fragment.Split('(')[0].Split(' ')[^1]}：{m.Value}");
+        }
+
+        // ② 卡片动作：对话框与提示只在这些方法体里现取词。
+        var actions = Code(ReadRepoFile("src/StarMark.UI/Helpers/ItemCardActions.cs"));
+        foreach (var fragment in new[]
+                 {
+                     "private static void ReportOpenFailure(long itemId, (OpenFailure Kind, string? Message) outcome)",
+                     "public static async void DeleteFileRow(long itemId)",
+                     "public static async void CopyImage(ItemCardViewModel vm)",
+                     "public static async void PinImageToDesktop(ItemCardViewModel vm)",
+                     "public static async void DeleteClipboard(ItemCardViewModel vm)",
+                     "public static async void TogglePin(ItemCardViewModel vm)",
+                     "public static async void EditNote(XamlRoot xamlRoot, ItemCardViewModel vm)",
+                     "public static async void EditTags(XamlRoot xamlRoot, ItemCardViewModel vm)",
+                     "public static async void AddTag(XamlRoot xamlRoot, ItemCardViewModel vm)",
+                 })
+        {
+            var body = MethodBody(actions, fragment);
+            var withoutLogs = string.Join("\n", body.Split('\n')
+                .Where(l => !l.Contains("StarLog.", StringComparison.Ordinal)));
+            foreach (Match m in Regex.Matches(withoutLogs, @"""[^""]*[\u4e00-\u9fff][^""]*"""))
+                offenders.Add($"ItemCardActions {fragment.Split('(')[0].Split(' ')[^1]}：{m.Value}");
+        }
+
+        // ③ 卡片 VM：方向判据住 VM、字进表（五颗 *MenuText；PinImageMenuText 豁免见方法注释）。
+        var vm = Code(ReadRepoFile("src/StarMark.UI/ViewModels/ItemCardViewModel.cs"));
+        foreach (var prop in new[]
+                 {
+                     "public string HideMenuText", "public string PinMenuText", "public string OpenMenuText",
+                     "public string CopyMenuText", "public string DeleteMenuText",
+                 })
+        {
+            var line = vm.Split('\n').FirstOrDefault(l => l.Contains(prop, StringComparison.Ordinal));
+            if (line is null || Regex.IsMatch(line, @"""[^""]*[\u4e00-\u9fff][^""]*"""))
+                offenders.Add($"ItemCardViewModel {prop.Split(' ')[^1]}：字面量回来了或属性不见了");
+        }
+
+        // ④ 亮路交键；灰路的中文字面量必须还钉在原处（P-172 的在案豁免不许悄悄漂走）。
+        Assert.Contains("Locale.T(\"card.pinImage.ok\")", vm, StringComparison.Ordinal);
+        Assert.Contains("贴到桌面（这张图的{ClipboardPolicy.MissingFileClause}）", vm, StringComparison.Ordinal);
+
+        // ⑤ 隐藏页还原词（StateWriteNotice 的 word 实参要按当前语言取）。
+        Assert.Contains("Locale.T(\"card.restore.word\")",
+            Code(ReadRepoFile("src/StarMark.UI/ViewModels/HiddenPageViewModel.cs")), StringComparison.Ordinal);
+
+        // ⑥ StateWriteNotice 的骨架走表（"没生效"/"没落上去"两句只许在 UiStrings 里）。
+        var notice = Code(ReadRepoFile("src/StarMark.Abstractions/StateWriteNotice.cs"));
+        Assert.Contains("Locale.Fmt(\"state.title\"", notice, StringComparison.Ordinal);
+        Assert.Contains("Locale.Fmt(\"state.rowGone\"", notice, StringComparison.Ordinal);
+
+        Assert.True(offenders.Count == 0,
+            "条目右键族的界面串直交了中文（换语言那一刻它不跟着改）：\n" + string.Join("\n", offenders));
+    }
+
+    /// <summary>
     /// 一颗附带属性<b>实际会贴哪几颗属性</b>→ 那些属性在代码里的"第二个主人"长什么样。
     /// <para>顺序照 UI 那边 <c>LocText.ResolveTextProperty</c> 的分工写：正文键会挑 Text/Content/Header/Title/Message/Description
     /// 里确实存在的那一颗，所以六颗都要问；提示条有两种写法（<c>NAME.ToolTip =</c> 与

@@ -63,7 +63,8 @@ public sealed class ClipboardCopyImageGateTests
         // 判据只有一份：菜单上不该有这一项的行，动作自己也要收住（宿主自己挂按钮时绕过规则是必然发生的事）。
         Assert.Contains("if (!vm.CanCopyAsImage) return;", body);
         // 坏消息要给出口（P-54 同口径）：只回一句"复制失败"，用户分不清是程序坏了还是这张图坏了。
-        Assert.Contains("没能复制图片", body);
+        // WI-2p 起那句走键（card.copyImage.fail，两处出口共用）——锚点跟形状走。
+        Assert.Contains("Locale.T(\"card.copyImage.fail\")", body);
         Assert.Contains("ShowError", body);
         Assert.Contains("why", body);                      // 原因来自那一处读文件的入口，不在这里另编一句
     }
@@ -93,7 +94,8 @@ public sealed class ClipboardCopyImageGateTests
         var copy = xaml.IndexOf("Click=\"Menu_CopyLink\"", StringComparison.Ordinal);
         var image = xaml.IndexOf("Click=\"Menu_CopyImage\"", StringComparison.Ordinal);
         Assert.True(copy > 0 && image > copy, "卡片的 ContextFlyout 里「复制图片」要紧跟在复制链接之后（与组件行同序）");
-        Assert.Contains("Text=\"复制图片\"", xaml);
+        // WI-2p 起菜单行文字走键（与组件行 ItemContextMenu 共用 card.menu.copyImage）——锚点跟形状走。
+        Assert.Contains("local:LocText.Key=\"card.menu.copyImage\"", xaml);
         // 1→2 是 ClipIMG-P3 决议过的出口增长（「贴到桌面」与「复制图片」共用同一颗判据）：
         // 这里钉的不再是"只有一处图片出口"，而是"每一出口都只认同一颗属性、且各出口顺序一致"。
         Assert.Equal(2, Count(xaml, "ViewModel.CanCopyAsImage"));

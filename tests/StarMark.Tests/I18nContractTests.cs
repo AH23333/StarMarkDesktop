@@ -204,6 +204,7 @@ public sealed class I18nContractTests : IDisposable
             ["kind.conditions"] = "条件：日语也写「条件」",
             ["settings.ai.stop"] = "停止：日语也写「停止」",
                         ["tray.tip"] = "产品名 StarMark，三语同形",
+                        ["dialog.save"] = "「保存」日文同字（WI-2p）",
 ["trending.daily"] = "今日：日语也写「今日」",
             ["widget.calc.tabQuick"] = "常用：日语也写「常用」（常用ツール）",
             ["widget.cd.save"] = "保存：日语也写「保存」",

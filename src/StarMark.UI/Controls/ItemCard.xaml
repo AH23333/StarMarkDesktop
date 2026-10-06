@@ -21,12 +21,12 @@
         <Border.ContextFlyout>
             <MenuFlyout>
                 <MenuFlyoutItem Text="{x:Bind ViewModel.OpenMenuText, Mode=OneWay}" Click="Menu_Open"/>
-                <MenuFlyoutItem Text="打开所在位置" Click="Menu_OpenLocation"
+                <MenuFlyoutItem local:LocText.Key="card.menu.openLoc" Click="Menu_OpenLocation"
                                 Visibility="{x:Bind ViewModel.HasOpenLocation, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutItem Text="{x:Bind ViewModel.CopyMenuText, Mode=OneWay}" Click="Menu_CopyLink"/>
                 <!-- 「复制图片」交位图数据（粘出来是一张图），上面那颗交的是一串文字：两件事都要能一眼选出来。
                      判据与组件行右键同源（ItemCardPolicy.CanCopyAsImage）。 -->
-                <MenuFlyoutItem Text="复制图片" Click="Menu_CopyImage"
+                <MenuFlyoutItem local:LocText.Key="card.menu.copyImage" Click="Menu_CopyImage"
                                 Visibility="{x:Bind ViewModel.CanCopyAsImage, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <!-- 「贴到桌面」（ClipIMG-P3）：同一颗判据、不经剪贴板的那条出口。与组件行右键同源。
                      缺文件的那些行灰着、并把原因写在标题上（灰项自己在标题上说原因，全程序口径）：
@@ -36,7 +36,7 @@
                                 IsEnabled="{x:Bind ViewModel.CanPinAsImage, Mode=OneWay}"
                                 Visibility="{x:Bind ViewModel.CanCopyAsImage, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <!-- RSS 候选不给预览（用户裁决：点条目直接跳文章，正文解析暂不做）；判据与操作栏那颗按钮同一个属性 -->
-                <MenuFlyoutItem Text="预览" Click="Preview_Click"
+                <MenuFlyoutItem local:LocText.Key="card.menu.preview" Click="Preview_Click"
                                 Visibility="{x:Bind ViewModel.ShowsPreview, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <!-- 热榜候选专属：⭐Star 与 🔖收进收藏（两者落点不同——远端 vs 本机书签，tooltip 已写明）。
                      库管理类动作对这类行一律不出现（ItemCardPolicy 判定）：它们会经"按需登记"把外部候选写进 items。 -->
@@ -45,7 +45,7 @@
                 <!-- 收藏这一位两类候选共用（热榜＝本机书签，RSS＝收藏进"RSS订阅 / 源名"），文案与 tooltip 按种类分流 -->
                 <MenuFlyoutItem Text="{x:Bind ViewModel.CollectLabel, Mode=OneWay}" Click="Menu_Collect_Click"
                                 Visibility="{x:Bind ViewModel.ShowsCollect, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                <MenuFlyoutItem Text="删除" Click="Delete_Click"
+                <MenuFlyoutItem local:LocText.Key="dialog.delete" Click="Delete_Click"
                                 Visibility="{x:Bind ViewModel.IsLauncherMode, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutItem Text="{x:Bind ViewModel.DeleteMenuText, Mode=OneWay}" Click="DeleteClipboard_Click"
                                 Visibility="{x:Bind ViewModel.CanDeletePermanently, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
@@ -53,11 +53,11 @@
                 <MenuFlyoutItem Click="Pin_Click"
                                 Text="{x:Bind ViewModel.PinMenuText, Mode=OneWay}"
                                 Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                <MenuFlyoutItem Text="发送到桌面 · 快捷启动" Click="SendToWidget_Click"
+                <MenuFlyoutItem local:LocText.Key="card.menu.sendTo" Click="SendToWidget_Click"
                                 Visibility="{x:Bind ViewModel.CanSendToWidget, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                <MenuFlyoutItem Text="编辑笔记" Click="EditNote_Click"
+                <MenuFlyoutItem local:LocText.Key="card.note.title" Click="EditNote_Click"
                                 Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-                <MenuFlyoutItem Text="编辑标签" Click="EditTags_Click"
+                <MenuFlyoutItem local:LocText.Key="card.tags.title" Click="EditTags_Click"
                                 Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutSeparator Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <MenuFlyoutItem Click="Hide_Click"
@@ -71,7 +71,7 @@
             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                 <TextBlock Text="{x:Bind ViewModel.SourceIcon, Mode=OneWay}" FontSize="13" VerticalAlignment="Center"/>
                 <TextBlock Text="📌" FontSize="11" Margin="6,0,0,0" VerticalAlignment="Center"
-                           ToolTipService.ToolTip="已置顶"
+                           local:LocText.ToolTipKey="card.tip.pinned"
                            Visibility="{x:Bind ViewModel.IsPinned, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <!-- 标题走 Inlines 以支持搜索命中高亮（Segments 为空时退化为单段普通文本） -->
                 <TextBlock Margin="7,0,0,0"
@@ -83,7 +83,7 @@
                            ToolTipService.ToolTip="{x:Bind ViewModel.UriForDisplay, Mode=OneWay}"/>
                 <TextBlock Text="{x:Bind ViewModel.SizeText, Mode=OneWay}" Margin="8,0,0,0"
                            FontSize="11" Style="{StaticResource MutedText}"
-                           ToolTipService.ToolTip="文件大小"
+                           local:LocText.ToolTipKey="card.tip.size"
                            Visibility="{x:Bind ViewModel.HasSizeText, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <TextBlock Text="{x:Bind ViewModel.RelativeTime, Mode=OneWay}" Margin="8,0,0,0"
                            FontSize="11" Style="{StaticResource MutedText}"
@@ -142,14 +142,14 @@
                                     <Button Click="Tag_Chip_Click"
                                             Tag="{x:Bind}"
                                             Padding="6,1" Background="Transparent" BorderThickness="0"
-                                            ToolTipService.ToolTip="查看该标签的全部条目">
+                                            local:LocText.ToolTipKey="card.tip.tagOpen">
                                         <TextBlock Text="{x:Bind}" FontSize="11"
                                                    Foreground="{x:Bind Converter={StaticResource ContainedTagColor}}"/>
                                     </Button>
                                     <Button Click="Tag_Remove_Click"
                                             Tag="{x:Bind}"
                                             Padding="3,1" Background="Transparent" BorderThickness="0"
-                                            ToolTipService.ToolTip="移除标签">
+                                            local:LocText.ToolTipKey="card.tip.tagRemove">
                                         <TextBlock Text="✕" FontSize="8" Opacity="0.5"
                                                    VerticalAlignment="Center"/>
                                     </Button>
@@ -160,11 +160,11 @@
                 </ItemsRepeater>
 
                 <Button Click="Tag_Add_Click" Padding="4,1" CornerRadius="10"
-                        ToolTipService.ToolTip="添加标签"
+                        local:LocText.ToolTipKey="card.tip.tagAdd"
                         Background="Transparent"
                         BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="1">
-                    <TextBlock Text="＋ 标签" FontSize="10"
+                    <TextBlock local:LocText.Key="card.tip.tagPlus" FontSize="10"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                 </Button>
             </StackPanel>
@@ -183,16 +183,16 @@
             <!-- 操作栏：预览 / 笔记 / 标签 / 置顶 / 复制 / 隐藏 -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0" Spacing="4">
                 <Button Content="🔎" Padding="4,2" Style="{StaticResource MiniIconButton}"
-                        ToolTipService.ToolTip="预览（QuickLook）" Click="Preview_Click"
+                        local:LocText.ToolTipKey="card.tip.preview" Click="Preview_Click"
                         Visibility="{x:Bind ViewModel.ShowsPreview, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <Button Content="📝" Padding="4,2" Style="{StaticResource MiniIconButton}"
-                        ToolTipService.ToolTip="编辑笔记" Click="EditNote_Click"
+                        local:LocText.ToolTipKey="card.note.title" Click="EditNote_Click"
                         Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <Button Content="🏷" Padding="4,2" Style="{StaticResource MiniIconButton}"
-                        ToolTipService.ToolTip="编辑标签" Click="EditTags_Click"
+                        local:LocText.ToolTipKey="card.tags.title" Click="EditTags_Click"
                         Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <Button Content="📌" Padding="4,2" Style="{StaticResource MiniIconButton}"
-                        ToolTipService.ToolTip="置顶（浏览视图排最前）" Click="Pin_Click"
+                        local:LocText.ToolTipKey="card.tip.pin" Click="Pin_Click"
                         Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <Button Content="⧉" Padding="4,2" Style="{StaticResource MiniIconButton}"
                         ToolTipService.ToolTip="{x:Bind ViewModel.CopyMenuText, Mode=OneWay}" Click="Menu_CopyLink"/>
@@ -204,7 +204,7 @@
                         ToolTipService.ToolTip="{x:Bind ViewModel.CollectTip, Mode=OneWay}" Click="Collect_Click"
                         Visibility="{x:Bind ViewModel.ShowsCollect, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <Button Content="👁" Padding="4,2" Style="{StaticResource MiniIconButton}"
-                        ToolTipService.ToolTip="隐藏" Click="Hide_Click"
+                        local:LocText.ToolTipKey="card.hide.hide" Click="Hide_Click"
                         Visibility="{x:Bind ViewModel.ShowsLibraryActions, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
             </StackPanel>
         </StackPanel>

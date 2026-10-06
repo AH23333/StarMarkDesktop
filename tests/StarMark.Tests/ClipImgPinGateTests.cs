@@ -109,7 +109,8 @@ public sealed class ClipImgPinGateTests
         // 派生而不是重判：可见性那颗（CanCopyAsImage）仍是唯一认"图片行"的属性，缺文件只是多扣一票。
         Assert.Contains("public bool CanPinAsImage => CanCopyAsImage && !ClipboardImageMissing;", vm);
         // 缺文件时原因写在标题上（灰项自己在标题上说原因；置灰而不解释＝用户只能猜是程序坏了）。
-        Assert.Equal(1, Count(vm, "\"贴到桌面\""));                 // 亮着的那一句只有一份
+        // WI-2p 起亮着的那一句走键（card.pinImage.ok），字面量只在表里；灰着的那路保持原样（P-172 在案）。
+        Assert.Equal(1, Count(vm, "card.pinImage.ok"));
         // 灰着的那一句：动作名归本类（菜单项的名字只有一个主人），事实那半句归政策层（批次 SI）。
         Assert.Contains("贴到桌面（这张图的{ClipboardPolicy.MissingFileClause}）", vm);
 

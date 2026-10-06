@@ -87,7 +87,9 @@ public sealed class StateWriteRowGateTests
             .Select(f => (f.RelativePath, Count: SourceGate.Count(SourceGate.Code(f.Text), GoneFingerprint)))
             .Where(f => f.Count > 0)
             .ToList();
-        Assert.Equal(new[] { (Judge, 1) }, hits.Select(h => (h.RelativePath, h.Count)).ToArray());
+        // WI-2p 起骨架那句住进了语言表（StateWriteNotice 交 Locale.Fmt）——"只许一个出处"的指针跟着搬：
+        Assert.Equal(new[] { ("src/StarMark.Abstractions/I18n/UiStrings.cs", 1) },
+            hits.Select(h => (h.RelativePath, h.Count)).ToArray());
     }
     [Fact]
     public void CardActionsNeitherFlipTheFlagNorLogWhatDidNotHappen()

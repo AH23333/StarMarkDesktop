@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.UI.ViewModels;
 
@@ -57,7 +58,7 @@ public partial class HiddenPageViewModel : ObservableObject
             // 0 行（那一行已经不在了）走同一条口径：不摘行，并把原因当面说出来，不靠这页没有的状态行（P-40）。
             if (!await _repository.SetHiddenAsync(item.Id, false, CancellationToken.None))
             {
-                var word = "还原（取消隐藏）";
+                var word = Locale.T("card.restore.word");
                 App.MainWindow?.ShowError(StateWriteNotice.Title(word), StateWriteNotice.RowGone(word));
                 return;
             }
