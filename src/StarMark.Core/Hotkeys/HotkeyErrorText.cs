@@ -2,6 +2,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Hotkeys;
 
@@ -25,7 +26,7 @@ public static class HotkeyErrorText
     public const int ErrorHookCreationFailed = 1401;
 
     /// <summary>
-    /// 注册全局热键失败的原因。
+    /// 注册全局热键失败的原因（WI-2r 起字进语言表；键逐颗写字面＝坑表 #331，<c>{0}</c>/<c>{1}</c> 是 pid 数字＝非语言内容）。
     /// <para>
     /// <paramref name="siblingInstancePids"/>＝本机还活着的**本程序其它实例**的 pid。为什么要单独传这个：
     /// Win32 不回答"这条组合键被谁占了"，而 1409 最常见的一种占用方就是我们自己的另一个实例
@@ -36,18 +37,18 @@ public static class HotkeyErrorText
     public static string RegisterFailure(int errorCode, IReadOnlyList<int>? siblingInstancePids = null) => errorCode switch
     {
         ErrorHotkeyAlreadyRegistered when siblingInstancePids is { Count: > 0 } =>
-            $"本程序还另开着 {siblingInstancePids.Count} 个实例（pid {string.Join("、", siblingInstancePids.Select(id => id.ToString()))}），"
-            + "这条键此刻由那边响应（按它动的就是那个实例）；这个实例会自己继续重试，那边退出后自动接回来",
-        ErrorHotkeyAlreadyRegistered => "该组合键已被其它程序占用",
-        _ => $"系统拒绝注册（Win32 错误 {errorCode}）",
+            Locale.Fmt("hotkey.err.occupiedBySiblings", siblingInstancePids.Count.ToString(),
+                string.Join(Locale.T("hotkey.err.pidJoin"), siblingInstancePids.Select(id => id.ToString()))),
+        ErrorHotkeyAlreadyRegistered => Locale.T("hotkey.err.occupied"),
+        _ => Locale.Fmt("hotkey.err.registerDenied", errorCode.ToString()),
     };
 
     /// <summary>安装底层键盘钩子失败的原因——此时收不到任何按键，录制不能用。</summary>
     public static string HookInstallFailure(int errorCode) => errorCode switch
     {
-        ErrorAccessDenied => "系统拒绝了键盘钩子的安装（Win32 错误 5，通常是安全软件或组策略拦截）",
-        ErrorHookCreationFailed => "键盘钩子创建失败（Win32 错误 1401）",
-        _ => $"键盘钩子安装失败（Win32 错误 {errorCode}）",
+        ErrorAccessDenied => Locale.T("hotkey.err.hookDenied"),
+        ErrorHookCreationFailed => Locale.T("hotkey.err.hookCreate"),
+        _ => Locale.Fmt("hotkey.err.hookFailed", errorCode.ToString()),
     };
 
     /// <summary>
@@ -63,5 +64,8 @@ public static class HotkeyErrorText
     /// 换哪颗键由他挑，程序不许替他动他选的键（与「重试注册」同一条边界）。
     /// </para>
     /// </summary>
-    public const string RebindHint = "要现在就归这个实例用：点这一行那颗显示键位的按钮换一个组合，再点「保存快捷键」。";
+    public const string RebindHintKey = "hotkey.err.rebindHint";
+
+    /// <summary>WI-2r 起提示句进语言表；常量保留给既有引用做编译期存在性锚（值改由表出）。</summary>
+    public static string RebindHint => Locale.T(RebindHintKey);
 }

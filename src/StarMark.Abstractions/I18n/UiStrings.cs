@@ -752,6 +752,17 @@ public static class UiStrings
         new Entry("hotkey.act.widget.create", "新建组件 · {0}", "New widget · {0}", "ウィジェットを追加 · {0}"),
         new Entry("hotkey.act.widget.show", "显示组件 · {0}", "Show widget · {0}", "ウィジェットを表示 · {0}"),
         new Entry("hotkey.act.widget.hide", "隐藏组件 · {0}", "Hide widget · {0}", "ウィジェットを非表示 · {0}"),
+        new Entry("hotkey.err.occupiedBySiblings", "本程序还另开着 {0} 个实例（pid {1}），这条键此刻由那边响应（按它动的就是那个实例）；这个实例会自己继续重试，那边退出后自动接回来", "StarMark is also running {0} more instance(s) here (pid {1}); that copy is the one responding to this key. This instance keeps retrying and takes over automatically once the other exits.", "このアプリのインスタンスがあと {0} 個動いています（pid {1}）。このキーはそちらが応答しています。こちらは自動で再試行し、相手が終了すると引き継ぎます"),
+        new Entry("hotkey.err.pidJoin", "、", ", ", "、"),
+        new Entry("hotkey.err.occupied", "该组合键已被其它程序占用", "This key combination is already taken by another program", "このキーの組み合わせは他のプログラムに占有されています"),
+        new Entry("hotkey.err.registerDenied", "系统拒绝注册（Win32 错误 {0}）", "The system refused to register it (Win32 error {0})", "システムが登録を拒否しました（Win32 エラー {0}）"),
+        new Entry("hotkey.err.hookDenied", "系统拒绝了键盘钩子的安装（Win32 错误 5，通常是安全软件或组策略拦截）", "The system refused to install the keyboard hook (Win32 error 5 — usually security software or group policy)", "システムがキーボードフックのインストールを拒否しました（Win32 エラー 5。セキュリティソフトやグループポリシーによるものが一般的）"),
+        new Entry("hotkey.err.hookCreate", "键盘钩子创建失败（Win32 错误 1401）", "Keyboard hook creation failed (Win32 error 1401)", "キーボードフックの作成に失敗しました（Win32 エラー 1401）"),
+        new Entry("hotkey.err.hookFailed", "键盘钩子安装失败（Win32 错误 {0}）", "Keyboard hook installation failed (Win32 error {0})", "キーボードフックのインストールに失敗しました（Win32 エラー {0}）"),
+        new Entry("hotkey.err.rebindHint", "要现在就归这个实例用：点这一行那颗显示键位的按钮换一个组合，再点「保存快捷键」。", "To claim it for this instance right now: click the key button on this row to pick another combination, then click Save hotkeys.", "今すぐこちらで使うには：この行のキー表示ボタンをクリックして別の組み合わせを選び、「ショートカットを保存」をクリックしてください。"),
+        new Entry("hotkey.err.rowNotice", "提示：{0}（设置已保存，占用者退出后自动生效）。{1}", "Note: {0} (settings are saved; it takes effect automatically once the other program exits). {1}", "ヒント：{0}（設定は保存済み。占有側が終了すると自動で有効になります）。{1}"),
+        new Entry("hotkey.err.summary", "提示：{0} 个组合键此刻没归这个实例（{1}）。这些快捷键已经保存，程序会每 {2} 秒自己再注册一次，对方一退出就生效——不需要你做任何事；急着现在就要生效可以点「重试注册」，具体每一行怎么换一个键，写在该行的提示里。", "Note: {0} key combination(s) are not held by this instance right now ({1}). These hotkeys are already saved — the app retries registration every {2} seconds on its own and takes over once the other program exits, so you don't need to do anything; if you need it working right away, click Retry registration. How to change the key on each row is written in that row's hint.", "ヒント：{0} 個のキーの組み合わせが現在このインスタンスにありません（{1}）。これらのショートカットは保存済みで、アプリが {2} 秒ごとに自動で再登録し、相手が終了すると引き継ぎます。操作は不要です。今すぐ有効にしたい場合は「再登録」をクリックしてください。各行のキーの変更方法はその行のヒントに書かれています。"),
+        new Entry("hotkey.err.summaryItem", "{0}：{1}", "{0}: {1}", "{0}：{1}"),
 
         // ===== 「热榜」那一页（批次 WI-2j）=====
         // 页面标题逐字与设置页那颗开关同名 ⇒ 复用 settings.extend.trendingTitle，⛔ 不造第二份措辞（坑表 #290）；

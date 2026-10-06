@@ -35,8 +35,12 @@ public sealed class HotkeyOccupancyHintGateTests
     [Fact]
     public void TheRebindSentenceHasExactlyOneSource()
     {
+        // WI-2s 起那句话住语言表（hotkey.err.rebindHint），字面只在 UiStrings 里恰好一份——
+        // 判据的两个方向都跟着形状走：界面里不许出现字面，表里恰好一份（键形键名作锚）。
         Assert.DoesNotContain("换一个组合", Code(Partial), StringComparison.Ordinal);
-        Assert.Equal(1, SourceGate.Count(Code(Judge), "换一个组合"));
+        Assert.Equal(0, SourceGate.Count(Code(Judge), "换一个组合"));
+        Assert.Equal(1, SourceGate.Count(SourceGate.Code(SourceGate.ReadRepoFile(
+            "src/StarMark.Abstractions/I18n/UiStrings.cs")), "换一个组合"));
     }
 
     /// <summary>
@@ -48,8 +52,13 @@ public sealed class HotkeyOccupancyHintGateTests
     {
         var summary = SourceGate.Between(Code(Partial), "RegisterErrorSummary =", "private void RetryHotkeyRegister_Click");
 
-        Assert.Contains("重试注册", summary, StringComparison.Ordinal);
-        Assert.Contains("该行的提示", summary, StringComparison.Ordinal);
+        // WI-2s 起句子走键（hotkey.err.summary）——"点名重试注册"与"指向行"这两条口径改由表里那一行承担，
+        // 这里钉键的存在与"不许重启"（那条禁令对任何语言都成立）。
+        Assert.Contains("hotkey.err.summary", summary, StringComparison.Ordinal);
         Assert.DoesNotContain("重启", summary, StringComparison.Ordinal);
+        var table = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.Abstractions/I18n/UiStrings.cs"));
+        var row = SourceGate.Between(table, "new Entry(\"hotkey.err.summary\"", "),");
+        Assert.Contains("重试注册", row, StringComparison.Ordinal);
+        Assert.Contains("该行的提示", row, StringComparison.Ordinal);
     }
 }
