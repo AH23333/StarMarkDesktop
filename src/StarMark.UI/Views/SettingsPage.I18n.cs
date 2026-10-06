@@ -84,5 +84,6 @@ public sealed partial class SettingsPage
         var code = LanguageSelect.SelectedItem is LocOption option ? option.Value as string : null;
         App.Services.GetRequiredService<SettingsStore>().SetUiLanguageCode(code);
         Locale.TrySet(Locale.Resolve(code, AppLanguages.SystemLanguageTags()));
+            UiLanguageOverride.Apply();   // 同一次用户动作里把框架链也带上（WI-34）；已铺出的树不追改，重进页现取——绑定族同一口径
     }
 }

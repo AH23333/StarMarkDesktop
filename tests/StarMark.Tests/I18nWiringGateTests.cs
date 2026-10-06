@@ -1316,4 +1316,24 @@ public sealed class I18nWiringGateTests
         Assert.Contains("RssFeedCache.GapMessage", rss, StringComparison.Ordinal);
         Assert.DoesNotContain(".Render()", rss, StringComparison.Ordinal);       // 界面那一路一个都不许先取词
     }
+    /// <summary>
+    /// 第六族（控件库自带无障碍名，P-169 ㊼/#298）的机制账：应用级覆盖件存在、三档语言码齐全、
+    /// 启动与切换两颗接线都在且**跟着 TrySet 走**（写在 TrySet 之前＝覆盖读旧语言，白设）。
+    /// 真机那九行是否真改口由 bin/WI34 的树转储给数——本格只钉代码形状（#287：屏幕的字归屏幕的尺）。
+    /// </summary>
+    [Fact]
+    public void TheFrameworkLanguageChainIsAlignedWithOurTable()
+    {
+        var ov = Code(ReadRepoFile("src/StarMark.UI/Helpers/UiLanguageOverride.cs"));
+        Assert.Contains("PrimaryLanguageOverride", ov, StringComparison.Ordinal);
+        foreach (var code in new[] { "\"zh-Hans\"", "\"ja\"", "\"en\"" })
+            Assert.Contains(code, ov, StringComparison.Ordinal);
+        foreach (var file in new[] { "src/StarMark.UI/App.xaml.cs", "src/StarMark.UI/Views/SettingsPage.I18n.cs" })
+        {
+            var body = ReadRepoFile(file).Replace("\r\n", "\n");
+            var set = body.IndexOf("Locale.TrySet(Locale.Resolve", StringComparison.Ordinal);
+            var apply = body.IndexOf("UiLanguageOverride.Apply()", StringComparison.Ordinal);
+            Assert.True(set >= 0 && apply > set, file + "：必须 TrySet 之后接 Apply（先覆盖后定档＝读旧语言）");
+        }
+    }
 }
