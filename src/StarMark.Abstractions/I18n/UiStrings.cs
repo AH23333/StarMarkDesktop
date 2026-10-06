@@ -175,7 +175,7 @@ public static class UiStrings
             + "AI 增强这一栏那行测试结果与那行用量读数、那些写着出厂数值与当前设置的只读展示、"
             + "通道下拉里由枚举现生成的那些通道名，还有那些把当场算出来的值写进标签的按钮"
             + "（写着要改用的模型名、写着上次整理好的条数），"
-            + "以及健康那一栏的扣分行还是半句＋读数拼的（语言／域名那四行统计已改成整句键，批次 WI-32）。"
+            + "健康那一栏的扣分与统计文字已整句化（批次 WI-32/33），不再列进这串欠格。"
             + "选项还没进表的那几颗下拉也照旧写着中文：热榜那排时间范围、搜索组件那三档排序、组件外观编辑器里那几颗。"
             + "上面这些由程序写出来的字与没进表的选项，要先改成按键取词才谈得上翻。",
             "Takes effect at once — no restart needed. Translated so far: the main window's top row "
@@ -676,6 +676,22 @@ public static class UiStrings
         new Entry("health.stat.dup", "疑似重复 Top：{0}", "Top likely duplicates: {0}", "重複候補 Top：{0}"),
         new Entry("health.stat.tag", "标签 Top：{0}", "Top tags: {0}", "タグ Top：{0}"),
         new Entry("health.stat.none", "（无）", "(none)", "（なし）"),
+        // 健康页扣分文字整链（批次 WI-33，组合句一族的下半）：因子名/明细/外壳/档位/摘要全进表——
+        // Core 从此交 LocMessage（键＋实参），界面在重算那一刻渲染；"英文骨架夹中文肉"在这页没有落脚处。
+        new Entry("health.factor.duplicates", "疑似重复条目", "Likely duplicates", "重複の疑い"),
+        new Entry("health.detail.duplicates", "{0} 组疑似重复（如：{1}）", "{0} likely-duplicate groups (e.g. {1})", "{0} 件の重複候補（例：{1}）"),
+        new Entry("health.factor.untagged", "未打标签比例偏高", "Too many items without tags", "タグ未設定の割合が高い"),
+        new Entry("health.detail.untagged", "{0}/{1}（{2}）的条目没有标签", "{0}/{1} items ({2}) have no tags", "{0}/{1} 件（{2}）にタグがありません"),
+        new Entry("health.factor.stale", "大量条目长期未整理", "Many items untouched for a long time", "長期未整理の項目が多い"),
+        new Entry("health.detail.stale", "{0}/{1}（{2}）超过 {3} 天未更新", "{0}/{1} ({2}) not updated for over {3} days", "{0}/{1} 件（{2}）が {3} 日以上更新されていません"),
+        new Entry("health.deduction.row", "• {0}： -{1} 分（{2}）", "• {0}: -{1} pts ({2})", "• {0}： -{1} 点（{2}）"),
+        new Entry("health.grade.good", "健康", "Healthy", "良好"),
+        new Entry("health.grade.ok", "一般，可优化", "Fair — worth tidying", "まずまず、改善可"),
+        new Entry("health.grade.bad", "需整理", "Needs tidying", "整理が必要"),
+        new Entry("health.summary.good", "收藏整理良好，继续保持", "Collection is well kept — carry on", "コレクションは良好です。この調子で"),
+        new Entry("health.summary.todo", "待优化：{0}", "To tidy: {0}", "これから整理：{0}"),
+        new Entry("health.join.list", "、", ", ", "、"),
+        new Entry("health.error", "健康度计算失败：{0}", "Health calculation failed: {0}", "健康度計算に失敗しました: {0}"),
         new Entry("card.open.fail", "打不开这一行", "Can't open this row", "この行を開けません"),
         new Entry("card.deleteRow.remove", "从库里删掉这一行", "Remove it from the library", "ライブラリからこの行を削除"),
         new Entry("card.deleteRow.done", "已删掉这一行", "Row removed", "行を削除しました"),

@@ -43,6 +43,7 @@ public partial class SettingsPageViewModel
     [ObservableProperty] private string _tagSummary = string.Empty;
     [ObservableProperty] private List<HealthTrendBar> _trendBars = new();
     // 四行"外壳＋读数"的整句（WI-32）：外壳住表、读数进实参——标记里不再留半句。
+    [ObservableProperty] private List<string> _deductionLines = new();
     [ObservableProperty] private string _languageLine = string.Empty;
     [ObservableProperty] private string _domainsLine = string.Empty;
     [ObservableProperty] private string _duplicateLine = string.Empty;
@@ -72,7 +73,7 @@ public partial class SettingsPageViewModel
         catch (Exception ex)
         {
             HasHealthError = true;
-            HealthError = $"健康度计算失败：{ex.Message}";
+            HealthError = Locale.Fmt("health.error", ex.Message);
             StarLog.Error($"健康度计算失败: {ex}");
         }
         finally { IsHealthLoading = false; }
@@ -82,7 +83,7 @@ public partial class SettingsPageViewModel
     {
         var r = HealthReport;
         ScoreText = r.Score.ToString();
-        ScoreGrade = r.Score >= 80 ? "健康" : r.Score >= 50 ? "一般，可优化" : "需整理";
+        ScoreGrade = r.Score >= 80 ? Locale.T("health.grade.good") : r.Score >= 50 ? Locale.T("health.grade.ok") : Locale.T("health.grade.bad");
         ScoreBrush = r.Score >= 80
             ? new SolidColorBrush(Color.FromArgb(255, 16, 124, 16))   // 绿
             : r.Score >= 50
@@ -90,8 +91,10 @@ public partial class SettingsPageViewModel
                 : new SolidColorBrush(Color.FromArgb(255, 196, 43, 28));  // 红
 
         ScoreSummary = r.Factors.Count == 0
-            ? "收藏整理良好，继续保持"
-            : "待优化：" + string.Join("、", r.Factors.Select(f => f.Label));
+            ? Locale.T("health.summary.good")
+            : Locale.Fmt("health.summary.todo", string.Join(Locale.T("health.join.list"), r.Factors.Select(f => f.Label.Render())));
+        // 扣分行整链（WI-33）：外壳与因子名/明细全部按键现取，重算那一刻渲染当前语言。
+        DeductionLines = r.Factors.Select(f => Locale.Fmt("health.deduction.row", f.Label.Render(), f.Deduction, f.Detail.Render())).ToList();
 
         LanguageSummary = r.LanguageTop.Count == 0
             ? Locale.T("health.stat.none")

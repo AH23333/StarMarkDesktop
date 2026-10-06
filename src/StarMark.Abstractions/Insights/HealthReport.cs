@@ -1,5 +1,6 @@
 #nullable enable
 using System.Collections.Generic;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions.Insights;
 
@@ -9,9 +10,10 @@ namespace StarMark.Abstractions.Insights;
 public sealed class HealthFactor
 {
     public string Key { get; init; } = string.Empty;
-    public string Label { get; init; } = string.Empty;
+    // 措辞交"键＋实参"（批次 WI-33）：Core 不再生产成品句——界面重算那一刻才按当前语言渲染。
+    public LocMessage Label { get; init; } = LocMessage.Of("health.factor.duplicates");
     public int Deduction { get; init; }
-    public string Detail { get; init; } = string.Empty;
+    public LocMessage Detail { get; init; } = LocMessage.Of("health.detail.duplicates", 0, "");
 }
 
 /// <summary>语言分布条目。</summary>

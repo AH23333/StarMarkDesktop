@@ -522,7 +522,7 @@ public sealed class I18nWiringGateTests
 
         var whole = Regex.Matches(page, Attributes).Cast<Match>()
             .Count(m => Regex.IsMatch(m.Groups[1].Value, @"[\u4e00-\u9fff]"));
-        Assert.True(whole <= 1, $"整页中文正文从 1 涨到了 {whole}（只剩「健康与诊断」扣分行那一句胶水——四行统计已整句化（WI-32）；这一族只许往下减）");
+        Assert.True(whole == 0, $"整页中文正文从 0 涨到了 {whole}（组合句一族健康页已全清（WI-32/33）——标记里一个字都不该留）");
     }
 
     /// <summary>
@@ -543,10 +543,10 @@ public sealed class I18nWiringGateTests
             .Select(m => m.Groups[1].Value)
             .Where(v => Regex.IsMatch(v, @"[\u4e00-\u9fff]"))
             .ToArray();
-        Assert.Equal(new[] { " 分（" }, glue);                       // 负账：只剩扣分外壳还在案
+        Assert.Empty(glue);                                       // 负账清零（WI-33）：扣分行整句住 VM 现装
         var vm = ReadRepoFile("src/StarMark.UI/ViewModels/SettingsPageViewModel.Health.cs");
-        foreach (var key in new[] { "health.stat.lang", "health.stat.domains", "health.stat.dup", "health.stat.tag" })
-            Assert.Contains($"Locale.Fmt(\"{key}\",", vm, StringComparison.Ordinal);   // 正账：四行整句都从表出
+        foreach (var key in new[] { "health.stat.lang", "health.stat.domains", "health.stat.dup", "health.stat.tag", "health.deduction.row", "health.summary.todo" })
+            Assert.Contains($"Locale.Fmt(\"{key}", vm, StringComparison.Ordinal);   // 正账：整句都从表出（统计＋扣分半链同闸）
     }
 
     /// <summary>

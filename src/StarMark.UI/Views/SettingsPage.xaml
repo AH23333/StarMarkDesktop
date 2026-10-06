@@ -1253,12 +1253,12 @@
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
                                         <TextBlock Text="{x:Bind ViewModel.ScoreSummary, Mode=OneWay}" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
-                                        <ItemsControl ItemsSource="{x:Bind ViewModel.HealthReport.Factors, Mode=OneWay}">
+                                        <!-- 扣分行整句由 VM 在重算时按键组装（WI-33：外壳/因子/明细全在表里）；
+                                             旧七段 Run 排法把一句话劈成标记串，正是组合句一族登记的形状。 -->
+                                        <ItemsControl ItemsSource="{x:Bind ViewModel.DeductionLines, Mode=OneWay}">
                                             <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="ab:HealthFactor">
-                                                    <TextBlock Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap">
-                                                        <Run Text="• "/><Run Text="{x:Bind Label}"/><Run Text="： -"/><Run Text="{x:Bind Deduction}"/><Run Text=" 分（"/><Run Text="{x:Bind Detail}"/><Run Text="）"/>
-                                                    </TextBlock>
+                                                <DataTemplate x:DataType="x:String">
+                                                    <TextBlock Text="{x:Bind}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap"/>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>

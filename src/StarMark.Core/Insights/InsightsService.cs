@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Insights;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Insights;
 
@@ -45,13 +46,13 @@ public static class InsightsService
         {
             var d = Math.Min(40, dupList.Count * 10);
             deduction += d;
-            var examples = string.Join("、", dupList.OrderByDescending(x => x.Count).Take(5).Select(x => x.Sample));
+            var examples = string.Join(Locale.T("health.join.list"), dupList.OrderByDescending(x => x.Count).Take(5).Select(x => x.Sample));
             factors.Add(new HealthFactor
             {
                 Key = "duplicates",
-                Label = "疑似重复条目",
+                Label = LocMessage.Of("health.factor.duplicates"),
                 Deduction = d,
-                Detail = $"{dupList.Count} 组疑似重复（如：{examples}）",
+                Detail = LocMessage.Of("health.detail.duplicates", dupList.Count, examples),
             });
         }
 
@@ -67,9 +68,9 @@ public static class InsightsService
                 factors.Add(new HealthFactor
                 {
                     Key = "untagged",
-                    Label = "未打标签比例偏高",
+                    Label = LocMessage.Of("health.factor.untagged"),
                     Deduction = d,
-                    Detail = $"{untagged}/{total}（{NumberText.Percent(ratio)}）的条目没有标签",
+                    Detail = LocMessage.Of("health.detail.untagged", untagged, total, NumberText.Percent(ratio)),
                 });
             }
         }
@@ -87,9 +88,9 @@ public static class InsightsService
                 factors.Add(new HealthFactor
                 {
                     Key = "stale",
-                    Label = "大量条目长期未整理",
+                    Label = LocMessage.Of("health.factor.stale"),
                     Deduction = d,
-                    Detail = $"{stale}/{total}（{NumberText.Percent(ratio)}）超过 {StaleDays} 天未更新",
+                    Detail = LocMessage.Of("health.detail.stale", stale, total, NumberText.Percent(ratio), StaleDays),
                 });
             }
         }
