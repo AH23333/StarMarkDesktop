@@ -216,7 +216,9 @@ public sealed class I18nContractTests : IDisposable
             ["widget.pomo.stop"] = "停止：日语也写「停止」",
             ["trending.statusViaAge"] = "纯胶水行「{0}·{1}」，没有词可翻",
             ["trending.statusNotice"] = "纯胶水行「{0}｜{1}」，没有词可翻",
-            ["rss.statusJoin"] = "纯胶水行「{0}{1}」，没有词可翻",
+                        ["trending.notice.compose"] = "纯骨架「{0}（{1}）」：中文与日文都用全角括号，两语同形（WI-2z）",
+                        ["trending.notice.join"] = "从句分隔符「；」中日同形，en 列是 \", \"（WI-2z）",
+                        ["rss.statusJoin"] = "纯胶水行「{0}{1}」，没有词可翻",
         };
 
         var actual = UiStrings.All

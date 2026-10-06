@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Trending;
 
 namespace StarMark.Integrations.Trending;
@@ -77,11 +78,12 @@ public sealed class TrendingFetcher : ITrendingSource, IDisposable
             {
                 var parsed = TrendingHtmlParser.Parse(body);
                 if (parsed.Count > 0) return new TrendingFetchResult(parsed, TrendingSource.TrendingHtml, notice);
-                htmlNotice = (notice is null ? "" : notice + "；") + "热榜页解析为 0 条（页面可能改版或被拦截成验证页）";
+                htmlNotice = notice is null ? Locale.T("trending.fetch.htmlZero")
+                    : notice + Locale.T("trending.notice.join") + Locale.T("trending.fetch.htmlZero");
             }
         }
         catch (OperationCanceledException) { throw; }        // 见类注释 ②
-        catch (Exception ex) { htmlNotice = "热榜页请求失败：" + ex.Message; }
+        catch (Exception ex) { htmlNotice = Locale.Fmt("trending.fetch.htmlFailed", ex.Message); }
 
         try
         {
@@ -92,16 +94,16 @@ public sealed class TrendingFetcher : ITrendingSource, IDisposable
                 var repos = TrendingHtmlParser.FromSearchApi(ParseSearchRepos(body));
                 if (repos.Count > 0)
                     return new TrendingFetchResult(repos, TrendingSource.SearchApi,
-                        Compose("热榜页抓取失败，已用 GitHub 搜索接口兜底", htmlNotice, notice));
-                notice = Compose("搜索接口没有返回符合该周期/语言的仓库", notice);
+                        Compose(Locale.T("trending.fetch.fallbackApi"), htmlNotice, notice));
+                notice = Compose(Locale.T("trending.fetch.apiEmpty"), notice);
             }
-            throw new TrendingException(Compose("热榜页与 GitHub 搜索接口都没能给出结果", htmlNotice, notice));
+            throw new TrendingException(Compose(Locale.T("trending.fetch.bothEmpty"), htmlNotice, notice));
         }
         catch (OperationCanceledException) { throw; }
         catch (TrendingException) { throw; }
         catch (Exception ex)
         {
-            throw new TrendingException(Compose("热榜抓取失败", htmlNotice, ex.Message));
+            throw new TrendingException(Compose(Locale.T("trending.fetch.allFailed"), htmlNotice, ex.Message));
         }
     }
 
@@ -127,12 +129,12 @@ public sealed class TrendingFetcher : ITrendingSource, IDisposable
             var status = (int)resp.StatusCode;
             if (attempt == 0 && (status == 429 || status >= 500) && await BackoffAsync(resp, ct))
             {
-                notice = $"第 1 次请求被拒（{status}），已按 Retry-After 退避重试";
+                notice = Locale.Fmt("trending.fetch.httpBad", status);
                 continue;
             }
             return (null, $"HTTP {status} {resp.StatusCode}");
         }
-        return (null, notice ?? "重试后仍未成功");
+        return (null, notice ?? Locale.T("trending.fetch.retryFailed"));
     }
 
     /// <summary>退避：读 Retry-After（秒数形式）， capped 到 <see cref="MaxBackoff"/>；等不起就返回 false 让调用方走兜底。</summary>
@@ -201,7 +203,8 @@ public sealed class TrendingFetcher : ITrendingSource, IDisposable
         var kept = new List<string>();
         foreach (var n in notes)
             if (!string.IsNullOrWhiteSpace(n)) kept.Add(n!.TrimEnd('。', '；'));
-        return kept.Count == 0 ? headline : headline + "（" + string.Join("；", kept) + "）";
+        // 骨架整颗进表：compose 的括号与 join 的分隔符都是语言内容，三列各自排（WI-2z）
+        return kept.Count == 0 ? headline : string.Format(Locale.T("trending.notice.compose"), headline, string.Join(Locale.T("trending.notice.join"), kept));
     }
 
     public void Dispose()

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Trending;
 
 namespace StarMark.Core.Trending;
@@ -100,9 +101,9 @@ public sealed class TrendingService
         catch (Exception ex)
         {
             StarLog.Warn($"热榜缓存写入失败（{key}）：{ex.Message}");
-            return "缓存未能写入本机，下次打开仍会重新抓取";
+            return Locale.T("trending.notice.write");
         }
     }
 
-    private static string? Combine(string? a, string b) => string.IsNullOrEmpty(a) ? b : a + "；" + b;
+    private static string? Combine(string? a, string b) => string.IsNullOrEmpty(a) ? b : a + Locale.T("trending.notice.join") + b;
 }
