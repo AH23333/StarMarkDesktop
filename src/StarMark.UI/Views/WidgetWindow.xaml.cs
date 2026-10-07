@@ -180,7 +180,7 @@ public sealed partial class WidgetWindow : Window
         RootBorder.ActualThemeChanged += (_, _) => RefreshAppearance();
 
         WidgetGlyph.Text = KindGlyph(_kind);
-        ApplyTitle();   // 标题栏文本 + 窗口标题（优先取用户重命名的名字）
+        ApplyTitle();   // 标题栏文本 + 窗口标题（两处都交键，切语言由 LocText 重贴）
 
         StartupProfile.Measure($"组件内容构建 {_kind}", BuildContent, logWhenMs: 10);
         WireChrome();

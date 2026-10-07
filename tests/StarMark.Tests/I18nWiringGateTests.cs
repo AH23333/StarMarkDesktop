@@ -1102,6 +1102,9 @@ public sealed class I18nWiringGateTests
         // 那颗的实参是托管数组，而 WinUI 3 的依赖属性类型必须投得到 WinRT——它换来的不是托管异常，
         // 是<b>启动即原生访问违例</b>（下一格 <see cref="NoUiDependencyPropertyIsRegisteredAsAnArrayType"/>
         // 与坑表 #316）。实参现在住在 <c>LocText</c> 的弱表信箱里，取词路仍然只有一条。
+        // ⛔ 窗口标题<b>也没有</b>加成第六颗：WinUI 3 的 <c>Window</c> 不是 <c>DependencyObject</c>，
+        // 附带属性根本贴不上去（它走 <c>LocText</c> 的第二张名单，见
+        // <see cref="TheWidgetTitleHasOneIconOwnerAndFollowsTheLanguage"/> 与坑表 #338）。
         Assert.Equal(5, Count(loc, "DependencyProperty.RegisterAttached"));
         Assert.Contains("FindProperty(d, \"PlaceholderText\")", loc, StringComparison.Ordinal);
     }
@@ -1234,7 +1237,7 @@ public sealed class I18nWiringGateTests
         var warn = MethodBody(loc, "private static void WarnUnwritableOnce");
         Assert.Contains("StarLog.Warn(", warn, StringComparison.Ordinal);
         Assert.Contains("GetType().Name", warn, StringComparison.Ordinal);   // 说得出是哪一类元素贴不上
-        Assert.Equal(3, Count(loc, "WarnUnwritableOnce(d, "));   // 正文／占位符／开关两侧（那两颗共用一条出口）
+        Assert.Equal(3, Count(loc, "WarnUnwritableOnce(d, "));   // 正文／占位符／开关两侧（两颗共用一条出口）
         var switchPath = MethodBody(loc, "private static void PasteOntoNamedProperty");
         Assert.Contains("WarnUnwritableOnce(d, ", switchPath, StringComparison.Ordinal);
         Assert.Contains("没有 {propertyName}", loc, StringComparison.Ordinal);   // 说不出哪一颗属性贴不上＝白报
@@ -1389,5 +1392,43 @@ public sealed class I18nWiringGateTests
         Assert.Contains("Locale.Fmt(\"settings.widgets.deleteLayoutBody\", row?.Name ?? id)", del, StringComparison.Ordinal);
         Assert.Contains("Locale.T(\"dialog.delete\")", del, StringComparison.Ordinal);
         Assert.Contains("Locale.T(\"dialog.cancel\")", del, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>组件窗标题那一排只许画一颗图标，且换语言要跟着走</b>（批次 WI-36，用户真机报「所有组件再次出现两个图标」）。
+    /// <para>根因形状：标题栏本来就有一颗 <c>WidgetGlyph</c> 在画图标，而批次 db0306f 把默认标题换成
+    /// <c>WidgetStorage.KindTitle</c>（展示名＝"图标 空格 名字"）——图标从此住进名字串，<b>同一排画出两颗</b>。
+    /// 带图标那份是<b>托盘菜单</b>的需要（那里没有别的元素画图标），组件窗不是：它该挂 <c>KindTitleKey</c>。
+    /// ⚠ 只钉"别再叫 KindTitle"不够——名字里夹 glyph 这件事没有第二条路可查，所以正向也钉：默认名必须来自那颗键。</para>
+    /// <para>另一半是这台机器上通用的一条：<b>标题栏文字挂键</b>（切语言由 <c>LocText</c> 重贴），
+    /// 而用户重命名过的必须<b>先把键摘掉</b>再写他的名字——挂着键，换语言那一刻会把他的名字盖回类型名
+    /// （坑表 #276 的镜像面：带值的字不许由静态键接管）。</para>
+    /// <para>OS 那层的 <c>Title</c>（Alt+Tab 读它）走 <c>LocText.SetWindowTitle</c>，<b>不是</b>第六颗附带属性：
+    /// WinUI 3 的 <c>Window</c> <b>不是</b> <c>DependencyObject</c>，附带属性贴不上去（坑表 #338——我先前认定
+    /// "Title 也是依赖属性，所以进得了那棵树"，编译器直接否了）。它记进 <c>LocText</c> 的第二张弱引用名单，
+    /// 由<b>同一个</b> <c>ReapplyAll</c> 重贴，所以"换语言谁改文案"在 UI 里仍然只有一个订阅点
+    /// （<see cref="ExactlyOneSubscriberRenamesTheStringsAndItRebuildsNothing"/>），⛔ 组件窗不许自己
+    /// <c>Locale.Changed +=</c>。而"只登记不重贴"正是测试工程看不见的那半条失效，所以两头都钉。</para>
+    /// </summary>
+    [Fact]
+    public void TheWidgetTitleHasOneIconOwnerAndFollowsTheLanguage()
+    {
+        var menu = Code(ReadRepoFile("src/StarMark.UI/Views/WidgetWindow.Menu.cs"));
+        Assert.DoesNotContain("WidgetStorage.KindTitle(_kind)", menu, StringComparison.Ordinal);  // 回归本体
+        Assert.Contains("WidgetStorage.KindTitleKey(kind)", menu, StringComparison.Ordinal);      // 默认名来自那颗键
+        Assert.Contains("LocText.SetKey(WidgetTitle, DefaultKindTitleKey(_kind))", menu, StringComparison.Ordinal);
+        Assert.Contains("LocText.SetKey(WidgetTitle, string.Empty)", menu, StringComparison.Ordinal);  // 重命名过＝先摘键
+        Assert.DoesNotContain("$\"StarMark 组件", menu, StringComparison.Ordinal);                 // 前缀抄回中文
+        // OS 那一层的标题走 LocText 的第二张名单（⛔ 不为它另开一处 Locale.Changed 订阅），且嵌套的名字交的是<b>没渲染的</b>那句
+        Assert.Contains("LocText.SetWindowTitle(this, \"widget.win.windowTitle\"", menu, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(DefaultKindTitleKey(_kind))", menu, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Render()", menu, StringComparison.Ordinal);
+        Assert.DoesNotContain("Locale.Changed += ", menu, StringComparison.Ordinal);
+
+        // 名单的另一头：ReapplyAll 真去重贴那颗 Title，否则登记再多也只是"记了一句没人读的话"。
+        var loc = Code(ReadRepoFile(LocTextCs));
+        Assert.Contains("public static void SetWindowTitle(Window window, string key", loc, StringComparison.Ordinal);
+        Assert.Contains("window.Title = Text(title.Key, title.Args)", loc, StringComparison.Ordinal);
+        Assert.DoesNotContain("TitleKey", loc, StringComparison.Ordinal);   // ⛔ 别把它改回附带属性：Window 进不了那棵树
     }
 }

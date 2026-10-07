@@ -1211,6 +1211,9 @@ public static class UiStrings
         new Entry("widget.win.addTip", "添加/管理组件", "Add / manage widgets", "ウィジェット追加・管理"),
         new Entry("widget.win.hideTip", "隐藏（托盘/设置中可恢复）", "Hide (restorable from the tray or settings)", "非表示（トレイ／設定で復帰できる）"),
         new Entry("widget.win.removeTip", "移除组件（设置中可重新添加）", "Remove this widget (re-add it from settings)", "ウィジェットを削除（設定から再追加できる）"),
+        // 窗口标题前缀（Alt+Tab／任务切换器那一格）。⚠ 这里接的是<b>名字</b>而不是"图标 名字"：
+        // 图标归标题栏那颗元素一个出口，名字里再夹一颗就是"两个图标"（坑表 #337）。
+        new Entry("widget.win.windowTitle", "StarMark 组件 - {0}", "StarMark widget - {0}", "StarMark ウィジェット - {0}"),
         new Entry("widget.menuShowAll", "全部显示", "Show all", "すべて表示"),
         new Entry("widget.menuHideAll", "全部隐藏", "Hide all", "すべて非表示"),
         new Entry("widget.menuToggleAll", "显示/隐藏全部组件", "Show or hide all widgets", "すべてのウィジェットを表示／非表示"),

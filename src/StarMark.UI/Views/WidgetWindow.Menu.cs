@@ -13,6 +13,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Graphics;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Health;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
@@ -431,22 +432,40 @@ public sealed partial class WidgetWindow
         }
     }
 
-    /// <summary>组件类型的默认标题（未重命名时的显示名）。取词在那一刻定（Locale.T）。</summary>
-    private string DefaultKindTitle()
-        => WidgetStorage.KindTitle(_kind);
+    /// <summary>组件类型的默认标题那颗<b>键</b>——⛔ <b>不带图标</b>。
+    /// <para>批次 db0306f（WI-2o）把这里换成 <c>WidgetStorage.KindTitle</c>（展示名＝"图标 空格 名字"），
+    /// 而标题栏本来就有一颗 <c>WidgetGlyph</c> 在画图标，于是<b>同一排画出两颗图标</b>——"所有组件又出现两个图标"
+    /// 就是这个形状。带图标的 <c>DisplayTitle</c> 是<b>托盘菜单</b>的需要（那里没有别的元素画图标），组件窗不是</para>
+    /// <para>（坑表 #337：图标与名字各只许一个出口；同一个字符串当两处显示时，另一处的需要不许改写它。）</para></summary>
+    private static string DefaultKindTitleKey(WidgetKind kind)
+        => WidgetStorage.KindTitleKey(kind);
 
-    /// <summary>当前显示名：优先用户重命名的名字，未命名/null 时回退到类型默认标题。</summary>
-    private string DisplayTitle()
-        => string.IsNullOrWhiteSpace(_config.Title) ? DefaultKindTitle() : _config.Title!;
-
-    /// <summary>把显示名同步到标题栏文本与窗口标题（重命名后立即刷新）。</summary>
+    /// <summary>
+    /// 把显示名同步到标题栏文本与窗口标题（重命名后立即刷新）。
+    /// <para>两条路必须分开（批次 WI-36）：<b>未重命名＝挂键</b>，换语言那一刻由 <c>LocText</c> 重贴；
+    /// <b>重命名过＝写他起的名字并把那颗键摘掉</b>——挂着键，换语言就会把他的名字盖回类型名
+    /// （坑表 #276 的镜像面：带值的字不许由静态键接管）。
+    /// OS 那一层的 <c>Title</c>（Alt+Tab 读它）走 <c>LocText.SetWindowTitle</c>：WinUI 3 的
+    /// <c>Window</c> <b>不是</b> <c>DependencyObject</c>，附带属性贴不上去（坑表 #338），所以它记在
+    /// <c>LocText</c> 的第二张名单里——订阅点仍然只有那唯一一处，⛔ 不许在这里 <c>Locale.Changed +=</c>；
+    /// 而名字那一层交出去的是<b>没渲染的</b> <see cref="LocMessage"/>——嵌套那句同样在贴上去那一刻才取词（#328 同族）。</para>
+    /// </summary>
     private void ApplyTitle()
     {
         try
         {
-            var t = DisplayTitle();
-            WidgetTitle.Text = t;
-            Title = $"StarMark 组件 - {t}";
+            var renamed = !string.IsNullOrWhiteSpace(_config.Title);
+            if (renamed)
+            {
+                LocText.SetKey(WidgetTitle, string.Empty);   // 摘注册项（顺带清字），再写他自己起的名字
+                WidgetTitle.Text = _config.Title;
+            }
+            else
+            {
+                LocText.SetKey(WidgetTitle, DefaultKindTitleKey(_kind));
+            }
+            LocText.SetWindowTitle(this, "widget.win.windowTitle",
+                renamed ? _config.Title! : (object)LocMessage.Of(DefaultKindTitleKey(_kind)));
         }
         catch { /* 标题不是关键路径，失败不影响窗口可用 */ }
     }
@@ -459,7 +478,7 @@ public sealed partial class WidgetWindow
     {
         try
         {
-            var def = DefaultKindTitle();
+            var def = Locale.T(DefaultKindTitleKey(_kind));   // 提示里的"默认名称"＝类型名，不带图标
             var input = await CenteredDialog.PromptAsync(
                 title: "重命名组件",
                 message: $"给这个组件取个名字（留空则恢复默认名称「{def}」）。",

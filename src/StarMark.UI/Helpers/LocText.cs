@@ -44,6 +44,15 @@ public static class LocText
 
     private static readonly object Gate = new();
     private static readonly List<Registration> Live = new();
+
+    /// <summary><b>窗口标题</b>那张名单（批次 WI-36）：与 <see cref="Live"/> 同一时刻、同一个订阅里重贴。
+    /// <para>为什么单开一张而不是加第七颗附带属性：<b>WinUI 3 的 <c>Window</c> 不是
+    /// <c>DependencyObject</c></b>（它只是 HWND 的托管包装），附带属性贴不上去——写
+    /// <c>SetTitleKey(this, …)</c> 的编译错误是「无法从 WidgetWindow 转换为 DependencyObject」，
+    /// 我先前认定"标题也是依赖属性，所以进得了那棵树"是错的（坑表 #338）。</para>
+    /// <para>它仍是"重贴"而不是"重建"：订阅点还是只有 <see cref="ReapplyAll"/> 那唯一一处。</para></summary>
+    private static readonly List<WindowTitle> WindowTitles = new();
+
     private static readonly HashSet<string> ReportedUnwritable = new(StringComparer.Ordinal);
 
     /// <summary><see cref="KeyProperty"/> 那句正文的实参（配 <c>Locale.Fmt</c> 的位置式占位符）。
@@ -141,6 +150,22 @@ public static class LocText
     public static void SetOffContentKey(DependencyObject element, string value) => element.SetValue(OffContentKeyProperty, value);
 
     public static string GetOffContentKey(DependencyObject element) => (string)element.GetValue(OffContentKeyProperty);
+
+    /// <summary>
+    /// 把<b>窗口标题</b>（Alt+Tab 与任务栏读的那一颗）交进重贴名单（批次 WI-36）。
+    /// <para>带实参：组件窗那句是"前缀 ＋ 名字"，而名字本身又是一颗键——实参交出去的是<b>没渲染的</b>
+    /// <see cref="LocMessage"/>，嵌套那句也在贴上去这一刻才取词（坑表 #328 同族）。</para>
+    /// </summary>
+    public static void SetWindowTitle(Window window, string key, params object?[]? args)
+    {
+        lock (Gate)
+        {
+            // 同一个窗只留最新那句：重命名、换类型后重设，留着旧的会让换语言把上一版名字贴回来。
+            WindowTitles.RemoveAll(t => !t.TryGetTarget(out var live) || ReferenceEquals(live, window));
+            WindowTitles.Add(new WindowTitle(new WeakReference<Window>(window), key, args));
+        }
+        window.Title = Text(key, args);
+    }
 
     private static void OnKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
@@ -246,19 +271,27 @@ public static class LocText
         }
     }
 
-    /// <summary>换语言的那一刻：把所有还活着的注册项按新的语言重取一次词。</summary>
+    /// <summary>换语言的那一刻：把所有还活着的注册项（元素上的字与窗口标题）按新的语言重取一次词。</summary>
     private static void ReapplyAll()
     {
         Registration[] snapshot;
+        WindowTitle[] titles;
         lock (Gate)
         {
             Live.RemoveAll(r => !r.TryGetTarget(out _));
             snapshot = Live.ToArray();
+            WindowTitles.RemoveAll(t => !t.TryGetTarget(out _));
+            titles = WindowTitles.ToArray();
         }
         foreach (var registration in snapshot)
         {
             if (!registration.TryGetTarget(out var target)) continue;
             target.SetValue(registration.Property, Text(registration.Key, registration.Args));
+        }
+        foreach (var title in titles)
+        {
+            // Title 是普通 CLR 属性（Window 不是 DependencyObject），所以这里只能整句重设，不能 SetValue。
+            if (title.TryGetTarget(out var window)) window.Title = Text(title.Key, title.Args);
         }
     }
 
@@ -331,5 +364,25 @@ public static class LocText
         public object?[]? Args { get; }
 
         public bool TryGetTarget(out DependencyObject target) => Target.TryGetTarget(out target!);
+    }
+
+    /// <summary>一条<b>窗口标题</b>的注册项：与 <see cref="Registration"/> 同一条取词路，只是宿主是
+    /// <c>Window</c>（它不是 <c>DependencyObject</c>，进不了附带属性那棵树，只能自己记一句）。</summary>
+    private sealed class WindowTitle
+    {
+        public WindowTitle(WeakReference<Window> target, string key, object?[]? args)
+        {
+            Target = target;
+            Key = key;
+            Args = args;
+        }
+
+        public WeakReference<Window> Target { get; }
+
+        public string Key { get; }
+
+        public object?[]? Args { get; }
+
+        public bool TryGetTarget(out Window window) => Target.TryGetTarget(out window!);
     }
 }
