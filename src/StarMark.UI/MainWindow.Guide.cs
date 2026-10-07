@@ -84,10 +84,12 @@ public sealed partial class MainWindow
     {
         var button = new Button
         {
-            Content = "看完整使用说明",
             Margin = new Thickness(0, 8, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Left,
         };
+        // 复用首启向导最后那一步那颗键（同一句话，⛔ 不起第二个键名）；挂键而不是写中文串，
+        // 否则英文界面上这一颗就是浮层里唯一没翻的一项。
+        LocText.SetKey(button, "guide.primary");
         button.Click += (_, _) => OpenFullGuide();
         return button;
     }

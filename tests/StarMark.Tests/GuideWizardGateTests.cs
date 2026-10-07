@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Guide;
 using Xunit;
 using static StarMark.Tests.SourceGate;
@@ -55,7 +56,7 @@ public sealed class GuideWizardGateTests
         {
             if (step.JumpTag is null) continue;
             Assert.True(reachable.Contains(step.JumpTag),
-                $"「{step.Title}」要带去 {step.JumpTag}，而那张 switch 到不了这一页 ⇒ 那颗按钮点了没反应");
+                $"「{step.TitleKey}」要带去 {step.JumpTag}，而那张 switch 到不了这一页 ⇒ 那颗按钮点了没反应");
         }
     }
 
@@ -71,8 +72,8 @@ public sealed class GuideWizardGateTests
         var drawn = new HashSet<string>(DrawnArt(), StringComparer.OrdinalIgnoreCase);
         foreach (var step in FirstRunGuide.Steps())
         {
-            Assert.True(step.Art is not null, $"「{step.Title}」没配图：向导里出现纯文字的一步＝退回 VC-3 那一版");
-            Assert.True(GuideArt.IsReal(step.Art), $"「{step.Title}」配了一张不存在的示意图：{step.Art}");
+            Assert.True(step.Art is not null, $"「{step.TitleKey}」没配图：向导里出现纯文字的一步＝退回 VC-3 那一版");
+            Assert.True(GuideArt.IsReal(step.Art), $"「{step.TitleKey}」配了一张不存在的示意图：{step.Art}");
             Assert.True(drawn.Contains(step.Art!), $"名字认得但 UI 没画：{step.Art}（那一步会是一片空白）");
         }
         var used = new HashSet<string>(FirstRunGuide.Steps().Select(s => s.Art!), StringComparer.Ordinal);
@@ -87,7 +88,7 @@ public sealed class GuideWizardGateTests
     [Fact]
     public void TheWizardTitleDoesNotBakeInAStepCount()
     {
-        Assert.DoesNotMatch(@"[一二三四五六七八九十0-9]\s*步|这[一两三四五六七八九十0-9]件事", FirstRunGuide.Title());
+        Assert.DoesNotMatch(@"[一二三四五六七八九十0-9]\s*步|这[一两三四五六七八九十0-9]件事", Locale.T(FirstRunGuide.TitleKey));
         Assert.True(LocaleStepCounterComesFromTheTable(),
             "第几步／共几步必须由表算出来（Locale.Fmt + steps.Count），不许再写一个数字进 UI");
     }

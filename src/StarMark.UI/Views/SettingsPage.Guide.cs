@@ -18,9 +18,11 @@ public sealed partial class SettingsPage
     private void BuildGuideTab()
     {
         GuideTabPanel.Children.Clear();
+        // 交的是键：这一栏常驻在树上，拼成成品串就等于把语言钉在这里——换语言后它一个字都不动
+        // （他报的第 5 条："修改语言后需要重新刷新进入设置页翻译才会生效"）。批次 WI-39。
         foreach (var page in PageGuides.InOrder()) GuideUi.AppendPanel(GuideTabPanel, page);
         // 按键这一节从绑定表现场渲染：用户改过键之后这一栏要跟着改，抄一份默认键就是抄一份假话。
-        GuideUi.AppendPanel(GuideTabPanel, Locale.T("guide.hotkey.section"), GuideUi.HotkeyHints(new SettingsStore()));
+        GuideUi.AppendPanel(GuideTabPanel, "guide.hotkey.section", GuideUi.HotkeyHints(new SettingsStore()));
     }
 
     /// <summary>

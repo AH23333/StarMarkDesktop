@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Guide;
 using StarMark.Core.Hotkeys;
 using Xunit;
@@ -27,6 +28,7 @@ public sealed class GuideGateTests
     private const string SettingsXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
     private const string SettingsCtor = "src/StarMark.UI/Views/SettingsPage.xaml.cs";
     private const string GuideRender = "src/StarMark.UI/Helpers/GuideUi.cs";
+    private const string GuideTable = "src/StarMark.Core/Guide/PageGuides.cs";
     private const string GuideStore = "src/StarMark.UI/Helpers/SettingsStore.Guide.cs";
 
     /// <summary>应用能导航到的全部页（<c>NavigateToPage</c> 那张 switch 表，不是侧栏那几颗——搜索页不在侧栏里但照样要说得清）。</summary>
@@ -71,19 +73,36 @@ public sealed class GuideGateTests
     }
 
     /// <summary>
-    /// 说明要真的说事：标题不空、至少两条、每条不短于一句话的起头。
-    /// <para>"一条空壳说明"能让上一条闸门全绿而用户什么也没学到，所以这里量的是内容而不是"有没有键"。</para>
+    /// 说明要真的说事：每一颗键都在表里、标题不空、至少两条、每条不短于一句话的起头。
+    /// <para>批次 WI-39 起表里存的是<b>键</b>，所以"内容够不够"必须<b>照着表的那一列量</b>：
+    /// 只钉"有没有挂上键"会让一格空壳全绿（#317 那一族——形状对而屏幕上没说事）。</para>
+    /// <para>⚠ 这颗闸门同时是"guide 键写错了有没有人问"的<b>唯一出口</b>：Core 交键之后不再有
+    /// <c>Locale.T("…")</c> 那种调用形状，正向对账闸门（只认取词调用）就看不见这些字面量了。</para>
     /// </summary>
     [Fact]
     public void EachGuideSaysSeveralThingsRatherThanAnEmptyShell()
     {
         foreach (var guide in PageGuides.InOrder())
         {
-            Assert.False(string.IsNullOrWhiteSpace(guide.Title), $"{guide.Tag} 没有标题");
-            Assert.True(guide.Lines.Count >= 2, $"{guide.Tag} 只有 {guide.Lines.Count} 行说明，说不到两件事");
-            Assert.All(guide.Lines, line => Assert.True(line.Trim().Length >= 8, $"{guide.Tag} 有一行太短：「{line}」"));
+            Assert.False(string.IsNullOrWhiteSpace(ZhOf(guide.TitleKey)), $"{guide.Tag} 没有标题");
+            Assert.True(guide.LineKeys.Count >= 2, $"{guide.Tag} 只有 {guide.LineKeys.Count} 行说明，说不到两件事");
+            foreach (var key in guide.LineKeys)
+                Assert.True(ZhOf(key).Trim().Length >= 8, $"{guide.Tag} 有一行太短：{key}");
         }
-        Assert.All(FirstRunGuide.Steps(), step => Assert.True(step.Lines.Count >= 2, $"首启那一段「{step.Title}」少于两行"));
+        foreach (var step in FirstRunGuide.Steps())
+        {
+            Assert.True(step.LineKeys.Count >= 2, $"首启那一步「{ZhOf(step.TitleKey)}」少于两行");
+            foreach (var key in step.LineKeys)
+                Assert.True(ZhOf(key).Trim().Length >= 8, $"首启那一步有一行太短：{key}");
+        }
+        Assert.False(string.IsNullOrWhiteSpace(ZhOf(FirstRunGuide.TitleKey)));
+    }
+
+    /// <summary>表里那一行的中文列；键写错当场红（见上一条：guide 那批字面量不在正向对账的射程里）。</summary>
+    private static string ZhOf(string key)
+    {
+        Assert.True(UiStrings.TryGet(key, out var entry), $"表里没有这一行：{key}");
+        return entry.Zh;
     }
 
     /// <summary>
@@ -92,17 +111,20 @@ public sealed class GuideGateTests
     /// 比少写一句更糟。按键一律由 UI 从绑定表现场渲染（<c>GuideUi.HotkeyHints</c>），
     /// 所以这里禁的是字面：<c>Ctrl+Alt</c> 与 <c>F1</c>／<c>F3</c>／<c>F4</c>／<c>F5</c>。
     /// <c>Ctrl+Enter</c> 与 <c>↑↓</c> 不在禁项里——它们是页面内的键盘操作，不是可改的全局绑定。</para>
+    /// <para>批次 WI-39 起按<b>三列</b>各比一次：这些token 是 ASCII，只在中文列上比会放过英文列里抄进去的那一串。</para>
     /// </summary>
     [Fact]
     public void NoGuideLineCopiesAGlobalHotkeyIntoText()
     {
         var forbidden = new[] { "Ctrl+Alt", "Ctrl + Alt", "F1", "F3", "F4", "F5" };
-        var all = PageGuides.InOrder().SelectMany(g => new[] { g.Title }.Concat(g.Lines))
-            .Concat(FirstRunGuide.Steps().SelectMany(s => new[] { s.Title }.Concat(s.Lines)))
-            .Concat(new[] { FirstRunGuide.Title() });
-        foreach (var line in all)
+        var keys = PageGuides.InOrder().SelectMany(g => new[] { g.TitleKey }.Concat(g.LineKeys))
+            .Concat(FirstRunGuide.Steps().SelectMany(s => new[] { s.TitleKey }.Concat(s.LineKeys)))
+            .Append(FirstRunGuide.TitleKey);
+        foreach (var key in keys)
         {
-            foreach (var token in forbidden) Assert.DoesNotContain(token, line, StringComparison.Ordinal);
+            Assert.True(UiStrings.TryGet(key, out var entry), $"表里没有这一行：{key}");
+            foreach (var column in new[] { entry.Zh, entry.En, entry.Ja })
+                foreach (var token in forbidden) Assert.DoesNotContain(token, column, StringComparison.Ordinal);
         }
     }
 
@@ -123,7 +145,8 @@ public sealed class GuideGateTests
             @"自行(查阅|参考|备份|处理)",
             @"(文档|官网|issue)\s*(里|上|中)?\s*(有|见)?说明",
         };
-        var lines = PageGuides.InOrder().SelectMany(g => g.Lines).Concat(FirstRunGuide.Steps().SelectMany(s => s.Lines));
+        var lines = PageGuides.InOrder().SelectMany(g => g.LineKeys).Concat(FirstRunGuide.Steps().SelectMany(s => s.LineKeys))
+            .Select(ZhOf);
         foreach (var line in lines)
         {
             foreach (var pattern in pushes)
@@ -143,7 +166,8 @@ public sealed class GuideGateTests
     public void TheFallbackGuideIsHonestButDoesNotCountAsCoverage()
     {
         var missing = PageGuides.ForOrSaySo("definitely-not-a-page");
-        Assert.Contains("还没有说明", missing.Title, StringComparison.Ordinal);
+        Assert.Contains("还没有说明", ZhOf(missing.TitleKey), StringComparison.Ordinal);
+        Assert.Single(missing.LineKeys);          // 兜底只说一句实话，⛔ 不许编一段操作出来
         Assert.DoesNotContain("definitely-not-a-page", PageGuides.Tags, StringComparer.Ordinal);
         Assert.Null(PageGuides.For("definitely-not-a-page"));
         Assert.Null(PageGuides.For(null));
@@ -224,6 +248,9 @@ public sealed class GuideGateTests
 
     /// <summary>
     /// 首启要列的那几颗键，动作名必须真的存在（写错一个字母＝那一行永远不出现在引导里，而没人会红）。
+    /// <para>⚠ 这里必须钉 <see cref="HotkeyActions.DisplayMessage"/> 而不是 <c>DisplayName</c>：
+    /// 引导那一跑用的是前者，而它<b>认不得时才返回 null</b>——<c>GuideUi.HotkeyHints</c> 里那句
+    /// <c>DisplayMessage(action)!</c> 的免责只有靠这一格才成立（返回 null 时屏幕上就是半截话）。</para>
     /// </summary>
     [Fact]
     public void EveryActionListedInTheFirstRunGuideIsARealHotkeyAction()
@@ -232,8 +259,60 @@ public sealed class GuideGateTests
         foreach (var action in FirstRunGuide.HotkeyActionsToShow)
         {
             Assert.Contains(action, all, StringComparer.Ordinal);
-            Assert.False(string.IsNullOrWhiteSpace(HotkeyActions.DisplayName(action)),
+            var message = HotkeyActions.DisplayMessage(action);
+            Assert.NotNull(message);
+            Assert.False(string.IsNullOrWhiteSpace(message!.Render()),
                 $"{action} 没有中文名，引导里那一行会读成「：Ctrl + Alt + Space」这种半截话");
         }
+    }
+
+    /// <summary>
+    /// 批次 WI-39：<b>说明族一路交的是键，取词只发生在贴上去那一刻</b>。
+    /// <para>他报的第 5 条（"设置页的使用说明在修改语言后需要重新刷新进入设置页翻译才会生效"）根因有两层：
+    /// ① <c>PageGuides</c> 交的是<b>成品串</b>；② <c>ByTag</c> 那颗<b>静态</b>字典把第一次取词的成品钉进了缓存，
+    /// 于是连"打开那一刻现取"的「？」浮层也说着旧语言。所以这里三处一起钉：
+    /// Core 一次都不许取词、渲染层必须把键交给 <c>LocText</c>、设置页宿主不许自己拼句子。</para>
+    /// </summary>
+    [Fact]
+    public void TheGuideFamilyHandsKeysToLocTextAndNeverARenderedSentence()
+    {
+        var store = Code(ReadRepoFile(GuideTable));
+        Assert.Equal(0, Count(store, "Locale.T("));            // Core 交词＝语言被钉在算出它那一刻
+        Assert.Equal(0, Count(store, "Locale.Fmt("));
+
+        // 记录本身的形状：键在名字里，不在词里（改回 Title/Lines 就是退回旧那一条）
+        Assert.Contains("record PageGuide(string Tag, string TitleKey, IReadOnlyList<string> LineKeys)", store, StringComparison.Ordinal);
+        Assert.Contains("record GuideSection(string TitleKey, IReadOnlyList<string> LineKeys", store, StringComparison.Ordinal);
+        Assert.Contains("const string TitleKey = \"guide.first.title\"", store, StringComparison.Ordinal);
+
+        var render = Code(ReadRepoFile(GuideRender));
+        Assert.Contains("LocText.SetMessage(heading, title)", render, StringComparison.Ordinal);
+        Assert.Contains("LocText.SetMessage(text, line)", render, StringComparison.Ordinal);
+        Assert.Contains("LocText.SetKey(heading, step.TitleKey)", render, StringComparison.Ordinal);
+        Assert.Contains("public static IReadOnlyList<LocMessage> HotkeyHints", render, StringComparison.Ordinal);
+        Assert.Contains("HotkeyActions.DisplayMessage(action)", render, StringComparison.Ordinal);
+        Assert.Equal(0, Count(render, "HotkeyActions.DisplayName("));   // 引导那一跑⛔ 不许再走成品串那条出口
+
+        var host = Code(ReadRepoFile(SettingsGuide));
+        Assert.Equal(0, Count(host, "Locale.T("));             // 宿主拼句子＝第二处取词
+        Assert.Contains("GuideUi.AppendPanel(GuideTabPanel, \"guide.hotkey.section\"", host, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 项目符号「·」<b>是布局不是话</b>：它必须是自己那颗元素，⛔ 拼进句子前缀。
+    /// <para>拼成 <c>"· " + 句子</c> 有两个坏处：① 那句话就不能交给 <c>LocText</c> 重贴（换语言不刷新＝本批修的那一格）；
+    /// ② 想让它跟着贴就得给符号单独向语言表要一行——那与"把换行写进表行"（坑表 #340）是同一个错误。</para>
+    /// </summary>
+    [Fact]
+    public void TheBulletMarkerIsItsOwnElementAndNeverAPrefixGluedOntoTheSentence()
+    {
+        // 读的是抹掉注释之后的代码：这条禁项要拦的是真拼上去的前缀，⛔ 拦不住我"解释为什么不许拼"的那句注释
+        var render = Code(ReadRepoFile(GuideRender));
+        Assert.DoesNotContain("\"· \" +", render, StringComparison.Ordinal);
+        var bullet = MethodBody(render, "private static Grid Bullet(LocMessage line)");
+        Assert.Equal(2, Count(bullet, "new TextBlock"));      // 一行说明＝符号一颗＋正文一颗，缺一个就是形状变了
+        Assert.Contains("Text = \"·\"", bullet, StringComparison.Ordinal);
+        Assert.Contains("LocText.SetMessage(text, line)", bullet, StringComparison.Ordinal);
+        Assert.Contains("Grid.SetColumn(text, 1)", bullet, StringComparison.Ordinal);   // 正文在第二列，符号不占正文的宽
     }
 }

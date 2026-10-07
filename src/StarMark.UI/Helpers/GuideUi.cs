@@ -17,46 +17,60 @@ namespace StarMark.UI.Helpers;
 /// 这里只负责把它铺到三个宿主上——顶栏「？」的浮层、首启那颗对话框、设置页「使用说明」栏。
 /// <para><b>为什么三个宿主共用一份渲染</b>：三处各自写一遍"标题加粗、正文换行、项目符号"，
 /// 就会漂成三种观感；而内容分岔（某一处少一条）比观感不一致更坏——用户不知道哪句作数。</para>
+/// <para><b>批次 WI-39 起这里接的是键，贴的时候才取词</b>：原先宿主把成品串递进来，语言就被钉在
+/// "算出那句话那一刻"，设置页那一栏常驻在树上，换语言后没人回去重贴（他报的第 5 条）。
+/// 现在标题与每一行都过一次 <see cref="LocText"/>，换语言由那唯一一处订阅重贴——
+/// 项目符号「·」<b>是布局不是话</b>，所以它是另一颗元素，⛔ 拼进句子（坑表 #340 同一味药）。</para>
 /// </summary>
 public static class GuideUi
 {
-    /// <summary>把一页的说明铺进面板（浮层与设置页那一栏都用它）。</summary>
-    public static void AppendPanel(Panel target, string title, IReadOnlyList<string> lines)
+    /// <summary>把一页的说明铺进面板（浮层与设置页那一栏都用它）——正文是表里的行，交键即可。</summary>
+    public static void AppendPanel(Panel target, string titleKey, IReadOnlyList<string> lineKeys)
+        => AppendPanel(target, LocMessage.Of(titleKey), lineKeys.Select(key => LocMessage.Of(key)).ToList());
+
+    /// <summary>标题在表里、正文是算出来的那一节（设置页那节按键就是这一种）。</summary>
+    public static void AppendPanel(Panel target, string titleKey, IReadOnlyList<LocMessage> lines)
+        => AppendPanel(target, LocMessage.Of(titleKey), lines);
+
+    /// <summary>按键那一节的话是<b>算出来的</b>（现在绑的是哪颗键），所以这一路交 <see cref="LocMessage"/>。</summary>
+    public static void AppendPanel(Panel target, LocMessage title, IReadOnlyList<LocMessage> lines)
     {
-        target.Children.Add(new TextBlock
+        var heading = new TextBlock
         {
-            Text = title,
             FontSize = 14,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 0),
-        });
+        };
+        LocText.SetMessage(heading, title);
+        target.Children.Add(heading);
         foreach (var line in lines) target.Children.Add(Bullet(line));
     }
 
-    public static void AppendPanel(Panel target, PageGuide guide) => AppendPanel(target, guide.Title, guide.Lines);
+    public static void AppendPanel(Panel target, PageGuide guide) => AppendPanel(target, guide.TitleKey, guide.LineKeys);
 
-    public static void AppendPanel(Panel target, GuideSection section) => AppendPanel(target, section.Title, section.Lines);
+    public static void AppendPanel(Panel target, GuideSection section) => AppendPanel(target, section.TitleKey, section.LineKeys);
 
     /// <summary>
     /// 首启那份引导要列的按键行。<b>按键文本不在文案里写死</b>：这里从绑定表现场渲染，
     /// 用户改过键之后这句话跟着改；总开关关着时补一句实话，而不是报一串按了没反应的键。
+    /// <para>交的是 <see cref="LocMessage"/>（键＋实参），实参里那颗动作名也还是键——
+    /// 换成成品串就是"外层翻了、动作名没翻"那半中半英的一格。</para>
     /// </summary>
-    public static IReadOnlyList<string> HotkeyHints(SettingsStore settings)
+    public static IReadOnlyList<LocMessage> HotkeyHints(SettingsStore settings)
     {
         var bindings = settings.GetHotkeyBindings();
-        var lines = new List<string>();
+        var lines = new List<LocMessage>();
         foreach (var action in FirstRunGuide.HotkeyActionsToShow)
         {
             // 取不到绑定就说"没有绑定"，而不是把这一行悄悄丢掉：少一行与多一行"没绑"是两件事，
-            // 前者用户永远不会知道。
-            var name = HotkeyActions.DisplayName(action);
+            // 前者用户永远不会知道。这六颗都有表里那一行（GuideGateTests 逐颗钉），所以这里不必为"认不得"另编一句。
+            var name = HotkeyActions.DisplayMessage(action)!;
             lines.Add(bindings.TryGetValue(action, out var gesture) && gesture is not null
-                ? Locale.Fmt("guide.hotkey.bound", name, HotkeyDisplay.Display(gesture))
-                : Locale.Fmt("guide.hotkey.unbound", name));
+                ? LocMessage.Of("guide.hotkey.bound", name, HotkeyDisplay.Display(gesture))
+                : LocMessage.Of("guide.hotkey.unbound", name));
         }
-        if (!settings.LoadEnableGlobalHotKey())
-            lines.Add(Locale.T("guide.hotkey.disabled"));
+        if (!settings.LoadEnableGlobalHotKey()) lines.Add(LocMessage.Of("guide.hotkey.disabled"));
         return lines;
     }
 
@@ -121,7 +135,7 @@ public static class GuideUi
 
         var dialog = new ContentDialog
         {
-            Title = FirstRunGuide.Title(),
+            Title = Locale.T(FirstRunGuide.TitleKey),
             // 右侧留 16px：内容一超高就出垂直滚动条，而它压在进度点那一行上（真机截图查出来的，
             // 形状闸门看不见"被盖住"这件事）。
             Content = new ScrollViewer { Content = layout, MaxHeight = 470, Padding = new Thickness(0, 0, 16, 0) },
@@ -137,9 +151,9 @@ public static class GuideUi
             var step = steps[index];
             art.Content = GuideArtView.Build(step.Art, ink, accent);
             counter.Text = Locale.Fmt("guide.step", index + 1, steps.Count);
-            heading.Text = step.Title;
+            LocText.SetKey(heading, step.TitleKey);
             body.Children.Clear();
-            foreach (var line in step.Lines) body.Children.Add(Bullet(line));
+            foreach (var key in step.LineKeys) body.Children.Add(Bullet(LocMessage.Of(key)));
             // 最后那几行按键从绑定表现场渲染：写进表里就是"引导说一颗键、用户改了键按了没反应"那种假话。
             if (step.Art == GuideArt.Keys)
                 foreach (var hint in HotkeyHints(settings)) body.Children.Add(Bullet(hint));
@@ -179,13 +193,35 @@ public static class GuideUi
         else if (result == ContentDialogResult.Primary) openFullGuide();
     }
 
-    private static TextBlock Bullet(string line) => new()
+    /// <summary>
+    /// 一行说明：一颗项目符号加一句<b>挂着键</b>的正文。
+    /// <para>「·」与正文分成两颗元素而不是拼成 <c>"· " + 句子</c>：项目符号是<b>布局</b>，
+    /// 拼进句子里就等于替它向语言表要一行（坑表 #340 那一族：换行是布局，符号也是布局）；
+    /// 而正文必须带着键，换语言那一刻才有人回来重贴（批次 WI-39 修的就是这一格）。</para>
+    /// <para>代价说清楚：折行时第二行起会缩进到正文那一列（悬挂缩进），而不是像以前那样回到最左边。</para>
+    /// </summary>
+    private static Grid Bullet(LocMessage line)
     {
-        Text = "· " + line,
-        FontSize = 13,
-        TextWrapping = TextWrapping.Wrap,
-        Margin = new Thickness(0, 2, 0, 0),
-    };
+        var row = new Grid { Margin = new Thickness(0, 2, 0, 0) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.Children.Add(new TextBlock
+        {
+            Text = "·",
+            FontSize = 13,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        var text = new TextBlock
+        {
+            FontSize = 13,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(6, 0, 0, 0),
+        };
+        Grid.SetColumn(text, 1);
+        LocText.SetMessage(text, line);
+        row.Children.Add(text);
+        return row;
+    }
 
     /// <summary>进度点：当前这一步是<b>实心</b>，其余是<b>空心圈</b>。用形状而不是只用颜色区分，
     /// 是为了在高对比度主题与色弱下也读得出"走到哪儿了"。</summary>

@@ -11,26 +11,31 @@ namespace StarMark.Core.Guide;
 /// 一段说明：一个标题加几行正文，外加"这一步能把用户带去哪儿"与"这一步配哪张示意图"。
 /// <para>刻意不用富文本/markdown——三处宿主（首启向导、顶栏「？」的浮层、设置页「使用说明」栏）
 /// 都只是"标题 + 项目符号"，中间格式只会多出一层要维护的渲染器。</para>
+/// <para><b>这里交的是键，不是词</b>（批次 WI-39）：见 <see cref="PageGuides"/> 的说明——
+/// 一旦在这里取词，语言就被钉在"算出它那一刻"，而下面那颗静态缓存正是那一刻。</para>
 /// <para><paramref name="JumpTag"/> 与 <paramref name="Art"/> 都是<b>名字而不是内容</b>：跳转要落到
 /// 真存在的页（对不上就是假按钮，用户点了没反应＝把活推回给他，P-54），示意图要画得出来
 /// （对不上就是一片空白）。两者都由 <c>GuideGateTests</c> 对着 UI 那两份清单比，写错当场红。</para>
 /// </summary>
-public sealed record GuideSection(string Title, IReadOnlyList<string> Lines, string? JumpTag = null, string? Art = null);
+public sealed record GuideSection(string TitleKey, IReadOnlyList<string> LineKeys, string? JumpTag = null, string? Art = null);
 
 /// <summary>
 /// 一页的说明。<b>tag 与文字写在同一行</b>：原先是"列表按位置映射到 tag"，那正好是"两个槽位对调
 /// 而谁也发现不了"的形状（列表顺序一改，说明就串页），所以把 tag 放进条目本身。
 /// </summary>
-public sealed record PageGuide(string Tag, string Title, IReadOnlyList<string> Lines);
+public sealed record PageGuide(string Tag, string TitleKey, IReadOnlyList<string> LineKeys);
 
 /// <summary>
-/// 应用内说明的<b>唯一文字出处</b>（批次 VC-3；批次 WI-2q 起字面进语言表，这里存键、取词在调用那一刻）。
+/// 应用内说明的<b>唯一文字出处</b>（批次 VC-3；批次 WI-2q 起字面进语言表，批次 WI-39 起这里<b>只交键</b>）。
 /// <para><b>为什么住 Core</b>：同一批话有三个地方要说——首启引导、每页右上角的「？」、设置页的
 /// 「使用说明」栏。写三份必然漂移（#123 那一族：一处事实多个出处），而漂移的表现是"三处说法不一样，
 /// 用户不知道哪句作数"。住 Core 之后它可被单测：每一页有没有说明、有没有空行、
 /// 新加一页而这里没补一条＝当场红（<c>GuideGateTests</c>）。</para>
-/// <para><b>三个宿主都是"打开那一刻"渲染</b>（浮层/对话框/设置页那一栏切进去时），
-/// 所以这里现取返回成品串就能跟着语言走；切语言时已铺好的常驻面板不重算＝绑定族已知限制（照登记）。</para>
+/// <para>⛔ <b>这里不许调 <see cref="Locale"/>。</b>原先 <see cref="InOrder"/> 当场取词、把成品串交给宿主，
+/// 而下面那颗 <see cref="ByTag"/> 是<b>静态</b>字典——第一次被访问时就把那一语言的整份说明钉进了缓存，
+/// 之后换语言：顶栏「？」与设置页那一栏都还说旧语言（真机读到的就是这一格，他报的第 5 条：
+/// "修改语言后需要重新刷新进入设置页翻译才会生效"）。交键之后，取词发生在<b>贴上去那一刻</b>（<c>GuideUi</c>），
+/// 缓存里剩的是与语言无关的名字 ⇒ 换语言由 <c>LocText</c> 那唯一一处订阅重贴，不需要重进任何页。</para>
 /// <para><b>刻意不写具体按键</b>："F1 截图"这种句子是热键的第二个出处，用户在设置里改过键之后它就是假话。
 /// 要提按键的地方只给<b>动作名清单</b>（<see cref="FirstRunGuide.HotkeyActionsToShow"/>），
 /// 由 UI 那侧从绑定表现场渲染（<c>HotkeyDisplay</c> 是按键文本的唯一出处）。</para>
@@ -70,10 +75,9 @@ public static class PageGuides
         (SettingsTag, "guide.page.settings", new[] { "guide.page.settings.1", "guide.page.settings.2", "guide.page.settings.3" }),
     };
 
-    /// <summary>每页说明（调用那一刻按当前语言取词）。顺序即设置页「使用说明」里的呈现顺序。</summary>
+    /// <summary>每页说明（<b>交键不交词</b>）。顺序即设置页「使用说明」里的呈现顺序。</summary>
     public static IReadOnlyList<PageGuide> InOrder() =>
-        Entries.Select(e => new PageGuide(e.Tag, Locale.T(e.TitleKey),
-            e.LineKeys.Select(Locale.T).ToList())).ToList();
+        Entries.Select(e => new PageGuide(e.Tag, e.TitleKey, e.LineKeys)).ToList();
 
     /// <summary>按页面 tag 取那一页的说明；没有对应说明时返回 null（调用方要说"这一页还没有说明"，不许静默给一个空面板）。</summary>
     public static PageGuide? For(string? tag)
@@ -85,8 +89,7 @@ public static class PageGuides
     /// 兜底条目<b>不进 <see cref="Tags"/></b>——否则"每页都有说明"那条闸门会被自己骗过去。
     /// </summary>
     public static PageGuide ForOrSaySo(string? tag)
-        => For(tag) ?? new PageGuide(tag ?? "—", Locale.T("guide.missing.title"),
-            new[] { Locale.T("guide.missing.line") });
+        => For(tag) ?? new PageGuide(tag ?? "—", "guide.missing.title", new[] { "guide.missing.line" });
 
     private static readonly Dictionary<string, PageGuide> ByTag = ToMap();
 
@@ -114,7 +117,8 @@ public static class PageGuides
 /// </summary>
 public static class FirstRunGuide
 {
-    public static string Title() => Locale.T("guide.first.title");
+    /// <summary>向导标题的那颗键（<b>交键不交词</b>，理由同 <see cref="PageGuides.InOrder"/>）。</summary>
+    public const string TitleKey = "guide.first.title";
 
     /// <summary>向导每一步的键表（标题键＝<c>guide.first.s&lt;n&gt;.title</c>，正文键＝<c>guide.first.s&lt;n&gt;.&lt;m&gt;</c>）。</summary>
     private static readonly (string TitleKey, string[] LineKeys, string? JumpTag, string Art)[] StepKeys =
@@ -127,10 +131,10 @@ public static class FirstRunGuide
         ("guide.first.s6.title", new[] { "guide.first.s6.1", "guide.first.s6.2" }, PageGuides.SettingsTag, GuideArt.Keys),
     };
 
-    /// <summary>向导的步子（调用那一刻按当前语言取词）。顺序即呈现顺序；<c>JumpTag</c> 是"带我去这一页"要落到的页（null＝这一步没有页可去）。</summary>
+    /// <summary>向导的步子（<b>交的是键</b>：取词发生在贴上去那一刻，⛔ 不在这里）。
+    /// 顺序即呈现顺序；<c>JumpTag</c> 是"带我去这一页"要落到的页（null＝这一步没有页可去）。</summary>
     public static IReadOnlyList<GuideSection> Steps() =>
-        StepKeys.Select(s => new GuideSection(Locale.T(s.TitleKey),
-            s.LineKeys.Select(Locale.T).ToList(), s.JumpTag, s.Art)).ToList();
+        StepKeys.Select(s => new GuideSection(s.TitleKey, s.LineKeys, s.JumpTag, s.Art)).ToList();
 
     /// <summary>
     /// 引导末尾那一行"这几件事此刻的按键是什么"要列的动作，<b>只给动作名</b>：

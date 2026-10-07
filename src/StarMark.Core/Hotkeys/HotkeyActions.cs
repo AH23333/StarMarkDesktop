@@ -189,40 +189,50 @@ public static class HotkeyActions
     }
 
     /// <summary>
-    /// 动作的展示名（layouts 提供布局名称）。批次 WI-2r 起字进语言表：
-    /// ⚠ 键<b>逐颗写字面</b>（<c>hotkey.act.</c>＋动作 ID），不许 <c>$"hotkey.act.{action}"</c> 内插——
-    /// 对账闸门认字面量（坑表 #331，WI-2q 首跑的教训）；布局/组件那四颗带 {0} 的模板走 <see cref="Locale.Fmt"/>，
-    /// {0} 是用户数据（布局名）或已键化的组件名，不是语言内容。
+    /// 动作的展示名（成品串）。批次 WI-39 起它只是 <see cref="DisplayMessage"/> 上面薄薄一层 <c>Render()</c>：
+    /// 「哪颗键说这个名字」只许有一份，而"什么时候取词"归拿它的那一处宿主决定（常驻的那三处要能重贴）。
     /// </summary>
     public static string DisplayName(string action, IReadOnlyList<WidgetLayout>? layouts = null)
+        => DisplayMessage(action, layouts)?.Render() ?? action;
+
+    /// <summary>
+    /// 某一动作的名字怎么说：<b>交「键＋读数」，不交成品串</b>（批次 WI-39）。
+    /// <para>布局名与组件名是<b>实参</b>（用户数据／已键化的种类名），不是第二句语言；
+    /// 整句留在 <c>hotkey.act.layout</c> 那一行里，换语言重贴时外层与实参一起按当下语言重算。</para>
+    /// <para>返回 <c>null</c>＝这颗 ID 表里没有对应的一行（<see cref="DisplayName"/> 于是原样交出 ID，
+    /// ⛔ 不在这里替它编一句）。说明族列的那六颗都有行，由 <c>GuideGateTests</c> 逐颗钉着。</para>
+    /// <para>⚠ 键<b>逐颗写字面</b>（<c>hotkey.act.</c>＋动作 ID），不许 <c>$"hotkey.act.{action}"</c> 内插——
+    /// 对账闸门认字面量（坑表 #331，WI-2q 首跑的教训）。</para>
+    /// </summary>
+    public static LocMessage? DisplayMessage(string action, IReadOnlyList<WidgetLayout>? layouts = null)
     {
         switch (action)
         {
-            case MainToggle: return Locale.T("hotkey.act.main.toggle");
-            case MainShow: return Locale.T("hotkey.act.main.show");
-            case MainHide: return Locale.T("hotkey.act.main.hide");
-            case WidgetsShowAll: return Locale.T("hotkey.act.widgets.showall");
-            case WidgetsHideAll: return Locale.T("hotkey.act.widgets.hideall");
-            case WidgetsToggleAll: return Locale.T("hotkey.act.widgets.toggleall");
-            case WidgetsToggleTopmostAll: return Locale.T("hotkey.act.widgets.topmostall");
-            case ScreenCapture: return Locale.T("hotkey.act.screen.capture");
-            case ScreenPin: return Locale.T("hotkey.act.screen.pin");
-            case ScreenPinToggleHidden: return Locale.T("hotkey.act.screen.pinhidden");
-            case ScreenPinClickThrough: return Locale.T("hotkey.act.screen.pinthrough");
-            case ScreenOcr: return Locale.T("hotkey.act.screen.ocr");
-            case CanvasToggle: return Locale.T("hotkey.act.canvas.toggle");
-            case CanvasClickThrough: return Locale.T("hotkey.act.canvas.through");
-            case CanvasPen: return Locale.T("hotkey.act.canvas.pen");
-            case CanvasHighlighter: return Locale.T("hotkey.act.canvas.highlighter");
-            case CanvasEraser: return Locale.T("hotkey.act.canvas.eraser");
-            case CanvasBoard: return Locale.T("hotkey.act.canvas.board");
-            case CanvasCurtain: return Locale.T("hotkey.act.canvas.curtain");
-            case CanvasUndo: return Locale.T("hotkey.act.canvas.undo");
-            case CanvasRedo: return Locale.T("hotkey.act.canvas.redo");
-            case CanvasClear: return Locale.T("hotkey.act.canvas.clear");
-            case CanvasSave: return Locale.T("hotkey.act.canvas.save");
-            case CanvasCopy: return Locale.T("hotkey.act.canvas.copy");
-            case CanvasPin: return Locale.T("hotkey.act.canvas.pin");
+            case MainToggle: return LocMessage.Of("hotkey.act.main.toggle");
+            case MainShow: return LocMessage.Of("hotkey.act.main.show");
+            case MainHide: return LocMessage.Of("hotkey.act.main.hide");
+            case WidgetsShowAll: return LocMessage.Of("hotkey.act.widgets.showall");
+            case WidgetsHideAll: return LocMessage.Of("hotkey.act.widgets.hideall");
+            case WidgetsToggleAll: return LocMessage.Of("hotkey.act.widgets.toggleall");
+            case WidgetsToggleTopmostAll: return LocMessage.Of("hotkey.act.widgets.topmostall");
+            case ScreenCapture: return LocMessage.Of("hotkey.act.screen.capture");
+            case ScreenPin: return LocMessage.Of("hotkey.act.screen.pin");
+            case ScreenPinToggleHidden: return LocMessage.Of("hotkey.act.screen.pinhidden");
+            case ScreenPinClickThrough: return LocMessage.Of("hotkey.act.screen.pinthrough");
+            case ScreenOcr: return LocMessage.Of("hotkey.act.screen.ocr");
+            case CanvasToggle: return LocMessage.Of("hotkey.act.canvas.toggle");
+            case CanvasClickThrough: return LocMessage.Of("hotkey.act.canvas.through");
+            case CanvasPen: return LocMessage.Of("hotkey.act.canvas.pen");
+            case CanvasHighlighter: return LocMessage.Of("hotkey.act.canvas.highlighter");
+            case CanvasEraser: return LocMessage.Of("hotkey.act.canvas.eraser");
+            case CanvasBoard: return LocMessage.Of("hotkey.act.canvas.board");
+            case CanvasCurtain: return LocMessage.Of("hotkey.act.canvas.curtain");
+            case CanvasUndo: return LocMessage.Of("hotkey.act.canvas.undo");
+            case CanvasRedo: return LocMessage.Of("hotkey.act.canvas.redo");
+            case CanvasClear: return LocMessage.Of("hotkey.act.canvas.clear");
+            case CanvasSave: return LocMessage.Of("hotkey.act.canvas.save");
+            case CanvasCopy: return LocMessage.Of("hotkey.act.canvas.copy");
+            case CanvasPin: return LocMessage.Of("hotkey.act.canvas.pin");
         }
 
         if (IsLayoutAction(action))
@@ -230,18 +240,20 @@ public static class HotkeyActions
             var id = LayoutIdOf(action);
             var name = layouts?.FirstOrDefault(l => l.Id == id)?.Name;
             return string.IsNullOrEmpty(name)
-                ? Locale.T("hotkey.act.layoutGone")
-                : Locale.Fmt("hotkey.act.layout", name);
+                ? LocMessage.Of("hotkey.act.layoutGone")
+                : LocMessage.Of("hotkey.act.layout", name);
         }
 
         foreach (var k in WidgetStorage.AllKinds)
         {
-            var title = WidgetStorage.KindTitle(k);
-            if (action == WidgetToggle(k)) return Locale.Fmt("hotkey.act.widget.toggle", title);
-            if (action == WidgetCreate(k)) return Locale.Fmt("hotkey.act.widget.create", title);
-            if (action == WidgetShow(k)) return Locale.Fmt("hotkey.act.widget.show", title);
-            if (action == WidgetHide(k)) return Locale.Fmt("hotkey.act.widget.hide", title);
+            // 组件名交的是<b>键</b>（<c>KindTitleKey</c>），⛔ 不是 <c>KindTitle</c> 那颗成品串：
+            // 实参一旦已经拼好，外层换语言重贴时这一颗还是旧语言＝半中半英（NestedReadingsArePassedUnrendered 守的就是这一条）。
+            var title = LocMessage.Of(WidgetStorage.KindTitleKey(k));
+            if (action == WidgetToggle(k)) return LocMessage.Of("hotkey.act.widget.toggle", title);
+            if (action == WidgetCreate(k)) return LocMessage.Of("hotkey.act.widget.create", title);
+            if (action == WidgetShow(k)) return LocMessage.Of("hotkey.act.widget.show", title);
+            if (action == WidgetHide(k)) return LocMessage.Of("hotkey.act.widget.hide", title);
         }
-        return action;
+        return null;
     }
 }

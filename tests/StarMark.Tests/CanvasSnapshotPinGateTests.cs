@@ -121,8 +121,11 @@ public sealed class CanvasSnapshotPinGateTests
         Assert.Contains("不挡桌面", pinHint);
         Assert.DoesNotContain("屏幕画面 + 笔迹合成一张钉在桌面", xaml);       // 旧那句＝整屏，已不是事实
         // WI-2r 起动作名走键（hotkey.act.canvas.pin，三语进表）——锚点跟形状走；
+        // 批次 WI-39 起那颗键住在 DisplayMessage（交键不交词），DisplayName 只是它外面薄一层 Render()，
+        // 所以锚点挪到真正写键的那颗方法体上（⛔ 放宽成整档找词：那会放过"另有一处自己拼名字"的第二份实现）。
         // "按钮提示与热键目录同一句事实"的口径由表里那一行承担（zh 列就是原来那句话）。
-        Assert.Contains("Locale.T(\"hotkey.act.canvas.pin\")", SourceGate.MethodBody(actions, "public static string DisplayName"));
+        Assert.Contains("LocMessage.Of(\"hotkey.act.canvas.pin\")",
+            SourceGate.MethodBody(actions, "public static LocMessage? DisplayMessage"));
     }
 
     /// <summary>
