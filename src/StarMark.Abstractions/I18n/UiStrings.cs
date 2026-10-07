@@ -1282,9 +1282,17 @@ public static class UiStrings
         // ===== 护眼 · 休息提醒整节（批次 WI-37-B）=====
         // 这一族过去住在 Core：`EyeRestPolicy.IntervalLabels`／`NoticeLabels`／`NoticeHint` 直接拼中文成品串，
         // 于是下拉、状态行、幕布、组件菜单四处各自钉死一份语言（＝P-172 那一族）。Core 现在只交「键＋读数」，
-        // 句子只在这里有一份。<b>分钟数与秒数一律当实参</b>：量词的位置三种语言不同，而"档位说 20 秒、
-        // 幕布倒数到 30"这类自相矛盾要靠实参消灭（秒数只在 `EyeRestPolicy.RestSeconds` 一处）。
-        new Entry("health.eyeRest.intervalMinutes", "{0} 分钟", "{0} min", "{0} 分"),
+        // 句子只在这里有一份。
+        // ⚠ <b>间隔这六档是一档一颗键，⛔ 不是一颗 "{0} 分钟" 加实参</b>：这一排走的是「数据项＋模板」，
+        // 而模板那颗 TextBlock 只能交出一颗键——实参信箱由代码 `LocText.SetKey(el, key, args)` 填，
+        // 模板没有那个机会。真机英文档上这就是坏的一格：闭合的格子显示成 "(0) min"（形状闸门全绿）。
+        // 秒数不受此限（它只出现在代码里挂键的那几句：幕布、状态行、提示卡，那些都走 SetKey/SetMessage）。
+        new Entry("health.eyeRest.interval.15", "15 分钟", "15 min", "15 分"),
+        new Entry("health.eyeRest.interval.20", "20 分钟", "20 min", "20 分"),
+        new Entry("health.eyeRest.interval.30", "30 分钟", "30 min", "30 分"),
+        new Entry("health.eyeRest.interval.45", "45 分钟", "45 min", "45 分"),
+        new Entry("health.eyeRest.interval.60", "60 分钟", "60 min", "60 分"),
+        new Entry("health.eyeRest.interval.90", "90 分钟", "90 min", "90 分"),
         // 提示卡那两句是屏幕上的字（批次 RV-1 自绘那张卡，四个降级出口共用）⇒ 同样只许有一份。
         new Entry("health.card.title", "该休息一下了", "Time for a break", "そろそろ休憩です"),
         new Entry("health.card.body", "已连续工作约 {0}。看看远处，放松一下眼睛。",

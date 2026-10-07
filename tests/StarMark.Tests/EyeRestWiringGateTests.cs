@@ -306,7 +306,9 @@ public sealed class EyeRestWiringGateTests
 
         var vm = SourceGate.ReadRepoPartials(SettingsVm);
         Assert.Contains("EyeRestPolicy.NoticeKeys", vm);                       // 下拉的项（三颗键，不是三句中文）
-        Assert.Contains("EyeRestPolicy.IntervalKey", vm);                      // 间隔那一排同理
+        // 间隔那一排同理，而且<b>必须按"一档一颗键"取</b>：模板交不出实参，带 {0} 的行在屏幕上就是坏的一格
+        // （真机英文档实测闭合的格子显示 "(0) min"，形状闸门全绿＝坑表 #317 那一族）。
+        Assert.Contains("EyeRestPolicy.IntervalKeys[index]", vm);
         Assert.Contains("EyeRestPolicy.NoticeAt(EyeRestNoticeIndex)", vm);     // 下标 → 哪一档
         Assert.Contains("EyeRestPolicy.NoticeMessage(CurrentEyeRestNotice)", vm);   // 状态行取同一颗键
         Assert.Contains("EyeRestPolicy.NoticeHintMessage(CurrentEyeRestNotice)", vm); // 「试一试」也说同一句

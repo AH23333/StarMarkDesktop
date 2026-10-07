@@ -149,20 +149,34 @@ public sealed class EyeRestPolicyTests
     }
 
     /// <summary>
-    /// 每一档的说法都<b>带着自己那个数</b>（批次 WI-37-B 起那句字住在语言表里，Core 只交「键＋读数」）。
-    /// <para>⛔ 判据不许只看"渲染出来的串里有数字"——那会放过"六档共用一个数"这种分岔。这里按<b>实参</b>钉：
-    /// 每档交回的 <see cref="LocMessage"/> 必须带一颗实参、且那颗实参就是这一档的分钟数。</para>
+    /// 每一档的说法都<b>带着自己那个数</b>，而且这一排<b>不许退回"一颗键＋实参"</b>（批次 WI-37-B 收口时改的）。
+    /// <para>为什么：这一排要进<b>「数据项＋模板」的下拉</b>，而模板里那颗 <c>TextBlock</c> 只能交出一颗键——
+    /// 实参信箱只有代码调 <c>LocText.SetKey(el, key, args)</c> 时才填得进去，模板没有那个机会。
+    /// 用带 <c>{0}</c> 的行，屏幕上就是坏的一格：真机英文档闭合的格子显示成 <c>(0) min</c>，
+    /// 而 5499 格形状闸门<b>全绿</b>（坑表 #317 那一族，也正是屏幕读数存在的理由）。</para>
+    /// <para>⛔ 判据不许只看"渲染出来的串里有数字"——那会放过"六档共用一个数"。这里四件一起钉：
+    /// 键的<b>颗数＝档数</b>、六颗键<b>互不相同</b>、每档<b>不带实参也不带占位符</b>、
+    /// 表里那一行的<b>三列各自</b>写着它自己那个数字（行直接按那颗键从表里切出来数）。</para>
     /// </summary>
     [Fact]
     public void Labels_AreOnePerOption_AndCarryTheirOwnNumber()
     {
-        foreach (var minutes in EyeRestPolicy.IntervalOptions)
+        Assert.Equal(EyeRestPolicy.IntervalOptions.Length, EyeRestPolicy.IntervalKeys.Length);
+        Assert.Equal(EyeRestPolicy.IntervalKeys.Length, EyeRestPolicy.IntervalKeys.Distinct().Count());
+        var table = SourceGate.ReadRepoFile("src/StarMark.Abstractions/I18n/UiStrings.cs");
+        for (var i = 0; i < EyeRestPolicy.IntervalOptions.Length; i++)
         {
+            var minutes = EyeRestPolicy.IntervalOptions[i];
+            var number = minutes.ToString(System.Globalization.CultureInfo.InvariantCulture);
             var message = EyeRestPolicy.IntervalMessage(minutes);
-            Assert.Equal(EyeRestPolicy.IntervalKey, message.Key);
-            Assert.Equal(new object?[] { minutes }, message.Args);
-            Assert.Contains(minutes.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                message.Render(), StringComparison.Ordinal);
+            Assert.Equal(EyeRestPolicy.IntervalKeys[i], message.Key);      // 顺序＝IntervalOptions（下拉的选中项跟着档位走）
+            Assert.Null(message.Args);                                     // 这一排交不出实参，也不该要实参
+            Assert.DoesNotContain("{0}", message.Render(), StringComparison.Ordinal);
+            var at = table.IndexOf("\"" + message.Key + "\"", StringComparison.Ordinal);
+            Assert.True(at >= 0, $"表里找不到这一档的键：{message.Key}");
+            var row = table[(at + message.Key.Length + 2)..];
+            row = row[..row.IndexOf("),", StringComparison.Ordinal)];
+            Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(row, number).Count);   // 中／英／日各一次
         }
         // 非法值先夹再说话：界面上不许出现"0 分钟"这种下拉里根本没有的档位
         Assert.Contains(EyeRestPolicy.DefaultIntervalMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture),

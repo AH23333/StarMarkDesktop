@@ -61,14 +61,25 @@ public sealed class EyeRestPolicy
     public static readonly int[] IntervalOptions = { 15, 20, 30, 45, 60, 90 };
 
     /// <summary>
-    /// 间隔那一档怎么说的那颗键（批次 WI-37-B）。<b>整句进表、分钟数当实参</b>：
-    /// "45 分钟"这种量词在三种语言里位置不同（英文 "45 min"、日文「45 分」），拼在代码里就等于替英文和日文重写中文语序。
+    /// 间隔每一档怎么说的那<b>六颗键</b>，<b>顺序＝<see cref="IntervalOptions"/></b>（批次 WI-37-B 收口时改的）。
+    /// <para>为什么一档一颗键、而不是 <c>"{0} 分钟"</c> ＋分钟数当实参：这一排要进<b>「数据项＋模板」的下拉</b>，
+    /// 而模板里那颗 <c>TextBlock</c> 只能交出一颗键——带实参的那条路要靠代码调 <c>LocText.SetKey(el, key, args)</c>
+    /// 填信箱，模板没有那个机会。用带 <c>{0}</c> 的行，屏幕上就是坏的一格（真机英文档实测：闭合的格子显示
+    /// <c>(0) min</c>，而 5499 格形状闸门全绿＝坑表 #317 那一族，屏幕读数存在的理由）。</para>
+    /// <para>代价说清楚：<b>分钟数在表与 <see cref="IntervalOptions"/> 各写一次</b>，所以
+    /// <c>EyeRestPolicyTests</c> 逐颗钉"这一行的三列都带着它自己那个数字"——加一档忘了加行、
+    /// 或改了档位忘了改行，都会红。</para>
     /// </summary>
-    public const string IntervalKey = "health.eyeRest.intervalMinutes";
+    public static readonly string[] IntervalKeys =
+        { "health.eyeRest.interval.15", "health.eyeRest.interval.20", "health.eyeRest.interval.30",
+          "health.eyeRest.interval.45", "health.eyeRest.interval.60", "health.eyeRest.interval.90" };
 
-    /// <summary>某一档是多少分钟 ⇒ 那一行怎么说。<b>交的是「键＋读数」，不是成品串</b>：
+    /// <summary>某个分钟数怎么说的那颗键（先走 <see cref="ClampInterval"/>，认不得的值不会取到别的档）。</summary>
+    public static string IntervalKey(int minutes) => IntervalKeys[System.Array.IndexOf(IntervalOptions, ClampInterval(minutes))];
+
+    /// <summary>某一档是多少分钟 ⇒ 那一行怎么说。<b>交的是那颗键，不是成品串</b>：
     /// Core 一旦拼出中文句子，换语言那一刻没人会回去重算（P-172 那一族的形状）。</summary>
-    public static LocMessage IntervalMessage(int minutes) => LocMessage.Of(IntervalKey, ClampInterval(minutes));
+    public static LocMessage IntervalMessage(int minutes) => LocMessage.Of(IntervalKey(minutes));
 
     /// <summary>第 <paramref name="index"/> 档是多少分钟（下标越界夹到两端，不抛）。</summary>
     public static int IntervalAt(int index)

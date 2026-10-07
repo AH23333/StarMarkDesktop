@@ -64,7 +64,7 @@ public partial class SettingsPageViewModel
     /// </summary>
     public IReadOnlyList<LocOption> EyeRestIntervalOptions { get; } =
         StarMark.Core.Health.EyeRestPolicy.IntervalOptions
-            .Select(minutes => new LocOption(StarMark.Core.Health.EyeRestPolicy.IntervalKey, string.Empty, minutes))
+            .Select((minutes, index) => new LocOption(StarMark.Core.Health.EyeRestPolicy.IntervalKeys[index], string.Empty, minutes))
             .ToList();
 
     /// <summary>提醒形式那三档，顺序＝<c>EyeRestPolicy.NoticeOptions</c>（也就是设置档里那颗序号）。</summary>
