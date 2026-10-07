@@ -157,10 +157,13 @@
                 </Button.Flyout>
             </Button>
 
-            <!-- 语言筛选：常态显示（对齐扩展工具栏），选项由搜索页结果聚合；全部 = 不过滤 -->
+            <!-- 语言筛选：常态显示（对齐扩展工具栏），选项由搜索页结果聚合；全部 = 不过滤。
+                 「数据项＋模板」（批次 WI-38）：闭着的那一格显示的是选中那一刻抄走的快照，
+                 只有格子里那颗 TextBlock 自己带键，换语言才轮得到它重贴（坑表 #272／#275）。 -->
             <ComboBox x:Name="LanguageCombo" MinWidth="116" FontSize="12"
                       i18n:LocText.PlaceholderKey="searchLang.placeholder"
                       i18n:LocText.ToolTipKey="searchLang.tip"
+                      ItemTemplate="{StaticResource LocOptionTemplate}"
                       SelectionChanged="LanguageCombo_SelectionChanged"/>
 
             <CheckBox x:Name="ShowHiddenCheck" i18n:LocText.Key="top.showHidden" Click="ShowHidden_Click" FontSize="12" VerticalAlignment="Center"/>

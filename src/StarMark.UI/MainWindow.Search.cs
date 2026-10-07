@@ -212,15 +212,21 @@ public sealed partial class MainWindow
 
     // ───────── 语言筛选（常态显示于工具栏；选项由搜索页结果聚合）─────────
 
-    private const string LanguageAllItem = "语言：全部";
+    /// <summary>
+    /// 「全部」那一行的<b>身份就是空字符串</b>（<see cref="MainViewModel.CurrentLanguage"/> 认这个值＝不过滤）。
+    /// <para>⛔ 别再存一颗中文常量当"全部"的显示文字：那颗下拉的其余各项是仓库语言的<b>自名</b>（不翻），
+    /// 只有这一项是界面话——它必须走表（<c>searchLang.placeholder</c>，与占位文字同一颗键，⛔ 不起第二个键名），
+    /// 而身份交回 <c>Value</c>，换语言那一刻屏幕上改口、选中的还是同一项。</para>
+    /// </summary>
+    private const string LanguageAllValue = "";
+
     private bool _syncingLanguageCombo;
     private bool _languageHooked;
 
     private void LanguageCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_syncingLanguageCombo) return;
-        var selected = LanguageCombo.SelectedItem as string;
-        var lang = (selected is null || selected == LanguageAllItem) ? string.Empty : selected;
+        var lang = LanguageCombo.SelectedItem is LocOption { Value: string name } ? name : LanguageAllValue;
         // 单一事实来源：主界面语言下拉同时驱动浏览（文件夹/star）与搜索两套过滤
         ViewModel.CurrentLanguage = lang;
         if (ContentFrame?.Content is SearchPage sp) sp.ViewModel.CurrentLanguage = lang;
@@ -248,13 +254,15 @@ public sealed partial class MainWindow
             var set = new HashSet<string>(_starLanguages, StringComparer.OrdinalIgnoreCase);
             // 搜索结果里实际出现的语言一并合并（同样是真实存在的语言）
             if (vm is not null) foreach (var l in vm.AvailableLanguages) set.Add(l);
-            var items = new List<string> { LanguageAllItem };
-            items.AddRange(set);
+            var items = new List<LocOption> { LocOption.T("searchLang.placeholder", LanguageAllValue) };
+            // 其余各项是仓库语言的<b>自名</b>（Python 在英文界面上也叫 Python）⇒ 走 SelfName，⛔ 不进表。
+            items.AddRange(set.Select(l => LocOption.SelfName(l, l)));
             LanguageCombo.ItemsSource = items;
             var current = ViewModel.CurrentLanguage;
             LanguageCombo.SelectedIndex = string.IsNullOrEmpty(current)
                 ? 0
-                : Math.Max(0, items.IndexOf(current));
+                : Math.Max(0, items.FindIndex(o => o.Value is string name
+                    && string.Equals(name, current, StringComparison.OrdinalIgnoreCase)));
         }
         finally { _syncingLanguageCombo = false; }
     }

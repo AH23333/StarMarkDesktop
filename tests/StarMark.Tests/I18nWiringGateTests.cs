@@ -1442,6 +1442,41 @@ public sealed class I18nWiringGateTests
     }
 
     /// <summary>
+    /// <b>主窗那颗「语言」下拉：全部那一行走表，仓库语言的自名不走表</b>（批次 WI-38，用户真机报
+    /// 「主窗口"语言"选择未国际化」）。
+    /// <para>根因不是"忘了挂键"，而是<b>那颗下拉根本没有可挂键的东西</b>：它的项是一段中文常量
+    /// <c>"语言：全部"</c> 加上一串裸字符串，闭着的格子显示的是选中那一刻从 <c>Content</c> 抄走的快照
+    /// ⇒ 换语言那一刻它一个字都不动（WI-2c 立下的那条修法在这里是第一次用到"混合项"上：
+    /// 一颗要翻、其余不翻）。⛔ 因此不许退回 <c>SetAt</c>，也不许给"全部"那一句再起第二个键名——
+    /// 它与占位文字本来就是同一句话（<c>searchLang.placeholder</c>）。</para>
+    /// </summary>
+    [Fact]
+    public void TheMainWindowLanguageComboCarriesOneTranslatableRowAndSelfNamedRest()
+    {
+        var xaml = Code(ReadRepoFile("src/StarMark.UI/MainWindow.xaml"));
+        var search = Code(ReadRepoFile("src/StarMark.UI/MainWindow.Search.cs"));
+
+        // 数据项＋模板：格子里那颗元素自己带键，重贴才轮得到它。
+        // ⚠ 必须<b>切到这颗 ComboBox 身上</b>再断言：主窗那颗排序下拉早就带着同一行模板，
+        // 整档 Contains 在"把语言下拉的模板删掉"那一臂上是<b>绿</b>的（台架 C1 第一跑实测，坑表 #340 同族）。
+        var at = xaml.IndexOf("<ComboBox x:Name=\"LanguageCombo\"", StringComparison.Ordinal);
+        Assert.True(at >= 0, "主窗那颗语言下拉不见了（改名或搬走了，判据要跟上）");
+        var combo = xaml[at..(xaml.IndexOf("/>", at, StringComparison.Ordinal) + 2)];
+        Assert.Contains("ItemTemplate=\"{StaticResource LocOptionTemplate}\"", combo, StringComparison.Ordinal);
+        Assert.Contains("i18n:LocText.PlaceholderKey=\"searchLang.placeholder\"", combo, StringComparison.Ordinal);
+
+        // 「全部」那一行交的是这颗键＋空字符串身份；其余各项是仓库语言自名（Python 在哪一版都叫 Python）
+        Assert.Contains("LocOption.T(\"searchLang.placeholder\", LanguageAllValue)", search, StringComparison.Ordinal);
+        Assert.Contains("LocOption.SelfName(l, l)", search, StringComparison.Ordinal);
+        // ⛔ 中文常量当"全部"的显示文字＝第二份语言钉在代码里；它一回来，那颗格子又不会跟着换语言了
+        Assert.DoesNotContain("语言：全部", search, StringComparison.Ordinal);
+        // 读的是身份不是那串字：换语言之后显示文字变了，选中的还是同一项
+        Assert.Contains("LanguageCombo.SelectedItem is LocOption { Value: string name }", search, StringComparison.Ordinal);
+        Assert.Contains("o.Value is string name", search, StringComparison.Ordinal);   // 回灌选中项也按身份找
+        Assert.DoesNotContain("items.IndexOf(current)", search, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// <b>组件窗自己的三条文字出口只许交键</b>（批次 WI-37-A，用户真机报「组件内容和右键菜单未国际化」）。
     /// <para>三条出口按宿主形状分三种接法（WI-2o 定下的口径，这里逐颗钉住）：
     /// ① <b>右键菜单</b>每次打开都重建（<c>OnContextMenuOpening</c>）⇒ 构建那一刻 <c>Locale.T</c> 就够；
