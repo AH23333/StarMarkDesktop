@@ -1336,4 +1336,58 @@ public sealed class I18nWiringGateTests
             Assert.True(set >= 0 && apply > set, file + "：必须 TrySet 之后接 Apply（先覆盖后定档＝读旧语言）");
         }
     }
+
+    /// <summary>
+    /// 「桌面工具」那一栏由 <b>code-behind 现建</b>的那排字只许交键（批次 WI-35，P-169 ① 点名的最后一格）。
+    /// <para>症状不是"没翻"，是<b>那一行的语言被钉在建行那一刻</b>：这些 Expander 摆出来之后不重建，
+    /// 换语言回头看那一栏，类型标题、计数与那排按钮还挂着旧语言（坑表 #276 同一件事，只是宿主从 XAML
+    /// 换成了 C#）。修法与标记那一路同形：元素挂进 <c>LocText</c> 那棵树，换语言由那颗全局订阅重贴。</para>
+    /// <para>两头钉：① 五处挂键逐处点名（少挂一处＝那一行退回钉死，而屏幕上看不出区别）；
+    /// ② <b>零格</b>——这两个方法体里再不许出现一句中文字面量，给的判据是"哪一句"而不是"少了几个"。
+    /// ⚠ 零格只收这两个方法体，不收整档：那颗「未设置」还兼着"这行到底绑没绑"的哨兵值，
+    /// 直接把它的字换掉会让分类计数在换语言那一刻数错（要先拆状态再挂键＝账上另立的一刀）。</para>
+    /// <para>③ 类型标题必须挂<b>注册表那颗键</b>：现取 <c>KindTitle(kind)</c> 既把成品串钉进界面，
+    /// 又给同一句话开出第二种写法（托盘那一路早已交键）。④ 确认框那两颗按钮复用对话框那对键，
+    /// ⛔ 不许在这一栏再造一份「删除／取消」（三个主人的教训）。</para>
+    /// </summary>
+    [Fact]
+    public void TheWidgetRowsHandKeysNotWords()
+    {
+        const string file = "src/StarMark.UI/Views/SettingsPage.Widgets.cs";
+        var page = Code(ReadRepoFile(file));
+        foreach (var call in new[]
+                 {
+                     "LocText.SetKey(addBtn, \"settings.widgets.addRow\")",
+                     "LocText.SetKey(showBtn, \"settings.widgets.showOne\")",
+                     "LocText.SetKey(removeBtn, \"settings.widgets.removeOne\")",
+                     "LocText.SetKey(label, \"settings.widgets.instanceLine\"",
+                     "LocText.SetKey(title, WidgetStorage.KindTitleKey(kind))",
+                     "LocText.SetKey(counted, \"settings.widgets.noneAdded\")",
+                     "LocText.SetKey(counted, \"settings.widgets.addedCount\"",
+                 })
+            Assert.Contains(call, page, StringComparison.Ordinal);
+
+        Assert.DoesNotContain("WidgetStorage.KindTitle(kind)", page, StringComparison.Ordinal);
+
+        // 置顶那半句是实参不是第二颗键：它得由表里那颗尾巴出，代码只许决定"挂不挂"。
+        Assert.Equal(1, Count(page, "Locale.T(\"settings.widgets.instanceTopmost\")"));
+
+        foreach (var method in new[] { "private void BuildWidgetRows()", "private async void DeleteLayout_Click" })
+        {
+            var body = MethodBody(page, method);
+            var stillLiteral = Regex.Matches(body, @"(?:Content|Text)\s*=\s*""([^""]*)""|""([^""]*)""")
+                .Cast<Match>()
+                .Select(m => (m.Groups[1].Success ? m.Groups[1] : m.Groups[2]).Value)
+                .Where(v => Regex.IsMatch(v, @"[\u4e00-\u9fff]"))
+                .ToArray();
+            Assert.True(body.Length > 0, $"{method}：读不到方法体，这一格就成了空判（读不到不等于通过）");
+            Assert.Equal(Array.Empty<string>(), stillLiteral);
+        }
+
+        var del = MethodBody(page, "private async void DeleteLayout_Click");
+        Assert.Contains("Locale.T(\"settings.widgets.deleteLayoutTitle\")", del, StringComparison.Ordinal);
+        Assert.Contains("Locale.Fmt(\"settings.widgets.deleteLayoutBody\", row?.Name ?? id)", del, StringComparison.Ordinal);
+        Assert.Contains("Locale.T(\"dialog.delete\")", del, StringComparison.Ordinal);
+        Assert.Contains("Locale.T(\"dialog.cancel\")", del, StringComparison.Ordinal);
+    }
 }

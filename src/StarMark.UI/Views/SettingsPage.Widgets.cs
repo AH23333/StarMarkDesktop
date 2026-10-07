@@ -15,6 +15,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Backup;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Backup;
 using StarMark.Core.Hotkeys;
 using StarMark.Core.Widgets;
@@ -64,13 +65,15 @@ public sealed partial class SettingsPage
 
             var content = new StackPanel { Spacing = 2 };
 
+            // 这一族由 code-behind 现建，字一律<b>挂键</b>而不是写成品串（批次 WI-35）：
+            // 挂进 LocText 那棵树之后，换语言那一刻这些行不用重建也跟着改口；写死串就把语言钉在建行那一刻。
             var addBtn = new Button
             {
-                Content = "添加组件",
                 Style = (Style)Application.Current.Resources["SecondaryButton"], // 仅 Style 查找（非画笔），不受主题冻结影响
                 Padding = new Thickness(10, 3, 10, 3),
                 HorizontalAlignment = HorizontalAlignment.Left,
             };
+            LocText.SetKey(addBtn, "settings.widgets.addRow");
             var captured = kind;
             addBtn.Click += (_, _) => _ = mgr.AddInstanceAsync(captured);
             content.Children.Add(addBtn);
@@ -86,28 +89,31 @@ public sealed partial class SettingsPage
 
                 var label = new TextBlock
                 {
-                    Text = $"实例 {idx + 1}" + (inst.Topmost ? "（置顶）" : string.Empty),
                     VerticalAlignment = VerticalAlignment.Center,
                     Opacity = 0.8,
                 };
+                // 一颗骨架两个槽：置顶那半句在哪种语言里都贴着序号，所以它是实参而不是第二颗键
+                //（拆成两句就得在代码里拼分隔符＝P-171 那个形状）。
+                LocText.SetKey(label, "settings.widgets.instanceLine", idx + 1,
+                    inst.Topmost ? Locale.T("settings.widgets.instanceTopmost") : string.Empty);
                 var id = inst.Id;
                 var showBtn = new Button
                 {
-                    Content = "显示",
                     Style = (Style)Application.Current.Resources["SecondaryButton"], // 仅 Style 查找（非画笔），不受主题冻结影响
                     Padding = new Thickness(8, 2, 8, 2),
                     Margin = new Thickness(6, 0, 0, 0),
                     VerticalAlignment = VerticalAlignment.Center,
                 };
+                LocText.SetKey(showBtn, "settings.widgets.showOne");
                 showBtn.Click += (_, _) => _ = mgr.ShowAsync(id);
                 var removeBtn = new Button
                 {
-                    Content = "移除",
                     Style = (Style)Application.Current.Resources["SecondaryButton"], // 仅 Style 查找（非画笔），不受主题冻结影响
                     Padding = new Thickness(8, 2, 8, 2),
                     Margin = new Thickness(6, 0, 0, 0),
                     VerticalAlignment = VerticalAlignment.Center,
                 };
+                LocText.SetKey(removeBtn, "settings.widgets.removeOne");
                 removeBtn.Click += (_, _) => _ = mgr.RemoveAsync(id);
 
                 Grid.SetColumn(label, 0);
@@ -120,21 +126,27 @@ public sealed partial class SettingsPage
             }
 
             var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
-            header.Children.Add(new TextBlock
+            var title = new TextBlock
             {
-                Text = WidgetStorage.KindTitle(kind),
                 FontSize = 14,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 Foreground = Brush("TextFillColorPrimaryBrush", Microsoft.UI.Colors.Black),
-            });
-            header.Children.Add(new TextBlock
+            };
+            // 类型名早就有键（组件注册表那颗 TitleKey，托盘子菜单在用）：这里挂<b>那颗键</b>而不是
+            // 它渲染出来的串——现取的成品串会把语言钉在建行那一刻，而这一行会一直摆在屏幕上。
+            LocText.SetKey(title, WidgetStorage.KindTitleKey(kind));
+            header.Children.Add(title);
+            var counted = new TextBlock
             {
-                Text = kindInstances.Count == 0 ? "未添加" : $"已添加 {kindInstances.Count} 个",
                 FontSize = 11,
                 Opacity = 0.7,
                 Foreground = Brush("TextFillColorSecondaryBrush", Microsoft.UI.Colors.Gray),
                 VerticalAlignment = VerticalAlignment.Center,
-            });
+            };
+            // 没加与加了 N 颗是两种话，也是两种形状：一颗不带实参、一颗带，⛔ 不许合成一句"已添加 0 个"。
+            if (kindInstances.Count == 0) LocText.SetKey(counted, "settings.widgets.noneAdded");
+            else LocText.SetKey(counted, "settings.widgets.addedCount", kindInstances.Count);
+            header.Children.Add(counted);
 
             WidgetRows.Children.Add(new Expander
             {
@@ -178,10 +190,12 @@ public sealed partial class SettingsPage
 
         var row = LayoutRowsItems.FirstOrDefault(r => r.Id == id);
         // 统一走外部居中窗口（非 ContentDialog）：按用户主题着色、可拖动、不可重复。
+        // 三句都在<b>弹出这一刻</b>现取（批次 WI-35）：一次性的框没有"后来换语言"的时刻，
+        // 而按钮那两颗复用对话框那对键，不在这一栏里再造第二个出处。
         var confirm = await CenteredDialog.ConfirmAsync(
-            "删除布局",
-            $"确定删除布局「{row?.Name ?? id}」？绑定给它切换的快捷键也会同时失效。",
-            primaryText: "删除", cancelText: "取消",
+            Locale.T("settings.widgets.deleteLayoutTitle"),
+            Locale.Fmt("settings.widgets.deleteLayoutBody", row?.Name ?? id),
+            primaryText: Locale.T("dialog.delete"), cancelText: Locale.T("dialog.cancel"),
             owner: App.MainWindow, dedupeKey: $"deletelayout:{id}");
         if (!confirm) return;
         await mgr.DeleteLayoutAsync(id);

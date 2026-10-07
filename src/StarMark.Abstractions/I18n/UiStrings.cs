@@ -161,6 +161,8 @@ public static class UiStrings
         // 那一屏上还有五行状态读数是 VM／code-behind 现写的中文（已逐条读到赋值点），不点名就等于藏着。
         // 第六版（批次 WI-2h）同一形状再来一次：「桌面工具」那一栏的标记进表，剩下的正文只剩一栏；
         // 而这一屏上的中文还有三样是程序现写的（每一类那行标题、展开后每行两颗按钮、布局那栏每行的名字与摘要）。
+        // 第七版（批次 WI-35）动的还是<b>覆盖面</b>：前两样（类型标题与展开后那排按钮）已改挂键，欠格清单里
+        // 那半句必须一起删——这句是界面在报"还剩哪儿没翻"，留着它就是当着用户多报两处已翻好的地方（#297 同族）。
         new Entry("settings.languageNote",
             "改完立刻生效，不用重启。这一版换掉了主窗口顶部那一排（页签、搜索框、排序与筛选按钮）、"
             + "设置页的页眉与那八栏的标题，和「常规」「使用说明」「快捷键」「数据」「健康与诊断」「拓展功能」「桌面工具（组件）」「AI 增强」这八栏里由界面标记写出来的那排字。"
@@ -170,8 +172,7 @@ public static class UiStrings
             + "快捷键这一栏的分类名与每一行的动作名和键位、健康页那两排下拉的选项、那一页「诊断」的整列标签、"
             + "数据这一栏那几行状态读数、备份列表那行标题与每行那颗按钮的字、那颗备份间隔下拉的选项、"
             + "拓展功能这一栏那五行状态读数（热榜／RSS／本地磁盘搜索／截屏／画布）、那行引擎占用大小的「约」字"
-            + "与画布快捷键一览每行的动作名，桌面工具这一栏每一类组件那行标题与展开后每行两颗按钮的字，"
-            + "开机加载那行说每颗约多少的读数、布局那一栏每行的名字与摘要，"
+            + "与画布快捷键一览每行的动作名，桌面工具这一栏开机加载那行说每颗约多少的读数、布局那一栏每行的名字与摘要，"
             + "AI 增强这一栏那行测试结果与那行用量读数、那些写着出厂数值与当前设置的只读展示、"
             + "通道下拉里由枚举现生成的那些通道名，还有那些把当场算出来的值写进标签的按钮"
             + "（写着要改用的模型名、写着上次整理好的条数），"
@@ -189,8 +190,8 @@ public static class UiStrings
             + "key, the two option lists on the Health page, the whole label column under Diagnostics there, "
             + "the status lines on the Data page, that backup list's own header and every row's button, "
             + "the options in the backup-interval dropdown, the five status lines on the Extensions page, the word "
-            + "in front of the engine's size and every canvas shortcut's action name there, on the Desktop tools page each widget "
-            + "type's own header and the two buttons under it, the per-window cost line under the startup switch and every "
+            + "in front of the engine's size and every canvas shortcut's action name there, on the Desktop tools page the "
+            + "per-window cost line under the startup switch and every "
             + "layout row's name and summary, on the AI page the probe-result and usage lines, the three read-only rows "
             + "quoting built-in limits against the current settings, the channel names the dropdown builds from an enum "
             + "and those buttons whose labels carry a value computed on the spot (naming the model it would "
@@ -526,6 +527,21 @@ public static class UiStrings
         new Entry("settings.widgets.layoutNote", "在组件窗口标题栏点右键，那排动作里有一颗能把当前这一屏存成纯模板：存下来的是各组件的位置、大小与外观配置（不含条目内容数据）。同一时刻只会启用一套布局，切换它的快捷键可在「快捷键」那一栏录制。", "Right-click a widget's title bar and one of those actions saves the current screen as a pure template: positions, sizes and appearance settings for every widget (never the items themselves). Only one layout is active at a time, and the hotkey that switches between them is recorded under the “Hotkeys” tab.", "ウィジェット窓のタイトルバーで右クリックすると、あの並びのアクションに一つ、現在のこの画面を純粋なテンプレートとして保存するものがあります：保存されるのは各ウィジェートの位置、大きさ、外観設定で、条目の中身データは含みません。同時に有効なレイアウトは一套だけ、それらを切り替えるショートカットキーは「ショートカットキー」の欄で録れます。"),
         new Entry("settings.widgets.applyLayout", "应用", "Apply", "適用"),
         new Entry("settings.widgets.noLayouts", "（暂无保存的布局）", "(no saved layouts yet)", "（保存済みのレイアウトはまだありません）"),
+        // 批次 WI-35：「桌面工具」那一栏由 code-behind 现建的那排字（每一类标题下展开后的三颗按钮、
+        // 实例那一行的序号与置顶尾巴、标题上那颗计数）。实例行用<b>一颗骨架＋一颗尾巴</b>而不是两句整话：
+        // "实例 3（置顶）" 的尾巴在哪种语言里都贴着序号，拆成两句就得在代码里拼分隔符（P-171 那个形状）。
+        new Entry("settings.widgets.addRow", "添加组件", "Add widget", "ウィジェットを追加"),
+        new Entry("settings.widgets.showOne", "显示", "Show", "表示"),
+        new Entry("settings.widgets.removeOne", "移除", "Remove", "削除"),
+        new Entry("settings.widgets.instanceLine", "实例 {0}{1}", "Instance {0}{1}", "インスタンス {0}{1}"),
+        new Entry("settings.widgets.instanceTopmost", "（置顶）", " (on top)", "（最前面）"),
+        new Entry("settings.widgets.noneAdded", "未添加", "None added", "未追加"),
+        new Entry("settings.widgets.addedCount", "已添加 {0} 个", "{0} added", "{0} 件追加済み"),
+        new Entry("settings.widgets.deleteLayoutTitle", "删除布局", "Delete layout", "レイアウトを削除"),
+        new Entry("settings.widgets.deleteLayoutBody",
+            "确定删除布局「{0}」？绑定给它切换的快捷键也会同时失效。",
+            "Delete the layout “{0}”? The hotkey bound to switch to it stops working too.",
+            "レイアウト「{0}」を削除しますか？それに割り当てたショートカットキーも無効になります。"),
         // ===== 「AI 增强」那一栏（批次 WI-2i：标记进表，宽尺 39 → 0）=====
         // ⚠ 这一栏没有一句能复用：35 句逐字拿去表的中文列比过一遍，一处逐字相同都没有
         //   （最接近的两处是开关那两个字——这一栏写「开／关」，共用那颗键是「开启／关闭」，
