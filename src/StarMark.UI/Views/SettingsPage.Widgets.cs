@@ -219,5 +219,6 @@ public sealed partial class SettingsPage
     /// <summary>一条快捷键最多允许几个按键（修饰键 + 主键一起算）。</summary>
     private const int MaxHotkeyKeys = 3;
 
-    private const string UnsetText = "未设置";
+    // 「这一行绑没绑」记在 HotkeyRow.Bound，屏幕上那句话住在表里（hotkey.unset）。
+    // 两者从前共用一颗 const，于是那句一进表，分类计数就会在换语言那一刻全归零（坑表 #354）。
 }

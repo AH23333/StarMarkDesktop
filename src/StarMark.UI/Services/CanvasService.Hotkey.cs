@@ -6,6 +6,7 @@ using System.Linq;
 using Microsoft.UI.Dispatching;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Canvas;
 using StarMark.Core.Capture;
 using StarMark.Core.Hotkeys;
@@ -74,20 +75,20 @@ public static partial class CanvasService
             : $"「{what}」要先在 设置 → 拓展功能 里打开「屏幕画布」");
     }
 
-    /// <summary>某动作当前绑定的键位文本（没绑定／读不到设置时回"未绑定"，绝不回一个假键位）。</summary>
+    /// <summary>某动作当前绑定的键位文本（没绑定／读不到设置时回表里那颗 <c>hotkey.unbound</c>，绝不回一个假键位）。</summary>
     public static string BindingText(string action)
     {
         try
         {
             var settings = App.Services?.GetService(typeof(SettingsStore)) as SettingsStore;
-            if (settings is null) return "未绑定";
+            if (settings is null) return Locale.T("hotkey.unbound");
             var gesture = settings.GetHotkeyBindings().GetValueOrDefault(action);
-            return gesture is { IsEmpty: false } bound ? HotkeyDisplay.Display(bound) : "未绑定";
+            return gesture is { IsEmpty: false } bound ? HotkeyDisplay.Display(bound) : Locale.T("hotkey.unbound");
         }
         catch (Exception ex)
         {
             StarLog.Warn($"[Canvas] 键位文本没取到：{ex.Message}");
-            return "未绑定";
+            return Locale.T("hotkey.unbound");
         }
     }
 }

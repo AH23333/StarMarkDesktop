@@ -68,7 +68,10 @@ public sealed partial class SettingsPage
             {
                 Action = action,
                 ActionName = HotkeyActions.DisplayName(action, _layouts),
-                BindingText = bound ? HotkeyDisplay.Display(g!) : UnsetText,
+                // 绑没绑记在 Bound 上：那一栏的计数读它。⛔ 让"给人看的那一句"兼任真值判据——
+                // 「未设置」进了表之后，按字符串相等数出来的数会在换语言那一刻全归零（坑表 #354）。
+                Bound = bound,
+                BindingText = bound ? HotkeyDisplay.Display(g!) : Locale.T("hotkey.unset"),
             };
             HotkeyRowsItems.Add(row);
             var cat = HotkeyActions.CategoryOf(action, _layouts);
@@ -97,7 +100,7 @@ public sealed partial class SettingsPage
         };
         repeater.Layout = new StackLayout { Spacing = 4 };
 
-        var count = rows.Count(r => !string.Equals(r.BindingText, UnsetText, StringComparison.Ordinal));
+        var count = rows.Count(r => r.Bound);
         var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
         header.Children.Add(new TextBlock
         {
@@ -150,7 +153,7 @@ public sealed partial class SettingsPage
                                 .ToList();
             row.ConflictText = others.Count == 0
                 ? string.Empty
-                : "⚠ 与其它动作共用该组合：" + string.Join("、", others);
+                : Locale.Fmt("hotkey.conflict.shares", string.Join(Locale.T("hotkey.conflict.join"), others));
         }
     }
 
@@ -187,7 +190,7 @@ public sealed partial class SettingsPage
         {
             var why = HotkeyErrorText.HookInstallFailure(hookError);
             StarMark.Abstractions.StarLog.Warn($"无法安装键盘钩子：{why} ⇒ 快捷键录制不可用");
-            RecordingAlert = why + "——因此收不到你按下的键。再点一次这个按钮即可重试。";
+            RecordingAlert = Locale.Fmt("hotkey.record.hookRetry", why);
             return;
         }
         RecordingAlert = string.Empty;
@@ -290,7 +293,8 @@ public sealed partial class SettingsPage
         StopRecording(resetText: false);
         row.IsRecording = false;
         var g = _hotkeyBindings[action];
-        row.BindingText = g.IsEmpty ? UnsetText : HotkeyDisplay.Display(g);
+        row.Bound = !g.IsEmpty;
+        row.BindingText = g.IsEmpty ? Locale.T("hotkey.unset") : HotkeyDisplay.Display(g);
         _ignoreClickUntil = DateTimeOffset.UtcNow.AddMilliseconds(400);  // 吞掉本键附带的那次 Click
         _hotkeysDirty = true;
         RaiseHotkeyStateChanged();
@@ -306,7 +310,8 @@ public sealed partial class SettingsPage
         if (resetText && _recordingRow is not null)
         {
             _recordingRow.IsRecording = false;
-            _recordingRow.BindingText = _recordingPrevText ?? UnsetText;
+            _recordingRow.Bound = _recordingWasSet;
+            _recordingRow.BindingText = _recordingPrevText ?? Locale.T("hotkey.unset");
         }
         _recordingAction = null;
         _recordingButton = null;
@@ -340,7 +345,11 @@ public sealed partial class SettingsPage
         _hkHook.SwallowCurrentKeyDown();
         _hotkeyBindings[_recordingAction] = new HotkeyGesture(HotkeyModifiers.NoRepeat, 0);
         StopRecording(resetText: false);
-        if (row is not null) row.BindingText = UnsetText;
+        if (row is not null)
+        {
+            row.Bound = false;
+            row.BindingText = Locale.T("hotkey.unset");
+        }
         _hotkeysDirty = true;
         RaiseHotkeyStateChanged();
         RefreshConflictMarks();

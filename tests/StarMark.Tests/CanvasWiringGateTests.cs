@@ -1526,14 +1526,19 @@ public sealed class CanvasWiringGateTests
             SourceGate.MethodBody(service, "public static void PanelClosed(CanvasHotkeyPanelWindow panel)"));
     }
 
-    /// <summary>面板上的键位文本取自真实绑定；读不到时说"未绑定"，绝不回一个看起来对的假键位。</summary>
+    /// <summary>
+    /// 面板上的键位文本取自真实绑定；读不到时交表里那颗"没绑"，绝不回一个看起来对的假键位。
+    /// <para>批次 WI-40-1 把那颗词搬进表（<c>hotkey.unbound</c>），所以"三条兜底路都不能编出键位"这一判据
+    /// 改钉<b>那颗键出现三次</b>——数的还是同一个东西（三条出口各有兜底），⛔ 不是把尺子放宽。</para>
+    /// </summary>
     [Fact]
     public void BindingTextFallsBackToUnbound_NeverToABogusKey()
     {
         var text = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "public static string BindingText(string action)");
         Assert.Contains("gesture is { IsEmpty: false } bound", text);
         Assert.Contains("HotkeyDisplay.Display(bound)", text);
-        Assert.Equal(3, SourceGate.Count(text, "\"未绑定\""));      // 没设置 / 没绑定 / 抛异常：三条兜底路都不能编出键位
+        Assert.Equal(3, SourceGate.Count(text, "Locale.T(\"hotkey.unbound\")"));   // 没设置 / 没绑定 / 抛异常：三条兜底路
+        Assert.DoesNotContain("\"未绑定\"", text);                                  // ⛔ 那颗词回到代码里＝换语言后留一句中文
     }
 
     // ────────── 批次 WD-5：总开关（设置 → 拓展功能）──────────

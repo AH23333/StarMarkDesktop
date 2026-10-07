@@ -695,6 +695,15 @@ public static class UiStrings
         new Entry("hotkey.err.rowNotice", "提示：{0}（设置已保存，占用者退出后自动生效）。{1}", "Note: {0} (settings are saved; it takes effect automatically once the other program exits). {1}", "ヒント：{0}（設定は保存済み。占有側が終了すると自動で有効になります）。{1}"),
         new Entry("hotkey.err.summary", "提示：{0} 个组合键此刻没归这个实例（{1}）。这些快捷键已经保存，程序会每 {2} 秒自己再注册一次，对方一退出就生效——不需要你做任何事；急着现在就要生效可以点「重试注册」，具体每一行怎么换一个键，写在该行的提示里。", "Note: {0} key combination(s) are not held by this instance right now ({1}). These hotkeys are already saved — the app retries registration every {2} seconds on its own and takes over once the other program exits, so you don't need to do anything; if you need it working right away, click Retry registration. How to change the key on each row is written in that row's hint.", "ヒント：{0} 個のキーの組み合わせが現在このインスタンスにありません（{1}）。これらのショートカットは保存済みで、アプリが {2} 秒ごとに自動で再登録し、相手が終了すると引き継ぎます。操作は不要です。今すぐ有効にしたい場合は「再登録」をクリックしてください。各行のキーの変更方法はその行のヒントに書かれています。"),
         new Entry("hotkey.err.summaryItem", "{0}：{1}", "{0}: {1}", "{0}：{1}"),
+        // ===== 快捷键那一栏的"这一行绑没绑"那一族（批次 WI-40-1，P-175 缺口③）=====
+        // ⚠ 两颗"没绑"是<b>两个表面各自的字</b>：设置页那一格是按钮上的占位（未设置），画布那两处是只读一览里的状态（未绑定）。
+        //   合成一颗就会改掉其中一个表面的用词——那不是翻译，是改产品（坑表 #350：颗粒度按"这句会不会不一样"划）。
+        //   并列号单独立行：它与 health／trending 那两族同形（中日都用顿号、en 用半角逗号），所以同形豁免要点名登记。
+        new Entry("hotkey.unset", "未设置", "Not set", "未設定"),
+        new Entry("hotkey.unbound", "未绑定", "Not bound", "未割り当て"),
+        new Entry("hotkey.conflict.shares", "⚠ 与其它动作共用该组合：{0}", "⚠ Shares this combination with other actions: {0}", "⚠ この組み合わせは他の動作と共用しています：{0}"),
+        new Entry("hotkey.conflict.join", "、", ", ", "、"),
+        new Entry("hotkey.record.hookRetry", "{0}——因此收不到你按下的键。再点一次这个按钮即可重试。", "{0} — so the keys you press won't reach the recorder. Click this button again to try once more.", "{0}——そのため押したキーが届きません。このボタンをもう一度クリックすれば再試行できます。"),
         new Entry("hotkey.gate.captureDisabled", "要先在 设置 → 拓展功能 里打开「截屏（截图 / 贴图 / 识字）」", "First turn on Screenshot (capture / pin / OCR) in Settings → Extensions", "先に設定 → 拡張機能 で「スクリーンショット（キャプチャ／貼り付け／文字起こし）」をオンにしてください"),
         new Entry("hotkey.gate.captureBusy", "已经有一次截图在场，先把它结束（Esc 取消）再截下一张", "A screenshot session is already running — finish it first (Esc to cancel) before starting another", "すでにスクリーンショットが実行中です。先に終了して（Esc でキャンセル）から次を撮ってください"),
         new Entry("hotkey.gate.canvasBusySheet", "截图进行中，这条快捷键要等截图结束才归画布", "A screenshot is in progress — this hotkey goes back to the canvas once it ends", "スクリーンショットが進行中です。このショートカットは終了後にキャンバスに戻ります"),

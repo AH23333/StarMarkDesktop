@@ -236,6 +236,19 @@ public sealed class HotkeyRow : INotifyPropertyChanged
     public string Action { get; set; } = string.Empty;
     public string ActionName { get; set; } = string.Empty;
 
+    private bool _bound;
+
+    /// <summary>
+    /// 这一行到底绑没绑——分类标题上那个"N 项已绑定"读的是它。
+    /// <para>⚠ 它⛔ 由 <see cref="BindingText"/> 反推：那颗是给人看的那一句（「未设置」在表里，换语言会跟着换），
+    /// 拿它当判据＝用某一档语言的词做真值比较，换语言那一刻每组的数都会归零（坑表 #354）。</para>
+    /// </summary>
+    public bool Bound
+    {
+        get => _bound;
+        set { if (_bound != value) { _bound = value; OnChanged(); } }
+    }
+
     private string _bindingText = string.Empty;
     public string BindingText
     {

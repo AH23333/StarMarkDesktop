@@ -1381,9 +1381,10 @@ public sealed class I18nWiringGateTests
     /// 换语言回头看那一栏，类型标题、计数与那排按钮还挂着旧语言（坑表 #276 同一件事，只是宿主从 XAML
     /// 换成了 C#）。修法与标记那一路同形：元素挂进 <c>LocText</c> 那棵树，换语言由那颗全局订阅重贴。</para>
     /// <para>两头钉：① 五处挂键逐处点名（少挂一处＝那一行退回钉死，而屏幕上看不出区别）；
-    /// ② <b>零格</b>——这两个方法体里再不许出现一句中文字面量，给的判据是"哪一句"而不是"少了几个"。
-    /// ⚠ 零格只收这两个方法体，不收整档：那颗「未设置」还兼着"这行到底绑没绑"的哨兵值，
-    /// 直接把它的字换掉会让分类计数在换语言那一刻数错（要先拆状态再挂键＝账上另立的一刀）。</para>
+    /// ② <b>零格</b>——这一档里再不许出现一句中文字面量，给的判据是"哪一句"而不是"少了几个"。
+    /// ⚠ 批次 WI-35 当时只收两个方法体，因为那颗「未设置」还兼着"这行到底绑没绑"的<b>哨兵值</b>，
+    /// 直接换掉它的字会让分类计数在换语言那一刻数错（要先拆状态再挂键）。那颗哨兵已在批次 WI-40-1 拆成
+    /// <c>HotkeyRow.Bound</c> ⇒ 挡路的理由到期，零格<b>就地收到整档</b>（见 <see cref="TheHotkeyRowsCountByTheFlagNotByTheDisplayedWords"/>）。</para>
     /// <para>③ 类型标题必须挂<b>注册表那颗键</b>：现取 <c>KindTitle(kind)</c> 既把成品串钉进界面，
     /// 又给同一句话开出第二种写法（托盘那一路早已交键）。④ 确认框那两颗按钮复用对话框那对键，
     /// ⛔ 不许在这一栏再造一份「删除／取消」（三个主人的教训）。</para>
@@ -1410,23 +1411,57 @@ public sealed class I18nWiringGateTests
         // 置顶那半句是实参不是第二颗键：它得由表里那颗尾巴出，代码只许决定"挂不挂"。
         Assert.Equal(1, Count(page, "Locale.T(\"settings.widgets.instanceTopmost\")"));
 
-        foreach (var method in new[] { "private void BuildWidgetRows()", "private async void DeleteLayout_Click" })
-        {
-            var body = MethodBody(page, method);
-            var stillLiteral = Regex.Matches(body, @"(?:Content|Text)\s*=\s*""([^""]*)""|""([^""]*)""")
-                .Cast<Match>()
-                .Select(m => (m.Groups[1].Success ? m.Groups[1] : m.Groups[2]).Value)
-                .Where(v => Regex.IsMatch(v, @"[\u4e00-\u9fff]"))
-                .ToArray();
-            Assert.True(body.Length > 0, $"{method}：读不到方法体，这一格就成了空判（读不到不等于通过）");
-            Assert.Equal(Array.Empty<string>(), stillLiteral);
-        }
+        // 零格收到整档（批次 WI-40-1：挡路的那颗哨兵已经拆成 bool，⛔ 再靠"只收两个方法体"躲着）。
+        var stillLiteral = Regex.Matches(page, @"(?:Content|Text)\s*=\s*""([^""]*)""|""([^""]*)""")
+            .Cast<Match>()
+            .Select(m => (m.Groups[1].Success ? m.Groups[1] : m.Groups[2]).Value)
+            .Where(v => Regex.IsMatch(v, @"[\u4e00-\u9fff]"))
+            .ToArray();
+        Assert.Equal(Array.Empty<string>(), stillLiteral);
 
         var del = MethodBody(page, "private async void DeleteLayout_Click");
         Assert.Contains("Locale.T(\"settings.widgets.deleteLayoutTitle\")", del, StringComparison.Ordinal);
         Assert.Contains("Locale.Fmt(\"settings.widgets.deleteLayoutBody\", row?.Name ?? id)", del, StringComparison.Ordinal);
         Assert.Contains("Locale.T(\"dialog.delete\")", del, StringComparison.Ordinal);
         Assert.Contains("Locale.T(\"dialog.cancel\")", del, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 「快捷键」那一栏里<b>"这一行绑没绑"由一颗 bool 说，屏幕上那句话说自己的</b>（批次 WI-40-1，P-175 缺口③）。
+    /// <para>从前那颗 <c>const string UnsetText = "未设置"</c> 一人两用：既是按钮上的占位话，又是分类计数读的<b>真值</b>
+    /// （<c>rows.Count(r =&gt; !Equals(r.BindingText, UnsetText))</c>）。那句一进表，"绑没绑"就变成"这行是不是中文的『未设置』"
+    /// ——切英文那一刻每组的数全归零：<b>界面读起来对、数是错的</b>（坑表 #354）。
+    /// 建行时当场算过的那颗 <c>bound</c> 从此留在 <c>HotkeyRow.Bound</c> 上，计数只读它。</para>
+    /// <para>⚠ 分类标题那句「（N 项已绑定）」<b>本批故意没进表</b>：它与同一排的分类名贴在一起，而分类名还住在 Core
+    /// （P-175 缺口①）——只翻半排就是半中半英（坑表 #330 那一族）⇒ 那一句与"身份改 ASCII"<b>同一批</b>做。
+    /// 台架里它就是那条<b>必须仍绿</b>的对照臂：本格⛔ 守着它，别把"这一格没红"读成"已经修好了"。</para>
+    /// </summary>
+    [Fact]
+    public void TheHotkeyRowsCountByTheFlagNotByTheDisplayedWords()
+    {
+        var rows = Code(ReadRepoFile("src/StarMark.UI/Views/SettingsPage.Hotkeys.cs"));
+        var model = Code(ReadRepoFile("src/StarMark.UI/Views/SettingsPage.xaml.cs"));
+
+        // ① 计数读那颗 bool；⛔ 再不许按"给人看的那一句"相等来数。
+        Assert.Contains("var count = rows.Count(r => r.Bound);", rows, StringComparison.Ordinal);
+        Assert.DoesNotContain("string.Equals(r.BindingText", rows, StringComparison.Ordinal);
+        // ② 那颗哨兵 const 不许回来——它一回来，①就只能重新靠字符串数。
+        Assert.DoesNotContain("UnsetText", rows, StringComparison.Ordinal);
+        Assert.DoesNotContain("UnsetText", Code(ReadRepoFile("src/StarMark.UI/Views/SettingsPage.Widgets.cs")), StringComparison.Ordinal);
+        Assert.Contains("public bool Bound", model, StringComparison.Ordinal);
+
+        // ③ 每一处改了显示的路径都必须同处改掉那颗 bool：少钉一处＝那一路上 Bound 与文字分家（各自演自己的）。
+        Assert.Contains("BindingText = bound ? HotkeyDisplay.Display(g!) : Locale.T(\"hotkey.unset\")", rows, StringComparison.Ordinal);
+        Assert.Contains("row.Bound = !g.IsEmpty;", MethodBody(rows, "private void FinishRecording()"), StringComparison.Ordinal);
+        Assert.Contains("_recordingRow.Bound = _recordingWasSet;", MethodBody(rows, "private void StopRecording(bool resetText)"), StringComparison.Ordinal);
+        Assert.Contains("row.Bound = false;", MethodBody(rows, "private void ClearBinding()"), StringComparison.Ordinal);
+
+        // ④ 冲突那句与它自己的连接号都住表里（顿号换英文要变成 ", "，坑表 #356）。
+        Assert.Contains("Locale.Fmt(\"hotkey.conflict.shares\", string.Join(Locale.T(\"hotkey.conflict.join\"), others))",
+            MethodBody(rows, "private void RefreshConflictMarks()"), StringComparison.Ordinal);
+        // ⑤ 钩子装不上那句：原因由 Core 给，后半句"因此收不到你的按键"不再由代码拼。
+        Assert.Contains("RecordingAlert = Locale.Fmt(\"hotkey.record.hookRetry\", why);",
+            MethodBody(rows, "private void BeginRecording(string action, Button btn, HotkeyRow row)"), StringComparison.Ordinal);
     }
 
     /// <summary>
