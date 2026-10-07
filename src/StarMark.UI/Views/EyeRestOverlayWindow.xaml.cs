@@ -72,12 +72,18 @@ public sealed partial class EyeRestOverlayWindow : Window
     }
 
     /// <summary>
-    /// 为什么提醒（"连续工作约 45 分钟"）＋ 怎么退出。退出那一句现问 <see cref="EyeRestPolicy.NoticeHint"/>：
-    /// 幕布上不自己写"能不能提前结束"，免得设置页写着"点一下即可"、幕布上却写着别的（记忆 ⑧）。
+    /// 幕布上那两行话：为什么提醒 ＋ 怎么退出（批次 WI-37-B）。
+    /// <para>退出那一句现问 <see cref="EyeRestPolicy.NoticeHintMessage"/>：幕布上不自己写"能不能提前结束"，
+    /// 免得设置页写着"点一下即可"、幕布上却写着别的（记忆 ⑧）。两半都交<b>没渲染的</b> <c>LocMessage</c>，
+    /// 挂上去这一刻才取词 ⇒ 幕布上那句与设置页那行永远是同一版语言（⛔ 在这里拼成品串＝把语言钉死在演的那一刻）。</para>
+    /// <para>两句各占一行是<b>布局</b>而不是表里的换行符：拼成一颗键就得在字符串里塞 <c>\n</c>，
+    /// 而控制字符不许进语言表（闸门 <c>NoRowCarriesAnInvisibleControlCharacter</c>）。</para>
     /// </summary>
     public void SetMessage(int intervalMinutes, EyeRestNotice notice)
-        => Hint.Text = $"你已经连续工作约 {intervalMinutes.ToString(CultureInfo.InvariantCulture)} 分钟。"
-            + "把视线挪到几米外的地方，让睫状肌松一松\n" + EyeRestPolicy.NoticeHint(notice);
+    {
+        LocText.SetKey(HintReason, "health.curtain.reason", EyeRestPolicy.IntervalMessage(intervalMinutes));
+        LocText.SetMessage(HintExit, EyeRestPolicy.NoticeHintMessage(notice));
+    }
 
     /// <summary>更新剩余秒数。</summary>
     public void SetSecondsLeft(int seconds) => Countdown.Text = seconds.ToString(CultureInfo.InvariantCulture);

@@ -278,7 +278,7 @@ public sealed class ClipboardImageSettingsGateTests
         Assert.Contains("public void LoadFromStore()", all);                          // 主文件
         Assert.Contains("public async Task LoadHealthAsync()", all);                   // Health
         Assert.Contains("private void ComputeClipboardUsage()", all);                  // Clipboard
-        Assert.Contains("private string BuildEyeRestStatus()", all);                   // EyeRest
+        Assert.Contains("private LocMessage? BuildEyeRestStatus()", all);                   // EyeRest
         Assert.Contains("public void RefreshRssEnabled()", all);                       // Feeds
         Assert.Contains("private IEnumerable<StarMark.UI.Views.CanvasHotkeyRow> BuildCanvasHotkeyRows()", all);   // Canvas
         Assert.Contains("private string BuildCaptureStatus()", all);                        // Capture

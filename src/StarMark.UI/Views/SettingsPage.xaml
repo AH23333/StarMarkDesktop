@@ -1200,7 +1200,8 @@
                                         <TextBlock i18n:LocText.Key="settings.health.eyeRestIntervalNote" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                     </StackPanel>
                                     <ComboBox Grid.Column="1" MinWidth="120" VerticalAlignment="Center"
-                                              ItemsSource="{x:Bind ViewModel.EyeRestIntervalOptions}"
+                                              ItemsSource="{x:Bind ViewModel.EyeRestIntervalOptions, Mode=OneTime}"
+                                              ItemTemplate="{StaticResource LocOptionTemplate}"
                                               SelectedIndex="{x:Bind ViewModel.EyeRestIntervalIndex, Mode=TwoWay}"/>
                                 </Grid>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
@@ -1210,7 +1211,8 @@
                                                    Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                     </StackPanel>
                                     <ComboBox Grid.Column="1" MinWidth="250" MaxWidth="320" VerticalAlignment="Center" HorizontalAlignment="Right"
-                                              ItemsSource="{x:Bind ViewModel.EyeRestNoticeOptions}"
+                                              ItemsSource="{x:Bind ViewModel.EyeRestNoticeOptions, Mode=OneTime}"
+                                              ItemTemplate="{StaticResource LocOptionTemplate}"
                                               SelectedIndex="{x:Bind ViewModel.EyeRestNoticeIndex, Mode=TwoWay}"/>
                                 </Grid>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
@@ -1226,15 +1228,17 @@
                                             Style="{StaticResource SecondaryButton}"
                                             Command="{x:Bind ViewModel.PreviewEyeRestCommand}"/>
                                     <!-- 演完必须有回执："按了没反应"与"演过了但没看见"在用户侧长得一样 -->
-                                    <TextBlock Grid.Column="1" VerticalAlignment="Center"
-                                               Text="{x:Bind ViewModel.EyeRestPreviewStatus, Mode=OneWay}"
+                                    <!-- 这一行是 VM 算出来的话：交回的是「键＋读数」，由 code-behind 过一次
+                                         LocText.SetMessage 那颗门（⛔ 不再 Text="{x:Bind …}"——绑成品串就等于
+                                         把语言钉在 VM 算出它的那一刻，换语言没人回来重算＝坑表 #276 那一族） -->
+                                    <TextBlock Grid.Column="1" x:Name="EyeRestPreviewText" VerticalAlignment="Center"
                                                Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                 </Grid>
                                 <!-- 两处入口要互相认账（批次 WC-3）：这里说清"时钟组件上也能开关"，
                                      否则用户在组件上改了间隔，回到这页会以为这里才是真值。 -->
                                 <TextBlock i18n:LocText.Key="settings.health.eyeRestClockHint"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap" Opacity="0.62" FontSize="12"/>
-                                <TextBlock Text="{x:Bind ViewModel.EyeRestStatus, Mode=OneWay}"
+                                <TextBlock x:Name="EyeRestStatusText"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Border>

@@ -1427,7 +1427,11 @@ public sealed class I18nWiringGateTests
         // OS 那一层的标题走 LocText 的第二张名单（⛔ 不为它另开一处 Locale.Changed 订阅），且嵌套的名字交的是<b>没渲染的</b>那句
         Assert.Contains("LocText.SetWindowTitle(this, \"widget.win.windowTitle\"", menu, StringComparison.Ordinal);
         Assert.Contains("LocMessage.Of(DefaultKindTitleKey(_kind))", menu, StringComparison.Ordinal);
-        Assert.DoesNotContain(".Render()", menu, StringComparison.Ordinal);
+        // ⚠ 只扫 <c>ApplyTitle</c> 那一颗方法体，⛔ 不扫整档（批次 WI-37-B 起的口径）：
+        // 这份文件里还有每次右键都重建的那一节（<c>BuildEyeRestSection</c>），那里 <c>.Render()</c> 是<b>对的</b>
+        // ——构建那一刻现取词正是 WI-2o 的接法①。整档禁这六个字节守的就不是"标题不许提前渲染"，
+        // 而是"这个文件里不许出现某个词"，那种判据下一次一定被改松而不是改对（#195 的形状口径）。
+        Assert.DoesNotContain(".Render()", MethodBody(menu, "private void ApplyTitle()"), StringComparison.Ordinal);
         Assert.DoesNotContain("Locale.Changed += ", menu, StringComparison.Ordinal);
 
         // 名单的另一头：ReapplyAll 真去重贴那颗 Title，否则登记再多也只是"记了一句没人读的话"。

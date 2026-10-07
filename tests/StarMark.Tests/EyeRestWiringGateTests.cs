@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace StarMark.Tests;
@@ -29,6 +30,8 @@ public sealed class EyeRestWiringGateTests
     private const string ClockXamlCs = "src/StarMark.UI/Views/ClockWidget.xaml.cs";
     private const string MainWindow = "src/StarMark.UI/MainWindow.xaml.cs";
     private const string SettingsPageXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
+    private const string SettingsPageCs = "src/StarMark.UI/Views/SettingsPage.xaml.cs";
+    private const string PolicyCs = "src/StarMark.Core/Health/EyeRestPolicy.cs";
 
     /// <summary>
     /// <c>BeginRest</c> 的整条签名（三处闸门都要切进它的方法体）。写成一份常量而不是各写一遍：
@@ -132,7 +135,7 @@ public sealed class EyeRestWiringGateTests
         var body = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), BeginRest);
         // 一条正常出口（提示卡档＝只发一张卡）+ 三条失败退路（取显示器列表抛／系统没报告显示器／遮罩建到一半抛）
         // 都必须各有一条提示卡出口，而不是静默不提醒——"到点了但什么都没发生"和"没到点"在用户侧长得一模一样。
-        Assert.Equal(4, SourceGate.Count(body, "Notify(\"该休息一下了\""));
+        Assert.Equal(4, SourceGate.Count(body, "Locale.T(\"health.card.title\")"));   // 四个降级出口共用同一颗键
         Assert.Contains("CloseOverlays();", body);        // 建到一半失败：先收干净已建的，再降级
         // 分流只看 Core 的两条判据，不看"这一档是不是强制"：合成就回到旧形状（想用暗幕必须先接受不能退出）。
         Assert.Contains("if (!EyeRestPolicy.UsesCurtain(notice))", body);
@@ -263,35 +266,105 @@ public sealed class EyeRestWiringGateTests
         Assert.DoesNotContain("SaveEyeRest", backfill);            // 更不因打开页面而把当前值写回存档
     }
 
+    /// <summary>
+    /// "开着但表没挂上"这一句必须自己承认——用户没法用眼睛验证一张定时器在不在跑。
+    /// <para>批次 WI-37-B 起这一行交回的是 <see cref="LocMessage"/>（键＋读数），所以这里钉的是
+    /// <b>键在不在</b>，而不是那句中文在不在：中文现在只有语言表一份，代码里再出现一份就是第二个主人。</para>
+    /// </summary>
     [Fact]
     public void StatusLineAdmitsWhenTheTimerIsNotActuallyRunning()
     {
         var vm = SourceGate.ReadRepoPartials(SettingsVm);
-        var build = SourceGate.MethodBody(vm, "private string BuildEyeRestStatus()");
+        var build = SourceGate.MethodBody(vm, "private LocMessage? BuildEyeRestStatus()");
         Assert.Contains("EyeRestService.IsRunning", build);
-        Assert.Contains("节拍表没挂上", build);
+        Assert.Contains("\"health.status.notRunning\"", build);   // 表没挂上要说得出这一格
+        Assert.Contains("\"health.status.off\"", build);          // 关着与"开着但没起来"是两种话，不许共用一句
         Assert.Contains("NextDueAt", build);                       // 下一次大约几点：用户唯一能核对的证据
+        Assert.DoesNotContain("节拍表没挂上", build);              // 字只在表里（⛔ 别把中文搬回代码）
     }
 
     /// <summary>
     /// 「怎么提醒」那一排必须<b>由 Core 那三档生成</b>：界面自己重写一遍选项，就会出现
     /// "下拉里有 ClampNotice 不认的一档"、"状态行说的与幕布上写的不一样"这类分岔（记忆 ⑧），
     /// 而分岔的这一次是用户看得见的。
+    /// <para>批次 WI-37-B 起两排都改成<b>「数据项＋模板」</b>（<see cref="Helpers.LocOption"/>）：
+    /// 闭着的那一格显示的是选中那一刻从 <c>Content</c> 抄走的快照，只有让格子里那颗元素自己带键，
+    /// 换语言那一刻才轮得到它重贴（坑表 #272／#275；同一族已有 6 颗下拉走过这条路，
+    /// ⛔ 不许退回 <c>SetAt</c>，那颗证人 <c>ReapplyingNeverTriesToForceTheDropdownToReSnapshotItsItems</c> 会红）。</para>
     /// </summary>
     [Fact]
     public void TheNoticePickerIsGeneratedFromCore_NotRetypedInThePage()
     {
         var page = SourceGate.ReadRepoFile(SettingsPageXaml);
-        Assert.Contains("ItemsSource=\"{x:Bind ViewModel.EyeRestNoticeOptions}\"", page);
+        foreach (var options in new[] { "EyeRestNoticeOptions", "EyeRestIntervalOptions" })
+        {
+            Assert.Contains($"ItemsSource=\"{{x:Bind ViewModel.{options}, Mode=OneTime}}\"", page);
+            Assert.Contains("ItemTemplate=\"{StaticResource LocOptionTemplate}\"", page);
+        }
         Assert.Contains("SelectedIndex=\"{x:Bind ViewModel.EyeRestNoticeIndex, Mode=TwoWay}\"", page);
-        Assert.DoesNotContain("只发一张右下角提示卡", page);                 // 三档的说法只在 Core 写一次
+        Assert.DoesNotContain("只发一张右下角提示卡", page);                 // 说法只在语言表里有一份
 
         var vm = SourceGate.ReadRepoPartials(SettingsVm);
-        Assert.Contains("EyeRestPolicy.NoticeLabels", vm);                       // 下拉的项
-        Assert.Contains("EyeRestPolicy.NoticeAt(EyeRestNoticeIndex)", vm);        // 下标 → 哪一档
-        Assert.Contains("EyeRestPolicy.NoticeLabel(CurrentEyeRestNotice)", vm);   // 状态行取同一句
-        Assert.Contains("EyeRestPolicy.NoticeHint(CurrentEyeRestNotice)", vm);    // 「试一试」的回执也说同一句
+        Assert.Contains("EyeRestPolicy.NoticeKeys", vm);                       // 下拉的项（三颗键，不是三句中文）
+        Assert.Contains("EyeRestPolicy.IntervalKey", vm);                      // 间隔那一排同理
+        Assert.Contains("EyeRestPolicy.NoticeAt(EyeRestNoticeIndex)", vm);     // 下标 → 哪一档
+        Assert.Contains("EyeRestPolicy.NoticeMessage(CurrentEyeRestNotice)", vm);   // 状态行取同一颗键
+        Assert.Contains("EyeRestPolicy.NoticeHintMessage(CurrentEyeRestNotice)", vm); // 「试一试」也说同一句
         Assert.DoesNotContain("只发一张右下角提示卡", vm);
+        // ⛔ 下拉的"身份"不许是显示文字：换语言之后那串字会变，而选中的还是同一项
+        Assert.DoesNotContain("option.Text", vm, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>护眼这一族的话只许由语言表说一次，而且上屏幕的那一路全程是「键」</b>（批次 WI-37-B，
+    /// 用户真机报「大量设置项的说明文字未完全国际化」）。
+    /// <para>这一刀改的是<b>句子的归属</b>：Core 原先把间隔标签与三档说法拼成中文串交出去
+    /// （<c>IntervalLabels</c>／<c>NoticeLabels</c>／<c>NoticeLabel</c>／<c>NoticeHint</c>），于是
+    /// 下拉、状态行、幕布、日志<b>四处各自钉死一份语言</b>——换语言那一刻一处都不会跟着走。
+    /// 现在 Core 只交「键＋读数」（<see cref="StarMark.Abstractions.I18n.LocMessage"/>），取词发生在贴上去那一刻。</para>
+    /// <para>四路各自还有一个看不见的第二主人，所以四路分开钉：幕布的标记（标题此前硬编码在 XAML 里）、
+    /// 幕布上那两行（退出那句必须与设置页同源，⛔ 不许幕布自己写"能不能提前结束"——记忆 ⑧）、
+    /// 设置页那两句状态（绑成品串＝语言钉在绑的那一刻，要等用户再动一次设置才翻）、
+    /// 以及 Core 里那个"返回成品串"的旧门面（它一回来，上面四路就一起退回去）。</para>
+    /// <para>⚠ 读的是<b>抹掉注释后</b>的代码与<b>抹掉 XML 注释后</b>的标记：注释里引用一句旧话是讲清为什么，
+    /// 不是又开一个出口（#123／#195 的形状口径）。</para>
+    /// </summary>
+    [Fact]
+    public void TheEyeRestWordingHasOneOwnerInTheTable_AndReachesTheScreenAsKeys()
+    {
+        // ① Core：代码里一个带中文的字面串都不许留下，只留「键＋读数」那两颗门面
+        var core = SourceGate.Code(SourceGate.ReadRepoFile(PolicyCs));
+        Assert.Empty(Regex.Matches(core, @"""[^""]*[\u4e00-\u9fff][^""]*"""));
+        Assert.Contains("public static LocMessage NoticeMessage(EyeRestNotice notice)", core, StringComparison.Ordinal);
+        Assert.Contains("public static LocMessage NoticeHintMessage(EyeRestNotice notice)", core, StringComparison.Ordinal);
+        // 旧门面不许回来（<c>NoticeHint(</c> 与现在还活着的 <c>NoticeHintMessage(</c> 是两个串，不冲突）
+        foreach (var back in new[] { "IntervalLabels", "NoticeLabels", "NoticeLabel(", "NoticeHint(" })
+            Assert.DoesNotContain(back, core, StringComparison.Ordinal);
+
+        // ② 幕布的标记：抹掉那段设计说明后，整档不许剩一个中文字（标题那颗此前就是硬编码在那儿的）
+        var xaml = Regex.Replace(SourceGate.ReadRepoFile(OverlayXaml), @"<!--.*?-->", string.Empty, RegexOptions.Singleline);
+        Assert.Empty(Regex.Matches(xaml, "[\u4e00-\u9fff]"));
+        Assert.Contains("i18n:LocText.Key=\"health.curtain.title\"", xaml, StringComparison.Ordinal);
+
+        // ③ 幕布上两行各挂一颗键，退出那一句与设置页取<b>同一颗</b>
+        var set = SourceGate.MethodBody(SourceGate.Code(SourceGate.ReadRepoFile(OverlayCode)),
+            "public void SetMessage(int intervalMinutes, EyeRestNotice notice)");
+        Assert.Contains("LocText.SetKey(HintReason, \"health.curtain.reason\", EyeRestPolicy.IntervalMessage(intervalMinutes))",
+            set, StringComparison.Ordinal);
+        Assert.Contains("LocText.SetMessage(HintExit, EyeRestPolicy.NoticeHintMessage(notice))", set, StringComparison.Ordinal);
+
+        // ④ 设置页那两句：XAML 里没有成品串绑定，页面代码里过 <c>LocText.SetMessage</c> 那颗门
+        var page = SourceGate.ReadRepoFile(SettingsPageXaml);
+        Assert.DoesNotContain("Text=\"{x:Bind ViewModel.EyeRestStatus", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"{x:Bind ViewModel.EyeRestPreviewStatus", page, StringComparison.Ordinal);
+        var cs = SourceGate.Code(SourceGate.ReadRepoPartials(SettingsPageCs));
+        Assert.Contains("LocText.SetMessage(EyeRestStatusText, ViewModel.EyeRestStatus)", cs, StringComparison.Ordinal);
+        Assert.Contains("LocText.SetMessage(EyeRestPreviewText, ViewModel.EyeRestPreviewStatus)", cs, StringComparison.Ordinal);
+        // 属性变了要真去重贴（不然门是挂上了，改档位那一刻屏幕上还是上一版的句子）
+        var handler = SourceGate.MethodBody(cs,
+            "private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)");
+        Assert.Contains("nameof(SettingsPageViewModel.EyeRestStatus)", handler, StringComparison.Ordinal);
+        Assert.Contains("ApplyEyeRestMessages();", handler, StringComparison.Ordinal);
     }
 
     // ────────── 「试一试」：给真机一条不用等满间隔的验证出口 ──────────
@@ -339,7 +412,7 @@ public sealed class EyeRestWiringGateTests
         var vm = SourceGate.ReadRepoPartials(SettingsVm);
         var apply = SourceGate.MethodBody(vm, "private void ApplyEyeRestSwitch()");
         // 上一次演出来的已经不是新配置了：留着那行会读成"刚验证过现在的设置"
-        Assert.Contains("EyeRestPreviewStatus = string.Empty;", apply);
+        Assert.Contains("EyeRestPreviewStatus = null;", apply);   // 交回 null＝那颗门会把上一句摘掉（⛔ 留空串会挂着旧注册项）
         Assert.Contains("EyeRestStatus = BuildEyeRestStatus();", apply);
     }
 
@@ -372,14 +445,19 @@ public sealed class EyeRestWiringGateTests
         Assert.Equal(3, SourceGate.Count(section, "settings.LoadEyeRestDeferOnFullscreen());"));
         Assert.Equal(2, SourceGate.Count(section, "App.ApplyEyeRest(settings.LoadEyeRestEnabled());"));
 
-        // 档位与文案都取 Core 那一份（自己拼"X 分钟"或把三档重打一遍就是第二份"有哪些档"）
+        // 档位与说法都取 Core 那一份（批次 WI-37-B 起它交回的是「键＋读数」）：
+        // 自己拼"X 分钟"或把三档重打一遍，就是第二份"有哪些档"，改一处就留下一处假话。
         Assert.Contains("EyeRestPolicy.IntervalOptions", section);
-        Assert.Contains("EyeRestPolicy.IntervalLabels", section);
+        Assert.Contains("EyeRestPolicy.IntervalMessage(minutes)", section);
         Assert.Contains("EyeRestPolicy.NoticeOptions", section);
-        Assert.Contains("EyeRestPolicy.NoticeLabels", section);
-        Assert.Contains("EyeRestPolicy.NoticeLabel(notice)", section);   // 菜单标题上的当前档
+        Assert.Contains("EyeRestPolicy.NoticeMessage(option)", section);
+        Assert.Contains("EyeRestPolicy.NoticeMessage(notice)", section);   // 菜单标题上的当前档
         Assert.DoesNotContain("15 分钟", section);
         Assert.DoesNotContain("只发一张右下角提示卡", section);
+        // 这一节整族交键（批次 WI-37-B 那一刀）：菜单每次右键重建 ⇒ 构建那一刻 Locale.T 就够
+        Assert.Contains("Locale.T(\"widget.health.section\")", section);
+        Assert.Contains("Locale.T(\"widget.health.toggle\")", section);
+        Assert.Contains("Locale.T(\"widget.health.full\")", section);
     }
 
     /// <summary>
@@ -393,8 +471,10 @@ public sealed class EyeRestWiringGateTests
         var section = SourceGate.MethodBody(SourceGate.ReadRepoPartials(WidgetWindow), "private void BuildEyeRestSection(MenuFlyout menu)");
         Assert.Contains("EyeRestService.Preview()", section);
         Assert.Contains("IsEnabled = running,", section);                                  // running＝节拍表真的挂着
-        Assert.Contains("试一试（要先开启休息提醒，上面第一项）", section);                  // 灰着的那一句要自己说清原因
-        Assert.Contains("App.MainWindow?.ShowNotice(\"没演成\"", section);                  // 按下去没演成要看得见
+        // 灰着的那一句要自己说清原因：两颗键由 running <b>当场挑</b>（菜单每次右键重建 ⇒ 那一刻取词才是对的），
+        // 钉的是这个三元式整形状，不是"这两个名字出现过"——只数名字就放得过"两句都提前拼成中文再挑"那种写法。
+        Assert.Contains("Locale.T(running ? \"widget.health.tryIt\" : \"widget.health.tryItNeedsOn\")", section);
+        Assert.Contains("ShowNotice(Locale.T(\"widget.health.previewFailed\")", section);   // 按下去没演成要看得见
         Assert.Contains("EyeRestService.IsResting", section);                               // "幕布还盖着"与"表没挂上"要分开说
         Assert.DoesNotContain("EyeRestService.Start(", section);                            // 组件这一头不替用户起表
     }

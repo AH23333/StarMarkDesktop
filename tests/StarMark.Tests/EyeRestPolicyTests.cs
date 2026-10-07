@@ -1,6 +1,8 @@
 #nullable enable
 using System;
+using System.Linq;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Health;
 using Xunit;
 
@@ -146,12 +148,25 @@ public sealed class EyeRestPolicyTests
             Assert.Equal(minutes, EyeRestPolicy.ClampInterval(minutes));
     }
 
+    /// <summary>
+    /// 每一档的说法都<b>带着自己那个数</b>（批次 WI-37-B 起那句字住在语言表里，Core 只交「键＋读数」）。
+    /// <para>⛔ 判据不许只看"渲染出来的串里有数字"——那会放过"六档共用一个数"这种分岔。这里按<b>实参</b>钉：
+    /// 每档交回的 <see cref="LocMessage"/> 必须带一颗实参、且那颗实参就是这一档的分钟数。</para>
+    /// </summary>
     [Fact]
     public void Labels_AreOnePerOption_AndCarryTheirOwnNumber()
     {
-        Assert.Equal(EyeRestPolicy.IntervalOptions.Length, EyeRestPolicy.IntervalLabels.Count);
-        for (var i = 0; i < EyeRestPolicy.IntervalOptions.Length; i++)
-            Assert.Equal($"{EyeRestPolicy.IntervalOptions[i]} 分钟", EyeRestPolicy.IntervalLabels[i]);
+        foreach (var minutes in EyeRestPolicy.IntervalOptions)
+        {
+            var message = EyeRestPolicy.IntervalMessage(minutes);
+            Assert.Equal(EyeRestPolicy.IntervalKey, message.Key);
+            Assert.Equal(new object?[] { minutes }, message.Args);
+            Assert.Contains(minutes.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                message.Render(), StringComparison.Ordinal);
+        }
+        // 非法值先夹再说话：界面上不许出现"0 分钟"这种下拉里根本没有的档位
+        Assert.Contains(EyeRestPolicy.DefaultIntervalMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            EyeRestPolicy.IntervalMessage(0).Render(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -198,7 +213,8 @@ public sealed class EyeRestPolicyTests
             Assert.Equal(notice, EyeRestPolicy.ClampNotice(notice));          // 用户选"强制"实际跑的是别的
             Assert.Equal(i, EyeRestPolicy.NoticeIndexOf(notice));             // 下拉的选中项跟着档位走
         }
-        Assert.Equal(EyeRestPolicy.NoticeOptions.Length, EyeRestPolicy.NoticeLabels.Count);
+        // 三档＝三颗键，一颗不多一颗不少（WI-37-B 起说法在表里，Core 这边只数键）
+        Assert.Equal(EyeRestPolicy.NoticeOptions.Length, EyeRestPolicy.NoticeKeys.Length);
     }
 
     /// <summary>
@@ -255,6 +271,8 @@ public sealed class EyeRestPolicyTests
     /// <summary>
     /// 幕布上那句退出说明<b>不许承诺按键</b>：这扇窗不抢焦点，而按键只投递给有焦点的窗，
     /// 所以写"按 Esc 可提前结束"是把一条做不到的出口印在屏幕上。给的出口是鼠标（点击不依赖焦点）。
+    /// <para>批次 WI-37-B 起这句话住语言表里，所以这一格实际是<b>中文那一列</b>的证人——
+    /// ⛔ 换语言不会让它松口：三列各查各的由 <c>I18nContractTests</c> 那族管（这里钉的是判据形状还在）。</para>
     /// </summary>
     [Theory]
     [InlineData(EyeRestNotice.Card)]
@@ -262,46 +280,57 @@ public sealed class EyeRestPolicyTests
     [InlineData(EyeRestNotice.Forced)]
     public void NoticeHint_NeverPromisesAKeystroke_TheCurtainCannotReceive(EyeRestNotice notice)
     {
-        var hint = EyeRestPolicy.NoticeHint(notice);
+        var hint = EyeRestPolicy.NoticeHintMessage(notice).Render();
         Assert.DoesNotContain("Esc", hint, System.StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("按键", hint);
         if (EyeRestPolicy.IsSkippable(notice)) Assert.Contains("点一下", hint);
         else Assert.Contains("不能提前结束", hint);
     }
 
-    /// <summary>状态行与下拉共用一份措辞；认不得的值也要说得出默认档那一句（不能空着）。</summary>
     /// <summary>
-    /// 三档的文案不许再提"气泡"：批次 RV 起第一档真的是一张自绘的右下角提示卡，而托盘气泡在 Windows 11 上
+    /// 三档的说法不许再提"气泡"：批次 RV 起第一档真的是一张自绘的右下角提示卡，而托盘气泡在 Windows 11 上
     /// <b>一次都没有显示过</b>——把做不到的事写在设置页上，用户就会照着那句话去找一个不存在的东西
     /// （口径同"幕布上不承诺 Esc"）。
     /// </summary>
     [Fact]
     public void NoNoticeLabelPromisesSomethingTheUserCannotSee()
     {
-        foreach (var label in EyeRestPolicy.NoticeLabels) Assert.DoesNotContain("气泡", label);
-        Assert.Contains("提示卡", EyeRestPolicy.NoticeLabels[0]);
+        foreach (var key in EyeRestPolicy.NoticeKeys) Assert.DoesNotContain("气泡", Locale.T(key));
+        Assert.Contains("提示卡", Locale.T(EyeRestPolicy.NoticeKeys[0]));
     }
 
+    /// <summary>状态行、下拉、幕布共用同一颗键；认不得的值也要说得出默认档那一句（不能空着）。</summary>
     [Fact]
     public void NoticeLabel_FallsBackToTheDefaultWordings_AsWell()
     {
-        Assert.Equal(EyeRestPolicy.NoticeLabels[EyeRestPolicy.NoticeIndexOf(EyeRestPolicy.DefaultNotice)],
-            EyeRestPolicy.NoticeLabel(EyeRestPolicy.DefaultNotice));
-        Assert.Equal(EyeRestPolicy.NoticeLabel(EyeRestPolicy.DefaultNotice),
-            EyeRestPolicy.NoticeLabel((EyeRestNotice)7));
+        Assert.Equal(EyeRestPolicy.NoticeKeys[EyeRestPolicy.NoticeIndexOf(EyeRestPolicy.DefaultNotice)],
+            EyeRestPolicy.NoticeKey(EyeRestPolicy.DefaultNotice));
+        Assert.Equal(EyeRestPolicy.NoticeMessage(EyeRestPolicy.DefaultNotice).Render(),
+            EyeRestPolicy.NoticeMessage((EyeRestNotice)7).Render());
     }
 
     /// <summary>
-    /// 秒数只有一个出处：幕布上写的"20 秒走完"必须跟着 <see cref="EyeRestPolicy.RestSeconds"/> 动——
-    /// 倒数到 30 而说明写着 20 是用户第一眼看得见的自相矛盾（同批次 WR 那条"档位要落到最终产物"）。
+    /// 秒数只有一个出处：幕布上写的"{N} 秒走完"与档位说法里那个数必须跟着
+    /// <see cref="EyeRestPolicy.RestSeconds"/> 动——倒数到 30 而说明写着 20 是用户第一眼看得见的自相矛盾
+    /// （同批次 WR 那条"档位要落到最终产物"）。
+    /// <para>批次 WI-37-B 起它是<b>实参</b>而不是句子的一部分：表里那三行都不许自带秒数字面，
+    /// 否则改了常量之后一句跟着变、一句不变。所以两头钉——渲染出来含这个数，而表里那一行不含别的数。</para>
     /// </summary>
     [Fact]
     public void TheSecondsInTheWordingComeFromRestSeconds()
     {
-        Assert.Contains(EyeRestPolicy.RestSeconds.ToString(),
-            EyeRestPolicy.NoticeHint(EyeRestNotice.Forced));
-        Assert.Contains(EyeRestPolicy.RestSeconds.ToString(),
-            EyeRestPolicy.NoticeLabel(EyeRestNotice.Forced));
+        var seconds = EyeRestPolicy.RestSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Contains(seconds, EyeRestPolicy.NoticeHintMessage(EyeRestNotice.Forced).Render(), StringComparison.Ordinal);
+        Assert.Contains(seconds, EyeRestPolicy.NoticeMessage(EyeRestNotice.Forced).Render(), StringComparison.Ordinal);
+        Assert.Equal(new object?[] { EyeRestPolicy.RestSeconds }, EyeRestPolicy.NoticeMessage(EyeRestNotice.Forced).Args);
+        // 表里那两行不许自己写死秒数：只有 {0} 才是合法的出处
+        var rows = SourceGate.ReadRepoFile("src/StarMark.Abstractions/I18n/UiStrings.cs");
+        foreach (var key in new[] { "health.eyeRest.notice.forced", "health.eyeRest.hint.forced" })
+        {
+            var line = rows.Split('\n').First(l => l.Contains("\"" + key + "\"", StringComparison.Ordinal));
+            Assert.DoesNotContain(seconds + " 秒", line);
+            Assert.Contains("{0}", line);
+        }
     }
 
     // ────────── 全屏几何判据 ──────────

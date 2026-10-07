@@ -1,8 +1,7 @@
 #nullable enable
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Health;
 
@@ -61,10 +60,15 @@ public sealed class EyeRestPolicy
     /// </summary>
     public static readonly int[] IntervalOptions = { 15, 20, 30, 45, 60, 90 };
 
-    /// <summary>给界面下拉用的档位文案（与 <see cref="IntervalOptions"/> 同序）。文案与数值放在一处，
-    /// 免得"下拉里有 120 分钟但 ClampInterval 不认"这类分岔。</summary>
-    public static IReadOnlyList<string> IntervalLabels { get; } =
-        IntervalOptions.Select(minutes => minutes + " 分钟").ToList();
+    /// <summary>
+    /// 间隔那一档怎么说的那颗键（批次 WI-37-B）。<b>整句进表、分钟数当实参</b>：
+    /// "45 分钟"这种量词在三种语言里位置不同（英文 "45 min"、日文「45 分」），拼在代码里就等于替英文和日文重写中文语序。
+    /// </summary>
+    public const string IntervalKey = "health.eyeRest.intervalMinutes";
+
+    /// <summary>某一档是多少分钟 ⇒ 那一行怎么说。<b>交的是「键＋读数」，不是成品串</b>：
+    /// Core 一旦拼出中文句子，换语言那一刻没人会回去重算（P-172 那一族的形状）。</summary>
+    public static LocMessage IntervalMessage(int minutes) => LocMessage.Of(IntervalKey, ClampInterval(minutes));
 
     /// <summary>第 <paramref name="index"/> 档是多少分钟（下标越界夹到两端，不抛）。</summary>
     public static int IntervalAt(int index)
@@ -87,24 +91,27 @@ public sealed class EyeRestPolicy
     public static readonly EyeRestNotice[] NoticeOptions =
         { EyeRestNotice.Card, EyeRestNotice.Curtain, EyeRestNotice.Forced };
 
-    /// <summary>给界面下拉用的三档文案（与 <see cref="NoticeOptions"/> 同序；文案与数值一处，理由同 <see cref="IntervalLabels"/>）。
-    /// <para><b>秒数从 <see cref="RestSeconds"/> 来，不写进字符串里</b>：档位话说"20 秒"而遮罩倒数到 30 是用户第一眼看得见的自相矛盾。</para></summary>
-    public static IReadOnlyList<string> NoticeLabels { get; } =
-    [
-        "只发一张右下角提示卡（什么都不盖）",
-        "盖一层暗幕（点一下屏幕即可提前结束）",
-        $"盖一层暗幕且 {RestSeconds} 秒不可跳过（强制休息）",
-    ];
+    /// <summary>三档各自的那颗键，<b>顺序＝<see cref="NoticeOptions"/>（也就是界面上的顺序）</b>。
+    /// <para>批次 WI-37-B 起这里只留键、不留句子：文案与数值"放在一处"这件事由语言表负责（一行四列同处），
+    /// 而不是由 Core 负责——Core 交出成品中文串＝下拉、状态行、幕布、日志四处各自钉死一份语言。</para></summary>
+    public static readonly string[] NoticeKeys =
+        { "health.eyeRest.notice.card", "health.eyeRest.notice.curtain", "health.eyeRest.notice.forced" };
+
+    /// <summary>某一档的那颗键（认不得的值先走 <see cref="ClampNotice"/> 回落，不抛）。</summary>
+    public static string NoticeKey(EyeRestNotice notice) => NoticeKeys[NoticeIndexOf(notice)];
+
+    /// <summary>某一档怎么说（<b>下拉项、状态行、日志、「试一试」的回执共用这一颗</b>）。
+    /// <para>"这一档到底会发生什么"写两份就会有一份漏掉——批次 RS 之前正是两份（强制那句写了"不能提前跳过"，
+    /// 提示卡那句没写"点一下屏幕"），所以这里只留一处出处，界面各处都来取。</para>
+    /// <para><b>秒数从 <see cref="RestSeconds"/> 来，不写进表里那一行的字面</b>：档位话说"20 秒"而遮罩倒数到 30
+    /// 是用户第一眼看得见的自相矛盾——所以它是实参，改那一颗常量，三档说法与幕布上的读数一起跟着变。</para></summary>
+    public static LocMessage NoticeMessage(EyeRestNotice notice)
+        => notice == EyeRestNotice.Forced
+            ? LocMessage.Of(NoticeKey(notice), RestSeconds)
+            : LocMessage.Of(NoticeKey(notice));
 
     /// <summary>某一档在下拉里排第几（认不得的值先走 <c>ClampNotice</c> 回落，不抛）。</summary>
     public static int NoticeIndexOf(EyeRestNotice notice) => Array.IndexOf(NoticeOptions, ClampNotice(notice));
-
-    /// <summary>
-    /// 某一档怎么说（下拉项、状态行、日志、「试一试」的回执共用这一条）。
-    /// <para>"这一档到底会发生什么"写两份就会有一份漏掉——批次 RS 之前正是两份（强制那句写了"不能提前跳过"，
-    /// 提示卡那句没写"点一下屏幕"），所以这里只留一处出处，界面各处都来取。</para>
-    /// </summary>
-    public static string NoticeLabel(EyeRestNotice notice) => NoticeLabels[NoticeIndexOf(notice)];
 
     /// <summary>第 <paramref name="index"/> 档是哪一种（下标越界夹到两端，不抛）。</summary>
     public static EyeRestNotice NoticeAt(int index)
@@ -146,10 +153,10 @@ public sealed class EyeRestPolicy
     /// 而按键只投递给有焦点的窗 ⇒ 不激活就收不到 Esc。可跳过档给的是<b>鼠标出口</b>（点一下即可，
     /// 点击不依赖焦点），这也符合"不吃键盘的覆盖窗要留纯鼠标出口"那条既有口径。</para>
     /// </summary>
-    public static string NoticeHint(EyeRestNotice notice) => notice switch
+    public static LocMessage NoticeHintMessage(EyeRestNotice notice) => notice switch
     {
-        EyeRestNotice.Forced => $"这一轮是强制休息：{RestSeconds} 秒走完会自动恢复，中途不能提前结束。",
-        _ => "想提前结束就点一下屏幕任意处；什么都不做的话，时间到了会自动恢复。",
+        EyeRestNotice.Forced => LocMessage.Of("health.eyeRest.hint.forced", RestSeconds),
+        _ => LocMessage.Of("health.eyeRest.hint.skippable"),
     };
 
     /// <summary>强制模式下遮罩停留多久（秒）。20 秒是"看远处"够用的最短值，再长就从护眼变成惩罚。</summary>

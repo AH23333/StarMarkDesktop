@@ -74,6 +74,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         _hkHook.KeyUp += OnHookKeyUp;       // 修饰键抬起时回显同步
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;  // 实时生效：属性变更去抖落盘
         LoadFromStoreSilently();
+        ApplyEyeRestMessages();   // 回灌出来的那两句也要当场贴上去（换语言重贴走同一条门，见下面那颗方法）
         // 开机自启开关初始态以注册表为准（SetEnabled 幂等，程序化置位不会误写）。
         // 它归在「常规 → 托盘与呼出」，所以由页面构造时读一次，不再挂在组件列表的构建里。
         AutostartToggle.IsOn = AutostartService().IsEnabled();
@@ -144,10 +145,26 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        // 护眼那两句先推再判保存：它们是"VM 算出来的话"，交回的是「键＋读数」，
+        // 过一次 LocText 那颗门才会跟着语言走（⛔ 不绑成品串，也不参与自动保存）。
+        if (e.PropertyName is nameof(SettingsPageViewModel.EyeRestStatus)
+                         or nameof(SettingsPageViewModel.EyeRestPreviewStatus))
+            ApplyEyeRestMessages();
         if (_suppressSave || string.IsNullOrEmpty(e.PropertyName)) return;
         // 健康度/备份/诊断等异步展示态不参与保存，避免加载过程中反复写盘
         if (IsDisplayOnlyProperty(e.PropertyName)) return;
         ScheduleAutoSave();
+    }
+
+    /// <summary>
+    /// 把护眼那一卡片的两句状态交进 <see cref="LocText.SetMessage"/> 那一颗门（批次 WI-37-B）。
+    /// <para>两句一起推、且不问"是哪一句变了"：这两行同属一张卡片，分开推就会有一行停在上一版语言上——
+    /// 而"幕布上写着点一下可结束、下面那行写着强制不可跳"正是这一族最容易被看见的自相矛盾。</para>
+    /// </summary>
+    private void ApplyEyeRestMessages()
+    {
+        LocText.SetMessage(EyeRestStatusText, ViewModel.EyeRestStatus);
+        LocText.SetMessage(EyeRestPreviewText, ViewModel.EyeRestPreviewStatus);
     }
 
     private static bool IsDisplayOnlyProperty(string name)

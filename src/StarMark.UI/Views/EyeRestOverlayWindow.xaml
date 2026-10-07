@@ -3,6 +3,7 @@
     x:Class="StarMark.UI.Views.EyeRestOverlayWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:i18n="using:StarMark.UI.Helpers"
     xmlns:local="using:StarMark.UI.Views">
 
     <!--
@@ -15,7 +16,7 @@
     <Grid x:Name="Root" Background="#C0000000">
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
             <TextBlock
-                Text="让眼睛休息一下"
+                i18n:LocText.Key="health.curtain.title"
                 FontSize="26"
                 FontWeight="SemiBold"
                 Foreground="#FFFFFFFF"
@@ -28,9 +29,19 @@
                 Foreground="#FFFFFFFF"
                 HorizontalAlignment="Center"/>
             <TextBlock
-                x:Name="Hint"
+                x:Name="HintReason"
                 FontSize="13"
                 Foreground="#BFFFFFFF"
+                TextWrapping="Wrap"
+                MaxWidth="560"
+                TextAlignment="Center"
+                HorizontalAlignment="Center"/>
+            <!-- 退出那一句单独一行：换行是布局，⛔ 不是表里的字符（见 UiStrings 幕布那一节）-->
+            <TextBlock
+                x:Name="HintExit"
+                FontSize="13"
+                FontWeight="SemiBold"
+                Foreground="#FFFFFFFF"
                 TextWrapping="Wrap"
                 MaxWidth="560"
                 TextAlignment="Center"

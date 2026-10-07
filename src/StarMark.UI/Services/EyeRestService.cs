@@ -5,6 +5,7 @@ using System.Linq;
 using Microsoft.UI.Dispatching;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Health;
 using StarMark.UI.Helpers;
 using StarMark.UI.Views;
@@ -139,8 +140,8 @@ public static class EyeRestService
 
         if (!EyeRestPolicy.UsesCurtain(notice))
         {
-            var shown = Notify("该休息一下了", RestBody(intervalMinutes));
-            StarLog.Info($"[EyeRest] 提示卡提醒已发出（间隔 {intervalMinutes} 分钟，提醒形式：{EyeRestPolicy.NoticeLabel(notice)}）");
+            var shown = Notify(Locale.T("health.card.title"), Locale.Fmt("health.card.body", EyeRestPolicy.IntervalMessage(intervalMinutes)));
+            StarLog.Info($"[EyeRest] 提示卡提醒已发出（间隔 {intervalMinutes} 分钟，提醒形式：{EyeRestPolicy.NoticeMessage(notice).Render()}）");
             return shown;
         }
 
@@ -152,12 +153,12 @@ public static class EyeRestService
         catch (Exception ex)
         {
             StarLog.Error("[EyeRest] 取显示器列表失败，降级为提示卡提醒", ex);
-            return Notify("该休息一下了", RestBody(intervalMinutes));
+            return Notify(Locale.T("health.card.title"), Locale.Fmt("health.card.body", EyeRestPolicy.IntervalMessage(intervalMinutes)));
         }
         if (monitors.Count == 0)
         {
             StarLog.Warn("[EyeRest] 系统没报告任何显示器，降级为提示卡提醒");
-            return Notify("该休息一下了", RestBody(intervalMinutes));
+            return Notify(Locale.T("health.card.title"), Locale.Fmt("health.card.body", EyeRestPolicy.IntervalMessage(intervalMinutes)));
         }
 
         try
@@ -174,7 +175,7 @@ public static class EyeRestService
         {
             CloseOverlays();                                       // 建到一半失败也不能留几屏暗幕挂在那儿
             StarLog.Error("[EyeRest] 遮罩窗没建起来，降级为提示卡提醒", ex);
-            return Notify("该休息一下了", RestBody(intervalMinutes));
+            return Notify(Locale.T("health.card.title"), Locale.Fmt("health.card.body", EyeRestPolicy.IntervalMessage(intervalMinutes)));
         }
 
         _restEndsAt = DateTimeOffset.Now + TimeSpan.FromSeconds(EyeRestPolicy.RestSeconds);
@@ -227,9 +228,6 @@ public static class EyeRestService
     }
 
     /// <summary>四处出口共用一条文案：差别只在"用什么形式出现"，内容不一样会让人以为是两件事。</summary>
-    private static string RestBody(int intervalMinutes)
-        => $"已连续工作约 {intervalMinutes} 分钟。看看远处，放松一下眼睛。";
-
     private static void OnRestTick(DispatcherQueueTimer sender, object args) => RestOnce();
 
     private static void RestOnce()

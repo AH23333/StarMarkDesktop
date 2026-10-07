@@ -63,11 +63,11 @@ public sealed partial class WidgetWindow
         menu.Items.Add(new MenuFlyoutSeparator());
         var section = new MenuFlyoutSubItem
         {
-            Text = "护眼 · 休息提醒",
+            Text = Locale.T("widget.health.section"),
             Icon = new FontIcon { Glyph = "\uE7BA", FontSize = 14 },   // TouchPointer：示意"该歇一下"
         };
 
-        var toggle = new ToggleMenuFlyoutItem { Text = "开启休息提醒", IsChecked = enabled };
+        var toggle = new ToggleMenuFlyoutItem { Text = Locale.T("widget.health.toggle"), IsChecked = enabled };
         toggle.Click += (_, _) =>
         {
             // 每一项只管自己那一件，其余三项<b>当场重新读一遍</b>带过去：拿"菜单打开那一刻"的快照写回去，
@@ -78,15 +78,19 @@ public sealed partial class WidgetWindow
         };
         section.Items.Add(toggle);
 
-        var gap = new MenuFlyoutSubItem { Text = $"间隔：{interval} 分钟", IsEnabled = enabled };
-        // 档位与文案都取 Core 的那一份（IntervalLabels 与 IntervalOptions 同序）：
-        // 这里自己拼"X 分钟"就会与设置页的下拉分岔成两处事实。
+        // 档位与说法都取 Core 的那一份（它交回的是「键＋读数」，与设置页下拉看到的是同一颗键）：
+        // 这里自己拼"X 分钟"就会与设置页分岔成两处事实（批次 WI-37-B 起那句字只在表里有一份）。
+        var gap = new MenuFlyoutSubItem
+        {
+            Text = Locale.Fmt("widget.health.gap", EyeRestPolicy.IntervalMessage(interval)),
+            IsEnabled = enabled,
+        };
         for (var i = 0; i < EyeRestPolicy.IntervalOptions.Length; i++)
         {
             var minutes = EyeRestPolicy.IntervalOptions[i];
             var item = new RadioMenuFlyoutItem
             {
-                Text = EyeRestPolicy.IntervalLabels[i],
+                Text = EyeRestPolicy.IntervalMessage(minutes).Render(),
                 IsChecked = minutes == interval,
             };
             item.Click += (_, _) =>
@@ -100,10 +104,10 @@ public sealed partial class WidgetWindow
         section.Items.Add(gap);
 
         // 提醒形式那一排（批次 RT）：菜单标题带上当前档怎么说，用户不用展开就知道现在配的是什么；
-        // 文案一律取 Core（NoticeLabels／NoticeLabel）——这一档"能不能点掉"在两处各写一份迟早对不上。
+        // 说法一律取 Core 那颗键（NoticeMessage）——这一档"能不能点掉"在两处各写一份迟早对不上。
         var how = new MenuFlyoutSubItem
         {
-            Text = $"提醒形式：{EyeRestPolicy.NoticeLabel(notice)}",
+            Text = Locale.Fmt("widget.health.notice", EyeRestPolicy.NoticeMessage(notice)),
             IsEnabled = enabled,
         };
         for (var i = 0; i < EyeRestPolicy.NoticeOptions.Length; i++)
@@ -111,7 +115,7 @@ public sealed partial class WidgetWindow
             var option = EyeRestPolicy.NoticeOptions[i];
             var item = new RadioMenuFlyoutItem
             {
-                Text = EyeRestPolicy.NoticeLabels[i],
+                Text = EyeRestPolicy.NoticeMessage(option).Render(),
                 IsChecked = option == notice,
             };
             item.Click += (_, _) =>
@@ -129,15 +133,15 @@ public sealed partial class WidgetWindow
         var running = EyeRestService.IsRunning;
         var tryIt = new MenuFlyoutItem
         {
-            Text = running ? "试一试当前效果（不动节拍）" : "试一试（要先开启休息提醒，上面第一项）",
+            Text = Locale.T(running ? "widget.health.tryIt" : "widget.health.tryItNeedsOn"),
             IsEnabled = running,
         };
         tryIt.Click += (_, _) =>
         {
             if (EyeRestService.Preview()) return;                 // 屏幕上已经有东西了，不需要再补一句话
-            App.MainWindow?.ShowNotice("没演成", EyeRestService.IsResting
-                ? "上一轮的暗幕还盖着屏，等这一轮结束再按。"
-                : "节拍表没挂上（原因见日志），先在本节第一项开启休息提醒。");
+            App.MainWindow?.ShowNotice(Locale.T("widget.health.previewFailed"), EyeRestService.IsResting
+                ? Locale.T("widget.health.previewBlocked")
+                : Locale.T("widget.health.previewNoBeat"));
         };
         section.Items.Add(tryIt);
 
@@ -146,12 +150,12 @@ public sealed partial class WidgetWindow
         section.Items.Add(new MenuFlyoutItem
         {
             Text = next is { } due
-                ? $"下一次大约 {DateTimeText.Clock(due.ToLocalTime())}（到点前还会看一眼前台是否全屏）"
-                : enabled ? "开关已开，但计时器没起来（设置页「健康与诊断」有原因）" : "未开启",
+                ? Locale.Fmt("widget.health.nextDue", DateTimeText.Clock(due.ToLocalTime()))
+                : enabled ? Locale.T("widget.health.notRunning") : Locale.T("widget.health.off"),
             IsEnabled = false,
         });
 
-        var full = new MenuFlyoutItem { Text = "完整设置（全屏让路 / 下一次几点）…" };
+        var full = new MenuFlyoutItem { Text = Locale.T("widget.health.full") };
         // 直接落在「健康与诊断」页：跳进设置页却停在常规页，等于让人到了门口再自己找房间
         full.Click += (_, _) => App.MainWindow?.Present(true, SettingsTabIds.Health);
         section.Items.Add(full);

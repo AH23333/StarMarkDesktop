@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml.Media;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Insights;
 using StarMark.Integrations.Clipboard;
 using StarMark.Core.Backup;
@@ -50,16 +51,27 @@ public partial class SettingsPageViewModel
     /// <summary>前台是全屏应用时让路（放 PPT / 放映不被砸）。默认开。</summary>
     [ObservableProperty] private bool _eyeRestDeferOnFullscreen;
 
-    [ObservableProperty] private string _eyeRestStatus = string.Empty;
+    [ObservableProperty] private LocMessage? _eyeRestStatus;
 
     /// <summary>「试一试」的结果回报（属性名含 Status＝不进自动保存，见 <c>IsDisplayOnlyProperty</c>）。</summary>
-    [ObservableProperty] private string _eyeRestPreviewStatus = string.Empty;
+    [ObservableProperty] private LocMessage? _eyeRestPreviewStatus;
 
-    /// <summary>下拉的档位文案，与 <see cref="EyeRestIntervalIndex"/> 同序（一处事实：档位与文案都在 Core）。</summary>
-    public IReadOnlyList<string> EyeRestIntervalOptions => StarMark.Core.Health.EyeRestPolicy.IntervalLabels;
+    /// <summary>
+    /// 间隔那几档（批次 WI-37-B 起是<b>数据项</b>，不再是 Core 拼好的中文标签）。
+    /// <para>为什么必须换成 <see cref="LocOption"/>：闭着的那格显示的是选中那一刻从 <c>Content</c> 抄走的快照，
+    /// 换语言时 <c>LocText</c> 只重贴"还活在可视树里、自己带着键"的元素（坑表 #272／#275）；
+    /// 而 <c>Value</c> 交的是<b>分钟数本身</b>——⛔ 拿显示文字当身份，换语言后选中的还是同一项，读出来的却是另一串字。</para>
+    /// </summary>
+    public IReadOnlyList<LocOption> EyeRestIntervalOptions { get; } =
+        StarMark.Core.Health.EyeRestPolicy.IntervalOptions
+            .Select(minutes => new LocOption(StarMark.Core.Health.EyeRestPolicy.IntervalKey, string.Empty, minutes))
+            .ToList();
 
-    /// <summary>提醒形式的三档文案，与 <see cref="EyeRestNoticeIndex"/> 同序。</summary>
-    public IReadOnlyList<string> EyeRestNoticeOptions => StarMark.Core.Health.EyeRestPolicy.NoticeLabels;
+    /// <summary>提醒形式那三档，顺序＝<c>EyeRestPolicy.NoticeOptions</c>（也就是设置档里那颗序号）。</summary>
+    public IReadOnlyList<LocOption> EyeRestNoticeOptions { get; } =
+        StarMark.Core.Health.EyeRestPolicy.NoticeKeys
+            .Select((key, index) => new LocOption(key, string.Empty, StarMark.Core.Health.EyeRestPolicy.NoticeAt(index)))
+            .ToList();
 
     private int EyeRestIntervalMinutes => StarMark.Core.Health.EyeRestPolicy.IntervalAt(EyeRestIntervalIndex);
 
@@ -98,27 +110,34 @@ public partial class SettingsPageViewModel
         App.ApplyEyeRest(EyeRestEnabled);
         EyeRestStatus = BuildEyeRestStatus();
         // 设置一变，上一次"试一试"演出来的就已经不是当前配置了：留着那行会读成"刚验证过现在的设置"
-        EyeRestPreviewStatus = string.Empty;
+        EyeRestPreviewStatus = null;
     }
 
     /// <summary>
     /// 状态行说三件事：怎么提醒、全屏时让不让路、下一次大约几点。
     /// "开着但表没挂上"必须自己承认——用户没法用眼睛验证一张定时器在不在跑。
-    /// <para>那一档怎么说取 <c>EyeRestPolicy.NoticeLabel</c>：与下拉里看到的是同一句，
-    /// 免得状态行自己攒第二份"这一档会发生什么"（漏掉"点一下可提前结束"就是这一族最典型的形状）。</para>
+    /// <para><b>交回的是「键＋读数」，不是拼好的句子</b>（批次 WI-37-B，WI-2k 那颗门）：VM 拼串的那一刻
+    /// 语言就被定死了，换语言没人回去重算，屏幕上会留下半中半英；而这一行是设置页最显眼的那一句。</para>
+    /// <para>那一档怎么说、间隔是多少，都取 <c>EyeRestPolicy</c> 交回的<b>没渲染的</b> <see cref="LocMessage"/>：
+    /// 与下拉里看到的是同一颗键（⛔ 状态行自己攒第二份"这一档会发生什么"＝漏掉"点一下可提前结束"那一族），
+    /// 而嵌套那句在贴上去这一刻才按当前语言取词（坑表 #328 同族）。</para>
     /// </summary>
-    private string BuildEyeRestStatus()
+    private LocMessage? BuildEyeRestStatus()
     {
-        if (!EyeRestEnabled)
-            return "已关闭：不建定时器、不探测前台窗口，屏幕上不会出现任何东西。";
-        var how = $"连续工作约 {EyeRestIntervalMinutes} 分钟后：{StarMark.Core.Health.EyeRestPolicy.NoticeLabel(CurrentEyeRestNotice)}";
-        var defer = EyeRestDeferOnFullscreen ? "；前台是全屏应用（放 PPT / 放映）时自己让路" : "；全屏应用下也照常提醒";
-        var running = StarMark.UI.Services.EyeRestService.IsRunning;
-        var next = running && StarMark.UI.Services.EyeRestService.NextDueAt is { } due
-            ? $"下一次大约 {DateTimeText.Clock(due)}。"
-            : string.Empty;
-        var warning = running ? string.Empty : "开关是开着的，但节拍表没挂上（原因见日志）——当前不会提醒。";
-        return $"{how}{defer}。{next}{warning}";
+        if (!EyeRestEnabled) return LocMessage.Of("health.status.off");
+
+        var next = StarMark.UI.Services.EyeRestService.IsRunning
+                   && StarMark.UI.Services.EyeRestService.NextDueAt is { } due
+            ? LocMessage.Of("health.status.nextDue", DateTimeText.Clock(due))
+            : null;
+        var warning = StarMark.UI.Services.EyeRestService.IsRunning
+            ? null
+            : LocMessage.Of("health.status.notRunning");
+        return LocMessage.Of("health.status.on",
+            StarMark.Core.Health.EyeRestPolicy.IntervalMessage(EyeRestIntervalMinutes),
+            StarMark.Core.Health.EyeRestPolicy.NoticeMessage(CurrentEyeRestNotice),
+            LocMessage.Of(EyeRestDeferOnFullscreen ? "health.status.deferOn" : "health.status.deferOff"),
+            next, warning);
     }
 
     /// <summary>
@@ -132,13 +151,15 @@ public partial class SettingsPageViewModel
         EyeRestPreviewStatus = did switch
         {
             // 盖上幕布时把幕布上那句退出说明同样说一遍：这一行与屏幕上那块幕布不许对不上（强制档可点不开，
-            // 让人以为"再点一下就行"，正是这次改判要治的那种措辞）。
+            // 让人以为"再点一下就行"，正是这次改判要治的那种措辞）。实参交<b>没渲染的</b>那颗，
+            // 幕布上与本行才真是同一句字（⛔ 在这里拼两串中文）。
             true when StarMark.UI.Services.EyeRestService.IsResting
-                => "已演一次：暗幕已经盖上。" + StarMark.Core.Health.EyeRestPolicy.NoticeHint(CurrentEyeRestNotice),
-            true => "已演一次：右下角那张提示卡真的贴上了屏幕（贴不上时才会退到主窗提示条）。",
+                => LocMessage.Of("health.preview.curtain",
+                    StarMark.Core.Health.EyeRestPolicy.NoticeHintMessage(CurrentEyeRestNotice)),
+            true => LocMessage.Of("health.preview.card"),
             false when StarMark.UI.Services.EyeRestService.IsResting
-                => "幕布还盖着屏，等这一轮结束再按（能不能提前点掉按上面那一档的说法）。",
-            false => "没演成：护眼开关没打开时不建节拍表，也就没有可演的东西（先开启本卡片顶部的开关）。",
+                => LocMessage.Of("health.preview.busy"),
+            false => LocMessage.Of("health.preview.off"),
         };
     }
 
