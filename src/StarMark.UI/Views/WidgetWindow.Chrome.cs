@@ -13,6 +13,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Graphics;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Health;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
@@ -431,9 +432,11 @@ public sealed partial class WidgetWindow
         if (CollapseIcon is not null)
             CollapseIcon.Glyph = _chromeMode == WidgetChromeMode.Compact ? "\uE70D" : "\uE70E"; // 展开/收起
         if (_collapseMenuItem is not null)
-            _collapseMenuItem.Text = _chromeMode == WidgetChromeMode.Compact ? "展开组件" : "收起为胶囊";
+            _collapseMenuItem.Text = Locale.T(_chromeMode == WidgetChromeMode.Compact
+                ? "widget.chrome.expand" : "widget.chrome.collapse");
         if (_hideChromeMenuItem is not null)
-            _hideChromeMenuItem.Text = _chromeMode == WidgetChromeMode.Hidden ? "显示外壳（标题栏）" : "隐藏外壳（仅内容）";
+            _hideChromeMenuItem.Text = Locale.T(_chromeMode == WidgetChromeMode.Hidden
+                ? "widget.chrome.showFrame" : "widget.chrome.hideFrame");
     }
 
     private void TogglePin()

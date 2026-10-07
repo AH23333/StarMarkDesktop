@@ -1214,6 +1214,71 @@ public static class UiStrings
         // 窗口标题前缀（Alt+Tab／任务切换器那一格）。⚠ 这里接的是<b>名字</b>而不是"图标 名字"：
         // 图标归标题栏那颗元素一个出口，名字里再夹一颗就是"两个图标"（坑表 #337）。
         new Entry("widget.win.windowTitle", "StarMark 组件 - {0}", "StarMark widget - {0}", "StarMark ウィジェット - {0}"),
+        // ===== 组件窗右键那一族（批次 WI-37-A）=====
+        // 中文列<b>逐字取自改键前 code-behind 里的那一句</b>：这一刀只搬地方，不顺手改措辞。
+        // 菜单每次右键重建 ⇒ 构建那一刻 Locale.T 就够（WI-2o 那条口径），⛔ 不给它挂附带属性。
+        new Entry("widget.menu.removeOne", "移除本组件", "Remove this widget", "このウィジェットを削除"),
+        new Entry("widget.menu.main", "打开 StarMark 主窗口", "Open the StarMark window", "StarMark のメインウィンドウを開く"),
+        new Entry("widget.menu.manage", "管理组件…", "Manage widgets…", "ウィジェット管理…"),
+        new Entry("widget.menu.rename", "重命名…", "Rename…", "名前を変更…"),
+        new Entry("widget.menu.appearance", "外观…", "Appearance…", "外観…"),
+        new Entry("widget.menu.saveLayout", "保存当前组件布局…", "Save the current layout…", "現在のレイアウトを保存…"),
+        new Entry("widget.menu.applyLayout", "应用布局", "Apply layout", "レイアウトを適用"),
+        // 布局与快照那两行列的是"名字（摘要）"——两处同一形状，⛔ 各写一行迟早只改一处。
+        new Entry("widget.menu.nameWithSummary", "{0}（{1}）", "{0} ({1})", "{0}（{1}）"),
+        new Entry("widget.menu.saveSnapshot", "保存当前布局与数据…", "Save layout & data…", "レイアウトとデータを保存…"),
+        new Entry("widget.menu.applySnapshot", "应用快照", "Apply snapshot", "スナップショットを適用"),
+        new Entry("widget.menu.applyFailed", "未能应用快照", "Couldn’t apply the snapshot", "スナップショットを適用できませんでした"),
+        new Entry("widget.menu.applyFailedBody", "{0}——为防数据丢失已中止，当前状态未改动。",
+            "{0} — stopped to protect your data; nothing was changed.", "{0}——データ保護のため中止し、変更は加えていません。"),
+        new Entry("widget.menu.rollbackFailed", "生成「应用前」回滚点失败",
+            "Failed to create the “before applying” rollback point", "「適用前」ロールバック地点を作成できませんでした"),
+        new Entry("widget.menu.manageSnapshots", "管理快照…", "Manage snapshots…", "スナップショット管理…"),
+        new Entry("widget.menu.saveLayoutTitle", "保存当前组件布局", "Save the current layout", "現在のレイアウトを保存"),
+        new Entry("widget.menu.saveLayoutBody",
+            "记下当前屏幕上所有可见组件的位置、大小与各自的外观配置（材质/颜色等），形成一套可复用的模板。不含任何条目内容数据（待办/随记/快捷入口/笔记）。应用布局时，不属于该布局的组件会被隐藏（内容保留）。",
+            "Records every visible widget's position, size and own appearance (material, colour, …) as a reusable template. "
+            + "It holds no item data (todos / notes / quick launch / memos). Applying a layout hides the widgets that aren't part of it (their data stays).",
+            "現在表示中のすべてのウィジェットについて、位置・サイズ・それぞれの外観（材質／色など）を、再利用できるテンプレートとして残します。項目のデータ（ToDo／走り書き／クイック起動／メモ）は含みません。レイアウトを適用すると、そのレイアウトに属さないウィジェットは隠れます（内容は残ります）。"),
+        new Entry("widget.menu.saveLayoutHint", "例如：工作模式", "e.g. Work mode", "例：作業モード"),
+        new Entry("widget.menu.noneVisible", "当前没有可见的组件", "No widgets are visible", "表示中のウィジェットがありません"),
+        new Entry("widget.menu.noLayoutContent", "没有可保存的布局内容。", "There is nothing to save.", "保存できるレイアウト内容がありません。"),
+        new Entry("widget.menu.saveSnapshotTitle", "保存当前布局与数据", "Save layout & data", "レイアウトとデータを保存"),
+        new Entry("widget.menu.saveSnapshotBody",
+            "把当前屏幕上所有组件的位置、外观，连同各自的数据（快捷入口 / 待办 / 随记 / 条目格查询）一起存成一个不可变快照点。之后「应用快照」即回到这一刻，并会先自动生成一个「应用前」回滚点。",
+            "Saves every widget's position and appearance together with its own data (quick launch / todos / notes / library queries) "
+            + "as an immutable point. “Apply snapshot” later returns to this moment, after making a “before applying” rollback point first.",
+            "現在画面上のすべてのウィジェットの位置・外観を、それぞれのデータ（クイック起動／ToDo／走り書き／ライブラリの照会）とともに、変更できない一点として保存します。後で「スナップショットを適用」するとこの時点に戻り、その前に「適用前」ロールバック地点が自動で作られます。"),
+        new Entry("widget.menu.saveSnapshotHint", "例如：上线前", "e.g. Before a release", "例：リリース前"),
+        new Entry("widget.menu.noneWidgets", "当前没有组件", "There are no widgets", "ウィジェットがありません"),
+        new Entry("widget.menu.noSnapshotContent", "没有可保存的快照内容。", "There is nothing to snapshot.", "スナップショットにできる内容がありません。"),
+        new Entry("widget.menu.snapshotSaved", "已保存快照", "Snapshot saved", "スナップショットを保存しました"),
+        new Entry("widget.menu.snapshotSavedBody",
+            "「{0}」已记录（{1}）。可在主窗口「快照」页或右键「应用快照」里回到这一刻。",
+            "“{0}” is recorded ({1}). Return to this moment from the “Snapshots” page or the right-click “Apply snapshot”.",
+            "「{0}」を記録しました（{1}）。メインウィンドウの「スナップショット」ページか、右クリックの「スナップショットを適用」からこの時点に戻れます。"),
+        new Entry("widget.menu.snapshotFailed", "保存快照失败", "Saving the snapshot failed", "スナップショットの保存に失敗しました"),
+        new Entry("widget.menu.snapshotFailedBody", "读取组件数据时出错，快照未保存：{0}",
+            "Widget data could not be read, so nothing was saved: {0}", "ウィジェットのデータ読み取りに失敗したため、保存されませんでした：{0}"),
+        new Entry("widget.menu.renameTitle", "重命名组件", "Rename this widget", "ウィジェットの名前を変更"),
+        new Entry("widget.menu.renameBody", "给这个组件取个名字（留空则恢复默认名称「{0}」）。",
+            "Give this widget a name (leave it empty to restore the default “{0}”).",
+            "このウィジェットに名前を付けてください（空欄なら既定名の「{0}」に戻ります）。"),
+        new Entry("widget.chrome.collapse", "收起为胶囊", "Collapse into a pill", "カプセルに折りたたむ"),
+        new Entry("widget.chrome.expand", "展开组件", "Expand the widget", "ウィジェットを展開"),
+        new Entry("widget.chrome.hideFrame", "隐藏外壳（仅内容）", "Hide the frame (content only)", "枠を隠す（内容のみ）"),
+        new Entry("widget.chrome.showFrame", "显示外壳（标题栏）", "Show the frame (title bar)", "枠を表示（タイトルバー）"),
+        new Entry("widget.chrome.privacy", "隐私模式（胶囊态隐藏标题）", "Privacy mode (hide the title in pill form)", "プライバシーモード（カプセル時にタイトルを隠す）"),
+        // 占位那一行是这块内容<b>唯一的表面</b>（没有别的元素画图标），所以标题里那颗 glyph 在这里是唯一的图标。
+        // ⚠ 措辞只说今天的事实：`ShippedUiTextNeverPromisesAFutureBatch` 那颗闸门不许界面文本写"暂未实现"
+        // ——那一句话是在替程序承诺一件还没做的事（本批第一版就是被它当场咬住的）。
+        new Entry("widget.notImplemented", "「{0}」没有可显示的内容", "“{0}” has nothing to show", "「{0}」は表示できる内容がありません"),
+
+        // 快捷启动拖放那两句（批次 WI-37-A）：遮罩里那句挂键（树里的元素），
+        // 跟随光标那句由 DragOver 现取词（系统画的，不是树里的元素）。术语与 widget.kind.quickLaunch 同一份。
+        new Entry("widget.drop.hint", "松开以添加到快捷启动", "Release to add to Quick launch", "ドロップしてクイック起動に追加"),
+        new Entry("widget.drop.caption", "添加到快捷启动", "Add to Quick launch", "クイック起動に追加"),
+
         new Entry("widget.menuShowAll", "全部显示", "Show all", "すべて表示"),
         new Entry("widget.menuHideAll", "全部隐藏", "Hide all", "すべて非表示"),
         new Entry("widget.menuToggleAll", "显示/隐藏全部组件", "Show or hide all widgets", "すべてのウィジェットを表示／非表示"),

@@ -221,6 +221,7 @@ public sealed class I18nContractTests : IDisposable
             ["widget.glance.ym"] = "月题骨架「{0}年{1}月」中日同形（ja 也用年月，en 列走 ISO 式不同形，WI-31）",
             ["health.join.list"] = "列表连接号「、」中日同形，en 列是 \", \"（WI-33）",
                         ["rss.statusJoin"] = "纯胶水行「{0}{1}」，没有词可翻",
+            ["widget.menu.nameWithSummary"] = "纯骨架「{0}（{1}）」：中文与日文都用全角括号，两语同形（WI-37，与 trending.notice.compose 同形）",
         };
 
         var actual = UiStrings.All

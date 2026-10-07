@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using StarMark.UI.ViewModels;
 using StarMark.UI.Views;
@@ -38,7 +39,7 @@ public sealed class WidgetContentFactory
         string title = WidgetStorage.KindTitle(kind);
         return new TextBlock
         {
-            Text = $"「{title}」暂未实现",
+            Text = Locale.Fmt("widget.notImplemented", title),
             Margin = new Thickness(16),
             Opacity = 0.6,
         };

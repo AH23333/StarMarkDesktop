@@ -167,11 +167,13 @@ public sealed partial class WidgetWindow
         // 避免主菜单被一长串「添加 X」撑爆、与「移除本组件」混在一起难以区分。
         var addSub = new MenuFlyoutSubItem
         {
-            Text = "添加组件",
+            Text = Locale.T("settings.widgets.addRow"),   // 与设置页那颗「添加组件」同一句话＝同一颗键（⛔ 另起一行迟早只改一处）
             Icon = new FontIcon { Glyph = "\uE710", FontSize = 14 },
         };
         foreach (var kind in WidgetStorage.AllKinds)
         {
+            // 这里<b>留着</b>带图标那份（KindTitle＝"图标 空格 名字"）：菜单项没有别的元素画图标，
+            // 与托盘同理。组件窗标题栏不是这种宿主——那边只许拿键（坑表 #337）。
             var add = new MenuFlyoutItem { Text = WidgetStorage.KindTitle(kind) };
             var captured = kind;
             add.Click += (_, _) => _ = _manager.AddInstanceAsync(captured);
@@ -182,7 +184,7 @@ public sealed partial class WidgetWindow
         menu.Items.Add(new MenuFlyoutSeparator());
         var removeThis = new MenuFlyoutItem
         {
-            Text = "移除本组件",
+            Text = Locale.T("widget.menu.removeOne"),
             Icon = new FontIcon { Glyph = "\uE711", FontSize = 14 },   // Cancel（X），与其它图标视觉一致
         };
         removeThis.Click += (_, _) => _ = _manager.RemoveAsync(_instanceId);
@@ -199,7 +201,7 @@ public sealed partial class WidgetWindow
         var canHide = WidgetRegistry.Default.TryGet(_kind, out var desc) && desc.CanHideChrome;
         _collapseMenuItem = new MenuFlyoutItem
         {
-            Text = "收起为胶囊",
+            Text = Locale.T("widget.chrome.collapse"),
             Icon = new FontIcon { Glyph = "\uE70E", FontSize = 14 }, // ChevronUp：收起
             IsEnabled = canHide,
         };
@@ -208,7 +210,7 @@ public sealed partial class WidgetWindow
 
         _hideChromeMenuItem = new MenuFlyoutItem
         {
-            Text = "隐藏外壳（仅内容）",
+            Text = Locale.T("widget.chrome.hideFrame"),
             Icon = new FontIcon { Glyph = "\uE921", FontSize = 14 },   // Hide（有效字形，避免显示错误方框）
             IsEnabled = canHide,
         };
@@ -218,7 +220,7 @@ public sealed partial class WidgetWindow
         // 隐私模式（B-10）：收起为胶囊时隐藏标题，避免胶囊泄露组件身份/内容
         var privacyItem = new ToggleMenuFlyoutItem
         {
-            Text = "隐私模式（胶囊态隐藏标题）",
+            Text = Locale.T("widget.chrome.privacy"),
             Icon = new FontIcon { Glyph = "\uE72E", FontSize = 14 }, // 锁
             IsChecked = _config.PrivacyMode,
         };
@@ -231,17 +233,17 @@ public sealed partial class WidgetWindow
         menu.Items.Add(privacyItem);
 
         menu.Items.Add(new MenuFlyoutSeparator());
-        var showAll = new MenuFlyoutItem { Text = "全部显示" };
+        var showAll = new MenuFlyoutItem { Text = Locale.T("widget.menuShowAll") };
         showAll.Click += (_, _) => _ = _manager.ShowAllAsync();
-        var hideAll = new MenuFlyoutItem { Text = "全部隐藏" };
+        var hideAll = new MenuFlyoutItem { Text = Locale.T("widget.menuHideAll") };
         hideAll.Click += (_, _) => _ = _manager.HideAllAsync();
         menu.Items.Add(showAll);
         menu.Items.Add(hideAll);
 
         menu.Items.Add(new MenuFlyoutSeparator());
-        var main = new MenuFlyoutItem { Text = "打开 StarMark 主窗口" };
+        var main = new MenuFlyoutItem { Text = Locale.T("widget.menu.main") };
         main.Click += (_, _) => _manager.OpenMainWindow();
-        var settings = new MenuFlyoutItem { Text = "管理组件…" };
+        var settings = new MenuFlyoutItem { Text = Locale.T("widget.menu.manage") };
         settings.Click += (_, _) => _manager.OpenWidgetSettings();
         menu.Items.Add(main);
         menu.Items.Add(settings);
@@ -249,7 +251,7 @@ public sealed partial class WidgetWindow
         // 重命名本组件实例（名字显示在标题栏 / 胶囊标题上）
         var rename = new MenuFlyoutItem
         {
-            Text = "重命名…",
+            Text = Locale.T("widget.menu.rename"),
             Icon = new FontIcon { Glyph = "\uE8AC", FontSize = 14 },   // Rename，与其它图标视觉一致
         };
         rename.Click += async (_, _) => await RenameAsync();
@@ -258,7 +260,7 @@ public sealed partial class WidgetWindow
         // 每实例外观编辑（B-9）：材质/颜色/边框/圆角/文本缩放，可一键恢复全局
         var appearance = new MenuFlyoutItem
         {
-            Text = "外观…",
+            Text = Locale.T("widget.menu.appearance"),
             Icon = new FontIcon { Glyph = "\uE790", FontSize = 14 },
         };
         appearance.Click += async (_, _) => await EditAppearanceAsync();
@@ -268,7 +270,7 @@ public sealed partial class WidgetWindow
         menu.Items.Add(new MenuFlyoutSeparator());
         var saveLayout = new MenuFlyoutItem
         {
-            Text = "保存当前组件布局…",
+            Text = Locale.T("widget.menu.saveLayout"),
             Icon = new FontIcon { Glyph = "\uE78C", FontSize = 14 },
         };
         saveLayout.Click += (_, _) => _ = SaveLayoutByNameAsync();
@@ -277,11 +279,12 @@ public sealed partial class WidgetWindow
         var layouts = _manager.GetLayouts();
         if (layouts.Count > 0)
         {
-            var sub = new MenuFlyoutSubItem { Text = "应用布局" };
+            var sub = new MenuFlyoutSubItem { Text = Locale.T("widget.menu.applyLayout") };
             foreach (var l in layouts)
             {
                 var id = l.Id;
-                var apply = new MenuFlyoutItem { Text = $"{l.Name}（{l.Summary}）" };
+                // 名字与摘要之间那个括号是<b>语言内容</b>（英文用半角），所以整句进表、两段当实参。
+                var apply = new MenuFlyoutItem { Text = Locale.Fmt("widget.menu.nameWithSummary", l.Name, l.Summary) };
                 apply.Click += (_, _) => _ = _manager.ApplyLayoutAsync(id);
                 sub.Items.Add(apply);
             }
@@ -291,7 +294,7 @@ public sealed partial class WidgetWindow
         // 布局与数据快照（#53）：连组件数据一起存成不可变历史点；应用 = 回到那一刻（带自动回滚）。
         var saveSnapshot = new MenuFlyoutItem
         {
-            Text = "保存当前布局与数据…",
+            Text = Locale.T("widget.menu.saveSnapshot"),
             Icon = new FontIcon { Glyph = "\uE787", FontSize = 14 },
         };
         saveSnapshot.Click += (_, _) => _ = SaveSnapshotByNameAsync();
@@ -300,25 +303,25 @@ public sealed partial class WidgetWindow
         var snapshots = _manager.GetSnapshots();
         if (snapshots.Count > 0)
         {
-            var snapSub = new MenuFlyoutSubItem { Text = "应用快照" };
+            var snapSub = new MenuFlyoutSubItem { Text = Locale.T("widget.menu.applySnapshot") };
             foreach (var s in snapshots)
             {
                 var id = s.Id;
-                var apply = new MenuFlyoutItem { Text = $"{s.Name}（{s.Summary}）" };
+                var apply = new MenuFlyoutItem { Text = Locale.Fmt("widget.menu.nameWithSummary", s.Name, s.Summary) };
                 // 快照应用刻意与「应用布局」一致：直接应用、不再二次确认，因为应用前会自动留回滚点。
                 // 但回滚点没存成时 Apply 会中止（返回 false）——不静默吞掉，给一条提示说明"未应用"。
                 apply.Click += async (_, _) =>
                 {
                     if (!await _manager.ApplySnapshotAsync(id))
-                        await ShowTipAsync("未能应用快照",
-                            $"{_manager.LastApplyError ?? "生成「应用前」回滚点失败"}——为防数据丢失已中止，当前状态未改动。");
+                        await ShowTipAsync(Locale.T("widget.menu.applyFailed"), Locale.Fmt("widget.menu.applyFailedBody",
+                            _manager.LastApplyError ?? Locale.T("widget.menu.rollbackFailed")));
                 };
                 snapSub.Items.Add(apply);
             }
             menu.Items.Add(snapSub);
         }
 
-        var manageSnapshots = new MenuFlyoutItem { Text = "管理快照…" };
+        var manageSnapshots = new MenuFlyoutItem { Text = Locale.T("widget.menu.manageSnapshots") };
         manageSnapshots.Click += (_, _) =>
         {
             App.PresentMainWindow();
@@ -334,11 +337,11 @@ public sealed partial class WidgetWindow
     private async System.Threading.Tasks.Task SaveSnapshotByNameAsync()
     {
         var name = await CenteredDialog.PromptAsync(
-            title: "保存当前布局与数据",
-            message: "把当前屏幕上所有组件的位置、外观，连同各自的数据（快捷入口 / 待办 / 随记 / 条目格查询）一起存成一个不可变快照点。之后「应用快照」即回到这一刻，并会先自动生成一个「应用前」回滚点。",
-            placeholder: "例如：上线前",
-            primaryText: "保存",
-            cancelText: "取消",
+            title: Locale.T("widget.menu.saveSnapshotTitle"),
+            message: Locale.T("widget.menu.saveSnapshotBody"),
+            placeholder: Locale.T("widget.menu.saveSnapshotHint"),
+            primaryText: Locale.T("dialog.save"),
+            cancelText: Locale.T("dialog.cancel"),
             owner: this);
 
         if (name is null) return;
@@ -348,13 +351,17 @@ public sealed partial class WidgetWindow
         try
         {
             var saved = await _manager.CaptureSnapshotAsync(name);
-            if (saved is null) await ShowTipAsync("当前没有组件", "没有可保存的快照内容。");
-            else await ShowTipAsync("已保存快照", $"「{saved.Name}」已记录（{saved.Summary}）。可在主窗口「快照」页或右键「应用快照」里回到这一刻。");
+            if (saved is null)
+                await ShowTipAsync(Locale.T("widget.menu.noneWidgets"), Locale.T("widget.menu.noSnapshotContent"));
+            else
+                await ShowTipAsync(Locale.T("widget.menu.snapshotSaved"),
+                    Locale.Fmt("widget.menu.snapshotSavedBody", saved.Name, saved.Summary));
         }
         catch (Exception ex)
         {
             StarLog.Error("保存布局与数据快照失败", ex);
-            await ShowTipAsync("保存快照失败", $"读取组件数据时出错，快照未保存：{ex.Message}");
+            await ShowTipAsync(Locale.T("widget.menu.snapshotFailed"),
+                Locale.Fmt("widget.menu.snapshotFailedBody", ex.Message));
         }
     }
 
@@ -366,17 +373,18 @@ public sealed partial class WidgetWindow
     private async System.Threading.Tasks.Task SaveLayoutByNameAsync()
     {
         var name = await CenteredDialog.PromptAsync(
-            title: "保存当前组件布局",
-            message: "记下当前屏幕上所有可见组件的位置、大小与各自的外观配置（材质/颜色等），形成一套可复用的模板。不含任何条目内容数据（待办/随记/快捷入口/笔记）。应用布局时，不属于该布局的组件会被隐藏（内容保留）。",
-            placeholder: "例如：工作模式",
-            primaryText: "保存",
-            cancelText: "取消",
+            title: Locale.T("widget.menu.saveLayoutTitle"),
+            message: Locale.T("widget.menu.saveLayoutBody"),
+            placeholder: Locale.T("widget.menu.saveLayoutHint"),
+            primaryText: Locale.T("dialog.save"),
+            cancelText: Locale.T("dialog.cancel"),
             owner: this);
 
         if (name is null) return;
 
         var saved = await _manager.SaveCurrentLayoutAsync(name);
-        if (saved is null) await ShowTipAsync("当前没有可见的组件", "没有可保存的布局内容。");
+        if (saved is null)
+            await ShowTipAsync(Locale.T("widget.menu.noneVisible"), Locale.T("widget.menu.noLayoutContent"));
     }
 
     private async System.Threading.Tasks.Task ShowTipAsync(string title, string message)
@@ -480,8 +488,8 @@ public sealed partial class WidgetWindow
         {
             var def = Locale.T(DefaultKindTitleKey(_kind));   // 提示里的"默认名称"＝类型名，不带图标
             var input = await CenteredDialog.PromptAsync(
-                title: "重命名组件",
-                message: $"给这个组件取个名字（留空则恢复默认名称「{def}」）。",
+                title: Locale.T("widget.menu.renameTitle"),
+                message: Locale.Fmt("widget.menu.renameBody", def),
                 placeholder: def,
                 defaultText: string.IsNullOrWhiteSpace(_config.Title) ? null : _config.Title,
                 owner: this);

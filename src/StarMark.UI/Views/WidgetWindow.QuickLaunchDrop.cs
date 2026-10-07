@@ -13,6 +13,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Graphics;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Health;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
@@ -41,6 +42,15 @@ public sealed partial class WidgetWindow
         RootBorder.DragEnter += QuickLaunch_DragEnter;
         RootBorder.DragLeave += (_, _) => SetDropHintVisible(false);
 
+        var hintText = new TextBlock
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+        };
+        // 树里的元素挂键：遮罩只在构造时建一次，直写 Text 就是把语言钉在创建那一刻（坑表 #328 同族）。
+        LocText.SetKey(hintText, "widget.drop.hint");
+
         _dropHint = new Border
         {
             Background = WidgetBrush("WidgetDropHintBrush"),
@@ -49,13 +59,7 @@ public sealed partial class WidgetWindow
             CornerRadius = new CornerRadius(8),
             IsHitTestVisible = false,
             Visibility = Visibility.Collapsed,
-            Child = new TextBlock
-            {
-                Text = "松开以添加到快捷启动",
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            },
+            Child = hintText,
         };
         Grid.SetRowSpan(_dropHint, 2);
         if (RootBorder.Child is Grid rootGrid) rootGrid.Children.Add(_dropHint);
@@ -99,7 +103,8 @@ public sealed partial class WidgetWindow
                  || v.Contains(StandardDataFormats.StorageItems)
                  || v.Contains(StandardDataFormats.Text);
         e.AcceptedOperation = ok ? DataPackageOperation.Copy : DataPackageOperation.None;
-        e.DragUIOverride.Caption = "添加到快捷启动";
+        // 拖拽跟随光标的那句是系统画的，不是树里的元素：每次 DragOver 现取词（同菜单"每次右键重建"那一路）。
+        e.DragUIOverride.Caption = Locale.T("widget.drop.caption");
         SetDropHintVisible(ok);
         await Task.CompletedTask;
     }

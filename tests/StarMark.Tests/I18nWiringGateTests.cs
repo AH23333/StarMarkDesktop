@@ -42,6 +42,11 @@ public sealed class I18nWiringGateTests
     private const string SettingsHotkeysCs = "src/StarMark.UI/Views/SettingsPage.Hotkeys.cs";
     private const string GuideUiCs = "src/StarMark.UI/Helpers/GuideUi.cs";
     private const string AppCs = "src/StarMark.UI/App.xaml.cs";
+    // 组件窗自己的三条文字出口（批次 WI-37-A）：菜单本体／外壳两态／快捷启动拖放，加内容工厂的占位那一行。
+    private const string WidgetMenuCs = "src/StarMark.UI/Views/WidgetWindow.Menu.cs";
+    private const string WidgetChromeCs = "src/StarMark.UI/Views/WidgetWindow.Chrome.cs";
+    private const string WidgetDropCs = "src/StarMark.UI/Views/WidgetWindow.QuickLaunchDrop.cs";
+    private const string WidgetFactoryCs = "src/StarMark.UI/Services/WidgetContentFactory.cs";
 
     /// <summary>标记上那些"会显示给人看"的属性值（一颗正则，两处收口判据共用＝⛔ 不许各写一份）。</summary>
     const string Attributes = @"(?:Text|Content|Header|OnContent|OffContent|ToolTip|PlaceholderText)=""([^""]*)""";
@@ -1430,5 +1435,80 @@ public sealed class I18nWiringGateTests
         Assert.Contains("public static void SetWindowTitle(Window window, string key", loc, StringComparison.Ordinal);
         Assert.Contains("window.Title = Text(title.Key, title.Args)", loc, StringComparison.Ordinal);
         Assert.DoesNotContain("TitleKey", loc, StringComparison.Ordinal);   // ⛔ 别把它改回附带属性：Window 进不了那棵树
+    }
+
+    /// <summary>
+    /// <b>组件窗自己的三条文字出口只许交键</b>（批次 WI-37-A，用户真机报「组件内容和右键菜单未国际化」）。
+    /// <para>三条出口按宿主形状分三种接法（WI-2o 定下的口径，这里逐颗钉住）：
+    /// ① <b>右键菜单</b>每次打开都重建（<c>OnContextMenuOpening</c>）⇒ 构建那一刻 <c>Locale.T</c> 就够；
+    /// ② <b>外壳模式</b>那两颗项是建好常驻的，改文案由 <c>UpdateChromeControls</c> 现取词（同一形状的两种说法不许各写一份）；
+    /// ③ <b>树里的元素</b>（拖放遮罩那句）挂 <c>LocText.SetKey</c>，由唯一的 <c>ReapplyAll</c> 重贴。
+    /// 跟随光标的 <c>DragUIOverride.Caption</c> 是系统画的、每次 DragOver 重设 ⇒ 走 ①。</para>
+    /// <para>⛔ 只扫这几个方法体、不扫整档：同档的护眼那一节（<c>BuildEyeRestSection</c>）还欠着，
+    /// 它的选项字住在 Core（<c>EyeRestPolicy.IntervalLabels</c>／<c>NoticeLabels</c>），要连着设置页那两颗下拉一起改＝WI-37-B；
+    /// 闹钟那一节在 <c>AlarmMenu.cs</c>＝WI-37-C。整档扫会把这两刀的债算成这一刀的。</para>
+    /// <para>顺带钉两条"一个主人"：<b>同一句话不许第二个键</b>（「添加组件」沿用设置页那颗、「保存／取消」沿用对话框那对、
+    /// 布局行与快照行共用 <c>nameWithSummary</c> 一颗）；<b>带图标那份展示名在组件窗里恰好一处</b>（菜单项那颗子菜单），
+    /// 标题栏那颗已由 <see cref="TheWidgetTitleHasOneIconOwnerAndFollowsTheLanguage"/> 钉成键。</para>
+    /// </summary>
+    [Fact]
+    public void TheWidgetMenuChromeAndDropHandKeysNotWords()
+    {
+        var offenders = new List<string>();
+
+        void Scan(string file, string owner, params string[] signatures)
+        {
+            var source = Code(ReadRepoFile(file));
+            foreach (var signature in signatures)
+            {
+                // StarLog 的中文日志不归这把尺子（#329）——按行摘掉再扫。
+                var body = string.Join("\n", MethodBody(source, signature).Split('\n')
+                    .Where(l => !l.Contains("StarLog.", StringComparison.Ordinal)));
+                foreach (Match m in Regex.Matches(body, @"""[^""]*[\u4e00-\u9fff][^""]*"""))
+                    offenders.Add($"{owner} {signature.Split('(')[0].Trim()}：{m.Value}");
+            }
+        }
+
+        Scan(WidgetMenuCs, "菜单",
+            "private void PopulateMenu(MenuFlyout menu)",
+            "private async System.Threading.Tasks.Task SaveSnapshotByNameAsync()",
+            "private async System.Threading.Tasks.Task SaveLayoutByNameAsync()",
+            "private async System.Threading.Tasks.Task RenameAsync()");
+        Scan(WidgetChromeCs, "外壳", "private void UpdateChromeControls()");
+        Scan(WidgetDropCs, "拖放",
+            "private void SetupQuickLaunchDrop()",
+            "private async void QuickLaunch_DragOver(object sender, DragEventArgs e)");
+        Scan(WidgetFactoryCs, "占位", "public UIElement Build(WidgetKind kind, WidgetWindow host)");
+
+        Assert.True(offenders.Count == 0,
+            "组件窗的界面串直交了中文（换语言那一刻它不跟着改）：\n" + string.Join("\n", offenders));
+
+        var menu = Code(ReadRepoFile(WidgetMenuCs));
+        // ① 重建那一刻现取词；同一句话不许有第二颗键
+        Assert.Contains("Locale.T(\"settings.widgets.addRow\")", menu, StringComparison.Ordinal);
+        Assert.Equal(1, Count(menu, "\"settings.widgets.addRow\""));
+        Assert.Contains("Locale.Fmt(\"widget.menu.nameWithSummary\", l.Name, l.Summary)", menu, StringComparison.Ordinal);
+        Assert.Contains("Locale.Fmt(\"widget.menu.nameWithSummary\", s.Name, s.Summary)", menu, StringComparison.Ordinal);
+        Assert.Equal(2, Count(menu, "\"widget.menu.nameWithSummary\""));   // 布局行与快照行共用一颗
+        Assert.Equal(2, Count(menu, "Locale.T(\"dialog.save\")"));         // 两颗保存对话框，⛔ 不另起一份「保存」
+        Assert.Equal(2, Count(menu, "Locale.T(\"dialog.cancel\")"));
+        // 带图标那份展示名：组件窗里只剩菜单那一个宿主（标题栏那颗是键，见 WI-36 那格）
+        Assert.Equal(1, Count(menu, "WidgetStorage.KindTitle(kind)"));
+
+        // ② 外壳两态各两颗词，且旧中文不许回来（回来就是"第二个人写这句话"）
+        var chrome = Code(ReadRepoFile(WidgetChromeCs));
+        Assert.Contains("Locale.T(_chromeMode == WidgetChromeMode.Compact", chrome, StringComparison.Ordinal);
+        Assert.Contains("Locale.T(_chromeMode == WidgetChromeMode.Hidden", chrome, StringComparison.Ordinal);
+        foreach (var back in new[] { "展开组件", "收起为胶囊", "显示外壳", "隐藏外壳" })
+            Assert.DoesNotContain(back, chrome, StringComparison.Ordinal);
+
+        // ③ 树里的元素挂键；系统画的那句每次现取
+        var drop = Code(ReadRepoFile(WidgetDropCs));
+        Assert.Contains("LocText.SetKey(hintText, \"widget.drop.hint\")", drop, StringComparison.Ordinal);
+        Assert.Contains("Locale.T(\"widget.drop.caption\")", drop, StringComparison.Ordinal);
+        Assert.DoesNotContain("松开以添加到快捷启动", drop, StringComparison.Ordinal);
+
+        var factory = Code(ReadRepoFile(WidgetFactoryCs));
+        Assert.Contains("Locale.Fmt(\"widget.notImplemented\", title)", factory, StringComparison.Ordinal);
     }
 }
