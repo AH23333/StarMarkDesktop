@@ -176,9 +176,16 @@
          ⛔ 两颗属性不许并成一行：`LocText.Key` 与 `Text=` 同在一行会被
          「同一行不许既有键、又留着它该取代的那句字面量」那颗闸门红掉（坑表 #276 一族）。 -->
     <DataTemplate x:Key="LocOptionTemplate">
-        <TextBlock Text="{Binding Text}"
-                   i18n:LocText.Key="{Binding Key}"
-                   i18n:LocText.ToolTipKey="{Binding TipKey}"/>
+        <!-- 第一列是 ComboBoxItem 自己的：选中那一行时它把"勾"画在列 0。
+             裸内容（早先这里直接放一颗 TextBlock）会被摆进同一列，于是选中项上同时出现那颗勾与文字，
+             看着就是"选项前面多了一个记号、和控件自己的那个记号重复"（批次 WI-43）。
+             ⚠ 射程：这一颗被 10 处下拉共用（主窗 2／设置页 7／热榜 1）⇒ 这里坏了不是"护眼那一格的问题"。
+             ⇒ 模板自己先分列，⛔ 用 Margin／Padding 把文字顶开那是遮丑：列 0 一被内容占住，勾照样叠上来。 -->
+        <Grid ColumnDefinitions="Auto,*">
+            <TextBlock Grid.Column="1" Text="{Binding Text}"
+                       i18n:LocText.Key="{Binding Key}"
+                       i18n:LocText.ToolTipKey="{Binding TipKey}"/>
+        </Grid>
     </DataTemplate>
 
 </ResourceDictionary>

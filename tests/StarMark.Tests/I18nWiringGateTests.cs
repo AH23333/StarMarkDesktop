@@ -372,6 +372,36 @@ public sealed class I18nWiringGateTests
     }
 
     /// <summary>
+    /// 那颗共用模板<b>不许把内容交进列 0</b>——列 0 是 <c>ComboBoxItem</c> 自己的：选中那一行时它把"勾"画在那里。
+    /// <para>形状：模板根是一颗裸 <c>TextBlock</c> 时，文字与那颗勾叠在同一列，选中项看起来就是"选项前面多了一个记号、
+    /// 和控件自己的那个记号重复"（批次 WI-43，他这轮的另一条反馈报的；⛔ 这里不写引语——那条消息的逐字在本机转写里取不到，
+    /// 而这件事⛔ 不需要人证：下面那些位置就是它的全部射程。这颗模板被 <b>10</b> 处下拉共用 ⇒ 一处坏＝
+    /// 主窗两颗、设置页七颗、热榜一颗<b>一起坏</b>，而他先看到的是护眼那一颗）。</para>
+    /// <para>判据只看结构：模板根必须自己分列，且<b>每一颗</b>会画东西出来的元素都显式站第二列。
+    /// ⛔ 用 <c>Margin</c>／<c>Padding</c> 把文字顶开是遮丑——列 0 一被占住，勾照样叠上来，
+    /// 所以这里数的是"画得出来的元素颗数 == 显式落第二列的颗数"，不是缩进好不好看。</para>
+    /// </summary>
+    [Fact]
+    public void TheSharedOptionTemplateKeepsTheFirstColumnForTheControlsOwnCheckMark()
+    {
+        var theme = Markup(ReadRepoFile(ThemeXaml));
+        const string open = "<DataTemplate x:Key=\"LocOptionTemplate\">";
+        var template = Between(theme, open, "</DataTemplate>")[open.Length..].Trim();
+        var root = Regex.Match(template, @"^\s*<(\w+)");
+        Assert.True(root.Success, "抽不出这颗模板的根元素（形状变了，这一格先跟上）");
+        Assert.Equal("Grid", root.Groups[1].Value);
+        Assert.Contains("ColumnDefinitions=\"Auto,*", template, StringComparison.Ordinal);
+
+        var drawn = Regex.Matches(template, @"<(TextBlock|FontIcon|SymbolIcon|ContentPresenter)\b").Cast<Match>()
+            .Select(m => m.Groups[1].Value).ToList();
+        Assert.True(drawn.Count >= 1, $"模板里一颗可见元素都没认到（抽取器没跑对）");
+        var placed = Regex.Matches(template,
+            @"<(?:TextBlock|FontIcon|SymbolIcon|ContentPresenter)[^>]*?Grid\.Column=""1""",
+            RegexOptions.Singleline).Count;
+        Assert.Equal(drawn.Count, placed);
+    }
+
+    /// <summary>
     /// 排序档那五颗<b>身份</b>必须逐个是数据层真认得的键。
     /// <para>坏法：改个名（<c>starred</c>→<c>pushed</c>）只改了 UI 那一侧，SQL 的 switch 落入
     /// <c>default</c>＝"最近更新"——屏幕上的档名与实际的排序顺序就此分岔，而两边都不报错。
