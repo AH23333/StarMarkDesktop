@@ -87,13 +87,17 @@ public sealed class ClipboardImageSettingsGateTests
     [Fact]
     public void RetentionNumberHasOneHomeNotTwo()
     {
+        // 批次 WI-42：那一格 NumberBox <b>自己就显示着当前的默认值</b>，所以"500"住进说明句成了第二份出处
+        // ——精简掉那句之后，这一族里谁都不许再带这个数；默认值的主人是 ClipboardPolicy 那颗常数（下面一并钉）。
         var owners = UiStrings.All
             .Where(e => e.Key.StartsWith("settings.data.", StringComparison.Ordinal))
             .Where(e => e.Zh.Contains("500", StringComparison.Ordinal)
                      || e.En.Contains("500", StringComparison.Ordinal))
             .Select(e => e.Key)
             .ToArray();
-        Assert.Equal(new[] { "settings.data.textMaxNote" }, owners);
+        Assert.Empty(owners);
+        Assert.Contains("public const int MaxEntries = 500;",
+            ReadRepoFile("src/StarMark.Abstractions/Clipboard/ClipboardPolicy.cs"), StringComparison.Ordinal);
     }
 
     [Fact]

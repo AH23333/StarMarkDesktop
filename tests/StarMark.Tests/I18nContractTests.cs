@@ -121,8 +121,8 @@ public sealed class I18nContractTests : IDisposable
         var rows = UiStrings.All
             .Where(e => e.Key.StartsWith("settings.hotkeys.", StringComparison.Ordinal))
             .ToArray();
-        Assert.True(rows.Length >= 12,
-            $"这一族只剩 {rows.Length} 行（现场量过是 12）——整段被清空不是改措辞");
+        Assert.True(rows.Length >= 11,
+            $"这一族只剩 {rows.Length} 行（批次 WI-42 精简掉「动作 → 快捷键」那句重复说明后现场是 11）——整段被清空不是改措辞");
         foreach (var entry in rows)
         {
             foreach (var text in new[] { entry.Zh, entry.En, entry.Ja })

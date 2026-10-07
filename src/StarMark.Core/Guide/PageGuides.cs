@@ -72,7 +72,9 @@ public static class PageGuides
         ("clipboard", "guide.page.clipboard", new[] { "guide.page.clipboard.1", "guide.page.clipboard.2", "guide.page.clipboard.3" }),
         ("trending", "guide.page.trending", new[] { "guide.page.trending.1", "guide.page.trending.2" }),
         ("rss", "guide.page.rss", new[] { "guide.page.rss.1", "guide.page.rss.2" }),
-        (SettingsTag, "guide.page.settings", new[] { "guide.page.settings.1", "guide.page.settings.2", "guide.page.settings.3" }),
+        (SettingsTag, "guide.page.settings", new[] { "guide.page.settings.1", "guide.page.settings.2", "guide.page.settings.3",
+            "settings.ai.fieldGuide", "settings.ai.deepseekGuide", "settings.ai.kimiGuide", "settings.ai.zhipuGuide",
+            "settings.ai.openaiGuide", "settings.ai.localGuide" }),
     };
 
     /// <summary>每页说明（<b>交键不交词</b>）。顺序即设置页「使用说明」里的呈现顺序。</summary>

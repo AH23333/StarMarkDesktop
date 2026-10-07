@@ -121,7 +121,6 @@
                             <StackPanel Spacing="10">
                                 <TextBlock i18n:LocText.Key="settings.general.themeTitle" Style="{StaticResource SettingTitle}"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
-                                    <TextBlock Grid.Column="0" i18n:LocText.Key="settings.general.themeNote" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
                                     <ComboBox Grid.Column="1" x:Name="ThemeSelect" MinWidth="180"
                                               SelectedIndex="{x:Bind ViewModel.ThemeIndex, Mode=TwoWay}"
                                               ItemsSource="{x:Bind ThemeOptions, Mode=OneTime}"
@@ -138,8 +137,6 @@
                             <StackPanel Spacing="10">
                                 <TextBlock i18n:LocText.Key="settings.languageTitle" Style="{StaticResource SettingTitle}"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
-                                    <TextBlock Grid.Column="0" i18n:LocText.Key="settings.languageNote"
-                                               Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
                                     <ComboBox Grid.Column="1" x:Name="LanguageSelect" MinWidth="180"
                                               SelectionChanged="LanguageSelect_SelectionChanged"
                                               ItemsSource="{x:Bind LanguageOptions, Mode=OneTime}"
@@ -159,7 +156,6 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock i18n:LocText.Key="settings.general.mainBackdrop"/>
-                                        <TextBlock i18n:LocText.Key="settings.general.mainBackdropNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <!-- 顺序即枚举值，与「组件材质」一致：0=亚克力(薄) 1=云母 2=实色 3=云母Alt 4=亚克力(厚) 5=纯色；
                                          清单住在 SettingsPage.Options.cs 的 MaterialOptions（两颗下拉共用一份措辞，坑表 #290） -->
@@ -172,7 +168,7 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock i18n:LocText.Key="settings.general.mainOpacity"/>
-                                        <TextBlock i18n:LocText.Key="settings.general.mainOpacityNote" Style="{StaticResource SettingRowText}"/>
+                                        <TextBlock i18n:LocText.Key="settings.shared.opacityScope" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
                                         <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.OpacityFloor, Mode=OneTime}"
@@ -194,7 +190,6 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock i18n:LocText.Key="settings.general.autostart"/>
-                                        <TextBlock i18n:LocText.Key="settings.general.autostartNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <ToggleSwitch Grid.Column="1" x:Name="AutostartToggle"
                                                   i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off"
@@ -203,7 +198,6 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock i18n:LocText.Key="settings.general.trayResident"/>
-                                        <TextBlock i18n:LocText.Key="settings.general.trayResidentNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <ToggleSwitch Grid.Column="1"
                                                   i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off"
@@ -224,7 +218,6 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock i18n:LocText.Key="settings.general.minimizeToTray"/>
-                                        <TextBlock i18n:LocText.Key="settings.general.minimizeToTrayNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <ToggleSwitch Grid.Column="1"
                                                   i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off"
@@ -264,7 +257,6 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock i18n:LocText.Key="settings.general.currentVersion"/>
-                                        <TextBlock i18n:LocText.Key="settings.general.currentVersionNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{x:Bind ViewModel.LocalVersionText, Mode=OneWay}"/>
                                 </Grid>
@@ -343,19 +335,6 @@
                              填错了又只看到"连接失败"，等于把文档藏进了试错里。 -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
-                                <TextBlock i18n:LocText.Key="settings.ai.whatToFill" Style="{StaticResource SettingTitle}"/>
-                                <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
-                                           i18n:LocText.Key="settings.ai.fieldGuide"/>
-                                <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
-                                           i18n:LocText.Key="settings.ai.deepseekGuide"/>
-                                <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
-                                           i18n:LocText.Key="settings.ai.kimiGuide"/>
-                                <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
-                                           i18n:LocText.Key="settings.ai.zhipuGuide"/>
-                                <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
-                                           i18n:LocText.Key="settings.ai.openaiGuide"/>
-                                <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
-                                           i18n:LocText.Key="settings.ai.localGuide"/>
                                 <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
                                            i18n:LocText.Key="settings.ai.noKeyNote"/>
                             </StackPanel>
@@ -364,8 +343,6 @@
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
                                 <TextBlock i18n:LocText.Key="settings.ai.title" Style="{StaticResource SettingTitle}"/>
-                                <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
-                                           i18n:LocText.Key="settings.ai.note"/>
 
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <TextBlock Grid.Column="0" i18n:LocText.Key="settings.ai.enable" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
@@ -385,6 +362,7 @@
                                     <TextBox Grid.Column="0" x:Name="AiOllamaUrlBox" i18n:LocText.Key="settings.ai.ollamaUrl"
                                              i18n:LocText.PlaceholderKey="settings.ai.ollamaUrlPlaceholder"
                                              FontSize="12" TextChanged="AiField_TextChanged"/>
+                                    <TextBlock i18n:LocText.Key="settings.ai.whatToFill" Style="{StaticResource SettingTitle}"/>
                                     <TextBox Grid.Column="1" x:Name="AiBaseUrlBox" i18n:LocText.Key="settings.ai.endpoint"
                                              i18n:LocText.PlaceholderKey="settings.ai.endpointPlaceholder"
                                              FontSize="12" TextChanged="AiField_TextChanged"/>
@@ -542,7 +520,6 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock i18n:LocText.Key="settings.widgets.materialLabel"/>
-                                        <TextBlock i18n:LocText.Key="settings.widgets.materialNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <!-- 顺序即枚举值：0=亚克力(薄) 1=云母 2=实色 3=云母Alt 4=亚克力(厚) 5=纯色，追加新项不影响已保存的设置；
                                          措辞与「主窗口材质」同一份清单（⛔ 不许在这里再列六行同义键，坑表 #290） -->
@@ -555,7 +532,7 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock i18n:LocText.Key="settings.widgets.opacityLabel"/>
-                                        <TextBlock i18n:LocText.Key="settings.widgets.opacityNote" Style="{StaticResource SettingRowText}"/>
+                                        <TextBlock i18n:LocText.Key="settings.shared.opacityScope" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
                                         <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.OpacityFloor, Mode=OneTime}"
@@ -611,8 +588,6 @@
                                                    Style="{StaticResource MutedText}"/>
                                     </Grid>
                                 </Grid>
-                                <TextBlock i18n:LocText.Key="settings.widgets.snapOnNote"
-                                           Style="{StaticResource SettingRowText}"/>
                             </StackPanel>
                         </Border>
 
@@ -651,7 +626,6 @@
                                       Visibility="{x:Bind ViewModel.CustomBudgetVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock i18n:LocText.Key="settings.widgets.cacheLabel"/>
-                                        <TextBlock i18n:LocText.Key="settings.widgets.cacheNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
                                         <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.CacheCountFloor, Mode=OneTime}"
@@ -725,8 +699,6 @@
                                     <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="settings.extend.glanceOn" i18n:LocText.OffContentKey="settings.extend.glanceOff" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.TrendingGlanceEnabled, Mode=TwoWay}"/>
                                 </Grid>
-                                <TextBlock i18n:LocText.Key="settings.extend.trendingPeriodNote"
-                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap" Opacity="0.62" FontSize="12"/>
                                 <!-- 就地入口：刚开启的人多半想立刻看一眼，不该让他自己回导航栏找那一项 -->
                                 <Button i18n:LocText.Key="settings.extend.openTrending" Click="OpenTrending_Click" Style="{StaticResource SecondaryButton}"
                                         HorizontalAlignment="Left"
@@ -977,8 +949,6 @@
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="6">
                                 <TextBlock i18n:LocText.Key="settings.hotkeys.mapTitle" Style="{StaticResource SettingTitle}"/>
-                                <TextBlock i18n:LocText.Key="settings.hotkeys.mapNote"
-                                           Style="{StaticResource SettingRowText}"/>
                                 <!-- 按分类（主界面 / 组件总控 / 各组件 / 布局方案）折叠成多级结构，消除扁平长列表的重复感 -->
                                 <StackPanel x:Name="HotkeyGroups" Spacing="6"/>
                             </StackPanel>
@@ -1207,8 +1177,6 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock i18n:LocText.Key="settings.health.eyeRestNotice"/>
-                                        <TextBlock i18n:LocText.Key="settings.health.eyeRestNoticeNote"
-                                                   Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                     </StackPanel>
                                     <ComboBox Grid.Column="1" MinWidth="250" MaxWidth="320" VerticalAlignment="Center" HorizontalAlignment="Right"
                                               ItemsSource="{x:Bind ViewModel.EyeRestNoticeOptions, Mode=OneTime}"
