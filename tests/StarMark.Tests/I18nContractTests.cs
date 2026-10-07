@@ -222,6 +222,9 @@ public sealed class I18nContractTests : IDisposable
             ["health.join.list"] = "列表连接号「、」中日同形，en 列是 \", \"（WI-33）",
                         ["rss.statusJoin"] = "纯胶水行「{0}{1}」，没有词可翻",
             ["widget.menu.nameWithSummary"] = "纯骨架「{0}（{1}）」：中文与日文都用全角括号，两语同形（WI-37，与 trending.notice.compose 同形）",
+            ["alarm.stop.button"] = "纯骨架「{0}（{1}）」：那颗按钮＝名字那颗键＋条数，中英日各自都不换形状（WI-37-C）",
+            ["time.weekday.stem.0"] = "月历表头第一格：星期日的「日」中日同字（那一格只装一个字，⛔ 为了不同形去改表头）（WI-37-C）",
+            ["alarm.days.pick1"] = "只勾一天时那一行就是「{0}」本身，中日英都没有分隔符可放（WI-37-C）",
         };
 
         var actual = UiStrings.All

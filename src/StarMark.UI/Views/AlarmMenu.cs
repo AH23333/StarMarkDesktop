@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 
@@ -24,13 +25,20 @@ namespace StarMark.UI.Views;
 /// </summary>
 public static class AlarmMenu
 {
-    /// <summary>重复的四个快捷档（"按星期勾"那一排是同一份旗标的另一种设法，不是第二套判据）。</summary>
-    private static readonly (string Name, AlarmDays Days)[] RepeatPresets =
+    /// <summary>
+    /// 重复的四个快捷档（"按星期勾"那一排是同一份旗标的另一种设法，不是第二套判据）。
+    /// <para>这里存的是<b>键</b>不是字（批次 WI-37-C）：这颗数组是 <c>static readonly</c>，
+    /// 一旦把中文写进去，它就在<b>类首次被碰到的那一刻</b>把语言冻住——菜单每次重建都读到那句旧字，
+    /// 屏幕上"档位停在中文"没有任何一处代码能看出来（WI-39 那颗 <c>ByTag</c> 化石 bug 同一个形状）。</para>
+    /// <para>只有"单次"这一档带解释：响过一次之后它自己关掉，那是<b>看不见副作用</b>的那类事，
+    /// 值得多占一行（他这一轮的裁决口径）；"工作日（周一到周五）"那种括号里的话是同名复述 ⇒ 直接复用星期档那颗键。</para>
+    /// </summary>
+    private static readonly (string Key, AlarmDays Days)[] RepeatPresets =
     [
-        ("单次（叫一次就关）", AlarmDays.None),
-        ("每天", AlarmDays.Daily),
-        ("工作日（周一到周五）", AlarmDays.Weekdays),
-        ("周末（周六周日）", AlarmDays.Weekends),
+        ("alarm.preset.once", AlarmDays.None),
+        ("alarm.days.daily", AlarmDays.Daily),
+        ("alarm.days.weekdays", AlarmDays.Weekdays),
+        ("alarm.days.weekends", AlarmDays.Weekends),
     ];
 
     /// <summary>
@@ -44,31 +52,43 @@ public static class AlarmMenu
         DayOfWeek.Sunday,
     ];
 
-    /// <summary>一行闹钟的标题（两个入口同一句措辞）：<c>（已关）07:30 起床 · 每天</c>。</summary>
-    public static string TitleOf(AlarmItem item)
-        => (item.Enabled ? string.Empty : "（已关）") + AlarmPolicy.LineOf(item);
+    /// <summary>
+    /// 一行闹钟的标题（两个入口同一句措辞）：<c>（已关）07:30 起床 · 每天</c>。
+    /// <para>交的是<b>还没取词的那句</b>：右键菜单每次重建、当场渲染一次就对了，而"（已关）"这一前缀
+    /// 若在这里就拼成字符串，将来任何常驻宿主拿到的都是定死的语言（坑表 #344）。</para>
+    /// </summary>
+    public static LocMessage TitleMessage(AlarmItem item)
+        => item.Enabled
+            ? AlarmPolicy.LineMessage(item)
+            : LocMessage.Of("alarm.row.offTitle", AlarmPolicy.LineMessage(item));
+
+    /// <summary>那一行的<b>成品串</b>：只给每次重建的菜单标题用（<see cref="TitleMessage"/> 的同一条路，取词时刻不同）。</summary>
+    public static string TitleOf(AlarmItem item) => TitleMessage(item).Render();
 
     /// <summary>
     /// 这一条的全部动作，按顺序。调用方把它们放进自己的容器：宿主菜单放进 <see cref="MenuFlyoutSubItem"/>、
     /// 表面上那一排放进 <see cref="ShowRow"/> 现建的 <see cref="MenuFlyout"/>。
+    /// <para><b>这一路每次点开都重建</b>，所以这里的 <c>Locale.T/Fmt</c> 是正当的取词时刻（批次 WI-37-C 的口径：
+    /// 重建那一路当场取词，常驻那一路交键）。⛔ 把这些字改成静态字段＝把语言冻在建表那一刻。</para>
     /// </summary>
     /// <param name="owner">弹输入框时以哪扇窗所在屏幕为基准（组件传自己那扇宿主窗；null 落回主显示器）。</param>
     public static IEnumerable<MenuFlyoutItemBase> RowItems(IAlarmEditor alarms, AlarmItem item, Window? owner)
     {
-        var onOff = new ToggleMenuFlyoutItem { Text = "开着", IsChecked = item.Enabled };
+        var onOff = new ToggleMenuFlyoutItem { Text = Locale.T("alarm.toggle.on"), IsChecked = item.Enabled };
         onOff.Click += (_, _) => alarms.SetEnabled(item.Id, onOff.IsChecked);
         yield return onOff;
 
-        var repeat = new MenuFlyoutSubItem { Text = $"重复：{AlarmPolicy.DaysLabel(item.Days)}" };
-        foreach (var (name, days) in RepeatPresets)
+        // 实参交出的是 LocMessage：Fmt 里 string.Format 对它调 ToString ⇒ 在这一刻（重建时）才取词，嵌套那句不会停在旧语言。
+        var repeat = new MenuFlyoutSubItem { Text = Locale.Fmt("alarm.repeat.title", AlarmPolicy.DaysMessage(item.Days)) };
+        foreach (var (key, days) in RepeatPresets)
         {
-            var preset = new RadioMenuFlyoutItem { Text = name, IsChecked = days == item.Days };
+            var preset = new RadioMenuFlyoutItem { Text = Locale.T(key), IsChecked = days == item.Days };
             var chosen = days;                       // 捕获：档位不靠菜单项位置反推
             preset.Click += (_, _) => alarms.SetDays(item.Id, chosen);
             repeat.Items.Add(preset);
         }
         // 逐天勾：四个快捷档覆盖不到的组合（"只有周三和周六"）用这一排；勾完标题那一行立刻跟着变。
-        var pick = new MenuFlyoutSubItem { Text = "按星期勾" };
+        var pick = new MenuFlyoutSubItem { Text = Locale.T("alarm.repeat.byDay") };
         foreach (var day in DayOrder)
         {
             var check = new ToggleMenuFlyoutItem
@@ -84,17 +104,17 @@ public static class AlarmMenu
         repeat.Items.Add(pick);
         yield return repeat;
 
-        var edit = new MenuFlyoutItem { Text = "改时间或名字…" };
+        var edit = new MenuFlyoutItem { Text = Locale.T("alarm.edit") };
         edit.Click += (_, _) => _ = EditAsync(alarms, item, owner);
         yield return edit;
 
-        var test = new MenuFlyoutItem { Text = "试响一次（不动到点记录）" };
+        var test = new MenuFlyoutItem { Text = Locale.T("alarm.testFire") };
         test.Click += (_, _) => alarms.TestFire(item.Id);
         yield return test;
 
         var remove = new MenuFlyoutItem
         {
-            Text = "删掉这一条",
+            Text = Locale.T("alarm.remove"),
             Icon = new FontIcon { Glyph = "\uE711", FontSize = 14 },   // Cancel
         };
         remove.Click += (_, _) => alarms.Remove(item.Id);
@@ -123,14 +143,15 @@ public static class AlarmMenu
         try
         {
             var input = await CenteredDialog.PromptAsync(
-                title: "加一条闹钟",
-                message: "写钟点，后面可以跟名字。例如「7:30 起床」。",
-                placeholder: "7:30 起床",
+                title: Locale.T("alarm.add.title"),
+                message: Locale.T("alarm.add.message"),
+                placeholder: Locale.T("alarm.add.placeholder"),
                 owner: owner);
             if (input is null) return;                                  // 取消：什么都不改
             if (!AlarmPolicy.TryParseInput(input, out var minute, out var label, out var error))
             {
-                await CenteredDialog.MessageAsync("没加上", error ?? "看不懂这个时间。", owner);
+                // 弹窗是一次性的消费者：这一刻渲染当前语言那句，⛔ 不该把成品串提前存进任何常驻元素。
+                await CenteredDialog.MessageAsync(Locale.T("alarm.add.failed"), error?.Render() ?? Locale.T("alarm.unreadable"), owner);
                 return;
             }
             alarms.Add(minute, label, AlarmDays.Daily);                 // 新条目默认"每天"：只有"单次"需要额外说明，其余都能就地改
@@ -148,15 +169,15 @@ public static class AlarmMenu
         {
             var current = AlarmPolicy.FormatMinute(item.MinuteOfDay) + " " + item.Label;
             var input = await CenteredDialog.PromptAsync(
-                title: "改这条闹钟",
-                message: "写钟点，后面可以跟名字。留空或取消都不改动。",
+                title: Locale.T("alarm.edit.title"),
+                message: Locale.T("alarm.edit.message"),
                 placeholder: current.Trim(),
                 defaultText: current.Trim(),
                 owner: owner);
             if (input is null) return;
             if (!AlarmPolicy.TryParseInput(input, out var minute, out var label, out var error))
             {
-                await CenteredDialog.MessageAsync("没改", error ?? "看不懂这个时间。", owner);
+                await CenteredDialog.MessageAsync(Locale.T("alarm.edit.kept"), error?.Render() ?? Locale.T("alarm.unreadable"), owner);
                 return;
             }
             alarms.SetTime(item.Id, minute, label);

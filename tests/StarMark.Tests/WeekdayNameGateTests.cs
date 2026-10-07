@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using StarMark.Abstractions.I18n;
 using Xunit;
 using static StarMark.Tests.SourceGate;
 
@@ -46,16 +47,23 @@ public sealed class WeekdayNameGateTests
 
     // ────────── ① 判据之外不许有第二张表 ──────────
 
+    /// <summary>
+    /// 批次 WI-37-C 起，<b>那张表（<c>I18n/UiStrings.cs</c>）就是星期名的主人</b>，所以扫描面要把它一起跳过——
+    /// 它与 <c>DateTimeText.cs</c> 同一种豁免理由：那一行一行本身就是字，把它算进"别人自己写的表"
+    /// 等于要求主人不带字（而"表里不许有第二套"那一族由 <c>I18nWiringGateTests</c> 那几颗管）。
+    /// ⛔ 因此这一格仍然成立：除这两处之外，任何文件里再出现一枚 <c>"周一"</c> 都要红。
+    /// </summary>
     [Fact]
     public void NoWeekdayTableLandsOutsideTheJudge()
     {
         var offenders = FormatScanner.SourcesUnder("src", "DateTimeText.cs")
+            .Where(f => !f.Path.EndsWith("I18n/UiStrings.cs", StringComparison.Ordinal))
             .SelectMany(f => WeekdayTableLiteral.Matches(f.Code).Cast<Match>()
                 .Select(m => $"{f.Path}: {m.Value}"))
             .ToList();
 
         Assert.True(offenders.Count == 0,
-            "又有人自己写了一张星期表（该走 DateTimeText.Weekday／WeekdayShort／WeekdayStem）：\n"
+            "又有人自己写了一张星期表（该走 DateTimeText.Weekday／WeekdayShort／WeekdayStem，或它们的 *Message 版）：\n"
             + string.Join("\n", offenders));
     }
 
@@ -88,23 +96,77 @@ public sealed class WeekdayNameGateTests
     public void ProseThatMentionsWeekdaysIsNotATable(string literal)
         => Assert.DoesNotMatch(WeekdayTableLiteral, literal);
 
-    // ────────── ② 判据不许退成空壳 ──────────
+    // ────────── ② 主人（那张表）不许退成空壳，也不许两副面孔各说各的 ──────────
 
-    [Fact]
-    public void TheJudgeHoldsSevenDistinctStems()
+    /// <summary>
+    /// 每一副面孔七格齐全、三列都有字、且<b>同一副面孔内部互不相同</b>（周日周日不分＝那一格在表里根本不存在）。
+    /// <para>原来这一格数的是 <c>DateTimeText</c> 里那七枚字面量。字搬进表之后，"数得到七格"必须在表那一侧量——
+    /// ⛔ 让判据退成"只会拼键名、里面一颗字都没有"而没人核对那 21 行齐不齐（键名对了但表里少一行，
+    /// 屏幕上就是 ⟨time.weekday.short.3⟩ 那种形状，而全绿）。</para>
+    /// </summary>
+    [Theory]
+    [InlineData("full")]
+    [InlineData("short")]
+    [InlineData("stem")]
+    public void EachSpellingFamilyHoldsSevenDistinctNames(string which)
     {
-        var body = MethodBody(ReadRepoFile(JudgeFile), "public static string WeekdayStem(");
-        var stems = Regex.Matches(body, @"""(.)""").Select(m => m.Groups[1].Value).ToList();
-        Assert.Equal(7, stems.Distinct().Count());   // 七格互不相同，且都在
+        var rows = Enumerable.Range(0, 7)
+            .Select(i => UiStrings.All.FirstOrDefault(e => e.Key == $"time.weekday.{which}.{i}"))
+            .ToList();
+        Assert.All(rows, r => Assert.NotNull(r));
+        Assert.Equal(7, rows.Select(r => r!.Zh).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(rows, r => Assert.False(
+            string.IsNullOrWhiteSpace(r!.En) || string.IsNullOrWhiteSpace(r.Ja),
+            $"{which} 那一族有一行的英文或日文列是空的（键在、字没填＝屏幕上那一格是 ⟨键⟩ 或空白）"));
     }
 
-    /// <summary>全称与短名都必须<b>由词根拼</b>——否则①那条禁项一红，修法就变成"再补一张表"。</summary>
+    /// <summary>
+    /// 中文那两副面孔仍是"前缀＋词根"：<c>星期日＝星期＋日</c>、<c>周日＝周＋日</c>。
+    /// <para>这条从前钉在代码里（<c>"星期" + WeekdayStem(day)</c> 出现一次），现在钉<b>表的数据</b>：
+    /// 代码里再拼一次就是第二份真值（切语言时一半跟着翻、一半停在旧语言＝坑表 #344），
+    /// 而"表里那两列会不会哪天自己漂开"这件事⛔ 只能这样当场对账。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(6)]
+    public void EachChineseSpellingIsItsStemWithItsPrefix(int index)
+    {
+        var stem = Zh($"time.weekday.stem.{index}");
+        Assert.Equal("星期" + stem, Zh($"time.weekday.full.{index}"));
+        Assert.Equal("周" + stem, Zh($"time.weekday.short.{index}"));
+    }
+
+    private static string Zh(string key)
+        => UiStrings.All.First(e => string.Equals(e.Key, key, StringComparison.Ordinal)).Zh;
+
+    /// <summary>
+    /// 判据那一侧⛔ 再留一张中文表、也⛔ 再自己现拼一次键名（那两处各是一份可以独立漂移的真值，上面那颗数据格就是防它）。
+    /// <para>它现在只许拥有一件事：<b>把"第几天"换成"哪一颗键"</b>，而且三副面孔共用同一条路（数一次 <c>Slot(day)</c> 的定义、
+    /// 三处使用）。原来这一格钉的是"两副面孔都由词根拼"——那是中文唯一形状时代的规矩；字进了表之后，
+    /// 那条规矩的正确后继就是上面 <see cref="EachChineseSpellingIsItsStemWithItsPrefix"/> 那颗数据对账。</para>
+    /// <para>⚠ 键名不许写成 <c>$"time.weekday.full.{n}"</c> 现拼（<see cref="EachSpellingFamilyHoldsSevenDistinctNames"/>
+    /// 与 <see cref="TheJudgeKeepsNoWordsAndBuildsAllThreeKeysOneWay"/> 是同一件事的两面）：拼出来的键在源码里不成一整串，
+    /// 那颗"表里没有一行没人问"的闸门就看不见它，21 行星期名于是变成删不掉的死行。</para>
+    /// </summary>
     [Fact]
-    public void BothSpellingsAreBuiltFromTheStem()
+    public void TheJudgeKeepsNoWordsAndBuildsAllThreeKeysOneWay()
     {
         var judge = CodeOf(JudgeFile);
-        Assert.Equal(1, Count(judge, "\"星期\" + WeekdayStem(day)"));
-        Assert.Equal(1, Count(judge, "\"周\" + WeekdayStem(day)"));
+        Assert.DoesNotContain("\"星期\"", judge, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"周\" +", judge, StringComparison.Ordinal);
+        Assert.Empty(WeekdayTableLiteral.Matches(judge));
+        Assert.DoesNotContain("$\"time.weekday", judge, StringComparison.Ordinal);   // 现拼＝对死键闸门隐身
+        // full／short／stem 三副面孔共用同一条取键路：三份实现＝三处可以各自漂的地方。
+        Assert.Equal(3, Count(judge, "Keys[Slot(day)]"));
+        Assert.Equal(1, Count(judge, "private static int Slot("));
+        // 每条路各有一张自己的键表（三张、每张七行）：只有一张表时另一族就会读到邻族的字。
+        Assert.Equal(3, Count(judge, "private static readonly string[] "));
+        Assert.Equal(21, Regex.Matches(judge, "\"time\\.weekday\\.(?:full|short|stem)\\.[0-6]\"").Count);
     }
 
     // ────────── ③ 四个真读者都得真的接在判据上 ──────────
@@ -123,11 +185,17 @@ public sealed class WeekdayNameGateTests
     private static int MonthGridColumns
         => int.Parse(Regex.Match(CodeOf(MonthGridFile), @"const int Columns = (\d+)").Groups[1].Value);
 
+    /// <summary>
+    /// 星期档那一句的名字来自判据，而<b>次序（周一在前）才是 AlarmPolicy 拥有的事</b>。
+    /// <para>批次 WI-37-C 起这一族交的是<b>还没取词的</b> <c>LocMessage</c>（<c>DaysMessage</c>），
+    /// <c>DaysLabel</c> 只剩一句 <c>.Render()</c>——所以这一格改钉 <c>DaysMessage</c> 那颗方法体：
+    /// ⛔ 继续钉 <c>DaysLabel</c> 的方法体会变成"名字搬进了 <c>DaysMessage</c>、这里数不到"的假红（#196 同族：接线断言要钉在真正干活的那颗体上）。</para>
+    /// </summary>
     [Fact]
     public void AlarmPolicyTakesItsDayWordsFromTheJudge()
     {
-        var body = MethodBody(ReadRepoFile(AlarmPolicyFile), "public static string DaysLabel(");
-        Assert.Contains("DateTimeText.WeekdayShort(", body, StringComparison.Ordinal);
+        var body = MethodBody(ReadRepoFile(AlarmPolicyFile), "public static LocMessage DaysMessage(");
+        Assert.Contains("DateTimeText.WeekdayShortMessage(", body, StringComparison.Ordinal);
         Assert.Empty(WeekdayTableLiteral.Matches(body));
         // 它仍拥有"周一在前"这个次序（那是习惯，不是第二真值）——少了这句就说明次序被并掉了。
         Assert.Contains("DayOfWeek.Monday", body, StringComparison.Ordinal);

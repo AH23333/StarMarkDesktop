@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Widgets;
 
@@ -185,47 +186,87 @@ public static class AlarmPolicy
     /// <summary>确认掉这一轮（菜单里那颗「停止」做的事）。不改动开关：关掉的是"这条还在等确认"，不是"这条以后不叫了"。</summary>
     public static void Confirm(AlarmItem item) => item.PendingSince = null;
 
-    /// <summary>0–1439 → <c>07:30</c>。越界照原样写出来（无效条目要在界面上看得见地无效，而不是被悄悄折成 00:00）。</summary>
-    public static string FormatMinute(int minuteOfDay)
+    /// <summary>越界那条钟点在界面上说的那句（键只在这里出现一次，<see cref="MinuteCell"/> 与 <see cref="FormatMinute"/> 共用）。</summary>
+    public const string InvalidMinuteKey = "alarm.timeInvalid";
+
+    /// <summary>
+    /// 钟点那一格：<b>有效＝数据（<c>07:30</c>，不参与翻译）；无效＝还没取词的那句</b>（<c>alarm.timeInvalid</c>）。
+    /// <para>为什么交 <c>object</c> 而不是先把那句渲染成字符串再拼进整行：外层那句（<c>alarm.line</c>）是
+    /// <b>常驻元素</b>上要重贴的，实参一旦已成字符串，语言就被定死在算出它的那一刻（坑表 #276／#344 那一族）。</para>
+    /// <para>越界照原样写出来：无效条目要在界面上看得见地无效，而不是被悄悄折成 00:00。</para>
+    /// </summary>
+    public static object MinuteCell(int minuteOfDay)
         => HasValidMinute(minuteOfDay)
             ? $"{minuteOfDay / 60:00}:{minuteOfDay % 60:00}"
-            : "时间无效";
+            : LocMessage.Of(InvalidMinuteKey);
+
+    /// <summary>0–1439 → <c>07:30</c>；越界 → 当时的语言里那句"时间无效"。<b>只给每次重建那一路用</b>（输入框回填、每次右键重建的菜单）。</summary>
+    public static string FormatMinute(int minuteOfDay)
+        => MinuteCell(minuteOfDay) as string ?? Locale.T(InvalidMinuteKey);
 
     /// <summary>星期档怎么说（阅读顺序周一在前，那是习惯不是另一份真值）。</summary>
-    public static string DaysLabel(AlarmDays days)
+    public static LocMessage DaysMessage(AlarmDays days)
     {
-        if (days == AlarmDays.None) return "单次";
-        if (days == AlarmDays.Daily) return "每天";
-        if (days == AlarmDays.Weekdays) return "工作日";
-        if (days == AlarmDays.Weekends) return "周末";
-        // 这里只拥有一件事：列出来的次序（周一在前）。那个中文名字归 DateTimeText，别在这儿再抄一张表。
+        if (days == AlarmDays.None) return LocMessage.Of("alarm.days.once");
+        if (days == AlarmDays.Daily) return LocMessage.Of("alarm.days.daily");
+        if (days == AlarmDays.Weekdays) return LocMessage.Of("alarm.days.weekdays");
+        if (days == AlarmDays.Weekends) return LocMessage.Of("alarm.days.weekends");
+        // 这里只拥有一件事：列出来的次序（周一在前）。那七个名字归 DateTimeText／那张表，⛔ 在这儿再抄一张。
         var readOrder = new[]
         {
             DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
             DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday,
             DayOfWeek.Sunday,
         };
-        var picked = new List<string>();
+        var picked = new List<object>();
         foreach (var day in readOrder)
-            if (Matches(days, day)) picked.Add(DateTimeText.WeekdayShort(day));
-        return string.Join(" ", picked);
+            if (Matches(days, day)) picked.Add(DateTimeText.WeekdayShortMessage(day));
+        // 勾出来的组合有几格就用几格的那颗键（PickKeys 按下标取，⛔ 拼 `$"alarm.days.pick{n}"`——
+        // 拼出来的键在源码里不成串，那颗"表里没有一行没人问"的闸门就看不见它，写错的键名也能静默落到 ⟨键⟩ 之外）。
+        return LocMessage.Of(PickKeys[picked.Count - 1], picked.ToArray());
     }
 
-    /// <summary>菜单里一条闹钟的一行：<c>07:30 起床 · 每天</c>（开着）或前面加一个「关」字样的状态由调用侧给。</summary>
-    public static string LineOf(AlarmItem item)
+    /// <summary>
+    /// 逐天勾出来的组合怎么说：下标＝勾了几格（1…6）。存的是<b>键名</b>不是字（键与语言无关），
+    /// 一位一槽、条数对上颗数，⛔ 一条七槽模板拿空格填空（那会在句尾留下看不见的空格）。
+    /// <para>只有六颗：<b>勾满七天＝<see cref="AlarmDays.Daily"/>，那句先由上面的预设档接住</b>，
+    /// 第七格永远走不到（这条由 <c>AlarmPolicyTests</c> 穷举 128 种组合法当场对账，不靠注释）。</para>
+    /// </summary>
+    private static readonly string[] PickKeys =
+    [
+        "alarm.days.pick1", "alarm.days.pick2", "alarm.days.pick3", "alarm.days.pick4",
+        "alarm.days.pick5", "alarm.days.pick6",
+    ];
+
+    /// <summary>星期档的<b>成品串</b>（每次重建那一路：菜单标题、每次打开的浮层）。常驻元素要拿 <see cref="DaysMessage"/>。</summary>
+    public static string DaysLabel(AlarmDays days) => DaysMessage(days).Render();
+
+    /// <summary>
+    /// 菜单／表面里一条闹钟的一行：<c>07:30 起床 · 每天</c>。名字是用户打的字，不参与翻译，
+    /// 所以"有名字"与"没名字"是两颗键（⛔ 用一句里的条件空格凑出来——那会在没名字时留下一个洞）。
+    /// <para>开关状态不在这一句里：那是调用侧的前缀（<c>alarm.row.offTitle</c>），因为表面那一排与右键菜单贴的位置不同。</para>
+    /// </summary>
+    public static LocMessage LineMessage(AlarmItem item)
     {
-        var label = item.Label.Length > 0 ? " " + TrimLabel(item.Label) : string.Empty;
-        return $"{FormatMinute(item.MinuteOfDay)}{label} · {DaysLabel(item.Days)}";
+        var label = TrimLabel(item.Label);
+        return label.Length > 0
+            ? LocMessage.Of("alarm.line", MinuteCell(item.MinuteOfDay), label, DaysMessage(item.Days))
+            : LocMessage.Of("alarm.lineNoLabel", MinuteCell(item.MinuteOfDay), DaysMessage(item.Days));
     }
+
+    /// <summary>那一行的<b>成品串</b>（不上屏幕的消费者：日志与右下角提示卡正文）。</summary>
+    public static string LineOf(AlarmItem item) => LineMessage(item).Render();
 
     /// <summary>标签截断（只截不换行：菜单不换行，长标签会把整排挤没）。切法在 <see cref="TextTrim"/>。</summary>
     public static string TrimLabel(string? label)
         => TextTrim.Ellipsize((label ?? string.Empty).Trim(), MaxLabelLength);
 
     /// <summary>
-    /// 时钟上那一行待确认的话：最早那条的钟点，多于一条时报条数。没有待确认时返回空串（整行不占位）。
+    /// 时钟上那一行待确认的话：最早那条的钟点，多于一条时报条数。没有待确认时返回 <c>null</c>（整行不占位）。
+    /// <para>返回 null 而不是空串：''没话要说''与''有一句话但它是空的''在界面上必须是两种状态，
+    /// 否则换语言重贴会把上一句又贴回来（坑表 #276 那一族的反向）。</para>
     /// </summary>
-    public static string PendingLine(IEnumerable<AlarmItem> items, DateTimeOffset now)
+    public static LocMessage? PendingMessage(IEnumerable<AlarmItem> items, DateTimeOffset now)
     {
         AlarmItem? earliest = null;
         var count = 0;
@@ -238,17 +279,24 @@ public static class AlarmPolicy
             if (item.PendingSince is { } pending
                 && (earliest is null || earliest.PendingSince is not { } head || pending < head)) earliest = item;
         }
-        if (earliest is null) return string.Empty;
+        if (earliest is null) return null;
         var at = earliest.PendingSince?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? "--:--";
-        return count == 1 ? $"闹钟 {at} 待确认" : $"闹钟 {at} 等 {count} 条待确认";
+        return count == 1
+            ? LocMessage.Of("alarm.pending.one", at)
+            : LocMessage.Of("alarm.pending.many", at, count);
     }
+
+    /// <summary>待确认那一行的<b>成品串</b>（时钟每秒刷的那一处：没有时给空串，整行不占位）。</summary>
+    public static string PendingLine(IEnumerable<AlarmItem> items, DateTimeOffset now)
+        => PendingMessage(items, now)?.Render() ?? string.Empty;
 
     /// <summary>时钟表面上一行闹钟：给界面画的，不是第二份真值（判据仍在这里，界面只摆盘子）。</summary>
     /// <param name="Id">这一条的身份，点击回来时只认它。</param>
-    /// <param name="Text"><c>07:30 起床 · 每天</c>——<b>只由定义组成，不含"现在几点／还有多久"</b>，见 <see cref="FaceSignature"/>。</param>
+    /// <param name="Text"><c>07:30 起床 · 每天</c>，交的是<b>还没取词的那句</b>（批次 WI-37-C）——这一排是常驻元素，
+    /// 只在定义变了时重建，换语言那一刻由 <c>LocText</c> 重贴；在这里就渲染成字符串＝那一行停在旧语言（坑表 #344）。</param>
     /// <param name="Enabled">开着（表面那颗点的实心/空心）。</param>
     /// <param name="Pending">正挂着这一轮没确认（表面把它标出来，出口仍是同一句 <c>ConfirmPending</c>）。</param>
-    public sealed record AlarmFaceRow(long Id, string Text, bool Enabled, bool Pending);
+    public sealed record AlarmFaceRow(long Id, LocMessage Text, bool Enabled, bool Pending);
 
     /// <summary>
     /// 时钟表面上那一排：<b>按钟点升序，无效的那条垫底</b>。
@@ -269,7 +317,7 @@ public static class AlarmPolicy
             var rankB = HasValidMinute(b.MinuteOfDay) ? 0 : 1;
             return rankA != rankB ? rankA.CompareTo(rankB) : a.MinuteOfDay.CompareTo(b.MinuteOfDay);
         });
-        return list.Select(item => new AlarmFaceRow(item.Id, LineOf(item), item.Enabled, IsPending(item, now))).ToList();
+        return list.Select(item => new AlarmFaceRow(item.Id, LineMessage(item), item.Enabled, IsPending(item, now))).ToList();
     }
 
     /// <summary>
@@ -277,9 +325,26 @@ public static class AlarmPolicy
     /// 时钟每秒刷一整张表，签名里若掺进钟点或"还有多久"，表面就变成<b>每秒销毁重建一遍控件</b>——
     /// 那是把"每秒改一次文本"升级成"每秒一次布局重排"，而代价正好由最不该卡的地方（常驻桌面的小窗）付。
     /// 判"要不要重画"住在 Core，是为了让这条纪律有证人（<c>AlarmPolicyTests</c> 钉"时间走一秒不换签名"）。
+    /// <para>批次 WI-37-C 起，行内那句是<b>还没取词的</b> <see cref="LocMessage"/>，所以签名取的是它的<b>形状</b>
+    /// （键＋嵌套键＋数据实参，见 <see cref="ShapeOf"/>）。⛔ 拿 <c>Render()</c> 的结果当签名——
+    /// 那等于"换一次语言就把他正盯着的那一排销毁重建一遍"，而这句话本身是这条判据要防的那一类。</para>
     /// </summary>
     public static string FaceSignature(IReadOnlyList<AlarmFaceRow> rows)
-        => string.Join("|", rows.Select(static r => $"{r.Id}{(r.Enabled ? 'o' : 'x')}{(r.Pending ? '!' : '.')}{r.Text}"));
+        => string.Join("|", rows.Select(static r => $"{r.Id}{(r.Enabled ? 'o' : 'x')}{(r.Pending ? '!' : '.')}{ShapeOf(r.Text)}"));
+
+    /// <summary>
+    /// 把"还没取词的那句"压成<b>与语言无关</b>的指纹：键与嵌套的键照原样进串，数据实参（钟点、用户起的名字、条数）进串。
+    /// <para>⛔ 在这里调 <c>Render()</c> 或 <c>Locale.T</c>：那会让同一份定义在三档语言里有三种签名，
+    /// 于是"换语言"混进"内容变了"这一判据里——常驻小窗上那几颗控件就会被无故重建。</para>
+    /// </summary>
+    private static string ShapeOf(LocMessage message)
+    {
+        if (message.Args is not { Length: > 0 } args) return message.Key;
+        var parts = new List<string>(args.Length);
+        foreach (var arg in args)
+            parts.Add(arg switch { LocMessage nested => ShapeOf(nested), null => string.Empty, _ => arg.ToString() ?? string.Empty });
+        return message.Key + "(" + string.Join(",", parts) + ")";
+    }
 
     /// <summary>
     /// 解析"新建/修改"那一个输入框：<b>时间与名字写在同一行</b>（<c>7:30 起床</c>）。
@@ -289,43 +354,43 @@ public static class AlarmPolicy
     /// <para>时刻<b>自己拆两位数字，不交给 <c>TimeSpan.TryParseExact</c></b>：那道闸把"24:00"当成格式不对，
     /// 于是"我写了 24 点"收到的回答是"请写成 7:30"——他照着改还是 24 点，白跑一趟。越界要单独说一句它越了哪一边界。</para>
     /// </summary>
-    public static bool TryParseInput(string? text, out int minute, out string label, out string? error)
+    public static bool TryParseInput(string? text, out int minute, out string label, out LocMessage? error)
     {
         minute = 0;
         label = string.Empty;
         var input = (text ?? string.Empty).Trim();
         if (input.Length == 0)
         {
-            error = "请写时间，例如 7:30 起床";
+            error = LocMessage.Of("alarm.input.empty");
             return false;
         }
 
         var tail = 0;
         while (tail < input.Length && (char.IsAsciiDigit(input[tail]) || input[tail] == ':')) tail++;
         var head = input[..tail];
-        const string shape = "开头请写成 7:30 或 07:30（后面可以跟名字）";
+        const string ShapeKey = "alarm.input.shape";
         var bits = head.Split(':');
         if (bits.Length != 2
             || bits[0].Length > 2
             || !int.TryParse(bits[0], out var hour)
             || !int.TryParse(bits[1], out var plainMinute))
         {
-            error = shape;
+            error = LocMessage.Of(ShapeKey);
             return false;
         }
         if (bits[1].Length != 2)
         {
-            error = "分钟要写两位，例如 7:05";
+            error = LocMessage.Of("alarm.input.minuteTwo");
             return false;
         }
         if (hour > 23)
         {
-            error = "小时要在 0–23 之间（24:00 请写 0:00）";
+            error = LocMessage.Of("alarm.input.hourRange");
             return false;
         }
         if (plainMinute > 59)
         {
-            error = "分钟要在 0–59 之间";
+            error = LocMessage.Of("alarm.input.minuteRange");
             return false;
         }
 

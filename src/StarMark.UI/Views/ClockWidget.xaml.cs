@@ -7,7 +7,9 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
+using StarMark.UI.Helpers;
 using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
 
@@ -70,7 +72,12 @@ public sealed partial class ClockWidget : UserControl, IWidgetTicker, IAlarmEdit
     /// 这句话要跟着改，否则卡片把人支去一个更麻烦的地方（P-54 那一族：出口要指到最近的那一个）。</para>
     /// </summary>
     private static void OnAlarmReached(AlarmItem item)
-        => TrayReporter.Report("闹钟", AlarmPolicy.LineOf(item), "到点了。点时钟上那一排的「停止待确认」就收，右键「闹钟」里也能改。");
+        => TrayReporter.Report(
+            Locale.T("alarm.section"),
+            AlarmPolicy.LineOf(item),
+            // 卡片上点名的那两个出口名，与表面上那颗按钮、右键里那一节的标题是同一颗键（⛔ 各写一遍）；
+            // 提示卡不是常驻元素，弹出这一刻渲染一次就是对的。
+            Locale.Fmt("alarm.notify.body", LocMessage.Of("alarm.stop.label"), LocMessage.Of("alarm.section")));
 
     /// <summary>
     /// 时钟现在可以缩放：时间字号按窗口尺寸自适应（照搬 DeskBox Glance 的做法），
@@ -208,22 +215,25 @@ public sealed partial class ClockWidget : UserControl, IWidgetTicker, IAlarmEdit
         // 待确认时把出口挂在排尾：只写出"待确认"却把人支去右键菜单，那一发的观感就是"它挂在那里关不掉"
         // （P-54：出口要指到最近的那一个）。
         if (PendingCount > 0)
-            AlarmList.Children.Add(BuildTextButton($"停止待确认（{PendingCount}）", size, ConfirmPending,
-                "确认掉所有还在等的轮次（本程序运行时才提醒）"));
+            AlarmList.Children.Add(BuildTextButton("alarm.stop.button", size, ConfirmPending, "alarm.face.stopTip",
+                LocMessage.Of("alarm.stop.label"), PendingCount));
 
         // 加一条的入口常驻在这一排末尾，一条闹钟也没有时更要在那里：那时这是唯一的出口。
         if (ViewModel.IsFull)
-            AlarmList.Children.Add(BuildTextButton($"闹钟最多 {AlarmPolicy.MaxItems} 条", size, null, "先删掉一条再加"));
+            AlarmList.Children.Add(BuildTextButton("alarm.face.max", size, null, "alarm.face.maxTip", AlarmPolicy.MaxItems));
         else
             AlarmList.Children.Add(BuildTextButton(
-                ViewModel.FaceRows.Count == 0 ? "＋ 加一条闹钟" : "＋ 闹钟", size, AddAlarmFromFace,
-                "加一条，例如「7:30 起床」（本程序运行时才提醒）"));
+                ViewModel.FaceRows.Count == 0 ? "alarm.face.addFirst" : "alarm.face.add", size, AddAlarmFromFace,
+                "alarm.face.addTip"));
     }
 
     /// <summary>
     /// 一行闹钟：左边那颗点管开关，右边那行字点开是这一条的动作表。
     /// <b>整行用横向 StackPanel，不用 <c>*</c> 列</b>：外层 StackPanel 给子元素的是无限宽，
     /// <c>*</c> 列在无限宽里量成 0，于是文字整行不见——只有真机看得见的那种形状错。
+    /// <para>批次 WI-37-C：这一排<b>只在定义变了时重建</b>，所以"换语言"不会走到这里。
+    /// 于是每一句都交<b>键</b>（<c>LocText.SetKey/SetMessage/SetToolTipKey</c>），由那唯一一处订阅当场重贴；
+    /// ⛔ 在这里 <c>Locale.T</c> 拼成字符串——那就回到"外面翻了、这一排停在旧语言"（坑表 #344，他这轮报的第 5 条）。</para>
     /// </summary>
     private FrameworkElement BuildAlarmRow(AlarmPolicy.AlarmFaceRow row, double size)
     {
@@ -236,18 +246,19 @@ public sealed partial class ClockWidget : UserControl, IWidgetTicker, IAlarmEdit
             Padding = new Thickness(2, 0, 4, 0),
             VerticalAlignment = VerticalAlignment.Center,
         };
-        ToolTipService.SetToolTip(toggle, row.Enabled ? "开着：点一下关掉这一条" : "关着：点一下开回来");
+        LocText.SetToolTipKey(toggle, row.Enabled ? "alarm.face.onTip" : "alarm.face.offTip");
         toggle.Click += AlarmToggle_Click;
 
         var label = new TextBlock
         {
-            Text = row.Pending ? row.Text + " · 待确认" : row.Text,
             FontSize = size,
             MaxWidth = size * 18,               // 约十八个字：上限跟着字号走，不跟窗口高度走（那会自咬成回环）
             TextTrimming = TextTrimming.CharacterEllipsis,
             Opacity = row.Enabled ? 1 : 0.5,    // 关掉的那条照旧在场，只是退到背景："关了"与"删了"是两件事
             VerticalAlignment = VerticalAlignment.Center,
         };
+        // 待确认那一句把整行文字当实参嵌进去：嵌套那句在贴上去这一刻才取词（LocMessage.ToString 那条口径）。
+        LocText.SetMessage(label, row.Pending ? LocMessage.Of("alarm.face.pendingSuffix", row.Text) : row.Text);
         var open = new Button
         {
             Content = label,
@@ -260,7 +271,9 @@ public sealed partial class ClockWidget : UserControl, IWidgetTicker, IAlarmEdit
             HorizontalContentAlignment = HorizontalAlignment.Left,
             FontSize = size,
         };
-        ToolTipService.SetToolTip(open, row.Text + "｜改时间、重复、试响或删掉");
+        // 提示只说"这一行能做什么"，⛔ 把这一行的文字再抄一遍：那是第二份内容、也让这颗键带不上实参
+        //（LocText 的实参信箱按元素只有一份，正文用了就没提示的份）。
+        LocText.SetToolTipKey(open, "alarm.face.rowTip");
         open.Click += AlarmRow_Click;
 
         var line = new StackPanel { Orientation = Orientation.Horizontal };
@@ -269,12 +282,17 @@ public sealed partial class ClockWidget : UserControl, IWidgetTicker, IAlarmEdit
         return line;
     }
 
-    /// <summary>排尾那几颗（停止待确认／加一条／已满）：只有一行字，不带底板。</summary>
-    private Button BuildTextButton(string text, double size, Action? click, string toolTip)
+    /// <summary>
+    /// 排尾那几颗（停止待确认／加一条／已满）：只有一行字，不带底板。
+    /// <para>键交在<b>里面那颗 TextBlock</b> 而不是按钮上：<c>LocText</c> 给 <c>Button</c> 找到的属性是
+    /// <c>Content</c>，把字符串写进去会连这里的字号与透明度一起换掉（正文属性那串顺序的副作用，坑表 #274 一族）。</para>
+    /// </summary>
+    private Button BuildTextButton(string key, double size, Action? click, string toolTipKey, params object?[] args)
     {
+        var text = new TextBlock { FontSize = size, Opacity = click is null ? 0.5 : 0.8 };
         var button = new Button
         {
-            Content = new TextBlock { Text = text, FontSize = size, Opacity = click is null ? 0.5 : 0.8 },
+            Content = text,
             Background = FlatBrush,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(4, 0, 4, 0),
@@ -282,10 +300,11 @@ public sealed partial class ClockWidget : UserControl, IWidgetTicker, IAlarmEdit
             MinHeight = 0,
             HorizontalAlignment = HorizontalAlignment.Center,
         };
+        LocText.SetKey(text, key, args);
+        LocText.SetToolTipKey(button, toolTipKey);
         // 满了那颗按不下去，但要说得出为什么：一句"最多 8 条"写在脸上，比一个灰掉的加号有用。
         if (click is { } handler) button.Click += (_, _) => handler();
         else button.IsEnabled = false;
-        ToolTipService.SetToolTip(button, toolTip);
         return button;
     }
 

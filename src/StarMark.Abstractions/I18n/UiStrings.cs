@@ -1289,6 +1289,102 @@ public static class UiStrings
         new Entry("widget.note.save", "保存随记", "Save note", "メモを保存"),
         new Entry("widget.clock.addZone", "＋ 添加时区…", "＋ Add a time zone…", "＋ タイムゾーン追加…"),
         new Entry("widget.clock.removePin", "移除这个点位", "Remove this clock", "この時計を削除"),
+
+        // ────────── 星期名的三副面孔（批次 WI-37-C）──────────
+        // 位序＝(int)DayOfWeek（Sunday＝0），与 AlarmPolicy.BitFor／MonthGrid.FirstSlot 同一套序号口径。
+        // 全称（时钟、今日速览）／短名（闹钟那一排、待办截止日）／词根（月历表头：一格一个字，那是布局，
+        // ⛔ 不许把整词塞进表头）。中文的「周日＝周＋日」「星期日＝星期＋日」这一层拼法由表自己守住
+        // （证人 WeekdayNameGateTests.EachChineseSpellingIsItsStemWithItsPrefix —— 代码里再拼一次就是第二份真值）。
+        new Entry("time.weekday.full.0", "星期日", "Sunday", "日曜日"),
+        new Entry("time.weekday.full.1", "星期一", "Monday", "月曜日"),
+        new Entry("time.weekday.full.2", "星期二", "Tuesday", "火曜日"),
+        new Entry("time.weekday.full.3", "星期三", "Wednesday", "水曜日"),
+        new Entry("time.weekday.full.4", "星期四", "Thursday", "木曜日"),
+        new Entry("time.weekday.full.5", "星期五", "Friday", "金曜日"),
+        new Entry("time.weekday.full.6", "星期六", "Saturday", "土曜日"),
+        new Entry("time.weekday.short.0", "周日", "Sun", "日"),
+        new Entry("time.weekday.short.1", "周一", "Mon", "月"),
+        new Entry("time.weekday.short.2", "周二", "Tue", "火"),
+        new Entry("time.weekday.short.3", "周三", "Wed", "水"),
+        new Entry("time.weekday.short.4", "周四", "Thu", "木"),
+        new Entry("time.weekday.short.5", "周五", "Fri", "金"),
+        new Entry("time.weekday.short.6", "周六", "Sat", "土"),
+        // 英文那一列只有首字母：月历那一格装得下一个字，装得下三个字母就装不下别的列（同一格里"更清楚"买不回来）。
+        new Entry("time.weekday.stem.0", "日", "S", "日"),
+        new Entry("time.weekday.stem.1", "一", "M", "月"),
+        new Entry("time.weekday.stem.2", "二", "T", "火"),
+        new Entry("time.weekday.stem.3", "三", "W", "水"),
+        new Entry("time.weekday.stem.4", "四", "T", "木"),
+        new Entry("time.weekday.stem.5", "五", "F", "金"),
+        new Entry("time.weekday.stem.6", "六", "S", "土"),
+
+        // ────────── 闹钟那一族（批次 WI-37-C：Core 交"还没取词的那句"，界面在贴的那一刻取词）──────────
+        // 三条状态句各自带着"本程序运行时才提醒"这一句实话（⛔ 只在其中一条上写＝另外两条读起来像系统闹钟）；
+        // 证人 AlarmWiringGateTests 按表里那一列逐条数，不再数代码里的字面量。
+        new Entry("alarm.timeInvalid", "时间无效", "Invalid time", "時刻が無効"),
+        new Entry("alarm.days.once", "单次", "Once", "1 回だけ"),
+        new Entry("alarm.days.daily", "每天", "Daily", "毎日"),
+        new Entry("alarm.days.weekdays", "工作日", "Weekdays", "平日"),
+        new Entry("alarm.days.weekends", "周末", "Weekends", "週末"),
+        // 快捷档之外（"只有周三和周六"）才是逐天勾出来的组合：一颗键只管一种条数，⛔ 一条模板配七个槽再拿空格填空——
+        // 那会在句尾留下看不见的空格，也会让"少一个槽"这种错读起来像正常。
+        // 日文那一列用「・」接（中文与英文用空格）：⇒ 这一族不是"两语同形的胶水行"，日文列照旧要过那颗复印机闸门。
+        new Entry("alarm.days.pick1", "{0}", "{0}", "{0}"),
+        new Entry("alarm.days.pick2", "{0} {1}", "{0} {1}", "{0}・{1}"),
+        new Entry("alarm.days.pick3", "{0} {1} {2}", "{0} {1} {2}", "{0}・{1}・{2}"),
+        new Entry("alarm.days.pick4", "{0} {1} {2} {3}", "{0} {1} {2} {3}", "{0}・{1}・{2}・{3}"),
+        new Entry("alarm.days.pick5", "{0} {1} {2} {3} {4}", "{0} {1} {2} {3} {4}", "{0}・{1}・{2}・{3}・{4}"),
+        new Entry("alarm.days.pick6", "{0} {1} {2} {3} {4} {5}", "{0} {1} {2} {3} {4} {5}", "{0}・{1}・{2}・{3}・{4}・{5}"),
+        // 一行闹钟的全部设定：钟点（＋名字）· 重复档。名字是用户打的字，不参与翻译，所以两种形状各一颗键。
+        new Entry("alarm.line", "{0} {1} · {2}", "{0} {1} · {2}", "{0} {1}・{2}"),
+        new Entry("alarm.lineNoLabel", "{0} · {1}", "{0} · {1}", "{0}・{1}"),
+        new Entry("alarm.row.offTitle", "（已关）{0}", "{0} (off)", "{0}（オフ）"),
+        new Entry("alarm.pending.one", "闹钟 {0} 待确认", "Alarm {0} awaits confirmation", "アラーム {0} 確認待ち"),
+        new Entry("alarm.pending.many", "闹钟 {0} 等 {1} 条待确认", "Alarm {0}: {1} rounds await confirmation", "アラーム {0}：{1} 件確認待ち"),
+        // 解析输入的五句：越界要说得出越了哪一边界（"格式不对"那种红等于没答）。
+        new Entry("alarm.input.empty", "请写时间，例如 7:30 起床", "Write a time, e.g. 7:30 Wake up", "時刻を入力（例：7:30 起床）"),
+        new Entry("alarm.input.shape", "开头请写成 7:30 或 07:30（后面可以跟名字）", "Start with 7:30 or 07:30 (a name may follow)", "冒頭に 7:30 または 07:30（名前の続き可）"),
+        new Entry("alarm.input.minuteTwo", "分钟要写两位，例如 7:05", "Minutes need two digits, e.g. 7:05", "分は 2 桁（例：7:05）"),
+        new Entry("alarm.input.hourRange", "小时要在 0–23 之间（24:00 请写 0:00）", "Hours must be 0–23 (write 0:00 for midnight)", "時は 0–23（24:00 は 0:00）"),
+        new Entry("alarm.input.minuteRange", "分钟要在 0–59 之间", "Minutes must be 0–59", "分は 0–59"),
+        new Entry("alarm.unreadable", "看不懂这个时间。", "I can't read that time.", "時刻を読み取れません。"),
+        // 菜单与对话框（两个入口共用同一份动作表，批次 VO）。
+        new Entry("alarm.preset.once", "单次（叫一次就关）", "Once (turns itself off)", "1 回だけ（終了後オフ）"),
+        new Entry("alarm.toggle.on", "开着", "On", "オン"),
+        new Entry("alarm.repeat.title", "重复：{0}", "Repeat: {0}", "繰り返し：{0}"),
+        new Entry("alarm.repeat.byDay", "按星期勾", "Pick days", "曜日を選ぶ"),
+        new Entry("alarm.edit", "改时间或名字…", "Change time or name…", "時刻・名前を変更…"),
+        new Entry("alarm.testFire", "试响一次（不动到点记录）", "Ring once now (schedule untouched)", "今 1 回鳴らす（予定は不変）"),
+        new Entry("alarm.remove", "删掉这一条", "Delete this alarm", "このアラームを削除"),
+        new Entry("alarm.add.title", "加一条闹钟", "Add an alarm", "アラームを追加"),
+        new Entry("alarm.add.message", "写钟点，后面可以跟名字。例如「7:30 起床」。", "Write a time; a name may follow, e.g. “7:30 Wake up”.", "時刻を書き、後に名前（例：7:30 朝の支度）。"),
+        new Entry("alarm.add.placeholder", "7:30 起床", "7:30 Wake up", "7:30 朝の支度"),
+        new Entry("alarm.add.failed", "没加上", "Not added", "追加できませんでした"),
+        new Entry("alarm.edit.title", "改这条闹钟", "Edit this alarm", "このアラームを編集"),
+        new Entry("alarm.edit.message", "写钟点，后面可以跟名字。留空或取消都不改动。", "Write a time; a name may follow. Blank or Cancel changes nothing.", "時刻を入力。空欄かキャンセルで変更しません。"),
+        new Entry("alarm.edit.kept", "没改", "Unchanged", "変更しませんでした"),
+        // 组件右键那一节
+        new Entry("alarm.section", "闹钟", "Alarms", "アラーム"),
+        new Entry("alarm.section.pending", "闹钟 · {0} 条待确认", "Alarms · {0} awaiting confirmation", "アラーム・{0} 件確認待ち"),
+        new Entry("alarm.status.pending", "到点了：按下面「停止待确认」就收（本程序运行时才提醒）", "It's due: press “Stop pending” below (this program only rings while it runs)", "時刻です：下の「確認停止」で消えます（本アプリ起動中のみ）"),
+        new Entry("alarm.status.due", "下一次大约 {0}（本程序运行时才提醒）", "Next around {0} (this program only rings while it runs)", "次回 約 {0}（本アプリ起動中のみ）"),
+        new Entry("alarm.status.empty", "还没有闹钟：加一条，例如「7:30 起床」（本程序运行时才提醒）", "No alarms yet: add one, e.g. “7:30 Wake up” (this program only rings while it runs)", "アラーム未設定：追加を（例：7:30 起床）（本アプリ起動中のみ）"),
+        new Entry("alarm.stop.label", "停止待确认", "Stop pending", "確認停止"),
+        new Entry("alarm.stop.button", "{0}（{1}）", "{0} ({1})", "{0}（{1}）"),
+        new Entry("alarm.add.item", "加一条…", "Add…", "追加…"),
+        new Entry("alarm.add.full", "加一条（最多 {0} 条，先删一条）", "Add (limit {0}; delete one first)", "追加（最大 {0} 件、先に 1 件削除）"),
+        // 时钟表面那一排（常驻元素 ⇒ 走 LocText 重贴，⛔ 只在建行那一刻取词）
+        new Entry("alarm.face.addFirst", "＋ 加一条闹钟", "＋ Add an alarm", "＋ アラーム追加"),
+        new Entry("alarm.face.add", "＋ 闹钟", "＋ Alarm", "＋ アラーム"),
+        new Entry("alarm.face.max", "闹钟最多 {0} 条", "Alarms limit {0}", "アラームは最大 {0} 件"),
+        new Entry("alarm.face.maxTip", "先删一条再加", "Delete one before adding", "1 件削除してから追加"),
+        new Entry("alarm.face.addTip", "加一条，例如「7:30 起床」（本程序运行时才提醒）", "Add one, e.g. “7:30 Wake up” (this program only rings while it runs)", "追加（例：7:30 起床）（本アプリ起動中のみ）"),
+        new Entry("alarm.face.stopTip", "确认掉所有还在等的轮次（本程序运行时才提醒）", "Confirm every round still waiting (this program only rings while it runs)", "保留中の全回を確認（本アプリ起動中のみ）"),
+        new Entry("alarm.face.onTip", "开着：点一下关掉这一条", "On: click to switch this one off", "オン：クリックでこの 1 件をオフ"),
+        new Entry("alarm.face.offTip", "关着：点一下开回来", "Off: click to switch it back on", "オフ：クリックでこの 1 件をオン"),
+        new Entry("alarm.face.pendingSuffix", "{0} · 待确认", "{0} · awaiting confirmation", "{0}・確認待ち"),
+        new Entry("alarm.face.rowTip", "改时间、重复、试响或删掉", "Change time, repeat, ring or delete", "時刻・繰り返し・試鳴ら・削除"),
+        new Entry("alarm.notify.body", "到点了。点时钟上那一排的「{0}」就收，右键「{1}」里也能改。", "It's due. Press “{0}” on the clock face, or edit it under “{1}” in the right-click menu.", "時刻です。時計面の「{0}」で消せます。右クリックの「{1}」でも変更可。"),
     };
 
     private static readonly Dictionary<string, Entry> ByKey = Build();

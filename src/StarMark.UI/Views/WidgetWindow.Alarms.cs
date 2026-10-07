@@ -1,5 +1,6 @@
 #nullable enable
 using Microsoft.UI.Xaml.Controls;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 
 namespace StarMark.UI.Views;
@@ -29,20 +30,21 @@ public sealed partial class WidgetWindow
         var pending = alarms.PendingCount;
         var section = new MenuFlyoutSubItem
         {
-            Text = pending > 0 ? $"闹钟 · {pending} 条待确认" : "闹钟",
+            Text = pending > 0 ? Locale.Fmt("alarm.section.pending", pending) : Locale.T("alarm.section"),
             Icon = new FontIcon { Glyph = "\uE823", FontSize = 14 },   // Clock
         };
 
         // 状态常驻一行：按完任何一项都要立刻看得见"下一次是几点"，否则"按了没反应"与"生效了但没到点"分不开。
         // "只有本程序活着的时候才响"这句话写死在下面<b>三条状态</b>里：不让人以为它是系统闹钟
         // （用户裁决：就地写明，不做系统级排程）。只在其中一条上写＝另外两条读起来仍是系统闹钟。
+        // ⇒ 证人 AlarmWiringGateTests 按<b>表里那一列</b>逐条数这句话（批次 WI-37-C 起，代码里已没有这三串字面量）。
         section.Items.Add(new MenuFlyoutItem
         {
             Text = pending > 0
-                ? $"到点了：按下面「停止待确认」就收（本程序运行时才提醒）"
+                ? Locale.T("alarm.status.pending")
                 : alarms.NextDueAt is { } due
-                    ? $"下一次大约 {StarMark.Abstractions.DateTimeText.Clock(due)}（本程序运行时才提醒）"
-                    : "还没有闹钟：加一条，例如「7:30 起床」（本程序运行时才提醒）",
+                    ? Locale.Fmt("alarm.status.due", StarMark.Abstractions.DateTimeText.Clock(due))
+                    : Locale.T("alarm.status.empty"),
             IsEnabled = false,
         });
 
@@ -50,7 +52,9 @@ public sealed partial class WidgetWindow
         {
             var stop = new MenuFlyoutItem
             {
-                Text = $"停止待确认（{pending}）",
+                // 那颗按钮上的字与上面状态句里点名的那个名字＝同一颗键（⛔ 两处各写一遍：状态说"按「停止待确认」"
+                // 而按钮却写着别的，那一发就是把人支向一个不存在的出口）。计数由外层模板加。
+                Text = Locale.Fmt("alarm.stop.button", LocMessage.Of("alarm.stop.label"), pending),
                 Icon = new FontIcon { Glyph = "\uE73E", FontSize = 14 },   // CheckMark：确认掉这一轮
             };
             stop.Click += (_, _) => alarms.ConfirmPending();
@@ -59,7 +63,7 @@ public sealed partial class WidgetWindow
 
         var add = new MenuFlyoutItem
         {
-            Text = alarms.IsFull ? $"加一条（最多 {AlarmPolicy.MaxItems} 条，先删一条）" : "加一条…",
+            Text = alarms.IsFull ? Locale.Fmt("alarm.add.full", AlarmPolicy.MaxItems) : Locale.T("alarm.add.item"),
             Icon = new FontIcon { Glyph = "\uE710", FontSize = 14 },       // Add
             IsEnabled = !alarms.IsFull,
         };

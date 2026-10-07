@@ -1,7 +1,10 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using Xunit;
 
@@ -11,9 +14,16 @@ namespace StarMark.Tests;
 /// 闹钟的判据（批次 RU）。全部<b>注入时刻</b>，不起表也不碰窗口——"哪一天响、什么时候算到点、
 /// 待确认挂多久"这三件事每一条都只在真机上看得见，而真机验证要等一个真实的早晨，
 /// 所以先把它们钉死在这里。
+/// <para>批次 WI-37-C 起这一族还兼一件事：字进了表，<b>换语言那一刻是否真的整体跟着翻</b>
+/// 只能在这里当场量（三档语言各读一遍再两两比对）。跑完必须把语言还回去——
+/// 全工程只有这一颗订阅 <c>Locale.Changed</c> 的机制住在 UI，测试进程里换了语言不还原，
+/// 下一颗读到的是别档的字（<c>DisableTestParallelization</c> 让这条可行）。</para>
 /// </summary>
-public sealed class AlarmPolicyTests
+public sealed class AlarmPolicyTests : IDisposable
 {
+    private readonly AppLanguage _languageBefore = Locale.Current;
+
+    public void Dispose() => Locale.TrySet(_languageBefore);
     /// <summary>2026-09-29 是<b>周二</b>（本批写就时的当天，日期与星期一并钉在下面那几枚测里）。</summary>
     private static DateTimeOffset Tue0700() => new(2026, 9, 29, 7, 0, 0, TimeSpan.FromHours(8));
 
@@ -290,8 +300,10 @@ public sealed class AlarmPolicyTests
             Row(4, 2000, label: "坏值"),                  // 越界：LineOf 写成"时间无效"，垫在最后
         }, At(8, 0));
 
+        // Core 交出的是<b>还没取词的那句</b>（批次 WI-37-C）⇒ 这一格先按当时的语言（默认档＝中文）渲染再比，
+        // 期望值一字未动：改的是"从哪儿拿字"，不是"字该说什么"。
         Assert.Equal(new[] { "01:00 早课 · 每天", "07:30 起床 · 每天", "09:00 跑步 · 每天", "时间无效 坏值 · 每天" },
-                     rows.Select(row => row.Text).ToArray());
+                     rows.Select(row => row.Text.Render()).ToArray());
         Assert.Equal(new long[] { 3, 1, 2, 4 }, rows.Select(row => row.Id).ToArray());
         Assert.Equal(new[] { false, true, true, true }, rows.Select(row => row.Enabled).ToArray());
         Assert.All(rows, row => Assert.False(row.Pending));   // 谁都没弹过 ⇒ 一行"待确认"都不该有
@@ -358,7 +370,8 @@ public sealed class AlarmPolicyTests
     [InlineData("0:05 晨跑", 5, "晨跑")]
     public void TryParseInput_AcceptsClockThenName(string text, int wantMinute, string wantLabel)
     {
-        Assert.True(AlarmPolicy.TryParseInput(text, out var minute, out var label, out var error), error);
+        // 拒绝那句现在交的是键＋实参（WI-37-C），失败消息要看得见 ⇒ 当场渲染一次。
+        Assert.True(AlarmPolicy.TryParseInput(text, out var minute, out var label, out var error), error?.Render());
         Assert.Equal(wantMinute, minute);
         Assert.Equal(wantLabel, label);
         Assert.Null(error);
@@ -375,7 +388,9 @@ public sealed class AlarmPolicyTests
     public void TryParseInput_Rejects_WithSomethingActionable(string text)
     {
         Assert.False(AlarmPolicy.TryParseInput(text, out _, out _, out var error));
-        Assert.False(string.IsNullOrWhiteSpace(error));
+        // 拒了就得有话说（键没登记时 Locale.T 会回 ⟨key⟩ 那种形状，也是一句可见的话，但下面那颗逐条点名的格会红）。
+        Assert.NotNull(error);
+        Assert.False(string.IsNullOrWhiteSpace(error.Render()));
     }
 
     /// <summary>
@@ -390,7 +405,8 @@ public sealed class AlarmPolicyTests
     public void TryParseInput_NamesTheBoundaryItViolated(string text, string wantInError)
     {
         Assert.False(AlarmPolicy.TryParseInput(text, out _, out _, out var error));
-        Assert.Contains(wantInError, error);
+        Assert.NotNull(error);
+        Assert.Contains(wantInError, error.Render());
     }
 
     // ────────── 存档形状 ──────────
@@ -424,5 +440,157 @@ public sealed class AlarmPolicyTests
         AlarmPolicy.Confirm(item);
         Assert.Null(item.PendingSince);
         Assert.Equal(At(7, 30), copy.PendingSince);               // 快照不许跟着在用的一份一起变（同倒计时那条理由）
+    }
+
+    // ────────── 批次 WI-37-C：字进了表，换语言那一刻必须整体跟着走 ──────────
+
+    /// <summary>
+    /// 三副星期面孔在<b>每一档语言里都取自那一档的那一列</b>（逐天逐键对账，七格一颗不漏）。
+    /// <para>为什么不只测中文：中文是唯一形状的时代早已测绿过，而"外面翻了、这一排停在旧语言"
+    /// 恰好只有换语言那一刻才看得见（坑表 #344）。<see cref="DateTimeText"/> 里那三张键表哪天写错一行，
+    /// 屏幕上就是 ⟨time.weekday.short.3⟩ 那种形状——这颗当场红。</para>
+    /// <para><see cref="Locale.TrySet"/> 返回 false 时直接红而不是跳过：读不到那一档＝这一格没量到东西，
+    /// 不算过（三态口径）。</para>
+    /// </summary>
+    [Fact]
+    public void EveryWeekdaySpellingComesFromTheColumnThatLanguageUses()
+    {
+        foreach (var language in new[] { AppLanguage.Chinese, AppLanguage.English, AppLanguage.Japanese })
+        {
+            Locale.TrySet(language);
+            Assert.Equal(language, Locale.Current);      // TrySet 在"原样点回去"时回 false，所以看的是当前档而不是返回值
+            foreach (var day in new[]
+                     {
+                         DayOfWeek.Sunday, DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
+                         DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday,
+                     })
+            {
+                Assert.Equal(FromTable(DateTimeText.WeekdayKey(day)), DateTimeText.Weekday(day));
+                Assert.Equal(FromTable(DateTimeText.WeekdayShortKey(day)), DateTimeText.WeekdayShort(day));
+                Assert.Equal(FromTable(DateTimeText.WeekdayStemKey(day)), DateTimeText.WeekdayStem(day));
+            }
+        }
+    }
+
+    /// <summary>
+    /// 闹钟那一整行：档位那句跟着语言走，<b>用户自己打的名字一颗都不许动</b>。
+    /// <para>后半条是这一族的边界：把「起床」也送进翻译，屏幕上会出现没人起过的那句话；
+    /// 反过来若整行停在中文，就是"外面翻了、这一排没翻"（真机报的第三条同一形状）。</para>
+    /// <para>⚠ "三档读数两两不同"必须比<b>档位那句本身</b>，⛔ 只比整行：台架 A3 把 `alarm.days.weekdays`
+    /// 的日文列抄成中文列，整行仍然两两不同（`alarm.line` 三列的分隔符本来就不同：中文 <c> · </c>、日文 <c>・</c>），
+    /// 于是那一臂红在别的证人上而我这颗绿——**尺子读不到 ≠ 缺陷不存在，先换尺子再归责**。</para>
+    /// </summary>
+    [Fact]
+    public void TheAlarmLineFollowsTheLanguage_ButNeverTheUsersOwnName()
+    {
+        var dayWords = new HashSet<string>(StringComparer.Ordinal);
+        var lines = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var language in new[] { AppLanguage.Chinese, AppLanguage.English, AppLanguage.Japanese })
+        {
+            Locale.TrySet(language);
+            Assert.Equal(language, Locale.Current);      // TrySet 在"原样点回去"时回 false，所以看的是当前档而不是返回值
+            var days = FromTable("alarm.days.weekdays");
+            Assert.Equal(days, AlarmPolicy.DaysLabel(AlarmDays.Weekdays));
+            Assert.True(dayWords.Add(days),
+                $"星期档那句在 {language} 档与前面某档逐字相同 ⇒ 那一列抄了别档（表里三列分不开，屏幕上就是半中半日）：{days}");
+
+            var line = AlarmPolicy.LineOf(Item(450, AlarmDays.Weekdays, label: "起床"));
+            Assert.StartsWith("07:30", line, StringComparison.Ordinal);   // 钟点是数字，不参与翻译
+            Assert.Contains("起床", line, StringComparison.Ordinal);        // 名字是用户打的字
+            Assert.Contains(days, line, StringComparison.Ordinal);         // 档位那句取自当前语言那一列
+            Assert.True(lines.Add(line), $"整行在 {language} 档与前面某档逐字相同 ⇒ 这一族没接到表上：{line}");
+        }
+        Assert.Equal(3, dayWords.Count);                  // 三档都真进过循环（⛔ 空循环冒充绿灯）
+        Assert.Equal(3, lines.Count);
+    }
+
+    /// <summary>
+    /// 星期档那十颗键（四档预设＋六档逐天组合）与<b>真能走到的那些组合</b>当场对账，两个方向都比。
+    /// <para>这是"表里这一行没人问"那颗闸门<b>看不见</b>的一半：<c>PickKeys</c> 里每颗键名都成串，
+    /// 死键闸门因此永远绿；可"勾满七天"就是「每天」那颗预设，<b>pick7 没有任何输入能走到</b>。
+    /// 留着的后果是那一行谎报覆盖面（有人照着表数七档，实际只有六档）。穷举 128 种组合法，⛔ 抽样。</para>
+    /// </summary>
+    [Fact]
+    public void DaysMessage_CoversExactlyTheRowsARealCombinationCanReach()
+    {
+        var reached = new HashSet<string>(StringComparer.Ordinal);
+        for (var raw = 0; raw <= (int)AlarmDays.Daily; raw++)
+            reached.Add(AlarmPolicy.DaysMessage((AlarmDays)raw).Key);
+
+        Assert.Equal(
+            new[]
+            {
+                "alarm.days.daily", "alarm.days.once", "alarm.days.pick1", "alarm.days.pick2", "alarm.days.pick3",
+                "alarm.days.pick4", "alarm.days.pick5", "alarm.days.pick6", "alarm.days.weekdays", "alarm.days.weekends",
+            },
+            reached.OrderBy(k => k, StringComparer.Ordinal).ToArray());
+    }
+
+    /// <summary>
+    /// 一条组合句里的<b>实参颗数＝勾了几格</b>，次序＝周一在前，每颗实参交的是<b>短名那颗键</b>（不是成品字）。
+    /// <para>⛔ 一条七槽模板拿空格填空：那会在"只勾两天"时留下看不见的空格，而空格的宽度在窄列里就是"那一行怪怪的"。
+    /// 名字交给表 ⇒ 这里只许核对形状，一颗字都不许比对（比对字就等于又写了一份真值）。</para>
+    /// </summary>
+    [Fact]
+    public void DaysMessage_CarriesOneArgumentPerCheckedDay_InReadingOrder()
+    {
+        var combos = 0;
+        for (var raw = 0; raw <= (int)AlarmDays.Daily; raw++)
+        {
+            var message = AlarmPolicy.DaysMessage((AlarmDays)raw);
+            if (!message.Key.StartsWith("alarm.days.pick", StringComparison.Ordinal)) continue;
+            var bits = System.Numerics.BitOperations.PopCount((uint)raw);
+            Assert.Equal($"alarm.days.pick{bits}", message.Key);   // 键按条数选，一位一槽
+            Assert.Equal(bits, message.Args!.Length);              // 勾几格就几个实参
+            var want = new List<string>();
+            for (var offset = 0; offset < 7; offset++)             // 阅读顺序：周一在前
+            {
+                var day = (DayOfWeek)((offset + 1) % 7);
+                if ((raw & (1 << (int)day)) != 0) want.Add(DateTimeText.WeekdayShortKey(day));
+            }
+            Assert.Equal(want, message.Args.Select(a => ((LocMessage)a!).Key));
+            combos++;
+        }
+        Assert.True(combos >= 120, $"逐天组合那一路只走了 {combos} 种（128 种里去掉四档预设应有 124 种）——循环本身坏了");
+    }
+
+    /// <summary>
+    /// <b>同一份定义在三档语言里给出同一串签名</b>：时钟每秒问一次"要不要重画那一排"，
+    /// 签名掺进成品字就等于"换一次语言把他正盯着的那几颗控件销毁重建一遍"（常驻小窗为此多付一次布局重排，
+    /// 而换语言那一刻该由 <c>LocText</c> 重贴，见 <see cref="AlarmWiringGateTests"/>）。
+    /// <para>他起的名字<b>照旧进签名</b>（那是内容，改了当然要重画），所以这一格只许比对<b>表里那三列的词</b>：
+    /// 它们一颗都不许出现。</para>
+    /// </summary>
+    [Fact]
+    public void FaceSignature_IsTheSameStringInEveryLanguage()
+    {
+        var items = new[] { Item(450, AlarmDays.Weekdays, label: "起床"), Item(420, AlarmDays.None) };
+        var readings = new List<string>();
+        foreach (var language in new[] { AppLanguage.Chinese, AppLanguage.English, AppLanguage.Japanese })
+        {
+            Locale.TrySet(language);
+            Assert.Equal(language, Locale.Current);      // TrySet 在"原样点回去"时回 false，所以看的是当前档而不是返回值
+            readings.Add(AlarmPolicy.FaceSignature(AlarmPolicy.FaceRows(items, At(8, 0))));
+        }
+
+        Assert.Equal(readings[0], readings[1], StringComparer.Ordinal);
+        Assert.Equal(readings[0], readings[2], StringComparer.Ordinal);
+        Assert.Contains("alarm.line", readings[0], StringComparison.Ordinal);        // 进串的是键，不是成品句
+        Assert.Contains("起床", readings[0], StringComparison.Ordinal);              // 内容变了仍然要重画
+        foreach (var word in new[] { "工作日", "每天", "单次", "Weekdays", "Daily", "Once", "平日", "毎日" })
+            Assert.DoesNotContain(word, readings[0], StringComparison.Ordinal);
+    }
+
+    /// <summary>按<b>当前</b>那一档去表里取对应的列（对账用；取不到键直接红，不许静默落到 ⟨键⟩）。</summary>
+    private static string FromTable(string key)
+    {
+        var entry = UiStrings.All.FirstOrDefault(e => string.Equals(e.Key, key, StringComparison.Ordinal));
+        Assert.True(entry is not null, $"表里没有这一行：{key}");
+        return Locale.Current switch
+        {
+            AppLanguage.English => entry!.En,
+            AppLanguage.Japanese => entry!.Ja,
+            _ => entry!.Zh,
+        };
     }
 }

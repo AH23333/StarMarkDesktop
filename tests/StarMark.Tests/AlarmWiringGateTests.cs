@@ -88,7 +88,8 @@ public sealed class AlarmWiringGateTests
         // 数"实例化"这一句而不是数名字：入口引用 AlarmMenu 时也会出现同一个词。
         Assert.Equal(2, SourceGate.Count(table, "new ToggleMenuFlyoutItem"));
         Assert.Equal(1, SourceGate.Count(table, "new RadioMenuFlyoutItem"));
-        Assert.Equal(1, SourceGate.Count(table, "new MenuFlyoutSubItem { Text = $\"重复"));
+        // 批次 WI-37-C：那句"重复：X"进了表（代码只剩键名），所以这里钉的是"这一颗子菜单的标题问的是 alarm.repeat.title"。
+        Assert.Equal(1, SourceGate.Count(table, "new MenuFlyoutSubItem { Text = Locale.Fmt(\"alarm.repeat.title\""));
         foreach (var entry in new[] { menu, widget })
             foreach (var built in new[] { "new ToggleMenuFlyoutItem", "new RadioMenuFlyoutItem" })
                 Assert.DoesNotContain(built, entry);
@@ -219,13 +220,16 @@ public sealed class AlarmWiringGateTests
     {
         var menu = SourceGate.ReadRepoFile(Menu);
         Assert.Contains("alarms.ConfirmPending();", menu);
-        Assert.Contains("pending > 0 ? $\"闹钟 · {pending} 条待确认\"", menu);   // 标题自己说"有几条在等"
+        // 标题自己说"有几条在等"（批次 WI-37-C 起这句话在表里，代码只问键；带条数那颗键是 alarm.section.pending）
+        Assert.Contains("Locale.Fmt(\"alarm.section.pending\", pending)", menu);
 
         var widget = SourceGate.ReadRepoFile(Widget);
         Assert.Contains("AlarmPolicy.IsPending(item, DateTimeOffset.Now)", widget);
         Assert.DoesNotContain("FromHours", widget);                    // 别在 UI 里再写一个时限
-        // 批次 VO：出口要在桌面上就近给一个（P-54），措辞与菜单那颗说同一件事
-        Assert.Contains("BuildTextButton($\"停止待确认（{PendingCount}）\", size, ConfirmPending,", widget);
+        // 批次 VO：出口要在桌面上就近给一个（P-54），措辞与菜单那颗说同一件事——
+        //  ⇒ 两扇宿主交的是同一颗键（alarm.stop.button 包着 alarm.stop.label），⛔ 各写一遍字。
+        Assert.Contains("BuildTextButton(\"alarm.stop.button\", size, ConfirmPending, \"alarm.face.stopTip\",", widget);
+        Assert.Contains("LocMessage.Of(\"alarm.stop.label\"), PendingCount)", widget);
     }
 
     /// <summary>
@@ -249,23 +253,49 @@ public sealed class AlarmWiringGateTests
     /// <para>批次 VO 之后桌面上那一排也成了入口，这句话就<b>两处都要有</b>：只在菜单里写，
     /// 从表面上加的那一条读起来仍是"没写清楚的闹钟"。</para>
     /// </summary>
+    /// <summary>
+    /// 用户裁决"本程序运行时才提醒"要<b>就地写明</b>在入口上：不写，这一节读起来就像系统闹钟
+    /// （"我关了电脑它还会响吗"只有一个答案：不会，那就必须让他第一眼看出来）。
+    /// <para>批次 VO 之后桌面上那一排也成了入口，这句话就<b>两处都要有</b>：只在菜单里写，
+    /// 从表面上加的那一条读起来仍是"没写清楚的闹钟"。</para>
+    /// <para>批次 WI-37-C 起这五句话住在<b>表</b>里（代码只剩键名）⇒ 尺子跟着搬到主人那一侧，
+    /// 并且⛔ 不许这串字再回到代码里（下面那两条 <c>DoesNotContain</c> 就是防"表挂了、代码还留一份"的双写）。
+    /// <b>三列各自钉一句同义话</b>：只钉中文列的话，换语言那一刻这句话就消失了——那正是本条要防的事。</para>
+    /// </summary>
     [Fact]
     public void TheEntrySaysOutLoudThatItOnlyRingsWhileTheAppRuns()
     {
-        var menu = SourceGate.ReadRepoFile(Menu);
-        Assert.Equal(3, SourceGate.Count(menu, "本程序运行时才提醒"));
-        // 三条状态（待确认 / 有下一次 / 还没有闹钟）都得带上这句：只在其中一条上写＝另外两条读起来仍是"系统闹钟"
-        Assert.Contains("按下面「停止待确认」就收（本程序运行时才提醒）", menu);
-        Assert.Contains("（本程序运行时才提醒）\"", menu);
-        Assert.Contains("加一条，例如「7:30 起床」（本程序运行时才提醒）", menu);
+        var mustCarry = new[]
+        {
+            "alarm.status.pending", "alarm.status.due", "alarm.status.empty",   // 三条状态（待确认／有下一次／还没有）
+            "alarm.face.addTip", "alarm.face.stopTip",                          // 桌面上那两颗的提示
+        };
+        foreach (var key in mustCarry)
+        {
+            Assert.Contains("（本程序运行时才提醒）", Column(key, e => e.Zh), StringComparison.Ordinal);
+            Assert.Contains("only rings while it runs", Column(key, e => e.En), StringComparison.Ordinal);
+            Assert.Contains("本アプリ起動中のみ", Column(key, e => e.Ja), StringComparison.Ordinal);
+        }
 
-        var face = SourceGate.ReadRepoFile(Widget);
-        Assert.Equal(2, SourceGate.Count(face, "本程序运行时才提醒"));   // 停止待确认那颗 ＋ 加一条那颗
-        Assert.Contains("确认掉所有还在等的轮次（本程序运行时才提醒）", face);
-        Assert.Contains("加一条，例如「7:30 起床」（本程序运行时才提醒）", face);
-        // 提示卡也要把人指到最近的那一个出口，而不是支去右键菜单
-        Assert.Contains("点时钟上那一排的「停止待确认」就收", SourceGate.ReadRepoFile("src/StarMark.UI/Views/ClockWidget.xaml.cs"));
+        // 接线：五颗键都真被问到了（挂了键却没接线＝屏幕上是一串 ⟨键⟩，与"没写清楚"同一种后果）
+        var menu = SourceGate.ReadRepoFile(Menu);
+        foreach (var key in new[] { "alarm.status.pending", "alarm.status.due", "alarm.status.empty" })
+            Assert.Contains("\"" + key + "\"", menu);
+        var widget = SourceGate.ReadRepoFile(Widget);
+        Assert.Contains("\"alarm.face.addTip\"", widget);
+        Assert.Contains("\"alarm.face.stopTip\"", widget);
+
+        // 代码那两侧⛔ 再留一份字面量（双写的那一份在换语言后就是没人读的副本）
+        Assert.DoesNotContain("本程序运行时才提醒", SourceGate.Code(menu));
+        Assert.DoesNotContain("本程序运行时才提醒", SourceGate.Code(widget));
+
+        // 提示卡要把人指到最近的那一个出口，而且那个名字与按钮那颗是同一颗键（⛔ 两处各写一遍）
+        var card = SourceGate.ReadRepoFile(Widget);
+        Assert.Contains("Locale.Fmt(\"alarm.notify.body\", LocMessage.Of(\"alarm.stop.label\")", card);
     }
+
+    private static string Column(string key, Func<StarMark.Abstractions.I18n.UiStrings.Entry, string> side)
+        => side(StarMark.Abstractions.I18n.UiStrings.All.First(e => string.Equals(e.Key, key, StringComparison.Ordinal)));
 
     /// <summary>存档字段本身：按实例存、整表替换（与倒计时同一条形状，"两个时钟各一套"要成立）。</summary>
     [Fact]
@@ -281,5 +311,109 @@ public sealed class AlarmWiringGateTests
         Assert.Contains("public Task SaveAlarmsAsync(string instanceId, IReadOnlyList<AlarmItem> alarms)", manager);
         Assert.Equal(1, SourceGate.Count(manager, "inst.Alarms = alarms.ToList();"));   // 整表替换，不 append（否则删不掉）
         Assert.Equal(1, SourceGate.Count(manager, "inst.Alarms"));
+    }
+
+    // ────────── 批次 WI-37-C：闹钟整族交键，代码里⛔ 再留一句字 ──────────
+
+    /// <summary>
+    /// 一句会贴到屏幕上的中文字面量的形状。只喂<b>抹掉注释后的代码</b>（<see cref="SourceGate.Code"/>）：
+    /// 这一族最想在注释里解释"旧写法是 <c>"每天"</c>"，读原文就会把自己的说明弄红（#195）。
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex CjkLiteral = new(
+        "\"[^\"\\n]*[\\u4e00-\\u9fff][^\"\\n]*\"",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// 把<b>日志那一类出口</b>从禁项的射程里摘掉：全工程的 <c>StarLog.*</c> 一律写中文，
+    /// 那是给排障的人读的、<b>不上屏幕</b>（与 <c>.Render()</c> 只许出现在日志/通知那一路是同一条口径，批次 WI-37-C）。
+    /// <para>⚠ 改窄必须给读数：上面那颗 <see cref="TheLiteralScannerSeesTheBadShape_andIgnoresComments"/>
+    /// 钉"尺子本身认得出违规"，下面 <see cref="LogsAreNotTheScreen"/> 钉"摘掉的只有日志这一族"——
+    /// 少了这两条，"我只摘日志"就会变成"什么都能摘"。</para>
+    /// </summary>
+    private static string OffScreen(string code)
+        => string.Join("\n", code.Split('\n').Where(l => !l.Contains("StarLog.", StringComparison.Ordinal)));
+
+    /// <summary>摘掉的射程只到 <c>StarLog.*</c>：一颗贴着屏幕的属性名不许被这条顺手放过。</summary>
+    [Fact]
+    public void LogsAreNotTheScreen()
+    {
+        const string sample = "StarLog.Error(\"加闹钟失败\", ex);\nText = \"加闹钟失败\";\n";
+        var kept = OffScreen(SourceGate.Code(sample));
+        Assert.Empty(CjkLiteral.Matches(OffScreen(SourceGate.Code("StarLog.Error(\"加闹钟失败\", ex);\n"))));
+        Assert.Single(CjkLiteral.Matches(kept));
+        Assert.Equal("\"加闹钟失败\"", CjkLiteral.Match(kept).Value, System.StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// 正面凭据（#161）：上面那颗禁项今天能红，靠的是这把尺子<b>认得出违规</b>——
+    /// 先证明"代码里的一句"算违规、"注释里的一句"不算，否则零命中只是尺子失效。
+    /// </summary>
+    [Fact]
+    public void TheLiteralScannerSeesTheBadShape_andIgnoresComments()
+    {
+        const string sample = "// 旧写法是把档位写成 \"每天\"，注释里出现不算违规\n"
+            + "var preset = \"每天\";\n";
+        var code = SourceGate.Code(sample);
+        Assert.Equal(2, CjkLiteral.Matches(sample).Count);      // 读原文会连注释一起数（没人敢解释旧写法）
+        Assert.Single(CjkLiteral.Matches(code));
+        Assert.Equal("\"每天\"", CjkLiteral.Match(code).Value, System.StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// 两个只装闹钟的文件里<b>零句中文字面量</b>（用户真机报的第一条："所有组件名称未国际化，组件内容和右键菜单未国际化"）。
+    /// <para>⛔ 整棵 <c>src/StarMark.UI</c> 一起数：那会把还没轮到那一刀的文件（快照页、AI 那一栏＝账上 WI-40/41）
+    /// 也算进来，红成噪音，然后被人整颗关掉（P-169 的按页推进口径）。加一颗文件＝那一族的字必须同批进表。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(Table)]
+    [InlineData(Menu)]
+    public void TheAlarmHostsHoldNoChineseLiterals(string relativePath)
+    {
+        var code = OffScreen(SourceGate.Code(SourceGate.ReadRepoFile(relativePath)));
+        var left = CjkLiteral.Matches(code).Cast<System.Text.RegularExpressions.Match>()
+            .Select(m => m.Value).ToArray();
+        Assert.True(left.Length == 0,
+            $"{relativePath} 的代码里还剩 {left.Length} 句中文字面量（换语言时它们停在中文，屏幕上就是半中半英）：\n"
+            + string.Join("\n", left));
+    }
+
+    /// <summary>
+    /// 时钟组件那一档是<b>混住</b>的（护眼、秒表、休息都在同一份文件），所以那一侧只收闹钟那几颗方法体：
+    /// ⛔ 整档扫会把护眼那一族（WI-37-B 已交键、但同一档里还有别的中文）误算成这一刀的欠账。
+    /// <para>"读不到方法体"单独钉一条：<see cref="SourceGate.MethodBody"/> 对表达式体只会切到第一个分号，
+    /// 切出空串时禁项天然零命中＝假绿（#161 那一族的反向）。</para>
+    /// </summary>
+    [Theory]
+    [InlineData("private void RebuildAlarmFace()")]
+    [InlineData("private FrameworkElement BuildAlarmRow(")]
+    [InlineData("private Button BuildTextButton(")]
+    [InlineData("private static void OnAlarmReached(")]
+    public void TheAlarmBodiesOnTheFaceHoldNoChineseLiterals(string signature)
+    {
+        var body = OffScreen(SourceGate.MethodBody(SourceGate.Code(SourceGate.ReadRepoFile(Widget)), signature));
+        Assert.False(string.IsNullOrWhiteSpace(body), $"{signature}：读不到方法体，这一格是空判（读不到不等于通过）");
+        var left = CjkLiteral.Matches(body).Cast<System.Text.RegularExpressions.Match>()
+            .Select(m => m.Value).ToArray();
+        Assert.True(left.Length == 0, $"{signature} 里还剩 {left.Length} 句中文字面量：\n{string.Join("\n", left)}");
+    }
+
+    /// <summary>
+    /// <c>RepeatPresets</c> 是 <c>static readonly</c>：中文字一旦进去，就在<b>类首次被碰到的那一刻</b>把语言冻住
+    /// （WI-39 那颗 <c>ByTag</c> 化石同一形状，而屏幕上看不出来）。所以这一排四颗只许是键。
+    /// <para>四这一颗数不写死在断言里而是从数组自己读——它哪天变成五档，这一格不许继续绿。</para>
+    /// </summary>
+    [Fact]
+    public void TheRepeatPresetTableHandsFourKeysNotWords()
+    {
+        var code = SourceGate.Code(SourceGate.ReadRepoFile(Table));
+        var region = SourceGate.Between(code, "RepeatPresets =", "];");
+        var keys = System.Text.RegularExpressions.Regex.Matches(region, @"""(alarm\.[a-zA-Z.]+)""")
+            .Cast<System.Text.RegularExpressions.Match>().Select(m => m.Groups[1].Value).ToArray();
+        Assert.Equal(4, keys.Length);                                   // 单次／每天／工作日／周末
+        Assert.Empty(CjkLiteral.Matches(region));                       // 那颗数组里一颗字都没有
+        Assert.Contains("\"alarm.preset.once\"", region, System.StringComparison.Ordinal);   // 唯一带解释的那一档
+        foreach (var key in keys)
+            Assert.Contains("new Entry(\"" + key + "\"",
+                SourceGate.ReadRepoFile("src/StarMark.Abstractions/I18n/UiStrings.cs"), System.StringComparison.Ordinal);
     }
 }

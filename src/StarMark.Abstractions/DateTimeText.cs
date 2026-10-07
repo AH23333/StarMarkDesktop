@@ -104,36 +104,76 @@ public static class DateTimeText
         => value.ToString(withHours ? @"h\:mm\:ss" : @"m\:ss", CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// 中文<b>全称</b>星期：<c>星期日…星期六</c>。位序跟 <see cref="DayOfWeek"/> 走（Sunday＝0），
+    /// <b>全称</b>星期：<c>星期日 / Sunday / 日曜日</c>。位序跟 <see cref="DayOfWeek"/> 走（Sunday＝0），
     /// 与 <c>AlarmPolicy.BitFor</c> 同一套位序口径——按"周一是第一天"的直觉排这张表就会整体错一天。
+    /// <para>批次 WI-37-C 起，这三副面孔的字<b>只住在那张表里</b>（<c>time.weekday.*</c>）：这一族从前是
+    /// "代码里那张中文表 ＋ 表里那一句"两个主人，切语言时只有一半跟着翻（外层翻了、内层停在旧语言＝坑表 #344 那一族）。</para>
+    /// <para>常驻元素（时钟表面、说明栏）要拿的是<b>还没取词的那句</b>（<see cref="WeekdayMessage"/>），
+    /// 每次重建才取词的（右键菜单、月历表头）才可以走下面这三颗 <c>string</c> 出口。</para>
     /// </summary>
-    public static string Weekday(DayOfWeek day) => "星期" + WeekdayStem(day);
+    public static string Weekday(DayOfWeek day) => Locale.T(WeekdayKey(day));
 
-    /// <summary>中文<b>短名</b>星期：<c>周日…周六</c>（组件里那些窄列用这一颗）。</summary>
-    public static string WeekdayShort(DayOfWeek day) => "周" + WeekdayStem(day);
+    /// <summary><b>短名</b>星期：<c>周日 / Sun / 日</c>（组件里那些窄列与闹钟那一排用这一颗）。</summary>
+    public static string WeekdayShort(DayOfWeek day) => Locale.T(WeekdayShortKey(day));
 
     /// <summary>
-    /// 星期名里那个<b>词根</b>（<c>日 / 一 / 二 / 三 / 四 / 五 / 六</c>）——全称、短名、月历表头三副面孔共用的唯一一张表。
-    /// <para>
-    /// 越界（库里存着本二进制不认识的序号）落到 <c>日</c>：宁可错印成周日，也不许什么都不印——
-    /// 空字符串在界面上表现为"那一格凭空消失"，比错一天更难报障。
-    /// </para>
-    /// <para>
-    /// 表的次序就是 <c>(int)DayOfWeek</c>（Sunday＝0）。<c>MonthGrid.FirstSlot</c> 用同一个序号决定网格开头补几天，
-    /// 所以"第 0 列是周日"不是排版习惯而是硬约束：这张表哪天被谁改成周一在前，月历就会行行错位。
-    /// </para>
+    /// 星期名里那个<b>词根</b>（<c>日 / S / 日</c>）——月历表头那一格只装得下一个字，所以它自己是一族键，
+    /// ⛔ 不是"短名再切一刀"（那一刀在英文列上会切出 <c>Sun[..1]</c>＝"更短的英文名"，而不是表里那个约定俗成的首字母）。
     /// </summary>
-    public static string WeekdayStem(DayOfWeek day) => day switch
-    {
-        DayOfWeek.Sunday => "日",
-        DayOfWeek.Monday => "一",
-        DayOfWeek.Tuesday => "二",
-        DayOfWeek.Wednesday => "三",
-        DayOfWeek.Thursday => "四",
-        DayOfWeek.Friday => "五",
-        DayOfWeek.Saturday => "六",
-        _ => "日",
-    };
+    public static string WeekdayStem(DayOfWeek day) => Locale.T(WeekdayStemKey(day));
+
+    /// <summary>三副面孔的<b>交键</b>出口（给常驻元素重贴用；同一张表，⛔ 第二份字）。</summary>
+    public static LocMessage WeekdayMessage(DayOfWeek day) => LocMessage.Of(WeekdayKey(day));
+
+    /// <summary>短名的交键出口（闹钟"按星期勾"那一排与待办截止日共用）。</summary>
+    public static LocMessage WeekdayShortMessage(DayOfWeek day) => LocMessage.Of(WeekdayShortKey(day));
+
+    /// <summary>词根的交键出口（月历表头按天挂键时用它）。</summary>
+    public static LocMessage WeekdayStemMessage(DayOfWeek day) => LocMessage.Of(WeekdayStemKey(day));
+
+    /// <summary>星期全称的键名（<c>time.weekday.full.N</c>，N＝<c>(int)DayOfWeek</c>）。</summary>
+    public static string WeekdayKey(DayOfWeek day) => FullKeys[Slot(day)];
+
+    /// <summary>星期短名的键名（<c>time.weekday.short.N</c>）。</summary>
+    public static string WeekdayShortKey(DayOfWeek day) => ShortKeys[Slot(day)];
+
+    /// <summary>星期词根的键名（<c>time.weekday.stem.N</c>）。</summary>
+    public static string WeekdayStemKey(DayOfWeek day) => StemKeys[Slot(day)];
+
+    /// <summary>
+    /// 三副面孔的键名，各自七格、下标＝<c>(int)DayOfWeek</c>（Sunday＝0，与 <c>AlarmPolicy.BitFor</c>／
+    /// <c>MonthGrid.FirstSlot</c> 同一套序号口径——这张表哪天被改成周一在前，月历就会行行错位）。
+    /// <para>⛔ 把键名改成 <c>$"time.weekday.full.{n}"</c> 现拼：拼出来的键在源码里不成一整串，
+    /// 那颗"表里没有一行没人问"的闸门就看不见它，而表里真少一行时屏幕上才会露出 ⟨键⟩（键名写错也是同一种静默）。
+    /// 列成数组之后每颗键名都在源码里成串 ⇒ 缺哪一行当场红。</para>
+    /// </summary>
+    private static readonly string[] FullKeys =
+    [
+        "time.weekday.full.0", "time.weekday.full.1", "time.weekday.full.2", "time.weekday.full.3",
+        "time.weekday.full.4", "time.weekday.full.5", "time.weekday.full.6",
+    ];
+
+    /// <summary>短名那一族的键名（闹钟"按星期勾"那一排、待办截止日、星期档拼接都用它）。</summary>
+    private static readonly string[] ShortKeys =
+    [
+        "time.weekday.short.0", "time.weekday.short.1", "time.weekday.short.2", "time.weekday.short.3",
+        "time.weekday.short.4", "time.weekday.short.5", "time.weekday.short.6",
+    ];
+
+    /// <summary>词根那一族的键名（月历表头：一格一个字）。它与短名⛔ 不是一颗键切两半——见 <see cref="WeekdayStem"/>。</summary>
+    private static readonly string[] StemKeys =
+    [
+        "time.weekday.stem.0", "time.weekday.stem.1", "time.weekday.stem.2", "time.weekday.stem.3",
+        "time.weekday.stem.4", "time.weekday.stem.5", "time.weekday.stem.6",
+    ];
+
+    /// <summary>
+    /// 序号换算只此一处：<b>越界（存档里存着本二进制不认识的序号）落到 0＝周日</b>。
+    /// <para>宁可错印成周日，也不许什么都不印——空字符串在界面上表现为"那一格凭空消失"，比错一天更难报障；
+    /// 而"落到哪一格"若在三副面孔里各写一遍，就有三处可以各自漂（记忆 ⑧）。</para>
+    /// </summary>
+    private static int Slot(DayOfWeek day)
+        => day is >= DayOfWeek.Sunday and <= DayOfWeek.Saturday ? (int)day : (int)DayOfWeek.Sunday;
 
     // ==================== 「多久以前」那四档人话 ====================
 
