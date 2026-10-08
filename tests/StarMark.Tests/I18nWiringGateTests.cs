@@ -1432,9 +1432,9 @@ public sealed class I18nWiringGateTests
     /// （<c>rows.Count(r =&gt; !Equals(r.BindingText, UnsetText))</c>）。那句一进表，"绑没绑"就变成"这行是不是中文的『未设置』"
     /// ——切英文那一刻每组的数全归零：<b>界面读起来对、数是错的</b>（坑表 #354）。
     /// 建行时当场算过的那颗 <c>bound</c> 从此留在 <c>HotkeyRow.Bound</c> 上，计数只读它。</para>
-    /// <para>⚠ 分类标题那句「（N 项已绑定）」<b>本批故意没进表</b>：它与同一排的分类名贴在一起，而分类名还住在 Core
-    /// （P-175 缺口①）——只翻半排就是半中半英（坑表 #330 那一族）⇒ 那一句与"身份改 ASCII"<b>同一批</b>做。
-    /// 台架里它就是那条<b>必须仍绿</b>的对照臂：本格⛔ 守着它，别把"这一格没红"读成"已经修好了"。</para>
+    /// <para>⚠ 分类标题那句「（N 项已绑定）」在 WI-40-1 <b>故意没进表</b>：它与同一排的分类名贴在一起，而分类名还住在 Core
+    /// （P-175 缺口①）——只翻半排就是半中半英（坑表 #330 那一族）⇒ 那一句与"身份改 ASCII"<b>同一批</b>做，已随批次 WI-40-2 落地
+    /// （<see cref="TheHotkeyCategoriesHandAnIdentityWhileTheirWordsLiveInTheTable"/>）。WI-40-1 台架里它是那条<b>必须仍绿</b>的对照臂。</para>
     /// </summary>
     [Fact]
     public void TheHotkeyRowsCountByTheFlagNotByTheDisplayedWords()
@@ -1463,6 +1463,57 @@ public sealed class I18nWiringGateTests
         Assert.Contains("RecordingAlert = Locale.Fmt(\"hotkey.record.hookRetry\", why);",
             MethodBody(rows, "private void BeginRecording(string action, Button btn, HotkeyRow row)"), StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// 快捷键那一栏的<b>分组身份⛔ 是给人看的那句话，而那句话只许住在表里</b>（批次 WI-40-2，P-175 缺口①）。
+    /// <para>从前 <c>HotkeyActions.CategoryOf</c> 直接返回中文串，UI 拿同一颗串三用：字典的键、与 <c>CategoryOrder</c> 配对的渲染序、
+    /// 以及 Expander 标题（坑表 #353）。同五个词还在 <c>BuildCategoryOrder</c> 里<b>各写第二遍</b>，两份逐字相同的清单就是两份会各自漂移的实现。
+    /// 组件那一族更阴：它交的是 <c>KindTitle</c>——那颗串里既有<b>图标字形</b>（⛔ 语言内容）又有<b>已按当下语言取过词</b>的名字，
+    /// 拿它当身份＝换语言那一刻这一组自己搬家；名字的真源本是注册表那颗 <c>KindTitleKey</c>（托盘与组件窗都读它）。</para>
+    /// <para>⚠ 那颗"每颗动作常量都得有人接 handler"的证人按反射扫 <c>HotkeyActions</c> 的公开静态字符串字段，
+    /// 所以身份刻意做成<b>嵌套类</b> <c>Category</c> 而不是六个 <c>public const string</c>——
+    /// 混进去的后果不是误报，是有人为了让它绿去<b>放宽那把尺</b>。</para>
+    /// </summary>
+    [Fact]
+    public void TheHotkeyCategoriesHandAnIdentityWhileTheirWordsLiveInTheTable()
+    {
+        var core = Code(ReadRepoFile("src/StarMark.Core/Hotkeys/HotkeyActions.cs"));
+        var rows = Code(ReadRepoFile("src/StarMark.UI/Views/SettingsPage.Hotkeys.cs"));
+        var cjk = new Regex(@"[\u4e00-\u9fff]");
+
+        // ① 身份的三个出口⛔ 一个字都不许带（带一个就还是"身份＝话"）
+        foreach (var anchor in new[] { "public static string CategoryOf(string action", "private static List<string> BuildCategoryOrder()" })
+        {
+            var body = MethodBody(core, anchor);
+            Assert.True(body.Length > 0, anchor + "：读不到方法体，这一格就成了空判");
+            Assert.Equal(Array.Empty<string>(), WordsIn(body, cjk));
+        }
+        // ①b 身份住在嵌套类里：拉平成 <c>HotkeyActions</c> 上的 <c>public const string</c> 会让那颗反射证人
+        //    去要求"给一个分组名注册热键"（它按"公开静态字符串字段＝动作"扫），所以这一条也钉形状
+        Assert.Contains("public static class Category", core, StringComparison.Ordinal);
+        // ② 词住在表里：六颗身份各自映射到一颗<b>写字面</b>的键（⛔ 内插——坑表 #349）
+        var titleKey = MethodBody(core, "public static string CategoryTitleKey(string category)");
+        foreach (var key in new[] { "hotkey.cat.main", "hotkey.cat.widgets", "hotkey.cat.screen",
+                                     "hotkey.cat.canvas", "hotkey.cat.layout", "hotkey.cat.other" })
+            Assert.Contains("\"" + key + "\"", titleKey, StringComparison.Ordinal);
+        Assert.DoesNotContain("$\"hotkey.cat.", titleKey, StringComparison.Ordinal);
+        // 组件那一族交回注册表那颗键，⛔ 在这一栏另起一份名字
+        Assert.Contains("WidgetStorage.KindTitleKey(kind)", titleKey, StringComparison.Ordinal);
+        Assert.DoesNotContain("KindTitle(", core, StringComparison.Ordinal);
+
+        // ③ UI 那一排：标题与计数都挂键（这颗 Expander 建一次就常驻，写成品串＝把语言钉在建那一刻）
+        var header = MethodBody(rows, "private Expander BuildCategoryExpander(string category, IList<HotkeyRow> rows)");
+        Assert.Contains("LocText.SetKey(title, HotkeyActions.CategoryTitleKey(category))", header, StringComparison.Ordinal);
+        Assert.Contains("LocText.SetKey(boundCount, \"hotkey.cat.boundCount\", count)", header, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text = category", header, StringComparison.Ordinal);
+        Assert.DoesNotContain("项已绑定", header, StringComparison.Ordinal);
+    }
+
+    private static string[] WordsIn(string code, Regex cjk) =>
+        Regex.Matches(code, @"""(?:[^""\\\n]|\\.)*""").Cast<Match>()
+            .Select(m => m.Value).Where(v => cjk.IsMatch(v)).ToArray();
+
+    private static string MatchCjk(string s, Regex cjk) => string.Empty;
 
     /// <summary>
     /// <b>组件窗标题那一排只许画一颗图标，且换语言要跟着走</b>（批次 WI-36，用户真机报「所有组件再次出现两个图标」）。

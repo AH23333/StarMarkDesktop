@@ -704,6 +704,17 @@ public static class UiStrings
         new Entry("hotkey.conflict.shares", "⚠ 与其它动作共用该组合：{0}", "⚠ Shares this combination with other actions: {0}", "⚠ この組み合わせは他の動作と共用しています：{0}"),
         new Entry("hotkey.conflict.join", "、", ", ", "、"),
         new Entry("hotkey.record.hookRetry", "{0}——因此收不到你按下的键。再点一次这个按钮即可重试。", "{0} — so the keys you press won't reach the recorder. Click this button again to try once more.", "{0}——そのため押したキーが届きません。このボタンをもう一度クリックすれば再試行できます。"),
+        // ===== 快捷键那一栏的分组标题（批次 WI-40-2，P-175 缺口①）=====
+        // 从前这几颗词由 Core 现拼（`CategoryOf` 直接返回中文串），而同一颗串又被当**分组身份**用
+        // ——换语言那一刻同一批动作会跑到另一个组名底下（坑表 #353）。身份从此是 ASCII，词只住在这里。
+        // ⚠ 组件那一族的分组标题⛔ 在这里另起键：名字的唯一真源是注册表那颗（`widget.kind.*`，托盘与组件窗都读它）。
+        new Entry("hotkey.cat.main", "主界面", "Main window", "メイン画面"),
+        new Entry("hotkey.cat.widgets", "组件总控", "All widgets", "ウィジェット一括"),
+        new Entry("hotkey.cat.screen", "截图 / 贴图 / 识字", "Screenshot / pin / OCR", "スクリーンショット／貼り付け／文字起こし"),
+        new Entry("hotkey.cat.canvas", "屏幕画布", "Screen canvas", "画面キャンバス"),
+        new Entry("hotkey.cat.layout", "布局方案", "Layouts", "レイアウト"),
+        new Entry("hotkey.cat.other", "其它", "Other", "その他"),
+        new Entry("hotkey.cat.boundCount", "（{0} 项已绑定）", "({0} bound)", "（{0} 件バインド済み）"),
         new Entry("hotkey.gate.captureDisabled", "要先在 设置 → 拓展功能 里打开「截屏（截图 / 贴图 / 识字）」", "First turn on Screenshot (capture / pin / OCR) in Settings → Extensions", "先に設定 → 拡張機能 で「スクリーンショット（キャプチャ／貼り付け／文字起こし）」をオンにしてください"),
         new Entry("hotkey.gate.captureBusy", "已经有一次截图在场，先把它结束（Esc 取消）再截下一张", "A screenshot session is already running — finish it first (Esc to cancel) before starting another", "すでにスクリーンショットが実行中です。先に終了して（Esc でキャンセル）から次を撮ってください"),
         new Entry("hotkey.gate.canvasBusySheet", "截图进行中，这条快捷键要等截图结束才归画布", "A screenshot is in progress — this hotkey goes back to the canvas once it ends", "スクリーンショットが進行中です。このショートカットは終了後にキャンバスに戻ります"),

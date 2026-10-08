@@ -145,11 +145,11 @@ public sealed class PinGeometryTests
         };
         foreach (var action in screen)
         {
-            Assert.Equal("截图 / 贴图 / 识字", HotkeyActions.CategoryOf(action));
+            Assert.Equal(HotkeyActions.Category.Screen, HotkeyActions.CategoryOf(action));
             Assert.Contains(action, HotkeyActions.All());
         }
-        Assert.Contains("截图 / 贴图 / 识字", HotkeyActions.CategoryOrder);
-        // 每个动作都要有自己的中文名：设置页逐行渲染，漏一个就显示成英文 id
+        Assert.Contains(HotkeyActions.Category.Screen, HotkeyActions.CategoryOrder);
+        // 每个动作都要有自己的名字（按键取词，⛔ 代码里那份中文）：设置页逐行渲染，漏一个就显示成英文 id
         foreach (var action in screen)
         {
             var name = HotkeyActions.DisplayName(action);

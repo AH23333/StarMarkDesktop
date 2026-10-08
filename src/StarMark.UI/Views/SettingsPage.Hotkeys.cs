@@ -102,21 +102,25 @@ public sealed partial class SettingsPage
 
         var count = rows.Count(r => r.Bound);
         var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
-        header.Children.Add(new TextBlock
+        // 标题与计数都挂键：这颗 Expander 的头部建一次就常驻，写成品串等于把语言钉在建那一刻
+        // （他那条"要重进才生效"的同一族，只是宿主从 XAML 换成了 C#）。计数带读数 ⇒ 实参交给信箱。
+        var title = new TextBlock
         {
-            Text = category,
             FontSize = 14,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Foreground = Brush("TextFillColorPrimaryBrush", Microsoft.UI.Colors.Black),
-        });
-        header.Children.Add(new TextBlock
+        };
+        LocText.SetKey(title, HotkeyActions.CategoryTitleKey(category));
+        header.Children.Add(title);
+        var boundCount = new TextBlock
         {
-            Text = $"（{count} 项已绑定）",
             FontSize = 11,
             Opacity = 0.7,
             Foreground = Brush("TextFillColorSecondaryBrush", Microsoft.UI.Colors.Gray),
             VerticalAlignment = VerticalAlignment.Center,
-        });
+        };
+        LocText.SetKey(boundCount, "hotkey.cat.boundCount", count);
+        header.Children.Add(boundCount);
 
         return new Expander
         {

@@ -140,28 +140,77 @@ public static class HotkeyActions
     public static string? LayoutIdOf(string action)
         => IsLayoutAction(action) ? action[LayoutPrefix.Length..] : null;
 
-    /// <summary>动作所属的分类（用于设置页按分类折叠成多级菜单，消除扁平长列表的重复感）。</summary>
+    /// <summary>
+    /// 动作所属的分类<b>身份</b>（设置页按分类折叠成多级菜单，消除扁平长列表的重复感）。
+    /// <para>⚠ 这里交的是 ASCII 身份，<b>不是</b>说给人听的那句话：UI 把返回值同时当分组的字典键与渲染顺序用
+    /// （<c>SettingsPage.Hotkeys.cs</c> 里 <c>Dictionary&lt;string, List&lt;HotkeyRow&gt;&gt;</c> 的键），
+    /// 一句"换语言"就会让同一批动作跑到另一个组名底下。那句话由 <see cref="CategoryTitleKey"/> 交键，词只住在表里（坑表 #353）。</para>
+    /// <para>组件那一族从前返回 <c>WidgetStorage.KindTitle</c>——那颗串里既有图标字形又有<b>已按当下语言取过词</b>的名字，
+    /// 所以它是同一个缺陷的第二张脸（字形⛔ 是语言内容，名字却是）。</para>
+    /// </summary>
     public static string CategoryOf(string action, IReadOnlyList<WidgetLayout>? layouts = null)
     {
-        if (action is MainToggle or MainShow or MainHide) return "主界面";
-        if (action is WidgetsToggleAll or WidgetsShowAll or WidgetsHideAll or WidgetsToggleTopmostAll) return "组件总控";
-        if (IsScreenAction(action)) return "截图 / 贴图 / 识字";
-        if (IsCanvasAction(action)) return "屏幕画布";
-        if (IsLayoutAction(action)) return "布局方案";
+        if (action is MainToggle or MainShow or MainHide) return Category.Main;
+        if (action is WidgetsToggleAll or WidgetsShowAll or WidgetsHideAll or WidgetsToggleTopmostAll) return Category.Widgets;
+        if (IsScreenAction(action)) return Category.Screen;
+        if (IsCanvasAction(action)) return Category.Canvas;
+        if (IsLayoutAction(action)) return Category.Layout;
         foreach (var k in WidgetStorage.AllKinds)
             if (action == WidgetCreate(k) || action == WidgetShow(k) || action == WidgetHide(k) || action == WidgetToggle(k))
-                return WidgetStorage.KindTitle(k);
-        return "其它";
+                return Category.Of(k);
+        return Category.Other;
     }
 
-    /// <summary>分类的固定展示顺序（主界面 → 组件总控 → 截图 / 贴图 → 各组件 → 布局方案）。</summary>
+    /// <summary>
+    /// 分组的<b>身份</b>（不是给人看的那句话）。
+    /// <para>⚠ 刻意做成嵌套类而不是 <c>HotkeyActions</c> 上的 <c>public const string</c>：那颗"每一颗动作常量都得有人接 handler"
+    /// 的证人是按反射扫 <c>HotkeyActions</c> 的公开静态字符串字段的（<c>CanvasWiringGateTests</c>），
+    /// 把非动作的身份混进那一族＝让闸门去要求"给一个分组名注册热键"，而绕过它的唯一办法是松那把尺。</para>
+    /// </summary>
+    public static class Category
+    {
+        public const string Main = "main";
+        public const string Widgets = "widgets";
+        public const string Screen = "screen";
+        public const string Canvas = "canvas";
+        public const string Layout = "layout";
+        public const string Other = "other";
+        public const string WidgetPrefix = "widget:";
+
+        /// <summary>某一类组件自成一组的身份。</summary>
+        public static string Of(WidgetKind kind) => WidgetPrefix + kind;
+    }
+
+    /// <summary>
+    /// 那一组的标题取<b>哪颗键</b>：六颗固定的⛔ 现拼（<c>$"hotkey.cat.{id}"</c> 对死键闸门隐身，坑表 #349），
+    /// 组件那一族交回注册表那颗 <c>KindTitleKey</c>（名字的唯一真源，托盘与组件窗都读它）⇒ ⛔ 在这一栏再造第二个名字出处。
+    /// </summary>
+    public static string CategoryTitleKey(string category)
+    {
+        switch (category)
+        {
+            case Category.Main: return "hotkey.cat.main";
+            case Category.Widgets: return "hotkey.cat.widgets";
+            case Category.Screen: return "hotkey.cat.screen";
+            case Category.Canvas: return "hotkey.cat.canvas";
+            case Category.Layout: return "hotkey.cat.layout";
+            case Category.Other: return "hotkey.cat.other";
+            default:
+                return category.StartsWith(Category.WidgetPrefix, StringComparison.Ordinal)
+                       && Enum.TryParse(category[Category.WidgetPrefix.Length..], out WidgetKind kind)
+                    ? WidgetStorage.KindTitleKey(kind)
+                    : "hotkey.cat.other";   // 认不得的身份：露出"其它"那颗，⛔ 这里替它编一句
+        }
+    }
+
+    /// <summary>分类的固定展示顺序（主界面 → 组件总控 → 截图 / 贴图 → 各组件 → 布局方案）。交的是<b>身份</b>。</summary>
     public static IReadOnlyList<string> CategoryOrder { get; } = BuildCategoryOrder();
 
     private static List<string> BuildCategoryOrder()
     {
-        var list = new List<string> { "主界面", "组件总控", "截图 / 贴图 / 识字", "屏幕画布" };
-        foreach (var k in WidgetStorage.AllKinds) list.Add(WidgetStorage.KindTitle(k));
-        list.Add("布局方案");
+        var list = new List<string> { Category.Main, Category.Widgets, Category.Screen, Category.Canvas };
+        foreach (var k in WidgetStorage.AllKinds) list.Add(Category.Of(k));
+        list.Add(Category.Layout);
         return list;
     }
 

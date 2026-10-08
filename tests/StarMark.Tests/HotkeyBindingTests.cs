@@ -242,13 +242,17 @@ public sealed class HotkeyBindingTests
 
         foreach (var kind in WidgetStorage.AllKinds)
         {
-            var title = WidgetStorage.KindTitle(kind);
+            var category = HotkeyActions.Category.Of(kind);
             Assert.Contains(HotkeyActions.WidgetToggle(kind), all);
             Assert.Contains(HotkeyActions.WidgetCreate(kind), all);
             Assert.Contains(HotkeyActions.WidgetShow(kind), all);
             Assert.Contains(HotkeyActions.WidgetHide(kind), all);
-            Assert.Equal(title, HotkeyActions.CategoryOf(HotkeyActions.WidgetToggle(kind)));
-            Assert.Contains(title, order);
+            // 批次 WI-40-2：分组身份是 `widget:<kind>`，⛔ 那颗带图标又已按当下语言取过词的成品串
+            // （那颗串当键用＝换语言那一刻这一组自己搬家；图标字形更是⛔ 语言内容）
+            Assert.Equal(category, HotkeyActions.CategoryOf(HotkeyActions.WidgetToggle(kind)));
+            Assert.Contains(category, order);
+            // 名字的唯一真源＝注册表那颗键（托盘与组件窗都读它），这一栏⛔ 另起一份
+            Assert.Equal(WidgetStorage.KindTitleKey(kind), HotkeyActions.CategoryTitleKey(category));
         }
     }
 
@@ -270,10 +274,12 @@ public sealed class HotkeyBindingTests
         Assert.Contains(HotkeyActions.WidgetsToggleTopmostAll, all);
         foreach (var action in all)
         {
-            Assert.NotEqual("其它", HotkeyActions.CategoryOf(action, layouts));
+            Assert.NotEqual(HotkeyActions.Category.Other, HotkeyActions.CategoryOf(action, layouts));
             Assert.NotEqual(action, HotkeyActions.DisplayName(action, layouts));   // 展示名不许退回裸 id
         }
-        Assert.Equal("组件总控", HotkeyActions.CategoryOf(HotkeyActions.WidgetsToggleTopmostAll));
+        Assert.Equal(HotkeyActions.Category.Widgets, HotkeyActions.CategoryOf(HotkeyActions.WidgetsToggleTopmostAll));
+        // 身份之外还要钉一次"那句话说的是哪颗键"：漏了这颗映射，设置页那一组会露出 ⟨键⟩ 而不是空或英文 id
+        Assert.Equal("hotkey.cat.widgets", HotkeyActions.CategoryTitleKey(HotkeyActions.Category.Widgets));
     }
 
     /// <summary>布局被删掉后它的动作还在磁盘上：展示名要说明"已删除"，而不是回显裸 id 或空串。</summary>

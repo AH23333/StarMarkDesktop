@@ -519,8 +519,10 @@ public sealed class CanvasWiringGateTests
     public void CanvasActionIsADocumentedHotkeyWithARealDefault()
     {
         Assert.Contains(HotkeyActions.CanvasToggle, HotkeyActions.All());
-        Assert.Equal("屏幕画布", HotkeyActions.CategoryOf(HotkeyActions.CanvasToggle));
-        Assert.Contains("屏幕画布", HotkeyActions.CategoryOrder);
+        // 批次 WI-40-2：分组交的是 ASCII <b>身份</b>，那句话说的是 `hotkey.cat.canvas`（钉键＝钉"身份与话已分家"）
+        Assert.Equal(HotkeyActions.Category.Canvas, HotkeyActions.CategoryOf(HotkeyActions.CanvasToggle));
+        Assert.Contains(HotkeyActions.Category.Canvas, HotkeyActions.CategoryOrder);
+        Assert.Equal("hotkey.cat.canvas", HotkeyActions.CategoryTitleKey(HotkeyActions.Category.Canvas));
         Assert.NotEqual(HotkeyActions.CanvasToggle, HotkeyActions.DisplayName(HotkeyActions.CanvasToggle));
         var gesture = Assert.Contains(HotkeyActions.CanvasToggle, HotkeyBindings.Defaults());
         Assert.False(gesture.IsEmpty);
@@ -1412,7 +1414,7 @@ public sealed class CanvasWiringGateTests
         foreach (var (action, vk) in expected)
         {
             Assert.True(HotkeyActions.IsCanvasAction(action), $"「{action}」不在 canvas. 前缀里——分类会漏掉它");
-            Assert.Equal("屏幕画布", HotkeyActions.CategoryOf(action));
+            Assert.Equal(HotkeyActions.Category.Canvas, HotkeyActions.CategoryOf(action));
             var gesture = Assert.Contains(action, defaults);
             Assert.Equal(vk, gesture.VirtualKey);
             Assert.Equal(HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.NoRepeat, gesture.Modifiers);
