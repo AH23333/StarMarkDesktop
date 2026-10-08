@@ -6,6 +6,7 @@ using System.Linq;
 using Microsoft.UI.Dispatching;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Canvas;
 using StarMark.Core.Capture;
 using StarMark.Core.Hotkeys;
@@ -36,7 +37,7 @@ public static partial class CanvasService
         var shot = Compose();
         if (!shot.Ok)
         {
-            Report("贴图失败", shot.Reason);
+            Report(Locale.T("canvas.shot.pinFailedTitle"), shot.Reason);
             return;
         }
         if (shot.Ink.IsEmpty)
@@ -44,8 +45,8 @@ public static partial class CanvasService
             // 一块墨都没有就没有"哪一块"可贴。这里不能退回"那就贴整屏"——那正是本批修掉的病；
             // 而"按了没反应"也不算交代，所以把另一条出口点名给用户，并说他**当前实际绑着的那颗键**
             // （写死键名就是把人支使去按一颗可能没用的键）。
-            Report("贴图失败", "板上还没有笔迹可贴——「贴图」贴的就是笔迹那一块；" +
-                $"要截整块屏幕请用截图（{BindingText(HotkeyActions.ScreenCapture)}），框选后再贴出");
+            Report(Locale.T("canvas.shot.pinFailedTitle"),
+                Locale.Fmt("canvas.shot.noInk", BindingText(HotkeyActions.ScreenCapture)));
             return;
         }
         // 边距是 DIP，必须按这块屏自己的缩放换算：写死像素数，150% 屏上的边就缩水一半（CanvasBackdropMath 同一条纪律）
@@ -64,10 +65,11 @@ public static partial class CanvasService
         var shot = Compose();
         if (!shot.Ok)
         {
-            Report("复制失败", shot.Reason);
+            Report(Locale.T("canvas.shot.copyFailedTitle"), shot.Reason);
             return;
         }
-        _ = ScreenshotService.CopyPixelsAsync(shot.Pixels, shot.Width, shot.Height, "画布");
+        _ = ScreenshotService.CopyPixelsAsync(shot.Pixels, shot.Width, shot.Height,
+            Locale.T("settings.extend.canvasTitle"));
     }
 
     /// <summary>把"屏幕 + 笔迹"合成一张存成 PNG。<b>整幅交出去</b>（与复制到剪贴板同口径）。</summary>
@@ -76,10 +78,11 @@ public static partial class CanvasService
         var shot = Compose();
         if (!shot.Ok)
         {
-            Report("存图失败", shot.Reason);
+            Report(Locale.T("canvas.shot.saveFailedTitle"), shot.Reason);
             return;
         }
-        _ = ScreenshotService.SavePixelsAsync(shot.Pixels, shot.Width, shot.Height, "画布");
+        _ = ScreenshotService.SavePixelsAsync(shot.Pixels, shot.Width, shot.Height,
+            Locale.T("settings.extend.canvasTitle"));
     }
 
     // ────────── 快照 ──────────
@@ -103,7 +106,7 @@ public static partial class CanvasService
     /// </summary>
     private static Shot Compose()
     {
-        if (Screens.Count == 0) return NoShot("画布没开着");
+        if (Screens.Count == 0) return NoShot(Locale.T("canvas.notice.notRunningTitle"));
         WindowInterop.GetCursorPos(out var cursor);
         var screen = Screens.FirstOrDefault(s => s.Bounds.X <= cursor.X && cursor.X < s.Bounds.Right
             && s.Bounds.Y <= cursor.Y && cursor.Y < s.Bounds.Bottom) ?? Screens[0];
@@ -127,9 +130,9 @@ public static partial class CanvasService
         {
             var captured = ScreenshotService.CaptureWithoutCanvas();
             if (!captured.Ok || captured.Frame is not { } frame)
-                return NoShot(captured.Error ?? "系统没有返回画面");
+                return NoShot(captured.Error ?? Locale.T("canvas.shot.noFrame"));
             if (ScreenshotService.TryCrop(frame, screen.Bounds) is not { } crop)
-                return NoShot("这一块屏在截到的画面外面（显示器可能刚被拔掉）");
+                return NoShot(Locale.T("canvas.shot.screenOutOfFrame"));
             boardWidth = crop.Width;
             boardHeight = crop.Height;
             baseFrame = crop.Pixels;

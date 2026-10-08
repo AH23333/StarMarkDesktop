@@ -98,10 +98,10 @@ public sealed class CanvasSnapshotPinGateTests
         var pin = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Service), "public static void SnapshotToPin()");
 
         Assert.Contains("shot.Ink.IsEmpty", pin);
-        Assert.Contains("板上还没有笔迹可贴", pin);
+        Assert.Contains("canvas.shot.noInk", pin);                                   // 那句"为什么没贴出来"交键（字在表里，P-176）
         Assert.Contains("BindingText(HotkeyActions.ScreenCapture)", pin);     // 报的是当前绑定的键，不是写死的 F1
         Assert.DoesNotContain("（F1）", pin);
-        var report = pin.IndexOf("板上还没有笔迹可贴", System.StringComparison.Ordinal);
+        var report = pin.IndexOf("canvas.shot.noInk", System.StringComparison.Ordinal);
         var crop = pin.IndexOf("CropBgra", System.StringComparison.Ordinal);
         Assert.True(report < crop, "空板必须在裁之前拦：那时 region 是空的，CropBgra 只会交出一张零字节的贴图");
     }

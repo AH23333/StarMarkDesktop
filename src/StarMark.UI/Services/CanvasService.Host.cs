@@ -6,6 +6,7 @@ using System.Linq;
 using Microsoft.UI.Dispatching;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Canvas;
 using StarMark.Core.Capture;
 using StarMark.Core.Hotkeys;
@@ -51,7 +52,8 @@ public static partial class CanvasService
         // 按它要听见这句原因——一条什么都不发生的哑键是最坏的收尾。
         if (!EnabledBySetting)
         {
-            Report("屏幕画布已关闭", "要在 设置 → 拓展功能 的「屏幕画布」里打开；打开后这条快捷键就回来了");
+            Report(Locale.T("canvas.notice.boardClosedTitle"),
+                Locale.Fmt("canvas.notice.boardClosedBody", Locale.T("settings.extend.canvasTitle")));
             return false;
         }
         _busy = true;
@@ -63,7 +65,7 @@ public static partial class CanvasService
             var monitors = WindowInterop.ListMonitors();
             if (monitors.Count == 0)
             {
-                Report("画布打不开", "系统没有报告任何显示器");
+                Report(Locale.T("canvas.notice.openFailedTitle"), Locale.T("canvas.notice.noMonitors"));
                 return false;
             }
             foreach (var monitor in monitors)
@@ -114,7 +116,7 @@ public static partial class CanvasService
             }
             if (Screens.Count == 0)
             {
-                Report("画布打不开", "每一屏的透明层都没能建起来（原因见日志）");
+                Report(Locale.T("canvas.notice.openFailedTitle"), Locale.T("canvas.notice.noLayers"));
                 return false;
             }
 
@@ -123,7 +125,7 @@ public static partial class CanvasService
             if (queue is null)
             {
                 CloseBoardHost();
-                Report("画布打不开", "主窗还不存在（应用还没起完？）");
+                Report(Locale.T("canvas.notice.openFailedTitle"), Locale.T("canvas.notice.noMainWindow"));
                 return false;
             }
             _frame ??= BuildFrameTimer(queue);
@@ -137,7 +139,7 @@ public static partial class CanvasService
         {
             CloseBoardHost();
             StarLog.Error("[Canvas] 开启画布模式失败", ex);
-            Report("画布打不开", ex.Message);
+            Report(Locale.T("canvas.notice.openFailedTitle"), ex.Message);
             return false;
         }
         finally

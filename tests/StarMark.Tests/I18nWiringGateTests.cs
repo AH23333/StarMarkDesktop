@@ -1513,8 +1513,6 @@ public sealed class I18nWiringGateTests
         Regex.Matches(code, @"""(?:[^""\\\n]|\\.)*""").Cast<Match>()
             .Select(m => m.Value).Where(v => cjk.IsMatch(v)).ToArray();
 
-    private static string MatchCjk(string s, Regex cjk) => string.Empty;
-
     /// <summary>
     /// <b>组件窗标题那一排只许画一颗图标，且换语言要跟着走</b>（批次 WI-36，用户真机报「所有组件再次出现两个图标」）。
     /// <para>根因形状：标题栏本来就有一颗 <c>WidgetGlyph</c> 在画图标，而批次 db0306f 把默认标题换成

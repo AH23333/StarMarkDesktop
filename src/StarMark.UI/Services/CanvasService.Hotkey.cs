@@ -44,35 +44,42 @@ public static partial class CanvasService
     public static bool EnabledBySetting
         => (App.Services?.GetService(typeof(SettingsStore)) as SettingsStore)?.LoadCanvasEnabled() ?? true;
 
-    public static void HotkeyClickThrough() => RequireRunning("交出 / 收回鼠标", () => SetClickThrough(!ClickThroughHere));
+    public static void HotkeyClickThrough() => RequireRunning("canvas.act.through", () => SetClickThrough(!ClickThroughHere));
 
-    public static void HotkeyUndo() => RequireRunning("撤销上一笔", Undo);
+    public static void HotkeyUndo() => RequireRunning("canvas.act.undo", Undo);
 
-    public static void HotkeyRedo() => RequireRunning("重做那一笔", Redo);
+    public static void HotkeyRedo() => RequireRunning("canvas.act.redo", Redo);
 
-    public static void HotkeyClear() => RequireRunning("清空笔迹", ClearAll);
+    public static void HotkeyClear() => RequireRunning("canvas.act.clear", ClearAll);
 
-    public static void HotkeySave() => RequireRunning("存为图片", SavePng);
+    public static void HotkeySave() => RequireRunning("canvas.act.save", SavePng);
 
-    public static void HotkeyCopy() => RequireRunning("复制到剪贴板", SnapshotToClipboard);
+    public static void HotkeyCopy() => RequireRunning("canvas.act.copy", SnapshotToClipboard);
 
-    public static void HotkeyPin() => RequireRunning("贴到桌面", SnapshotToPin);
+    public static void HotkeyPin() => RequireRunning("canvas.act.pin", SnapshotToPin);
 
     /// <summary>
     /// 画布内动作的闸门：<b>板子没开着时按这些键要给一句看得见的原因</b>，不能"按了没反应"——
     /// 那在用户眼里与功能坏了是同一件事。两种"没开着"要分开说：功能被关掉时指向快捷键是指错路，
     /// 所以那里说的是"去设置里打开"。
+    /// <para>调用点交的是<b>动作名的那颗键</b>而不是句子：这句要上屏幕，字只能住在表里（P-176）。
+    /// 那里用的是短名（<c>canvas.act.*</c>）而不是快捷键栏那一行的标签（<c>hotkey.act.canvas.*</c>，
+    /// 带「画布 · 」前缀）——前缀是那张<b>平铺清单</b>为区分六个分组而加的脚手架，不是动作的名字，
+    /// 念进这一句就成了「画布 · 撤销上一笔」要先打开屏幕画布。</para>
     /// </summary>
-    private static void RequireRunning(string what, Action run)
+    private static void RequireRunning(string whatKey, Action run)
     {
         if (IsRunning)
         {
             run();
             return;
         }
-        Report("画布没开着", EnabledBySetting
-            ? $"「{what}」要先打开屏幕画布（{BindingText(HotkeyActions.CanvasToggle)}，或托盘菜单「屏幕画布」）"
-            : $"「{what}」要先在 设置 → 拓展功能 里打开「屏幕画布」");
+        var what = Locale.T(whatKey);
+        // 「屏幕画布」与托盘那一项的名字都由调用点把表里的实参递进来（⛔ 抄进句子＝第二个出处，#353 同族）。
+        Report(Locale.T("canvas.notice.notRunningTitle"), EnabledBySetting
+            ? Locale.Fmt("canvas.hotkey.notRunning", what, Locale.T("settings.extend.canvasTitle"),
+                  BindingText(HotkeyActions.CanvasToggle), Locale.T("tray.canvas"))
+            : Locale.Fmt("canvas.hotkey.disabled", what, Locale.T("settings.extend.canvasTitle")));
     }
 
     /// <summary>某动作当前绑定的键位文本（没绑定／读不到设置时回表里那颗 <c>hotkey.unbound</c>，绝不回一个假键位）。</summary>

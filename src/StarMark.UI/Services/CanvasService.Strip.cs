@@ -6,6 +6,7 @@ using System.Linq;
 using Microsoft.UI.Dispatching;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Canvas;
 using StarMark.Core.Capture;
 using StarMark.Core.Hotkeys;
@@ -49,7 +50,8 @@ public static partial class CanvasService
         if (_panel is not null) { HideHotkeyPanel(); return; }
         if (!IsRunning || Screens.Count == 0 || _toolbar is null)
         {
-            Report("画布已经关了", "快捷键面板是画布的一部分，先重新打开屏幕画布");
+            Report(Locale.T("canvas.notice.panelClosedTitle"),
+                Locale.Fmt("canvas.notice.panelIsPartOfCanvas", Locale.T("settings.extend.canvasTitle")));
             return;
         }
         try
@@ -69,7 +71,7 @@ public static partial class CanvasService
         {
             _panel = null;
             StarLog.Error("[Canvas] 快捷键面板没出现（工具条与热键都还在）", ex);
-            Report("快捷键面板没打开", ex.Message);
+            Report(Locale.T("canvas.notice.panelFailedTitle"), ex.Message);
         }
     }
 

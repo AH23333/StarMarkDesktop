@@ -610,7 +610,7 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("foreach (var monitor in monitors)", start);
         Assert.Contains("monitor.Bounds.Width", start);                     // 物理像素，不做 DIP 换算
         Assert.Contains("catch (Exception ex)", start);                     // 某一屏建不起来不牵连别的屏
-        Assert.Contains("每一屏的透明层都没能建起来", start);                // 一块都没成时要回报
+        Assert.Contains("canvas.notice.noLayers", start);                              // 一块都没成时要回报（字在表里，这里只认那颗键）
         // 一块都没成 ⇒ 返回 false，Hub 会把会话态退回原处（不许留下"状态说有板子、屏幕上一块都没有"）
         Assert.Contains("return false;", start);
         var apply = SourceGate.MethodBody(SourceGate.ReadRepoFile(Hub), "private static bool Apply(AnnotationStage from, AnnotationStage to)");
@@ -1457,23 +1457,69 @@ public sealed class CanvasWiringGateTests
         // 要画再自己关穿透）。判据在 Core 的转移表，接线层只递"开板"这一个事件
         Assert.Equal(AnnotationStage.BoardPenetrating,
             AnnotationSessions.Move(AnnotationStage.Idle, SessionEvent.ToggleBoard, null));
-        var require = SourceGate.MethodBody(service, "private static void RequireRunning(string what, Action run)");
-        Assert.Contains("Report(\"画布没开着\"", require);
+        var require = SourceGate.MethodBody(service, "private static void RequireRunning(string whatKey, Action run)");
+        Assert.Contains("Report(Locale.T(\"canvas.notice.notRunningTitle\")", require);
         Assert.Contains("BindingText(HotkeyActions.CanvasToggle)", require);   // 键位取自真实绑定，不写死
+        // 两种"没开着"各说各话：功能开着（只是板子没开）才提快捷键，功能关着时指向快捷键是指错路。
+        Assert.Contains("Locale.Fmt(\"canvas.hotkey.notRunning\"", require);
+        Assert.Contains("Locale.Fmt(\"canvas.hotkey.disabled\"", require);
+        // ⛔ 句子（连"屏幕画布"这个名字）不许再住在代码里：名字由表里那两处实参递进来（P-176／#353 同族）。
+        // 读的是抹掉注释的那一份——注释里提到这个名字正是为了写下这条禁令，不能把它算成违例。
+        var requireCode = SourceGate.Code(require);
+        Assert.DoesNotContain("屏幕画布", requireCode);
+        Assert.DoesNotContain("托盘菜单「", requireCode);
         // 计数不写死：按动作表算。表里除「开关 + 三支笔 + 两块底」那六条之外，每一条都必须走 RequireRunning
         // （那六条的活儿本身就是"把板子开起来/选那支笔/换那块底"，自带回执）。写死数字的下场是加一条动作就红一次——
         // 或者更糟：忘了改，于是一条新动作谁都没接而闸门仍然绿（批次 WD-3 之后加「重做」正是这一次）。
         // 豁免名单按名字钉住：只留一个减数，将来"顺手多减一条"就把这条闸门变成了摆设。
+        // ⚠ 数的是「交键的那一种写法」：<c>RequireRunning("canvas.act.…"</c>。只数 `RequireRunning("` 的话，
+        // 调用点退回交一句中文它照样数得整整齐齐——一颗计数替假话数得漂亮，是计数型判据特有的漏法。
         var opensTheBoardItself = new[]
         {
             HotkeyActions.CanvasToggle, HotkeyActions.CanvasPen, HotkeyActions.CanvasHighlighter,
             HotkeyActions.CanvasEraser, HotkeyActions.CanvasBoard, HotkeyActions.CanvasCurtain,
         };
         Assert.Equal(HotkeyActions.Canvas.Count - opensTheBoardItself.Length,
-            SourceGate.Count(service, "RequireRunning(\""));
+            SourceGate.Count(service, "RequireRunning(\"canvas.act."));
         // 「白板」「幕布」确实走的是"能开就开"的路（事件折给 Hub，由转移表决定落点），不是 RequireRunning
         Assert.Contains("=> AnnotationHub.Raise(SessionEvent.ToggleWhiteboard);", service);
         Assert.Contains("=> AnnotationHub.Raise(SessionEvent.ToggleCurtain);", service);
+    }
+
+    /// <summary>
+    /// 批次 WI-45（P-176）：画布那一路要上屏幕的话<b>全部改由表里取</b>，代码里一处句子都不留。
+    /// <para>这一族与"重贴"那一路（<c>LocText</c>）走法不同，而且是合法的：<c>NoticeCard</c> 是一次性的
+    /// ——贴上十秒自己消失，把它记进重贴名单只会让名单多几条再也贴不出去的空壳。所以取词<b>在调用点当场发生</b>；
+    /// 要点是字⛔ 住在代码里：那种句子在换语言之后永远还说中文，正是"国际化不全"这一族。</para>
+    /// <para><b>②那一段读的是抹掉注释之后的一份</b>：注释里出现这些句子，恰恰是为了把它们写进这条禁令；
+    /// 按原文读会让后人为了过闸门而删掉注释，那条路走通一次，这一族的来龙去脉就没了。</para>
+    /// </summary>
+    [Fact]
+    public void CanvasNoticeSentencesAreAllTakenFromTheTable()
+    {
+        var all = SourceGate.Code(SourceGate.ReadRepoPartials(Service));
+        // ① 每一张失败脸都得有人问：四条"打不开"的出口共用同一颗标题键（少一条＝那条失败从此静默返回）
+        Assert.Equal(4, SourceGate.Count(all, "Locale.T(\"canvas.notice.openFailedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"canvas.notice.boardClosedTitle\")"));
+        Assert.Equal(2, SourceGate.Count(all, "Locale.T(\"canvas.shot.pinFailedTitle\")"));
+        // 合成的三条失败脸各有话说；其中"板子没开着"这一句与那颗标题键是同一个出处（一句面上话，⛔ 两处各写一份）
+        Assert.Equal(2, SourceGate.Count(all, "Locale.T(\"canvas.notice.notRunningTitle\")"));
+        Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"canvas.shot.noFrame\")"));
+        Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"canvas.shot.screenOutOfFrame\")"));
+        // ② 旧句子一概不许回到代码里（现在由表里说）。逐颗点名，⛔ 用"汉字总数下降"那种整体口径——
+        // 那种判据既抓不到"删一颗"，也抓不到新写的一句别的中文。
+        foreach (var dead in new[]
+        {
+            "画布打不开", "系统没有报告任何显示器", "每一屏的透明层都没能建起来", "主窗还不存在（应用还没起完？）",
+            "屏幕画布已关闭", "要先打开屏幕画布", "要先在 设置 → 拓展功能 里打开「屏幕画布」", "画布没开着",
+            "贴图失败", "复制失败", "存图失败", "板上还没有笔迹可贴", "画布已经关了", "快捷键面板没打开",
+            "快捷键面板是画布的一部分", "系统没有返回画面", "这一块屏在截到的画面外面",
+            "交出 / 收回鼠标", "撤销上一笔", "重做那一笔", "清空笔迹", "存为图片", "复制到剪贴板", "贴到桌面",
+        })
+            Assert.DoesNotContain(dead, all);
+        // ③ 功能名与托盘那一项各只有一个出处：句子交位置，名字由调用点把表里那两颗递进来（#353 同族）
+        Assert.Equal(6, SourceGate.Count(all, "Locale.T(\"settings.extend.canvasTitle\")"));
+        Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"tray.canvas\")"));
     }
 
     // ────────── 批次 WD-4：「⌨」快捷键面板 ──────────
@@ -1585,7 +1631,7 @@ public sealed class CanvasWiringGateTests
         var service = SourceGate.ReadRepoPartials(Service);
         var start = SourceGate.MethodBody(service, "public static bool OpenBoardHost()");
         Assert.Contains("if (!EnabledBySetting)", start);
-        Assert.Contains("屏幕画布已关闭", start);
+        Assert.Contains("canvas.notice.boardClosedTitle", start);            // 总开关关着时要报得出原因（字在表里）
         // 两条总开关共用一次过滤（批次 RP 把截屏那条并进来）。旧写法是每条开关各写一句 `list.Where(...)`，
         // 加第二条时就会有人新写一句而漏掉前一句的分支——两处 where 各对一半，症状是"某个开关关了菜单里还有"
         Assert.Contains("(canvasOn || item.Tag != TrayCanvas) && !hiddenCapture.Contains(item.Tag)", main);
@@ -1671,7 +1717,7 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("private static void PollPress(int cursorX, int cursorY)", all); // Pointer
         Assert.Contains("private static void Flush(Screen screen)", all);               // Frame
         Assert.Contains("private static Shot Compose()", all);                          // Snapshot
-        Assert.Contains("private static void RequireRunning(string what, Action run)", all); // Hotkey
+        Assert.Contains("private static void RequireRunning(string whatKey, Action run)", all); // Hotkey
         Assert.Contains("private static void ShowToolbar()", all);                      // Strip
     }
 
