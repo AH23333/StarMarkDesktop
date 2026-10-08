@@ -42,6 +42,19 @@ public sealed class OcrReadTests
         Assert.Equal("按 ja，已换语言", Read("ja", 1, swapped: true).How);
     }
 
+    /// <summary>
+    /// 分隔符由拼接处放一次，⛔ 写在每颗片段开头（批次 WI-46b 把它交进 `ocr.how.join` 时才改的这个形状）。
+    /// <para>旧写法下"引擎没报语言、又放大了"那一格会输出「，放大 2×」——屏幕上开头多一颗逗号，
+    /// 而那一格以前没有任何测试，所以它一直活着。</para>
+    /// </summary>
+    [Fact]
+    public void SeparatorsBelongToTheJoin_NotToTheFragments()
+    {
+        Assert.Equal("放大 2×", Read(lang: null, upscale: 2).How);
+        Assert.Equal("（放大 2×）", Read(lang: null, upscale: 2).HowParenthesized);
+        Assert.Equal("已换语言", Read(lang: null, upscale: 1, swapped: true).How);
+    }
+
     [Fact]
     public void FailKeepsTheReasonAndTheLanguageSeparate()
     {

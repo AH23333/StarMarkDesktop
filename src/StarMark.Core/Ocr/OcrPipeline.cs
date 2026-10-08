@@ -1,4 +1,5 @@
 #nullable enable
+using StarMark.Abstractions.I18n;
 using System;
 using System.Threading.Tasks;
 using StarMark.Integrations.Ocr;
@@ -57,7 +58,7 @@ public static class OcrPipeline
         OcrImagePrep.StretchContrast(work, workWidth, workHeight);
 
         var first = await ScreenOcrReader.RecognizeAsync(work, workWidth, workHeight);
-        if (!first.Ok) return OcrRead.Fail(first.Error ?? "识别引擎没有给出原因", first.EngineLanguage);
+        if (!first.Ok) return OcrRead.Fail(first.Error ?? Locale.T("ocr.card.noReason"), first.EngineLanguage);
 
         var language = first.EngineLanguage;
         var text = OcrText.Assemble(first.Lines);

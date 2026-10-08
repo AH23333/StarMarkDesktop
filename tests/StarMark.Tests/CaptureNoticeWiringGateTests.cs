@@ -28,6 +28,10 @@ public sealed class CaptureNoticeWiringGateTests
     private const string Screenshot = "src/StarMark.UI/Services/ScreenshotService.cs";
     private const string Overlay = "src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs";
     private const string Geometry = "src/StarMark.Core/Capture/CaptureGeometry.cs";
+    private const string Ocr = "src/StarMark.UI/Services/OcrService.cs";
+    private const string OcrReadFile = "src/StarMark.Core/Ocr/OcrRead.cs";
+    private const string OcrTextFile = "src/StarMark.Core/Ocr/OcrText.cs";
+    private const string OcrPipelineFile = "src/StarMark.Core/Ocr/OcrPipeline.cs";
     private const string SnapshotPartial = "src/StarMark.UI/Services/CanvasService.Snapshot.cs";
     private const string HostPartial = "src/StarMark.UI/Services/CanvasService.Host.cs";
 
@@ -129,5 +133,54 @@ public sealed class CaptureNoticeWiringGateTests
             "Locale.T(\"capture.grab.noMonitors\")"));
         Assert.False(StarMark.Abstractions.I18n.UiStrings.TryGet("canvas.shot.noFrame", out _));
         Assert.False(StarMark.Abstractions.I18n.UiStrings.TryGet("canvas.notice.noMonitors", out _));
+    }
+
+    /// <summary>
+    /// 识字那一路（批次 WI-46b，P-177 第二刀）：卡上的标题、正文与那行"怎么认的"全部交表。
+    /// <para>⚠ `ocr.card.noReason` 在两处被问（Core 的 `Fail` 与 UI 的 `read.Error ?? …`）——同一颗键⛔ 两个出处，
+    /// 而那颗 `??` 只是替 `string?` 的类型系统上的保险，⛔ 另立一行同名的话。</para>
+    /// <para>⚠ `ocr.how.*` 这一族的存在理由：从前片段各自开头带一颗全角逗号，"语言没报＋放大了"那一格
+    /// 屏幕上会露出「，放大 2×」——分隔符现在由拼接处放一次（`OcrReadTests` 里有那一格的读数）。</para>
+    /// </summary>
+    [Fact]
+    public void OcrCardSentencesAndTheHowNoteAreTakenFromTheTable()
+    {
+        var svc = SourceGate.Code(SourceGate.ReadRepoFile(Ocr));
+        var read = SourceGate.Code(SourceGate.ReadRepoFile(OcrReadFile));
+        var text = SourceGate.Code(SourceGate.ReadRepoFile(OcrTextFile));
+        var pipe = SourceGate.Code(SourceGate.ReadRepoFile(OcrPipelineFile));
+        var overlay = SourceGate.Code(SourceGate.ReadRepoPartials(Overlay));
+
+        // ① 三张失败脸各有话说（引擎坏了／认出个空／写不进剪贴板），成功那一张也要报数
+        Assert.Equal(2, SourceGate.Count(svc, "Locale.T(\"ocr.card.failedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(svc, "Locale.T(\"ocr.card.emptyTitle\")"));
+        Assert.Equal(1, SourceGate.Count(svc, "Locale.T(\"ocr.card.copiedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(svc, "Locale.Fmt(\"ocr.card.copyFailedBody\""));
+        Assert.Equal(1, SourceGate.Count(svc, "Locale.Fmt(\"ocr.card.copiedBody\""));
+        // ② 抬头那颗必传（⛔ 默认值），两态各报自己的名字；同一颗"复制失败"与截图那一路共用一个出处
+        Assert.Equal(2, SourceGate.Count(svc, "Locale.T(\"ocr.card.category\")"));
+        Assert.DoesNotContain("string category =", svc);
+        Assert.Equal(1, SourceGate.Count(svc, "Locale.T(\"capture.card.copyFailedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(overlay, "Locale.T(\"capture.card.categoryOcr\")"));
+        Assert.Equal(1, SourceGate.Count(overlay, "Locale.T(\"pin.card.categoryOcr\")"));
+        // ③ "怎么认的"那三片＋分隔符＋括号：Core 一份，UI⛔ 再写第二份括号
+        Assert.Equal(1, SourceGate.Count(read, "Locale.T(\"ocr.how.join\")"));
+        Assert.Equal(1, SourceGate.Count(read, "Locale.Fmt(\"ocr.how.byLanguage\""));
+        Assert.Equal(1, SourceGate.Count(read, "Locale.Fmt(\"ocr.how.upscale\""));
+        Assert.Equal(1, SourceGate.Count(read, "Locale.T(\"ocr.how.swapped\")"));
+        Assert.Equal(1, SourceGate.Count(read, "Locale.Fmt(\"ocr.how.paren\""));
+        Assert.DoesNotContain("private static string Paren(", svc);
+        // ④ 旧句子一概不许回来（带引号的短词同 WI-46a 那条口径：裸词会撞上日志措辞）
+        foreach (var dead in new[]
+        {
+            "没能识别", "没认出文字", "已复制文字", "识别引擎没有给出原因", "但没能写进剪贴板",
+            "字但", "\"识字\"", "这块画面里没有认出文字", "按 {Language}", "已换语言",
+        })
+        {
+            Assert.DoesNotContain(dead, svc);
+            Assert.DoesNotContain(dead, text);
+            Assert.DoesNotContain(dead, pipe);
+        }
+        Assert.DoesNotContain("\"识字\"", read);
     }
 }

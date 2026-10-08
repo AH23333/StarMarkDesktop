@@ -811,6 +811,32 @@ public static class UiStrings
         // `_pinned ? 贴图 : 截图` 是一整颗三元表达式，只交一半＝贴出去的那张卡半英半中；
         // 贴图那一族自己的句子归下一刀，但**必须复用这一行**，⛔ 另起同名键。
         new Entry("pin.card.category", "贴图", "Pin", "貼り付け"),
+        // ===== 识字那一路的提示卡句（批次 WI-46b，P-177 第二刀）=====
+        // 与截图那一批同一口径：瞬时卡 ⇒ 取词在调用点当场发生，⛔ 挂 `LocText`。
+        // ⚠ `ocr.how.*` 那五颗是**一条读数被拆成三片**：从前 `OcrRead.How` 把"，"写死在每个片段开头，
+        //   于是"引擎没报语言、又放大了"那一格会输出开头带一颗全角逗号的句子（屏幕上就是「，放大 2×」）。
+        //   现在片段自己⛔ 带分隔符，分隔符单独一颗键（先例＝`hotkey.conflict.join`，也⛔ 并入片段——并入就改掉了各语言的用词）。
+        new Entry("ocr.card.category", "识字", "OCR", "文字認識"),
+        new Entry("capture.card.categoryOcr", "截图识字", "Capture OCR", "スクリーンショット文字認識"),
+        new Entry("pin.card.categoryOcr", "贴图识字", "Pin OCR", "貼り付け文字認識"),
+        new Entry("ocr.card.failedTitle", "没能识别", "Couldn't read it", "認識できませんでした"),
+        new Entry("ocr.card.noReason", "识别引擎没有给出原因", "the OCR engine gave no reason", "認識エンジンが理由を返しませんでした"),
+        new Entry("ocr.card.emptyTitle", "没认出文字", "No text found", "文字が見つかりませんでした"),
+        new Entry("ocr.card.copyFailedBody", "认出 {0} 字但没能写进剪贴板：{1}",
+                  "Recognised {0} characters but couldn't put them on the clipboard: {1}",
+                  "{0} 文字認識しましたが、クリップボードに書き込めませんでした：{1}"),
+        new Entry("ocr.card.copiedTitle", "已复制文字", "Text copied", "テキストをコピーしました"),
+        new Entry("ocr.card.copiedBody", "{0} 字{1}：", "{0} characters{1}: ", "{0} 文字{1}："),
+        new Entry("ocr.text.noText", "这块画面里没有认出文字（图形、手写或太小的字都不在这套引擎的能力里）",
+                  "This image has no text the engine can read (graphics, handwriting and very small text are all outside what it does)",
+                  "この画像には読める文字がありません（図形・手書き・小さすぎる文字はこのエンジンの能力外です）"),
+        new Entry("ocr.how.byLanguage", "按 {0}", "using {0}", "{0} で認識"),
+        new Entry("ocr.how.upscale", "放大 {0}×", "upscaled {0}×", "{0} 倍に拡大"),
+        new Entry("ocr.how.swapped", "已换语言", "language retried", "言語を切り替え"),
+        new Entry("ocr.how.join", "，", ", ", "、"),
+        // 括号形状只许一个主人：Core 的 `HowParenthesized` 与 UI 里那份 `Paren` 从前各写一份（同一动作两份实现），
+        // 现在只有 Core 那一份，词也从表里取——⛔ en 那两列用全角括号（那不是我写的那门字的排版）。
+        new Entry("ocr.how.paren", "（{0}）", " ({0})", "（{0}）"),
         new Entry("hotkey.gate.captureDisabled", "要先在 设置 → 拓展功能 里打开「截屏（截图 / 贴图 / 识字）」", "First turn on Screenshot (capture / pin / OCR) in Settings → Extensions", "先に設定 → 拡張機能 で「スクリーンショット（キャプチャ／貼り付け／文字起こし）」をオンにしてください"),
         new Entry("hotkey.gate.captureBusy", "已经有一次截图在场，先把它结束（Esc 取消）再截下一张", "A screenshot session is already running — finish it first (Esc to cancel) before starting another", "すでにスクリーンショットが実行中です。先に終了して（Esc でキャンセル）から次を撮ってください"),
         new Entry("hotkey.gate.canvasBusySheet", "截图进行中，这条快捷键要等截图结束才归画布", "A screenshot is in progress — this hotkey goes back to the canvas once it ends", "スクリーンショットが進行中です。このショートカットは終了後にキャンバスに戻ります"),

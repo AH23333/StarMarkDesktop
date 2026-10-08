@@ -87,7 +87,7 @@ public sealed partial class CaptureOverlayWindow
                 break;
             case CommitAction.Ocr:
                 _ = OcrService.CopyTextFromPixelsAsync(final.Pixels, final.Width, final.Height,
-                    _pinned ? "贴图识字" : "截图识字");
+                    _pinned ? Locale.T("pin.card.categoryOcr") : Locale.T("capture.card.categoryOcr"));
                 break;
             default: ScreenshotService.PinPixels(final.Pixels, final.Width, final.Height, selection); break;
         }

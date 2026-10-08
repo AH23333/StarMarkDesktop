@@ -1,4 +1,5 @@
 #nullable enable
+using StarMark.Abstractions.I18n;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -98,7 +99,7 @@ public static class OcrText
 
     /// <summary>识别结果能不能用。返回 null＝可以；否则是给界面直接显示的原因。</summary>
     public static string? ResultProblem(string assembled)
-        => assembled.Length == 0 ? "这块画面里没有认出文字（图形、手写或太小的字都不在这套引擎的能力里）" : null;
+        => assembled.Length == 0 ? Locale.T("ocr.text.noText") : null;
 
     /// <summary>
     /// 黏字符：中日韩文字（含假名/韩文音节）与全角标点/全角形式。
