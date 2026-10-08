@@ -6,6 +6,7 @@ using System.Linq;
 using Microsoft.UI.Xaml;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;   // 卡片上那几句都由表里取（批次 WI-46a，P-177 第一刀）
 using StarMark.Core.Capture;
 using StarMark.Core.Hotkeys;   // 发起一次框选的闸门在 Core（CaptureGate），这里只按它的结论分派
 using StarMark.Integrations.Capture;
@@ -75,7 +76,7 @@ public static class ScreenshotService
         {
             // 功能被关掉：屏幕上什么都没发生，必须给一句可见的话，否则用户只会以为"这个键坏了"
             case CaptureBlock.Disabled:
-                Report("截屏功能已关闭", CaptureGate.ReasonFor(CaptureBlock.Disabled)!);
+                Report(Locale.T("capture.card.disabledTitle"), CaptureGate.ReasonFor(CaptureBlock.Disabled)!);
                 return;
             // 会话中：那块遮罩本身就是原因，再弹一条会把框选的焦点抢走（抢走就等于取消截图），所以只记一行
             case CaptureBlock.SessionBusy:
@@ -85,13 +86,13 @@ public static class ScreenshotService
         var captured = Grab();
         if (!captured.Ok || captured.Frame is not { } frame)
         {
-            Report("截图失败", captured.Error ?? "系统没有返回画面");
+            Report(Locale.T("capture.card.failedTitle"), captured.Error ?? Locale.T("capture.grab.noFrame"));
             return;
         }
         var monitors = WindowInterop.ListMonitors();
         if (monitors.Count == 0)
         {
-            Report("截图失败", "系统没有报告任何显示器");
+            Report(Locale.T("capture.card.failedTitle"), Locale.T("capture.grab.noMonitors"));
             return;
         }
 
@@ -113,7 +114,7 @@ public static class ScreenshotService
         {
             CloseSession();
             StarLog.Error("[Screenshot] 建立遮罩失败", ex);
-            Report("截图失败", ex.Message);
+            Report(Locale.T("capture.card.failedTitle"), ex.Message);
         }
     }
 
@@ -213,13 +214,13 @@ public static class ScreenshotService
     /// </summary>
     public static System.Threading.Tasks.Task CopySelectionAsync(ScreenFrame frame, IntRect selection)
         => TryCrop(frame, selection) is { } crop
-            ? CopyPixelsAsync(crop.Pixels, crop.Width, crop.Height)
+            ? CopyPixelsAsync(crop.Pixels, crop.Width, crop.Height, Locale.T("capture.card.category"))
             : System.Threading.Tasks.Task.CompletedTask;
 
     /// <summary>把选区存成 PNG，存到 图片\StarMark 截图（首次自动建目录）。</summary>
     public static System.Threading.Tasks.Task SaveSelectionAsync(ScreenFrame frame, IntRect selection)
         => TryCrop(frame, selection) is { } crop
-            ? SavePixelsAsync(crop.Pixels, crop.Width, crop.Height)
+            ? SavePixelsAsync(crop.Pixels, crop.Width, crop.Height, Locale.T("capture.card.category"))
             : System.Threading.Tasks.Task.CompletedTask;
 
     /// <summary>
@@ -240,9 +241,14 @@ public static class ScreenshotService
     public static void PinPixels(byte[] pixels, int width, int height, IntRect sourceSelection)
         => PinManager.Add(pixels, width, height, sourceSelection);
 
-    /// <summary>把一份 BGRA 画面交给剪贴板。截图与贴图共用这一份实现（两份"从像素到剪贴板"迟早分岔）。</summary>
+    /// <summary>
+    /// 把一份 BGRA 画面交给剪贴板。截图与贴图共用这一份实现（两份"从像素到剪贴板"迟早分岔）。
+    /// <para><paramref name="category"/> 是**卡片抬头那颗"谁在说话"**（<c>TrayReporter</c> 把它拼进标题），
+    /// 所以它是必传参数而不是带默认值的可选项：默认值＝"忘了传也算说过话"，那条卡会把贴图说成截图。
+    /// 词由调用点从表里取（瞬时卡，取词时机就在调用这一下）。</para>
+    /// </summary>
     public static async System.Threading.Tasks.Task CopyPixelsAsync(
-        byte[] pixels, int width, int height, string category = "截图")
+        byte[] pixels, int width, int height, string category)
     {
         try
         {
@@ -250,7 +256,7 @@ public static class ScreenshotService
             // 不另写一份"从像素到剪贴板"的旁路实现
             if (await GdiScreenCapture.EncodePngAsync(pixels, width, height) is not { } stream)
             {
-                ReportFor(category, "复制失败", "把画面编成图片时失败");
+                ReportFor(category, Locale.T("capture.card.copyFailedTitle"), Locale.T("capture.card.encodeFailed"));
                 return;
             }
             using (stream)
@@ -261,18 +267,19 @@ public static class ScreenshotService
                 // Flush：SetContent 默认延迟渲染，窗一关、应用被挂起时内容会丢（点了"复制"却没东西）
                 Clipboard.Flush();
             }
-            ReportFor(category, "已复制", CaptureGeometry.FormatSize(width, height) + " 的画面已进剪贴板");
+            ReportFor(category, Locale.T("capture.card.copiedTitle"),
+                Locale.Fmt("capture.card.copiedBody", CaptureGeometry.FormatSize(width, height)));
         }
         catch (Exception ex)
         {
             StarLog.Error($"[{category}] 复制到剪贴板失败", ex);
-            ReportFor(category, "复制失败", ex.Message);
+            ReportFor(category, Locale.T("capture.card.copyFailedTitle"), ex.Message);
         }
     }
 
-    /// <summary>把一份 BGRA 画面存成 PNG（同名自动递增，不覆盖上一张）。</summary>
+    /// <summary>把一份 BGRA 画面存成 PNG（同名自动递增，不覆盖上一张）。抬头那颗的规矩同 <see cref="CopyPixelsAsync"/>。</summary>
     public static async System.Threading.Tasks.Task SavePixelsAsync(
-        byte[] pixels, int width, int height, string category = "截图")
+        byte[] pixels, int width, int height, string category)
     {
         string? path = null;
         try
@@ -289,13 +296,13 @@ public static class ScreenshotService
                 index++;
             }
             var saved = await GdiScreenCapture.SavePngAsync(path!, pixels, width, height);
-            if (saved) ReportFor(category, "已存图", $"{width} × {height} → {path}");
-            else ReportFor(category, "存图失败", "写入图片文件时出错（检查磁盘空间与目录权限）");
+            if (saved) ReportFor(category, Locale.T("capture.card.savedTitle"), $"{width} × {height} → {path}");
+            else ReportFor(category, Locale.T("capture.card.saveFailedTitle"), Locale.T("capture.card.saveWriteFailed"));
         }
         catch (Exception ex)
         {
             StarLog.Error($"[{category}] 存图失败（{path}）", ex);
-            ReportFor(category, "存图失败", ex.Message);
+            ReportFor(category, Locale.T("capture.card.saveFailedTitle"), ex.Message);
         }
     }
 
@@ -309,7 +316,7 @@ public static class ScreenshotService
         {
             if (CaptureGeometry.CropProblem(selection, frame.Bounds) is { } problem)
             {
-                Report("截图失败", problem);
+                Report(Locale.T("capture.card.failedTitle"), problem);
                 return null;
             }
             var (ox, oy) = CaptureGeometry.CropOffset(selection, frame.Bounds);
@@ -319,7 +326,7 @@ public static class ScreenshotService
         catch (Exception ex)
         {
             StarLog.Error("[Screenshot] 取这一块的像素失败", ex);
-            Report("截图失败", ex.Message);
+            Report(Locale.T("capture.card.failedTitle"), ex.Message);
             return null;
         }
     }
@@ -346,8 +353,9 @@ public static class ScreenshotService
     /// 结果回报：优先右下角提示卡；卡片贴不上屏幕时退到日志。
     /// 与番茄钟同一口径 —— 通道要报告它自己有没有真的把消息送出去，
     /// 否则"提示了"与"什么都没发生"在事后无从分辨。实现收在 <see cref="TrayReporter"/>（贴图共用）。
+    /// <para>抬头那颗"谁在说话"在这里取（<c>capture.card.category</c>）：这一路报的每一张卡都是截图那一族的话。</para>
     /// </summary>
-    private static void Report(string title, string body) => ReportFor("截图", title, body);
+    private static void Report(string title, string body) => ReportFor(Locale.T("capture.card.category"), title, body);
 
     private static void ReportFor(string category, string title, string body) => TrayReporter.Report(category, title, body);
 }

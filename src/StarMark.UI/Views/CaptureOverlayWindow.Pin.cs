@@ -13,6 +13,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Capture;
 using StarMark.Integrations.Capture;
 using StarMark.UI.Helpers;
@@ -373,7 +374,7 @@ public sealed partial class CaptureOverlayWindow
         catch (Exception ex)
         {
             StarLog.Error("[CaptureOverlay] 打码预览上传失败", ex);
-            ShowError("打码预览没能刷到屏幕上：" + ex.Message);
+            ShowError(Locale.Fmt("capture.strip.mosaicFailed", ex.Message));
         }
     }
 

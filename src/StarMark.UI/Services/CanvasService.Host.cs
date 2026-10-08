@@ -65,7 +65,7 @@ public static partial class CanvasService
             var monitors = WindowInterop.ListMonitors();
             if (monitors.Count == 0)
             {
-                Report(Locale.T("canvas.notice.openFailedTitle"), Locale.T("canvas.notice.noMonitors"));
+                Report(Locale.T("canvas.notice.openFailedTitle"), Locale.T("capture.grab.noMonitors"));
                 return false;
             }
             foreach (var monitor in monitors)

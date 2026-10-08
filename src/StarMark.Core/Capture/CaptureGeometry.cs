@@ -3,6 +3,7 @@ using System;
 using System.Globalization;
 using StarMark.Abstractions.Capture;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;   // 这几句"回原因"的函数是给界面直接念的（批次 WI-46a）
 
 namespace StarMark.Core.Capture;
 
@@ -71,16 +72,16 @@ public static class CaptureGeometry
     }
 
     /// <summary>
-    /// 选区能不能用。返回 null＝可以；否则是给界面直接显示的中文原因。
+    /// 选区能不能用。返回 null＝可以；否则是**给界面直接显示的那句话**（词在语言表里，批次 WI-46a）。
     /// <para>注意"超出可截范围"不当错误处理：跨屏拖选时选区大半在屏外是正常操作，
     /// 交得上一块就行，所以这里只拦"与可截范围完全不相交"和"太小"。</para>
     /// </summary>
     public static string? SelectionProblem(IntRect selection, IntRect? intersectedBounds)
     {
-        if (intersectedBounds is null) return "选区落在所有显示器之外，没有可截取的内容";
+        if (intersectedBounds is null) return Locale.T("capture.select.offscreen");
         var box = intersectedBounds.Value;
         if (box.Width < MinSelectionSide || box.Height < MinSelectionSide)
-            return $"选区太小（{box.Width} × {box.Height}），请按住的拖动再放开";
+            return Locale.Fmt("capture.select.tooSmall", box.Width, box.Height);
         return null;
     }
 
@@ -90,8 +91,8 @@ public static class CaptureGeometry
     /// </summary>
     public static string? CropProblem(IntRect selection, IntRect frameBounds)
     {
-        if (frameBounds.IsEmpty) return "本机没有可用的显示器画面";
-        if (Intersect(selection, frameBounds) is null) return "选区不在已捕获的画面范围内";
+        if (frameBounds.IsEmpty) return Locale.T("capture.grab.noDisplay");
+        if (Intersect(selection, frameBounds) is null) return Locale.T("capture.grab.outsideFrame");
         return null;
     }
 

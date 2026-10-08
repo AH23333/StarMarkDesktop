@@ -130,7 +130,7 @@ public static partial class CanvasService
         {
             var captured = ScreenshotService.CaptureWithoutCanvas();
             if (!captured.Ok || captured.Frame is not { } frame)
-                return NoShot(captured.Error ?? Locale.T("canvas.shot.noFrame"));
+                return NoShot(captured.Error ?? Locale.T("capture.grab.noFrame"));
             if (ScreenshotService.TryCrop(frame, screen.Bounds) is not { } crop)
                 return NoShot(Locale.T("canvas.shot.screenOutOfFrame"));
             boardWidth = crop.Width;

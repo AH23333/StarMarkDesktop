@@ -14,6 +14,7 @@ using Microsoft.UI.Xaml.Shapes;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
 using StarMark.Core.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Integrations.Capture;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
@@ -248,7 +249,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         if (BuildMonitorBitmap() is not { } shot)
         {
-            ShowError("这一帧没能铺到屏幕上（内存不足或像素缓冲尺寸不符）——按 Esc 结束");
+            ShowError(Locale.T("capture.grab.frameNotShown"));
             return;
         }
         Shot.Source = shot.Bitmap;

@@ -13,6 +13,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Capture;
 using StarMark.Integrations.Capture;
 using StarMark.UI.Helpers;
@@ -75,7 +76,7 @@ public sealed partial class CaptureOverlayWindow
         if (FinalPixels() is not { } final) return;       // 原因已经在里面报过了，这里只负责不再往下走
         if (!_pinned) Settle(selection);
         // 贴图态交出去的也是"当前这一份"：贴图显示的就是合成预览，所见即所存这条不变。
-        var category = _pinned ? "贴图" : "截图";
+        var category = _pinned ? Locale.T("pin.card.category") : Locale.T("capture.card.category");
         switch (action)
         {
             case CommitAction.Copy:
@@ -112,7 +113,7 @@ public sealed partial class CaptureOverlayWindow
             catch (Exception ex)
             {
                 StarLog.Error("[CaptureOverlay] 交图前合成标注失败", ex);
-                ShowError("标注没能合成：" + ex.Message);
+                ShowError(Locale.Fmt("capture.strip.composeFailed", ex.Message));
                 return null;
             }
         }
@@ -127,7 +128,7 @@ public sealed partial class CaptureOverlayWindow
             catch (Exception ex)
             {
                 StarLog.Error("[CaptureOverlay] 从合成图裁选区失败", ex);
-                ShowError("选区那块画面没能裁出来：" + ex.Message);
+                ShowError(Locale.Fmt("capture.strip.cropFailed", ex.Message));
                 return null;
             }
         }

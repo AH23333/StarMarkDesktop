@@ -734,7 +734,8 @@ public static class UiStrings
                   "Turn on “{0}” in Settings → Extensions — this hotkey comes back once it is on.",
                   "設定 → 拡張機能 で「{0}」をオンにしてください。オンにすればこのショートカットが戻ります。"),
         new Entry("canvas.notice.openFailedTitle", "画布打不开", "Can't open the canvas", "キャンバスを開けません"),
-        new Entry("canvas.notice.noMonitors", "系统没有报告任何显示器", "The system reported no monitors", "システムがディスプレイを返しませんでした"),
+        // 「一个显示器都没报告」这条**关于机器的事实**归抓帧那一路（批次 WI-46a）：画布与截图都问同一件事，
+        // 而画布出图本来就经 `ScreenshotService.CaptureWithoutCanvas` ⇒ ⛔ 两处各立一行同名的话。
         new Entry("canvas.notice.noLayers", "每一屏的透明层都没能建起来（原因见日志）",
                   "No transparent layer could be created on any screen (see the log for why)",
                   "どの画面にも透過レイヤーを作成できませんでした（原因はログを参照）"),
@@ -761,10 +762,55 @@ public static class UiStrings
                   "to grab the whole screen use Capture ({0}) and pin it after selecting",
                   "ボードに筆跡がないため、貼り付ける領域がありません。「ピン」が貼るのは筆跡のあった部分です。" +
                   "画面全体を撮るにはスクリーンショット（{0}）で範囲選択後貼り付けてください"),
-        new Entry("canvas.shot.noFrame", "系统没有返回画面", "The system returned no image", "システムが画像を返しませんでした"),
         new Entry("canvas.shot.screenOutOfFrame", "这一块屏在截到的画面外面（显示器可能刚被拔掉）",
                   "This screen fell outside the captured image (a monitor may have just been unplugged)",
                   "この画面は取得した画像の外にあります（モニターが抜かれた可能性があります）"),
+        // ===== 截图那一路：卡片句 + 遮罩窗上那颗错误角标（批次 WI-46a，P-177 第一刀）=====
+        // 与画布那一族同一口径：提示卡是建好即弃的瞬时表面，取词**在调用点当场发生**，⛔ 挂 `LocText` 键
+        // （#WI-45 那段注释：记进重贴名单只会多几条再也贴不出去的空壳）。遮罩窗那颗角标同理——它只在出事那一刻写一次。
+        // ⚠ 卡片底部那一行（`card.hint.*`）**不在这一批**：它是每一张卡共用的句子，提前交出去＝还没交完的那几族
+        //   每张卡从此半英半中 ⇒ 它归提示卡这一族的最后一刀（P-177 收尾）。
+        // ⚠ 同形但不同的失败⛔ 合成一颗（卷首"颗粒度按这句会不会不一样划"）：这里的 `copyFailedTitle`／`saveFailedTitle`
+        //   与画布那两颗 `canvas.shot.*FailedTitle` 中文同形，说的是两件事——画布那是"根本没东西可交"，
+        //   这里是"像素到手了、剪贴板／磁盘那一步坏了"。反之 `grab.noFrame`／`grab.noMonitors` 是同一件机器事实，
+        //   上一批为画布临时起的两颗同名行已并进这里（`CanvasService.Snapshot`／`Host` 两处调用点一起改指）。
+        new Entry("capture.card.category", "截图", "Capture", "スクリーンショット"),
+        new Entry("capture.card.disabledTitle", "截屏功能已关闭", "Screen capture is turned off", "スクリーンショット機能はオフです"),
+        new Entry("capture.card.failedTitle", "截图失败", "Capture failed", "スクリーンショットに失敗しました"),
+        new Entry("capture.card.copyFailedTitle", "复制失败", "Copy failed", "コピーに失敗しました"),
+        new Entry("capture.card.encodeFailed", "把画面编成图片时失败", "The image couldn't be encoded", "画像をエンコードできませんでした"),
+        new Entry("capture.card.copiedTitle", "已复制", "Copied", "コピーしました"),
+        new Entry("capture.card.copiedBody", "{0} 的画面已进剪贴板", "{0} is on the clipboard", "{0} をクリップボードにコピーしました"),
+        new Entry("capture.card.savedTitle", "已存图", "Saved", "保存しました"),
+        new Entry("capture.card.saveFailedTitle", "存图失败", "Couldn't save it", "保存に失敗しました"),
+        new Entry("capture.card.saveWriteFailed", "写入图片文件时出错（检查磁盘空间与目录权限）",
+                  "The image file couldn't be written (check disk space and folder permissions)",
+                  "画像ファイルを書き込めませんでした（ディスク容量とフォルダの権限を確認してください）"),
+        new Entry("capture.grab.noFrame", "系统没有返回画面", "The system returned no image", "システムが画像を返しませんでした"),
+        new Entry("capture.grab.noMonitors", "系统没有报告任何显示器", "The system reported no monitors", "システムがディスプレイを返しませんでした"),
+        new Entry("capture.grab.noDisplay", "本机没有可用的显示器画面", "This machine has no usable display image", "このPCに利用可能なディスプレイ画面がありません"),
+        new Entry("capture.grab.outsideFrame", "选区不在已捕获的画面范围内", "The selection is outside the captured image", "選択範囲は取得した画像の外にあります"),
+        new Entry("capture.grab.frameNotShown", "这一帧没能铺到屏幕上（内存不足或像素缓冲尺寸不符）——按 Esc 结束",
+                  "This frame couldn't be put on screen (out of memory, or the pixel buffer size doesn't match) — press Esc to end",
+                  "このフレームを画面に表示できませんでした（メモリ不足、またはピクセルバッファのサイズ不一致）。Esc で終了してください"),
+        new Entry("capture.select.offscreen", "选区落在所有显示器之外，没有可截取的内容",
+                  "The selection fell outside every monitor, so there is nothing to capture",
+                  "選択範囲がすべてのディスプレイの外にあるため、切り取れる内容がありません"),
+        new Entry("capture.select.tooSmall", "选区太小（{0} × {1}），请按住的拖动再放开",
+                  "The selection is too small ({0} × {1}) — hold and drag, then release",
+                  "選択範囲が小さすぎます（{0} × {1}）。押したままドラッグしてから離してください"),
+        new Entry("capture.strip.composeFailed", "标注没能合成：{0}", "The annotations couldn't be composed: {0}", "注釈を合成できませんでした：{0}"),
+        new Entry("capture.strip.cropFailed", "选区那块画面没能裁出来：{0}", "The selected area couldn't be cropped: {0}", "選択範囲を切り抜できませんでした：{0}"),
+        new Entry("capture.strip.mosaicFailed", "打码预览没能刷到屏幕上：{0}", "The mosaic preview couldn't be drawn: {0}", "モザイクのプレビューを更新できませんでした：{0}"),
+        new Entry("capture.strip.resizeFailed", "这一改画不出来：{0}", "That change couldn't be drawn: {0}", "この変更は描画できませんでした：{0}"),
+        new Entry("capture.strip.drawFailed", "标注没能画上去：{0}", "The annotation couldn't be drawn: {0}", "注釈を描画できませんでした：{0}"),
+        new Entry("capture.strip.textNoFocus", "这一行字还没拿到键盘焦点：点一下那个描边的输入框再打字（Enter 换行，Esc 结束编辑）",
+                  "This line doesn't have the keyboard yet — click the outlined box, then type (Enter for a new line, Esc to finish editing)",
+                  "この行はまだキーボードフォーカスを持っていません。枠のある入力欄をクリックしてから入力してください（Enter で改行、Esc で編集終了）"),
+        // 卡片抬头那一颗"谁在说话"。⚠ 贴图那颗在这一批就立好：`CaptureOverlayWindow.Actions` 里
+        // `_pinned ? 贴图 : 截图` 是一整颗三元表达式，只交一半＝贴出去的那张卡半英半中；
+        // 贴图那一族自己的句子归下一刀，但**必须复用这一行**，⛔ 另起同名键。
+        new Entry("pin.card.category", "贴图", "Pin", "貼り付け"),
         new Entry("hotkey.gate.captureDisabled", "要先在 设置 → 拓展功能 里打开「截屏（截图 / 贴图 / 识字）」", "First turn on Screenshot (capture / pin / OCR) in Settings → Extensions", "先に設定 → 拡張機能 で「スクリーンショット（キャプチャ／貼り付け／文字起こし）」をオンにしてください"),
         new Entry("hotkey.gate.captureBusy", "已经有一次截图在场，先把它结束（Esc 取消）再截下一张", "A screenshot session is already running — finish it first (Esc to cancel) before starting another", "すでにスクリーンショットが実行中です。先に終了して（Esc でキャンセル）から次を撮ってください"),
         new Entry("hotkey.gate.canvasBusySheet", "截图进行中，这条快捷键要等截图结束才归画布", "A screenshot is in progress — this hotkey goes back to the canvas once it ends", "スクリーンショットが進行中です。このショートカットは終了後にキャンバスに戻ります"),

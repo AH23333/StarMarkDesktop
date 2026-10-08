@@ -14,6 +14,7 @@ using Microsoft.UI.Xaml.Shapes;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
 using StarMark.Core.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Integrations.Capture;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
@@ -101,7 +102,7 @@ public sealed partial class CaptureOverlayWindow
         if (TextEditor.Focus(FocusState.Programmatic)) return;
         if (triesLeft > 1 && Root.DispatcherQueue.TryEnqueue(() => TakeEditorFocus(triesLeft - 1))) return;
         if (!_editingText) return;        // 用户已改去点别处：这时再说"没焦点"是假警报
-        ShowError("这一行字还没拿到键盘焦点：点一下那个描边的输入框再打字（Enter 换行，Esc 结束编辑）");
+        ShowError(Locale.T("capture.strip.textNoFocus"));
     }
 
     /// <summary>

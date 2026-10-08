@@ -1504,7 +1504,8 @@ public sealed class CanvasWiringGateTests
         Assert.Equal(2, SourceGate.Count(all, "Locale.T(\"canvas.shot.pinFailedTitle\")"));
         // 合成的三条失败脸各有话说；其中"板子没开着"这一句与那颗标题键是同一个出处（一句面上话，⛔ 两处各写一份）
         Assert.Equal(2, SourceGate.Count(all, "Locale.T(\"canvas.notice.notRunningTitle\")"));
-        Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"canvas.shot.noFrame\")"));
+        // "系统没有返回画面"这条机器事实的出处已并进截图那一族（批次 WI-46a，一颗话⛔ 两个主人）
+        Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"capture.grab.noFrame\")"));
         Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"canvas.shot.screenOutOfFrame\")"));
         // ② 旧句子一概不许回到代码里（现在由表里说）。逐颗点名，⛔ 用"汉字总数下降"那种整体口径——
         // 那种判据既抓不到"删一颗"，也抓不到新写的一句别的中文。
