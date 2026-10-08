@@ -15,6 +15,7 @@ using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
 using StarMark.Abstractions.I18n;
 using StarMark.Core.Capture;
+using StarMark.Core.Hotkeys;
 using StarMark.Integrations.Capture;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
@@ -162,7 +163,9 @@ public sealed partial class CaptureOverlayWindow
         SizeChip.HorizontalAlignment = HorizontalAlignment.Right;
         SizeChip.VerticalAlignment = VerticalAlignment.Bottom;
         SizeChip.Margin = new Thickness(0, 0, 1, 1);
-        SizeText.Text = CaptureGeometry.FormatZoom(_zoom) + (_clickThrough ? " · 已穿透，按 F5 恢复" : "");
+        SizeText.Text = CaptureGeometry.FormatZoom(_zoom) + (_clickThrough
+            ? Locale.Fmt("pin.bar.through", CanvasService.BindingText(HotkeyActions.ScreenPinClickThrough))
+            : "");
         // 100% 且没穿透＝刚贴上的原样，不必顶一个角标挡画面
         SizeChip.Visibility = Math.Abs(_zoom - 1.0) < 0.0001 && !_clickThrough
             ? Visibility.Collapsed
@@ -482,18 +485,18 @@ public sealed partial class CaptureOverlayWindow
         _opacity = opacity;
         WindowInterop.SetWindowOpacity(this, opacity);
         SizeChip.Visibility = Visibility.Visible;
-        SizeText.Text = $"不透明度 {opacity * 100:0}%";
+        SizeText.Text = Locale.Fmt("pin.bar.opacity", Locale.T("pin.opacity.label"), $"{opacity * 100:0}");
     }
 
     private void ShowPinMenu(Point localDip)
     {
         var menu = new MenuFlyout();
-        AddMenuItem(menu, "复制（Ctrl+C）", () => Commit(CommitAction.Copy));
-        AddMenuItem(menu, "保存（Ctrl+S）", () => Commit(CommitAction.Save));
-        AddMenuItem(menu, "识字", () => Commit(CommitAction.Ocr));
+        AddMenuItem(menu, Locale.T("pin.menu.copy"), () => Commit(CommitAction.Copy));
+        AddMenuItem(menu, Locale.T("pin.menu.save"), () => Commit(CommitAction.Save));
+        AddMenuItem(menu, Locale.T("ocr.card.category"), () => Commit(CommitAction.Ocr));
         menu.Items.Add(new MenuFlyoutSeparator());
-        AddMenuItem(menu, "缩放重置为 100%", ResetZoomTo1);
-        var opacityMenu = new MenuFlyoutSubItem { Text = "不透明度" };
+        AddMenuItem(menu, Locale.T("pin.menu.resetZoom"), ResetZoomTo1);
+        var opacityMenu = new MenuFlyoutSubItem { Text = Locale.T("pin.opacity.label") };
         foreach (var v in new[] { 1.0, 0.75, 0.5, 0.25 })
         {
             var value = v;
@@ -501,14 +504,14 @@ public sealed partial class CaptureOverlayWindow
         }
         menu.Items.Add(opacityMenu);
         menu.Items.Add(new MenuFlyoutSeparator());
-        AddMenuItem(menu, "向左旋转 90°", () => BakeQuarterTurn(clockwise: false));
-        AddMenuItem(menu, "向右旋转 90°", () => BakeQuarterTurn(clockwise: true));
-        AddMenuItem(menu, "水平翻转", () => BakeFlip(horizontal: true));
-        AddMenuItem(menu, "垂直翻转", () => BakeFlip(horizontal: false));
-        AddMenuItem(menu, _clickThrough ? "取消鼠标穿透" : "鼠标穿透",
+        AddMenuItem(menu, Locale.T("pin.menu.rotLeft"), () => BakeQuarterTurn(clockwise: false));
+        AddMenuItem(menu, Locale.T("pin.menu.rotRight"), () => BakeQuarterTurn(clockwise: true));
+        AddMenuItem(menu, Locale.T("pin.menu.flipH"), () => BakeFlip(horizontal: true));
+        AddMenuItem(menu, Locale.T("pin.menu.flipV"), () => BakeFlip(horizontal: false));
+        AddMenuItem(menu, Locale.T(_clickThrough ? "pin.menu.uncross" : "pin.menu.cross"),
             () => ApplyClickThrough(!_clickThrough));
         menu.Items.Add(new MenuFlyoutSeparator());
-        AddMenuItem(menu, "关闭（Esc）", Close);
+        AddMenuItem(menu, Locale.T("pin.menu.close"), Close);
         menu.ShowAt(Root, localDip);
     }
 

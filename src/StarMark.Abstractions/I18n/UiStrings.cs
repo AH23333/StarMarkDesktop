@@ -818,6 +818,57 @@ public static class UiStrings
         // ⚠ `ocr.how.*` 那五颗是**一条读数被拆成三片**：从前 `OcrRead.How` 把"，"写死在每个片段开头，
         //   于是"引擎没报语言、又放大了"那一格会输出开头带一颗全角逗号的句子（屏幕上就是「，放大 2×」）。
         //   现在片段自己⛔ 带分隔符，分隔符单独一颗键（先例＝`hotkey.conflict.join`，也⛔ 并入片段——并入就改掉了各语言的用词）。
+        // ── 批次 WI-50（P-179）：截图／贴图那条工具条的 tooltip 与贴图右键菜单上那一族屏幕字。
+        // ⛔ 这一族的句子把「组」「贴图组」这类**屏幕上另一行**的名字抄进正文：那些词一律交实参（值由表里那颗主人说）。
+        // ⚠ 带 {0} 的那几颗收的是**当前绑定的键位文本**（F3／F5 用户可改，⛔ 抄在句子里）。
+        new Entry("capture.bar.brushTip", "{0}：{1}（点开换颜色和粗细；Esc 收笔）", "{0}: {1} (click to change colour and weight; Esc stops)", "{0}：{1}（クリックで色と太さを変更、Esc で終了）"),
+        new Entry("capture.bar.pen", "当前这支笔：点开换颜色和粗细", "This brush: click to change colour and weight", "現在の筆：クリックで色と太さを変更"),
+        new Entry("capture.bar.undo", "撤销上一条（Ctrl+Z）", "Undo the last mark (Ctrl+Z)", "直前の注釈を取り消す（Ctrl+Z）"),
+        new Entry("capture.bar.redo", "重做上一条（Ctrl+Y）", "Redo the last mark (Ctrl+Y)", "取り消した注釈をやり直す（Ctrl+Y）"),
+        new Entry("capture.bar.clear", "清空全部标注（还能撤销回来）", "Clear all marks (you can undo this)", "すべての注釈を消す（元に戻せます）"),
+        new Entry("capture.bar.copy", "把带标注的画面复制进剪贴板（Enter）", "Copy the annotated image to the clipboard (Enter)", "注釈入りの画像をクリップボードへ（Enter）"),
+        new Entry("capture.bar.save", "存成 PNG（Ctrl+S）", "Save as PNG (Ctrl+S)", "PNG で保存（Ctrl+S）"),
+        new Entry("capture.bar.pin", "钉在桌面上（同 {0}），带上刚画的标注", "Pin it to the desktop (same as {0}), keeping the marks you just drew", "デスクトップに貼り付け（{0} と同じ、描いた注釈付き）"),
+        new Entry("capture.bar.ocr", "认出这块画面的文字并复制", "Read the text in this area and copy it", "この範囲の文字を読み取ってコピー"),
+        new Entry("capture.bar.through", "鼠标穿透：让所有贴图都不再收鼠标（再用这一颗或按 {0} 恢复；只动一组请点「组」）",
+            "Click-through: no pin takes the mouse any more (press this again or {0} to hand it back; for a single group use Group)", "マウス透過：すべての貼り付け画像がマウスを受け取らなくなります（もう一度押すか {0} で復帰。1 組だけなら「組」へ）"),
+        new Entry("capture.bar.closePin", "关闭这张（Esc）", "Close this pin (Esc)", "この貼り付けを閉じる（Esc）"),
+        new Entry("capture.bar.finish", "结束这一屏（Esc）", "Finish this capture (Esc)", "この撮影を終了（Esc）"),
+        new Entry("capture.bar.shape", "图形：{0}（点开换{1}；Esc 收笔）", "Shape: {0} (click to switch between {1}; Esc stops)", "図形：{0}（クリックで {1} を選択、Esc で終了）"),
+        new Entry("capture.bar.noneMove", "没选工具＝移动这张图（十字箭头：按住可拖走）。点图标开始画",
+            "No tool selected = move this pin (four-way arrow: hold to drag). Pick an icon to draw", "ツール未選択＝この画像を動かす（十字矢印：押してドラッグ）。アイコンを選ぶと描画"),
+        new Entry("capture.bar.noneResize", "没选工具＝改框那一态（十字箭头：可拖动选区、可改边缘大小）。点图标开始画",
+            "No tool selected = adjust the box (four-way arrow: drag the area or an edge). Pick an icon to draw", "ツール未選択＝選択枠の調整（十字矢印：枠も辺もドラッグ可）。アイコンを選ぶと描画"),
+        new Entry("capture.bar.groupIn", "已在「{0}」（{1} 张）。点开＝换组或移出；整组动作在托盘「{2}」",
+            "In “{0}” ({1} pins). Click to switch group or leave; whole-group commands are in the tray under “{2}”", "「{0}」に入り（{1} 枚）。クリックで組の替え・退出、組全体の操作はトレイの「{2}」"),
+        new Entry("capture.bar.groupNone", "分组：把这一张单独分成一组，或并进已有的一组（整组隐藏 / 忽略鼠标 / 关闭在托盘「{0}」里）",
+            "Group: make this pin its own group or join an existing one (hide / click-through / close a whole group live in the tray under “{0}”)", "グループ化：この画像を単独の組にするか既存の組にまとめる（組まとめての非表示／マウス無視／終了はトレイの「{0}」）"),
+        new Entry("capture.bar.penUnarmed", "没选工具：这一按是改框（十字箭头）。点上面任一支笔开始画并选颜色；Esc 收笔",
+            "No tool selected: this click adjusts the box (four-way arrow). Pick a brush above to draw and choose a colour; Esc stops", "ツール未選択：このクリックは枠の調整（十字矢印）。上の筆を選ぶと描画と色選択、Esc で終了"),
+        new Entry("capture.bar.penNow", "当前：{0} · {1}（{2} 的{3}：{4} ≈ {5} 像素）。点这支笔＝换颜色和粗细；Esc 收笔",
+            "Now: {0} · {1} ({2} {3}: {4} ≈ {5} px). Click this brush to change colour and weight; Esc stops", "現在：{0} · {1}（{2} の{3}：{4} ≈ {5} px）。クリックで色と太さ、Esc で終了"),
+        // OS 那一层的窗口标题（WI-50 补记）：这扇条子窗是无框＋不进任务栏／Alt+Tab，屏幕上读不到这一行，
+        // 但 `Window.Title` 只有 <c>LocText.SetWindowTitle</c> 一条路（它不是 DependencyObject，⛔ 附带属性，坑表 #338）。
+        new Entry("capture.bar.windowTitle", "StarMark 贴图工具条", "StarMark pin toolbar", "StarMark ピンツールバー"),
+        new Entry("capture.pick.weight", "{0}（{1} 的{2}约 {3} 像素）", "{0} (for {1} the {2} is about {3} px)", "{0}（{1} の{2}は約 {3} px）"),
+        new Entry("capture.pick.groupNew", "新建一组", "New group", "新しい組"),
+        new Entry("capture.pick.groupNewTip", "把这一张单独分成一组", "Make this pin its own group", "この画像を単独の組にする"),
+        new Entry("capture.pick.groupMerge", "把这一张并进{0}（现在 {1} 张）", "Merge this pin into {0} (now {1} pins)", "この画像を{0}にまとめる（現在 {1} 枚）"),
+        new Entry("capture.pick.groupLeave", "移出", "Leave group", "組から出る"),
+        new Entry("capture.pick.groupLeaveTip", "让这一张不再属于任何一组", "Take this pin out of every group", "この画像をどの組からも外す"),
+        new Entry("pin.bar.through", " · 已穿透，按 {0} 恢复", " · click-through on — press {0} to hand the mouse back", " · 透過中、{0} で復帰"),
+        new Entry("pin.opacity.label", "不透明度", "Opacity", "不透明度"),
+        new Entry("pin.bar.opacity", "{0} {1}%", "{0} {1}%", "{0} {1}%"),
+        new Entry("pin.menu.copy", "复制（Ctrl+C）", "Copy (Ctrl+C)", "コピー（Ctrl+C）"),
+        new Entry("pin.menu.save", "保存（Ctrl+S）", "Save (Ctrl+S)", "保存（Ctrl+S）"),
+        new Entry("pin.menu.resetZoom", "缩放重置为 100%", "Reset zoom to 100%", "表示拡大を 100% に戻す"),
+        new Entry("pin.menu.rotLeft", "向左旋转 90°", "Rotate left 90°", "左に 90° 回転"),
+        new Entry("pin.menu.rotRight", "向右旋转 90°", "Rotate right 90°", "右に 90° 回転"),
+        new Entry("pin.menu.flipH", "水平翻转", "Flip horizontally", "左右反転"),
+        new Entry("pin.menu.flipV", "垂直翻转", "Flip vertically", "上下反転"),
+        new Entry("pin.menu.uncross", "取消鼠标穿透", "Stop click-through", "マウス透過をやめる"),
+        new Entry("pin.menu.cross", "鼠标穿透", "Click-through", "マウス透過"),
+        new Entry("pin.menu.close", "关闭（Esc）", "Close (Esc)", "閉じる（Esc）"),
         new Entry("ocr.card.category", "识字", "OCR", "文字認識"),
         new Entry("capture.card.categoryOcr", "截图识字", "Capture OCR", "スクリーンショット文字認識"),
         new Entry("pin.card.categoryOcr", "贴图识字", "Pin OCR", "貼り付け文字認識"),
@@ -909,6 +960,8 @@ public static class UiStrings
         // 动作标签：正文由供话者递进来，那颗 `链接` 只是"没给名字"时的兜底（⛔ 反推那颗当状态判断，#361 同族）。
         new Entry("card.action.link", "链接", "link", "リンク"),
         new Entry("card.action.releasePage", "发布页", "release page", "リリースページ"),
+        // 那张卡自己的窗口标题（WI-50 补记：WI-47 那把尺按调用形状数，漏了这一族唯一一颗不带取词调用的 <c>Title</c>）。
+        new Entry("card.windowTitle", "StarMark 提示", "StarMark notice", "StarMark お知らせ"),
         // ⚠ 正文那颗 `{0}` 交的是**当前绑定**的键位文本（`CanvasService.BindingText`），⛔ 抄一颗键名进句子：
         //   那颗键用户可改，改了之后这句就在教人去按一颗哑键（P-178；同一禁项在批次 VC 已为说明文字定死）。
         new Entry("main.bgRunningTitle", "StarMark 正在后台运行", "StarMark is running in the background", "StarMark はバックグラウンドで実行中です"),

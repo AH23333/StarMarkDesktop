@@ -328,7 +328,9 @@ public sealed class PinEditTests
         var bar = SourceGate.MethodBody(cs, "private void BuildToolBar()");
         Assert.Contains("if (_pinned)", bar);
         Assert.Contains("Through_Click", bar);                                  // 鼠标穿透
-        Assert.Contains("_pinned ? \"关闭这张（Esc）\"", bar);                    // 关闭这张
+        // 关闭那颗（批次 WI-50 起这句话交表）：⛔ 钉表里的措辞（改文案不该让这颗证人红，#379／规则 #130），
+        // 钉的是"这颗动作交的是哪颗键、按什么挑"——两颗键在整个三元式里逐字钉住，对调它就红（台架 B11 验过）。
+        Assert.Contains("Locale.T(_pinned ? \"capture.bar.closePin\" : \"capture.bar.finish\")", bar);
         Assert.Contains("if (!_pinned)", bar);                                  // "再钉一张"只在截图态出现
         Assert.Contains("CopyIcon()", bar);
         Assert.Contains("SaveIcon()", bar);

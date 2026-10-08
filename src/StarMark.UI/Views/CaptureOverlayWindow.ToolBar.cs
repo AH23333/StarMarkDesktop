@@ -13,7 +13,9 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Capture;
+using StarMark.Core.Hotkeys;
 using StarMark.Integrations.Capture;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
@@ -83,7 +85,7 @@ public sealed partial class CaptureOverlayWindow
         foreach (AnnotationTool tool in AnnotationTools.Brushes)
         {
             var button = IconButton(ToolIcon(tool),
-                $"{Annotation.ToolName(tool)}：{Annotation.ToolHint(tool)}（点开换颜色和粗细；Esc 收笔）");
+                Locale.Fmt("capture.bar.brushTip", Annotation.ToolName(tool), Annotation.ToolHint(tool)));
             button.Tag = tool;
             button.Click += BrushTool_Click;
             button.RightTapped += BrushTool_RightTapped;   // 换颜色/粗细从"再点一次"挪到这里（点按那条按用户要求让给"取消选中"）
@@ -91,34 +93,34 @@ public sealed partial class CaptureOverlayWindow
             BarRow.Children.Add(button);
         }
 
-        _brushButton = IconButton(BrushIcon(), "当前这支笔：点开换颜色和粗细");
+        _brushButton = IconButton(BrushIcon(), Locale.T("capture.bar.pen"));
         _brushButton.Click += (_, _) => ToggleBrushPicker(_brushButton);
         BarRow.Children.Add(_brushButton);
 
         BarRow.Children.Add(Separator());
-        _undoButton = IconButton(ArrowIcon(left: true), "撤销上一条（Ctrl+Z）");
+        _undoButton = IconButton(ArrowIcon(left: true), Locale.T("capture.bar.undo"));
         _undoButton.Click += Undo_Click;
-        _redoButton = IconButton(ArrowIcon(left: false), "重做上一条（Ctrl+Y）");
+        _redoButton = IconButton(ArrowIcon(left: false), Locale.T("capture.bar.redo"));
         _redoButton.Click += Redo_Click;
-        _clearButton = IconButton(EraserIcon(), "清空全部标注（还能撤销回来）");
+        _clearButton = IconButton(EraserIcon(), Locale.T("capture.bar.clear"));
         _clearButton.Click += Clear_Click;
         BarRow.Children.Add(_undoButton);
         BarRow.Children.Add(_redoButton);
         BarRow.Children.Add(_clearButton);
 
         BarRow.Children.Add(Separator());
-        _copyButton = IconButton(CopyIcon(), "把带标注的画面复制进剪贴板（Enter）");
+        _copyButton = IconButton(CopyIcon(), Locale.T("capture.bar.copy"));
         _copyButton.Click += Copy_Click;
-        var save = IconButton(SaveIcon(), "存成 PNG（Ctrl+S）");
+        var save = IconButton(SaveIcon(), Locale.T("capture.bar.save"));
         save.Click += Save_Click;
         // 贴图态不再显示"再钉一张"这颗：这张本来就钉着，多一颗只会让人猜那份去哪了。
         if (!_pinned)
         {
-            var pin = IconButton(PinIcon(), "钉在桌面上（同 F3），带上刚画的标注");
+            var pin = IconButton(PinIcon(), Locale.Fmt("capture.bar.pin", CanvasService.BindingText(HotkeyActions.ScreenPin)));
             pin.Click += Pin_Click;
             BarRow.Children.Add(pin);
         }
-        var ocr = IconButton(OcrIcon(), "认出这块画面的文字并复制");
+        var ocr = IconButton(OcrIcon(), Locale.T("capture.bar.ocr"));
         ocr.Click += Ocr_Click;
         BarRow.Children.Add(_copyButton);
         BarRow.Children.Add(save);
@@ -133,11 +135,12 @@ public sealed partial class CaptureOverlayWindow
 
             // 这颗按下去动的是<b>所有</b>贴图（想只动一组用旁边那颗「组」）。
             // 说明写错范围会让人以为只有自己手上这张被点穿（批次 WF-1 那族极性事故）。
-            var through = IconButton(ThroughIcon(), "鼠标穿透：让所有贴图都不再收鼠标（再用这一颗或按 F5 恢复；只动一组请点「组」）");
+            var through = IconButton(ThroughIcon(), Locale.Fmt("capture.bar.through",
+                CanvasService.BindingText(HotkeyActions.ScreenPinClickThrough)));
             through.Click += Through_Click;
             BarRow.Children.Add(through);
         }
-        var cancel = IconButton(CrossIcon(), _pinned ? "关闭这张（Esc）" : "结束这一屏（Esc）");
+        var cancel = IconButton(CrossIcon(), Locale.T(_pinned ? "capture.bar.closePin" : "capture.bar.finish"));
         cancel.Click += Cancel_Click;
         BarRow.Children.Add(cancel);
 
@@ -236,11 +239,15 @@ public sealed partial class CaptureOverlayWindow
 
     private string ShapeButtonText()
         => _tool is { } tool
-            ? $"图形：{Annotation.ToolName(tool)}（点开换矩形 / 椭圆 / 直线 / 折线 / 箭头；Esc 收笔）"
+            ? Locale.Fmt("capture.bar.shape", Annotation.ToolName(tool), ShapeNameList())
             // 贴图态没有"框"可改：未选笔那一按是移动整张图，说明要按它真正的行为写
             : _pinned
-                ? "没选工具＝移动这张图（十字箭头：按住可拖走）。点图标开始画"
-                : "没选工具＝改框那一态（十字箭头：可拖动选区、可改边缘大小）。点图标开始画";
+                ? Locale.T("capture.bar.noneMove")
+                : Locale.T("capture.bar.noneResize");
+
+    /// <summary>「点开换 …」那一串图形名由<b>选择栏那颗主人</b>现给（⛔ 在这句里再抄一份名字：
+    /// 加一支图形笔时这句话不会跟着变，就成了假话）。</summary>
+    private static string ShapeNameList() => string.Join(" / ", AnnotationTools.Shapes.Select(Annotation.ToolName));
 
     /// <summary>
     /// 「组」那颗的说明：把"这一张现在在不在组里、那一组里有几张"直接写在句子里。
@@ -250,8 +257,9 @@ public sealed partial class CaptureOverlayWindow
     /// </summary>
     private string GroupButtonText()
         => PinManager.GroupOf(this) is { } group
-            ? $"已在「{group.Name}」（{group.Members.Count} 张）。点开＝换组或移出；整组动作在托盘「贴图组」"
-            : "分组：把这一张单独分成一组，或并进已有的一组（整组隐藏 / 忽略鼠标 / 关闭在托盘「贴图组」里）";
+            ? Locale.Fmt("capture.bar.groupIn", group.Name, group.Members.Count,
+                Locale.T("pin.card.groupCategory"))
+            : Locale.Fmt("capture.bar.groupNone", Locale.T("pin.card.groupCategory"));
 
     /// <summary>把"当前用的是哪种图形、哪一支笔"画出来（图标上没有文字，只能靠底色与那颗点说）。</summary>
     private void SyncTools()
@@ -270,15 +278,17 @@ public sealed partial class CaptureOverlayWindow
         if (_tool is not { } tool)
         {
             ToolTipService.SetToolTip(_brushButton,
-                "没选工具：这一按是改框（十字箭头）。点上面任一支笔开始画并选颜色；Esc 收笔");
+                Locale.T("capture.bar.penUnarmed"));
             return;
         }
         var sizes = string.Join(" / ", Enumerable.Range(0, Annotation.ThicknessSteps.Length)
             .Select(index => Annotation.ThicknessFor(tool, index)));
         ToolTipService.SetToolTip(_brushButton,
-            $"当前：{Annotation.Palette[Math.Clamp(_colourIndex, 0, Annotation.Palette.Count - 1)].Name}"
-            + $" · {Annotation.ThicknessNames[Math.Clamp(_weightIndex, 0, Annotation.ThicknessNames.Count - 1)]}"
-            + $"（{Annotation.ToolName(tool)} 的{Annotation.ThicknessUnit(tool)}：细 / 中 / 粗 ≈ {sizes} 像素）。点这支笔＝换颜色和粗细；Esc 收笔");
+            Locale.Fmt("capture.bar.penNow",
+                Annotation.Palette[Math.Clamp(_colourIndex, 0, Annotation.Palette.Count - 1)].Name,
+                Annotation.ThicknessNames[Math.Clamp(_weightIndex, 0, Annotation.ThicknessNames.Count - 1)],
+                Annotation.ToolName(tool), Annotation.ThicknessUnit(tool),
+                string.Join(" / ", Annotation.ThicknessNames), sizes));
     }
 
     // ────────── 图标：矢量图元画的，不用字体字形 ──────────

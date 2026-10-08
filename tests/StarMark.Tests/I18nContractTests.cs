@@ -228,6 +228,9 @@ public sealed class I18nContractTests : IDisposable
             ["time.weekday.stem.0"] = "月历表头第一格：星期日的「日」中日同字（那一格只装一个字，⛔ 为了不同形去改表头）（WI-37-C）",
             ["anno.color.white"] = "颜色名「白」中日同字（日文里它就是写作白，⛔ 为了不同形改成片假名反而不像界面用语）（批次 WI-49／P-181）",
             ["alarm.days.pick1"] = "只勾一天时那一行就是「{0}」本身，中日英都没有分隔符可放（WI-37-C）",
+            ["pin.opacity.label"] = "「不透明度」日文也照汉字写（⛔ 为不同形改成「透過度」，那在贴图语境里是另一个意思）（批次 WI-50／P-179）",
+            ["pin.bar.opacity"] = "纯胶水行「{0} {1}%」：词在 label 那颗里，这一行没有词可翻（批次 WI-50／P-179）",
+            ["pin.menu.save"] = "「保存」日文同字（与 widget.cd.save 同形，⛔ 为不同形改成「ファイル保存」反而长出第二条尺）（批次 WI-50／P-179）",
         };
 
         var actual = UiStrings.All

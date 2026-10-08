@@ -87,7 +87,7 @@ public sealed class NoticeCardWindow : Window
 
     public NoticeCardWindow()
     {
-        Title = "StarMark 提示";
+        LocText.SetWindowTitle(this, "card.windowTitle");
         _title = new TextBlock
         {
             FontSize = 14,

@@ -13,6 +13,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Capture;
 using StarMark.Integrations.Capture;
 using StarMark.UI.Helpers;
@@ -86,7 +87,9 @@ public sealed partial class CaptureOverlayWindow
         {
             var wanted = index;
             var dot = IconButton(DotIcon(SolidWhite, selected: index == _weightIndex, diameter: 3 + index * 3),
-                $"{Annotation.ThicknessNames[index]}（{WeightToolName} 的{Annotation.ThicknessUnit(_tool ?? AnnotationTool.Pen)}约 {Annotation.ThicknessFor(_tool ?? AnnotationTool.Pen, index)} 像素）");
+                Locale.Fmt("capture.pick.weight", Annotation.ThicknessNames[index], WeightToolName,
+                    Annotation.ThicknessUnit(_tool ?? AnnotationTool.Pen),
+                    Annotation.ThicknessFor(_tool ?? AnnotationTool.Pen, index)));
             dot.Click += (_, _) =>
             {
                 _weightIndex = wanted;
@@ -115,16 +118,18 @@ public sealed partial class CaptureOverlayWindow
     private void ShowGroupPicker(FrameworkElement anchor)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Padding = new Thickness(4) };
-        row.Children.Add(GroupChip("新建一组", "把这一张单独分成一组", () => PinManager.NewGroup(this)));
+        row.Children.Add(GroupChip(Locale.T("capture.pick.groupNew"), Locale.T("capture.pick.groupNewTip"),
+            () => PinManager.NewGroup(this)));
         foreach (var group in PinManager.Groups)
         {
             var target = group;
             row.Children.Add(GroupChip(target.Name,
-                $"把这一张并进{target.Name}（现在 {target.Members.Count} 张）",
+                Locale.Fmt("capture.pick.groupMerge", target.Name, target.Members.Count),
                 () => PinManager.JoinGroup(this, target.Serial)));
         }
         if (PinManager.GroupOf(this) is not null)
-            row.Children.Add(GroupChip("移出", "让这一张不再属于任何一组", () => PinManager.LeaveGroup(this)));
+            row.Children.Add(GroupChip(Locale.T("capture.pick.groupLeave"), Locale.T("capture.pick.groupLeaveTip"),
+            () => PinManager.LeaveGroup(this)));
         ShowPicker(anchor, row);
     }
 

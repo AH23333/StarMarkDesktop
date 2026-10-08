@@ -57,7 +57,7 @@ public sealed class CaptureBarWindow : Window
     {
         _content = content;
         _scale = scale <= 0 ? 1 : scale;
-        Title = "StarMark 贴图工具条";
+        LocText.SetWindowTitle(this, "capture.bar.windowTitle");
         // 底色与条子本体同色（#EE202020）：WinUI 3 的 Window 没有 Background 可设，客户区就是这层 Grid；
         // 不设就会露出框架默认色（浅色系统主题下是一片白），围着暗色条子出现一圈白边——正是要消掉的观感。
         // 主题也钉成暗色：条上图标按白色画的，跟着系统主题走会在浅色模式下糊成一片。
