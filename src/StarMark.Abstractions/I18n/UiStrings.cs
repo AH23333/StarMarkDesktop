@@ -743,6 +743,8 @@ public static class UiStrings
                   "The main window doesn't exist yet (is the app still starting up?)",
                   "メインウィンドウがまだ存在しません（起動途中ですか？）"),
         new Entry("canvas.notice.notRunningTitle", "画布没开着", "The canvas isn't open", "キャンバスが開いていません"),
+        new Entry("canvas.notice.notResponsiveTitle", "画布现在按不动", "The canvas isn't taking input right now", "キャンバスは今入力を受け付けません"),
+        new Entry("canvas.notice.captureInFlight", "截图进行中", "a screenshot is in progress", "スクリーンショット撮信中"),
         new Entry("canvas.notice.panelClosedTitle", "画布已经关了", "The canvas is closed", "キャンバスは閉じています"),
         new Entry("canvas.notice.panelIsPartOfCanvas", "快捷键面板是{0}的一部分，先把它重新打开",
                   "The shortcut panel is part of {0} — open it again first",
@@ -837,6 +839,20 @@ public static class UiStrings
         // 括号形状只许一个主人：Core 的 `HowParenthesized` 与 UI 里那份 `Paren` 从前各写一份（同一动作两份实现），
         // 现在只有 Core 那一份，词也从表里取——⛔ en 那两列用全角括号（那不是我写的那门字的排版）。
         new Entry("ocr.how.paren", "（{0}）", " ({0})", "（{0}）"),
+        // ===== 卡片自己那一行 footer 与主窗那张卡（批次 WI-47，P-177 收尾＋P-178）=====
+        // ⚠ 这一批⛔ 与前面三刀同批：footer 是**每一张卡**共用的那一行，提前交出去＝还没交完的那几族每张卡半英半中
+        //   （WI-46a 判定 3 的口径）。停留秒数仍只有 `KeepSeconds` 一个主人——那两行都收 `{n}` 实参，⛔ 在表里写死"10 秒"。
+        new Entry("card.hint.withAction", "点一下打开{0} · {1} 秒后自动消失",
+                  "Click to open {0} · disappears in {1} s", "{0} をクリックで開きます · {1} 秒で自動的に消えます"),
+        new Entry("card.hint.plain", "点一下关闭 · {0} 秒后自动消失",
+                  "Click to dismiss · disappears in {0} s", "クリックで閉じます · {0} 秒で自動的に消えます"),
+        // 动作标签：正文由供话者递进来，那颗 `链接` 只是"没给名字"时的兜底（⛔ 反推那颗当状态判断，#361 同族）。
+        new Entry("card.action.link", "链接", "link", "リンク"),
+        new Entry("card.action.releasePage", "发布页", "release page", "リリースページ"),
+        // ⚠ 正文那颗 `{0}` 交的是**当前绑定**的键位文本（`CanvasService.BindingText`），⛔ 抄一颗键名进句子：
+        //   那颗键用户可改，改了之后这句就在教人去按一颗哑键（P-178；同一禁项在批次 VC 已为说明文字定死）。
+        new Entry("main.bgRunningTitle", "StarMark 正在后台运行", "StarMark is running in the background", "StarMark はバックグラウンドで実行中です"),
+        new Entry("main.bgRunningBody", "{0} 随时呼出窗口", "Press {0} anytime to bring the window back", "{0} でいつでもウィンドウを呼び出せます"),
         // ===== 贴图与贴图组那一路的提示卡句（批次 WI-46c，P-177 第三刀）=====
         // 同一口径：卡片那三样（抬头／标题／正文）都在做事那一刻写一次 ⇒ 取词落在调用点，⛔ 挂 `LocText`（WI-45／46a／46b）。
         // ⚠ 抬头那颗「贴图」⛔ 在这一批再立一次——它就是 WI-46a 为 `_pinned ? 贴图 : 截图` 立好的 `pin.card.category`；
@@ -902,6 +918,8 @@ public static class UiStrings
         new Entry("rss.src.fetched", "抓到 {0} 条", "Fetched {0} entries", "{0} 件を取得"),
         new Entry("rss.src.grew", "，缓存共 {0} 条", ", {0} entries in the cache in total", "。キャッシュには合計 {0} 件"),
         new Entry("rss.src.stillThere", "，仍然摆着缓存里的 {0} 条", ", still showing {0} cached entries", "。キャッシュの {0} 件を引き続き表示中"),
+        new Entry("upd.card.checkTitle", "检查更新", "Update check", "更新の確認"),
+        new Entry("upd.card.newVersionTitle", "发现新版本", "New version found", "新しいバージョンが見つかりました"),
         new Entry("upd.verdict.newer", "有新版本 {0}（本机 {1}）", "New version available: {0} (local {1})", "新しいバージョンがあります {0}（ローカル {1}）"),
         new Entry("upd.verdict.upToDate", "已经是最新（{0}）", "Already up to date ({0})", "すでに最新です（{0}）"),
         new Entry("upd.verdict.localAhead", "本机版本 {0} 比远端 {1} 更新（这通常是预发布或自己编的版）", "Local version {0} is newer than remote {1} (usually a prerelease or a local build)", "ローカルのバージョン {0} はリモート {1} より新しくなっています（プレリリースか自分でビルドしたものの可能性）"),
@@ -1467,6 +1485,16 @@ public static class UiStrings
         new Entry("widget.kind.worldClock", "世界时钟", "World clock", "世界時計"),
         new Entry("widget.kind.countdown", "倒计时", "Countdown", "カウントダウン"),
         new Entry("widget.kind.focus", "番茄钟", "Focus timer", "ポモドーロ"),
+        // ===== 番茄钟与倒计时"到点了"那两张卡的句子（批次 WI-47，P-177 收尾）=====
+        // ⚠ 抬头那颗「番茄钟」⛔ 再立一行——就是上面 `widget.kind.focus`（组件名只有一个主人）。
+        new Entry("widget.countdown.dueTitle", "倒计时到点", "Countdown reached", "カウントダウンの時刻になりました"),
+        new Entry("widget.focus.endedFocusing", "专注结束", "Focus session ended", "集中が終わりました"),
+        new Entry("widget.focus.endedResting", "休息结束", "Break ended", "休憩が終わりました"),
+        new Entry("widget.focus.staleBody", "时间早已到点（机器可能睡眠过），不自动进休息",
+                  "It was due long ago (the machine may have slept), so no break was started",
+                  "随分前に時刻を迎えていました（マシンがスリープした可能性）、休憩には入りません"),
+        new Entry("widget.focus.restNowBody", "该休息一下了", "Time for a break", "休憩の時間です"),
+        new Entry("widget.focus.nextRoundBody", "休息结束，可以开始下一轮", "Break over — ready for another round", "休憩が終わりました。次のラウンドを始められます"),
         new Entry("widget.kind.systemMonitor", "系统监控", "System monitor", "システムモニター"),
         new Entry("widget.pomo.taskHint", "这一轮在做什么？（可留空）", "What are you doing this round? (optional)", "今回やること（空欄可）"),
         new Entry("widget.pomo.stop", "停止", "Stop", "停止"),

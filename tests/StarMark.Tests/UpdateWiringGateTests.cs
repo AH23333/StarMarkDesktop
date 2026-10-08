@@ -237,8 +237,9 @@ public sealed class UpdateWiringGateTests
     public void TheCardStillSaysTheHoldSecondsOnce()
     {
         var code = Code(ReadRepoFile(Card));
-        Assert.Contains("点一下关闭 · {KeepSeconds} 秒后自动消失", code, StringComparison.Ordinal);
-        Assert.Contains("点一下打开{label ?? \"链接\"} · {KeepSeconds} 秒后自动消失", code, StringComparison.Ordinal);
+        // 批次 WI-47 改锚：footer 那两句话现在在表里，代码里只许留下"把秒数当实参交出去"这一件事
+        Assert.Contains("Locale.Fmt(\"card.hint.plain\", KeepSeconds)", code, StringComparison.Ordinal);
+        Assert.Contains("Locale.Fmt(\"card.hint.withAction\", label ?? Locale.T(\"card.action.link\"), KeepSeconds)", code, StringComparison.Ordinal);
         Assert.DoesNotContain("10 秒后自动消失", code, StringComparison.Ordinal);
         Assert.Equal(3, Count(code, "HintFor("));   // 定义一处 + 造出来时一次 + 换动作时一次
     }
@@ -263,12 +264,13 @@ public sealed class UpdateWiringGateTests
         var scheduler = Code(ReadRepoFile(Scheduler));
         Assert.Contains("UpdatePolicy.HasDownloadableRelease(report.Verdict) ? report.PageUrl : null",
             MethodBody(scheduler, "public static void AnnounceOnDemand(UpdateReport report)"));
-        Assert.Contains("ShowCard(\"发现新版本\", report, report.PageUrl);", scheduler, StringComparison.Ordinal);
+        // 批次 WI-47：抬头那颗交表（它从前是私有包装的实参 ⇒ 按调用形状数屏幕字的尺看不见它）
+        Assert.Contains("ShowCard(Locale.T(\"upd.card.newVersionTitle\"), report, report.PageUrl);", scheduler, StringComparison.Ordinal);
         // 出声必须回 UI 线程：这扇窗要在 UI 线程上建，从池线程直接发的症状是"永远贴不上屏幕"
         var showCard = MethodBody(scheduler, "private static void ShowCard(string title, UpdateReport report, string? actionUrl)");
         Assert.Contains("App.MainWindow?.DispatcherQueue", showCard);
         Assert.Contains("pump.TryEnqueue(() =>", showCard);
-        Assert.Contains("NoticeCard.Show(title, report.Text, actionUrl, \"发布页\");", showCard);
+        Assert.Contains("NoticeCard.Show(title, report.Text, actionUrl, Locale.T(\"card.action.releasePage\"));", showCard);
         // 而"贴上了没有"问的是屏幕，不是任何一发的返回值（批次 RV 那条谎报的教训）
         Assert.Contains("if (!shown) StarLog.Info(", showCard);
     }

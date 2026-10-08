@@ -8,6 +8,8 @@ using StarMark.Core.Widgets;
 using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
 
+using StarMark.Abstractions.I18n;
+
 namespace StarMark.UI.Views;
 
 /// <summary>
@@ -39,7 +41,7 @@ public sealed partial class CountdownWidget : UserControl, IWidgetTicker
 
     private void OnOccurrenceReached(CountdownItem item)
     {
-        var delivered = NoticeCard.Show("倒计时到点", item.Title);
+        var delivered = NoticeCard.Show(Locale.T("widget.countdown.dueTitle"), item.Title);
         if (!delivered)
         {
             // 卡片贴不上屏幕（不在 UI 线程、拿不到显示器）⇒ 记一条日志说明"到点过、只是没能弹"，

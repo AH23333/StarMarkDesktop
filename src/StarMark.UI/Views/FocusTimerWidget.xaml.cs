@@ -9,6 +9,8 @@ using StarMark.Core.Widgets;
 using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
 
+using StarMark.Abstractions.I18n;
+
 namespace StarMark.UI.Views;
 
 /// <summary>
@@ -54,11 +56,13 @@ public sealed partial class FocusTimerWidget : UserControl, IWidgetTicker
 
     private void OnPhaseFinished(FocusPhase ended, bool restSkippedAsStale)
     {
-        var title = ended == FocusPhase.Focusing ? "专注结束" : "休息结束";
+        var title = ended == FocusPhase.Focusing
+            ? Locale.T("widget.focus.endedFocusing")
+            : Locale.T("widget.focus.endedResting");
         var body = ended == FocusPhase.Focusing
-            ? (restSkippedAsStale ? "时间早已到点（机器可能睡眠过），不自动进休息" : "该休息一下了")
-            : "休息结束，可以开始下一轮";
-        if (!NoticeCard.Show("番茄钟 · " + title, body))
+            ? (restSkippedAsStale ? Locale.T("widget.focus.staleBody") : Locale.T("widget.focus.restNowBody"))
+            : Locale.T("widget.focus.nextRoundBody");
+        if (!NoticeCard.Show(TrayReporter.CardTitle(Locale.T("widget.kind.focus"), title), body))
             StarLog.Info($"番茄钟提醒（提示卡没能贴上屏幕，仅组件内显示）：{title} — {body}");
     }
 

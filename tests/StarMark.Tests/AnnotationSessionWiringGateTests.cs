@@ -112,8 +112,26 @@ public sealed class AnnotationSessionWiringGateTests
                     < raise.IndexOf("if (to == from) return;", StringComparison.Ordinal),
             "回执排在短路之后＝Sheet 期间那颗键什么都不会说");
         Assert.Contains("HotkeyGate.ReasonNotRunning(", raise);
-        Assert.Contains("Report(\"画布现在按不动\"", raise);
+        Assert.Contains("Report(Locale.T(\"canvas.notice.notResponsiveTitle\")", raise);
         Assert.DoesNotContain("SetHint", raise);
+    }
+
+    /// <summary>
+    /// Sheet 那一格的两处出声（快捷键那条与「白板／幕布」按钮那条）<b>两句都从表里取</b>（批次 WI-47，P-177 收尾）。
+    /// <para>抬头与那句"截图进行中"的兜底从前各写两份：`HotkeyGate.ReasonNotRunning` 回 null 才是这一格真正要说的话，
+    /// 而它写死在调用点的 `??` 后面——同一句话在两个宿主各一份，改一处另一处不会跟着改。
+    /// 现在两处共用一颗键，颗数直接钉死（少一处＝有一处悄悄退回面字）。</para>
+    /// <para>⚠ 禁项读 <c>Code()</c>：这一档的注释与 <c>AnnotationSessionTests</c> 的用例名里都写着「截图进行中」，
+    /// 连注释读会把解释判死（#123）。</para>
+    /// </summary>
+    [Fact]
+    public void BothSheetSpeakersTakeTheirTwoSentencesFromTheTable()
+    {
+        var hub = SourceGate.Code(SourceGate.ReadRepoFile(Hub));
+        Assert.Equal(2, SourceGate.Count(hub, "Report(Locale.T(\"canvas.notice.notResponsiveTitle\")"));
+        Assert.Equal(2, SourceGate.Count(hub, "?? Locale.T(\"canvas.notice.captureInFlight\")"));
+        foreach (var dead in new[] { "Report(\"画布现在按不动\"", "?? \"截图进行中\"" })
+            Assert.DoesNotContain(dead, hub);
     }
 
     /// <summary>

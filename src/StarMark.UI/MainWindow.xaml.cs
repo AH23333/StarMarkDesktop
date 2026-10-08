@@ -22,6 +22,8 @@ using WinUIEx;
 using StarMark.UI.ViewModels;
 using StarMark.UI.Views;
 
+using StarMark.Abstractions.I18n;
+
 namespace StarMark.UI;
 
 /// <summary>
@@ -228,7 +230,8 @@ public sealed partial class MainWindow : Window
             try
             {
                 AppWindow.Hide();
-                if (!_backgroundNoticeShown && NoticeCard.Show("StarMark 正在后台运行", "Ctrl+Alt+Space 随时呼出窗口"))
+                if (!_backgroundNoticeShown && NoticeCard.Show(Locale.T("main.bgRunningTitle"),
+                    Locale.Fmt("main.bgRunningBody", CanvasService.BindingText(HotkeyActions.MainToggle))))
                 {
                     // 只有真的贴上了屏幕才算"说过这一次"：上一版按"气泡返回 true"记账，于是那条提醒
                     // 一辈子只发一次、而用户一次都没看见——记错了账就把唯一的补发机会也烧掉了。

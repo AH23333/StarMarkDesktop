@@ -18,11 +18,14 @@ namespace StarMark.UI.Services;
 /// </summary>
 internal static class TrayReporter
 {
+    /// <summary>卡片标题那句"谁在说话 · 说了什么"只许在这一处拼（批次 WI-47：从前番茄钟自己抄了一遍分隔符）。</summary>
+    public static string CardTitle(string category, string title) => $"{category} · {title}";
+
     public static void Report(string category, string title, string body)
     {
         StarLog.Info($"[{category}] {title}：{body}");
         var shown = false;
-        try { shown = NoticeCard.Show($"{category} · {title}", body); }
+        try { shown = NoticeCard.Show(CardTitle(category, title), body); }
         catch (Exception ex) { StarLog.Warn($"回报没能贴上屏幕：{ex.Message}"); }
         if (!shown) StarLog.Info($"（提示卡没能贴上屏幕，结果只留在日志）{title}：{body}");
     }

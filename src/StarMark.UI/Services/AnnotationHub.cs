@@ -7,6 +7,8 @@ using StarMark.Core.Capture;
 using StarMark.Core.Hotkeys;
 using StarMark.UI.Helpers;
 
+using StarMark.Abstractions.I18n;
+
 namespace StarMark.UI.Services;
 
 /// <summary>
@@ -89,8 +91,8 @@ public static class AnnotationHub
         var to = AnnotationSessions.Move(from, what, _boardBeforeSheet);
         if (what == SessionEvent.ToggleBoard && from.IsSheet())
         {
-            Report("画布现在按不动", HotkeyGate.ReasonNotRunning(
-                HotkeyActions.CanvasToggle, true, AnnotationStage.Sheet) ?? "截图进行中");
+            Report(Locale.T("canvas.notice.notResponsiveTitle"), HotkeyGate.ReasonNotRunning(
+                HotkeyActions.CanvasToggle, true, AnnotationStage.Sheet) ?? Locale.T("canvas.notice.captureInFlight"));
             return;
         }
         if (to == from) return;
@@ -155,8 +157,8 @@ public static class AnnotationHub
     {
         if (Stage.IsSheet())
         {
-            Report("画布现在按不动", HotkeyGate.ReasonNotRunning(
-                HotkeyActions.CanvasToggle, true, AnnotationStage.Sheet) ?? "截图进行中");
+            Report(Locale.T("canvas.notice.notResponsiveTitle"), HotkeyGate.ReasonNotRunning(
+                HotkeyActions.CanvasToggle, true, AnnotationStage.Sheet) ?? Locale.T("canvas.notice.captureInFlight"));
             return;
         }
         if (!Stage.IsBoard())

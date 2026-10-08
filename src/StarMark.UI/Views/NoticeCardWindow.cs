@@ -11,6 +11,8 @@ using Windows.Foundation;
 using Windows.Graphics;
 using Windows.UI;
 
+using StarMark.Abstractions.I18n;
+
 namespace StarMark.UI.Views;
 
 /// <summary>
@@ -74,11 +76,14 @@ public sealed class NoticeCardWindow : Window
     private string? _actionUrl;
     private string? _actionLabel;
 
-    /// <summary>底部那一行的两种说法——停留秒数只有 <see cref="KeepSeconds"/> 一个出处，这里不许另写一份。</summary>
+    /// <summary>
+    /// 底部那一行的两种说法——停留秒数只有 <see cref="KeepSeconds"/> 一个出处，这里不许另写一份
+    /// （批次 WI-47 把句子交表：秒数交实参，⛔ 在表里写死一个数字）。
+    /// </summary>
     private static string HintFor(bool hasAction, string? label)
         => hasAction
-            ? $"点一下打开{label ?? "链接"} · {KeepSeconds} 秒后自动消失"
-            : $"点一下关闭 · {KeepSeconds} 秒后自动消失";
+            ? Locale.Fmt("card.hint.withAction", label ?? Locale.T("card.action.link"), KeepSeconds)
+            : Locale.Fmt("card.hint.plain", KeepSeconds);
 
     public NoticeCardWindow()
     {
