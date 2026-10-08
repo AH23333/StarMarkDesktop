@@ -90,6 +90,10 @@ public static class CanvasTools
 
     /// <summary>条上与状态行用的中文名——<b>整条链只在这里问一次那张表</b>。</summary>
     public static string Name(this CanvasTool tool) => Capture.Annotation.ToolName(tool.ToAnnotation());
+
+    /// <summary>那颗名字在表里的<b>键</b>（批次 WI-51）：画布那条栏把名字嵌进常驻的悬停说明里，
+    /// 交键才让换语言重贴时外层与名字一起换（✅P-181 那颗 <c>NameKey</c> 同一条口径）。</summary>
+    public static string NameKey(this CanvasTool tool) => Capture.Annotation.ToolNameKey(tool.ToAnnotation());
 }
 
 /// <summary>

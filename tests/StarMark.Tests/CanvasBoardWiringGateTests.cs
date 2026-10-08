@@ -174,14 +174,11 @@ public sealed class CanvasBoardWiringGateTests
     }
 
     /// <summary>
-    /// 那颗按钮与那条热键都只能汇到<b>同一个事件</b>上，而且被拦时状态行要讲得出原因。
-    /// <para>XAML 里那颗按钮写成汉字是刻意的：它不属于"图形那排图标"（那排必须按模型生成，见批次 WM）。
-    /// 状态行里"要先点「白板」"那句是拦住它的闸门的可见交代——少了它，"点穿透没反应"只剩一种解释＝软件坏了。</para>
-    /// </summary>
-    /// <summary>
     /// 两颗按钮、两条热键各自汇到<b>一个事件</b>上，而且被拦时状态行要讲得出原因。
-    /// <para>XAML 里这两颗按钮写成汉字是刻意的：它们不属于"图形那排图标"（那排必须按模型生成，见批次 WM）。
-    /// 状态行里"要先点「白板」"那句是拦住它的闸门的可见交代——少了它，"点穿透没反应"只剩一种解释＝软件坏了。</para>
+    /// <para>这两颗按钮在标记里只交<b>那颗键</b>（批次 WI-51，✅P-180）：它们不属于"图形那排图标"
+    /// （那排必须按模型生成，见批次 WM），但和条上其余每一颗一样走 <c>i18n:LocText.Key</c>——
+    /// 从前这里写的是"汉字是刻意的"，而汉字留在标记里只会让换语言时半中半英。</para>
+    /// <para>状态行里那句"要先关掉白板"是拦住它的闸门的可见交代——少了它，"点穿透没反应"只剩一种解释＝软件坏了。</para>
     /// </summary>
     [Fact]
     public void BothBackdropButtonsAndHotkeysFunnelIntoEvents_AndTheBarSaysWhyWhenBlocked()
@@ -200,7 +197,9 @@ public sealed class CanvasBoardWiringGateTests
         var status = SourceGate.MethodBody(code, "private string StatusText()");
         Assert.Contains("CanvasService.IsWhiteboard", status);
         Assert.Contains("CanvasService.IsCurtain", status);            // 幕布压掉半屏内容，这一行必须说
-        Assert.Contains("要先点「白板」", code);
+        // 那句"要先关掉白板"自批次 WI-51 起住在表里（✅P-180）：这里钉的是状态行<b>问哪颗键</b>，
+        // ⛔ 钉句子中的汉字（措辞归表，改一句说法必须照样绿——台架规则 #130）。
+        Assert.Contains("Locale.Fmt(\"canvas.status.boardBlocked\", Locale.T(\"canvas.btn.board\"))", status);
         var app = SourceGate.ReadRepoFile(App);
         Assert.Contains("RegisterHandler(HotkeyActions.CanvasBoard", app);
         Assert.Contains("RegisterHandler(HotkeyActions.CanvasCurtain", app);

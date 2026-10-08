@@ -1,4 +1,5 @@
 #nullable enable
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Canvas;
 
 namespace StarMark.Core.Capture;
@@ -152,10 +153,17 @@ public static class AnnotationSessions
     public static bool IsBlockedByBackdrop(SessionEvent what, CanvasBackdrop backdrop)
         => what == SessionEvent.GivePointerBack && !CanvasBackdropMath.AllowsClickThrough(backdrop);
 
-    /// <summary>拦住那句事件时的<b>看得见的原因</b>（工具条状态行读它；哑按最坏，被拦更要说）。</summary>
-    public static string? ReasonBlockedByBackdrop(SessionEvent what, CanvasBackdrop backdrop)
+    /// <summary>
+    /// 拦住那句事件时的<b>看得见的原因</b>（工具条状态行读它；哑按最坏，被拦更要说）。
+    /// <para>批次 WI-51（P-180）：交的是<b>「键＋实参」</b>而不是拼好的中文句子——那句话嵌着
+    /// 「白板」「穿透」两颗按钮的名字，而它的宿主（<c>AnnotationHub.Notice</c>）会一路显示到画布那条栏上。
+    /// 递成品字＝换语言之后外层换了、句子里那两颗名字还停在旧语言（✅WI-36 那颗窗口标题同一条口径；
+    /// 实参交的是<b>没渲染的</b> <see cref="LocMessage"/>，取词落在贴上去那一刻）。</para>
+    /// </summary>
+    public static LocMessage? ReasonBlockedByBackdrop(SessionEvent what, CanvasBackdrop backdrop)
         => IsBlockedByBackdrop(what, backdrop)
-            ? "白板底时整屏是白墙，交出鼠标等于隔着白墙点桌面；先点「白板」关掉白底，再点「穿透」"
+            ? LocMessage.Of("canvas.notice.blockedByBoard",
+                LocMessage.Of("canvas.btn.board"), LocMessage.Of("canvas.btn.through"))
             : null;
 
     /// <summary>

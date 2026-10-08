@@ -41,6 +41,7 @@ public sealed class I18nWiringGateTests
     private const string SettingsI18nCs = "src/StarMark.UI/Views/SettingsPage.I18n.cs";
     private const string SettingsHotkeysCs = "src/StarMark.UI/Views/SettingsPage.Hotkeys.cs";
     private const string GuideUiCs = "src/StarMark.UI/Helpers/GuideUi.cs";
+    private const string CanvasToolbarCs = "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs";
     private const string AppCs = "src/StarMark.UI/App.xaml.cs";
     // 组件窗自己的三条文字出口（批次 WI-37-A）：菜单本体／外壳两态／快捷启动拖放，加内容工厂的占位那一行。
     private const string WidgetMenuCs = "src/StarMark.UI/Views/WidgetWindow.Menu.cs";
@@ -1100,24 +1101,38 @@ public sealed class I18nWiringGateTests
     }
 
     /// <summary>
-    /// 换语言<b>只有一个订阅点</b>，而且那个订阅点只许做"重贴"这一件事。
-    /// <para>多一处订阅就多一处"谁去把文案改回来"的分配：这一族的坏样子不是崩，是两处各自记得一部分，
-    /// 于是有一处永远贴着旧词。而"重贴"里若混进重建页面／重新查库，切换语言就成了一次全应用刷新
-    /// ——那才是真的会卡一下。</para>
+    /// 换语言的订阅点<b>只许有这两处，且各自的活不重叠</b>。
+    /// <para><see cref="LocText"/> 是"重贴"那一族的唯一主人：多一处订阅就多一处"谁去把文案改回来"的分配，
+    /// 于是有一处永远贴着旧词；而"重贴"里若混进重建页面／重新查库，切换语言就成了一次全应用刷新——那才是真的会卡一下。</para>
+    /// <para>第二处是画布那条工具条（批次 WI-51）：它的状态行是<b>每次状态变化现拼</b>的那一族（⛔ 挂 <c>LocText</c>，
+    /// 见 <c>CaptureBarWordGateTests</c>／<c>CanvasBarWordGateTests</c> 里那两格同一判据），
+    /// 换语言时没人替它取词，屏幕就是半中半英；而它的窗宽按实测内容算，不跟着重摆的话，
+    /// 换成长句那一档就把 ✕（唯一的鼠标出口之一）截在窗外。两处都不是"第二份重贴机制"：
+    /// 一处贴标记上的字，一处贴自己现拼的那一行＋量窗。</para>
     /// </summary>
     [Fact]
     public void ExactlyOneSubscriberRenamesTheStringsAndItRebuildsNothing()
     {
         var files = ReadRepoUnder("src/StarMark.UI");
-        Assert.Equal(1, files.Sum(f => Count(Code(f.Text), "Locale.Changed += ")));
-        Assert.Contains("src/StarMark.UI/Helpers/LocText.cs",
-            files.Where(f => Code(f.Text).Contains("Locale.Changed += ", StringComparison.Ordinal))
-                 .Select(f => f.RelativePath.Replace(Path.DirectorySeparatorChar, '/')),
-            StringComparer.Ordinal);
+        var subscribers = files
+            .Where(f => Code(f.Text).Contains("Locale.Changed += ", StringComparison.Ordinal))
+            .Select(f => f.RelativePath.Replace(Path.DirectorySeparatorChar, '/'))
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToArray();
+        // 两位主人各点一次名（⛔ 只钉计数：加第三处时那一行会红得说不出是谁）
+        Assert.Equal(new[]
+        {
+            "src/StarMark.UI/Helpers/LocText.cs",
+            "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs",
+        }, subscribers);
 
         var reapply = MethodBody(Code(ReadRepoFile(LocTextCs)), "private static void ReapplyAll");
         Assert.DoesNotContain("new ", reapply, StringComparison.Ordinal);        // 重贴不等于重建
         Assert.DoesNotContain("Navigate", reapply, StringComparison.Ordinal);
+        // 第二处也只许做"重取词＋重摆"：它订阅的那颗方法就是它平时状态变化走的那一颗，不许另开一条重建路
+        var bar = Code(ReadRepoFile(CanvasToolbarCs));
+        Assert.Contains("Locale.Changed += Refresh;", bar, StringComparison.Ordinal);
+        Assert.Contains("Locale.Changed -= Refresh;", bar, StringComparison.Ordinal);   // 成对摘掉（事件泄漏那一族）
     }
 
     /// <summary>

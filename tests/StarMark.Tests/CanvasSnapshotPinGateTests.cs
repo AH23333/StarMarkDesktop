@@ -1,4 +1,6 @@
 #nullable enable
+using System.Linq;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Hotkeys;
 using Xunit;
 
@@ -22,6 +24,7 @@ public sealed class CanvasSnapshotPinGateTests
     private const string Service = "src/StarMark.UI/Services/CanvasService.cs";
     private const string SnapshotMath = "src/StarMark.Core/Canvas/CanvasSnapshot.cs";
     private const string ToolbarXaml = "src/StarMark.UI/Views/CanvasToolbarWindow.xaml";
+    private const string ToolbarCs = "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs";
     private const string ActionsFile = "src/StarMark.Core/Hotkeys/HotkeyActions.cs";
 
     /// <summary>
@@ -109,21 +112,32 @@ public sealed class CanvasSnapshotPinGateTests
     /// <summary>
     /// 那颗按钮的悬停说明与热键目录里那一行，说的必须是<b>同一件事</b>（贴的是笔迹那一块）。
     /// <para>文案分岔的形状："条上写着整屏、点出来是一小块"或反过来——用户按哪一句做事，只有他自己承担。</para>
+    /// <para>批次 WI-51（P-180）之后那句说明从标记搬进了表（它还嵌着「截图」那颗名字，实参只能由代码递），
+    /// 所以这一格里还能机检的三件事是：<b>①</b> 那颗按钮的说明确实由那颗键挂上（⛔ 回到标记里写死一句），
+    /// <b>②</b> 旧那句假话（"屏幕画面 + 笔迹合成一张"＝整屏）在任何一列都不许回来，
+    /// <b>③</b> 热键目录那一行仍由 <c>DisplayMessage</c> 交键。<b>④</b>"两行讲的是不是同一件事"从今天起
+    /// 是<b>换语言后的屏幕读数</b>（表里的措辞⛔ 当判据——改一句说法必须绿，规则 #130），已排在 #575 那一跑。</para>
     /// </summary>
     [Fact]
     public void TheButtonHintAndTheHotkeyDirectoryTellTheSameStory()
     {
         var xaml = SourceGate.ReadRepoFile(ToolbarXaml);
+        var code = SourceGate.Code(SourceGate.ReadRepoFile(ToolbarCs));
         var actions = SourceGate.ReadRepoFile(ActionsFile);
-        var pinHint = SourceGate.Between(xaml, "Content=\"贴图\"", "/>");
 
-        Assert.Contains("只裁笔迹那一块", pinHint);
-        Assert.Contains("不挡桌面", pinHint);
-        Assert.DoesNotContain("屏幕画面 + 笔迹合成一张钉在桌面", xaml);       // 旧那句＝整屏，已不是事实
-        // WI-2r 起动作名走键（hotkey.act.canvas.pin，三语进表）——锚点跟形状走；
-        // 批次 WI-39 起那颗键住在 DisplayMessage（交键不交词），DisplayName 只是它外面薄一层 Render()，
-        // 所以锚点挪到真正写键的那颗方法体上（⛔ 放宽成整档找词：那会放过"另有一处自己拼名字"的第二份实现）。
-        // "按钮提示与热键目录同一句事实"的口径由表里那一行承担（zh 列就是原来那句话）。
+        // ① 说明挂在代码那条带实参的路上（它嵌着「截图」那颗名字），标记里⛔ 再留一份没有实参的同款句子
+        Assert.Contains(@"LocText.SetToolTipKey(PinButton, ""canvas.bar.tip.pin"", LocMessage.Of(""capture.card.category""))",
+            code, System.StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"贴图\"", xaml);
+        Assert.DoesNotContain("canvas.bar.tip.pin", xaml);
+        // ② 旧那句已经不是事实，任何一列都不许把它带回来（行按主人点名列出，⛔ 只扫整档）
+        foreach (var key in new[] { "canvas.bar.tip.pin", "hotkey.act.canvas.pin" })
+        {
+            var row = UiStrings.All.Single(e => e.Key == key);
+            foreach (var text in new[] { row.Zh, row.En, row.Ja })
+                Assert.DoesNotContain("屏幕画面 + 笔迹合成", text, System.StringComparison.Ordinal);
+        }
+        // ③ 热键目录那一行仍是键（WI-2r 起动作名走键；WI-39 起那颗键住在 DisplayMessage，交键不交词）
         Assert.Contains("LocMessage.Of(\"hotkey.act.canvas.pin\")",
             SourceGate.MethodBody(actions, "public static LocMessage? DisplayMessage"));
     }

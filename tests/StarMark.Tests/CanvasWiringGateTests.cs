@@ -729,7 +729,7 @@ public sealed class CanvasWiringGateTests
             Assert.Contains($"CanvasTool.{shape} =>",
                 SourceGate.MethodBody(toolbar, "private static UIElement ShapeIcon("));
             Assert.Contains($"CanvasTool.{shape} =>",
-                SourceGate.MethodBody(toolbar, "private static string ShapeHint("));
+                SourceGate.MethodBody(toolbar, "private static string ShapeHintKey("));
             // 每一颗都必须真的走到共用库（漏一颗的症状是"这条上它长得和另一条不一样"）
             Assert.Contains($"BarGlyphs.{shape}Glyph(",
                 SourceGate.MethodBody(toolbar, "private static UIElement ShapeIcon("));
@@ -740,8 +740,11 @@ public sealed class CanvasWiringGateTests
         // 穿透态那一行必须说"这一按仍归下层应用"——不然就是"拖了半天什么都没画，以为软件坏了"。
         // 2026-09-27 改判之后这句话对<b>每一支笔</b>都说（从前图形与荧光笔各写一份、措辞还不一致）：
         // 按工具分支就是"有的说了有的没说"的来源，所以这里反向钉死"不许再按工具分叉"。
+        // 批次 WI-51（P-180）把那两行句子交进表之后，这里能钉的只剩"这一行由哪颗键拼"：
+        // ⛔ 再钉句子里的汉字——措辞归表，改一句说法必须照样绿（台架规则 #130 那条对照臂）。
         var status = SourceGate.MethodBody(toolbar, "private string StatusText()");
-        Assert.Contains("仍归下层应用", status);
+        Assert.Contains("\"canvas.status.through\"", status);
+        Assert.Contains("\"canvas.status.drawing\"", status);
         Assert.DoesNotContain("tool.IsShape()", status);
         Assert.DoesNotContain("CanvasTool.Highlighter", status);
         // 折线是唯一"跨按还开着"的：绘制态那行要顺带说怎么收口（不然用户试出来的那一下是退出画布）
@@ -1351,12 +1354,13 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("if (CanvasService.PressInFlight || !Stage.GlassTakesPointer()) return;", audit);
         Assert.Contains("hit == _yieldedTo", audit);                           // 同一个窗只说一次，不每帧刷
         Assert.Contains("Raise(SessionEvent.GivePointerBack);", audit);        // 让位走会话事件，不再直接改样式位
-        Assert.Contains("另一个程序的窗口", audit);                              // 让位必须给得出原因
         // 让位那句话现在有两臂：白板态要<b>先放下白板</b>才交得出鼠标（整屏白墙不许穿透，判据见 Core 的闸门）。
         // 只钉"常态"那一臂的话，另一臂就成了编不出也测不到的空位——而它的症状是"点了穿透，屏幕还是白的"。
+        // 批次 WI-51：两臂的句子都交进表了，这里钉的是"每一臂问哪颗键、那颗键嵌着谁的名字"
+        // （⛔ 钉汉字：让位的理由上屏幕那一刻才取词，措辞归表）。
         Assert.Contains("Notice = droppingBoard", audit);
-        Assert.Contains("已自动关掉白板底并交回鼠标", audit);
-        Assert.Contains("已自动交回鼠标", audit);
+        Assert.Contains("LocMessage.Of(\"canvas.notice.boardGivenUp\", LocMessage.Of(\"canvas.btn.board\"))", audit);
+        Assert.Contains("LocMessage.Of(\"canvas.notice.pointerGivenUp\", Annotation.ToolNameKey(AnnotationTool.Pen))", audit);
         Assert.Contains("if (droppingBoard) ApplyBackdrop(CanvasBackdrop.Transparent);", audit);
         Assert.DoesNotContain("ReassertLayering", hub);
 
@@ -1371,8 +1375,10 @@ public sealed class CanvasWiringGateTests
             SourceGate.ReadRepoFile(Layer));
         Assert.Contains("public static extern IntPtr WindowFromPoint(NativeMethods.POINT pt);",
             SourceGate.ReadRepoFile(Native));
-        // 让位的话要说给用户听，且用户自己动手后翻篇
-        Assert.Contains("if (AnnotationHub.Notice is { } note) return note;",
+        // 让位的话要说给用户听，且用户自己动手后翻篇。⚠ 状态行收到的是「键＋实参」那句
+        // （<c>AnnotationHub.Notice</c> 自批次 WI-51 起是 <c>LocMessage</c>），
+        // 所以这里必须是<b>当场渲染</b>：把 Notice 的字符串直接 return 会让它在让位那一刻就定死语言。
+        Assert.Contains("if (AnnotationHub.Notice is { } note) return note.Render();",
             SourceGate.MethodBody(SourceGate.ReadRepoFile(Toolbar), "private string StatusText()"));
         Assert.Contains("Notice = null;", SourceGate.MethodBody(hub, "private static bool Apply"));
     }

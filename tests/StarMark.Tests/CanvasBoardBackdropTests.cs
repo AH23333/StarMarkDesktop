@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Linq;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Canvas;
 using StarMark.Core.Capture;
 using StarMark.Integrations.Canvas;
@@ -103,7 +104,21 @@ public sealed class CanvasBoardBackdropTests
             {
                 var reason = AnnotationSessions.ReasonBlockedByBackdrop(what, backdrop);
                 Assert.Equal(AnnotationSessions.IsBlockedByBackdrop(what, backdrop), reason is not null);
-                if (reason is not null) Assert.Contains("白板", reason);
+                if (reason is not null)
+                {
+                    // 批次 WI-51（P-180）：那句话交的是<b>键＋实参</b>。⛔ 再钉"句子里有没有『白板』两个字"——
+                    // 那是把表里的措辞当判据，改一句说法就会红（#379／规则 #130）；钉的是**哪颗键、两颗实参各是谁**。
+                    Assert.Equal("canvas.notice.blockedByBoard", reason.Key);
+                    var args = reason.Args!;
+                    Assert.Equal(2, args.Length);
+                    Assert.Equal("canvas.btn.board", ((LocMessage)args[0]!).Key);
+                    Assert.Equal("canvas.btn.through", ((LocMessage)args[1]!).Key);
+                    // 语言读数：渲染走的是<b>当下</b>那张表，实参也各自现取（外层换了、名字停在旧语言就红）
+                    Assert.Equal(
+                        Locale.Fmt("canvas.notice.blockedByBoard",
+                            LocMessage.Of("canvas.btn.board"), LocMessage.Of("canvas.btn.through")),
+                        reason.Render());
+                }
             }
     }
 

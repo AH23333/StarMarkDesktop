@@ -39,8 +39,12 @@ public static class AnnotationHub
     /// <summary>截图会话在场（热键投影与玻璃显隐都问这一句，不许各自再判一次 <c>_busy</c>）。</summary>
     public static bool IsSheetActive => Stage.SuppressesCanvasHotkeys();
 
-    /// <summary>"画布主动把鼠标交回去了"的原因，工具条状态行跟着显示一次。没有这句话，用户只会觉得软件自己抽风。</summary>
-    public static string? Notice { get; private set; }
+    /// <summary>
+    /// "画布主动把鼠标交回去了"的原因，工具条状态行跟着显示一次。没有这句话，用户只会觉得软件自己抽风。
+    /// <para>⚠ 交的是 <see cref="LocMessage"/>（键＋实参）而不是拼好的句子（批次 WI-51）：这一句会<b>停在</b>
+    /// 状态行上直到下一次状态变化，拼死的字符串等于把语言定死在让位那一瞬间（坑表 #276 那一族）。</para>
+    /// </summary>
+    public static LocMessage? Notice { get; private set; }
 
     /// <summary>
     /// 画布玻璃<b>底下那块背景</b>（透明 / 白板底）——会话态的一部分，所以住在这里而不是宿主里。
@@ -280,8 +284,8 @@ public static class AnnotationHub
         if (droppingBoard) ApplyBackdrop(CanvasBackdrop.Transparent);
         Raise(SessionEvent.GivePointerBack);
         Notice = droppingBoard
-            ? "已自动关掉白板底并交回鼠标：另一个程序的窗口（例如按 Win 呼出的开始菜单）盖住了画布；要接着用白板请再点「白板」"
-            : "已自动交回鼠标：另一个程序的窗口（例如按 Win 呼出的开始菜单）盖住了画布；要接着画请再点「画笔」";
+            ? LocMessage.Of("canvas.notice.boardGivenUp", LocMessage.Of("canvas.btn.board"))
+            : LocMessage.Of("canvas.notice.pointerGivenUp", Annotation.ToolNameKey(AnnotationTool.Pen));
         _yieldedTo = hit;
         StageChanged?.Invoke(Stage);
     }

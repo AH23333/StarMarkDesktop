@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Canvas;
 using StarMark.Core.Capture;
 using StarMark.UI.Helpers;
@@ -53,9 +54,13 @@ public sealed partial class CanvasToolbarWindow : Window
         WindowInterop.RemoveDefaultWindowFrame(this);
         BuildPalette();
         BuildShapeButtons();
+        BuildEmbeddedNameTooltips();
         // 状态回报是"按钮哪个亮着"这件事的唯一出口：画布那边改了，条子必须跟着改
         CanvasService.StateChanged += Refresh;
-        Closed += (_, _) => CanvasService.StateChanged -= Refresh;
+        // 换语言那一刻也得重算这一行（批次 WI-51）：状态行⛔ 走 LocText（它每次状态变化现拼，节拍就是它的重贴），
+        // 不补这一发就是"切了语言，条上每颗按钮都换了字、只有那一行还念着上一门语言"。
+        Locale.Changed += Refresh;
+        Closed += (_, _) => { CanvasService.StateChanged -= Refresh; Locale.Changed -= Refresh; };
 
         Grip.PointerPressed += GripPressed;
         Grip.PointerMoved += GripMoved;
@@ -252,7 +257,9 @@ public sealed partial class CanvasToolbarWindow : Window
                 MinHeight = 0,
                 Background = IdleBrush,
             };
-            ToolTipService.SetToolTip(button, colour.Name);
+            // 颜色名交的是<b>键</b>（✅P-181 那颗 NameKey）：tooltip 是常驻的，换语言由 LocText 重贴。
+            // 从前这里贴的是 `colour.Name`——那一刻拼好的字符串，之后换语言它一个字都不动。
+            LocText.SetToolTipKey(button, colour.NameKey);
             button.Click += Colour_Click;
             _colourButtons.Add(button);
             ColourPalette.Children.Add(button);
@@ -291,9 +298,12 @@ public sealed partial class CanvasToolbarWindow : Window
                 CornerRadius = new CornerRadius(3),
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            var hint = ShapeHint(tool);
-            ToolTipService.SetToolTip(button, hint);
-            button.PointerEntered += (_, _) => ShowHint(hint);
+            // 说明交<b>键＋实参</b>：这颗按钮的 ToolTip 是常驻的（换语言由 LocText 重贴），
+            // 句子里嵌着那颗工具名 ⇒ 实参必须交没渲染的那句（✅WI-36 那颗窗口标题同一条口径），
+            // 而状态行是悬停那一刻现拼的（它的节拍就是它的重贴，⛔ 挂 LocText）。
+            var key = ShapeHintKey(tool);
+            LocText.SetToolTipKey(button, key, LocMessage.Of(tool.NameKey()));
+            button.PointerEntered += (_, _) => ShowHint(Locale.Fmt(key, tool.Name()));
             button.PointerExited += (_, _) => HideHint();
             button.Click += Shape_Click;
             _shapeButtons[tool] = button;
@@ -317,19 +327,35 @@ public sealed partial class CanvasToolbarWindow : Window
         Fit(centerOnScreen: false);
     }
 
-    /// <summary>这颗按钮在说什么。名字一律取 <see cref="CanvasTools.Name"/>，界面不另写一份；
-    /// 手势说明只有这里知道（"按下与抬起是两个对角"和"抬手定一个顶点"不是一回事）。</summary>
-    private static string ShapeHint(CanvasTool tool) => tool switch
+    /// <summary>这颗按钮在说哪句话（批次 WI-51：句子进表，名字一律由那颗主人当实参递进来）。
+    /// 手势说明只有这里知道（"按下与抬起是两个对角"和"抬手定一个顶点"不是一回事），所以一句都不能少。</summary>
+    private static string ShapeHintKey(CanvasTool tool) => tool switch
     {
-        CanvasTool.Rectangle => $"{tool.Name()}：按住拖出，按下处与抬起处是两个对角。再点一次收笔",
-        CanvasTool.Ellipse => $"{tool.Name()}：按住拖出，拖拽的矩形就是它的外切框。再点一次收笔",
-        CanvasTool.Line => $"{tool.Name()}：按住拖出一条，起点到抬手处。再点一次收笔",
+        CanvasTool.Rectangle => "canvas.hint.rectangle",
+        CanvasTool.Ellipse => "canvas.hint.ellipse",
+        CanvasTool.Line => "canvas.hint.line",
         // 折线是唯一"跨按"的，所以它的说明必须把收口方式一并说清，否则用户会以为软件卡住了
-        CanvasTool.PolyLine => $"{tool.Name()}：按住拖出一段、抬手定一个顶点，可接着拖下一段。" +
-                               "Esc／再点一次／换工具收口（整条算一笔，撤销一次退整条）",
-        CanvasTool.Arrow => $"{tool.Name()}：按住拖出，箭头指向抬手那一端。再点一次收笔",
-        _ => $"{tool.Name()}：按住拖出。再点一次收笔",
+        CanvasTool.PolyLine => "canvas.hint.polyline",
+        CanvasTool.Arrow => "canvas.hint.arrow",
+        _ => "canvas.hint.generic",
     };
+
+    /// <summary>
+    /// 四句<b>嵌着别的按钮名字</b>的悬停说明（批次 WI-51，P-180）：这四颗⛔ 在 XAML 里挂
+    /// <c>LocText.ToolTipKey</c>——标记扩展只能给键、递不出实参，那样屏幕上会露出字面的 <c>{0}</c>。
+    /// <para>实参一律交<b>没渲染的</b> <see cref="LocMessage"/>：改天有人把那颗按钮改成「透传」或「白版」，
+    /// 这四句话跟着换；把名字抄在句子里就是留四份会过期的假话（✅P-178／#373 同一族）。</para>
+    /// </summary>
+    private void BuildEmbeddedNameTooltips()
+    {
+        LocText.SetToolTipKey(BoardButton, "canvas.bar.tip.board",
+            LocMessage.Of("canvas.btn.board"), LocMessage.Of("pin.card.category"),
+            LocMessage.Of("canvas.btn.save"), LocMessage.Of("canvas.btn.through"));
+        LocText.SetToolTipKey(CurtainButton, "canvas.bar.tip.curtain",
+            LocMessage.Of("canvas.btn.curtain"), LocMessage.Of("canvas.btn.through"));
+        LocText.SetToolTipKey(HaloButton, "canvas.bar.tip.halo", LocMessage.Of("canvas.btn.curtain"));
+        LocText.SetToolTipKey(PinButton, "canvas.bar.tip.pin", LocMessage.Of("capture.card.category"));
+    }
 
     // ────────── 图标：矢量图元画的，不用字体字形 ──────────
     //
@@ -386,26 +412,31 @@ public sealed partial class CanvasToolbarWindow : Window
         // 刚发生过"让位"就先说这一句：用户此刻最需要知道的是"为什么刚才还能画"，
         // 而不是那行常态说明（下一次自己动工具/穿透时这句话就翻篇）
         // 让位原因是状态机的输出（"为什么交回了鼠标"是会话这件事的一部分），不是画布宿主的私事。
-        if (AnnotationHub.Notice is { } note) return note;
+        if (AnnotationHub.Notice is { } note) return note.Render();
         var tool = CanvasService.Tool;
         // 光晕只有两档（批次 RN，用户裁），开没开由那颗按钮的亮灭说——状态行不再写它：
         // 这行是「按了会发生什么」的唯一说明，多挂一段就少一段看得清的空间（幕布那句留着，它改的是半屏内容）。
-        var ink = $"{tool.Name()} · {CanvasService.WidthStep + 1} 档 · {CanvasService.Palette[CanvasService.ColorIndex].Name}";
+        var ink = Locale.Fmt("canvas.status.ink", tool.Name(), CanvasService.WidthStep + 1,
+            CanvasService.Palette[CanvasService.ColorIndex].Name);
         // 幕布开着时屏幕上少了一半内容：这一行不说，"屏幕怎么暗了、我的字怎么不见了"就只能靠猜
-        var curtain = CanvasService.IsCurtain ? " · 幕布（只亮鼠标那一圈）" : string.Empty;
+        var curtain = CanvasService.IsCurtain
+            ? Locale.Fmt("canvas.status.curtainTail", Locale.T("canvas.btn.curtain"))
+            : string.Empty;
         if (!CanvasService.IsClickThrough)
             // 折线是唯一"跨按还开着"的：不在这行说怎么收，用户就只能靠试——而试出来的那一下是 Esc＝退出画布
             // 白板开着时「交出鼠标」这条出口被背景态闸门拦住了（整屏白墙不许穿透）。这一行不说清楚，
             // 用户点「穿透」只会得到"按钮坏了"的结论——被拦住的动作必须把拦住它的那句话讲出来。
-            return $"绘制中（鼠标归画布）：{ink}{curtain}。" + (CanvasService.IsWhiteboard
-                ? "白板底开着：要先点「白板」关掉白底，才能交出鼠标"
-                : "点「穿透」或右键交出鼠标")
-                   + (tool == CanvasTool.PolyLine ? "；勾折线时 Esc／再点「折线」＝收口这一条" : string.Empty);
+            return Locale.Fmt("canvas.status.drawing", ink, curtain, CanvasService.IsWhiteboard
+                    ? Locale.Fmt("canvas.status.boardBlocked", Locale.T("canvas.btn.board"))
+                    : Locale.Fmt("canvas.status.giveBack", Locale.T("canvas.btn.through")))
+                + (tool == CanvasTool.PolyLine
+                    ? Locale.Fmt("canvas.status.polyTail", tool.Name())
+                    : string.Empty);
         // 2026-09-27 改判：穿透态下<b>没有任何一支笔</b>能直接画（从前荧光笔"按住即画"，与"穿透＝鼠标归下层"
         // 这句话自相矛盾，而且那套轮询抢按不看光标落点，会把点工具条那一下也吃掉）。
         // 所以这一行只说两件事：这一按归谁、以及怎么开始画。少了"仍归下层应用"这句，
         // 就是"点了橡皮、拖了半天什么都没画、还以为软件坏了"那种误会。
-        return $"穿透中：这一按仍归下层应用{curtain}；点「穿透」（或画布「穿透」快捷键）收回鼠标再画{tool.Name()}。{ink}";
+        return Locale.Fmt("canvas.status.through", curtain, Locale.T("canvas.btn.through"), tool.Name(), ink);
     }
 
     private static void Highlight(Button button, bool on, bool strong = true)

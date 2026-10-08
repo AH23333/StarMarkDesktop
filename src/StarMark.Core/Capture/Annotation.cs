@@ -542,19 +542,27 @@ public sealed record Annotation(
     /// "荧光／橡皮擦"与画布那边的"荧光笔／橡皮"从前各写一份，同一条链的两根栏上叫法就不一样。
     /// 这里取两边都讲得通、且更完整的那一个。</para>
     /// </summary>
-    public static string ToolName(AnnotationTool tool) => tool switch
+    public static string ToolName(AnnotationTool tool) => Locale.T(ToolNameKey(tool));
+
+    /// <summary>
+    /// 这个名字<b>在表里的那颗键</b>（批次 WI-51，与 ✅P-181 那颗 <c>AnnotationColor.NameKey</c> 同一形状）。
+    /// <para>为什么要把键交出去而不只交词：画布那条栏的悬停说明是<b>常驻</b>的（挂在 ToolTip 上，
+    /// 换语言由 <c>LocText</c> 重贴），而句子里嵌着这颗工具名。递<b>已渲染的词</b>进去，重贴时外层换了、
+    /// 名字还停在旧语言（✅WI-36 那颗窗口标题同一条口径：嵌套的名字交的是<b>没渲染的</b>那句）。</para>
+    /// </summary>
+    public static string ToolNameKey(AnnotationTool tool) => tool switch
     {
-        AnnotationTool.Rectangle => Locale.T("anno.tool.rectangle"),
-        AnnotationTool.Ellipse => Locale.T("anno.tool.ellipse"),
-        AnnotationTool.Line => Locale.T("anno.tool.line"),
-        AnnotationTool.PolyLine => Locale.T("anno.tool.polyline"),
-        AnnotationTool.Arrow => Locale.T("anno.tool.arrow"),
-        AnnotationTool.Pen => Locale.T("anno.tool.pen"),
-        AnnotationTool.Highlighter => Locale.T("anno.tool.highlighter"),
-        AnnotationTool.Mosaic => Locale.T("anno.tool.mosaic"),
-        AnnotationTool.Text => Locale.T("anno.tool.text"),
-        AnnotationTool.Number => Locale.T("anno.tool.number"),
-        AnnotationTool.Eraser => Locale.T("anno.tool.eraser"),
+        AnnotationTool.Rectangle => "anno.tool.rectangle",
+        AnnotationTool.Ellipse => "anno.tool.ellipse",
+        AnnotationTool.Line => "anno.tool.line",
+        AnnotationTool.PolyLine => "anno.tool.polyline",
+        AnnotationTool.Arrow => "anno.tool.arrow",
+        AnnotationTool.Pen => "anno.tool.pen",
+        AnnotationTool.Highlighter => "anno.tool.highlighter",
+        AnnotationTool.Mosaic => "anno.tool.mosaic",
+        AnnotationTool.Text => "anno.tool.text",
+        AnnotationTool.Number => "anno.tool.number",
+        AnnotationTool.Eraser => "anno.tool.eraser",
         _ => tool.ToString(),
     };
 

@@ -70,6 +70,13 @@ public static class LocText
     /// </summary>
     private static readonly ConditionalWeakTable<DependencyObject, ArgsBox> ArgStore = new();
 
+    /// <summary><see cref="ToolTipKeyProperty"/> 那句悬停说明的实参（批次 WI-51）。
+    /// <para>为什么不是顺路用 <see cref="ArgStore"/>：画布那条工具条上<b>同一颗按钮两句话都有</b>——
+    /// 正文（图标／短名）一句、悬停说明一句，而说明里嵌着别的按钮的名字。共用一格信箱就等于
+    /// "贴正文时拿到说明的实参"，屏幕上是一句填空填错了的话（坑表 #276 同族：一处信箱只服务一条路）。
+    /// ⛔ 第二颗附带属性（WinRT 投不出去的那条边界，✅P-173／坑表 #316）⇒ 与 ArgStore 同一形状的弱表。</para></summary>
+    private static readonly ConditionalWeakTable<DependencyObject, ArgsBox> ToolTipArgStore = new();
+
     static LocText()
     {
         // 只订阅一次，且回调里只做"重贴"这一件事：重建页面、重查数据都不属于这里。
@@ -135,7 +142,27 @@ public static class LocText
 
     public static string GetKey(DependencyObject element) => (string)element.GetValue(KeyProperty);
 
-    public static void SetToolTipKey(DependencyObject element, string value) => element.SetValue(ToolTipKeyProperty, value);
+    public static void SetToolTipKey(DependencyObject element, string value)
+    {
+        // 不带实参的那一路也要过一次信箱：留着上一句的实参＝下一次换语言按旧读数填空（与 SetKey 同一条理由）。
+        ToolTipArgStore.Remove(element);
+        element.SetValue(ToolTipKeyProperty, value);
+    }
+
+    /// <summary>
+    /// 把一句<b>带实参</b>的悬停说明钉进重贴名单（批次 WI-51）。
+    /// <para>画布那条工具条上有四句说明嵌着别的按钮的名字（「白板开着不能穿透」这类）。
+    /// 名字⛔ 抄在句子里：改了那颗按钮的说法，这四句就留在旧名字上教人点一颗不存在的东西
+    /// ——与 ✅P-178 那颗"卡片正文抄了全局热键"同一形状。实参交出去的是<b>没渲染的</b>
+    /// <see cref="LocMessage"/>，嵌套那句也在贴上去这一刻才取词（✅WI-36 那颗窗口标题同一条口径）。</para>
+    /// </summary>
+    public static void SetToolTipKey(DependencyObject element, string key, params object?[] args)
+    {
+        // 与正文那一路同序：实参先落，随后那颗键的回调才知道自己要以"带读数"的方式贴。
+        if (args is { Length: > 0 }) ToolTipArgStore.AddOrUpdate(element, new ArgsBox(args));
+        else ToolTipArgStore.Remove(element);
+        element.SetValue(ToolTipKeyProperty, key);
+    }
 
     public static string GetToolTipKey(DependencyObject element) => (string)element.GetValue(ToolTipKeyProperty);
 
@@ -222,8 +249,10 @@ public static class LocText
     {
         var key = e.NewValue as string;
         if (string.IsNullOrEmpty(key)) return;
-        Register(d, ToolTipService.ToolTipProperty, key!, null);
-        ToolTipService.SetToolTip(d, Locale.T(key!));
+        // 取词＋填空仍走 Text() 那唯一一处（⛔ 在这里再写一份 string.Format）：换语言重贴的是同一条路。
+        var args = ToolTipArgStore.TryGetValue(d, out var box) ? box.Value : null;
+        Register(d, ToolTipService.ToolTipProperty, key!, args);
+        ToolTipService.SetToolTip(d, Text(key!, args));
     }
 
     private static void OnPlaceholderKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

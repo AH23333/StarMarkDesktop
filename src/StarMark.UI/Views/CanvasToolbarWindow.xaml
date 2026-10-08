@@ -2,37 +2,46 @@
 <Window
     x:Class="StarMark.UI.Views.CanvasToolbarWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:i18n="using:StarMark.UI.Helpers">
 
     <!--
         画布工具条：一块独立小窗（与截图那条窗链同一套理由：不进组件体系、不参与布局存档）。
         它<b>永远不穿透</b>——§16.6 点名的"穿透之后找不回"就靠这条 + 全局热键 + 托盘三处出口。
+
+        批次 WI-51（P-180）：这一档的字全部交表（换语言由 LocText 重贴，⛔ 重启，P-54 那条口径）。
+        ⚠ 四句说明（白板／幕布／光晕／贴图那四颗）嵌着<b>别的按钮的名字</b>，XAML 里递不出实参
+          （标记扩展只能给键）⇒ 那四颗的 ToolTip 一律挪到 code-behind 用 `LocText.SetToolTipKey(el, key, args)`，
+          XAML 里⛔ 留一份"没有实参的同款句子"——那会把 {0} 原样贴到屏幕上。
+        ⚠ 三支笔与三档档位名的主人是 Core 的词厂（✅P-181），这里挂的是<b>那两颗键</b>，⛔ 第六份字面量。
     -->
     <Grid x:Name="Root" Background="#F21E1E1E" RequestedTheme="Dark">
         <StackPanel Spacing="6" Padding="10">
             <StackPanel Orientation="Horizontal" Spacing="6">
                 <!-- 拖动落点：整条窗跟着走，笔迹不受影响（分层窗自己不动） -->
                 <Border x:Name="Grip" Width="22" Height="22" Background="#33FFFFFF"
-                        VerticalAlignment="Center" ToolTipService.ToolTip="拖动移动工具条">
+                        VerticalAlignment="Center" i18n:LocText.ToolTipKey="canvas.bar.tip.grip">
                     <TextBlock Text="⋮⋮" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
-                <Button x:Name="PenButton" Content="画笔" Click="Pen_Click"/>
-                <Button x:Name="MarkerButton" Content="荧光笔" Click="Marker_Click"/>
-                <Button x:Name="EraserButton" Content="橡皮" Click="Eraser_Click"/>
+                <Button x:Name="PenButton" Click="Pen_Click" i18n:LocText.Key="anno.tool.pen"/>
+                <Button x:Name="MarkerButton" Click="Marker_Click" i18n:LocText.Key="anno.tool.highlighter"/>
+                <Button x:Name="EraserButton" Click="Eraser_Click" i18n:LocText.Key="anno.tool.eraser"/>
                 <!-- 措辞要说准：撤销退的是"最后落的那一笔"，多屏时它可能不在鼠标所在那块屏上
                      （从前这里写"这一块屏"，而代码早已改成按全机序号挑——屏幕说明与行为不一致＝用户以为撤错了东西）。 -->
-                <Button Content="撤销" Click="Undo_Click" ToolTipService.ToolTip="退掉最后落的那一笔（多块屏时按全机先后挑，不是只挑鼠标这块）"/>
-                <Button Content="重做" Click="Redo_Click" ToolTipService.ToolTip="把刚退掉的那一笔放回来"/>
-                <Button Content="清屏" Click="Clear_Click"/>
-                <Button x:Name="ThroughButton" Content="穿透" Click="Through_Click"
-                        ToolTipService.ToolTip="点穿到下面的 PPT／桌面；再按一次或按热键回到绘制"/>
+                <Button Click="Undo_Click" i18n:LocText.Key="canvas.btn.undo"
+                        i18n:LocText.ToolTipKey="canvas.bar.tip.undo"/>
+                <Button Click="Redo_Click" i18n:LocText.Key="canvas.btn.redo"
+                        i18n:LocText.ToolTipKey="canvas.bar.tip.redo"/>
+                <Button Click="Clear_Click" i18n:LocText.Key="canvas.btn.clear"/>
+                <Button x:Name="ThroughButton" Click="Through_Click" i18n:LocText.Key="canvas.btn.through"
+                        i18n:LocText.ToolTipKey="canvas.bar.tip.through"/>
                 <!-- 白板底：这块玻璃底下换成不透明白（演示/讲解用）。措辞要说清它与「穿透」互相拦着，
-                     否则"点了穿透没反应"只剩一种解释＝软件坏了。 -->
-                <Button x:Name="BoardButton" Content="白板" Click="Board_Click"
-                        ToolTipService.ToolTip="整屏换成白底，墨画在白底上（贴图／存图带这张白底）；白板开着不能穿透，先关掉它再交鼠标"/>
-                <!-- 幕布：整屏压暗、只留鼠标那一圈亮。与白板互斥（背景只有一个真值），所以点它会把白板关掉。 -->
-                <Button x:Name="CurtainButton" Content="幕布" Click="Curtain_Click"
-                        ToolTipService.ToolTip="压暗整屏、只留鼠标周围一圈亮（讲解时收注意力）；幕布是半透明的，压暗着还能穿透"/>
+                     否则"点了穿透没反应"只剩一种解释＝软件坏了。
+                     ⚠ 这句的 ToolTip 在 code-behind 里挂（它嵌着另外三颗按钮的名字，实参⛔ 抄在句子里）。 -->
+                <Button x:Name="BoardButton" Click="Board_Click" i18n:LocText.Key="canvas.btn.board"/>
+                <!-- 幕布：整屏压暗、只留鼠标那一圈亮。与白板互斥（背景只有一个真值），所以点它会把白板关掉。
+                     ToolTip 同上：在 code-behind 挂。 -->
+                <Button x:Name="CurtainButton" Click="Curtain_Click" i18n:LocText.Key="canvas.btn.curtain"/>
                 <!--
                     五种图形（发起人点名"给画布加图形编辑"，并要求用图标而不是汉字）。
                     这一段整排由代码按 Core 的 CanvasTools.Shapes 生成：
@@ -42,22 +51,21 @@
                        五颗下来就是把 ✕（唯一的鼠标出口之一）挤出客户区的那种宽度。
                 -->
                 <StackPanel x:Name="ShapeRow" Orientation="Horizontal" Spacing="6"/>
-                <Button x:Name="HaloButton" Content="光晕" Click="Halo_Click"
-                        ToolTipService.ToolTip="点开＝任何工具都跟着光标一团光，再点关掉（默认关；讲解时指着屏幕看得见光标在哪儿）。幕布开着时那一块是亮区，不再叠光。圆多大在设置→拓展功能→屏幕画布里调"/>
-                <Button Content="贴图" Click="Pin_Click" ToolTipService.ToolTip="只裁笔迹那一块（连同它底下的画面）钉回原位，不挡桌面；要整屏请用截图"/>
-                <Button Content="存图" Click="Save_Click"/>
-                <Button Content="复制" Click="Copy_Click"/>
+                <Button x:Name="HaloButton" Click="Halo_Click" i18n:LocText.Key="canvas.btn.halo"/>
+                <Button x:Name="PinButton" Click="Pin_Click" i18n:LocText.Key="pin.card.category"/>
+                <Button Click="Save_Click" i18n:LocText.Key="canvas.btn.save"/>
+                <Button Click="Copy_Click" i18n:LocText.Key="canvas.btn.copy"/>
                 <Button x:Name="KeysButton" Content="⌨" Click="Keys_Click" MinWidth="0"
-                        ToolTipService.ToolTip="快捷键一览（含不用键盘的三条出口）；再点一次收起"/>
-                <Button x:Name="CloseButton" Content="✕ 退出" Click="Close_Click"/>
+                        i18n:LocText.ToolTipKey="canvas.bar.tip.keys"/>
+                <Button x:Name="CloseButton" Click="Close_Click" i18n:LocText.Key="canvas.btn.exit"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="6">
                 <Border x:Name="ColourRow" Background="#22FFFFFF" Padding="4,2">
                     <StackPanel x:Name="ColourPalette" Orientation="Horizontal" Spacing="4"/>
                 </Border>
-                <Button x:Name="ThinButton" Content="细" Click="Thin_Click"/>
-                <Button x:Name="MediumButton" Content="中" Click="Medium_Click"/>
-                <Button x:Name="ThickButton" Content="粗" Click="Thick_Click"/>
+                <Button x:Name="ThinButton" Click="Thin_Click" i18n:LocText.Key="anno.thickness.thin"/>
+                <Button x:Name="MediumButton" Click="Medium_Click" i18n:LocText.Key="anno.thickness.medium"/>
+                <Button x:Name="ThickButton" Click="Thick_Click" i18n:LocText.Key="anno.thickness.thick"/>
                 <TextBlock x:Name="Status" VerticalAlignment="Center" FontSize="12" MaxWidth="360"
                            Foreground="#BFFFFFFF" TextWrapping="Wrap"/>
             </StackPanel>
