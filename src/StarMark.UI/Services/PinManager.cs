@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Capture;
 using StarMark.UI.Helpers;
 using StarMark.UI.Views;
@@ -45,7 +46,9 @@ public static class PinManager
     public sealed class PinGroup(int serial, CaptureOverlayWindow first)
     {
         public int Serial { get; } = serial;
-        public string Name { get; } = PinGrouping.NameOf(serial);
+
+        /// <summary>组名的<b>念法</b>：每次现算（批次 WI-46c）。⛔ 存进字段——存下来＝在建组那一刻定死，换语言后不动。</summary>
+        public string Name => PinGrouping.NameOf(Serial);
         public List<CaptureOverlayWindow> Members { get; } = [first];
 
         /// <summary>整组都收起了才算"这一组已隐藏"——决定那条菜单写「显示」还是「隐藏」。</summary>
@@ -75,7 +78,7 @@ public static class PinManager
         {
             if (CaptureGeometry.PinLimitProblem(Pins.Count) is { } full)
             {
-                TrayReporter.Report("贴图", "已达上限", full);
+                TrayReporter.Report(Locale.T("pin.card.category"), Locale.T("pin.card.limitTitle"), full);
                 return;
             }
             try
@@ -88,14 +91,15 @@ public static class PinManager
                 // 新贴的一张要跟随当前全局状态，否则"明明收起了却冒出一张新的"
                 if (wasHidden) pin.HidePin();
                 if (wasThrough && !pin.ApplyClickThrough(true))
-                    TrayReporter.Report("贴图", "穿透未跟上新贴图", "系统拒绝了这一张的扩展样式，其余几张仍然穿透");
-                TrayReporter.Report("贴图", "已钉住",
-                    CaptureGeometry.FormatSize(width, height) + $"（共 {Pins.Count} 张，上限 {CaptureGeometry.MaxPins} 张）");
+                    TrayReporter.Report(Locale.T("pin.card.category"), Locale.T("pin.card.throughMissTitle"),
+                        Locale.T("pin.card.throughMissBody"));
+                TrayReporter.Report(Locale.T("pin.card.category"), Locale.T("pin.card.pinnedTitle"),
+                    CaptureGeometry.FormatSize(width, height) + Locale.Fmt("pin.card.pinnedBody", Pins.Count, CaptureGeometry.MaxPins));
             }
             catch (Exception ex)
             {
                 StarLog.Error("[Pin] 贴图未能钉住", ex);
-                TrayReporter.Report("贴图", "钉住失败", ex.Message);
+                TrayReporter.Report(Locale.T("pin.card.category"), Locale.T("pin.card.pinFailedTitle"), ex.Message);
             }
         });
 
@@ -104,10 +108,10 @@ public static class PinManager
     {
         if (CaptureGeometry.PinCommandProblem(Pins.Count) is { } none)
         {
-            TrayReporter.Report("贴图", "没有可操作的贴图", none);
+            TrayReporter.Report(Locale.T("pin.card.category"), Locale.T("pin.card.noneTitle"), none);
             return;
         }
-        ApplyHiddenTo(Pins, PinGrouping.NextHidden(AreHidden), "全部贴图");
+        ApplyHiddenTo(Pins, PinGrouping.NextHidden(AreHidden), Locale.T("pin.card.scopeAll"));
     });
 
     /// <summary>切换所有贴图的鼠标穿透。</summary>
@@ -115,17 +119,17 @@ public static class PinManager
     {
         if (CaptureGeometry.PinCommandProblem(Pins.Count) is { } none)
         {
-            TrayReporter.Report("贴图", "没有可操作的贴图", none);
+            TrayReporter.Report(Locale.T("pin.card.category"), Locale.T("pin.card.noneTitle"), none);
             return;
         }
-        ApplyThroughTo(Pins, PinGrouping.NextThrough(ClickThrough), "全部贴图");
+        ApplyThroughTo(Pins, PinGrouping.NextThrough(ClickThrough), Locale.T("pin.card.scopeAll"));
     });
 
     public static void CloseAll() => OnUi(() =>
     {
         if (CaptureGeometry.PinCommandProblem(Pins.Count) is { } none)
         {
-            TrayReporter.Report("贴图", "没有可操作的贴图", none);
+            TrayReporter.Report(Locale.T("pin.card.category"), Locale.T("pin.card.noneTitle"), none);
             return;
         }
         var closed = Pins.Count;
@@ -150,14 +154,15 @@ public static class PinManager
     {
         if (PinGrouping.LimitProblem(GroupRoster.Count) is { } full)
         {
-            TrayReporter.Report("贴图组", "不能再分组", full);
+            TrayReporter.Report(Locale.T("pin.card.groupCategory"), Locale.T("pin.card.groupFullTitle"), full);
             return;
         }
         Detach(pin);
         var group = new PinGroup(++_nextSerial, pin);
         GroupRoster.Add(group);
         StarLog.Info($"[Pin] {group.Name}＝1 张");
-        TrayReporter.Report("贴图组", "已分组", $"{group.Name}（1 张）。托盘「贴图组」里能整组隐藏 / 穿透 / 关闭");
+        TrayReporter.Report(Locale.T("pin.card.groupCategory"), Locale.T("pin.card.groupedTitle"),
+            Locale.Fmt("pin.card.groupedBody", PinGrouping.GroupLabel(group.Name, 1), Locale.T("pin.card.groupCategory")));
     });
 
     /// <summary>把这一张并进已有的一组（先从原来的组里摘出来，组号因此可能变少一行）。</summary>
@@ -167,13 +172,15 @@ public static class PinManager
         if (target is null)
         {
             // 菜单是右键那一刻现取的，走到这里时那一组可能已经被关掉了：说清楚，别让人以为并进去了。
-            TrayReporter.Report("贴图组", "那一组已经不在了", $"组 {serial} 在本次操作前被关掉，这张仍按原样留在桌面上");
+            TrayReporter.Report(Locale.T("pin.card.groupCategory"), Locale.T("pin.card.groupGoneTitle"),
+                Locale.Fmt("pin.card.goneBeforeBody", PinGrouping.NameOf(serial)));
             return;
         }
         Detach(pin);
         target.Members.Add(pin);
         StarLog.Info($"[Pin] 并入 {target.Name}＝{target.Members.Count} 张");
-        TrayReporter.Report("贴图组", "已并入", $"{target.Name}（{target.Members.Count} 张）");
+        TrayReporter.Report(Locale.T("pin.card.groupCategory"), Locale.T("pin.card.joinedTitle"),
+            Locale.Fmt("pin.groupLabel", target.Name, target.Members.Count));
     });
 
     /// <summary>从当前组里出来。整组只剩一张时它出来就等于空组 ⇒ 那一组一起消失。</summary>
@@ -183,7 +190,8 @@ public static class PinManager
         if (from is null) return;
         Detach(pin);
         StarLog.Info($"[Pin] 已从 {from.Name} 移出");
-        TrayReporter.Report("贴图组", "已移出组", $"{from.Name} 还剩 {from.Members.Count} 张");
+        TrayReporter.Report(Locale.T("pin.card.groupCategory"), Locale.T("pin.card.leftTitle"),
+            Locale.Fmt("pin.card.leftBody", from.Name, from.Members.Count));
     });
 
     /// <summary>
@@ -199,7 +207,8 @@ public static class PinManager
         {
             if (Find(serial) is not { } group)
             {
-                TrayReporter.Report("贴图组", "那一组已经不在了", $"组 {serial} 在本次点击前被关掉");
+                TrayReporter.Report(Locale.T("pin.card.groupCategory"), Locale.T("pin.card.groupGoneTitle"),
+                    Locale.Fmt("pin.card.goneOnClickBody", PinGrouping.NameOf(serial)));
                 return;
             }
             switch (action)
@@ -228,7 +237,8 @@ public static class PinManager
         }
         Prune();
         StarLog.Info($"[Pin] 已关闭 {group.Name}（{closed} 张）");
-        TrayReporter.Report("贴图组", "已关闭这一组", $"{group.Name}（{closed} 张）");
+        TrayReporter.Report(Locale.T("pin.card.groupCategory"), Locale.T("pin.card.groupClosedTitle"),
+            Locale.Fmt("pin.groupLabel", group.Name, closed));
     }
 
     private static void ApplyHiddenTo(List<CaptureOverlayWindow> targets, bool hidden, string scope)
@@ -247,8 +257,8 @@ public static class PinManager
         var failed = targets.Count(pin => !pin.ApplyClickThrough(through));
         if (failed > 0)
         {
-            TrayReporter.Report("贴图", "穿透未能全部生效",
-                $"{failed} / {targets.Count} 张（{scope}）拒绝了这个改动（系统拒绝了扩展样式），在那几张的工具条上再点一次穿透");
+            TrayReporter.Report(Locale.T("pin.card.category"), Locale.T("pin.card.throughPartialTitle"),
+                Locale.Fmt("pin.card.throughPartialBody", failed, targets.Count, scope));
             return;
         }
         StarLog.Info($"[Pin] 鼠标穿透＝{(through ? "开" : "关")}（{scope} {targets.Count} 张）");

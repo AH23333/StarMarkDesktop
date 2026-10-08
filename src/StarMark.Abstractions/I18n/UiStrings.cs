@@ -837,6 +837,54 @@ public static class UiStrings
         // 括号形状只许一个主人：Core 的 `HowParenthesized` 与 UI 里那份 `Paren` 从前各写一份（同一动作两份实现），
         // 现在只有 Core 那一份，词也从表里取——⛔ en 那两列用全角括号（那不是我写的那门字的排版）。
         new Entry("ocr.how.paren", "（{0}）", " ({0})", "（{0}）"),
+        // ===== 贴图与贴图组那一路的提示卡句（批次 WI-46c，P-177 第三刀）=====
+        // 同一口径：卡片那三样（抬头／标题／正文）都在做事那一刻写一次 ⇒ 取词落在调用点，⛔ 挂 `LocText`（WI-45／46a／46b）。
+        // ⚠ 抬头那颗「贴图」⛔ 在这一批再立一次——它就是 WI-46a 为 `_pinned ? 贴图 : 截图` 立好的 `pin.card.category`；
+        //   一个词两个出处＝改了其中一处，屏幕上同一族卡的抬头从此各说各话。
+        // ⚠ `pin.group.name` 顶掉了从前那颗 `PinGrouping.NamePrefix`：组**身份**是序号，"组 3"只是它的一种念法；
+        //   旧写法把念法存进建组那一刻的快照 ⇒ 换语言后托盘与条上那几行仍念旧语言（同形先例＝`hotkey.gate.*`）。
+        new Entry("pin.card.groupCategory", "贴图组", "Pin group", "貼り付けグループ"),
+        new Entry("pin.card.limitTitle", "已达上限", "Limit reached", "上限に達しました"),
+        new Entry("pin.card.limitBody", "已经有 {0} 张贴图，最多 {1} 张——先关掉不用的再贴（贴图会把那块画面常驻在内存里）",
+                  "There are already {0} pins and {1} is the limit — close one you no longer need (a pin keeps that part of the screen in memory)",
+                  "すでに {0} 枚貼り付けています。上限は {1} 枚です。不要なものを先に閉じてください（貼り付けは画面の一部をメモリに保持します）"),
+        new Entry("pin.card.noneTitle", "没有可操作的贴图", "No pin to act on", "操作する貼り付けがありません"),
+        new Entry("pin.card.noneBody", "现在没有贴图，这一条没有可操作的对象",
+                  "There is no pin on screen, so this command has nothing to act on",
+                  "貼り付けがないため、このコマンドは対象がありません"),
+        new Entry("pin.card.pinnedTitle", "已钉住", "Pinned", "貼り付けました"),
+        new Entry("pin.card.pinnedBody", "（共 {0} 张，上限 {1} 张）", " ({0} in total, limit {1})", "（計 {0} 枚、上限 {1} 枚）"),
+        new Entry("pin.card.pinFailedTitle", "钉住失败", "Couldn't pin it", "貼り付けに失敗しました"),
+        new Entry("pin.card.throughMissTitle", "穿透未跟上新贴图", "The new pin didn't follow click-through", "新しい貼り付けがマウス無視に追随しませんでした"),
+        new Entry("pin.card.throughMissBody", "系统拒绝了这一张的扩展样式，其余几张仍然穿透",
+                  "The system refused the extended style for this one; the others still ignore the mouse",
+                  "このウィンドウの拡張スタイルをシステムが拒否しました。他は引き続きマウスを無視します"),
+        new Entry("pin.card.throughPartialTitle", "穿透未能全部生效", "Click-through didn't apply to every pin", "マウス無視が全てには適用されませんでした"),
+        new Entry("pin.card.throughPartialBody", "{0} / {1} 张（{2}）拒绝了这个改动（系统拒绝了扩展样式），在那几张的工具条上再点一次穿透",
+                  "{0} of {1} pins ({2}) refused this change (the system rejected the extended style) — click click-through again on those toolbars",
+                  "{1} 枚中 {0} 枚（{2}）がこの変更を拒否しました（システムが拡張スタイルを却下）。それらのツールバーでマウス無視をもう一度押してください"),
+        new Entry("pin.card.groupFullTitle", "不能再分组", "Can't group further", "これ以上グループ化できません"),
+        new Entry("pin.card.groupedTitle", "已分组", "Grouped", "グループ化しました"),
+        // {0} 交的是 `pin.groupLabel` 拼好的"组 1（1 张）"——"名字后面带张数"这个形状⛔ 再写第二份（托盘那行读的也是它）。
+        new Entry("pin.card.groupedBody", "{0}。托盘「{1}」里能整组隐藏 / 穿透 / 关闭",
+                  "{0}. Under \"{1}\" in the tray you can hide, click-through and close the whole group",
+                  "{0}。トレイの「{1}」でグループごと収納／マウス無視／閉じができます"),
+        new Entry("pin.card.groupGoneTitle", "那一组已经不在了", "That group is gone", "そのグループはありません"),
+        // 两行分开的理由＝这句会不会不一样（卷首颗粒度）：并组那条还要说"这张没动过"，托盘那条不必。
+        new Entry("pin.card.goneBeforeBody", "{0} 在本次操作前被关掉，这张仍按原样留在桌面上",
+                  "{0} was closed before this action; this pin stays on the desktop as it was",
+                  "{0} はこの操作の前に閉じられました。この貼り付けはそのままデスクトップに残っています"),
+        new Entry("pin.card.goneOnClickBody", "{0} 在本次点击前被关掉", "{0} was closed before this click", "{0} はこのクリックの前に閉じられました"),
+        new Entry("pin.card.joinedTitle", "已并入", "Joined", "グループに追加しました"),
+        new Entry("pin.card.leftTitle", "已移出组", "Left the group", "グループから外れました"),
+        new Entry("pin.card.leftBody", "{0} 还剩 {1} 张", "{0} now has {1} pins left", "{0} は残り {1} 枚です"),
+        new Entry("pin.card.groupClosedTitle", "已关闭这一组", "Group closed", "このグループを閉じました"),
+        new Entry("pin.card.scopeAll", "全部贴图", "all pins", "すべての貼り付け"),
+        new Entry("pin.group.name", "组 {0}", "Group {0}", "グループ {0}"),
+        // 「贴图组」「关闭这组」两处引用都交键：这句话指的是屏幕上真实存在的那两行，改了那两个名字⛔ 让这里继续念旧的。
+        new Entry("pin.group.limitBody", "最多分 {0} 组，先关掉一组（托盘「{1}」里那条「{2}」）",
+                  "You can have at most {0} groups — close one first (the \"{2}\" row under \"{1}\" in the tray)",
+                  "グループは最大 {0} 個です。先に一つ閉じてください（トレイの「{1}」にある「{2}」）"),
         new Entry("hotkey.gate.captureDisabled", "要先在 设置 → 拓展功能 里打开「截屏（截图 / 贴图 / 识字）」", "First turn on Screenshot (capture / pin / OCR) in Settings → Extensions", "先に設定 → 拡張機能 で「スクリーンショット（キャプチャ／貼り付け／文字起こし）」をオンにしてください"),
         new Entry("hotkey.gate.captureBusy", "已经有一次截图在场，先把它结束（Esc 取消）再截下一张", "A screenshot session is already running — finish it first (Esc to cancel) before starting another", "すでにスクリーンショットが実行中です。先に終了して（Esc でキャンセル）から次を撮ってください"),
         new Entry("hotkey.gate.canvasBusySheet", "截图进行中，这条快捷键要等截图结束才归画布", "A screenshot is in progress — this hotkey goes back to the canvas once it ends", "スクリーンショットが進行中です。このショートカットは終了後にキャンバスに戻ります"),
@@ -1399,7 +1447,9 @@ public static class UiStrings
         new Entry("pin.groupHide", "隐藏这一组", "Hide this group", "このグループを隠す"),
         new Entry("pin.groupThroughOn", "取消这组忽略鼠标", "Stop ignoring the mouse for this group", "このグループのマウス無視を解除"),
         new Entry("pin.groupThroughOff", "这组忽略鼠标", "Ignore the mouse for this group", "このグループをマウス無視"),
-        new Entry("pin.groupClose", "关闭这组（{0} 张）", "Close this group ({0} pins)", "このグループを閉じる（{0} 枚）"),
+        // 批次 WI-46c：这一行交**纯短语**。从前它带"（{0} 张）"，于是卡片正文里"名字后面带张数"那个形状
+        // 有了第二个出处（`pin.groupLabel` 是它的主人）；现在张数由 GroupLabel 拼一次。
+        new Entry("pin.groupClose", "关闭这组", "Close this group", "このグループを閉じる"),
         new Entry("pin.groupLabel", "{0}（{1} 张）", "{0} ({1} pins)", "{0}（{1} 枚）"),
         new Entry("widget.kind.quickLaunch", "快捷启动", "Quick launch", "クイック起動"),
         new Entry("widget.kind.todo", "待办", "To-do", "ToDo"),

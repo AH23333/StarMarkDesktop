@@ -21,9 +21,6 @@ public static class PinGrouping
     /// <summary>一屏最多几组。再多一组，托盘那棵子菜单就长到找不着目标组了（上限是给"看一眼就点到"用的）。</summary>
     public const int MaxGroups = 8;
 
-    /// <summary>组名的前缀。序号只增不复用：删掉「组 1」后再新建一组叫「组 3」，不会出现两个"组 1"。</summary>
-    public const string NamePrefix = "组 ";
-
     /// <summary>托盘里组命令的号段起点。宿主自带的那些 tag 都在 1..99，永不与这里重叠。</summary>
     public const int TagBase = 1000;
 
@@ -42,13 +39,20 @@ public static class PinGrouping
     }
 
     /// <summary>还能不能再分一组。不能时要说清"为什么不行 + 怎么办"，而不是把那颗按钮悄悄禁掉。</summary>
+    /// <para>那句里引用的<b>两个名字</b>（托盘那一行、以及「关闭这组」那条）也交键：它们是屏幕上真存在的两行，
+    /// 抄在这里＝改了那两个名字后这句指着一条不存在的菜单（批次 WI-46c，与 P-178 那条"⛔ 抄用户可改的东西"同一族，
+    /// 只不过这里能改的是<b>语言表自己的那一行</b>）。</para>
     public static string? LimitProblem(int currentGroups)
         => currentGroups >= MaxGroups
-            ? $"最多分 {MaxGroups} 组，先关掉一组（托盘「贴图组」里那条「关闭这组」）"
+            ? Locale.Fmt("pin.group.limitBody", MaxGroups, Locale.T("pin.card.groupCategory"), Locale.T("pin.groupClose"))
             : null;
 
-    /// <summary>第 <paramref name="serial"/> 号组的名字。</summary>
-    public static string NameOf(int serial) => NamePrefix + serial;
+    /// <summary>
+    /// 第 <paramref name="serial"/> 号组<b>在当前语言里的念法</b>。序号只增不复用：删掉「组 1」后再新建一组叫「组 3」，不会出现两个"组 1"。
+    /// <para><b>身份是序号，这句话只是念法</b>——从前这里是一颗 <c>const string NamePrefix</c>，组名在建组那一刻定死，
+    /// 于是换语言后托盘与条上那几行仍念旧语言（批次 WI-46c 改成每次现算）。</para>
+    /// </summary>
+    public static string NameOf(int serial) => Locale.Fmt("pin.group.name", serial);
 
     /// <summary>组标签：名字后面永远带成员数——"组 2"看不出是几张，用户就不敢点关闭。</summary>
     public static string GroupLabel(string name, int members) => Locale.Fmt("pin.groupLabel", name, members);
@@ -73,8 +77,12 @@ public static class PinGrouping
     /// <summary>这一组是不是已经整组穿透 ⇒ 同样只出措辞，不做决定。</summary>
     public static string ThroughLabel(bool allThrough) => Locale.T(allThrough ? "pin.groupThroughOn" : "pin.groupThroughOff");
 
-    /// <summary>关闭那一条要带数量：关掉的是一张张真实的窗，不是"一个概念"。</summary>
-    public static string CloseLabel(int members) => Locale.Fmt("pin.groupClose", members);
+    /// <summary>
+    /// 关闭那一条要带数量：关掉的是一张张真实的窗，不是"一个概念"。
+    /// <para>"名字后面带张数"这个形状只由 <see cref="GroupLabel"/> 拼一次（批次 WI-46c）——
+    /// 从前这一行自己写着「（{0} 张）」，卡片正文里又各写一份，同一句话两个出处。</para>
+    /// </summary>
+    public static string CloseLabel(int members) => Locale.Fmt("pin.groupLabel", Locale.T("pin.groupClose"), members);
 
     /// <summary>
     /// 下一次点"显示 / 收起"要落到哪个状态。

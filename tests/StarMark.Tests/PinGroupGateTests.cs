@@ -102,8 +102,9 @@ public sealed class PinGroupGateTests
         Assert.DoesNotContain("CloseAll()", run);
 
         // 而"全部"那三条不许反过来被组命令改写：范围只由调用点决定
+        // （批次 WI-46c：那颗范围名交表 ⇒ 锚点跟着改锚，钉的仍是"调用点自己报名字"这件事）
         var toggleHidden = SourceGate.Between(pins, "public static void ToggleHidden()", "public static void ToggleClickThrough()");
-        Assert.Contains("ApplyHiddenTo(Pins, PinGrouping.NextHidden(AreHidden), \"全部贴图\")", toggleHidden);
+        Assert.Contains("ApplyHiddenTo(Pins, PinGrouping.NextHidden(AreHidden), Locale.T(\"pin.card.scopeAll\"))", toggleHidden);
     }
 
     /// <summary>
@@ -164,7 +165,9 @@ public sealed class PinGroupGateTests
         Assert.Contains("Detach(pin);", join);
         Assert.Contains("target.Members.Add(pin);", join);
         // 那一组已经不在（右键之后被关掉）也要回执，不能静默：静默＝用户以为并进去了
-        Assert.Contains("TrayReporter.Report(\"贴图组\", \"那一组已经不在了\"", join);
+        // （批次 WI-46c 改锚：那两句话现在从表里取，钉的是"这一条出口确实开口说过话"，⛔ 钉字面中文）
+        Assert.Contains("TrayReporter.Report(Locale.T(\"pin.card.groupCategory\"), Locale.T(\"pin.card.groupGoneTitle\"),", join);
+        Assert.Contains("Locale.Fmt(\"pin.card.goneBeforeBody\", PinGrouping.NameOf(serial))", join);
     }
 
     /// <summary>名册里的"隐藏"只有两个写点：窗自己收（HidePin）与窗自己回（Present）。</summary>

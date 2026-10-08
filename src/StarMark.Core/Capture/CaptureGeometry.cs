@@ -286,7 +286,7 @@ public static class CaptureGeometry
     /// </summary>
     public static string? PinLimitProblem(int currentPins)
         => currentPins >= MaxPins
-            ? $"已经有 {currentPins} 张贴图，最多 {MaxPins} 张——先关掉不用的再贴（贴图会把那块画面常驻在内存里）"
+            ? Locale.Fmt("pin.card.limitBody", currentPins, MaxPins)
             : null;
 
     /// <summary>
@@ -295,7 +295,7 @@ public static class CaptureGeometry
     /// 静默返回就等于让用户以为按错了键（热键回调没有任何别的反馈渠道）。
     /// </summary>
     public static string? PinCommandProblem(int currentPins)
-        => currentPins == 0 ? "现在没有贴图，这一条没有可操作的对象" : null;
+        => currentPins == 0 ? Locale.T("pin.card.noneBody") : null;
 
     /// <summary>贴图当前的倍率文案（右上角那颗角标用的百分比）。</summary>
     public static string FormatZoom(double zoom)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Capture;
 using Xunit;
 
@@ -90,7 +91,36 @@ public sealed class PinGroupingTests
         Assert.Equal("组 12", PinGrouping.NameOf(12));        // 序号只增不复用：删掉「组 1」不会再来一个「组 1」
         Assert.Equal("组 2（3 张）", PinGrouping.GroupLabel(PinGrouping.NameOf(2), 3));
         Assert.Contains("0 张", PinGrouping.CloseLabel(0));
+        // "名字后面带张数"这个形状只许一个主人（批次 WI-46c）：关闭那一行是 GroupLabel 拼出来的，⛔ 自己再写一份「（N 张）」
+        Assert.Equal(PinGrouping.GroupLabel(Locale.T("pin.groupClose"), 3), PinGrouping.CloseLabel(3));
         Assert.True(PinGrouping.ShouldDrop(0));
         Assert.False(PinGrouping.ShouldDrop(1));
+    }
+
+    /// <summary>
+    /// <b>组名是念法，不是身份</b>（批次 WI-46c）：身份是序号，念法每次现算，所以换语言那一刻它跟着换。
+    /// <para>从前这里是一颗 <c>const string NamePrefix = "组 "</c>，而 <c>PinGroup.Name</c> 把结果<b>存</b>进建组那一刻——
+    /// 于是托盘与条上那几行从此停在旧语言里（形状闸门看不出来：那张名册的键还在被问）。</para>
+    /// <para>⚠ 读数取的是<b>切过去之后</b>那一档：换语言的返回值（"变没变"）⛔ 当"换没换到"的探针（#112）。</para>
+    /// </summary>
+    [Fact]
+    public void TheGroupNameIsReadEveryTimeItIsShown()
+    {
+        var before = Locale.Current;
+        try
+        {
+            Locale.TrySet(AppLanguage.English);
+            Assert.Equal(AppLanguage.English, Locale.Current);
+            Assert.Equal("Group 7", PinGrouping.NameOf(7));
+            Assert.Equal("Group 7 (3 pins)", PinGrouping.GroupLabel(PinGrouping.NameOf(7), 3));
+            Assert.Equal("Close this group (3 pins)", PinGrouping.CloseLabel(3));
+            Assert.Contains("at most 8 groups", PinGrouping.LimitProblem(PinGrouping.MaxGroups));
+            Assert.DoesNotContain("贴图组", PinGrouping.LimitProblem(PinGrouping.MaxGroups));   // 那句引用的名字也跟着换
+        }
+        finally
+        {
+            Locale.TrySet(before);
+        }
+        Assert.Equal(before, Locale.Current);
     }
 }

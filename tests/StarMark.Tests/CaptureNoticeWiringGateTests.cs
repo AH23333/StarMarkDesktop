@@ -4,8 +4,9 @@ using Xunit;
 namespace StarMark.Tests;
 
 /// <summary>
-/// 截图那一路送到屏幕上的话（批次 WI-46a，P-177 第一刀）：右下角提示卡的标题与正文、
+/// 截图那一路送到屏幕上的话（批次 WI-46a／46b／46c，P-177 三刀）：右下角提示卡的标题与正文、
 /// 遮罩窗跟随鼠标那颗错误角标、以及 Core 里"回原因"的那几句判据。
+/// <para>三刀的分工：46a＝截图本身，46b＝识字那一路，46c＝贴图与贴图组（这一族的抬头那颗「贴图」与 46a 共用一颗键）。</para>
 /// <para>
 /// <b>为什么这一族的取词可以发生在调用点</b>：提示卡是建好即弃的瞬时表面（批次 RV-1），
 /// 错误角标也只在出事那一刻写一次（写完就被下一次成功覆盖）——两者都不靠"换语言时重贴"活着。
@@ -28,6 +29,8 @@ public sealed class CaptureNoticeWiringGateTests
     private const string Screenshot = "src/StarMark.UI/Services/ScreenshotService.cs";
     private const string Overlay = "src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs";
     private const string Geometry = "src/StarMark.Core/Capture/CaptureGeometry.cs";
+    private const string PinRoster = "src/StarMark.UI/Services/PinManager.cs";
+    private const string Grouping = "src/StarMark.Core/Capture/PinGrouping.cs";
     private const string Ocr = "src/StarMark.UI/Services/OcrService.cs";
     private const string OcrReadFile = "src/StarMark.Core/Ocr/OcrRead.cs";
     private const string OcrTextFile = "src/StarMark.Core/Ocr/OcrText.cs";
@@ -116,8 +119,78 @@ public sealed class CaptureNoticeWiringGateTests
         Assert.Equal(1, SourceGate.Count(geo, "Locale.T(\"capture.grab.outsideFrame\")"));
         foreach (var dead in new[] { "选区落在所有显示器之外", "选区太小", "本机没有可用的显示器画面", "选区不在已捕获的画面范围内" })
             Assert.DoesNotContain(dead, geo);
-        // ⚠ 同档里⛔ 上屏的那几句仍然留在代码里：参数校验抛出去的话（ArgumentOutOfRange）是给日志与开发者的，
-        // 而贴图上限那两句的主人贴图那一族（P-177 第三刀）——射程按"会不会上这一处屏幕"划，⛔ 按文件划。
+        // ⚠ 同档里⛔ 上屏的那一句仍然留在代码里：`throw new ArgumentOutOfRangeException("DPI 缩放因子必须为正")`
+        // 是给日志与开发者的参数校验（它一旦说出来就是"程序自己坏了"，⛔ 进表＝让表替 bug 说话）。
+        // 同档的贴图上限那两句本批已交表（`pin.card.*`，见 <see cref="PinAndGroupCardsAreTakenFromTheTable"/>）。
+    }
+
+    /// <summary>
+    /// 贴图与贴图组那一路（批次 WI-46c，P-177 第三刀）：卡上的抬头、标题、正文与"回原因"的两句全部交表。
+    /// <para><b>抬头那颗「贴图」⛔ 再立一行</b>：它和 WI-46a 为 `_pinned ? 贴图 : 截图` 立的是同一颗
+    /// <c>pin.card.category</c>（一个词两个出处＝改了其中一处，同一族卡的抬头从此各说各话）。</para>
+    /// <para><b>这一族坏过的形状是"念法被当成身份存下来"</b>：从前 <c>PinGrouping</c> 有一颗
+    /// <c>const string NamePrefix</c>，而 <c>PinGroup.Name</c> 在建组那一刻把结果存进字段 ⇒ 换语言后托盘与条上那几行
+    /// 停在旧语言。现在 const 没了、名字每次现算，所以这两种"回来的形状"各列一颗禁项。</para>
+    /// <para>⚠ 「组 N（M 张）」那个计数形状只许 <c>pin.groupLabel</c> 一个主人（托盘那一行读的也是它），
+    /// 「关闭这组」那颗菜单行因此交<b>纯短语</b>；上限那句里引用的两个名字（托盘那一行、关闭那一条）也交键。</para>
+    /// </summary>
+    [Fact]
+    public void PinAndGroupCardsAreTakenFromTheTable()
+    {
+        var pin = SourceGate.Code(SourceGate.ReadRepoFile(PinRoster));
+        var geo = SourceGate.Code(SourceGate.ReadRepoFile(Geometry));
+        var grouping = SourceGate.Code(SourceGate.ReadRepoFile(Grouping));
+
+        // ① 抬头两颗（贴图／贴图组）＋那一排的范围名：按主人点名，⛔ 用"汉字总数下降"那种整体口径
+        Assert.Equal(8, SourceGate.Count(pin, "Locale.T(\"pin.card.category\")"));
+        Assert.Equal(8, SourceGate.Count(pin, "Locale.T(\"pin.card.groupCategory\")"));   // 7 处 Report + 那句正文里的引用
+        Assert.Equal(2, SourceGate.Count(pin, "Locale.T(\"pin.card.scopeAll\")"));
+        // ② 每张卡的标题各有几张脸（少一条＝那条从此静默；"没有可操作的贴图"三处共用一颗）
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.limitTitle\")"));
+        Assert.Equal(3, SourceGate.Count(pin, "Locale.T(\"pin.card.noneTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.pinnedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.pinFailedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.throughMissTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.throughPartialTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.groupFullTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.groupedTitle\")"));
+        Assert.Equal(2, SourceGate.Count(pin, "Locale.T(\"pin.card.groupGoneTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.joinedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.leftTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.groupClosedTitle\")"));
+        // ③ 带插值的正文：一颗都不许漏（漏掉的那条只会以中文出现在英文界面上）
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.Fmt(\"pin.card.pinnedBody\""));
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.throughMissBody\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.Fmt(\"pin.card.groupedBody\""));
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.Fmt(\"pin.card.goneBeforeBody\""));
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.Fmt(\"pin.card.goneOnClickBody\""));
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.Fmt(\"pin.card.leftBody\""));
+        Assert.Equal(1, SourceGate.Count(pin, "Locale.Fmt(\"pin.card.throughPartialBody\""));
+        // ④ 回原因那两句住 Core，但话是说给人看的 ⇒ 词同样进表（先例＝WI-2t／WI-46a）
+        Assert.Equal(1, SourceGate.Count(geo, "Locale.Fmt(\"pin.card.limitBody\""));
+        Assert.Equal(1, SourceGate.Count(geo, "Locale.T(\"pin.card.noneBody\")"));
+        // ⑤ 念法与形状各只一个主人：组名＝`pin.group.name`，"名字（张数）"＝`pin.groupLabel`
+        Assert.Equal(1, SourceGate.Count(grouping, "Locale.Fmt(\"pin.group.name\""));
+        Assert.Equal(2, SourceGate.Count(grouping, "Locale.Fmt(\"pin.groupLabel\""));   // GroupLabel 自己 + CloseLabel 借它
+        Assert.Equal(1, SourceGate.Count(grouping, "Locale.Fmt(\"pin.group.limitBody\""));
+        Assert.Equal(1, SourceGate.Count(pin, "PinGrouping.GroupLabel("));
+        Assert.Equal(2, SourceGate.Count(pin, "PinGrouping.NameOf(serial)"));
+        // ⑥ 旧句子一概不许回来（短词带引号点名：`[Pin] 贴图未能钉住` 那一族是日志措辞，⛔ 上屏）
+        foreach (var dead in new[]
+        {
+            "\"贴图\"", "\"贴图组\"", "\"全部贴图\"", "已达上限", "穿透未跟上新贴图", "系统拒绝了这一张的扩展样式",
+            "已钉住", "张，上限", "钉住失败", "没有可操作的贴图", "不能再分组", "已分组", "那一组已经不在了",
+            "在本次操作前被关掉", "在本次点击前被关掉", "已并入", "还剩", "已关闭这一组", "穿透未能全部生效",
+        })
+        {
+            Assert.DoesNotContain(dead, pin);
+            Assert.DoesNotContain(dead, geo);
+            Assert.DoesNotContain(dead, grouping);
+        }
+        // ⑦ 两种坏掉的形状：那颗 const 回来了＝念法又被当成身份；名字被存进字段＝换语言后那一行不再动
+        Assert.DoesNotContain("public const string NamePrefix", grouping);
+        Assert.DoesNotContain("Name { get; } = PinGrouping.NameOf", pin);
+        Assert.DoesNotContain("关闭这组（", grouping);          // 「N 张」⛔ 由 pin.groupClose 自己带
     }
 
     /// <summary>

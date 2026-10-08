@@ -820,9 +820,10 @@ public sealed class I18nWiringGateTests
     /// 贴图组四颗标签的方向判据在 <c>PinGrouping</c>（字进表、判据只认键）。
     /// <para>⛔ 直交中文菜单串在这四颗文件里从此是禁项——注释不算（<see cref="Code"/> 已剥）。
     /// 扫描按<b>会产界面串的方法体</b>收口，不扫整文件：日志（<c>StarLog.*</c>）本就不过这把尺子
-    /// （Tray.cs 的检查更新兜底日志是中文，与 TrayHost 同一口径）；
-    /// <c>NamePrefix "组 "</c> 是<b>持久化数据</b>（组名存档），<c>LimitProblem</c> 是还没键化的错误提示
-    /// （P-172 那一族按行推进），两处刻意不在这一格的射程里。</para>
+    /// （Tray.cs 的检查更新兜底日志是中文，与 TrayHost 同一口径）。
+    /// ⚠ 这一格从前把 <c>PinGrouping.NamePrefix</c> 当作"持久化数据"放在射程外——那句<b>是错的</b>：
+    /// 组名压根不落盘（贴图与贴图组都不进 widgets.json），那颗 const 只是把念法存进了建组那一刻的快照。
+    /// 批次 WI-46c 删掉那颗 const、组名改成交表＋每次现算，于是 <c>NameOf</c> 与 <c>LimitProblem</c> 一起进射程。</para>
     /// </summary>
     [Fact]
     public void TrayStringsAreKeysNotLiterals()
@@ -854,8 +855,8 @@ public sealed class I18nWiringGateTests
                                           @"""[^""]*[\u4e00-\u9fff][^""]*"""))
             offenders.Add($"MainWindow.Menu.cs BuildWidgetsMenu：{m.Value}");
 
-        // PinGrouping：只扫四颗 label 方法体（方向判据留 Core、字进表）。NamePrefix "组 " 是持久化数据
-        // （组名存档，⛔ 不是显示模板）；LimitProblem 是还没键化的错误提示（P-172 按行推进）——两处刻意不在射程。
+        // PinGrouping：扫五颗 label/命名方法体（方向判据留 Core、字进表）。批次 WI-46c 起
+        // `NameOf` 与 `LimitProblem` 也进了射程——组名从前是存下来的一份快照，现在是每次现算的念法。
         var grouping = Code(ReadRepoFile("src/StarMark.Core/Capture/PinGrouping.cs"));
         foreach (var (fragment, name) in new[]
                  {
@@ -863,6 +864,8 @@ public sealed class I18nWiringGateTests
                      ("public static string HideLabel(", "HideLabel"),
                      ("public static string ThroughLabel(", "ThroughLabel"),
                      ("public static string CloseLabel(", "CloseLabel"),
+                     ("public static string NameOf(", "NameOf"),
+                     ("public static string? LimitProblem(", "LimitProblem"),
                  })
         {
             var body = MethodBody(grouping, fragment);
