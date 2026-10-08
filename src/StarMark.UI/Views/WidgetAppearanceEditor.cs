@@ -15,6 +15,7 @@ using Windows.Graphics;
 using Windows.UI;
 using WinRT.Interop;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 
@@ -30,12 +31,22 @@ namespace StarMark.UI.Views;
 /// </summary>
 public static class WidgetAppearanceEditor
 {
-    // 预设调色板（#RRGGBB），作为快捷按钮；真正取色在主区渐变图上点击完成
-    private static readonly (string Name, string Hex)[] Palette =
+    /// <summary>
+    /// 预设调色板：每颗＝<b>那颗颜色名在表里的键</b> ＋ <b>#RRGGBB 身份</b>；真正取色在主区渐变图上点击完成。
+    /// <para>批次 WI-52（P-183）：名字交<b>键</b>。白／黑／红／黄／绿／蓝那六颗的主人已经是 ✅P-181 那套词厂
+    /// （<c>anno.color.*</c>），这里⛔ 再抄一份中文——抄出来就是"同一句字两个出处"（WI-49 并句之前的真症状）；
+    /// 编辑器比词厂多出来的五颗同族补进表。</para>
+    /// <para>⚠ <b>身份是那颗 hex，⛔ 不是名字</b>：换语言后这一排按钮的念法跟着换，选中的仍是同一颗颜色。
+    /// 拿名字当身份＝✅WI-46c 那颗组名的同一缺陷（换语言后"选中的颜色"认不出来）。</para>
+    /// </summary>
+    private static readonly (string NameKey, string Hex)[] Palette =
     {
-        ("白", "#FFFFFFFF"), ("黑", "#FF000000"), ("深灰", "#FF2B2B2B"), ("浅灰", "#FFF3F3F3"),
-        ("蓝", "#FF3B82F6"), ("青", "#FF06B6D4"), ("绿", "#FF16A34A"), ("黄", "#FFEAB308"),
-        ("红", "#FFDC2626"), ("紫", "#FF8B5CF6"), ("粉", "#FFF472B6"),
+        ("anno.color.white", "#FFFFFFFF"), ("anno.color.black", "#FF000000"),
+        ("anno.color.darkGray", "#FF2B2B2B"), ("anno.color.lightGray", "#FFF3F3F3"),
+        ("anno.color.blue", "#FF3B82F6"), ("anno.color.cyan", "#FF06B6D4"),
+        ("anno.color.green", "#FF16A34A"), ("anno.color.yellow", "#FFEAB308"),
+        ("anno.color.red", "#FFDC2626"), ("anno.color.purple", "#FF8B5CF6"),
+        ("anno.color.pink", "#FFF472B6"),
     };
 
     /// <summary>编辑结果：Saved=true 确定保存（Override 为最终覆盖，全 null=清除）；Saved=false 取消（已还原预览）。</summary>
@@ -60,7 +71,13 @@ public static class WidgetAppearanceEditor
         var current = config.Appearance;
         var original = current;   // 取消时按此还原实时预览
 
-        var win = new Window { Title = "组件外观" };
+        var win = new Window();
+        // 窗口标题只许交 LocText 的第二张名单（坑表 #338：Window 不是 DependencyObject，进不了那颗 attached property）
+        LocText.SetWindowTitle(win, "widget.appearance.windowTitle");
+
+        // 换语言那一刻要重算的"当场取词"读数（见 RebuildWords）：编辑器可以一直开着，而语言的节拍与它的节拍不同
+        var wordRefreshers = new List<Action>();
+
         // 注意：ThemeManager.Apply 必须等 win.Content 设好后再调用（Apply 仅当 Content 是
         // FrameworkElement 时才设置其 RequestedTheme，Content 为 null 时是空操作）。
         // 过早调用（在 Content 之前）正是「外观编辑器始终为深色」的根因之一，故移到内容挂载之后。
@@ -173,7 +190,7 @@ public static class WidgetAppearanceEditor
             {
                 currentColorSwatch.Background = null;
                 currentColorSwatch.BorderBrush = Brush("TextFillColorSecondaryBrush", Colors.Gray);
-                currentColorText.Text = "跟随全局";
+                currentColorText.Text = Locale.T("widget.appearance.followGlobal");
             }
             else if (WidgetAppearance.ParseColorBrush(cur) is { } b)
             {
@@ -280,14 +297,15 @@ public static class WidgetAppearanceEditor
             presetWrap.Children.Clear();
             leftButtons.Clear();
 
-            var follow = MakeColorButton(null, "跟随全局", () => SetColorValue(selObj, null));
+            var follow = MakeColorButton(null, Locale.T("widget.appearance.followGlobal"), () => SetColorValue(selObj, null));
             presetWrap.Children.Add(follow);
             leftButtons.Add((null, follow));
 
-            foreach (var (name, hex) in Palette)
+            // 这一排随选中对象<b>重建</b>，所以当场取词是合法那一路（WI-45 口径）；换语言时由 RebuildWords 整排重铺
+            foreach (var (nameKey, hex) in Palette)
             {
                 var h = hex;
-                var btn = MakeColorButton(hex, name, () =>
+                var btn = MakeColorButton(hex, Locale.T(nameKey), () =>
                 {
                     SetColorValue(selObj, h);
                     if (RgbFromHex(h) is { } rgb)
@@ -326,19 +344,21 @@ public static class WidgetAppearanceEditor
         var root = new StackPanel { Spacing = 14, Margin = new Thickness(4) };
 
         // 材质（顶部，保持不变）
-        root.Children.Add(MakeLabel("材质"));
+        root.Children.Add(MakeLabel("widget.appearance.section.material"));
         var backdropCombo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
-        backdropCombo.Items.Add(new ComboItem { Text = "跟随全局", Value = null });
-        backdropCombo.Items.Add(new ComboItem { Text = "亚克力", Value = WidgetBackdropKind.Acrylic });
-        backdropCombo.Items.Add(new ComboItem { Text = "云母", Value = WidgetBackdropKind.Mica });
-        backdropCombo.Items.Add(new ComboItem { Text = "不透明", Value = WidgetBackdropKind.None });
-        backdropCombo.Items.Add(new ComboItem { Text = "云母 · Alt", Value = WidgetBackdropKind.MicaAlt });
-        backdropCombo.Items.Add(new ComboItem { Text = "亚克力 · 厚", Value = WidgetBackdropKind.AcrylicBase });
-        backdropCombo.Items.Add(new ComboItem { Text = "纯色 · Solid", Value = WidgetBackdropKind.Solid });
-        backdropCombo.SelectedIndex = IndexOfBackdrop(wBackdrop);
+        // ⚠ 六档材质的名字⛔ 在这档另立一份：主人＝设置页那颗清单（SettingsPage.Options.cs 的 MaterialOptions，
+        //   主窗／组件／这里三颗下拉共用同一批话，坑表 #290）。编辑器只多一颗"跟随全局"（覆盖值 null 那一档）。
+        var backdropItems = new List<LocOption> { LocOption.T("widget.appearance.followGlobal") };
+        backdropItems.AddRange(WidgetMaterialWords.SixTiers);
+        backdropCombo.ItemsSource = backdropItems;
+        // 「数据项＋模板」是这一族唯一合法的写法（WI-2c）：闭着的那格显示的是选中那一刻的快照，
+        // ⛔ 把文字塞进 ComboItem.Text 就等于让那一格永远念旧语言（坑表 #272／#275）。
+        // 这里从应用级资源取的是一颗模板（非画笔）：画笔一律走 ThemeBrush，那颗闸门管的是画笔。
+        backdropCombo.ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Application.Current.Resources["LocOptionTemplate"];
+        backdropCombo.SelectedIndex = WidgetMaterialWords.IndexOf(wBackdrop) + 1;   // +1：这一排第一项是「跟随全局」
         backdropCombo.SelectionChanged += (_, _) =>
         {
-            wBackdrop = (backdropCombo.SelectedItem as ComboItem)?.Value;
+            wBackdrop = (backdropCombo.SelectedItem as LocOption)?.Value as WidgetBackdropKind?;
             Preview();
         };
         root.Children.Add(backdropCombo);
@@ -350,13 +370,20 @@ public static class WidgetAppearanceEditor
 
         // 左列：对象选择 + 颜色按钮
         var leftCol = new StackPanel { Spacing = 10 };
-        leftCol.Children.Add(MakeLabel("对象"));
+        leftCol.Children.Add(MakeLabel("widget.appearance.section.target"));
         var objList = new StackPanel { Spacing = 6 };
-        foreach (var (key, title) in new[] { ("bg", "背景色"), ("fg", "文本色"), ("border", "边框色") })
+        // 这三颗建一次就一直挂在屏幕上（不像左侧那排颜色按钮随选中对象重建）⇒ 常驻那一族，交键走 LocText 重贴。
+        // ⚠ 键写成<b>调用行上的字面量</b>，⛔ 藏进 (身份, 键) 那份元组建表：两向对账的那把尺按行读，
+        //   藏在数组里的那三颗既拦不住拼错键名，也证明不了"表里这行有人问"（坑表 #375 同族·WI-52 补的那一臂）。
+        objList.Children.Add(MakeObjectButton("bg", "widget.appearance.target.bg"));
+        objList.Children.Add(MakeObjectButton("fg", "widget.appearance.target.fg"));
+        objList.Children.Add(MakeObjectButton("border", "widget.appearance.target.border"));
+        leftCol.Children.Add(objList);
+
+        Button MakeObjectButton(string obj, string titleKey)
         {
             var ob = new Button
             {
-                Content = title,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Left,
                 Padding = new Thickness(12, 8, 12, 8),
@@ -364,19 +391,19 @@ public static class WidgetAppearanceEditor
                 BorderThickness = new Thickness(1),
                 BorderBrush = new SolidColorBrush(Colors.Transparent),
             };
-            var k = key;
-            ob.Click += (_, _) => SelectObject(k);
-            objButtons[key] = ob;
-            objList.Children.Add(ob);
+            LocText.SetKey(ob, titleKey);
+            ob.Click += (_, _) => SelectObject(obj);
+            objButtons[obj] = ob;
+            return ob;
         }
-        leftCol.Children.Add(objList);
-        leftCol.Children.Add(MakeLabel("颜色（按钮快捷选取）"));
+
+        leftCol.Children.Add(MakeLabel("widget.appearance.section.swatches"));
         presetWrap = new WrapPanel { HorizontalSpacing = 6, VerticalSpacing = 6 };
         leftCol.Children.Add(presetWrap);
 
         // 右列：HSV 渐变取色器
         var rightCol = new StackPanel { Spacing = 8 };
-        rightCol.Children.Add(MakeLabel("调色板（在渐变色图上点击选取颜色）"));
+        rightCol.Children.Add(MakeLabel("widget.appearance.section.gradient"));
 
         // SV 方图：底色=当前色相纯色；横向白→透明（饱和度），纵向透明→黑（明度）
         svCanvas = new Canvas
@@ -471,7 +498,7 @@ public static class WidgetAppearanceEditor
         hueCanvas.PointerCanceled += (_, e) => { _huePressed = false; try { hueCanvas.ReleasePointerCapture(e.Pointer); } catch { } };
         rightCol.Children.Add(hueCanvas);
 
-        rightCol.Children.Add(MakeLabel("当前颜色"));
+        rightCol.Children.Add(MakeLabel("widget.appearance.section.current"));
         var curRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
         currentColorSwatch = new Border
         {
@@ -495,28 +522,29 @@ public static class WidgetAppearanceEditor
         // suppressSliderReset：以编程方式回退滑杆（如「恢复全局」）时临时屏蔽其 ValueChanged，
         // 避免把 wScale/wThick/wRadius 误写成「跟随全局」对应的默认值（应保持 null = 跟随全局）。
         bool suppressSliderReset = false;
-        var cThick = MakeSlider("边框粗细", wThick ?? 1, 0, 12, 0.5, v => { if (suppressSliderReset) return; wThick = v; Preview(); }, out var sThick);
-        var cRadius = MakeSlider("圆角半径", wRadius ?? 8, 0, 48, 1, v => { if (suppressSliderReset) return; wRadius = v; Preview(); }, out var sRadius);
+        var cThick = MakeSlider("widget.appearance.slider.borderThickness", wThick ?? 1, 0, 12, 0.5, v => { if (suppressSliderReset) return; wThick = v; Preview(); }, out var sThick, wordRefreshers);
+        var cRadius = MakeSlider("widget.appearance.slider.cornerRadius", wRadius ?? 8, 0, 48, 1, v => { if (suppressSliderReset) return; wRadius = v; Preview(); }, out var sRadius, wordRefreshers);
         // 文本缩放：在 1.0（=默认/跟随全局）附近吸附，并把该档显示成「默认」。
         // 不吸附的话拇指停在 0.95 / 1.05 这种临界值是常事，用户会以为「明明调回默认了，字还是不对」。
-        var cScale = MakeSlider("文本缩放", wScale ?? 1, 0.6, 1.8, 0.05, v =>
+        var cScale = MakeSlider("widget.appearance.slider.textScale", wScale ?? 1, 0.6, 1.8, 0.05, v =>
         {
             if (suppressSliderReset) return;
             wScale = SnapTextScale(v);
             PreviewTextOnly();   // 实时预览文本缩放（只改 TextBlock.FontSize，不动材质与背景）
-        }, out var sScale, v =>
+        }, out var sScale, wordRefreshers, v =>
         {
             var s = SnapTextScale(v);
-            return Math.Abs(s - 1.0) < 1e-6 ? "默认" : NumberText.UpTo2(s);
+            // 那颗"默认"是**读数**，随滑杆当场算 ⇒ 交 Locale.T（⛔ 挂 LocText：同一颗元素还兼着显示数字）
+            return Math.Abs(s - 1.0) < 1e-6 ? Locale.T("widget.appearance.scaleDefault") : NumberText.UpTo2(s);
         });
         root.Children.Add(cThick);
         root.Children.Add(cRadius);
         root.Children.Add(cScale);
 
         // 按钮
-        var reset = MakeButton("恢复全局", false);
-        var ok = MakeButton("确定", true);
-        var cancel = MakeButton("取消", false);
+        var reset = MakeButton("widget.appearance.resetGlobal", false);
+        var ok = MakeButton("dialog.ok", true);
+        var cancel = MakeButton("dialog.cancel", false);
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -547,7 +575,10 @@ public static class WidgetAppearanceEditor
             if (IsDirty())
             {
                 var yes = await CenteredDialog.ConfirmAsync(
-                    "取消外观编辑", "有未保存的外观更改，确定取消？\n（取消后组件将恢复为打开前的样子）", "确定取消", "继续编辑", owner: win);
+                    // 一次性对话框＝瞬时宿主：取词发生在**开它的那一刻**（⛔ 挂 LocText，WI-45 那条口径——
+                    // 它开完就关，重贴名单里只会留下一条永远贴不出去的空壳）
+                    Locale.T("widget.appearance.cancelConfirmTitle"), Locale.T("widget.appearance.cancelConfirmBody"),
+                    Locale.T("widget.appearance.cancelConfirmPrimary"), Locale.T("widget.appearance.cancelConfirmSecondary"), owner: win);
                 if (!yes) return;   // 继续编辑
             }
             FinishCancel();
@@ -561,7 +592,7 @@ public static class WidgetAppearanceEditor
             wBg = wFg = wBorder = null;
             wThick = wRadius = wScale = null;
             wBackdrop = current?.Backdrop;   // 材质保持打开时的值，不强制改
-            backdropCombo.SelectedIndex = IndexOfBackdrop(wBackdrop);
+            backdropCombo.SelectedIndex = WidgetMaterialWords.IndexOf(wBackdrop) + 1;   // +1：这一排第一项是「跟随全局」
             Preview();
             // 同步把滑杆视觉回退到「跟随全局」对应的默认值（不触发 ValueChanged，保持上面的 null = 跟随全局）
             suppressSliderReset = true;
@@ -573,12 +604,27 @@ public static class WidgetAppearanceEditor
             RefreshColorHighlights();
             RefreshCurrentColor();
         };
+        // 换语言那一刻：这一族字是**当场算**的（左侧那排颜色按钮、"当前颜色"那一行、三根滑杆行末的读数），
+        // 而编辑器自己的节拍里没有"语言变了"这件事 ⇒ 自己订阅 Locale.Changed（✅WI-51 同一口径，坑表 #386）。
+        void RebuildWords()
+        {
+            BuildPresetStrip();
+            RefreshColorHighlights();
+            RefreshCurrentColor();
+            foreach (var paste in wordRefreshers) paste();
+        }
+        Locale.Changed += RebuildWords;
+
         // Esc 取消（带确认）；窗口关闭等同取消
         root.KeyDown += async (_, e) =>
         {
             if (e.Key == Windows.System.VirtualKey.Escape) { e.Handled = true; await RequestCancel(); }
         };
-        win.Closed += (_, _) => { if (!tcs.Task.IsCompleted) FinishCancel(); };
+        win.Closed += (_, _) =>
+        {
+            Locale.Changed -= RebuildWords;   // 与上面成对：编辑器一次性，但订阅挂的是静态事件
+            if (!tcs.Task.IsCompleted) FinishCancel();
+        };
 
         // ── 挂载为屏幕中央顶层窗口（复用 CenteredDialog 的居中 + 置顶套路）──
         var scroll = new ScrollViewer
@@ -671,35 +717,24 @@ public static class WidgetAppearanceEditor
     private static string ToHex(Windows.UI.Color c)
         => $"#FF{c.R:X2}{c.G:X2}{c.B:X2}";
 
-    private sealed class ComboItem
-    {
-        public string Text { get; set; } = "";
-        public WidgetBackdropKind? Value { get; set; }
-        public override string ToString() => Text;
-    }
-
     private static bool AllNull(WidgetAppearanceOverride ov) =>
         ov.Backdrop is null && ov.BackgroundColor is null && ov.ForegroundColor is null &&
         ov.BorderColor is null && ov.BorderThickness is null && ov.CornerRadius is null && ov.TextScale is null;
 
-    private static int IndexOfBackdrop(WidgetBackdropKind? v) => v switch
+    /// <summary>一行标题：交的是<b>那颗键</b>（批次 WI-52·P-183）。这些标题建一次就常驻在屏幕上，
+    /// 而编辑器可以开着不动、语言却被人换掉 ⇒ 属"常驻"那一族，走 <see cref="LocText"/> 重贴；
+    /// ⛔ 当场取词（Locale.T）写死在 Text 上——那样换语言时这一排永远念旧语言。</summary>
+    private static TextBlock MakeLabel(string key)
     {
-        WidgetBackdropKind.Acrylic => 1,
-        WidgetBackdropKind.Mica => 2,
-        WidgetBackdropKind.None => 3,
-        WidgetBackdropKind.MicaAlt => 4,
-        WidgetBackdropKind.AcrylicBase => 5,
-        WidgetBackdropKind.Solid => 6,
-        _ => 0,
-    };
-
-    private static TextBlock MakeLabel(string text) => new()
-    {
-        Text = text,
-        FontSize = 13,
-        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-        Foreground = Brush("TextFillColorPrimaryBrush", Colors.Black),
-    };
+        var tb = new TextBlock
+        {
+            FontSize = 13,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = Brush("TextFillColorPrimaryBrush", Colors.Black),
+        };
+        LocText.SetKey(tb, key);
+        return tb;
+    }
 
     /// <summary>
     /// 文本缩放的「默认档」吸附：1.0 附近 ±0.03 内一律算 1.0。
@@ -707,10 +742,14 @@ public static class WidgetAppearanceEditor
     /// </summary>
     private static double SnapTextScale(double v) => Math.Abs(v - 1.0) < 0.03 ? 1.0 : v;
 
-    private static StackPanel MakeSlider(string label, double value, double min, double max, double step, Action<double> onChange, out Slider outSlider)
-        => MakeSlider(label, value, min, max, step, onChange, out outSlider, null);
+    private static StackPanel MakeSlider(string labelKey, double value, double min, double max, double step, Action<double> onChange, out Slider outSlider, List<Action> wordRefreshers)
+        => MakeSlider(labelKey, value, min, max, step, onChange, out outSlider, wordRefreshers, null);
 
-    private static StackPanel MakeSlider(string label, double value, double min, double max, double step, Action<double> onChange, out Slider outSlider, Func<double, string>? format)
+    /// <param name="labelKey">那一行的标题＝<b>那颗键</b>（批次 WI-52）：编辑器开着不动而语言被换掉时由 LocText 重贴。</param>
+    /// <param name="wordRefreshers">行末那颗<b>读数</b>的重算动作登记处：它显示的是数字或"默认"那颗词，
+    /// ⛔ 不能挂 LocText（同一颗元素还被滑杆改写），于是换语言那一刻由 <c>RebuildWords</c> 现算——
+    /// 与✅WI-51 那条口径一致：<b>自己的节拍里没有语言</b>的宿主，得自己订阅 <c>Locale.Changed</c>（坑表 #386）。</param>
+    private static StackPanel MakeSlider(string labelKey, double value, double min, double max, double step, Action<double> onChange, out Slider outSlider, List<Action> wordRefreshers, Func<double, string>? format)
     {
         var slider = new Slider
         {
@@ -722,15 +761,17 @@ public static class WidgetAppearanceEditor
         };
         var tb = new TextBlock
         {
-            Text = format?.Invoke(value) ?? NumberText.UpTo2(value),
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
             Foreground = Brush("TextFillColorSecondaryBrush", Colors.Gray),
         };
+        void PasteReading() => tb.Text = format?.Invoke(slider.Value) ?? NumberText.UpTo2(slider.Value);
+        PasteReading();
+        wordRefreshers.Add(PasteReading);
         slider.ValueChanged += (_, e) =>
         {
             onChange(e.NewValue);
-            tb.Text = format?.Invoke(e.NewValue) ?? NumberText.UpTo2(e.NewValue);
+            PasteReading();
         };
         var row = new Grid
         {
@@ -744,18 +785,19 @@ public static class WidgetAppearanceEditor
         Grid.SetColumn(slider, 0);
         Grid.SetColumn(tb, 1);
         outSlider = slider;
-        return new StackPanel { Spacing = 2, Children = { MakeLabel(label), row } };
+        return new StackPanel { Spacing = 2, Children = { MakeLabel(labelKey), row } };
     }
 
-    private static Button MakeButton(string text, bool accent)
+    /// <summary>底部那三颗按钮：文字交<b>键</b>走 LocText 重贴（与 MakeLabel 同一族——建一次、常驻）。</summary>
+    private static Button MakeButton(string key, bool accent)
     {
         var btn = new Button
         {
-            Content = text,
             MinWidth = 84,
             Padding = new Thickness(12, 5, 12, 5),
             CornerRadius = new CornerRadius(6),
         };
+        LocText.SetKey(btn, key);
         if (accent)
         {
             btn.Background = Brush("AccentFillColorDefaultBrush", Colors.RoyalBlue);

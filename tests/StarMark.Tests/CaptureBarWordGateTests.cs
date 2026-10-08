@@ -25,6 +25,7 @@ public sealed class CaptureBarWordGateTests
     private const string Pin = "src/StarMark.UI/Views/CaptureOverlayWindow.Pin.cs";
     private const string BarWindow = "src/StarMark.UI/Views/CaptureBarWindow.cs";
     private const string NoticeWindow = "src/StarMark.UI/Views/NoticeCardWindow.cs";
+    private const string AppearanceEditor = "src/StarMark.UI/Views/WidgetAppearanceEditor.cs";
 
     private static readonly Regex Cjk = new(@"[一-鿿]+", RegexOptions.Compiled);
 
@@ -133,21 +134,27 @@ public sealed class CaptureBarWordGateTests
     }
 
     /// <summary>
-    /// 窗口标题那一族：本批交完的两档宿主（贴图条那扇窗、提示卡那扇窗）里，<c>Title</c> 只许由
-    /// <c>LocText.SetWindowTitle</c> 写——WinUI 3 的 <c>Window</c> 不是 <c>DependencyObject</c>，
-    /// 进不了附带属性那棵树（坑表 #338），那一族的另一条路（<c>Locale.T</c> 当场取词）会让标题停在旧语言。
-    /// <para>⚠ 射程＝这两档，因为<b>只有这两档的整族交完了</b>。全仓同一个形状还剩两处，本批⛔ 一起钉住：
-    /// <c>SettingsPage.Ai.cs</c> 那颗确认框抬头属 P-169 ①（WI-41 那一族还没交完，提前交＝标题跟语言、正文不跟，
-    /// WI-46a 判定 3 的口径），<c>WidgetAppearanceEditor.cs</c> 那扇窗属 P-183（整族 28 行屏幕字、0 处取词）。
-    /// 那两族交完时把宿主加进这份名单。</para>
+    /// 窗口标题那一族：本批交完的那几档宿主里，<c>Title</c> 只许由 <c>LocText.SetWindowTitle</c> 写——
+    /// WinUI 3 的 <c>Window</c> 不是 <c>DependencyObject</c>，进不了附带属性那棵树（坑表 #338），
+    /// 那一族的另一条路（<c>Locale.T</c> 当场取词）会让标题停在旧语言。
+    /// <para>⚠ 射程＝<b>整族交完的那几档</b>：全仓同一个形状还剩一处（<c>SettingsPage.Ai.cs</c> 那颗确认框抬头），
+    /// 属 P-169 ①（WI-41 那一族还没交完，提前交＝标题跟语言、正文不跟，WI-46a 判定 3 的口径）。交完时把宿主加进这份名单。</para>
+    /// <para>批次 WI-52（P-183）加的第三档＝「组件外观」那扇编辑器窗：它先 <c>var win = new Window()</c>
+    /// 再交标题，所以那颗调用式的宿主名与前两档（<c>this</c>）不同——名单因此带上<b>那颗调用怎么写</b>，
+    /// ⛔ 把三种形状并成一条"含 SetWindowTitle"就算过（那等于不再看它写在哪扇窗上）。</para>
     /// </summary>
     [Fact]
     public void TheWindowTitlesOfTheHostsClosedHereComeFromTheTable()
     {
-        foreach (var (rel, key) in new[] { (BarWindow, "capture.bar.windowTitle"), (NoticeWindow, "card.windowTitle") })
+        foreach (var (rel, call, key) in new[]
+                 {
+                     (BarWindow, @"LocText.SetWindowTitle(this, ""capture.bar.windowTitle"")", "capture.bar.windowTitle"),
+                     (NoticeWindow, @"LocText.SetWindowTitle(this, ""card.windowTitle"")", "card.windowTitle"),
+                     (AppearanceEditor, @"LocText.SetWindowTitle(win, ""widget.appearance.windowTitle"")", "widget.appearance.windowTitle"),
+                 })
         {
             var code = CodeOf(rel);
-            Assert.Contains($"LocText.SetWindowTitle(this, \"{key}\")", code, StringComparison.Ordinal);
+            Assert.Contains(call, code, StringComparison.Ordinal);
             Assert.Contains(UiStrings.Keys(), k => k == key);
             // 一般式（台架规则 #131）：⛔ 只钉上次那一行字面量——宿主自己往 Title 上写值的任何形状
             // （直接赋值、object initializer、内插串）都算这一族回来了。SetWindowTitle 那颗方法名不算。

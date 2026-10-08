@@ -25,6 +25,7 @@ public sealed class I18nWiringGateTests
     private const string MainWindowXaml = "src/StarMark.UI/MainWindow.xaml";
     private const string SettingsXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
     private const string SettingsOptionsCs = "src/StarMark.UI/Views/SettingsPage.Options.cs";
+    private const string WidgetAppearanceEditorCs = "src/StarMark.UI/Views/WidgetAppearanceEditor.cs";
     private const string TrendingXaml = "src/StarMark.UI/Views/TrendingPage.xaml";
     private const string SnapshotXaml = "src/StarMark.UI/Views/SnapshotPage.xaml";
     private const string RssXaml = "src/StarMark.UI/Views/RssPage.xaml";
@@ -127,6 +128,20 @@ public sealed class I18nWiringGateTests
                 yield return (path, m.Groups[1].Value);
             foreach (Match m in Regex.Matches(code, @"tipKey:\s*""([^""]+)"""))
                 yield return (path, m.Groups[1].Value);
+            // 批次 WI-52：外观编辑器那一族的私有包装（<c>MakeLabel</c>／<c>MakeButton</c>／<c>MakeSlider</c>／
+            // <c>MakeObjectButton</c>）把交键这一步吞进了方法体——调用行上既没有取词出口也没有 <c>LocText.</c>，
+            // ⛔ 只认 <c>LocText.Set</c> 那一臂就看不见这几颗键（坑表 #375 的第二面：包装的实参是尺子的盲区）。
+            // 与 <c>LocText.Set</c> 那一臂同法：按<b>行</b>收那一行里所有<b>键形</b>字面量（"bg"／"fg" 这类身份串过不了形状门）。
+            foreach (var line in code.Split('\n'))
+            {
+                if (!Regex.IsMatch(line, @"Make(?:Label|Button|Slider|ObjectButton)\(")) continue;
+                foreach (Match m in Regex.Matches(line, @"""([^""\n]+)"""))
+                {
+                    var value = m.Groups[1].Value;
+                    if (Regex.IsMatch(value, @"^[a-z][a-z0-9]*(\.[a-z][A-Za-z0-9]*)+$", RegexOptions.CultureInvariant))
+                        yield return (path, value);
+                }
+            }
         }
     }
 
@@ -253,20 +268,21 @@ public sealed class I18nWiringGateTests
     }
 
     /// <summary>
-    /// 材质那一族<b>只许有一份措辞</b>：「桌面工具」的下拉复用「常规」页那六行
-    /// <c>settings.general.material.*</c>，⛔ 不许为组件再造六行同名文案。
+    /// 材质那一族<b>只许有一份措辞</b>：三颗下拉（设置页主窗那一格／设置页组件那一格／「组件外观」编辑器那一格）
+    /// 复用同一批 <c>settings.general.material.*</c>，⛔ 再造一份同名行或另抄六个短名。
     /// <para>症状形状：同一句字两个出处之后，改一漏一——换语言时主窗口翻了、组件那一栏没翻，
     /// 而两栏的<b>中文</b>看起来都还在（因为键不同、对账的两颗闸门各看各的）。</para>
-    /// <para><b>批次 WI-2c 把这六行从标记搬进了 <c>MaterialOptions</c></b>（闭着的那格要跟着语言走，
-    /// 只有"数据项＋模板"这一条路），所以这一格的读点从"两颗 <c>&lt;ComboBoxItem&gt;</c> 之间的标记"
-    /// 改成了"那份清单本身＋两颗下拉确实都指向它"。<b>判据守的那件事没变</b>，变的是它读的那份文件——
-    /// 这正是坑表 #286 那一族：锚点只认旧形状时，改对了反而会红。</para>
+    /// <para><b>批次 WI-2c</b> 把这六行从标记搬进 <c>MaterialOptions</c>（闭着的那格要跟着语言走，
+    /// 只有"数据项＋模板"这一条路）；<b>批次 WI-52（P-183）</b>又把它们从设置页的<b>实例属性</b>搬进
+    /// <c>WidgetMaterialWords.SixTiers</c>——第三颗下拉建在 <c>WidgetAppearanceEditor</c> 里，够不到实例，
+    /// 于是它当年自己抄了六个短名（亚克力／云母／不透明…）。判据守的那件事两次都没变，
+    /// 变的都是它读的那份文件与那段形状——这正是坑表 #286 那一族：锚点只认旧形状时，改对了反而会红。</para>
     /// </summary>
     [Fact]
     public void TheWidgetMaterialListIsNotASecondCopy()
     {
         var options = Code(ReadRepoFile(SettingsOptionsCs));
-        var block = Between(options, "IReadOnlyList<LocOption> MaterialOptions", "];");
+        var block = Between(options, "LocOption[] SixTiers", "];");
         var asked = Regex.Matches(block, @"settings\.[a-z]+\.material\.\w+").Cast<Match>()
             .Select(m => m.Value).ToArray();
 
@@ -277,6 +293,11 @@ public sealed class I18nWiringGateTests
         // 两颗下拉都得指向这一份清单——只有一份清单、却有人自带列表，就等于回到两个出处。
         var page = Markup(ReadRepoFile(SettingsXaml));
         Assert.Equal(2, Count(page, "ItemsSource=\"{x:Bind MaterialOptions, Mode=OneTime}\""));
+
+        // 第三颗下拉（外观编辑器）也收同一份：它⛔ 出现任何一颗材质键，只许点那份清单的名。
+        var editor = Code(ReadRepoFile(WidgetAppearanceEditorCs));
+        Assert.Equal(0, Count(editor, "settings.general.material."));
+        Assert.Contains("WidgetMaterialWords.SixTiers", editor, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -287,15 +308,17 @@ public sealed class I18nWiringGateTests
     /// </summary>
     [Fact]
     public void TheMaterialOptionListHasOneRowPerBackdropKind()
-        => AssertOneRowPerEnumMember("MaterialOptions", typeof(StarMark.Abstractions.WidgetBackdropKind));
+        => AssertOneRowPerEnumMember("LocOption[] SixTiers", typeof(StarMark.Abstractions.WidgetBackdropKind));
 
     [Fact]
     public void ThePerformanceOptionListHasOneRowPerMode()
-        => AssertOneRowPerEnumMember("PerformanceOptions", typeof(StarMark.Core.Performance.PerformanceMode));
+        => AssertOneRowPerEnumMember("IReadOnlyList<LocOption> PerformanceOptions", typeof(StarMark.Core.Performance.PerformanceMode));
 
-    private static void AssertOneRowPerEnumMember(string list, Type enumType)
+    /// <param name="listMarker">那份清单在源文件里的<b>定位串</b>（原文照抄，⛔ 凭记忆打——缩进错一格那一格就没读）。
+    /// 材质那六颗住在 <c>LocOption[] SixTiers</c>（批次 WI-52 起的家），性能那三颗还住在实例属性里。</param>
+    private static void AssertOneRowPerEnumMember(string listMarker, Type enumType)
     {
-        var block = Between(Code(ReadRepoFile(SettingsOptionsCs)), $"IReadOnlyList<LocOption> {list}", "];");
+        var block = Between(Code(ReadRepoFile(SettingsOptionsCs)), listMarker, "];");
         var rows = Regex.Matches(block, @"LocOption\.T\(""[^""\s]+""").Count;
         Assert.Equal(Enum.GetNames(enumType).Length, rows);
     }
@@ -1101,14 +1124,17 @@ public sealed class I18nWiringGateTests
     }
 
     /// <summary>
-    /// 换语言的订阅点<b>只许有这两处，且各自的活不重叠</b>。
+    /// 换语言的订阅点<b>只许有这三处，且各自的活不重叠</b>。
     /// <para><see cref="LocText"/> 是"重贴"那一族的唯一主人：多一处订阅就多一处"谁去把文案改回来"的分配，
     /// 于是有一处永远贴着旧词；而"重贴"里若混进重建页面／重新查库，切换语言就成了一次全应用刷新——那才是真的会卡一下。</para>
     /// <para>第二处是画布那条工具条（批次 WI-51）：它的状态行是<b>每次状态变化现拼</b>的那一族（⛔ 挂 <c>LocText</c>，
     /// 见 <c>CaptureBarWordGateTests</c>／<c>CanvasBarWordGateTests</c> 里那两格同一判据），
     /// 换语言时没人替它取词，屏幕就是半中半英；而它的窗宽按实测内容算，不跟着重摆的话，
-    /// 换成长句那一档就把 ✕（唯一的鼠标出口之一）截在窗外。两处都不是"第二份重贴机制"：
-    /// 一处贴标记上的字，一处贴自己现拼的那一行＋量窗。</para>
+    /// 换成长句那一档就把 ✕（唯一的鼠标出口之一）截在窗外。</para>
+    /// <para>第三处是「组件外观」那扇编辑器（批次 WI-52／P-183）：同一族理由，不同的宿主——
+    /// 它那一排预设色、"当前颜色"那一行与三根滑杆行末的读数都是<b>当场算</b>的，而编辑器可以一直开着不动，
+    /// 自己的节拍里没有"语言换了"这件事。那颗 handler 只重取词＋重铺<b>它换对象时本来就会重铺的那一排</b>，
+    /// ⛔ 新立一套重贴机制（前两处也都不是：一处贴标记上的字，两处贴自己现拼的那几行）。</para>
     /// </summary>
     [Fact]
     public void ExactlyOneSubscriberRenamesTheStringsAndItRebuildsNothing()
@@ -1119,20 +1145,26 @@ public sealed class I18nWiringGateTests
             .Select(f => f.RelativePath.Replace(Path.DirectorySeparatorChar, '/'))
             .OrderBy(p => p, StringComparer.Ordinal)
             .ToArray();
-        // 两位主人各点一次名（⛔ 只钉计数：加第三处时那一行会红得说不出是谁）
+        // 三位主人各点一次名（⛔ 只钉计数：加第四处时那一行会红得说不出是谁）
         Assert.Equal(new[]
         {
             "src/StarMark.UI/Helpers/LocText.cs",
             "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs",
+            "src/StarMark.UI/Views/WidgetAppearanceEditor.cs",
         }, subscribers);
 
         var reapply = MethodBody(Code(ReadRepoFile(LocTextCs)), "private static void ReapplyAll");
         Assert.DoesNotContain("new ", reapply, StringComparison.Ordinal);        // 重贴不等于重建
         Assert.DoesNotContain("Navigate", reapply, StringComparison.Ordinal);
-        // 第二处也只许做"重取词＋重摆"：它订阅的那颗方法就是它平时状态变化走的那一颗，不许另开一条重建路
+        // 另外两处也只许做"重取词＋重摆／重铺自己那一排"：订阅的那颗方法就是它们平时状态变化走的那一颗，
+        // 而且必须成对摘掉（事件挂在静态事件上，窗关了不摘＝那一窗的元素永远活着）。
         var bar = Code(ReadRepoFile(CanvasToolbarCs));
         Assert.Contains("Locale.Changed += Refresh;", bar, StringComparison.Ordinal);
-        Assert.Contains("Locale.Changed -= Refresh;", bar, StringComparison.Ordinal);   // 成对摘掉（事件泄漏那一族）
+        Assert.Contains("Locale.Changed -= Refresh;", bar, StringComparison.Ordinal);
+        var editor = Code(ReadRepoFile(WidgetAppearanceEditorCs));
+        Assert.Contains("Locale.Changed += RebuildWords;", editor, StringComparison.Ordinal);
+        Assert.Contains("Locale.Changed -= RebuildWords;", editor, StringComparison.Ordinal);
+        Assert.DoesNotContain("new Window", MethodBody(editor, "void RebuildWords"), StringComparison.Ordinal);
     }
 
     /// <summary>

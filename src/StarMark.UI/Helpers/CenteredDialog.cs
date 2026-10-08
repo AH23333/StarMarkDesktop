@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Media;
 using Windows.Graphics;
 using Windows.UI;
 using WinRT.Interop;
+using StarMark.Abstractions.I18n;
 using StarMark.UI;
 using StarMark.UI.Views;
 
@@ -67,8 +68,8 @@ public static class CenteredDialog
         string? message = null,
         string placeholder = "",
         string? defaultText = null,
-        string primaryText = "确定",
-        string cancelText = "取消",
+        string? primaryText = null,
+        string? cancelText = null,
         Window? owner = null)
     {
         var tcs = new TaskCompletionSource<string?>();
@@ -91,8 +92,10 @@ public static class CenteredDialog
             SafeClose(win);
         }
 
-        var primary = MakeButton(primaryText, true);
-        var cancel = MakeButton(cancelText, false);
+        // 没点名就交表里那颗动词（批次 WI-52·P-183）：这颗工厂曾把「确定／取消」各抄两份，
+        // 而工厂里的字⛔ 在任何一颗屏幕尺的射程内（它既不调取词出口、也不是宿主档自己的字面量——坑表 #387）。
+        var primary = MakeButton(primaryText ?? Locale.T("dialog.ok"), true);
+        var cancel = MakeButton(cancelText ?? Locale.T("dialog.cancel"), false);
 
         var buttons = new StackPanel
         {
@@ -131,8 +134,8 @@ public static class CenteredDialog
     public static Task<bool> ConfirmAsync(
         string title,
         string message,
-        string primaryText = "确定",
-        string cancelText = "取消",
+        string? primaryText = null,
+        string? cancelText = null,
         Window? owner = null,
         string? dedupeKey = null)
     {
@@ -156,8 +159,8 @@ public static class CenteredDialog
             SafeClose(win);
         }
 
-        var primary = MakeButton(primaryText, true);
-        var cancel = MakeButton(cancelText, false);
+        var primary = MakeButton(primaryText ?? Locale.T("dialog.ok"), true);
+        var cancel = MakeButton(cancelText ?? Locale.T("dialog.cancel"), false);
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -191,7 +194,7 @@ public static class CenteredDialog
             SafeClose(win);
         }
 
-        var ok = MakeButton("知道了", true);
+        var ok = MakeButton(Locale.T("dialog.gotIt"), true);
         var content = new StackPanel
         {
             Children =
@@ -229,9 +232,9 @@ public static class CenteredDialog
     /// <param name="dedupeKey">去重键；非空时同 key 只允许一个窗口，重复调用置顶已有窗口并返回 Cancelled。</param>
     /// <param name="width">窗口逻辑宽（px，不含 DPI）。</param>
     /// <param name="height">窗口逻辑高（px，不含 DPI）。</param>
-    /// <param name="primaryText">主按钮文字（null=不显示）。</param>
+    /// <param name="primaryText">主按钮文字（null=不显示；<b>默认不显示</b>——要那颗按钮就自己点名那颗词）。</param>
     /// <param name="secondaryText">次按钮文字（null=不显示，用于三选一场景如导入备份）。</param>
-    /// <param name="cancelText">取消/关闭按钮文字（null=不显示）。</param>
+    /// <param name="cancelText">取消/关闭按钮文字（null=不显示；默认同 primaryText，不显示）。</param>
     public static Task<HostedDialogResult> ShowContentAsync(
         string title,
         FrameworkElement content,
@@ -239,9 +242,12 @@ public static class CenteredDialog
         string? dedupeKey = null,
         double width = 440,
         double height = 360,
-        string? primaryText = "确定",
+        // ⚠ 这三颗的 null 说的是"这颗按钮不出现"，所以⛔ 再让 null 兼作"用默认那两个字"（一颗哨兵两义＝迟早贴错）。
+        //   工厂原先把「确定／取消」写成默认值，而那是四把屏幕尺都看不见的一处措辞（批次 WI-52·坑表 #387）：
+        //   它既不调取词出口，也不是某个宿主档自己的字面量——要默认字的那颗调用方现在自己点名表里的键。
+        string? primaryText = null,
         string? secondaryText = null,
-        string? cancelText = "取消")
+        string? cancelText = null)
     {
         // 不可重复：同一 key 已开则置顶已有窗口，丢弃本次重复请求（返回 Cancelled，调用方据此不落库）
         if (dedupeKey != null && IsOpen(dedupeKey, out var existing) && existing is not null)

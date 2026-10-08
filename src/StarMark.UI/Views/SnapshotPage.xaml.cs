@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
@@ -103,7 +104,11 @@ public sealed partial class SnapshotPage : Page, INotifyPropertyChanged
                 TextWrapping = TextWrapping.Wrap,
             },
         };
-        await CenteredDialog.ShowContentAsync($"快照「{snapshot.Name}」", content, owner: App.MainWindow);
+        // 两颗按钮字点名要（批次 WI-52）：CenteredDialog 工厂里那份「确定／取消」默认值已交表，
+        // 而 ShowContentAsync 的 null 说的是"这颗按钮不出现"——⛔ 拿 null 兼作"用默认字"。
+        await CenteredDialog.ShowContentAsync(
+            $"快照「{snapshot.Name}」", content, owner: App.MainWindow,
+            primaryText: Locale.T("dialog.ok"), cancelText: Locale.T("dialog.cancel"));
     }
 
     private static string BuildDetails(WidgetSnapshot snapshot)

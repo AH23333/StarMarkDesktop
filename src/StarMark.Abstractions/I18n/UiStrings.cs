@@ -486,6 +486,40 @@ public static class UiStrings
 
         // ===== 对话框与列表上那几个共用动词 =====
         // 与 settings.general.cancelUpdate 不是一句：那颗管的是"停掉正在跑的下载／替换"，这颗只是"不做了"。
+        // ── 批次 WI-52（P-183）：「组件外观」那扇编辑器窗＋公共对话框工厂自己的那颗默认按钮 ──
+        // ⚠ 六档材质名⛔ 在这里再列一遍——本档直接收「常规」页那六颗主人（settings.general.material.*），
+        //   两条下拉从此念同一批话（措辞取舍的裁决记在 docs/待决策事项.md 的 ✅P-183）。
+        new Entry("dialog.ok", "确定", "OK", "OK"),
+        new Entry("dialog.gotIt", "知道了", "Got it", "了解"),
+        // 颜色名：白／黑／红／黄／绿／蓝那六颗的主人已是 ✅P-181 那套词厂（anno.color.*），这里只补编辑器多出来的五颗
+        new Entry("anno.color.darkGray", "深灰", "Dark grey", "濃灰"),
+        new Entry("anno.color.lightGray", "浅灰", "Light grey", "薄灰"),
+        new Entry("anno.color.cyan", "青", "Cyan", "シアン"),
+        new Entry("anno.color.purple", "紫", "Purple", "紫"),
+        new Entry("anno.color.pink", "粉", "Pink", "ピンク"),
+        new Entry("widget.appearance.windowTitle", "组件外观", "Component appearance", "ウィジェットの外観"),
+        new Entry("widget.appearance.followGlobal", "跟随全局", "follow the global setting", "全体設定に従う"),
+        new Entry("widget.appearance.section.material", "材质", "Material", "マテリアル"),
+        new Entry("widget.appearance.section.target", "对象", "Target", "対象"),
+        new Entry("widget.appearance.target.bg", "背景色", "Background", "背景色"),
+        new Entry("widget.appearance.target.fg", "文本色", "Text", "文字色"),
+        new Entry("widget.appearance.target.border", "边框色", "Border", "枠線色"),
+        new Entry("widget.appearance.section.swatches", "颜色（按钮快捷选取）", "Colours (pick from these)", "色（ボタンで素早く選択）"),
+        new Entry("widget.appearance.section.gradient", "调色板（在渐变色图上点击选取颜色）",
+                  "Colour picker (click the gradient to pick)", "カラーピッカー（グラデーションをクリックして選択）"),
+        new Entry("widget.appearance.section.current", "当前颜色", "Current colour", "現在の色"),
+        new Entry("widget.appearance.slider.borderThickness", "边框粗细", "Border thickness", "枠線の太さ"),
+        new Entry("widget.appearance.slider.cornerRadius", "圆角半径", "Corner radius", "角丸半径"),
+        new Entry("widget.appearance.slider.textScale", "文本缩放", "Text scale", "文字の拡大"),
+        new Entry("widget.appearance.scaleDefault", "默认", "default", "既定"),
+        new Entry("widget.appearance.resetGlobal", "恢复全局", "Reset to global", "全体設定に戻す"),
+        new Entry("widget.appearance.cancelConfirmTitle", "取消外观编辑", "Discard appearance changes", "外観編集を破棄"),
+        new Entry("widget.appearance.cancelConfirmBody",
+                  "有未保存的外观更改，确定取消？（取消后组件将恢复为打开前的样子）",
+                  "You have unsaved appearance changes. Discard them? (the widget goes back to how it looked when this opened)",
+                  "保存していない外観変更があります。破棄しますか？（破棄すると開く前の見た目に戻ります）"),
+        new Entry("widget.appearance.cancelConfirmPrimary", "确定取消", "Discard", "破棄する"),
+        new Entry("widget.appearance.cancelConfirmSecondary", "继续编辑", "Keep editing", "編集を続ける"),
         new Entry("dialog.cancel", "取消", "Cancel", "キャンセル"),
         new Entry("dialog.delete", "删除", "Delete", "削除"),
         new Entry("dialog.refresh", "刷新", "Refresh", "更新"),

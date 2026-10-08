@@ -231,6 +231,8 @@ public sealed class I18nContractTests : IDisposable
             ["pin.opacity.label"] = "「不透明度」日文也照汉字写（⛔ 为不同形改成「透過度」，那在贴图语境里是另一个意思）（批次 WI-50／P-179）",
             ["pin.bar.opacity"] = "纯胶水行「{0} {1}%」：词在 label 那颗里，这一行没有词可翻（批次 WI-50／P-179）",
             ["pin.menu.save"] = "「保存」日文同字（与 widget.cd.save 同形，⛔ 为不同形改成「ファイル保存」反而长出第二条尺）（批次 WI-50／P-179）",
+            ["anno.color.purple"] = "颜色名「紫」中日同字（与 anno.color.white 同形：日文里它就写作紫，改成「パープル」反而不像这一排界面用语）（批次 WI-52／P-183）",
+            ["widget.appearance.target.bg"] = "「背景色」日文同字（日语界面里就写背景色；⛔ 为不同形改成「背景」，那一档就说不清是颜色还是图）（批次 WI-52／P-183）",
         };
 
         var actual = UiStrings.All
