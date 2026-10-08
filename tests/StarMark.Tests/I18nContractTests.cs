@@ -226,6 +226,7 @@ public sealed class I18nContractTests : IDisposable
             ["widget.menu.nameWithSummary"] = "纯骨架「{0}（{1}）」：中文与日文都用全角括号，两语同形（WI-37，与 trending.notice.compose 同形）",
             ["alarm.stop.button"] = "纯骨架「{0}（{1}）」：那颗按钮＝名字那颗键＋条数，中英日各自都不换形状（WI-37-C）",
             ["time.weekday.stem.0"] = "月历表头第一格：星期日的「日」中日同字（那一格只装一个字，⛔ 为了不同形去改表头）（WI-37-C）",
+            ["anno.color.white"] = "颜色名「白」中日同字（日文里它就是写作白，⛔ 为了不同形改成片假名反而不像界面用语）（批次 WI-49／P-181）",
             ["alarm.days.pick1"] = "只勾一天时那一行就是「{0}」本身，中日英都没有分隔符可放（WI-37-C）",
         };
 

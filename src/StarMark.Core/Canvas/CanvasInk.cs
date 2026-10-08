@@ -101,7 +101,8 @@ public static class CanvasWidths
     /// <summary>三档笔宽（物理像素直径）。</summary>
     public static readonly int[] Steps = { 4, 9, 18 };
 
-    public static readonly string[] StepLabels = { "细", "中", "粗" };
+    /// <summary>标签⛔ 第二份：三档名字只有一个主人（截图那张表），这里只是投影——两份各写一遍就会出现"两条栏同一颗笔两个名字"（✅P-181）。</summary>
+    public static IReadOnlyList<string> StepLabels => Capture.Annotation.ThicknessNames;
 
     public static int At(int stepIndex) => Steps[Math.Clamp(stepIndex, 0, Steps.Length - 1)];
 

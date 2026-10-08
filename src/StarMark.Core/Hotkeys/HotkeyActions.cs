@@ -43,7 +43,10 @@ public static class HotkeyActions
     /// </summary>
     public const string ScreenPinToggleHidden = "screen.pinhidden";
 
-    /// <summary>所有贴图的鼠标穿透开关。<b>默认不绑键</b>（少占一个全局键位），托盘里有同名勾选项，设置页可自行绑定。</summary>
+    /// <summary>
+    /// 所有贴图的鼠标穿透开关。<b>默认绑裸 F5</b>（理由写在 <see cref="HotkeyBindings.Defaults"/> 里那一行旁的注释：
+    /// 穿透中的贴图收不到任何鼠标消息，必须留一颗全局键能把这一组交还鼠标）。托盘里有同名勾选项，设置页可自行改绑。
+    /// </summary>
     public const string ScreenPinClickThrough = "screen.pinthrough";
 
     /// <summary>

@@ -208,7 +208,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private IntRect _adjustPending;
     private PointInt32 _adjustPress;
 
-    private string WeightToolName => _tool is { } t ? Annotation.ToolName(t) : "未选工具";
+    private string WeightToolName => _tool is { } t ? Annotation.ToolName(t) : Locale.T("capture.tool.none");
     private int _colourIndex;
     private int _weightIndex = 1;
 

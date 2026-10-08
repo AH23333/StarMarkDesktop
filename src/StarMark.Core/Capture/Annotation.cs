@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Capture;
 
@@ -68,7 +69,11 @@ public static class AnnotationTools
 /// <summary>工具条上给用户挑的一个颜色。</summary>
 /// <param name="Bgra">按 <c>B | G&lt;&lt;8 | R&lt;&lt;16 | A&lt;&lt;24</c> 摆好的整数——像素缓冲就是这个字节序，
 /// 中间再来一次「颜色对象→字节」的换算就是多一处会写反的地方。</param>
-public readonly record struct AnnotationColor(string Name, int Bgra);
+public readonly record struct AnnotationColor(string NameKey, int Bgra)
+{
+    /// <summary>念法<b>每次现算</b>：这颗从前是建表那一刻存下的成品字，于是换语言之后两条栏都念旧语言（#373）。</summary>
+    public string Name => Locale.T(NameKey);
+}
 
 /// <summary>
 /// 一条标注。
@@ -407,7 +412,8 @@ public sealed record Annotation(
     public static readonly int[] ThicknessSteps = { 2, 4, 8 };
 
     /// <summary>三档的名字，与 <see cref="ThicknessSteps"/> 同序（条数不一致就是给错了标签，有测试钉着）。</summary>
-    public static IReadOnlyList<string> ThicknessNames { get; } = new[] { "细", "中", "粗" };
+    public static IReadOnlyList<string> ThicknessNames =>
+        new[] { Locale.T("anno.thickness.thin"), Locale.T("anno.thickness.medium"), Locale.T("anno.thickness.thick") };
 
     /// <summary>
     /// 第 <paramref name="stepIndex"/> 档在某个工具上实际是多少像素粗。
@@ -445,11 +451,11 @@ public sealed record Annotation(
     /// </summary>
     public static string ThicknessUnit(AnnotationTool tool) => tool switch
     {
-        AnnotationTool.Number => "圆点半径",
-        AnnotationTool.Text => "字号",
-        AnnotationTool.Mosaic => "格子边长",
-        AnnotationTool.Highlighter => "笔刷直径",
-        _ => "线宽",
+        AnnotationTool.Number => Locale.T("anno.unit.radius"),
+        AnnotationTool.Text => Locale.T("anno.unit.fontsize"),
+        AnnotationTool.Mosaic => Locale.T("anno.unit.cell"),
+        AnnotationTool.Highlighter => Locale.T("anno.unit.brush"),
+        _ => Locale.T("anno.unit.line"),
     };
 
     /// <summary>切到某个工具时给用户的默认粗细（＝中间那一档）。</summary>
@@ -469,12 +475,12 @@ public sealed record Annotation(
     /// </summary>
     public static IReadOnlyList<AnnotationColor> Palette { get; } = new[]
     {
-        new AnnotationColor("红", Opaque(0x23, 0x11, 0xE8)),
-        new AnnotationColor("黄", Opaque(0x00, 0xB9, 0xFF)),
-        new AnnotationColor("绿", Opaque(0x3E, 0x89, 0x10)),
-        new AnnotationColor("蓝", Opaque(0xD4, 0x78, 0x00)),
-        new AnnotationColor("白", Opaque(0xFF, 0xFF, 0xFF)),
-        new AnnotationColor("黑", Opaque(0x11, 0x11, 0x11)),
+        new AnnotationColor("anno.color.red", Opaque(0x23, 0x11, 0xE8)),
+        new AnnotationColor("anno.color.yellow", Opaque(0x00, 0xB9, 0xFF)),
+        new AnnotationColor("anno.color.green", Opaque(0x3E, 0x89, 0x10)),
+        new AnnotationColor("anno.color.blue", Opaque(0xD4, 0x78, 0x00)),
+        new AnnotationColor("anno.color.white", Opaque(0xFF, 0xFF, 0xFF)),
+        new AnnotationColor("anno.color.black", Opaque(0x11, 0x11, 0x11)),
     };
 
     /// <summary>不透明色。<b>全仓库只有这一处「字节→BGRA 整数」的拼法</b>（绘制那边也调它），
@@ -511,22 +517,22 @@ public sealed record Annotation(
     /// </summary>
     public string? Problem()
     {
-        if (Tool == AnnotationTool.Eraser) return "橡皮擦不是可绘制的标注";
+        if (Tool == AnnotationTool.Eraser) return Locale.Fmt("anno.problem.notDrawable", ToolName(Tool));
         if (Points is null || Points.Count < MinPoints(Tool))
-            return $"{ToolName(Tool)}至少需要 {MinPoints(Tool)} 个点";
+            return Locale.Fmt("anno.problem.tooFewPoints", ToolName(Tool), MinPoints(Tool));
         if (Tool == AnnotationTool.Text && string.IsNullOrEmpty(Text))
-            return "文字是空的，没有可写上去的内容";
+            return Locale.T("anno.problem.emptyText");
         // 文字不看 Thickness（字号是它自己的那条），序号看的正是 Thickness（＝圆点半径，批次 WR），
         // 所以只有文字这一项豁免范围检查
         if (Tool != AnnotationTool.Text
             && (Thickness < MinThickness || Thickness > MaxThickness))
-            return $"{ToolName(Tool)}的{ThicknessUnit(Tool)} {Thickness} 不在 {MinThickness}–{MaxThickness} 之间";
+            return Locale.Fmt("anno.problem.thicknessRange", ToolName(Tool), ThicknessUnit(Tool), Thickness, MinThickness, MaxThickness);
         if (FontHeight is < 6 or > 200)
-            return $"文字高度 {FontHeight} 太离谱（只接受 6–200 物理像素）";
+            return Locale.Fmt("anno.problem.fontHeightRange", FontHeight);
         if (Scale is < MinScale or > MaxScale)
-            return $"缩放倍数 {NumberText.UpTo2(Scale)} 超出 {NumberText.UpTo2(MinScale)}–{NumberText.UpTo2(MaxScale)}（缩到底会再也点不中，放到最大会撑破画面）";
+            return Locale.Fmt("anno.problem.scaleRange", NumberText.UpTo2(Scale), NumberText.UpTo2(MinScale), NumberText.UpTo2(MaxScale));
         if (EffectiveColorBgra >>> 24 == 0)
-            return "颜色是全透明的，画上去等于没画";
+            return Locale.T("anno.problem.transparent");
         return null;
     }
 
@@ -538,34 +544,34 @@ public sealed record Annotation(
     /// </summary>
     public static string ToolName(AnnotationTool tool) => tool switch
     {
-        AnnotationTool.Rectangle => "矩形",
-        AnnotationTool.Ellipse => "椭圆",
-        AnnotationTool.Line => "直线",
-        AnnotationTool.PolyLine => "折线",
-        AnnotationTool.Arrow => "箭头",
-        AnnotationTool.Pen => "画笔",
-        AnnotationTool.Highlighter => "荧光笔",
-        AnnotationTool.Mosaic => "打码",
-        AnnotationTool.Text => "文字",
-        AnnotationTool.Number => "序号",
-        AnnotationTool.Eraser => "橡皮",
+        AnnotationTool.Rectangle => Locale.T("anno.tool.rectangle"),
+        AnnotationTool.Ellipse => Locale.T("anno.tool.ellipse"),
+        AnnotationTool.Line => Locale.T("anno.tool.line"),
+        AnnotationTool.PolyLine => Locale.T("anno.tool.polyline"),
+        AnnotationTool.Arrow => Locale.T("anno.tool.arrow"),
+        AnnotationTool.Pen => Locale.T("anno.tool.pen"),
+        AnnotationTool.Highlighter => Locale.T("anno.tool.highlighter"),
+        AnnotationTool.Mosaic => Locale.T("anno.tool.mosaic"),
+        AnnotationTool.Text => Locale.T("anno.tool.text"),
+        AnnotationTool.Number => Locale.T("anno.tool.number"),
+        AnnotationTool.Eraser => Locale.T("anno.tool.eraser"),
         _ => tool.ToString(),
     };
 
     /// <summary>工具条上每个按钮的悬停说明：只说「这一下会发生什么」，不复述按钮名字。</summary>
     public static string ToolHint(AnnotationTool tool) => tool switch
     {
-        AnnotationTool.Rectangle => "拖一个方框圈出来",
-        AnnotationTool.Ellipse => "拖一个椭圆圈出来",
-        AnnotationTool.Line => "拖一条直线（做指示线、划掉内容）",
-        AnnotationTool.PolyLine => "点几下钉几个顶点（沿一条边界描一圈），Enter 或双击收口，Esc 丢掉这一条",
-        AnnotationTool.Arrow => "从起点指到终点，箭头在终点",
-        AnnotationTool.Pen => "按住划出任意线条",
-        AnnotationTool.Highlighter => "半透明高亮：盖在字上还能读原来的字",
-        AnnotationTool.Mosaic => "涂过的地方变成不可读的色块（发图前遮敏感信息）",
-        AnnotationTool.Text => "点一下选区就开始打字，Enter 换行，Esc 结束编辑；点已写好的字可以接着改",
-        AnnotationTool.Number => "每点一下放一个带编号的圆点（1、2、3…），可拖动改位置",
-        AnnotationTool.Eraser => "按住拖过已有标注，整条擦掉（一次擦除可一次撤销）",
+        AnnotationTool.Rectangle => Locale.T("anno.hint.rectangle"),
+        AnnotationTool.Ellipse => Locale.T("anno.hint.ellipse"),
+        AnnotationTool.Line => Locale.T("anno.hint.line"),
+        AnnotationTool.PolyLine => Locale.T("anno.hint.polyline"),
+        AnnotationTool.Arrow => Locale.T("anno.hint.arrow"),
+        AnnotationTool.Pen => Locale.T("anno.hint.pen"),
+        AnnotationTool.Highlighter => Locale.T("anno.hint.highlighter"),
+        AnnotationTool.Mosaic => Locale.T("anno.hint.mosaic"),
+        AnnotationTool.Text => Locale.T("anno.hint.text"),
+        AnnotationTool.Number => Locale.T("anno.hint.number"),
+        AnnotationTool.Eraser => Locale.T("anno.hint.eraser"),
         _ => string.Empty,
     };
 
