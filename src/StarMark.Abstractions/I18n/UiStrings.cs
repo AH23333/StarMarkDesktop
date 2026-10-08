@@ -1359,6 +1359,10 @@ public static class UiStrings
         new Entry("widget.note.save", "保存随记", "Save note", "メモを保存"),
         new Entry("widget.clock.addZone", "＋ 添加时区…", "＋ Add a time zone…", "＋ タイムゾーン追加…"),
         new Entry("widget.clock.removePin", "移除这个点位", "Remove this clock", "この時計を削除"),
+        // 时钟上那一行护眼读数（批次 WI-44）。⚠ 这一行由组件的定时器**每秒重算**，所以取词就在调用点当场发生即合法
+        // （与瞬时提示卡同理，⛔ 挂 LocText：那一行不是靠重贴活的，是靠下一拍）。
+        new Entry("widget.clock.restNow", "休息中", "On break", "休憩中"),
+        new Entry("widget.clock.nextRest", "休息 {0}", "Break at {0}", "休憩 {0}"),
 
         // ────────── 星期名的三副面孔（批次 WI-37-C）──────────
         // 位序＝(int)DayOfWeek（Sunday＝0），与 AlarmPolicy.BitFor／MonthGrid.FirstSlot 同一套序号口径。

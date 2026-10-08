@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 
 namespace StarMark.UI.ViewModels;
@@ -90,7 +91,7 @@ public sealed partial class ClockWidgetViewModel : ObservableObject
         // 「休息中」优先：暗幕已经盖下来了，这一行再说"下一次 15:35"就是两套事实。
         if (StarMark.UI.Services.EyeRestService.IsResting)
         {
-            RestText = "休息中";
+            RestText = Locale.T("widget.clock.restNow");
             HasRestLine = true;
             return;
         }
@@ -103,7 +104,10 @@ public sealed partial class ClockWidgetViewModel : ObservableObject
         // 到点时刻是"大约"：节拍判据在 Core，界面上不承诺精确到分。
         var local = due.ToLocalTime();
         var sameDay = local.Date == now.Date;
-        RestText = $"休息 {(sameDay ? DateTimeText.Clock(local) : DateTimeText.MonthDayClock(local))}";
+        // 时刻那一段⛔ 跟语言走（DateTimeText 按 InvariantCulture 给，那是批次 RZ 定下的口径）；
+        // 这里交出去的只有"休息"那两个字的位子。
+        RestText = Locale.Fmt("widget.clock.nextRest",
+            sameDay ? DateTimeText.Clock(local) : DateTimeText.MonthDayClock(local));
         HasRestLine = true;
     }
 

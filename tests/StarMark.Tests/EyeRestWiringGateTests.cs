@@ -496,6 +496,14 @@ public sealed class EyeRestWiringGateTests
             Assert.DoesNotContain(forbidden, update);
             Assert.DoesNotContain(forbidden, rest);
         }
+        // 批次 WI-44：这一行那两句也交表。换语言之后它靠**组件自己的每秒那一拍**重取词（`ClockWidget.xaml.cs` 里
+        // 定时器 1 秒一跳，可见才启），所以取词在调用点当场发生就够，⛔ 挂 LocText——那一行不是靠重贴活的。
+        Assert.Contains("Locale.T(\"widget.clock.restNow\")", rest);
+        Assert.Contains("Locale.Fmt(\"widget.clock.nextRest\"", rest);
+        // 禁项读的是抹掉注释那一份：注释里出现"休息"恰恰是为了写下这条禁令（按原文读会逼后人删注释换绿灯）。
+        var restCode = SourceGate.Code(rest);
+        Assert.DoesNotContain("休息", restCode);
+        Assert.DoesNotContain("$\"", restCode);      // 那一刻⛔ 再自己拼句子：读数交 {0}，其余全在表里
 
         var xaml = SourceGate.ReadRepoFile(ClockXaml);
         // 关着的人不该在时钟上多看见一行空位
