@@ -46,6 +46,7 @@ public sealed class I18nWiringGateTests
     private const string WeatherWidgetCs = "src/StarMark.UI/Views/WeatherWidget.xaml.cs";
     private const string CountdownWidgetCs = "src/StarMark.UI/Views/CountdownWidget.xaml.cs";
     private const string CalcWidgetCs = "src/StarMark.UI/Views/CalcWidget.xaml.cs";
+    private const string GlanceWidgetCs = "src/StarMark.UI/Views/GlanceWidget.xaml.cs";
     private const string AppCs = "src/StarMark.UI/App.xaml.cs";
     // 组件窗自己的三条文字出口（批次 WI-37-A）：菜单本体／外壳两态／快捷启动拖放，加内容工厂的占位那一行。
     private const string WidgetMenuCs = "src/StarMark.UI/Views/WidgetWindow.Menu.cs";
@@ -729,9 +730,11 @@ public sealed class I18nWiringGateTests
     /// <c>WidgetWindow.xaml</c> 那颗宿主；其中 <c>ClockWidget.xaml</c> 面上一句可翻的话都没有，见下面那颗断言）。
     /// 新添一颗组件不必改判据就会落进这一格（⛔ 不许改成点文件名单——#318 那条教训的另一面：
     /// 名单式射程会在"搬个家／新加一颗"时静默失效）。</para>
-    /// <para>⛔ <b>下面那 13 句是登记在案的缺口，不是漏翻</b>（批次 WI-53 之前是 17 句，天气那 4 句已交键），两类各有各的坏法：
-    /// <b>①</b>14 句是<b>代码当场写过同一个属性</b>的（<c>MonthBlock.Text</c>＝"2026年9月"、
-    /// <c>TitleBlock.Text</c>、<c>ConfigBox.PlaceholderText</c>…）——给这类挂静态键的后果不是少翻一句，
+    /// <para>⛔ <b>下面那 9 句是登记在案的缺口，不是漏翻</b>（批次 WI-53 之前是 17 句，天气那 4 句已交键；
+    /// 批次 WI-56 又收掉速览那 4 句示例字）。那个数是<b>这条断言自己数的</b>：尺＝"文件|属性|值"三件一体去重点名。
+    /// 两类各有各的坏法：
+    /// <b>①</b>6 句是<b>代码当场写过同一个属性</b>的（<c>MusicWidget.xaml</c> 的「未在播放」、
+    /// <c>ItemGridWidget.xaml</c> 的「暂无条目」、<c>SearchWidget.xaml</c> 的"输入关键词…"…）——给这类挂静态键的后果不是少翻一句，
     /// 是<b>换语言那一刻用默认那句盖掉带值那句</b>（屏幕上写着"2026年9月"而那天是 10 月＝一句当场可见的假话，
     /// 坑表 #276／#295）；要翻它们得先让宿主交出 <c>LocMessage</c>＝P-172。<b>②</b>搜索组件那颗排序下拉的三颗
     /// <c>ComboBoxItem</c>：闭着的那一格是选中时从 <c>Content</c> 抄走的快照（#272／#275），只挂键＝
@@ -770,10 +773,6 @@ public sealed class I18nWiringGateTests
             .ToArray();
         Assert.Equal(new[]
         {
-            "GlanceWidget.xaml|Text|2026年9月",
-            "GlanceWidget.xaml|Text|2026年9月",
-            "GlanceWidget.xaml|Text|农历八月初八",
-            "GlanceWidget.xaml|Text|星期五",
             "ItemGridWidget.xaml|PlaceholderText|输入标签名…",
             "ItemGridWidget.xaml|Text|暂无条目",
             "MusicWidget.xaml|Text|打开任意播放器后这里会显示曲目",
@@ -788,6 +787,10 @@ public sealed class I18nWiringGateTests
         // （Loaded 的 ApplyToggleLabels／Render／ShowEmpty）⇒ XAML 那份字面量是"没人读的副本"，
         // 删掉它而不是给它挂静态键（挂了键＝换语言把带值那句盖回去，正是上面第①类的那颗假话）。
         Assert.DoesNotContain(left, x => x.StartsWith("WeatherWidget.xaml", StringComparison.Ordinal));
+        // 批次 WI-56（P-186）收掉 GlanceWidget.xaml 那 4 句示例字（"2026年9月"×2／"星期五"／"农历八月初八"）：
+        // 同一颗形状——四格的值都由 <c>RefreshDate()</c>／<c>RebuildCalendar()</c> 每次重写，
+        // 而农历那一行从此<b>按语言当场算</b>（那句「农历…」现在住表里，示例字留着就是第二个主人）。
+        Assert.DoesNotContain(left, x => x.StartsWith("GlanceWidget.xaml", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -1127,7 +1130,7 @@ public sealed class I18nWiringGateTests
     }
 
     /// <summary>
-    /// 换语言的订阅点<b>只许有这六处，且各自的活不重叠</b>。
+    /// 换语言的订阅点<b>只许有这七处，且各自的活不重叠</b>。
     /// <para><see cref="LocText"/> 是"重贴"那一族的唯一主人：多一处订阅就多一处"谁去把文案改回来"的分配，
     /// 于是有一处永远贴着旧词；而"重贴"里若混进重建页面／重新查库，切换语言就成了一次全应用刷新——那才是真的会卡一下。</para>
     /// <para>第二处是画布那条工具条（批次 WI-51）：它的状态行是<b>每次状态变化现拼</b>的那一族（⛔ 挂 <c>LocText</c>，
@@ -1144,6 +1147,10 @@ public sealed class I18nWiringGateTests
     /// （"18:42 更新"、"3 天 05:20"），而 <c>LocText.SetKey(el, key, args)</c> 把<b>实参也一起冻住</b>——
     /// 挂上去换语言那一刻贴回来的是<b>上一次那些数字</b>（坑表 #361）。合法性的另一半在三处都是同一句：
     /// 那颗 handler 只把<b>本来就在重算的那几行</b>再算一遍，⛔ 在回调里打接口／读设置档／重建集合。</para>
+    /// <para>第七处是「今日速览」（批次 WI-56／P-186）：同一族理由（农历那一行与"距〈节日〉还有 N 天"都是当场算的读数），
+    /// 它比前三扇组件多一条要防的：<b>这一格里最像"重贴"的写法是把热榜重新加载一遍</b>——那一趟含读设置档与打接口，
+    /// 换语言那一刻就可能把"字改口"变成"热榜没拿到：超时"。所以重贴只许铺<b>已经拿到手的那一份</b>（<c>PaintTrending</c>），
+    /// 抓与画分成两颗（这条界线与 ✅WI-39 那颗"重贴⛔ 重新导航"是同一件事的第三种形状）。</para>
     /// </summary>
     [Fact]
     public void ExactlyOneSubscriberRenamesTheStringsAndItRebuildsNothing()
@@ -1161,6 +1168,7 @@ public sealed class I18nWiringGateTests
             "src/StarMark.UI/Views/CalcWidget.xaml.cs",
             "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs",
             "src/StarMark.UI/Views/CountdownWidget.xaml.cs",
+            "src/StarMark.UI/Views/GlanceWidget.xaml.cs",
             "src/StarMark.UI/Views/WeatherWidget.xaml.cs",
             "src/StarMark.UI/Views/WidgetAppearanceEditor.cs",
         }, subscribers);
@@ -1210,6 +1218,18 @@ public sealed class I18nWiringGateTests
         Assert.DoesNotContain("ApplyQuickMode", calcRebuild, StringComparison.Ordinal);           // ⛔ 抹掉用户已经填进去的输入
         Assert.DoesNotContain("SaveHistoryAsync", calcRebuild, StringComparison.Ordinal);         // ⛔ 顺手落一次盘
         Assert.DoesNotContain("InitializeComponent", calcRebuild, StringComparison.Ordinal);      // ⛔ 顺手重建整棵可视树
+        // 今日速览这扇组件（批次 WI-56／P-186，第七位主人）：农历那一行与"距〈节日〉还有 N 天（M月D日）"都是
+        // <b>当场算出来的读数</b>（同一族理由⛔ 走 LocText 那条冻实参的路），而月历上那些"哪天算节日"的圆点
+        // 从此<b>按语言各排一张清单</b>——换语言不重画，英文界面的月历就会亮着中国农历那些点。
+        // 这一处比别人多一条禁项：热榜那几行的字来自<b>已经拿到手的那一份</b>（<c>PaintTrending</c>），
+        // ⛔ 在回调里再走 <c>LoadTrendingAsync</c>——那一趟含读设置档与打接口，切语言就可能换来一句"热榜没拿到"。
+        var glance = Code(ReadRepoFile(GlanceWidgetCs));
+        Assert.Contains("Locale.Changed += RebuildWords", glance, StringComparison.Ordinal);
+        Assert.Contains("Locale.Changed -= RebuildWords", glance, StringComparison.Ordinal);
+        var glanceRebuild = MethodBody(glance, "private void RebuildWords");
+        Assert.Contains("PaintTrending()", glanceRebuild, StringComparison.Ordinal);               // 只重铺缓存里那一份
+        Assert.DoesNotContain("LoadTrendingAsync", glanceRebuild, StringComparison.Ordinal);       // ⛔ 顺手再抓一次网络
+        Assert.DoesNotContain("InitializeComponent", glanceRebuild, StringComparison.Ordinal);     // ⛔ 顺手重建整棵可视树
     }
 
     /// <summary>

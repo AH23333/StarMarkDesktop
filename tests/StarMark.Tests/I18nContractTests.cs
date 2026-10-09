@@ -205,6 +205,8 @@ public sealed class I18nContractTests : IDisposable
             ["settings.ai.stop"] = "停止：日语也写「停止」",
                         ["tray.tip"] = "产品名 StarMark，三语同形",
                         ["dialog.save"] = "「保存」日文同字（WI-2p）",
+            ["glance.festival.qingming"] = "「清明」中日同字：日本也把这一天写成「清明」，同颗节日（批次 WI-56／P-186）",
+            ["glance.festival.qixi"] = "「七夕」中日同字：同一颗节日在两文化里都写这两个汉字（批次 WI-56／P-186）",
                         ["guide.hotkey.bound"] = "占位骨架「{0}：{1}」三语同形（WI-2q）",
                         ["guide.page.rss"] = "RSS 三语同字（WI-2q）",
                         ["upd.verdict.emptyTag"] = "「空」三语同字（WI-2v）",
