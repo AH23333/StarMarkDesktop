@@ -169,7 +169,8 @@ public sealed class AutoBackupWiringGateTests
         foreach (var stale in new[] { "24 小时", "每天", "每日", "按天", "7 份" })
             Assert.DoesNotContain(stale, card);
         // 间隔/份数/回溯多久这些数只能在状态行里出现，而状态行是算出来的（下一条）。
-        Assert.Contains("ViewModel.AutoBackupStatus", card);
+        // 批次 WI-61c 起那行状态改由宿主贴 ⇒ 锚点搬到那颗元素名（这张卡仍然带着它的状态行）。
+        Assert.Contains("x:Name=" + '"' + "AutoBackupStatusText" + '"', card);
 
         // 批次 WI-2f 把卡片上那两句说明搬进了字符串表 ⇒ 上面那个循环的真实射程缩水成
         // "别把中文抄回 XAML"。这条判据管的是<b>那句话本身</b>，所以两列都得按同一串禁词过一遍：
@@ -192,12 +193,20 @@ public sealed class AutoBackupWiringGateTests
     [Fact]
     public void TheStatusLineDoesTheLookbackMathItself()
     {
-        var status = MethodBody(ReadRepoPartials(Vm), "private string BuildAutoBackupStatus()");
+        // 回型也是判据的一半：交回 string 等于把这句话定稿在"算出来那一刻的语言"（P-188 的原始形状）。
+        var status = MethodBody(ReadRepoPartials(Vm), "private LocMessage? BuildAutoBackupStatus()");
         Assert.Contains("AutoBackupPolicy.MaxLookbackDays(", status);
         Assert.Contains("AutoBackupPolicy.Keep", status);
         Assert.Contains("AutoBackupIntervalHours", status);
-        // 关着的那一臂必须说清代价（"关了之后丢了别怪我"那句理由就写在这里，不是靠弹窗）。
-        Assert.Contains("已关闭", status);
+        // 关着的那一臂必须说清代价（"关了之后丢了别怪我"那句理由，不是靠弹窗）。
+        // 批次 WI-61c 起那句话住在表里 ⇒ 两处各读一半：源码那一臂点名那颗键，表里那一行自己把答案给出。
+        // ⛔ 拿表里的措辞逐字当期望（#130 那条口径：只改措辞必须绿），这一格判的是"三语各自答话且互不相同"。
+        Assert.Contains("LocMessage.Of(" + '"' + "settings.data.autoBackupOff" + '"' + ")", status);
+        Assert.True(UiStrings.TryGet("settings.data.autoBackupOff", out var offRow), "表里没有关着那一句");
+        var offSaid = new[] { offRow.Zh, offRow.En, offRow.Ja };
+        foreach (var text in offSaid) Assert.False(string.IsNullOrWhiteSpace(text));
+        Assert.NotEqual(offSaid[0], offSaid[1]);
+        Assert.NotEqual(offSaid[1], offSaid[2]);
     }
 
     // ────────── ④ 删除那颗按钮 ──────────

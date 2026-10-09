@@ -93,7 +93,7 @@
                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
                 <!-- 设置改动实时生效、没有底部保存按钮，因此"没保存成功"这种反面事实必须自己露头，
                      否则用户唯一能发现的时间点是下次启动设置悄悄回退（P-53）。 -->
-                <TextBlock Text="{x:Bind ViewModel.SaveErrorMessage, Mode=OneWay}"
+                <TextBlock x:Name="SaveErrorMessageText"
                            FontSize="12" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left"
                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
                            Visibility="{x:Bind ViewModel.HasSaveError, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
@@ -993,7 +993,7 @@
                                               ItemsSource="{x:Bind ViewModel.AutoBackupIntervalOptions}"
                                               SelectedIndex="{x:Bind ViewModel.AutoBackupIntervalIndex, Mode=TwoWay}"/>
                                 </Grid>
-                                <TextBlock Text="{x:Bind ViewModel.AutoBackupStatus, Mode=OneWay}"
+                                <TextBlock x:Name="AutoBackupStatusText"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                 <TextBlock i18n:LocText.Key="settings.data.restoreSnapshotNote"
                                            Style="{StaticResource SettingRowText}"/>
@@ -1034,7 +1034,7 @@
                                 </StackPanel>
 
                                 <!-- 本机已有备份：看得见有哪些份，才谈得上"恢复到某一份"或"用它回滚" -->
-                                <TextBlock Text="{x:Bind ViewModel.BackupsHeader, Mode=OneWay}"
+                                <TextBlock x:Name="BackupsHeaderText"
                                            Style="{StaticResource SettingRowText}" FontWeight="SemiBold"/>
                                 <ItemsControl ItemsSource="{x:Bind ViewModel.Backups, Mode=OneWay}"
                                               Visibility="{x:Bind ViewModel.HasBackups, Mode=OneWay, Converter={StaticResource BoolToVis}}">
@@ -1083,7 +1083,7 @@
                                     <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.ClipboardHistoryEnabled, Mode=TwoWay}"/>
                                 </Grid>
-                                <TextBlock Text="{x:Bind ViewModel.ClipboardHistoryStatus, Mode=OneWay}"
+                                <TextBlock x:Name="ClipboardHistoryStatusText"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
 
                                 <!--
@@ -1140,7 +1140,7 @@
                                         Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"
                                         i18n:LocText.Key="settings.data.cleanOrphans"
                                         i18n:LocText.ToolTipKey="settings.data.cleanOrphansTip"/>
-                                <TextBlock Text="{x:Bind ViewModel.ClipboardCleanupStatus, Mode=OneWay}"
+                                <TextBlock x:Name="ClipboardCleanupStatusText"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
                             </StackPanel>
                         </Border>

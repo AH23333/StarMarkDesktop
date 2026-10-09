@@ -258,6 +258,7 @@ public sealed class I18nContractTests : IDisposable
             ["widget.mon.row.cpu"] = "「CPU」三语同形：拉丁字母缩写，日文界面也这么写（⛔ 为了不同形改成「プロセッサ」，那一格就不是这一行的写法了）（批次 WI-60／P-193）",
             ["widget.mon.note.join"] = "两颗槽的骨架「{0}；{1}」中日同形，en 列是 \", \"：从前这句在代码里 string.Join 拼成品字＝语言被定死在采样那一刻（批次 WI-60／P-192，与 trending.notice.join 同形）",
             ["widget.mon.upRate"] = "纯骨架「↑{0}」：箭头是记号不是词，速率是机器事实（⛔ 把箭头搬进词里＝让读数形状随语言变）（批次 WI-60／P-192）",
+            ["settings.data.autoBackupSentence"] = "纯胶水行「{0}{1}」，没有词可翻（批次 WI-61c／P-188，与 rss.statusJoin／widget.mon.note.join 同形——从前那半句在 C# 里用 + 拼成品字，语序就被定死在中文那一侧）",
         };
 
         var actual = UiStrings.All

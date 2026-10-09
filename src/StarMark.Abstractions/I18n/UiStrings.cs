@@ -302,6 +302,33 @@ public static class UiStrings
             "删掉「不在历史里的那些文件」与没写完的临时件。点下去会先列名单让你确认，一条历史条目都不会动。",
             "Deletes the files “not in the history any more” plus half-written temporary ones. It lists them for confirmation first, and no history entry is touched.", "「履歴にいないあのファイル」と書きかけの一時ファイルを消します。押すとまず一覧を出して確認を求め、履歴条目は一件も動きません。"),
 
+        // ===== 「数据」栏那五行的状态读数（批次 WI-61c，P-188 第三刀·第二片）=====
+        new Entry("settings.data.autoBackupOff", "已关闭：程序不再自动落盘，能回滚的只剩你手动导出的那些份（导入前的「恢复前快照」仍然每次都留）。", "Off: nothing is saved automatically any more, so only the copies you exported by hand can be rolled back to (the pre-import snapshot is still written every time).", "切ると自動保存は止まり、戻せるのは手で書き出した分だけになります（取り込み前の「スナップショット」は毎回残ります）。"),
+        new Entry("settings.data.autoBackupHow", "已开启：距上一份满 {0} 小时自动落一份，保留最近 {1} 份 ≈ 最长回溯 {2} 天。", "On: one copy lands automatically {0} hours after the previous one, keeping the newest {1} ≈ {2} days of history.", "オン：前の分から {0} 時間ごとに自動で 1 份、最近 {1} 份を保持 ≒ 最長 {2} 日。"),
+        new Entry("settings.data.autoBackupNoAuto", "本机还没有自动件，最多 {0} 分钟内就会落第一份。", "No automatic copy on this machine yet; the first one lands within {0} minutes.", "自動の分はまだ無いので、遅くとも {0} 分以内に最初の 1 份ができます。"),
+        new Entry("settings.data.autoBackupNext", "下一次约 {0}。", "Next one around {0}.", "次は約 {0}。"),
+        new Entry("settings.data.autoBackupDue", "已到间隔，下一次巡查（{0} 分钟内）就会落盘。", "The interval has passed; the next sweep (within {0} minutes) will save it.", "間隔を超えたので、次の巡回（{0} 分以内）で保存されます。"),
+        new Entry("settings.data.autoBackupSentence", "{0}{1}", "{0}{1}", "{0}{1}"),
+        new Entry("settings.data.backupsHeaderNone", "本机备份", "Backups on this machine", "この機のバックアップ"),
+        new Entry("settings.data.backupsHeaderCount", "本机备份（列出最近 {0} 份）", "Backups on this machine (newest {0} listed)", "この機のバックアップ（直近 {0} 件）"),
+        new Entry("settings.data.clipHistoryOff", "未开启：不读剪贴板、不落盘。开启后自动记录，不需要其它步骤。", "Not on: the clipboard is neither read nor stored. Turn it on and recording starts by itself.", "未開：クリップボードを読まず保存もしません。入れれば自動で記録されます。"),
+        new Entry("settings.data.clipHistoryRecording", "正在记录本机复制的内容（密码管理器与私钥 / 令牌 / 卡号形态除外）。", "Recording what this machine copies (except password managers and key / token / card-number shapes).", "この機の複製内容を記録中（パスワード管理アプリと秘密鍵 / トークン / カード番号形は除く）。"),
+        new Entry("settings.data.clipHistoryWatchMissing", "开关是开着的，但本会话的剪贴板监听没建立起来，暂时不会记录新内容——关掉再打开本开关可重试。", "The switch is on, but this session never got a clipboard listener, so nothing new is recorded — turn this switch off and on to retry.", "オンにしていますが、このセッションでは監視が始まらず新しい内容は記録されません——入れ直すと再試行できます。"),
+        new Entry("settings.data.clipHistoryStarted", "已开始记录。密码管理器复制的内容、以及私钥 / 登录令牌 / 银行卡号形态一律不入库；想临时停一下，去「剪贴板」页点「暂停记录」。", "Recording now. Password-manager copies and private-key / token / card-number shapes never enter the store; to pause, open the Clipboard page and press Pause recording.", "記録を始めました。パスワード管理アプリの内容と秘密鍵 / トークン / カード番号形は入りません。 一時的に止めるには「クリップボード」頁の「記録を一時停止」へ。"),
+        new Entry("settings.data.clipHistoryListenerGone", "开关已打开，但系统剪贴板监听窗口没建起来（原因见日志）——当前仍不会记录任何内容。", "The switch is on, but the system clipboard listener window was never created (see the log) — nothing is being recorded.", "入にしましたが監視ウィンドウが作れず（理由はログ）、今は何も記録されません。"),
+        new Entry("settings.data.clipHistoryStopped", "已停止记录。之前存下的历史仍在「剪贴板」页，可在那里一键清空。", "Recording stopped. What was already saved stays on the Clipboard page, where one press clears it.", "記録を止めました。既に残る履歴は「クリップボード」頁にあり、そこから一括で消せます。"),
+        new Entry("settings.data.cleanNoScan", "没能核对目录与历史的差（原因见日志），一件都没动。", "The difference between the folder and the history could not be checked (see the log); nothing was touched.", "目録と履歴の差を照合できず（理由はログ）、何も消していません。"),
+        new Entry("settings.data.cleanNothing", "现在没有需要清理的文件。", "There is nothing to clean up right now.", "今、整理が必要なファイルはありません。"),
+        new Entry("settings.data.cleanCancelled", "没删任何东西。", "Nothing was deleted.", "何も消しませんでした。"),
+        new Entry("settings.data.cleanRunFailed", "清理没跑成（原因见日志），已删掉的部分不会回头补删——可以再点一次。", "The clean-up did not finish (see the log); what was already deleted will not be retried — press it again.", "整理は完走せず（理由はログ）、既に消えた分は戻りません——もう一度押せます。"),
+        new Entry("settings.data.cleanAllBlocked", "一件都没删掉：{0} 个文件正被别的程序占用。它们还在名单里，可以稍后再点一次。", "Nothing was deleted: {0} files are held by another program. They stay on the list — try again later.", "一つも消えませんでした：{0} 件が他のプログラムに占有されています。一覧には残るので後で再試行を。"),
+        new Entry("settings.data.cleanDone", "已删掉 {0} 个不属于历史的文件，腾出约 {1}。", "Deleted {0} files that were no longer in the history, freeing about {1}.", "履歴にないファイル {0} 件を消し、約 {1} が空きました。"),
+        new Entry("settings.data.cleanDoneWithTemp", "已删掉 {0} 个不属于历史的文件与 {1} 个临时件，腾出约 {2}。", "Deleted {0} files no longer in the history plus {1} temporary ones, freeing about {2}.", "履歴にないファイル {0} 件と一時ファイル {1} 件を消し、約 {2} が空きました。"),
+        new Entry("settings.data.cleanPartlyBlocked", "已删掉 {0} 个，但还有 {1} 个正被占用没删掉——它们仍在名单里，可以稍后再点一次。", "Deleted {0}, but {1} are still held by another program — they stay on the list, so try again later.", "{0} 件消しましたが、{1} 件は占有されて残っています——一覧に残るので後で再試行を。"),
+        new Entry("settings.data.cleanFailed", "清理失败：{0}", "Clean-up failed: {0}", "整理に失敗：{0}"),
+        new Entry("settings.data.saveNotWritten", "设置未能写入磁盘，重启后会回到旧值：{0}", "The settings could not be written to disk, so they will fall back after a restart: {0}", "設定をディスクに書けず、再起動後に旧値へ戻ります：{0}"),
+        new Entry("settings.data.saveFailed", "保存失败: {0}", "Save failed: {0}", "保存失敗: {0}"),
+
         // ===== 「拓展功能」那一栏的正文（批次 WI-2g，P-169 ① 第五刀）=====
         // 口径与前几刀一致：中文列逐字照抄**屏幕上的那一句**，英文列是它的对译。
         // ⚠ 这一刀有<b>七句</b>没能逐字照抄，全因那句里<b>引用了屏幕上别处的几个字</b>（坑表 #280：

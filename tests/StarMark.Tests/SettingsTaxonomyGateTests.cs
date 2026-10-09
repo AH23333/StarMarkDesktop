@@ -224,7 +224,8 @@ public sealed class SettingsTaxonomyGateTests
         // 搬到别页就会出现"在剪贴板页里改备份频率"这种找不到入口的改动。
         Assert.Contains("ViewModel.AutoBackupEnabled, Mode=TwoWay", data);
         Assert.Contains("ViewModel.AutoBackupIntervalIndex, Mode=TwoWay", data);
-        Assert.Contains("ViewModel.AutoBackupStatus", data);
+        // 批次 WI-61c 起那行状态改由宿主贴 ⇒ 锚点搬到那颗元素名（改锚不改判：这张卡仍留在「数据」栏）。
+        Assert.Contains("x:Name=" + '"' + "AutoBackupStatusText" + '"', data);
         Assert.DoesNotContain("ViewModel.ClipboardImageEnabled", Between(xaml, "<TabViewItem x:Name=\"TabExtend\" Tag=\"extend\"", "</TabViewItem>"));
         // 「数据」页仍会在提权说明里提到本地磁盘搜索（那是一句原因，不是第二处开关），
         // 所以钉的是"这张卡不在这页"，而不是这个词不在这页。

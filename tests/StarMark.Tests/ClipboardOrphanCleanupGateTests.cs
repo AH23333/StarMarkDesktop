@@ -29,7 +29,10 @@ public sealed class ClipboardOrphanCleanupGateTests
         Assert.Contains("i18n:LocText.Key=\"settings.data.cleanOrphans\"", xaml);
         Assert.Equal(1, Count(xaml, "ViewModel.CleanClipboardAssetsCommand"));
         Assert.Equal(1, Count(xaml, "ViewModel.CanCleanClipboardAssets, Mode=OneWay"));
-        Assert.Equal(1, Count(xaml, "ViewModel.ClipboardCleanupStatus, Mode=OneWay"));
+        // 批次 WI-61c 起那行结果句改由宿主贴（VM 交回的是身份）⇒ 锚点搬到那颗元素名，改锚不改判：
+        // "这一个动作在这页有出口、且看得见结果"仍由同一格钉着；句子本身归 SettingsDataWordGateTests。
+        Assert.Equal(0, Count(xaml, "ViewModel.ClipboardCleanupStatus, Mode=OneWay"));
+        Assert.Contains("x:Name=" + '"' + "ClipboardCleanupStatusText" + '"', xaml);
         // 灰着的时候必须看得见为什么：那句"另有 N 个文件不在历史里"就在同一张卡片里，由占用那行念出来。
         Assert.Contains("ClipboardUsage", xaml);
         // 但剪贴板页不许再长一颗（同一个动作两个入口＝两处确认框文案会分岔）。
@@ -54,8 +57,9 @@ public sealed class ClipboardOrphanCleanupGateTests
         Assert.True(cancel >= 0 && cancel < clean, "判确认结果的那一句必须早于 CleanAsync");
         Assert.Contains("先不删", body);
         // 空名单不许弹一个空框。
-        Assert.Contains("现在没有需要清理的文件", body);
-        Assert.True(body.IndexOf("现在没有需要清理的文件", StringComparison.Ordinal) < dialog);
+        // 批次 WI-61c：那句"没东西可清"交进了表里 ⇒ 这里改钉"那颗键在弹框之前就已定下来"。
+        Assert.Contains("LocMessage.Of(" + '"' + "settings.data.cleanNothing" + '"' + ")", body);
+        Assert.True(body.IndexOf("LocMessage.Of(" + '"' + "settings.data.cleanNothing" + '"' + ")", StringComparison.Ordinal) < dialog);
     }
 
     [Fact]
@@ -83,10 +87,14 @@ public sealed class ClipboardOrphanCleanupGateTests
     public void TheResultSentenceKeepsTheThreeOutcomesApart()
     {
         var body = MethodBody(ReadRepoPartials(Vm), CommandAnchor);
-        Assert.Contains("腾出约", body);                       // 全删成：删了几件 + 多少体积
-        Assert.Contains("还在名单里", body);                     // 部分/全部删不掉：不许报"清理完成"
-        Assert.Contains("一件都没删掉", body);
-        Assert.Contains("没删任何东西", body);                   // 用户点了"先不删"也要有一句话落回界面上
+        // 批次 WI-61c 把这几种下落各交了一颗键 ⇒ 这里逐颗点名"有几种下落就有几颗键"，
+        // 句子本身的事实（件数／体积／占用数／那批文件仍在名单里）由 SettingsDataWordGateTests 读表去管。
+        // needle 连着键名后面那颗收尾引号一起比、⛔ 再带上收尾括号：cleanDone 是 cleanDoneWithTemp 的前缀，
+        // 少那颗引号就"只贴了临时件那一颗"也能蒙过；带上括号则把<b>带实参</b>的那几句全判成没贴（现场如此）。
+        foreach (var key in new[] { "cleanDone", "cleanDoneWithTemp", "cleanPartlyBlocked", "cleanAllBlocked", "cleanCancelled" })
+            Assert.Contains("LocMessage.Of(" + '"' + "settings.data." + key + '"', body);
+        // 体积读数仍由那一颗共享的字节梯子供：界面自己再排一份梯子就回到 ✅P-122 那个缺陷。
+        Assert.Contains("ClipAssets.DescribeBytes(", body);
         // 删完必须就地重算占用：数字不动，用户会以为那一步白点。
         Assert.Contains("ComputeClipboardUsage()", body);
     }

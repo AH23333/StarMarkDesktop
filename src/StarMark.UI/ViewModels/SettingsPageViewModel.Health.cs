@@ -165,7 +165,7 @@ public partial class SettingsPageViewModel
     /// </summary>
     [ObservableProperty] private bool _clipboardHistoryEnabled;
 
-    [ObservableProperty] private string _clipboardHistoryStatus = string.Empty;
+    [ObservableProperty] private LocMessage? _clipboardHistoryStatus;
 
     /// <summary>LoadFromStore 回灌初值期间抑制启停动作，免得每次进设置页就凭默认值建/拆监听窗口。</summary>
     private bool _suppressClipboardApply;

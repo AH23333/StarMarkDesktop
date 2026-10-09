@@ -77,6 +77,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         LoadFromStoreSilently();
         ApplyEyeRestMessages();   // 回灌出来的那两句也要当场贴上去（换语言重贴走同一条门，见下面那颗方法）
         ApplyExtensionStatuses(); // 「拓展功能」那一屏的七行同理：VM 交的是身份，贴上屏幕才取词
+        ApplyDataStatuses();      // 「数据」那一屏的五行同理（批次 WI-61c）
         // 开机自启开关初始态以注册表为准（SetEnabled 幂等，程序化置位不会误写）。
         // 它归在「常规 → 托盘与呼出」，所以由页面构造时读一次，不再挂在组件列表的构建里。
         AutostartToggle.IsOn = AutostartService().IsEnabled();
@@ -161,6 +162,15 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
                          or nameof(SettingsPageViewModel.LocalDiskSearchStatus)
                          or nameof(SettingsPageViewModel.MissingFileRowsStatus))
             ApplyExtensionStatuses();
+        // 「数据」那一屏的五行同理：一颗变了就把**五行一起重贴**（批次 WI-61c，P-188 第三刀·第二片）。
+        // 这一屏互相解释的话比拓展功能那一屏更明显——「自动备份」那行说"多久一份、能回到几天前"，
+        // 下面那行标题说"列出了几份"，分开贴就会出现同一张卡片里两行两种语言。
+        if (e.PropertyName is nameof(SettingsPageViewModel.AutoBackupStatus)
+                         or nameof(SettingsPageViewModel.BackupsHeader)
+                         or nameof(SettingsPageViewModel.ClipboardHistoryStatus)
+                         or nameof(SettingsPageViewModel.ClipboardCleanupStatus)
+                         or nameof(SettingsPageViewModel.SaveErrorMessage))
+            ApplyDataStatuses();
         if (_suppressSave || string.IsNullOrEmpty(e.PropertyName)) return;
         // 健康度/备份/诊断等异步展示态不参与保存，避免加载过程中反复写盘
         if (IsDisplayOnlyProperty(e.PropertyName)) return;
@@ -194,6 +204,25 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         LocText.SetMessage(CaptureStatusText, ViewModel.CaptureStatus);
         LocText.SetMessage(LocalDiskSearchStatusText, ViewModel.LocalDiskSearchStatus);
         LocText.SetMessage(MissingFileRowsStatusText, ViewModel.MissingFileRowsStatus);
+    }
+
+    /// <summary>
+    /// 设置页「数据」那一屏那五行状态贴到屏幕上（批次 WI-61c，P-188 第三刀·第二片）。
+    /// <para>与 ✅WI-61b 那颗 <see cref="ApplyExtensionStatuses"/> 同一机制、同一条理由：VM 交回的是
+    /// <b>没取词的</b>「键＋实参」，件数／小时数／回溯天数／腾出多少字节／异常消息全在实参里。</para>
+    /// <para>⚠ 这一屏还有四行本批**故意没动**（<c>BackupStatus</c>／<c>UpdateStatus</c>／
+    /// <c>ClipboardUsage</c>／<c>ClipboardImageStatus</c>）：它们的话有一半由 Core／Abstractions 供
+    /// （<c>DeleteBackup</c>／<c>UpdatePolicy.Describe*</c>／<c>ClipAssets.DescribeUsage</c>／
+    /// <c>ClipboardPolicy.DescribeImageIntake</c>），只交 UI 那一半就是同一行半中半英——
+    /// 那四行各随它们的另一半走（账本 P-193／P-194）。</para>
+    /// </summary>
+    private void ApplyDataStatuses()
+    {
+        LocText.SetMessage(AutoBackupStatusText, ViewModel.AutoBackupStatus);
+        LocText.SetMessage(BackupsHeaderText, ViewModel.BackupsHeader);
+        LocText.SetMessage(ClipboardHistoryStatusText, ViewModel.ClipboardHistoryStatus);
+        LocText.SetMessage(ClipboardCleanupStatusText, ViewModel.ClipboardCleanupStatus);
+        LocText.SetMessage(SaveErrorMessageText, ViewModel.SaveErrorMessage);
     }
 
     private static bool IsDisplayOnlyProperty(string name)

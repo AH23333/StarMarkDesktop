@@ -133,7 +133,7 @@ public partial class SettingsPageViewModel : ObservableObject
     partial void OnWidgetOpacityChanged(double value) => OnPropertyChanged(nameof(OpacityPercentText));
     partial void OnMainWindowOpacityChanged(double value) => OnPropertyChanged(nameof(MainWindowOpacityPercentText));
 
-    [ObservableProperty] private string _saveErrorMessage = string.Empty;
+    [ObservableProperty] private LocMessage? _saveErrorMessage;
     [ObservableProperty] private bool _hasSaveError;
 
     // 备份与恢复（P0-2）状态反馈
@@ -160,9 +160,9 @@ public partial class SettingsPageViewModel : ObservableObject
 
     public bool HasBackups => Backups.Count > 0;
 
-    public string BackupsHeader => Backups.Count == 0
-        ? "本机备份"
-        : $"本机备份（列出最近 {Backups.Count} 份）";
+    public LocMessage? BackupsHeader => Backups.Count == 0
+        ? LocMessage.Of("settings.data.backupsHeaderNone")
+        : LocMessage.Of("settings.data.backupsHeaderCount", Backups.Count);
 
     /// <summary>
     /// 重新扫描备份目录。<b>同步</b>文件枚举：件数被上限钉死在几十份以内、目录在本地盘，
@@ -197,7 +197,7 @@ public partial class SettingsPageViewModel : ObservableObject
     /// <summary>间隔档位序号（持久化的是小时，界面只给序号）。</summary>
     [ObservableProperty] private int _autoBackupIntervalIndex;
 
-    [ObservableProperty] private string _autoBackupStatus = string.Empty;
+    [ObservableProperty] private LocMessage? _autoBackupStatus;
 
     /// <summary>下拉的档位文案，与 <see cref="AutoBackupIntervalIndex"/> 同序（一处事实：档位与文案都在 Core）。</summary>
     public IReadOnlyList<string> AutoBackupIntervalOptions => AutoBackupPolicy.IntervalLabels;
@@ -235,21 +235,29 @@ public partial class SettingsPageViewModel : ObservableObject
     /// <para>保留份数仍是写死的 7，而间隔可调 ⇒ "最长能回到多久以前"跟着设置变（每 6 小时≈不到两天，
     /// 每 7 天≈七周）。不把这笔账算出来给用户看，他会在真需要旧备份的那天才发现回溯不了那么久。</para>
     /// </summary>
-    private string BuildAutoBackupStatus()
+    private LocMessage? BuildAutoBackupStatus()
     {
         if (!AutoBackupEnabled)
-            return "已关闭：程序不再自动落盘，能回滚的只剩你手动导出的那些份（导入前的「恢复前快照」仍然每次都留）。";
+            return LocMessage.Of("settings.data.autoBackupOff");
         var hours = AutoBackupIntervalHours;
-        var how = $"已开启：距上一份满 {hours} 小时自动落一份，保留最近 {AutoBackupPolicy.Keep} 份"
-            + $" ≈ 最长回溯 {AutoBackupPolicy.MaxLookbackDays(hours)} 天。";
+        // 分钟数那颗读数原先靠插值串里的 `:0` 取整；句子的槽带不了格式串 ⇒ 交给 NumberText
+        // （<1000 时与原读数逐字相同，✅P-122 那条"显示侧数字格式收一处"）。
+        var probeMinutes = NumberText.Grouped(AutoBackupScheduler.ProbePeriod.TotalMinutes);
+        var how = LocMessage.Of("settings.data.autoBackupHow", hours, AutoBackupPolicy.Keep,
+            AutoBackupPolicy.MaxLookbackDays(hours));
         var newestAuto = Backups.FirstOrDefault(r => r.File.Kind == AutoBackupPolicy.BackupKind.Auto)?.File.ModifiedUtc;
         if (newestAuto is null)
-            return how + $"本机还没有自动件，最多 {AutoBackupScheduler.ProbePeriod.TotalMinutes:0} 分钟内就会落第一份。";
+            return Two(how, LocMessage.Of("settings.data.autoBackupNoAuto", probeMinutes));
         var nextDue = newestAuto.Value.AddHours(hours);
-        return how + (nextDue > DateTimeOffset.Now
-            ? $"下一次约 {DateTimeText.MonthDayMinute(nextDue)}。"
-            : $"已到间隔，下一次巡查（{AutoBackupScheduler.ProbePeriod.TotalMinutes:0} 分钟内）就会落盘。");
+        return nextDue > DateTimeOffset.Now
+            ? Two(how, LocMessage.Of("settings.data.autoBackupNext", DateTimeText.MonthDayMinute(nextDue)))
+            : Two(how, LocMessage.Of("settings.data.autoBackupDue", probeMinutes));
     }
+
+    /// <summary>「前一句 ＋ 后一句」这一形状也进表（`settings.data.autoBackupSentence`＝`{0}{1}`）：
+    /// 两句话各自带自己的语言，代码里⛔ 再拼中文字符（✅WI-60b 那颗 `widget.mon.note.join` 同一口径）。</summary>
+    private static LocMessage Two(LocMessage head, LocMessage tail)
+        => LocMessage.Of("settings.data.autoBackupSentence", head, tail);
 
     public SettingsPageViewModel()
     {
@@ -323,10 +331,10 @@ public partial class SettingsPageViewModel : ObservableObject
         ClipboardHistoryEnabled = Safe(_settings.LoadClipboardHistoryEnabled, false, "剪贴板历史");
         _suppressClipboardApply = false;
         ClipboardHistoryStatus = !ClipboardHistoryEnabled
-            ? "未开启：不读剪贴板、不落盘。开启后自动记录，不需要其它步骤。"
+            ? LocMessage.Of("settings.data.clipHistoryOff")
             : App.IsClipboardCollecting
-                ? "正在记录本机复制的内容（密码管理器与私钥 / 令牌 / 卡号形态除外）。"
-                : "开关是开着的，但本会话的剪贴板监听没建立起来，暂时不会记录新内容——关掉再打开本开关可重试。";
+                ? LocMessage.Of("settings.data.clipHistoryRecording")
+                : LocMessage.Of("settings.data.clipHistoryWatchMissing");
 
         // 图片那三项 + 导出带不带图片本体同样"只回灌、不因为显示而写盘"；但占用统计要真算一次：
         // §3-Q1 的第三层就是"让用户在填上限之前先看见现在占了多少"。
@@ -468,12 +476,12 @@ public partial class SettingsPageViewModel : ObservableObject
             {
                 StarMark.Abstractions.StarLog.Info($"设置已保存（主题={theme}, 托盘={EnableTray}）");
                 HasSaveError = false;
-                SaveErrorMessage = string.Empty;
+                SaveErrorMessage = null;
             }
             else
             {
                 HasSaveError = true;
-                SaveErrorMessage = $"设置未能写入磁盘，重启后会回到旧值：{writeError}";
+                SaveErrorMessage = LocMessage.Of("settings.data.saveNotWritten", writeError);
             }
 
             // 主题即时应用
@@ -505,7 +513,7 @@ public partial class SettingsPageViewModel : ObservableObject
         catch (Exception ex)
         {
             HasSaveError = true;
-            SaveErrorMessage = $"保存失败: {ex.Message}";
+            SaveErrorMessage = LocMessage.Of("settings.data.saveFailed", ex.Message);
             StarMark.Abstractions.StarLog.Error($"设置保存失败: {ex}");
         }
     }

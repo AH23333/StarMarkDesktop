@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml.Media;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Clipboard;
 using StarMark.Abstractions.Insights;
 using StarMark.Integrations.Clipboard;
@@ -35,10 +36,9 @@ public partial class SettingsPageViewModel
         var collecting = App.ApplyClipboardHistory(enabled);
         ClipboardHistoryStatus = enabled
             ? collecting
-                ? "已开始记录。密码管理器复制的内容、以及私钥 / 登录令牌 / 银行卡号形态一律不入库；"
-                  + "想临时停一下，去「剪贴板」页点「暂停记录」。"
-                : "开关已打开，但系统剪贴板监听窗口没建起来（原因见日志）——当前仍不会记录任何内容。"
-            : "已停止记录。之前存下的历史仍在「剪贴板」页，可在那里一键清空。";
+                ? LocMessage.Of("settings.data.clipHistoryStarted")
+                : LocMessage.Of("settings.data.clipHistoryListenerGone")
+            : LocMessage.Of("settings.data.clipHistoryStopped");
         ClipboardImageStatus = ClipboardImageStatusText(collecting, ClipboardImageEnabled);
     }
 
@@ -68,7 +68,7 @@ public partial class SettingsPageViewModel
     [ObservableProperty] private bool _canCleanClipboardAssets;
 
     /// <summary>清理那一步的结果行：删了几件、腾出多少、还有几件删不掉。<b>不许写成一句"清理完成"</b>。</summary>
-    [ObservableProperty] private string _clipboardCleanupStatus = string.Empty;
+    [ObservableProperty] private LocMessage? _clipboardCleanupStatus;
 
     /// <summary>
     /// 手动导出是否带上剪贴板图片本体（决议 §4：<b>默认开</b>）。
@@ -234,14 +234,14 @@ public partial class SettingsPageViewModel
             var scan = await Task.Run(() => ClipboardAssetAudit.ScanAsync(ClipboardRepo()));
             if (scan is null)
             {
-                ClipboardCleanupStatus = "没能核对目录与历史的差（原因见日志），一件都没动。";
+                ClipboardCleanupStatus = LocMessage.Of("settings.data.cleanNoScan");
                 return;
             }
             var names = scan.Value.Result.OrphanNames;
             var temps = scan.Value.Result.TempNames;
             if (names.Count + temps.Count == 0)
             {
-                ClipboardCleanupStatus = "现在没有需要清理的文件。";
+                ClipboardCleanupStatus = LocMessage.Of("settings.data.cleanNothing");
                 return;
             }
 
@@ -261,31 +261,34 @@ public partial class SettingsPageViewModel
                 primaryText: $"删掉这 {total} 个文件", cancelText: "先不删");
             if (choice != CenteredDialog.HostedDialogResult.Committed)
             {
-                ClipboardCleanupStatus = "没删任何东西。";
+                ClipboardCleanupStatus = LocMessage.Of("settings.data.cleanCancelled");
                 return;
             }
 
             var outcome = await Task.Run(() => ClipboardAssetAudit.CleanAsync(ClipboardRepo()));
             if (outcome is null)
             {
-                ClipboardCleanupStatus = "清理没跑成（原因见日志），已删掉的部分不会回头补删——可以再点一次。";
+                ClipboardCleanupStatus = LocMessage.Of("settings.data.cleanRunFailed");
                 ComputeClipboardUsage();
                 return;
             }
             var o = outcome.Value;
+            // 三种结果各配一颗键（⛔ 用一句"清理完成"盖掉"还有 N 件没删掉"＝上一版差点做的事）；
+            // "与 N 个临时件"那一小段原来靠代码里拼字，今天交给另一颗整句键，代码里⛔ 留中文字符。
+            var freed = StarMark.Abstractions.Clipboard.ClipAssets.DescribeBytes(o.DeletedBytes + o.TempDeletedBytes);
             ClipboardCleanupStatus = o.Deleted + o.TempDeleted == 0
-                ? $"一件都没删掉：{o.Failed + o.TempFailed} 个文件正被别的程序占用。它们还在名单里，可以稍后再点一次。"
+                ? LocMessage.Of("settings.data.cleanAllBlocked", o.Failed + o.TempFailed)
                 : o.Failed + o.TempFailed == 0
-                    ? $"已删掉 {o.Deleted} 个不属于历史的文件"
-                      + (o.TempDeleted > 0 ? $"与 {o.TempDeleted} 个临时件" : "")
-                      + $"，腾出约 {StarMark.Abstractions.Clipboard.ClipAssets.DescribeBytes(o.DeletedBytes + o.TempDeletedBytes)}。"
-                    : $"已删掉 {o.Deleted + o.TempDeleted} 个，但还有 {o.Failed + o.TempFailed} 个正被占用没删掉——它们仍在名单里，可以稍后再点一次。";
+                    ? o.TempDeleted > 0
+                        ? LocMessage.Of("settings.data.cleanDoneWithTemp", o.Deleted, o.TempDeleted, freed)
+                        : LocMessage.Of("settings.data.cleanDone", o.Deleted, freed)
+                    : LocMessage.Of("settings.data.cleanPartlyBlocked", o.Deleted + o.TempDeleted, o.Failed + o.TempFailed);
             ComputeClipboardUsage();
         }
         catch (Exception ex)
         {
             StarLog.Error("清理剪贴板图片孤儿文件失败", ex);
-            ClipboardCleanupStatus = $"清理失败：{ex.Message}";
+            ClipboardCleanupStatus = LocMessage.Of("settings.data.cleanFailed", ex.Message);
         }
     }
 }
