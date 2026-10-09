@@ -56,6 +56,7 @@ public sealed partial class GlanceWidget : UserControl
             _sync = null;
             // 静态事件是强引用：组件被移除后若不退订，整个控件（连同其下的行）会一直被钉住。
             Helpers.TrendingItemActions.NoticeRaised -= OnTrendingNotice;
+            Locale.Changed -= RebuildWords;
         };
         Loaded += (_, _) =>
         {
@@ -64,10 +65,26 @@ public sealed partial class GlanceWidget : UserControl
             // 动作结果先退再订：没有这一步，窗口每次隐藏/显示都会多挂一份同一个委托。
             Helpers.TrendingItemActions.NoticeRaised -= OnTrendingNotice;
             Helpers.TrendingItemActions.NoticeRaised += OnTrendingNotice;
+            // 换语言那一刻自己重贴（批次 WI-56／P-186，第七位订阅的主人）：农历那一行与倒计时那句都是
+            // <b>当场算出来的读数</b>，走不了 LocText 那条注册路（SetKey 连实参一起冻住＝坑表 #361）。
+            Locale.Changed -= RebuildWords;
+            Locale.Changed += RebuildWords;
             RefreshDate();
             StartTimer();
             _ = ReloadAsync();
         };
+    }
+
+    /// <summary>
+    /// 重贴只做"按新语言把同一批读数与已经拿到手的那份数据再铺一遍"：⛔ 建窗口、⛔ 落盘、⛔ 打接口、⛔ 读设置档。
+    /// 月历开着时圆点也要重画——"哪天算节日"的清单按语言各排一张（批次 WI-56／P-186），
+    /// 那一档没排的那几天就不该在英文界面的月历上亮点。
+    /// </summary>
+    private void RebuildWords()
+    {
+        RefreshDate();
+        if (_calendarOpen) RebuildCalendar();
+        if (TrendingBlock.Visibility == Visibility.Visible) PaintTrending();
     }
 
     /// <summary>
@@ -104,31 +121,26 @@ public sealed partial class GlanceWidget : UserControl
         MonthBlock.Text = Locale.Fmt("widget.glance.ym", today.Year, today.Month);
         WeekBlock.Text = DateTimeText.Weekday(today.DayOfWeek);
 
-        // 农历区（农历文本＋节日＋倒计时）＝中文文化成品词，只在中文档出现；其余语言整区折叠
-        // ——判据与理由在 GlanceCalendar.ShowsLunarZone（WI-31 的 P-172 收官口径，非漏翻）。
-        if (GlanceCalendar.ShowsLunarZone(Locale.Current))
+        // 农历那一行只有中文档出现（判据与理由在 GlanceCalendar.ShowsLunarDayText）；
+        // 节日与倒计时那一行三档都有，各念自己那张清单——⛔ 在这里拼"农历"那三个字、也⛔ 拼「 · 」
+        // 与「距…还有…天」：句子住表里，嵌进去的节日名交的是<b>还没渲染的那颗键</b>（坑表 #371／#393）。
+        var festival = GlanceCalendar.FestivalMessage(today);
+        var lunar = GlanceCalendar.ShowsLunarDayText(Locale.Current) ? GlanceCalendar.LunarText(today) : string.Empty;
+        LunarBlock.Text = (lunar, festival) switch
         {
-            LunarBlock.Visibility = Visibility.Visible;
-            var lunar = GlanceCalendar.LunarText(today);
-            var festival = GlanceCalendar.Festival(today);
-            LunarBlock.Text = string.IsNullOrEmpty(lunar)
-                ? (festival ?? string.Empty)
-                : festival is null ? $"农历{lunar}" : $"农历{lunar} · {festival}";
+            ("", null) => string.Empty,
+            ("", not null) => festival.Render(),
+            (not "", null) => Locale.Fmt("widget.glance.lunarDay", lunar),
+            (not "", not null) => Locale.Fmt("widget.glance.lunarDayWithFestival", lunar, festival),
+        };
+        LunarBlock.Visibility = string.IsNullOrEmpty(LunarBlock.Text) ? Visibility.Collapsed : Visibility.Visible;
 
-            // 今天已经是节日时，倒计时展示「下一个」节日，避免与上方重复。
-            var next = GlanceCalendar.NextFestival(today.AddDays(1));
-            CountdownBlock.Visibility = Visibility.Visible;
-            CountdownBlock.Text = next is null
-                ? string.Empty
-                : $"距「{next.Name}」还有 {next.Days + 1} 天（{next.Date.Month}月{next.Date.Day}日）";
-        }
-        else
-        {
-            LunarBlock.Text = string.Empty;
-            LunarBlock.Visibility = Visibility.Collapsed;
-            CountdownBlock.Text = string.Empty;
-            CountdownBlock.Visibility = Visibility.Collapsed;
-        }
+        // 今天已经是节日时，倒计时展示「下一个」节日，避免与上一行重复。
+        var next = GlanceCalendar.NextFestival(today.AddDays(1));
+        CountdownBlock.Text = next is null
+            ? string.Empty
+            : Locale.Fmt("widget.glance.nextFestival", next.Name, next.Days + 1, next.Date.Month, next.Date.Day);
+        CountdownBlock.Visibility = string.IsNullOrEmpty(CountdownBlock.Text) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void StartTimer()
@@ -302,14 +314,17 @@ public sealed partial class GlanceWidget : UserControl
 
     // ==================== GitHub 热榜块（批次 KH）====================
 
+    /// <summary>这一轮拿到手的那份热榜。换语言那一刻<b>只重铺这一份</b>：⛔ 再打接口、⛔ 读设置档
+    /// （那一趟要是在回调里跑，切语言就可能变成"热榜没拿到：超时"）。
+    /// 与 <see cref="_trendingFailure"/> 是两颗不同的事实——"抓到了但今天没有"与"没抓到"必须分开说（P-54/P-56 同一口径）。</summary>
+    private StarMark.Core.Trending.TrendingResult? _trendingShown;
+    private string? _trendingFailure;
+
     /// <summary>
-    /// 拉一次热榜（走 <c>TrendingService</c> 的"同一本地日历日只抓一次"，所以每次重载都很便宜）。
-    /// <para>
-    /// 这一块必须自己说清"是不是上次的结果 / 是不是兜底来源 / 为什么是空的"：组件上没有主窗那条状态行，
-    /// 抓失败却只留一个空块＝用户以为 GitHub 今天没有热榜（P-54/P-56 同一口径）。
-    /// </para>
+    /// 拉一次热榜（走 <c>TrendingService</c> 的"同一本地日历日只抓一次"，所以每次重载都很便宜），再交 <see cref="PaintTrending"/> 铺字。
+    /// <para>读与画分成两颗，是因为换语言那一刻只有"画"那一半要重来。</para>
     /// </summary>
-    private async System.Threading.Tasks.Task LoadTrendingAsync()
+    private async System.Threading.Tasks.Task LoadTrendingAsync(bool force = false)
     {
         var settings = App.Services.GetRequiredService<Helpers.SettingsStore>();
         var on = settings.LoadTrendingEnabled() && settings.LoadTrendingGlanceEnabled();
@@ -319,37 +334,55 @@ public sealed partial class GlanceWidget : UserControl
         try
         {
             var service = App.Services.GetRequiredService<StarMark.Core.Trending.TrendingService>();
-            var result = await service.GetAsync(
-                StarMark.Abstractions.Trending.TrendingPeriod.Daily, null, force: false, CancellationToken.None);
-
-            TrendingHost.Children.Clear();
-            foreach (var repo in result.Repos.Take(TrendingLimit))
-                TrendingHost.Children.Add(BuildTrendingRow(repo, result));
-
-            var none = result.Repos.Count == 0;
-            TrendingEmpty.Text = none ? "本期没有候选：去主窗「热榜」页看原因与「重试」。" : string.Empty;
-            TrendingEmpty.Visibility = none ? Visibility.Visible : Visibility.Collapsed;
-
-            // 这两句的字住在表里，且与主窗热榜页共用同一颗键（⛔ 不另写一份"这是上次结果"——那是 P-131 #5 那一族差一天的前身）。
-            // 组件窗那一族"换语言当场重贴"还没接线，所以这里按当前语言取一次词。
-            var notes = new System.Collections.Generic.List<string>();
-            if (result.Stale) notes.Add(LocMessage.Of("trending.statusStale",
-                StarMark.Abstractions.Trending.TrendingCacheCodec.DescribeAge(result.FetchedAt, DateTimeOffset.Now)).Render());
-            if (result.Via == StarMark.Abstractions.Trending.TrendingSource.SearchApi) notes.Add(Locale.T("trending.viaSearchApiShort"));
-            if (!string.IsNullOrWhiteSpace(result.Notice)) notes.Add(result.Notice!);
-            TrendingStatus.Text = string.Join("｜", notes);
-            TrendingStatus.Visibility = notes.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _trendingShown = await service.GetAsync(
+                StarMark.Abstractions.Trending.TrendingPeriod.Daily, null, force, CancellationToken.None);
+            _trendingFailure = null;
         }
         catch (Exception ex)
         {
-            // 失败与"今天没有热榜"分开写：前者要给出可再试的信号，后者才谈数据本身。
-            TrendingHost.Children.Clear();
-            TrendingEmpty.Text = "热榜没拿到：" + ex.Message;
+            _trendingShown = null;
+            _trendingFailure = ex.Message;
+            StarLog.Warn($"今日速览热榜块加载失败：{ex.Message}");
+        }
+        PaintTrending();
+    }
+
+    /// <summary>把缓存那一份按<b>当前语言</b>铺一遍（首次加载与换语言重贴走的是同一颗）。
+    /// 这一块必须自己说清"是不是上次的结果 / 是不是兜底来源 / 为什么是空的"：组件上没有主窗那条状态行，
+    /// 抓失败却只留一个空块＝用户以为 GitHub 今天没有热榜。</summary>
+    private void PaintTrending()
+    {
+        TrendingHost.Children.Clear();
+        if (_trendingFailure is { } why)
+        {
+            TrendingEmpty.Text = Locale.Fmt("widget.glance.trending.failed", why);
             TrendingEmpty.Visibility = Visibility.Visible;
             TrendingStatus.Text = string.Empty;
             TrendingStatus.Visibility = Visibility.Collapsed;
-            StarLog.Warn($"今日速览热榜块加载失败：{ex.Message}");
+            return;
         }
+        if (_trendingShown is not { } result) return;
+
+        foreach (var repo in result.Repos.Take(TrendingLimit))
+            TrendingHost.Children.Add(BuildTrendingRow(repo, result));
+
+        var none = result.Repos.Count == 0;
+        TrendingEmpty.Text = none ? Locale.T("widget.glance.trending.none") : string.Empty;
+        TrendingEmpty.Visibility = none ? Visibility.Visible : Visibility.Collapsed;
+
+        // 这两句的字住在表里，且与主窗热榜页共用同一颗键（⛔ 不另写一份"这是上次结果"——那是 P-131 #5 那一族差一天的前身）。
+        var notes = new System.Collections.Generic.List<string>();
+        if (result.Stale) notes.Add(LocMessage.Of("trending.statusStale",
+            StarMark.Abstractions.Trending.TrendingCacheCodec.DescribeAge(result.FetchedAt, DateTimeOffset.Now)).Render());
+        if (result.Via == StarMark.Abstractions.Trending.TrendingSource.SearchApi) notes.Add(Locale.T("trending.viaSearchApiShort"));
+        if (!string.IsNullOrWhiteSpace(result.Notice)) notes.Add(result.Notice!);
+        // 那几颗事实<b>怎么连</b>也住在表里（`trending.statusNotice`，主窗热榜页念的是同一颗）：
+        // 把全角「｜」写死在这一行，英文档就得到"拉丁句子里冒出一颗 CJK 宽度的符号"，
+        // 而那一行的英文列本来就是半角竖线——两处各一套＝第二个主人（坑表 #371 那颗分隔符的同族）。
+        TrendingStatus.Text = notes.Count == 0
+            ? string.Empty
+            : notes.Aggregate((head, next) => Locale.Fmt("trending.statusNotice", head, next));
+        TrendingStatus.Visibility = notes.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private Button BuildTrendingRow(StarMark.Abstractions.Trending.TrendingRepo repo,
@@ -381,7 +414,7 @@ public sealed partial class GlanceWidget : UserControl
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Left,
         };
-        ToolTipService.SetToolTip(button, "左键打开仓库 · 右键可 Star / 收进收藏");
+        ToolTipService.SetToolTip(button, Locale.T("widget.glance.trending.rowTip"));
         button.Click += (_, _) => StarMark.UI.Helpers.ItemCardActions.OpenUriAndReport(repo.Url);
         WireTrendingRowContext(button);
         return button;
@@ -409,12 +442,10 @@ public sealed partial class GlanceWidget : UserControl
         TrendingRefreshButton.IsEnabled = false;
         try
         {
-            var service = App.Services.GetRequiredService<StarMark.Core.Trending.TrendingService>();
-            await service.GetAsync(StarMark.Abstractions.Trending.TrendingPeriod.Daily, null, force: true, CancellationToken.None);
+            // 读与画都在这一颗里：⛔ 抓完再抓一次（那是两次网络往返、两份失败日志）。
+            await LoadTrendingAsync(force: true);
         }
-        catch (Exception ex) { StarLog.Warn($"今日速览热榜手动刷新失败：{ex.Message}"); }
         finally { TrendingRefreshButton.IsEnabled = true; }
-        await LoadTrendingAsync();
     }
 
     private static Button BuildItemButton(Item item)

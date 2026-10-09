@@ -57,7 +57,9 @@ public static class MonthGrid
         {
             var date = start.AddDays(i);
             var inMonth = date.Year == year && date.Month == month;
-            cells.Add(new MonthCell(date.Day, inMonth, date == today, inMonth && GlanceCalendar.Festival(date) is not null));
+            // ⚠ 圆点问的是"这一档的语言里那天算不算节日"——清单按语言各排一张（批次 WI-56／P-186），
+            //    所以同一张月历在 en／ja 档亮的点与中文档不同，这是裁决而不是漏翻。
+            cells.Add(new MonthCell(date.Day, inMonth, date == today, inMonth && GlanceCalendar.FestivalMessage(date) is not null));
         }
 
         var rows = new List<IReadOnlyList<MonthCell>>(count / Columns);

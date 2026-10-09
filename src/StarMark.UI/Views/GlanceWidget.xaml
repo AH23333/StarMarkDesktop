@@ -21,8 +21,10 @@
                 <TextBlock x:Name="DayBlock" Grid.Column="0" Text="18" FontSize="42" FontWeight="Bold"
                            VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                    <TextBlock x:Name="MonthBlock" Text="2026年9月" FontSize="13"/>
-                    <TextBlock x:Name="WeekBlock" Text="星期五" FontSize="12" Opacity="0.7"/>
+                    <!-- ⛔ 这里不留"2026年9月／星期五"那种示例字：这两格每次 Loaded 都由 RefreshDate() 重写，
+                         留着就是同一句话的第二份出处，而它⛔ 换语言（✅WI-2n／WI-53 同一颗判据）。 -->
+                    <TextBlock x:Name="MonthBlock" FontSize="13"/>
+                    <TextBlock x:Name="WeekBlock" FontSize="12" Opacity="0.7"/>
                 </StackPanel>
                 <ToggleButton Grid.Column="2" x:Name="CalendarToggle" i18n:LocText.Key="widget.gl.calendar" FontSize="11"
                               Padding="8,2,8,2" VerticalAlignment="Top" Checked="CalendarToggle_Changed"
@@ -31,7 +33,9 @@
             </Grid>
 
             <StackPanel x:Name="DateHead" Spacing="4">
-                <TextBlock x:Name="LunarBlock" Text="农历八月初八" FontSize="13" TextWrapping="Wrap"/>
+                <!-- ⛔ "农历八月初八"那种示例字⛔ 留在这里：那一行由 RefreshDate() 按当前语言当场算，
+                     挂静态键又会把带读数的实参冻住（坑表 #361／✅WI-53 天气那 4 句同一条口子）。 -->
+                <TextBlock x:Name="LunarBlock" FontSize="13" TextWrapping="Wrap"/>
                 <TextBlock x:Name="CountdownBlock" Text="" FontSize="12" Opacity="0.75" TextWrapping="Wrap"/>
             </StackPanel>
 
@@ -40,7 +44,8 @@
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="4">
                     <Button Grid.Column="0" Content="‹" FontSize="12" Padding="8,0,8,0" Click="PrevMonth_Click"
                             i18n:LocText.ToolTipKey="widget.gl.prevMonth"/>
-                    <TextBlock Grid.Column="1" x:Name="CalendarTitle" Text="2026年9月" FontSize="12"
+                    <!-- 这一格与主行共用 `widget.glance.ym`（那颗年月句此前有两份主人）：面字⛔ 留示例值。 -->
+                    <TextBlock Grid.Column="1" x:Name="CalendarTitle" FontSize="12"
                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     <Button Grid.Column="2" Content="›" FontSize="12" Padding="8,0,8,0" Click="NextMonth_Click"
                             i18n:LocText.ToolTipKey="widget.gl.nextMonth"/>
