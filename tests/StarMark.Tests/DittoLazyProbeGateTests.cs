@@ -57,7 +57,7 @@ public sealed class DittoLazyProbeGateTests
         var hint = source.AvailabilityHint;
 
         Assert.Equal(1, source.ProbeCount);
-        Assert.Contains("Ditto", hint, StringComparison.Ordinal);
+        Assert.Equal("source.hint.ditto", hint!.Key);   // 钉那颗键，⛔ 钉屏幕上那几个字（规则 #130／批次 WI-57）
     }
 
     /// <summary>显式给了路径（测试/自定义安装位置）＝<b>不探</b>，也不许被"懒"顺手改成去枚举进程。</summary>
@@ -103,18 +103,26 @@ public sealed class DittoLazyProbeGateTests
     public void BothEntryPointsAskTheGateAndThereAreNoOthers()
     {
         Assert.Contains("EnsureProbed();", Body("public bool IsAvailable"), StringComparison.Ordinal);
-        Assert.Contains("EnsureProbed();", Body("public string? AvailabilityHint"), StringComparison.Ordinal);
+        Assert.Contains("EnsureProbed();", Body("public LocMessage? AvailabilityHint"), StringComparison.Ordinal);
 
         // 调用闸门的地方全档只许两处（定义那行是 "EnsureProbed()"，不带分号，不会被数进来）。
         var whole = SourceGate.Code(SourceGate.ReadRepoFile(File));
         Assert.Equal(2, SourceGate.Count(whole, "EnsureProbed();"));
     }
 
-    /// <summary>探测过的位置清单必须还是那句话的来源——"找过哪里"是本组件的既有承诺（批次 MH）。</summary>
+    /// <summary>
+    /// 探测过的位置清单必须还是那句话的来源——"找过哪里"是本组件的既有承诺（批次 MH）。
+    /// <para><b>清单的分隔符是「 · 」而不是「；」</b>（批次 WI-57）：这一串是<b>路径与路径之间</b>的连接，
+    /// 属于那份机器事实，⛔ 为它再立一颗"分隔符"表行（表里已有 <c>health.join.list</c>／<c>trending.notice.join</c>
+    /// 两颗按句子主人各写一份，第三颗只会让"清单怎么连"多出一个人）。句子本身那颗键换语言时跟着重贴。</para>
+    /// </summary>
     [Fact]
     public void TheHintStillNamesEveryProbedPath()
     {
-        Assert.Contains("string.Join(\"；\", _probed)", Body("public string? AvailabilityHint"), StringComparison.Ordinal);
+        var body = Body("public LocMessage? AvailabilityHint");
+        Assert.Contains("string.Join(\" · \", _probed)", body, StringComparison.Ordinal);
+        Assert.Contains("SourceAvailabilityText.MaxFactLength", body, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"source.hint.ditto\"", body, StringComparison.Ordinal);
     }
 
     /// <summary>探过一次就把旗子立起来：靠旗子而不是靠"_dbPath 非空"判断，因为<b>探不到时 _dbPath 也可能是候选首项</b>。</summary>

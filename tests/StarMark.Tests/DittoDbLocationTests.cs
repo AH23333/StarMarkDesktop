@@ -55,7 +55,9 @@ public sealed class DittoDbLocationTests
 
         var hint = src.AvailabilityHint;
         Assert.NotNull(hint);
-        Assert.Contains(ghost, hint!, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("剪贴板历史", hint!, StringComparison.Ordinal);
+        // 那句"内置历史不依赖 Ditto"自批次 WI-57 起住在表里（钉它＝钉某一列的措辞，规则 #130）；
+        // 这里能机检、且与语言无关的是：那颗键＋实参里真的带着这条路径。
+        Assert.Equal("source.hint.ditto", hint!.Key);
+        Assert.Contains(ghost, hint.Render(), StringComparison.OrdinalIgnoreCase);
     }
 }

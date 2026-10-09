@@ -122,11 +122,17 @@ public sealed class BrowserBookmarksSourceTests : IDisposable
             Assert.All(await source.FetchAsync(new SyncContext(), CancellationToken.None), i => Assert.Equal(which, i.Source));
     }
 
+    /// <summary>
+    /// Chrome 与 Edge 各自的名字必须映射到<b>各自那颗</b>表行（批次 WI-57／P-187）。
+    /// <para>旧写法是 <c>IItemSource.DisplayName</c> 各源写死一句中文——那与表里那行是同一句字的两个主人，
+    /// 一份改了另一份不会跟着改（P-171 那一族）。现在身份只有 <c>SourceId</c>，念法只有表里那一处，
+    /// 所以这里钉的是"两条身份没落到同一颗键上"（同一颗＝屏幕上两行念同一个名字）。</para>
+    /// </summary>
     [Fact]
-    public void ChromeAndEdge_HaveDistinctDisplayNames()
+    public void ChromeAndEdge_HaveDistinctNameKeys()
     {
-        Assert.Equal("Chrome 书签", new ChromeBookmarksSource().DisplayName);
-        Assert.Equal("Edge 书签", new EdgeBookmarksSource().DisplayName);
+        Assert.Equal("source.name.chrome", SourceNames.NameKeyOf(new ChromeBookmarksSource().SourceId));
+        Assert.Equal("source.name.edge", SourceNames.NameKeyOf(new EdgeBookmarksSource().SourceId));
     }
 
     // ===== 多 profile（真实环境里"书签一条都没同步进来"的头号成因）=====

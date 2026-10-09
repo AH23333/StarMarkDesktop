@@ -118,14 +118,23 @@ public sealed class TextTrimTests
         Assert.Equal(0, Unpaired(title));
     }
 
+    /// <summary>
+    /// 诊断那一行的"找过哪里"清单仍受 200 枚上限（批次 WI-57 改道：<b>上限切的是路径事实，⛔ 整句</b>）。
+    /// <para>句子自本批起住在语言表里，按字符数切它会切掉括号和句号——所以这一格不再走
+    /// <c>SourceAvailabilityText</c>（它现在只交键），而走真正的供话者：书签源那条路径。</para>
+    /// </summary>
     [Fact]
     public void AvailabilityHint_StaysUnderItsTwoHundredUnits()
     {
         var text = A(199) + Cat + A(50);
-        var line = SourceAvailabilityText.Of(false, text);
-        Assert.StartsWith("没有这项数据：", line, StringComparison.Ordinal);
-        Assert.Equal(0, Unpaired(line));
-        Assert.True(line.Length <= "没有这项数据：".Length + 200 + 1);
+        var hint = ((IItemSource)new StarMark.Integrations.Bookmarks.EdgeBookmarksSource(text)).AvailabilityHint;
+        Assert.NotNull(hint);
+        Assert.Equal("source.hint.bookmarks", hint!.Key);
+        // 单条候选 ⇒ 实参就是那条路径（机器事实，⛔ 一句已取词的话）。
+        var where = Assert.IsType<string>(hint.Args![0]);
+        Assert.Equal(200, where.Length);          // 199 枚＋一枚省略号：那一刀退在代理对之前
+        Assert.EndsWith("…", where, StringComparison.Ordinal);
+        Assert.Equal(0, Unpaired(where));
     }
 
     [Fact]

@@ -67,7 +67,8 @@ public class EverythingSourceTests
     {
         var source = new EverythingSource(new EverythingQueryQueue(), new FileIndexOptions());
         Assert.Equal(ItemSources.FileSystem, source.SourceId);
-        Assert.Equal("本地文件 (Everything)", source.DisplayName);
+        // 名字念什么住在表里（批次 WI-57）：这里钉"身份映射到哪颗键"，⛔ 抄屏幕上那几个字（规则 #130）。
+        Assert.Equal("source.name.filesystem", SourceNames.NameKeyOf(source.SourceId));
     }
 
     /// <summary>

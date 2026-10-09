@@ -29,7 +29,7 @@ public sealed class EllipsisFamilyGateTests
     private static readonly string[] ConvertedHosts =
     {
         "src/StarMark.Abstractions/ItemCardPolicy.cs",
-        "src/StarMark.Abstractions/SourceAvailabilityText.cs",
+        "src/StarMark.Integrations/Bookmarks/BrowserBookmarksSource.cs",   // 批次 WI-57：那句"找过哪条路径"从这里切（上游那颗出口已改交键，⛔ 再切句子）
         "src/StarMark.Abstractions/Ai/AiFailures.cs",
         "src/StarMark.Abstractions/Clipboard/ClipboardPolicy.cs",
         "src/StarMark.Core/Feed/RssParser.cs",

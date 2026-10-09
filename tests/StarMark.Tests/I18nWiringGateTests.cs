@@ -47,6 +47,7 @@ public sealed class I18nWiringGateTests
     private const string CountdownWidgetCs = "src/StarMark.UI/Views/CountdownWidget.xaml.cs";
     private const string CalcWidgetCs = "src/StarMark.UI/Views/CalcWidget.xaml.cs";
     private const string GlanceWidgetCs = "src/StarMark.UI/Views/GlanceWidget.xaml.cs";
+    private const string SettingsPageCs = "src/StarMark.UI/Views/SettingsPage.xaml.cs";
     private const string AppCs = "src/StarMark.UI/App.xaml.cs";
     // 组件窗自己的三条文字出口（批次 WI-37-A）：菜单本体／外壳两态／快捷启动拖放，加内容工厂的占位那一行。
     private const string WidgetMenuCs = "src/StarMark.UI/Views/WidgetWindow.Menu.cs";
@@ -608,7 +609,7 @@ public sealed class I18nWiringGateTests
             .ToArray();
         Assert.Empty(glue);                                       // 负账清零（WI-33）：扣分行整句住 VM 现装
         var vm = ReadRepoFile("src/StarMark.UI/ViewModels/SettingsPageViewModel.Health.cs");
-        foreach (var key in new[] { "health.stat.lang", "health.stat.domains", "health.stat.dup", "health.stat.tag", "health.deduction.row", "health.summary.todo" })
+        foreach (var key in new[] { "health.stat.lang", "health.stat.domains", "health.stat.dup", "health.stat.tag", "health.deduction.row", "health.summary.todo", "health.dup.item" })
             Assert.Contains($"Locale.Fmt(\"{key}", vm, StringComparison.Ordinal);   // 正账：整句都从表出（统计＋扣分半链同闸）
     }
 
@@ -1169,6 +1170,7 @@ public sealed class I18nWiringGateTests
             "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs",
             "src/StarMark.UI/Views/CountdownWidget.xaml.cs",
             "src/StarMark.UI/Views/GlanceWidget.xaml.cs",
+            "src/StarMark.UI/Views/SettingsPage.xaml.cs",
             "src/StarMark.UI/Views/WeatherWidget.xaml.cs",
             "src/StarMark.UI/Views/WidgetAppearanceEditor.cs",
         }, subscribers);
@@ -1230,6 +1232,14 @@ public sealed class I18nWiringGateTests
         Assert.Contains("PaintTrending()", glanceRebuild, StringComparison.Ordinal);               // 只重铺缓存里那一份
         Assert.DoesNotContain("LoadTrendingAsync", glanceRebuild, StringComparison.Ordinal);       // ⛔ 顺手再抓一次网络
         Assert.DoesNotContain("InitializeComponent", glanceRebuild, StringComparison.Ordinal);     // ⛔ 顺手重建整棵可视树
+        // 设置页那一卡（批次 WI-57／P-187，第八位主人）：诊断那几行是<b>进页时采回来的事实</b>（键＋实参），
+        // 语言换了没人会回去重采——那一趟里有 COUNT(*) 全表扫描。所以重贴只许把<b>已经拿到手的那一份</b>再念一遍。
+        // 这一处与七扇组件不同的一点：它挂的是<b>本页那份 transient 的 VM</b>，摘掉必须落在 Page_Unloaded 上，
+        // 只摘一半（或只订不摘）＝每进一次设置页在静态事件上多挂一份，而那些页面早就不在了（坑表 #386 的代价）。
+        var settings = Code(ReadRepoFile(SettingsPageCs));
+        Assert.Contains("Locale.Changed += ViewModel.PaintDiagnostics;", settings, StringComparison.Ordinal);
+        Assert.Contains("Locale.Changed -= ViewModel.PaintDiagnostics;", settings, StringComparison.Ordinal);
+        Assert.DoesNotContain("LoadDiagnosticsAsync", MethodBody(settings, "void Page_Loaded"), StringComparison.Ordinal);
     }
 
     /// <summary>

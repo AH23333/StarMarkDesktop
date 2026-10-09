@@ -207,6 +207,8 @@ public sealed class I18nContractTests : IDisposable
                         ["dialog.save"] = "「保存」日文同字（WI-2p）",
             ["glance.festival.qingming"] = "「清明」中日同字：日本也把这一天写成「清明」，同颗节日（批次 WI-56／P-186）",
             ["glance.festival.qixi"] = "「七夕」中日同字：同一颗节日在两文化里都写这两个汉字（批次 WI-56／P-186）",
+            ["diag.fact"] = "直通行「{0}」：那一格交的是机器事实（数据库路径、版本号、ETag、启动刻度行），三语同形是刻意的（批次 WI-57／P-187）",
+            ["health.dup.item"] = "全角括号「（）」中日同形，en 列给半角——那颗宽度就是语言内容（批次 WI-57 顺手交表）",
                         ["guide.hotkey.bound"] = "占位骨架「{0}：{1}」三语同形（WI-2q）",
                         ["guide.page.rss"] = "RSS 三语同字（WI-2q）",
                         ["upd.verdict.emptyTag"] = "「空」三语同字（WI-2v）",
