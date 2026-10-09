@@ -60,7 +60,10 @@ public sealed class RssPageWiringGateTests
         var xaml = Between(ReadRepoFile(SettingsXaml), "i18n:LocText.Key=\"settings.extend.rssTitle\"", "</controls:ColumnFlowPanel>");
 
         Assert.Equal(2, Count(xaml, "ViewModel.RssEnabled"));
-        Assert.Contains("ViewModel.RssStatus", xaml);
+        // 这一栏确实<b>自带一颗状态行</b>——这颗才是这一格的本职（它问的是"在不在这张卡里"，只有这段切片答得了）。
+        // 批次 WI-61b 起那一句由 VM 交身份、宿主贴：XAML 里⛔ 有 `ViewModel.RssStatus` 那份绑定，
+        // "绑没绑"与"谁来贴"归 SettingsExtendWordGateTests 判，这里⛔ 再钉一遍同一行（同一动作两份定位）。
+        Assert.Contains("x:Name=\"RssSwitchStatusText\"", xaml);
         Assert.Contains("OpenRss_Click", xaml);
     }
 

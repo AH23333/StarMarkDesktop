@@ -20,6 +20,7 @@ namespace StarMark.Tests;
 /// <b>③</b> 启动时定语言的调用排在建窗之后 → 用户看到的是"先一整窗中文、再抖成英文"；
 /// <b>④</b> 语言选项在 XAML 里再列一遍 → 补日文时改了表没改这里，界面上多出一颗点了没反应的选项。</para>
 /// </summary>
+[Collection("LocaleGlobal")]
 public sealed class I18nWiringGateTests
 {
     private const string MainWindowXaml = "src/StarMark.UI/MainWindow.xaml";
@@ -1797,5 +1798,31 @@ public sealed class I18nWiringGateTests
 
         var factory = Code(ReadRepoFile(WidgetFactoryCs));
         Assert.Contains("Locale.Fmt(\"widget.notImplemented\", title)", factory, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>会换全局语言的那批证人类必须挂在同一个关并行集合上</b>（批次 WI-61b 附带的一处测试层修复）。
+    /// <para>缺陷形状：<c>Locale.Current</c> 是 <c>static</c>，而本工程既没有 <c>xunit.runner.json</c>
+    /// 也没有 assembly 级 <c>[CollectionBehavior]</c> ⇒ xunit v2 的两个默认值叠出来是"每个类各成一集合、
+    /// 集合之间并发跑"。于是 A 类把语言按成英文时，B 类正拿"这一句在中文里该长什么样"做断言——
+    /// 红的那一格指向的是<b>谁先抢到那颗静态</b>，⛔ 指向谁改坏了哪一行（那种红会把人领去改本来正确的判据）。</para>
+    /// <para>口径＝抹掉注释后正文里出现 <c>Locale.TrySet(</c> 的那些档，逐档现扫（⛔ 凭记忆列名单＝#122/#141）；
+    /// 2026-10-10 现场数到 15 颗，只登记成<b>下限</b>：以后再加主人必须同批挂属性，那颗"没挂"的红才是这一格的本职。
+    /// 集合定义住在 <see cref="LocaleGlobalCollection"/>。</para>
+    /// </summary>
+    [Fact]
+    public void EveryLocaleMutatingTestClassIsInTheSerialCollection()
+    {
+        var mutating = ReadRepoUnder("tests/StarMark.Tests")
+            .Where(f => Code(f.Text).Contains("Locale.TrySet(", StringComparison.Ordinal))
+            .ToList();
+        Assert.True(mutating.Count >= 15,
+                    $"只扫到 {mutating.Count} 颗会换语言的证人类（2026-10-10 现场是 15）⇒ 普查路径或口径变了，这一格在空转");
+        var unguarded = mutating
+            .Where(f => !f.Text.Contains("[Collection(\"LocaleGlobal\")]", StringComparison.Ordinal))
+            .Select(f => f.RelativePath)
+            .ToList();
+        Assert.True(unguarded.Count == 0,
+                    "这些证人类会换进程级语言却没进串行集合（并发跑会读到别人那一档的语言）：" + string.Join("、", unguarded));
     }
 }

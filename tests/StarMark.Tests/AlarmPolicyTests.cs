@@ -19,6 +19,7 @@ namespace StarMark.Tests;
 /// 全工程只有这一颗订阅 <c>Locale.Changed</c> 的机制住在 UI，测试进程里换了语言不还原，
 /// 下一颗读到的是别档的字（<c>DisableTestParallelization</c> 让这条可行）。</para>
 /// </summary>
+[Collection("LocaleGlobal")]
 public sealed class AlarmPolicyTests : IDisposable
 {
     private readonly AppLanguage _languageBefore = Locale.Current;

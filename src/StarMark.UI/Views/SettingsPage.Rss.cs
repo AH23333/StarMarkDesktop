@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using StarMark.Abstractions.Feed;
+using StarMark.Abstractions.I18n;
 using StarMark.UI.Helpers;
 
 namespace StarMark.UI.Views;
@@ -49,12 +50,12 @@ public sealed partial class SettingsPage
         // 就地给原因：地址写错了却只是"没加上"，用户会反复点同一个按钮
         if (RssSourceConfig.UrlProblem(url) is { } bad)
         {
-            ViewModel.RssStatus = "没能添加：" + bad;
+            ViewModel.RssStatus = LocMessage.Of("settings.extend.rssAddBad", bad);
             return;
         }
         if (_rssSources.Any(row => string.Equals(row.Config.Url.Trim(), url, StringComparison.OrdinalIgnoreCase)))
         {
-            ViewModel.RssStatus = "这个地址已经在列表里了，不必重复添加";
+            ViewModel.RssStatus = LocMessage.Of("settings.extend.rssDuplicated");
             return;
         }
 
@@ -68,7 +69,7 @@ public sealed partial class SettingsPage
         RssSourceEmpty.Visibility = Visibility.Collapsed;
         // 新源默认启用 ⇒ 这一栏就此算"开着"：导航栏立刻跟上，不要再让他去找那个总开关
         ViewModel.RefreshRssEnabled();
-        ViewModel.RssStatus = "已添加「" + source.Name + "」。到「RSS」页按「刷新」看看它给了什么。";
+        ViewModel.RssStatus = LocMessage.Of("settings.extend.rssAdded", source.Name);
     }
 
     private void RssDelete_Click(object sender, RoutedEventArgs e)
@@ -78,7 +79,7 @@ public sealed partial class SettingsPage
         PersistRssSources();
         RssSourceEmpty.Visibility = _rssSources.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
         ViewModel.RefreshRssEnabled();
-        ViewModel.RssStatus = "已移除「" + row.Name + "」（它之前被收藏进来的条目不受影响）";
+        ViewModel.RssStatus = LocMessage.Of("settings.extend.rssRemoved", row.Name);
     }
 
     private void RssSource_Toggled(object sender, RoutedEventArgs e)

@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml.Media;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Insights;
+using StarMark.Abstractions.I18n;
 using StarMark.Integrations.Clipboard;
 using StarMark.Core.Appearance;
 using StarMark.Core.Backup;
@@ -366,9 +367,11 @@ public partial class SettingsPageViewModel : ObservableObject
         TrendingEnabled = Safe(_settings.LoadTrendingEnabled, false, "GitHub 热榜");
         TrendingGlanceEnabled = Safe(_settings.LoadTrendingGlanceEnabled, false, "热榜·今日速览");
         _suppressTrendingApply = false;
+        // 这一对与开关回调那一对原先各写一句措辞（「右侧有」vs「右侧现在有」、
+         // 「不需要 Token」vs「不需要 Token（读侧匿名）」）⇒ 同一行静默换措辞。现在两处同一颗键。
         TrendingStatus = TrendingEnabled
-            ? "已开启：导航栏「剪贴板」右侧有「热榜」。热榜本身不需要 Token，只有 Star 按钮需要。"
-            : "未开启：不发请求、导航栏也没有「热榜」项。";
+            ? LocMessage.Of("settings.extend.trendingOn")
+            : LocMessage.Of("settings.extend.trendingOff");
 
         // 屏幕画布：只回灌开关与那份只读键位一览。副作用在回灌期间抑制——
         // "进一趟设置页就把画布的热键全撤了"是最离谱的一种副作用。
@@ -393,8 +396,8 @@ public partial class SettingsPageViewModel : ObservableObject
         RssEnabled = Safe(_settings.LoadRssEnabled, false, "RSS 订阅");
         _suppressRssApply = false;
         RssStatus = RssEnabled
-            ? "已开启：导航栏有「RSS」这一栏，每个订阅源是它自己的一个文件夹。这一栏只管来源地址。"
-            : "未开启：导航栏没有「RSS」项，也不会去抓任何地址。添加一个启用中的来源就会自动开启。";
+            ? LocMessage.Of("settings.extend.rssOnStatus")
+            : LocMessage.Of("settings.extend.rssOffStatus");
 
         // 关于与更新（批次 UE）：只回灌那颗开关 + 上一次检查留下的那一句。
         // 这一屏打开时一个请求都不发——否则"想看一眼版本"就变成每进一次设置页上一次网。

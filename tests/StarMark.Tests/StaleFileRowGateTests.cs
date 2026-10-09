@@ -241,9 +241,15 @@ public sealed class StaleFileRowGateTests
         Assert.Equal(1, Count(xaml, "ViewModel.HasMissingFileRows,"));        // 带逗号的这颗只许是「清掉这些行」按钮
 
         var vm = Code(ReadRepoFile(LocalDiskVm));
-        Assert.Contains("!string.IsNullOrEmpty(MissingFileRowsStatus)", vm, StringComparison.Ordinal);
+        // 这一格的本职＝那颗可见性⛔ 拿"有没有可删的行"当判据（那一行要露的是"有没有话要说"，
+        // 绑前者就等于把「扫描失败」与「都还在」一起藏起来）。"它绑的是身份"那一半归
+        // SettingsExtendWordGateTests 逐字钉，这里⛔ 再钉同一行（同一动作两份定位＝批次 WI-60b 那条）。
+        Assert.DoesNotContain("HasMissingFileRowsNotice => HasMissingFileRows", vm, StringComparison.Ordinal);
         var body = MethodBody(vm, "private async Task RescanMissingFilesAsync()");
-        Assert.DoesNotContain("MissingFileRowsStatus = string.Empty", body, StringComparison.Ordinal);
+        // 新形状里"复位"这件事换了写法：⛔ 再把那句清成空串（类型也不让了），而是<b>每一臂都交一份身份</b>——
+        // 留 null 就是留上一轮的沉默。颗数 2 现场数出来的（规则 #160：先拿数 → 再钉等号）。
+        Assert.Equal(2, Count(body, "MissingFileRowsStatus = LocMessage.Of("));
+        Assert.Equal(0, Count(vm, "MissingFileRowsStatus = null"));
     }
 
     /// <summary>守门自己要有证人：喂一段"退回旧写法"的样串必须命中，否则上面几格是装饰（#228/#236 那一族）。</summary>

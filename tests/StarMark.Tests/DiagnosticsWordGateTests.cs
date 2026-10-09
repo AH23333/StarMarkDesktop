@@ -26,6 +26,7 @@ namespace StarMark.Tests;
 /// <para>尺＝抹注释后逐行取连续汉字片段、并<b>排除日志头</b>那一行（与 <c>bin/WI48/census_core.py</c> 同一把；
 /// 登记剩余量必须把尺子写进句子＝规则 #126）。数字来自 <c>bin/WI57/probe_57c.py</c> 这一跑，⛔ 凭记忆（#129）。</para>
 /// </summary>
+[Collection("LocaleGlobal")]
 public sealed class DiagnosticsWordGateTests : IDisposable
 {
     private const string DiagnosticsCs = "src/StarMark.Core/Diagnostics/DiagnosticsService.cs";

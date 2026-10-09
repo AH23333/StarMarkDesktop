@@ -37,6 +37,7 @@ namespace StarMark.Tests;
 /// <para>尺＝抹注释后逐行取连续 CJK 片段，<b>字符类含全角那一族</b>（坑表 #403／#407）。出现次数口径，⛔ 去重。
 /// 颗数一律来自 <c>bin/WI60/census_60b.txt</c>（2026-10-10 现场复算），⛔ 凭记忆（规则 #159）。</para>
 /// </summary>
+[Collection("LocaleGlobal")]
 public sealed class MonitorWordGateTests : IDisposable
 {
     private const string VmCs = "src/StarMark.UI/ViewModels/SystemMonitorViewModel.cs";

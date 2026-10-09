@@ -1,6 +1,7 @@
 #nullable enable
 using CommunityToolkit.Mvvm.ComponentModel;
 using StarMark.Core.Hotkeys;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.UI.ViewModels;
 
@@ -19,7 +20,7 @@ public partial class SettingsPageViewModel
     [ObservableProperty] private bool _captureEnabled = true;
 
     /// <summary>开关当前含义的一句话（键位从当前绑定现取，界面不自己写"F1"）。</summary>
-    [ObservableProperty] private string _captureStatus = string.Empty;
+    [ObservableProperty] private LocMessage? _captureStatus;
 
     /// <summary>LoadFromStore 回灌初值期间抑制写盘（否则每次进设置页都重写一遍档，还会顺带重建托盘与重注册热键）。</summary>
     private bool _suppressCaptureApply;
@@ -38,16 +39,14 @@ public partial class SettingsPageViewModel
     /// <para>键位一律现取（<c>HotkeyText</c> 转发 <c>CanvasService.BindingText</c>，读的是真实绑定）——
     /// 把"F1"写死在说明里，用户改了键之后这句就成了假指引（同一族：批次 WM"界面不自己写中文"）。</para>
     /// </summary>
-    private string BuildCaptureStatus()
+    private LocMessage? BuildCaptureStatus()
     {
         var capture = HotkeyText(HotkeyActions.ScreenCapture);
         var pin = HotkeyText(HotkeyActions.ScreenPin);
         var ocr = HotkeyText(HotkeyActions.ScreenOcr);
+        // 三条键位走实参（它们与文化无关，且⛔ 抄进句子＝改了键这句就成假话，✅P-178 同一口径）
         return CaptureEnabled
-            ? $"已开启：截图 {capture} · 贴图 {pin} · 识字 {ocr}（这是此刻真正生效的键位；要改到「快捷键」页的「截图 / 贴图 / 识字」分组）。"
-            : $"已关闭：那三条发起框选的热键不再向系统注册（{capture}、{pin}、{ocr} 交还给当前窗口），" +
-              "托盘里的「截图 / 贴图 / 识字」三项一并消失。" +
-              "已经钉在桌面上的贴图不受影响：显示／隐藏、忽略鼠标、关闭全部照常可用——" +
-              "那几条管的是「图已经在那里」这件事，关掉一个功能不该顺手把桌上的图变成拆不掉。";
+            ? LocMessage.Of("settings.extend.captureOn", capture, pin, ocr)
+            : LocMessage.Of("settings.extend.captureOff", capture, pin, ocr);
     }
 }

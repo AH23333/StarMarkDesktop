@@ -25,6 +25,7 @@ namespace StarMark.Tests;
 /// <para>尺＝抹注释后逐行取连续汉字片段（坑表 #375／#378）；<b>禁项一律读 <see cref="SourceGate.Code"/></b>，
 /// ⛔ 连注释读（规则 #131：否则下一手只想在注释里引用一句旧话的人得先删注释换绿灯）。</para>
 /// </summary>
+[Collection("LocaleGlobal")]
 public sealed class GlanceWordGateTests : IDisposable
 {
     private const string GlanceCalendarCs = "src/StarMark.Core/Widgets/GlanceCalendar.cs";

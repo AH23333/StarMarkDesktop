@@ -1696,7 +1696,7 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("if (_suppressCaptureApply) return;", captureChanged);
         Assert.Contains("App.MainWindow?.ApplyTraySettings();", captureChanged);
         // 状态行里的键位一律现取（写死"F1"就是一份会过期的假指引）
-        var status = SourceGate.MethodBody(vm, "private string BuildCaptureStatus()");
+        var status = SourceGate.MethodBody(vm, "private LocMessage? BuildCaptureStatus()");
         Assert.Contains("HotkeyText(HotkeyActions.ScreenCapture)", status);
         Assert.Contains("HotkeyText(HotkeyActions.ScreenPin)", status);
         Assert.Contains("HotkeyText(HotkeyActions.ScreenOcr)", status);

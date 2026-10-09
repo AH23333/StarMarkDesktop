@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml.Media;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Insights;
 using StarMark.Integrations.Clipboard;
 using StarMark.Core.Backup;
@@ -31,7 +32,7 @@ public partial class SettingsPageViewModel
     // ===== 库里留着、盘上已经没有的本机文件条目（批次 VQ；「索引进库」那三行输入格的位置）=====
 
     /// <summary>扫描结果那句话（含"读不到库"与"扫描失败"两种坏消息）；<b>空＝还没扫过</b>。非空就一定显示。</summary>
-    [ObservableProperty] private string _missingFileRowsStatus = string.Empty;
+    [ObservableProperty] private LocMessage? _missingFileRowsStatus;
 
     /// <summary>待清理的 Id 清单（只读扫描的结果，清理命令按它删；<b>不</b>是"每次点按钮重新数一遍"的两份真相）。</summary>
     private List<long> _missingIds = new();
@@ -44,9 +45,9 @@ public partial class SettingsPageViewModel
     /// "扫描失败"与"读不到库"这两句就跟着一起被藏起来——点了按钮既没反应也没人说话，
     /// 那正是本批要消掉的症状（与批次 IJ 那颗 <c>HasItems</c> 未复位导致失败提示看不见同族）。
     /// </summary>
-    public bool HasMissingFileRowsNotice => !string.IsNullOrEmpty(MissingFileRowsStatus);
+    public bool HasMissingFileRowsNotice => MissingFileRowsStatus is not null;
 
-    partial void OnMissingFileRowsStatusChanged(string value)
+    partial void OnMissingFileRowsStatusChanged(LocMessage? value)
     {
         OnPropertyChanged(nameof(HasMissingFileRows));
         OnPropertyChanged(nameof(HasMissingFileRowsNotice));
@@ -70,7 +71,7 @@ public partial class SettingsPageViewModel
         _missingIds = new List<long>();
         if (_repository is not { } repo)
         {
-            MissingFileRowsStatus = "现在还读不到库里的条目（稍后再点一次『重新扫描』）。";
+            MissingFileRowsStatus = LocMessage.Of("settings.extend.missingNoRows");
             return;
         }
         try
@@ -91,16 +92,16 @@ public partial class SettingsPageViewModel
             // 点了按钮既不消失也不出声，就是本批要消掉的那个症状本身。
             // 撞到窗口时照实写"前 N 条"，不把"没扫完"报成"都扫过了"。
             var scanned = rows.Count >= MissingScanWindow
-                ? $"扫过前 {MissingScanWindow} 条（窗口之外可能还有）"
-                : $"扫过 {rows.Count} 条";
+                ? LocMessage.Of("settings.extend.missingScannedWindow", MissingScanWindow)
+                : LocMessage.Of("settings.extend.missingScanned", rows.Count);
             MissingFileRowsStatus = gone.Count == 0
-                ? $"本机文件条目都还在（{scanned}）。"
-                : $"库里有 {gone.Count} 条本机文件路径在这台机器上已经找不到（文件被移动或删除，或所在的盘现在没插）——{scanned}。";
+                ? LocMessage.Of("settings.extend.missingAllThere", scanned)
+                : LocMessage.Of("settings.extend.missingGone", gone.Count, scanned);
         }
         catch (Exception ex)
         {
             StarLog.Error("扫描失联的本机文件条目失败", ex);
-            MissingFileRowsStatus = "扫描失败：" + ex.Message;
+            MissingFileRowsStatus = LocMessage.Of("settings.extend.missingScanFailed", ex.Message);
         }
         OnPropertyChanged(nameof(HasMissingFileRows));
     }
@@ -143,7 +144,7 @@ public partial class SettingsPageViewModel
     [ObservableProperty] private bool _localDiskSearchEnabled;
 
     /// <summary>开关下方的一行状态提示文本。</summary>
-    [ObservableProperty] private string _localDiskSearchStatus = string.Empty;
+    [ObservableProperty] private LocMessage? _localDiskSearchStatus;
 
     /// <summary>LoadFromStore 回灌初值期间抑制 <see cref="OnLocalDiskSearchEnabledChanged"/> 副作用，
     /// 免得每次进入设置页就把默认值再存一遍、甚至误触发 Everything 拉起。</summary>
@@ -160,7 +161,7 @@ public partial class SettingsPageViewModel
             options.Enabled = false;
             _settings.SaveLocalDiskSearchEnabled(false);
             CanRetryLocalDiskPrepare = false;
-            LocalDiskSearchStatus = "已关闭：不再搜索本地文件（已安装的 Everything 不受影响）。";
+            LocalDiskSearchStatus = LocMessage.Of("settings.extend.diskOffStopped");
             return;
         }
 
@@ -175,9 +176,10 @@ public partial class SettingsPageViewModel
     /// </summary>
     [ObservableProperty] private bool _canRetryLocalDiskPrepare;
 
-    /// <summary>按钮只干一件事：就地重跑准备流程。以前这里按会话权限换文字（"重试提权重启"），
-    /// 因为开关会先把 StarMark 提上去；那条自我提权已经删掉（P-108 改判），所以措辞也只有一份。</summary>
-    public string LocalDiskSearchRetryLabel => "重试准备 Everything";
+    // 「重试准备 Everything」这颗按钮名⛔ 住在这里（批次 WI-61b）：它是一句**固定的常驻词**、不带读数，
+    // 所以走 XAML 那颗 `i18n:LocText.Key="settings.extend.retryPrepare"`，换语言由 LocText 的重贴名单负责。
+    // 留在 VM 里它就是一句"算好一次就钉住"的成品字。措辞只有一份这条不变：
+    // 原先按会话权限分叉的那一版（"重试提权重启"）已随自我提权一起删掉（P-108 改判）。
 
     /// <summary>
     /// 开启本地磁盘搜索的准备流程：<b>就地</b>起 SDK / 拉起 Everything 客户端，不碰进程权限。
@@ -192,12 +194,11 @@ public partial class SettingsPageViewModel
     private void PrepareLocalDiskSearch()
     {
         CanRetryLocalDiskPrepare = false;
-        OnPropertyChanged(nameof(LocalDiskSearchRetryLabel));
 
-        LocalDiskSearchStatus = "已开启：正在准备 Everything（起 SDK / 拉起客户端）…";
+        LocalDiskSearchStatus = LocMessage.Of("settings.extend.diskPreparing");
         _ = Task.Run(async () =>
         {
-            string status;
+            LocMessage? status;
             bool needRetry;
             try
             {
@@ -205,14 +206,14 @@ public partial class SettingsPageViewModel
                 var outcome = await src.EnableAsync(CancellationToken.None);
                 needRetry = outcome != StarMark.Integrations.Everything.EverythingSource.LocalDiskSearchEnableOutcome.Ready;
                 status = needRetry
-                    ? "已开启，但 Everything 尚未就绪（客户端没起来，或它正以另一种权限运行——那种情况下本程序不会替你去改它的权限）。"
-                    : "已开启：本地文件将参与全盘搜索（快捷搜索 / 主窗即时生效）。";
+                    ? LocMessage.Of("settings.extend.diskNotReady")
+                    : LocMessage.Of("settings.extend.diskWillSearch");
             }
             catch (Exception ex)
             {
                 StarLog.Error("本地磁盘搜索：准备 Everything 失败", ex);
                 needRetry = true;
-                status = $"已开启，但准备 Everything 失败：{ex.Message}";
+                status = LocMessage.Of("settings.extend.diskPrepareFailed", ex.Message);
             }
             App.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
             {
@@ -237,7 +238,7 @@ public partial class SettingsPageViewModel
         if (!LocalDiskSearchEnabled)
         {
             CanRetryLocalDiskPrepare = false;
-            LocalDiskSearchStatus = "已关闭：开启后可像 Everything 一样全盘秒搜本地文件（首次会自动准备 Everything）。";
+            LocalDiskSearchStatus = LocMessage.Of("settings.extend.diskOffHint");
             return;
         }
 
@@ -250,20 +251,20 @@ public partial class SettingsPageViewModel
         {
             StarLog.Warn($"探测 Everything 可用性失败（状态按未知展示）：{ex.Message}");
             CanRetryLocalDiskPrepare = false;
-            LocalDiskSearchStatus = "已开启：本地文件会出现在快捷搜索 / 主窗搜索结果中。";
+            LocalDiskSearchStatus = LocMessage.Of("settings.extend.diskReady");
             return;
         }
 
         if (ready)
         {
             CanRetryLocalDiskPrepare = false;
-            LocalDiskSearchStatus = "已开启：本地文件会出现在快捷搜索 / 主窗搜索结果中。";
+            LocalDiskSearchStatus = LocMessage.Of("settings.extend.diskReady");
             return;
         }
 
         CanRetryLocalDiskPrepare = true;
         // 两种成因都照实说，但不把用户支使去改权限：本程序不会为了连引擎而抬自己的权限，
         // 抬上去的代价是拖进／拖出与系统对话框一起失灵（P-108 改判）。
-        LocalDiskSearchStatus = "已开启，但 Everything 没连上：它可能没在运行，也可能正以比本程序更高的权限运行。";
+        LocalDiskSearchStatus = LocMessage.Of("settings.extend.diskNotConnected");
     }
 }

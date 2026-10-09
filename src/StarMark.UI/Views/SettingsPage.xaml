@@ -689,7 +689,7 @@
                                     <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.TrendingEnabled, Mode=TwoWay}"/>
                                 </Grid>
-                                <TextBlock Text="{x:Bind ViewModel.TrendingStatus, Mode=OneWay}"
+                                <TextBlock x:Name="TrendingStatusText"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
 
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
@@ -719,7 +719,7 @@
                                     <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.RssEnabled, Mode=TwoWay}"/>
                                 </Grid>
-                                <TextBlock Text="{x:Bind ViewModel.RssStatus, Mode=OneWay}"
+                                <TextBlock x:Name="RssSwitchStatusText"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
 
                                 <TextBlock x:Name="RssSourceEmpty" i18n:LocText.Key="settings.extend.rssEmpty" Opacity="0.62"
@@ -767,11 +767,11 @@
                                     <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.LocalDiskSearchEnabled, Mode=TwoWay}"/>
                                 </Grid>
-                                <TextBlock Text="{x:Bind ViewModel.LocalDiskSearchStatus, Mode=OneWay}"
+                                <TextBlock x:Name="LocalDiskSearchStatusText"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                 <!-- 准备失败原先只留一句「请确认 Everything 正在运行后稍候再试」／「请用开始菜单以管理员身份运行」，
                                      等于把程序自己能做的动作写成用户作业。改为就地按钮，点的就是同一段准备代码（P-54）。 -->
-                                <Button Content="{x:Bind ViewModel.LocalDiskSearchRetryLabel, Mode=OneWay}"
+                                <Button i18n:LocText.Key="settings.extend.retryPrepare"
                                         Command="{x:Bind ViewModel.RetryLocalDiskPrepareCommand}"
                                         Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"
                                         Visibility="{x:Bind ViewModel.CanRetryLocalDiskPrepare, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
@@ -796,7 +796,7 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <!-- 这句话的可见性只管"有没有话要说"（含扫描失败与"都还在"两种），
                                          不跟"有没有可删的行"绑——否则失败那句会被一起藏掉。 -->
-                                    <TextBlock Grid.Column="0" Text="{x:Bind ViewModel.MissingFileRowsStatus, Mode=OneWay}"
+                                    <TextBlock Grid.Column="0" x:Name="MissingFileRowsStatusText"
                                                Style="{StaticResource SettingRowText}" TextWrapping="Wrap" VerticalAlignment="Center"
                                                Foreground="{ThemeResource SystemFillColorCautionBrush}"
                                                Visibility="{x:Bind ViewModel.HasMissingFileRowsNotice, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
@@ -828,7 +828,7 @@
                                     <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.CaptureEnabled, Mode=TwoWay}"/>
                                 </Grid>
-                                <TextBlock Text="{x:Bind ViewModel.CaptureStatus, Mode=OneWay}"
+                                <TextBlock x:Name="CaptureStatusText"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Border>
@@ -847,7 +847,7 @@
                                     <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.CanvasEnabled, Mode=TwoWay}"/>
                                 </Grid>
-                                <TextBlock Text="{x:Bind ViewModel.CanvasStatus, Mode=OneWay}"
+                                <TextBlock x:Name="CanvasStatusText"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"

@@ -17,6 +17,7 @@ namespace StarMark.Tests;
 /// 三张清单（中／美／日）各钉一格：只钉中文档＝另两档排错了也没人知道。
 /// </para>
 /// </summary>
+[Collection("LocaleGlobal")]
 public sealed class GlanceCalendarTests : IDisposable
 {
     private readonly AppLanguage _before = Locale.Current;

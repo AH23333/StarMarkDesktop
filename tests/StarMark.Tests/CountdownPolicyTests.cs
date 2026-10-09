@@ -10,6 +10,7 @@ namespace StarMark.Tests;
 /// 倒计时 / 纪念日纯逻辑测试：墙上时钟+时区的换算、每年推进（含闰日）、剩余量格式化、
 /// 到点提醒的窗口与防重、输入校验。
 /// </summary>
+[Collection("LocaleGlobal")]
 public sealed class CountdownPolicyTests
 {
     private const string Beijing = "China Standard Time";

@@ -76,6 +76,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;  // 实时生效：属性变更去抖落盘
         LoadFromStoreSilently();
         ApplyEyeRestMessages();   // 回灌出来的那两句也要当场贴上去（换语言重贴走同一条门，见下面那颗方法）
+        ApplyExtensionStatuses(); // 「拓展功能」那一屏的七行同理：VM 交的是身份，贴上屏幕才取词
         // 开机自启开关初始态以注册表为准（SetEnabled 幂等，程序化置位不会误写）。
         // 它归在「常规 → 托盘与呼出」，所以由页面构造时读一次，不再挂在组件列表的构建里。
         AutostartToggle.IsOn = AutostartService().IsEnabled();
@@ -151,6 +152,15 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         if (e.PropertyName is nameof(SettingsPageViewModel.EyeRestStatus)
                          or nameof(SettingsPageViewModel.EyeRestPreviewStatus))
             ApplyEyeRestMessages();
+        // 拓展功能那一屏的七行：一颗变了就把**七行一起重贴**。分开贴会留下"这一行刚换语言、
+        // 隔壁那行还停在上一门"那种自相矛盾（与上面护眼那两句同一条理由，批次 WI-37-B）。
+        if (e.PropertyName is nameof(SettingsPageViewModel.TrendingStatus)
+                         or nameof(SettingsPageViewModel.RssStatus)
+                         or nameof(SettingsPageViewModel.CanvasStatus)
+                         or nameof(SettingsPageViewModel.CaptureStatus)
+                         or nameof(SettingsPageViewModel.LocalDiskSearchStatus)
+                         or nameof(SettingsPageViewModel.MissingFileRowsStatus))
+            ApplyExtensionStatuses();
         if (_suppressSave || string.IsNullOrEmpty(e.PropertyName)) return;
         // 健康度/备份/诊断等异步展示态不参与保存，避免加载过程中反复写盘
         if (IsDisplayOnlyProperty(e.PropertyName)) return;
@@ -166,6 +176,24 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     {
         LocText.SetMessage(EyeRestStatusText, ViewModel.EyeRestStatus);
         LocText.SetMessage(EyeRestPreviewText, ViewModel.EyeRestPreviewStatus);
+    }
+
+    /// <summary>
+    /// 「拓展功能」那一屏的七行状态贴到屏幕上（批次 WI-61b，P-188 第三刀·第一片）。
+    /// <para>VM 交回的是<b>没取词的</b>「键＋实参」，所以这一颗方法是它到屏幕上的唯一出口：
+    /// 键位（F1／Ctrl+…）、条数、字节读数都在实参里，取词发生在贴上去这一刻，
+    /// 换语言那一刻由 <see cref="LocText"/> 那份名单重贴（本页⛔ 再挂第二份订阅）。</para>
+    /// <para><b>七行一起推</b>：它们是同一屏互相解释的话——「热榜」那行说"导航栏有这一项"，
+    /// 旁边的开关行说"已开启"，分开推就会出现一行英文一行中文那种当场可见的自相矛盾。</para>
+    /// </summary>
+    private void ApplyExtensionStatuses()
+    {
+        LocText.SetMessage(TrendingStatusText, ViewModel.TrendingStatus);
+        LocText.SetMessage(RssSwitchStatusText, ViewModel.RssStatus);
+        LocText.SetMessage(CanvasStatusText, ViewModel.CanvasStatus);
+        LocText.SetMessage(CaptureStatusText, ViewModel.CaptureStatus);
+        LocText.SetMessage(LocalDiskSearchStatusText, ViewModel.LocalDiskSearchStatus);
+        LocText.SetMessage(MissingFileRowsStatusText, ViewModel.MissingFileRowsStatus);
     }
 
     private static bool IsDisplayOnlyProperty(string name)

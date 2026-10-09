@@ -15,6 +15,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Backup;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Backup;
 using StarMark.Core.Hotkeys;
 using StarMark.Core.Widgets;
@@ -51,13 +52,17 @@ public sealed partial class SettingsPage
         if (!confirm) return;
         StarMark.Integrations.Everything.EverythingSource.DeleteEngine();
         RefreshEngineSize();
-        ViewModel.LocalDiskSearchStatus = "已删除本地搜索引擎。下次开启本地磁盘搜索（或重启应用）会自动重新下载。";
+        ViewModel.LocalDiskSearchStatus = LocMessage.Of("settings.extend.engineDeleted");
     }
 
     private void RefreshEngineSize()
     {
         var bytes = StarMark.Integrations.Everything.EverythingSource.GetEngineOccupancyBytes();
-        EngineSizeText.Text = bytes > 0 ? $"约 {FileSizeText.Human(bytes)}" : "未安装";
+        // 那一格原先把"约 / 未安装"两颗词直接写进 `Text`：换语言那一刻它停在上一门，
+        // 而它旁边那行（"本地搜索引擎占用"）是跟着表走的 ⇒ 同一张卡半中半英。
+        LocText.SetMessage(EngineSizeText, bytes > 0
+            ? LocMessage.Of("settings.extend.engineSizeApprox", FileSizeText.Human(bytes))
+            : LocMessage.Of("settings.extend.engineNotInstalled"));
     }
 
 }

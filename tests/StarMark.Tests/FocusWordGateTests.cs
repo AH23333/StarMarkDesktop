@@ -29,6 +29,7 @@ namespace StarMark.Tests;
 /// <para>尺＝抹注释后逐行取连续 CJK 片段，<b>字符类含全角那一族</b>（坑表 #403／#407：
 /// 只写汉字与假名的话，那颗写死在代码里的「（）」与「、」量得到却判不出）。出现次数口径，⛔ 去重。</para>
 /// </summary>
+[Collection("LocaleGlobal")]
 public sealed class FocusWordGateTests : IDisposable
 {
     private const string CoreCs = "src/StarMark.Core/Widgets/FocusTimer.cs";

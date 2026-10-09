@@ -26,6 +26,7 @@ namespace StarMark.Tests;
 /// <para>尺的口径与 <c>DiagnosticsWordGateTests</c> 同一份（共用件＝<see cref="SourceGate"/>，规则 #86）：
 /// 抹注释后逐行取 CJK <b>含全角那一族</b>、排除日志头；登记剩余量必须把尺子写进句子（规则 #126）。</para>
 /// </summary>
+[Collection("LocaleGlobal")]
 public sealed class TrendingWordGateTests : IDisposable
 {
     private const string FetcherCs = "src/StarMark.Integrations/Trending/TrendingFetcher.cs";

@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml.Media;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Insights;
 using StarMark.Integrations.Clipboard;
 using StarMark.Core.Backup;
@@ -50,14 +51,14 @@ public partial class SettingsPageViewModel
     private IEnumerable<StarMark.UI.Views.CanvasHotkeyRow> BuildCanvasHotkeyRows()
         => HotkeyActions.Canvas.Select(a => new StarMark.UI.Views.CanvasHotkeyRow(HotkeyActions.DisplayName(a), HotkeyText(a)));
 
-    private string BuildCanvasStatus()
+    private LocMessage? BuildCanvasStatus()
     {
         var open = HotkeyText(HotkeyActions.CanvasToggle);
+        // 交出去的是「键＋那颗键位」：键位与文化无关（`CanvasService.BindingText` 那份），
+        // 而"按哪颗键进画布"这句必须跟着语言走——原先是拼好的一句，换语言就钉在上一门。
         return CanvasEnabled
-            ? $"已开启：按 {open} 进入画布（进去是穿透态，下层应用照常操作，画布不会吃掉鼠标）。" +
-              "画布上的工具条有那颗「⌨」，随时能把下面这张表原样调出来。"
-            : $"已关闭：托盘里不再有「屏幕画布」，画布内那批快捷键也不再占用系统组合键；" +
-              $"按 {open} 只会提示一句“要先在设置里打开”，不会静默。";
+            ? LocMessage.Of("settings.extend.canvasOn", open)
+            : LocMessage.Of("settings.extend.canvasOff", open);
     }
 
     /// <summary>
@@ -73,8 +74,8 @@ public partial class SettingsPageViewModel
         _settings.SaveTrendingEnabled(value);
         App.MainWindow?.ApplyTrendingNavVisibility(value);
         TrendingStatus = value
-            ? "已开启：导航栏「剪贴板」右侧现在有「热榜」。热榜本身不需要 Token（读侧匿名），只有 Star 按钮需要。"
-            : "已关闭：导航栏的「热榜」项已移除，不再发起任何抓取；已缓存的那份留在本机，重新开启时直接用。";
+            ? LocMessage.Of("settings.extend.trendingOn")
+            : LocMessage.Of("settings.extend.trendingOff");
         if (value) _ = AskTrendingGlanceAsync();
     }
 
@@ -83,8 +84,8 @@ public partial class SettingsPageViewModel
         if (_suppressTrendingApply) return;
         _settings.SaveTrendingGlanceEnabled(value);
         TrendingStatus = value
-            ? "「今日速览」已加上热榜块（默认日榜），原「常看」排在它下面。"
-            : "「今日速览」不再显示热榜块；导航栏的「热榜」页不受影响。";
+            ? LocMessage.Of("settings.extend.glanceOnStatus")
+            : LocMessage.Of("settings.extend.glanceOffStatus");
         // 组件即时跟上：这条广播就是各组件"数据变了重载一次"的既有通道，不必等重启、也不新写一套通知。
         StarMark.Abstractions.DataChangeHub.Notify();
     }

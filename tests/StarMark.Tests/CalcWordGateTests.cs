@@ -23,6 +23,7 @@ namespace StarMark.Tests;
 /// <para>尺＝抹注释后逐行取汉字／假名片段（坑表 #375／#378：按调用形状数会漏掉内插串与标记里的面字）。
 /// ⚠ 全角运算符（＋－（【）那一族）⛔ 算"词"——它们是输入格式，分词器认的是字符不是话。</para>
 /// </summary>
+[Collection("LocaleGlobal")]
 public sealed class CalcWordGateTests : IDisposable
 {
     private const string UnitTablesCs = "src/StarMark.Core/Calc/UnitTables.cs";

@@ -20,6 +20,7 @@ namespace StarMark.Tests;
 /// <para><b>这里只查 Abstractions 那一层</b>：XAML 有没有真的按键取词、启动接线有没有排在建窗之前，
 /// 那些归 <see cref="I18nWiringGateTests"/>（<c>StarMark.Tests</c> 引用不到 UI 项目，只能按源码形状钉）。</para>
 /// </summary>
+[Collection("LocaleGlobal")]
 public sealed class I18nContractTests : IDisposable
 {
     private readonly AppLanguage _languageBefore = Locale.Current;

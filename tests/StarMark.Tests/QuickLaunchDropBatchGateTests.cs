@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using StarMark.Abstractions.I18n;
 using Xunit;
 
 namespace StarMark.Tests;
@@ -173,12 +174,20 @@ public sealed class QuickLaunchDropBatchGateTests
         Assert.DoesNotContain("--elevate-retry", vm);
         Assert.Contains("按普通权限运行（不自我提权）", app);
 
-        // 「重试」只剩一个含义：就地重跑准备流程，不再按会话权限分叉措辞（那一版会说"重试提权重启"，
-        // 而重启这件事已经没有任何代码会去做了）。判据只钉定义那一行——本文件上方的注释里出现过那句旧文案，
-        // 拿整文件 DoesNotContain 去比会被自己的注释假失败（同一条坑在批次 WA 记过）。
-        var label = Between(vm, "public string LocalDiskSearchRetryLabel", "\n");
-        Assert.Contains("=> \"重试准备 Everything\";", label);
-        Assert.DoesNotContain("IsElevated", label);
+        // 「重试」只剩一个含义：就地重跑准备流程，不再按会话权限分叉措辞（那一版在不提权时说成"重试提权重启"，
+        // 而重启这件事已经没有任何代码会去做了）。措辞从前长在 VM 那颗 `LocalDiskSearchRetryLabel` 上，
+        // 现在它是表里的一颗键、由 XAML 直接贴上；"这颗键只有一个出处"归
+        // SettingsExtendWordGateTests.TheRetryButtonNameHasExactlyOneOwner 判，这里⛔ 重复设第二份定位。
+        // 这一格只问权限那件事：那一行的三种读法都不许留"要你去提权／重启"的尾巴——
+        // 拿整文件 DoesNotContain 去比会被本文件上方的注释假失败（同一条坑在批次 WA 记过），所以逐列取出来比。
+        Assert.True(UiStrings.TryGet("settings.extend.retryPrepare", out var retry), "表里没有 settings.extend.retryPrepare");
+        foreach (var language in new[] { AppLanguage.Chinese, AppLanguage.English, AppLanguage.Japanese })
+        {
+            var text = UiStrings.TextOf(retry, language);
+            Assert.Contains("Everything", text);
+            foreach (var word in new[] { "提权", "重启", "管理员", "elevat", "Elevat", "admin", "Admin", "権限", "再起動", "管理者" })
+                Assert.DoesNotContain(word, text);
+        }
     }
 
     /// <summary>

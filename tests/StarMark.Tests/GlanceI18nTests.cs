@@ -15,6 +15,7 @@ namespace StarMark.Tests;
 /// 「只放公历，或者按照美国/日本的日历和传统节日编排」，取第二条）。
 /// 于是"折叠区的句子不进表"那条旧口径在这一族作废：那两句话现在是<b>会露面的句子</b>，必须住表里。
 /// </summary>
+[Collection("LocaleGlobal")]
 public sealed class GlanceI18nTests : IDisposable
 {
     private readonly AppLanguage _before = Locale.Current;

@@ -171,7 +171,7 @@ public partial class SettingsPageViewModel
     /// </summary>
     [ObservableProperty] private bool _rssEnabled;
 
-    [ObservableProperty] private string _rssStatus = string.Empty;
+    [ObservableProperty] private LocMessage? _rssStatus;
 
     /// <summary>LoadFromStore 回灌初值期间抑制副作用（否则每次进设置页都会重设一次导航可见性）。</summary>
     private bool _suppressRssApply;
@@ -182,8 +182,8 @@ public partial class SettingsPageViewModel
         _settings.SaveRssEnabled(value);
         App.MainWindow?.ApplyRssNavVisibility(value);
         RssStatus = value
-            ? "已开启：导航栏现在有「RSS」这一栏，每个订阅源是它自己的一个文件夹。抓取只在你按「刷新」时发生。"
-            : "已关闭：导航栏的「RSS」项已移除，不再发起任何抓取。已收藏进库的条目不受影响（它们已经是普通书签了）。";
+            ? LocMessage.Of("settings.extend.rssOnStatus")
+            : LocMessage.Of("settings.extend.rssOffStatus");
     }
 
     // ===== GitHub 热榜（批次 KG）=====
@@ -197,7 +197,7 @@ public partial class SettingsPageViewModel
     /// <summary>是否在「今日速览」显示热榜块（开启热榜时弹窗问过，这里随时可改）。</summary>
     [ObservableProperty] private bool _trendingGlanceEnabled;
 
-    [ObservableProperty] private string _trendingStatus = string.Empty;
+    [ObservableProperty] private LocMessage? _trendingStatus;
 
     /// <summary>LoadFromStore 回灌初值期间抑制副作用（否则每次进设置页都重设可见性、甚至弹一次询问框）。</summary>
     private bool _suppressTrendingApply;
@@ -231,7 +231,7 @@ public partial class SettingsPageViewModel
     public string CursorCircleRadiusText => $"{(int)CursorCircle.ClampRadiusDip(CursorCircleRadiusDip)} DIP";
 
     /// <summary>开关当前含义的一句话（看得见"关掉会发生什么"，不用猜）。</summary>
-    [ObservableProperty] private string _canvasStatus = string.Empty;
+    [ObservableProperty] private LocMessage? _canvasStatus;
 
     /// <summary>
     /// 十条画布动作与它们<b>当前真实绑定</b>的键位，一行一条——生成，不写死。

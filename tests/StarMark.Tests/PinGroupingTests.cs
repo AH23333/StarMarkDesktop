@@ -10,6 +10,7 @@ namespace StarMark.Tests;
 /// 贴图组判据（批次 S4-③）。UI 层不引用测试工程，所以能被机器检的那部分判据全部住在这里：
 /// 命名、上限、聚合态（尤其<b>空组</b>那条 <c>All()</c> 陷阱）、菜单措辞的方向、托盘命令号的编解码。
 /// </summary>
+[Collection("LocaleGlobal")]
 public sealed class PinGroupingTests
 {
     [Fact]

@@ -21,6 +21,7 @@ namespace StarMark.Tests;
 /// 是这一族的真缺陷面：它们从前是<b>建表那一刻存下的成品字</b>，换语言之后两条栏都念旧语言，
 /// 而通用闸门看不见（被问的键没变，变的是实参）⇒ 按 #373 的口径，一条语言读数＋一条形状禁项成对。</para>
 /// </summary>
+[Collection("LocaleGlobal")]
 public sealed class AnnotationWordGateTests
 {
     private const string Ann = "src/StarMark.Core/Capture/Annotation.cs";

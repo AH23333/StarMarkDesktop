@@ -285,7 +285,7 @@ public sealed class ClipboardImageSettingsGateTests
         Assert.Contains("private LocMessage? BuildEyeRestStatus()", all);                   // EyeRest
         Assert.Contains("public void RefreshRssEnabled()", all);                       // Feeds
         Assert.Contains("private IEnumerable<StarMark.UI.Views.CanvasHotkeyRow> BuildCanvasHotkeyRows()", all);   // Canvas
-        Assert.Contains("private string BuildCaptureStatus()", all);                        // Capture
+        Assert.Contains("private LocMessage? BuildCaptureStatus()", all);                    // Capture
         Assert.Contains("private void PrepareLocalDiskSearch()", all);                 // LocalDisk
         Assert.Contains("public void BackfillUpdateState()", all);                      // Updates
     }
