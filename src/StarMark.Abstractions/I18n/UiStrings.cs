@@ -1339,10 +1339,10 @@ public static class UiStrings
         // ===== RSS 那一页的状态行与收藏结果（批次 WI-2k）=====
         // 节奏那一句（"一天"／"{0} 小时"那一族）也住在这一组，由 RssFeedCache.GapMessage 交出。
         // ⛔ 不许把"一天"抄进下面任何一句——改了 AutoRefreshGap 就会留下四句假话（批次 RF-4 的口径）。
-        new Entry("rss.gapMinutes", "{0} 分钟", "{0} minutes", "{0} 分"),
-        new Entry("rss.gapHours", "{0} 小时", "{0} hours", "{0} 時間"),
+        new Entry("time.unit.minutes", "{0} 分钟", "{0} minutes", "{0} 分"),
+        new Entry("time.unit.hours", "{0} 小时", "{0} hours", "{0} 時間"),
         new Entry("rss.gapOneDay", "一天", "a day", "一日"),
-        new Entry("rss.gapDays", "{0} 天", "{0} days", "{0} 日"),
+        new Entry("time.unit.days", "{0} 天", "{0} days", "{0} 日"),
         new Entry("rss.gapDaysPlus", "{0} 天多", "over {0} days", "{0} 日以上"),
         new Entry("rss.emptyDisabled",
             "RSS 未开启：到「设置 → 网址来源（RSS / Atom）」打开总开关，这里才会出现各个订阅源。",
@@ -1888,6 +1888,35 @@ public static class UiStrings
         new Entry("widget.weather.feelsWind", "体感 {0}° · 湿度 {1}% · 风 {2}", "Feels {0}° · Humidity {1}% · Wind {2}",
                   "体感 {0}° · 湿度 {1}% · 風速 {2}"),
         new Entry("widget.weather.feelsOnly", "体感 {0}°", "Feels {0}°", "体感温度 {0}°"),
+
+        // ────────── 倒计时／纪念日那一族（批次 WI-54＝P-182a 第二刀·倒计时那半）──────────
+        // 主行与次行都是**状态读数**：这颗组件每秒重算一行 ⇒ 节拍就是它的重贴，⛔ 挂 `LocText`（✅WI-44 同一颗判据）。
+        // 时长单位那颗（"{0} 分钟"／"{0} 小时"／"{0} 天"）⛔ 在这里再开一份——它跟 RSS 节奏那句是同一件事，
+        // 本批把那三颗键名从中性的 `time.unit.*` 起给两族共用（改名只落在 `RssFeedCache` 四处调用点）。
+        new Entry("widget.cd.remainDays", "{0} 天 {1}", "{0} days {1}", "{0} 日 {1}"),
+        new Entry("widget.cd.remainClock", "{0}", "{0}", "{0}"),
+        new Entry("widget.cd.underMinute", "不足 1 分钟", "Under a minute", "1 分未満"),
+        new Entry("widget.cd.past", "已过 {0}", "{0} elapsed", "{0} 経過"),
+        new Entry("widget.cd.dueAt", "{0}  到期", "{0}  due", "{0}  期限"),
+        // 「今年」与「N 周年」是两颗**整句**，⛔ 拼成"今年 周年"（那是本批读到的一处真缺陷：旧代码把 YearNumber 的兜底词直接接上" 周年"）。
+        new Entry("widget.cd.annivAt", "{0}  {1} 周年", "{0}  {1}th anniversary", "{0}  {1} 回目"),
+        new Entry("widget.cd.thisYearAt", "{0}  今年", "{0}  this year", "{0}  本年"),
+        new Entry("widget.cd.expiredAt", "{0} 已到期", "{0} expired", "{0} 期限切れ"),
+        new Entry("widget.cd.annivCount", "{0} · 第 {1} 个年头", "{0} · year {1}", "{0} · {1} 年目"),
+        // 三条输入错误各说清"哪一半错了"（⛔ 只写"格式不对"，那等于没让人改对地方）。
+        new Entry("widget.cd.errDate", "日期请写成 2026-12-31", "Write the date as 2026-12-31", "日付は 2026-12-31 の形で"),
+        new Entry("widget.cd.errTimeRequired", "还差时刻，如 18:00", "Add a time, e.g. 18:00", "時刻も入力してください（例 18:00）"),
+        new Entry("widget.cd.errTime", "时刻请写成 18:00 或 9:30", "Write the time as 18:00 or 9:30", "時刻は 18:00 や 9:30 の形で"),
+        new Entry("widget.cd.errUnknown", "日期或时刻写错了", "The date or time is not valid", "日付または時刻を読み取れません"),
+        // 上限句只留一颗键：旧代码在 `BeginAdd` 与 `CommitAdd` 各写一份（一份带"先删掉不用的"、一份不带）＝同一件事两个主人。
+        new Entry("widget.cd.limit", "最多 {0} 条，先删掉不用的", "Up to {0} items - remove one first", "最大 {0} 件です。不要なものを削除してください"),
+        // 「新建」那颗按钮的名字交实参（那颗行只有 `widget.cd.add` 一个主人），⛔ 抄进这句里。
+        new Entry("widget.cd.empty", "还没有项目：点下方「{0}」添加截止日或纪念日。",
+                  "No items yet - use \"{0}\" below to add a deadline or anniversary.",
+                  "項目がありません。下の「{0}」から期限日か記念日を追加してください。"),
+        // 默认名两颗：存的是**身份**（日期），念法每次现算 ⇒ 换语言之后标题跟着换（✅WI-46c 那颗组名同族）。
+        new Entry("widget.cd.nameAnniv", "纪念日（{0}-{1}）", "Anniversary ({0}-{1})", "記念日（{0}-{1}）"),
+        new Entry("widget.cd.nameDue", "截止（{0} {1}）", "Deadline ({0} {1})", "締切（{0} {1}）"),
     };
 
     private static readonly Dictionary<string, Entry> ByKey = Build();

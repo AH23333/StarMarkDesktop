@@ -115,10 +115,10 @@ public static class RssFeedCache
     public static LocMessage GapMessageFor(TimeSpan gap)
     {
         var hours = (int)Math.Round(gap.TotalHours);
-        if (hours < 1) return LocMessage.Of("rss.gapMinutes", (int)Math.Round(gap.TotalMinutes));
-        if (hours < 24) return LocMessage.Of("rss.gapHours", hours);
+        if (hours < 1) return LocMessage.Of("time.unit.minutes", (int)Math.Round(gap.TotalMinutes));
+        if (hours < 24) return LocMessage.Of("time.unit.hours", hours);
         return hours % 24 == 0
-            ? (hours == 24 ? LocMessage.Of("rss.gapOneDay") : LocMessage.Of("rss.gapDays", hours / 24))
+            ? (hours == 24 ? LocMessage.Of("rss.gapOneDay") : LocMessage.Of("time.unit.days", hours / 24))
             : LocMessage.Of("rss.gapDaysPlus", hours / 24);
     }
 

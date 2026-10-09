@@ -44,6 +44,7 @@ public sealed class I18nWiringGateTests
     private const string GuideUiCs = "src/StarMark.UI/Helpers/GuideUi.cs";
     private const string CanvasToolbarCs = "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs";
     private const string WeatherWidgetCs = "src/StarMark.UI/Views/WeatherWidget.xaml.cs";
+    private const string CountdownWidgetCs = "src/StarMark.UI/Views/CountdownWidget.xaml.cs";
     private const string AppCs = "src/StarMark.UI/App.xaml.cs";
     // 组件窗自己的三条文字出口（批次 WI-37-A）：菜单本体／外壳两态／快捷启动拖放，加内容工厂的占位那一行。
     private const string WidgetMenuCs = "src/StarMark.UI/Views/WidgetWindow.Menu.cs";
@@ -1125,7 +1126,7 @@ public sealed class I18nWiringGateTests
     }
 
     /// <summary>
-    /// 换语言的订阅点<b>只许有这三处，且各自的活不重叠</b>。
+    /// 换语言的订阅点<b>只许有这五处，且各自的活不重叠</b>。
     /// <para><see cref="LocText"/> 是"重贴"那一族的唯一主人：多一处订阅就多一处"谁去把文案改回来"的分配，
     /// 于是有一处永远贴着旧词；而"重贴"里若混进重建页面／重新查库，切换语言就成了一次全应用刷新——那才是真的会卡一下。</para>
     /// <para>第二处是画布那条工具条（批次 WI-51）：它的状态行是<b>每次状态变化现拼</b>的那一族（⛔ 挂 <c>LocText</c>，
@@ -1136,6 +1137,11 @@ public sealed class I18nWiringGateTests
     /// 它那一排预设色、"当前颜色"那一行与三根滑杆行末的读数都是<b>当场算</b>的，而编辑器可以一直开着不动，
     /// 自己的节拍里没有"语言换了"这件事。那颗 handler 只重取词＋重铺<b>它换对象时本来就会重铺的那一排</b>，
     /// ⛔ 新立一套重贴机制（前两处也都不是：一处贴标记上的字，两处贴自己现拼的那几行）。</para>
+    /// <para>第四、第五处是两扇<b>组件窗</b>（天气＝批次 WI-53／P-182a 第一刀，倒计时＝批次 WI-54＝同一族剩半边）：
+    /// 同一族理由，第一次落到"每秒自己就在重算"的宿主上。这类宿主屏上大半是<b>带读数的句子</b>
+    /// （"18:42 更新"、"3 天 05:20"），而 <c>LocText.SetKey(el, key, args)</c> 把<b>实参也一起冻住</b>——
+    /// 挂上去换语言那一刻贴回来的是<b>上一次那些数字</b>（坑表 #361）。合法性的另一半在两处都是同一句：
+    /// 那颗 handler 只把<b>本来就在重算的那几行</b>再算一遍，⛔ 在回调里打接口／读设置档／重建集合。</para>
     /// </summary>
     [Fact]
     public void ExactlyOneSubscriberRenamesTheStringsAndItRebuildsNothing()
@@ -1146,11 +1152,12 @@ public sealed class I18nWiringGateTests
             .Select(f => f.RelativePath.Replace(Path.DirectorySeparatorChar, '/'))
             .OrderBy(p => p, StringComparer.Ordinal)
             .ToArray();
-        // 四位主人各点一次名（⛔ 只钉计数：加第五处时那一行会红得说不出是谁）
+        // 五位主人各点一次名（⛔ 只钉计数：加第六处时那一行会红得说不出是谁）
         Assert.Equal(new[]
         {
             "src/StarMark.UI/Helpers/LocText.cs",
             "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs",
+            "src/StarMark.UI/Views/CountdownWidget.xaml.cs",
             "src/StarMark.UI/Views/WeatherWidget.xaml.cs",
             "src/StarMark.UI/Views/WidgetAppearanceEditor.cs",
         }, subscribers);
@@ -1178,6 +1185,17 @@ public sealed class I18nWiringGateTests
         var weatherRebuild = MethodBody(weather, "private void RebuildWords");
         Assert.DoesNotContain("RefreshAsync", weatherRebuild, StringComparison.Ordinal);   // 重贴⛔ 顺手再查一次网络
         Assert.DoesNotContain("SearchCityAsync", weatherRebuild, StringComparison.Ordinal);
+        // 倒计时这颗组件（批次 WI-54，P-182a 那半边的另一半）：同一族理由，第五个宿主。
+        // 它屏上每一行都是读数（主行剩多久／次行第几个年头／没起名时那个派生名），所以⛔ 走 LocText 那条冻实参的路；
+        // 而"每秒重算"那一拍里从来不含"语言换了"这件事 ⇒ 订阅归宿主。挂在 <c>Loaded</c>、摘在 <c>Unloaded</c>
+        // 是这一族与前三处不同的一点：组件窗会被关掉，静态事件上不摘＝那一窗的元素永远活着。
+        var countdown = Code(ReadRepoFile(CountdownWidgetCs));
+        Assert.Contains("Loaded += (_, _) => Locale.Changed += RebuildWords;", countdown, StringComparison.Ordinal);
+        Assert.Contains("Unloaded += (_, _) => Locale.Changed -= RebuildWords;", countdown, StringComparison.Ordinal);
+        var countdownRebuild = MethodBody(countdown, "private void RebuildWords");
+        Assert.Contains("ViewModel.RebuildWords(", countdownRebuild, StringComparison.Ordinal);   // 只把本来每秒就在算的那几行再算一遍
+        Assert.DoesNotContain("PersistAsync", countdownRebuild, StringComparison.Ordinal);        // ⛔ 顺手落一次盘（换语言不该写设置档）
+        Assert.DoesNotContain("InitializeComponent", countdownRebuild, StringComparison.Ordinal); // ⛔ 顺手重建整棵可视树
     }
 
     /// <summary>

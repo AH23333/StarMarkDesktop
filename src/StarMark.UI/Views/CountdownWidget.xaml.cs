@@ -37,16 +37,28 @@ public sealed partial class CountdownWidget : UserControl, IWidgetTicker
         ViewModel.Load(config.Countdowns);
         ViewModel.OccurrenceReached += OnOccurrenceReached;
         ViewModel.Tick(DateTimeOffset.Now);
+        // 换语言那一拍⛔ 在组件自己的节拍里：那一秒一秒重算的是"还剩多久"，而"语言换了"这件事它自己不知道
+        // ⇒ 与 ✅WI-53 那颗天气组件同一条路：订阅一次、离屏成对摘掉（坑表 #386 第三次落到长命宿主上）。
+        Loaded += (_, _) => Locale.Changed += RebuildWords;
+        Unloaded += (_, _) => Locale.Changed -= RebuildWords;
     }
+
+    /// <summary>
+    /// 换语言时重贴这一扇宿主：只把<b>本来每秒就在算的那几行</b>再算一遍（主行／次行／每行的名字／空态提示／错误句）。
+    /// <para>⛔ 在这里读设置档、⛔ 在这里重建集合、⛔ 在这里发提醒——那些都不属于"重贴"这一件事。</para>
+    /// </summary>
+    private void RebuildWords() => ViewModel.RebuildWords(DateTimeOffset.Now);
 
     private void OnOccurrenceReached(CountdownItem item)
     {
-        var delivered = NoticeCard.Show(Locale.T("widget.countdown.dueTitle"), item.Title);
+        // 正文念的是"这一行现在该叫什么"（用户没起名字时那是按当前语言现算的派生名）：
+        // ⛔ 直接把 <c>item.Title</c> 递出去——批次 WI-54 之后空白标题是合法的"用派生名"，那样卡片会只剩一个抬头。
+        var delivered = NoticeCard.Show(Locale.T("widget.countdown.dueTitle"), CountdownPolicy.TitleText(item));
         if (!delivered)
         {
             // 卡片贴不上屏幕（不在 UI 线程、拿不到显示器）⇒ 记一条日志说明"到点过、只是没能弹"，
             // 否则用户事后回看只会得到"它根本没提醒我"。界面上的到点高亮仍在。
-            StarLog.Info($"倒计时到点（提示卡没能贴上屏幕，仅组件内高亮）：{item.Title}");
+            StarLog.Info($"倒计时到点（提示卡没能贴上屏幕，仅组件内高亮）：{CountdownPolicy.TitleText(item)}");
         }
     }
 

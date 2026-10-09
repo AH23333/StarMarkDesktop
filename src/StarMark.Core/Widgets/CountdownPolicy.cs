@@ -1,6 +1,7 @@
 #nullable enable
 using System.Globalization;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Widgets;
 
@@ -52,12 +53,12 @@ public sealed class CountdownItem
 }
 
 /// <summary>一个倒计时在本次刷新时的呈现。</summary>
-/// <param name="Headline">主行：剩余量（"3 天 05:20"）或"已过 N 天"。</param>
-/// <param name="Subline">次行：目标时刻 / 第 N 年。</param>
+/// <param name="Headline">主行：剩余量（"3 天 05:20"）或"已过 N 天"——交的是<b>那颗键＋实参</b>，⛔ 是已经取好词的那句。</param>
+/// <param name="Subline">次行：目标时刻 / 第 N 年（同上，交键）。</param>
 /// <param name="IsPast">目标（或本年那一次）是否已过。</param>
 /// <param name="Occurrence">本轮对应的绝对时刻（用于提醒键与"到点"判定）。</param>
 /// <param name="IsDueNow">是否正处在提醒窗口内（界面据此高亮）。</param>
-public readonly record struct CountdownView(string Headline, string Subline, bool IsPast, DateTimeOffset Occurrence, bool IsDueNow);
+public readonly record struct CountdownView(LocMessage Headline, LocMessage Subline, bool IsPast, DateTimeOffset Occurrence, bool IsDueNow);
 
 /// <summary>
 /// 倒计时的纯逻辑：时刻换算、每年推进、剩余量格式化、到点提醒判定、输入解析。
@@ -118,54 +119,61 @@ public static class CountdownPolicy
         return new DateTime(year, wall.Month, day, wall.Hour, wall.Minute, wall.Second, DateTimeKind.Unspecified);
     }
 
+    /// <summary>
+    /// 这一行现在念什么（<b>交的是键＋实参</b>，批次 WI-54＝P-182a 第二刀）。
+    /// <para>⛔ 在这里就把词取好：这一族每秒都被问一遍，而语言是用户随时改的——交字符串＝把语言
+    /// 冻在算出它的那一刻（✅WI-37-C 那颗闹钟、✅WI-53 那把天气码表同一条口径）。</para>
+    /// </summary>
     public static CountdownView Describe(CountdownItem item, DateTimeOffset now)
     {
         var occurrence = NextOccurrence(item, now);
         var until = occurrence - now;
         if (until > TimeSpan.Zero)
-            return new CountdownView(FormatRemaining(until), OccurrenceLine(item, occurrence), false, occurrence, false);
+            return new CountdownView(FormatRemaining(until), OccurrenceMessage(item, occurrence), false, occurrence, false);
 
         var since = -until;
         return new CountdownView(
-            $"已过 {FormatDuration(since)}",
-            AnniversaryLine(item, occurrence, now),
+            LocMessage.Of("widget.cd.past", FormatDuration(since)),
+            AnniversaryMessage(item, occurrence, now),
             true,
             occurrence,
             since <= NotifyWindow);
     }
 
     /// <summary>剩余量：<c>3 天 05:20</c>｜<c>05:20</c>｜<c>不足 1 分钟</c>。不到一分钟仍要说，不能显示 00:00 让人以为卡住。</summary>
-    public static string FormatRemaining(TimeSpan until)
+    public static LocMessage FormatRemaining(TimeSpan until)
     {
-        if (until < TimeSpan.FromMinutes(1)) return "不足 1 分钟";
+        if (until < TimeSpan.FromMinutes(1)) return LocMessage.Of("widget.cd.underMinute");
         var days = (int)Math.Floor(until.TotalDays);
         var rest = until - TimeSpan.FromDays(days);
         var clock = $"{(int)rest.Hours:00}:{(int)rest.Minutes:00}";
-        return days > 0 ? $"{days} 天 {clock}" : clock;
+        return days > 0 ? LocMessage.Of("widget.cd.remainDays", days, clock) : LocMessage.Of("widget.cd.remainClock", clock);
     }
 
-    /// <summary>已过去的时长：分钟级起跳（"42 分钟"），再往上小时/天。</summary>
-    public static string FormatDuration(TimeSpan since)
+    /// <summary>已过去的时长：分钟级起跳，再往上小时/天。单位那三颗键与 RSS 节奏那句<b>共用一份</b>（见 <c>time.unit.*</c>）。</summary>
+    public static LocMessage FormatDuration(TimeSpan since)
     {
-        if (since < TimeSpan.FromHours(1)) return $"{Math.Max(1, (int)since.TotalMinutes)} 分钟";
-        if (since < TimeSpan.FromDays(1)) return $"{(int)since.TotalHours} 小时";
-        return $"{(int)Math.Floor(since.TotalDays)} 天";
+        if (since < TimeSpan.FromHours(1)) return LocMessage.Of("time.unit.minutes", Math.Max(1, (int)since.TotalMinutes));
+        if (since < TimeSpan.FromDays(1)) return LocMessage.Of("time.unit.hours", (int)since.TotalHours);
+        return LocMessage.Of("time.unit.days", (int)Math.Floor(since.TotalDays));
     }
 
-    private static string OccurrenceLine(CountdownItem item, DateTimeOffset occurrence)
-        => $"{DateTimeText.Minute(occurrence)}  {(item.Yearly ? YearNumber(item, occurrence) + " 周年" : "到期")}";
-
-    private static string AnniversaryLine(CountdownItem item, DateTimeOffset occurrence, DateTimeOffset now)
+    /// <summary>还没到：次行念"几点 到期"或"几点 N 周年"。</summary>
+    private static LocMessage OccurrenceMessage(CountdownItem item, DateTimeOffset occurrence)
     {
-        if (!item.Yearly) return $"{DateTimeText.Minute(occurrence)} 已到期";
-        var years = now.Year - item.At.Year;
-        return $"{DateTimeText.MonthDayMinute(occurrence)} · 第 {years + 1} 个年头";
-    }
-
-    private static string YearNumber(CountdownItem item, DateTimeOffset occurrence)
-    {
+        var at = DateTimeText.Minute(occurrence);
+        if (!item.Yearly) return LocMessage.Of("widget.cd.dueAt", at);
         var years = occurrence.Year - item.At.Year;
-        return years <= 0 ? "今年" : $"{years}";
+        // ⚠ 旧写法是"兜底词 + 周年"两个片段拼起来的，而那颗兜底给的是"今年"⇒ 屏幕上出过「今年 周年」。
+        // 一句念给人听的话⛔ 由片段拼：每个分支各交一颗**整句**键（坑表 #371 那颗同族：连接料别留在片段里）。
+        return years <= 0 ? LocMessage.Of("widget.cd.thisYearAt", at) : LocMessage.Of("widget.cd.annivAt", at, years);
+    }
+
+    /// <summary>已经过了：非每年项念"几点 已到期"，每年项念"哪天几点 · 第 N 个年头"。</summary>
+    private static LocMessage AnniversaryMessage(CountdownItem item, DateTimeOffset occurrence, DateTimeOffset now)
+    {
+        if (!item.Yearly) return LocMessage.Of("widget.cd.expiredAt", DateTimeText.Minute(occurrence));
+        return LocMessage.Of("widget.cd.annivCount", DateTimeText.MonthDayMinute(occurrence), now.Year - item.At.Year + 1);
     }
 
     /// <summary>提醒键：本轮发生时刻的 UTC ISO 串。同一轮只提醒一次，换一轮（下一年/新时刻）自动失效。</summary>
@@ -188,20 +196,20 @@ public static class CountdownPolicy
     /// 只写"格式不对"用户不知道该改哪一半。
     /// </summary>
     public static bool TryParseInput(string? dateText, string? timeText, bool requireTime,
-        out DateTime wallClock, out string? error)
+        out DateTime wallClock, out LocMessage? error)
     {
         wallClock = default;
         if (!DateTime.TryParseExact((dateText ?? string.Empty).Trim(),
                 new[] { "yyyy-MM-dd", "yyyy/M/d", "yyyy-M-d" },
                 CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
         {
-            error = "日期请写成 2026-12-31";
+            error = LocMessage.Of("widget.cd.errDate");
             return false;
         }
         var time = (timeText ?? string.Empty).Trim();
         if (time.Length == 0)
         {
-            if (requireTime) { error = "还差时刻，如 18:00"; return false; }
+            if (requireTime) { error = LocMessage.Of("widget.cd.errTimeRequired"); return false; }
             wallClock = date.Date;   // 纪念日只看天：钟点记 00:00
             error = null;
             return true;
@@ -210,7 +218,7 @@ public static class CountdownPolicy
                 new[] { @"h\:mm", @"hh\:mm", @"h\:mm\:ss" }, CultureInfo.InvariantCulture, out var span)
             || span < TimeSpan.Zero || span >= TimeSpan.FromDays(1))
         {
-            error = "时刻请写成 18:00 或 9:30";
+            error = LocMessage.Of("widget.cd.errTime");
             return false;
         }
         wallClock = date.Date + span;
@@ -219,15 +227,41 @@ public static class CountdownPolicy
     }
 
     /// <summary>
-    /// 标题兜底。留空不是错误——自动按日期生成一个可辨认的名字，比逼用户起名、或者渲染出一行空白
-    /// （读起来像坏了）都好。
+    /// 存进条目的<b>只有用户自己起的名字</b>（空白＝他没起，默认名⛔ 在这里生成）。
+    /// <para>为什么：旧版本把自动生成的名字连同"当时那门语言"一起存进档（<c>截止（2026-1-5 09:00）</c>），
+    /// 换语言之后那一行还念旧语言——与 ✅WI-46c 那颗贴图组名同一个坏法（存的是身份，念法却存成了成品）。</para>
     /// </summary>
-    public static string TitleOf(string? title, DateTime wallClock, bool yearly)
+    public static string TitleStored(string? title) => (title ?? string.Empty).Trim();
+
+    /// <summary>
+    /// 默认名的<b>念法</b>：按当时语言现算，日期部分交实参（⛔ 抄进句子）。
+    /// <para>月与日<b>各交一颗</b>：那个「-」是句子的一部分（各语言自己写日期形状），
+    /// ⛔ 由代码先拼成 <c>"6-6"</c> 再塞进一个槽——那是 ✅坑表 #371 那一族"连接料留在片段里"。</para>
+    /// </summary>
+    public static LocMessage TitleMessage(DateTime wallClock, bool yearly)
+        => yearly
+            ? LocMessage.Of("widget.cd.nameAnniv", wallClock.Month, wallClock.Day)
+            : LocMessage.Of("widget.cd.nameDue",
+                $"{wallClock.Year}-{wallClock.Month}-{wallClock.Day}", $"{wallClock.Hour:00}:{wallClock.Minute:00}");
+
+    /// <summary>这一行现在该念什么（VM 每秒问一次，⛔ 挂 <c>LocText</c>：它的节拍就是它的重贴，✅WI-44 同口径）。</summary>
+    public static string TitleText(CountdownItem item)
     {
-        var trimmed = (title ?? string.Empty).Trim();
-        if (trimmed.Length > 0) return trimmed;
-        return yearly
-            ? $"纪念日（{wallClock.Month}-{wallClock.Day}）"
-            : $"截止（{wallClock.Year}-{wallClock.Month}-{wallClock.Day} {wallClock.Hour:00}:{wallClock.Minute:00}）";
+        var stored = TitleStored(item.Title);
+        if (stored.Length == 0) return TitleMessage(item.At, item.Yearly).Render();
+        // 老档里那批"当年生成的默认名"认得出来就按派生名现算（⛔ 悄悄改档：数据不动，只改念法）；
+        // 认不出（用户自己打的字）原样念用户的。
+        return LooksLikeGeneratedName(stored, item.At, item.Yearly) ? TitleMessage(item.At, item.Yearly).Render() : stored;
+    }
+
+    /// <summary>
+    /// 认一颗旧默认名：拿<b>表里那颗行的中文列</b>当模板现拼一份来比对。
+    /// <para>⛔ 在本档里再写一份"截止（"当判据——那会长出第二个主人，整档汉字尺今天就把这一行读成屏幕字。</para>
+    /// </summary>
+    private static bool LooksLikeGeneratedName(string stored, DateTime wall, bool yearly)
+    {
+        var message = TitleMessage(wall, yearly);
+        if (!UiStrings.TryGet(message.Key, out var row) || message.Args is not { Length: > 0 }) return false;
+        return stored == string.Format(row.Zh, message.Args);
     }
 }

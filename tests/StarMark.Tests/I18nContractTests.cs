@@ -233,6 +233,7 @@ public sealed class I18nContractTests : IDisposable
             ["pin.menu.save"] = "「保存」日文同字（与 widget.cd.save 同形，⛔ 为不同形改成「ファイル保存」反而长出第二条尺）（批次 WI-50／P-179）",
             ["anno.color.purple"] = "颜色名「紫」中日同字（与 anno.color.white 同形：日文里它就写作紫，改成「パープル」反而不像这一排界面用语）（批次 WI-52／P-183）",
             ["widget.appearance.target.bg"] = "「背景色」日文同字（日语界面里就写背景色；⛔ 为不同形改成「背景」，那一档就说不清是颜色还是图）（批次 WI-52／P-183）",
+            ["widget.cd.remainClock"] = "纯骨架「{0}」：那一格只装一个钟点读数（05:20），三语同形，没有词可翻（批次 WI-54／P-182a）",
         };
 
         var actual = UiStrings.All
