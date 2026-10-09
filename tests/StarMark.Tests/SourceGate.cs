@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Xunit;
@@ -182,5 +183,68 @@ internal static class SourceGate
         var b = text.IndexOf(to, a + from.Length, StringComparison.Ordinal);
         Assert.True(a >= 0 && b > a, $"没能从「{from}」定位到「{to}」——结构变了，守门要先跟上");
         return text[a..b];
+    }
+
+    /// <summary>
+    /// 表里那一行的<b>槽数</b>（三列里出现过的占位符编号去重）。读不到那颗键就当场抛——
+    /// 「表里没有这颗键」正是要被看见的那件事，⛔ 让它退回 0。
+    /// </summary>
+    internal static int RowSlots(string key)
+    {
+        Assert.True(StarMark.Abstractions.I18n.UiStrings.TryGet(key, out var entry), $"表里没有这颗键：{key}");
+        return new[] { entry.Zh, entry.En, entry.Ja }
+            .SelectMany(text => System.Text.RegularExpressions.Regex.Matches(text, @"\{(\d+)\}")
+                .Cast<System.Text.RegularExpressions.Match>()
+                .Select(m => m.Groups[1].Value))
+            .Distinct(StringComparer.Ordinal).Count();
+    }
+
+    /// <summary>
+    /// 扫出 <c>LocMessage.Of("字面键"…)</c> 的<b>调用点</b>：键＋代码实际递出的顶层实参数＋那一行的行号。
+    /// <para>⛔ 用一条正则切：实参里有 <c>TypeCount(ItemType.Bookmark),</c> 这种"嵌套括号后紧跟逗号"的形状，
+    /// 正则会在第一颗嵌套括号处提前收尾，于是"槽数对不上"那格读数是<b>仪器</b>错的（坑表 #393／#406）。
+    /// 这里按括号深度走到与 <c>Of(</c> 配对的那颗 <c>)</c>，字符串里的逗号与转义都不算。</para>
+    /// <para>批次 WI-57 先把它写在 <c>DiagnosticsWordGateTests</c> 里；批次 WI-58 第二族要用同一把尺
+    /// ⇒ 升到这一颗共用件（台架规则 #86：同一动作⛔ 两份定位实现）。</para>
+    /// </summary>
+    internal static List<(string Key, int Args, int Line)> KeyedCallSites(string code)
+    {
+        var found = new List<(string, int, int)>();
+        const string head = "LocMessage.Of(\"";
+        var from = 0;
+        while (true)
+        {
+            var start = code.IndexOf(head, from, StringComparison.Ordinal);
+            if (start < 0) return found;
+            var keyStart = start + head.Length;
+            var keyEnd = code.IndexOf('"', keyStart);
+            if (keyEnd < 0) return found;
+            var key = code[keyStart..keyEnd];
+
+            var depth = 1;                       // 已经在 Of( 的那颗括号里
+            var inString = false;
+            var prev = '\0';
+            var commas = 0;
+            var i = keyEnd + 1;
+            for (; i < code.Length; i++)
+            {
+                var c = code[i];
+                if (inString)
+                {
+                    if (c == '"' && prev != '\\') inString = false;
+                }
+                else if (c == '"') inString = true;
+                else if (c == '(') depth++;
+                else if (c == ')')
+                {
+                    depth--;
+                    if (depth == 0) break;
+                }
+                else if (c == ',' && depth == 1) commas++;
+                prev = c;
+            }
+            found.Add((key, commas, code[..i].Count(ch => ch == '\n') + 1));
+            from = i;
+        }
     }
 }

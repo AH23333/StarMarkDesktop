@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using StarMark.Abstractions.Trending;
+using StarMark.Abstractions.I18n;
 using StarMark.Integrations.Trending;
 
 namespace StarMark.Tests;
@@ -60,6 +61,29 @@ public sealed class TrendingFetchTests
 
     private static bool IsTrendingPage(string url) => url.StartsWith("https://github.com/trending", StringComparison.Ordinal);
 
+    /// <summary>
+    /// 把那颗<b>套娃的 <see cref="LocMessage"/></b> 摊平成「出现过的键」＋「所有非键的实参」。
+    /// <para>断言这一族的措辞＝把表里那句话钉死在测试里（台架规则 #130）：改一次中文措辞要红一片，
+    /// 而真正要守的是<b>哪颗键、按什么顺序套、机器事实有没有递进去</b>。键的顺序由 <c>Keys</c> 给，
+    /// 两条腿各自的 HTTP 码这类机器事实在 <c>Args</c> 里。</para>
+    /// </summary>
+    private static (string[] Keys, string[] Args) Flatten(LocMessage message)
+    {
+        var keys = new List<string>();
+        var args = new List<string>();
+        void Walk(LocMessage m)
+        {
+            keys.Add(m.Key);
+            foreach (var a in m.Args ?? Array.Empty<object?>())
+            {
+                if (a is LocMessage inner) Walk(inner);
+                else if (a is not null) args.Add(a.ToString()!);
+            }
+        }
+        Walk(message);
+        return (keys.ToArray(), args.ToArray());
+    }
+
     // ===== 两条腿 =====
 
     [Fact]
@@ -104,7 +128,7 @@ public sealed class TrendingFetchTests
         var r = await f.FetchAsync(TrendingPeriod.Monthly, null, CancellationToken.None);
 
         Assert.Equal(TrendingSource.SearchApi, r.Via);
-        Assert.Contains("解析为 0 条", r.Notice);
+        Assert.Contains("trending.fetch.htmlZero", Flatten(r.Notice!).Keys);   // 钉那颗键，⛔ 抄表里的措辞
     }
 
     [Fact]
@@ -118,8 +142,10 @@ public sealed class TrendingFetchTests
         var ex = await Assert.ThrowsAsync<TrendingException>(
             () => f.FetchAsync(TrendingPeriod.Weekly, null, CancellationToken.None));
 
-        Assert.Contains("403", ex.Message);
-        Assert.Contains("401", ex.Message);            // 只报一条腿的码会让人去查错的那条腿
+        var (keys, args) = Flatten(ex.Reason);
+        Assert.Contains("trending.fetch.bothEmpty", keys);       // 抬头那句也是键
+        Assert.Contains("403", args);                            // 两条腿各自的码都得在
+        Assert.Contains("401", args);                            // 只报一条腿会让人去查错的那条腿
     }
 
     // ===== 退避重试 =====
@@ -264,7 +290,7 @@ public sealed class TrendingFetchTests
         var r = await f.FetchAsync(TrendingPeriod.Weekly, null, CancellationToken.None);
 
         Assert.Equal(TrendingSource.SearchApi, r.Via);
-        Assert.Contains("MB 上限", r.Notice);
+        Assert.Contains("trending.fetch.tooLarge", Flatten(r.Notice!).Keys);   // 超限那句从此住表里
     }
 
     [Fact]

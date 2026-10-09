@@ -244,13 +244,16 @@ public sealed class GlanceWordGateTests : IDisposable
         Assert.Equal(0, SourceGate.Count(fetch, "Locale.Fmt("));
         Assert.Equal(1, SourceGate.Count(fetch, "PaintTrending()"));
         Assert.Contains("_trendingShown = null;", fetch, StringComparison.Ordinal);      // 失败与"今天没有"分开写
-        Assert.Contains("_trendingFailure = ex.Message;", fetch, StringComparison.Ordinal);
+        // 失败那句交的是<b>键</b>（批次 WI-58／P-190）：读侧⛔ 在这里取词，也⛔ 自拼一份"抓取失败：…"——
+        // 那份句子主人在 `TrendingFailure.Of`（主窗热榜页与 Core 的 stale 那一路问的是同一颗）。
+        Assert.Contains("_trendingFailure = StarMark.Abstractions.Trending.TrendingFailure.Of(ex);", fetch, StringComparison.Ordinal);
+        Assert.DoesNotContain("_trendingFailure = ex.Message;", fetch, StringComparison.Ordinal);
 
         // ⚠ 那几颗事实<b>怎么连</b>也⛔ 由代码写一颗标点（坑表 #371 那颗分隔符的同族：本批普查当场量到）。
         // 骨架的主人＝`trending.statusNotice`（主窗热榜页念的是同一颗），它的英文列本来就是半角竖线；
         // 代码里再写一颗全角「｜」＝第二份出处，而且英文句子中间会冒出一颗 CJK 宽度的符号。
         Assert.DoesNotContain("string.Join(\"｜\"", widget, StringComparison.Ordinal);
-        Assert.Contains("Locale.Fmt(\"trending.statusNotice\"", paint, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"trending.statusNotice\"", paint, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using StarMark.Abstractions.Trending;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Trending;
 
 namespace StarMark.Tests;
@@ -126,21 +127,22 @@ public sealed class TrendingServiceTests
     [Fact]
     public async Task FetchFails_WithCache_ShowsStaleDataWithReason()
     {
-        var h = new Harness { Source = { Throw = new TrendingException("热榜页与 GitHub 搜索接口都没能给出结果（HTTP 503）") } };
+        var h = new Harness { Source = { Throw = new TrendingException(LocMessage.Of("trending.fetch.httpBad", 503)) } };
         h.SeedCache(fetchedAt: h.Now.AddDays(-1).ToUnixTimeSeconds());   // 昨日的缓存才会真的触发一次抓取
 
         var r = await h.Service().GetAsync(TrendingPeriod.Weekly, null, force: false, CancellationToken.None);
 
         Assert.True(r.Stale);
         Assert.True(r.FromCache);
-        Assert.Contains("503", r.Notice);
+        Assert.Equal("trending.fetch.httpBad", r.Notice!.Key);   // Core 交出去的是同一颗键，⛔ 套第二层成品字
+        Assert.Equal("503", r.Notice.Args![0]?.ToString());
         Assert.Equal("seed/0", Assert.Single(r.Repos).FullName);
     }
 
     [Fact]
     public async Task FetchFails_WithoutCache_RethrowsSoTheUiCanGiveAReason()
     {
-        var h = new Harness { Source = { Throw = new TrendingException("两条腿都失败") } };
+        var h = new Harness { Source = { Throw = new TrendingException(LocMessage.Of("trending.fetch.bothEmpty")) } };
 
         await Assert.ThrowsAsync<TrendingException>(() =>
             h.Service().GetAsync(TrendingPeriod.Weekly, null, force: false, CancellationToken.None));
@@ -170,7 +172,7 @@ public sealed class TrendingServiceTests
 
         Assert.Single(r.Repos);
         Assert.False(r.Stale);
-        Assert.Contains("缓存未能写入", r.Notice);
+        Assert.Equal("trending.notice.write", r.Notice!.Key);   // 钉那颗键（表里怎么改措辞都⛔ 红在这里）
     }
 
     [Fact]
@@ -192,13 +194,13 @@ public sealed class TrendingServiceTests
     {
         var h = new Harness
         {
-            Source = { Result = new TrendingFetchResult(Repos, TrendingSource.SearchApi, "热榜页抓取失败，已用 GitHub 搜索接口兜底") }
+            Source = { Result = new TrendingFetchResult(Repos, TrendingSource.SearchApi, LocMessage.Of("trending.fetch.fallbackApi")) }
         };
 
         var r = await h.Service().GetAsync(TrendingPeriod.Weekly, null, force: false, CancellationToken.None);
 
         Assert.Equal(TrendingSource.SearchApi, r.Via);
-        Assert.Contains("兜底", r.Notice);
+        Assert.Equal("trending.fetch.fallbackApi", r.Notice!.Key);   // 编排层⛔ 改写那颗键，原样递给界面
         Assert.Equal("search-api", TrendingCacheCodec.Decode(h.Store[h.Key()])!.Via);
     }
 }

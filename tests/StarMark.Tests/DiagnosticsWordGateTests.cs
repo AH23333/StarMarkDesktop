@@ -61,6 +61,11 @@ public sealed class DiagnosticsWordGateTests : IDisposable
     private readonly AppLanguage _before = Locale.Current;
     public void Dispose() => Locale.TrySet(_before);
 
+    // 两颗尺升到共用件（台架规则 #86）：断言一个字没动，只是实现⛔ 两处各写一份。
+    private static int SlotCount(string key) => SourceGate.RowSlots(key);
+
+    private static List<(string Key, int Args, int Line)> CallSites(string code) => SourceGate.KeyedCallSites(code);
+
     private static string CodeOf(string rel) => SourceGate.Code(SourceGate.ReadRepoFile(rel));
 
     /// <summary>
@@ -79,62 +84,7 @@ public sealed class DiagnosticsWordGateTests : IDisposable
         return hits;
     }
 
-    /// <summary>那一族每一行要的槽数（<b>从表里现取</b>，⛔ 在本档抄一份期望值——抄的那份会跟着表落后，规则 #130）。</summary>
-    private static int SlotCount(string key)
-    {
-        Assert.True(UiStrings.TryGet(key, out var entry), $"表里没有这颗键：{key}");
-        return new[] { entry.Zh, entry.En, entry.Ja }
-            .SelectMany(text => Regex.Matches(text, @"\{(\d+)\}").Cast<Match>().Select(m => m.Groups[1].Value))
-            .Distinct(StringComparer.Ordinal).Count();
-    }
 
-    /// <summary>
-    /// 扫出 <c>LocMessage.Of("字面键"…)</c> 的<b>调用点</b>：键 + 代码实际递出的顶层实参数。
-    /// <para>为什么不是一条正则搞定：本批那句 <c>diag.value.itemTotal</c> 跨三行写，而实参里就有
-    /// <c>TypeCount(ItemType.Bookmark)</c> 这种"括号后面紧跟逗号"的形状——正则会在第一颗嵌套括号处停下，
-    /// 读数看着像"槽数对不上"，其实是那一格根本没被完整读到（坑表 #393 的仪器版）。
-    /// 这里按括号深度走到配对的那颗 <c>)</c>，字符串里的逗号与转义都不算。</para>
-    /// </summary>
-    private static List<(string Key, int Args, int Line)> CallSites(string code)
-    {
-        var found = new List<(string, int, int)>();
-        const string head = "LocMessage.Of(\"";
-        var from = 0;
-        while (true)
-        {
-            var start = code.IndexOf(head, from, StringComparison.Ordinal);
-            if (start < 0) return found;
-            var keyStart = start + head.Length;
-            var keyEnd = code.IndexOf('"', keyStart);
-            if (keyEnd < 0) return found;
-            var key = code[keyStart..keyEnd];
-
-            var depth = 1;                       // 已经在 Of( 的那颗括号里
-            var inString = false;
-            var prev = '\0';
-            var commas = 0;
-            var i = keyEnd + 1;
-            for (; i < code.Length; i++)
-            {
-                var c = code[i];
-                if (inString)
-                {
-                    if (c == '"' && prev != '\\') inString = false;
-                }
-                else if (c == '"') inString = true;
-                else if (c == '(') depth++;
-                else if (c == ')')
-                {
-                    depth--;
-                    if (depth == 0) break;
-                }
-                else if (c == ',' && depth == 1) commas++;
-                prev = c;
-            }
-            found.Add((key, commas, code[..i].Count(ch => ch == '\n') + 1));
-            from = i;
-        }
-    }
 
     /// <summary>
     /// <b>Core 与 Abstractions 交出的是键，⛔ 在那里取词</b>（✅WI-53 天气码／✅WI-54 倒计时同一条口径）。
