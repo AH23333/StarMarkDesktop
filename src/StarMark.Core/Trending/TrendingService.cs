@@ -15,10 +15,12 @@ namespace StarMark.Core.Trending;
 /// <param name="Stale">抓取失败后回读的旧缓存——<b>必须与 FromCache 分开</b>：
 /// "今天没抓到，给你看上次那份"与"今天已经抓过了"是两件事，混成一个用户就不知道该不该重试。</param>
 /// <param name="FetchedAt">这批数据的抓取时刻（Unix 秒；0＝未知）。</param>
-/// <param name="Notice">要贴给用户的一句话（兜底原因 / 失败原因 / 缓存没写进去）。可为 null。</param>
+/// <param name="Notice">要贴给用户的一句话（兜底原因 / 失败原因 / 缓存没写进去）。可为 null。
+/// 交的是<b>键＋实参</b>：抓取可能发生在中文档、贴可能在换语言之后，⛔ 在这里就把词取死（批次 WI-57
+/// 给诊断那一族立的判据，这一批把同一颗尺伸到热榜这一路＝P-190）。</param>
 public sealed record TrendingResult(
     IReadOnlyList<TrendingRepo> Repos, TrendingSource? Via,
-    bool FromCache, bool Stale, long FetchedAt, string? Notice = null);
+    bool FromCache, bool Stale, long FetchedAt, LocMessage? Notice = null);
 
 /// <summary>
 /// 热榜编排：读缓存 →（同本地日历日且非强制刷新则直接返回）→ 抓取 → 写缓存；抓取失败回读旧缓存并标 stale。
@@ -75,7 +77,7 @@ public sealed class TrendingService
             // 抓取失败但有旧缓存 ⇒ 给它，并说明是上次的（空列表比报错更难查，见 P-54/P-56 口径）
             if (cached is { HasContent: true })
                 return new TrendingResult(cached.Repos, TrendingSources.ParseCode(cached.Via),
-                    FromCache: true, Stale: true, cached.FetchedAt, ex.Message);
+                    FromCache: true, Stale: true, cached.FetchedAt, TrendingFailure.Of(ex));
             throw;                                            // 什么都没有：抛出去让界面给原因 + 「重试」
         }
 
@@ -88,7 +90,7 @@ public sealed class TrendingService
     /// 缓存写失败不该把已经抓到的数据丢掉（那等于"网络好了但界面还是看不到"），
     /// 也不能静默：否则用户以为明天还会自动更新，实际每天都在重抓。⇒ 数据照出，附一句原因。
     /// </summary>
-    private async Task<string?> TryWriteCacheAsync(string key, TrendingFetchResult fetched, long nowUnix, CancellationToken ct)
+    private async Task<LocMessage?> TryWriteCacheAsync(string key, TrendingFetchResult fetched, long nowUnix, CancellationToken ct)
     {
         var payload = TrendingCacheCodec.Encode(new TrendingCachedEntry(
             fetched.Repos, nowUnix, fetched.Via.Code()));
@@ -101,9 +103,12 @@ public sealed class TrendingService
         catch (Exception ex)
         {
             StarLog.Warn($"热榜缓存写入失败（{key}）：{ex.Message}");
-            return Locale.T("trending.notice.write");
+            return LocMessage.Of("trending.notice.write");
         }
     }
 
-    private static string? Combine(string? a, string b) => string.IsNullOrEmpty(a) ? b : a + Locale.T("trending.notice.join") + b;
+    /// <summary>两颗原因连成一句：交的仍是<b>键</b>——连接骨架 <c>trending.notice.join</c> 自己也是表里那颗两槽行，
+    /// 所以这一层套到最外面那句时，取词发生在贴上去的那一刻（⛔ 在这里拼成品字＝P-190 那颗缺陷）。</summary>
+    private static LocMessage Combine(LocMessage? a, LocMessage b) =>
+        a is null ? b : LocMessage.Of("trending.notice.join", a, b);
 }

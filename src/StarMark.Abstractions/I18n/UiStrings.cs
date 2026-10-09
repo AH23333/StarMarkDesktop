@@ -1333,6 +1333,8 @@ public static class UiStrings
         new Entry("trending.statusNotice", "{0}｜{1}", "{0} | {1}", "{0}｜{1}"),
         // 「热榜句厂」一族（批次 WI-2z，P-172 的 Notice 生产者行）：兜底/退避/缓存的成品句全部进表。
         // headline 与从句的连接骨架（compose/join）也是语言内容——"中文括号夹英文从句"正是它长出来的。
+        // 批次 WI-58（P-190）起 join 从「一颗裸分隔符」改成**两颗槽的骨架**：代码里 `a + T(join) + b`
+        // 会在抓取那一刻就把两头的语言定死，而骨架自己也得等贴上去才念得出（坑表 #407 的那一条路）。
         new Entry("trending.fetch.httpBad", "第 1 次请求被拒（{0}），已按 Retry-After 退避重试", "First request was refused (HTTP {0}); retried after a Retry-After backoff", "1回目のリクエストは拒否されました（{0}）— Retry-After に従いバックオフで再試行しました"),
         new Entry("trending.fetch.retryFailed", "重试后仍未成功", "Still failed after the retry", "再試行後も成功しませんでした"),
         new Entry("trending.fetch.htmlFailed", "热榜页请求失败：{0}", "the trending page request failed: {0}", "熱榜ページの要求に失敗しました: {0}"),
@@ -1341,9 +1343,12 @@ public static class UiStrings
         new Entry("trending.fetch.apiEmpty", "搜索接口没有返回符合该周期/语言的仓库", "the search API returned no repos for that period/language", "検索 API はその期間/言語のリポジトリを返しませんでした"),
         new Entry("trending.fetch.bothEmpty", "热榜页与 GitHub 搜索接口都没能给出结果", "neither the trending page nor the GitHub search API returned a result", "熱榜ページも GitHub 検索 API も結果を返しませんでした"),
         new Entry("trending.fetch.allFailed", "热榜抓取失败", "trending fetch failed", "熱榜の取得に失敗しました"),
+        new Entry("trending.fetch.httpStatus", "HTTP {0}（{1}）", "HTTP {0} ({1})", "HTTP {0}（{1}）"),
+        new Entry("trending.fetch.apiFailed", "搜索接口请求失败：{0}", "the search API request failed: {0}", "検索 API の要求に失敗しました: {0}"),
+        new Entry("trending.fetch.tooLarge", "响应超过 {0} MB 上限，已放弃解析", "the response passed the {0} MB cap, so parsing was dropped", "応答が {0} MB 上限を超えたため解析を打ち切りました"),
         new Entry("trending.notice.write", "缓存未能写入本机，下次打开仍会重新抓取", "the cache could not be written locally — next open will fetch again", "キャッシュをローカルに書き込めませんでした。次回開いたとき再取得されます"),
         new Entry("trending.notice.compose", "{0}（{1}）", "{0} ({1})", "{0}（{1}）"),
-        new Entry("trending.notice.join", "；", ", ", "；"),
+        new Entry("trending.notice.join", "{0}；{1}", "{0}, {1}", "{0}；{1}"),
         new Entry("trending.viaSearchApi", "来源：GitHub 搜索接口兜底（没有“本期新增星数”）",
             "Source: GitHub search API fallback (no “stars added this period”)", "出所：GitHub 検索 API によるフォールバック（「本期の新規 star 数」はありません）"),
         new Entry("trending.viaSearchApiShort", "来源：GitHub 搜索接口兜底",

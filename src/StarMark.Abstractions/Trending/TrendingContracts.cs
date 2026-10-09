@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions.Trending;
 
@@ -33,13 +34,30 @@ public static class TrendingSources
     };
 }
 
-/// <param name="Notice">这一批为什么走了兜底（页面 HTTP 码 / 解析为 0 条 / 响应过大…）。界面标注用，可为 null。</param>
-public sealed record TrendingFetchResult(IReadOnlyList<TrendingRepo> Repos, TrendingSource Via, string? Notice = null);
+/// <param name="Notice">这一批为什么走了兜底（页面 HTTP 码 / 解析为 0 条 / 响应过大…）。界面标注用，可为 null。
+/// 交的是<b>键＋实参</b>而⛔ 已经取好词的那一句：这一批可能在中文档抓、在英文档贴（批次 WI-57 给诊断那一族
+/// 立的同一条判据＝坑表 #393／#407），取词必须发生在贴上去那一刻。</param>
+public sealed record TrendingFetchResult(IReadOnlyList<TrendingRepo> Repos, TrendingSource Via, LocMessage? Notice = null);
 
-/// <summary>两条腿都拿不到结果时的错误（消息即给人看的原因，界面直接贴出来）。</summary>
+/// <summary>两条腿都拿不到结果时的错误（<b>带的是那颗键</b>，界面念的是 <see cref="Reason"/>）。</summary>
 public sealed class TrendingException : Exception
 {
-    public TrendingException(string message) : base(message) { }
+    public TrendingException(LocMessage reason) : base(reason.Render()) => Reason = reason;
+
+    /// <summary>给人看的那句的<b>身份</b>（键＋实参，还没取词）。宿主按此刻语言渲染它，⛔ 读 <see cref="Exception.Message"/>。</summary>
+    public LocMessage Reason { get; }
+}
+
+/// <summary>
+/// 「抓取这一路失败了，界面上该念哪一句」——<b>只许一处决定</b>（主窗热榜页、今日速览那一块、
+/// Core 的 stale 那一路都问它，⛔ 各自拼一份＝P-171 那一族）。
+/// <para>两条腿都失败的 <see cref="TrendingException"/> 已经带着骨架（含两条腿各自的原因），直接交出它那颗键；
+/// 其它异常（网络栈、取消之外的 IO…）没有骨架可用，就套进「抓取失败：{原因}」那颗已有行。</para>
+/// </summary>
+public static class TrendingFailure
+{
+    public static LocMessage Of(Exception ex) =>
+        ex is TrendingException trended ? trended.Reason : LocMessage.Of("trending.emptyFailed", ex.Message);
 }
 
 /// <summary>

@@ -65,10 +65,10 @@ public sealed class TrendingFetcher : ITrendingSource, IDisposable
         _delay = delay ?? Task.Delay;
     }
 
-    /// <summary>抓一期热榜。两条腿都失败 ⇒ 抛 <see cref="TrendingException"/>（消息含两条腿各自的原因）。</summary>
+    /// <summary>抓一期热榜。两条腿都失败 ⇒ 抛 <see cref="TrendingException"/>（带的是<b>键</b>，两句原因都在里面）。</summary>
     public async Task<TrendingFetchResult> FetchAsync(TrendingPeriod period, string? language, CancellationToken ct)
     {
-        string? htmlNotice = null;
+        LocMessage? htmlNotice = null;
         try
         {
             var (body, notice) = await GetWithOneRetryAsync(
@@ -78,12 +78,14 @@ public sealed class TrendingFetcher : ITrendingSource, IDisposable
             {
                 var parsed = TrendingHtmlParser.Parse(body);
                 if (parsed.Count > 0) return new TrendingFetchResult(parsed, TrendingSource.TrendingHtml, notice);
-                htmlNotice = notice is null ? Locale.T("trending.fetch.htmlZero")
-                    : notice + Locale.T("trending.notice.join") + Locale.T("trending.fetch.htmlZero");
+                var zero = LocMessage.Of("trending.fetch.htmlZero");
+                htmlNotice = notice is null ? zero : LocMessage.Of("trending.notice.join", notice, zero);
             }
         }
         catch (OperationCanceledException) { throw; }        // 见类注释 ②
-        catch (Exception ex) { htmlNotice = Locale.Fmt("trending.fetch.htmlFailed", ex.Message); }
+        // 超限那颗是自己人（已经带着键），⛔ 再把它的 Render() 当实参套一层＝语言又被定死在这一刻
+        catch (Exception ex)
+            { htmlNotice = ex is TrendingException trended ? trended.Reason : LocMessage.Of("trending.fetch.htmlFailed", ex.Message); }
 
         try
         {
@@ -94,24 +96,25 @@ public sealed class TrendingFetcher : ITrendingSource, IDisposable
                 var repos = TrendingHtmlParser.FromSearchApi(ParseSearchRepos(body));
                 if (repos.Count > 0)
                     return new TrendingFetchResult(repos, TrendingSource.SearchApi,
-                        Compose(Locale.T("trending.fetch.fallbackApi"), htmlNotice, notice));
-                notice = Compose(Locale.T("trending.fetch.apiEmpty"), notice);
+                        Compose(LocMessage.Of("trending.fetch.fallbackApi"), htmlNotice, notice));
+                notice = Compose(LocMessage.Of("trending.fetch.apiEmpty"), notice);
             }
-            throw new TrendingException(Compose(Locale.T("trending.fetch.bothEmpty"), htmlNotice, notice));
+            throw new TrendingException(Compose(LocMessage.Of("trending.fetch.bothEmpty"), htmlNotice, notice));
         }
         catch (OperationCanceledException) { throw; }
         catch (TrendingException) { throw; }
         catch (Exception ex)
         {
-            throw new TrendingException(Compose(Locale.T("trending.fetch.allFailed"), htmlNotice, ex.Message));
+            throw new TrendingException(Compose(LocMessage.Of("trending.fetch.allFailed"), htmlNotice,
+                ex is TrendingException trended ? trended.Reason : LocMessage.Of("trending.fetch.apiFailed", ex.Message)));
         }
     }
 
     /// <summary>发一次 GET；429/5xx 时按 Retry-After 退避重试<b>一次</b>（扩展有这一步，桌面原先没有）。</summary>
-    private async Task<(string? Body, string? Notice)> GetWithOneRetryAsync(
+    private async Task<(string? Body, LocMessage? Notice)> GetWithOneRetryAsync(
         string url, string accept, bool sendToken, CancellationToken ct)
     {
-        string? notice = null;
+        LocMessage? notice = null;
         for (var attempt = 0; attempt < 2; attempt++)
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
@@ -129,12 +132,13 @@ public sealed class TrendingFetcher : ITrendingSource, IDisposable
             var status = (int)resp.StatusCode;
             if (attempt == 0 && (status == 429 || status >= 500) && await BackoffAsync(resp, ct))
             {
-                notice = Locale.Fmt("trending.fetch.httpBad", status);
+                notice = LocMessage.Of("trending.fetch.httpBad", status);
                 continue;
             }
-            return (null, $"HTTP {status} {resp.StatusCode}");
+            // 那一格念的是"HTTP 码＋状态名"：码与枚举名都是机器事实，当实参递进去，⛔ 在这一刻拼成品字
+            return (null, LocMessage.Of("trending.fetch.httpStatus", status, resp.StatusCode));
         }
-        return (null, notice ?? Locale.T("trending.fetch.retryFailed"));
+        return (null, notice ?? LocMessage.Of("trending.fetch.retryFailed"));
     }
 
     /// <summary>退避：读 Retry-After（秒数形式）， capped 到 <see cref="MaxBackoff"/>；等不起就返回 false 让调用方走兜底。</summary>
@@ -160,7 +164,7 @@ public sealed class TrendingFetcher : ITrendingSource, IDisposable
             if (n <= 0) break;
             total += n;
             if (total > MaxBodyBytes)
-                throw new TrendingException($"响应超过 {MaxBodyBytes / 1024 / 1024} MB 上限，已放弃解析");
+                throw new TrendingException(LocMessage.Of("trending.fetch.tooLarge", MaxBodyBytes / 1024 / 1024));
             ms.Write(buffer, 0, n);
         }
         return Encoding.UTF8.GetString(ms.ToArray());
@@ -197,14 +201,17 @@ public sealed class TrendingFetcher : ITrendingSource, IDisposable
     /// 拼一句给人看的话，并<b>把两条腿各自的原因都带上</b>。
     /// 只报最后一条腿的码会让人去查错的那条腿：热榜页 403 而搜索接口 401 时，
     /// 用户看到"401"就会去折腾 Token，而真正的原因是页面那头被拦。
+    /// <para>交出来的仍是<b>一颗 <see cref="LocMessage"/></b>（骨架套骨架）：从这一刻到贴上屏幕之间
+    /// 换了语言，这句也得跟着改口（批次 WI-57 给诊断那一族立的判据，同一颗尺＝P-190）。
+    /// 从前这里对每片尾巴 <c>TrimEnd('。','；')</c>——那是把两颗 CJK 标点写死在代码里（坑表 #407 那一族）；
+    /// 表里那几颗从句本来就不带句末标点，⛔ 需要再削。</para>
     /// </summary>
-    private static string Compose(string headline, params string?[] notes)
+    private static LocMessage Compose(LocMessage headline, params LocMessage?[] notes)
     {
-        var kept = new List<string>();
-        foreach (var n in notes)
-            if (!string.IsNullOrWhiteSpace(n)) kept.Add(n!.TrimEnd('。', '；'));
-        // 骨架整颗进表：compose 的括号与 join 的分隔符都是语言内容，三列各自排（WI-2z）
-        return kept.Count == 0 ? headline : string.Format(Locale.T("trending.notice.compose"), headline, string.Join(Locale.T("trending.notice.join"), kept));
+        var kept = notes.Where(n => n is not null).ToArray();
+        if (kept.Length == 0) return headline;
+        var tail = kept.Aggregate((head, next) => LocMessage.Of("trending.notice.join", head!, next));
+        return LocMessage.Of("trending.notice.compose", headline, tail);
     }
 
     public void Dispose()

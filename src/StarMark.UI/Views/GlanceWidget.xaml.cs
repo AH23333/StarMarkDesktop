@@ -318,7 +318,7 @@ public sealed partial class GlanceWidget : UserControl
     /// （那一趟要是在回调里跑，切语言就可能变成"热榜没拿到：超时"）。
     /// 与 <see cref="_trendingFailure"/> 是两颗不同的事实——"抓到了但今天没有"与"没抓到"必须分开说（P-54/P-56 同一口径）。</summary>
     private StarMark.Core.Trending.TrendingResult? _trendingShown;
-    private string? _trendingFailure;
+    private LocMessage? _trendingFailure;
 
     /// <summary>
     /// 拉一次热榜（走 <c>TrendingService</c> 的"同一本地日历日只抓一次"，所以每次重载都很便宜），再交 <see cref="PaintTrending"/> 铺字。
@@ -341,7 +341,7 @@ public sealed partial class GlanceWidget : UserControl
         catch (Exception ex)
         {
             _trendingShown = null;
-            _trendingFailure = ex.Message;
+            _trendingFailure = StarMark.Abstractions.Trending.TrendingFailure.Of(ex);   // 交键⛔ 交此刻取好的词
             StarLog.Warn($"今日速览热榜块加载失败：{ex.Message}");
         }
         PaintTrending();
@@ -355,7 +355,7 @@ public sealed partial class GlanceWidget : UserControl
         TrendingHost.Children.Clear();
         if (_trendingFailure is { } why)
         {
-            TrendingEmpty.Text = Locale.Fmt("widget.glance.trending.failed", why);
+            TrendingEmpty.Text = LocMessage.Of("widget.glance.trending.failed", why).Render();
             TrendingEmpty.Visibility = Visibility.Visible;
             TrendingStatus.Text = string.Empty;
             TrendingStatus.Visibility = Visibility.Collapsed;
@@ -370,18 +370,19 @@ public sealed partial class GlanceWidget : UserControl
         TrendingEmpty.Text = none ? Locale.T("widget.glance.trending.none") : string.Empty;
         TrendingEmpty.Visibility = none ? Visibility.Visible : Visibility.Collapsed;
 
-        // 这两句的字住在表里，且与主窗热榜页共用同一颗键（⛔ 不另写一份"这是上次结果"——那是 P-131 #5 那一族差一天的前身）。
-        var notes = new System.Collections.Generic.List<string>();
+        // 这三片交的都是<b>键</b>（末片来自 Core，批次 WI-58／P-190 起也是键）：
+        // 抓取可能在中文档，而这一块可能在你换成英文之后才重画——套娃到最后一刻才取词，那句才整条跟着改口。
+        var notes = new System.Collections.Generic.List<LocMessage>();
         if (result.Stale) notes.Add(LocMessage.Of("trending.statusStale",
-            StarMark.Abstractions.Trending.TrendingCacheCodec.DescribeAge(result.FetchedAt, DateTimeOffset.Now)).Render());
-        if (result.Via == StarMark.Abstractions.Trending.TrendingSource.SearchApi) notes.Add(Locale.T("trending.viaSearchApiShort"));
-        if (!string.IsNullOrWhiteSpace(result.Notice)) notes.Add(result.Notice!);
+            StarMark.Abstractions.Trending.TrendingCacheCodec.DescribeAge(result.FetchedAt, DateTimeOffset.Now)));
+        if (result.Via == StarMark.Abstractions.Trending.TrendingSource.SearchApi) notes.Add(LocMessage.Of("trending.viaSearchApiShort"));
+        if (result.Notice is { } notice) notes.Add(notice);
         // 那几颗事实<b>怎么连</b>也住在表里（`trending.statusNotice`，主窗热榜页念的是同一颗）：
         // 把全角「｜」写死在这一行，英文档就得到"拉丁句子里冒出一颗 CJK 宽度的符号"，
         // 而那一行的英文列本来就是半角竖线——两处各一套＝第二个主人（坑表 #371 那颗分隔符的同族）。
         TrendingStatus.Text = notes.Count == 0
             ? string.Empty
-            : notes.Aggregate((head, next) => Locale.Fmt("trending.statusNotice", head, next));
+            : notes.Aggregate((head, next) => LocMessage.Of("trending.statusNotice", head, next)).Render();
         TrendingStatus.Visibility = notes.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 

@@ -151,7 +151,7 @@ public partial class TrendingPageViewModel : ObservableObject
             Failed = true;
             Rows.Clear();
             HasRowsChanged();
-            EmptyHint = LocMessage.Of("trending.emptyFailed", ex.Message);
+            EmptyHint = TrendingFailure.Of(ex);            // 两条腿都失败时那句已在 Core 外面拼好（交的是键），⛔ 在这里再套一层
             StatusText = LocMessage.Of("trending.statusFailed");
             StarLog.Warn($"热榜页抓取失败（{PeriodCode}）：{ex.Message}");
         }
@@ -216,7 +216,9 @@ public partial class TrendingPageViewModel : ObservableObject
             ? LocMessage.Of("trending.statusStale", age)
             : r.FromCache ? LocMessage.Of("trending.statusCached", via, age)
             : age is null ? via : LocMessage.Of("trending.statusViaAge", via, age);
-        return r.Notice is { Length: > 0 } notice ? LocMessage.Of("trending.statusNotice", head, notice) : head;
+        // Notice 交的是键（批次 WI-58／P-190）：套进外层那句时⛔ 在这里 Render——
+        // 抓取可能在中文档、这一句可能在换语言之后才贴，取词必须留在贴上去那一刻。
+        return r.Notice is { } notice ? LocMessage.Of("trending.statusNotice", head, notice) : head;
     }
 
     private void HasRowsChanged() => OnPropertyChanged(nameof(HasRows));
