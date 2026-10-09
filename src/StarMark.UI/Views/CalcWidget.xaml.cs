@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Calc;
 using StarMark.Core.Widgets;
 using StarMark.UI.Services;
@@ -46,6 +47,16 @@ public sealed partial class CalcWidget : UserControl
         ApplyQuickMode(0);
         SyncHistoryEmptyHint();
         _ready = true;
+        // 换语言那一刻自己重贴（批次 WI-55a／P-182b，第六位订阅的主人）：结果句是**当场算出来的读数**，
+        // 走不了 LocText 那条注册路（SetKey 连实参一起冻住＝坑表 #361），所以这一扇窗自己订阅、成对摘掉。
+        Loaded += (_, _) => Locale.Changed += RebuildWords;
+        Unloaded += (_, _) => Locale.Changed -= RebuildWords;
+    }
+
+    /// <summary>重贴只做"按新语言把同一批读数再念一遍"：⛔ 建控件、⛔ 落盘、⛔ 抹掉用户已经填进去的字。</summary>
+    private void RebuildWords()
+    {
+        ViewModel.RebuildWords();
     }
 
     // ───────────────────────── 计算 ─────────────────────────
@@ -131,6 +142,9 @@ public sealed partial class CalcWidget : UserControl
     private void UnitValueBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (!_ready) return;
+        // ⚠ 那颗文本必须**在这里交给 VM**：VM 算的是 `UnitValueText`，以前这个处理器只调 RecalcUnit 而从不交接输入，
+        // 于是换算页改数字屏幕上的结果一直是"1 …= …"（批次 WI-55a 读调用点时撞见；与 ExprBox／QuickBox 同一形状）。
+        ViewModel.UnitValueText = UnitValueBox.Text;
         ViewModel.RecalcUnit();
     }
 

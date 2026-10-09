@@ -120,9 +120,12 @@
             <!-- ═══════════ 换算 ═══════════ -->
             <PivotItem i18n:LocText.Key="widget.calc.tabConvert">
                 <StackPanel Spacing="8">
+                    <!-- 三颗下拉走「数据项＋模板」（批次 WI-55a）：⛔ DisplayMemberPath="Label"——
+                         那条路把表里那颗成品字直接搬到屏幕上，换语言时闭着的那一格念的还是旧语言。
+                         模板里的 TextBlock 自己带着那颗键，于是它和其他被注册的元素一起重贴（✅WI-2c／✅WI-43）。 -->
                     <ComboBox x:Name="CategoryBox" HorizontalAlignment="Stretch" FontSize="12"
-                              DisplayMemberPath="Label" SelectedIndex="0"
-                              ItemsSource="{x:Bind ViewModel.Categories, Mode=OneTime}"
+                              ItemTemplate="{StaticResource LocOptionTemplate}" SelectedIndex="0"
+                              ItemsSource="{x:Bind ViewModel.CategoryOptions, Mode=OneTime}"
                               SelectionChanged="CategoryBox_SelectionChanged"/>
                     <TextBox x:Name="UnitValueBox" Text="1" FontSize="13"
                              Style="{StaticResource WidgetInputBox}" Padding="8,6,8,6"
@@ -134,15 +137,15 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <ComboBox Grid.Column="0" x:Name="FromBox" HorizontalAlignment="Stretch" FontSize="12"
-                                  DisplayMemberPath="Label" SelectedIndex="0"
-                                  ItemsSource="{x:Bind ViewModel.Units, Mode=OneWay}"
+                                  ItemTemplate="{StaticResource LocOptionTemplate}" SelectedIndex="0"
+                                  ItemsSource="{x:Bind ViewModel.UnitOptions, Mode=OneWay}"
                                   SelectionChanged="FromBox_SelectionChanged"/>
                         <Button Grid.Column="1" Content="⇄" FontSize="12" Padding="8,2,8,2"
                                 Style="{StaticResource WidgetActionButton}" i18n:LocText.ToolTipKey="widget.calc.swapUnits"
                                 Click="Swap_Click"/>
                         <ComboBox Grid.Column="2" x:Name="ToBox" HorizontalAlignment="Stretch" FontSize="12"
-                                  DisplayMemberPath="Label" SelectedIndex="1"
-                                  ItemsSource="{x:Bind ViewModel.Units, Mode=OneWay}"
+                                  ItemTemplate="{StaticResource LocOptionTemplate}" SelectedIndex="1"
+                                  ItemsSource="{x:Bind ViewModel.UnitOptions, Mode=OneWay}"
                                   SelectionChanged="ToBox_SelectionChanged"/>
                     </Grid>
                     <TextBlock Text="{x:Bind ViewModel.UnitResult, Mode=OneWay}"

@@ -1,6 +1,7 @@
 #nullable enable
 using System.Globalization;
 using Xunit;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Calc;
 
 namespace StarMark.Tests;
@@ -345,10 +346,14 @@ public sealed class UnitTablesTests
         Assert.Equal(keys.Count, keys.Distinct().Count());
         foreach (var cat in UnitTables.Categories)
         {
-            Assert.False(string.IsNullOrWhiteSpace(cat.Label));
+            // 类别与单位的"念法"交的是那颗键（批次 WI-55a／P-182b）：这里钉的是"键真在表里"，
+            // ⛔ 回到"非空字符串"那一版——那会把成品字重新当成合法形状放回来。
+            Assert.True(UiStrings.TryGet(cat.LabelKey, out _), $"{cat.Key} 的类别名没进表：{cat.LabelKey}");
             Assert.True(cat.Units.Count >= 2, $"{cat.Key} 至少要有两个单位才谈得上换算");
             var unitKeys = cat.Units.Select(u => u.Key).ToList();
             Assert.Equal(unitKeys.Count, unitKeys.Distinct().Count());
+            foreach (var unit in cat.Units)
+                Assert.True(UiStrings.TryGet(unit.LabelKey, out _), $"{unit.Key} 的单位名没进表：{unit.LabelKey}");
         }
     }
 
@@ -365,10 +370,11 @@ public sealed class UnitTablesTests
     [Fact]
     public void UnknownInputs_ReturnReasonNotException()
     {
+        // 钉的是**哪颗键**（批次 WI-55a）：⛔ 钉屏幕上那句话的中文——措辞一改就红，而红得毫无信息量。
         Assert.False(UnitTables.TryConvert("nope", "m", "km", 1m, out _, out var e1));
-        Assert.Equal("不认识这一类单位", e1);
+        Assert.Equal("calc.convert.noCategory", e1!.Key);
         Assert.False(UnitTables.TryConvert(UnitTables.LengthKey, "zz", "km", 1m, out _, out var e2));
-        Assert.Equal("起始或目标单位无效，请重新选择", e2);
+        Assert.Equal("calc.convert.badUnit", e2!.Key);
         Assert.False(UnitTables.TryConvert(null, "m", "km", 1m, out _, out _));
     }
 

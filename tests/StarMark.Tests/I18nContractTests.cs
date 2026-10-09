@@ -234,6 +234,16 @@ public sealed class I18nContractTests : IDisposable
             ["anno.color.purple"] = "颜色名「紫」中日同字（与 anno.color.white 同形：日文里它就写作紫，改成「パープル」反而不像这一排界面用语）（批次 WI-52／P-183）",
             ["widget.appearance.target.bg"] = "「背景色」日文同字（日语界面里就写背景色；⛔ 为不同形改成「背景」，那一档就说不清是颜色还是图）（批次 WI-52／P-183）",
             ["widget.cd.remainClock"] = "纯骨架「{0}」：那一格只装一个钟点读数（05:20），三语同形，没有词可翻（批次 WI-54／P-182a）",
+            ["calc.cat.speed"] = "速度：日语界面也照汉字写「速度」（⛔ 为不同形改成「スピード」，换算表那一档不像界面用语）（批次 WI-55a／P-182b）",
+            ["calc.cat.temperature"] = "温度：日语界面也照汉字写「温度」（与 calc.cat.area「面積」同一写法）（批次 WI-55a／P-182b）",
+            ["calc.unit.nmi"] = "海里：日语同字（航海单位在两语里都这么写）（批次 WI-55a／P-182b）",
+            ["calc.unit.s"] = "秒：日语同字（同一类的 ms 写「ミリ秒」，那一格本来就不同形）（批次 WI-55a／P-182b）",
+            ["calc.unit.kb"] = "存储单位符号 KB：三语界面都写 KB（与「字节 B／比特」不同，那一颗有词）（批次 WI-55a／P-182b）",
+            ["calc.unit.mb"] = "存储单位符号 MB：同 calc.unit.kb（批次 WI-55a／P-182b）",
+            ["calc.unit.gb"] = "存储单位符号 GB：同 calc.unit.kb（批次 WI-55a／P-182b）",
+            ["calc.unit.tb"] = "存储单位符号 TB：同 calc.unit.kb（批次 WI-55a／P-182b）",
+            ["calc.unit.pb"] = "存储单位符号 PB：同 calc.unit.kb（批次 WI-55a／P-182b）",
+            ["calc.convert.result"] = "纯骨架「{0} {1} = {2} {3}」：词全在那两颗单位名的键里，这一行没有词可翻（批次 WI-55a／P-182b）",
         };
 
         var actual = UiStrings.All

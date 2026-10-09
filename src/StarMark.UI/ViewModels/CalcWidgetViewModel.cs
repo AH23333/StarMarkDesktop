@@ -5,8 +5,10 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Calc;
 using StarMark.Core.Widgets;
+using StarMark.UI.Helpers;
 
 namespace StarMark.UI.ViewModels;
 
@@ -27,7 +29,7 @@ public sealed partial class CalcWidgetViewModel : ObservableObject
     [ObservableProperty] private string _unitValueText = "1";
     [ObservableProperty] private string _unitResult = string.Empty;
     [ObservableProperty] private string _quickResult = string.Empty;
-    [ObservableProperty] private IReadOnlyList<CalcUnit> _units;
+    [ObservableProperty] private IReadOnlyList<LocOption> _unitOptions;
     [ObservableProperty] private int _fromIndex;
     [ObservableProperty] private int _toIndex = 1;
     [ObservableProperty] private int _categoryIndex;
@@ -43,28 +45,40 @@ public sealed partial class CalcWidgetViewModel : ObservableObject
     {
         Categories = UnitTables.Categories;
         _category = Categories[0];
-        _units = _category.Units;
+        _unitOptions = UnitOptionsOf(_category);
         QuickModeTitles = QuickCalculator.Modes.Select(m => m.Title).ToList();
     }
 
     public IReadOnlyList<CalcUnitCategory> Categories { get; }
+
+    /// <summary>类别下拉的那一批<b>数据项</b>：文字走那颗键，<see cref="LocOption.Value"/> 装 ASCII 身份。</summary>
+    public IReadOnlyList<LocOption> CategoryOptions =>
+        Categories.Select(c => new LocOption(c.LabelKey, string.Empty, c.Key)).ToList();
 
     /// <summary>速算下拉的标题列表（与 <see cref="QuickCalculator.Modes"/> 同序）。</summary>
     public IReadOnlyList<string> QuickModeTitles { get; }
 
     public ObservableCollection<CalcHistoryEntry> History { get; } = new();
 
-    /// <summary>类别下拉的当前序号（由界面写入）；改动后起止单位归位到该类别的前两个，<see cref="Units"/> 换一批。</summary>
+    /// <summary>类别下拉的当前序号（由界面写入）；改动后起止单位归位到该类别的前两个，<see cref="UnitOptions"/> 换一批。</summary>
     partial void OnCategoryIndexChanged(int value)
     {
         if (value < 0 || value >= Categories.Count) return;
         _category = Categories[value];
-        Units = _category.Units;
+        UnitOptions = UnitOptionsOf(_category);
         // 换类别后旧序号可能越界 ⇒ 归位到"该类别的前两个单位"，不能让换算静默用错单位
         FromIndex = 0;
         ToIndex = Math.Min(1, _category.Units.Count - 1);
         RecalcUnit();
     }
+
+    /// <summary>
+    /// 某一类量的单位选项（<b>念法走那颗键</b>，批次 WI-55a）：
+    /// ⛔ 在这里把 <c>Locale.T(...)</c> 的结果存成 <c>LocOption.Text</c>——建表那一刻取词就等于把语言定死，
+    /// 而模板那颗 <c>TextBlock</c> 自己带着键，换语言由 <c>LocText</c> 那一条唯一的重贴路改口。
+    /// </summary>
+    private static IReadOnlyList<LocOption> UnitOptionsOf(CalcUnitCategory category) =>
+        category.Units.Select(u => new LocOption(u.LabelKey, string.Empty, u.Key)).ToList();
 
     // ───────────────────────── 表达式 ─────────────────────────
 
@@ -123,21 +137,26 @@ public sealed partial class CalcWidgetViewModel : ObservableObject
     {
         var cat = _category;
         if (cat is null) return;
-        if (Units.Count == 0) { UnitResult = string.Empty; return; }
-        var from = Units[Math.Clamp(FromIndex, 0, Units.Count - 1)];
-        var to = Units[Math.Clamp(ToIndex, 0, Units.Count - 1)];
+        var units = cat.Units;
+        if (units.Count == 0) { UnitResult = string.Empty; return; }
+        var from = units[Math.Clamp(FromIndex, 0, units.Count - 1)];
+        var to = units[Math.Clamp(ToIndex, 0, units.Count - 1)];
         if (!decimal.TryParse(UnitValueText?.Trim(), NumberStyles.Float | NumberStyles.AllowThousands,
                 CultureInfo.InvariantCulture, out var value))
         {
-            UnitResult = "填入一个数字";
+            UnitResult = Locale.T("calc.convert.needNumber");
             return;
         }
         if (!UnitTables.TryConvert(cat.Key, from.Key, to.Key, value, out var result, out var error))
         {
-            UnitResult = error ?? "换算失败";
+            UnitResult = (error ?? LocMessage.Of("calc.convert.failed")).Render();
             return;
         }
-        UnitResult = $"{UnitTables.Format(value)} {from.Label} = {UnitTables.Format(result)} {to.Label}";
+        // 那两颗单位名交出的是<b>还没渲染的</b> LocMessage：string.Format 在填空那一刻调 ToString()→Render()，
+        // 于是外层骨架与嵌进去的两个名字在同一次取词里改口（坑表 #328／#361：实参先渲染＝语言定死在算出它的那一刻）。
+        UnitResult = Locale.Fmt("calc.convert.result",
+            UnitTables.Format(value), LocMessage.Of(from.LabelKey),
+            UnitTables.Format(result), LocMessage.Of(to.LabelKey));
     }
 
     /// <summary>交换起止单位；已是同一个单位时无需交换。</summary>
@@ -147,6 +166,21 @@ public sealed partial class CalcWidgetViewModel : ObservableObject
         ToIndex = FromIndex;
         FromIndex = to;
         RecalcUnit();
+    }
+
+    /// <summary>
+    /// 换语言那一刻由宿主（<c>CalcWidget</c>）调进来的重贴：三页的读数各按<b>新语言</b>再念一遍。
+    /// <para>这里⛔ 取词时机以外的任何事：不落盘、不重建控件、不清输入框——
+    /// 那三件都属于"用户做了某个动作"，而不属于"语言变了"（✅WI-52／✅WI-53／✅WI-54 同一条口径）。</para>
+    /// <para>之所以要这一颗而不是靠 <c>LocText</c>：这三句都是<b>当场算出来的读数</b>，
+    /// 注册进那张名单只会得到"名单里多条贴不出去的空壳"（✅WI-45），而 <c>SetKey</c> 连实参一起冻住
+    /// 更会把上一次那句贴回来（坑表 #361）。</para>
+    /// </summary>
+    public void RebuildWords()
+    {
+        ApplyExpression(Expression);
+        RecalcUnit();
+        RecalcQuick();
     }
 
     // ───────────────────────── 常用速算 ─────────────────────────
