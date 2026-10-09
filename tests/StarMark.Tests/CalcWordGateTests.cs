@@ -114,7 +114,7 @@ public sealed class CalcWordGateTests : IDisposable
         foreach (var message in handed)
         {
             Assert.True(UiStrings.TryGet(message.Key, out var row), $"交出的键没登记在表里：{message.Key}");
-            var slots = Regex.Matches(row.Zh, @"\{(\d+)\}").Cast<Match>()
+            var slots = Slots.Matches(row.Zh).Cast<Match>()
                 .Select(m => m.Groups[1].Value).Distinct().Count();
             var args = message.Args?.Length ?? 0;
             Assert.True(slots == args,
@@ -171,9 +171,7 @@ public sealed class CalcWordGateTests : IDisposable
     [Fact]
     public void TheUnitTableCarriesNoWordsOfItsOwn()
     {
-        var left = CodeOf(UnitTablesCs).Replace("\r\n", "\n").Split('\n')
-            .Where(line => Regex.IsMatch(line, @"[㐀-䶿一-鿿぀-ヿ]"))
-            .Select(line => line.Trim()).Where(line => line.Length > 0).ToArray();
+        var left = WordLines(UnitTablesCs);
         Assert.True(left.Length == 0, $"{UnitTablesCs} 还剩 {left.Length} 行自己的汉字／假名面字：\n  "
                                       + string.Join("\n  ", left));
     }
@@ -735,4 +733,26 @@ public sealed class CalcWordGateTests : IDisposable
         => MarkupOf(rel).Replace("\r\n", "\n").Split('\n')
             .Where(line => Cjk.IsMatch(line))
             .Select(line => line.Trim()).Where(line => line.Length > 0).ToArray();
+
+    /// <summary>
+    /// <b>Core 那四颗文件只交键，一次词都不取</b>：<c>Locale.T(</c>／<c>Locale.Fmt(</c> 在它们里⛔ 出现。
+    /// <para>为什么单独立一颗而不是靠"代码里不许有汉字面字"那把尺：把 <c>Locale.T(field.LabelKey)</c> 递进
+    /// <c>LocMessage.Of("calc.quick.rej.pair", …)</c> 的实参位，<b>两把旧尺一条都不红</b>——源码里没有汉字（词是从表里取的），
+    /// 槽数与实参数也照样对得上（渲染后的字符串仍是一颗实参）。屏幕上却是半中半英：外层那句跟着语言改口，
+    /// 嵌进去的那颗停在算出它的那一刻（坑表 #361；✅WI-46c 那颗组名同一条界线）。
+    /// 唯一的合法取词出口是 <c>LocMessage.Render()</c>，而它只许住在"被读那一刻"（<c>QuickResult.MultiLine</c>）。</para>
+    /// </summary>
+    [Fact]
+    public void TheCoreCalcFilesHandKeysAndNeverFetchWords()
+    {
+        foreach (var rel in new[] { EvaluatorCs, UnitTablesCs, QuickMathCs, QuickCalculatorCs })
+        {
+            var code = CodeOf(rel);
+            Assert.DoesNotContain("Locale.T(", code, StringComparison.Ordinal);
+            Assert.DoesNotContain("Locale.Fmt(", code, StringComparison.Ordinal);
+        }
+        // 而界面那一侧正是相反的形状：读数在被算的那一刻取词，Core 交出来的键由宿主现贴
+        Assert.Contains("Locale.T(", CodeOf(ViewModelCs), StringComparison.Ordinal);
+        Assert.Contains("Locale.T(", CodeOf(WidgetCs), StringComparison.Ordinal);
+    }
 }
