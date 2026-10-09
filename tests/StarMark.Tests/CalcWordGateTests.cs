@@ -29,6 +29,14 @@ public sealed class CalcWordGateTests : IDisposable
     private const string ViewModelCs = "src/StarMark.UI/ViewModels/CalcWidgetViewModel.cs";
     private const string WidgetCs = "src/StarMark.UI/Views/CalcWidget.xaml.cs";
     private const string WidgetXaml = "src/StarMark.UI/Views/CalcWidget.xaml";
+    private const string QuickMathCs = "src/StarMark.Core/Calc/QuickMath.cs";
+    private const string QuickCalculatorCs = "src/StarMark.Core/Calc/QuickCalculator.cs";
+
+    /// <summary>汉字／假名那几段码位：全角运算符（＋－（【）不在里面——它们是输入形状，不是话。</summary>
+    private static readonly Regex Cjk = new(@"[㐀-䶿一-鿿぀-ヿ]", RegexOptions.Compiled);
+
+    /// <summary>位置式占位符（与通用闸门同一形状：去重后按数字序，见 <c>I18nContractTests</c> 那颗同名的）。</summary>
+    private static readonly Regex Slots = new(@"\{(\d+)\}", RegexOptions.Compiled);
 
     /// <summary>换算页那六句（三句拒绝＋一句骨架＋一句"没填对"＋一句兜底）。其余 66 颗是名字，由运行时表自己数出来。</summary>
     private static readonly string[] Sentences =
@@ -215,25 +223,26 @@ public sealed class CalcWordGateTests : IDisposable
     }
 
     /// <summary>
-    /// 三颗下拉是<b>数据项＋模板</b>：⛔ <c>DisplayMemberPath="Label"</c>——那条路把表里的成品字直接搬到屏幕上，
+    /// 四颗下拉是<b>数据项＋模板</b>：⛔ <c>DisplayMemberPath="Label"</c>——那条路把表里的成品字直接搬到屏幕上，
     /// 换语言那一刻闭着的那一格念的还是旧语言（✅WI-2c／✅WI-43 同一颗判据，本批把最后一族下拉交出来）。
-    /// <para>那颗模板是 13 处下拉共用的主人（主窗 2／设置页 7／热榜 1／计算器 3），射程记在 <c>StarMarkTheme.xaml</c> 的注释里。</para>
+    /// <para>那颗模板是 14 处下拉共用的主人（主窗 2／设置页 7／热榜 1／计算器 4），射程记在 <c>StarMarkTheme.xaml</c> 的注释里。</para>
     /// </summary>
     [Fact]
-    public void TheThreeDropdownsAreDataItemsNotAMemberPath()
+    public void TheFourDropdownsAreDataItemsNotAMemberPath()
     {
         var markup = MarkupOf(WidgetXaml);
         Assert.Equal(0, SourceGate.Count(markup, "DisplayMemberPath"));
-        Assert.Equal(3, SourceGate.Count(markup, @"ItemTemplate=""{StaticResource LocOptionTemplate}"""));
+        Assert.Equal(4, SourceGate.Count(markup, @"ItemTemplate=""{StaticResource LocOptionTemplate}"""));
         // 三颗下拉的数据源交的是"项"而不是单位对象本身（身份在 LocOption.Value 里，⛔ 拿显示文字当身份）
         Assert.Equal(1, SourceGate.Count(markup, "ViewModel.CategoryOptions"));
         Assert.Equal(2, SourceGate.Count(markup, "ViewModel.UnitOptions"));
+        Assert.Equal(1, SourceGate.Count(markup, "ViewModel.QuickModeOptions"));
 
         var total = Directory.GetFiles(Path.Combine(SourceGate.RepoRoot(), "src"), "*.xaml", SearchOption.AllDirectories)
             .Select(f => f.Replace(Path.DirectorySeparatorChar, '/'))
             .Where(f => !f.Contains("/obj/", StringComparison.Ordinal) && !f.Contains("/bin/", StringComparison.Ordinal))
             .Sum(f => SourceGate.Count(Markup(File.ReadAllText(f)), "StaticResource LocOptionTemplate"));
-        Assert.Equal(13, total);
+        Assert.Equal(14, total);
     }
 
     /// <summary>
@@ -283,5 +292,267 @@ public sealed class CalcWordGateTests : IDisposable
             foreach (var (text, column) in new[] { (row.Zh, "中文"), (row.En, "英文"), (row.Ja, "日文") })
                 Assert.True(text.All(c => c >= ' '), $"{key} 的{column}列含控制字符（那一行必须写成 verbatim 或换掉写法）");
         }
+    }
+
+    // ───────────────────────── 批次 WI-55b：常用速算那一族 ─────────────────────────
+
+    /// <summary>本批 55b 交表的行：一切 <c>calc.quick.*</c> 加上那两颗纯骨架（由表本身数出来，⛔ 抄一份名单）。</summary>
+    private static string[] ShippedQuick()
+        => UiStrings.All
+            .Where(e => e.Key.StartsWith("calc.quick.", StringComparison.Ordinal)
+                        || e.Key.StartsWith("calc.num", StringComparison.Ordinal))
+            .Select(e => e.Key).ToArray();
+
+    private static readonly DateTime Day = new DateTime(2026, 5, 5);
+
+    /// <summary>
+    /// 住在 code-behind、<c>StarMark.Tests</c> 点不着的一颗（坑表 #370）：<c>calc.quick.optionalField</c> 由
+    /// <c>RepaintQuickSlots</c> 现场 <c>Locale.Fmt(…, LocMessage.Of(field.LabelKey))</c> 递出——一颗实参、一个槽。
+    /// ⛔ 因此把这一行摘出射程：<see cref="EveryQuickRowIsAskedForAndNoAskedKeyIsMissingFromTheTable"/> 仍在代码里数它有没有人被问，
+    /// <see cref="TheOptionalSlotLabelIsASentenceThatTakesTheFieldNameAsAnArg"/> 钉那颗调用与那一行的槽数（名单⛔ 长大：新加一颗就得写理由）。
+    /// </summary>
+    private static readonly string[] UiSideQuick = ["calc.quick.optionalField"];
+
+    /// <summary>把一组结果行的<b>标签与读数都</b>摆进名单：只取读数那一半会把"只有归零／持平才出现的那颗标签"漏成死行。</summary>
+    private static void AddLines(ICollection<LocMessage> into, QuickResult r)
+    {
+        Assert.True(r.Ok, r.Error?.Key);
+        foreach (var line in r.Lines)
+        {
+            into.Add(line.Label);
+            into.Add(line.Value);
+        }
+    }
+
+    private static LocMessage ErrorOf(QuickResult r)
+    {
+        Assert.False(r.Ok, "这一格要的正是失败那一句，结果算出来了");
+        Assert.NotNull(r.Error);
+        return r.Error!;
+    }
+
+    /// <summary>
+    /// 把速算这一族<b>真跑得到的每一颗键</b>各配一个真的会走到的场景：四模式的样例输入（标签／说明／槽名／占位／
+    /// 每一行读数）＋每一条拒绝句＋涨跌与单价与日期那三个"只有换个输入才走得到"的臂。
+    /// </summary>
+    private static LocMessage[] RenderedByTheQuickFamily()
+    {
+        var samples = new[]
+        {
+            new[] { "800", "9", "300", "50" },        // 打折＋满减（折后带"几折"、满减那一行）
+            new[] { "100", "80" },                    // 跌 20% ⇒ 需涨 25%
+            new[] { "29.9", "500", "39.9", "800" },   // 单价比较：结论带两个组名
+            new[] { "2026-10-01", "2026-10-11" },     // 间隔天数：折合／工作日／说明／注意
+        };
+        var messages = new List<LocMessage>();
+        for (var i = 0; i < samples.Length; i++)
+        {
+            var mode = QuickCalculator.Modes[i];
+            messages.Add(LocMessage.Of(mode.TitleKey));
+            messages.Add(LocMessage.Of(mode.HintKey));
+            foreach (var field in mode.Fields)
+            {
+                messages.Add(LocMessage.Of(field.LabelKey));
+                if (field.PlaceholderKey is { } placeholder) messages.Add(LocMessage.Of(placeholder));
+            }
+            var r = QuickCalculator.Evaluate(i, samples[i], Day);
+            Assert.True(r.Ok, $"模式 {i} 的样例输入应当算得出来，实际那颗键：{r.Error?.Key}");
+            AddLines(messages, r);
+        }
+
+        // 只有换一组输入才走得到的臂（⛔ 拿"sample 里没出现"当"这行永远念不出来"的证据，规则 #111）
+        messages.Add(LocMessage.Of("calc.num", QuickMath.Money(1m)));                       // 按百分比收的那一档：折后只有钱
+        AddLines(messages, QuickMath.Bargain(100m, 85m, 0m, 0m));                           // 不参加了满减：那一行整行不出现
+        AddLines(messages, QuickMath.Change(100m, 120m));                                   // 需跌那一臂
+        AddLines(messages, QuickMath.Change(50m, 50m));                                     // 已经是这个值
+        AddLines(messages, QuickMath.Change(100m, 0m));                                     // 值已归零（那颗标签只有这一臂给得出）
+        AddLines(messages, QuickMath.UnitPriceCompare(10m, 2m, 15m, 3m));                   // 两者单价相同
+        AddLines(messages, QuickMath.DateSpan(Day, Day));                                   // 同一天那一臂
+        AddLines(messages, QuickMath.DateSpan(new DateTime(2026, 6, 1), Day));               // 结束日早于开始日
+        AddLines(messages, QuickCalculator.Evaluate(0, new[] { "100", "7.5", "", null }, Day));   // 可空槽留空＝那一行整行不出现
+
+        // 拒绝句：一句一句按调用点真的递一次（嵌进去的那颗字段名是<b>还没渲染的</b> LocMessage）
+        messages.Add(ErrorOf(QuickMath.Bargain(0m, 7.5m, 0m, 0m)));
+        messages.Add(ErrorOf(QuickMath.Bargain(100m, 700m, 0m, 0m)));
+        messages.Add(ErrorOf(QuickMath.Bargain(100m, 7.5m, -1m, 0m)));
+        messages.Add(ErrorOf(QuickMath.Bargain(100m, 7.5m, 300m, 0m)));
+        messages.Add(ErrorOf(QuickMath.Bargain(100m, 7.5m, 0m, 50m)));
+        messages.Add(ErrorOf(QuickMath.Bargain(100m, 7.5m, 50m, 50m)));
+        messages.Add(ErrorOf(QuickMath.Change(0m, 5m)));
+        messages.Add(ErrorOf(QuickMath.Change(100m, -1m)));
+        messages.Add(ErrorOf(QuickMath.UnitPriceCompare(0m, 1m, 2m, 1m)));
+        messages.Add(ErrorOf(QuickMath.UnitPriceCompare(2m, 0m, 3m, 1m)));
+        messages.Add(ErrorOf(QuickCalculator.Evaluate(9, new[] { "1", "2" }, Day)));
+        messages.Add(ErrorOf(QuickCalculator.Evaluate(0, new[] { "", "7.5" }, Day)));
+        messages.Add(ErrorOf(QuickCalculator.Evaluate(3, new[] { "2026-01-01", "" }, Day)));
+        messages.Add(ErrorOf(QuickCalculator.Evaluate(3, new[] { "下周三", "2026-12-31" }, Day)));
+        messages.Add(ErrorOf(QuickCalculator.Evaluate(1, new[] { "abc", "80" }, Day)));
+        return messages.ToArray();
+    }
+
+    /// <summary>
+    /// 与 55a 那颗同一把尺（坑表 #393）：<b>每一颗交出去的键都得按代码实际给的实参渲染得出来</b>，
+    /// 槽数与实参数对不上＝屏幕上那一格整空白，而通用表闸门一条都不红。
+    /// </summary>
+    [Fact]
+    public void EveryQuickRowRendersWithTheArgsTheCodeActuallyHands()
+    {
+        var handed = RenderedByTheQuickFamily();
+        var shipped = ShippedQuick();
+        Assert.True(shipped.Length >= 60, $"表里只数出 {shipped.Length} 行速算的键（现场是 68）——前缀筛错了就不是空转，是假绿");
+
+        var unreachable = shipped
+            .Where(key => !handed.Any(m => m.Key == key) && !UiSideQuick.Contains(key, StringComparer.Ordinal))
+            .ToList();
+        Assert.True(unreachable.Count == 0,
+            "这些行交了表⛔ 真跑里没有一格走到它（要么场景少了＝证人空转，要么那一行永远念不出来）：\n  "
+            + string.Join("\n  ", unreachable));
+
+        foreach (var message in handed)
+        {
+            Assert.True(UiStrings.TryGet(message.Key, out var row), $"交出的键没登记在表里：{message.Key}");
+            var slots = Slots.Matches(row.Zh).Cast<Match>().Select(m => m.Groups[1].Value).Distinct().Count();
+            var args = message.Args?.Length ?? 0;
+            Assert.True(slots == args,
+                $"{message.Key} 中文列有 {slots} 个槽，代码递了 {args} 颗实参（对不上⇒那一格屏幕上空白；"
+                + "⛔ 把分隔词或字段名预先拼进实参凑成一颗——那正是这个形状，坑表 #371／#393）");
+            var rendered = message.Render();
+            Assert.False(string.IsNullOrWhiteSpace(rendered), $"{message.Key} 渲染出来是空的");
+            Assert.DoesNotContain("{", rendered, StringComparison.Ordinal);
+            // 实参只许是这几类：读数（string／int／decimal）或还没取词的 LocMessage。
+            // ⛔ 在这里加"能自带措辞的类型"（DateTime／枚举／自定义 record 的 ToString）——那一类会把语言定死在算出它的那一刻。
+            // 至于"字段名被预先拼成中文再递进来"，拦它的是 <see cref="TheQuickFamilyCarriesNoWordsOfItsOwn"/>：代码里根本不许有汉字面字。
+            foreach (var arg in message.Args ?? Array.Empty<object?>())
+                Assert.True(arg is null or string or LocMessage or int or decimal,
+                    $"{message.Key} 递了一颗没预料到的实参类型：" + arg?.GetType().Name);
+        }
+    }
+
+    /// <summary>双向对账：表里 68 行速算的键每行都有人问，代码里⛔ 问一颗表里没有的（⛔ 死行，⛔ 悬空键）。</summary>
+    [Fact]
+    public void EveryQuickRowIsAskedForAndNoAskedKeyIsMissingFromTheTable()
+    {
+        var asked = CodeOf(QuickMathCs) + "\n" + CodeOf(QuickCalculatorCs) + "\n"
+                  + CodeOf(ViewModelCs) + "\n" + CodeOf(WidgetCs);
+        var shipped = ShippedQuick();
+        var orphan = shipped.Where(key => !asked.Contains('"' + key + '"', StringComparison.Ordinal)).ToList();
+        Assert.True(orphan.Count == 0, "这些行交了表却没有一处源码在问：\n  " + string.Join("\n  ", orphan));
+
+        var dangling = Regex.Matches(asked, @"""(calc\.quick\.[A-Za-z0-9.]+|calc\.num[A-Za-z0-9.]*)""").Cast<Match>()
+            .Select(m => m.Groups[1].Value).Distinct()
+            .Where(key => !UiStrings.TryGet(key, out _)).ToList();
+        Assert.True(dangling.Count == 0, "代码在问表里没有的键（屏幕上会显示成 ⟨key⟩）：\n  " + string.Join("\n  ", dangling));
+    }
+
+    /// <summary>抹注释后逐行取那一档里会<b>上屏幕</b>的汉字／假名面字（日志行按坑表 #368 那条界线豁免）。</summary>
+    private static string[] WordLines(string rel)
+        => CodeOf(rel).Replace("\r\n", "\n").Split('\n')
+            .Where(line => Cjk.IsMatch(line) && !line.Contains("StarLog", StringComparison.Ordinal))
+            .Select(line => line.Trim()).Where(line => line.Length > 0).ToArray();
+
+    /// <summary>
+    /// 「计算」那一档（批次 55c 的射程）今天<b>还剩</b>的屏幕字，逐颗点名。
+    /// <para>⛔ 把上面那颗闸门改窄成"只扫 Core 两颗文件"就当作过了：✅WI-51 那次的教训正是名单只扫了 code-behind，
+    /// <c>.xaml</c> 里那 23 行从没进过射程（坑表 #384）。四档宿主一起扫、把没交的那一半<b>点名钉住</b>，
+    /// 才是"存量"而不是"漏网"。</para>
+    /// <para>⚠ 这些 needle 是<b>临时脚手架</b>：55c 交完那一档，这一列必须整列删掉（⛔ 留着＝下一批以为那一档已经交完）。
+    /// 名单是<b>双向</b>的：多一处没点名的汉字＝红，名单里那颗已经不在了＝也红。</para>
+    /// </summary>
+    private static readonly string[] PendingCalcTabWords =
+    {
+        @"= ""输入算式，回车记入历史""",                       // VM：空闲那一句读数（两颗赋值共用一句话）
+        @"ShowHint(""这一条没有记入",                             // 历史带不收非算式
+        @"ShowHint(""历史已清空""",
+        @"ShowHint(""没有可复制的结果",                           // 算式还没算对
+        @"ShowHint($""已复制 ",
+        @"ShowHint($""复制失败：",
+        @"ShowQuickHint(""没有可复制的结果",                       // 还有必填的格子没填对
+        @"? ""已复制速算结果""",
+        @": $""复制失败：",                                      // 速算那一侧：三元的前一支把 ShowQuickHint( 与字面量隔开了
+        @"ShowQuickHint(""已清空""",
+    };
+
+    /// <summary>
+    /// 那一族<b>四档代码宿主</b>（速算两颗 Core ＋ VM ＋ code-behind）⛔ 留一颗自己的汉字／假名面字；
+    /// 「计算」那一档的存量由 <see cref="PendingCalcTabWords"/> 逐颗点名钉住，⛔ 静默通过。
+    /// <para>⚠ 唯一点名豁免的一行：<c>ParseDate</c> 那份格式表里的 <c>yyyy年M月d日</c> 是<b>输入</b>的形状，
+    /// ⛔ 上屏幕（豁免写在这里而不是把尺改松，规则 #110／#121）。全角运算符（＋－（【）那一族）本来就不在
+    /// 这把尺的码位段里——它们是字符不是话。</para>
+    /// </summary>
+    [Fact]
+    public void TheQuickFamilyCarriesNoWordsOfItsOwn()
+    {
+        foreach (var rel in new[] { QuickMathCs, QuickCalculatorCs })
+        {
+            var left = WordLines(rel);
+            if (rel == QuickMathCs)
+            {
+                Assert.Single(left);
+                Assert.Contains("yyyy", left[0], StringComparison.Ordinal);   // 就是那份输入格式表
+                continue;
+            }
+            Assert.True(left.Length == 0, $"{rel} 还剩 {left.Length} 行自己的汉字／假名面字：\n  " + string.Join("\n  ", left));
+        }
+
+        var pending = WordLines(ViewModelCs).Concat(WordLines(WidgetCs)).ToArray();
+        foreach (var line in pending)
+            Assert.True(PendingCalcTabWords.Any(needle => line.Contains(needle, StringComparison.Ordinal)),
+                "「计算」那一档新长出一处屏幕字，⛔ 悄悄加进名单——先决定它归哪一批、要不要现在交：\n  " + line);
+        foreach (var needle in PendingCalcTabWords)
+            Assert.True(pending.Any(l => l.Contains(needle, StringComparison.Ordinal)),
+                $"名单里那颗 {needle} 已经不在源码里＝那一处已经交表了：把它从名单删掉（过期的名单比没有名单更坏，规则 #111）");
+    }
+
+    /// <summary>
+    /// "可空"那两个字是一句<b>收实参的话</b>（<c>calc.quick.optionalField</c>）：
+    /// ⛔ 在标签后面拼 <c>+ "（可空）"</c>，也⛔ 抄进每一格占位文本里（那样五个槽就有五个主人）。
+    /// </summary>
+    [Fact]
+    public void TheOptionalSlotLabelIsASentenceThatTakesTheFieldNameAsAnArg()
+    {
+        var widget = CodeOf(WidgetCs);
+        Assert.DoesNotContain("(" + "可空)", widget, StringComparison.Ordinal);
+        Assert.Contains(@"Locale.Fmt(""calc.quick.optionalField"", LocMessage.Of(field.LabelKey))", widget, StringComparison.Ordinal);
+        Assert.True(UiStrings.TryGet("calc.quick.optionalField", out var row));
+        Assert.Equal(new[] { "0" }, Slots.Matches(row.Zh).Cast<Match>().Select(m => m.Groups[1].Value).ToArray());
+        // 占位文本里⛔ 再留一份"可空"：那是同一件事的第二处（✅WI-46c 那颗组名同一条界线）
+        var calculator = CodeOf(QuickCalculatorCs);
+        Assert.DoesNotContain("可空", calculator, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 换语言那一刻重铺四个槽，⛔ 走那颗会清空输入的 <c>ApplyQuickMode</c>：
+    /// 清空四格是"换速算模式"的活（<c>CalcWidgetViewModel.SelectQuickMode</c> 一起作废上一组文本），
+    /// 挂到换语言上就是吃掉用户正在打的字（与 55a 那颗方法体禁项同一族，这里钉的是"铺字只有一颗主人"）。
+    /// </summary>
+    [Fact]
+    public void TheQuickSlotsAreRepaintedByOneOwnerThatNeverClearsInput()
+    {
+        var widget = CodeOf(WidgetCs);
+        var repaint = SourceGate.MethodBody(widget, "private void RepaintQuickSlots");
+        Assert.Contains("_quickLabels[i].Text =", repaint, StringComparison.Ordinal);
+        Assert.Contains("_quickBoxes[i].PlaceholderText =", repaint, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Text = string.Empty", repaint, StringComparison.Ordinal);   // 铺字的那一颗⛔ 顺手清空
+        var rebuild = SourceGate.MethodBody(widget, "private void RebuildWords");
+        Assert.Contains("RepaintQuickSlots(", rebuild, StringComparison.Ordinal);
+        Assert.DoesNotContain("box.Text = string.Empty", rebuild, StringComparison.Ordinal);   // 换语言⛔ 顺手吃掉用户正在打的字
+        // 清空四格只有两颗主人，各管一件事：换模式（上一模式的旧值不能留着）与「清空」按钮。
+        // ⛔ 把它们并成一颗公共 helper 再让换语言也去调它——那正是这一族坏掉的样子（铺字的与清空的分成两半，谁都能顺手调错的那一半）。
+        Assert.Equal(2, SourceGate.Count(widget, "foreach (var box in _quickBoxes) box.Text = string.Empty;"));
+        Assert.Contains("box.Text = string.Empty;",
+            SourceGate.MethodBody(widget, "private void ApplyQuickMode"), StringComparison.Ordinal);
+        Assert.Contains("box.Text = string.Empty;",
+            SourceGate.MethodBody(widget, "private void ClearQuick_Click"), StringComparison.Ordinal);
+        Assert.Contains("ApplyQuickMode(QuickModeBox.SelectedIndex)", widget, StringComparison.Ordinal);
+    }
+
+    /// <summary>速算下拉那一颗与换算那三颗同一条路：交 <c>LocOption</c>，⛔ 把标题存成成品字（VM 建表那一刻取词＝语言定死）。</summary>
+    [Fact]
+    public void TheQuickModeDropdownCarriesKeysNotFinishedTitles()
+    {
+        var options = SourceGate.MethodBody(CodeOf(ViewModelCs), "public CalcWidgetViewModel");
+        Assert.Contains("LocOption(m.TitleKey, string.Empty, index)", options, StringComparison.Ordinal);
+        Assert.DoesNotContain("Locale.T(m.TitleKey", options, StringComparison.Ordinal);
+        Assert.DoesNotContain("QuickModeTitles", CodeOf(ViewModelCs) + CodeOf(WidgetCs), StringComparison.Ordinal);
     }
 }

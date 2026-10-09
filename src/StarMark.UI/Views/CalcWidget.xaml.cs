@@ -57,6 +57,10 @@ public sealed partial class CalcWidget : UserControl
     private void RebuildWords()
     {
         ViewModel.RebuildWords();
+        // 四个槽的名字与占位是这颗宿主自己铺的（没有挂 LocText 的键），所以换语言要在这里重铺一遍；
+        // 走的是 RepaintQuickSlots 而不是 ApplyQuickMode——后者会清空用户正在打的字。
+        RepaintQuickSlots(ViewModel.CurrentQuickMode.Fields);
+        if (!_quickHintTransient) ShowQuickHint(string.Empty);   // 那一行回落的是模式说明，得跟着改口
     }
 
     // ───────────────────────── 计算 ─────────────────────────
@@ -161,17 +165,31 @@ public sealed partial class CalcWidget : UserControl
     private void ApplyQuickMode(int index)
     {
         var fields = ViewModel.SelectQuickMode(index);
+        // 先一律清空再铺字：收起来的格子若留着上一模式的文本，切回来就是"看着像填错"的旧值。
+        // 这一半只属于"换模式"——换语言那一刻⛔ 走到这里（那颗订阅的方法体由 I18nWiringGateTests 钉着）。
+        foreach (var box in _quickBoxes) box.Text = string.Empty;
+        RepaintQuickSlots(fields);
+        ShowQuickHint(string.Empty);
+    }
+
+    /// <summary>
+    /// 把四个槽的名字、占位与显隐按<b>当前语言</b>铺一遍。换模式与换语言共用这一颗；
+    /// 它⛔ 碰用户已经打进去的字（那半件事留在 <see cref="ApplyQuickMode"/>）。
+    /// </summary>
+    private void RepaintQuickSlots(IReadOnlyList<QuickField> fields)
+    {
         for (var i = 0; i < _quickBoxes.Length; i++)
         {
-            // 先一律清空再决定显隐：收起来的格子若留着上一模式的文本，切回来就是"看着像填错"的旧值
-            _quickBoxes[i].Text = string.Empty;
             _quickCells[i].Visibility = i < fields.Count ? Visibility.Visible : Visibility.Collapsed;
             if (i >= fields.Count) continue;
-            _quickLabels[i].Text = fields[i].Required ? fields[i].Label : fields[i].Label + "（可空）";
-            _quickBoxes[i].PlaceholderText = fields[i].Placeholder;
+            var field = fields[i];
+            // "（可空）"是一句收实参的话：那颗名字交的是还没渲染的 LocMessage，⛔ 在标签后面拼那三个字（坑表 #371／#393）
+            _quickLabels[i].Text = field.Required
+                ? Locale.T(field.LabelKey)
+                : Locale.Fmt("calc.quick.optionalField", LocMessage.Of(field.LabelKey));
+            _quickBoxes[i].PlaceholderText = field.PlaceholderKey is { } key ? Locale.T(key) : field.Placeholder;
             _quickBoxes[i].Tag = i;
         }
-        ShowQuickHint(string.Empty);
     }
 
     private void QuickModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -204,9 +222,15 @@ public sealed partial class CalcWidget : UserControl
         ShowQuickHint("已清空");
     }
 
+    /// <summary>那一行此刻显示的是<b>临时提示</b>而不是模式说明？换语言那一刻只有模式说明会自己改口。</summary>
+    private bool _quickHintTransient;
+
     /// <summary>常用页的提示走自己的文本块（<c>HintBlock</c> 在"计算"页里，从这页看不见）；空文本＝回落到模式说明。</summary>
     private void ShowQuickHint(string text)
-        => QuickHintBlock.Text = string.IsNullOrEmpty(text) ? ViewModel.CurrentQuickMode.Hint : text;
+    {
+        _quickHintTransient = !string.IsNullOrEmpty(text);
+        QuickHintBlock.Text = _quickHintTransient ? text : Locale.T(ViewModel.CurrentQuickMode.HintKey);
+    }
 
     // ───────────────────────── 共用 ─────────────────────────
 

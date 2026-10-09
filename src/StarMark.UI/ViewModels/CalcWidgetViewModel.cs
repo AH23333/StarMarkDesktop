@@ -46,7 +46,8 @@ public sealed partial class CalcWidgetViewModel : ObservableObject
         Categories = UnitTables.Categories;
         _category = Categories[0];
         _unitOptions = UnitOptionsOf(_category);
-        QuickModeTitles = QuickCalculator.Modes.Select(m => m.Title).ToList();
+        QuickModeOptions = QuickCalculator.Modes
+            .Select((m, index) => new LocOption(m.TitleKey, string.Empty, index)).ToList();
     }
 
     public IReadOnlyList<CalcUnitCategory> Categories { get; }
@@ -55,8 +56,9 @@ public sealed partial class CalcWidgetViewModel : ObservableObject
     public IReadOnlyList<LocOption> CategoryOptions =>
         Categories.Select(c => new LocOption(c.LabelKey, string.Empty, c.Key)).ToList();
 
-    /// <summary>速算下拉的标题列表（与 <see cref="QuickCalculator.Modes"/> 同序）。</summary>
-    public IReadOnlyList<string> QuickModeTitles { get; }
+    /// <summary>速算下拉的那一批<b>数据项</b>（与 <see cref="QuickCalculator.Modes"/> 同序）：
+    /// 文字走那颗键，<see cref="LocOption.Value"/> 装模式序号（⛔ 拿标题当身份，✅WI-55a 那三颗下拉同一条路）。</summary>
+    public IReadOnlyList<LocOption> QuickModeOptions { get; }
 
     public ObservableCollection<CalcHistoryEntry> History { get; } = new();
 

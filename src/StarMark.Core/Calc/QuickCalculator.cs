@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Calc;
 
@@ -14,12 +15,23 @@ public enum QuickFieldKind
 
 /// <summary>
 /// 速算页的一个输入槽。<see cref="Required"/>=false 表示留空有意义：
-/// 数字留空按 0（"没有满减"），日期留空按今天（"距年底还有几天"只填一头）。
+/// 数字留空按 0（"没有满减"），日期留空按今天（"距年底还有几天"只填一头）——
+/// "可空"那两个字由界面按这颗 bool 现拼一句（<c>calc.quick.optionalField</c>），⛔ 写进每格的名字里。
+/// <para>念法交 <see cref="LabelKey"/>（批次 WI-55b）：这三句被托盘上的标签、错误句里的引用同时念，
+/// 存成品字就换语言后各念一份（✅WI-46c 那颗组名同一条界线）。</para>
+/// <para>占位符两种之一，<b>恰好一种</b>（<see cref="HasOnePlaceholderShape"/>）：
+/// <see cref="PlaceholderKey"/> 是"真有一句话要说"（如「留空＝今天」），
+/// <see cref="Placeholder"/> 是给照着打的<b>例子</b>（199、7.5、2026-12-31：数字与 ISO 日期三语一样，
+/// ⛔ 为它们各造一行＝表里多出一批三列同形的空转行）。</para>
 /// </summary>
-public sealed record QuickField(string Label, string Placeholder, QuickFieldKind Kind, bool Required = true);
+public sealed record QuickField(string LabelKey, string? PlaceholderKey, string? Placeholder,
+                                QuickFieldKind Kind, bool Required = true)
+{
+    public bool HasOnePlaceholderShape => (PlaceholderKey is null) != (Placeholder is null);
+}
 
-/// <summary>一种速算：标题、一句话说明、需要哪几个输入槽。</summary>
-public sealed record QuickMode(string Title, string Hint, IReadOnlyList<QuickField> Fields);
+/// <summary>一种速算：标题那颗键、一句话说明那颗键、需要哪几个输入槽。</summary>
+public sealed record QuickMode(string TitleKey, string HintKey, IReadOnlyList<QuickField> Fields);
 
 /// <summary>
 /// 计算器「常用」页的目录：有哪些速算、各要哪些输入、把原始文本解析成什么再交给 <see cref="QuickMath"/>。
@@ -30,7 +42,7 @@ public sealed record QuickMode(string Title, string Hint, IReadOnlyList<QuickFie
 /// <para>
 /// 解析一律<b>按槽位下标</b>取值而不是先分拣再压缩（那样一旦某个模式混排数字与日期，
 /// 参数就会静默错位），失败也一律点出<b>是哪个槽</b>——四个输入并排时，
-/// "数字没认出来"这种没有主语的原因等于没说。
+/// "数字没认出来"这种没有主语的原因等于没说。那句主语交的是<b>还没渲染的</b>那颗标签键（坑表 #393）。
 /// </para>
 /// </summary>
 public static class QuickCalculator
@@ -38,39 +50,57 @@ public static class QuickCalculator
     /// <summary>界面按这个数量预放输入槽（多退少不填：没有哪个模式用到第 5 个）。</summary>
     public const int MaxFields = 4;
 
+    /// <summary>
+    /// 那十二颗<b>输入槽身份</b>（屏幕上那一行的键名）。住进嵌套类而不是摊成外层 <c>public const</c>：
+    /// 外层常量会被那颗"扫键族"的反射证人当成自己人算进名单（✅WI-40-2 坑表 #359 同一件事）。
+    /// <para>算法的拒绝句要点名"是哪一格"时，引用的就是这里的<b>那颗键</b>，⛔ 抄屏幕上那句话。</para>
+    /// </summary>
+    public static class Field
+    {
+        public const string Original = "calc.quick.field.original";
+        public const string Discount = "calc.quick.field.discount";
+        public const string EveryFull = "calc.quick.field.everyFull";
+        public const string Reduce = "calc.quick.field.reduce";
+        public const string Start = "calc.quick.field.start";
+        public const string Current = "calc.quick.field.current";
+        public const string PriceA = "calc.quick.field.priceA";
+        public const string QtyA = "calc.quick.field.qtyA";
+        public const string PriceB = "calc.quick.field.priceB";
+        public const string QtyB = "calc.quick.field.qtyB";
+        public const string StartDate = "calc.quick.field.startDate";
+        public const string EndDate = "calc.quick.field.endDate";
+    }
+
     public static IReadOnlyList<QuickMode> Modes { get; } = new List<QuickMode>
     {
-        new("打折 / 满减",
-            "折扣可写 7.5（七五折）或 85（按 85% 收）；满减两栏没有就留空。",
+        new("calc.quick.mode.bargain", "calc.quick.hint.bargain",
             new List<QuickField>
             {
-                new("原价", "199", QuickFieldKind.Money),
-                new("折扣", "7.5", QuickFieldKind.Money),
-                new("每满", "300（可空）", QuickFieldKind.Money, Required: false),
-                new("减", "50（可空）", QuickFieldKind.Money, Required: false),
+                new(Field.Original, null, "199", QuickFieldKind.Money),
+                new(Field.Discount, null, "7.5", QuickFieldKind.Money),
+                new(Field.EveryFull, null, "300", QuickFieldKind.Money, Required: false),
+                new(Field.Reduce, null, "50", QuickFieldKind.Money, Required: false),
             }),
-        new("涨跌 / 回本",
-            "起始值填买入价、当前值填现价。跌 20% 要涨 25% 才回本，跌 50% 要涨 100%。",
+        new("calc.quick.mode.change", "calc.quick.hint.change",
             new List<QuickField>
             {
-                new("起始值", "100", QuickFieldKind.Money),
-                new("当前值", "80", QuickFieldKind.Money),
+                new(Field.Start, null, "100", QuickFieldKind.Money),
+                new(Field.Current, null, "80", QuickFieldKind.Money),
             }),
-        new("哪个划算",
-            "两种包装的单价对比，如 29.9 元/500g 与 39.9 元/800g。",
+        new("calc.quick.mode.unit", "calc.quick.hint.unit",
             new List<QuickField>
             {
-                new("价格 A", "29.9", QuickFieldKind.Money),
-                new("数量 A", "500", QuickFieldKind.Money),
-                new("价格 B", "39.9", QuickFieldKind.Money),
-                new("数量 B", "800", QuickFieldKind.Money),
+                new(Field.PriceA, null, "29.9", QuickFieldKind.Money),
+                new(Field.QtyA, null, "500", QuickFieldKind.Money),
+                new(Field.PriceB, null, "39.9", QuickFieldKind.Money),
+                new(Field.QtyB, null, "800", QuickFieldKind.Money),
             }),
-        new("间隔天数",
-            "日期可写 2026-12-31 或 12-31（按今年）；开始留空＝今天。",
+        new("calc.quick.mode.days", "calc.quick.hint.days",
             new List<QuickField>
             {
-                new("开始日期", "留空＝今天", QuickFieldKind.Date, Required: false),
-                new("结束日期", "2026-12-31", QuickFieldKind.Date),
+                // 这一格的占位符是一句话（"空着就是今天"），不是例子 ⇒ 走表
+                new(Field.StartDate, "calc.quick.placeholder.emptyToday", null, QuickFieldKind.Date, Required: false),
+                new(Field.EndDate, null, "2026-12-31", QuickFieldKind.Date),
             }),
     };
 
@@ -80,7 +110,7 @@ public static class QuickCalculator
     public static QuickResult Evaluate(int modeIndex, IReadOnlyList<string?> texts, DateTime today)
     {
         if (modeIndex < 0 || modeIndex >= Modes.Count)
-            return new QuickResult(Array.Empty<QuickLine>(), $"没有序号为 {modeIndex} 的速算");
+            return new QuickResult(Array.Empty<QuickLine>(), LocMessage.Of("calc.quick.noMode", modeIndex));
 
         var mode = Modes[modeIndex];
         // 两组槽按同一份下标填充：数字槽的 Date 为 null、日期槽的 Money 为 0，取值时永不错位。
@@ -100,8 +130,7 @@ public static class QuickCalculator
                 }
                 var parsed = QuickMath.ParseDate(text, today);
                 if (parsed is null)
-                    return new QuickResult(Array.Empty<QuickLine>(),
-                        $"「{field.Label}」没认出日期（写成 2026-12-31，或 12-31 按今年）");
+                    return Fail(LocMessage.Of("calc.quick.badDate", LocMessage.Of(field.LabelKey)));
                 date[i] = parsed;
                 continue;
             }
@@ -113,7 +142,7 @@ public static class QuickCalculator
             }
             if (!decimal.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands,
                     CultureInfo.InvariantCulture, out var value))
-                return new QuickResult(Array.Empty<QuickLine>(), $"「{field.Label}」没认出数字：{text}");
+                return Fail(LocMessage.Of("calc.quick.badNumber", LocMessage.Of(field.LabelKey), text));
             money[i] = value;
         }
 
@@ -126,7 +155,14 @@ public static class QuickCalculator
         };
     }
 
+    /// <summary>
+    /// 必填那一格没填：两句各自把"日期／数字"写在句子里，⛔ 由代码在句子后面拼那两个字
+    /// （✅坑表 #371 那一族：分隔词留在片段里，屏幕上就是一句半截话）。
+    /// </summary>
     private static QuickResult Missing(QuickField field)
-        => new QuickResult(Array.Empty<QuickLine>(),
-            $"「{field.Label}」还没填" + (field.Kind == QuickFieldKind.Date ? "日期" : "数字"));
+        => Fail(LocMessage.Of(field.Kind == QuickFieldKind.Date
+            ? "calc.quick.missingDate"
+            : "calc.quick.missingNumber", LocMessage.Of(field.LabelKey)));
+
+    private static QuickResult Fail(LocMessage reason) => new(Array.Empty<QuickLine>(), reason);
 }

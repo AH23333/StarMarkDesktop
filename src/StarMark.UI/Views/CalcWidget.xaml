@@ -69,7 +69,8 @@
             <PivotItem i18n:LocText.Key="widget.calc.tabQuick">
                 <StackPanel Spacing="8">
                     <ComboBox x:Name="QuickModeBox" HorizontalAlignment="Stretch" FontSize="12"
-                              SelectedIndex="0" ItemsSource="{x:Bind ViewModel.QuickModeTitles, Mode=OneTime}"
+                              ItemTemplate="{StaticResource LocOptionTemplate}" SelectedIndex="0"
+                              ItemsSource="{x:Bind ViewModel.QuickModeOptions, Mode=OneTime}"
                               SelectionChanged="QuickModeBox_SelectionChanged"/>
                     <TextBlock x:Name="QuickHintBlock" Text="" FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
 
@@ -120,8 +121,8 @@
             <!-- ═══════════ 换算 ═══════════ -->
             <PivotItem i18n:LocText.Key="widget.calc.tabConvert">
                 <StackPanel Spacing="8">
-                    <!-- 三颗下拉走「数据项＋模板」（批次 WI-55a）：⛔ DisplayMemberPath="Label"——
-                         那条路把表里那颗成品字直接搬到屏幕上，换语言时闭着的那一格念的还是旧语言。
+                    <!-- 本窗四颗下拉都走「数据项＋模板」（批次 WI-55a／55b）：⛔ DisplayMemberPath="Label"——
+                         那条路把表里那颗成品字直接搬到屏幕上，换语言那一刻闭着的那一格念的还是旧语言。
                          模板里的 TextBlock 自己带着那颗键，于是它和其他被注册的元素一起重贴（✅WI-2c／✅WI-43）。 -->
                     <ComboBox x:Name="CategoryBox" HorizontalAlignment="Stretch" FontSize="12"
                               ItemTemplate="{StaticResource LocOptionTemplate}" SelectedIndex="0"
