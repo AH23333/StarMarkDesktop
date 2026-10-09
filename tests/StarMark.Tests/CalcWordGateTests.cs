@@ -421,7 +421,7 @@ public sealed class CalcWordGateTests : IDisposable
             Assert.DoesNotContain("{", rendered, StringComparison.Ordinal);
             // 实参只许是这几类：读数（string／int／decimal）或还没取词的 LocMessage。
             // ⛔ 在这里加"能自带措辞的类型"（DateTime／枚举／自定义 record 的 ToString）——那一类会把语言定死在算出它的那一刻。
-            // 至于"字段名被预先拼成中文再递进来"，拦它的是 <see cref="TheQuickFamilyCarriesNoWordsOfItsOwn"/>：代码里根本不许有汉字面字。
+            // 至于"字段名被预先拼成中文再递进来"，拦它的是 <see cref="TheCalculatorWindowCarriesNoWordsOfItsOwn"/>：代码里根本不许有汉字面字。
             foreach (var arg in message.Args ?? Array.Empty<object?>())
                 Assert.True(arg is null or string or LocMessage or int or decimal,
                     $"{message.Key} 递了一颗没预料到的实参类型：" + arg?.GetType().Name);
@@ -449,59 +449,6 @@ public sealed class CalcWordGateTests : IDisposable
         => CodeOf(rel).Replace("\r\n", "\n").Split('\n')
             .Where(line => Cjk.IsMatch(line) && !line.Contains("StarLog", StringComparison.Ordinal))
             .Select(line => line.Trim()).Where(line => line.Length > 0).ToArray();
-
-    /// <summary>
-    /// 「计算」那一档（批次 55c 的射程）今天<b>还剩</b>的屏幕字，逐颗点名。
-    /// <para>⛔ 把上面那颗闸门改窄成"只扫 Core 两颗文件"就当作过了：✅WI-51 那次的教训正是名单只扫了 code-behind，
-    /// <c>.xaml</c> 里那 23 行从没进过射程（坑表 #384）。四档宿主一起扫、把没交的那一半<b>点名钉住</b>，
-    /// 才是"存量"而不是"漏网"。</para>
-    /// <para>⚠ 这些 needle 是<b>临时脚手架</b>：55c 交完那一档，这一列必须整列删掉（⛔ 留着＝下一批以为那一档已经交完）。
-    /// 名单是<b>双向</b>的：多一处没点名的汉字＝红，名单里那颗已经不在了＝也红。</para>
-    /// </summary>
-    private static readonly string[] PendingCalcTabWords =
-    {
-        @"= ""输入算式，回车记入历史""",                       // VM：空闲那一句读数（两颗赋值共用一句话）
-        @"ShowHint(""这一条没有记入",                             // 历史带不收非算式
-        @"ShowHint(""历史已清空""",
-        @"ShowHint(""没有可复制的结果",                           // 算式还没算对
-        @"ShowHint($""已复制 ",
-        @"ShowHint($""复制失败：",
-        @"ShowQuickHint(""没有可复制的结果",                       // 还有必填的格子没填对
-        @"? ""已复制速算结果""",
-        @": $""复制失败：",                                      // 速算那一侧：三元的前一支把 ShowQuickHint( 与字面量隔开了
-        @"ShowQuickHint(""已清空""",
-    };
-
-    /// <summary>
-    /// 那一族<b>四档代码宿主</b>（速算两颗 Core ＋ VM ＋ code-behind）⛔ 留一颗自己的汉字／假名面字；
-    /// 「计算」那一档的存量由 <see cref="PendingCalcTabWords"/> 逐颗点名钉住，⛔ 静默通过。
-    /// <para>⚠ 唯一点名豁免的一行：<c>ParseDate</c> 那份格式表里的 <c>yyyy年M月d日</c> 是<b>输入</b>的形状，
-    /// ⛔ 上屏幕（豁免写在这里而不是把尺改松，规则 #110／#121）。全角运算符（＋－（【）那一族）本来就不在
-    /// 这把尺的码位段里——它们是字符不是话。</para>
-    /// </summary>
-    [Fact]
-    public void TheQuickFamilyCarriesNoWordsOfItsOwn()
-    {
-        foreach (var rel in new[] { QuickMathCs, QuickCalculatorCs })
-        {
-            var left = WordLines(rel);
-            if (rel == QuickMathCs)
-            {
-                Assert.Single(left);
-                Assert.Contains("yyyy", left[0], StringComparison.Ordinal);   // 就是那份输入格式表
-                continue;
-            }
-            Assert.True(left.Length == 0, $"{rel} 还剩 {left.Length} 行自己的汉字／假名面字：\n  " + string.Join("\n  ", left));
-        }
-
-        var pending = WordLines(ViewModelCs).Concat(WordLines(WidgetCs)).ToArray();
-        foreach (var line in pending)
-            Assert.True(PendingCalcTabWords.Any(needle => line.Contains(needle, StringComparison.Ordinal)),
-                "「计算」那一档新长出一处屏幕字，⛔ 悄悄加进名单——先决定它归哪一批、要不要现在交：\n  " + line);
-        foreach (var needle in PendingCalcTabWords)
-            Assert.True(pending.Any(l => l.Contains(needle, StringComparison.Ordinal)),
-                $"名单里那颗 {needle} 已经不在源码里＝那一处已经交表了：把它从名单删掉（过期的名单比没有名单更坏，规则 #111）");
-    }
 
     /// <summary>
     /// "可空"那两个字是一句<b>收实参的话</b>（<c>calc.quick.optionalField</c>）：
@@ -555,4 +502,237 @@ public sealed class CalcWordGateTests : IDisposable
         Assert.DoesNotContain("Locale.T(m.TitleKey", options, StringComparison.Ordinal);
         Assert.DoesNotContain("QuickModeTitles", CodeOf(ViewModelCs) + CodeOf(WidgetCs), StringComparison.Ordinal);
     }
+
+    // ───────────────────────── 批次 WI-55c：计算那一档（求值器 19 句＋八句瞬时提示） ─────────────────────────
+
+    private const string EvaluatorCs = "src/StarMark.Core/Calc/ExpressionEvaluator.cs";
+
+    /// <summary>本刀交表的行：一切 <c>calc.expr.*</c> 与 <c>calc.hint.*</c>（由表本身数出来，⛔ 抄一份名单）。</summary>
+    private static string[] ShippedExpr()
+        => UiStrings.All
+            .Where(e => e.Key.StartsWith("calc.expr.", StringComparison.Ordinal)
+                        || e.Key.StartsWith("calc.hint.", StringComparison.Ordinal))
+            .Select(e => e.Key).ToArray();
+
+    /// <summary>
+    /// 这一格走不到的那些，各有各<b>可核对</b>的理由（⛔ 把"我没构造出输入"写成"这行永远念不出来"，⛔ 反过来把走不到的摘进名单换绿灯）：
+    /// <list type="bullet">
+    /// <item><c>expr.unspecified</c>／<c>expr.lexCrash</c>／<c>expr.evalCrash</c>／<c>expr.numberRange</c>＝四道兜底
+    /// （两颗 catch、一句"失败却没给原因"、比 <c>double.TryParse</c> 更宽的数字自检）。兜底就是走不到才对：
+    /// 真要走到它，得先把"任何输入都不抛"这条硬契约改坏。存在的证据在 <see cref="TheDefensiveArmsAreWiredToTheirOwnKeys"/>。</item>
+    /// <item><c>expr.undefined</c>：这套语法里 NaN 只能来自 ÷0 与 0 的负数次幂，两者都被<b>先一步</b>判成"除数为 0"
+    /// （那句顺序是刻意的，见 <c>Evaluate</c> 里的注释）——证据是同一颗方法体里那两行的先后，也钉在同一格。</item>
+    /// <item><c>expr.idle</c> 与七颗 <c>calc.hint.*</c>：住在 UI，而 <c>StarMark.Tests</c> 引用不到 <c>StarMark.UI</c>（坑表 #370）；
+    /// 它们的取词时机与槽数由 <see cref="TheUiSideSentencesAreFetchedAtTheMomentTheyAreShown"/> 按源码形状钉。</item>
+    /// </list>
+    /// </summary>
+    private static readonly string[] NotReachableInExprFamily =
+    [
+        "calc.expr.unspecified", "calc.expr.lexCrash", "calc.expr.evalCrash", "calc.expr.numberRange",
+        "calc.expr.undefined", "calc.expr.idle",
+        "calc.hint.notCommitted", "calc.hint.historyCleared", "calc.hint.noCopyNoAnswer",
+        "calc.hint.noCopyIncomplete", "calc.hint.copied", "calc.hint.copiedQuick", "calc.hint.clearedQuick",
+    ];
+
+    /// <summary>真跑得得到的那一族：<b>每一颗都用能走到它的输入去取</b>（⛔ 在测试里再 <c>LocMessage.Of</c> 一份，那样测的是我自己）。</summary>
+    private static LocMessage[] RenderedByTheExprFamily()
+    {
+        var inputs = new[]
+        {
+            "",                                                     // empty
+            new string('1', ExpressionEvaluator.MaxLength + 1),     // tooLong
+            "2e",                                                   // trailing（e 是常量，"2" 之后多出的一颗记号）
+            "1/0",                                                  // divZero
+            "1e308*10",                                             // overflow
+            "1,23",                                                 // badNumber
+            "x+1",                                                  // unknownName（两颗实参：名字＋那份名单）
+            ",5",                                                   // unsupportedChar
+            "2+",                                                   // incomplete
+            "(1+2",                                                 // missingRParen
+            ")",                                                    // extraRParen（⚠ "1+2)" 走的是 trailing：那颗多余的记号是"读完后还剩东西"，不是"开头就是右括号"）
+            "%",                                                    // percentNoNumber
+            "*3",                                                   // needNumber
+            string.Concat(Enumerable.Repeat("(", ExpressionEvaluator.MaxDepth + 5)) + "1"
+                + string.Concat(Enumerable.Repeat(")", ExpressionEvaluator.MaxDepth + 5)),   // deepNest
+        };
+        var handed = new List<LocMessage>();
+        foreach (var input in inputs)
+        {
+            var r = ExpressionEvaluator.Evaluate(input);
+            Assert.False(r.Ok, $"这一格要的正是失败那一句，结果却算出来了：{input}");
+            handed.Add(r.Error!);
+        }
+        return handed.ToArray();
+    }
+
+    [Fact]
+    public void EveryExprRowRendersWithTheArgsTheCodeActuallyHands()
+    {
+        var handed = RenderedByTheExprFamily();
+        var shipped = ShippedExpr();
+        Assert.True(shipped.Length >= 27, $"表里只数出 {shipped.Length} 行（这一刀现场是 27）——前缀筛错了不是空转，是假绿");
+        Assert.Equal(14, handed.Length);   // 守门测试不许空转：真跑确实取到 14 句
+
+        var unreachable = shipped
+            .Where(key => !handed.Any(m => m.Key == key) && !NotReachableInExprFamily.Contains(key, StringComparer.Ordinal))
+            .ToList();
+        Assert.True(unreachable.Count == 0,
+            "这些行交了表⛔ 真跑里没有一格走到它，也没在名单里写理由：\n  " + string.Join("\n  ", unreachable));
+
+        // 名单⛔ 藏死行：登记成「走不到」的每一颗，代码里必须真的有人在问它
+        var asked = CodeOf(EvaluatorCs) + CodeOf(ViewModelCs) + CodeOf(WidgetCs);
+        foreach (var key in NotReachableInExprFamily)
+            Assert.True(asked.Contains('"' + key + '"', StringComparison.Ordinal),
+                $"{key} 被登记成「走不到」，可源码里也没有一处问它＝表里一颗死行");
+
+        foreach (var message in handed)
+        {
+            Assert.True(UiStrings.TryGet(message.Key, out var row), $"交出的键没登记在表里：{message.Key}");
+            var slots = Slots.Matches(row.Zh).Cast<Match>().Select(m => m.Groups[1].Value).Distinct().Count();
+            var args = message.Args?.Length ?? 0;
+            Assert.True(slots == args,
+                $"{message.Key} 中文列有 {slots} 个槽，代码递了 {args} 颗实参（对不上⇒屏幕上那一格空白，坑表 #393）");
+            var rendered = message.Render();
+            Assert.False(string.IsNullOrWhiteSpace(rendered), $"{message.Key} 渲染出来是空的");
+            Assert.DoesNotContain("{", rendered, StringComparison.Ordinal);
+            foreach (var arg in message.Args ?? Array.Empty<object?>())
+                Assert.True(arg is null or string or int or LocMessage,
+                    $"{message.Key} 递了一颗没预料到的实参类型：" + arg?.GetType().Name);
+        }
+    }
+
+    /// <summary>双向对账（与 55b 那颗同名者一条路）：交表的行每行都有人在问；代码⛔ 问一颗表里没有的。</summary>
+    [Fact]
+    public void EveryExprRowIsAskedForAndNoAskedKeyIsMissingFromTheTable()
+    {
+        var asked = CodeOf(EvaluatorCs) + CodeOf(ViewModelCs) + CodeOf(WidgetCs);
+        var orphan = ShippedExpr().Where(key => !asked.Contains('"' + key + '"', StringComparison.Ordinal)).ToList();
+        Assert.True(orphan.Count == 0, "这些行交了表却没有一处源码在问：\n  " + string.Join("\n  ", orphan));
+
+        var dangling = Regex.Matches(asked, @"""(calc\.(expr|hint)\.[A-Za-z0-9]+)""").Cast<Match>()
+            .Select(m => m.Groups[1].Value).Distinct()
+            .Where(key => !UiStrings.TryGet(key, out _)).ToList();
+        Assert.True(dangling.Count == 0, "代码在问表里没有的键（屏幕上会显示成 ⟨key⟩）：\n  " + string.Join("\n  ", dangling));
+    }
+
+    /// <summary>
+    /// UI 那一侧八句的<b>形状</b>（工程引用不到，只能按源码钉，坑表 #370）：
+    /// ① 每句都在<b>被展示的那一刻</b>取词——<c>Locale.T/Fmt</c> 直接坐在 <c>ShowHint</c>／<c>ShowQuickHint</c> 的实参位上；
+    /// ② ⛔ 挂 <c>LocText</c>（✅WI-45 那条裁决：瞬时行挂上去只会得到"名单里多条贴不出去的空壳"，
+    /// 而 <c>SetKey</c> 连实参一起冻住＝贴回来的是上一次那句，坑表 #361）；
+    /// ③ 空闲那句<b>一颗主人</b>：字段初值与"清空后"都走 <c>IdleText()</c>，⛔ 两处各抄一遍那六个字。
+    /// </summary>
+    [Fact]
+    public void TheUiSideSentencesAreFetchedAtTheMomentTheyAreShown()
+    {
+        var widget = CodeOf(WidgetCs);
+        foreach (var key in new[]
+        {
+            "calc.hint.notCommitted", "calc.hint.historyCleared", "calc.hint.noCopyNoAnswer",
+            "calc.hint.noCopyIncomplete", "calc.hint.copiedQuick", "calc.hint.clearedQuick",
+        })
+            Assert.Contains($"Locale.T(\"{key}\")", widget, StringComparison.Ordinal);
+
+        Assert.Contains(@"Locale.Fmt(""calc.hint.copied"", ExpressionEvaluator.Format(r.Value))", widget, StringComparison.Ordinal);
+        Assert.Equal(2, SourceGate.Count(widget, @"Locale.Fmt(""clip.status.copyFail"", why)"));
+        Assert.DoesNotContain("LocText.SetKey", widget, StringComparison.Ordinal);
+        Assert.DoesNotContain("LocText.SetToolTipKey", widget, StringComparison.Ordinal);
+
+        var vm = CodeOf(ViewModelCs);
+        // 那颗主人自己（声明）＋两处调用＝三处；两处调用必须以同一种形状出现（⛔ 一处抄字面量）
+        Assert.Contains(@"private static string IdleText() => Locale.T(""calc.expr.idle"");", vm, StringComparison.Ordinal);
+        Assert.Equal(2, SourceGate.Count(vm, "= IdleText();"));
+        Assert.Contains(@"_calcResult = IdleText();", vm, StringComparison.Ordinal);
+        Assert.Contains("CalcResult = IdleText();", vm, StringComparison.Ordinal);
+
+        // 三列同槽：引用不到的那两颗带实参的，形状在这里钉住（中文列与英文列的编号集合必须相等）
+        foreach (var key in new[] { "calc.hint.copied", "calc.hint.copiedQuick", "clip.status.copyFail" })
+        {
+            Assert.True(UiStrings.TryGet(key, out var row), key + " 不在表里");
+            var zh = Slots.Matches(row.Zh).Cast<Match>().Select(m => m.Groups[1].Value).Distinct().Count();
+            var en = Slots.Matches(row.En).Cast<Match>().Select(m => m.Groups[1].Value).Distinct().Count();
+            Assert.True(zh == en, $"{key} 中英两列的槽数不同（{zh} vs {en}）：换语言那一刻就是填错的句子");
+        }
+    }
+
+    /// <summary>
+    /// "复制失败：{0}"这句<b>整张表只许一份</b>：计算器与剪贴板页报的是同一件机器事实（剪贴板写入失败并带原因）。
+    /// <para>⛔ 为计算器另开一颗同义行（✅WI-46b 那颗"识字另立复制失败"同一条界线）；两处宿主共问一颗＝一句话一份出处，
+    /// 改那句会同时动两处，那是对的。表里 <c>capture.card.copyFailedTitle</c> 那句是<b>卡片抬头</b>（"复制失败"四个字、不带原因、
+    /// 另一个表面），不在这一格的判据里。</para>
+    /// </summary>
+    [Fact]
+    public void TheClipboardFailureSentenceHasExactlyOneOwnerInTheTable()
+        => Assert.Equal(1, UiStrings.All.Count(e => e.Zh == "复制失败：{0}"));
+
+    /// <summary>四道兜底<b>为什么</b>走不到，钉的是可核对的形状（⛔ 拿"我构造不出输入"当证据，规则 #111）。</summary>
+    [Fact]
+    public void TheDefensiveArmsAreWiredToTheirOwnKeys()
+    {
+        var evl = CodeOf(EvaluatorCs);
+        Assert.Equal(2, SourceGate.Count(evl, "catch (Exception ex)"));
+        Assert.Contains(@"CalcResult.Fail(LocMessage.Of(""calc.expr.lexCrash"", ex.GetType().Name))", evl, StringComparison.Ordinal);
+        Assert.Contains(@"CalcResult.Fail(LocMessage.Of(""calc.expr.evalCrash"", ex.GetType().Name))", evl, StringComparison.Ordinal);
+        Assert.Contains(@"new LexOutcome(false, LocMessage.Of(""calc.expr.numberRange"", raw), null)", evl, StringComparison.Ordinal);
+        Assert.Contains(@"(Error ?? LocMessage.Of(""calc.expr.unspecified""))", evl, StringComparison.Ordinal);
+
+        // ÷0 先于 NaN／∞ 判：那句顺序是刻意的 ⇒ "结果无定义"在正常输入下走不到（顺序反了就是把除号报成溢出）
+        Assert.True(
+            evl.IndexOf("DivisionByZero) return", StringComparison.Ordinal)
+            < evl.IndexOf("IsNaN(value)) return", StringComparison.Ordinal),
+            "「除数为 0」必须判在 NaN 之前，否则 1/0 会被报成「结果超出可表示范围」");
+
+        // "失败却没给原因"只能由绕过两颗工厂的直接构造造出来，而全文件⛔ 那样写（这一格是那四行名单的地基）
+        Assert.DoesNotContain("new CalcResult(", evl, StringComparison.Ordinal);
+        Assert.Equal(1, SourceGate.Count(evl, "public static CalcResult Success("));
+        Assert.Equal(1, SourceGate.Count(evl, "public static CalcResult Fail("));
+    }
+
+    /// <summary>
+    /// 那句"只支持 pi / π / e"里的<b>名单接出处</b>：交的是 <c>SupportedNames</c> 那颗常量，⛔ 抄进表里。
+    /// <para>抄进表里＝加一颗常量时界面上那句话还在说三颗（✅WI-2g 那颗"画布内的九条快捷键"就是这句话的墓志铭）。</para>
+    /// </summary>
+    [Fact]
+    public void TheSupportedConstantNamesAreTakenFromOnePlace()
+    {
+        var evl = CodeOf(EvaluatorCs);
+        Assert.Contains(@"public const string SupportedNames = ""pi / π / e"";", evl, StringComparison.Ordinal);
+        Assert.Contains(@"LocMessage.Of(""calc.expr.unknownName"", name, SupportedNames)", evl, StringComparison.Ordinal);
+        Assert.True(UiStrings.TryGet("calc.expr.unknownName", out var row));
+        Assert.DoesNotContain("pi / π / e", row.Zh, StringComparison.Ordinal);   // 名单不在句子里，它是递进去的
+        Assert.Equal(2, Slots.Matches(row.Zh).Cast<Match>().Select(m => m.Groups[1].Value).Distinct().Count());
+    }
+
+    /// <summary>
+    /// 「计算」那一档交完＝<b>整扇窗五颗代码宿主＋标记</b>一起归零（批次 WI-55／P-182b 到此收口）。
+    /// <para>⚠ 名单⛔ 只扫 code-behind：✅WI-51 那次正是旧尺漏了 <c>.xaml</c> 里那 23 行（坑表 #384），
+    /// 所以这一格把标记一起摆进射程。55b 那批留的临时名单（<c>PendingCalcTabWords</c>）在这一刀删掉——
+    /// 过期的名单比没有名单更坏。</para>
+    /// <para>⚠ 唯一点名豁免的一行：<c>ParseDate</c> 那份格式表里的 <c>yyyy年M月d日</c> 是<b>输入</b>的形状，⛔ 上屏幕
+    /// （豁免写在这里而不是把尺改松，规则 #110／#121）。全角运算符（＋－（【）那一族）本来就不在这把尺的码位段里。</para>
+    /// </summary>
+    [Fact]
+    public void TheCalculatorWindowCarriesNoWordsOfItsOwn()
+    {
+        foreach (var rel in new[] { EvaluatorCs, QuickMathCs, QuickCalculatorCs, ViewModelCs, WidgetCs })
+        {
+            var left = WordLines(rel);
+            if (rel == QuickMathCs)
+            {
+                Assert.Single(left);
+                Assert.Contains("yyyy", left[0], StringComparison.Ordinal);   // 就是那份输入格式表
+                continue;
+            }
+            Assert.True(left.Length == 0, $"{rel} 还剩 {left.Length} 行自己的汉字／假名面字：\n  " + string.Join("\n  ", left));
+        }
+
+        var markup = WordLinesOfMarkup(WidgetXaml);
+        Assert.True(markup.Length == 0, $"{WidgetXaml} 的标记里还剩 {markup.Length} 处面字：\n  " + string.Join("\n  ", markup));
+    }
+
+    /// <summary>标记那一档：抹掉标记注释之后逐行数汉字／假名（属性里的面字与表头文字都在这把尺里）。</summary>
+    private static string[] WordLinesOfMarkup(string rel)
+        => MarkupOf(rel).Replace("\r\n", "\n").Split('\n')
+            .Where(line => Cjk.IsMatch(line))
+            .Select(line => line.Trim()).Where(line => line.Length > 0).ToArray();
 }

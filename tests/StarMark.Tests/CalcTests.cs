@@ -1,5 +1,7 @@
 #nullable enable
+using System;
 using System.Globalization;
+using System.Linq;
 using Xunit;
 using StarMark.Abstractions.I18n;
 using StarMark.Core.Calc;
@@ -18,12 +20,25 @@ public sealed class ExpressionEvaluatorTests
         return r.Value;
     }
 
-    private static string Fail(string text)
+    /// <summary>失败那一句<b>交出来的键</b>（批次 WI-55c：求值器交 LocMessage，这里就钉那颗键）。</summary>
+    private static LocMessage Fail(string text)
     {
         var r = ExpressionEvaluator.Evaluate(text);
         Assert.False(r.Ok, $"应当失败却成功：{text} ⇒ {r.Value}");
+        Assert.NotNull(r.Error);
         return r.Error!;
     }
+
+    /// <summary>那颗键在不在表里——不在＝界面上是 ⟨key⟩，比句子写错更糟。</summary>
+    private static string KeyOf(string text)
+    {
+        var key = Fail(text).Key;
+        Assert.True(UiStrings.TryGet(key, out _), $"那颗键没登记在表里：{key}");
+        return key;
+    }
+
+    private static string[] ArgsOf(LocMessage message)
+        => (message.Args ?? Array.Empty<object?>()).Select(a => a?.ToString() ?? string.Empty).ToArray();
 
     // ────────── 优先级与结合性 ──────────
 
@@ -82,7 +97,7 @@ public sealed class ExpressionEvaluatorTests
     public void LetterE_AfterNumberWithoutDigits_IsNotAnExponent()
     {
         // "2e" 里的 e 是常量 e ⇒ 裸的 "2e" 是"多余的内容"，不能被当成 2 静默算掉
-        Assert.Contains("多余", Fail("2e"));
+        Assert.Equal("calc.expr.trailing", KeyOf("2e"));
         Assert.Equal(2 * Math.E, Ok("2*e"), 10);
     }
 
@@ -99,13 +114,15 @@ public sealed class ExpressionEvaluatorTests
     [InlineData("1.2.3")]
     [InlineData("1.")]
     public void MalformedNumbers_AreRejectedNotSilentlyRounded(string text)
-        => Assert.Contains("数字", Fail(text));
+        => Assert.Equal("calc.expr.badNumber", KeyOf(text));
 
     [Fact]
     public void LeadingComma_IsReportedAsUnsupportedCharacter()
     {
         // 逗号只在数字内部有意义；开头一个逗号是"没见过的符号"，说"数字写法无法识别"反而误导
-        Assert.Contains("不支持的字符", Fail(",5"));
+        var error = Fail(",5");
+        Assert.Equal("calc.expr.unsupportedChar", error.Key);
+        Assert.Equal([","], ArgsOf(error));
     }
 
     // ────────── 百分号语义（计算器惯例，非纯数学） ──────────
@@ -145,45 +162,52 @@ public sealed class ExpressionEvaluatorTests
     [InlineData("2 3")]
     [InlineData("@")]
     [InlineData("%")]
-    public void InvalidInput_ReturnsReason(string text) => Assert.False(string.IsNullOrWhiteSpace(Fail(text)));
+    public void InvalidInput_ReturnsReason(string text)
+    {
+        var error = Fail(text);
+        Assert.False(string.IsNullOrWhiteSpace(error.Key), $"「{text}」失败却没给键");
+        Assert.True(UiStrings.TryGet(error.Key, out _), $"「{text}」的键没登记在表里：{error.Key}");
+    }
 
     [Fact]
-    public void EmptyInput_ExplainsItself() => Assert.Equal("没有可计算的内容", Fail(""));
+    public void EmptyInput_ExplainsItself() => Assert.Equal("calc.expr.empty", KeyOf(""));
 
     [Fact]
-    public void MissingCloseParen_SaysSo() => Assert.Equal("缺少右括号", Fail("(1+2"));
+    public void MissingCloseParen_SaysSo() => Assert.Equal("calc.expr.missingRParen", KeyOf("(1+2"));
 
     [Fact]
-    public void TrailingOperator_SaysWhatIsMissing() => Assert.Contains("缺少数字", Fail("2+"));
+    public void TrailingOperator_SaysWhatIsMissing() => Assert.Equal("calc.expr.incomplete", KeyOf("2+"));
 
     [Fact]
     public void DivideByZero_IsNamedNotNaN()
     {
-        Assert.Equal("除数为 0", Fail("1/0"));
-        Assert.Equal("除数为 0", Fail("1/(3-3)"));
+        Assert.Equal("calc.expr.divZero", KeyOf("1/0"));
+        Assert.Equal("calc.expr.divZero", KeyOf("1/(3-3)"));
         // 0÷0 同样报"除数为 0"而不是"无定义"：用户按下去的动机是"除以了 0"，这条信息更可行动
-        Assert.Equal("除数为 0", Fail("0/0"));
+        Assert.Equal("calc.expr.divZero", KeyOf("0/0"));
     }
 
     [Fact]
     public void ZeroToNegativePower_IsAlsoDivideByZero()
     {
         // 0^-1 数学上就是 1÷0，报"除数为 0"比"结果超出可表示范围"更可行动
-        Assert.Equal("除数为 0", Fail("0^-1"));
+        Assert.Equal("calc.expr.divZero", KeyOf("0^-1"));
     }
 
     [Fact]
     public void Overflow_IsReportedAsRange()
     {
-        Assert.Equal("结果超出可表示范围", Fail("1e308*10"));
-        Assert.Equal("结果超出可表示范围", Fail("10^400"));
+        Assert.Equal("calc.expr.overflow", KeyOf("1e308*10"));
+        Assert.Equal("calc.expr.overflow", KeyOf("10^400"));
     }
 
     [Fact]
     public void TooLong_IsBoundedAndNamed()
     {
         var error = Fail(new string('1', ExpressionEvaluator.MaxLength + 1));
-        Assert.Contains("过长", error);
+        Assert.Equal("calc.expr.tooLong", error.Key);
+        // 那句里的上限数字接的是这颗常量本身（⛔ 在表里抄一个看起来顺眼的数，✅WI-50 那颗"计数⛔ 是凭据"同一条界线）
+        Assert.Equal([ExpressionEvaluator.MaxLength.ToString()], ArgsOf(error));
     }
 
     [Fact]
@@ -193,7 +217,9 @@ public sealed class ExpressionEvaluatorTests
         var inside = string.Concat(Enumerable.Repeat("(", ExpressionEvaluator.MaxDepth + 5)) + "1"
                    + string.Concat(Enumerable.Repeat(")", ExpressionEvaluator.MaxDepth + 5));
         Assert.True(inside.Length <= ExpressionEvaluator.MaxLength, "用例本身要落在长度上限内，否则测不到深度闸门");
-        Assert.Contains("嵌套过深", Fail(inside));
+        var error = Fail(inside);
+        Assert.Equal("calc.expr.deepNest", error.Key);
+        Assert.Equal([ExpressionEvaluator.MaxDepth.ToString()], ArgsOf(error));
     }
 
     [Fact]
@@ -206,7 +232,7 @@ public sealed class ExpressionEvaluatorTests
             var r = ExpressionEvaluator.Evaluate(s);
             Assert.False(r.Ok && double.IsNaN(r.Value), $"「{s}」返回了 NaN 却标记成功");
             Assert.False(r.Ok && double.IsInfinity(r.Value), $"「{s}」返回了无穷却标记成功");
-            if (!r.Ok) Assert.False(string.IsNullOrWhiteSpace(r.Error), $"「{s}」失败却没给原因");
+            if (!r.Ok) Assert.True(UiStrings.TryGet(r.Error!.Key, out _), $"「{s}」的原因那颗键没登记：{r.Error!.Key}");
         }
     }
 

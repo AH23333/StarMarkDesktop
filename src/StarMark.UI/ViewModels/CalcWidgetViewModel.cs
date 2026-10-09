@@ -25,7 +25,10 @@ public sealed partial class CalcWidgetViewModel : ObservableObject
     public const int HistoryLimit = 20;
 
     [ObservableProperty] private string _expression = string.Empty;
-    [ObservableProperty] private string _calcResult = "输入算式，回车记入历史";
+
+    /// <summary>结果行。<b>never 存成品字</b>：这句要么是当前算式的读数，要么是 Core 那颗键在当前语言下的念法，
+    /// 两者都由 <see cref="ApplyExpression"/>／<see cref="RebuildWords"/> 当场算出（批次 WI-55c／P-182b）。</summary>
+    [ObservableProperty] private string _calcResult = IdleText();
     [ObservableProperty] private string _unitValueText = "1";
     [ObservableProperty] private string _unitResult = string.Empty;
     [ObservableProperty] private string _quickResult = string.Empty;
@@ -84,13 +87,19 @@ public sealed partial class CalcWidgetViewModel : ObservableObject
 
     // ───────────────────────── 表达式 ─────────────────────────
 
+    /// <summary>
+    /// 计算页那句"还没输入时说什么"。<b>一颗主人</b>：字段初值与"清空后"都走这里，
+    /// ⛔ 两处各抄一遍那六个字（抄的那一处换语言不会改口，正是这一族坏掉的样子）。
+    /// </summary>
+    private static string IdleText() => Locale.T("calc.expr.idle");
+
     /// <summary>逐键求值：只更新显示，不入历史（入历史要用户明确按回车或点"记入"）。</summary>
     public void ApplyExpression(string? text)
     {
         Expression = text ?? string.Empty;
         if (string.IsNullOrWhiteSpace(Expression))
         {
-            CalcResult = "输入算式，回车记入历史";
+            CalcResult = IdleText();
             return;
         }
         CalcResult = ExpressionEvaluator.Evaluate(Expression).Display;

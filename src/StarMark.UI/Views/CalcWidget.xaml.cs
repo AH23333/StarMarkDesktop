@@ -77,7 +77,7 @@ public sealed partial class CalcWidget : UserControl
         if (!ViewModel.CommitExpression())
         {
             // 按了回车却没记东西，必须说清为什么（否则用户会以为历史功能坏了）
-            ShowHint("这一条没有记入：只有算出结果的算式才进历史带");
+            ShowHint(Locale.T("calc.hint.notCommitted"));
             return;
         }
         e.Handled = true;
@@ -98,7 +98,7 @@ public sealed partial class CalcWidget : UserControl
     {
         ViewModel.ClearHistory();
         SyncHistoryEmptyHint();
-        ShowHint("历史已清空");
+        ShowHint(Locale.T("calc.hint.historyCleared"));
         await SaveHistoryAsync();
     }
 
@@ -109,13 +109,13 @@ public sealed partial class CalcWidget : UserControl
         var r = ExpressionEvaluator.Evaluate(ViewModel.Expression);
         if (!r.Ok)
         {
-            ShowHint("没有可复制的结果：算式还没算对");
+            ShowHint(Locale.T("calc.hint.noCopyNoAnswer"));
             return;
         }
         if (TryCopy(ExpressionEvaluator.Format(r.Value), out var why))
-            ShowHint($"已复制 {ExpressionEvaluator.Format(r.Value)}");
+            ShowHint(Locale.Fmt("calc.hint.copied", ExpressionEvaluator.Format(r.Value)));
         else
-            ShowHint($"复制失败：{why}");
+            ShowHint(Locale.Fmt("clip.status.copyFail", why));
     }
 
     // ───────────────────────── 换算 ─────────────────────────
@@ -210,16 +210,18 @@ public sealed partial class CalcWidget : UserControl
         var text = ViewModel.QuickCopyText;
         if (text is null)
         {
-            ShowQuickHint("没有可复制的结果：还有必填的格子没填对");
+            ShowQuickHint(Locale.T("calc.hint.noCopyIncomplete"));
             return;
         }
-        ShowQuickHint(TryCopy(text, out var why) ? "已复制速算结果" : $"复制失败：{why}");
+        ShowQuickHint(TryCopy(text, out var why)
+            ? Locale.T("calc.hint.copiedQuick")
+            : Locale.Fmt("clip.status.copyFail", why));
     }
 
     private void ClearQuick_Click(object sender, RoutedEventArgs e)
     {
         foreach (var box in _quickBoxes) box.Text = string.Empty;
-        ShowQuickHint("已清空");
+        ShowQuickHint(Locale.T("calc.hint.clearedQuick"));
     }
 
     /// <summary>那一行此刻显示的是<b>临时提示</b>而不是模式说明？换语言那一刻只有模式说明会自己改口。</summary>

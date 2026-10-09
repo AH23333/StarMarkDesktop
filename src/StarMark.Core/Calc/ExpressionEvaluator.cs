@@ -1,16 +1,30 @@
 #nullable enable
 using System.Globalization;
 using System.Text;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Calc;
 
-/// <summary>求值结果。<see cref="Ok"/> 为 false 时 <see cref="Error"/> 必非空——界面直接显示它，不再自行猜测原因。</summary>
-public readonly record struct CalcResult(bool Ok, double Value, string? Error)
+/// <summary>
+/// 求值结果。<see cref="Ok"/> 为 false 时 <see cref="Error"/> 必非空——界面直接显示它，不再自行猜测原因。
+/// <para><b><see cref="Error"/> 交的是键不是句子</b>（批次 WI-55c／P-182b）：求值器每键跑一次，
+/// 而"语言换了"这件事不在这条节拍里；拼成成品字就等于把语言定死在算出它的那一刻（坑表 #361）。</para>
+/// </summary>
+public readonly record struct CalcResult(bool Ok, double Value, LocMessage? Error)
 {
-    public static CalcResult Fail(string error) => new(false, 0, error);
+    public static CalcResult Success(double value) => new(true, value, null);
 
-    /// <summary>结果行绑定用：成功给格式化数值，失败给原因。</summary>
-    public string Display => Ok ? ExpressionEvaluator.Format(Value) : Error ?? "无法计算";
+    public static CalcResult Fail(LocMessage error) => new(false, 0, error);
+
+    /// <summary>
+    /// 结果行绑定用：成功给格式化数值，失败给原因。
+    /// <para><b>取词发生在被算的那一刻</b>——这颗宿主（<c>CalcWidget</c>）每键重算、换语言再算一遍，
+    /// 所以这里⛔ 走 <c>LocText</c> 那条注册路（那一族贴的是钉在元素上的键，⛔ 是这种当场算出来的读数）。</para>
+    /// <para><c>?? unspecified</c> 那一臂走不到（两颗工厂是唯一的构造入口），它是"任何输入都不抛"这条硬契约的
+    /// 最后一道：宁可念一句"没给出原因"，也不让逐键路径炸在界面上。该臂因此登记在
+    /// <c>CalcWordGateTests</c> 的"这一格走不到"名单里（⛔ 当它已被测过）。</para>
+    /// </summary>
+    public string Display => Ok ? ExpressionEvaluator.Format(Value) : (Error ?? LocMessage.Of("calc.expr.unspecified")).Render();
 }
 
 /// <summary>
@@ -39,8 +53,8 @@ public static class ExpressionEvaluator
 
     public static CalcResult Evaluate(string? text)
     {
-        if (string.IsNullOrWhiteSpace(text)) return CalcResult.Fail("没有可计算的内容");
-        if (text.Length > MaxLength) return CalcResult.Fail($"表达式过长（上限 {MaxLength} 个字符）");
+        if (string.IsNullOrWhiteSpace(text)) return CalcResult.Fail(LocMessage.Of("calc.expr.empty"));
+        if (text.Length > MaxLength) return CalcResult.Fail(LocMessage.Of("calc.expr.tooLong", MaxLength));
 
         List<Token> tokens;
         try
@@ -51,31 +65,34 @@ public static class ExpressionEvaluator
         }
         catch (Exception ex)
         {
-            return CalcResult.Fail($"无法解析：{ex.GetType().Name}");
+            return CalcResult.Fail(LocMessage.Of("calc.expr.lexCrash", ex.GetType().Name));
         }
 
-        if (tokens.Count == 0) return CalcResult.Fail("没有可计算的内容");
+        if (tokens.Count == 0) return CalcResult.Fail(LocMessage.Of("calc.expr.empty"));
 
         try
         {
             var p = new Parser(tokens, text.Length);
             var value = p.ParseAdditive();
             if (!p.Ok) return CalcResult.Fail(p.Error!);
-            if (!p.AtEnd) return CalcResult.Fail($"多余的内容：第 {p.NextPosition} 个字符");
+            if (!p.AtEnd) return CalcResult.Fail(LocMessage.Of("calc.expr.trailing", p.NextPosition));
             // 先判"除以 0"再判 NaN/∞：n÷0 在 IEEE 里给 ±∞（0÷0 才给 NaN），
             // 顺序颠倒时 1/0 会被下面的范围分支报成"结果超出可表示范围"——用户按的是除号，不是溢出。
-            if (p.DivisionByZero) return CalcResult.Fail("除数为 0");
-            if (double.IsNaN(value)) return CalcResult.Fail("结果无定义");
-            if (double.IsInfinity(value)) return CalcResult.Fail("结果超出可表示范围");
-            return new CalcResult(true, value, null);
+            if (p.DivisionByZero) return CalcResult.Fail(LocMessage.Of("calc.expr.divZero"));
+            if (double.IsNaN(value)) return CalcResult.Fail(LocMessage.Of("calc.expr.undefined"));
+            if (double.IsInfinity(value)) return CalcResult.Fail(LocMessage.Of("calc.expr.overflow"));
+            return CalcResult.Success(value);
         }
         catch (Exception ex)
         {
-            return CalcResult.Fail($"无法计算：{ex.GetType().Name}");
+            return CalcResult.Fail(LocMessage.Of("calc.expr.evalCrash", ex.GetType().Name));
         }
     }
 
     // ───────────────────────── 分词 ─────────────────────────
+
+    /// <summary>认得的常量名。那句"只支持 …"的话收的就是这一串：加常量时改这里，⛔ 在表里再抄一份名单（两份名单一定会漂，✅WI-50 那颗"计数⛔ 是凭据"同一条界线）。</summary>
+    public const string SupportedNames = "pi / π / e";
 
     private enum Op { Plus, Minus, Multiply, Divide, Power, LParen, RParen }
 
@@ -86,7 +103,7 @@ public static class ExpressionEvaluator
         public bool Is(Op op) => Kind == TokKind.Operator && Operator == op;
     }
 
-    private readonly record struct LexOutcome(bool Ok, string? Error, List<Token>? Tokens);
+    private readonly record struct LexOutcome(bool Ok, LocMessage? Error, List<Token>? Tokens);
 
     private static LexOutcome TryLex(string s)
     {
@@ -113,10 +130,10 @@ public static class ExpressionEvaluator
                 }
                 var raw = s.Substring(start, i - start);
                 if (!IsNumericToken(raw))
-                    return new LexOutcome(false, $"数字写法无法识别：「{raw}」", null);
+                    return new LexOutcome(false, LocMessage.Of("calc.expr.badNumber", raw), null);
                 if (!double.TryParse(raw.Replace(",", string.Empty), NumberStyles.Float,
                         CultureInfo.InvariantCulture, out var num))
-                    return new LexOutcome(false, $"数字超出范围：「{raw}」", null);
+                    return new LexOutcome(false, LocMessage.Of("calc.expr.numberRange", raw), null);
                 list.Add(new Token(TokKind.Number, num, default, start + 1));
                 continue;
             }
@@ -133,7 +150,7 @@ public static class ExpressionEvaluator
                     _ => double.NaN,
                 };
                 if (double.IsNaN(value))
-                    return new LexOutcome(false, $"不认识「{name}」（只支持 pi / π / e）", null);
+                    return new LexOutcome(false, LocMessage.Of("calc.expr.unknownName", name, SupportedNames), null);
                 list.Add(new Token(TokKind.Number, value, default, start + 1));
                 continue;
             }
@@ -142,7 +159,7 @@ public static class ExpressionEvaluator
             var mapped = MapOperator(c);
             if (mapped.HasValue) { list.Add(new Token(TokKind.Operator, 0, mapped.Value, i + 1)); i++; continue; }
 
-            return new LexOutcome(false, $"不支持的字符「{c}」", null);
+            return new LexOutcome(false, LocMessage.Of("calc.expr.unsupportedChar", c.ToString()), null);
         }
         return new LexOutcome(true, null, list);
     }
@@ -228,12 +245,12 @@ public static class ExpressionEvaluator
         }
 
         public bool Ok { get; private set; } = true;
-        public string? Error { get; private set; }
+        public LocMessage? Error { get; private set; }
         public bool DivisionByZero { get; private set; }
         public bool AtEnd => _pos >= _tokens.Count;
         public int NextPosition => _pos < _tokens.Count ? _tokens[_pos].Position : _inputLength + 1;
 
-        private void Fail(string error)
+        private void Fail(LocMessage error)
         {
             if (!Ok) return;
             Ok = false;
@@ -343,7 +360,7 @@ public static class ExpressionEvaluator
             var t = Peek();
             if (t is null)
             {
-                Fail("表达式不完整：末尾缺少数字");
+                Fail(LocMessage.Of("calc.expr.incomplete"));
                 return 0;
             }
             if (t.Kind == TokKind.Number)
@@ -356,7 +373,7 @@ public static class ExpressionEvaluator
                 _pos++;
                 if (++_depth > MaxDepth)
                 {
-                    Fail($"括号嵌套过深（上限 {MaxDepth} 层）");
+                    Fail(LocMessage.Of("calc.expr.deepNest", MaxDepth));
                     return 0;
                 }
                 var inner = ParseAdditive();
@@ -367,23 +384,23 @@ public static class ExpressionEvaluator
                 }
                 else
                 {
-                    Fail("缺少右括号");
+                    Fail(LocMessage.Of("calc.expr.missingRParen"));
                 }
                 return inner;
             }
             if (t.Is(Op.RParen))
             {
-                Fail($"多余的右括号（第 {t.Position} 个字符）");
+                Fail(LocMessage.Of("calc.expr.extraRParen", t.Position));
                 _pos++;
                 return 0;
             }
             if (t.Kind == TokKind.Percent)
             {
-                Fail($"百分号前缺少数字（第 {t.Position} 个字符）");
+                Fail(LocMessage.Of("calc.expr.percentNoNumber", t.Position));
                 _pos++;
                 return 0;
             }
-            Fail($"这里需要数字（第 {t.Position} 个字符）");
+            Fail(LocMessage.Of("calc.expr.needNumber", t.Position));
             _pos++;
             return 0;
         }
