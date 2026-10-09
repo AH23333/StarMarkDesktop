@@ -1973,6 +1973,39 @@ public static class UiStrings
         new Entry("widget.pomo.stop", "停止", "Stop", "停止"),
         new Entry("widget.pomo.focus", "专注", "Focus", "フォーカス"),
         new Entry("widget.pomo.rest", "休息", "Break", "休憩"),
+        // ===== 批次 WI-59：番茄钟那一扇正文那一行、那颗主按钮与那几句提示（P-188 第一刀＋P-193 第一颗）=====
+        // 阶段名词⛔ 再立一行——`widget.pomo.focus`／`widget.pomo.rest` 就是它们（一词一主，XAML 那两行念的也是这两颗）；
+        //   而「专注<b>中</b>」是<b>另一句</b>：英文要写成 "Focusing"，把「中」拼在名词后面＝语言又被定死在拼接那一刻。
+        //   ⚠ 反过来，"空闲／已暂停"这两颗名词本批刻意⛔ 立行：仓里⛔ 有人念它们
+        //   （从前那颗 `FocusTimer.PhaseLabel` 的唯一读者就是状态行，方法一起删了）——立了没人问的行＝死行。
+        // 那颗输入框的占位句也⛔ 再立一行＝上面 `widget.pomo.taskHint`：从前 VM 里硬写着第二种措辞
+        //   「这一轮在做什么？可留空」（少了那对全角括号），屏幕上与占位符两种写法＝P-171 那一族。
+        new Entry("widget.pomo.doing.focusing", "专注中", "Focusing", "集中中"),
+        new Entry("widget.pomo.doing.resting", "休息中", "On a break", "休憩中"),
+        new Entry("widget.pomo.status.idle", "准备开始一轮专注", "Ready to start a focus round", "集中を始める準備ができています"),
+        new Entry("widget.pomo.status.paused", "已暂停（剩 {0}）", "Paused — {0} left", "一時停止中（残り {0}）"),
+        new Entry("widget.pomo.status.running", "{0} · 剩 {1}", "{0} · {1} left", "{0}・残り{1}"),
+        new Entry("widget.pomo.btn.start", "开始专注", "Start focus", "集中を開始"),
+        new Entry("widget.pomo.btn.resume", "继续", "Resume", "再開"),
+        new Entry("widget.pomo.btn.skipRest", "跳过休息", "Skip the break", "休憩を飛ばす"),
+        new Entry("widget.pomo.btn.pause", "暂停", "Pause", "一時停止"),
+        new Entry("widget.pomo.hint.stopped", "已停止这一轮", "This round is stopped", "今回のラウンドを停止しました"),
+        new Entry("widget.pomo.hint.runningElseStop", "这一轮还在跑，先停止才能换任务",
+                  "A round is still running — stop it first to switch tasks",
+                  "実行中です。停止してからタスクを変更してください"),
+        new Entry("widget.pomo.hint.startedFromTodo", "已按待办开始一轮专注",
+                  "Started a focus round from that task", "そのタスクで集中を始めました"),
+        new Entry("widget.pomo.hint.cannotStart", "没能开始（状态异常）",
+                  "Couldn't start — unexpected state", "開始できませんでした（状態異常）"),
+        new Entry("widget.pomo.hint.clamped", "时长只收 {0}–{1} 分钟，已按边界取值",
+                  "Minutes must be between {0} and {1}, so the value was clamped",
+                  "分数は {0}～{1} の範囲に収めました"),
+        // ⚠ 英文列⛔ 写 "from the next round"：那颗闸门（`I18nWiringGateTests.ShippedUiTextNeverPromisesAFutureBatch`）
+        // 按句式咬 `(?:later|following|next) (?:pass|batch|round)`，它分不清"下一批才有"和"下一轮才生效"。
+        // 中文列的「下一轮」不在它的清单里，所以这一格只有英文要绕着措辞（改措辞，⛔ 放宽那把尺）。
+        new Entry("widget.pomo.hint.nextRound", "新时长下一轮生效",
+                  "New durations apply to rounds started after this one",
+                  "新しい分数は次回から適用されます"),
         new Entry("widget.todo.inputHint", "添加待办，回车确认…", "Add a todo, press Enter to confirm…", "ToDo を追加、Enter で確定…"),
         new Entry("widget.todo.colorTip", "颜色标记", "Colour marker", "色マーク"),
         new Entry("widget.todo.dueTip", "截止日期", "Due date", "期限日"),

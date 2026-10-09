@@ -1,4 +1,5 @@
 #nullable enable
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using Xunit;
 
@@ -176,23 +177,41 @@ public sealed class FocusTimerTests
         Assert.Equal("00:01", FocusTimer.Format(TimeSpan.FromMilliseconds(200)));
     }
 
-    [Theory]
-    [InlineData(FocusPhase.Idle, "空闲")]
-    [InlineData(FocusPhase.Focusing, "专注")]
-    [InlineData(FocusPhase.Resting, "休息")]
-    [InlineData(FocusPhase.Paused, "已暂停")]
-    public void PhaseLabel_CoversEveryPhase(FocusPhase phase, string expected)
-        => Assert.Equal(expected, FocusTimer.PhaseLabel(phase));
-
+    /// <summary>
+    /// 状态行交回的是<b>键＋实参</b>，⛔ 已经取好词的那一句（批次 WI-59／P-193：Core 交出身份，
+    /// 宿主在贴上屏幕的那一刻才取词）。四颗阶段各有下落；进行中的那一颗把「专注中／休息中」作为
+    /// <b>整句的键</b>递进实参（⛔ 在这里把「专注」＋「中」拼起来＝语言被定死在拼接那一刻），
+    /// 倒计时读数按<b>机器事实</b>当实参递进去。
+    /// </summary>
     [Fact]
-    public void StatusLine_TellsTheTruthPerPhase()
+    public void StatusMessage_TellsTheTruthPerPhase()
     {
         var t = New();
-        Assert.Equal("准备开始一轮专注", t.StatusLine(T0));
+        Assert.Equal("widget.pomo.status.idle", t.StatusMessage(T0).Key);
+
         t.Start(T0);
-        Assert.Equal("专注中 · 剩 25:00", t.StatusLine(T0));
+        var focusing = t.StatusMessage(T0);
+        Assert.Equal("widget.pomo.status.running", focusing.Key);
+        Assert.Equal("widget.pomo.doing.focusing", Assert.IsType<LocMessage>(focusing.Args![0]).Key);
+        Assert.Equal("25:00", focusing.Args![1]);            // 整分不缺位、不进位
+
         t.Pause(T0.AddMinutes(5));
-        Assert.Equal("已暂停（剩 20:00）", t.StatusLine(T0.AddMinutes(5)));
+        var paused = t.StatusMessage(T0.AddMinutes(5));
+        Assert.Equal("widget.pomo.status.paused", paused.Key);
+        Assert.Equal("20:00", Assert.Single(paused.Args!));
+    }
+
+    /// <summary>休息那一档也是同一颗骨架、另一颗"进行中"的键（⛔ 复用专注那颗＝两件事两种念法）。</summary>
+    [Fact]
+    public void StatusMessage_RestingHandsTheRestSkeleton()
+    {
+        var t = New();
+        t.Start(T0);
+        t.Skip(T0.AddMinutes(25));                          // 专注结束 ⇒ 立刻进休息
+        var resting = t.StatusMessage(T0.AddMinutes(25));
+        Assert.Equal("widget.pomo.status.running", resting.Key);
+        Assert.Equal("widget.pomo.doing.resting", Assert.IsType<LocMessage>(resting.Args![0]).Key);
+        Assert.Equal("05:00", resting.Args![1]);
     }
 
     [Theory]

@@ -1,5 +1,7 @@
 #nullable enable
 
+using StarMark.Abstractions.I18n;
+
 namespace StarMark.Core.Widgets;
 
 /// <summary>番茄钟阶段。</summary>
@@ -74,20 +76,24 @@ public sealed class FocusTimer
 
     public static TimeSpan MaxZero(TimeSpan t) => t < TimeSpan.Zero ? TimeSpan.Zero : t;
 
-    /// <summary>阶段名（界面/提醒共用一处措辞，避免两个书写点）。</summary>
-    public static string PhaseLabel(FocusPhase phase) => phase switch
+    /// <summary>
+    /// 正文那一行的<b>身份</b>（键＋实参，还没取词）——批次 WI-59／P-193：Core 交出的是键，
+    /// 取词发生在宿主把它贴上屏幕的那一刻（从前这里返回成品字，换语言后那一行停在旧语言）。
+    /// <para>「专注<b>中」是一颗整句的键</b>，⛔ 由「专注」＋「中」拼出来：英文那一档要写 "Focusing"，
+    /// 而拼接那一刻语言就被定死了（同一批还顺手并掉了那颗「（可留空）」的第二份措辞）。</para>
+    /// </summary>
+    public LocMessage StatusMessage(DateTimeOffset now) => Phase switch
     {
-        FocusPhase.Focusing => "专注",
-        FocusPhase.Resting => "休息",
-        FocusPhase.Paused => "已暂停",
-        _ => "空闲",
+        FocusPhase.Idle => LocMessage.Of("widget.pomo.status.idle"),
+        FocusPhase.Paused => LocMessage.Of("widget.pomo.status.paused", Format(Remaining(now))),
+        _ => LocMessage.Of("widget.pomo.status.running", DoingMessage(Phase), Format(Remaining(now))),
     };
 
-    public string StatusLine(DateTimeOffset now) => Phase switch
+    /// <summary>阶段进行中的那句念法（<see cref="StatusMessage"/> 的第一格实参）。两个阶段各一颗整句。</summary>
+    private static LocMessage DoingMessage(FocusPhase phase) => phase switch
     {
-        FocusPhase.Idle => "准备开始一轮专注",
-        FocusPhase.Paused => $"已暂停（剩 {Format(Remaining(now))}）",
-        _ => $"{PhaseLabel(Phase)}中 · 剩 {Format(Remaining(now))}",
+        FocusPhase.Resting => LocMessage.Of("widget.pomo.doing.resting"),
+        _ => LocMessage.Of("widget.pomo.doing.focusing"),
     };
 
     /// <summary>计时读数 mm:ss；超过一小时才带小时位（休息/常规专注都不该出现，出现说明上限设得太宽）。</summary>

@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 
 namespace StarMark.UI.ViewModels;
@@ -8,14 +9,23 @@ namespace StarMark.UI.ViewModels;
 /// <summary>
 /// 番茄钟 ViewModel：持有状态机，把阶段/剩余时间翻成界面文本。
 /// 全部规则在 <see cref="FocusTimer"/>（可单测），本类只做"传 now、取显示串"。
+/// <para>
+/// <b>取词发生在 <see cref="Refresh"/> 里</b>（批次 WI-59／P-188）：这颗宿主靠自己那一拍每秒重算，
+/// 那一拍就是它的重贴 ⇒ ⛔ 挂 <c>LocText</c>、也⛔ 为它新开一个 <c>Locale.Changed</c> 订阅
+/// （与 ✅WI-44 那颗时钟同一口径）。所以这里存的是<b>键</b>（<see cref="_hint"/>），
+/// 而交到绑定属性上的才是那一刻的字。
+/// </para>
 /// </summary>
 public sealed partial class FocusTimerViewModel : ObservableObject
 {
     private readonly FocusTimer _timer;
 
-    [ObservableProperty] private string _statusText = "准备开始一轮专注";
-    [ObservableProperty] private string _taskText = "这一轮在做什么？可留空";
-    [ObservableProperty] private string _primaryText = "开始专注";
+    /// <summary>那颗提示的<b>身份</b>（键＋实参）：它只在事件上换，靠每秒那次重算跟着语言走。</summary>
+    private LocMessage? _hint;
+
+    [ObservableProperty] private string _statusText = string.Empty;
+    [ObservableProperty] private string _taskText = string.Empty;
+    [ObservableProperty] private string _primaryText = string.Empty;
     [ObservableProperty] private string _hintText = string.Empty;
     [ObservableProperty] private bool _canStop;
     [ObservableProperty] private string _countdownText = "--:--";
@@ -51,19 +61,25 @@ public sealed partial class FocusTimerViewModel : ObservableObject
 
     public void Refresh(DateTimeOffset now)
     {
-        StatusText = _timer.StatusLine(now);
+        StatusText = _timer.StatusMessage(now).Render();
         CountdownText = FocusTimer.Format(_timer.Remaining(now));
-        PrimaryText = _timer.Phase switch
-        {
-            FocusPhase.Idle => "开始专注",
-            FocusPhase.Paused => "继续",
-            FocusPhase.Resting => "跳过休息",
-            _ => "暂停",
-        };
+        PrimaryText = PrimaryMessage(_timer.Phase).Render();
         CanStop = _timer.Phase != FocusPhase.Idle;
         TaskText = _timer.TaskTitle
-                   ?? (string.IsNullOrWhiteSpace(EditTitle) ? "这一轮在做什么？可留空" : EditTitle);
+                   ?? (string.IsNullOrWhiteSpace(EditTitle) ? LocMessage.Of("widget.pomo.taskHint").Render() : EditTitle);
+        // 那颗提示⛔ 存成品字：它只在事件上换，而换语言那一刻没人再发一次事件——
+        // 存键＋每一拍重算，屏幕上那一行才跟着语言走（与上面三颗同一条路子）。
+        HintText = _hint?.Render() ?? string.Empty;
     }
+
+    /// <summary>那颗主按钮在当前阶段该说什么（<b>四颗键</b>，⛔ 在这里取词＝批次 WI-59／P-188）。</summary>
+    private static LocMessage PrimaryMessage(FocusPhase phase) => phase switch
+    {
+        FocusPhase.Idle => LocMessage.Of("widget.pomo.btn.start"),
+        FocusPhase.Paused => LocMessage.Of("widget.pomo.btn.resume"),
+        FocusPhase.Resting => LocMessage.Of("widget.pomo.btn.skipRest"),
+        _ => LocMessage.Of("widget.pomo.btn.pause"),
+    };
 
     /// <summary>用户在输入框里写的本轮任务名（空闲/暂停态可改）。</summary>
     public string EditTitle { get; set; } = string.Empty;
@@ -76,7 +92,7 @@ public sealed partial class FocusTimerViewModel : ObservableObject
         {
             case FocusPhase.Idle:
                 _timer.Start(now, EditTitle);
-                HintText = string.Empty;
+                _hint = null;
                 break;
             case FocusPhase.Focusing or FocusPhase.Resting:
                 _timer.Pause(now);
@@ -100,8 +116,8 @@ public sealed partial class FocusTimerViewModel : ObservableObject
     {
         _timer.Reset();
         EditTitle = string.Empty;
+        _hint = LocMessage.Of("widget.pomo.hint.stopped");
         Refresh(DateTimeOffset.Now);
-        HintText = "已停止这一轮";
     }
 
     /// <summary>从别处（待办条目右键「开始专注」）拉起一轮专注。返回是否真的开始。</summary>
@@ -111,13 +127,16 @@ public sealed partial class FocusTimerViewModel : ObservableObject
         if (_timer.Phase != FocusPhase.Idle)
         {
             // 已经在计时 ⇒ 不偷换任务，也不把 deadline 往后推，只把这件事告诉用户
-            HintText = "这一轮还在跑，先停止才能换任务";
+            _hint = LocMessage.Of("widget.pomo.hint.runningElseStop");
             Refresh(now);
             return false;
         }
         EditTitle = title ?? string.Empty;
         var started = _timer.Start(now, title);
-        HintText = started ? "已按待办开始一轮专注" : "没能开始（状态异常）";
+        // 两颗键各自写全（⛔ `Of(started ? "…" : "…")`）：把三元塞进<b>键名那一格</b>，
+        // 那颗"按实参数比槽数"与"每颗键都有人问"的尺都读不到这两处调用点＝盲区（坑表 #127 那一族）。
+        _hint = started ? LocMessage.Of("widget.pomo.hint.startedFromTodo")
+                        : LocMessage.Of("widget.pomo.hint.cannotStart");
         Refresh(now);
         return started;
     }
@@ -137,12 +156,13 @@ public sealed partial class FocusTimerViewModel : ObservableObject
         RestMinutes = r;
 
         if (rawFocus != f || rawRest != r)
-            HintText = $"时长只收 {FocusTimerConfig.MinMinutes}–{FocusTimerConfig.MaxMinutes} 分钟，已按边界取值";
+            _hint = LocMessage.Of("widget.pomo.hint.clamped", FocusTimerConfig.MinMinutes, FocusTimerConfig.MaxMinutes);
         else if (_timer.Phase is FocusPhase.Focusing or FocusPhase.Resting or FocusPhase.Paused)
-            HintText = "新时长下一轮生效";
+            _hint = LocMessage.Of("widget.pomo.hint.nextRound");
         else
-            HintText = string.Empty;
+            _hint = null;
 
+        Refresh(DateTimeOffset.Now);        // 提示存的是键，交到绑定属性上的是<b>此刻</b>的字（⛔ 在这里 Render 之外没有第二条路）
         ConfigChanged?.Invoke();
     }
 
