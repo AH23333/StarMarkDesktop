@@ -43,6 +43,7 @@ public sealed class I18nWiringGateTests
     private const string SettingsHotkeysCs = "src/StarMark.UI/Views/SettingsPage.Hotkeys.cs";
     private const string GuideUiCs = "src/StarMark.UI/Helpers/GuideUi.cs";
     private const string CanvasToolbarCs = "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs";
+    private const string WeatherWidgetCs = "src/StarMark.UI/Views/WeatherWidget.xaml.cs";
     private const string AppCs = "src/StarMark.UI/App.xaml.cs";
     // 组件窗自己的三条文字出口（批次 WI-37-A）：菜单本体／外壳两态／快捷启动拖放，加内容工厂的占位那一行。
     private const string WidgetMenuCs = "src/StarMark.UI/Views/WidgetWindow.Menu.cs";
@@ -726,7 +727,7 @@ public sealed class I18nWiringGateTests
     /// <c>WidgetWindow.xaml</c> 那颗宿主；其中 <c>ClockWidget.xaml</c> 面上一句可翻的话都没有，见下面那颗断言）。
     /// 新添一颗组件不必改判据就会落进这一格（⛔ 不许改成点文件名单——#318 那条教训的另一面：
     /// 名单式射程会在"搬个家／新加一颗"时静默失效）。</para>
-    /// <para>⛔ <b>下面那 17 句是登记在案的缺口，不是漏翻</b>，两类各有各的坏法：
+    /// <para>⛔ <b>下面那 13 句是登记在案的缺口，不是漏翻</b>（批次 WI-53 之前是 17 句，天气那 4 句已交键），两类各有各的坏法：
     /// <b>①</b>14 句是<b>代码当场写过同一个属性</b>的（<c>MonthBlock.Text</c>＝"2026年9月"、
     /// <c>TitleBlock.Text</c>、<c>ConfigBox.PlaceholderText</c>…）——给这类挂静态键的后果不是少翻一句，
     /// 是<b>换语言那一刻用默认那句盖掉带值那句</b>（屏幕上写着"2026年9月"而那天是 10 月＝一句当场可见的假话，
@@ -780,11 +781,11 @@ public sealed class I18nWiringGateTests
             "SearchWidget.xaml|Content|最近更新",
             "SearchWidget.xaml|Content|相关度",
             "SearchWidget.xaml|Text|输入关键词或选择标签开始搜索",
-            "WeatherWidget.xaml|Content|今日逐时",
-            "WeatherWidget.xaml|Text|暂无数据",
-            "WeatherWidget.xaml|Text|未来三天",
-            "WeatherWidget.xaml|Text|选择城市",
         }, left);
+        // 批次 WI-53（P-182a）收掉 WeatherWidget.xaml 那 4 句：它们每一句都由 code-behind 当场重写
+        // （Loaded 的 ApplyToggleLabels／Render／ShowEmpty）⇒ XAML 那份字面量是"没人读的副本"，
+        // 删掉它而不是给它挂静态键（挂了键＝换语言把带值那句盖回去，正是上面第①类的那颗假话）。
+        Assert.DoesNotContain(left, x => x.StartsWith("WeatherWidget.xaml", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -1145,18 +1146,19 @@ public sealed class I18nWiringGateTests
             .Select(f => f.RelativePath.Replace(Path.DirectorySeparatorChar, '/'))
             .OrderBy(p => p, StringComparer.Ordinal)
             .ToArray();
-        // 三位主人各点一次名（⛔ 只钉计数：加第四处时那一行会红得说不出是谁）
+        // 四位主人各点一次名（⛔ 只钉计数：加第五处时那一行会红得说不出是谁）
         Assert.Equal(new[]
         {
             "src/StarMark.UI/Helpers/LocText.cs",
             "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs",
+            "src/StarMark.UI/Views/WeatherWidget.xaml.cs",
             "src/StarMark.UI/Views/WidgetAppearanceEditor.cs",
         }, subscribers);
 
         var reapply = MethodBody(Code(ReadRepoFile(LocTextCs)), "private static void ReapplyAll");
         Assert.DoesNotContain("new ", reapply, StringComparison.Ordinal);        // 重贴不等于重建
         Assert.DoesNotContain("Navigate", reapply, StringComparison.Ordinal);
-        // 另外两处也只许做"重取词＋重摆／重铺自己那一排"：订阅的那颗方法就是它们平时状态变化走的那一颗，
+        // 另外三处也只许做"重取词＋重摆／重铺自己那一排"：订阅的那颗方法就是它们平时状态变化走的那一颗，
         // 而且必须成对摘掉（事件挂在静态事件上，窗关了不摘＝那一窗的元素永远活着）。
         var bar = Code(ReadRepoFile(CanvasToolbarCs));
         Assert.Contains("Locale.Changed += Refresh;", bar, StringComparison.Ordinal);
@@ -1165,6 +1167,17 @@ public sealed class I18nWiringGateTests
         Assert.Contains("Locale.Changed += RebuildWords;", editor, StringComparison.Ordinal);
         Assert.Contains("Locale.Changed -= RebuildWords;", editor, StringComparison.Ordinal);
         Assert.DoesNotContain("new Window", MethodBody(editor, "void RebuildWords"), StringComparison.Ordinal);
+        // 天气这颗组件（批次 WI-53）：⛔ 用 LocText 的那一路走不通——它屏上大半是<b>带读数的句子</b>
+        // （"18:42 更新"、"体感 21° · 湿度 60% · 风 12 km/h"），`LocText.SetKey(el, key, args)` 把<b>实参也一起冻住</b>，
+        // 换语言那一刻贴回来的是<b>上一次那些数字</b>（坑表 #361 那颗同族）。而那颗"更新失败"是状态：
+        // 重画若把它盖回"某时更新"就是一句当场可见的假话 ⇒ 订阅点⛔ 是通用机制的洞，是这一族的读数必须自己重算。
+        // 合法性的另一半＝它只重跑 `Loaded` 那两条（标签＋用<b>内存里那份缓存</b>重画），⛔ 在这条回调里再打接口。
+        var weather = Code(ReadRepoFile(WeatherWidgetCs));
+        Assert.Contains("Locale.Changed += RebuildWords;", weather, StringComparison.Ordinal);
+        Assert.Contains("Locale.Changed -= RebuildWords;", weather, StringComparison.Ordinal);
+        var weatherRebuild = MethodBody(weather, "private void RebuildWords");
+        Assert.DoesNotContain("RefreshAsync", weatherRebuild, StringComparison.Ordinal);   // 重贴⛔ 顺手再查一次网络
+        Assert.DoesNotContain("SearchCityAsync", weatherRebuild, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -15,21 +15,29 @@ public class WeatherTests
 {
     // ── WMO 天气码映射 ──
 
+    /// <summary>
+    /// 批次 WI-53（P-182a）：那颗词厂从此交<b>键</b>而⛔ 词。
+    /// <para>期望那一侧⛔ 抄表里的中文（那等于把"措辞"当判据，改一个字就得回来改测试；规则 #130）——
+    /// 这里钉的是<b>码→键</b>的归属，词本身由"每颗被问的键都在表里"那颗通用尺与三列闸门管。</para>
+    /// <para>同词共用一颗键（53 与 61 都说"小雨"）⇒ 两码给同一颗键是<b>对的</b>，⛔ 为每个码各开一颗。</para>
+    /// </summary>
     [Theory]
-    [InlineData(0, "晴")]
-    [InlineData(2, "多云")]
-    [InlineData(3, "阴")]
-    [InlineData(45, "雾")]
-    [InlineData(63, "中雨")]
-    [InlineData(75, "大雪")]
-    [InlineData(95, "雷阵雨")]
-    [InlineData(99, "雷阵雨伴大冰雹")]
-    public void Describe_KnownCodes_ReturnsChinese(int code, string expected)
-        => Assert.Equal(expected, WeatherCode.Describe(code));
+    [InlineData(0, "weather.desc.clear")]
+    [InlineData(2, "weather.desc.cloudy")]
+    [InlineData(3, "weather.desc.overcast")]
+    [InlineData(45, "weather.desc.fog")]
+    [InlineData(63, "weather.desc.moderateRain")]
+    [InlineData(53, "weather.desc.lightRain")]      // 毛毛雨档的"小雨"与雨档的"小雨"同一颗键
+    [InlineData(61, "weather.desc.lightRain")]
+    [InlineData(75, "weather.desc.heavySnow")]
+    [InlineData(95, "weather.desc.thunderstorm")]
+    [InlineData(99, "weather.desc.thunderstormHeavyHail")]
+    public void DescribeMessage_KnownCodes_ReturnTheKeyOfThatWord(int code, string expectedKey)
+        => Assert.Equal(expectedKey, WeatherCode.DescribeMessage(code).Key);
 
     [Fact]
-    public void Describe_UnknownCode_FallsBackToUnknown()
-        => Assert.Equal("未知", WeatherCode.Describe(12345));
+    public void DescribeMessage_UnknownCode_FallsBackToUnknown()
+        => Assert.Equal("weather.desc.unknown", WeatherCode.DescribeMessage(12345).Key);
 
     [Fact]
     public void Glyph_DistinguishesDayAndNightForClearSky()

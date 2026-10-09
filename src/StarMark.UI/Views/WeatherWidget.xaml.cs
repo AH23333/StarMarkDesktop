@@ -6,6 +6,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using StarMark.Integrations.Weather;
 using StarMark.UI.Helpers;
@@ -35,6 +36,11 @@ public sealed partial class WeatherWidget : UserControl
 
     private DispatcherQueueTimer? _timer;
     private bool _loading;
+    /// <summary>
+    /// 上一次刷新<b>失败着</b>——那颗状态必须活过"换语言重画"：
+    /// 那一行是这颗组件唯一的失败出口，重画把它盖回那句「某时更新」就是在说假话。
+    /// </summary>
+    private bool _failed;
 
     /// <summary>温度单位（°C / °F）。组件内可读，切换按钮据此回写设置。</summary>
     private WeatherUnit _unit = WeatherUnit.Celsius;
@@ -56,8 +62,19 @@ public sealed partial class WeatherWidget : UserControl
             ApplyToggleLabels();
             RenderCachedOrPlaceholder();
             StartTimer();
+            // 换语言那一拍⛔ 在这颗组件自己的节拍里（刷新是"数据过期才重画"，最快也要等半小时）
+            // ⇒ 与 Loaded 同一对动作重跑一遍：只用那份内存里的报告重贴，⛔ 在这里再打一次接口（#386）。
+            Locale.Changed += RebuildWords;
             _ = RefreshAsync(force: false);
         };
+        Unloaded += (_, _) => Locale.Changed -= RebuildWords;
+    }
+
+    /// <summary>换语言时重贴这一扇宿主：走的正是 <c>Loaded</c> 那两条（标签＋用缓存重画），⛔ 新立一套重贴机制。</summary>
+    private void RebuildWords()
+    {
+        ApplyToggleLabels();
+        RenderCachedOrPlaceholder();
     }
 
     /// <summary>
@@ -101,8 +118,12 @@ public sealed partial class WeatherWidget : UserControl
     private void ApplyToggleLabels()
     {
         UnitButton.Content = WeatherUnits.UnitSuffix(_unit);
-        ViewButton.Content = _view == WeatherForecastView.Hourly ? "未来三天" : "今日逐时";
-        ForecastTitle.Text = _view == WeatherForecastView.Hourly ? "今日逐时" : "未来三天";
+        // 那颗按钮说的是"点下去会切到哪儿"，标题说的是"现在在看哪儿"——两颗宿主两句话，⛔ 合用一颗键。
+        // 这一族随状态重建 ⇒ 当场取词（⛔ 挂 LocText：那颗键会把上一次那种视图的句子在换语言时又贴回来，#361）。
+        ViewButton.Content = Locale.T(_view == WeatherForecastView.Hourly
+            ? "widget.weather.dailyView" : "widget.weather.hourlyView");
+        ForecastTitle.Text = Locale.T(_view == WeatherForecastView.Hourly
+            ? "widget.weather.hourlyView" : "widget.weather.dailyView");
         _empty = s_cached is null;
         ApplyVisibility();
     }
@@ -195,18 +216,22 @@ public sealed partial class WeatherWidget : UserControl
     private void Render(WeatherReport report)
     {
         ShowEmpty(false);
+        // 一次成功的重画＝那颗"失败"状态到此为止（它⛔ 活到下一次重画，否则换语言会把旧失败句贴回来）
+        _failed = false;
 
         CityBlock.Text = report.City.Display;
-        UpdatedBlock.Text = DateTimeText.Clock(report.FetchedAt) + " 更新";
+        PaintUpdatedLine(report);
 
         TempBlock.Text = WeatherUnits.TemperatureText(report.Now.TemperatureC, _unit);
-        DescBlock.Text = WeatherCode.Describe(report.Now.Code);
+        // Core 交的是那颗键；词在这里按**当前**语言取（换语言由上面那对订阅再跑一遍这条路）。
+        DescBlock.Text = WeatherCode.DescribeMessage(report.Now.Code).Render();
         IconBlock.Text = WeatherCode.Emoji(report.Now.Code, report.Now.IsDay);
 
         var feels = WeatherUnits.TemperatureValue(report.Now.FeelsLikeC, _unit);
         FeelsBlock.Text = report.Now.Humidity > 0
-            ? $"体感 {feels}° · 湿度 {report.Now.Humidity}% · 风 {WeatherUnits.WindText(report.Now.WindSpeedKmh, _unit)}"
-            : $"体感 {feels}°";
+            ? Locale.Fmt("widget.weather.feelsWind", feels, report.Now.Humidity,
+                         WeatherUnits.WindText(report.Now.WindSpeedKmh, _unit))
+            : Locale.Fmt("widget.weather.feelsOnly", feels);
 
         // 第 0 天是今天，跳过；只展示未来三天
         ForecastHost.Children.Clear();
@@ -230,17 +255,18 @@ public sealed partial class WeatherWidget : UserControl
         if (!WeatherLayoutMath.ShowExtraMetrics(_level)) return;
 
         var today = report.Days.Count > 0 ? report.Days[0] : null;
-        var items = new List<(string Label, string Value)>();
+        // 交的是**键**，取词在 BuildMetrics 这一趟里发生（这一排随每次重画重建，节拍就是它的重贴）。
+        var items = new List<(string LabelKey, string Value)>();
         if (today is not null)
-            items.Add(("降水概率", $"{today.PrecipitationProbabilityMax}%"));
+            items.Add(("widget.weather.metric.precip", $"{today.PrecipitationProbabilityMax}%"));
         if (report.Now.UvIndex > 0)
-            items.Add(("紫外线", NumberText.UpTo1(report.Now.UvIndex)));
+            items.Add(("widget.weather.metric.uv", NumberText.UpTo1(report.Now.UvIndex)));
         if (report.Now.PressureHpa > 0)
-            items.Add(("气压", $"{Math.Round(report.Now.PressureHpa)} hPa"));
+            items.Add(("widget.weather.metric.pressure", $"{Math.Round(report.Now.PressureHpa)} hPa"));
         if (today?.Sunrise is { } rise)
-            items.Add(("日出", DateTimeText.Clock(rise)));
+            items.Add(("widget.weather.metric.sunrise", DateTimeText.Clock(rise)));
         if (today?.Sunset is { } set)
-            items.Add(("日落", DateTimeText.Clock(set)));
+            items.Add(("widget.weather.metric.sunset", DateTimeText.Clock(set)));
 
         MetricsHost.RowDefinitions.Clear();
         MetricsHost.ColumnDefinitions.Clear();
@@ -252,7 +278,7 @@ public sealed partial class WeatherWidget : UserControl
         for (var i = 0; i < items.Count; i++)
         {
             var cell = new StackPanel();
-            cell.Children.Add(new TextBlock { Text = items[i].Label, FontSize = 10, Opacity = 0.55 });
+            cell.Children.Add(new TextBlock { Text = Locale.T(items[i].LabelKey), FontSize = 10, Opacity = 0.55 });
             cell.Children.Add(new TextBlock { Text = items[i].Value, FontSize = 12 });
             Grid.SetRow(cell, i / 2);
             Grid.SetColumn(cell, i % 2);
@@ -315,7 +341,10 @@ public sealed partial class WeatherWidget : UserControl
 
         var date = new TextBlock
         {
-            Text = day.Date == DateOnly.FromDateTime(DateTime.Now) ? "今天" : $"{day.Date.Month}/{day.Date.Day}",
+            // 「今天」是日期身份那句，与速览那颗"回到本月"的按钮同形而不同事 ⇒ 各一颗键（⛔ 合成一颗：改了按钮不该带动这一格）
+            Text = day.Date == DateOnly.FromDateTime(DateTime.Now)
+                ? Locale.T("widget.weather.today")
+                : $"{day.Date.Month}/{day.Date.Day}",
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -327,7 +356,7 @@ public sealed partial class WeatherWidget : UserControl
         };
         var desc = new TextBlock
         {
-            Text = WeatherCode.Describe(day.Code),
+            Text = WeatherCode.DescribeMessage(day.Code).Render(),
             FontSize = 12,
             Opacity = 0.8,
             VerticalAlignment = VerticalAlignment.Center,
@@ -363,9 +392,9 @@ public sealed partial class WeatherWidget : UserControl
     {
         var current = Try(() => new SettingsStore().LoadWeatherCity(), null);
         var input = await CenteredDialog.PromptAsync(
-            "选择城市",
-            "输入城市名（支持中文），将从 Open-Meteo 查询并记住选择。",
-            placeholder: "例如：北京",
+            Locale.T("widget.weather.city.title"),
+            Locale.T("widget.weather.city.body"),
+            placeholder: Locale.T("widget.weather.city.sample"),
             defaultText: current?.Name);
 
         if (string.IsNullOrWhiteSpace(input)) return;
@@ -376,12 +405,12 @@ public sealed partial class WeatherWidget : UserControl
         // 措辞只说这一趟的事实＋下一步就在当前这颗按钮上（P-54：不给用户加步骤）。
         if (matches is null)
         {
-            CityBlock.Text = "没连上 Open-Meteo，再点一次试试";
+            CityBlock.Text = Locale.T("widget.weather.city.offline");
             return;
         }
         if (matches.Count == 0)
         {
-            CityBlock.Text = $"未找到「{input.Trim()}」";
+            CityBlock.Text = Locale.Fmt("widget.weather.city.notFound", input.Trim());
             return;
         }
 
@@ -403,10 +432,12 @@ public sealed partial class WeatherWidget : UserControl
         if (empty)
         {
             HourlyHost.Children.Clear();
-            CityBlock.Text = "选择城市";
+            // 空态＝连城市都没选，那颗"上次刷新失败"的状态到这里一并作废（它说的已经不是当前这一屏）
+            _failed = false;
+            CityBlock.Text = Locale.T("widget.weather.city.title");
             UpdatedBlock.Text = string.Empty;
             TempBlock.Text = "--°";
-            DescBlock.Text = "暂无数据";
+            DescBlock.Text = Locale.T("widget.weather.noData");
             IconBlock.Text = "☀️";
             FeelsBlock.Text = string.Empty;
         }
@@ -441,8 +472,24 @@ public sealed partial class WeatherWidget : UserControl
     {
         // 拿不到数据但已有缓存时，宁可继续显示旧数据（比闪一片空白体验好）
         if (s_cached is null) ShowEmpty(true);
-        else UpdatedBlock.Text = "更新失败";
+        else
+        {
+            // ⚠ 这一行是**状态**，不是数据：换语言重画时⛔ 让它被那句"某时更新"盖回去（那是在说假话）
+            _failed = true;
+            PaintUpdatedLine(s_cached);
+        }
     }
+
+    /// <summary>
+    /// "更新"那一行的<b>唯一</b>一处写法（批次 WI-53）：成功念"某时更新"，失败念"更新失败"。
+    /// <para>为什么收成一颗而不是两处各写一遍：那颗键在 <c>Render</c> 与 <c>ShowError</c> 里各出现一次，
+    /// 就是同一句活开了两个主人——下一手只改其中一个，屏幕上就会出现"失败着却报时刻"那种自相矛盾的一行。
+    /// 换语言重画走的是 <c>Render</c> ⇒ 状态由 <see cref="_failed"/> 带过去，⛔ 被那句时刻盖掉。</para>
+    /// </summary>
+    private void PaintUpdatedLine(WeatherReport report)
+        => UpdatedBlock.Text = _failed
+            ? Locale.T("widget.weather.updateFailed")
+            : Locale.Fmt("widget.weather.updated", DateTimeText.Clock(report.FetchedAt));
 
     private static T? Try<T>(Func<T> f, T? fallback)
     {

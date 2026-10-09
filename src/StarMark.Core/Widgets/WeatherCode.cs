@@ -1,12 +1,14 @@
 #nullable enable
+using StarMark.Abstractions.I18n;
+
 namespace StarMark.Core.Widgets;
 
 /// <summary>
-/// WMO 天气解释码（Weather interpretation codes）→ 中文描述 / Segoe Fluent 字形 / emoji 的映射。
+/// WMO 天气解释码（Weather interpretation codes）→ 那句天气话的<b>键</b> / Segoe Fluent 字形 / emoji 的映射。
 /// <para>
 /// 码表来源：Open-Meteo 文档（https://open-meteo.com/en/docs），与 DeskBox 的
 /// <c>Helpers/WeatherCodeMapper.cs</c> 同源。DeskBox 那份还有 MSN 描述文本反查与 11 种语言，
-/// StarMark 只用中文、且数据源固定为 Open-Meteo（WMO 原生码），故只保留正向映射。
+/// StarMark 一份表配三列（见 <c>UiStrings</c>），故这里只留正向映射，而词交在表里。
 /// </para>
 /// </summary>
 public static class WeatherCode
@@ -27,38 +29,44 @@ public static class WeatherCode
     /// <summary>未知/缺失码。Open-Meteo 不会返回，用于本地「暂无数据」占位。</summary>
     public const int Unknown = int.MinValue;
 
-    /// <summary>WMO 码 → 中文描述。</summary>
-    public static string Describe(int code) => code switch
+    /// <summary>
+    /// WMO 码 → 那句天气话的<b>键</b>（批次 WI-53＝P-182a）。
+    /// <para>⛔ 在这里返回已经取好词的那句：这里每秒/每次刷新都会被问一遍，而语言是<b>用户随时改的</b>；
+    /// 交字符串就等于把语言冻在算出它的那一刻（✅WI-37-C 那颗闹钟同一条口径）。
+    /// 键按<b>词</b>开而⛔ 按码开：53 与 61 都说"小雨"、57 与 66 都说"冻雨"，
+    /// 一颗词配一颗键才能被证人问"这句有没有第二个主人"。</para>
+    /// </summary>
+    public static LocMessage DescribeMessage(int code) => code switch
     {
-        0 => "晴",
-        1 => "晴间多云",
-        2 => "多云",
-        3 => "阴",
-        45 => "雾",
-        48 => "冻雾",
-        51 => "毛毛雨",
-        53 => "小雨",
-        55 => "中雨",
-        56 => "冻毛毛雨",
-        57 => "冻雨",
-        61 => "小雨",
-        63 => "中雨",
-        65 => "大雨",
-        66 => "冻雨",
-        67 => "强冻雨",
-        71 => "小雪",
-        73 => "中雪",
-        75 => "大雪",
-        77 => "米雪",
-        80 => "阵雨",
-        81 => "强阵雨",
-        82 => "暴雨",
-        85 => "阵雪",
-        86 => "强阵雪",
-        95 => "雷阵雨",
-        96 => "雷阵雨伴冰雹",
-        99 => "雷阵雨伴大冰雹",
-        _ => "未知",
+        0 => LocMessage.Of("weather.desc.clear"),
+        1 => LocMessage.Of("weather.desc.mainlyClear"),
+        2 => LocMessage.Of("weather.desc.cloudy"),
+        3 => LocMessage.Of("weather.desc.overcast"),
+        45 => LocMessage.Of("weather.desc.fog"),
+        48 => LocMessage.Of("weather.desc.freezingFog"),
+        51 => LocMessage.Of("weather.desc.drizzle"),
+        53 => LocMessage.Of("weather.desc.lightRain"),
+        55 => LocMessage.Of("weather.desc.moderateRain"),
+        56 => LocMessage.Of("weather.desc.freezingDrizzle"),
+        57 => LocMessage.Of("weather.desc.freezingRain"),
+        61 => LocMessage.Of("weather.desc.lightRain"),
+        63 => LocMessage.Of("weather.desc.moderateRain"),
+        65 => LocMessage.Of("weather.desc.heavyRain"),
+        66 => LocMessage.Of("weather.desc.freezingRain"),
+        67 => LocMessage.Of("weather.desc.heavyFreezingRain"),
+        71 => LocMessage.Of("weather.desc.lightSnow"),
+        73 => LocMessage.Of("weather.desc.moderateSnow"),
+        75 => LocMessage.Of("weather.desc.heavySnow"),
+        77 => LocMessage.Of("weather.desc.snowGrains"),
+        80 => LocMessage.Of("weather.desc.showers"),
+        81 => LocMessage.Of("weather.desc.heavyShowers"),
+        82 => LocMessage.Of("weather.desc.violentRain"),
+        85 => LocMessage.Of("weather.desc.snowShowers"),
+        86 => LocMessage.Of("weather.desc.heavySnowShowers"),
+        95 => LocMessage.Of("weather.desc.thunderstorm"),
+        96 => LocMessage.Of("weather.desc.thunderstormHail"),
+        99 => LocMessage.Of("weather.desc.thunderstormHeavyHail"),
+        _ => LocMessage.Of("weather.desc.unknown"),
     };
 
     /// <summary>

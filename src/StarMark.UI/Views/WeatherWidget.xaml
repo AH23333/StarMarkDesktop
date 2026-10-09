@@ -23,7 +23,7 @@
                  这里手动把按钮压成「看起来像标题文本」的样子，零依赖 -->
             <Button x:Name="CityButton" Grid.Column="0" Padding="0" BorderThickness="0"
                     Background="Transparent" HorizontalAlignment="Left" Click="CityButton_Click">
-                <TextBlock x:Name="CityBlock" Text="选择城市" FontSize="13" FontWeight="SemiBold"
+                <TextBlock x:Name="CityBlock" FontSize="13" FontWeight="SemiBold"
                            TextTrimming="CharacterEllipsis"/>
             </Button>
             <TextBlock x:Name="UpdatedBlock" Grid.Column="1" Text="" FontSize="10" Opacity="0.55"
@@ -36,7 +36,7 @@
                        VerticalAlignment="Center"/>
 
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                <TextBlock x:Name="DescBlock" Text="暂无数据" FontSize="14"/>
+                <TextBlock x:Name="DescBlock" FontSize="14"/>
                 <TextBlock x:Name="FeelsBlock" Text="" FontSize="11" Opacity="0.7"/>
             </StackPanel>
 
@@ -59,7 +59,7 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-            <TextBlock Grid.Row="0" x:Name="ForecastTitle" Text="未来三天" FontSize="12" Opacity="0.6"
+            <TextBlock Grid.Row="0" x:Name="ForecastTitle" FontSize="12" Opacity="0.6"
                        VerticalAlignment="Center"/>
 
             <!-- 视图切换（未来三天 / 今日逐时）+ 单位切换（°C / °F） -->
@@ -67,7 +67,7 @@
                         HorizontalAlignment="Right" Spacing="4">
                 <Button x:Name="ViewButton" Height="22" Padding="8,0" FontSize="10"
                         Style="{StaticResource WidgetActionButton}"
-                        Content="今日逐时" Click="ViewButton_Click"
+                        Click="ViewButton_Click"
                         i18n:LocText.ToolTipKey="widget.weather.viewTip"/>
                 <Button x:Name="UnitButton" Height="22" Padding="8,0" FontSize="10"
                         Style="{StaticResource WidgetActionButton}"
