@@ -12,6 +12,5 @@ public sealed class EdgeBookmarksSource : BrowserBookmarksSource
     public EdgeBookmarksSource(string bookmarksPath) : base(bookmarksPath) { }
 
     public override string SourceId => ItemSources.Edge;
-    public override string DisplayName => "Edge 书签";
     protected override string BrowserSubPath => Path.Combine("Microsoft", "Edge");
 }

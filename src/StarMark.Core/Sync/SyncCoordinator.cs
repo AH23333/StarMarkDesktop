@@ -42,7 +42,6 @@ public sealed class SyncCoordinator
                 results.Add(new SourceSyncResult
                 {
                     SourceId = source.SourceId,
-                    DisplayName = source.DisplayName,
                     Success = true,
                     PulledCount = 0,
                     Error = "源不可用（未配置或依赖未运行）",
@@ -69,7 +68,6 @@ public sealed class SyncCoordinator
                 results.Add(new SourceSyncResult
                 {
                     SourceId = source.SourceId,
-                    DisplayName = source.DisplayName,
                     Success = true,
                     PulledCount = items.Count,
                 });
@@ -84,7 +82,6 @@ public sealed class SyncCoordinator
                 results.Add(new SourceSyncResult
                 {
                     SourceId = source.SourceId,
-                    DisplayName = source.DisplayName,
                     Success = false,
                     PulledCount = 0,
                     Error = "拉取超时或被取消（未中断其余源）",
@@ -106,7 +103,6 @@ public sealed class SyncCoordinator
                 results.Add(new SourceSyncResult
                 {
                     SourceId = source.SourceId,
-                    DisplayName = source.DisplayName,
                     Success = false,
                     PulledCount = 0,
                     Error = gex.Message,
@@ -119,7 +115,6 @@ public sealed class SyncCoordinator
                 results.Add(new SourceSyncResult
                 {
                     SourceId = source.SourceId,
-                    DisplayName = source.DisplayName,
                     Success = false,
                     PulledCount = 0,
                     Error = ex.Message,
@@ -177,8 +172,9 @@ public enum SourceSyncErrorKind
 /// <summary>单个源的同步结果。</summary>
 public sealed class SourceSyncResult
 {
+    // ⛔ 在这里再放一份"这个名字念什么"（批次 WI-57，P-187）：念法自本批起只有语言表一个主人，
+    // 要给人看的那一句按 SourceId 现取（SourceNames.NameOf）；这一份只服务汇总与控制台，身份就够了。
     public string SourceId { get; init; } = string.Empty;
-    public string DisplayName { get; init; } = string.Empty;
     public bool Success { get; init; }
     public int PulledCount { get; init; }
     public string? Error { get; init; }

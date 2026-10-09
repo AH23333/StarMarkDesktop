@@ -651,6 +651,8 @@ public static class UiStrings
         new Entry("health.stat.lang", "语言 Top：{0}", "Top languages: {0}", "言語 Top：{0}"),
         new Entry("health.stat.domains", "独立域名：{0}", "Distinct domains: {0}", "独立ドメイン：{0}"),
         new Entry("health.stat.dup", "疑似重复 Top：{0}", "Top likely duplicates: {0}", "重複候補 Top：{0}"),
+        // 「标题（3 次）」那一格：括号的**宽度**是语言内容（拉丁界面给半角），⛔ 把「（）」写回代码里。
+        new Entry("health.dup.item", "{0}（{1}）", "{0} ({1})", "{0}（{1}）"),
         new Entry("health.stat.tag", "标签 Top：{0}", "Top tags: {0}", "タグ Top：{0}"),
         new Entry("health.stat.none", "（无）", "(none)", "（なし）"),
         // 健康页扣分文字整链（批次 WI-33，组合句一族的下半）：因子名/明细/外壳/档位/摘要全进表——
@@ -2159,6 +2161,64 @@ public static class UiStrings
         // 默认名两颗：存的是**身份**（日期），念法每次现算 ⇒ 换语言之后标题跟着换（✅WI-46c 那颗组名同族）。
         new Entry("widget.cd.nameAnniv", "纪念日（{0}-{1}）", "Anniversary ({0}-{1})", "記念日（{0}-{1}）"),
         new Entry("widget.cd.nameDue", "截止（{0} {1}）", "Deadline ({0} {1})", "締切（{0} {1}）"),
+        // ── 批次 WI-57（P-187）：设置页「诊断」那一卡上的全部字 ──
+        // 左列「标签」与右列「值」是同一行上<b>同时</b>显示的两格 ⇒ 两列一起交，只翻左边就是半中半英。
+        // Core（DiagnosticsService）交回的是键＋实参，⛔ 在那里取词＝#361；宿主贴上去那一刻念一次，
+        // 换语言只重贴这份事实（SettingsPageViewModel.PaintDiagnostics），⛔ 为此再跑一趟 COUNT(*) 全表扫描。
+        // 直通行：那一格交的是<b>机器事实</b>（路径／版本号／ETag／启动刻度行），不是一句话——三语同形是刻意的。
+        new Entry("diag.fact", "{0}", "{0}", "{0}"),
+        new Entry("diag.label.build", "本次运行的构建时间", "Build of this run", "今回のビルド"),
+        new Entry("diag.label.startupSegments", "本次启动分段", "Startup segments", "起動の各区間"),
+        new Entry("diag.label.dbPath", "数据库路径", "Database path", "データベースのパス"),
+        new Entry("diag.label.dbSize", "数据库体积", "Database size", "データベースの容量"),
+        new Entry("diag.label.schema", "Schema 版本", "Schema version", "Schema バージョン"),
+        new Entry("diag.label.itemTotal", "条目总数", "Item count", "エントリ数"),
+        new Entry("diag.label.ftsRows", "FTS 索引行数", "FTS index rows", "FTS インデックス行数"),
+        new Entry("diag.label.activityRows", "活动记录数", "Activity records", "活動記録数"),
+        new Entry("diag.label.source", "源：{0}", "Source: {0}", "ソース：{0}"),
+        new Entry("diag.label.lastSync", "上次 GitHub 同步", "Last GitHub sync", "前回の GitHub 同期"),
+        new Entry("diag.label.etag", "GitHub ETag", "GitHub ETag", "GitHub の ETag"),
+        new Entry("diag.value.itemTotal", "{0}（Stars {1} / 书签 {2} / 文件 {3} / 剪贴板 {4}）",
+                  "{0} (Stars {1} / bookmarks {2} / files {3} / clipboard {4})",
+                  "{0}（Stars {1} / ブックマーク {2} / ファイル {3} / クリップボード {4}）"),
+        new Entry("diag.value.etagNone", "（无，下次全量拉取）", "(none - the next sync pulls everything)", "（なし・次回すべて取得）"),
+        new Entry("diag.value.schemaUnrecorded", "（未记录，目标 {0}）", "(not recorded, target {0})", "（未記録・目標 {0}）"),
+        new Entry("diag.value.schemaMismatch", "{0}（≠ 目标 {1}，迁移可能未成功）",
+                  "{0} (≠ target {1} - the migration may not have finished)", "{0}（≠ 目標 {1}・移行が未完の可能性）"),
+        // 同一句"查不到"的两个宿主（schema 那一格与两条计数）共用这颗键，⛔ 各写一份原因形状。
+        new Entry("diag.value.queryFailed", "（查询失败：{0}）", "(query failed: {0})", "（照会失敗：{0}）"),
+        new Entry("diag.value.never", "从未", "Never", "一度もなし"),
+        new Entry("diag.collectFailed", "诊断信息采集失败：{0}", "Diagnostics could not be collected: {0}", "診断情報の取得に失敗しました：{0}"),
+        // 来源的名字：身份是 <c>SourceId</c>（ASCII），念法只有这几颗行有。`IItemSource.DisplayName` 那份中文常量
+        // 本批删掉而不是留着当"日志用"的第二出处——同一句字两个主人、两份可各自被改正是 P-171 那一族。
+        new Entry("source.name.github", "GitHub Stars", "GitHub Stars", "GitHub の Star"),
+        new Entry("source.name.chrome", "Chrome 书签", "Chrome bookmarks", "Chrome ブックマーク"),
+        new Entry("source.name.edge", "Edge 书签", "Edge bookmarks", "Edge ブックマーク"),
+        new Entry("source.name.ditto", "Ditto 剪贴板", "Ditto clipboard", "Ditto クリップボード"),
+        new Entry("source.name.filesystem", "本地文件 (Everything)", "Local files (Everything)", "ローカルファイル (Everything)"),
+        new Entry("source.name.other", "其它来源（{0}）", "Other source ({0})", "その他のソース（{0}）"),
+        new Entry("source.avail.available", "可用", "Available", "利用可能"),
+        new Entry("source.avail.missing", "没有这项数据：{0}", "No data for it: {0}", "このデータはありません：{0}"),
+        new Entry("source.avail.unknownReason", "本机没有这项数据或依赖没启动",
+                  "this machine has no such data, or its dependency is not running",
+                  "この PC にデータがないか、依存するプログラムが起動していません"),
+        // 「找过哪条路径」是实参（机器事实），"及同级 Profile 目录"是那句话说的一半 ⇒ 它也进表。
+        new Entry("source.hint.profilesSuffix", "{0} 及同级 Profile 目录", "{0} and its sibling Profile folders", "{0} と同階層の Profile フォルダー"),
+        new Entry("source.hint.bookmarks", "没在本机找到这个浏览器的书签文件（找过 {0}）；没装它属正常，其它浏览器来源各读各的目录、不受影响",
+                  "No bookmark file for this browser on this machine (looked in {0}). Not having it installed is normal - each browser source reads its own folder, they do not affect each other",
+                  "この PC でこのブラウザのブックマークファイルが見つかりませんでした（検索先 {0}）。未インストールでも正常です。各ブラウザのソースは別々のフォルダーを読むため互いに影響しません"),
+        new Entry("source.hint.ditto", "没在本机找到 Ditto 的数据库（找过：{0}）。没用过 Ditto 属正常，StarMark 自带的「剪贴板历史」不依赖它——在设置里开启后即可用",
+                  "No Ditto database on this machine (looked in: {0}). Not using Ditto is normal - StarMark's own Clipboard history does not depend on it; turn it on in Settings",
+                  "この PC で Ditto のデータベースが見つかりませんでした（検索先：{0}）。Ditto 未使用でも正常です。StarMark 自带の「クリップボード履歴」は Ditto に依存しません - 設定で有効にすれば使えます"),
+        new Entry("source.hint.everythingOff", "本地磁盘搜索未开启（设置 → 本地磁盘搜索 打开即可；不开时不占内存也不启动任何外部程序）",
+                  "Local disk search is off (turn it on under Settings -> Local disk search; while off it uses no memory and starts no external programs)",
+                  "ローカルディスク検索がオフです（設定 → ローカルディスク検索 でオンにできます。オフの間はメモリを使わず、外部プログラムも起動しません）"),
+        new Entry("source.hint.everythingNotRunning", "Everything 引擎当前没在运行（开启本地磁盘搜索时 StarMark 会自带并拉起一份；也可手动启动 Everything）",
+                  "The Everything engine is not running right now (with local disk search on, StarMark ships and starts its own copy; you can also launch Everything manually)",
+                  "Everything エンジンが現在起動していません（ローカルディスク検索をオンにすると StarMark が出荷分のコピーを用意して起動します。Everything を手動で起動することもできます）"),
+        new Entry("source.hint.githubNoToken", "未配置 GitHub Token（设置 → GitHub Stars 同步 里填入带 public_repo 范围的 Token 才会同步 Star；书签 / 本地文件 / 热榜浏览都不受影响）",
+                  "No GitHub Token configured (enter one with the public_repo scope under Settings -> GitHub Stars sync to sync stars; bookmarks, local files and trending browsing are untouched)",
+                  "GitHub Token が未設定です（設定 → GitHub Stars 同期 に public_repo スコープの Token を入力すると Star が同期されます。ブックマーク／ローカルファイル／トレンドの閲覧は影響を受けません）"),
     };
 
     private static readonly Dictionary<string, Entry> ByKey = Build();

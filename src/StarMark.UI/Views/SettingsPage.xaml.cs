@@ -15,6 +15,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Backup;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Backup;
 using StarMark.Core.Hotkeys;
 using StarMark.Core.Widgets;
@@ -200,6 +201,11 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
     private void Page_Loaded(object sender, RoutedEventArgs e)
     {
+        // 诊断那一行念的是"进页时采回来的事实"（键＋实参），而换语言⛔ 重新采集——那一趟里有 COUNT(*) 全表扫描。
+        // 所以本页自己订阅重贴，并在 Unloaded 成对摘掉（坑表 #386）：这颗 VM 是 AddTransient，
+        // 挂着不摘就是每进一次设置页多一份订阅，而那些页面早就不在了。
+        Locale.Changed -= ViewModel.PaintDiagnostics;
+        Locale.Changed += ViewModel.PaintDiagnostics;
         if (App.Services.GetRequiredService<HotkeyService>() is not { } svc) return;
         // 本页可能被反复导航回来：先退再订，避免同一个处理器挂多份（一份事件 → N 次重建 UI）。
         svc.RegistrationStateFlushed -= OnRegistrationStateFlushed;
@@ -208,6 +214,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
     private void Page_Unloaded(object sender, RoutedEventArgs e)
     {
+        Locale.Changed -= ViewModel.PaintDiagnostics;   // 与 Loaded 那颗成对
         if (App.Services.GetRequiredService<HotkeyService>() is { } svc)
             svc.RegistrationStateFlushed -= OnRegistrationStateFlushed;
     }

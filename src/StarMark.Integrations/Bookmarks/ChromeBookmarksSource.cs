@@ -7,6 +7,5 @@ namespace StarMark.Integrations.Bookmarks;
 public sealed class ChromeBookmarksSource : BrowserBookmarksSource
 {
     public override string SourceId => ItemSources.Chrome;
-    public override string DisplayName => "Chrome 书签";
     protected override string BrowserSubPath => Path.Combine("Google", "Chrome");
 }

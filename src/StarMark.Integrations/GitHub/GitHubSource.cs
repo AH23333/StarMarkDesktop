@@ -2,6 +2,7 @@
 using System.Globalization;
 using System.Text.Json;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Integrations.GitHub;
 
@@ -74,13 +75,14 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
 
     public string SourceId => ItemSources.GitHub;
 
-    public string DisplayName => "GitHub Stars";
-
     public bool IsAvailable => _options.IsConfigured;
 
-    /// <summary>"不可用"在这里的成因是<b>没配 Token</b>，不是坏了；且只影响 Star 同步这一条源。</summary>
-    public string? AvailabilityHint
-        => "未配置 GitHub Token（设置 → GitHub Stars 同步 里填入带 public_repo 范围的 Token 才会同步 Star；书签 / 本地文件 / 热榜浏览都不受影响）";
+    /// <summary>
+    /// "不可用"在这里的成因是<b>没配 Token</b>，不是坏了；且只影响 Star 同步这一条源。
+    /// 那句话自批次 WI-57 起住在表里（这一行上屏幕，⛔ 在这里拼成品字）。
+    /// </summary>
+    public LocMessage? AvailabilityHint
+        => LocMessage.Of("source.hint.githubNoToken");
 
     /// <summary>
     /// 全量拉取 starred 列表。<b>本方法不写检查点</b>——它只把"这一轮拉到了什么检查点"暂存起来，

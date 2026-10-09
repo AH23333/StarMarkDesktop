@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Runtime.Versioning;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Integrations.Everything;
 
@@ -133,8 +134,6 @@ public sealed class EverythingSource : IItemSource
 
     public string SourceId => ItemSources.FileSystem;
 
-    public string DisplayName => "本地文件 (Everything)";
-
     /// <summary>
     /// 检测依赖是否可用。总开关关闭时恒 false——统一搜索据此跳过本源，不发任何 IPC 查询，
     /// 保障默认（轻度用户）零本地文件搜索、零额外内存。开启后才看 Everything 是否在运行。
@@ -143,11 +142,12 @@ public sealed class EverythingSource : IItemSource
 
     /// <summary>
     /// 这一项有两个独立成因，必须分开说：开关没开（去设置里打开）与引擎没在跑（StarMark 会在开启时自带一份）。
-    /// 合成一句"不可用"会让人去查错的那一半。
+    /// 合成一句"不可用"会让人去查错的那一半。两句都在表里（批次 WI-57，P-187）：这一行直接上屏幕，
+    /// 在这里拼成品字就等于把语言钉在"面板算出它的那一刻"。
     /// </summary>
-    public string? AvailabilityHint => !_options.Enabled
-        ? "本地磁盘搜索未开启（设置 → 本地磁盘搜索 打开即可；不开时不占内存也不启动任何外部程序）"
-        : "Everything 引擎当前没在运行（开启本地磁盘搜索时 StarMark 会自带并拉起一份；也可手动启动 Everything）";
+    public LocMessage? AvailabilityHint => !_options.Enabled
+        ? LocMessage.Of("source.hint.everythingOff")
+        : LocMessage.Of("source.hint.everythingNotRunning");
 
     /// <summary>
     /// <b>本源不做全量入库</b>（批次 VQ，用户裁决拆掉「索引进库」）。

@@ -1,5 +1,6 @@
 #nullable enable
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Integrations.Bookmarks;
 
@@ -21,8 +22,6 @@ public abstract class BrowserBookmarksSource : IItemSource
 
     /// <summary>用户数据目录下浏览器名的子路径（如 Google/Chrome 或 Microsoft/Edge）。</summary>
     protected abstract string BrowserSubPath { get; }
-
-    public virtual string DisplayName => "浏览器书签";
 
     /// <summary>
     /// 要读的书签文件：Default 之外，浏览器还常把真实配置放在 <c>Profile 1/2/…</c>（多账号机器上极常见）。
@@ -64,14 +63,21 @@ public abstract class BrowserBookmarksSource : IItemSource
     /// <summary>
     /// 说清"找过哪个文件"，并点破一件容易被误判成故障的事：Chrome 与 Edge <b>各读各自的用户数据目录</b>，
     /// 只用 Edge 的机器上「Chrome 书签 没有这项数据」是正常状态，不影响 Edge 那一条。
+    /// <para><b>交回键＋实参（批次 WI-57）</b>：那句话住在表里，这里只递"找过哪条路径"这颗机器事实。
+    /// 长度上限也只套在路径上——⛔ 拿它切整句，那会把括号和句号切没（<see cref="SourceAvailabilityText.MaxFactLength"/>）。</para>
     /// </summary>
-    public string? AvailabilityHint
+    public LocMessage? AvailabilityHint
     {
         get
         {
             var candidates = Sources();
-            var where = candidates.Count <= 1 ? candidates[0] : candidates[0] + " 及同级 Profile 目录";
-            return $"没在本机找到这个浏览器的书签文件（找过 {where}）；没装它属正常，其它浏览器来源各读各的目录、不受影响";
+            var head = TextTrim.Ellipsize(candidates[0], SourceAvailabilityText.MaxFactLength);
+            // 多条候选时"及同级 Profile 目录"是那一句的一部分，所以它也是语言内容：交嵌进去的那颗键，
+            // 单条时候直接把路径原样递过去（那是事实，不是话）。
+            object where = candidates.Count <= 1
+                ? head
+                : LocMessage.Of("source.hint.profilesSuffix", head);
+            return LocMessage.Of("source.hint.bookmarks", where);
         }
     }
 

@@ -1,5 +1,5 @@
 #nullable enable
-using System;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions;
 
@@ -11,23 +11,23 @@ namespace StarMark.Abstractions;
 /// 而正确反应可能是"我本来就没用 Ditto"。所以这里规定：<b>不可用时要说成因</b>，
 /// 成因由各来源自己给（<see cref="IItemSource.AvailabilityHint"/>：它才知道自己找过哪条路径）。
 /// </para>
+/// <para><b>批次 WI-57（P-187）把交出的东西从成品字换成 <see cref="LocMessage"/>，三处一起换</b>：
+/// 这一句直接上屏幕，而那一行的语言由贴上去的那一刻决定。旧写法在这里拼好"没有这项数据：…"，
+/// 语言就定死在算出它的那一瞬间——换语言只剩外层重贴，屏幕上半中半英（坑表 #361 同一族）。
+/// <b>成因那句也是 <see cref="LocMessage"/>，作为实参嵌进来</b>：<c>string.Format</c> 对实参调的正是
+/// <c>ToString</c>，所以嵌套的那一句同样在贴上去的那一刻才取词。</para>
 /// </summary>
 public static class SourceAvailabilityText
 {
-    /// <summary>可用时的固定值。</summary>
-    public const string Available = "可用";
+    /// <summary>
+    /// 诊断那一行里"路径清单"这类<b>机器事实</b>的长度上限（面板一行一行读，不该塞进整段清单）。
+    /// <para>上限只管事实，⛔ 管句子：句子进了语言表，长度由那一列自己的措辞决定，
+    /// 在这里按字符数切一句人话会把括号和句号切没（批次 WI-46b 那族"分隔符／括号形状"的教训）。</para>
+    /// </summary>
+    public const int MaxFactLength = 200;
 
-    /// <summary>来源没给成因时的兜底（不猜原因，只说明"本机没有它的数据/依赖"）。</summary>
-    public const string UnknownReason = "本机没有这项数据或依赖没启动";
-
-    /// <summary>不可用时展示的成因上限（诊断面板是一行一行读的，不该塞进整段路径清单）。</summary>
-    private const int MaxHintLength = 200;
-
-    public static string Of(bool available, string? hint)
-    {
-        if (available) return Available;
-        var why = hint?.Trim();
-        if (string.IsNullOrEmpty(why)) return "没有这项数据：" + UnknownReason;
-        return "没有这项数据：" + TextTrim.Ellipsize(why, MaxHintLength);
-    }
+    public static LocMessage Of(bool available, LocMessage? hint)
+        => available
+            ? LocMessage.Of("source.avail.available")
+            : LocMessage.Of("source.avail.missing", hint ?? LocMessage.Of("source.avail.unknownReason"));
 }

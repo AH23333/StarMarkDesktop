@@ -1,5 +1,6 @@
 #nullable enable
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Integrations.Ditto;
 
@@ -23,8 +24,6 @@ public sealed class DittoSource : IItemSource
 
     public string SourceId => ItemSources.Ditto;
 
-    public string DisplayName => "Ditto 剪贴板";
-
     /// <summary>问一次就够：<c>IsAvailable</c> 在一次搜索里会被问两遍（Core 侧筛源＋队列查询前），探两遍是白花。</summary>
     public bool IsAvailable
     {
@@ -35,14 +34,20 @@ public sealed class DittoSource : IItemSource
         }
     }
 
-    /// <summary>Ditto 是外部程序：没装就没有数据库，这一项本来就该是空的（与内置剪贴板历史是两回事）。</summary>
-    public string? AvailabilityHint
+    /// <summary>
+    /// Ditto 是外部程序：没装就没有数据库，这一项本来就该是空的（与内置剪贴板历史是两回事）。
+    /// <para><b>交回键＋实参</b>（批次 WI-57）：那句话住在表里，这里只递"探过哪几条路径"。
+    /// 路径清单的分隔符取<b>语言中性的「 · 」</b>——它切在事实与事实之间，⛔ 为它再立一颗"分隔符"表行
+    /// （全仓已有 <c>health.join.list</c>／<c>trending.notice.join</c> 两颗按句子主人各写一份，
+    /// 第三颗只会让"清单怎么连"多出一个人；这一族要不要收成一颗另见账本）。</para>
+    /// </summary>
+    public LocMessage? AvailabilityHint
     {
         get
         {
             EnsureProbed();
-            return $"没在本机找到 Ditto 的数据库（找过：{string.Join("；", _probed)}）。"
-                 + "没用过 Ditto 属正常，StarMark 自带的「剪贴板历史」不依赖它——在设置里开启后即可用";
+            var where = TextTrim.Ellipsize(string.Join(" · ", _probed), SourceAvailabilityText.MaxFactLength);
+            return LocMessage.Of("source.hint.ditto", where);
         }
     }
 

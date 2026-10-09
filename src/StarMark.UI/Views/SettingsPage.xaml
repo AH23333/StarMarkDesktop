@@ -12,7 +12,6 @@
     xmlns:local="using:StarMark.UI.Views"
     xmlns:ab="using:StarMark.Abstractions.Insights"
     xmlns:i18n="using:StarMark.UI.Helpers"
-    xmlns:diag="using:StarMark.Core.Diagnostics"
     mc:Ignorable="d">
 
     <Page.Resources>
@@ -1290,7 +1289,9 @@
                                         <StackLayout Spacing="4"/>
                                     </ItemsRepeater.Layout>
                                     <ItemsRepeater.ItemTemplate>
-                                        <DataTemplate x:DataType="diag:DiagnosticEntry">
+                                        <!-- 绑的是 UI 侧那一格（已按贴上去那一刻的语言取过词），⛔ 直接绑 Core 那颗存键的记录：
+                                             屏幕上这一列要的是一串字，取词的时机由 ViewModel.PaintDiagnostics 一处守着（批次 WI-57）。 -->
+                                        <DataTemplate x:DataType="viewModels:DiagnosticRow">
                                             <Grid ColumnSpacing="8">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="150"/>

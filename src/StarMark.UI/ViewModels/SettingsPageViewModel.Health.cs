@@ -101,7 +101,11 @@ public partial class SettingsPageViewModel
             : string.Join(" · ", r.LanguageTop.Take(5).Select(s => $"{s.Language} {s.Count}"));
         DuplicateSummary = r.DuplicateTop.Count == 0
             ? Locale.T("health.stat.none")
-            : string.Join("、", r.DuplicateTop.Take(5).Select(d => $"{d.Title}（{d.Count}）"));
+            // 「、」与那对括号的<b>宽度</b>都是语言内容（批次 WI-57 的普查尺量到）：连接号早已归
+            // <c>health.join.list</c> ⇒ 这里⛔ 再抄一份（同一件事两个主人＝P-171 那一族），括号形状走表。
+            // ⚠ 通用 en 列闸门看不见它——那颗只禁汉字与假名（坑表 #403 第二次兑现）。
+            : string.Join(Locale.T("health.join.list"),
+                r.DuplicateTop.Take(5).Select(d => Locale.Fmt("health.dup.item", d.Title, d.Count)));
         TagSummary = r.TagHistogram.Count == 0
             ? Locale.T("health.stat.none")
             : string.Join(" · ", r.TagHistogram.Take(5).Select(t => $"{t.Tag} {t.Count}"));
@@ -123,10 +127,37 @@ public partial class SettingsPageViewModel
     }
 
     // ===== 诊断（P2-8）=====
-    public System.Collections.ObjectModel.ObservableCollection<StarMark.Core.Diagnostics.DiagnosticEntry> DiagnosticEntries { get; }
+    public System.Collections.ObjectModel.ObservableCollection<DiagnosticRow> DiagnosticEntries { get; }
         = new();
+
+    /// <summary>
+    /// 采回来的<b>事实</b>（每格都是键＋实参，还没取词）。
+    /// <para>为什么要把事实存下来而不是在换语言时重采一次：<c>CollectAsync</c> 里有 <c>COUNT(*)</c>
+    /// 全表扫描与逐表统计，而 <c>Locale.Changed</c> 那条订阅<b>只许做"把已经贴上去的那句重贴一遍"这一件事</b>
+    /// （<see cref="Locale.Changed"/> 自己的注释就写着"重新查库不属于这里"）。</para>
+    /// </summary>
+    private IReadOnlyList<StarMark.Core.Diagnostics.DiagnosticEntry> _diagnosticFacts
+        = System.Array.Empty<StarMark.Core.Diagnostics.DiagnosticEntry>();
+
+    /// <summary>采集失败的那句话（同样存键）。读它之前先看 <see cref="HasDiagnosticsError"/>——这颗 null ⛔ 兼"有没有坏"的判据。</summary>
+    private LocMessage? _diagnosticsFailure;
+
     [ObservableProperty] private bool _hasDiagnosticsError;
     [ObservableProperty] private string _diagnosticsError = string.Empty;
+
+    /// <summary>
+    /// 把存着的事实按<b>此刻</b>的语言贴成屏幕上那一行（批次 WI-57，P-187）。
+    /// <para>这一颗是那一格<b>唯一</b>的取词点：采集与换语言两条路都走到这里，所以屏幕上不会出现
+    /// "上一门的语言"。宿主自己订阅 <c>Locale.Changed</c> 并成对摘掉（<c>SettingsPage</c> 的 Loaded／Unloaded）——
+    /// 这一页的节拍里没有"语言换了"这件事（坑表 #386 同口径）。</para>
+    /// </summary>
+    public void PaintDiagnostics()
+    {
+        DiagnosticEntries.Clear();
+        foreach (var e in _diagnosticFacts)
+            DiagnosticEntries.Add(new DiagnosticRow(e.Label.Render(), e.Value.Render()));
+        DiagnosticsError = HasDiagnosticsError && _diagnosticsFailure is { } failure ? failure.Render() : string.Empty;
+    }
 
     /// <summary>
     /// 「剪贴板历史」总开关（默认关）。翻位即持久化 + <b>立刻</b>启停监听窗口，
@@ -145,7 +176,7 @@ public partial class SettingsPageViewModel
         ApplyClipboardHistorySwitch(value);
     }
 
-    /// <summary>采集只读诊断信息（P2-8）。本地查询，零网络。</summary>
+    /// <summary>采集只读诊断信息（P2-8）。本地查询，零网络。<b>采的是事实，贴的是念法</b>（两件事分两步，见 <see cref="PaintDiagnostics"/>）。</summary>
     public async Task LoadDiagnosticsAsync()
     {
         if (_diagnostics is null) return;
@@ -153,15 +184,23 @@ public partial class SettingsPageViewModel
         try
         {
             // 诊断里含 COUNT(*) 全量扫描与逐表统计：同样是"进设置页即同步跑完"的站点，offload 后回 UI 填集合。
-            var entries = await Task.Run(() => _diagnostics.CollectAsync(CancellationToken.None));
-            DiagnosticEntries.Clear();
-            foreach (var e in entries) DiagnosticEntries.Add(e);
+            _diagnosticFacts = await Task.Run(() => _diagnostics.CollectAsync(CancellationToken.None));
         }
         catch (Exception ex)
         {
             HasDiagnosticsError = true;
-            DiagnosticsError = $"诊断信息采集失败：{ex.Message}";
+            _diagnosticsFailure = LocMessage.Of("diag.collectFailed", ex.Message);
             StarLog.Error($"诊断信息采集失败: {ex}");
         }
+        PaintDiagnostics();
     }
 }
+
+/// <summary>
+/// 诊断面板在屏幕上的一格（批次 WI-57，P-187）。
+/// <para><b>它与 <c>DiagnosticEntry</c> 的分别是"什么时候取词"</b>：那颗存键＋实参（可以放着不动），
+/// 这一颗存的是<b>贴上去那一刻</b>按当前语言取出来的两串字。中间这一步只许住在
+/// <c>PaintDiagnostics</c> 里——把成品字存回字段＝屏幕上那一行停在旧语言，而通用表闸门看不见
+/// （被问的键没变，变的是它什么时候被念出来；坑表 #361／#372 同一族）。</para>
+/// </summary>
+public sealed record DiagnosticRow(string Label, string Value);

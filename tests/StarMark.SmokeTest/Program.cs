@@ -693,7 +693,7 @@ static async Task SyncModeAsync()
     foreach (var s in summary.Sources)
     {
         var status = s.Success ? "OK" : "FAIL";
-        Console.WriteLine($"  [{status}] {s.DisplayName}: {s.PulledCount} 条{(s.Error != null ? " err=" + s.Error : "")}");
+        Console.WriteLine($"  [{status}] {s.SourceId}: {s.PulledCount} 条{(s.Error != null ? " err=" + s.Error : "")}");
     }
 
     // 验证同步后 DB 状态

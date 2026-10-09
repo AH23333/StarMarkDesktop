@@ -1,6 +1,7 @@
 #nullable enable
 using System.Threading;
 using System.Threading.Tasks;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions;
 
@@ -13,21 +14,24 @@ public interface IItemSource
     /// <summary>来源标识（filesystem / chrome / github / ditto ...）。见 <see cref="ItemSources"/>。</summary>
     string SourceId { get; }
 
-    /// <summary>显示名称（用于同步状态、设置页）。</summary>
-    string DisplayName { get; }
-
     /// <summary>检测依赖是否可用（如 Everything 是否运行、浏览器是否安装）。</summary>
     bool IsAvailable { get; }
 
     /// <summary>
-    /// 不可用时，"它到底找过什么 / 缺的是什么"——诊断面板把这句原样显示出来。
+    /// 不可用时，"它到底找过什么 / 缺的是什么"——诊断面板把这句显示出来。
     /// <para>
     /// 为什么要有它：只报一个"不可用"，用户无从分辨<b>这台机器压根没装</b>与<b>装了但读不到</b>，
     /// 也就不知道"Edge 能用、Chrome 不可用"是正常现象还是坏了（文案不许比已知事实更含糊）。
     /// 走默认实现，所以既有源与测试桩都可以不动；愿意说细节的源各自覆写。
     /// </para>
+    /// <para><b>交的是 <see cref="LocMessage"/>，不是拼好的那句</b>（批次 WI-57，P-187）：这一句直接上屏幕，
+    /// 而屏幕上那一行的语言由<b>贴上去的那一刻</b>决定。旧签名返回 <c>string</c> 时，语言在源算出它的
+    /// 那一瞬间就定死了——换语言只会重贴外层「没有这项数据：」，屏幕上剩下半中半英（坑表 #361 同一族）。</para>
+    /// <para><b>本接口从前还有一条 <c>DisplayName</c>，本批删掉而不是改交键</b>：它的读者只有同步汇总的
+    /// 控制台输出，而"这个名字念什么"自本批起住在表里（<see cref="SourceNames"/>）。留着那份中文常量＝
+    /// 同一句字两个主人、两份可各自被改（P-171 那一族），要日志里的名字就按 <see cref="SourceId"/> 现取。</para>
     /// </summary>
-    string? AvailabilityHint => null;
+    LocMessage? AvailabilityHint => null;
 
     /// <summary>从源拉取全量条目，写入 items 表。同步协调器调用。</summary>
     Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct);
