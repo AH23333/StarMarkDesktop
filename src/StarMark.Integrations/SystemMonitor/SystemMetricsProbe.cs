@@ -2,21 +2,25 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.SystemMonitor;
 
 namespace StarMark.Integrations.SystemMonitor;
 
-/// <summary>CPU 内核时间的一次读数（100 纳秒计）。<see cref="Ok"/> 为 false 时 <see cref="Error"/> 是能直接显示给用户的原因。</summary>
-public sealed record CpuTicksReading(bool Ok, long Idle, long Kernel, long User, string? Error);
+/// <summary>
+/// CPU 内核时间的一次读数（100 纳秒计）。<see cref="Ok"/> 为 false 时 <see cref="Error"/> 是能直接显示给用户的<b>那句话的身份</b>
+/// （键＋机器事实，⛔ 在这里取词＝批次 WI-60／P-192——从前它是中文成品字，经 VM 贴到组件那一行上，换语言停在旧语言）。
+/// </summary>
+public sealed record CpuTicksReading(bool Ok, long Idle, long Kernel, long User, LocMessage? Error);
 
 /// <summary>物理内存的一次读数。</summary>
-public sealed record MemoryReading(bool Ok, long TotalBytes, long AvailableBytes, string? Error);
+public sealed record MemoryReading(bool Ok, long TotalBytes, long AvailableBytes, LocMessage? Error);
 
 /// <summary>
 /// 逐网卡的<b>累计</b>字节数。这里刻意不做差、不算速率、也不判断哪块网卡该计入——
 /// 那些是有对错的判定，留在 Core 里可单测（<c>SystemMonitorPolicy</c>）。
 /// </summary>
-public sealed record NetworkReading(bool Ok, IReadOnlyList<NetworkAdapterCounters> Adapters, string? Error);
+public sealed record NetworkReading(bool Ok, IReadOnlyList<NetworkAdapterCounters> Adapters, LocMessage? Error);
 
 /// <summary>
 /// 系统指标探针：CPU 时间、物理内存、逐网卡累计字节数。
@@ -33,7 +37,7 @@ public sealed record NetworkReading(bool Ok, IReadOnlyList<NetworkAdapterCounter
 public sealed class SystemMetricsProbe
 {
     /// <summary>结构自检只做一次：它查的是本机布局，不会中途变化。</summary>
-    private static readonly string? s_layoutError = SystemMonitorNative.LayoutError();
+    private static readonly LocMessage? s_layoutError = SystemMonitorNative.LayoutError();
 
     /// <summary>
     /// CPU 忙闲时间。<c>kernel</c> <b>已包含</b> <c>idle</c>（微软文档里那句话），
@@ -44,10 +48,13 @@ public sealed class SystemMetricsProbe
         try
         {
             if (!SystemMonitorNative.GetSystemTimes(out var idle, out var kernel, out var user))
-                return new CpuTicksReading(false, 0, 0, 0, $"读取系统时间失败（Win32 {Marshal.GetLastWin32Error()}）");
+                return new CpuTicksReading(false, 0, 0, 0,
+                    LocMessage.Of("widget.mon.err.sysTimeWin32", Marshal.GetLastWin32Error()));
             return new CpuTicksReading(true, (long)idle, (long)kernel, (long)user, null);
         }
-        catch (Exception ex) { return new CpuTicksReading(false, 0, 0, 0, "读取系统时间异常：" + ex.Message); }
+        // Win32 码与异常正文都是**机器事实**：交进槽里，⛔ 在这里拼成成品字（那一句的语言就被定死在抓那一刻）
+        catch (Exception ex) { return new CpuTicksReading(false, 0, 0, 0,
+            LocMessage.Of("widget.mon.err.sysTimeException", ex.Message)); }
     }
 
     /// <summary>
@@ -63,12 +70,14 @@ public sealed class SystemMetricsProbe
         try
         {
             if (!SystemMonitorNative.GlobalMemoryStatusEx(ref status))
-                return new MemoryReading(false, 0, 0, $"读取内存状态失败（Win32 {Marshal.GetLastWin32Error()}）");
+                return new MemoryReading(false, 0, 0,
+                    LocMessage.Of("widget.mon.err.memStateWin32", Marshal.GetLastWin32Error()));
             if (status.ullTotalPhys == 0)
-                return new MemoryReading(false, 0, 0, "系统报告的内存总量为 0");
+                return new MemoryReading(false, 0, 0, LocMessage.Of("widget.mon.err.memTotalZero"));
             return new MemoryReading(true, (long)status.ullTotalPhys, (long)status.ullAvailPhys, null);
         }
-        catch (Exception ex) { return new MemoryReading(false, 0, 0, "读取内存状态异常：" + ex.Message); }
+        catch (Exception ex) { return new MemoryReading(false, 0, 0,
+            LocMessage.Of("widget.mon.err.memStateException", ex.Message)); }
     }
 
     /// <summary>
@@ -91,11 +100,11 @@ public sealed class SystemMetricsProbe
             var code = SystemMonitorNative.GetIfTable2(out table);
             if (code != SystemMonitorNative.NoError || table == IntPtr.Zero)
                 return new NetworkReading(false, Array.Empty<NetworkAdapterCounters>(),
-                    $"未取到网络接口表（IP Helper 返回 {code}）");
+                    LocMessage.Of("widget.mon.err.ifTableHelper", code));
 
             var count = Marshal.ReadInt32(table, 0);
             if (count is < 0 or > SystemMonitorNative.MaxTrustedRows)
-                return Reject($"接口表行数不可信（{count}）");
+                return Reject(LocMessage.Of("widget.mon.err.ifRowCount", count));
 
             for (var i = 0; i < count; i++)
             {
@@ -115,15 +124,15 @@ public sealed class SystemMetricsProbe
                 // 刻意放过 Mtu/Type 为 0 的接口——回环、WAN Miniport、内核调试网卡本机就有 56 行里的若干条，
                 // 把它们当"读错了"会让整张表作废（第一版就栽在要求 Mtu > 0 上）。
                 if (index is <= 0 or > 0xFFFF || mtu is < 0 or > 0xFFFF || type is < 0 or > 400 || !seen.Add(index))
-                    return Reject("接口表内容与预期不符（已停用网速，避免把内存噪声当成流量）");
+                    return Reject(LocMessage.Of("widget.mon.err.ifTableMismatch"));
 
                 rows.Add(new NetworkAdapterCounters(type, tunnel, oper, hardware, inbound, outbound));
             }
             return new NetworkReading(true, rows, null);
         }
-        catch (DllNotFoundException) { return Reject("本机没有 IP Helper（iphlpapi.dll）"); }
-        catch (EntryPointNotFoundException) { return Reject("本机 IP Helper 过旧，不支持 GetIfTable2"); }
-        catch (Exception ex) { return Reject("读取网络接口表异常：" + ex.Message); }
+        catch (DllNotFoundException) { return Reject(LocMessage.Of("widget.mon.err.noIpHelper")); }
+        catch (EntryPointNotFoundException) { return Reject(LocMessage.Of("widget.mon.err.ipHelperTooOld")); }
+        catch (Exception ex) { return Reject(LocMessage.Of("widget.mon.err.ifTableException", ex.Message)); }
         finally
         {
             if (table != IntPtr.Zero)
@@ -134,6 +143,6 @@ public sealed class SystemMetricsProbe
         }
     }
 
-    private static NetworkReading Reject(string reason)
+    private static NetworkReading Reject(LocMessage reason)
         => new(false, Array.Empty<NetworkAdapterCounters>(), reason);
 }

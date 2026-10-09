@@ -62,7 +62,7 @@ public sealed class SystemMetricsProbeTests
     {
         var probe = new SystemMetricsProbe();
         var first = probe.ReadCpuTicks();
-        Assert.True(first.Ok, first.Error);
+        Assert.True(first.Ok, first.Error?.Key);
         // kernel 含 idle ⇒ 恒有 kernel >= idle；不成立就说明三个出参的取值顺序被写坏了
         Assert.True(first.Kernel >= first.Idle, $"kernel={first.Kernel} idle={first.Idle}");
         Assert.True(first.Idle >= 0 && first.User >= 0);
@@ -74,7 +74,7 @@ public sealed class SystemMetricsProbeTests
         var probe = new SystemMetricsProbe();
         var first = probe.ReadCpuTicks();
         var second = probe.ReadCpuTicks();
-        Assert.True(second.Ok, second.Error);
+        Assert.True(second.Ok, second.Error?.Key);
         var percent = SystemMonitorPolicy.CpuPercent(
             new CpuCounters(first.Idle, first.Kernel, first.User),
             new CpuCounters(second.Idle, second.Kernel, second.User));
@@ -86,7 +86,7 @@ public sealed class SystemMetricsProbeTests
     public void Probe_Memory_ReportsPlausibleTotals()
     {
         var reading = new SystemMetricsProbe().ReadMemory();
-        Assert.True(reading.Ok, reading.Error);
+        Assert.True(reading.Ok, reading.Error?.Key);
         Assert.InRange(reading.TotalBytes, 256L * 1024 * 1024, 1L << 44);
         Assert.InRange(reading.AvailableBytes, 0, reading.TotalBytes);
         var percent = SystemMonitorPolicy.MemoryPercent(reading.TotalBytes, reading.AvailableBytes);
@@ -101,7 +101,7 @@ public sealed class SystemMetricsProbeTests
         var reading = new SystemMetricsProbe().ReadNetwork();
         if (!reading.Ok)
         {
-            Assert.False(string.IsNullOrWhiteSpace(reading.Error), "不可用必须带原因");
+            Assert.NotNull(reading.Error);          // 不可用必须带着那句**身份**（键＋实参），⛔ 在这里取词
             return;
         }
         Assert.All(reading.Adapters, a =>
@@ -158,7 +158,7 @@ public sealed class SystemMetricsProbeTests
     {
         var probe = new SystemMetricsProbe();
         var first = probe.ReadNetwork();
-        Assert.True(first.Ok, first.Error);
+        Assert.True(first.Ok, first.Error?.Key);
         if (first.Adapters.Count == 0) return;         // 这台机器当时没有任何链路：无话可说，不算失败
         var noPath = WhyNoByteWouldLeaveThisMachine(first.Adapters);
         if (noPath is not null)
@@ -171,7 +171,7 @@ public sealed class SystemMetricsProbeTests
 
         ConsumeNetworkTraffic();
         var second = probe.ReadNetwork();
-        Assert.True(second.Ok, second.Error);
+        Assert.True(second.Ok, second.Error?.Key);
         var after = Total(second.Adapters);
 
         // 不再用"固定等 400 ms"赌驱动什么时候把计数刷出来：等到涨为止，等不到才是证据。
@@ -182,7 +182,7 @@ public sealed class SystemMetricsProbeTests
         {
             System.Threading.Thread.Sleep(50);
             second = probe.ReadNetwork();
-            Assert.True(second.Ok, second.Error);
+            Assert.True(second.Ok, second.Error?.Key);
             after = Total(second.Adapters);
         }
 

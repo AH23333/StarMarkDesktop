@@ -51,13 +51,21 @@ public static class SystemMonitorPolicy
     /// <summary>滑动平均窗下限（D7：CPU 取 2 秒滑动平均——1 秒窗在 PDH/内核计数上抖得读不出趋势）。</summary>
     public const int MinWindowMs = 2_000;
 
-    /// <summary>指标目录：顺序＝界面行序，标签＝界面文案。<b>每加一个指标必须在这里补一行</b>（有守门）。</summary>
-    public static IReadOnlyList<(MonitorMetric Metric, string Label, string Glyph)> Catalog { get; } =
+    /// <summary>
+    /// 指标目录：顺序＝界面行序，<b>标签那一格交的是键</b>（批次 WI-60／P-193）。
+    /// <para>从前这里写的是「内存」「网速」两个中文词，被 VM 直接贴上行首 ⇒ 换语言那一刻那一列停在旧语言。
+    /// 与 <c>UnitTables</c>（✅WI-55）同一口径：Core 给身份，取词发生在界面那一刻。</para>
+    /// <para>⚠ 那颗「网速」⛔ 再立一行——表里 <c>widget.mon.net</c> 的中文列与它一模一样（一词一主）；
+    /// 而 CPU／内存两颗行的中文列多着「占用」二字（那是勾选面板的标签），所以行首**另立**两颗键
+    /// ——⛔ 为了省两颗行就把屏幕上那两个词换掉（换措辞是产品决定，不归这一批）。</para>
+    /// <para><b>每加一个指标必须在这里补一行</b>（有守门）。</para>
+    /// </summary>
+    public static IReadOnlyList<(MonitorMetric Metric, string LabelKey, string Glyph)> Catalog { get; } =
         new (MonitorMetric, string, string)[]
         {
-            (MonitorMetric.Cpu, "CPU", "⚙"),
-            (MonitorMetric.Memory, "内存", "▦"),
-            (MonitorMetric.Network, "网速", "⇅"),
+            (MonitorMetric.Cpu, "widget.mon.row.cpu", "⚙"),
+            (MonitorMetric.Memory, "widget.mon.row.mem", "▦"),
+            (MonitorMetric.Network, "widget.mon.net", "⇅"),
         };
 
     /// <summary>
@@ -71,8 +79,8 @@ public static class SystemMonitorPolicy
     /// <summary>落盘形态（剥掉未知位，避免把脏值写回去）。</summary>
     public static int ToWire(MonitorMetric metrics) => (int)metrics & KnownBits;
 
-    /// <summary>界面要显示的行（按目录顺序，不含 None）。</summary>
-    public static IReadOnlyList<(MonitorMetric Metric, string Label, string Glyph)> RowsFor(MonitorMetric metrics)
+    /// <summary>界面要显示的行（按目录顺序，不含 None；目录那一列交的是<b>键</b>而不是文案）。</summary>
+    public static IReadOnlyList<(MonitorMetric Metric, string LabelKey, string Glyph)> RowsFor(MonitorMetric metrics)
     {
         var rows = new List<(MonitorMetric, string, string)>();
         foreach (var entry in Catalog)

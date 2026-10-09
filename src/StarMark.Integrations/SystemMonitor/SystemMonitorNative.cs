@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Runtime.InteropServices;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Integrations.SystemMonitor;
 
@@ -155,12 +156,14 @@ public static class SystemMonitorNative
 
     /// <summary>
     /// 布局自检：两份独立声明是否一致、且等于从 SDK 头文件推得的常量。
-    /// 返回 null 表示通过；否则是给界面显示的中文原因。
+    /// 返回 null 表示通过；否则是<b>给界面显示的那句话的身份</b>（键＋那两个字节数）——
+    /// 批次 WI-60／P-192：这一层从前直接返回中文成品字，而它经 <c>NetworkReading.Error</c> 贴到组件那一行上，
+    /// 换语言那一刻停在旧语言。机器事实（字节数、字段名）走实参进来。
     /// </summary>
-    public static string? LayoutError()
+    public static LocMessage? LayoutError()
     {
         if (MirrorRowSize != RowSize)
-            return $"接口表结构与预期不符（镜像声明算出 {MirrorRowSize} 字节，应为 {RowSize}）";
+            return LocMessage.Of("widget.mon.err.rowSize", MirrorRowSize, RowSize);
         foreach (var (field, expected) in new[]
                  {
                      (nameof(MibIfRow2Mirror.InterfaceIndex), OffInterfaceIndex),
@@ -175,7 +178,7 @@ public static class SystemMonitorNative
         {
             var actual = SafeOffsetOf(field);
             if (actual != expected)
-                return $"接口表字段 {field} 偏移不符（镜像声明 {actual}，应为 {expected}）";
+                return LocMessage.Of("widget.mon.err.fieldOffset", field, actual, expected);
         }
         return null;
     }

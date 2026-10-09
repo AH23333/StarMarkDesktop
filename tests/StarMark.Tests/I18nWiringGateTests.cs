@@ -1162,7 +1162,7 @@ public sealed class I18nWiringGateTests
             .Select(f => f.RelativePath.Replace(Path.DirectorySeparatorChar, '/'))
             .OrderBy(p => p, StringComparer.Ordinal)
             .ToArray();
-        // 六位主人各点一次名（⛔ 只钉计数：加第七处时那一行会红得说不出是谁）
+        // 每一位主人各点一次名（⛔ 只钉计数：多一处时那一行要红得说出是谁——批次 WI-60 那第九处就是这么被看见的）
         Assert.Equal(new[]
         {
             "src/StarMark.UI/Helpers/LocText.cs",
@@ -1171,6 +1171,7 @@ public sealed class I18nWiringGateTests
             "src/StarMark.UI/Views/CountdownWidget.xaml.cs",
             "src/StarMark.UI/Views/GlanceWidget.xaml.cs",
             "src/StarMark.UI/Views/SettingsPage.xaml.cs",
+            "src/StarMark.UI/Views/SystemMonitorWidget.xaml.cs",
             "src/StarMark.UI/Views/WeatherWidget.xaml.cs",
             "src/StarMark.UI/Views/WidgetAppearanceEditor.cs",
         }, subscribers);
@@ -1239,6 +1240,14 @@ public sealed class I18nWiringGateTests
         var settings = Code(ReadRepoFile(SettingsPageCs));
         Assert.Contains("Locale.Changed += ViewModel.PaintDiagnostics;", settings, StringComparison.Ordinal);
         Assert.Contains("Locale.Changed -= ViewModel.PaintDiagnostics;", settings, StringComparison.Ordinal);
+        // 第九处＝系统监控那扇组件窗（批次 WI-60／P-188 第二刀）：它的行名来自 Core 的目录、
+        //   行内原因来自 Integrations 的探针——**这两层交的都是键**，"重念"只能发生在这颗宿主上；
+        //   而它那一拍是"多久采一次"（省资源模式 3 秒），⛔ 让语言改动等到下一拍 ⇒ 自己订阅。
+        var monitor = Code(ReadRepoFile("src/StarMark.UI/Views/SystemMonitorWidget.xaml.cs"));
+        Assert.Contains("Loaded += (_, _) => Locale.Changed += RepaintWords;", monitor, StringComparison.Ordinal);
+        Assert.Contains("Unloaded += (_, _) => Locale.Changed -= RepaintWords;", monitor, StringComparison.Ordinal);
+        Assert.DoesNotContain("ViewModel.Tick", MethodBody(monitor, "private void RepaintWords"),
+                              StringComparison.Ordinal);   // 重贴⛔ 顺手再采一次（那会把改口变成"读数失败"）
         Assert.DoesNotContain("LoadDiagnosticsAsync", MethodBody(settings, "void Page_Loaded"), StringComparison.Ordinal);
     }
 

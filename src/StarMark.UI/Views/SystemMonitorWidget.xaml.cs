@@ -3,6 +3,7 @@ using System;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Performance;
 using StarMark.Core.Widgets;
 using StarMark.UI.Services;
@@ -34,8 +35,14 @@ public sealed partial class SystemMonitorWidget : UserControl, IWidgetTicker
         ViewModel = new SystemMonitorViewModel(WindowMs());
         InitializeComponent();
         ViewModel.Load(config.MonitorMetrics);
+        // 换语言那一刻重念已经拿到手的那几句（⛔ 在这里再采一次样：那会把"字改口"变成"这次读数失败了"）。
+        // 订阅与摘掉必须成对——事件挂在静态事件上，窗关了不摘＝这一窗的元素永远活着（坑表 #386）。
+        Loaded += (_, _) => Locale.Changed += RepaintWords;
+        Unloaded += (_, _) => Locale.Changed -= RepaintWords;
         _ready = true;
     }
+
+    private void RepaintWords() => ViewModel.RepaintWords();
 
     /// <summary>省资源模式改的是"多久采一次"，窗长跟着间隔走（窗比间隔短等于没有平均）。</summary>
     private static int WindowMs()

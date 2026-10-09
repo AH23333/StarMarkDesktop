@@ -40,8 +40,17 @@ public sealed class SystemMonitorPolicyTests
         foreach (var metric in selectable)
             Assert.Contains(metric, flags);                                   // 不得漏
         Assert.DoesNotContain(MonitorMetric.None, flags);                     // None 不是可显示行
-        Assert.All(SystemMonitorPolicy.Catalog, e => Assert.False(string.IsNullOrWhiteSpace(e.Label)));
-        Assert.All(SystemMonitorPolicy.Catalog, e => Assert.False(string.IsNullOrWhiteSpace(e.Glyph)));
+        // 目录那一列交的是**键**（批次 WI-60／P-193）：三颗逐颗点名，⛔ 只钉计数——
+        //   换名不换数，"颗数相等"那种判据放走过台架 A13（规则 #164＝坑表 #414）。
+        Assert.Equal(new[] { "widget.mon.row.cpu", "widget.mon.row.mem", "widget.mon.net" },
+                     SystemMonitorPolicy.Catalog.Select(e => e.LabelKey).ToArray());
+        Assert.All(SystemMonitorPolicy.Catalog, e =>
+        {
+            Assert.True(StarMark.Abstractions.I18n.UiStrings.TryGet(e.LabelKey, out var row),
+                        $"{e.LabelKey} 在表里没有行 ⇒ 界面上那一格是 ⟨…⟩");
+            Assert.False(string.IsNullOrWhiteSpace(row.Zh), $"{e.LabelKey} 的中文列是空的");
+            Assert.False(string.IsNullOrWhiteSpace(e.Glyph), "那颗图标⛔ 空（行首就只剩文字）");
+        });
     }
 
     [Fact]

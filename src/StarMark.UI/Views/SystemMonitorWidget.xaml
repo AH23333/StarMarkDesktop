@@ -16,7 +16,8 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{x:Bind Label}" FontSize="12" Opacity="0.75"
+                            <!-- 行名⛔ OneTime：它是"重建集合那一刻取好的词"，换语言后必须能被重念（批次 WI-60） -->
+                            <TextBlock Grid.Column="0" Text="{x:Bind Label, Mode=OneWay}" FontSize="12" Opacity="0.75"
                                        VerticalAlignment="Center"/>
                             <TextBlock Grid.Column="1" Text="{x:Bind Value, Mode=OneWay}" FontSize="13"
                                        FontWeight="SemiBold" VerticalAlignment="Center"/>
