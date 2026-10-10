@@ -256,9 +256,9 @@ public partial class SettingsPageViewModel
             };
             var total = names.Count + temps.Count;
             var choice = await CenteredDialog.ShowContentAsync(
-                $"清理 {total} 个不用的文件", body, owner: App.MainWindow,
+                LocMessage.Of("clip.cleanTitle", total), body, owner: App.MainWindow,
                 dedupeKey: "clip-asset-cleanup", width: 520, height: 420,
-                primaryText: $"删掉这 {total} 个文件", cancelText: "先不删");
+                primaryText: LocMessage.Of("clip.cleanPrimary", total), cancelText: LocMessage.Of("clip.cleanCancel"));
             if (choice != CenteredDialog.HostedDialogResult.Committed)
             {
                 ClipboardCleanupStatus = LocMessage.Of("settings.data.cleanCancelled");

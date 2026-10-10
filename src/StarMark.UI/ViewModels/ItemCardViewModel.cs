@@ -77,8 +77,16 @@ public partial class ItemCardViewModel : ObservableObject
     /// <summary>
     /// 「打开」这一项对该条目到底做什么。剪贴板历史条目没有可启动的目标，
     /// 它的"打开"＝把正文再复制回剪贴板；文案若仍写"打开"，用户点之前无从知道会发生什么。
+    /// <para>那颗动作的<b>身份</b>（批次 WI-61d·P-185）：键的选择只此一处——条目卡右键、贴图条右键与
+    /// 两颗对话框（"打开"／"复制到剪贴板"）都从这一颗出。⛔ 把选好的<b>字</b>交出去：那样语言就被定死在
+    /// 算出它那一刻（坑表 #276／#423 那一族），换语言时弹窗与菜单各留一门语言。</para>
     /// </summary>
-    public string OpenMenuText => ClipboardPolicy.OpensAsCopy(Type, Uri) ? Locale.T("card.open.asCopy") : Locale.T("card.open.open");
+    public LocMessage OpenMenuMessage =>
+        LocMessage.Of(ClipboardPolicy.OpensAsCopy(Type, Uri) ? "card.open.asCopy" : "card.open.open");
+
+    /// <summary>同一颗句子的<b>成品字</b>薄包装，只喂给"当下就要一个字串"的消费者（XAML 绑定与菜单行的 Text）。
+    /// 它⛔ 第二份措辞出处——字由上面那颗键现取。</summary>
+    public string OpenMenuText => OpenMenuMessage.Render();
 
     /// <summary>同上：对没有链接的条目，这一项复制的是正文而不是"链接/路径"。</summary>
     public string CopyMenuText => ClipboardPolicy.OpensAsCopy(Type, Uri) ? Locale.T("card.copy.content") : Locale.T("card.copy.link");

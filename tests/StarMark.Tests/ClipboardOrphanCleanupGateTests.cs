@@ -55,7 +55,11 @@ public sealed class ClipboardOrphanCleanupGateTests
         // 取消那一支必须在 CleanAsync 之前就返回，否则"先不删"变成"照删"。
         var cancel = body.IndexOf("HostedDialogResult.Committed", StringComparison.Ordinal);
         Assert.True(cancel >= 0 && cancel < clean, "判确认结果的那一句必须早于 CleanAsync");
-        Assert.Contains("先不删", body);
+        // 批次 WI-61c→61d：那颗取消按钮的字也交进了表里 ⇒ 这里⛔ 再钉"先不删"那三个字（钉字＝钉住一种语言），
+        // 改钉<b>那颗键在 CleanAsync 之前就被点名</b>——顺序判据一个字没放宽。
+        Assert.Contains("LocMessage.Of(" + '"' + "clip.cleanCancel" + '"' + ")", body);
+        Assert.True(body.IndexOf("LocMessage.Of(" + '"' + "clip.cleanCancel" + '"' + ")", StringComparison.Ordinal) < clean,
+            "取消那颗键要在 CleanAsync 之前点名（否则弹框还没定下来就先删了）");
         // 空名单不许弹一个空框。
         // 批次 WI-61c：那句"没东西可清"交进了表里 ⇒ 这里改钉"那颗键在弹框之前就已定下来"。
         Assert.Contains("LocMessage.Of(" + '"' + "settings.data.cleanNothing" + '"' + ")", body);

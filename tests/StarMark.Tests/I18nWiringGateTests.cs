@@ -1426,9 +1426,9 @@ public sealed class I18nWiringGateTests
     public void TheResetHotkeysConfirmPushesKeysInsteadOfNamingAGesture()
     {
         var body = MethodBody(Code(ReadRepoFile(SettingsHotkeysCs)), "private async void ResetHotkeys_Click");
-        Assert.Contains("Locale.T(\"settings.hotkeys.reset\")", body, StringComparison.Ordinal);
-        Assert.Contains("Locale.T(\"settings.hotkeys.resetConfirm\")", body, StringComparison.Ordinal);
-        Assert.Contains("Locale.T(\"dialog.cancel\")", body, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"settings.hotkeys.reset\")", body, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"settings.hotkeys.resetConfirm\")", body, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"dialog.cancel\")", body, StringComparison.Ordinal);
         // 实参不许再是引号里的那句话（与"跳转实参不许是中文"同一形状）
         Assert.DoesNotContain("primaryText: \"", body, StringComparison.Ordinal);
         Assert.DoesNotContain("cancelText: \"", body, StringComparison.Ordinal);
@@ -1555,10 +1555,10 @@ public sealed class I18nWiringGateTests
         Assert.Equal(Array.Empty<string>(), stillLiteral);
 
         var del = MethodBody(page, "private async void DeleteLayout_Click");
-        Assert.Contains("Locale.T(\"settings.widgets.deleteLayoutTitle\")", del, StringComparison.Ordinal);
-        Assert.Contains("Locale.Fmt(\"settings.widgets.deleteLayoutBody\", row?.Name ?? id)", del, StringComparison.Ordinal);
-        Assert.Contains("Locale.T(\"dialog.delete\")", del, StringComparison.Ordinal);
-        Assert.Contains("Locale.T(\"dialog.cancel\")", del, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"settings.widgets.deleteLayoutTitle\")", del, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"settings.widgets.deleteLayoutBody\", row?.Name ?? id)", del, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"dialog.delete\")", del, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"dialog.cancel\")", del, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -1778,8 +1778,8 @@ public sealed class I18nWiringGateTests
         Assert.Contains("Locale.Fmt(\"widget.menu.nameWithSummary\", l.Name, l.Summary)", menu, StringComparison.Ordinal);
         Assert.Contains("Locale.Fmt(\"widget.menu.nameWithSummary\", s.Name, s.Summary)", menu, StringComparison.Ordinal);
         Assert.Equal(2, Count(menu, "\"widget.menu.nameWithSummary\""));   // 布局行与快照行共用一颗
-        Assert.Equal(2, Count(menu, "Locale.T(\"dialog.save\")"));         // 两颗保存对话框，⛔ 不另起一份「保存」
-        Assert.Equal(2, Count(menu, "Locale.T(\"dialog.cancel\")"));
+        Assert.Equal(2, Count(menu, "LocMessage.Of(\"dialog.save\")"));    // 两颗保存对话框，⛔ 不另起一份「保存」
+        Assert.Equal(2, Count(menu, "LocMessage.Of(\"dialog.cancel\")"));
         // 带图标那份展示名：组件窗里只剩菜单那一个宿主（标题栏那颗是键，见 WI-36 那格）
         Assert.Equal(1, Count(menu, "WidgetStorage.KindTitle(kind)"));
 

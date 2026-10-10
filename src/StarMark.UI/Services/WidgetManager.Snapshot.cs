@@ -1,5 +1,6 @@
 #nullable enable
 using Microsoft.UI.Dispatching;
+using StarMark.Abstractions.I18n;
 using Windows.Graphics;
 using StarMark.Abstractions;
 using StarMark.Core.Widgets;
@@ -104,8 +105,10 @@ public sealed partial class WidgetManager
     /// 最近一次 <see cref="ApplySnapshotAsync"/> 未能应用的原因（成功或未尝试＝null，失败时随该次调用刷新）。
     /// <para>快照页原先无论为何失败都只会说"请重试"，而原因埋在日志里：磁盘满、快照被别处删掉、
     /// 组件数据读不出来——用户看到的都是同一句话，也就无从判断重试有没有意义（P-54）。</para>
+    /// <para>这里交的是那句的<b>身份</b>（键＋实参，批次 WI-61d·P-185）：两颗宿主（快照页那颗对话框与
+    /// 组件右键那条提示）各自从这一颗取词，⛔ 在这里就把句子念成成品字。</para>
     /// </summary>
-    public string? LastApplyError { get; private set; }
+    public LocMessage? LastApplyError { get; private set; }
 
     /// <summary>
     /// 应用快照 = 回到那一刻（Replace）：先自动留一个「应用前」回滚点，再落位布局 + 写回配置数据 + 还原本地条目。
@@ -117,7 +120,7 @@ public sealed partial class WidgetManager
         var snapshot = _storage.FindSnapshot(snapshotId);
         if (snapshot is null)
         {
-            LastApplyError = "该快照已不存在（可能在别处被删除）";
+            LastApplyError = LocMessage.Of("snapshot.goneNowhere");
             return false;
         }
 
@@ -224,7 +227,7 @@ public sealed partial class WidgetManager
         catch (Exception ex)
         {
             StarLog.Error("创建应用前回滚快照失败", ex);
-            LastApplyError = $"生成「应用前」回滚点失败：{ex.Message}";
+            LastApplyError = LocMessage.Of("widget.menu.rollbackFailedReason", ex.Message);
             return false;
         }
     }

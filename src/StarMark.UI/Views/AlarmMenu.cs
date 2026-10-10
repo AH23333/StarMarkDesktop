@@ -143,15 +143,15 @@ public static class AlarmMenu
         try
         {
             var input = await CenteredDialog.PromptAsync(
-                title: Locale.T("alarm.add.title"),
-                message: Locale.T("alarm.add.message"),
-                placeholder: Locale.T("alarm.add.placeholder"),
+                title: LocMessage.Of("alarm.add.title"),
+                message: LocMessage.Of("alarm.add.message"),
+                placeholder: LocMessage.Of("alarm.add.placeholder"),
                 owner: owner);
             if (input is null) return;                                  // 取消：什么都不改
             if (!AlarmPolicy.TryParseInput(input, out var minute, out var label, out var error))
             {
                 // 弹窗是一次性的消费者：这一刻渲染当前语言那句，⛔ 不该把成品串提前存进任何常驻元素。
-                await CenteredDialog.MessageAsync(Locale.T("alarm.add.failed"), error?.Render() ?? Locale.T("alarm.unreadable"), owner);
+                await CenteredDialog.MessageAsync(LocMessage.Of("alarm.add.failed"), error ?? LocMessage.Of("alarm.unreadable"), owner);
                 return;
             }
             alarms.Add(minute, label, AlarmDays.Daily);                 // 新条目默认"每天"：只有"单次"需要额外说明，其余都能就地改
@@ -169,15 +169,16 @@ public static class AlarmMenu
         {
             var current = AlarmPolicy.FormatMinute(item.MinuteOfDay) + " " + item.Label;
             var input = await CenteredDialog.PromptAsync(
-                title: Locale.T("alarm.edit.title"),
-                message: Locale.T("alarm.edit.message"),
-                placeholder: current.Trim(),
+                title: LocMessage.Of("alarm.edit.title"),
+                message: LocMessage.Of("alarm.edit.message"),
+                // placeholder 那一颗⛔ 交"当前名字"：那是用户会改的值，而它随后就坐在 defaultText 里
+                // （框没清空时提示根本不显示）——同一件值交两次，换语言那一刻只会留下两份出处（批次 WI-61d）。
                 defaultText: current.Trim(),
                 owner: owner);
             if (input is null) return;
             if (!AlarmPolicy.TryParseInput(input, out var minute, out var label, out var error))
             {
-                await CenteredDialog.MessageAsync(Locale.T("alarm.edit.kept"), error?.Render() ?? Locale.T("alarm.unreadable"), owner);
+                await CenteredDialog.MessageAsync(LocMessage.Of("alarm.edit.kept"), error ?? LocMessage.Of("alarm.unreadable"), owner);
                 return;
             }
             alarms.SetTime(item.Id, minute, label);

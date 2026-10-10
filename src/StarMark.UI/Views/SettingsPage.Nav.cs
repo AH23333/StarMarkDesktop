@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using StarMark.Abstractions.I18n;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -99,6 +100,5 @@ public sealed partial class SettingsPage
     // PickSaveFileAsync/PickSingleFileAsync 稳定抛 COMException E_FAIL（真机日志：提权 pid 内连挂 4 次），
     // 且 try 若从 picker 之后才开始，异常就冲到 UI 兜底网、用户只看到"点了没反应"。
     // 处置：picker 调用本身进 try；失败**不写死成因、也不要求用户换权限重启**，而是退回应用内路径输入框（见 RequestBackupPathAsync）。
-    private const string PickerBlockedHint =
-        "系统文件对话框在当前会话调不起来（本程序权限高于对话框宿主时就会这样）——改用路径输入框。";
+    private static LocMessage PickerBlockedHint => LocMessage.Of("settings.data.pickerBlocked");
 }

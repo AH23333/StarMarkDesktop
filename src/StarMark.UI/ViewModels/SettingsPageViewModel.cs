@@ -565,14 +565,12 @@ public sealed class BackupRow
     /// <para>写成静态判据（而不是行内字符串）是让确认框与列表用同一份说法：按钮的 <c>Tag</c> 绑的是
     /// <see cref="BackupService.BackupFile"/>，拿不到行对象，两边各写一份就一定会有分岔。</para>
     /// </summary>
-    public static string DeleteWarningFor(AutoBackupPolicy.BackupKind kind) => kind switch
+    public static LocMessage DeleteWarningFor(AutoBackupPolicy.BackupKind kind) => kind switch
     {
-        AutoBackupPolicy.BackupKind.Auto
-            => "自动件会按你设的间隔继续生成，删这一份只是腾地方。",
-        AutoBackupPolicy.BackupKind.PreRestore
-            => "它是某次导入的回滚点：删掉之后就再也没法撤销那一次恢复了。",
-        _ => "手动导出的这份程序不会替你再生成，删掉就真的没了（除非你在别处拷过）。",
+        AutoBackupPolicy.BackupKind.Auto => LocMessage.Of("settings.data.deleteWarnAuto"),
+        AutoBackupPolicy.BackupKind.PreRestore => LocMessage.Of("settings.data.deleteWarnPreRestore"),
+        _ => LocMessage.Of("settings.data.deleteWarnManual"),
     };
 
-    public string DeleteWarning => DeleteWarningFor(File.Kind);
+    public LocMessage DeleteWarning => DeleteWarningFor(File.Kind);
 }

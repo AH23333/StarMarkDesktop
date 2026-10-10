@@ -575,10 +575,11 @@ public static class WidgetAppearanceEditor
             if (IsDirty())
             {
                 var yes = await CenteredDialog.ConfirmAsync(
-                    // 一次性对话框＝瞬时宿主：取词发生在**开它的那一刻**（⛔ 挂 LocText，WI-45 那条口径——
-                    // 它开完就关，重贴名单里只会留下一条永远贴不出去的空壳）
-                    Locale.T("widget.appearance.cancelConfirmTitle"), Locale.T("widget.appearance.cancelConfirmBody"),
-                    Locale.T("widget.appearance.cancelConfirmPrimary"), Locale.T("widget.appearance.cancelConfirmSecondary"), owner: win);
+                    // 交身份⛔ 交成品字（批次 WI-61d 改口）：✅WI-52 那句"⛔ 把键塞进那颗通用工厂——它⛔ 懂语言"
+                    // 说的是**当时**的签名；工厂现在收 LocMessage，取词挪到贴上那一刻。
+                    // 名单里也不会攒壳：LocText 那份名单是弱引用、每次重贴前先 sweep（读过的实现，⛔ 猜的）。
+                    LocMessage.Of("widget.appearance.cancelConfirmTitle"), LocMessage.Of("widget.appearance.cancelConfirmBody"),
+                    LocMessage.Of("widget.appearance.cancelConfirmPrimary"), LocMessage.Of("widget.appearance.cancelConfirmSecondary"), owner: win);
                 if (!yes) return;   // 继续编辑
             }
             FinishCancel();

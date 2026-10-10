@@ -317,8 +317,8 @@ public sealed partial class WidgetWindow
                 apply.Click += async (_, _) =>
                 {
                     if (!await _manager.ApplySnapshotAsync(id))
-                        await ShowTipAsync(Locale.T("widget.menu.applyFailed"), Locale.Fmt("widget.menu.applyFailedBody",
-                            _manager.LastApplyError ?? Locale.T("widget.menu.rollbackFailed")));
+                        await ShowTipAsync(LocMessage.Of("widget.menu.applyFailed"), LocMessage.Of("widget.menu.applyFailedBody",
+                            _manager.LastApplyError ?? LocMessage.Of("widget.menu.rollbackFailed")));
                 };
                 snapSub.Items.Add(apply);
             }
@@ -341,11 +341,11 @@ public sealed partial class WidgetWindow
     private async System.Threading.Tasks.Task SaveSnapshotByNameAsync()
     {
         var name = await CenteredDialog.PromptAsync(
-            title: Locale.T("widget.menu.saveSnapshotTitle"),
-            message: Locale.T("widget.menu.saveSnapshotBody"),
-            placeholder: Locale.T("widget.menu.saveSnapshotHint"),
-            primaryText: Locale.T("dialog.save"),
-            cancelText: Locale.T("dialog.cancel"),
+            title: LocMessage.Of("widget.menu.saveSnapshotTitle"),
+            message: LocMessage.Of("widget.menu.saveSnapshotBody"),
+            placeholder: LocMessage.Of("widget.menu.saveSnapshotHint"),
+            primaryText: LocMessage.Of("dialog.save"),
+            cancelText: LocMessage.Of("dialog.cancel"),
             owner: this);
 
         if (name is null) return;
@@ -356,16 +356,16 @@ public sealed partial class WidgetWindow
         {
             var saved = await _manager.CaptureSnapshotAsync(name);
             if (saved is null)
-                await ShowTipAsync(Locale.T("widget.menu.noneWidgets"), Locale.T("widget.menu.noSnapshotContent"));
+                await ShowTipAsync(LocMessage.Of("widget.menu.noneWidgets"), LocMessage.Of("widget.menu.noSnapshotContent"));
             else
-                await ShowTipAsync(Locale.T("widget.menu.snapshotSaved"),
-                    Locale.Fmt("widget.menu.snapshotSavedBody", saved.Name, saved.Summary));
+                await ShowTipAsync(LocMessage.Of("widget.menu.snapshotSaved"),
+                    LocMessage.Of("widget.menu.snapshotSavedBody", saved.Name, saved.Summary));
         }
         catch (Exception ex)
         {
             StarLog.Error("保存布局与数据快照失败", ex);
-            await ShowTipAsync(Locale.T("widget.menu.snapshotFailed"),
-                Locale.Fmt("widget.menu.snapshotFailedBody", ex.Message));
+            await ShowTipAsync(LocMessage.Of("widget.menu.snapshotFailed"),
+                LocMessage.Of("widget.menu.snapshotFailedBody", ex.Message));
         }
     }
 
@@ -377,21 +377,21 @@ public sealed partial class WidgetWindow
     private async System.Threading.Tasks.Task SaveLayoutByNameAsync()
     {
         var name = await CenteredDialog.PromptAsync(
-            title: Locale.T("widget.menu.saveLayoutTitle"),
-            message: Locale.T("widget.menu.saveLayoutBody"),
-            placeholder: Locale.T("widget.menu.saveLayoutHint"),
-            primaryText: Locale.T("dialog.save"),
-            cancelText: Locale.T("dialog.cancel"),
+            title: LocMessage.Of("widget.menu.saveLayoutTitle"),
+            message: LocMessage.Of("widget.menu.saveLayoutBody"),
+            placeholder: LocMessage.Of("widget.menu.saveLayoutHint"),
+            primaryText: LocMessage.Of("dialog.save"),
+            cancelText: LocMessage.Of("dialog.cancel"),
             owner: this);
 
         if (name is null) return;
 
         var saved = await _manager.SaveCurrentLayoutAsync(name);
         if (saved is null)
-            await ShowTipAsync(Locale.T("widget.menu.noneVisible"), Locale.T("widget.menu.noLayoutContent"));
+            await ShowTipAsync(LocMessage.Of("widget.menu.noneVisible"), LocMessage.Of("widget.menu.noLayoutContent"));
     }
 
-    private async System.Threading.Tasks.Task ShowTipAsync(string title, string message)
+    private async System.Threading.Tasks.Task ShowTipAsync(LocMessage title, LocMessage message)
     {
         try { await CenteredDialog.MessageAsync(title, message, owner: this); }
         catch { /* 窗口正在关闭 */ }
@@ -492,9 +492,9 @@ public sealed partial class WidgetWindow
         {
             var def = Locale.T(DefaultKindTitleKey(_kind));   // 提示里的"默认名称"＝类型名，不带图标
             var input = await CenteredDialog.PromptAsync(
-                title: Locale.T("widget.menu.renameTitle"),
-                message: Locale.Fmt("widget.menu.renameBody", def),
-                placeholder: def,
+                title: LocMessage.Of("widget.menu.renameTitle"),
+                message: LocMessage.Of("widget.menu.renameBody", def),
+                placeholder: LocMessage.Of("common.rawValue", def),
                 defaultText: string.IsNullOrWhiteSpace(_config.Title) ? null : _config.Title,
                 owner: this);
             if (input is null) return;   // 用户取消

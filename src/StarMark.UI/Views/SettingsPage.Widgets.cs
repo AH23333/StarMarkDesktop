@@ -193,9 +193,9 @@ public sealed partial class SettingsPage
         // 三句都在<b>弹出这一刻</b>现取（批次 WI-35）：一次性的框没有"后来换语言"的时刻，
         // 而按钮那两颗复用对话框那对键，不在这一栏里再造第二个出处。
         var confirm = await CenteredDialog.ConfirmAsync(
-            Locale.T("settings.widgets.deleteLayoutTitle"),
-            Locale.Fmt("settings.widgets.deleteLayoutBody", row?.Name ?? id),
-            primaryText: Locale.T("dialog.delete"), cancelText: Locale.T("dialog.cancel"),
+            LocMessage.Of("settings.widgets.deleteLayoutTitle"),
+            LocMessage.Of("settings.widgets.deleteLayoutBody", row?.Name ?? id),
+            primaryText: LocMessage.Of("dialog.delete"), cancelText: LocMessage.Of("dialog.cancel"),
             owner: App.MainWindow, dedupeKey: $"deletelayout:{id}");
         if (!confirm) return;
         await mgr.DeleteLayoutAsync(id);

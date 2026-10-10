@@ -64,8 +64,9 @@ public sealed class WidgetAppearanceWordGateTests
         var left = CjkLines(code);
         Assert.True(left.Length == 0, $"工厂里还有 {left.Length} 行屏幕字：\n  " + string.Join("\n  ", left));
 
-        // 读数那一半：五处动词只许现场问表（Prompt 两颗＋Confirm 两颗＋Message 那颗「知道了」）。
-        Assert.Equal(5, Count(code, @"Locale.T(""dialog."));
+        // 读数那一半：五处动词只许交出表里的键（Prompt 两颗＋Confirm 两颗＋Message 那颗「知道了」）。
+        // 批次 WI-61d 起工厂形参收 LocMessage——这里若又写回 Locale.T，字就被钉在"建这句话那一刻"的语言上。
+        Assert.Equal(5, Count(code, @"LocMessage.Of(""dialog."));
         // 禁项那一半（带引号点名⛔ 裸词，裸词会撞上日志措辞——#367 那一族）：默认值不许再写字面量。
         Assert.Empty(Regex.Matches(code, @"""(确定|取消|知道了)"""));
     }
@@ -93,9 +94,12 @@ public sealed class WidgetAppearanceWordGateTests
     }
 
     /// <summary>
-    /// 那一排<b>随状态重建</b>的字（预设颜色按钮、当前颜色那一行、"默认"那颗读数、一次性确认框那四句）
-    /// 反过来只许<b>当场取词</b>：⛔ 挂 <c>LocText</c>——它们开完就被下一次状态覆盖，挂上去只是名单里
-    /// 几条永远贴不出去的空壳（WI-45 同条判据在这一族的另一面）。
+    /// 那一排<b>随状态重建</b>的字（预设颜色按钮、当前颜色那一行、"默认"那颗读数）反过来只许<b>当场取词</b>：
+    /// ⛔ 给它们挂 <c>LocText</c>——那些元素每换一次状态就整批重造，挂上去只是把同一句话重复登记一遍。
+    /// <para>⚠ 批次 WI-61d 改口（#125 那条"注释里那句为什么也是一条断言"）：原本与这三句并列的<b>一次性确认框那四句</b>
+    /// 不在这排了——对话框工厂的形参改收 <c>LocMessage</c> 之后它们交的是<b>键</b>，由工厂在建窗那一刻贴。
+    /// 从前那句"挂上去＝名单里永远贴不出去的空壳"站不住：<c>LocText.Live</c> 与 <c>WindowTitles</c> 都是<b>弱引用</b>名单，
+    /// 每比重贴前先 sweep 掉已死的目标（读源码量出来的，⛔ 沿用旧理由），多登记几句既不涨内存也贴不到别处。</para>
     /// <para>⚠ 这类宿主自己的节拍里<b>没有语言这件事</b> ⇒ 必须自己订阅 <c>Locale.Changed</c>，
     /// 且与 <c>-=</c> 成对（坑表 #386，✅WI-51 那条口径在这一族第一次落到"编辑器"这种长命宿主上）。</para>
     /// </summary>
@@ -103,7 +107,8 @@ public sealed class WidgetAppearanceWordGateTests
     public void TheWordsRebuiltOnEachStateChangeAreTakenAtThatMomentAndTheHostFollowsLanguage()
     {
         var code = CodeOf(Editor);
-        Assert.Equal(4, Count(code, @"Locale.T(""widget.appearance.cancelConfirm"));
+        // 那四句现在是"交键"（工厂在建窗那一刻贴），⛔ 再按 Locale.T 数＝永远读不到；颗数一颗没少。
+        Assert.Equal(4, Count(code, @"LocMessage.Of(""widget.appearance.cancelConfirm"));
         Assert.Equal(1, Count(code, @"Locale.T(""widget.appearance.scaleDefault"""));
         Assert.Equal(2, Count(code, @"Locale.T(""widget.appearance.followGlobal"""));
         Assert.Equal(1, Count(code, @"Locale.T(nameKey)"));
@@ -146,8 +151,10 @@ public sealed class WidgetAppearanceWordGateTests
     public void TheCallerThatUsedToLeanOnTheFactoryDefaultNowNamesItsWords()
     {
         var code = CodeOf(SnapshotPage);
-        Assert.Equal(1, Count(code, @"primaryText: Locale.T(""dialog.ok"")"));
-        Assert.Equal(1, Count(code, @"cancelText: Locale.T(""dialog.cancel"")"));
+        Assert.Equal(1, Count(code, @"primaryText: LocMessage.Of(""dialog.ok"")"));
+        // 两颗而不是从前那一颗：批次 WI-61d 把「从快照提取布局」那格的 cancelText: "取消" 也交了表，
+        // 于是这一档有两处点名 dialog.cancel（⛔ 把数改回 1＝把那颗新交的字放回去）。
+        Assert.Equal(2, Count(code, @"cancelText: LocMessage.Of(""dialog.cancel"")"));
     }
 
     /// <summary>

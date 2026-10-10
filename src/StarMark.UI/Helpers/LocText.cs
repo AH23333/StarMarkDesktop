@@ -70,6 +70,14 @@ public static class LocText
     /// </summary>
     private static readonly ConditionalWeakTable<DependencyObject, ArgsBox> ArgStore = new();
 
+    /// <summary><see cref="PlaceholderKeyProperty"/> 那句提示的实参（批次 WI-61d·P-185）。
+    /// <para>为什么现在才加：<see cref="PlaceholderKeyProperty"/> 的 doc-comment 早写着
+    /// "⛔ 等哪一条真带读数了再加"——本批把 `CenteredDialog` 的形参换成交身份之后，
+    /// 备份路径那句「完整路径，例：{0}」就是**第一颗带读数的占位符**。</para>
+    /// <para>与 <see cref="ToolTipArgStore"/> 分开而不是共用一格信箱：同一颗输入框可以
+    /// 既有正文键又有提示键，共用就等于"贴提示时拿到正文的实参"（坑表 #276 同族——一处信箱只服务一条路）。</para></summary>
+    private static readonly ConditionalWeakTable<DependencyObject, ArgsBox> PlaceholderArgStore = new();
+
     /// <summary><see cref="ToolTipKeyProperty"/> 那句悬停说明的实参（批次 WI-51）。
     /// <para>为什么不是顺路用 <see cref="ArgStore"/>：画布那条工具条上<b>同一颗按钮两句话都有</b>——
     /// 正文（图标／短名）一句、悬停说明一句，而说明里嵌着别的按钮的名字。共用一格信箱就等于
@@ -166,7 +174,20 @@ public static class LocText
 
     public static string GetToolTipKey(DependencyObject element) => (string)element.GetValue(ToolTipKeyProperty);
 
-    public static void SetPlaceholderKey(DependencyObject element, string value) => element.SetValue(PlaceholderKeyProperty, value);
+    public static void SetPlaceholderKey(DependencyObject element, string value)
+    {
+        // 不带读数的那一路也要过一次信箱：留着上一句的实参＝下一次换语言按旧读数填空（与 SetKey 同一条理由）。
+        PlaceholderArgStore.Remove(element);
+        element.SetValue(PlaceholderKeyProperty, value);
+    }
+
+    /// <summary>贴一句<b>带读数</b>的提示（批次 WI-61d）：实参先落，随后那颗键的回调才知道要填空（与 SetKey 同序）。</summary>
+    public static void SetPlaceholderKey(DependencyObject element, string key, params object?[] args)
+    {
+        if (args is { Length: > 0 }) PlaceholderArgStore.AddOrUpdate(element, new ArgsBox(args));
+        else PlaceholderArgStore.Remove(element);
+        element.SetValue(PlaceholderKeyProperty, key);
+    }
 
     public static string GetPlaceholderKey(DependencyObject element) => (string)element.GetValue(PlaceholderKeyProperty);
 
@@ -265,8 +286,10 @@ public static class LocText
             WarnUnwritableOnce(d, key!, "没有 PlaceholderText");
             return;
         }
-        Register(d, target, key!, null);
-        d.SetValue(target, Locale.T(key!));
+        // 取词＋填空仍走 Text() 那唯一一处（与 ToolTip/OnContent 同一条路，⛔ 再写一份 string.Format）。
+        var args = PlaceholderArgStore.TryGetValue(d, out var box) ? box.Value : null;
+        Register(d, target, key!, args);
+        d.SetValue(target, Text(key!, args));
     }
 
     private static void OnOnContentKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

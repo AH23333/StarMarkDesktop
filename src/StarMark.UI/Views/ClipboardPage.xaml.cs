@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using StarMark.UI.Helpers;
 using StarMark.UI.ViewModels;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.UI.Views;
 
@@ -76,10 +77,10 @@ public sealed partial class ClipboardPage : Page
     {
         var count = ViewModel.Entries.Count;
         var confirmed = await Helpers.CenteredDialog.ConfirmAsync(
-            StarMark.Abstractions.I18n.Locale.T("clip.dialog.clearTitle"),
-            StarMark.Abstractions.I18n.Locale.Fmt("clip.dialog.clearBody", count),
-            primaryText: StarMark.Abstractions.I18n.Locale.T("clip.dialog.clearGo"),
-            cancelText: StarMark.Abstractions.I18n.Locale.T("dialog.cancel"),
+            LocMessage.Of("clip.dialog.clearTitle"),
+            LocMessage.Of("clip.dialog.clearBody", count),
+            primaryText: LocMessage.Of("clip.dialog.clearGo"),
+            cancelText: LocMessage.Of("dialog.cancel"),
             owner: App.MainWindow,
             dedupeKey: "clearclipboard");
         if (!confirmed) return;

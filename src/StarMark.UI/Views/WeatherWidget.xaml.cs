@@ -392,9 +392,9 @@ public sealed partial class WeatherWidget : UserControl
     {
         var current = Try(() => new SettingsStore().LoadWeatherCity(), null);
         var input = await CenteredDialog.PromptAsync(
-            Locale.T("widget.weather.city.title"),
-            Locale.T("widget.weather.city.body"),
-            placeholder: Locale.T("widget.weather.city.sample"),
+            LocMessage.Of("widget.weather.city.title"),
+            LocMessage.Of("widget.weather.city.body"),
+            placeholder: LocMessage.Of("widget.weather.city.sample"),
             defaultText: current?.Name);
 
         if (string.IsNullOrWhiteSpace(input)) return;

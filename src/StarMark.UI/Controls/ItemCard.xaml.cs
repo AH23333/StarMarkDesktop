@@ -7,6 +7,7 @@ using StarMark.Abstractions;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.UI.Controls;
 
@@ -84,10 +85,10 @@ public sealed partial class ItemCard : UserControl
         var host = new PreviewHost { ViewModel = vm };
         // 统一走外部居中窗口（非 ContentDialog）：按用户主题着色、可拖动、不可重复。
         var result = await CenteredDialog.ShowContentAsync(
-            ItemCardPolicy.TruncatedTitle(vm.Title),
+            LocMessage.Of("common.rawValue", ItemCardPolicy.TruncatedTitle(vm.Title)),
             host, owner: App.MainWindow,
             dedupeKey: vm.PreviewDedupeKey, width: 820, height: 640,
-            primaryText: vm.OpenMenuText, cancelText: "关闭");
+            primaryText: vm.OpenMenuMessage, cancelText: LocMessage.Of("dialog.close"));
         if (result == CenteredDialog.HostedDialogResult.Committed)
             OpenRequested?.Invoke(this, vm.Id);
     }

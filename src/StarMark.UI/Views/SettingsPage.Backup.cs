@@ -24,6 +24,7 @@ using StarMark.UI.ViewModels;
 using Windows.Storage.Pickers;
 using Windows.System;
 using WinRT.Interop;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.UI.Views;
 
@@ -42,7 +43,7 @@ public sealed partial class SettingsPage
         catch (Exception ex)
         {
             StarLog.Error("文件选择器调起失败（多为提权进程跨完整性级别访问系统对话框宿主被拦）", ex);
-            throw new InvalidOperationException(PickerBlockedHint, ex);
+            throw new InvalidOperationException(PickerBlockedHint.Render(), ex);
         }
     }
 
@@ -53,7 +54,7 @@ public sealed partial class SettingsPage
         catch (Exception ex)
         {
             StarLog.Error("文件保存对话框调起失败（多为提权进程跨完整性级别访问系统对话框宿主被拦）", ex);
-            throw new InvalidOperationException(PickerBlockedHint, ex);
+            throw new InvalidOperationException(PickerBlockedHint.Render(), ex);
         }
     }
 
@@ -112,11 +113,13 @@ public sealed partial class SettingsPage
         while (true)
         {
             var input = await CenteredDialog.PromptAsync(
-                save ? "导出备份到" : "导入备份自",
-                message: error ?? PickerBlockedHint,
-                placeholder: $"完整路径，例：{suggestedPath}",
+                save ? LocMessage.Of("settings.data.exportTo") : LocMessage.Of("settings.data.importFrom"),
+                // ⚠ `error` 那一句的成因话住在 `BackupPathPolicy`（Core 侧当场念出来的成品字，归 P-193／P-194 那一族），
+                //   本批⛔ 半搬——只把它当**实参**递进那颗纯骨架，句子本身仍由表管（✅WI-61c 那颗跨层证人同一口径）。
+                message: error is null ? PickerBlockedHint : LocMessage.Of("common.rawValue", error),
+                placeholder: LocMessage.Of("settings.data.pathExample", suggestedPath),
                 defaultText: text,
-                primaryText: save ? "导出" : "导入",
+                primaryText: save ? LocMessage.Of("settings.data.export") : LocMessage.Of("settings.data.import"),
                 owner: App.MainWindow);
             if (input is null) return null;   // 取消
 
@@ -251,10 +254,13 @@ public sealed partial class SettingsPage
     {
         if (sender is not Microsoft.UI.Xaml.Controls.Button { Tag: BackupService.BackupFile file }) return;
         var confirm = await CenteredDialog.ConfirmAsync(
-            "删除这份备份",
-            $"将永久删除 {file.FileName}（{StarMark.Abstractions.FileSizeText.Human(file.LengthBytes)}，{DateTimeText.Minute(file.ModifiedUtc.ToLocalTime())}）。\n"
-            + $"{BackupRow.DeleteWarningFor(file.Kind)}\n数据库本身不受影响；删的只是这一份导出文件。确定删除？",
-            primaryText: "删除", cancelText: "取消",
+            LocMessage.Of("settings.data.deleteBackupTitle"),
+            // 句子里那两个换行⛔ 抄进表（规则 #100：表里不许有控制字符，换行是布局）⇒ 交成实参 {4}
+            LocMessage.Of("settings.data.deleteBackupBody", file.FileName,
+                StarMark.Abstractions.FileSizeText.Human(file.LengthBytes),
+                DateTimeText.Minute(file.ModifiedUtc.ToLocalTime()),
+                BackupRow.DeleteWarningFor(file.Kind), "\n"),
+            LocMessage.Of("dialog.delete"), LocMessage.Of("dialog.cancel"),
             owner: App.MainWindow, dedupeKey: "deletebackup-" + file.FileName);
         if (!confirm) return;
         ViewModel.BackupStatus = BackupService.DeleteBackup(file.Path);
@@ -321,9 +327,11 @@ public sealed partial class SettingsPage
             TextWrapping = TextWrapping.Wrap,
         };
         var choice = await CenteredDialog.ShowContentAsync(
-            "导入备份", detailBlock, owner: App.MainWindow, dedupeKey: "importbackup",
+            LocMessage.Of("settings.data.importBackupTitle"), detailBlock, owner: App.MainWindow, dedupeKey: "importbackup",
             width: 480, height: 340,
-            primaryText: "合并导入", secondaryText: "覆盖导入", cancelText: "取消");
+            primaryText: LocMessage.Of("settings.data.importMerge"),
+            secondaryText: LocMessage.Of("settings.data.importOverwrite"),
+            cancelText: LocMessage.Of("dialog.cancel"));
 
         if (choice != CenteredDialog.HostedDialogResult.Committed
             && choice != CenteredDialog.HostedDialogResult.Secondary) return;

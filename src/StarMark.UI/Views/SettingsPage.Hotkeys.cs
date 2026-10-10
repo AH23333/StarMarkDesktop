@@ -388,9 +388,9 @@ public sealed partial class SettingsPage
         // ② "只保留那一颗"本身也是假的——出厂默认里有截图／贴图／穿透／画布那一整批，
         //    恢复默认还原的是<b>每一行</b>。两列现在都说"每一行都还原成出厂默认"。
         var confirm = await CenteredDialog.ConfirmAsync(
-            Locale.T("settings.hotkeys.reset"),
-            Locale.T("settings.hotkeys.resetConfirm"),
-            primaryText: Locale.T("settings.hotkeys.reset"), cancelText: Locale.T("dialog.cancel"),
+            LocMessage.Of("settings.hotkeys.reset"),
+            LocMessage.Of("settings.hotkeys.resetConfirm"),
+            primaryText: LocMessage.Of("settings.hotkeys.reset"), cancelText: LocMessage.Of("dialog.cancel"),
             owner: App.MainWindow, dedupeKey: "resethotkeys");
         if (!confirm) return;
 

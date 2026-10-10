@@ -15,6 +15,7 @@ using StarMark.UI.Controls;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.UI.Views;
 
@@ -88,9 +89,9 @@ public sealed partial class QuickLaunchWidget : UserControl
     {
         if (vm is not { IsLauncherMode: true }) return;
         var ok = await CenteredDialog.ConfirmAsync(
-            "删除快捷入口",
-            $"确定删除快捷入口「{vm.Title}」？此操作不可撤销。",
-            primaryText: "删除", cancelText: "取消",
+            LocMessage.Of("quicklaunch.deleteTitle"),
+            LocMessage.Of("quicklaunch.deleteBody", vm.Title),
+            primaryText: LocMessage.Of("dialog.delete"), cancelText: LocMessage.Of("dialog.cancel"),
             owner: App.MainWindow, dedupeKey: $"deletelink:{vm.Uri}");
         if (ok) await _manager.RemoveLinkAsync(_instanceId, vm.Uri);
     }

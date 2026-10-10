@@ -64,25 +64,27 @@ public static class CenteredDialog
     /// 居中顶层输入对话框。返回用户输入（取消 / 关闭返回 null）。
     /// </summary>
     public static Task<string?> PromptAsync(
-        string title,
-        string? message = null,
-        string placeholder = "",
+        LocMessage title,
+        LocMessage? message = null,
+        LocMessage? placeholder = null,
+        // ⚠ 这一颗⛔ 换成 LocMessage：它是输入框里那个**用户会改的值**（数据），不是标签——
+        //   贴进重贴名单会在换语言那一刻盖掉他正在打的字（LocText 类注释第②条）。
         string? defaultText = null,
-        string? primaryText = null,
-        string? cancelText = null,
+        LocMessage? primaryText = null,
+        LocMessage? cancelText = null,
         Window? owner = null)
     {
         var tcs = new TaskCompletionSource<string?>();
         var box = new TextBox
         {
-            PlaceholderText = placeholder,
             Text = defaultText ?? string.Empty,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             Margin = new Thickness(0, 8, 0, 0),
         };
         box.Select(box.Text.Length, 0);
+        if (placeholder != null) LocText.SetPlaceholderKey(box, placeholder.Key, placeholder.Args ?? Array.Empty<object?>());
 
-        double height = 150 + (string.IsNullOrWhiteSpace(message) ? 0 : 48) + 62;
+        double height = 150 + (message is null ? 0 : 48) + 62;
         var win = BuildWindow(title, message, height, owner);
 
         void Finish(string? result)
@@ -94,8 +96,8 @@ public static class CenteredDialog
 
         // 没点名就交表里那颗动词（批次 WI-52·P-183）：这颗工厂曾把「确定／取消」各抄两份，
         // 而工厂里的字⛔ 在任何一颗屏幕尺的射程内（它既不调取词出口、也不是宿主档自己的字面量——坑表 #387）。
-        var primary = MakeButton(primaryText ?? Locale.T("dialog.ok"), true);
-        var cancel = MakeButton(cancelText ?? Locale.T("dialog.cancel"), false);
+        var primary = MakeButton(primaryText ?? LocMessage.Of("dialog.ok"), true);
+        var cancel = MakeButton(cancelText ?? LocMessage.Of("dialog.cancel"), false);
 
         var buttons = new StackPanel
         {
@@ -132,10 +134,10 @@ public static class CenteredDialog
 
     /// <summary>居中顶层确认对话框（确认返回 true）。</summary>
     public static Task<bool> ConfirmAsync(
-        string title,
-        string message,
-        string? primaryText = null,
-        string? cancelText = null,
+        LocMessage title,
+        LocMessage message,
+        LocMessage? primaryText = null,
+        LocMessage? cancelText = null,
         Window? owner = null,
         string? dedupeKey = null)
     {
@@ -147,7 +149,7 @@ public static class CenteredDialog
         }
 
         var tcs = new TaskCompletionSource<bool>();
-        double height = 150 + (string.IsNullOrWhiteSpace(message) ? 0 : 60);
+        double height = 150 + (string.IsNullOrWhiteSpace(message.Key) ? 0 : 60);
         var win = BuildWindow(title, message, height, owner);
         if (dedupeKey != null) RegisterOpen(dedupeKey, win);
 
@@ -159,8 +161,8 @@ public static class CenteredDialog
             SafeClose(win);
         }
 
-        var primary = MakeButton(primaryText ?? Locale.T("dialog.ok"), true);
-        var cancel = MakeButton(cancelText ?? Locale.T("dialog.cancel"), false);
+        var primary = MakeButton(primaryText ?? LocMessage.Of("dialog.ok"), true);
+        var cancel = MakeButton(cancelText ?? LocMessage.Of("dialog.cancel"), false);
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -181,10 +183,10 @@ public static class CenteredDialog
     }
 
     /// <summary>居中顶层提示框。</summary>
-    public static Task MessageAsync(string title, string message, Window? owner = null)
+    public static Task MessageAsync(LocMessage title, LocMessage message, Window? owner = null)
     {
         var tcs = new TaskCompletionSource<bool>();
-        double height = 150 + (string.IsNullOrWhiteSpace(message) ? 0 : 60);
+        double height = 150 + (string.IsNullOrWhiteSpace(message.Key) ? 0 : 60);
         var win = BuildWindow(title, message, height, owner);
 
         void Finish()
@@ -194,7 +196,7 @@ public static class CenteredDialog
             SafeClose(win);
         }
 
-        var ok = MakeButton(Locale.T("dialog.gotIt"), true);
+        var ok = MakeButton(LocMessage.Of("dialog.gotIt"), true);
         var content = new StackPanel
         {
             Children =
@@ -236,7 +238,7 @@ public static class CenteredDialog
     /// <param name="secondaryText">次按钮文字（null=不显示，用于三选一场景如导入备份）。</param>
     /// <param name="cancelText">取消/关闭按钮文字（null=不显示；默认同 primaryText，不显示）。</param>
     public static Task<HostedDialogResult> ShowContentAsync(
-        string title,
+        LocMessage title,
         FrameworkElement content,
         Window? owner = null,
         string? dedupeKey = null,
@@ -245,9 +247,9 @@ public static class CenteredDialog
         // ⚠ 这三颗的 null 说的是"这颗按钮不出现"，所以⛔ 再让 null 兼作"用默认那两个字"（一颗哨兵两义＝迟早贴错）。
         //   工厂原先把「确定／取消」写成默认值，而那是四把屏幕尺都看不见的一处措辞（批次 WI-52·坑表 #387）：
         //   它既不调取词出口，也不是某个宿主档自己的字面量——要默认字的那颗调用方现在自己点名表里的键。
-        string? primaryText = null,
-        string? secondaryText = null,
-        string? cancelText = null)
+        LocMessage? primaryText = null,
+        LocMessage? secondaryText = null,
+        LocMessage? cancelText = null)
     {
         // 不可重复：同一 key 已开则置顶已有窗口，丢弃本次重复请求（返回 Cancelled，调用方据此不落库）
         if (dedupeKey != null && IsOpen(dedupeKey, out var existing) && existing is not null)
@@ -379,9 +381,11 @@ public static class CenteredDialog
         }
     }
 
-    private static Window BuildWindow(string title, string? message, double height, Window? owner)
+    private static Window BuildWindow(LocMessage title, LocMessage? message, double height, Window? owner)
     {
-        var win = new Window { Title = title };
+        // Alt+Tab／任务栏那颗标题也交身份：窗口标题⛔ 写死成品字（✅WI-36 那张名单，订阅点仍只有 LocText 一处）
+        var win = new Window();
+        LocText.SetWindowTitle(win, title.Key, title.Args);
         return win;
     }
 
@@ -444,15 +448,15 @@ public static class CenteredDialog
         return new PopupCard { CardContent = content };
     }
 
-    private static TextBlock MakeTitle(string title)
+    private static TextBlock MakeTitle(LocMessage title)
     {
         var tb = new TextBlock
         {
-            Text = title,
             FontSize = 16,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         };
+        LocText.SetMessage(tb, title);        // 贴上屏幕那一刻取词，换语言由 LocText 重贴
         Paint(tb, TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush", Colors.Black);
         return tb;
     }
@@ -484,30 +488,30 @@ public static class CenteredDialog
         lock (_buildSlots) _buildSlots.Add(new BrushSlot(target, prop, key, fallback));
     }
 
-    private static UIElement MakeMessage(string? message)
+    private static UIElement MakeMessage(LocMessage? message)
     {
-        if (string.IsNullOrWhiteSpace(message)) return new Grid { Height = 0 };
+        if (message is null) return new Grid { Height = 0 };
         var tb = new TextBlock
         {
-            Text = message,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 8, 0, 0),
             Opacity = 0.85,
             FontSize = 13,
         };
+        LocText.SetMessage(tb, message);
         Paint(tb, TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush", Colors.Gray);
         return tb;
     }
 
-    private static Button MakeButton(string text, bool accent)
+    private static Button MakeButton(LocMessage text, bool accent)
     {
         var btn = new Button
         {
-            Content = text,
             MinWidth = 92,
             Padding = new Thickness(12, 5, 12, 5),
             CornerRadius = new CornerRadius(6),
         };
+        LocText.SetMessage(btn, text);        // Button 没有 Header ⇒ 名单挑中的是 Content
         if (accent)
         {
             Paint(btn, Control.BackgroundProperty, "AccentFillColorDefaultBrush", Colors.RoyalBlue);

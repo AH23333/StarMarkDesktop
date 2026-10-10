@@ -117,10 +117,11 @@ public partial class SettingsPageViewModel
     {
         var ids = _missingIds.ToList();
         if (ids.Count == 0 || _repository is not { } repo) return;
-        if (!await CenteredDialog.ConfirmAsync("清掉这些行？",
-                $"将从库里删掉 {ids.Count} 条已经找不到文件的本机路径。只删记录，磁盘上的文件不会被改动；"
-                + "这些行上挂的标签与笔记也会一并删掉。",
-                "清掉", "先留着", dedupeKey: "clean-missing-file-rows")) return;
+        if (!await CenteredDialog.ConfirmAsync(
+                LocMessage.Of("settings.local.cleanRowsTitle"),
+                LocMessage.Of("settings.local.cleanRowsBody", ids.Count),
+                LocMessage.Of("settings.local.cleanRowsGo"), LocMessage.Of("settings.local.cleanRowsKeep"),
+                dedupeKey: "clean-missing-file-rows")) return;
         try
         {
             var removed = await repo.DeleteFileEntriesAsync(ids, CancellationToken.None);

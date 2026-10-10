@@ -360,9 +360,9 @@ public static class ItemCardActions
 
             // 统一走外部居中窗口（非 ContentDialog），自动按用户主题着色、可拖动、不可重复。
             var result = await CenteredDialog.ShowContentAsync(
-                Locale.T("card.note.title"), box, owner: ResolveOwner(xamlRoot),
+                LocMessage.Of("card.note.title"), box, owner: ResolveOwner(xamlRoot),
                 dedupeKey: $"editnote:{vm.Id}", width: 460, height: 260,
-                primaryText: Locale.T("dialog.save"), cancelText: Locale.T("dialog.cancel"));
+                primaryText: LocMessage.Of("dialog.save"), cancelText: LocMessage.Of("dialog.cancel"));
 
             if (result != CenteredDialog.HostedDialogResult.Committed) return;
             var text = box.Text.Trim();
@@ -399,9 +399,9 @@ public static class ItemCardActions
 
             // 统一走外部居中窗口（非 ContentDialog），自动按用户主题着色、可拖动、不可重复。
             var result = await CenteredDialog.ShowContentAsync(
-                Locale.T("card.tags.title"), editor, owner: ResolveOwner(xamlRoot),
+                LocMessage.Of("card.tags.title"), editor, owner: ResolveOwner(xamlRoot),
                 dedupeKey: $"edittags:{vm.Id}", width: 460, height: 460,
-                primaryText: Locale.T("dialog.save"), cancelText: Locale.T("dialog.cancel"));
+                primaryText: LocMessage.Of("dialog.save"), cancelText: LocMessage.Of("dialog.cancel"));
 
             if (result != CenteredDialog.HostedDialogResult.Committed) return;
 
@@ -486,9 +486,9 @@ public static class ItemCardActions
 
             // 统一走外部居中窗口（非 ContentDialog），自动按用户主题着色、可拖动、不可重复。
             var result = await CenteredDialog.ShowContentAsync(
-                Locale.T("card.tags.quickAdd"), editor, owner: ResolveOwner(xamlRoot),
+                LocMessage.Of("card.tags.quickAdd"), editor, owner: ResolveOwner(xamlRoot),
                 dedupeKey: $"addtag:{vm.Id}", width: 460, height: 460,
-                primaryText: Locale.T("dialog.add"), cancelText: Locale.T("dialog.cancel"));
+                primaryText: LocMessage.Of("dialog.add"), cancelText: LocMessage.Of("dialog.cancel"));
 
             if (result != CenteredDialog.HostedDialogResult.Committed) return;
 

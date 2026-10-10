@@ -107,8 +107,8 @@ public sealed partial class SnapshotPage : Page, INotifyPropertyChanged
         // 两颗按钮字点名要（批次 WI-52）：CenteredDialog 工厂里那份「确定／取消」默认值已交表，
         // 而 ShowContentAsync 的 null 说的是"这颗按钮不出现"——⛔ 拿 null 兼作"用默认字"。
         await CenteredDialog.ShowContentAsync(
-            $"快照「{snapshot.Name}」", content, owner: App.MainWindow,
-            primaryText: Locale.T("dialog.ok"), cancelText: Locale.T("dialog.cancel"));
+            LocMessage.Of("snapshot.previewTitle", snapshot.Name), content, owner: App.MainWindow,
+            primaryText: LocMessage.Of("dialog.ok"), cancelText: LocMessage.Of("dialog.cancel"));
     }
 
     private static string BuildDetails(WidgetSnapshot snapshot)
@@ -135,18 +135,21 @@ public sealed partial class SnapshotPage : Page, INotifyPropertyChanged
         if (snapshot is null) return;
 
         var name = await CenteredDialog.PromptAsync(
-            title: "从快照提取布局",
-            message: "把这个快照的「位置 + 外观」另存为一套**不含数据**的纯模板布局，之后可在布局方案里复用。给这套布局起个名字：",
-            placeholder: "例如：从「上线前」提取",
-            defaultText: $"{snapshot.Name} 的布局",
-            primaryText: "提取",
-            cancelText: "取消",
+            title: LocMessage.Of("snapshot.extractTitle"),
+            message: LocMessage.Of("snapshot.extractBody"),
+            placeholder: LocMessage.Of("snapshot.extractHint"),
+            // defaultText 是输入框里那个**用户会改的值**（数据）⇒ 当场渲染一次就交出去，⛔ 进重贴名单
+            //（进去就会在换语言那一刻盖掉他正在打的字，LocText 类注释第②条）。
+            defaultText: LocMessage.Of("snapshot.layoutNameDefault", snapshot.Name).Render(),
+            primaryText: LocMessage.Of("snapshot.extractGo"),
+            cancelText: LocMessage.Of("dialog.cancel"),
             owner: App.MainWindow);
         if (name is null) return;
 
         var layout = await mgr.ExtractLayoutFromSnapshotAsync(id, name);
         if (layout is null)
-            await CenteredDialog.MessageAsync("无法提取", "该快照没有可提取的组件。", owner: App.MainWindow);
+            await CenteredDialog.MessageAsync(LocMessage.Of("snapshot.noneToExtractTitle"),
+                LocMessage.Of("snapshot.noneToExtractBody"), owner: App.MainWindow);
     }
 
     private async void Apply_Click(object sender, RoutedEventArgs e)
@@ -157,11 +160,10 @@ public sealed partial class SnapshotPage : Page, INotifyPropertyChanged
         if (snapshot is null) return;
 
         var confirm = await CenteredDialog.ConfirmAsync(
-            "应用快照",
-            $"确定回到快照「{row?.Name ?? id}」记录的时刻？当前所有组件的位置与数据将被该快照**覆盖**（不属于该快照的组件会被隐藏，内容保留）。"
-            + "应用前会自动生成一个「自动备份（应用前）」快照点，万一结果不满意可再应用它退回。",
-            primaryText: "应用",
-            cancelText: "取消",
+            LocMessage.Of("widget.menu.applySnapshot"),
+            LocMessage.Of("snapshot.applyBody", row?.Name ?? id),
+            LocMessage.Of("widget.grid.apply"),
+            LocMessage.Of("dialog.cancel"),
             owner: App.MainWindow,
             dedupeKey: $"applysnapshot:{id}");
         if (!confirm) return;
@@ -170,8 +172,9 @@ public sealed partial class SnapshotPage : Page, INotifyPropertyChanged
         // 必须明确告知用户"未应用"，否则会误以为已还原。
         var ok = await mgr.ApplySnapshotAsync(id);
         if (!ok)
-            await CenteredDialog.MessageAsync("未能应用",
-                $"{mgr.LastApplyError ?? "生成「应用前」回滚点失败"}——为防数据丢失已中止，当前状态未改动。",
+            await CenteredDialog.MessageAsync(LocMessage.Of("snapshot.applyFailedTitle"),
+                LocMessage.Of("snapshot.applyFailedBody",
+                    mgr.LastApplyError ?? LocMessage.Of("widget.menu.rollbackFailed")),
                 owner: App.MainWindow);
     }
 
@@ -181,10 +184,10 @@ public sealed partial class SnapshotPage : Page, INotifyPropertyChanged
         var row = RowsItems.FirstOrDefault(r => r.Id == id);
 
         var confirm = await CenteredDialog.ConfirmAsync(
-            "删除快照",
-            $"确定删除快照「{row?.Name ?? id}」？此操作不可撤销（其它快照不受影响）。",
-            primaryText: "删除",
-            cancelText: "取消",
+            LocMessage.Of("snapshot.deleteTitle"),
+            LocMessage.Of("snapshot.deleteBody", row?.Name ?? id),
+            LocMessage.Of("dialog.delete"),
+            LocMessage.Of("dialog.cancel"),
             owner: App.MainWindow,
             dedupeKey: $"deletesnapshot:{id}");
         if (!confirm) return;

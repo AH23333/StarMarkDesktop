@@ -18,6 +18,7 @@ using StarMark.Core.Insights;
 using StarMark.Core.Performance;
 using StarMark.UI.Helpers;
 using Windows.UI;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.UI.ViewModels;
 
@@ -53,10 +54,10 @@ public partial class SettingsPageViewModel
             if (App.MainWindow is not { } owner) return;
             if (_settings.LoadTrendingGlanceEnabled()) return;      // 之前已答过"是"就不再问
             var yes = await Helpers.CenteredDialog.ConfirmAsync(
-                "要在今日速览里显示 GitHub 热榜吗？",
-                "组件里会多一块热榜（默认日榜），原「常看」排到它的下面。" +
-                "选「不显示」也没关系：导航栏的「热榜」页照常可用，这里随时能改。",
-                primaryText: "显示", cancelText: "不显示", owner: owner, dedupeKey: "trending-glance-ask");
+                LocMessage.Of("settings.feeds.glanceAskTitle"),
+                LocMessage.Of("settings.feeds.glanceAskBody"),
+                primaryText: LocMessage.Of("dialog.show"), cancelText: LocMessage.Of("dialog.dontShow"),
+                owner: owner, dedupeKey: "trending-glance-ask");
             if (!yes) return;
             TrendingGlanceEnabled = true;
         }

@@ -164,12 +164,12 @@ internal static class ItemContextMenu
         try
         {
             var host = new Controls.PreviewHost { ViewModel = vm };
-            var title = ItemCardPolicy.TruncatedTitle(vm.Title);
+            var title = LocMessage.Of("common.rawValue", ItemCardPolicy.TruncatedTitle(vm.Title));
             var owner = WindowInterop.ResolveWindow(root, App.MainWindow);
             var result = await CenteredDialog.ShowContentAsync(
                 title, host, owner: owner,
                 dedupeKey: vm.PreviewDedupeKey, width: 820, height: 640,
-                primaryText: vm.OpenMenuText, cancelText: Locale.T("dialog.close"));
+                primaryText: vm.OpenMenuMessage, cancelText: LocMessage.Of("dialog.close"));
             if (result == CenteredDialog.HostedDialogResult.Committed)
                 OpenByRow(root, vm);
         }

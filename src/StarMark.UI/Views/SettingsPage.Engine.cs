@@ -44,10 +44,9 @@ public sealed partial class SettingsPage
         var bytes = StarMark.Integrations.Everything.EverythingSource.GetEngineOccupancyBytes();
         var sizeHint = bytes > 0 ? $"（约 {FileSizeText.Human(bytes)}）" : "";
         var confirm = await CenteredDialog.ConfirmAsync(
-            "删除本地搜索引擎",
-            $"将删除本地磁盘搜索所用的 Everything 引擎及其 SDK{sizeHint}。书签 / Star / 标签数据不受影响；" +
-            "下次开启本地磁盘搜索会自动重新下载。确定删除？",
-            primaryText: "删除", cancelText: "取消",
+            LocMessage.Of("settings.engine.deleteTitle"),
+            LocMessage.Of("settings.engine.deleteBody", sizeHint),
+            LocMessage.Of("dialog.delete"), LocMessage.Of("dialog.cancel"),
             owner: App.MainWindow, dedupeKey: "deleteengine");
         if (!confirm) return;
         StarMark.Integrations.Everything.EverythingSource.DeleteEngine();
