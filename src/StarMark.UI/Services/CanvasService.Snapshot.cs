@@ -37,7 +37,7 @@ public static partial class CanvasService
         var shot = Compose();
         if (!shot.Ok)
         {
-            Report(Locale.T("canvas.shot.pinFailedTitle"), shot.Reason);
+            Report(LocMessage.Of("canvas.shot.pinFailedTitle"), LocMessage.Of("common.rawValue", shot.Reason));
             return;
         }
         if (shot.Ink.IsEmpty)
@@ -45,8 +45,8 @@ public static partial class CanvasService
             // 一块墨都没有就没有"哪一块"可贴。这里不能退回"那就贴整屏"——那正是本批修掉的病；
             // 而"按了没反应"也不算交代，所以把另一条出口点名给用户，并说他**当前实际绑着的那颗键**
             // （写死键名就是把人支使去按一颗可能没用的键）。
-            Report(Locale.T("canvas.shot.pinFailedTitle"),
-                Locale.Fmt("canvas.shot.noInk", BindingText(HotkeyActions.ScreenCapture)));
+            Report(LocMessage.Of("canvas.shot.pinFailedTitle"),
+                LocMessage.Of("canvas.shot.noInk", BindingText(HotkeyActions.ScreenCapture)));
             return;
         }
         // 边距是 DIP，必须按这块屏自己的缩放换算：写死像素数，150% 屏上的边就缩水一半（CanvasBackdropMath 同一条纪律）
@@ -65,11 +65,11 @@ public static partial class CanvasService
         var shot = Compose();
         if (!shot.Ok)
         {
-            Report(Locale.T("canvas.shot.copyFailedTitle"), shot.Reason);
+            Report(LocMessage.Of("canvas.shot.copyFailedTitle"), LocMessage.Of("common.rawValue", shot.Reason));
             return;
         }
         _ = ScreenshotService.CopyPixelsAsync(shot.Pixels, shot.Width, shot.Height,
-            Locale.T("settings.extend.canvasTitle"));
+            LocMessage.Of("settings.extend.canvasTitle"));
     }
 
     /// <summary>把"屏幕 + 笔迹"合成一张存成 PNG。<b>整幅交出去</b>（与复制到剪贴板同口径）。</summary>
@@ -78,11 +78,11 @@ public static partial class CanvasService
         var shot = Compose();
         if (!shot.Ok)
         {
-            Report(Locale.T("canvas.shot.saveFailedTitle"), shot.Reason);
+            Report(LocMessage.Of("canvas.shot.saveFailedTitle"), LocMessage.Of("common.rawValue", shot.Reason));
             return;
         }
         _ = ScreenshotService.SavePixelsAsync(shot.Pixels, shot.Width, shot.Height,
-            Locale.T("settings.extend.canvasTitle"));
+            LocMessage.Of("settings.extend.canvasTitle"));
     }
 
     // ────────── 快照 ──────────

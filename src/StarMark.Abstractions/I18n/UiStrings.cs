@@ -1242,6 +1242,7 @@ public static class UiStrings
         // ===== 卡片自己那一行 footer 与主窗那张卡（批次 WI-47，P-177 收尾＋P-178）=====
         // ⚠ 这一批⛔ 与前面三刀同批：footer 是**每一张卡**共用的那一行，提前交出去＝还没交完的那几族每张卡半英半中
         //   （WI-46a 判定 3 的口径）。停留秒数仍只有 `KeepSeconds` 一个主人——那两行都收 `{n}` 实参，⛔ 在表里写死"10 秒"。
+        new Entry("card.title.withCategory", "{0} · {1}", "{0} · {1}", "{0} · {1}"),
         new Entry("card.hint.withAction", "点一下打开{0} · {1} 秒后自动消失",
                   "Click to open {0} · disappears in {1} s", "{0} をクリックで開きます · {1} 秒で自動的に消えます"),
         new Entry("card.hint.plain", "点一下关闭 · {0} 秒后自动消失",
@@ -2442,6 +2443,14 @@ public static class UiStrings
         new Entry("clip.cleanCancel", "先不删", "Not now", "今は削除しない"),
         new Entry("settings.feeds.glanceAskTitle", "要在今日速览里显示 GitHub 热榜吗？", "Show GitHub trending in today's glance?", "今日のグランスに GitHub トレンドを表示しますか？"),
         new Entry("settings.feeds.glanceAskBody", "组件里会多一块热榜（默认日榜），原「常看」排到它的下面。选「不显示」也没关系：导航栏的「热榜」页照常可用，这里随时能改。", "The widget gains a trending block (daily by default) and the usual list moves below it. Choosing Don't show is fine too: the Trending page stays in the navigation bar, and you can change this here any time.", "ウィジェットに急上昇ブロック（既定は日次）が増え、いつもの一覧はその下に回ります。「表示しない」を選んでも構いません：ナビの「トレンド」ページはそのまま使え、ここからいつでも変えられます。"),
+        new Entry("settings.local.clearedTitle", "已清掉", "Cleaned up", "整理しました"),
+        new Entry("settings.local.nothingLeftTitle", "已经没有这些行了", "Those rows are already gone", "その行はもうありません"),
+        new Entry("settings.local.clearedBody", "删掉 {0} 条记录；磁盘上的文件没有被改动。",
+            "Removed {0} records; files on disk were not touched.", "{0} 件の記録を削除しました。ディスク上のファイルは変更していません。"),
+        new Entry("settings.local.nothingLeftBody", "它们在你点这一下之前就已经不在库里了（可能刚清过一遍）。",
+            "They were already out of the library before you clicked (a clean-up may have just run).",
+            "クリックする前からデータベースにありません（整理が直前に走った可能性があります）。"),
+        new Entry("settings.local.cleanFailedTitle", "清理失败", "Clean-up failed", "整理に失敗"),
         new Entry("settings.local.cleanRowsTitle", "清掉这些行？", "Clear these rows?", "これらの行を消しますか？"),
         new Entry("settings.local.cleanRowsBody", "将从库里删掉 {0} 条已经找不到文件的本机路径。只删记录，磁盘上的文件不会被改动；这些行上挂的标签与笔记也会一并删掉。", "This removes {0} local paths whose files can no longer be found. Only the records go; nothing on disk changes. Tags and notes attached to those rows are removed too.", "ファイルが見つからないローカルパス {0} 件をライブラリから削除します。レコードのみで、ディスク上のファイルは変更されません。これらの行に付けたタグとメモも一緒に消えます。"),
         new Entry("settings.local.cleanRowsGo", "清掉", "Clear", "消す"),

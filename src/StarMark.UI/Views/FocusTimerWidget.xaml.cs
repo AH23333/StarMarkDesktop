@@ -57,12 +57,12 @@ public sealed partial class FocusTimerWidget : UserControl, IWidgetTicker
     private void OnPhaseFinished(FocusPhase ended, bool restSkippedAsStale)
     {
         var title = ended == FocusPhase.Focusing
-            ? Locale.T("widget.focus.endedFocusing")
-            : Locale.T("widget.focus.endedResting");
+            ? LocMessage.Of("widget.focus.endedFocusing")
+            : LocMessage.Of("widget.focus.endedResting");
         var body = ended == FocusPhase.Focusing
-            ? (restSkippedAsStale ? Locale.T("widget.focus.staleBody") : Locale.T("widget.focus.restNowBody"))
-            : Locale.T("widget.focus.nextRoundBody");
-        if (!NoticeCard.Show(TrayReporter.CardTitle(Locale.T("widget.kind.focus"), title), body))
+            ? (restSkippedAsStale ? LocMessage.Of("widget.focus.staleBody") : LocMessage.Of("widget.focus.restNowBody"))
+            : LocMessage.Of("widget.focus.nextRoundBody");
+        if (!NoticeCard.Show(TrayReporter.CardTitle(LocMessage.Of("widget.kind.focus"), title), body))
             StarLog.Info($"番茄钟提醒（提示卡没能贴上屏幕，仅组件内显示）：{title} — {body}");
     }
 

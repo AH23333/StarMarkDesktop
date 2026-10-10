@@ -6,6 +6,7 @@ using System.Linq;
 using Microsoft.UI.Dispatching;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Canvas;
 using StarMark.Core.Capture;
 using StarMark.Core.Hotkeys;
@@ -191,7 +192,7 @@ public static partial class CanvasService
     /// </summary>
     private static CanvasHotkeyPanelWindow? _panel;
 
-    private static void Report(string title, string message)
+    private static void Report(LocMessage title, LocMessage message)
     {
         var shown = false;
         try { shown = NoticeCard.Show(title, message); }

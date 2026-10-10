@@ -76,10 +76,10 @@ public static partial class CanvasService
         }
         var what = Locale.T(whatKey);
         // 「屏幕画布」与托盘那一项的名字都由调用点把表里的实参递进来（⛔ 抄进句子＝第二个出处，#353 同族）。
-        Report(Locale.T("canvas.notice.notRunningTitle"), EnabledBySetting
-            ? Locale.Fmt("canvas.hotkey.notRunning", what, Locale.T("settings.extend.canvasTitle"),
-                  BindingText(HotkeyActions.CanvasToggle), Locale.T("tray.canvas"))
-            : Locale.Fmt("canvas.hotkey.disabled", what, Locale.T("settings.extend.canvasTitle")));
+        Report(LocMessage.Of("canvas.notice.notRunningTitle"), EnabledBySetting
+            ? LocMessage.Of("canvas.hotkey.notRunning", what, LocMessage.Of("settings.extend.canvasTitle"),
+                  BindingText(HotkeyActions.CanvasToggle), LocMessage.Of("tray.canvas"))
+            : LocMessage.Of("canvas.hotkey.disabled", what, LocMessage.Of("settings.extend.canvasTitle")));
     }
 
     /// <summary>某动作当前绑定的键位文本（没绑定／读不到设置时回表里那颗 <c>hotkey.unbound</c>，绝不回一个假键位）。</summary>

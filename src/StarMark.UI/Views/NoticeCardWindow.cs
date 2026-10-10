@@ -74,16 +74,19 @@ public sealed class NoticeCardWindow : Window
     /// 会碰上同一件事，症状正是"按下下载没反应、卡还收掉了"。整张卡都是那一下，两路里哪一条先通都算点中。</para>
     /// </summary>
     private string? _actionUrl;
-    private string? _actionLabel;
+    private LocMessage? _actionLabel;
 
     /// <summary>
     /// 底部那一行的两种说法——停留秒数只有 <see cref="KeepSeconds"/> 一个出处，这里不许另写一份
     /// （批次 WI-47 把句子交表：秒数交实参，⛔ 在表里写死一个数字）。
+    /// <para>批次 WI-61d·片2 交回<b>身份</b>而⛔ 成品字：这一行住在一张<b>复用</b>的卡上（<c>HideCard</c> 不关窗），
+    /// 卡还贴着的时候换语言，那句"点一下打开…"与"N 秒后自动消失"必须跟着换；嵌套那句（动作名）同样
+    /// 在贴上屏幕那一刻才取词（与 <c>SetWindowTitle</c> 那条口径同形，⛔ 抄一次渲染结果）。</para>
     /// </summary>
-    private static string HintFor(bool hasAction, string? label)
+    private static LocMessage HintFor(bool hasAction, LocMessage? label)
         => hasAction
-            ? Locale.Fmt("card.hint.withAction", label ?? Locale.T("card.action.link"), KeepSeconds)
-            : Locale.Fmt("card.hint.plain", KeepSeconds);
+            ? LocMessage.Of("card.hint.withAction", label ?? LocMessage.Of("card.action.link"), KeepSeconds)
+            : LocMessage.Of("card.hint.plain", KeepSeconds);
 
     public NoticeCardWindow()
     {
@@ -107,10 +110,11 @@ public sealed class NoticeCardWindow : Window
         };
         _hint = new TextBlock
         {
-            Text = HintFor(false, null),
             FontSize = 11,
             Foreground = new SolidColorBrush(Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF)),
         };
+        // 抬头那句不在这里写 Text：写了就留下一份没人读的副本（换语言那一刻贴的是注册项那句）。
+        LocText.SetMessage(_hint, HintFor(false, null));
         _card = new Border
         {
             Width = CardWidthDip,
@@ -158,11 +162,12 @@ public sealed class NoticeCardWindow : Window
     /// <para>已经在屏幕上时收到新消息是<b>就地替换</b>而不是叠一张：角落里堆三张卡，用户只会看见最上面那张，
     /// "到底提醒了几次"这件事在界面上就没了凭据。</para>
     /// </summary>
-    public bool Apply(string title, string message)
+    public bool Apply(LocMessage title, LocMessage message)
     {
         if (_destroyed) return false;
-        _title.Text = title ?? string.Empty;
-        _body.Text = message ?? string.Empty;
+        // 两句都进重贴名单（批次 WI-61d·片2）：卡是复用的，就地换内容那一刻也是它唯一一次"没贴着"的机会。
+        LocText.SetMessage(_title, title);
+        LocText.SetMessage(_body, message);
 
         var monitor = WindowInterop.MonitorWorkAreaAtCursor();
         if (monitor is null)
@@ -272,11 +277,11 @@ public sealed class NoticeCardWindow : Window
     /// （<c>UpdatePolicy.ReleasePageUrl</c>）——远端回的 <c>html_url</c> 从解析那一步就不进数据结构，
     /// 否则"点一下卡片"就变成了"打开外部服务器想让你打开的东西"。</para>
     /// </summary>
-    public void SetAction(string? url, string? label)
+    public void SetAction(string? url, LocMessage? label)
     {
         _actionUrl = string.IsNullOrWhiteSpace(url) ? null : url;
         _actionLabel = _actionUrl is null ? null : label;
-        _hint.Text = HintFor(_actionUrl is not null, _actionLabel);
+        LocText.SetMessage(_hint, HintFor(_actionUrl is not null, _actionLabel));
     }
 
     private void OpenAction()

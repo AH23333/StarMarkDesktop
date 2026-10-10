@@ -76,7 +76,7 @@ public sealed partial class CaptureOverlayWindow
         if (FinalPixels() is not { } final) return;       // 原因已经在里面报过了，这里只负责不再往下走
         if (!_pinned) Settle(selection);
         // 贴图态交出去的也是"当前这一份"：贴图显示的就是合成预览，所见即所存这条不变。
-        var category = _pinned ? Locale.T("pin.card.category") : Locale.T("capture.card.category");
+        var category = _pinned ? LocMessage.Of("pin.card.category") : LocMessage.Of("capture.card.category");
         switch (action)
         {
             case CommitAction.Copy:
@@ -87,7 +87,7 @@ public sealed partial class CaptureOverlayWindow
                 break;
             case CommitAction.Ocr:
                 _ = OcrService.CopyTextFromPixelsAsync(final.Pixels, final.Width, final.Height,
-                    _pinned ? Locale.T("pin.card.categoryOcr") : Locale.T("capture.card.categoryOcr"));
+                    _pinned ? LocMessage.Of("pin.card.categoryOcr") : LocMessage.Of("capture.card.categoryOcr"));
                 break;
             default: ScreenshotService.PinPixels(final.Pixels, final.Width, final.Height, selection); break;
         }

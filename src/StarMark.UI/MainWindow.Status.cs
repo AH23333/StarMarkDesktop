@@ -130,7 +130,7 @@ public sealed partial class MainWindow
                 var summary = await syncCoordinator.SyncAllAsync(cts.Token);
                 // Core 交回的是"还没取词"的那句话：在这里 Render 一次＝那句话的语言被钉死在同步完成的那一刻
                 SetStatusText(summary.Message());
-                ShowInfoBar(InfoBarSeverity.Success, Locale.T("top.syncDoneTitle"), string.Empty, 6500);
+                ShowInfoBar(InfoBarSeverity.Success, LocMessage.Of("top.syncDoneTitle"), null, 6500);
             }
             SetStatusDot(StatusKind.Success);
             await ViewModel.LoadCountsAsync();
@@ -143,7 +143,7 @@ public sealed partial class MainWindow
             var cancelled = LocMessage.Of("top.syncCancelledBody");
             SetStatusText(cancelled);
             SetStatusDot(StatusKind.Success);
-            ShowInfoBar(InfoBarSeverity.Informational, Locale.T("top.syncCancelledTitle"), cancelled.Render(), 6500);
+            ShowInfoBar(InfoBarSeverity.Informational, LocMessage.Of("top.syncCancelledTitle"), cancelled, 6500);
             await ViewModel.LoadCountsAsync();
         }
         catch (Exception ex)
@@ -151,7 +151,7 @@ public sealed partial class MainWindow
             // 异常原文是数据不是措辞：它当实参进去，句子本身仍由表管
             SetStatusText(LocMessage.Of("top.statusFailed", ex.Message));
             SetStatusDot(StatusKind.Caution);
-            ShowInfoBar(InfoBarSeverity.Error, Locale.T("top.syncFailedTitle"), ex.Message);
+            ShowInfoBar(InfoBarSeverity.Error, LocMessage.Of("top.syncFailedTitle"), LocMessage.Of("common.rawValue", ex.Message));
         }
         finally
         {
@@ -169,7 +169,7 @@ public sealed partial class MainWindow
     /// 供共享卡片动作（<c>ItemCardActions</c>）等"没有自己状态行的页面"用的瞬时错误提示。
     /// 判据同 P-53/P-54：<b>日志不是用户能看到的反馈面</b>——失败要么就地写清楚，要么就别报"已完成"。
     /// </summary>
-    public void ShowError(string title, string message)
+    public void ShowError(LocMessage title, LocMessage message)
         => ShowInfoBar(InfoBarSeverity.Error, title, message, 8000);
 
     /// <summary>
@@ -179,9 +179,10 @@ public sealed partial class MainWindow
     /// 而不是让他去某个设置页找一个清理入口（今天也确实没有那一页）。
     /// 按钮只在"删得掉、且删是对的动作"那一类失败里出现——"系统里没有能开它的程序"给同一颗按钮就是错的。</para>
     /// </summary>
-    public void ShowErrorWithAction(string title, string message, string actionLabel, Action onAction)
+    public void ShowErrorWithAction(LocMessage title, LocMessage message, LocMessage actionLabel, Action onAction)
     {
-        var button = new Button { Content = actionLabel };
+        var button = new Button();
+        LocText.SetMessage(button, actionLabel);   // 名字进重贴名单：这颗按钮跟的是那句坏消息，不是那条状态行
         button.Click += (_, _) =>
         {
             SyncInfoBar.IsOpen = false;
@@ -194,14 +195,16 @@ public sealed partial class MainWindow
     /// 中性提示（不是错误也不是"操作完成"）：右下角提示卡贴不上屏幕时的兜底出口。
     /// 停留久一点——护眼这类提醒是"给你看一眼"，不该 8 秒就自己收走。
     /// </summary>
-    public void ShowNotice(string title, string message)
+    public void ShowNotice(LocMessage title, LocMessage message)
         => ShowInfoBar(InfoBarSeverity.Informational, title, message, 15000);
 
-    private void ShowInfoBar(InfoBarSeverity severity, string title, string message, int autoCloseMs = -1, object? action = null)
+    private void ShowInfoBar(InfoBarSeverity severity, LocMessage title, LocMessage? message, int autoCloseMs = -1, object? action = null)
     {
         SyncInfoBar.Severity = severity;
-        SyncInfoBar.Title = title;
-        SyncInfoBar.Message = message;
+        // 这两句是**常驻**元素（同一颗 SyncInfoBar 反复换内容）⇒ 只许走"键＋实参进注册项"那一条路，
+        // ⛔ 直接赋成品字：赋了就是"形参交身份、手臂⛔ 跟着搬"那半截（新证人 TheNoticeCardFamilyIsMovedWhole 拦着）。
+        LocText.SetMessage(SyncInfoBar, InfoBar.TitleProperty, title);
+        LocText.SetMessage(SyncInfoBar, InfoBar.MessageProperty, message);
         // 每次都写：上一句留下的按钮不清掉，下一次"已完成"旁边就挂着一颗对不上号的按钮。
         // （WinUI 的 InfoBar 没有 ActionContent 那一格，能挂东西的位置就是 Content——按钮放进去即可。）
         SyncInfoBar.Content = action;

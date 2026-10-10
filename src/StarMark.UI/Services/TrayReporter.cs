@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.UI.Services;
 
@@ -18,10 +19,14 @@ namespace StarMark.UI.Services;
 /// </summary>
 internal static class TrayReporter
 {
-    /// <summary>卡片标题那句"谁在说话 · 说了什么"只许在这一处拼（批次 WI-47：从前番茄钟自己抄了一遍分隔符）。</summary>
-    public static string CardTitle(string category, string title) => $"{category} · {title}";
+    /// <summary>卡片标题那句"谁在说话 · 说了什么"只许在这一处拼（批次 WI-47：从前番茄钟自己抄了一遍分隔符）。
+    /// <para>批次 WI-61d·片2：拼的是<b>两份身份</b>而不是两句成品字——分隔符进表（<c>card.title.withCategory</c>），
+    /// 两侧的名字在贴上屏幕那一刻各自取词。⛔ 在这里 <c>Render()</c> 一次：那样标题就被钉死在拼它那一刻的语言上，
+    /// 而这张卡是复用的（同一句抬头会在换语言后继续挂着）。</para></summary>
+    public static LocMessage CardTitle(LocMessage category, LocMessage title)
+        => LocMessage.Of("card.title.withCategory", category, title);
 
-    public static void Report(string category, string title, string body)
+    public static void Report(LocMessage category, LocMessage title, LocMessage body)
     {
         StarLog.Info($"[{category}] {title}：{body}");
         var shown = false;

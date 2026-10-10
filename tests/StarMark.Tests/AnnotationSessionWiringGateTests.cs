@@ -112,7 +112,7 @@ public sealed class AnnotationSessionWiringGateTests
                     < raise.IndexOf("if (to == from) return;", StringComparison.Ordinal),
             "回执排在短路之后＝Sheet 期间那颗键什么都不会说");
         Assert.Contains("HotkeyGate.ReasonNotRunning(", raise);
-        Assert.Contains("Report(Locale.T(\"canvas.notice.notResponsiveTitle\")", raise);
+        Assert.Contains("Report(LocMessage.Of(\"canvas.notice.notResponsiveTitle\")", raise);
         Assert.DoesNotContain("SetHint", raise);
     }
 
@@ -128,8 +128,10 @@ public sealed class AnnotationSessionWiringGateTests
     public void BothSheetSpeakersTakeTheirTwoSentencesFromTheTable()
     {
         var hub = SourceGate.Code(SourceGate.ReadRepoFile(Hub));
-        Assert.Equal(2, SourceGate.Count(hub, "Report(Locale.T(\"canvas.notice.notResponsiveTitle\")"));
-        Assert.Equal(2, SourceGate.Count(hub, "?? Locale.T(\"canvas.notice.captureInFlight\")"));
+        Assert.Equal(2, SourceGate.Count(hub, "Report(LocMessage.Of(\"canvas.notice.notResponsiveTitle\")"));
+        // 批次 WI-61d·片2 改锚：那句兜底从前写成 `?? Locale.T("…")`，而 `??` 两边一颗是数据一颗是成品字编不过，
+        // 所以现场改成了 `is { }` 三元＋`LocMessage.Of`（取词处数一颗不少，变的只是形状；钉新形状＝#124 那条成对判据）。
+        Assert.Equal(2, SourceGate.Count(hub, "LocMessage.Of(\"canvas.notice.captureInFlight\")"));
         foreach (var dead in new[] { "Report(\"画布现在按不动\"", "?? \"截图进行中\"" })
             Assert.DoesNotContain(dead, hub);
     }

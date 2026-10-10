@@ -101,11 +101,11 @@ public static class ItemCardActions
         StarLog.Warn($"打不开这一行（{kind}，id={itemId}）：{message}");
         if (kind != OpenFailure.MissingOnDisk || itemId <= 0)
         {
-            App.MainWindow?.ShowError(Locale.T("card.open.fail"), message);
+            App.MainWindow?.ShowError(LocMessage.Of("card.open.fail"), LocMessage.Of("common.rawValue", message));
             return;
         }
-        App.MainWindow?.ShowErrorWithAction(Locale.T("card.open.fail"), message,
-            Locale.T("card.deleteRow.remove"), () => DeleteFileRow(itemId));
+        App.MainWindow?.ShowErrorWithAction(LocMessage.Of("card.open.fail"), LocMessage.Of("common.rawValue", message),
+            LocMessage.Of("card.deleteRow.remove"), () => DeleteFileRow(itemId));
     }
 
     /// <summary>
@@ -118,14 +118,14 @@ public static class ItemCardActions
         {
             var removed = await GetRepo().DeleteFileEntriesAsync(new[] { itemId }, CancellationToken.None);
             App.MainWindow?.ShowNotice(
-                removed > 0 ? Locale.T("card.deleteRow.done") : Locale.T("card.deleteRow.already"),
-                removed > 0 ? Locale.T("card.deleteRow.doneBody")
-                            : Locale.T("card.deleteRow.alreadyBody"));
+                removed > 0 ? LocMessage.Of("card.deleteRow.done") : LocMessage.Of("card.deleteRow.already"),
+                removed > 0 ? LocMessage.Of("card.deleteRow.doneBody")
+                            : LocMessage.Of("card.deleteRow.alreadyBody"));
         }
         catch (Exception ex)
         {
             StarLog.Error($"删除本机文件条目失败 (id={itemId})", ex);
-            App.MainWindow?.ShowError(Locale.T("card.delete.fail"), ex.Message);
+            App.MainWindow?.ShowError(LocMessage.Of("card.delete.fail"), LocMessage.Of("common.rawValue", ex.Message));
         }
     }
 
@@ -217,7 +217,8 @@ public static class ItemCardActions
             {
                 // 坏消息要说得出为什么、并落在用户能做的那件事上（P-54 同口径）：
                 // 只回一句"复制失败"，他只能去猜是程序坏了还是这张图坏了。
-                App.MainWindow?.ShowError(Locale.T("card.copyImage.fail"), why ?? Locale.T("card.image.unreadable"));
+                App.MainWindow?.ShowError(LocMessage.Of("card.copyImage.fail"),
+                    why is { } whyText ? LocMessage.Of("common.rawValue", whyText) : LocMessage.Of("card.image.unreadable"));
                 return;
             }
 
@@ -234,7 +235,7 @@ public static class ItemCardActions
         catch (Exception ex)
         {
             StarLog.Error($"复制图片失败 (id={vm.Id}, uri={vm.Uri})", ex);
-            App.MainWindow?.ShowError(Locale.T("card.copyImage.fail"), ex.Message);
+            App.MainWindow?.ShowError(LocMessage.Of("card.copyImage.fail"), LocMessage.Of("common.rawValue", ex.Message));
         }
     }
 
@@ -263,7 +264,8 @@ public static class ItemCardActions
 
             if (png is null || frame.Width <= 0 || frame.Height <= 0)
             {
-                App.MainWindow?.ShowError(Locale.T("card.pinImage.fail"), why ?? Locale.T("card.image.unreadable"));
+                App.MainWindow?.ShowError(LocMessage.Of("card.pinImage.fail"),
+                    why is { } whyText ? LocMessage.Of("common.rawValue", whyText) : LocMessage.Of("card.image.unreadable"));
                 return;
             }
 
@@ -280,7 +282,7 @@ public static class ItemCardActions
         catch (Exception ex)
         {
             StarLog.Error($"剪贴板图片贴到桌面失败 (id={vm.Id}, uri={vm.Uri})", ex);
-            App.MainWindow?.ShowError(Locale.T("card.pinImage.fail"), ex.Message);
+            App.MainWindow?.ShowError(LocMessage.Of("card.pinImage.fail"), LocMessage.Of("common.rawValue", ex.Message));
         }
     }
 
@@ -304,17 +306,17 @@ public static class ItemCardActions
         {
             if (vm.Id <= 0)
             {
-                App.MainWindow?.ShowError(Locale.T("card.delete.fail"), Locale.T("card.delete.notInLib"));
+                App.MainWindow?.ShowError(LocMessage.Of("card.delete.fail"), LocMessage.Of("card.delete.notInLib"));
                 return;
             }
             var removed = await GetRepo().DeleteClipboardEntryAsync(vm.Id, CancellationToken.None);
             if (!removed)
-                App.MainWindow?.ShowError(Locale.T("card.delete.fail"), Locale.T("card.delete.gone"));
+                App.MainWindow?.ShowError(LocMessage.Of("card.delete.fail"), LocMessage.Of("card.delete.gone"));
         }
         catch (Exception ex)
         {
             StarLog.Error($"删除剪贴板历史失败 (id={vm.Id})", ex);
-            App.MainWindow?.ShowError(Locale.T("card.delete.fail"), ex.Message);
+            App.MainWindow?.ShowError(LocMessage.Of("card.delete.fail"), LocMessage.Of("common.rawValue", ex.Message));
         }
     }
 
@@ -325,7 +327,7 @@ public static class ItemCardActions
             // 未入库的实时源虚拟条目（Everything，Id=0）没有可写 pinned 的主库行：先按路径登记拿真实 Id。
             if (vm.Id == 0 && await EnsureRecordedAsync(vm.GetItem()) == 0) return;
             var newState = !vm.IsPinned;
-            var word = newState ? Locale.T("card.pin.pin") : Locale.T("card.pin.unpin");
+            var word = newState ? LocMessage.Of("card.pin.pin") : LocMessage.Of("card.pin.unpin");
             // 库里没那一行时不许翻旗：从前它翻完就没人管，150 ms 后重载把它弹回去，
             // 用户看到的只是"点了一下没反应"（P-40）。
             if (!await GetRepo().SetPinnedAsync(vm.Id, newState, CancellationToken.None))
@@ -374,7 +376,7 @@ public static class ItemCardActions
             if (!await GetRepo().SetNoteAsync(vm.Id, text, CancellationToken.None))
             {
                 // 笔记没落到那一行上：既不改笔记框，也不往活动流记一笔"修改"（那是条假事件，比没改更难解释）。
-                App.MainWindow?.ShowError(StateWriteNotice.Title(Locale.T("card.note.save")), StateWriteNotice.RowGone(Locale.T("card.note.save")));
+                App.MainWindow?.ShowError(StateWriteNotice.Title(LocMessage.Of("card.note.save")), StateWriteNotice.RowGone(LocMessage.Of("card.note.save")));
                 return;
             }
             vm.ApplyNotes(string.IsNullOrWhiteSpace(text) ? null : text);
@@ -436,7 +438,7 @@ public static class ItemCardActions
             if (vm.Id == 0 && await EnsureRecordedAsync(vm.GetItem()) == 0) return vm.IsHidden;
             var repo = GetRepo();
             var newState = !vm.IsHidden;
-            var word = newState ? Locale.T("card.hide.hide") : Locale.T("card.hide.show");
+            var word = newState ? LocMessage.Of("card.hide.hide") : LocMessage.Of("card.hide.show");
             if (!await repo.SetHiddenAsync(vm.Id, newState, CancellationToken.None))
             {
                 // 回传"未改变"（调用方据此不摘行、不整表重载），并把原因当面对他说（P-40）。

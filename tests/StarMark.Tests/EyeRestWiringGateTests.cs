@@ -135,7 +135,7 @@ public sealed class EyeRestWiringGateTests
         var body = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), BeginRest);
         // 一条正常出口（提示卡档＝只发一张卡）+ 三条失败退路（取显示器列表抛／系统没报告显示器／遮罩建到一半抛）
         // 都必须各有一条提示卡出口，而不是静默不提醒——"到点了但什么都没发生"和"没到点"在用户侧长得一模一样。
-        Assert.Equal(4, SourceGate.Count(body, "Locale.T(\"health.card.title\")"));   // 四个降级出口共用同一颗键
+        Assert.Equal(4, SourceGate.Count(body, "LocMessage.Of(\"health.card.title\")"));   // 四个降级出口共用同一颗键
         Assert.Contains("CloseOverlays();", body);        // 建到一半失败：先收干净已建的，再降级
         // 分流只看 Core 的两条判据，不看"这一档是不是强制"：合成就回到旧形状（想用暗幕必须先接受不能退出）。
         Assert.Contains("if (!EyeRestPolicy.UsesCurtain(notice))", body);
@@ -177,7 +177,7 @@ public sealed class EyeRestWiringGateTests
     [Fact]
     public void TheNoticeCardFallsBackToTheMainWindowNoticeAndThenToTheLog()
     {
-        var body = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static bool Notify(string title, string body)");
+        var body = SourceGate.MethodBody(SourceGate.ReadRepoFile(Service), "private static bool Notify(LocMessage title, LocMessage body)");
         var card = body.IndexOf("NoticeCard.Show(title, body)", StringComparison.Ordinal);
         var notice = body.IndexOf("ShowNotice", StringComparison.Ordinal);
         Assert.True(card >= 0 && notice > card, "主窗收进托盘时 InfoBar 是看不见的：提示卡必须排在前面");
@@ -476,7 +476,7 @@ public sealed class EyeRestWiringGateTests
         // 灰着的那一句要自己说清原因：两颗键由 running <b>当场挑</b>（菜单每次右键重建 ⇒ 那一刻取词才是对的），
         // 钉的是这个三元式整形状，不是"这两个名字出现过"——只数名字就放得过"两句都提前拼成中文再挑"那种写法。
         Assert.Contains("Locale.T(running ? \"widget.health.tryIt\" : \"widget.health.tryItNeedsOn\")", section);
-        Assert.Contains("ShowNotice(Locale.T(\"widget.health.previewFailed\")", section);   // 按下去没演成要看得见
+        Assert.Contains("ShowNotice(LocMessage.Of(\"widget.health.previewFailed\")", section);   // 按下去没演成要看得见
         Assert.Contains("EyeRestService.IsResting", section);                               // "幕布还盖着"与"表没挂上"要分开说
         Assert.DoesNotContain("EyeRestService.Start(", section);                            // 组件这一头不替用户起表
     }

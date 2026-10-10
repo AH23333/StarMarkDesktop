@@ -291,7 +291,7 @@ public sealed class AlarmWiringGateTests
 
         // 提示卡要把人指到最近的那一个出口，而且那个名字与按钮那颗是同一颗键（⛔ 两处各写一遍）
         var card = SourceGate.ReadRepoFile(Widget);
-        Assert.Contains("Locale.Fmt(\"alarm.notify.body\", LocMessage.Of(\"alarm.stop.label\")", card);
+        Assert.Contains("LocMessage.Of(\"alarm.notify.body\", LocMessage.Of(\"alarm.stop.label\")", card);
     }
 
     private static string Column(string key, Func<StarMark.Abstractions.I18n.UiStrings.Entry, string> side)

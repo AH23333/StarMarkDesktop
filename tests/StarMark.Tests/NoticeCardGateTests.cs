@@ -24,7 +24,7 @@ public sealed class NoticeCardGateTests
     private const string Reporter = "src/StarMark.UI/Services/TrayReporter.cs";
     private const string EyeRest = "src/StarMark.UI/Services/EyeRestService.cs";
     private const string Capture = "src/StarMark.UI/Services/ScreenshotService.cs";
-    private const string Apply = "public bool Apply(string title, string message)";
+    private const string Apply = "public bool Apply(LocMessage title, LocMessage message)";
 
     // ────────── 那条谎报的出口必须整条消失，而不是"以后别再用" ──────────
 
@@ -171,7 +171,7 @@ public sealed class NoticeCardGateTests
         var code = SourceGate.ReadRepoFile(Window);
         Assert.Contains("_hide.Interval = TimeSpan.FromSeconds(KeepSeconds);", code);
         // 批次 WI-47：那两行改由表里说 ⇒ 锚点跟着改锚，钉的仍是"停留秒数当实参交出去、代码里⛔ 写死数字"
-        Assert.Contains("Locale.Fmt(\"card.hint.plain\", KeepSeconds)", code);
+        Assert.Contains("LocMessage.Of(\"card.hint.plain\", KeepSeconds)", code);
         Assert.DoesNotContain("10 秒后自动消失", code);
     }
 
@@ -190,17 +190,17 @@ public sealed class NoticeCardGateTests
     {
         var win = SourceGate.Code(SourceGate.ReadRepoFile(Window));
         var upd = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.UI/Helpers/UpdateScheduler.cs"));
-        Assert.Equal(1, SourceGate.Count(win, "Locale.Fmt(\"card.hint.plain\", KeepSeconds)"));
-        Assert.Equal(1, SourceGate.Count(win, "Locale.Fmt(\"card.hint.withAction\", label ?? Locale.T(\"card.action.link\"), KeepSeconds)"));
-        Assert.Equal(1, SourceGate.Count(upd, "Locale.T(\"card.action.releasePage\")"));
+        Assert.Equal(1, SourceGate.Count(win, "LocMessage.Of(\"card.hint.plain\", KeepSeconds)"));
+        Assert.Equal(1, SourceGate.Count(win, "LocMessage.Of(\"card.hint.withAction\", label ?? LocMessage.Of(\"card.action.link\"), KeepSeconds)"));
+        Assert.Equal(1, SourceGate.Count(upd, "LocMessage.Of(\"card.action.releasePage\")"));
         foreach (var dead in new[] { "\"点一下关闭", "\"点一下打开", "\"链接\"", "\"发布页\"" })
         {
             Assert.DoesNotContain(dead, win);
             Assert.DoesNotContain(dead, upd);
         }
         // 抬头两颗：一张是"他刚按了检查更新"的回话，一张是"真的有新版"——两件事，各一颗键，⛔ 复用托盘那一项
-        Assert.Equal(1, SourceGate.Count(upd, "ShowCard(Locale.T(\"upd.card.checkTitle\"), report,"));
-        Assert.Equal(1, SourceGate.Count(upd, "ShowCard(Locale.T(\"upd.card.newVersionTitle\"), report, report.PageUrl)"));
+        Assert.Equal(1, SourceGate.Count(upd, "ShowCard(LocMessage.Of(\"upd.card.checkTitle\"), report,"));
+        Assert.Equal(1, SourceGate.Count(upd, "ShowCard(LocMessage.Of(\"upd.card.newVersionTitle\"), report, report.PageUrl)"));
         foreach (var dead in new[] { "\"检查更新\"", "\"发现新版本\"" })
             Assert.DoesNotContain(dead, upd);
     }
@@ -217,15 +217,16 @@ public sealed class NoticeCardGateTests
         var focus = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.UI/Views/FocusTimerWidget.xaml.cs"));
         var clock = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.UI/Views/CountdownWidget.xaml.cs"));
         var hub = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.UI/Services/AnnotationHub.cs"));
-        Assert.Equal(1, SourceGate.Count(reporter, "public static string CardTitle(string category, string title)"));
+        Assert.Equal(1, SourceGate.Count(reporter, "public static LocMessage CardTitle(LocMessage category, LocMessage title)"));
+        Assert.Equal(1, SourceGate.Count(reporter, "LocMessage.Of(\"card.title.withCategory\", category, title)"));
         Assert.Equal(1, SourceGate.Count(reporter, "NoticeCard.Show(CardTitle(category, title), body);"));
-        Assert.Equal(1, SourceGate.Count(focus, "TrayReporter.CardTitle(Locale.T(\"widget.kind.focus\"), title)"));
+        Assert.Equal(1, SourceGate.Count(focus, "TrayReporter.CardTitle(LocMessage.Of(\"widget.kind.focus\"), title)"));
         foreach (var file in new[] { reporter, focus, clock, hub })
             Assert.DoesNotContain(" · \" +", file);
         Assert.DoesNotContain("\"番茄钟 · \"", focus);
         // 到点那两族自己的句子也交表了（倒计时那颗正文是条目名＝数据，⛔ 进表）
-        Assert.Equal(1, SourceGate.Count(clock, "Locale.T(\"widget.countdown.dueTitle\")"));
-        Assert.Equal(5, SourceGate.Count(focus, "Locale.T(\"widget.focus."));
+        Assert.Equal(1, SourceGate.Count(clock, "LocMessage.Of(\"widget.countdown.dueTitle\")"));
+        Assert.Equal(5, SourceGate.Count(focus, "LocMessage.Of(\"widget.focus."));
         Assert.DoesNotContain("\"倒计时到点\"", clock);
         foreach (var dead in new[] { "\"专注结束\"", "\"休息结束\"", "\"该休息一下了\"", "不自动进休息", "可以开始下一轮" })
             Assert.DoesNotContain(dead, focus);
@@ -242,8 +243,8 @@ public sealed class NoticeCardGateTests
     {
         const string Main = "src/StarMark.UI/MainWindow.xaml.cs";
         var main = SourceGate.Code(SourceGate.ReadRepoFile(Main));
-        Assert.Equal(1, SourceGate.Count(main, "Locale.T(\"main.bgRunningTitle\")"));
-        Assert.Equal(1, SourceGate.Count(main, "Locale.Fmt(\"main.bgRunningBody\", CanvasService.BindingText(HotkeyActions.MainToggle))"));
+        Assert.Equal(1, SourceGate.Count(main, "LocMessage.Of(\"main.bgRunningTitle\")"));
+        Assert.Equal(1, SourceGate.Count(main, "LocMessage.Of(\"main.bgRunningBody\", CanvasService.BindingText(HotkeyActions.MainToggle))"));
         Assert.DoesNotContain("Ctrl+Alt", main);                  // 与画布那颗面板同一禁项：键名⛔ 抄进句子
         Assert.DoesNotContain("\"StarMark 正在后台运行\"", main);
         Assert.DoesNotContain("随时呼出窗口\"", main);             // 那句话现在在表里，代码里只许留下取词
@@ -268,14 +269,14 @@ public sealed class NoticeCardGateTests
             Assert.Contains("NoticeCard.Show(", SourceGate.ReadRepoFile(file));
 
         // 共用那份回报的措辞也要跟着换：日志里那句旧话会教用户去找一个不存在的面板
-        var report = SourceGate.MethodBody(SourceGate.ReadRepoFile(Reporter), "public static void Report(string category, string title, string body)");
+        var report = SourceGate.MethodBody(SourceGate.ReadRepoFile(Reporter), "public static void Report(LocMessage category, LocMessage title, LocMessage body)");
         // 批次 WI-47：抬头那句的拼装搬进 `CardTitle`（一个主人），这里的锚点跟着改锚
         Assert.Contains("shown = NoticeCard.Show(CardTitle(category, title), body);", report);
         Assert.Contains("（提示卡没能贴上屏幕，结果只留在日志）", report);
         Assert.DoesNotContain("托盘未启用", report);   // 别再退回"怪托盘没启用"那套说法：出口已经不是它了
 
         // 护眼那一档的说法也只有一个出处（Core 的标签 + 服务的通道名），界面/日志不许各写一份
-        var notify = SourceGate.MethodBody(SourceGate.ReadRepoFile(EyeRest), "private static bool Notify(string title, string body)");
+        var notify = SourceGate.MethodBody(SourceGate.ReadRepoFile(EyeRest), "private static bool Notify(LocMessage title, LocMessage body)");
         Assert.Contains("if (NoticeCard.Show(title, body)) channel = NoticeChannel;", notify);
         Assert.Contains("public const string NoticeChannel = \"右下角提示卡\";", SourceGate.ReadRepoFile(EyeRest));
     }

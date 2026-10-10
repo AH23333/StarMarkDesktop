@@ -73,11 +73,11 @@ public sealed partial class ClockWidget : UserControl, IWidgetTicker, IAlarmEdit
     /// </summary>
     private static void OnAlarmReached(AlarmItem item)
         => TrayReporter.Report(
-            Locale.T("alarm.section"),
-            AlarmPolicy.LineOf(item),
+            LocMessage.Of("alarm.section"),
+            LocMessage.Of("common.rawValue", AlarmPolicy.LineOf(item)),
             // 卡片上点名的那两个出口名，与表面上那颗按钮、右键里那一节的标题是同一颗键（⛔ 各写一遍）；
             // 提示卡不是常驻元素，弹出这一刻渲染一次就是对的。
-            Locale.Fmt("alarm.notify.body", LocMessage.Of("alarm.stop.label"), LocMessage.Of("alarm.section")));
+            LocMessage.Of("alarm.notify.body", LocMessage.Of("alarm.stop.label"), LocMessage.Of("alarm.section")));
 
     /// <summary>
     /// 时钟现在可以缩放：时间字号按窗口尺寸自适应（照搬 DeskBox Glance 的做法），

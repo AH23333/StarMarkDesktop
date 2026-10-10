@@ -139,9 +139,9 @@ public sealed partial class WidgetWindow
         tryIt.Click += (_, _) =>
         {
             if (EyeRestService.Preview()) return;                 // 屏幕上已经有东西了，不需要再补一句话
-            App.MainWindow?.ShowNotice(Locale.T("widget.health.previewFailed"), EyeRestService.IsResting
-                ? Locale.T("widget.health.previewBlocked")
-                : Locale.T("widget.health.previewNoBeat"));
+            App.MainWindow?.ShowNotice(LocMessage.Of("widget.health.previewFailed"), EyeRestService.IsResting
+                ? LocMessage.Of("widget.health.previewBlocked")
+                : LocMessage.Of("widget.health.previewNoBeat"));
         };
         section.Items.Add(tryIt);
 

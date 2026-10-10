@@ -1464,11 +1464,11 @@ public sealed class CanvasWiringGateTests
         Assert.Equal(AnnotationStage.BoardPenetrating,
             AnnotationSessions.Move(AnnotationStage.Idle, SessionEvent.ToggleBoard, null));
         var require = SourceGate.MethodBody(service, "private static void RequireRunning(string whatKey, Action run)");
-        Assert.Contains("Report(Locale.T(\"canvas.notice.notRunningTitle\")", require);
+        Assert.Contains("Report(LocMessage.Of(\"canvas.notice.notRunningTitle\")", require);
         Assert.Contains("BindingText(HotkeyActions.CanvasToggle)", require);   // 键位取自真实绑定，不写死
         // 两种"没开着"各说各话：功能开着（只是板子没开）才提快捷键，功能关着时指向快捷键是指错路。
-        Assert.Contains("Locale.Fmt(\"canvas.hotkey.notRunning\"", require);
-        Assert.Contains("Locale.Fmt(\"canvas.hotkey.disabled\"", require);
+        Assert.Contains("LocMessage.Of(\"canvas.hotkey.notRunning\"", require);
+        Assert.Contains("LocMessage.Of(\"canvas.hotkey.disabled\"", require);
         // ⛔ 句子（连"屏幕画布"这个名字）不许再住在代码里：名字由表里那两处实参递进来（P-176／#353 同族）。
         // 读的是抹掉注释的那一份——注释里提到这个名字正是为了写下这条禁令，不能把它算成违例。
         var requireCode = SourceGate.Code(require);
@@ -1505,11 +1505,16 @@ public sealed class CanvasWiringGateTests
     {
         var all = SourceGate.Code(SourceGate.ReadRepoPartials(Service));
         // ① 每一张失败脸都得有人问：四条"打不开"的出口共用同一颗标题键（少一条＝那条失败从此静默返回）
-        Assert.Equal(4, SourceGate.Count(all, "Locale.T(\"canvas.notice.openFailedTitle\")"));
-        Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"canvas.notice.boardClosedTitle\")"));
-        Assert.Equal(2, SourceGate.Count(all, "Locale.T(\"canvas.shot.pinFailedTitle\")"));
-        // 合成的三条失败脸各有话说；其中"板子没开着"这一句与那颗标题键是同一个出处（一句面上话，⛔ 两处各写一份）
-        Assert.Equal(2, SourceGate.Count(all, "Locale.T(\"canvas.notice.notRunningTitle\")"));
+        Assert.Equal(4, SourceGate.Count(all, "LocMessage.Of(\"canvas.notice.openFailedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(all, "LocMessage.Of(\"canvas.notice.boardClosedTitle\")"));
+        Assert.Equal(2, SourceGate.Count(all, "LocMessage.Of(\"canvas.shot.pinFailedTitle\")"));
+        // 合成的三条失败脸各有话说；其中"板子没开着"这一句与那颗标题键是同一个出处（一句面上话，⛔ 两处各写一份）。
+        // 批次 WI-61d·片2 改锚：这一族的两位主人现在**一种交身份、一种还当场念**，两颗都钉，⛔ 把合起来的 2 悄悄改成 1：
+        //  · `Report(…)` 那一臂交的是键（`LocMessage.Of`，1 处）；
+        //  · `NoShot(string reason)` 那一臂还在调用点念完再回一句成品字（`Locale.T`，1 处）——那颗包装的形参是 `string`，
+        //    句子随 `Shot.Reason` 走，出门时才进 `common.rawValue` 那道门 ⇒ 归 P-194（✅#178：登记"还剩多少"要连着尺子写）。
+        Assert.Equal(1, SourceGate.Count(all, "LocMessage.Of(\"canvas.notice.notRunningTitle\")"));
+        Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"canvas.notice.notRunningTitle\")"));
         // "系统没有返回画面"这条机器事实的出处已并进截图那一族（批次 WI-46a，一颗话⛔ 两个主人）
         Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"capture.grab.noFrame\")"));
         Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"canvas.shot.screenOutOfFrame\")"));
@@ -1525,8 +1530,8 @@ public sealed class CanvasWiringGateTests
         })
             Assert.DoesNotContain(dead, all);
         // ③ 功能名与托盘那一项各只有一个出处：句子交位置，名字由调用点把表里那两颗递进来（#353 同族）
-        Assert.Equal(6, SourceGate.Count(all, "Locale.T(\"settings.extend.canvasTitle\")"));
-        Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"tray.canvas\")"));
+        Assert.Equal(6, SourceGate.Count(all, "LocMessage.Of(\"settings.extend.canvasTitle\")"));
+        Assert.Equal(1, SourceGate.Count(all, "LocMessage.Of(\"tray.canvas\")"));
     }
 
     // ────────── 批次 WD-4：「⌨」快捷键面板 ──────────

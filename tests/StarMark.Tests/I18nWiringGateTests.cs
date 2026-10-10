@@ -988,13 +988,13 @@ public sealed class I18nWiringGateTests
         Assert.DoesNotContain("贴到桌面（这张图的{ClipboardPolicy", vm, StringComparison.Ordinal);
 
         // ⑤ 隐藏页还原词（StateWriteNotice 的 word 实参要按当前语言取）。
-        Assert.Contains("Locale.T(\"card.restore.word\")",
+        Assert.Contains("LocMessage.Of(\"card.restore.word\")",
             Code(ReadRepoFile("src/StarMark.UI/ViewModels/HiddenPageViewModel.cs")), StringComparison.Ordinal);
 
         // ⑥ StateWriteNotice 的骨架走表（"没生效"/"没落上去"两句只许在 UiStrings 里）。
         var notice = Code(ReadRepoFile("src/StarMark.Abstractions/StateWriteNotice.cs"));
-        Assert.Contains("Locale.Fmt(\"state.title\"", notice, StringComparison.Ordinal);
-        Assert.Contains("Locale.Fmt(\"state.rowGone\"", notice, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"state.title\"", notice, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"state.rowGone\"", notice, StringComparison.Ordinal);
 
         Assert.True(offenders.Count == 0,
             "条目右键族的界面串直交了中文（换语言那一刻它不跟着改）：\n" + string.Join("\n", offenders));

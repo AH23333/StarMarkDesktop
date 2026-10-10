@@ -220,7 +220,7 @@ public sealed class UpdateWiringGateTests
         Assert.Contains("if (_clickMounted) return;", mount);
         // 动作是"当时那条消息的"，所以复用这扇窗时上一条不会留给下一条
         Assert.Contains("_actionUrl = string.IsNullOrWhiteSpace(url) ? null : url;",
-            MethodBody(code, "public void SetAction(string? url, string? label)"));
+            MethodBody(code, "public void SetAction(string? url, LocMessage? label)"));
         // 交出去之前先清空：同一条消息被再点一次不该再开一扇浏览器
         var open = MethodBody(code, "private void OpenAction()");
         Assert.Contains("SetAction(null, null);", open);
@@ -238,8 +238,8 @@ public sealed class UpdateWiringGateTests
     {
         var code = Code(ReadRepoFile(Card));
         // 批次 WI-47 改锚：footer 那两句话现在在表里，代码里只许留下"把秒数当实参交出去"这一件事
-        Assert.Contains("Locale.Fmt(\"card.hint.plain\", KeepSeconds)", code, StringComparison.Ordinal);
-        Assert.Contains("Locale.Fmt(\"card.hint.withAction\", label ?? Locale.T(\"card.action.link\"), KeepSeconds)", code, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"card.hint.plain\", KeepSeconds)", code, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"card.hint.withAction\", label ?? LocMessage.Of(\"card.action.link\"), KeepSeconds)", code, StringComparison.Ordinal);
         Assert.DoesNotContain("10 秒后自动消失", code, StringComparison.Ordinal);
         Assert.Equal(3, Count(code, "HintFor("));   // 定义一处 + 造出来时一次 + 换动作时一次
     }
@@ -249,7 +249,7 @@ public sealed class UpdateWiringGateTests
     public void TheActionIsSetBeforeTheMessageReplacesTheCard()
     {
         var service = Code(ReadRepoFile(CardService));
-        var show = MethodBody(service, "public static bool Show(string title, string message, string? actionUrl = null, string? actionLabel = null)");
+        var show = MethodBody(service, "public static bool Show(LocMessage title, LocMessage message, string? actionUrl = null, LocMessage? actionLabel = null)");
         Between(show, "_window.Closed += (_, _) => _window = null;", "_window.SetAction(actionUrl, actionLabel);");
         Between(show, "_window.SetAction(actionUrl, actionLabel);", "return _window.Apply(title, message);");
     }
@@ -265,12 +265,12 @@ public sealed class UpdateWiringGateTests
         Assert.Contains("UpdatePolicy.HasDownloadableRelease(report.Verdict) ? report.PageUrl : null",
             MethodBody(scheduler, "public static void AnnounceOnDemand(UpdateReport report)"));
         // 批次 WI-47：抬头那颗交表（它从前是私有包装的实参 ⇒ 按调用形状数屏幕字的尺看不见它）
-        Assert.Contains("ShowCard(Locale.T(\"upd.card.newVersionTitle\"), report, report.PageUrl);", scheduler, StringComparison.Ordinal);
+        Assert.Contains("ShowCard(LocMessage.Of(\"upd.card.newVersionTitle\"), report, report.PageUrl);", scheduler, StringComparison.Ordinal);
         // 出声必须回 UI 线程：这扇窗要在 UI 线程上建，从池线程直接发的症状是"永远贴不上屏幕"
-        var showCard = MethodBody(scheduler, "private static void ShowCard(string title, UpdateReport report, string? actionUrl)");
+        var showCard = MethodBody(scheduler, "private static void ShowCard(LocMessage title, UpdateReport report, string? actionUrl)");
         Assert.Contains("App.MainWindow?.DispatcherQueue", showCard);
         Assert.Contains("pump.TryEnqueue(() =>", showCard);
-        Assert.Contains("NoticeCard.Show(title, report.Text, actionUrl, Locale.T(\"card.action.releasePage\"));", showCard);
+        Assert.Contains("NoticeCard.Show(title, LocMessage.Of(\"common.rawValue\", report.Text), actionUrl,\n                    LocMessage.Of(\"card.action.releasePage\"));", showCard);
         // 而"贴上了没有"问的是屏幕，不是任何一发的返回值（批次 RV 那条谎报的教训）
         Assert.Contains("if (!shown) StarLog.Info(", showCard);
     }

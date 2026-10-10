@@ -140,7 +140,7 @@ public static class EyeRestService
 
         if (!EyeRestPolicy.UsesCurtain(notice))
         {
-            var shown = Notify(Locale.T("health.card.title"), Locale.Fmt("health.card.body", EyeRestPolicy.IntervalMessage(intervalMinutes)));
+            var shown = Notify(LocMessage.Of("health.card.title"), LocMessage.Of("health.card.body", EyeRestPolicy.IntervalMessage(intervalMinutes)));
             StarLog.Info($"[EyeRest] 提示卡提醒已发出（间隔 {intervalMinutes} 分钟，提醒形式：{EyeRestPolicy.NoticeMessage(notice).Render()}）");
             return shown;
         }
@@ -153,12 +153,12 @@ public static class EyeRestService
         catch (Exception ex)
         {
             StarLog.Error("[EyeRest] 取显示器列表失败，降级为提示卡提醒", ex);
-            return Notify(Locale.T("health.card.title"), Locale.Fmt("health.card.body", EyeRestPolicy.IntervalMessage(intervalMinutes)));
+            return Notify(LocMessage.Of("health.card.title"), LocMessage.Of("health.card.body", EyeRestPolicy.IntervalMessage(intervalMinutes)));
         }
         if (monitors.Count == 0)
         {
             StarLog.Warn("[EyeRest] 系统没报告任何显示器，降级为提示卡提醒");
-            return Notify(Locale.T("health.card.title"), Locale.Fmt("health.card.body", EyeRestPolicy.IntervalMessage(intervalMinutes)));
+            return Notify(LocMessage.Of("health.card.title"), LocMessage.Of("health.card.body", EyeRestPolicy.IntervalMessage(intervalMinutes)));
         }
 
         try
@@ -175,7 +175,7 @@ public static class EyeRestService
         {
             CloseOverlays();                                       // 建到一半失败也不能留几屏暗幕挂在那儿
             StarLog.Error("[EyeRest] 遮罩窗没建起来，降级为提示卡提醒", ex);
-            return Notify(Locale.T("health.card.title"), Locale.Fmt("health.card.body", EyeRestPolicy.IntervalMessage(intervalMinutes)));
+            return Notify(LocMessage.Of("health.card.title"), LocMessage.Of("health.card.body", EyeRestPolicy.IntervalMessage(intervalMinutes)));
         }
 
         _restEndsAt = DateTimeOffset.Now + TimeSpan.FromSeconds(EyeRestPolicy.RestSeconds);
@@ -291,7 +291,7 @@ public static class EyeRestService
     /// 措辞也由 <see cref="NoticeChannel"/> 一处给出，界面与日志说同一件事。</para>
     /// 回报有没有真的出现在屏幕上（<see cref="Preview"/> 据此说话）。
     /// </summary>
-    private static bool Notify(string title, string body)
+    private static bool Notify(LocMessage title, LocMessage body)
     {
         var channel = "日志";
         try

@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.UI.Views;
 
 namespace StarMark.UI.Services;
@@ -29,7 +30,7 @@ internal static class NoticeCard
     /// （批次 UE：有新版本时点整张卡就打开它自己的发布页）。传进来的一律必须是<b>本程序自己拼出来的</b>地址，
     /// 调用方不许把外部服务器给的回链直接递到这里（理由见 <c>NoticeCardWindow.SetAction</c>）。</para>
     /// </summary>
-    public static bool Show(string title, string message, string? actionUrl = null, string? actionLabel = null)
+    public static bool Show(LocMessage title, LocMessage message, string? actionUrl = null, LocMessage? actionLabel = null)
     {
         try
         {

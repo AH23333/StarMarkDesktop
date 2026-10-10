@@ -148,6 +148,28 @@ public static class LocText
         SetKey(element, message.Key, message.Args ?? Array.Empty<object?>());
     }
 
+    /// <summary>
+    /// 把一句「键＋实参」钉到<b>点名要的那一颗</b>依赖属性上（批次 WI-61d·片2）。
+    /// <para>为什么⛔ 让 <see cref="SetMessage(DependencyObject,LocMessage)"/> 顺路处理常驻那张提示条：
+    /// <see cref="ResolveTextProperty"/> 的次序是 Text→Content→Header→Title→Message→Description，
+    /// 而 <c>InfoBar</c> 没有 Text 也没有 Header ⇒ 第一颗命中的是 <b><c>Content</c></b>——那正是本批往里挂
+    /// 那颗就地按钮的位置。WI-2 那次的症状会原样重来：标题写进正文容器，屏幕上看不见那句字、只剩空白。</para>
+    /// <para>交的是 <c>InfoBar.TitleProperty</c> 那颗<b>标识符</b>而不是属性名 ⇒ 这颗 DP 存不存在由
+    /// <b>编译器</b>回答，⛔ 留到运行期反射去猜（猜错的症状是屏幕上那张卡空白，只有真机看得见）。</para>
+    /// <para>实参随 <see cref="LocMessage"/> 一起进注册项（<see cref="Paste"/> 那唯一一条取词路），
+    /// 所以这里⛔ 第四颗信箱——常驻元素同一刻有两句（抬头与正文），共用一格信箱就等于贴抬头时拿到正文的实参
+    /// （坑表 #276 同族）。</para>
+    /// </summary>
+    public static void SetMessage(DependencyObject element, DependencyProperty target, LocMessage? message)
+    {
+        if (message is null)
+        {
+            Drop(element, target);        // 没话了必须把注册项一起摘掉，否则下一次换语言把旧句子贴回来
+            return;
+        }
+        Paste(element, target, message.Key, message.Args ?? Array.Empty<object?>());
+    }
+
     public static string GetKey(DependencyObject element) => (string)element.GetValue(KeyProperty);
 
     public static void SetToolTipKey(DependencyObject element, string value)

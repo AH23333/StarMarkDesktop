@@ -52,8 +52,8 @@ public static partial class CanvasService
         // 按它要听见这句原因——一条什么都不发生的哑键是最坏的收尾。
         if (!EnabledBySetting)
         {
-            Report(Locale.T("canvas.notice.boardClosedTitle"),
-                Locale.Fmt("canvas.notice.boardClosedBody", Locale.T("settings.extend.canvasTitle")));
+            Report(LocMessage.Of("canvas.notice.boardClosedTitle"),
+                LocMessage.Of("canvas.notice.boardClosedBody", LocMessage.Of("settings.extend.canvasTitle")));
             return false;
         }
         _busy = true;
@@ -65,7 +65,7 @@ public static partial class CanvasService
             var monitors = WindowInterop.ListMonitors();
             if (monitors.Count == 0)
             {
-                Report(Locale.T("canvas.notice.openFailedTitle"), Locale.T("capture.grab.noMonitors"));
+                Report(LocMessage.Of("canvas.notice.openFailedTitle"), LocMessage.Of("capture.grab.noMonitors"));
                 return false;
             }
             foreach (var monitor in monitors)
@@ -116,7 +116,7 @@ public static partial class CanvasService
             }
             if (Screens.Count == 0)
             {
-                Report(Locale.T("canvas.notice.openFailedTitle"), Locale.T("canvas.notice.noLayers"));
+                Report(LocMessage.Of("canvas.notice.openFailedTitle"), LocMessage.Of("canvas.notice.noLayers"));
                 return false;
             }
 
@@ -125,7 +125,7 @@ public static partial class CanvasService
             if (queue is null)
             {
                 CloseBoardHost();
-                Report(Locale.T("canvas.notice.openFailedTitle"), Locale.T("canvas.notice.noMainWindow"));
+                Report(LocMessage.Of("canvas.notice.openFailedTitle"), LocMessage.Of("canvas.notice.noMainWindow"));
                 return false;
             }
             _frame ??= BuildFrameTimer(queue);
@@ -139,7 +139,7 @@ public static partial class CanvasService
         {
             CloseBoardHost();
             StarLog.Error("[Canvas] 开启画布模式失败", ex);
-            Report(Locale.T("canvas.notice.openFailedTitle"), ex.Message);
+            Report(LocMessage.Of("canvas.notice.openFailedTitle"), LocMessage.Of("common.rawValue", ex.Message));
             return false;
         }
         finally

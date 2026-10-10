@@ -64,7 +64,7 @@ public sealed class ClipboardCopyImageGateTests
         Assert.Contains("if (!vm.CanCopyAsImage) return;", body);
         // 坏消息要给出口（P-54 同口径）：只回一句"复制失败"，用户分不清是程序坏了还是这张图坏了。
         // WI-2p 起那句走键（card.copyImage.fail，两处出口共用）——锚点跟形状走。
-        Assert.Contains("Locale.T(\"card.copyImage.fail\")", body);
+        Assert.Contains("LocMessage.Of(\"card.copyImage.fail\")", body);
         Assert.Contains("ShowError", body);
         Assert.Contains("why", body);                      // 原因来自那一处读文件的入口，不在这里另编一句
     }

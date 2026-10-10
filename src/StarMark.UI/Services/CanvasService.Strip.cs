@@ -50,8 +50,8 @@ public static partial class CanvasService
         if (_panel is not null) { HideHotkeyPanel(); return; }
         if (!IsRunning || Screens.Count == 0 || _toolbar is null)
         {
-            Report(Locale.T("canvas.notice.panelClosedTitle"),
-                Locale.Fmt("canvas.notice.panelIsPartOfCanvas", Locale.T("settings.extend.canvasTitle")));
+            Report(LocMessage.Of("canvas.notice.panelClosedTitle"),
+                LocMessage.Of("canvas.notice.panelIsPartOfCanvas", LocMessage.Of("settings.extend.canvasTitle")));
             return;
         }
         try
@@ -71,7 +71,7 @@ public static partial class CanvasService
         {
             _panel = null;
             StarLog.Error("[Canvas] 快捷键面板没出现（工具条与热键都还在）", ex);
-            Report(Locale.T("canvas.notice.panelFailedTitle"), ex.Message);
+            Report(LocMessage.Of("canvas.notice.panelFailedTitle"), LocMessage.Of("common.rawValue", ex.Message));
         }
     }
 

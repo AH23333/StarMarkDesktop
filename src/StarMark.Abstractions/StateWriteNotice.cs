@@ -19,13 +19,15 @@ namespace StarMark.Abstractions;
 /// </summary>
 public static class StateWriteNotice
 {
-    /// <summary>弹窗标题：谁没生效就说谁。<b>骨架与动作词都走表</b>（批次 WI-2p；动作词由调用方按当前语言传）。</summary>
-    public static string Title(string action) => Locale.Fmt("state.title", action);
+    /// <summary>弹窗标题：谁没生效就说谁。<b>骨架与动作词都走表</b>（批次 WI-2p；WI-61d·片2 起动作词交<b>身份</b>）。</summary>
+    public static LocMessage Title(LocMessage action) => LocMessage.Of("state.title", action);
 
     /// <summary>
     /// 正文：一句到位，并给出<b>下一步</b>（刷新这一页），不留"请稍后重试"那种要用户猜的话。
-    /// 骨架进表（<c>state.rowGone</c>），<paramref name="action"/> 是调用方按当前语言取好的词。
+    /// 骨架进表（<c>state.rowGone</c>），<paramref name="action"/> 交的是<b>没渲染的那份身份</b>——
+    /// 批次 WI-61d·片2：这一句的宿主是右下角提示条，它要在<b>贴上屏幕那一刻</b>才取词，换语言时才重贴得动
+    /// （⛔ 在这里先 <c>Locale.Fmt</c> 完再回一句成品字＝那句被钉死在今天这一门语言上）。
     /// </summary>
-    public static string RowGone(string action) =>
-        Locale.Fmt("state.rowGone", action);
+    public static LocMessage RowGone(LocMessage action) =>
+        LocMessage.Of("state.rowGone", action);
 }

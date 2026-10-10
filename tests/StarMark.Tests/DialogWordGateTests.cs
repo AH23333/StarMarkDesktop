@@ -36,6 +36,16 @@ public sealed class DialogWordGateTests
     private const string SnapshotPageCs = "src/StarMark.UI/Views/SnapshotPage.xaml.cs";
     private const string StatusCs = "src/StarMark.UI/MainWindow.Status.cs";
     private const string LocalDiskCs = "src/StarMark.UI/ViewModels/SettingsPageViewModel.LocalDisk.cs";
+    private const string NoticeWin = "src/StarMark.UI/Views/NoticeCardWindow.cs";
+    private const string Reporter = "src/StarMark.UI/Services/TrayReporter.cs";
+    private const string CountdownCs = "src/StarMark.UI/Views/CountdownWidget.xaml.cs";
+    private const string ClockCs = "src/StarMark.UI/Views/ClockWidget.xaml.cs";
+    private const string PinCs = "src/StarMark.UI/Services/PinManager.cs";
+    private const string ShotCs = "src/StarMark.UI/Services/CanvasService.Snapshot.cs";
+    private const string ScreenCs = "src/StarMark.UI/Services/ScreenshotService.cs";
+    private const string HubCs = "src/StarMark.UI/Services/AnnotationHub.cs";
+    private const string UpdateCs = "src/StarMark.UI/Helpers/UpdateScheduler.cs";
+    private const string OcrCs = "src/StarMark.UI/Services/OcrService.cs";
 
     /// <summary>那颗 <c>LocMessage title</c> 的六位主人：四颗公共入口＋<c>BuildWindow</c>＋<c>MakeTitle</c>。</summary>
     private static readonly string[] TitleOwners =
@@ -209,35 +219,80 @@ public sealed class DialogWordGateTests
     }
 
     /// <summary>
-    /// ⑦本批<b>刻意没动</b>的那一族（右下角提示卡贴不上屏幕时的兜底＝C 桶）：主窗那三颗出口仍收 <c>string</c>。
-    /// <para>为什么不同批：它们写的是<b>常驻</b>那颗 <c>SyncInfoBar</c> 的 <c>Title</c>／<c>Message</c>，
-    /// 换语言那一刻没人重贴 ⇒ 必须先给它配一条重贴手臂（顶栏那一行早已走 <c>SetStatusText(LocMessage?)</c> 那颗门，
-    /// 是现成的先例）。只翻形参不翻手臂＝同一句提示半中半英，比原缺陷更难发现（✅WI-61c 那颗"没被半搬"的同一口径）。</para>
-    /// <para>片2 交表时这一格要<b>一起改锚</b>，⛔ 悄悄放宽这把尺。</para>
+    /// ⑦右下角提示卡那一族<b>整条搬完</b>（批次 WI-61d 片2＝P-185 的 C 桶）：三颗出口收 <c>LocMessage</c>，
+    /// 而<b>常驻</b>那颗 <c>SyncInfoBar</c> 的两个格子也走"键＋实参进注册项"那条手臂。
+    /// <para>片1 立这一格时说的就是"只翻形参不翻手臂＝同一句提示半中半英"。今天两半一起翻了 ⇒
+    /// 这一格换成<b>钉住新形状</b>：既不许退回直接赋成品字，也不许把取词拆成第二份实现。</para>
     /// </summary>
     [Fact]
-    public void TheNoticeCardFamilyWasNotHalfMoved()
+    public void TheNoticeCardFamilyIsMovedWhole()
     {
         var status = CodeOf(StatusCs);
         foreach (var sig in new[]
                  {
-                     "public void ShowError(string title, string message)",
-                     "public void ShowErrorWithAction(string title, string message, string actionLabel, Action onAction)",
-                     "public void ShowNotice(string title, string message)",
+                     "public void ShowError(LocMessage title, LocMessage message)",
+                     "public void ShowErrorWithAction(LocMessage title, LocMessage message, LocMessage actionLabel, Action onAction)",
+                     "public void ShowNotice(LocMessage title, LocMessage message)",
                  })
             Assert.Contains(sig, status);
-        Assert.Equal(3, Times(status, "(string title, string message"));
+        Assert.Equal(0, Times(status, "(string title, string message"));   // ⛔ 任何一位主人退回成品字
 
-        // 那三颗都落到同一位宿主身上：常驻 InfoBar 的两个格子被直接写字（这就是手臂欠着的那一处）。
+        // 常驻元素：两颗格子各一条注册项；直接赋字＝换语言那一刻那张卡继续挂着旧话。
         var paste = SourceGate.MethodBody(status, "private void ShowInfoBar");
-        Assert.Contains("SyncInfoBar.Title = title;", paste);
-        Assert.Contains("SyncInfoBar.Message = message;", paste);
-        Assert.Equal(0, Times(status, "LocText.SetMessage(SyncInfoBar"));
+        Assert.Contains("LocText.SetMessage(SyncInfoBar, InfoBar.TitleProperty, title);", paste);
+        Assert.Contains("LocText.SetMessage(SyncInfoBar, InfoBar.MessageProperty, message);", paste);
+        Assert.Equal(0, Times(paste, "SyncInfoBar.Title = "));
+        Assert.Equal(0, Times(paste, "SyncInfoBar.Message = "));
 
-        // 顶栏那一行的门早就在（片2 的先例，⛔ 到那时再说"这条机制没有过"）。
+        // 那颗就地按钮的名字同一条路；顶栏那扇门既没被绕开也没被换成第二份实现。
+        Assert.Contains("LocText.SetMessage(button, actionLabel);", status);
         Assert.Contains("private void SetStatusText(LocMessage? message) => LocText.SetMessage(StatusText, message);", status);
 
-        // 那四行的字还在这档（本批⛔ 动它们）。
-        Assert.Contains("App.MainWindow?.ShowError(\"清理失败\", ex.Message);", CodeOf(LocalDiskCs));
+        // 提示卡本体：三句都住在**复用**的那扇窗上 ⇒ 全部进注册项（<c>HideCard</c> 不关窗）。
+        var win = CodeOf(NoticeWin);
+        Assert.Contains("public bool Apply(LocMessage title, LocMessage message)", win);
+        Assert.Contains("LocText.SetMessage(_title, title);", win);
+        Assert.Contains("LocText.SetMessage(_body, message);", win);
+        Assert.Contains("LocText.SetMessage(_hint, HintFor(_actionUrl is not null, _actionLabel));", win);
+        Assert.Equal(0, Times(win, "_title.Text = "));
+        Assert.Equal(0, Times(win, "_body.Text = "));
+        Assert.Equal(0, Times(win, "_hint.Text = "));
+
+        // 「谁在说话 · 说了什么」那句抬头的分隔符也交表（✅P-178"一个主人"同一条口径）。
+        var reporter = CodeOf(Reporter);
+        Assert.Contains("public static LocMessage CardTitle(LocMessage category, LocMessage title)", reporter);
+        Assert.Contains("LocMessage.Of(\"card.title.withCategory\", category, title)", reporter);
+
+        // 那四行裸字面在本档一个字都不剩（它们现在只在 UiStrings 里有一份）。
+        var disk = CodeOf(LocalDiskCs);
+        Assert.Equal(0, Times(disk, "\"已经没有这些行了\""));
+        Assert.Equal(0, Times(disk, "\"清理失败\""));
+    }
+
+    /// <summary>
+    /// ⑧本批<b>只交门⛔ 交身份</b>的那几颗：句子由 Core／Abstractions 当场念完再回一句成品字，UI 侧只能
+    /// 把它们原样交出去（<c>common.rawValue</c>）。名单逐颗点名＋颗数钉死——
+    /// <b>⛔ 把那种句子塞进键位</b>：那读起来像做完了，实际是把"停在上一门语言"伪装成"已经交表"。
+    /// <para>P-194 收这一族时要连着这一格一起改（✅#178：登记"还剩多少"要同时报两串数）。</para>
+    /// </summary>
+    [Fact]
+    public void TheCrossLayerSentencesEnterThroughTheRawValueDoor()
+    {
+        var doors = new[]
+        {
+            (CountdownCs, "LocMessage.Of(\"common.rawValue\", CountdownPolicy.TitleText(item))", 1),
+            (ClockCs, "LocMessage.Of(\"common.rawValue\", AlarmPolicy.LineOf(item))", 1),
+            (PinCs, "LocMessage.Of(\"common.rawValue\", full)", 2),
+            (PinCs, "LocMessage.Of(\"common.rawValue\", none)", 3),
+            (ShotCs, "LocMessage.Of(\"common.rawValue\", shot.Reason)", 3),
+            (ScreenCs, "LocMessage.Of(\"common.rawValue\", CaptureGate.ReasonFor(CaptureBlock.Disabled)!)", 1),
+            (HubCs, "LocMessage.Of(\"common.rawValue\", why)", 2),
+            (UpdateCs, "LocMessage.Of(\"common.rawValue\", report.Text)", 1),
+            (OcrCs, "LocMessage.Of(\"common.rawValue\", problem + read.HowParenthesized)", 1),
+        };
+        foreach (var (file, needle, want) in doors)
+            Assert.True(Times(CodeOf(file), needle) == want,
+                $"{file}：{needle} 应命中 {want} 处，现场 {Times(CodeOf(file), needle)} 处"
+                + "（这道门的主人换了就得连这一格一起改）");
     }
 }

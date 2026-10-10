@@ -166,8 +166,8 @@ public sealed class PinGroupGateTests
         Assert.Contains("target.Members.Add(pin);", join);
         // 那一组已经不在（右键之后被关掉）也要回执，不能静默：静默＝用户以为并进去了
         // （批次 WI-46c 改锚：那两句话现在从表里取，钉的是"这一条出口确实开口说过话"，⛔ 钉字面中文）
-        Assert.Contains("TrayReporter.Report(Locale.T(\"pin.card.groupCategory\"), Locale.T(\"pin.card.groupGoneTitle\"),", join);
-        Assert.Contains("Locale.Fmt(\"pin.card.goneBeforeBody\", PinGrouping.NameOf(serial))", join);
+        Assert.Contains("TrayReporter.Report(LocMessage.Of(\"pin.card.groupCategory\"), LocMessage.Of(\"pin.card.groupGoneTitle\"),", join);
+        Assert.Contains("LocMessage.Of(\"pin.card.goneBeforeBody\", PinGrouping.NameOf(serial))", join);
     }
 
     /// <summary>名册里的"隐藏"只有两个写点：窗自己收（HidePin）与窗自己回（Present）。</summary>

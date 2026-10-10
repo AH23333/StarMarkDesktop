@@ -48,20 +48,20 @@ public sealed class CaptureNoticeWiringGateTests
         var svc = SourceGate.Code(SourceGate.ReadRepoFile(Screenshot));
 
         // ① 五张"截图失败"的失败脸共用同一颗标题键：抓帧空／没显示器／建窗抛／裁不动／取像素抛
-        Assert.Equal(5, SourceGate.Count(svc, "Locale.T(\"capture.card.failedTitle\")"));
-        Assert.Equal(1, SourceGate.Count(svc, "Locale.T(\"capture.card.disabledTitle\")"));
-        Assert.Equal(2, SourceGate.Count(svc, "Locale.T(\"capture.card.copyFailedTitle\")"));
-        Assert.Equal(1, SourceGate.Count(svc, "Locale.T(\"capture.card.encodeFailed\")"));
-        Assert.Equal(1, SourceGate.Count(svc, "Locale.T(\"capture.card.copiedTitle\")"));
-        Assert.Equal(1, SourceGate.Count(svc, "Locale.Fmt(\"capture.card.copiedBody\""));
-        Assert.Equal(2, SourceGate.Count(svc, "Locale.T(\"capture.card.saveFailedTitle\")"));
-        Assert.Equal(1, SourceGate.Count(svc, "Locale.T(\"capture.card.savedTitle\")"));
-        Assert.Equal(1, SourceGate.Count(svc, "Locale.T(\"capture.card.saveWriteFailed\")"));
+        Assert.Equal(5, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.failedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.disabledTitle\")"));
+        Assert.Equal(2, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.copyFailedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.encodeFailed\")"));
+        Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.copiedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.copiedBody\""));
+        Assert.Equal(2, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.saveFailedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.savedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.saveWriteFailed\")"));
         // ② 两条关于机器的事实：截图这边一处，另一处在画布那一路（同一颗键，⛔ 两个出处）
-        Assert.Equal(1, SourceGate.Count(svc, "Locale.T(\"capture.grab.noFrame\")"));
-        Assert.Equal(1, SourceGate.Count(svc, "Locale.T(\"capture.grab.noMonitors\")"));
+        Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"capture.grab.noFrame\")"));
+        Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"capture.grab.noMonitors\")"));
         // ③ 抬头那颗"谁在说话"：两条选区出口 + 那颗工厂 = 3 处，且⛔ 再带默认值
-        Assert.Equal(3, SourceGate.Count(svc, "Locale.T(\"capture.card.category\")"));
+        Assert.Equal(3, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.category\")"));
         Assert.DoesNotContain("string category =", svc);
         // ④ 旧句子一概不许回到代码里（现在由表里说）。逐颗点名，⛔ 用"汉字总数下降"那种整体口径。
         //    ⚠ 短到与日志撞车的那一颗要**带引号点名**：`StarLog.Error($"[{category}] 存图失败（{path}）")` 里的
@@ -90,9 +90,9 @@ public sealed class CaptureNoticeWiringGateTests
             "capture.grab.frameNotShown",
         })
             Assert.Equal(1, SourceGate.Count(all, key));
-        Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"capture.card.category\")"));
+        Assert.Equal(1, SourceGate.Count(all, "LocMessage.Of(\"capture.card.category\")"));
         // 贴图那一路自己的句子归下一刀，但抬头那颗名字⛔ 再抄一份：它已经立在这一行的表里
-        Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"pin.card.category\")"));
+        Assert.Equal(1, SourceGate.Count(all, "LocMessage.Of(\"pin.card.category\")"));
         foreach (var dead in new[]
         {
             "标注没能合成", "选区那块画面没能裁出来", "打码预览没能刷到屏幕上", "这一改画不出来",
@@ -142,30 +142,30 @@ public sealed class CaptureNoticeWiringGateTests
         var grouping = SourceGate.Code(SourceGate.ReadRepoFile(Grouping));
 
         // ① 抬头两颗（贴图／贴图组）＋那一排的范围名：按主人点名，⛔ 用"汉字总数下降"那种整体口径
-        Assert.Equal(8, SourceGate.Count(pin, "Locale.T(\"pin.card.category\")"));
-        Assert.Equal(8, SourceGate.Count(pin, "Locale.T(\"pin.card.groupCategory\")"));   // 7 处 Report + 那句正文里的引用
+        Assert.Equal(8, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.category\")"));
+        Assert.Equal(8, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.groupCategory\")"));   // 7 处 Report + 那句正文里的引用
         Assert.Equal(2, SourceGate.Count(pin, "Locale.T(\"pin.card.scopeAll\")"));
         // ② 每张卡的标题各有几张脸（少一条＝那条从此静默；"没有可操作的贴图"三处共用一颗）
-        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.limitTitle\")"));
-        Assert.Equal(3, SourceGate.Count(pin, "Locale.T(\"pin.card.noneTitle\")"));
-        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.pinnedTitle\")"));
-        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.pinFailedTitle\")"));
-        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.throughMissTitle\")"));
-        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.throughPartialTitle\")"));
-        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.groupFullTitle\")"));
-        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.groupedTitle\")"));
-        Assert.Equal(2, SourceGate.Count(pin, "Locale.T(\"pin.card.groupGoneTitle\")"));
-        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.joinedTitle\")"));
-        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.leftTitle\")"));
-        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.groupClosedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.limitTitle\")"));
+        Assert.Equal(3, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.noneTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.pinnedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.pinFailedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.throughMissTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.throughPartialTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.groupFullTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.groupedTitle\")"));
+        Assert.Equal(2, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.groupGoneTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.joinedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.leftTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.groupClosedTitle\")"));
         // ③ 带插值的正文：一颗都不许漏（漏掉的那条只会以中文出现在英文界面上）
         Assert.Equal(1, SourceGate.Count(pin, "Locale.Fmt(\"pin.card.pinnedBody\""));
-        Assert.Equal(1, SourceGate.Count(pin, "Locale.T(\"pin.card.throughMissBody\")"));
-        Assert.Equal(1, SourceGate.Count(pin, "Locale.Fmt(\"pin.card.groupedBody\""));
-        Assert.Equal(1, SourceGate.Count(pin, "Locale.Fmt(\"pin.card.goneBeforeBody\""));
-        Assert.Equal(1, SourceGate.Count(pin, "Locale.Fmt(\"pin.card.goneOnClickBody\""));
-        Assert.Equal(1, SourceGate.Count(pin, "Locale.Fmt(\"pin.card.leftBody\""));
-        Assert.Equal(1, SourceGate.Count(pin, "Locale.Fmt(\"pin.card.throughPartialBody\""));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.throughMissBody\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.groupedBody\""));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.goneBeforeBody\""));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.goneOnClickBody\""));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.leftBody\""));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.throughPartialBody\""));
         // ④ 回原因那两句住 Core，但话是说给人看的 ⇒ 词同样进表（先例＝WI-2t／WI-46a）
         Assert.Equal(1, SourceGate.Count(geo, "Locale.Fmt(\"pin.card.limitBody\""));
         Assert.Equal(1, SourceGate.Count(geo, "Locale.T(\"pin.card.noneBody\")"));
@@ -203,7 +203,7 @@ public sealed class CaptureNoticeWiringGateTests
         Assert.Equal(1, SourceGate.Count(SourceGate.Code(SourceGate.ReadRepoFile(SnapshotPartial)),
             "Locale.T(\"capture.grab.noFrame\")"));
         Assert.Equal(1, SourceGate.Count(SourceGate.Code(SourceGate.ReadRepoFile(HostPartial)),
-            "Locale.T(\"capture.grab.noMonitors\")"));
+            "LocMessage.Of(\"capture.grab.noMonitors\")"));
         Assert.False(StarMark.Abstractions.I18n.UiStrings.TryGet("canvas.shot.noFrame", out _));
         Assert.False(StarMark.Abstractions.I18n.UiStrings.TryGet("canvas.notice.noMonitors", out _));
     }
@@ -225,17 +225,17 @@ public sealed class CaptureNoticeWiringGateTests
         var overlay = SourceGate.Code(SourceGate.ReadRepoPartials(Overlay));
 
         // ① 三张失败脸各有话说（引擎坏了／认出个空／写不进剪贴板），成功那一张也要报数
-        Assert.Equal(2, SourceGate.Count(svc, "Locale.T(\"ocr.card.failedTitle\")"));
-        Assert.Equal(1, SourceGate.Count(svc, "Locale.T(\"ocr.card.emptyTitle\")"));
-        Assert.Equal(1, SourceGate.Count(svc, "Locale.T(\"ocr.card.copiedTitle\")"));
-        Assert.Equal(1, SourceGate.Count(svc, "Locale.Fmt(\"ocr.card.copyFailedBody\""));
+        Assert.Equal(2, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.failedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.emptyTitle\")"));
+        Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.copiedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.copyFailedBody\""));
         Assert.Equal(1, SourceGate.Count(svc, "Locale.Fmt(\"ocr.card.copiedBody\""));
         // ② 抬头那颗必传（⛔ 默认值），两态各报自己的名字；同一颗"复制失败"与截图那一路共用一个出处
-        Assert.Equal(2, SourceGate.Count(svc, "Locale.T(\"ocr.card.category\")"));
+        Assert.Equal(2, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.category\")"));
         Assert.DoesNotContain("string category =", svc);
-        Assert.Equal(1, SourceGate.Count(svc, "Locale.T(\"capture.card.copyFailedTitle\")"));
-        Assert.Equal(1, SourceGate.Count(overlay, "Locale.T(\"capture.card.categoryOcr\")"));
-        Assert.Equal(1, SourceGate.Count(overlay, "Locale.T(\"pin.card.categoryOcr\")"));
+        Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.copyFailedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(overlay, "LocMessage.Of(\"capture.card.categoryOcr\")"));
+        Assert.Equal(1, SourceGate.Count(overlay, "LocMessage.Of(\"pin.card.categoryOcr\")"));
         // ③ "怎么认的"那三片＋分隔符＋括号：Core 一份，UI⛔ 再写第二份括号
         Assert.Equal(1, SourceGate.Count(read, "Locale.T(\"ocr.how.join\")"));
         Assert.Equal(1, SourceGate.Count(read, "Locale.Fmt(\"ocr.how.byLanguage\""));

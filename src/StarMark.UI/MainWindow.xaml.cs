@@ -230,8 +230,8 @@ public sealed partial class MainWindow : Window
             try
             {
                 AppWindow.Hide();
-                if (!_backgroundNoticeShown && NoticeCard.Show(Locale.T("main.bgRunningTitle"),
-                    Locale.Fmt("main.bgRunningBody", CanvasService.BindingText(HotkeyActions.MainToggle))))
+                if (!_backgroundNoticeShown && NoticeCard.Show(LocMessage.Of("main.bgRunningTitle"),
+                    LocMessage.Of("main.bgRunningBody", CanvasService.BindingText(HotkeyActions.MainToggle))))
                 {
                     // 只有真的贴上了屏幕才算"说过这一次"：上一版按"气泡返回 true"记账，于是那条提醒
                     // 一辈子只发一次、而用户一次都没看见——记错了账就把唯一的补发机会也烧掉了。

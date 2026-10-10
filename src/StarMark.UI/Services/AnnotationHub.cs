@@ -95,8 +95,10 @@ public static class AnnotationHub
         var to = AnnotationSessions.Move(from, what, _boardBeforeSheet);
         if (what == SessionEvent.ToggleBoard && from.IsSheet())
         {
-            Report(Locale.T("canvas.notice.notResponsiveTitle"), HotkeyGate.ReasonNotRunning(
-                HotkeyActions.CanvasToggle, true, AnnotationStage.Sheet) ?? Locale.T("canvas.notice.captureInFlight"));
+            Report(LocMessage.Of("canvas.notice.notResponsiveTitle"), HotkeyGate.ReasonNotRunning(
+                HotkeyActions.CanvasToggle, true, AnnotationStage.Sheet) is { } why
+                    ? LocMessage.Of("common.rawValue", why)
+                    : LocMessage.Of("canvas.notice.captureInFlight"));
             return;
         }
         if (to == from) return;
@@ -161,8 +163,10 @@ public static class AnnotationHub
     {
         if (Stage.IsSheet())
         {
-            Report(Locale.T("canvas.notice.notResponsiveTitle"), HotkeyGate.ReasonNotRunning(
-                HotkeyActions.CanvasToggle, true, AnnotationStage.Sheet) ?? Locale.T("canvas.notice.captureInFlight"));
+            Report(LocMessage.Of("canvas.notice.notResponsiveTitle"), HotkeyGate.ReasonNotRunning(
+                HotkeyActions.CanvasToggle, true, AnnotationStage.Sheet) is { } why
+                    ? LocMessage.Of("common.rawValue", why)
+                    : LocMessage.Of("canvas.notice.captureInFlight"));
             return;
         }
         if (!Stage.IsBoard())
@@ -308,7 +312,7 @@ public static class AnnotationHub
         catch (Exception ex) { StarLog.Warn($"[Hub] 热键重新注册失败：{ex.Message}"); }
     }
 
-    private static void Report(string title, string message)
+    private static void Report(LocMessage title, LocMessage message)
     {
         var shown = false;
         try { shown = NoticeCard.Show(title, message); }

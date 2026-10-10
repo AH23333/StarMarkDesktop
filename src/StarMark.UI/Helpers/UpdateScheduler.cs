@@ -108,7 +108,7 @@ public static class UpdateScheduler
     /// 等于承诺一个不存在的产物。
     /// </summary>
     public static void AnnounceOnDemand(UpdateReport report)
-        => ShowCard(Locale.T("upd.card.checkTitle"), report,
+        => ShowCard(LocMessage.Of("upd.card.checkTitle"), report,
             UpdatePolicy.HasDownloadableRelease(report.Verdict) ? report.PageUrl : null);
 
     /// <summary>
@@ -116,9 +116,9 @@ public static class UpdateScheduler
     /// <para><b>回 UI 线程</b>：提示卡是一扇 XAML 窗，建窗与摆窗都要用调度队列，从池线程直接发会当场失败；
     /// 而失败必须落到日志——这一批的教训是"API 说发了、屏幕上没有"（托盘气泡那一版）。</para>
     /// </summary>
-    public static void Announce(UpdateReport report) => ShowCard(Locale.T("upd.card.newVersionTitle"), report, report.PageUrl);
+    public static void Announce(UpdateReport report) => ShowCard(LocMessage.Of("upd.card.newVersionTitle"), report, report.PageUrl);
 
-    private static void ShowCard(string title, UpdateReport report, string? actionUrl)
+    private static void ShowCard(LocMessage title, UpdateReport report, string? actionUrl)
     {
         var pump = App.MainWindow?.DispatcherQueue;
         if (pump is null)
@@ -132,7 +132,8 @@ public static class UpdateScheduler
             try
             {
                 // 地址交出去的是 report.PageUrl——本程序按配置里的仓库拼的那一个，不是远端回的连接串。
-                shown = NoticeCard.Show(title, report.Text, actionUrl, Locale.T("card.action.releasePage"));
+                shown = NoticeCard.Show(title, LocMessage.Of("common.rawValue", report.Text), actionUrl,
+                    LocMessage.Of("card.action.releasePage"));
             }
             catch (Exception ex) { StarLog.Warn($"[更新] 提示卡没能贴上屏幕：{ex.Message}"); }
             if (!shown) StarLog.Info($"（提示卡没能贴上屏幕，结果只留在日志）{title}：{report.Text}");

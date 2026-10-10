@@ -78,7 +78,8 @@ public static class PinManager
         {
             if (CaptureGeometry.PinLimitProblem(Pins.Count) is { } full)
             {
-                TrayReporter.Report(Locale.T("pin.card.category"), Locale.T("pin.card.limitTitle"), full);
+                TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.limitTitle"),
+                    LocMessage.Of("common.rawValue", full));
                 return;
             }
             try
@@ -91,15 +92,17 @@ public static class PinManager
                 // 新贴的一张要跟随当前全局状态，否则"明明收起了却冒出一张新的"
                 if (wasHidden) pin.HidePin();
                 if (wasThrough && !pin.ApplyClickThrough(true))
-                    TrayReporter.Report(Locale.T("pin.card.category"), Locale.T("pin.card.throughMissTitle"),
-                        Locale.T("pin.card.throughMissBody"));
-                TrayReporter.Report(Locale.T("pin.card.category"), Locale.T("pin.card.pinnedTitle"),
-                    CaptureGeometry.FormatSize(width, height) + Locale.Fmt("pin.card.pinnedBody", Pins.Count, CaptureGeometry.MaxPins));
+                    TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.throughMissTitle"),
+                        LocMessage.Of("pin.card.throughMissBody"));
+                TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.pinnedTitle"),
+                    LocMessage.Of("common.rawValue", CaptureGeometry.FormatSize(width, height)
+                        + Locale.Fmt("pin.card.pinnedBody", Pins.Count, CaptureGeometry.MaxPins)));
             }
             catch (Exception ex)
             {
                 StarLog.Error("[Pin] 贴图未能钉住", ex);
-                TrayReporter.Report(Locale.T("pin.card.category"), Locale.T("pin.card.pinFailedTitle"), ex.Message);
+                TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.pinFailedTitle"),
+                    LocMessage.Of("common.rawValue", ex.Message));
             }
         });
 
@@ -108,7 +111,8 @@ public static class PinManager
     {
         if (CaptureGeometry.PinCommandProblem(Pins.Count) is { } none)
         {
-            TrayReporter.Report(Locale.T("pin.card.category"), Locale.T("pin.card.noneTitle"), none);
+            TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.noneTitle"),
+                LocMessage.Of("common.rawValue", none));
             return;
         }
         ApplyHiddenTo(Pins, PinGrouping.NextHidden(AreHidden), Locale.T("pin.card.scopeAll"));
@@ -119,7 +123,8 @@ public static class PinManager
     {
         if (CaptureGeometry.PinCommandProblem(Pins.Count) is { } none)
         {
-            TrayReporter.Report(Locale.T("pin.card.category"), Locale.T("pin.card.noneTitle"), none);
+            TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.noneTitle"),
+                LocMessage.Of("common.rawValue", none));
             return;
         }
         ApplyThroughTo(Pins, PinGrouping.NextThrough(ClickThrough), Locale.T("pin.card.scopeAll"));
@@ -129,7 +134,8 @@ public static class PinManager
     {
         if (CaptureGeometry.PinCommandProblem(Pins.Count) is { } none)
         {
-            TrayReporter.Report(Locale.T("pin.card.category"), Locale.T("pin.card.noneTitle"), none);
+            TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.noneTitle"),
+                LocMessage.Of("common.rawValue", none));
             return;
         }
         var closed = Pins.Count;
@@ -154,15 +160,16 @@ public static class PinManager
     {
         if (PinGrouping.LimitProblem(GroupRoster.Count) is { } full)
         {
-            TrayReporter.Report(Locale.T("pin.card.groupCategory"), Locale.T("pin.card.groupFullTitle"), full);
+            TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.groupFullTitle"),
+                LocMessage.Of("common.rawValue", full));
             return;
         }
         Detach(pin);
         var group = new PinGroup(++_nextSerial, pin);
         GroupRoster.Add(group);
         StarLog.Info($"[Pin] {group.Name}＝1 张");
-        TrayReporter.Report(Locale.T("pin.card.groupCategory"), Locale.T("pin.card.groupedTitle"),
-            Locale.Fmt("pin.card.groupedBody", PinGrouping.GroupLabel(group.Name, 1), Locale.T("pin.card.groupCategory")));
+        TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.groupedTitle"),
+            LocMessage.Of("pin.card.groupedBody", PinGrouping.GroupLabel(group.Name, 1), LocMessage.Of("pin.card.groupCategory")));
     });
 
     /// <summary>把这一张并进已有的一组（先从原来的组里摘出来，组号因此可能变少一行）。</summary>
@@ -172,15 +179,15 @@ public static class PinManager
         if (target is null)
         {
             // 菜单是右键那一刻现取的，走到这里时那一组可能已经被关掉了：说清楚，别让人以为并进去了。
-            TrayReporter.Report(Locale.T("pin.card.groupCategory"), Locale.T("pin.card.groupGoneTitle"),
-                Locale.Fmt("pin.card.goneBeforeBody", PinGrouping.NameOf(serial)));
+            TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.groupGoneTitle"),
+                LocMessage.Of("pin.card.goneBeforeBody", PinGrouping.NameOf(serial)));
             return;
         }
         Detach(pin);
         target.Members.Add(pin);
         StarLog.Info($"[Pin] 并入 {target.Name}＝{target.Members.Count} 张");
-        TrayReporter.Report(Locale.T("pin.card.groupCategory"), Locale.T("pin.card.joinedTitle"),
-            Locale.Fmt("pin.groupLabel", target.Name, target.Members.Count));
+        TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.joinedTitle"),
+            LocMessage.Of("pin.groupLabel", target.Name, target.Members.Count));
     });
 
     /// <summary>从当前组里出来。整组只剩一张时它出来就等于空组 ⇒ 那一组一起消失。</summary>
@@ -190,8 +197,8 @@ public static class PinManager
         if (from is null) return;
         Detach(pin);
         StarLog.Info($"[Pin] 已从 {from.Name} 移出");
-        TrayReporter.Report(Locale.T("pin.card.groupCategory"), Locale.T("pin.card.leftTitle"),
-            Locale.Fmt("pin.card.leftBody", from.Name, from.Members.Count));
+        TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.leftTitle"),
+            LocMessage.Of("pin.card.leftBody", from.Name, from.Members.Count));
     });
 
     /// <summary>
@@ -207,8 +214,8 @@ public static class PinManager
         {
             if (Find(serial) is not { } group)
             {
-                TrayReporter.Report(Locale.T("pin.card.groupCategory"), Locale.T("pin.card.groupGoneTitle"),
-                    Locale.Fmt("pin.card.goneOnClickBody", PinGrouping.NameOf(serial)));
+                TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.groupGoneTitle"),
+                    LocMessage.Of("pin.card.goneOnClickBody", PinGrouping.NameOf(serial)));
                 return;
             }
             switch (action)
@@ -237,8 +244,8 @@ public static class PinManager
         }
         Prune();
         StarLog.Info($"[Pin] 已关闭 {group.Name}（{closed} 张）");
-        TrayReporter.Report(Locale.T("pin.card.groupCategory"), Locale.T("pin.card.groupClosedTitle"),
-            Locale.Fmt("pin.groupLabel", group.Name, closed));
+        TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.groupClosedTitle"),
+            LocMessage.Of("pin.groupLabel", group.Name, closed));
     }
 
     private static void ApplyHiddenTo(List<CaptureOverlayWindow> targets, bool hidden, string scope)
@@ -257,8 +264,8 @@ public static class PinManager
         var failed = targets.Count(pin => !pin.ApplyClickThrough(through));
         if (failed > 0)
         {
-            TrayReporter.Report(Locale.T("pin.card.category"), Locale.T("pin.card.throughPartialTitle"),
-                Locale.Fmt("pin.card.throughPartialBody", failed, targets.Count, scope));
+            TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.throughPartialTitle"),
+                LocMessage.Of("pin.card.throughPartialBody", failed, targets.Count, scope));
             return;
         }
         StarLog.Info($"[Pin] 鼠标穿透＝{(through ? "开" : "关")}（{scope} {targets.Count} 张）");

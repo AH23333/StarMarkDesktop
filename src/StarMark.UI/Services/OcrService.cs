@@ -38,12 +38,13 @@ public static class OcrService
         var problem = CaptureGeometry.CropProblem(boxed, frame.Bounds);
         if (problem is not null)
         {
-            TrayReporter.Report(Locale.T("ocr.card.category"), Locale.T("ocr.card.failedTitle"), problem);
+            TrayReporter.Report(LocMessage.Of("ocr.card.category"), LocMessage.Of("ocr.card.failedTitle"),
+                LocMessage.Of("common.rawValue", problem));
             return Task.CompletedTask;
         }
         var (ox, oy) = CaptureGeometry.CropOffset(boxed, frame.Bounds);
         var pixels = GdiScreenCapture.Crop(new FrameCopyRequest(frame, ox, oy, boxed.Width, boxed.Height));
-        return CopyTextFromPixelsAsync(pixels, boxed.Width, boxed.Height, Locale.T("ocr.card.category"));
+        return CopyTextFromPixelsAsync(pixels, boxed.Width, boxed.Height, LocMessage.Of("ocr.card.category"));
     }
 
     /// <summary>
@@ -51,13 +52,13 @@ public static class OcrService
     /// <para><paramref name="category"/> 必传的理由与 <c>ScreenshotService.CopyPixelsAsync</c> 同一颗：
     /// 那颗词会被拼进卡片抬头＝上屏，带默认值＝"忘了传也算说过话"（托盘那条入口与遮罩窗那两态说的不是同一族话）。</para>
     /// </summary>
-    public static async Task CopyTextFromPixelsAsync(byte[] pixels, int width, int height, string category)
+    public static async Task CopyTextFromPixelsAsync(byte[] pixels, int width, int height, LocMessage category)
     {
         var read = await OcrPipeline.ReadAsync(pixels, width, height);
         if (!read.Ok)
         {
-            TrayReporter.Report(category, Locale.T("ocr.card.failedTitle"),
-                (read.Error ?? Locale.T("ocr.card.noReason")) + read.HowParenthesized);
+            TrayReporter.Report(category, LocMessage.Of("ocr.card.failedTitle"),
+                LocMessage.Of("common.rawValue", (read.Error ?? Locale.T("ocr.card.noReason")) + read.HowParenthesized));
             return;
         }
 
@@ -65,18 +66,20 @@ public static class OcrService
         {
             // 这是"识别成功但没有文字"，与"引擎坏了"是两件事，必须分开说：
             // 前者让用户换一块有字/更大的区域再试，后者是程序该修的问题
-            TrayReporter.Report(category, Locale.T("ocr.card.emptyTitle"), problem + read.HowParenthesized);
+            TrayReporter.Report(category, LocMessage.Of("ocr.card.emptyTitle"),
+                LocMessage.Of("common.rawValue", problem + read.HowParenthesized));
             return;
         }
 
         if (!TryCopyText(read.Text, out var copyError))
         {
-            TrayReporter.Report(category, Locale.T("capture.card.copyFailedTitle"),
-                Locale.Fmt("ocr.card.copyFailedBody", read.Chars, copyError));
+            TrayReporter.Report(category, LocMessage.Of("capture.card.copyFailedTitle"),
+                LocMessage.Of("ocr.card.copyFailedBody", read.Chars, copyError));
             return;
         }
-        TrayReporter.Report(category, Locale.T("ocr.card.copiedTitle"),
-            Locale.Fmt("ocr.card.copiedBody", read.Chars, read.HowParenthesized) + OcrText.Preview(read.Text));
+        TrayReporter.Report(category, LocMessage.Of("ocr.card.copiedTitle"),
+            LocMessage.Of("common.rawValue", Locale.Fmt("ocr.card.copiedBody", read.Chars, read.HowParenthesized)
+                + OcrText.Preview(read.Text)));
     }
 
     /// <summary>写剪贴板。失败必须报出来（用户下一步就是粘贴），不能只记日志。</summary>

@@ -125,14 +125,15 @@ public partial class SettingsPageViewModel
         try
         {
             var removed = await repo.DeleteFileEntriesAsync(ids, CancellationToken.None);
-            App.MainWindow?.ShowNotice(removed > 0 ? "已清掉" : "已经没有这些行了",
-                removed > 0 ? $"删掉 {removed} 条记录；磁盘上的文件没有被改动。"
-                            : "它们在你点这一下之前就已经不在库里了（可能刚清过一遍）。");
+            App.MainWindow?.ShowNotice(
+                removed > 0 ? LocMessage.Of("settings.local.clearedTitle") : LocMessage.Of("settings.local.nothingLeftTitle"),
+                removed > 0 ? LocMessage.Of("settings.local.clearedBody", removed)
+                            : LocMessage.Of("settings.local.nothingLeftBody"));
         }
         catch (Exception ex)
         {
             StarLog.Error("清理失联的本机文件条目失败", ex);
-            App.MainWindow?.ShowError("清理失败", ex.Message);
+            App.MainWindow?.ShowError(LocMessage.Of("settings.local.cleanFailedTitle"), LocMessage.Of("common.rawValue", ex.Message));
         }
         await RescanMissingFilesAsync();
     }

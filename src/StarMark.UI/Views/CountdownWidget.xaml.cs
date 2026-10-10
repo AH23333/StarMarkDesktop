@@ -53,7 +53,8 @@ public sealed partial class CountdownWidget : UserControl, IWidgetTicker
     {
         // 正文念的是"这一行现在该叫什么"（用户没起名字时那是按当前语言现算的派生名）：
         // ⛔ 直接把 <c>item.Title</c> 递出去——批次 WI-54 之后空白标题是合法的"用派生名"，那样卡片会只剩一个抬头。
-        var delivered = NoticeCard.Show(Locale.T("widget.countdown.dueTitle"), CountdownPolicy.TitleText(item));
+        var delivered = NoticeCard.Show(LocMessage.Of("widget.countdown.dueTitle"),
+            LocMessage.Of("common.rawValue", CountdownPolicy.TitleText(item)));
         if (!delivered)
         {
             // 卡片贴不上屏幕（不在 UI 线程、拿不到显示器）⇒ 记一条日志说明"到点过、只是没能弹"，

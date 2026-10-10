@@ -58,7 +58,7 @@ public partial class HiddenPageViewModel : ObservableObject
             // 0 行（那一行已经不在了）走同一条口径：不摘行，并把原因当面说出来，不靠这页没有的状态行（P-40）。
             if (!await _repository.SetHiddenAsync(item.Id, false, CancellationToken.None))
             {
-                var word = Locale.T("card.restore.word");
+                var word = LocMessage.Of("card.restore.word");
                 App.MainWindow?.ShowError(StateWriteNotice.Title(word), StateWriteNotice.RowGone(word));
                 return;
             }
