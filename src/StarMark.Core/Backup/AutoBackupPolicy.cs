@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Backup;
 
@@ -50,11 +51,23 @@ public static class AutoBackupPolicy
     /// </summary>
     public static readonly int[] IntervalOptions = { 6, 24, 72, 168 };
 
-    /// <summary>下拉的档位文案（与 <see cref="IntervalOptions"/> 同序、同处生成）：
-    /// 界面 <c>ItemsSource</c> 直接读它，XAML 里就没有第二份档位表——
-    /// "下拉里有 120 小时但判据不认"这种分岔只能靠一处事实来防。</summary>
-    public static IReadOnlyList<string> IntervalLabels { get; } =
-        IntervalOptions.Select(h => "每 " + (h < 24 ? $"{h} 小时" : $"{h / 24} 天")).ToList();
+    /// <summary>
+    /// 下拉每一档怎么说的那<b>四颗键</b>，<b>顺序＝<see cref="IntervalOptions"/></b>（批次 WI-62 把这句从 Core 拼好的中文标签改成交键）。
+    /// <para>为什么一档一颗键、而不是 <c>"每 {0} 小时"</c> ＋小时数当实参：这一排进的是<b>「数据项＋模板」的下拉</b>，
+    /// 而模板里那颗 <c>TextBlock</c> 只能交出一颗键——带实参的那条路要靠代码调 <c>LocText.SetKey(el, key, args)</c>
+    /// 填信箱，模板没有那个机会（护眼那一排在批次 WI-37-B 就踩过：真机英文档闭合的格子显示 <c>(0) min</c>＝坑表 #317）。
+    /// 且 72/168 两档本来就不说小时而说<b>天</b>，一个 <c>{0}</c> 装不下两种单位。</para>
+    /// <para>代价说清楚：<b>小时数在表与 <see cref="IntervalOptions"/> 各写一次</b>，所以 <c>AutoBackupPolicyTests</c>
+    /// 逐颗钉"这一行的三列都带着它自己那个数"——加一档忘了加行、改了档位忘了改行都会红（✅EyeRestPolicy 同一口径）。</para>
+    /// </summary>
+    public static readonly string[] IntervalKeys =
+        { "settings.data.autoBackupInterval.6", "settings.data.autoBackupInterval.24",
+          "settings.data.autoBackupInterval.72", "settings.data.autoBackupInterval.168" };
+
+    /// <summary>某一档是多少小时 ⇒ 那一行怎么说。<b>交的是那颗键，不是成品串</b>：
+    /// Core 一旦拼出中文句子，换语言那一刻没人会回去重算（P-172 那一族的形状）。</summary>
+    public static LocMessage IntervalMessage(int hours)
+        => LocMessage.Of(IntervalKeys[Math.Clamp(IntervalIndexOf(hours), 0, IntervalKeys.Length - 1)]);
 
     /// <summary>把落盘里读出来的间隔夹回合法档位；脏值（0、负数、没见过的数）一律回默认档。</summary>
     public static int ClampInterval(int hours)
@@ -134,16 +147,18 @@ public static class AutoBackupPolicy
     /// 那样 <c>backups-evil</c> 会被当成 <c>backups</c> 里面）。
     /// </para>
     /// </summary>
-    public static string? DeleteRefusal(string? path, string directory)
+    /// <returns>拒绝原因那颗「键＋实参」（界面要照着它说清为什么没删），<c>null</c>＝可以删。
+    /// 批次 WI-62（P-193）之前这里回的是拼好的中文句子，而念它的是设置页那一行状态——Core 取词＝那行停在旧语言。</returns>
+    public static LocMessage? DeleteRefusal(string? path, string directory)
     {
-        if (string.IsNullOrWhiteSpace(path)) return "没指定要删哪一份备份。";
+        if (string.IsNullOrWhiteSpace(path)) return LocMessage.Of("settings.data.backup.deleteNoPath");
         var full = Path.GetFullPath(path);
         var parent = Path.GetDirectoryName(full);
         var wanted = Path.GetFullPath(directory);
         if (!string.Equals(parent, wanted, StringComparison.OrdinalIgnoreCase))
-            return $"{Path.GetFileName(full)} 不在备份目录里，程序不代删。";
+            return LocMessage.Of("settings.data.backup.deleteOutside", Path.GetFileName(full));
         if (!BackupContainer.IsBackupPath(full))
-            return $"{Path.GetFileName(full)} 不是备份件（只认 .json / .zip），不删。";
+            return LocMessage.Of("settings.data.backup.deleteNotBackup", Path.GetFileName(full));
         return null;
     }
 

@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Backup;
 using StarMark.Abstractions.Clipboard;
+using StarMark.Abstractions.I18n;
 using StarMark.Integrations.Clipboard;
 using StarMark.Core.Widgets;
 using StarLog = StarMark.Abstractions.StarLog;
@@ -153,6 +154,8 @@ public sealed class BackupService
     /// 读取并校验备份文件——<b>两种载体都从这一个门进</b>：<c>.json</c> 直接读，
     /// 带附件的 <c>.zip</c> 读它里面那份清单（校验与版本判定完全同一套，附件不改变清单的字节）。
     /// 校验和不匹配或版本不兼容时抛 <see cref="BackupFormatException"/>。
+    /// <para>批次 WI-62（P-193）：那六句拒绝理由一律交「键＋实参」——念它们的是设置页「数据」那一行
+    /// （<c>BackupStatus</c>，长命宿主），Core 当场取词就等于把那行钉在"上一次导入那一刻的语言"上。</para>
     /// </summary>
     public static async Task<BackupEnvelope> ReadAsync(string path, CancellationToken ct = default)
     {
@@ -161,30 +164,31 @@ public sealed class BackupService
         try
         {
             env = JsonSerializer.Deserialize<BackupEnvelope>(text, JsonOptions)
-                  ?? throw new BackupFormatException("备份文件不是合法的 JSON。");
+                  ?? throw new BackupFormatException(LocMessage.Of("settings.data.backup.badJson"));
         }
         catch (JsonException ex)
         {
             // 半份文件、被改过后缀的压缩包、手改坏一个字符的清单都落到这里。
             // 报成"读不懂"而不是把 .NET 那句英文（"The JSON value could not be converted to …"）递给用户：
             // 前者是可执行的结论（这份文件不能用，换一份），后者只会让人以为是应用坏了。
-            throw new BackupFormatException(
-                $"这个备份文件读不懂（坏在 {(string.IsNullOrEmpty(ex.Path) ? "开头" : ex.Path)}）：可能没写完或已损坏，已拒绝导入。");
+            // 「开头」那颗也是句子的一部分 ⇒ 交成<b>嵌套的身份</b>（实参带 LocMessage，贴上屏幕那一刻才取词）。
+            throw new BackupFormatException(LocMessage.Of("settings.data.backup.unreadable",
+                string.IsNullOrEmpty(ex.Path) ? LocMessage.Of("settings.data.backup.pathStart") : ex.Path));
         }
 
         if (!string.Equals(env.App, BackupEnvelope.AppId, StringComparison.Ordinal))
-            throw new BackupFormatException($"这不是 StarMark 桌面版备份（app={env.App}）。");
+            throw new BackupFormatException(LocMessage.Of("settings.data.backup.notStarMark", env.App));
 
         if (env.Version > BackupEnvelope.CurrentVersion)
             throw new BackupFormatException(
-                $"备份版本 {env.Version} 高于当前支持的 {BackupEnvelope.CurrentVersion}，请升级应用后再导入。");
+                LocMessage.Of("settings.data.backup.tooNew", env.Version, BackupEnvelope.CurrentVersion));
 
         if (string.IsNullOrEmpty(env.Checksum))
-            throw new BackupFormatException("备份文件缺少校验和，无法验证完整性，已拒绝导入。");
+            throw new BackupFormatException(LocMessage.Of("settings.data.backup.noChecksum"));
 
         var actual = ComputeChecksum(env.Payload);
         if (!string.Equals(actual, env.Checksum, StringComparison.Ordinal))
-            throw new BackupFormatException("校验和不匹配，备份文件已损坏或被篡改，已拒绝导入。");
+            throw new BackupFormatException(LocMessage.Of("settings.data.backup.checksumMismatch"));
 
         return env;
     }
@@ -238,7 +242,7 @@ public sealed class BackupService
             return new RestoreResult
             {
                 Success = false,
-                Message = $"写入恢复前快照失败，已中止导入以免无法回滚：{ex.Message}",
+                Message = LocMessage.Of("settings.data.backup.snapshotFailed", ex.Message),
             };
         }
 
@@ -289,9 +293,11 @@ public sealed class BackupService
             // 用户会误以为组件也一并还原了。这里把失败并入文案，Success 仍为 true（条目本体确已还原）。
             // 原因必须一起给出：旧文案是"请稍后重试或检查 %APPDATA% 是否被占用"，等于让用户去猜
             // 一个日志里已经写明的东西（P-54）。
-            var widgetsNote = (!string.IsNullOrEmpty(p.WidgetsJson) && !widgetsRestored)
-                ? $" 但桌面组件数据未能写入（组件保持原状）：{widgetsError}"
-                : string.Empty;
+            // 并入的方式⛔ 在 C# 里拼字符串：那半句是<b>独立的一句话</b>，交成实参递进外层句子的槽里
+            // （✅WI-61c 那颗 `settings.data.autoBackupSentence` 同一口径；没有的那一档交 null，格式化时那一格自己变空）。
+            var widgetsNote = !string.IsNullOrEmpty(p.WidgetsJson) && !widgetsRestored
+                ? LocMessage.Of("settings.data.backup.widgetsNotWritten", widgetsError)
+                : null;
 
             // 图片本体的那句必须按<b>这一份备份到底带没带</b>来说，三种事实三种话（§3-Q2 反批：b 期文案
             // 在 a 期上线前不许撤——现在 a 上线了，就要按事实分支，留着它同样是假话）：
@@ -304,28 +310,23 @@ public sealed class BackupService
             var clipImageNote = clip.PackageEntries switch
             {
                 > 0 => ClipPackageSentence(clip),
-                0 when clipImageCount == 0 => string.Empty,
+                0 when clipImageCount == 0 => (LocMessage?)null,
                 // 包打不开（被云盘抽成占位件、正被别的程序独占、或刚被删掉）：这时"这份备份不带图片本体"
                 // 是没资格说的——我们连里面有什么都没看见。单独一句，并把原因留在日志里。
-                0 when !clip.Opened
-                    => " 剪贴板图片：这次没能打开那份附件包（原因见日志），所以一张图片都没解出来；"
-                      + "条目已照常恢复，缺的会标成“文件缺失”，再导一次即可。",
+                0 when !clip.Opened => LocMessage.Of("settings.data.backup.clipNotOpened"),
                 // 调用方没把那份文件的路径递进来（只有不经 UI 的调用会这样）：谁也没打开过那个包，
                 // 因此"这份备份不带图片本体"这句没资格说——它是对文件内容的断言，得看过文件才配说。
                 0 when attachmentSourcePath is null
-                    => $" 其中 {clipImageCount} 条是剪贴板图片：这次没有从备份包里解出任何图片文件，"
-                      + "这些条目只有在本机图片目录里还留着对应文件时才打得开，缺的会标成“文件缺失”。",
-                _ => $" 其中 {clipImageCount} 条是剪贴板图片：这份备份只带条目与文件名、不带图片本体"
-                      + "（导出时那颗开关是关的，或它是带附件之前的版本），所以这些条目只有在本机图片目录里"
-                      + "还留着对应文件时才打得开，缺的会标成“文件缺失”。",
+                    => LocMessage.Of("settings.data.backup.clipNoSource", clipImageCount),
+                _ => LocMessage.Of("settings.data.backup.clipManifestOnly", clipImageCount),
             };
 
             return new RestoreResult
             {
                 Success = true,
-                Message = (mode == RestoreMode.Replace
-                    ? $"已覆盖恢复 {p.Items.Count} 条条目。"
-                    : $"已合并恢复 {p.Items.Count} 条条目。") + widgetsNote + clipImageNote,
+                Message = LocMessage.Of(
+                    mode == RestoreMode.Replace ? "settings.data.backup.restoredReplace" : "settings.data.backup.restoredMerge",
+                    p.Items.Count, widgetsNote, clipImageNote),
                 SnapshotPath = snapshotPath,
                 ItemsRestored = p.Items.Count,
                 UserStatesRestored = p.UserState.Count,
@@ -340,10 +341,11 @@ public sealed class BackupService
         catch (Exception ex)
         {
             StarLog.Error("恢复失败", ex);
+            // 换行⛔ 写进表（规则 #100：表里不许有控制字符，换行是布局）⇒ 由实参 {2} 递进去。
             return new RestoreResult
             {
                 Success = false,
-                Message = $"恢复失败：{ex.Message}\n已保留恢复前快照：{snapshotPath}",
+                Message = LocMessage.Of("settings.data.backup.restoreFailed", ex.Message, snapshotPath, "\n"),
                 SnapshotPath = snapshotPath,
             };
         }
@@ -423,11 +425,14 @@ public sealed class BackupService
     /// 程序删掉用户任意文件的入口。</para>
     /// <para>返回给界面看的回执（成功与失败都要有下文，静默删或静默不删都不许）。</para>
     /// </summary>
-    public static string DeleteBackup(string? path)
+    /// <param name="path">要删的那一份的完整路径。</param>
+    /// <returns>给界面看的那句回执的「键＋实参」（⛔ 成品字：那一行是设置页「数据」那一屏的读数，批次 WI-62／P-193）。</returns>
+    public static LocMessage DeleteBackup(string? path)
     {
         if (AutoBackupPolicy.DeleteRefusal(path, SnapshotDirectory) is { } refusal)
         {
-            StarLog.Warn($"拒绝删除备份：{refusal}");
+            // 日志这一侧⛔ 交表（它是给查问题的人看的），所以这里才取词——那句只许出现在这一行。
+            StarLog.Warn($"拒绝删除备份：{refusal.Render()}");
             return refusal;
         }
         var full = Path.GetFullPath(path!);
@@ -435,13 +440,13 @@ public sealed class BackupService
         {
             File.Delete(full);
             StarLog.Info($"已删除备份件：{Path.GetFileName(full)}");
-            return $"已删除 {Path.GetFileName(full)}。";
+            return LocMessage.Of("settings.data.backup.deleted", Path.GetFileName(full));
         }
         catch (Exception ex)
         {
             // 被云盘/杀软占用时的失败：说清没删掉，列表还在原地，别让人以为已经腾出空间了。
             StarLog.Warn($"删除备份件失败（{Path.GetFileName(full)}）：{ex.Message}");
-            return $"没能删除：{ex.Message}";
+            return LocMessage.Of("settings.data.backup.deleteFailed", ex.Message);
         }
     }
 
@@ -557,20 +562,21 @@ public sealed class BackupService
     /// <summary>
     /// "这一份包到底把图片带回来了没有"那句话。<b>四个数分四档说，逗号跟着实际出现的那几档走</b>——
     /// 用嵌套三元拼出来的句子在"没跳过也没失败，但有行没带着文件"时会写出"写回 2 个，；还有…"这种话。
+    /// <para>批次 WI-62（P-193）之后，"出现才拼"这件事由<b>表里那三行自己带的连接号</b>承担：外层那颗句子有
+    /// 三颗可选槽，没出现的那一档交 <c>null</c>（格式化时那一格自己变空，✅WI-41 那颗 <c>settings.ai.usage.full</c> 同一口径），
+    /// 而 Core 只交身份、⛔ 在这里取词。</para>
     /// </summary>
-    private static string ClipPackageSentence(
+    private static LocMessage ClipPackageSentence(
         (int Written, int Skipped, int Failed, int PackageEntries, int RowsWithoutPicture, bool Opened) clip)
-    {
-        var sb = new StringBuilder();
-        sb.Append($" 剪贴板图片：这份包里带着 {clip.PackageEntries} 个图片文件，写回 {clip.Written} 个");
-        if (clip.Skipped > 0)
-            sb.Append($"，跳过 {clip.Skipped} 个（本机已有同名文件，或那个名字不属于任何一条历史）");
-        if (clip.Failed > 0)
-            sb.Append($"，另有 {clip.Failed} 个没能写入（原因见日志）");
-        if (clip.RowsWithoutPicture > 0)
-            sb.Append($"；还有 {clip.RowsWithoutPicture} 条图片历史在这份包里就没有对应的文件，会标成“文件缺失”");
-        return sb.Append("。").ToString();
-    }
+        => LocMessage.Of(
+            "settings.data.backup.clipCarried",
+            clip.PackageEntries,
+            clip.Written,
+            clip.Skipped > 0 ? LocMessage.Of("settings.data.backup.clipSkipped", clip.Skipped) : null,
+            clip.Failed > 0 ? LocMessage.Of("settings.data.backup.clipFailed", clip.Failed) : null,
+            clip.RowsWithoutPicture > 0
+                ? LocMessage.Of("settings.data.backup.clipRowsMissing", clip.RowsWithoutPicture)
+                : null);
 
     /// <summary>
     /// 动数据前的语义校验（校验和只保证字节完整，不保证载荷可用）。缺业务键的条目直接拒绝导入并原样
@@ -578,15 +584,15 @@ public sealed class BackupService
     /// "<b>要么是可读对象、要么是 null</b>"（P-17）——把「Replace 清库后才崩、留下半截空库」的载荷挡在
     /// 清库之前。合法备份恒满足，行为不变。返回 null 表示通过。
     /// </summary>
-    private static string? ValidatePayload(BackupPayload? p)
+    private static LocMessage? ValidatePayload(BackupPayload? p)
     {
         // STJ 会把 JSON 显式 null 覆盖到集合的 `= new()` 初始值之上，故 payload 或任一必需集合
         // 都可能为 null——直接 RemoveAll 会 NRE 且发生在 try 之外、以异常形式逃出本应"返回失败"的方法。
         // null（字段缺失/被置 null）语义上≠空备份 `[]`，属畸形载荷，一律在清库之前拒绝。
         if (p is null)
-            return "备份载荷缺失（payload 为 null），已拒绝导入，未改动现有数据。";
+            return LocMessage.Of("settings.data.backup.payloadMissing");
         if (p.Items is null || p.UserState is null || p.Tags is null || p.ItemTags is null)
-            return "备份载荷缺少必需集合（items/user_state/tags/item_tags 存在 null），已拒绝导入，未改动现有数据。";
+            return LocMessage.Of("settings.data.backup.payloadSetsMissing");
 
         p.Items.RemoveAll(it => it is null);
         p.UserState.RemoveAll(s => s is null || string.IsNullOrWhiteSpace(s.Source) || string.IsNullOrWhiteSpace(s.SourceId));
@@ -596,7 +602,7 @@ public sealed class BackupService
         foreach (var it in p.Items)
         {
             if (string.IsNullOrWhiteSpace(it.Source) || string.IsNullOrWhiteSpace(it.SourceId))
-                return "备份条目缺 source/source_id（业务键），已拒绝导入，未改动现有数据。";
+                return LocMessage.Of("settings.data.backup.itemKeyMissing");
             it.Title ??= string.Empty;
             it.Subtitle ??= string.Empty;
             it.Uri ??= string.Empty;

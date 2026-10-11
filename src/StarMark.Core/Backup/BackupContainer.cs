@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Clipboard;
+using StarMark.Abstractions.I18n;
 using StarMark.Integrations.Clipboard;
 
 namespace StarMark.Core.Backup;
@@ -70,7 +71,7 @@ public static class BackupContainer
         {
             using var zip = ZipFile.OpenRead(path);
             var entry = zip.GetEntry(ManifestEntryName)
-                ?? throw new BackupFormatException("这个压缩包里没找到备份清单（backup.json），已拒绝导入。");
+                ?? throw new BackupFormatException(LocMessage.Of("settings.data.backup.manifestMissing"));
             using var reader = new StreamReader(entry.Open());
             return await reader.ReadToEndAsync(ct);
         }
@@ -78,8 +79,9 @@ public static class BackupContainer
         catch (Exception ex)
         {
             // 半个 zip（导出途中断电/磁盘满）、被改过后缀的 .json、损坏的包都落到这里。
-            // 报成"备份文件损坏"而不抛 InvalidDataFileException：调用方只把消息显示到状态栏。
-            throw new BackupFormatException($"这个备份包打不开（{ex.GetType().Name}）：文件可能没写完或已损坏，已拒绝导入。");
+            // 报成"备份文件损坏"而不抛 InvalidDataFileException：调用方只把那句话贴到状态栏那一行。
+            // 异常类型名是机器事实 ⇒ 走实参⛔ 抄进句子（✅P-178 口径，批次 WI-62／P-193）。
+            throw new BackupFormatException(LocMessage.Of("settings.data.backup.packageUnopenable", ex.GetType().Name));
         }
     }
 

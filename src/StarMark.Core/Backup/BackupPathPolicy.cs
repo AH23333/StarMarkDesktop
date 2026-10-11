@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.IO;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Backup;
 
@@ -24,15 +25,16 @@ public static class BackupPathPolicy
     /// 归一用户手输的导出目标：去引号/空白、补扩展名、展开为绝对路径。
     /// <para>只填文件名时补 <c>.json</c>——实际写出去的是什么载体由内容决定（带图就是同名 <c>.zip</c>），
     /// 返回值里的路径与 <c>ExportWithClipImagesAsync</c> 报回来的路径可能差一个扩展名，界面因此要显示后者。</para>
-    /// 返回 (可用路径, 错误)：错误非 null 时前者为 null，调用方把错误原样回显给用户再问一次。
+    /// 返回 (可用路径, 错误)：错误非 null 时前者为 null，调用方带着那句<b>身份</b>再问一次——
+    /// 错误交的是「键＋实参」(LocMessage)，⛔ 成品字：那一句要贴到屏幕上（批次 WI-62／P-193）。
     /// </summary>
     /// <param name="raw">用户输入（可为 null＝取消）。</param>
     /// <param name="defaultDirectory">默认目录；输入只给文件名时落到这里。</param>
-    public static (string? Path, string? Error) ForExport(string? raw, string defaultDirectory)
+    public static (string? Path, LocMessage? Error) ForExport(string? raw, string defaultDirectory)
     {
         var text = Clean(raw);
         if (text is null) return (null, null);                                   // 取消
-        if (text.Length == 0) return (null, "请填写保存位置（只填文件名会存到备份目录）。");
+        if (text.Length == 0) return (null, LocMessage.Of("settings.data.backup.needSavePath"));
 
         // 只给文件名 → 落到默认目录，省掉"整盘路径"这种多余输入。
         if (!HasDirectory(text))
@@ -42,18 +44,18 @@ public static class BackupPathPolicy
         if (full is null) return (null, err);
 
         var stem = Path.GetFileNameWithoutExtension(full);
-        if (stem.Length == 0) return (null, "文件名不能为空。");
+        if (stem.Length == 0) return (null, LocMessage.Of("settings.data.backup.emptyFileName"));
         if (Array.Exists(ReservedStems, s => string.Equals(s, stem, StringComparison.OrdinalIgnoreCase)))
-            return (null, $"「{stem}」是 Windows 保留名，换一个文件名。");
+            return (null, LocMessage.Of("settings.data.backup.reservedName", stem));
 
         var ext = Path.GetExtension(full);
         if (ext.Length == 0) full += BackupContainer.ManifestExtension;     // 默认仍是只带条目的 .json；带不带图由内容决定实际写出的载体
         else if (!BackupContainer.IsBackupPath(full))
-            return (null, "备份文件要用 .json 或 .zip 扩展名（直接删掉结尾的扩展名即可自动补上）。");
+            return (null, LocMessage.Of("settings.data.backup.badExtension"));
 
         var dir = Path.GetDirectoryName(full);
-        if (string.IsNullOrEmpty(dir)) return (null, "请填写包含目录的完整路径。");
-        if (!Directory.Exists(dir)) return (null, $"目录不存在：{dir}");
+        if (string.IsNullOrEmpty(dir)) return (null, LocMessage.Of("settings.data.backup.needDir"));
+        if (!Directory.Exists(dir)) return (null, LocMessage.Of("settings.data.backup.dirMissing", dir));
 
         return (full, null);
     }
@@ -61,19 +63,19 @@ public static class BackupPathPolicy
     /// <summary>归一用户手输的导入来源：必须是存在的备份文件（<c>.json</c> 或带附件的 <c>.zip</c>）。
     /// <para>"哪些扩展名算备份"必须与 <see cref="BackupContainer.IsBackupPath"/> 同一份口径：
     /// 这里各写一遍，就会出现"列表里看得见、输入框里说不是备份文件"这种自相矛盾。</para></summary>
-    public static (string? Path, string? Error) ForImport(string? raw)
+    public static (string? Path, LocMessage? Error) ForImport(string? raw)
     {
         var text = Clean(raw);
         if (text is null) return (null, null);
-        if (text.Length == 0) return (null, "请填写要导入的备份文件完整路径。");
+        if (text.Length == 0) return (null, LocMessage.Of("settings.data.backup.needFilePath"));
 
         var full = TryFull(text, out var err);
         if (full is null) return (null, err);
 
         if (!BackupContainer.IsBackupPath(full))
-            return (null, "请选择 .json 或 .zip 备份文件（带图片的那一份导出是 .zip）。");
+            return (null, LocMessage.Of("settings.data.backup.importBadExtension"));
         if (!File.Exists(full))
-            return (null, $"文件不存在：{full}");
+            return (null, LocMessage.Of("settings.data.backup.fileMissing", full));
 
         return (full, null);
     }
@@ -96,7 +98,7 @@ public static class BackupPathPolicy
         catch (ArgumentException) { return false; }
     }
 
-    private static string? TryFull(string text, out string? error)
+    private static string? TryFull(string text, out LocMessage? error)
     {
         error = null;
         try
@@ -105,7 +107,7 @@ public static class BackupPathPolicy
         }
         catch (Exception ex)
         {
-            error = $"路径无法解析：{ex.Message}";
+            error = LocMessage.Of("settings.data.backup.pathUnparsable", ex.Message);
             return null;
         }
     }

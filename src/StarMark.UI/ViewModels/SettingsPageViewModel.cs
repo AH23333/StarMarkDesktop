@@ -136,8 +136,10 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty] private LocMessage? _saveErrorMessage;
     [ObservableProperty] private bool _hasSaveError;
 
-    // 备份与恢复（P0-2）状态反馈
-    [ObservableProperty] private string _backupStatus = string.Empty;
+    // 备份与恢复（P0-2）状态反馈。
+    // ⚠ 这一颗从前是 `string`（批次 WI-62 起交身份）：它念的是 Core 供的那半句（`DeleteBackup`／`RestoreResult.Message`），
+    // 只交 UI 这一半就是同一行半中半英——那两半在这一批一起进表（✅WI-61c 那颗跨层证人点名的正是这一行）。
+    [ObservableProperty] private LocMessage? _backupStatus;
     [ObservableProperty] private bool _isBackupBusy;
 
     /// <summary>
@@ -180,7 +182,7 @@ public partial class SettingsPageViewModel : ObservableObject
         catch (Exception ex)
         {
             StarLog.Warn($"列出本机备份失败：{ex.Message}");
-            BackupStatus = $"未能列出备份文件：{ex.Message}";
+            BackupStatus = LocMessage.Of("settings.data.backup.listFailed", ex.Message);
         }
         OnPropertyChanged(nameof(HasBackups));
         OnPropertyChanged(nameof(BackupsHeader));
@@ -199,8 +201,16 @@ public partial class SettingsPageViewModel : ObservableObject
 
     [ObservableProperty] private LocMessage? _autoBackupStatus;
 
-    /// <summary>下拉的档位文案，与 <see cref="AutoBackupIntervalIndex"/> 同序（一处事实：档位与文案都在 Core）。</summary>
-    public IReadOnlyList<string> AutoBackupIntervalOptions => AutoBackupPolicy.IntervalLabels;
+    /// <summary>
+    /// 下拉的档位（与 <see cref="AutoBackupIntervalIndex"/> 同序；一处事实：档位与键名都在 Core）。
+    /// <para>批次 WI-62 起交 <see cref="LocOption"/> 而不是 Core 拼好的中文标签——闭着的那格显示的是选中那一刻
+    /// 从 <c>Content</c> 抄走的快照，换语言时 <c>LocText</c> 只重贴"还活在可视树里、自己带着键"的元素（坑表 #272/#275，
+    /// 护眼那一排在 ✅WI-37-B 就是这么改的）。<see cref="LocOption.Value"/> 交的是<b>小时数本身</b>⛔ 拿显示文字当身份。</para>
+    /// </summary>
+    public IReadOnlyList<LocOption> AutoBackupIntervalOptions { get; } =
+        AutoBackupPolicy.IntervalOptions
+            .Select((hours, index) => new LocOption(AutoBackupPolicy.IntervalKeys[index], string.Empty, hours))
+            .ToList();
 
     private int AutoBackupIntervalHours => AutoBackupPolicy.IntervalAt(AutoBackupIntervalIndex);
 

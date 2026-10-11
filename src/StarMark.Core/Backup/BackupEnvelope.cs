@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Backup;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Backup;
 
@@ -80,7 +81,16 @@ public sealed class BackupPayload
 public sealed class RestoreResult
 {
     public bool Success { get; init; }
-    public string Message { get; init; } = string.Empty;
+
+    /// <summary>
+    /// 恢复回执那句话的<b>身份</b>（键＋实参），⛔ 一句成品字（批次 WI-62／P-193）。
+    /// <para>为什么这一颗必须交身份而不是字符串：念它的是设置页「数据」那一行（<c>BackupStatus</c>），
+    /// 而那一行是<b>长命宿主</b>上的读数。Core 在被调用那一刻按当时语言拼好，换语言就没人回去重算 ⇒
+    /// 屏幕上停的是"上一次恢复那一刻的语言"，而同卡的「本机备份」「自动备份」那两行早已跟着语言走——
+    /// 同一张卡片两行两种语言就是这一族缺陷的样子（✅WI-61c 那颗跨层证人点名的正是这一行）。</para>
+    /// <para>⛔ 在这里 <c>.Render()</c>：那条出口只留给<b>不上屏幕</b>的消费者（日志、通知文本）。</para>
+    /// </summary>
+    public LocMessage? Message { get; init; }
 
     /// <summary>恢复前自动落盘的快照路径；失败时可用于回滚。</summary>
     public string? SnapshotPath { get; init; }
@@ -101,8 +111,16 @@ public sealed class RestoreResult
     public int ClipImagesFailed { get; init; }
 }
 
-/// <summary>备份文件损坏或不兼容。</summary>
+/// <summary>
+/// 备份文件损坏或不兼容。<b>给人看的那句话交的是身份（<see cref="Reason"/>），不是拼好的字</b>（批次 WI-62／P-193）。
+/// <para>为什么⛔ 把句子写进 <see cref="Exception.Message"/>：唯一的消费者是设置页那一行状态（<c>BackupStatus</c>），
+/// 而 <c>Message</c> 在抛出那一刻就定稿了——那一行换语言不会重抛，屏幕上就停在旧语言。
+/// <c>Message</c> 因此只装<b>键名</b>（日志里可 grep，⛔ 是一句翻不动的字），界面侧一律读 <see cref="Reason"/>。</para>
+/// </summary>
 public sealed class BackupFormatException : Exception
 {
-    public BackupFormatException(string message) : base(message) { }
+    /// <summary>拒绝导入那句话的「键＋实参」；按当前语言取词由宿主在贴上屏幕那一刻做。</summary>
+    public LocMessage Reason { get; }
+
+    public BackupFormatException(LocMessage reason) : base(reason.Key) => Reason = reason;
 }

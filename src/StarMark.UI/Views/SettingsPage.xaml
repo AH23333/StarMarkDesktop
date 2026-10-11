@@ -992,7 +992,8 @@
                                                i18n:LocText.Key="settings.data.autoBackupInterval"/>
                                     <ComboBox Grid.Column="1" MinWidth="120" VerticalAlignment="Center"
                                               i18n:LocText.ToolTipKey="settings.data.autoBackupIntervalTip"
-                                              ItemsSource="{x:Bind ViewModel.AutoBackupIntervalOptions}"
+                                              ItemsSource="{x:Bind ViewModel.AutoBackupIntervalOptions, Mode=OneTime}"
+                                              ItemTemplate="{StaticResource LocOptionTemplate}"
                                               SelectedIndex="{x:Bind ViewModel.AutoBackupIntervalIndex, Mode=TwoWay}"/>
                                 </Grid>
                                 <TextBlock x:Name="AutoBackupStatusText"
@@ -1070,8 +1071,8 @@
                                            Style="{StaticResource MutedText}" TextWrapping="Wrap"
                                            Visibility="{x:Bind ViewModel.HasBackups, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
 
-                                <TextBlock Text="{x:Bind ViewModel.BackupStatus, Mode=OneWay}"
-                                           Style="{StaticResource SettingRowText}"/>
+                                <TextBlock x:Name="BackupStatusText"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Border>
 
