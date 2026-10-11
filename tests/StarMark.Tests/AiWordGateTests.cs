@@ -8,8 +8,9 @@ using Xunit;
 namespace StarMark.Tests;
 
 /// <summary>
-/// 批次 WI-41（P-169 ① 最后一格 ＝ P-188 第四刀·AI 那一栏）的闸门：<b>整栏那 70 颗键只许住在表里</b>
+/// 批次 WI-41（P-169 ① 最后一格 ＝ P-188 第四刀·AI 那一栏）的闸门：<b>整栏那 71 颗键只许住在表里</b>
 /// （另有一颗 <c>settings.engine.sizeApprox</c> 住在 <c>settings.engine.*</c> 门下，由 ③ 那一格单独盯）。
+/// <para>⚠ 名单在 ✅WI-63 加过一颗（<c>settings.ai.result.noneBecause</c>＝P-195 他裁"要补上屏出口"那一刀），故 70 → 71。</para>
 /// <para>
 /// 射程＝<b>落在 AI 那一屏上的每一行 UI 层屏幕字</b>，按屏幕宿主划⛔ 按我原先那份名单划：
 /// 除 <c>SettingsPage.Ai.cs</c>／<c>SettingsPage.AiUsage.cs</c>／<c>SettingsPage.Engine.cs</c> 三档，
@@ -75,6 +76,7 @@ public sealed class AiWordGateTests : IDisposable
         "settings.ai.confirm.go",
         "settings.ai.result.full",
         "settings.ai.result.none",
+        "settings.ai.result.noneBecause",
         "settings.ai.result.count",
         "settings.ai.result.missing",
         "settings.ai.result.unknown",
@@ -147,8 +149,8 @@ public sealed class AiWordGateTests : IDisposable
     [Fact]
     public void TheRosterHasExactlyTheKeysThisBatchHandedIn()
     {
-        Assert.Equal(70, Keys.Length);
-        Assert.Equal(70, Keys.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(71, Keys.Length);
+        Assert.Equal(71, Keys.Distinct(StringComparer.Ordinal).Count());
     }
 
     /// <summary>②双向对账：每颗在表里恰好一行、在五档里恰好被点名一次、在标记里一次都没有。</summary>
@@ -385,6 +387,58 @@ public sealed class AiWordGateTests : IDisposable
         Assert.DoesNotContain("、", after, StringComparison.Ordinal);   // 外层重贴了而连接号停在上一门＝屏幕上念出混搭
         Assert.NotEqual(before, after, StringComparer.Ordinal);
         Assert.Equal(Locale.Fmt("settings.ai.groupTagLine", "书签, 待办", 2), after, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// ⑫ <b>那四发静默拒绝把"为什么"念到屏幕上</b>（✅WI-63·P-195 他裁"要补上屏出口"）。
+    /// <para>形状尺（②③）只说得了"代码交出的是键"，说不了本批真发生的三件事：
+    /// ① 登记时那句原话带结尾句号（「…没整理出可用的建议。」），而收尾那颗「。」归 <c>result.tail</c> 那一格——
+    /// 照抄上去屏幕念成「建议。。点」，只有真拼一遍才看得见（坑表 #469）；
+    /// ② 原因嵌在<b>第四层</b>交出去的槽里（full → noneBecause → budgetBlocked → unpause），⛔ 被外层吞掉；
+    /// ③ "有坏批"那一支下面已经点过同一颗 <c>FirstError</c>（<c>result.failedWith</c>），两处都念就是同一句话说两遍
+    /// ——这一条只有把那条排他臂一起钉住才守得住。</para>
+    /// </summary>
+    [Fact]
+    public void TheSilentRefusalsSayWhyOnScreen()
+    {
+        var describe = SourceGate.MethodBody(CodeOf(Ai), "private static LocMessage Describe(OrganiseOutcome outcome)");
+        // ①形状：补进来的这一臂必须连着"坏批那一支已经念过它"这条排他一起写；
+        //    而旧形状（Plan.IsEmpty 直接落 result.none＝P-195 那个缺陷的复活形状）⛔ 回来。
+        Assert.Contains("outcome.FailedBatches == 0 && outcome.FirstError is { } why", describe, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"settings.ai.result.noneBecause\", why)", describe, StringComparison.Ordinal);
+        Assert.DoesNotContain("Plan.IsEmpty ? LocMessage.Of(\"settings.ai.result.none\")", describe, StringComparison.Ordinal);
+
+        // ②语言读数：四发原因（预算那两发嵌得最深）各自真拼一次上台词。
+        //    期望⛔ 抄表里的措辞——内层那句由同一颗键当场 Render 出来现取（#130），红字才说得出是"没念"还是"念得不同"。
+        foreach (var reason in new[]
+        {
+            LocMessage.Of("settings.ai.service.nothingToOrganise"),
+            LocMessage.Of("settings.ai.service.budgetTripped", "40000"),
+            LocMessage.Of("settings.ai.service.budgetBlocked", LocMessage.Of("settings.ai.unpause")),
+            LocMessage.Of("settings.ai.service.channelBlocked", LocMessage.Of("common.rawValue", "no api key")),
+        })
+        {
+            var line = LocMessage.Of("settings.ai.result.full",
+                LocMessage.Of("settings.ai.result.noneBecause", reason),
+                null, null, null, null, null,
+                LocMessage.Of("settings.ai.result.tail", LocMessage.Of("settings.ai.applyGroup")));
+            var said = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var language in new[] { AppLanguage.Chinese, AppLanguage.English, AppLanguage.Japanese })
+            {
+                Locale.TrySet(language);
+                Assert.Equal(language, Locale.Current);       // ⛔ 拿 TrySet 的返回值当"换没换到"（#112）
+                var text = line.Render();                     // 同一颗实例：取词＝贴上去这一刻，⛔ 造它那一刻
+                Assert.Contains(reason.Render(), text, StringComparison.Ordinal);            // 原因⛔ 被外层吞掉
+                Assert.Contains(Locale.T("settings.ai.applyGroup"), text, StringComparison.Ordinal);
+                Assert.DoesNotContain("{", text, StringComparison.Ordinal);
+                Assert.DoesNotContain("}", text, StringComparison.Ordinal);
+                // 那颗收尾句号只有一个出处：槽⛔ 自带结尾标点，否则屏幕上就是「。。」这种双句号
+                foreach (var clash in new[] { "。。", "，。", "、。", "..", ", ." })
+                    Assert.False(text.Contains(clash, StringComparison.Ordinal),
+                        $"{language} 那一句念出双标点「{clash}」：{text}");
+                Assert.True(said.Add(text), "这一发拒绝有两门语言念出来一模一样：" + text);
+            }
+        }
     }
 
 }
