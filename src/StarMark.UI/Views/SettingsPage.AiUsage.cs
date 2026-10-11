@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Ai;
+using StarMark.Abstractions.I18n;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
 
@@ -54,9 +55,9 @@ public sealed partial class SettingsPage
 
     private void RefreshAiWarnRatioNote()
     {
-        var ratio = App.Services.GetRequiredService<SettingsStore>().LoadAiBudget().WarnRatio;
-        AiWarnRatioNoteText.Text =
-            $"用到预算的 {PercentOfRatio(ratio)}% 时先提醒（到线不拦，只说明；留空＝出厂 {PercentOfRatio(AiBudget.DefaultWarnRatio)}%）。";
+        // 说明里⛔ 再念一遍框里正显示着的那个比例（留空时框是空的，那时这句给的就是出厂值本身）。
+        LocText.SetMessage(AiWarnRatioNoteText,
+            LocMessage.Of("settings.ai.usage.warnNote", PercentOfRatio(AiBudget.DefaultWarnRatio)));
     }
 
     private void AiWarnRatioBox_TextChanged(object sender, RoutedEventArgs e)
@@ -77,9 +78,8 @@ public sealed partial class SettingsPage
             RefreshAiWarnRatioNote();
             return;
         }
-        AiWarnRatioNoteText.Text =
-            $"{PercentOfRatio(percent.Value)}% 不是 0 与 1 之间的比例（也就是只能填 1–99 这一档），"
-            + $"已按出厂 {PercentOfRatio(AiBudget.DefaultWarnRatio)}% 执行。";
+        LocText.SetMessage(AiWarnRatioNoteText, LocMessage.Of("settings.ai.usage.warnRejected",
+            PercentOfRatio(percent.Value), PercentOfRatio(AiBudget.DefaultWarnRatio)));
     }
 
     private async Task RefreshAiUsageAsync()
@@ -105,37 +105,45 @@ public sealed partial class SettingsPage
 
             if (snapshot is null)
             {
-                AiUsageText.Text = "用量账本还没接上（不影响使用，本次会话的消耗不会记录）。";
+                LocText.SetMessage(AiUsageText, LocMessage.Of("settings.ai.usage.noLedger"));
                 return;
             }
 
             var used = snapshot.Window;
-            var text = snapshot.MaxRecordedAt is null
-                ? $"本月还没花过 token（预算 {NumberText.Grouped(verdict.Used + verdict.Remaining)}）"
-                : $"近 30 天（按账本最后一条起算）已用 {NumberText.Grouped(used.TotalTokens)} / 预算 {NumberText.Grouped(budget.MonthlyTokenBudget)}，"
-                  + $"共 {used.Calls} 次调用";
-            if (used.EstimatedCalls > 0)
-                text += $"（其中 {used.EstimatedCalls} 次是按字符估算的，服务没回计量）";
-            if (used.Calls > 0)
-                text += "。" + string.Join("；", snapshot.ByFeature.Select(f => $"{f.Name} {NumberText.Grouped(f.TotalTokens)}")) + "。";
-            switch (verdict.State)
+            // 这一格从前是八句 `text +=` 拼出来的：换语言那一刻只有外层那颗键会被重贴，
+            // 而拼接早在算出来那一瞬定稿 ⇒ 屏幕上留的是"上一次读账本那一刻的语言"（P-188 确证②）。
+            // 现在四段各是一颗键，缺的段交 null（格式化时那一格自己变空），语序由那颗 join 键自己说。
+            var head = snapshot.MaxRecordedAt is null
+                ? LocMessage.Of("settings.ai.usage.noneThisMonth",
+                    NumberText.Grouped(verdict.Used + verdict.Remaining))
+                : LocMessage.Of("settings.ai.usage.window", NumberText.Grouped(used.TotalTokens),
+                    NumberText.Grouped(budget.MonthlyTokenBudget), used.Calls);
+            var estimated = used.EstimatedCalls > 0
+                ? LocMessage.Of("settings.ai.usage.estimated", used.EstimatedCalls)
+                : null;
+            var features = used.Calls > 0 && snapshot.ByFeature.Count > 0
+                ? LocMessage.Of("settings.ai.usage.featureBlock", Joined(
+                    snapshot.ByFeature.Select(f => LocMessage.Of("common.rawValue",
+                        f.Name + " " + NumberText.Grouped(f.TotalTokens))),
+                    "settings.ai.usage.featureJoin"))
+                : null;
+            var verdictLine = verdict.State switch
             {
-                case AiBudgetState.Warning:
-                    text += $"到 {NumberText.Grouped(budget.MonthlyTokenBudget)} 会自动暂停（预警线设在预算的 {PercentOfRatio(budget.WarnRatio)}%），"
-                        + $"还剩 {NumberText.Grouped(verdict.Remaining)} token。";
-                    break;
-                case AiBudgetState.Tripping:
-                case AiBudgetState.Blocked:
-                    text += budget.PausedByBudget
-                        ? "AI 已按预算自动暂停——点「恢复 AI」继续；恢复前请先把预算调到够用的档位。"
-                        : "AI 已按预算自动暂停。";
-                    break;
-            }
-            AiUsageText.Text = text;
+                AiBudgetState.Warning => LocMessage.Of("settings.ai.usage.warnTail",
+                    NumberText.Grouped(budget.MonthlyTokenBudget), PercentOfRatio(budget.WarnRatio),
+                    NumberText.Grouped(verdict.Remaining)),
+                AiBudgetState.Tripping or AiBudgetState.Blocked => budget.PausedByBudget
+                    ? LocMessage.Of("settings.ai.usage.pausedWithButton", LocMessage.Of("settings.ai.unpause"))
+                    : LocMessage.Of("settings.ai.usage.paused"),
+                _ => null,
+            };
+            LocText.SetMessage(AiUsageText, LocMessage.Of("settings.ai.usage.full",
+                head, estimated, features, verdictLine));
         }
         catch (Exception ex)
         {
-            AiUsageText.Text = "用量读不出来：" + ex.Message;
+            LocText.SetMessage(AiUsageText,
+                LocMessage.Of("settings.ai.status.usageReadFailed", LocMessage.Of("common.rawValue", ex.Message)));
         }
     }
 
@@ -151,7 +159,8 @@ public sealed partial class SettingsPage
         }
         catch (Exception ex)
         {
-            AiStatusText.Text = "预算没存上：" + ex.Message;
+            LocText.SetMessage(AiStatusText,
+                LocMessage.Of("settings.ai.status.budgetSaveFailed", LocMessage.Of("common.rawValue", ex.Message)));
         }
     }
 
@@ -166,7 +175,8 @@ public sealed partial class SettingsPage
         }
         catch (Exception ex)
         {
-            AiStatusText.Text = "恢复没成功：" + ex.Message;
+            LocText.SetMessage(AiStatusText,
+                LocMessage.Of("settings.ai.status.unpauseFailed", LocMessage.Of("common.rawValue", ex.Message)));
         }
     }
 }

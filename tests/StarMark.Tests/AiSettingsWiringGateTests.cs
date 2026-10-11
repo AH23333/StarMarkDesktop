@@ -79,7 +79,7 @@ public sealed class AiSettingsWiringGateTests
     {
         var store = ReadRepoPartials(StoreAi);
         // 超时：读写都过 ClassifyRunner 那一道判据，界面与仓储都不许自己夹边
-        Assert.Contains("ClassifyRunner.NormalizeTimeoutSeconds(stored)", MethodBody(store, "public (int Seconds, string? Reason) LoadAiBatchTimeout"));
+        Assert.Contains("ClassifyRunner.NormalizeTimeoutSeconds(stored)", MethodBody(store, "public (int Seconds, LocMessage? Reason) LoadAiBatchTimeout"));
         Assert.Contains("ClassifyRunner.NormalizeTimeoutSeconds(seconds) == seconds", MethodBody(store, "public void SaveAiBatchTimeout"));
         // 预警比例：消毒放在读取而不是展示——判额与展示读的是同一个实例，只有一边消毒就会出现"面板写 80%、裁决按 5 倍预算"
         Assert.Contains("budget.WithWarnRatio(ratio)", MethodBody(store, "public AiBudget LoadAiBudget"));
@@ -103,8 +103,8 @@ public sealed class AiSettingsWiringGateTests
     public void FixedBatchLimitsAreShownFromTheirConstants()
     {
         var page = ReadRepoPartials(PageAi);
-        Assert.Contains("AiBatchLimitsText.Text = DescribeFixedBatchLimits();", MethodBody(page, "private void InitAiOrganiseSection"));
-        var note = MethodBody(page, "private static string DescribeFixedBatchLimits");
+        Assert.Contains("LocText.SetMessage(AiBatchLimitsText, DescribeFixedBatchLimits());", MethodBody(page, "private void InitAiOrganiseSection"));
+        var note = MethodBody(page, "private static LocMessage DescribeFixedBatchLimits");
         Assert.Contains("ClassifyPrompt.MaxItemsPerBatch", note);
         Assert.Contains("ClassifyPrompt.UserBudgetChars", note);
         Assert.Contains("ClassifyPrompt.MaxReferenceTags", note);

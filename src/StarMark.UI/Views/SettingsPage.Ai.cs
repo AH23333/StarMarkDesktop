@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Ai;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Ai;
 using StarMark.Integrations.Ai;
 using StarMark.UI.Helpers;
@@ -92,9 +93,13 @@ public sealed partial class SettingsPage
     private void ShowAiProblem(AiSettings? settings = null)
     {
         settings ??= ReadAiSettings();
-        AiStatusText.Text = settings.Problem() is { } bad
-            ? "配置还不能用：" + bad
-            : settings.DescribeWhere() + " —— 可以点「测试连接」确认服务真的答话。";
+        // 那一格里混着两家的话：骨架（"配置还不能用／可以点…"）进表，`Problem()`／`DescribeWhere()`
+        // 那两句成品字由 Abstractions 念完再交过来 ⇒ 走 `common.rawValue` 那道门（⛔ 半搬，归 P-193）。
+        LocText.SetMessage(AiStatusText, settings.Problem() is { } bad
+            ? LocMessage.Of("settings.ai.status.configBlocked", LocMessage.Of("common.rawValue", bad))
+            : LocMessage.Of("settings.ai.status.whereHint",
+                LocMessage.Of("common.rawValue", settings.DescribeWhere()),
+                LocMessage.Of("settings.ai.testConnection")));
     }
 
     /// <summary>这两句字<b>走键不走字</b>（坑表 #276）：直接写 <c>Content = "…"</c> 的话，
@@ -112,7 +117,7 @@ public sealed partial class SettingsPage
         if (_aiBusy)
         {
             _aiProbeCts?.Cancel();
-            AiStatusText.Text = "正在取消…";
+            LocText.SetMessage(AiStatusText, LocMessage.Of("settings.ai.status.cancellingProbe"));
             return;
         }
 
@@ -120,30 +125,31 @@ public sealed partial class SettingsPage
         _aiBusy = true;
         LocText.SetKey(AiProbeButton, ProbeCancelKey);
         AiFillModelButton.Visibility = Visibility.Collapsed;
-        AiStatusText.Text = "正在问服务有哪些模型…";
+        LocText.SetMessage(AiStatusText, LocMessage.Of("settings.ai.status.probing"));
         var cts = new CancellationTokenSource();
         _aiProbeCts = cts;
         try
         {
             var probe = await App.Services.GetRequiredService<AiGateway>().ProbeAsync(settings, cts.Token);
-            AiStatusText.Text = probe.Report;
+            LocText.SetMessage(AiStatusText, LocMessage.Of("common.rawValue", probe.Report));
 
             // "通了但模型名不对"要能一步修好：把服务侧的名字直接递过去，而不是让用户自己抄一遍
             _aiModels = probe.Models;
             if (!probe.Ok && _aiModels.Count > 0)
             {
-                AiFillModelButton.Content = "模型名改用「" + _aiModels[0] + "」";
+                LocText.SetMessage(AiFillModelButton, LocMessage.Of("settings.ai.fillModel", _aiModels[0]));
                 AiFillModelButton.Visibility = Visibility.Visible;
             }
         }
         catch (OperationCanceledException)
         {
-            AiStatusText.Text = "已经取消，没有等到答复。";
+            LocText.SetMessage(AiStatusText, LocMessage.Of("settings.ai.status.probeCancelled"));
         }
         catch (Exception ex)
         {
             StarLog.Error("[AI] 连接自检失败", ex);
-            AiStatusText.Text = "自检没能完成：" + ex.Message;
+            LocText.SetMessage(AiStatusText,
+                LocMessage.Of("settings.ai.status.probeFailed", LocMessage.Of("common.rawValue", ex.Message)));
         }
         finally
         {
@@ -174,7 +180,7 @@ public sealed partial class SettingsPage
         AiGroupList.ItemsSource = _aiGroups;
         ShowPlan(PendingPlan());
         if (_aiPlan.IsEmpty) AiResumeButton.Visibility = Visibility.Collapsed;
-        AiBatchLimitsText.Text = DescribeFixedBatchLimits();
+        LocText.SetMessage(AiBatchLimitsText, DescribeFixedBatchLimits());
         // 置位这一格要压住 TextChanged：否则"打开设置页"这件事本身就是一次写盘（整档读写一遍）。
         _aiLoading = true;
         try
@@ -194,20 +200,19 @@ public sealed partial class SettingsPage
 
     /// <summary>三格只读展示。<b>数字全部取自代码里的常数</b>：写死在界面里就会和常数分岔（同一份预算两处各说一次）。
     /// 不开放填写的理由也同批写出来——只留一句"这格不做"，用户无法判断这条决定对不对。</summary>
-    private static string DescribeFixedBatchLimits()
-        => $"每一批 {ClassifyPrompt.MaxItemsPerBatch} 条、发给模型的条目段不超过 {ClassifyPrompt.UserBudgetChars} 字、"
-         + $"参考标签取 {ClassifyPrompt.MaxReferenceTags} 个。这三格留在代码里，不开放填写："
-         + $"真会挡住的是单次请求 {AiRequest.MaxPromptChars} 字那道闸门，把前两格调大不会报错，"
-         + "而是让提示词越过模型窗口——超窗的表现是「模型开始编」，比一个红字更难发现。";
+    private static LocMessage DescribeFixedBatchLimits()
+        => LocMessage.Of("settings.ai.batchLimits", ClassifyPrompt.MaxItemsPerBatch,
+            ClassifyPrompt.UserBudgetChars, ClassifyPrompt.MaxReferenceTags, AiRequest.MaxPromptChars);
 
-    /// <summary>超时那一格的当前口径。<b>坏值必须当场说原因</b>：这一格用户可以手改存档，
-    /// 静默回默认等于"改了没落盘"里最难自查的一种。</summary>
+    /// <summary>超时那一格的可设范围。<b>坏值必须当场说原因</b>：这一格用户可以手改存档，
+    /// 静默回默认等于"改了没落盘"里最难自查的一种。当前值⛔ 在这句里再念一遍——框里就显示着它
+    /// （等于默认时框是空的，那时由 <c>timeoutBlank</c> 那句接手）。</summary>
     private void RefreshAiTimeoutNote()
     {
-        var (seconds, reason) = App.Services.GetRequiredService<SettingsStore>().LoadAiBatchTimeout();
-        AiTimeoutNoteText.Text = reason
-            ?? $"当前每批 {seconds} 秒：留空＝默认 {ClassifyRunner.DefaultTimeoutSeconds} 秒，"
-             + $"可在 {ClassifyRunner.MinTimeoutSeconds}–{ClassifyRunner.MaxTimeoutSeconds} 秒之间自选。";
+        var (_, reason) = App.Services.GetRequiredService<SettingsStore>().LoadAiBatchTimeout();
+        LocText.SetMessage(AiTimeoutNoteText, reason
+            ?? LocMessage.Of("settings.ai.timeoutNote", ClassifyRunner.MinTimeoutSeconds,
+                ClassifyRunner.MaxTimeoutSeconds, ClassifyRunner.DefaultTimeoutSeconds));
     }
 
     private void AiTimeoutBox_TextChanged(object sender, RoutedEventArgs e)
@@ -221,15 +226,17 @@ public sealed partial class SettingsPage
             : null;
         var store = App.Services.GetRequiredService<SettingsStore>();
         store.SaveAiBatchTimeout(asked);
-        AiTimeoutNoteText.Text = text.Length == 0
-            ? $"留空＝默认 {defaultSeconds} 秒，可在 {ClassifyRunner.MinTimeoutSeconds}–{ClassifyRunner.MaxTimeoutSeconds} 秒之间自选。"
-            : asked is null
-                ? $"「{text}」不是整数秒，已按默认 {defaultSeconds} 秒执行。"
-                : ClassifyRunner.NormalizeTimeoutSeconds(asked) == asked
-                    ? $"当前每批 {asked} 秒：留空＝默认 {defaultSeconds} 秒，"
-                      + $"可在 {ClassifyRunner.MinTimeoutSeconds}–{ClassifyRunner.MaxTimeoutSeconds} 秒之间自选。"
-                    : $"{asked} 秒不在 {ClassifyRunner.MinTimeoutSeconds}–{ClassifyRunner.MaxTimeoutSeconds} 之间，"
-                      + $"已按默认 {defaultSeconds} 秒执行。";
+        if (text.Length == 0)
+            LocText.SetMessage(AiTimeoutNoteText, LocMessage.Of("settings.ai.timeoutBlank", defaultSeconds,
+                ClassifyRunner.MinTimeoutSeconds, ClassifyRunner.MaxTimeoutSeconds));
+        else if (asked is null)
+            LocText.SetMessage(AiTimeoutNoteText,
+                LocMessage.Of("settings.ai.timeoutNotInt", text, defaultSeconds));
+        else if (ClassifyRunner.NormalizeTimeoutSeconds(asked) != asked)
+            LocText.SetMessage(AiTimeoutNoteText, LocMessage.Of("settings.ai.timeoutOutOfRange", asked,
+                ClassifyRunner.MinTimeoutSeconds, ClassifyRunner.MaxTimeoutSeconds, defaultSeconds));
+        else
+            RefreshAiTimeoutNote();   // 与装载那一拍同一颗键⛔ 这一格两处各写一遍（✅WI-61b2 那颗分岔）
     }
 
 
@@ -245,7 +252,8 @@ public sealed partial class SettingsPage
         if (settings.Problem() is { } bad)
         {
             // 就地给原因，不让人对着一个灰按钮猜：通道没通是"点了没反应"最常见的原因
-            AiStatusText.Text = "还不能开始整理：" + bad;
+            LocText.SetMessage(AiStatusText,
+                LocMessage.Of("settings.ai.status.organiseBlocked", LocMessage.Of("common.rawValue", bad)));
             return;
         }
 
@@ -263,7 +271,7 @@ public sealed partial class SettingsPage
             // §20.3 预估前置：发第一发之前把"N 批 ≈ X token"算给用户看，确认了才动手。
             // 口径与 service 内部一致（LoadCandidates + ClassifyRules.Split + Estimate）——
             // "弹窗说 15K 实际花 40K"比不报更伤信任，宁可多读一次候选也不许两处各算各的。
-            AiStatusText.Text = "正在算这一轮要花多少…";
+            LocText.SetMessage(AiStatusText, LocMessage.Of("settings.ai.status.estimating"));
             var candidates = await classifier.LoadCandidatesAsync(limit, CancellationToken.None);
             if (candidates.Count > 0)
             {
@@ -275,23 +283,25 @@ public sealed partial class SettingsPage
                     return;    // finally 把忙碌态收回去，什么都没发
             }
 
-            AiStatusText.Text = "正在准备…";
+            LocText.SetMessage(AiStatusText, LocMessage.Of("settings.ai.status.preparing"));
             var outcome = await classifier
-                .OrganiseAsync(limit, status => AiStatusText.Text = status,
-                    (done, total) => AiStatusText.Text = $"第 {done} / {total} 批完成，继续中…", cts.Token);
+                .OrganiseAsync(limit, status => LocText.SetMessage(AiStatusText, status),
+                    (done, total) => LocText.SetMessage(AiStatusText,
+                        LocMessage.Of("settings.ai.status.batchDone", done, total)), cts.Token);
 
             ShowPlan(outcome.Plan);
-            AiStatusText.Text = Describe(outcome);
+            LocText.SetMessage(AiStatusText, Describe(outcome));
         }
         catch (OperationCanceledException)
         {
-            AiStatusText.Text = "已经停下。下面这些是停之前整理出来的，可以先挑几组应用。";
+            LocText.SetMessage(AiStatusText, LocMessage.Of("settings.ai.status.stoppedWithLeft"));
             ShowPlan(PendingPlan());
         }
         catch (Exception ex)
         {
             StarLog.Error("[AI] 批量整理失败", ex);
-            AiStatusText.Text = "整理没能完成：" + ex.Message;
+            LocText.SetMessage(AiStatusText,
+                LocMessage.Of("settings.ai.status.organiseFailed", LocMessage.Of("common.rawValue", ex.Message)));
         }
         finally
         {
@@ -311,18 +321,16 @@ public sealed partial class SettingsPage
     private async Task<bool> ConfirmOrganiseAsync(int total, int ruled, int batches, long approxTokens)
     {
         var detail = ruled > 0
-            ? $"共 {total} 条：{ruled} 条按高置信规则先定（不进模型）；其余分 {batches} 批问模型，约 {NumberText.Grouped(approxTokens)} token。"
-            : $"共 {total} 条，分 {batches} 批问模型，约 {NumberText.Grouped(approxTokens)} token。";
-        var dialog = new ContentDialog
-        {
-            Title = "开始 AI 整理？",
-            Content = detail + "\n预算与历史用量见下方「token 预算与用量」。",
-            PrimaryButtonText = "开始",
-            CloseButtonText = "取消",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = this.XamlRoot,   // Page 自身就是 FrameworkElement，取自己挂靠的 XamlRoot
-        };
-        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+            ? LocMessage.Of("settings.ai.confirm.detailRuled", total, ruled, batches,
+                NumberText.Grouped(approxTokens))
+            : LocMessage.Of("settings.ai.confirm.detailPlain", total, batches, NumberText.Grouped(approxTokens));
+        // 改道 ✅WI-61d 片1 那颗收身份的工厂：默认焦点在「取消」那一侧这件事它已经做了，⛔ 在这里再摆一次。
+        // ⚠ 改口：原先那句指着「token 预算与用量」这颗抬头，而那五个字只活在两份注释里——屏幕上从来没有它。
+        return await CenteredDialog.ConfirmAsync(
+            LocMessage.Of("settings.ai.confirm.title"),
+            LocMessage.Of("settings.ai.confirm.body", detail),
+            LocMessage.Of("settings.ai.confirm.go"), LocMessage.Of("dialog.cancel"),
+            owner: App.MainWindow, dedupeKey: "aiorganiseconfirm");
     }
 
     /// <summary>
@@ -334,25 +342,38 @@ public sealed partial class SettingsPage
         if (!_aiOrganising) return;
         AiStopButton.IsEnabled = false;         // 按过一次就够了：正在停下这件事不需要第二次指令
         _aiOrganiseCts?.Cancel();
-        AiStatusText.Text = "正在停下…（已经整理出来的会留在下面）";
+        LocText.SetMessage(AiStatusText, LocMessage.Of("settings.ai.status.stopping"));
     }
 
     /// <summary>一句话交代这一轮：<b>整理出多少、缺多少、坏了几批、以及"还没写进库"</b>。
     /// 只报"完成"会漏掉两种真话：模型答漏了条目、某些批次根本没成功。</summary>
-    private static string Describe(OrganiseOutcome outcome)
+    private static LocMessage Describe(OrganiseOutcome outcome) => LocMessage.Of("settings.ai.result.full",
+        outcome.Plan.IsEmpty ? LocMessage.Of("settings.ai.result.none")
+            : LocMessage.Of("settings.ai.result.count", outcome.Plan.ItemCount, outcome.AskedItems),
+        outcome.MissingItems > 0 ? LocMessage.Of("settings.ai.result.missing", outcome.MissingItems) : null,
+        outcome.UnknownOrdinals > 0 ? LocMessage.Of("settings.ai.result.unknown", outcome.UnknownOrdinals) : null,
+        outcome.DroppedTags > 0
+            ? outcome.DroppedItems > 0
+                ? LocMessage.Of("settings.ai.result.droppedWith", outcome.DroppedTags, outcome.DroppedItems)
+                : LocMessage.Of("settings.ai.result.dropped", outcome.DroppedTags)
+            : null,
+        outcome.StoppedBatches > 0 ? LocMessage.Of("settings.ai.result.stopped", outcome.StoppedBatches) : null,
+        outcome.FailedBatches > 0
+            ? outcome.FirstError is { } err
+                ? LocMessage.Of("settings.ai.result.failedWith", outcome.FailedBatches, err)
+                : LocMessage.Of("settings.ai.result.failed", outcome.FailedBatches)
+            : null,
+        // 那句尾巴里点名的那颗按钮⛔ 把名字抄进句子：改了它的说法，这句还在教人点一个不存在的名字。
+        LocMessage.Of("settings.ai.result.tail", LocMessage.Of("settings.ai.applyGroup")));
+
+    /// <summary>把一串<b>用户数据</b>（标签名／账本里的功能名）连成一句：连接这件事走键，
+    /// ⛔ 在 C# 里 `string.Join("、", …)`——那是把这一族的标点钉死在中文那一侧（✅WI-60b 同一口径）。</summary>
+    private static LocMessage? Joined(IEnumerable<LocMessage> parts, string joinKey)
     {
-        var text = outcome.Plan.IsEmpty
-            ? "没有整理出可用的建议"
-            : $"整理出 {outcome.Plan.ItemCount} 条建议（问的是 {outcome.AskedItems} 条）";
-        if (outcome.MissingItems > 0) text += $"，{outcome.MissingItems} 条模型没答";
-        if (outcome.UnknownOrdinals > 0) text += $"，丢掉 {outcome.UnknownOrdinals} 个对不上号的编号";
-        if (outcome.DroppedTags > 0)
-            text += $"，砍掉 {outcome.DroppedTags} 个只挂在 1 条上的标签"
-                + (outcome.DroppedItems > 0 ? $"（{outcome.DroppedItems} 条因此没有建议）" : string.Empty);
-        if (outcome.StoppedBatches > 0) text += $"，{outcome.StoppedBatches} 批没问（已停止）";
-        if (outcome.FailedBatches > 0)
-            text += $"，{outcome.FailedBatches} 批没成功" + (outcome.FirstError is { } err ? $"（{err}）" : string.Empty);
-        return text + "。点「应用这组」才会写进库。";
+        LocMessage? acc = null;
+        foreach (var part in parts)
+            acc = acc is null ? part : LocMessage.Of(joinKey, acc, part);
+        return acc;
     }
 
     private void ShowPlan(ClassifyPlan plan)
@@ -367,29 +388,32 @@ public sealed partial class SettingsPage
         }
         AiApplyAllButton.IsEnabled = !plan.IsEmpty;
         AiResumeButton.Visibility = plan.IsEmpty ? Visibility.Collapsed : Visibility.Visible;
-        AiResumeButton.Content = plan.IsEmpty ? "继续处理上次的整理结果"
-            : $"继续处理上次整理好的 {plan.ItemCount} 条";
+        LocText.SetMessage(AiResumeButton, plan.IsEmpty ? LocMessage.Of("settings.ai.resumeIdle")
+            : LocMessage.Of("settings.ai.resumeCount", plan.ItemCount));
     }
 
     private void AiResume_Click(object sender, RoutedEventArgs e)
         => ShowPlan(PendingPlan());
 
-    private async void AiApplyAll_Click(object sender, RoutedEventArgs e) => await ApplyAsync(_aiPlan, "全部");
+    private async void AiApplyAll_Click(object sender, RoutedEventArgs e)
+        => await ApplyAsync(_aiPlan, LocMessage.Of("settings.ai.applyScopeAll"));
 
     private async void AiApplyGroup_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: AiGroupRow row }) return;
         // 只切这一组的条目出去应用；"这一组"是用户点头的单位，不能顺手把别的组也写了
         await ApplyAsync(new ClassifyPlan(row.Proposals, _aiPlan.CreatedAt),
-            $"「{string.Join("、", row.Group.Tags)}」这一组");
+            LocMessage.Of("settings.ai.applyScopeGroup",
+                Joined(row.Group.Tags.Select(tag => LocMessage.Of("common.rawValue", tag)),
+                    "settings.ai.tagJoin")!));
     }
 
     /// <summary>只应用这一组：把组内条目从总方案里切出来交给服务，应用完再从预览里摘掉。</summary>
-    private async Task ApplyAsync(ClassifyPlan plan, string label)
+    private async Task ApplyAsync(ClassifyPlan plan, LocMessage label)
     {
         if (plan.IsEmpty)
         {
-            AiStatusText.Text = label + "没有可应用的内容。";
+            LocText.SetMessage(AiStatusText, LocMessage.Of("settings.ai.applyNothing", label));
             return;
         }
         AiApplyAllButton.IsEnabled = false;
@@ -402,14 +426,15 @@ public sealed partial class SettingsPage
             ShowPlan(new ClassifyPlan(
                 _aiPlan.Proposals.Where(proposal => !appliedIds.Contains(proposal.Id)).ToList(), _aiPlan.CreatedAt));
             App.Services.GetRequiredService<AiClassifyService>().SavePending(_aiPlan);
-            AiStatusText.Text = applied > 0
-                ? $"已把{label}的标签写进库：{applied} 条。"
-                : $"{label}的标签其实都已经有了，没有需要新加的。";
+            LocText.SetMessage(AiStatusText, applied > 0
+                ? LocMessage.Of("settings.ai.applyDone", label, applied)
+                : LocMessage.Of("settings.ai.applyNoop", label));
         }
         catch (Exception ex)
         {
             StarLog.Error("[AI] 应用整理结果失败", ex);
-            AiStatusText.Text = "写入没能完成：" + ex.Message;
+            LocText.SetMessage(AiStatusText,
+                LocMessage.Of("settings.ai.status.writeFailed", LocMessage.Of("common.rawValue", ex.Message)));
         }
         finally
         {
@@ -422,9 +447,9 @@ public sealed partial class SettingsPage
         if (sender is not Button { Tag: AiGroupRow row }) return;
         ShowPlan(_aiPlan.WithoutGroup(row.Group));
         App.Services.GetRequiredService<AiClassifyService>().SavePending(_aiPlan);
-        AiStatusText.Text = _aiPlan.IsEmpty
-            ? "这一组不要了。剩下的预览已清空。"
-            : $"这一组不要了（{row.Group.Ids.Count} 条），还剩 {_aiPlan.ItemCount} 条。";
+        LocText.SetMessage(AiStatusText, _aiPlan.IsEmpty
+            ? LocMessage.Of("settings.ai.rejectedAll")
+            : LocMessage.Of("settings.ai.rejectedOne", row.Group.Ids.Count, _aiPlan.ItemCount));
     }
 }
 

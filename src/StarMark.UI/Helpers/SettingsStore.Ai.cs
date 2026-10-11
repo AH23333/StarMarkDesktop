@@ -7,6 +7,7 @@ using System.Text.Json;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Ai;
 using StarMark.Abstractions.Feed;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Ai;
 using StarMark.Core.Feed;
 using StarMark.Abstractions.Trending;
@@ -137,14 +138,14 @@ public sealed partial class SettingsStore
 
     /// <summary>读单批超时。<b>坏值回默认，并把"为什么不采纳"一起交出去</b>：这一格同样是用户可手改的
     /// JSON 数字，静默按 0 秒执行等于每批一发出就超时，比回默认难查得多（界面上那句原因由调用方说）。</summary>
-    public (int Seconds, string? Reason) LoadAiBatchTimeout()
+    public (int Seconds, LocMessage? Reason) LoadAiBatchTimeout()
     {
         var stored = Load()?.AiBatchTimeoutSeconds;
         var seconds = ClassifyRunner.NormalizeTimeoutSeconds(stored);
         if (stored is null || stored == seconds) return (seconds, null);
-        return (seconds,
-            $"存档里写的 {stored} 秒不在 {ClassifyRunner.MinTimeoutSeconds}–{ClassifyRunner.MaxTimeoutSeconds} 之间，"
-            + $"已按默认 {seconds} 秒执行。");
+        // 那句话贴到 `AiTimeoutNoteText` 上（屏幕上的一格）⇒ 交身份⛔ 交成品字：成品字换语言没人重贴。
+        return (seconds, LocMessage.Of("settings.ai.timeoutStoredOutOfRange", stored,
+            ClassifyRunner.MinTimeoutSeconds, ClassifyRunner.MaxTimeoutSeconds, seconds));
     }
 
     /// <summary>写单批超时。<b>越界写成"没设"而不是把坏值存进去</b>：存一个下轮还要消毒的数，

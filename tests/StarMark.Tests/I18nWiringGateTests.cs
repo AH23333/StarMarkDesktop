@@ -492,14 +492,15 @@ public sealed class I18nWiringGateTests
 
     /// <summary>
     /// 两颗把<b>当场算出来的值</b>写进标签的按钮（那颗"改用本机有的模型"里是模型名、那颗"继续处理…"里是条数）
-    /// <b>留在 code-behind，标记里不许挂静态键</b>：挂了键，换语言那一刻静态那句会盖掉带值的这句，
+    /// <b>标记里不许挂静态键</b>：挂了键，换语言那一刻静态那句会盖掉带值的这句，
     /// 用户看到的就是一个和实际要改的东西不一样的名字。
-    /// <para>这一格钉的是<b>登记在案的缺口</b>（P-169 的"组合句"那一族，`settings.languageNote` 里点名了这两颗）。
-    /// 将来那一族有了"按语言重算"的机制，这里会红——改法是连着把两颗按钮换成"按键＋占位符重算"，
-    /// 不是把静态键一挂了事（与坑表 #276 同一件事的镜像面：那边是"别在键之外再写字"，这边是"别给带值的字挂静态键"）。</para>
+    /// <para>这一格从前钉的是<b>登记在案的缺口</b>（"组合句"那一族还没有按语言重算的机制，字只能留在 code-behind）。
+    /// 批次 WI-41 把机制接上了——两颗现在走 <c>LocText.SetMessage</c> ＋<b>没渲染的</b>实参，
+    /// 换语言那一刻按新语言重取词、重填空。⚠ 换的是<b>后半那两条断言</b>⛔ 把这一格删掉：
+    /// 前半（标记里⛔ 静态键）今天仍然成立，而且比原来更要紧——表里现在真有那两颗键，挂进标记就成了第二份出处。</para>
     /// </summary>
     [Fact]
-    public void TheTwoComposedButtonLabelsStayWithTheCode()
+    public void TheTwoComposedButtonLabelsPasteWithTheirArgs()
     {
         var ai = Between(Markup(ReadRepoFile(SettingsXaml)),
                          "<TabViewItem x:Name=\"TabAi\" Tag=\"ai\"", "</TabViewItem>");
@@ -511,8 +512,12 @@ public sealed class I18nWiringGateTests
         }
 
         var page = Code(ReadRepoFile("src/StarMark.UI/Views/SettingsPage.Ai.cs"));
-        Assert.Contains("AiFillModelButton.Content = \"模型名改用", page);
-        Assert.Contains("继续处理上次整理好的", page);
+        Assert.Contains("LocText.SetMessage(AiFillModelButton, LocMessage.Of(\"settings.ai.fillModel\"", page);
+        Assert.Contains("LocText.SetMessage(AiResumeButton, plan.IsEmpty ? LocMessage.Of(\"settings.ai.resumeIdle\")", page);
+        Assert.Contains("LocMessage.Of(\"settings.ai.resumeCount\", plan.ItemCount)", page);
+        // 回来路＝把值抄进字面量：那一格换语言不再重算，屏幕上留着上一次那个模型名／条数。
+        Assert.DoesNotContain("AiFillModelButton.Content = \"", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("AiResumeButton.Content = \"", page, StringComparison.Ordinal);
     }
 
     /// <summary>

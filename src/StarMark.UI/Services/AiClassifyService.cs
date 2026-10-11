@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Ai;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Ai;
 using StarMark.UI.Helpers;
 
@@ -28,7 +29,7 @@ public sealed record OrganiseOutcome(
     int UnknownOrdinals,
     int DroppedTags,
     int DroppedItems,
-    string? FirstError)
+    LocMessage? FirstError)
 {
     public bool NothingOrganised => Plan.IsEmpty && FailedBatches > 0;
 }
@@ -142,24 +143,25 @@ public sealed class AiClassifyService
     /// <para><b>入口先过预算闸</b>（§20.2）：熔断亮着就不发一个包，原因原样带在 FirstError 里。</para>
     /// </summary>
     public async Task<OrganiseOutcome> OrganiseAsync(
-        int limit, Action<string> onStatus, Action<int, int> onProgress, CancellationToken ct)
+        int limit, Action<LocMessage> onStatus, Action<int, int> onProgress, CancellationToken ct)
     {
         var budget = await BudgetVerdictAsync(ct);
         if (!budget.AllowsCall)
             return new OrganiseOutcome(ClassifyPlan.Empty, 0, 0, 0, 0, 0, 0, 0, 0,
                 budget.State == AiBudgetState.Tripping
-                    ? $"这一轮会花约 {budget.Used} token，已达到月度预算——AI 已自动暂停，可在 设置 → AI 的用量面板调额或手动恢复"
-                    : "本月 token 预算已用完，AI 整理处于暂停；可在 设置 → AI 的用量面板点「恢复」或调整额度");
+                    ? LocMessage.Of("settings.ai.service.budgetTripped", NumberText.Grouped(budget.Used))
+                    : LocMessage.Of("settings.ai.service.budgetBlocked", LocMessage.Of("settings.ai.unpause")));
 
         var settings = _store.LoadAiSettings();
         if (settings.Problem() is { } bad)
-            return new OrganiseOutcome(ClassifyPlan.Empty, 0, 0, 0, 0, 0, 0, 0, 0, "AI 通道还不能用：" + bad);
+            return new OrganiseOutcome(ClassifyPlan.Empty, 0, 0, 0, 0, 0, 0, 0, 0,
+                LocMessage.Of("settings.ai.service.channelBlocked", LocMessage.Of("common.rawValue", bad)));
 
-        onStatus("正在挑出还没有标签的条目…");
+        onStatus(LocMessage.Of("settings.ai.service.loadingCandidates"));
         var candidates = await LoadCandidatesAsync(limit, ct);
         if (candidates.Count == 0)
             return new OrganiseOutcome(ClassifyPlan.Empty, 0, 0, 0, 0, 0, 0, 0, 0,
-                "没有待整理的条目（要么都有标签了，要么只剩剪贴板条目）");
+                LocMessage.Of("settings.ai.service.nothingToOrganise"));
 
         // O2 规则预分类：命中的折算成提案、不进 AI 批次，但照常进预览确认（规则错了用户还是那一刀）。
         // 自定义 JSON 坏了整份按"只有内置"生效，并随状态行出声——"加了规则没生效"必须当场可见，不能静默。
@@ -171,11 +173,12 @@ public sealed class AiClassifyService
 
         var catalog = await ReferenceTagsAsync(ct);
         var total = ClassifyPrompt.Batches(forAi).Count;
+        // "有没有那半句警告"是数据，"这一句怎么排"是语言 ⇒ 两句各留一颗可空槽（⛔ `status +=` 拼）。
+        // 警告那颗键⛔ 在两条臂里各点一次：两处各写一遍就是第二个出处（✅WI-61b2 那颗分岔同一形状）。
+        var warning = customRulesBroken ? LocMessage.Of("settings.ai.service.customRulesIgnored") : null;
         var status = ruled.Count > 0
-            ? $"共 {candidates.Count} 条待整理：{ruled.Count} 条按规则先定了，其余 {forAi.Count} 条分 {total} 批问模型"
-            : $"共 {candidates.Count} 条待整理，分 {total} 批问模型…";
-        if (customRulesBroken)
-            status += "（⚠ 自定义规则没被读进去，本轮只用了内置规则）";
+            ? LocMessage.Of("settings.ai.service.planRuled", candidates.Count, ruled.Count, forAi.Count, total, warning)
+            : LocMessage.Of("settings.ai.service.planPlain", candidates.Count, total, warning);
         onStatus(status);
 
         // 从"上次整理好但还没应用"的方案接着写：<b>不种子就会让这一轮把旧结果整档覆盖掉</b>——
@@ -227,7 +230,9 @@ public sealed class AiClassifyService
             report.Batches.Sum(batch => batch.UnknownCount),
             pruned.DroppedTags.Count,
             pruned.DroppedItems,
-            report.Batches.FirstOrDefault(batch => !batch.Ok)?.Error);
+            report.Batches.FirstOrDefault(batch => !batch.Ok) is { } firstBad
+                ? LocMessage.Of("common.rawValue", firstBad.Error)
+                : null);
     }
 
     /// <summary>把一批的结果并进"目前为止"。<b>同一条目再出现时以新的那份为准而不是合并标签</b>：

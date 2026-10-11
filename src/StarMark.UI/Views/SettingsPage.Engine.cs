@@ -42,7 +42,11 @@ public sealed partial class SettingsPage
     private async void DeleteEngine_Click(object sender, RoutedEventArgs e)
     {
         var bytes = StarMark.Integrations.Everything.EverythingSource.GetEngineOccupancyBytes();
-        var sizeHint = bytes > 0 ? $"（约 {FileSizeText.Human(bytes)}）" : "";
+        // 「约」那颗词从前坐在数据实参里（`（约 …）` 整块交进 `deleteBody` 的槽）⇒ 换了语言那一格还是中文。
+        // 现在交的是没渲染的身份：那一格自己按当前语言取词，体积读数还是数据。
+        LocMessage? sizeHint = bytes > 0
+            ? LocMessage.Of("settings.engine.sizeApprox", FileSizeText.Human(bytes))
+            : null;
         var confirm = await CenteredDialog.ConfirmAsync(
             LocMessage.Of("settings.engine.deleteTitle"),
             LocMessage.Of("settings.engine.deleteBody", sizeHint),
