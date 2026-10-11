@@ -170,6 +170,8 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
                          or nameof(SettingsPageViewModel.BackupStatus)
                          or nameof(SettingsPageViewModel.ClipboardHistoryStatus)
                          or nameof(SettingsPageViewModel.ClipboardCleanupStatus)
+                         or nameof(SettingsPageViewModel.ClipboardImageStatus)
+                         or nameof(SettingsPageViewModel.ClipboardUsage)
                          or nameof(SettingsPageViewModel.SaveErrorMessage))
             ApplyDataStatuses();
         if (_suppressSave || string.IsNullOrEmpty(e.PropertyName)) return;
@@ -208,15 +210,17 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     }
 
     /// <summary>
-    /// 设置页「数据」那一屏那六行状态贴到屏幕上（第一批＝批次 WI-61c 那五行；第六行＝批次 WI-62，P-193 那半句与 UI 那半句同批）。
+    /// 设置页「数据」那一屏那<b>八行</b>状态贴到屏幕上（第一批＝WI-61c 那五行；第六行＝WI-62 的备份回执；
+    /// 第七、八行＝✅WI-64 的「图片占用」与「图片采集状态」——它们的话的一半住在 <c>ClipAssets</c>／<c>ClipboardPolicy</c>，
+    /// 而「图片占用」那一行自己就是四段拼出来的，⛔ 只贴一段＝同一行两种语言）。
     /// <para>与 ✅WI-61b 那颗 <see cref="ApplyExtensionStatuses"/> 同一机制、同一条理由：VM 交回的是
     /// <b>没取词的</b>「键＋实参」，件数／小时数／回溯天数／腾出多少字节／异常消息全在实参里。</para>
     /// <para><b>第六行「备份与恢复」为什么等到这一批</b>：它那半句由 Core 供（<c>DeleteBackup</c>／
     /// <c>RestoreResult.Message</c>／<c>BackupPathPolicy</c>／<c>BackupFormatException</c>），只交 UI 那一半就是
     /// 同一行半中半英——那两半在 WI-62 一起进表（✅WI-61c 登记的就是这一条前置）。
-    /// ⚠ 这一屏还剩<b>三行</b>同形状：<c>UpdateStatus</c>（话的一半在 <c>UpdatePolicy.Describe*</c>＝P-194）与
-    /// <c>ClipboardUsage</c>／<c>ClipboardImageStatus</c>（在 <c>ClipAssets.DescribeUsage</c>／
-    /// <c>ClipboardPolicy.DescribeImageIntake</c>＝P-193 的 Abstractions 半族），各随它们的另一半走。</para>
+    /// ⚠ 这一屏只剩<b>一行</b>同形状：<c>UpdateStatus</c>（话的一半在 <c>UpdatePolicy.Describe*</c>＝P-194），
+    /// 那两行（<c>ClipAssets.DescribeUsage</c>／<c>ClipboardPolicy.DescribeImageIntake</c>＝P-193 的 Abstractions 半族）
+    /// 已在 ✅WI-64 两层同批走完——它们从前是 <c>{x:Bind}</c> 绑<b>成品串</b>，所以"换语言即重贴"对它们从不发生。</para>
     /// </summary>
     private void ApplyDataStatuses()
     {
@@ -225,6 +229,8 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         LocText.SetMessage(BackupStatusText, ViewModel.BackupStatus);
         LocText.SetMessage(ClipboardHistoryStatusText, ViewModel.ClipboardHistoryStatus);
         LocText.SetMessage(ClipboardCleanupStatusText, ViewModel.ClipboardCleanupStatus);
+        LocText.SetMessage(ClipboardImageStatusText, ViewModel.ClipboardImageStatus);
+        LocText.SetMessage(ClipboardUsageText, ViewModel.ClipboardUsage);
         LocText.SetMessage(SaveErrorMessageText, ViewModel.SaveErrorMessage);
     }
 

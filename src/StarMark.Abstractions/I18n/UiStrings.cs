@@ -959,6 +959,25 @@ public static class UiStrings
         new Entry("clip.dialog.clearTitle", "清空剪贴板历史", "Clear clipboard history", "クリップボード履歴を消去"),
         new Entry("clip.dialog.clearBody", "将删除本机记录的 {0} 条复制内容（含你置顶的条目），删除后无法恢复。书签 / Star / 待办 / 随记不受影响。", "This deletes {0} recorded copies on this machine — including pinned entries — and cannot be undone. Bookmarks, Stars, todos and notes are untouched.", "この PC の記録 {0} 件（ピン留めを含む）を削除すると戻せません。ブックマーク / Star / 待办 / メモは影響を受けません。"),
         new Entry("clip.dialog.clearGo", "清空", "Clear", "消去"),
+        // ✅WI-64 片1（P-193 的 Abstractions 半句＋「数据」那一屏的两行 UI·两层同批）：「图片占用」那一行由三颗工厂＋宿主自己那句「文件就放在：」拼成，
+        // 「图片采集」那一行由 `ClipboardPolicy.DescribeImageIntake` 的三臂供话——只交一层就是半中半英（⛔ 半搬）。
+        new Entry("clip.usage.empty", "图片目录还是空的。", "The image folder is still empty.", "画像フォルダはまだ空です。"),
+        new Entry("clip.usage.main", "图片 {0} 张 · 共 {1}", "{0} images · {1} in total", "画像 {0} 件・合計 {1}"),
+        new Entry("clip.usage.none", "还没有图片", "no images yet", "画像はまだありません"),
+        new Entry("clip.usage.thumbs", "；缩略图 {0} 张 · {1}", "; {0} thumbnails · {1}", "；サムネイル {0} 件・{1}"),
+        new Entry("clip.usage.temps", "；另有 {0} 未写完的临时件（不影响历史，可清理）", "; {0} unfinished temporary file(s) (history is unaffected; they can be cleaned up)", "；未完了の一時ファイル {0} 件（履歴には影響しません、整理できます）"),
+        new Entry("clip.usage.full", "{0}{1}{2}", "{0}{1}{2}", "{0}{1}{2}"),
+        new Entry("clip.usage.folder", " 文件就放在：{0}", " Files live in: {0}", " ファイルの保存先：{0}"),
+        new Entry("clip.usage.line", "{0}{1}{2}{3}", "{0}{1}{2}{3}", "{0}{1}{2}{3}"),
+        new Entry("clip.usage.counting", "正在统计图片目录…", "Measuring the image folder…", "画像フォルダを計算中…"),
+        new Entry("clip.usage.recountBlocked", " 但没能核对哪些文件已不属于历史（对账没跑成，原因见日志），所以清理按钮暂时不可用。", " but which files no longer belong to the history could not be checked (the reconcile did not run; see the log), so the cleanup button stays unavailable.", " ただし履歴に属さないファイルを確認できませんでした（照合が走っていません。原因はログ参照）。そのため整理ボタンは使えません。"),
+        new Entry("clip.usage.measureFailed", "没能算出图片占用（{0}）——数字缺失比编一个数好。", "Could not measure image usage ({0}) — a missing number beats an invented one.", "画像の占用を計算できませんでした（{0}）——数字がない方が、でっち上げるよりマシです。"),
+        new Entry("clip.proj.none", " 当前一张都还没有，调到 {0} 张的实际占用还估不出来。", " There are no images yet, so what a cap of {0} would really take can't be estimated.", " 現在画像が 1 枚もないため、上限を {0} 件にした実占用は見積もれません。"),
+        new Entry("clip.proj.estimate", " 按现有平均单张 {0} 估算，上限 {1} 张约 {2}（缩略图另计，约为其 {3}px 的 JPEG）。", " Based on the current average of {0} per image, a cap of {1} would be about {2} (thumbnails extra, roughly {3}px JPEGs).", " 現在の平均 1 枚 {0} で見積むと、上限 {1} 件で約 {2}（サムネイルは別計、概ね {3}px の JPEG）。"),
+        new Entry("clip.orphans.some", " 另有 {0} 个文件不在历史里（共 {1}）：可能是某次删除没删干净的残留，也可能是你自己拷进来的。", " {0} more files are not referenced by any history entry ({1} in total): leftovers from a delete that did not finish, or files you copied in yourself.", " 履歴が参照していないファイルが {0} 件あります（合計 {1}）：削除に残ったものか、ご自身でコピーしたものか判別できません。"),
+        new Entry("clip.intake.off", "图片采集未开启：只记录文本与文件列表。", "Image capture is off: only text and file lists are recorded.", "画像収集はオフ：テキストとファイル一覧のみ記録します。"),
+        new Entry("clip.intake.paused", "图片采集已打开，但剪贴板历史总开关没开（或监听没建立）——现在一条图片都不会记录。", "Image capture is on, but the clipboard-history master switch is off (or the listener never started) — no image will be recorded right now.", "画像収集はオンですが、クリップボード履歴の親スイッチがオフ（または監視未開始）です——現在画像は 1 件も記録されません。"),
+        new Entry("clip.intake.on", "已开启：复制到的图片会存成 PNG，并预生成 {0}px 缩略图。单张超过 {1} 或短边小于 {2}px 的不收；密码管理器在前台时一律不收。", "On: copied images are stored as PNG with a {0}px thumbnail generated up front. Anything over {1} per image, or shorter than {2}px on its short side, is skipped; so is anything copied while a password manager is in the foreground.", "オン：コピーした画像は PNG で保存し、{0}px のサムネイルを先に作ります。1 枚 {1} を超える場合や短辺が {2}px 未満の場合は保存せず、パスワードマネージャーが前面のときも保存しません。"),
         // 今日速览的月题（批次 WI-31，P-172 收官）：主行与月历头部**同一个键**——此前两处各写一份
         // $"{年}年{月}月"，正是"同一句话两个主人"的现行案。en 走"2026/10"：不补零、不造 12 颗月名装平行
         //（组件位读得出就够；带格式的 {1:00} 会让占位符闸门眼盲——形状守闸门的，不是反过来）。

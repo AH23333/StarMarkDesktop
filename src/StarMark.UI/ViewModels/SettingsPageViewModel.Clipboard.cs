@@ -56,10 +56,19 @@ public partial class SettingsPageViewModel
     /// <summary>文本条数上限（默认 500＝改之前的写死值，这一格只是把它变成看得见的东西）。</summary>
     [ObservableProperty] private double _clipboardTextMaxValue;
 
-    [ObservableProperty] private string _clipboardImageStatus = string.Empty;
+    /// <summary>
+    /// 图片采集那一段的状态行。✅WI-64 起交回的是<b>身份</b>（键＋实参）而⛔ 成品串：这一行由
+    /// <c>LocText.SetMessage</c> 贴上屏幕，换语言那一刻由那颗进程级订阅重贴（⛔ 绑 <c>ToString()</c>，
+    /// 那是"取一次词就冻住"的形状＝P-193 那一族第一次上屏时的样子）。
+    /// </summary>
+    [ObservableProperty] private LocMessage? _clipboardImageStatus;
 
-    /// <summary>当前图片目录的实际占用 + 按上限的预估（决议 §3-Q1 第三层：让用户"按需配置"有数字可依）。</summary>
-    [ObservableProperty] private string _clipboardUsage = string.Empty;
+    /// <summary>
+    /// 当前图片目录的实际占用 + 按上限的预估（决议 §3-Q1 第三层：让用户"按需配置"有数字可依）。
+    /// <para>⚠ 这一行由<b>四段</b>拼成（占用／预估／存放路径／孤儿计数），是全页最长的一串套娃：
+    /// 任何一段停在上一门语言，屏幕上那一行就是半中半英——所以四段一起交身份、一起由 <c>clip.usage.line</c> 收。</para>
+    /// </summary>
+    [ObservableProperty] private LocMessage? _clipboardUsage;
 
     /// <summary>
     /// 「清理孤儿文件」能不能按。<b>只有真扫出东西才允许按</b>：扫不出东西时灰着，而旁边那行占用文字
@@ -83,9 +92,10 @@ public partial class SettingsPageViewModel
     /// <summary>
     /// 图片那一段的状态行。<b>三格各说什么、以及句子里那三个实测值（缩略图边长／单张上限／短边下限）</b>
     /// 全在 <see cref="ClipboardPolicy.DescribeImageIntake"/>（批次 SE）——这里以前把数字写死在句子里，
-    /// 改任何一颗判据，设置页就会替它撒谎。
+    /// 改任何一颗判据，设置页就会替它撒谎。✅WI-64 起这一颗只<b>转交身份</b>：⛔ 在本机取词
+    /// （那等于把 Abstractions 那半句冻在生成那一刻）。
     /// </summary>
-    private static string ClipboardImageStatusText(bool collecting, bool imageOn)
+    private static LocMessage ClipboardImageStatusText(bool collecting, bool imageOn)
         => ClipboardPolicy.DescribeImageIntake(collecting, imageOn);
 
     partial void OnClipboardImageEnabledChanged(bool value)
@@ -166,42 +176,47 @@ public partial class SettingsPageViewModel
     /// 症状就是"一打开设置页卡半秒"，而这一页本来已经有好几处要读盘。
     /// <para>顺带扫一次"图有行无"（§3-Q6 的第二类）：决议要的是<b>只数不删 + 数出来的看得见的</b>，
     /// 所以这一句直接接在占用那行后面，而旁边那颗按钮就是它的出口。</para>
+    /// <para>✅WI-64：这一行从此⛔ 再用 <c>+</c> 拼字符串——四段各是一颗键，最后一段（孤儿计数／"对账没跑成"那句）
+    /// 要么整段出现要么交 <c>null</c>。旧写法是 <c>if (orphanSentence.Length > 0) text += " " + …</c>，
+    /// 那是用字符串把戏回答"有没有这句话"：某一段念起来为空时，屏幕上只剩一个孤零零的分隔符。</para>
     /// </summary>
     private void ComputeClipboardUsage()
     {
-        ClipboardUsage = "正在统计图片目录…";
+        ClipboardUsage = LocMessage.Of("clip.usage.counting");
         _ = Task.Run(async () =>
         {
-            string text;
+            LocMessage text;
             bool canClean;
             try
             {
                 var scan = await Task.Run(() => ClipboardAssetAudit.ScanAsync(ClipboardRepo()));
                 var files = scan?.Files ?? await Task.Run(StarMark.Integrations.Clipboard.ClipboardImageStore.ListFiles);
                 var footprint = StarMark.Abstractions.Clipboard.ClipAssets.Summarize(files, out var tempBytes);
-                text = StarMark.Abstractions.Clipboard.ClipAssets.DescribeUsage(footprint, tempBytes)
-                     + " " + StarMark.Abstractions.Clipboard.ClipAssets
-                         .DescribeProjection(footprint, _settings.LoadClipboardImageMaxEntries())
-                     + " 文件就放在：" + StarMark.Abstractions.Clipboard.ClipAssets.Folder;
+                LocMessage? tail;
                 canClean = false;
                 if (scan is { } s)
                 {
                     var (orphanBytes, _) = ClipboardAssetAudit.BytesOf(s);
-                    var orphanSentence = StarMark.Abstractions.Clipboard.ClipAssets
+                    tail = StarMark.Abstractions.Clipboard.ClipAssets
                         .DescribeOrphans(s.Result.OrphanNames.Count, orphanBytes);
-                    if (orphanSentence.Length > 0) text += " " + orphanSentence;
                     canClean = s.Result.OrphanNames.Count + s.Result.TempNames.Count > 0;
                 }
                 else
                 {
                     // 扫不出差集时既不点亮按钮，也不写成"其实一个都没有"——那两种都会把用户引向一次错误的删除决定。
-                    text += " 但没能核对哪些文件已不属于历史（对账没跑成，原因见日志），所以清理按钮暂时不可用。";
+                    tail = LocMessage.Of("clip.usage.recountBlocked");
                 }
+                text = LocMessage.Of("clip.usage.line",
+                    StarMark.Abstractions.Clipboard.ClipAssets.DescribeUsage(footprint, tempBytes),
+                    StarMark.Abstractions.Clipboard.ClipAssets
+                        .DescribeProjection(footprint, _settings.LoadClipboardImageMaxEntries()),
+                    LocMessage.Of("clip.usage.folder", StarMark.Abstractions.Clipboard.ClipAssets.Folder),
+                    tail);
             }
             catch (Exception ex)
             {
                 StarLog.Error("统计剪贴板图片占用失败", ex);
-                text = $"没能算出图片占用（{ex.Message}）——数字缺失比编一个数好。";
+                text = LocMessage.Of("clip.usage.measureFailed", ex.Message);
                 canClean = false;
             }
             App.MainWindow?.DispatcherQueue?.TryEnqueue(() =>

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions.Clipboard;
 
@@ -174,23 +175,27 @@ public static class ClipAssets
     }
 
     /// <summary>
-    /// 占用那句话（设置页打开时算一次，§3-Q1 第三层）。
+    /// 占用那句话（设置页打开时算一次，§3-Q1 第三层）。✅WI-64（P-193 的 Abstractions 半句）交回的是
+    /// <b>没取词的</b>「键＋实参」——这一行的话<b>还有一半在宿主</b>（<c>clip.usage.line</c> 收四段），
+    /// 在这里当场取词就会出现"前半句跟着界面语言、后半句跟着程序文化"那种同一行两种语言。
     /// <para>主图与缩略图<b>分开报</b>：合成一个总数，用户删了图却看见数字几乎没动，
     /// 就会以为这个功能在骗人——而真相是缩略图还在。临时件单列（它只可能来自一次没写完的采集）。</para>
+    /// <para>⚠ "这一臂今天没话"一律交 <c>null</c> 而⛔ 交空串：<c>null</c> 让那一颗槽整颗消失，
+    /// 空串则留下一处只剩分隔符的空位（<c>LocAssert.Silent</c> 钉这一条）。</para>
     /// </summary>
-    public static string DescribeUsage(Footprint footprint, long tempBytes)
+    public static LocMessage DescribeUsage(Footprint footprint, long tempBytes)
     {
-        if (footprint.TotalFiles == 0 && tempBytes == 0)
-            return "图片目录还是空的。";
-        var sb = new System.Text.StringBuilder();
-        sb.Append(footprint.MainCount > 0
-            ? $"图片 {footprint.MainCount} 张 · 共 {DescribeBytes(footprint.MainBytes)}"
-            : "还没有图片");
-        if (footprint.ThumbCount > 0)
-            sb.Append($"；缩略图 {footprint.ThumbCount} 张 · {DescribeBytes(footprint.ThumbBytes)}");
-        if (tempBytes > 0)
-            sb.Append($"；另有 {DescribeBytes(tempBytes)} 未写完的临时件（不影响历史，可清理）");
-        return sb.ToString();
+        if (footprint.TotalFiles == 0 && tempBytes == 0) return LocMessage.Of("clip.usage.empty");
+        return LocMessage.Of("clip.usage.full",
+            footprint.MainCount > 0
+                ? LocMessage.Of("clip.usage.main", footprint.MainCount, DescribeBytes(footprint.MainBytes))
+                : LocMessage.Of("clip.usage.none"),
+            footprint.ThumbCount > 0
+                ? LocMessage.Of("clip.usage.thumbs", footprint.ThumbCount, DescribeBytes(footprint.ThumbBytes))
+                : null,
+            tempBytes > 0
+                ? LocMessage.Of("clip.usage.temps", DescribeBytes(tempBytes))
+                : null);
     }
 
     /// <summary>
@@ -198,12 +203,12 @@ public static class ClipAssets
     /// <para>§3-Q1 要的是"让用户自己配"这件事<b>有数字可依</b>：只给一个条数框，用户不知道该填多少，
     /// 结果就是要么不敢调、要么一口气调到 2000 然后发现磁盘满了。没样本时如实说估不了，不编一个数。</para>
     /// </summary>
-    public static string DescribeProjection(Footprint footprint, int cap)
+    public static LocMessage DescribeProjection(Footprint footprint, int cap)
     {
-        if (footprint.MainCount == 0) return $"当前一张都还没有，调到 {cap} 张的实际占用还估不出来。";
+        if (footprint.MainCount == 0) return LocMessage.Of("clip.proj.none", cap);
         var avg = footprint.MainBytes / (double)footprint.MainCount;
-        return $"按现有平均单张 {DescribeBytes((long)avg)} 估算，上限 {cap} 张约 {DescribeBytes((long)(avg * cap))}"
-             + $"（缩略图另计，约为其 {ThumbnailMaxEdge}px 的 JPEG）。";
+        return LocMessage.Of("clip.proj.estimate", DescribeBytes((long)avg), cap,
+            DescribeBytes((long)(avg * cap)), ThumbnailMaxEdge);
     }
 
     /// <summary>确认框里最多列出几个名字：再多就变成一屏没人会读的清单，剩下的用总数说清。</summary>
@@ -212,12 +217,13 @@ public static class ClipAssets
     /// <summary>
     /// 孤儿那一类的计数句（§3-Q6：这一类<b>只数不删</b>——但"数出来"必须让用户看得见，
     /// 否则"目录里有些文件历史并不认识"这件事只存在于日志里）。
-    /// <para>0 时返回空串：没有孤儿不是一条需要占一行才能读到的事实（同一口径见"关着不占行"）。</para>
+    /// <para>0 时交 <c>null</c>：没有孤儿不是一条需要占一行才能读到的事实（同一口径见"关着不占行"）。
+    /// ⚠ 返回类型升成可空的 <see cref="LocMessage"/> 之后，"有没有这句话"由<b>空引用</b>回答，
+    /// ⛔ 再由 <c>.Length &gt; 0</c> 这种字符串把戏回答（那会把"交了一句话、念起来却是空"也算成没话）。</para>
     /// </summary>
-    public static string DescribeOrphans(int count, long bytes) => count <= 0
-        ? string.Empty
-        : $"另有 {count} 个文件不在历史里（共 {DescribeBytes(bytes)}）："
-          + "可能是某次删除没删干净的残留，也可能是你自己拷进来的。";
+    public static LocMessage? DescribeOrphans(int count, long bytes) => count <= 0
+        ? null
+        : LocMessage.Of("clip.orphans.some", count, DescribeBytes(bytes));
 
     /// <summary>
     /// 「清理」确认框的正文。<b>三件事必须写在同一屏里</b>：动的是哪个目录里的哪几个名字、

@@ -1100,7 +1100,7 @@
                                     <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.ClipboardImageEnabled, Mode=TwoWay}"/>
                                 </Grid>
-                                <TextBlock Text="{x:Bind ViewModel.ClipboardImageStatus, Mode=OneWay}"
+                                <TextBlock x:Name="ClipboardImageStatusText"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
 
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
@@ -1131,7 +1131,7 @@
                                     数字是"要不要把上限调高"这个决定的唯一依据，看不见就等于把选择权给出去又收回来。
                                     图片目录对用户直接可见（决议 §3-Q6），所以路径也一并写出来，不藏。
                                 -->
-                                <TextBlock Text="{x:Bind ViewModel.ClipboardUsage, Mode=OneWay}"
+                                <TextBlock x:Name="ClipboardUsageText"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
                                 <Button i18n:LocText.Key="settings.data.recount" Command="{x:Bind ViewModel.RefreshClipboardUsageCommand}"
                                         Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
