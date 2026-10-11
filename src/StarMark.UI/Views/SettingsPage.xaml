@@ -44,7 +44,9 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Bind ActionName}" VerticalAlignment="Center"
+                <!-- 四颗槽一律 Mode=OneWay：值由行模型现算（「键＋实参」＋当下语言），换语言那一刻由
+                     SettingsPage 那一拍重念（P-175 缺口②）。⛔ 回到 OneTime——那等于把句子钉在建行那一刻的语言。 -->
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Bind ActionName, Mode=OneWay}" VerticalAlignment="Center"
                            Style="{StaticResource MutedText}" TextWrapping="Wrap"/>
                 <Button Grid.Row="0" Grid.Column="1"
                         Content="{x:Bind BindingText, Mode=OneWay}"
@@ -56,7 +58,7 @@
 
                 <!-- 冲突提示：不弹窗，就地标注（用户可直接忽略） -->
                 <TextBlock Grid.Row="1" Grid.Column="1" Margin="12,2,0,0"
-                           Text="{x:Bind ConflictText}" FontSize="11" TextWrapping="Wrap"
+                           Text="{x:Bind ConflictText, Mode=OneWay}" FontSize="11" TextWrapping="Wrap"
                            MaxWidth="320" HorizontalAlignment="Right"
                            Foreground="{ThemeResource SystemFillColorCautionBrush}"
                            Visibility="{x:Bind HasConflict, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
@@ -64,7 +66,7 @@
                 <!-- 组合键此刻被别的程序占用：这是"提示"不是"注册被拒绝"（绑定已保存、程序在自动重试），
                      所以用与冲突标注同一 tone 的 caution 色，而不是 critical 红。 -->
                 <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,2,0,0"
-                           Text="{x:Bind RegisterErrorText}" FontSize="11" TextWrapping="Wrap"
+                           Text="{x:Bind RegisterErrorText, Mode=OneWay}" FontSize="11" TextWrapping="Wrap"
                            HorizontalAlignment="Left"
                            Foreground="{ThemeResource SystemFillColorCautionBrush}"
                            Visibility="{x:Bind HasRegisterError, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>

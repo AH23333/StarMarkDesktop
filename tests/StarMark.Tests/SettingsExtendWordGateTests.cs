@@ -206,15 +206,28 @@ public sealed class SettingsExtendWordGateTests : IDisposable
         }
     }
 
-    /// <summary>⑦这一屏⛔ 新订阅者：重贴由 LocText 那唯一一处订阅负责；本页那份仍只念诊断那行。</summary>
+    /// <summary>
+    /// ⑦这一屏⛔ 新增<b>一位主人</b>（那是 <c>I18nWiringGateTests.ExactlyOneSubscriberRenamesTheStringsAndItRebuildsNothing</c>
+    /// 按<b>档</b>点名的东西），而它<b>已有</b>的那一位每开一次订阅都必须成对摘掉。
+    /// <para><b>口径改口（批次 WI-40-3b）</b>：这一格从前钉的是"这一档只许有一处 <code>+=</code>"，那句话把两件不同的事
+    /// 混成了一件——本档从来不是"⛔ 再订阅"（它自己就是主人之一），要防的是<b>挂了没人摘</b>（坑表 #386：这颗 VM 是
+    /// AddTransient，每进一次设置页多一份订阅，而那些页面早就不在了）。「快捷键」那一栏模板行的重贴（P-175 缺口②）
+    /// 因此加进<b>同一对块</b>：多一个 handler、多一条配对的 <code>-=</code>，主人名单一个字没变。
+    /// 现在按<b>每一位 handler</b> 点名"挂一次、摘两次（Loaded 先退再订＋Unloaded 收尾）"，并把 Unloaded 那一体
+    /// 必须同时摘掉两位也钉住——这一族真正的失效是那条 <code>-=</code> 没写，⛔ 靠"总数不许变"去挡。</para>
+    /// </summary>
     [Fact]
-    public void TheHostAddsNoSecondLocaleSubscription()
+    public void TheHostPairsEveryLocaleSubscriptionItOpens()
     {
         var host = CodeOf(HostCs);
-        Assert.Equal(2, Times(host, "Locale.Changed -= ViewModel.PaintDiagnostics"));   // 与 Loaded 那颗成对
         Assert.Equal(1, Times(host, "Locale.Changed += ViewModel.PaintDiagnostics"));
-        // 「+=」在这一档只许有那一个去向：多一位主人就必须在这里配对摘掉，而换语言重贴已由 LocText 那一份全局订阅负责。
-        Assert.Equal(1, Times(host, "Locale.Changed +="));
+        Assert.Equal(2, Times(host, "Locale.Changed -= ViewModel.PaintDiagnostics"));   // 先退再订＋收尾那一次
+        Assert.Equal(1, Times(host, "Locale.Changed += RepasteHotkeyRows"));            // 「快捷键」那一栏的重贴
+        Assert.Equal(2, Times(host, "Locale.Changed -= RepasteHotkeyRows"));
+        // 收尾那一体必须两位都摘：只摘一位＝另一位永远挂着，而那些行早就不在了
+        var unloaded = SourceGate.MethodBody(host, "private void Page_Unloaded(object sender, RoutedEventArgs e)");
+        Assert.Contains("Locale.Changed -= ViewModel.PaintDiagnostics;", unloaded, StringComparison.Ordinal);
+        Assert.Contains("Locale.Changed -= RepasteHotkeyRows;", unloaded, StringComparison.Ordinal);
         Assert.Contains("private void ApplyExtensionStatuses()", host);
         // 两个推它的时机缺一不可：进页面那一次（回灌出来的值没人推就一直是空的）＋那六颗属性任一变化时那一次。
         Assert.Equal(1, Times(host, "private void ApplyExtensionStatuses()"));

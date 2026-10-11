@@ -33,22 +33,25 @@ public static class HotkeyErrorText
     /// （开发期同时开几份、或留着一个提权实例）。一律写成"被其它程序占用"，用户就会去关本不相干的软件、
     /// 或者给这些键换个组合——两种都是白做工，而那条键其实一直在另一个实例那儿好好的生效着。
     /// </para>
+    /// <para><b>批次 WI-40-3b 起交回的是「键＋实参」而不是成品串</b>：这一句要进设置页那一行的模板，
+    /// 而模板行的取词时刻归界面（换语言那一刻重念）。词早就进了表，<b>取词时机</b>才是那一格缺陷（坑表 #362）——
+    /// 返回 <c>string</c> 等于在注册失败的那一刻把语言钉死，而注册是自动重试的，那句话可能在几分钟前算好。</para>
     /// </summary>
-    public static string RegisterFailure(int errorCode, IReadOnlyList<int>? siblingInstancePids = null) => errorCode switch
+    public static LocMessage RegisterFailure(int errorCode, IReadOnlyList<int>? siblingInstancePids = null) => errorCode switch
     {
         ErrorHotkeyAlreadyRegistered when siblingInstancePids is { Count: > 0 } =>
-            Locale.Fmt("hotkey.err.occupiedBySiblings", siblingInstancePids.Count.ToString(),
-                string.Join(Locale.T("hotkey.err.pidJoin"), siblingInstancePids.Select(id => id.ToString()))),
-        ErrorHotkeyAlreadyRegistered => Locale.T("hotkey.err.occupied"),
-        _ => Locale.Fmt("hotkey.err.registerDenied", errorCode.ToString()),
+            LocMessage.Of("hotkey.err.occupiedBySiblings", siblingInstancePids.Count.ToString(),
+                new LocJoin(siblingInstancePids.Select(id => (object?)id.ToString()).ToList(), "hotkey.err.pidJoin")),
+        ErrorHotkeyAlreadyRegistered => LocMessage.Of("hotkey.err.occupied"),
+        _ => LocMessage.Of("hotkey.err.registerDenied", errorCode.ToString()),
     };
 
-    /// <summary>安装底层键盘钩子失败的原因——此时收不到任何按键，录制不能用。</summary>
-    public static string HookInstallFailure(int errorCode) => errorCode switch
+    /// <summary>安装底层键盘钩子失败的原因——此时收不到任何按键，录制不能用。取词时刻同 <see cref="RegisterFailure"/>。</summary>
+    public static LocMessage HookInstallFailure(int errorCode) => errorCode switch
     {
-        ErrorAccessDenied => Locale.T("hotkey.err.hookDenied"),
-        ErrorHookCreationFailed => Locale.T("hotkey.err.hookCreate"),
-        _ => Locale.Fmt("hotkey.err.hookFailed", errorCode.ToString()),
+        ErrorAccessDenied => LocMessage.Of("hotkey.err.hookDenied"),
+        ErrorHookCreationFailed => LocMessage.Of("hotkey.err.hookCreate"),
+        _ => LocMessage.Of("hotkey.err.hookFailed", errorCode.ToString()),
     };
 
     /// <summary>
@@ -66,6 +69,11 @@ public static class HotkeyErrorText
     /// </summary>
     public const string RebindHintKey = "hotkey.err.rebindHint";
 
-    /// <summary>WI-2r 起提示句进语言表；常量保留给既有引用做编译期存在性锚（值改由表出）。</summary>
-    public static string RebindHint => Locale.T(RebindHintKey);
+    /// <summary>
+    /// WI-2r 起提示句进语言表，批次 WI-40-3b 起<b>交回的是键</b>而不是取好词的那一句：
+    /// 它现在坐在设置页那一行的模板里，换语言那一刻要跟着重念。
+    /// <para>名字⛔ 顺手改成 <c>…Message</c>：那颗闸门按 <c>"HotkeyErrorText.RebindHint"</c> 这个串钉
+    /// "指路的话只有一个出处"，改名字会让它读起来像没人引用了（而同名加一颗才是真风险——两颗都在，措辞就会只改到一半）。</para>
+    /// </summary>
+    public static LocMessage RebindHint => LocMessage.Of(RebindHintKey);
 }

@@ -34,6 +34,20 @@ public sealed record LocMessage(string Key, object?[]? Args = null)
 }
 
 /// <summary>
+/// 「一串话＋用哪颗键把它们连起来」：连接符也住在表里，所以这一颗要等<b>被贴上去的那一刻</b>才取词（批次 WI-40-3b）。
+/// <para>为什么⛔ 在算实参时就 <c>string.Join(Locale.T(连接键), …)</c> 再把字符串交出去：那样连接符被钉在
+/// <b>算出它的那一瞬间</b>，换语言重贴只重算了外层句子，屏幕上剩下「A、B, C」这种半中半英。
+/// 句子进了表而<b>取词时机</b>没跟着进——坑表 #362 那一族的第三个表面（前两个＝<see cref="LocMessage.ToString"/>
+/// 与 <c>PlaceholderArgStore</c> 那颗信箱）。</para>
+/// <para>实参按 <c>object?</c> 存：数字（pid）与 <see cref="LocMessage"/>（动作名）都能进来，
+/// <c>string.Join</c> 对每个元素调 <c>ToString</c>，于是嵌套的那一句同样在连起来这一刻才按当下语言取词。</para>
+/// </summary>
+public sealed record LocJoin(IReadOnlyList<object?> Items, string JoinKey)
+{
+    public override string ToString() => string.Join(Locale.T(JoinKey), Items);
+}
+
+/// <summary>
 /// 当前界面语言＋取词的唯一入口（批次 WI-1）。
 /// <para>进程里<b>只有这一颗可变状态</b>：谁要按语言取词都从这里走，于是"换语言"这一件事
 /// 只有一个要重画的时刻，而不是每个控件自己记得去读一遍。</para>

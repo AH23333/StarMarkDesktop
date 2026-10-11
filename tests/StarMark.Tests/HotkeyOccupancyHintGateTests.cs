@@ -22,11 +22,13 @@ public sealed class HotkeyOccupancyHintGateTests
     /// <summary>
     /// 逐行提示必须把 Core 那句指路拼上。少了它，界面就退回"报完被占用就停手"——
     /// 而那正是 P-136 登记的原始症状（设置页显示这颗键已绑上，按下去没反应，也没说下一步做什么）。
+    /// <para>锚点跟着批次 WI-40-3b 走：那一格现在存的是「键＋实参」（<c>row.RegisterErrorMessage =</c>），
+    /// 屏幕上那句由行模型的 getter 现算——判据一个字没放宽（仍要求那颗指路句出现在同一片里）。</para>
     /// </summary>
     [Fact]
     public void TheFailingRowCarriesTheWayOut()
         => Assert.Contains("HotkeyErrorText.RebindHint",
-            SourceGate.Between(Code(Partial), "row.RegisterErrorText =", "RegisterErrorSummary ="), StringComparison.Ordinal);
+            SourceGate.Between(Code(Partial), "row.RegisterErrorMessage =", "RegisterErrorSummary ="), StringComparison.Ordinal);
 
     /// <summary>
     /// 反向也钉：<b>换键那句话在界面里一份都不许有</b>，在判据那颗里恰好一份。

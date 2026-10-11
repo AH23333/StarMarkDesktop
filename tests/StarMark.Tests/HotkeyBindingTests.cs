@@ -353,8 +353,9 @@ public sealed class HotkeyBindingTests
     [Fact]
     public void RegisterFailure_NamesTheOccupiedCase_AndKeepsOtherCodesRaw()
     {
-        Assert.Equal("该组合键已被其它程序占用", HotkeyErrorText.RegisterFailure(1409));
-        Assert.Equal("系统拒绝注册（Win32 错误 5）", HotkeyErrorText.RegisterFailure(5));
+        // WI-40-3b 起 Core 交回的是「键＋实参」，这里 .Render() 一次再比句子：判据钉的还是同一串字，⛔ 因此放宽
+        Assert.Equal("该组合键已被其它程序占用", HotkeyErrorText.RegisterFailure(1409).Render());
+        Assert.Equal("系统拒绝注册（Win32 错误 5）", HotkeyErrorText.RegisterFailure(5).Render());
     }
 
     /// <summary>
@@ -365,18 +366,18 @@ public sealed class HotkeyBindingTests
     [Fact]
     public void RegisterFailure_BlamesOtherProgramsOnlyWhenNoSiblingInstanceIsRunning()
     {
-        var own = HotkeyErrorText.RegisterFailure(1409, new[] { 21648 });
+        var own = HotkeyErrorText.RegisterFailure(1409, new[] { 21648 }).Render();
         Assert.Contains("本程序还另开着 1 个实例", own);
         Assert.Contains("21648", own);
         Assert.DoesNotContain("其它程序", own);
         // 多个实例要一次报全：只报第一个的话，用户关掉一个还以为问题解决了
-        var two = HotkeyErrorText.RegisterFailure(1409, new[] { 7, 9 });
+        var two = HotkeyErrorText.RegisterFailure(1409, new[] { 7, 9 }).Render();
         Assert.Contains("7", two);
         Assert.Contains("9", two);
         // 空列表＝没探到自己人 ⇒ 不能编出"自己人占的"这个结论
-        Assert.Equal("该组合键已被其它程序占用", HotkeyErrorText.RegisterFailure(1409, new int[0]));
+        Assert.Equal("该组合键已被其它程序占用", HotkeyErrorText.RegisterFailure(1409, new int[0]).Render());
         // 非 1409 的码不被这条线索改写：仍然只给编号，不编造解释
-        Assert.Equal("系统拒绝注册（Win32 错误 5）", HotkeyErrorText.RegisterFailure(5, new[] { 21648 }));
+        Assert.Equal("系统拒绝注册（Win32 错误 5）", HotkeyErrorText.RegisterFailure(5, new[] { 21648 }).Render());
     }
 
     /// <summary>
@@ -388,7 +389,7 @@ public sealed class HotkeyBindingTests
     [InlineData(1401)]
     [InlineData(9999)]
     public void HookInstallFailure_AlwaysCarriesTheCodeNumber(int code)
-        => Assert.Contains(code.ToString(), HotkeyErrorText.HookInstallFailure(code));
+        => Assert.Contains(code.ToString(), HotkeyErrorText.HookInstallFailure(code).Render());
 
     // ===== 组合键被占用时，那一行要把出路说出来（批次 SW，P-136） =====
 
@@ -399,10 +400,10 @@ public sealed class HotkeyBindingTests
     [Fact]
     public void RebindHint_NamesTheEntryOnThatVeryRow()
     {
-        Assert.Contains("这一行", HotkeyErrorText.RebindHint, StringComparison.Ordinal);
-        Assert.Contains("键位", HotkeyErrorText.RebindHint, StringComparison.Ordinal);
+        Assert.Contains("这一行", HotkeyErrorText.RebindHint.Render(), StringComparison.Ordinal);
+        Assert.Contains("键位", HotkeyErrorText.RebindHint.Render(), StringComparison.Ordinal);
         // 只说"重录"不够——重录完不点「保存快捷键」是不生效（JE/KL 定的两步流程），指路要指到底
-        Assert.Contains("保存快捷键", HotkeyErrorText.RebindHint, StringComparison.Ordinal);
+        Assert.Contains("保存快捷键", HotkeyErrorText.RebindHint.Render(), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -415,5 +416,5 @@ public sealed class HotkeyBindingTests
     [InlineData("手动")]
     [InlineData("已自动")]
     public void RebindHint_NeverPushesWorkBackToTheUser(string banned)
-        => Assert.DoesNotContain(banned, HotkeyErrorText.RebindHint, StringComparison.Ordinal);
+        => Assert.DoesNotContain(banned, HotkeyErrorText.RebindHint.Render(), StringComparison.Ordinal);
 }

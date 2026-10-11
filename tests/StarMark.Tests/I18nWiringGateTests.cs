@@ -1591,14 +1591,22 @@ public sealed class I18nWiringGateTests
         Assert.Contains("public bool Bound", model, StringComparison.Ordinal);
 
         // ③ 每一处改了显示的路径都必须同处改掉那颗 bool：少钉一处＝那一路上 Bound 与文字分家（各自演自己的）。
-        Assert.Contains("BindingText = bound ? HotkeyDisplay.Display(g!) : Locale.T(\"hotkey.unset\")", rows, StringComparison.Ordinal);
+        //    WI-40-3b 起这里交出的是「键＋实参」：键位那颗走 common.rawValue（它是数据），「未设置」那颗才是表里的句子。
+        Assert.Contains("BindingMessage = bound", rows, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"common.rawValue\", HotkeyDisplay.Display(g!))", rows, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"hotkey.unset\")", rows, StringComparison.Ordinal);
+        // ⛔ 回到"写进去的那一刻就把词取出来"——那正是缺口②的形状
+        Assert.DoesNotContain("Locale.T(\"hotkey.unset\")", rows, StringComparison.Ordinal);
+        Assert.DoesNotContain("BindingText = bound", rows, StringComparison.Ordinal);
         Assert.Contains("row.Bound = !g.IsEmpty;", MethodBody(rows, "private void FinishRecording()"), StringComparison.Ordinal);
         Assert.Contains("_recordingRow.Bound = _recordingWasSet;", MethodBody(rows, "private void StopRecording(bool resetText)"), StringComparison.Ordinal);
         Assert.Contains("row.Bound = false;", MethodBody(rows, "private void ClearBinding()"), StringComparison.Ordinal);
 
-        // ④ 冲突那句与它自己的连接号都住表里（顿号换英文要变成 ", "，坑表 #356）。
-        Assert.Contains("Locale.Fmt(\"hotkey.conflict.shares\", string.Join(Locale.T(\"hotkey.conflict.join\"), others))",
+        // ④ 冲突那句与它自己的连接号都住表里（顿号换英文要变成 ", "，坑表 #356）：
+        //    名单交 LocMessage、连接号交键，由 LocJoin 在<b>被贴上去那一刻</b>才取词（坑表 #362）。
+        Assert.Contains("LocMessage.Of(\"hotkey.conflict.shares\", new LocJoin(others, \"hotkey.conflict.join\"))",
             MethodBody(rows, "private void RefreshConflictMarks()"), StringComparison.Ordinal);
+        Assert.DoesNotContain("string.Join(Locale.T(\"hotkey.conflict.join\")", rows, StringComparison.Ordinal);
         // ⑤ 钩子装不上那句：原因由 Core 给，后半句"因此收不到你的按键"不再由代码拼。
         Assert.Contains("RecordingAlert = Locale.Fmt(\"hotkey.record.hookRetry\", why);",
             MethodBody(rows, "private void BeginRecording(string action, Button btn, HotkeyRow row)"), StringComparison.Ordinal);

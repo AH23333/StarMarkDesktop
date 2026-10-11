@@ -45,6 +45,17 @@ public sealed partial class SettingsPage
     private void OnRegistrationStateFlushed(System.Collections.Generic.IReadOnlyList<HotkeyRegistrationFailure> _)
         => MarkRegistrationFailures();
 
+    /// <summary>
+    /// 换语言那一拍：把「快捷键」这一栏每一行的四句话各重念一次。
+    /// <para>这里⛔ 重建行、⛔ 重算键位、⛔ 重查冲突——数据一个字都没变，变的只是<b>取词用的那版语言</b>（P-175 缺口②）。
+    /// 挂在主文件里那颗<b>已有</b>的 <c>Locale.Changed</c> 订阅旁、与摘掉<b>成对</b>：这一页早就是主人了，
+    /// ⛔ 为这件事新开第十位（坑表 #386＝"谁在改文案"一旦有两处，下次就有一处漏摘）。</para>
+    /// </summary>
+    private void RepasteHotkeyRows()
+    {
+        foreach (var row in HotkeyRowsItems) row.Repaste();
+    }
+
     private void BuildHotkeyRows()
     {
         // 有未保存的录制结果时保留内存副本，避免布局增删等重建把用户刚录的键冲掉
@@ -67,11 +78,15 @@ public sealed partial class SettingsPage
             var row = new HotkeyRow
             {
                 Action = action,
-                ActionName = HotkeyActions.DisplayName(action, _layouts),
+                // 动作名交回 Core 那颗「键＋实参」：这一行住在模板里，取词时刻归换语言那一拍（P-175 缺口②）
+                ActionNameMessage = HotkeyActions.DisplayMessage(action, _layouts),
                 // 绑没绑记在 Bound 上：那一栏的计数读它。⛔ 让"给人看的那一句"兼任真值判据——
                 // 「未设置」进了表之后，按字符串相等数出来的数会在换语言那一刻全归零（坑表 #354）。
                 Bound = bound,
-                BindingText = bound ? HotkeyDisplay.Display(g!) : Locale.T("hotkey.unset"),
+                // 键位是数据（走 common.rawValue 那道门），「未设置」才是表里的那句话：两件事⛔ 并成一颗 null。
+                BindingMessage = bound
+                    ? LocMessage.Of("common.rawValue", HotkeyDisplay.Display(g!))
+                    : LocMessage.Of("hotkey.unset"),
             };
             HotkeyRowsItems.Add(row);
             var cat = HotkeyActions.CategoryOf(action, _layouts);
@@ -144,20 +159,23 @@ public sealed partial class SettingsPage
         {
             if (!_hotkeyBindings.TryGetValue(row.Action, out var g) || g.IsEmpty)
             {
-                row.ConflictText = string.Empty;
+                row.ConflictMessage = null;
                 continue;
             }
             if (!byGesture.TryGetValue(HotkeyGesture.GestureKey(g), out var actions) || actions.Count <= 1)
             {
-                row.ConflictText = string.Empty;
+                row.ConflictMessage = null;
                 continue;
             }
+            // 名单里每一项都还是「键＋实参」：组件名与布局名跟着当下语言走，⛔ 在这里先取一次词
             var others = actions.Where(a => a != row.Action)
-                                .Select(a => HotkeyActions.DisplayName(a, _layouts))
+                                .Select(a => HotkeyActions.DisplayMessage(a, _layouts)
+                                            ?? LocMessage.Of("common.rawValue", a))
                                 .ToList();
-            row.ConflictText = others.Count == 0
-                ? string.Empty
-                : Locale.Fmt("hotkey.conflict.shares", string.Join(Locale.T("hotkey.conflict.join"), others));
+            // 连接号也住在表里：整句在这一刻交出，而「、 / ,  / 、」要等被贴上去那一刻才取词（坑表 #362）
+            row.ConflictMessage = others.Count == 0
+                ? null
+                : LocMessage.Of("hotkey.conflict.shares", new LocJoin(others, "hotkey.conflict.join"));
         }
     }
 
@@ -202,14 +220,14 @@ public sealed partial class SettingsPage
         _recordingAction = action;
         _recordingButton = btn;
         _recordingRow = row;
-        _recordingPrevText = row.BindingText;
+        _recordingPrevMessage = row.BindingMessage;
         _recordingWasSet = _hotkeyBindings.TryGetValue(action, out var g) && !g.IsEmpty;
         _recordedModifiers = HotkeyModifiers.None;
         _recordedMainKey = 0;
 
         row.IsRecording = true;
-        row.BindingText = string.Empty;                 // 清空文字，保留按钮样式——用户可实时看到按下的键
-        row.ConflictText = string.Empty;
+        row.BindingMessage = null;                      // 清空文字，保留按钮样式——用户可实时看到按下的键
+        row.ConflictMessage = null;
         // 注意：不设置 btn.Background，保持默认按钮样式（按用户要求不高亮）
 
         // 录制期间挂起全局热键，避免按下的键命中已生效的热键（如正在重录「隐藏主界面」
@@ -277,7 +295,8 @@ public sealed partial class SettingsPage
         var text = _recordedMainKey == 0
             ? mods
             : (mods.Length == 0 ? HotkeyDisplay.KeyName(_recordedMainKey) : $"{mods} + {HotkeyDisplay.KeyName(_recordedMainKey)}");
-        _recordingRow.BindingText = text;
+        // 回显的是键位＝数据，走同一道门：⛔ 因为"这句不归表管"就把它塞成 null——那会让取消录制时还原不出原来的句子
+        _recordingRow.BindingMessage = LocMessage.Of("common.rawValue", text);
     }
 
     /// <summary>结束录制：只落到内存待保存字典里，**不注册生效**（需点保存）。</summary>
@@ -298,7 +317,9 @@ public sealed partial class SettingsPage
         row.IsRecording = false;
         var g = _hotkeyBindings[action];
         row.Bound = !g.IsEmpty;
-        row.BindingText = g.IsEmpty ? Locale.T("hotkey.unset") : HotkeyDisplay.Display(g);
+        row.BindingMessage = g.IsEmpty
+            ? LocMessage.Of("hotkey.unset")
+            : LocMessage.Of("common.rawValue", HotkeyDisplay.Display(g));
         _ignoreClickUntil = DateTimeOffset.UtcNow.AddMilliseconds(400);  // 吞掉本键附带的那次 Click
         _hotkeysDirty = true;
         RaiseHotkeyStateChanged();
@@ -315,12 +336,12 @@ public sealed partial class SettingsPage
         {
             _recordingRow.IsRecording = false;
             _recordingRow.Bound = _recordingWasSet;
-            _recordingRow.BindingText = _recordingPrevText ?? Locale.T("hotkey.unset");
+            _recordingRow.BindingMessage = _recordingPrevMessage ?? LocMessage.Of("hotkey.unset");
         }
         _recordingAction = null;
         _recordingButton = null;
         _recordingRow = null;
-        _recordingPrevText = null;
+        _recordingPrevMessage = null;
         _recordingWasSet = false;
         _recordedModifiers = HotkeyModifiers.None;
         _recordedMainKey = 0;
@@ -352,7 +373,7 @@ public sealed partial class SettingsPage
         if (row is not null)
         {
             row.Bound = false;
-            row.BindingText = Locale.T("hotkey.unset");
+            row.BindingMessage = LocMessage.Of("hotkey.unset");
         }
         _hotkeysDirty = true;
         RaiseHotkeyStateChanged();
@@ -442,7 +463,7 @@ public sealed partial class SettingsPage
     private void MarkRegistrationFailures()
     {
         var failed = HotkeySvc()?.RegistrationFailures ?? Array.Empty<HotkeyRegistrationFailure>();
-        var reasons = new Dictionary<string, string>();
+        var reasons = new Dictionary<string, LocMessage>();
         foreach (var f in failed) reasons[HotkeyGesture.GestureKey(f.Gesture)] = f.Reason;
 
         foreach (var row in HotkeyRowsItems)
@@ -450,10 +471,11 @@ public sealed partial class SettingsPage
             // 措辞刻意不是"失败/未注册"：绑定已经存下并在自动重试，这一行只是"此刻还归别人"的事实提示。
             // 出路要**点在同一行上说**（P-136）：页底那句汇总离这一行有十几行之远，"给这些动作换一个组合"
             // 到底点哪里，用户得自己猜——而入口就是这一行那颗显示键位的按钮。文案在 Core 那颗里，界面不重写一份。
-            row.RegisterErrorText =
+            // ⚠ 这里交的是「键＋实参」而不是拼好的那句：占用状态是**自动重试**的，原因可能在换语言之前几分钟就算好了。
+            row.RegisterErrorMessage =
                 _hotkeyBindings.TryGetValue(row.Action, out var g) && !g.IsEmpty
                 && reasons.TryGetValue(HotkeyGesture.GestureKey(g), out var why)
-                    ? Locale.Fmt("hotkey.err.rowNotice", why, HotkeyErrorText.RebindHint) : string.Empty;
+                    ? LocMessage.Of("hotkey.err.rowNotice", why, HotkeyErrorText.RebindHint) : null;
         }
 
         RegisterErrorSummary = failed.Count == 0
@@ -462,10 +484,14 @@ public sealed partial class SettingsPage
             // 具体是谁由每一条的 Reason 说（那边有 pid 就报 pid），汇总句只说"此刻没归这个实例"这个事实。
             // 汇总句**不再重复教他怎么换键**——那句话只有一个出处（Core 的 RebindHint），由每一行自己说；
             // 同一件事在两处各写一遍，下次改措辞就会只改到一半（P-123/P-130 那条线）。
+            // 每一条都还是「键＋实参」，连接号也交键：这一句离"下一次自动重试"最多隔 OccupancyRetrySeconds，
+            // 中途换过语言时它自己会重算，⛔ 在这里先把词取死。
             : Locale.Fmt("hotkey.err.summary",
                   failed.Count.ToString(),
-                  string.Join(Locale.T("hotkey.err.pidJoin"),
-                      failed.Select(f => Locale.Fmt("hotkey.err.summaryItem", HotkeyDisplay.Display(f.Gesture), f.Reason))),
+                  new LocJoin(failed
+                      .Select(f => (object?)LocMessage.Of("hotkey.err.summaryItem",
+                          HotkeyDisplay.Display(f.Gesture), f.Reason))
+                      .ToList(), "hotkey.err.pidJoin"),
                   HotkeyService.OccupancyRetrySeconds.ToString());
     }
 

@@ -250,8 +250,12 @@ public sealed class SettingsDataWordGateTests : IDisposable
         Assert.Equal(2, Times(host, "ApplyDataStatuses();"));
         foreach (var row in Rows) Assert.Equal(1, Times(host, "nameof(SettingsPageViewModel." + row + ")"));
         Assert.Equal(13, Times(host, "LocText.SetMessage("));           // 拓展功能那 8 ＋这一屏 5
-        // 整档 <c>Locale.Changed +=</c> 只有一个去向（多了第十位主人就必须在这里配对摘掉，而这件事 LocText 已经做了）。
-        Assert.Equal(1, Times(host, "Locale.Changed +="));
+        // 这一档的 <c>Locale.Changed +=</c> 颗数⛔ 写死成"一颗"：设置页早就是这条事件的一位主人，
+        // 而这一族真正的失效是<b>挂了没人摘</b>（坑表 #386），不是"订阅多了"——批次 WI-40-3b 给「快捷键」那一栏
+        // 的重贴加进同一个成对块时，这里就红过一次（定向筛选器⛔ 覆盖邻族，只有全量揪得出来）。
+        // "有哪几位 handler"只在那一颗闸门逐颗点名（<c>SettingsExtendWordGateTests.TheHostPairsEveryLocaleSubscriptionItOpens</c>），
+        // ⛔ 在两处各抄一份名单：下次加一位就会只改到一半。这里只钉不变式——每位都是「挂一次、摘两次」。
+        Assert.Equal(Times(host, "Locale.Changed +=") * 2, Times(host, "Locale.Changed -="));
     }
 
     /// <summary>

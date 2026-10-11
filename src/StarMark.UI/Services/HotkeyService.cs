@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Hotkeys;
 using StarMark.UI.Helpers;
 
@@ -267,6 +268,10 @@ public sealed class HotkeyService : IDisposable
 public sealed record HotkeyRegistrationFailure(HotkeyGesture Gesture, int ErrorCode,
     IReadOnlyList<int>? SiblingInstancePids = null)
 {
-    /// <summary>给用户看的原因（不含组合键本身——界面自己拼 <c>HotkeyDisplay.Display</c>）。措辞在 Core 的纯函数里，可单测。</summary>
-    public string Reason => HotkeyErrorText.RegisterFailure(ErrorCode, SiblingInstancePids);
+    /// <summary>
+    /// 给用户看的原因（不含组合键本身——界面自己拼 <c>HotkeyDisplay.Display</c>）。措辞在 Core 的纯函数里，可单测。
+    /// <para>交回的是<b>「键＋实参」</b>（批次 WI-40-3b）：注册是<b>自动重试</b>的，这一句可能在换语言之前几分钟就算好了，
+    /// 而它坐在设置页那一行的模板里——取词时刻必须归界面那一拍，否则屏幕上留的就是上一次语言的那句。</para>
+    /// </summary>
+    public LocMessage Reason => HotkeyErrorText.RegisterFailure(ErrorCode, SiblingInstancePids);
 }

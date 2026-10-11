@@ -39,7 +39,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     private string? _recordingAction;
     private Button? _recordingButton;
     private HotkeyRow? _recordingRow;
-    private string? _recordingPrevText;
+    private LocMessage? _recordingPrevMessage;   // 进入录制前那一格"还没取词的那一句"（取消录制时原样交回去）
     private bool _recordingWasSet;      // 进入录制前该动作是否已有绑定（用于「Esc 清除」判定）
     private DateTimeOffset _ignoreClickUntil;
     private IReadOnlyList<WidgetLayout> _layouts = Array.Empty<WidgetLayout>();
@@ -263,6 +263,10 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         // 挂着不摘就是每进一次设置页多一份订阅，而那些页面早就不在了。
         Locale.Changed -= ViewModel.PaintDiagnostics;
         Locale.Changed += ViewModel.PaintDiagnostics;
+        // 「快捷键」那一栏每一行的四句话都住在 DataTemplate 里：模板上的挂键只能带一颗固定键，带不了"这一行自己的那颗"，
+        // 所以换语言那一刻必须由这里把四颗显示属性重念一次（P-175 缺口②）。同一颗订阅、同一个成对块——⛔ 为这件事再开第十位主人。
+        Locale.Changed -= RepasteHotkeyRows;
+        Locale.Changed += RepasteHotkeyRows;
         if (App.Services.GetRequiredService<HotkeyService>() is not { } svc) return;
         // 本页可能被反复导航回来：先退再订，避免同一个处理器挂多份（一份事件 → N 次重建 UI）。
         svc.RegistrationStateFlushed -= OnRegistrationStateFlushed;
@@ -272,6 +276,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     private void Page_Unloaded(object sender, RoutedEventArgs e)
     {
         Locale.Changed -= ViewModel.PaintDiagnostics;   // 与 Loaded 那颗成对
+        Locale.Changed -= RepasteHotkeyRows;            // 同上：那一栏的重贴手臂也一起摘
         if (App.Services.GetRequiredService<HotkeyService>() is { } svc)
             svc.RegistrationStateFlushed -= OnRegistrationStateFlushed;
     }
@@ -294,11 +299,31 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 /// <param name="Gesture">键位文本（取自 <c>CanvasService.BindingText</c>，读的是真实绑定）。</param>
 public sealed record CanvasHotkeyRow(string Label, string Gesture);
 
-/// <summary>快捷键录制列表的单行模型（动作名 + 当前绑定显示 + 录制态 + 冲突标注）。</summary>
+/// <summary>
+/// 快捷键录制列表的单行模型（动作名 + 当前绑定显示 + 录制态 + 冲突标注）。
+/// <para><b>批次 WI-40-3b：四颗槽存的是「键＋实参」（<see cref="LocMessage"/>），屏幕上那句由显示侧 getter 现算。</b>
+/// 这一行住在 <c>DataTemplate</c> 里，而模板上的 <c>i18n:LocText.Key</c> 只能带一颗<b>固定</b>键、带不了
+/// "这一行自己的那颗键"——旧写法把成品串存进字段，换语言那一刻<b>一个字都不动</b>，要重进这一栏才更新（P-175 缺口②）。
+/// 现在由设置页那一拍（挂在它<b>已有</b>的那颗 <c>Locale.Changed</c> 订阅旁、与摘掉成对）把四颗显示属性重念一遍，
+/// 取词时刻回到"语言改变的那一刻"。</para>
+/// <para>⚠ 显示侧那四颗 getter 只服务首帧与重念，⛔ 有人拿它们当真值判据（坑表 #354）：
+/// 绑没绑读 <see cref="Bound"/>，有没有冲突／有没有占用读 <see cref="HasConflict"/>／<see cref="HasRegisterError"/>，
+/// 后两颗问的是"这句有没有要说"，⛔ 去比句子里的字。</para>
+/// </summary>
 public sealed class HotkeyRow : INotifyPropertyChanged
 {
     public string Action { get; set; } = string.Empty;
-    public string ActionName { get; set; } = string.Empty;
+
+    private LocMessage? _actionName;
+
+    /// <summary>动作名交回 Core 那颗 <c>HotkeyActions.DisplayMessage</c>：布局名与组件名是<b>实参</b>，不是第二句语言。</summary>
+    public LocMessage? ActionNameMessage
+    {
+        get => _actionName;
+        set => Set(ref _actionName, value, nameof(ActionName));
+    }
+
+    public string ActionName => _actionName?.Render() ?? string.Empty;
 
     private bool _bound;
 
@@ -313,33 +338,47 @@ public sealed class HotkeyRow : INotifyPropertyChanged
         set { if (_bound != value) { _bound = value; OnChanged(); } }
     }
 
-    private string _bindingText = string.Empty;
-    public string BindingText
+    private LocMessage? _binding;
+
+    /// <summary>
+    /// 那颗按钮上显示的东西。<b>三态而⛔ 两态</b>：已绑＝键位（<b>数据</b>，走 <c>common.rawValue</c> 那道门），
+    /// 没绑＝表里那句 <c>hotkey.unset</c>，正在录且一个键都没按＝<c>null</c>（这一格就是要空着）。
+    /// 把"没绑"与"此刻没话要说"并成一颗 <code>null</code> 就等于让一句表里的话失去出处。
+    /// </summary>
+    public LocMessage? BindingMessage
     {
-        get => _bindingText;
-        set { if (_bindingText != value) { _bindingText = value; OnChanged(); } }
+        get => _binding;
+        set => Set(ref _binding, value, nameof(BindingText));
     }
 
-    private string _conflictText = string.Empty;
-    public string ConflictText
+    public string BindingText => _binding?.Render() ?? string.Empty;
+
+    private LocMessage? _conflict;
+
+    /// <summary>与别的动作共用同一组合（<c>null</c>＝没共用）。</summary>
+    public LocMessage? ConflictMessage
     {
-        get => _conflictText;
-        set { if (_conflictText != value) { _conflictText = value; OnChanged(); OnChanged(nameof(HasConflict)); } }
+        get => _conflict;
+        set => Set(ref _conflict, value, nameof(ConflictText), nameof(HasConflict));
     }
 
-    /// <summary>是否与其它动作共用同一组合（仅提示，允许保留）。</summary>
-    public bool HasConflict => !string.IsNullOrEmpty(_conflictText);
+    public string ConflictText => _conflict?.Render() ?? string.Empty;
 
-    private string _registerErrorText = string.Empty;
+    /// <summary>是否与其它动作共用同一组合（仅提示，允许保留）。读的是"这句有没有要说"，⛔ 读句子。</summary>
+    public bool HasConflict => _conflict is not null;
 
-    /// <summary>该组合未能注册时的原因；空＝已注册或不适用（未绑定）。</summary>
-    public string RegisterErrorText
+    private LocMessage? _registerError;
+
+    /// <summary>该组合未能注册时的原因（<c>null</c>＝已注册或不适用／未绑定）。原因由 Core 交键，界面这一拍才取词。</summary>
+    public LocMessage? RegisterErrorMessage
     {
-        get => _registerErrorText;
-        set { if (_registerErrorText != value) { _registerErrorText = value; OnChanged(); OnChanged(nameof(HasRegisterError)); } }
+        get => _registerError;
+        set => Set(ref _registerError, value, nameof(RegisterErrorText), nameof(HasRegisterError));
     }
 
-    public bool HasRegisterError => !string.IsNullOrEmpty(_registerErrorText);
+    public string RegisterErrorText => _registerError?.Render() ?? string.Empty;
+
+    public bool HasRegisterError => _registerError is not null;
 
     private bool _isRecording;
     public bool IsRecording
@@ -348,9 +387,30 @@ public sealed class HotkeyRow : INotifyPropertyChanged
         set { if (_isRecording != value) { _isRecording = value; OnChanged(); } }
     }
 
+    /// <summary>
+    /// 换语言那一拍：四颗"给人看的那一句"各重念一次。
+    /// <para>数据一个字都没改，改的是<b>取词用的那一版语言</b>——所以这里只发通知，⛔ 去重算任何句子。</para>
+    /// </summary>
+    public void Repaste()
+    {
+        OnChanged(nameof(ActionName));
+        OnChanged(nameof(BindingText));
+        OnChanged(nameof(ConflictText));
+        OnChanged(nameof(RegisterErrorText));
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnChanged([CallerMemberName] string? p = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
+
+    /// <summary>存"还没取词的那一句"，并把它在屏幕上对应的那格（以及可见性那颗）一起通知出去。</summary>
+    private void Set(ref LocMessage? slot, LocMessage? value, string display, string? flag = null)
+    {
+        if (slot == value) return;
+        slot = value;
+        OnChanged(display);
+        if (flag is not null) OnChanged(flag);
+    }
 }
 
 /// <summary>布局方案列表的单行模型（名称 + 摘要 + 应用/删除）。</summary>
