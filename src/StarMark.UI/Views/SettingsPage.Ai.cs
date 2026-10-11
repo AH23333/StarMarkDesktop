@@ -347,9 +347,16 @@ public sealed partial class SettingsPage
     }
 
     /// <summary>一句话交代这一轮：<b>整理出多少、缺多少、坏了几批、以及"还没写进库"</b>。
-    /// 只报"完成"会漏掉两种真话：模型答漏了条目、某些批次根本没成功。</summary>
+    /// 只报"完成"会漏掉三种真话：模型答漏了条目、某些批次根本没成功、以及<b>一发都没发出去</b>（✅WI-63 补的第三种）。</summary>
     private static LocMessage Describe(OrganiseOutcome outcome) => LocMessage.Of("settings.ai.result.full",
-        outcome.Plan.IsEmpty ? LocMessage.Of("settings.ai.result.none")
+        // ✅WI-63（P-195）：预算熔断／通道没配好／没东西可整理那三发把原因装在同一个对象里，
+        // 屏幕上却只有"没有可用的建议"——看着像模型没想到东西，真原因是根本没发出去。
+        // ⚠ 只在 FailedBatches＝0 时才由这一格念：批失败那一支下面已经点过同一颗 FirstError（result.failedWith），
+        // 两处都念就是同一句话在屏幕上说两遍。
+        outcome.Plan.IsEmpty
+            ? outcome.FailedBatches == 0 && outcome.FirstError is { } why
+                ? LocMessage.Of("settings.ai.result.noneBecause", why)
+                : LocMessage.Of("settings.ai.result.none")
             : LocMessage.Of("settings.ai.result.count", outcome.Plan.ItemCount, outcome.AskedItems),
         outcome.MissingItems > 0 ? LocMessage.Of("settings.ai.result.missing", outcome.MissingItems) : null,
         outcome.UnknownOrdinals > 0 ? LocMessage.Of("settings.ai.result.unknown", outcome.UnknownOrdinals) : null,

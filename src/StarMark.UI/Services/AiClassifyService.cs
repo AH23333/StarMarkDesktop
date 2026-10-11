@@ -18,7 +18,9 @@ namespace StarMark.UI.Services;
 /// <param name="DroppedTags">被砍掉的"整个方案里只挂了一条条目"的标签数。<b>砍了多少必须报</b>：
 /// 建议条数变少了，用户有权知道是程序替他砍的，而不是模型少答了。</param>
 /// <param name="DroppedItems">因为这些标签被砍而一个标签都不剩、于是整条不提的条目数。</param>
-/// <param name="FirstError">第一个坏批的原因。<b>只报第一个</b>：六个批各自超时，用户要处理的是同一件事。</param>
+/// <param name="FirstError">这一轮<b>为什么没跑成</b>。两种脸：跑起来之后＝第一个坏批的原因（<b>只报第一个</b>：
+/// 六个批各自超时，用户要处理的是同一件事），一发都没出去时＝那道闸自己的话（预算／通道／没候选）。
+/// 两种都要上屏，出口只有一处＝<c>SettingsPage.Ai.cs</c> 的 <c>Describe</c>（✅WI-63·P-195）。</param>
 public sealed record OrganiseOutcome(
     ClassifyPlan Plan,
     int AskedItems,

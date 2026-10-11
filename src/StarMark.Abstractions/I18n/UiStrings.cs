@@ -752,6 +752,11 @@ public static class UiStrings
             "{0}{1}{2}{3}{4}{5}{6}",
             "{0}{1}{2}{3}{4}{5}{6}", "{0}{1}{2}{3}{4}{5}{6}"),
         new Entry("settings.ai.result.none", "没有整理出可用的建议", "Nothing usable came out of it", "使える提案は出ませんでした"),
+        // ✅WI-63（P-195）：三发静默拒绝（预算熔断／通道没配好／没东西可整理）那句"为什么"终于上了屏。
+        // ⛔ 给这一句加结尾句号——收尾那颗「。」由 result.tail 那颗槽提供，加了就念成「建议。。点」。
+        new Entry("settings.ai.result.noneBecause",
+            "{0}，所以这一轮没整理出可用的建议",
+            "{0}, so this round produced nothing usable", "{0}——そのため、今回は使える提案が出ませんでした"),
         new Entry("settings.ai.result.count",
             "整理出 {0} 条建议（问的是 {1} 条）",
             "{0} suggestions produced ({1} items asked about)", "{0} 件の提案（質問したのは {1} 件）"),
