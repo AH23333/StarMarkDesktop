@@ -108,7 +108,9 @@ public sealed class ClipboardOrphanCleanupGateTests
     {
         var vm = ReadRepoPartials(Vm);
         var body = MethodBody(vm, "private void ComputeClipboardUsage()");
-        Assert.Contains("清理按钮暂时不可用", body);
+        // ✅WI-64：那句"暂时不可用"进了表（屏幕上念出来的是哪一句归表与 `ClipboardAssetsWordGateTests`），
+        // 这一格守的还是同一件事——<b>扫不出差集那一支必须给得出灰的理由</b>，⛔ 冒充"一切正常"。
+        Assert.Contains("LocMessage.Of(\"clip.usage.recountBlocked\")", body);
         Assert.DoesNotContain("没有孤儿", body);               // 扫不出差集时不许冒充"一切正常"
         Assert.Contains("CanCleanClipboardAssets = canClean", body);
         // 回灌只发生在 UI 那一侧：池线程不碰绑定（否则症状是"数字偶尔不更新"）。
@@ -121,7 +123,8 @@ public sealed class ClipboardOrphanCleanupGateTests
     {
         var assets = ReadRepoFile(Assets);
         Assert.Equal(1, Count(assets, "public const int CleanupPreviewLimit"));
-        Assert.Equal(1, Count(assets, "public static string DescribeOrphans("));
+        // 回型连着一起数（✅WI-64 把它升成可空的 <c>LocMessage</c>：0 颗孤儿交 null 而⛔ 空串）
+        Assert.Equal(1, Count(assets, "public static LocMessage? DescribeOrphans("));
         var vm = ReadRepoPartials(Vm);
         // UI 不许手抄那个上限，也不许自己算"什么算孤儿"（判据只有一份＝ClipAssets.Reconcile）。
         Assert.DoesNotContain("CleanupPreviewLimit = 8", vm);

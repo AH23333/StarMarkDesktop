@@ -527,36 +527,54 @@ public sealed class ClipboardImagePayloadTests
         }, out var temp);
 
         var s = ClipAssets.DescribeUsage(fp, temp);
-        Assert.Contains("图片 2 张", s);
-        Assert.Contains("共 1 MB", s);                   // 700000 + 348576 = 1 MiB
-        Assert.Contains("缩略图 2 张", s);
-        Assert.Contains("60 KB", s);                     // 51200 + 10240 = 60 KiB
-        Assert.DoesNotContain("临时件", s);             // 没有临时件就别提，别叫用户去找不存在的东西
+        // ✅WI-64：主图与缩略图<b>各是一颗键</b>——"分开报"这件事从此有可机检的形状。旧写法读整句里的字样，
+        // 那既是"改词就撞红"的假红来源，也⛔ 抓得住真回归：谁把两段合成一个总数，只要句子里还留着"图片"两个字它照样绿。
+        Assert.Equal("clip.usage.full", s.Key);
+        var main = (StarMark.Abstractions.I18n.LocMessage?)s.Args![0];
+        Assert.Equal("clip.usage.main", main!.Key);
+        Assert.Equal(new object?[] { 2, "1 MB" }, main.Args);          // 700000 + 348576 = 1 MiB
+        var thumbs = (StarMark.Abstractions.I18n.LocMessage?)s.Args[1];
+        Assert.Equal("clip.usage.thumbs", thumbs!.Key);
+        Assert.Equal(new object?[] { 2, "60 KB" }, thumbs.Args);       // 51200 + 10240 = 60 KiB
+        Assert.Null(s.Args[2]);                                       // 没有临时件就别提，别叫用户去找不存在的东西
     }
 
     [Fact]
     public void EmptyFolderSaysSo_AndTempFilesGetNamedWithAnExit()
     {
-        Assert.Equal("图片目录还是空的。", ClipAssets.DescribeUsage(
-            ClipAssets.Summarize(Array.Empty<(string, long)>(), out var none), none));
+        Assert.Equal("clip.usage.empty", ClipAssets.DescribeUsage(
+            ClipAssets.Summarize(Array.Empty<(string, long)>(), out var none), none).Key);
 
         var fp = ClipAssets.Summarize(new[] { ("2026-09-28_0915_cccc3333.png.tmp", 4096L) }, out var temp);
         Assert.Equal(4096, temp);
         Assert.Equal(0, fp.TotalFiles);                // 临时件既不计入主图也不计入缩略图
         var s = ClipAssets.DescribeUsage(fp, temp);
-        Assert.Contains("未写完的临时件", s);
-        Assert.Contains("可清理", s);                   // 报坏消息的那句要同时给出口（P-54 同口径）
+        Assert.Equal("clip.usage.none",
+            ((StarMark.Abstractions.I18n.LocMessage?)s.Args![0])!.Key);   // 一张主图都没有：说"还没有图片"而⛔ 报 0 张
+        var temps = (StarMark.Abstractions.I18n.LocMessage?)s.Args[2];
+        Assert.Equal("clip.usage.temps", temps!.Key);
+        // 报坏消息的那句要同时给出口（P-54 同口径）——"可清理"那半句现在住在表里那一行，由那颗新闸门三语各拼一次钉住。
+        Assert.Equal(new object?[] { ClipAssets.DescribeBytes(temp) }, temps.Args);
     }
 
     [Theory]
-    [InlineData(0L, 200, "估不出来")]                            // 一张都没有：不许编一个平均体积出来
-    [InlineData(1_048_576L, 200, "200 MB")]                       // 平均 1 MB × 200 张（默认上限）
-    [InlineData(2_097_152L, 2000, "3.91 GB")]                     // 平均 2 MB 拉到最高上限：句子要自己跳到 GB 档
-    public void ProjectionUsesTheSameSizeVocabularyAsTheOccupancyLine(long mainBytes, int cap, string fragment)
+    [InlineData(0L, 200, "")]                                          // 一张都没有：不许编一个平均体积出来
+    [InlineData(1_048_576L, 200, "200 MB")]                            // 平均 1 MB × 200 张（默认上限）
+    [InlineData(2_097_152L, 2000, "3.91 GB")]                          // 平均 2 MB 拉到最高上限：读数要自己跳到 GB 档
+    public void ProjectionUsesTheSameSizeVocabularyAsTheOccupancyLine(long mainBytes, int cap, string expectedTotal)
     {
         var fp = new ClipAssets.Footprint(mainBytes, mainBytes / 40, mainBytes > 0 ? 1 : 0, mainBytes > 0 ? 1 : 0);
         var s = ClipAssets.DescribeProjection(fp, cap);
-        Assert.Contains(fragment, s, StringComparison.Ordinal);
-        Assert.Contains(cap.ToString(System.Globalization.CultureInfo.InvariantCulture), s);
+        if (mainBytes == 0)
+        {
+            Assert.Equal("clip.proj.none", s.Key);
+            Assert.Equal(new object?[] { cap }, s.Args);
+            return;
+        }
+        // ✅WI-64：句子里那个"总数"仍走同一把字节梯子（⛔ 在句子里自己除 1024）——改钉<b>递进去的那颗读数</b>。
+        Assert.Equal("clip.proj.estimate", s.Key);
+        Assert.Equal(cap, s.Args![1]);
+        Assert.Equal(expectedTotal, s.Args[2]);
+        Assert.Equal(ClipAssets.ThumbnailMaxEdge, s.Args[3]);
     }
 }

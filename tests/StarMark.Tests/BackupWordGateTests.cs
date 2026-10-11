@@ -43,8 +43,11 @@ public sealed class BackupWordGateTests : IDisposable
     private const string Host = "src/StarMark.UI/Views/SettingsPage.xaml.cs";
     private const string PageXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
 
-    /// <summary>对照档：⛔ 本批射程（那半句住在 <c>ClipAssets.DescribeUsage</c>，归下一片）。
-    /// 它存在的理由是<b>给归零那颗尺一个分母</b>——一把静默读成 0 的尺比红更危险（台架规则 #188）。</summary>
+    /// <summary>对照档：⛔ 本批射程，存在的理由是<b>给归零那颗尺一个分母</b>——一把静默读成 0 的尺比红更危险（台架规则 #188）。
+    /// <para>✅WI-64 片1 把 <c>DescribeUsage</c>／<c>DescribeProjection</c>／<c>DescribeOrphans</c> 三颗交进了表，
+    /// 这颗档<b>还没归零</b>：剩下的屏幕字出自 <c>CleanupConfirmBody</c>（清理确认框正文）与 <c>DescribeTitle</c>（卡片标题那颗）——
+    /// 那是片2 的射程，⛔ 算进本批。⇒ 分母今天仍由这颗档出；片2 把它们交完时，这一行必须<b>换成另一档还在说话的文件</b>
+    /// （换到哪一档由那一批现读现定，⛔ 提前把名字写在这儿——那是一颗指针，它会漂）。</para></summary>
     private const string Control = "src/StarMark.Abstractions/Clipboard/ClipAssets.cs";
 
     private static readonly string[] CoreFiles = [Svc, PathPolicy, AutoPolicy, Container, Envelope];

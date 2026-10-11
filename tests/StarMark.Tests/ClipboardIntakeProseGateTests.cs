@@ -20,9 +20,14 @@ public sealed class ClipboardIntakeProseGateTests
     private const string JudgeFile = "src/StarMark.Abstractions/Clipboard/ClipboardPolicy.cs";
     private const string ViewModelFile = "src/StarMark.UI/ViewModels/SettingsPageViewModel.Clipboard.cs";
 
-    /// <summary>四格状态句里各取一段"只可能属于这句话"的签名。</summary>
+    /// <summary>四格状态句里各取一段"只可能属于这句话"的签名。
+    /// <para>✅WI-64 起这些句子住在<b>文案表</b>里（三语各一列），所以"只有一个主人"这一问的档案从判据换成了表：
+    /// 判据里那些字出现 0 次才是对的——它只该点名键。</para></summary>
     private static readonly string[] SentenceSignatures =
         ["只记录文本与文件列表", "一条图片都不会记录", "px 缩略图", "或短边小于"];
+
+    /// <summary>判据点名的那三颗键（三臂各一颗，颗数由这一份名单报）。</summary>
+    private static readonly string[] IntakeKeys = ["clip.intake.off", "clip.intake.paused", "clip.intake.on"];
 
     // ────────── ① 句子只有一个主人 ──────────
 
@@ -30,17 +35,20 @@ public sealed class ClipboardIntakeProseGateTests
     public void EachStateSentenceLivesExactlyOnce_andOnlyInTheJudge()
     {
         var judge = CodeOf(JudgeFile);
+        var table = SourceGate.ReadRepoFile("src/StarMark.Abstractions/I18n/UiStrings.cs");
         foreach (var signature in SentenceSignatures)
         {
-            // 判据里恰好一次（写了两遍＝同一格有两个说法，界面上会自相矛盾）
-            Assert.Equal(1, Count(judge, signature));
-            // UI 工程里零次（不许再抄一份）
+            // ✅WI-64：中文列里恰好一次，而<b>主人是表</b>——判据与 UI 工程都该零次（那里只该点名键）。
+            Assert.Equal(1, Count(table, signature));
+            Assert.Equal(0, Count(judge, signature));
             var inUi = FormatScanner.SourcesUnder("src/StarMark.UI")
                 .Where(f => Count(Code(f.Code), signature) > 0)
                 .Select(f => f.Path)
                 .ToList();
-            Assert.True(inUi.Count == 0, $"设置页又自己写了一遍这句（该转发出判据）：{signature} ⇒\n" + string.Join("\n", inUi));
+            Assert.True(inUi.Count == 0, $"设置页又自己写了一遍这句（该问表要键）：{signature} ⇒\n" + string.Join("\n", inUi));
         }
+        // 三臂各一颗键，逐颗点名（计数型判据抓不到"换名"＝#164）
+        foreach (var key in IntakeKeys) Assert.Equal(1, Count(judge, "LocMessage.Of(\"" + key + "\""));
     }
 
     // ────────── ② VM 只做转发 ──────────
@@ -91,11 +99,13 @@ public sealed class ClipboardIntakeProseGateTests
     {
         // 必须钉在**那颗句子的方法体**里：整文件数会被另一处合法用法（拒收原因里也算过一次体积）顶住，
         // 于是"状态句把上限写死成 20 MB"这种接线断裂扫不出来（台架 SE5 第一遍就是这么绿的）。
-        var body = MethodBody(ReadRepoFile(JudgeFile), "public static string DescribeImageIntake(");
+        var body = MethodBody(ReadRepoFile(JudgeFile), "public static LocMessage DescribeImageIntake(");
+        // ⚠ 那颗 needle 连着<b>回型</b>一起比（上面已同批改口）：这颗方法今天交的是身份，
+        // 回型一改就是命中 0，读起来像"闸门有洞"，其实是别处的证人要跟上新形状（坑表 #465 同族）。
         Assert.Contains("ClipAssets.ThumbnailMaxEdge", body, StringComparison.Ordinal);
         Assert.Contains("ClipAssets.DescribeBytes(MaxImageBytes)", body, StringComparison.Ordinal);
         Assert.Contains("MinImageEdge", body, StringComparison.Ordinal);
-        Assert.Equal(1, Count(CodeOf(JudgeFile), "public static string DescribeImageIntake("));
+        Assert.Equal(1, Count(CodeOf(JudgeFile), "public static LocMessage DescribeImageIntake("));
     }
 
     // ────────── ⑤ 签名清单不许悄悄删短 ──────────
@@ -108,8 +118,10 @@ public sealed class ClipboardIntakeProseGateTests
     [Fact]
     public void TheSignatureListCoversEveryStateCell()
     {
-        var body = MethodBody(ReadRepoFile(JudgeFile), "public static string DescribeImageIntake(");
-        var cells = Regex.Matches(body, @"[?:]\s*\$?""").Count;   // 一格＝三元的一个出口
+        var body = MethodBody(ReadRepoFile(JudgeFile), "public static LocMessage DescribeImageIntake(");
+        // 旧口径"数三元的出口"（`? "` / `: "` 后面紧跟引号）随 ✅WI-64 失效：出口现在都是 `LocMessage.Of("…")`，
+        // 引号前多了一段方法调用 ⇒ 那颗正则恒 0，看着像"函数被拆了"、其实是尺⛔ 跟上形状。改成数点名的键。
+        var cells = Regex.Matches(body, "LocMessage\\.Of\\(").Count;
         Assert.True(cells >= 3, $"只从判据里认出 {cells} 格状态句——函数结构变了，①那条守不住任何东西");
         Assert.Equal(4, SentenceSignatures.Length);
     }

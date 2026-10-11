@@ -266,6 +266,9 @@ public sealed class I18nContractTests : IDisposable
             ["widget.mon.note.join"] = "两颗槽的骨架「{0}；{1}」中日同形，en 列是 \", \"：从前这句在代码里 string.Join 拼成品字＝语言被定死在采样那一刻（批次 WI-60／P-192，与 trending.notice.join 同形）",
             ["widget.mon.upRate"] = "纯骨架「↑{0}」：箭头是记号不是词，速率是机器事实（⛔ 把箭头搬进词里＝让读数形状随语言变）（批次 WI-60／P-192）",
             ["settings.data.autoBackupSentence"] = "纯胶水行「{0}{1}」，没有词可翻（批次 WI-61c／P-188，与 rss.statusJoin／widget.mon.note.join 同形——从前那半句在 C# 里用 + 拼成品字，语序就被定死在中文那一侧）",
+            ["clip.usage.full"] = "纯胶水行「{0}{1}{2}」三列同形：把「图片占用」那三段（主图／缩略图／临时件）收在一颗键里，"
+                + "语序由那一行自己决定而⛔ 在 C# 里拼 +（✅WI-64，与 autoBackupSentence／settings.data.backup.lineJoin 同形）",
+            ["clip.usage.line"] = "纯胶水行「{0}{1}{2}{3}」三列同形：占用／预估／存放路径／孤儿计数四段的拼接位（✅WI-64·P-193 的 Abstractions 半句）",
             ["settings.data.backup.lineJoin"] = "纯胶水行「{0}{2}{1}」三列同形：把回执的两半连起来的那颗位置，⛔ 在 C# 里拼 +（同 autoBackupSentence／widget.mon.note.join）；{2} 交的是<b>换行</b>那颗布局，⛔ 进表（规则 #100，先例＝settings.data.deleteBackupBody）（批次 WI-62／P-193）",
         };
 

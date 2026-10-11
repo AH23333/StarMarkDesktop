@@ -185,18 +185,19 @@ public sealed class ClipboardOrphanCleanupTests : IDisposable
     // ────────── 那两句要念给用户听的话（纯函数，逐值钉） ──────────
 
     [Theory]
-    [InlineData(0, 0, "")]                                   // 没有孤儿就不占行：那不是需要报的事实
-    [InlineData(1, 2048, "1 个文件不在历史里")]
-    [InlineData(7, 20 * 1024 * 1024, "7 个文件不在历史里")]
-    public void OrphanSentenceStatesTheCountAndTheSize(int count, long bytes, string expected)
+    [InlineData(0, 0, "")]                                         // 没有孤儿就不占行：那不是需要报的事实
+    [InlineData(1, 2048, "clip.orphans.some")]
+    [InlineData(7, 20 * 1024 * 1024, "clip.orphans.some")]
+    public void OrphanSentenceStatesTheCountAndTheSize(int count, long bytes, string expectedKey)
     {
-        var text = ClipAssets.DescribeOrphans(count, bytes);
-        if (expected.Length == 0) { Assert.Equal(string.Empty, text); return; }
-        Assert.Contains(expected, text, StringComparison.Ordinal);
-        Assert.Contains(ClipAssets.DescribeBytes(bytes), text, StringComparison.Ordinal);
-        // "可能是残留，也可能是你自己拷进来的"两句都要在：只说其一会让用户以为程序在指控他。
-        Assert.Contains("残留", text, StringComparison.Ordinal);
-        Assert.Contains("拷进来", text, StringComparison.Ordinal);
+        var msg = ClipAssets.DescribeOrphans(count, bytes);
+        // ✅WI-64：0 颗交的是 <b>null</b> 而⛔ 空串——宿主那一侧旧写法是 `orphanSentence.Length > 0`，
+        // 那是用字符串把戏回答"有没有这句话"（某句念起来为空时，屏幕上只剩一个分隔符）。
+        if (count <= 0) { Assert.Null(msg); return; }
+        Assert.Equal(expectedKey, msg!.Key);
+        Assert.Equal(new object?[] { count, ClipAssets.DescribeBytes(bytes) }, msg.Args);
+        // "可能是残留、也可能是你自己拷进来的"那两句现在住在表里那一行（⛔ 只说其一会让用户以为程序在指控他），
+        // 由 `ClipboardAssetsWordGateTests` 在三语下各拼一次钉住；这一格钉颗数与那颗体积读数都递进去了。
     }
 
     [Fact]

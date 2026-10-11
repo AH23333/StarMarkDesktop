@@ -19,8 +19,11 @@ public sealed class ClipboardImageIntakeTextTests
     [Fact]
     public void Off_saysNothingIsCollected_andMentionsWhatStillWorks()
     {
-        var text = ClipboardPolicy.DescribeImageIntake(collecting: true, imageOn: false);
-        Assert.Equal("图片采集未开启：只记录文本与文件列表。", text);
+        var msg = ClipboardPolicy.DescribeImageIntake(collecting: true, imageOn: false);
+        // ✅WI-64：这一格交的是<b>身份</b>。措辞住在表里（三语各一列），由 `ClipboardAssetsWordGateTests` 真拼一遍钉；
+        // 这里钉的是"哪一臂说什么"——⛔ 在这里钉中文，改词就撞红，那是假红（分流条件一字未动）。
+        Assert.Equal("clip.intake.off", msg.Key);
+        Assert.Null(msg.Args);                                    // 不带实参＝这一臂没有读数可念
     }
 
     /// <summary>
@@ -30,18 +33,19 @@ public sealed class ClipboardImageIntakeTextTests
     [Fact]
     public void ImageOnWithoutCollecting_statesPlainlyThatNothingIsRecorded()
     {
-        var text = ClipboardPolicy.DescribeImageIntake(collecting: false, imageOn: true);
-        Assert.Contains("一条图片都不会记录", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("已开启：", text, StringComparison.Ordinal);   // 不许把这格写成"看起来在工作"
+        var msg = ClipboardPolicy.DescribeImageIntake(collecting: false, imageOn: true);
+        Assert.Equal("clip.intake.paused", msg.Key);
+        Assert.NotEqual("clip.intake.on", msg.Key);               // 不许把这格写成"看起来在工作"
+        Assert.Null(msg.Args);                                    // 三颗实测值只挂在"两把开关都开"那一臂
     }
 
     /// <summary>两把开关都开着才许说"已开启"，且这一格才是带三个实测值的那一格。</summary>
     [Fact]
     public void OnlyTheBothOnCellCarriesTheNumbers()
     {
-        Assert.Contains("已开启：", ClipboardPolicy.DescribeImageIntake(true, true), StringComparison.Ordinal);
-        Assert.DoesNotContain("160px", ClipboardPolicy.DescribeImageIntake(false, true), StringComparison.Ordinal);
-        Assert.DoesNotContain("160px", ClipboardPolicy.DescribeImageIntake(true, false), StringComparison.Ordinal);
+        Assert.Equal("clip.intake.on", ClipboardPolicy.DescribeImageIntake(true, true).Key);
+        Assert.Null(ClipboardPolicy.DescribeImageIntake(false, true).Args);
+        Assert.Null(ClipboardPolicy.DescribeImageIntake(true, false).Args);
     }
 
     // ────────── ② 今天的读数逐字钉住（这批只换出处，不换显示） ──────────
@@ -49,10 +53,11 @@ public sealed class ClipboardImageIntakeTextTests
     [Fact]
     public void TodaySentence_ReadsWordForWordLikeBeforeTheBatch()
     {
-        Assert.Equal(
-            "已开启：复制到的图片会存成 PNG，并预生成 160px 缩略图。"
-            + "单张超过 20 MB 或短边小于 16px 的不收；密码管理器在前台时一律不收。",
-            ClipboardPolicy.DescribeImageIntake(collecting: true, imageOn: true));
+        // 这一格随 ✅WI-64 改口径：那一行<b>没有逐字可钉的成品串</b>了（词在表里，取词发生在贴上屏幕那一刻）。
+        // 改钉"三个实测值按那颗梯子递进去了"——那是原句里唯一会随判据变的部分。
+        var msg = ClipboardPolicy.DescribeImageIntake(collecting: true, imageOn: true);
+        Assert.Equal("clip.intake.on", msg.Key);
+        Assert.Equal(new object?[] { 160, "20 MB", 16 }, msg.Args);
     }
 
     /// <summary>三颗判据的读数（句子里那三个数就是从它们拼出来的）。</summary>
