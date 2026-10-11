@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Backup;
 using StarMark.Abstractions.Clipboard;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Backup;
 using StarMark.Data;
 using StarMark.Integrations.Clipboard;
@@ -229,7 +230,9 @@ public sealed class ClipboardBackupAttachmentTests : IDisposable
         ReplaceManifest(export.Path, original.Replace("800×600", "800×601", StringComparison.Ordinal));
 
         var ex = await Assert.ThrowsAsync<BackupFormatException>(() => BackupService.ReadAsync(export.Path));
-        Assert.Contains("校验和不匹配", ex.Message);
+        // 交的是身份，⛔ 在这里比表里那一行的措辞（只改措辞必须绿＝规则 #130）。
+        Assert.Equal("settings.data.backup.checksumMismatch", LocAssert.KeyOf(ex.Reason));
+        Assert.Equal(0, LocAssert.Slots(ex.Reason));                     // 那颗拒绝不带读数：带了就得多递一颗实参
     }
 
     [Fact]
@@ -243,8 +246,13 @@ public sealed class ClipboardBackupAttachmentTests : IDisposable
         ReplaceManifest(export.Path, "{\"app\":\"starmark-desk");     // 截断在字符串中间
 
         var ex = await Assert.ThrowsAsync<BackupFormatException>(() => BackupService.ReadAsync(export.Path));
-        Assert.Contains("读不懂", ex.Message);
-        Assert.DoesNotContain("converted", ex.Message);
+        // 交的是身份，⛔ 在这里比表里那一行的措辞（只改措辞必须绿＝规则 #130）。
+        Assert.Equal("settings.data.backup.unreadable", LocAssert.KeyOf(ex.Reason));
+        Assert.True(LocAssert.Arg(ex.Reason, 0) is LocMessage or string,
+            "「坏在哪一处」那颗⛔ 既不是嵌套身份也不是路径原文——两种出口都不许静默丢掉");
+        // 反面对照（⛔ 禁的不是表里的字，是 .NET 那句库原文）：它能上屏就说明"报成格式错误"这件事没做到。
+        Assert.DoesNotContain("converted", ex.Reason.Render(), StringComparison.Ordinal);
+        Assert.DoesNotContain("JSON value", ex.Reason.Render(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -351,13 +359,13 @@ public sealed class ClipboardBackupAttachmentTests : IDisposable
         Assert.Equal(Path.Combine(_backupDir, "abc" + BackupContainer.ManifestExtension), p2);
 
         var (_, e3) = BackupPathPolicy.ForExport("abc.txt", _backupDir);
-        Assert.Contains(".zip", e3!);
+        Assert.Equal("settings.data.backup.badExtension", e3!.Key);
 
         var (_, e4) = BackupPathPolicy.ForImport(Path.Combine(_backupDir, "nope.zip"));
-        Assert.Contains("文件不存在", e4!);
+        Assert.Equal("settings.data.backup.fileMissing", e4!.Key);
 
         var (_, e5) = BackupPathPolicy.ForImport(Path.Combine(_backupDir, "nope.rar"));
-        Assert.Contains(".json 或 .zip", e5!);
+        Assert.Equal("settings.data.backup.importBadExtension", e5!.Key);
     }
 
     // ==================== 恢复侧 ====================
@@ -377,7 +385,11 @@ public sealed class ClipboardBackupAttachmentTests : IDisposable
         Assert.Equal(4, result.ClipImagesRestored);
         Assert.Equal(0, result.ClipImagesSkipped);
         Assert.Equal(0, result.ClipImagesFailed);
-        Assert.Contains("写回 4 个", result.Message);
+        var carried = LocAssert.Arm(result.Message, 2);       // 那句"包里有几张 / 写回几张"是恢复回执的第三档
+        Assert.Equal("settings.data.backup.clipCarried", carried.Key);
+        Assert.Equal(4, LocAssert.Arg(carried, 0));             // 包里带着 4 个
+        Assert.Equal(4, LocAssert.Arg(carried, 1));             // 写回 4 个
+        LocAssert.Silent(carried, 2);                           // 没跳过：那一档不许说话
         Assert.Equal("像素[A]", Read(ClipAssets.MainNameOf(Sid("A"), At(0))));
         Assert.Equal("缩略[B]", Read(ClipAssets.ThumbNameOf(Sid("B"), At(60))));
         Assert.Equal(4, Directory.GetFiles(_clip).Length);
@@ -425,7 +437,9 @@ public sealed class ClipboardBackupAttachmentTests : IDisposable
         Assert.Equal("我自己那份更新的内容", Read(mine));
         Assert.Equal(3, result.ClipImagesRestored);
         Assert.Equal(1, result.ClipImagesSkipped);
-        Assert.Contains("跳过 1 个", result.Message);
+        var skipped = LocAssert.Arm(LocAssert.Arm(result.Message, 2), 2);
+        Assert.Equal("settings.data.backup.clipSkipped", skipped.Key);
+        Assert.Equal(1, LocAssert.Arg(skipped, 0));
     }
 
     [Fact]
@@ -476,7 +490,9 @@ public sealed class ClipboardBackupAttachmentTests : IDisposable
         Assert.Equal(1, result.ClipImagesRestored);        // 缩略图那张仍然回来了
         Assert.Equal(1, result.ClipImagesFailed);          // 主图这张要说"没能写入"，不许并进"跳过"
         Assert.False(File.Exists(Path.Combine(_clip, main)));
-        Assert.Contains("没能写入", result.Message);
+        var failed = LocAssert.Arm(LocAssert.Arm(result.Message, 2), 3);
+        Assert.Equal("settings.data.backup.clipFailed", failed.Key);
+        Assert.Equal(1, LocAssert.Arg(failed, 0));
     }
 
     [Fact]
@@ -492,8 +508,8 @@ public sealed class ClipboardBackupAttachmentTests : IDisposable
         var result = await _backup.RestoreAsync(env, RestoreMode.Replace, null, CancellationToken.None, plain);
 
         Assert.Equal(0, result.ClipImagesRestored);
-        Assert.Contains("不带图片本体", result.Message);
-        Assert.DoesNotContain("写回", result.Message);
+        // 开关关着导的那一份：说话的是"只带清单"那一档，"写回几张"那句⛔ 冒出来（它说的是包里确实有附件）。
+        Assert.Equal("settings.data.backup.clipManifestOnly", LocAssert.KeyOf(LocAssert.Arm(result.Message, 2)));
     }
 
     [Fact]
@@ -513,8 +529,13 @@ public sealed class ClipboardBackupAttachmentTests : IDisposable
         var result = await _backup.RestoreAsync(env, RestoreMode.Replace, null, CancellationToken.None, export.Path);
 
         Assert.Equal(2, result.ClipImagesRestored);
-        Assert.Contains("这份包里带着 2 个图片文件，写回 2 个", result.Message);
-        Assert.Contains("还有 1 条图片历史在这份包里就没有对应的文件", result.Message);
+        var both = LocAssert.Arm(result.Message, 2);
+        Assert.Equal("settings.data.backup.clipCarried", both.Key);
+        Assert.Equal(2, LocAssert.Arg(both, 0));
+        Assert.Equal(2, LocAssert.Arg(both, 1));
+        var rows = LocAssert.Arm(both, 4);                      // "有行没带着文件"与"写失败"是两档，⛔ 并成一句
+        Assert.Equal("settings.data.backup.clipRowsMissing", rows.Key);
+        Assert.Equal(1, LocAssert.Arg(rows, 0));
     }
 
     [Fact]
@@ -535,8 +556,8 @@ public sealed class ClipboardBackupAttachmentTests : IDisposable
         Assert.True(result.Success);                      // 条目本体照常被恢复，附件这一步失败不该连带
         Assert.Equal(0, result.ClipImagesRestored);
         Assert.Equal(0, result.ClipImagesSkipped);
-        Assert.Contains("没能打开那份附件包", result.Message);
-        Assert.DoesNotContain("不带图片本体", result.Message);
+        // 包没打开＝我们对里面有什么一无所知，那句"这份备份不带图片本体"就没资格说（它是对文件内容的断言）。
+        Assert.Equal("settings.data.backup.clipNotOpened", LocAssert.KeyOf(LocAssert.Arm(result.Message, 2)));
     }
 
     [Fact]
@@ -553,6 +574,8 @@ public sealed class ClipboardBackupAttachmentTests : IDisposable
         Assert.Equal(0, result.ClipImagesRestored);
         Assert.Empty(Directory.GetFiles(_clip));
         // 没递路径＝没人打开过那个包，所以这句不许写成"这份备份不带图片本体"（那是对文件的断言）。
-        Assert.Contains("这次没有从备份包里解出任何图片文件", result.Message);
+        var noSrc = LocAssert.Arm(result.Message, 2);
+        Assert.Equal("settings.data.backup.clipNoSource", noSrc.Key);   // 没人递路径＝单独一档
+        Assert.Equal(1, LocAssert.Arg(noSrc, 0));
     }
 }

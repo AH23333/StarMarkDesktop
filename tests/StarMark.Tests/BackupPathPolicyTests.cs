@@ -65,7 +65,7 @@ public sealed class BackupPathPolicyTests : IDisposable
     {
         var (path, error) = BackupPathPolicy.ForExport(Path.Combine(_dir, "bk.txt"), _dir);
         Assert.Null(path);
-        Assert.Contains(".json", error);
+        Assert.Equal("settings.data.backup.badExtension", error!.Key);   // 那颗句子自己会说出两种载体（表里那一行是它的唯一出处）
     }
 
     [Theory]
@@ -77,7 +77,8 @@ public sealed class BackupPathPolicyTests : IDisposable
         // 保留名能通过 File.Exists/Directory.Exists 的直觉检查，却会在真正写盘时以奇怪方式失败。
         var (path, error) = BackupPathPolicy.ForExport(Path.Combine(_dir, stem + ".json"), _dir);
         Assert.Null(path);
-        Assert.Contains("保留名", error);
+        Assert.Equal("settings.data.backup.reservedName", error!.Key);
+        Assert.Equal(stem, LocAssert.Arg(error, 0));                     // 点名的是用户打的那一颗，⛔ 一句泛泛"名字非法"
     }
 
     [Fact]
@@ -87,7 +88,7 @@ public sealed class BackupPathPolicyTests : IDisposable
         var ghost = Path.Combine(_dir, "no-such-sub", "bk.json");
         var (path, error) = BackupPathPolicy.ForExport(ghost, _dir);
         Assert.Null(path);
-        Assert.Contains("目录不存在", error);
+        Assert.Equal("settings.data.backup.dirMissing", error!.Key);
         Assert.False(Directory.Exists(Path.GetDirectoryName(ghost)));
     }
 
@@ -127,7 +128,7 @@ public sealed class BackupPathPolicyTests : IDisposable
         File.WriteAllText(file, "x");
         var (path, error) = BackupPathPolicy.ForImport(file);
         Assert.Null(path);
-        Assert.Contains(".json", error);
+        Assert.Equal("settings.data.backup.importBadExtension", error!.Key);
     }
 
     [Fact]
@@ -136,7 +137,7 @@ public sealed class BackupPathPolicyTests : IDisposable
         // 必须在真正读档/恢复之前拦住：恢复流程自带"先落恢复前快照"，喂错文件不是无害失败。
         var (path, error) = BackupPathPolicy.ForImport(Path.Combine(_dir, "gone.json"));
         Assert.Null(path);
-        Assert.Contains("文件不存在", error);
+        Assert.Equal("settings.data.backup.fileMissing", error!.Key);
     }
 
     [Fact]

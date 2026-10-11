@@ -164,8 +164,12 @@ public sealed class ClipboardBackupAttachmentGateTests
         Assert.Equal(1, Count(pick, "picker.DefaultFileExtension =")); // 默认那一项只设一次，跟着开关走
         Assert.Contains("CarrierLabel(primary)", pick);
         Assert.Contains("CarrierLabel(secondary)", pick);
-        Assert.Contains("BackupContainer.ContainerExtension ? \"备份包",
-            MethodBody(ReadRepoPartials(Ui), "private static string CarrierLabel"));
+        // 标签交的是身份（✅WI-62 把"备份包（带图片）"那两句送进了表），这里钉的是"两种载体各有一颗键、
+        // 分流条件还是扩展名"——⛔ 回到钉中文：中文是给用户看的标签，改文案不该撞红（本批那条红就是这么来的）。
+        var label = MethodBody(ReadRepoPartials(Ui), "private static LocMessage CarrierLabel");
+        Assert.Contains("extension == BackupContainer.ContainerExtension", label);
+        Assert.Contains("settings.data.backup.carrierZip", label);
+        Assert.Contains("settings.data.backup.carrierManifest", label);
         // 类型表按"建议名的扩展名"分流，而建议名由那颗开关决定 ⇒ 这条链不许各写一份判据。
         Assert.Contains("Path.GetExtension(fileName)", pick);
         Assert.Contains("BackupContainer.ContainerExtension, StringComparison.OrdinalIgnoreCase)", pick);

@@ -276,14 +276,17 @@ public sealed class BackupServiceTests : IDisposable
         // 契约护栏：前向兼容闸门（BackupService.ReadAsync:106）——高于当前支持版本的备份必须被拒，
         // 否则旧版会用自己不认识的 schema 半导入未来备份、静默丢弃其新增字段（比"直接失败"更坏）。
         // 版本校验(:106)在校验和校验(:110)之前，故用正确 app 段 + 空 checksum 即命中版本分支；
-        // 再断言错误文案含"高于当前支持的"，以防该断言实际是被校验和不匹配那一支抛出的（那样等于没钉住版本闸门）。
+        // 再断言抛出的<b>是那一句拒绝</b>（键名），以防该断言实际是被校验和不匹配那一支抛出的（那样等于没钉住版本闸门）。
         var file = Path.Combine(Path.GetTempPath(), $"bk_{Guid.NewGuid():N}.json");
         await File.WriteAllTextAsync(file,
             $"{{\"app\":\"{BackupEnvelope.AppId}\",\"version\":{BackupEnvelope.CurrentVersion + 1},\"exportedAt\":0,\"checksum\":\"\",\"payload\":{{}}}}");
 
         var ex = await Assert.ThrowsAsync<BackupFormatException>(
             () => BackupService.ReadAsync(file, CancellationToken.None));
-        Assert.Contains("高于当前支持的", ex.Message);
+        Assert.Equal("settings.data.backup.tooNew", ex.Reason.Key);
+        // 两个版本号都从实参进槽：句子⛔ 写死数字（那才是"旧版不认识未来"这句话的两个主角）。
+        Assert.Equal(BackupEnvelope.CurrentVersion + 1, Convert.ToInt32(LocAssert.Arg(ex.Reason, 0)!));
+        Assert.Equal(BackupEnvelope.CurrentVersion, Convert.ToInt32(LocAssert.Arg(ex.Reason, 1)!));
     }
 
     [Fact]
@@ -345,16 +348,16 @@ public sealed class BackupServiceTests : IDisposable
 
             Assert.True(rr.Success);
             Assert.False(rr.WidgetsRestored);
-            Assert.Contains("组件", rr.Message);
-            Assert.Contains("未能写入", rr.Message);
+            // 外层那句"已合并恢复 N 条"必须把组件那一半<b>并进实参</b>（交身份，不是拼字符串）：
+            // Success 仍为 true 而组件没写成＝不报这一半就是假成功（✅WI-40-4 那一族"一句不许盖过去"）。
+            var note = LocAssert.Arm(rr.Message, 1);
+            Assert.Equal("settings.data.backup.widgetsNotWritten", note.Key);
 
             // P-54：失败原因必须一路带到状态栏。旧文案只写"请稍后重试或检查 %APPDATA% 是否被占用"，
             // 让用户去猜一个日志里早已写明的事——真正的错因（这里是往"文件"下建目录）被丢进了日志。
-            const string marker = "（组件保持原状）：";
-            Assert.Contains(marker, rr.Message);
-            var reason = rr.Message[(rr.Message.IndexOf(marker, StringComparison.Ordinal) + marker.Length)..];
-            Assert.NotEmpty(reason.Trim());
-            Assert.DoesNotContain("请稍后重试", rr.Message);
+            var reason = Assert.IsType<string>(LocAssert.Arg(note, 0));
+            Assert.NotEmpty(reason!.Trim());
+            Assert.Contains(reason, note.Render());     // 那句"为什么"确实贴在这一行里，⛔ 只留在日志
         }
         finally { try { File.Delete(blocker); } catch { } }
     }
@@ -380,7 +383,7 @@ public sealed class BackupServiceTests : IDisposable
         var rr = await dst.Backup.RestoreAsync(env, RestoreMode.Replace, null, CancellationToken.None);
 
         Assert.False(rr.Success);
-        Assert.Contains("业务键", rr.Message);
+        Assert.Equal("settings.data.backup.itemKeyMissing", LocAssert.KeyOf(rr.Message));   // 那句说的是"缺业务键"，⛔ 一句泛泛"载荷非法"
         // 关键：拒绝发生在清库之前 → dst 原有条目仍在，未被抹掉（旧实现此处已清空、Assert.Empty）。
         var all = await dst.Items.GetAllAsync(new BrowseFilter { IncludeHidden = true, Limit = 1000 }, CancellationToken.None);
         var only = Assert.Single(all);

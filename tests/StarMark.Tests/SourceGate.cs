@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace StarMark.Tests;
@@ -199,6 +200,31 @@ internal static class SourceGate
             .Distinct(StringComparer.Ordinal).Count();
     }
 
+    /// <summary>汉字＋假名＋<b>全角那一族</b>：与 <c>bin/WI48/census_core.py</c> 同一把尺。
+    /// <para>⛔ 只写汉字与假名：那正是坑表 #403／#407 那颗盲区的形状——全角顿号与全角括号
+    /// 都能从「en 列⛔ CJK」那颗通用闸门底下走过去，而屏幕上是一句拉丁文里夹着的中文标点。</para></summary>
+    internal static readonly Regex Cjk = new(@"[぀-ヿ㐀-䶿一-鿿　-〿＀-￯]+", RegexOptions.Compiled);
+    internal static readonly string[] LogHeads = ["StarLog.", "Debug.", "Trace."];
+
+    /// <summary>屏幕上会念出来的字：<b>抹注释后逐行</b>取本族文字，<b>但排除日志头</b>那一行
+    /// （<c>StarLog.Error(…)</c> 上不了屏幕；日志按既定口径⛔ 交表）。
+    /// <para>参数必须是已经抹过注释的那一份（<see cref="Code"/>），⛔ 整档原文：doc-comment 里的汉字
+    /// 会让每一档都读成「还有屏幕字」，本批那句归零就成了假话。</para>
+    /// <para>批次 WI-62 把 <c>TrendingWordGateTests</c>／<c>DiagnosticsWordGateTests</c> 里那两份
+    /// 逐字相同的实现升到这里（台架规则 #86，先例＝WI-57 升 <c>RowSlots</c>）。</para>
+    /// </summary>
+    internal static List<string> ScreenWords(string text)
+    {
+        var hits = new List<string>();
+        foreach (var line in text.Split('\n'))
+        {
+            var head = line.Split('"')[0];
+            if (LogHeads.Any(h => head.Contains(h, StringComparison.Ordinal))) continue;
+            hits.AddRange(Cjk.Matches(line).Cast<Match>().Select(m => m.Value));
+        }
+        return hits;
+    }
+
     /// <summary>
     /// 扫出 <c>LocMessage.Of("字面键"…)</c> 的<b>调用点</b>：键＋代码实际递出的顶层实参数＋那一行的行号。
     /// <para>⛔ 用一条正则切：实参里有 <c>TypeCount(ItemType.Bookmark),</c> 这种"嵌套括号后紧跟逗号"的形状，
@@ -206,17 +232,31 @@ internal static class SourceGate
     /// 这里按括号深度走到与 <c>Of(</c> 配对的那颗 <c>)</c>，字符串里的逗号与转义都不算。</para>
     /// <para>批次 WI-57 先把它写在 <c>DiagnosticsWordGateTests</c> 里；批次 WI-58 第二族要用同一把尺
     /// ⇒ 升到这一颗共用件（台架规则 #86：同一动作⛔ 两份定位实现）。</para>
+    /// <para>批次 WI-62 让它认得<b>换行写的调用</b>（<c>LocMessage.Of(</c> 与那颗引号之间的空白）：
+    /// 从前那一类整颗看不见，而"看不见"在这把尺上读成"没有这一处"＝那条 arity 判据静默少扫几颗（规则 #188）。
+    /// ⛔ 因此把受影响的门里那些确数当成回归——它们变大是<b>尺学会了多读</b>，不是代码变坏。</para>
+    /// <para>三元选键（<c>Of(cond ? "a" : "b", …)</c>）与名单里的裸字面量仍不归这把尺：
+    /// 那颗键的实参颗数由点名它的那一格逐颗钉（见 <c>BackupWordGateTests</c>）。</para>
     /// </summary>
     internal static List<(string Key, int Args, int Line)> KeyedCallSites(string code)
     {
         var found = new List<(string, int, int)>();
-        const string head = "LocMessage.Of(\"";
+        const string head = "LocMessage.Of(";
         var from = 0;
         while (true)
         {
             var start = code.IndexOf(head, from, StringComparison.Ordinal);
             if (start < 0) return found;
-            var keyStart = start + head.Length;
+            var p = start + head.Length;
+            // ⚠ 批次 WI-62 补上的这一跳：实参换行写的调用（<c>LocMessage.Of(\n    "键", …)</c>）从前看不见，
+            // 而"看不见"在这把尺上读成"没有这一处"＝那条arity判据静默少扫几颗（台架规则 #188 同一族）。
+            while (p < code.Length && char.IsWhiteSpace(code[p])) p++;
+            if (p >= code.Length || code[p] != '"')
+            {
+                from = start + head.Length;      // 三元选键那类形状不归这把尺，跳过这颗 Of( 继续
+                continue;
+            }
+            var keyStart = p + 1;
             var keyEnd = code.IndexOf('"', keyStart);
             if (keyEnd < 0) return found;
             var key = code[keyStart..keyEnd];
@@ -244,7 +284,9 @@ internal static class SourceGate
                 prev = c;
             }
             found.Add((key, commas, code[..i].Count(ch => ch == '\n') + 1));
-            from = i;
+            // ⛔ `from = i`：那会跳过整段外层实参，于是<b>嵌套</b>的那颗 <c>LocMessage.Of("键", …)</c>
+            // （回执的套娃写法）读成"没有这一处"＝同一族静默少扫（批次 WI-62，规则 #188）。
+            from = start + head.Length;
         }
     }
 }

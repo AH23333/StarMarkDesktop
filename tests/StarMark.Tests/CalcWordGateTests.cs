@@ -224,7 +224,8 @@ public sealed class CalcWordGateTests : IDisposable
     /// <summary>
     /// 四颗下拉是<b>数据项＋模板</b>：⛔ <c>DisplayMemberPath="Label"</c>——那条路把表里的成品字直接搬到屏幕上，
     /// 换语言那一刻闭着的那一格念的还是旧语言（✅WI-2c／✅WI-43 同一颗判据，本批把最后一族下拉交出来）。
-    /// <para>那颗模板是 14 处下拉共用的主人（主窗 2／设置页 7／热榜 1／计算器 4），射程记在 <c>StarMarkTheme.xaml</c> 的注释里。</para>
+    /// <para>那颗模板是 15 处下拉共用的主人（主窗 2／设置页 8／热榜 1／计算器 4），射程记在 <c>StarMarkTheme.xaml</c> 的注释里。
+    /// 设置页那 8 颗里最新的一颗＝✅WI-62 把「自动备份间隔」那棵下拉改成数据项＋模板（同批把四句间隔话交表）。</para>
     /// </summary>
     [Fact]
     public void TheFourDropdownsAreDataItemsNotAMemberPath()
@@ -241,7 +242,7 @@ public sealed class CalcWordGateTests : IDisposable
             .Select(f => f.Replace(Path.DirectorySeparatorChar, '/'))
             .Where(f => !f.Contains("/obj/", StringComparison.Ordinal) && !f.Contains("/bin/", StringComparison.Ordinal))
             .Sum(f => SourceGate.Count(Markup(File.ReadAllText(f)), "StaticResource LocOptionTemplate"));
-        Assert.Equal(14, total);
+        Assert.Equal(15, total);
     }
 
     /// <summary>

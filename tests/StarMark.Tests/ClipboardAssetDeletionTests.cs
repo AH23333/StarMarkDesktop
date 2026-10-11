@@ -313,10 +313,12 @@ public sealed class ClipboardAssetDeletionTests : IDisposable
             var rr = await new BackupService(new BackupRepository(f2))
                 .RestoreAsync(env, RestoreMode.Merge, null, CancellationToken.None, file);
 
-            Assert.True(rr.Success, rr.Message);
-            Assert.Contains("1 条是剪贴板图片", rr.Message);
-            Assert.Contains("不带图片本体", rr.Message);
-            Assert.False(rr.Message.Contains("省空间", StringComparison.Ordinal),
+            Assert.True(rr.Success, rr.Message!.ToString());
+            // 那半句由 Core 供（键＋实参）：这一档说的是"条目在、图不在"，条数走实参。
+            var clip = LocAssert.Arm(rr.Message, 2);
+            Assert.Equal("settings.data.backup.clipManifestOnly", clip.Key);
+            Assert.Equal(1, LocAssert.Arg(clip, 0));
+            Assert.False(rr.Message!.ToString().Contains("省空间", StringComparison.Ordinal),
                 "洞 2：备份文案只许说\"打包\"，压缩收益不成立——a 期的词不许提前用掉");
         }
         finally
@@ -347,8 +349,8 @@ public sealed class ClipboardAssetDeletionTests : IDisposable
             var rr = await new BackupService(new BackupRepository(f2)).RestoreAsync(
                 await BackupService.ReadAsync(file, CancellationToken.None), RestoreMode.Merge, null, CancellationToken.None);
 
-            Assert.True(rr.Success, rr.Message);
-            Assert.DoesNotContain("剪贴板图片", rr.Message);        // 没有图片就别多嘴那半句
+            Assert.True(rr.Success, rr.Message!.ToString());
+            LocAssert.Silent(rr.Message, 2);      // 一份文字都没有的备份：那一档压根不该说话（从前靠"句子里没那几个字"判）
         }
         finally
         {

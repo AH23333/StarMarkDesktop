@@ -8,10 +8,11 @@ using Xunit;
 namespace StarMark.Tests;
 
 /// <summary>
-/// 批次 WI-61c（P-188 第三刀·第二片）的闸门：<b>设置页「数据」那一屏的五行状态只许住在表里</b>。
+/// 批次 WI-61c（P-188 第三刀·第二片）的闸门：<b>设置页「数据」那一屏的状态读数只许住在表里</b>。
 /// <para>
-/// 射程＝这一屏那五行<b>UI 自己算得出</b>的读数：写盘失败那句、自动备份那句（含"下一次约…"的续句）、
-/// 「本机已有备份」那颗标题、剪贴板历史开关的状态句、清理孤儿的结果句。
+/// 射程＝这一屏那<b>六行</b>（WI-61c 交五行，<b>批次 WI-62 加上 <c>BackupStatus</c> 那一行</b>）里
+/// <b>UI 自己算得出</b>的读数：写盘失败那句、自动备份那句（含"下一次约…"的续句）、
+/// 「本机已有备份」那颗标题、剪贴板历史开关的状态句、清理孤儿的结果句、备份列表/导出的回执句。
 /// 从前 VM 在<b>算出来那一刻</b>把整句拼好（<c>AutoBackupStatus = $"已开启：距上一份满 {hours} 小时…"</c>），
 /// 换语言那一刻没人重念 ⇒ 屏幕上留的是"上一次算话那一刻的语言"（P-188 确证②）。
 /// </para>
@@ -21,6 +22,14 @@ namespace StarMark.Tests;
 /// 它们的话有一半由 Core／Abstractions 供（<c>BackupService.DeleteBackup</c>／<c>UpdatePolicy.Describe*</c>／
 /// <c>ClipAssets.DescribeUsage</c>／<c>ClipboardPolicy.DescribeImageIntake</c>），只搬 UI 那一半就会出现
 /// <b>同一行半中半英</b>——那种"看着像做完了"的状态比原缺陷更难发现（各自归 ✅P-193／P-194／P-188 剩族）。
+/// </para>
+/// <para>
+/// <b>批次 WI-62 把这一族里的 <c>BackupStatus</c> 那一行整条翻完了</b>（Core 那半句与 UI 这半句同批交表，
+/// 见 <c>BackupWordGateTests</c>）⇒ 上面那句"四行"从今天起是<b>三行</b>：名单里 <see cref="Deferred"/> 只剩
+/// <c>UpdateStatus</c>／<c>ClipboardUsage</c>／<c>ClipboardImageStatus</c>，<c>BackupStatus</c> 升进
+/// <see cref="Rows"/> 与 <see cref="Names"/>。那颗证人的<b>名字⛔ 跟着改</b>：✅WI-61c／✅WI-41 的文档与
+/// <c>AiWordGateTests</c> 的注释都按旧名指着它，改名就等于留下一处读不到的指针（坑表 #422 同一族）——
+/// 名字说的是"那四行当年一起被钉住"这件事，行数由 <see cref="Deferred"/> 自己报。
 /// </para>
 /// <para>
 /// 机制上这批⛔ 新东西：VM 交「键＋实参」＋宿主 <c>LocText.SetMessage</c> 是 ✅WI-61b 第一片刚走通的那条门；
@@ -39,16 +48,17 @@ public sealed class SettingsDataWordGateTests : IDisposable
     private const string HostCs = "src/StarMark.UI/Views/SettingsPage.xaml.cs";
     private const string PageXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
 
-    /// <summary>这五行里的状态属性：每一颗都⛔ 再收一句成品字。</summary>
+    /// <summary>这六行里的状态属性：每一颗都⛔ 再收一句成品字。</summary>
     private static readonly string[] Rows =
     {
-        "SaveErrorMessage", "AutoBackupStatus", "BackupsHeader", "ClipboardHistoryStatus", "ClipboardCleanupStatus",
+        "SaveErrorMessage", "AutoBackupStatus", "BackupsHeader", "BackupStatus",
+        "ClipboardHistoryStatus", "ClipboardCleanupStatus",
     };
 
-    /// <summary>宿主贴上去的那五颗元素名（XAML 里 <c>x:Name</c> 与 <c>SetMessage</c> 的第一实参逐颗同名）。</summary>
+    /// <summary>宿主贴上去的那六颗元素名（XAML 里 <c>x:Name</c> 与 <c>SetMessage</c> 的第一实参逐颗同名）。</summary>
     private static readonly string[] Names =
     {
-        "SaveErrorMessageText", "AutoBackupStatusText", "BackupsHeaderText",
+        "SaveErrorMessageText", "AutoBackupStatusText", "BackupsHeaderText", "BackupStatusText",
         "ClipboardHistoryStatusText", "ClipboardCleanupStatusText",
     };
 
@@ -75,8 +85,13 @@ public sealed class SettingsDataWordGateTests : IDisposable
         ("cleanFailed", 1), ("saveNotWritten", 1), ("saveFailed", 1),
     };
 
-    /// <summary>话的另一半在 Core／Abstractions 的那四行：本批⛔ 动，但必须钉住"没被半搬"。</summary>
-    private static readonly string[] Deferred = { "BackupStatus", "UpdateStatus", "ClipboardUsage", "ClipboardImageStatus" };
+    /// <summary>话的另一半在 Core／Abstractions、<b>本批仍⛔ 动</b>的那三行：钉住"没被半搬"。
+    /// <para>WI-61c 立这颗闸门时这里坐着四行，第四行 <c>BackupStatus</c> 已在批次 WI-62 里<b>整条</b>翻完
+    /// （Core 那半句与 UI 这半句同批），于是它升进 <see cref="Rows"/>／<see cref="Names"/>。
+    /// 方法名里的"Four"⛔ 改：✅WI-61c／✅WI-41 的文档、<c>AiWordGateTests</c> 的注释与 ✅WI-59b 起的
+    /// 各份收口读数都按那个名字指着它，改名等于留下一处读不到的指针（坑表 #422 同一族）——
+    /// 名字说的是"那四行当年一起被钉住"这件事，<b>行数由这一颗名单自己报</b>。</para></summary>
+    private static readonly string[] Deferred = { "UpdateStatus", "ClipboardUsage", "ClipboardImageStatus" };
 
     private readonly AppLanguage _before = Locale.Current;
     public void Dispose() => Locale.TrySet(_before);
@@ -106,9 +121,11 @@ public sealed class SettingsDataWordGateTests : IDisposable
         Assert.Contains("[ObservableProperty] private LocMessage? _saveErrorMessage;", CodeOf(Vm));
         Assert.Contains("[ObservableProperty] private LocMessage? _autoBackupStatus;", CodeOf(Vm));
         Assert.Contains("public LocMessage? BackupsHeader => Backups.Count == 0", CodeOf(Vm));
+        Assert.Contains("[ObservableProperty] private LocMessage? _backupStatus;", CodeOf(Vm));
         Assert.Contains("[ObservableProperty] private LocMessage? _clipboardHistoryStatus;", CodeOf(HealthCs));
         Assert.Contains("[ObservableProperty] private LocMessage? _clipboardCleanupStatus;", CodeOf(ClipboardCs));
-        foreach (var field in new[] { "_saveErrorMessage", "_autoBackupStatus", "_clipboardHistoryStatus", "_clipboardCleanupStatus" })
+        foreach (var field in new[]
+                 { "_saveErrorMessage", "_autoBackupStatus", "_backupStatus", "_clipboardHistoryStatus", "_clipboardCleanupStatus" })
             Assert.Equal(0, Times(all, "private string " + field));
 
         // "这一屏到底有没有一句要给人看"是另一件事：可见性⛔ 拿一句给人看的话做字符串判空（✅VQ 那条"两件事两颗 bool"）。
@@ -116,7 +133,7 @@ public sealed class SettingsDataWordGateTests : IDisposable
         Assert.Equal(4, Times(all, "HasSaveError = "));               // 现场数：写成功复位、回灌复位、两处置真
     }
 
-    /// <summary>②宿主：XAML ⛔ 再绑那五行（绑上去就是一句停在旧语言的字），改由那颗门贴。</summary>
+    /// <summary>②宿主：XAML ⛔ 再绑那六行（绑上去就是一句停在旧语言的字），改由那颗门贴。</summary>
     [Fact]
     public void TheMarkupStopsBindingThoseRowsAndNamesThePasteTargets()
     {
@@ -240,7 +257,9 @@ public sealed class SettingsDataWordGateTests : IDisposable
     /// <summary>
     /// ⑦这一屏⛔ 新订阅者：重贴由 <c>LocText</c> 那唯一一处全局订阅负责；本页那份成对订阅仍只念诊断那行。
     /// <para>两颗推 <c>ApplyDataStatuses</c> 的时机缺一不可：进页面那一次（回灌出来的值没人推就一直是空的）＋
-    /// 这五颗属性任一变化时那一次（<c>nameof</c> 逐颗点名＝计数型判据抓不到"换名"，#164）。</para>
+    /// 这六颗属性任一变化时那一次（<c>nameof</c> 逐颗点名＝计数型判据抓不到"换名"，#164）。</para>
+    /// <para>方法名里那颗 <b>Five</b> 是 WI-61c 当时的行数，⛔ 跟着改：坑表与各批收口读数都按这个名字指着它
+    /// （改完就是一处读不到的假指针＝坑表 #422 同一族）。行数由 <see cref="Rows"/> 自己报。</para>
     /// </summary>
     [Fact]
     public void TheHostPastesThoseFiveRowsFromTwoTimings()
@@ -249,7 +268,7 @@ public sealed class SettingsDataWordGateTests : IDisposable
         Assert.Equal(1, Times(host, "private void ApplyDataStatuses()"));
         Assert.Equal(2, Times(host, "ApplyDataStatuses();"));
         foreach (var row in Rows) Assert.Equal(1, Times(host, "nameof(SettingsPageViewModel." + row + ")"));
-        Assert.Equal(13, Times(host, "LocText.SetMessage("));           // 拓展功能那 8 ＋这一屏 5
+        Assert.Equal(14, Times(host, "LocText.SetMessage("));           // 拓展功能那 8 ＋这一屏 6（WI-62 加上 BackupStatus）
         // 这一档的 <c>Locale.Changed +=</c> 颗数⛔ 写死成"一颗"：设置页早就是这条事件的一位主人，
         // 而这一族真正的失效是<b>挂了没人摘</b>（坑表 #386），不是"订阅多了"——批次 WI-40-3b 给「快捷键」那一栏
         // 的重贴加进同一个成对块时，这里就红过一次（定向筛选器⛔ 覆盖邻族，只有全量揪得出来）。
@@ -259,13 +278,14 @@ public sealed class SettingsDataWordGateTests : IDisposable
     }
 
     /// <summary>
-    /// ⑧那四行要么整句走、要么整句不动：本批它们<b>仍由绑定贴</b>，且⛔ 有人替它们半贴。
+    /// ⑧<span><see cref="Deferred"/> 里那些行</span>要么整句走、要么整句不动：它们<b>仍由绑定贴</b>，且⛔ 有人替它们半贴。
     /// <para>形状＝同一行里 UI 那半换了语言、Core 那半停在上一门 —— 那种"半个交表"会让 P-193／P-194 的下一批
     /// 以为这里已经做过，也会让用户在同一行里读到两种语言（✅WI-40-0 定口径时把这一族划出射程的原始理由）。</para>
     /// </summary>
     [Fact]
     public void TheFourCrossLayerRowsAreNeitherHalfTranslatedNorPasted()
     {
+        Assert.Equal(3, Deferred.Length);           // 现场三行；第四行 BackupStatus 已由 WI-62 整条走完
         var xaml = SourceGate.ReadRepoFile(PageXaml);
         var host = CodeOf(HostCs);
         var all = AllSources();

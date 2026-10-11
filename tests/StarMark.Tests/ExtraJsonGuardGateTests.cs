@@ -84,7 +84,7 @@ public static class ExtraJsonGuardGateTests
         // 那是"注释里也写着这句话"顶住了断言（#195 同族，这次是我的接线断言犯）。
         var body = SourceGate.MethodBody(
             SourceGate.ReadRepoFile("src/StarMark.Core/Backup/BackupService.cs"),
-            "private static string? ValidatePayload");
+            "private static LocMessage? ValidatePayload");
 
         Assert.Contains("ExtraJsonGuard.SanitizeForStore(it.ExtraJson)", SourceGate.Code(body));
     }

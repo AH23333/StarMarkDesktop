@@ -35,27 +35,14 @@ public sealed class TrendingWordGateTests : IDisposable
     private const string PageVmCs = "src/StarMark.UI/ViewModels/TrendingPageViewModel.cs";
     private const string GlanceCs = "src/StarMark.UI/Views/GlanceWidget.xaml.cs";
 
-    /// <summary>汉字＋假名＋<b>全角那一族</b>（与 <c>bin/WI48/census_core.py</c> 同一把尺；#403／#407 两次都是这里漏的）。</summary>
-    private static readonly Regex Cjk = new(@"[぀-ヿ㐀-䶿一-鿿　-〿＀-￯]+", RegexOptions.Compiled);
-    private static readonly string[] LogHeads = ["StarLog.", "Debug.", "Trace."];
-
     private readonly AppLanguage _before = Locale.Current;
     public void Dispose() => Locale.TrySet(_before);
 
     private static string CodeOf(string rel) => SourceGate.Code(SourceGate.ReadRepoFile(rel));
 
-    /// <summary>屏幕上会念出来的字（日志头那一行不算：日志按既定口径⛔ 国际化）。</summary>
-    private static List<string> ScreenWords(string text)
-    {
-        var hits = new List<string>();
-        foreach (var line in text.Split('\n'))
-        {
-            var head = line.Split('"')[0];
-            if (LogHeads.Any(h => head.Contains(h, StringComparison.Ordinal))) continue;
-            hits.AddRange(Cjk.Matches(line).Cast<Match>().Select(m => m.Value));
-        }
-        return hits;
-    }
+    /// <summary>屏幕上会念出来的字＝共用件 <see cref="SourceGate.ScreenWords"/> 那颗尺
+    /// （⛔ 在这里再写一遍字符类＝第二个口径，台架规则 #86）。</summary>
+    private static List<string> ScreenWords(string text) => SourceGate.ScreenWords(text);
 
     /// <summary>
     /// <b>供话者⛔ 自己取词</b>：抓取与编排那两档只许交出"键＋实参"。
@@ -197,8 +184,8 @@ public sealed class TrendingWordGateTests : IDisposable
             Assert.Contains("503", text, StringComparison.Ordinal);            // 两条腿的码是这一句的意义所在
             Assert.DoesNotContain("{0}", text, StringComparison.Ordinal);      // 少递实参会在这里露出来（#393）
         }
-        Assert.Empty(Cjk.Matches(en).Cast<Match>().Select(m => m.Value));      // 拉丁那一档⛔ 混进 CJK 宽度符号
-        Assert.NotEmpty(Cjk.Matches(ja).Cast<Match>());                        // 而日文那一档<b>应当</b>有本族文字
+        Assert.Empty(SourceGate.Cjk.Matches(en).Cast<Match>().Select(m => m.Value));      // 拉丁那一档⛔ 混进 CJK 宽度符号
+        Assert.NotEmpty(SourceGate.Cjk.Matches(ja).Cast<Match>());                        // 而日文那一档<b>应当</b>有本族文字
     }
 
     /// <summary>

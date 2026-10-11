@@ -278,16 +278,33 @@ public sealed class AutoBackupPolicyTests : IDisposable
     /// 文案与数值同处生成、同序：下拉里出现一个 <c>ClampInterval</c> 不认的档，
     /// 用户选了它之后落盘的是另一个间隔（护眼那边同样的分岔已经钉过一次）。
     /// </summary>
+    /// <summary>
+    /// 档位与<b>键名</b>同处生成、同序（批次 WI-62 起 Core 交键不交成品字）：下拉里出现一个
+    /// <c>ClampInterval</c> 不认的档，用户选了它之后落盘的是另一个间隔（护眼那边同样的分岔已经钉过一次）。
+    /// <para>⛔ 比渲染出来的中文（规则 #130：把措辞改通顺必须绿）；这里钉的是"那颗键确实是那一档的键"
+    /// 与"表里那一行的<b>三列都带着它自己那个数</b>"——加一档忘了加行、改了档位忘了改行都会红（✅EyeRestPolicyTests 同一口径）。</para>
+    /// </summary>
     [Fact]
-    public void IntervalLabels_AreOnePerChoice_AndNameTheirNumber()
+    public void IntervalKeys_AreOnePerChoice_AndNameTheirNumber()
     {
-        Assert.Equal(AutoBackupPolicy.IntervalOptions.Length, AutoBackupPolicy.IntervalLabels.Count);
+        Assert.Equal(AutoBackupPolicy.IntervalOptions.Length, AutoBackupPolicy.IntervalKeys.Length);
+        Assert.Equal(AutoBackupPolicy.IntervalKeys.Length, StarMark.Abstractions.I18n.UiStrings.All
+            .Count(e => e.Key.StartsWith("settings.data.autoBackupInterval.", StringComparison.Ordinal)));
         for (var i = 0; i < AutoBackupPolicy.IntervalOptions.Length; i++)
         {
             var hours = AutoBackupPolicy.IntervalOptions[i];
-            var label = AutoBackupPolicy.IntervalLabels[i];
-            Assert.StartsWith("每 ", label);
-            Assert.Contains((hours < 24 ? hours : hours / 24).ToString(), label);
+            Assert.Equal(AutoBackupPolicy.IntervalKeys[i], AutoBackupPolicy.IntervalMessage(hours).Key);
+            Assert.Equal("settings.data.autoBackupInterval." + hours, AutoBackupPolicy.IntervalKeys[i]);
+            var entry = StarMark.Abstractions.I18n.UiStrings.All.Single(e => e.Key == AutoBackupPolicy.IntervalKeys[i]);
+            // 那一行自己怎么说的那个数：≤24 小时说小时，72/168 两档改口说<b>天</b>（一颗 {0} 装不下两种单位）。
+            var said = (hours <= 24 ? hours : hours / 24).ToString();
+            foreach (var language in new[]
+            {
+                StarMark.Abstractions.I18n.AppLanguage.Chinese,
+                StarMark.Abstractions.I18n.AppLanguage.English,
+                StarMark.Abstractions.I18n.AppLanguage.Japanese,
+            })
+                Assert.Contains(said, StarMark.Abstractions.I18n.UiStrings.TextOf(entry, language));
         }
     }
 
@@ -413,7 +430,7 @@ public sealed class AutoBackupPolicyTests : IDisposable
     [InlineData("index.html")]
     [InlineData("no-extension")]
     public void DeleteRefusal_RejectsNonBackupFilesEvenInsideTheDirectory(string name)
-        => Assert.Contains("不是备份件", AutoBackupPolicy.DeleteRefusal(Path.Combine(_snapshotDir, name), _snapshotDir));
+        => Assert.Equal("settings.data.backup.deleteNotBackup", LocAssert.KeyOf(AutoBackupPolicy.DeleteRefusal(Path.Combine(_snapshotDir, name), _snapshotDir)));
 
     [Fact]
     public void DeleteRefusal_RejectsSiblingDirectoryWithTheSamePrefix()
@@ -423,14 +440,15 @@ public sealed class AutoBackupPolicyTests : IDisposable
         var inside = Path.Combine(_snapshotDir + "-evil", "x.json");
         var reason = AutoBackupPolicy.DeleteRefusal(inside, _snapshotDir);
         Assert.NotNull(reason);
-        Assert.Contains("不在备份目录里", reason);
+        Assert.Equal("settings.data.backup.deleteOutside", reason!.Key);
+        Assert.Equal("x.json", LocAssert.Arg(reason, 0));   // 拒绝原因要点名那一份，⛔ 只说"不行"
     }
 
     [Fact]
     public void DeleteRefusal_RejectsParentDirectoryEscape()
     {
         var escaped = Path.Combine(_snapshotDir, "..", "x.json");
-        Assert.Contains("不在备份目录里", AutoBackupPolicy.DeleteRefusal(escaped, _snapshotDir));
+        Assert.Equal("settings.data.backup.deleteOutside", LocAssert.KeyOf(AutoBackupPolicy.DeleteRefusal(escaped, _snapshotDir)));
     }
 
     [Fact]
@@ -446,7 +464,8 @@ public sealed class AutoBackupPolicyTests : IDisposable
     {
         var path = WriteFake("auto-todelete.json", TimeSpan.FromHours(1));
         var receipt = BackupService.DeleteBackup(path);
-        Assert.Contains("已删除", receipt);
+        Assert.Equal("settings.data.backup.deleted", receipt.Key);
+        Assert.Equal("auto-todelete.json", LocAssert.Arg(receipt, 0));
         Assert.False(File.Exists(path));
     }
 
@@ -455,13 +474,13 @@ public sealed class AutoBackupPolicyTests : IDisposable
     {
         // 拒绝时必须真的没删——回执说了"不删"而文件已经没了，是最坏的一种回答。
         var path = WriteFake("readme.txt", TimeSpan.FromHours(1));
-        Assert.Contains("不是备份件", BackupService.DeleteBackup(path));
+        Assert.Equal("settings.data.backup.deleteNotBackup", LocAssert.KeyOf(BackupService.DeleteBackup(path)));
         Assert.True(File.Exists(path));
 
         var evil = EnsureSiblingDirWithTheSamePrefix();
         var outside = Path.Combine(evil, "important.json");
         File.WriteAllText(outside, "{}");
-        Assert.Contains("不在备份目录里", BackupService.DeleteBackup(outside));
+        Assert.Equal("settings.data.backup.deleteOutside", LocAssert.KeyOf(BackupService.DeleteBackup(outside)));
         Assert.True(File.Exists(outside));
     }
 
@@ -469,8 +488,8 @@ public sealed class AutoBackupPolicyTests : IDisposable
     public void DeleteBackup_EmptyPathRefusesWithoutTouchingTheDisk()
     {
         var keep = WriteFake("auto-keepme.json", TimeSpan.FromHours(1));
-        Assert.Contains("没指定", BackupService.DeleteBackup(null));
-        Assert.Contains("没指定", BackupService.DeleteBackup("   "));
+        Assert.Equal("settings.data.backup.deleteNoPath", LocAssert.KeyOf(BackupService.DeleteBackup(null)));
+        Assert.Equal("settings.data.backup.deleteNoPath", LocAssert.KeyOf(BackupService.DeleteBackup("   ")));
         Assert.True(File.Exists(keep));
     }
 

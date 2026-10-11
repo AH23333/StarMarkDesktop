@@ -50,15 +50,6 @@ public sealed class DiagnosticsWordGateTests : IDisposable
     /// <summary>整档口径的那几档：这一族的<b>全部</b>屏幕上字都归本批交，所以整档=0 是真话。</summary>
     private static readonly string[] WholeFileZero = [DiagnosticsCs, AvailabilityCs, SourceNamesCs, IItemSourceCs, HealthCs];
 
-    /// <summary>
-    /// 尺的字符类＝<b>汉字＋假名＋全角那一族</b>（与普查尺 <c>bin/WI48/census_core.py</c> 同一份）。
-    /// <para>⛔ 只写汉字与假名：那正是坑表 #403 那颗盲区的形状——<c>string.Join("、", …)</c> 与
-    /// <c>$"{Title}（{Count}）"</c> 都能从"en 列⛔ CJK"那颗通用闸门底下走过去，而屏幕上是一句拉丁文里
-    /// 夹着的中文标点。尺与管理口径不同类，量到却判不出来＝假绿（本批 Health.cs 那一行就是这么抓到的）。</para>
-    /// </summary>
-    private static readonly Regex Cjk = new(@"[぀-ヿ㐀-䶿一-鿿　-〿＀-￯]+", RegexOptions.Compiled);
-    private static readonly string[] LogHeads = ["StarLog.", "Debug.", "Trace."];
-
     private readonly AppLanguage _before = Locale.Current;
     public void Dispose() => Locale.TrySet(_before);
 
@@ -69,21 +60,9 @@ public sealed class DiagnosticsWordGateTests : IDisposable
 
     private static string CodeOf(string rel) => SourceGate.Code(SourceGate.ReadRepoFile(rel));
 
-    /// <summary>
-    /// 屏幕字计数口径：<b>抹注释后逐行</b>取汉字片段，<b>但排除日志头</b>那一行
-    /// （<c>StarLog.Error($"诊断信息采集失败: …")</c> 上不了屏幕；日志按既定口径⛔ 交表）。
-    /// </summary>
-    private static List<string> ScreenWords(string text)
-    {
-        var hits = new List<string>();
-        foreach (var line in text.Split('\n'))
-        {
-            var head = line.Split('"')[0];
-            if (LogHeads.Any(h => head.Contains(h, StringComparison.Ordinal))) continue;
-            hits.AddRange(Cjk.Matches(line).Cast<Match>().Select(m => m.Value));
-        }
-        return hits;
-    }
+    /// <summary>屏幕上会念出来的字＝共用件 <see cref="SourceGate.ScreenWords"/> 那颗尺
+    /// （⛔ 在这里再写一遍字符类＝第二个口径，台架规则 #86）。</summary>
+    private static List<string> ScreenWords(string text) => SourceGate.ScreenWords(text);
 
 
 

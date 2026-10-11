@@ -52,9 +52,13 @@ public sealed class AutoBackupWiringGateTests
     {
         // 档位表只能有一份：XAML 里再写一份 ComboBoxItem，就会长成"下拉里有 120 小时但判据不认"。
         var card = BackupCard();
-        Assert.Contains("ItemsSource=\"{x:Bind ViewModel.AutoBackupIntervalOptions}\"", card);
+        // 批次 WI-62 之后这一排是<b>数据项</b>：项上带着键、模板只交那颗键（⛔ 在模板里填实参＝坑表 #317 那一族），
+        // 而闭着的那格靠 `OneTime` 不再抄快照——换成 `LocOption` 的同时这两条一起钉（✅SettingsPageViewModel.EyeRest 那一批同形状）。
+        Assert.Contains("ItemsSource=\"{x:Bind ViewModel.AutoBackupIntervalOptions, Mode=OneTime}\"", card);
+        Assert.Contains("ItemTemplate=\"{StaticResource LocOptionTemplate}\"", card);
         Assert.DoesNotContain("ComboBoxItem", card);
-        Assert.Contains("AutoBackupPolicy.IntervalLabels", ReadRepoPartials(Vm));
+        Assert.Contains("AutoBackupPolicy.IntervalKeys", ReadRepoPartials(Vm));
+        Assert.DoesNotContain("AutoBackupPolicy.IntervalLabels", ReadRepoPartials(Vm));   // 那颗回字符串的旧出口不许留着（留了就没人知道哪一侧在念表）
     }
 
     [Fact]
@@ -241,7 +245,7 @@ public sealed class AutoBackupWiringGateTests
     [Fact]
     public void TheDeleteGateRunsBeforeTheDeleteInCore()
     {
-        var body = MethodBody(ReadRepoFile(Service), "public static string DeleteBackup(string? path)");
+        var body = MethodBody(ReadRepoFile(Service), "public static LocMessage DeleteBackup(string? path)");
         var refusal = body.IndexOf("AutoBackupPolicy.DeleteRefusal(", StringComparison.Ordinal);
         var del = body.IndexOf("File.Delete(", StringComparison.Ordinal);
         Assert.True(refusal >= 0 && del > refusal, "闸门排在删除之前，否则只是装饰");
@@ -253,7 +257,7 @@ public sealed class AutoBackupWiringGateTests
     public void DeleteRefusalComparesTheDirectoryCharacterByCharacter()
     {
         var policy = ReadRepoFile(Policy);
-        var body = MethodBody(policy, "public static string? DeleteRefusal(string? path, string directory)");
+        var body = MethodBody(policy, "public static LocMessage? DeleteRefusal(string? path, string directory)");
         Assert.Contains("string.Equals(parent, wanted, StringComparison.OrdinalIgnoreCase)", body);
         // StartsWith 判目录＝backups-evil 被当成 backups 里面，"程序代删"于是有了越界入口。
         Assert.DoesNotContain("StartsWith", body);
@@ -266,7 +270,7 @@ public sealed class AutoBackupWiringGateTests
         // 删除后立刻重扫列表，并且不碰保留策略：PrunePlan 的候选只有 auto- 前缀，
         // 而手动"删这一份"走的是另一条路（DeleteBackup），两者不许共用一个入口。
         var service = ReadRepoFile(Service);
-        Assert.DoesNotContain("PrunePlan", MethodBody(service, "public static string DeleteBackup(string? path)"));
+        Assert.DoesNotContain("PrunePlan", MethodBody(service, "public static LocMessage DeleteBackup(string? path)"));
         Assert.Contains("AutoBackupPolicy.PrunePlan", MethodBody(service, "public async Task<string?> RunAutoBackupAsync"));
     }
 
