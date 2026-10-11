@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
@@ -395,6 +396,15 @@ public sealed partial class SettingsPage
     private void AiResume_Click(object sender, RoutedEventArgs e)
         => ShowPlan(PendingPlan());
 
+    /// <summary>换语言那一拍：预览里每一组的两行都只把<b>已经存着的那两颗「键＋实参」</b>重新通知一遍。
+    /// <para>⛔ 在这里重算句子（那等于把词钉回这一拍），也⛔ 借这一拍叫 <c>ShowPlan</c> 重建整份预览——
+    /// 那颗会 <c>_aiGroups.Clear()</c> 再重切一遍方案，而换语言⛔ 需要重切方案（更⛔ 把用户已经应用掉的那几组再列回来）。
+    /// 挂在主文件里那颗<b>已有</b>的订阅旁、与摘掉成对（坑表 #386）。</para></summary>
+    private void RepasteAiGroupRows()
+    {
+        foreach (var row in _aiGroups) row.Repaste();
+    }
+
     private async void AiApplyAll_Click(object sender, RoutedEventArgs e)
         => await ApplyAsync(_aiPlan, LocMessage.Of("settings.ai.applyScopeAll"));
 
@@ -454,20 +464,46 @@ public sealed partial class SettingsPage
 }
 
 /// <summary>预览里"一组标签一样的条目"那一行。<b>标签集合与条目 id 都用字符串显示出来</b>：
-/// 用户在应用之前要能看见"到底给哪几条打哪几个标签"，看不见就等于让人盲签。</summary>
-public sealed class AiGroupRow
+/// 用户在应用之前要能看见"到底给哪几条打哪几个标签"，看不见就等于让人盲签。
+/// <para>两句都存<b>「键＋实参」</b>⛔ 存成品字——这一行由 <c>DataTemplate</c> 里的 <c>{Binding}</c> 递出去，
+/// 而模板上挂的键只能是一颗固定键、带不了"这一行自己的那颗"（✅P-175 缺口②·机制 (C) 的第二位宿主，
+/// 第一位＝<c>HotkeyRow</c>）。屏幕上那两句由显示侧 getter 现算，换语言那一刻由 <see cref="Repaste"/> 回来重念。</para></summary>
+public sealed class AiGroupRow : INotifyPropertyChanged
 {
+    private readonly LocMessage _tagLine;
+    private readonly LocMessage _itemLine;
+
     public AiGroupRow(TagGroup group, IReadOnlyList<TagProposal> proposals)
     {
         Group = group;
         Proposals = proposals;
-        TagLine = string.Join("、", group.Tags) + "（" + group.Ids.Count + " 条）";
-        ItemLine = "条目编号 " + string.Join("、", group.Ids.Take(6))
-            + (group.Ids.Count > 6 ? $"…（共 {group.Ids.Count} 条）" : string.Empty);
+        // 标签名是用户自己起的＝数据，走 common.rawValue 那道门交出去；句子与连接号都在表里，贴上去那一刻才取词。
+        _tagLine = LocMessage.Of("settings.ai.groupTagLine",
+            new LocJoin(group.Tags.Select(tag => (object?)LocMessage.Of("common.rawValue", tag)).ToList(), "settings.ai.groupJoin"),
+            group.Ids.Count);
+        _itemLine = group.Ids.Count > 6
+            ? LocMessage.Of("settings.ai.groupItemLineMore",
+                new LocJoin(group.Ids.Take(6).Select(id => (object?)id.ToString()).ToList(), "settings.ai.groupJoin"),
+                group.Ids.Count)
+            : LocMessage.Of("settings.ai.groupItemLine",
+                new LocJoin(group.Ids.Select(id => (object?)id.ToString()).ToList(), "settings.ai.groupJoin"));
     }
 
+    public event PropertyChangedEventHandler? PropertyChanged;
+
     public TagGroup Group { get; }
-    public string TagLine { get; }
-    public string ItemLine { get; }
     public IReadOnlyList<TagProposal> Proposals { get; }
+
+    /// <summary>这一组要打的那几个标签＋条数（<c>{Binding}</c> 的落点；⛔ 在这里存下渲染结果＝换语言那一刻停在上一门）。</summary>
+    public string TagLine => _tagLine.Render();
+
+    /// <summary>这一组涉及的条目编号（超过六颗只列前六颗，尾巴那句"共几条"另由一颗键管）。</summary>
+    public string ItemLine => _itemLine.Render();
+
+    /// <summary>换语言那一拍：只把两颗显示属性重新通知一遍，⛔ 在这里算任何句子。</summary>
+    public void Repaste()
+    {
+        PropertyChanged?.Invoke(this, new(nameof(TagLine)));
+        PropertyChanged?.Invoke(this, new(nameof(ItemLine)));
+    }
 }

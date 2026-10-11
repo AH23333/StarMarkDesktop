@@ -245,6 +245,7 @@ public sealed class I18nContractTests : IDisposable
             ["card.title.withCategory"] = "纯骨架「{0} · {1}」三列同形：右下角提示卡抬头那句「谁在说话 · 说了什么」的分隔符（批次 WI-61d 片2／P-185）——卡片形参改收 LocMessage 之后，抬头由两份身份拼成，⛔ 分隔符留在 C# 里（那是第二份拼装出处，✅P-178 当年把「·」收成一颗主人正是为此）",
             ["settings.ai.result.full"] = "纯胶水「{0}…{6}」：一句话交代这一轮的那七段各是一句独立的话，拼接位⛔ 译（✅WI-60b 那颗 widget.mon.note.join 同一口径：代码里拼 + 就是把语序钉死在中文那一侧）（批次 WI-41／P-188 第四刀）",
             ["settings.ai.tagJoin"] = "连接位「{0}、{1}」：中日都用顿号，英文用逗号＋空格——连的是<b>用户自己起的标签名</b>，这一行没有词可翻（批次 WI-41／P-188 第四刀）",
+            ["settings.ai.groupJoin"] = "连接号「、」中日同形，en 列是 \", \"：那一行没有词可翻，连的是<b>用户自己起的标签名</b>与<b>条目编号</b>（批次 WI-40-3b 片2／P-175 缺口②，与 health.join.list／hotkey.conflict.join／settings.ai.tagJoin 同形）",
             ["settings.ai.usage.featureBlock"] = "「。{0}。」：中日都用全角句号，英文换成半角点＋空格——那一格包的是一串读数，句号是标点不是词（批次 WI-41／P-188 第四刀）",
             ["settings.ai.usage.full"] = "纯胶水「{0}{1}{2}{3}」：用量面板那句由「窗口合计／估算说明／按功能分开／裁决」四段拼成，缺的段交 null（格式化时那一格自己变空），⛔ 在代码里拼字符串（批次 WI-41／P-188 第四刀）",
             ["calc.num.percent"] = "纯骨架「{0}%」：百分号是记号不是词，⛔ 为了不同形改成全角「％」＝让读数形状随语言变（批次 WI-55b／P-182b）",

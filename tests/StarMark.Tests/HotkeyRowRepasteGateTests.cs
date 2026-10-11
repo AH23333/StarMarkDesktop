@@ -14,7 +14,7 @@ namespace StarMark.Tests;
 /// <para>这一族的形状是：行由 <c>ItemsRepeater</c> ＋ <c>DataTemplate</c> 长出来，值由 code-behind 算。
 /// 从前 code-behind 把<b>成品串</b>存进行模型，而模板上的 <c>i18n:LocText.Key</c> 只能带一颗<b>固定</b>键、
 /// 带不了"这一行自己的那颗键"也带不了实参 ⇒ 换语言那一刻整栏一个字都不动，要重进那一栏才更新
-/// （＝用户那句"使用说明要重进设置页才生效"的同一族，换了个表面）。</para>
+/// （＝✅WI-39 那一刀治的同一族缺陷：屏幕上那几格要重进这一栏才更新——⛔ 把这句话记成他的原话，逐字⛔ 取到过）。</para>
 /// <para><b>定案＝(C)</b>：行模型存「键＋实参」＋显示侧 getter，模板那四颗槽 <c>Mode=OneWay</c>，
 /// 宿主在 <c>Locale.Changed</c> 那一拍把四颗显示属性重念一遍。⛔ <c>ElementPrepared</c> 那族方案（(A)／(A′)）：
 /// <c>LocText</c> 的重贴名单按「元素＋那颗依赖属性」去重（<c>Helpers/LocText.cs:337-366</c>），

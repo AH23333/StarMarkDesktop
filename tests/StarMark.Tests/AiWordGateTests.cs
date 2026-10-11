@@ -260,23 +260,35 @@ public sealed class AiWordGateTests : IDisposable
     }
 
     /// <summary>
-    /// ⑦那两类本批刻意没动的，钉住"⛔ 半搬"：它们要么整句走、要么整句不动。
-    /// <para>只搬一半的表现是<b>同一行里两种语言</b>，而那种"看着像做完了"的状态比原缺陷更难发现
-    /// （✅WI-61c 那颗 <c>TheFourCrossLayerRowsAreNeitherHalfTranslatedNorPasted</c> 同一口径）。</para>
+    /// ⑦这一族⛔ 半搬，两个方向各钉一条：<b>组行那两句整句走表</b>，而<b>发给模型的那四行⛔ 上屏幕</b>。
+    /// <para>它们的失效方向是同一种"做了一半"：前者半搬＝同一行里两种语言（换语言那一刻还停在构造期拼好的成品字上），
+    /// 后者半搬＝把提示词当成界面词，长出一堆⛔ 有人问的键（✅WI-61c 那颗
+    /// <c>TheFourCrossLayerRowsAreNeitherHalfTranslatedNorPasted</c> 同一口径）。</para>
+    /// <para><b>这一格的口径随批次改过</b>：批次 WI-41 立它时那两句"本批刻意没动"，钉的是旧形状；
+    /// 批次 WI-40-3b 片2 把第二位宿主落完 ⇒ 判据换成"整句走＋⛔ 退回成品字"，⛔ 留着旧那句当"看着像有守门"（#195）。</para>
     /// </summary>
     [Fact]
-    public void TheTemplateRowsAndThePromptDataAreNeitherHalfMovedNorPasted()
+    public void TheGroupRowsAreMovedWholesaleWhileThePromptDataStaysUntranslated()
     {
         var ai = CodeOf(Ai);
         var row = SourceGate.MethodBody(ai, "public AiGroupRow(TagGroup group, IReadOnlyList<TagProposal> proposals)");
-        // 那三行仍是字面量（由 {Binding} 递给模板），且⛔ 有人给它半贴：
-        Assert.Contains("TagLine = string.Join(\"、\"", row);
-        Assert.Contains("ItemLine = \"条目编号 \"", row);
+        // 那两句交出的是「键＋实参」，两条编号句各一颗键（超过六颗那一档另有一颗，⛔ 在代码里拼那句尾巴）：
+        Assert.Contains("LocMessage.Of(\"settings.ai.groupTagLine\"", row, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"settings.ai.groupItemLine\"", row, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"settings.ai.groupItemLineMore\"", row, StringComparison.Ordinal);
+        // 旧写法⛔ 回来（在构造期把两句拼成成品字＝换语言那一刻整栏停在上一门）：
+        Assert.DoesNotContain("string.Join(\"、\"", row, StringComparison.Ordinal);
+        Assert.DoesNotContain("条目编号", ai, StringComparison.Ordinal);       // 字面只在表里一份
+        Assert.DoesNotContain("…（共 ", ai, StringComparison.Ordinal);         // 同上：那句尾巴也⛔ 在代码里
+        // 这一栏⛔ 自己长出第四位 Locale.Changed 主人——重贴归宿主那一拍（每位主人成对那颗闸门在 SettingsExtendWordGateTests 点名）
+        Assert.Equal(0, Times(ai, "Locale.Changed +="));
+
+        // 模板那两头仍由绑定递出去：它们⛔ 是 LocText 的注册槽（容器会被回收＝坑表 #447），靠行模型的 PropertyChanged 重贴
         var xaml = SourceGate.ReadRepoFile(PageXaml);
-        Assert.Contains("{Binding TagLine}", xaml);   // 仍由模板绑定＝换语言那一刻没人重贴的那个形状
-        Assert.Contains("{Binding ItemLine}", xaml);
-        Assert.Equal(0, Times(ai, "\"settings.ai.tagLine\""));   // ⛔ 半搬：不许只把标签那半交出去
-        Assert.Equal(0, Times(ai, "\"settings.ai.itemLine\""));
+        Assert.Contains("Text=\"{Binding TagLine}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding ItemLine}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("{x:Bind TagLine", xaml, StringComparison.Ordinal);   // ⛔ 换成 x:Bind（默认 OneTime＝又变回快照）
+        Assert.DoesNotContain("{x:Bind ItemLine", xaml, StringComparison.Ordinal);
 
         var nameOf = SourceGate.MethodBody(CodeOf(Service), "private static string NameOf(Item item)");
         Assert.Contains("ItemType.File => \"本地文件\"", nameOf);   // 那是发给模型的提示词数据，⛔ 上屏幕
@@ -292,7 +304,8 @@ public sealed class AiWordGateTests : IDisposable
     {
         var all = AllSources();
         const string door = "LocMessage.Of(\"common.rawValue\"";
-        Assert.Equal(14, Times(all, door));   // bin/WI41/named_41.txt 现场数：Ai 8 ＋ AiUsage 4 ＋ Service 2
+        // 现场数（bin/WI403b/door_403b2.txt，2026-10-11 本批之后重跑同一颗尺）：Ai 9 ＋ AiUsage 4 ＋ Service 2 ＝ 15
+        Assert.Equal(15, Times(all, door));
         // 每一处都必须在实参位上（⛔ 把成品字当整句贴：那正是 P-188 的确证形状）。
         Assert.Contains("LocText.SetMessage(AiStatusText, LocMessage.Of(\"common.rawValue\", probe.Report))", CodeOf(Ai));
     }
@@ -304,6 +317,7 @@ public sealed class AiWordGateTests : IDisposable
         Row("settings.ai.result.full", "{0}{1}{2}{3}{4}{5}{6}");
         Row("settings.ai.usage.full", "{0}{1}{2}{3}");
         Row("settings.ai.tagJoin", "{0}、{1}", "{0}, {1}", "{0}、{1}");
+        Row("settings.ai.groupJoin", "、", ", ", "、");
         Row("settings.ai.usage.featureBlock", "。{0}。", ". {0}.", "。{0}。");
 
         static void Row(string key, string zh, string? en = null, string? ja = null)
@@ -314,4 +328,63 @@ public sealed class AiWordGateTests : IDisposable
             Assert.Equal(ja ?? zh, entry.Ja);
         }
     }
+    /// <summary>
+    /// ⑩ 那三颗新键<b>真跑得念一遍</b>：三语各渲染一次，槽全填满、三语互不相同；期望⛔ 抄表里的措辞＝现取同一颗键（#130）。
+    /// <para>形状尺只能说"代码交出的是键"，说不了"那句在屏幕上念得出来"——槽没填满、Ja 列漏一格，都由这一格先红。</para>
+    /// </summary>
+    [Fact]
+    public void TheThreeNewGroupKeysRenderInAllThreeLanguages()
+    {
+        // 互异性⛔ 拼成一串比：三颗键各比一次——抄了中文列的那一颗会被另外两颗的差异掩掉（台架 A3 第一次跑读了绿＝坑表 #456）
+        var tagsSaid = new HashSet<string>(StringComparer.Ordinal);
+        var fewSaid = new HashSet<string>(StringComparer.Ordinal);
+        var manySaid = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var lang in new[] { AppLanguage.Chinese, AppLanguage.English, AppLanguage.Japanese })
+        {
+            Locale.TrySet(lang);
+            // TrySet 的返回值说的是"变没变"，⛔"换没换到"（当场就在那一门语言时它回 false）＝台架纪律规则 #112 ⇒ 判语言读当前状态
+            Assert.Equal(lang, Locale.Current);
+            var tags = Locale.Fmt("settings.ai.groupTagLine", "A、B", 3);
+            var few = Locale.Fmt("settings.ai.groupItemLine", "1、2");
+            var many = Locale.Fmt("settings.ai.groupItemLineMore", "1、2、3、4、5、6", 9);
+            foreach (var text in new[] { tags, few, many })
+            {
+                Assert.DoesNotContain("{", text, StringComparison.Ordinal);   // 槽没填满＝屏幕上露 {0}
+                Assert.DoesNotContain("}", text, StringComparison.Ordinal);
+                Assert.NotEmpty(text);
+            }
+            Assert.Contains("3", tags, StringComparison.Ordinal);             // 实参进了槽，⛔ 被句子吞掉
+            Assert.Contains("9", many, StringComparison.Ordinal);
+            // 逐颗点名：哪一颗抄了哪一列，红字就说得出是哪一颗
+            Assert.True(tagsSaid.Add(tags), "标签那一句有两门语言念出来一模一样：" + tags);
+            Assert.True(fewSaid.Add(few), "编号那一句有两门语言念出来一模一样：" + few);
+            Assert.True(manySaid.Add(many), "「共几条」那一句有两门语言念出来一模一样：" + many);
+        }
+    }
+
+    /// <summary>
+    /// ⑪ <b>同一颗 <c>LocMessage</c> 实例</b>在换语言前后各念一次：取词时机＝贴上去那一刻⛔ 算出它那一刻（坑表 #362 的第二个表面）。
+    /// <para>这是本批唯一的运行时读数：形状尺看不见"外层重贴而连接号停在上一门"——而那半条约束正是
+    /// ✅WI-40-3a2 那份 (A′) 定案里<b>活到 (C)</b> 的一条（<code>LocJoin</code> 就是它留下的）。</para>
+    /// </summary>
+    [Fact]
+    public void TheJoinerWordIsTakenWhenTheRowIsPastedNotWhenItIsBuilt()
+    {
+        Locale.TrySet(AppLanguage.Chinese);
+        Assert.Equal(AppLanguage.Chinese, Locale.Current);   // 同上：⛔ 拿 TrySet 的返回值当"换没换到"（规则 #112）
+        var row = LocMessage.Of("settings.ai.groupTagLine",
+            new LocJoin(new object?[] { LocMessage.Of("common.rawValue", "书签"), LocMessage.Of("common.rawValue", "待办") },
+                "settings.ai.groupJoin"),
+            2);
+        var before = row.Render();
+        Assert.Contains("书签、待办", before, StringComparison.Ordinal);
+
+        Locale.TrySet(AppLanguage.English);
+        Assert.Equal(AppLanguage.English, Locale.Current);
+        var after = row.Render();
+        Assert.DoesNotContain("、", after, StringComparison.Ordinal);   // 外层重贴了而连接号停在上一门＝屏幕上念出混搭
+        Assert.NotEqual(before, after, StringComparer.Ordinal);
+        Assert.Equal(Locale.Fmt("settings.ai.groupTagLine", "书签, 待办", 2), after, StringComparer.Ordinal);
+    }
+
 }

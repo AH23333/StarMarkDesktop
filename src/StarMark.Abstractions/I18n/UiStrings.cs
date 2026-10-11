@@ -711,6 +711,12 @@ public static class UiStrings
         new Entry("settings.ai.applyScopeAll", "全部", "all of it", "すべて"),
         new Entry("settings.ai.applyScopeGroup", "「{0}」这一组", "the “{0}” group", "「{0}」のグループ"),
         new Entry("settings.ai.tagJoin", "{0}、{1}", "{0}, {1}", "{0}、{1}"),
+        // 「AI 整理预览」那一组的两行（P-175 缺口②·机制 (C) 第二位宿主＝AiGroupRow）：连接号⛔ 并进句子里，
+        // 也别与上面那颗两颗槽的 tagJoin 混用——那一颗拼的是「应用范围」那句里的两个标签名，这一颗列的是整排标签与整排编号。
+        new Entry("settings.ai.groupJoin", "、", ", ", "、"),
+        new Entry("settings.ai.groupTagLine", "{0}（{1} 条）", "{0} ({1} items)", "{0}（{1} 件）"),
+        new Entry("settings.ai.groupItemLine", "条目编号 {0}", "Item IDs {0}", "項目番号 {0}"),
+        new Entry("settings.ai.groupItemLineMore", "条目编号 {0}…（共 {1} 条）", "Item IDs {0}… ({1} in total)", "項目番号 {0}…（全 {1} 件）"),
         new Entry("settings.ai.applyNothing", "{0}没有可应用的内容。", "Nothing to apply in {0}.", "{0}に適用できる内容はありません。"),
         new Entry("settings.ai.applyDone",
             "已把{0}的标签写进库：{1} 条。",

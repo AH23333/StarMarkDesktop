@@ -224,10 +224,13 @@ public sealed class SettingsExtendWordGateTests : IDisposable
         Assert.Equal(2, Times(host, "Locale.Changed -= ViewModel.PaintDiagnostics"));   // 先退再订＋收尾那一次
         Assert.Equal(1, Times(host, "Locale.Changed += RepasteHotkeyRows"));            // 「快捷键」那一栏的重贴
         Assert.Equal(2, Times(host, "Locale.Changed -= RepasteHotkeyRows"));
+        Assert.Equal(1, Times(host, "Locale.Changed += RepasteAiGroupRows"));           // 「AI 整理预览」那两行的重贴
+        Assert.Equal(2, Times(host, "Locale.Changed -= RepasteAiGroupRows"));
         // 收尾那一体必须两位都摘：只摘一位＝另一位永远挂着，而那些行早就不在了
         var unloaded = SourceGate.MethodBody(host, "private void Page_Unloaded(object sender, RoutedEventArgs e)");
         Assert.Contains("Locale.Changed -= ViewModel.PaintDiagnostics;", unloaded, StringComparison.Ordinal);
         Assert.Contains("Locale.Changed -= RepasteHotkeyRows;", unloaded, StringComparison.Ordinal);
+        Assert.Contains("Locale.Changed -= RepasteAiGroupRows;", unloaded, StringComparison.Ordinal);   // 三位都得在收尾那一体里摘掉
         Assert.Contains("private void ApplyExtensionStatuses()", host);
         // 两个推它的时机缺一不可：进页面那一次（回灌出来的值没人推就一直是空的）＋那六颗属性任一变化时那一次。
         Assert.Equal(1, Times(host, "private void ApplyExtensionStatuses()"));

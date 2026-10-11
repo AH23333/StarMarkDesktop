@@ -267,6 +267,10 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         // 所以换语言那一刻必须由这里把四颗显示属性重念一次（P-175 缺口②）。同一颗订阅、同一个成对块——⛔ 为这件事再开第十位主人。
         Locale.Changed -= RepasteHotkeyRows;
         Locale.Changed += RepasteHotkeyRows;
+        // 同一栏里那两行「AI 整理预览」的组行也是「数据项＋模板」：换语言那一刻⛔ 有人回去重念就停在上一门（P-175 缺口②·第二位宿主）。
+        // 排在下面那颗早退之前——那一颗是热键服务解析失败时的出口，⛔ 让 AI 这一栏的重贴跟着它一起被跳过。
+        Locale.Changed -= RepasteAiGroupRows;
+        Locale.Changed += RepasteAiGroupRows;
         if (App.Services.GetRequiredService<HotkeyService>() is not { } svc) return;
         // 本页可能被反复导航回来：先退再订，避免同一个处理器挂多份（一份事件 → N 次重建 UI）。
         svc.RegistrationStateFlushed -= OnRegistrationStateFlushed;
@@ -277,6 +281,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     {
         Locale.Changed -= ViewModel.PaintDiagnostics;   // 与 Loaded 那颗成对
         Locale.Changed -= RepasteHotkeyRows;            // 同上：那一栏的重贴手臂也一起摘
+        Locale.Changed -= RepasteAiGroupRows;           // 同上：AI 预览那两行同样⛔ 留下挂着的订阅
         if (App.Services.GetRequiredService<HotkeyService>() is { } svc)
             svc.RegistrationStateFlushed -= OnRegistrationStateFlushed;
     }
