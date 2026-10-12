@@ -233,14 +233,17 @@ public sealed partial class RssPage : Page
             Foreground = muted,
             VerticalAlignment = VerticalAlignment.Center,
         });
-        row.Children.Add(new TextBlock
+        // 状态那一行交的是「键＋实参」，由这里贴上去（✅WI-65 片2）：⛔ Text = section.Status 绑成品串——
+        // 那一行住在长命的树里，换语言若不重贴，它就停在上一门语言（这一族最初的事故形状）。
+        var statusText = new TextBlock
         {
-            Text = section.Status,
             FontSize = 11,
             Foreground = muted,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
-        });
+        };
+        LocText.SetMessage(statusText, section.Status);
+        row.Children.Add(statusText);
         ToolTipService.SetToolTip(row, $"{section.Url}　收藏会放进「{section.FolderPath}」");
         return row;
     }

@@ -416,7 +416,9 @@ public sealed class RssSourceSection : INotifyPropertyChanged
     /// <summary>这一组的收藏落点（与真正写进库的那份 ExtraJson 同一个函数算出来，提示不会指错路径）。</summary>
     public string FolderPath => RssFolders.DisplayPath(Config.Name);
 
-    public string Status { get; private set; } = RssSourceStatus.NeverFetched;
+    /// <summary>这一行"这一轮怎么样了"——交的是<b>没取词的</b>「键＋实参」：那一行由宿主 <c>LocText.SetMessage</c> 贴，
+    /// 所以换语言时已经铺出来的那一行会跟着换（✅WI-65 片2；⛔ 在这里就 <c>Render()</c> 一次）。</summary>
+    public LocMessage Status { get; private set; } = RssSourceStatus.NeverFetched;
 
     /// <summary>条数只在真有内容时出现：空文件夹再标一个"共 0 条"就是噪音，状态那一行已经说清了原因。</summary>
     public string CountText => Rows.Count == 0 ? string.Empty : $"共 {Rows.Count} 条";
@@ -436,9 +438,14 @@ public sealed class RssSourceSection : INotifyPropertyChanged
         Raise(nameof(CountText));
     }
 
-    public void SetStatus(string status)
+    public void SetStatus(LocMessage status)
     {
-        if (Status == status) return;
+        // ⚠ 这里从前写着 <c>if (Status == status) return;</c>——那颗短路换型之后⛔ 搬得过来：
+        // <c>LocMessage</c> 是 record 而 <c>Args</c> 是数组，合成相等对数组只比引用 ⇒ 同键同实参的两句永远不相等（坑表 #480）；
+        // 而改成「比 <c>Render()</c> 后的句子」就把一次取词放进了界面那一路——那颗闸门（<c>I18nWiringGateTests</c>
+        // 的 <c>NestedReadingsArePassedUnrendered</c>）钉的正是「这一档 <c>.Render()</c> 命中 0」。
+        // 这一格本来也只是给"<c>Status</c> 被绑出去"那种宿主用的，而这一页的表头是 code-behind 现建的（没人订这一颗事件），
+        // 所以宁可让它每次都报一声，⛔ 为了省一次通知在链上先念一遍词。
         Status = status;
         Raise();
     }
