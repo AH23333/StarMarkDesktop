@@ -2727,6 +2727,15 @@ public static class UiStrings
         new Entry("clip.cleanTitle", "清理 {0} 个不用的文件", "Clean up {0} unused files", "使われなくなったファイルを {0} 件整理します"),
         new Entry("clip.cleanPrimary", "删掉这 {0} 个文件", "Delete these {0} files", "これらのファイル {0} 件を削除"),
         new Entry("clip.cleanCancel", "先不删", "Not now", "今は削除しない"),
+        // ✅WI-64 片2（清理确认框那颗正文·✅P-193 收官那一颗）：那只框的标题与两颗按钮早就是键，
+        // 只有正文还是代码里拼的裸字。颗与颗之间的那串换行⛔ 进表（规则 #100），由 clip.clean.lineJoin 收实参 {2}。
+        new Entry("clip.clean.head", "这些文件在「{0}」里，但历史中没有任何条目指向它们：", "These files are in {0}, but no history entry points at them:", "これらのファイルは {0} にありますが、履歴のどの項目も参照していません："),
+        new Entry("clip.clean.row", "· {0}", "· {0}", "・{0}"),
+        new Entry("clip.clean.more", "…其余 {0} 个没有列出。", "…{0} more are not listed.", "…他の {0} 件は列挙していません。"),
+        new Entry("clip.clean.total", "共 {0} 个，约 {1}。", "{0} in total, about {1}.", "合計 {0} 件、約 {1}。"),
+        new Entry("clip.clean.temps", "另有 {0} 个没写完的临时件（约 {1}）——那是我们自己留下的半件，不可能是你的文件。", "{0} unfinished temporary files ({1}) — that is our own half-written leftover, it cannot be your file.", "書きかけの一時ファイルが {0} 件あります（約 {1}）——当方が残した中途半端なもので、あなたのファイルではありません。"),
+        new Entry("clip.clean.tail", "删掉这些文件不会动任何一条历史条目，也不会碰这份名单之外的任何一个文件。拿不准就先别删：它们除了占地方，不做任何事。", "Deleting these files changes no history entry and touches no file outside this list. If you are unsure, don't delete yet: apart from taking up space, these files do nothing.", "これらのファイルを削除しても履歴の項目は一切変わらず、この一覧以外のファイルにも触れません。迷うなら削除しないでください——場所を取るだけで、何も働きません。"),
+        new Entry("clip.clean.lineJoin", "{0}{2}{1}", "{0}{2}{1}", "{0}{2}{1}"),
         new Entry("settings.feeds.glanceAskTitle", "要在今日速览里显示 GitHub 热榜吗？", "Show GitHub trending in today's glance?", "今日のグランスに GitHub トレンドを表示しますか？"),
         new Entry("settings.feeds.glanceAskBody", "组件里会多一块热榜（默认日榜），原「常看」排到它的下面。选「不显示」也没关系：导航栏的「热榜」页照常可用，这里随时能改。", "The widget gains a trending block (daily by default) and the usual list moves below it. Choosing Don't show is fine too: the Trending page stays in the navigation bar, and you can change this here any time.", "ウィジェットに急上昇ブロック（既定は日次）が増え、いつもの一覧はその下に回ります。「表示しない」を選んでも構いません：ナビの「トレンド」ページはそのまま使え、ここからいつでも変えられます。"),
         new Entry("settings.local.clearedTitle", "已清掉", "Cleaned up", "整理しました"),

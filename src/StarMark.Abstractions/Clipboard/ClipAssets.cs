@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Text;
 using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions.Clipboard;
@@ -229,28 +228,33 @@ public static class ClipAssets
     /// 「清理」确认框的正文。<b>三件事必须写在同一屏里</b>：动的是哪个目录里的哪几个名字、
     /// 一条历史条目都不动、<b>这份名单之外一个文件都不碰</b>。
     /// <para>缺第二句，用户会以为这颗按钮是"清理剪贴板历史"；缺第三句，一次批量删除的想象空间
-    /// 就足够让人不敢按——而按不下去的结果是那些文件永远留在那里。名单被截断时必须说"其余 N 个没列出"，
+    /// 就足够让人不敢按——而按不下去的结果是那些文件永远留在那里。名单被截断时必须说"其余 N 个没有列出"，
     /// 不许让用户以为列出来的就是全部。</para>
+    /// <para>✅WI-64 片2（P-193 收官的那一颗）：那七句全交表，这一颗只交<b>身份＋实参</b>。
+    /// 行与行之间那根换行由<b>实参</b>递进 <c>clip.clean.lineJoin</c> 的 <c>{2}</c> 槽（⛔ 抄进表＝规则 #100：
+    /// 表里不许收控制字符，换行是布局），"尾句之前空一行"也留在代码里——它是布局，不是一门语言的话。
+    /// 回型升成 <see cref="LocMessage"/> 而⛔ 悄悄退成 <c>string</c>：那串成品字在 Abstractions 里按<b>当时</b>
+    /// 的语言念完，换语言后屏幕上就还停着上一门那一句（＝ P-194 那一族）。贴由宿主那一拍做，见
+    /// <c>SettingsPageViewModel.Clipboard.cs</c> 里那颗 <c>LocText.SetMessage</c>。</para>
     /// </summary>
-    public static string CleanupConfirmBody(IReadOnlyList<string> orphanNames, long orphanBytes,
+    public static LocMessage CleanupConfirmBody(IReadOnlyList<string> orphanNames, long orphanBytes,
         int tempCount, long tempBytes, string folder)
     {
-        var sb = new StringBuilder();
+        LocMessage? body = null;
         var shown = Math.Min(CleanupPreviewLimit, orphanNames.Count);
         if (shown > 0)
         {
-            sb.Append("这些文件在「").Append(folder).Append("」里，但历史中没有任何条目指向它们：\n");
-            for (var i = 0; i < shown; i++) sb.Append("· ").Append(orphanNames[i]).Append('\n');
-            if (orphanNames.Count > shown)
-                sb.Append("…其余 ").Append(orphanNames.Count - shown).Append(" 个没有列出。\n");
-            sb.Append("共 ").Append(orphanNames.Count).Append(" 个，约 ").Append(DescribeBytes(orphanBytes)).Append("。\n");
+            Say(LocMessage.Of("clip.clean.head", folder));
+            for (var i = 0; i < shown; i++) Say(LocMessage.Of("clip.clean.row", orphanNames[i]));
+            if (orphanNames.Count > shown) Say(LocMessage.Of("clip.clean.more", orphanNames.Count - shown));
+            Say(LocMessage.Of("clip.clean.total", orphanNames.Count, DescribeBytes(orphanBytes)));
         }
-        if (tempCount > 0)
-            sb.Append("另有 ").Append(tempCount).Append(" 个没写完的临时件（约 ")
-              .Append(DescribeBytes(tempBytes)).Append("）——那是我们自己留下的半件，不可能是你的文件。\n");
-        sb.Append("\n删掉这些文件不会动任何一条历史条目，也不会碰这份名单之外的任何一个文件。")
-          .Append("拿不准就先别删：它们除了占地方，不做任何事。");
-        return sb.ToString();
+        if (tempCount > 0) Say(LocMessage.Of("clip.clean.temps", tempCount, DescribeBytes(tempBytes)));
+        Say(LocMessage.Of("clip.clean.tail"), "\n\n");
+        return body!;
+
+        void Say(LocMessage line, string gap = "\n")
+            => body = body is null ? line : LocMessage.Of("clip.clean.lineJoin", body, line, gap);
     }
 
     /// <summary>

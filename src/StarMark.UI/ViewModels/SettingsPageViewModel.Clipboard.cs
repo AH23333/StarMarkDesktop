@@ -263,12 +263,13 @@ public partial class SettingsPageViewModel
             var (orphanBytes, tempBytes) = ClipboardAssetAudit.BytesOf(scan.Value);
             var body = new Microsoft.UI.Xaml.Controls.TextBlock
             {
-                Text = StarMark.Abstractions.Clipboard.ClipAssets
-                    .CleanupConfirmBody(names, orphanBytes, temps.Count, tempBytes,
-                        StarMark.Abstractions.Clipboard.ClipAssets.Folder),
                 TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap,
                 IsTextSelectionEnabled = true,
             };
+            // ✅WI-64 片2：正文交的是身份，取词由宿主这一拍做（⛔ 在 VM 里 .Render()＝半搬）。
+            // 仍走 ShowContentAsync 而⛔ 换 ConfirmAsync：后者的框高写死 150＋60，八行名单会被截掉。
+            LocText.SetMessage(body, ClipAssets.CleanupConfirmBody(
+                names, orphanBytes, temps.Count, tempBytes, ClipAssets.Folder));
             var total = names.Count + temps.Count;
             var choice = await CenteredDialog.ShowContentAsync(
                 LocMessage.Of("clip.cleanTitle", total), body, owner: App.MainWindow,
