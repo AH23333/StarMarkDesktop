@@ -83,7 +83,7 @@ public sealed class PinGeometryTests
     [Fact]
     public void PinLimitProblem_TellsTheUserWhatToDo()
     {
-        var text = CaptureGeometry.PinLimitProblem(CaptureGeometry.MaxPins)!;
+        var text = CaptureGeometry.PinLimitProblem(CaptureGeometry.MaxPins)!.Render();   // ✅片3b：那颗交「键＋实参」⇒ 比句子
         Assert.Contains("关掉", text);                       // P-54：阻碍要说清出路，不能只说不行
         Assert.Contains(CaptureGeometry.MaxPins.ToString(), text);
     }
@@ -92,7 +92,7 @@ public sealed class PinGeometryTests
     public void PinCommandProblem_OnlyRefusesTheEmptySet()
     {
         Assert.NotNull(CaptureGeometry.PinCommandProblem(0));
-        Assert.Contains("没有", CaptureGeometry.PinCommandProblem(0)!);
+        Assert.Contains("没有", CaptureGeometry.PinCommandProblem(0)!.Render());
         Assert.Null(CaptureGeometry.PinCommandProblem(1));
         Assert.Null(CaptureGeometry.PinCommandProblem(CaptureGeometry.MaxPins));
     }

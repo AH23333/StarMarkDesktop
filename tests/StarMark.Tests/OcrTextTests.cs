@@ -112,7 +112,7 @@ public sealed class OcrTextTests
     [Fact]
     public void ResultProblem_EmptyCaseNamesTheLimits()
     {
-        var problem = OcrText.ResultProblem(string.Empty)!;
+        var problem = OcrText.ResultProblem(string.Empty)!.Render();   // ✅片3b：那颗交「键＋实参」⇒ 比句子
         Assert.Contains("没有认出文字", problem);
         Assert.Contains("图形", problem);      // 要说清哪种情况注定读不出来，别让人反复试
         Assert.Null(OcrText.ResultProblem("有字"));

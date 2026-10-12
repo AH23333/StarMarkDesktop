@@ -29,6 +29,8 @@ public sealed class CaptureNoticeWiringGateTests
     private const string Screenshot = "src/StarMark.UI/Services/ScreenshotService.cs";
     private const string Overlay = "src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs";
     private const string Geometry = "src/StarMark.Core/Capture/CaptureGeometry.cs";
+    private const string HotkeyGateFile = "src/StarMark.Core/Hotkeys/HotkeyGate.cs";
+    private const string CaptureGateFile = "src/StarMark.Core/Hotkeys/CaptureGate.cs";
     private const string PinRoster = "src/StarMark.UI/Services/PinManager.cs";
     private const string Grouping = "src/StarMark.Core/Capture/PinGrouping.cs";
     private const string Ocr = "src/StarMark.UI/Services/OcrService.cs";
@@ -63,6 +65,10 @@ public sealed class CaptureNoticeWiringGateTests
         // ③ 抬头那颗"谁在说话"：两条选区出口 + 那颗工厂 = 3 处，且⛔ 再带默认值
         Assert.Equal(3, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.category\")"));
         Assert.DoesNotContain("string category =", svc);
+        // ④ "被关掉了"那句的正文＝闸门那颗判据自己交的话，⛔ 在这包一层 common.rawValue（那道门只装念完的成品字；
+        //    ✅WI-65 片3 第二刀撤的门，由这一行钉着它⛔ 回来）
+        Assert.Equal(1, SourceGate.Count(svc,
+            "Report(LocMessage.Of(\"capture.card.disabledTitle\"), CaptureGate.ReasonFor(CaptureBlock.Disabled)!);"));
         // ④ 旧句子一概不许回到代码里（现在由表里说）。逐颗点名，⛔ 用"汉字总数下降"那种整体口径。
         //    ⚠ 短到与日志撞车的那一颗要**带引号点名**：`StarLog.Error($"[{category}] 存图失败（{path}）")` 里的
         //    "存图失败"是日志措辞，⛔ 上屏（射程按"会不会出现在这一处屏幕上"划，坑表 #365；日志⛔ 进表是既有口径）。
@@ -108,6 +114,9 @@ public sealed class CaptureNoticeWiringGateTests
     /// <summary>
     /// "回原因的判据"住在 Core，但那句话是直接念给人看的（<c>ShowError(reason)</c>／卡的正文），
     /// 所以词同样从表里取——先例是 <see cref="StarMark.Core.Hotkeys.CaptureGate"/>（批次 WI-2t）。
+    /// <para>✅WI-65 片3 第二刀把这一格的射程从"⛔ 写死汉字"加宽到"<b>也不许当场念出来</b>"（P-194 那一族）：
+    /// 判据回的是「键＋实参」，取词发生在<b>那句话上屏的那一拍</b>。前两档（<c>CaptureGeometry</c> 与两道闸门）
+    /// 的读者都是一直开着的表面（贴图条／常驻工具条），念早一次就停在旧语言上。</para>
     /// </summary>
     [Fact]
     public void CoreReasonSentencesAreTakenFromTheTable()
@@ -119,6 +128,18 @@ public sealed class CaptureNoticeWiringGateTests
         Assert.Equal(1, SourceGate.Count(geo, "LocMessage.Of(\"capture.grab.outsideFrame\")"));
         foreach (var dead in new[] { "选区落在所有显示器之外", "选区太小", "本机没有可用的显示器画面", "选区不在已捕获的画面范围内" })
             Assert.DoesNotContain(dead, geo);
+        // ② 两道闸门（截图总开关／画布热键）：✅片3 第二刀起各档两颗键交「键＋实参」，整档一颗当场取词都不留
+        var hotkeyGate = SourceGate.Code(SourceGate.ReadRepoFile(HotkeyGateFile));
+        var captureGate = SourceGate.Code(SourceGate.ReadRepoFile(CaptureGateFile));
+        foreach (var code in new[] { hotkeyGate, captureGate })
+        {
+            Assert.Equal(0, SourceGate.Count(code, "Locale.T("));
+            Assert.Equal(0, SourceGate.Count(code, "Locale.Fmt("));
+        }
+        Assert.Equal(2, SourceGate.Count(hotkeyGate, "LocMessage.Of(\"hotkey.gate."));
+        Assert.Equal(2, SourceGate.Count(captureGate, "LocMessage.Of(\"hotkey.gate."));
+        Assert.Contains("public static LocMessage? ReasonNotRunning(", hotkeyGate);
+        Assert.Contains("public static LocMessage? ReasonFor(", captureGate);
         // ⚠ 同档里⛔ 上屏的那一句仍然留在代码里：`throw new ArgumentOutOfRangeException("DPI 缩放因子必须为正")`
         // 是给日志与开发者的参数校验（它一旦说出来就是"程序自己坏了"，⛔ 进表＝让表替 bug 说话）。
         // 同档的贴图上限那两句本批已交表（`pin.card.*`，见 <see cref="PinAndGroupCardsAreTakenFromTheTable"/>）。
@@ -146,6 +167,12 @@ public sealed class CaptureNoticeWiringGateTests
         Assert.Equal(8, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.groupCategory\")"));   // 7 处 Report + 那句正文里的引用
         Assert.Equal(2, SourceGate.Count(pin, "Locale.T(\"pin.card.scopeAll\")"));
         // ② 每张卡的标题各有几张脸（少一条＝那条从此静默；"没有可操作的贴图"三处共用一颗）
+        //    ✅WI-65 片3 第二刀：那四处把判据自己交的话<b>原样递进卡里</b>（第三个实参就是那颗 <c>none</c>／<c>full</c>），
+        //    ⛔ 在这里包一层 <c>common.rawValue</c>——那道门只装念完的成品字，包上去就等于替用户把语言钉在判据那一刻。
+        Assert.Equal(3, SourceGate.Count(pin,
+            "TrayReporter.Report(LocMessage.Of(\"pin.card.category\"), LocMessage.Of(\"pin.card.noneTitle\"), none);"));
+        Assert.Equal(1, SourceGate.Count(pin,
+            "TrayReporter.Report(LocMessage.Of(\"pin.card.category\"), LocMessage.Of(\"pin.card.limitTitle\"), full);"));
         Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.limitTitle\")"));
         Assert.Equal(3, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.noneTitle\")"));
         Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.pinnedTitle\")"));
@@ -166,9 +193,10 @@ public sealed class CaptureNoticeWiringGateTests
         Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.goneOnClickBody\""));
         Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.leftBody\""));
         Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.throughPartialBody\""));
-        // ④ 回原因那两句住 Core，但话是说给人看的 ⇒ 词同样进表（先例＝WI-2t／WI-46a）
-        Assert.Equal(1, SourceGate.Count(geo, "Locale.Fmt(\"pin.card.limitBody\""));
-        Assert.Equal(1, SourceGate.Count(geo, "Locale.T(\"pin.card.noneBody\")"));
+        // ④ 回原因那两句住 Core，但话是说给人看的 ⇒ 词同样进表（先例＝WI-2t／WI-46a）。
+        //    ✅WI-65 片3 第二刀起那两句交的是「键＋实参」⛔ 在 Core 里先念成字——念出来就把语言冻在了判据那一刻。
+        Assert.Equal(1, SourceGate.Count(geo, "LocMessage.Of(\"pin.card.limitBody\""));
+        Assert.Equal(1, SourceGate.Count(geo, "LocMessage.Of(\"pin.card.noneBody\")"));
         // ⑤ 念法与形状各只一个主人：组名＝`pin.group.name`，"名字（张数）"＝`pin.groupLabel`
         Assert.Equal(1, SourceGate.Count(grouping, "Locale.Fmt(\"pin.group.name\""));
         Assert.Equal(2, SourceGate.Count(grouping, "Locale.Fmt(\"pin.groupLabel\""));   // GroupLabel 自己 + CloseLabel 借它
@@ -210,8 +238,8 @@ public sealed class CaptureNoticeWiringGateTests
 
     /// <summary>
     /// 识字那一路（批次 WI-46b，P-177 第二刀）：卡上的标题、正文与那行"怎么认的"全部交表。
-    /// <para>⚠ `ocr.card.noReason` 在两处被问（Core 的 `Fail` 与 UI 的 `read.Error ?? …`）——同一颗键⛔ 两个出处，
-    /// 而那颗 `??` 只是替 `string?` 的类型系统上的保险，⛔ 另立一行同名的话。</para>
+    /// <para>⚠ `ocr.card.noReason` 只有<b>一处</b>被问（Core 的 `OcrPipeline`）：✅WI-65 片3 第二刀起 UI 那侧
+    /// 不再替它兜底——同一颗键⛔ 两个出处，而"引擎连原因都没给"这件事只由管线那一处回答。</para>
     /// <para>⚠ `ocr.how.*` 这一族的存在理由：从前片段各自开头带一颗全角逗号，"语言没报＋放大了"那一格
     /// 屏幕上会露出「，放大 2×」——分隔符现在由拼接处放一次（`OcrReadTests` 里有那一格的读数）。</para>
     /// </summary>
@@ -229,21 +257,36 @@ public sealed class CaptureNoticeWiringGateTests
         Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.emptyTitle\")"));
         Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.copiedTitle\")"));
         Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.copyFailedBody\""));
-        Assert.Equal(1, SourceGate.Count(svc, "Locale.Fmt(\"ocr.card.copiedBody\""));
+        Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.copiedBody\""));
         // ② 抬头那颗必传（⛔ 默认值），两态各报自己的名字；同一颗"复制失败"与截图那一路共用一个出处
         Assert.Equal(2, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.category\")"));
         Assert.DoesNotContain("string category =", svc);
         Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.copyFailedTitle\")"));
         Assert.Equal(1, SourceGate.Count(overlay, "LocMessage.Of(\"capture.card.categoryOcr\")"));
         Assert.Equal(1, SourceGate.Count(overlay, "LocMessage.Of(\"pin.card.categoryOcr\")"));
-        // ③ "怎么认的"那三片＋分隔符＋括号：Core 一份，UI⛔ 再写第二份括号
-        Assert.Equal(1, SourceGate.Count(read, "Locale.T(\"ocr.how.join\")"));
-        Assert.Equal(1, SourceGate.Count(read, "Locale.Fmt(\"ocr.how.byLanguage\""));
-        Assert.Equal(1, SourceGate.Count(read, "Locale.Fmt(\"ocr.how.upscale\""));
-        Assert.Equal(1, SourceGate.Count(read, "Locale.T(\"ocr.how.swapped\")"));
-        Assert.Equal(1, SourceGate.Count(read, "Locale.Fmt(\"ocr.how.paren\""));
+        // ③ "怎么认的"那三片＋分隔符＋括号：Core 一份，UI⛔ 再写第二份括号。
+        //    ✅WI-65 片3 第二刀起那一串交的是 <c>LocJoin</c>＝连连接符本身也进表（`ocr.how.join`），
+        //    括号那颗交的是「键＋那一句」⇒ 这一档从此⛔ 出现当场取词（念法冻在建对象那一刻＝坑表 #362 那一族）。
+        Assert.Equal(1, SourceGate.Count(read, "new LocJoin("));
+        Assert.Equal(1, SourceGate.Count(read, "LocMessage.Of(\"ocr.how.byLanguage\""));
+        Assert.Equal(1, SourceGate.Count(read, "LocMessage.Of(\"ocr.how.upscale\""));
+        Assert.Equal(1, SourceGate.Count(read, "LocMessage.Of(\"ocr.how.swapped\")"));
+        Assert.Equal(1, SourceGate.Count(read, "LocMessage.Of(\"ocr.how.paren\""));
+        Assert.Equal(1, SourceGate.Count(read, "\"ocr.how.join\""));
+        Assert.Equal(0, SourceGate.Count(read, "Locale.T("));
+        Assert.Equal(0, SourceGate.Count(read, "Locale.Fmt("));
         Assert.DoesNotContain("private static string Paren(", svc);
-        // ④ 旧句子一概不许回来（带引号的短词同 WI-46a 那条口径：裸词会撞上日志措辞）
+        // ④ 三张卡的正文各由一颗胶水位把两段连起来：⛔ 在 C# 里拼 `+`——那是把语序定死在中文那一侧（规则 #100）
+        Assert.Equal(3, SourceGate.Count(svc, "LocMessage.Of(\"ocr.body.join\""));
+        Assert.Equal(0, SourceGate.Count(svc, "Locale.T("));
+        Assert.Equal(0, SourceGate.Count(svc, "Locale.Fmt("));
+        // ⑤ 引擎自己那句话是机器文本 ⇒ 数据门立在它<b>进来的那一处</b>（Core 的管线），⛔ 留在 UI 的 `??` 里；
+        //    "连原因都没给"这件事从此只由管线那一处回答（同一颗键⛔ 两个出处）
+        Assert.Equal(1, SourceGate.Count(pipe, "LocMessage.Of(\"common.rawValue\", engine)"));
+        Assert.Equal(1, SourceGate.Count(pipe, "LocMessage.Of(\"ocr.card.noReason\")"));
+        Assert.Equal(0, SourceGate.Count(svc, "ocr.card.noReason"));
+        Assert.Equal(1, SourceGate.Count(text, "LocMessage.Of(\"ocr.text.noText\")"));
+        // ⑥ 旧句子一概不许回来（带引号的短词同 WI-46a 那条口径：裸词会撞上日志措辞）
         foreach (var dead in new[]
         {
             "没能识别", "没认出文字", "已复制文字", "识别引擎没有给出原因", "但没能写进剪贴板",

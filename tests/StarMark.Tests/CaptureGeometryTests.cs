@@ -204,8 +204,9 @@ public sealed class CaptureGeometryTests
     {
         Assert.Null(CaptureGeometry.PinLimitProblem(0));
         Assert.Null(CaptureGeometry.PinLimitProblem(CaptureGeometry.MaxPins - 1));
-        var text = CaptureGeometry.PinLimitProblem(CaptureGeometry.MaxPins);
-        Assert.NotNull(text);
+        var problem = CaptureGeometry.PinLimitProblem(CaptureGeometry.MaxPins);
+        Assert.NotNull(problem);                                        // 到上限必须回一句话
+        var text = problem!.Render();                                   // ✅片3b：那颗交「键＋实参」⇒ 比句子
         Assert.Contains(CaptureGeometry.MaxPins.ToString(CultureInfo.InvariantCulture), text);
         Assert.Contains("关掉", text);                                     // 到上限要给下一步怎么做，不只是"不行"
     }

@@ -283,13 +283,16 @@ public sealed class DialogWordGateTests
         {
             (CountdownCs, "LocMessage.Of(\"common.rawValue\", CountdownPolicy.TitleText(item))", 1),
             (ClockCs, "LocMessage.Of(\"common.rawValue\", AlarmPolicy.LineOf(item))", 1),
-            (PinCs, "LocMessage.Of(\"common.rawValue\", full)", 2),
-            (PinCs, "LocMessage.Of(\"common.rawValue\", none)", 3),
+            // ✅WI-65 片3 第二刀：「贴图上限」那颗判据自己交「键＋实参」⇒ 那道门撤了（撤门⛔ 留下这一格当它还在）。
+            //   这里剩下的那一颗 <c>full</c> 是<b>组上限</b>那句（<c>PinGrouping.LimitProblem</c> 仍当场念完，归后面那刀）。
+            (PinCs, "LocMessage.Of(\"common.rawValue\", full)", 1),
             (ShotCs, "LocMessage.Of(\"common.rawValue\", shot.Reason)", 3),
-            (ScreenCs, "LocMessage.Of(\"common.rawValue\", CaptureGate.ReasonFor(CaptureBlock.Disabled)!)", 1),
-            (HubCs, "LocMessage.Of(\"common.rawValue\", why)", 2),
-            // ✅WI-65 片1：report.Text 从此自己就是「键＋实参」，那道门撤了（门撤掉⛔ 留下这一格当它还在）。
-            (OcrCs, "LocMessage.Of(\"common.rawValue\", problem + read.HowParenthesized)", 1),
+            // 同批改掉的另外三颗门：ScreenshotService 那颗 CaptureGate.ReasonFor、AnnotationHub 那两颗 why
+            //（两道闸门的判据现在交「键＋实参」，直接递进提示卡）。
+            // ✅WI-65 片3 第二刀：识字那两张卡不再拼成品字；这里剩下的那颗是<b>认出来的那段文字本身</b>＝机器文本。
+            (OcrCs, "LocMessage.Of(\"common.rawValue\", OcrText.Preview(read.Text))", 1),
+            // 引擎连原因都没给时那颗 <c>ocr.card.noReason</c> 交键，而<b>引擎自己那句话</b>的数据门挪到了
+            // 它进来的那一处（<c>src/StarMark.Core/Ocr/OcrPipeline.cs</c>，Core 那一档由 OcrReadTests 钉）。
             // 同批新立的那一颗：相对时间那句的第五臂是语言中性的 ISO 日，没有词可念 ⇒ 只能走这道数据门。
             (DttCs, "LocMessage.Of(\"common.rawValue\",", 1),
         };

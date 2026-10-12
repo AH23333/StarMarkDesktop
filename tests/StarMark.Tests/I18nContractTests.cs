@@ -278,6 +278,9 @@ public sealed class I18nContractTests : IDisposable
                 + "⚠ 交的是 <c>LocJoin</c> 而⛔ string.Join 念完的那句：后者把每颗名字钉在算出它那一刻，外层换语言重贴时里面停旧话",
             ["capture.pick.shapeTip"] = "纯骨架「{0}：{1}」中日同形，en 列是 \"{0}: {1}\"：连的是<b>工具名</b>与<b>那颗工具的说明</b>两颗键的读数，这一行没有词可翻"
                 + "（✅WI-65 片3／P-194，与 calc.convert.result／trending.notice.join 同形）",
+            ["ocr.body.join"] = "纯胶水位「{0}{1}」三列同形：把识字那三张卡的「原因／结果」与「怎么认的」两段连起来的位置，"
+                + "⛔ 在 C# 里拼 +（✅WI-65 片3 第二刀／P-194，与 rss.statusJoin／settings.data.backup.lineJoin／clip.usage.line 同形——"
+                + "语序归那一行自己决定，⛔ 被拼法定死在中文那一侧＝规则 #100）",
         };
 
         var actual = UiStrings.All

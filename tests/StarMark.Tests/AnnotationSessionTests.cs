@@ -323,7 +323,7 @@ public class AnnotationSessionTests
     {
         // 截图进行中按画布开关：正确回答是"等截图结束"，而不是把用户支使去设置页开一个本来就开着的功能。
         Assert.Equal("截图进行中，这条快捷键要等截图结束才归画布",
-            HotkeyGate.ReasonNotRunning(HotkeyActions.CanvasToggle, canvasEnabled: false, AnnotationStage.Sheet));
+            HotkeyGate.ReasonNotRunning(HotkeyActions.CanvasToggle, canvasEnabled: false, AnnotationStage.Sheet)!.Render());
         // 反过来：会话期间这条键<b>继续注册着</b>，所以必须有原因可说。
         // 少这一臂的话，按下去仍然"什么都不知道地没反应"——那正是这条设计要消掉的东西。
         Assert.True(HotkeyGate.ShouldRegister(HotkeyActions.CanvasToggle, false, AnnotationStage.Sheet));
@@ -337,7 +337,7 @@ public class AnnotationSessionTests
         Assert.Null(HotkeyGate.ReasonNotRunning(HotkeyActions.ScreenCapture, false, AnnotationStage.Sheet));
         // 总开关关着（且不在截图）：说的是"去设置里打开"，不提快捷键（那会把人引向一条哑键）
         Assert.Equal("要先在 设置 → 拓展功能 里打开「屏幕画布」",
-            HotkeyGate.ReasonNotRunning(HotkeyActions.CanvasPen, false, AnnotationStage.Idle));
+            HotkeyGate.ReasonNotRunning(HotkeyActions.CanvasPen, false, AnnotationStage.Idle)!.Render());
     }
 
     // ────────── 截屏总开关的闸门（批次 RP）──────────
@@ -411,9 +411,12 @@ public class AnnotationSessionTests
     public void ABlockedCaptureAlwaysHasSomethingToSay()
     {
         Assert.Null(CaptureGate.ReasonFor(CaptureBlock.None));                 // 放行＝没有话，别返回空字符串
-        Assert.Contains("设置", CaptureGate.ReasonFor(CaptureBlock.Disabled));   // 被关掉：给的是下一步（去哪打开）
-        Assert.Contains("Esc", CaptureGate.ReasonFor(CaptureBlock.SessionBusy)); // 会话中：给的是怎么结束它
-        Assert.NotEqual(CaptureGate.ReasonFor(CaptureBlock.Disabled), CaptureGate.ReasonFor(CaptureBlock.SessionBusy));
+        Assert.Contains("设置", CaptureGate.ReasonFor(CaptureBlock.Disabled)!.Render());   // 被关掉：给的是下一步（去哪打开）
+        Assert.Contains("Esc", CaptureGate.ReasonFor(CaptureBlock.SessionBusy)!.Render()); // 会话中：给的是怎么结束它
+        // ⚠ 比的是<b>念出来的两句</b>而⛔ 比对象：LocMessage 是 record 而 Args 是数组 ⇒ 合成相等只比引用，
+        //   两句一模一样的话也会被 NotEqual 判成"不同"（坑表 #480 同条，本批⛔ 让这一格静默变绿）。
+        Assert.NotEqual(CaptureGate.ReasonFor(CaptureBlock.Disabled)!.Render(),
+            CaptureGate.ReasonFor(CaptureBlock.SessionBusy)!.Render());
     }
 
     // ────────── Esc 路由 ──────────

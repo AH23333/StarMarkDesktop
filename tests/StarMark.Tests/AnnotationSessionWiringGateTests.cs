@@ -132,6 +132,9 @@ public sealed class AnnotationSessionWiringGateTests
         // 批次 WI-61d·片2 改锚：那句兜底从前写成 `?? Locale.T("…")`，而 `??` 两边一颗是数据一颗是成品字编不过，
         // 所以现场改成了 `is { }` 三元＋`LocMessage.Of`（取词处数一颗不少，变的只是形状；钉新形状＝#124 那条成对判据）。
         Assert.Equal(2, SourceGate.Count(hub, "LocMessage.Of(\"canvas.notice.captureInFlight\")"));
+        // ✅WI-65 片3 第二刀：闸门回的那颗「键＋实参」原样递出去 ⇒ 这一档一颗数据门都不许有。
+        //   ⛔ 在这里包一层 <c>common.rawValue</c>：那道门只装念完的成品字，而这张卡会一直挂到下一次操作。
+        Assert.Equal(0, SourceGate.Count(hub, "LocMessage.Of(\"common.rawValue\""));
         foreach (var dead in new[] { "Report(\"画布现在按不动\"", "?? \"截图进行中\"" })
             Assert.DoesNotContain(dead, hub);
     }

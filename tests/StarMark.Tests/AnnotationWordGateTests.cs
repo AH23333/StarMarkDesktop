@@ -275,8 +275,8 @@ public sealed class AnnotationWordGateTests
     /// <summary>
     /// ⑨ 词厂整档一颗当场取词都不留（P-194 数这一族的尺）：28 处 <c>LocMessage.Of(</c> 对上落档时称的数，
     /// <c>Locale.T(</c>／<c>Locale.Fmt(</c> 各钉 <b>0</b>。
-    /// <para><c>CaptureGeometry</c> 这一档⛔ 整档归零：选区／裁剪那四处交键，<b>还剩贴图那两颗</b>
-    /// （<c>pin.card.limitBody</c>／<c>pin.card.noneBody</c>）归片3 第二刀 ⇒ 剩余量钉成数、⛔ 写成完成态（#178／#469 同条）。</para>
+    /// <para><c>CaptureGeometry</c> 这一档✅片3 第二刀起<b>整档归零</b>：选区／裁剪那四处（第一刀）＋贴图那两颗
+    /// （第二刀）都交「键＋实参」⇒ <c>Locale.T(</c>／<c>Locale.Fmt(</c> 各钉 <b>0</b>，两批的形状各自点名。</para>
     /// </summary>
     [Fact]
     public void TheJudgeHandsOutKeysAndNeverReadsThemItself()
@@ -287,12 +287,15 @@ public sealed class AnnotationWordGateTests
         Assert.Equal(28, SourceGate.Count(ann, "LocMessage.Of("));     // 1 色名 ＋ 3 档名 ＋ 5 单位 ＋ 7 判据 ＋ 1 工具名 ＋ 11 悬停说明
 
         var geo = SourceGate.Code(SourceGate.ReadRepoFile(Geo));
-        Assert.Equal(0, SourceGate.Count(geo, "Locale.T(\"capture."));
-        Assert.Equal(0, SourceGate.Count(geo, "Locale.Fmt(\"capture."));
+        // ✅片3 第二刀：这一档<b>整档归零</b>——选区／裁剪那四颗之外，贴图那两颗也交完了
+        Assert.Equal(0, SourceGate.Count(geo, "Locale.T("));
+        Assert.Equal(0, SourceGate.Count(geo, "Locale.Fmt("));
         Assert.Equal(4, SourceGate.Count(geo, "LocMessage.Of(\"capture."));
-        Assert.Equal(2, SourceGate.Count(geo, "Locale.T(") + SourceGate.Count(geo, "Locale.Fmt("));   // 只剩贴图那两颗
+        Assert.Equal(2, SourceGate.Count(geo, "LocMessage.Of(\"pin.card."));
         Assert.Contains("public static LocMessage? SelectionProblem(", geo);
         Assert.Contains("public static LocMessage? CropProblem(", geo);
+        Assert.Contains("public static LocMessage? PinLimitProblem(", geo);
+        Assert.Contains("public static LocMessage? PinCommandProblem(", geo);
 
         var ink = SourceGate.Code(SourceGate.ReadRepoFile(Ink));
         Assert.Equal(0, SourceGate.Count(ink, "Locale.T("));
