@@ -58,7 +58,12 @@ public static class OcrPipeline
         OcrImagePrep.StretchContrast(work, workWidth, workHeight);
 
         var first = await ScreenOcrReader.RecognizeAsync(work, workWidth, workHeight);
-        if (!first.Ok) return OcrRead.Fail(first.Error ?? Locale.T("ocr.card.noReason"), first.EngineLanguage);
+        // ✅WI-65 片3 第二刀：引擎那句话是<b>机器文本</b> ⇒ 数据门（common.rawValue）就放在它进来的这一行；
+        // 只有"引擎连原因都没给"时说的才是<b>我们自己的</b>那颗词，那句交键、⛔ 在这里念完。
+        if (!first.Ok)
+            return OcrRead.Fail(first.Error is { } engine
+                ? LocMessage.Of("common.rawValue", engine)
+                : LocMessage.Of("ocr.card.noReason"), first.EngineLanguage);
 
         var language = first.EngineLanguage;
         var text = OcrText.Assemble(first.Lines);

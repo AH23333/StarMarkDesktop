@@ -285,10 +285,12 @@ public static class CaptureGeometry
     /// <summary>
     /// 再开一张贴图行不行。到上限时的文案要带上怎么办（关掉不用的那张），
     /// 而不是只说"不行"——这是 P-54 那条"提示与阻碍"的口径。
+    /// <para>✅WI-65 片3 第二刀：交「键＋实参」而⛔ 交念完的那句——那条提示卡会一直挂着到下一次操作，
+    /// 宿主拿到成品字就等于把语言钉在算出它那一刻（夹在里面的两个数字仍是实参，随时现算）。</para>
     /// </summary>
-    public static string? PinLimitProblem(int currentPins)
+    public static LocMessage? PinLimitProblem(int currentPins)
         => currentPins >= MaxPins
-            ? Locale.Fmt("pin.card.limitBody", currentPins, MaxPins)
+            ? LocMessage.Of("pin.card.limitBody", currentPins, MaxPins)
             : null;
 
     /// <summary>
@@ -296,8 +298,8 @@ public static class CaptureGeometry
     /// 一张都没有时必须回原因：这三条指令在空集上都是"什么都没发生"，
     /// 静默返回就等于让用户以为按错了键（热键回调没有任何别的反馈渠道）。
     /// </summary>
-    public static string? PinCommandProblem(int currentPins)
-        => currentPins == 0 ? Locale.T("pin.card.noneBody") : null;
+    public static LocMessage? PinCommandProblem(int currentPins)
+        => currentPins == 0 ? LocMessage.Of("pin.card.noneBody") : null;
 
     /// <summary>贴图当前的倍率文案（右上角那颗角标用的百分比）。</summary>
     public static string FormatZoom(double zoom)

@@ -58,8 +58,10 @@ public static class OcrService
         var read = await OcrPipeline.ReadAsync(pixels, width, height);
         if (!read.Ok)
         {
+            // 「原因」＋「怎么认的」这两段从前在 C# 里用 + 拼 ⇒ 语序被定死在中文那一侧；
+            // 现在连起来的位置交表里那颗纯胶水位 ocr.body.join（规则 #100，先例＝rss.statusJoin）。
             TrayReporter.Report(category, LocMessage.Of("ocr.card.failedTitle"),
-                LocMessage.Of("common.rawValue", (read.Error ?? Locale.T("ocr.card.noReason")) + read.HowParenthesized));
+                LocMessage.Of("ocr.body.join", read.Error, read.HowParenthesized));
             return;
         }
 
@@ -68,7 +70,7 @@ public static class OcrService
             // 这是"识别成功但没有文字"，与"引擎坏了"是两件事，必须分开说：
             // 前者让用户换一块有字/更大的区域再试，后者是程序该修的问题
             TrayReporter.Report(category, LocMessage.Of("ocr.card.emptyTitle"),
-                LocMessage.Of("common.rawValue", problem + read.HowParenthesized));
+                LocMessage.Of("ocr.body.join", problem, read.HowParenthesized));
             return;
         }
 
@@ -79,8 +81,10 @@ public static class OcrService
             return;
         }
         TrayReporter.Report(category, LocMessage.Of("ocr.card.copiedTitle"),
-            LocMessage.Of("common.rawValue", Locale.Fmt("ocr.card.copiedBody", read.Chars, read.HowParenthesized)
-                + OcrText.Preview(read.Text)));
+            LocMessage.Of("ocr.body.join",
+                LocMessage.Of("ocr.card.copiedBody", read.Chars, read.HowParenthesized),
+                // 认出来的那段文字是<b>机器文本</b> ⇒ 它走数据门；⛔ 把它当"我们的词"塞进表里
+                LocMessage.Of("common.rawValue", OcrText.Preview(read.Text))));
     }
 
     /// <summary>写剪贴板。失败必须报出来（用户下一步就是粘贴），不能只记日志。</summary>

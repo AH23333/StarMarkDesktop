@@ -97,9 +97,9 @@ public static class OcrText
         return cut.TrimEnd() + (HasMoreThan(text, maxChars) ? "…" : string.Empty);
     }
 
-    /// <summary>识别结果能不能用。返回 null＝可以；否则是给界面直接显示的原因。</summary>
-    public static string? ResultProblem(string assembled)
-        => assembled.Length == 0 ? Locale.T("ocr.text.noText") : null;
+    /// <summary>识别结果能不能用。返回 null＝可以；否则是给界面显示的那句话的<b>「键＋实参」</b>（✅WI-65 片3 第二刀：⛔ 在这里念完）。</summary>
+    public static LocMessage? ResultProblem(string assembled)
+        => assembled.Length == 0 ? LocMessage.Of("ocr.text.noText") : null;
 
     /// <summary>
     /// 黏字符：中日韩文字（含假名/韩文音节）与全角标点/全角形式。

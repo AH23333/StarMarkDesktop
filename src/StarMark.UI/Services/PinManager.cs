@@ -78,8 +78,7 @@ public static class PinManager
         {
             if (CaptureGeometry.PinLimitProblem(Pins.Count) is { } full)
             {
-                TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.limitTitle"),
-                    LocMessage.Of("common.rawValue", full));
+                TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.limitTitle"), full);
                 return;
             }
             try
@@ -111,8 +110,8 @@ public static class PinManager
     {
         if (CaptureGeometry.PinCommandProblem(Pins.Count) is { } none)
         {
-            TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.noneTitle"),
-                LocMessage.Of("common.rawValue", none));
+            // ✅WI-65 片3 第二刀：那颗判据自己交「键＋实参」⇒ 直接递出去（common.rawValue 那道门只装念完的成品字）。
+            TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.noneTitle"), none);
             return;
         }
         ApplyHiddenTo(Pins, PinGrouping.NextHidden(AreHidden), Locale.T("pin.card.scopeAll"));
@@ -123,8 +122,8 @@ public static class PinManager
     {
         if (CaptureGeometry.PinCommandProblem(Pins.Count) is { } none)
         {
-            TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.noneTitle"),
-                LocMessage.Of("common.rawValue", none));
+            // ✅WI-65 片3 第二刀：那颗判据自己交「键＋实参」⇒ 直接递出去（common.rawValue 那道门只装念完的成品字）。
+            TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.noneTitle"), none);
             return;
         }
         ApplyThroughTo(Pins, PinGrouping.NextThrough(ClickThrough), Locale.T("pin.card.scopeAll"));
@@ -134,8 +133,8 @@ public static class PinManager
     {
         if (CaptureGeometry.PinCommandProblem(Pins.Count) is { } none)
         {
-            TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.noneTitle"),
-                LocMessage.Of("common.rawValue", none));
+            // ✅WI-65 片3 第二刀：那颗判据自己交「键＋实参」⇒ 直接递出去（common.rawValue 那道门只装念完的成品字）。
+            TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.noneTitle"), none);
             return;
         }
         var closed = Pins.Count;

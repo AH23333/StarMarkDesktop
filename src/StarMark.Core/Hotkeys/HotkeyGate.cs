@@ -44,13 +44,13 @@ public static class HotkeyGate
     /// <para>画布开着但这一条动作此刻没东西可做（板子没在场）那句不在这里——它带键位提示，
     /// 由 UI 侧的 <c>RequireRunning</c> 拼；这里只回答两道闸（会话、总开关）。</para>
     /// </summary>
-    public static string? ReasonNotRunning(string action, bool canvasEnabled, AnnotationStage stage)
+    public static LocMessage? ReasonNotRunning(string action, bool canvasEnabled, AnnotationStage stage)
     {
         if (!HotkeyActions.IsCanvasAction(action)) return null;
         if (stage.SuppressesCanvasHotkeys())
-            return Locale.T("hotkey.gate.canvasBusySheet");
+            return LocMessage.Of("hotkey.gate.canvasBusySheet");
         if (!canvasEnabled)
-            return Locale.T("hotkey.gate.canvasDisabled");
+            return LocMessage.Of("hotkey.gate.canvasDisabled");
         return null;
     }
 

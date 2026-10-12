@@ -97,7 +97,7 @@ public static class AnnotationHub
         {
             Report(LocMessage.Of("canvas.notice.notResponsiveTitle"), HotkeyGate.ReasonNotRunning(
                 HotkeyActions.CanvasToggle, true, AnnotationStage.Sheet) is { } why
-                    ? LocMessage.Of("common.rawValue", why)
+                    ? why
                     : LocMessage.Of("canvas.notice.captureInFlight"));
             return;
         }
@@ -165,7 +165,7 @@ public static class AnnotationHub
         {
             Report(LocMessage.Of("canvas.notice.notResponsiveTitle"), HotkeyGate.ReasonNotRunning(
                 HotkeyActions.CanvasToggle, true, AnnotationStage.Sheet) is { } why
-                    ? LocMessage.Of("common.rawValue", why)
+                    ? why
                     : LocMessage.Of("canvas.notice.captureInFlight"));
             return;
         }

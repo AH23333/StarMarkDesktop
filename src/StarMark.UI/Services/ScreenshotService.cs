@@ -76,8 +76,7 @@ public static class ScreenshotService
         {
             // 功能被关掉：屏幕上什么都没发生，必须给一句可见的话，否则用户只会以为"这个键坏了"
             case CaptureBlock.Disabled:
-                Report(LocMessage.Of("capture.card.disabledTitle"),
-                    LocMessage.Of("common.rawValue", CaptureGate.ReasonFor(CaptureBlock.Disabled)!));
+                Report(LocMessage.Of("capture.card.disabledTitle"), CaptureGate.ReasonFor(CaptureBlock.Disabled)!);
                 return;
             // 会话中：那块遮罩本身就是原因，再弹一条会把框选的焦点抢走（抢走就等于取消截图），所以只记一行
             case CaptureBlock.SessionBusy:

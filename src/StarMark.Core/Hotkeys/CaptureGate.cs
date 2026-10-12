@@ -68,10 +68,10 @@ public static class CaptureGate
     /// 挡住时给的一句话；没挡住返回 <b>null</b>（调用方靠 null 判"放行"，返回空字符串会让"被挡住"与"放行"在界面上长得一样）。
     /// <para>措辞给的是<b>下一步动作</b>（去哪打开），不是"失败"。</para>
     /// </summary>
-    public static string? ReasonFor(CaptureBlock block) => block switch
+    public static LocMessage? ReasonFor(CaptureBlock block) => block switch
     {
-        CaptureBlock.Disabled => Locale.T("hotkey.gate.captureDisabled"),
-        CaptureBlock.SessionBusy => Locale.T("hotkey.gate.captureBusy"),
+        CaptureBlock.Disabled => LocMessage.Of("hotkey.gate.captureDisabled"),
+        CaptureBlock.SessionBusy => LocMessage.Of("hotkey.gate.captureBusy"),
         _ => null,
     };
 }
