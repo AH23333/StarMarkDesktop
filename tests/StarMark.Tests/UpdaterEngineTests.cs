@@ -540,7 +540,7 @@ public sealed class UpdaterEngineTests : IDisposable
     public void TheReplacementSentencesAreAsManyDistinctOnesAsThereAreOutcomes()
     {
         var values = Enum.GetValues<UpdaterOutcome>();
-        Assert.Equal(values.Length, values.Select(UpdatePolicy.Describe).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(values.Length, values.Select(static s => UpdatePolicy.Describe(s)).Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
@@ -637,9 +637,9 @@ public sealed class UpdaterEngineTests : IDisposable
     public void TheLaunchSentencesDoNotClaimTheUpdateIsFinished()
     {
         var values = Enum.GetValues<LaunchStatus>();
-        Assert.Equal(values.Length, values.Select(UpdatePolicy.Describe).Distinct(StringComparer.Ordinal).Count());
-        Assert.DoesNotContain("已经换好", UpdatePolicy.Describe(LaunchStatus.Started), StringComparison.Ordinal);
-        Assert.DoesNotContain("重新安装", UpdatePolicy.Describe(LaunchStatus.NotStarted), StringComparison.Ordinal);
+        Assert.Equal(values.Length, values.Select(static s => UpdatePolicy.Describe(s).Render()).Distinct(StringComparer.Ordinal).Count());
+        Assert.DoesNotContain("已经换好", UpdatePolicy.Describe(LaunchStatus.Started).Render(), StringComparison.Ordinal);
+        Assert.DoesNotContain("重新安装", UpdatePolicy.Describe(LaunchStatus.NotStarted).Render(), StringComparison.Ordinal);
         foreach (LaunchStatus value in values)
             Assert.Contains($"LaunchStatus.{value} =>",
                 Code(ReadRepoFile("src/StarMark.Core/Updates/UpdatePolicy.cs")), StringComparison.Ordinal);

@@ -406,7 +406,7 @@ public sealed class UpdateStagingTests : IDisposable
     [Fact]
     public void TheStageSentencesAreAsManyDistinctOnesAsThereAreCauses()
         => Assert.Equal(Enum.GetValues<StageStatus>().Length,
-            Enum.GetValues<StageStatus>().Select(UpdatePolicy.Describe).Distinct(StringComparer.Ordinal).Count());
+            Enum.GetValues<StageStatus>().Select(static s => UpdatePolicy.Describe(s).Render()).Distinct(StringComparer.Ordinal).Count());
 
     /// <summary>
     /// 每一格在 <c>UpdatePolicy.Describe</c> 里必须有<b>自己的那条臂</b>。
@@ -428,7 +428,7 @@ public sealed class UpdateStagingTests : IDisposable
     [MemberData(nameof(EveryStageStatus))]
     public void NoRefusalSentenceClaimsAnythingWasInstalled(StageStatus status)
     {
-        var text = UpdatePolicy.Describe(status);
+        var text = UpdatePolicy.Describe(status).Render();
         Assert.False(string.IsNullOrWhiteSpace(text));
         if (status == StageStatus.Staged) return;
 

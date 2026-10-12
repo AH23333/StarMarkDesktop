@@ -184,7 +184,7 @@ public sealed class UpdateCheckTests
     [MemberData(nameof(EveryVerdict))]
     public void EveryVerdictHasItsOwnSentenceThatNeverPushesWorkBack(UpdateVerdict verdict)
     {
-        var text = UpdatePolicy.Describe(verdict, Release("v1.1.0"), "1.0.0");
+        var text = UpdatePolicy.Describe(verdict, Release("v1.1.0"), "1.0.0").Render();
 
         Assert.False(string.IsNullOrWhiteSpace(text), $"{verdict} 这一格没有话可说");
         // 十二格十二种说法：并成两句就等于告诉用户"失败"（P-54 的判据在这里同样成立）
@@ -197,7 +197,7 @@ public sealed class UpdateCheckTests
     [Fact]
     public void TheNewerSentenceCarriesBothVersions()
     {
-        var text = UpdatePolicy.Describe(UpdateVerdict.NewerAvailable, Release("v1.1.0"), "1.0.0");
+        var text = UpdatePolicy.Describe(UpdateVerdict.NewerAvailable, Release("v1.1.0"), "1.0.0").Render();
         Assert.Contains("1.1.0", text, StringComparison.Ordinal);
         Assert.Contains("1.0.0", text, StringComparison.Ordinal);
     }
@@ -206,7 +206,7 @@ public sealed class UpdateCheckTests
     public void NoTwoVerdictsShareTheSameSentence()
     {
         var all = Enum.GetValues<UpdateVerdict>();
-        var texts = all.Select(v => UpdatePolicy.Describe(v, Release("v1.1.0"), "1.0.0")).ToList();
+        var texts = all.Select(v => UpdatePolicy.Describe(v, Release("v1.1.0"), "1.0.0").Render()).ToList();
         Assert.Equal(texts.Count, texts.Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(all.Length, texts.Count);        // 反空转：漏了一格时这里会先红
     }
@@ -410,7 +410,7 @@ public sealed class UpdateCheckTests
         var last = service.LastReport();
         Assert.NotNull(last);
         Assert.Equal(UpdateVerdict.NewerAvailable, last!.Verdict);
-        Assert.Contains("1.1.0", last.Text, StringComparison.Ordinal);
+        Assert.Contains("1.1.0", last.Text.Render(), StringComparison.Ordinal);
         Assert.False(last.Announced);                       // 回看不该被记成"又提醒了一次"
         Assert.Equal(0, source.Calls);                      // 打开设置页不发请求
         await Task.CompletedTask;

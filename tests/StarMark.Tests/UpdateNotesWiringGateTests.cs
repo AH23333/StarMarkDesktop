@@ -71,7 +71,7 @@ public sealed class UpdateNotesWiringGateTests
         foreach (var banned in new[] { "Regex", "Replace(", "Trim(", "TextTrim", "ReleaseNotes.Clean", "Body" })
             Assert.DoesNotContain(banned, vm + Code(ReadRepoFile(View)), StringComparison.Ordinal);
         // 状态行与那一格正文是两个出口：把说明拼进句子，收起折叠区时句子还留着它
-        Assert.DoesNotContain("Notes", MethodBody(vm, "private string BuildUpdateStatus()"), StringComparison.Ordinal);
+        Assert.DoesNotContain("Notes", MethodBody(vm, "private LocMessage BuildUpdateStatus()"), StringComparison.Ordinal);
     }
 
     /// <summary>清 markdown 这件事<b>全仓只有一个调用点</b>，且那一处住在 Core。</summary>

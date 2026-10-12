@@ -122,7 +122,7 @@ public sealed class ReleaseNotesTests
 
         Assert.Equal("修了两件事\n- 那条不再丢窗口", report.Notes);
         // 正文不许混进那句话：状态行与说明各是各的出口，混一次就没法只收起其中一格
-        Assert.DoesNotContain("修了两件事", report.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("修了两件事", report.Text.Render(), StringComparison.Ordinal);
     }
 
     /// <summary>

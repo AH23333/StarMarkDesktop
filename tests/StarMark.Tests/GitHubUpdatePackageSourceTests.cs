@@ -382,7 +382,7 @@ public sealed class GitHubUpdatePackageSourceTests : IDisposable
 
         Assert.Equal(PackageFetchStatus.Fetched, result.Status);
         Assert.Equal(new DownloadProgress(total, null), Assert.Single(seen));
-        Assert.DoesNotContain("%", UpdatePolicy.Describe(seen[0]), StringComparison.Ordinal);
+        Assert.DoesNotContain("%", UpdatePolicy.Describe(seen[0]).Render(), StringComparison.Ordinal);
     }
 
     /// <summary>比一个缓冲块还短的载荷只能报出一格——那一格也必须报，界面不该一个数字都拿不到。</summary>

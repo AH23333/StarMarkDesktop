@@ -38,6 +38,7 @@ public sealed class DialogWordGateTests
     private const string LocalDiskCs = "src/StarMark.UI/ViewModels/SettingsPageViewModel.LocalDisk.cs";
     private const string NoticeWin = "src/StarMark.UI/Views/NoticeCardWindow.cs";
     private const string Reporter = "src/StarMark.UI/Services/TrayReporter.cs";
+    private const string DttCs = "src/StarMark.Abstractions/DateTimeText.cs";
     private const string CountdownCs = "src/StarMark.UI/Views/CountdownWidget.xaml.cs";
     private const string ClockCs = "src/StarMark.UI/Views/ClockWidget.xaml.cs";
     private const string PinCs = "src/StarMark.UI/Services/PinManager.cs";
@@ -287,8 +288,10 @@ public sealed class DialogWordGateTests
             (ShotCs, "LocMessage.Of(\"common.rawValue\", shot.Reason)", 3),
             (ScreenCs, "LocMessage.Of(\"common.rawValue\", CaptureGate.ReasonFor(CaptureBlock.Disabled)!)", 1),
             (HubCs, "LocMessage.Of(\"common.rawValue\", why)", 2),
-            (UpdateCs, "LocMessage.Of(\"common.rawValue\", report.Text)", 1),
+            // ✅WI-65 片1：report.Text 从此自己就是「键＋实参」，那道门撤了（门撤掉⛔ 留下这一格当它还在）。
             (OcrCs, "LocMessage.Of(\"common.rawValue\", problem + read.HowParenthesized)", 1),
+            // 同批新立的那一颗：相对时间那句的第五臂是语言中性的 ISO 日，没有词可念 ⇒ 只能走这道数据门。
+            (DttCs, "LocMessage.Of(\"common.rawValue\",", 1),
         };
         foreach (var (file, needle, want) in doors)
             Assert.True(Times(CodeOf(file), needle) == want,

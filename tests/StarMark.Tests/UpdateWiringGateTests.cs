@@ -49,8 +49,11 @@ public sealed class UpdateWiringGateTests
         Assert.Equal(1, Count(tab, "i18n:LocText.Key=\"settings.general.aboutTitle\""));
         Assert.Equal(1, Count(tab, "ViewModel.UpdateAutoCheckEnabled, Mode=TwoWay"));
         // 版本号与上一次的结果都要看得见（只给一颗开关而说不出"上次查到了什么"＝不能自证）
+        // 版本号与上一次的结果都要看得见（只给一颗开关而说不出"上次查到了什么"＝不能自证）。
+        // ✅WI-65 片1：那一行不再绑成品串，改由宿主那一拍贴 ⇒ 判据跟着换那颗元素名（屏幕上还在不在，同一件事）。
         Assert.Equal(1, Count(tab, "ViewModel.LocalVersionText, Mode=OneWay"));
-        Assert.Equal(1, Count(tab, "ViewModel.UpdateStatus, Mode=OneWay"));
+        Assert.Equal(1, Count(tab, "x:Name=\"UpdateStatusText\""));
+        Assert.Equal(0, Count(tab, "ViewModel.UpdateStatus, Mode=OneWay"));
         Assert.Equal(1, Count(tab, "Click=\"UpdateCheck_Click\""));
         Assert.Equal(1, Count(tab, "Click=\"UpdateOpenPage_Click\""));
     }
@@ -270,7 +273,9 @@ public sealed class UpdateWiringGateTests
         var showCard = MethodBody(scheduler, "private static void ShowCard(LocMessage title, UpdateReport report, string? actionUrl)");
         Assert.Contains("App.MainWindow?.DispatcherQueue", showCard);
         Assert.Contains("pump.TryEnqueue(() =>", showCard);
-        Assert.Contains("NoticeCard.Show(title, LocMessage.Of(\"common.rawValue\", report.Text), actionUrl,\n                    LocMessage.Of(\"card.action.releasePage\"));", showCard);
+        // ✅WI-65 片1：那颗正文从"Core 念完再走数据门"变成"Core 交键、这里原样递出去"⇒ 门撤了，句子整颗走。
+        Assert.Contains("NoticeCard.Show(title, report.Text, actionUrl,", showCard);
+        Assert.DoesNotContain("common.rawValue", showCard, StringComparison.Ordinal);
         // 而"贴上了没有"问的是屏幕，不是任何一发的返回值（批次 RV 那条谎报的教训）
         Assert.Contains("if (!shown) StarLog.Info(", showCard);
     }

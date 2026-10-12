@@ -69,7 +69,7 @@ public sealed class UpdateApplierTests : IDisposable
         var result = await applier.ApplyAsync(Tag, options: options);
 
         Assert.Equal(ApplyStatus.HandedOff, result.Status);
-        Assert.Equal(UpdatePolicy.Describe(LaunchStatus.Started), result.Sentence);   // 那句不许在界面侧另写一份
+        Assert.Equal(UpdatePolicy.Describe(LaunchStatus.Started).Render(), result.Sentence!.Render());   // 那句不许在界面侧另写一份
         Assert.False(File.Exists(_payload));                                          // 那颗 zip 用完就走
         Assert.Single(started);
     }
@@ -184,7 +184,7 @@ public sealed class UpdateApplierTests : IDisposable
         var result = await applier.ApplyAsync(tag);
 
         Assert.Equal(ApplyStatus.NothingApplied, result.Status);
-        Assert.Equal(UpdatePolicy.Describe(ApplyStatus.NothingApplied), result.Sentence);
+        Assert.Equal(UpdatePolicy.Describe(ApplyStatus.NothingApplied).Render(), result.Sentence!.Render());
         Assert.False(string.IsNullOrEmpty(result.Detail));
         Assert.Equal(0, source.Calls);                                                // 一次都没问
         Assert.False(Directory.Exists(_stagingRoot));                                  // 连暂存根都没建
@@ -230,8 +230,8 @@ public sealed class UpdateApplierTests : IDisposable
         var result = await applier.ApplyAsync(Tag);
 
         Assert.Equal(ApplyStatus.NothingApplied, result.Status);
-        Assert.Equal(UpdatePolicy.Describe(status), result.Sentence);
-        Assert.NotEqual(UpdatePolicy.Describe(ApplyStatus.NothingApplied), result.Sentence);  // 不许退回那句通用话
+        Assert.Equal(UpdatePolicy.Describe(status).Render(), result.Sentence!.Render());
+        Assert.NotEqual(UpdatePolicy.Describe(ApplyStatus.NothingApplied).Render(), result.Sentence!.Render());  // 不许退回那句通用话
         Assert.False(Directory.Exists(_stagingRoot));
     }
 
@@ -249,7 +249,7 @@ public sealed class UpdateApplierTests : IDisposable
         var result = await applier.ApplyAsync(Tag);                      // 不传 Options ⇒ 走生产入口
 
         Assert.Equal(ApplyStatus.NothingApplied, result.Status);
-        Assert.Equal(UpdatePolicy.Describe(UpdateIntegrity.Outcome.SignatureInvalid), result.Sentence);
+        Assert.Equal(UpdatePolicy.Describe(UpdateIntegrity.Outcome.SignatureInvalid).Render(), result.Sentence!.Render());
         Assert.False(Directory.Exists(_stagingRoot));
         Assert.False(File.Exists(_payload));                             // 拒绝之后那颗 zip 也不许留着
     }
@@ -262,7 +262,7 @@ public sealed class UpdateApplierTests : IDisposable
 
         var result = await applier.ApplyAsync(Tag, options: options);
 
-        Assert.Equal(UpdatePolicy.Describe(UpdateIntegrity.Outcome.RollbackRefused), result.Sentence);
+        Assert.Equal(UpdatePolicy.Describe(UpdateIntegrity.Outcome.RollbackRefused).Render(), result.Sentence!.Render());
         Assert.False(Directory.Exists(_stagingRoot));
         Assert.False(File.Exists(_payload));
     }
@@ -275,7 +275,7 @@ public sealed class UpdateApplierTests : IDisposable
 
         var result = await applier.ApplyAsync(Tag, options: options);
 
-        Assert.Equal(UpdatePolicy.Describe(StageStatus.FileMissing), result.Sentence);
+        Assert.Equal(UpdatePolicy.Describe(StageStatus.FileMissing).Render(), result.Sentence!.Render());
         Assert.Empty(Directory.GetFileSystemEntries(_stagingRoot));
         Assert.False(File.Exists(_payload));
     }
@@ -293,7 +293,7 @@ public sealed class UpdateApplierTests : IDisposable
 
         var result = await applier.ApplyAsync(Tag, options: options);
 
-        Assert.Equal(UpdatePolicy.Describe(LaunchStatus.NotStarted), result.Sentence);
+        Assert.Equal(UpdatePolicy.Describe(LaunchStatus.NotStarted).Render(), result.Sentence!.Render());
         Assert.True(Directory.Exists(Path.Combine(_stagingRoot, Version + ".new")));
         Assert.Equal(installBefore, ContentOf(_install));
         Assert.False(Directory.Exists(Path.Combine(_install, UpdaterPaths.UpdaterFolderName)));   // 连副本都没往里带
@@ -355,9 +355,9 @@ public sealed class UpdateApplierTests : IDisposable
     public void TheApplySentencesAreAsManyDistinctOnesAsThereAre()
     {
         Assert.Equal(Enum.GetValues<ApplyStatus>().Length,
-            Enum.GetValues<ApplyStatus>().Select(UpdatePolicy.Describe).Distinct(StringComparer.Ordinal).Count());
+            Enum.GetValues<ApplyStatus>().Select(static s => UpdatePolicy.Describe(s).Render()).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(Enum.GetValues<ApplyPhase>().Length,
-            Enum.GetValues<ApplyPhase>().Select(UpdatePolicy.Describe).Distinct(StringComparer.Ordinal).Count());
+            Enum.GetValues<ApplyPhase>().Select(static s => UpdatePolicy.Describe(s).Render()).Distinct(StringComparer.Ordinal).Count());
     }
 
     /// <summary>进度那几句说出来必须"还在走"：不许出现"完成/成功/已装"，也不许出现"请…／稍后"（P-54）。</summary>
@@ -365,7 +365,7 @@ public sealed class UpdateApplierTests : IDisposable
     [MemberData(nameof(EveryApplyPhase))]
     public void ProgressSentencesNeverReadLikeAResult(ApplyPhase phase)
     {
-        var text = UpdatePolicy.Describe(phase);
+        var text = UpdatePolicy.Describe(phase).Render();
         Assert.StartsWith("正在", text, StringComparison.Ordinal);
         foreach (var banned in new[] { "完成", "成功", "已装", "请", "稍后" })
             Assert.DoesNotContain(banned, text, StringComparison.Ordinal);
@@ -381,7 +381,7 @@ public sealed class UpdateApplierTests : IDisposable
     public void TheReadoutHeadIsTakenFromThePhaseSentenceRatherThanCopied()
     {
         var body = MethodBody(Code(ReadRepoFile("src/StarMark.Core/Updates/UpdatePolicy.cs")),
-            "public static string Describe(DownloadProgress progress)");
+            "public static LocMessage Describe(DownloadProgress progress)");
         Assert.Contains("Describe(ApplyPhase.Downloading)", body, StringComparison.Ordinal);
         Assert.DoesNotContain("正在下载", body, StringComparison.Ordinal);
     }
@@ -393,9 +393,9 @@ public sealed class UpdateApplierTests : IDisposable
     [Fact]
     public void TheReadoutSentenceIsThePhaseSentencePlusNumbers()
     {
-        var head = UpdatePolicy.Describe(ApplyPhase.Downloading);
-        var known = UpdatePolicy.Describe(new DownloadProgress(1_048_576, 2_097_152));
-        var unknown = UpdatePolicy.Describe(new DownloadProgress(1_048_576, null));
+        var head = UpdatePolicy.Describe(ApplyPhase.Downloading).Render();
+        var known = UpdatePolicy.Describe(new DownloadProgress(1_048_576, 2_097_152)).Render();
+        var unknown = UpdatePolicy.Describe(new DownloadProgress(1_048_576, null)).Render();
 
         Assert.StartsWith(head, known, StringComparison.Ordinal);
         Assert.StartsWith(head, unknown, StringComparison.Ordinal);
@@ -413,7 +413,7 @@ public sealed class UpdateApplierTests : IDisposable
     [MemberData(nameof(EveryApplyStatus))]
     public void ResultSentencesNeverClaimTheSwapIsDone(ApplyStatus status)
     {
-        var text = UpdatePolicy.Describe(status);
+        var text = UpdatePolicy.Describe(status).Render();
         Assert.False(string.IsNullOrWhiteSpace(text));
         foreach (var banned in new[] { "已安装", "替换完成", "更新成功", "请重新安装" })
             Assert.DoesNotContain(banned, text, StringComparison.Ordinal);

@@ -26,6 +26,9 @@ public sealed class RelativeTimeTextGateTests
     private const string Trending = "src/StarMark.Abstractions/Trending/TrendingCacheCodec.cs";
     private const string RssStatus = "src/StarMark.Core/Feed/RssSourceStatus.cs";
 
+    /// <summary>✅WI-65 片1 起，四档判据的<b>本体</b>住在这颗「还没取词」的孪生里（<c>Relative</c> 只剩一行转发）。</summary>
+    private const string Twin = "public static LocMessage RelativeMessage(long unixSeconds, DateTimeOffset now, TimeZoneInfo zone)";
+
     private static readonly string[] Phrases = { "刚刚", "分钟前", "小时前", "天前" };
 
     /// <summary>四档措辞在<b>整个 src 的代码里</b>各只出现一次，而且就在界面文案表那一颗上（批次 WI-2k 起的主人）。</summary>
@@ -114,10 +117,24 @@ public sealed class RelativeTimeTextGateTests
     [Fact]
     public void TheJudgeConvertsBeforeTakingTheDate()
     {
-        var body = MethodBody(ReadRepoFile(Judge), "public static string Relative(long unixSeconds, DateTimeOffset now, TimeZoneInfo zone)");
+        // ✅WI-65 片1：判据本体搬进了那颗「还没取词」的孪生，<c>Relative</c> 只剩一行转发
+        // （坑表 #278 同族：改了被守的那份文件，锚点必须跟着搬——⛔ 留这一格去读那颗壳）。
+        var body = MethodBody(ReadRepoFile(Judge), Twin);
         Assert.Contains("TimeZoneInfo.ConvertTime(", body);
         Assert.DoesNotContain("Day(DateTimeOffset.FromUnixTimeSeconds", body);
         Assert.DoesNotContain("TimeZoneInfo.Local", body);      // 判据不许自己偷本机时区：那样用例就测不到跨日
+    }
+
+    /// <summary>「念完那一版」现在只是那颗孪生的薄壳：它的身体里⛔ 再长出第二份档位梯。</summary>
+    [Fact]
+    public void TheRenderedWrapperIsNothingButADelegateToTheUnrenderedTwin()
+    {
+        var shell = MethodBody(ReadRepoFile(Judge), "public static string Relative(long unixSeconds, DateTimeOffset now, TimeZoneInfo zone)");
+        Assert.Contains("=> RelativeMessage(unixSeconds, now, zone).Render();", shell);
+        // 上面三格钉的都是「本体在这颗孪生里」；这里补的是「壳⛔ 也偷偷算一遍」——换算、阈值、取词一个都不许出现在壳里
+        // （⚠ 方法体是从<b>签名那一行</b>切起的，所以禁项要点名到"只有算过才会出现"的那一串，⛔ 光写 TimeZoneInfo）。
+        foreach (var was in new[] { "TimeZoneInfo.ConvertTime", "AppConstants", "FromUnixTimeSeconds", "Locale.", "diff <" })
+            Assert.DoesNotContain(was, shell);
     }
 
     /// <summary>
@@ -129,15 +146,14 @@ public sealed class RelativeTimeTextGateTests
     {
         Assert.Equal(1, Count(Code(ReadRepoFile(Trending)), "TimeSpan.FromMinutes(2)"));
         Assert.Equal(1, Count(Code(ReadRepoFile(RssStatus)), "TimeSpan.FromMinutes(2)"));
-        Assert.DoesNotContain("FromMinutes(2)", MethodBody(ReadRepoFile(Judge),
-            "public static string Relative(long unixSeconds, DateTimeOffset now, TimeZoneInfo zone)"));
+        Assert.DoesNotContain("FromMinutes(2)", MethodBody(ReadRepoFile(Judge), Twin));
     }
 
     /// <summary>阈值那颗常数仍由判据用（不是抄成 2_592_000 字面量——那是 RZ 那批"字节梯子四份抄本"的同款病）。</summary>
     [Fact]
     public void TheThirtyDayThresholdComesFromTheConstant()
     {
-        var body = MethodBody(ReadRepoFile(Judge), "public static string Relative(long unixSeconds, DateTimeOffset now, TimeZoneInfo zone)");
+        var body = MethodBody(ReadRepoFile(Judge), Twin);
         Assert.Contains("AppConstants.ThirtyDaysInSeconds", body);
         Assert.DoesNotContain("2_592_000", body);
         Assert.DoesNotContain("2592000", body);

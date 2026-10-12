@@ -499,21 +499,21 @@ public sealed class UpdateIntegrityTests
     [MemberData(nameof(FetchStatuses))]
     public void EveryFetchOutcomeSaysSomethingOfItsOwn(PackageFetchStatus status)
     {
-        var text = UpdatePolicy.Describe(status);
+        var text = UpdatePolicy.Describe(status).Render();
         Assert.False(string.IsNullOrWhiteSpace(text));
         Assert.DoesNotContain("失败", text, StringComparison.Ordinal);       // 并成一句"失败"就是要修的那个形状
         Assert.Equal(0, Enum.GetValues<PackageFetchStatus>()
-            .Count(other => !other.Equals(status) && UpdatePolicy.Describe(other) == text));
+            .Count(other => !other.Equals(status) && UpdatePolicy.Describe(other).Render() == text));
     }
 
     [Theory]
     [MemberData(nameof(IntegrityOutcomes))]
     public void EveryIntegrityOutcomeSaysSomethingOfItsOwn(UpdateIntegrity.Outcome outcome)
     {
-        var text = UpdatePolicy.Describe(outcome);
+        var text = UpdatePolicy.Describe(outcome).Render();
         Assert.False(string.IsNullOrWhiteSpace(text));
         Assert.Equal(0, Enum.GetValues<UpdateIntegrity.Outcome>()
-            .Count(other => !other.Equals(outcome) && UpdatePolicy.Describe(other) == text));
+            .Count(other => !other.Equals(outcome) && UpdatePolicy.Describe(other).Render() == text));
     }
 
     /// <summary>
@@ -525,7 +525,7 @@ public sealed class UpdateIntegrityTests
     [InlineData(UpdateIntegrity.Outcome.SignatureInvalid)]
     public void TheSecurityArmsDoNotTellAnyoneToWait(UpdateIntegrity.Outcome outcome)
     {
-        var text = UpdatePolicy.Describe(outcome);
+        var text = UpdatePolicy.Describe(outcome).Render();
         Assert.DoesNotContain("再试", text, StringComparison.Ordinal);
         Assert.DoesNotContain("连不上", text, StringComparison.Ordinal);
         Assert.Contains("已拒绝", text, StringComparison.Ordinal);
@@ -549,7 +549,7 @@ public sealed class UpdateIntegrityTests
     [InlineData(UpdateIntegrity.Outcome.PackageSizeMismatch)]
     public void EveryRefusalSaysOnlyWhatThisLayerActuallyGuarantees(UpdateIntegrity.Outcome outcome)
     {
-        var text = UpdatePolicy.Describe(outcome);
+        var text = UpdatePolicy.Describe(outcome).Render();
         Assert.DoesNotContain("没动本机任何文件", text, StringComparison.Ordinal);
         Assert.True(text.Contains("没装", StringComparison.Ordinal) || text.Contains("已拒绝", StringComparison.Ordinal),
             $"{outcome} 这一格没说要紧的那件事：到底装没装");
