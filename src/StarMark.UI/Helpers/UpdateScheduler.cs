@@ -132,7 +132,7 @@ public static class UpdateScheduler
             try
             {
                 // 地址交出去的是 report.PageUrl——本程序按配置里的仓库拼的那一个，不是远端回的连接串。
-                shown = NoticeCard.Show(title, LocMessage.Of("common.rawValue", report.Text), actionUrl,
+                shown = NoticeCard.Show(title, report.Text, actionUrl,
                     LocMessage.Of("card.action.releasePage"));
             }
             catch (Exception ex) { StarLog.Warn($"[更新] 提示卡没能贴上屏幕：{ex.Message}"); }

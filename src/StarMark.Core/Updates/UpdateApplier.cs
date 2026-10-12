@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Updates;
 
 namespace StarMark.Core.Updates;
@@ -32,7 +33,7 @@ public sealed class UpdateApplier
 
     /// <summary>结局。<b>只有两格</b>：交出去了／这次什么都没换（哪一步没过去写在 <c>Detail</c>，
     /// 那句话出自各步已有的 <c>Describe</c>，这里不另写一套措辞）。</summary>
-    public sealed record ApplyResult(ApplyStatus Status, string? Sentence = null, string? Detail = null)
+    public sealed record ApplyResult(ApplyStatus Status, LocMessage? Sentence = null, string? Detail = null)
     {
         public bool IsHandedOff => Status == ApplyStatus.HandedOff;
     }
@@ -152,7 +153,7 @@ public sealed class UpdateApplier
         }
     }
 
-    private static ApplyResult NotApplied(string sentence, string detail)
+    private static ApplyResult NotApplied(LocMessage sentence, string detail)
     {
         StarLog.Warn($"[更新] 没有装：{detail}");
         return new ApplyResult(ApplyStatus.NothingApplied, sentence, detail);

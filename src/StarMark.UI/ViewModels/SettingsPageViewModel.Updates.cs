@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.Extensions.DependencyInjection;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Updates;
 using StarMark.Core.Updates;
 using StarMark.UI.Helpers;
@@ -25,8 +26,11 @@ public partial class SettingsPageViewModel
     /// <summary>「每天自动检查一次」那颗开关。默认开＝这条功能刚上线时的行为；关掉之后程序一次网也不上。</summary>
     [ObservableProperty] private bool _updateAutoCheckEnabled;
 
-    /// <summary>状态行（<b>只给界面读</b>：名字含 Status，因此不会被那次防抖整页保存当成待写项）。</summary>
-    [ObservableProperty] private string _updateStatus = string.Empty;
+    /// <summary>状态行（<b>只给界面读</b>：名字含 Status，因此不会被那次防抖整页保存当成待写项）。
+    /// <para>批次 WI-65 片1 起它交的是<b>还没取词的</b>「键＋实参」：那句话的一半住在 <c>UpdatePolicy.Describe*</c>，
+    /// 从前在这里先拼成字符串，换语言那一刻既没人重贴也没人重算 ⇒ 整行停在上一门语言（✅P-194 第一颗）。
+    /// 贴上屏幕由本页那一拍走 <c>LocText.SetMessage</c>，取词发生在这一刻。</para></summary>
+    [ObservableProperty] private LocMessage? _updateStatus;
 
     private bool _suppressUpdateApply;
 
@@ -105,15 +109,19 @@ public partial class SettingsPageViewModel
     /// 于是新版本只能靠他主动点那一下发现）。上一次的答案照 <see cref="UpdatePolicy.Describe"/> 原样念，
     /// 界面这里不另写一套措辞。
     /// </summary>
-    private string BuildUpdateStatus()
+    private LocMessage BuildUpdateStatus()
     {
         var cadence = UpdateAutoCheckEnabled
-            ? $"自动检查开着：距上次问满 {UpdatePolicy.ProbeGapHours} 小时就会自己问一次（联网才行）。"
-            : "已关闭：程序不会自己上网问，新版本只能靠点「立即检查」发现。";
+            ? LocMessage.Of("upd.status.autoOn", UpdatePolicy.ProbeGapHours.ToString())
+            : LocMessage.Of("upd.status.off");
         var last = Updates().LastReport();
+        // 三段都交「键＋实参」：节奏那句、上次检查的相对时间、上一次问出的那句话——
+        // 任何一段先念成字符串，换语言就只重贴外层，屏幕上剩半中半英（⛔ 在这里 Relative/Text 先 Render）。
         return last is null
-            ? cadence + " 这台机器上还没检查过。"
-            : $"{cadence} 上次检查 {DateTimeText.Relative(last.CheckedUtc.ToUnixTimeSeconds(), DateTimeOffset.Now, TimeZoneInfo.Local)}：{last.Text}。";
+            ? LocMessage.Of("upd.status.neverChecked", cadence)
+            : LocMessage.Of("upd.status.lastCheck", cadence,
+                DateTimeText.RelativeMessage(last.CheckedUtc.ToUnixTimeSeconds(), DateTimeOffset.Now, TimeZoneInfo.Local),
+                last.Text);
     }
 
     /// <summary>
@@ -123,14 +131,17 @@ public partial class SettingsPageViewModel
     public void ReportCheckCrash(Exception ex)
     {
         StarLog.Error("检查更新没走完", ex);
-        UpdateStatus = $"这次检查没走完（{ex.GetType().Name}），原因在日志里。";
+        UpdateStatus = LocMessage.Of("upd.status.checkCrash", ex.GetType().Name);
     }
 
-    /// <summary>「打开下载页」那句返回值是"系统有没有找到能处理它的程序"，不接住它就是一次看不见的点击。</summary>
+    /// <summary>「打开下载页」那句返回值是"系统有没有找到能处理它的程序"，不接住它就是一次看不见的点击。
+    /// <para>那句话的主人是 <c>LauncherEx</c>（它自己念完的 <c>string</c>），这一层接不住它的键——
+    /// 只能走 <c>common.rawValue</c> 那道数据门原样交出去（<c>DialogWordGateTests</c> ⑧格逐颗点名；
+    /// ⛔ 为它再立一颗「{0}」的行，那道门早有主人＝P-171 那一族）。</para></summary>
     public void ShowOpenReason(string? reason)
     {
         if (string.IsNullOrWhiteSpace(reason)) return;
-        UpdateStatus = reason;
+        UpdateStatus = LocMessage.Of("common.rawValue", reason);
     }
 
     private static UpdateApplier Apply() => App.Services.GetRequiredService<UpdateApplier>();
@@ -176,7 +187,7 @@ public partial class SettingsPageViewModel
     public void ReportApplyCrash(Exception ex)
     {
         StarLog.Error("更新没走完", ex);
-        UpdateStatus = $"这次更新没走完（{ex.GetType().Name}），原因在日志里。";
+        UpdateStatus = LocMessage.Of("upd.status.applyCrash", ex.GetType().Name);
     }
 
     /// <summary>

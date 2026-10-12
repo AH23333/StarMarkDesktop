@@ -113,27 +113,28 @@ public static class UpdatePolicy
     /// 出不去就说这是网络而不是程序坏了。只有"仓库还没发布"这一格什么都不承诺——
     /// 那本来就是发布侧的事，写"请去发布"就是把活推回给人。
     /// </summary>
-    public static string Describe(UpdateVerdict verdict, RemoteRelease? release = null, string? localVersionText = null)
+    public static LocMessage Describe(UpdateVerdict verdict, RemoteRelease? release = null, string? localVersionText = null)
         => verdict switch
         {
             // WI-2v 起字进语言表（upd.verdict.*，键逐颗写字面＝坑表 #331）；tag/版本号/限额数都是 {n} 实参。
             UpdateVerdict.NewerAvailable =>
-                Locale.Fmt("upd.verdict.newer", release?.Tag ?? "?", localVersionText ?? AppVersion.Unknown),
-            UpdateVerdict.UpToDate => Locale.Fmt("upd.verdict.upToDate", localVersionText ?? AppVersion.Unknown),
+                LocMessage.Of("upd.verdict.newer", release?.Tag ?? "?", localVersionText ?? AppVersion.Unknown),
+            UpdateVerdict.UpToDate => LocMessage.Of("upd.verdict.upToDate", localVersionText ?? AppVersion.Unknown),
             UpdateVerdict.LocalAhead =>
-                Locale.Fmt("upd.verdict.localAhead", localVersionText ?? AppVersion.Unknown, release?.Tag ?? "?"),
-            UpdateVerdict.NothingPublished => Locale.T("upd.verdict.nothingPublished"),
-            UpdateVerdict.RepositoryNotVisible => Locale.Fmt("upd.verdict.repoNotVisible", DefaultRepository),
-            UpdateVerdict.Unauthorized => Locale.T("upd.verdict.unauthorized"),
+                LocMessage.Of("upd.verdict.localAhead", localVersionText ?? AppVersion.Unknown, release?.Tag ?? "?"),
+            UpdateVerdict.NothingPublished => LocMessage.Of("upd.verdict.nothingPublished"),
+            UpdateVerdict.RepositoryNotVisible => LocMessage.Of("upd.verdict.repoNotVisible", DefaultRepository),
+            UpdateVerdict.Unauthorized => LocMessage.Of("upd.verdict.unauthorized"),
             // 匿名限额 60/h 是 GitHub 的数、重问间隔是 ProbeGapHours——都作实参传，不许把数抄进翻译（P-171）。
-            UpdateVerdict.RateLimited => Locale.Fmt("upd.verdict.rateLimited", "60", ProbeGapHours.ToString()),
-            UpdateVerdict.NotReachable => Locale.T("upd.verdict.notReachable"),
-            UpdateVerdict.TimedOut => Locale.T("upd.verdict.timedOut"),
-            UpdateVerdict.ServerError => Locale.T("upd.verdict.serverError"),
+            UpdateVerdict.RateLimited => LocMessage.Of("upd.verdict.rateLimited", "60", ProbeGapHours.ToString()),
+            UpdateVerdict.NotReachable => LocMessage.Of("upd.verdict.notReachable"),
+            UpdateVerdict.TimedOut => LocMessage.Of("upd.verdict.timedOut"),
+            UpdateVerdict.ServerError => LocMessage.Of("upd.verdict.serverError"),
             UpdateVerdict.UnreadableRemoteTag =>
-                Locale.Fmt("upd.verdict.unreadableTag", release?.Tag ?? Locale.T("upd.verdict.emptyTag")),
-            UpdateVerdict.LocalVersionUnknown => Locale.T("upd.verdict.localVersionUnknown"),
-            _ => Locale.T("upd.verdict.noResult"),
+                LocMessage.Of("upd.verdict.unreadableTag",
+                    (object?)(release?.Tag) ?? LocMessage.Of("upd.verdict.emptyTag")),
+            UpdateVerdict.LocalVersionUnknown => LocMessage.Of("upd.verdict.localVersionUnknown"),
+            _ => LocMessage.Of("upd.verdict.noResult"),
         };
 
     /// <summary>
@@ -262,21 +263,21 @@ public static class UpdatePolicy
     /// <para>WI-2w 起字进语言表（upd.fetch.*，键逐颗写字面＝坑表 #331）；限额后的重问间隔是
     /// <see cref="ProbeGapHours"/>，作实参传，不许把数抄进翻译（P-171）。</para>
     /// </summary>
-    public static string Describe(PackageFetchStatus status) => status switch
+    public static LocMessage Describe(PackageFetchStatus status) => status switch
     {
-        PackageFetchStatus.Fetched => Locale.T("upd.fetch.fetched"),
-        PackageFetchStatus.AssetMissing => Locale.T("upd.fetch.assetMissing"),
-        PackageFetchStatus.AddressRefused => Locale.T("upd.fetch.addressRefused"),
-        PackageFetchStatus.OffHostRedirect => Locale.T("upd.fetch.offHostRedirect"),
-        PackageFetchStatus.TooLarge => Locale.T("upd.fetch.tooLarge"),
-        PackageFetchStatus.ManifestUnreadable => Locale.T("upd.fetch.manifestUnreadable"),
-        PackageFetchStatus.NotReachable => Locale.T("upd.fetch.notReachable"),
-        PackageFetchStatus.TimedOut => Locale.T("upd.fetch.timedOut"),
-        PackageFetchStatus.ServerError => Locale.T("upd.fetch.serverError"),
-        PackageFetchStatus.Unauthorized => Locale.T("upd.fetch.unauthorized"),
-        PackageFetchStatus.RateLimited => Locale.Fmt("upd.fetch.rateLimited", ProbeGapHours.ToString()),
-        PackageFetchStatus.DiskWriteFailed => Locale.T("upd.fetch.diskWriteFailed"),
-        _ => Locale.T("upd.fetch.noResult"),
+        PackageFetchStatus.Fetched => LocMessage.Of("upd.fetch.fetched"),
+        PackageFetchStatus.AssetMissing => LocMessage.Of("upd.fetch.assetMissing"),
+        PackageFetchStatus.AddressRefused => LocMessage.Of("upd.fetch.addressRefused"),
+        PackageFetchStatus.OffHostRedirect => LocMessage.Of("upd.fetch.offHostRedirect"),
+        PackageFetchStatus.TooLarge => LocMessage.Of("upd.fetch.tooLarge"),
+        PackageFetchStatus.ManifestUnreadable => LocMessage.Of("upd.fetch.manifestUnreadable"),
+        PackageFetchStatus.NotReachable => LocMessage.Of("upd.fetch.notReachable"),
+        PackageFetchStatus.TimedOut => LocMessage.Of("upd.fetch.timedOut"),
+        PackageFetchStatus.ServerError => LocMessage.Of("upd.fetch.serverError"),
+        PackageFetchStatus.Unauthorized => LocMessage.Of("upd.fetch.unauthorized"),
+        PackageFetchStatus.RateLimited => LocMessage.Of("upd.fetch.rateLimited", ProbeGapHours.ToString()),
+        PackageFetchStatus.DiskWriteFailed => LocMessage.Of("upd.fetch.diskWriteFailed"),
+        _ => LocMessage.Of("upd.fetch.noResult"),
     };
 
     /// <summary>
@@ -287,20 +288,20 @@ public static class UpdatePolicy
     /// "没动本机任何文件"——那句说的是"什么都没写"，而这里确实写过一颗临时文件。
     /// 能担保的是弱一点但真的那一件：<b>装目录里的东西一个字没换</b>，故统一落在"没装"／"已拒绝"上。</para>
     /// </summary>
-    public static string Describe(UpdateIntegrity.Outcome outcome) => outcome switch
+    public static LocMessage Describe(UpdateIntegrity.Outcome outcome) => outcome switch
     {
-        UpdateIntegrity.Outcome.Trusted => Locale.T("upd.integrity.trusted"),
-        UpdateIntegrity.Outcome.SignatureInvalid => Locale.T("upd.integrity.signatureInvalid"),
-        UpdateIntegrity.Outcome.ManifestUnreadable => Locale.T("upd.integrity.manifestUnreadable"),
-        UpdateIntegrity.Outcome.SchemaUnsupported => Locale.T("upd.integrity.schemaUnsupported"),
-        UpdateIntegrity.Outcome.FieldRejected => Locale.T("upd.integrity.fieldRejected"),
-        UpdateIntegrity.Outcome.VersionMismatch => Locale.T("upd.integrity.versionMismatch"),
-        UpdateIntegrity.Outcome.ManifestPredatesRelease => Locale.T("upd.integrity.manifestPredatesRelease"),
-        UpdateIntegrity.Outcome.RollbackRefused => Locale.T("upd.integrity.rollbackRefused"),
-        UpdateIntegrity.Outcome.LocalVersionUnknown => Locale.T("upd.integrity.localVersionUnknown"),
-        UpdateIntegrity.Outcome.PackageHashMismatch => Locale.T("upd.integrity.packageHashMismatch"),
-        UpdateIntegrity.Outcome.PackageSizeMismatch => Locale.T("upd.integrity.packageSizeMismatch"),
-        _ => Locale.T("upd.integrity.noResult"),
+        UpdateIntegrity.Outcome.Trusted => LocMessage.Of("upd.integrity.trusted"),
+        UpdateIntegrity.Outcome.SignatureInvalid => LocMessage.Of("upd.integrity.signatureInvalid"),
+        UpdateIntegrity.Outcome.ManifestUnreadable => LocMessage.Of("upd.integrity.manifestUnreadable"),
+        UpdateIntegrity.Outcome.SchemaUnsupported => LocMessage.Of("upd.integrity.schemaUnsupported"),
+        UpdateIntegrity.Outcome.FieldRejected => LocMessage.Of("upd.integrity.fieldRejected"),
+        UpdateIntegrity.Outcome.VersionMismatch => LocMessage.Of("upd.integrity.versionMismatch"),
+        UpdateIntegrity.Outcome.ManifestPredatesRelease => LocMessage.Of("upd.integrity.manifestPredatesRelease"),
+        UpdateIntegrity.Outcome.RollbackRefused => LocMessage.Of("upd.integrity.rollbackRefused"),
+        UpdateIntegrity.Outcome.LocalVersionUnknown => LocMessage.Of("upd.integrity.localVersionUnknown"),
+        UpdateIntegrity.Outcome.PackageHashMismatch => LocMessage.Of("upd.integrity.packageHashMismatch"),
+        UpdateIntegrity.Outcome.PackageSizeMismatch => LocMessage.Of("upd.integrity.packageSizeMismatch"),
+        _ => LocMessage.Of("upd.integrity.noResult"),
     };
 
     /// <summary>
@@ -325,17 +326,17 @@ public static class UpdatePolicy
     /// 而是"这份包与它的清单不是一套"——说成"网络问题"会把一个发布事故藏成一次重试。</para>
     /// <para>口径照旧：没摊成的树已经被删掉了，所以每一句都在说"没往下走"，不许出现"部分替换成功"这种半句真话。</para>
     /// </summary>
-    public static string Describe(StageStatus status) => status switch
+    public static LocMessage Describe(StageStatus status) => status switch
     {
-        StageStatus.Staged => Locale.T("upd.stage.staged"),
-        StageStatus.NotTrusted => Locale.T("upd.stage.notTrusted"),
-        StageStatus.PackageUnreadable => Locale.T("upd.stage.packageUnreadable"),
-        StageStatus.FileMissing => Locale.T("upd.stage.fileMissing"),
-        StageStatus.UnexpectedEntry => Locale.T("upd.stage.unexpectedEntry"),
-        StageStatus.FileHashMismatch => Locale.T("upd.stage.fileHashMismatch"),
-        StageStatus.PayloadUnavailable => Locale.T("upd.stage.payloadUnavailable"),
-        StageStatus.DiskWriteFailed => Locale.T("upd.stage.diskWriteFailed"),
-        _ => Locale.T("upd.stage.noResult"),
+        StageStatus.Staged => LocMessage.Of("upd.stage.staged"),
+        StageStatus.NotTrusted => LocMessage.Of("upd.stage.notTrusted"),
+        StageStatus.PackageUnreadable => LocMessage.Of("upd.stage.packageUnreadable"),
+        StageStatus.FileMissing => LocMessage.Of("upd.stage.fileMissing"),
+        StageStatus.UnexpectedEntry => LocMessage.Of("upd.stage.unexpectedEntry"),
+        StageStatus.FileHashMismatch => LocMessage.Of("upd.stage.fileHashMismatch"),
+        StageStatus.PayloadUnavailable => LocMessage.Of("upd.stage.payloadUnavailable"),
+        StageStatus.DiskWriteFailed => LocMessage.Of("upd.stage.diskWriteFailed"),
+        _ => LocMessage.Of("upd.stage.noResult"),
     };
 
     /// <summary>
@@ -372,12 +373,12 @@ public static class UpdatePolicy
     /// 启动侧（"活有没有交出去"）的措辞。<b>这一族与上面那几族量纲不同</b>：
     /// <see cref="LaunchStatus.Started"/> 只担保"更新器接手了"，不担保"换好了"——
     /// 把它演成后者就是界面在承诺一件还没发生的事（同一口径见设置页那句"不替换正在运行的程序"要到 UG-3 才改）。</summary>
-    public static string Describe(LaunchStatus status) => status switch
+    public static LocMessage Describe(LaunchStatus status) => status switch
     {
-        LaunchStatus.Started => Locale.T("upd.launch.started"),
-        LaunchStatus.InvalidRequest => Locale.T("upd.launch.invalidRequest"),
-        LaunchStatus.NotStarted => Locale.T("upd.launch.notStarted"),
-        _ => Locale.T("upd.launch.noResult"),
+        LaunchStatus.Started => LocMessage.Of("upd.launch.started"),
+        LaunchStatus.InvalidRequest => LocMessage.Of("upd.launch.invalidRequest"),
+        LaunchStatus.NotStarted => LocMessage.Of("upd.launch.notStarted"),
+        _ => LocMessage.Of("upd.launch.noResult"),
     };
 
     /// <summary>
@@ -386,24 +387,24 @@ public static class UpdatePolicy
     /// 两处各写一份，迟早一处写"已装好"、另一处写"交出去了"，而界面念的是其中随机一句（#189/#193 那一族）。
     /// <b>两格都不许出现"已安装/成功"</b>——这一层真的不知道换没换成，那是更新器那一侧的 <c>UpdaterOutcome</c>。</para>
     /// </summary>
-    public static string Describe(ApplyStatus status) => status switch
+    public static LocMessage Describe(ApplyStatus status) => status switch
     {
         ApplyStatus.HandedOff => Describe(LaunchStatus.Started),
-        ApplyStatus.NothingApplied => Locale.T("upd.apply.nothingApplied"),
-        _ => Locale.T("upd.apply.noResult"),
+        ApplyStatus.NothingApplied => LocMessage.Of("upd.apply.nothingApplied"),
+        _ => LocMessage.Of("upd.apply.noResult"),
     };
 
     /// <summary>
     /// 走到哪一步的那行字（只在这一步还在走的时候显示；<b>说的时候不许像结局</b>——
     /// 所以这几句一律以"正在"开头，且不许出现"好了/完成/成功"）。
     /// </summary>
-    public static string Describe(ApplyPhase phase) => phase switch
+    public static LocMessage Describe(ApplyPhase phase) => phase switch
     {
-        ApplyPhase.Downloading => Locale.T("upd.phase.downloading"),
-        ApplyPhase.Inspecting => Locale.T("upd.phase.inspecting"),
-        ApplyPhase.Staging => Locale.T("upd.phase.staging"),
-        ApplyPhase.HandingOff => Locale.T("upd.phase.handingOff"),
-        _ => Locale.T("upd.phase.preparing"),
+        ApplyPhase.Downloading => LocMessage.Of("upd.phase.downloading"),
+        ApplyPhase.Inspecting => LocMessage.Of("upd.phase.inspecting"),
+        ApplyPhase.Staging => LocMessage.Of("upd.phase.staging"),
+        ApplyPhase.HandingOff => LocMessage.Of("upd.phase.handingOff"),
+        _ => LocMessage.Of("upd.phase.preparing"),
     };
 
     /// <summary>
@@ -413,14 +414,14 @@ public static class UpdatePolicy
     /// 编一个分母出来就能编出一个百分比，而那一句会看着比它证到的更有把握。
     /// <see cref="DownloadProgress.Percent"/> 自己压不到 100，所以这句话永远读起来不像结局（#234）。</para>
     /// </summary>
-    public static string Describe(DownloadProgress progress)
+    public static LocMessage Describe(DownloadProgress progress)
     {
         // 头一句仍从四步那一句取来（形状闸门钉着这一手）；两段读数模板各三语，数全部作实参。
         var head = Describe(ApplyPhase.Downloading);
         var done = FileSizeText.Human(progress.BytesDone);
         return progress.Percent is not { } percent
-            ? Locale.Fmt("upd.progress.noTotal", head, done)
-            : Locale.Fmt("upd.progress.withTotal", head, done,
+            ? LocMessage.Of("upd.progress.noTotal", head, done)
+            : LocMessage.Of("upd.progress.withTotal", head, done,
                 FileSizeText.Human(progress.BytesTotal!.Value), NumberText.Grouped(percent));
     }
 
@@ -432,5 +433,5 @@ public static class UpdatePolicy
     /// </summary>
     public const string UpdateCancelledSentenceKey = "upd.cancelled";
 
-    public static string UpdateCancelledSentence => Locale.T(UpdateCancelledSentenceKey);
+    public static LocMessage UpdateCancelledSentence => LocMessage.Of(UpdateCancelledSentenceKey);
 }

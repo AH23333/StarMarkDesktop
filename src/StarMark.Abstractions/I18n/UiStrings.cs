@@ -1681,6 +1681,14 @@ public static class UiStrings
         new Entry("upd.progress.noTotal", "{0} 已下 {1}", "{0} — {1} downloaded", "{0} {1} をダウンロード済み"),
         new Entry("upd.progress.withTotal", "{0} 已下 {1}／共 {2}（{3}%）", "{0} — {1} of {2} downloaded ({3}%)", "{0} {1}／全 {2} をダウンロード済み（{3}%）"),
         new Entry("upd.cancelled", "这次更新停在半路，本机什么都没改；要装的话再点一次「立即更新」。", "This update stopped halfway — nothing was changed on this machine; to install, click Update now again.", "この更新は途中で停止し、この端末は変更されていません。インストールするには「今すぐ更新」をもう一度クリックしてください。"),
+        // 状态行那六颗（批次 WI-65 片1）：那一行从前半截住在 Core、半截是 UI 里的裸字面量，
+        // 合句的胶水与"那句问到了什么"分属两族，所以外壳整颗进表——cadence 与上一次的答案都作实参交进来。
+        new Entry("upd.status.autoOn", "自动检查开着：距上次问满 {0} 小时就会自己问一次（联网才行）。", "Automatic checks are on — the app asks again once {0} hours have passed since the last probe (while online).", "自動チェックはオンです：前回の確認から {0} 時間ごとに自動で確認します（オンラインの場合）。"),
+        new Entry("upd.status.off", "已关闭：程序不会自己上网问，新版本只能靠点「立即检查」发现。", "Turned off — the app never asks on its own, so a new version only shows up when you click Check now.", "オフ：アプリは自動で確認しません。新バージョンは「今すぐ確認」を押したときだけ分かります。"),
+        new Entry("upd.status.neverChecked", "{0} 这台机器上还没检查过。", "{0} This machine has never been checked.", "{0} この端末ではまだ確認していません。"),
+        new Entry("upd.status.lastCheck", "{0} 上次检查 {1}：{2}。", "{0} Last checked {1}: {2}.", "{0} 最終確認 {1}：{2}。"),
+        new Entry("upd.status.checkCrash", "这次检查没走完（{0}），原因在日志里。", "This check did not finish ({0}) — the reason is in the log.", "この確認は完了しませんでした（{0}）。原因はログにあります。"),
+        new Entry("upd.status.applyCrash", "这次更新没走完（{0}），原因在日志里。", "This update did not finish ({0}) — the reason is in the log.", "この更新は完了しませんでした（{0}）。原因はログにあります。"),
         new Entry("upd.manifest.missing", "清单没写生成时间（这一份不判新鲜度）", "The manifest has no generation time (freshness not judged)", "マニフェストに生成時刻がありません（新鮮度は判定しません）"),
         new Entry("upd.manifest.today", "清单是今天签的", "The manifest was signed today", "マニフェストは今日署名されたものです"),
         new Entry("upd.manifest.recent", "清单签于 {0}", "The manifest was signed {0}", "マニフェストの署名は {0}"),

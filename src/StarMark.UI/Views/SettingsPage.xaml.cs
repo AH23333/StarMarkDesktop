@@ -78,6 +78,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         ApplyEyeRestMessages();   // 回灌出来的那两句也要当场贴上去（换语言重贴走同一条门，见下面那颗方法）
         ApplyExtensionStatuses(); // 「拓展功能」那一屏的七行同理：VM 交的是身份，贴上屏幕才取词
         ApplyDataStatuses();      // 「数据」那一屏的五行同理（批次 WI-61c）
+        ApplyUpdateStatus();      // 「关于与更新」那一行同理（批次 WI-65 片1，✅P-194 第一颗）
         // 开机自启开关初始态以注册表为准（SetEnabled 幂等，程序化置位不会误写）。
         // 它归在「常规 → 托盘与呼出」，所以由页面构造时读一次，不再挂在组件列表的构建里。
         AutostartToggle.IsOn = AutostartService().IsEnabled();
@@ -174,6 +175,10 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
                          or nameof(SettingsPageViewModel.ClipboardUsage)
                          or nameof(SettingsPageViewModel.SaveErrorMessage))
             ApplyDataStatuses();
+        // 「关于与更新」那一行同理（批次 WI-65 片1）：它一句话里装着节奏、上次检查的时刻与上一次问出的结局，
+        // 全由 VM 交「键＋实参」过来，取词发生在贴上去这一刻。
+        if (e.PropertyName is nameof(SettingsPageViewModel.UpdateStatus))
+            ApplyUpdateStatus();
         if (_suppressSave || string.IsNullOrEmpty(e.PropertyName)) return;
         // 健康度/备份/诊断等异步展示态不参与保存，避免加载过程中反复写盘
         if (IsDisplayOnlyProperty(e.PropertyName)) return;
@@ -210,6 +215,16 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     }
 
     /// <summary>
+    /// 把「关于与更新」那一行交进 <see cref="LocText.SetMessage"/> 那颗门（批次 WI-65 片1＝✅P-194 第一颗）。
+    /// <para>从前它写的是 <c>{x:Bind ViewModel.UpdateStatus}</c>，绑的是一颗<b>成品串</b>：那句话的节奏、
+    /// 上次检查的时刻与上一次问出的结局全在 <c>UpdatePolicy.Describe*</c> 里当场念好，换语言那一刻
+    /// 既没人重贴也没人重算 ⇒ 整行停在上一门语言，而它正是这一屏唯一还这么写的一行。</para>
+    /// <para>现在 VM 交的是「键＋实参」，取词发生在贴上去这一刻（含 <c>LocText</c> 那份名单的换语言重贴，
+    /// 本页⛔ 为它再挂第四位 <c>Locale.Changed</c> 主人）。</para>
+    /// </summary>
+    private void ApplyUpdateStatus() => LocText.SetMessage(UpdateStatusText, ViewModel.UpdateStatus);
+
+    /// <summary>
     /// 设置页「数据」那一屏那<b>八行</b>状态贴到屏幕上（第一批＝WI-61c 那五行；第六行＝WI-62 的备份回执；
     /// 第七、八行＝✅WI-64 的「图片占用」与「图片采集状态」——它们的话的一半住在 <c>ClipAssets</c>／<c>ClipboardPolicy</c>，
     /// 而「图片占用」那一行自己就是四段拼出来的，⛔ 只贴一段＝同一行两种语言）。
@@ -218,8 +233,8 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     /// <para><b>第六行「备份与恢复」为什么等到这一批</b>：它那半句由 Core 供（<c>DeleteBackup</c>／
     /// <c>RestoreResult.Message</c>／<c>BackupPathPolicy</c>／<c>BackupFormatException</c>），只交 UI 那一半就是
     /// 同一行半中半英——那两半在 WI-62 一起进表（✅WI-61c 登记的就是这一条前置）。
-    /// ⚠ 这一屏只剩<b>一行</b>同形状：<c>UpdateStatus</c>（话的一半在 <c>UpdatePolicy.Describe*</c>＝P-194），
-    /// 那两行（<c>ClipAssets.DescribeUsage</c>／<c>ClipboardPolicy.DescribeImageIntake</c>＝P-193 的 Abstractions 半族）
+    /// ⚠ 这一屏从前只剩<b>一行</b>同形状：<c>UpdateStatus</c>（话的一半在 <c>UpdatePolicy.Describe*</c>＝P-194），
+    /// 它已在 ✅WI-65 片1 与 Core 那半句两层同批走完（上面那颗 <see cref="ApplyUpdateStatus"/>）；那两行（<c>ClipAssets.DescribeUsage</c>／<c>ClipboardPolicy.DescribeImageIntake</c>＝P-193 的 Abstractions 半族）
     /// 已在 ✅WI-64 两层同批走完——它们从前是 <c>{x:Bind}</c> 绑<b>成品串</b>，所以"换语言即重贴"对它们从不发生。</para>
     /// </summary>
     private void ApplyDataStatuses()

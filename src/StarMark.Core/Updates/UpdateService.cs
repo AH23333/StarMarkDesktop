@@ -3,6 +3,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Updates;
 
 namespace StarMark.Core.Updates;
@@ -67,7 +68,7 @@ public sealed record UpdateState(
 /// 与 <see cref="Notes"/> 不同，这一格<b>会</b>进设置档——它必须与那个标签配成一对才作数（见 <see cref="UpdateState.LastPublishedUtc"/>）。</param>
 public sealed record UpdateReport(
     UpdateVerdict Verdict, string? RemoteTag, string PageUrl,
-    DateTimeOffset CheckedUtc, bool Announced, string Text, string? Notes = null,
+    DateTimeOffset CheckedUtc, bool Announced, LocMessage Text, string? Notes = null,
     DateTimeOffset? PublishedUtc = null);
 
 /// <summary>

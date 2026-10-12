@@ -245,12 +245,26 @@ public static class DateTimeText
     /// "跨日"判据里同样靠偏移算，不靠这台机器的默认设置，用例才能钉死跨日那一格。</para>
     /// </summary>
     public static string Relative(long unixSeconds, DateTimeOffset now, TimeZoneInfo zone)
+        => RelativeMessage(unixSeconds, now, zone).Render();
+
+    /// <summary>
+    /// <see cref="Relative"/> 的<b>还没取词</b>版本（批次 WI-65 片1）：要嵌进别句子里的那段相对时间一律走这一颗。
+    /// <para>理由与 <see cref="LocMessage"/> 那条一模一样：状态行那句是套娃的（"… 上次检查 3 天前：这句话本身"），
+    /// 在这里先念成字符串，换语言只重贴外层，屏幕上就剩「Last checked 3 天前: …」那种半中半英。</para>
+    /// <para><b>档位仍在此刻定</b>（"多久以前"是这一次算出来的事实，⛔ 由取词时机改判），交出去的只有词。</para>
+    /// <para>第五臂那句是语言中性的 <c>yyyy-MM-dd</c>：它没有词可念，只能走 <c>common.rawValue</c> 那道数据门
+    /// （那道门的名册因此<b>10 行 → 9 行</b>：同一批撤掉 <c>UpdateScheduler.cs</c> 那一行——<c>report.Text</c> 自己
+    /// 就是「键＋实参」了——再立上本颗；<c>DialogWordGateTests</c> 那颗门格逐颗点名＋颗数钉着）。⛔ 为它再立一颗「{0}」的行——
+    /// 那颗门早有主人（P-171 那一族）。</para>
+    /// </summary>
+    public static LocMessage RelativeMessage(long unixSeconds, DateTimeOffset now, TimeZoneInfo zone)
     {
         var diff = now.ToUnixTimeSeconds() - unixSeconds;
-        if (diff < 60) return JustNow;
-        if (diff < 3_600) return MinutesAgo(diff / 60);
-        if (diff < 86_400) return HoursAgo(diff / 3_600);
-        if (diff < AppConstants.ThirtyDaysInSeconds) return DaysAgo(diff / 86_400);
-        return Day(TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(unixSeconds), zone));
+        if (diff < 60) return JustNowMessage();
+        if (diff < 3_600) return MinutesAgoMessage(diff / 60);
+        if (diff < 86_400) return HoursAgoMessage(diff / 3_600);
+        if (diff < AppConstants.ThirtyDaysInSeconds) return DaysAgoMessage(diff / 86_400);
+        return LocMessage.Of("common.rawValue",
+            Day(TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(unixSeconds), zone)));
     }
 }

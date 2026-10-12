@@ -272,7 +272,8 @@
                                                   MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.UpdateAutoCheckEnabled, Mode=TwoWay}"/>
                                 </Grid>
-                                <TextBlock Text="{x:Bind ViewModel.UpdateStatus, Mode=OneWay}" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                                <!-- ⛔ 把这句绑成成品串：话的一半住在 UpdatePolicy.Describe*，绑字符串＝换语言没人重贴（批次 WI-65 片1，由宿主那一拍走 LocText.SetMessage） -->
+                                <TextBlock x:Name="UpdateStatusText" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <Button x:Name="UpdateCheckButton" i18n:LocText.Key="settings.general.checkNow"
                                             Click="UpdateCheck_Click" Style="{StaticResource SecondaryButton}"/>
