@@ -186,19 +186,21 @@ public sealed class RssRowPolicyTests
             RssSourceStatus.Describe(Outcome()),
             RssSourceStatus.Describe(Outcome(entries: 3)),
         };
-        Assert.Equal(texts.Length, texts.Distinct().Count());        // 分不开＝用户不知道该改地址还是查网络
-        Assert.All(texts, text => Assert.False(string.IsNullOrWhiteSpace(text)));
-        Assert.Contains("503", RssSourceStatus.Describe(Outcome(error: "对方返回 503")));
-        Assert.Contains("3", RssSourceStatus.Describe(Outcome(entries: 3)));
+        // 分不开＝用户不知道该改地址还是查网络。⚠ 这一格⛔ 直接对一串 LocMessage 去重：
+        // record 合成的相等对 Args 数组只比引用 ⇒ 七颗永远各不相等，判据会静默退化成「建了七个对象」（坑表 #480）。
+        Assert.Equal(texts.Length, texts.Select(static m => m.Render()).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(texts, m => Assert.False(string.IsNullOrWhiteSpace(m.Render())));
+        Assert.Contains("503", RssSourceStatus.Describe(Outcome(error: "对方返回 503")).Render());
+        Assert.Contains("3", RssSourceStatus.Describe(Outcome(entries: 3)).Render());
     }
 
     [Fact]
     public void ASkippedSourceIsReportedAsSkippedNotAsBroken()
     {
-        var text = RssSourceStatus.Describe(Outcome(stopped: true));
+        var text = RssSourceStatus.Describe(Outcome(stopped: true)).Render();
         Assert.DoesNotContain("失败", text);
         Assert.Contains("停止", text);
         // 停用的行不能显示成"通了但没有条目"：那会让人以为服务出问题了
-        Assert.DoesNotContain("没有条目", RssSourceStatus.Describe(Outcome(enabled: false)));
+        Assert.DoesNotContain("没有条目", RssSourceStatus.Describe(Outcome(enabled: false)).Render());
     }
 }

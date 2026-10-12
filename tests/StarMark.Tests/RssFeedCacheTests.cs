@@ -380,7 +380,7 @@ public sealed class RssFeedCacheTests : IDisposable
     [InlineData(Now - 2 * Day, "2 天前")]
     public void TheCacheLineSaysHowOldItIs(long fetchedAt, string expectedAge)
     {
-        var text = RssSourceStatus.FromCache(Cached(fetchedAt, Entry("https://a.test/x"), Entry("https://a.test/y")), Now);
+        var text = RssSourceStatus.FromCache(Cached(fetchedAt, Entry("https://a.test/x"), Entry("https://a.test/y")), Now).Render();
         Assert.Contains(expectedAge, text);
         Assert.Contains("共 2 条", text);
     }
@@ -389,9 +389,9 @@ public sealed class RssFeedCacheTests : IDisposable
     public void TheCacheLineTellsTheUserWhenTheNextAutomaticRoundComes()
     {
         Assert.Contains("现在到期，会自动补抓",
-            RssSourceStatus.FromCache(Cached(Now - Day, Entry("https://a.test/x")), Now));
+            RssSourceStatus.FromCache(Cached(Now - Day, Entry("https://a.test/x")), Now).Render());
         Assert.Contains("约 1 小时后自动刷新",
-            RssSourceStatus.FromCache(Cached(Now - 23 * 3600, Entry("https://a.test/x")), Now));
+            RssSourceStatus.FromCache(Cached(Now - 23 * 3600, Entry("https://a.test/x")), Now).Render());
     }
 
     /// <summary>增量刷新之后，"本轮抓到几条"与"这一组现在摆着几条"是两个数。
@@ -400,9 +400,9 @@ public sealed class RssFeedCacheTests : IDisposable
     public void TheRoundLineDistinguishesWhatItFetchedFromWhatIsOnScreen()
     {
         var outcome = new RssSourceOutcome(Source(), new[] { Entry("https://a.test/x") });
-        Assert.Contains("抓到 1 条，缓存共 20 条", RssSourceStatus.Describe(outcome, 20));
-        Assert.Equal("抓到 1 条", RssSourceStatus.Describe(outcome, 1));        // 相等时不重复一遍数字
-        Assert.Equal("抓到 1 条", RssSourceStatus.Describe(outcome));           // 没有缓存这个数时保持原样
+        Assert.Contains("抓到 1 条，缓存共 20 条", RssSourceStatus.Describe(outcome, 20).Render());
+        Assert.Equal("抓到 1 条", RssSourceStatus.Describe(outcome, 1).Render());        // 相等时不重复一遍数字
+        Assert.Equal("抓到 1 条", RssSourceStatus.Describe(outcome).Render());           // 没有缓存这个数时保持原样
     }
 
     /// <summary>失败/304/停止那三种"这一轮没拿到东西"如果界面仍显示着上次那一列，就得说清"还摆着缓存里的 N 条"，
@@ -414,9 +414,9 @@ public sealed class RssFeedCacheTests : IDisposable
         var failed = new RssSourceOutcome(Source(), Array.Empty<RssEntry>(), "对方返回 503");
         var unchanged = new RssSourceOutcome(Source(), Array.Empty<RssEntry>(), NotModified: true);
 
-        Assert.Contains("仍然摆着缓存里的 9 条", RssSourceStatus.Describe(stopped, 9));
-        Assert.Contains("失败：对方返回 503", RssSourceStatus.Describe(failed, 9));
-        Assert.Contains("没有新内容（源说未变化）", RssSourceStatus.Describe(unchanged, 9));
+        Assert.Contains("仍然摆着缓存里的 9 条", RssSourceStatus.Describe(stopped, 9).Render());
+        Assert.Contains("失败：对方返回 503", RssSourceStatus.Describe(failed, 9).Render());
+        Assert.Contains("没有新内容（源说未变化）", RssSourceStatus.Describe(unchanged, 9).Render());
 
         // 那半句不许把五种状态互相抹平（批次 NF 的教训：分不开就不知道该改地址还是查网络）
         var disabled = new RssSourceOutcome(new RssSourceConfig(1, "源", "https://a.test/feed", false), Array.Empty<RssEntry>());
@@ -428,7 +428,9 @@ public sealed class RssFeedCacheTests : IDisposable
             RssSourceStatus.Describe(unchanged, 9),
             RssSourceStatus.Describe(failed, 9),
         };
-        Assert.Equal(five.Distinct().Count(), five.Length);
-        Assert.All(five, line => Assert.NotEqual(string.Empty, line));   // 空标题看着像渲染坏了
+        // ⚠ 互异计数⛔ 直接对一串 LocMessage 做 Distinct：record 合成的相等对 Args 数组只比引用 ⇒ 五颗永远各不相等，
+        // 这一格就从「五种状态分得开」静默退化成「建了五个对象」（坑表 #480）。比的是念出来的那一句。
+        Assert.Equal(five.Length, five.Select(static m => m.Render()).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(five, m => Assert.NotEqual(string.Empty, m.Render()));   // 空标题看着像渲染坏了
     }
 }

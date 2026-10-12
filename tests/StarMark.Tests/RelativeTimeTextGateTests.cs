@@ -94,9 +94,11 @@ public sealed class RelativeTimeTextGateTests
         var trending = MethodBody(ReadRepoFile(Trending), "public static LocMessage? DescribeAge(long fetchedAtUnixSeconds, DateTimeOffset now)");
         Assert.Contains("DateTimeText.JustNowMessage()", trending);
         Assert.Contains("DateTimeText.HoursAgoMessage(", trending);
-        var rss = MethodBody(ReadRepoFile(RssStatus), "public static string FromCache(RssCachedSource cached, long nowUnix)");
-        Assert.Contains("DateTimeText.JustNow", rss);
-        Assert.Contains("DateTimeText.DaysAgo(", rss);
+        // ✅WI-65 片2：这一档的 FromCache 也换成交「键＋实参」，锚点跟着签名搬（坑表 #278/#484：改了被守的那份文件，
+        // 守门要先跟上——⛔ 留它读那颗已经不存在的旧签名，更⛔ 让它静默变成永远成立）。
+        var rss = MethodBody(ReadRepoFile(RssStatus), "public static LocMessage FromCache(RssCachedSource cached, long nowUnix)");
+        Assert.Contains("DateTimeText.JustNowMessage()", rss);
+        Assert.Contains("DateTimeText.DaysAgoMessage(", rss);
     }
 
     /// <summary>活动列表那第二份 if 链<b>整条消失</b>，不留转发壳（SF 的口径：零读者的壳只会让人以为还有两处）。</summary>
