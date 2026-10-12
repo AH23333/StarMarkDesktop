@@ -330,7 +330,8 @@ public sealed class PinEditTests
         Assert.Contains("Through_Click", bar);                                  // 鼠标穿透
         // 关闭那颗（批次 WI-50 起这句话交表）：⛔ 钉表里的措辞（改文案不该让这颗证人红，#379／规则 #130），
         // 钉的是"这颗动作交的是哪颗键、按什么挑"——两颗键在整个三元式里逐字钉住，对调它就红（台架 B11 验过）。
-        Assert.Contains("Locale.T(_pinned ? \"capture.bar.closePin\" : \"capture.bar.finish\")", bar);
+        // ✅WI-65 片3：交的形状从「当场念完的那句」换成「键＋实参」，承诺同一件事 ⇒ 只换外层那颗厂名。
+        Assert.Contains("LocMessage.Of(_pinned ? \"capture.bar.closePin\" : \"capture.bar.finish\")", bar);
         Assert.Contains("if (!_pinned)", bar);                                  // "再钉一张"只在截图态出现
         Assert.Contains("CopyIcon()", bar);
         Assert.Contains("SaveIcon()", bar);

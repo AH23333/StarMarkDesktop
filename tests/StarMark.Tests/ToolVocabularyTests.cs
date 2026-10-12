@@ -56,10 +56,10 @@ public sealed class ToolVocabularyTests
     [Fact]
     public void OneToolNamesOneThingAcrossBothBars()
     {
-        Assert.Equal("荧光笔", CanvasTool.Highlighter.Name());
-        Assert.Equal("橡皮", CanvasTool.Eraser.Name());
+        Assert.Equal("荧光笔", CanvasTool.Highlighter.Name().Render());
+        Assert.Equal("橡皮", CanvasTool.Eraser.Name().Render());
         foreach (var tool in Enum.GetValues<CanvasTool>())
-            Assert.Equal(Annotation.ToolName(tool.ToAnnotation()), tool.Name());
+            Assert.Equal(Annotation.ToolName(tool.ToAnnotation()).Render(), tool.Name().Render());
     }
 
     /// <summary>

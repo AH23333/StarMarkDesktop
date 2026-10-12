@@ -126,7 +126,7 @@ public sealed class CaptureGeometryTests
         var bounds = new IntRect(0, 0, 1920, 1080);
         var text = CaptureGeometry.SelectionProblem(new IntRect(10, 10, 2, 2), CaptureGeometry.Intersect(new IntRect(10, 10, 2, 2), bounds));
         Assert.NotNull(text);
-        Assert.Contains("拖动", text);
+        Assert.Contains("拖动", text!.Render());
 
         // 长条也太小：短边不达标就不该截（用户多半是想框一条线）
         Assert.NotNull(CaptureGeometry.SelectionProblem(new IntRect(0, 0, 1000, 2),
@@ -140,7 +140,7 @@ public sealed class CaptureGeometryTests
     {
         var reason = CaptureGeometry.SelectionProblem(new IntRect(5000, 5000, 400, 400), null);
         Assert.NotNull(reason);
-        Assert.Contains("显示器之外", reason);
+        Assert.Contains("显示器之外", reason!.Render());
     }
 
     [Fact]

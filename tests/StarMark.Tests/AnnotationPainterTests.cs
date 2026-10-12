@@ -547,8 +547,8 @@ public sealed class AnnotationPainterTests
     public void ASingleVertexPolyLineIsRefusedWithTheModelsReason()
     {
         var one = new Annotation(AnnotationTool.PolyLine, new[] { new PixelPoint(6, 6) }, Red, 4);
-        Assert.Contains("折线", one.Problem());
-        Assert.Contains("2 个点", one.Problem());
+        Assert.Contains("折线", one.Problem()!.Render());
+        Assert.Contains("2 个点", one.Problem()!.Render());
     }
 
     // ────────── 批次 RF-2：文字旋转 ──────────

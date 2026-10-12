@@ -139,8 +139,10 @@ public sealed class PinGroupGateTests
         var insidePinned = SourceGate.Between(bar, "_groupButton = IconButton(GroupIcon()", "var cancel = IconButton");
 
         Assert.Contains("_groupButton.Click += (_, _) => ToggleGroupPicker(_groupButton);", insidePinned);
-        Assert.Contains("GroupButtonText()", bar);                  // 那颗的说明按"在哪一组、组里几张"现写
-        Assert.Contains("ToolTipService.SetToolTip(_groupButton, GroupButtonText());", bar);   // 并组后立刻跟着变
+        // 那颗的说明按"在哪一组、组里几张"现写，并组后立刻跟着变。
+        // ✅WI-65 片3：从前这句在<b>建条那一刻</b>被 Locale.T 念完，换语言时它停在旧话（组号与张数是实参，
+        // 「贴图组」那颗才是表里的词）⇒ 改交 LocText 重贴，这一格钉的还是同一件事，形状换了。
+        Assert.Contains("LocText.SetMessage(_groupButton, ToolTipService.ToolTipProperty, GroupTip());", bar);
         Assert.Contains("foreach (var group in PinManager.Groups)", pickers);
         Assert.Contains("PinManager.NewGroup(this)", pickers);
         Assert.Contains("PinManager.JoinGroup(this, target.Serial)", pickers);

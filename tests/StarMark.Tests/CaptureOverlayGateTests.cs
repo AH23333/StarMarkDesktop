@@ -167,8 +167,8 @@ public sealed class CaptureOverlayGateTests
         // 与上面那条配对：新增一个枚举值时，名字与说明必须一起补上，否则这里先红
         foreach (var tool in Enum.GetValues<AnnotationTool>())
         {
-            Assert.NotEqual(tool.ToString(), Annotation.ToolName(tool));
-            Assert.False(string.IsNullOrEmpty(Annotation.ToolHint(tool)));
+            Assert.NotEqual(tool.ToString(), Annotation.ToolName(tool).Render());
+            Assert.NotNull(Annotation.ToolHint(tool));        // 认得的工具⛔ 回空话（✅片3：兜底改成 null）
         }
     }
 
@@ -714,7 +714,9 @@ public sealed class CaptureOverlayGateTests
         Assert.DoesNotContain("ShowHint", cs);
         Assert.DoesNotContain("PointerEntered +=", cs);
         // 文案仍然只有一份，挂在 ToolTipService 上（不是又抄一遍到别处）
-        Assert.Contains("ToolTipService.SetToolTip(button, tip);", SourceGate.MethodBody(cs, "private Button IconButton"));
+        // ✅WI-65 片3：那颗按钮的说明改由 LocText 贴（条子会一直挂着，⛔ 把念完的那句钉在建条那一刻）。
+        Assert.Contains("LocText.SetMessage(button, ToolTipService.ToolTipProperty, tip);",
+            SourceGate.MethodBody(cs, "private Button IconButton"));
         var xaml = SourceGate.ReadRepoFile("src/StarMark.UI/Views/CaptureOverlayWindow.xaml");
         Assert.Contains("x:Name=\"BarPicker\"", xaml);
         Assert.DoesNotContain("BarHint", xaml);

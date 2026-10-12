@@ -79,9 +79,9 @@ public sealed class CaptureBarWordGateTests
         // 计数、汉字面字、裸功能键三条判据全绿，屏幕上却是一条说明配了一颗哑键 ⇒ 键与句子得**成对**钉住。
         var bar = CodeOf(Bar);
         Assert.Contains(
-            @"Locale.Fmt(""capture.bar.pin"", CanvasService.BindingText(HotkeyActions.ScreenPin))", bar);
+            @"LocMessage.Of(""capture.bar.pin"", CanvasService.BindingText(HotkeyActions.ScreenPin))", bar);
         Assert.Contains(
-            @"Locale.Fmt(""capture.bar.through"",
+            @"LocMessage.Of(""capture.bar.through"",
                 CanvasService.BindingText(HotkeyActions.ScreenPinClickThrough))", bar);
         Assert.Contains(
             @"Locale.Fmt(""pin.bar.through"", CanvasService.BindingText(HotkeyActions.ScreenPinClickThrough))", CodeOf(Pin));
@@ -95,11 +95,13 @@ public sealed class CaptureBarWordGateTests
     public void WordsOwnedElsewhereArePassedInNotRetyped()
     {
         var bar = CodeOf(Bar);
-        Assert.Equal(2, SourceGate.Count(bar, @"Locale.T(""pin.card.groupCategory"")"));
+        Assert.Equal(2, SourceGate.Count(bar, @"LocMessage.Of(""pin.card.groupCategory"")"));
         // 图形那一串的名单由那颗主人现给：加一支图形笔时这句话跟着变（⛔ 在 tooltip 里再抄五颗名字）
-        Assert.Equal(1, SourceGate.Count(bar, "AnnotationTools.Shapes.Select(Annotation.ToolName)"));
-        // 档位名从前在这里是<b>第三份</b>字面量（细 / 中 / 粗）⇒ 改回表里那颗
-        Assert.Equal(1, SourceGate.Count(bar, @"string.Join("" / "", Annotation.ThicknessNames)"));
+        Assert.Equal(1, SourceGate.Count(bar, "AnnotationTools.Shapes.Select(static shape => (object?)Annotation.ToolName(shape))"));
+        // 档位名从前在这里是<b>第三份</b>字面量（细 / 中 / 粗）⇒ 交表里那颗主人；✅WI-65 片3 进一步：那排名字⛔
+        // 在交出之前就被 string.Join 念完（外层换语言重贴时里面会停旧话）⇒ 交 LocJoin，连接符本身也进表。
+        Assert.Equal(2, SourceGate.Count(bar, "new LocJoin("));
+        Assert.Equal(0, SourceGate.Count(bar, @"string.Join("" / "", Annotation."));
     }
 
     /// <summary>
@@ -123,7 +125,9 @@ public sealed class CaptureBarWordGateTests
     public void EveryRowThisBatchShippedIsActuallyAskedFor()
     {
         var asked = new[] { Bar, Pickers, Pin }.Select(CodeOf).Aggregate((a, b) => a + b);
-        var keys = Regex.Matches(asked, @"Locale\.(?:T|Fmt)\(""([a-z][\w.]+)""").Cast<Match>()
+        // ✅WI-65 片3：这一档的句子一半已改交「键＋实参」⇒ 数键的那把尺⛔ 只认旧写法（只认旧写法就只数到 17 颗，
+        // 而"每一颗键都得有人问"这条判据会<b>静默变弱</b>＝坑表 #486 同一族）。两种写法一起数。
+        var keys = Regex.Matches(asked, @"(?:Locale\.(?:T|Fmt)|LocMessage\.Of)\(""([a-z][\w.]+)""").Cast<Match>()
             .Select(m => m.Groups[1].Value).Distinct().ToArray();
         var known = new HashSet<string>(UiStrings.All.Select(e => e.Key), StringComparer.Ordinal);
         Assert.True(keys.Length >= 30, $"这一族只数到 {keys.Length} 颗键（本批落地后现场是 30＋）");

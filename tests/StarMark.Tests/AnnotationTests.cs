@@ -27,7 +27,7 @@ public sealed class AnnotationTests
     public void PaletteCoversBothDarkAndLightBackgrounds()
     {
         // 只有彩色的一组：在深色截图上画一条蓝线等于没画。黑白两色是"任何截图都看得见"的下限。
-        var names = Annotation.Palette.Select(color => color.Name).ToList();
+        var names = Annotation.Palette.Select(color => color.Name.Render()).ToList();
         Assert.Contains("黑", names);
         Assert.Contains("白", names);
         Assert.Equal(6, names.Count);
@@ -35,7 +35,7 @@ public sealed class AnnotationTests
         foreach (var color in Annotation.Palette)
         {
             Assert.Equal(255, color.Bgra >>> 24);                   // 出厂颜色必须不透明
-            Assert.False(string.IsNullOrWhiteSpace(color.Name));
+            Assert.False(string.IsNullOrWhiteSpace(color.Name.Render()));
         }
     }
 
@@ -89,7 +89,8 @@ public sealed class AnnotationTests
     public void WeightNamesAndStepsAreOneForOne()
     {
         Assert.Equal(Annotation.ThicknessSteps.Length, Annotation.ThicknessNames.Count);
-        Assert.All(Annotation.ThicknessNames, name => Assert.False(string.IsNullOrWhiteSpace(name)));
+        Assert.All(Annotation.ThicknessNames,
+            name => Assert.False(string.IsNullOrWhiteSpace(name.Render())));
     }
 
     [Fact]
@@ -98,10 +99,13 @@ public sealed class AnnotationTests
         foreach (var tool in Enum.GetValues<AnnotationTool>())
         {
             var hint = Annotation.ToolHint(tool);
-            Assert.False(string.IsNullOrEmpty(hint), $"{Annotation.ToolName(tool)} 没有悬停说明");
+            var named = Annotation.ToolName(tool).Render();
+            Assert.NotNull(hint);                                   // 认得的工具必须真有话说（✅片3：兜底那颗交 null）
+            var said = hint!.Render();
+            Assert.False(string.IsNullOrEmpty(said), $"{named} 没有悬停说明");
             // 说明不能只是把按钮名重念一遍（那一行是废话）；提到这个名字本身没问题
-            Assert.NotEqual(Annotation.ToolName(tool), hint);
-            Assert.True(hint.Length >= Annotation.ToolName(tool).Length + 4, $"{Annotation.ToolName(tool)} 的说明太短，说不清这一下会发生什么");
+            Assert.NotEqual(named, said);
+            Assert.True(said.Length >= named.Length + 4, $"{named} 的说明太短，说不清这一下会发生什么");
         }
     }
 
@@ -133,22 +137,22 @@ public sealed class AnnotationTests
         var onePoint = new Annotation(tool, new[] { new PixelPoint(5, 5) }, Annotation.Opaque(0, 0, 255), 4);
         var problem = onePoint.Problem();
         Assert.NotNull(problem);
-        Assert.Contains(Annotation.ToolName(tool), problem);        // 原因要点名是哪个工具，否则提示没法定位
+        Assert.Contains(Annotation.ToolName(tool).Render(), problem!.Render());        // 原因要点名是哪个工具，否则提示没法定位
     }
 
     [Fact]
     public void EveryRejectionNamesTheReason()
     {
         Assert.Contains("文字是空的", new Annotation(AnnotationTool.Text, new[] { new PixelPoint(1, 1) },
-            Annotation.Opaque(255, 255, 255), 4).Problem());
+            Annotation.Opaque(255, 255, 255), 4).Problem()!.Render());
         // 原因要点名"哪个工具的哪一个量"越界了：同一句"粗细不在范围内"在序号那里说的是圆点半径，读的人按线宽去理解就找不到北
-        Assert.Contains("矩形的线宽 0", Make(AnnotationTool.Rectangle, thickness: 0).Problem());
-        Assert.Contains("矩形的线宽 49", Make(AnnotationTool.Rectangle, thickness: 49).Problem());
-        Assert.Contains("文字高度 5", Make(AnnotationTool.Text, text: "字", fontHeight: 5).Problem());
-        Assert.Contains("文字高度 201", Make(AnnotationTool.Text, text: "字", fontHeight: 201).Problem());
+        Assert.Contains("矩形的线宽 0", Make(AnnotationTool.Rectangle, thickness: 0).Problem()!.Render());
+        Assert.Contains("矩形的线宽 49", Make(AnnotationTool.Rectangle, thickness: 49).Problem()!.Render());
+        Assert.Contains("文字高度 5", Make(AnnotationTool.Text, text: "字", fontHeight: 5).Problem()!.Render());
+        Assert.Contains("文字高度 201", Make(AnnotationTool.Text, text: "字", fontHeight: 201).Problem()!.Render());
         // 全透明：画上去等于没画，必须在画之前就说
         Assert.Contains("全透明", new Annotation(AnnotationTool.Rectangle,
-            new[] { new PixelPoint(0, 0), new PixelPoint(3, 3) }, Annotation.WithAlpha(Annotation.Opaque(0, 0, 255), 0), 4).Problem());
+            new[] { new PixelPoint(0, 0), new PixelPoint(3, 3) }, Annotation.WithAlpha(Annotation.Opaque(0, 0, 255), 0), 4).Problem()!.Render());
         Assert.Null(Make(AnnotationTool.Text, text: "中").Problem());
     }
 
@@ -160,7 +164,7 @@ public sealed class AnnotationTests
         Assert.True(all.Length >= 8);
         foreach (var tool in all)
         {
-            var name = Annotation.ToolName(tool);
+            var name = Annotation.ToolName(tool).Render();
             Assert.False(name == tool.ToString(), $"{tool} 没有中文名");
             Assert.False(string.IsNullOrWhiteSpace(name));
         }
@@ -838,6 +842,6 @@ public sealed class AnnotationTests
     {
         var problem = NumberAt(thickness).Problem();
         Assert.NotNull(problem);
-        Assert.Contains("圆点半径", problem);            // 报的是这个工具实际量的那个东西，不是泛泛的"粗细"
+        Assert.Contains("圆点半径", problem!.Render());            // 报的是这个工具实际量的那个东西，不是泛泛的"粗细"
     }
 }

@@ -113,10 +113,10 @@ public sealed class CaptureNoticeWiringGateTests
     public void CoreReasonSentencesAreTakenFromTheTable()
     {
         var geo = SourceGate.Code(SourceGate.ReadRepoFile(Geometry));
-        Assert.Equal(1, SourceGate.Count(geo, "Locale.T(\"capture.select.offscreen\")"));
-        Assert.Equal(1, SourceGate.Count(geo, "Locale.Fmt(\"capture.select.tooSmall\""));
-        Assert.Equal(1, SourceGate.Count(geo, "Locale.T(\"capture.grab.noDisplay\")"));
-        Assert.Equal(1, SourceGate.Count(geo, "Locale.T(\"capture.grab.outsideFrame\")"));
+        Assert.Equal(1, SourceGate.Count(geo, "LocMessage.Of(\"capture.select.offscreen\")"));
+        Assert.Equal(1, SourceGate.Count(geo, "LocMessage.Of(\"capture.select.tooSmall\""));
+        Assert.Equal(1, SourceGate.Count(geo, "LocMessage.Of(\"capture.grab.noDisplay\")"));
+        Assert.Equal(1, SourceGate.Count(geo, "LocMessage.Of(\"capture.grab.outsideFrame\")"));
         foreach (var dead in new[] { "选区落在所有显示器之外", "选区太小", "本机没有可用的显示器画面", "选区不在已捕获的画面范围内" })
             Assert.DoesNotContain(dead, geo);
         // ⚠ 同档里⛔ 上屏的那一句仍然留在代码里：`throw new ArgumentOutOfRangeException("DPI 缩放因子必须为正")`
