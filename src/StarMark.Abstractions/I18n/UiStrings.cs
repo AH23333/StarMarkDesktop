@@ -1345,10 +1345,16 @@ public static class UiStrings
             "No tool selected: this click adjusts the box (four-way arrow). Pick a brush above to draw and choose a colour; Esc stops", "ツール未選択：このクリックは枠の調整（十字矢印）。上の筆を選ぶと描画と色選択、Esc で終了"),
         new Entry("capture.bar.penNow", "当前：{0} · {1}（{2} 的{3}：{4} ≈ {5} 像素）。点这支笔＝换颜色和粗细；Esc 收笔",
             "Now: {0} · {1} ({2} {3}: {4} ≈ {5} px). Click this brush to change colour and weight; Esc stops", "現在：{0} · {1}（{2} の{3}：{4} ≈ {5} px）。クリックで色と太さ、Esc で終了"),
+        // ✅WI-65 片3：那条串「一排名字」的分隔符⛔ 住在 C# 里（`string.Join(" / ", 那群 LocMessage)` 会在交出去的那一刻
+        // 就把每颗名字钉死成当前语言，而外层那句是换语言才重贴的 ⇒ 屏幕上剩半中半英）。三语都是同一串斜杠，
+        // 但"由谁在何时取词"必须跟着键走（先例＝`rss.statusJoin`／`ocr.how.join`，规则 #100）。
+        new Entry("capture.bar.nameJoin", " / ", " / ", " / "),
         // OS 那一层的窗口标题（WI-50 补记）：这扇条子窗是无框＋不进任务栏／Alt+Tab，屏幕上读不到这一行，
         // 但 `Window.Title` 只有 <c>LocText.SetWindowTitle</c> 一条路（它不是 DependencyObject，⛔ 附带属性，坑表 #338）。
         new Entry("capture.bar.windowTitle", "StarMark 贴图工具条", "StarMark pin toolbar", "StarMark ピンツールバー"),
         new Entry("capture.pick.weight", "{0}（{1} 的{2}约 {3} 像素）", "{0} (for {1} the {2} is about {3} px)", "{0}（{1} の{2}は約 {3} px）"),
+        // ✅WI-65 片3：浮层里每颗图形的那句「名字：说明」，从前那枚全角冒号写在 C# 的内插串里（en 也该是半角）。
+        new Entry("capture.pick.shapeTip", "{0}：{1}", "{0}: {1}", "{0}：{1}"),
         new Entry("capture.pick.groupNew", "新建一组", "New group", "新しい組"),
         new Entry("capture.pick.groupNewTip", "把这一张单独分成一组", "Make this pin its own group", "この画像を単独の組にする"),
         new Entry("capture.pick.groupMerge", "把这一张并进{0}（现在 {1} 张）", "Merge this pin into {0} (now {1} pins)", "この画像を{0}にまとめる（現在 {1} 枚）"),

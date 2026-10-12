@@ -72,27 +72,29 @@ public static class CaptureGeometry
     }
 
     /// <summary>
-    /// 选区能不能用。返回 null＝可以；否则是**给界面直接显示的那句话**（词在语言表里，批次 WI-46a）。
+    /// 选区能不能用。返回 null＝可以；否则是<b>给界面直接显示的那句话</b>（词在语言表里，批次 WI-46a）。
     /// <para>注意"超出可截范围"不当错误处理：跨屏拖选时选区大半在屏外是正常操作，
     /// 交得上一块就行，所以这里只拦"与可截范围完全不相交"和"太小"。</para>
+    /// <para>✅WI-65 片3：交「键＋实参」——那句挂在错误角标上，会一直挂到下一次落笔为止。</para>
     /// </summary>
-    public static string? SelectionProblem(IntRect selection, IntRect? intersectedBounds)
+    public static LocMessage? SelectionProblem(IntRect selection, IntRect? intersectedBounds)
     {
-        if (intersectedBounds is null) return Locale.T("capture.select.offscreen");
+        if (intersectedBounds is null) return LocMessage.Of("capture.select.offscreen");
         var box = intersectedBounds.Value;
         if (box.Width < MinSelectionSide || box.Height < MinSelectionSide)
-            return Locale.Fmt("capture.select.tooSmall", box.Width, box.Height);
+            return LocMessage.Of("capture.select.tooSmall", box.Width, box.Height);
         return null;
     }
 
     /// <summary>
     /// 从已捕获的一帧里裁剪这块选区是否安全（<paramref name="frameBounds"/> 用虚拟桌面坐标，
     /// 因此原点可以是负的）。返回 null＝可裁；裁剪偏移由 <see cref="CropOffset"/> 给出。
+    /// <para>✅WI-65 片3：两颗出口都交「键＋实参」——一路挂错误角标、一路进提示卡正文，两边都不许先念完。</para>
     /// </summary>
-    public static string? CropProblem(IntRect selection, IntRect frameBounds)
+    public static LocMessage? CropProblem(IntRect selection, IntRect frameBounds)
     {
-        if (frameBounds.IsEmpty) return Locale.T("capture.grab.noDisplay");
-        if (Intersect(selection, frameBounds) is null) return Locale.T("capture.grab.outsideFrame");
+        if (frameBounds.IsEmpty) return LocMessage.Of("capture.grab.noDisplay");
+        if (Intersect(selection, frameBounds) is null) return LocMessage.Of("capture.grab.outsideFrame");
         return null;
     }
 

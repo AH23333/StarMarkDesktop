@@ -320,7 +320,8 @@ public static class ScreenshotService
         {
             if (CaptureGeometry.CropProblem(selection, frame.Bounds) is { } problem)
             {
-                Report(LocMessage.Of("capture.card.failedTitle"), LocMessage.Of("common.rawValue", problem));
+                // ✅WI-65 片3：那颗判据交的就是「键＋实参」，直接递出去（那道数据门把它念完再交＝换语言重贴被挡在门外）。
+                Report(LocMessage.Of("capture.card.failedTitle"), problem);
                 return null;
             }
             var (ox, oy) = CaptureGeometry.CropOffset(selection, frame.Bounds);

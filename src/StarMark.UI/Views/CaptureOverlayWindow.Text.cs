@@ -102,7 +102,7 @@ public sealed partial class CaptureOverlayWindow
         if (TextEditor.Focus(FocusState.Programmatic)) return;
         if (triesLeft > 1 && Root.DispatcherQueue.TryEnqueue(() => TakeEditorFocus(triesLeft - 1))) return;
         if (!_editingText) return;        // 用户已改去点别处：这时再说"没焦点"是假警报
-        ShowError(Locale.T("capture.strip.textNoFocus"));
+        ShowError(LocMessage.Of("capture.strip.textNoFocus"));
     }
 
     /// <summary>

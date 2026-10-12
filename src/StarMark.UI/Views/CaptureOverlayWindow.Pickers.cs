@@ -42,8 +42,10 @@ public sealed partial class CaptureOverlayWindow
         foreach (AnnotationTool shape in AnnotationTools.Shapes)
         {
             var wanted = shape;
+            // ✅WI-65 片3：那句「名字：说明」从前是 C# 里的内插串——冒号抄在代码里（en 该是半角），
+            // 而两颗词在这里就先念完了。现在整句交键，两颗名字作为实参递进去、贴上去那一刻才取词。
             var button = IconButton(ToolIcon(shape),
-                $"{Annotation.ToolName(shape)}：{Annotation.ToolHint(shape)}");
+                LocMessage.Of("capture.pick.shapeTip", Annotation.ToolName(shape), Annotation.ToolHint(shape)));
             button.Background = shape == _tool ? BarChecked : BarNormal;
             button.Click += (_, _) =>
             {
@@ -87,7 +89,7 @@ public sealed partial class CaptureOverlayWindow
         {
             var wanted = index;
             var dot = IconButton(DotIcon(SolidWhite, selected: index == _weightIndex, diameter: 3 + index * 3),
-                Locale.Fmt("capture.pick.weight", Annotation.ThicknessNames[index], WeightToolName,
+                LocMessage.Of("capture.pick.weight", Annotation.ThicknessNames[index], WeightToolName,
                     Annotation.ThicknessUnit(_tool ?? AnnotationTool.Pen),
                     Annotation.ThicknessFor(_tool ?? AnnotationTool.Pen, index)));
             dot.Click += (_, _) =>

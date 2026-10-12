@@ -35,11 +35,12 @@ public static class OcrService
     public static Task CopyTextFromSelectionAsync(ScreenFrame frame, IntRect selection)
     {
         var boxed = OcrImagePrep.Pad(selection, frame.Bounds);
-        var problem = CaptureGeometry.CropProblem(boxed, frame.Bounds);
-        if (problem is not null)
+        if (CaptureGeometry.CropProblem(boxed, frame.Bounds) is { } cropProblem)
         {
+            // ✅WI-65 片3：那颗判据自己就交「键＋实参」⇒ 直接递出去，common.rawValue 那道门在这里撤了
+            //（那道门只装"念完的成品字"，留着它反而把换语言重贴挡在门外）。
             TrayReporter.Report(LocMessage.Of("ocr.card.category"), LocMessage.Of("ocr.card.failedTitle"),
-                LocMessage.Of("common.rawValue", problem));
+                cropProblem);
             return Task.CompletedTask;
         }
         var (ox, oy) = CaptureGeometry.CropOffset(boxed, frame.Bounds);

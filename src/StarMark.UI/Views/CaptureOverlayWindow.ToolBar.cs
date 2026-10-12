@@ -78,14 +78,14 @@ public sealed partial class CaptureOverlayWindow
     /// </summary>
     private void BuildToolBar()
     {
-        _shapeButton = IconButton(ToolIcon(AnnotationTool.Rectangle), ShapeButtonText());
+        _shapeButton = IconButton(ToolIcon(AnnotationTool.Rectangle), ShapeTip());
         _shapeButton.Click += (_, _) => ShowShapePicker(_shapeButton);
         BarRow.Children.Add(_shapeButton);
 
         foreach (AnnotationTool tool in AnnotationTools.Brushes)
         {
             var button = IconButton(ToolIcon(tool),
-                Locale.Fmt("capture.bar.brushTip", Annotation.ToolName(tool), Annotation.ToolHint(tool)));
+                LocMessage.Of("capture.bar.brushTip", Annotation.ToolName(tool), Annotation.ToolHint(tool)));
             button.Tag = tool;
             button.Click += BrushTool_Click;
             button.RightTapped += BrushTool_RightTapped;   // 换颜色/粗细从"再点一次"挪到这里（点按那条按用户要求让给"取消选中"）
@@ -93,34 +93,35 @@ public sealed partial class CaptureOverlayWindow
             BarRow.Children.Add(button);
         }
 
-        _brushButton = IconButton(BrushIcon(), Locale.T("capture.bar.pen"));
+        _brushButton = IconButton(BrushIcon(), LocMessage.Of("capture.bar.pen"));
         _brushButton.Click += (_, _) => ToggleBrushPicker(_brushButton);
         BarRow.Children.Add(_brushButton);
 
         BarRow.Children.Add(Separator());
-        _undoButton = IconButton(ArrowIcon(left: true), Locale.T("capture.bar.undo"));
+        _undoButton = IconButton(ArrowIcon(left: true), LocMessage.Of("capture.bar.undo"));
         _undoButton.Click += Undo_Click;
-        _redoButton = IconButton(ArrowIcon(left: false), Locale.T("capture.bar.redo"));
+        _redoButton = IconButton(ArrowIcon(left: false), LocMessage.Of("capture.bar.redo"));
         _redoButton.Click += Redo_Click;
-        _clearButton = IconButton(EraserIcon(), Locale.T("capture.bar.clear"));
+        _clearButton = IconButton(EraserIcon(), LocMessage.Of("capture.bar.clear"));
         _clearButton.Click += Clear_Click;
         BarRow.Children.Add(_undoButton);
         BarRow.Children.Add(_redoButton);
         BarRow.Children.Add(_clearButton);
 
         BarRow.Children.Add(Separator());
-        _copyButton = IconButton(CopyIcon(), Locale.T("capture.bar.copy"));
+        _copyButton = IconButton(CopyIcon(), LocMessage.Of("capture.bar.copy"));
         _copyButton.Click += Copy_Click;
-        var save = IconButton(SaveIcon(), Locale.T("capture.bar.save"));
+        var save = IconButton(SaveIcon(), LocMessage.Of("capture.bar.save"));
         save.Click += Save_Click;
         // 贴图态不再显示"再钉一张"这颗：这张本来就钉着，多一颗只会让人猜那份去哪了。
         if (!_pinned)
         {
-            var pin = IconButton(PinIcon(), Locale.Fmt("capture.bar.pin", CanvasService.BindingText(HotkeyActions.ScreenPin)));
+            var pin = IconButton(PinIcon(),
+                LocMessage.Of("capture.bar.pin", CanvasService.BindingText(HotkeyActions.ScreenPin)));
             pin.Click += Pin_Click;
             BarRow.Children.Add(pin);
         }
-        var ocr = IconButton(OcrIcon(), Locale.T("capture.bar.ocr"));
+        var ocr = IconButton(OcrIcon(), LocMessage.Of("capture.bar.ocr"));
         ocr.Click += Ocr_Click;
         BarRow.Children.Add(_copyButton);
         BarRow.Children.Add(save);
@@ -129,18 +130,18 @@ public sealed partial class CaptureOverlayWindow
         {
             // 「组」只在这条带子上出现：能无歧义说清"哪一张"的地方就是这一张自己的条子，
             // 托盘那侧只负责按组下达命令（整组隐藏后条子跟着没了，出口必须是热键与托盘）。
-            _groupButton = IconButton(GroupIcon(), GroupButtonText());
+            _groupButton = IconButton(GroupIcon(), GroupTip());
             _groupButton.Click += (_, _) => ToggleGroupPicker(_groupButton);
             BarRow.Children.Add(_groupButton);
 
             // 这颗按下去动的是<b>所有</b>贴图（想只动一组用旁边那颗「组」）。
             // 说明写错范围会让人以为只有自己手上这张被点穿（批次 WF-1 那族极性事故）。
-            var through = IconButton(ThroughIcon(), Locale.Fmt("capture.bar.through",
+            var through = IconButton(ThroughIcon(), LocMessage.Of("capture.bar.through",
                 CanvasService.BindingText(HotkeyActions.ScreenPinClickThrough)));
             through.Click += Through_Click;
             BarRow.Children.Add(through);
         }
-        var cancel = IconButton(CrossIcon(), Locale.T(_pinned ? "capture.bar.closePin" : "capture.bar.finish"));
+        var cancel = IconButton(CrossIcon(), LocMessage.Of(_pinned ? "capture.bar.closePin" : "capture.bar.finish"));
         cancel.Click += Cancel_Click;
         BarRow.Children.Add(cancel);
 
@@ -155,7 +156,13 @@ public sealed partial class CaptureOverlayWindow
         Margin = new Thickness(3, 2, 3, 2),
     };
 
-    private Button IconButton(UIElement icon, string tip)
+    /// <summary>
+    /// 条上的一颗按钮：图标做面，句子挂 <c>ToolTip</c>。
+    /// <para>✅WI-65 片3：交进来的是<b>「键＋实参」</b>，贴的那一发走 <c>LocText</c> 那份名单——
+    /// 这扇条子窗（尤其贴图态那一扇）会一直开着，从前这里 <c>ToolTipService.SetToolTip(button, 念完的那句)</c>
+    /// 等于把整条的语言钉在建条那一刻，换语言之后条上每颗都还念着上一门话。</para>
+    /// </summary>
+    private Button IconButton(UIElement icon, LocMessage? tip)
     {
         var button = new Button
         {
@@ -169,7 +176,7 @@ public sealed partial class CaptureOverlayWindow
             CornerRadius = new CornerRadius(3),
             VerticalAlignment = VerticalAlignment.Center,
         };
-        ToolTipService.SetToolTip(button, tip);
+        LocText.SetMessage(button, ToolTipService.ToolTipProperty, tip);
         // 悬停说明<b>不写进条子</b>（用户裁决）：那一行几百像素宽，而窗宽＝内容宽，
         // 悬停哪颗整条就变宽、边缘跟着跑（贴图态那颗条子因此跳位置）。
         // 文案仍然只有一份，就是上面 ToolTip 那一句（选区阶段那扇全屏窗里它本来就显示得下）。
@@ -237,58 +244,72 @@ public sealed partial class CaptureOverlayWindow
             shape ?? (Armed ? InputSystemCursorShape.Cross : InputSystemCursorShape.SizeAll));
     }
 
-    private string ShapeButtonText()
+    /// <summary>「图形」那颗此刻的说明（✅WI-65 片3：交「键＋实参」，嵌在句子里的那两颗名字⛔ 先念完）。</summary>
+    private LocMessage ShapeTip()
         => _tool is { } tool
-            ? Locale.Fmt("capture.bar.shape", Annotation.ToolName(tool), ShapeNameList())
+            ? LocMessage.Of("capture.bar.shape", Annotation.ToolName(tool), ShapeNameList())
             // 贴图态没有"框"可改：未选笔那一按是移动整张图，说明要按它真正的行为写
             : _pinned
-                ? Locale.T("capture.bar.noneMove")
-                : Locale.T("capture.bar.noneResize");
+                ? LocMessage.Of("capture.bar.noneMove")
+                : LocMessage.Of("capture.bar.noneResize");
 
     /// <summary>「点开换 …」那一串图形名由<b>选择栏那颗主人</b>现给（⛔ 在这句里再抄一份名字：
-    /// 加一支图形笔时这句话不会跟着变，就成了假话）。</summary>
-    private static string ShapeNameList() => string.Join(" / ", AnnotationTools.Shapes.Select(Annotation.ToolName));
+    /// 加一支图形笔时这句话不会跟着变，就成了假话）。
+    /// <para>✅WI-65 片3：串名字那份连接符也交表（<c>capture.bar.nameJoin</c>）——交的是 <c>LocJoin</c>
+    /// 而不是 <c>string.Join(" / ", 念完的那几颗)</c>：那样每颗名字被钉在算出它的那一刻，
+    /// 换语言重贴只翻外层，屏幕上剩「矩形 / Ellipse」那种半中半英（先例＝<c>ocr.how.join</c>，规则 #100）。</para></summary>
+    private static LocJoin ShapeNameList() => new LocJoin(
+        AnnotationTools.Shapes.Select(static shape => (object?)Annotation.ToolName(shape)).ToList(),
+        "capture.bar.nameJoin");
 
     /// <summary>
     /// 「组」那颗的说明：把"这一张现在在不在组里、那一组里有几张"直接写在句子里。
     /// <para>条上没有文字（批次 WP 的取舍：窗宽＝内容宽，带字的说明会让整条在悬停时变宽跳位），
     /// 所以这句只能待在 ToolTip 里——而贴图态那扇条子窗放不下长句，<b>这一句是短的、且只说这一张的事实</b>。
-    /// 组号与张数都从名册现取，不在界面上留第二份（并组之后 tooltip 立刻跟着变，见 <see cref="SyncTools"/>）。</para>
+    /// 组号与张数都从名册现取，不在界面上留第二份（并组之后 tooltip 立刻跟着变，见 <see cref="SyncTools"/>）。
+    /// 组名是<b>用户起的</b>那颗数据 ⇒ 原样交实参；而句尾「贴图组」是表里的词，交键（✅WI-65 片3）。</para>
     /// </summary>
-    private string GroupButtonText()
+    private LocMessage GroupTip()
         => PinManager.GroupOf(this) is { } group
-            ? Locale.Fmt("capture.bar.groupIn", group.Name, group.Members.Count,
-                Locale.T("pin.card.groupCategory"))
-            : Locale.Fmt("capture.bar.groupNone", Locale.T("pin.card.groupCategory"));
+            ? LocMessage.Of("capture.bar.groupIn", group.Name, group.Members.Count,
+                LocMessage.Of("pin.card.groupCategory"))
+            : LocMessage.Of("capture.bar.groupNone", LocMessage.Of("pin.card.groupCategory"));
 
-    /// <summary>把"当前用的是哪种图形、哪一支笔"画出来（图标上没有文字，只能靠底色与那颗点说）。</summary>
+    /// <summary>
+    /// 把"当前用的是哪种图形、哪一支笔"画出来（图标上没有文字，只能靠底色与那颗点说）。
+    /// <para>✅WI-65 片3：这里重贴的三句全部改走 <c>LocText</c>——这一方法是"状态变了就重算"的那一拍，
+    /// 而它从前把 <c>Locale.Fmt</c> 念完的成品字塞进 <c>ToolTip</c>，于是换语言那一刻条上不动、
+    /// 下一次改状态才跟着换（挂在常驻条子上的那句话⛔ 由节拍代替名单）。</para>
+    /// </summary>
     private void SyncTools()
     {
         var shape = _tool is { } current && AnnotationTools.IsShapeTool(current) ? current : AnnotationTool.Rectangle;
         _shapeButton.Content = ToolIcon(shape);
         // 没选工具时图形那颗不许看起来"被选中"：底色是这条链上唯一的"我在哪一态"信号
         _shapeButton.Background = _tool is { } armed && AnnotationTools.IsShapeTool(armed) ? BarChecked : BarNormal;
-        ToolTipService.SetToolTip(_shapeButton, ShapeButtonText());
+        LocText.SetMessage(_shapeButton, ToolTipService.ToolTipProperty, ShapeTip());
         foreach (var button in _brushButtons)
             button.Background = (AnnotationTool)button.Tag! == _tool ? BarChecked : BarNormal;
         _brushButton.Content = BrushIcon();
         // 「组」那颗的说明跟着名册走：并组/移出之后不重建整条，但说明必须立刻是新的那一组
         //（留着旧的组号，用户就会以为并组没生效而再点一次，第二次会真的又建一组）。
-        if (_pinned) ToolTipService.SetToolTip(_groupButton, GroupButtonText());
+        if (_pinned) LocText.SetMessage(_groupButton, ToolTipService.ToolTipProperty, GroupTip());
         if (_tool is not { } tool)
         {
-            ToolTipService.SetToolTip(_brushButton,
-                Locale.T("capture.bar.penUnarmed"));
+            LocText.SetMessage(_brushButton, ToolTipService.ToolTipProperty,
+                LocMessage.Of("capture.bar.penUnarmed"));
             return;
         }
+        // 那一排数字（每档实际多少像素）⛔ 是"念出来的词"，就地串起来没问题；那排<b>名字</b>可⛔ 这么办。
         var sizes = string.Join(" / ", Enumerable.Range(0, Annotation.ThicknessSteps.Length)
             .Select(index => Annotation.ThicknessFor(tool, index)));
-        ToolTipService.SetToolTip(_brushButton,
-            Locale.Fmt("capture.bar.penNow",
+        var nameList = new LocJoin(Enumerable.Range(0, Annotation.ThicknessSteps.Length)
+            .Select(index => (object?)Annotation.ThicknessNames[index]).ToList(), "capture.bar.nameJoin");
+        LocText.SetMessage(_brushButton, ToolTipService.ToolTipProperty,
+            LocMessage.Of("capture.bar.penNow",
                 Annotation.Palette[Math.Clamp(_colourIndex, 0, Annotation.Palette.Count - 1)].Name,
                 Annotation.ThicknessNames[Math.Clamp(_weightIndex, 0, Annotation.ThicknessNames.Count - 1)],
-                Annotation.ToolName(tool), Annotation.ThicknessUnit(tool),
-                string.Join(" / ", Annotation.ThicknessNames), sizes));
+                Annotation.ToolName(tool), Annotation.ThicknessUnit(tool), nameList, sizes));
     }
 
     // ────────── 图标：矢量图元画的，不用字体字形 ──────────

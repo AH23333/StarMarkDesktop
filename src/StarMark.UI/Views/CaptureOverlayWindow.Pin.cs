@@ -377,7 +377,7 @@ public sealed partial class CaptureOverlayWindow
         catch (Exception ex)
         {
             StarLog.Error("[CaptureOverlay] 打码预览上传失败", ex);
-            ShowError(Locale.Fmt("capture.strip.mosaicFailed", ex.Message));
+            ShowError(LocMessage.Of("capture.strip.mosaicFailed", ex.Message));
         }
     }
 

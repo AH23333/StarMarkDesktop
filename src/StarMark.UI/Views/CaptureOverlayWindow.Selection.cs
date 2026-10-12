@@ -129,7 +129,7 @@ public sealed partial class CaptureOverlayWindow
             catch (Exception ex)
             {
                 // 预览画不出来不当场说，用户就要到松手才发现这一改是坏的
-                ShowError(Locale.Fmt("capture.strip.resizeFailed", ex.Message));
+                ShowError(LocMessage.Of("capture.strip.resizeFailed", ex.Message));
                 return;
             }
             // 截图态的拖动底是整帧缓冲，逐事件上传会跟不上手：节流到 ~60fps，
@@ -308,7 +308,7 @@ public sealed partial class CaptureOverlayWindow
         {
             // 画不上去必须看得见：交出一张"少了刚画的那条"的图，用户完全没有办法发现
             StarLog.Error("[CaptureOverlay] 合成标注失败", ex);
-            ShowError(Locale.Fmt("capture.strip.drawFailed", ex.Message));
+            ShowError(LocMessage.Of("capture.strip.drawFailed", ex.Message));
             return;
         }
         ErrorChip.Visibility = Visibility.Collapsed;

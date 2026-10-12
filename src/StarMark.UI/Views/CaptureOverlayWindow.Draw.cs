@@ -13,6 +13,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Capture;
 using StarMark.Integrations.Capture;
 using StarMark.UI.Helpers;
@@ -405,9 +406,15 @@ public sealed partial class CaptureOverlayWindow
     private static void PlaceByMargin(FrameworkElement element, double x, double y)
         => element.Margin = new Thickness(Math.Max(0, x), Math.Max(0, y), 0, 0);
 
-    private void ShowError(string reason)
+    /// <summary>
+    /// 把"这一按为什么没成"贴在那颗常驻的错误角标上。
+    /// <para>✅WI-65 片3：交进来的是一颗「键＋实参」，贴的那一发走 <c>LocText</c>——这一行会<b>一直挂着</b>
+    /// 直到下一次落笔/取消选区才收，换语言那一刻它自己不会翻（从前这里 <c>ErrorText.Text = 念完的那句</c>
+    /// 就是把语言钉在报错那一瞬间）。</para>
+    /// </summary>
+    private void ShowError(LocMessage reason)
     {
-        ErrorText.Text = reason;
+        LocText.SetMessage(ErrorText, reason);
         ErrorChip.Visibility = Visibility.Visible;
     }
 

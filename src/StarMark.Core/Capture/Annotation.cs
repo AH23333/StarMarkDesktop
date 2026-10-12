@@ -71,8 +71,10 @@ public static class AnnotationTools
 /// 中间再来一次「颜色对象→字节」的换算就是多一处会写反的地方。</param>
 public readonly record struct AnnotationColor(string NameKey, int Bgra)
 {
-    /// <summary>念法<b>每次现算</b>：这颗从前是建表那一刻存下的成品字，于是换语言之后两条栏都念旧语言（#373）。</summary>
-    public string Name => Locale.T(NameKey);
+    /// <summary>念法<b>每次现算</b>：这颗从前是建表那一刻存下的成品字，于是换语言之后两条栏都念旧语言（#373）。
+    /// <para>✅WI-65 片3 起交出去的是<b>「键＋实参」</b>而不是念完的那句：这条链上它最终嵌在工具条那句长说明里
+    /// （外层换语言重贴时，这颗名字必须跟着换＝<see cref="LocMessage.ToString"/> 那段理由）。</para></summary>
+    public LocMessage Name => LocMessage.Of(NameKey);
 }
 
 /// <summary>
@@ -411,9 +413,15 @@ public sealed record Annotation(
     /// <summary>三档线宽：细/中/粗。给的是「点一下就能选到」的档位，不是滑杆（截图标注没人微调）。</summary>
     public static readonly int[] ThicknessSteps = { 2, 4, 8 };
 
-    /// <summary>三档的名字，与 <see cref="ThicknessSteps"/> 同序（条数不一致就是给错了标签，有测试钉着）。</summary>
-    public static IReadOnlyList<string> ThicknessNames =>
-        new[] { Locale.T("anno.thickness.thin"), Locale.T("anno.thickness.medium"), Locale.T("anno.thickness.thick") };
+    /// <summary>三档的名字，与 <see cref="ThicknessSteps"/> 同序（条数不一致就是给错了标签，有测试钉着）。
+    /// ✅WI-65 片3：给的⛔ 是念完的三句，而是三颗「键＋实参」——那条栏把这三颗串成一句长说明，
+    /// 串早了就把语言钉在算出它的那一刻（半中半英那一种）。</summary>
+    public static IReadOnlyList<LocMessage> ThicknessNames =>
+        new[]
+        {
+            LocMessage.Of("anno.thickness.thin"), LocMessage.Of("anno.thickness.medium"),
+            LocMessage.Of("anno.thickness.thick"),
+        };
 
     /// <summary>
     /// 第 <paramref name="stepIndex"/> 档在某个工具上实际是多少像素粗。
@@ -449,13 +457,13 @@ public sealed record Annotation(
     /// 那一档在某个工具上<b>量的到底是什么</b>——条上把数字报给用户时得带上单位，
     /// 否则"序号 ≈ 22 像素"会被读成直径（它是半径），而马赛克那一档量的是格子边长。
     /// </summary>
-    public static string ThicknessUnit(AnnotationTool tool) => tool switch
+    public static LocMessage ThicknessUnit(AnnotationTool tool) => tool switch
     {
-        AnnotationTool.Number => Locale.T("anno.unit.radius"),
-        AnnotationTool.Text => Locale.T("anno.unit.fontsize"),
-        AnnotationTool.Mosaic => Locale.T("anno.unit.cell"),
-        AnnotationTool.Highlighter => Locale.T("anno.unit.brush"),
-        _ => Locale.T("anno.unit.line"),
+        AnnotationTool.Number => LocMessage.Of("anno.unit.radius"),
+        AnnotationTool.Text => LocMessage.Of("anno.unit.fontsize"),
+        AnnotationTool.Mosaic => LocMessage.Of("anno.unit.cell"),
+        AnnotationTool.Highlighter => LocMessage.Of("anno.unit.brush"),
+        _ => LocMessage.Of("anno.unit.line"),
     };
 
     /// <summary>切到某个工具时给用户的默认粗细（＝中间那一档）。</summary>
@@ -514,25 +522,27 @@ public sealed record Annotation(
     /// 给的是<b>原因</b>而不是 bool：工具条上「点下去什么都没发生」是最难自查的一类缺陷，
     /// 而这里的判据（点数够不够、文字是不是空的、粗细在不在范围内）每一条都对应一种真实的输入。
     /// </para>
+    /// <para>✅WI-65 片3 起交 <see cref="LocMessage"/>：那句「{0}的{1} {2} 不在 {3}-{4} 之间」里嵌着
+    /// 工具名与单位两颗词，⛔ 在这里先念完（那条错误角标会一直挂着，直到下一次落笔才换一句）。</para>
     /// </summary>
-    public string? Problem()
+    public LocMessage? Problem()
     {
-        if (Tool == AnnotationTool.Eraser) return Locale.Fmt("anno.problem.notDrawable", ToolName(Tool));
+        if (Tool == AnnotationTool.Eraser) return LocMessage.Of("anno.problem.notDrawable", ToolName(Tool));
         if (Points is null || Points.Count < MinPoints(Tool))
-            return Locale.Fmt("anno.problem.tooFewPoints", ToolName(Tool), MinPoints(Tool));
+            return LocMessage.Of("anno.problem.tooFewPoints", ToolName(Tool), MinPoints(Tool));
         if (Tool == AnnotationTool.Text && string.IsNullOrEmpty(Text))
-            return Locale.T("anno.problem.emptyText");
+            return LocMessage.Of("anno.problem.emptyText");
         // 文字不看 Thickness（字号是它自己的那条），序号看的正是 Thickness（＝圆点半径，批次 WR），
         // 所以只有文字这一项豁免范围检查
         if (Tool != AnnotationTool.Text
             && (Thickness < MinThickness || Thickness > MaxThickness))
-            return Locale.Fmt("anno.problem.thicknessRange", ToolName(Tool), ThicknessUnit(Tool), Thickness, MinThickness, MaxThickness);
+            return LocMessage.Of("anno.problem.thicknessRange", ToolName(Tool), ThicknessUnit(Tool), Thickness, MinThickness, MaxThickness);
         if (FontHeight is < 6 or > 200)
-            return Locale.Fmt("anno.problem.fontHeightRange", FontHeight);
+            return LocMessage.Of("anno.problem.fontHeightRange", FontHeight);
         if (Scale is < MinScale or > MaxScale)
-            return Locale.Fmt("anno.problem.scaleRange", NumberText.UpTo2(Scale), NumberText.UpTo2(MinScale), NumberText.UpTo2(MaxScale));
+            return LocMessage.Of("anno.problem.scaleRange", NumberText.UpTo2(Scale), NumberText.UpTo2(MinScale), NumberText.UpTo2(MaxScale));
         if (EffectiveColorBgra >>> 24 == 0)
-            return Locale.T("anno.problem.transparent");
+            return LocMessage.Of("anno.problem.transparent");
         return null;
     }
 
@@ -542,7 +552,7 @@ public sealed record Annotation(
     /// "荧光／橡皮擦"与画布那边的"荧光笔／橡皮"从前各写一份，同一条链的两根栏上叫法就不一样。
     /// 这里取两边都讲得通、且更完整的那一个。</para>
     /// </summary>
-    public static string ToolName(AnnotationTool tool) => Locale.T(ToolNameKey(tool));
+    public static LocMessage ToolName(AnnotationTool tool) => LocMessage.Of(ToolNameKey(tool));
 
     /// <summary>
     /// 这个名字<b>在表里的那颗键</b>（批次 WI-51，与 ✅P-181 那颗 <c>AnnotationColor.NameKey</c> 同一形状）。
@@ -566,21 +576,23 @@ public sealed record Annotation(
         _ => tool.ToString(),
     };
 
-    /// <summary>工具条上每个按钮的悬停说明：只说「这一下会发生什么」，不复述按钮名字。</summary>
-    public static string ToolHint(AnnotationTool tool) => tool switch
+    /// <summary>工具条上每个按钮的悬停说明：只说「这一下会发生什么」，不复述按钮名字。
+    /// ✅WI-65 片3：交「键＋实参」，那颗说明会嵌进「名字：说明」那句长 tooltip 里（外层重贴时一起翻）。
+    /// <para>认得的工具才有说明，所以交<b>可空</b>的那一颗；⛔ 用一句空话（或那句空话走数据门）冒充"有话说"。</para></summary>
+    public static LocMessage? ToolHint(AnnotationTool tool) => tool switch
     {
-        AnnotationTool.Rectangle => Locale.T("anno.hint.rectangle"),
-        AnnotationTool.Ellipse => Locale.T("anno.hint.ellipse"),
-        AnnotationTool.Line => Locale.T("anno.hint.line"),
-        AnnotationTool.PolyLine => Locale.T("anno.hint.polyline"),
-        AnnotationTool.Arrow => Locale.T("anno.hint.arrow"),
-        AnnotationTool.Pen => Locale.T("anno.hint.pen"),
-        AnnotationTool.Highlighter => Locale.T("anno.hint.highlighter"),
-        AnnotationTool.Mosaic => Locale.T("anno.hint.mosaic"),
-        AnnotationTool.Text => Locale.T("anno.hint.text"),
-        AnnotationTool.Number => Locale.T("anno.hint.number"),
-        AnnotationTool.Eraser => Locale.T("anno.hint.eraser"),
-        _ => string.Empty,
+        AnnotationTool.Rectangle => LocMessage.Of("anno.hint.rectangle"),
+        AnnotationTool.Ellipse => LocMessage.Of("anno.hint.ellipse"),
+        AnnotationTool.Line => LocMessage.Of("anno.hint.line"),
+        AnnotationTool.PolyLine => LocMessage.Of("anno.hint.polyline"),
+        AnnotationTool.Arrow => LocMessage.Of("anno.hint.arrow"),
+        AnnotationTool.Pen => LocMessage.Of("anno.hint.pen"),
+        AnnotationTool.Highlighter => LocMessage.Of("anno.hint.highlighter"),
+        AnnotationTool.Mosaic => LocMessage.Of("anno.hint.mosaic"),
+        AnnotationTool.Text => LocMessage.Of("anno.hint.text"),
+        AnnotationTool.Number => LocMessage.Of("anno.hint.number"),
+        AnnotationTool.Eraser => LocMessage.Of("anno.hint.eraser"),
+        _ => null,
     };
 
     /// <summary>

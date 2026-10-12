@@ -208,7 +208,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private IntRect _adjustPending;
     private PointInt32 _adjustPress;
 
-    private string WeightToolName => _tool is { } t ? Annotation.ToolName(t) : Locale.T("capture.tool.none");
+    private LocMessage WeightToolName => _tool is { } t ? Annotation.ToolName(t) : LocMessage.Of("capture.tool.none");
     private int _colourIndex;
     private int _weightIndex = 1;
 
@@ -249,7 +249,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         if (BuildMonitorBitmap() is not { } shot)
         {
-            ShowError(Locale.T("capture.grab.frameNotShown"));
+            ShowError(LocMessage.Of("capture.grab.frameNotShown"));
             return;
         }
         Shot.Source = shot.Bitmap;

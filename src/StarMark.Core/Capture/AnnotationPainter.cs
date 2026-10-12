@@ -35,10 +35,12 @@ public static class AnnotationPainter
     /// 就地把一条标注画进 <paramref name="bgra"/>（<see cref="Render"/> 负责"先复制再逐条画"）。
     /// 画不出去时抛原因：<see cref="Annotation.Problem"/> 里每一条都对应一种真实输入，
     /// 静默跳过等于让用户对着一张少了字的图猜"我刚才写的那行字呢"。
+    /// <para>✅WI-65 片3：那颗判据现在交「键＋实参」，这一处<b>当场念完再交出去</b>——它是异常消息，
+    /// 出口是日志与崩溃转储，⛔ 挂进语言表（那条口径归 <b>P-184</b>：没有屏幕宿主的话⛔ 为了"进表"而进表）。</para>
     /// </summary>
     public static void Paint(byte[] bgra, int width, int height, Annotation mark)
     {
-        if (mark.Problem() is { } problem) throw new InvalidOperationException(problem);
+        if (mark.Problem() is { } problem) throw new InvalidOperationException(problem.Render());
         var color = mark.EffectiveColorBgra;
         var radius = Radius(mark);
         // 变换（旋转/缩放）在这里落地一次：绘制、选择框、命中测试读的都是同一组点，
