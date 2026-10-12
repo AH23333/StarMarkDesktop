@@ -44,11 +44,14 @@ public sealed class BackupWordGateTests : IDisposable
     private const string PageXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
 
     /// <summary>对照档：⛔ 本批射程，存在的理由是<b>给归零那颗尺一个分母</b>——一把静默读成 0 的尺比红更危险（台架规则 #188）。
-    /// <para>✅WI-64 片1 把 <c>DescribeUsage</c>／<c>DescribeProjection</c>／<c>DescribeOrphans</c> 三颗交进了表，
-    /// 这颗档<b>还没归零</b>：剩下的屏幕字出自 <c>CleanupConfirmBody</c>（清理确认框正文）与 <c>DescribeTitle</c>（卡片标题那颗）——
-    /// 那是片2 的射程，⛔ 算进本批。⇒ 分母今天仍由这颗档出；片2 把它们交完时，这一行必须<b>换成另一档还在说话的文件</b>
-    /// （换到哪一档由那一批现读现定，⛔ 提前把名字写在这儿——那是一颗指针，它会漂）。</para></summary>
-    private const string Control = "src/StarMark.Abstractions/Clipboard/ClipAssets.cs";
+    /// <para>✅WI-64 片2 之前这颗档是 <c>ClipAssets.cs</c>，片1 交三颗、片2 交完 <c>CleanupConfirmBody</c> 那七句之后
+    /// 它<b>只剩 1 片段</b>（<c>DescribeTitle</c> 那颗兜底字，✅WI-64c 判归 P-199）——片1 那节早就写明"片2 交完时这一行必须
+    /// 换成另一档还在说话的文件，换到哪一档由那一批现读现定"，今天兑现（⛔ 提前把名字写在那一行＝一颗会漂的指针）。
+    /// 现读的 1 片段⛔ 再当分母：它随时会被 P-199 归零，那颗闸门就会在一次⛔ 相关的批次里红。</para>
+    /// <para>换来的是 <c>ClipboardPolicy.cs</c>，<b>现读 9 片段</b>（同一把尺，2026-10-12 由 <c>ClipboardAssetsWordGateTests</c>
+    /// ①那格的红字报出）。那九片出自 <c>ShouldRecordImage</c> 的四发拒绝理由——✅WI-64c 判定它们<b>只进日志</b>、
+    /// ⛔ 在任何一批的交表射程里（日志按既定口径⛔ 交表）⇒ 这颗对照档⛔ 会随搬字归零，当分母当得稳。</para></summary>
+    private const string Control = "src/StarMark.Abstractions/Clipboard/ClipboardPolicy.cs";
 
     private static readonly string[] CoreFiles = [Svc, PathPolicy, AutoPolicy, Container, Envelope];
     private static readonly string[] Silent = [.. CoreFiles, Ui];
@@ -108,7 +111,7 @@ public sealed class BackupWordGateTests : IDisposable
             Assert.Empty(SourceGate.ScreenWords(CodeOf(rel)));
 
         var control = SourceGate.ScreenWords(CodeOf(Control));
-        Assert.True(control.Count >= 10,
+        Assert.True(control.Count >= 9,      // 2026-10-12 现读（红字报的数）；阈值⛔ 跟着"这颗档还剩几片"漂
             $"对照档 {Control} 只量到 {control.Count} 片段——这把尺没扫到东西，上面那些 0 不算证据");
     }
 

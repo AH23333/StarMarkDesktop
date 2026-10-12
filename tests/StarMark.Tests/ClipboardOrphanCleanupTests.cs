@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Clipboard;
+using StarMark.Abstractions.I18n;
 using StarMark.Data;
 using StarMark.Integrations.Clipboard;
 using Xunit;
@@ -21,6 +22,7 @@ namespace StarMark.Tests;
 /// 把它写成"返回该删哪些名字"再在内存里断言，最容易坏的三段（拼路径、名字名册、删前重扫）就全留在没测的地方。
 /// </para>
 /// </summary>
+[Collection("LocaleGlobal")]    // ✅WI-64 片2：本档开始读进程级语言（下面那两格要渲染中文那一屏），⛔ 与换语言的证人并发跑
 public sealed class ClipboardOrphanCleanupTests : IDisposable
 {
     private readonly string _db = Path.Combine(Path.GetTempPath(), $"starmark_orphan_{Guid.NewGuid():N}.db");
@@ -42,6 +44,26 @@ public sealed class ClipboardOrphanCleanupTests : IDisposable
         foreach (var p in new[] { _db, _db + "-wal", _db + "-shm" })
             try { File.Delete(p); } catch { }
         try { Directory.Delete(_dir, true); } catch { }
+    }
+
+    /// <summary>
+    /// ✅WI-64 片2：<c>CleanupConfirmBody</c> 交回的是<b>身份</b>（键＋实参），这两格钉的是<b>中文那一屏</b>的形状，
+    /// 所以先钉住语言再渲染。<para>⛔ 直接 <c>msg.Render()</c>：那一刻读到的是别的证类留在静态上的语言
+    /// （症状是"随机红一格"，红字指向谁先抢到那颗静态而⛔ 指向谁改坏了哪一行＝<c>EveryLocaleMutatingTestClassIsInTheSerialCollection</c>
+    /// 那条判据讲的事）。</para>
+    /// </summary>
+    private static string InChinese(LocMessage message)
+    {
+        var before = Locale.Current;
+        Locale.TrySet(AppLanguage.Chinese);
+        try
+        {
+            return message.Render();
+        }
+        finally
+        {
+            Locale.TrySet(before);
+        }
     }
 
     private static DateTimeOffset At(int seconds)
@@ -205,7 +227,7 @@ public sealed class ClipboardOrphanCleanupTests : IDisposable
     {
         var many = Enumerable.Range(0, ClipAssets.CleanupPreviewLimit + 3)
             .Select(i => $"2026-09-28_0915_{i:x8}.png").ToList();
-        var body = ClipAssets.CleanupConfirmBody(many, 9000, tempCount: 0, tempBytes: 0, folder: @"C:\x\clip");
+        var body = InChinese(ClipAssets.CleanupConfirmBody(many, 9000, tempCount: 0, tempBytes: 0, folder: @"C:\x\clip"));
 
         Assert.Contains(@"C:\x\clip", body, StringComparison.Ordinal);        // 哪个目录：可见性决议要求原话写出来
         Assert.Contains("不会动任何一条历史条目", body, StringComparison.Ordinal);
@@ -222,15 +244,15 @@ public sealed class ClipboardOrphanCleanupTests : IDisposable
     {
         var one = new[] { "a.png" };
         // ① 只有孤儿：列名字，不提临时件。
-        var onlyOrphan = ClipAssets.CleanupConfirmBody(one, 10, 0, 0, "D:\\clip");
+        var onlyOrphan = InChinese(ClipAssets.CleanupConfirmBody(one, 10, 0, 0, "D:\\clip"));
         Assert.Contains("a.png", onlyOrphan, StringComparison.Ordinal);
         Assert.DoesNotContain("临时件", onlyOrphan, StringComparison.Ordinal);
         // ② 只有临时件：不编一份空名单，也不能一句"没有可清"。
-        var onlyTemp = ClipAssets.CleanupConfirmBody(Array.Empty<string>(), 0, 2, 64, "D:\\clip");
+        var onlyTemp = InChinese(ClipAssets.CleanupConfirmBody(Array.Empty<string>(), 0, 2, 64, "D:\\clip"));
         Assert.Contains("2 个没写完的临时件", onlyTemp, StringComparison.Ordinal);
         Assert.DoesNotContain("· ", onlyTemp, StringComparison.Ordinal);
         // ③ 两种都有：各自成句，且临时件要说清"那是我们自己的半件，不可能是你的文件"。
-        var both = ClipAssets.CleanupConfirmBody(one, 10, 2, 64, "D:\\clip");
+        var both = InChinese(ClipAssets.CleanupConfirmBody(one, 10, 2, 64, "D:\\clip"));
         Assert.Contains("· a.png", both, StringComparison.Ordinal);
         Assert.Contains("不可能是你的文件", both, StringComparison.Ordinal);
         // ④ 一句都不许出现"请稍后/请确认/重启"式的把责任交回用户的话（P-54 同口径）。
