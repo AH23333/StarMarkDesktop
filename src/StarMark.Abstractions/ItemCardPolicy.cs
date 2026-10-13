@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions;
 
@@ -83,12 +84,13 @@ public static class ItemCardPolicy
     /// </summary>
     public static bool ShowsCollect(bool isTrendingRepo, bool isRssCandidate) => isTrendingRepo || isRssCandidate;
 
-    /// <summary>收藏动作的文字（按行种类分流）。</summary>
-    public static string CollectLabelFor(bool isRssCandidate, bool collected)
+    /// <summary>收藏动作的文字（按行种类分流）。<b>交的是「键」而⛔ 成品字</b>（批次 WI-67 片4）：
+    /// 这一族住在卡片与右键菜单两处宿主上，念字的时刻归宿主，措辞只此一处（表）。</summary>
+    public static LocMessage CollectLabelFor(bool isRssCandidate, bool collected)
         => isRssCandidate ? RssCollectLabel(collected) : CollectLabel(collected);
 
     /// <summary>收藏动作的 tooltip（按行种类分流）。RSS 那一份要说清落到哪个文件夹，故多带一个参数。</summary>
-    public static string CollectTipFor(bool isRssCandidate, bool collected, string folderPath)
+    public static LocMessage CollectTipFor(bool isRssCandidate, bool collected, string folderPath)
         => isRssCandidate ? RssCollectTip(collected, folderPath) : CollectTip(collected);
 
     /// <summary>
@@ -109,11 +111,12 @@ public static class ItemCardPolicy
     /// <summary>RSS 那一行的动作文案。<b>已经收藏过的不再提供"从库里移除"</b>（P-88 的裁决：
     /// 这一栏的职责是"把看中的收进来"，移除属于资料库自己的页面），所以收过之后它是一颗说明性的灰按钮，
     /// 不是可点的开关。</summary>
-    public static string RssCollectLabel(bool collected) => collected ? "已收藏" : "收藏到文件夹";
+    public static LocMessage RssCollectLabel(bool collected)
+        => LocMessage.Of(collected ? "card.rssCollect.label.collected" : "card.rssCollect.label.uncollected");
 
-    public static string RssCollectTip(bool collected, string folderPath) => collected
-        ? $"已经在「{folderPath}」里了。要移除请到资料库对应那一行"
-        : $"作为书签存进本机，并放进「{folderPath}」（第一次收藏这个源时会建出这一层文件夹）";
+    /// <summary>RSS 收藏那两句提示：<c>{0}</c> 交的是<b>给人看的那条文件夹路径</b>（数据，⛔ 第二句语言）。</summary>
+    public static LocMessage RssCollectTip(bool collected, string folderPath)
+        => LocMessage.Of(collected ? "card.rssCollect.tip.collected" : "card.rssCollect.tip.uncollected", folderPath);
 
     /// <summary>
     /// 条目类型 → 行首图标，<b>全应用唯一出处</b>（批次 RX，P-123 第一条）。
@@ -152,16 +155,21 @@ public static class ItemCardPolicy
     /// <summary>Star 按钮的图标与文字：已 Star 必须一眼可辨（它是"再点会取消"的信号）。</summary>
     public static string StarGlyph(bool starred) => starred ? "★" : "☆";
 
-    public static string StarLabel(bool starred) => starred ? "已 Star" : "Star";
+    public static LocMessage StarLabel(bool starred)
+        => LocMessage.Of(starred ? "card.star.label.starred" : "card.star.label.unstarred");
 
     /// <summary>
-    /// Star 的 tooltip：把"点下去会发生什么"说全，包括"已 Star 是本地已同步列表的判定，
-    /// 刚在网页上 star 的要等下次同步才认得"——这句不写，用户会把界面当成不准确的实时状态。
+    /// Star 的 tooltip：把"点下去会发生什么"说全，包括"已 Star 是<b>本机已同步列表</b>的判定，
+    /// 刚在网页上 star 的要等下次同步才认得"——这句不写，用户会把界面当成实时的。
+    /// <para><b>三层各归各的键</b>（批次 WI-67 片4）：外层骨架那颗带着<b>还没取词的</b>两颗实参——
+    /// 状态那半句（<c>card.star.tip.starred</c>／<c>.unstarred</c>）与那颗可选的 Token 提醒。
+    /// ⛔ 在这里拼字符串：那正是 P-196 一路在追的形状（外层重贴、内层钉在造串那一刻）。
+    /// "没话要说"交 <c>null</c>，分隔符写在<b>那一列自己</b>那句的开头（与 <c>settings.data.backup.clipRowsMissing</c> 同一口径）。</para>
     /// </summary>
-    public static string StarTip(bool starred, bool hasToken)
-        => (starred ? "已在你的 Star 列表中，点击取消 Star" : "Star 这个仓库（需 GitHub Token）")
-           + (hasToken ? string.Empty : "；当前未配置 Token，点击会提示失败")
-           + "。判定取自本机已同步的 Star 列表，网页上刚 Star 的要等下次同步才显示。";
+    public static LocMessage StarTip(bool starred, bool hasToken)
+        => LocMessage.Of("card.star.tip",
+               LocMessage.Of(starred ? "card.star.tip.starred" : "card.star.tip.unstarred"),
+               hasToken ? null : LocMessage.Of("card.star.tip.tokenNote"));
 
     /// <summary>
     /// 是否提供「复制图片」（把位图数据放进剪贴板，区别于"复制的是文字/路径"那一颗）。
@@ -210,11 +218,13 @@ public static class ItemCardPolicy
     public static bool ShowsTimeAndStarsLines(bool isTrendingRepo, bool isRssCandidate = false)
         => !isTrendingRepo && !isRssCandidate;
 
-    public static string CollectLabel(bool collected) => collected ? "移出收藏" : "收进收藏";
-    public static string CollectTip(bool collected)
-        => collected
-            ? "已在本机收藏（书签）里，点击移除；不会动 GitHub 的 Star 状态"
-            : "把它作为书签存进本机收藏；不会动 GitHub 的 Star 状态";
+    public static LocMessage CollectLabel(bool collected)
+        => LocMessage.Of(collected ? "card.collect.label.collected" : "card.collect.label.uncollected");
+
+    /// <summary>「收进收藏／移出收藏」那两句说明：落点（本机书签）与<b>不动的东西</b>（GitHub 的 Star）都得说全，
+    /// 否则用户会以为点这颗把自己在网页上的 Star 也撤了。</summary>
+    public static LocMessage CollectTip(bool collected)
+        => LocMessage.Of(collected ? "card.collect.tip.collected" : "card.collect.tip.uncollected");
 
     /// <summary>
     /// 「贴到桌面」的摆放判据（ClipIMG-P3 的纯函数半格）。

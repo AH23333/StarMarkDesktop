@@ -941,6 +941,25 @@ public static class UiStrings
         new Entry("clip.miss.banner", "图片{0}（条目仍保留，可直接删掉这一条；这一张复制不回去）", "{0} — the entry stays and you can delete this row, but this picture cannot be copied back.", "{0}（項目は残っています。この行は削除できますが、この画像はコピーし戻せません）"),
         new Entry("card.missRow", "本机的这个{0}（{1}），打开没有东西可开——条目还留在库里，可以删掉这一行", "{0} — this local entry cannot be opened ({1}). The record stays in your library; you can delete this row.", "{0}（{1}）— 開ける対象がありません。記録はライブラリに残っており、この行を削除できます。"),
         new Entry("card.pinImage.missing", "贴到桌面（这张图的{0}）", "Pin to desktop — {0}", "デスクトップへ貼り付け — {0}"),
+        // 「卡片上那两颗动作按钮怎么说」一族（批次 WI-67 片4，发起人 2026-10-13 逐行报障里的「收进收藏」「收藏到文件夹」）。
+        // ⚠ 措辞逐字照搬本批之前 <c>ItemCardPolicy</c> 里的那几句（改的只是"住在哪儿"）；表外那份抄写由
+        //   <c>EnglishLeftoverGateTests.TheCardActionWordsHaveOneHomeEach</c> 钉成 0 处。
+        // 骨架那颗 <c>card.star.tip</c> 的 {1} 槽"没话要说"时交 null（与 <c>settings.data.backup.clipRowsMissing</c>
+        // 同一形状：分隔符写在<b>那一列自己</b>那句的开头，⛔ 在 C# 里拼「；」）。
+        new Entry("card.star.label.starred", "已 Star", "Starred", "スター済み"),
+        new Entry("card.star.label.unstarred", "Star", "Star", "スター"),
+        new Entry("card.star.tip", "{0}{1}。判定取自本机已同步的 Star 列表，网页上刚 Star 的要等下次同步才显示。", "{0}{1}. The status comes from the Star list already synced on this machine; a star you added on the web shows up after the next sync.", "{0}{1}。判定は本機に同期済みの Star リストに基づきます。Web でスターしたばかりの項目は次回同期後に反映されます。"),
+        new Entry("card.star.tip.starred", "已在你的 Star 列表中，点击取消 Star", "It's already in your Star list; click to unstar", "あなたの Star リストにあります。クリックで解除します"),
+        new Entry("card.star.tip.unstarred", "Star 这个仓库（需 GitHub Token）", "Star this repository (needs a GitHub token)", "このリポジトリをスターします（GitHub Token が必要）"),
+        new Entry("card.star.tip.tokenNote", "；当前未配置 Token，点击会提示失败", "; no token is configured yet, so clicking will report a failure", "；Token が未設定のため、クリックすると失敗を知らせます"),
+        new Entry("card.collect.label.collected", "移出收藏", "Remove bookmark", "ブックマークから削除"),
+        new Entry("card.collect.label.uncollected", "收进收藏", "Save bookmark", "ブックマークに保存"),
+        new Entry("card.collect.tip.collected", "已在本机收藏（书签）里，点击移除；不会动 GitHub 的 Star 状态", "It's already in your local bookmarks; clicking removes it. This never touches your GitHub stars.", "本機のお気に入り（ブックマーク）にあります。クリックで削除しますが、GitHub の Star には触れません。"),
+        new Entry("card.collect.tip.uncollected", "把它作为书签存进本机收藏；不会动 GitHub 的 Star 状态", "Stores it in your local bookmarks. This never touches your GitHub stars.", "ブックマークとして本機のお気に入りに保存します。GitHub の Star には触れません。"),
+        new Entry("card.rssCollect.label.collected", "已收藏", "Saved", "保存済み"),
+        new Entry("card.rssCollect.label.uncollected", "收藏到文件夹", "Save to folder", "フォルダーに保存"),
+        new Entry("card.rssCollect.tip.collected", "已经在「{0}」里了。要移除请到资料库对应那一行", "It's already in “{0}”. To remove it, use that row in the library.", "すでに「{0}」にあります。削除するにはライブラリの該当行を使ってください。"),
+        new Entry("card.rssCollect.tip.uncollected", "作为书签存进本机，并放进「{0}」（第一次收藏这个源时会建出这一层文件夹）", "Saves it as a local bookmark inside “{0}” (the first save from this source creates that folder).", "ブックマークとして本機に保存し、「{0}」に入れます（この源で初めて保存するとそのフォルダーが出来上がります）。"),
         // 「剪贴板历史页」状态行与空态（批次 WI-30，P-172 该行兑现）：状态行的话在动作那一刻现取＝当前语言；
         // 暂停那颗是 ToggleButton 绑定（只拿 bool，提示语走 code-behind 写状态行——挂键会成双主人，#276 口径）。
         new Entry("clip.empty.off", "剪贴板历史未开启：到「设置 → 数据 → 剪贴板历史」打开后，复制过的内容会自动出现在这里。", "Clipboard history is off. Turn it on under Settings → Data → Clipboard history, and anything you copy will show up here.", "クリップボード履歴はオフです。「設定 → データ → クリップボード履歴」でオンにすると、コピーした内容がここに自動表示されます。"),

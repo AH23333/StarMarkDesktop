@@ -196,10 +196,18 @@ public partial class ItemCardViewModel : ObservableObject
     public bool IsStarred => _isStarred;
     public bool IsCollected => _isCollected;
     public string StarGlyph => ItemCardPolicy.StarGlyph(_isStarred);
-    public string StarLabel => ItemCardPolicy.StarLabel(_isStarred);
-    public string StarTip => ItemCardPolicy.StarTip(_isStarred, _hasToken);
-    public string CollectLabel => ItemCardPolicy.CollectLabelFor(IsRssCandidate, _isCollected);
-    public string CollectTip => ItemCardPolicy.CollectTipFor(IsRssCandidate, _isCollected, RssFolderPath);
+
+    /// <summary>那四颗按钮字：<b>措辞只住表里</b>，这里交出的是「键＋实参」，字由 getter 现取（批次 WI-67 片4）。
+    /// <para>与上面 <see cref="OpenMenuText"/> 同一口径：卡片住在绑定行里，换语言那一刻⛔ 回来重念这一格
+    /// （<c>SettingsPage.I18n.cs</c> 卷首那句"已铺出的树不追改，重进页现取"），但<b>念的是当前语言</b>——
+    /// 本批之前这几句是 Abstractions 里写死的中文，英文界面上就是屏幕上的一行汉字（发起人逐行报障那两颗）。</para></summary>
+    public string StarLabel => ItemCardPolicy.StarLabel(_isStarred).Render();
+
+    public string StarTip => ItemCardPolicy.StarTip(_isStarred, _hasToken).Render();
+
+    public string CollectLabel => ItemCardPolicy.CollectLabelFor(IsRssCandidate, _isCollected).Render();
+
+    public string CollectTip => ItemCardPolicy.CollectTipFor(IsRssCandidate, _isCollected, RssFolderPath).Render();
 
     /// <summary>RSS 候选收藏后的落点（"RSS订阅 / 源名"）。<b>取自这一行自带的 ExtraJson</b>，
     /// 不另算一遍：提示里说的文件夹与真正写进去的文件夹必须是同一个来源，否则 tooltip 会指一个不存在的路径。</summary>
