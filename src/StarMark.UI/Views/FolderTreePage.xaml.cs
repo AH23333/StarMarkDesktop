@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Text;
 using Microsoft.UI;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.UI.Controls;
 using StarMark.UI.Helpers;
 using StarMark.UI.ViewModels;
@@ -190,7 +191,7 @@ public sealed partial class FolderTreePage : Page
                     };
                     body.Children.Add(expandBtn);
                 }
-                expandBtn.Content = $"展开更多（剩余 {remaining} 条）";
+                LocText.SetMessage(expandBtn, LocMessage.Of("common.expandMore", remaining));
             }
             else if (expandBtn != null)
             {

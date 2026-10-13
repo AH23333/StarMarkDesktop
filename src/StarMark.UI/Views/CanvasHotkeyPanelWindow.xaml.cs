@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Capture;
 using StarMark.Core.Hotkeys;
 using StarMark.UI.Helpers;
@@ -38,6 +39,10 @@ public sealed partial class CanvasHotkeyPanelWindow : Window
     public CanvasHotkeyPanelWindow()
     {
         InitializeComponent();
+        // 抬头那句里嵌着「屏幕画布」那颗名字，而那颗名字自己也是颗键 ⇒ 实参交没渲染的 LocMessage，
+        // 贴上去那一刻（含换语言重贴那一次）才取词。
+        LocText.SetMessage(PanelTitle, LocMessage.Of("canvas.hotkey.title", LocMessage.Of("settings.extend.canvasTitle")));
+        LocText.SetMessage(WhereToChange, LocMessage.Of("canvas.hotkey.whereToChange", LocMessage.Of("settings.extend.canvasTitle")));
         WindowInterop.RemoveDefaultWindowFrame(this);
         Grip.PointerPressed += GripPressed;
         Grip.PointerMoved += GripMoved;

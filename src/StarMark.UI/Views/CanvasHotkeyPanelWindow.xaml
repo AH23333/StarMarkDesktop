@@ -2,7 +2,8 @@
 <Window
     x:Class="StarMark.UI.Views.CanvasHotkeyPanelWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:i18n="using:StarMark.UI.Helpers">
 
     <!--
         画布的快捷键面板（发起人 2026-09-26 点名要的兜底）："防止用户忘记快捷键，可以随时打开查看"。
@@ -14,21 +15,20 @@
             <StackPanel Orientation="Horizontal" Spacing="6">
                 <!-- 拖动落点：面板挡住笔迹时可以挪开（工具条那颗 ⌨ 再点一次也能收） -->
                 <Border x:Name="Grip" Width="22" Height="22" Background="#33FFFFFF"
-                        VerticalAlignment="Center" ToolTipService.ToolTip="拖动移动这块面板">
+                        VerticalAlignment="Center" i18n:LocText.ToolTipKey="canvas.hotkey.dragTip">
                     <TextBlock Text="⋮⋮" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
-                <TextBlock Text="屏幕画布 · 快捷键" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <TextBlock x:Name="PanelTitle" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 <Button x:Name="CloseButton" Content="✕" Click="Close_Click" Padding="8,2" MinWidth="0"
-                        VerticalAlignment="Center" ToolTipService.ToolTip="收起这块面板（画布继续开着）"/>
+                        VerticalAlignment="Center" i18n:LocText.ToolTipKey="canvas.hotkey.closeTip"/>
             </StackPanel>
             <Border Height="1" Background="#33FFFFFF"/>
             <!-- 行距 4：12px 的字挤在 1 的间距上就是"全部糊成一坨"（发起人点名的另一半症状） -->
             <StackPanel x:Name="Rows" Spacing="4"/>
             <Border Height="1" Background="#33FFFFFF"/>
             <TextBlock x:Name="MouseExits" FontSize="11.5" Foreground="#BFFFFFFF" TextWrapping="Wrap"
-                       Text="不用键盘的三条出口：画布上右键＝把鼠标交还给下面的应用；荧光笔按住才画、松开即透；穿透态下按住 Ctrl+Alt 拖动＝直接圈画。"/>
-            <TextBlock x:Name="WhereToChange" FontSize="11.5" Foreground="#8FFFFFFF" TextWrapping="Wrap"
-                       Text="想改键位：主窗口 → 设置 → 快捷键 →「屏幕画布」分组（这里显示的就是那边当前绑的键）。"/>
+                       i18n:LocText.Key="canvas.hotkey.mouseExits"/>
+            <TextBlock x:Name="WhereToChange" FontSize="11.5" Foreground="#8FFFFFFF" TextWrapping="Wrap"/>
         </StackPanel>
     </Grid>
 </Window>

@@ -4,8 +4,10 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Text;
 using StarMark.Integrations.Clipboard;
+using StarMark.UI.Helpers;
 using StarMark.UI.ViewModels;
 using Windows.Storage;
 using Windows.Storage.Streams;
@@ -115,7 +117,7 @@ public sealed partial class PreviewHost : UserControl
                 // 不猜、不把路径当正文糊上去，直接说明并交回系统关联程序。
                 ShowFallback(Path.GetFileName(path),
                     $"暂不支持该格式文件预览{(string.IsNullOrEmpty(ext) ? "（无扩展名）" : $"（{ext}）")}",
-                    true, "用默认程序打开");
+                    true, LocMessage.Of("preview.open.local"));
                 return;
             }
 
@@ -164,7 +166,7 @@ public sealed partial class PreviewHost : UserControl
         }
         catch
         {
-            ShowFallback(Path.GetFileName(path), "图片解码失败", true, "用默认程序打开");
+            ShowFallback(Path.GetFileName(path), "图片解码失败", true, LocMessage.Of("preview.open.local"));
         }
     }
 
@@ -176,7 +178,7 @@ public sealed partial class PreviewHost : UserControl
             var doc = await Windows.Data.Pdf.PdfDocument.LoadFromFileAsync(file);
             if (doc.PageCount == 0)
             {
-                ShowFallback(Path.GetFileName(path), "PDF 没有可渲染的页面", true, "用默认程序打开");
+                ShowFallback(Path.GetFileName(path), "PDF 没有可渲染的页面", true, LocMessage.Of("preview.open.local"));
                 return;
             }
 
@@ -192,7 +194,7 @@ public sealed partial class PreviewHost : UserControl
         }
         catch (Exception ex)
         {
-            ShowFallback(Path.GetFileName(path), $"PDF 渲染失败: {ex.Message}", true, "用默认程序打开");
+            ShowFallback(Path.GetFileName(path), $"PDF 渲染失败: {ex.Message}", true, LocMessage.Of("preview.open.local"));
         }
     }
 
@@ -214,7 +216,7 @@ public sealed partial class PreviewHost : UserControl
             if (!ReferenceEquals(_player, player)) return;   // 已被新一次渲染取代
             ReleasePlayer();
             ShowFallback(Path.GetFileName(path),
-                $"{kind}无法在此播放（{args.ErrorMessage}）", true, "用默认程序打开");
+                $"{kind}无法在此播放（{args.ErrorMessage}）", true, LocMessage.Of("preview.open.local"));
         });
         _player = player;
         MediaPreview.SetMediaPlayer(player);
@@ -251,7 +253,7 @@ public sealed partial class PreviewHost : UserControl
         }
         catch
         {
-            ShowFallback(Path.GetFileName(path), "压缩包无法读取（可能已加密或损坏）", true, "用默认程序打开");
+            ShowFallback(Path.GetFileName(path), "压缩包无法读取（可能已加密或损坏）", true, LocMessage.Of("preview.open.local"));
         }
     }
 
@@ -283,11 +285,11 @@ public sealed partial class PreviewHost : UserControl
         FallbackTitle.Text = FirstNonEmpty(vm.Title, vm.Uri) ?? vm.Uri;
         FallbackDetail.Text = vm.Uri;
         OpenButton.Visibility = Visibility.Visible;
-        OpenButton.Content = "在浏览器中打开";
+        LocText.SetMessage(OpenButton, LocMessage.Of("preview.open.browser"));
     }
 
-    /// <param name="openText">主按钮文案；省略时按 uri 是网页还是本地文件自动选「在浏览器中打开」/「用默认程序打开」。</param>
-    private void ShowFallback(string title, string detail, bool showOpen, string? openText = null)
+    /// <param name="openText">主按钮文案；省略时按 uri 是网页还是本地文件自动选「在浏览器中打开」/「用默认程序打开」那两颗键。</param>
+    private void ShowFallback(string title, string detail, bool showOpen, LocMessage? openText = null)
     {
         FallbackPanel.Visibility = Visibility.Visible;
         FallbackTitle.Text = title;
@@ -297,7 +299,8 @@ public sealed partial class PreviewHost : UserControl
         var isWeb = _viewModel?.Uri is { } u
             && (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
                 || u.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
-        OpenButton.Content = openText ?? (isWeb ? "在浏览器中打开" : "用默认程序打开");
+        // 交出去的是「键＋实参」，念词落在 SetMessage 那一拍：调用方给的那句优先，省略时按网页/本机文件选一颗。
+        LocText.SetMessage(OpenButton, openText ?? LocMessage.Of(isWeb ? "preview.open.browser" : "preview.open.local"));
     }
 
     private static string? FirstNonEmpty(params string?[] values)

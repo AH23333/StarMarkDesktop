@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using StarMark.Abstractions.I18n;
 using StarMark.UI.Controls;
 using StarMark.UI.Helpers;
 using StarMark.UI.ViewModels;
@@ -169,7 +170,7 @@ public sealed partial class RssPage : Page
                 return;
             }
             moreButton ??= NewMoreButton();
-            moreButton.Content = $"展开更多（剩余 {remaining} 条）";
+            LocText.SetMessage(moreButton, LocMessage.Of("common.expandMore", remaining));
             if (!body.Children.Contains(moreButton)) body.Children.Add(moreButton);
         }
 

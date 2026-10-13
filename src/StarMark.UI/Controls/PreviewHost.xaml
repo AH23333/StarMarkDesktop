@@ -35,7 +35,7 @@
             <TextBlock x:Name="FallbackDetail" FontSize="12"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                        TextWrapping="Wrap"/>
-            <Button x:Name="OpenButton" Click="Open_Click" Content="用默认程序打开"/>
+            <Button x:Name="OpenButton" Click="Open_Click"/>
         </StackPanel>
 
         <!-- 加载状态 -->
