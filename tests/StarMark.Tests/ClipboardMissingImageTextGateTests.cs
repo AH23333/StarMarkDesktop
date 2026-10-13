@@ -67,6 +67,36 @@ public sealed class ClipboardMissingImageTextGateTests
         Assert.Equal(1, Count(policy, "DescribeMissingImageBanner()"));              // 那一格那句
     }
 
+    /// <summary>
+    /// ✅WI-65 片5a（P-194 那一族的第五刀第一颗）：这四颗政策句交的是<b>键＋实参</b>，政策层自己⛔ 再念一遍。
+    /// <para>⚠ 这一格数的⛔ 是"合数掉了多少"（那是 <c>spoken_65.py</c> 那把尺的活），它钉的是<b>形状</b>：
+    /// <c>Locale.T(</c>／<c>Locale.Fmt(</c> 在这两档的代码里一颗都不许留，而那颗 <c>{0}</c> 槽里放的必须是
+    /// <c>LocMessage</c>（逐字与"槽里交键"两条真测在 <see cref="ClipboardMissingImageTextTests"/>）。</para>
+    /// <para>⚠ 取词落在<b>宿主那一拍</b>：读取侧那两处 <c>.Render()</c> 也钉在这里——那一条载体
+    /// （<c>ClipboardImageStore</c> 的 reason）同一口气里还装着四句没进表的裸中文（那是 P-192 的账），
+    /// 把它整个换成 <c>LocMessage</c> ＝把另一票的账拖进这一刀＝半搬，所以本批只换到"话由谁决定"为止。</para>
+    /// </summary>
+    [Fact]
+    public void ThePolicyLayerHandsOutKeysWhileTheHostsDoTheReading()
+    {
+        var policy = Code(ReadRepoFile(Policy));
+        Assert.Equal(0, Count(policy, "Locale.T(") + Count(policy, "Locale.Fmt("));
+        Assert.Equal(3, Count(policy, "LocMessage.Of(\"clip.miss."));                 // 事实＋那两句宿主话
+        Assert.Equal(1, Count(policy, "LocMessage.Of(\"clip.miss.clause\")"));         // 那颗事实自己也只在一处成串
+        Assert.Equal(2, Count(policy, ", MissingFileClause)"));                       // 另外两句把它当 {0} 槽递出去
+
+        var cardPolicy = Code(ReadRepoFile("src/StarMark.Abstractions/ItemCardPolicy.cs"));
+        Assert.Equal(0, Count(cardPolicy, "Locale.T(") + Count(cardPolicy, "Locale.Fmt("));
+        Assert.Equal(1, Count(cardPolicy, "LocMessage.Of(\"card.missRow\""));
+
+        // 宿主侧：读取那两处当场念完再交出（载体还是字符串，理由见上一段），卡片与状态行那两处在 UI 念
+        Assert.Equal(2, Count(Code(ReadRepoFile(Store)), "ClipboardPolicy.MissingFileClause.Render()"));
+        Assert.Contains("ClipboardPolicy.DescribeMissingImageForReuse().Render()",
+            Code(ReadRepoFile(PageVm)), StringComparison.Ordinal);
+        Assert.Contains("ClipboardPolicy.DescribeMissingImageBanner().Render()",
+            Code(ReadRepoFile(CardVm)), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void EveryOutletAsksThePolicyFromInsideItsOwnMethod()
     {

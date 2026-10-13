@@ -119,7 +119,11 @@ public sealed class StaleFileRowGateTests
     {
         Assert.Contains("ItemCardPolicy.MissingRowMessage", Code(ReadRepoFile(Launcher)), StringComparison.Ordinal);
         // 参数改名（批次 VR：递进去的是给人看的那条路径，不是库里的 uri 原文）——锚点跟着走，判据不变
-        Assert.Contains("public static string MissingRowMessage(string shownPath)", Code(ReadRepoFile(Policy)), StringComparison.Ordinal);
+        // ✅WI-65 片5a：这颗工厂从 string 改成交「键＋实参」（{0} 槽里塞的不再是念完的半句），锚点跟着换型
+        Assert.Contains("public static StarMark.Abstractions.I18n.LocMessage MissingRowMessage(string shownPath)",
+            Code(ReadRepoFile(Policy)), StringComparison.Ordinal);
+        // 宿主递出去之前才取词（⛔ 让 Abstractions 念完再穿过 UI 的返回值）——针整条写到 .Render() 那一颗
+        Assert.Contains("DisplayPath(uri, ExistsOnDisk)).Render())", Code(ReadRepoFile(Launcher)), StringComparison.Ordinal);
         // 那句话的"事实"半截仍归 ClipboardPolicy 那颗唯一出处；宿主侧不许另写一份由 G_ARM 那格钉
         Assert.Contains("MissingFileClause", Code(ReadRepoFile(Policy)), StringComparison.Ordinal);
     }
