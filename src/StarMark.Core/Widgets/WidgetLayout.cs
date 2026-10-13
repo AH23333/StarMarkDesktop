@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Serialization;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Widgets;
 
@@ -72,9 +73,14 @@ public sealed class WidgetLayout
 
     public List<WidgetLayoutEntry> Entries { get; set; } = new();
 
-    /// <summary>布局摘要（设置页列表展示用），如「4 个组件」。</summary>
+    /// <summary>
+    /// 布局摘要（设置页列表与组件右键菜单展示用）。这颗是<b>每次现算的展示值</b>（<c>[JsonIgnore]</c>⛔ 落库），
+    /// 所以交「键＋实参」＝换语言即换字；⛔ 在这里拼成品字（批次 WI-67 片5，P-193 那一族收官）。
+    /// </summary>
     [JsonIgnore]
-    public string Summary => Entries.Count == 0 ? "空布局" : $"{Entries.Count} 个组件";
+    public LocMessage Summary => Entries.Count == 0
+        ? LocMessage.Of("widget.layout.summaryEmpty")
+        : LocMessage.Of("widget.layout.summaryCount", Entries.Count.ToString());
 }
 
 /// <summary>布局集合的纯逻辑工具（去重命名、规范排序），便于单元测试。</summary>

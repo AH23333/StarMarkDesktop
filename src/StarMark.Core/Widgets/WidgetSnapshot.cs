@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Serialization;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Widgets;
 
@@ -112,16 +113,22 @@ public sealed class WidgetSnapshot
     public long CreatedAt { get; set; }
     public List<WidgetSnapshotEntry> Entries { get; set; } = new();
 
-    /// <summary>快照摘要（列表展示用）：组件数 / 待办·随记条数 / 快捷入口数。</summary>
+    /// <summary>
+    /// 快照摘要（组件数 / 待办·随记条数 / 快捷入口数）。与 <c>WidgetLayout.Summary</c> 同一口径：
+    /// <b>每次现算的展示值</b>、⛔ 落库 ⇒ 交「键＋实参」，⛔ 在这里拼成品字（批次 WI-67 片5）。
+    /// </summary>
     [JsonIgnore]
-    public string Summary
+    public LocMessage Summary
     {
         get
         {
             var widgets = Entries.Count;
             var local = Entries.Sum(e => e.LocalItems.Count);
             var links = Entries.Sum(e => e.Links.Count);
-            return widgets == 0 ? "空快照" : $"{widgets} 个组件 · {local} 条待办/随记 · {links} 个入口";
+            return widgets == 0
+                ? LocMessage.Of("widget.snapshot.summaryEmpty")
+                : LocMessage.Of("widget.snapshot.summaryBody",
+                    widgets.ToString(), local.ToString(), links.ToString());
         }
     }
 }

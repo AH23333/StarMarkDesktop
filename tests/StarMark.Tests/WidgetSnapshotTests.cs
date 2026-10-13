@@ -161,8 +161,8 @@ public sealed class WidgetSnapshotTests : IDisposable
                 },
             },
         };
-        Assert.Equal("2 个组件 · 2 条待办/随记 · 2 个入口", snap.Summary);
-        Assert.Equal("空快照", new WidgetSnapshot().Summary);
+        Assert.Equal("2 个组件 · 2 条待办/随记 · 2 个入口", snap.Summary.Render());
+        Assert.Equal("空快照", new WidgetSnapshot().Summary.Render());
     }
 
     /// <summary>
@@ -197,7 +197,29 @@ public sealed class WidgetSnapshotTests : IDisposable
         };
 
         // widgets=2、local=5、links=3 —— 三插槽互异，任何跨插槽对调 / Σ→单条目退化都会改变输出串。
-        Assert.Equal("2 个组件 · 5 条待办/随记 · 3 个入口", snap.Summary);
+        Assert.Equal("2 个组件 · 5 条待办/随记 · 3 个入口", snap.Summary.Render());
+    }
+
+    /// <summary>WI-67 片5：快照那颗出口同样交「键＋三颗裸实参」。与 DX 那几格同一条轴（三颗计数各钉其源投影），
+    /// 只是本格⛔ 比字符串而<b>比键与实参数组</b> ⇒ 换成先拼成品串、或把三颗数并成一颗，都当场红。</summary>
+    [Fact]
+    public void Summary_HandsKeyAndThreeBareArgs()
+    {
+        Assert.Equal("widget.snapshot.summaryEmpty", new WidgetSnapshot().Summary.Key);
+
+        var snap = new WidgetSnapshot
+        {
+            Entries =
+            {
+                new WidgetSnapshotEntry
+                {
+                    Links = { new LinkItem(), new LinkItem(), new LinkItem() },
+                    LocalItems = { new SnapshotLocalItem(), new SnapshotLocalItem() },
+                },
+            },
+        };
+        Assert.Equal("widget.snapshot.summaryBody", snap.Summary.Key);
+        Assert.Equal(new object?[] { "1", "2", "3" }, snap.Summary.Args);
     }
 
     [Fact]
@@ -288,7 +310,7 @@ public sealed class WidgetSnapshotTests : IDisposable
         Assert.Empty(e.Links);
         Assert.NotNull(e.LocalItems);
         Assert.Empty(e.LocalItems);
-        Assert.Contains("1 个组件", snap.Summary);
+        Assert.Contains("1 个组件", snap.Summary.Render());
     }
 
     // ───────── DM：Normalize 的两处「从未被进入」输出分支——同刻名序平局臂 + 空名兜底真支 ─────────

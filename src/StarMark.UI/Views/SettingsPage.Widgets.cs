@@ -173,7 +173,7 @@ public sealed partial class SettingsPage
         LayoutRowsItems.Clear();
         if (WidgetManager() is { } mgr)
             foreach (var l in mgr.GetLayouts())
-                LayoutRowsItems.Add(new WidgetLayoutRow { Id = l.Id, Name = l.Name, Summary = l.Summary });
+                LayoutRowsItems.Add(new WidgetLayoutRow { Id = l.Id, Name = l.Name, Summary = l.Summary.Render() });
         RaisePropertyChanged(nameof(HasNoLayouts));
     }
 

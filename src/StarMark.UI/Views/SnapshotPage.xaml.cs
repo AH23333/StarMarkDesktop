@@ -76,7 +76,7 @@ public sealed partial class SnapshotPage : Page, INotifyPropertyChanged
                 {
                     Id = s.Id,
                     Name = s.Name,
-                    Meta = $"{s.Summary} · {FormatTime(s.CreatedAt)}",
+                    Meta = $"{s.Summary.Render()} · {FormatTime(s.CreatedAt)}",
                 });
         }
         RaisePropertyChanged(nameof(HasNoSnapshots));

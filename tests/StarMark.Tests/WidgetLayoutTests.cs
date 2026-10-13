@@ -81,7 +81,7 @@ public sealed class WidgetLayoutTests
 
         Assert.Single(result);
         Assert.False(string.IsNullOrWhiteSpace(result[0].Id));
-        Assert.Equal("空布局", result[0].Summary);
+        Assert.Equal("空布局", result[0].Summary.Render());
     }
 
     [Fact]
@@ -155,7 +155,7 @@ public sealed class WidgetLayoutTests
         var result = WidgetLayoutCollection.Normalize(new List<WidgetLayout> { new() { Name = "兜底", Entries = null! } });
 
         Assert.Empty(result[0].Entries);
-        Assert.Equal("空布局", result[0].Summary);
+        Assert.Equal("空布局", result[0].Summary.Render());
     }
 
     /// <summary>:95 <c>Where(e =&gt; e is not null)</c>——Entries 数组含 null 元素时须在 OrderBy 前剔除（否则 <c>e.Kind</c> 排序 NRE），有效条目仍按 Kind→Index 落位。</summary>
@@ -199,7 +199,19 @@ public sealed class WidgetLayoutTests
         for (var i = 0; i < entryCount; i++)
             layout.Entries.Add(new WidgetLayoutEntry { Kind = WidgetKind.Todo, Index = i });
 
-        Assert.Equal(expected, layout.Summary);
+        Assert.Equal(expected, layout.Summary.Render());
+    }
+
+    /// <summary>WI-67 片5（P-193 那一族收官两颗之一）：这颗出口交的是<b>「键＋裸实参」</b>，⛔ 在 Core 里拼成中文成品串。
+    /// 上面的 Theory 钉渲染结果，本格钉<b>键名与实参形状</b>——把 Core 改回 <c>$"{Count} 个组件"</c> 当场红。</summary>
+    [Fact]
+    public void Summary_HandsKeyAndBareArgs()
+    {
+        Assert.Equal("widget.layout.summaryEmpty", new WidgetLayout().Summary.Key);
+
+        var two = new WidgetLayout { Name = "L", Entries = { new WidgetLayoutEntry(), new WidgetLayoutEntry() } };
+        Assert.Equal("widget.layout.summaryCount", two.Summary.Key);
+        Assert.Equal(new object?[] { "2" }, two.Summary.Args);
     }
 
     [Fact]

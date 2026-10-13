@@ -45,7 +45,7 @@ public sealed class EnglishLeftoverGateTests : IDisposable
     private const string CardPolicy = "src/StarMark.Abstractions/ItemCardPolicy.cs";
     private const string CardVm = "src/StarMark.UI/ViewModels/ItemCardViewModel.cs";
 
-    /// <summary>本批这几片改交键的那 35 颗（片1 十二颗＋片3 九颗＋片4 十四颗；颗数＝<c>bin/WI67/keys_67d.txt</c> 那把差集尺对过，
+    /// <summary>本批这几片改交键的那 39 颗（片1 十二颗＋片3 九颗＋片4 十四颗＋片5 四颗；颗数＝<c>bin/WI67/keys_67d.txt</c> 那把差集尺对过，
     /// 名单长度＝同一颗尺逐颗数出来的数组元素数）。一颗都得有人在表里问，⛔ 留一颗没人念的死键进表。</summary>
     private static readonly string[] Keys =
     {
@@ -65,6 +65,9 @@ public sealed class EnglishLeftoverGateTests : IDisposable
         "card.collect.tip.collected", "card.collect.tip.uncollected",
         "card.rssCollect.label.collected", "card.rssCollect.label.uncollected",
         "card.rssCollect.tip.collected", "card.rssCollect.tip.uncollected",
+        // 批次 WI-67 片5（布局／快照那两颗「每次现算的摘要」交表：问的人在 Core，⛔ 在 Core 里拼成品串）。
+        "widget.layout.summaryEmpty", "widget.layout.summaryCount",
+        "widget.snapshot.summaryEmpty", "widget.snapshot.summaryBody",
     };
 
     private static readonly Regex CjkInAttribute = new("(?<=[\"'])[^\"']*?[㐀-鿿]", RegexOptions.CultureInvariant);

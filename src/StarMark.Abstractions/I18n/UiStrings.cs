@@ -2287,6 +2287,14 @@ public static class UiStrings
         new Entry("widget.menu.applyLayout", "应用布局", "Apply layout", "レイアウトを適用"),
         // 布局与快照那两行列的是"名字（摘要）"——两处同一形状，⛔ 各写一行迟早只改一处。
         new Entry("widget.menu.nameWithSummary", "{0}（{1}）", "{0} ({1})", "{0}（{1}）"),
+        // 这两颗出口住在 Core（WidgetLayout／WidgetSnapshot.Summary），是「每次现算的展示值」⛔ 落库 ⇒ 交「键＋实参」就够：
+        // 组件右键菜单与设置页/快照页那几处每次重建时按当时语言念（批次 WI-67 片5，P-193 那一族的收官两颗）。
+        new Entry("widget.layout.summaryEmpty", "空布局", "Empty layout", "空のレイアウト"),
+        new Entry("widget.layout.summaryCount", "{0} 个组件", "{0} widgets", "{0} 個のウィジェット"),
+        new Entry("widget.snapshot.summaryEmpty", "空快照", "Empty snapshot", "空のスナップショット"),
+        new Entry("widget.snapshot.summaryBody", "{0} 个组件 · {1} 条待办/随记 · {2} 个入口",
+            "{0} widgets · {1} to-dos/notes · {2} quick links",
+            "{0} 個のウィジェット · {1} 件の待办・メモ · {2} 件のショートカット"),
         new Entry("widget.menu.saveSnapshot", "保存当前布局与数据…", "Save layout & data…", "レイアウトとデータを保存…"),
         new Entry("widget.menu.applySnapshot", "应用快照", "Apply snapshot", "スナップショットを適用"),
         new Entry("widget.menu.applyFailed", "未能应用快照", "Couldn’t apply the snapshot", "スナップショットを適用できませんでした"),
