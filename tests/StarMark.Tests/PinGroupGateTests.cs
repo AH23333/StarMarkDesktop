@@ -102,9 +102,9 @@ public sealed class PinGroupGateTests
         Assert.DoesNotContain("CloseAll()", run);
 
         // 而"全部"那三条不许反过来被组命令改写：范围只由调用点决定
-        // （批次 WI-46c：那颗范围名交表 ⇒ 锚点跟着改锚，钉的仍是"调用点自己报名字"这件事）
+        // （批次 WI-46c 那颗范围名交表、WI-65 片5b 改成交「键」⇒ 锚点跟着改锚，钉的仍是"调用点自己报名字"这件事）
         var toggleHidden = SourceGate.Between(pins, "public static void ToggleHidden()", "public static void ToggleClickThrough()");
-        Assert.Contains("ApplyHiddenTo(Pins, PinGrouping.NextHidden(AreHidden), Locale.T(\"pin.card.scopeAll\"))", toggleHidden);
+        Assert.Contains("ApplyHiddenTo(Pins, PinGrouping.NextHidden(AreHidden), LocMessage.Of(\"pin.card.scopeAll\"))", toggleHidden);
     }
 
     /// <summary>

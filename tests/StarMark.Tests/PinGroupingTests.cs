@@ -30,7 +30,7 @@ public sealed class PinGroupingTests
     [InlineData(false, "隐藏这一组", true)]
     public void TheHideWordingAndTheHideDirectionAgree(bool allHidden, string expectedLabel, bool expectedNext)
     {
-        Assert.Equal(expectedLabel, PinGrouping.HideLabel(allHidden));
+        Assert.Equal(expectedLabel, PinGrouping.HideLabel(allHidden).Render());
         Assert.Equal(expectedNext, PinGrouping.NextHidden(allHidden));
     }
 
@@ -39,7 +39,7 @@ public sealed class PinGroupingTests
     [InlineData(false, "这组忽略鼠标", true)]
     public void TheThroughWordingAndTheThroughDirectionAgree(bool allThrough, string expectedLabel, bool expectedNext)
     {
-        Assert.Equal(expectedLabel, PinGrouping.ThroughLabel(allThrough));
+        Assert.Equal(expectedLabel, PinGrouping.ThroughLabel(allThrough).Render());
         Assert.Equal(expectedNext, PinGrouping.NextThrough(allThrough));
     }
 
@@ -88,12 +88,14 @@ public sealed class PinGroupingTests
     [Fact]
     public void NamesNeverReuseAndLabelsAlwaysCarryTheCount()
     {
-        Assert.Equal("组 1", PinGrouping.NameOf(1));
-        Assert.Equal("组 12", PinGrouping.NameOf(12));        // 序号只增不复用：删掉「组 1」不会再来一个「组 1」
-        Assert.Equal("组 2（3 张）", PinGrouping.GroupLabel(PinGrouping.NameOf(2), 3));
-        Assert.Contains("0 张", PinGrouping.CloseLabel(0));
+        Assert.Equal("组 1", PinGrouping.NameOf(1).Render());
+        Assert.Equal("组 12", PinGrouping.NameOf(12).Render());        // 序号只增不复用：删掉「组 1」不会再来一个「组 1」
+        Assert.Equal("组 2（3 张）", PinGrouping.GroupLabel(PinGrouping.NameOf(2), 3).Render());
+        Assert.Contains("0 张", PinGrouping.CloseLabel(0).Render());
         // "名字后面带张数"这个形状只许一个主人（批次 WI-46c）：关闭那一行是 GroupLabel 拼出来的，⛔ 自己再写一份「（N 张）」
-        Assert.Equal(PinGrouping.GroupLabel(Locale.T("pin.groupClose"), 3), PinGrouping.CloseLabel(3));
+        // ⚠ 比的是读数（坑表 #504）：两颗 LocMessage 的 Args 是数组、按引用比 ⇒ 直接 NotEqual 会静默空转
+        Assert.Equal(PinGrouping.GroupLabel(LocMessage.Of("pin.groupClose"), 3).Render(),
+                     PinGrouping.CloseLabel(3).Render());
         Assert.True(PinGrouping.ShouldDrop(0));
         Assert.False(PinGrouping.ShouldDrop(1));
     }
@@ -112,9 +114,9 @@ public sealed class PinGroupingTests
         {
             Locale.TrySet(AppLanguage.English);
             Assert.Equal(AppLanguage.English, Locale.Current);
-            Assert.Equal("Group 7", PinGrouping.NameOf(7));
-            Assert.Equal("Group 7 (3 pins)", PinGrouping.GroupLabel(PinGrouping.NameOf(7), 3));
-            Assert.Equal("Close this group (3 pins)", PinGrouping.CloseLabel(3));
+            Assert.Equal("Group 7", PinGrouping.NameOf(7).Render());
+            Assert.Equal("Group 7 (3 pins)", PinGrouping.GroupLabel(PinGrouping.NameOf(7), 3).Render());
+            Assert.Equal("Close this group (3 pins)", PinGrouping.CloseLabel(3).Render());
             // ✅WI-65 片4：那一句现在交「键＋实参」，而夹在里面的两颗<b>名字</b>也是键 ⇒ 三处都在这一刻才取词
             var limit = PinGrouping.LimitProblem(PinGrouping.MaxGroups)!.Render();
             Assert.Contains("at most 8 groups", limit);
@@ -126,5 +128,37 @@ public sealed class PinGroupingTests
             Locale.TrySet(before);
         }
         Assert.Equal(before, Locale.Current);
+    }
+    /// <summary>
+    /// ✅WI-65 片5b：组标签交出来的是<b>还没取词的那句</b>，且<b>内层那颗名字也是键</b>。
+    /// <para>缺陷现场在提示卡那一边：<c>PinManager</c> 从前把 <c>GroupLabel(...)</c> 的<b>成品串</b>塞进
+    /// <c>LocMessage.Of("pin.card.groupedBody", …)</c> 的 <c>{0}</c> 槽 ⇒ 外层换语言也贴不动里层那半句
+    /// （#393／P-196 那一族）。本批起组名与组标签都是「键＋实参」，塞进槽的就是键。</para>
+    /// <para>⚠ 时序照坑表 #501：<b>造在前／换在中／贴在后</b>。每换一次语言再现造一句，那种坏形照样句句都对，
+    /// 那一格就成了一扇永远绿的门；最后一行再要一条「旧那颗与换语言后新造那颗同形」＝话只有一个主人。</para>
+    /// </summary>
+    [Fact]
+    public void TheGroupLabelsAreHandedOutUnrenderedSoTheCardSlotFollowsTheLanguage()
+    {
+        var before = Locale.Current;
+        try
+        {
+            Locale.TrySet(AppLanguage.Chinese);
+            var built = PinGrouping.GroupLabel(PinGrouping.NameOf(2), 3);
+            Assert.Equal("pin.groupLabel", built.Key);
+            Assert.Equal("pin.group.name", Assert.IsType<LocMessage>(built.Args![0]).Key);   // 槽里那颗名字也是键
+            Assert.Equal(3, Assert.IsType<int>(built.Args![1]));
+            Assert.Equal("组 2（3 张）", built.Render());
+
+            Locale.TrySet(AppLanguage.English);                          // 换语言发生在贴之前
+            Assert.Equal("Group 2 (3 pins)", built.Render());            // 内层那颗名字跟着外层一起换
+            Assert.DoesNotContain("组", built.Render());
+            Assert.Equal(built.Render(), PinGrouping.GroupLabel(PinGrouping.NameOf(2), 3).Render());
+            Assert.Equal("Close this group (3 pins)", PinGrouping.CloseLabel(3).Render());
+        }
+        finally
+        {
+            Locale.TrySet(before);
+        }
     }
 }

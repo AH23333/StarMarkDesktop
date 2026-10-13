@@ -894,14 +894,15 @@ public sealed class I18nWiringGateTests
 
         // PinGrouping：扫五颗 label/命名方法体（方向判据留 Core、字进表）。批次 WI-46c 起
         // `NameOf` 与 `LimitProblem` 也进了射程——组名从前是存下来的一份快照，现在是每次现算的念法。
+        // ✅WI-65 片5b 起那五颗改交「键＋实参」（返回 `LocMessage`）⇒ 锚点跟着改型，⛔ 放宽扫描。
         var grouping = Code(ReadRepoFile("src/StarMark.Core/Capture/PinGrouping.cs"));
         foreach (var (fragment, name) in new[]
                  {
-                     ("public static string GroupLabel(", "GroupLabel"),
-                     ("public static string HideLabel(", "HideLabel"),
-                     ("public static string ThroughLabel(", "ThroughLabel"),
-                     ("public static string CloseLabel(", "CloseLabel"),
-                     ("public static string NameOf(", "NameOf"),
+                     ("public static LocMessage GroupLabel(", "GroupLabel"),
+                     ("public static LocMessage HideLabel(", "HideLabel"),
+                     ("public static LocMessage ThroughLabel(", "ThroughLabel"),
+                     ("public static LocMessage CloseLabel(", "CloseLabel"),
+                     ("public static LocMessage NameOf(", "NameOf"),
                      ("public static LocMessage? LimitProblem(", "LimitProblem"),
                  })
         {

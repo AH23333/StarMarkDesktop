@@ -166,7 +166,7 @@ public sealed class CaptureNoticeWiringGateTests
         // ① 抬头两颗（贴图／贴图组）＋那一排的范围名：按主人点名，⛔ 用"汉字总数下降"那种整体口径
         Assert.Equal(8, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.category\")"));
         Assert.Equal(8, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.groupCategory\")"));   // 7 处 Report + 那句正文里的引用
-        Assert.Equal(2, SourceGate.Count(pin, "Locale.T(\"pin.card.scopeAll\")"));
+        Assert.Equal(2, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.scopeAll\")"));   // ✅片5b：交键，⛔ 当场念完
         // ② 每张卡的标题各有几张脸（少一条＝那条从此静默；"没有可操作的贴图"三处共用一颗）
         //    ✅WI-65 片3 第二刀：那四处把判据自己交的话<b>原样递进卡里</b>（第三个实参就是那颗 <c>none</c>／<c>full</c>），
         //    ⛔ 在这里包一层 <c>common.rawValue</c>——那道门只装念完的成品字，包上去就等于替用户把语言钉在判据那一刻。
@@ -199,12 +199,19 @@ public sealed class CaptureNoticeWiringGateTests
         Assert.Equal(1, SourceGate.Count(geo, "LocMessage.Of(\"pin.card.limitBody\""));
         Assert.Equal(1, SourceGate.Count(geo, "LocMessage.Of(\"pin.card.noneBody\")"));
         // ⑤ 念法与形状各只一个主人：组名＝`pin.group.name`，"名字（张数）"＝`pin.groupLabel`
-        Assert.Equal(1, SourceGate.Count(grouping, "Locale.Fmt(\"pin.group.name\""));
-        Assert.Equal(2, SourceGate.Count(grouping, "Locale.Fmt(\"pin.groupLabel\""));   // GroupLabel 自己 + CloseLabel 借它
+        //    ✅WI-65 片5b 起那五颗念法全部交「键＋实参」⇒ 那一档自己⛔ 取词，两把尺都得读成 0。
+        Assert.Equal(1, SourceGate.Count(grouping, "LocMessage.Of(\"pin.group.name\""));
+        Assert.Equal(1, SourceGate.Count(grouping, "LocMessage.Of(\"pin.groupLabel\""));   // 只有 GroupLabel 自己；CloseLabel 借它
+        Assert.Equal(0, SourceGate.Count(grouping, "Locale.T("));
+        Assert.Equal(0, SourceGate.Count(grouping, "Locale.Fmt("));
         Assert.Equal(1, SourceGate.Count(grouping, "LocMessage.Of(\"pin.group.limitBody\""));
         Assert.Equal(0, SourceGate.Count(grouping, "Locale.Fmt(\"pin.group.limitBody\""));   // ✅片4：那句⛔ 在 Core 里念完
-        Assert.Equal(1, SourceGate.Count(pin, "PinGrouping.GroupLabel("));
+        Assert.Equal(3, SourceGate.Count(pin, "PinGrouping.GroupLabel("));                    // 172/190/248：那里⛔ 再拼一份「（N 张）」
+        Assert.Equal(0, SourceGate.Count(pin, "Locale.Fmt(\"pin.groupLabel\""));
         Assert.Equal(2, SourceGate.Count(pin, "PinGrouping.NameOf(serial)"));
+        // ✅WI-65 片5b 逐字钉「递进槽的是那颗键」：内层名字一旦被当场念完，提示卡就冻在贴出来那一刻（#393／P-196 那一族）
+        Assert.Contains("LocMessage.Of(\"pin.card.groupedBody\", PinGrouping.GroupLabel(group.Name, 1), LocMessage.Of(\"pin.card.groupCategory\"))", pin);
+        Assert.Contains("PinGrouping.GroupLabel(target.Name, target.Members.Count))", pin);
         // ⑥ 旧句子一概不许回来（短词带引号点名：`[Pin] 贴图未能钉住` 那一族是日志措辞，⛔ 上屏）
         foreach (var dead in new[]
         {
