@@ -738,11 +738,11 @@ public sealed class I18nWiringGateTests
     /// <c>WidgetWindow.xaml</c> 那颗宿主；其中 <c>ClockWidget.xaml</c> 面上一句可翻的话都没有，见下面那颗断言）。
     /// 新添一颗组件不必改判据就会落进这一格（⛔ 不许改成点文件名单——#318 那条教训的另一面：
     /// 名单式射程会在"搬个家／新加一颗"时静默失效）。</para>
-    /// <para>⛔ <b>下面那 9 句是登记在案的缺口，不是漏翻</b>（批次 WI-53 之前是 17 句，天气那 4 句已交键；
-    /// 批次 WI-56 又收掉速览那 4 句示例字）。那个数是<b>这条断言自己数的</b>：尺＝"文件|属性|值"三件一体去重点名。
+    /// <para>⛔ <b>下面那 7 句是登记在案的缺口，不是漏翻</b>（批次 WI-53 之前是 17 句，天气那 4 句已交键；
+    /// 批次 WI-56 又收掉速览那 4 句示例字、批次 WI-67 片3 再收掉条目格那 2 句）。那个数是<b>这条断言自己数的</b>：尺＝"文件|属性|值"三件一体去重点名。
     /// 两类各有各的坏法：
-    /// <b>①</b>6 句是<b>代码当场写过同一个属性</b>的（<c>MusicWidget.xaml</c> 的「未在播放」、
-    /// <c>ItemGridWidget.xaml</c> 的「暂无条目」、<c>SearchWidget.xaml</c> 的"输入关键词…"…）——给这类挂静态键的后果不是少翻一句，
+    /// <b>①</b>4 句是<b>代码当场写过同一个属性</b>的（<c>MusicWidget.xaml</c> 的「未在播放」与「打开任意播放器后…」。
+    /// <c>SearchWidget.xaml</c> 的"输入关键词…"…）——给这类挂静态键的后果不是少翻一句，
     /// 是<b>换语言那一刻用默认那句盖掉带值那句</b>（屏幕上写着"2026年9月"而那天是 10 月＝一句当场可见的假话，
     /// 坑表 #276／#295）；要翻它们得先让宿主交出 <c>LocMessage</c>＝P-172。<b>②</b>搜索组件那颗排序下拉的三颗
     /// <c>ComboBoxItem</c>：闭着的那一格是选中时从 <c>Content</c> 抄走的快照（#272／#275），只挂键＝
@@ -781,8 +781,6 @@ public sealed class I18nWiringGateTests
             .ToArray();
         Assert.Equal(new[]
         {
-            "ItemGridWidget.xaml|PlaceholderText|输入标签名…",
-            "ItemGridWidget.xaml|Text|暂无条目",
             "MusicWidget.xaml|Text|打开任意播放器后这里会显示曲目",
             "MusicWidget.xaml|Text|未在播放",
             "QuickLaunchWidget.xaml|Text|提示：可把文件、文件夹或网址直接拖入本组件；拖不动时用上面那行「＋」里的「选择文件／选择文件夹」",
@@ -799,6 +797,9 @@ public sealed class I18nWiringGateTests
         // 同一颗形状——四格的值都由 <c>RefreshDate()</c>／<c>RebuildCalendar()</c> 每次重写，
         // 而农历那一行从此<b>按语言当场算</b>（那句「农历…」现在住表里，示例字留着就是第二个主人）。
         Assert.DoesNotContain(left, x => x.StartsWith("GlanceWidget.xaml", StringComparison.Ordinal));
+        // 批次 WI-67 片3 收掉 ItemGridWidget 那两句（「暂无条目」与「输入标签名…」）：同一颗形状——两处都由 code-behind
+        // 每次重写 ⇒ 删掉标记里那份字面量、由宿主交「键＋实参」走重贴名单（挂了静态键＝换语言把空态那句盖回"暂无条目"）。
+        Assert.DoesNotContain(left, x => x.StartsWith("ItemGridWidget.xaml", StringComparison.Ordinal));
     }
 
     /// <summary>
