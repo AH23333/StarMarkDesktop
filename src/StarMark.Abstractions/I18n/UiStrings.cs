@@ -2721,6 +2721,11 @@ public static class UiStrings
         new Entry("diag.label.source", "源：{0}", "Source: {0}", "ソース：{0}"),
         new Entry("diag.label.lastSync", "上次 GitHub 同步", "Last GitHub sync", "前回の GitHub 同期"),
         new Entry("diag.label.etag", "GitHub ETag", "GitHub ETag", "GitHub の ETag"),
+        // 启动分段那一行的<b>右列</b>：批次 WI-67 他改判「文字可删去」⇒ 交的是「#编号 +N ms」，段名不进屏幕。
+        // 那句"段名见日志"必须<b>跟着语言走</b>（它是给用户读的一句话，不是机器事实），而编号＝日志里第 N 条 [启动]。
+        new Entry("diag.value.startupSegments", "{0}（段名见日志）",
+                  "{0} (segment names are in the log)",
+                  "{0}（区間名はログにあります）"),
         new Entry("diag.value.itemTotal", "{0}（Stars {1} / 书签 {2} / 文件 {3} / 剪贴板 {4}）",
                   "{0} (Stars {1} / bookmarks {2} / files {3} / clipboard {4})",
                   "{0}（Stars {1} / ブックマーク {2} / ファイル {3} / クリップボード {4}）"),

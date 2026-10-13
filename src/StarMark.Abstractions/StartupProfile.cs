@@ -36,7 +36,14 @@ public static class StartupProfile
 
     private static long _start = NowMs;
     private static long _last = _start;
-    private static readonly List<string> _segments = new();
+
+    /// <summary>
+    /// 已记下的每段<b>时长</b>（自上一段起的毫秒数，按 <see cref="Mark"/> 顺序）。
+    /// <para><b>这里刻意不存段名</b>（批次 WI-67·P-191 他改判「文字可删去」）：屏幕上那一行只要数字，
+    /// 而那 29 颗中文段名唯一的去处＝<see cref="Mark"/> 写的那行日志与 <see cref="LastCheckpoint"/>——
+    /// 存了名字就有人把它再端上屏，日志那一路按既定口径⛔ 国际化，两条一起上屏就是一整行中文。</para>
+    /// </summary>
+    private static readonly List<long> _segmentDeltas = new();
 
     /// <summary>本类计时源的分辨率（每秒刻度数）。测试用它钉"这把尺子比一个系统计时器节拍细"。</summary>
     internal static long ClockTicksPerSecond => Stopwatch.Frequency;
@@ -167,7 +174,7 @@ public static class StartupProfile
         {
             var sinceLast = now - _last;
             _last = now;
-            _segments.Add($"{segment} +{sinceLast} ms");
+            _segmentDeltas.Add(sinceLast);
             NoteCheckpoint(segment, sinceLast);
             // CPU 读数与那两个时长**写在同一行**（批次 TC）：TB 的教训是"同一行印出来"不等于"同一段量出来"——
             // 分在两行（或另取时刻）就给了读的人做错减法的机会。写在一行、且带着线程号，
@@ -181,10 +188,23 @@ public static class StartupProfile
         Sink($"[内存] {segment}：{MemoryReader()}");
     }
 
-    /// <summary>本次启动已记下的分段表（诊断面板用，按记录顺序）。</summary>
-    public static IReadOnlyList<string> Segments
+    /// <summary>
+    /// 本次启动已记下的分段<b>读数</b>（诊断面板用，按记录顺序，形如「#2 +70 ms」）。
+    /// <para><b>不带段名</b>（批次 WI-67·P-191 他改判「文字可删去」）：屏幕那一行与日志那一行从此按
+    /// <b>编号</b>对账——这里的 #N ＝ 日志里第 N 条 <c>[启动]</c> 行（两边都只由 <see cref="Mark"/> 推进，
+    /// <see cref="Measure"/> 那一族（逐组件的高频细段）不进这一列，它只推进 <see cref="LastCheckpoint"/>。</para>
+    /// </summary>
+    public static IReadOnlyList<string> SegmentTimings
     {
-        get { lock (_gate) return _segments.ToArray(); }
+        get
+        {
+            lock (_gate)
+            {
+                var timings = new string[_segmentDeltas.Count];
+                for (var i = 0; i < _segmentDeltas.Count; i++) timings[i] = $"#{i + 1} +{_segmentDeltas[i]} ms";
+                return timings;
+            }
+        }
     }
 
     /// <summary>重新对齐基线并清空分段表。测试用（真实启动路径每次都从进程起点开始，不需要重置）。</summary>
@@ -194,7 +214,7 @@ public static class StartupProfile
         {
             _start = start;
             _last = start;
-            _segments.Clear();
+            _segmentDeltas.Clear();
             _lastCheckpoint = null;
             System.Threading.Interlocked.Exchange(ref _lastCheckpointAt, -1);
         }

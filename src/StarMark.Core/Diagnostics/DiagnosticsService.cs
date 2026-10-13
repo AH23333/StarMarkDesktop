@@ -55,12 +55,12 @@ public sealed class DiagnosticsService
 
         // ── 这一次启动的各段花了多久 ──
         // 与上一行同一个用途：报"启动慢"时不必来回猜，面板上就有分段数字（也才判断得出优化有没有真的变快）。
-        // ⚠ 这一行念的是<b>日志刻度行的原文</b>（<c>StartupProfile.Mark</c> 那 29 颗段名都在里面），
-        //    本批刻意⛔ 交表：它的用途是让人把屏幕上的那行与日志里的那一行<b>逐字对上</b>，
-        //    翻了它就切断了这条对账路（取舍与代价登记在账本 P-191，要翻得连 Mark 的调用点一起翻）。
-        if (StarMark.Abstractions.StartupProfile.Segments is { Count: > 0 } segments)
+        // 交的是<b>编号＋毫秒</b>，⛔ 段名（批次 WI-67·P-191 他改判「文字可删去」）：那 29 颗名字是中文写死在
+        // Mark 调用点的，而日志那一路按既定口径⛔ 国际化 ⇒ 屏幕与日志之间从"逐字对上文字"改成"按编号对上"，
+        // #N ＝ 日志里第 N 条 [启动]。外层那句"段名见日志"是表里的话，三种语言各有各的写法（⛔ 拼在 Core 里）。
+        if (StarMark.Abstractions.StartupProfile.SegmentTimings is { Count: > 0 } timings)
             entries.Add(new DiagnosticEntry(LocMessage.Of("diag.label.startupSegments"),
-                DiagnosticEntry.Fact(string.Join(" · ", segments))));
+                LocMessage.Of("diag.value.startupSegments", string.Join(" · ", timings))));
 
         // ── 数据库 ──
         entries.Add(new DiagnosticEntry(LocMessage.Of("diag.label.dbPath"), DiagnosticEntry.Fact(_factory.DbPath)));
