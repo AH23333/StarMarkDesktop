@@ -311,12 +311,13 @@ public static class UpdatePolicy
     /// </summary>
     public static string DescribeManifestAge(long? daysOld) => daysOld switch
     {
-        // WI-2v 起进表（upd.manifest.*）；相对时间（DateTimeText，已键化）与天数是实参。
+        // WI-2v 起进表（upd.manifest.*）；相对时间与天数是实参。✅WI-65 片5c：那一档的 string 出口已删，
+        // 这一句本就只进日志（⛔ 随语言重贴），所以在这里显式念一次而⛔ 靠 ToString()==Render() 那颗隐式转换。
         null => Locale.T("upd.manifest.missing"),
         0 => Locale.T("upd.manifest.today"),
         long d when !ManifestFreshness.WorthMentioning(d) =>
-            Locale.Fmt("upd.manifest.recent", DateTimeText.DaysAgo(d)),
-        long d => Locale.Fmt("upd.manifest.stale", DateTimeText.DaysAgo(d),
+            Locale.Fmt("upd.manifest.recent", DateTimeText.DaysAgoMessage(d).Render()),
+        long d => Locale.Fmt("upd.manifest.stale", DateTimeText.DaysAgoMessage(d).Render(),
             ((int)ManifestFreshness.NoticeAfter.TotalDays).ToString()),
     };
 

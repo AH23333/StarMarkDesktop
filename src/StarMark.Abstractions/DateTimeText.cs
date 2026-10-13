@@ -207,17 +207,10 @@ public static class DateTimeText
     /// <summary>「N 天前」那一档的<b>键</b>。</summary>
     public const string DaysAgoKey = "time.daysAgo";
 
-    /// <summary>「刚刚」这一档（<b>按当前语言</b>当场取词）。</summary>
-    public static string JustNow => Locale.T(JustNowKey);
-
-    /// <summary>「N 分钟前」这一档（<paramref name="count"/> 由调用点向下截断后交出）。</summary>
-    public static string MinutesAgo(long count) => Locale.Fmt(MinutesAgoKey, count);
-
-    /// <summary>「N 小时前」这一档。</summary>
-    public static string HoursAgo(long count) => Locale.Fmt(HoursAgoKey, count);
-
-    /// <summary>「N 天前」这一档。</summary>
-    public static string DaysAgo(long count) => Locale.Fmt(DaysAgoKey, count);
+    // 这四档从前另有四颗「当场念完」的 string 出口（JustNow／MinutesAgo／HoursAgo／DaysAgo），
+    // 生产侧一颗读者都没有（唯一的消费点在 UpdatePolicy 那句日志里，它要的也是一句日志用的字），
+    // 而留着的代价不是"多四行死码"：它们把「按当时语言取一次词」这件事做成了一条看起来合法的出口，
+    // 下一次有人把这句话塞进别的句子就正好踩回 #393／P-196 那一族。批次 WI-65 片5c 连根拔掉。
 
     /// <summary>四档的<b>还没取词</b>版本：要嵌进别句子里的读数一律走这几颗，⛔ 别在这里先拼成字符串。</summary>
     public static LocMessage JustNowMessage()
