@@ -37,7 +37,7 @@ public static partial class CanvasService
         var shot = Compose();
         if (!shot.Ok)
         {
-            Report(LocMessage.Of("canvas.shot.pinFailedTitle"), LocMessage.Of("common.rawValue", shot.Reason));
+            Report(LocMessage.Of("canvas.shot.pinFailedTitle"), shot.Reason!);
             return;
         }
         if (shot.Ink.IsEmpty)
@@ -65,7 +65,7 @@ public static partial class CanvasService
         var shot = Compose();
         if (!shot.Ok)
         {
-            Report(LocMessage.Of("canvas.shot.copyFailedTitle"), LocMessage.Of("common.rawValue", shot.Reason));
+            Report(LocMessage.Of("canvas.shot.copyFailedTitle"), shot.Reason!);
             return;
         }
         _ = ScreenshotService.CopyPixelsAsync(shot.Pixels, shot.Width, shot.Height,
@@ -78,7 +78,7 @@ public static partial class CanvasService
         var shot = Compose();
         if (!shot.Ok)
         {
-            Report(LocMessage.Of("canvas.shot.saveFailedTitle"), LocMessage.Of("common.rawValue", shot.Reason));
+            Report(LocMessage.Of("canvas.shot.saveFailedTitle"), shot.Reason!);
             return;
         }
         _ = ScreenshotService.SavePixelsAsync(shot.Pixels, shot.Width, shot.Height,
@@ -94,10 +94,13 @@ public static partial class CanvasService
     /// 而这一格的全部风险都在"落点之间悄悄分岔"（记忆 ⑧）。</para>
     /// </summary>
     private readonly record struct Shot(bool Ok, byte[] Pixels, int Width, int Height,
-        IntRect Screen, IntRect Ink, double Scale, string Reason);
+        IntRect Screen, IntRect Ink, double Scale, LocMessage? Reason);
 
-    /// <summary>合成就失败了：画面还没开始叠，reason 是给用户看得见的那一句。</summary>
-    private static Shot NoShot(string reason)
+    /// <summary>合成就失败了：画面还没开始叠，reason 是交给提示卡的那颗「键＋实参」。</summary>
+    /// <para><b>不变量＝<c>!Ok</c> 那一侧 <c>Reason</c> 一定在</b>（这里只有这一颗失败出口，四条正文全由它交出去）
+    /// ⇒ 三条落点因此直接 <c>shot.Reason!</c>，⛔ 再套 <c>common.rawValue</c> 那道门（✅WI-65 片4：
+    /// 那道门只装读数，装句子就等于替用户把语言钉在合成那一刻）。</para>
+    private static Shot NoShot(LocMessage reason)
         => new(false, Array.Empty<byte>(), 0, 0, new IntRect(), CanvasCompositor.Nothing, 1d, reason);
 
     /// <summary>
@@ -106,7 +109,7 @@ public static partial class CanvasService
     /// </summary>
     private static Shot Compose()
     {
-        if (Screens.Count == 0) return NoShot(Locale.T("canvas.notice.notRunningTitle"));
+        if (Screens.Count == 0) return NoShot(LocMessage.Of("canvas.notice.notRunningTitle"));
         WindowInterop.GetCursorPos(out var cursor);
         var screen = Screens.FirstOrDefault(s => s.Bounds.X <= cursor.X && cursor.X < s.Bounds.Right
             && s.Bounds.Y <= cursor.Y && cursor.Y < s.Bounds.Bottom) ?? Screens[0];
@@ -130,9 +133,9 @@ public static partial class CanvasService
         {
             var captured = ScreenshotService.CaptureWithoutCanvas();
             if (!captured.Ok || captured.Frame is not { } frame)
-                return NoShot(captured.Error ?? Locale.T("capture.grab.noFrame"));
+                return NoShot(captured.Error ?? LocMessage.Of("capture.grab.noFrame"));
             if (ScreenshotService.TryCrop(frame, screen.Bounds) is not { } crop)
-                return NoShot(Locale.T("canvas.shot.screenOutOfFrame"));
+                return NoShot(LocMessage.Of("canvas.shot.screenOutOfFrame"));
             boardWidth = crop.Width;
             boardHeight = crop.Height;
             baseFrame = crop.Pixels;
@@ -158,7 +161,7 @@ public static partial class CanvasService
         CanvasCompositor.OverlayOntoFrame(baseFrame, boardWidth, boardHeight,
             new IntRect(0, 0, 0, 0), ink, screen.Window.Width, screen.Window.Height);
 
-        return new Shot(true, baseFrame, boardWidth, boardHeight, screen.Bounds, inkRegion, screen.Scale, string.Empty);
+        return new Shot(true, baseFrame, boardWidth, boardHeight, screen.Bounds, inkRegion, screen.Scale, null);
     }
 
     /// <summary>

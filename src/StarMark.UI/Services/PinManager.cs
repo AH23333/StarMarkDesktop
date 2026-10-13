@@ -159,8 +159,9 @@ public static class PinManager
     {
         if (PinGrouping.LimitProblem(GroupRoster.Count) is { } full)
         {
+            // ✅WI-65 片4：那颗判据自己交「键＋实参」⇒ 直接递出去（common.rawValue 那道门只装念完的成品字）。
             TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.groupFullTitle"),
-                LocMessage.Of("common.rawValue", full));
+                full);
             return;
         }
         Detach(pin);

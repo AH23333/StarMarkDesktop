@@ -86,8 +86,8 @@ public static class ScreenshotService
         var captured = Grab();
         if (!captured.Ok || captured.Frame is not { } frame)
         {
-            Report(LocMessage.Of("capture.card.failedTitle"), captured.Error is { } grabError
-                    ? LocMessage.Of("common.rawValue", grabError) : LocMessage.Of("capture.grab.noFrame"));
+            // ✅WI-65 片4：抓屏那颗判据自己交「键＋实参」⇒ 直接递出去（common.rawValue 那道门只装读数）。
+            Report(LocMessage.Of("capture.card.failedTitle"), captured.Error ?? LocMessage.Of("capture.grab.noFrame"));
             return;
         }
         var monitors = WindowInterop.ListMonitors();

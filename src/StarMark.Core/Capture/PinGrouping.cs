@@ -42,9 +42,13 @@ public static class PinGrouping
     /// <para>那句里引用的<b>两个名字</b>（托盘那一行、以及「关闭这组」那条）也交键：它们是屏幕上真存在的两行，
     /// 抄在这里＝改了那两个名字后这句指着一条不存在的菜单（批次 WI-46c，与 P-178 那条"⛔ 抄用户可改的东西"同一族，
     /// 只不过这里能改的是<b>语言表自己的那一行</b>）。</para>
-    public static string? LimitProblem(int currentGroups)
+    /// <para>✅WI-65 片4：整句交「键＋实参」而⛔ 当场念完——它的宿主是那张一直挂到下一次操作的提示卡，
+    /// 念出来就把语言钉在了点「新建一组」那一刻（与 ✅片3b 那颗 <c>CaptureGeometry.PinLimitProblem</c> 同一口径，
+    /// 那两颗嵌套的名字由 <c>LocMessage</c> 的实参在贴上去那一刻才取词）。</para>
+    public static LocMessage? LimitProblem(int currentGroups)
         => currentGroups >= MaxGroups
-            ? Locale.Fmt("pin.group.limitBody", MaxGroups, Locale.T("pin.card.groupCategory"), Locale.T("pin.groupClose"))
+            ? LocMessage.Of("pin.group.limitBody", MaxGroups,
+                LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.groupClose"))
             : null;
 
     /// <summary>

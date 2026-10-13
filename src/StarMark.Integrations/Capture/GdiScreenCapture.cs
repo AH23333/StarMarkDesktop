@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Windows.Graphics.Imaging;
 using Windows.Storage.Streams;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Integrations.Capture;
 
@@ -18,10 +19,13 @@ public sealed record ScreenFrame(IntRect Bounds, byte[] Bgra)
     public int Height => Bounds.Height;
 }
 
-/// <summary>带成败与原因的返回值（"什么都没截到"与"截到一张全黑的画面"必须不是一回事）。</summary>
-public sealed record CaptureResult(bool Ok, ScreenFrame? Frame, string? Error)
+/// <summary>带成败与原因的返回值（"什么都没截到"与"截到一张全黑的画面"必须不是一回事）。
+/// <para>原因交 <see cref="LocMessage"/>（「键＋实参」）而⛔ 交念完的那句：这一句的宿主是右下角那张提示卡，
+/// 它一直挂到下一次操作，成品字就等于把语言钉在抓屏失败那一刻（✅WI-65 片4，与 ✅片3b 那两道闸门同一口径）。
+/// Win32 错误码与异常正文是数据，走实参——宿主那侧因此⛔ 再套一道 <c>common.rawValue</c>。</para></summary>
+public sealed record CaptureResult(bool Ok, ScreenFrame? Frame, LocMessage? Error)
 {
-    public static CaptureResult Fail(string reason) => new(false, null, reason);
+    public static CaptureResult Fail(LocMessage reason) => new(false, null, reason);
     public static CaptureResult Success(ScreenFrame frame) => new(true, frame, null);
 }
 
@@ -50,12 +54,12 @@ public static class GdiScreenCapture
         var width = GetSystemMetrics(SM_CXVIRTUALSCREEN);
         var height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
         if (width <= 0 || height <= 0)
-            return CaptureResult.Fail("系统报告的桌面尺寸为 0，无法截取");
+            return CaptureResult.Fail(LocMessage.Of("capture.grab.zeroSize"));
 
         var bytes = (long)width * height * 4;
         if (bytes > MaxPixelBufferBytes)
             return CaptureResult.Fail(
-                $"桌面尺寸 {width} × {height} 超出可截取上限，已放弃（避免把内存吃满）");
+                LocMessage.Of("capture.grab.tooLarge", width, height));
 
         var screenDc = IntPtr.Zero;
         var memoryDc = IntPtr.Zero;
@@ -65,17 +69,17 @@ public static class GdiScreenCapture
         try
         {
             screenDc = GetDC(IntPtr.Zero);
-            if (screenDc == IntPtr.Zero) return CaptureResult.Fail("取不到屏幕设备上下文（桌面可能正在切换）");
+            if (screenDc == IntPtr.Zero) return CaptureResult.Fail(LocMessage.Of("capture.grab.noScreenDc"));
             memoryDc = CreateCompatibleDC(screenDc);
-            if (memoryDc == IntPtr.Zero) return CaptureResult.Fail("创建内存设备上下文失败");
+            if (memoryDc == IntPtr.Zero) return CaptureResult.Fail(LocMessage.Of("capture.grab.noMemoryDc"));
             bitmap = CreateCompatibleBitmap(screenDc, width, height);
-            if (bitmap == IntPtr.Zero) return CaptureResult.Fail("创建位图失败（显存或桌面堆不足）");
+            if (bitmap == IntPtr.Zero) return CaptureResult.Fail(LocMessage.Of("capture.grab.noBitmap"));
             oldObject = SelectObject(memoryDc, bitmap);
 
             // SRCCOPY；CAPTUREBLT 一并带上——没有它，"始终置顶"的那类窗口（含我们自己的组件）
             // 会从截出来的画面里消失，用户会以为截图漏掉了那一块。
             if (!BitBlt(memoryDc, 0, 0, width, height, screenDc, x, y, SRCCOPY | CAPTUREBLT))
-                return CaptureResult.Fail($"拷贝屏幕失败（Win32 {Marshal.GetLastWin32Error()}）");
+                return CaptureResult.Fail(LocMessage.Of("capture.grab.blitFailed", Marshal.GetLastWin32Error()));
 
             // BITMAPINFOHEADER 之后那块联合体区是系统可写的（BI_RGB 下不写，但会校验长度），
             // 所以按"头 + 余量"分配非托管缓冲，而不是直接把托管结构体 ref 过去——
@@ -100,14 +104,15 @@ public static class GdiScreenCapture
             oldObject = IntPtr.Zero;
             var lines = GetDIBits(memoryDc, bitmap, 0, (uint)height, pixels, info, DIB_RGB_COLORS);
             if (lines == 0)
-                return CaptureResult.Fail($"读出像素失败（GetDIBits 返回 0 行，Win32 {Marshal.GetLastWin32Error()}）");
+                return CaptureResult.Fail(
+                    LocMessage.Of("capture.grab.readPixelsFailed", Marshal.GetLastWin32Error()));
 
             PixelBuffers.MakeOpaque(pixels);
             return CaptureResult.Success(new ScreenFrame(new IntRect(x, y, width, height), pixels));
         }
         catch (Exception ex)
         {
-            return CaptureResult.Fail("截屏异常：" + ex.Message);
+            return CaptureResult.Fail(LocMessage.Of("capture.grab.failed", ex.Message));
         }
         finally
         {
