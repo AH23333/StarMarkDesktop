@@ -77,10 +77,10 @@ public sealed class PinGroupingTests
     public void TheGroupLimitSpeaksAReasonAtTheBoundary()
     {
         Assert.Null(PinGrouping.LimitProblem(PinGrouping.MaxGroups - 1));
-        var atLimit = PinGrouping.LimitProblem(PinGrouping.MaxGroups);
-        Assert.NotNull(atLimit);
-        Assert.Contains(PinGrouping.MaxGroups.ToString(), atLimit!);
-        Assert.Contains("关闭", atLimit!);                     // 给出路，不是只说"不行"
+        // ✅WI-65 片4：那颗判据交的是「键＋实参」⇒ 这里比 Render() 之后的句子（⛔ 再比对象，坑表 #480）
+        var atLimit = PinGrouping.LimitProblem(PinGrouping.MaxGroups)!.Render();
+        Assert.Contains(PinGrouping.MaxGroups.ToString(), atLimit);
+        Assert.Contains("关闭", atLimit);                     // 给出路，不是只说"不行"
         Assert.NotNull(PinGrouping.LimitProblem(PinGrouping.MaxGroups + 1));
         Assert.Null(PinGrouping.LimitProblem(0));
     }
@@ -115,8 +115,11 @@ public sealed class PinGroupingTests
             Assert.Equal("Group 7", PinGrouping.NameOf(7));
             Assert.Equal("Group 7 (3 pins)", PinGrouping.GroupLabel(PinGrouping.NameOf(7), 3));
             Assert.Equal("Close this group (3 pins)", PinGrouping.CloseLabel(3));
-            Assert.Contains("at most 8 groups", PinGrouping.LimitProblem(PinGrouping.MaxGroups));
-            Assert.DoesNotContain("贴图组", PinGrouping.LimitProblem(PinGrouping.MaxGroups));   // 那句引用的名字也跟着换
+            // ✅WI-65 片4：那一句现在交「键＋实参」，而夹在里面的两颗<b>名字</b>也是键 ⇒ 三处都在这一刻才取词
+            var limit = PinGrouping.LimitProblem(PinGrouping.MaxGroups)!.Render();
+            Assert.Contains("at most 8 groups", limit);
+            Assert.DoesNotContain("贴图组", limit);            // 那句引用的名字也跟着换
+            Assert.Contains(@"""Close this group"" row under ""Pin group""", limit);
         }
         finally
         {

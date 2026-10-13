@@ -39,6 +39,7 @@ public sealed class CaptureNoticeWiringGateTests
     private const string OcrPipelineFile = "src/StarMark.Core/Ocr/OcrPipeline.cs";
     private const string SnapshotPartial = "src/StarMark.UI/Services/CanvasService.Snapshot.cs";
     private const string HostPartial = "src/StarMark.UI/Services/CanvasService.Host.cs";
+    private const string Gdi = "src/StarMark.Integrations/Capture/GdiScreenCapture.cs";
 
     /// <summary>
     /// 每一张失败脸都有人问：少一条＝那条失败从此静默（用户只会以为"这个键坏了"）。
@@ -200,7 +201,8 @@ public sealed class CaptureNoticeWiringGateTests
         // ⑤ 念法与形状各只一个主人：组名＝`pin.group.name`，"名字（张数）"＝`pin.groupLabel`
         Assert.Equal(1, SourceGate.Count(grouping, "Locale.Fmt(\"pin.group.name\""));
         Assert.Equal(2, SourceGate.Count(grouping, "Locale.Fmt(\"pin.groupLabel\""));   // GroupLabel 自己 + CloseLabel 借它
-        Assert.Equal(1, SourceGate.Count(grouping, "Locale.Fmt(\"pin.group.limitBody\""));
+        Assert.Equal(1, SourceGate.Count(grouping, "LocMessage.Of(\"pin.group.limitBody\""));
+        Assert.Equal(0, SourceGate.Count(grouping, "Locale.Fmt(\"pin.group.limitBody\""));   // ✅片4：那句⛔ 在 Core 里念完
         Assert.Equal(1, SourceGate.Count(pin, "PinGrouping.GroupLabel("));
         Assert.Equal(2, SourceGate.Count(pin, "PinGrouping.NameOf(serial)"));
         // ⑥ 旧句子一概不许回来（短词带引号点名：`[Pin] 贴图未能钉住` 那一族是日志措辞，⛔ 上屏）
@@ -224,16 +226,41 @@ public sealed class CaptureNoticeWiringGateTests
     /// <summary>
     /// 同一件关于机器的事实只许一个出处：画布那一路从前自己立过两颗同名行，本批并进来。
     /// 这一格钉的是"画布那边问的还是那两颗键"，⛔ 让它退回一颗只有画布念得到的名字。
+    /// <para><b>✅WI-65 片4 加宽</b>：那两颗"键"里有一颗的<b>正文</b>根本⛔ 在 C# 的键上——画布那三张卡的
+    /// 失败正文有三分之二来自 <c>GdiScreenCapture</c> 里写死的八句中文（P-194 那把尺只数 <c>Locale.T(</c>／
+    /// <c>Locale.Fmt(</c>，那八颗一颗也看不见＝账本 P-192 那句"原生互调的 reason 串"）。这一格因此把那颗
+    /// 盲区一起钉住：回型升 <c>LocMessage?</c>、八颗 Fail 各交一颗键、那一档⛔ 再留一句写死的中文。</para>
     /// </summary>
     [Fact]
     public void TheCanvasChainBorrowsTheSameTwoMachineFacts()
     {
         Assert.Equal(1, SourceGate.Count(SourceGate.Code(SourceGate.ReadRepoFile(SnapshotPartial)),
-            "Locale.T(\"capture.grab.noFrame\")"));
+            "LocMessage.Of(\"capture.grab.noFrame\")"));
         Assert.Equal(1, SourceGate.Count(SourceGate.Code(SourceGate.ReadRepoFile(HostPartial)),
             "LocMessage.Of(\"capture.grab.noMonitors\")"));
         Assert.False(StarMark.Abstractions.I18n.UiStrings.TryGet("canvas.shot.noFrame", out _));
         Assert.False(StarMark.Abstractions.I18n.UiStrings.TryGet("canvas.notice.noMonitors", out _));
+
+        // ② 抓屏那八句：一句一颗键，Win32 码／尺寸／异常正文走实参（先例＝✅WI-60b 系统监控那三型读数）。
+        var gdi = SourceGate.Code(SourceGate.ReadRepoFile(Gdi));
+        Assert.Contains("public sealed record CaptureResult(bool Ok, ScreenFrame? Frame, LocMessage? Error)", gdi);
+        Assert.Equal(8, SourceGate.Count(gdi, "CaptureResult.Fail("));
+        Assert.Equal(8, SourceGate.Count(gdi, "LocMessage.Of(\"capture.grab."));
+        foreach (var key in new[] { "zeroSize", "tooLarge", "noScreenDc", "noMemoryDc", "noBitmap",
+                                   "blitFailed", "readPixelsFailed", "failed" })
+            Assert.Equal(1, SourceGate.Count(gdi, "LocMessage.Of(\"capture.grab." + key + "\""));
+        // ③ 那一档自己⛔ 取词（交「键＋实参」＝这一族的界线，✅WI-53／54／58 同一条），也⛔ 留一句写死的中文。
+        Assert.Equal(0, SourceGate.Count(gdi, "Locale.T("));
+        Assert.Equal(0, SourceGate.Count(gdi, "Locale.Fmt("));
+        foreach (var dead in new[] { "系统报告的桌面尺寸为 0", "超出可截取上限", "取不到屏幕设备上下文",
+                                    "创建内存设备上下文失败", "创建位图失败", "拷贝屏幕失败",
+                                    "读出像素失败", "截屏异常" })
+            Assert.DoesNotContain(dead, gdi);
+        // ④ 撤门的形状：那两档消费点现在直接把判据递进提示卡，⛔ 再包一道 common.rawValue。
+        Assert.Equal(1, SourceGate.Count(SourceGate.Code(SourceGate.ReadRepoFile(SnapshotPartial)),
+            "NoShot(captured.Error ?? LocMessage.Of(\"capture.grab.noFrame\"))"));
+        Assert.Equal(0, SourceGate.Count(SourceGate.Code(SourceGate.ReadRepoFile(Screenshot)),
+            "LocMessage.Of(\"common.rawValue\", grabError"));
     }
 
     /// <summary>

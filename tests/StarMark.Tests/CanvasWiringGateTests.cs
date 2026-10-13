@@ -1509,15 +1509,14 @@ public sealed class CanvasWiringGateTests
         Assert.Equal(1, SourceGate.Count(all, "LocMessage.Of(\"canvas.notice.boardClosedTitle\")"));
         Assert.Equal(2, SourceGate.Count(all, "LocMessage.Of(\"canvas.shot.pinFailedTitle\")"));
         // 合成的三条失败脸各有话说；其中"板子没开着"这一句与那颗标题键是同一个出处（一句面上话，⛔ 两处各写一份）。
-        // 批次 WI-61d·片2 改锚：这一族的两位主人现在**一种交身份、一种还当场念**，两颗都钉，⛔ 把合起来的 2 悄悄改成 1：
-        //  · `Report(…)` 那一臂交的是键（`LocMessage.Of`，1 处）；
-        //  · `NoShot(string reason)` 那一臂还在调用点念完再回一句成品字（`Locale.T`，1 处）——那颗包装的形参是 `string`，
-        //    句子随 `Shot.Reason` 走，出门时才进 `common.rawValue` 那道门 ⇒ 归 P-194（✅#178：登记"还剩多少"要连着尺子写）。
-        Assert.Equal(1, SourceGate.Count(all, "LocMessage.Of(\"canvas.notice.notRunningTitle\")"));
-        Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"canvas.notice.notRunningTitle\")"));
-        // "系统没有返回画面"这条机器事实的出处已并进截图那一族（批次 WI-46a，一颗话⛔ 两个主人）
-        Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"capture.grab.noFrame\")"));
-        Assert.Equal(1, SourceGate.Count(all, "Locale.T(\"canvas.shot.screenOutOfFrame\")"));
+        // ✅WI-65 片4：这一族<b>两位主人一起翻完</b>了——从前一片交身份、一片还当场念（`NoShot(string reason)` 那条臂），
+        // 今天 `NoShot` 的形参升成 `LocMessage`，四条正文全部交「键＋实参」，出门时⛔ 再过 `common.rawValue` 那道门。
+        // 于是这一格里 `Locale.T` 那三行改钉 0，`LocMessage.Of` 那三行各钉 1／2（那颗标题键另有 Hotkey 那一处，合起来 2）。
+        Assert.Equal(2, SourceGate.Count(all, "LocMessage.Of(\"canvas.notice.notRunningTitle\")"));
+        Assert.Equal(1, SourceGate.Count(all, "LocMessage.Of(\"capture.grab.noFrame\")"));
+        Assert.Equal(1, SourceGate.Count(all, "LocMessage.Of(\"canvas.shot.screenOutOfFrame\")"));
+        foreach (var spent in new[] { "canvas.notice.notRunningTitle", "capture.grab.noFrame", "canvas.shot.screenOutOfFrame" })
+            Assert.Equal(0, SourceGate.Count(all, "Locale.T(\"" + spent + "\")"));
         // ② 旧句子一概不许回到代码里（现在由表里说）。逐颗点名，⛔ 用"汉字总数下降"那种整体口径——
         // 那种判据既抓不到"删一颗"，也抓不到新写的一句别的中文。
         foreach (var dead in new[]

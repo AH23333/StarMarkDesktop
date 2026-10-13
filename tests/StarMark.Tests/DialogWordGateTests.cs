@@ -284,9 +284,7 @@ public sealed class DialogWordGateTests
             (CountdownCs, "LocMessage.Of(\"common.rawValue\", CountdownPolicy.TitleText(item))", 1),
             (ClockCs, "LocMessage.Of(\"common.rawValue\", AlarmPolicy.LineOf(item))", 1),
             // ✅WI-65 片3 第二刀：「贴图上限」那颗判据自己交「键＋实参」⇒ 那道门撤了（撤门⛔ 留下这一格当它还在）。
-            //   这里剩下的那一颗 <c>full</c> 是<b>组上限</b>那句（<c>PinGrouping.LimitProblem</c> 仍当场念完，归后面那刀）。
-            (PinCs, "LocMessage.Of(\"common.rawValue\", full)", 1),
-            (ShotCs, "LocMessage.Of(\"common.rawValue\", shot.Reason)", 3),
+            // ✅WI-65 片4：这里剩下的那颗 <c>full</c>（组上限那句）也交「键＋实参」了 ⇒ 整档门数改钉 0／2（见下面那段撤门自证）。
             // 同批改掉的另外三颗门：ScreenshotService 那颗 CaptureGate.ReasonFor、AnnotationHub 那两颗 why
             //（两道闸门的判据现在交「键＋实参」，直接递进提示卡）。
             // ✅WI-65 片3 第二刀：识字那两张卡不再拼成品字；这里剩下的那颗是<b>认出来的那段文字本身</b>＝机器文本。
@@ -300,5 +298,13 @@ public sealed class DialogWordGateTests
             Assert.True(Times(CodeOf(file), needle) == want,
                 $"{file}：{needle} 应命中 {want} 处，现场 {Times(CodeOf(file), needle)} 处"
                 + "（这道门的主人换了就得连这一格一起改）");
+
+        // 撤门也要有针（✅WI-65 片4：那一路的五颗门一起撤，⛔ 只写"撤了"这句话）。
+        // 钉的是<b>整档</b>的门数：`common.rawValue` 只装读数，一个文件撤干净之后那颗数字就钉死在那里，
+        // 下一位再把句子塞回去＝这一格当场红（先例＝✅片3b 那三行"原样递出去"的针）。
+        Assert.Equal(0, Times(CodeOf(ShotCs), "LocMessage.Of(\"common.rawValue\""));    // 画布那三张卡的正文现在交「键＋实参」
+        Assert.Equal(0, Times(CodeOf(ShotCs), "Locale.T("));                            // 那一档⛔ 再当场念表里的键
+        Assert.Equal(2, Times(CodeOf(PinCs), "LocMessage.Of(\"common.rawValue\""));     // 剩下的两颗＝尺寸读数与 ex.Message＝数据
+        Assert.Equal(5, Times(CodeOf(ScreenCs), "LocMessage.Of(\"common.rawValue\""));  // 剩下的五颗＝异常正文与像素读数＝数据
     }
 }

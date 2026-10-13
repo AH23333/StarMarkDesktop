@@ -902,7 +902,7 @@ public sealed class I18nWiringGateTests
                      ("public static string ThroughLabel(", "ThroughLabel"),
                      ("public static string CloseLabel(", "CloseLabel"),
                      ("public static string NameOf(", "NameOf"),
-                     ("public static string? LimitProblem(", "LimitProblem"),
+                     ("public static LocMessage? LimitProblem(", "LimitProblem"),
                  })
         {
             var body = MethodBody(grouping, fragment);

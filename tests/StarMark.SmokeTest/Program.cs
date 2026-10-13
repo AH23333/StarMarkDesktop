@@ -898,8 +898,8 @@ static async Task CaptureCheckAsync()
     var started = Stopwatch.GetTimestamp();
     var result = StarMark.Integrations.Capture.GdiScreenCapture.CaptureVirtualScreen();
     var elapsedMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-    Console.WriteLine($"Capture ok={result.Ok} elapsed={elapsedMs:F0}ms err={result.Error ?? "-"}");
-    if (!result.Ok || result.Frame is not { } frame) throw new Exception("截屏失败：" + (result.Error ?? "无帧"));
+    Console.WriteLine($"Capture ok={result.Ok} elapsed={elapsedMs:F0}ms err={result.Error?.Render() ?? "-"}");
+    if (!result.Ok || result.Frame is not { } frame) throw new Exception("截屏失败：" + (result.Error?.Render() ?? "无帧"));
     Console.WriteLine($"Frame bounds={frame.Bounds.X},{frame.Bounds.Y} {frame.Bounds.Width}x{frame.Bounds.Height} bytes={frame.Bgra.Length}");
     if (frame.Bgra.Length != (long)frame.Width * frame.Height * 4) throw new Exception("像素缓冲长度与宽高不符");
 
@@ -1047,7 +1047,7 @@ static async Task OcrCheckAsync()
     var captured = StarMark.Integrations.Capture.GdiScreenCapture.CaptureVirtualScreen();
     if (!captured.Ok || captured.Frame is not { } frame)
     {
-        lines.Add("截屏失败：" + (captured.Error ?? "没有帧"));
+        lines.Add("截屏失败：" + (captured.Error?.Render() ?? "没有帧"));
     }
     else
     {
@@ -1116,7 +1116,7 @@ static async Task AnnotateCheckAsync()
 {
     CaptureSmokeNative.SetProcessDpiAwarenessContext(CaptureSmokeNative.PerMonitorV2);
     var captured = StarMark.Integrations.Capture.GdiScreenCapture.CaptureVirtualScreen();
-    if (!captured.Ok || captured.Frame is not { } frame) throw new Exception("截屏失败：" + (captured.Error ?? "无帧"));
+    if (!captured.Ok || captured.Frame is not { } frame) throw new Exception("截屏失败：" + (captured.Error?.Render() ?? "无帧"));
 
     var width = Math.Min(700, frame.Bounds.Width - 120);
     var height = Math.Min(430, frame.Bounds.Height - 120);
