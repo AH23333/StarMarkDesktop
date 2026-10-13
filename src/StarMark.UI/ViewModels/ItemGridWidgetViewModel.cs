@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 
@@ -78,20 +79,25 @@ public sealed class ItemGridWidgetViewModel
     /// 空列表时该说什么。<b>剪贴板格不能只说"暂无条目"</b>：一片空白最容易被读成"组件坏了"，
     /// 而真实原因有四种（没开启 / 开着但监听窗没建立 / 正在暂停 / 真的还没复制过），
     /// 每种对应的下一步动作都不一样——照实说是省掉一轮"是不是 bug"来回沟通的唯一办法。
+    /// <para><b>交的是 <see cref="LocMessage"/>（键＋实参），⛔ 成品字</b>（批次 WI-67 片3）：
+    /// 这一句在组件被建出来那一刻取词，而组件活在换语言之后——宿主 <c>UpdateEmptyHint()</c> 把它交给
+    /// <c>LocText.SetMessage</c>，换语言那一刻由重贴名单自己来（⛔ 在这档再挂一颗 <c>Locale.Changed</c>）。
+    /// 在 VM 里 <c>Render()</c> 一次就把语言冻在了"这一格第一次空着"的那一刻，而那一刻可能是三天前。</para>
     /// </summary>
-    public string EmptyStateText => Mode switch
+    public LocMessage EmptyState => Mode switch
     {
+        // 「没开启」那一句与「剪贴板」页同源同键（⛔ 在这里另抄一份：两处各写一次＝换语言时只有其中一处跟着走）。
         ItemGridMode.Clipboard when !App.IsClipboardHistoryEnabled()
-            => "剪贴板历史还没开启：到「设置 → 数据 → 剪贴板历史」打开后，复制过的内容会自动出现在这里。",
+            => LocMessage.Of("clip.empty.off"),
         ItemGridMode.Clipboard when !App.IsClipboardCollecting
-            => "开关已打开，但采集窗口没建立——期间不会记录任何复制。到设置里把该开关关掉再打开即可重试。",
+            => LocMessage.Of("clip.empty.noWindow"),
         ItemGridMode.Clipboard when App.IsClipboardPaused
-            => "正在暂停记录（临时粘贴私密内容用的）。到「剪贴板」页关掉「暂停记录」就会继续采集。",
+            => LocMessage.Of("clip.empty.pausedCell"),
         ItemGridMode.Clipboard
-            => "还没有记录到任何复制内容。复制一段文字，它就会出现在这里。",
+            => LocMessage.Of("clip.empty.none"),
         ItemGridMode.Activity
-            => "暂无活动记录。新增 / 删除 / 修改条目（含待办、随记、快捷入口、笔记、标签）后会显示在这里。",
-        _ => NeedsConfig ? "先在上方配置要钉的内容" : "暂无条目",
+            => LocMessage.Of("widget.grid.emptyActivity"),
+        _ => NeedsConfig ? LocMessage.Of("widget.grid.needConfig") : LocMessage.Of("widget.grid.emptyNone"),
     };
 
     public ItemGridWidgetViewModel(ItemGridMode mode, WidgetStorage storage, IItemRepository? repo, string instanceId, WidgetKind kind)

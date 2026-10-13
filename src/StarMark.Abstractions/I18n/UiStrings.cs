@@ -943,8 +943,11 @@ public static class UiStrings
         new Entry("card.pinImage.missing", "贴到桌面（这张图的{0}）", "Pin to desktop — {0}", "デスクトップへ貼り付け — {0}"),
         // 「剪贴板历史页」状态行与空态（批次 WI-30，P-172 该行兑现）：状态行的话在动作那一刻现取＝当前语言；
         // 暂停那颗是 ToggleButton 绑定（只拿 bool，提示语走 code-behind 写状态行——挂键会成双主人，#276 口径）。
-        new Entry("clip.empty.off", "剪贴板历史未开启：到「设置 → 剪贴板历史」打开后，从这里复制过的内容会自动出现在这里。", "Clipboard history is off. Turn it on under Settings → Clipboard History, and anything you copy will show up here.", "クリップボード履歴はオフです。「設定 → クリップボード履歴」でオンにすると、コピーした内容がここに自動表示されます。"),
-        new Entry("clip.empty.none", "还没有记录到任何复制内容。", "No copies have been recorded yet.", "コピーの記録はまだありません。"),
+        new Entry("clip.empty.off", "剪贴板历史未开启：到「设置 → 数据 → 剪贴板历史」打开后，复制过的内容会自动出现在这里。", "Clipboard history is off. Turn it on under Settings → Data → Clipboard history, and anything you copy will show up here.", "クリップボード履歴はオフです。「設定 → データ → クリップボード履歴」でオンにすると、コピーした内容がここに自動表示されます。"),
+        new Entry("clip.empty.none", "还没有记录到任何复制内容。复制一段文字，它就会出现在这里。", "No copies have been recorded yet. Copy some text and it turns up here.", "コピーの記録はまだありません。テキストをコピーすると、ここに表示されます。"),
+        // 剪贴板格（组件）独有的另外两张空态脸：同一颗开关状态下"下一步做什么"各不相同，⛔ 与页那两句合并（各说各的下一步）。
+        new Entry("clip.empty.noWindow", "开关已打开，但采集窗口没建立——期间不会记录任何复制。到设置里把该开关关掉再打开即可重试。", "The switch is on, but the capture window never came up — nothing is recorded in the meantime. Turn the switch off and on again in Settings to retry.", "スイッチはオンですが収集ウインドウが立ち上がっていません。この間コピーは記録されません。設定で一度オフにしてから再びオンにすると再試行できます。"),
+        new Entry("clip.empty.pausedCell", "正在暂停记录（临时粘贴私密内容用的）。到「剪贴板」页关掉「暂停记录」就会继续采集。", "Recording is paused (for pasting private content briefly). Switch off \"Pause capture\" on the Clipboard page to resume.", "記録を一時停止しています（個人情報を少し貼る時のための機能）。「クリップボード」ページで「記録を一時停止」を切ると再開します。"),
         new Entry("clip.status.load", "加载失败：{0}", "Failed to load: {0}", "読み込みに失敗しました: {0}"),
         new Entry("clip.status.noBody", "这条历史没有可复制的正文", "This entry has no text to copy", "この履歴にはコピーできる本文がありません"),
         new Entry("clip.status.copied", "已复制到剪贴板：{0}", "Copied to the clipboard: {0}", "クリップボードにコピーしました: {0}"),
@@ -2516,6 +2519,18 @@ public static class UiStrings
         new Entry("widget.todo.dueTip", "截止日期", "Due date", "期限日"),
         new Entry("widget.todo.undo", "撤销", "Undo", "元に戻す"),
         new Entry("widget.grid.apply", "应用", "Apply", "適用"),
+        // 条目格那一族的空态与配置栏提示（批次 WI-67 片3）：六臂的话由 <c>ItemGridWidgetViewModel.EmptyState</c> 交<b>键</b>，
+        // 宿主在贴上去那一刻念一次并随语言重贴 ⇒ ⛔ 在 VM 里拼成品字（那是"换语言那一刻盖不掉的第二份出处"）。
+        // 「应用」那颗按钮的名字交实参（只有 `widget.grid.apply` 一个主人），⛔ 抄进这句里。
+        new Entry("widget.grid.emptyNone", "暂无条目", "No entries yet", "項目はまだありません"),
+        new Entry("widget.grid.emptyActivity", "暂无活动记录。新增 / 删除 / 修改条目（含待办、随记、快捷入口、笔记、标签）后会显示在这里。",
+                  "No activity yet. Adding, removing or editing an entry (todos, notes, launchers, notes-to-self, tags) shows up here.",
+                  "活動記録はまだありません。エントリ（ToDo・クイックメモ・クイック起動・メモ・タグ）を追加／削除／変更すると、ここに表示されます。"),
+        new Entry("widget.grid.needConfig", "先在上方配置要钉的内容", "First configure what to pin in the box above", "先に上でピン留めする内容を設定してください"),
+        new Entry("widget.grid.pinHint", "输入要常驻桌面的标签名（如 rag、llm），回车或点「{0}」。",
+                  "Type a tag name to keep on the desktop (for example rag, llm), then press Enter or use \"{0}\".",
+                  "デスクトップに常駐させるタグ名を入力し（例：rag、llm）、Enter か「{0}」を押してください。"),
+        new Entry("widget.grid.placeholder", "标签名，如 rag", "Tag name, e.g. rag", "タグ名（例：rag）"),
         new Entry("widget.note.hint", "随手记一笔，Ctrl+Enter 保存…", "Jot something down; Ctrl+Enter saves…", "走り書き、Ctrl+Enter で保存…"),
         new Entry("widget.note.save", "保存随记", "Save note", "メモを保存"),
         new Entry("widget.clock.addZone", "＋ 添加时区…", "＋ Add a time zone…", "＋ タイムゾーン追加…"),

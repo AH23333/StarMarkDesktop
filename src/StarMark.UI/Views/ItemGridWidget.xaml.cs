@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.System;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
@@ -33,8 +34,11 @@ public sealed partial class ItemGridWidget : UserControl
         if (ViewModel.IsConfigurable)
         {
             ConfigBar.Visibility = Visibility.Visible;
-            ConfigHint.Text = "输入要常驻桌面的标签名（如 rag、llm），回车或点「应用」。";
-            ConfigBox.PlaceholderText = "标签名，如 rag";
+            // 两句都走重贴机制（批次 WI-67 片3）：这里交的是<b>键</b>而⛔ 自己的字面量——组件活得比一次换语言久，
+            // 字面量会留在"这一格第一次被建出来"那一刻的语言上（坑表 #276 那一族）。
+            // 「应用」那颗按钮的名字交实参，⛔ 抄进这句里（改了按钮的说法，这句会留下一个不存在的按钮名）。
+            LocText.SetMessage(ConfigHint, LocMessage.Of("widget.grid.pinHint", LocMessage.Of("widget.grid.apply")));
+            LocText.SetPlaceholderKey(ConfigBox, "widget.grid.placeholder");
             // 回填已钉内容：早先这里从不回填，重新打开组件时输入框是空的，
             // 即便后台仍按上次的标签出结果，用户也会误以为「配置丢了 / 搜不到」。
             ConfigBox.Text = ViewModel.GridTag ?? string.Empty;
@@ -66,7 +70,8 @@ public sealed partial class ItemGridWidget : UserControl
             ResultsRepeater.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
 
         // 文案交给 ViewModel：剪贴板格的"为什么是空的"有四种，各自对应不同的下一步动作。
-        if (empty) EmptyHint.Text = ViewModel.EmptyStateText;
+        // 空态那句由 VM 交「键＋实参」，贴这一颗走重贴名单：换语言那一刻不必重建组件也能换字。
+        if (empty) LocText.SetMessage(EmptyHint, ViewModel.EmptyState);
     }
 
     private void ConfigBox_KeyDown(object sender, KeyRoutedEventArgs e)
