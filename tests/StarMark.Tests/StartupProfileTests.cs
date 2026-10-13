@@ -13,7 +13,8 @@ namespace StarMark.Tests;
 /// 这批不做优化，先把"到底慢在哪一段"变成日志里的数字——清单上那些"约 -50~150 ms"的收益
 /// 全是没有量过的猜测，而真机日志里已经有一条 <c>[卡顿] …阻塞约 1516 ms</c>。
 /// 所以这里要钉住的是<b>读法正确</b>：增量是自上一段起的、累计是自会话开始起的、
-/// 顺序与标签一一对应、慢阈值真的会筛掉常态噪声、计时壳绝不吞返回值与异常。
+/// 顺序与编号一一对应（段名只进日志，批次 WI-67·P-191 他改判「文字可删去」）、
+/// 慢阈值真的会筛掉常态噪声、计时壳绝不吞返回值与异常。
 /// 这些错了，下一个读日志的人就会被数字骗到——比没有度量更糟。
 /// </para>
 /// </summary>
@@ -291,18 +292,25 @@ public sealed class StartupProfileTests : IDisposable
     }
 
     [Fact]
-    public void SegmentTableKeepsLabelAndDeltaTogether()
+    public void SegmentTimingsCarryIndexAndDeltaWhileTheLogKeepsTheLabel()
     {
         StartupProfile.ResetForTests(2_000);
         StartupProfile.Mark("第一段", 2_030);
         StartupProfile.Mark("第二段", 2_100);
 
-        var segments = StartupProfile.Segments;
-        Assert.Equal(2, segments.Count);
-        Assert.Equal("第一段 +30 ms", segments[0]);
-        Assert.Equal("第二段 +70 ms", segments[1]);      // 错位一格就会把慢的段安到别的标签上
-        // Mark 同时推进"最后一个刻度"，且用的是表里同一份文字——两处不同源，看门狗报的就是另一个动作
-        Assert.Equal(segments[^1], StartupProfile.LastCheckpoint);
+        // 屏幕那一路（诊断面板）交的是<b>编号＋毫秒</b>：错位一格就会把慢的那段安到别的编号上，
+        // 而"编号 ↔ 日志里第 N 条 [启动]"是删掉段名之后唯一剩下的对账路。
+        var timings = StartupProfile.SegmentTimings;
+        Assert.Equal(2, timings.Count);
+        Assert.Equal("#1 +30 ms", timings[0]);
+        Assert.Equal("#2 +70 ms", timings[1]);
+        // 段名的唯一去处＝日志那一行（他改判「文字可删去」只删屏幕，⛔ 连日志一起删）：
+        // 这一格红了就说明有人把对账路两头都拆了。
+        Assert.Equal("第二段 +70 ms", StartupProfile.LastCheckpoint);
+        Assert.Contains(_lines, l => l.StartsWith("[启动] 第一段：+30 ms", StringComparison.Ordinal));
+        Assert.Contains(_lines, l => l.StartsWith("[启动] 第二段：+70 ms", StringComparison.Ordinal));
+        // ⛔ 屏幕上那一列再带一个字：段名进 timings 就是把他这次裁决改回去（批次 WI-67·P-191）。
+        Assert.All(timings, t => Assert.DoesNotContain("第", t, StringComparison.Ordinal));
     }
 
     [Fact]

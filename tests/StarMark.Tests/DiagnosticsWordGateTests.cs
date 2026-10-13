@@ -19,8 +19,9 @@ namespace StarMark.Tests;
 /// </para>
 /// <para><b>为什么连 Integrations 那几句也一起交</b>：屏幕上那一行同时显示「源：Chrome 书签」与
 /// 「没有这项数据：没在本机找到…」——只翻外层就是半中半英（✅WI-46a"未交完的族"那颗教训）。
-/// 反过来 <c>StartupProfile</c> 的刻度行<b>本批判为日志摘录⛔ 交表</b>：它的用途是让人把面板上那一行
-/// 与日志里那一行<b>逐字对上</b>，翻了就切断这条对账路（取舍与代价登记在账本 P-191）。</para>
+/// 反过来 <c>StartupProfile</c> 那一路的<b>段名只住日志</b>（批次 WI-67·P-191 他改判「文字可删去」）：
+/// 面板那一行交的是「#编号 +N ms」＋表里那句"段名见日志"，⛔ 把那 29 颗写死在调用点的中文端上屏——
+/// 判据见 <see cref="TheStartupSegmentRowShowsNumbersOnScreenAndKeepsNamesInTheLog"/>。</para>
 /// <para><b>供话者那四档只圈住 <c>AvailabilityHint</c> 那颗方法体</b>（规则 #110：禁项按"会不会上这一屏"划射程）——
 /// 同一档文件里还有卡片副标题、诊断日志那几族，它们各有主人，整档一刀切会咬到本批没交的人。</para>
 /// <para>尺＝抹注释后逐行取连续汉字片段、并<b>排除日志头</b>那一行（与 <c>bin/WI48/census_core.py</c> 同一把；
@@ -37,6 +38,7 @@ public sealed class DiagnosticsWordGateTests : IDisposable
     private const string SettingsPageCs = "src/StarMark.UI/Views/SettingsPage.xaml.cs";
     private const string SettingsPageXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
     private const string TableCs = "src/StarMark.Abstractions/I18n/UiStrings.cs";
+    private const string StartupProfileCs = "src/StarMark.Abstractions/StartupProfile.cs";
 
     /// <summary>把成因句交进表的那四档供话者（现场 grep 出来的，⛔ 手抄名单——真漏过一颗的那次是 #367）。</summary>
     private static readonly string[] SupplierFiles =
@@ -212,6 +214,44 @@ public sealed class DiagnosticsWordGateTests : IDisposable
         {
             Locale.TrySet(language);
             Assert.Equal(expect, Locale.Fmt("diag.label.source", SourceNames.NameOf(ItemSources.Chrome)));
+        }
+    }
+
+    /// <summary>
+    /// <b>启动分段那一行：屏幕上只许有「#编号 +N ms」，段名唯一的去处＝日志</b>
+    /// （批次 WI-67·P-191 他改判「文字可删去」——原裁决 (A) 那句"那一行＝日志摘录，逐字对上"是他这次收回的半句）。
+    /// <para>为什么这一族要一格专门钉：它<b>两个方向都会坏</b>。方向① 有人把段名再端上屏＝他报的那一行
+    /// 「DI 与数据库迁移完成…组件点亮后 UI 让出（Low 档）」原样回来；方向② 有人连日志里的名字一起删＝
+    /// 对账路两头都没了，"启动慢"重新变回猜。所以这一格<b>屏幕侧与日志侧同时钉</b>，⛔ 只钉一条。</para>
+    /// <para>第三件钉的是<b>形状</b>：Core 交出的是键＋实参。那颗 <c>diag.fact</c> 直通行是"机器事实"专用，
+    /// 用它当外层就等于把"段名见日志"这句<b>话</b>没了主人——英文界面上永远挂着中文。</para>
+    /// </summary>
+    [Fact]
+    public void TheStartupSegmentRowShowsNumbersOnScreenAndKeepsNamesInTheLog()
+    {
+        var code = CodeOf(DiagnosticsCs);
+        Assert.Contains("StartupProfile.SegmentTimings is { Count: > 0 } timings", code, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"diag.value.startupSegments\", string.Join(\" · \", timings))", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("DiagnosticEntry.Fact(string.Join", code, StringComparison.Ordinal);
+
+        // 带段名那颗出口（<c>StartupProfile.Segments</c>）已经删掉。这一格管的是"有人另开一条带名字的新出口"——
+        // 那种形状编译得过（换个名字就行），而屏幕上那行中文就回来了。
+        var corpus = string.Join("\n", SourceGate.ReadRepoUnder("src").Select(f => SourceGate.Code(f.Text)));
+        Assert.Equal(0, SourceGate.Count(corpus, "StartupProfile.Segments"));
+
+        // 日志那一路一个名字都没少：Mark 写的那行仍带着调用点交来的标签（P-191 (A) 保持的那半）。
+        Assert.Contains("$\"[启动] {segment}：+{sinceLast} ms", CodeOf(StartupProfileCs), StringComparison.Ordinal);
+
+        // 成对的另一半（规则 #124）：计数抓不到"键还在问、实参换了"，而外层那句是三语各念一次的。
+        foreach (var (language, expect) in new (AppLanguage, string)[]
+                 {
+                     (AppLanguage.Chinese, "#1 +30 ms（段名见日志）"),
+                     (AppLanguage.English, "#1 +30 ms (segment names are in the log)"),
+                     (AppLanguage.Japanese, "#1 +30 ms（区間名はログにあります）"),
+                 })
+        {
+            Locale.TrySet(language);
+            Assert.Equal(expect, LocMessage.Of("diag.value.startupSegments", "#1 +30 ms").Render());
         }
     }
 
