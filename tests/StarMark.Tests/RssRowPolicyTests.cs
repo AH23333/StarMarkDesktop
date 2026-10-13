@@ -61,17 +61,24 @@ public sealed class RssRowPolicyTests
         Assert.True(ItemCardPolicy.CanSendToLauncher(false, false, hasUri: true, isRssCandidate: false));
     }
 
+    /// <summary>收藏那两项<b>交的是键</b>（批次 WI-67 片4）：这一族的字从此只住表里一份，
+    /// 测试⛔ 再抄那句中文当期望（抄了＝表里的措辞一改就红在无关的地方，而真正要防的"落点没带上"照样看不见）。
+    /// <para>能机检的两件事：①选的是<b>哪一颗键</b>（收藏态翻转）；②那句提示带着<b>这一行自己的落点</b>。
+    /// "移除去哪儿移除"那半句的语义从此归表与真机（点验单），⛔ 拿一句中文的存在与否当证据。</para></summary>
     [Fact]
     public void CollectAffordanceNamesTheFolderItWillCreate()
     {
-        var tip = ItemCardPolicy.RssCollectTip(false, RssFolders.DisplayPath("开源中国"));
-        Assert.Contains("RSS订阅 / 开源中国", tip);
-        Assert.Equal("收藏到文件夹", ItemCardPolicy.RssCollectLabel(false));
+        var path = RssFolders.DisplayPath("开源中国");
+        var tip = ItemCardPolicy.RssCollectTip(false, path);
+        Assert.Equal("card.rssCollect.tip.uncollected", tip.Key);
+        Assert.Equal(path, Assert.Single(tip.Args!));        // 提示里那个文件夹＝这一行算出来的落点（数据，⛔ 第二句语言）
+        Assert.Contains("RSS订阅 / 开源中国", tip.Render());   // 填进槽的是实参而⛔ 表里的字
+        Assert.Equal("card.rssCollect.label.uncollected", ItemCardPolicy.RssCollectLabel(false).Key);
         // 已收藏后不再给"移除"（P-88）：文案要说清去哪儿移除，而不是留一颗含义不明的灰按钮
-        var done = ItemCardPolicy.RssCollectTip(true, RssFolders.DisplayPath("开源中国"));
-        Assert.Equal("已收藏", ItemCardPolicy.RssCollectLabel(true));
-        Assert.Contains("已经在", done);
-        Assert.Contains("资料库", done);
+        var done = ItemCardPolicy.RssCollectTip(true, path);
+        Assert.Equal("card.rssCollect.tip.collected", done.Key);
+        Assert.Equal(path, Assert.Single(done.Args!));
+        Assert.Equal("card.rssCollect.label.collected", ItemCardPolicy.RssCollectLabel(true).Key);
     }
 
     // ────────── 收藏落点：文件夹 ──────────
@@ -84,7 +91,8 @@ public sealed class RssRowPolicyTests
         var row = RssRowDraft.ForCandidate(Entry(sourceName: "开源中国"));
 
         Assert.Equal(new[] { "RSS订阅", "开源中国" }, FolderPathUtil.BookmarkSegments(row));
-        Assert.Contains("RSS订阅 / 开源中国", ItemCardPolicy.RssCollectTip(false, RssFolders.DisplayPath("开源中国")));
+        Assert.Contains("RSS订阅 / 开源中国",
+            ItemCardPolicy.RssCollectTip(false, RssFolders.DisplayPath("开源中国")).Render());
     }
 
     /// <summary>收藏写库的那一行：与候选行只差"进库"这件事（来源换成本地、补时间戳），
@@ -116,10 +124,14 @@ public sealed class RssRowPolicyTests
         Assert.False(ItemCardPolicy.ShowsCollect(false, false));   // 库里的行没有"再收藏一次"
 
         // 同一个按钮位，两类行两套文案：混用就会出现"RSS 行上写着 GitHub 的落点"
-        Assert.Equal("收藏到文件夹", ItemCardPolicy.CollectLabelFor(true, false));
-        Assert.Equal("收进收藏", ItemCardPolicy.CollectLabelFor(false, false));
-        Assert.Contains("RSS订阅", ItemCardPolicy.CollectTipFor(true, false, "RSS订阅 / 开源中国"));
-        Assert.Contains("GitHub", ItemCardPolicy.CollectTipFor(false, false, "RSS订阅 / 开源中国"));
+        Assert.Equal("card.rssCollect.label.uncollected", ItemCardPolicy.CollectLabelFor(true, false).Key);
+        Assert.Equal("card.collect.label.uncollected", ItemCardPolicy.CollectLabelFor(false, false).Key);
+        var rssTip = ItemCardPolicy.CollectTipFor(true, false, "RSS订阅 / 开源中国");
+        var hotTip = ItemCardPolicy.CollectTipFor(false, false, "RSS订阅 / 开源中国");
+        Assert.NotEqual(rssTip.Key, hotTip.Key);                        // 两套念法⛔ 并成一颗（落点根本不同）
+        Assert.Contains("RSS订阅 / 开源中国", rssTip.Render());          // RSS 那份带着这一行的落点
+        Assert.Contains("GitHub", hotTip.Render());                     // 热榜那份说的是远端那件事（三列里都有这颗专有名词）
+        Assert.True(hotTip.Args is null || hotTip.Args.Length == 0);   // 热榜那一句不带实参＝⛔ 把落点塞进不相干的那句
     }
 
     /// <summary>候选行没有"本机更新时间"：<c>UpdatedAt</c> 缺省 0，不关掉就会在卡片右上角印出 1970-01-01。</summary>

@@ -2,6 +2,7 @@
 using System;
 using Xunit;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Trending;
 
 namespace StarMark.Tests;
@@ -98,19 +99,33 @@ public sealed class TrendingCardPolicyTests
     {
         Assert.Equal("☆", ItemCardPolicy.StarGlyph(false));
         Assert.Equal("★", ItemCardPolicy.StarGlyph(true));
-        Assert.Equal("Star", ItemCardPolicy.StarLabel(false));
-        Assert.Equal("已 Star", ItemCardPolicy.StarLabel(true));
+        // 那两颗按钮的字从此交键（批次 WI-67 片4）：测试钉"选的是哪一颗"，⛔ 再抄一遍表里的字
+        Assert.Equal("card.star.label.unstarred", ItemCardPolicy.StarLabel(false).Key);
+        Assert.Equal("card.star.label.starred", ItemCardPolicy.StarLabel(true).Key);
     }
 
+    /// <summary>
+    /// Star 的提示句是<b>三层</b>的：外层骨架带着两颗还没取词的实参（状态那半句＋那颗可选的 Token 提醒）。
+    /// <para>这里钉的是"套娃的形状"——<c>{0}</c> 槽必须是 <see cref="LocMessage"/> 而⛔ 一句念完的字，
+    /// "没话要说"必须是 <c>null</c>（P-196／坑表 #393 那一族：外层重贴、内层钉在造串那一刻＝半中半英）。
+    /// 至于那句"判定取自哪份列表"的语义，从此归表与真机点验（机检⛔ 靠一句中文的存在与否当证据）。</para>
+    /// </summary>
     [Fact]
     public void StarTip_NeverClaimsToBeRealtime_AndSaysWhenTokenIsMissing()
     {
-        // 判定来自本机已同步列表，不是 HEAD 探测：这句不写，用户会以为界面是实时的、刚在网页 star 的也该显示
-        Assert.Contains("本机已同步的 Star 列表", ItemCardPolicy.StarTip(true, true));
-        Assert.Contains("本机已同步的 Star 列表", ItemCardPolicy.StarTip(false, false));
-        // 没配 Token 时必须当场说清"点了会失败"，而不是让人按下去才知道
-        Assert.Contains("未配置 Token", ItemCardPolicy.StarTip(false, false));
-        Assert.DoesNotContain("未配置 Token", ItemCardPolicy.StarTip(false, true));
+        var withToken = ItemCardPolicy.StarTip(false, true);
+        var noToken = ItemCardPolicy.StarTip(false, false);
+        Assert.Equal("card.star.tip", withToken.Key);
+        Assert.Equal("card.star.tip", noToken.Key);
+        Assert.Null(withToken.Args![1]);                                       // 配了 Token＝那半句没话要说（⛔ 空壳句）
+        Assert.Equal("card.star.tip.tokenNote", ((LocMessage)noToken.Args![1]!).Key);
+        Assert.Equal("card.star.tip.unstarred", ((LocMessage)noToken.Args![0]!).Key);
+        Assert.Equal("card.star.tip.starred",
+            ((LocMessage)ItemCardPolicy.StarTip(true, true).Args![0]!).Key);
+        // 那句"点了会失败"必须真填进句子（选了键却没上槽＝屏幕上少半句），而配了 Token 时⛔ 还留着它。
+        // ⚠ 期望⛔ 抄表里的措辞＝现取同一颗键（#130）：抄了的那一版在日文档上必红而改动措辞时看不见。
+        Assert.Contains(Locale.T("card.star.tip.tokenNote"), noToken.Render(), StringComparison.Ordinal);
+        Assert.DoesNotContain(Locale.T("card.star.tip.tokenNote"), withToken.Render(), StringComparison.Ordinal);
     }
 
     [Theory]
@@ -118,8 +133,10 @@ public sealed class TrendingCardPolicyTests
     [InlineData(false)]
     public void CollectLabels_AlwaysSayTheLocalBookmarkDoesNotTouchGitHub(bool collected)
     {
-        Assert.Equal(collected ? "移出收藏" : "收进收藏", ItemCardPolicy.CollectLabel(collected));
-        Assert.Contains("不会动 GitHub 的 Star 状态", ItemCardPolicy.CollectTip(collected));
+        Assert.Equal(collected ? "card.collect.label.collected" : "card.collect.label.uncollected",
+            ItemCardPolicy.CollectLabel(collected).Key);
+        // 三列里都写着这颗专有名词＝语言无关的那半句事实（"点这颗不动 GitHub 的 Star"）
+        Assert.Contains("GitHub", ItemCardPolicy.CollectTip(collected).Render());
     }
 
     // ===== 星数文案：不知道 ≠ 没涨 =====

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using StarMark.Abstractions.I18n;
 using Xunit;
 using static StarMark.Tests.SourceGate;
 
@@ -20,8 +21,17 @@ namespace StarMark.Tests;
 /// <para>禁项一律读<b>抹掉注释后的代码</b>（<see cref="SourceGate.Code"/>，#195/#200/#201 那一族）：
 /// 注释里引用一句旧措辞是为了讲清为什么，不是又开一个出口。</para>
 /// </summary>
-public sealed class EnglishLeftoverGateTests
+[Collection("LocaleGlobal")]      // 批次 WI-67 片4 起本档有一格会当场换语言（三语各渲染一遍），⛔ 与别的换语言的证人交错跑
+public sealed class EnglishLeftoverGateTests : IDisposable
 {
+    private readonly AppLanguage _languageBefore = Locale.Current;
+
+    /// <summary>跑完把语言<b>还回去</b>：全工程逐档断言中文的证人不少（<c>TrendingCardPolicyTests</c> 那颗副标题），
+    /// 而 <c>DisableTestParallelization</c> 让测试是<b>顺序</b>跑的——上一档留在哪一门，下一档就读哪一门。
+    /// <para>⚠ 这一条不是修饰：<c>bench_67d_r1</c> 的基线第一跑就是被我自己这颗没还原的格打红的
+    /// （两颗红：那颗串行集合闸门＋热榜副标题），当场证明"换了不还"会污染别人（名册 241 的姊妹面）。</para></summary>
+    public void Dispose() => Locale.TrySet(_languageBefore);
+
     private const string TagEditor = "src/StarMark.UI/Controls/TagEditor.xaml";
     private const string PreviewHostXaml = "src/StarMark.UI/Controls/PreviewHost.xaml";
     private const string PreviewHostCs = "src/StarMark.UI/Controls/PreviewHost.xaml.cs";
@@ -32,8 +42,11 @@ public sealed class EnglishLeftoverGateTests
     private const string Table = "src/StarMark.Abstractions/I18n/UiStrings.cs";
     private const string ItemGridVm = "src/StarMark.UI/ViewModels/ItemGridWidgetViewModel.cs";
     private const string ItemGridCs = "src/StarMark.UI/Views/ItemGridWidget.xaml.cs";
+    private const string CardPolicy = "src/StarMark.Abstractions/ItemCardPolicy.cs";
+    private const string CardVm = "src/StarMark.UI/ViewModels/ItemCardViewModel.cs";
 
-    /// <summary>本批这两片改交键的那 21 颗（片1 十二颗＋片3 九颗；颗数＝`bin/WI67/keys_67c.txt` 那把差集尺对过）。一颗都得有人在表里问，⛔ 留一颗没人念的死键进表。</summary>
+    /// <summary>本批这几片改交键的那 35 颗（片1 十二颗＋片3 九颗＋片4 十四颗；颗数＝<c>bin/WI67/keys_67d.txt</c> 那把差集尺对过，
+    /// 名单长度＝同一颗尺逐颗数出来的数组元素数）。一颗都得有人在表里问，⛔ 留一颗没人念的死键进表。</summary>
     private static readonly string[] Keys =
     {
         "tag.editor.placeholder", "tag.editor.removeTip", "tag.editor.suggestTitle", "tag.editor.addTip",
@@ -45,6 +58,13 @@ public sealed class EnglishLeftoverGateTests
         "clip.empty.off", "clip.empty.none", "clip.empty.noWindow", "clip.empty.pausedCell",
         "widget.grid.emptyActivity", "widget.grid.emptyNone", "widget.grid.needConfig",
         "widget.grid.pinHint", "widget.grid.placeholder",
+        // 批次 WI-67 片4（卡片上那两颗动作按钮：他报的「收进收藏」「收藏到文件夹」正是这里的两颗 label）。
+        "card.star.label.starred", "card.star.label.unstarred", "card.star.tip",
+        "card.star.tip.starred", "card.star.tip.unstarred", "card.star.tip.tokenNote",
+        "card.collect.label.collected", "card.collect.label.uncollected",
+        "card.collect.tip.collected", "card.collect.tip.uncollected",
+        "card.rssCollect.label.collected", "card.rssCollect.label.uncollected",
+        "card.rssCollect.tip.collected", "card.rssCollect.tip.uncollected",
     };
 
     private static readonly Regex CjkInAttribute = new("(?<=[\"'])[^\"']*?[㐀-鿿]", RegexOptions.CultureInvariant);
@@ -188,6 +208,98 @@ public sealed class EnglishLeftoverGateTests
         Assert.Equal(0, Count(code, "剪贴板历史还没开启"));                        // 表外那份抄写的开头（改前现读 1 处）
         Assert.Equal(0, Count(code, "到「设置 → 数据 → 剪贴板历史」打开后"));      // 路径⛔ 在表外再活一份（改前现读 1 处）
         Assert.Equal(2, Count(code, "\"clip.empty.off\""));                      // 两个宿主各问一次：「剪贴板」页与组件那一格
+    }
+
+    /// <summary>
+    /// 卡片上那两颗动作按钮的字（发起人逐行报障里的<b>「收进收藏」与「收藏到文件夹」</b>）从此只住表里一份（批次 WI-67 片4）。
+    /// <para>⚠ 下面那十三串"表外 0 处"是<b>从改前那一侧现读出来的</b>（<c>bin/WI67/literal_67d.txt</c>：那十三句在
+    /// <c>ItemCardPolicy.cs</c> 里<b>各读 1 处</b>，全仓除表外没有第二处）。这一族本批之前<b>压根没进过表</b>——
+    /// 英文界面上它们就是一行汉字，而 5795 格里没有一格看得见（名册 245：一颗"0 处"只有在一边读到过 ≥1 时才在防事）。</para>
+    /// <para>另外那两串（「收藏到文件夹」「收进收藏」）问的是<b>整片 src</b>：他点到的那两句⛔ 在别的宿主里再抄一份。</para>
+    /// </summary>
+    [Fact]
+    public void TheCardActionWordsHaveOneHomeEach()
+    {
+        var policy = Code(ReadRepoFile(CardPolicy));
+        foreach (var words in new[]
+        {
+            "收藏到文件夹", "已收藏", "移出收藏", "收进收藏", "已 Star",
+            "作为书签存进本机，并放进", "要移除请到资料库对应那一行", "第一次收藏这个源时会建出这一层文件夹",
+            "不会动 GitHub 的 Star 状态", "已在你的 Star 列表中，点击取消 Star", "Star 这个仓库（需 GitHub Token）",
+            "当前未配置 Token，点击会提示失败", "判定取自本机已同步的 Star 列表",
+        })
+            Assert.Equal(0, Count(policy, words));
+
+        var code = string.Concat(ReadRepoUnder("src")
+            .Where(f => !f.RelativePath.EndsWith("UiStrings.cs", StringComparison.Ordinal))
+            .Select(f => Code(f.Text)));
+        Assert.Equal(0, Count(code, "收藏到文件夹"));
+        Assert.Equal(0, Count(code, "收进收藏"));
+
+        // 十四颗键各有且只有一处出口（工厂那一颗）：宿主⛔ 自己再点一次键名＝第二个主人。
+        foreach (var key in Keys.Where(k => k.StartsWith("card.", StringComparison.Ordinal)))
+            Assert.Equal(1, Count(code, $"\"{key}\""));
+
+        // 工厂交的是「键＋实参」；那颗套娃的 {0} 槽交的是<b>还没取词的</b> LocMessage（⛔ 先念好再拼）。
+        Assert.Equal(8, Count(policy, "public static LocMessage "));
+        Assert.Contains("LocMessage.Of(starred ? \"card.star.tip.starred\" : \"card.star.tip.unstarred\")",
+            policy, StringComparison.Ordinal);
+        Assert.Contains("hasToken ? null : LocMessage.Of(\"card.star.tip.tokenNote\")", policy, StringComparison.Ordinal);
+        Assert.DoesNotContain("Locale.T(", policy, StringComparison.Ordinal);      // 句厂⛔ 自己取词＝语言冻在算出它那一刻
+        Assert.DoesNotContain("Locale.Fmt(", policy, StringComparison.Ordinal);
+
+        // 卡片 VM 那四颗是"当下就要一个字串"的薄包装（与 OpenMenuText 同一口径）：逐字钉住，⛔ 谁把它们换回字面量。
+        var vm = Code(ReadRepoFile(CardVm));
+        foreach (var line in new[]
+        {
+            "public string StarLabel => ItemCardPolicy.StarLabel(_isStarred).Render();",
+            "public string StarTip => ItemCardPolicy.StarTip(_isStarred, _hasToken).Render();",
+            "public string CollectLabel => ItemCardPolicy.CollectLabelFor(IsRssCandidate, _isCollected).Render();",
+            "public string CollectTip => ItemCardPolicy.CollectTipFor(IsRssCandidate, _isCollected, RssFolderPath).Render();",
+        })
+            Assert.Contains(line, vm, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 那十四颗新键<b>真跑得念一遍</b>（三语各一次）：非空、槽全填满、两颗状态 label 在<b>每一门语言里都互不相同</b>。
+    /// <para>形状尺只能说"工厂交出的是键"，说不了"那句在屏幕上念得出来"——槽没填满、ja 列漏一格、
+    /// 或者"已 Star／Star"在某一档语言里念成同一句（点了看不出翻转），都由这一格先红。</para>
+    /// </summary>
+    [Fact]
+    public void TheCardActionWordsRenderInAllThreeLanguages()
+    {
+        const string folder = "RSS订阅 / 开源中国";      // 那颗<b>实参</b>是数据（路径），⛔ 表里的措辞
+        foreach (var lang in new[] { AppLanguage.Chinese, AppLanguage.English, AppLanguage.Japanese })
+        {
+            Locale.TrySet(lang);
+            Assert.Equal(lang, Locale.Current);                       // TrySet 回的是"变没变"，⛔"换没换到"（规则 #112）
+
+            var starred = Locale.Fmt("card.star.label.starred");
+            var unstarred = Locale.Fmt("card.star.label.unstarred");
+            Assert.True(starred.Length > 0 && unstarred.Length > 0, $"{lang} 那两颗 Star 字是空的");
+            Assert.NotEqual(starred, unstarred);                      // 点了必须看得出翻转
+
+            var collected = Locale.Fmt("card.collect.label.collected");
+            var uncollected = Locale.Fmt("card.collect.label.uncollected");
+            Assert.NotEqual(collected, uncollected);
+            var rssOn = Locale.Fmt("card.rssCollect.label.collected");
+            var rssOff = Locale.Fmt("card.rssCollect.label.uncollected");
+            Assert.NotEqual(rssOn, rssOff);
+
+            foreach (var key in new[] { "card.collect.tip.collected", "card.collect.tip.uncollected" })
+                Assert.True(Locale.T(key).Length > 20, $"{key} 在 {lang} 太短＝那一列没填");
+
+            foreach (var key in new[] { "card.rssCollect.tip.collected", "card.rssCollect.tip.uncollected" })
+                Assert.Contains(folder, Locale.Fmt(key, folder));     // {0} 真被填上了（⛔ 屏幕上留一个 {0}）
+            var token = Locale.T("card.star.tip.tokenNote");
+            Assert.Contains(token, Locale.Fmt("card.star.tip", unstarred, token));
+            Assert.DoesNotContain(token, Locale.Fmt("card.star.tip", unstarred, (object?)null));   // "没话要说"不许留下半个分隔符
+        }
+        // ⚠「Star」那颗中英同形是<b>事实</b>（这个专有名词在英文界面里本来就写作 Star）＝不是没翻（与 ⑨ 那格同一口径）；
+        // 而它⛔ 与日文同形——那一列写的是「スター」。
+        Assert.True(UiStrings.TryGet("card.star.label.unstarred", out var sameName), "表里没有 card.star.label.unstarred");
+        Assert.Equal(sameName.Zh, sameName.En);
+        Assert.NotEqual(sameName.Zh, sameName.Ja);
     }
 
     /// <summary>整个 src 下的 <c>.xaml</c>（<see cref="ReadRepoUnder"/> 只 glob <c>.cs</c>，标记档⛔ 在它射程里）。</summary>
