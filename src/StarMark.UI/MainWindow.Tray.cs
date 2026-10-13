@@ -99,12 +99,12 @@ public sealed partial class MainWindow
         if (groups.Count == 0) return null;
         return new TrayHost.TrayCommandItem(Locale.T("tray.groupParent"), TrayGroupParent,
             Children: groups.Select(group => new TrayHost.TrayCommandItem(
-                PinGrouping.GroupLabel(group.Name, group.Members.Count), TrayGroupParent,
+                PinGrouping.GroupLabel(group.Name, group.Members.Count).Render(), TrayGroupParent,
                 Children:
                 [
-                    new(PinGrouping.HideLabel(group.AllHidden), PinGrouping.TagOf(group.Serial, PinGrouping.Action.Show)),
-                    new(PinGrouping.ThroughLabel(group.AllThrough), PinGrouping.TagOf(group.Serial, PinGrouping.Action.Through)),
-                    new(PinGrouping.CloseLabel(group.Members.Count), PinGrouping.TagOf(group.Serial, PinGrouping.Action.Close)),
+                    new(PinGrouping.HideLabel(group.AllHidden).Render(), PinGrouping.TagOf(group.Serial, PinGrouping.Action.Show)),
+                    new(PinGrouping.ThroughLabel(group.AllThrough).Render(), PinGrouping.TagOf(group.Serial, PinGrouping.Action.Through)),
+                    new(PinGrouping.CloseLabel(group.Members.Count).Render(), PinGrouping.TagOf(group.Serial, PinGrouping.Action.Close)),
                 ])).ToList());
     }
 

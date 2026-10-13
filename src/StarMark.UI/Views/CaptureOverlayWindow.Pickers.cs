@@ -125,8 +125,8 @@ public sealed partial class CaptureOverlayWindow
         foreach (var group in PinManager.Groups)
         {
             var target = group;
-            row.Children.Add(GroupChip(target.Name,
-                Locale.Fmt("capture.pick.groupMerge", target.Name, target.Members.Count),
+            row.Children.Add(GroupChip(target.Name.Render(),
+                Locale.Fmt("capture.pick.groupMerge", target.Name.Render(), target.Members.Count),
                 () => PinManager.JoinGroup(this, target.Serial)));
         }
         if (PinManager.GroupOf(this) is not null)

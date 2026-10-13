@@ -48,7 +48,7 @@ public static class PinManager
         public int Serial { get; } = serial;
 
         /// <summary>组名的<b>念法</b>：每次现算（批次 WI-46c）。⛔ 存进字段——存下来＝在建组那一刻定死，换语言后不动。</summary>
-        public string Name => PinGrouping.NameOf(Serial);
+        public LocMessage Name => PinGrouping.NameOf(Serial);
         public List<CaptureOverlayWindow> Members { get; } = [first];
 
         /// <summary>整组都收起了才算"这一组已隐藏"——决定那条菜单写「显示」还是「隐藏」。</summary>
@@ -114,7 +114,7 @@ public static class PinManager
             TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.noneTitle"), none);
             return;
         }
-        ApplyHiddenTo(Pins, PinGrouping.NextHidden(AreHidden), Locale.T("pin.card.scopeAll"));
+        ApplyHiddenTo(Pins, PinGrouping.NextHidden(AreHidden), LocMessage.Of("pin.card.scopeAll"));
     });
 
     /// <summary>切换所有贴图的鼠标穿透。</summary>
@@ -126,7 +126,7 @@ public static class PinManager
             TrayReporter.Report(LocMessage.Of("pin.card.category"), LocMessage.Of("pin.card.noneTitle"), none);
             return;
         }
-        ApplyThroughTo(Pins, PinGrouping.NextThrough(ClickThrough), Locale.T("pin.card.scopeAll"));
+        ApplyThroughTo(Pins, PinGrouping.NextThrough(ClickThrough), LocMessage.Of("pin.card.scopeAll"));
     });
 
     public static void CloseAll() => OnUi(() =>
@@ -167,7 +167,7 @@ public static class PinManager
         Detach(pin);
         var group = new PinGroup(++_nextSerial, pin);
         GroupRoster.Add(group);
-        StarLog.Info($"[Pin] {group.Name}＝1 张");
+        StarLog.Info($"[Pin] {group.Name.Render()}＝1 张");
         TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.groupedTitle"),
             LocMessage.Of("pin.card.groupedBody", PinGrouping.GroupLabel(group.Name, 1), LocMessage.Of("pin.card.groupCategory")));
     });
@@ -185,9 +185,9 @@ public static class PinManager
         }
         Detach(pin);
         target.Members.Add(pin);
-        StarLog.Info($"[Pin] 并入 {target.Name}＝{target.Members.Count} 张");
+        StarLog.Info($"[Pin] 并入 {target.Name.Render()}＝{target.Members.Count} 张");
         TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.joinedTitle"),
-            LocMessage.Of("pin.groupLabel", target.Name, target.Members.Count));
+            PinGrouping.GroupLabel(target.Name, target.Members.Count));
     });
 
     /// <summary>从当前组里出来。整组只剩一张时它出来就等于空组 ⇒ 那一组一起消失。</summary>
@@ -196,7 +196,7 @@ public static class PinManager
         var from = GroupRoster.FirstOrDefault(g => g.Members.Contains(pin));
         if (from is null) return;
         Detach(pin);
-        StarLog.Info($"[Pin] 已从 {from.Name} 移出");
+        StarLog.Info($"[Pin] 已从 {from.Name.Render()} 移出");
         TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.leftTitle"),
             LocMessage.Of("pin.card.leftBody", from.Name, from.Members.Count));
     });
@@ -240,26 +240,26 @@ public static class PinManager
         foreach (var pin in group.Members.ToList())
         {
             try { pin.Close(); }
-            catch (Exception ex) { StarLog.Warn($"[Pin] 关闭{group.Name}中的一张贴图失败：{ex.Message}"); }
+            catch (Exception ex) { StarLog.Warn($"[Pin] 关闭{group.Name.Render()}中的一张贴图失败：{ex.Message}"); }
         }
         Prune();
-        StarLog.Info($"[Pin] 已关闭 {group.Name}（{closed} 张）");
+        StarLog.Info($"[Pin] 已关闭 {group.Name.Render()}（{closed} 张）");
         TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.groupClosedTitle"),
-            LocMessage.Of("pin.groupLabel", group.Name, closed));
+            PinGrouping.GroupLabel(group.Name, closed));
     }
 
-    private static void ApplyHiddenTo(List<CaptureOverlayWindow> targets, bool hidden, string scope)
+    private static void ApplyHiddenTo(List<CaptureOverlayWindow> targets, bool hidden, LocMessage scope)
     {
         foreach (var pin in targets)
         {
             if (hidden) pin.HidePin();
             else pin.Present();
         }
-        StarLog.Info($"[Pin] {(hidden ? "收起" : "显示")}{scope}（{targets.Count} 张）");
+        StarLog.Info($"[Pin] {(hidden ? "收起" : "显示")}{scope.Render()}（{targets.Count} 张）");
     }
 
     /// <summary>整批套穿透并数出被系统拒绝的张数——部分成功是最坏的形状，必须如实说出来。</summary>
-    private static void ApplyThroughTo(List<CaptureOverlayWindow> targets, bool through, string scope)
+    private static void ApplyThroughTo(List<CaptureOverlayWindow> targets, bool through, LocMessage scope)
     {
         var failed = targets.Count(pin => !pin.ApplyClickThrough(through));
         if (failed > 0)
@@ -268,7 +268,7 @@ public static class PinManager
                 LocMessage.Of("pin.card.throughPartialBody", failed, targets.Count, scope));
             return;
         }
-        StarLog.Info($"[Pin] 鼠标穿透＝{(through ? "开" : "关")}（{scope} {targets.Count} 张）");
+        StarLog.Info($"[Pin] 鼠标穿透＝{(through ? "开" : "关")}（{scope.Render()} {targets.Count} 张）");
     }
 
     private static bool All(List<CaptureOverlayWindow> members, Func<CaptureOverlayWindow, bool> of)

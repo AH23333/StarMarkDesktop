@@ -52,14 +52,17 @@ public static class PinGrouping
             : null;
 
     /// <summary>
-    /// 第 <paramref name="serial"/> 号组<b>在当前语言里的念法</b>。序号只增不复用：删掉「组 1」后再新建一组叫「组 3」，不会出现两个"组 1"。
+    /// 第 <paramref name="serial"/> 号组<b>的念法</b>（交<b>还没取词的</b>「键＋实参」）。序号只增不复用：
+    /// 删掉「组 1」后再新建一组叫「组 3」，不会出现两个"组 1"。
     /// <para><b>身份是序号，这句话只是念法</b>——从前这里是一颗 <c>const string NamePrefix</c>，组名在建组那一刻定死，
-    /// 于是换语言后托盘与条上那几行仍念旧语言（批次 WI-46c 改成每次现算）。</para>
+    /// 于是换语言后托盘与条上那几行仍念旧语言（批次 WI-46c 改成每次现算）。✅WI-65 片5b 再走一步：
+    /// 现算的<b>是键而⛔ 词</b>——从前这四个方法在 Core 里就 <c>Locale.Fmt</c> 念成整句，宿主把结果塞进
+    /// 提示卡那颗 <c>{0}</c> 槽（<c>PinManager</c> 四处）＝槽里钉着一句旧语言（#393／P-196 那一族）。</para>
     /// </summary>
-    public static string NameOf(int serial) => Locale.Fmt("pin.group.name", serial);
+    public static LocMessage NameOf(int serial) => LocMessage.Of("pin.group.name", serial);
 
-    /// <summary>组标签：名字后面永远带成员数——"组 2"看不出是几张，用户就不敢点关闭。</summary>
-    public static string GroupLabel(string name, int members) => Locale.Fmt("pin.groupLabel", name, members);
+    /// <summary>组标签：名字后面永远带成员数——"组 2"看不出是几张，用户就不敢点关闭。<b>名字的张数这一形状只在这一颗拼</b>。</summary>
+    public static LocMessage GroupLabel(LocMessage name, int members) => LocMessage.Of("pin.groupLabel", name, members);
 
     /// <summary>
     /// 聚合态：组里<b>每一张</b>都处于该状态才算这个状态成立。
@@ -75,18 +78,20 @@ public static class PinGrouping
         return true;
     }
 
-    /// <summary>这一组是不是已经整组收起了 ⇒ 决定那条菜单写「显示」还是「隐藏」。</summary>
-    public static string HideLabel(bool allHidden) => Locale.T(allHidden ? "pin.groupShow" : "pin.groupHide");
+    /// <summary>这一组是不是已经整组收起了 ⇒ 决定那条菜单写「显示」还是「隐藏」（方向判据⛔ 留在 UI：反了编译得过、闸门也过得去）。</summary>
+    public static LocMessage HideLabel(bool allHidden)
+        => LocMessage.Of(allHidden ? "pin.groupShow" : "pin.groupHide");
 
     /// <summary>这一组是不是已经整组穿透 ⇒ 同样只出措辞，不做决定。</summary>
-    public static string ThroughLabel(bool allThrough) => Locale.T(allThrough ? "pin.groupThroughOn" : "pin.groupThroughOff");
+    public static LocMessage ThroughLabel(bool allThrough)
+        => LocMessage.Of(allThrough ? "pin.groupThroughOn" : "pin.groupThroughOff");
 
     /// <summary>
     /// 关闭那一条要带数量：关掉的是一张张真实的窗，不是"一个概念"。
-    /// <para>"名字后面带张数"这个形状只由 <see cref="GroupLabel"/> 拼一次（批次 WI-46c）——
+    /// <para>"名字后面带张数"这个形状由 <see cref="GroupLabel"/> 拼<b>一次</b>（批次 WI-46c）——
     /// 从前这一行自己写着「（{0} 张）」，卡片正文里又各写一份，同一句话两个出处。</para>
     /// </summary>
-    public static string CloseLabel(int members) => Locale.Fmt("pin.groupLabel", Locale.T("pin.groupClose"), members);
+    public static LocMessage CloseLabel(int members) => GroupLabel(LocMessage.Of("pin.groupClose"), members);
 
     /// <summary>
     /// 下一次点"显示 / 收起"要落到哪个状态。
