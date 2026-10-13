@@ -197,7 +197,7 @@ public static class ClipboardImageStore
         if (path is null) { reason = "这一条的文件名不安全或没有文件"; return false; }
         // 先 stat 再去读：让 File.ReadAllBytes 抛，交出去的就是"文件读不出来（FileNotFoundException）"
         // 这种系统原话。两句在界面上都像程序坏了，而"这一张已经不在这台机器上"是用户能懂的事实。
-        if (!File.Exists(path)) { reason = ClipboardPolicy.MissingFileClause; return false; }
+        if (!File.Exists(path)) { reason = ClipboardPolicy.MissingFileClause.Render(); return false; }
         try
         {
             return TryHandOutPng(File.ReadAllBytes(path), out pngBytes, out frame, out reason);
@@ -226,7 +226,7 @@ public static class ClipboardImageStore
         if (string.IsNullOrWhiteSpace(path)) return (null, default, "没有给出文件路径");
         try
         {
-            if (!File.Exists(path!)) return (null, default, ClipboardPolicy.MissingFileClause);
+            if (!File.Exists(path!)) return (null, default, ClipboardPolicy.MissingFileClause.Render());
             var size = new FileInfo(path!).Length;
             if (size > ClipboardPolicy.MaxImageBytes)
                 return (null, default,

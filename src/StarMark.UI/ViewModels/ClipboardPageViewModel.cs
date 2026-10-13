@@ -148,7 +148,7 @@ public partial class ClipboardPageViewModel : ObservableObject
         var path = ClipAssets.FullPathOf(ClipboardEntry.FileName(item));
         if (path is null || !System.IO.File.Exists(path))
         {
-            StatusText = ClipboardPolicy.DescribeMissingImageForReuse();
+            StatusText = ClipboardPolicy.DescribeMissingImageForReuse().Render();
             return false;
         }
 

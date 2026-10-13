@@ -74,7 +74,7 @@ public static class LauncherEx
                     // 但递进去的是 DisplayPath 解过的那一串：库里存的是编码态时，别把 %E5%B7%A5… 念给用户听（批次 VR）。
                     // 种类那一格才是宿主判断"要不要就地递出删掉这一行"的依据。
                     return (OpenFailure.MissingOnDisk, StarMark.Abstractions.ItemCardPolicy.MissingRowMessage(
-                        StarMark.Abstractions.LocalFileIdentity.DisplayPath(uri, ExistsOnDisk)));
+                        StarMark.Abstractions.LocalFileIdentity.DisplayPath(uri, ExistsOnDisk)).Render());
                 }
                 else
                 {

@@ -273,7 +273,7 @@ public partial class ItemCardViewModel : ObservableObject
     /// 那一格说的话。<b>不写在 XAML 里</b>：同一句事实今天还要在状态行与灰项标题上说一遍，
     /// 写死在页面上它就只属于这一格，改了这里别处照旧（句子本体在 <see cref="ClipboardPolicy"/>）。
     /// </summary>
-    public string ClipboardImageMissingText => ClipboardPolicy.DescribeMissingImageBanner();
+    public string ClipboardImageMissingText => ClipboardPolicy.DescribeMissingImageBanner().Render();
 
     /// <summary>
     /// 取这一行的缩略图源。<paramref name="flaggedMissing"/>＝对账打上的"文件缺失"标记；

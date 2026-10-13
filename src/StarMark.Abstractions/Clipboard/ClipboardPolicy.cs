@@ -158,16 +158,20 @@ public static class ClipboardPolicy
     /// 并成一句就会把别的宿主用不上的话也塞进去。所以<b>事实只有一个出处，解释各归各的宿主</b>。</para>
     /// <para>不跟着并的那一处：启动器那句"本机上的这个路径已经不在了（…）"说的是任意本地路径、
     /// 还要带出地址，与"这一张图的像素拿不到了"不是同一件事（有意分岔，闸门按文件名点名）。</para>
+    /// <para>批次 WI-65 片5a 起这三颗（本颗＋下面两句）交的都是<b>还没取词的</b>「键＋实参」：
+    /// 从前 <c>Locale.Fmt("clip.miss.reuse", MissingFileClause)</c> 是把事实那句<b>先念成字符串</b>再塞进
+    /// 外层模板的 <c>{0}</c> 槽，槽里因此是一条钉死在造串那一刻的语言（#393／P-196 那一族）。
+    /// 取词推到宿主贴上去那一拍⛔ 在本刀：卡片那一行是绑定出来的字符串，那颗归 P-172。</para>
     /// </summary>
-    public static string MissingFileClause => StarMark.Abstractions.I18n.Locale.T("clip.miss.clause");
+    public static LocMessage MissingFileClause => LocMessage.Of("clip.miss.clause");
 
     /// <summary>历史页点「再复制」而文件已经不在了：事实（<see cref="MissingFileClause"/>）＋ 后果 ＋ 出口。</summary>
-    public static string DescribeMissingImageForReuse()
-        => StarMark.Abstractions.I18n.Locale.Fmt("clip.miss.reuse", MissingFileClause);
+    public static LocMessage DescribeMissingImageForReuse()
+        => LocMessage.Of("clip.miss.reuse", MissingFileClause);
 
     /// <summary>卡片里那一格：图不在了不许空着不解释——空着看起来像程序坏了，而不是"文件没了但条目还在"。</summary>
-    public static string DescribeMissingImageBanner()
-        => StarMark.Abstractions.I18n.Locale.Fmt("clip.miss.banner", MissingFileClause);
+    public static LocMessage DescribeMissingImageBanner()
+        => LocMessage.Of("clip.miss.banner", MissingFileClause);
 
     /// <summary>
     /// 行分隔符归一（CRLF/CR → LF）+ 去首尾空白。

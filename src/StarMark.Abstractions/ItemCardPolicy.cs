@@ -66,9 +66,13 @@ public static class ItemCardPolicy
     /// <para>⚠ 参数是<b>给人看的那条路径</b>（<c>LocalFileIdentity.DisplayPath</c>）而不是库里的 uri 原文：
     /// 历史行里有一类是 percent 编码的，原文念出来就是 <c>D:\Visual%20Studio%20Code\…</c>
     /// （批次 VR 起于用户原话「文件路径中的空格会被展示为%20」）。</para>
+    /// <para>批次 WI-65 片5a 起这一颗交的是<b>还没取词的</b>「键＋实参」（<see cref="StarMark.Abstractions.I18n.LocMessage"/>）：
+    /// 从前这里先 <c>Locale.Fmt</c> 成字符串，而 <c>card.missRow</c> 的 <c>{0}</c> 槽塞的是
+    /// <c>ClipboardPolicy.MissingFileClause</c> 那颗<b>已经按当下语言念完</b>的半句——外层什么时候贴都只贴得动
+    /// 外层，里层那半句钉在造串那一刻（#393／P-196 那一族）。现在槽里交的是键，取词发生在宿主那一拍。</para>
     /// </summary>
-    public static string MissingRowMessage(string shownPath)
-        => StarMark.Abstractions.I18n.Locale.Fmt("card.missRow",
+    public static StarMark.Abstractions.I18n.LocMessage MissingRowMessage(string shownPath)
+        => StarMark.Abstractions.I18n.LocMessage.Of("card.missRow",
                StarMark.Abstractions.Clipboard.ClipboardPolicy.MissingFileClause, shownPath);
 
     /// <summary>
