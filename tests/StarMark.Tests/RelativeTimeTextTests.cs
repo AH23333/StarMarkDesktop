@@ -70,25 +70,26 @@ public sealed class RelativeTimeTextTests
         Assert.Matches(@"^\d{4}-\d{2}-\d{2}$", readout);
     }
 
-    // ────────── 三颗档 builder：措辞与取整的落点 ──────────
+    // ────────── 三颗档 builder：措辞与取整的落点（✅WI-65 片5c 起这四档只剩「交键」那一条出口，
+    //   所以逐值契约钉在 *Message(...).Render() 上——念完那一版⛔ 有第二个主人，也就⛔ 有第二条契约）──────────
 
     [Theory]
     [InlineData(1, "1 分钟前")]
     [InlineData(59, "59 分钟前")]
     public void MinutesAgoIsWrittenExactlyOnce(int count, string expected)
-        => Assert.Equal(expected, DateTimeText.MinutesAgo(count));
+        => Assert.Equal(expected, DateTimeText.MinutesAgoMessage(count).Render());
 
     [Theory]
     [InlineData(3, "3 小时前")]
     [InlineData(23, "23 小时前")]
     public void HoursAgoIsWrittenExactlyOnce(int count, string expected)
-        => Assert.Equal(expected, DateTimeText.HoursAgo(count));
+        => Assert.Equal(expected, DateTimeText.HoursAgoMessage(count).Render());
 
     [Theory]
     [InlineData(1, "1 天前")]
     [InlineData(29, "29 天前")]
     public void DaysAgoIsWrittenExactlyOnce(int count, string expected)
-        => Assert.Equal(expected, DateTimeText.DaysAgo(count));
+        => Assert.Equal(expected, DateTimeText.DaysAgoMessage(count).Render());
 
     /// <summary>
      /// 年龄数字<b>不加千分位</b>：这一族要的是"多久以前"，不是可数的金额。
@@ -97,8 +98,8 @@ public sealed class RelativeTimeTextTests
      /// </summary>
     [Fact]
     public void AgesArePlainDigitsWithoutGroupSeparators()
-        => Assert.Equal("1234 天前", DateTimeText.DaysAgo(1_234));
+        => Assert.Equal("1234 天前", DateTimeText.DaysAgoMessage(1_234).Render());
 
     [Fact]
-    public void JustNowIsTheTwoCharacterWord() => Assert.Equal("刚刚", DateTimeText.JustNow);
+    public void JustNowIsTheTwoCharacterWord() => Assert.Equal("刚刚", DateTimeText.JustNowMessage().Render());
 }

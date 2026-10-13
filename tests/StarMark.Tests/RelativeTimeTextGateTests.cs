@@ -61,9 +61,31 @@ public sealed class RelativeTimeTextGateTests
         foreach (var phrase in Phrases) Assert.DoesNotContain(phrase, code, StringComparison.Ordinal);
         foreach (var key in new[] { "time.justNow", "time.minutesAgo", "time.hoursAgo", "time.daysAgo" })
             Assert.Contains(key, code, StringComparison.Ordinal);
-        // 取词与交键两条路都必须问表，⛔ 不许在这里自己拼一句。
-        Assert.Contains("Locale.T(JustNowKey)", code, StringComparison.Ordinal);
+        // ✅WI-65 片5c：这四档只剩「交键」那一条出口（从前并存的"当场念完"那四颗生产侧无人消费，已连根拔掉）
+        // ⇒ 这一格从"两条路都问表"改成"只问那一条路"，⛔ 留着钉一颗已经不存在的函数（那只会静默变成永远成立）。
+        Assert.Contains("LocMessage.Of(JustNowKey)", code, StringComparison.Ordinal);
         Assert.Contains("LocMessage.Of(MinutesAgoKey, count)", code, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 那四颗「当场念完」的档出口删掉之后⛔ 回来（批次 WI-65 片5c）。
+    /// <para>它们不是"多余的便利"而是<b>第二个主人</b>：谁把 <c>HoursAgo(3)</c> 塞进另一句的 <c>{0}</c> 槽，
+    /// 那句话就从此钉死在一句旧语言上（坑表 #393／P-196 那一族）——留一条看起来无害的 <c>string</c> 出口，
+    /// 下一次半搬就有了一条正当路径。四颗 <c>*Message</c> 各一颗，是这一族唯一的出口。</para>
+    /// </summary>
+    [Fact]
+    public void TheRenderedBucketExitsStayDeleted()
+    {
+        var code = Code(ReadRepoFile(Judge));
+        foreach (var dead in new[] { "public static string JustNow", "public static string MinutesAgo(",
+                                    "public static string HoursAgo(", "public static string DaysAgo(" })
+            Assert.DoesNotContain(dead, code, StringComparison.Ordinal);
+        foreach (var one in new[] { "public static LocMessage JustNowMessage()", "public static LocMessage MinutesAgoMessage(long count)",
+                                    "public static LocMessage HoursAgoMessage(long count)", "public static LocMessage DaysAgoMessage(long count)" })
+            Assert.Equal(1, Count(code, one));
+        // ⚠ 「壳只剩一行转发」那颗格（<see cref="TheRenderedWrapperIsNothingButADelegateToTheUnrenderedTwin"/>）
+        // 守的是 <c>Relative</c> 这一颗——它是活动列表与卡片两处的真宿主，⛔ 与上面那四颗同罪同罚。
+        Assert.Equal(1, Count(code, "public static string Relative(long unixSeconds"));
     }
 
     [Fact]

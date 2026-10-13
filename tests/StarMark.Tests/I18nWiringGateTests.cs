@@ -120,7 +120,8 @@ public sealed class I18nWiringGateTests
                 }
             }
             // 键名住在 const 里的那些（`MinutesAgoKey = "time.minutesAgo"`／`FollowSystemKey`）：
-            // 取词调用写的是 `Locale.Fmt(MinutesAgoKey, count)`，上面那几臂按**字面量实参**认，一律看不见 ⇒
+            // 取词调用写的是 `Locale.Fmt(MinutesAgoKey, count)` 这类<b>形参不是字面量</b>的形状（✅WI-65 片5c 起
+            // 那四颗档出口改成交键，这一臂留给的读者是 <c>FollowSystemKey</c> 那族还没搬完的），上面那几臂按<b>字面量实参</b>认，一律看不见 ⇒
             // 拼错这种键名今天两臂都不红（台架 WI-K8 量到的就是这一个洞）。按形状补这一臂：
             // 只认"点分小驼峰、至少两段"那颗值——那正是表自己的键形状，
             // ⛔ 不许宽成"任何带 Key 的常量"，否则 `DoneKey = "done"`、`AppKey = "clipApp"` 那些 JSON 字段名全被当界面键。
