@@ -1,4 +1,5 @@
 #nullable enable
+using System.ComponentModel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -19,6 +20,38 @@ public sealed partial class SearchPage : Page
         InitializeComponent();
         var main = App.Services.GetRequiredService<MainViewModel>();
         ViewModel = App.Services.GetRequiredService<SearchPageViewModel>();
+        // 段名／空态／那两颗按钮词由 VM 交回「键＋实参」，这里只负责贴（换语言的重贴归 LocText 那份名单，
+        // ⛔ 为本页再挂一位 Locale.Changed 主人——设置页那一位从 ✅WI-57 起就管着全部注册项）。
+        ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+        ApplySearchWords();
+    }
+
+    /// <summary>那颗 VM 是<b>单例</b>而本页每次导航新建：挂着不摘＝每进一次本页多留一份订阅（坑表 #386 那一族）。</summary>
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+        ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(SearchPageViewModel.EmptyHint)
+            or nameof(SearchPageViewModel.ExactHeader)
+            or nameof(SearchPageViewModel.RelatedHeader)
+            or nameof(SearchPageViewModel.LoadMoreLabel))
+            ApplySearchWords();
+    }
+
+    /// <summary>
+    /// 宿主那一拍：四行各贴一次<b>没取过词</b>的那句。「没有话要说」也必须走这一颗门（<c>SetMessage(… null)</c>
+    /// 会把注册项一起摘掉），否则换语言那一刻把上一句早该消失的话又贴回来（✅片8 那颗 <c>WidgetsTradeoffHint</c> 同一条路）。
+    /// </summary>
+    private void ApplySearchWords()
+    {
+        LocText.SetMessage(EmptyHintText, ViewModel.EmptyHint);
+        LocText.SetMessage(ExactHeaderText, ViewModel.ExactHeader);
+        LocText.SetMessage(RelatedHeaderText, ViewModel.RelatedHeader);
+        LocText.SetMessage(LoadMoreButton, ViewModel.LoadMoreLabel);
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)

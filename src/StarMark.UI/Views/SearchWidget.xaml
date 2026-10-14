@@ -24,15 +24,17 @@
         </StackPanel>
 
         <!-- 排序（批次 P 内联轻量增强）：相关度 / 最近更新 / 名称。对照 DeskBox 弹窗可点列排序，
-             这里收敛为小组件适配的一枚下拉。索引→键见 SortKeys，浏览态（空词）只认 名称/最近更新。 -->
+             这里收敛为小组件适配的一枚下拉。浏览态（空词）只认 名称/最近更新。
+             ⚠ 选项走「数据项＋模板」（与 <c>TrendingPage.xaml</c> 那颗周期下拉同一颗共用模板）：
+             把 <c>&lt;ComboBoxItem Content="中文"&gt;</c> 写回标记里，闭着的那一格显示的就是选中那一刻从 Content
+             抄走的快照——换语言时展开的列表翻了、这一格不翻（坑表 #272／#275；批次 WI-67 片9b 收回
+             <c>I18nWiringGateTests</c> 那三句在案豁免）。措辞住表里，排序键（relevance／recent／name）住在数据项里。 -->
         <StackPanel Orientation="Horizontal" Spacing="6">
             <TextBlock i18n:LocText.Key="widget.sw.sortTitle" FontSize="11" Opacity="0.7" VerticalAlignment="Center"/>
             <ComboBox x:Name="SortBox" FontSize="11" SelectedIndex="0" MinWidth="104"
-                      SelectionChanged="SortBox_SelectionChanged">
-                <ComboBoxItem Content="相关度"/>
-                <ComboBoxItem Content="最近更新"/>
-                <ComboBoxItem Content="名称"/>
-            </ComboBox>
+                      SelectionChanged="SortBox_SelectionChanged"
+                      ItemsSource="{x:Bind SortOptions, Mode=OneTime}"
+                      ItemTemplate="{StaticResource LocOptionTemplate}"/>
             <TextBlock i18n:LocText.Key="widget.sw.keysHint" FontSize="9" Opacity="0.5" VerticalAlignment="Center" Margin="4,0,0,0"/>
         </StackPanel>
 
@@ -73,7 +75,9 @@
 
         <!-- 结果 -->
         <TextBlock i18n:LocText.Key="widget.sw.results" FontSize="11" FontWeight="SemiBold" Opacity="0.7"/>
-        <TextBlock x:Name="EmptyHint" Text="输入关键词或选择标签开始搜索"
+        <!-- ⚠ 这一格的初值⛔ 写在标记里：它每次搜索结果落地都由 code-behind 现贴（UpdateEmptyHint），
+             标记里留一句字面量＝同一句话的第二个主人，换语言那一刻它还会把带状态那句盖回兜底那句（坑表 #276／#295）。 -->
+        <TextBlock x:Name="EmptyHint"
                    FontSize="10" Opacity="0.55" TextWrapping="Wrap" Margin="2,2,2,4"/>
         <ItemsRepeater x:Name="ResultsRepeater" ItemsSource="{x:Bind ViewModel.Results, Mode=OneWay}">
             <ItemsRepeater.ItemTemplate>

@@ -34,6 +34,9 @@ public sealed class I18nWiringGateTests
     private const string TagsXaml = "src/StarMark.UI/Views/TagsPage.xaml";
     private const string FolderTreeXaml = "src/StarMark.UI/Views/FolderTreePage.xaml";
     private const string SearchPageXaml = "src/StarMark.UI/Views/SearchPage.xaml";
+    private const string SearchPageCs = "src/StarMark.UI/Views/SearchPage.xaml.cs";
+    private const string SearchWidgetXaml = "src/StarMark.UI/Views/SearchWidget.xaml";
+    private const string SearchWidgetCs = "src/StarMark.UI/Views/SearchWidget.xaml.cs";
     private const string MainWindowSearchCs = "src/StarMark.UI/MainWindow.Search.cs";
     private const string MainWindowStatusCs = "src/StarMark.UI/MainWindow.Status.cs";
     private const string SyncCoordinatorCs = "src/StarMark.Core/Sync/SyncCoordinator.cs";
@@ -336,14 +339,15 @@ public sealed class I18nWiringGateTests
     /// <para>合取的另一半才是这一格的存在理由：只挂 <c>ItemsSource</c> 不挂模板，WinUI 会去
     /// <c>ToString()</c> 那颗数据项——屏幕上是一整排 <c>LocOption { Key = settings…, … }</c>。
     /// 编译过、测试全绿、启动不抛，只有眼睛看得见（坑表 #180 同族）。</para>
-    /// <para><b>射程说清楚</b>：这一格只管设置页与主窗这两份标记。热榜那颗「今日／本周／本月」
-    /// （<c>TrendingPage.xaml</c>）与搜索组件那三档（<c>SearchWidget.xaml</c>）今天还是
-    /// <c>&lt;ComboBoxItem Content="中文"&gt;</c>，它们的表行还没建，归后面一批（P-169）。</para>
+    /// <para><b>射程说清楚</b>：主窗、设置页、热榜那颗「今日／本周／本月」与搜索组件那颗排序下拉
+    /// （✅批次 WI-67 片9b 收掉 <c>SearchWidget.xaml</c> 那三颗 <c>&lt;ComboBoxItem Content="中文"&gt;</c>，
+    /// 那份在案豁免同时收回 ⇒ 下面 <see cref="WidgetMarkupIsCoveredAndTheLeftoversAreNamed"/> 的第②类归零）。</para>
     /// </summary>
     [Theory]
     [InlineData(MainWindowXaml)]
     [InlineData(SettingsXaml)]
     [InlineData(TrendingXaml)]
+    [InlineData(SearchWidgetXaml)]
     public void DropdownOptionsLiveInCodeNotInTheMarkup(string relativePath)
     {
         var page = Markup(ReadRepoFile(relativePath));
@@ -374,6 +378,7 @@ public sealed class I18nWiringGateTests
     [InlineData(TagsXaml)]
     [InlineData(FolderTreeXaml)]
     [InlineData(SearchPageXaml)]
+    [InlineData(SearchWidgetXaml)]   // ✅批次 WI-67 片9b 加进来：那一页的标记（三颗下拉项＋那颗空态字面量）同批改完才配加这一臂
     public void ScannedPagesHoldNoChineseMarkup(string relativePath)
     {
         var page = Markup(ReadRepoFile(relativePath));
@@ -738,15 +743,17 @@ public sealed class I18nWiringGateTests
     /// <c>WidgetWindow.xaml</c> 那颗宿主；其中 <c>ClockWidget.xaml</c> 面上一句可翻的话都没有，见下面那颗断言）。
     /// 新添一颗组件不必改判据就会落进这一格（⛔ 不许改成点文件名单——#318 那条教训的另一面：
     /// 名单式射程会在"搬个家／新加一颗"时静默失效）。</para>
-    /// <para>⛔ <b>下面那 7 句是登记在案的缺口，不是漏翻</b>（批次 WI-53 之前是 17 句，天气那 4 句已交键；
-    /// 批次 WI-56 又收掉速览那 4 句示例字、批次 WI-67 片3 再收掉条目格那 2 句）。那个数是<b>这条断言自己数的</b>：尺＝"文件|属性|值"三件一体去重点名。
+    /// <para>⛔ <b>下面那 3 句是登记在案的缺口，不是漏翻</b>（批次 WI-53 之前是 17 句，天气那 4 句已交键；
+    /// 批次 WI-56 收掉速览那 4 句示例字、批次 WI-67 片3 收掉条目格那 2 句、✅批次 WI-67 片9b 收掉搜索组件那 4 句）。
+    /// 那个数是<b>这条断言自己数的</b>：尺＝"文件|属性|值"三件一体去重点名。
     /// 两类各有各的坏法：
-    /// <b>①</b>4 句是<b>代码当场写过同一个属性</b>的（<c>MusicWidget.xaml</c> 的「未在播放」与「打开任意播放器后…」。
-    /// <c>SearchWidget.xaml</c> 的"输入关键词…"…）——给这类挂静态键的后果不是少翻一句，
+    /// <b>①</b>3 句是<b>代码当场写过同一个属性</b>的（<c>MusicWidget.xaml</c> 的「未在播放」与「打开任意播放器后…」）——
+    /// 给这类挂静态键的后果不是少翻一句，
     /// 是<b>换语言那一刻用默认那句盖掉带值那句</b>（屏幕上写着"2026年9月"而那天是 10 月＝一句当场可见的假话，
     /// 坑表 #276／#295）；要翻它们得先让宿主交出 <c>LocMessage</c>＝P-172。<b>②</b>搜索组件那颗排序下拉的三颗
-    /// <c>ComboBoxItem</c>：闭着的那一格是选中时从 <c>Content</c> 抄走的快照（#272／#275），只挂键＝
-    /// "列表跟着翻、闭着那格不翻"的半接状态 ⇒ 那一族要走 WI-2c 的「数据项＋模板」，⛔ 不许当成"已翻"。</para>
+    /// <c>ComboBoxItem</c> 本批走的是 WI-2c 那条正路（<b>数据项＋模板</b>，见上面
+    /// <see cref="DropdownOptionsLiveInCodeNotInTheMarkup"/>）：从前只挂键＝"展开的列表翻了、闭着那格不翻"的半接状态
+    /// （#272／#275）⇒ 这一类今天<b>归零</b>，⛔ 有人再把选项写回标记。</para>
     /// <para>名单<b>双向</b>钉（与日文列那颗同一口径）：多一句＝有人写回中文，少一句＝有人翻掉了却没来把这条改短。</para>
     /// </summary>
     [Fact]
@@ -784,10 +791,6 @@ public sealed class I18nWiringGateTests
             "MusicWidget.xaml|Text|打开任意播放器后这里会显示曲目",
             "MusicWidget.xaml|Text|未在播放",
             "QuickLaunchWidget.xaml|Text|提示：可把文件、文件夹或网址直接拖入本组件；拖不动时用上面那行「＋」里的「选择文件／选择文件夹」",
-            "SearchWidget.xaml|Content|名称",
-            "SearchWidget.xaml|Content|最近更新",
-            "SearchWidget.xaml|Content|相关度",
-            "SearchWidget.xaml|Text|输入关键词或选择标签开始搜索",
         }, left);
         // 批次 WI-53（P-182a）收掉 WeatherWidget.xaml 那 4 句：它们每一句都由 code-behind 当场重写
         // （Loaded 的 ApplyToggleLabels／Render／ShowEmpty）⇒ XAML 那份字面量是"没人读的副本"，
@@ -800,6 +803,10 @@ public sealed class I18nWiringGateTests
         // 批次 WI-67 片3 收掉 ItemGridWidget 那两句（「暂无条目」与「输入标签名…」）：同一颗形状——两处都由 code-behind
         // 每次重写 ⇒ 删掉标记里那份字面量、由宿主交「键＋实参」走重贴名单（挂了静态键＝换语言把空态那句盖回"暂无条目"）。
         Assert.DoesNotContain(left, x => x.StartsWith("ItemGridWidget.xaml", StringComparison.Ordinal));
+        // ✅批次 WI-67 片9b 收掉 SearchWidget 那 4 句（三颗排序下拉项＋那颗空态兜底句）：两类各有正路——
+        // 下拉那三颗改「数据项＋模板」（措辞进表、身份留 ASCII 键），空态那句改由宿主交 LocMessage 走重贴名单。
+        // 这一格留在这里是防"退回标记里的字面量"：那种写法编得过、跑得起来、展开的列表还翻得好，只有闭着那一格说假话。
+        Assert.DoesNotContain(left, x => x.StartsWith("SearchWidget.xaml", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -1454,6 +1461,8 @@ public sealed class I18nWiringGateTests
     [Theory]
     [InlineData("src/StarMark.UI/Views/TrendingPage.xaml.cs")]
     [InlineData("src/StarMark.UI/Views/RssPage.xaml.cs")]
+    [InlineData(SearchPageCs)]      // ✅批次 WI-67 片9b：搜索页那四行（段名两颗＋空态＋加载更多那颗按钮）都从这颗门走
+    [InlineData(SearchWidgetCs)]    //   组件那颗空态从前是 EmptyHint.Text = 直接写，本批改交这颗门
     public void APagePushesItsViewModelMessageThroughOneDoor(string relativePath)
     {
         var code = Code(ReadRepoFile(relativePath));

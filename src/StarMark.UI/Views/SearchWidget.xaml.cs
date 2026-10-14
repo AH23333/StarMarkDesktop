@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -31,17 +32,23 @@ public sealed partial class SearchWidget : UserControl
         InitializeComponent();
         ViewModel.Results.CollectionChanged += (_, _) => UpdateEmptyHint();
         ViewModel.SearchCompleted += UpdateEmptyHint;
+        // 标记里那颗字面量删了，所以第一句兜底由这里贴：它同时把这一格挂进 LocText 的重贴名单（换语言即改口）。
+        UpdateEmptyHint();
         _ = ViewModel.LoadTagsAsync();
         // 打开组件即展示最近条目（空态浏览），而不是先给用户一页「无结果」。
         _ = ViewModel.RunSearchAsync();
     }
 
+    /// <summary>
+    /// 宿主那一拍：VM 交回的「键＋实参」由 <see cref="LocText.SetMessage"/> 贴，⛔ 再写一次 <c>EmptyHint.Text =</c>——
+    /// 代码写那颗属性＝第二个主人，且换语言那一刻没人回来重贴（批次 WI-67 片9b）。
+    /// </summary>
     private void UpdateEmptyHint()
     {
         var empty = ViewModel.Results.Count == 0;
         if (EmptyHint is not null)
         {
-            EmptyHint.Text = ViewModel.EmptyHint;
+            LocText.SetMessage(EmptyHint, ViewModel.EmptyHint);
             EmptyHint.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
         }
         if (ResultsRepeater is not null) ResultsRepeater.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
@@ -53,14 +60,26 @@ public sealed partial class SearchWidget : UserControl
         await ViewModel.RunSearchAsync();
     }
 
-    /// <summary>排序下拉：索引→排序键，切换即重搜（浏览态空词也走同一入口）。</summary>
-    private static readonly string[] SortKeys = { "relevance", "recent", "name" };
+    /// <summary>
+    /// 排序下拉的数据项：一句措辞（住表里）＋一颗<b>数据层的排序键</b>（住在 <c>Value</c> 里）。
+    /// <para>⛔ 把 <c>&lt;ComboBoxItem Content="相关度"&gt;</c> 写回标记：闭着的那一格显示的是选中那一刻从
+    /// <c>Content</c> 抄走的快照，换语言时展开的列表翻了、这一格不翻（坑表 #272／#275；
+    /// <c>I18nWiringGateTests</c> 那三句在案豁免由批次 WI-67 片9b 收回）。先例＝<c>MainWindow.Search.cs</c> 那颗 <c>SortOptions</c>。</para>
+    /// <para>那颗「名称」⛔ 再造一行，复用主窗排序档已在册的 <c>sort.name</c>。</para>
+    /// </summary>
+    public IReadOnlyList<LocOption> SortOptions { get; } =
+    [
+        LocOption.T("widget.sw.sort.relevance", "relevance"),
+        LocOption.T("widget.sw.sort.recent", "recent"),
+        LocOption.T("sort.name", "name"),
+    ];
 
+    /// <summary>排序切换即重搜（浏览态空词也走同一入口）：认的是数据项里那颗 ASCII 键，⛔ 屏幕上那行字。</summary>
     private void SortBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (SortBox is null) return;      // 初值 SelectedIndex=0 在 InitializeComponent 期触发，ViewModel 尚未就绪
-        var idx = SortBox.SelectedIndex;
-        ViewModel.Sort = idx >= 0 && idx < SortKeys.Length ? SortKeys[idx] : "relevance";
+        ViewModel.Sort = SortBox.SelectedItem is LocOption option && option.Value is string key
+            ? key : "relevance";
         _ = ViewModel.RunSearchAsync();
     }
 

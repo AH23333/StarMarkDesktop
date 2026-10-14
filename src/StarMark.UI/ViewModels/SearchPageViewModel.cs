@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Dispatching;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Search;
 using StarMark.UI.Helpers;
 
@@ -40,8 +41,7 @@ public partial class SearchPageViewModel : ObservableObject
     }
 
     [ObservableProperty] private string _query = string.Empty;
-    [ObservableProperty] private string _statusText = string.Empty;
-    [ObservableProperty] private string _emptyHint = "输入关键词开始搜索";
+    [ObservableProperty] private LocMessage? _emptyHint = LocMessage.Of("search.empty.keyword");
     [ObservableProperty] private bool _hasResults;
     [ObservableProperty] private bool _isSearching;
 
@@ -56,7 +56,9 @@ public partial class SearchPageViewModel : ObservableObject
     /// <summary>「加载更多」可点＝还有剩余 且 当前没在取页。</summary>
     public bool CanLoadMoreButton => CanLoadMore && !IsLoadingMore;
 
-    public string LoadMoreLabel => IsLoadingMore ? "加载中…" : "加载更多";
+    /// <summary>「加载更多」那颗按钮上的话：交的是<b>键</b>，不是取过词的句子——取词发生在宿主贴上去那一刻（批次 WI-67 片9b）。
+    /// <para>留着一颗 <c>string</c> 出口＝那句话又被冻在"上一次算出它的那一门语言"里（与 ✅片8 那颗 <c>WidgetsLoadHint</c> 同一形状）。</para></summary>
+    public LocMessage LoadMoreLabel => LocMessage.Of(IsLoadingMore ? "search.loadingMore" : "search.loadMore");
     [ObservableProperty] private string _currentSort = "relevance";
     [ObservableProperty] private string _currentSource = "all";
     [ObservableProperty] private bool _showHidden;
@@ -82,8 +84,10 @@ public partial class SearchPageViewModel : ObservableObject
 
     [ObservableProperty] private bool _hasExact;
     [ObservableProperty] private bool _hasRelated;
-    [ObservableProperty] private string _exactHeader = "精确匹配";
-    [ObservableProperty] private string _relatedHeader = "相关结果";
+    // 两颗段名⛔ 再带一句"没数出来的默认值"：它们只在 HasExact／HasRelated 为真时上屏，而那时念的
+    // 永远是现算的带数那句——从前那三行不带数的汉字⛔ 见到过一次屏幕（批次 WI-67 片9b 现读，故交 null）。
+    [ObservableProperty] private LocMessage? _exactHeader;
+    [ObservableProperty] private LocMessage? _relatedHeader;
 
     // ───────── 语言筛选维度（P2-7，GitHubStar 主语言）─────────
 
@@ -158,8 +162,7 @@ public partial class SearchPageViewModel : ObservableObject
         CanLoadMore = false;
         IsLoadingMore = false;
         IsSearching = false;
-        StatusText = string.Empty;
-        EmptyHint = "输入关键词开始搜索";
+        EmptyHint = LocMessage.Of("search.empty.keyword");
         // 语言筛选与选项一并复位，避免残留过滤让下次搜索静默变窄。
         if (CurrentLanguage.Length > 0)
             CurrentLanguage = string.Empty; // 触发 OnCurrentLanguageChanged → 幂等空查询
@@ -264,7 +267,6 @@ public partial class SearchPageViewModel : ObservableObject
 
         IsSearching = !append;
         IsLoadingMore = append;
-        StatusText = append ? "加载更多..." : "搜索中...";
 
         var filter = new SearchFilter
         {
@@ -320,8 +322,8 @@ public partial class SearchPageViewModel : ObservableObject
                 }
                 HasExact = ExactResults.Count > 0;
                 HasRelated = RelatedResults.Count > 0;
-                ExactHeader = $"精确匹配 ({ExactResults.Count})";
-                RelatedHeader = $"相关结果 ({RelatedResults.Count})";
+                ExactHeader = LocMessage.Of("search.header.exactCount", ExactResults.Count);
+                RelatedHeader = LocMessage.Of("search.header.relatedCount", RelatedResults.Count);
                 CanLoadMore = result.HasMore;
 
                 // 语言下拉选项：仅在「未按语言过滤」时重建，避免过滤后列表塌缩成单项。
@@ -343,25 +345,40 @@ public partial class SearchPageViewModel : ObservableObject
 
                 if (!append) ClearSelection();   // 追加页不该把用户已选中的那条丢掉
                 HasResults = Results.Count > 0;
+                // 空态那几句交「键＋实参」：引号、书名号与「没有同时带…」那串的连接符都住在表里，
+                // 槽里递的是⛔ 取过词的关键词本身与一颗 LocJoin（批次 WI-67 片9b·P-188 第五刀）。
                 EmptyHint = Results.Count == 0
                     ? CurrentSource switch
                     {
                         // 本地文件空结果最常被误读成"搜索坏了"：开关没开时直接说出下一步该做什么。
-                        "file" when !IsLocalDiskSearchOn() =>
-                            "本地磁盘搜索还没开启 — 设置 › 本地磁盘搜索 打开后即可搜遍整盘文件",
-                        "file" => $"磁盘上没有找到{(keyword.Length > 0 ? $"\"{keyword}\"" : "该类型")}的文件",
-                        _ => Main.HasGlobalTagFilters
-                            ? $"没有同时带 {string.Join(" + ", Main.GlobalTagFilters.Select(t => "#" + t.Name))} 的条目"
-                            : $"未找到与 \"{keyword}\" 相关的条目",
+                        "file" when !IsLocalDiskSearchOn() => LocMessage.Of("search.empty.diskOff"),
+                        "file" when keyword.Length > 0 => LocMessage.Of("search.empty.diskKeyword", keyword),
+                        "file" => LocMessage.Of("search.empty.diskKind"),
+                        _ when Main.HasGlobalTagFilters => LocMessage.Of("search.empty.tagAnd",
+                            new LocJoin(Main.GlobalTagFilters.Select(t => (object?)("#" + t.Name)).ToList(), "search.tagJoin")),
+                        _ => LocMessage.Of("search.empty.noMatch", keyword),
                     }
-                    : string.Empty;
-                StatusText = $"命中 {Results.Count} 条 · {result.ElapsedMs}ms";
+                    : null;
             });
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            await RunOnUi(() => StatusText = $"错误: {ex.Message}");
+            // 那颗 StatusText 从来⛔ 被任何绑定读过（本批把那颗死出口删了）：坏消息改交这一屏唯一看得见的那一行，
+            // 并按 ✅HG（P-56）的口径带上原因与下一步——只写日志等于屏幕上又一次"点了没反应"。
+            StarLog.Error("搜索页查询失败", ex);
+            await RunOnUi(() =>
+            {
+                if (!append)
+                {
+                    Results.Clear();
+                    ExactResults.Clear();
+                    RelatedResults.Clear();
+                    HasExact = HasRelated = false;
+                }
+                HasResults = false;   // 那颗提示按 HasResults 取反显示，不抹掉就没人看得见这句
+                EmptyHint = LocMessage.Of("search.failed", ex.Message);
+            });
         }
         finally
         {
@@ -380,7 +397,6 @@ public partial class SearchPageViewModel : ObservableObject
     private async Task LoadBrowseAsync(CancellationToken token)
     {
         IsSearching = true;
-        StatusText = "加载中...";
         try
         {
             var source = CurrentSource switch
@@ -416,18 +432,22 @@ public partial class SearchPageViewModel : ObservableObject
                 }
                 HasExact = false;
                 HasRelated = Results.Count > 0;
-                ExactHeader = "精确匹配";
-                RelatedHeader = $"最近条目 ({Results.Count})";
+                ExactHeader = null;   // 浏览态⛔ 精确匹配段：那句段名从前也只是一句没人读的默认值
+                RelatedHeader = LocMessage.Of("search.header.recentCount", Results.Count);
                 CanLoadMore = false;   // 浏览态走 GetAllAsync（无偏移），故不给"加载更多"入口
                 HasResults = Results.Count > 0;
-                EmptyHint = Results.Count == 0 ? "没有可展示的条目" : string.Empty;
-                StatusText = $"最近 {Results.Count} 条";
+                EmptyHint = Results.Count == 0 ? LocMessage.Of("search.empty.noRows") : null;
             });
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            await RunOnUi(() => StatusText = $"错误: {ex.Message}");
+            StarLog.Error("搜索页浏览最近条目失败", ex);
+            await RunOnUi(() =>
+            {
+                HasResults = false;   // 与上一颗 catch 同一条理由：不抹掉这句就藏在屏幕外
+                EmptyHint = LocMessage.Of("search.failed", ex.Message);
+            });
         }
         finally
         {
@@ -444,8 +464,8 @@ public partial class SearchPageViewModel : ObservableObject
         RelatedResults.Remove(vm);
         HasExact = ExactResults.Count > 0;
         HasRelated = RelatedResults.Count > 0;
-        ExactHeader = $"精确匹配 ({ExactResults.Count})";
-        RelatedHeader = $"相关结果 ({RelatedResults.Count})";
+        ExactHeader = LocMessage.Of("search.header.exactCount", ExactResults.Count);
+        RelatedHeader = LocMessage.Of("search.header.relatedCount", RelatedResults.Count);
     }
 
     /// <summary>键入这条路径走合并窗口（连打只跑最后一次）；显式动作（回车/按钮/切来源排序语言）仍立即执行。</summary>

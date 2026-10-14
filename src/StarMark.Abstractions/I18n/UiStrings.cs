@@ -83,6 +83,29 @@ public static class UiStrings
         new Entry("source.bookmarkTip", "收藏夹", "Bookmarks", "ブックマーク"),
         new Entry("source.fileTip", "本地文件（需先在设置开启本地磁盘搜索）", "Local files (turn on local disk search in Settings first)", "ローカルファイル（先に設定でローカルディスク検索を有効にする必要があります）"),
 
+        // ===== 搜索页与搜索组件那一族（批次 WI-67 片9b·P-188 第五刀）=====
+        // 空态那几句从前由 VM 当场拼成中文串；现在交「键＋实参」，命中数与关键词都留在槽里。
+        new Entry("search.empty.keyword", "输入关键词开始搜索", "Type a keyword to start searching", "キーワードを入力すると検索が始まります"),
+        new Entry("search.empty.noRows", "没有可展示的条目", "Nothing to show", "表示できる項目がありません"),
+        new Entry("search.empty.diskOff",
+            "本地磁盘搜索还没开启 — 设置 › 本地磁盘搜索 打开后即可搜遍整盘文件",
+            "Local disk search is off - turn on Settings › Local disk search to search the whole disk",
+            "ローカルディスク検索が未オンです — 設定 › ローカルディスク検索 をオンにするとディスク全体を検索できます"),
+        // 引号归句子（各语言的标点各归各的），实参只递那颗关键词本身。
+        new Entry("search.empty.diskKeyword", "磁盘上没有找到\"{0}\"的文件", "No files on disk matching \"{0}\"", "ディスク上に「{0}」に合うファイルはありません"),
+        new Entry("search.empty.diskKind", "磁盘上没有找到该类型的文件", "No files of that kind were found on disk", "ディスク上にその種類のファイルはありません"),
+        new Entry("search.empty.tagAnd", "没有同时带 {0} 的条目", "No items carry all of {0}", "{0} をすべて含む項目はありません"),
+        new Entry("search.empty.noMatch", "未找到与 \"{0}\" 相关的条目", "Nothing matched \"{0}\"", "「{0}」に関連する項目は見つかりませんでした"),
+        // 标签那一串的连接符也住表里：⛔ 在 C# 里 string.Join(" + ", …) 念完（先例＝capture.bar.nameJoin，规则 #100）。
+        new Entry("search.tagJoin", " + ", " + ", " + "),
+        // 「搜索中…」那一族今天⛔ 上屏（那颗 StatusText 没人绑定，本批删掉了它的死出口）；这一颗是失败那句唯一看得见的位置。
+        new Entry("search.failed", "搜索失败：{0}（改一下关键词再回车即可重试）", "Search failed: {0} (edit the keyword and press Enter to try again)", "検索に失敗：{0}（キーワードを直して Enter で再試行）"),
+        new Entry("search.header.exactCount", "精确匹配 ({0})", "Exact matches ({0})", "完全一致（{0}）"),
+        new Entry("search.header.relatedCount", "相关结果 ({0})", "Related results ({0})", "関連結果（{0}）"),
+        new Entry("search.header.recentCount", "最近条目 ({0})", "Recent items ({0})", "最近の項目（{0}）"),
+        new Entry("search.loadMore", "加载更多", "Load more", "もっと読み込む"),
+        new Entry("search.loadingMore", "加载中…", "Loading…", "読み込み中…"),
+
         // ===== 「类型筛选」浮层 =====
         new Entry("kind.button", "类型筛选", "Type filter", "種類で絞り込み"),
         new Entry("kind.buttonCount", "类型筛选 · {0}", "Type filter · {0}", "種類で絞り込み · {0}"),
@@ -2274,6 +2297,17 @@ public static class UiStrings
         new Entry("widget.sw.tagsTitle", "标签", "Tags", "タグ"),
         new Entry("widget.sw.clearTags", "清除标签", "Clear tags", "タグを解除"),
         new Entry("widget.sw.results", "结果", "Results", "結果"),
+        // 排序那三档的措辞（批次 WI-67 片9b）：标记里那三颗 <ComboBoxItem Content="中文"> 删掉了——
+        // 闭着的那一格显示的是选中那一刻从 Content 抄走的快照，换语言只翻展开的列表（坑表 #272／#275）。
+        // 「名称」⛔ 再造一颗，复用上面那颗 sort.name。
+        new Entry("widget.sw.sort.relevance", "相关度", "Relevance", "関連度"),
+        new Entry("widget.sw.sort.recent", "最近更新", "Recently updated", "最近更新順"),
+        new Entry("widget.sw.empty.start", "输入关键词或选择标签开始搜索", "Type a keyword or pick a tag to start searching", "キーワードを入力するかタグを選ぶと検索が始まります"),
+        new Entry("widget.sw.empty.noEntries", "还没有条目", "No entries yet", "項目がまだありません"),
+        new Entry("widget.sw.empty.noRecent", "暂无最近条目，输入关键词或选择标签开始搜索",
+            "No recent entries - type a keyword or pick a tag to search", "最近の項目がありません。キーワード入力かタグで検索してください"),
+        new Entry("widget.sw.empty.failed", "搜索失败：{0}（重新输入关键词会自动再试一次）",
+            "Search failed: {0} (typing a new keyword tries again automatically)", "検索に失敗：{0}（キーワードを入力し直すと自動的に再試行します）"),
         new Entry("widget.music.source", "切换音源", "Switch player", "プレイヤーを切替"),
         new Entry("widget.music.sourceTip", "选择要控制的播放器（默认跟随系统当前播放）", "Choose which player to control (follows the system's current playback by default)", "操作するプレイヤーを選択（既定はシステムの再生に沿う）"),
         new Entry("widget.music.seekTip", "点击或拖动可跳转进度", "Click or drag to seek", "クリック／ドラッグで再生位置を移動"),

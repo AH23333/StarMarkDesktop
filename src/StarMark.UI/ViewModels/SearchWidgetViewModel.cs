@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Search;
 
 namespace StarMark.UI.ViewModels;
@@ -84,8 +85,9 @@ public sealed class SearchWidgetViewModel
     /// <summary>当前结果是否来自「空态浏览最近条目」（用于区分空态文案：还没搜 / 没找到）。</summary>
     public bool IsBrowsing { get; private set; }
 
-    /// <summary>空态提示文案（Results 为空时由视图展示）。</summary>
-    public string EmptyHint { get; private set; } = "输入关键词或选择标签开始搜索";
+    /// <summary>空态提示（Results 为空时由视图展示）：交的是<b>「键＋实参」</b>，取词发生在宿主贴上去那一刻（批次 WI-67 片9b）。
+    /// <para>留着一颗 <c>string</c> 属性＝那句话又被冻在"上一次算出它的那一门语言"里（✅片8 那颗 <c>WidgetsLoadHint</c> 同一形状）。</para></summary>
+    public LocMessage? EmptyHint { get; private set; } = LocMessage.Of("widget.sw.empty.start");
 
     /// <summary>一轮搜索收尾时触发，通知视图刷新空态文案（Results 的 CollectionChanged 早于文案确定）。</summary>
     public event Action? SearchCompleted;
@@ -208,7 +210,7 @@ public sealed class SearchWidgetViewModel
             if (q.Length == 0 && selected.Count == 0)
             {
                 IsBrowsing = true;
-                EmptyHint = "还没有条目";
+                EmptyHint = LocMessage.Of("widget.sw.empty.noEntries");
                 if (_repo is not null)
                 {
                     var recent = await _repo.GetAllAsync(
@@ -218,7 +220,8 @@ public sealed class SearchWidgetViewModel
                         Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId));
                     ResetSelectionAfterPopulate();
                 }
-                EmptyHint = Results.Count == 0 ? "暂无最近条目，输入关键词或选择标签开始搜索" : "最近条目";
+                // 有货可看时那句空态⛔ 上屏（视图按 Results.Count 决定这一格可见性），所以这里交 null 而⛔ 再造一颗"最近条目"。
+                EmptyHint = Results.Count == 0 ? LocMessage.Of("widget.sw.empty.noRecent") : null;
                 return;
             }
 
@@ -265,7 +268,7 @@ public sealed class SearchWidgetViewModel
             StarMark.Abstractions.StarLog.Error("桌面搜索失败", ex);
             // 原先只有一句"搜索失败，请重试"：既没说为什么（库被占用？SQL 异常？来源抛的？），
             // 也没交代"要不要按什么按钮重试"——本组件重新输入关键词就会再跑一轮，把这两点写清楚（P-56）。
-            EmptyHint = $"搜索失败：{ex.Message}（重新输入关键词会自动再试一次）";
+            EmptyHint = LocMessage.Of("widget.sw.empty.failed", ex.Message);
         }
         finally
         {
@@ -276,12 +279,16 @@ public sealed class SearchWidgetViewModel
         }
     }
 
-    /// <summary>无结果时按查询词 / 标签组合给出的空态文案。</summary>
-    private string EmptyMessageFor(string q, IReadOnlyList<string> selected)
+    /// <summary>无结果时按查询词 / 标签组合给出的空态：<b>与主窗搜索页共用同一颗键</b>（批次 WI-67 片9b）。
+    /// <para>那两句从前在这两个 VM 里<b>各抄一份</b>——同一句话两个主人，改一处另一处静默留在旧措辞上。
+    /// 标签那一串的连接符也交表（<c>search.tagJoin</c>）：⛔ 在 C# 里 <c>string.Join(" + ", …)</c> 念完，
+    /// 那样连接符就被冻在算出它的那一刻（先例＝<c>capture.bar.nameJoin</c>，规则 #100）。</para></summary>
+    private LocMessage? EmptyMessageFor(string q, IReadOnlyList<string> selected)
     {
-        if (Results.Count > 0) return string.Empty;
+        if (Results.Count > 0) return null;
         if (q.Length == 0 && selected.Count > 0)
-            return $"没有同时带 {string.Join(" + ", selected.Select(t => "#" + t))} 的条目";
-        return $"未找到与 \"{q}\" 相关的条目";
+            return LocMessage.Of("search.empty.tagAnd",
+                new LocJoin(selected.Select(t => (object?)("#" + t)).ToList(), "search.tagJoin"));
+        return LocMessage.Of("search.empty.noMatch", q);
     }
 }

@@ -224,8 +224,10 @@ public sealed class CalcWordGateTests : IDisposable
     /// <summary>
     /// 四颗下拉是<b>数据项＋模板</b>：⛔ <c>DisplayMemberPath="Label"</c>——那条路把表里的成品字直接搬到屏幕上，
     /// 换语言那一刻闭着的那一格念的还是旧语言（✅WI-2c／✅WI-43 同一颗判据，本批把最后一族下拉交出来）。
-    /// <para>那颗模板是 15 处下拉共用的主人（主窗 2／设置页 8／热榜 1／计算器 4），射程记在 <c>StarMarkTheme.xaml</c> 的注释里。
-    /// 设置页那 8 颗里最新的一颗＝✅WI-62 把「自动备份间隔」那棵下拉改成数据项＋模板（同批把四句间隔话交表）。</para>
+    /// <para>那颗模板是 <b>16</b> 处下拉共用的主人（主窗 2／设置页 8／热榜 1／计算器 4／<b>快捷搜索 1</b>），射程记在 <c>StarMarkTheme.xaml</c> 的注释里。
+    /// 设置页那 8 颗里最新的一颗＝✅WI-62 把「自动备份间隔」那棵下拉改成数据项＋模板（同批把四句间隔话交表）；
+    /// 最后加进来的那一颗＝✅WI-67 片9b 把快捷搜索组件那颗排序下拉从标记里的三颗 <c>&lt;ComboBoxItem&gt;</c> 换成数据项＋模板
+    /// （这颗计数钉原本钉 15，⛔ 把它红成"闸门有洞"——它说的是"共用主人的那排下拉多了一处"＝射程兑现）。</para>
     /// </summary>
     [Fact]
     public void TheFourDropdownsAreDataItemsNotAMemberPath()
@@ -242,7 +244,7 @@ public sealed class CalcWordGateTests : IDisposable
             .Select(f => f.Replace(Path.DirectorySeparatorChar, '/'))
             .Where(f => !f.Contains("/obj/", StringComparison.Ordinal) && !f.Contains("/bin/", StringComparison.Ordinal))
             .Sum(f => SourceGate.Count(Markup(File.ReadAllText(f)), "StaticResource LocOptionTemplate"));
-        Assert.Equal(15, total);
+        Assert.Equal(16, total);   // ✅WI-67 片9b 起 15 → 16：快捷搜索那颗排序下拉进了这一排（逐颗点名见上面那段）
     }
 
     /// <summary>

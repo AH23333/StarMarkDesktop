@@ -283,6 +283,9 @@ public sealed class I18nContractTests : IDisposable
             ["ocr.body.join"] = "纯胶水位「{0}{1}」三列同形：把识字那三张卡的「原因／结果」与「怎么认的」两段连起来的位置，"
                 + "⛔ 在 C# 里拼 +（✅WI-65 片3 第二刀／P-194，与 rss.statusJoin／settings.data.backup.lineJoin／clip.usage.line 同形——"
                 + "语序归那一行自己决定，⛔ 被拼法定死在中文那一侧＝规则 #100）",
+            ["search.tagJoin"] = "连接符「 + 」三列同形（en 列也是同一个 ASCII 形状）：搜索页与搜索组件那句「没有同时带 #a + #b 的条目」里连的是"
+                + "<b>用户自己起的标签名</b>，这一行没有词可翻（✅WI-67 片9b／P-188 第五刀，与 capture.bar.nameJoin／settings.ai.groupJoin 同形）。"
+                + "⚠ 交的是 <c>LocJoin</c> 而⛔ 在 C# 里 string.Join 念完：念完那一刻语言就被定死了（规则 #100）",
             ["widget.name.dedupSuffix"] = "同名序号那副括号「{0} ({1})」三列同形：连的是<b>基名</b>与<b>第几颗</b>那颗读数，这一行没有词可翻。"
                 + "⚠ 刻意用<b>半角括号＋一个空格</b>而⛔ 全角（与 widget.menu.nameWithSummary 相反）：用户档里历史遗留的「X (2)」就是这个形状，"
                 + "屏幕上重排⛔ 换一副括号去和它长得不一样（✅WI-67 片6／P-200 他裁 (A)）",

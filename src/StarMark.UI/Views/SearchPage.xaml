@@ -67,8 +67,11 @@
 
             <!-- 语言筛选已上移至主窗口工具栏（常态显示，与 全部/star/书签 同排） -->
 
-            <!-- 结果分段（P2-7）：精确匹配段在前，相关结果段在后，段内保持原排序 -->
-            <TextBlock Text="{x:Bind ViewModel.ExactHeader, Mode=OneWay}" FontSize="12"
+            <!-- 结果分段（P2-7）：精确匹配段在前，相关结果段在后，段内保持原排序。
+                 ⚠ 段名与空态那几行⛔ 再走 {x:Bind …, Mode=OneWay}：那条绑定拿的是<b>成品串</b>，
+                 换语言那一刻没人回去重贴（批次 WI-67 片9b·✅片8 那颗 WidgetsLoadHint 同一形状）。
+                 改成交「键＋实参」由 SearchPage.xaml.cs 那一拍 LocText.SetMessage 贴。 -->
+            <TextBlock x:Name="ExactHeaderText" FontSize="12"
                        FontWeight="SemiBold" Opacity="0.75" Margin="2,2,0,6"
                        Visibility="{x:Bind ViewModel.HasExact, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
             <ItemsRepeater x:Name="ExactRepeater" ItemsSource="{x:Bind ViewModel.ExactResults, Mode=OneWay}">
@@ -94,7 +97,7 @@
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
 
-            <TextBlock Text="{x:Bind ViewModel.RelatedHeader, Mode=OneWay}" FontSize="12"
+            <TextBlock x:Name="RelatedHeaderText" FontSize="12"
                        FontWeight="SemiBold" Opacity="0.75" Margin="2,10,0,6"
                        Visibility="{x:Bind ViewModel.HasRelated, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
             <ItemsRepeater x:Name="RelatedRepeater" ItemsSource="{x:Bind ViewModel.RelatedResults, Mode=OneWay}">
@@ -123,13 +126,13 @@
                 <!-- 「加载更多」：只在上一页报告仍有剩余时出现。分页＝合并去重后再切片（P-42 路线 D），
                      所以这一页接上去的是"完整有序列表的下一段"，不重不漏。放在结果末尾而非工具栏：
                      它是"往下读"的动作，位置本身就是语义。 -->
-                <Button Content="{x:Bind ViewModel.LoadMoreLabel, Mode=OneWay}"
+                <Button x:Name="LoadMoreButton"
                         HorizontalAlignment="Center" Margin="0,14,0,4" Padding="18,6"
                         Visibility="{x:Bind ViewModel.CanLoadMore, Mode=OneWay, Converter={StaticResource BoolToVis}}"
                         IsEnabled="{x:Bind ViewModel.CanLoadMoreButton, Mode=OneWay}"
                         Command="{x:Bind ViewModel.LoadMoreCommand}"/>
 
-                <TextBlock Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}" Style="{StaticResource MutedText}"
+                <TextBlock x:Name="EmptyHintText" Style="{StaticResource MutedText}"
                            HorizontalAlignment="Center" Margin="0,40,0,16"
                            Visibility="{x:Bind ViewModel.HasResults, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
             </StackPanel>
