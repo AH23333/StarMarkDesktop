@@ -22,9 +22,11 @@ public sealed class WidgetLayoutTests
         var result = WidgetLayoutCollection.Normalize(layouts);
 
         Assert.Equal(3, result.Count);
-        Assert.Equal("工作模式", result[0].Name);
-        Assert.Equal("工作模式 (2)", result[1].Name);
-        Assert.Equal("未命名布局", result[2].Name);
+        // 批次 WI-67 片6（✅P-200 他裁 (A)）：没起名的那一颗存<b>空串</b>＝中性形状，「未命名布局」那一句归显示侧现算
+        // （<see cref="WidgetDisplayName"/>，证人搬进 WidgetDisplayNameTests）。空串在末尾那颗 OrderBy 下排最前。
+        Assert.Equal("", result[0].Name);
+        Assert.Equal("工作模式", result[1].Name);
+        Assert.Equal("工作模式 (2)", result[2].Name);
     }
 
     [Fact]
@@ -101,15 +103,17 @@ public sealed class WidgetLayoutTests
     // 既有 MakeUniqueName_AppendsCounterWhenTaken 只喂「已 trim、大小写一致、非空」的 CJK 名 → :127 的
     // 空白兜底真臂、.Trim()、:128 StringComparer.OrdinalIgnoreCase 三处皆未走到必要场景。GUID 兜底(:135)
     // 需 999 条同前缀碰撞才触发，属计数/规模用例、构造即注水，故刻意不测。
+    // ⚠ 批次 WI-67 片6 起那"空白兜底"一臂<b>换了形态</b>：⛔ 再补一颗词进库，空白原样交回空串（下面那格），
+    //   屏幕上那一句由 <see cref="WidgetDisplayName"/> 现算 ⇒ 那一臂的证人跟着搬到 WidgetDisplayNameTests。
 
     [Fact]
-    public void MakeUniqueName_BlankDesired_FallsBackToDefault()
+    public void MakeUniqueName_BlankDesired_ReturnsNeutralBlank()
     {
-        // 用户新建布局时名字留空/纯空白 → 兜底默认名，而非落回空串（空名会让列表出现无名条目）。
-        Assert.Equal("未命名布局", WidgetLayoutCollection.MakeUniqueName([], ""));
-        // 兜底名本身已占用时须继续加计数后缀（空白兜底臂 → 碰撞循环串联）。
-        var taken = new[] { new WidgetLayout { Name = "未命名布局" } };
-        Assert.Equal("未命名布局 (2)", WidgetLayoutCollection.MakeUniqueName(taken, "   "));
+        // 用户新建布局时名字留空/纯空白 → 交回<b>空串</b>（＝中性形状）。片6 之前这里返回「未命名布局」，
+        // 那是把"建出来那一刻"的界面语言冻进 widgets.json（✅P-200 他裁 (A)：新行按中性形状落，⛔ 迁历史名）。
+        Assert.Equal("", WidgetLayoutCollection.MakeUniqueName([], ""));
+        // ⛔ 因为"兜底名可能已占用"就给空串编 (2)：库里两行空白是合法的（它们就是"没名字"），序号只在屏幕上发。
+        Assert.Equal("", WidgetLayoutCollection.MakeUniqueName(new[] { new WidgetLayout { Name = "未命名布局" } }, "   "));
     }
 
     [Fact]

@@ -704,7 +704,7 @@ public sealed class WidgetStorage
 
     // ───────────────────────── 布局方案 ─────────────────────────
 
-    /// <summary>全部已保存布局（按名称排序，名称保证唯一）。</summary>
+    /// <summary>全部已保存布局（按名称排序；非空名保证唯一，<b>没起名的存空串</b>且可以有多行＝✅P-200 (A) 的中性形状）。</summary>
     public IReadOnlyList<WidgetLayout> GetLayouts()
     {
         lock (_gate) return Load().Layouts ?? new List<WidgetLayout>();
@@ -716,7 +716,8 @@ public sealed class WidgetStorage
         lock (_gate) return Load().Layouts?.FirstOrDefault(l => l.Id == id);
     }
 
-    /// <summary>新增或覆盖同名布局（按 Id 判定）；返回去重后的最终名称。</summary>
+    /// <summary>新增或覆盖同名布局（按 Id 判定）；返回归一后的最终名称（没起名就是空串，屏幕上那句由
+    /// <see cref="WidgetDisplayName"/> 现算——⛔ 把这句当"能直接上屏的名字"用）。</summary>
     public string SaveLayout(WidgetLayout layout)
     {
         lock (_gate)
@@ -750,7 +751,8 @@ public sealed class WidgetStorage
     // 快照与布局的本质区别：布局是可复用的**纯模板**且按 Id 就地覆盖；快照是**不可变历史点**、
     // 带组件数据、一次一点永不覆盖（唯一例外是用户主动删除）。故此处刻意不提供 SaveSnapshot。
 
-    /// <summary>全部快照点（新的在前；名称唯一，由 <see cref="WidgetSnapshotCollection.Normalize"/> 保证）。</summary>
+    /// <summary>全部快照点（新的在前；非空名唯一，<b>没起名的存空串</b>且可以有多行，由
+    /// <see cref="WidgetSnapshotCollection.Normalize"/> 保证）。</summary>
     public IReadOnlyList<WidgetSnapshot> GetSnapshots()
     {
         lock (_gate) return Load().Snapshots ?? new List<WidgetSnapshot>();
@@ -764,7 +766,7 @@ public sealed class WidgetStorage
 
     /// <summary>
     /// 追加一个快照点（**不可变**：永不按 Id 覆盖既有点）。
-    /// 名称自动去重、Id 冲突时重新生成后追加；返回落盘后的快照（含最终名称）。
+    /// 非空名自动去重、Id 冲突时重新生成后追加；返回落盘后的快照（含最终名称，没起名就是空串）。
     /// </summary>
     public WidgetSnapshot AppendSnapshot(WidgetSnapshot snapshot)
     {

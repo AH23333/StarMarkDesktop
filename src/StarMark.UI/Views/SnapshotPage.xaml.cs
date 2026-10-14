@@ -71,11 +71,15 @@ public sealed partial class SnapshotPage : Page, INotifyPropertyChanged
         RowsItems.Clear();
         if (Manager() is { } mgr)
         {
-            foreach (var s in mgr.GetSnapshots())
+            var points = mgr.GetSnapshots();
+            // 名字那一列＝库里那颗中性形状念出来的词（空白＝「未命名快照」＋同组序号，✅P-200 (A)）；
+            // 行模型持 string ⇒ 当场渲染，换语言要<b>重进</b>这一页才改口（与 Meta 同一口径）。
+            var names = WidgetDisplayName.ForSnapshots(points);
+            foreach (var s in points)
                 RowsItems.Add(new SnapshotRow
                 {
                     Id = s.Id,
-                    Name = s.Name,
+                    Name = names.Word(s.Id, s.Name, WidgetDisplayName.SnapshotFallbackKey).Render(),
                     Meta = $"{s.Summary.Render()} · {FormatTime(s.CreatedAt)}",
                 });
         }
@@ -107,7 +111,9 @@ public sealed partial class SnapshotPage : Page, INotifyPropertyChanged
         // 两颗按钮字点名要（批次 WI-52）：CenteredDialog 工厂里那份「确定／取消」默认值已交表，
         // 而 ShowContentAsync 的 null 说的是"这颗按钮不出现"——⛔ 拿 null 兼作"用默认字"。
         await CenteredDialog.ShowContentAsync(
-            LocMessage.Of("snapshot.previewTitle", snapshot.Name), content, owner: App.MainWindow,
+            LocMessage.Of("snapshot.previewTitle",
+                WidgetDisplayName.ForSnapshots(mgr.GetSnapshots()).Word(snapshot.Id, snapshot.Name, WidgetDisplayName.SnapshotFallbackKey)),
+            content, owner: App.MainWindow,
             primaryText: LocMessage.Of("dialog.ok"), cancelText: LocMessage.Of("dialog.cancel"));
     }
 
@@ -134,13 +140,19 @@ public sealed partial class SnapshotPage : Page, INotifyPropertyChanged
         var snapshot = mgr.GetSnapshots().FirstOrDefault(s => s.Id == id);
         if (snapshot is null) return;
 
+        // 提取出来的布局该预填什么：交<b>库里那颗中性形状</b>，⛔ 交屏幕上那一句——后者是 WidgetDisplayName 现算的
+        // <b>词</b>，他一字不改点确定就等于把「未命名快照」按<b>当下这门语言</b>冻进 widgets.json＝✅P-200 (A) 的侧门。
+        // 没起名的快照这里就是空串（输入框靠 placeholder 提示），点确定后写侧照旧把它存回空串。
+        var neutralName = WidgetDisplayName.Neutralize(snapshot.Name);
         var name = await CenteredDialog.PromptAsync(
             title: LocMessage.Of("snapshot.extractTitle"),
             message: LocMessage.Of("snapshot.extractBody"),
             placeholder: LocMessage.Of("snapshot.extractHint"),
             // defaultText 是输入框里那个**用户会改的值**（数据）⇒ 当场渲染一次就交出去，⛔ 进重贴名单
             //（进去就会在换语言那一刻盖掉他正在打的字，LocText 类注释第②条）。
-            defaultText: LocMessage.Of("snapshot.layoutNameDefault", snapshot.Name).Render(),
+            defaultText: neutralName.Length == 0
+                ? string.Empty
+                : LocMessage.Of("snapshot.layoutNameDefault", neutralName).Render(),
             primaryText: LocMessage.Of("snapshot.extractGo"),
             cancelText: LocMessage.Of("dialog.cancel"),
             owner: App.MainWindow);

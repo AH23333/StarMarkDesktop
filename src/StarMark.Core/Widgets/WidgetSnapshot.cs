@@ -162,13 +162,14 @@ public static class WidgetSnapshotCollection
             result.Add(s);
         }
 
-        // 名称去重：与 WidgetLayoutCollection 同策略——以「最终名」为准防碰撞，空名兜底。
+        // 名称去重：与 WidgetLayoutCollection 同策略——以「最终名」为准防碰撞；
+        // 空白名一律留<b>空串</b>＝中性形状（⛔ 在这里写「未命名快照」，那是会冻进 widgets.json 的界面语言内容＝✅P-200 (A)）。
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var s in result)
         {
-            var desired = string.IsNullOrWhiteSpace(s.Name) ? "未命名快照" : s.Name.Trim();
+            var desired = WidgetDisplayName.Neutralize(s.Name);
             var name = desired;
-            if (used.Contains(name))
+            if (name.Length > 0 && used.Contains(name))
             {
                 for (var n = 2; ; n++)
                 {
@@ -176,7 +177,7 @@ public static class WidgetSnapshotCollection
                     if (!used.Contains(name)) break;
                 }
             }
-            used.Add(name);
+            if (name.Length > 0) used.Add(name);
             s.Name = name;
         }
 
@@ -187,10 +188,14 @@ public static class WidgetSnapshotCollection
             .ToList();
     }
 
-    /// <summary>为新快照生成一个不与现有点重名的名字。</summary>
+    /// <summary>
+    /// 为新快照生成一个不与现有点重名的名字。<b>空白一律原样交回空串</b>（＝中性形状，屏幕上那一句由
+    /// <see cref="WidgetDisplayName"/> 现算）：⛔ 在这里补「未命名快照」，也⛔ 在这里编 (2) 那颗序号。
+    /// </summary>
     public static string MakeUniqueName(IEnumerable<WidgetSnapshot> existing, string desired)
     {
-        desired = string.IsNullOrWhiteSpace(desired) ? "未命名快照" : desired.Trim();
+        desired = WidgetDisplayName.Neutralize(desired);
+        if (desired.Length == 0) return string.Empty;
         var names = new HashSet<string>(existing.Select(e => e.Name), StringComparer.OrdinalIgnoreCase);
         if (!names.Contains(desired)) return desired;
         for (var i = 2; i < 1000; i++)

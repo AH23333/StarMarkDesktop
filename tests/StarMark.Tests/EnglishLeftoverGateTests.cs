@@ -44,9 +44,16 @@ public sealed class EnglishLeftoverGateTests : IDisposable
     private const string ItemGridCs = "src/StarMark.UI/Views/ItemGridWidget.xaml.cs";
     private const string CardPolicy = "src/StarMark.Abstractions/ItemCardPolicy.cs";
     private const string CardVm = "src/StarMark.UI/ViewModels/ItemCardViewModel.cs";
+    private const string LayoutCore = "src/StarMark.Core/Widgets/WidgetLayout.cs";
+    private const string SnapshotCore = "src/StarMark.Core/Widgets/WidgetSnapshot.cs";
+    private const string NameOwner = "src/StarMark.Core/Widgets/WidgetDisplayName.cs";
+    private const string WidgetMenuCs = "src/StarMark.UI/Views/WidgetWindow.Menu.cs";
+    private const string SettingsWidgetsCs = "src/StarMark.UI/Views/SettingsPage.Widgets.cs";
+    private const string SnapshotPageCs = "src/StarMark.UI/Views/SnapshotPage.xaml.cs";
 
-    /// <summary>本批这几片改交键的那 39 颗（片1 十二颗＋片3 九颗＋片4 十四颗＋片5 四颗；颗数＝<c>bin/WI67/keys_67d.txt</c> 那把差集尺对过，
-    /// 名单长度＝同一颗尺逐颗数出来的数组元素数）。一颗都得有人在表里问，⛔ 留一颗没人念的死键进表。</summary>
+    /// <summary>本批这几片改交键的那 42 颗（片1 十二颗＋片3 九颗＋片4 十四颗＋片5 四颗＋片6 三颗；
+    /// 颗数＝<c>bin/WI67/keys_67d.txt</c> 那把差集尺对过，名单长度＝同一颗尺逐颗数出来的数组元素数）。
+    /// 一颗都得有人在表里问，⛔ 留一颗没人念的死键进表。</summary>
     private static readonly string[] Keys =
     {
         "tag.editor.placeholder", "tag.editor.removeTip", "tag.editor.suggestTitle", "tag.editor.addTip",
@@ -68,6 +75,8 @@ public sealed class EnglishLeftoverGateTests : IDisposable
         // 批次 WI-67 片5（布局／快照那两颗「每次现算的摘要」交表：问的人在 Core，⛔ 在 Core 里拼成品串）。
         "widget.layout.summaryEmpty", "widget.layout.summaryCount",
         "widget.snapshot.summaryEmpty", "widget.snapshot.summaryBody",
+        // 批次 WI-67 片6（✅P-200 他裁 (A)：两颗兜底名＋同名序号——库里只存中性形状，词只在贴上屏幕那一刻念）。
+        "widget.name.layoutFallback", "widget.name.snapshotFallback", "widget.name.dedupSuffix",
     };
 
     private static readonly Regex CjkInAttribute = new("(?<=[\"'])[^\"']*?[㐀-鿿]", RegexOptions.CultureInvariant);
@@ -263,6 +272,53 @@ public sealed class EnglishLeftoverGateTests : IDisposable
             "public string CollectTip => ItemCardPolicy.CollectTipFor(IsRssCandidate, _isCollected, RssFolderPath).Render();",
         })
             Assert.Contains(line, vm, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 两颗兜底名「未命名布局／未命名快照」从此只住表里一份（批次 WI-67 片6，✅P-200 他裁 (A)）。
+    /// <para>这一族的形状与片4 那八颗⛔ 同：问题⛔ 是"屏幕上少一行字"，而是<b>那一颗字会落进 widgets.json</b>——
+    /// 存进档＝把"建出来那一刻"的界面语言冻死（换语言之后它永不改口＝P-199 那条界线）。库里因此改存<b>中性形状</b>
+    /// （没起名就是空串），词与 (2) 那颗序号都在贴上屏幕那一刻现算，唯一主人＝<c>WidgetDisplayName</c>。</para>
+    /// <para>⚠ 那"改前 4 处写进库／7 处念上屏"是<b>从改前那一侧现读出来的</b>（<c>bin/WI67/recon_67e_names.txt</c>：
+    /// 写进库 4 处＝Core 两档的 <c>Normalize</c> 各 1 ＋ <c>MakeUniqueName</c> 各 1；念上屏 7 处＝设置页 1／快照页 3／组件右键 3）。
+    /// 名册 245 那条口径：一句"0 处"只有在一边读到过 ≥1 时才在防事。</para>
+    /// <para>⚠ 而那句"7 处念上屏"里有一颗<b>分堆分错了</b>（坑表 #525）：快照页第三处＝「提取为布局」输入框的默认字，
+    /// 它看屏幕上<b>出去</b>的值会被他一字不改地点确定<b>写回来</b>。这一族真正的判据是<b>方向</b>而⛔"有没有出现过"，
+    /// 所以本档把那颗单独计数（<c>Neutralize(</c>＝1），⛔ 让它混进 <c>.Word(</c> 的 3·1·2 里。</para>
+    /// </summary>
+    [Fact]
+    public void TheFallbackNamesHaveOneHomeEach()
+    {
+        var table = Code(ReadRepoFile(Table));
+        Assert.Equal(1, Count(table, "未命名布局"));
+        Assert.Equal(1, Count(table, "未命名快照"));
+
+        var code = string.Concat(ReadRepoUnder("src")
+            .Where(f => !f.RelativePath.EndsWith("UiStrings.cs", StringComparison.Ordinal))
+            .Select(f => Code(f.Text)));
+        Assert.Equal(0, Count(code, "未命名布局"));
+        Assert.Equal(0, Count(code, "未命名快照"));
+
+        // 三颗键名一处主人：只在 WidgetDisplayName 里各声明一次；Core 那两档一颗都不问（问＝绕过主人自己取词）。
+        var owner = Code(ReadRepoFile(NameOwner));
+        foreach (var key in new[] { "widget.name.layoutFallback", "widget.name.snapshotFallback", "widget.name.dedupSuffix" })
+            Assert.Equal(1, Count(owner, $"\"{key}\""));
+        foreach (var file in new[] { LayoutCore, SnapshotCore })
+        {
+            var text = Code(ReadRepoFile(file));
+            Assert.Equal(0, Count(text, "widget.name."));
+            Assert.Contains("WidgetDisplayName", text, StringComparison.Ordinal);
+        }
+
+        // 取词必须发生在"贴上屏幕那一刻"：三位宿主各自交出去的实参前缀都是 <c>….Word(</c>（⛔ 直接交 l.Name／s.Name）。
+        // 颗数＝改前那 6 处<b>上屏</b>消费点（组件右键 3＝应用布局子菜单＋应用快照子菜单＋保存回执；设置页 1；快照页 2＝行/预览）。
+        Assert.Equal(3, Count(Code(ReadRepoFile(WidgetMenuCs)), ".Word("));
+        Assert.Equal(1, Count(Code(ReadRepoFile(SettingsWidgetsCs)), ".Word("));
+        // ⚠ 快照页那 2 处⛔ 再多一颗：「提取为布局」的<b>输入框预填</b>看着也像"上屏"，但它交出去的值会被他
+        // 一字不改地点确定<b>写回库里</b>——那一颗必须走 <c>Neutralize</c>（中性形状），走 <c>.Word(</c> 就是把兜底词冻进档＝(A) 的侧门。
+        var snapshotPage = Code(ReadRepoFile(SnapshotPageCs));
+        Assert.Equal(2, Count(snapshotPage, ".Word("));
+        Assert.Equal(1, Count(snapshotPage, "WidgetDisplayName.Neutralize("));
     }
 
     /// <summary>

@@ -106,13 +106,15 @@ public static class WidgetLayoutCollection
         }
 
         // 名称去重：以「最终名」为准防碰撞。同名追加 (2)(3)…；生成的 "X (N)"
-        // 不得再与某个本就叫 "X (N)" 的布局撞车（旧实现只记基名，会出现两个同名）。空名兜底。
+        // 不得再与某个本就叫 "X (N)" 的布局撞车（旧实现只记基名，会出现两个同名）。
+        // ⚠ 空白名一律留<b>空串</b>＝中性形状：⛔ 在这里写「未命名布局」——那是会被冻进 widgets.json 的界面语言内容
+        //   （P-199 那颗形状；✅P-200 他裁 (A)）。词与屏幕上的序号都归 <see cref="WidgetDisplayName"/> 现算。
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var l in result)
         {
-            var desired = string.IsNullOrWhiteSpace(l.Name) ? "未命名布局" : l.Name.Trim();
+            var desired = WidgetDisplayName.Neutralize(l.Name);
             var name = desired;
-            if (used.Contains(name))
+            if (name.Length > 0 && used.Contains(name))
             {
                 for (var n = 2; ; n++)
                 {
@@ -120,17 +122,21 @@ public static class WidgetLayoutCollection
                     if (!used.Contains(name)) break;
                 }
             }
-            used.Add(name);
+            if (name.Length > 0) used.Add(name);
             l.Name = name;
         }
 
         return result.OrderBy(l => l.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    /// <summary>为新布局生成一个不与现有重名的名字。</summary>
+    /// <summary>
+    /// 为新布局生成一个不与现有重名的名字。<b>空白一律原样交回空串</b>（＝中性形状，屏幕上那一句由
+    /// <see cref="WidgetDisplayName"/> 现算）：⛔ 在这里补「未命名布局」，也⛔ 在这里给它编 (2) 那颗序号。
+    /// </summary>
     public static string MakeUniqueName(IEnumerable<WidgetLayout> existing, string desired)
     {
-        desired = string.IsNullOrWhiteSpace(desired) ? "未命名布局" : desired.Trim();
+        desired = WidgetDisplayName.Neutralize(desired);
+        if (desired.Length == 0) return string.Empty;
         var names = new HashSet<string>(existing.Select(e => e.Name), StringComparer.OrdinalIgnoreCase);
         if (!names.Contains(desired)) return desired;
         for (var i = 2; i < 1000; i++)

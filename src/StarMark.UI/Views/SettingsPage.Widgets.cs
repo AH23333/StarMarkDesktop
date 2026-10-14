@@ -172,8 +172,18 @@ public sealed partial class SettingsPage
     {
         LayoutRowsItems.Clear();
         if (WidgetManager() is { } mgr)
+        {
+            // 名字那一列交<b>库里那颗中性形状</b>念出来的词（空白＝「未命名布局」＋同组序号，✅P-200 (A)）；
+            // 行模型持 string ⇒ 当场渲染，换语言要<b>重进</b>这一页才改口（与 Summary 同一口径）。
+            var names = WidgetDisplayName.ForLayouts(mgr.GetLayouts());
             foreach (var l in mgr.GetLayouts())
-                LayoutRowsItems.Add(new WidgetLayoutRow { Id = l.Id, Name = l.Name, Summary = l.Summary.Render() });
+                LayoutRowsItems.Add(new WidgetLayoutRow
+                {
+                    Id = l.Id,
+                    Name = names.Word(l.Id, l.Name, WidgetDisplayName.LayoutFallbackKey).Render(),
+                    Summary = l.Summary.Render(),
+                });
+        }
         RaisePropertyChanged(nameof(HasNoLayouts));
     }
 

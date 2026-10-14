@@ -284,11 +284,13 @@ public sealed partial class WidgetWindow
         if (layouts.Count > 0)
         {
             var sub = new MenuFlyoutSubItem { Text = Locale.T("widget.menu.applyLayout") };
+            var layoutNames = WidgetDisplayName.ForLayouts(layouts);   // 序号只在这一次算，子菜单与设置页那一列⛔ 各数一套
             foreach (var l in layouts)
             {
                 var id = l.Id;
                 // 名字与摘要之间那个括号是<b>语言内容</b>（英文用半角），所以整句进表、两段当实参。
-                var apply = new MenuFlyoutItem { Text = Locale.Fmt("widget.menu.nameWithSummary", l.Name, l.Summary) };
+                // 名字那一颗交<b>未渲染的 LocMessage</b>：库里的空名（中性形状）在这里才念成「未命名布局」（✅P-200 (A)）。
+                var apply = new MenuFlyoutItem { Text = Locale.Fmt("widget.menu.nameWithSummary", layoutNames.Word(id, l.Name, WidgetDisplayName.LayoutFallbackKey), l.Summary) };
                 apply.Click += (_, _) => _ = _manager.ApplyLayoutAsync(id);
                 sub.Items.Add(apply);
             }
@@ -308,10 +310,11 @@ public sealed partial class WidgetWindow
         if (snapshots.Count > 0)
         {
             var snapSub = new MenuFlyoutSubItem { Text = Locale.T("widget.menu.applySnapshot") };
+            var snapshotNames = WidgetDisplayName.ForSnapshots(snapshots);
             foreach (var s in snapshots)
             {
                 var id = s.Id;
-                var apply = new MenuFlyoutItem { Text = Locale.Fmt("widget.menu.nameWithSummary", s.Name, s.Summary) };
+                var apply = new MenuFlyoutItem { Text = Locale.Fmt("widget.menu.nameWithSummary", snapshotNames.Word(id, s.Name, WidgetDisplayName.SnapshotFallbackKey), s.Summary) };
                 // 快照应用刻意与「应用布局」一致：直接应用、不再二次确认，因为应用前会自动留回滚点。
                 // 但回滚点没存成时 Apply 会中止（返回 false）——不静默吞掉，给一条提示说明"未应用"。
                 apply.Click += async (_, _) =>
@@ -359,7 +362,9 @@ public sealed partial class WidgetWindow
                 await ShowTipAsync(LocMessage.Of("widget.menu.noneWidgets"), LocMessage.Of("widget.menu.noSnapshotContent"));
             else
                 await ShowTipAsync(LocMessage.Of("widget.menu.snapshotSaved"),
-                    LocMessage.Of("widget.menu.snapshotSavedBody", saved.Name, saved.Summary));
+                    LocMessage.Of("widget.menu.snapshotSavedBody",
+                        WidgetDisplayName.ForSnapshots(_manager.GetSnapshots())
+                            .Word(saved.Id, saved.Name, WidgetDisplayName.SnapshotFallbackKey), saved.Summary));
         }
         catch (Exception ex)
         {

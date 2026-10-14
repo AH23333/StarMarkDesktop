@@ -195,7 +195,8 @@ public sealed partial class WidgetManager
 
     /// <summary>
     /// 从快照「提取布局」：把某个快照点的几何 + 外观转成一套**新的、不含数据**的纯模板布局。
-    /// 名称由用户输入（空则兜底），与 <see cref="SaveCurrentLayoutAsync"/> 产物同构、可在布局列表里复用。
+    /// 名称由用户输入（留空＝存空串，屏幕上那句由 <see cref="StarMark.Core.Widgets.WidgetDisplayName"/> 现算），
+    /// 与 <see cref="SaveCurrentLayoutAsync"/> 产物同构、可在布局列表里复用。
     /// </summary>
     public Task<WidgetLayout?> ExtractLayoutFromSnapshotAsync(string snapshotId, string layoutName) => OnUiAsync(() =>
     {

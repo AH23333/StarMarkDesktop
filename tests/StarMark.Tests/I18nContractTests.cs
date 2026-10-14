@@ -281,6 +281,9 @@ public sealed class I18nContractTests : IDisposable
             ["ocr.body.join"] = "纯胶水位「{0}{1}」三列同形：把识字那三张卡的「原因／结果」与「怎么认的」两段连起来的位置，"
                 + "⛔ 在 C# 里拼 +（✅WI-65 片3 第二刀／P-194，与 rss.statusJoin／settings.data.backup.lineJoin／clip.usage.line 同形——"
                 + "语序归那一行自己决定，⛔ 被拼法定死在中文那一侧＝规则 #100）",
+            ["widget.name.dedupSuffix"] = "同名序号那副括号「{0} ({1})」三列同形：连的是<b>基名</b>与<b>第几颗</b>那颗读数，这一行没有词可翻。"
+                + "⚠ 刻意用<b>半角括号＋一个空格</b>而⛔ 全角（与 widget.menu.nameWithSummary 相反）：用户档里历史遗留的「X (2)」就是这个形状，"
+                + "屏幕上重排⛔ 换一副括号去和它长得不一样（✅WI-67 片6／P-200 他裁 (A)）",
         };
 
         var actual = UiStrings.All
@@ -295,6 +298,41 @@ public sealed class I18nContractTests : IDisposable
         foreach (var key in actual)
             Assert.True(reasons.ContainsKey(key), $"{key} 两列相同却没写理由");
     }
+
+    /// <summary>
+    /// 表里那三列<b>各说各的语言</b>：英文列不许有一个汉字，日文列不许夹一颗<b>简体专用字形</b>。
+    /// <para>为什么上面那颗「ja 与 zh 逐字相等」⛔ 够：它判的是<b>整行没翻</b>，看不见<b>一句长日文里
+    /// 抄进一颗中文词</b>——批次 WI-67 片5 我自己就抄了一颗（<c>widget.snapshot.summaryBody</c> 的 ja 列
+    /// 写作「1 件の待办」，而本表 <c>widget.kind.todo</c> 的 ja 列一直写作 <c>ToDo</c>），
+    /// 全量测试⛔ 有一格红（名册 252：一颗"逐字相等"的尺测不出"局部抄写"）。片6 起这一族有证人。</para>
+    /// <para>名单口径＝<b>简体专用</b>（那颗字形在日文规范写法里⛔ 长成这样：日文用 関／図／移動／概要／スイッチ）。
+    /// ⛔ 把 <c>写・会・点・号・売・学・干・后</c> 这类<b>中日同形</b>的字放进来——
+    /// 天天红的判据最后只会被人绕过（#144 那条"判据要能被遵守"）。</para>
+    /// </summary>
+    [Fact]
+    public void TheEnglishColumnHasNoHanAndTheJapaneseColumnNoSimplifiedForms()
+    {
+        Assert.True(UiStrings.All.Count > 1_500, $"只读到 {UiStrings.All.Count} 行⇒表没 load 起来，这一格不作数");
+
+        var hanInEnglish = UiStrings.All.Where(e => e.En.Any(IsHan)).Select(e => e.Key).ToArray();
+        Assert.True(hanInEnglish.Length == 0,
+            $"英文列里出现汉字（英文界面上那就是一行汉字）：{string.Join("、", hanInEnglish)}");
+
+        var copiedIntoJapanese = UiStrings.All
+            .Where(e => e.Ja.Any(c => SimplifiedOnlyForms.IndexOf(c) >= 0))
+            .Select(e => e.Key).ToArray();
+        Assert.True(copiedIntoJapanese.Length == 0,
+            $"日文列夹着简体专用字形＝从中文列抄过去的词：{string.Join("、", copiedIntoJapanese)}");
+    }
+
+    /// <summary>汉字区（U+4E00～U+9FFF）：日文列的同一段⛔ 用这颗判（那里⛔"不许有汉字"，只不许有<b>简体那一型</b>）。</summary>
+    private static bool IsHan(char c) => c >= '一' && c <= '鿿';
+
+    /// <summary>简体专用字形名单（逐颗都有对应的日文写法，见 <see cref="TheEnglishColumnHasNoHanAndTheJapaneseColumnNoSimplifiedForms"/> 的口径）。</summary>
+    private const string SimplifiedOnlyForms =
+        "关听觉图团库应变单卖补续统组织结给类态极构创颜币简层联达过适选运动务顶顺预审义习书买众优时"
+        + "间见观记讲议语词诉评试译读为举乐亚产亲决净减击刚员响坏块览讯汉泪泽洁测浏济满滤渐忧环现热显"
+        + "设备录页值复规们这样队从护钟气闹标夹贴让识转缩传负载办陈际险隐难约纪细终线纸级纯纲纳纵纷";
 
     /// <summary>取一行里的占位符编号，去重后按数字序。<b>返回数组而不是集合</b>：
     /// <c>Assert.Equal</c> 对 <c>SortedSet</c> 走引用相等，那样的判据永远红，写的人只会去改判据。</summary>

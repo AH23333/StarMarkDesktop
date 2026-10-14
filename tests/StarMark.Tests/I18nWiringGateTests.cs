@@ -1791,8 +1791,10 @@ public sealed class I18nWiringGateTests
         // ① 重建那一刻现取词；同一句话不许有第二颗键
         Assert.Contains("Locale.T(\"settings.widgets.addRow\")", menu, StringComparison.Ordinal);
         Assert.Equal(1, Count(menu, "\"settings.widgets.addRow\""));
-        Assert.Contains("Locale.Fmt(\"widget.menu.nameWithSummary\", l.Name, l.Summary)", menu, StringComparison.Ordinal);
-        Assert.Contains("Locale.Fmt(\"widget.menu.nameWithSummary\", s.Name, s.Summary)", menu, StringComparison.Ordinal);
+        // ⚠ 名字那颗从批次 WI-67 片6 起交<b>屏幕上的那一句</b>（库里是中性空串，词与序号由 WidgetDisplayName 现算），
+        //    所以这里钉的实参前缀是 layoutNames/snapshotNames 而不是 l.Name/s.Name——那颗钉子只认"这一句走没走名字主人"。
+        Assert.Contains("Locale.Fmt(\"widget.menu.nameWithSummary\", layoutNames.Word(", menu, StringComparison.Ordinal);
+        Assert.Contains("Locale.Fmt(\"widget.menu.nameWithSummary\", snapshotNames.Word(", menu, StringComparison.Ordinal);
         Assert.Equal(2, Count(menu, "\"widget.menu.nameWithSummary\""));   // 布局行与快照行共用一颗
         Assert.Equal(2, Count(menu, "LocMessage.Of(\"dialog.save\")"));    // 两颗保存对话框，⛔ 不另起一份「保存」
         Assert.Equal(2, Count(menu, "LocMessage.Of(\"dialog.cancel\")"));

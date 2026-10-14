@@ -357,7 +357,7 @@ public static class UiStrings
         new Entry("settings.data.backup.clipRowsMissing", "；还有 {0} 条图片历史在这份包里就没有对应的文件，会标成“文件缺失”", "; {0} image history rows have no matching file in this package and read as file missing", "、{0} 件の画像履歴はこのパックに対応するファイルが無いため「ファイル欠損」の表示"),
         new Entry("settings.data.backup.clipNotOpened", " 剪贴板图片：这次没能打开那份附件包（原因见日志），所以一张图片都没解出来；条目已照常恢复，缺的会标成“文件缺失”，再导一次即可。", " Clipboard images: this run couldn't open the attachment package (see the log), so no image came out; the items restored as usual, missing ones read as file missing, and importing again is enough.", " クリップボード画像：この回は添付パックを開けませんでした（理由はログ）＝画像は 1 枚も取り出せませんでしたが、項目は通常どおり復元しました。無いものは「ファイル欠損」の表示になり、もう一度導入すれば解消できます。"),
         new Entry("settings.data.backup.clipNoSource", " 其中 {0} 条是剪贴板图片：这次没有从备份包里解出任何图片文件，这些条目只有在本机图片目录里还留着对应文件时才打得开，缺的会标成“文件缺失”。", " {0} of them are clipboard images: no image file was extracted from the package this time, so they open only while the matching file still exists in this machine's image folder; missing ones read as file missing.", " そのうち {0} 件はクリップボード画像です：今回パックから画像ファイルを取り出さなかったため、この機の画像フォルダに対応ファイルが残る場合のみ開けます。無いものは「ファイル欠損」の表示です。"),
-        new Entry("settings.data.backup.clipManifestOnly", " 其中 {0} 条是剪贴板图片：这份备份只带条目与文件名、不带图片本体（导出时那颗开关是关的，或它是带附件之前的版本），所以这些条目只有在本机图片目录里还留着对应文件时才打得开，缺的会标成“文件缺失”。", " {0} of them are clipboard images: this backup carries items and file names but no image bodies (the switch was off when it was exported, or it predates attachments), so they open only while the matching file still exists in this machine's image folder; missing ones read as file missing.", " そのうち {0} 件はクリップボード画像です：このバックアップは項目とファイル名だけを添え、画像本体は付けていません（書き出し時に开关がオフ、または添付機能以前の版）。よってこの機の画像フォルダに対応ファイルが残る場合のみ開け、無いものは「ファイル欠損」の表示です。"),
+        new Entry("settings.data.backup.clipManifestOnly", " 其中 {0} 条是剪贴板图片：这份备份只带条目与文件名、不带图片本体（导出时那颗开关是关的，或它是带附件之前的版本），所以这些条目只有在本机图片目录里还留着对应文件时才打得开，缺的会标成“文件缺失”。", " {0} of them are clipboard images: this backup carries items and file names but no image bodies (the switch was off when it was exported, or it predates attachments), so they open only while the matching file still exists in this machine's image folder; missing ones read as file missing.", " そのうち {0} 件はクリップボード画像です：このバックアップは項目とファイル名だけを添え、画像本体は付けていません（書き出し時にスイッチがオフ、または添付機能以前の版）。よってこの機の画像フォルダに対応ファイルが残る場合のみ開け、無いものは「ファイル欠損」の表示です。"),
         new Entry("settings.data.backup.restoreFailed", "恢复失败：{0}{2}已保留恢复前快照：{1}", "Restore failed: {0}{2}The pre-restore snapshot was kept: {1}", "復元に失敗：{0}{2}復元前スナップショットは残しています：{1}"),
         new Entry("settings.data.backup.deleted", "已删除 {0}。", "Deleted {0}.", "{0} を削除しました。"),
         new Entry("settings.data.backup.deleteFailed", "没能删除：{0}", "Couldn't delete it: {0}", "削除できませんでした：{0}"),
@@ -492,7 +492,7 @@ public static class UiStrings
             "オン：切り取り {0}・貼り画像 {1}・文字認識 {2}（これは現在本当に効いているキー割り当て。変えるなら「ショートカットキー」ページの該当の組へ）。"),
         new Entry("settings.extend.captureOff", "已关闭：那三条发起框选的热键不再向系统注册（{0}、{1}、{2} 交还给当前窗口），托盘里的「截图 / 贴图 / 识字」三项一并消失。已经钉在桌面上的贴图不受影响：显示／隐藏、忽略鼠标、关闭全部照常可用——那几条管的是「图已经在那里」这件事，关掉一个功能不该顺手把桌上的图变成拆不掉。",
             "Off — the three keys that start a selection are unregistered ({0}, {1}, {2} go back to the active window) and the tray's three capture items disappear. Pins already on the desktop are untouched: show/hide, click-through and close all still work — those belong to 'the picture is already there', and switching a feature off must not make a pin impossible to remove.",
-            "オフ：切り出しを開始する 3 つのキーはシステムに登録されず（{0}、{1}、{2} は前面的なウィンドウに戻ります）、トレイの 3 項目も消えます。既にデスクトップに貼った画像は無傷で、表示／非表示・マウス無視・閉じるは普段どおり使えます——あれらは「图はもうそこにある」ことを担当しており、機能を切ったついでに剥がせない画像にするのは筋が違うからです。"),
+            "オフ：切り出しを開始する 3 つのキーはシステムに登録されず（{0}、{1}、{2} は前面のウィンドウに戻ります）、トレイの 3 項目も消えます。既にデスクトップに貼った画像は無傷で、表示／非表示・マウス無視・閉じるは普段どおり使えます——あれらは「画像はもうそこにある」ことを担当しており、機能を切ったついでに剥がせない画像にするのは筋が違うからです。"),
         new Entry("settings.extend.diskOffStopped", "已关闭：不再搜索本地文件（已安装的 Everything 不受影响）。",
             "Off — local files are no longer searched (an Everything you installed yourself is untouched).",
             "オフ：ローカルファイルは検索しません（インストール済みの Everything はそのまま）。"),
@@ -530,7 +530,7 @@ public static class UiStrings
         new Entry("settings.extend.missingAllThere", "本机文件条目都还在（{0}）。", "Every local file entry is still here ({0}).", "ローカルファイルの条目は全部そこにあります（{0}）。"),
         new Entry("settings.extend.missingGone", "库里有 {0} 条本机文件路径在这台机器上已经找不到（文件被移动或删除，或所在的盘现在没插）——{1}。",
             "{0} stored local-file paths are no longer on this machine (moved, deleted, or the drive is unplugged) — {1}.",
-            "ライブラリのローカルファイルのパス {0} 件がこのマシンに見当たりません（移动・削除されたか、そのドライブが今刺さっていない）——{1}。"),
+            "ライブラリのローカルファイルのパス {0} 件がこのマシンに見当たりません（移動・削除されたか、そのドライブが今刺さっていない）——{1}。"),
         new Entry("settings.extend.missingScanFailed", "扫描失败：{0}", "Scan failed: {0}", "走査に失敗：{0}"),
         // RSS 那一栏的<b>动作回执</b>（同一颗状态行：开关讲的是"这一栏开没开"，添加/移除讲的是"刚刚那一下成了没"）
         new Entry("settings.extend.rssAddBad", "没能添加：{0}", "Not added: {0}", "追加できませんでした：{0}"),
@@ -979,7 +979,7 @@ public static class UiStrings
         new Entry("clip.pause.on", "已暂停记录：期间不再写入新内容。要恢复请再点一次。", "Recording is paused: nothing new is captured until you switch it back on.", "記録を一時停止しました。再開するにはもう一度押してください。"),
         new Entry("clip.pause.off", "已恢复记录。", "Recording is back on.", "記録を再開しました。"),
         new Entry("clip.dialog.clearTitle", "清空剪贴板历史", "Clear clipboard history", "クリップボード履歴を消去"),
-        new Entry("clip.dialog.clearBody", "将删除本机记录的 {0} 条复制内容（含你置顶的条目），删除后无法恢复。书签 / Star / 待办 / 随记不受影响。", "This deletes {0} recorded copies on this machine — including pinned entries — and cannot be undone. Bookmarks, Stars, todos and notes are untouched.", "この PC の記録 {0} 件（ピン留めを含む）を削除すると戻せません。ブックマーク / Star / 待办 / メモは影響を受けません。"),
+        new Entry("clip.dialog.clearBody", "将删除本机记录的 {0} 条复制内容（含你置顶的条目），删除后无法恢复。书签 / Star / 待办 / 随记不受影响。", "This deletes {0} recorded copies on this machine — including pinned entries — and cannot be undone. Bookmarks, Stars, todos and notes are untouched.", "この PC の記録 {0} 件（ピン留めを含む）を削除すると戻せません。ブックマーク / Star / ToDo / メモは影響を受けません。"),
         new Entry("clip.dialog.clearGo", "清空", "Clear", "消去"),
         // ✅WI-64 片1（P-193 的 Abstractions 半句＋「数据」那一屏的两行 UI·两层同批）：「图片占用」那一行由三颗工厂＋宿主自己那句「文件就放在：」拼成，
         // 「图片采集」那一行由 `ClipboardPolicy.DescribeImageIntake` 的三臂供话——只交一层就是半中半英（⛔ 半搬）。
@@ -2189,7 +2189,7 @@ public static class UiStrings
         new Entry("widget.ql.add", "添加", "Add", "追加"),
         new Entry("widget.ql.pickFile", "选择文件…", "Choose file…", "ファイルを選択…"),
         new Entry("widget.ql.pickFolder", "选择文件夹…", "Choose folder…", "フォルダを選択…"),
-        new Entry("widget.weather.viewTip", "在多日概览与今日逐时之间切换", "Switch between the multi-day overview and today's hourly view", "数日概览と今日の1時間表示を切替"),
+        new Entry("widget.weather.viewTip", "在多日概览与今日逐时之间切换", "Switch between the multi-day overview and today's hourly view", "数日分の概要と今日の1時間ごとの表示を切り替え"),
         new Entry("widget.weather.unitTip", "温度单位（华氏模式下风速同时换成 mph）", "Temperature unit (Fahrenheit also switches wind speed to mph)", "温度単位（華氏では風速も mph に変わる）"),
         new Entry("widget.weather.pickCity", "点击上方城市名，选择要查看天气的城市", "Tap the city name above to choose which city's weather to show", "上の都市名をクリックして、天気を見る都市を選ぶ"),
         new Entry("widget.cd.deleteTip", "删除这一条", "Delete this entry", "この項目を削除"),
@@ -2294,7 +2294,13 @@ public static class UiStrings
         new Entry("widget.snapshot.summaryEmpty", "空快照", "Empty snapshot", "空のスナップショット"),
         new Entry("widget.snapshot.summaryBody", "{0} 个组件 · {1} 条待办/随记 · {2} 个入口",
             "{0} widgets · {1} to-dos/notes · {2} quick links",
-            "{0} 個のウィジェット · {1} 件の待办・メモ · {2} 件のショートカット"),
+            "{0} 個のウィジェット · {1} 件のToDo・メモ · {2} 件のショートカット"),
+        // 名字这一列的<b>兜底词与同名序号</b>（批次 WI-67 片6，✅P-200 他裁 (A)）：库里只存中性形状（空串），
+        // 这一句在贴上屏幕的那一刻才念 ⇒ ⛔ 把某一门语言冻进 widgets.json（＝P-199 那颗形状）。唯一主人＝<c>WidgetDisplayName</c>。
+        new Entry("widget.name.layoutFallback", "未命名布局", "Unnamed layout", "無名のレイアウト"),
+        new Entry("widget.name.snapshotFallback", "未命名快照", "Unnamed snapshot", "無名のスナップショット"),
+        // 序号那副括号三语<b>同形</b>（半角＋一个空格）：用户档里历史遗留的「X (2)」就是这个形状，⛔ 换一副括号去和它长得不一样。
+        new Entry("widget.name.dedupSuffix", "{0} ({1})", "{0} ({1})", "{0} ({1})"),
         new Entry("widget.menu.saveSnapshot", "保存当前布局与数据…", "Save layout & data…", "レイアウトとデータを保存…"),
         new Entry("widget.menu.applySnapshot", "应用快照", "Apply snapshot", "スナップショットを適用"),
         new Entry("widget.menu.applyFailed", "未能应用快照", "Couldn’t apply the snapshot", "スナップショットを適用できませんでした"),

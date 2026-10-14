@@ -231,14 +231,14 @@ public sealed class WidgetSnapshotTests : IDisposable
     }
 
     [Fact]
-    public void MakeUniqueName_BlankDesired_FallsBackToSnapshotDefault()
+    public void MakeUniqueName_BlankDesired_ReturnsNeutralBlank()
     {
-        // DR：空白兜底真臂（:172）从未在任一重载上走过。钉快照侧默认串是「未命名快照」而非布局侧的
-        // 「未命名布局」——两重载逻辑近同，唯兜底字面量应各自分化；若复制粘贴误接则用户快照被叫成布局名。
-        Assert.Equal("未命名快照", WidgetSnapshotCollection.MakeUniqueName([], ""));
-        // 兜底名已占用 → 加计数后缀（与布局侧同结构）。
-        var taken = new[] { new WidgetSnapshot { Name = "未命名快照" } };
-        Assert.Equal("未命名快照 (2)", WidgetSnapshotCollection.MakeUniqueName(taken, "  "));
+        // DR 原判"空白兜底真臂从未在任一重载上走过"。批次 WI-67 片6（✅P-200 他裁 (A)）起那一臂<b>换了形态</b>：
+        // 兜底词⛔ 进库（那是会被冻在 widgets.json 里的界面语言内容），空白一律原样交回空串＝中性形状，
+        // 屏幕上那句「未命名快照」由 <see cref="WidgetDisplayName"/> 现算（证人见 WidgetDisplayNameTests）。
+        Assert.Equal("", WidgetSnapshotCollection.MakeUniqueName([], ""));
+        // 两重载逻辑近同，唯"这一档的兜底词"应各自分化 ⇒ 这里钉的是<b>快照侧交回空串</b>而非布局侧的任何字面量。
+        Assert.Equal("", WidgetSnapshotCollection.MakeUniqueName(new[] { new WidgetSnapshot { Name = "未命名快照" } }, "  "));
     }
 
     [Fact]
@@ -313,10 +313,12 @@ public sealed class WidgetSnapshotTests : IDisposable
         Assert.Contains("1 个组件", snap.Summary.Render());
     }
 
-    // ───────── DM：Normalize 的两处「从未被进入」输出分支——同刻名序平局臂 + 空名兜底真支 ─────────
+    // ───────── DM：Normalize 的两处「从未被进入」输出分支——同刻名序平局臂 + 空名那条归一臂 ─────────
     // 既有排序/去重测（GetSnapshots_OrdersNewestFirst 10/30/20、Append_DedupsNames 1/2/3、Append_IsImmutable 100/200）
     // 的时间戳两两不同，故 :165 的 .ThenBy(Name, OrdinalIgnoreCase) 平局臂一次都未走；且所有构造快照皆带非空名，
-    // :148 空名→「未命名快照」兜底真支一次未进。这里直调纯 Normalize 钉两处。
+    // 空名那一臂一次未进。这里直调纯 Normalize 钉两处。
+    // ⚠ 批次 WI-67 片6（✅P-200 他裁 (A)）改了空名那一臂的<b>产物</b>：⛔ 兜底成「未命名快照」，改存<b>空串</b>＝中性形状
+    //   （屏幕上那一句与 (2) 那颗序号由 <see cref="WidgetDisplayName"/> 现算，证人见 WidgetDisplayNameTests）。
 
     [Fact]
     public void Normalize_OrdersEqualCreatedAtByName_CaseInsensitive()
@@ -337,9 +339,10 @@ public sealed class WidgetSnapshotTests : IDisposable
     }
 
     [Fact]
-    public void Normalize_FallsBackToDefaultNameForBlank_AndDedupsAmongThemselves()
+    public void Normalize_KeepsBlankNamesNeutral_AndNeverNumbersThemInStore()
     {
-        // 空白 / 空名经 :148 兜底为「未命名快照」；多条同兜底名再经去重级联顺延 (2)。
+        // 空白 / 空名经归一臂一律留<b>空串</b>：⛔ 在这里写「未命名快照」，也⛔ 在这里编 (2)（✅P-200 他裁 (A)）。
+        // 库里两行空白是合法的＝"这两颗都没起名"；屏幕上把它们念成两句不同的话是显示侧那颗主人的事。
         var snapshots = new[]
         {
             new WidgetSnapshot { Name = "   ", CreatedAt = 7 },
@@ -348,6 +351,6 @@ public sealed class WidgetSnapshotTests : IDisposable
 
         var names = WidgetSnapshotCollection.Normalize(snapshots).Select(s => s.Name).ToList();
 
-        Assert.Equal(new[] { "未命名快照", "未命名快照 (2)" }, names);
+        Assert.Equal(new[] { "", "" }, names);
     }
 }
