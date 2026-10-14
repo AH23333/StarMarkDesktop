@@ -156,8 +156,9 @@ public sealed class AiClassifyService
 
         var settings = _store.LoadAiSettings();
         if (settings.Problem() is { } bad)
+            // 那句"为什么不能用"由 Abstractions 交键（✅片7），槽里嵌的就是还没取词的那一句 ⇒ 换语言重贴跟得上
             return new OrganiseOutcome(ClassifyPlan.Empty, 0, 0, 0, 0, 0, 0, 0, 0,
-                LocMessage.Of("settings.ai.service.channelBlocked", LocMessage.Of("common.rawValue", bad)));
+                LocMessage.Of("settings.ai.service.channelBlocked", bad));
 
         onStatus(LocMessage.Of("settings.ai.service.loadingCandidates"));
         var candidates = await LoadCandidatesAsync(limit, ct);
@@ -233,7 +234,7 @@ public sealed class AiClassifyService
             pruned.DroppedTags.Count,
             pruned.DroppedItems,
             report.Batches.FirstOrDefault(batch => !batch.Ok) is { } firstBad
-                ? LocMessage.Of("common.rawValue", firstBad.Error)
+                ? firstBad.Error
                 : null);
     }
 

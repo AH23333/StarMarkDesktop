@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Ai;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Ai;
 using StarMark.Data;
 using Xunit;
@@ -123,7 +124,8 @@ public sealed class AiUsageRunnerTests
     {
         var items = new[] { Item(1, "a") };
         var report = await ClassifyRunner.RunAsync(items, Array.Empty<string>(),
-            _ => Task.FromResult(AiReply.Fail(AiFailureKind.TimedOut, "超时")), null, CancellationToken.None);
+            _ => Task.FromResult(AiReply.Fail(AiFailureKind.TimedOut, LocMessage.Of("ai.transport.waitedOut"))),
+                null, CancellationToken.None);
 
         Assert.False(report.Batches[0].Ok);
         Assert.Null(report.Batches[0].Usage);   // 没成的批不猜消耗

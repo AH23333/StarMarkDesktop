@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions.Ai;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Integrations.Ai;
 
@@ -17,7 +18,8 @@ internal sealed record AiTransport(
     int? Status,
     string? Body,
     AiFailureKind Failure = AiFailureKind.Unknown,
-    string? Problem = null)
+    LocMessage? Problem = null,
+    bool Truncated = false)
 {
     public bool Succeeded => Connected && Status is >= 200 and <= 299;
 }
@@ -35,6 +37,19 @@ internal static class AiHttp
 {
     /// <summary>响应体上限。批量分类一批 50 条的正常答复在几十 KB 量级，超过这个数就是答疯了或有人在灌。</summary>
     public const long MaxReplyBytes = 4L * 1024 * 1024;
+
+    /// <summary>把"这一发答了什么"翻成给用户看的那句明细。<b>只这一处</b>：两家的四发出口都走它，
+    /// ⛔ 在每一发那里各写一遍"先试它的错误字段、读不出来就交原文"（同一件事两处实现迟早分岔）。
+    /// <para>原文（响应体、异常正文）是<b>机器事实</b> ⇒ 走 <c>common.rawValue</c> 那道数据门；
+    /// 被截断那一支另判：那条信息说的是"我们为什么没读完"，⛔ 冒充成响应体塞进 <see cref="AiTransport.Body"/>
+    /// 让解析器去撞（今天就是这么做的，于是那句中文成品字挂在一个数据字段里，⛔ 被取词也⛔ 被翻译）。</para></summary>
+    internal static LocMessage? DetailOf(AiTransport transport)
+    {
+        if (transport.Truncated) return LocMessage.Of("ai.transport.replyTooBig", MaxReplyBytes / 1024 / 1024);
+        var text = AiWire.ReadErrorText(transport.Body) ?? transport.Body;
+        return text is null ? null : LocMessage.Of("common.rawValue", text);
+    }
+
 
     public static async Task<AiTransport> PostAsync(
         HttpClient http, string url, string json, IReadOnlyDictionary<string, string>? headers,
@@ -79,8 +94,8 @@ internal static class AiHttp
         {
             // ResponseHeadersRead + 限长读：服务方一直喂也不会把内存吃掉
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, bounded);
-            var body = await ReadBoundedAsync(response, bounded);
-            return new AiTransport(true, (int)response.StatusCode, body);
+            var (body, truncated) = await ReadBoundedAsync(response, bounded);
+            return new AiTransport(true, (int)response.StatusCode, body, Truncated: truncated);
         }
         catch (OperationCanceledException) when (userToken.IsCancellationRequested)
         {
@@ -88,20 +103,23 @@ internal static class AiHttp
         }
         catch (OperationCanceledException)
         {
-            return new AiTransport(false, null, null, AiFailureKind.TimedOut, "等到时限");
+            return new AiTransport(false, null, null, AiFailureKind.TimedOut, LocMessage.Of("ai.transport.waitedOut"));
         }
         catch (HttpRequestException ex)
         {
             // 端口没人监听 / DNS 解析不出来 / 连接被重置，全都从这里出去；Message 里有 Win32 编号
-            return new AiTransport(false, null, null, AiFailureKind.Unreachable, ex.Message);
+            return new AiTransport(false, null, null, AiFailureKind.Unreachable,
+                LocMessage.Of("common.rawValue", ex.Message));
         }
         catch (Exception ex)
         {
-            return new AiTransport(false, null, null, AiFailureKind.Unknown, ex.Message);
+            return new AiTransport(false, null, null, AiFailureKind.Unknown,
+                LocMessage.Of("common.rawValue", ex.Message));
         }
     }
 
-    private static async Task<string?> ReadBoundedAsync(HttpResponseMessage response, CancellationToken ct)
+    private static async Task<(string? Body, bool Truncated)> ReadBoundedAsync(
+        HttpResponseMessage response, CancellationToken ct)
     {
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
         using var buffer = new MemoryStream();
@@ -111,9 +129,9 @@ internal static class AiHttp
             var read = await stream.ReadAsync(chunk, ct);
             if (read == 0) break;
             if (buffer.Length + read > MaxReplyBytes)
-                return $"（响应超过 {MaxReplyBytes / 1024 / 1024}MB，已停止读取）";
+                return (null, true);
             buffer.Write(chunk, 0, read);
         }
-        return Encoding.UTF8.GetString(buffer.ToArray());
+        return (Encoding.UTF8.GetString(buffer.ToArray()), false);
     }
 }

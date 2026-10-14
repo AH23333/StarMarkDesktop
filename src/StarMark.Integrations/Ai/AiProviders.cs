@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions.Ai;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Integrations.Ai;
 
@@ -53,13 +54,12 @@ public sealed class OllamaProvider : IAiProvider, IDisposable
         if (!transport.Connected)
             return AiModelInventory.Fail(transport.Failure, transport.Problem);
         if (!transport.Succeeded)
-            return AiModelInventory.Fail(AiFailures.FromStatus(transport.Status, transport.Body),
-                AiWire.ReadErrorText(transport.Body) ?? transport.Body);
+            return AiModelInventory.Fail(AiFailures.FromStatus(transport.Status, transport.Body), AiHttp.DetailOf(transport));
 
         var names = AiWire.ReadOllamaModelNames(transport.Body);
         // 答了但读不出清单：这既不是"没模型"也不是"连不上"，必须单列，否则会把版本不匹配说成没装
         if (names.Count == 0 && transport.Body?.Contains("models") != true)
-            return AiModelInventory.Fail(AiFailureKind.BadResponse, "答回来的形式不是模型清单");
+            return AiModelInventory.Fail(AiFailureKind.BadResponse, LocMessage.Of("ai.transport.notModelList"));
         return new AiModelInventory(true, names);
     }
 
@@ -68,12 +68,11 @@ public sealed class OllamaProvider : IAiProvider, IDisposable
         if (!transport.Connected)
             return AiReply.Fail(transport.Failure, transport.Problem);
         if (!transport.Succeeded)
-            return AiReply.Fail(AiFailures.FromStatus(transport.Status, transport.Body),
-                AiWire.ReadErrorText(transport.Body) ?? transport.Body);
+            return AiReply.Fail(AiFailures.FromStatus(transport.Status, transport.Body), AiHttp.DetailOf(transport));
         return AiWire.ReadOllamaText(transport.Body) is { Length: > 0 } text
             ? AiReply.Success(text, AiWire.ReadOllamaUsage(transport.Body)
                 ?? AiWire.Approximate(request.SystemPrompt + request.UserPrompt, text))   // 没回 usage 就折算（§20.5），正文照常返回
-            : AiReply.Fail(AiFailureKind.BadResponse, "服务答了，但答里没有一个字的正文");
+            : AiReply.Fail(AiFailureKind.BadResponse, LocMessage.Of("ai.transport.emptyReply"));
     }
 
     public void Dispose() => _http.Dispose();
@@ -99,12 +98,11 @@ public sealed class OpenAiCompatibleProvider : IAiProvider, IDisposable
 
         if (!transport.Connected) return AiReply.Fail(transport.Failure, transport.Problem);
         if (!transport.Succeeded)
-            return AiReply.Fail(AiFailures.FromStatus(transport.Status, transport.Body),
-                AiWire.ReadErrorText(transport.Body) ?? transport.Body);
+            return AiReply.Fail(AiFailures.FromStatus(transport.Status, transport.Body), AiHttp.DetailOf(transport));
         return AiWire.ReadOpenAiText(transport.Body) is { Length: > 0 } text
             ? AiReply.Success(text, AiWire.ReadOpenAiUsage(transport.Body)
                 ?? AiWire.Approximate(request.SystemPrompt + request.UserPrompt, text))
-            : AiReply.Fail(AiFailureKind.BadResponse, "服务答了，但 choices 里没有正文（这个端点可能不支持 chat 形式）");
+            : AiReply.Fail(AiFailureKind.BadResponse, LocMessage.Of("ai.transport.noChoices"));
     }
 
     public async Task<AiModelInventory> ListModelsAsync(AiSettings settings, CancellationToken ct)
@@ -114,12 +112,11 @@ public sealed class OpenAiCompatibleProvider : IAiProvider, IDisposable
         if (!transport.Connected)
             return AiModelInventory.Fail(transport.Failure, transport.Problem);
         if (!transport.Succeeded)
-            return AiModelInventory.Fail(AiFailures.FromStatus(transport.Status, transport.Body),
-                AiWire.ReadErrorText(transport.Body) ?? transport.Body);
+            return AiModelInventory.Fail(AiFailures.FromStatus(transport.Status, transport.Body), AiHttp.DetailOf(transport));
 
         var names = AiWire.ReadOpenAiModelNames(transport.Body);
         if (names.Count == 0)
-            return AiModelInventory.Fail(AiFailureKind.BadResponse, "端点答了，但模型清单是空的或形式不对");
+            return AiModelInventory.Fail(AiFailureKind.BadResponse, LocMessage.Of("ai.transport.emptyInventory"));
         return new AiModelInventory(true, names);
     }
 

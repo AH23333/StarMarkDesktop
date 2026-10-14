@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions.Ai;
 
@@ -86,13 +87,15 @@ public static class TagText
 /// 否则一个幻觉编号会去改一条用户根本没选的东西。</param>
 /// <param name="NewTags">目录里原本没有的标签名。界面上与"沿用既有标签"分开确认——
 /// 造新词是这次整理最容易后悔的部分。</param>
-/// <param name="Error">整份答复读不出来时的原因；null＝解析成功（哪怕一条都没提）。</param>
+/// <param name="Error">整份答复读不出来时的原因；null＝解析成功（哪怕一条都没提）。
+/// 交 <see cref="LocMessage"/>（批次 WI-67 片7）：这五句今天经 <c>ClassifyBatchReport.Error</c>
+/// 走到「批量整理」那句"这批为什么没成"上屏——那是屏幕，不是日志。</param>
 public sealed record ClassifyParseResult(
     IReadOnlyList<TagProposal> Proposals,
     IReadOnlyList<long> MissingIds,
     IReadOnlyList<long> UnknownIds,
     IReadOnlyList<string> NewTags,
-    string? Error = null)
+    LocMessage? Error = null)
 {
     public bool Readable => Error is null;
 }
@@ -237,7 +240,7 @@ public static class ClassifyPrompt
         if (json is null)
             // O4：行格式现在是第一公民；"自然语言一整段"（既无 JSON 也无编号行）才是读不出来。
             return ParseLineReply(reply, ids, catalog)
-                ?? empty with { Error = "答复里既没有 JSON，也没有可读的「编号: 标签」行（模型可能只回了自然语言）" };
+                ?? empty with { Error = LocMessage.Of("ai.parse.nothingReadable") };
 
         var proposals = new Dictionary<long, List<string>>();
         var unknown = new List<long>();
@@ -251,26 +254,26 @@ public static class ClassifyPrompt
             {
                 if (itemsNode.ValueKind != JsonValueKind.Array)
                     return ParseLineReply(reply, ids, catalog)
-                        ?? empty with { Error = "items 不是数组，读不出逐条结果" };
+                        ?? empty with { Error = LocMessage.Of("ai.parse.itemsNotArray") };
                 ReadItems(itemsNode, ids, proposals, unknown);
             }
             else if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("categories", out var categoriesNode))
             {
                 if (categoriesNode.ValueKind != JsonValueKind.Object)
                     return ParseLineReply(reply, ids, catalog)
-                        ?? empty with { Error = "categories 不是对象，读不出按标签分组的结果" };
+                        ?? empty with { Error = LocMessage.Of("ai.parse.categoriesNotObject") };
                 ReadCategories(categoriesNode, ids, proposals, unknown);
             }
             else
                 return ParseLineReply(reply, ids, catalog)
-                    ?? empty with { Error = "JSON 里没有 items / categories，也没有逐行「编号: 标签」" };
+                    ?? empty with { Error = LocMessage.Of("ai.parse.noKnownShape") };
         }
         catch (JsonException ex)
         {
             // 半截 JSON（被 max_tokens 切断）：先试行格式——"JSON 起头没闭合但下面其实是逐行"
             // 在真实答复里出现过；行也读不出才按坏 JSON 报（错误原文保留，别让它被行分支话术盖掉）。
             return ParseLineReply(reply, ids, catalog)
-                ?? empty with { Error = "JSON 读不下去：" + ex.Message };
+                ?? empty with { Error = LocMessage.Of("ai.parse.jsonBroken", ex.Message) };
         }
 
         return Finalize(proposals, unknown, ids, catalog, empty);

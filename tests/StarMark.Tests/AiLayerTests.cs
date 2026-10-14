@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions.Ai;
+using StarMark.Abstractions.I18n;
 using StarMark.Integrations.Ai;
 using Xunit;
 
@@ -24,7 +25,8 @@ public sealed class AiLayerTests
     {
         var fresh = new AiSettings();
         Assert.False(fresh.Enabled);
-        Assert.Equal("AI 功能没有开启", fresh.Problem());
+        Assert.Equal("ai.problem.notEnabled", fresh.Problem()!.Key);   // 键＝表里那颗（⛔ 在产地取词）
+        Assert.Equal("AI 功能没有开启", fresh.Problem()!.Render());      // zh 那一格逐字＝搬走前屏幕上那句
     }
 
     [Fact]
@@ -38,9 +40,9 @@ public sealed class AiLayerTests
     [Fact]
     public void ModelNameIsRequiredRegardlessOfChannel()
     {
-        Assert.Equal("没有填模型名", new AiSettings(Enabled: true, Model: "   ").Problem());
+        Assert.Equal("没有填模型名", new AiSettings(Enabled: true, Model: "   ").Problem()!.Render());
         Assert.Equal("没有填模型名",
-            new AiSettings(Enabled: true, Provider: AiProviderKind.OpenAiCompatible, ApiKey: "sk-x").Problem());
+            new AiSettings(Enabled: true, Provider: AiProviderKind.OpenAiCompatible, ApiKey: "sk-x").Problem()!.Render());
     }
 
     [Fact]
@@ -52,7 +54,7 @@ public sealed class AiLayerTests
         Assert.True(viaLocal.IsUsable);                       // LM Studio / Ollama 的 openai 模式就是本机明文
 
         var viaPublic = viaLocal with { BaseUrl = "http://api.example.com/v1" };
-        Assert.Contains("https", viaPublic.Problem());        // 带 Key 走公网明文＝把凭据送给路径上任何人
+        Assert.Contains("https", viaPublic.Problem()!.Render());        // 带 Key 走公网明文＝把凭据送给路径上任何人
     }
 
     [Theory]
@@ -90,9 +92,9 @@ public sealed class AiLayerTests
     public void WhereWeReachedIsSpelledOutForEachChannel()
     {
         Assert.Equal("本机 Ollama（http://127.0.0.1:11434，模型 a）",
-            new AiSettings(Provider: AiProviderKind.Ollama, Model: "a").DescribeWhere());
+            new AiSettings(Provider: AiProviderKind.Ollama, Model: "a").DescribeWhere().Render());
         Assert.Equal("OpenAI 兼容端点（https://api.openai.com/v1，模型 b）",
-            new AiSettings(Provider: AiProviderKind.OpenAiCompatible, Model: "b").DescribeWhere());
+            new AiSettings(Provider: AiProviderKind.OpenAiCompatible, Model: "b").DescribeWhere().Render());
     }
 
     // ────────── 请求体 ──────────
@@ -145,7 +147,7 @@ public sealed class AiLayerTests
     {
         var big = new AiRequest("s", new string('字', AiRequest.MaxPromptChars));
         Assert.NotNull(big.Problem());
-        Assert.Contains("缩小批量", big.Problem());
+        Assert.Contains("缩小批量", big.Problem()!.Render());
     }
 
     // ────────── 读答复：形状漂移是常态，两种都得认 ──────────
@@ -204,9 +206,9 @@ public sealed class AiLayerTests
     [Fact]
     public void EmptyModelListIsSaidOutLoud()
     {
-        Assert.Equal("（本机一个模型也没有）", AiWire.Preview(Array.Empty<string>()));
-        Assert.Equal("a、b", AiWire.Preview(new[] { "a", "b" }));
-        Assert.Contains("共 7 个", AiWire.Preview(new[] { "a", "b", "c", "d", "e", "f", "g" }));
+        Assert.Equal("（本机一个模型也没有）", AiWire.Preview(Array.Empty<string>()).Render());
+        Assert.Equal("a、b", AiWire.Preview(new[] { "a", "b" }).Render());
+        Assert.Contains("共 7 个", AiWire.Preview(new[] { "a", "b", "c", "d", "e", "f", "g" }).Render());
     }
 
     // ────────── 失败分型：决定用户下一步做什么 ──────────
@@ -234,10 +236,10 @@ public sealed class AiLayerTests
     [Fact]
     public void EveryReasonTellsWhereToLook()
     {
-        var where = "本机 Ollama（http://127.0.0.1:11434，模型 q）";
+        var where = new AiSettings(Provider: AiProviderKind.Ollama, Model: "q").DescribeWhere();
         foreach (AiFailureKind kind in Enum.GetValues<AiFailureKind>())
         {
-            var reason = AiFailures.Reason(kind, "x", where);
+            var reason = AiFailures.Reason(kind, LocMessage.Of("common.rawValue", "x"), where).Render();
             Assert.False(string.IsNullOrWhiteSpace(reason));
             // "连不上/模型名不对"这两类必须指名地址，否则用户不知道改哪一格；
             // "未配置"要说的是"去设置那一栏"。超时不同：该改的是模型或时限，地址写对了也一样会超时。
@@ -251,7 +253,9 @@ public sealed class AiLayerTests
     [Fact]
     public void LongServiceReasonsDoNotBreakTheRow()
     {
-        var reason = AiFailures.Reason(AiFailureKind.ServiceError, new string('长', 400), "w");
+        // 明细的压平与截断要到"贴上去那一刻"才算（那颗实参交的是还没算过的东西）⇒ 这里比的是 Render 之后
+        var reason = AiFailures.Reason(AiFailureKind.ServiceError,
+            LocMessage.Of("common.rawValue", new string('长', 400)), LocMessage.Of("common.rawValue", "w")).Render();
         Assert.True(reason.Length < 200, reason.Length.ToString());
         Assert.DoesNotContain("\n", reason);
     }
@@ -260,9 +264,10 @@ public sealed class AiLayerTests
     public void InventoryReportCarriesChannelListAndVerdict()
     {
         var ok = new AiModelInventory(true, new[] { "llama3", "qwen2.5:7b" });
-        Assert.Contains("✓", ok.Explain("本机 Ollama", "qwen2.5:7b"));
+        var where = LocMessage.Of("common.rawValue", "本机 Ollama");
+        Assert.Contains("✓", ok.Explain(where, "qwen2.5:7b").Render());
 
-        var miss = ok.Explain("本机 Ollama", "mistral");
+        var miss = ok.Explain(where, "mistral").Render();
         Assert.Contains("没有", miss);
         Assert.Contains("llama3", miss);                      // 报"现有几个"是这一步唯一有用的信息
     }
@@ -278,7 +283,7 @@ public sealed class AiLayerTests
 
         Assert.False(reply.Ok);
         Assert.Equal(AiFailureKind.NotConfigured, reply.Failure);
-        Assert.Contains("没有开启", reply.Detail);
+        Assert.Contains("没有开启", reply.Detail!.Render());
     }
 
     [Fact]
@@ -291,8 +296,8 @@ public sealed class AiLayerTests
             CancellationToken.None);
 
         Assert.False(probe.Ok);
-        Assert.Contains("127.0.0.1:1", probe.Report);
-        Assert.Contains("没在服务端口上监听", probe.Report);
+        Assert.Contains("127.0.0.1:1", probe.Report.Render());
+        Assert.Contains("没在服务端口上监听", probe.Report.Render());
     }
 
     [Fact]

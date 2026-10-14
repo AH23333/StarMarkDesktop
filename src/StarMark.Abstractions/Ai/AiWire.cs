@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions.Ai;
 
@@ -25,14 +26,17 @@ public sealed record AiRequest(
     /// 比报错更难发现。</summary>
     public const int MaxPromptChars = 24_000;
 
-    public string? Problem()
+    /// <summary>这一发出得出去吗。<b>交 <see cref="LocMessage"/> 而⛔ 交成品字</b>（批次 WI-67 片7）：
+    /// 这五句顺着 <c>AiReply.Detail</c> 走到「批量整理」那句"这批为什么没成"上屏，
+    /// 在产地取词就是那一族半中半英（坑表 #393／P-196 的"第二时刻"）。</summary>
+    public LocMessage? Problem()
     {
-        if (string.IsNullOrWhiteSpace(UserPrompt)) return "没有要发给模型的内容";
-        if (SystemPrompt is null) return "没有格式约束，模型会自由发挥";
+        if (string.IsNullOrWhiteSpace(UserPrompt)) return LocMessage.Of("ai.request.noUserPrompt");
+        if (SystemPrompt is null) return LocMessage.Of("ai.request.noSystemPrompt");
         if (SystemPrompt.Length + UserPrompt.Length > MaxPromptChars)
-            return $"这一批太长（{SystemPrompt.Length + UserPrompt.Length} 字 > {MaxPromptChars}），请缩小批量";
-        if (TimeoutSeconds <= 0) return "超时必须为正数";
-        if (Temperature is < 0 or > 2) return "温度只接受 0–2";
+            return LocMessage.Of("ai.request.tooLong", SystemPrompt.Length + UserPrompt.Length, MaxPromptChars);
+        if (TimeoutSeconds <= 0) return LocMessage.Of("ai.request.badTimeout");
+        if (Temperature is < 0 or > 2) return LocMessage.Of("ai.request.badTemperature");
         return null;
     }
 }
@@ -195,12 +199,18 @@ public static class AiWire
         return available.Any(name => string.Equals(name.Trim(), want, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>列表进提示语时最多列几个：本机装了三十个模型是常事，全列会把那一行撑成一段。</summary>
-    public static string Preview(IReadOnlyList<string> names, int max = 6)
+    /// <summary>列表进提示语时最多列几个：本机装了三十个模型是常事，全列会把那一行撑成一段。
+    /// <para>交的是「一串数据＋两颗胶水键」：连接号（顿号／逗号）与"共 N 个"那半句都随语言变，
+    /// 所以在这一行就 <c>string.Join(Locale.T(连接键), …)</c> 会把它们钉死在算出那一刻——
+    /// 换语言重贴只重算了外层那句，屏幕上剩下「a、b, c」这种（坑表 #362／#393 那一族的第三个表面）。
+    /// <see cref="LocJoin"/> 因此留到被贴上去那一刻才连（批次 WI-67 片7）。</para></summary>
+    public static LocMessage Preview(IReadOnlyList<string> names, int max = 6)
     {
-        if (names.Count == 0) return "（本机一个模型也没有）";
-        var shown = names.Take(max).ToList();
-        return string.Join("、", shown) + (names.Count > max ? $"…（共 {names.Count} 个）" : string.Empty);
+        if (names.Count == 0) return LocMessage.Of("ai.preview.none");
+        var shown = names.Take(max).Select(name => (object?)name).ToList();
+        // 没超出上限＝没有后半句：那一槽交 null，格式化时它自己变空（⛔ 在这里拼字符串）
+        return LocMessage.Of("ai.preview.list", new LocJoin(shown, "ai.preview.join"),
+            names.Count > max ? LocMessage.Of("ai.preview.more", names.Count) : null);
     }
 
     private static JsonObject? TryParse(string? json)

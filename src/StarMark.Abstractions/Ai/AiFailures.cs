@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions.Ai;
 
@@ -21,7 +22,7 @@ public enum AiFailureKind
     Unknown,
 }
 
-/// <summary>状态码/响应体 → 失败种类，以及种类 → 中文原因。<b>纯函数，不碰网络</b>。</summary>
+/// <summary>状态码/响应体 → 失败种类，以及种类 → <b>那句还没取词的原因</b>。<b>纯函数，不碰网络</b>。</summary>
 public static class AiFailures
 {
     /// <param name="status">HTTP 状态码；null＝连上了但没有响应（DNS/拒绝连接/超时都算这一类）。</param>
@@ -48,45 +49,53 @@ public static class AiFailures
                 || text.Contains("no such", StringComparison.OrdinalIgnoreCase)
                 || text.Contains("does not exist", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>给用户看的那一句。<b>必须包含"上哪儿改"</b>：只描述现象的原因，用户读完只能再点一次同一个按钮。</summary>
-    public static string Reason(AiFailureKind kind, string? detail, string where) => kind switch
+    /// <summary>给用户看的那一句。<b>必须包含"上哪儿改"</b>：只描述现象的原因，用户读完只能再点一次同一个按钮。
+    /// <para>交「键＋实参」而⛔ 交成品字（批次 WI-67 片7）：这一句被三处念——设置页那一格、
+    /// 「测试连接」的报告、批量整理那句"这批为什么没成"，而且每一处都可能在换语言之后被重贴一次。
+    /// 在这里取词就把语言钉死在"失败那一刻"，屏幕上留下半中半英（坑表 #393／P-196 那一族）。</para>
+    /// <para><c>detail</c>＝服务回的那段原文，或本仓另一句"原因"（已是 <see cref="LocMessage"/>，⛔ 在这里取词）；
+    /// <c>where</c>＝这一轮发到哪儿、用哪个模型（<see cref="AiSettings.DescribeWhere"/>）。</para></summary>
+    public static LocMessage Reason(AiFailureKind kind, LocMessage? detail, LocMessage where) => kind switch
     {
         // "未配置"这一类必须自带落点：用户是在设置页外面点了一个功能才被挡下的，
         // 只说"没有填模型名"他还得自己找出是哪一栏。
-        AiFailureKind.NotConfigured => "AI 还没配置好："
-            + (string.IsNullOrWhiteSpace(detail) ? "请检查设置里的 AI 那一栏" : detail + "（在设置 → AI 助手那一栏改）"),
-        AiFailureKind.Unreachable =>
-            $"连不上 {where}。没在服务端口上监听的进程会这样：本机装了但没启动，或端口/地址不是这一格填的。",
-        AiFailureKind.ModelNotFound =>
-            $"{where} 这个模型名服务侧不认。名字要与服务自己的列表完全一致（大小写与后缀都算），" +
-            "本机 Ollama 还需先拉取过该模型。",
-        AiFailureKind.Unauthorized => "Key 被拒绝（401/403）。请核对 Key 是否属于这个端点、是否已过期或被撤销。",
-        AiFailureKind.RateLimited => "被限流了（429）。批量整理会在批次边界自动放慢重试，无需改配置。",
-        AiFailureKind.TimedOut => "服务响应超时。本机模型第一次装载会明显偏慢；若每次都这样，请调大超时或换小模型。",
-        AiFailureKind.ServiceError => "服务侧报错：" + Shown(detail ?? "未给出原因") + "（多为服务本身异常，不是这里的配置）",
-        AiFailureKind.BadResponse =>
-            "服务答了，但答的不是能读的形式（404 也常是地址少了一段，例如 OpenAI 兼容端点要填到 /v1）。" + Shown(detail),
-        _ => "AI 调用没成功：" + Shown(detail ?? "未给出原因"),
+        AiFailureKind.NotConfigured => detail is { } why
+            ? LocMessage.Of("ai.failure.notConfiguredWith", why)
+            : LocMessage.Of("ai.failure.notConfigured"),
+        AiFailureKind.Unreachable => LocMessage.Of("ai.failure.unreachable", where),
+        AiFailureKind.ModelNotFound => LocMessage.Of("ai.failure.modelNotFound", where),
+        AiFailureKind.Unauthorized => LocMessage.Of("ai.failure.unauthorized"),
+        AiFailureKind.RateLimited => LocMessage.Of("ai.failure.rateLimited"),
+        AiFailureKind.TimedOut => LocMessage.Of("ai.failure.timedOut"),
+        AiFailureKind.ServiceError => LocMessage.Of("ai.failure.serviceError", Shown(detail)),
+        AiFailureKind.BadResponse => LocMessage.Of("ai.failure.badResponse", Shown(detail)),
+        _ => LocMessage.Of("ai.failure.unknown", Shown(detail)),
     };
 
-    /// <summary>响应体里的原因常常是一整段 JSON：<b>压掉换行并截断</b>，否则一行提示会把界面撑破。</summary>
-    private static string Shown(string? detail)
+    /// <summary>响应体里的原因常常是一整段 JSON：<b>压掉换行并截断</b>，否则一行提示会把界面撑破。
+    /// <para>⚠ 这颗帮手交的是"还没算完的那颗实参"而⛔ 一个字符串：截断要先有字才量得出长度，
+    /// 而"什么时候有字"必须等到贴上去那一刻——在这里 <c>Render()</c> 一次就等于把明细的语言
+    /// 钉在失败发生那一瞬间（外层换语言只重贴外层，屏幕上剩半中半英）。
+    /// <c>string.Format</c> 对实参调的正是 <see cref="object.ToString"/>，于是压平与截断跟着取词一起落在那一刻。</para>
+    /// <para>明细空白（含纯空格）念 <c>ai.failure.noReason</c>：今天 null 念那句、空白什么都不念，
+    /// 于是屏幕上是一句"服务侧报错：（多为…）"那样吊着一个分隔符的话；表里的句子没法表达"可选的半句"，
+    /// 这一批把它统一成"没有明细就说没有明细"（登记在本批报告的改口那一节）。</para></summary>
+    private static object Shown(LocMessage? detail) => new DeferredDetail(detail);
+
+    private sealed class DeferredDetail
     {
-        if (string.IsNullOrWhiteSpace(detail)) return string.Empty;
-        var flat = detail.Replace('\r', ' ').Replace('\n', ' ').Trim();
-        return "　" + TextTrim.Ellipsize(flat, 160);
+        private readonly LocMessage? _detail;
+
+        public DeferredDetail(LocMessage? detail) => _detail = detail;
+
+        public override string ToString()
+        {
+            var flat = _detail is { } d
+                ? d.Render().Replace('\r', ' ').Replace('\n', ' ').Trim()
+                : string.Empty;
+            return flat.Length == 0
+                ? LocMessage.Of("ai.failure.noReason").Render()
+                : TextTrim.Ellipsize(flat, 160);
+        }
     }
-
-    public static string NameOf(AiFailureKind kind) => kind switch
-    {
-        AiFailureKind.NotConfigured => "未配置",
-        AiFailureKind.Unreachable => "连不上",
-        AiFailureKind.ModelNotFound => "模型名不对",
-        AiFailureKind.Unauthorized => "凭据被拒",
-        AiFailureKind.RateLimited => "限流",
-        AiFailureKind.TimedOut => "超时",
-        AiFailureKind.ServiceError => "服务侧错误",
-        AiFailureKind.BadResponse => "答的形式不对",
-        _ => "未知",
-    };
 }

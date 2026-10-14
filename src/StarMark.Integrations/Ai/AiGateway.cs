@@ -5,15 +5,18 @@ using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Ai;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Integrations.Ai;
 
 /// <summary>一次连接自检的回报。<b>Report 是要直接显示给用户看的那一句</b>，
-/// 所以它必须说清"找过哪里、按哪种通道、结果如何"，而不是"成功/失败"。</summary>
-public sealed record AiProbe(bool Ok, string Report, IReadOnlyList<string> Models)
+/// 所以它必须说清"找过哪里、按哪种通道、结果如何"，而不是"成功/失败"。
+/// <para>交 <see cref="LocMessage"/>（批次 WI-67 片7）：设置页那一格把这句原样贴出来，
+/// 词在产地取走＝贴上去那一刻已经是上一门语言。</para></summary>
+public sealed record AiProbe(bool Ok, LocMessage Report, IReadOnlyList<string> Models)
 {
     /// <summary>失败时也带上清单（只要服务答过话）：界面上"改用本机真有那个模型"的按钮要靠它。</summary>
-    public static AiProbe Bad(string report, IReadOnlyList<string>? models = null)
+    public static AiProbe Bad(LocMessage report, IReadOnlyList<string>? models = null)
         => new(false, report, models ?? Array.Empty<string>());
 }
 
@@ -26,9 +29,6 @@ public sealed class AiGateway : IDisposable
 {
     private readonly OllamaProvider _ollama = new();
     private readonly OpenAiCompatibleProvider _openAi = new();
-
-    /// <summary>配置能不能用。null＝可用，否则是"照着改就行"的原因。</summary>
-    public string? ConfigProblem(AiSettings settings) => settings.Problem();
 
     public IAiProvider Of(AiProviderKind kind) => kind switch
     {
@@ -55,8 +55,10 @@ public sealed class AiGateway : IDisposable
         }
         catch (Exception ex)
         {
-            StarLog.Error($"[AI] 调用失败（{settings.DescribeWhere()}）", ex);
-            return AiReply.Fail(AiFailureKind.Unknown, ex.Message);
+            // 日志按"写它的那一刻"取一次词（LocMessage 交的是没取词的那句，⛔ 在这里就定死语言）
+            StarLog.Error($"[AI] 调用失败（{settings.DescribeWhere().Render()}）", ex);
+            // 异常正文是机器事实 ⇒ 走数据门那道口（⛔ 为它编一句"调用出错了"）
+            return AiReply.Fail(AiFailureKind.Unknown, LocMessage.Of("common.rawValue", ex.Message));
         }
     }
 
@@ -68,7 +70,7 @@ public sealed class AiGateway : IDisposable
     public async Task<AiProbe> ProbeAsync(AiSettings settings, CancellationToken ct)
     {
         var url = settings.EffectiveBaseUrl;
-        if (AiSettings.UrlProblem(url, settings.Provider) is { } bad) return AiProbe.Bad("服务地址不成形：" + bad);
+        if (AiSettings.UrlProblem(url, settings.Provider) is { } bad) return AiProbe.Bad(LocMessage.Of("ai.probe.urlMalformed", bad));
 
         try
         {
@@ -87,8 +89,10 @@ public sealed class AiGateway : IDisposable
         }
         catch (Exception ex)
         {
-            StarLog.Warn($"[AI] 连接自检异常（{settings.DescribeWhere()}）：{ex.Message}");
-            return AiProbe.Bad(AiFailures.Reason(AiFailureKind.Unknown, ex.Message, settings.DescribeWhere()));
+            StarLog.Warn($"[AI] 连接自检异常（{settings.DescribeWhere().Render()}）：{ex.Message}");
+            // 异常正文是机器事实 ⇒ 走数据门那道口（⛔ 为它编一句"服务出错了"）
+            return AiProbe.Bad(AiFailures.Reason(AiFailureKind.Unknown,
+                LocMessage.Of("common.rawValue", ex.Message), settings.DescribeWhere()));
         }
     }
 

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions.Ai;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Ai;
 
@@ -24,7 +25,7 @@ public sealed record ClassifyBatchReport(
     int Index,
     int ItemCount,
     bool Ok,
-    string? Error,
+    LocMessage? Error,
     IReadOnlyList<TagProposal> Proposals,
     int MissingCount,
     int UnknownCount,
@@ -147,7 +148,7 @@ public static class ClassifyRunner
                 MaxTokens: Math.Clamp(batch.Count * 28, 400, 4000));
             var reply = await call(request);
             if (!reply.Ok)
-                return new ClassifyBatchReport(index, batch.Count, false, reply.Explain("AI 通道"), Array.Empty<TagProposal>(), batch.Count, 0);
+                return new ClassifyBatchReport(index, batch.Count, false, reply.Explain(LocMessage.Of("ai.where.channel")), Array.Empty<TagProposal>(), batch.Count, 0);
 
             var parsed = ClassifyPrompt.Parse(reply.Text, batch, catalog);
             if (!parsed.Readable)
@@ -163,7 +164,7 @@ public static class ClassifyRunner
         }
         catch (Exception ex)
         {
-            return new ClassifyBatchReport(index, batch.Count, false, "这一批出错了：" + ex.Message,
+            return new ClassifyBatchReport(index, batch.Count, false, LocMessage.Of("ai.run.batchFailed", ex.Message),
                 Array.Empty<TagProposal>(), batch.Count, 0);
         }
     }

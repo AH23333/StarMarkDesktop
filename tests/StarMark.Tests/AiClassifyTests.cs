@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions.Ai;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Ai;
 using Xunit;
 
@@ -204,7 +205,7 @@ public sealed class AiClassifyTests
     {
         var parsed = ClassifyPrompt.Parse("好的，下面是我为您整理的结果，希望有帮助。", Batch(1, 2));
         Assert.False(parsed.Readable);
-        Assert.Contains("编号", parsed.Error);                    // 新话术要提行格式，让用户知道模型没按哪种形状回
+        Assert.Contains("编号", parsed.Error!.Render());                    // 新话术要提行格式，让用户知道模型没按哪种形状回
     }
 
     [Fact]
@@ -260,7 +261,7 @@ public sealed class AiClassifyTests
     public void FencesAndProseAroundTheJsonAreStripped(string wrapped)
     {
         var parsed = ClassifyPrompt.Parse(wrapped.Replace("\\n", "\n"), Batch(3));
-        Assert.True(parsed.Readable, parsed.Error);
+        Assert.True(parsed.Readable, parsed.Error?.Render());
         Assert.Equal("工具", parsed.Proposals.Single().Tags.Single());
     }
 
@@ -330,7 +331,7 @@ public sealed class AiClassifyTests
             {
                 calls++;
                 return calls == 1
-                    ? Task.FromResult(AiReply.Fail(AiFailureKind.TimedOut, "等到时限"))
+                    ? Task.FromResult(AiReply.Fail(AiFailureKind.TimedOut, LocMessage.Of("ai.transport.waitedOut")))
                     : Reply("""{"items":[{"id":1,"tags":["工具"]}]}""");
             },
             null, CancellationToken.None);
@@ -339,7 +340,7 @@ public sealed class AiClassifyTests
         Assert.Equal(2, report.Batches.Count);
         Assert.Equal(1, report.FailedBatches);
         Assert.False(report.Batches[0].Ok);
-        Assert.Contains("超时", report.Batches[0].Error);
+        Assert.Contains("超时", report.Batches[0].Error!.Render());
         Assert.Single(report.Proposals);                          // 第二批整理出来的东西留着
         Assert.Equal(0, report.StoppedBatches);
     }
@@ -435,7 +436,7 @@ public sealed class AiClassifyTests
             _ => throw new InvalidOperationException("通道里抛了"), null, CancellationToken.None);
 
         Assert.Equal(1, report.FailedBatches);
-        Assert.Contains("通道里抛了", report.Batches[0].Error);
+        Assert.Contains("通道里抛了", report.Batches[0].Error!.Render());
     }
 
     [Fact]

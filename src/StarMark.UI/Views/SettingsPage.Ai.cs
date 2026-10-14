@@ -41,9 +41,16 @@ public sealed partial class SettingsPage
         _aiLoading = true;
         try
         {
+            // 通道名走「数据项＋模板」（批次 WI-67 片7）：闭着的那格显示的是选中那一刻从 Content 抄走的快照，
+            // 把词塞进 ComboBoxItem.Content 就等于让那一格永远念旧语言（坑表 #272／#275）。
+            // 键的主人＝<c>AiSettings.NameKeyOf</c>（枚举里加了新值而那里没跟上时交 null ⇒ 念自名，⛔ 在界面编一句没进表的话）。
             AiProviderBox.Items.Clear();
+            // 下面那颗是应用级资源里的<b>模板</b>而非画笔（非画笔）：画笔一律走 ThemeBrush.For，那颗闸门管的就是画笔。
+            AiProviderBox.ItemTemplate = (DataTemplate)Application.Current.Resources["LocOptionTemplate"];
             foreach (var kind in Enum.GetValues<AiProviderKind>())
-                AiProviderBox.Items.Add(new ComboBoxItem { Content = AiSettings.NameOf(kind), Tag = kind });
+                AiProviderBox.Items.Add(AiSettings.NameKeyOf(kind) is { } nameKey
+                    ? LocOption.T(nameKey, kind)
+                    : LocOption.SelfName(kind.ToString(), kind));
 
             var stored = App.Services.GetRequiredService<SettingsStore>().LoadAiSettings();
             AiEnabledToggle.IsOn = stored.Enabled;
@@ -68,7 +75,7 @@ public sealed partial class SettingsPage
     /// 分散着读就会出现"某一格改了但没进保存"的漏。</summary>
     private AiSettings ReadAiSettings() => new(
         Enabled: AiEnabledToggle.IsOn,
-        Provider: AiProviderBox.SelectedItem is ComboBoxItem { Tag: AiProviderKind kind }
+        Provider: AiProviderBox.SelectedItem is LocOption { Value: AiProviderKind kind }
             ? kind : AiProviderKind.Ollama,
         Model: AiModelBox.Text,
         ApiKey: AiKeyBox.Password,
@@ -94,12 +101,15 @@ public sealed partial class SettingsPage
     private void ShowAiProblem(AiSettings? settings = null)
     {
         settings ??= ReadAiSettings();
-        // 那一格里混着两家的话：骨架（"配置还不能用／可以点…"）进表，`Problem()`／`DescribeWhere()`
-        // 那两句成品字由 Abstractions 念完再交过来 ⇒ 走 `common.rawValue` 那道门（⛔ 半搬，归 P-193）。
+        // 那一格里混着两家的话：骨架（"配置还不能用／可以点…"）与 `Problem()`／`DescribeWhere()`
+        // 那两句都进表，槽里交的是<b>还没取词的 LocMessage</b>（✅P-193 片7 收的就是这半搬）。
+        // ⚠ 槽里⛔ 交成品串：`LocText.SetMessage` 存的是「键＋实参」，换语言那一刻由 `ReapplyAll` 拿<b>存的实参</b>
+        //   再 `Fmt` 一次——实参是 LocMessage 时 `ToString()==Render()` 正好按<b>新</b>语言重念，
+        //   是字符串时就把上一次那门语言冻在信箱里（坑表 #393／P-196 那一族的"第二时刻"）。
         LocText.SetMessage(AiStatusText, settings.Problem() is { } bad
-            ? LocMessage.Of("settings.ai.status.configBlocked", LocMessage.Of("common.rawValue", bad))
+            ? LocMessage.Of("settings.ai.status.configBlocked", bad)
             : LocMessage.Of("settings.ai.status.whereHint",
-                LocMessage.Of("common.rawValue", settings.DescribeWhere()),
+                settings.DescribeWhere(),
                 LocMessage.Of("settings.ai.testConnection")));
     }
 
@@ -132,7 +142,7 @@ public sealed partial class SettingsPage
         try
         {
             var probe = await App.Services.GetRequiredService<AiGateway>().ProbeAsync(settings, cts.Token);
-            LocText.SetMessage(AiStatusText, LocMessage.Of("common.rawValue", probe.Report));
+            LocText.SetMessage(AiStatusText, probe.Report);   // 报告那句由 Gateway 交键（✅片7），这里⛔ 再套一道数据门
 
             // "通了但模型名不对"要能一步修好：把服务侧的名字直接递过去，而不是让用户自己抄一遍
             _aiModels = probe.Models;
@@ -253,8 +263,7 @@ public sealed partial class SettingsPage
         if (settings.Problem() is { } bad)
         {
             // 就地给原因，不让人对着一个灰按钮猜：通道没通是"点了没反应"最常见的原因
-            LocText.SetMessage(AiStatusText,
-                LocMessage.Of("settings.ai.status.organiseBlocked", LocMessage.Of("common.rawValue", bad)));
+            LocText.SetMessage(AiStatusText, LocMessage.Of("settings.ai.status.organiseBlocked", bad));
             return;
         }
 

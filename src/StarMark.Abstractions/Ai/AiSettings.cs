@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions.Ai;
 
@@ -62,11 +63,14 @@ public sealed record AiSettings(
         _ => string.IsNullOrWhiteSpace(BaseUrl) ? DefaultOpenAiBaseUrl : BaseUrl.Trim().TrimEnd('/'),
     };
 
-    /// <summary>配置不成立时给出<b>能照着改</b>的原因；null＝可用。</summary>
-    public string? Problem()
+    /// <summary>配置不成立时给出<b>能照着改</b>的原因；null＝可用。
+    /// <para>交的是<b>没取词的</b>「键＋实参」（批次 WI-67 片7）：这一句既上设置页那一格，也进
+    /// <see cref="AiFailures.Reason"/> 拼成的失败原因，还进日志。在产地就把词取走，屏幕上就会
+    /// 留下「英文骨架＋中文原因」那半句（P-193 口径②），而日志那一刻要的又是另一门语言。</para></summary>
+    public LocMessage? Problem()
     {
-        if (!Enabled) return "AI 功能没有开启";
-        if (string.IsNullOrWhiteSpace(Model)) return "没有填模型名";
+        if (!Enabled) return LocMessage.Of("ai.problem.notEnabled");
+        if (string.IsNullOrWhiteSpace(Model)) return LocMessage.Of("ai.problem.noModel");
 
         var url = Provider switch
         {
@@ -78,10 +82,10 @@ public sealed record AiSettings(
         // Ollama 免 Key 豁免：本机进程之间没有"凭据"这回事，要求填 Key 只会让人去编一个
         if (Provider == AiProviderKind.Ollama) return null;
 
-        if (string.IsNullOrWhiteSpace(ApiKey)) return "这个通道需要 API Key，但没填";
+        if (string.IsNullOrWhiteSpace(ApiKey)) return LocMessage.Of("ai.problem.noApiKey");
         // Key 会随请求头长期外发，明文走公网等于把凭据送给路径上任何人
         if (!url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) && !IsLocalHost(url))
-            return "只有本机地址允许不加密（填 Key 的通道请用 https://）";
+            return LocMessage.Of("ai.problem.insecureUrl");
         return null;
     }
 
@@ -89,14 +93,14 @@ public sealed record AiSettings(
 
     /// <summary>只支持 http/https 的绝对地址——其余形式（<c>file:</c>、裸 <c>:11434</c>、带空格）都会
     /// 在 <see cref="System.Net.Http.HttpClient"/> 里变成一个看不懂的异常，不如在这里挡住。</summary>
-    public static string? UrlProblem(string? url, AiProviderKind provider)
+    public static LocMessage? UrlProblem(string? url, AiProviderKind provider)
     {
-        if (string.IsNullOrWhiteSpace(url)) return "没有填服务地址";
+        if (string.IsNullOrWhiteSpace(url)) return LocMessage.Of("ai.url.none");
         if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var parsed))
-            return $"服务地址不是一个完整 URL：{url}";
+            return LocMessage.Of("ai.url.notAbsolute", url);
         if (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps)
-            return $"服务地址只支持 http / https，这个是 {parsed.Scheme}://";
-        if (string.IsNullOrEmpty(parsed.Host)) return "服务地址没有主机名";
+            return LocMessage.Of("ai.url.badScheme", parsed.Scheme);
+        if (string.IsNullOrEmpty(parsed.Host)) return LocMessage.Of("ai.url.noHost");
         return null;
     }
 
@@ -111,17 +115,26 @@ public sealed record AiSettings(
     }
 
     /// <summary>给日志与界面用的一行说明：<b>说清"按哪个通道、发到哪儿、用哪个模型"</b>。
-    /// 只写"AI 调用失败"等于没写——用户需要知道该去改哪一格。</summary>
-    public string DescribeWhere() => Provider switch
+    /// 只写"AI 调用失败"等于没写——用户需要知道该去改哪一格。
+    /// <para>交「键＋读数」而⛔ 交成品字：这一句既上设置页那一格、也嵌进
+    /// <see cref="AiFailures.Reason"/> 那句失败原因，另外还单独进日志。
+    /// 日志那两处自己在<b>写日志的那一刻</b> <c>Render()</c>（＝<c>RestoreResult.Message</c> 同一口径），
+    /// 于是屏幕上按当前语言念、日志里也按当时那门语言落字。</para></summary>
+    public LocMessage DescribeWhere() => Provider switch
     {
-        AiProviderKind.Ollama => $"本机 Ollama（{EffectiveOllamaBaseUrl}，模型 {Model?.Trim()}）",
-        _ => $"OpenAI 兼容端点（{EffectiveBaseUrl}，模型 {Model?.Trim()}）",
+        AiProviderKind.Ollama => LocMessage.Of("ai.where.ollama", EffectiveOllamaBaseUrl, Model?.Trim()),
+        _ => LocMessage.Of("ai.where.openAi", EffectiveBaseUrl, Model?.Trim()),
     };
 
-    public static string NameOf(AiProviderKind provider) => provider switch
+    /// <summary>通道下拉里那一颗名字的<b>键</b>（批次 WI-67 片7）。交键而⛔ 交成品字：
+    /// 下拉是「数据项＋模板」那一族，格子与展开列表都在<b>被贴上去那一刻</b>按当前语言取词，
+    /// 所以这里只能说"用哪一颗键"，把词交出去就会让那一格永远念旧语言（坑表 #272／#275）。
+    /// <para>读不到键＝枚举加了新值而这里没跟上 ⇒ 交 <b>null</b>（这一个 null 只有这一个意思：
+    /// "没有登记过的名字可念"）。界面退成念自名，⛔ 在这里编一句没进表的话。</para></summary>
+    public static string? NameKeyOf(AiProviderKind provider) => provider switch
     {
-        AiProviderKind.Ollama => "Ollama（本机）",
-        AiProviderKind.OpenAiCompatible => "OpenAI 兼容端点",
-        _ => provider.ToString(),
+        AiProviderKind.Ollama => "ai.provider.ollama",
+        AiProviderKind.OpenAiCompatible => "ai.provider.openAi",
+        _ => null,
     };
 }

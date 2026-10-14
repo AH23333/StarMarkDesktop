@@ -307,9 +307,20 @@ public sealed class AiWordGateTests : IDisposable
         var all = AllSources();
         const string door = "LocMessage.Of(\"common.rawValue\"";
         // 现场数（bin/WI403b/door_403b2.txt，2026-10-11 本批之后重跑同一颗尺）：Ai 9 ＋ AiUsage 4 ＋ Service 2 ＝ 15
-        Assert.Equal(15, Times(all, door));
+        // 现场数（<b>片7 之后重跑同一颗尺</b>）：15 → 9。少掉那六处不是"门被拆了"，是<b>过门的不再是词</b>：
+        // AiSettings.Problem()／DescribeWhere()、probe.Report、firstBad.Error 都改成交键（✅P-193 片7），
+        // 留在门里的只剩异常正文、服务响应体、URL 这类<b>机器事实</b>——那才是这道门本来的用途。
+        Assert.Equal(9, Times(all, door));
         // 每一处都必须在实参位上（⛔ 把成品字当整句贴：那正是 P-188 的确证形状）。
-        Assert.Contains("LocText.SetMessage(AiStatusText, LocMessage.Of(\"common.rawValue\", probe.Report))", CodeOf(Ai));
+        Assert.Contains("LocText.SetMessage(AiStatusText, probe.Report)", CodeOf(Ai));
+        // ⛔ 退回成品字：那三句再套一道数据门＝语言又被冻回产地（＝本条那一族的失效方向）⇒ 逐股钉住它们走的是键
+        Assert.Contains("LocMessage.Of(\"settings.ai.status.configBlocked\", bad)", CodeOf(Ai));
+        Assert.DoesNotContain("configBlocked\", LocMessage.Of(\"common.rawValue\"", CodeOf(Ai));
+        Assert.Contains("LocMessage.Of(\"settings.ai.status.organiseBlocked\", bad)", CodeOf(Ai));
+        Assert.DoesNotContain("LocMessage.Of(\"common.rawValue\", settings.DescribeWhere())", CodeOf(Ai));
+        Assert.DoesNotContain("LocMessage.Of(\"common.rawValue\", bad)", CodeOf(Ai));
+        Assert.Contains("LocMessage.Of(\"settings.ai.service.channelBlocked\", bad)", CodeOf(Service));
+        Assert.DoesNotContain("LocMessage.Of(\"common.rawValue\", firstBad.Error)", CodeOf(Service));
     }
 
     /// <summary>⑨纯胶水那四颗⛔ 被"为了不同形"改掉：三列同形／中日同形是<b>事实</b>，不是没翻。</summary>
@@ -320,6 +331,8 @@ public sealed class AiWordGateTests : IDisposable
         Row("settings.ai.usage.full", "{0}{1}{2}{3}");
         Row("settings.ai.tagJoin", "{0}、{1}", "{0}, {1}", "{0}、{1}");
         Row("settings.ai.groupJoin", "、", ", ", "、");
+        Row("ai.preview.join", "、", ", ", "、");       // 片7：模型名那一串的连接号（LocJoin 拿这颗键的值当分隔符）
+        Row("ai.preview.list", "{0}{1}");              // 片7：纯骨架——"那一串"与"也许没有的后半句"并起来
         Row("settings.ai.usage.featureBlock", "。{0}。", ". {0}.", "。{0}。");
 
         static void Row(string key, string zh, string? en = null, string? ja = null)
