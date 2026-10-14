@@ -79,6 +79,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         ApplyExtensionStatuses(); // 「拓展功能」那一屏的七行同理：VM 交的是身份，贴上屏幕才取词
         ApplyDataStatuses();      // 「数据」那一屏的五行同理（批次 WI-61c）
         ApplyUpdateStatus();      // 「关于与更新」那一行同理（批次 WI-65 片1，✅P-194 第一颗）
+        ApplyWidgetStartupHint(); // 「开机自动加载组件」那行取舍说明同理（批次 WI-67 片8，✅P-201）
         // 开机自启开关初始态以注册表为准（SetEnabled 幂等，程序化置位不会误写）。
         // 它归在「常规 → 托盘与呼出」，所以由页面构造时读一次，不再挂在组件列表的构建里。
         AutostartToggle.IsOn = AutostartService().IsEnabled();
@@ -223,6 +224,16 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     /// 本页⛔ 为它再挂第四位 <c>Locale.Changed</c> 主人）。</para>
     /// </summary>
     private void ApplyUpdateStatus() => LocText.SetMessage(UpdateStatusText, ViewModel.UpdateStatus);
+
+    /// <summary>
+    /// 把「开机自动加载组件」下面那行取舍说明交进 <see cref="LocText.SetMessage"/> 那颗门（批次 WI-67 片8＝✅P-201）。
+    /// <para>从前那一行写的是 <c>{x:Bind ViewModel.WidgetsLoadHint, Mode=OneWay}</c>，而那颗属性直接把
+    /// <c>WidgetStartupPolicy.TradeoffNote</c> 的<b>成品中文串</b>交出去：OneWay 只在该属性报
+    /// <c>PropertyChanged</c> 时重取，换语言那一刻⛔ 人报它 ⇒ 屏幕上那一行停在上一门语言上。</para>
+    /// <para>现在 Core 交「键＋实参」（那颗实测出来的每颗成本走 <c>{0}</c> 槽），取词发生在贴上去这一刻；
+    /// 换语言的重贴由 <see cref="LocText"/> 那份名单负责——本页⛔ 为它再挂一位 <c>Locale.Changed</c> 主人。</para>
+    /// </summary>
+    private void ApplyWidgetStartupHint() => LocText.SetMessage(WidgetsTradeoffHint, WidgetStartupPolicy.TradeoffNote);
 
     /// <summary>
     /// 设置页「数据」那一屏那<b>八行</b>状态贴到屏幕上（第一批＝WI-61c 那五行；第六行＝WI-62 的备份回执；

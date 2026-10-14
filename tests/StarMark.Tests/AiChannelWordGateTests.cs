@@ -262,9 +262,12 @@ public sealed class AiChannelWordGateTests : IDisposable
 
         // 屏上⛔ 有这一发：那颗 ArgumentOutOfRangeException 的段落名只给开发者读（✅WI-67 片2 同口径）
         Assert.Contains("throw new ArgumentOutOfRangeException(nameof(kind)", CodeOf(Gateway));
-        // 开机让路那句说明只写进日志，⛔ 为它编键（它的主人住在 片8 的射程之外）
+        // 开机让路那句说明只写进日志，⛔ 为它编键（✅WI-67 片8 之后，同一档里两种下落各归各的）
         Assert.Contains("public static string DescribeSkipped(int instances)", CodeOf(Policy));
-        Assert.Equal(0, Times(CodeOf(Policy), "LocMessage"));
+        Assert.DoesNotContain("LocMessage DescribeSkipped", CodeOf(Policy));
+        // ⚠ 本片改口一处：从前这一格钉的是"整档 LocMessage 颗数＝0"。✅WI-67 片8 把<b>上屏</b>那句升成 <c>LocMessage</c>（＝✅P-201 结案），
+        // 于是这一格真正要守的是"⛔ 让日志那句跟着升"——按形状钉两条签名，⛔ 再钉一颗会被合法改动带漂的计数。
+        Assert.Contains("public static LocMessage TradeoffNote", CodeOf(Policy));
     }
 
     /// <summary>⑦<b>同一颗 <c>LocMessage</c> 实例</b>在换语言前后各念一次：整条"原因"行连<b>槽里嵌的那句</b>一起跟着语言走。

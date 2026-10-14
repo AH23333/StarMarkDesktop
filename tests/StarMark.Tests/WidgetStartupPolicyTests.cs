@@ -1,5 +1,8 @@
 #nullable enable
+using System;
+using System.Text.RegularExpressions;
 using Xunit;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 
 namespace StarMark.Tests;
@@ -11,15 +14,24 @@ namespace StarMark.Tests;
 /// UI 层出不了契约测（#184：StarMark.Tests 不引用 StarMark.UI），所以接线的部分是形状闸门。
 /// 报告 §二百一十二。
 /// </para>
+/// <para>✅WI-67 片8 起本档会改进程级语言（那颗时刻证人要在两门语言里各念一遍同一颗实例），
+/// 所以进串行集合、并在 <see cref="Dispose"/> 里还回原语言（坑表 #517：⛔ 还原就会污染排在后面的档）。</para>
 /// </summary>
-public sealed class WidgetStartupPolicyTests
+[Collection("LocaleGlobal")]
+public sealed class WidgetStartupPolicyTests : IDisposable
 {
+    private readonly AppLanguage _before = Locale.Current;
+
     private const string Lifecycle = "src/StarMark.UI/Services/WidgetManager.Lifecycle.cs";
     private const string MainWindow = "src/StarMark.UI/MainWindow.xaml.cs";
     private const string Store = "src/StarMark.UI/Helpers/SettingsStore.cs";
     private const string StorePerf = "src/StarMark.UI/Helpers/SettingsStore.Performance.cs";
     private const string VmWidgets = "src/StarMark.UI/ViewModels/SettingsPageViewModel.Widgets.cs";
     private const string SettingsXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
+    private const string PageCode = "src/StarMark.UI/Views/SettingsPage.xaml.cs";
+    private const string Policy = "src/StarMark.Core/Widgets/WidgetStartupPolicy.cs";
+
+    public void Dispose() => Locale.TrySet(_before);
 
     private static string Body(string file, string signature)
         => SourceGate.Code(SourceGate.MethodBody(SourceGate.ReadRepoFile(file), signature));
@@ -100,11 +112,86 @@ public sealed class WidgetStartupPolicyTests
     [Fact]
     public void TheTradeoffNotePromisesNoRestart()
     {
-        var note = WidgetStartupPolicy.TradeoffNote;
+        var note = WidgetStartupPolicy.TradeoffNote.Render();   // ✅片8：那句现在交「键＋实参」，取词发生在这一刻
 
         Assert.Contains("不用重启", note, StringComparison.Ordinal);
         Assert.Contains("默认", note, StringComparison.Ordinal);
         Assert.Contains($"{WidgetStartupPolicy.PerWindowPrivateMb} MB", note, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 那句取舍说明<b>在贴上去那一刻才取词</b>：同一颗实例在英／中两门语言里各念一次，两句话必须不同，
+    /// 而那颗<b>实测数字照旧是数字</b>（机器事实⛔ 被翻成另一种写法）。
+    /// <para>这一格是 P-201 的落地判据本身：从前那一行绑的是 Core 当场念好的成品串，
+    /// 屏幕上停在上一门语言——⛔ 拿同一门语言里现取的词当期望（坑表 #526），那样逐字相等是必然。</para>
+    /// <para>顺带钉"槽里真递进了东西"：两门语言念出来都⛔ 出现 <c>{0}</c>，也⛔ 出现表里的键名。</para>
+    /// </summary>
+    [Fact]
+    public void TheTradeoffNoteIsTakenWhenItIsPastedNotWhereItIsBuilt()
+    {
+        Locale.TrySet(AppLanguage.English);
+        var en = WidgetStartupPolicy.TradeoffNote.Render();
+        Locale.TrySet(AppLanguage.Chinese);
+        var zh = WidgetStartupPolicy.TradeoffNote.Render();
+
+        Assert.NotEqual(en, zh, StringComparer.Ordinal);
+        Assert.False(HasHan(en), "换语言后那一行仍念出汉字，说明词是在产地取的：" + en);
+        Assert.Contains($"{WidgetStartupPolicy.PerWindowPrivateMb} MB", en, StringComparison.Ordinal);
+        Assert.Contains("no restart", en, StringComparison.Ordinal);
+        Assert.Contains($"{WidgetStartupPolicy.PerWindowPrivateMb} MB", zh, StringComparison.Ordinal);
+        foreach (var line in new[] { en, zh })
+        {
+            Assert.DoesNotContain("{0}", line, StringComparison.Ordinal);
+            Assert.DoesNotContain("settings.widgets.startupTradeoff", line, StringComparison.Ordinal);
+        }
+
+        // <b>那颗数确实是从实参进来的</b>：换一个实参就得换读数——表里写死"7 MB"（第二个主人）时这一条当场红，
+        // 而 ⛔ 换实参的成对判据只看得到"改政策数界面跟不跟"，看不见"表里另抄了一份"（P-123／#466 同一族）。
+        Assert.Contains("99 MB", LocMessage.Of("settings.widgets.startupTradeoff", "99").Render(), StringComparison.Ordinal);
+        Assert.DoesNotContain($"{WidgetStartupPolicy.PerWindowPrivateMb} MB",
+            LocMessage.Of("settings.widgets.startupTradeoff", "99").Render(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 接线（✅WI-67 片8）：Core 交<b>键＋实参</b>、宿主那一拍走 <c>LocText.SetMessage</c>，
+    /// 而从前的形状——VM 一颗 <c>string</c> 属性＋XAML 一条 <c>{x:Bind …, Mode=OneWay}</c>——⛔ 许留着（它正是 P-201 那三行的机制缺口）。
+    /// <para>同档里那颗<b>只进日志</b>的 <c>DescribeSkipped</c> 仍回 <c>string</c>：日志⛔ 交表是既定口径，
+    /// 这一格把它和上屏那句<b>分方向</b>钉住（✅片7 那颗 <c>AiChannelWordGateTests</c> ⑥ 同一族）。</para>
+    /// </summary>
+    [Fact]
+    public void TheOnScreenNoteHasOneVoiceAndOneHostBeat()
+    {
+        var policy = Code(Policy);
+        Assert.Contains("public static LocMessage TradeoffNote", policy, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Of(\"settings.widgets.startupTradeoff\", PerWindowPrivateMb.ToString())",
+            policy, StringComparison.Ordinal);
+        Assert.Contains("public static string DescribeSkipped(int instances)", policy, StringComparison.Ordinal);
+        Assert.DoesNotContain("LocMessage DescribeSkipped", policy, StringComparison.Ordinal);
+        // 这一档里 <c>LocMessage</c> 只许出现<b>两颗</b>（一颗签名＋一颗 <c>Of</c>）：日志那句若被"顺手搬进表"就会变多。
+        // ⚠ 这是<b>计数型</b>判据，分配写在这里＝上屏那句 2，⛔ 靠它代替上面那两条形状锚点。
+        Assert.Equal(2, SourceGate.Count(policy, "LocMessage"));
+        Assert.Equal(0, SourceGate.Count(policy, "Locale.T("));   // 连"当场念表里的键"那一族⛔ 住进这一档
+        Assert.Equal(0, SourceGate.Count(policy, "Locale.Fmt("));
+
+        Assert.DoesNotContain("WidgetsLoadHint", Code(VmWidgets), StringComparison.Ordinal);
+        var xaml = Regex.Replace(SourceGate.ReadRepoFile(SettingsXaml), "<!--.*?-->", string.Empty,
+                                 RegexOptions.Singleline);
+        Assert.DoesNotContain("WidgetsLoadHint", xaml, StringComparison.Ordinal);
+        Assert.Equal(1, SourceGate.Count(xaml, "x:Name=\"WidgetsTradeoffHint\""));
+        // 方法体＋<b>调用点各一颗</b>：只钉"有人写了那一拍"⛔ 够——把构造函数里那句调用摘掉，屏幕上那一行就整行空着，
+        // 而方法体还留在原地（✅WI-67 片7 台架那一课的反面：判据要看得见"接没接上"）。
+        var page = Code(PageCode);
+        Assert.Equal(1, SourceGate.Count(page, "private void ApplyWidgetStartupHint()"));
+        Assert.Equal(1, SourceGate.Count(page, "ApplyWidgetStartupHint();"));
+        Assert.Equal(1, SourceGate.Count(page,
+            "LocText.SetMessage(WidgetsTradeoffHint, WidgetStartupPolicy.TradeoffNote)"));
+    }
+
+    private static bool HasHan(string text)
+    {
+        foreach (var c in text)
+            if (c >= '\u4E00' && c <= '\u9FFF') return true;
+        return false;
     }
 
     /// <summary>

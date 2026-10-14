@@ -32,12 +32,6 @@ public partial class SettingsPageViewModel
         }
     }
 
-    /// <summary>
-    /// 开关下面那行说明。数字只从 <see cref="WidgetStartupPolicy.TradeoffNote"/> 来（一颗出处），
-    /// 而且<b>不含"你现在有 N 颗"</b>——那种数要跟着增删组件刷新，漏刷就变成报一个过期的钱数。
-    /// </summary>
-    public string WidgetsLoadHint => WidgetStartupPolicy.TradeoffNote;
-
     private static StarMark.UI.Services.WidgetManager? WidgetsManager()
         => App.Services.GetService<StarMark.UI.Services.WidgetManager>();
 

@@ -496,7 +496,8 @@
                         <!-- 「开机自动加载组件」（用户裁决：这笔性能取舍由他自己选，别替他决定桌面长什么样）。
                              默认开＝今天的观感。关掉的收益是实测出来的（每颗组件窗的私有成本，见 Core 的
                              WidgetStartupPolicy 与报告 §二百一十），而"先建再关"退不回来（§二百零九量过），
-                             所以只能走"不建"这一侧。数字不在这里重抄一遍——下面那行说明绑的是政策那颗。 -->
+                             所以只能走"不建"这一侧。数字不在这里重抄一遍——下面那行由 code-behind 走
+                             LocText.SetMessage 贴 Core 交出的那颗「键＋实参」（✅WI-67 片8＝✅P-201）。 -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">
                                 <TextBlock i18n:LocText.Key="settings.widgets.startupTitle" Style="{StaticResource SettingTitle}"/>
@@ -506,7 +507,7 @@
                                     <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="settings.widgets.loadOn" i18n:LocText.OffContentKey="settings.widgets.loadOff" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.WidgetsLoadOnStartup, Mode=TwoWay}"/>
                                 </Grid>
-                                <TextBlock Text="{x:Bind ViewModel.WidgetsLoadHint, Mode=OneWay}"
+                                <TextBlock x:Name="WidgetsTradeoffHint"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Border>

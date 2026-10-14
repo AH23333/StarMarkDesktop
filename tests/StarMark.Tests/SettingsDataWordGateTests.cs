@@ -278,9 +278,10 @@ public sealed class SettingsDataWordGateTests : IDisposable
         Assert.Equal(1, Times(host, "private void ApplyDataStatuses()"));
         Assert.Equal(2, Times(host, "ApplyDataStatuses();"));
         foreach (var row in Rows) Assert.Equal(1, Times(host, "nameof(SettingsPageViewModel." + row + ")"));
-        // 全仓计数型钉：这颗档里挂着的宿主贴字段数（✅WI-64 加那两行＝16；✅WI-65 片1 加「更新」那一行＝17）。
-        // ⚠ 改这颗数⛔ 只改数：分配要一起写下来，下一批只看得到"17 ＝ 拓展功能 8 ＋数据屏 8 ＋更新那一行 1"这一条口径。
-        Assert.Equal(17, Times(host, "LocText.SetMessage("));         // 拓展功能那 8 ＋这一屏 8 ＋「更新」那一行 1
+        // 全仓计数型钉：这颗档里挂着的宿主贴字段数（✅WI-64 加那两行＝16；✅WI-65 片1 加「更新」那一行＝17；
+        // ✅WI-67 片8 加「开机自动加载组件」那行取舍说明＝18）。
+        // ⚠ 改这颗数⛔ 只改数：分配要一起写下来，下一批只看得到"18 ＝ 拓展功能 8 ＋数据屏 8 ＋更新那一行 1 ＋组件开机那行 1"这一条口径。
+        Assert.Equal(18, Times(host, "LocText.SetMessage("));         // 拓展功能那 8 ＋这一屏 8 ＋「更新」那一行 1 ＋「开机自动加载」那一行 1
         // 这一档的 <c>Locale.Changed +=</c> 颗数⛔ 写死成"一颗"：设置页早就是这条事件的一位主人，
         // 而这一族真正的失效是<b>挂了没人摘</b>（坑表 #386），不是"订阅多了"——批次 WI-40-3b 给「快捷键」那一栏
         // 的重贴加进同一个成对块时，这里就红过一次（定向筛选器⛔ 覆盖邻族，只有全量揪得出来）。

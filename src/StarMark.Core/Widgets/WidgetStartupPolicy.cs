@@ -1,3 +1,5 @@
+using StarMark.Abstractions.I18n;
+
 namespace StarMark.Core.Widgets;
 
 /// <summary>
@@ -32,19 +34,24 @@ public static class WidgetStartupPolicy
     public static int EstimatedPrivateMb(int instances)
         => instances > 0 ? instances * PerWindowPrivateMb : 0;
 
-    /// <summary>启动日志里那句"为什么这次一颗都没建"——没有这句，"开机内存怎么少了"就只能靠猜。</summary>
+    /// <summary>
+    /// 启动日志里那句"为什么这次一颗都没建"——没有这句，"开机内存怎么少了"就只能靠猜。
+    /// <para>它回 <see cref="string"/> 是<b>刻意的</b>：日志⛔ 交表（既定口径），而同档里<b>上屏</b>那句
+    /// （<see cref="TradeoffNote"/>）交的是 <see cref="LocMessage"/>——同一颗档两种下落⛔ 混着搬，
+    /// 搬错的那一半会让屏幕上念出表里的键名。</para>
+    /// </summary>
     public static string DescribeSkipped(int instances)
         => $"开机自动加载已关：{instances} 颗组件窗一颗都不建（约 {EstimatedPrivateMb(instances)} MB 私有），"
            + "要用的组件在设置「桌面工具（组件）」或托盘里点亮，点亮时按存档的几何与外观重建";
 
     /// <summary>
-    /// 设置页上那句取舍说明。
+    /// 设置页上那句取舍说明——交<b>没取词的</b>「键＋实参」（✅WI-67 片8＝✅P-201）。
     /// <para><b>刻意不写"你现在有 N 颗，可省 M MB"</b>：那颗数要跟着增删组件刷新，
     /// 一旦漏刷，界面就在报一个过期的钱数——报一个说不清来源的数字，比不报更容易误导人。
     /// 颗数与总额留在<b>启动日志</b>那句里（那一刻的颗数是事实，不会过期）。</para>
+    /// <para>槽里只递<b>那颗裸数</b>（<see cref="PerWindowPrivateMb"/>）：写死的读数会变成第二个主人，
+    /// 而那一族缺陷在本仓有据（每颗"数字＋MB"的字面都由证人挡掉）。</para>
     /// </summary>
-    public static string TradeoffNote
-        => $"开着＝开机把已添加的组件全部建出来（默认，也就是今天的行为）。"
-           + $"关掉＝开机一颗都不建，省下约 {PerWindowPrivateMb} MB 私有内存每颗（本机实测，颗数越多省得越多）。"
-           + "改这个开关当场生效，不用重启。";
+    public static LocMessage TradeoffNote
+        => LocMessage.Of("settings.widgets.startupTradeoff", PerWindowPrivateMb.ToString());
 }

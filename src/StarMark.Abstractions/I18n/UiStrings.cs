@@ -556,6 +556,10 @@ public static class UiStrings
         new Entry("settings.widgets.hideAll", "全部隐藏", "Hide all", "すべて隠す"),
         new Entry("settings.widgets.startupTitle", "开机自动加载组件", "Load widgets at startup", "起動時にウィジェットを自動で読み込む"),
         new Entry("settings.widgets.startupNote", "只影响开机那一次，已添加的不会丢", "Affects boot only; added widgets are not lost", "起動時のみ。追加済みは消えません"),
+        // {0}＝每颗组件窗的私有成本（MB），由 Core 那颗政策递进来（⛔ 在表里重抄一遍数＝两个主人）。
+        new Entry("settings.widgets.startupTradeoff", "开着＝开机把已添加的组件全部建出来（默认，也就是今天的行为）。关掉＝开机一颗都不建，省下约 {0} MB 私有内存每颗（本机实测，颗数越多省得越多）。改这个开关当场生效，不用重启。",
+                  "On builds every widget you've added when Windows starts (the default, i.e. what happens today). Off builds none at startup and saves about {0} MB of private memory per widget (measured on this machine; the more widgets, the more it saves). This switch takes effect right away — no restart needed.",
+                  "オン＝起動時に追加済みのウィジェットをすべて作成します（既定＝現在の動作）。オフ＝起動時は一つも作成せず、1個あたり約 {0} MB のプライベートメモリを節約できます（本機実測。個数が多いほど節約量も増えます）。このスイッチはその場で有効になります。再起動は不要です。"),
                     new Entry("settings.widgets.loadOn", "加载", "Load", "読み込む"),
         new Entry("settings.widgets.loadOff", "不加载", "Don't load", "読み込まない"),
         new Entry("settings.widgets.appearanceTitle", "组件外观 · 材质与不透明度", "Widget look · material and opacity", "ウィジェットの外観 · 材質と不透明度"),
