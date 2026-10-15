@@ -53,6 +53,21 @@ public sealed class I18nWiringGateTests
     private const string GlanceWidgetCs = "src/StarMark.UI/Views/GlanceWidget.xaml.cs";
     private const string SettingsPageCs = "src/StarMark.UI/Views/SettingsPage.xaml.cs";
     private const string AppCs = "src/StarMark.UI/App.xaml.cs";
+
+    // P-184 那条名单点名的九档（✅批次 WI-68 逐档交完，射程同批从"主窗／设置页两档"扩到这一组）。
+    // ⛔ 一次扩到全仓：没交完的档会被误伤（那条账本的证人条款逐字写着）。
+    private const string CanvasHotkeyXaml = "src/StarMark.UI/Views/CanvasHotkeyPanelWindow.xaml";
+    private const string TagEditorXaml = "src/StarMark.UI/Controls/TagEditor.xaml";
+    private const string GlanceWidgetXaml = "src/StarMark.UI/Views/GlanceWidget.xaml";
+    private const string CaptureOverlayXaml = "src/StarMark.UI/Views/CaptureOverlayWindow.xaml";
+    private const string ItemGridWidgetXaml = "src/StarMark.UI/Views/ItemGridWidget.xaml";
+    private const string MusicWidgetXaml = "src/StarMark.UI/Views/MusicWidget.xaml";
+    private const string PreviewHostXaml = "src/StarMark.UI/Controls/PreviewHost.xaml";
+    private const string QuickLaunchWidgetXaml = "src/StarMark.UI/Views/QuickLaunchWidget.xaml";
+
+    // 那颗 health.join.list 的三处念法住的两档（P-184 最后一格，见 TheHealthJoinIsNotReadBeforeItsRowIsPasted）。
+    private const string InsightsCs = "src/StarMark.Core/Insights/InsightsService.cs";
+    private const string HealthVmCs = "src/StarMark.UI/ViewModels/SettingsPageViewModel.Health.cs";
     // 组件窗自己的三条文字出口（批次 WI-37-A）：菜单本体／外壳两态／快捷启动拖放，加内容工厂的占位那一行。
     private const string WidgetMenuCs = "src/StarMark.UI/Views/WidgetWindow.Menu.cs";
     private const string WidgetChromeCs = "src/StarMark.UI/Views/WidgetWindow.Chrome.cs";
@@ -206,10 +221,22 @@ public sealed class I18nWiringGateTests
     /// 直到有人换语言——那时键那份跟着变，字面量那份留在原地，屏幕上就是半中半英。
     /// 判据按<b>属性名</b>配对，不按元素：占位符与提示各有自己的键（见 <see cref="LocText"/> 的分工），
     /// 所以 <c>Key</c> 只与正文那六颗属性相冲，不冲 <c>ToolTipService.ToolTip</c>。</para>
+    /// <para><b>批次 WI-68 把射程从"主窗／设置页两档"扩到 P-184 点名的九档</b>：那九档的字面量已在历次
+    /// P-188／P-194 那几刀里交完（复算＝<c>bin/WI53/census_184_53.py</c> 现读 0 档 0 行），而"没交"与
+    /// "交了但没人守"是两件事——不加这一臂，下一批把某颗字面量顺手写回同一行时，历次那几把尺都不会红。</para>
     /// </summary>
     [Theory]
     [InlineData(MainWindowXaml)]
     [InlineData(SettingsXaml)]
+    [InlineData(CanvasHotkeyXaml)]
+    [InlineData(TagEditorXaml)]
+    [InlineData(GlanceWidgetXaml)]
+    [InlineData(SearchWidgetXaml)]
+    [InlineData(CaptureOverlayXaml)]
+    [InlineData(ItemGridWidgetXaml)]
+    [InlineData(MusicWidgetXaml)]
+    [InlineData(PreviewHostXaml)]
+    [InlineData(QuickLaunchWidgetXaml)]
     public void AKeyNeverSharesItsLineWithTheLiteralItReplaces(string relativePath)
     {
         var lines = Markup(ReadRepoFile(relativePath)).Split('\n');
@@ -369,6 +396,9 @@ public sealed class I18nWiringGateTests
     /// （P-169 那一族），整树扫会在还没轮到那一页时红成噪音，然后被人整颗关掉。⇒ 这一颗<b>按页加</b>：
     /// 加一颗文件就必须<b>同批</b>把那一页的标记全部进表，⛔ 不许先加 InlineData 再补翻译。</para>
     /// <para>每一臂只该红自己那一页（规则 76）：这是 Theory，加一颗文件就多一条测试。</para>
+    /// <para><b>✅批次 WI-68 一次加了八臂</b>＝P-184 那条名单点名的九档（<c>SearchWidget.xaml</c> 那臂
+    /// 片9b 已加）。九档的字面量不是本批交掉的，是历次 P-188／P-194 那几刀顺手收完的——本批补的是
+    /// 那颗账本的<b>证人条款</b>：交了而⛔ 守，下一批把汉字写回标记时没人拦。</para>
     /// </summary>
     [Theory]
     [InlineData(TrendingXaml)]
@@ -379,6 +409,14 @@ public sealed class I18nWiringGateTests
     [InlineData(FolderTreeXaml)]
     [InlineData(SearchPageXaml)]
     [InlineData(SearchWidgetXaml)]   // ✅批次 WI-67 片9b 加进来：那一页的标记（三颗下拉项＋那颗空态字面量）同批改完才配加这一臂
+    [InlineData(CanvasHotkeyXaml)]   // ✅批次 WI-68（P-184）：以下八臂同批加，逐档先按这颗判据复算过＝0 句
+    [InlineData(TagEditorXaml)]
+    [InlineData(GlanceWidgetXaml)]
+    [InlineData(CaptureOverlayXaml)]
+    [InlineData(ItemGridWidgetXaml)]
+    [InlineData(MusicWidgetXaml)]
+    [InlineData(PreviewHostXaml)]
+    [InlineData(QuickLaunchWidgetXaml)]
     public void ScannedPagesHoldNoChineseMarkup(string relativePath)
     {
         var page = Markup(ReadRepoFile(relativePath));
@@ -620,9 +658,71 @@ public sealed class I18nWiringGateTests
             .Where(v => Regex.IsMatch(v, @"[\u4e00-\u9fff]"))
             .ToArray();
         Assert.Empty(glue);                                       // 负账清零（WI-33）：扣分行整句住 VM 现装
-        var vm = ReadRepoFile("src/StarMark.UI/ViewModels/SettingsPageViewModel.Health.cs");
-        foreach (var key in new[] { "health.stat.lang", "health.stat.domains", "health.stat.dup", "health.stat.tag", "health.deduction.row", "health.summary.todo", "health.dup.item" })
-            Assert.Contains($"Locale.Fmt(\"{key}", vm, StringComparison.Ordinal);   // 正账：整句都从表出（统计＋扣分半链同闸）
+        var vm = Code(ReadRepoFile(HealthVmCs));
+        // 正账（✅批次 WI-68／P-184 改锚）：那九句现在⛔ 在 VM 里取词，只许存「键＋实参」，念成字符串那一步
+        // 搬进 <c>PaintHealthReadouts</c>。旧锚点 <c>Locale.Fmt("{key}</c> 会替新形状答"句子进了表"——
+        // 进表与"什么时候念"是两件事，后者才是本批修的（两颗时机证人见下面两格）。
+        foreach (var key in new[]
+                 {
+                     "health.stat.lang", "health.stat.domains", "health.stat.dup", "health.stat.tag",
+                     "health.stat.none", "health.deduction.row", "health.summary.todo", "health.summary.good",
+                     "health.dup.item"
+                 })
+        {
+            Assert.Contains($"LocMessage.Of(\"{key}\"", vm, StringComparison.Ordinal);
+            Assert.DoesNotContain($"Locale.Fmt(\"{key}\"", vm, StringComparison.Ordinal);
+            Assert.DoesNotContain($"Locale.T(\"{key}\"", vm, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// <b>那颗连接号只许在"贴上去那一刻"才念，而三处⛔ 分开交</b>（✅批次 WI-68／P-184 那一格的证人）。
+    /// <para><c>health.join.list</c> 全仓三处念它：Core 的重复项明细、设置页 VM 的"待优化"与"疑似重复 Top"。
+    /// 三处原先都写成 <c>string.Join(Locale.T(连接键), …)</c>＝把分隔符钉在<b>算出它的那一瞬间</b>：外层句子
+    /// 后来改成换语言重贴，里面那半句停在旧语言，屏幕上就是「A、B, C」——<see cref="LocJoin"/> 自己的
+    /// doc-comment 逐字写过的那句。所以这一格守的⛔"这句进没进表"（那颗早就在表里），守的是<b>取词时机</b>。</para>
+    /// <para><b>三处一起交＝计数按档点名</b>（Core 一颗、VM 两颗，加总三颗）：只搬其中一处就红在这三行里的
+    /// 某一行——✅WI-63 结案 P-195 时同一条判据（半搬比不搬更坏，因为它把"已经修好"这句话变成了假话）。
+    /// 时机这一族另一头的证人＝<see cref="TheHealthRowsArePaintedInTheHostsBeat"/>。</para>
+    /// </summary>
+    [Fact]
+    public void TheHealthJoinIsNotReadBeforeItsRowIsPasted()
+    {
+        var core = Code(ReadRepoFile(InsightsCs));
+        var vm = Code(ReadRepoFile(HealthVmCs));
+        // ⛔ 提前念完的那两种形状：一颗键名都不该再出现在这两档的取词出口上。
+        Assert.Equal(0, Count(core + vm, "Locale.T(\"health.join.list\""));
+        Assert.Equal(0, Count(core + vm, "string.Join(Locale.T("));
+        Assert.Equal(1, Count(core, "new LocJoin("));                       // 重复项明细
+        Assert.Equal(2, Count(vm, "new LocJoin("));                         // 「待优化」＋「疑似重复 Top」
+        Assert.Equal(3, Count(core + vm, "\"health.join.list\""));          // 三处一起交，⛔ 只搬一处
+    }
+
+    /// <summary>
+    /// <b>屏幕上那几行只许有一处取词，而那一处⛔ 顺手重算</b>（✅批次 WI-68／P-184 的另一半）。
+    /// <para>句子进了表、时机也推迟了，还得有人<b>在换语言那一刻回来重念</b>：那九处显示属性过去只在
+    /// <c>LoadHealthAsync</c> 那一趟里装配（VM 自己的注释就承认"要重进那一页才跟着改"）。
+    /// 现在 <c>PaintHealthReadouts</c> 是唯一的取词点，重算与换语言两条路都走到它。</para>
+    /// <para>那一拍的界线与诊断那格同一条（坑表 #386）：<b>只重念已有</b>——⛔ 查库、⛔ 重建分数与趋势柱，
+    /// 否则"改个字"会变成"那一栏转圈重算"。宿主那颗订阅必须成对：这颗 VM 是 <c>AddTransient</c>，
+    /// 挂着不摘＝每进一次设置页在静态事件上多一份订阅，而那些页面早就不在了。</para>
+    /// </summary>
+    [Fact]
+    public void TheHealthRowsArePaintedInTheHostsBeat()
+    {
+        var vm = Code(ReadRepoFile(HealthVmCs));
+        var paint = MethodBody(vm, "public void PaintHealthReadouts()");
+        foreach (var row in new[] { "ScoreSummary", "DeductionLines", "DuplicateLine", "LanguageLine", "DomainsLine", "TagLine" })
+            Assert.Contains($"{row} = ", paint, StringComparison.Ordinal);
+        Assert.DoesNotContain("Task.Run", paint, StringComparison.Ordinal);
+        Assert.DoesNotContain("TrendBars", paint, StringComparison.Ordinal);
+        Assert.DoesNotContain("BuildHealthReport", paint, StringComparison.Ordinal);
+        // 装配那一颗把重贴叫在最后：漏了这一句＝存了事实而屏幕上永远空着。
+        Assert.Contains("PaintHealthReadouts();", MethodBody(vm, "private void RefreshHealthView()"), StringComparison.Ordinal);
+
+        var host = Code(ReadRepoFile(SettingsPageCs));
+        Assert.Equal(1, Count(host, "Locale.Changed += ViewModel.PaintHealthReadouts;"));
+        Assert.Equal(2, Count(host, "Locale.Changed -= ViewModel.PaintHealthReadouts;"));   // 先退再订＋收尾那一次
     }
 
     /// <summary>

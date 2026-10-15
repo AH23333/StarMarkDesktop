@@ -309,6 +309,10 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         // 「本机备份」那一列每行有两句（类别名与按钮名）也住在数据项＋模板里：同一颗订阅那一段，第四组成对手臂（机制 (C)·第四位宿主）。
         Locale.Changed -= RepasteBackupRows;
         Locale.Changed += RepasteBackupRows;
+        // 「健康」那一栏那几行念的是"进页时算回来的事实"（键＋实参，那颗连接号也到这一拍才取）：
+        // 换语言只重念那几行，⛔ 在这里重新采集（那一趟含整表读），也⛔ 顺手把分数与趋势柱重建一遍（P-184）。
+        Locale.Changed -= ViewModel.PaintHealthReadouts;
+        Locale.Changed += ViewModel.PaintHealthReadouts;
         if (App.Services.GetRequiredService<HotkeyService>() is not { } svc) return;
         // 本页可能被反复导航回来：先退再订，避免同一个处理器挂多份（一份事件 → N 次重建 UI）。
         svc.RegistrationStateFlushed -= OnRegistrationStateFlushed;
@@ -327,6 +331,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         Locale.Changed -= RepasteHotkeyRows;            // 同上：那一栏的重贴手臂也一起摘
         Locale.Changed -= RepasteAiGroupRows;           // 同上：AI 预览那两行同样⛔ 留下挂着的订阅
         Locale.Changed -= RepasteBackupRows;            // 同上：备份那一列的三颗显示属性也一起摘
+        Locale.Changed -= ViewModel.PaintHealthReadouts; // 同上：健康那一栏那几行的重贴手臂一起摘
         if (App.Services.GetRequiredService<HotkeyService>() is { } svc)
             svc.RegistrationStateFlushed -= OnRegistrationStateFlushed;
     }

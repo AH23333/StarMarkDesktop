@@ -80,13 +80,13 @@ public sealed class LocaleSubscriptionPairGateTests
     public void TheCensusReportsItsOwnDenominator()
     {
         var pts = All.Value;
-        // 36／16／20／13 档＝现读（⛔ 预测，名册 262 那一族：第一次只按"这一批加了第四组手臂"算成 30，被自己写的闸门当场否掉）。
-        // 多出来的那 9 颗里有 6 颗是<b>上一笔提交</b>（片9c 第三刀）给活动流那两位宿主新挂的手臂——
-        // 那一跑只跑了定向证人 688 格，这颗全局分母没进过滤器 ⇒ 登记为"邻族证人漏重锚"，不是这颗闸门读错（坑表那条同族）。
-        Assert.Equal(36, pts.Count);
-        Assert.Equal(16, pts.Count(p => p.Sign == "+"));
-        Assert.Equal(20, pts.Count(p => p.Sign == "-"));
-        Assert.Equal(13, pts.Select(p => p.File).Distinct().Count());
+        // 39／17／22／13 档＝现读（⛔ 预测，名册 262 那一族）。批次 WI-68 把三串各加一颗/两颗：设置页为「健康」那一栏
+        // 新挂了一组成对手臂（挂 1／摘 2＝Loaded 先退再订＋Unloaded 收尾），而那一档本就是主人 ⇒ 档数不变。
+        // ⚠ 这颗闸门⛔ 在本族的定向过滤器里 ⇒ 只要动了订阅手臂，收口必须跑全量（上一批就是这么静默漏过一次，
+        // 名册 288 第④条）。四串合成<b>一条</b>断言：红了就把"该是多少"与"现在是多少"两边整串一起报出来，
+        // ⛔ 撞一次改一次（那要重编四回）。
+        Assert.Equal("39|17|22|13",
+            $"{pts.Count}|{pts.Count(p => p.Sign == "+")}|{pts.Count(p => p.Sign == "-")}|{pts.Select(p => p.File).Distinct().Count()}");
         Assert.All(pts, p => Assert.True(p.Sign is "+" or "-", "符号只可能是这两颗之一"));
     }
 

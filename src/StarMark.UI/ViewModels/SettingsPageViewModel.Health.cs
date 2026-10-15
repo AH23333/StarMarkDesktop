@@ -52,6 +52,23 @@ public partial class SettingsPageViewModel
     [ObservableProperty] private string _duplicateLine = string.Empty;
     [ObservableProperty] private string _tagLine = string.Empty;
 
+    // ⛔ 上面那九处显示属性存成品字：换语言那一刻没人回来重念，屏幕上就停在上一门的话（P-184 点名的就是这一族里
+    // 那颗连接号——它当时有三处念法，每处都在"算出来那一瞬间"把语言定死）。存的换成「键＋实参」，
+    // 取词一起推迟到 <see cref="PaintHealthReadouts"/> 那一拍；先例＝✅WI-40-3b 机制 (C)／✅片9d P-203。
+    /// <summary>「待优化：{0}」那颗实参是一位 <see cref="LocJoin"/>：连起来与取词都在贴上去那一刻。</summary>
+    private LocMessage? _scoreSummaryFact;
+    /// <summary>扣分那一列：每行的因子名与明细都还是键，列子只在这那一拍才念成字符串。</summary>
+    private IReadOnlyList<LocMessage> _deductionFacts = new List<LocMessage>();
+    /// <summary>统计那三串的槽：<b>空态那句「（无）」住表</b>（所以槽型是 <c>object?</c>），
+    /// 非空那串是「代码 数量」＋语言中性的「 · 」——它没有词可翻，⛔ 为它立第三颗分隔符表行（账本定死的口径）。</summary>
+    private object? _languageSummaryFact;
+    private object? _duplicateSummaryFact;
+    private object? _tagSummaryFact;
+    private LocMessage? _languageLineFact;
+    private LocMessage? _domainsLineFact;
+    private LocMessage? _duplicateLineFact;
+    private LocMessage? _tagLineFact;
+
     /// <summary>拉取全部条目并构建健康度报告（P2-6）。本地聚合，零网络。</summary>
     public async Task LoadHealthAsync()
     {
@@ -93,30 +110,33 @@ public partial class SettingsPageViewModel
                 ? new SolidColorBrush(Color.FromArgb(255, 214, 137, 16)) // 琥珀
                 : new SolidColorBrush(Color.FromArgb(255, 196, 43, 28));  // 红
 
-        ScoreSummary = r.Factors.Count == 0
-            ? Locale.T("health.summary.good")
-            : Locale.Fmt("health.summary.todo", string.Join(Locale.T("health.join.list"), r.Factors.Select(f => f.Label.Render())));
-        // 扣分行整链（WI-33）：外壳与因子名/明细全部按键现取，重算那一刻渲染当前语言。
-        DeductionLines = r.Factors.Select(f => Locale.Fmt("health.deduction.row", f.Label.Render(), f.Deduction, f.Detail.Render())).ToList();
+        _scoreSummaryFact = r.Factors.Count == 0
+            ? LocMessage.Of("health.summary.good")
+            : LocMessage.Of("health.summary.todo",
+                new LocJoin(r.Factors.Select(f => (object?)f.Label).ToList(), "health.join.list"));
+        // 扣分行整链（WI-33→P-184）：外壳、因子名、明细全部存「键＋实参」，念成字符串交给 PaintHealthReadouts 那一拍。
+        _deductionFacts = r.Factors
+            .Select(f => LocMessage.Of("health.deduction.row", f.Label, f.Deduction, f.Detail))
+            .ToList();
 
-        LanguageSummary = r.LanguageTop.Count == 0
-            ? Locale.T("health.stat.none")
-            : string.Join(" · ", r.LanguageTop.Take(5).Select(s => $"{s.Language} {s.Count}"));
-        DuplicateSummary = r.DuplicateTop.Count == 0
-            ? Locale.T("health.stat.none")
-            // 「、」与那对括号的<b>宽度</b>都是语言内容（批次 WI-57 的普查尺量到）：连接号早已归
-            // <c>health.join.list</c> ⇒ 这里⛔ 再抄一份（同一件事两个主人＝P-171 那一族），括号形状走表。
+        _languageSummaryFact = r.LanguageTop.Count == 0
+            ? LocMessage.Of("health.stat.none")
+            : string.Join(" · ", r.LanguageTop.Select(s => $"{s.Language} {s.Count}").Take(5));
+        _duplicateSummaryFact = r.DuplicateTop.Count == 0
+            ? LocMessage.Of("health.stat.none")
+            // 「、」与那对括号的<b>宽度</b>都是语言内容（批次 WI-57 的普查尺量到）：连接号归
+            // <c>health.join.list</c> ⇒ ⛔ 这里再抄一份（同一件事两个主人＝P-171 那一族），括号形状走表。
             // ⚠ 通用 en 列闸门看不见它——那颗只禁汉字与假名（坑表 #403 第二次兑现）。
-            : string.Join(Locale.T("health.join.list"),
-                r.DuplicateTop.Take(5).Select(d => Locale.Fmt("health.dup.item", d.Title, d.Count)));
-        TagSummary = r.TagHistogram.Count == 0
-            ? Locale.T("health.stat.none")
-            : string.Join(" · ", r.TagHistogram.Take(5).Select(t => $"{t.Tag} {t.Count}"));
-        // 整句在重算那一刻按键取词（进这一页必过 LoadHealthAsync＝组合句一族的"按语言重算"时机）。
-        LanguageLine = Locale.Fmt("health.stat.lang", LanguageSummary);
-        DomainsLine = Locale.Fmt("health.stat.domains", r.DistinctDomains);
-        DuplicateLine = Locale.Fmt("health.stat.dup", DuplicateSummary);
-        TagLine = Locale.Fmt("health.stat.tag", TagSummary);
+            // ⛔ 在这里 string.Join：那会把连接号钉在"算出报告这一刻"，外层重贴只改外壳 ⇒ 交 LocJoin。
+            : new LocJoin(r.DuplicateTop.Take(5)
+                .Select(d => (object?)LocMessage.Of("health.dup.item", d.Title, d.Count)).ToList(), "health.join.list");
+        _tagSummaryFact = r.TagHistogram.Count == 0
+            ? LocMessage.Of("health.stat.none")
+            : string.Join(" · ", r.TagHistogram.Select(t => $"{t.Tag} {t.Count}").Take(5));
+        _languageLineFact = LocMessage.Of("health.stat.lang", _languageSummaryFact);
+        _domainsLineFact = LocMessage.Of("health.stat.domains", r.DistinctDomains);
+        _duplicateLineFact = LocMessage.Of("health.stat.dup", _duplicateSummaryFact);
+        _tagLineFact = LocMessage.Of("health.stat.tag", _tagSummaryFact);
 
         var max = r.NewTrend.Count == 0 ? 0 : r.NewTrend.Max(t => t.Count);
         TrendBars = r.NewTrend
@@ -127,6 +147,31 @@ public partial class SettingsPageViewModel
                 Height = max > 0 && t.Count > 0 ? Math.Max(3, t.Count * 80.0 / max) : 0,
             })
             .ToList();
+        PaintHealthReadouts();
+    }
+
+    /// <summary>
+    /// 把存着的事实按<b>此刻</b>的语言念成屏幕上那几行（批次 WI-68／P-184）。
+    /// <para>那颗 <c>health.join.list</c> 全仓有<b>三处</b>念它：Core 的重复项明细、这里的"待优化"与
+    /// "疑似重复 Top"——三处交的都是键，取词一起推迟到这一颗（⛔ 在 <see cref="RefreshHealthView"/> 里
+    /// <c>string.Join(Locale.T(连接键), …)</c> 念完：那会把连接号钉在"算出它的那一瞬间"，外层重贴只改外壳，
+    /// 屏幕上剩下「A、B, C」那种半中半英——<see cref="LocJoin"/> 的 doc-comment 逐字写过的那句）。</para>
+    /// <para>这一拍<b>只重念已有</b>：⛔ 查库／重算分数／重建趋势柱（与 <see cref="PaintDiagnostics"/>
+    /// 同一条界线，坑表 #386）。没采过时那些槽是 null／空表，念出来还是空串，⛔ 把"还没加载"刷成假读数。</para>
+    /// <para>宿主自己订阅 <c>Locale.Changed</c> 并成对摘掉（<c>SettingsPage</c> 的 Loaded／Unloaded）——
+    /// 这一页的节拍里没有"语言换了"这件事。</para>
+    /// </summary>
+    public void PaintHealthReadouts()
+    {
+        ScoreSummary = _scoreSummaryFact?.Render() ?? string.Empty;
+        DeductionLines = _deductionFacts.Select(m => m.Render()).ToList();
+        LanguageSummary = _languageSummaryFact?.ToString() ?? string.Empty;
+        DuplicateSummary = _duplicateSummaryFact?.ToString() ?? string.Empty;
+        TagSummary = _tagSummaryFact?.ToString() ?? string.Empty;
+        LanguageLine = _languageLineFact?.Render() ?? string.Empty;
+        DomainsLine = _domainsLineFact?.Render() ?? string.Empty;
+        DuplicateLine = _duplicateLineFact?.Render() ?? string.Empty;
+        TagLine = _tagLineFact?.Render() ?? string.Empty;
     }
 
     // ===== 诊断（P2-8）=====

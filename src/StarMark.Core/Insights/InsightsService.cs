@@ -46,7 +46,11 @@ public static class InsightsService
         {
             var d = Math.Min(40, dupList.Count * 10);
             deduction += d;
-            var examples = string.Join(Locale.T("health.join.list"), dupList.OrderByDescending(x => x.Count).Take(5).Select(x => x.Sample));
+            // 那颗连接号⛔ 在这里 `string.Join(Locale.T(…))` 念完：念的那一刻＝后台算报告的那一刻，
+            // 外层将来由宿主重贴，里面这半句的分隔符会停在旧语言（屏幕上就是「A、B, C」那种半中半英）。
+            // 交 <see cref="LocJoin"/>＝连起来与取词一起推迟到贴上去那一拍（P-184·三处一起交，⛔ 只搬这一处）。
+            var examples = new LocJoin(dupList.OrderByDescending(x => x.Count).Take(5)
+                .Select(x => (object?)x.Sample).ToList(), "health.join.list");
             factors.Add(new HealthFactor
             {
                 Key = "duplicates",
