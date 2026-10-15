@@ -77,6 +77,12 @@ public sealed class TemplateRowWordGateTests : IDisposable
         Assert.Equal(1, Count(act, "public LocMessage KindMessage { get; }"));
         Assert.Equal(1, Count(act, "public string KindLabel => KindMessage.Render();"));
         Assert.Equal(0, Count(act, "public string KindLabel { get; }"));
+        // ⚠ 那一行上有<b>两句</b>会念的话（事件名＋相对时间），宿主那一拍⛔ 只重念一颗：
+        // 从前那颗时间在构造函数里取一次词，换语言后屏幕上就是"名字换成英文、时间还留着中文"那半行（片9c 第六刀）。
+        Assert.Equal(1, Count(act, "public string AtText => RelativeTimeHelper.Format(At);"));
+        Assert.Equal(0, Count(act, "public string AtText { get; }"));
+        Assert.Equal(1, Count(act, "OnPropertyChanged(nameof(KindLabel));"));
+        Assert.Equal(1, Count(act, "OnPropertyChanged(nameof(AtText));"));
 
         var clock = CodeOf(ClockVm);
         Assert.Equal(1, Count(clock, "[ObservableProperty] private LocMessage? _error;"));
@@ -113,7 +119,9 @@ public sealed class TemplateRowWordGateTests : IDisposable
     /// </summary>
     [Theory]
     [InlineData(ActPageCs, "KindLabel")]
+    [InlineData(ActPageCs, "AtText")]
     [InlineData(GridCs, "KindLabel")]
+    [InlineData(GridCs, "AtText")]
     [InlineData(ClockCs, "ErrorText")]
     [InlineData(BackupCs, "MetaText")]
     [InlineData(BackupCs, "RestoreLabel")]

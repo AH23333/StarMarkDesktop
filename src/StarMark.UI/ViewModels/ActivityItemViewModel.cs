@@ -32,7 +32,7 @@ public sealed partial class ActivityItemViewModel : ObservableObject
         Title = rec.Title;
         Uri = rec.Uri;
         KindMessage = KindMessageOf(rec.Kind);
-        AtText = RelativeTimeHelper.Format(rec.At);
+        At = rec.At;
         Change = ChangeOf(rec.Kind);
     }
 
@@ -51,8 +51,15 @@ public sealed partial class ActivityItemViewModel : ObservableObject
     /// <summary>屏幕上念出来的那一行：⛔ 产地取词，由 <see cref="KindMessage"/> 现算；换语言那一刻靠宿主那一拍重念。</summary>
     public string KindLabel => KindMessage.Render();
 
-    /// <summary>相对时间文案：刚刚 / x 分钟前 / x 小时前 / x 天前 / yyyy-MM-dd。</summary>
-    public string AtText { get; }
+    /// <summary>那一刻的 unix 秒——交的是<b>事实</b>，⛔ 在这里就把它念成"3 分钟前"。</summary>
+    public long At { get; }
+
+    /// <summary>
+    /// 相对时间文案：刚刚 / x 分钟前 / x 小时前 / x 天前 / yyyy-MM-dd。
+    /// <para><b>念在显示侧</b>（与 <see cref="KindLabel"/> 同一拍）：从前这一句在构造函数里取一次词，
+    /// 于是宿主那一拍换语言时事件名换了、这一句还留在旧语言里——同一行两种语言（✅WI-40-3b 那句话只办了半行）。</para>
+    /// </summary>
+    public string AtText => RelativeTimeHelper.Format(At);
 
     /// <summary>三色归类：绿(增)/红(删)/黄(改)。着色只认这一层。</summary>
     public ActivityChange Change { get; }
@@ -73,8 +80,13 @@ public sealed partial class ActivityItemViewModel : ObservableObject
         _ => LocMessage.Of("activity.kind.itemDelete"),
     };
 
-    /// <summary>换语言那一刻由宿主逐行调用：⛔ 换那颗键（身份没变），只把"念出来的那一行"重新通知一遍。</summary>
-    public void Repaste() => OnPropertyChanged(nameof(KindLabel));
+    /// <summary>换语言那一刻由宿主逐行调用：⛔ 换那颗键（身份没变），只把"念出来的那一行"重新通知一遍。
+    /// <para><b>两颗都要通知</b>：那一行上有两句会念的话（事件名与相对时间），只报一颗＝换语言后同一行半中半英。</para></summary>
+    public void Repaste()
+    {
+        OnPropertyChanged(nameof(KindLabel));
+        OnPropertyChanged(nameof(AtText));
+    }
 
     private static ActivityChange ChangeOf(ActivityKind k) => k switch
     {

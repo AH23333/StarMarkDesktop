@@ -72,7 +72,7 @@
                                            VerticalAlignment="Center"/>
                                 <TextBlock Grid.Column="2" Text="{x:Bind Title}" FontSize="11"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="2,0,0,0"/>
-                                <TextBlock Grid.Column="3" Text="{x:Bind AtText}" FontSize="9" Opacity="0.55"
+                                <TextBlock Grid.Column="3" Text="{x:Bind AtText, Mode=OneWay}" FontSize="9" Opacity="0.55"
                                            VerticalAlignment="Center"/>
                             </Grid>
                         </DataTemplate>

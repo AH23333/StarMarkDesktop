@@ -37,7 +37,7 @@
                                                Style="{StaticResource BodyTextBlockStyle}"
                                                TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
-                                <TextBlock Grid.Column="2" Text="{x:Bind AtText}"
+                                <TextBlock Grid.Column="2" Text="{x:Bind AtText, Mode=OneWay}"
                                            Style="{StaticResource MutedText}"
                                            VerticalAlignment="Center" Margin="10,0,0,0"/>
                             </Grid>

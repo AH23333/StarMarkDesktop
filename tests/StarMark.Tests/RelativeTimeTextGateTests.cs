@@ -109,7 +109,10 @@ public sealed class RelativeTimeTextGateTests
     public void EveryHostAsksTheJudgeFromInsideItsOwnMethod()
     {
         Assert.Contains("DateTimeText.Relative(", MethodBody(ReadRepoFile(Helper), "public static string Format(long unixSeconds)"));
-        Assert.Contains("RelativeTimeHelper.Format(", MethodBody(ReadRepoFile(ActivityVm), "public ActivityItemViewModel(ActivityRecord rec)"));
+        // ⚠ 这一格的锚点从<b>构造函数</b>搬到<b>显示侧 getter</b>（批次 WI-67 片9c 第六刀）：
+        // 构造函数里取一次词＝把语言冻在那一刻，宿主那一拍重念的是 getter，屏幕上就剩「事件名换了、时间没换」那半行。
+        Assert.Contains("RelativeTimeHelper.Format(", MethodBody(ReadRepoFile(ActivityVm), "public string AtText =>"));
+        Assert.DoesNotContain("RelativeTimeHelper.Format(", MethodBody(ReadRepoFile(ActivityVm), "public ActivityItemViewModel(ActivityRecord rec)"));
         Assert.Contains("RelativeTimeHelper.Format(", MethodBody(ReadRepoFile(CardVm), "public string RelativeTime =>"));
         // 签名交回的是**还没取词**的那句（LocMessage?）——这一格按现场形状重定锚（坑表 #278：改了被守的那份文件，
         // 判据的锚点必须跟着改，且那一格要带重编重跑）。
