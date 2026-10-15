@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.UI.Helpers;
 
 namespace StarMark.UI.ViewModels;
@@ -56,11 +57,12 @@ public partial class FolderTreePageViewModel : ObservableObject
     [ObservableProperty] private string _currentSource = "all";
     [ObservableProperty] private bool _showHidden;
     [ObservableProperty] private bool _isLoading = true;
-    [ObservableProperty] private string _emptyHint = string.Empty;
+    [ObservableProperty] private LocMessage? _emptyHint;
 
-    public bool HasEmptyHint => !string.IsNullOrEmpty(EmptyHint);
+    /// <summary>那一行空态该不该出现——交的是<b>有没有话要说</b>，不是那句话念出来是什么。</summary>
+    public bool HasEmptyHint => EmptyHint is not null;
 
-    partial void OnEmptyHintChanged(string value) => OnPropertyChanged(nameof(HasEmptyHint));
+    partial void OnEmptyHintChanged(LocMessage? value) => OnPropertyChanged(nameof(HasEmptyHint));
 
     public ObservableCollection<FolderPathNodeViewModel> Roots { get; } = new();
 
@@ -154,7 +156,7 @@ public partial class FolderTreePageViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            await RunOnUi(() => { EmptyHint = $"加载失败: {ex.Message}"; IsLoading = false; });
+            await RunOnUi(() => { EmptyHint = LocMessage.Of("common.loadFailed", ex.Message); IsLoading = false; });
             return;
         }
 
@@ -166,7 +168,7 @@ public partial class FolderTreePageViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            await RunOnUi(() => { EmptyHint = $"加载失败: {ex.Message}"; IsLoading = false; });
+            await RunOnUi(() => { EmptyHint = LocMessage.Of("common.loadFailed", ex.Message); IsLoading = false; });
             return;
         }
 
@@ -201,8 +203,8 @@ public partial class FolderTreePageViewModel : ObservableObject
                 }
 
                 EmptyHint = Roots.Count == 0
-                    ? (HasTagFilter ? "所选标签下没有条目，可在上方筛选栏移除或清除" : "暂无条目，请先同步数据")
-                    : string.Empty;
+                    ? (HasTagFilter ? LocMessage.Of("page.folder.tagEmpty") : LocMessage.Of("page.folder.noRows"))
+                    : null;
                 IsLoading = false;
                 RootsReady?.Invoke();
             });

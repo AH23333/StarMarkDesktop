@@ -35,9 +35,10 @@
                 </ItemsRepeater.ItemTemplate>
             </ItemsRepeater>
 
-<TextBlock Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}" Style="{StaticResource MutedText}"
-                           HorizontalAlignment="Center" Margin="0,40,0,16"
-                           Visibility="{x:Bind ViewModel.HasItems, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+        <!-- 空态那一句由 VM 交「键＋实参」，这里只给宿主那一颗名字：Text⛔ 再绑字符串（换语言那一刻没人重贴）。 -->
+        <TextBlock x:Name="EmptyHintText" Style="{StaticResource MutedText}"
+                   HorizontalAlignment="Center" Margin="0,40,0,16"
+                   Visibility="{x:Bind ViewModel.HasItems, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
         </StackPanel>
     </ScrollViewer>
 </Page>

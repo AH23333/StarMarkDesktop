@@ -61,7 +61,7 @@
             </ItemsRepeater>
         </ScrollViewer>
 
-        <TextBlock Grid.Row="3" Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}"
+        <TextBlock Grid.Row="3" x:Name="EmptyHintText"
                    Style="{StaticResource MutedText}" HorizontalAlignment="Center" Margin="0,0,0,20"
                    TextWrapping="Wrap" MaxWidth="520" TextAlignment="Center"
                    Visibility="{x:Bind ViewModel.HasItems, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>

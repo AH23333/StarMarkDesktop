@@ -28,9 +28,20 @@ public sealed partial class FolderTreePage : Page
         InitializeComponent();
         ViewModel = App.Services.GetRequiredService<FolderTreePageViewModel>();
         ViewModel.RootsReady += OnRootsReady;
+        // 空态那句由 VM 交回「键＋实参」，这里只负责贴；换语言的重贴归 LocText 那份名单，⛔ 再造一位主人。
+        ViewModel.PropertyChanged += OnEmptyHintChanged;
+        ApplyEmptyHint();
         // 主题切换会改变代码构建处的主题画笔解析，需重建以刷新颜色
         ActualThemeChanged += (_, _) => RebuildTree();
     }
+
+    private void OnEmptyHintChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(FolderTreePageViewModel.EmptyHint)) ApplyEmptyHint();
+    }
+
+    /// <summary>「没话了」也走这一颗门：SetMessage(… null) 会把重贴名单里那条一起摘掉，否则换语言把旧句子贴回来。</summary>
+    private void ApplyEmptyHint() => LocText.SetMessage(EmptyHintText, ViewModel.EmptyHint);
 
     private static StarMark.Abstractions.IItemRepository GetRepo()
         => App.Services.GetRequiredService<StarMark.Abstractions.IItemRepository>();
@@ -50,6 +61,7 @@ public sealed partial class FolderTreePage : Page
         // 单例 VM 的 RootsReady 在 ctor 订阅且永不退订；离开本页后必须退订，
         // 否则死页会持续接收重建事件（重载树、操作已分离的元素），既泄漏又可能在标签变化时崩溃。
         ViewModel.RootsReady -= OnRootsReady;
+        ViewModel.PropertyChanged -= OnEmptyHintChanged;
     }
 
     // ────── 全局标签筛选栏 ──────
@@ -220,7 +232,10 @@ public sealed partial class FolderTreePage : Page
             catch (Exception ex)
             {
                 StarLog.Error($"BuildOnce failed for {node.Name}", ex);
-                body.Children.Add(new TextBlock { Text = $"加载失败: {ex.Message}", Foreground = new SolidColorBrush(Colors.OrangeRed) });
+                // 这一句是代码里建的元素，所以当场过一次门：⛔ 在这里拼好的汉字，换语言那一刻没人重贴。
+                var failedRow = new TextBlock { Foreground = new SolidColorBrush(Colors.OrangeRed) };
+                LocText.SetMessage(failedRow, LocMessage.Of("common.loadFailed", ex.Message));
+                body.Children.Add(failedRow);
             }
         }
 

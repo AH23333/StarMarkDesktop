@@ -14,7 +14,7 @@
                   SelectionChanged="AddBox_SelectionChanged"/>
 
         <!-- 空态提示：文本为空时这个块只剩几像素行距，不值得为它再造一枚可见性转换器 -->
-        <TextBlock Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}" FontSize="11" Opacity="0.6"
+        <TextBlock x:Name="EmptyHintText" FontSize="11" Opacity="0.6"
                    TextWrapping="Wrap"/>
 
         <ItemsRepeater ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}">

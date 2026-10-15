@@ -46,7 +46,7 @@
                 </ItemsRepeater.ItemTemplate>
             </ItemsRepeater>
 
-            <TextBlock Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}" Style="{StaticResource MutedText}"
+            <TextBlock x:Name="EmptyHintText" Style="{StaticResource MutedText}"
                        HorizontalAlignment="Center" Margin="0,40,0,16"
                        Visibility="{x:Bind ViewModel.HasItems, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
         </StackPanel>

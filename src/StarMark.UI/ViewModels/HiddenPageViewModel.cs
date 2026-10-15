@@ -15,7 +15,7 @@ public partial class HiddenPageViewModel : ObservableObject
     private readonly IItemRepository _repository;
 
     [ObservableProperty] private bool _isLoading = true;
-    [ObservableProperty] private string _emptyHint = string.Empty;
+    [ObservableProperty] private LocMessage? _emptyHint;
     [ObservableProperty] private bool _hasItems;
 
     public ObservableCollection<ItemCardViewModel> HiddenItems { get; } = new();
@@ -36,11 +36,13 @@ public partial class HiddenPageViewModel : ObservableObject
             foreach (var item in items)
                 HiddenItems.Add(new ItemCardViewModel(item));
             HasItems = HiddenItems.Count > 0;
-            EmptyHint = HiddenItems.Count == 0 ? "没有隐藏的条目" : string.Empty;
+            EmptyHint = HiddenItems.Count == 0 ? LocMessage.Of("page.hidden.empty") : null;
         }
         catch (Exception ex)
         {
-            EmptyHint = $"加载失败: {ex.Message}";
+            // HasItems 必须一起复位：那一行的可见性绑的就是它，留着 true 这句"加载失败"就藏在屏幕外（批次 IJ 同一条口径）。
+            HasItems = false;
+            EmptyHint = LocMessage.Of("common.loadFailed", ex.Message);
         }
         finally
         {
@@ -64,7 +66,7 @@ public partial class HiddenPageViewModel : ObservableObject
             }
             HiddenItems.Remove(item);
             HasItems = HiddenItems.Count > 0;
-            EmptyHint = HiddenItems.Count == 0 ? "没有隐藏的条目" : string.Empty;
+            EmptyHint = HiddenItems.Count == 0 ? LocMessage.Of("page.hidden.empty") : null;
         }
         catch (Exception ex)
         {

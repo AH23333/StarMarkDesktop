@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.UI.ViewModels;
 
@@ -14,7 +15,7 @@ public partial class TagsPageViewModel : ObservableObject
     private readonly IItemRepository _repository;
 
     [ObservableProperty] private bool _isLoading = true;
-    [ObservableProperty] private string _emptyHint = string.Empty;
+    [ObservableProperty] private LocMessage? _emptyHint;
 
     public ObservableCollection<TagItemViewModel> Tags { get; } = new();
 
@@ -60,13 +61,13 @@ public partial class TagsPageViewModel : ObservableObject
             var tagList = await _repository.GetAllTagsAsync(CancellationToken.None);
             foreach (var (name, count) in tagList)
                 Tags.Add(new TagItemViewModel(name, count));
-            EmptyHint = Tags.Count == 0 ? "暂无标签" : string.Empty;
+            EmptyHint = Tags.Count == 0 ? LocMessage.Of("page.tags.empty") : null;
             // 载入后按当前全局筛选标记选中态（例如他页已选标签，回到标签页应高亮）。
             RefreshSelection();
         }
         catch (Exception ex)
         {
-            EmptyHint = $"加载失败: {ex.Message}";
+            EmptyHint = LocMessage.Of("common.loadFailed", ex.Message);
         }
         finally
         {

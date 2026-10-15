@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Clipboard;
+using StarMark.Abstractions.I18n;
 using StarMark.Integrations.Clipboard;
 using StarMark.UI.Helpers;
 using Windows.ApplicationModel.DataTransfer;
@@ -27,7 +28,7 @@ public partial class ClipboardPageViewModel : ObservableObject
     private readonly IItemRepository _repository;
 
     [ObservableProperty] private bool _isLoading = true;
-    [ObservableProperty] private string _emptyHint = string.Empty;
+    [ObservableProperty] private LocMessage? _emptyHint;
     [ObservableProperty] private bool _hasItems;
     [ObservableProperty] private string _statusText = string.Empty;
 
@@ -82,15 +83,15 @@ public partial class ClipboardPageViewModel : ObservableObject
 
             HasItems = Entries.Count > 0;
             EmptyHint = !Enabled
-                ? StarMark.Abstractions.I18n.Locale.T("clip.empty.off")
-                : HasItems ? string.Empty : StarMark.Abstractions.I18n.Locale.T("clip.empty.none");
+                ? LocMessage.Of("clip.empty.off")
+                : HasItems ? null : (LocMessage?)LocMessage.Of("clip.empty.none");
         }
         catch (Exception ex)
         {
             // HasItems 必须一起复位：那一行的可见性绑的就是它，留着 true 会让"加载失败"这句话
             // 直接被折叠掉——用户看到的是空白页加一句"还没有记录"，比报错更难查。
             HasItems = false;
-            EmptyHint = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.load", ex.Message);
+            EmptyHint = LocMessage.Of("common.loadFailed", ex.Message);
         }
         finally
         {
@@ -211,7 +212,7 @@ public partial class ClipboardPageViewModel : ObservableObject
         StatusText = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.cleared", deleted);
         Entries.Clear();
         HasItems = false;
-        EmptyHint = Enabled ? StarMark.Abstractions.I18n.Locale.T("clip.empty.none") : EmptyHint;
+        EmptyHint = Enabled ? LocMessage.Of("clip.empty.none") : EmptyHint;
         return deleted;
     }
 }

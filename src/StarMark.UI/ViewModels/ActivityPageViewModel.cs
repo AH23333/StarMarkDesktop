@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.UI.ViewModels;
 
@@ -14,7 +15,7 @@ public partial class ActivityPageViewModel : ObservableObject
     private readonly IItemRepository _repository;
 
     [ObservableProperty] private bool _isLoading = true;
-    [ObservableProperty] private string _emptyHint = string.Empty;
+    [ObservableProperty] private LocMessage? _emptyHint;
     [ObservableProperty] private bool _hasItems;
 
     public ObservableCollection<ActivityItemViewModel> Activities { get; } = new();
@@ -37,11 +38,13 @@ public partial class ActivityPageViewModel : ObservableObject
             foreach (var rec in records)
                 Activities.Add(new ActivityItemViewModel(rec));
             HasItems = Activities.Count > 0;
-            EmptyHint = Activities.Count == 0 ? "暂无活动记录" : string.Empty;
+            EmptyHint = HasItems ? null : LocMessage.Of("page.activity.empty");
         }
         catch (Exception ex)
         {
-            EmptyHint = $"加载失败: {ex.Message}";
+            // HasItems 与 EmptyHint 是同一行的两半：不复位，这句"加载失败"就被可见性绑藏住了（批次 IJ 同一条口径）。
+            HasItems = false;
+            EmptyHint = LocMessage.Of("common.loadFailed", ex.Message);
         }
         finally
         {

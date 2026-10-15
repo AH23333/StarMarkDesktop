@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 
 namespace StarMark.UI.ViewModels;
@@ -43,7 +44,7 @@ public sealed partial class WorldClockRow : ObservableObject
 /// </summary>
 public sealed partial class WorldClockViewModel : ObservableObject
 {
-    [ObservableProperty] private string _emptyHint = string.Empty;
+    [ObservableProperty] private LocMessage? _emptyHint;
 
     public ObservableCollection<WorldClockRow> Rows { get; } = new();
 
@@ -141,6 +142,6 @@ public sealed partial class WorldClockViewModel : ObservableObject
     }
 
     private void UpdateEmptyHint() => EmptyHint = Rows.Count == 0
-        ? "还没有点位：用上方下拉添加时区。"
-        : string.Empty;
+        ? LocMessage.Of("widget.clock.noRows")
+        : null;
 }

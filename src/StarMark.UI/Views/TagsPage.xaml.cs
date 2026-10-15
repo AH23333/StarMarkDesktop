@@ -16,9 +16,27 @@ public sealed partial class TagsPage : Page
     {
         InitializeComponent();
         ViewModel = App.Services.GetRequiredService<TagsPageViewModel>();
+        // 空态那句由 VM 交「键＋实参」，本页只负责贴（换语言的重贴归 LocText 那份名单，⛔ 再造一位主人）。
+        ViewModel.PropertyChanged += OnEmptyHintChanged;
+        ApplyEmptyHint();
         ViewModel.LoadCommand.Execute(null);
         // 主题切换后重载标签云，让按主题明度计算的标签颜色随之刷新
         ActualThemeChanged += (_, _) => ViewModel.LoadCommand.Execute(null);
+    }
+
+    private void OnEmptyHintChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(TagsPageViewModel.EmptyHint)) ApplyEmptyHint();
+    }
+
+    /// <summary>「没话了」也走这一颗门：SetMessage(… null) 把重贴名单那条一起摘掉，否则换语言把旧句子贴回来。</summary>
+    private void ApplyEmptyHint() => LocText.SetMessage(EmptyHintText, ViewModel.EmptyHint);
+
+    /// <summary>那颗 VM 是<b>单例</b>而本页每次导航新建：挂着不摘＝每进一次本页多留一份订阅（坑表 #386 那一族）。</summary>
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+        ViewModel.PropertyChanged -= OnEmptyHintChanged;
     }
 
     private static StarMark.Abstractions.IItemRepository GetRepo()

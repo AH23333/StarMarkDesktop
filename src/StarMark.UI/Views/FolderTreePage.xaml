@@ -51,7 +51,7 @@
         </StackPanel>
 
         <TextBlock Grid.Row="1"
-                   Text="{x:Bind ViewModel.EmptyHint, Mode=OneWay}"
+                   x:Name="EmptyHintText"
                    Style="{StaticResource MutedText}"
                    HorizontalAlignment="Center" Margin="12,40,12,16"
                    Visibility="{x:Bind ViewModel.HasEmptyHint, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>

@@ -18,7 +18,24 @@ public sealed partial class ActivityPage : Page
     {
         InitializeComponent();
         ViewModel = App.Services.GetRequiredService<ActivityPageViewModel>();
+        // 空态那句由 VM 交「键＋实参」，本页只负责贴（换语言的重贴归 LocText 那份名单，⛔ 再造一位主人）。
+        ViewModel.PropertyChanged += OnEmptyHintChanged;
+        ApplyEmptyHint();
         ViewModel.LoadCommand.Execute(null);
+    }
+
+    private void OnEmptyHintChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ActivityPageViewModel.EmptyHint)) ApplyEmptyHint();
+    }
+
+    /// <summary>「没话了」也走这一颗门：SetMessage(… null) 把重贴名单那条一起摘掉，否则换语言把旧句子贴回来。</summary>
+    private void ApplyEmptyHint() => LocText.SetMessage(EmptyHintText, ViewModel.EmptyHint);
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+        ViewModel.PropertyChanged -= OnEmptyHintChanged;
     }
 
     private static IItemRepository GetRepo()

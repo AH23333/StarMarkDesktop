@@ -1088,7 +1088,7 @@ public static class UiStrings
         // 剪贴板格（组件）独有的另外两张空态脸：同一颗开关状态下"下一步做什么"各不相同，⛔ 与页那两句合并（各说各的下一步）。
         new Entry("clip.empty.noWindow", "开关已打开，但采集窗口没建立——期间不会记录任何复制。到设置里把该开关关掉再打开即可重试。", "The switch is on, but the capture window never came up — nothing is recorded in the meantime. Turn the switch off and on again in Settings to retry.", "スイッチはオンですが収集ウインドウが立ち上がっていません。この間コピーは記録されません。設定で一度オフにしてから再びオンにすると再試行できます。"),
         new Entry("clip.empty.pausedCell", "正在暂停记录（临时粘贴私密内容用的）。到「剪贴板」页关掉「暂停记录」就会继续采集。", "Recording is paused (for pasting private content briefly). Switch off \"Pause capture\" on the Clipboard page to resume.", "記録を一時停止しています（個人情報を少し貼る時のための機能）。「クリップボード」ページで「記録を一時停止」を切ると再開します。"),
-        new Entry("clip.status.load", "加载失败：{0}", "Failed to load: {0}", "読み込みに失敗しました: {0}"),
+        // clip.status.load 搬去 common.loadFailed（✅WI-67 片9c：那句「加载失败」六档各写一份，全仓只留一颗）。
         new Entry("clip.status.noBody", "这条历史没有可复制的正文", "This entry has no text to copy", "この履歴にはコピーできる本文がありません"),
         new Entry("clip.status.copied", "已复制到剪贴板：{0}", "Copied to the clipboard: {0}", "クリップボードにコピーしました: {0}"),
         new Entry("clip.status.copyFail", "复制失败：{0}", "Copy failed: {0}", "コピーに失敗しました: {0}"),
@@ -3024,6 +3024,22 @@ public static class UiStrings
         new Entry("snapshot.applyFailedBody", "{0}——为防数据丢失已中止，当前状态未改动。", "{0} — stopped before anything could be lost; nothing changed.", "{0}——データ喪失を防ぐため中止し、現在の状態は変わっていません。"),
         new Entry("widget.menu.rollbackFailedReason", "生成「应用前」回滚点失败：{0}", "Failed to create the “before applying” rollback point: {0}", "「適用前」ロールバック地点を作成できませんでした：{0}"),
         new Entry("snapshot.goneNowhere", "该快照已不存在（可能在别处被删除）", "This snapshot no longer exists (it may have been deleted elsewhere)", "このスナップショットはもう存在しません（よそで削除された可能性があります）"),
+        // ✅WI-67 片9c 第一刀（P-188 第六刀）：「加载失败」这句在六档里各写了一份，且四档是在 VM 里当场取过词才交出去的
+        // ——换语言那一刻，那一行还念着旧语言。现在全仓只留这一颗，槽里递裸的 ex.Message，取词推迟到贴上去那一刻。
+        // ⚠ 这一颗是从 clip.status.load 搬来的（旧行同批删掉）：一句话⛔ 两个名字，否则改了其中一颗另一颗就在说假话。
+        new Entry("common.loadFailed", "加载失败：{0}", "Failed to load: {0}", "読み込みに失敗しました: {0}"),
+        // 主窗那几页空态行上的话（同一批：宿主交 LocText.SetMessage，⛔ 让 VM 拿成品字上屏）。
+        new Entry("page.hidden.empty", "没有隐藏的条目", "No hidden items", "非表示の項目はありません"),
+        new Entry("page.tags.empty", "暂无标签", "No tags yet", "タグはまだありません"),
+        new Entry("page.activity.empty", "暂无活动记录", "No activity recorded yet", "活動記録はまだありません"),
+        new Entry("page.folder.tagEmpty", "所选标签下没有条目，可在上方筛选栏移除或清除",
+                  "Nothing matches the selected tags — remove or clear them in the filter bar above",
+                  "選択したタグに該当する項目がありません。上のフィルターバーで外すかクリアしてください"),
+        new Entry("page.folder.noRows", "暂无条目，请先同步数据", "No items yet — sync your data first",
+                  "項目がありません。まずデータを同期してください"),
+        // 世界时钟组件那句空态（⛔ 与「添加时区」那颗占位符合并：一句说没内容、一句说怎么加，各说各的）。
+        new Entry("widget.clock.noRows", "还没有点位：用上方下拉添加时区。", "No zones yet — pick one from the dropdown above.",
+                  "地点がまだありません——上のドロップダウンでタイムゾーンを追加してください。"),
     };
 
     private static readonly Dictionary<string, Entry> ByKey = Build();

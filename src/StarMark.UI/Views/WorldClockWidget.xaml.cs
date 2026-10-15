@@ -4,6 +4,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using StarMark.Core.Widgets;
+using StarMark.UI.Helpers;
 using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
 
@@ -31,10 +32,22 @@ public sealed partial class WorldClockWidget : UserControl, IWidgetTicker
         _manager = manager;
         _instanceId = config.Id;
         InitializeComponent();
+        // 空态那句由 VM 交「键＋实参」，这里只负责贴（换语言的重贴归 LocText 那份名单，⛔ 再造一位主人）。
+        ViewModel.PropertyChanged += OnEmptyHintChanged;
+        Unloaded += (_, _) => ViewModel.PropertyChanged -= OnEmptyHintChanged;
         // 配置里存的是点位（含名字）；名字随区号一起存，避免每次刷新都去查系统显示名
         ViewModel.Load(config.WorldClockZones);
+        ApplyEmptyHint();
         _ready = true;
     }
+
+    private void OnEmptyHintChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(WorldClockViewModel.EmptyHint)) ApplyEmptyHint();
+    }
+
+    /// <summary>「没话了」也走这一颗门：SetMessage(… null) 把重贴名单那条一起摘掉，否则换语言把旧句子贴回来。</summary>
+    private void ApplyEmptyHint() => LocText.SetMessage(EmptyHintText, ViewModel.EmptyHint);
 
     private async void AddBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
