@@ -117,33 +117,33 @@
                     <!-- 自适应分栏：宽屏两列铺满，窄屏自动单列 -->
                     <controls:ColumnFlowPanel MinColumnWidth="420" MaxColumns="2" ColumnSpacing="14" RowSpacing="12">
 
-                        <!-- 主题 -->
+                        <!-- 主题：这一张卡只有一格设置，抬头⛔ 另占一行——那样名字丢在空行上、下拉孤悬在右
+                             （批次 WI-67 片13，用户指"不在同一行"，屏幕上量到标题 659x19+95+313 与下拉 188x40+570+346）。 -->
                         <Border Style="{StaticResource Card}">
-                            <StackPanel Spacing="10">
-                                <TextBlock i18n:LocText.Key="settings.general.themeTitle" Style="{StaticResource SettingTitle}"/>
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
-                                    <ComboBox Grid.Column="1" x:Name="ThemeSelect" MinWidth="180"
-                                              SelectedIndex="{x:Bind ViewModel.ThemeIndex, Mode=TwoWay}"
-                                              ItemsSource="{x:Bind ThemeOptions, Mode=OneTime}"
-                                              ItemTemplate="{StaticResource LocOptionTemplate}"/>
-                                </Grid>
-                            </StackPanel>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock Grid.Column="0" i18n:LocText.Key="settings.general.themeTitle"
+                                           Style="{StaticResource SettingTitle}" Margin="0" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Column="1" x:Name="ThemeSelect" MinWidth="180"
+                                          SelectedIndex="{x:Bind ViewModel.ThemeIndex, Mode=TwoWay}"
+                                          ItemsSource="{x:Bind ThemeOptions, Mode=OneTime}"
+                                          ItemTemplate="{StaticResource LocOptionTemplate}"/>
+                            </Grid>
                         </Border>
 
                         <!-- 界面语言（批次 WI-1）。
                              选项**不在这里列**：语言名单只有一个出处（AppLanguages.Pickable），
                              由 SettingsPage.I18n.cs 现场生成——在这里多写一行 ComboBoxItem，
-                             就等于让"能不能选日文"这件事同时住在两个地方。 -->
+                             就等于让"能不能选日文"这件事同时住在两个地方。
+                             摆位与「主题」同一判据：名字与下拉一行（片13，屏幕上量到 659x19+790+313 与 188x40+1265+346 各在各行）。 -->
                         <Border Style="{StaticResource Card}">
-                            <StackPanel Spacing="10">
-                                <TextBlock i18n:LocText.Key="settings.languageTitle" Style="{StaticResource SettingTitle}"/>
-                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
-                                    <ComboBox Grid.Column="1" x:Name="LanguageSelect" MinWidth="180"
-                                              SelectionChanged="LanguageSelect_SelectionChanged"
-                                              ItemsSource="{x:Bind LanguageOptions, Mode=OneTime}"
-                                              ItemTemplate="{StaticResource LocOptionTemplate}"/>
-                                </Grid>
-                            </StackPanel>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock Grid.Column="0" i18n:LocText.Key="settings.languageTitle"
+                                           Style="{StaticResource SettingTitle}" Margin="0" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Column="1" x:Name="LanguageSelect" MinWidth="180"
+                                          SelectionChanged="LanguageSelect_SelectionChanged"
+                                          ItemsSource="{x:Bind LanguageOptions, Mode=OneTime}"
+                                          ItemTemplate="{StaticResource LocOptionTemplate}"/>
+                            </Grid>
                         </Border>
 
                         <!-- 外观：主窗口材质（macOS 风；组件材质住在「桌面工具（组件）」页） -->
@@ -360,11 +360,14 @@
                                              FontSize="12" TextChanged="AiField_TextChanged"/>
                                 </Grid>
 
+                                <!-- 这里从前挂过一句"每一项分别要填什么"的<b>标题</b>：它的正文早已搬进
+                                     PageGuides（设置页「使用说明」与顶栏「？」），留下标题没有落脚的格子，
+                                     又没有 Grid.Column ⇒ 它掉进第 0 列，在屏幕上把「Ollama 地址」那一格整格盖住
+                                     （批次 WI-67 片13，用户指的那处重叠＝量到两句同为 790+464 起点）。 -->
                                 <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
                                     <TextBox Grid.Column="0" x:Name="AiOllamaUrlBox" i18n:LocText.Key="settings.ai.ollamaUrl"
                                              i18n:LocText.PlaceholderKey="settings.ai.ollamaUrlPlaceholder"
                                              FontSize="12" TextChanged="AiField_TextChanged"/>
-                                    <TextBlock i18n:LocText.Key="settings.ai.whatToFill" Style="{StaticResource SettingTitle}"/>
                                     <TextBox Grid.Column="1" x:Name="AiBaseUrlBox" i18n:LocText.Key="settings.ai.endpoint"
                                              i18n:LocText.PlaceholderKey="settings.ai.endpointPlaceholder"
                                              FontSize="12" TextChanged="AiField_TextChanged"/>

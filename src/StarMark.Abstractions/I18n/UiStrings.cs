@@ -666,7 +666,6 @@ public static class UiStrings
             "本地或自建（Ollama、LM Studio、vLLM 等）：Base URL 填本机地址（如 http://localhost:11434/v1 ），API Key 多数实现要求非空但内容随意，模型名填本地已拉取的那个。",
             "Local or self-hosted (Ollama, LM Studio, vLLM …): Base URL is your machine's address (e.g. http://localhost:11434/v1 ); most implementations want a non-empty key but accept any text, and the model name must be one you've already pulled locally.", "ローカルまたは自前構築（Ollama、LM Studio、vLLM など）：Base URL に本機のアドレス（例 http://localhost:11434/v1 ）、API Key は多くの実装が空以外を要求しますが中身は何でも構いません。モデル名は本機に既に取得済みのものを入れます。"),
         new Entry("settings.ai.noKeyNote", "不配 Key 也能用：AI 只管批量整理标签", "The app works without a key: AI only does bulk tag organising", "Key なしでも使えます。AI はタグの一括整理だけ"),
-                    new Entry("settings.ai.whatToFill", "每一项分别要填什么", "What each field is for", "各項目の意味"),
         new Entry("settings.ai.title", "AI 助手", "AI assistant", "AI アシスタント"),
                 new Entry("settings.ai.enable", "启用 AI 助手", "Turn on the AI assistant", "AI アシスタントを有効にする"),
         new Entry("settings.ai.channel", "通道", "Channel", "チャネル"),

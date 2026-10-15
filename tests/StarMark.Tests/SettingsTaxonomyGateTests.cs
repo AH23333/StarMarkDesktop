@@ -160,7 +160,9 @@ public sealed class SettingsTaxonomyGateTests
 
         var ai = Between(xaml, "<TabViewItem x:Name=\"TabAi\" Tag=\"ai\"", "</TabViewItem>");
         // 批次 WI-2i 把这一栏的标记搬进了表 ⇒ 锚点从"屏幕上那几个字"搬到那颗键（改锚不改判，同 170 行那一步的口径）。
-        Assert.Contains("i18n:LocText.Key=\"settings.ai.whatToFill\"", ai);
+        // 片13 摘掉「每一项分别要填什么」那颗<b>没有正文的标题</b>以后，这一格的锚点搬到那张卡的抬头：
+        // 判的仍是"AI 那张表单卡住在 AI 页"，⛔ 跟着搬的是地址还是判据要看清楚——这里是地址。
+        Assert.Contains("i18n:LocText.Key=\"settings.ai.title\"", Markup(ai));
         var regular = Between(xaml, "<TabViewItem x:Name=\"TabGeneral\" Tag=\"general\"", "</TabViewItem>");
         // Token 那一格是"库"的日常配置，卡留在常规页。批次 UI/P-146 之后这里**不再数绑定**：
         // 那颗编辑格换成了 PasswordBox（Password 不可绑定），编辑入口的形状与"只有一处读写"
