@@ -67,7 +67,7 @@
                             <Grid ColumnDefinitions="12,Auto,*,Auto" Padding="2,3" ColumnSpacing="8">
                                 <Ellipse Grid.Column="0" Width="8" Height="8" VerticalAlignment="Center"
                                          Fill="{x:Bind Change, Converter={StaticResource ChangeToBrush}}"/>
-                                <TextBlock Grid.Column="1" Text="{x:Bind KindLabel}" FontSize="10"
+                                <TextBlock Grid.Column="1" Text="{x:Bind KindLabel, Mode=OneWay}" FontSize="10"
                                            Foreground="{x:Bind Change, Converter={StaticResource ChangeToBrush}}"
                                            VerticalAlignment="Center"/>
                                 <TextBlock Grid.Column="2" Text="{x:Bind Title}" FontSize="11"

@@ -30,12 +30,16 @@ public partial class ClipboardPageViewModel : ObservableObject
     [ObservableProperty] private bool _isLoading = true;
     [ObservableProperty] private LocMessage? _emptyHint;
     [ObservableProperty] private bool _hasItems;
-    [ObservableProperty] private string _statusText = string.Empty;
+    [ObservableProperty] private LocMessage? _statusText;
 
-    /// <summary>状态行是否要有内容（XAML 用现成的 BoolToVisibility 控制那一行的显示）。</summary>
-    public bool HasStatus => !string.IsNullOrEmpty(StatusText);
+    /// <summary>
+    /// 状态行有没有话要说——判的是<b>那颗键在不在</b>，⛔ 拿念出来的字当身份（✅VQ：有话要说与有东西可删是两颗判据）。
+    /// <para>从前这里比的是 <c>string.IsNullOrEmpty(StatusText)</c>：那句话一旦升成 <c>LocMessage</c>，
+    /// 中文档还能比、换到英文档就变成"比一串没人负责的字"（批次 IJ／✅片9c 第一刀同一颗口径）。</para>
+    /// </summary>
+    public bool HasStatus => StatusText is not null;
 
-    partial void OnStatusTextChanged(string value) => OnPropertyChanged(nameof(HasStatus));
+    partial void OnStatusTextChanged(LocMessage? value) => OnPropertyChanged(nameof(HasStatus));
 
     /// <summary>
     /// 暂停标记。真正的动作在页面代码里（<c>App.SetClipboardPaused</c>）——两处都要改的是同一个事实，
@@ -109,7 +113,7 @@ public partial class ClipboardPageViewModel : ObservableObject
         var text = vm.Description ?? string.Empty;
         if (text.Length == 0)
         {
-            StatusText = StarMark.Abstractions.I18n.Locale.T("clip.status.noBody");
+            StatusText = LocMessage.Of("clip.status.noBody");
             return false;
         }
 
@@ -121,11 +125,11 @@ public partial class ClipboardPageViewModel : ObservableObject
             package.SetText(text);
             Clipboard.SetContent(package);
             Clipboard.Flush();
-            StatusText = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.copied", vm.Title);
+            StatusText = LocMessage.Of("clip.status.copied", vm.Title);
         }
         catch (Exception ex)
         {
-            StatusText = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.copyFail", ex.Message);
+            StatusText = LocMessage.Of("clip.status.copyFail", ex.Message);
             StarLog.Error($"剪贴板历史再复制失败 (id={vm.Id})", ex);
             return false;
         }
@@ -149,7 +153,7 @@ public partial class ClipboardPageViewModel : ObservableObject
         var path = ClipAssets.FullPathOf(ClipboardEntry.FileName(item));
         if (path is null || !System.IO.File.Exists(path))
         {
-            StatusText = ClipboardPolicy.DescribeMissingImageForReuse().Render();
+            StatusText = ClipboardPolicy.DescribeMissingImageForReuse();
             return false;
         }
 
@@ -164,7 +168,7 @@ public partial class ClipboardPageViewModel : ObservableObject
             });
             if (!read.ok)
             {
-                StatusText = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.imgFail", read.why);
+                StatusText = LocMessage.Of("clip.status.imgFail", read.why);
                 return false;
             }
 
@@ -178,11 +182,11 @@ public partial class ClipboardPageViewModel : ObservableObject
                 .CreateFromStream(ClipboardImageStore.StreamOf(read.bytes!)));
             Clipboard.SetContent(package);
             Clipboard.Flush();
-            StatusText = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.imgCopied", vm.Title);
+            StatusText = LocMessage.Of("clip.status.imgCopied", vm.Title);
         }
         catch (Exception ex)
         {
-            StatusText = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.imgCopyFail", ex.Message);
+            StatusText = LocMessage.Of("clip.status.imgCopyFail", ex.Message);
             StarLog.Error($"剪贴板历史再复制图片失败 (id={vm.Id})", ex);
             return false;
         }
@@ -204,12 +208,12 @@ public partial class ClipboardPageViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            StatusText = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.clearFail", ex.Message);
+            StatusText = LocMessage.Of("clip.status.clearFail", ex.Message);
             StarLog.Error("清空剪贴板历史失败", ex);
             return -1;
         }
 
-        StatusText = StarMark.Abstractions.I18n.Locale.Fmt("clip.status.cleared", deleted);
+        StatusText = LocMessage.Of("clip.status.cleared", deleted);
         Entries.Clear();
         HasItems = false;
         EmptyHint = Enabled ? LocMessage.Of("clip.empty.none") : EmptyHint;

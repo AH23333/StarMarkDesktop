@@ -1168,6 +1168,14 @@ public sealed class I18nWiringGateTests
     /// 它比前三扇组件多一条要防的：<b>这一格里最像"重贴"的写法是把热榜重新加载一遍</b>——那一趟含读设置档与打接口，
     /// 换语言那一刻就可能把"字改口"变成"热榜没拿到：超时"。所以重贴只许铺<b>已经拿到手的那一份</b>（<c>PaintTrending</c>），
     /// 抓与画分成两颗（这条界线与 ✅WI-39 那颗"重贴⛔ 重新导航"是同一件事的第三种形状）。</para>
+    /// <para><b>批次 WI-67 片9c 第三刀（P-188 第七刀）给这张名单添了三位主人</b>：「最近活动」页与桌面那格
+    /// （<c>ActivityPage.xaml.cs</c>／<c>ItemGridWidget.xaml.cs</c>，11 档事件名）与世界时钟组件
+    /// （<c>WorldClockWidget.xaml.cs</c>，"本机没有这个时区：{0}"）。三处的共同点⛔ 是"当场算读数"，而是<b>行</b>：
+    /// 模板上那颗 <c>i18n:LocText.Key</c> 只能带一颗<b>固定</b>键，带不了"这一行自己的那颗键"，
+    /// 而逐行 <c>LocText.SetMessage</c> 会把名单塞满会重建的行（✅WI-45 同一颗理由）⇒ 唯一合法形状是 ✅WI-40-3b 机制 (C)：
+    /// 行模型持 <c>LocMessage</c>＋显示侧 getter 绑 <c>Mode=OneWay</c>＋宿主逐行 <c>Repaste()</c>。
+    /// 合法性的另一半与那三扇组件一样：<b>那颗 handler 只重念屏幕上已有的行</b>，⛔ 在回调里查库／打接口／重建集合
+    /// （成对摘掉逐档数在 <c>TemplateRowWordGateTests.EveryNewLocaleOwnerUnsubscribesWhatItSubscribed</c>）。</para>
     /// </summary>
     [Fact]
     public void ExactlyOneSubscriberRenamesTheStringsAndItRebuildsNothing()
@@ -1182,14 +1190,17 @@ public sealed class I18nWiringGateTests
         Assert.Equal(new[]
         {
             "src/StarMark.UI/Helpers/LocText.cs",
+            "src/StarMark.UI/Views/ActivityPage.xaml.cs",
             "src/StarMark.UI/Views/CalcWidget.xaml.cs",
             "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs",
             "src/StarMark.UI/Views/CountdownWidget.xaml.cs",
             "src/StarMark.UI/Views/GlanceWidget.xaml.cs",
+            "src/StarMark.UI/Views/ItemGridWidget.xaml.cs",
             "src/StarMark.UI/Views/SettingsPage.xaml.cs",
             "src/StarMark.UI/Views/SystemMonitorWidget.xaml.cs",
             "src/StarMark.UI/Views/WeatherWidget.xaml.cs",
             "src/StarMark.UI/Views/WidgetAppearanceEditor.cs",
+            "src/StarMark.UI/Views/WorldClockWidget.xaml.cs",
         }, subscribers);
 
         var reapply = MethodBody(Code(ReadRepoFile(LocTextCs)), "private static void ReapplyAll");

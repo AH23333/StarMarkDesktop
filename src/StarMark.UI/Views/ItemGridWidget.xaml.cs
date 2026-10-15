@@ -55,9 +55,14 @@ public sealed partial class ItemGridWidget : UserControl
         ViewModel.Events.CollectionChanged += (_, _) => UpdateEmptyHint();
         UpdateEmptyHint();
 
+        // 活动流那些行的事件名同样⛔ 进 LocText 名单（行数不定、行会重建）⇒ 由组件自己逐行重念（✅WI-40-3b）。
+        Locale.Changed += RepasteEventRows;
         // 卸载即退订数据广播：组件会被反复创建/销毁，留着订阅会白跑数据库查询。
-        Unloaded += (_, _) => ViewModel.Dispose();
+        Unloaded += (_, _) => { ViewModel.Dispose(); Locale.Changed -= RepasteEventRows; };
     }
+
+    /// <summary>换语言那一刻：这一格活动流每一行的事件名各重念一次。</summary>
+    private void RepasteEventRows() { foreach (var row in ViewModel.Events) row.Repaste(); }
 
     private void UpdateEmptyHint()
     {

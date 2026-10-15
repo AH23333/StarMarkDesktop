@@ -1,0 +1,230 @@
+#nullable enable
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
+using StarMark.Abstractions.I18n;
+using Xunit;
+using static StarMark.Tests.SourceGate;
+
+namespace StarMark.Tests;
+
+/// <summary>
+/// 批次 WI-67 片9c 第三刀（P-188 第七刀）的闸门：<b>住在 <c>DataTemplate</c> 行上的那两句话⛔ 再把语言冻在产地</b>。
+/// <para>射程＝活动名表那 11 档（<see cref="ActVm"/>，两处宿主：<see cref="ActPageCs"/> 与 <see cref="GridCs"/>）
+/// ＋世界时钟那一行的原因（<see cref="ClockVm"/>，宿主 <see cref="ClockCs"/>）。
+/// 两者都不是"页级那一行"：模板上的 <c>i18n:LocText.Key</c> 只能带一颗<b>固定</b>键，带不了"这一行自己的那颗键"，
+/// 所以走 ✅WI-40-3b 那条机制 (C)——<b>行模型持 <c>LocMessage</c> ＋显示侧 getter 绑 <c>Mode=OneWay</c> ＋宿主在
+/// <c>Locale.Changed</c> 那一拍逐行 <c>Repaste()</c></b>（前两位宿主＝「快捷键」那一栏与 AI 预览那两行）。</para>
+/// <para><b>⛔ 让行对象自己订阅 <c>Locale.Changed</c></b>：那些行会被反复重建（每秒刷新的时钟行、每次数据广播重建的活动流），
+/// 挂上去没人摘＝每进一次多一份订阅（坑表 #386 那一族）⇒ 订阅归宿主，且与摘掉<b>成对</b>（④那一格逐档数）。</para>
+/// <para>尺＝<see cref="SourceGate.ScreenWords"/>＋<see cref="SourceGate.Count"/>＋<see cref="UiStrings"/>；
+/// 计数型判据一律<b>逐档点名</b>，⛔ 一个"看起来差不多"的总数（规则 #115 的仪器面）。</para>
+/// </summary>
+[Collection("LocaleGlobal")]
+public sealed class TemplateRowWordGateTests : IDisposable
+{
+    private const string ActVm = "src/StarMark.UI/ViewModels/ActivityItemViewModel.cs";
+    private const string ClockVm = "src/StarMark.UI/ViewModels/WorldClockViewModel.cs";
+
+    private const string ActPageCs = "src/StarMark.UI/Views/ActivityPage.xaml.cs";
+    private const string GridCs = "src/StarMark.UI/Views/ItemGridWidget.xaml.cs";
+    private const string ClockCs = "src/StarMark.UI/Views/WorldClockWidget.xaml.cs";
+
+    private static readonly string[] Models = [ActVm, ClockVm];
+    private static readonly string[] Hosts = [ActPageCs, GridCs, ClockCs];
+
+    private static readonly string[] KindKeys =
+    [
+        "activity.kind.starAdd", "activity.kind.starRemove", "activity.kind.bookmarkAdd",
+        "activity.kind.bookmarkRemove", "activity.kind.fileAdd", "activity.kind.fileRemove",
+        "activity.kind.clipAdd", "activity.kind.clipRemove", "activity.kind.itemAdd",
+        "activity.kind.itemModify", "activity.kind.itemDelete",
+    ];
+
+    private readonly AppLanguage _before = Locale.Current;
+    public void Dispose() => Locale.TrySet(_before);
+
+    private static string CodeOf(string rel) => Code(ReadRepoFile(rel));
+    private static string MarkupOf(string csRel) => ReadRepoFile(csRel[..^3]);
+
+    // ────────── ① 屏幕上⛔ 留一句写死的汉字，也⛔ 在产地把句子念好 ──────────
+
+    [Theory]
+    [InlineData(ActVm)]
+    [InlineData(ClockVm)]
+    [InlineData(ActPageCs)]
+    [InlineData(GridCs)]
+    [InlineData(ClockCs)]
+    public void ARowHostOrModelKeptNoHardCodedWords(string rel)
+    {
+        var words = ScreenWords(CodeOf(rel));
+        Assert.True(words.Count == 0, $"{rel} 仍留着非日志的屏幕上汉字片段 {words.Count} 处：{string.Join(" / ", words.Take(5))}");
+    }
+
+    /// <summary>
+    /// <b>两颗行模型交的都是那颗键</b>：屏幕上那一行由显示侧 getter <b>现算</b>，⛔ 有人把成品串存进字段。
+    /// <para>⚠ 数的是<b>声明形状</b>而⛔ 属性名：属性由 <c>[ObservableProperty]</c> 生成，源码里只有 <c>_error</c>（坑表 #531）。</para>
+    /// </summary>
+    [Fact]
+    public void TheRowModelsHoldTheKeyNotTheSentence()
+    {
+        var act = CodeOf(ActVm);
+        Assert.Equal(1, Count(act, "public LocMessage KindMessage { get; }"));
+        Assert.Equal(1, Count(act, "public string KindLabel => KindMessage.Render();"));
+        Assert.Equal(0, Count(act, "public string KindLabel { get; }"));
+
+        var clock = CodeOf(ClockVm);
+        Assert.Equal(1, Count(clock, "[ObservableProperty] private LocMessage? _error;"));
+        Assert.Equal(1, Count(clock, @"public string ErrorText => Error?.Render() ?? string.Empty;"));
+        Assert.Equal(1, Count(clock, "public bool HasError => Error is not null;"));
+        // 那颗"有没有话要说"⛔ 由念出来的那句反推（换语言那一刻它就是个字符串比较，坑表 #354）。
+        Assert.Equal(0, Count(clock, "string.IsNullOrEmpty(Error)"));
+    }
+
+    /// <summary>
+    /// <b>11 档事件名一颗键一个主人</b>：那张 switch 只认身份（<c>ActivityKind</c>）交出键，
+    /// 全仓⛔ 第二处写死"新增书签"那一类中文（表里那 11 行是唯一出处）。
+    /// </summary>
+    [Fact]
+    public void EveryActivityKindHasOneKeyAndNoSecondVoice()
+    {
+        var act = CodeOf(ActVm);
+        // 10 档点名＋那颗 `_ =>` 兜底＝11 处；两处计数<b>相等</b>才算"每一档都交键"（⛔ 一处交字面量、一处交键）。
+        Assert.Equal(11, Count(act, "=> LocMessage.Of(\"activity.kind."));
+        Assert.Equal(11, Count(act, "LocMessage.Of(\"activity.kind."));
+        Assert.Equal(11, KindKeys.Length);
+        foreach (var key in KindKeys)
+            Assert.Equal(1, Count(AskedCorpus(), @"""" + key + @""""));
+        // 汉字⛔ 再出现在行模型这一侧（"收藏 Star"从前就住在这里）
+        foreach (var word in new[] { "收藏", "取消", "新增书签", "删除书签", "新增文件", "移除文件", "剪贴板", "删除条目" })
+            Assert.Equal(0, Count(act, word));
+    }
+
+    // ────────── ② 三份模板：那一行必须跟着那一拍走 ──────────
+
+    /// <summary>
+    /// <b>模板里那两行都绑成 <c>Mode=OneWay</c> 的显示侧 getter</b>（<c>x:Bind</c> 默认 OneTime＝值冻在元素建出来那一刻，
+    /// 换语言后<b>一个字都不动</b>，要重开那一格才更新＝P-175 缺口②，也就是这一族最大的成因）。
+    /// </summary>
+    [Theory]
+    [InlineData(ActPageCs, "KindLabel")]
+    [InlineData(GridCs, "KindLabel")]
+    [InlineData(ClockCs, "ErrorText")]
+    public void TheRowTemplateBindsTheReadoutNotTheFrozenString(string csRel, string readout)
+    {
+        var xaml = MarkupOf(csRel);
+        Assert.Equal(1, Count(xaml, "{x:Bind " + readout + ", Mode=OneWay}"));
+        Assert.Equal(0, Count(xaml, "{x:Bind " + readout + "}"));      // OneTime 那一形⛔ 回来
+        if (readout == "ErrorText") Assert.Equal(0, Count(xaml, "{x:Bind Error, Mode=OneWay}"));
+        if (readout == "KindLabel") Assert.Equal(0, Count(xaml, "{x:Bind KindLabel, Mode=OneTime}"));
+    }
+
+    // ────────── ③ 宿主那一拍：逐行重念，⛔ 新机制也⛔ 让行自己订阅 ──────────
+
+    /// <summary>
+    /// <b>三处宿主各把"换语言"这一拍接到自己那批行上</b>：一颗 <c>Repaste()</c> 调用点、一句"逐行"的循环，
+    /// 且⛔ 在 <c>LocText</c> 名单里给每一行挂一颗（行数不定、行会重建＝名单变垃圾场，✅WI-45 同一颗口径）。
+    /// </summary>
+    [Theory]
+    [InlineData(ActPageCs, "ViewModel.Activities")]
+    [InlineData(GridCs, "ViewModel.Events")]
+    [InlineData(ClockCs, "ViewModel.Rows")]
+    public void EachHostRepronestesItsOwnRows(string csRel, string collection)
+    {
+        var code = CodeOf(csRel);
+        Assert.Equal(1, Count(code, "foreach (var row in " + collection + ") row.Repaste();"));
+        Assert.Equal(0, Count(code, "LocText.SetMessage(row"));      // ⛔ 逐行挂进那份名单
+        // ⛔ 产地取词：宿主那一侧只通知，⛔ 自己念（念＝把语言冻在点那一下）。
+        Assert.Equal(0, Count(code, "Locale.T(") + Count(code, "Locale.Fmt("));
+    }
+
+    /// <summary><b>订阅与摘掉成对</b>（✅P-198 那颗闸门族的本批面：这三处新挂的每一位都必须有一位对应的摘）。
+    /// 世界时钟那处写在同一行 lambda 里——那把认得同行双符号的尺正是为这个形状装的。</summary>
+    [Fact]
+    public void EveryNewLocaleOwnerUnsubscribesWhatItSubscribed()
+    {
+        foreach (var rel in Hosts)
+        {
+            var code = CodeOf(rel);
+            Assert.Equal(1, Count(code, "Locale.Changed += Repaste"));
+            Assert.Equal(1, Count(code, "Locale.Changed -= Repaste"));
+        }
+    }
+
+    // ────────── ④ 表里那一族⛔ 有死键，也⛔ 抄进另一档 ──────────
+
+    /// <summary>语料⛔ 把表自己算进来（否则"这一行没人问"会被表里那一行自己满足＝仪器骗人，规则 #95/#102）。</summary>
+    private static string AskedCorpus()
+        => string.Join("\n", ReadRepoUnder("src")
+            .Where(f => !f.RelativePath.EndsWith("UiStrings.cs", StringComparison.Ordinal))
+            .Select(f => f.Text));
+
+    /// <summary>
+    /// 汉字那一问数的是<b>抹注释后的正文</b>：doc-comment 里那句"从前这里写的是『本机没有这个时区：…』"是<b>给人的理由</b>，
+    /// 拿原文数就会把理由读成第二个出口（规则 #131；坑表 #535 同一族）。
+    /// </summary>
+    private static string AskedCode()
+        => string.Join("\n", ReadRepoUnder("src")
+            .Where(f => !f.RelativePath.EndsWith("UiStrings.cs", StringComparison.Ordinal))
+            .Select(f => Code(f.Text)));
+
+    [Fact]
+    public void EveryRowThisSliceShippedIsAskedForAndOnlyOnce()
+    {
+        Assert.Equal(1, Count(AskedCorpus(), @"""widget.clock.noZone"""));
+        Assert.Equal(0, Count(AskedCode(), "本机没有这个时区"));   // 汉字⛔ 再回正文里住（表里那颗是唯一出处）
+        Assert.Equal(0, Count(AskedCorpus(), "new Entry(\"widget.clock.noZone\""));   // ⛔ 把表自己算进语料：这一问在语料里必须是 0
+    }
+
+    // ────────── ⑤ 三语各说各的＋换实参就换读数 ──────────
+
+    /// <summary>
+    /// <b>那 12 行三列都填了、也⛔ 抄同一份</b>：en 列⛔ 一个汉字／一颗全角标点，ja 列≠zh 列，zh 念出来≠ja 念出来（"没翻"看着像翻了＝坑表 #526 那一族）。
+    /// </summary>
+    [Theory]
+    [InlineData("widget.clock.noZone")]
+    [InlineData("activity.kind.starAdd")]
+    [InlineData("activity.kind.starRemove")]
+    [InlineData("activity.kind.bookmarkAdd")]
+    [InlineData("activity.kind.bookmarkRemove")]
+    [InlineData("activity.kind.fileAdd")]
+    [InlineData("activity.kind.fileRemove")]
+    [InlineData("activity.kind.clipAdd")]
+    [InlineData("activity.kind.clipRemove")]
+    [InlineData("activity.kind.itemAdd")]
+    [InlineData("activity.kind.itemModify")]
+    [InlineData("activity.kind.itemDelete")]
+    public void EachRowSaysItDifferentlyInEachLanguage(string key)
+    {
+        Assert.True(UiStrings.TryGet(key, out var row), "表里没有这颗键：" + key);
+        Assert.Empty(Cjk.Matches(row.En).Cast<Match>());
+        Assert.NotEqual(row.Zh, row.Ja);
+        Assert.NotEqual(row.Zh, row.En);
+        var said = new List<string>();
+        foreach (var language in new[] { AppLanguage.Chinese, AppLanguage.English, AppLanguage.Japanese })
+        {
+            Locale.TrySet(language);
+            var one = LocMessage.Of(key, "Asia/Nowhere").Render();
+            Assert.DoesNotContain("{0}", one, StringComparison.Ordinal);        // 填空没做＝屏幕上挂着键的形状
+            Assert.Equal(said.Count + 1, said.Append(one).Distinct(StringComparer.Ordinal).Count());   // 三语⛔ 有两档说同一句
+            said.Add(one);
+        }
+        Assert.Equal(3, said.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    /// <summary>
+    /// <b>那颗带读数的原因：换个点位就换个句子，也⛔ 留着上一条</b>（与"整句照抄"那一半成对，规则 #124）。
+    /// </summary>
+    [Fact]
+    public void TheZoneReasonChangesWhenTheZoneChanges()
+    {
+        Locale.TrySet(AppLanguage.English);
+        var one = LocMessage.Of("widget.clock.noZone", "Mars/Phobos").Render();
+        var other = LocMessage.Of("widget.clock.noZone", "Asia/Shanghai").Render();
+        Assert.Contains("Mars/Phobos", one, StringComparison.Ordinal);
+        Assert.DoesNotContain("Mars/Phobos", other, StringComparison.Ordinal);
+        Assert.DoesNotContain("{0}", other, StringComparison.Ordinal);
+        Assert.Equal(1, RowSlots("widget.clock.noZone"));
+    }
+}

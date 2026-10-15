@@ -28,13 +28,29 @@ public sealed partial class WorldClockRow : ObservableObject
     [ObservableProperty] private string _offsetText = string.Empty;
     [ObservableProperty] private string _dayTag = string.Empty;
 
-    /// <summary>非空表示这个时区在本机解析不出来（精简系统/手改配置）；界面直接显示原因而不是留空。</summary>
-    [ObservableProperty] private string? _error;
+    /// <summary>
+    /// 非空表示这个时区在本机解析不出来（精简系统/手改配置）；界面直接显示原因而不是留空。
+    /// <para>✅WI-67 片9c 第三刀：这里存的是<b>那颗键</b>（<c>widget.clock.noZone</c>＋点位实参），
+    /// 屏幕上那一行由 <see cref="ErrorText"/> 现取词——从前 VM 用 <c>$"本机没有这个时区：{...}"</c> 当场拼中文，
+    /// 而这一行会一直挂到用户删掉那个点位为止（换语言后它⛔ 再改口）。</para>
+    /// </summary>
+    [ObservableProperty] private LocMessage? _error;
 
-    public bool HasError => !string.IsNullOrEmpty(Error);
+    /// <summary>那一行念出来的句子：⛔ 在产地念，也⛔ 拿它当真值判据（判据读 <see cref="HasError"/>）。</summary>
+    public string ErrorText => Error?.Render() ?? string.Empty;
 
-    /// <summary>Error 是 HasError 的唯一来源，变了必须连带通知，否则错误行与时间行会同时显示。</summary>
-    partial void OnErrorChanged(string? value) => OnPropertyChanged(nameof(HasError));
+    /// <summary>这颗行有没有话要说——判的是<b>那颗键在不在</b>（✅VQ：有话要说与有东西可删是两颗判据）。</summary>
+    public bool HasError => Error is not null;
+
+    /// <summary>Error 是这两颗显示属性的唯一来源，变了必须一起通知，否则错误行与时间行会同时显示。</summary>
+    partial void OnErrorChanged(LocMessage? value)
+    {
+        OnPropertyChanged(nameof(ErrorText));
+        OnPropertyChanged(nameof(HasError));
+    }
+
+    /// <summary>换语言那一刻由宿主逐行调用（✅WI-40-3b 机制 (C)）：⛔ 换那颗键，只重念屏幕上那一行。</summary>
+    public void Repaste() => OnPropertyChanged(nameof(ErrorText));
 }
 
 /// <summary>
@@ -113,7 +129,7 @@ public sealed partial class WorldClockViewModel : ObservableObject
             var zone = WorldClockPolicy.TryResolve(row.ZoneId);
             if (zone is null)
             {
-                row.Error = $"本机没有这个时区：{row.ZoneId}";
+                row.Error = LocMessage.Of("widget.clock.noZone", row.ZoneId);
                 row.TimeText = "--:--:--";
                 row.OffsetText = string.Empty;
                 row.DayTag = string.Empty;

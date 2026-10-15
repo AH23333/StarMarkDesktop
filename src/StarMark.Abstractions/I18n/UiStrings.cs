@@ -3040,6 +3040,21 @@ public static class UiStrings
         // 世界时钟组件那句空态（⛔ 与「添加时区」那颗占位符合并：一句说没内容、一句说怎么加，各说各的）。
         new Entry("widget.clock.noRows", "还没有点位：用上方下拉添加时区。", "No zones yet — pick one from the dropdown above.",
                   "地点がまだありません——上のドロップダウンでタイムゾーンを追加してください。"),
+        // 世界时钟那一行的原因（住在 DataTemplate 的行上：交「键＋实参」，念出来发生在宿主那一拍，见 ✅WI-40-3b 机制 (C)）。
+        new Entry("widget.clock.noZone", "本机没有这个时区：{0}", "No such time zone on this machine: {0}",
+                  "このマシンにそのタイムゾーンはありません: {0}"),
+        // 「最近活动」那一族的事件名：11 档各一颗，⛔ 再回 VM 里写死中文（✅WI-67 片9c 第三刀）。
+        new Entry("activity.kind.starAdd", "收藏 Star", "Star added", "Starを追加"),
+        new Entry("activity.kind.starRemove", "取消 Star", "Star removed", "Starを解除"),
+        new Entry("activity.kind.bookmarkAdd", "新增书签", "Bookmark added", "ブックマークを追加"),
+        new Entry("activity.kind.bookmarkRemove", "删除书签", "Bookmark removed", "ブックマークを削除"),
+        new Entry("activity.kind.fileAdd", "新增文件", "File added", "ファイルを追加"),
+        new Entry("activity.kind.fileRemove", "移除文件", "File removed", "ファイルを削除"),
+        new Entry("activity.kind.clipAdd", "新增剪贴板", "Clipboard entry added", "クリップボード記録を追加"),
+        new Entry("activity.kind.clipRemove", "移除剪贴板", "Clipboard entry removed", "クリップボード記録を削除"),
+        new Entry("activity.kind.itemAdd", "新增内容", "Item added", "項目を追加"),
+        new Entry("activity.kind.itemModify", "修改内容", "Item modified", "項目を変更"),
+        new Entry("activity.kind.itemDelete", "删除条目", "Item deleted", "項目を削除"),
     };
 
     private static readonly Dictionary<string, Entry> ByKey = Build();

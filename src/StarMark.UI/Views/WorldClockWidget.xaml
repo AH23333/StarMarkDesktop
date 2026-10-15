@@ -31,7 +31,7 @@
                             <TextBlock Text="{x:Bind Name, Mode=OneWay}" FontSize="13"
                                        TextTrimming="CharacterEllipsis"/>
                             <!-- 时区在本机解析不出来时给原因（精简系统/手改配置）；平时这行是空的 -->
-                            <TextBlock Text="{x:Bind Error, Mode=OneWay}" FontSize="10" TextWrapping="Wrap"
+                            <TextBlock Text="{x:Bind ErrorText, Mode=OneWay}" FontSize="10" TextWrapping="Wrap"
                                        Foreground="{ThemeResource SystemFillColorCautionBrush}"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="0">

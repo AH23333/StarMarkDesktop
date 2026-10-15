@@ -24,19 +24,24 @@ public sealed partial class ClipboardPage : Page
     {
         InitializeComponent();
         ViewModel = App.Services.GetRequiredService<ClipboardPageViewModel>();
-        // 空态那句由 VM 交「键＋实参」，本页只负责贴（换语言的重贴归 LocText 那份名单，⛔ 再造一位主人）。
+        // 空态与状态行都由 VM 交「键＋实参」，本页只负责贴（换语言的重贴归 LocText 那份名单，⛔ 再造一位主人）。
         ViewModel.PropertyChanged += OnEmptyHintChanged;
         ApplyEmptyHint();
+        ApplyStatusLine();
         Unloaded += (_, _) => { _reload?.Dispose(); _reload = null; };
     }
 
     private void OnEmptyHintChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(ClipboardPageViewModel.EmptyHint)) ApplyEmptyHint();
+        if (e.PropertyName == nameof(ClipboardPageViewModel.StatusText)) ApplyStatusLine();
     }
 
     /// <summary>「没话了」也走这一颗门：SetMessage(… null) 把重贴名单那条一起摘掉，否则换语言把旧句子贴回来。</summary>
     private void ApplyEmptyHint() => LocText.SetMessage(EmptyHintText, ViewModel.EmptyHint);
+
+    /// <summary>状态行那句同理：⛔ 话由本页写，取词由 <see cref="LocText"/> 在<b>贴上去与换语言</b>那两个时刻各念一次。</summary>
+    private void ApplyStatusLine() => LocText.SetMessage(StatusLine, ViewModel.StatusText);
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
@@ -80,9 +85,10 @@ public sealed partial class ClipboardPage : Page
         // 双向绑定回灌（进入页面时赋值）不会触发 Checked/Unchecked，故无需再判来源。
         ViewModel.Paused = PauseButton.IsChecked == true;
         App.SetClipboardPaused(PauseButton.IsChecked == true);
+        // 两颗键各自 LocMessage.Of：把三元放进实参位会让按字面键扫的仪器看不见这两句。
         ViewModel.StatusText = PauseButton.IsChecked == true
-            ? StarMark.Abstractions.I18n.Locale.T("clip.pause.on")
-            : StarMark.Abstractions.I18n.Locale.T("clip.pause.off");
+            ? LocMessage.Of("clip.pause.on")
+            : LocMessage.Of("clip.pause.off");
     }
 
     private async void Clear_Click(object sender, RoutedEventArgs e)

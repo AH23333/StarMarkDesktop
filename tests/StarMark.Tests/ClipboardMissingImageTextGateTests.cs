@@ -91,7 +91,9 @@ public sealed class ClipboardMissingImageTextGateTests
 
         // 宿主侧：读取那两处当场念完再交出（载体还是字符串，理由见上一段），卡片与状态行那两处在 UI 念
         Assert.Equal(2, Count(Code(ReadRepoFile(Store)), "ClipboardPolicy.MissingFileClause.Render()"));
-        Assert.Contains("ClipboardPolicy.DescribeMissingImageForReuse().Render()",
+        // ✅WI-67 片9c 第二刀：那一页的状态行升成 LocMessage ⇒ 宿主⛔ 再当场念（射程已经兑现，本格改口钉"⛔ 就地取词"）。
+        Assert.DoesNotContain(".Render()", Code(ReadRepoFile(PageVm)), StringComparison.Ordinal);
+        Assert.Contains("StatusText = ClipboardPolicy.DescribeMissingImageForReuse();",
             Code(ReadRepoFile(PageVm)), StringComparison.Ordinal);
         Assert.Contains("ClipboardPolicy.DescribeMissingImageBanner().Render()",
             Code(ReadRepoFile(CardVm)), StringComparison.Ordinal);

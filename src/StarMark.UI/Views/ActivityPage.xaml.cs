@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.UI.Helpers;
 using StarMark.UI.ViewModels;
 
@@ -21,6 +22,8 @@ public sealed partial class ActivityPage : Page
         // 空态那句由 VM 交「键＋实参」，本页只负责贴（换语言的重贴归 LocText 那份名单，⛔ 再造一位主人）。
         ViewModel.PropertyChanged += OnEmptyHintChanged;
         ApplyEmptyHint();
+        // 行模板里那 11 档事件名⛔ 挂在 LocText 名单（每行挂一颗＝名单变垃圾场）⇒ 由本页逐行重念（✅WI-40-3b）。
+        Locale.Changed += RepasteActivityRows;
         ViewModel.LoadCommand.Execute(null);
     }
 
@@ -32,10 +35,14 @@ public sealed partial class ActivityPage : Page
     /// <summary>「没话了」也走这一颗门：SetMessage(… null) 把重贴名单那条一起摘掉，否则换语言把旧句子贴回来。</summary>
     private void ApplyEmptyHint() => LocText.SetMessage(EmptyHintText, ViewModel.EmptyHint);
 
+    /// <summary>换语言那一刻：这一页每一行的事件名各重念一次（那颗键没变，变的只是念出来的语言）。</summary>
+    private void RepasteActivityRows() { foreach (var row in ViewModel.Activities) row.Repaste(); }
+
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
         base.OnNavigatedFrom(e);
         ViewModel.PropertyChanged -= OnEmptyHintChanged;
+        Locale.Changed -= RepasteActivityRows;   // 与构造函数那颗成对
     }
 
     private static IItemRepository GetRepo()

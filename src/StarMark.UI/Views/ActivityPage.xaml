@@ -30,7 +30,7 @@
                                 <Border Grid.Column="0" CornerRadius="2"
                                         Background="{x:Bind Change, Converter={StaticResource ChangeToBrush}}"/>
                                 <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="{x:Bind KindLabel}"
+                                    <TextBlock Text="{x:Bind KindLabel, Mode=OneWay}"
                                                Style="{StaticResource CaptionTextBlockStyle}"
                                                Foreground="{x:Bind Change, Converter={StaticResource ChangeToBrush}}"/>
                                     <TextBlock Text="{x:Bind Title}"

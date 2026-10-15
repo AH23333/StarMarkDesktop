@@ -99,18 +99,6 @@ public sealed class EmptyHintWordGateTests : IDisposable
         Assert.Equal(0, Count(code, "EmptyHint = \""));
     }
 
-    /// <summary>
-    /// <b>世界时钟那颗 VM 只剩一行汉字：行模板里那颗「本机没有这个时区」</b>——它住在 <c>DataTemplate</c> 的行上，
-    /// 重贴要走 ✅WI-40-3b 那一条（行模型持 <c>LocMessage</c>＋宿主那一拍），与本批的"页级空态行"是两种宿主 ⇒ 下一刀的射程，这里先数着钉住。
-    /// <para>⚠ 这一格拦的是"下一刀把这行忘了"：那一行变 0 时本格会红，红的是<b>射程已经兑现</b>，那时把这一格删掉而⛔ 放宽判据。</para>
-    /// </summary>
-    [Fact]
-    public void TheClockRowKeepsExactlyTheDeferredRowSentence()
-    {
-        Assert.Single(ScreenWords(CodeOf(ClockVm)));
-        Assert.Equal(1, Count(CodeOf(ClockVm), "本机没有这个时区"));
-    }
-
     // ────────── ② 一句话⛔ 两个名字：那句「加载失败」收成一颗 ──────────
 
     /// <summary>
@@ -136,15 +124,19 @@ public sealed class EmptyHintWordGateTests : IDisposable
     /// <b>五档 VM 交出的是没取过词的那句</b>：里头⛔ 有 <c>.Render()</c>／<c>Locale.T(</c>／<c>Locale.Fmt(</c>。
     /// <para>一旦"顺手先把句子念好"，语言就被冻在算出它的那一刻，换语言只重贴外层——坑表 #276 那一族，
     /// 而形状闸门（①那一格）看不见，因为它只数汉字。</para>
-    /// <para>剪贴板那颗 VM 单列：它的 <c>StatusText</c> 那一句族（8 处 <c>Locale.*</c>）是<b>下一刀的射程</b>，
-    /// 本批只保证空态那一行不再自己念（这里数着钉 8＝多一处就红，⛔ 让欠项悄悄变大）。</para>
+    /// <para>✅片9c 第二刀把<b>六档</b>全数进来：剪贴板那颗 VM 从前有 9 处当场念（8 处 <c>Locale.T/Fmt</c>＋1 处 <c>.Render()</c>），
+    /// 现在它的状态行与空态行都交「键＋实参」，取词推迟到 <c>LocText.SetMessage</c> 那一拍（<see cref="TheClipboardStatusLineHasOneDoorAndNoReadingAtTheSource"/>）。</para>
+    /// <para>⚠ <b>世界时钟那颗 VM 不在这一格</b>（✅片9c 第三刀之后）：它屏上那一行住在 <c>DataTemplate</c> 里，走的是
+    /// ✅WI-40-3b 机制 (C)——<b>显示侧 getter 里那颗 <c>.Render()</c> 正是机制规定的位置</b>（"念出来"发生在被绑上去那一刻）。
+    /// 那一族由 <c>TemplateRowWordGateTests</c> 逐颗钉（那里数 <c>.Render()</c>＝恰一颗、且 <c>Locale.T/Fmt</c>＝0），
+    /// ⛔ 在这一格顺手放宽共用的禁词表——那是全仓每道字闸门共用的尺（坑表 #423 同族）。</para>
     /// </summary>
     [Theory]
     [InlineData(HiddenVm)]
     [InlineData(TagsVm)]
     [InlineData(ActivityVm)]
     [InlineData(FolderVm)]
-    [InlineData(ClockVm)]
+    [InlineData(ClipVm)]
     public void TheseViewModelsNeverTakeWordsThemselves(string rel)
     {
         var code = CodeOf(rel);
@@ -152,13 +144,34 @@ public sealed class EmptyHintWordGateTests : IDisposable
             Assert.DoesNotContain(banned, code, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// <b>剪贴板那一页的状态行也交「键＋实参」，本页⛔ 一处当场取词</b>（✅片9c 第二刀）。
+    /// <para>从前这 9 处在 VM 里 <c>Locale.T/Fmt</c> 念成成品串：那句话的语言被冻在"用户点了那一下"，
+    /// 而状态行会一直挂着到用户下一次操作才换——换语言那一刻它是<b>唯一还在念旧语言的那一行</b>。</para>
+    /// <para>⚠ 计数只落<b>本页那一颗出口</b>：<c>clip.status.copyFail</c> 在计算器组件里另有两处当场念
+    /// （✅WI-45 裁的"瞬时提示⛔ 挂名单"，两种宿主两种口径），⛔ 拿全仓那颗键的名字当这一格的靶子（名册 263）。</para>
+    /// </summary>
     [Fact]
-    public void TheClipboardPageStillHasOnlyItsStatusLineTakingWords()
+    public void TheClipboardStatusLineHasOneDoorAndNoReadingAtTheSource()
     {
-        var code = CodeOf(ClipVm);
-        Assert.Equal(8, Count(code, "Locale.T(") + Count(code, "Locale.Fmt("));   // 那一句族的欠项数（本批⛔ 搬，先数住）
-        Assert.Equal(0, Count(code, "EmptyHint = StarMark.Abstractions.I18n.Locale"));
-        Assert.Equal(1, Count(code, @"EmptyHint = LocMessage.Of(""common.loadFailed"", ex.Message);"));
+        var vm = CodeOf(ClipVm);
+        Assert.Equal(0, Count(vm, "Locale.T(") + Count(vm, "Locale.Fmt(") + Count(vm, ".Render()"));
+        Assert.Equal(1, Count(vm, @"private LocMessage? _statusText;"));
+        Assert.Equal(1, Count(vm, "public bool HasStatus => StatusText is not null;"));    // 判那颗键在不在，⛔ 比念出来的字
+        Assert.Equal(1, Count(vm, "partial void OnStatusTextChanged(LocMessage? value)"));
+        Assert.Equal(9, Count(vm, "StatusText = "));    // 八颗键＋那颗"图已不在本机"交回策略层的 LocMessage
+        Assert.Equal(1, Count(vm, @"EmptyHint = LocMessage.Of(""common.loadFailed"", ex.Message);"));
+
+        var host = CodeOf(ClipCs);
+        Assert.Equal(1, Count(host, "LocText.SetMessage(StatusLine, ViewModel.StatusText);"));
+        Assert.Equal(2, Count(host, "ApplyStatusLine();"));   // 构造那一拍＋属性变了再来一拍
+        Assert.Equal(0, Count(host, "Locale.T(") + Count(host, "Locale.Fmt("));   // 暂停那两句也交键（从前宿主自己念）
+        Assert.Equal(0, Count(host, "Locale.Changed"));   // ⛔ 新主人：换语言的重贴归 LocText 那一份名单
+
+        var xaml = ReadRepoFile(ClipCs[..^3]);
+        Assert.DoesNotContain("{x:Bind ViewModel.StatusText", xaml, StringComparison.Ordinal);
+        Assert.Contains(@"x:Name=""StatusLine""", xaml, StringComparison.Ordinal);
+        Assert.Contains(@"Visibility=""{x:Bind ViewModel.HasStatus, Mode=OneWay", xaml, StringComparison.Ordinal);  // 那颗 bool 绑定留着
     }
 
     // ────────── ④ 出口类型：⛔ 一颗 string 出口留着 ──────────
@@ -240,8 +253,11 @@ public sealed class EmptyHintWordGateTests : IDisposable
         var xaml = ReadRepoFile(csRel[..^3]);   // "X.xaml.cs" 去掉末尾那颗 ".cs" 就是标记本体
         Assert.DoesNotContain("{x:Bind ViewModel.EmptyHint", xaml, StringComparison.Ordinal);
         Assert.Contains(@"x:Name=""EmptyHintText""", xaml, StringComparison.Ordinal);
-        // ⛔ 新主人：本宿主⛔ 为这一行再挂一位 Locale.Changed，重贴归 LocText 那份名单。
-        Assert.Equal(0, Count(code, "Locale.Changed"));
+        // ⛔ 为"这一行空态"再挂一位主人：重贴归 LocText 那份名单。
+        // ⚠ 唯一两处例外＝✅片9c 第三刀给"模板行"挂的那一对（活动页与世界时钟组件各一次挂／一次摘，钉在
+        //   TemplateRowWordGateTests.EveryNewLocaleOwnerUnsubscribesWhatItSubscribed 与 I18nWiringGateTests 那份主人名单里）：
+        //   行模板上的字⛔ 进得了那颗门（每行一颗、行会重建），只能由宿主逐行重念。
+        Assert.Equal(csRel == ActivityCs || csRel == ClockCs ? 2 : 0, Count(code, "Locale.Changed"));
     }
 
     /// <summary><b>订阅与摘掉成对</b>（坑表 #386：这一族的失效是挂了没人摘；标签页与文件夹页那颗 VM 是单例，更要成对）。</summary>
