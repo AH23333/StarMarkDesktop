@@ -144,12 +144,15 @@
                                 <CheckBox i18n:LocText.Key="kind.recent" Tag="Recent" FontSize="13"
                                           Checked="FileKind_Changed" Unchecked="FileKind_Changed"/>
                             </StackPanel>
+                            <!-- 那颗 MaxWidth 是给<b>这一颗元素</b>的，⛔ 提到外层 StackPanel 上：浮出的呈现器沿水平方向
+                                 按无限宽测量，外层给的宽度约束传不到文字测量里 ⇒ Wrap 永不生效、长句把浮出顶出横向滚动条
+                                 （批次 WI-67 片12／P-205，屏幕上英日两语各多出一根条量到的）。两句的数值必须相等，有证人钉着。 -->
                             <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7"
                                        i18n:LocText.Key="kind.noteScope"
-                                       TextWrapping="Wrap"/>
+                                       TextWrapping="Wrap" MaxWidth="380"/>
                             <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7"
                                        i18n:LocText.Key="kind.noteSyntax"
-                                       TextWrapping="Wrap"/>
+                                       TextWrapping="Wrap" MaxWidth="380"/>
                             <Button i18n:LocText.Key="kind.clear" HorizontalAlignment="Left" Margin="0,4,0,0"
                                     Click="FileKind_Clear_Click"/>
                         </StackPanel>

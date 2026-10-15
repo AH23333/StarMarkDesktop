@@ -1762,6 +1762,42 @@ public sealed class I18nWiringGateTests
     }
 
     /// <summary>
+    /// <b>「类型筛选」浮出里那两句长说明，宽度上限要各自长在<b>文字那一颗</b>身上</b>（批次 WI-67 片12·P-205）。
+    /// <para>为什么要有这一格：屏幕上中文档那两句是 348 宽、英／日各 438 宽，而浮出的可视宽只有 ~422
+    /// ⇒ 英／日两语各多出一根<b>横向滚动条</b>（修前读数＝<c>bin/WI67/dump67w/dump7_pre67y_{zh,en,ja}_kindflyout.txt</c>，
+    /// 修后同名三档里那根条不再出现）。
+    /// 那两句本来就写着 <c>TextWrapping="Wrap"</c> 却不折行——因为浮出的呈现器沿水平方向<b>按无限宽测量</b>，
+    /// 外层面板上的宽度约束传不进文字测量里 ⇒ 上限必须落在每一颗 TextBlock 自己身上。</para>
+    /// <para>⚠ 这一格是<b>形状</b>判据：它钉"两颗各带 Wrap 与各带同一颗上限"，⛔ 钉"屏幕上那根条不再出现"
+    /// ——后者由我在沙盒里三语各量一次，读数写进账本 P-205 与本批报告。</para>
+    /// </summary>
+    [Fact]
+    public void TheKindFilterFlyoutNotesEachCarryTheirOwnWidthCap()
+    {
+        // 先抹 XML 注释再切：注释里出现 MaxWidth 是给人读的叙述，不算一处属性（同一口径＝Markup）
+        var xaml = Markup(Code(ReadRepoFile(MainWindowXaml)));
+        var at = xaml.IndexOf("<Button x:Name=\"FileKindButton\"", StringComparison.Ordinal);
+        Assert.True(at >= 0, "那颗类型筛选按钮不见了（改名或搬走了，判据要跟上）");
+        var end = xaml.IndexOf("</Flyout>", at, StringComparison.Ordinal);
+        Assert.True(end > at, "那颗按钮的浮出不见了");
+        var flyout = xaml[at..(end + 9)];
+
+        Assert.Equal(2, Count(flyout, "TextWrapping=\"Wrap\""));
+        Assert.Equal(2, Count(flyout, "MaxWidth=\"380\""));
+        Assert.Contains("MinWidth=\"176\"", flyout, StringComparison.Ordinal);   // 下限管摆位，⛔ 当上限用
+
+        // 两颗上限要落在<b>两颗文字</b>上：都塞到外层面板＝整档计数照样绿，而屏幕上那根条还在（#340 那一族）
+        foreach (var key in new[] { "kind.noteScope", "kind.noteSyntax" })
+        {
+            var k = flyout.IndexOf(key, StringComparison.Ordinal);
+            Assert.True(k >= 0, key + " 那颗键不见了，这一格守的东西没人念了");
+            var tag = flyout[flyout.LastIndexOf("<TextBlock", k, StringComparison.Ordinal)..(flyout.IndexOf("/>", k, StringComparison.Ordinal) + 2)];
+            Assert.Contains("TextWrapping=\"Wrap\"", tag, StringComparison.Ordinal);
+            Assert.Contains("MaxWidth=\"380\"", tag, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
     /// <b>组件窗自己的三条文字出口只许交键</b>（批次 WI-37-A，用户真机报「组件内容和右键菜单未国际化」）。
     /// <para>三条出口按宿主形状分三种接法（WI-2o 定下的口径，这里逐颗钉住）：
     /// ① <b>右键菜单</b>每次打开都重建（<c>OnContextMenuOpening</c>）⇒ 构建那一刻 <c>Locale.T</c> 就够；
