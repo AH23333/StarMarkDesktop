@@ -119,17 +119,19 @@ public sealed partial class SnapshotPage : Page, INotifyPropertyChanged
 
     private static string BuildDetails(WidgetSnapshot snapshot)
     {
-        if (snapshot.Entries.Count == 0) return "（空快照）";
+        if (snapshot.Entries.Count == 0) return Locale.T("widget.snapshot.summaryEmpty");   // 与组件右键那张摘要同一颗键，⛔ 一句字两个主人
         var lines = snapshot.Entries.Select(entry =>
         {
             var bits = new System.Collections.Generic.List<string>();
-            if (entry.Links.Count > 0) bits.Add($"入口 {entry.Links.Count}");
+            if (entry.Links.Count > 0) bits.Add(Locale.Fmt("snapshot.detailLinks", entry.Links.Count));
             var local = entry.LocalItems.Count;
-            if (local > 0) bits.Add($"待办/随记 {local}");
-            if (!string.IsNullOrWhiteSpace(entry.GridTag)) bits.Add($"标签「{entry.GridTag}」");
-            var data = bits.Count > 0 ? string.Join("，", bits) : "无数据";
+            if (local > 0) bits.Add(Locale.Fmt("snapshot.detailLocal", local));
+            if (!string.IsNullOrWhiteSpace(entry.GridTag)) bits.Add(Locale.Fmt("snapshot.detailTag", entry.GridTag));
+            // 顿号那句也是话：各语言各排一颗（⛔ 把中文那颗逗号抄进英日那两列）。
+            var data = bits.Count > 0 ? string.Join(Locale.T("snapshot.detailSep"), bits) : Locale.T("snapshot.detailNoData");
             var where = $"{(int)entry.X},{(int)entry.Y} {Math.Max(0, (int)entry.Width)}×{Math.Max(0, (int)entry.Height)}";
-            return $"· {WidgetStorage.KindTitle(entry.Kind)} — {data}（位置 {where}）";
+            // 组件名交注册表那颗 <c>KindTitleKey</c>（名字的唯一真源），⛔ 再念 KindTitle 那颗成品串。
+            return Locale.Fmt("snapshot.detailLine", Locale.T(WidgetStorage.KindTitleKey(entry.Kind)), data, where);
         });
         return string.Join(Environment.NewLine, lines);
     }

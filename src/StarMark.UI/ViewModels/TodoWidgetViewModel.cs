@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.UI.Dispatching;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 
@@ -62,7 +63,7 @@ public sealed class TodoWidgetViewModel : ObservableObject
 
     private TodoFilter _filter = TodoFilter.All;
     private Item? _undoSnapshot;
-    private string _undoText = string.Empty;
+    private LocMessage? _undoMessage;
     /// <summary>是否发生过一次真实拖拽（决定拖拽落地是否写盘，见 <see cref="PersistVisibleOrderAsync"/>）。</summary>
     private bool _dragActive;
 
@@ -103,18 +104,20 @@ public sealed class TodoWidgetViewModel : ObservableObject
     public int ActiveCount => _all.Count(r => !r.Done);
     public int CompletedCount => _all.Count(r => r.Done);
 
-    /// <summary>底部统计文案。DeskBox 区分「全部完成」与「当前筛选无结果」两种空态，这里同口径。</summary>
-    public string SummaryText => ActiveCount == 0 && AllCount > 0
-        ? "全部完成"
-        : AllCount == 0 ? string.Empty : $"剩余 {ActiveCount} 项";
+    /// <summary>底部统计那句：交<b>没取词的</b>「键＋实参」，念出来发生在宿主 <c>LocText.SetMessage</c> 那一拍（✅WI-67 片9c 第四刀）。
+    /// <para>DeskBox 区分「全部完成」与「当前筛选无结果」两种空态，这里同口径；<b>没话</b>交 <c>null</c>，
+    /// 由那颗门把重贴名单一起摘掉——留着的换会把上一句又贴回空列表下面。</para></summary>
+    public LocMessage? SummaryMessage => ActiveCount == 0 && AllCount > 0
+        ? LocMessage.Of("widget.todo.allDone")
+        : AllCount == 0 ? null : LocMessage.Of("widget.todo.remaining", ActiveCount);
 
     /// <summary>撤销条是否显示（删除后可撤销）。</summary>
     public bool HasUndo => _undoSnapshot is not null;
 
-    public string UndoText
+    public LocMessage? UndoMessage
     {
-        get => _undoText;
-        private set => SetProperty(ref _undoText, value);
+        get => _undoMessage;
+        private set => SetProperty(ref _undoMessage, value);
     }
 
     public async Task LoadAsync()
@@ -178,7 +181,7 @@ public sealed class TodoWidgetViewModel : ObservableObject
             OnPropertyChanged(nameof(AllCount));
             OnPropertyChanged(nameof(ActiveCount));
             OnPropertyChanged(nameof(CompletedCount));
-            OnPropertyChanged(nameof(SummaryText));
+            OnPropertyChanged(nameof(SummaryMessage));
             OnPropertyChanged(nameof(CanReorder));
         });
     }
@@ -365,7 +368,7 @@ public sealed class TodoWidgetViewModel : ObservableObject
         RunOnUi(() =>
         {
             _undoSnapshot = it;
-            UndoText = $"已删除「{Trim(it.Title)}」";
+            UndoMessage = LocMessage.Of("widget.todo.deleted", Trim(it.Title));
             OnPropertyChanged(nameof(HasUndo));
         });
         await LoadAsync();
@@ -389,7 +392,7 @@ public sealed class TodoWidgetViewModel : ObservableObject
         RunOnUi(() =>
         {
             _undoSnapshot = null;
-            UndoText = string.Empty;
+            UndoMessage = null;
             OnPropertyChanged(nameof(HasUndo));
         });
     }

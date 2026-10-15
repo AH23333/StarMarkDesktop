@@ -142,11 +142,14 @@ public sealed class QuickLaunchDropBatchGateTests
     {
         var code = ReadRepoFile(WidgetCodeRelativePath);
         Assert.Contains("if (Privilege.IsElevated())", code);
-        Assert.Contains("以管理员身份运行", code);
-        Assert.Contains("Hint.Text =", code);
+        // 两句都进了表（批次 WI-67 片9c 第四刀）：代码交「键」，贴与重贴都归 <c>LocText</c> 那一颗门——
+        // 提权会话结束后换语言，这句要跟着换，⛔ 停在上一门语言（赋成品串给 <c>Hint.Text</c> 就是那个形状）。
+        Assert.Contains("LocText.SetMessage(Hint, LocMessage.Of(\"widget.ql.elevatedHint\"));", code);
+        Assert.Contains("以管理员身份运行", ReadRepoFile("src/StarMark.Abstractions/I18n/UiStrings.cs"));
         var xaml = ReadRepoFile(WidgetXamlRelativePath);
         Assert.Contains("x:Name=\"Hint\"", xaml);
-        Assert.Contains("选择文件／选择文件夹", xaml);              // 常态那句仍然指向两条可用的路
+        Assert.Contains("i18n:LocText.Key=\"widget.ql.dragHint\"", xaml);          // 常态那句仍然指向两条可用的路（话进表，标记留键）
+        Assert.Contains("选择文件／选择文件夹", ReadRepoFile("src/StarMark.Abstractions/I18n/UiStrings.cs"));
     }
 
     /// <summary>

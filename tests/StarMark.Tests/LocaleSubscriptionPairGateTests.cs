@@ -80,10 +80,13 @@ public sealed class LocaleSubscriptionPairGateTests
     public void TheCensusReportsItsOwnDenominator()
     {
         var pts = All.Value;
-        Assert.Equal(27, pts.Count);
-        Assert.Equal(12, pts.Count(p => p.Sign == "+"));
-        Assert.Equal(15, pts.Count(p => p.Sign == "-"));
-        Assert.Equal(10, pts.Select(p => p.File).Distinct().Count());
+        // 36／16／20／13 档＝现读（⛔ 预测，名册 262 那一族：第一次只按"这一批加了第四组手臂"算成 30，被自己写的闸门当场否掉）。
+        // 多出来的那 9 颗里有 6 颗是<b>上一笔提交</b>（片9c 第三刀）给活动流那两位宿主新挂的手臂——
+        // 那一跑只跑了定向证人 688 格，这颗全局分母没进过滤器 ⇒ 登记为"邻族证人漏重锚"，不是这颗闸门读错（坑表那条同族）。
+        Assert.Equal(36, pts.Count);
+        Assert.Equal(16, pts.Count(p => p.Sign == "+"));
+        Assert.Equal(20, pts.Count(p => p.Sign == "-"));
+        Assert.Equal(13, pts.Select(p => p.File).Distinct().Count());
         Assert.All(pts, p => Assert.True(p.Sign is "+" or "-", "符号只可能是这两颗之一"));
     }
 

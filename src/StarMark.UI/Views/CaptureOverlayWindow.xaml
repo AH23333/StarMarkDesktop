@@ -3,7 +3,8 @@
     x:Class="StarMark.UI.Views.CaptureOverlayWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:local="using:StarMark.UI.Views">
+    xmlns:local="using:StarMark.UI.Views"
+    xmlns:i18n="using:StarMark.UI.Helpers">
 
     <!--
         截图遮罩：每块显示器一个本窗口的实例（每屏 DPI 可能不同，单窗跨屏只有一屏的坐标换算是对的）。
@@ -186,7 +187,7 @@
                 x:Name="HintText"
                 FontSize="12"
                 Foreground="#FFFFFFFF"
-                Text="拖动框选 · 点亮框的窗口＝选中（可继续改框）· 选一支笔就能画，可以画出框外；再点一次收笔、回来改框 · Enter 复制 · Esc 取消 · 右键不截"/>
+                />
         </Border>
 
         <!-- 失败原因就地显示：弹对话框会立刻把遮罩的焦点抢走（抢走就等于取消截图） -->
@@ -217,7 +218,7 @@
             <TextBlock
                 FontSize="12"
                 Foreground="#FFFFFFFF"
-                Text="已选中：拖框内＝移动 · 拖角＝缩放 · 拖顶部圆点＝转方向 · 文字点住它＝接着改（Enter 换行） · Delete＝删除"/>
+                i18n:LocText.Key="capture.selectionTip"/>
         </Border>
 
         <!-- Snipaste 式像素放大镜：放大 15×15 源像素，每像素 10 物理像素，自带像素网格与十字线；

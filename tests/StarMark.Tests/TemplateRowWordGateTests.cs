@@ -31,6 +31,10 @@ public sealed class TemplateRowWordGateTests : IDisposable
     private const string GridCs = "src/StarMark.UI/Views/ItemGridWidget.xaml.cs";
     private const string ClockCs = "src/StarMark.UI/Views/WorldClockWidget.xaml.cs";
 
+    // 第五刀那一族（「本机备份」那一列）：宿主是设置页，它<b>本来</b>就有订阅，这一刀只加第四组成对手臂。
+    private const string BackupVm = "src/StarMark.UI/ViewModels/SettingsPageViewModel.cs";
+    private const string BackupCs = "src/StarMark.UI/Views/SettingsPage.xaml.cs";
+
     private static readonly string[] Models = [ActVm, ClockVm];
     private static readonly string[] Hosts = [ActPageCs, GridCs, ClockCs];
 
@@ -111,6 +115,8 @@ public sealed class TemplateRowWordGateTests : IDisposable
     [InlineData(ActPageCs, "KindLabel")]
     [InlineData(GridCs, "KindLabel")]
     [InlineData(ClockCs, "ErrorText")]
+    [InlineData(BackupCs, "MetaText")]
+    [InlineData(BackupCs, "RestoreLabel")]
     public void TheRowTemplateBindsTheReadoutNotTheFrozenString(string csRel, string readout)
     {
         var xaml = MarkupOf(csRel);
@@ -118,6 +124,46 @@ public sealed class TemplateRowWordGateTests : IDisposable
         Assert.Equal(0, Count(xaml, "{x:Bind " + readout + "}"));      // OneTime 那一形⛔ 回来
         if (readout == "ErrorText") Assert.Equal(0, Count(xaml, "{x:Bind Error, Mode=OneWay}"));
         if (readout == "KindLabel") Assert.Equal(0, Count(xaml, "{x:Bind KindLabel, Mode=OneTime}"));
+        if (readout == "MetaText") Assert.Equal(0, Count(xaml, "{x:Bind KindLabel, Mode=OneWay}"));   // 摘要那颗⛔ 再单独绑一次名字
+    }
+
+    /// <summary>
+    /// <b>第五刀那一族（「本机备份」列表的一行）＝机制 (C) 的第四位宿主</b>：行持两颗键（类别名＋按钮名），
+    /// 三颗显示属性由 <c>Render()</c> 现算，宿主那一拍逐行 <c>Repaste()</c>，且与它<b>已有</b>的那三组订阅一样成对摘掉。
+    /// <para>⚠ 这一档的其余汉字（<c>Safe(…) 的"哪项设置读失败了"</c>那一族）只进日志，<c>ScreenWords</c>⛔ 看不见这一档＝
+    /// 判 <c>ScreenWords == 0</c> 会把仪器自己的口径当成缺陷（✅P-191 那一族的反面）。</para>
+    /// </summary>
+    [Fact]
+    public void TheBackupRowIsTheFourthTemplateRowFamily()
+    {
+        var vm = CodeOf(BackupVm);
+        Assert.Equal(1, Count(vm, "public LocMessage KindMessage { get; }"));
+        Assert.Equal(1, Count(vm, "public LocMessage RestoreMessage { get; }"));
+        Assert.Equal(1, Count(vm, "public string KindLabel => KindMessage.Render();"));
+        Assert.Equal(1, Count(vm, "public string RestoreLabel => RestoreMessage.Render();"));
+        Assert.Equal(3, Count(vm, "=> LocMessage.Of(\"settings.data.backup.kind"));      // 三档类别各一颗，⛔ 一处漏成交字面量
+        Assert.Equal(1, Count(vm, "OnPropertyChanged(nameof(MetaText));"));
+        // 汉字⛔ 再回那一行住：那三档类别名与两颗按钮名从前都写在这里。
+        foreach (var word in new[] { "恢复前快照", "手动导出", "用它回滚", "恢复这份" })
+            Assert.Equal(0, Count(vm, "\"" + word + "\""));
+        Assert.Equal(0, Count(vm, "public string KindLabel { get; }"));                 // ⛔ 成品串存回字段（冻语言）
+
+        var host = CodeOf(BackupCs);
+        Assert.Equal(1, Count(host, "foreach (var row in ViewModel.Backups) row.Repaste();"));
+        Assert.Equal(0, Count(host, "LocText.SetMessage(row"));                         // ⛔ 逐行挂进那份名单
+        Assert.Equal(3, Count(host, "Locale.Changed += Repaste"));                      // 快捷键＋AI 组行＋备份那一列
+        // 6：设置页那三组手臂写的是"先退再订"（同一页可能被反复导航回来，⛔ 挂两份），Loaded 三颗退＋Unloaded 三颗摘。
+        Assert.Equal(6, Count(host, "Locale.Changed -= Repaste"));
+
+        foreach (var key in new[] { "settings.data.backup.kindAuto", "settings.data.backup.kindPreRestore",
+                                    "settings.data.backup.kindManual", "settings.data.backup.restore",
+                                    "settings.data.backup.rollback" })
+        {
+            Assert.Equal(1, Count(AskedCorpus(), @"""" + key + @""""));                 // 一颗键一个主人
+            Assert.True(UiStrings.TryGet(key, out var row), "表里没有这颗键：" + key);
+            Assert.Empty(Cjk.Matches(row.En).Cast<Match>());
+            Assert.NotEqual(row.Zh, row.Ja);
+        }
     }
 
     // ────────── ③ 宿主那一拍：逐行重念，⛔ 新机制也⛔ 让行自己订阅 ──────────

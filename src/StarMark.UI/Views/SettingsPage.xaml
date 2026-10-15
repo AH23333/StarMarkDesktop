@@ -1047,7 +1047,7 @@
                                         <DataTemplate x:DataType="viewModels:BackupRow">
                                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,2">
                                                 <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
-                                                    <TextBlock Text="{x:Bind MetaText}" FontSize="12"/>
+                                                    <TextBlock Text="{x:Bind MetaText, Mode=OneWay}" FontSize="12"/>
                                                     <TextBlock Text="{x:Bind NameText}" Style="{StaticResource MutedText}"
                                                                FontSize="11" TextTrimming="CharacterEllipsis"/>
                                                 </StackPanel>
@@ -1056,7 +1056,7 @@
                                                      等于把"腾地方/清掉误操作那一份"留成手工活。删除必先确认。 -->
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
                                                             VerticalAlignment="Center">
-                                                    <Button Content="{x:Bind RestoreLabel}" Tag="{x:Bind File}"
+                                                    <Button Content="{x:Bind RestoreLabel, Mode=OneWay}" Tag="{x:Bind File}"
                                                             Click="RestoreBackup_Click"
                                                             Style="{StaticResource SecondaryButton}" Padding="10,2,10,2"/>
                                                     <Button Tag="{x:Bind File}"

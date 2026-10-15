@@ -229,12 +229,14 @@ public sealed partial class CaptureOverlayWindow : Window
         DeviceName = monitor.Device;
 
         InitWindow();
-        HintText.Text = mode switch
+        // 三档各一句，全部走那颗门（⛔ 在标记上挂默认那句：这一颗元素的名字随状态变，静态键会在换语言那一刻盖掉真话，
+        // 等于给同一行字开两个主人——✅WI-2n 收掉播放／暂停那两颗是同一件事）。
+        LocText.SetMessage(HintText, mode switch
         {
-            CaptureMode.Pin => "按住拖动框选区域 · 放开即钉到桌面 · Enter 立即贴当前选区 · Esc 取消 · 右键不截",
-            CaptureMode.Ocr => "按住拖动框选要认字的区域 · 放开即识别并把文字复制走 · Esc 取消 · 右键不截",
-            _ => HintText.Text,
-        };
+            CaptureMode.Pin => LocMessage.Of("capture.hintPin"),
+            CaptureMode.Ocr => LocMessage.Of("capture.hintOcr"),
+            _ => LocMessage.Of("capture.hintToolbar"),
+        });
 
         // 自动检测的候选窗口只枚举一次（画面已冻结，拓扑不会变）。<b>必须发生在窗口上屏之前</b>：
         // 这一步若抛异常，后面 SetWindowPos 已经把窗口摆上屏、名册里却没有它——

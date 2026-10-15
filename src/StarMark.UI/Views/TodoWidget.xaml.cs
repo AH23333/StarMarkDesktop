@@ -7,7 +7,9 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.System;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
+using StarMark.UI.Helpers;
 using StarMark.UI.ViewModels;
 
 namespace StarMark.UI.Views;
@@ -37,9 +39,9 @@ public sealed partial class TodoWidget : UserControl
         // 用一处集中刷新比分散绑定更好维护，也避开 x:Bind 默认 OneTime 不订阅 INPC 的老坑。
         ViewModel.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(ViewModel.HasUndo) or nameof(ViewModel.UndoText)
+            if (e.PropertyName is nameof(ViewModel.HasUndo) or nameof(ViewModel.UndoMessage)
                 or nameof(ViewModel.AllCount) or nameof(ViewModel.ActiveCount)
-                or nameof(ViewModel.CompletedCount) or nameof(ViewModel.SummaryText)
+                or nameof(ViewModel.CompletedCount) or nameof(ViewModel.SummaryMessage)
                 or nameof(ViewModel.Filter))
             {
                 SyncChrome();
@@ -60,17 +62,18 @@ public sealed partial class TodoWidget : UserControl
 
     private void SyncChrome()
     {
-        FilterAllButton.Content = $"全部 {ViewModel.AllCount}";
-        FilterActiveButton.Content = $"未完成 {ViewModel.ActiveCount}";
-        FilterCompletedButton.Content = $"已完成 {ViewModel.CompletedCount}";
+        // 三颗分段按钮＝「固定那句＋当场读数」：交键＋实参给那颗门，换语言时读数不丢、措辞也不留在上一门语言。
+        LocText.SetKey(FilterAllButton, "widget.todo.filterAll", ViewModel.AllCount);
+        LocText.SetKey(FilterActiveButton, "widget.todo.filterActive", ViewModel.ActiveCount);
+        LocText.SetKey(FilterCompletedButton, "widget.todo.filterCompleted", ViewModel.CompletedCount);
 
         ApplyHighlight(FilterAllButton, ViewModel.Filter == TodoFilter.All);
         ApplyHighlight(FilterActiveButton, ViewModel.Filter == TodoFilter.Active);
         ApplyHighlight(FilterCompletedButton, ViewModel.Filter == TodoFilter.Completed);
 
-        SummaryBlock.Text = ViewModel.SummaryText;
+        LocText.SetMessage(SummaryBlock, ViewModel.SummaryMessage);
         UndoBar.Visibility = ViewModel.HasUndo ? Visibility.Visible : Visibility.Collapsed;
-        UndoTextBlock.Text = ViewModel.UndoText;
+        LocText.SetMessage(UndoTextBlock, ViewModel.UndoMessage);
     }
 
     /// <summary>选中项的视觉强调：加粗 + 提高不透明度（未选中保持淡色）。</summary>
@@ -122,16 +125,16 @@ public sealed partial class TodoWidget : UserControl
     /// <summary>
     /// 颜色档位与文案：<b>只这一份</b>。0＝无（清掉标记），1～6 对应 <see cref="TodoColorConverter"/> 的调色板序号。
     /// </summary>
-    private static readonly (int Tier, string Label)[] ColorTiers =
+    private static readonly (int Tier, string NameKey)[] ColorTiers =
     {
-        (0, "无"), (1, "红（紧急）"), (2, "橙（重要）"), (3, "黄（提醒）"),
-        (4, "绿（常规）"), (5, "蓝（稍后）"), (6, "紫（灵感）"),
+        (0, "widget.todo.colorNone"), (1, "widget.todo.colorRed"), (2, "widget.todo.colorOrange"), (3, "widget.todo.colorYellow"),
+        (4, "widget.todo.colorGreen"), (5, "widget.todo.colorBlue"), (6, "widget.todo.colorPurple"),
     };
 
     /// <summary>截止日档位与文案：null＝清除。<b>0＝今天、1＝明天</b>，都是"日历日"，不是 24 小时（✅P-37）。</summary>
-    private static readonly (int? Offset, string Label)[] DueTiers =
+    private static readonly (int? Offset, string NameKey)[] DueTiers =
     {
-        (0, "今天"), (1, "明天"), (null, "清除"),
+        (0, "widget.todo.dueToday"), (1, "widget.todo.dueTomorrow"), (null, "widget.todo.dueClear"),
     };
 
     /// <summary>
@@ -148,9 +151,10 @@ public sealed partial class TodoWidget : UserControl
     {
         if (!TryRowId(sender, out var id)) return;
         var menu = new MenuFlyout();
-        foreach (var (tier, label) in ColorTiers)
+        foreach (var (tier, nameKey) in ColorTiers)
         {
-            var item = new MenuFlyoutItem { Text = label };
+            // 菜单每次点开都重念一次：屏幕上那张卡出现的这一刻是什么语言，名字就是什么语言。
+            var item = new MenuFlyoutItem { Text = Locale.T(nameKey) };
             if (tier == 0) item.Icon = new FontIcon { Glyph = "\uE711", FontSize = 12 };
             menu.Items.Add(item);
             var chosen = tier;                       // 捕获：档位不再靠菜单项索引反推
@@ -164,9 +168,9 @@ public sealed partial class TodoWidget : UserControl
     {
         if (!TryRowId(sender, out var id)) return;
         var menu = new MenuFlyout();
-        foreach (var (offset, label) in DueTiers)
+        foreach (var (offset, nameKey) in DueTiers)
         {
-            var item = new MenuFlyoutItem { Text = label };
+            var item = new MenuFlyoutItem { Text = Locale.T(nameKey) };
             menu.Items.Add(item);
             var chosen = offset;
             item.Click += (_, _) => _ = ViewModel.SetDueAsync(id, chosen);

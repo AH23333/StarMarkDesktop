@@ -538,26 +538,43 @@ public sealed class HealthTrendBar
 }
 
 /// <summary>
-/// 「本机备份」列表的一行：显示文本 + 按钮要用的原始盘点结果。
-/// 类别/时间的中文口径留在这里（Core 只管判类，不管怎么显示），
-/// 但<b>判类本身不在这里重复</b>——直接读 <see cref="BackupService.BackupFile.Kind"/>，
-/// 免得界面自己再按文件名前缀猜一次而和清理逻辑分叉。
+/// 「本机备份」列表的一行：行身份（原始盘点结果）＋<b>没取词的</b>「键」＋显示侧现算的那几句。
+/// <para>Core 只管判类、不管怎么显示，而<b>判类本身不在这里重复</b>——直接读 <see cref="BackupService.BackupFile.Kind"/>，
+/// 免得界面自己再按文件名前缀猜一次而和清理逻辑分叉。</para>
+/// <para>这一行住在 <c>DataTemplate</c> 上，走的是 ✅WI-40-3b 那条机制 (C)：行持 <see cref="LocMessage"/>，
+/// <c>KindLabel</c>／<c>RestoreLabel</c>／<c>MetaText</c> 三颗 getter <b>当场念</b>，模板绑 <c>Mode=OneWay</c>，
+/// 换语言那一刻由设置页逐行 <see cref="Repaste"/>。⛔ 在这里把成品串存进字段——那等于把语言冻在算出它的那一刻（P-175 缺口②）。</para>
 /// </summary>
-public sealed class BackupRow
+public sealed class BackupRow : ObservableObject
 {
-    public BackupRow(BackupService.BackupFile file) => File = file;
+    public BackupRow(BackupService.BackupFile file)
+    {
+        File = file;
+        // 键按身份挑（⛔ 在这里念），所以换语言时同一行只要重念一次就换成那一门语言的说法。
+        KindMessage = file.Kind switch
+        {
+            AutoBackupPolicy.BackupKind.Auto => LocMessage.Of("settings.data.backup.kindAuto"),
+            AutoBackupPolicy.BackupKind.PreRestore => LocMessage.Of("settings.data.backup.kindPreRestore"),
+            _ => LocMessage.Of("settings.data.backup.kindManual"),
+        };
+        // 三元⛔ 写进 Of(…) 里：闸门按字面键扫调用点，包进条件里就看不见那两颗键各被问过几次。
+        RestoreMessage = file.Kind == AutoBackupPolicy.BackupKind.PreRestore
+            ? LocMessage.Of("settings.data.backup.rollback")
+            : LocMessage.Of("settings.data.backup.restore");
+    }
 
     /// <summary>整条记录（按钮的 Tag 直接绑它，恢复时不再按名字回查目录）。</summary>
     public BackupService.BackupFile File { get; }
 
     public string NameText => File.FileName;
 
-    public string KindLabel => File.Kind switch
-    {
-        AutoBackupPolicy.BackupKind.Auto => "自动备份",
-        AutoBackupPolicy.BackupKind.PreRestore => "恢复前快照",
-        _ => "手动导出",
-    };
+    /// <summary>这一行是哪一类备份——交的是键，念在 <see cref="KindLabel"/>。</summary>
+    public LocMessage KindMessage { get; }
+
+    /// <summary>那颗按钮叫什么——快照说"用它回滚"：用户心里的动作是"撤销刚才那次导入"，不是"恢复一份备份"。</summary>
+    public LocMessage RestoreMessage { get; }
+
+    public string KindLabel => KindMessage.Render();
 
     /// <summary>列表一律说本地时间——用户记的是"我昨天下午导过一次"，不是 UTC。</summary>
     public string WhenText => DateTimeText.Minute(File.ModifiedUtc.ToLocalTime());
@@ -566,8 +583,15 @@ public sealed class BackupRow
 
     public string MetaText => $"{WhenText} · {KindLabel} · {SizeText}";
 
-    /// <summary>快照那一份要说"用它回滚"：用户心里的动作是"撤销刚才那次导入"，不是"恢复一份备份"。</summary>
-    public string RestoreLabel => File.Kind == AutoBackupPolicy.BackupKind.PreRestore ? "用它回滚" : "恢复这份";
+    public string RestoreLabel => RestoreMessage.Render();
+
+    /// <summary>换语言那一拍由宿主叫这一次：三颗显示属性都重念（⛔ 行自己订阅 <c>Locale.Changed</c>，坑表 #386）。</summary>
+    public void Repaste()
+    {
+        OnPropertyChanged(nameof(KindLabel));
+        OnPropertyChanged(nameof(RestoreLabel));
+        OnPropertyChanged(nameof(MetaText));
+    }
 
     /// <summary>
     /// 「删除」确认框里那句代价说明——按类别分开说，因为三种类失去之后的后果完全不同：

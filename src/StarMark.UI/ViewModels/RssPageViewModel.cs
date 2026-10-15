@@ -420,9 +420,6 @@ public sealed class RssSourceSection : INotifyPropertyChanged
     /// 所以换语言时已经铺出来的那一行会跟着换（✅WI-65 片2；⛔ 在这里就 <c>Render()</c> 一次）。</summary>
     public LocMessage Status { get; private set; } = RssSourceStatus.NeverFetched;
 
-    /// <summary>条数只在真有内容时出现：空文件夹再标一个"共 0 条"就是噪音，状态那一行已经说清了原因。</summary>
-    public string CountText => Rows.Count == 0 ? string.Empty : $"共 {Rows.Count} 条";
-
     /// <summary>源改了名/改了地址之后复用同一组行（配置是同一个 id）。</summary>
     public RssSourceSection WithConfig(RssSourceConfig config)
     {
@@ -435,7 +432,6 @@ public sealed class RssSourceSection : INotifyPropertyChanged
     {
         Rows.Clear();
         foreach (var row in rows) Rows.Add(row);
-        Raise(nameof(CountText));
     }
 
     public void SetStatus(LocMessage status)
@@ -454,7 +450,7 @@ public sealed class RssSourceSection : INotifyPropertyChanged
 
     private void RaiseAll()
     {
-        foreach (var name in new[] { nameof(Name), nameof(Url), nameof(Enabled), nameof(FolderPath), nameof(CountText) })
+        foreach (var name in new[] { nameof(Name), nameof(Url), nameof(Enabled), nameof(FolderPath) })
             Raise(name);
     }
 

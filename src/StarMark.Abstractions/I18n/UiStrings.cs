@@ -355,8 +355,8 @@ public static class UiStrings
         // ===== 「数据」那一屏·备份与恢复那一族（批次 WI-62，P-193 那半句与 UI 那半句同批交表）=====
         // 中文列<b>逐字照抄</b>屏幕上那一句（来源＝`bin/WI62/scope_62.txt` 那串现抽的原文），英文与日文是对译。
         // ⚠ 那三句里被引用的「文件缺失」是<b>别处那一行自己说的话</b>，各列按各语言的原写法给（坑表 #280：
-        //   抄其中一列的另一句必然成假话）；而「用它回滚」那颗按钮名<b>今天还没交表</b>（它住在数据项＋模板那一族＝机制 (C)），
-        //   所以恢复前快照那句改口成「在下面的列表里选那一份」⛔ 点名那颗还没交表的按钮。
+        //   抄其中一列的另一句必然成假话）；而「用它回滚」那颗按钮名从前⛔ 交表（它住在数据项＋模板那一族＝机制 (C)），到批次 WI-67 片9c 第五刀才交上，
+        //   所以恢复前快照那句当时改口成「在下面的列表里选那一份」；⛔ 现在再把那句改回点名那颗按钮——屏幕上早就点得出它了。
         // 换行⛔ 进表（规则 #100：表里不许有控制字符）——那一颗是布局，由 `settings.data.backup.lineJoin` 收实参 {2} 递进来。
         new Entry("settings.data.backup.badJson", "备份文件不是合法的 JSON。", "The backup file isn't valid JSON.", "バックアップファイルは有効な JSON ではありません。"),
         new Entry("settings.data.backup.unreadable", "这个备份文件读不懂（坏在 {0}）：可能没写完或已损坏，已拒绝导入。", "This backup file can't be read (broken at {0}): it may be unfinished or corrupted, so the import was refused.", "このバックアップファイルは読み取れません（{0} が壊れています）：書きかけか破損の可能性があるため導入を拒否しました。"),
@@ -3055,6 +3055,66 @@ public static class UiStrings
         new Entry("activity.kind.itemAdd", "新增内容", "Item added", "項目を追加"),
         new Entry("activity.kind.itemModify", "修改内容", "Item modified", "項目を変更"),
         new Entry("activity.kind.itemDelete", "删除条目", "Item deleted", "項目を削除"),
+        // ── WI-67 片9c 第四刀：音乐／待办／快捷启动／截图框选／RSS／快照详情那六扇的上屏字 ──
+        // 措辞照搬原写死那几句（交表⛔ 顺手改口），⛔ 再回代码里住。
+        new Entry("widget.music.emptyTitle", "未在播放", "Nothing playing", "再生していません"),
+        new Entry("widget.music.emptyArtist", "打开任意播放器后这里会显示曲目", "Open any player and the track shows up here", "プレイヤーを開くと曲目がここに表示されます"),
+        new Entry("widget.music.noSession", "无法访问媒体会话", "Can't reach the media session", "メディアセッションにアクセスできません"),
+        new Entry("widget.music.systemBlocked", "系统未开放播放信息（部分非打包应用受限）", "The system isn't exposing playback info (some unpackaged apps are blocked)", "システムが再生情報を公開していません（一部の非パッケージアプリは制限されます）"),
+        new Entry("widget.music.unknownTitle", "未知曲目", "Unknown track", "不明な曲"),
+        new Entry("widget.music.unknownArtist", "未知艺人", "Unknown artist", "不明なアーティスト"),
+        // 音源下拉那一列：那颗「跟随系统」⛔ 复用 settings.languageFollowSystem——它说的是语言那一栏的选项，
+        // 改了那句不该把播放器选择器一起改掉（同一颗键只服务一条路）。
+        new Entry("widget.music.followSystem", "跟随系统", "Follow the system", "システムに追随"),
+        new Entry("widget.music.playingSuffix", "{0} · 播放中", "{0} · playing", "{0} · 再生中"),
+        new Entry("widget.todo.filterAll", "全部 {0}", "All {0}", "すべて {0}"),
+        new Entry("widget.todo.filterActive", "未完成 {0}", "Open {0}", "未完了 {0}"),
+        new Entry("widget.todo.filterCompleted", "已完成 {0}", "Done {0}", "完了 {0}"),
+        new Entry("widget.todo.allDone", "全部完成", "All done", "すべて完了"),
+        new Entry("widget.todo.remaining", "剩余 {0} 项", "{0} left", "残り {0} 件"),
+        new Entry("widget.todo.deleted", "已删除「{0}」", "Deleted “{0}”", "「{0}」を削除しました"),
+        new Entry("widget.todo.colorNone", "无", "None", "なし"),
+        new Entry("widget.todo.colorRed", "红（紧急）", "Red (urgent)", "赤（緊急）"),
+        new Entry("widget.todo.colorOrange", "橙（重要）", "Orange (important)", "オレンジ（重要）"),
+        new Entry("widget.todo.colorYellow", "黄（提醒）", "Yellow (heads-up)", "黄（注意）"),
+        new Entry("widget.todo.colorGreen", "绿（常规）", "Green (routine)", "緑（通常）"),
+        new Entry("widget.todo.colorBlue", "蓝（稍后）", "Blue (later)", "青（後で）"),
+        new Entry("widget.todo.colorPurple", "紫（灵感）", "Purple (inspiration)", "紫（ひらめき）"),
+        new Entry("widget.todo.dueToday", "今天", "Today", "今日"),
+        new Entry("widget.todo.dueTomorrow", "明天", "Tomorrow", "明日"),
+        new Entry("widget.todo.dueClear", "清除", "Clear", "クリア"),
+        new Entry("widget.ql.dragHint", "提示：可把文件、文件夹或网址直接拖入本组件；拖不动时用上面那行「＋」里的「选择文件／选择文件夹」",
+                  "Tip: drop files, folders or links straight onto this widget; if the drop is blocked, use “Choose file / Choose folder” under the “+” row above",
+                  "ヒント：ファイル・フォルダ・URL をこのウィジェットに直接ドロップできます。ドロップできない場合は上の「＋」の中にある「ファイルを選択／フォルダを選択」を使ってください"),
+        new Entry("widget.ql.elevatedHint", "本程序正以管理员身份运行：系统会拦下从资源管理器拖进来的那一下（不是组件坏了）。请用上面那两颗「选择文件／选择文件夹」加进来。",
+                  "This app is running as administrator: Windows blocks drops coming from Explorer (the widget isn't broken). Add them with the two “Choose file / Choose folder” buttons above.",
+                  "このアプリは管理者権限で実行中のため、エクスプローラーからのドロップはシステムにブロックされます（ウィジェットの不具合ではありません）。上の「ファイルを選択／フォルダを選択」の 2 ボタンで追加してください。"),
+        new Entry("capture.hintToolbar", "拖动框选 · 点亮框的窗口＝选中（可继续改框）· 选一支笔就能画，可以画出框外；再点一次收笔、回来改框 · Enter 复制 · Esc 取消 · 右键不截",
+                  "Drag to select · the window inside the lit frame is picked (you can keep resizing it) · pick a pen and draw, outside the frame is fine; tap the same pen again to stop and edit the frame · Enter copies · Esc cancels · right-click doesn't capture",
+                  "ドラッグで範囲選択 · 枠が光ったウィンドウが選択（枠は後から変更できます）· ペンを選ぶと枠外にも描けます。同じペンをもう一度タップすると描くのをやめて枠を編集 · Enter でコピー · Esc で取消 · 右クリックは撮影しません"),
+        new Entry("capture.hintPin", "按住拖动框选区域 · 放开即钉到桌面 · Enter 立即贴当前选区 · Esc 取消 · 右键不截",
+                  "Hold and drag out a region · release pins it to the desktop · Enter pins the current region right now · Esc cancels · right-click doesn't capture",
+                  "押しながらドラッグで範囲選択 · 離すとデスクトップに固定 · Enter で現在の範囲をすぐ貼る · Esc で取消 · 右クリックは撮影しません"),
+        new Entry("capture.hintOcr", "按住拖动框选要认字的区域 · 放开即识别并把文字复制走 · Esc 取消 · 右键不截",
+                  "Hold and drag out the region to read · release recognises it and copies the text · Esc cancels · right-click doesn't capture",
+                  "押しながらドラッグで文字を読み取る範囲を選ぶ · 離すと認識してテキストをコピーします · Esc で取消 · 右クリックは撮影しません"),
+        new Entry("capture.selectionTip", "已选中：拖框内＝移动 · 拖角＝缩放 · 拖顶部圆点＝转方向 · 文字点住它＝接着改（Enter 换行） · Delete＝删除",
+                  "Selected: drag inside the frame to move · drag a corner to scale · drag the top dot to change direction · click text to keep editing it (Enter adds a line) · Delete removes it",
+                  "選択中：枠内をドラッグ＝移動 · 隅をドラッグ＝拡大縮小 · 上の点をドラッグ＝方向変更 · テキストをクリックで続きを編集（Enter で改行） · Delete で削除"),
+        new Entry("rss.rowTip", "{0}　收藏会放进「{1}」", "{0}  bookmarks go into “{1}”", "{0}　保存先「{1}」"),
+        new Entry("snapshot.detailLinks", "入口 {0}", "{0} links", "リンク {0}"),
+        new Entry("snapshot.detailLocal", "待办/随记 {0}", "{0} todos/notes", "ToDo/メモ {0}"),
+        new Entry("snapshot.detailTag", "标签「{0}」", "Tag “{0}”", "タグ「{0}」"),
+        new Entry("snapshot.detailNoData", "无数据", "no data", "データなし"),
+        new Entry("snapshot.detailSep", "，", ", ", "、"),
+        new Entry("snapshot.detailLine", "· {0} — {1}（位置 {2}）", "· {0} — {1} (at {2})", "· {0} — {1}（座標 {2}）"),
+        // 「本机备份」那一列的行名与按钮名（批次 WI-67 片9c 第五刀·机制 (C) 第四位宿主）：
+        // 类别名与那颗开关标签「自动备份」⛔ 共用一颗——那是两栏的话，改一处不该把另一处一起改掉。
+        new Entry("settings.data.backup.kindAuto", "自动备份", "Automatic", "自動"),
+        new Entry("settings.data.backup.kindPreRestore", "恢复前快照", "Pre-restore snapshot", "復元前スナップショット"),
+        new Entry("settings.data.backup.kindManual", "手动导出", "Manual export", "手動書き出し"),
+        new Entry("settings.data.backup.restore", "恢复这份", "Restore this one", "これを復元"),
+        new Entry("settings.data.backup.rollback", "用它回滚", "Roll back with this", "これで巻き戻す"),
     };
 
     private static readonly Dictionary<string, Entry> ByKey = Build();

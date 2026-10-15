@@ -167,7 +167,10 @@ public sealed class BackupWordGateTests : IDisposable
         Assert.Equal(4, Times(ui, ".Render()"));
         Assert.Equal(2, Times(ui, "PickerBlockedHint.Render(), ex"));
         Assert.Equal(2, Times(ui, ".Render(), new[] {"));
-        Assert.Equal(0, Times(CodeOf(Vm), ".Render()"));
+        // 2 而不是 0：「本机备份」那一行是<b>数据项＋模板</b>那一族（✅WI-40-3b 机制 (C)，本批第四位宿主）。
+        // 行模型交的是键，念出来发生在显示侧那两颗 getter（<c>KindLabel</c>／<c>RestoreLabel</c>）——
+        // 与 <c>ActivityItemViewModel.KindLabel</c> 同一形状（片9c 第三刀同一口径）：产地⛔ 存成品串，那一拍由宿主逐行重念。
+        Assert.Equal(2, Times(CodeOf(Vm), ".Render()"));
         Assert.Contains("LocMessage? error", ui, StringComparison.Ordinal);
         Assert.Contains("ViewModel.BackupStatus = ex.Reason;", ui, StringComparison.Ordinal);
     }

@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Media;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
@@ -114,9 +115,9 @@ public sealed partial class MusicWidget : UserControl
 
         var follow = new RadioMenuFlyoutItem
         {
-            Text = "跟随系统",
             IsChecked = s_media.PreferredSessionId is null,
         };
+        LocText.SetKey(follow, "widget.music.followSystem");   // 菜单项也走那颗门：贴着就换语言，⛔ 等下一回打开才改口
         follow.Click += async (_, _) => await PickSessionAsync(null);
         SourceFlyout.Items.Add(follow);
         SourceFlyout.Items.Add(new MenuFlyoutSeparator());
@@ -126,9 +127,12 @@ public sealed partial class MusicWidget : UserControl
             var id = option.SessionId;
             var item = new RadioMenuFlyoutItem
             {
-                Text = option.IsPlaying ? $"{option.DisplayName} · 播放中" : option.DisplayName,
                 IsChecked = s_media.PreferredSessionId == id,
             };
+            // 「· 播放中」那句的后半是表里的话，前半是播放器自报的名字：带读数交「键＋实参」，
+            // 没在播的就只有名字本身（不是表里的话）⇒ 先把注册项摘掉，再直接贴串，换语言才盖不掉它。
+            if (option.IsPlaying) LocText.SetKey(item, "widget.music.playingSuffix", option.DisplayName);
+            else { LocText.SetKey(item, string.Empty); item.Text = option.DisplayName; }
             item.Click += async (_, _) => await PickSessionAsync(id);
             SourceFlyout.Items.Add(item);
         }
@@ -204,8 +208,8 @@ public sealed partial class MusicWidget : UserControl
     {
         if (!available)
         {
-            TitleBlock.Text = "无法访问媒体会话";
-            ArtistBlock.Text = "系统未开放播放信息（部分非打包应用受限）";
+            LocText.SetMessage(TitleBlock, LocMessage.Of("widget.music.noSession"));
+            LocText.SetMessage(ArtistBlock, LocMessage.Of("widget.music.systemBlocked"));
             SourceBlock.Text = string.Empty;
             SetEnabled(false);
             SetProgress(TimeSpan.Zero, TimeSpan.Zero);
@@ -215,8 +219,8 @@ public sealed partial class MusicWidget : UserControl
 
         if (snapshot is null || !snapshot.HasTrack)
         {
-            TitleBlock.Text = "未在播放";
-            ArtistBlock.Text = "打开任意播放器后这里会显示曲目";
+            LocText.SetMessage(TitleBlock, LocMessage.Of("widget.music.emptyTitle"));
+            LocText.SetMessage(ArtistBlock, LocMessage.Of("widget.music.emptyArtist"));
             SourceBlock.Text = string.Empty;
             SetEnabled(false);
             SetProgress(TimeSpan.Zero, TimeSpan.Zero);
@@ -224,8 +228,12 @@ public sealed partial class MusicWidget : UserControl
             return;
         }
 
-        TitleBlock.Text = string.IsNullOrWhiteSpace(snapshot.Title) ? "未知曲目" : snapshot.Title;
-        ArtistBlock.Text = string.IsNullOrWhiteSpace(snapshot.Subtitle) ? "未知艺人" : snapshot.Subtitle;
+        // 真在播的那两句是播放器自报的数据，⛔ 留在重贴名单里（换语言把歌名换成「未知曲目」是假话）：
+        // 先交 null 把注册项摘掉，再直接贴串。兜底名反过来是表里的话，走 SetMessage 一起换。
+        LocText.SetMessage(TitleBlock, string.IsNullOrWhiteSpace(snapshot.Title) ? LocMessage.Of("widget.music.unknownTitle") : null);
+        if (!string.IsNullOrWhiteSpace(snapshot.Title)) TitleBlock.Text = snapshot.Title;
+        LocText.SetMessage(ArtistBlock, string.IsNullOrWhiteSpace(snapshot.Subtitle) ? LocMessage.Of("widget.music.unknownArtist") : null);
+        if (!string.IsNullOrWhiteSpace(snapshot.Subtitle)) ArtistBlock.Text = snapshot.Subtitle;
         // 显示友好名而不是 SMTC 的原始 AUMID（那串带包名下划线的东西用户读不懂）
         SourceBlock.Text = string.IsNullOrWhiteSpace(snapshot.SourceName)
             ? snapshot.AppId

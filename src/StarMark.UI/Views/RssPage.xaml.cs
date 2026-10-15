@@ -245,7 +245,7 @@ public sealed partial class RssPage : Page
         };
         LocText.SetMessage(statusText, section.Status);
         row.Children.Add(statusText);
-        ToolTipService.SetToolTip(row, $"{section.Url}　收藏会放进「{section.FolderPath}」");
+        LocText.SetToolTipKey(row, "rss.rowTip", section.Url, section.FolderPath);   // 提示词那颗门自带实参信箱：换语言重贴时读数跟着重填
         return row;
     }
 }

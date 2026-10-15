@@ -766,7 +766,9 @@ public sealed class I18nWiringGateTests
             $"组件窗标记只扫到 {widgets.Count} 个文件（现场 15 个：14 颗组件＋WidgetWindow.xaml 那颗宿主）");
 
         var all = string.Join("\n", widgets.Select(f => Markup(f.Text)));
-        Assert.Equal(46, Count(all, "i18n:LocText.Key=\""));
+        // 47：批次 WI-67 片9c 第四刀把「快捷启动可以拖」那句提示挂上标记（代码只在提权会话里换它，走同一颗门）。
+        // ⚠ 音乐那两句<b>没</b>挂上去——那一行写的是当前曲目，代码要写同一颗属性（见下面那颗成对闸门）。
+        Assert.Equal(47, Count(all, "i18n:LocText.Key=\""));
         // 20 而不是 22：批次 WI-2n 收掉两颗<b>随状态变</b>的提示条（播放/暂停、置顶/取消置顶）。
         // 它们在标记上挂静态键＝给同一颗按钮开第二个主人（代码那句带状态的会被静态那句盖掉），
         // 改由代码交键；判据见 <see cref="AWiredElementNeverGetsItsPropertyWrittenFromCodeToo"/>。
@@ -786,12 +788,10 @@ public sealed class I18nWiringGateTests
                     .Select(v => $"{Path.GetFileName(f.RelativePath)}|{v.Groups[1].Value}|{v.Groups[2].Value}")))
             .OrderBy(x => x, StringComparer.Ordinal)
             .ToArray();
-        Assert.Equal(new[]
-        {
-            "MusicWidget.xaml|Text|打开任意播放器后这里会显示曲目",
-            "MusicWidget.xaml|Text|未在播放",
-            "QuickLaunchWidget.xaml|Text|提示：可把文件、文件夹或网址直接拖入本组件；拖不动时用上面那行「＋」里的「选择文件／选择文件夹」",
-        }, left);
+        // 空表＝组件标记那一族⛔ 再有一句写死的正文。批次 WI-67 片9c 第四刀收掉了原先点名的三颗
+        // （音乐那两句空态由 <c>MusicWidget.Render()</c> 走 <c>LocText.SetMessage</c> 交键——那两个元素代码要写当前曲目，
+        // ⛔ 同时在标记上挂静态键，见上面那颗成对闸门；快捷启动那句提示挂上了标记）。
+        Assert.Empty(left);
         // 批次 WI-53（P-182a）收掉 WeatherWidget.xaml 那 4 句：它们每一句都由 code-behind 当场重写
         // （Loaded 的 ApplyToggleLabels／Render／ShowEmpty）⇒ XAML 那份字面量是"没人读的副本"，
         // 删掉它而不是给它挂静态键（挂了键＝换语言把带值那句盖回去，正是上面第①类的那颗假话）。

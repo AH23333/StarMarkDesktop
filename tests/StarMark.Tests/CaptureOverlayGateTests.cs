@@ -555,7 +555,10 @@ public sealed class CaptureOverlayGateTests
         var tip = SourceGate.Between(xaml, "x:Name=\"SelectionTip\"", "</Border>");
         Assert.Contains("VerticalAlignment=\"Bottom\"", tip);
         Assert.Contains("Visibility=\"Collapsed\"", tip);
-        Assert.Contains("Delete", tip);             // 删除要有键盘出口，而出口得写在用户看得见的这一句里
+        // 那句话搬进表里（批次 WI-67 片9c 第四刀）：标记上留键，正文只许一个出处。
+        Assert.Contains("i18n:LocText.Key=\"capture.selectionTip\"", tip);
+        // 删除要有键盘出口，而出口得写在用户看得见的这一句里——这句判据⛔ 松，只是问的对象从标记换成表里那一行。
+        Assert.Contains("Delete＝删除", SourceGate.ReadRepoFile("src/StarMark.Abstractions/I18n/UiStrings.cs"));
         Assert.Contains("SelectionTip.Visibility", SourceGate.MethodBody(ReadOverlay(xaml: false), "private void DropSelection"));
     }
 

@@ -17,9 +17,9 @@
 
         <!-- 曲目信息 -->
         <StackPanel Grid.Row="0" VerticalAlignment="Center" Spacing="3">
-            <TextBlock x:Name="TitleBlock" Text="未在播放" FontSize="16" FontWeight="SemiBold"
+            <TextBlock x:Name="TitleBlock" FontSize="16" FontWeight="SemiBold"
                        TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
-            <TextBlock x:Name="ArtistBlock" Text="打开任意播放器后这里会显示曲目" FontSize="12"
+            <TextBlock x:Name="ArtistBlock" FontSize="12"
                        Opacity="0.7" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
 
             <!-- 音源行：只有一个播放器时不占地方（隐藏下拉），多个时才出来 -->

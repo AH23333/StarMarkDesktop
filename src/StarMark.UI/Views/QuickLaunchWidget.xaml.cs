@@ -57,8 +57,7 @@ public sealed partial class QuickLaunchWidget : UserControl
         // 那种会话里从资源管理器拖进来的那一下被 Windows 静默拦掉（UIPI 按完整性级别过滤消息：不报错、不提示），
         // 常态那句"拖不动时…"会让人以为是自己手势没做好，所以这里点名原因并指向这两颗与权限无关的选择器。
         if (Privilege.IsElevated())
-            Hint.Text = "本程序正以管理员身份运行：系统会拦下从资源管理器拖进来的那一下（不是组件坏了）。" +
-                        "请用上面那两颗「选择文件／选择文件夹」加进来。";
+            LocText.SetMessage(Hint, LocMessage.Of("widget.ql.elevatedHint"));   // 那句也过那颗门：提权会话结束后换语言，它跟着换
     }
 
     private void QuickLaunchWidget_Unloaded(object sender, RoutedEventArgs e)

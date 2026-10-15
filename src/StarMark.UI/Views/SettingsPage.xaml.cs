@@ -306,10 +306,19 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         // 排在下面那颗早退之前——那一颗是热键服务解析失败时的出口，⛔ 让 AI 这一栏的重贴跟着它一起被跳过。
         Locale.Changed -= RepasteAiGroupRows;
         Locale.Changed += RepasteAiGroupRows;
+        // 「本机备份」那一列每行有两句（类别名与按钮名）也住在数据项＋模板里：同一颗订阅那一段，第四组成对手臂（机制 (C)·第四位宿主）。
+        Locale.Changed -= RepasteBackupRows;
+        Locale.Changed += RepasteBackupRows;
         if (App.Services.GetRequiredService<HotkeyService>() is not { } svc) return;
         // 本页可能被反复导航回来：先退再订，避免同一个处理器挂多份（一份事件 → N 次重建 UI）。
         svc.RegistrationStateFlushed -= OnRegistrationStateFlushed;
         svc.RegistrationStateFlushed += OnRegistrationStateFlushed;
+    }
+
+    /// <summary>换语言那一刻逐行重念备份那一列（⛔ 在这里挂 <c>LocText</c> 名单：行数不定、每次进页整列重建）。</summary>
+    private void RepasteBackupRows()
+    {
+        foreach (var row in ViewModel.Backups) row.Repaste();
     }
 
     private void Page_Unloaded(object sender, RoutedEventArgs e)
@@ -317,6 +326,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         Locale.Changed -= ViewModel.PaintDiagnostics;   // 与 Loaded 那颗成对
         Locale.Changed -= RepasteHotkeyRows;            // 同上：那一栏的重贴手臂也一起摘
         Locale.Changed -= RepasteAiGroupRows;           // 同上：AI 预览那两行同样⛔ 留下挂着的订阅
+        Locale.Changed -= RepasteBackupRows;            // 同上：备份那一列的三颗显示属性也一起摘
         if (App.Services.GetRequiredService<HotkeyService>() is { } svc)
             svc.RegistrationStateFlushed -= OnRegistrationStateFlushed;
     }
