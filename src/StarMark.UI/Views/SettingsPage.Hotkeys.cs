@@ -54,6 +54,9 @@ public sealed partial class SettingsPage
     private void RepasteHotkeyRows()
     {
         foreach (var row in HotkeyRowsItems) row.Repaste();
+        // 「拓展功能」那一页的热键只读一览同属这一拍：那一排的行是<b>建出来那一刻</b>把动作名念成字的（P-202），
+        // 而重算入口早就有（保存快捷键/重试注册都走它）——这一发⛔ 新开主人，只把它挂到同一拍上。
+        ViewModel.RefreshCanvasHotkeySheet();
     }
 
     private void BuildHotkeyRows()

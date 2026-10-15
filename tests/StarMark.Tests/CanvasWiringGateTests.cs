@@ -1749,8 +1749,9 @@ public sealed class CanvasWiringGateTests
         Assert.DoesNotContain("Ctrl+Alt+R", vm);                      // 一份字面键位都不许有
         Assert.Contains("CanvasService.BindingText(action)", SourceGate.ReadRepoFile(Panel));   // 面板读的是同一个出处
         // 改完键要重算，否则那一览会一直显示旧键位
+        // 三位主人各守一拍：保存快捷键、重试注册、换语言（P-202 把第三位居上，"挂在哪一拍"由 TemplateRowWordGateTests 钉）
         var page = SourceGate.ReadRepoPartials(SettingsPageCode);
-        Assert.Equal(2, SourceGate.Count(page, "ViewModel.RefreshCanvasHotkeySheet();"));
+        Assert.Equal(3, SourceGate.Count(page, "ViewModel.RefreshCanvasHotkeySheet();"));
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -280,5 +280,26 @@ public sealed class TemplateRowWordGateTests : IDisposable
         Assert.DoesNotContain("Mars/Phobos", other, StringComparison.Ordinal);
         Assert.DoesNotContain("{0}", other, StringComparison.Ordinal);
         Assert.Equal(1, RowSlots("widget.clock.noZone"));
+    }
+
+    /// <summary>
+    /// <b>✅WI-67 片10（P-202／P-203）＝屏幕读数一跑咬出来的两颗</b>：换语言那一拍要把「画布热键只读一览」那一排
+    /// 一起重建（那颗是<b>建出来那一刻</b>把动作名念成字的），健康档位那颗则⛔ 存成品字、改交<b>键</b>＋显示侧 getter。
+    /// <para>两格都落在形状判据的射程外那一格（与第六刀、名册 271 同一族）：屏幕上那句<b>没有写死汉字</b>——
+    /// 它是从表里念出来的，所以"整档屏幕字归零"那把尺全绿而人看见的仍是旧语言。</para>
+    /// </summary>
+    [Fact]
+    public void TheCanvasHotkeySheetAndHealthGradeRepasteOnTheSameBeat()
+    {
+        var armBody = MethodBody(Code(ReadRepoFile("src/StarMark.UI/Views/SettingsPage.Hotkeys.cs")), "private void RepasteHotkeyRows()");
+        Assert.Equal(1, Count(armBody, "ViewModel.RefreshCanvasHotkeySheet();"));   // ⛔ 新开一位主人，挂到已有那一拍
+        var health = Code(ReadRepoFile("src/StarMark.UI/ViewModels/SettingsPageViewModel.Health.cs"));
+        Assert.Equal(3, Count(health, "LocMessage.Of(\"health.grade."));        // 三档各一颗键
+        Assert.Equal(0, Count(health, "Locale.T(\"health.grade."));             // ⛔ 取词时机回到建行的那一刻
+        Assert.Equal(1, Count(health, "public string ScoreGradeText => ScoreGrade?.Render() ?? string.Empty;"));
+        Assert.Equal(1, Count(health, "OnPropertyChanged(nameof(ScoreGradeText));"));
+        var xaml = ReadRepoFile("src/StarMark.UI/Views/SettingsPage.xaml");
+        Assert.Equal(1, Count(xaml, "{x:Bind ViewModel.ScoreGradeText, Mode=OneWay}"));
+        Assert.Equal(0, Count(xaml, "{x:Bind ViewModel.ScoreGrade,"));            // ⛔ 退回那颗只读属性
     }
 }

@@ -1225,7 +1225,7 @@
                                     <StackPanel Grid.Column="0" HorizontalAlignment="Center" Spacing="2">
                                         <TextBlock Text="{x:Bind ViewModel.ScoreText, Mode=OneWay}"
                                                    FontSize="44" FontWeight="Bold" Foreground="{x:Bind ViewModel.ScoreBrush, Mode=OneWay}"/>
-                                        <TextBlock Text="{x:Bind ViewModel.ScoreGrade, Mode=OneWay}" FontSize="12" HorizontalAlignment="Center" Style="{StaticResource MutedText}"/>
+                                        <TextBlock Text="{x:Bind ViewModel.ScoreGradeText, Mode=OneWay}" FontSize="12" HorizontalAlignment="Center" Style="{StaticResource MutedText}"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
                                         <TextBlock Text="{x:Bind ViewModel.ScoreSummary, Mode=OneWay}" Style="{StaticResource MutedText}" TextWrapping="Wrap"/>

@@ -35,7 +35,10 @@ public partial class SettingsPageViewModel
     [ObservableProperty] private bool _hasHealthError;
     [ObservableProperty] private string _healthError = string.Empty;
     [ObservableProperty] private string _scoreText = "—";
-    [ObservableProperty] private string _scoreGrade = string.Empty;
+    [ObservableProperty] private LocMessage? _scoreGrade;
+
+    /// <summary>屏幕上那一行念的是<b>现在这门语言</b>：槽里只存「键」，取词推迟到这一拍（✅片9d／P-203，与片9c 第二刀同一口径）。</summary>
+    public string ScoreGradeText => ScoreGrade?.Render() ?? string.Empty;
     [ObservableProperty] private Brush _scoreBrush = new SolidColorBrush(Color.FromArgb(255, 16, 124, 16));
     [ObservableProperty] private string _scoreSummary = string.Empty;
     [ObservableProperty] private string _languageSummary = string.Empty;
@@ -83,7 +86,7 @@ public partial class SettingsPageViewModel
     {
         var r = HealthReport;
         ScoreText = r.Score.ToString();
-        ScoreGrade = r.Score >= 80 ? Locale.T("health.grade.good") : r.Score >= 50 ? Locale.T("health.grade.ok") : Locale.T("health.grade.bad");
+        ScoreGrade = r.Score >= 80 ? LocMessage.Of("health.grade.good") : r.Score >= 50 ? LocMessage.Of("health.grade.ok") : LocMessage.Of("health.grade.bad");
         ScoreBrush = r.Score >= 80
             ? new SolidColorBrush(Color.FromArgb(255, 16, 124, 16))   // 绿
             : r.Score >= 50
@@ -157,6 +160,7 @@ public partial class SettingsPageViewModel
         foreach (var e in _diagnosticFacts)
             DiagnosticEntries.Add(new DiagnosticRow(e.Label.Render(), e.Value.Render()));
         DiagnosticsError = HasDiagnosticsError && _diagnosticsFailure is { } failure ? failure.Render() : string.Empty;
+        OnPropertyChanged(nameof(ScoreGradeText));   // 那一行也归这一拍念：档位是"分数＋一颗键"，⛔ 存成品字（P-203）
     }
 
     /// <summary>
