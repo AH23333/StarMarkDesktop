@@ -514,6 +514,7 @@ public partial class SettingsPageViewModel : ObservableObject
             // 也不再谎报已保存。本次会话内的即时应用照旧生效（改动已体现在内存与界面上）。
             var writeError = _settings.LastWriteError;
             // 运行期那颗缓存跟着落盘那一刻走（⛔ 让读者各读各的：材质与那三颗强调笔光只问这一颗）。
+            var accentChanged = ThemeAccent.Custom != AppPalette.ParseArgb(accentText);
             ThemeAccent.Apply(accentText);
 
             if (writeError is null)
@@ -543,10 +544,21 @@ public partial class SettingsPageViewModel : ObservableObject
             {
                 App.MainWindow?.DispatcherQueue.TryEnqueue(() =>
                 {
+                    // 染料<b>真的换了</b>那一拍才惊动：把框架那一族 SystemAccentColor* 换掉，再让每扇窗
+                    // 把 {ThemeResource} 重解一遍（批次 WI-82·P-213——ThemeBrush 只管代码取画笔那几处，
+                    // 控件内部样式与 XAML 里直接取的那三处问的是这一族）。⛔ 每根滑杆都翻一次主题＝肉眼可见的闪。
+                    if (accentChanged)
+                    {
+                        Helpers.AccentResourceSync.Apply(Helpers.ThemeAccent.Custom);
+                        if (App.MainWindow is { } main) Helpers.AccentResourceSync.Retheme(main);
+                    }
                     App.MainWindow?.RefreshAppearance();
                     if (App.Services.GetRequiredService<StarMark.UI.Services.WidgetManager>()
                         is StarMark.UI.Services.WidgetManager mgr)
+                    {
                         _ = mgr.RefreshAppearanceAsync();
+                        if (accentChanged) _ = mgr.RethemeAccentsAsync();
+                    }
                 });
             }
             catch (Exception ex)

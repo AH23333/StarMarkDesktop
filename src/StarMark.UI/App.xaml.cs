@@ -312,6 +312,10 @@ public partial class App : Application
             // 主题色＝自定义时那颗必须在下第一颗笔光之前定好（批次 WI-81）：晚一步的表现不是「晚一点才变」，
             // 而是首屏按系统那颗染一遍、再重染一遍，而组件窗是在后面建的——两边观感不同步（✅WI-1 同一口径）。
             Helpers.ThemeAccent.Apply(fileSettings.LoadThemeAccent());
+            // 同一拍把那颗染料交给<b>框架自己那一族颜色资源</b>（批次 WI-82·P-213）：控件内部样式
+            // （开关/滑杆/进度条/勾选/焦点框）与 XAML 里按 {ThemeResource} 取的那几处问的是 SystemAccentColor*，
+            // 晚一步的表现与上面那句一样——首屏按系统那颗染一遍、再重染一遍。
+            Helpers.AccentResourceSync.Apply(Helpers.ThemeAccent.Custom);
 
             // 2. 执行数据库迁移
             Services.GetRequiredService<StarMark.Data.MigrationRunner>().EnsureSchema();

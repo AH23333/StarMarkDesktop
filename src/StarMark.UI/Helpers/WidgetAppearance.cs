@@ -73,6 +73,26 @@ public static class WidgetAppearance
         return AppPalette.ResolveAccent(ThemeAccent.Custom, Windows.UI.Color.FromArgb(c.A, c.R, c.G, c.B));
     }, ThemeAccent.Custom ?? MaterialTint.FallbackAccent);
 
+    /// <summary>
+    /// 用户给这一扇<b>点了底色</b>、却<b>⛔ 自己点文本色</b>时，那一扇上的字该念哪一颗：
+    /// 把那颗底色按那一档材质的透明度压到主题基色上，取与合成结果<b>对比度更高</b>的黑/白。
+    /// <para>批次 WI-82（真机量到的那一格）：深色主题 + 点了白色＝<b>整扇内容从屏幕上消失</b>
+    /// （现读 tint=#FFFFFFFF 实色，字仍是主题给的白字）。判据本身住在
+    /// <see cref="SurfaceReadability.ReadableOn"/>（Core，可测），这里只做"取现场那几颗色"的 plumbing。</para>
+    /// <para>交 null＝<b>不插手</b>：没人点底色时那一套字色是主题配的，本来就对；而他自己点了文本色，
+    /// 就以他为准（调用点那三档优先级：他的文本色 &gt; 这颗自动色 &gt; 样式默认）。</para>
+    /// </summary>
+    public static Windows.UI.Color? AutoForeground(
+        ElementTheme theme, WidgetBackdropKind kind, double solidOpacity, Windows.UI.Color? tint)
+    {
+        if (tint is null) return null;
+        var dark = theme == ElementTheme.Dark;
+        var surface = SurfaceReadability.Over(
+            MaterialTint.BackdropColor(dark, AccentColor(), kind, Math.Clamp(solidOpacity, 0.0, 1.0), tint),
+            SurfaceReadability.BaseFor(dark));
+        return SurfaceReadability.ReadableOn(surface);
+    }
+
     private static T Try<T>(Func<T> read, T fallback)
     {
         try { return read(); }

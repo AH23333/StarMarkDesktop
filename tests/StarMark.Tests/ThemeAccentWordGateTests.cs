@@ -106,8 +106,10 @@ public sealed class ThemeAccentWordGateTests : IDisposable
         foreach (var (_, text) in ReadRepoUnder("src").Concat(ReadRepoUnder("tests")))
             Assert.Equal(0, Count(Code(text), moved + "."));
 
-        // 背衬取色只有两个读者：套背衬那一腿 + 兜底画笔那一腿
-        Assert.Equal(2, Count(Code(ReadRepoFile(WidgetAppearanceCs)), "MaterialTint.BackdropColor("));
+        // 背衬取色的读者：①套背衬那一腿 ②兜底画笔那一腿 ③批次 WI-82 那颗"点了底色之后字念黑还是白"
+        // 也要问同一颗合成色（⛔ 自己再算一遍 alpha——那正是"换了颜色顺手换了材质"的入口）。
+        // 这颗数从 2 → 3 是<b>多了一个合法读者</b>，⛔ 把判据放宽；再加读者时同批改这颗数与这段分布。
+        Assert.Equal(3, Count(Code(ReadRepoFile(WidgetAppearanceCs)), "MaterialTint.BackdropColor("));
         // 那一档 alpha 的性格只住在 Core，UI 侧⛔ 再算一遍（那正是"换了颜色顺手换了材质"的入口）
         Assert.Equal(0, Count(Code(ReadRepoFile(WidgetAppearanceCs)), "BackdropAlpha("));
         Assert.Contains("public static byte BackdropAlpha(",
@@ -125,7 +127,8 @@ public sealed class ThemeAccentWordGateTests : IDisposable
         Assert.Equal(0, Count(code, "useCustomBg"));
         Assert.Equal(0, Count(code, "WidgetBackdropKind.None : ("));
         Assert.Contains("var kind = ov?.Backdrop ?? globalKind;", code, StringComparison.Ordinal);
-        Assert.Equal(1, Count(code, "tint?.Color"));                 // 那颗色只交给背衬一次
+        // 那颗点定的色交给两处：①背衬那一腿 ②批次 WI-82 起的兜底内容表面也照同一颗（⛔ 一处吃了色、另一处仍铺主题色）
+        Assert.Equal(2, Count(code, "tint?.Color"));
         Assert.Contains("backdropOwnsSurface", code, StringComparison.Ordinal);
     }
 

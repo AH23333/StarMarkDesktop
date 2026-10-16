@@ -90,6 +90,7 @@ public static class WidgetAppearanceEditor
         double? wThick = current?.BorderThickness;
         double? wRadius = current?.CornerRadius;
         double? wScale = current?.TextScale;
+        double? wOpacity = current?.OpacityOverride;
 
         // 选中的「对象」（背景色 / 文本色 / 边框色）
         string selObj = "bg";
@@ -115,6 +116,7 @@ public static class WidgetAppearanceEditor
             BorderThickness = wThick,
             CornerRadius = wRadius,
             TextScale = wScale,
+            OpacityOverride = wOpacity,
         };
         bool IsDirty()
         {
@@ -125,7 +127,8 @@ public static class WidgetAppearanceEditor
                 || (wBorder != o?.BorderColor)
                 || (wThick != o?.BorderThickness)
                 || (wRadius != o?.CornerRadius)
-                || (wScale != o?.TextScale);
+                || (wScale != o?.TextScale)
+                || (wOpacity != o?.OpacityOverride);
         }
         string? GetColor(string obj) => obj switch
         {
@@ -170,7 +173,9 @@ public static class WidgetAppearanceEditor
             }
             else
             {
-                btn.BorderBrush = new SolidColorBrush(Colors.Transparent);
+                // 摘掉高亮⛔ 抹成"没有边框"：那颗白色色板在浅色卡片上会连形状一起消失（批次 WI-82 量到的
+                // "看不见那一颗"），描边由它自己常驻，高亮只加粗与换强调色。
+                btn.BorderBrush = SwatchStroke();
                 btn.BorderThickness = new Thickness(1);
             }
         }
@@ -330,7 +335,7 @@ public static class WidgetAppearanceEditor
                 Content = name,
                 FontSize = 11,
                 BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Colors.Transparent),
+                BorderBrush = SwatchStroke(),
             };
             ToolTipService.SetToolTip(btn, name);
             if (hex is not null && WidgetAppearance.ParseColorBrush(hex) is { } b)
@@ -338,6 +343,9 @@ public static class WidgetAppearanceEditor
             btn.Click += (_, _) => onClick();
             return btn;
         }
+
+        // 色板那颗按钮的常驻描边：⛔ 用 Transparent——那颗「白」在浅色卡片上会连形状一起看不见。
+        Brush SwatchStroke() => Brush("CardStrokeColorDefaultBrush", Colors.Gray);
 
         // ───────────────────────── 构建 UI ─────────────────────────
 
@@ -518,10 +526,15 @@ public static class WidgetAppearanceEditor
         cols.Children.Add(rightCol);
         root.Children.Add(cols);
 
-        // 滑杆三件套（底部，阈值放宽）
+        // 滑杆四件套（底部，阈值放宽）
         // suppressSliderReset：以编程方式回退滑杆（如「恢复全局」）时临时屏蔽其 ValueChanged，
         // 避免把 wScale/wThick/wRadius 误写成「跟随全局」对应的默认值（应保持 null = 跟随全局）。
         bool suppressSliderReset = false;
+        // 「背景不透明度」从前只有设置页那一根全局旋钮，而<b>材质</b>早就逐扇可覆写 ⇒ 同一扇能改材质、
+        // 能改颜色，却改不了那颗材质的透明度（批次 WI-82 补上的那一档）。标题⛔ 另立一句：
+        // 它与全局那一行念的是同一件事，共用 settings.widgets.opacityLabel 那颗键（一句字一个主人）。
+        var cOpacity = MakeSlider("settings.widgets.opacityLabel", wOpacity ?? WidgetAppearance.Opacity(),
+            0, 1, 0.05, v => { if (suppressSliderReset) return; wOpacity = v; Preview(); }, out var sOpacity, wordRefreshers);
         var cThick = MakeSlider("widget.appearance.slider.borderThickness", wThick ?? 1, 0, 12, 0.5, v => { if (suppressSliderReset) return; wThick = v; Preview(); }, out var sThick, wordRefreshers);
         var cRadius = MakeSlider("widget.appearance.slider.cornerRadius", wRadius ?? 8, 0, 48, 1, v => { if (suppressSliderReset) return; wRadius = v; Preview(); }, out var sRadius, wordRefreshers);
         // 文本缩放：在 1.0（=默认/跟随全局）附近吸附，并把该档显示成「默认」。
@@ -537,6 +550,7 @@ public static class WidgetAppearanceEditor
             // 那颗"默认"是**读数**，随滑杆当场算 ⇒ 交 Locale.T（⛔ 挂 LocText：同一颗元素还兼着显示数字）
             return Math.Abs(s - 1.0) < 1e-6 ? Locale.T("widget.appearance.scaleDefault") : NumberText.UpTo2(s);
         });
+        root.Children.Add(cOpacity);
         root.Children.Add(cThick);
         root.Children.Add(cRadius);
         root.Children.Add(cScale);
@@ -589,14 +603,21 @@ public static class WidgetAppearanceEditor
         cancel.Click += (_, _) => _ = RequestCancel();
         reset.Click += (_, _) =>
         {
-            // 恢复全局：清空所有覆盖（颜色 + 滑杆回到「跟随全局」），实时预览回退
+            // 恢复全局：清空所有覆盖（颜色 + 滑杆回到「跟随全局」），实时预览回退。
+            // ⚠ 材质<b>也在这一排里</b>（批次 WI-82 改掉的那句谎）：从前这里写的是
+            // "材质保持打开时的值，不强制改"，于是那颗按钮念着「恢复全局」却把某一扇钉在实色上——
+            // 措辞与实现对齐的口径是"改实现去配那句话"，⛔ 把标签改短来迁就实现。
             wBg = wFg = wBorder = null;
             wThick = wRadius = wScale = null;
-            wBackdrop = current?.Backdrop;   // 材质保持打开时的值，不强制改
-            backdropCombo.SelectedIndex = WidgetMaterialWords.IndexOf(wBackdrop) + 1;   // +1：这一排第一项是「跟随全局」
+            wOpacity = null;
+            wBackdrop = null;
+            // 「跟随全局」是第几项⛔ 由这里写死 0：那一排是 [跟随全局] + 六档清单，加一档时 0 会静默指错，
+            // 所以两处（初次挂载与这颗按钮）都问同一份清单要下标（既有闸门 WidgetAppearanceWordGateTests 钉着颗数）。
+            backdropCombo.SelectedIndex = WidgetMaterialWords.IndexOf(wBackdrop) + 1;
             Preview();
             // 同步把滑杆视觉回退到「跟随全局」对应的默认值（不触发 ValueChanged，保持上面的 null = 跟随全局）
             suppressSliderReset = true;
+            sOpacity.Value = WidgetAppearance.Opacity();
             sThick.Value = 1;
             sRadius.Value = 8;
             sScale.Value = 1;
@@ -720,7 +741,8 @@ public static class WidgetAppearanceEditor
 
     private static bool AllNull(WidgetAppearanceOverride ov) =>
         ov.Backdrop is null && ov.BackgroundColor is null && ov.ForegroundColor is null &&
-        ov.BorderColor is null && ov.BorderThickness is null && ov.CornerRadius is null && ov.TextScale is null;
+        ov.BorderColor is null && ov.BorderThickness is null && ov.CornerRadius is null &&
+        ov.TextScale is null && ov.OpacityOverride is null;
 
     /// <summary>一行标题：交的是<b>那颗键</b>（批次 WI-52·P-183）。这些标题建一次就常驻在屏幕上，
     /// 而编辑器可以开着不动、语言却被人换掉 ⇒ 属"常驻"那一族，走 <see cref="LocText"/> 重贴；

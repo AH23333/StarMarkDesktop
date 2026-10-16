@@ -47,6 +47,29 @@ public static class AppPalette
     public static Color WithAlpha(Color color, byte alpha) => Color.FromArgb(alpha, color.R, color.G, color.B);
 
     /// <summary>
+    /// 由那颗染料派生出<b>框架控件模板要问的那六颗</b>（批次 WI-82，P-213 的落地腿）：
+    /// WinUI 的开关／滑杆／进度条／勾选／焦点框读的不是 <c>AccentFillColorDefaultBrush</c> 那一颗画笔，
+    /// 而是 <c>SystemAccentColorLight1/2</c> 与 <c>SystemAccentColorDark1/2/3</c> 这一族<b>颜色</b>资源
+    /// （深浅两套主题各取不同的档），所以只交 <c>SystemAccentColor</c> 一颗＝那一半仍然跟着系统蓝。
+    /// <para>派生法＝<b>朝白/朝黑线性混</b>（⛔ 走 HSL 改明度）：混白/混黑保得住色相，
+    /// 而这一族要的正是"同一颗颜色的亮一档/暗一档"；档位取 Windows 自己那五档（+20/+40/−10/−20/−30）。</para>
+    /// </summary>
+    public static (Color Light1, Color Light2, Color Dark1, Color Dark2, Color Dark3) AccentRamp(Color accent)
+        => (MixToward(accent, 255, 255, 255, 0.20),
+            MixToward(accent, 255, 255, 255, 0.40),
+            MixToward(accent, 0, 0, 0, 0.10),
+            MixToward(accent, 0, 0, 0, 0.20),
+            MixToward(accent, 0, 0, 0, 0.30));
+
+    /// <summary>朝那颗目标色混 <paramref name="t"/> 成（t=0 原样、t=1 全取目标）；alpha 一律铺成实色。</summary>
+    public static Color MixToward(Color from, byte toR, byte toG, byte toB, double t)
+    {
+        var k = Math.Clamp(t, 0.0, 1.0);
+        byte Mix(byte a, byte b) => (byte)Math.Round(a + (b - a) * k);
+        return Color.FromArgb(0xFF, Mix(from.R, toR), Mix(from.G, toG), Mix(from.B, toB));
+    }
+
+    /// <summary>
     /// 严格解析 <c>#RRGGBB</c> ／ <c>#AARRGGBB</c>（可选 <c>#</c>）。<b>认不出来就返回 null，⛔ 凑出一颗颜色</b>。
     /// <para>旧的那颗（<c>WidgetAppearance.ParseColorBrush</c>）对 <c>"#GGHHII"</c>、含空格或汉字的串
     /// 会"解析成功"并产出一颗错色，调用方按"非 null"当作有效而不再回退主题——那是

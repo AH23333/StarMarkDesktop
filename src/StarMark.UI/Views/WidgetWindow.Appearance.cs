@@ -75,8 +75,11 @@ public sealed partial class WidgetWindow
             // 内容表面照旧透明让背衬透出 ⇒ 亚克力还是亚克力，只是换了色。
             var tint = WidgetAppearance.ParseColorBrush(ov?.BackgroundColor);
             var kind = ov?.Backdrop ?? globalKind;
+            // 「背景不透明度」从前只有全局一根旋钮，而材质早就逐扇可覆写 ⇒ 同一扇能改材质、能改颜色，
+            // 却改不了那颗材质的透明度（批次 WI-82 补上的那一档；null＝跟随全局）。
+            var opacity = ov?.OpacityOverride ?? WidgetAppearance.Opacity();
             StartupProfile.Measure($"组件材质挂载 {_kind}", () => WidgetAppearance.ApplyBackdrop(
-                this, kind, WidgetAppearance.Opacity(), RootBorder.ActualTheme, tint?.Color), logWhenMs: 10);
+                this, kind, opacity, RootBorder.ActualTheme, tint?.Color), logWhenMs: 10);
 
             // 背衬画笔已接管整窗着色（除实色 None 外的所有材质：亚克力/云母/纯色）时，内容表面必须透明，
             // 让这一层扁平背衬单独着色——若再叠一层内容实色就会两次 alpha 叠加导致过实/发灰。
@@ -85,7 +88,7 @@ public sealed partial class WidgetWindow
                 && WidgetAppearance.IsBackdropSurfaceActive(this);
             Brush surface = backdropOwnsSurface
                 ? new SolidColorBrush(Microsoft.UI.Colors.Transparent)
-                : tint ?? WidgetAppearance.SurfaceBrush(RootBorder.ActualTheme, kind);
+                : tint ?? WidgetAppearance.SurfaceBrush(RootBorder.ActualTheme, kind, opacity, tint?.Color);
 
             RootBorder.Background = surface;
             DragBar.Background = surface;
@@ -167,9 +170,13 @@ public sealed partial class WidgetWindow
         {
             try
             {
-                if (WidgetAppearance.ParseColorBrush(ov?.ForegroundColor) is { } fg)
+                // 三档优先级：他自己点的文本色 > 由那颗点定底色算出来的自动字色 > 样式默认（这颗⛔ 插手）。
+                var fg = WidgetAppearance.ParseColorBrush(ov?.ForegroundColor) ?? AutoForegroundBrush(ov);
+                if (fg is not null)
                 {
-                    SetForegroundDeep(panel, fg);
+                    // 遍历<b>整扇</b>（含标题栏那一行：组件名与那五颗动作图标）。从前只从 ContentHost 起走，
+                    // 于是"文本色"把内容改黄了、标题栏那一行还白着（批次 WI-82 真机量到的那一格）。
+                    SetForegroundDeep(RootBorder, fg);
                 }
                 else
                 {
@@ -180,7 +187,7 @@ public sealed partial class WidgetWindow
                 }
                 // 文本缩放（与前景共享一次遍历）
                 _textScale = ov?.TextScale is { } ts ? Math.Clamp(ts, 0.6, 1.8) : 1.0;
-                ApplyTextScale(panel, _textScale);
+                ApplyTextScale(panel, _textScale);   // 缩放仍只管内容区：标题栏那一行是控件，不是被看的字
             }
             catch (Exception ex)
             {
@@ -210,6 +217,8 @@ public sealed partial class WidgetWindow
         for (var i = 0; i < n; i++)
         {
             var child = VisualTreeHelper.GetChild(parent, i);
+            // 那颗图钉的字色有它自己的主人（ApplyTopmost 按"钉没钉"交强调色/次级色），⛔ 被文本色盖掉
+            if (ReferenceEquals(child, PinIcon)) continue;
             if (child is TextBlock tb)
             {
                 tb.Foreground = fg;
@@ -221,6 +230,20 @@ public sealed partial class WidgetWindow
             }
             SetForegroundDeep(child, fg);
         }
+    }
+
+    /// <summary>
+    /// 他<b>只点了底色、⛔ 点文本色</b>时的那一颗字色：把现场那几颗色（材质/透明度/主题/染料）交给
+    /// <see cref="WidgetAppearance.AutoForeground"/> 判黑判白。没点底色就交 null（＝不插手）。
+    /// </summary>
+    private Brush? AutoForegroundBrush(WidgetAppearanceOverride? ov)
+    {
+        if (WidgetAppearance.ParseColorBrush(ov?.BackgroundColor)?.Color is not { } tint) return null;
+        return WidgetAppearance.AutoForeground(
+            RootBorder.ActualTheme,
+            ov?.Backdrop ?? WidgetAppearance.Backdrop(),
+            ov?.OpacityOverride ?? WidgetAppearance.Opacity(),
+            tint) is { } c ? new SolidColorBrush(c) : null;
     }
 
     /// <summary>
@@ -282,6 +305,18 @@ public sealed partial class WidgetWindow
     {
         if (!_styled) return;   // 尚未完成首次样式化的窗口（未 Show）无需刷
         ApplyAppearanceCore();
+    }
+
+    /// <summary>
+    /// 「主题色＝自定义」换了那一拍，让这一扇把 <c>{ThemeResource}</c> 重解一遍
+    /// （批次 WI-82·P-213：这一扇标题栏那排控件的内部样式问的是框架那族 <c>SystemAccentColor*</c>，
+    /// 只重挂材质（<see cref="RefreshAppearance"/>）⛔ 会动到它）。
+    /// </summary>
+    public void RethemeAccent()
+    {
+        if (!_styled) return;
+        AccentResourceSync.Retheme(this);
+        RefreshAppearance();
     }
 
     /// <summary>

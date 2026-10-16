@@ -216,6 +216,15 @@ public sealed class WidgetAppearanceOverride
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? BackgroundColor { get; set; }
 
+    /// <summary>
+    /// 这一扇自己的「背景不透明度」（0–1，只有<b>纯色</b>那一档读它）。null = 用全局设置。
+    /// <para>批次 WI-82：材质早就⛔ 全仓只有全局一处主人（<see cref="WidgetAppearanceOverride.Backdrop"/>
+    /// 逐扇可覆写），而它唯一那颗可调的旋钮却只有全局一根 ⇒ "这一扇想比别的扇更透"做不到，
+    /// 是那一族"半覆盖"的形状（同一扇能改材质、能改颜色，⛔ 改不了那颗材质的透明度）。</para>
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? OpacityOverride { get; set; }
+
     /// <summary>前景（文本）色（#RRGGBB）。null = 用主题默认。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ForegroundColor { get; set; }
