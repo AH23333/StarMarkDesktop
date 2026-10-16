@@ -206,4 +206,28 @@ public sealed class ThemeAccentWordGateTests : IDisposable
         Assert.Equal(3, ReadRepoUnder("src").Sum(f => Count(Code(f.Text), "LoadThemeAccent")));   // 定义＋启动＋回填
         Assert.Equal(2, ReadRepoUnder("src").Sum(f => Count(Code(f.Text), "SaveThemeAccent(")));  // 定义＋保存
     }
+
+    /// <summary>
+    /// ⑨ 取色器与那颗预览方块<b>同一根左轨、同一个宽</b>：批次 WI-82 片6 在屏幕上量到那颗润色器自己保方
+    /// （档上声明 220x140 ⇒ 现读 140x140），而方块带着 220 在 Stretch 下居中 ⇒ 两者左缘差 222 px，
+    /// 卡片右半 523 px 全空。现在那颗方块⛔ 再写一份宽度（宽只有一个主人＝上面那一格），两颗同住左对齐的容器。
+    /// <para>⚠ 这一格钉的是<b>形状</b>：那两个数在屏幕上实现成什么，只有那一跑量得到（<c>bin/WI82/measure_82s.py</c>）。</para>
+    /// </summary>
+    [Fact]
+    public void TheSwatchSharesThePickersLeftEdgeAndItsWidth()
+    {
+        var panel = Between(ReadRepoFile(Page),
+            "<StackPanel HorizontalAlignment=\"Left\" Spacing=\"10\">", "</StackPanel>");
+        Assert.Contains("x:Name=\"AccentSpectrum\"", panel, StringComparison.Ordinal);
+        Assert.Contains("ViewModel.ThemeAccentBrush, Mode=OneWay", panel, StringComparison.Ordinal);
+
+        var picker = Between(panel, "<ColorSpectrum", "/>");
+        Assert.Equal(1, Count(picker, "Width=\"140\""));        // 声明与实现同一颗数（它保方）
+        Assert.Equal(1, Count(picker, "Height=\"140\""));
+        Assert.Equal(0, Count(picker, "HorizontalAlignment=")); // 归属由那一格给，⛔ 两处各说一遍
+
+        var swatch = Between(panel, "<Rectangle", "/>");
+        Assert.Equal(0, Count(swatch, "Width="));               // ⛔ 第二份宽度
+        Assert.Equal(1, Count(swatch, "Height=\"26\""));
+    }
 }

@@ -146,16 +146,20 @@
                                 <TextBlock i18n:LocText.Key="settings.general.accentScope"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                 <!-- ⛔ 在这里再列一排颜色按钮：「组件外观」编辑器那排的主人是那颗编辑器，
-                                     这一格要的是<b>任意一颗</b>，所以用ColorSpectrum 那一格（无正文＝⛔ 新键，坑表 #276 那一族⛔ 复发）。 -->
-                                <ColorSpectrum x:Name="AccentSpectrum" Width="220" Height="140"
-                                             HorizontalAlignment="Left"
-                                             Visibility="{x:Bind ViewModel.CustomAccentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}"
-                                             Color="{x:Bind ViewModel.ThemeAccentColor, Mode=TwoWay}"/>
-                                <!-- 那颗预览方块：选完得看见自己点的是哪颗（润色器自己不带预览格，⛔ 让用户猜）。 -->
-                                <Rectangle Width="220" Height="26" RadiusX="4" RadiusY="4"
-                                           Stroke="{ThemeResource CardStrokeColorDefaultBrush}" StrokeThickness="1"
-                                           Visibility="{x:Bind ViewModel.CustomAccentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}"
-                                           Fill="{x:Bind ViewModel.ThemeAccentBrush, Mode=OneWay}"/>
+                                     这一格要的是<b>任意一颗</b>，所以用ColorSpectrum 那一格（无正文＝⛔ 新键，坑表 #276 那一族⛔ 复发）。
+                                     两颗同住一个左对齐的容器，且宽度只由选取器那一格给：批次 WI-82 片6 量到它自己保方
+                                     （声明 220x140 ⇒ 现读 140x140），而那颗方块带着 220 在 Stretch 下居中⇒ 左缘差 222 px。 -->
+                                <StackPanel HorizontalAlignment="Left" Spacing="10">
+                                    <ColorSpectrum x:Name="AccentSpectrum" Width="140" Height="140"
+                                                 Visibility="{x:Bind ViewModel.CustomAccentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}"
+                                                 Color="{x:Bind ViewModel.ThemeAccentColor, Mode=TwoWay}"/>
+                                    <!-- 那颗预览方块：选完得看见自己点的是哪颗（润色器自己不带预览格，⛔ 让用户猜）。
+                                         它自己⛔ 写宽度——那一颗宽由上面那格给（同批⛔ 两处各写一个数）。 -->
+                                    <Rectangle Height="26" RadiusX="4" RadiusY="4"
+                                               Stroke="{ThemeResource CardStrokeColorDefaultBrush}" StrokeThickness="1"
+                                               Visibility="{x:Bind ViewModel.CustomAccentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}"
+                                               Fill="{x:Bind ViewModel.ThemeAccentBrush, Mode=OneWay}"/>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
 
