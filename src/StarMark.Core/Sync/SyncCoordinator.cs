@@ -128,13 +128,34 @@ public sealed class SyncCoordinator
 
         sw.Stop();
         StarLog.Info($"同步结束，耗时 {sw.ElapsedMilliseconds}ms，失败 {results.Count(r => !r.Success)} 源");
-        return new SyncSummary
+        var summary = new SyncSummary
         {
             StartedAt = now,
             ElapsedMs = sw.ElapsedMilliseconds,
             Sources = results,
         };
+        // 记一次、发一次，界面上谁要读都读同一颗（P-212 走 (B) 的后半：设置页那颗 GitHub 卡也要说得出
+        // "哪一源为什么没成"，而提示卡 9 秒就收了）。这里⛔ 造第二份汇总给事件——订阅者拿到的
+        // 就是 LastSummary 那一颗，两份读数从此不可能分岔。
+        LastSummary = summary;
+        SyncCompleted?.Invoke(summary);
+        return summary;
     }
+
+    /// <summary>
+    /// 本进程内<b>最后一次跑完的</b>同步汇总；null＝这一场还没跑完过一次。
+    /// <para>为什么⛔ 落盘：落盘就要回答"跨重启那一句还算不算数"，而屏幕需要的是"这一场同步跑完了什么"；
+    /// 新启动时这一格收着（⛔ 拿旧档的句子冒充刚刚发生过的事）。</para>
+    /// <para>被取消的那一发走不到这里：源抛 <see cref="OperationCanceledException"/> 时，带
+    /// <c>when (!ct.IsCancellationRequested)</c> 的那一条 catch 管"单源自己超时"（记成一源失败、其余继续），
+    /// 顶层令牌确实取消了才由下一条上抛中断整次同步。取消⛔ 是"一次结果"，把上一发的读数抹掉反而说了假话。</para>
+    /// </summary>
+    public SyncSummary? LastSummary { get; private set; }
+
+    /// <summary>每一发跑完时发一次，实参＝<b>就是</b> <see cref="LastSummary"/> 那一颗对象。</summary>
+    /// <remarks>发在 <c>SyncAllAsync</c> 的续跑线上（通常＝UI 线程，因为调用方是界面上的命令），
+    /// 但"通常"⛔ 是判据 ⇒ 订阅者自己 marshal（设置页那一格进 <c>DispatcherQueue</c>）。</remarks>
+    public event Action<SyncSummary>? SyncCompleted;
 }
 
 /// <summary>单次同步的汇总报告。</summary>

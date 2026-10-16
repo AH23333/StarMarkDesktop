@@ -159,9 +159,15 @@ public sealed class TemplateRowWordGateTests : IDisposable
         var host = CodeOf(BackupCs);
         Assert.Equal(1, Count(host, "foreach (var row in ViewModel.Backups) row.Repaste();"));
         Assert.Equal(0, Count(host, "LocText.SetMessage(row"));                         // ⛔ 逐行挂进那份名单
-        Assert.Equal(3, Count(host, "Locale.Changed += Repaste"));                      // 快捷键＋AI 组行＋备份那一列
-        // 6：设置页那三组手臂写的是"先退再订"（同一页可能被反复导航回来，⛔ 挂两份），Loaded 三颗退＋Unloaded 三颗摘。
-        Assert.Equal(6, Count(host, "Locale.Changed -= Repaste"));
+        // 三组手臂<b>按名字各钉一颗</b>。⛔ 数 "Locale.Changed += Repaste" 那颗前缀：那一串会把同一页后来加的
+        // 无关手臂一起算进来（批次 WI-82 片2 的 GitHub 卡「上一次同步」那一行就叫 RepasteSyncStatus，
+        // 它不是模板行，却把这两颗前缀计数顶成 4／7＝天天误伤，坑表 #144 那条"判据要能被遵守"）。
+        // 每一组都是"先退再订"（同一页可能被反复导航回来，⛔ 挂两份）＝Loaded 一退一进＋Unloaded 一摘。
+        foreach (var arm in new[] { "RepasteHotkeyRows", "RepasteAiGroupRows", "RepasteBackupRows" })
+        {
+            Assert.Equal(1, Count(host, $"Locale.Changed += {arm}"));
+            Assert.Equal(2, Count(host, $"Locale.Changed -= {arm}"));
+        }
 
         foreach (var key in new[] { "settings.data.backup.kindAuto", "settings.data.backup.kindPreRestore",
                                     "settings.data.backup.kindManual", "settings.data.backup.restore",

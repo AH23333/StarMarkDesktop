@@ -80,12 +80,13 @@ public sealed class LocaleSubscriptionPairGateTests
     public void TheCensusReportsItsOwnDenominator()
     {
         var pts = All.Value;
-        // 39／17／22／13 档＝现读（⛔ 预测，名册 262 那一族）。批次 WI-68 把三串各加一颗/两颗：设置页为「健康」那一栏
-        // 新挂了一组成对手臂（挂 1／摘 2＝Loaded 先退再订＋Unloaded 收尾），而那一档本就是主人 ⇒ 档数不变。
+        // 42／18／24／13 档＝现读（⛔ 预测，名册 262 那一族）。批次 WI-82 片2 给设置页那行「上一次同步」新挂了一组成对手臂
+        // （挂 1／摘 2＝Loaded 先退再订＋Unloaded 收尾），⛔ 档数不变（那一档本就是主人）⇒ 三串各 +1／+2／总 +3。
+        // 上一批同形状的一次＝批次 WI-68（那颗「健康」那一栏）。
         // ⚠ 这颗闸门⛔ 在本族的定向过滤器里 ⇒ 只要动了订阅手臂，收口必须跑全量（上一批就是这么静默漏过一次，
         // 名册 288 第④条）。四串合成<b>一条</b>断言：红了就把"该是多少"与"现在是多少"两边整串一起报出来，
         // ⛔ 撞一次改一次（那要重编四回）。
-        Assert.Equal("39|17|22|13",
+        Assert.Equal("42|18|24|13",
             $"{pts.Count}|{pts.Count(p => p.Sign == "+")}|{pts.Count(p => p.Sign == "-")}|{pts.Select(p => p.File).Distinct().Count()}");
         Assert.All(pts, p => Assert.True(p.Sign is "+" or "-", "符号只可能是这两颗之一"));
     }

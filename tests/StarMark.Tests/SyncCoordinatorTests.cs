@@ -233,4 +233,91 @@ public sealed class SyncCoordinatorTests : IDisposable
 
         Assert.Equal(1, empty.Commits);
     }
+
+    // ─────────────── 批次 WI-82 片2：那颗「上一次同步」的读数只有一个主人（P-212 走 B 的后半） ───────────────
+
+    [Fact]
+    public void LastSummary_IsNullUntilTheFirstRunFinishes()
+    {
+        // 设置页那一格靠这颗 null 决定"整行收着"：把它当成"同步过了、什么都没拉"就是编话。
+        var coordinator = new SyncCoordinator(new ItemRepository(_factory), Array.Empty<IItemSource>());
+        Assert.Null(coordinator.LastSummary);
+    }
+
+    [Fact]
+    public async Task LastSummary_IsTheSameObjectTheCallerWasHanded()
+    {
+        var repo = new ItemRepository(_factory);
+        var good = new FakeSource { SourceId = "good", DisplayName = "Good", Result = new[] { ItemFile("good") } };
+        var coordinator = new SyncCoordinator(repo, new[] { good });
+
+        var summary = await coordinator.SyncAllAsync(CancellationToken.None);
+
+        // ⛔ "内容相等就算"：界面上读的那一颗与调用方拿到的那一颗必须同一颗，
+        // 否则"提示卡说的"与"设置页说的"可以来自两份不同时刻的汇总（＝分岔预定）。
+        Assert.Same(summary, coordinator.LastSummary);
+    }
+
+    [Fact]
+    public async Task SyncCompleted_FiresOncePerRunWithThatSameObject()
+    {
+        var repo = new ItemRepository(_factory);
+        var good = new FakeSource { SourceId = "good", DisplayName = "Good", Result = new[] { ItemFile("good") } };
+        var coordinator = new SyncCoordinator(repo, new[] { good });
+        var seen = new System.Collections.Generic.List<SyncSummary>();
+        coordinator.SyncCompleted += seen.Add;
+
+        var first = await coordinator.SyncAllAsync(CancellationToken.None);
+        var second = await coordinator.SyncAllAsync(CancellationToken.None);
+
+        Assert.Equal(2, seen.Count);
+        Assert.Same(first, seen[0]);
+        Assert.Same(second, seen[1]);
+        Assert.Same(second, coordinator.LastSummary);   // 后一发覆盖前一发（屏幕上要的永远是"最后一次"）
+    }
+
+    [Fact]
+    public async Task CancelledRun_LeavesThePreviousReadingAlone()
+    {
+        var repo = new ItemRepository(_factory);
+        var ok = new FakeSource { SourceId = "ok", DisplayName = "OK", Result = new[] { ItemFile("ok") } };
+        var canceller = new FakeSource { SourceId = "cancel", DisplayName = "Cancel", Throw = new OperationCanceledException() };
+        var coordinator = new SyncCoordinator(repo, new[] { ok });
+        var fired = 0;
+        coordinator.SyncCompleted += _ => fired++;
+
+        var first = await coordinator.SyncAllAsync(CancellationToken.None);
+        // 取消这一发要走到"上抛"那一条 catch 才算真取消：那颗 catch 带 `when (!ct.IsCancellationRequested)` 的兄弟
+        // 管的是"单源自己超时"（记成一源失败、其余继续）。所以这里交一颗<b>已经取消</b>的令牌——
+        // 拿一颗没取消的令牌丢进去会被当成超时，那是我读错 catch 的顺序、⛔ 读那颗过滤器（坑表同族）。
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await new SyncCoordinator(repo, new[] { canceller }).SyncAllAsync(cts.Token));
+
+        // 被取消的那一发⛔ 是一次"结果"：它没有失败名单可报，记下来会让设置页念一句假的"上一次同步没成"。
+        Assert.Same(first, coordinator.LastSummary);
+        Assert.Equal(1, fired);
+    }
+
+    [Fact]
+    public async Task LastSummary_StillCarriesThePerSourceReasons()
+    {
+        var repo = new ItemRepository(_factory);
+        var bad = new FakeSource { SourceId = "bad", DisplayName = "Bad", Throw = new InvalidOperationException("boom") };
+        var bad2 = new FakeSource { SourceId = "bad2", DisplayName = "Bad2", Throw = new InvalidOperationException("bang") };
+        var coordinator = new SyncCoordinator(repo, new[] { bad, bad2 });
+
+        await coordinator.SyncAllAsync(CancellationToken.None);
+
+        // 这一格钉的是 P-212 那颗缺陷的本体：界面上那句"哪一源、为什么"必须还能从<b>这颗被留下的汇总</b>里取出来，
+        // ⛔ 留下的只是"失败几颗"那颗数（那是 WI-80 判出来的形状）。
+        var lines = coordinator.LastSummary!.FailureLines();
+        Assert.NotNull(lines);
+        Assert.Equal(2, lines!.Render().Split('\n').Length);
+        Assert.Contains("boom", lines.Render(), StringComparison.Ordinal);
+    }
+
+    private static Item ItemFile(string source)
+        => new() { Type = ItemType.File, Source = source, SourceId = "a", Title = "T" };
 }

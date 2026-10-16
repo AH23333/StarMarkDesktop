@@ -313,6 +313,10 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         // 换语言只重念那几行，⛔ 在这里重新采集（那一趟含整表读），也⛔ 顺手把分数与趋势柱重建一遍（P-184）。
         Locale.Changed -= ViewModel.PaintHealthReadouts;
         Locale.Changed += ViewModel.PaintHealthReadouts;
+        // 「上一次同步」那一行（GitHub 卡）：换语言回同一颗汇总重贴，另外还挂"每一发跑完"那颗事件（机制 (C)·第五位宿主，P-212 走 B 的后半）。
+        Locale.Changed -= RepasteSyncStatus;
+        Locale.Changed += RepasteSyncStatus;
+        SubscribeSyncStatus();
         if (App.Services.GetRequiredService<HotkeyService>() is not { } svc) return;
         // 本页可能被反复导航回来：先退再订，避免同一个处理器挂多份（一份事件 → N 次重建 UI）。
         svc.RegistrationStateFlushed -= OnRegistrationStateFlushed;
@@ -332,6 +336,8 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         Locale.Changed -= RepasteAiGroupRows;           // 同上：AI 预览那两行同样⛔ 留下挂着的订阅
         Locale.Changed -= RepasteBackupRows;            // 同上：备份那一列的三颗显示属性也一起摘
         Locale.Changed -= ViewModel.PaintHealthReadouts; // 同上：健康那一栏那几行的重贴手臂一起摘
+        Locale.Changed -= RepasteSyncStatus;            // 同上：GitHub 卡那行「上一次同步」的重贴手臂一起摘
+        UnsubscribeSyncStatus();                        // 同上：那颗 SyncCompleted 事件也成对摘（这颗服务是单例，挂着就是每进一次页多一份）
         if (App.Services.GetRequiredService<HotkeyService>() is { } svc)
             svc.RegistrationStateFlushed -= OnRegistrationStateFlushed;
     }

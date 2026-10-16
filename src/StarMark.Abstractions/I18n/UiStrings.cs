@@ -91,6 +91,13 @@ public static class UiStrings
         new Entry("top.syncPartialTitle", "同步没有全部完成",
             "Sync did not finish completely", "同期は全ては完了していません"),
         new Entry("top.syncFixToken", "去常规页换 Token", "Replace the token", "トークンを変更する"),
+        // 批次 WI-82 片2（P-212 走 B 的后半）：那句"哪一源为什么没成"从前只住在主窗那张提示卡上（9 秒自动收、
+        // 用户随时能点关闭），而人读到「凭据无效」时已经站在设置页那颗 GitHub 卡前——这里给同一发同步的
+        // 读数补一个家。槽里交的是 <c>SyncSummary.Message()</c> 那颗<b>还没取词</b>的 LocMessage，
+        // 逐源那几行由 <c>sync.src.lineJoin</c> 那一族接（分隔符是布局，走实参⛔ 写进正文＝规则 #100）。
+        new Entry("settings.general.github.lastSync", "上一次同步：{0}",
+            "Last sync: {0}", "前回の同期：{0}"),
+        new Entry("settings.general.github.lastSyncJoin", "{0}{2}{1}", "{0}{2}{1}", "{0}{2}{1}"),
 
         new Entry("top.widgetsTip", "桌面组件", "Desktop widgets", "デスクトップウィジェット"),
         new Entry("top.guideTip", "这一页怎么用", "How this page works", "このページの使い方"),

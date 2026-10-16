@@ -280,6 +280,11 @@ public sealed class I18nContractTests : IDisposable
                 + "（✅WI-81／P-212 走 B，与 clip.clean.lineJoin／settings.data.backup.lineJoin 同形）；"
                 + "{2} 交的是<b>换行</b>那颗布局，⛔ 进表（规则 #100，先例＝settings.data.deleteBackupBody）",
 
+            ["settings.general.github.lastSyncJoin"] = "纯胶水行「{0}{2}{1}」三列同形：把设置页那一行的<b>抬头</b>（settings.general.github.lastSync）与"
+                + "<b>逐源那几句「谁、为什么」</b>连起来的位置，⛔ 在 C# 里拼 +"
+                + "（✅WI-82 片2／P-212 (B) 那半颗落地，与 sync.src.lineJoin／clip.clean.lineJoin／settings.data.backup.lineJoin 同形）；"
+                + "{2} 交的是<b>换行</b>那颗布局，⛔ 进表（规则 #100）——这一行今天屏幕上量到了中英两句（正本 bin/WI82/ShotN_zh、ShotN_en）",
+
             ["settings.data.backup.lineJoin"] = "纯胶水行「{0}{2}{1}」三列同形：把回执的两半连起来的那颗位置，⛔ 在 C# 里拼 +（同 autoBackupSentence／widget.mon.note.join）；{2} 交的是<b>换行</b>那颗布局，⛔ 进表（规则 #100，先例＝settings.data.deleteBackupBody）（批次 WI-62／P-193）",
             ["capture.bar.nameJoin"] = "连接符「 / 」三列同形（en 列也是同一个 ASCII 形状）：截图条上「点开换 …」那一排图形名与「细 / 中 / 粗」那一排档位名的间隔，"
                 + "⛔ 在 C# 里写死 \" / \"（✅WI-65 片3／P-194，与 health.join.list／hotkey.conflict.join／settings.ai.groupJoin 同形）。"

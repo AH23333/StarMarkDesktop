@@ -276,6 +276,13 @@
                                         <TextBox PlaceholderText="octocat" Text="{x:Bind ViewModel.GithubUsername, Mode=TwoWay}"/>
                                     </StackPanel>
                                 </Grid>
+                                <!-- 上一次同步的读数（批次 WI-82 片2，P-212 走 B 的后半）：主窗那张提示卡会说
+                                     "哪一源为什么没成"，但它 9 秒就收、也随时被人点掉，而用户读到「凭据无效」那句话时
+                                     通常已经站在这张卡前了。这一行读的是同一颗 <c>SyncSummary</c>（Core 里只有一个主人），
+                                     ⛔ 在这里再算一遍失败名单。从没跑完过一次 ⇒ 整行收着（⛔ 编一句"已完成"）。
+                                     ⛔ 把这句绑成成品串：绑字符串＝换语言那一刻没人重贴（机制 (C)，见 SettingsPage.Sync.cs）。 -->
+                                <TextBlock x:Name="GithubSyncStatusText" Style="{StaticResource SettingRowText}"
+                                           TextWrapping="Wrap" Visibility="Collapsed"/>
                             </StackPanel>
                         </Border>
 
