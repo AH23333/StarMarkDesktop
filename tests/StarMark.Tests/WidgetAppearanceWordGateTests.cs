@@ -207,4 +207,51 @@ public sealed class WidgetAppearanceWordGateTests
     public void NoRowOfThisBatchCarriesAControlCharacter()
         => Assert.All(UiStrings.All.Where(e => e.Key.StartsWith("widget.appearance.", StringComparison.Ordinal)),
             e => Assert.True(!e.Zh.Contains('\n') && !e.Zh.Contains('\r'), $"{e.Key} 的中文列里躺着一颗控制字符"));
+    /// <summary>
+    /// ✅P-208：六档材质的<b>选项正文只许是短名</b>——括注⛔ 留在选项里（它决定那颗 <c>ComboBox</c> 的期望宽度，
+    /// 而那一行的第 1 列是 <c>Auto</c>，于是控件把宽度顶出它自己那一列：日语在 918／960 两档实测越出 66／47 px）。
+    /// <para>为什么这条判据是形状而不是像素：闸门量不到排版，但"括注进了选项正文"就是那颗越列的<b>因</b>——
+    /// 把说明搬回选项里（下一次为了"看得见解释"这么改）当场红，而屏幕上又会越列，中间没有读数可等。</para>
+    /// <para>括注那六句搬去了 <c>guide.page.settings.4</c>（设置页「？」那一行），所以这里⛔ 同时钉"话没丢"：
+    /// 见 <see cref="TheTierExplanationsLiveInTheSettingsGuide"/>。</para>
+    /// </summary>
+    [Fact]
+    public void TheSixMaterialNamesCarryNoParentheticalAndStayDistinct()
+    {
+        string[] keys =
+        {
+            "settings.general.material.acrylicThin", "settings.general.material.mica",
+            "settings.general.material.opaque", "settings.general.material.micaAlt",
+            "settings.general.material.acrylicThick", "settings.general.material.solid",
+        };
+        var rows = keys.Select(k => UiStrings.All.Single(e => e.Key == k)).ToList();
+        foreach (var (col, name) in new[] { (rows.Select(r => r.Zh).ToList(), "中文"),
+                                             (rows.Select(r => r.En).ToList(), "英文"),
+                                             (rows.Select(r => r.Ja).ToList(), "日文") })
+        {
+            foreach (var text in col)
+                Assert.True(text.IndexOfAny(new[] { '（', '(', '「', '【', '[' }) < 0,
+                    $"材质名里又出现括注了（{name}列：{text}）——那颗下拉会因此顶出它自己那一列（P-208）");
+            Assert.Equal(6, col.Distinct(StringComparer.Ordinal).Count());   // 六档两两不同名（薄／厚／Alt 分得开）
+        }
+    }
+
+    /// <summary>
+    /// 那六句说明<b>搬进了设置页那份「？」</b>，⛔ 搬一半：新行必须同时住在表里与那一页的名单里。
+    /// <para>两半各钉一次：只在表里加一行＝屏幕上没人念它（<c>TheTableHasNoRowNothingAsksFor</c> 那一族会红，
+    /// 但那颗尺不认得"这一页该不该有这句"）；只往名单里加键＝运行时念一句表里没有的话。</para>
+    /// </summary>
+    [Fact]
+    public void TheTierExplanationsLiveInTheSettingsGuide()
+    {
+        const string key = "guide.page.settings.4";
+        var row = Assert.Single(UiStrings.All, e => e.Key == key);
+        Assert.True(row.Zh.Length > 40 && row.En.Length > 40 && row.Ja.Length > 40,
+            $"那一句说明太短，装不下六档（中 {row.Zh.Length}／英 {row.En.Length}／日 {row.Ja.Length} 字）");
+        Assert.DoesNotContain('\n', row.Zh);                     // 一颗格子里不许有换行（#100：换行是布局不是话）
+        var guides = ReadRepoFile("src/StarMark.Core/Guide/PageGuides.cs").Replace("\r\n", "\n");
+        var listed = guides.Split('\n').Count(l => l.Contains("\"" + key + "\"", StringComparison.Ordinal));
+        Assert.True(listed == 1, $"那一页的名单里这颗键的出现次数不是 {listed}（⛔ 只往表里加行、名单里不念＝屏幕上永远少一句）");
+    }
+
 }
