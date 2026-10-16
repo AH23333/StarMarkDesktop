@@ -10,7 +10,7 @@ using static StarMark.Tests.SourceGate;
 namespace StarMark.Tests;
 
 /// <summary>
-/// 批次 WI-71（✅P-188）的闸门：<b>UI 层剩下的那 69 行汉字⛔ 有一颗住在屏幕上，而且每一行都认得出消费点</b>。
+/// 批次 WI-71（✅P-188）的闸门：<b>UI 层剩下的那 70 行汉字⛔ 有一颗住在屏幕上，而且每一行都认得出消费点</b>。
 /// <para>
 /// 这一格从前只按"还剩几行汉字"记账，而汉字行 ≠ 上屏行：日志、启动刻度、异常句里的字换语言不需要翻（✅WI-67 片4
 /// 那条"只进日志的句⛔ 顺手交表"的口径）。批次 WI-71 把这 70 行<b>逐行追到消费点</b>（只读尺
@@ -19,7 +19,9 @@ namespace StarMark.Tests;
 /// </para>
 /// <para>
 /// ⚠ 两把尺⛔ 同一构造（名册 277 那一族）：C# 这侧只认"锚行＋名册写法＋上屏出口形状"，
-/// 它与 python 那侧的<b>消费点数据流</b>读数是<b>独立算出来的同一组数</b>（69＋1＝70）——
+/// 它与 python 那侧的<b>消费点数据流</b>读数是<b>独立算出来的同一组数</b>（✅WI-71 那一刻：python 70 行 − 1 行只含全角符号＝这里 69 行）——
+/// 批次 WI-81 起这里是 <b>70</b>＝69 ＋那颗主题色的 <c>Safe(..., "主题色")</c> 兜底标签（同一族写法，⛔ 新出口），
+/// 而 python 那把尺本批⛔ 复称 ⇒ 那一侧的数留作欠项（名册：改了判据⛔ 顺手说"两边还相等"）。
 /// 两侧同时错到一处去的概率，就是这颗闸门值得存在的理由。
 /// </para>
 /// <para>⚠ 测试工程引用不到 <c>StarMark.UI</c>（坑表 #370 那条边界），所以这里全是源码形状判据；
@@ -62,7 +64,7 @@ public sealed class LogOnlyWordGateTests
         ("只进日志（拼接的续行）", new Regex(@"(StarLog|Debug|Trace)\.\w+\("), 4),
         ("启动刻度（StartupProfile）", new Regex(@"StartupProfile\.(Mark|Measure)\s*\("), 15),
         ("异常句（throw）", new Regex(@"throw new \w*Exception"), 2),
-        ("设置回读兜底（Safe 的 what）", new Regex(@"\bSafe\s*\("), 35),
+        ("设置回读兜底（Safe 的 what）", new Regex(@"\bSafe\s*\("), 36),
         ("组件写兜底（GuardAsync 的 what）", new Regex(@"\bGuardAsync\s*\("), 7),
         ("拖放格式串厂（DropFormats）", new Regex(@"\b\w+\.Add\(|return \w+\.Count"), 5),
         ("贴图窗设备名（DeviceName）", new Regex(@"^\s*DeviceName\s*="), 1),
@@ -117,14 +119,14 @@ public sealed class LogOnlyWordGateTests
     }
 
     /// <summary>
-    /// 名册那一半（读数）：69 行汉字逐行归进七种写法，<b>每档颗数钉死</b>；出现"名册外"的那一行就红，
+    /// 名册那一半（读数）：70 行汉字逐行归进七种写法，<b>每档颗数钉死</b>；出现"名册外"的那一行就红，
     /// 并直接印出原文（红测要能指出该打开哪一行，⛔ 只报一个数）。
     /// </summary>
     [Fact]
     public void TheWordsLeftInTheTwelveHostsAreOnlyEverTakenByNamedNonScreenConsumers()
     {
         var rows = WordsOfHosts();
-        Assert.Equal(69, rows.Count);                                       // 与那颗只读尺同一读数（70 行 − 1 行只含全角符号）
+        Assert.Equal(70, rows.Count);   // ✅WI-71 那把尺的 69（70 行汉字−1 行只含全角符号）＋批次 WI-81 那颗主题色的 Safe 兜底标签
 
         var counted = Roster.ToDictionary(r => r.Name, _ => 0);
         var homeless = new List<string>();

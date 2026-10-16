@@ -146,6 +146,8 @@ public sealed class SettingsTaxonomyGateTests
             "AutoBackupEnabled", "AutoBackupIntervalIndex",
             // 批次 UE：自动检查更新那一颗（住在「常规」页的「关于与更新」卡里，挨着它要用的 Token）。
             "UpdateAutoCheckEnabled",
+            // 批次 WI-81：主题色两档（0＝随系统强调色，1＝自定义）。不登记的话"只有一个编辑入口"对它根本不成立。
+            "AccentIndex",
         };
 
         foreach (var p in writable)
@@ -179,6 +181,11 @@ public sealed class SettingsTaxonomyGateTests
         // 于是"卡搬走了"这种结构改动在这一格里没有凭据（同一族：#171/#179 锚点要认代码不认注释）。
         Assert.Contains("i18n:LocText.Key=\"settings.general.aboutTitle\"", Markup(regular));
         Assert.Contains("ViewModel.UpdateAutoCheckEnabled", regular);
+        // 批次 WI-81：「主题色」那张卡跟着「主题」留在常规页——它改的是同一件事（界面这套颜色），
+        // 拆到「桌面组件」就成了"换个颜色要在两页之间找"；而组件页那颗「外观」管的是材质，不是这套颜色。
+        Assert.Contains("i18n:LocText.Key=\"settings.general.accentTitle\"", Markup(regular));
+        Assert.Contains("ViewModel.AccentIndex", regular);
+        Assert.DoesNotContain("ViewModel.AccentIndex", Between(xaml, "<TabViewItem x:Name=\"TabWidgets\" Tag=\"widgets\"", "</TabViewItem>"));
 
         var widgets = Between(xaml, "<TabViewItem x:Name=\"TabWidgets\" Tag=\"widgets\"", "</TabViewItem>");
         Assert.Contains("i18n:LocText.Key=\"settings.widgets.materialLabel\"", widgets);

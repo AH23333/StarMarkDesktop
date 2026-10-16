@@ -117,7 +117,7 @@ public sealed class AppearanceSettingsPolicyTests
     /// <summary>
     /// 判据只做<b>范围</b>夹取，<b>不做有限性检查</b>：NaN 一路穿过（<c>Math.Clamp</c> 的两个比较都不成立）。
     /// <para>这不是遗漏而是分工——"非有限值 ⇒ 整窗面板隐形"那层守卫在
-    /// <c>WidgetMaterialVisualCalculator.NormalizeMaterialIntensity</c>（批次 10 真机踩过的坑）。
+    /// <c>MaterialTint.NormalizeOpacity</c>（批次 10 真机踩过的坑）。
     /// 记成断言是为了让下一个想"给判据加个 NaN 兜底"的人先看见这句话管的是哪一层。</para>
     /// </summary>
     [Fact]

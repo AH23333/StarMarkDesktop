@@ -107,7 +107,10 @@ public sealed class SyncCoordinatorTests : IDisposable
 
         Assert.Equal(1, summary.TotalPulled);
         Assert.Equal(1, summary.FailedCount);
-        Assert.Contains(summary.Sources, s => s.SourceId == "bad" && !s.Success && s.Error == "boom");
+        // 批次 WI-81／P-212 走 B：`Error` 从成品中文串换成了「键＋实参」。异常原文不再当"那句话"交出，
+        // 而是当**读数**进 sync.src.other 的 {0} 槽——句子本身归表管，换语言那一刻才取词。
+        Assert.Contains(summary.Sources, s => s.SourceId == "bad" && !s.Success
+            && s.Error is { Key: "sync.src.other" } && (string?)s.Error.Args?[0] == "boom");
         Assert.Contains(summary.Sources, s => s.SourceId == "good" && s.Success);
     }
 

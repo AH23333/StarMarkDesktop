@@ -37,6 +37,19 @@ public sealed partial class SettingsPage
     /// </summary>
     public IReadOnlyList<LocOption> MaterialOptions => WidgetMaterialWords.SixTiers;
 
+    /// <summary>
+    /// 主题色两档（批次 WI-81，用户裁「当前系统主题色只能选择两种，能否添加一个自定义颜色」）：
+    /// 第 0 项＝那颗染料跟着 Windows 的强调色走（＝本批之前的唯一行为，观感一字不动），第 1 项＝用户自己点一颗。
+    /// <para>与「材质」「性能」同一条规矩：设置档存的就是<b>选到第几项</b>（0＝没设过），⛔ 换序、只许追加在末尾。</para>
+    /// <para>第 0 项那句⛔ 复用「跟随系统」那颗键：那一颗管的是深浅色档与语言，这句管的是<b>颜色</b>。
+    /// 同一句字给两样东西当名字，坏的时候没人知道该去哪一行找。</para>
+    /// </summary>
+    public IReadOnlyList<LocOption> AccentOptions { get; } =
+    [
+        LocOption.T("settings.general.accentSystemAccent"),
+        LocOption.T("settings.general.accentCustom"),
+    ];
+
     /// <summary>性能三档，顺序＝<c>PerformanceMode</c> 的序号（同上：存的是序号，不是名字）。</summary>
     public IReadOnlyList<LocOption> PerformanceOptions { get; } =
     [

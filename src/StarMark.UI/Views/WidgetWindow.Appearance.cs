@@ -69,25 +69,23 @@ public sealed partial class WidgetWindow
             var ov = _config.Appearance;
             var globalKind = WidgetAppearance.Backdrop();
 
-            // 自定义背景色优先覆盖材质（实色铺满会盖住霜化背景，故强制 None）
-            var useCustomBg = !string.IsNullOrWhiteSpace(ov?.BackgroundColor);
-            var kind = useCustomBg ? StarMark.Abstractions.WidgetBackdropKind.None : (ov?.Backdrop ?? globalKind);
+            // 那一扇窗点定的底色＝**只换颜色，⛔ 换材质**（批次 WI-81，用户报「选了透明材质再改颜色就变实色」）。
+            // 从前的写法是 useCustomBg ⇒ 强制 None：因为把"实色铺满内容表面"当成了唯一一条落色路径，
+            // 而它会把背衬盖住。现在那颗颜色交给背衬自己（MaterialTint 里只换 RGB、alpha 仍按那一档材质的性格），
+            // 内容表面照旧透明让背衬透出 ⇒ 亚克力还是亚克力，只是换了色。
+            var tint = WidgetAppearance.ParseColorBrush(ov?.BackgroundColor);
+            var kind = ov?.Backdrop ?? globalKind;
             StartupProfile.Measure($"组件材质挂载 {_kind}", () => WidgetAppearance.ApplyBackdrop(
-                this, kind, WidgetAppearance.Opacity(), RootBorder.ActualTheme), logWhenMs: 10);
-
-            Brush surface = useCustomBg
-                ? (WidgetAppearance.ParseColorBrush(ov!.BackgroundColor!) ?? WidgetAppearance.SurfaceBrush(RootBorder.ActualTheme, globalKind))
-                : WidgetAppearance.SurfaceBrush(RootBorder.ActualTheme, kind);
+                this, kind, WidgetAppearance.Opacity(), RootBorder.ActualTheme, tint?.Color), logWhenMs: 10);
 
             // 背衬画笔已接管整窗着色（除实色 None 外的所有材质：亚克力/云母/纯色）时，内容表面必须透明，
             // 让这一层扁平背衬单独着色——若再叠一层内容实色就会两次 alpha 叠加导致过实/发灰。
-            // 背衬未生效（理论上不会，实色 None 走 else）时保留 SurfaceBrush 的实色兜底，绝不变透明幽灵窗。
-            if (!useCustomBg &&
-                kind != StarMark.Abstractions.WidgetBackdropKind.None &&
-                WidgetAppearance.IsBackdropSurfaceActive(this))
-            {
-                surface = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            }
+            // 背衬未生效（理论上不会，实色 None 走 else）时保留兜底：点了底色就铺那颗，否则按材质取实色，绝不变透明幽灵窗。
+            var backdropOwnsSurface = kind != StarMark.Abstractions.WidgetBackdropKind.None
+                && WidgetAppearance.IsBackdropSurfaceActive(this);
+            Brush surface = backdropOwnsSurface
+                ? new SolidColorBrush(Microsoft.UI.Colors.Transparent)
+                : tint ?? WidgetAppearance.SurfaceBrush(RootBorder.ActualTheme, kind);
 
             RootBorder.Background = surface;
             DragBar.Background = surface;

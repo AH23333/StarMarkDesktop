@@ -15,6 +15,7 @@ using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Language;
 using StarMark.Core.Capture;
 using StarMark.Core.Hotkeys;
+using StarMark.Core.Sync;
 using StarMark.Core.Widgets;
 using StarMark.Integrations.SystemTray;
 using StarMark.UI.Helpers;
@@ -130,7 +131,23 @@ public sealed partial class MainWindow
                 var summary = await syncCoordinator.SyncAllAsync(cts.Token);
                 // Core 交回的是"还没取词"的那句话：在这里 Render 一次＝那句话的语言被钉死在同步完成的那一刻
                 SetStatusText(summary.Message());
-                ShowInfoBar(InfoBarSeverity.Success, LocMessage.Of("top.syncDoneTitle"), null, 6500);
+                // 批次 WI-81／P-212 走 B：有源没成时这张卡不再顶着「索引同步完成」＋Success。
+                // 从前屏幕上只报"失败 N 源"那颗数——用户问的「哪一源、为什么」一处都没回答，
+                // 而"为什么"恰好决定下一步（换 Token／等一会儿／去把 Ditto 开着）。
+                // 现在逐源一行摆在这句话下面；鉴权那一档就地给那颗换 Token 的按钮（P-54 的口径：
+                // 程序能做的动作不许写成用户作业），所以卡不自动收走，等它被按下或被关掉。
+                if (summary.FailedCount == 0)
+                {
+                    ShowInfoBar(InfoBarSeverity.Success, LocMessage.Of("top.syncDoneTitle"), null, 6500);
+                }
+                else
+                {
+                    var needsToken = summary.Sources.Any(s => !s.Success && s.ErrorKind == SourceSyncErrorKind.Auth);
+                    ShowInfoBar(InfoBarSeverity.Warning, LocMessage.Of("top.syncPartialTitle"),
+                        summary.FailureLines(), needsToken ? -1 : 9000,
+                        needsToken ? ActionButton(LocMessage.Of("top.syncFixToken"),
+                            () => OpenSettingsPage(SettingsTabIds.General)) : null);
+                }
             }
             SetStatusDot(StatusKind.Success);
             await ViewModel.LoadCountsAsync();
@@ -180,15 +197,23 @@ public sealed partial class MainWindow
     /// 按钮只在"删得掉、且删是对的动作"那一类失败里出现——"系统里没有能开它的程序"给同一颗按钮就是错的。</para>
     /// </summary>
     public void ShowErrorWithAction(LocMessage title, LocMessage message, LocMessage actionLabel, Action onAction)
+        => ShowInfoBar(InfoBarSeverity.Error, title, message, 15000, ActionButton(actionLabel, onAction));
+
+    /// <summary>
+    /// 提示卡上那颗<b>就地动作</b>按钮（批次 WI-81：「文件不在了⇒从库里删掉这一行」与「同步没成⇒去换 Token」共用一颗）。
+    /// <para>名字必须走 <see cref="LocText.SetMessage"/> 而⛔ 直接赋成品字：这颗按钮跟着的是那句坏消息，
+    /// 换语言那一刻要一起重贴。点击先把卡收掉——动作做完还留着一张写着旧事实的卡，比没有卡更糟。</para>
+    /// </summary>
+    private Button ActionButton(LocMessage label, Action onAction)
     {
         var button = new Button();
-        LocText.SetMessage(button, actionLabel);   // 名字进重贴名单：这颗按钮跟的是那句坏消息，不是那条状态行
+        LocText.SetMessage(button, label);
         button.Click += (_, _) =>
         {
             SyncInfoBar.IsOpen = false;
             onAction();
         };
-        ShowInfoBar(InfoBarSeverity.Error, title, message, 15000, button);
+        return button;
     }
 
     /// <summary>

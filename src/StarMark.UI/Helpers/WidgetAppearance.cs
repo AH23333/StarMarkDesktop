@@ -61,18 +61,17 @@ public static class WidgetAppearance
         => Try(() => Store.LoadWidgetOpacity(), AppearanceSettingsPolicy.OpacityDefault);
 
     /// <summary>
-    /// 系统强调色（DeskBox 取 <c>ThemeService.GetEffectiveAccentColor()</c>）。
-    /// 拿不到时回落到 <see cref="WidgetMaterialVisualCalculator.DefaultAccentColor"/> ——
-    /// 纯色材质掺的就是这个色，用错会让纯色和 DeskBox 明显不同。
+    /// 整窗共用的那颗<b>染料色</b>（主题色）：自定义 &gt; 系统强调色 &gt; 兜底蓝，判据只住在
+    /// <see cref="AppPalette.ResolveAccent"/>（批次 WI-81：从前只有"系统／兜底"两种，用户裁要加一颗自定义）。
+    /// <para>读设置档走 <see cref="ThemeAccent"/> 那颗缓存，⛔ 在这里直接读档——材质套用是启动头号嫌疑
+    /// （日志里 5 秒内出现过 38 次），而这一颗在每次套材质、每次刷画笔上都要问。</para>
     /// </summary>
     public static Windows.UI.Color AccentColor() => Try(() =>
     {
         var settings = new Windows.UI.ViewManagement.UISettings();
         var c = settings.GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent);
-        return c.A == 0
-            ? WidgetMaterialVisualCalculator.DefaultAccentColor
-            : Windows.UI.Color.FromArgb(0xFF, c.R, c.G, c.B);
-    }, WidgetMaterialVisualCalculator.DefaultAccentColor);
+        return AppPalette.ResolveAccent(ThemeAccent.Custom, Windows.UI.Color.FromArgb(c.A, c.R, c.G, c.B));
+    }, ThemeAccent.Custom ?? MaterialTint.FallbackAccent);
 
     private static T Try<T>(Func<T> read, T fallback)
     {
@@ -110,8 +109,16 @@ public static class WidgetAppearance
     /// 其余材质：玻璃化整窗 + 铺一层按材质取色的扁平背衬，内容表面保持透明让背衬透出。
     /// 「背景不透明度」(<paramref name="solidOpacity"/>) 只在纯色材质参与取色；其它材质用各自固定透明度。
     /// </para>
+    /// <para>
+    /// <paramref name="tintOverride"/>＝那一扇窗点定的底色（组件「外观」里那颗背景色，或将来主窗的同名出口）。
+    /// <b>它只换 RGB，⛔ 换 alpha</b>——那一档材质的透明度性格由 <see cref="MaterialTint.BackdropAlpha"/> 单独决定，
+    /// 两边都读同一颗 ⇒「选了透明材质再改颜色」得到的仍是透明材质，只是换了色（批次 WI-81 修的那条缺陷：
+    /// 从前这里把自定义底色判成"强制实色 None"，透明效果当场丢掉）。
+    /// </para>
     /// </summary>
-    public static void ApplyBackdrop(Window window, WidgetBackdropKind kind, double solidOpacity, ElementTheme theme)
+    public static void ApplyBackdrop(
+        Window window, WidgetBackdropKind kind, double solidOpacity, ElementTheme theme,
+        Windows.UI.Color? tintOverride = null)
     {
         try
         {
@@ -131,8 +138,8 @@ public static class WidgetAppearance
             }
 
             // 其余材质统一：按材质性格取扁平背衬色（纯色吃滑杆，其余固定），玻璃化整窗让背衬透出。
-            var color = WidgetMaterialVisualCalculator.BuildMaterialBackdropColor(
-                isDark, AccentColor(), kind, Math.Clamp(solidOpacity, 0.0, 1.0));
+            var color = MaterialTint.BackdropColor(
+                isDark, AccentColor(), kind, Math.Clamp(solidOpacity, 0.0, 1.0), tintOverride);
 
             if (state.Tint is null)
             {
@@ -205,7 +212,7 @@ public static class WidgetAppearance
     /// 是<b>背衬未生效时的实色兜底</b>（理论上扁平背衬总能挂上，兜底只为防御）：
     /// </para>
     /// <list type="bullet">
-    /// <item>半透明材质（亚克力 / 云母 / 纯色）→ 与背衬同源的 <see cref="WidgetMaterialVisualCalculator.BuildMaterialBackdropColor"/>，
+    /// <item>半透明材质（亚克力 / 云母 / 纯色）→ 与背衬<b>同源</b>的 <see cref="MaterialTint.BackdropColor"/>，
     ///     保证「万一没挂上背衬也仍是该材质应有的染色面板」，绝不全黑；</item>
     /// <item><see cref="WidgetBackdropKind.None"/> → 跟随主题的黑 / 白实色。</item>
     /// </list>
@@ -214,19 +221,21 @@ public static class WidgetAppearance
         => SurfaceBrush(theme, kind, null);
 
     /// <param name="opacityOverride">显式指定「背景不透明度」（仅纯色材质读取它）。</param>
-    public static Brush SurfaceBrush(ElementTheme theme, WidgetBackdropKind kind, double? opacityOverride)
+    /// <param name="tintOverride">那一扇窗点定的底色；<b>只换 RGB⛔ 换那一档材质的 alpha</b>（同 <see cref="ApplyBackdrop"/>）。</param>
+    public static Brush SurfaceBrush(
+        ElementTheme theme, WidgetBackdropKind kind, double? opacityOverride, Windows.UI.Color? tintOverride = null)
     {
         var dark = theme == ElementTheme.Dark;
         var opacity = Math.Clamp(opacityOverride ?? Opacity(), 0.0, 1.0);
 
-        if (kind == WidgetBackdropKind.None)
+        // 实色且没人点底色＝跟主题的黑白；点了底色就铺那颗（实色没有透明可保留，alpha 由取色那颗给成 FF）。
+        if (kind == WidgetBackdropKind.None && tintOverride is null)
         {
             // 实色：完全跟主题的黑白实色，不吃任何滑杆。
             return new SolidColorBrush(dark ? Colors.Black : Colors.White);
         }
 
-        return new SolidColorBrush(WidgetMaterialVisualCalculator.BuildMaterialBackdropColor(
-            dark, AccentColor(), kind, opacity));
+        return new SolidColorBrush(MaterialTint.BackdropColor(dark, AccentColor(), kind, opacity, tintOverride));
     }
 
     /// <summary>便捷重载：按当前设置读出材质。</summary>

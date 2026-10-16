@@ -309,6 +309,10 @@ public partial class App : Application
             // 应用级主题（必须在首个窗口创建前设置）
             ThemeManager.ApplyAppLevelTheme(fileSettings.LoadTheme());
 
+            // 主题色＝自定义时那颗必须在下第一颗笔光之前定好（批次 WI-81）：晚一步的表现不是「晚一点才变」，
+            // 而是首屏按系统那颗染一遍、再重染一遍，而组件窗是在后面建的——两边观感不同步（✅WI-1 同一口径）。
+            Helpers.ThemeAccent.Apply(fileSettings.LoadThemeAccent());
+
             // 2. 执行数据库迁移
             Services.GetRequiredService<StarMark.Data.MigrationRunner>().EnsureSchema();
             StarMark.Abstractions.StartupProfile.Mark("DI 与数据库迁移完成");

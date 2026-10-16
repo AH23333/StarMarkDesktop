@@ -60,6 +60,38 @@ public static class UiStrings
         new Entry("top.syncCancelledBody", "已取消同步：已拉完的源已入库，未拉完的下次同步继续补齐。",
             "Sync cancelled: the sources already pulled are stored; the rest come with the next sync.",
             "同期をキャンセルしました：取得済みの源は保存済み、未取得の源は次回以降の同期で補います。"),
+        // ===== 同步「哪一源、为什么」那一族（批次 WI-81，P-212 走 B）=====
+        // 从前这几句"为什么"住在 Core 里当成品中文常量，而屏幕上那一行只报"失败 N 源"那颗数：
+        // 既没人念、也换不了语言（坑表 #588）。现在 Core 只交身份，念法只有这一个主人。
+        // unavailable／timeout 两颗的中文列<b>逐字照抄</b>从前那两条常量（它们唯一的读者是测试）⇒ 中文界面一字未变。
+        new Entry("sync.src.unavailable", "源不可用（未配置或依赖未运行）",
+            "Source unavailable (not configured, or the program it depends on is not running)",
+            "ソースが利用できません（未設定か、依存先が起動していません）"),
+        new Entry("sync.src.timeout", "拉取超时或被取消（未中断其余源）",
+            "Fetch timed out or was cancelled (the other sources kept going)",
+            "取得がタイムアウトまたは取り消されました（他のソースは続行中）"),
+        new Entry("sync.src.auth", "凭据无效或已过期——换一个 Token 再同步",
+            "Credentials are invalid or expired - replace the token and sync again",
+            "認証情報が無効か期限切れです：トークンを変更して再同期してください"),
+        new Entry("sync.src.rateLimit", "请求太频繁，被 GitHub 限流了——稍后再同步",
+            "Too many requests - GitHub rate limited us, try again a little later",
+            "要求が多すぎます（GitHub の制限）。少し後に再同期してください"),
+        new Entry("sync.src.forbidden", "权限不够：这个 Token 看不到要同步的内容",
+            "Not allowed: this token cannot see the content being synced",
+            "権限が足りません：このトークンは同期対象を表示できません"),
+        new Entry("sync.src.server", "GitHub 服务器出错（5xx），下次同步会再试",
+            "GitHub's server failed (5xx); the next sync will retry",
+            "GitHub のサーバーでエラー（5xx）。次回の同期で再試行します"),
+        new Entry("sync.src.githubOther", "GitHub 请求失败：{0}",
+            "GitHub request failed: {0}", "GitHub リクエスト失敗：{0}"),
+        new Entry("sync.src.other", "出错：{0}", "Error: {0}", "エラー：{0}"),
+        // 「谁」与「为什么」连起来的那一行，以及行与行之间那颗位置：语序归这两行自己决定（⛔ 在 C# 里拼 +）。
+        new Entry("sync.src.line", "{0}：{1}", "{0}: {1}", "{0}：{1}"),
+        new Entry("sync.src.lineJoin", "{0}{2}{1}", "{0}{2}{1}", "{0}{2}{1}"),
+        new Entry("top.syncPartialTitle", "同步没有全部完成",
+            "Sync did not finish completely", "同期は全ては完了していません"),
+        new Entry("top.syncFixToken", "去常规页换 Token", "Replace the token", "トークンを変更する"),
+
         new Entry("top.widgetsTip", "桌面组件", "Desktop widgets", "デスクトップウィジェット"),
         new Entry("top.guideTip", "这一页怎么用", "How this page works", "このページの使い方"),
         new Entry("top.showHidden", "显示隐藏", "Show hidden", "非表示を表示"),
@@ -196,6 +228,12 @@ public static class UiStrings
         // 两处写的是同一个决定，分成两行迟早只改一处。
         new Entry("settings.general.themeLight", "浅色", "Light", "ライト"),
         new Entry("settings.general.themeDark", "深色", "Dark", "ダーク"),
+        new Entry("settings.general.accentTitle", "主题色", "Accent colour", "アクセントカラー"),
+        new Entry("settings.general.accentSystemAccent", "随系统强调色", "System accent", "アクセントカラーに従う"),
+        new Entry("settings.general.accentCustom", "自定义颜色", "Custom colour", "色を指定"),
+        new Entry("settings.general.accentScope", "只改颜色，不改材质：主窗口与组件一起跟着变",
+                  "Changes the tint only, never the material; the main window and widgets follow together",
+                  "色だけ変わります。素材はそのまま。メインとウィジェットに共通"),
 
         new Entry("settings.general.appearanceTitle", "外观 · 主窗口材质与不透明度",
             "Appearance · main window material and opacity", "外観 · メインウィンドウの材質と不透明度"),

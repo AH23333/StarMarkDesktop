@@ -44,7 +44,7 @@ public sealed class SyncCoordinator
                     SourceId = source.SourceId,
                     Success = true,
                     PulledCount = 0,
-                    Error = "源不可用（未配置或依赖未运行）",
+                    Error = LocMessage.Of("sync.src.unavailable"),
                 });
                 continue;
             }
@@ -84,7 +84,7 @@ public sealed class SyncCoordinator
                     SourceId = source.SourceId,
                     Success = false,
                     PulledCount = 0,
-                    Error = "拉取超时或被取消（未中断其余源）",
+                    Error = LocMessage.Of("sync.src.timeout"),
                     ErrorKind = SourceSyncErrorKind.Unknown,
                 });
             }
@@ -92,20 +92,23 @@ public sealed class SyncCoordinator
             catch (GitHubApiException gex)
             {
                 StarLog.Error($"源 {source.SourceId} 同步失败（{gex.Kind}）: {gex.Message}");
-                var kind = gex.Kind switch
+                // 「为什么没成」这句话自本批起由表念（✅WI-81／P-212 走 B）：认得出档的那四档，
+                // 分类本身就是用户要知道的事，而 gex.Message 是「GitHub 请求失败（429 TooManyRequests）」那种机器话——
+                // 它留在上一行的日志里。只有认不出档的那一档才把原文当实参递进去（口径同 ✅WI-79 那四颗 RSS 出口）。
+                var (kind, reason) = gex.Kind switch
                 {
-                    GitHubErrorKind.Auth => SourceSyncErrorKind.Auth,
-                    GitHubErrorKind.RateLimit => SourceSyncErrorKind.RateLimit,
-                    GitHubErrorKind.Forbidden => SourceSyncErrorKind.Forbidden,
-                    GitHubErrorKind.Server => SourceSyncErrorKind.Server,
-                    _ => SourceSyncErrorKind.Unknown,
+                    GitHubErrorKind.Auth => (SourceSyncErrorKind.Auth, LocMessage.Of("sync.src.auth")),
+                    GitHubErrorKind.RateLimit => (SourceSyncErrorKind.RateLimit, LocMessage.Of("sync.src.rateLimit")),
+                    GitHubErrorKind.Forbidden => (SourceSyncErrorKind.Forbidden, LocMessage.Of("sync.src.forbidden")),
+                    GitHubErrorKind.Server => (SourceSyncErrorKind.Server, LocMessage.Of("sync.src.server")),
+                    _ => (SourceSyncErrorKind.Unknown, LocMessage.Of("sync.src.githubOther", gex.Message)),
                 };
                 results.Add(new SourceSyncResult
                 {
                     SourceId = source.SourceId,
                     Success = false,
                     PulledCount = 0,
-                    Error = gex.Message,
+                    Error = reason,
                     ErrorKind = kind,
                 });
             }
@@ -117,7 +120,7 @@ public sealed class SyncCoordinator
                     SourceId = source.SourceId,
                     Success = false,
                     PulledCount = 0,
-                    Error = ex.Message,
+                    Error = LocMessage.Of("sync.src.other", ex.Message),
                     ErrorKind = SourceSyncErrorKind.Unknown,
                 });
             }
@@ -153,9 +156,37 @@ public sealed class SyncSummary
         => FailedCount == 0
             ? LocMessage.Of("top.syncDone", TotalPulled, ElapsedMs)
             : LocMessage.Of("top.syncPartial", TotalPulled, FailedCount, ElapsedMs);
+
+    /// <summary>
+    /// 失败的那几源<b>逐源一行「谁＋为什么」</b>（批次 WI-81，P-212 走 B 那一头）。
+    /// <para>为什么非要有这一颗：<see cref="Message"/> 只报"失败 N 源"那颗数，而屏幕前的用户问的是
+    /// "哪一源、为什么"——答案决定下一步动作（换 Token／等一会儿再同步／去把 Ditto 开着）。
+    /// 从前那句"为什么"是 Core 里写死的中文常量，而它连一个屏幕上的读者都没有（＝P-212 撞出的形状）。</para>
+    /// <para>行与行之间那根<b>换行</b>是本方法那颗 <c>gap</c> 的<b>默认实参</b>（宿主按自己那一格可以改递），
+    /// 它当实参进 <c>sync.src.lineJoin</c> 的 <c>{2}</c> 槽——是布局而⛔ 进表（规则 #100，
+    /// 先例＝<c>clip.clean.lineJoin</c>／<c>settings.data.backup.lineJoin</c>）。
+    /// 源名交的是 <see cref="SourceNames.NameOf"/> 那颗 <see cref="LocMessage"/>，⛔ 在这里念成中文：
+    /// 嵌套的那一句要到贴上去那一刻才按当时的语言取词（✅WI-57／P-187）。</para>
+    /// </summary>
+    /// <remarks>没有失败源时返回 null：调用方⛔ 拿一颗"空"去顶在一句已完成的消息下面。</remarks>
+    public LocMessage? FailureLines(string gap = "\n")
+    {
+        LocMessage? body = null;
+        foreach (var s in Sources)
+        {
+            if (s.Success) continue;
+            var line = LocMessage.Of("sync.src.line", SourceNames.NameOf(s.SourceId), s.Error);
+            body = body is null ? line : LocMessage.Of("sync.src.lineJoin", body, line, gap);
+        }
+        return body;
+    }
 }
 
-/// <summary>同步错误分类（P1-4），供设置页/同步状态给出可操作文案。</summary>
+/// <summary>
+/// 同步错误分类（P1-4）。<b>现在的读者</b>＝主窗口那颗提示卡：命中 <see cref="Auth"/> 时它在卡上多摆一颗
+/// 「去常规页换 Token」的按钮（批次 WI-81／P-212 走 B——它从前那句承诺是"给界面一份能操作的提示"，
+/// 而这一档<b>全仓零读者</b>，那就是坑表 #588 那一族：注释写的是打算，不是现场）。
+/// </summary>
 public enum SourceSyncErrorKind
 {
     Unknown,
@@ -177,7 +208,12 @@ public sealed class SourceSyncResult
     public string SourceId { get; init; } = string.Empty;
     public bool Success { get; init; }
     public int PulledCount { get; init; }
-    public string? Error { get; init; }
+    /// <summary>
+    /// 这一源<b>为什么</b>没成（键＋实参，⛔ 成品字）。批次 WI-81／P-212 走 B 把它从 <c>string</c> 升上来的：
+    /// 从前这里住的是「拉取超时或被取消（未中断其余源）」那种写死的中文，而屏幕上那一行只报颗数——
+    /// 那句话既没人念、也换不了语言（同一形状 ✅WI-79 在 RSS 那侧修掉过，坑表 #586）。
+    /// </summary>
+    public LocMessage? Error { get; init; }
     /// <summary>P1-4 错误分类，便于 UI 给出针对性引导。</summary>
     public SourceSyncErrorKind ErrorKind { get; init; } = SourceSyncErrorKind.Unknown;
 }

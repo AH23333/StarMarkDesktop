@@ -51,6 +51,29 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty] private double _mainWindowOpacity = AppearanceSettingsPolicy.OpacityDefault;
 
     /// <summary>
+    /// 主题色两档的索引（0＝随系统强调色，1＝自定义）；设置档里存的是那颗 hex，
+    /// <b>hex 认不出来就当 0</b>（⛔ 让一颗拼错的串把界面染成莫名其妙的颜色）。
+    /// </summary>
+    [ObservableProperty] private int _accentIndex;
+
+    /// <summary>自定义那一档点定的颜色（取色器那一格的内容）。</summary>
+    [ObservableProperty] private Windows.UI.Color _themeAccentColor = MaterialTint.FallbackAccent;
+
+    /// <summary>只有「自定义颜色」那一档才摊开取色器——随系统时摊着它＝一个动了什么都不改变的旋钮。</summary>
+    public bool CustomAccentVisible => AccentIndex == 1;
+
+    /// <summary>取色器旁边那颗预览方块：画笔由<b>当前那颗颜色</b>现场算，⛔ 再写一份写死的蓝。
+    /// <para>润色器（ColorSpectrum）自己不带预览格，而这一格要回答的是"我刚点的到底是哪颗"。</para>
+    /// <para>走 OneWay：它是<b>读数</b>，编辑入口只有润色器那一格（每个可写设置⛔ 第二处编辑入口，✅SettingsTaxonomyGateTests 同一口径）。</para>
+    /// </summary>
+    public Microsoft.UI.Xaml.Media.SolidColorBrush ThemeAccentBrush => new(ThemeAccentColor);
+
+    partial void OnThemeAccentColorChanged(Windows.UI.Color value)
+        => OnPropertyChanged(nameof(ThemeAccentBrush));
+
+    partial void OnAccentIndexChanged(int value) => OnPropertyChanged(nameof(CustomAccentVisible));
+
+    /// <summary>
     /// 三根滑杆的<b>量程与步进</b>，一律转发自 <see cref="AppearanceSettingsPolicy"/>（批次 SD，P-123 清单 #4）。
     /// <para>以前 XAML 自己写着 <c>0.3–1</c>／<c>4–64</c>／<c>0–40</c>，而仓储的 <c>Math.Clamp</c> 各写一遍、
     /// VM 的初值与读取兜底又各写一遍 ⇒ 同一个旋钮最多有五个主人（#175：SA 那批已经因为这种分岔真咬过一次）。
@@ -318,6 +341,11 @@ public partial class SettingsPageViewModel : ObservableObject
         MainWindowBackdropIndex = (int)Safe(_settings.LoadMainWindowBackdrop, WidgetBackdropKind.Acrylic, "主窗口材质");
         WidgetOpacity = Safe(_settings.LoadWidgetOpacity, AppearanceSettingsPolicy.OpacityDefault, "不透明度");
         MainWindowOpacity = Safe(_settings.LoadMainWindowOpacity, AppearanceSettingsPolicy.OpacityDefault, "主窗口不透明度");
+        // 主题色：认得那颗 hex 才摆「自定义」，否则回「随系统」；取色器那一格总得显示一颗，
+        // 没自定义时就把此刻真正在用的那颗（系统强调色）摆上去——⛔ 摆一颗与屏幕无关的默认蓝。
+        var customAccent = AppPalette.ParseArgb(Safe(_settings.LoadThemeAccent, null, "主题色"));
+        AccentIndex = customAccent is null ? 0 : 1;
+        ThemeAccentColor = customAccent ?? Helpers.WidgetAppearance.AccentColor();
         EnableWidgetSnap = Safe(_settings.LoadWidgetSnapEnabled, true, "边缘磁吸");
         SnapSpacing = Safe(_settings.LoadWidgetSnapSpacing, AppearanceSettingsPolicy.SnapSpacingDefault, "磁吸间距");
         SnapStrength = Safe(_settings.LoadWidgetSnapStrength, AppearanceSettingsPolicy.SnapStrengthDefault, "磁吸强度");
@@ -436,6 +464,8 @@ public partial class SettingsPageViewModel : ObservableObject
             };
             // 一次保存串 16 项：不在批量区间里就是 16 次整档读 + 16 次原子替换，而拖滑杆会按
             // 350 ms 自动保存的节奏反复走这一轮（P-43）。区间内读写同一份待落盘快照。
+            // 主题色：选了「自定义」才落 hex，选回「随系统」就交 null（那颗染料当场回落到系统强调色）。
+            var accentText = AccentIndex == 1 ? AppPalette.ToHexText(ThemeAccentColor) : null;
             using (_settings.BeginBatch())
             {
                 _settings.SaveTheme(theme);
@@ -449,6 +479,7 @@ public partial class SettingsPageViewModel : ObservableObject
                 _settings.SaveWidgetOpacity(WidgetOpacity);
                 _settings.SaveMainWindowBackdrop((WidgetBackdropKind)MainWindowBackdropIndex);
                 _settings.SaveMainWindowOpacity(MainWindowOpacity);
+                _settings.SaveThemeAccent(accentText);
                 _settings.SavePerformanceMode((PerformanceMode)PerformanceModeIndex);
                 _settings.SaveCacheBudgetMb(CacheBudgetMb);
                 _settings.SaveMaxImageCacheCount(MaxCacheCount);
@@ -482,6 +513,9 @@ public partial class SettingsPageViewModel : ObservableObject
             // 发现设置全回退。日志不是用户能看到的反馈面，故这里把"未落盘"当成保存失败呈现，
             // 也不再谎报已保存。本次会话内的即时应用照旧生效（改动已体现在内存与界面上）。
             var writeError = _settings.LastWriteError;
+            // 运行期那颗缓存跟着落盘那一刻走（⛔ 让读者各读各的：材质与那三颗强调笔光只问这一颗）。
+            ThemeAccent.Apply(accentText);
+
             if (writeError is null)
             {
                 StarMark.Abstractions.StarLog.Info($"设置已保存（主题={theme}, 托盘={EnableTray}）");

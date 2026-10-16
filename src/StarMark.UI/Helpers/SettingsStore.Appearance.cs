@@ -35,6 +35,20 @@ public sealed partial class SettingsStore
         Save(d);
     }
 
+    /// <summary>
+    /// 主题色（批次 WI-81，用户裁「当前系统主题色只能选择两种」⇒ 加一颗自定义）。
+    /// 交回设置档里那颗原文；<b>认不认得由 <c>AppPalette.ParseArgb</c> 判</b>，⛔ 在这颗里凑一颗颜色顶上。
+    /// </summary>
+    public string? LoadThemeAccent() => Load() is { } d ? d.ThemeAccent : null;
+
+    /// <summary>落那颗 hex；<c>null</c>＝改回「随系统强调色」（照实写 null，读者读到的是「没设过」）。</summary>
+    public void SaveThemeAccent(string? hex)
+    {
+        var d = Load() ?? new SettingsData();
+        d.ThemeAccent = hex;
+        Save(d);
+    }
+
     /// <summary>组件边缘磁吸总开关（默认开启）。关闭后拖动/缩放都不再自动贴合。</summary>
     public bool LoadWidgetSnapEnabled() => Load() is { } d ? d.WidgetSnapEnabled ?? true : true;
 

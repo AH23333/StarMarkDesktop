@@ -245,8 +245,11 @@ public sealed class DialogWordGateTests
         Assert.Equal(0, Times(paste, "SyncInfoBar.Title = "));
         Assert.Equal(0, Times(paste, "SyncInfoBar.Message = "));
 
-        // 那颗就地按钮的名字同一条路；顶栏那扇门既没被绕开也没被换成第二份实现。
-        Assert.Contains("LocText.SetMessage(button, actionLabel);", status);
+        // 那颗就地按钮的名字同一条路，而批次 WI-81 起两处动作（那颗「去常规页换 Token」与那颗「文件不在了⇒删这行」）
+        // 共用同一颗工厂 ⇒ 贴进注册项那一行⛔ 出现第二处（那＝那颗按钮的第二个主人，✅WI-65 那一族的口径）。
+        Assert.Contains("private Button ActionButton(LocMessage label, Action onAction)", status);
+        Assert.Equal(1, Times(status, "LocText.SetMessage(button, label);"));
+        Assert.Equal(3, Times(status, "ActionButton("));   // 一颗工厂定义＋两处主人，⛔ 第三份就地实现
         Assert.Contains("private void SetStatusText(LocMessage? message) => LocText.SetMessage(StatusText, message);", status);
 
         // 提示卡本体：三句都住在**复用**的那扇窗上 ⇒ 全部进注册项（<c>HideCard</c> 不关窗）。

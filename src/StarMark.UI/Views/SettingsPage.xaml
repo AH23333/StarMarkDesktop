@@ -130,6 +130,35 @@
                             </Grid>
                         </Border>
 
+                        <!-- 主题色（批次 WI-81，用户裁「只能选择两种」）：这颗只管<b>染料</b>，
+                             六档材质／不透明度／各档的透明度性格一个字⛔ 动。范围那句话住在卡片自己嘴里，
+                             因为「改了颜色顺手把材质也改了」正是这一族以前的症状形状（同批修掉的那条组件缺陷）。 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="10">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <TextBlock Grid.Column="0" i18n:LocText.Key="settings.general.accentTitle"
+                                               Style="{StaticResource SettingTitle}" Margin="0" VerticalAlignment="Center"/>
+                                    <ComboBox Grid.Column="1" x:Name="AccentSelect" MinWidth="180"
+                                              SelectedIndex="{x:Bind ViewModel.AccentIndex, Mode=TwoWay}"
+                                              ItemsSource="{x:Bind AccentOptions, Mode=OneTime}"
+                                              ItemTemplate="{StaticResource LocOptionTemplate}"/>
+                                </Grid>
+                                <TextBlock i18n:LocText.Key="settings.general.accentScope"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
+                                <!-- ⛔ 在这里再列一排颜色按钮：「组件外观」编辑器那排的主人是那颗编辑器，
+                                     这一格要的是<b>任意一颗</b>，所以用ColorSpectrum 那一格（无正文＝⛔ 新键，坑表 #276 那一族⛔ 复发）。 -->
+                                <ColorSpectrum x:Name="AccentSpectrum" Width="220" Height="140"
+                                             HorizontalAlignment="Left"
+                                             Visibility="{x:Bind ViewModel.CustomAccentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}"
+                                             Color="{x:Bind ViewModel.ThemeAccentColor, Mode=TwoWay}"/>
+                                <!-- 那颗预览方块：选完得看见自己点的是哪颗（润色器自己不带预览格，⛔ 让用户猜）。 -->
+                                <Rectangle Width="220" Height="26" RadiusX="4" RadiusY="4"
+                                           Stroke="{ThemeResource CardStrokeColorDefaultBrush}" StrokeThickness="1"
+                                           Visibility="{x:Bind ViewModel.CustomAccentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}"
+                                           Fill="{x:Bind ViewModel.ThemeAccentBrush, Mode=OneWay}"/>
+                            </StackPanel>
+                        </Border>
+
                         <!-- 界面语言（批次 WI-1）。
                              选项**不在这里列**：语言名单只有一个出处（AppLanguages.Pickable），
                              由 SettingsPage.I18n.cs 现场生成——在这里多写一行 ComboBoxItem，

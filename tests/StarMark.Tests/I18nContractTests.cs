@@ -274,6 +274,12 @@ public sealed class I18nContractTests : IDisposable
             ["clip.usage.full"] = "纯胶水行「{0}{1}{2}」三列同形：把「图片占用」那三段（主图／缩略图／临时件）收在一颗键里，"
                 + "语序由那一行自己决定而⛔ 在 C# 里拼 +（✅WI-64，与 autoBackupSentence／settings.data.backup.lineJoin 同形）",
             ["clip.usage.line"] = "纯胶水行「{0}{1}{2}{3}」三列同形：占用／预估／存放路径／孤儿计数四段的拼接位（✅WI-64·P-193 的 Abstractions 半句）",
+            ["sync.src.line"] = "两颗槽的骨架「{0}：{1}」中日同形，en 列用半角冒号：连的是<b>源名</b>与<b>那一源为什么没成</b>两颗键的读数，"
+                + "这一行没有词可翻（✅WI-81／P-212 走 B，与 capture.pick.shapeTip／widget.mon.note.join 同形）",
+            ["sync.src.lineJoin"] = "纯胶水行「{0}{2}{1}」三列同形：把同步失败那几行连起来的位置，⛔ 在 C# 里拼 +"
+                + "（✅WI-81／P-212 走 B，与 clip.clean.lineJoin／settings.data.backup.lineJoin 同形）；"
+                + "{2} 交的是<b>换行</b>那颗布局，⛔ 进表（规则 #100，先例＝settings.data.deleteBackupBody）",
+
             ["settings.data.backup.lineJoin"] = "纯胶水行「{0}{2}{1}」三列同形：把回执的两半连起来的那颗位置，⛔ 在 C# 里拼 +（同 autoBackupSentence／widget.mon.note.join）；{2} 交的是<b>换行</b>那颗布局，⛔ 进表（规则 #100，先例＝settings.data.deleteBackupBody）（批次 WI-62／P-193）",
             ["capture.bar.nameJoin"] = "连接符「 / 」三列同形（en 列也是同一个 ASCII 形状）：截图条上「点开换 …」那一排图形名与「细 / 中 / 粗」那一排档位名的间隔，"
                 + "⛔ 在 C# 里写死 \" / \"（✅WI-65 片3／P-194，与 health.join.list／hotkey.conflict.join／settings.ai.groupJoin 同形）。"

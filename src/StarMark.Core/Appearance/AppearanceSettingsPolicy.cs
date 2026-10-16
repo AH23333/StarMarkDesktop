@@ -73,7 +73,7 @@ public static class AppearanceSettingsPolicy
     public const double MaterialIntensityDefault = 0.65;
 
     /// <summary>
-    /// 材质浓度的合法区间。<b>它同时是 <c>WidgetMaterialVisualCalculator</c> 自己那两颗同常数的出处</b>
+    /// 材质浓度的合法区间。<b>它同时是 <c>MaterialTint</c> 那族取色的出处</b>
     /// （浓度没有滑杆，但"仓储夹一次、落盘再夹一次、算法里再夹一次"是同一对数字写三遍的病）。
     /// </summary>
     public const double MaterialIntensityFloor = 0.0;

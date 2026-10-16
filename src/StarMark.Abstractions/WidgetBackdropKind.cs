@@ -24,7 +24,7 @@ public enum WidgetBackdropKind
     AcrylicBase = 4,
     /// <summary>
     /// 纯色（Solid，照搬 DeskBox）：不启用任何材质控制器，窗口背景由内容表面铺一层
-    /// 「主题基色 + 强调色」的实色（WidgetMaterialVisualCalculator.BuildContentSolidSurfaceColor）。
+    /// 「主题基色 + 强调色」的实色（MaterialTint.BackdropColor 的 Solid 那一臂）。
     /// 与 <see cref="None"/> 的区别：None 是纯跟主题的黑白实色（最省资源、不吃不透明度），
     /// Solid 则是带强调色倾向的实色，且**吃「背景不透明度」**、不吃「材质浓度」（与 DeskBox 的
     /// SupportsWidgetOpacity / SupportsMaterialIntensity 判定一致）。

@@ -34,6 +34,12 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
     private sealed class SettingsData
     {
         public int Theme { get; set; }
+        /// <summary>
+        /// 主题色（整窗共用的那颗染料）＝<c>#RRGGBB</c>。null／认不出的串＝<b>「随系统强调色」</b>，
+        /// 也就是批次 WI-81 之前唯一的那条路（默认值就是改之前的行为）。
+        /// <b>存的是那颗 hex，⛔ 不是名字</b>：换语言后「选中的颜色」仍是同一颗（✅WI-52 同一口径）。
+        /// </summary>
+        public string? ThemeAccent { get; set; }
         public bool? EnableTray { get; set; }
         public bool? EnableGlobalHotKey { get; set; }
         public bool? MinimizeToTray { get; set; }
