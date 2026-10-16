@@ -255,7 +255,8 @@ public sealed partial class MusicWidget : UserControl
         ModeButton.Visibility = canChangeMode ? Visibility.Visible : Visibility.Collapsed;
         ModeIcon.Glyph = MusicPlaybackModeMath.Glyph(snapshot.PlaybackMode);
         ModeIcon.Opacity = snapshot.PlaybackMode == MusicPlaybackMode.Normal ? 0.55 : 1.0;
-        ToolTipService.SetToolTip(ModeButton, MusicPlaybackModeMath.Label(snapshot.PlaybackMode));
+        // 交键而不是交字：那颗说明随"哪一态"变，Core 里⛔ 留中文成品句（✅WI-72，与上一行同一形状）。
+        LocText.SetToolTipKey(ModeButton, MusicPlaybackModeMath.ModeKey(snapshot.PlaybackMode));
 
         // 每次拿到真实快照就把推算基准归零，否则本地推算会一直叠在旧基准上
         ResetTickBase(snapshot);

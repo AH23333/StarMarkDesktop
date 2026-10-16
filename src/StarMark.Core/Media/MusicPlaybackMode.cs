@@ -40,11 +40,16 @@ public static class MusicPlaybackModeMath
         _ => "\uE8CB",
     };
 
-    /// <summary>模式按钮的悬浮提示。</summary>
-    public static string Label(MusicPlaybackMode mode) => mode switch
+    /// <summary>
+    /// 模式按钮悬停说明那颗<b>键名</b>（✅WI-72：从前这一颗返回中文成品句，
+    /// 于是组件那一行的提示在英文与日文界面下照样念「随机播放（点击切换）」——字压根没进表，
+    /// 数汉字的尺与"每行都得有人问"的闸门同时判它干净＝P-197 那一族的形状）。
+    /// <para>交键而⛔ 交字：三态各一颗、⛔ 一把钥匙开三态（坑表 #290 那一族：顺序⛔ 动＝数字住在设置档里对着枚举值）。</para>
+    /// </summary>
+    public static string ModeKey(MusicPlaybackMode mode) => mode switch
     {
-        MusicPlaybackMode.Shuffle => "随机播放（点击切换）",
-        MusicPlaybackMode.Repeat => "列表循环（点击切换）",
-        _ => "顺序播放（点击切换）",
+        MusicPlaybackMode.Shuffle => "widget.music.mode.shuffle",
+        MusicPlaybackMode.Repeat => "widget.music.mode.repeat",
+        _ => "widget.music.mode.normal",
     };
 }

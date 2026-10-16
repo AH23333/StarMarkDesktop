@@ -55,17 +55,22 @@ public class MusicPlaybackModeTests
         Assert.All(glyphs, g => Assert.False(string.IsNullOrWhiteSpace(g)));
     }
 
+    /// <summary>
+    /// ✅WI-72：这颗从 <c>Label</c>（返回中文成品句）换成 <c>ModeKey</c>（返回键名）。
+    /// 三态各一颗、互不相同，而且<b>整串 ASCII</b>——身份⛔ 念出来的名字（记忆 [P-186]：名字住表里，Core 只交身份）。
+    /// </summary>
     [Fact]
-    public void Label_三态各不相同且非空()
+    public void ModeKey_三态各交一颗键而交不出句子()
     {
-        var labels = new[]
+        var keys = new[]
         {
-            MusicPlaybackModeMath.Label(MusicPlaybackMode.Normal),
-            MusicPlaybackModeMath.Label(MusicPlaybackMode.Shuffle),
-            MusicPlaybackModeMath.Label(MusicPlaybackMode.Repeat),
+            MusicPlaybackModeMath.ModeKey(MusicPlaybackMode.Normal),
+            MusicPlaybackModeMath.ModeKey(MusicPlaybackMode.Shuffle),
+            MusicPlaybackModeMath.ModeKey(MusicPlaybackMode.Repeat),
         };
 
-        Assert.Equal(3, System.Linq.Enumerable.Distinct(labels).Count());
-        Assert.All(labels, l => Assert.False(string.IsNullOrWhiteSpace(l)));
+        Assert.Equal(3, keys.Distinct().Count());
+        Assert.All(keys, k => Assert.StartsWith("widget.music.mode.", k, StringComparison.Ordinal));
+        Assert.All(keys, k => Assert.Matches(@"^[\x20-\x7E]+$", k));
     }
 }
