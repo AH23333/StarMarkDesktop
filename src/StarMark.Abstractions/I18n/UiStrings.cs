@@ -2919,6 +2919,7 @@ public static class UiStrings
         // 同一句"查不到"的两个宿主（schema 那一格与两条计数）共用这颗键，⛔ 各写一份原因形状。
         new Entry("diag.value.queryFailed", "（查询失败：{0}）", "(query failed: {0})", "（照会失敗：{0}）"),
         new Entry("diag.value.never", "从未", "Never", "一度もなし"),
+        new Entry("diag.value.buildUnknown", "未知（读不到可执行文件的写入时间）", "Unknown (the executable's write time can't be read)", "不明（実行ファイルの更新日時を読み取れません）"),
         new Entry("diag.collectFailed", "诊断信息采集失败：{0}", "Diagnostics could not be collected: {0}", "診断情報の取得に失敗しました：{0}"),
         // 来源的名字：身份是 <c>SourceId</c>（ASCII），念法只有这几颗行有。`IItemSource.DisplayName` 那份中文常量
         // 本批删掉而不是留着当"日志用"的第二出处——同一句字两个主人、两份可各自被改正是 P-171 那一族。

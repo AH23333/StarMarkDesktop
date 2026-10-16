@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.IO;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions;
 
@@ -17,10 +18,13 @@ public static class BuildInfo
     /// <summary>构建时刻（本地时区）；取不到时为 null（宿主不提供可执行路径等）。</summary>
     public static DateTime? LocalTime { get; } = Read();
 
-    /// <summary>给人看的那一句：<c>2026-09-25 00:31</c>；取不到时说实话，不假装是最新。</summary>
+    /// <summary>给人看的那一句：<c>2026-09-25 00:31</c>；取不到时说实话，不假装是最新。
+    /// <para>那一句兜底话<b>交表念</b>（<c>diag.value.buildUnknown</c>）：这一行是诊断面板上「你刚才跑的那次含不含
+    /// 最新改动」的凭据，写死中文就等于让英日界面在这一格里看到一颗⛔ 认得的字。取词时机＝每次采集当场读，
+    /// 与 <c>DateTimeText</c> 同一口径（先例＝<c>hotkey.unbound</c> 那颗）。</para></summary>
     public static string Display => LocalTime is { } time
         ? DateTimeText.Minute(time)
-        : "未知（读不到可执行文件的写入时间）";
+        : Locale.T("diag.value.buildUnknown");
 
     private static DateTime? Read()
     {
