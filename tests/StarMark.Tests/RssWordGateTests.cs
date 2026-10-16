@@ -47,7 +47,7 @@ public sealed class RssWordGateTests : IDisposable
     private static RssEntry Entry() => new("标题", "https://a.test/x", null, "摘要", null, 1, "源");
 
     private static RssSourceOutcome Outcome(bool stopped = false, bool enabled = true, bool notModified = false,
-                                            string? error = null, int entries = 0)
+                                            LocMessage? error = null, int entries = 0)
         => new(Source(enabled), Enumerable.Range(0, entries).Select(_ => Entry()).ToList(), error, notModified, stopped);
 
     /// <summary>①判据那一档现在只交「键＋实参」：三颗公开出口都换型，两颗私有助手交可空的半句，

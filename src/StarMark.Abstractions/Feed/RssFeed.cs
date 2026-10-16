@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions.Feed;
 
@@ -21,12 +22,12 @@ public sealed record RssSourceConfig(int Id, string Name, string Url, bool Enabl
     public const int MaxEntries = 60;
 
     /// <summary>这一栏能不能用：只有 http/https 值得去抓。</summary>
-    public static string? UrlProblem(string? url)
+    public static LocMessage? UrlProblem(string? url)
     {
-        if (string.IsNullOrWhiteSpace(url)) return "地址是空的";
-        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var parsed)) return "认不出这是一个完整地址（要带 http:// 或 https://）";
+        if (string.IsNullOrWhiteSpace(url)) return LocMessage.Of("rss.url.empty");
+        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var parsed)) return LocMessage.Of("rss.url.notAbsolute");
         if (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps)
-            return $"只支持 http / https，这个是 {parsed.Scheme}";
+            return LocMessage.Of("rss.url.scheme", parsed.Scheme);
         return null;
     }
 

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions.Feed;
+using StarMark.Abstractions.I18n;
 using StarMark.Integrations.Feed;
 
 namespace StarMark.Core.Feed;
@@ -22,7 +23,7 @@ namespace StarMark.Core.Feed;
 public sealed record RssSourceOutcome(
     RssSourceConfig Source,
     IReadOnlyList<RssEntry> Entries,
-    string? Error = null,
+    LocMessage? Error = null,
     bool NotModified = false,
     bool Stopped = false,
     string? Etag = null,
@@ -128,7 +129,7 @@ public static class RssAggregator
                 return new RssSourceOutcome(source, Array.Empty<RssEntry>(),
                     NotModified: true, Etag: fetched.ETag, LastModified: fetched.LastModified);
             if (!fetched.Ok)
-                return new RssSourceOutcome(source, Array.Empty<RssEntry>(), fetched.Error ?? "抓取没有成功，也没有给出原因");
+                return new RssSourceOutcome(source, Array.Empty<RssEntry>(), fetched.Error ?? LocMessage.Of("rss.fetch.noReason"));
 
             var parsed = RssParser.Parse(fetched.Body, source);
             return parsed.Ok
@@ -143,7 +144,7 @@ public static class RssAggregator
         }
         catch (Exception ex)
         {
-            return new RssSourceOutcome(source, Array.Empty<RssEntry>(), "这个源抓取时异常：" + ex.Message);
+            return new RssSourceOutcome(source, Array.Empty<RssEntry>(), LocMessage.Of("rss.fetch.exception", ex.Message));
         }
     }
 }

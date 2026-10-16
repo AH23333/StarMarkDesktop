@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions.Feed;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Feed;
 using StarMark.Integrations.Feed;
 using Xunit;
@@ -37,12 +38,12 @@ public sealed class RssAggregatorTests
     public async Task OneBrokenSourceDoesNotBlankTheWholeRun()
     {
         var result = await Run(new[] { Src(1), Src(2) }, source => Task.FromResult(
-            source.Id == 1 ? Content(Feed(("好的一条", "https://a.test/1", null))) : new RssFetchResult(RssFetchStatus.Failure, null, null, null, "源返回 503")));
+            source.Id == 1 ? Content(Feed(("好的一条", "https://a.test/1", null))) : new RssFetchResult(RssFetchStatus.Failure, null, null, null, LocMessage.Of("rss.fetch.status", 503, "Service Unavailable"))));
 
         Assert.Equal(2, result.Outcomes.Count);
         Assert.True(result.Outcomes[0].Ok);
         Assert.False(result.Outcomes[1].Ok);
-        Assert.Equal("源返回 503", result.Outcomes[1].Error);
+        Assert.Equal("源返回 503 Service Unavailable", result.Outcomes[1].Error!.Render());
         Assert.Equal(1, result.FailedCount);
         Assert.Single(result.Entries);                      // 好源的内容照常给出
         Assert.Equal(1, result.Outcomes[0].Source.Id);      // 顺序与配置一致，刷新不会换位置
@@ -53,7 +54,7 @@ public sealed class RssAggregatorTests
     {
         var result = await Run(new[] { Src(9) }, _ => throw new HttpRequestLike());
         Assert.False(result.Outcomes[0].Ok);
-        Assert.Contains("异常", result.Outcomes[0].Error);
+        Assert.Contains("异常", result.Outcomes[0].Error!.Render());
     }
 
     private sealed class HttpRequestLike : Exception { }
@@ -78,7 +79,7 @@ public sealed class RssAggregatorTests
         var result = await Run(new[] { Src(1, "blog.example.com") },
             _ => { called++; return Task.FromResult(Content("<rss><channel/></rss>")); });
         Assert.Equal(0, called);
-        Assert.Contains("完整地址", result.Outcomes[0].Error);
+        Assert.Contains("完整地址", result.Outcomes[0].Error!.Render());
     }
 
     [Fact]
@@ -171,13 +172,13 @@ public sealed class RssAggregatorTests
         using var cts = new CancellationTokenSource();
         var result = await Run(new[] { Src(1), Src(2, "https://b.test/feed") },
             source => source.Id == 1
-                ? Task.FromResult(new RssFetchResult(RssFetchStatus.Failure, null, null, null, "源返回 503"))
+                ? Task.FromResult(new RssFetchResult(RssFetchStatus.Failure, null, null, null, LocMessage.Of("rss.fetch.status", 503, "Service Unavailable")))
                 : Task.FromResult(Content(Feed(("好的一条", "https://b.test/1", null)))),
             cts.Token);
 
         Assert.Equal(1, result.FailedCount);
         Assert.Equal(0, result.StoppedCount);
-        Assert.Equal("源返回 503", result.Outcomes[0].Error);
+        Assert.Equal("源返回 503 Service Unavailable", result.Outcomes[0].Error!.Render());
     }
 
     // ────────── 并发（批次 RF-3：真机反馈"每次刷新极为缓慢"的主因） ──────────

@@ -10,6 +10,7 @@ using System.Xml;
 using System.Xml.Linq;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Feed;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Feed;
 
@@ -17,7 +18,7 @@ namespace StarMark.Core.Feed;
 /// <param name="FeedTitle">源自己报的频道名（可用来给用户确认"我加对了没"）。null＝没读到。</param>
 /// <param name="Error">为什么解析不出来。<b>为 null 才算成功</b>；条目数为 0 但没报错是合法结果
 /// （源真的没内容），界面要能区分"空的"与"坏了"。</param>
-public sealed record RssParseResult(IReadOnlyList<RssEntry> Entries, string? FeedTitle, string? Error)
+public sealed record RssParseResult(IReadOnlyList<RssEntry> Entries, string? FeedTitle, LocMessage? Error)
 {
     public bool Ok => Error is null;
 }
@@ -57,14 +58,14 @@ public static class RssParser
     public static RssParseResult Parse(string? xml, RssSourceConfig source)
     {
         if (string.IsNullOrWhiteSpace(xml))
-            return new RssParseResult(Array.Empty<RssEntry>(), null, "这个源没有返回任何内容");
+            return new RssParseResult(Array.Empty<RssEntry>(), null, LocMessage.Of("rss.parse.empty"));
         if (xml.Length > MaxDocumentChars)
             return new RssParseResult(Array.Empty<RssEntry>(), null,
-                $"这个源返回的内容超过 {MaxDocumentChars / 1024 / 1024}MB，按坏源处理");
+                LocMessage.Of("rss.parse.tooBig", MaxDocumentChars / 1024 / 1024));
 
         // DTD / 实体：直接拒。用户输入的地址返回什么不由我们决定，而这两样是唯一能让解析器"去读别处"的入口。
         if (HasDoctype(xml))
-            return new RssParseResult(Array.Empty<RssEntry>(), null, "这个源带 DTD 或实体声明，出于安全不解析");
+            return new RssParseResult(Array.Empty<RssEntry>(), null, LocMessage.Of("rss.parse.dtd"));
 
         XDocument doc;
         try
@@ -73,15 +74,15 @@ public static class RssParser
         }
         catch (XmlException ex)
         {
-            return new RssParseResult(Array.Empty<RssEntry>(), null, "不是一份能读的 XML：" + ex.Message);
+            return new RssParseResult(Array.Empty<RssEntry>(), null, LocMessage.Of("rss.parse.badXml", ex.Message));
         }
         catch (Exception ex)
         {
-            return new RssParseResult(Array.Empty<RssEntry>(), null, "解析失败：" + ex.Message);
+            return new RssParseResult(Array.Empty<RssEntry>(), null, LocMessage.Of("rss.parse.failed", ex.Message));
         }
 
         var root = doc.Root;
-        if (root is null) return new RssParseResult(Array.Empty<RssEntry>(), null, "文档没有根节点");
+        if (root is null) return new RssParseResult(Array.Empty<RssEntry>(), null, LocMessage.Of("rss.parse.noRoot"));
 
         var isAtom = root.Name == Atom + "feed";
         if (!isAtom && !root.Name.LocalName.Equals("rss", StringComparison.OrdinalIgnoreCase)
@@ -91,7 +92,7 @@ public static class RssParser
             // 根节点既不是 RSS 也不是 Atom：多半是用户填了个普通网页地址。
             // 这条要说得出口，否则"加了个源结果是空的"与"加错了"在用户那边是同一个谜。
             return new RssParseResult(Array.Empty<RssEntry>(), null,
-                $"这个地址返回的不是 RSS / Atom 文档（根节点是 {root.Name.LocalName}）——如果它是普通网页，需要填它自己的订阅地址");
+                LocMessage.Of("rss.parse.notFeed", root.Name.LocalName));
         }
 
         var entries = isAtom ? FromAtom(root, source) : FromRss(root, source);

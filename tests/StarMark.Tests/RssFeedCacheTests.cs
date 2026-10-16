@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.Json;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Feed;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Feed;
 using Xunit;
 
@@ -411,11 +412,11 @@ public sealed class RssFeedCacheTests : IDisposable
     public void AQuietRoundStillSaysWhatIsStillOnScreen()
     {
         var stopped = new RssSourceOutcome(Source(), Array.Empty<RssEntry>(), Stopped: true);
-        var failed = new RssSourceOutcome(Source(), Array.Empty<RssEntry>(), "对方返回 503");
+        var failed = new RssSourceOutcome(Source(), Array.Empty<RssEntry>(), LocMessage.Of("rss.fetch.status", 503, "Service Unavailable"));
         var unchanged = new RssSourceOutcome(Source(), Array.Empty<RssEntry>(), NotModified: true);
 
         Assert.Contains("仍然摆着缓存里的 9 条", RssSourceStatus.Describe(stopped, 9).Render());
-        Assert.Contains("失败：对方返回 503", RssSourceStatus.Describe(failed, 9).Render());
+        Assert.Contains("失败：源返回 503 Service Unavailable", RssSourceStatus.Describe(failed, 9).Render());
         Assert.Contains("没有新内容（源说未变化）", RssSourceStatus.Describe(unchanged, 9).Render());
 
         // 那半句不许把五种状态互相抹平（批次 NF 的教训：分不开就不知道该改地址还是查网络）

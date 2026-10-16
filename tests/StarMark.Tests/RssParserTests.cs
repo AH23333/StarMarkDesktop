@@ -38,7 +38,7 @@ public sealed class RssParserTests
             </channel></rss>
             """);
 
-        Assert.True(result.Ok, result.Error);
+        Assert.True(result.Ok, result.Error?.Render());
         Assert.Equal("Example Blog", result.FeedTitle);
         Assert.Equal(2, result.Entries.Count);
         Assert.Equal("第一篇", result.Entries[0].Title);
@@ -84,7 +84,7 @@ public sealed class RssParserTests
               </entry>
             </feed>
             """);
-        Assert.True(result.Ok, result.Error);
+        Assert.True(result.Ok, result.Error?.Render());
         var entry = Assert.Single(result.Entries);
         Assert.Equal("https://blog.example.com/posts/1", entry.Link);   // 相对地址按源补全；不能拿 icon 当正文
         Assert.Equal("李四", entry.Author);
@@ -196,7 +196,7 @@ public sealed class RssParserTests
         // 订阅地址是用户输入的，返回内容不可信；DTD/实体是唯一能让解析器"去读别处"的入口
         var result = Parse(xml);
         Assert.False(result.Ok);
-        Assert.Contains("DTD", result.Error);
+        Assert.Contains("DTD", result.Error!.Render());
         Assert.Empty(result.Entries);
     }
 
@@ -205,8 +205,8 @@ public sealed class RssParserTests
     {
         var result = Parse("<html><body><p>这不是订阅</p></body></html>");
         Assert.False(result.Ok);
-        Assert.Contains("不是 RSS", result.Error);
-        Assert.Contains("订阅地址", result.Error);           // 要给出口：用户多半是把网页地址当订阅地址填了
+        Assert.Contains("不是 RSS", result.Error!.Render());
+        Assert.Contains("订阅地址", result.Error!.Render());           // 要给出口：用户多半是把网页地址当订阅地址填了
     }
 
     [Theory]
@@ -217,7 +217,7 @@ public sealed class RssParserTests
     {
         var result = Parse(xml!);
         Assert.False(result.Ok);
-        Assert.Contains("没有返回任何内容", result.Error);
+        Assert.Contains("没有返回任何内容", result.Error!.Render());
     }
 
     [Fact]
@@ -225,7 +225,7 @@ public sealed class RssParserTests
     {
         var result = Parse("<rss><channel><item><title>忘了闭合");
         Assert.False(result.Ok);
-        Assert.Contains("XML", result.Error);
+        Assert.Contains("XML", result.Error!.Render());
     }
 
     [Fact]
@@ -233,7 +233,7 @@ public sealed class RssParserTests
     {
         var result = RssParser.Parse(new string('x', RssParser.MaxDocumentChars + 1), Source);
         Assert.False(result.Ok);
-        Assert.Contains("MB", result.Error);
+        Assert.Contains("MB", result.Error!.Render());
     }
 
     [Fact]
@@ -260,7 +260,7 @@ public sealed class RssParserTests
     {
         var problem = RssSourceConfig.UrlProblem(url);
         Assert.Equal(rejected, problem is not null);
-        if (rejected && url is not null && url.Contains("ftp")) Assert.Contains("ftp", problem);
+        if (rejected && url is not null && url.Contains("ftp")) Assert.Contains("ftp", problem!.Render());
     }
 
     [Theory]

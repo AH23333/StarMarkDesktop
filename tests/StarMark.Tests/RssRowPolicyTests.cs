@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Feed;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Feed;
 using Xunit;
 
@@ -180,7 +181,7 @@ public sealed class RssRowPolicyTests
 
     // ────────── 逐源状态：五种"没有内容"要分得开 ──────────
 
-    private static RssSourceOutcome Outcome(bool enabled = true, string? error = null,
+    private static RssSourceOutcome Outcome(bool enabled = true, LocMessage? error = null,
         bool notModified = false, bool stopped = false, int entries = 0)
         => new(new RssSourceConfig(1, "开源中国", "https://a.example.com/feed", enabled),
             Enumerable.Range(0, entries).Select(n => Entry()).ToList(), error, notModified, stopped);
@@ -194,7 +195,7 @@ public sealed class RssRowPolicyTests
             RssSourceStatus.Describe(Outcome(stopped: true)),
             RssSourceStatus.Describe(Outcome(enabled: false)),
             RssSourceStatus.Describe(Outcome(notModified: true)),
-            RssSourceStatus.Describe(Outcome(error: "对方返回 503")),
+            RssSourceStatus.Describe(Outcome(error: LocMessage.Of("rss.fetch.status", 503, "Service Unavailable"))),
             RssSourceStatus.Describe(Outcome()),
             RssSourceStatus.Describe(Outcome(entries: 3)),
         };
@@ -202,7 +203,7 @@ public sealed class RssRowPolicyTests
         // record 合成的相等对 Args 数组只比引用 ⇒ 七颗永远各不相等，判据会静默退化成「建了七个对象」（坑表 #480）。
         Assert.Equal(texts.Length, texts.Select(static m => m.Render()).Distinct(StringComparer.Ordinal).Count());
         Assert.All(texts, m => Assert.False(string.IsNullOrWhiteSpace(m.Render())));
-        Assert.Contains("503", RssSourceStatus.Describe(Outcome(error: "对方返回 503")).Render());
+        Assert.Contains("503", RssSourceStatus.Describe(Outcome(error: LocMessage.Of("rss.fetch.status", 503, "Service Unavailable"))).Render());
         Assert.Contains("3", RssSourceStatus.Describe(Outcome(entries: 3)).Render());
     }
 
