@@ -52,7 +52,8 @@ public sealed class WorldClockPolicyTests
         foreach (var city in WorldClockPolicy.DefaultCities)
         {
             Assert.NotNull(WorldClockPolicy.TryResolve(city.ZoneId));
-            Assert.False(string.IsNullOrWhiteSpace(city.Name));
+            // ✅WI-76：名字⛔ 存在档里，是当场由 Id 取的——默认四城要是落在本机没有的 Id 上，这一句就会露出来
+            Assert.False(string.IsNullOrWhiteSpace(WorldClockPolicy.DisplayNameOf(city.ZoneId)));
         }
     }
 
@@ -67,13 +68,13 @@ public sealed class WorldClockPolicyTests
     [Fact]
     public void CanAdd_RejectsDuplicateCaseInsensitivelyAndRespectsCap()
     {
-        var one = new WorldClockCity("W. Europe Standard Time", "柏林");
+        var one = new WorldClockCity("W. Europe Standard Time");
         Assert.False(WorldClockPolicy.CanAdd(new[] { one }, one.ZoneId));
         Assert.False(WorldClockPolicy.CanAdd(new[] { one }, "w. europe standard time"));  // 时区 Id 大小写不敏感
         Assert.True(WorldClockPolicy.CanAdd(new[] { one }, "Tokyo Standard Time"));
 
         var atCap = Enumerable.Range(0, WorldClockPolicy.MaxCities)
-            .Select(i => new WorldClockCity($"Zone-{i}", $"城{i}")).ToList();
+            .Select(i => new WorldClockCity($"Zone-{i}")).ToList();
         Assert.False(WorldClockPolicy.CanAdd(atCap, "Tokyo Standard Time"));
     }
 

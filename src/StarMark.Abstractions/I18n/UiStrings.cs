@@ -2713,6 +2713,13 @@ public static class UiStrings
         // 全称（时钟、今日速览）／短名（闹钟那一排、待办截止日）／词根（月历表头：一格一个字，那是布局，
         // ⛔ 不许把整词塞进表头）。中文的「周日＝周＋日」「星期日＝星期＋日」这一层拼法由表自己守住
         // （证人 WeekdayNameGateTests.EachChineseSpellingIsItsStemWithItsPrefix —— 代码里再拼一次就是第二份真值）。
+        new Entry("time.day.today", "今天", "Today", "今日"),
+        new Entry("time.day.tomorrow", "明天", "Tomorrow", "明日"),
+        new Entry("time.day.yesterday", "昨天", "Yesterday", "昨日"),
+        new Entry("time.day.overdue", "逾期 {0} 天", "{0} days overdue", "{0}日超過"),
+        new Entry("time.day.ahead", "+{0} 天", "+{0} days", "+{0}日"),
+        new Entry("time.day.behind", "{0} 天", "{0} days", "{0}日"),
+        new Entry("time.day.monthDay", "{0}月{1}日", "{1}/{0}", "{0}月{1}日"),
         new Entry("time.weekday.full.0", "星期日", "Sunday", "日曜日"),
         new Entry("time.weekday.full.1", "星期一", "Monday", "月曜日"),
         new Entry("time.weekday.full.2", "星期二", "Tuesday", "火曜日"),
@@ -3045,6 +3052,7 @@ public static class UiStrings
         new Entry("widget.clock.noRows", "还没有点位：用上方下拉添加时区。", "No zones yet — pick one from the dropdown above.",
                   "地点がまだありません——上のドロップダウンでタイムゾーンを追加してください。"),
         // 世界时钟那一行的原因（住在 DataTemplate 的行上：交「键＋实参」，念出来发生在宿主那一拍，见 ✅WI-40-3b 机制 (C)）。
+        new Entry("widget.clock.unnamedZone", "未命名时区", "Unnamed time zone", "名前不明のタイムゾーン"),
         new Entry("widget.clock.noZone", "本机没有这个时区：{0}", "No such time zone on this machine: {0}",
                   "このマシンにそのタイムゾーンはありません: {0}"),
         // 「最近活动」那一族的事件名：11 档各一颗，⛔ 再回 VM 里写死中文（✅WI-67 片9c 第三刀）。
@@ -3084,8 +3092,6 @@ public static class UiStrings
         new Entry("widget.todo.colorGreen", "绿（常规）", "Green (routine)", "緑（通常）"),
         new Entry("widget.todo.colorBlue", "蓝（稍后）", "Blue (later)", "青（後で）"),
         new Entry("widget.todo.colorPurple", "紫（灵感）", "Purple (inspiration)", "紫（ひらめき）"),
-        new Entry("widget.todo.dueToday", "今天", "Today", "今日"),
-        new Entry("widget.todo.dueTomorrow", "明天", "Tomorrow", "明日"),
         new Entry("widget.todo.dueClear", "清除", "Clear", "クリア"),
         new Entry("widget.ql.dragHint", "提示：可把文件、文件夹或网址直接拖入本组件；拖不动时用上面那行「＋」里的「选择文件／选择文件夹」",
                   "Tip: drop files, folders or links straight onto this widget; if the drop is blocked, use “Choose file / Choose folder” under the “+” row above",

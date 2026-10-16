@@ -40,7 +40,7 @@ public sealed class PageWordGateTests : IDisposable
         "widget.todo.allDone", "widget.todo.remaining", "widget.todo.deleted",
         "widget.todo.colorNone", "widget.todo.colorRed", "widget.todo.colorOrange", "widget.todo.colorYellow",
         "widget.todo.colorGreen", "widget.todo.colorBlue", "widget.todo.colorPurple",
-        "widget.todo.dueToday", "widget.todo.dueTomorrow", "widget.todo.dueClear",
+        "widget.todo.dueClear",
         "widget.ql.dragHint", "widget.ql.elevatedHint",
         "capture.hintToolbar", "capture.hintPin", "capture.hintOcr", "capture.selectionTip",
         "rss.rowTip",
@@ -158,7 +158,8 @@ public sealed class PageWordGateTests : IDisposable
         var todo = CodeOf(TodoCs);
         Assert.Equal(1, Count(todo, "(int Tier, string NameKey)[] ColorTiers"));
         Assert.Equal(1, Count(todo, "(int? Offset, string NameKey)[] DueTiers"));
-        Assert.Equal(10, Count(todo, "\"widget.todo.color") + Count(todo, "\"widget.todo.due"));   // 七档颜色＋三档日期＝十颗键，一颗不多一颗不少
+        // 七档颜色＋一颗"清除"＋两颗公共的"今天／明天"＝十颗键，一颗不多不少（✅WI-76：后两颗换了一家，⛔ 再算成 widget.todo.due 前缀）
+        Assert.Equal(10, Count(todo, "\"widget.todo.color") + Count(todo, "\"widget.todo.due") + Count(todo, "\"time.day."));
         Assert.Equal(2, Count(todo, "new MenuFlyoutItem { Text = Locale.T(nameKey) }"));           // 两处循环各念一次，⛔ 把名字存进表里那份数据
         foreach (var word in new[] { "红（紧急）", "橙（重要）", "黄（提醒）", "绿（常规）", "蓝（稍后）", "紫（灵感）", "今天", "明天" })
             Assert.Equal(0, Count(todo, "\"" + word + "\""));
@@ -188,8 +189,6 @@ public sealed class PageWordGateTests : IDisposable
     [InlineData("widget.todo.colorGreen")]
     [InlineData("widget.todo.colorBlue")]
     [InlineData("widget.todo.colorPurple")]
-    [InlineData("widget.todo.dueToday")]
-    [InlineData("widget.todo.dueTomorrow")]
     [InlineData("widget.todo.dueClear")]
     [InlineData("widget.ql.dragHint")]
     [InlineData("widget.ql.elevatedHint")]
@@ -206,7 +205,9 @@ public sealed class PageWordGateTests : IDisposable
     [InlineData("snapshot.detailLine")]
     public void EveryNewWordIsAskedForOnceAndSaysItDifferentlyInEachLanguage(string key)
     {
-        Assert.True(Words.Length == 37, "本档点名的键数与语料那一串必须相等（现在是 " + Words.Length + "）");
+        // 35 颗：✅WI-76 把两颗公共的「今天／明天」摘出本档——它们⛔ 只有一个主人（待办筛选＋待办截止读数＋
+        // 世界时钟日签共三处），主人清单由 WorldClockWordGateTests 逐颗数；那颗「清除」仍归本档点。
+        Assert.True(Words.Length == 35, "本档点名的键数与语料那一串必须相等（现在是 " + Words.Length + "）");
         Assert.Contains(key, Words, StringComparer.Ordinal);
         // 一颗键一个主人＝<b>代码与标记两边合计恰好一次</b>（⛔ 一句字两个主人，也⛔ 只扫 .cs 把标记那颗读成"没人问"）。
         Assert.Equal(1, Count(AskedCorpus(), @"""" + key + @"""") + Count(AskedMarkup(), @"""" + key + @""""));

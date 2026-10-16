@@ -131,10 +131,12 @@ public sealed partial class TodoWidget : UserControl
         (4, "widget.todo.colorGreen"), (5, "widget.todo.colorBlue"), (6, "widget.todo.colorPurple"),
     };
 
-    /// <summary>截止日档位与文案：null＝清除。<b>0＝今天、1＝明天</b>，都是"日历日"，不是 24 小时（✅P-37）。</summary>
+    /// <summary>截止日档位与文案：null＝清除。<b>0＝今天、1＝明天</b>，都是"日历日"，不是 24 小时（✅P-37）。
+    /// <para>「今天／明天」两颗⛔ 另起一家（<c>time.day.*</c>，与待办截止读数、世界时钟日签共用一颗键；
+    /// 批次 WI-76 把从前 <c>widget.todo.due*</c> 那两行<b>整颗摘掉</b>，⛔ 留一颗没人问的死键）。</para></summary>
     private static readonly (int? Offset, string NameKey)[] DueTiers =
     {
-        (0, "widget.todo.dueToday"), (1, "widget.todo.dueTomorrow"), (null, "widget.todo.dueClear"),
+        (0, "time.day.today"), (1, "time.day.tomorrow"), (null, "widget.todo.dueClear"),
     };
 
     /// <summary>

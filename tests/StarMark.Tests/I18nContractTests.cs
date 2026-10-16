@@ -289,6 +289,10 @@ public sealed class I18nContractTests : IDisposable
             ["widget.name.dedupSuffix"] = "同名序号那副括号「{0} ({1})」三列同形：连的是<b>基名</b>与<b>第几颗</b>那颗读数，这一行没有词可翻。"
                 + "⚠ 刻意用<b>半角括号＋一个空格</b>而⛔ 全角（与 widget.menu.nameWithSummary 相反）：用户档里历史遗留的「X (2)」就是这个形状，"
                 + "屏幕上重排⛔ 换一副括号去和它长得不一样（✅WI-67 片6／P-200 他裁 (A)）",
+            ["time.day.monthDay"] = "纯骨架「{0}月{1}日」<b>中日同形</b>，en 列是 \"{1}/{0}\"：那一行连的是<b>月与日两颗读数</b>，"
+                + "而「N 月 N 日」在日文里就是同一串字（⛔ 第三副面孔可写），这一行没有词可翻"
+                + "（✅WI-76 相对日期那一族，与 capture.pick.shapeTip／widget.name.dedupSuffix 同形）。"
+                + "⚠ 两颗主人共用这一颗：待办<b>那颗远的截止日</b>与世界时钟那一格<b>月日读数</b>（⛔ 各写一份中文）",
         };
 
         var actual = UiStrings.All

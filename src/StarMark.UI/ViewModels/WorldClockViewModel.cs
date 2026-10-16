@@ -79,7 +79,7 @@ public sealed partial class WorldClockViewModel : ObservableObject
     {
         Rows.Clear();
         var source = persisted ?? WorldClockPolicy.DefaultCities;
-        foreach (var city in source) AddCore(city.ZoneId, city.Name);
+        foreach (var city in source) AddCore(city.ZoneId, WorldClockPolicy.DisplayNameOf(city.ZoneId));
         RefreshCandidates();
         UpdateEmptyHint();
         Tick();
@@ -90,9 +90,8 @@ public sealed partial class WorldClockViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(zoneId)) return false;
         if (!WorldClockPolicy.CanAdd(
-                Rows.Select(r => new WorldClockCity(r.ZoneId, r.Name)).ToList(), zoneId)) return false;
-        var zone = WorldClockPolicy.TryResolve(zoneId);
-        AddCore(zoneId, zone is null ? zoneId : WorldClockPolicy.ShortName(zone.DisplayName));
+                Rows.Select(r => new WorldClockCity(r.ZoneId)).ToList(), zoneId)) return false;
+        AddCore(zoneId, WorldClockPolicy.DisplayNameOf(zoneId));
         RefreshCandidates();
         UpdateEmptyHint();
         Tick();
@@ -116,8 +115,15 @@ public sealed partial class WorldClockViewModel : ObservableObject
         UpdateEmptyHint();
     }
 
+    /// <summary>落盘的<b>只有点位身份</b>（Id）：⛔ 再把"这一刻念出来的名字"写进档里（✅WI-76，与 ✅P-199 同族）。</summary>
     public IReadOnlyList<WorldClockCity> ToPersisted() =>
-        Rows.Select(r => new WorldClockCity(r.ZoneId, r.Name)).ToList();
+        Rows.Select(r => new WorldClockCity(r.ZoneId)).ToList();
+
+    /// <summary>换语言那一刻：每行的名字重取一次（名字来自系统显示名，而兜底那颗在表里）。</summary>
+    public void ReresolveNames()
+    {
+        foreach (var row in Rows) row.Name = WorldClockPolicy.DisplayNameOf(row.ZoneId);
+    }
 
     /// <summary>每秒一次：按各自时区取当前时刻，并算出与本机相差几日。</summary>
     public void Tick()

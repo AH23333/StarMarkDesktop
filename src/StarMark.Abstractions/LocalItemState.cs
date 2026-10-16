@@ -1,5 +1,6 @@
 #nullable enable
 using System.Text.Json.Nodes;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions;
 
@@ -158,8 +159,12 @@ public static class LocalItemState
     }
 
     /// <summary>
-    /// 截止时间的中文短描述（组件列表显示用）。
+    /// 截止时间的短描述（组件列表显示用）。
     /// 逾期 / 今天 / 明天 / 本周内星期X / 具体月日 —— 按这个优先级，远的才显示日期。
+    /// <para>那五颗字<b>只住在语言表里</b>（<c>time.day.*</c>）：批次 WI-76 之前这一档自己写着
+    /// "昨天／今天／明天／逾期 N 天／N月N日"，而世界时钟那一格日签另写一份"明天／昨天／±N 天"——
+    /// 同一个词两个主人、其中一份还⛔ 随语言（✅P-210 名下的"确证上屏"那一族）。</para>
+    /// <para>取词时机＝每次装载那一列表时（调用方在贴上去那一刻才念，⛔ 提前念完再冻住＝✅P-184）。</para>
     /// </summary>
     public static string DescribeDue(long? dueUnixSeconds, DateTimeOffset now)
     {
@@ -170,11 +175,11 @@ public static class LocalItemState
             var today = now.ToLocalTime().Date;
             var days = (due - today).Days;
 
-            if (days < 0) return days == -1 ? "昨天" : $"逾期 {-days} 天";
-            if (days == 0) return "今天";
-            if (days == 1) return "明天";
+            if (days < 0) return days == -1 ? Locale.T("time.day.yesterday") : Locale.Fmt("time.day.overdue", -days);
+            if (days == 0) return Locale.T("time.day.today");
+            if (days == 1) return Locale.T("time.day.tomorrow");
             if (days < 7) return DateTimeText.WeekdayShort(due.DayOfWeek);
-            return $"{due.Month}月{due.Day}日";
+            return Locale.Fmt("time.day.monthDay", due.Month, due.Day);
         }
         catch
         {

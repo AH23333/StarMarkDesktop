@@ -52,7 +52,7 @@ public sealed partial class WidgetManager
                 Links = inst.Links.Select(l => new LinkItem { Id = l.Id, Title = l.Title, Uri = l.Uri, CreatedAt = l.CreatedAt }).ToList(),
                 GridTag = inst.GridTag,
                 CalcHistory = inst.CalcHistory?.Select(h => new CalcHistoryItem { Expression = h.Expression, Answer = h.Answer }).ToList(),
-                WorldClockZones = inst.WorldClockZones?.Select(c => new WorldClockCity(c.ZoneId, c.Name)).ToList(),
+                WorldClockZones = inst.WorldClockZones?.Select(c => new WorldClockCity(c.ZoneId)).ToList(),
                 Countdowns = inst.Countdowns?.Select(c => c.Clone()).ToList(),
                 Focus = inst.Focus is null ? null : new FocusTimerConfig { FocusMinutes = inst.Focus.FocusMinutes, RestMinutes = inst.Focus.RestMinutes },
                 MonitorMetrics = inst.MonitorMetrics,
@@ -145,7 +145,7 @@ public sealed partial class WidgetManager
                 inst.GridTag = entry.GridTag;
                 // null 也要照搬：那一刻这台计算器没有历史，还原后就不该留着之后算出来的条目
                 inst.CalcHistory = entry.CalcHistory?.Select(h => new CalcHistoryItem { Expression = h.Expression, Answer = h.Answer }).ToList();
-                inst.WorldClockZones = entry.WorldClockZones?.Select(c => new WorldClockCity(c.ZoneId, c.Name)).ToList();
+                inst.WorldClockZones = entry.WorldClockZones?.Select(c => new WorldClockCity(c.ZoneId)).ToList();
                 inst.Countdowns = entry.Countdowns?.Select(c => c.Clone()).ToList();
                 inst.Focus = entry.Focus is null ? null : new FocusTimerConfig { FocusMinutes = entry.Focus.FocusMinutes, RestMinutes = entry.Focus.RestMinutes };
                 inst.MonitorMetrics = entry.MonitorMetrics;

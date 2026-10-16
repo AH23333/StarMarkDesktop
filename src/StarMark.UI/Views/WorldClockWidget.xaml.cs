@@ -38,7 +38,7 @@ public sealed partial class WorldClockWidget : UserControl, IWidgetTicker
         // 那一行的原因写在行模板上（每行一颗）⇒ ⛔ 挂 LocText 名单，由组件在换语言那一刻逐行重念（✅WI-40-3b）。
         Locale.Changed += RepasteZoneRows;
         Unloaded += (_, _) => { ViewModel.PropertyChanged -= OnEmptyHintChanged; Locale.Changed -= RepasteZoneRows; };
-        // 配置里存的是点位（含名字）；名字随区号一起存，避免每次刷新都去查系统显示名
+        // 配置里只存点位身份（Id）；名字在装载这一刻查一次，换语言再查一次（⛔ 每秒一拍去查，也⛔ 把字冻进档里）
         ViewModel.Load(config.WorldClockZones);
         ApplyEmptyHint();
         _ready = true;
@@ -52,8 +52,13 @@ public sealed partial class WorldClockWidget : UserControl, IWidgetTicker
     /// <summary>「没话了」也走这一颗门：SetMessage(… null) 把重贴名单那条一起摘掉，否则换语言把旧句子贴回来。</summary>
     private void ApplyEmptyHint() => LocText.SetMessage(EmptyHintText, ViewModel.EmptyHint);
 
-    /// <summary>换语言那一刻：每个点位那一行「本机没有这个时区」各重念一次（实参还是那颗点位，⛔ 重新拼）。</summary>
-    private void RepasteZoneRows() { foreach (var row in ViewModel.Rows) row.Repaste(); }
+    /// <summary>换语言那一刻：先按 Id 重取每行的名字，再把「本机没有这个时区」那句各重念一次
+    /// （实参还是那颗点位，⛔ 重新拼）。旧写法只重念后半句，名字那一列冻在装载那一刻（✅WI-76）。</summary>
+    private void RepasteZoneRows()
+    {
+        ViewModel.ReresolveNames();
+        foreach (var row in ViewModel.Rows) row.Repaste();
+    }
 
     private async void AddBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
