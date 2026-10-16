@@ -233,15 +233,19 @@ public sealed class WidgetAppearanceOverride
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? BorderColor { get; set; }
 
-    /// <summary>边框粗细（物理 px）。null = 用全局（1）。</summary>
+    /// <summary>边框粗细（DIP）。null = 用默认。量程住在 <c>AppearanceSettingsPolicy.BorderThickness*</c>。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? BorderThickness { get; set; }
 
-    /// <summary>圆角半径（物理 px）。null = 用全局（8）。</summary>
+    /// <summary>圆角半径（DIP）。null = 用默认。量程住在 <c>AppearanceSettingsPolicy.CornerRadius*</c>。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? CornerRadius { get; set; }
 
-    /// <summary>文本缩放（1.0 = 100%）。null = 用全局（1.0）。范围建议 0.7–1.5。</summary>
+    /// <summary>
+    /// 文本缩放（1.0 = 100%）。null = 用全局（1.0）。
+    /// ⚠ 从前这句注释写的是"范围建议 0.7–1.5"，而滑杆与读档夹的都是 <b>0.6–1.8</b>——
+    /// 注释替一把⛔ 存在的尺打勾（批次 WI-82 更正）。量程现在只有 <c>AppearanceSettingsPolicy.TextScale*</c> 一个主人。
+    /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? TextScale { get; set; }
 }

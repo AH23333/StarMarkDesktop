@@ -93,4 +93,57 @@ public static class AppearanceSettingsPolicy
     /// <summary>把材质浓度夹进合法范围。</summary>
     public static double NormalizeMaterialIntensity(double intensity)
         => Math.Clamp(intensity, MaterialIntensityFloor, MaterialIntensityCeiling);
+
+    // ─────────────── 组件「外观」编辑器那三根旋钮（批次 WI-82 收口：量程此前写两遍） ───────────────
+    //
+    // 那三根旋钮的量程从前<b>各写两份</b>：编辑器里滑杆的 min/max/step 一份、组件窗读档时 <c>Math.Clamp</c> 一份。
+    // 同一族病在 ✅批次 SD 那一边（设置页四根旋钮）已经真咬过一次：改量程 ⇒ 存档里合法且在生效的值
+    // 在界面上表达不出来。这里补齐的另一半是<b>已经咬到了的那一颗</b>：逐扇那颗「背景不透明度」
+    // 当时写的是 0–1，而全局那颗的下界是 0.3（"再低就等于把组件隐藏了"）——同一件事两扇窗给了
+    // 一段⛔ 互相认的范围，滑杆还能把单扇组件拖到完全看不见。
+
+    /// <summary>文本缩放下界（1.0＝100%；再小那一行的字就没法读了）。</summary>
+    public const double TextScaleFloor = 0.6;
+
+    /// <summary>文本缩放上限（再大内容就撑破那一扇，只能靠滚动条找回来）。</summary>
+    public const double TextScaleCeiling = 1.8;
+
+    /// <summary>文本缩放滑杆步进（5%）。</summary>
+    public const double TextScaleStep = 0.05;
+
+    /// <summary>没存过时的文本缩放＝不缩放。</summary>
+    public const double TextScaleDefault = 1.0;
+
+    /// <summary>边框粗细下界（0＝无边框，这是有意开放的一档）。</summary>
+    public const double BorderThicknessFloor = 0;
+
+    /// <summary>边框粗细上界（DIP；再粗那一圈就把内容挤掉了）。</summary>
+    public const double BorderThicknessCeiling = 12;
+
+    /// <summary>边框粗细滑杆步进。</summary>
+    public const double BorderThicknessStep = 0.5;
+
+    /// <summary>没存过时的边框粗细。</summary>
+    public const double BorderThicknessDefault = 1;
+
+    /// <summary>圆角半径下界（0＝直角，窗口区域裁成矩形）。</summary>
+    public const double CornerRadiusFloor = 0;
+
+    /// <summary>圆角半径上界（DIP）。</summary>
+    public const double CornerRadiusCeiling = 48;
+
+    /// <summary>圆角半径滑杆步进（1px）。</summary>
+    public const double CornerRadiusStep = 1;
+
+    /// <summary>没存过时的圆角半径。</summary>
+    public const double CornerRadiusDefault = 8;
+
+    /// <summary>把文本缩放夹进合法范围（读档与滑杆同一颗）。</summary>
+    public static double NormalizeTextScale(double scale) => Math.Clamp(scale, TextScaleFloor, TextScaleCeiling);
+
+    /// <summary>把边框粗细夹进合法范围（DIP）。</summary>
+    public static double NormalizeBorderThickness(double px) => Math.Clamp(px, BorderThicknessFloor, BorderThicknessCeiling);
+
+    /// <summary>把圆角半径夹进合法范围（DIP）。</summary>
+    public static double NormalizeCornerRadius(double px) => Math.Clamp(px, CornerRadiusFloor, CornerRadiusCeiling);
 }

@@ -88,7 +88,8 @@ public static class WidgetAppearance
         if (tint is null) return null;
         var dark = theme == ElementTheme.Dark;
         var surface = SurfaceReadability.Over(
-            MaterialTint.BackdropColor(dark, AccentColor(), kind, Math.Clamp(solidOpacity, 0.0, 1.0), tint),
+            MaterialTint.BackdropColor(dark, AccentColor(), kind,
+                AppearanceSettingsPolicy.NormalizeOpacity(solidOpacity), tint),
             SurfaceReadability.BaseFor(dark));
         return SurfaceReadability.ReadableOn(surface);
     }
@@ -159,7 +160,7 @@ public static class WidgetAppearance
 
             // 其余材质统一：按材质性格取扁平背衬色（纯色吃滑杆，其余固定），玻璃化整窗让背衬透出。
             var color = MaterialTint.BackdropColor(
-                isDark, AccentColor(), kind, Math.Clamp(solidOpacity, 0.0, 1.0), tintOverride);
+                isDark, AccentColor(), kind, AppearanceSettingsPolicy.NormalizeOpacity(solidOpacity), tintOverride);
 
             if (state.Tint is null)
             {
@@ -246,7 +247,7 @@ public static class WidgetAppearance
         ElementTheme theme, WidgetBackdropKind kind, double? opacityOverride, Windows.UI.Color? tintOverride = null)
     {
         var dark = theme == ElementTheme.Dark;
-        var opacity = Math.Clamp(opacityOverride ?? Opacity(), 0.0, 1.0);
+        var opacity = AppearanceSettingsPolicy.NormalizeOpacity(opacityOverride ?? Opacity());
 
         // 实色且没人点底色＝跟主题的黑白；点了底色就铺那颗（实色没有透明可保留，alpha 由取色那颗给成 FF）。
         if (kind == WidgetBackdropKind.None && tintOverride is null)

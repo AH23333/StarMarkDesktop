@@ -23,6 +23,10 @@ public sealed class AppearanceSettingsPolicyTests
     [InlineData(AppearanceSettingsPolicy.SnapStrengthFloor, AppearanceSettingsPolicy.SnapStrengthDefault, AppearanceSettingsPolicy.SnapStrengthCeiling)]
     [InlineData(AppearanceSettingsPolicy.SnapSpacingFloor, AppearanceSettingsPolicy.SnapSpacingDefault, AppearanceSettingsPolicy.SnapSpacingCeiling)]
     [InlineData(AppearanceSettingsPolicy.MaterialIntensityFloor, AppearanceSettingsPolicy.MaterialIntensityDefault, AppearanceSettingsPolicy.MaterialIntensityCeiling)]
+    // 批次 WI-82 收进来的那三根（组件「外观」编辑器）：量程从前写两遍，现在只准这一颗主人
+    [InlineData(AppearanceSettingsPolicy.TextScaleFloor, AppearanceSettingsPolicy.TextScaleDefault, AppearanceSettingsPolicy.TextScaleCeiling)]
+    [InlineData(AppearanceSettingsPolicy.BorderThicknessFloor, AppearanceSettingsPolicy.BorderThicknessDefault, AppearanceSettingsPolicy.BorderThicknessCeiling)]
+    [InlineData(AppearanceSettingsPolicy.CornerRadiusFloor, AppearanceSettingsPolicy.CornerRadiusDefault, AppearanceSettingsPolicy.CornerRadiusCeiling)]
     public void DefaultSitsInsideItsOwnRange(double floor, double def, double ceiling)
     {
         Assert.True(floor <= ceiling, $"下限 {floor} 比上限 {ceiling} 还大");
@@ -58,7 +62,54 @@ public sealed class AppearanceSettingsPolicyTests
         Assert.Equal(64, AppearanceSettingsPolicy.SnapStrengthCeiling);
         Assert.Equal(0, AppearanceSettingsPolicy.SnapSpacingFloor);
         Assert.Equal(40, AppearanceSettingsPolicy.SnapSpacingCeiling);
+        // 批次 WI-82：这三根从前各写两份（编辑器滑杆一份、组件窗夹取一份），搬进来的那一刀⛔ 动数字
+        Assert.Equal(1.0, AppearanceSettingsPolicy.TextScaleDefault);
+        Assert.Equal(0.6, AppearanceSettingsPolicy.TextScaleFloor);
+        Assert.Equal(1.8, AppearanceSettingsPolicy.TextScaleCeiling);
+        Assert.Equal(0.05, AppearanceSettingsPolicy.TextScaleStep);
+        Assert.Equal(1.0, AppearanceSettingsPolicy.BorderThicknessDefault);
+        Assert.Equal(0.0, AppearanceSettingsPolicy.BorderThicknessFloor);
+        Assert.Equal(12.0, AppearanceSettingsPolicy.BorderThicknessCeiling);
+        Assert.Equal(8.0, AppearanceSettingsPolicy.CornerRadiusDefault);
+        Assert.Equal(0.0, AppearanceSettingsPolicy.CornerRadiusFloor);
+        Assert.Equal(48.0, AppearanceSettingsPolicy.CornerRadiusCeiling);
     }
+
+    /// <summary>
+    /// 文本缩放那根的边界臂。⚠ 那颗 <b>0.6 的下界</b>从前只活在编辑器的滑杆参数里，
+    /// 而组件档的注释写的是"范围建议 0.7–1.5"——一句⛔ 存在的范围（坑表 #580 那一族：措辞与实现对齐）。
+    /// </summary>
+    [Theory]
+    [InlineData(0.1, 0.6)]
+    [InlineData(0.59, 0.6)]
+    [InlineData(0.6, 0.6)]           // 正好在下界：不许多夹
+    [InlineData(1.0, 1.0)]           // 默认值原样穿过
+    [InlineData(1.8, 1.8)]           // 正好在上界
+    [InlineData(2.4, 1.8)]
+    public void TextScaleClampsBothEnds_IncludingTheEndpointsThemselves(double input, double expected)
+        => Assert.Equal(expected, AppearanceSettingsPolicy.NormalizeTextScale(input), 10);
+
+    /// <summary>边框粗细的<b>下限 0 是有意开放的一档</b>（0＝无边框，用户真会要）：⛔ 当"至少给条边"顶成 1。</summary>
+    [Theory]
+    [InlineData(-2.0, 0.0)]
+    [InlineData(0.0, 0.0)]
+    [InlineData(0.5, 0.5)]
+    [InlineData(1.0, 1.0)]
+    [InlineData(12.0, 12.0)]
+    [InlineData(30.0, 12.0)]
+    public void BorderThicknessAllowsNoBorder_AndClampsBothEnds(double input, double expected)
+        => Assert.Equal(expected, AppearanceSettingsPolicy.NormalizeBorderThickness(input), 10);
+
+    /// <summary>圆角的<b>0＝直角</b>同样是有意开放的一档（窗口区域直接裁成矩形）；上界 48 之外⛔ 再裁。</summary>
+    [Theory]
+    [InlineData(-8.0, 0.0)]
+    [InlineData(0.0, 0.0)]
+    [InlineData(8.0, 8.0)]
+    [InlineData(24.0, 24.0)]
+    [InlineData(48.0, 48.0)]
+    [InlineData(49.0, 48.0)]
+    public void CornerRadiusAllowsSquareCorners_AndClampsBothEnds(double input, double expected)
+        => Assert.Equal(expected, AppearanceSettingsPolicy.NormalizeCornerRadius(input), 10);
 
     /// <summary>
     /// 滑块右边那行百分比文本的算法是 <c>(int)Math.Round(opacity * 100)</c>（VM 里）。

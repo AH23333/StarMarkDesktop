@@ -13,6 +13,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Graphics;
 using StarMark.Abstractions;
+using StarMark.Core.Appearance;
 using StarMark.Core.Health;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
@@ -77,7 +78,9 @@ public sealed partial class WidgetWindow
             var kind = ov?.Backdrop ?? globalKind;
             // 「背景不透明度」从前只有全局一根旋钮，而材质早就逐扇可覆写 ⇒ 同一扇能改材质、能改颜色，
             // 却改不了那颗材质的透明度（批次 WI-82 补上的那一档；null＝跟随全局）。
-            var opacity = ov?.OpacityOverride ?? WidgetAppearance.Opacity();
+            // 量程⛔ 在这儿再写一遍：逐扇那颗与全局那颗是<b>同一件事</b>，共用 AppearanceSettingsPolicy 那一段
+            // （批次 J 拆的是值、⛔ 拆范围——从前逐扇滑杆给的是 0–1，把"最透 0.3"那条承诺拖穿了）。
+            var opacity = AppearanceSettingsPolicy.NormalizeOpacity(ov?.OpacityOverride ?? WidgetAppearance.Opacity());
             StartupProfile.Measure($"组件材质挂载 {_kind}", () => WidgetAppearance.ApplyBackdrop(
                 this, kind, opacity, RootBorder.ActualTheme, tint?.Color), logWhenMs: 10);
 
@@ -101,12 +104,14 @@ public sealed partial class WidgetWindow
                 ? WidgetAppearance.ParseColorBrush(ov.BorderColor!) ?? RootBorder.BorderBrush
                 : (ThemeBrush.For(RootBorder.ActualTheme, "WidgetBorderBrush") ?? new SolidColorBrush(Microsoft.UI.Colors.Gray));
             RootBorder.BorderThickness = ov?.BorderThickness is { } bt
-                ? new Thickness(Math.Clamp(bt, 0, 12))
-                : new Thickness(1);
+                ? new Thickness(AppearanceSettingsPolicy.NormalizeBorderThickness(bt))
+                : new Thickness(AppearanceSettingsPolicy.BorderThicknessDefault);
 
             // 圆角：内部 Border 跟随圆角（内容裁进圆角矩形），同时把「窗口本身」用 SetWindowRgn
             // 裁成圆角矩形——这样圆角改变的是组件真实外形（半径 0 即直角窗口），而不只是内部形状。
-            var radius = ov?.CornerRadius is { } cr ? Math.Clamp(cr, 0, 48) : 8;
+            var radius = ov?.CornerRadius is { } cr
+                ? AppearanceSettingsPolicy.NormalizeCornerRadius(cr)
+                : AppearanceSettingsPolicy.CornerRadiusDefault;
             _currentCornerRadius = radius;
             RootBorder.CornerRadius = new CornerRadius(radius);
             if (DragBar is not null)
@@ -185,8 +190,10 @@ public sealed partial class WidgetWindow
                         tb.ClearValue(TextBlock.ForegroundProperty);
                     _coloredMarker.Clear();
                 }
-                // 文本缩放（与前景共享一次遍历）
-                _textScale = ov?.TextScale is { } ts ? Math.Clamp(ts, 0.6, 1.8) : 1.0;
+                // 文本缩放（与前景共享一次遍历）；量程问 Core 那一颗（⛔ 在这里再抄一遍 0.6/1.8）
+                _textScale = ov?.TextScale is { } ts
+                    ? AppearanceSettingsPolicy.NormalizeTextScale(ts)
+                    : AppearanceSettingsPolicy.TextScaleDefault;
                 ApplyTextScale(panel, _textScale);   // 缩放仍只管内容区：标题栏那一行是控件，不是被看的字
             }
             catch (Exception ex)

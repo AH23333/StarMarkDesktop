@@ -16,6 +16,7 @@ using Windows.UI;
 using WinRT.Interop;
 using StarMark.Abstractions;
 using StarMark.Abstractions.I18n;
+using StarMark.Core.Appearance;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 
@@ -533,13 +534,25 @@ public static class WidgetAppearanceEditor
         // 「背景不透明度」从前只有设置页那一根全局旋钮，而<b>材质</b>早就逐扇可覆写 ⇒ 同一扇能改材质、
         // 能改颜色，却改不了那颗材质的透明度（批次 WI-82 补上的那一档）。标题⛔ 另立一句：
         // 它与全局那一行念的是同一件事，共用 settings.widgets.opacityLabel 那颗键（一句字一个主人）。
+        // <b>量程也共用那一颗</b>：从前这里写 0–1，而全局那根的下界是 0.3（"再低就等于把组件隐藏了"）
+        // ⇒ 同一件事两扇窗给了两段互相认不出的范围，滑杆还能把单扇组件拖到完全看不见。
         var cOpacity = MakeSlider("settings.widgets.opacityLabel", wOpacity ?? WidgetAppearance.Opacity(),
-            0, 1, 0.05, v => { if (suppressSliderReset) return; wOpacity = v; Preview(); }, out var sOpacity, wordRefreshers);
-        var cThick = MakeSlider("widget.appearance.slider.borderThickness", wThick ?? 1, 0, 12, 0.5, v => { if (suppressSliderReset) return; wThick = v; Preview(); }, out var sThick, wordRefreshers);
-        var cRadius = MakeSlider("widget.appearance.slider.cornerRadius", wRadius ?? 8, 0, 48, 1, v => { if (suppressSliderReset) return; wRadius = v; Preview(); }, out var sRadius, wordRefreshers);
+            AppearanceSettingsPolicy.OpacityFloor, AppearanceSettingsPolicy.OpacityCeiling,
+            AppearanceSettingsPolicy.OpacityStep, v => { if (suppressSliderReset) return; wOpacity = v; Preview(); },
+            out var sOpacity, wordRefreshers);
+        var cThick = MakeSlider("widget.appearance.slider.borderThickness", wThick ?? AppearanceSettingsPolicy.BorderThicknessDefault,
+            AppearanceSettingsPolicy.BorderThicknessFloor, AppearanceSettingsPolicy.BorderThicknessCeiling,
+            AppearanceSettingsPolicy.BorderThicknessStep, v => { if (suppressSliderReset) return; wThick = v; Preview(); },
+            out var sThick, wordRefreshers);
+        var cRadius = MakeSlider("widget.appearance.slider.cornerRadius", wRadius ?? AppearanceSettingsPolicy.CornerRadiusDefault,
+            AppearanceSettingsPolicy.CornerRadiusFloor, AppearanceSettingsPolicy.CornerRadiusCeiling,
+            AppearanceSettingsPolicy.CornerRadiusStep, v => { if (suppressSliderReset) return; wRadius = v; Preview(); },
+            out var sRadius, wordRefreshers);
         // 文本缩放：在 1.0（=默认/跟随全局）附近吸附，并把该档显示成「默认」。
         // 不吸附的话拇指停在 0.95 / 1.05 这种临界值是常事，用户会以为「明明调回默认了，字还是不对」。
-        var cScale = MakeSlider("widget.appearance.slider.textScale", wScale ?? 1, 0.6, 1.8, 0.05, v =>
+        var cScale = MakeSlider("widget.appearance.slider.textScale", wScale ?? AppearanceSettingsPolicy.TextScaleDefault,
+            AppearanceSettingsPolicy.TextScaleFloor, AppearanceSettingsPolicy.TextScaleCeiling,
+            AppearanceSettingsPolicy.TextScaleStep, v =>
         {
             if (suppressSliderReset) return;
             wScale = SnapTextScale(v);
@@ -618,9 +631,9 @@ public static class WidgetAppearanceEditor
             // 同步把滑杆视觉回退到「跟随全局」对应的默认值（不触发 ValueChanged，保持上面的 null = 跟随全局）
             suppressSliderReset = true;
             sOpacity.Value = WidgetAppearance.Opacity();
-            sThick.Value = 1;
-            sRadius.Value = 8;
-            sScale.Value = 1;
+            sThick.Value = AppearanceSettingsPolicy.BorderThicknessDefault;
+            sRadius.Value = AppearanceSettingsPolicy.CornerRadiusDefault;
+            sScale.Value = AppearanceSettingsPolicy.TextScaleDefault;
             suppressSliderReset = false;
             BuildPresetStrip();
             RefreshColorHighlights();

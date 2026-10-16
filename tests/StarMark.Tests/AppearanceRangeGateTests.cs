@@ -9,7 +9,9 @@ using static StarMark.Tests.SourceGate;
 namespace StarMark.Tests;
 
 /// <summary>
-/// 「外观 + 边缘磁吸」那三根滑杆的量程／默认只许有一个主人的形状闸门（批次 SD，P-123 清单 #4）。
+/// 「外观 + 边缘磁吸」那三根滑杆的量程／默认只许有一个主人的形状闸门（批次 SD，P-123 清单 #4；
+/// 批次 WI-82 把射程扩到<b>组件「外观」编辑器</b>那四根旋钮——那里当时是同一件事的第二主人，且已咬人：
+/// 逐扇不透明度滑杆写的是 0–1，全局那根的下界是 0.3，于是单扇组件能被拖到完全看不见）。
 /// <para>
 /// 收口前同一件事最多有五个主人：仓储读档夹一次、落盘再夹一次；VM 字段初值一遍、读取兜底一遍；
 /// XAML 的 <c>Minimum/Maximum/StepFrequency</c> 一遍。判据本身住在 Core，所以它的<b>行为</b>由
@@ -32,6 +34,9 @@ public sealed class AppearanceRangeGateTests
     private const string StoreFile = "src/StarMark.UI/Helpers/SettingsStore.Appearance.cs";
     private const string ViewModelFile = "src/StarMark.UI/ViewModels/SettingsPageViewModel.cs";
     private const string XamlFile = "src/StarMark.UI/Views/SettingsPage.xaml";
+    private const string WidgetEditorFile = "src/StarMark.UI/Views/WidgetAppearanceEditor.cs";
+    private const string WidgetWindowAppearanceFile = "src/StarMark.UI/Views/WidgetWindow.Appearance.cs";
+    private const string WidgetAppearanceFile = "src/StarMark.UI/Helpers/WidgetAppearance.cs";
 
     /// <summary>四根滑杆（组件／主窗各一根不透明度 ＋ 磁吸两根）按 <c>Value=</c> 的绑定目标点名。</summary>
     private static readonly string[] BoundValueTargets =
@@ -139,17 +144,104 @@ public sealed class AppearanceRangeGateTests
 
     // ────────── ⑤ 判据不空壳 ──────────
 
+    /// <summary>
+    /// 判据里数字的颗数按<b>分布</b>钉，⛔ 只钉一个总数（批次 WI-82 把组件那三根旋钮也搬进来之后，
+    /// 总数从 15 涨到 27；只写"27"的话，谁搬进一组却漏掉步进、或把某档整个删掉，这行照样绿）。
+    /// <para>分布＝设置页三组各 4 颗（下限/上限/默认/步进）＋材质那组 3 颗（无步进，那根滑杆由 XAML 自己给）
+    /// ＋组件编辑器三组各 4 颗＝27；夹取出口＝设置页四族＋组件三族＝7，每颗都真的用一次 <c>Math.Clamp</c>。</para>
+    /// </summary>
     [Fact]
     public void TheJudgeHoldsEveryNumberAndNormalizesThem()
     {
         var code = CodeOf(JudgeFile);
-        Assert.Equal(15, Regex.Matches(code, @"public const (double|int) \w+ =").Count);
-        Assert.Equal(4, Regex.Matches(code, @"public static (double|int) Normalize\w+\(").Count);
+        // 设置页那三组：4＋4＋4＝12；材质那组没有步进（XAML 自己给那根滑杆的节拍）＝3；两族合计正是批次 SD 的 15
+        Assert.Equal(12, CountGroup(code, ["Opacity", "SnapStrength", "SnapSpacing"]));
+        Assert.Equal(3, CountGroup(code, ["MaterialIntensity"]));
+        // 批次 WI-82 搬进来的组件那三根：各 4 颗＝12
+        Assert.Equal(12, CountGroup(code, ["TextScale", "BorderThickness", "CornerRadius"]));
+        Assert.Equal(27, Regex.Matches(code, @"public const (double|int) \w+ =").Count);
+        Assert.Equal(7, Regex.Matches(code, @"public static (double|int) Normalize\w+\(").Count);
         // 不许退成"只是把数字抄一遍、其实谁也没夹"的空壳：每颗 Normalize 都得真的用一次 Math.Clamp
-        Assert.Equal(4, Count(code, "Math.Clamp("));
+        Assert.Equal(7, Count(code, "Math.Clamp("));
+        Assert.Equal(7, Regex.Matches(code, @"Math\.Clamp\(\w+, \w+Floor, \w+Ceiling\)").Count);
     }
 
-    // ────────── ⑥ 转发的量程，XAML 必须各读一次 ──────────
+    /// <summary>按名头数一组里 <c>Floor/Ceiling/Default/Step</c> 那四颗常量的颗数（缺哪颗就少哪颗）。</summary>
+    private static int CountGroup(string code, string[] prefixes)
+        => prefixes.Sum(p => Regex.Matches(code, $@"public const (double|int) {p}(Floor|Ceiling|Default|Step) =").Count);
+
+    // ────────── ⑥ 组件「外观」编辑器那四根旋钮也不许自带量程 ──────────
+
+    /// <summary>
+    /// 批次 WI-82 的第二刀：组件那扇编辑器的滑杆此前把量程<b>各写一遍</b>，其中一颗已经咬人——
+    /// 逐扇「背景不透明度」写的是 0–1，而全局那根的下界是 0.3（判据注释：再低就等于把组件隐藏了）
+    /// ⇒ 同一件事两扇窗给了两段互相认不出的范围，滑杆还能把单扇组件拖到完全看不见。
+    /// <para>钉法沿用 ② 那一族的口径：⛔ 钉数字（0.6、12、48 在界面里是无关的量），改钉<b>形状</b>＝
+    /// 按标签认出那四根 <c>MakeSlider</c> 调用，量程序列里必须出现判据的名字且<b>一颗数字都没有</b>。
+    /// 抽取器自己也要正证（⑤ 那格之外的 #161 口径）：四根必须各命中恰好一次。</para>
+    /// </summary>
+    [Fact]
+    public void WidgetEditorKnobsTakeTheirRangeFromTheJudge()
+    {
+        var code = CodeOf(WidgetEditorFile);
+        var segments = KnobCallSegments(code);
+        Assert.Equal(KnobRanges.Length, segments.Count);   // 抽取器瞎了／多了一根没点名的旋钮，都在这里红
+
+        foreach (var (label, floor, ceiling, step) in KnobRanges)
+        {
+            var seg = Assert.Single(segments, s => s.Contains($"\"{label}\"", StringComparison.Ordinal));
+            foreach (var name in new[] { floor, ceiling, step })
+                Assert.Equal(1, Count(seg, $"AppearanceSettingsPolicy.{name}"));
+            // 量程槽里一颗字面数字都不许有：写回 0.6／12／48 就是第二个主人回来了
+            Assert.Equal(0, seg.Count(char.IsDigit));
+        }
+
+        // 「恢复全局」把滑杆摆回哪一档也必须问判据（三根默认值各两处＝挂上时 + 复位时；不透明度复位读全局值，形状不同）
+        foreach (var name in new[] { "BorderThicknessDefault", "CornerRadiusDefault", "TextScaleDefault" })
+            Assert.Equal(2, Count(code, $"AppearanceSettingsPolicy.{name}"));
+    }
+
+    /// <summary>
+    /// 按标签把四根旋钮的调用段切出来：从 <c>MakeSlider("标签"</c> 起，到该调用第一个 <c>out var</c> 止，
+    /// 中途遇到下一个 <c>MakeSlider(</c> 就判失败（防"段跨到下一根上"，那会让数字检查形同虚设）。
+    /// </summary>
+    private static List<string> KnobCallSegments(string code)
+        => Regex.Matches(code, @"MakeSlider\(""[^""]*""(?:(?!MakeSlider\()[\s\S])*?out var")
+            .Select(m => m.Value).ToList();
+
+    private static readonly (string Label, string Floor, string Ceiling, string Step)[] KnobRanges =
+    [
+        ("settings.widgets.opacityLabel", "OpacityFloor", "OpacityCeiling", "OpacityStep"),
+        ("widget.appearance.slider.borderThickness", "BorderThicknessFloor", "BorderThicknessCeiling", "BorderThicknessStep"),
+        ("widget.appearance.slider.cornerRadius", "CornerRadiusFloor", "CornerRadiusCeiling", "CornerRadiusStep"),
+        ("widget.appearance.slider.textScale", "TextScaleFloor", "TextScaleCeiling", "TextScaleStep"),
+    ];
+
+    // ────────── ⑦ 套用侧与取色侧都不许再自己夹一遍 ──────────
+
+    /// <summary>
+    /// 组件窗口读覆盖值、<c>WidgetAppearance</c> 算背衬透明度：这两个消费点此前各写了一份 <c>Math.Clamp(x, 0.0, 1.0)</c>
+    /// 与 <c>Math.Clamp(v, 0, 1)</c>——正是"第二份真值"，也是上面那颗缺陷能存在的土壤。
+    /// <para>现在禁的是<b>动作形状</b>（这两个文件里 <c>Math.Clamp</c> 归零）＋正面计数（确实各走了判据），
+    /// ⛔ 只禁数字：编辑器里 HSV 取色那三颗 <c>Math.Clamp</c> 是<b>另一件事</b>（把鼠标点位置折进色域），
+    /// 不在这两个文件的射程里，也不该被搬进判据。</para>
+    /// </summary>
+    [Fact]
+    public void WidgetAppearanceConsumersClampThroughTheJudgeNotTheirOwnMath()
+    {
+        var window = CodeOf(WidgetWindowAppearanceFile);
+        Assert.Equal(0, Count(window, "Math.Clamp("));
+        Assert.Equal(4, Count(window, "AppearanceSettingsPolicy.Normalize"));
+        // 覆盖为空时那三档回落也必须念同一颗默认（⛔ 在这里另写 1／8／1.0）：各恰好一处
+        foreach (var name in new[] { "BorderThicknessDefault", "CornerRadiusDefault", "TextScaleDefault" })
+            Assert.Equal(1, Count(window, $"AppearanceSettingsPolicy.{name}"));
+
+        var helper = CodeOf(WidgetAppearanceFile);
+        Assert.Equal(0, Count(helper, "Math.Clamp("));
+        Assert.Equal(3, Count(helper, "AppearanceSettingsPolicy.NormalizeOpacity("));
+    }
+
+    // ────────── ⑧ 转发的量程，XAML 必须各读一次 ──────────
 
     /// <summary>
     /// VM 转发出去的 9 颗量程（三组 × 下限/上限/步进），XAML 里必须各有读者；反过来 VM 里也必须有这 9 颗出口。
@@ -176,7 +268,7 @@ public sealed class AppearanceRangeGateTests
             || vm.Contains($"public int {p} =>", StringComparison.Ordinal)));
     }
 
-    // ────────── ⑦ 本闸门依赖的机制，自己也要被钉住 ──────────
+    // ────────── ⑨ 本闸门依赖的机制，自己也要被钉住 ──────────
 
     /// <summary>
     /// 上面每条禁项都靠"注释被抹平成空格"才不误伤，所以这个机制不能只是我说一句。
