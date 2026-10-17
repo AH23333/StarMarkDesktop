@@ -328,9 +328,11 @@ public sealed class AppIconGateTests
         Assert.True(File.Exists(Path.Combine(RepoRoot(), "assets", "app", "StarMark.ico")), "ApplicationIcon 指的那份资产不在仓里");
 
         // 那份资产目录只许出现两次：一次给 exe，一次给随包 Content。第三次＝第二条路径，迟早漂。
+        // （片18：随包资产那面又添了 assets/boards 的 Content 一颗——逐颗点名，⛔ 把那颗数放宽。）
         Assert.Equal(2, Count(csproj, @"..\..\assets\app\StarMark.ico"));
         Assert.Equal(1, Count(csproj, @"..\..\assets\app\StarMarkTray.ico"));
-        Assert.Equal(2, Count(csproj, @"CopyToOutputDirectory=""PreserveNewest"""));
+        Assert.Equal(1, Count(csproj, @"..\..\assets\boards\**\*"));
+        Assert.Equal(3, Count(csproj, @"CopyToOutputDirectory=""PreserveNewest"""));
     }
 
     /// <summary>

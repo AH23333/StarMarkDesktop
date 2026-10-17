@@ -44,6 +44,9 @@
          （不再指第二条路径 ⇒ 打包的图标与跑起来的图标不可能不一致）。 -->
     <Content Include="..\..\assets\app\StarMark.ico" Link="StarMark.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\assets\app\StarMarkTray.ico" Link="StarMarkTray.ico" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 画板随包资产（assets/boards，冻结清单 manifest.json 对账；闸门 BoardsAssetGateTests）。
+         Link 保留子树形状 ⇒ 运行时虚拟宿主把 Assets\Boards 映成根，bundle 内的相对引用（fonts/…）原样成立。 -->
+    <Content Include="..\..\assets\boards\**\*" Link="Assets\Boards\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
