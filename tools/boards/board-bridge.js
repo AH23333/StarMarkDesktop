@@ -39,12 +39,15 @@
     return out;
   }
 
-  /* 那颗 ⛔ 只出现一次的 export.bytes 出口（宿主是唯一读者；档位不认识时宿主拒，⛔ 由本页猜扩展名）。 */
-  function deliver(bytesB64, kind, sessionId) {
+  /* 那颗 ⛔ 只出现一次的 export.bytes 出口（宿主是唯一读者；档位不认识时宿主拒，⛔ 由本页猜扩展名）。
+     suggested＝那块板的显示名（`appState.name`）：它只是"用户想叫它什么"，⛔ 是身份（身份＝宿主给的那颗 id），
+     宿主那边只有导出那一路会用它（板档的档名⛔ 跟着显示名走，见 §21.3）。 */
+  function deliver(bytesB64, kind, sessionId, suggested) {
     postIn("export.bytes", {
       bytes: bytesB64,
       kind: kind,
-      sessionId: String(sessionId == null ? "" : sessionId)
+      sessionId: String(sessionId == null ? "" : sessionId),
+      suggested: String(suggested == null ? "" : suggested)
     });
   }
 
@@ -56,11 +59,22 @@
     return b64FromBytes(new TextEncoder().encode(json));
   }
 
+  /* 显示名读 appState.name（§21.3 逐字：那颗字段是 string | null，只当显示名、⛔ 当身份）。
+     ⚠ 引擎那颗只读出口在这里用不得——现读 bundle：`"getName",()=>this.state.name||this.props.name||
+     未命名-<时刻>`，它永远⛔ 回空。递上去＝宿主那颗"id＋时刻"的兜底名在链路上永远走不到，
+     正是片21 欠项⑤ 那一族（形参活着、读者永远撞不到）。 */
+  function boardName() {
+    try {
+      var s = API && API.getAppState ? API.getAppState() : null;
+      return s && s.name ? String(s.name) : "";
+    } catch (e) { return ""; }
+  }
+
   function flushSave() {
     saveTimer = null;
     if (!API || !HOST) return;
     try {
-      deliver(sceneBytesB64(), "scene", "idle");
+      deliver(sceneBytesB64(), "scene", "idle", boardName());
     } catch (e) { /* 序列化失败＝这一拍不写；档留在上一份（⛔ 拿坏 JSON 覆盖上一份） */ }
   }
   /* 停笔那一拍：去抖住在页面侧（宿主看不到"什么时候算停笔"，而 §21.1 的名单里⛔ dirty 那颗）。 */
@@ -145,7 +159,7 @@
   function runExport(kind, skipInliningFonts, replyId) {
     if (kind === "scene") {
       try {
-        deliver(sceneBytesB64(), kind, replyId);
+        deliver(sceneBytesB64(), kind, replyId, boardName());
       } catch (err) {
         send(replyId, false, "export-failed");
       }
@@ -161,7 +175,7 @@
     };
     fn(opts).then(function (blob) {
       blob.arrayBuffer().then(function (buf) {
-        deliver(b64FromBytes(new Uint8Array(buf)), kind, replyId);
+        deliver(b64FromBytes(new Uint8Array(buf)), kind, replyId, boardName());
       });
     }).catch(function () { send(replyId, false, "export-failed"); });
   }

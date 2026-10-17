@@ -44,6 +44,17 @@ public static class BoardPolicy
     public const int AutosaveIdleMs = 1500;
 
     /// <summary>
+    /// 盘上那份是不是<b>已经</b>等于这颗字节（v1 §21.4 那颗脏位＝宿主那一侧的字节对差；⛔ 另造计数器、⛔ 让 JS 递 bool）。
+    /// <para><b>这颗判定住在 Core</b>：它决定的不是"要不要调用一次写"，而是"<b>要不要滚 <see cref="BackupSuffix"/>"</b>——
+    /// 每滚一次，上一份<b>真正不同</b>的 <c>.bak</c> 就被顶成这一份的同件，退路当场少一条。
+    /// 失焦那一拍最常撞的正是"一个字节都没改"，所以这一判据的代价是直接落在用户数据上的。</para>
+    /// <para><c>lastWritten</c> 为 null＝这扇窗里宿主还没写过、也没<b>从主档</b>载过（新板，或档是从 <c>.bak</c> 捡回来的）：
+    /// 那时候盘上的主档要么不存在、要么不是页面此刻的样子，必写。</para>
+    /// </summary>
+    public static bool DiskAlreadyHolds(byte[]? lastWritten, byte[] next)
+        => lastWritten is not null && lastWritten.AsSpan().SequenceEqual(next);
+
+    /// <summary>
     /// 主干名里那颗时刻的格式（<c>yyMMdd-HHmmss</c> 那一颗形状，本地时刻）。
     /// <para><b>写成 <c>yyMMdd-HHmmss</c> 而不是直觉的 <c>yymmdd</c></b>：.NET 的自定义格式里
     /// <c>mm</c> 恒为<b>分钟</b>、月份只有 <c>MM</c>——那颗形状要的是"年月日-时分秒"，

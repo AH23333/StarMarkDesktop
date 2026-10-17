@@ -153,4 +153,30 @@ public sealed class BoardPolicyTests
         Assert.Equal(4L * 1024 * 1024, BoardPolicy.EngineReportedFileCeilingBytes);
         Assert.False(BoardPolicy.ImageCeilingsMeasured);        // 那条曲线量到之前，这颗旗⛔ 许翻
     }
+
+    // ────────── ⑨ 那颗脏位＝字节对差（片22＝§21.4） ──────────
+
+    /// <summary>
+    /// 「盘上已经有了」只由<b>字节逐颗相等</b>说了算：⛔ 计数器、⛔ 时间戳、⛔ 让 JS 递一颗 bool（§21.4 那三句禁令）。
+    /// <para>这颗判据的值不在"少写一次盘"（那是性能），在<b>退路</b>：每写一次就滚一次 <c>.bak</c>，
+    /// 而一次没改动的失焦把上一份<b>真正不同</b>的 <c>.bak</c> 顶成同件——用户按 Alt+Tab 出去倒杯水的代价。</para>
+    /// <para>正件要落在我要测的那一维（名册 349）：同内容的<b>两颗不同数组</b>才算"字节对差"，
+    /// 拿同一颗数组自比只能证 <c>==</c>，证不到 <c>SequenceEqual</c>。</para>
+    /// </summary>
+    [Fact]
+    public void TheDirtyBitIsAByteDiffAndAbsenceMeansWrite()
+    {
+        var scene = System.Text.Encoding.UTF8.GetBytes("{\"type\":\"excalidraw\",\"version\":2}");
+        var sameBytesDifferentArray = (byte[])scene.Clone();
+
+        Assert.True(BoardPolicy.DiskAlreadyHolds(scene, sameBytesDifferentArray));
+        Assert.False(BoardPolicy.DiskAlreadyHolds(null, scene));            // 还没写过＝必写
+
+        var oneTailByteDiffers = (byte[])scene.Clone();
+        oneTailByteDiffers[^1] = (byte)'!';
+        Assert.False(BoardPolicy.DiskAlreadyHolds(scene, oneTailByteDiffers));
+
+        Assert.False(BoardPolicy.DiskAlreadyHolds(scene, scene.Append((byte)' ').ToArray()));  // 长度不同
+        Assert.False(BoardPolicy.DiskAlreadyHolds(scene, scene[..^1]));                         // 少一颗也算不同
+    }
 }

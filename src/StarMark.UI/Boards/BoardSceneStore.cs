@@ -65,10 +65,14 @@ public static class BoardSceneStore
     /// 读这颗板的档：主档在就用主档，主档没了退到 <c>.bak</c>。
     /// <para>这颗退路是有读者的：上一份刚被滚走、新那份还没改名的那一瞬间进程没了，
     /// 用户重开时看到的应该是<b>还能打开的那一份</b>，而⛔ 是"这颗板不存在"。</para>
+    /// <para><paramref name="fromBackup"/> 交回的是"读到的是<em>哪一颗</em>文件"这件事实：退到 <c>.bak</c> 那一刻，
+    /// 盘上的<b>主档位置是空的</b>——调用方若把这份字节当成"盘上已经有了"（<see cref="BoardPolicy.DiskAlreadyHolds"/>），
+    /// 一颗"打开看看、没动"的板就永远补不回主档，而 <see cref="LatestSceneId"/> 只认主档。</para>
     /// </summary>
-    public static bool TryLoad(string? sceneId, out byte[] bytes)
+    public static bool TryLoad(string? sceneId, out byte[] bytes, out bool fromBackup)
     {
         bytes = Array.Empty<byte>();
+        fromBackup = false;
         if (sceneId is null || !BoardPolicy.IsSceneId(sceneId)) return false;
         try
         {
@@ -77,6 +81,7 @@ public static class BoardSceneStore
             var backup = BackupPathOf(sceneId);
             if (!System.IO.File.Exists(backup)) return false;
             bytes = System.IO.File.ReadAllBytes(backup);
+            fromBackup = true;
             return true;
         }
         catch (Exception) { return false; }

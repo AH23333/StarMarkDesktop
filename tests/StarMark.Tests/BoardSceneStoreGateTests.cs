@@ -181,4 +181,56 @@ public sealed class BoardSceneStoreGateTests
         Assert.Equal(1, Count(Tray, "new(Locale.T(\"tray.boardsNew\"), TrayBoardsNew),"));
         Assert.Equal(1, Count(Tray, "case TrayBoardsNew:"));
     }
+
+    /// <summary>
+    /// ⑩ 那颗显示名<b>真的到得了宿主</b>（片21 欠项⑤）：页面出口、白名单、宿主读者三头对上；
+    /// 而板档那一路⛔ 读它——档名＝那颗 id（§21.3 那句"显示名只当显示名、⛔ 当身份"）。
+    /// <para>页面侧禁的是<b>引擎那颗出口的实参形状</b>：现读 bundle 里它永远⛔ 回空
+    /// （<c>state.name || props.name || 未命名-时刻</c>），递它＝宿主那颗"id＋时刻"的兜底名又在链路上死一颗——
+    /// 正是本格要修的那件事换了个名字重犯。⚠ 禁串写成 <c>getName(</c> 而⛔ 光一颗名字（名册 308）。</para>
+    /// </summary>
+    [Fact]
+    public void TheSuggestedNameReachesTheHostButNeverNamesTheBoardFile()
+    {
+        Assert.Equal(1, Count(Js, "function deliver(bytesB64, kind, sessionId, suggested)"));
+        Assert.Contains("suggested: String(suggested == null ? \"\" : suggested)", Js, StringComparison.Ordinal);
+        Assert.Equal(3, Count(Js, "boardName())"));        // 三拍出口各递一次：停笔／被索取的 scene／png·svg
+
+        var nameReader = Between(Js, "function boardName", "function flushSave");
+        Assert.Contains("API.getAppState()", nameReader, StringComparison.Ordinal);   // 读的是那颗字段本尊
+        Assert.DoesNotContain("getName(", nameReader, StringComparison.Ordinal);
+
+        Assert.Contains("BridgeProtocol.SanitizeExportName(envelope.Suggested, stem, envelope.Kind)",
+            WindowCs, StringComparison.Ordinal);
+        var sceneBranch = Between(WindowCs, "if (BridgeProtocol.LandsInSceneArchive(envelope.Kind)", "var stem =");
+        Assert.DoesNotContain("Suggested", sceneBranch, StringComparison.Ordinal);     // 板档档名⛔ 跟着显示名走
+    }
+
+    /// <summary>
+    /// ⑪ §21.4 那颗脏位（片21 欠项④）：字节逐颗相等就⛔ 动盘、⛔ 滚。这一格钉的是<b>先后</b>而⛔ 只是"那颗判据存在"——
+    /// 门排在 <c>TrySave</c> 之前才保得住退路，排在后面照旧每拍滚一次。
+    /// 另一头钉两颗"必写"的形状：写失败⛔ 点亮（盘上仍是旧的那份）、从 <c>.bak</c> 捡回来的板也⛔ 点亮（主档位置是空的，
+    /// 而 <c>LatestSceneId</c> 只认主档）——那颗旗由存储那一档交回，UI 侧⛔ 自己再摸一遍盘＝第二个主人。
+    /// </summary>
+    [Fact]
+    public void TheUnchangedSceneNeitherWritesNorRollsTheBackup()
+    {
+        Assert.Contains("if (BoardPolicy.DiskAlreadyHolds(_lastWritten, bytes))", WindowCs, StringComparison.Ordinal);
+        var gate = Between(WindowCs, "if (BoardPolicy.DiskAlreadyHolds", "if (BoardSceneStore.TrySave");
+        Assert.Contains("Reply(envelope.Cmd, envelope.Id, ok: true);", gate, StringComparison.Ordinal);
+        Assert.Contains("return;", gate, StringComparison.Ordinal);
+        Assert.DoesNotContain("TrySave", gate, StringComparison.Ordinal);
+
+        var success = Between(WindowCs, "if (BoardSceneStore.TrySave(_boardId, bytes, out var fault))",
+            "StarMark.Abstractions.StarLog.Warn");
+        Assert.Contains("_lastWritten = bytes;", success, StringComparison.Ordinal);   // 只有真写成的那一支点亮
+        Assert.Equal(1, Count(WindowCs, "_lastWritten = bytes;"));
+
+        Assert.Contains("_lastWritten = null;", WindowCs, StringComparison.Ordinal);   // 新板：第一拍必写
+        Assert.Contains("if (!BoardSceneStore.TryLoad(sceneId, out var bytes, out var fromBackup) || bytes.Length == 0) return OpenNewAsync();",
+            WindowCs, StringComparison.Ordinal);
+        Assert.Contains("_lastWritten = fromBackup ? null : bytes", WindowCs, StringComparison.Ordinal);
+        Assert.Contains("out bool fromBackup", Store, StringComparison.Ordinal);
+        Assert.Equal(1, Count(Store, "fromBackup = true;"));
+    }
 }

@@ -15,7 +15,7 @@ namespace StarMark.Tests;
 public sealed class BoardBridgeProtocolTests
 {
     private const string Export = "export.bytes";
-    private static readonly string[] ExportArgs = ["bytes", "kind", "sessionId"];
+    private static readonly string[] ExportArgs = ["bytes", "kind", "sessionId", "suggested"];
 
     // ────────── ① 两份名单自己先要闭合 ──────────
 
@@ -103,6 +103,21 @@ public sealed class BoardBridgeProtocolTests
         var (allowed, fault) = BridgeProtocol.Check(BridgeProtocol.Version, Export, ExportArgs);
         Assert.True(allowed);
         Assert.Equal(BridgeProtocol.Fault.None, fault);
+    }
+
+    /// <summary>
+    /// 那颗 <c>suggested</c> 在册（片21 的现读缺陷：名单里没它⇒页面一递就整条 <see cref="Fault.UnexpectedField"/>，
+    /// 于是 <c>SanitizeExportName</c> 里"网页给的名字"那一支<b>在链路上永远走不到</b>——形参活着、读者永远撞不到），
+    /// 而<b>⛔ 在必带名单里</b>：没起过名的板递空串是正常形状，旧页面⛔ 带那颗键也照旧通。
+    /// </summary>
+    [Fact]
+    public void TheSuggestedNameIsAllowedButNeverRequired()
+    {
+        Assert.Contains("suggested", BridgeProtocol.InboundFields[Export]);
+        Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, Export, ["bytes", "kind"]).Allowed);
+        Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, Export, ExportArgs).Allowed);
+        Assert.Equal(BridgeProtocol.Fault.MissingField,
+            BridgeProtocol.Check(BridgeProtocol.Version, Export, ["kind", "sessionId", "suggested"]).Reason);
     }
 
     /// <summary>⛔ 参的那颗命令被塞了键也要拒（<c>bridge.ready</c> 的字段表是空的）。</summary>

@@ -21,6 +21,8 @@ namespace StarMark.UI.Boards;
 /// <para><b>落盘与载入（片21＝§21.3）</b>：页面侧停笔 <see cref="BoardPolicy.AutosaveIdleMs"/> 毫秒自己交一份
 /// 场景 JSON（<c>export.bytes</c>＋<c>kind:"scene"</c>，⛔ 新名字），宿主失焦那一拍再索取一次（<c>export.pick</c>）；
 /// 字节经 <see cref="BridgeProtocol.LandsInSceneArchive"/> 分流进板档目录，png／svg 仍进导出目录。
+/// <b>片22＝§21.4 那颗脏位</b>：交回来的字节与盘上那份<b>逐颗相等</b>时⛔ 写、⛔ 滚（<see cref="BoardPolicy.DiskAlreadyHolds"/>）；
+/// 同批把 <c>export.bytes</c> 的 <c>suggested</c> 接上链——页面递 <c>appState.name</c>，只有导出那一路读它（板档档名＝那颗 id，⛔ 跟着显示名走）。
 /// ⚠ 四拍里现在通了<b>两</b>拍（停笔／失焦）：渲染进程挂了那一拍页面已经死了、索取不到任何东西，
 /// 关窗那一拍在窗已拆之后再收 <c>postMessage</c> 也来不及——那两拍归后续批次，本档⛔ 假装接了。</para>
 /// </summary>
@@ -43,6 +45,10 @@ public sealed class BoardWindow : Window
     private readonly Microsoft.UI.Xaml.Controls.WebView2 _web;
     private string _boardId;
     private byte[]? _pendingScene;
+
+    /// <summary>盘上主档那一刻是哪些字节（只有宿主自己写得动它，所以这一份状态有唯一主人）。
+    /// null＝这扇窗还没写过、也没<b>从主档</b>载过（新板，或档是从 <c>.bak</c> 捡回来的）。</summary>
+    private byte[]? _lastWritten;
     private bool _bridgeReady;
 
     public BoardWindow()
@@ -64,17 +70,24 @@ public sealed class BoardWindow : Window
     public string BoardId => _boardId;
 
     /// <summary>起一扇新板（没带任何档）。</summary>
-    public System.Threading.Tasks.Task OpenNewAsync() => OpenAsync(null);
+    public System.Threading.Tasks.Task OpenNewAsync()
+    {
+        _lastWritten = null;   // 盘上还没有这颗板的档：第一拍照常规写，别把"还没写过"读成"已经一样"
+        return OpenAsync(null);
+    }
 
     /// <summary>
     /// 接着开那颗已有的板：先按 id 把档读进内存，等 <c>bridge.ready</c> 那一刻再递给页面。
     /// <para>顺序是反不得的：桥没通就发 <c>board.load</c>，页面侧那位 <c>API</c> 还是 null，
     /// 场景就永远进不去（而宿主这边一句错都⛔ 报）。档读不到＝退回新板，⛔ 弹"档不见了"那种废话。</para>
+    /// <para>从 <c>.bak</c> 捡回来的那一档⛔ 点亮脏位：主档位置上是空的，所以"盘上已经有了"那句⛔ 成立，
+    /// 得让第一拍把主档补回去（否则那颗板在 <see cref="BoardSceneStore.LatestSceneId"/> 那一问里始终是缺的）。</para>
     /// </summary>
     public System.Threading.Tasks.Task OpenSceneAsync(string sceneId)
     {
-        if (!BoardSceneStore.TryLoad(sceneId, out var bytes) || bytes.Length == 0) return OpenAsync(null);
+        if (!BoardSceneStore.TryLoad(sceneId, out var bytes, out var fromBackup) || bytes.Length == 0) return OpenNewAsync();
         _boardId = sceneId;
+        _lastWritten = fromBackup ? null : bytes;
         return OpenAsync(bytes);
     }
 
@@ -164,8 +177,18 @@ public sealed class BoardWindow : Window
         // png／svg＝一次性产物→导出目录、名字带时刻。两族⛔ 共用一份命名规则。
         if (BridgeProtocol.LandsInSceneArchive(envelope.Kind))
         {
-            if (BoardSceneStore.TrySave(_boardId, bytes, out var fault))
+            // §21.4 那颗脏位＝宿主这一侧的字节对差：一个字节都没变（失焦那一拍最常撞这一档）就⛔ 动盘——
+            // 动一次盘就多滚一次 .bak，而滚的那一下把上一份「真正不同」的退路顶成了同件。
+            if (BoardPolicy.DiskAlreadyHolds(_lastWritten, bytes))
+            {
                 Reply(envelope.Cmd, envelope.Id, ok: true);
+                return;
+            }
+            if (BoardSceneStore.TrySave(_boardId, bytes, out var fault))
+            {
+                _lastWritten = bytes;   // 这一刻起盘上主档就是这份字节
+                Reply(envelope.Cmd, envelope.Id, ok: true);
+            }
             else
             {
                 StarMark.Abstractions.StarLog.Warn("boards.scene.save.failed: " + fault);
