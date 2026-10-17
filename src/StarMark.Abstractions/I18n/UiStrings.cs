@@ -2659,6 +2659,7 @@ public static class UiStrings
         new Entry("tray.ocr", "识字（框选后复制文字）", "OCR (select, then copy the text)", "文字認識（範囲選択してコピー）"),
         new Entry("tray.canvas", "屏幕画布（讲解时在屏幕上画）", "Screen canvas (draw over the screen)", "スクリーンキャンバス（画面に描き込む）"),
         new Entry("tray.boards", "画板", "Board", "ボード"),
+        new Entry("tray.boardsNew", "画板（新起一块）", "Board (new)", "ボード（新規）"),
         new Entry("boards.openFailedTitle", "画板没能打开", "Board failed to open", "ボードを開けませんでした"),
         new Entry("boards.openFailedBody", "画板窗口启动失败；详细信息在日志里。", "The board window failed to start; details are in the log.", "ボードウィンドウの起動に失敗しました。詳細はログをご覧ください。"),
         new Entry("tray.pinsShowHideNone", "显示 / 收起所有贴图（当前没有贴图）", "Show or collapse all pins (none right now)", "すべてのピンを表示／収納（現在 0 枚）"),

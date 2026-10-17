@@ -1645,7 +1645,7 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("canvas.notice.boardClosedTitle", start);            // 总开关关着时要报得出原因（字在表里）
         // 三条总开关共用一次过滤（批次 RP 把截屏那条并进来，片20 把画板那条并进来）。旧写法是每条开关各写一句 `list.Where(...)`，
         // 加第二条时就会有人新写一句而漏掉前一句的分支——两处 where 各对一半，症状是"某个开关关了菜单里还有"
-        Assert.Contains("(canvasOn || item.Tag != TrayCanvas) && (boardsOn || item.Tag != TrayBoards) && !hiddenCapture.Contains(item.Tag)", main);
+        Assert.Contains("(canvasOn || item.Tag != TrayCanvas) && (boardsOn || (item.Tag != TrayBoards && item.Tag != TrayBoardsNew)) && !hiddenCapture.Contains(item.Tag)", main);
         // 关掉时正在画：立刻收玻璃（"我已经关了屏幕上还压着一层吃鼠标的东西"是最糟的收尾）
         var vm = SourceGate.ReadRepoPartials("src/StarMark.UI/ViewModels/SettingsPageViewModel.cs");
         var changed = SourceGate.MethodBody(vm, "partial void OnCanvasEnabledChanged(bool value)");
@@ -1681,7 +1681,7 @@ public sealed class CanvasWiringGateTests
         var tray = SourceGate.MethodBody(SourceGate.ReadRepoPartials(MainWindow),
             "private IReadOnlyList<TrayHost.TrayCommandItem> BuildTrayCommands()");
         Assert.Contains("CaptureGate.ShowsTrayItem(e.Action, captureOn)", tray);
-        Assert.Contains("(canvasOn || item.Tag != TrayCanvas) && (boardsOn || item.Tag != TrayBoards) && !hiddenCapture.Contains(item.Tag)", tray);
+        Assert.Contains("(canvasOn || item.Tag != TrayCanvas) && (boardsOn || (item.Tag != TrayBoards && item.Tag != TrayBoardsNew)) && !hiddenCapture.Contains(item.Tag)", tray);
         var roster = SourceGate.ReadRepoPartials(MainWindow);
         Assert.Contains("(HotkeyActions.ScreenCapture, TrayScreenshot)", roster);   // 动作号与托盘号成对：三份各一处
         Assert.Contains("(HotkeyActions.ScreenPin, TrayScreenPin)", roster);

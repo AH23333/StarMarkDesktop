@@ -36,6 +36,7 @@ public sealed class BoardsSettingsGateTests
         "settings.extend.boardsTitle",
         "settings.extend.boardsNote",
         "tray.boards",
+        "tray.boardsNew",
         "boards.openFailedTitle",
         "boards.openFailedBody",
     ];
@@ -82,11 +83,18 @@ public sealed class BoardsSettingsGateTests
     {
         var t = ReadRepo(Tray);
         Assert.Contains("private const int TrayBoards = 33;", t, StringComparison.Ordinal);
+        Assert.Contains("private const int TrayBoardsNew = 34;", t, StringComparison.Ordinal);
         Assert.Contains("var boardsOn = _settings.LoadBoardsEnabled();", t, StringComparison.Ordinal);
         Assert.Contains("new(Locale.T(\"tray.boards\"), TrayBoards, SeparatorBefore: true),", t, StringComparison.Ordinal);
-        // 关掉整条消失（与画布/截屏同一句 Where）：留一颗灰的＝「关掉还留入口」
-        Assert.Contains("(boardsOn || item.Tag != TrayBoards)", t, StringComparison.Ordinal);
+        Assert.Contains("new(Locale.T(\"tray.boardsNew\"), TrayBoardsNew),", t, StringComparison.Ordinal);
+        // 关掉整条消失（与画布/截屏同一句 Where）：留一颗灰的＝「关掉还留入口」。
+        // 片21 起画板那两颗入口共用一位开关，过滤条件必须一起收——只收前一颗＝留一颗"点得出却没板可开"的假入口。
+        Assert.Contains("(boardsOn || (item.Tag != TrayBoards && item.Tag != TrayBoardsNew))", t, StringComparison.Ordinal);
         Assert.Contains("case TrayBoards:", t, StringComparison.Ordinal);
+        Assert.Contains("case TrayBoardsNew:", t, StringComparison.Ordinal);
+        // 两颗入口分岔只由那颗实参命名（⛔ 两个 case 各写一套起窗代码＝第二主人）
+        Assert.Contains("OpenBoardsWindowAsync(resumeLast: true)", t, StringComparison.Ordinal);
+        Assert.Contains("OpenBoardsWindowAsync(resumeLast: false)", t, StringComparison.Ordinal);
         Assert.Contains("new StarMark.UI.Boards.BoardWindow();", t, StringComparison.Ordinal);
         Assert.Contains("await win.OpenNewAsync();", t, StringComparison.Ordinal);
         // 起窗失败必须有可见原因（「点了没反应」＝本仓定性过的坏）

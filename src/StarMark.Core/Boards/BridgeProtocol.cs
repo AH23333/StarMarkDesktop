@@ -200,6 +200,15 @@ public static class BridgeProtocol
     public static bool IsKnownExportKind(string? kind)
         => !string.IsNullOrEmpty(kind) && Array.IndexOf(ExportKinds, kind!) >= 0;
 
+    /// <summary>
+    /// 那颗档位递上来的字节<b>该落哪儿</b>——<c>scene</c> 落板档目录（一颗板一颗档，档名＝那颗 id，⛔ 时刻前缀），
+    /// 其余（png／svg）落导出目录（一次一份，名字带时刻）。
+    /// <para>这颗判定住在 Core 而不是 UI：它是"这份字节是不是那颗板的本体"那一问的答案，
+    /// 而这一问的答案同时决定了<b>命名规则</b>与<b>要不要滚 .bak</b>——散到 UI 里就会长成两份。</para>
+    /// </summary>
+    public static bool LandsInSceneArchive(string? kind)
+        => string.Equals(kind, "scene", StringComparison.Ordinal);
+
     /// <summary>那颗粘贴形状标签是否在册（⛔ 在册＝放行：在册只说明"我认得它"，要不要进画板另有判据）。</summary>
     public static bool IsKnownPasteShape(string? shape)
         => !string.IsNullOrEmpty(shape) && Array.IndexOf(PasteShapes, shape!) >= 0;

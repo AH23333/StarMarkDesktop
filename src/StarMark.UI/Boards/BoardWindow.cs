@@ -14,10 +14,15 @@ namespace StarMark.UI.Boards;
 /// <para><b>生命周期档位＝§九 裁决 2「关窗即散」</b>：<see cref="Closed"/> 里 Close 掉
 /// WebView2 控件（最后一扇走时浏览器进程树跟着散），userDataFolder 钉在
 /// <c>%LOCALAPPDATA%\StarMark\wbview2</c>（v1 §坑8 那条改道）。</para>
-/// <para><b>默认关</b>：本窗没有常驻入口，只有显式 <see cref="OpenNewAsync"/>；主窗接线归后续批次
-/// （接线那批要给入口上屏字交 <c>LocMessage</c>，本档⛔ 成品字）。</para>
+/// <para><b>默认关</b>：本窗没有常驻入口，只有显式 <see cref="OpenNewAsync"/>／<see cref="OpenSceneAsync"/>；
+/// 托盘那两颗（续上一块／新起一块）由接线批那颗总开关收放（本档⛔ 自己挂上去——"找不到人接又自己冒出来"是第二主人）。</para>
 /// <para><b>回路现状</b>：bridge.ready／open.external／export.bytes 三颗全通；
 /// paste.query／pin.request／background.request 回 <c>not-wired</c>——判定归各自批次（⛔ 假 allow）。</para>
+/// <para><b>落盘与载入（片21＝§21.3）</b>：页面侧停笔 <see cref="BoardPolicy.AutosaveIdleMs"/> 毫秒自己交一份
+/// 场景 JSON（<c>export.bytes</c>＋<c>kind:"scene"</c>，⛔ 新名字），宿主失焦那一拍再索取一次（<c>export.pick</c>）；
+/// 字节经 <see cref="BridgeProtocol.LandsInSceneArchive"/> 分流进板档目录，png／svg 仍进导出目录。
+/// ⚠ 四拍里现在通了<b>两</b>拍（停笔／失焦）：渲染进程挂了那一拍页面已经死了、索取不到任何东西，
+/// 关窗那一拍在窗已拆之后再收 <c>postMessage</c> 也来不及——那两拍归后续批次，本档⛔ 假装接了。</para>
 /// </summary>
 public sealed class BoardWindow : Window
 {
@@ -36,7 +41,8 @@ public sealed class BoardWindow : Window
         "StarMark", "boards", "exports");
 
     private readonly Microsoft.UI.Xaml.Controls.WebView2 _web;
-    private readonly string _boardId;
+    private string _boardId;
+    private byte[]? _pendingScene;
     private bool _bridgeReady;
 
     public BoardWindow()
@@ -46,14 +52,35 @@ public sealed class BoardWindow : Window
         _web = new Microsoft.UI.Xaml.Controls.WebView2 { DefaultBackgroundColor = Microsoft.UI.Colors.White };
         Content = _web;
         Closed += (_, _) => OnClosed();
+        // 失焦那一拍（§21.3 四拍其二）：向页面索取一份场景快照。⛔ 在这里判"要不要写"——
+        // 写不写由 Core 的档位分流说了算，这一处只负责"该问一次了"。
+        Activated += (_, e) =>
+        {
+            if (e.WindowActivationState == Microsoft.UI.Xaml.WindowActivationState.Deactivated) RequestSceneSnapshot();
+        };
     }
 
     /// <summary>那颗板 id（<see cref="BoardPolicy.NewSceneId"/> 的形状；宿主是它的主人）。</summary>
     public string BoardId => _boardId;
 
-    /// <summary>起窗＋导航；桥就绪以收到 <c>bridge.ready</c> 为准（<see cref="BridgeReady"/>）。</summary>
-    public async System.Threading.Tasks.Task OpenNewAsync()
+    /// <summary>起一扇新板（没带任何档）。</summary>
+    public System.Threading.Tasks.Task OpenNewAsync() => OpenAsync(null);
+
+    /// <summary>
+    /// 接着开那颗已有的板：先按 id 把档读进内存，等 <c>bridge.ready</c> 那一刻再递给页面。
+    /// <para>顺序是反不得的：桥没通就发 <c>board.load</c>，页面侧那位 <c>API</c> 还是 null，
+    /// 场景就永远进不去（而宿主这边一句错都⛔ 报）。档读不到＝退回新板，⛔ 弹"档不见了"那种废话。</para>
+    /// </summary>
+    public System.Threading.Tasks.Task OpenSceneAsync(string sceneId)
     {
+        if (!BoardSceneStore.TryLoad(sceneId, out var bytes) || bytes.Length == 0) return OpenAsync(null);
+        _boardId = sceneId;
+        return OpenAsync(bytes);
+    }
+
+    private async System.Threading.Tasks.Task OpenAsync(byte[]? sceneBytes)
+    {
+        _pendingScene = sceneBytes;
         var userData = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             UserDataFolderRelative);
@@ -133,6 +160,19 @@ public sealed class BoardWindow : Window
             Reply(envelope.Cmd, envelope.Id, ok: false, err: "bridge-broken");
             return;
         }
+        // 那颗档位决定落点（判据住 Core）：scene＝这颗板的本体→板档目录、档名＝那颗 id、滚 .bak；
+        // png／svg＝一次性产物→导出目录、名字带时刻。两族⛔ 共用一份命名规则。
+        if (BridgeProtocol.LandsInSceneArchive(envelope.Kind))
+        {
+            if (BoardSceneStore.TrySave(_boardId, bytes, out var fault))
+                Reply(envelope.Cmd, envelope.Id, ok: true);
+            else
+            {
+                StarMark.Abstractions.StarLog.Warn("boards.scene.save.failed: " + fault);
+                Reply(envelope.Cmd, envelope.Id, ok: false, err: "save-failed");
+            }
+            return;
+        }
         var stem = _boardId + "-" + BoardPolicy.FormatStamp(DateTime.Now);
         var name = BridgeProtocol.SanitizeExportName(envelope.Suggested, stem, envelope.Kind);
         Directory.CreateDirectory(ExportsDirectory);
@@ -142,9 +182,24 @@ public sealed class BoardWindow : Window
 
     private void OnBridgeReady()
     {
-        // 三颗初始值（§21.5）：宿主是它们的主人；占位档先发中性值，接设置面归接线批。
+        // 三颗初始值（§21.5）：宿主是它们的主人；占位档先发中性值，接设置面归后续批次。
         PostOutbound("theme.set", Envelope("theme.set", "h1", "\"theme\":\"light\""));
         PostOutbound("lang.set", Envelope("lang.set", "h2", "\"langCode\":\"zh-CN\""));
+        // 接着开的板：这一刻才把档递进去（早一步页面那位 API 还没起来，晚一步没有读者）。
+        if (_pendingScene is { Length: > 0 } bytes)
+        {
+            PostOutbound("board.load", Envelope("board.load", "h3",
+                JsonString("bytes") + ":" + JsonString(Convert.ToBase64String(bytes)) + ","
+                + JsonString("id") + ":" + JsonString(_boardId)));
+        }
+        _pendingScene = null;
+    }
+
+    /// <summary>向页面索取一份场景快照（失焦那一拍走这里；页面侧回的是 <c>export.bytes</c>＋<c>kind:"scene"</c>）。</summary>
+    private void RequestSceneSnapshot()
+    {
+        if (!_bridgeReady) return;   // 桥没通就索取＝发进一颗没人听的口子（回音都⛔ 有）
+        PostOutbound("export.pick", Envelope("export.pick", "h4", JsonString("kind") + ":" + JsonString("scene")));
     }
 
     private static string Envelope(string cmd, string id, string argsJson)
