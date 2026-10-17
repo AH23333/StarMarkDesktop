@@ -115,9 +115,16 @@ public static class BoardPolicy
     {
         if (rand0toFFFF < 0 || rand0toFFFF > 0xFFFF)
             throw new ArgumentOutOfRangeException(nameof(rand0toFFFF), "那颗随机段要落在 0–65535");
-        return at.ToLocalTime().ToString(StampFormat, CultureInfo.InvariantCulture)
+        return FormatStamp(at)
                + "-" + rand0toFFFF.ToString("x4", CultureInfo.InvariantCulture);
     }
+
+    /// <summary>
+    /// 那颗时刻的<b>主干形状</b>（<see cref="StampFormat"/>）——NewSceneId 与导出兜底名共用同一颗主人；
+    /// UI 层⛔ 自己再写一份格式串（DisplayDateFormatGate 的射程就是「UI 里⛔ 有格式字面量」）。
+    /// </summary>
+    public static string FormatStamp(DateTimeOffset at)
+        => at.ToLocalTime().ToString(StampFormat, CultureInfo.InvariantCulture);
 
     /// <summary>
     /// 那颗 id 的形状（也是"档名是不是我给的"那道判据——⛔ 拿标题当身份）。

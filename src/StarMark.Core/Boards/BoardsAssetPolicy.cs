@@ -31,6 +31,10 @@ public static class BoardsAssetPolicy
     /// <summary>引擎样式表（相对路径点字体，随 bundle 一起走）。</summary>
     public const string StylesFileName = "index.css";
 
+    /// <summary>桥的页面入口（board.html）与页面侧桥（board-bridge.js）——片19 起随包走。</summary>
+    public const string PageFileName = "board.html";
+    public const string BridgeJsFileName = "board-bridge.js";
+
     /// <summary>字体树根（bundle 内注册表按 <c>./fonts/&lt;族&gt;/&lt;档&gt;</c> 相对引用）。</summary>
     public const string FontsRootName = "fonts";
 
@@ -77,7 +81,8 @@ public static class BoardsAssetPolicy
     public static bool IsKnownAssetPath(string? path)
     {
         if (!IsSafeAssetRelativePath(path)) return false;
-        if (path == BundleFileName || path == StylesFileName || path == ManifestFileName) return true;
+        if (path == BundleFileName || path == StylesFileName || path == ManifestFileName
+            || path == PageFileName || path == BridgeJsFileName) return true;
         var segs = path!.Split('/');
         return segs.Length == 3
             && segs[0] == FontsRootName

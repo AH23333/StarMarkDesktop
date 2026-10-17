@@ -60,9 +60,10 @@ public sealed class BoardBridgeShapeGateTests
     // ────────── ② 桥的名字一颗主人 ──────────
 
     /// <summary>
-    /// 六颗进向命令的名字全仓只出现在 <c>BridgeProtocol.cs</c> 一处。
-    /// <para>接线批（片13）会把这套名字用到 UI 侧的<b>分发</b>上——那时它必须写 <c>BridgeProtocol.InboundCommands</c>
-    /// 与那颗 switch 的<b>常量名</b>，⛔ 再抄一遍字面串；这条闸门会在那一批点红一次，那是设计如此（改判据⛔ 放宽）。</para>
+    /// 六颗进向命令的名字全仓只许两处：<c>BridgeProtocol.cs</c>（名单本体）＋ <c>BoardWindow.cs</c>
+    /// （已接线的分发 switch——C# 的 case 标签要常量字面串，接线批片19 起它就是第二颗合法持有者）。
+    /// <para>第三处出现＝有人又抄了一份名单，⛔ 容（UI 侧⛔ 第二份名单另由
+    /// <c>BoardWindowBridgeGateTests</c> 钉：switch 里⛔ 出现成颗的名字数组）。</para>
     /// </summary>
     [Fact]
     public void BridgeNamesLiveInExactlyOneSourceFile()
@@ -73,7 +74,8 @@ public sealed class BoardBridgeShapeGateTests
             .Select(f => f.RelativePath.Replace('\\', '/'))
             .ToList();
 
-        Assert.Equal([BridgeFile], holders);
+        // 两颗合法持有者：名单本体（Core）＋已接线的分发 switch（UI BoardWindow，片19 起）。
+        Assert.Equal([BridgeFile, "src/StarMark.UI/Boards/BoardWindow.cs"], holders);
         Assert.Equal(1, Count(Code(BridgeFile), "public static readonly string[] InboundCommands"));
         Assert.Equal(1, Count(Code(BridgeFile), "public static readonly string[] OutboundEvents"));
     }

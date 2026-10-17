@@ -1,6 +1,6 @@
 {
  "schemaVersion": 1,
- "generatedAtUtc": "2026-10-17T14:05:30Z",
+ "generatedAtUtc": "2026-10-17T15:08:01Z",
  "source": {
   "package": "@excalidraw/excalidraw@0.18.0",
   "packageTarballSha256": "0f2851674434336f19f10b5f217977eac7a0714de7e31a559bc5dd37f2c2dc21",
@@ -10,6 +10,16 @@
   "xiaolaiCut": "main-area U+4E00..U+9FA5（§九 裁决 3；规则主人＝tools/boards/stage-assets.py）"
  },
  "files": [
+  {
+   "path": "board-bridge.js",
+   "bytes": 4434,
+   "sha256": "27e4d30f5ff6d8a637d8c342a330d8d210a390c3341fef64ba40310bb4ff512b"
+  },
+  {
+   "path": "board.html",
+   "bytes": 556,
+   "sha256": "f0fe6678a37b29ed9f8c760a2e196ca3d73bd5d553a1f767ada398a5d5f76a62"
+  },
   {
    "path": "excalidraw.min.js",
    "bytes": 4878772,

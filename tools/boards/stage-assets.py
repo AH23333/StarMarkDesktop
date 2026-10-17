@@ -107,8 +107,10 @@ def main():
     esbuild_version = subprocess.run(["node", esbuild_js, "--version"], capture_output=True, text=True).stdout.strip()
     node_version = subprocess.run(["node", "--version"], capture_output=True, text=True).stdout.strip()
 
-    # 2) 样式表（相对路径点字体，随 bundle 一起走）
+    # 2) 样式表（相对路径点字体，随 bundle 一起走）＋桥的页面与页面侧桥（片19）
     shutil.copy2(os.path.join(args.pkg, "index.css"), os.path.join(out, "index.css"))
+    for page in ("board.html", "board-bridge.js"):
+        shutil.copy2(os.path.join(REPO, "tools", "boards", page), os.path.join(out, page))
 
     # 3) 字体：8 族全随；Xiaolai 按主区裁（规则主人＝本脚本，裁决 3）
     pkg_fonts = os.path.join(args.pkg, "fonts")

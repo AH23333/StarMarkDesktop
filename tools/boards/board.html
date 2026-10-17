@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>StarMark Boards</title>
+<link rel="stylesheet" href="index.css">
+<style>
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  #root { width: 100vw; height: 100vh; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  /* asset 全局必须在 bundle 之前落（片13 现读：设了它字体/locales 才不打外网）。 */
+  window.EXCALIDRAW_ASSET_PATH = "/";
+</script>
+<script src="excalidraw.min.js"></script>
+<script src="board-bridge.js"></script>
+</body>
+</html>
