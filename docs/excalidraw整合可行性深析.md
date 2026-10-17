@@ -587,3 +587,86 @@ Xiaolai 随包那一颗的代价现在有三段，⛔ 只第一段是体积：
 
 > 这一腿写进仓里的只有 <c>docs</c> 这一节与 <c>bin/WI83</c> 那几份正本（临时臂档当场删，见 15.2 末那一行）。
 > <b>src／UiStrings 表／测试／账本一字未动</b>；§十二 那颗<b>待评审</b>状态⛔ 变，过评审前代码批仍一颗⛔ 开工。
+
+## 十六、Spike-0e：第一份 dist 到底“要不要装东西”——本机运行时＋那颗发布档的现读（批次 Phase C 片6，2026-10-17·只读探测＋一次 <c>npm pack</c>，⛔ 产品码⛔ 建工程⛔ 装工具链⛔ 起窗）
+
+> 尺与正本＝<c>bin/WI83/probe_83ab.py</c> → <c>bin/WI83/spike0e_83ab.txt</c>（41 行／每行三列）。
+> 这一腿撞掉的是<b>我自己前两节写下的那颗前提</b>：§十一 ③ 那句「<c>packages/excalidraw/dist</c> ⛔ 不存在⇒选 A 就得先在<b>别处</b>打一次，或者本机装 Node 走 B」，与 §12.6 ① 那句「装 Node＋<c>npm install</c>（拉几百颗包）才能产出第一份 dist……<b>等他点头</b>」。
+
+### 16.1 本机那一侧：那颗“要装 Node”的前提⛔ 成立
+
+| 现读 | 数 |
+|---|---|
+| PATH 里 <c>node</c>（在不在／版本） | 在（那颗 exe 在 D 盘）／<b>v24.18.0</b> |
+| PATH 里 <c>npm</c>（在不在／版本） | 在（那颗 exe 在 D 盘）／<b>11.7.0</b> |
+| PATH 里 <c>npx</c>／<c>corepack</c>／<c>yarn</c> | 在（那颗 exe 在 D 盘）／在（那颗 exe 在 D 盘）／⛔ 在 |
+| 那颗 npm 指的 registry 主机 | <b>registry.npmmirror.com</b>（⇒本机 npm 早已配成国内镜像，⛔ 我的假设） |
+
+⇒ §12.6 ① 那颗「要不要装、装到 D 盘哪一处」是<b>我问错的问题</b>：机器上<b>早就有</b>，而它<b>本来就在 D 盘</b>（他给的那颗硬约束已经被满足了）。
+⇒ 真正欠的从来⛔ 是「Node」这一颗，而是「一次 <c>npm pack</c>／一次打包」这件<b>会联网、会落盘</b>的动作。
+  本腿只做了前者（产物＝一颗 tgz，落在⛔ 随仓的取证目录里，<c>bin/</c> 整棵在 <c>.gitignore</c> 内⇒<b>仓⛔ 涨</b>）；打包那一颗<b>留给下一腿</b>并先写明代价（§16.4）。
+
+### 16.2 那颗发布档<b>自带已编译的 dist</b>（§十一 ③ 就地更正）
+
+| 现读 | 数 |
+|---|---|
+| <c>npm pack</c> 那颗 tgz 的字节／sha256 前缀 | <b>31234118</b>／0f2851674434336f |
+| registry 报的 <c>dist.integrity</c> 前缀 | sha512-QkIiS+5qdy8lmDWTK |
+| 解出来的整棵树 | <b>1029 颗／46802737 字节</b> |
+| <c>dist/prod</c>／<c>dist/dev</c>／<c>dist/types</c> 各多少 | prod 300 颗／17692829 字节｜dev 366 颗／27964931 字节｜types 361 颗／1139919 字节 |
+| <c>dist/prod</c> 根上的文件（10 颗） | chunk-6U3AYISY.js chunk-EIO257PC.js chunk-FX7ZIABN.js chunk-SQ5PDB2P.js chunk-SRAX5OIU.js chunk-Z3N5DIM6.js index.css index.js subset-shared.chunk.js subset-worker.chunk.js |
+| 其中按 <c>chunk-</c>／<c>subset-</c> 名型圈的颗数 | <b>8</b> 颗 |
+| <c>dist/prod/fonts</c>／<c>locales</c>／<c>data</c> 各多少 | fonts 234 颗／13107068 字节｜locales 55 颗／1648766 字节｜data 1 颗／189 字节 |
+| <b>成对判据</b>：树字节合计 ↔ registry 的 <c>unpackedSize</c> | <b>46802737 ↔ 46802737｜相等</b> |
+
+⇒ §十一 ③ 那颗「<c>dist</c> ⛔ 不存在」<b>数是对的，结论是错的</b>：仓外那棵 <c>excalidraw</c> 树确实没打过 dist，但<b>发布到 npm 的那一颗带着 dist</b>。走 A 的前置动作从「装工具链＋几百颗包」缩成「<b>拉一颗 tgz</b>」。
+⇒ 那颗成对判据是本节的骨头：<b>两把独立尺</b>（我自己 walk 出来的字节合计 vs registry 报的 <c>unpackedSize</c>）对同一颗包读数相等，才许发「这颗包我读全了」这句话（名册 <b>327</b> 的方向：⛔ 只在自己那一侧数得动就当全集）。
+
+### 16.3 包 ↔ 树同源：两把尺一起量（⛔ 拿“颗数相等”当证据）
+
+- 仓外那棵树的 <c>fonts</c>＝<b>249 颗／13935163 字节</b>｜包里 <c>dist/prod/fonts</c>＝<b>234 颗／13107068 字节</b>；
+- 第一把（名字）：交集 <b>234 颗</b>｜只在包里 <b>0：∅</b>｜只在树里 <b>15 颗</b>；
+- 换种问法再数一遍：那 15 颗按扩展名分档＝<b>.ts=13 .sfd=1 .css=1</b>⇒多出来的<b>全是源件</b>（各家族那颗 <c>index.ts</c>＋那颗 <c>.sfd</c> 源件＋<c>fonts.css</c>），<b>⛔ 一颗产物</b>（这颗接住 §十三 ④ 那颗混在字体目录里的 FontForge 源）；
+- 第二把（内容）：交集里逐颗 <c>sha256</c> 相等＝<b>234／234 颗</b>。
+
+⇒ 发布的那一颗<b>就是这棵树编出来的</b>（字体面 234 颗逐颗同字节），§坑16 那颗“上游版本漂移”在<b>字体</b>这一档上⛔ 成立；钉版本仍要<b>两颗一起钉</b>：commit <c>ed10ac7d</c>＋那颗 <c>0.18.0</c> 的 <c>dist.integrity</c>（颗数相等⛔ 算同源＝名册 326 要防的那类）。
+
+### 16.4 但 <c>dist/prod/index.js</c> ⛔ 是“浏览器直接能吃的东西”——这一节才是本腿的结论
+
+| 现读 | 数 |
+|---|---|
+| <c>dist/prod/index.js</c> 的字节 | <b>502071</b> |
+| 那颗档里<b>裸引用</b>（bare specifier）的颗数 | <b>16</b> |
+| 那 16 颗各是什么 | @excalidraw/laser-pointer @radix-ui/react-popover @radix-ui/react-tabs clsx fuzzy jotai jotai-scope lodash.debounce lodash.throttle nanoid open-color react react-dom react/jsx-runtime roughjs/bin/rough tunnel-rat |
+| <c>peerDependencies</c> | react=^17.0.2 || ^18.2.0 || ^19.0.0 react-dom=^17.0.2 || ^18.2.0 || ^19.0.0（⇒react／react-dom <b>⛔ 打在那颗 dist 里</b>） |
+| <c>index.css</c> 里 <c>url(</c> 命中／其中带 scheme 的 | <b>11</b>／<b>0</b> |
+| <c>dist/prod</c> 那些 js 里含 <c>http(s)</c> 的行数 | 13（按 §十四 口径：静态命中<b>⛔ 等于</b>出机） |
+
+⇒ 三条要紧的：
+① 走 A 还差一步，而那一步<b>⛔ 是“打 dist”</b>（dist 已在），是「<b>把 16 颗裸引用变成浏览器能加载的东西</b>」——§十一 ③ 与 §12.6 ① 都把这一步混在“装 Node”里说了，措辞把两件不同的事说成一件事；
+② 那颗 css 里 <b>带 scheme 的 url＝0</b> ⇒ 包内那一份样式表的字体引用<b>全是相对路径</b>。这颗比 §十三 的取证更强一档：那是<b>产物</b>侧的直接证据，而 §坑4/5 要治的是<b>源码里那两条远程回退</b>——两回事，别混（§十四 ④ 已经点过一次这个口径）。
+③ 两条出路：<b>(i)</b> 一颗打包器（<c>esbuild</c> 那一类）跑<b>一次</b>⇒产出一颗自足 bundle＋随它拷 <c>fonts</c>/<c>locales</c>；<b>(ii)</b> 手写 import map＋逐颗 ESM 化（⛔ 装东西，但那 16 颗里 CJS-only 的各自要垫片，且⛔ 可复算）。
+  <b>技术裁决＝(i)</b>（理由：产物只一颗文件、可逐颗 sha256 冻结、在<b>⛔ 装 Node 的用户机</b>上照跑；代价＝一次性打包腿＋冻结清单要多记两颗：那颗打包器的版本与 sha256）。按“产品要按复杂环境设计”那条纪律，<b>那颗打包器⛔ 进仓、⛔ 进产品构建链</b>（它只在取证目录里跑一次，产物进仓＝§九 决策 1 的 A 那一半照旧成立）。
+
+### 16.5 本腿⛔ 判到的（把射程写出来，也⛔ 让缺格从表里消失）
+
+- **那 16 颗裸引用各自是不是浏览器能直接吃的 ESM**＝未判定（本腿只读那一侧，⛔ 逐颗拉包）
+- **打完一颗 bundle 之后的字节**＝未跑（本腿⛔ 装打包器、⛔ 跑 bundle）
+- **空板起窗后的四格（导出 3 法／关按钮有效性／桥时延／断网全字体）**＝未跑（欠那颗 bundle＋宿主）
+- §十五 那颗「投影档为什么与包内⛔ 同源」还挂着（与本腿无关，但同一张欠账表）。
+
+### 16.6 本腿自己两处瞎（收口腿进坑表）
+
+- <b>那颗 <c>tar tvzf</c> 的列位在 bash 里读对、在 python 的 <c>subprocess</c> 里整列读成 0</b>⇒我一度把“字节合计＝0”读成“那颗包里⛔ 带字节”，
+  而<b>同一腿的 fonts 行已经报了 234 颗／13107068 字节</b>——一句话自己打自己（名册 <b>323</b> 那一类）却没被读回圈喊住：那颗尺只查“列数＝3”，⛔ 查“读数自洽”。
+  ⇒ 换尺＝<b>走解压后的树</b>（<c>os.walk</c>＋逐颗 <c>getsize</c>），并补一颗<b>成对判据</b>：自己合计 ↔ registry 的 <c>unpackedSize</c>（现读 相等）；
+- <b><c>npm view --json dist.integrity</c> 回的是<b>点号形式的键</b></b>（字符串 <c>"dist.integrity"</c>），我按 <c>meta["dist"]["integrity"]</c> 取⇒
+  读出<b>空串</b>，而<b>同一腿的 <c>unpackedSize</c> 也一起读成 <c>None</c></b>——那颗<b>⛔ 报错，只是静默空</b>。
+  ⇒ 新尺的正件＝“读出来必须与另一颗独立来源<b>相等</b>”，⛔“没抛异常就算对”（名册 <b>289／311</b> 那一族第五次撞）。
+
+### 16.7 §八 批形与 §九 决策 1 的现在位置
+
+- §八 0（Spike 批）里「⛔ 起窗就能答」的那几格又交掉一颗：<b>“第一份 dist 从哪来”现在有了带出处的答案</b>（拉一颗 tgz，⛔ 打一棵 monorepo）。
+- §九 决策 1 由我<b>技术裁决＝A′</b>＝「<b>产物随仓＋一次性打包腿，构建期⛔ Node</b>」；那颗打包器与它落的目录都<b>⛔ 进仓</b>。
+- 还剩他点头的只有两件观感／口径题：<b>§九 决策 3</b>（Xiaolai 随包＝现读 209 个分片／12.08 MB，那颗数来自 §12.6 ②）与 <b>§九 决策 4</b>（AI 生图要不要走自带 Key）。
+- 下一腿＝<b>Spike-1a 打包腿</b>：跑一次打包器产出 bundle＋逐文件冻结清单（版本／sha256／来源 commit），并当场判掉 §16.5 那颗“那 16 颗各自是不是 ESM”。
