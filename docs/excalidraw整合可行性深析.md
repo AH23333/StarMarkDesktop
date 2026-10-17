@@ -742,3 +742,141 @@ Xiaolai 随包那一颗的代价现在有三段，⛔ 只第一段是体积：
 - 未判定（本腿⛔ 试 --loader:.css=text 那一类改法）
 - 下一腿＝<b>Spike-1b 起窗腿</b>：⛔ 产品码，先在取证目录里起一颗<b>一次性</b>宿主窗（<c>WebView2</c> 由 §十五 那颗 transitive 依赖带着，⛔ 新引包），量 §八 0 的 ②③④⑤ 那四格＋§17.4 那颗拦截点的可行性。
 - 本腿自己一处瞎（收口腿进坑表）：第一版把「http 那颗数」按<b>行</b>计，而那颗产物的形状现读 <b>254990 行／最长 969606 字符</b>、minify 那一臂 <b>3091 行／最长 1090864 字符</b>⇒同一份内容的<b>颗数 ↔ 行数</b>＝163 颗 ↔ 151 行｜差 12 与 154 颗 ↔ 52 行｜差 102，两臂之间根本⛔ 可比；⇒ 列名跟着尺走（名册 322 那一类），口径写进那颗行的名字里（这一版已改成<b>颗数</b>＋一句「⛔ 按行计」）。
+
+
+## 十八、Spike-1b：那颗宿主窗真起过五回——字体那颗 CDN、4 MB 那堵墙、和「⛔ 焦点时剪贴板会吊住」（批次 Phase C 片8，2026-10-17·一次性起窗＋只读取数，⛔ 产品码⛔ 建工程⛔ 改系统 PATH⛔ 拔网⛔ 装工具链⛔ 表⛔ 账本）
+
+> 尺与正本＝<c>bin/WI83/spike1b/</c>（<c>host.csproj</c>＋<c>Program.cs</c>＋<c>www/battery*.js</c>）→
+> <c>bin/WI83/spike1b/out_r3/</c>、<c>out_r4/</c>、<c>out_r5/</c>（<c>host_log.jsonl</c>／<c>page_report.json</c>／<c>shots/*.png</c>）；
+> 铺站与那颗冻结 sha 的对账＝<c>bin/WI83/spike1b/prep_83ap.py</c> → <c>bin/WI83/spike1b/spike1b_prep_83ap.txt</c>；
+> 进程树那把尺＝<c>bin/WI83/spike1b/tree_83aq.py</c>（同一把尺在跑前／跑中／关窗后各读一次）。
+> ⚠ 这一腿⛔ 起的是产品窗：那颗 exe 只活在 <c>bin/</c>（整棵在 <c>.gitignore</c> 内⇒<b>仓⛔ 涨</b>），跑完自己关，⛔ 留改坏的源码。
+
+### 18.0 形状：五回各撞的哪一颗墙
+
+| 跑次 | 结果 | 为什么（都是⛔ 被测对象，是我那把尺） |
+|---|---|---|
+| r1 | 挂载超时 | 那颗 <c>ref</c> 我按「对象 ref」递，<c>Excalidraw</c> 现读是 <c>Symbol(react.memo)</c> 包一颗函数⇒ref 从没挂上 |
+| r2 | 同上＋诊断 | 诊断给出：<c>.excalidraw</c> 在、2 颗 canvas、9 颗 button、root 内 17 622 字符⇒<b>画板其实上了屏</b>，缺的只是「我拿不到那颗 API」 |
+| r3 | 交全表（2 分 39 秒） | 改走 <c>initialData</c>＋<c>onChange</c>（两颗都是包里的 prop）⇒ 不再需要那颗 API |
+| r4 | 460 秒超时 | 页面吊在 <c>exportToClipboard</c>（见 18.4）；那一跑仍交回那颗<b>桥时延数字表</b> |
+| r5 | 交全表（≈85 秒） | 给那颗调用套了 6 秒守卫⇒「吊住」从此是一格<b>读数</b>，⛔ 是一场事故 |
+
+⇒ 四处我自己的瞎（那颗 ref 的递法／截图旧帧／pong 的读法／<c>Local Storage</c> 落点找错层）全写在 <b>18.8</b>，改完才有的 r4／r5。
+
+### 18.1 「断网」是怎么断的：先给那颗对照件
+
+| 现读 | 数 |
+|---|---|
+| 这台机器此刻联网吗（⛔ 网页侧，python 一把独立尺） | <b>通</b>：esm.sh／bing／github TCP 各通，<c>https://www.bing.com/robots.txt</c> 200／2 676 字节 |
+| 同一时刻宿主那一侧 | <c>blocked=17</c>（r3）／<c>blocked=3</c>（r4、r5），主机名只有 <b>esm.sh</b>（r4 另加一颗 <c>www.bing.com</c>＝我故意递的对照） |
+| 那颗拦截机制 | <c>AddWebResourceRequestedFilter("http(s)://*", All)</c> ＋ <c>WebResourceRequested</c> 里给一颗 451 |
+
+⇒ <b>「断网」是拦出来的，⛔ 是这台机器本来没网</b>——那颗 bing 探针在 python 侧 200、在网页侧被拦，就是这一句的正件。
+⇒ 顺带一颗<b>机制事实</b>（§17.4 那颗拦截点从此有答案）：<c>blocked</c> 里出现过 <c>ctx=Document</c> 那颗 <c>https://www.youtube.com/embed/…?enablejsapi=1</c>⇒<b>那颗 filter 连 iframe 的文档请求都盖得住</b>。
+
+### 18.2 ② 字体面：那堵「远程回退」现读是 <c>esm.sh</c>，而且⛔ 止于画板
+
+<b>§坑4／§坑5 那句「字体有远程回退」在这一腿量到了那颗主机名、那几族、和它漏到哪儿。</b>
+
+| 现读 | 数 |
+|---|---|
+| <c>index.css</c> 里那颗 <c>@font-face</c> 的 src | 4 颗，<b>remote 0 颗</b>（全相对路径⇒<b>打包侧⛔ 改</b>，§17.6 那句复称一致） |
+| 但运行时真去要的 | <c>https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/fonts/&lt;族&gt;/&lt;档&gt;.woff2</c> |
+| 被拦的族（r3 那 17 颗点名） | Virgil／Cascadia／Excalifont／<b>Xiaolai×3 分片</b>／Nunito／Liberation／Lilita／ComicShanns，另 7 颗走 <c>XmlHttpRequest</c> 重试 |
+| 断网下真落地的族 | <b>只有 Assistant</b>（3 颗本地 woff2＝<c>status 200</c>）；<c>document.fonts</c> 其余全 <c>unloaded</c>，逐族 <c>document.fonts.load()</c> 的 <c>matched=0</c> |
+| 白底照片那一格 | <c>out_r3/shots/r3_a_scene.png</c>：矩形与箭头是手绘味（roughjs 在 bundle 里），<b>六行「永字八法 Abc 123」全是系统兜底字</b>⇒ 手写体这一格断网即灭 |
+| ⚠ 漏到出口外面 | 断网下 <c>exportToSvg</c> 交出的那段 SVG 里仍写着 <c>https://esm.sh/…Virgil-Regular.woff2</c>（r5 现读 <c>remoteCount=2</c>／<c>dataUri=0</c>／<c>fontFace=1</c>）⇒<b>对方打开那张 SVG 会自己去请 esm.sh</b> |
+
+⇒ <b>形1（本腿新撞，进 §五 续排的候选）</b>：那颗包里<b>⛔ 带</b> <c>esm.sh</c> 那颗基座，也<b>⛔ 是</b> <c>index.css</c> 写的——它在 JS 里（<c>fonts.css</c> 之外的一颗运行时回退）。
+后果两档：<b>①</b> 用户机器断网／⛔ 联网⇒画板手写体与中文手写体全灭（＝§十 第一格现读不通过）；<b>②</b> 导出的 SVG 带着那条远程引用出机（＝§十四 那句「静态命中⛔ 等于出机」在这一臂又兑现一次，而且这次是<b>会替我们出机</b>的那一类）。
+⇒ 出路三颗（都归打包／落地批，本腿⛔ 试）：把那颗基座改成本地（换 <c>fonts.css</c> 与那颗运行时常量）、或整族预载进 <c>document.fonts</c>、或在宿主侧把 <c>esm.sh</c> 永久 451 并接受「断网即兜底字」这一档观感。<b>§九 决策 3（Xiaolai 随包⛔ 随包）在这一格上⛔ 够：随了包也还要那颗运行时基座改口。</b>
+
+### 18.3 ② wasm 那半格，撞出来的是<b>一堵 4 MB 的墙</b>
+
+| 现读 | 数 |
+|---|---|
+| 那颗 3 600×3 600 噪声 PNG | <b>20 298 916</b> 字节（≈19.4 MiB；我那句 <c>over20MB</c> 按 20 MiB 判⇒报 False，口径以颗字节为准） |
+| 拖进去之后屏幕上出现什么 | 一颗居中 <b>Error</b> 卡：<c>File is too big. Maximum allowed size is 4MB.</c>（<c>out_r5/shots/r5_after_drop.png</c>）＋背景压暗 |
+| 减重管线跑到没 | ⛔ 到（闸门在减重<b>之前</b>）；但 <c>WebAssembly.compile(bytes)</c> 现读 <b>2 次</b>⇒<b>pica 那颗 wasm 是 base64 内联、断网可用</b>（⛔ 远程 .wasm 请求） |
+| 那颗常量在包里长什么样 | <c>Ine=4*1024*1024</c>（<c>dist/spike1.min.js</c> 现读 1 次）；<b>⛔ 任何 prop／env 出口</b> |
+| 那句正文进没进语言表 | <c>fileTooBig</c> 在 bundle 里出现 <b>55</b> 次＝55 份语言表各一颗（引擎自己按 <c>langCode</c> 念，⛔ 走我的表） |
+
+⇒ <b>形2</b>：StarMark 那条「截图／贴图进画板」的集成路线，在默认包下会被这堵墙挡在门外——<b>4K 全屏一张 PNG 常&gt;4 MB</b>，而那颗闸门⛔ 出口、⛔ 配置、也⛔ 走减重。
+⇒ 出路三颗（下一腿该判的就是这颗，⛔ 等他）：①<b>宿主侧先降</b>（交进画板前先缩到 &lt;4 MB 或转 JPEG，尺寸与格式由我定＝那颗「路径/命名由 C# 定」的同类）；②打包期<b>换那颗常数</b>（一次改一颗，代价＝与上游漂移，§坑16 那一族）；③那条路⛔ 走引擎文件入口，改走「画板背景／贴图」那颗⛔ 经闸的通道。
+⇒ §十 点验单那句「拖 20 MB 图→减重管线 wasm 生效」<b>现读⛔ 成立</b>：那颗管线在这种尺寸下根本没被叫到。
+
+### 18.4 ③ 出口三法：两成一吊，而且「档名」⛔ 归网页
+
+| 出口 | 现读 |
+|---|---|
+| (a) 下载事件 | <c>DownloadStarting</c> 触发（这颗 SDK 里它叫 <b>DownloadStarting</b>，⛔ 叫 Downloading）；<c>mime=image/png</c>、<c>total=28 759</c>、<c>state=Completed</c>、真落盘 28 759 字节。<b>但</b> <c>a.download="spike1b_download.png"</c> 被无视⇒<c>suggested</c> 是那颗 <c>blob:</c> 的 UUID |
+| (b) 桥回调 | 38 348 字符 base64 → 宿主解出 <b>28 759</b> 字节、<c>magic=PNG</c>、sha 前缀 <c>223db0fa</c>⇒<b>与那颗 blob 字节数成对相等</b>（成对判据，⛔「&gt;0」） |
+| (c) 剪贴板·网页侧 | <c>NotAllowedError: Document is not focused</c>（r3）；r4 同一条调用<b>直接吊住</b>（6 秒守卫现读 <c>pngMs=6004</c>、<c>focused=false</c>），且吊住之后剪贴板格式表还是<b>空</b> |
+| (c′) 剪贴板·宿主侧 | 三行对照：清空后 <c>formats=[]</c> → 宿主 <c>Clipboard.SetImage</c> 后 <c>formats=[Bitmap]</c>、读回 <c>350x250</c> 真档⇒<b>这颗出口只有宿主那一半成立</b> |
+| 越权那一格 | 递 <c>..\..\evil.png</c>／<c>D:/…/evil2.png</c>／空名三颗⇒宿主一律 <c>Path.GetFileName</c> 收进沙盒 <c>bridge/</c>（<c>r3_evil.png</c> 3 字节，落点⛔ 出目录）；那颗下载名同样被改写 |
+
+⇒ <b>形3</b>：桥协议那颗「复制为图」⛔ 能交给网页做（无焦点即吊／拒），必须<b>字节走桥、宿主上板</b>；而那颗 <c>exportToClipboard</c> 在宿主侧要<b>自带超时</b>（r4 就是被它吊掉一跑）。
+⇒ §十 那句「路径/命名由 C# 定」从此有读数：网页给的档名<b>会被丢</b>，⛔ 是「建议」。
+
+### 18.5 ④ 界面 chrome：两颗菜单各自的行，和「canvasActions 管⛔ 到哪些」
+
+| 现读（1440×879 一颗窗） | 数 |
+|---|---|
+| 闭合态带 title/aria 的可点件（r4） | <b>35</b> 颗，全在屏上 |
+| 同一颗数在「七项动作全 false」那一臂 | <b>33</b> 颗⇒<b>少 2 颗</b>（那两颗归 <c>canvasActions</c> 管） |
+| 左上角那颗 hamburger（按几何找到） | class=<c>dropdown-menu-button main-menu-trigger</c> @16,16 |
+| 它打开后新增的行 | <b>16</b> 颗：<c>Open</c>／<c>Save to...</c>／<c>Export image...</c>／<c>Find on canvas</c>／<c>Help</c>／<b><c>GitHub</c></b>／<b><c>X</c></b>／<b><c>Discord</c></b>／<c>Dark mode</c>／6 颗背景色板／<c>Show background color picker</c> |
+| 那颗 title 现读「More tools」的按钮 | 打开后新增 4 行：<c>Frame tool</c>／<b><c>Web Embed</c></b>／<b><c>Laser pointer</c></b>／<b><c>Mermaid to Excalidraw</c></b>；<b>它的 class 本腿没读到</b>⇒⛔ 就此认它是包里那颗 <c>TTDDialogTrigger</c>（§17.5 那颗导出名），那一格留「未判定」 |
+| <c>aiEnabled:false</c> 那一臂 | 与默认臂<b>逐颗相同</b>（delta=0）⇒那颗 prop 管⛔ 到上面这些行 |
+| <c>canvasActions</c> 七项全 false＋<c>tools.image:false</c> | 「More tools」里那四行<b>一颗⛔ 少</b>⇒那颗开关只管画布动作，⛔ 管工具与插件行 |
+| <c>langCode:"zh-CN"</c> | 那 9 颗按钮里 <b>6</b> 颗念出中文（更多工具／缩小／重置缩放／放大／帮助／退出禅模式）⇒引擎自带语言表真在生效 |
+
+⇒ §12.5 那张「摘哪几颗」的名单从此有出处，且<b>摘法分三档</b>：①画布动作走 <c>canvasActions</c>；②<b>GitHub／X／Discord／Web Embed／Laser／Mermaid 那几颗走⛔ 任何 prop</b>⇒要么 CSS 摘、要么运行时摘 DOM、要么打包期把那颗 <c>TTDDialogTrigger</c>／<c>OverrideMenu</c> 换掉（§17.3 那颗 alias/stub 臂是同一族手段）；③那句「默认 Key ⛔ 配时它是颗死按钮」在这一腿没测（那颗按钮在包内，但本腿没点它）。
+⇒ ⚠ 观感那一格留给他：<b>照片里那颗菜单是收起的</b>——我这把截图尺为了拿新鲜帧会把窗顶到前面，而<b>顶窗这一下正好把弹层关掉</b>（见 18.7）。菜单内容以那一列 DOM 读数为准。
+
+### 18.6 ⑤ 桥那颗往返：数字表（r4，n=150）
+
+| 载荷 | 单颗往返 |
+|---|---|
+| 空载荷 ×150 | min <b>0.2</b> ms／p50 <b>0.4</b> ms／p95 <b>0.7</b> ms／max 11.6 ms／超时 0 |
+| 64 KB | 4 ms（回声 65 536 字符，逐颗对过） |
+| 1 MB | 31 ms（1 048 576） |
+| 8 MB | 177 ms（8 388 608） |
+
+⇒ §12.1 那颗桥协议从此有预算：<b>控制消息按亚毫秒算</b>，⛔ 拿它当第二条数据通道；图／导出这类载荷走「字节进桥＋宿主落盘」那一臂（18.4(b) 已证成对）。
+⇒ 32 MB 那一档本腿<b>⛔ 跑</b>（我把它从臂里摘了：宿主那颗 <c>pad</c> 是字符串，撞上 OOM 会<b>整跑丢</b>，⛔ 拿一跑换一颗数）。
+
+### 18.7 ① 生命周期与那颗 userData：改道成功，且尺带正件
+
+| 现读 | 数 |
+|---|---|
+| Runtime（环境自报） | <c>152.0.4191.66</c>；UA 尾 <c>Chrome/152.0.0.0 … Edg/152.0.0.0</c>；dpr 1 |
+| 跑中进程树（按那颗沙盒 <c>--user-data-dir</c> 归因） | <b>7</b> 颗（全局 12→19）；<c>GetProcessInfos()</c> 自报 5～8 颗：Browser／Gpu／Utility×N／Renderer×N |
+| <b>关窗后</b>（同一把尺，再读） | <b>0</b> 颗归因于我；全局回到 12⇒§坑8 那句「关窗即散」在这一腿<b>可复现</b>（正件＝跑中那 7 颗） |
+| userData 落点 | <c>&lt;沙盒&gt;\wv2data\EBWebView\Default\Local Storage</c>（5 档／452 字节，含我写那颗 <c>spike1b.marker</c>）；exe 旁 <c>*.WebView2</c> 残留 <b>0</b>；<c>%LOCALAPPDATA%\spike1b</c> <b>⛔ 存在</b> |
+| 引擎自己往 localStorage 写了没 | <b>没</b>：整跑 <c>Object.keys(localStorage)</c> 只剩我那颗 marker，<c>engineKeys=[]</c>；<c>IndexedDB</c> 目录 <b>0</b> 颗⇒<b>§12.2「引擎的 LocalData 层⛔ 点火」这一格现读成立</b>（正件＝我自己那颗写得进也读得回） |
+| 首帧 | 挂载到 <c>.excalidraw</c> 出现 ≈<b>960 ms</b>（r3／r5 两跑同档）；<c>onChange</c> 首跑 2 次 |
+
+### 18.8 本腿自己四处瞎（收口腿进坑表；都是<b>我</b>的，⛔ 被测对象）
+
+1. <b>那颗 <c>ref</c></b>：按「对象 ref」递 <c>&lt;Excalidraw ref={{current:null}}&gt;</c>⇒生产包里<b>静默⛔ 挂</b>（memo 包函数组件），我把「画板没上屏」读了两回。改法＝走 <c>initialData</c>＋<c>onChange</c>，并把「ref 给不给」本身留成一格读数。
+2. <b>那颗截图</b>：<c>CapturePreviewAsync</c> 在窗被遮挡时交<b>旧帧</b>（r3 四张<b>同一颗 sha</b>）。改法＝<c>--disable-features=CalculateNativeWinOcclusion</c>＋拍前顶窗，并<b>当场算 sha 报「第几颗不同」</b>；副作用＝顶窗那一下会关掉正在拍的弹层（18.5 那颗 ⚠）。
+3. <b>那颗 pong</b>：宿主用 <c>PostWebMessageAsJson</c>，页面收到的是<b>对象</b>，我 <c>JSON.parse(ev.data)</c> 恒抛⇒r3 那颗「桥时延」全部读成超时（诚实留空才对，它留了 <c>timedOutAt=0</c>）。改法＝两侧都按形状分档。
+4. <b>那颗 <c>Local Storage</c> 落点</b>：我按 <c>&lt;udf&gt;\Default\…</c> 找⇒读成 0 颗档；真形状多一层 <c>EBWebView</c>。同一类瞎在 18.7 那颗 <c>onChange</c> 实参位上又现一次（files 在第 3 还是第 4 颗，本腿<b>未判定</b>⇒那颗「图数据多大」留白）。
+
+### 18.9 §八 Spike 批与 §十 点验单：这一腿交掉哪几格、还欠哪几格
+
+<b>交掉</b>：0① 运行时探测＋环境释放（18.7，含正件）；0② 字体/wasm 断网全验（18.2／18.3，<b>结论是「⛔ 通过」两颗缺陷形状</b>）；0③ 出口 3 法各试（18.4，两成一吊）；0④ TTD／Publish 关按钮有效性（18.5，<c>aiEnabled</c>／<c>canvasActions</c> 都管⛔ 到那几行）；0⑤ 桥往返时延（18.6）；§17.4 那颗拦截点（18.1，含 iframe Document）；§十 的「userData 改道」「关窗进程树归零」「旧 embeddable ⛔ 加载远程（iframe 被拦后是颗空框，<b> 警告文案要我们自己写</b>）」三格。
+
+<b>还欠（⛔ 从表里消失）</b>：
+- <b>观感／口径</b>：菜单展开态那张照片（我这把截图尺⛔ 拍得到弹层，见 18.7 第 2 条的副作用）；手写体断网那两档的<b>肉眼定论</b>；「默认 Key ⛔ 配时那颗按钮是不是死按钮」。
+- <b>机制</b>：那颗 4 MB 墙的三颗出路选哪颗（18.3）；<c>esm.sh</c> 基座改口那三颗（18.2）；<c>woff2.wasm</c> 那颗子集化开关<b>本腿没找到点它的那颗按钮</b>（⇒「断网时它坏没坏」未判定）；<c>onChange</c> 实参位与那颗图数据多大（18.8 第 4 条）。
+- <b>多窗</b>：两块板窗开同一颗档的冲突表（§12.2）——那是<b>存储接管</b>那一格，⛔ 属本腿。
+
+### 18.10 对 §八 批形与 §九 决策的位置
+
+- §八 那颗「Spike 批」<b>到这一腿交完</b>（0①～0⑤＋§17.4）⇒按 §八，下一批该是 <b>1 架构批</b>（桥协议＋存储适配器设计文档），而<b>⛔ 是继续起窗</b>。
+- 但 18.2／18.3 那两颗形状<b>排在架构批之前</b>：一颗决定「字体到底带什么、基座改到哪儿」，一颗决定「图进画板那条路走⛔ 走得通」——两颗都是<b>架构输入</b>，⛔ 是文案。⇒ 下一腿＝<b>Spike-2 裁决腿</b>：把「4 MB 三出路」与「esm.sh 三出路」各做一颗<b>最小可测臂</b>（仍⛔ 产品码），拿到数字再进架构批。
+- §九 决策 3（Xiaolai 随⛔ 随包）现读<b>加了一条前提</b>：随包⛔ 等于能用，那颗运行时基座还得改口；决策 4（AI／TTD 带⛔ 带）加了一条：<b>屏上确有一颗能开出那四行的按钮</b>（title 现读「More tools」），而摘它⛔ 归 <c>aiEnabled</c> 管（现读 delta=0）。
+- 本腿⛔ 动过：产品源码、那颗 <c>excalidraw</c> 树、系统 PATH、网络配置、那颗 <c>待决策事项.md</c> 账本。三颗形状（形1／形2／形3）<b>登记在本节</b>，进不进 §五 坑表与账本，等架构批一起排。
