@@ -224,8 +224,11 @@ public sealed class BoardSceneStoreGateTests
         Assert.Contains("return;", gate, StringComparison.Ordinal);
         Assert.DoesNotContain("TrySave", gate, StringComparison.Ordinal);
 
+        // 收尾那颗锚点取的是"写失败"那一句<b>消息名</b>而⛔ 那颗通用的 <c>StarLog.Warn</c>：
+        // 片26 在同一个方法里多加了一颗 Warn（写闸拒的那一行），按"文件里第一颗 Warn"切就切到邻居那一行去了
+        // （名册 313 那一族：一把按前缀数手臂的旧闸门被同前缀的新成员扫进——要改的是问法，⛔ 放宽判据）。
         var success = Between(WindowCs, "if (BoardSceneStore.TrySave(_boardId, bytes, out var fault))",
-            "StarMark.Abstractions.StarLog.Warn");
+            "boards.scene.save.failed");
         Assert.Contains("_lastWritten = bytes;", success, StringComparison.Ordinal);   // 只有真写成的那一支点亮
         Assert.Equal(1, Count(WindowCs, "_lastWritten = bytes;"));
 

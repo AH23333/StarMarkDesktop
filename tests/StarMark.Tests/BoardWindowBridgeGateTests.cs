@@ -174,7 +174,8 @@ public sealed class BoardWindowBridgeGateTests
     /// <summary>
     /// 关窗那一拍的等待<b>有界</b>、等的是"这一问有答案"而⛔"答案好听"，而且到点会说话。
     /// <para>那颗毫秒数只许住在主人那里（UI 档里再写一遍 2000＝第二主人，改的人只改得动一处）；
-    /// 两处 <c>FinishClosingFlush();</c> 分别对应"盘上本来就是它"与"这一问交回答案了（写成功还是写失败都算）"——
+    /// 三处 <c>FinishClosingFlush();</c> 分别对应"盘上本来就是它"、"这一问交回答案了（写成功还是写失败都算）"
+    /// 与片26 新加的那一颗"这一问被写闸拒了"——
     /// 少了前者那次关不掉，少了后者那颗写失败要用户白等两秒。</para>
     /// </summary>
     [Fact]
@@ -185,9 +186,118 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Contains("BoardPolicy.CloseFlushBudgetMs", code, StringComparison.Ordinal);
         Assert.Equal(0, Count(code, "2000"));                       // 那颗数⛔ 在这档里再出现一次
         Assert.Equal(2000, BoardPolicy.CloseFlushBudgetMs);         // 正件：主人那里它还在
-        Assert.Equal(2, Count(code, "FinishClosingFlush();"));
+        Assert.Equal(3, Count(code, "FinishClosingFlush();"));      // 片26 多出的那一处＝"这一问被写闸拒了"也是答案
         Assert.Contains("AppWindow.Hide()", code, StringComparison.Ordinal);
         Assert.Contains("boards.close.flush.timeout", raw, StringComparison.Ordinal);
         Assert.Contains("_recovering", code, StringComparison.Ordinal);   // 两颗控件抢同一扇窗＝更坏的现场
+    }
+
+    /// <summary>
+    /// 停笔那一拍等的是"数对上了"那句话（P-221 落地，片26 把它从一句<b>无参的话</b>换成<b>三颗数全等</b>）。
+    /// <para>这颗格有三半，缺任一半都⛔ 算修好：<b>(甲)</b> 页面侧那颗"读事件对象三颗键"的恒假判据⛔ 许抄回来
+    /// （引擎交的是位置参数——现读 bundle <c>this.props.onChange?.(C,this.state,this.files)</c>）；
+    /// <b>(乙)</b> 开闸的话两条路都要说得出（有档可载＝等页面回 <c>board.loaded</c>，新板＝当场说），
+    /// 漏发＝这一扇永远⛔ 写＝把 P-221 换成一条更静的坏；<b>(丙)</b> 而"没落地就开闸"是两跑现场量到的
+    /// 数据丢失（片25 挂载那一拍 4 元素→241 字节／0 元素；片26 重载那一拍 2608 字节／2 元素→241 字节／0 元素）
+    /// ⇒ 开闸只许由页面<b>报出数来</b>驱动，宿主拿自己递进去的那颗数对完才算数。</para>
+    /// <para>⚠ 那颗"对完"⛔ 能写在注释里：本批先按"页面回一句 board.loaded 就开闸"落地，跑真机才发现
+    /// 那句话照样是空的（promise 解掉了而画布是白的）＝"消息到达 ⛔ 等于状态达成"（坑表那一族）。</para>
+    /// </summary>
+    [Fact]
+    public void TheIdleBeatWaitsForTheHostsArmWord()
+    {
+        var js = ReadRepo(BridgeJs);
+        Assert.Equal(0, Count(js, "event.elements"));                              // 那颗恒假判据
+        Assert.Equal(1, Count(js, "if (!hostArmed) return;"));
+        Assert.Equal(1, Count(js, "hostArmed = true;"));
+        Assert.Equal(1, Count(js, "case \"autosave.arm\":"));
+        // 载完了那句必须<b>带两颗数</b>，而那颗画布数取的是<b>序列化器自己问的那一颗出口</b>（getSceneElements＝滤掉删的）
+        Assert.Equal(1, Count(js, "postIn(\"board.loaded\", { elements: writable, canvas: onCanvas });"));
+        Assert.Equal(1, Count(js, "onCanvas = API.getSceneElements().length;"));
+        Assert.Equal(0, Count(js, "getSceneElementsIncludingDeleted"));   // 那颗⛔ 同口径的出口⛔ 许被拿回来当证据（片26 第一跑栽在这上面）
+
+        var cs = ReadRepo(WindowCs);
+        var body = SourceGate.MethodBody(cs, "void OnBridgeReady");
+        Assert.Contains("PostOutbound(\"board.load\"", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("autosave.arm", body, StringComparison.Ordinal);     // (丙)⛔ 同拍开闸
+        Assert.Contains("ArmIdleBeat(\"no-scene\")", body, StringComparison.Ordinal);  // (乙)新板那一途
+        var inbound = SourceGate.MethodBody(cs, "void OnWebMessageReceived");
+        Assert.Contains("BoardPolicy.ShouldArmAfterLoad(want, envelope.Elements, envelope.Canvas)",
+            inbound, StringComparison.Ordinal);                                     // (丙)开闸前先把数对完
+        Assert.Contains("ArmIdleBeat(\"loaded\",", inbound, StringComparison.Ordinal);   // (乙)载完那一途
+        Assert.Contains("boards.arm.refused", cs, StringComparison.Ordinal);       // 对不上要有那句话可查，⛔ 静默
+        Assert.Equal(3, Count(cs, "ArmIdleBeat("));                                 // 一颗定义＋两颗调用
+        Assert.Contains("PostOutbound(\"autosave.arm\", Envelope(\"autosave.arm\", \"h5\", string.Empty));",
+            SourceGate.MethodBody(cs, "void ArmIdleBeat"), StringComparison.Ordinal);   // 唯一出口（⛔ 第二主人）
+    }
+
+    /// <summary>
+    /// 写盘那颗闸门握在<b>宿主</b>手里（片26＝P-223 的修法）。
+    /// <para>页面那颗 <c>hostArmed</c> 只包得住停笔一路：失焦与关窗那两拍是宿主问、页面答
+    /// （<c>export.pick</c>→<c>runExport</c>→<c>deliver</c>），现读那条路上⛔ 有对方那道 if。
+    /// 写盘的笔本来就握在宿主手里，主闸就⛔ 装在对方身上。</para>
+    /// <para>四颗形状各钉一处：每一趟 ready 重新闩上（新页面要自己重新举证）、开闸只许有一个出口、
+    /// 门排在档位分流<b>之后</b>（png／svg 是一次性产物，⛔ 被它挡）、被拒的字节⛔ 进 <c>_seenScene</c>
+    /// ——进了＝下一趟恢复会把空场景当"见过的那一份"递回画布，那才是把一次白屏变成永久丢板的一手。</para>
+    /// </summary>
+    [Fact]
+    public void TheHostHoldsTheWriteGate()
+    {
+        var raw = ReadRepo(WindowCs);
+        var code = SourceGate.Code(raw);
+        Assert.Equal(4, Count(code, "_autosaveArmed"));             // 一颗声明＋闩上＋开闸＋一读
+        Assert.Contains("_autosaveArmed = false;",
+            SourceGate.MethodBody(raw, "void OnBridgeReady"), StringComparison.Ordinal);
+        Assert.Contains("_autosaveArmed = true;",
+            SourceGate.MethodBody(raw, "void ArmIdleBeat"), StringComparison.Ordinal);
+
+        var export = SourceGate.MethodBody(raw, "void HandleExportBytes");
+        Assert.Equal(1, Count(export, "if (!_autosaveArmed)"));
+        Assert.True(export.IndexOf("if (!_autosaveArmed)", StringComparison.Ordinal)
+                    < export.IndexOf("_seenScene = bytes;", StringComparison.Ordinal),
+                    "被拒的那一份⛔ 许当成\"宿主见过的那一块板\"");
+        Assert.Contains("LandsInSceneArchive", export, StringComparison.Ordinal);  // 正件：门在档位分流之后
+        Assert.True(export.IndexOf("LandsInSceneArchive", StringComparison.Ordinal)
+                    < export.IndexOf("if (!_autosaveArmed)", StringComparison.Ordinal));
+        Assert.Contains("boards.scene.write.refused", raw, StringComparison.Ordinal);
+        Assert.Equal(3, Count(code, "FinishClosingFlush();"));      // 拒掉也是答案：⛔ 让关窗那一拍白等满预算
+    }
+
+    /// <summary>
+    /// 崩那一拍留下一串跑得过的痕迹（P-222 的现场尺）。
+    /// <para>片25 只证到"后一手真发出去了＋新进程真在＋屏幕真白"，而<b>为什么</b>没量到——三个候选因由
+    /// 在那些读数上同形。这一格钉的是三处日志都在、且导航那一拍的订阅走"先摘再挂"（重建那一趟用的是新控件，
+    /// 同一颗控件被重开再进来时⛔ 要两颗订阅＝一份日志打两遍，那条读数就不能当数了）。</para>
+    /// </summary>
+    [Fact]
+    public void TheCrashRecoveryLeavesARunningTrail()
+    {
+        var cs = SourceGate.Code(ReadRepo(WindowCs));
+        Assert.Contains("NavigationCompleted -= OnNavigationCompleted", cs, StringComparison.Ordinal);
+        Assert.Contains("NavigationCompleted += OnNavigationCompleted", cs, StringComparison.Ordinal);
+        Assert.Contains("boards.nav.done", cs, StringComparison.Ordinal);
+        Assert.Contains("boards.bridge.ready", cs, StringComparison.Ordinal);
+        Assert.True(Count(cs, "src=") >= 2, "崩那一拍与导航那一拍都得交出那颗 Source");
+        Assert.Equal(1, Count(cs, "private void OnNavigationCompleted("));
+    }
+
+    /// <summary>
+    /// 那一页只许有<b>一棵</b> React 根（片26＝P-222 的真因）。
+    /// <para>theme.set／lang.set／feature.flags 原先各走一遍 <c>L.createRoot(box).render(…)</c>——同一颗 DOM 容器上
+    /// 再挂一棵根＝React 把前一棵树整棵拆掉，而拆掉的正是宿主刚递进画布的那块板。现场的脸（06:22 那一跑）＝
+    /// <c>board.loaded</c> 那一刻画布上确实有那颗可写元素（canvas=1 是真数），1.5 s 后交回盘上的却是 0 元素／241 字节。</para>
+    /// <para>这颗格钉的是形状：造根那一句全档只许一颗、必须挂在"没有才造"那条件后面、且⛔ 许再出现
+    /// "造完当场 render"那颗旧写法（那颗就是拆树的那一手）。render 那颗出口也只许一处＝第二次改要挂哪棵根，
+    /// 只能问同一个主人。</para>
+    /// </summary>
+    [Fact]
+    public void ThePageMountsExactlyOneReactRoot()
+    {
+        var js = ReadRepo(BridgeJs);
+        Assert.Equal(1, Count(js, "L.createRoot("));                                  // 唯一造根点
+        Assert.Contains("if (!root) root = L.createRoot(box);", js, StringComparison.Ordinal);
+        Assert.Equal(0, Count(js, "L.createRoot(box).render"));
+        Assert.Equal(1, Count(js, ".render(L.React.createElement(L.Excalidraw"));
+        Assert.Contains("rerenderWith({});", js, StringComparison.Ordinal);             // 出生那一挂走同一个主人
     }
 }

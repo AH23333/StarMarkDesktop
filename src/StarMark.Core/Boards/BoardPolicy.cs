@@ -133,6 +133,57 @@ public static class BoardPolicy
         };
 
     /// <summary>
+    /// 那份场景字节里有几颗<b>会被写回盘上的</b>元素（<b>认不出＝null，⛔ 替它猜一颗 0</b>）。
+    /// <para><b>这颗数的口径就是本格的全部意义</b>：它⛔ 是"档里数组的长度"，而是"页面现在交得出几颗"——
+    /// 页面那颗序列化器交的是 <c>API.getSceneElements()</c>，现读 bundle＝<c>scene.getNonDeletedElements()</c>
+    /// （<c>isDeleted</c> 那颗被它滤掉），所以这里也跳掉 <c>isDeleted:true</c>。三颗比数的地方必须同吃一碗：
+    /// 片26 第一版拿"数组整颗长度"当 <paramref name="canvas"/> 那一维的对照物（页面递的是 <c>getSceneElementsIncludingDeleted</c>），
+    /// 崩后重载那一趟的读数三颗全等（want=4／loaded=4／canvas=4）而盘上仍被盖成 0 元素——那颗闸门比的是两颗
+    /// ⛔ 同口径的数，挡了个⛔ 存在的形状（真读数与它的下一跑对照见 §二十一 片26 那一块）。</para>
+    /// <para><b>为什么住 Core</b>：这颗数⛔ 只是诊断，它是开闸的<b>证据</b>（<see cref="ShouldArmAfterLoad"/>），
+    /// 而它管着"要不要动那块板"。一颗当判据用的数⛔ 许住在解它的那一档里。</para>
+    /// <para>认不出的形状一律 null：档不是 JSON、根不是对象、没有 <c>elements</c> 这一颗、那一颗不是数组。
+    /// 把这四档都折成 0＝"这份档是空的"，而它真正的意思是"我读不懂"——按 <see cref="ShouldArmAfterLoad"/>
+    /// 的口径，读不懂就⛔ 开闸。</para>
+    /// </summary>
+    public static int? CountWritableElements(byte[]? utf8Json)
+    {
+        if (utf8Json is not { Length: > 0 }) return null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(utf8Json);
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+            if (!doc.RootElement.TryGetProperty("elements", out var e)) return null;
+            if (e.ValueKind != System.Text.Json.JsonValueKind.Array) return null;
+            var n = 0;
+            foreach (var el in e.EnumerateArray())
+            {
+                // 与那颗序列化器同口径：被标了删的进不了档，也就不该算进"画布上该有几颗"
+                if (el.ValueKind == System.Text.Json.JsonValueKind.Object
+                    && el.TryGetProperty("isDeleted", out var d) && d.ValueKind == System.Text.Json.JsonValueKind.True)
+                    continue;
+                n++;
+            }
+            return n;
+        }
+        catch (Exception) { return null; }   // 半截档／坏编码：这一颗读不懂，交 null（⛔ 当"空的"）
+    }
+
+    /// <summary>
+    /// 载档那一拍页面报回的两颗数，够不够宿主开那道闸（片26 给 P-223 的修法）。
+    /// <para><b>要挡的现场是真机量到的那一颗</b>：崩溃重载之后 <c>loadFromBlob</c> 的 promise 解掉了、页面照实回话，
+    /// 而画布交不出可写的那几颗——盘上那块 4 元素／4936 字节的板，8 s 内被盖成 0 元素／241 字节（<c>.bak</c> 只剩一份）。</para>
+    /// <para><b>为什么"promise 解掉了"⛔ 是证据</b>：那句话报的是"我这颗解码跑完了"，
+    /// 而闸门要的是"画布上现在有宿主递给它的那块板"。所以这里问三颗数：宿主递进去的可写颗数 <paramref name="want"/>、
+    /// 页面从档里数到的 <paramref name="loaded"/>、页面<b>当场从画布上数回来的</b> <paramref name="canvas"/>。
+    /// <b>三颗必须同口径</b>（都＝那颗序列化器交回的那一堆），否则比的是两颗不同的事。
+    /// 三颗全等才开闸（⛔ "对不上就先信页面"——猜错的代价是拿空板盖掉那块好档）。</para>
+    /// <para><b>任一颗认不出（null）＝⛔ 开闸</b>：那是"读不懂"，而读不懂时唯一安全的动作是不写。</para>
+    /// </summary>
+    public static bool ShouldArmAfterLoad(int? want, int? loaded, int? canvas)
+        => want is int w && loaded == w && canvas == w;
+
+    /// <summary>
     /// 一扇画板窗在它那一生里最多<b>重建</b>几次控件（片24）。
     /// <para>为什么要有这一颗数：那颗运行时真坏掉的机器上，"重建→立刻又死"是一条<b>不需要谁帮忙就会一直跑</b>的循环，
     /// 每一圈还往日志里写一行——用户看到的是那扇窗既⛔ 恢复也⛔ 关掉。三圈的口径＝"给他一次改错的机会，再加两次"，

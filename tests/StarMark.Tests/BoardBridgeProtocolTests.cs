@@ -20,7 +20,7 @@ public sealed class BoardBridgeProtocolTests
     // ────────── ① 两份名单自己先要闭合 ──────────
 
     /// <summary>
-    /// 六颗进、五颗出，且<b>每颗在册的名字都有一份字段表、每份字段表都对应一颗在册的名字</b>。
+    /// 七颗进、六颗出，且<b>每颗在册的名字都有一份字段表、每份字段表都对应一颗在册的名字</b>。
     /// <para>双向对账的原因：只查"名单里有 6 颗"会放过"新增一颗命令却忘了给字段表"——
     /// 那种消息在 <see cref="BridgeProtocol.Check"/> 里会当场 <c>KeyNotFoundException</c>，
     /// 而抛出去到 UI 侧就是"点了没反应"（本仓定性过的坏）。</para>
@@ -29,10 +29,10 @@ public sealed class BoardBridgeProtocolTests
     public void BothListsAreClosedOverTheirOwnFieldTables()
     {
         Assert.Equal(
-            ["bridge.ready", "paste.query", Export, "pin.request", "background.request", "open.external"],
+            ["bridge.ready", "board.loaded", "paste.query", Export, "pin.request", "background.request", "open.external"],
             BridgeProtocol.InboundCommands);
         Assert.Equal(
-            ["board.load", "theme.set", "lang.set", "feature.flags", "export.pick"],
+            ["board.load", "theme.set", "lang.set", "feature.flags", "export.pick", "autosave.arm"],
             BridgeProtocol.OutboundEvents);
 
         Assert.Equal(BridgeProtocol.InboundCommands.Length, BridgeProtocol.InboundFields.Count);
@@ -158,11 +158,33 @@ public sealed class BoardBridgeProtocolTests
     [InlineData(Export, new string[] { "bytes", "suggested" })]   // 有字节没档
     [InlineData("pin.request", new string[0])]
     [InlineData("paste.query", new string[0])]
+    [InlineData("board.loaded", new string[0])]                   // 片26 第一版的形状：那句话本身⛔ 带数
+    [InlineData("board.loaded", new string[] { "elements" })]     // 报了档里几颗，没报案布上几颗
+    [InlineData("board.loaded", new string[] { "canvas" })]
     public void MissingRequiredArgumentIsItsOwnFault(string name, string[] keys)
     {
         var (allowed, fault) = BridgeProtocol.Check(BridgeProtocol.Version, name, keys);
         Assert.False(allowed);
         Assert.Equal(BridgeProtocol.Fault.MissingField, fault);
+    }
+
+    /// <summary>
+    /// 载档那句回话<b>必带两颗数</b>（片26＝P-223 的协议面）。
+    /// <para>本批第一版把它做成了一颗<b>无参</b>的命令，真机跑出来才发现"页面回了话"与"画布上有那块板"
+    /// 是两件事（那句无参的话在两种现场上形状相同）。协议里"缺一颗"与"多一颗"这两道门在这一颗上各钉一次，
+    /// 名单本身也钉一次——多出来的键⛔ 是忽略而整条拒（硬线②：忽略＝给越权留缝）。</para>
+    /// </summary>
+    [Fact]
+    public void TheLoadReportCarriesBothCounts()
+    {
+        Assert.Equal(new[] { "elements", "canvas" }, BridgeProtocol.InboundFields["board.loaded"]);
+        Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, "board.loaded",
+            new[] { "elements", "canvas" }).Allowed);
+        Assert.Equal(BridgeProtocol.Fault.MissingField,
+            BridgeProtocol.Check(BridgeProtocol.Version, "board.loaded", new[] { "canvas" }).Reason);
+        Assert.Equal(BridgeProtocol.Fault.UnexpectedField,
+            BridgeProtocol.Check(BridgeProtocol.Version, "board.loaded",
+                new[] { "elements", "canvas", "bytes" }).Reason);
     }
 
     [Theory]
@@ -201,6 +223,14 @@ public sealed class BoardBridgeProtocolTests
                                             ("feature.flags", "uiOptions") })
             Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, name, new[] { key },
                 BridgeProtocol.Direction.Outbound).Allowed, $"{name} 被这道多出来的门挡住了");
+
+        // autosave.arm（片26＝P-221 那颗"载档那一拍已过"）：这颗门故意⛔ 参——它报的是时刻，不是东西。
+        // 正负件各一：空 args 必通（宿主每一拍都发得出），多一颗键必拒（⛔ 让它长成第二份判据）。
+        Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, "autosave.arm", Array.Empty<string>(),
+            BridgeProtocol.Direction.Outbound).Allowed);
+        Assert.Equal(BridgeProtocol.Fault.UnexpectedField,
+            BridgeProtocol.Check(BridgeProtocol.Version, "autosave.arm", new[] { "id" },
+                BridgeProtocol.Direction.Outbound).Reason);
     }
 
     // ────────── ④ 方向决定名单（同一颗名字⛔ 能两头用） ──────────

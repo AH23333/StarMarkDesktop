@@ -257,4 +257,70 @@ public sealed class BoardPolicyTests
         Assert.False(BoardPolicy.DiskAlreadyHolds(scene, scene.Append((byte)' ').ToArray()));  // 长度不同
         Assert.False(BoardPolicy.DiskAlreadyHolds(scene, scene[..^1]));                         // 少一颗也算不同
     }
+
+    // ────────── ⑧ 载档那一拍那三颗数（片26＝P-223 的开闸判据） ──────────
+
+    /// <summary>
+    /// "这份档里有几颗<b>会被写回盘上的</b>元素"<b>认不出就交 null</b>，⛔ 折成一颗 0——0 读起来是"这块板是空的"，
+    /// 而它真正的意思是"我读不懂"，把后者当后者用＝拿一次解析失败去判"用户把板画没了"。
+    /// <para><b>这颗数的口径＝本格的全部意义</b>：它⛔ 是"档里数组的长度"，而是"页面那颗序列化器交回的那一堆"——
+    /// 现读 bundle：<c>getSceneElements</c> 走 <c>scene.getNonDeletedElements()</c>（<c>isDeleted</c> 那颗被滤掉），
+    /// 所以这里也跳掉 <c>isDeleted:true</c>。片26 第一版按"数组整颗长度"数、页面那颗画布数取的是
+    /// <c>getSceneElementsIncludingDeleted</c>，崩后重载那一跑三颗读数报出来"全等"（4／4／4）而盘上那块板
+    /// 照样被盖成 0 元素＝<b>两颗⛔ 同口径的数比 equality，闸门看着在挡、其实⛔ 挡任何东西</b>（坑表）。</para>
+    /// <para>正件按名册 349 落在我要测的那一维：真形状那份（两颗 freedraw、一颗标着删）必须数回 <b>1</b>，
+    /// 缺 <c>isDeleted</c> 那颗⛔ 算删。</para>
+    /// </summary>
+    [Fact]
+    public void SceneElementCountsWhatWouldBeWrittenBackAndGivesUpWhenItCannotRead()
+    {
+        var twoFreedrawsOneDeleted = Utf8("{\"type\":\"excalidraw\",\"version\":2,\"source\":\"https://starmark.local\","
+            + "\"elements\":["
+            + "{\"id\":\"A1\",\"type\":\"freedraw\",\"x\":12,\"y\":34,\"points\":[[0,0],[3,5],[9,11]],\"isDeleted\":false},"
+            + "{\"id\":\"B2\",\"type\":\"freedraw\",\"x\":88,\"y\":99,\"points\":[[0,0]],\"isDeleted\":true}"
+            + "],\"appState\":{\"gridModeEnabled\":false},\"files\":{}}");
+        var noneDeleted = Utf8("{\"elements\":[{\"id\":\"A1\",\"type\":\"freedraw\",\"isDeleted\":false},"
+            + "{\"id\":\"B2\",\"type\":\"freedraw\"}]}");
+
+        Assert.Equal(1, BoardPolicy.CountWritableElements(twoFreedrawsOneDeleted));  // 那颗标了删的进不了档
+        Assert.Equal(2, BoardPolicy.CountWritableElements(noneDeleted));              // ⛔ isDeleted 那颗⛔ 算删
+        Assert.Equal(1, BoardPolicy.CountWritableElements(nestedOne()));             // 嵌套⛔ 数进去，数的是外层
+        Assert.Equal(0, BoardPolicy.CountWritableElements(Utf8("{\"elements\":[]}")));  // 空板＝一颗，而⛔ "读不懂"
+
+        Assert.Null(BoardPolicy.CountWritableElements(Utf8("{\"appState\":{}}")));        // ⛔ 这颗键
+        Assert.Null(BoardPolicy.CountWritableElements(Utf8("{\"elements\":{\"a\":1}}"))); // 有这颗键而⛔ 是数组
+        Assert.Null(BoardPolicy.CountWritableElements(Utf8("[1,2,3]")));                  // 根⛔ 是对象
+        Assert.Null(BoardPolicy.CountWritableElements(Utf8("{\"elements\":[")));          // 半截档（写坏的那一颗形状）
+        Assert.Null(BoardPolicy.CountWritableElements(Array.Empty<byte>()));
+        Assert.Null(BoardPolicy.CountWritableElements(null));
+    }
+
+    /// <summary>
+    /// 开闸要<b>三颗数全等</b>：⛔ "对不上就先信页面"——猜错的代价是拿一块空板盖掉盘上那块好档
+    /// （片26 真机量到：崩后重载那一趟页面照实回了话，而盘上那块 4 元素／4936 字节的板被盖成 0 元素／241 字节）。
+    /// <para>任一颗认不出（null）也⛔ 开闸：那是"读不懂"，而读不懂时唯一安全的动作是不写。</para>
+    /// </summary>
+    [Fact]
+    public void TheArmWordNeedsAllThreeCountsToAgree()
+    {
+        Assert.True(BoardPolicy.ShouldArmAfterLoad(2, 2, 2));
+        Assert.True(BoardPolicy.ShouldArmAfterLoad(0, 0, 0));      // 空板也是"回到了那块板"，⛔ 因此⛔ 写
+
+        Assert.False(BoardPolicy.ShouldArmAfterLoad(4, 4, 0));     // 片26 那一跑的脸：档里 4 颗可写，画布交不出可写的
+        Assert.False(BoardPolicy.ShouldArmAfterLoad(2, 0, 0));     // 档自己也没读到（loadFromBlob 交回空）
+        Assert.False(BoardPolicy.ShouldArmAfterLoad(2, 1, 2));     // 中间那颗少一颗也⛔ 开
+        Assert.False(BoardPolicy.ShouldArmAfterLoad(2, 2, -1));    // 页面数不出来＝认不出
+        Assert.False(BoardPolicy.ShouldArmAfterLoad(null, 2, 2));  // 宿主读不懂自己那份字节
+        Assert.False(BoardPolicy.ShouldArmAfterLoad(2, null, 2));
+        Assert.False(BoardPolicy.ShouldArmAfterLoad(2, 2, null));
+        // ⚠ 这一颗是台架逼出来的（A3「null 当成 0 也开闸」第一版没把它撞红）：另两颗都数到 0 时，
+        // "宿主读不懂自己那份字节"与"递进去的是块空板"读起来一模一样——把 null 折成 0 就分不出这两件事，
+        // 而后者才许写。认不出＝⛔ 开闸这一条必须<b>在另两颗全等时也照样成立</b>。
+        Assert.False(BoardPolicy.ShouldArmAfterLoad(null, 0, 0));
+    }
+
+    private static byte[] Utf8(string s) => System.Text.Encoding.UTF8.GetBytes(s);
+
+    /// <summary>外层一颗、里面套三颗——这颗形状用来钉"数的是外层"。</summary>
+    private static byte[] nestedOne() => Utf8("{\"elements\":[{\"elements\":[1,2,3]}]}");
 }

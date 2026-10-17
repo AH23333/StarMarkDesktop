@@ -21,6 +21,10 @@ public readonly struct BoardEnvelope
     public string? Url { get; init; }
     public string? Shape { get; init; }
     public string? Token { get; init; }
+
+    /// <summary><c>board.loaded</c> 那两颗数：档里读到几颗元素／画布上当场几颗。认不出（缺键、非数）＝null。</summary>
+    public int? Elements { get; init; }
+    public int? Canvas { get; init; }
     public bool Invalid { get; init; }
 
     /// <summary>args 的键集（给 <see cref="StarMark.Core.Boards.BridgeProtocol.Check"/> 的字段白名单门）。</summary>
@@ -41,6 +45,9 @@ public readonly struct BoardEnvelope
             string? Arg(string name)
                 => root.TryGetProperty("args", out var a) && a.ValueKind == JsonValueKind.Object
                     && a.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+            int? ArgInt(string name)
+                => root.TryGetProperty("args", out var a) && a.ValueKind == JsonValueKind.Object
+                    && a.TryGetProperty(name, out var v) && v.TryGetInt32(out var n) ? n : null;
             var version = root.TryGetProperty("v", out var vv) && vv.TryGetInt32(out var i) ? i : int.MinValue;
             return new BoardEnvelope
             {
@@ -53,6 +60,8 @@ public readonly struct BoardEnvelope
                 Url = Arg("url"),
                 Shape = Arg("shape"),
                 Token = Arg("token"),
+                Elements = ArgInt("elements"),
+                Canvas = ArgInt("canvas"),
                 ArgKeys = keys,
             };
         }

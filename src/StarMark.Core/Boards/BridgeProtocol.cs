@@ -27,16 +27,16 @@ public static class BridgeProtocol
     /// <summary>信封里那颗 <c>v</c> 的本命值（§12.1 定形，v1 未改）。</summary>
     public const int Version = 1;
 
-    /// <summary>JS→C# 的六颗命令名。颗数由证人钉住（<c>BoardBridgeProtocolTests</c> ①）。</summary>
+    /// <summary>JS→C# 的七颗命令名。颗数由证人钉住（<c>BoardBridgeProtocolTests</c> ①）。</summary>
     public static readonly string[] InboundCommands =
     [
-        "bridge.ready", "paste.query", "export.bytes", "pin.request", "background.request", "open.external",
+        "bridge.ready", "board.loaded", "paste.query", "export.bytes", "pin.request", "background.request", "open.external",
     ];
 
-    /// <summary>C#→JS 的五颗事件名。</summary>
+    /// <summary>C#→JS 的六颗事件名。</summary>
     public static readonly string[] OutboundEvents =
     [
-        "board.load", "theme.set", "lang.set", "feature.flags", "export.pick",
+        "board.load", "theme.set", "lang.set", "feature.flags", "export.pick", "autosave.arm",
     ];
 
     /// <summary>
@@ -48,6 +48,11 @@ public static class BridgeProtocol
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             ["bridge.ready"] = [],
+            // 页面报"那份档落进画布了"＋<b>两颗数</b>：档里读到几颗（elements）、画布上现在几颗（canvas）。
+            // 开闸由这两颗数与宿主递进去的那颗<b>全等</b>说了算（BoardPolicy.ShouldArmAfterLoad）——
+            // ⛔ 拿一句无参的话当证据：片26 现场量到"promise 解掉了、页面回了话，而画布是空的"，
+            // 那一跑的盘上读数＝那块 2 元素／2608 字节的板被盖成 0 元素／241 字节。
+            ["board.loaded"] = ["elements", "canvas"],
             ["paste.query"] = ["shape", "bytes"],
             ["export.bytes"] = ["bytes", "kind", "suggested"],
             ["pin.request"] = ["token"],
@@ -55,7 +60,7 @@ public static class BridgeProtocol
             ["open.external"] = ["url"],
         };
 
-    /// <summary>C#→JS 那五颗事件的允许字段（同一道门，方向反过来也要有主人）。</summary>
+    /// <summary>C#→JS 那六颗事件的允许字段（同一道门，方向反过来也要有主人）。</summary>
     public static readonly IReadOnlyDictionary<string, string[]> OutboundFields =
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
@@ -64,6 +69,8 @@ public static class BridgeProtocol
             ["lang.set"] = ["langCode"],
             ["feature.flags"] = ["uiOptions"],
             ["export.pick"] = ["kind", "skipInliningFonts"],
+            // 宿主递给页面的"载档那一拍已过"：无参（它报的是时刻，不是东西）。
+            ["autosave.arm"] = [],
         };
 
     /// <summary>拒的原因。UI 侧拿这颗枚举去配表里的键（⛔ 在这里念成品句，也⛔ 静默吞）。</summary>
@@ -159,6 +166,9 @@ public static class BridgeProtocol
         "open.external" => ["url"],
         "paste.query" => ["shape"],
         "board.load" => ["bytes", "id"],
+        // 开闸那句必须<b>带数</b>：一颗⛔ 给的 <c>board.loaded</c> 只能读成"它 promise 解掉了"，
+        // 而闸门要的是"画布上真有宿主递进去那块板"（片26 量到的那颗坏就坏在这句话是空的）。
+        "board.loaded" => ["elements", "canvas"],
         "export.pick" => ["kind"],
         _ => null,
     };

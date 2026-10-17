@@ -24,12 +24,20 @@ namespace StarMark.UI.Boards;
 /// 字节经 <see cref="BridgeProtocol.LandsInSceneArchive"/> 分流进板档目录，png／svg 仍进导出目录。
 /// <b>片22＝§21.4 那颗脏位</b>：交回来的字节与盘上那份<b>逐颗相等</b>时⛔ 写、⛔ 滚（<see cref="BoardPolicy.DiskAlreadyHolds"/>）；
 /// 同批把 <c>export.bytes</c> 的 <c>suggested</c> 接上链——页面递 <c>appState.name</c>，只有导出那一路读它（板档档名＝那颗 id，⛔ 跟着显示名走）。</para>
-/// <para><b>片24＝§21.3 那四拍通完</b>。剩下那两拍各自能做的事⛔ 一样：
+/// <para><b>§21.3 那四拍都接上了线</b>。剩下那两拍各自能做的事⛔ 一样：
 /// <b>关窗</b>那一拍走 <c>AppWindow.Closing</c>——拦一次、窗先 Hide（用户⛔ 等那两秒）、向页面索取一份快照并<b>有界</b>等它落地
 /// （<see cref="BoardPolicy.CloseFlushBudgetMs"/>），到点照样关（⛔ 把用户的退出键抵押给一颗卡住的网页）；
 /// <b>渲染进程挂了</b>那一拍<b>问不到</b>任何东西（页面已死，<see cref="BoardPolicy.BeatCanAskForSnapshot"/> 就为此而住 Core），
 /// 它的活是按档恢复（<see cref="BoardPolicy.RecoveryForFailure"/>：重建控件／重载／只上报）＋ 桥第二次 ready 时把
 /// <em>宿主见过的那一份</em>递回去——重载之后⛔ 许回到空板，也⛔ 许静默白屏（§21.5）。</para>
+/// <para><b>片25 真机读数＋片26 落地</b>：那四拍里<b>失焦</b>与<b>关窗</b>两拍量到真落盘（片25：关窗后 0.55 s 盘上 3→4 元素），
+/// <b>崩</b>那一拍两条恢复路都停在同一颗白帧＝<b>P-222 仍开放</b>（本档已给它配了 <c>boards.bridge.ready</c>／
+/// <c>boards.nav.done</c>／<c>src=</c> 三处日志，先判因由再换手）；<b>停笔</b>那一拍原本⛔ 落过一根，
+/// 因由＝页面侧把 <c>onChange</c> 的位置参数当"事件对象"读、判据恒假（<b>P-221</b>，片26 修完真机两跑各 1.50 s 落盘）。
+/// 同批把"开闸"从一句<b>无参的话</b>换成<b>三颗数全等</b>：页面载完档回 <c>board.loaded{elements,canvas}</c>，
+/// 宿主拿自己递进去的那颗数对完才递 <c>autosave.arm</c>，并打开<b>自己这一侧</b>那颗写闸
+/// （<c>_autosaveArmed</c>，失焦／关窗那两拍由它挡）。改这一手的因由＝真机量到的<b>那颗数据丢失</b>（P-223）：
+/// 重载之后页面那句"载完了"是真递出来的、画布却是空的，而盘上那块板随后被盖成 0 元素。</para>
 /// <para>⚠ 已知绕过（归 P-220）：从<b>主窗</b>退出那一途读到的出口是 <c>Environment.Exit(0)</c>，
 /// 它⛔ 经过各扇窗的 <c>Closing</c>，所以那一途上这拍一次也走不到。</para>
 /// </summary>
@@ -77,6 +85,19 @@ public sealed class BoardWindow : Window
 
     /// <summary>这一扇窗已经试过几次"重建控件"（上限的来历见 <see cref="BoardPolicy.MaxRecreatePerWindow"/>）。</summary>
     private int _recreateTries;
+
+    /// <summary>桥到第几次 ready 了（首开＝1，崩溃重载＝2、3…）。它＋nav.done 那两行是 P-222 的现场尺。</summary>
+    private int _readySeq;
+
+    /// <summary>
+    /// 这一趟页面<b>有没有资格往板档上写</b>（片26 给 P-223 的那道门，宿主这一侧的副本）。
+    /// <para><b>为什么页面那颗 <c>hostArmed</c> ⛔ 够</b>：它包在 <c>onChange</c> 里，只挡停笔那一路；
+    /// 而<b>失焦</b>与<b>关窗</b>两拍是宿主问、页面答（<c>export.pick</c>→<c>runExport</c>→<c>deliver</c>），
+    /// 现读那一路上⛔ 有这道闸——写盘的那支笔本来就握在宿主手里，闸门就⛔ 只装在对方身上。</para>
+    /// <para>每一趟 <c>bridge.ready</c> 都从头算（那是"新页面诞生"的唯一时刻）：闸门的证据由那一趟的
+    /// <c>board.loaded</c> 那两颗数给（<see cref="BoardPolicy.ShouldArmAfterLoad"/>）。</para>
+    /// </summary>
+    private bool _autosaveArmed;
 
     public BoardWindow()
     {
@@ -139,8 +160,18 @@ public sealed class BoardWindow : Window
         _web.CoreWebView2.ProcessFailed += OnProcessFailed;
         _web.CoreWebView2.WebMessageReceived -= OnWebMessageReceived;
         _web.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+        _web.CoreWebView2.NavigationCompleted -= OnNavigationCompleted;
+        _web.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
         _web.CoreWebView2.Navigate("https://" + VirtualHostName + "/" + BoardPageName);
     }
+
+    /// <summary>
+    /// 那一扇页到底落没落地（P-222 的现场尺其一）：崩之后无论走 Reload 还是重建控件，这一行都该再来一次，
+    /// 而 <c>ok</c>／<c>err</c> 就是那三个候选因由的分岔——"重载回来了个错误文档"与"回来了却没载档"在这一行上不同形。
+    /// </summary>
+    private void OnNavigationCompleted(CoreWebView2 sender, CoreWebView2NavigationCompletedEventArgs e)
+        => StarMark.Abstractions.StarLog.Info(
+            "boards.nav.done seq=" + _readySeq + " ok=" + e.IsSuccess + " err=" + e.WebErrorStatus + " src=" + sender.Source);
 
     /// <summary>桥是否已就绪（页面递过 <c>bridge.ready</c>）。</summary>
     public bool BridgeReady => _bridgeReady;
@@ -173,6 +204,23 @@ public sealed class BoardWindow : Window
                 _bridgeReady = true;
                 Reply(envelope.Cmd, envelope.Id, ok: true);
                 OnBridgeReady();
+                break;
+            case "board.loaded":
+                // 页面报"那份档落进画布了"＋两颗数。开闸只认<b>数</b>：宿主递进去几颗、档里读到几颗、画布上现在几颗，
+                // 三颗全等才算"回到那块板"（片26 量到的是"promise 解掉了、页面回了话，而画布是空的"⇒ 那句话本身⛔ 是证据）。
+                var want = BoardPolicy.CountWritableElements(_seenScene);
+                if (BoardPolicy.ShouldArmAfterLoad(want, envelope.Elements, envelope.Canvas))
+                {
+                    Reply(envelope.Cmd, envelope.Id, ok: true);
+                    ArmIdleBeat("loaded", " want=" + want + " loaded=" + envelope.Elements + " canvas=" + envelope.Canvas);
+                }
+                else
+                {
+                    StarMark.Abstractions.StarLog.Warn(
+                        "boards.arm.refused want=" + want + " loaded=" + envelope.Elements + " canvas=" + envelope.Canvas
+                        + " id=" + _boardId);
+                    Reply(envelope.Cmd, envelope.Id, ok: false, err: "arm-refused");
+                }
                 break;
             case "open.external":
                 if (!BridgeProtocol.IsSafeExternalUrl(envelope.Url))
@@ -211,6 +259,18 @@ public sealed class BoardWindow : Window
         // png／svg＝一次性产物→导出目录、名字带时刻。两族⛔ 共用一份命名规则。
         if (BridgeProtocol.LandsInSceneArchive(envelope.Kind))
         {
+            // 写闸（P-223）：这一趟页面还没证明自己"回到了宿主给它的那块板"，它交回的场景字节就⛔ 许落盘。
+            // ⛔ 挡的只是这一族——png／svg 是一次性产物、另起一颗档名，盖不到任何板档（所以那颗门在档位分流之后）。
+            // 拒掉的字节也⛔ 记进 _seenScene：记了＝下一趟恢复会把这块空场景当"见过的那一份"递回去，
+            // 那才是把一次白屏变成永久丢板的一手。
+            if (!_autosaveArmed)
+            {
+                StarMark.Abstractions.StarLog.Warn(
+                    "boards.scene.write.refused notArmed bytes=" + bytes.Length + " id=" + _boardId);
+                Reply(envelope.Cmd, envelope.Id, ok: false, err: "not-armed");
+                FinishClosingFlush();   // 关窗那一拍等的是"这一问有答案"，拒掉也是答案——⛔ 让用户白等那两秒
+                return;
+            }
             // 崩那一拍要递回去的就是这一颗：交回来的那一刻起它就是"宿主见过的那一份"，⛔ 等盘上付进才认。
             _seenScene = bytes;
             // §21.4 那颗脏位＝宿主这一侧的字节对差：一个字节都没变（失焦那一拍最常撞这一档）就⛔ 动盘——
@@ -245,17 +305,45 @@ public sealed class BoardWindow : Window
 
     private void OnBridgeReady()
     {
+        _readySeq++;
+        // 新页面诞生＝写闸重新闩上：这一趟的证据要由这一趟的 board.loaded 重新给（崩之前开过闸⛔ 顶这一趟）。
+        _autosaveArmed = false;
+        // 片26 诊断面（P-222）：崩之后那两条恢复路都停在同一颗白帧，而"后一手真发出去了"与"页面真回来了"
+        // 是两件事。这一行＋下面那颗 nav.done 各给一次读数，才把"Reload 选了错的一手"与"重载回来了却没载档"
+        // 判得开（⛔ 靠猜换手）。
+        StarMark.Abstractions.StarLog.Info(
+            "boards.bridge.ready seq=" + _readySeq + " id=" + _boardId + " hasScene=" + (_seenScene is { Length: > 0 }));
         // 三颗初始值（§21.5）：宿主是它们的主人；占位档先发中性值，接设置面归后续批次。
         PostOutbound("theme.set", Envelope("theme.set", "h1", "\"theme\":\"light\""));
         PostOutbound("lang.set", Envelope("lang.set", "h2", "\"langCode\":\"zh-CN\""));
         // 首开与崩溃重载共用这一条：这一刻才把档递进去（早一步页面那位 API 还没起来，晚一步没有读者）。
         // 见过一份就递一份——§21.5 那句「重载之后⛔ 许回到空板」要的正是这一颗。
+        // 停笔那一拍的闸门由"档到底落没落进画布"那<b>三颗数</b>开（P-221→P-223）。有档可载＝等页面回 board.loaded
+        // （它自己才知道落没落），新板＝当场开闸。⚠ 两条路都得发出去：漏发＝这一扇永远⛔ 写，
+        // 那是把 P-221 换成一条更静的坏；而"没落地就开闸"＝两跑各自量到的那颗数据丢失
+        // （片25 挂载那一拍：4 元素→241 字节／0 元素；片26 重载那一拍：2608 字节／2 元素→241 字节／0 元素）。
         if (_seenScene is { Length: > 0 } bytes)
         {
             PostOutbound("board.load", Envelope("board.load", "h3",
                 JsonString("bytes") + ":" + JsonString(Convert.ToBase64String(bytes)) + ","
                 + JsonString("id") + ":" + JsonString(_boardId)));
         }
+        else
+        {
+            ArmIdleBeat("no-scene");
+        }
+    }
+
+    /// <summary>
+    /// 递那颗"此后画布上的变化都算用户改的"（<c>autosave.arm</c>，无参＝它报的是时刻），
+    /// 并同时打开<b>宿主这一侧</b>那颗写闸——从这一刻起，这一趟页面交回的场景字节才许落盘。
+    /// <para><paramref name="evidence"/> 只进日志：开闸这件事必须留得下"凭什么开的"那一颗读数。</para>
+    /// </summary>
+    private void ArmIdleBeat(string via, string evidence = "")
+    {
+        _autosaveArmed = true;
+        StarMark.Abstractions.StarLog.Info("boards.arm.post via=" + via + evidence + " id=" + _boardId);
+        PostOutbound("autosave.arm", Envelope("autosave.arm", "h5", string.Empty));
     }
 
     /// <summary>向页面索取一份场景快照（四拍里能问的那两拍走这里；页面侧回 <c>export.bytes</c>＋<c>kind:"scene"</c>）。</summary>
@@ -305,7 +393,8 @@ public sealed class BoardWindow : Window
     {
         var tier = BoardPolicy.RecoveryForFailure(e.ProcessFailedKind.ToString());
         StarMark.Abstractions.StarLog.Warn(
-            "boards.process.failed kind=" + e.ProcessFailedKind + " tier=" + tier);
+            "boards.process.failed kind=" + e.ProcessFailedKind + " tier=" + tier
+            + " src=" + (_web.CoreWebView2?.Source ?? "<null>") + " readySeq=" + _readySeq);
         _bridgeReady = false;
         if (_tearingDown || tier == BoardPolicy.FailureRecovery.ReportOnly) return;
         if (tier == BoardPolicy.FailureRecovery.ReloadPage)
@@ -371,6 +460,7 @@ public sealed class BoardWindow : Window
         {
             _web.CoreWebView2.WebMessageReceived -= OnWebMessageReceived;
             _web.CoreWebView2.ProcessFailed -= OnProcessFailed;
+            _web.CoreWebView2.NavigationCompleted -= OnNavigationCompleted;
         }
         _web.Close();
     }
