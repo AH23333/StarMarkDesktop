@@ -1189,3 +1189,84 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 - <b>⛔ 量的一颗（写清楚，别当成设计）</b>：内嵌 base64 之后「一颗板多大 ↔ 几张图」的曲线——本节只<b>定了方向</b>（内嵌），上限那颗数<b>欠着</b>，代码批第一刀补。
 - <b>v1 状态＝待评审</b>。评审过之前，§八 的第 2～6 批一颗⛔ 开工；评审后<b>第一颗交付＝§21.6 那张随包／接线清单</b>（宿主 HTML 那一行全局＋那颗虚拟站＋三道出机），⛔ 是 UI。
 
+## 二十二、Spike-1b 第二腿（起窗现读 r6＋r7）：那颗 asset 开关一臂之差＝导出档自不自足、档体积↔图张数那条直线、中文在画布上认的是系统字面（批次 Phase C 片13，2026-10-17·一次性起窗＋只读取数，⛔ 产品码⛔ 建工程⛔ 改系统 PATH⛔ 装工具链⛔ 表⛔ 账本）
+
+> 这一腿只答 §十九.5 欠的那四格，加一格新撞出来的（那颗字体子集化 worker）。跑法＝同一颗 <c>spike1b.exe</c>（⛔ 重编），r6 五臂＋r7 两臂，每一臂一颗进程、一个 <c>out_r6x/</c>·<c>out_r7x/</c> 目录、一张 <c>page_report.json</c>。两臂之间的差别只写在 <c>--query</c> 里（<c>&arm=…</c>／<c>&set=0|1</c>），那颗 <c>EXCALIDRAW_ASSET_PATH</c> 在 <c>index4.html</c>·<c>index5.html</c> 里、在 bundle <b>之前</b>落。全程 <c>--blocked 1</c>（宿主把外网掐了）。
+
+### 22.1 那颗 asset 开关：两臂一字之差，差的是「导出的档自不自足」
+
+| 读数 | <c>set=0</c>（⛔ 设） | <c>set=1</c>（设成 <c>"/"</c>） |
+| --- | --- | --- |
+| 起窗 | 965 ms painted | 965 ms painted |
+| 资源面（<c>performance</c>） | 8 颗：<b>7 本地＋1 打 esm.sh</b> | 8 颗：<b>8/8 本地</b> |
+| 那颗 <c>Virgil</c> 字面族 | <c>error</c>（NetworkError） | <c>loaded</c> |
+| <c>exportToSvg</c> 默认档 | 651 字符、<b>1 颗 esm.sh 绝对地址</b>、0 颗 <c>data:</c> 字体、等了 12 ms | 2614 字符、0 颗 esm.sh、<b>1 颗 <c>data:</c> 字体内联</b>、等了 146 ms |
+
+- 结论一句话：⛔ 设那颗开关时，画布<b>看起来</b>照常起（拉丁字走了系统回退，截图 <c>r6a_asset_unset.png</c> 与设了的那张只差手写体），而<b>导出的 SVG 里带着一颗断网机器打不开的绝对地址</b>——那张档发给同事就是一张坏图。设成 <c>"/"</c> 之后同一颗导出变自足（字体内联）。⇒ §十七 那条「随包字体不是可选装饰」在这一腿拿到了<b>导出面</b>的第二条证据：它同时管着「屏幕上长什么样」与「交出去的档能不能看」。
+- 那颗 <c>esm.sh</c> 的地址是<b>包写死的</b>（<c>https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/fonts/Virgil/Virgil-Regular.woff2</c>），⛔ 我的代码拼的；<c>attempts</c> 那一栏在 <c>set=0</c> 臂里记到 <c>fetch</c>＋<c>fetch:ERR</c> 各一颗 ⇒ 网络面普查那把尺（§十八）在设了开关之后<b>一颗远程都不报</b>（<c>remoteHosts: {}</c>）。
+
+### 22.2 新撞出来的一颗：那颗字体子集化 worker ⛔ 有 URL
+
+- <c>set=1</c> 与 r7 两臂的 <c>errors</c> 里都有同一句：<c>Failed to use workers for subsetting, falling back to the main thread. WorkerUrlNotDefinedError: Worker URL is not defined!</c>
+- 现场读数：那颗 <c>console.error</c> 出现时功能<b>没坏</b>——SVG 照样导出、字体照样内联，只是<b>从 12 ms 变 146 ms</b>（同一颗导出，两臂之差里混着这一颗）。⇒ 这是一颗「⛔ 给 worker 落 URL ⇒ 回落主线程」的降级，⛔ 是缺陷；但它是那条 4 MB 墙之外<b>第二颗</b>「随包要带的东西其实还有一份 JS worker」的线索。落地时要问的是：那份 worker 文件在包里叫什么、要不要一起随包（§22.10 欠项①）。
+
+### 22.3 档体积 ↔ 图张数：那条曲线是<b>直线</b>（§21.7 那颗 <c>ImageCeilingsMeasured</c> 等的就是这几颗数）
+
+现读（<c>serializeAsJSON(elements, appState, files, "local").length</c>，字符数；一颗 <c>dataURL</c> 就是档里那颗图的<b>全部</b>正文）：
+
+| 输入 | 单颗 PNG 字节 | 单颗 dataURL 字符 | 1 张 | 2 张 | 5 张 | 10 张 | 每张增量 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 空档（⛔ 图） | — | — | 237 字符 | — | — | — | — |
+| 照片渐变 1440×1440 | 247,668 B（0.24 MiB） | 330,246 | 331,412（0.32 MiB） | 0.63 | 1.58 | 3.16 MiB | <b>+0.32 MiB／张</b> |
+| 噪声 1440×1440（最坏档） | 7,135,503 B（6.8 MiB） | 9,514,026 | 9.07 MiB | 18.15 | — | — | <b>+9.08 MiB／张</b> |
+| 噪声 720×720 | 1,784,604 B（1.7 MiB） | 2,379,494 | 2.27 MiB | — | 11.35 | 22.7 MiB | <b>+2.27 MiB／张</b> |
+
+- 三件事照实记：①<b>严格线性</b>，固定开销只有那 237 字符（空档），⛔ 任何「多张图共用一份正文」的机制；②那颗 <c>dataURL</c> 的字符数＝字节数 × <b>4/3</b>（三档输入各自都对得上，1.3333），所以「档多大」＝「图字节多大 × 1.33 × 张数」，一句话就能算；③引擎报的那颗 4 MiB 单文件上限<b>只在不可压缩那一档咬人</b>（照片级 1440 图 0.24 MiB 远不到，噪声 1440 图 6.8 MiB 直接超）⇒ 那颗上限⛔ 是「宽不宽」的问题，是「谁的图会撞上」的问题。
+- 引擎<b>⛔ 动</b>宿主交进去的字节：<c>addFiles</c> 之后 <c>getFiles()</c> 里那颗 <c>dataURL</c> 与我交的<b>逐字节相同</b>（<c>sameAsSent: true</c>，三档输入都是），⛔ 缩放、⛔ 重编码、⛔ 摘 EXIF。⇒ §21.7 那句「上限必须由宿主自己守」现在是读数而⛔ 是推断：<b>引擎⛔ 会替我压</b>。
+- 另一颗形状：同一张图改走 <c>updateScene({files: {…}})</c> 时，<c>getFiles()</c> 里<b>一颗都没有</b>（<c>keptChars: 0</c>，那颗元素停在 <c>status: "pending"</c>）。⇒ 宿主交图这条路是 <c>addFiles</c>；<c>updateScene</c> 的 <c>files</c> 参数按我交的那个形状没收到（⛔ 据此断言「该 API 无此能力」，只记「这条路⛔ 通」）。
+
+### 22.4 <c>skipInliningFonts</c>：两颗读数，一颗干净小档
+
+| 调用 | 字符数 | <c>@font-face</c> | <c>data:</c> 字体 | esm.sh 地址 |
+| --- | --- | --- | --- | --- |
+| <c>exportToSvg(默认)</c>（⛔ 设 asset） | 651 | 1 | 0 | 1 |
+| <c>exportToSvg({skipInliningFonts:true})</c> | <b>516</b> | <b>0</b> | 0 | <b>0</b> |
+
+- <c>exportToSvg.length === 1</c>（一个形参），那颗开关在<b>返回值里读得到效果</b>而⛔ 在参数表上（名册 296 那条方向：判一颗开关要看它改了出口的什么）。
+- 落地口径待定（归他）：那颗「干净小档」导出的 SVG 在<b>没装那颗字面的机器</b>上会变成系统字面——省了 135 字符，代价是别人打开时⛔ 是那个风格。这颗与 §22.1 那条「随包字体管着导出面」是同一件事的两头。
+
+### 22.5 菜单展开态：那颗 hamburger 十项全文＋「更多工具」四项（含 Mermaid）
+
+- 左上那颗（<c>cls=dropdown-menu-button main-menu-trigger</c>，几何位置 16,16）展开后 DOM 里 10 颗可见项，逐字＝<c>Open Ctrl+O</c>／<c>Save to…</c>／<c>Export image… Ctrl+Shift+E</c>／<c>Find on canvas Ctrl+F</c>／<c>Help ?</c>／<c>Reset the canvas</c>／分节标题 <c>Excalidraw links</c> ＋ <c>GitHub</c>／<c>Follow us</c>／<c>Discord chat</c>／<c>Dark mode Shift+Alt+D</c>／分节标题 <c>Canvas background</c> ＋ 六颗色块（第一颗带选中环）。照片 <c>out_r7a/shots/r7a_menu_a.png</c>（44,779 B，与没开菜单那帧<b>不同一颗 sha</b>＝尺这次真拍到了）。
+- 三处要在 §二十一 那张「宿主接管表」上落地的：<b>①</b> <c>Open</c>／<c>Save to…</c> 两项在 WebView2 里<b>是真能点的</b>（见 §22.6），点了会去走浏览器那套文件对话框，而我们的档在<b>我们</b>手里；<b>②</b> <c>GitHub</c>／<c>Follow us</c>／<c>Discord chat</c> 三颗是<b>出站链接</b>——断网机器上三颗点不开的按钮摆在主菜单里；<b>③</b> <c>Reset the canvas</c> 一颗是<b>无确认清盘</b>的动作，与 §21.5 那颗「撤销立场」直接冲突。
+- 那颗「更多工具」（<c>App-toolbar__extra-tools-trigger</c>，955,20）展开 4 项、项宽一律 175 px：<c>Frame tool</c>／<c>Web Embed</c>／<c>Laser pointer</c>／<b><c>Mermaid to Excalidraw</c></b>。
+- 那颗 <c>Mermaid</c> 点下去：<b>1 颗本地弹窗</b>，正文逐字「Mermaid to Excalidraw／Currently only Flowchart, Sequence, and Class Diagrams are supported…」，左边语法框预置一段 <c>flowchart TD</c>，右边<b>当场渲染</b>出七颗节点的手写体预览，加一颗 <c>Insert →</c> 与 <c>Ctrl Enter</c> 提示（照片 <c>r7a_mermaid.png</c>，70,156 B）。这一臂的 <c>newAttemptsCount = 0</c>＝<b>全程零网络请求</b>。⇒ §九 决策 4（摘 TTD／mermaid 省 41.8%）的代价要说清：那颗入口在这份 bundle 里<b>内置且离线可用</b>，摘它省的是字节，⛔ 是「本来会坏的东西」。
+
+### 22.6 那颗 native FS：WebView2 <b>给</b>了这套 API（§十九.5 欠的那颗分支）
+
+现读（虚拟主机 <c>https://spike.local</c>，<c>isSecureContext = true</c>）：<c>showOpenFilePicker = true</c>／<c>showSaveFilePicker = true</c>／<c>FileSystemHandle = true</c>／<c>a[download] = true</c>／<c>navigator.clipboard.write = true</c>；而 <c>navigator.storage.getDirectoryHandle</c> 那颗在<b>这一臂的形状检查里没探到</b>（<c>fsAccess: false</c>）。
+
+- 含义：excalidraw 内部那颗 <c>nativeFileSystemSupported</c> 门在我们宿主里<b>是开的</b>⇒ §22.5 ① 那两项会走浏览器文件对话框，⛔ 走我们的桥。落地要么把两项摘掉／改道（<c>registerAction</c> 在那 25 颗旋钮里，见 §二十），要么接受「两套文件出口」。这颗是 §二十一 那张表上<b>由读数改口</b>的一处：v1 里写的是「宿主递档、网页⛔ 碰盘」，现在要加一句「⛔ 管住网页自己那颗 picker」。
+- <c>fsAccess: false</c> 那一颗⛔ 能当结论：我这把尺探的是 <c>navigator.storage.getDirectoryHandle</c> 一颗成员在不在，⛔ 是「Origin Private FS 能不能用」——登记为<b>未判定</b>（名册 304 那条：发表「还剩几颗」前先说⛔ 覆盖哪些形状）。
+
+### 22.7 画布三语：那颗 prop 叫 <c>langCode</c>，一交就全变（0 颗网络请求）
+
+- <c>langCode: "zh-CN"</c> ⇒ <c>document.documentElement.lang</c> 当场变 <c>zh-CN</c>，静态条上 <b>35 颗标签里 34 颗变中文</b>，逐字：绘制后保持所选的工具栏状态 — Q／抓手（平移工具） — H／选择 — V 或 1／矩形 — R 或 2／菱形／椭圆／箭头／线条／自由书写／文字／插入图像／橡皮／更多工具／素材库（照片 <c>out_r7b/shots/r7b_lang_zh.png</c>）。<c>attemptsSummary.total = 0</c>＝<b>语言包在 bundle 里</b>，⛔ 需要网络。
+- 那颗非中文的是 hamburger 自己（读出来是 class 名兜底，⛔ 是标签）。⇒ 界面语言那条线（WI-1～WI-82）在画布这一侧<b>⛔ 欠一整刀</b>：把 <c>Loc</c> 当前语言递成 <c>langCode</c> 就跟着走；欠的只剩「<b>换语言那一刻它真不真重贴</b>」（与我们那三颗机制 (C) 宿主同一问法，见 §22.10 欠项③）。
+- 反面证据也要记：r7a 那一跑我先按 <c>langKey</c> 交，读数是「35 颗标签 0 颗汉字」——那⛔ 是「画布没中文」，是<b>那颗 prop 名字我猜错了、根本没落地</b>（把它喊回来的正是 <c>htmlLang</c> 还是 <c>en</c> 那一列）。
+
+### 22.8 中文在画布上认的是<b>系统字面</b>（§九 决策 3 的新证据）
+
+- 同一张照片上：拉丁 <c>Abc 123</c> 是手写体，汉字 <c>永字八法</c> 是<b>系统黑体</b>。字面族状态读数（r7b）＝<c>Assistant/loaded 4</c>、<c>Virgil/loaded 1</c>、<c>Excalifont loaded 1／unloaded 6</c>、<c>Xiaolai unloaded 209</c>（<b>一颗都没拉</b>）。
+- 那颗 <c>document.fonts.check("16px Xiaolai")</c> 回 <b>true</b>，而同一刻那一族 209 面全 <c>unloaded</c> ⇒ 那颗 <c>check()</c> ⛔ 是「这颗字面上了屏没有」的尺（坑表 #666）。
+- 导出的 SVG 里那颗中文文本节点的 <c>font-family</c> 实测＝<c>Virgil, Segoe UI Emoji</c>（<b>⛔ 列 Xiaolai</b>）⇒ 中文在导出面上落到 emoji／系统回退，这一条与 §22.4 那颗 <c>skipInliningFonts</c> 的口径题是同一颗：中文要不要手写体，是<b>随包 209 分片／12.08 MB</b> 那颗决策的内容，现在它有了屏幕证据＋档内证据两行。
+
+### 22.9 这一腿的仪器账（⛔ 产品含义，只登记）
+
+- 首帧：四臂报同一档读数 <b>960～965 ms painted</b>（与 §十八 那颗 960 ms 一致，⛔ 变化）。
+- 那颗截图尺：r6e 三张照片<b>同一颗 sha</b> 且与「⛔ 开菜单」那两臂一字不差；r7a 同样开菜单、同样那颗尺，<b>拍到了</b>。差别＝r6e 在 <c>postMessage({kind:"shot"})</c> 之后<b>立刻</b>派发 Escape，而那颗尺是<b>异步</b>的（坑表 #663）。
+- 三格 <c>ERR</c> 是我自己造的：同一臂的头一格已经读到 <c>hasInsert: false</c>，后面还是去调了那颗⛔ 存在的 <c>insertSceneElements</c>（坑表 #664）。
+
+### 22.10 这一腿欠的那几格（⛔ 混进已读）
+
+①那颗字体子集化 worker 的文件名／要不要随包（§22.2）——要一次<b>包内文件普查</b>＋一臂起窗对照；②<c>nativeFileSystemSupported</c> 为真时那两项菜单的<b>改道方案</b>（§22.6）——属 §二十一 那张表，待评审；③<b>换语言那一刻</b>画布真不真重贴（<c>langCode</c> 递进去之后改一次再看标签）——下一腿一臂就能量；④<c>set=1</c> 那臂<b>只有 4 面</b>被拉（Assistant×3＋Virgil），Excalifont 那 7 面要<b>什么动作</b>才拉（画一笔？改字体？）——这一格直接决定随包字体清单能⛔ 再砍；⑤深色底（<c>viewBackgroundColor</c> 换深色）下那颗菜单与工具条的照片——§22.5 那十项只在白底量过。
