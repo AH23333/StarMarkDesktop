@@ -15,7 +15,7 @@ namespace StarMark.Tests;
 public sealed class BoardBridgeProtocolTests
 {
     private const string Export = "export.bytes";
-    private static readonly string[] ExportArgs = ["bytes", "kind", "sessionId", "suggested"];
+    private static readonly string[] ExportArgs = ["bytes", "kind", "suggested"];
 
     // ────────── ① 两份名单自己先要闭合 ──────────
 
@@ -117,7 +117,25 @@ public sealed class BoardBridgeProtocolTests
         Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, Export, ["bytes", "kind"]).Allowed);
         Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, Export, ExportArgs).Allowed);
         Assert.Equal(BridgeProtocol.Fault.MissingField,
-            BridgeProtocol.Check(BridgeProtocol.Version, Export, ["kind", "sessionId", "suggested"]).Reason);
+            BridgeProtocol.Check(BridgeProtocol.Version, Export, ["kind", "suggested"]).Reason);
+    }
+
+    /// <summary>
+    /// 那颗⛔ 有读者的 <c>sessionId</c> 已被摘掉（片22 欠项④／片23 落地）：它曾在名单里、页面三拍都递、
+    /// 宿主解进 <c>BoardEnvelope</c> 之后一颗读者也没有。
+    /// <para>为什么⛔ 补一颗读者了事：名单上的键＝<b>越权面</b>（硬线②），留着它等于养一颗"注释承诺了
+    /// 一个不存在的消费者"——P-212 那一族在这颗包里的第二颗，只是这回它连上屏都⛔ 够不上。
+    /// 真要"哪一拍写的"那颗读数，等它有了读者再带着读者一起回来。</para>
+    /// </summary>
+    [Fact]
+    public void TheFieldNobodyReadsIsOffTheListAgain()
+    {
+        Assert.Equal(ExportArgs, BridgeProtocol.InboundFields[Export]);   // 名单＝这张实参表，一颗不多一颗不少
+        Assert.DoesNotContain("sessionId", BridgeProtocol.InboundFields[Export]);
+        var (allowed, fault) = BridgeProtocol.Check(
+            BridgeProtocol.Version, Export, ExportArgs.Append("sessionId").ToArray());
+        Assert.False(allowed);
+        Assert.Equal(BridgeProtocol.Fault.UnexpectedField, fault);
     }
 
     /// <summary>⛔ 参的那颗命令被塞了键也要拒（<c>bridge.ready</c> 的字段表是空的）。</summary>
@@ -137,7 +155,7 @@ public sealed class BoardBridgeProtocolTests
     [Theory]
     [InlineData("open.external", new string[0])]
     [InlineData(Export, new string[] { "kind" })]                 // 有档没字节
-    [InlineData(Export, new string[] { "bytes", "sessionId" })]   // 有字节没档
+    [InlineData(Export, new string[] { "bytes", "suggested" })]   // 有字节没档
     [InlineData("pin.request", new string[0])]
     [InlineData("paste.query", new string[0])]
     public void MissingRequiredArgumentIsItsOwnFault(string name, string[] keys)

@@ -22,6 +22,7 @@ public sealed class BoardSceneStoreGateTests
     private static readonly string Js = Read("tools/boards/board-bridge.js");
     private static readonly string Store = Read("src/StarMark.UI/Boards/BoardSceneStore.cs");
     private static readonly string WindowCs = Read("src/StarMark.UI/Boards/BoardWindow.cs");
+    private static readonly string Envelope = Read("src/StarMark.UI/Boards/BoardEnvelope.cs");
     private static readonly string Tray = Read("src/StarMark.UI/MainWindow.Tray.cs");
 
     private static string FindRoot()
@@ -192,7 +193,7 @@ public sealed class BoardSceneStoreGateTests
     [Fact]
     public void TheSuggestedNameReachesTheHostButNeverNamesTheBoardFile()
     {
-        Assert.Equal(1, Count(Js, "function deliver(bytesB64, kind, sessionId, suggested)"));
+        Assert.Equal(1, Count(Js, "function deliver(bytesB64, kind, suggested)"));
         Assert.Contains("suggested: String(suggested == null ? \"\" : suggested)", Js, StringComparison.Ordinal);
         Assert.Equal(3, Count(Js, "boardName())"));        // 三拍出口各递一次：停笔／被索取的 scene／png·svg
 
@@ -232,5 +233,51 @@ public sealed class BoardSceneStoreGateTests
         Assert.Contains("_lastWritten = fromBackup ? null : bytes", WindowCs, StringComparison.Ordinal);
         Assert.Contains("out bool fromBackup", Store, StringComparison.Ordinal);
         Assert.Equal(1, Count(Store, "fromBackup = true;"));
+    }
+
+    /// <summary>
+    /// ⑫ 落点那颗⛔ 许有第二主人（片23）：板档目录与导出目录都问 <c>UserDataPaths</c> 要那颗根，
+    /// 画板那一族的档里⛔ 再拼一遍 <c>%APPDATA%\StarMark</c>。
+    /// <para>为什么值得单独钉：那份"settings 变量 ＞ db 变量 ＞ 真目录"的优先规则原本只管五份档，而画板档住在它外面——
+    /// 沙盒取证一跑就把他真目录里那颗 <c>boards\</c> 写脏，而"⛔ 只在我电脑上能跑"是本仓定性过多次的那类坏
+    /// （批次 SS 撞出来的正是同一族）。那颗导出目录挂在板目录之下：根只有一位主人，切 <c>exports\</c> 这一刀归窗口。</para>
+    /// <para>⚠ 禁项读<b>抹掉注释后</b>的代码：本族档里"为什么⛔ 自己拼"那句说明本来就要提到那颗根（#190 那一族）。</para>
+    /// </summary>
+    [Fact]
+    public void TheBoardRootComesFromTheOneOwnerOfTheUserDataDirectory()
+    {
+        Assert.Contains("UserDataPaths.Subdirectory(\"boards\")", Store, StringComparison.Ordinal);
+        Assert.Contains("Path.Combine(BoardSceneStore.Folder, \"exports\")", WindowCs, StringComparison.Ordinal);
+        Assert.Equal(1, Count(SourceGate.Code(Store), "\"boards\""));      // 那颗子目录名只许出现一次
+        Assert.DoesNotContain("GetFolderPath", SourceGate.Code(Store), StringComparison.Ordinal);
+        // 窗口只许在板目录下面再切一刀：它一旦自己写 "boards"，那位主人就变两颗（改名时只改得动一处）
+        Assert.DoesNotContain("\"boards\"", SourceGate.Code(WindowCs), StringComparison.Ordinal);
+
+        var offenders = SourceGate.ReadRepoUnder("src/StarMark.UI/Boards")
+            .Where(f => SourceGate.Code(f.Text).Contains("SpecialFolder.ApplicationData", StringComparison.Ordinal))
+            .Select(f => f.RelativePath.Replace('\\', '/'))
+            .ToList();
+        Assert.True(offenders.Count == 0,
+            "画板那一族又自己拼了一份漫游用户数据根（那份优先规则对它无效）：\n" + string.Join("\n", offenders));
+
+        // 窗口那颗 WebView2 的 userDataFolder 照旧钉在 %LOCALAPPDATA%（v1 §坑8 那条改道）：它⛔ 是用户数据档
+        Assert.Contains("SpecialFolder.LocalApplicationData", SourceGate.Code(WindowCs), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// ⑬ 那颗⛔ 有读者的 <c>sessionId</c> 从两头源码里都摘干净了（片22 欠项④／片23 落地）：
+    /// 页面三拍都⛔ 再递、宿主解包⛔ 再认；名单上那一项由 <c>BoardBridgeProtocolTests</c> 那一格钉行为。
+    /// <para>这颗格是"留着没人读的键"那族尺的第一次落地——它的形状与 P-212 那条同：形参与字段都活着，
+    /// 读者一颗都⛔ 有，于是链路上永远走不到、越权面上永远多一颗。</para>
+    /// <para><b>正件</b>（名册 296：禁项判据必须自带正件）＝摘掉它的那句<em>注释</em>里逐字还写着那颗名字：
+    /// 代码行读不到而原文读得到，才证这把尺真的分得清"说明"与"出口"（⛔ 顺手删那句注释，删了这格就不知道自己瞎）。</para>
+    /// </summary>
+    [Fact]
+    public void TheDroppedSessionFieldStaysOffBothSides()
+    {
+        Assert.DoesNotContain("sessionId", SourceGate.Code(Js), StringComparison.Ordinal);
+        Assert.DoesNotContain("sessionId", SourceGate.Code(Envelope), StringComparison.Ordinal);
+        Assert.DoesNotContain("SessionId", SourceGate.Code(Envelope), StringComparison.Ordinal);
+        Assert.Contains("sessionId", Js, StringComparison.Ordinal);
     }
 }

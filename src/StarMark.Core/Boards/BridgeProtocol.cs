@@ -49,7 +49,7 @@ public static class BridgeProtocol
         {
             ["bridge.ready"] = [],
             ["paste.query"] = ["shape", "bytes"],
-            ["export.bytes"] = ["bytes", "kind", "sessionId", "suggested"],
+            ["export.bytes"] = ["bytes", "kind", "suggested"],
             ["pin.request"] = ["token"],
             ["background.request"] = [],
             ["open.external"] = ["url"],

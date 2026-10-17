@@ -159,4 +159,28 @@ public sealed class UserDataPathsTests
         Assert.Equal(Path.GetDirectoryName(UserDataPaths.Database()),
             Path.GetDirectoryName(UserDataPaths.Sibling("anything.json")));
     }
+
+    /// <summary>
+    /// 一颗<b>子目录</b>也必须跟着那份优先规则走（片23：画板档那一族从此问这里要根）。
+    /// <para>为什么单独一格：上面那格只管"档"，而画板那一族住的是目录。目录一旦自己拼 <c>%APPDATA%\StarMark</c>，
+    /// 它就落在整套改道之外——沙盒与单测对它⛔ 生效（那份抄本不会报错，它只是永远写进真目录，正是本档开头那颗坑）。
+    /// 这里钉的是<b>同一条规则的两个出口</b>：档与目录必须同住一颗根，⛔ 一个跟着走、一个留在原地。</para>
+    /// </summary>
+    [Fact]
+    public void ASubdirectoryTravelsWithTheSameRedirect()
+    {
+        var saved = Capture();
+        try
+        {
+            var dir = Path.Combine(Path.GetTempPath(), $"udp_dir_{Guid.NewGuid():N}");
+            Environment.SetEnvironmentVariable(UserDataPaths.SettingsVariable, null);
+            Environment.SetEnvironmentVariable(UserDataPaths.DatabaseVariable, Path.Combine(dir, "starmark.db"));
+
+            Assert.Equal(Path.Combine(dir, "boards"), UserDataPaths.Subdirectory("boards"));
+            // 目录与档同源：db 变量带走档的那一格，必须同时带走目录那一格
+            Assert.Equal(Path.GetDirectoryName(UserDataPaths.Sibling("anything.json")),
+                Path.GetDirectoryName(UserDataPaths.Subdirectory("boards")));
+        }
+        finally { Restore(saved); }
+    }
 }

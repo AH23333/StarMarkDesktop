@@ -5,7 +5,7 @@ using System.IO;
 namespace StarMark.Abstractions;
 
 /// <summary>
-/// 用户数据档落在哪：整仓只有这一处约定（批次 SS）。
+/// 用户数据档落在哪：整仓只有这一处约定（批次 SS；片23 起画板那一族的子目录也从这里出）。
 /// <para>
 /// 为什么要有它：<c>starmark.db</c> / <c>settings.json</c> / <c>widgets.json</c> /
 /// <c>rss-cache.json</c> / <c>github.json</c> 这五份档，此前各有各的一套"读环境变量、否则 %APPDATA%"，
@@ -42,6 +42,14 @@ public static class UserDataPaths
 
     /// <summary>与数据库同目录的其它档（widgets.json / rss-cache.json / github.json 都走这里）。</summary>
     public static string Sibling(string fileName) => InRoot(fileName);
+
+    /// <summary>
+    /// 用户数据根之下的<b>一颗子目录</b>（画板那一族的档住 <c>boards\</c>，导出物住在它下面）。
+    /// <para>为什么一颗目录出口也要走这里：档名归 <c>BoardPolicy</c>、落点归 UI（深析 §21.3 那句"路径⛔ 是判据"），
+    /// 但"<b>根在哪</b>"这件事早就有主人了。UI 侧自己拼一份 <c>%APPDATA%\StarMark</c>，上面那条优先规则
+    /// 对它照样无效——沙盒改道带不走画板档，一次取证就把他的真目录写脏（批次 SS 撞过的正是这一族）。</para>
+    /// </summary>
+    public static string Subdirectory(string name) => Path.Combine(RootDirectory(), name);
 
     private static string InRoot(string fileName) => Path.Combine(RootDirectory(), fileName);
 

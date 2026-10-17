@@ -41,12 +41,14 @@
 
   /* 那颗 ⛔ 只出现一次的 export.bytes 出口（宿主是唯一读者；档位不认识时宿主拒，⛔ 由本页猜扩展名）。
      suggested＝那块板的显示名（`appState.name`）：它只是"用户想叫它什么"，⛔ 是身份（身份＝宿主给的那颗 id），
-     宿主那边只有导出那一路会用它（板档的档名⛔ 跟着显示名走，见 §21.3）。 */
-  function deliver(bytesB64, kind, sessionId, suggested) {
+     宿主那边只有导出那一路会用它（板档的档名⛔ 跟着显示名走，见 §21.3）。
+     ⚠ 片23 摘掉了那颗 sessionId：三拍都递、名单在册、宿主解出来却一颗读者也没有——多一颗没人读的键
+     就是越权面上多一颗（硬线②守的正是这类东西），而"形参活着、读者永远撞不到"＝片21 欠项⑤ 那一族。
+     哪一拍该写宿主自己知道（export.pick 那一问本就是它发的），⛔ 由页面再提醒一遍。 */
+  function deliver(bytesB64, kind, suggested) {
     postIn("export.bytes", {
       bytes: bytesB64,
       kind: kind,
-      sessionId: String(sessionId == null ? "" : sessionId),
       suggested: String(suggested == null ? "" : suggested)
     });
   }
@@ -74,7 +76,7 @@
     saveTimer = null;
     if (!API || !HOST) return;
     try {
-      deliver(sceneBytesB64(), "scene", "idle", boardName());
+      deliver(sceneBytesB64(), "scene", boardName());
     } catch (e) { /* 序列化失败＝这一拍不写；档留在上一份（⛔ 拿坏 JSON 覆盖上一份） */ }
   }
   /* 停笔那一拍：去抖住在页面侧（宿主看不到"什么时候算停笔"，而 §21.1 的名单里⛔ dirty 那颗）。 */
@@ -159,7 +161,7 @@
   function runExport(kind, skipInliningFonts, replyId) {
     if (kind === "scene") {
       try {
-        deliver(sceneBytesB64(), kind, replyId, boardName());
+        deliver(sceneBytesB64(), kind, boardName());
       } catch (err) {
         send(replyId, false, "export-failed");
       }
@@ -175,7 +177,7 @@
     };
     fn(opts).then(function (blob) {
       blob.arrayBuffer().then(function (buf) {
-        deliver(b64FromBytes(new Uint8Array(buf)), kind, replyId, boardName());
+        deliver(b64FromBytes(new Uint8Array(buf)), kind, boardName());
       });
     }).catch(function () { send(replyId, false, "export-failed"); });
   }

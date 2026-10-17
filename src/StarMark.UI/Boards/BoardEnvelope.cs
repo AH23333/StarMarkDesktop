@@ -17,7 +17,6 @@ public readonly struct BoardEnvelope
     public string? Id { get; init; }
     public string? Bytes { get; init; }
     public string? Kind { get; init; }
-    public string? SessionId { get; init; }
     public string? Suggested { get; init; }
     public string? Url { get; init; }
     public string? Shape { get; init; }
@@ -50,7 +49,6 @@ public readonly struct BoardEnvelope
                 Id = Get("id"),
                 Bytes = Arg("bytes"),
                 Kind = Arg("kind"),
-                SessionId = Arg("sessionId"),
                 Suggested = Arg("suggested"),
                 Url = Arg("url"),
                 Shape = Arg("shape"),

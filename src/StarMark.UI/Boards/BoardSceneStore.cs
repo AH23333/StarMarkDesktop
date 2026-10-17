@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.IO;
+using StarMark.Abstractions;
 using StarMark.Core.Boards;
 
 namespace StarMark.UI.Boards;
@@ -10,7 +11,8 @@ namespace StarMark.UI.Boards;
 /// <para>
 /// 这里只管<b>三件事</b>：落点、一颗板一颗档的命名怎么落到盘上、写的时候怎么不把上一份弄丢。
 /// 命名的<b>主人是 Core 的 <see cref="BoardPolicy"/></b>（档名、后缀、那颗 .bak 的尾名都在它那里），
-/// 本类⛔ 拼任何一颗名字字面量；落点这一颗⛔ 是判据（§21.3 明写"路径⛔ 是判据"），所以它住在 UI 侧。
+/// 本类⛔ 拼任何一颗名字字面量；落点这一颗⛔ 是判据（§21.3 明写"路径⛔ 是判据"），所以它住在 UI 侧——
+/// 但那颗<b>根</b>照旧问 <see cref="UserDataPaths"/>（片23：落点规则只许一颗主人，沙盒改道才带得动画板档）。
 /// </para>
 /// <para>
 /// <b>写的那条顺序是有原因的</b>：先把现档滚成 <c>.bak</c>（只留最近一份），再把新字节写进 <c>*.tmp</c>，
@@ -22,9 +24,11 @@ namespace StarMark.UI.Boards;
 /// </summary>
 public static class BoardSceneStore
 {
-    /// <summary>板档目录（<c>%APPDATA%\StarMark\boards</c>；导出物另住 <c>...\boards\exports</c>，两族不同主人）。</summary>
-    public static string Folder => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "StarMark", "boards");
+    /// <summary>板档目录（<c>boards\</c> 那一颗子目录，根由 <see cref="UserDataPaths"/> 给；
+    /// 导出物另住在它下面的 <c>exports\</c>，两族不同主人）。
+    /// <para>本档⛔ 自己拼 <c>%APPDATA%\StarMark</c>：那份优先规则（settings 变量 ＞ db 变量 ＞ 真目录）
+    /// 只许有一颗主人，抄第二份的那一族不会报错，它只是<b>永远写到真目录去</b>（批次 SS 那颗坑的同一条线）。</para></summary>
+    public static string Folder => UserDataPaths.Subdirectory("boards");
 
     /// <summary>那颗 id 的档在哪（只算名字，⛔ 摸盘）。</summary>
     public static string PathOf(string sceneId)

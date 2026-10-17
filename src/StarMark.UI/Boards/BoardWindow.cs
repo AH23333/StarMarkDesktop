@@ -37,10 +37,11 @@ public sealed class BoardWindow : Window
     /// <summary>userDataFolder 那条改道（v1 §坑8）：钉在 <c>%LOCALAPPDATA%</c> 之下。</summary>
     public const string UserDataFolderRelative = @"StarMark\wbview2";
 
-    /// <summary>导出产物那颗落点（硬线①：落点由 C# 定，web 侧只交字节）。</summary>
-    public static string ExportsDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "StarMark", "boards", "exports");
+    /// <summary>导出产物那颗落点（硬线①：落点由 C# 定，web 侧只交字节）。
+    /// <para>它<b>住在板档目录之下</b>：那颗根只许有一位主人（<see cref="BoardSceneStore.Folder"/>），
+    /// 这里只负责在它下面再切一颗 <c>exports\</c>——自己再拼一遍 <c>%APPDATA%\StarMark</c> 就是第二主人，
+    /// 而那份抄本⛔ 认沙盒改道（片23 归一的就是这一族）。</para></summary>
+    public static string ExportsDirectory => Path.Combine(BoardSceneStore.Folder, "exports");
 
     private readonly Microsoft.UI.Xaml.Controls.WebView2 _web;
     private string _boardId;
