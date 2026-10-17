@@ -505,3 +505,85 @@ Xiaolai 随包那一颗的代价现在有三段，⛔ 只第一段是体积：
 §八「未跑」名册里那一行现在只剩<b>四格</b>（导出出口真机行为／TTD 与 PublishLibrary 关按钮有效性／桥消息往返时延／断网全字体验证），
 共同前提＝<b>先有 dist、再起真窗</b>⇒ 全部挂在 §九 决策 1 与那颗「装 Node」的外部动作后面（12.6 第 ① 颗）。
 本节⛔ 动产品码、⛔ 起窗、⛔ 装东西、⛔ 联网。
+
+
+---
+
+## 十五、Spike-0d：WebView2 那一侧「要不要装东西」的现读（Phase C 片5，2026-10-17·⛔ 产品码⛔ 建工程⛔ 装工具链⛔ 联网）
+
+> 这一腿查的是<b>我自己没问过的一句前提</b>。§十一 ③ 现读「本仓 csproj 含 WebView2 的档数＝0 」，
+> 我顺着把它写成了「整合要新引一颗 NuGet 包＋一次联网还原」，还把那件事跟「装 Node」一起挂到 §12.6 那颗要他点头的格上。
+> 现读结论：<b>那一半⛔ 成立</b>——那颗包早就在还原图里（那棵 <c>MicrosoftWindowsAppSDKPackageDir=在</c>
+> 的开关就是原因），而<b>项目今天的求值结果就带着那颗显式引用</b>。
+> 尺与正本＝<c>bin/WI83/probe_83n.py</c>（更正 <c>fix_83n.py</c>）＋<c>probe_83v.py</c>＋<c>probe_83u.py</c>
+> → <c>bin/WI83/spike0d_83n.txt</c>（47 行）＋<c>bin/WI83/arm_83u.txt</c>。
+
+### 15.1 依赖那一侧：⛔ 欠新包、⛔ 欠网、⛔ 欠 csproj 改动
+
+| 事项 | 现读 | 这一条为什么算钉死 |
+|---|---|---|
+| 那颗包在还原图里的位置 | <b>⛔ 是（transitive）</b>（由 <c>Microsoft.WindowsAppSDK 2.4.0</c> 带进来） | 问的是 <c>project.assets.json</c> 里 <c>project.frameworks.libraries</c> 那一族，⛔ 看包名出现在哪几档里 |
+| 项目求值出的显式 <c>Reference</c> | <b>1 条</b>＝Microsoft.Web.WebView2.Core.Projection.dll（在 net8.0-windows10.0.17763.0 那一档） | <c>dotnet msbuild -getItem:Reference</c>——问的是<b>这颗项目当下真拿去编译的引用清单</b> |
+| 包内那三颗分支开关 | <c>EnableCsWinRTProjection=true</c>｜<c>NeverCopyLoaderDllToOutputDirectory=true</c>｜<c>LoaderPreference=Dynamic</c> | 取的是<b>求值后的实际值</b>；那段 <c>build/Common.targets</c> 的 XML 我只是读过，⛔ 拿它当读数 |
+| 发布树与暂存树那一族 | publish＝3：Microsoft.Web.WebView2.Core.Projection.dll(1470464 B), Microsoft.Web.WebView2.Core.dll(793704 B), WebView2Loader.dll(160368 B)；stage/1.0.4＝3：Microsoft.Web.WebView2.Core.Projection.dll(1470464 B), Microsoft.Web.WebView2.Core.dll(793704 B), WebView2Loader.dll(160368 B) | <b>成对判据</b>：两棵树各自现数；另 <c>deps.json</c> 两份也各自解析⇒相等（2 条） |
+| 本机原生资产 | native=WebView2Loader.dll; build=Microsoft.Web.WebView2.targets | RID 图里那一条就是那颗 Loader 的来路（另：求值三档条目现读＝0：(空)；1：Microsoft.Web.WebView2.Core.dll；0：(空)） |
+| 三颗文件与包内那颗<b>内容同源</b>？ | <b>2 颗同源、1 颗⛔</b>（不等的那颗：Microsoft.Web.WebView2.Core.Projection.dll）｜逐颗：Microsoft.Web.WebView2.Core.Projection.dll＝sha256 前 16 位 不等：包=c0036e5306aa9758 发布=813f20228d59fb3c；Microsoft.Web.WebView2.Core.dll＝sha256 前 16 位 相等 17ccd9141c486d7a；WebView2Loader.dll＝sha256 前 16 位 相等 ae69309c5e356350 | 逐颗 sha256 对拍。⚠ <b>那颗投影档发布树里≠包内</b>⇒它是构建期那一条链的产物：<b>编译引用的是包内那份、跟着安装包走的是另一份字节</b>；哪条 target 生成它⛔ 钉，留 15.4 那一格 |
+| 打包侧要不要动 | <b>⛔ 要</b>：<c>.iss</c> 的 <c>[Files]</c> 只有 1 条，那一行是<b>整棵递归不过滤</b>（是）；<c>update-manifest</c> 里那一族已列 3：Microsoft.Web.WebView2.Core.Projection.dll, Microsoft.Web.WebView2.Core.dll, WebView2Loader.dll | 逐颗过滤＝当年那颗「不装 <c>Updater</c> 目录」的雷；它整棵搬⇒新依赖自动进包、自动进清单 |
+| 今天有没有人在用它 | csproj 0  颗／分母 38 颗；src 的 <c>.cs</c>＋<c>.xaml</c> 里 <c>WebView2</c> 命中 <b>0</b> | ⛔ 包在≠已在用：第一颗代码批仍是从零接线，只是<b>⛔ 欠装东西</b> |
+
+### 15.2 编译那一半：Roslyn⛔ 止于「有没有」，还判出「挂在哪一层、叫什么名」
+
+§十一 ⑦ 那几处计数来自缓存包里的 <c>lib/net462/Microsoft.Web.WebView2.Core.xml</c>（现读：PostWebMessageAsJson=3 / WebMessageReceived=2 / DownloadStarting=1 / Downloading=0 / ProcessFailed=1 / CoreWebView2Environment=1 / AreDevToolsEnabled=1）。
+而我们<b>真编进去的那颗是投影档</b>——那一档里只有 1：Microsoft.Web.WebView2.Core.Projection.dll，<c>.xml</c> 文档 <b>0</b> 颗
+（<c>lib_manual</c> 四档合计 4 颗，那是<b>另外那几档</b>的包装器文档）。
+<b>「文档里有那句话」⛔ 等于「我们的码调得到那颗成员」</b>，所以这一腿补的是真编译：六臂各问一颗事，
+每臂往真项目落一颗⛔ 提交的临时档、编完当场删，<b>六臂全跑完再逐臂判</b>（判据＝臂名↔该红的颗名）。
+
+| 臂 | 那一臂问的 | 现读 |
+|---|---|---|
+| <b>A 正件</b> | §12.1 那四颗（<c>PostWebMessageAsJson</c>／<c>WebMessageReceived</c>／<c>DownloadStarting</c>／<c>ProcessFailed</c>）＋<c>NavigateToString</c> <b>只绑与只调</b> | exit=0｜succeeded=是｜红名=(无)｜错误码=(无) |
+| <b>B1 正件</b> | 两颗功能位走 <c>cw.Settings.*</c>（<c>IsStatusBarEnabled</c>／<c>AreDevToolsEnabled</c>） | exit=0｜succeeded=是｜红名=(无)｜错误码=(无) |
+| <b>B2 普查</b> | 候选层级一起编、按点名逐颗判（含一颗⛔ 存在的对照名） | exit=1｜succeeded=⛔｜红名=AreStatusBarEnabled,DefaultBackgroundColor,Z8NoSuchMemberZ8｜错误码=CS1061 |
+| <b>C 对照</b> | 同一颗功能位<b>直接挂</b> <c>cw.*</c>（我原本会顺手写的那一形） | exit=1｜succeeded=⛔｜红名=IsStatusBarEnabled｜错误码=CS1061 |
+| <b>D 正件</b> | 事件参数用<b>投影档的叫法</b>（<c>e.WebMessageAsJson</c>／<c>e.ProcessFailedKind</c>） | exit=0｜succeeded=是｜红名=(无)｜错误码=(无) |
+| <b>E 对照</b> | 同一颗参数用<b>包装器的叫法</b>（<c>e.Kind</c>）＝第一版把我撞红的那一形 | exit=1｜succeeded=⛔｜红名=Kind｜错误码=CS1061 |
+
+第一次那一臂把八颗一起编时，逐颗判定＝PostWebMessageAsJson=在 / WebMessageReceived=在 / DownloadStarting=在 / ProcessFailed=在 / IsStatusBarEnabled=⛔ 在 / AreDevToolsEnabled=⛔ 在 / DefaultBackgroundColor=⛔ 在 / NavigateToString=在；型名那一半＝0 ＝CoreWebView2 那颗型认得。
+六臂跑完的残留核对：csproj 分母 38｜src 里 WebView2 命中 0｜git status 干净｜臂数 6/6。
+
+<b>由此定下三条写码口径</b>（技术裁决，归我）：
+① <b>功能位一律走 <c>cw.Settings.*</c></b>——§12.5 那行「C#→JS 三颗值（主题／语言／功能位）」里那颗「功能位」
+   以后落到 <c>Settings</c>，⛔ 落 <c>CoreWebView2</c> 本体（C 臂现读编不过）；§12.1 的桥那四颗<b>挂本体</b>成立（A 臂）。
+② <b>那颗默认背景色⛔ 在 <c>Settings</c> 上，在 <c>CoreWebView2Controller</c> 上</b>——B2 普查现读：同一颗名在
+   <c>Settings</c> 那一形被点名、在 <c>Controller</c> 那一形没被点名（同臂里 <c>IsVisible</c>／<c>Bounds</c> 也⛔ 被点名）。
+   ⚠ 顺带纠正我自己一处手滑：那一族里<b>只有一颗</b>叫 <c>IsStatusBarEnabled</c>，<c>AreStatusBarEnabled</c> ⛔ 存在
+   （B2 点名了它）⇒⛔ 按「Are／Is 前缀随手挑」。
+③ <b>事件参数的名字按投影档念</b>——崩溃分档那一颗叫 <c>ProcessFailedKind</c>，⛔ <c>Kind</c>（E 臂现读编不过）。
+   ⛔ 照 <c>lib/net462</c> 那份包装器文档抄那一族的名字；§12.4 落码时逐颗按 D 臂那一形写。
+
+### 15.3 三处更正（都改我自己写下的那句）
+
+1. <b>§八 与 §12.6 那颗「外部动作」的射程缩小</b>：要他点头的只剩「装 Node＋<c>npm install</c>」<b>这一件</b>；
+   「新引 NuGet 包／联网还原／改产树与安装器」那三件按现读<b>⛔ 成立</b>⇒第一颗代码批的前置少三件事。
+2. <b>§十一 ⑦ 那几处计数的归属改口</b>：那是 <c>net462</c> 包装器的文档计数，⛔ 是我们编进去那颗投影档的计数
+   （投影档⛔ 带文档）；正件由 15.2 的真编译补上，<b>⛔ 删 §十一 那一行</b>（它是当时的如实读数，本节是它的补）。
+3. <b>§12.5 那颗「功能位」的挂点与 §12.4 那颗「崩溃分档」的叫法</b>：现读要求走 <c>Settings</c>／<c>Controller</c>
+   与 <c>ProcessFailedKind</c>（15.2 末那三条）——这两条在 §十二 的原文里没写出来；落地那一批按本节口径写，
+   <b>⛔ 回头改 §十二 的表</b>（那节状态仍是<b>待评审</b>，改它要先过评审；本节只登记口径）。
+
+### 15.4 仍欠（⛔ 这一腿能判的）
+
+- <b>那颗投影档为什么与包内⛔ 同源</b>（哪条 target 生成、生成的那颗与引用那颗的版本怎么对账）——只读那三档条目读不到，
+  要 <c>-getItem</c> 扩到 <c>CsWinRT</c> 那一族或读构建日志全文；<b>⛔ 影响「要不要动打包」那一半结论</b>
+  （文件已在树里、已在清单里），但<b>影响版本核对</b>⇒留一格未跑。
+- <b>真起窗那一半照旧欠</b>：<c>CoreWebView2Environment.CreateAsync</c>／<c>EnsureCoreWebView2Async</c> 的<b>实际形状</b>与时延、
+  §十 那颗「导出出口三法」、断网全字体验证——都要有 <c>dist</c>＋真窗，挂在 §九 决策 1 与那颗「装 Node」后面。
+- <b>⛔ 把「编得过」念成「行为对」</b>：15.2 只判<b>可编</b>；投影档与 <c>net462</c> 包装器在同一颗宿主上的<b>行为差异</b>
+  （事件时序、<c>WebMessageAsJson</c> 的空值形状）⛔ 照片能定，也⛔ 这段码能定。
+- <b>版本对齐</b>：现读那颗 <c>1.0.3719.77</c> 是 <c>WindowsAppSDK 2.4.0</c> 钉下来的；想要更新的 SDK 特性就<b>要联网</b>
+  （缓存里只那一颗与还原图对齐）——这是<b>将来的</b>动作，⛔ 本批的前置。
+- <b>一颗⛔ 动的前提</b>：本节「⛔ 改打包」的结论建立在 <c>WindowsAppSDKSelfContained=true</c> 与
+  「安装器整棵递归不过滤」这两颗现读上；哪天改成非自包含打包，那颗 Loader 与 Runtime 的配对要<b>重新量</b>。
+
+> 这一腿写进仓里的只有 <c>docs</c> 这一节与 <c>bin/WI83</c> 那几份正本（临时臂档当场删，见 15.2 末那一行）。
+> <b>src／UiStrings 表／测试／账本一字未动</b>；§十二 那颗<b>待评审</b>状态⛔ 变，过评审前代码批仍一颗⛔ 开工。
