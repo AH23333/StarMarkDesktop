@@ -1108,7 +1108,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 | 5 | 「订阅那五颗⛔ 退订句柄⇒桥要自己摘」 | <b>我写反了</b>：<c>emitter.d.ts</c> 逐字 <c>on(...): UnsubscribeCallback</c>，注释原文写着 <i>@returns unsubscribe function</i>，而 <c>UnsubscribeCallback = () =&gt; void</c>；api 那颗又是<b>表达式体箭头</b>（<c>onChange: (cb) =&gt; this.onChangeEmitter.on(cb)</c>）⇒ 句柄原样交给宿主；包<b>自己的</b>消费者就这么用：<c>hooks/useEmitter.ts</c> 里 <c>const unsubscribe = emitter.on(...); return () =&gt; { unsubscribe(); };</c> | <b>更正</b>：桥<b>存那五颗句柄</b>、<c>Closed</c> 里逐颗调（硬线⑥）；点验单加一格「摘完之后⛔ 再收到桥消息」（§21.6） |
 | 6 | 「Spike-1 要装 Node＋npm install＝那是要他点头的外部动作」 | §十六／§十七 已办：本机运行时本来就活（§16.1），打包全落在<b>⛔ 随仓</b>的 <c>bin/WI83/npm0e/</c>（整棵 <c>bin/</c> 在 <c>.gitignore</c> 内），⛔ 全局装⛔ 改 PATH⛔ 动那棵树 | <b>这颗从「欠他」移到「已办」</b>；§九 剩下三颗仍归他（§21.7） |
 | 7 | 「<c>embeddable</c>／远程 iframe 在导入那一刻降级为占位」——⛔ 说走哪颗开关 | 包里<b>有官方闸门</b>：<c>validateEmbeddable?</c> 的类型逐字是 boolean／字符串数组／RegExp／RegExp 数组／函数 五档，另有 <c>embeddableURLValidator(url, validateEmbeddable)</c> | 落地＝<b>那颗 prop 交 <c>false</c></b>（第一档就是 boolean）；宿主侧 CSP 与 <c>WebResourceRequested</c> 照旧当<b>第二道</b>（§17.4 那句「⛔ 能靠我们这份包⛔ 有远程 URL 过关」仍兑现） |
-| 8 | §12.5 那张「摘哪几颗」的名单 | <c>UIOptions</c> 逐字四颗：那颗 <c>welcomeScreen</c> 的注释原文是 <i>@deprecated does nothing. Will be removed in 0.15</i> | <b>欢迎屏那颗 prop 是死的</b>：产物里 <c>WelcomeScreen</c> 现读 28 颗（§17.3）⇒只能走 CSS／运行时摘 DOM／打包期 alias 三档之一（§18.5 那三档照旧） |
+| 8 | §12.5 那张「摘哪几颗」的名单 | <c>UIOptions</c> 逐字四颗：那颗 <c>welcomeScreen</c> 的注释原文是 <i>@deprecated does nothing. Will be removed in 0.15</i> | <b>欢迎屏那颗 prop 是死的</b>：产物里 <c>WelcomeScreen</c> 现读 28 颗（§17.3）⇒只能走 CSS／运行时摘 DOM／打包期 alias 三档之一（§18.5 那三档照旧；片16 现读：0.18 ⛔ 有 <c>renderMainMenu</c> 那颗 prop（bundle 与 .d.ts 都 0 颗），第一杠杆是宿主把 <c>MainMenu</c> 当 Excalidraw 的子元素排进去＝整颗换掉内置表，§二十五.2） |
 
 ### 21.1 桥协议 v1：那两份名单逐颗换成真名
 
@@ -1167,7 +1167,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 - <c>ProcessFailed</c> ⇒ 事件桥报＋<b>当场那份自动落盘</b>（§21.3 四拍之一）＋重载＋<c>board.load</c> 把刚那份递回去；重载之后⛔ 许回到空板，也⛔ 许静默白屏（§坑10）。
 - 那颗键位共存：包侧 <c>handleKeyboardGlobally</c> 默认 <c>false</c>（§20.5 两处消费点）⇒引擎⛔ 抢 window 级键盘；仍欠两格量（画板焦点下 F1 那颗全局热键、以及 <c>Ctrl+S</c> 那一类浏览器级键），列进 §21.6。
 - 首帧预算＝现读 <b>≈960 ms</b>（r3／r5 同档，§18.7）⇒「关窗即散」那颗体验说法以此为准（这是 §21.7 那颗拍板的材料，⛔ 是结论）。
-- 出机三道：宿主注入 CSP；<c>WebResourceRequested</c>（现读那颗 filter 连 iframe 的 <c>Document</c> 请求都盖得住，§18.1）；<c>esm.sh</c> 永久 451 当最后一道——<b>⛔ 因为「配了那颗全局」就摘掉它</b>（形1′：那颗兜底永远排在名单最后，§19.2）。
+- 出机三道：宿主注入 CSP；<c>WebResourceRequested</c>（现读那颗 filter 连 iframe 的 <c>Document</c> 请求都盖得住，§18.1）；<c>esm.sh</c> 永久 451 当最后一道——<b>⛔ 因为「配了那颗全局」就摘掉它</b>（形1′：那颗兜底永远排在名单最后，§19.2）；片16 补一颗：菜单那一路<b>⛔ 查动作注册表</b>（<c>executeAction</c> 收的是对象本身）⇒「同名 <c>registerAction</c> 改道菜单行」⛔ 成立——接管要么走 <c>UIOptions</c>（<c>canvasActions</c> 深合并、逐颗关），要么走宿主自排 <c>MainMenu</c>（§二十五.1／.3）。
 
 ### 21.6 §十 那张点验单：v1 从此有出处的格、新增的格
 
@@ -1364,3 +1364,39 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 ### 24.5 这一腿欠的（⛔ 混进已读）
 
 ①那 4 颗⛔ 被我正则抓到的 Xiaolai URI 的 descriptor 形状（逐颗读定义点）；②启用 worker 那条路<b>真跑一次</b>（单独切一颗 chunk＋注 URL，看那颗 146 ms 掉到多少）——那是打包腿的活，v1 评审过之前⛔ 开工；③「打到没随包的字」那一档的现场（要先定常用字表）；④档 6/7/8/9（Nunito／Lilita One／Comic Shanns／Liberation Sans）四颗<b>在屏幕上的样子</b>——本腿只读到名字与号数，⛔ 拍过照。
+
+## 二十五、Spike-1b 第四腿（r9 三臂）：那张「接管表」的第一杠杆是宿主自排 <c>MainMenu</c>，而⛔ 同名注册（批次 Phase C 片16，2026-10-17·一次性起窗＋只读取数，⛔ 产品码⛔ 建工程⛔ 装工具链⛔ 改系统 PATH⛔ 表⛔ 账本）
+
+三臂一次跑（r9a＝UIOptions 三挂载对照、r9b＝宿主自排、r9c＝动作注册表），bundle 换 <c>spike2.min.js</c>：同一份包、entry 多交 <c>MainMenu</c> 一颗——8,375,632 字节／sha256 <c>22bcb625…</c>，比 spike1 少 893 字节＝少交 <c>exportToBlob/exportToCanvas/exportToClipboard</c> 三颗名字（<b>tree-shaking 跟着出口的名单走</b>）。⛔ 点内置 Open／Save（那颗原生选择框会挂住这一跑），只读 DOM＋点我们自己 perform 的行。第 0 道核对（复合）两跑现读：闲置 0.0 秒／光标 (960,599)／前台 'Endfield' 与闲置 0.2 秒／前台同——前台是另一件事的窗，照实记。
+
+### 25.1 UIOptions 那颗表：关四行＋一块底色面板；<c>canvasActions</c> 是<b>深合并</b>
+
+| 挂载 | 行数 | 与默认的差 |
+| --- | --- | --- |
+| 默认（不递 UIOptions） | <b>11</b>（＋底色面板一块，6 swatches） | — |
+| 七颗 canvasActions＋<c>tools.image</c> 全 false | <b>7</b>（面板 6→0） | 少 Open／Export image…／Reset the canvas／Dark mode 四行＋面板 |
+| 只给 <c>{canvasActions:{loadScene:false}}</c> | <b>10</b> | 只少 Open，其余一字不动 |
+
+- 默认 11 行逐字：Open Ctrl+O｜Save to…｜Export image… Ctrl+Shift+E｜Find on canvas Ctrl+F｜Help ?｜Reset the canvas｜组头「Excalidraw links」｜GitHub｜Follow us(X)｜Discord chat｜Dark mode Shift+Alt+D。⚠ §22.5 的「十项」与本腿的「11 行」是<b>同一张菜单、两把尺的口径</b>：组头＋组内三颗外链在本尺算 4 行（组头那颗 ⛔ 是 menuitem 之外的形状）；「画布底色」那块面板是第 12 样可见东西，两把行尺都⛔ 数它（本腿另量 <c>canvas-background-label</c>／swatch 数）。
+- 「Save」那颗（<c>saveToActiveFile</c>）<b>两份读数都⛔ 有</b>：那颗 item 的 predicate 还要求 <c>appState.fileHandle</c>（源码：`predicate:(e,t,i,n)=>!!n.props.UIOptions.canvasActions.saveToActiveFile&&!!t.fileHandle&&!t.viewModeEnabled`）——宿主管档⇒永远没有原生 fileHandle⇒默认就⛔ 上屏。⇒ §22.6 那句「Open／Save to… 两项真能点」里的「Save to…」其实是 <c>DefaultItems.Export</c>（开 JSON 导出对话框那颗），它<b>没配任何门</b>（源码无 isActionEnabled）⇒ <b>UIOptions 关⛔ 掉它</b>，接管只能走宿主表。
+- <b>深合并</b>是这腿最值钱的一格：只递一颗键，邻居（Export image／Dark mode）全在 ⇒ 宿主递<b>部分表</b>是安全的；v1 若写过「必须交整表」照此改口。
+- <c>tools.image:false</c>＝工具条 32→30：恰好少「Insert image — 9」一颗（testid <c>toolbar-image</c>；label＋input 成对去重后两行读数），其余一排（Hand／Selection／Rectangle／Diamond／Ellipse／Arrow／Line／Draw／Text／Eraser／锁定／More tools／缩放三颗／撤销重做／帮助／zen）一字未动。⚠ 陪跑：第一版尺只抓 <c>button</c>，0.18 的形状工具是 <c>label.ToolIcon＋input[type=radio]</c> ⇒「没变化」是<b>尺瞎</b>＝坑表 #675。
+- 键盘那半边（源码判、⛔ 上真键）：<c>handleKeyDown</c> 的门按名字查表（<c>(l.name in t ? t[l.name] : !0)</c>）⇒ <c>loadScene:false</c> 会把 Ctrl+O 一起闸掉；真键那格未判（§25.3）。
+
+### 25.2 宿主自排 <c>MainMenu</c>＝接管的第一杠杆（r9b）
+
+- <c>&lt;Excalidraw&gt;&lt;MainMenu&gt;…&lt;/MainMenu&gt;&lt;/Excalidraw&gt;</c> 一挂：内置 11 行<b>整颗消失</b>，屏幕上只剩我排的四行（HOST-SAVE-CLICK／HOST-OPEN-CLICK／内置 LoadScene 复用／HOST-GUARD-TEN）。裁决者＝<c>YcA</c> 那颗 HOC（偏移 8,106,795）：宿主实例（⛔ 带 <c>__fallback</c>）把 <c>preferHost</c> 立起来，内置那颗 <c>__fallback:!0</c> 的实例渲染 null。
+- 点我自己的行：<c>onSelect</c> 真走（计数器 +1）⇒ 桥的「存到桌面档」走这条路；点完菜单自动合上（第二颗行因此⛔ 量到点击＝「选择后合菜单」这条行为，照实记）。
+- 内置行<b>可复用</b>：<c>MainMenu.DefaultItems.LoadScene</c> 在我自己那张表里照样渲染（<c>load-button</c> 在，谓词照跑）⇒「宿主的行＋挑几颗内置行」混合合法。
+- 出口形状：包的公共出口里有 <c>MainMenu</c>（<c>dist/types/excalidraw/index.d.ts:29</c>：`export { MainMenu }`）；上一批那句「bundle 只交 10 颗」说的是<b>我 entry 的选择</b>（⛔ 包缺）——落地批的 entry 要加交这一颗。0.17 那颗 <c>renderMainMenu</c> prop 在 0.18 <b>⛔ 存在</b>（bundle 与 .d.ts 全文 0 颗）⇒ 引过它的句照此改口。
+
+### 25.3 <c>registerAction</c>：同名⛔ 改道菜单；注册表自己⛔ 长出 UI（r9c）
+
+- 同名注册（<c>toggleTheme</c>，perform＝我们的计数器）之后：菜单那行<b>一字不改</b>（「Dark mode Shift+Alt+D」）、点下去<b>主题真翻了</b>（light→dark）、我的 perform <b>0 次</b> ⇒ 菜单那一路⛔ 查注册表。根因（源码判）：<c>executeAction(e,…)</c> 收的是 <b>action 对象本身</b>、直接 <c>e.perform(…)</c>；菜单组件闭包里握的就是内置那颗对象。
+- 全新注册（<c>spikeHostSave</c>＋keyTest Ctrl+Alt+K）之后：菜单 11→11、无任何新行 ⇒ <b>注册表自己⛔ 长出 UI 面</b>——自定义动作只有宿主自排 <c>MainMenu</c> 才有脸面。
+- 键盘那一路：源码判（<c>handleKeyDown</c> 遍历 <c>Object.values(this.actions)</c>）同名注册<b>会</b>改键盘；⚠ 运行时那半格<b>未判</b>：合成 keydown（window＋document 两路）⛔ 触达引擎 handler（hitsDelta 0）——按「测不到就留未跑」记（坑表 #677），⛔ 写成结论。
+- ⇒ 桥的设计结论：v1 §21.4 的撤销立场／落盘节拍照旧；<b>菜单面＝宿主 <c>MainMenu</c>（自己的行＋挑内置）＋ <c>UIOptions</c> 关内置</b>；<c>registerAction</c> 只当「给引擎注册键盘动作」的备用出口。§22.6 那三格（出站链接／无确认清盘／Open·Save 真可点）的处置从「关 prop」升级成「关 prop＋换表」。
+
+### 25.4 这一腿欠的（⛔ 混进已读）
+
+①Ctrl+O 真键那半格（<c>loadScene:false</c> 时键盘是否同闸）——合成事件⛔ 触达，要真键注入（画板焦点那一族）；②宿主 <c>MainMenu.Item</c> 的 <c>shortcut</c>／<c>icon</c> 参数与三语（引擎 UI 措辞归包管，我们自己的行要交什么语言）；③command palette 里同名／新动作有没有脸面（本腿⛔ 量）；④三颗外链／Reset 在「关 prop＋换表」之后的真机照片（属落地批，接 §22.6）。
