@@ -145,6 +145,13 @@ public sealed partial class MainWindow : Window
             });
         }
 
+        // 开发辅助：启动即起画板窗（STARMARK_START_BOARD＝new｜last）。§21.3 那四拍里"崩那一拍"与"关窗那一拍"
+        // 只有源码读数，而它们要的真机入口是"一块板上正在画"。托盘那两颗入口在 UIA 里探不到（现读：
+        // Shell_TrayWnd 子树 3 颗节点、0 颗有名按钮；那颗溢出岛 0 颗节点）⇒ 取证按不到那颗图标。
+        // ⛔ 在这里另起一份开场代码（第二主人）：交回给托盘那两颗入口共用的同一条 OpenBoardsWindowAsync。
+        var startBoard = Environment.GetEnvironmentVariable("STARMARK_START_BOARD");
+        if (startBoard is "new" or "last") _ = OpenBoardsWindowAsync(resumeLast: startBoard == "last");
+
         SetupDiag();
 
         // 订阅数据广播（去抖 250ms）：别处（组件写随记/待办、同步、备份还原）落库后，

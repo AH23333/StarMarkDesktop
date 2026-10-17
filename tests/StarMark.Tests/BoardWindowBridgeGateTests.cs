@@ -26,6 +26,8 @@ public sealed class BoardWindowBridgeGateTests
     private const string BridgeJs = "tools/boards/board-bridge.js";
     private const string BoardHtml = "tools/boards/board.html";
     private const string WindowCs = "src/StarMark.UI/Boards/BoardWindow.cs";
+    private const string MainCs = "src/StarMark.UI/MainWindow.xaml.cs";
+    private const string TrayCs = "src/StarMark.UI/MainWindow.Tray.cs";
 
     [Fact]
     public void BridgeJsSpeaksTheWiredSubsetOfTheProtocol()
@@ -98,6 +100,30 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Contains("case \"open.external\"", cs, StringComparison.Ordinal);
         Assert.Contains("case \"export.bytes\"", cs, StringComparison.Ordinal);
         Assert.Contains("not-wired", cs, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 片25 取证用的那颗"启动即起板"钩子：取值是一颗闭集、起窗只走托盘那两颗入口共用的同一条主人。
+    /// <para>为什么要有这一颗钩子：§21.3 那四拍要的真机入口是"一块板上正在画"，而托盘那颗图标在 UIA 里
+    /// 探不到（现读：Shell_TrayWnd 子树 3 颗节点、0 颗有名按钮；那颗溢出岛 0 颗节点）——把"人手点一下"
+    /// 当验收条件＝本仓定性过的坏。⛔ 因此另起一份开场代码：这一格里那颗 <c>OpenBoardsWindowAsync(</c>
+    /// 在主窗档里只许出现一次（＝一颗调用），定义与另两颗调用都住在托盘那一档。</para>
+    /// </summary>
+    [Fact]
+    public void TheDevHookStartsABoardThroughTheTraysOpener()
+    {
+        var main = ReadRepo(MainCs);
+        var tray = ReadRepo(TrayCs);
+        Assert.Equal(1, Count(main, "GetEnvironmentVariable(\"STARMARK_START_BOARD\")"));
+        // ⚠ 钉<b>整行</b>字面量：台架的 A2 臂（把取值集合放宽成 "new"｜"last"｜"resume"）证明
+        //   两颗 Assert.Contains 对"多一颗档位"是瞎的——那句前缀照样命中＝一颗恒绿断言（坑表 #695 同族）。
+        Assert.Contains(
+            "if (startBoard is \"new\" or \"last\") _ = OpenBoardsWindowAsync(resumeLast: startBoard == \"last\");",
+            main, StringComparison.Ordinal);
+        Assert.Equal(1, Count(main, "OpenBoardsWindowAsync("));                    // 主窗档里只有那一颗调用
+        Assert.DoesNotContain("new StarMark.UI.Boards.BoardWindow()", main, StringComparison.Ordinal);
+        Assert.Equal(1, Count(tray, "private async System.Threading.Tasks.Task OpenBoardsWindowAsync(bool resumeLast)"));
+        Assert.Equal(3, Count(tray, "OpenBoardsWindowAsync("));                    // 定义一颗＋托盘两颗
     }
 
     private static int Count(string haystack, string needle)
