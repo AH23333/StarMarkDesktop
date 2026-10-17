@@ -1123,7 +1123,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 |---|---|---|---|---|
 | JS→C# | <c>bridge.ready</c> | ⛔ 参 | 回 theme／lang／feature 三颗值（§21.5） | 名字表外的整条拒＋记日志 |
 | JS→C# | <c>paste.query</c> | 那颗 <c>data</c> 的<b>形状标签</b>（<c>elements</c>／<c>spreadsheet</c>／<c>text</c>／<c>errorMessage</c>，§20.3 那四档）＋字节数 | 走 <c>ClipboardPolicy</c> 那三层敏感判据，回 allow／deny | 钩子内部抛错＝<b>宿主自己 catch 成 deny</b>（⛔ 让引擎那颗 fail-open 替我们做主） |
-| JS→C# | <c>export.bytes</c> | base64 产物＋档位枚举（png／svg／scene）＋那颗会话 id | 解字节→由 C# 定名与落点；需要「贴／背景」的再转 §下两颗 | 档位⛔ 在枚举⇒拒；字节数与解码后⛔ 成对相等⇒报「桥坏」 |
+| JS→C# | <c>export.bytes</c> | base64 产物＋档位枚举（png／svg／scene）＋那颗会话 id＋那块板的<b>显示名 <c>suggested</c></b>（<b>片22 上链</b>：可缺、空串＝用户没起过名⇒宿主那颗「id＋时刻」的兜底名才是主人；只有 png／svg 那一路读它，<c>scene</c> 那一路⛔ 读—档名＝那颗 id） | 解字节→由 C# 定名与落点；需要「贴／背景」的再转 §下两颗 | 档位⛔ 在枚举⇒拒；字节数与解码后⛔ 成对相等⇒报「桥坏」 |
 | JS→C# | <c>pin.request</c> | 一颗<b>已发过的 token</b> | 走 ClipIMG-P3 那颗接合贴到桌面 | token 认不出／已回收⇒拒 |
 | JS→C# | <c>background.request</c> | ⛔ 参（哪张图宿主自己知道） | 交冻帧或剪贴板历史图，回字节 | — |
 | JS→C# | <c>open.external</c> | 一条 http(s) URL | 交 <c>LauncherEx.TryOpenAsync</c>（系统浏览器），窗内⛔ 导航 | 非 http(s)／带凭据／⛔ 在白名单⇒拒 |
@@ -1139,15 +1139,15 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 ⑤ <b><c>onPaste</c> 那颗钩⛔ 许抛、拒必须显式返 <c>false</c></b>（形6 的极性钉死）⇒宿主侧那颗判定包一颗自己的 <c>catch</c>，把「判不成」归到 deny 那一档。
 ⑥ 五颗订阅的<b>退订句柄存进那颗会话表</b>，窗 <c>Closed</c> 里逐颗调（§21.0 第 5 行的更正）；那颗「代数计数」只当兜底，⛔ 替代它。
 
-### 21.2 那 25 颗旋钮：用 9 颗、⛔ 用 14 颗、候选 2 颗（9＋14＋2＝25，逐颗点名）
+### 21.2 那 25 颗旋钮：用 8 颗、⛔ 用 15 颗、候选 2 颗（8＋15＋2＝25，逐颗点名；<b>片22 把 <c>getName</c> 从「用」挪进「⛔ 用」</b>，理由见那一行）
 
 | 档 | 键（api 逐字） | 为什么 |
 |---|---|---|
-| 用（9） | <c>updateScene</c>、<c>addFiles</c>、<c>getSceneElements</c>、<c>getAppState</c>、<c>getFiles</c>、<c>getName</c>、<c>id</c>、<c>history.clear</c>、<c>onChange</c> | 载档／存档／脏位／档名／栈治理各一颗，⛔ 一颗多余；那颗 <c>addFiles</c> 逐字收 <c>BinaryFileData[]</c>⇒宿主自缩自编的图正是它的入参（§21.3） |
+| 用（8） | <c>updateScene</c>、<c>addFiles</c>、<c>getSceneElements</c>、<c>getAppState</c>、<c>getFiles</c>、<c>id</c>、<c>history.clear</c>、<c>onChange</c> | 载档／存档／脏位／栈治理各一颗，⛔ 一颗多余（<b>档名那一颗走 <c>getAppState</c> 的 <c>name</c> 字段本尊</b>，⛔ 另一颗出口，见 ⛔用 那一行）；那颗 <c>addFiles</c> 逐字收 <c>BinaryFileData[]</c>⇒宿主自缩自编的图正是它的入参（§21.3） |
 | 候选（2） | <c>scrollToContent</c>、<c>updateFrameRendering</c> | 前者等<b>检索沉淀批</b>（§八 第 5 批）「跳到那颗元素」才要；后者它的注释逐字要求<b>配合 <c>props.viewModeEnabled</c> 一起用</b>⇒归「只读板」那一格，⛔ 单独开 |
-| ⛔ 用（14） | <c>updateLibrary</c>、<c>resetScene</c>、<c>getSceneElementsIncludingDeleted</c>、<c>registerAction</c>、<c>refresh</c>、<c>setToast</c>、<c>setActiveTool</c>、<c>setCursor</c>、<c>resetCursor</c>、<c>toggleSidebar</c>、<c>onPointerDown</c>、<c>onPointerUp</c>、<c>onScrollChange</c>、<c>onUserFollow</c> | 逐颗理由：云库／协作是 §七 非目标；<c>resetScene</c>＝一板一窗、关窗即散，⛔ 一颗「就地清空」的动作；带删除的那份现状⛔ 存进档（宿主只认那颗 NonDeleted 版）；<c>registerAction</c>＝⛔ 往引擎菜单里加动作（「一个主人」，§18.5 那张行名单由宿主⛔ 扩）；<c>setToast</c>＝我们有 RV-1 那颗自绘提示卡（引擎那颗住在 <c>appState.toast</c>＝现读形状）；替用户选工具／画光标＝观感，⛔ 代码批自己定；滚／点⛔ 一格读数需要（一板一窗⇒<c>detectScroll</c> 默认那颗就够） |
+| ⛔ 用（15） | <c>getName</c>、<c>updateLibrary</c>、<c>resetScene</c>、<c>getSceneElementsIncludingDeleted</c>、<c>registerAction</c>、<c>refresh</c>、<c>setToast</c>、<c>setActiveTool</c>、<c>setCursor</c>、<c>resetCursor</c>、<c>toggleSidebar</c>、<c>onPointerDown</c>、<c>onPointerUp</c>、<c>onScrollChange</c>、<c>onUserFollow</c> | 逐颗理由：云库／协作是 §七 非目标；<c>resetScene</c>＝一板一窗、关窗即散，⛔ 一颗「就地清空」的动作；带删除的那份现状⛔ 存进档（宿主只认那颗 NonDeleted 版）；<c>registerAction</c>＝⛔ 往引擎菜单里加动作（「一个主人」，§18.5 那张行名单由宿主⛔ 扩）；<c>setToast</c>＝我们有 RV-1 那颗自绘提示卡（引擎那颗住在 <c>appState.toast</c>＝现读形状）；替用户选工具／画光标＝观感，⛔ 代码批自己定；滚／点⛔ 一格读数需要（一板一窗⇒<c>detectScroll</c> 默认那颗就够）；<b><c>getName</c>＝片22 现读 bundle：`"getName",()=>this.state.name||this.props.name||`${b("labels.untitled")}-${Cp()}``⇒它永远⛔ 回空</b>。递它当桥上的 <c>suggested</c>＝宿主那颗兜底名在链路上永远走不到（＝片21 欠项⑤ 那一族换了个名字重犯）；而 §21.3 早就逐字写着显示名是 <c>appState.name</c>（<c>string | null</c>）——表上写着「用哪颗旋钮」⛔ 等于那颗旋钮的返回值形状 |
 
-⇒ 一句话形状：<b>桥的命令表（§21.1）与旋钮表（本节）是两件事</b>——JS→C# 那六颗里没有一颗是「画板动作」，画板动作全走宿主侧那 9 颗旋钮；这样那张越权测试才⛔ 有第二道缝。
+⇒ 一句话形状：<b>桥的命令表（§21.1）与旋钮表（本节）是两件事</b>——JS→C# 那六颗里没有一颗是「画板动作」，画板动作全走宿主侧那 8 颗旋钮；这样那张越权测试才⛔ 有第二道缝。
 
 ### 21.3 存储适配器 v1：四颗真签名钉住的形状
 
@@ -1162,7 +1162,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 ### 21.4 撤销栈、脏位、多窗（那颗 <c>captureUpdate</c> 注释逐字之后）
 
 - <c>updateScene</c> 那颗 <c>captureUpdate</c> 的注释逐字给了三档，并明写 <b><c>@default CaptureUpdateAction.EVENTUALLY</c></b> ⇒ v1 定死：<b>载档与桥回写交 <c>NEVER</c>，用户动作交 <c>IMMEDIATELY</c></b>，另配 <c>history.clear</c>（types 逐字＝<c>App[&quot;resetHistory&quot;]</c>）。§20.7 那句「默认要清栈，否则 Ctrl+Z 把图退回空白」落在这两颗上。
-- 脏位＝宿主那份字节对差（§21.0 第 2 行）；⛔ 另造计数器，⛔ 让 JS 递 bool。
+- 脏位＝宿主那份字节对差（§21.0 第 2 行）；⛔ 另造计数器，⛔ 让 JS 递 bool。<b>【片22 落码】</b>＝<c>BoardPolicy.DiskAlreadyHolds(上一份, 这一份)</c>：逐颗相等⇒⛔ 写也⛔ 滚 <c>.bak</c>（滚一次就把上一份<b>真正不同</b>的退路顶成同件，代价落在用户数据上）。那颗「上一份」由宿主自己持，而<b>从 <c>.bak</c> 捡回来的那一档⛔ 点亮</b>——主档位置是空的，<c>LatestSceneId</c> 只认主档；「读的是主档还是备份」那颗旗由 <c>BoardSceneStore.TryLoad</c> 交回，UI 侧⛔ 自己再摸一遍盘＝第二个主人。
 - 同档两扇窗：聚焦已有那扇（v0 不变，引擎<b>⛔ 跨窗机制</b>＝§20.4）；若将来真要把两份合，现成签名是 <c>reconcileElements(localElements, remoteElements, localAppState)</c> ⇒ <c>ReconciledExcalidrawElement[]</c>，版本戳现读 <c>getSceneVersion: (elements) =&gt; number</c>。
 
 ### 21.5 生命周期／崩溃／那颗注入面（片8 那五颗读数直接接进来）
