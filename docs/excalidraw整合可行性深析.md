@@ -670,3 +670,75 @@ Xiaolai 随包那一颗的代价现在有三段，⛔ 只第一段是体积：
 - §九 决策 1 由我<b>技术裁决＝A′</b>＝「<b>产物随仓＋一次性打包腿，构建期⛔ Node</b>」；那颗打包器与它落的目录都<b>⛔ 进仓</b>。
 - 还剩他点头的只有两件观感／口径题：<b>§九 决策 3</b>（Xiaolai 随包＝现读 209 个分片／12.08 MB，那颗数来自 §12.6 ②）与 <b>§九 决策 4</b>（AI 生图要不要走自带 Key）。
 - 下一腿＝<b>Spike-1a 打包腿</b>：跑一次打包器产出 bundle＋逐文件冻结清单（版本／sha256／来源 commit），并当场判掉 §16.5 那颗“那 16 颗各自是不是 ESM”。
+
+## 十七、Spike-1a：那一次打包真跑了——三臂的字节、65 颗导出面、和「摘哪一颗才真的摘掉」（批次 Phase C 片7，2026-10-17·一次性打包＋只读取数，⛔ 产品码⛔ 建工程⛔ 起窗⛔ 改系统 PATH⛔ 表⛔ 账本）
+
+> 尺与正本＝<c>bin/WI83/probe_83ae.py</c> → <c>bin/WI83/spike1a_83ae.txt</c>（59 行／每行三列）。
+> §十六 那颗技术裁决（<b>A′＝一次性打包腿＋产物随仓、构建期⛔ Node</b>）在这一腿<b>第一次真跑了一遍</b>；这一节交的是「跑出来是什么样」的数字，⛔ 是「能跑」这句断言。
+
+### 17.1 「跑一遍」的形状（写成可复算的三行，⛔ 系统级动作）
+
+| 现读 | 数 |
+|---|---|
+| 钉住的版本（四颗） | <b>@excalidraw/excalidraw=0.18.0 esbuild=0.25.12 react=18.3.1 react-dom=18.3.1</b> |
+| 那颗 <c>node_modules</c> 顶层档数 | <b>171</b> 档 |
+| 那颗打包器自报的版本 | 0.25.12 |
+
+⇒ 三行命令形状＝① <c>npm install</c> 那四颗钉住的版本 ② <c>esbuild entry.js --bundle --minify --format=iife --define:process.env.NODE_ENV</c> ③（可选那一臂）<c>--alias:@excalidraw/mermaid-to-excalidraw=./stub.js</c>。
+⇒ 那颗 <c>--define</c> ⛔ 是装饰：react 读那颗环境变量，⛔ 给就编出一颗开发态的、给了才对（这一条要进未来那颗构建脚本，⛔ 记成「顺手加的」）。
+⇒ 落盘全在<b>⛔ 随仓</b>的取证目录（<c>bin/</c> 整棵在 <c>.gitignore</c> 内⇒<b>仓⛔ 涨</b>）；⛔ 全局装、⛔ 改 PATH、⛔ 动那棵 <c>excalidraw</c> 树本身。
+
+### 17.2 三臂的字节，与「还有没有没打进去的引用」——两把尺⛔ 一致
+
+| 臂 | 产物字节 | metafile 的 inputs 档数 | metafile 的 <c>outputs.imports</c> | 我这把正则念出的「裸引用」 |
+|---|---|---|---|---|
+| iife | 14395067 | 1815 | <b>0</b> | 4 |
+| iife＋minify（这一颗是要留的那一臂） | <b>8376525</b> | 1815 | <b>0</b> | 3 |
+| iife＋minify＋摘 mermaid | <b>4878693</b> | 233 | <b>0</b> | 2 |
+
+⇒ 权威那颗＝<b>打包器自己报的 <c>outputs.imports</c>＝0 颗</b>（三臂都是 0）；我这把正则那颗（3 颗）是把<b>字符串里的词</b>念成了语句（pica 那句 debug、katex 那句注释）⇒ 这一列只当<b>对照件</b>，⛔ 当结论（名册 296 那一族：bundle 既然自足，我这把尺也该报 0 才对；它现读报 3 颗，正是「我在量错的东西」那颗信号）。
+⇒ §十六 那句「把 16 颗裸引用变成浏览器能加载的东西」<b>在这一腿做到了</b>：那颗 bundle 自足。
+
+### 17.3 摘掉 mermaid 那一臂：省 41.8%，但「⛔ import 就⛔ 带」这一句只有一半成立
+
+- 字节 8376525 ↔ 4878693（差 <b>3 497 832</b> 颗字节＝<b>41.8%</b>）；解析集 inputs <b>1815</b> 档 ↔ <b>233</b> 档；
+- 那颗产物里几颗串现读：<c>DiagramToCodePlugin</c>=<b>0</b> 颗／<c>TTDDialog</c>=<b>9</b> 颗／<c>mermaid</c>=<b>230</b> 颗／<c>WelcomeScreen</c>=<b>28</b> 颗。
+
+⇒ 三件事：<b>①</b> tree-shaking 真会带走<b>⛔ 被我 import 的具名导出</b>（那颗 <c>DiagramToCodePlugin</c> 现读 0 颗＝正件）；<b>②</b> 但 <c>TTDDialog</c>／<c>mermaid</c>／<c>WelcomeScreen</c> 坐在 <c>Excalidraw</c> 组件<b>自己的图</b>里⇒「不接就行」这句⛔ 成立，要摘就得<b>alias/stub 那一臂</b>（现读省 3 497 832 颗字节）或运行时关；<b>③</b> 那颗 stub 臂的<b>观感代价</b>（mermaid→画板还能不能进）本腿⛔ 判（见 §17.7）。
+⇒ 这颗直接改写 §九 决策 4 的形状：那颗「AI 生图（TTD）要不要带」<b>⛔ 是一个「接不接线」的决定，而是「省不省 41.8% 的包」＋「默认 Key 不配时那颗按钮是不是死按钮」两颗一起定。
+
+### 17.4 出机面：bundle 里那些 URL 的点数（口径先说清，⛔ 让「0」替我说话）
+
+| 现读（minify 那一臂） | 数 |
+|---|---|
+| <c>http(s)</c> 串的<b>颗数</b> | <b>154</b> 颗（⛔ 按行计：那颗档一行≈半档） |
+| 主机名去重后的颗数 | 36 颗 |
+| 其中 <c>www.w3.org</c> 那一族 | <b>89</b> 颗＝SVG/MathML 的 <c>xmlns</c> 串⇒<b>⛔ 出机</b> |
+| 带真取数形状的那几颗分档 | embeddable-srcdoc=5 xmlns-in-data=3 其它:.src==1 |
+| <c>srcdoc</c> 那一族点到的主机 | embed.reddit.com gist.github.com platform.twitter.com reddit.com twitter.com |
+| 模板里那颗 <c>script async src</c> | <b>4</b> 颗 |
+⇒ <b>这一族⛔ 被打包摘掉</b>：同一颗产物里 <c>twitter.com</c> 现读 <b>4</b> 颗、<c>libraries.excalidraw.com</c> <b>2</b> 颗还在。
+⇒ §十 点验单那颗「旧 embeddable 场景打开：iframe ⛔ 加载远程（占位＋警告文案）」从此有了一颗<b>具体拦点</b>：只能拦在<b>宿主那一侧</b>（<c>NewWindowRequested</c>／<c>WebResourceRequested</c>，或在桥里当场拒那颗元素类型）——<b>⛔ 能靠「我们这份包⛔ 有远程 URL」这句话过关</b>，那句话现读⛔ 成立（§十四 那句「静态命中⛔ 等于出机」在这一臂再次兑现）。
+
+### 17.5 那颗入口的导出面＝桥协议与导出批的底稿
+
+- 具名导出 <b>65</b> 颗、<b>⛔ 有 default</b>（现读：读不到 default）；
+- 那颗<b>对照臂</b>（<c>import Excalidraw from …</c> ＋ <c>convertToBlob</c>）<b>红成预期（rc=1，报错点了那颗缺的导出名）</b>⇒一处把「default 那颗写法」与「那颗导出的真名」两件事同时钉住：0.18 这一发读不到 <c>convertToBlob</c>，它叫 <b><c>exportToBlob</c></b>。<b>⚠ 它以前叫什么、哪一发改的名，本腿⛔ 判</b>（⛔ 把「我按记忆写错了」写成「上游漂移」）。
+- 出口那一族现读名字＝<c>bumpVersion exportToBlob exportToCanvas exportToClipboard exportToSvg loadFromBlob serializeAsJSON serializeLibraryAsJSON</c> ⇒ §八 0 ③「导出／下载出口 3 法各试」那一格的名字从此⛔ 是猜的；
+- 按钮／插件那一族现读＝<c>DiagramToCodePlugin Footer MainMenu Sidebar TTDDialog TTDDialogTrigger WelcomeScreen</c> ⇒ §12.5 那张「摘哪几颗」的名单从此有出处（那颗 Sidebar 与 WelcomeScreen 都在这颗清单里）。
+
+### 17.6 随包那一档的代价与冻结那三颗（P-209 那条教训在这里落地）
+
+- 打包只管那颗 js；那颗 <c>index.css</c> 按<b>相对路径</b>点字体⇒要一起拷 <c>fonts</c>（现读 <b>234</b> 颗／<b>13 107 068</b> 字节）与 <c>index.css</c>（<b>144 689</b> 字节）；
+- 现读三档当场相加（⛔ 手打）：<b>21 628 282</b> 字节（≈20.6 MB）＝带 mermaid 那一臂；摘掉那颗＝<b>18 130 450</b> 字节（≈17.3 MB）；
+- 冻结三颗：产物 <c>spike1.min.js</c> 的 sha256 <b>e361972f8487c6f0e33077147c43fc39b16014e43c0f208612f1ac37501f674a</b>；来源 <c>@excalidraw/excalidraw 0.18.0</c> 的 <c>dist.integrity</c> 前缀 <b>sha512-QkIiS+5qdy8lmDWTK</b>；工具 esbuild <b>0.25.12</b>。
+  再加一颗身份＝仓外那棵树的 commit <c>ed10ac7d</c>（§十一 ② 现读）。⇒ ⛔ 拿「以版本命名的目录」当内容证据，<b>逐颗 sha256 才算</b>。
+⇒ 与 §九 决策 3 并排看：那颗 Xiaolai 随包的代价是 209 个分片／12.08 MB（§十二 ② 现读），而这一节<b>整套字体</b>才是那颗大头（现读 13 107 068 字节）⇒「只带／不带 Xiaolai」的比价口径要从这里改口（⛔ 我把「字体⛔ 全带」当成了「⛔ 多几 MB」）。
+
+### 17.7 本腿⛔ 判到的（照抄正本 ⑥ 那三行）＋下一腿
+
+- 未跑（欠那颗宿主窗）
+- 未判定（本腿只量字节，⛔ 问功能）
+- 未判定（本腿⛔ 试 --loader:.css=text 那一类改法）
+- 下一腿＝<b>Spike-1b 起窗腿</b>：⛔ 产品码，先在取证目录里起一颗<b>一次性</b>宿主窗（<c>WebView2</c> 由 §十五 那颗 transitive 依赖带着，⛔ 新引包），量 §八 0 的 ②③④⑤ 那四格＋§17.4 那颗拦截点的可行性。
+- 本腿自己一处瞎（收口腿进坑表）：第一版把「http 那颗数」按<b>行</b>计，而那颗产物的形状现读 <b>254990 行／最长 969606 字符</b>、minify 那一臂 <b>3091 行／最长 1090864 字符</b>⇒同一份内容的<b>颗数 ↔ 行数</b>＝163 颗 ↔ 151 行｜差 12 与 154 颗 ↔ 52 行｜差 102，两臂之间根本⛔ 可比；⇒ 列名跟着尺走（名册 322 那一类），口径写进那颗行的名字里（这一版已改成<b>颗数</b>＋一句「⛔ 按行计」）。
