@@ -169,7 +169,9 @@ public sealed class BoardSceneStoreGateTests
         var ask = Between(WindowCs, "private void RequestSceneSnapshot", "private static string Envelope");
         Assert.Contains("if (!_bridgeReady) return;", ask, StringComparison.Ordinal);
         Assert.Contains("JsonString(\"kind\") + \":\" + JsonString(\"scene\")", ask, StringComparison.Ordinal);
-        Assert.Contains("WindowActivationState.Deactivated) RequestSceneSnapshot();", WindowCs, StringComparison.Ordinal);
+        // 片24：那一次索取现在<b>点名是哪一拍</b>（Core 判这一拍问得到问不到，UI 侧⛔ 自己猜）
+        Assert.Contains("WindowActivationState.Deactivated) RequestSceneSnapshot(BoardPolicy.SaveBeat.LosingFocus);",
+            WindowCs, StringComparison.Ordinal);
         Assert.Contains("await win.OpenSceneAsync(last)", Tray, StringComparison.Ordinal);
     }
 

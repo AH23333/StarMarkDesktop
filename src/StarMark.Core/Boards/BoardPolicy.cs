@@ -11,7 +11,7 @@ namespace StarMark.Core.Boards;
 /// "载档与桥回写算⛔ 算一次用户动作"那颗裁决。三样东西刻意<b>⛔ 在这里出现</b>：
 /// ① 我们自己给的图片字节上限（那条"内嵌 base64 之后档体积 ↔ 图张数"的曲线<b>还没量</b>，
 /// 先写常数＝把猜测当判据；见 §21.7 与 <see cref="ImageCeilingsMeasured"/>）；
-/// ② 落点目录（归 UI 侧的 <c>%APPDATA%\StarMark\boards</c>，那颗路径⛔ 是判据）；
+/// ② 落点目录（片23 起那颗根归 <c>UserDataPaths</c>，UI 侧只问它要那颗子目录；那颗路径⛔ 是判据）；
 /// ③ 上屏的句子（一律交 <c>LocMessage</c>，本档⛔ 成品字＝P-193/P-194 那条口径）。
 /// </para>
 /// </summary>
@@ -42,6 +42,16 @@ public static class BoardPolicy
 
     /// <summary>停笔多久算"这一笔收了"（autosave 那一拍，毫秒）。v1 §21.3 定 1.5 s。</summary>
     public const int AutosaveIdleMs = 1500;
+
+    /// <summary>
+    /// 关窗那一拍<b>最多</b>向页面等这份快照（毫秒，片24）。
+    /// <para><b>为什么必须有上限</b>：那一拍拦下的是用户亲手点下的"关闭"。没有上限＝页面卡住时那扇窗<b>永远关不掉</b>，
+    /// 那比丢最后几笔坏得多（P-54 那条口径的反面：⛔ 把用户的退出键抵押给一颗网页）。</para>
+    /// <para><b>为什么是这一颗数</b>：§18.6 那把尺现读的桥往返＝控制消息 p50 <b>0.4</b> ms／p95 <b>0.7</b> ms，
+    /// 1 MB 载荷单程 <b>31</b> ms、8 MB <b>177</b> ms。页面那颗 serialize 加这一趟往返，两秒是量到的最坏那一档的十倍以上；
+    /// 而它同时是"关掉一扇画板"的<b>可感上限</b>——那一拍里窗已经 Hide，用户等的是进程收尾，⛔ 是一段看不见的钟。</para>
+    /// </summary>
+    public const int CloseFlushBudgetMs = 2000;
 
     /// <summary>
     /// 盘上那份是不是<b>已经</b>等于这颗字节（v1 §21.4 那颗脏位＝宿主那一侧的字节对差；⛔ 另造计数器、⛔ 让 JS 递 bool）。
@@ -75,6 +85,60 @@ public static class BoardPolicy
         /// <summary>窗 <c>Closed</c>（退到子进程之前）。</summary>
         ClosingWindow,
     }
+
+    /// <summary>
+    /// 那一拍<b>问得到</b>页面要一份快照（片24；四拍里只有两拍问得到）。
+    /// <para><see cref="SaveBeat.Idle"/> 本来就是<b>页面自己</b>发起的那一拍——宿主"问"它等于把话回头递给自己；
+    /// <see cref="SaveBeat.RenderProcessFailed"/> 那一刻页面已经死了，发出去的东西没人接（§21.5 给这一档的活是<b>重载＋把见过那份递回去</b>，⛔ 索取）。</para>
+    /// <para><b>这颗判定为什么住 Core</b>：写调用点的人会本能地"每拍都问一次"，而这一条恰好是问不到的那两拍——
+    /// 它⛔ 改变盘上的字节，只决定"要不要开一次口"，所以错了不报错，只是白等或白问。</para>
+    /// </summary>
+    public static bool BeatCanAskForSnapshot(SaveBeat beat)
+        => beat is SaveBeat.LosingFocus or SaveBeat.ClosingWindow;
+
+    /// <summary>渲染／浏览器那一族进程失效之后，宿主这一侧该付<b>哪一手</b>恢复动作（§21.5「重载之后⛔ 许回到空板，也⛔ 许静默白屏」）。</summary>
+    public enum FailureRecovery
+    {
+        /// <summary>只上报：那一档要么自己会重起来，要么根本动不到画板；<b>重载反而会把用户画的东西退成错误页</b>。</summary>
+        ReportOnly,
+        /// <summary>页面没了而<b>那颗控件还在</b>：重载那一扇页，<c>bridge.ready</c> 再来时照旧把见过那份递回去。</summary>
+        ReloadPage,
+        /// <summary><b>控件本身没了</b>（官方表逐字：The app has to recreate a new WebView to recover）：只能拆掉重建一颗，⛔ 对着死的控件 Navigate。</summary>
+        RecreateWeb,
+    }
+
+    /// <summary>
+    /// 那颗进程失效的档位分到哪一手（片24）。名字交进来而⛔ 交 SDK 那颗 enum：Core⛔ 认得 WebView2，
+    /// 分了这一档，UI 侧就只剩一颗 <c>switch</c> 的三条腿（判据与接线各归其主）。
+    /// <para>出处＝<c>CoreWebView2ProcessFailedKind</c> 官方表的<b>逐字</b>恢复口径：
+    /// <c>BrowserProcessExited</c>「The app has to recreate a new WebView to recover from this failure」／
+    /// <c>RenderProcessExited</c>「You can use the <c>Reload</c> method to try to recover」／
+    /// <c>UtilityProcessExited</c>·<c>GpuProcessExited</c>·<c>SandboxHelperProcessExited</c>「does <b>not</b> need to handle recovery」／
+    /// <c>FrameRenderProcessExited</c>「does not affect the top-level document, only a subset of the subframes」⇒⛔ 重载（重载＝毁掉整块板）／
+    /// <c>RenderProcessUnresponsive</c>「event will continue to be raised every few seconds」⇒只上报，⛔ 把一颗忙但活着的渲染器退了。</para>
+    /// <para><b>认不出来的一律退到 <see cref="FailureRecovery.ReportOnly"/></b>：那颗表将来多出一档时，默认动作必须
+    /// "什么也⛔ 毁"，而⛔ 是"先重载再说"。</para>
+    /// <para><b>本仓钉住的那颗运行时现读</b>（WebView2 <c>1.0.3719.77</c> 的
+    /// <c>Microsoft.Web.WebView2.Core.xml</c>，按那颗 enum 的 <c>F:</c> 成员数出来的十颗）＝
+    /// <c>BrowserProcessExited</c>／<c>RenderProcessExited</c>／<c>RenderProcessUnresponsive</c>／<c>FrameRenderProcessExited</c>／
+    /// <c>UtilityProcessExited</c>／<c>SandboxHelperProcessExited</c>／<c>GpuProcessExited</c>／<c>PpapiPluginProcessExited</c>／
+    /// <c>PpapiBrokerProcessExited</c>／<c>UnknownProcessExited</c>——十颗全在证人里逐颗点了名（名单⛔ 靠记忆，见 <c>BoardPolicyTests</c> 那一格）。</para>
+    /// </summary>
+    public static FailureRecovery RecoveryForFailure(string processFailedKindName)
+        => processFailedKindName switch
+        {
+            "BrowserProcessExited" => FailureRecovery.RecreateWeb,
+            "RenderProcessExited" => FailureRecovery.ReloadPage,
+            _ => FailureRecovery.ReportOnly,
+        };
+
+    /// <summary>
+    /// 一扇画板窗在它那一生里最多<b>重建</b>几次控件（片24）。
+    /// <para>为什么要有这一颗数：那颗运行时真坏掉的机器上，"重建→立刻又死"是一条<b>不需要谁帮忙就会一直跑</b>的循环，
+    /// 每一圈还往日志里写一行——用户看到的是那扇窗既⛔ 恢复也⛔ 关掉。三圈的口径＝"给他一次改错的机会，再加两次"，
+    /// 超过就没了一颗自愈能修的东西，剩下的是日志里那句 <c>boards.recover.givenup</c>。</para>
+    /// </summary>
+    public const int MaxRecreatePerWindow = 3;
 
     /// <summary>一颗场景是怎么进到画板里的——它决定<b>撤销栈</b>那道门（§21.4）。</summary>
     public enum SceneOrigin

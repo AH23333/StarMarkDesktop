@@ -64,20 +64,33 @@ public sealed class BoardBridgeShapeGateTests
     /// （已接线的分发 switch——C# 的 case 标签要常量字面串，接线批片19 起它就是第二颗合法持有者）。
     /// <para>第三处出现＝有人又抄了一份名单，⛔ 容（UI 侧⛔ 第二份名单另由
     /// <c>BoardWindowBridgeGateTests</c> 钉：switch 里⛔ 出现成颗的名字数组）。</para>
+    /// <para><b>片24 改的是问法而⛔ 放宽</b>：这一列原来读<b>原文</b>，于是档里一句解释（"崩那一拍等
+    /// <c>bridge.ready</c> 再来"）也被数成一颗持有者——那把尺报的"谁抄了名单"其实由语法形状说了算，⛔ 由
+    /// "谁有资格持有"说了算（名册 347）。现在读 <c>SourceGate.Code</c>（抹注释、留字面量），并<b>自带正件</b>：
+    /// 同一批里确有颗档在注释里写了那颗名字（<c>BoardPolicy.cs</c>），原文读得到而代码行读不到——
+    /// 少了这一对，这一格就分不清"尺准了"与"尺瞎了"（名册 409）。</para>
     /// </summary>
     [Fact]
     public void BridgeNamesLiveInExactlyOneSourceFile()
     {
         var probe = "bridge.ready";
-        var holders = ReadRepoUnder("src")
+        var everyFile = ReadRepoUnder("src").ToList();
+        var codeHolders = everyFile
+            .Where(f => SourceGate.Code(f.Text).Contains(probe, System.StringComparison.Ordinal))
+            .Select(f => f.RelativePath.Replace('\\', '/'))
+            .ToList();
+        var rawHolders = everyFile
             .Where(f => f.Text.Contains(probe, System.StringComparison.Ordinal))
             .Select(f => f.RelativePath.Replace('\\', '/'))
             .ToList();
 
         // 两颗合法持有者：名单本体（Core）＋已接线的分发 switch（UI BoardWindow，片19 起）。
-        Assert.Equal([BridgeFile, "src/StarMark.UI/Boards/BoardWindow.cs"], holders);
+        Assert.Equal([BridgeFile, "src/StarMark.UI/Boards/BoardWindow.cs"], codeHolders);
         Assert.Equal(1, Count(Code(BridgeFile), "public static readonly string[] InboundCommands"));
         Assert.Equal(1, Count(Code(BridgeFile), "public static readonly string[] OutboundEvents"));
+        // 正件：注释里那颗名字的写法在语料里真存在（片24＝BoardPolicy 那句），而它⛔ 算持有者
+        Assert.Contains("src/StarMark.Core/Boards/BoardPolicy.cs", rawHolders);
+        Assert.DoesNotContain("src/StarMark.Core/Boards/BoardPolicy.cs", codeHolders);
     }
 
     // ────────── ③ 还没量的东西⛔ 许先发明 ──────────
@@ -95,9 +108,7 @@ public sealed class BoardBridgeShapeGateTests
     public void NoSelfInventedImageCeilingExistsYet()
     {
         var code = Code(JudgeFile);
-        var offenders = Regex.Matches(code,
-                @"public const (int|long) (?<n>(?!(?:EngineReported))\w*(Ceiling|Limit|Budget|Max|Min|Floor|Cap)\w*)\s*=")
-            .Select(m => m.Groups["n"].Value).ToList();
+        var offenders = CeilingNames(code);
 
         Assert.True(offenders.Count == 0,
             "那颗⛔ 还没量的上限被写成了常数（先量再写）：\n" + string.Join("\n", offenders));
@@ -106,6 +117,32 @@ public sealed class BoardBridgeShapeGateTests
         Assert.Equal(2, Regex.Matches(code, @"public const (int|long) EngineReported\w+").Count);
         Assert.Contains("ImageCeilingsMeasured = false", code, System.StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// 这颗尺问的是「<b>那颗⛔ 还没量的尺寸</b>被写成常数了没」，⛔ 是「名字里带 Budget/Max 的常数一律越权」。
+    /// <para>片24 撞出来的那处误伤：那两颗新常数（<c>CloseFlushBudgetMs</c>＝由 §18.6 那颗实测往返表换算的等待上限、
+    /// <c>MaxRecreatePerWindow</c>＝重试要有个数）都⛔ 是"一颗档 / 一张图多大"那一族的东西，却按名字形状被抓。
+    /// 用语法形状代替"谁有资格说"＝名册 347 那颗坑，而把它照抄放行⛔ 是答案——要改的是<b>问法</b>。</para>
+    /// <para>新问法要同时带一颗<b>尺寸</b>词（Image／File／Bytes／Size／Edge／Px／Board／Scene）与一颗<b>档位</b>词。
+    /// 下面那对正件／负件就是这一格没瞎的证据：两种写法的图片上限必须都被抓到（名册 409），
+    /// 而片24 那两颗必须⛔ 被抓（否则这一格只是把误伤换了个方向）。</para>
+    /// </summary>
+    [Fact]
+    public void TheCeilingRulerAsksAboutSizesAndProvesItSeesThem()
+    {
+        // 正件：那颗"我们自己的图片上限"的两种写法（尺寸在前／档位在前）各造一颗，必须都响
+        Assert.Equal(
+            ["ImageBytesCeiling", "MaxSceneFileBytes"],
+            CeilingNames("public const int ImageBytesCeiling = 4;\npublic const long MaxSceneFileBytes = 5;"));
+        // 负件：片24 那两颗⛔ 属于"还没量的尺寸"那一族，它们各有自己的实测／理由出处
+        Assert.Empty(CeilingNames(
+            "public const int CloseFlushBudgetMs = 2000;\npublic const int MaxRecreatePerWindow = 3;"));
+    }
+
+    private static List<string> CeilingNames(string code)
+        => Regex.Matches(code,
+                @"public const (int|long) (?<n>(?!(?:EngineReported))(?=\w*(?:Ceiling|Limit|Budget|Max|Min|Floor|Cap))(?=\w*(?:Image|File|Bytes|Size|Edge|Px|Board|Scene))\w+)\s*=")
+            .Select(m => m.Groups["n"].Value).ToList();
 
     // ────────── ④ 每颗故障名都有生产者 ──────────
 

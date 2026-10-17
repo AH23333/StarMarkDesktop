@@ -122,6 +122,84 @@ public sealed class BoardPolicyTests
         Assert.Equal(1500, BoardPolicy.AutosaveIdleMs);
     }
 
+    /// <summary>
+    /// 四拍里<b>问得到</b>页面的只有两拍（片24＝§21.3）。<c>RenderProcessFailed</c> 那一拍问不到东西：
+    /// 那一刻页面已经死了，发出去的 <c>export.pick</c> 没人接（§21.5 给它派的活是<b>恢复＋把见过那份递回去</b>）；
+    /// <c>Idle</c> 本来就是页面自己发起的那一拍，宿主"问"它等于把话回头递给自己。
+    /// <para>三颗节拍常数同住这一格＝本仓那条"量程收成一处"：改数字只许改在这里，UI 侧再写一遍数字＝第二主人。</para>
+    /// </summary>
+    [Fact]
+    public void OnlyTheBeatsWithALivingPageCanAskForASnapshot()
+    {
+        Assert.False(BoardPolicy.BeatCanAskForSnapshot(BoardPolicy.SaveBeat.Idle));
+        Assert.False(BoardPolicy.BeatCanAskForSnapshot(BoardPolicy.SaveBeat.RenderProcessFailed));
+        Assert.True(BoardPolicy.BeatCanAskForSnapshot(BoardPolicy.SaveBeat.LosingFocus));
+        Assert.True(BoardPolicy.BeatCanAskForSnapshot(BoardPolicy.SaveBeat.ClosingWindow));
+        Assert.Equal(2, Enum.GetValues<BoardPolicy.SaveBeat>().Count(BoardPolicy.BeatCanAskForSnapshot));
+
+        Assert.Equal(1500, BoardPolicy.AutosaveIdleMs);
+        Assert.Equal(2000, BoardPolicy.CloseFlushBudgetMs);   // 来历＝§18.6 那颗往返表（1 MB 31 ms／8 MB 177 ms）
+        Assert.Equal(3, BoardPolicy.MaxRecreatePerWindow);     // 自愈要有个数，⛔ 留一条不需要谁帮忙就会一直跑的循环
+    }
+
+    // ────────── ④b 那颗进程失效表（片24＝§21.5） ──────────
+
+    /// <summary>
+    /// 十颗档位<b>全点名</b>，名单是现读的：那颗 <c>Microsoft.Web.WebView2.Core.xml</c>（钉住的 1.0.3719.77）里
+    /// <c>CoreWebView2ProcessFailedKind</c> 的 <c>F:</c> 成员就是这十颗——⛔ 靠记忆抄官方表（名册 299 那一族）。
+    /// <para><b>这一格最值钱的那一行是 <c>FrameRenderProcessExited</c></b>：官方逐字写它"⛔ 影响顶层文档，
+    /// 只有部分子帧换成错误页"，而重载＝把用户<b>整块板</b>退成错误页。"看见进程没了就重载"听起来稳妥，恰好是最不稳妥的那一颗。</para>
+    /// </summary>
+    private static readonly (string Kind, BoardPolicy.FailureRecovery Tier)[] SdkFailureTable =
+    [
+        ("BrowserProcessExited", BoardPolicy.FailureRecovery.RecreateWeb),
+        ("RenderProcessExited", BoardPolicy.FailureRecovery.ReloadPage),
+        ("RenderProcessUnresponsive", BoardPolicy.FailureRecovery.ReportOnly),
+        ("FrameRenderProcessExited", BoardPolicy.FailureRecovery.ReportOnly),
+        ("UtilityProcessExited", BoardPolicy.FailureRecovery.ReportOnly),
+        ("SandboxHelperProcessExited", BoardPolicy.FailureRecovery.ReportOnly),
+        ("GpuProcessExited", BoardPolicy.FailureRecovery.ReportOnly),
+        ("PpapiPluginProcessExited", BoardPolicy.FailureRecovery.ReportOnly),
+        ("PpapiBrokerProcessExited", BoardPolicy.FailureRecovery.ReportOnly),
+        ("UnknownProcessExited", BoardPolicy.FailureRecovery.ReportOnly),
+    ];
+
+    public static System.Collections.Generic.IEnumerable<object[]> SdkFailureRows()
+        => SdkFailureTable.Select(r => new object[] { r.Kind, r.Tier });
+
+    [Theory]
+    [MemberData(nameof(SdkFailureRows))]
+    public void EachProcessFailureKindPaysTheTierTheOfficialTableSays(
+        string kind, BoardPolicy.FailureRecovery expected)
+    {
+        Assert.Equal(expected, BoardPolicy.RecoveryForFailure(kind));
+    }
+
+    [Fact]
+    public void OnlyTwoKindsInThePinnedTableAreAllowedToDoAnything()
+    {
+        // 会动手的档位只许两颗：官方表里只有那两档写了"要重载／要重建"，其余八档要么自己起得来、要么动不得。
+        // ⚠ 这一格数的是<b>那颗判据当场交回来的东西</b>，⛔ 我自己那份名单里写的档位——台架 r1 撞出来的：
+        // 数自己的字面量＝那颗函数怎么改这一格都⛔ 响（一颗恒绿断言；本仓"自己数自己"那一族的又一副脸）。
+        Assert.Equal(10, SdkFailureTable.Length);
+        var tiers = SdkFailureTable.Select(r => BoardPolicy.RecoveryForFailure(r.Kind)).ToList();
+        Assert.Equal(2, tiers.Count(t => t != BoardPolicy.FailureRecovery.ReportOnly));
+        Assert.Equal(8, tiers.Count(t => t == BoardPolicy.FailureRecovery.ReportOnly));
+    }
+
+    /// <summary>
+    /// 名单<b>外</b>的那颗名字退到"只上报"。这一条是这颗 <c>switch</c> 的兜底分支的方向：
+    /// 那颗表将来多出一档时，默认动作必须是"什么也⛔ 毁"，而⛔ 是"先重载再说"——
+    /// 猜错的代价落在用户画的那块板上，⛔ 落在日志里。
+    /// </summary>
+    [Fact]
+    public void AnUnlistedProcessFailureIsNeverTreatedAsReloadable()
+    {
+        Assert.Equal(BoardPolicy.FailureRecovery.ReportOnly, BoardPolicy.RecoveryForFailure("WebView2ProcessExited"));
+        Assert.Equal(BoardPolicy.FailureRecovery.ReportOnly, BoardPolicy.RecoveryForFailure("browserprocessexited"));
+        Assert.Equal(BoardPolicy.FailureRecovery.ReportOnly, BoardPolicy.RecoveryForFailure(""));
+    }
+
     // ────────── ⑤⑥⑦ 撤销立场 ──────────
 
     /// <summary>

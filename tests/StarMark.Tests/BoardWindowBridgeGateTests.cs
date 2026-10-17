@@ -102,4 +102,66 @@ public sealed class BoardWindowBridgeGateTests
 
     private static int Count(string haystack, string needle)
         => haystack.Split(needle).Length - 1;
+
+    // ────────── 片24：四拍剩下那两拍 ──────────
+
+    /// <summary>
+    /// <b>崩</b>那一拍与<b>关窗</b>那一拍都真挂上了，而且开口之前先问 Core「这一拍问得到吗」。
+    /// <para>这一格里最要紧的是 <c>_bridgeReady = false;</c> 出现在那颗 handler 里：那一颗旗要是还亮着，
+    /// 下一次失焦就往一颗<b>死控件</b> <c>PostWebMessageAsJson</c>——COM 异常当场抛在 UI 线程上，
+    /// 用户看到的正是"画板自己崩给我看"。</para>
+    /// </summary>
+    [Fact]
+    public void TheLastTwoSaveBeatsAreWiredAndBothAskThroughCore()
+    {
+        var cs = ReadRepo(WindowCs);
+        Assert.Contains("ProcessFailed += OnProcessFailed", cs, StringComparison.Ordinal);
+        Assert.Contains("ProcessFailed -= OnProcessFailed", cs, StringComparison.Ordinal);   // 拆窗那一拍摘干净
+        Assert.Contains("AppWindow.Closing += OnAppWindowClosing", cs, StringComparison.Ordinal);
+        Assert.Contains("BoardPolicy.BeatCanAskForSnapshot(beat)", cs, StringComparison.Ordinal);
+        Assert.Contains("RequestSceneSnapshot(BoardPolicy.SaveBeat.LosingFocus)", cs, StringComparison.Ordinal);
+        Assert.Contains("RequestSceneSnapshot(BoardPolicy.SaveBeat.ClosingWindow)", cs, StringComparison.Ordinal);
+        Assert.Equal(3, Count(cs, "RequestSceneSnapshot("));        // 定义一颗＋两拍各一颗
+        Assert.Contains("_bridgeReady = false;",
+            SourceGate.MethodBody(cs, "void OnProcessFailed"), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 恢复起来那一页拿到的＝<b>宿主见过的那一份</b>，⛔ 一颗空板（§21.5 那句硬约束落在这颗字段上）。
+    /// <para>首开与重载共用同一条 <c>OpenAsync</c>：两份开场代码就是第二个主人，而第二主人的第一号坏法
+    /// 是"其中一份忘了递档"。那颗被摘掉的 <c>_pendingScene</c> 名字两头都⛔ 留（正件＝新名字在这一档里读得到）。</para>
+    /// </summary>
+    [Fact]
+    public void TheRecoveredPageGetsTheSceneTheHostHasSeenNotAnEmptyBoard()
+    {
+        var cs = ReadRepo(WindowCs);
+        Assert.Contains("if (_seenScene is { Length: > 0 } bytes)", cs, StringComparison.Ordinal);
+        Assert.Contains("RecoverByRecreatingWeb", cs, StringComparison.Ordinal);
+        Assert.Contains("_web.CoreWebView2?.Reload()", cs, StringComparison.Ordinal);
+        Assert.Equal(1, Count(cs, "private async System.Threading.Tasks.Task OpenAsync("));
+        Assert.Contains("await OpenAsync(_seenScene)",
+            SourceGate.MethodBody(cs, "Task OpenRecoverAsync"), StringComparison.Ordinal);
+        Assert.DoesNotContain("_pendingScene", cs, StringComparison.Ordinal);
+        Assert.True(Count(cs, "_seenScene") >= 5, "这把尺要是瞎的，新名字在这一档里也读不到");
+    }
+
+    /// <summary>
+    /// 关窗那一拍的等待<b>有界</b>、等的是"这一问有答案"而⛔"答案好听"，而且到点会说话。
+    /// <para>那颗毫秒数只许住在主人那里（UI 档里再写一遍 2000＝第二主人，改的人只改得动一处）；
+    /// 两处 <c>FinishClosingFlush();</c> 分别对应"盘上本来就是它"与"这一问交回答案了（写成功还是写失败都算）"——
+    /// 少了前者那次关不掉，少了后者那颗写失败要用户白等两秒。</para>
+    /// </summary>
+    [Fact]
+    public void TheCloseFlushIsBoundedAndSaysWhenItGaveUp()
+    {
+        var raw = ReadRepo(WindowCs);
+        var code = SourceGate.Code(raw);
+        Assert.Contains("BoardPolicy.CloseFlushBudgetMs", code, StringComparison.Ordinal);
+        Assert.Equal(0, Count(code, "2000"));                       // 那颗数⛔ 在这档里再出现一次
+        Assert.Equal(2000, BoardPolicy.CloseFlushBudgetMs);         // 正件：主人那里它还在
+        Assert.Equal(2, Count(code, "FinishClosingFlush();"));
+        Assert.Contains("AppWindow.Hide()", code, StringComparison.Ordinal);
+        Assert.Contains("boards.close.flush.timeout", raw, StringComparison.Ordinal);
+        Assert.Contains("_recovering", code, StringComparison.Ordinal);   // 两颗控件抢同一扇窗＝更坏的现场
+    }
 }
