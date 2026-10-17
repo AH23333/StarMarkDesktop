@@ -80,6 +80,7 @@ public sealed partial class MainWindow
     private const int TrayAutostart = 30;
     private const int TrayHotkeysEnabled = 31;
     private const int TrayCheckUpdate = 32;
+    private const int TrayBoards = 33;
 
     private static StarMark.UI.Services.AutostartService Autostart()
         => App.Services.GetRequiredService<StarMark.UI.Services.AutostartService>();
@@ -130,6 +131,7 @@ public sealed partial class MainWindow
         var hotkeysOn = _settings.LoadEnableGlobalHotKey();
         var canvasOn = _settings.LoadCanvasEnabled();
         var captureOn = _settings.LoadCaptureEnabled();
+        var boardsOn = _settings.LoadBoardsEnabled();
         var hiddenCapture = new HashSet<int>(
             CaptureEntries.Where(e => !StarMark.Core.Hotkeys.CaptureGate.ShowsTrayItem(e.Action, captureOn))
                 .Select(e => e.Tag));
@@ -161,6 +163,7 @@ public sealed partial class MainWindow
             // 检查更新：永远点得动——它不依赖任何开关状态（自动那颗开关只管"程序自己要不要上网问"，
             // 不管"他能不能自己问一次"）。结果由提示卡当场说，包括问不上的那几种原因。
             new(Locale.T("tray.checkUpdate"), TrayCheckUpdate, SeparatorBefore: true),
+            new(Locale.T("tray.boards"), TrayBoards, SeparatorBefore: true),
         };
         // 有了组才多出这一棵，而且插在"所有贴图"那三条之后（先全局、后按组，与人的操作顺序一致）。
         // 一组贴图收起后它的工具条跟着消失，托盘这一行就是那几张图唯一的出口——不能只在贴图条上给入口。
@@ -168,7 +171,7 @@ public sealed partial class MainWindow
         // 两条总开关各自关掉时，对应入口整条消失（发起人裁决："关掉就别留入口"）。
         // 画布那条另有按 Ctrl+Alt+D 给的一句"要先在设置里打开"——那是 CanvasService 的闸门，不是菜单项的职责；
         // 截屏那三条则连键一起放掉（F1/F3 是裸功能键），所以这里必须整条消失，不能留一项灰在那儿。
-        return list.Where(item => (canvasOn || item.Tag != TrayCanvas) && !hiddenCapture.Contains(item.Tag)).ToList();
+        return list.Where(item => (canvasOn || item.Tag != TrayCanvas) && (boardsOn || item.Tag != TrayBoards) && !hiddenCapture.Contains(item.Tag)).ToList();
     }
 
     /// <summary>贴图显隐那一项的标签：没有贴图时把状态写进文字，灰掉的项才知道自己为什么点不动。</summary>
@@ -176,10 +179,29 @@ public sealed partial class MainWindow
         => pins == 0 ? Locale.T("tray.pinsShowHideNone")
            : hidden ? Locale.T("tray.pinsShowAll") : Locale.T("tray.pinsHideAll");
 
+    /// <summary>画板那扇窗：起窗失败必须有可见原因（「点了没反应」是本仓定性过的坏），提示卡＋日志双出口。</summary>
+    private async System.Threading.Tasks.Task OpenBoardsWindowAsync()
+    {
+        try
+        {
+            var win = new StarMark.UI.Boards.BoardWindow();
+            await win.OpenNewAsync();
+            win.Activate();
+        }
+        catch (Exception ex)
+        {
+            StarMark.Abstractions.StarLog.Warn("boards.open.failed: " + ex.Message);
+            ShowNotice(LocMessage.Of("boards.openFailedTitle"), LocMessage.Of("boards.openFailedBody"));
+        }
+    }
+
     private void RunTrayCommand(int tag)
     {
         switch (tag)
         {
+            case TrayBoards:
+                _ = OpenBoardsWindowAsync();
+                break;
             case TrayScreenshot:
                 StarMark.UI.Services.ScreenshotService.Start(StarMark.UI.Services.CaptureMode.Toolbar);
                 break;

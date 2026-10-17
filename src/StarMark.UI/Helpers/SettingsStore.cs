@@ -284,6 +284,8 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         /// 而显隐那条是"贴图忽然点不动了"唯一的键盘出口。判据在 <c>Core/Hotkeys/CaptureGate</c>。</para>
         /// </summary>
         public bool? CaptureEnabled { get; set; }
+        /// <summary>画板（excalidraw）总开关的存储位（默认关＝null/false；v1 §21 总闸）。</summary>
+        public bool? BoardsEnabled { get; set; }
 
         // ===== 检测版本更新（批次 UE）=====
         // 这一格只管"开不开自动检查"，另三格是<b>上次问到的结果</b>：设置页打开时要当场说得出

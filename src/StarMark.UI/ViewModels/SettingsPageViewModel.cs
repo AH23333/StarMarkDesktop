@@ -434,6 +434,11 @@ public partial class SettingsPageViewModel : ObservableObject
         CaptureEnabled = Safe(_settings.LoadCaptureEnabled, true, "截屏功能");
         _suppressCaptureApply = false;
 
+        // 画板总开关（Phase C 片20）：默认关，回灌同口径；副作用抑制照抄。
+        _suppressBoardsApply = true;
+        BoardsEnabled = Safe(_settings.LoadBoardsEnabled, false, "画板");
+        _suppressBoardsApply = false;
+
         // 两张状态行 + 那份只读键位一览都从当前绑定现生成（回灌也要生成一次，否则第一次进设置页会看到空表）
         RefreshCanvasHotkeySheet();
 
