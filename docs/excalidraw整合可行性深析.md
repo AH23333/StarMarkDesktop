@@ -148,7 +148,7 @@ action 注册表实测 44 个（前两轮普查逐条在列），按族归并：
 │ theme/i18n 注入 │
 └─────────────────┘
 ```
-关键：`BridgeProtocol` 单一 schema 出处；`StorageAdapter` 归 C#（web 内无 IndexedDB 写——`LocalData` 层禁用，引擎 onChange 上抛，防坑11 双主）；`export` 落点策略归 C#；"桥无路径"（JS 不决定文件写哪；用户开文件=WebView 发起→C# 弹框→选后回字节或只读流）。
+关键：`BridgeProtocol` 单一 schema 出处；`StorageAdapter` 归 C#（web 内无 IndexedDB 写——`LocalData` 层禁用，引擎 onChange 上抛，防坑11 双主）；`export` 落点策略归 C#；"桥无路径"（JS 不决定文件写哪；用户开文件=WebView 发起→C# 弹框→选后回字节或只读流）。  〔片11a v1 定稿三处：①那句「<c>LocalData</c> 层禁用」⛔ 再写（那颗层在随包 dist 里⛔ 存在，§20.4）；②「桥无路径」从此有<b>正件</b>（§18.4 越权那格三颗 evil 全被 <c>Path.GetFileName</c> 收进目录）；③那两份名单逐颗换成真名——命令 <b>7 颗→6 颗</b>（摘 <c>scene.save</c>／<c>scene.dirty</c>，加 <c>paste.query</c>），见 §21.1。〕
 
 ---
 
@@ -159,7 +159,7 @@ action 注册表实测 44 个（前两轮普查逐条在列），按族归并：
 ## 八、建议批形（拍板后才排，非承诺）
 
 0. **Spike 批（裁决前唯一允许的动作）**：①runtime 探测+环境释放实测；②字体/wasm 断网全验；③导出/下载出口 3 法各试（Downloading 事件/桥回调/剪贴板中转）；④TTD/Publish 关按钮有效性；⑤桥消息往返时延实测。产物=裁决数字表，产品码不进。
-1. 架构批（桥协议+存储适配器设计文档先行，过评审再码）
+1. 架构批（桥协议+存储适配器设计文档先行，过评审再码）  〔片11b 交付＝<b>§二十一 v1</b>：那份「待评审稿」现在每颗名字都钉在包里读到的真名上（§21.0 那八行逐颗点名，其中第 5 行是<b>我自己写反的形7</b>）；代码批仍⛔ 开工，等 v1 过评审。〕
 2. 宿主窗+引擎 bundle（先跑通空板，不含集成）
 3. 存储接管批（boards/对账/autosave/冲突表逐项对 §坑11） 〔片10〕那一批现在有的零件：引擎交出的<b>读面只有 4 颗 getter</b>（<c>getSceneElements</c>／<c>getAppState</c>／<c>getFiles</c>／<c>getName</c>）＋写面 <c>updateScene</c>，⛔ 任何自带落盘⇒时机、粒度、冲突策略<b>全归 C#</b>（§20.4／§20.7）。
 4. 集成批×3（截图→画板/画板→贴图/Board→快照；ClipIMG→背景）
@@ -280,7 +280,7 @@ Runtime 与 SDK 两样本机都在，所以"新增运行时"的<b>开发态</b>�
 
 ### 12.1 桥协议（`BridgeProtocol`＝唯一 schema 出处）
 
-一颗窗、一条通道、<b>两份名单</b>：JS→C# 的<b>命令白名单</b>（名单外一律拒并记日志），C#→JS 的<b>事件白名单</b>。
+一颗窗、一条通道、<b>两份名单</b>：JS→C# 的<b>命令白名单</b>（名单外一律拒并记日志），C#→JS 的<b>事件白名单</b>。  〔片11c：那两份名单逐颗换成真名，见 §21.1；本表里 <c>scene.save</c>／<c>scene.dirty</c> 两行<b>作废</b>（宿主按 §20.2 的读面 getter 自己取，⛔ 等 JS 喊存），另补一颗 <c>paste.query</c>（唯一否决口是 <c>onPaste</c>，§20.3）。〕
 形状＝`{ "v": 1, "cmd": "<名字>", "id": "<回执配对用>", "args": { … } }`，走 <c>PostWebMessageAsJson</c> ↔
 <c>WebMessageReceived</c>（§十一 ⑥ 现读那两名字在缓存的三版 SDK 文档里各有 39／74 处）。
 
@@ -324,7 +324,7 @@ Runtime 与 SDK 两样本机都在，所以"新增运行时"的<b>开发态</b>�
 ### 12.4 崩溃与出机流量
 
 - <c>ProcessFailed</c>（§十一 ⑥ 现读：那一名字在缓存的三版 SDK 文档里 33 处）⇒ 事件桥报＋<b>当前场景自动落盘</b>＋重载，
-  ⛔ 静默白屏（§坑10；"点了没反应"是本仓定性过的坏）。
+  ⛔ 静默白屏（§坑10；"点了没反应"是本仓定性过的坏）。  〔片11d 再加一格：⛔ 白屏的下一颗风险是「重载之后回到空板」。那份自动落盘的草稿由<b>宿主持有</b>（§21.3 那四拍之一），重载时用 <c>board.load</c> 按<b>三步</b>递回去（<c>loadFromBlob</c>→<c>updateScene</c>→<c>addFiles</c>，真签名在 §21.3）；递之前把 §21.1 硬线⑥那五颗退订句柄摘一次。〕
 - 下载出口＝接 <c>DownloadStarting</c>（<b>⛔ 叫 <c>Downloading</c></b>——§十一 ⑥ 现读三版 SDK 里那颗老名 0 处、
   新名 12 处；§坑13 与 §十 里那句老名已在那一格改口）。四个导出档位（PNG／SVG／<c>.excalidraw</c>／剪贴板位图）<b>逐一真点验收</b>。
 - 引擎自带的 16 处网络出口按 §三 D 表逐项处置；<b>字体那颗远程回退</b>（§坑4）与 <b>woff2 子集的 wasm</b>（§坑5）
@@ -348,7 +348,7 @@ Runtime 与 SDK 两样本机都在，所以"新增运行时"的<b>开发态</b>�
 
 1. **Spike-1 的外部动作**：装 Node＋`npm install`（拉几百颗包）才能产出第一份 dist——§十一 ③ 现读
    <c>⛔ 不存在（§九 决策 1 走 A 就得先有这一步）</c>、<c>node_modules</c> ⛔ 在。要不要装、装到 D 盘哪一处、还是改由他那边打一份 dist 给我，<b>等他点头</b>
-   （我不在他机器上静默装工具链）。钉版本要钉 <b>commit</b>：现读 <c>ed10ac7d / v0.18.0-429-ged10ac7d</c>。
+   （我不在他机器上静默装工具链）。钉版本要钉 <b>commit</b>：现读 <c>ed10ac7d / v0.18.0-429-ged10ac7d</c>。  〔片11e 更正那颗「等他点头」：那一档到 §十六／§十七 <b>已不需要外部动作</b>——本机运行时本来就活（§16.1），打包落在那棵<b>⛔ 随仓</b>的 <c>bin/WI83/npm0e/</c>（整棵 <c>bin/</c> 在 <c>.gitignore</c> 内），⛔ 全局装⛔ 改 PATH⛔ 动那棵树 ⇒ 这颗从「欠他」移到<b>「已办」</b>；本节末剩下两颗（决策 3、4）照旧归他。〕
 2. **§九 决策 3**：Xiaolai 随包＝209 个分片 / 12.08 MB（形状：分片⛔ 一颗文件，代价要进逐文件清单）。
 3. **§九 决策 4**：AI 生图（TTD）要不要走"自带 Key"那条——本提案默认<b>不带</b>，要带就另立批。
 
@@ -1029,7 +1029,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 |---|---|
 | 写（宿主→画板） | <c>updateScene</c>、<c>updateLibrary</c>、<c>addFiles</c>、<c>resetScene</c>、<c>scrollToContent</c>、<c>setActiveTool</c>、<c>setCursor</c>、<c>resetCursor</c>、<c>updateFrameRendering</c>、<c>toggleSidebar</c>、<c>setToast</c>、<c>refresh</c>、<c>registerAction</c>、<c>history.clear</c> |
 | 读（宿主问画板要现状） | <c>getSceneElements</c>、<c>getSceneElementsIncludingDeleted</c>、<c>getAppState</c>、<c>getFiles</c>、<c>getName</c>、<c>id</c> |
-| 订阅（画板→宿主） | <c>onChange</c>、<c>onPointerDown</c>、<c>onPointerUp</c>、<c>onScrollChange</c>、<c>onUserFollow</c>（五颗都是 <c>emitter.on</c>，⛔ 一处 unsubscribe 句柄⇒桥要自己摘） |
+| 订阅（画板→宿主） | <c>onChange</c>、<c>onPointerDown</c>、<c>onPointerUp</c>、<c>onScrollChange</c>、<c>onUserFollow</c>（五颗都是 <c>emitter.on</c>，⛔ 一处 unsubscribe 句柄⇒桥要自己摘）  〔片11f <b>更正：这一格我写反了</b>——那颗 <c>on</c> <b>交回退订句柄</b>：<c>types/excalidraw/emitter.d.ts</c> 逐字 <c>on(...): UnsubscribeCallback</c> 且注释原文写着 <i>@returns unsubscribe function</i>，<c>UnsubscribeCallback = () =&gt; void</c>；而那颗 api 是<b>表达式体箭头</b>（<c>onChange: (cb) =&gt; this.onChangeEmitter.on(cb)</c>，<c>dev/index.js:982087</c> 一带）⇒ 句柄一路交给宿主；包<b>自己的</b>那份消费者就是这么用的（<c>hooks/useEmitter.ts</c>：<c>const unsubscribe = emitter.on(...); return () =&gt; { unsubscribe(); };</c>）⇒ 桥<b>⛔ 再造一套摘除</b>，改成「存进会话表、<c>Closed</c> 里逐颗调」（§21.1 硬线⑥）。〕 |
 
 ⇒ <b>三颗由此定死的裁决材料</b>：①「保存」⛔ 需要 JS 侧序列化—宿主拿 <c>getSceneElements()</c>＋<c>getAppState()</c>＋<c>getFiles()</c> 自己 <c>serializeAsJSON</c>（那颗函数在 <c>index.d.ts</c> 导出名单里，与 <c>loadFromBlob</c>／<c>restore</c>／<c>reconcileElements</c> 同列）；②「贴图进画板」有官方写面 <c>addFiles</c>（配 §19.3 那颗 <c>dataURL</c> 出口＝两颗都⛔ 走 <c>input</c>）；③<b>订阅那五颗⛔ 带退订句柄</b>⇒关窗时桥若还活着，回调会往已 Disposed 的宿主上打（§十 点验单加一格：关窗后 5 秒内不得再有桥消息）。
 
@@ -1082,10 +1082,110 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 ### 20.8 这一腿交掉／新开／还欠
 
 - <b>交掉</b>：§18.9 那颗「<c>onChange</c> 实参位与那颗图数据多大」（三颗、<c>files</c> 第 3 位；图数据以 <c>BinaryFileData.dataURL</c> 活在 <c>files</c> 里⇒<b>整颗图以 base64 串进场景对象</b>）。那颗形状逐字（<c>types/excalidraw/types.d.ts</c>）：<c>BinaryFileData = { mimeType: ValueOf&lt;typeof IMAGE_MIME_TYPES&gt; | typeof MIME_TYPES.binary; id: FileId; dataURL: DataURL; created: number; lastRetrieved: number }</c>，其中 <c>DataURL</c> 是<b>带 <c>_brand:DataURL</c> 的牌号</b>（⛔ 随手塞一颗字符串），而 <c>lastRetrieved</c> 的注释原文写着「<i>我们用这颗 flag 决定要不要把没用到的文件从存储里删掉</i>」⇒ 引擎<b>留了</b>一套 GC 判据却⛔ 自带存储（20.4），那颗删除动作住在壳里（在不在包里本腿⛔ 判，登记候选）；§坑11 那三处猜测换成颗数；§十二 那条「禁用 <c>LocalData</c> 层」改口。
-- <b>新开</b>：<b>形6</b>＝<c>onPaste</c> 只在<b>严格 <c>false</c></b> 时否决、抛错被吞（fail-open）；<b>形7</b>＝桥订阅那五颗⛔ 退订句柄⇒关窗后的回调要宿主自己掐；<b>形8</b>＝<c>excalidrawAPI</c> 传错只 <c>console.error</c>，屏幕上⛔ 读数（宿主接不上 API 时会表现成「按钮没反应」＝本仓定性过的坏）。
+- <b>新开</b>：<b>形6</b>＝<c>onPaste</c> 只在<b>严格 <c>false</c></b> 时否决、抛错被吞（fail-open）；<b>形7</b>＝桥订阅那五颗⛔ 退订句柄⇒关窗后的回调要宿主自己掐；<b>形8</b>＝<c>excalidrawAPI</c> 传错只 <c>console.error</c>，屏幕上⛔ 读数（宿主接不上 API 时会表现成「按钮没反应」＝本仓定性过的坏）。  〔片11g 更正<b>形7</b>：那颗句柄<b>有</b>（<c>emitter.d.ts</c> 逐字 <c>on(...): UnsubscribeCallback</c>；api 那颗是表达式体箭头⇒原样交回；包自己的 <c>useEmitter</c> 就是这么摘的）⇒ 形状从「宿主自己掐」改成「宿主<b>必须用</b>那颗现成的退订句柄」。我那句「⛔ 一处 unsubscribe」错在<b>只认 <c>return</c> 关键字、⛔ 认表达式体箭头</b>（那颗 <c>on</c> 的实现体压根⛔ 写在 <c>dev/index.js</c> 里，是 <c>emitter.d.ts</c>＋那颗 hook 交的答案）。〕
 - <b>⛔ 判</b>：那颗 <c>dataURL</c> 到底多大才把档撑爆（图进画板后 <c>.excalidraw</c> 的体积↔张数关系）；那颗 <c>nativeFileSystemSupported</c> 在 WebView2 的分支；§19.5 两臂照旧欠。
 - <b>下一腿</b>：按 §八 该是<b>架构批</b>（桥协议＋存储适配器设计文档）——三颗输入现在齐了：钩子名单（§20.2）、存储面无主（§20.4）、官方开关（§20.5）；那张协议白名单要<b>照着 §20.2 写而⛔ 我自己发明命令名</b>。
 
 ### 20.9 本腿⛔ 动过
 
 ⛔ 起窗（闲置 3.3 秒）；⛔ 动产品源码、那颗 <c>excalidraw</c> 树、语言表、<c>待决策事项.md</c>、系统 PATH、网络配置；⛔ 装东西⛔ 新引包（四把尺都是仓内 python，读片6／片7 已落的那两颗档）；唯一改过的文件是 <c>docs/excalidraw整合可行性深析.md</c> 自己（新增一节＋就地补句，⛔ 删邻行）。
+
+## 二十一、落地设计提案 v1（架构批·§八 那颗「第 1 批」的待评审稿收口）（批次 Phase C 片11，2026-10-17·⛔ 起窗的源码＋设计腿，⛔ 产品码⛔ 建工程⛔ 表⛔ 账本⛔ 装东西⛔ 改 PATH）
+
+> 这一腿新读的四把尺与正本＝<c>bin/WI83/spike4_83bw.py</c>→<c>spike4_probe_83bw.txt</c>（types 里那几颗签名的逐字）；<c>spike4b_83bx.py</c>→<c>spike4b_probe_83bx.txt</c>（props 那几颗钩＋导出／载入的形参）；<c>spike4c_83by.py</c>→<c>spike4c_probe_83by.txt</c>（<c>UnsubscribeCallback</c>＋那颗 api 类型体整颗＋运行时 25 颗键）；<c>spike4d_83bz.py</c>→<c>spike4d_probe_83bz.txt</c>（<c>emitter.d.ts</c> 整档＋包自己那份 <c>useEmitter</c> 的正件）。
+> 语料＝同一颗 <c>@excalidraw/excalidraw@0.18.0/dist</c>：<c>types/</c> 361 档 <b>1 139 905 字符</b>（字符⛔ 字节，名册 328 那一族），其中 <c>types/excalidraw/types.d.ts</c> 一颗 26 215 字符；<c>dev/index.js</c> 那颗运行时同片10 那颗。
+> ⚠ 这一腿<b>⛔ 起窗</b>：起窗第 0 道核对现读 <c>GetLastInputInfo</c> 闲置 <b>0.2 秒</b>（他在用电脑）⇒ §19.5 那两臂照旧挂「待跑」，本节所有「待量」都照实留着。
+> v1 只做一件事：<b>把 §十二 每一颗名字换成包里读到的真名，并把「谁负责哪一格」写成一颗能直接开工的形状</b>。本节里出现的每颗形参与键名，在上面四份正本里都有逐字行；⛔ 一颗是我发明的。
+
+### 21.0 形状：v0 那节的哪几颗被现读改掉了
+
+| # | v0（§十二）写的是 | 现读 | v1 处置 |
+|---|---|---|---|
+| 1 | 命令表里那颗 <c>scene.save</c>（JS 喊宿主存） | 宿主能自己取：api 逐字给着 <c>getSceneElements()</c>（返回 <c>readonly Ordered&lt;NonDeletedExcalidrawElement&gt;[]</c>）／<c>getAppState()</c>／<c>getFiles()</c>／<c>getName()</c>，另有 <c>serializeAsJSON(elements, Partial&lt;AppState&gt;, files, type)</c>⇒<c>string</c>，那颗 <c>type</c> 只有 <c>&quot;local&quot;</c> 与 <c>&quot;database&quot;</c> 两档 | <b>摘掉那颗命令</b>：存的时机与形状全在 C# 侧（§21.3），JS 侧连「喊存」都⛔ 必留 |
+| 2 | 命令表里那颗 <c>scene.dirty</c>（JS 递一颗 bool） | <c>onChange</c> 每次都把<b>整颗现状</b>交出来（三颗实参，§20.3） | <b>摘掉</b>：脏位＝宿主拿「上一份 <c>serializeAsJSON</c> 的字节 ↔ 当场那颗」对差，⛔ 再信一颗递来的 bool |
+| 3 | 两份名单里⛔ 有「粘贴」那一档 | 唯一的否决口是 <c>props.onPaste</c>，且<b>只有严格 <c>false</c> 才拦得住</b>、钩子抛错被 <c>catch</c> 吞（形6，§20.3 那颗逐字） | <b>新增一颗命令 <c>paste.query</c></b>（那颗钩是 <c>await</c> 的⇒桥可以回话），并把「钩⛔ 许抛、拒要显式返 <c>false</c>」写成硬线⑤（§21.1） |
+| 4 | 「web 内⛔ IndexedDB 写——<c>LocalData</c> 层禁用」 | 那颗层⛔ 在：六颗持久化面两套语料各 0 颗（§20.4） | <b>句子改口</b>：没有第二主人可禁；剩下的活只有「宿主写，且只宿主一个主人写」 |
+| 5 | 「订阅那五颗⛔ 退订句柄⇒桥要自己摘」 | <b>我写反了</b>：<c>emitter.d.ts</c> 逐字 <c>on(...): UnsubscribeCallback</c>，注释原文写着 <i>@returns unsubscribe function</i>，而 <c>UnsubscribeCallback = () =&gt; void</c>；api 那颗又是<b>表达式体箭头</b>（<c>onChange: (cb) =&gt; this.onChangeEmitter.on(cb)</c>）⇒ 句柄原样交给宿主；包<b>自己的</b>消费者就这么用：<c>hooks/useEmitter.ts</c> 里 <c>const unsubscribe = emitter.on(...); return () =&gt; { unsubscribe(); };</c> | <b>更正</b>：桥<b>存那五颗句柄</b>、<c>Closed</c> 里逐颗调（硬线⑥）；点验单加一格「摘完之后⛔ 再收到桥消息」（§21.6） |
+| 6 | 「Spike-1 要装 Node＋npm install＝那是要他点头的外部动作」 | §十六／§十七 已办：本机运行时本来就活（§16.1），打包全落在<b>⛔ 随仓</b>的 <c>bin/WI83/npm0e/</c>（整棵 <c>bin/</c> 在 <c>.gitignore</c> 内），⛔ 全局装⛔ 改 PATH⛔ 动那棵树 | <b>这颗从「欠他」移到「已办」</b>；§九 剩下三颗仍归他（§21.7） |
+| 7 | 「<c>embeddable</c>／远程 iframe 在导入那一刻降级为占位」——⛔ 说走哪颗开关 | 包里<b>有官方闸门</b>：<c>validateEmbeddable?</c> 的类型逐字是 boolean／字符串数组／RegExp／RegExp 数组／函数 五档，另有 <c>embeddableURLValidator(url, validateEmbeddable)</c> | 落地＝<b>那颗 prop 交 <c>false</c></b>（第一档就是 boolean）；宿主侧 CSP 与 <c>WebResourceRequested</c> 照旧当<b>第二道</b>（§17.4 那句「⛔ 能靠我们这份包⛔ 有远程 URL 过关」仍兑现） |
+| 8 | §12.5 那张「摘哪几颗」的名单 | <c>UIOptions</c> 逐字四颗：那颗 <c>welcomeScreen</c> 的注释原文是 <i>@deprecated does nothing. Will be removed in 0.15</i> | <b>欢迎屏那颗 prop 是死的</b>：产物里 <c>WelcomeScreen</c> 现读 28 颗（§17.3）⇒只能走 CSS／运行时摘 DOM／打包期 alias 三档之一（§18.5 那三档照旧） |
+
+### 21.1 桥协议 v1：那两份名单逐颗换成真名
+
+信封⛔ 改：<c>{ v, cmd, id, args }</c>＋回执多两颗（<c>ok</c>／<c>err</c>）。方向由那颗 <c>cmd</c> 的名字表定，⛔ 再造字段（v0 硬线②「多一颗键就拒」原样保留）。
+
+| 方向 | 名字 | args（逐颗点名） | 对侧动作 | 拒／降级形状 |
+|---|---|---|---|---|
+| JS→C# | <c>bridge.ready</c> | ⛔ 参 | 回 theme／lang／feature 三颗值（§21.5） | 名字表外的整条拒＋记日志 |
+| JS→C# | <c>paste.query</c> | 那颗 <c>data</c> 的<b>形状标签</b>（<c>elements</c>／<c>spreadsheet</c>／<c>text</c>／<c>errorMessage</c>，§20.3 那四档）＋字节数 | 走 <c>ClipboardPolicy</c> 那三层敏感判据，回 allow／deny | 钩子内部抛错＝<b>宿主自己 catch 成 deny</b>（⛔ 让引擎那颗 fail-open 替我们做主） |
+| JS→C# | <c>export.bytes</c> | base64 产物＋档位枚举（png／svg／scene）＋那颗会话 id | 解字节→由 C# 定名与落点；需要「贴／背景」的再转 §下两颗 | 档位⛔ 在枚举⇒拒；字节数与解码后⛔ 成对相等⇒报「桥坏」 |
+| JS→C# | <c>pin.request</c> | 一颗<b>已发过的 token</b> | 走 ClipIMG-P3 那颗接合贴到桌面 | token 认不出／已回收⇒拒 |
+| JS→C# | <c>background.request</c> | ⛔ 参（哪张图宿主自己知道） | 交冻帧或剪贴板历史图，回字节 | — |
+| JS→C# | <c>open.external</c> | 一条 http(s) URL | 交 <c>LauncherEx.TryOpenAsync</c>（系统浏览器），窗内⛔ 导航 | 非 http(s)／带凭据／⛔ 在白名单⇒拒 |
+| C#→JS | <c>board.load</c> | 那份档的字节（base64）＋那颗 id | 页面按 §21.3 那<b>三步</b>递进引擎 | 会话已 Closed⇒整条丢并记一颗 |
+| C#→JS | <c>theme.set</c>／<c>lang.set</c>／<c>feature.flags</c> | 一颗值（三颗同形） | 页面重挂那颗 prop（⛔ 两份真相，§12.5 那颗口径） | ⛔ 值＝不应用并回错 |
+| C#→JS | <c>export.pick</c> | 档位枚举＋那颗 <c>skipInliningFonts</c> 的 bool（那颗形参逐字见 <c>utils/export.d.ts</c>） | 页面调 <c>exportToBlob</c>／<c>exportToSvg</c> 后走 <c>export.bytes</c> | 档位⛔ 在枚举⇒拒；那颗 bool 的效果<b>本腿⛔ 量</b>（§21.7） |
+
+<b>硬线六条</b>（① ～ ③ 是 v0 那三条的现读版，④ ～ ⑥ 是本腿新增）：
+① <b>路径永远⛔ 进 args</b>——落点目录与命名由 C# 定；这条从此有<b>正件</b>：片8 递 <c>..\..\evil.png</c>／绝对路径／空名三颗，宿主一律 <c>Path.GetFileName</c> 收进 <c>bridge/</c> 且落点⛔ 出目录（§18.4 越权那一格）。
+② 命令白名单＋args <b>字段</b>白名单（多一颗键就拒，⛔ 忽略）。
+③ 那颗 <c>cmd</c> 与那颗 <c>id</c> 的配对表只活在宿主一侧；回执超时＝报错，⛔ 静默重试第二次副作用。
+④ <b>⛔ 拿桥当第二条数据通道</b>：现读预算＝空载 p50 0.4 ms、1 MB 31 ms、8 MB 177 ms（§18.6）⇒控制消息按亚毫秒算，字节走「一次一问」那一臂。
+⑤ <b><c>onPaste</c> 那颗钩⛔ 许抛、拒必须显式返 <c>false</c></b>（形6 的极性钉死）⇒宿主侧那颗判定包一颗自己的 <c>catch</c>，把「判不成」归到 deny 那一档。
+⑥ 五颗订阅的<b>退订句柄存进那颗会话表</b>，窗 <c>Closed</c> 里逐颗调（§21.0 第 5 行的更正）；那颗「代数计数」只当兜底，⛔ 替代它。
+
+### 21.2 那 25 颗旋钮：用 9 颗、⛔ 用 14 颗、候选 2 颗（9＋14＋2＝25，逐颗点名）
+
+| 档 | 键（api 逐字） | 为什么 |
+|---|---|---|
+| 用（9） | <c>updateScene</c>、<c>addFiles</c>、<c>getSceneElements</c>、<c>getAppState</c>、<c>getFiles</c>、<c>getName</c>、<c>id</c>、<c>history.clear</c>、<c>onChange</c> | 载档／存档／脏位／档名／栈治理各一颗，⛔ 一颗多余；那颗 <c>addFiles</c> 逐字收 <c>BinaryFileData[]</c>⇒宿主自缩自编的图正是它的入参（§21.3） |
+| 候选（2） | <c>scrollToContent</c>、<c>updateFrameRendering</c> | 前者等<b>检索沉淀批</b>（§八 第 5 批）「跳到那颗元素」才要；后者它的注释逐字要求<b>配合 <c>props.viewModeEnabled</c> 一起用</b>⇒归「只读板」那一格，⛔ 单独开 |
+| ⛔ 用（14） | <c>updateLibrary</c>、<c>resetScene</c>、<c>getSceneElementsIncludingDeleted</c>、<c>registerAction</c>、<c>refresh</c>、<c>setToast</c>、<c>setActiveTool</c>、<c>setCursor</c>、<c>resetCursor</c>、<c>toggleSidebar</c>、<c>onPointerDown</c>、<c>onPointerUp</c>、<c>onScrollChange</c>、<c>onUserFollow</c> | 逐颗理由：云库／协作是 §七 非目标；<c>resetScene</c>＝一板一窗、关窗即散，⛔ 一颗「就地清空」的动作；带删除的那份现状⛔ 存进档（宿主只认那颗 NonDeleted 版）；<c>registerAction</c>＝⛔ 往引擎菜单里加动作（「一个主人」，§18.5 那张行名单由宿主⛔ 扩）；<c>setToast</c>＝我们有 RV-1 那颗自绘提示卡（引擎那颗住在 <c>appState.toast</c>＝现读形状）；替用户选工具／画光标＝观感，⛔ 代码批自己定；滚／点⛔ 一格读数需要（一板一窗⇒<c>detectScroll</c> 默认那颗就够） |
+
+⇒ 一句话形状：<b>桥的命令表（§21.1）与旋钮表（本节）是两件事</b>——JS→C# 那六颗里没有一颗是「画板动作」，画板动作全走宿主侧那 9 颗旋钮；这样那张越权测试才⛔ 有第二道缝。
+
+### 21.3 存储适配器 v1：四颗真签名钉住的形状
+
+- <b>载档天生是三步，⛔ 是一把交</b>（§21.0 第 1 行那颗类型钉的）：<c>SceneData</c> 逐字只有 <c>elements</c>／<c>appState</c>／<c>collaborators</c>／<c>captureUpdate</c> 四颗字段、<b>⛔ <c>files</c> 那一颗</b> ⇒ 序列＝档字节 → <c>loadFromBlob(blob, localAppState|null, localElements|null, fileHandle?)</c> → <c>updateScene({elements, appState, captureUpdate: NEVER})</c> → <c>addFiles(Object.values(files))</c>。v0 那句「updateScene 一把交」就地作废。
+- <b>存</b>：<c>serializeAsJSON(getSceneElements(), 那颗 Partial&lt;AppState&gt;, getFiles(), &quot;local&quot;)</c> ⇒ 一颗 <c>string</c>。那颗第四颗形参逐字只有两档，桌面档<b>定 <c>&quot;local&quot;</c></b>（<c>&quot;database&quot;</c> 那一档归协作壳，非目标）。写盘走本仓既有那条原子写（读档⛔ 截零）。
+- <b>图</b>：宿主自己缩到上限、自己编成 <c>BinaryFileData</c>（那颗 <c>dataURL</c> 带 <c>_brand</c>，⛔ 随手塞字符串）交 <c>addFiles</c>＝§19.3 出口①；两颗上限（长边与字节）<b>自己给</b>（形5：那条出口同时跳过引擎的 1440 减重）。那颗 <c>generateIdForFile?: (file: File) =&gt; string 或 Promise&lt;string&gt;</c> 也够宿主把 id 钉死（§19.3 现读）。
+- <b>内嵌 分颗：定＝内嵌</b>（一颗档一板，图跟着 <c>files</c> 走 base64）。三条理由：引擎那颗 serialize 自带这个形状；分颗＝第二套身份＋第二个主人；备份链复用那颗「含图片」的开关（§坑23：⛔ 加新键）。代价照实写：一张 4K 图的 base64 是几百 KB 级，而<b>「体积↔张数」这条曲线⛔ 量过</b>（§20.8）⇒代码批第一刀＝先把曲线量出来再给上限，⛔ 先写常数（本仓那条「量程收成一处」的旧规矩）。
+- <b>那颗 <c>lastRetrieved</c></b>：注释原文说它用来决定删⛔ 用的文件，而「删」这个动作在包里<b>0 处</b>（§20.4）⇒ v1 明写：宿主<b>⛔ 拿它当删除依据</b>；那颗字段照引擎形状存，⛔ 自己加字段（＝漂移面）。
+- <b>四拍 autosave</b>：停笔 1.5 s／窗失焦／<c>ProcessFailed</c> 之前／<c>Closed</c> 之前；另存一颗 <c>.bak</c>（只留最近一颗）；对账三分类⛔ 静默删（ClipIMG-1e 那一族直接复用）；未保存离开＝就地三颗按钮（存／丢／留下决定），⛔ 把「请先保存」写成用户作业（P-54）。
+- <b>身份与命名</b>：文件名＝那颗稳定 id（<c>yymmdd-HHMMss-4hex</c>，v0 同）；<c>appState.name</c>（逐字 <c>string | null</c>）只当显示名，⛔ 当身份；板名是用户数据⇒⛔ 进语言表，而宿主自己那几句上屏话一律 <c>LocMessage</c>（界面语言那条线的口径直接适用）。
+
+### 21.4 撤销栈、脏位、多窗（那颗 <c>captureUpdate</c> 注释逐字之后）
+
+- <c>updateScene</c> 那颗 <c>captureUpdate</c> 的注释逐字给了三档，并明写 <b><c>@default CaptureUpdateAction.EVENTUALLY</c></b> ⇒ v1 定死：<b>载档与桥回写交 <c>NEVER</c>，用户动作交 <c>IMMEDIATELY</c></b>，另配 <c>history.clear</c>（types 逐字＝<c>App[&quot;resetHistory&quot;]</c>）。§20.7 那句「默认要清栈，否则 Ctrl+Z 把图退回空白」落在这两颗上。
+- 脏位＝宿主那份字节对差（§21.0 第 2 行）；⛔ 另造计数器，⛔ 让 JS 递 bool。
+- 同档两扇窗：聚焦已有那扇（v0 不变，引擎<b>⛔ 跨窗机制</b>＝§20.4）；若将来真要把两份合，现成签名是 <c>reconcileElements(localElements, remoteElements, localAppState)</c> ⇒ <c>ReconciledExcalidrawElement[]</c>，版本戳现读 <c>getSceneVersion: (elements) =&gt; number</c>。
+
+### 21.5 生命周期／崩溃／那颗注入面（片8 那五颗读数直接接进来）
+
+- 一板一窗、按需建、<c>Closed</c> 里 <c>Dispose</c>；兜底＝按<b>自己那颗 pid 的子树</b>清 <c>msedgewebview2</c>（⛔ 杀不属于自己的进程）。这条从断言升成<b>可复现</b>：跑中按那颗沙盒 <c>--user-data-dir</c> 归因 7 颗、关窗后 0 颗、全局回到 12（§18.7）。
+- <c>userDataFolder</c> 的验收格<b>写成现读那层</b>：<c>&lt;udf&gt;\EBWebView\Default\Local Storage</c>（⛔ 按 <c>&lt;udf&gt;\Default\…</c> 找＝名册 334 那颗坑）。
+- <c>ProcessFailed</c> ⇒ 事件桥报＋<b>当场那份自动落盘</b>（§21.3 四拍之一）＋重载＋<c>board.load</c> 把刚那份递回去；重载之后⛔ 许回到空板，也⛔ 许静默白屏（§坑10）。
+- 那颗键位共存：包侧 <c>handleKeyboardGlobally</c> 默认 <c>false</c>（§20.5 两处消费点）⇒引擎⛔ 抢 window 级键盘；仍欠两格量（画板焦点下 F1 那颗全局热键、以及 <c>Ctrl+S</c> 那一类浏览器级键），列进 §21.6。
+- 首帧预算＝现读 <b>≈960 ms</b>（r3／r5 同档，§18.7）⇒「关窗即散」那颗体验说法以此为准（这是 §21.7 那颗拍板的材料，⛔ 是结论）。
+- 出机三道：宿主注入 CSP；<c>WebResourceRequested</c>（现读那颗 filter 连 iframe 的 <c>Document</c> 请求都盖得住，§18.1）；<c>esm.sh</c> 永久 451 当最后一道——<b>⛔ 因为「配了那颗全局」就摘掉它</b>（形1′：那颗兜底永远排在名单最后，§19.2）。
+
+### 21.6 §十 那张点验单：v1 从此有出处的格、新增的格
+
+| 格 | 状态 |
+|---|---|
+| 导出四路各一遍→档名与路径归 C# | <b>有正件</b>：§18.4 (a)(b) 两臂成对相等（28 759 ↔ 28 759），且网页给的档名<b>会被丢</b>（<c>a.download</c> 被无视⇒<c>blob:</c> 的 UUID） |
+| 桥越权（保存任意路径／命令／iframe url） | 硬线①②＋§18.4 那颗越权正件；<b>新增</b>一颗「伪造 <c>paste.query</c> 的 data 形状」 |
+| 旧 embeddable 场景打开：iframe ⛔ 加载远程 | 新增官方出口＝<c>validateEmbeddable:false</c>（§21.0 第 7 行），宿主两道照旧；⚠ 「占位＋警告文案」那句仍要<b>我们自己写</b>（§18.9 现读：拦下来是颗空框） |
+| 场景回环：保存→重开→undo 栈清空 | 从此有名字：<c>captureUpdate:NEVER</c> ＋ <c>history.clear</c>（§21.4） |
+| 关窗 60 秒后进程树＝0／userData 落点＝改道后目录 | §18.7 已在一次性宿主上复现；落地批在同一颗产品窗上<b>再跑一次</b>（⛔ 拿片8 那跑顶替） |
+| <b>新增</b>：摘完之后⛔ 再收到桥消息 | 硬线⑥那颗退订句柄；形状＝关窗后 5 秒内桥计数＝0（原 §20.2 那格由「宿主自己掐」改锚到「用现成的句柄」） |
+| <b>新增</b>：拖一颗<b>照片味</b>的 4K PNG | ＝§19.5 第②臂：1440 之后进不进 4 MB（形2 到底挡谁）；同跑顺手量「体积↔张数」那颗曲线（§21.3 那颗上限的前置） |
+| <b>新增</b>：断网全字体验证 | ＝§19.5 第①臂（那颗全局设／⛔ 设两跑）＋<c>WebAssembly.instantiate</c> 起没起＝§19.4(b) |
+
+### 21.7 本节⛔ 判的（⛔ 从表里消失）与归属
+
+- <b>归他三颗（口径与观感）</b>：§九 决策 2 生命周期档位（材料＝960 ms 首帧＋关窗归零可复现）；决策 3 Xiaolai 随⛔ 随包（209 分片／12.08 MB，且「随包＋那颗全局」两颗一起，§19.6 已改口）；决策 4 TTD／mermaid（那颗 alias stub 臂省 <b>41.8%＝3 497 832 颗字节</b>，代价＝「mermaid→画板」还能不能用⛔ 判，§17.3／§17.7）。
+- <b>窗口面四颗（我跑，归我）</b>：§19.5 两臂；<c>nativeFileSystemSupported</c> 在 WebView2 的分支（§20.6）；那颗 <c>skipInliningFonts</c> 的效果（§21.1 最后一行给它留的档）；菜单展开态那张照片（§18.5 那颗截图尺副作用）。
+- <b>⛔ 量的一颗（写清楚，别当成设计）</b>：内嵌 base64 之后「一颗板多大 ↔ 几张图」的曲线——本节只<b>定了方向</b>（内嵌），上限那颗数<b>欠着</b>，代码批第一刀补。
+- <b>v1 状态＝待评审</b>。评审过之前，§八 的第 2～6 批一颗⛔ 开工；评审后<b>第一颗交付＝§21.6 那张随包／接线清单</b>（宿主 HTML 那一行全局＋那颗虚拟站＋三道出机），⛔ 是 UI。
+
