@@ -1149,7 +1149,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 - <b>载档天生是三步，⛔ 是一把交</b>（§21.0 第 1 行那颗类型钉的）：<c>SceneData</c> 逐字只有 <c>elements</c>／<c>appState</c>／<c>collaborators</c>／<c>captureUpdate</c> 四颗字段、<b>⛔ <c>files</c> 那一颗</b> ⇒ 序列＝档字节 → <c>loadFromBlob(blob, localAppState|null, localElements|null, fileHandle?)</c> → <c>updateScene({elements, appState, captureUpdate: NEVER})</c> → <c>addFiles(Object.values(files))</c>。v0 那句「updateScene 一把交」就地作废。
 - <b>存</b>：<c>serializeAsJSON(getSceneElements(), 那颗 Partial&lt;AppState&gt;, getFiles(), &quot;local&quot;)</c> ⇒ 一颗 <c>string</c>。那颗第四颗形参逐字只有两档，桌面档<b>定 <c>&quot;local&quot;</c></b>（<c>&quot;database&quot;</c> 那一档归协作壳，非目标）。写盘走本仓既有那条原子写（读档⛔ 截零）。
 - <b>图</b>：宿主自己缩到上限、自己编成 <c>BinaryFileData</c>（那颗 <c>dataURL</c> 带 <c>_brand</c>，⛔ 随手塞字符串）交 <c>addFiles</c>＝§19.3 出口①；两颗上限（长边与字节）<b>自己给</b>（形5：那条出口同时跳过引擎的 1440 减重）。那颗 <c>generateIdForFile?: (file: File) =&gt; string 或 Promise&lt;string&gt;</c> 也够宿主把 id 钉死（§19.3 现读）。
-- <b>内嵌 分颗：定＝内嵌</b>（一颗档一板，图跟着 <c>files</c> 走 base64）。三条理由：引擎那颗 serialize 自带这个形状；分颗＝第二套身份＋第二个主人；备份链复用那颗「含图片」的开关（§坑23：⛔ 加新键）。代价照实写：一张 4K 图的 base64 是几百 KB 级，而<b>「体积↔张数」这条曲线⛔ 量过</b>（§20.8）⇒代码批第一刀＝先把曲线量出来再给上限，⛔ 先写常数（本仓那条「量程收成一处」的旧规矩）。
+- <b>内嵌 分颗：定＝内嵌</b>（一颗档一板，图跟着 <c>files</c> 走 base64）。三条理由：引擎那颗 serialize 自带这个形状；分颗＝第二套身份＋第二个主人；备份链复用那颗「含图片」的开关（§坑23：⛔ 加新键）。代价照实写：一张 4K 图的 base64 是几百 KB 级，而<b>「体积↔张数」这条曲线⛔ 量过</b>（§20.8）（<b>片15 追记</b>：曲线已量－空档 237 字符、照片级 1440 每张 +0.32 MiB、噪声 1440 每张 +9.08 MiB、dataURL 字符＝字节 × 4/3，见 §二十二.3；<b>但曲线⛔ 等于上限</b>——允多大那颗数仍归他）⇒代码批第一刀＝先把曲线量出来再给上限，⛔ 先写常数（本仓那条「量程收成一处」的旧规矩）。
 - <b>那颗 <c>lastRetrieved</c></b>：注释原文说它用来决定删⛔ 用的文件，而「删」这个动作在包里<b>0 处</b>（§20.4）⇒ v1 明写：宿主<b>⛔ 拿它当删除依据</b>；那颗字段照引擎形状存，⛔ 自己加字段（＝漂移面）。
 - <b>四拍 autosave</b>：停笔 1.5 s／窗失焦／<c>ProcessFailed</c> 之前／<c>Closed</c> 之前；另存一颗 <c>.bak</c>（只留最近一颗）；对账三分类⛔ 静默删（ClipIMG-1e 那一族直接复用）；未保存离开＝就地三颗按钮（存／丢／留下决定），⛔ 把「请先保存」写成用户作业（P-54）。
 - <b>身份与命名</b>：文件名＝那颗稳定 id（<c>yymmdd-HHMMss-4hex</c>，v0 同）；<c>appState.name</c>（逐字 <c>string | null</c>）只当显示名，⛔ 当身份；板名是用户数据⇒⛔ 进语言表，而宿主自己那几句上屏话一律 <c>LocMessage</c>（界面语言那条线的口径直接适用）。
@@ -1185,8 +1185,8 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 ### 21.7 本节⛔ 判的（⛔ 从表里消失）与归属
 
 - <b>归他三颗（口径与观感）</b>：§九 决策 2 生命周期档位（材料＝960 ms 首帧＋关窗归零可复现）；决策 3 Xiaolai 随⛔ 随包（209 分片／12.08 MB，且「随包＋那颗全局」两颗一起，§19.6 已改口）；决策 4 TTD／mermaid（那颗 alias stub 臂省 <b>41.8%＝3 497 832 颗字节</b>，代价＝「mermaid→画板」还能不能用⛔ 判，§17.3／§17.7）。
-- <b>窗口面四颗（我跑，归我）</b>：§19.5 两臂；<c>nativeFileSystemSupported</c> 在 WebView2 的分支（§20.6）；那颗 <c>skipInliningFonts</c> 的效果（§21.1 最后一行给它留的档）；菜单展开态那张照片（§18.5 那颗截图尺副作用）。
-- <b>⛔ 量的一颗（写清楚，别当成设计）</b>：内嵌 base64 之后「一颗板多大 ↔ 几张图」的曲线——本节只<b>定了方向</b>（内嵌），上限那颗数<b>欠着</b>，代码批第一刀补。
+- <b>窗口面四颗（我跑，归我）</b>：§19.5 两臂；- <b>窗口面四颗（我跑，归我）</b>：<b>【片15 追记：四颗全部已跑完，读数在 §二十二 与 §二十三】</b>——其中 native FS 那颗的读数是<b>「门是开的」</b>（§二十二.6）⇒ 接管表要加一行「⛔ 管住网页自己那颗 picker」。原四颗：§19.5 两臂；<c>nativeFileSystemSupported</c> 在 WebView2 的分支（§20.6）；那颗 <c>skipInliningFonts</c> 的效果（§21.1 最后一行给它留的档）；菜单展开态那张照片（§18.5 那颗截图尺副作用）。
+- <b>⛔ 量的一颗（写清楚，别当成设计）</b>：内嵌 base64 之后「一颗板多大 ↔ 几张图」的曲线——本节只<b>定了方向</b>（内嵌），上限那颗数<b>欠着</b>，代码批第一刀补。上限那颗数<b>欠着</b>，代码批第一刀补。<b>【片15 改口】</b>曲线已在片13 量出（§二十二.3），欠的变成两颗：<b>容差</b>（允许多大，归他）与<b>「打到没随包的字」那一档的现场</b>（归我，要先定一张常用字表）。
 - <b>v1 状态＝待评审</b>。评审过之前，§八 的第 2～6 批一颗⛔ 开工；评审后<b>第一颗交付＝§21.6 那张随包／接线清单</b>（宿主 HTML 那一行全局＋那颗虚拟站＋三道出机），⛔ 是 UI。
 
 ## 二十二、Spike-1b 第二腿（起窗现读 r6＋r7）：那颗 asset 开关一臂之差＝导出档自不自足、档体积↔图张数那条直线、中文在画布上认的是系统字面（批次 Phase C 片13，2026-10-17·一次性起窗＋只读取数，⛔ 产品码⛔ 建工程⛔ 改系统 PATH⛔ 装工具链⛔ 表⛔ 账本）
@@ -1312,3 +1312,55 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 ### 23.5 这一腿欠的（⛔ 混进已读）
 
 ①档 5 那一族<b>覆盖表</b>（哪几片对应哪些字）⇒ 才知道随包能裁到多小、以及「打到没随包的字」那一档长什么样；②深色底下元素描边的<b>对比色判据</b>归谁（Core 一颗⛔ 是两处）；③<c>langCode</c> 换语言那一刻<b>菜单开着</b>的时候会不会自己关（本腿是关了菜单才换的）；④那颗 <c>fontFamily=4</c> 报「⛔ 注册的字面族」——它在我们的字体下拉里<b>该⛔ 该出现</b>（现读：递进去会报 error 并落到 emoji 档）。
+
+## 二十四、包内现读（⛔ 起窗）：那颗子集化 worker 的 URL 从哪儿来、字体那枚 enum 的真名、Xiaolai 覆盖表就在 bundle 里（批次 Phase C 片15，2026-10-17·只读源码腿，⛔ 起窗⛔ 产品码⛔ 建工程⛔ 装工具链⛔ 改系统 PATH⛔ 表⛔ 账本）
+
+> §二十二.10 欠项①（那份 worker 到底叫什么、要不要随包）与 §二十三.5 欠项①（Xiaolai 覆盖表）都⛔ 需要起窗——两样都写在我<b>已经有</b>的那颗 bundle 里。这一腿只读 <c>bin/WI83/spike1b/www/spike1.min.js</c>（8,376,283 字节）与 <c>www/fonts/</c> 那 234 颗档。
+
+### 24.1 那颗子集化 worker：URL 由打包期注入，我这份产物里它<b>恒为 undefined</b>，而 worker 的<b>代码本体就在同一颗 bundle 里</b>
+
+逐字现读（<c>spike1.min.js</c>，偏移 2,168,641 起那一支）：
+
+- <c>var Eht = {}; Ei(Eht, { WorkerUrl: () => F0i });</c> ⇒ 那颗模块只交出一颗名字 <c>WorkerUrl</c>。
+- <c>Bht = {}, F0i = Bht.url ? new URL(Bht.url) : void 0;</c> ⇒ <b>那颗 <c>Bht</c> 在我这份 bundle 里是颗空对象</b>（打包期该注入的 <c>url</c> 没注进来）⇒ <c>WorkerUrl === undefined</c>。
+- <c>typeof window > "u" && typeof self < "u" && (self.onmessage = async e => { switch (e.data.command) { case WmA.Subset: … }</c> ⇒ <b>worker 的正文与主线程代码在同一颗档里</b>，靠「⛔ 有 window 而有 self」那颗门只在 worker 环境里挂上。
+- 那颗池子的门：<c>static create(t, i = {}) { if (!t) throw new p4t; if (!Ndt.url || t.toString() === Ndt.url) throw new w4t; … }</c> ⇒ <c>p4t</c>＝<c>WorkerUrlNotDefinedError</c>（URL 为空，<b>就是 r6b/r7a/r8a 三臂响的那一声</b>），<c>w4t</c>＝<c>WorkerInTheMainChunkError</c>（URL 就是主 chunk 自己＝那颗 worker ⛔ 单独成档）。
+- 兜底那一支：<c>catch (s) { Hht = !1, dri() && (s instanceof p4t || s instanceof w4t) || console.error("Failed to use workers for subsetting, falling back to the main thread.", s), n(e, t) }</c> ⇒ <b>回落主线程那颗 <c>subsetToBase64</c>，功能照成</b>（§二十二.2 那颗 12 ms→146 ms 就是这一支的代价）。⚠ 而 <c>console.error</c> 在我们这份产物里<b>会响</b>（三臂都读到＝那颗 dev 判定 <c>dri()</c> 恒假，被编译掉了）⇒ 排障时别把那一声当故障。
+
+**结论（欠项①就此关掉）**：随包<b>⛔ 需要额外的 worker 档</b>——今天这份产物里那颗 worker 从没被实例化过，全部子集化都在主线程做完，读得到、量得到。要<b>启用</b>它是<b>打包期</b>的事（把 worker 入口单独切一颗 chunk，再把 <c>Bht.url</c> 注成那颗 chunk 的 URL；<c>w4t</c> 就是防「URL 指回主 chunk」那道门），⛔ 运行时 prop、⛔ 桥命令。⇒ §二十一 那颗「随包清单」⛔ 因这颗 worker 加东西；§21.7 那颗性能读数（146 ms 一颗 SVG）的<b>解释</b>也从「未知降级」变成「已知且可选的优化」。
+
+### 24.2 字体那枚 enum 的真名：档 5 叫 <c>Excalifont</c>，而 <c>Xiaolai</c> 是<b>它的中文回退</b>（⛔ 是「档 5」）
+
+<c>Sl = { Virgil: 1, Helvetica: 2, Cascadia: 3, Excalifont: 5, Nunito: 6, "Lilita One": 7, "Comic Shanns": 8, "Liberation Sans": 9 }</c>，另 <c>NW = { Xiaolai: 100, "Segoe UI Emoji": 1000 }</c> 是<b>回退档</b>的登记表（<c>[NW.Xiaolai]: { metrics: {…}, fallback: !0 }</c>、emoji 那颗 <c>local: !0, fallback: !0</c>）。
+
+- 这把 §二十三.2 那张表读通了：<b>档 5 就是 Excalifont</b>（包里那颗默认手写体），它的 CSS 栈是 <c>Excalifont, Xiaolai, Segoe UI Emoji</c> ⇒ 汉字<b>不是</b>「档 5 的字」，是<b>档 5 后面的那颗中文回退</b>；档 1 是 <c>Virgil</c>（同一处还标着 <c>deprecated: !0</c>），栈里<b>⛔ 带中文回退</b> ⇒ 汉字落系统。
+- ⚠ 我上一腿把那颗档写成「档 5 那一族」，读起来像有一颗叫「5」的字面＝坑表 #672。也顺手撞出另一颗：<b>我 r6/r7/r8 三腿的探针元素一直用档 1</b>，而档 1 在包里是<b>已废弃</b>那颗 ⇒ 我那几张照片里「汉字是系统黑体」是<b>我自己选的档</b>造成的，⛔ 是引擎的默认（引擎默认＝档 5，也就是会走 Xiaolai 回退）＝坑表 #674。
+- 那颗 <c>fontFamily=4</c> 报 <c>Couldn't find registered fonts for font-family "4"</c> 现在也对上了：<c>Sl</c> 里<b>没</b> 4 这一档（1/2/3/5/6/7/8/9），4 是空洞。⇒ 我们的字体下拉⛔ 许出现 4（§二十三.5 欠项④关掉）。
+
+### 24.3 Xiaolai 的覆盖表<b>就在 bundle 里</b>：209 颗 URI 全被定义、205 颗抓到 <c>unicodeRange</c>、盖住 CJK 主区要 100 片＝5.43 MB
+
+现读（同一颗 <c>spike1.min.js</c> ＋ <c>www/fonts/Xiaolai/</c> 逐档 <c>getsize</c>）：
+
+| 读数 | 颗数 | 字节 |
+| --- | --- | --- |
+| 全族（档里定义、盘上都在） | 209 | <b>12.08 MB</b>（平均 59.2 KB／最大 82.1 KB） |
+| 抓到 <c>uri:…,descriptors:{unicodeRange:"…"}</c> 那一条形状的 | 205 | 11.85 MB |
+| 覆盖 <c>U+4E00–U+9FA5</c>（CJK 主区）那几片 | <b>100</b> | <b>5.43 MB</b>（省 55%） |
+| 那 205 片合计覆盖的码位并集 | — | <b>8,293</b> 颗 |
+| 屏幕上那句「永字八法 Abc 123」真拉的 | 3 | 135,612 B（§二十三.3） |
+
+- ⇒ §九 决策 3 现在有<b>三档</b>可选，而⛔ 一档：全随 12.08 MB／只随主区 5.43 MB／只随「屏幕上出现过的那几片」135 KB 级。裁到多小是<b>他的</b>口径（观感＋装机体积），我这一腿只把<b>每档的字节</b>摆出来。
+- ⚠ 那颗「205／209」⛔ 能读成「另 4 片用不上」：它只是<b>我那条正则</b>抓到 205 颗带 <c>unicodeRange</c> 的条目，另 4 颗 URI 在档里被定义了而<b> descriptor 的形状我⛔ 覆盖</b>＝坑表 #673。要说清那 4 颗得回去逐颗读它们的定义点，登记为欠项。
+- 再往下裁（比如「3,500 常用字要几片」）需要<b>一张常用字表</b>——那是措辞与口径之外的新输入，⛔ 由我现编一张。
+
+### 24.4 §二十一 那份 v1 里，本腿<b>就地改口</b>的三句
+
+| v1 原句（§21.3／§21.5／§21.7） | 新读数 | 已就地补成 |
+| --- | --- | --- |
+| 「『体积↔张数』这条曲线<b>⛔ 量过</b>（§20.8）⇒代码批第一刀＝先把曲线量出来再给上限」 | 曲线量出来了：空档 237 字符、照片级 1440 每张 +0.32 MiB、噪声 1440 每张 +9.08 MiB、<c>dataURL</c> 字符＝字节 × 4/3（§二十二.3） | 补成「已量（片13），<b>容差那颗数仍归他</b>」——曲线⛔ 等于上限 |
+| 「<b>窗口面四颗（我跑，归我）</b>：§19.5 两臂；<c>nativeFileSystemSupported</c> 分支；<c>skipInliningFonts</c> 效果；菜单展开态那张照片」 | 四颗全部有读数（片13／片14），其中 native FS 那颗的读数是<b>「门是开的」</b>（§二十二.6） | 补成「四颗已跑完＋那颗『⛔ 管住网页自己那颗 picker』进接管表」 |
+| 「<b>⛔ 量的一颗</b>：内嵌 base64 之后『一颗板多大 ↔ 几张图』的曲线——上限那颗数<b>欠着</b>」 | 曲线⛔ 欠；欠的变成「允许多大」那颗<b>口径</b>与「没随包的字长什么样」那颗<b>读数</b> | 改口成两颗欠项：容差（归他）＋没随包那一档的现场（归我，要一张常用字表） |
+
+### 24.5 这一腿欠的（⛔ 混进已读）
+
+①那 4 颗⛔ 被我正则抓到的 Xiaolai URI 的 descriptor 形状（逐颗读定义点）；②启用 worker 那条路<b>真跑一次</b>（单独切一颗 chunk＋注 URL，看那颗 146 ms 掉到多少）——那是打包腿的活，v1 评审过之前⛔ 开工；③「打到没随包的字」那一档的现场（要先定常用字表）；④档 6/7/8/9（Nunito／Lilita One／Comic Shanns／Liberation Sans）四颗<b>在屏幕上的样子</b>——本腿只读到名字与号数，⛔ 拍过照。
