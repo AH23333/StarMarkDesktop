@@ -168,6 +168,12 @@ public sealed class UpdateIntegrityTests
     [InlineData("StarMark%2ezip", false)]
     [InlineData("StarMark.tar.gz", false)]
     [InlineData("", false)]
+    // 批次 Phase C 片12：这一格此前把<b>整颗</b> "xxx.zip" 交给设备名判据，于是永远比不中。
+    [InlineData("CON.zip", false)]                            // 主干是设备名：落盘就是一颗打不开的东西
+    [InlineData("nul.ZIP", false)]                            // 大小写⛔ 敏感（扩展名那一半照常大写）
+    [InlineData("COM1.zip", false)]
+    [InlineData("CONSOLE.zip", true)]                         // 对照件：⛔ 是"开头像 CON"，判的是整颗主干
+    [InlineData("LPT0.zip", true)]                            // 成员照旧：原算法只认 1–9
     public void ThePayloadNameMustBeABareZipFileName(string name, bool allowed)
         => Assert.Equal(allowed, UpdateManifestCodec.IsSafePackageName(name));
 

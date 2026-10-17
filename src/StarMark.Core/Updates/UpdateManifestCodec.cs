@@ -288,14 +288,23 @@ public static class UpdateManifestCodec
         return true;
     }
 
-    /// <summary>载荷那颗：必须是个光秃秃的 <c>.zip</c> 文件名——不带路径、不带查询串、不带百分号。</summary>
+    /// <summary>
+    /// 载荷那颗：必须是个光秃秃的 <c>.zip</c> 文件名——不带路径、不带查询串、不带百分号。
+    /// <para><b>这里读的是叶名的主干</b>（<c>CON.zip</c> 拒）：本批之前这一行把<b>整个</b> <c>xxx.zip</c>
+    /// 交给设备名判据，那颗判据按"整颗名字恰好等于 CON/PRN/…"比，于是带扩展名的永远比不中＝这一格<b>从来没在判任何东西</b>。
+    /// 同一份清单里 <see cref="IsSafeRelativePath"/> 那条却按主干判（<c>NUL.txt</c> 直接拒）：
+    /// 两个入口对同一件事两套"合法档名"，而前者的形状正是它自己注释写的那句"能通过检查、却在真正写盘时以奇怪方式失败"。
+    /// ⚠ 这一改<b>收紧</b>了一颗永远不可能真实出现的名字（我们的包一律 <c>StarMark-&lt;版本&gt;-win-x64.zip</c>），
+    /// 不是放宽——把两颗主人并成一颗时⛔ 顺手让强者退到弱者的口径。</para>
+    /// </summary>
     public static bool IsSafePackageName(string? name)
     {
         if (string.IsNullOrWhiteSpace(name) || name!.Length > MaxPackageNameLength) return false;
         if (!name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) return false;
         if (name.IndexOfAny(PackageForbiddenChars) >= 0) return false;
         if (name.StartsWith('.') || name.EndsWith('.') || name.Contains(' ')) return false;
-        return !IsReservedDeviceName(name);
+        // 设备名判断全仓只有一份主人（<c>Files.DeviceNamePolicy</c>，批次 Phase C 片12 并的）
+        return !Files.DeviceNamePolicy.IsReservedStem(System.IO.Path.GetFileNameWithoutExtension(name));
     }
 
     private static readonly char[] PackageForbiddenChars =
@@ -314,7 +323,8 @@ public static class UpdateManifestCodec
         if (path.StartsWith('/') || path.EndsWith('/') || path.Contains("//")) return false;
         var leaf = path[(path.LastIndexOf('/') + 1)..];
         if (leaf.Length == 0 || leaf.EndsWith(".") || leaf.EndsWith(" ") || leaf.StartsWith('.')) return false;
-        if (IsReservedDeviceName(leaf.Split('.')[0])) return false;
+        // 那颗设备名判断全仓只有一份主人（<c>Files.DeviceNamePolicy</c>，批次 Phase C 片12 并的）
+        if (Files.DeviceNamePolicy.IsReservedStem(leaf.Split('.')[0])) return false;
 
         foreach (var segment in path!.Split('/'))
         {
@@ -322,18 +332,6 @@ public static class UpdateManifestCodec
             if (segment is "." or "..") return false;
         }
         return true;
-    }
-
-    /// <summary>Windows 的设备名不能当文件名，否则解出来就是一颗永远打不开的东西。</summary>
-    private static bool IsReservedDeviceName(string stem)
-    {
-        var upper = stem.ToUpperInvariant();
-        if (upper is "CON" or "PRN" or "AUX" or "NUL" or "CLOCK$") return true;
-        if (upper.Length is not (4 or 5) || (upper[0] != 'C' && upper[0] != 'L')) return false;
-        var head = upper[0] == 'C' ? "COM" : "LPT";
-        return upper.StartsWith(head, StringComparison.Ordinal)
-            && upper.Length == head.Length + 1
-            && upper[3] is >= '1' and <= '9';
     }
 
     /// <summary>只认<b>小写</b>十六进制：期望值与算出来的值都由 <see cref="UpdateHashHex"/> 生成，

@@ -13,14 +13,6 @@ namespace StarMark.Core.Backup;
 /// </summary>
 public static class BackupPathPolicy
 {
-    /// <summary>Windows 保留设备名（不区分大小写，且作为主干名时后面带任何扩展名都非法）。</summary>
-    private static readonly string[] ReservedStems =
-    {
-        "CON", "PRN", "AUX", "NUL",
-        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-    };
-
     /// <summary>
     /// 归一用户手输的导出目标：去引号/空白、补扩展名、展开为绝对路径。
     /// <para>只填文件名时补 <c>.json</c>——实际写出去的是什么载体由内容决定（带图就是同名 <c>.zip</c>），
@@ -45,7 +37,8 @@ public static class BackupPathPolicy
 
         var stem = Path.GetFileNameWithoutExtension(full);
         if (stem.Length == 0) return (null, LocMessage.Of("settings.data.backup.emptyFileName"));
-        if (Array.Exists(ReservedStems, s => string.Equals(s, stem, StringComparison.OrdinalIgnoreCase)))
+        // 那颗设备名判据全仓只有一份主人（批次 Phase C 片12：这里此前自带一张 22 行的表，且⛔ 认 CLOCK$）
+        if (Files.DeviceNamePolicy.IsReservedStem(stem))
             return (null, LocMessage.Of("settings.data.backup.reservedName", stem));
 
         var ext = Path.GetExtension(full);
