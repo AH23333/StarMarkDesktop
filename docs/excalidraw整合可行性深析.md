@@ -116,7 +116,7 @@ action 注册表实测 44 个（前两轮普查逐条在列），按族归并：
 **坑8 · 内存红线（铁律①）** —— WebView2 进程树驻留是常态。硬约束：画板窗**按需建窗、关窗即 Dispose environment/Process.Kill 兜底实测进程数归零**；默认功能关=零资源。这条要进验收（任务书既有横切第 8 类"功能默认关零资源"的直接适用）；"关窗后 msedgewebview2 还活着"的坑在别的项目是常客。userDataFolder 强制改道 %LOCALAPPDATA%\StarMark\wbview2（默认跟随 exe 目录=开发态可写性雷——本仓 NuGet/安装目录两类事故的镜像）。
 **坑9 · 全局键位互杀** —— 画板前台时 Ctrl+S/滚轮缩放/Z/Ctrl+Z 会被全局键层截走或反向。处置：画板进窗口状态机（Hub 会话位或并列的"画板前台"事实），注册表 GetRegisterableHotkeyBindings 按会话摘除（**该机制现成，但画板没被登记为会话态时要接**）；web 内键盘事件不回冒到 WPF/UIA 全局钩子的核验在 spike。
 **坑10 · 崩溃边界** —— ProcessFailed（渲染进程崩）现形="画板白了"。处置：ProcessFailed→事件桥报+当前场景自动落盘（场景快照防用户丢图）+重载（非静默）。宿主纪律"崩溃不能带走主程序"（本项目托盘/采集全按这条办）。
-**坑11 · 存储接管=职责表不是"顺手换个写盘"** —— IndexedDB/tabSync/LocalStorage（实测 EditorLocalStorage/appState 等 3 处）属 app 壳；桌面接管后：autosave 时机、同文件多窗冲突（**tabSync 的跨标签同步在桌面多窗下不自动成立，多板窗=数据竞争面**）、文件名↔场景 id 映射、"未保存离开"拦截。**此表进设计批，先写后码**。
+**坑11 · 存储接管=职责表不是"顺手换个写盘"** —— IndexedDB/tabSync/LocalStorage（实测 EditorLocalStorage/appState 等 3 处）属 app 壳；桌面接管后：autosave 时机、同文件多窗冲突（**tabSync 的跨标签同步在桌面多窗下不自动成立，多板窗=数据竞争面**）、文件名↔场景 id 映射、"未保存离开"拦截。**此表进设计批，先写后码**。 〔片10 源码现读换掉那三处的猜测〕<b>随包那颗引擎</b>自己⛔ 往任何持久化层写：整棵 <c>dist/dev</c>（65 档 5 827 756 字节）＋我自己那颗 <c>spike1.min.js</c> 两套各数一遍——<c>indexedDB</c> <b>0</b>、<c>openDatabase</c> <b>0</b>、<c>BroadcastChannel</c> <b>0</b>、<c>sessionStorage</c> <b>0</b>、<c>document.cookie</c> <b>0</b>、<c>serviceWorker</c> <b>0</b>；<c>localStorage</c> 只有 <b>8</b> 处命中，全在 <c>EditorLocalStorage</c> 那颗 wrapper 里（<c>has/get/set/delete</c>，每颗都 <c>try/catch</c> ＋ <c>console.warn</c>），而它的<b>调用点只有 5 颗、实名键只有 2 颗</b>：<c>publish-library</c>（发布预览）与 <c>mermaid-to-excalidraw</c>（那颗自带 300 ms 防抖）。⇒ 这张职责表第一行改口：<b>⛔ 需要「关掉引擎那一层」，只需要「宿主自己定策略」</b>；autosave／跨窗同步／appState 持久化那三样住在 excalidraw.<b>com</b> 那颗网页壳里，⛔ 在包里（§二十）。
 **坑12 · 剪贴板与文件拖放的 web 侧权限** —— WebView2 默认权限策略对 image paste 可能弹询问或直接拒（不同版本行为有记录级差异）。处置：spike 测"从 Word 复制图/文件拖入"是否免打扰；权限声明按需 Allow。
 **坑13 · 导出/下载出口（最大的"看着好"陷阱）** —— 浏览器里 export 走 download（blob URL）；**WebView2 默认弹下载对话框或根本没处理=用户点导出没反应**。处置：`Downloading` 事件或桥接导出字节到 C#（落"图片\StarMark 截图"同目录族惯例），且**每个导出档位（PNG/SVG/.excalidraw/剪贴板位图）逐一真点验收**；SVG 导出是否内嵌字体（fonts 外链=拿到别处看掉字体——待 spike，不许先承诺"1:1"）。
 **坑14 · 桥安全=命令白名单** —— C# 听 JS 消息 =攻击面（恶意 .excalidrawlib/scene 触发 JS 行为→桥指令）。桥协议：命令白名单（save/export/pin/requestBackground/openFile）、**无路径注入**（文件落点由 C# 定死目录，JS 只递字节）、消息 schema 校验。这条写死在协议设计，不写=形同虚设（对照 askConfirm 教训：确认机制不设形同虚设）。
@@ -161,7 +161,7 @@ action 注册表实测 44 个（前两轮普查逐条在列），按族归并：
 0. **Spike 批（裁决前唯一允许的动作）**：①runtime 探测+环境释放实测；②字体/wasm 断网全验；③导出/下载出口 3 法各试（Downloading 事件/桥回调/剪贴板中转）；④TTD/Publish 关按钮有效性；⑤桥消息往返时延实测。产物=裁决数字表，产品码不进。
 1. 架构批（桥协议+存储适配器设计文档先行，过评审再码）
 2. 宿主窗+引擎 bundle（先跑通空板，不含集成）
-3. 存储接管批（boards/对账/autosave/冲突表逐项对 §坑11）
+3. 存储接管批（boards/对账/autosave/冲突表逐项对 §坑11） 〔片10〕那一批现在有的零件：引擎交出的<b>读面只有 4 颗 getter</b>（<c>getSceneElements</c>／<c>getAppState</c>／<c>getFiles</c>／<c>getName</c>）＋写面 <c>updateScene</c>，⛔ 任何自带落盘⇒时机、粒度、冲突策略<b>全归 C#</b>（§20.4／§20.7）。
 4. 集成批×3（截图→画板/画板→贴图/Board→快照；ClipIMG→背景）
 5. 检索沉淀批（items 注册+search_text 场景抽字）
 6. 入口/设置批（主题键位共存/备份开关/隐私声明/快捷键摘挂）
@@ -306,8 +306,8 @@ Runtime 与 SDK 两样本机都在，所以"新增运行时"的<b>开发态</b>�
 |---|---|---|
 | 落点 | <c>%APPDATA%\StarMark\boards</c> 目录下一颗文件一板（<c>&lt;稳定 id&gt;.excalidraw</c>） | 与 <c>settings.json</c>／<c>widgets.json</c> 同目录族，备份链与"读档⛔ 截零"那套惯例直接复用 |
 | 稳定 id | 建板那一刻由 C# 生成（<c>yymmdd-HHMMss-4hex</c>），<b>文件名即 id</b> | 与 ClipIMG 的"稳定 id＋显示侧当场念"同一口径；⛔ 拿标题当身份（标题会随语言与用户改字） |
-| autosave | 停笔 1.5 s 或窗失焦即存；<b>另存一份 <c>.bak</c></b>（只留最近一颗） | 引擎自带的 autosave 住在 <c>FileManager</c>／IndexedDB（§坑11），桌面接管后<b>时机归 C#</b> |
-| 同文件多窗 | 打开时登记 <c>(id → pid 窗实例)</c>；第二扇要开同一颗 ⇒ <b>聚焦已有那扇</b>，⛔ 起第二份 | 引擎的 <c>tabSync</c> 只在<b>同源同浏览器</b>的标签间成立，跨两扇 WinUI 窗⛔ 自动同步＝数据竞争面 |
+| autosave | 停笔 1.5 s 或窗失焦即存；<b>另存一份 <c>.bak</c></b>（只留最近一颗） | 引擎自带的 autosave 住在 <c>FileManager</c>／IndexedDB（§坑11），桌面接管后<b>时机归 C#</b>  〔片10 更正那颗归因〕那句「引擎自带的 autosave 住在 <c>FileManager</c>／<c>IndexedDB</c>」讲的是 excalidraw.<b>com</b> 那颗壳；随包那颗⛔ autosave（整颗包 localStorage 写点只有两颗键，§20.4）⇒ 那一行的「时机归 C#」从「改道」升为<b>「本来就⛔ 主人」</b>。 |
+| 同文件多窗 | 打开时登记 <c>(id → pid 窗实例)</c>；第二扇要开同一颗 ⇒ <b>聚焦已有那扇</b>，⛔ 起第二份 | 引擎的 <c>tabSync</c> 只在<b>同源同浏览器</b>的标签间成立，跨两扇 WinUI 窗⛔ 自动同步＝数据竞争面  〔片10 换那颗因果〕数据竞争的<b>来源</b>更正：⛔ 是「引擎的 tabSync 失配」，而是<b>引擎根本没有跨窗同步这一层</b>（<c>BroadcastChannel</c> 两套语料各 0 颗）⇒ 桌面两扇板窗开同一颗档，谁都不让谁，<b>合与不合全由宿主定</b>；现成零件＝包里导出的 <c>reconcileElements</c>／<c>getSceneVersion</c>／<c>hashElementsVersion</c> ＋那颗 <c>CaptureUpdateAction</c>（现读 157 处）（§20.7）。 |
 | 未保存离开 | 拦截那一拍给<b>就地三颗按钮</b>（存／丢／留下决定），⛔ 把"请先保存"写成用户作业 | P-54 的口径（程序能做的动作⛔ 写成用户作业） |
 | 迁移 | 场景版本链<b>全交引擎</b>（<c>migrate</c>），宿主⛔ 抄一份 | §B 表那句"宿主别抄一份"；抄了就出现第二个主人 |
 | 对账 | 启动三分类（板在／档在而板缺／板在而注册缺）＝只<b>计数＋给按钮</b>，⛔ 静默删 | ClipIMG-1e 那一族直接复用 |
@@ -871,7 +871,7 @@ Xiaolai 随包那一颗的代价现在有三段，⛔ 只第一段是体积：
 
 <b>还欠（⛔ 从表里消失）</b>：
 - <b>观感／口径</b>：菜单展开态那张照片（我这把截图尺⛔ 拍得到弹层，见 18.7 第 2 条的副作用）；手写体断网那两档的<b>肉眼定论</b>；「默认 Key ⛔ 配时那颗按钮是不是死按钮」。
-- <b>机制</b>：那颗 4 MB 墙的三颗出路选哪颗（18.3）；<c>esm.sh</c> 基座改口那三颗（18.2）；<c>woff2.wasm</c> 那颗子集化开关<b>本腿没找到点它的那颗按钮</b>（⇒「断网时它坏没坏」未判定）；<c>onChange</c> 实参位与那颗图数据多大（18.8 第 4 条）。 〔片9 换了一茬：前两颗由 §十九 换成「一颗有官方出处的全局＋四颗出口并排」；那颗 <c>woff2.wasm</c> 拆成两问——<b>断网编不编得好＝编</b>（包内 <c>.wasm</c> 0 颗、base64 内联，§19.4），<b>出没出过字节＝还没被叫到</b>（排在字体字节取到之后，与 §19.5 第①臂同跑判掉）；剩下 <c>onChange</c> 那颗仍欠〕
+- <b>机制</b>：那颗 4 MB 墙的三颗出路选哪颗（18.3）；<c>esm.sh</c> 基座改口那三颗（18.2）；<c>woff2.wasm</c> 那颗子集化开关<b>本腿没找到点它的那颗按钮</b>（⇒「断网时它坏没坏」未判定）；<c>onChange</c> 实参位与那颗图数据多大（18.8 第 4 条）。 〔片9 换了一茬：前两颗由 §十九 换成「一颗有官方出处的全局＋四颗出口并排」；那颗 <c>woff2.wasm</c> 拆成两问——<b>断网编不编得好＝编</b>（包内 <c>.wasm</c> 0 颗、base64 内联，§19.4），<b>出没出过字节＝还没被叫到</b>（排在字体字节取到之后，与 §19.5 第①臂同跑判掉）；剩下 <c>onChange</c> 那颗仍欠〕 〔片10 又交一格，⛔ 等那颗窗〕<c>onChange</c> 的实参位次<b>源码判完</b>＝<c>(elements, this.state, this.files)</c> 三颗、<c>files</c> 在第 3 位（<c>dev/index.js:1025104</c>）；那颗 <c>ref</c> 的事另有官方出口 <c>excalidrawAPI</c> prop（§20.1）。
 - <b>多窗</b>：两块板窗开同一颗档的冲突表（§12.2）——那是<b>存储接管</b>那一格，⛔ 属本腿。
 
 ### 18.10 对 §八 批形与 §九 决策的位置
@@ -897,7 +897,7 @@ Xiaolai 随包那一颗的代价现在有三段，⛔ 只第一段是体积：
 | 18.3 那格「减重管线跑到没＝⛔ 到（闸门在减重<b>之前</b>）」＋末行「那颗管线在这种尺寸下根本没被叫到」 | 顺序<b>相反</b>：<c>dev/index.js:28411</c> 先压到 1440，<c>:28420</c> 才量 4 MB；而我<b>自己在 r5 就录了它跑过</b> | §18.3（就地更正）＋§十 那一格 |
 | §五 坑5「woff2 子集化 wasm 也是 fetch 加载＝断网即失效」 | 整棵 <c>dist</c> 里 <c>.wasm</c> 档 <b>0</b> 颗，两颗 wasm 以 base64 活在 JS 里 | §五 坑5（就地更正）＋19.4 |
 
-⇒ 三处都⛔ 是被测对象，都是<b>我</b>：①「读到关键字就当成读到顺序」——那颗包名与那颗顺序我各记过一遍，却⛔ 把它们放进同一句里比；②<b>同一行里自己打自己</b>——「⛔ 到」与「compile 2 次」写进同一格的两个半句，我读前半⛔ 读后半；③<b>把上游早先的形状当现读</b>——坑5 那句来自读 <c>woff2-bindings.ts</c> 的印象，这一腿才真去数那颗包里有几颗 <c>.wasm</c>。三条进 <c>docs/踩坑记录.md</c>（收口腿）。
+⇒ 三处都⛔ 是被测对象，都是<b>我</b>：①「读到关键字就当成读到顺序」——那颗包名与那颗顺序我各记过一遍，却⛔ 把它们放进同一句里比；②<b>同一行里自己打自己</b>——「⛔ 到」与「compile 2 次」写进同一格的两个半句，我读前半⛔ 读后半；③<b>把上游早先的形状当现读</b>——坑5 那句来自读 <c>woff2-bindings.ts</c> 的印象，这一腿才真去数那颗包里有几颗 <c>.wasm</c>。三条进 <c>docs/踩坑记录.md</c>（收口腿）。（片10 又添一处：我把「关掉引擎的 <c>LocalData</c> 层」写进了 §十二 那条关键设计，而那一片在这颗包里⛔ 存在——先数再设计，见 §20.4。）
 
 ### 19.1 那颗资产基座：<c>createUrls</c> 的四档出口与那颗全局的语义、时机、射程
 
@@ -999,3 +999,93 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 ### 19.7 本腿⛔ 动过／⛔ 跑过
 
 ⛔ 动过：产品源码、那颗 <c>excalidraw</c> 树、语言表、<c>待决策事项.md</c>、系统 PATH、网络配置。⛔ 起窗（⇒ 19.5 两格登记「待跑」而⛔ 「已通过」）。⛔ 装东西、⛔ 新引包（三把尺都是仓内 python，读的是片6／片7 已落的那两颗档）。⛔ 留改坏的源码：本腿唯一改过的文件是 <c>docs/excalidraw整合可行性深析.md</c> 自己，且改动＝就地更正＋新增一节，⛔ 删别行。
+
+## 二十、Spike-2 后半（桥面与存储面·源码普查）：那颗包把哪 25 颗旋钮交给宿主，以及它其实⛔ 写盘（批次 Phase C 片10，2026-10-17·⛔ 起窗的只读源码腿，⛔ 产品码⛔ 建工程⛔ 改系统 PATH⛔ 拔网⛔ 装工具链⛔ 表⛔ 账本）
+
+> 尺与正本＝<c>bin/WI83/spike3_83bl.py</c>→<c>spike3_probe_83bl.txt</c>（<c>dist/types</c> 361 份 <c>.d.ts</c> 普查＋props 逐字＋文件形状）；<c>spike3b_83bm.py</c>→<c>spike3b_probe_83bm.txt</c>（持久化层颗数：dev 65 档 vs 我那颗 min，两套各数一遍）；<c>spike3c_83bn.py</c>→<c>spike3c_probe_83bn.txt</c>（<c>onPaste</c> 极性／<c>excalidrawAPI</c> 调用点／那颗键表／<c>UIOptions</c>／<c>handleKeyboardGlobally</c>）；<c>spike3d_83bo.py</c>→<c>spike3d_probe_83bo.txt</c>（运行时那颗 <c>api</c> 字面量交出的 25 颗键，逐字）。
+> 语料＝<c>@excalidraw/excalidraw@0.18.0/dist</c>（<c>dev/</c> 未混淆 65 档 5 827 756 字节 ＋ <c>types/</c> 361 档 1 139 919 字节）与<b>我那颗</b> <c>bin/WI83/npm0e/build/dist/spike1.min.js</c>（8 376 283 字节，sha 与 §17.6 那颗冻结一致）。
+> ⚠ 这一腿<b>⛔ 起窗</b>：起窗第 0 道核对现读 <c>GetLastInputInfo</c> 闲置 <b>3.3 秒</b>（他在用电脑）⇒ §19.5 那两臂继续挂「待跑」，本腿⛔ 动那颗宿主窗。
+
+### 20.0 形状：只问两颗问题
+
+| 问 | 一句话答 |
+|---|---|
+| 宿主能挂哪几颗钩（⛔ 靠 <c>ref</c>、⛔ 靠猜） | 官方一颗 <c>excalidrawAPI(api)</c> 把 <b>25 颗旋钮</b>整包交出；另有 15 颗 <c>props</c> 钩（含那颗能<b>否决粘贴</b>的 <c>onPaste</c>）与 <c>UIOptions</c> 那张按钮表（§20.1～20.3、§20.5） |
+| 引擎自己会不会往盘上写（「接管存储」有没有第二个主人） | <b>⛔</b>：<c>indexedDB</c>／<c>openDatabase</c>／<c>BroadcastChannel</c>／<c>sessionStorage</c>／<c>cookie</c>／<c>serviceWorker</c> 在<b>两套语料里各 0 颗</b>；<c>localStorage</c> 只有 <c>EditorLocalStorage</c> 一颗 wrapper、8 处命中、<b>2 颗实名键、5 个调用点</b>（§20.4） |
+
+### 20.1 那颗包里另有官方 API 出口：<c>excalidrawAPI</c>（r1／r2 那颗 <c>ref</c> 之争的正解）
+
+| 现读 | 形状 |
+|---|---|
+| 声明（<c>dist/types/excalidraw/types.d.ts</c> 的 <c>ExcalidrawProps</c> 逐字） | <c>excalidrawAPI?: (api: ExcalidrawImperativeAPI) =&gt; void</c> ⇒ <b>⛔ 需要 ref</b>；同档还逐字给着 <c>onChange?: (elements: readonly OrderedExcalidrawElement[], appState: AppState, files: BinaryFiles) =&gt; void</c> |
+| 运行时那颗调用点 | <c>dev/index.js:982392</c> 起：先建一颗 <c>const api = {…}</c>（<c>@981130</c>），再 <c>if (typeof excalidrawAPI === function) { excalidrawAPI(api) } else { console.error(…) }</c> ⇒ <b>传非函数只 console.error</b>，屏幕上⛔ 任何提示（§20.6 那条排障形状） |
+| 我片8 的读法 | r1／r2 撞的是「我把 <c>ref</c> 按对象 ref 递，而 <c>Excalidraw</c> 是 <c>Symbol(react.memo)</c> 包一颗函数⇒<c>ref</c> 从没挂上」（名册 332）。当时我改走 <c>initialData</c>＋<c>onChange</c>（⛔ 需要 API），<b>绕对了但⛔ 绕在官方出口上</b>：这颗 prop 一直在 <c>types</c> 里躺着。⇒ 落地批的桥<b>第一选择＝这颗 prop</b>，⛔ 是 <c>ref</c>、⛔ 是 <c>window</c> 上挂野对象。 |
+
+### 20.2 那张 25 颗旋钮的名单（桥协议的白名单⛔ 用发明的，用现成的）
+
+运行时 <c>api</c> 字面量交出的键（<c>dev/index.js:981130..982392</c> 逐字，共 <b>25</b> 颗）：
+
+| 档 | 键 |
+|---|---|
+| 写（宿主→画板） | <c>updateScene</c>、<c>updateLibrary</c>、<c>addFiles</c>、<c>resetScene</c>、<c>scrollToContent</c>、<c>setActiveTool</c>、<c>setCursor</c>、<c>resetCursor</c>、<c>updateFrameRendering</c>、<c>toggleSidebar</c>、<c>setToast</c>、<c>refresh</c>、<c>registerAction</c>、<c>history.clear</c> |
+| 读（宿主问画板要现状） | <c>getSceneElements</c>、<c>getSceneElementsIncludingDeleted</c>、<c>getAppState</c>、<c>getFiles</c>、<c>getName</c>、<c>id</c> |
+| 订阅（画板→宿主） | <c>onChange</c>、<c>onPointerDown</c>、<c>onPointerUp</c>、<c>onScrollChange</c>、<c>onUserFollow</c>（五颗都是 <c>emitter.on</c>，⛔ 一处 unsubscribe 句柄⇒桥要自己摘） |
+
+⇒ <b>三颗由此定死的裁决材料</b>：①「保存」⛔ 需要 JS 侧序列化—宿主拿 <c>getSceneElements()</c>＋<c>getAppState()</c>＋<c>getFiles()</c> 自己 <c>serializeAsJSON</c>（那颗函数在 <c>index.d.ts</c> 导出名单里，与 <c>loadFromBlob</c>／<c>restore</c>／<c>reconcileElements</c> 同列）；②「贴图进画板」有官方写面 <c>addFiles</c>（配 §19.3 那颗 <c>dataURL</c> 出口＝两颗都⛔ 走 <c>input</c>）；③<b>订阅那五颗⛔ 带退订句柄</b>⇒关窗时桥若还活着，回调会往已 Disposed 的宿主上打（§十 点验单加一格：关窗后 5 秒内不得再有桥消息）。
+
+### 20.3 那颗 <c>onChange</c> 是通知，⛔ 是拦截；拦截点是 <c>onPaste</c>
+
+- <c>onChange</c> 的调用点：<c>this.props.onChange?.(elements, this.state, this.files)</c>（<c>dev/index.js:1025104</c>），且同一行之后立刻 <c>this.onChangeEmitter.trigger(…)</c> ⇒ <b>prop 与 api 订阅两条路同时喂</b>，实参同一颗对象；返回值⛔ 看（类型就是 <c>=&gt; void</c>）⇒ <b>想改内容⛔ 靠 <c>onChange</c> 否决</b>，只能回写（<c>updateScene</c>）。
+- <c>onPaste</c> 才是否决口（<c>dev/index.js:832002</c> 逐字）：<c>if (this.props.onPaste) { try { if (await this.props.onPaste(data, event) === false) { return; } } catch (error) { console.error(error) } }</c>。⇒ <b>只有<b>严格等于</b> <c>false</c> 才拦得下</b>（返 <c>true</c>／<c>undefined</c>／什么都不返＝引擎照走），而<b>宿主那颗钩一抛就被 <c>catch</c> 吞掉、默认行为照走（fail-open）</b>。⇒ <b>形状登记（形6）</b>：若「敏感图不进画板」这类策略挂在 <c>onPaste</c>，钩子本体⛔ 许抛、且⛔ 忘记 <c>return false</c>——两颗都是静默放行，屏幕上只会看到「它怎么还是进去了」。
+- 那颗 <c>data</c> 之后的分支（同段逐字）给了策略的粒度：<c>data.errorMessage</c> → 报错卡；<c>data.spreadsheet && !isPlainPaste</c> → 表格粘贴框；<c>data.elements</c> → 场景片段。⇒ 宿主想「只拦图、⛔ 拦字」要自己辨 <c>data</c> 的形状（这颗⛔ 在 §18 出现过，桥协议里给它留一档）。
+
+### 20.4 存储面普查：那颗引擎⛔ 写盘（把 §坑11 从猜测换成颗数）
+
+| 持久化层 | dev 65 档 | 我那颗 min |
+|---|---|---|
+| <c>indexedDB</c> / <c>openDatabase</c> | 0 / 0 | 0 / 0 |
+| <c>BroadcastChannel</c>（跨标签同步唯一的机制） | <b>0</b> | <b>0</b> |
+| <c>sessionStorage</c> / <c>document.cookie</c> / <c>serviceWorker</c> | 0 / 0 / 0 | 0 / 0 / 0 |
+| <c>caches.</c>（CacheStorage 形状） | 1（一颗同名局部变量，⛔ 网络缓存） | 1 |
+| <c>localStorage</c> | <b>8</b> 处，全在 <c>EditorLocalStorage</c>（<c>index.js:323486</c> 起，四颗静态方法各包一颗 <c>try/catch</c>） | 8 |
+| <c>navigator.clipboard</c> | 15 处（读写都有＝片8 那颗「无焦点即拒」的那一片） | 15 |
+
+- 引擎<b>实际会写的实名键只有 2 颗</b>：<c>EDITOR_LS_KEYS = { OAI_API_KEY: excalidraw-oai-api-key, MERMAID_TO_EXCALIDRAW: mermaid-to-excalidraw, PUBLISH_LIBRARY: publish-library… }</c>（<c>chunk-3KPV5WBD.js:11500</c>），但<b>调用点只碰后两颗</b>（<c>index.js:329409／331567／333097／593750／599215</c> 共 5 处）；那颗 <c>OAI_API_KEY</c> 在整包里<b>只出现在常量表两处、⛔ 读者⛔ 写者</b>＝一颗死键。
+- 那颗唯一自带防抖的写盘：<c>debounce(saveMermaidDataToStorage, 300)</c>；另有 <c>SEARCH_DEBOUNCE = 350</c> 与 <c>debounce(setSearchTerm, 20)</c>（⛔ 落盘）。⇒ <b>场景 autosave 在这颗包里⛔ 存在</b>。
+- 与片8 真机互证：r3 那跑「<c>Object.keys(localStorage)</c> 只剩我那颗 marker、<c>engineKeys=[]</c>、<c>IndexedDB</c> 目录 0 颗」（§18.7）——<b>一颗是运行时数、一颗是源码数，两颗对上了</b>。
+⇒ <b>这一格把 §十二 那条设计改了口径</b>：「web 内⛔ IndexedDB 写——<c>LocalData</c> 层禁用」⛔ 需要禁，它⛔ 在；真正的活是「<b>宿主自己写，且只有宿主一个主人</b>」（少了双主，也少了要并轨的第三套键名）。
+
+### 20.5 那三颗官方开关（把 §坑9／坑13 从「要 hack」改成「有 prop」）
+
+| 现读 | 用途 |
+|---|---|
+| <c>handleKeyboardGlobally?: boolean</c> 的真消费点两处：容器 <c>onKeyDown: this.props.handleKeyboardGlobally ? undefined : this.onKeyDown</c>（<c>index.js:997685</c>）＋ <c>addEventListeners()</c> 里那颗 <c>if (this.props.handleKeyboardGlobally)</c> 门（<c>:1017261</c>） | <b>§坑9（全局键位互杀）有官方出口</b>：关掉它＝画板⛔ 抢 window 级键盘，宿主的全局热键层照常活；默认值现读 <c>false</c>（<c>:1142292</c> 解构处）＝默认就⛔ 抢，那一格比 §坑9 担心的要好 |
+| <c>detectScroll</c> 门在 <c>index.js:1020338</c>（默认 <c>true</c>，<c>:1142267</c>） | 滚轮归属；与那颗 <c>onScrollChange</c> 订阅配成一对（宿主做「画板内滚动⛔ 动外层」那一格） |
+| <c>DEFAULT_UI_OPTIONS</c>（<c>chunk-3KPV5WBD.js:8781</c> 起逐字）＝<c>canvasActions:{changeViewBackgroundColor,clearCanvas,export:{saveFileToDisk},loadScene,saveToActiveFile,toggleTheme:null,saveAsImage}</c> ＋ <c>tools:{image:true}</c> | 摘按钮的正规出口（片8 §18.5 已现读：<c>aiEnabled</c>／<c>canvasActions</c> 管⛔ 到左上那 16 行与「More tools」那 4 行⇒摘除要两颗一起） |
+
+### 20.6 一处⛔ 对齐：那颗 <c>showOpenFilePicker</c>（dev 0 处 vs min 3 处）
+
+现读：dev 语料里只有<b>那颗依赖的名字</b>（<c>chunk-3KPV5WBD.js:719954</c>：<c>import { fileOpen as _fileOpen, fileSave as _fileSave, supported as nativeFileSystemSupported } from browser-fs-access</c>），而 <c>showOpenFilePicker</c> 这串字面量只出现在<b>我那颗 min</b>（3 处，<c>@244657／249405／249439</c>，都在依赖正文里）。
+⇒ 颗数差的解释＝<b>打包形状</b>：esbuild 把 <c>browser-fs-access</c> 整颗打进我那颗 bundle，而未混淆的 dev 分块把那棵依赖留给<b>各自的打包器</b>；这⛔ 是「版本不同」也⛔ 是「上游有两套代码」。
+⇒ 一条纪律（进坑表）：<b>我那颗 min 与随包 <c>dist</c> 在依赖内联这一维上⛔ 同形</b>⇒凡「字符串在⛔ 在」类判据，两套都要数；而<b>结论只按随包那一套下</b>（落地批走的是那颗 <c>dist</c>），我这颗 bundle 只当交叉证据。
+⚠ 顺带一格待量（⛔ 属本腿）：那条 <c>nativeFileSystemSupported</c> 分支在 WebView2 里到底走⛔ 走得通（走不通时引擎退回 <c>a.href + click()</c> 那颗下载口＝片8 §18.4 现读「档名⛔ 归网页」那一条）。
+
+### 20.7 那颗「多窗冲突表」现在长什么样（引擎⛔ 立场，宿主全权）
+
+| 格 | 现读零件 | 谁定 |
+|---|---|---|
+| 两份现状怎么合 | 包里<b>导出</b>了 <c>reconcileElements</c>（<c>index.d.ts</c> 逐字：与 <c>restore</c>／<c>serializeAsJSON</c>／<c>loadFromBlob</c> 同列） | 宿主调⛔ 调、什么顺序调 |
+| 谁新 | <c>getSceneVersion</c>／<c>hashElementsVersion</c>（现读各 5 处）；那颗 <c>sceneVersion</c> 只在 <c>chunk</c> 里 1 处 | 宿主取哪颗当版本戳 |
+| 撤销栈 | <c>CaptureUpdateAction</c>（<c>IMMEDIATELY</c>／<c>EVENTUALLY</c>，现读 157 处）＋<c>api.history.clear</c> | 「载档／桥回写算⛔ 算一次用户动作」＝宿主策略，默认要<b>清</b>栈（否则 Ctrl+Z 把用户的图退回空白板＝本仓定性过的坏） |
+| 同档两扇窗 | 引擎<b>⛔ 任何跨窗机制</b>（20.4 那颗 0） | 「第二扇要开同一颗档」＝聚焦已有那扇（§十二 那条不变，⛔ 再指望引擎兜底） |
+
+### 20.8 这一腿交掉／新开／还欠
+
+- <b>交掉</b>：§18.9 那颗「<c>onChange</c> 实参位与那颗图数据多大」（三颗、<c>files</c> 第 3 位；图数据以 <c>BinaryFileData.dataURL</c> 活在 <c>files</c> 里⇒<b>整颗图以 base64 串进场景对象</b>）。那颗形状逐字（<c>types/excalidraw/types.d.ts</c>）：<c>BinaryFileData = { mimeType: ValueOf&lt;typeof IMAGE_MIME_TYPES&gt; | typeof MIME_TYPES.binary; id: FileId; dataURL: DataURL; created: number; lastRetrieved: number }</c>，其中 <c>DataURL</c> 是<b>带 <c>_brand:DataURL</c> 的牌号</b>（⛔ 随手塞一颗字符串），而 <c>lastRetrieved</c> 的注释原文写着「<i>我们用这颗 flag 决定要不要把没用到的文件从存储里删掉</i>」⇒ 引擎<b>留了</b>一套 GC 判据却⛔ 自带存储（20.4），那颗删除动作住在壳里（在不在包里本腿⛔ 判，登记候选）；§坑11 那三处猜测换成颗数；§十二 那条「禁用 <c>LocalData</c> 层」改口。
+- <b>新开</b>：<b>形6</b>＝<c>onPaste</c> 只在<b>严格 <c>false</c></b> 时否决、抛错被吞（fail-open）；<b>形7</b>＝桥订阅那五颗⛔ 退订句柄⇒关窗后的回调要宿主自己掐；<b>形8</b>＝<c>excalidrawAPI</c> 传错只 <c>console.error</c>，屏幕上⛔ 读数（宿主接不上 API 时会表现成「按钮没反应」＝本仓定性过的坏）。
+- <b>⛔ 判</b>：那颗 <c>dataURL</c> 到底多大才把档撑爆（图进画板后 <c>.excalidraw</c> 的体积↔张数关系）；那颗 <c>nativeFileSystemSupported</c> 在 WebView2 的分支；§19.5 两臂照旧欠。
+- <b>下一腿</b>：按 §八 该是<b>架构批</b>（桥协议＋存储适配器设计文档）——三颗输入现在齐了：钩子名单（§20.2）、存储面无主（§20.4）、官方开关（§20.5）；那张协议白名单要<b>照着 §20.2 写而⛔ 我自己发明命令名</b>。
+
+### 20.9 本腿⛔ 动过
+
+⛔ 起窗（闲置 3.3 秒）；⛔ 动产品源码、那颗 <c>excalidraw</c> 树、语言表、<c>待决策事项.md</c>、系统 PATH、网络配置；⛔ 装东西⛔ 新引包（四把尺都是仓内 python，读片6／片7 已落的那两颗档）；唯一改过的文件是 <c>docs/excalidraw整合可行性深析.md</c> 自己（新增一节＋就地补句，⛔ 删邻行）。
