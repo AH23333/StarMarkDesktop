@@ -442,3 +442,66 @@ Xiaolai 随包那一颗的代价现在有三段，⛔ 只第一段是体积：
 <b>①</b>210 颗 / 12.20 MB（其中 209 颗是 woff2）（形状：分片⛔ 一颗文件⇒逐文件清单与 sha256 对账都要按 209 行走）；
 <b>②</b>本腿现读：那一族的授权档<b>⛔ 一手材料</b>（同其余 11 族）⇒ 随包前要多做一次「去上游取 LICENSE＋保留字体名那颗要求」的取证动作；
 <b>③</b>不打＝中文手绘观感降级为系统字体（§坑7 那句照旧成立）。
+
+
+---
+
+## 十四、Spike-0c：出机流量<b>逐颗落点</b>清单（批次 Phase C 片4，2026-10-17·只读探测，⛔ 产品码⛔ 起窗⛔ 装东西⛔ 联网）
+
+> 尺与正本＝<c>bin/WI83/netsites_83j.py</c> → <c>bin/WI83/netsites_83j.txt</c>（339 行明细）。
+> §一 那颗「editor 内网络出口 <b>16 处命中</b>」与 §三 D 表都只给了<b>族</b>；§12.4 与打包批要的是<b>每一颗在哪一行、由哪颗开关管</b>。
+> 这一格⛔ 需要 Node、⛔ 需要起窗⇒ 先交掉。
+
+### ① 这把尺的射程（名册 304：发表颗数之前先说清它覆盖哪几种形状）
+
+- 扫过 <b>415</b> 个源文件（packages/excalidraw 392 档／packages/common 23 档），扩展名 <c>.ts/.tsx/.js/.jsx/.mjs/.css</c>，⛔ 测试目录、⛔ <c>dist</c>／<c>node_modules</c>。
+- 圈的是 <b>12 种形状</b>：<c>fetch(</c>／<c>XMLHttpRequest</c>／<c>EventSource</c>／<c>new WebSocket</c>／<c>navigator.sendBeacon</c>／
+  <c>axios</c>／<c>window.open(</c>／<c>iframe</c>／<c>createElement("script"|"link")</c>／<c>import(</c>／<c>new Worker(</c>／任意 <c>http(s)://</c> 字面量。
+- ⇒ <b>⛔ 全集</b>：那颗 <c>navigator.clipboard.read</c>、Service Worker 注册、<c>&lt;img src&gt;</c> 模板里的远程、
+  <c>srcset</c>／<c>prefetch</c> 那一族都<b>在形状表之外</b>（要补就先补尺，⛔ 拿这颗数当"出机总量"）。
+- 四颗<b>正件</b>（本文其它段落已实测存在过的落点）逐颗在自己那颗档里命中：
+  <c>fonts/ExcalidrawFontFace.ts</c>＝esm.sh 回退、<c>subset/woff2/woff2-bindings.ts</c>＝wasm、<c>components/PublishLibrary.tsx</c>＝库后端 fetch、docs 外链那一类现读落在<c>components/App.tsx</c> 与 <c>components/HelpDialog.tsx</c>。
+
+### ② 颗数分两档（⛔ 混着说）
+
+| 那一档 | 现读 |
+|---|---|
+| 全形状命中 | <b>339 行</b>（XMLHttpRequest 3／fetch( 7／iframe 139／new Worker( 1／window.open 1／动态 import( 13／外链字符串 175） |
+| 其中<b>真调用点</b>（会发请求或起子资源的） | <b>25 颗</b>＝fetch( 7／XMLHttpRequest 3／动态 import( 13／new Worker( 1／window.open 1 |
+| 其中<b>真会出机</b>（<c>fetch</c>＋<c>XMLHttpRequest</c>） | <b>10 颗</b> |
+| 外链字面量里出现最多的<b>前缀</b>（top 8；这把尺<b>⛔ 砍路径</b>⇒那一列是「主机＋头一段路径」，⛔ 是纯主机名） | https://github.com 35、https://api.example.com 21、https://excalidraw.com 13、http://www.w3.org 10、https://example.com 8、https://example.com">click 8、https://example.com">{el}< 8、https://developer.mozilla.org 7 |
+
+⇒ 与 §一 那颗「16 处命中」<b>⛔ 能直接对</b>：那颗没写它的口径，而这一把写了<b>三档</b>（命中／真调用点／真出机）——
+同一族的教训刚记过（坑表 #624：两颗数⛔ 相等⛔ 等于其中一颗写错，<b>缺的是口径那一列</b>）。
+⇒ 一个新形状：外链字面量里带 <c>platform.openai</c> 的有 <b>4</b> 行命中（现读，按那一串出现在明细里数；这把尺⛔ 分注释与运行时代码，也⛔ 分主机与路径）；
+  <b>逐颗落在注释还是运行时代码⛔ 判</b>（明细在正本里，⛔ 因为主机名像 AI 就当成已定性的出机出口）；处置仍归 §三 D 表那颗「AI 生图另立批」。
+
+### ③ 逐颗落点（打包批与 §12.4 的验收底稿；⛔ 我能定的都标了）
+
+| 那一族 | 逐颗落点（档:行＝形状） |
+|---|---|
+| 字体那族（§坑4） | `fonts/ExcalidrawFontFace.ts:92`＝fetch( |
+| woff2 子集那族（§坑5） | `subset/woff2/woff2-bindings.ts:178`＝XMLHttpRequest；`subset/woff2/woff2-bindings.ts:185`＝XMLHttpRequest；`subset/woff2/woff2-bindings.ts:193`＝XMLHttpRequest；`subset/woff2/woff2-bindings.ts:930`＝fetch(；`subset/woff2/woff2-bindings.ts:989`＝fetch( |
+| 库导入那族 | `data/library.ts:733`＝fetch( |
+| PublishLibrary 那族 | `components/PublishLibrary.tsx:301`＝fetch( |
+| TTD 那族 | `components/TTDDialog/Chat/ChatMessage.tsx:86`＝window.open；`components/TTDDialog/TTDDialog.tsx:73`＝动态 import(；`components/TTDDialog/TTDDialogInput.tsx:56`＝动态 import(；`components/TTDDialog/utils/TTDStreamFetch.ts:101`＝fetch( |
+| 图片 URL 那族 | `data/blob.ts:37`＝动态 import(；`data/blob.ts:385`＝动态 import(；`data/blob.ts:387`＝动态 import(；`data/blob.ts:428`＝fetch( |
+| 本地分块与 worker 那族 | `components/App.clipboard.ts:208`＝动态 import(；`data/blob.ts:37`＝动态 import(；`data/blob.ts:385`＝动态 import(；`data/blob.ts:387`＝动态 import(；`data/blob.ts:428`＝fetch(；`data/index.ts:178`＝动态 import(；`i18n.ts:101`＝动态 import(；`index.tsx:181`＝动态 import(；`subset/subset-main.ts:75`＝动态 import(；`subset/subset-main.ts:76`＝动态 import(；`subset/subset-main.ts:80`＝动态 import(；`subset/subset-main.ts:89`＝动态 import(；`workers.ts:9`＝new Worker( |
+
+### ④ 这一把读出来的三颗<b>新事实</b>（改的是设计⛔ 是文案）
+
+1. <b>woff2 那颗有两条路并存</b>：<c>Module.wasmBinary</c>（§十一 ⑤ 现读 :340/:341）之外，<b>另有</b>
+   <c>fetch(wasmBinaryFile, {credentials:"same-origin"})</c> 两颗（:930/:989）与三颗 <c>XMLHttpRequest</c>（:178/:185/:193）——
+   ⇒ §12.4 那句"宿主直接喂字节消掉一半不确定"要加一颗<b>硬验收</b>：喂了 <c>wasmBinary</c> 之后那<b>五颗真的⛔ 走</b>
+   （不验＝断网下仍然报红，而我们以为修好了）。
+2. <b>库导入那一族自己已经带了一颗 hostname 白名单</b>：<c>data/library.ts:510</c> 造 <c>allowedUrl</c>、<c>:514</c> 取
+   <c>{hostname, pathname}</c> 比对 ⇒ §12.1 那句「args 走字段白名单」在他仓<b>已有同形状的现成机制</b>，
+   桥层与它<b>共一份⛔ 各写一份</b>（一个主人那条纪律）。这颗⛔ 我替他定，但技术裁决＝复用。
+3. <b>那颗 worker 的 URL 是形参递进来的</b>（<c>workers.ts:8/9</c>，调用方给）⇒ 本腿只判到「由调用方决定」，
+   <b>⛔ 能写成"随包本地"</b>：留「未判定」，与 §七 那颗"默认关零资源"一起验。
+
+### ⑤ 这一格交完之后剩下什么
+
+§八「未跑」名册里那一行现在只剩<b>四格</b>（导出出口真机行为／TTD 与 PublishLibrary 关按钮有效性／桥消息往返时延／断网全字体验证），
+共同前提＝<b>先有 dist、再起真窗</b>⇒ 全部挂在 §九 决策 1 与那颗「装 Node」的外部动作后面（12.6 第 ① 颗）。
+本节⛔ 动产品码、⛔ 起窗、⛔ 装东西、⛔ 联网。
