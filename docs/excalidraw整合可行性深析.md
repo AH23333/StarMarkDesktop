@@ -1350,7 +1350,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 | 屏幕上那句「永字八法 Abc 123」真拉的 | 3 | 135,612 B（§二十三.3） |
 
 - ⇒ §九 决策 3 现在有<b>三档</b>可选，而⛔ 一档：全随 12.08 MB／只随主区 5.43 MB／只随「屏幕上出现过的那几片」135 KB 级。裁到多小是<b>他的</b>口径（观感＋装机体积），我这一腿只把<b>每档的字节</b>摆出来。
-- ⚠ 那颗「205／209」⛔ 能读成「另 4 片用不上」：它只是<b>我那条正则</b>抓到 205 颗带 <c>unicodeRange</c> 的条目，另 4 颗 URI 在档里被定义了而<b> descriptor 的形状我⛔ 覆盖</b>＝坑表 #673。要说清那 4 颗得回去逐颗读它们的定义点，登记为欠项。
+- ⚠ 那颗「205／209」⛔ 能读成「另 4 片用不上」：它只是<b>我那条正则</b>抓到 205 颗带 <c>unicodeRange</c> 的条目，另 4 颗 URI 在档里被定义了而<b> descriptor 的形状我⛔ 覆盖</b>＝坑表 #673。要说清那 4 颗得回去逐颗读它们的定义点，登记为欠项（片17 已读：那 4 颗是<b>死常量</b>——bundle 里 0 处 <c>uri:</c> 引用，§二十六.4）。
 - 再往下裁（比如「3,500 常用字要几片」）需要<b>一张常用字表</b>——那是措辞与口径之外的新输入，⛔ 由我现编一张。
 
 ### 24.4 §二十一 那份 v1 里，本腿<b>就地改口</b>的三句
@@ -1400,3 +1400,39 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 ### 25.4 这一腿欠的（⛔ 混进已读）
 
 ①Ctrl+O 真键那半格（<c>loadScene:false</c> 时键盘是否同闸）——合成事件⛔ 触达，要真键注入（画板焦点那一族）；②宿主 <c>MainMenu.Item</c> 的 <c>shortcut</c>／<c>icon</c> 参数与三语（引擎 UI 措辞归包管，我们自己的行要交什么语言）；③command palette 里同名／新动作有没有脸面（本腿⛔ 量）；④三颗外链／Reset 在「关 prop＋换表」之后的真机照片（属落地批，接 §22.6）。
+
+## 二十六、Spike-1b 第五腿（r10 两臂）：宿主行认 shortcut/icon、zh 语料缺 palette 那颗键、字体档 6～9 全走本地、Xiaolai 那 4 颗是死常量（批次 Phase C 片17，2026-10-17·一次性起窗＋只读取数，⛔ 产品码⛔ 建工程⛔ 装工具链⛔ 改系统 PATH⛔ 表⛔ 账本）
+
+两臂一次跑（r10a＝宿主自排表的行参数＋三语＋命令面、r10b＝字体档 6/7/8/9），bundle 沿用 <c>spike2.min.js</c>（片16 那颗，sha256 <c>22bcb625…</c>）。⛔ 点内置 Open／Save；第 0 道核对（复合）现读闲置 0.0～0.2 秒／前台 'Endfield'——前台是另一件事的窗，照实记。
+
+### 26.1 宿主行参数＋三语（r10a）
+
+- <c>MainMenu.Item</b> 认 <c>shortcut</c>（「Ctrl+Alt+S」上屏，与内置行同一颗样式槽）与 <c>icon</c>（hasIcon true），<c>onSelect</c> 真走（计数器 +1）⇒ 宿主接管表的行＝「内置行的全部观感能力＋我们自己的出口」（§25.4 ② 关掉）。
+- <c>langCode:"zh-CN"</c> 时宿主表里的<b>内置行跟着翻</b>（load＝「打开 Ctrl+O」／help＝「帮助 ?」，CJK 判定 true×2）⇒ 内置行放进宿主表⛔ 冻结在英文（片14 那颗重贴机制在宿主表里照跑）。
+- ⚠ 同一张表里 <b>「Command palette」那行在 zh-CN 下仍念英文</b>（同拍对照：帮助／打开都是中文）⇒ 包内 zh 语料缺 <c>commandPalette</c> 那颗键（或该行⛔ 走 <c>t()</c>；两可，读数只记「那行是英文」）。落地含义：接管表若复用 <c>DefaultItems.CommandPalette</c>，中文界面会露英文——要么交自己的行，要么进「包语料缺口」清单。
+
+### 26.2 命令面的脸面＝未判（两条合成路⛔ 触达，名册 289／#677 同族）
+
+- 路一（菜单点击 <c>DefaultItems.CommandPalette</c>）：行可见（对照件＝同一拍我的行 onSelect 真触发）⇒ 1.4 秒内弹层⛔ 出现（<c>.command-palette-dialog</c> 0、照片＝关着那张 <c>15b529a58a99</c> 与 final 同一颗）。
+- 路二（合成 Ctrl+/，window＋document 两路——那颗监听是 <b>window 级 capture</b>，源码偏移 8,040,104）⇒ 同样⛔ 开。
+- ⇒ 这格<b>未判</b>：要真键（SendInput 那族）或真鼠标。同表对照件（我的行）排除了「菜单整体不响应」，所以沉默是「那颗行的选择没触发」或「触发了⛔ 上屏」两可，⛔ 写结论。
+
+### 26.3 字体档 6/7/8/9 的现场（r10b，§24.5 ④ 关掉）
+
+| 档 | 拉的档 | SVG <c>font-family</c> |
+| --- | --- | --- |
+| 6 | 本地 <c>/fonts/Nunito/…woff2</c> | <c>Nunito, Segoe UI Emoji</c> |
+| 7 | 本地 <c>/fonts/Lilita/…woff2</c> | <c>Lilita One, Segoe UI Emoji</c> |
+| 8 | 本地 <c>/fonts/ComicShanns/…woff2</c> | <c>Comic Shanns, Segoe UI Emoji</c> |
+| 9 | 本地 <c>/fonts/Liberation/…woff2</c> | <c>Liberation Sans, Segoe UI Emoji</c> |
+
+每挂载 <c>dataFont</c>＝2（字面嵌进 SVG）；照片 <c>fam67_white.png</c>／<c>fam89_white.png</c>（白底）。随包目录 9 族全在：Assistant 4／Cascadia 1／ComicShanns 4／Excalifont 7／Liberation 1／Lilita 2／Nunito 5／Virgil 1／Xiaolai 209（共 234 颗／13,107,068 字节口径不变）。
+
+### 26.4 §24.5 ① 关掉＝那 4 颗不是「没抓到的形状」，是<b>死常量</b>
+
+- 静态复算（变量→注册点两把尺，⛔ 一把正则）：bundle 里 URI 常量共 <b>227</b> 颗（Xiaolai 209／Excalifont 7／Nunito 5／ComicShanns 4／Cascadia 1／Liberation 1）；Xiaolai 209 颗里 <b>205 颗</b>有 <c>uri:…,descriptors:{unicodeRange:"…"}</c> 注册条目，**4 颗**（压名 <c>ai/oi/si/gi</c>＝四颗 <c>Xiaolai-Regular-*.woff2</c>）全档 <b>0 处 <c>uri:</c> 引用</b>——注册数组的形状是「定义簇紧邻数组字面量」，那四颗不在任何数组里。
+- ⇒ 片15 的「205／209」口径修正：<b>另 4 颗⛔ 是「我那条正则没抓到」，是它们根本没注册</b>。决策 3 的分母照旧按盘上 209 颗算（随包档数），但「运行时注册表认的」＝205；那 4 颗盘上在、运行时⛔ 会作 FontFace 拉 ⇒「只随主区」那一档的刀下得更准（先按注册表筛、再按 unicodeRange 筛）。
+
+### 26.5 这一腿欠的（⛔ 混进已读）
+
+①palette 脸面（真键 Ctrl+/ 或真鼠标）；②宿主自己的行在 ja 下的三语（本腿只量了 zh 的对照）；③外链三颗／Reset 在「关 prop＋换表」之后的真机照片（属落地批）。
