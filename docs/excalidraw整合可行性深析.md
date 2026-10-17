@@ -1270,3 +1270,45 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 ### 22.10 这一腿欠的那几格（⛔ 混进已读）
 
 ①那颗字体子集化 worker 的文件名／要不要随包（§22.2）——要一次<b>包内文件普查</b>＋一臂起窗对照；②<c>nativeFileSystemSupported</c> 为真时那两项菜单的<b>改道方案</b>（§22.6）——属 §二十一 那张表，待评审；③<b>换语言那一刻</b>画布真不真重贴（<c>langCode</c> 递进去之后改一次再看标签）——下一腿一臂就能量；④<c>set=1</c> 那臂<b>只有 4 面</b>被拉（Assistant×3＋Virgil），Excalifont 那 7 面要<b>什么动作</b>才拉（画一笔？改字体？）——这一格直接决定随包字体清单能⛔ 再砍；⑤深色底（<c>viewBackgroundColor</c> 换深色）下那颗菜单与工具条的照片——§22.5 那十项只在白底量过。
+
+## 二十三、Spike-1b 第三腿（r8 两臂）：<c>langCode</c> 那一刻真重贴、中文手写体落在 <c>fontFamily=5</c> 那一档、深色底会吞掉宿主塞进去的字（批次 Phase C 片14，2026-10-17·一次性起窗＋只读取数，⛔ 产品码⛔ 建工程⛔ 装工具链⛔ 改系统 PATH⛔ 表⛔ 账本）
+
+> 这一腿只还 §二十二.10 欠的那三格（③换语言那一刻／④那颗字面要什么动作才拉／⑤深色底那张照片），跑法照旧：同一颗 <c>spike1b.exe</c>（⛔ 重编）、<c>--blocked 1</c>、两臂各一颗进程（<c>out_r8a/</c>·<c>out_r8b/</c>），仪器＝<c>www/index6.html</c>＋<c>www/battery6.js</c>。
+
+### 23.1 那颗 <c>langCode</c> 换的那一刻：同一颗实例上真实重贴，⛔ 需要重挂
+
+现读（<c>r8-repaste</c>）＝<c>{sameReactRoot: true, islandSameNode: true, islandMarkSurvived: true, apiSameObject: true, changesDelta: 2}</c>，随后那一格（<c>r8-labels-en</c>）＝<c>{total: 35, cjk: 0, htmlLang: "en"}</c>，而换之前（<c>r8-labels-zh</c>）＝<c>{total: 35, cjk: 34, htmlLang: "zh-CN"}</c>。
+
+- 三件事一次读完：①那颗 prop 是<b>活控</b>的（<c>root.render</c> 换 props 即可，画布那颗 DOM 岛与 <c>excalidrawAPI</c> 对象<b>都是同一颗</b>，我在岛上打的标记也活着）；②35 颗标签里那 34 颗<b>当场</b>从中文变英文，⛔ 一次重挂、⛔ 一次网络请求；③句柄不变⇒<b>场景内容不受影响</b>（<c>sceneStillThere: 1</c>）。
+- 落地含义（进 §二十一 那张表）：画布这一侧的「换语言即重贴」<b>⛔ 欠我们那套机制 (C) 的手臂</b>——宿主只要把 <c>Loc.Current</c> 映射成 <c>langCode</c> 递进去就行。⚠ 这只读到<b>静态标签</b>那一族；<b>画布里已经写好的那句正文</b>（用户打的字）⛔ 会跟着翻，那是<b>刻意</b>的（那是用户内容）。
+- ⚠ 仪器一处坏：我把「三格合起来那句结论」想写成一颗 <c>r8-repaste-verdict</c>，结果取错了层级（<c>step()</c> 交回的就是那颗值本身，我按 <c>{ok,r}</c> 那层去读⇒三颗 <c>null</c>）。读数在上两格里一颗没丢，那一格已就地修好＝坑表 #668。
+
+### 23.2 中文手写体在哪一档：<c>fontFamily=5</c>，而 <c>document.fonts</c> 那五档探测一动不动
+
+逐档改那颗文本的 <c>fontFamily</c>（1→5），每档读<b>导出的 SVG</b>（权威）＋字面族状态表：
+
+| <c>fontFamily</c> | SVG 里的 <c>font-family</c> | SVG 字符数 | 内联 <c>data:</c> 字体 | 状态表 |
+| --- | --- | --- | --- | --- |
+| 1 | <c>Virgil, Segoe UI Emoji</c> | 2,614 | 1 | Xiaolai unloaded 209 |
+| 2 | <c>Helvetica, Segoe UI Emoji</c> | 522 | 0 | 同上 |
+| 3 | <c>Cascadia, Segoe UI Emoji</c> | 6,252 | 1 | 同上 |
+| 4 | <c>Segoe UI Emoji</c> | 508 | 0 | 同上＋报 <c>Couldn't find registered fonts for font-family "4"</c> |
+| <b>5</b> | <b><c>Excalifont, Xiaolai, Segoe UI Emoji</c></b> | 7,837 | <b>4</b> | 同上 |
+
+- 那颗 5 摆上屏幕（<c>r8b</c>）之后状态表才动：<c>Xiaolai/loaded 3</c>（另 206 颗 unloaded）、<c>Excalifont/loaded 1</c>。照片 <c>out_r8b/shots/r8b_ff5_white.png</c> 是<b>同一帧两行 A/B</b>：上面那行（档 5）汉字<b>是手写体</b>，下面那行（档 1）汉字是系统黑体——两行同一句「永字八法 Abc 123」。
+- 结论改口：§二十二.8 那句「中文在画布上认的是系统字面」<b>只对档 1 成立</b>；真实现场是<b>档 5 那一族才列 Xiaolai</b>。⇒「中文要不要手写体」⛔ 是随包⛔ 随包的二选一，而是<b>把⛔ 把那颗档摆进字体下拉</b>的口径题（他定）。
+
+### 23.3 那颗「随包 12.08 MB」的分母：引擎按 <c>unicode-range</c> 逐片拉，一句常用汉字只用 3 片
+
+- 屏幕那一跑真拉的 8 颗档（本机文件实测；<c>transferSize</c> 那一列<b>全 0</b>＝命中缓存，⛔ 能用它量，见坑表 #669）：Assistant 3 颗 60,932 B、Xiaolai <b>3 颗 135,612 B</b>（37,412＋47,540＋50,660）、Excalifont 1 颗 24,956 B、Virgil 1 颗 56,156 B，合计 <b>246.8 KB</b>。
+- 全族对照：<c>Xiaolai</c> 209 颗＝<b>12.08 MB</b>（平均 59.2 KB／最大 82.1 KB），<c>Excalifont</c> 7 颗＝0.06 MB。
+- ⇒ §九 决策 3 那条「209 分片／12.08 MB」的<b>前提</b>要补一句：那是「任意中文都要能写」的上限，⛔ 是「屏幕上出现中文」的开销；两者差<b>约 90 倍</b>（135,612 B ↔ 12,666,824 B（全族 12.08 MiB））。随包可以按<b>常用字那几片</b>裁，代价是「用户打到一个没随包的字」那一档——那一档现在⛔ 读数（⛔ 造：要量就得知道 unicode-range 覆盖表，登记为欠项）。
+
+### 23.4 深色底：菜单照旧，而<b>宿主塞进去的那句字整句看不见</b>
+
+- 现读（<c>r8-dark</c>）＝<c>{theme: "dark", bg: "#1a1a1a", itemsVisible: 10}</c>，照片 <c>out_r8a/shots/r8a_dark_menu.png</c>（43,543 B，与白底那颗不同一颗 sha）＝十项在深色菜单上照常可读，那颗「Dark mode」当场改口念 <c>Light mode Shift+Alt+D</c>，六颗背景色块换成深色档。
+- <b>同一帧里那行「永字八法 Abc 123」整句不见了</b>：元素 <c>strokeColor</c> 还是 <c>#1e1e1e</c>，压在 <c>#1a1a1a</c> 上。⇒ 引擎<b>⛔ 替宿主翻元素描边色</b>（换 <c>viewBackgroundColor</c> 与 <c>theme</c> 都⛔ 翻）。这条只活在照片里：那一格的三颗 DOM 读数一颗都⛔ 报它（坑表 #671）。落地要么在<b>进档那一刻按底色算一次对比色</b>（与我们 <c>SurfaceReadability</c> 同一族判据），要么把「深色画布」那一档在 UI 上关掉——口径题，进 §二十一 待评审。
+
+### 23.5 这一腿欠的（⛔ 混进已读）
+
+①档 5 那一族<b>覆盖表</b>（哪几片对应哪些字）⇒ 才知道随包能裁到多小、以及「打到没随包的字」那一档长什么样；②深色底下元素描边的<b>对比色判据</b>归谁（Core 一颗⛔ 是两处）；③<c>langCode</c> 换语言那一刻<b>菜单开着</b>的时候会不会自己关（本腿是关了菜单才换的）；④那颗 <c>fontFamily=4</c> 报「⛔ 注册的字面族」——它在我们的字体下拉里<b>该⛔ 该出现</b>（现读：递进去会报 error 并落到 emoji 档）。
