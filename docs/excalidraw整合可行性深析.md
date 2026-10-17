@@ -1123,7 +1123,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 |---|---|---|---|---|
 | JS→C# | <c>bridge.ready</c> | ⛔ 参 | 回 theme／lang／feature 三颗值（§21.5） | 名字表外的整条拒＋记日志 |
 | JS→C# | <c>paste.query</c> | 那颗 <c>data</c> 的<b>形状标签</b>（<c>elements</c>／<c>spreadsheet</c>／<c>text</c>／<c>errorMessage</c>，§20.3 那四档）＋字节数 | 走 <c>ClipboardPolicy</c> 那三层敏感判据，回 allow／deny | 钩子内部抛错＝<b>宿主自己 catch 成 deny</b>（⛔ 让引擎那颗 fail-open 替我们做主） |
-| JS→C# | <c>export.bytes</c> | base64 产物＋档位枚举（png／svg／scene）＋那颗会话 id＋那块板的<b>显示名 <c>suggested</c></b>（<b>片22 上链</b>：可缺、空串＝用户没起过名⇒宿主那颗「id＋时刻」的兜底名才是主人；只有 png／svg 那一路读它，<c>scene</c> 那一路⛔ 读—档名＝那颗 id） | 解字节→由 C# 定名与落点；需要「贴／背景」的再转 §下两颗 | 档位⛔ 在枚举⇒拒；字节数与解码后⛔ 成对相等⇒报「桥坏」 |
+| JS→C# | <c>export.bytes</c> | base64 产物＋档位枚举（png／svg／scene）＋那块板的<b>显示名 <c>suggested</c></b>（<b>片22 上链</b>：可缺、空串＝用户没起过名⇒宿主那颗「id＋时刻」的兜底名才是主人；只有 png／svg 那一路读它，<c>scene</c> 那一路⛔ 读—档名＝那颗 id）。<b>片23 摘掉了本节原本写着的「那颗会话 id」</b>：三拍都递、名单在册、宿主解进 <c>BoardEnvelope</c> 之后一颗读者也没有——留着它＝硬线②那张越权面上多一颗没人读的键，也正是 ✅P-212 那句「注释承诺了一个不存在的消费者」在同一颗包里的第二颗（要它，等它有了读者再带着读者一起回来） | 解字节→由 C# 定名与落点；需要「贴／背景」的再转 §下两颗 | 档位⛔ 在枚举⇒拒；字节数与解码后⛔ 成对相等⇒报「桥坏」 |
 | JS→C# | <c>pin.request</c> | 一颗<b>已发过的 token</b> | 走 ClipIMG-P3 那颗接合贴到桌面 | token 认不出／已回收⇒拒 |
 | JS→C# | <c>background.request</c> | ⛔ 参（哪张图宿主自己知道） | 交冻帧或剪贴板历史图，回字节 | — |
 | JS→C# | <c>open.external</c> | 一条 http(s) URL | 交 <c>LauncherEx.TryOpenAsync</c>（系统浏览器），窗内⛔ 导航 | 非 http(s)／带凭据／⛔ 在白名单⇒拒 |
@@ -1158,6 +1158,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 - <b>那颗 <c>lastRetrieved</c></b>：注释原文说它用来决定删⛔ 用的文件，而「删」这个动作在包里<b>0 处</b>（§20.4）⇒ v1 明写：宿主<b>⛔ 拿它当删除依据</b>；那颗字段照引擎形状存，⛔ 自己加字段（＝漂移面）。
 - <b>四拍 autosave</b>：停笔 1.5 s／窗失焦／<c>ProcessFailed</c> 之前／<c>Closed</c> 之前；另存一颗 <c>.bak</c>（只留最近一颗）；对账三分类⛔ 静默删（ClipIMG-1e 那一族直接复用）；未保存离开＝就地三颗按钮（存／丢／留下决定），⛔ 把「请先保存」写成用户作业（P-54）。
 - <b>身份与命名</b>：文件名＝那颗稳定 id（<c>yymmdd-HHMMss-4hex</c>，v0 同）；<c>appState.name</c>（逐字 <c>string | null</c>）只当显示名，⛔ 当身份；板名是用户数据⇒⛔ 进语言表，而宿主自己那几句上屏话一律 <c>LocMessage</c>（界面语言那条线的口径直接适用）。
+- <b>那颗「根」的主人（片23 落码）</b>：§21.3 那句「路径⛔ 是判据」判的是<b>命名与落点归谁</b>，而「用户数据住在哪」这件事本仓早就有主人（<c>UserDataPaths</c>：<c>STARMARK_SETTINGS_PATH</c> ＞ <c>STARMARK_DB_PATH</c> 的目录 ＞ <c>%APPDATA%\StarMark</c>）。板档目录现在问它要那颗子目录（<c>Subdirectory("boards")</c>，一颗<b>目录</b>出口与既有那三颗<b>档</b>出口同源），导出目录只在板目录下面再切一刀 <c>exports\</c>——画板那一族的档里⛔ 再拼一遍 <c>%APPDATA%</c>。<b>为什么值得为"整齐"动手</b：那份优先规则管不到的那一族⛔ 报错，它只是<b>永远写进真目录</b>，于是沙盒取证一跑就把他真目录里的 <c>boards\</c> 写脏——批次 SS 撞出来的正是同一件事（那颗坑的第五份抄本）。⚠ 那颗导出目录的<b>归属</b>还没裁：v0 §12.1 那张表写着「落『图片\StarMark 截图』同目录族」，v1 本节只把这句接成「由 C# 定名与落点」，而代码选了应用数据目录下面——用户从那儿<b>取不到</b>那张图，而界面上⛔ 一颗出口告诉他在哪 ⇒ <b>新条 P-219</b>（今天那颗路还⛔ 通：宿主只问 <c>kind:"scene"</c>，png／svg 的字节进不来，所以这一条归「接导出入口」那一批先裁再写）。
 
 ### 21.4 撤销栈、脏位、多窗（那颗 <c>captureUpdate</c> 注释逐字之后）
 
