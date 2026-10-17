@@ -1160,6 +1160,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
   <b>【片24 落码＝四拍都接上了线；片25 真机读数：其中两拍⛔ 通】</b>⚠ <b>就地改口</b>：这里原本写的是「四拍全通」——那句话只有<b>源码读数</b>（事件挂上了、分档判对了），片25 在沙盒里把四拍逐颗真机跑了一遍，<b>失焦</b>与<b>关窗</b>两拍通，<b>停笔</b>与<b>崩</b>两拍均⛔ 通（新条 <b>P-221</b>、<b>P-222</b>，读数 <c>bin/WI85/readings_25.txt</c>）。停笔那一拍由<b>页面</b>发起（宿主没得问）；失焦那一拍由宿主问（<c>export.pick</c>＋<c>kind:"scene"</c>）。<b>崩</b>那一拍<b>问不到东西</b>——那一刻页面已经死了，所以 §21.5 给它派的活是恢复而⛔ 是索取；<b>关窗</b>那一拍走 <c>AppWindow.Closing</c>：拦一次、窗先 <c>Hide()</c>（用户⛔ 等那两秒）、向页面索取一份快照并<b>有界</b>等它落地，到点照样关。那颗预算＝<c>BoardPolicy.CloseFlushBudgetMs</c>＝<b>2 000 ms</b>，来历是 §18.6 那颗往返表（控制消息 p95 0.7 ms、1 MB 单程 31 ms、8 MB 177 ms）——它同时是「关掉一扇画板」的可感上限。<b>⛔ 无上限＝那颗网页卡住时，用户的退出键被抵押在它手上</b>（P-54 那句口径的反面）。<b>⚠ 还有一条路⛔ 通</b>：从<b>主窗</b>退出走的是 <c>Environment.Exit(0)</c>，它⛔ 经过各扇窗的 <c>Closing</c> ⇒ 那一途上「关窗前那一拍」一次也走不到（新条 <b>P-220</b>：先给画板窗一位主人，再谈那一途）。「未保存离开＝就地三颗按钮」照旧欠着——那一拍问不到东西时，程序能做的只有「照关＋日志」，三颗按钮要等能<em>停下来问一句</em>的那一批。
 - <b>身份与命名</b>：文件名＝那颗稳定 id（<c>yymmdd-HHMMss-4hex</c>，v0 同）；<c>appState.name</c>（逐字 <c>string | null</c>）只当显示名，⛔ 当身份；板名是用户数据⇒⛔ 进语言表，而宿主自己那几句上屏话一律 <c>LocMessage</c>（界面语言那条线的口径直接适用）。
   <b>【片25 真机读数，四拍逐颗跑过一遍】</b>① <b>关窗</b>那一拍：三跑各把盘上那颗文件的元素颗数多写一颗（2→3→4），窗口正常消失、<b>⛔ 未处理异常</b>；② <b>失焦</b>那一拍：落笔后 2.5 s 盘上⛔ 动（因为停笔拍死着⇒归因干净），把前台换到主窗之后 <b>0.6 s</b> 落盘；③ <b>载档回读</b>（<c>STARMARK_START_BOARD＝last</c> 那一途，本批为取证新加的那颗钩子）：重开之后那两笔真回到画布上（暗像素尺 3645，照片 <c>shot_25_loadback.png</c>）；④ <b>停笔</b>那一拍：<b>三臂 bisect 定位到一行</b>——原样 12 s ⛔ 写、只跳去抖（那颗 if 留着）12 s ⛔ 写、连 if 一起拿掉 <b>0.50 s 就写</b> ⇒ 断点＝<b>页面侧把 <c>onChange</c> 的位置参数当成了「事件对象」，那颗判据恒假</b>（<b>P-221</b>）；⑤ <b>崩</b>那一拍：日志逐字给出 <c>kind=RenderProcessExited tier=ReloadPage</c> 与 <c>kind=BrowserProcessExited tier=RecreateWeb</c>，<b>新 renderer 与新浏览器根各自都起来了</b>，可两条路最后停在<b>同一颗白帧</b>（同一时刻两路拍照各读一次：<c>PrintWindow</c> 暗像素 0 与屏幕 DC 拷贝 0；杀之前两路都是 1787，一字不差）⇒ ⛔ 是尺造的白，而 <b>§21.5 那句「没一颗档位是把画板退成空白」被违反</b>（<b>P-222</b>）。⚠ 两条恢复路停在同一颗帧＝这一格⛔ 是「那一手选错」那么简单：片26 第一刀只给 <c>bridge.ready</c>／<c>NavigationCompleted</c>／<c>Source</c> 加日志把因由判成一颗，⛔ 直接换手。
+  <b>【片26 落地腿＝④ 那颗停笔拍通了；⑤ 崩那一拍的真因量到并改掉】</b>④ 的修法⛔ 是"把那颗 if 修对"，是<b>把开闸的权从页面挪回宿主</b>：桥上新增一颗进向 <c>board.loaded</c>（<b>必带两颗数</b> <c>elements</c>／<c>canvas</c>，缺任何一颗＝<c>MissingField</c>），页面交回"档里数到的"与"当场从画布上数回的"，宿主拿<b>自己递进去的那颗可写颗数</b>与之比<b>三颗全等</b>才递 <c>autosave.arm</c>（<c>BoardPolicy.ShouldArmAfterLoad</c>）。真机读数：健康那一跑 <c>want=3／loaded=3／canvas=3</c> 之后 <b>2.01 s 盘上多一颗</b>（3771／3 → 4936／4），修后两跑 0/0/0 与 1/1/1 同样 2.01 s 落盘（⚠ 那颗是"松手→盘上多一颗"的整段，⛔ 等于页面 <c>AUTOSAVE_MS=1500</c> 那颗去抖）。⑤ 的真因＝<b>同一颗 DOM 容器上被造了第二棵、第三棵 React 根</b>（<c>theme.set</c>／<c>lang.set</c>／<c>feature.flags</c> 各走一遍「造新根再 render」）⇒ <b>§21.5 那句"⛔ 许回到空板"与"⛔ 许静默白屏"被同一只手违反</b>，而这颗坏桥两侧都⛔ 报错。逐颗读数、口径那一半的教训与两道闸门＝<b>§二十七</b>；剩下的那一半（崩后 t+2 那 ≈2 s 白帧、拒绝路径⛔ 上屏说话）＝<b>P-224</b>。
 - <b>那颗「根」的主人（片23 落码）</b>：§21.3 那句「路径⛔ 是判据」判的是<b>命名与落点归谁</b>，而「用户数据住在哪」这件事本仓早就有主人（<c>UserDataPaths</c>：<c>STARMARK_SETTINGS_PATH</c> ＞ <c>STARMARK_DB_PATH</c> 的目录 ＞ <c>%APPDATA%\StarMark</c>）。板档目录现在问它要那颗子目录（<c>Subdirectory("boards")</c>，一颗<b>目录</b>出口与既有那三颗<b>档</b>出口同源），导出目录只在板目录下面再切一刀 <c>exports\</c>——画板那一族的档里⛔ 再拼一遍 <c>%APPDATA%</c>。<b>为什么值得为"整齐"动手</b：那份优先规则管不到的那一族⛔ 报错，它只是<b>永远写进真目录</b>，于是沙盒取证一跑就把他真目录里的 <c>boards\</c> 写脏——批次 SS 撞出来的正是同一件事（那颗坑的第五份抄本）。⚠ 那颗导出目录的<b>归属</b>还没裁：v0 §12.1 那张表写着「落『图片\StarMark 截图』同目录族」，v1 本节只把这句接成「由 C# 定名与落点」，而代码选了应用数据目录下面——用户从那儿<b>取不到</b>那张图，而界面上⛔ 一颗出口告诉他在哪 ⇒ <b>新条 P-219</b>（今天那颗路还⛔ 通：宿主只问 <c>kind:"scene"</c>，png／svg 的字节进不来，所以这一条归「接导出入口」那一批先裁再写）。
 
 ### 21.4 撤销栈、脏位、多窗（那颗 <c>captureUpdate</c> 注释逐字之后）
@@ -1174,6 +1175,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 - <c>userDataFolder</c> 的验收格<b>写成现读那层</b>：<c>&lt;udf&gt;\EBWebView\Default\Local Storage</c>（⛔ 按 <c>&lt;udf&gt;\Default\…</c> 找＝名册 334 那颗坑）。
 - <c>ProcessFailed</c> ⇒ 事件桥报＋<b>当场那份自动落盘</b>（§21.3 四拍之一）＋重载＋<c>board.load</c> 把刚那份递回去；重载之后⛔ 许回到空板，也⛔ 许静默白屏（§坑10）。
   <b>【片24 落码·就地改口】</b>那句「当场那份自动落盘」<b>做⛔ 到</b>：事件递到的那一刻渲染进程已经没了，宿主手上<b>没有</b>比盘上更新的一份可写（最近一次交回＝上一次 <c>export.bytes</c>，它已经在盘上或被 <c>DiskAlreadyHolds</c> 判成同一份）。这一拍真正付的钱是<b>恢复</b>，而恢复按档分（<c>BoardPolicy.RecoveryForFailure</c>，出处＝钉住那颗包 <c>Microsoft.Web.WebView2.Core.xml</c> 的逐字口径，1.0.3719.77 现读十颗档位）：<c>BrowserProcessExited</c>＝<b>重建控件</b>（官方逐字「The app has to recreate a new WebView to recover」）／<c>RenderProcessExited</c>＝<b>重载那一扇页</b>（「You can use the <c>Reload</c> method」）／<b>其余八档＝只上报</b>。八档里最该记住的是 <c>FrameRenderProcessExited</c>：官方写它「⛔ 影响顶层文档，只有部分子帧换成错误页」——<b>一重载就把用户整块板退掉了</b>，「看见进程没了就重载」听起来稳妥，恰好是最不稳妥的那一颗。名单<b>外</b>的名字（将来 SDK 多一档）一律退到只上报：<b>认不出来时的默认动作必须是"什么也⛔ 毁"</b>。重建与首开走<b>同一条</b>开路（两份开场代码＝第二个主人，第一号坏法是其中一份忘了递档），桥第二次 <c>ready</c> 时递进去的是<b>宿主见过的那一份</b>（<c>_seenScene</c>：首开与重载共用、写失败也算见过）而不是"盘上那份"（那颗是脏位的主人 <c>_lastWritten</c>，两问⛔ 同一问）。⚠ 本批读码读出的一颗真缺陷：<b>那颗"桥通了"的旗留在 true</b> 时，下一次失焦就会往死控件 <c>PostWebMessageAsJson</c>（COM 异常当场抛在 UI 线程上＝"画板自己崩给我看"）⇒ handler 第一件事是把它灭掉，这也是这一拍⛔ 能⛔ 装的最低要求。
+  <b>【片26 读数·就地改口】</b>本批先按片25 那一刀把三处日志装上（<c>bridge.ready</c>／<c>NavigationCompleted</c>／<c>Source</c>），三条候选<b>各都量到"真发生了"</b>：<c>nav.done seq=1 ok=True</c>、<c>src</c> 就是那块板、二次 ready 与 <c>board.load</c> 都送达并回了话⇒因由⛔ 在这三颗里，而在<b>页面内部</b>：那棵第二根每挂一次就把宿主刚递进去的那块板拆掉。改成"那棵根只生一次"之后（<c>rerenderWith</c> 复用同一棵 root）：renderer 臂两跑崩后 <b>t+4／t+8 两路都读回崩前那一帧</b>（1497／1632 颗暗像素，与 base 同一颗 sha），root 臂（<c>RecreateWeb</c>）三拍两路都有内容。⚠ <b>"⛔ 许静默白屏"这一条只做到一半</b>：崩后 t+2 那一颗白帧仍在（换帧那一下 ≈2 s），且恢复与拒绝过程依然⛔ 上屏说话⇒登记成 <b>P-224</b>（默认处置＝先重试一次递档、仍不对就在画板窗里给一句话加一颗按钮）。
 - 那颗键位共存：包侧 <c>handleKeyboardGlobally</c> 默认 <c>false</c>（§20.5 两处消费点）⇒引擎⛔ 抢 window 级键盘；仍欠两格量（画板焦点下 F1 那颗全局热键、以及 <c>Ctrl+S</c> 那一类浏览器级键），列进 §21.6。
 - 首帧预算＝现读 <b>≈960 ms</b>（r3／r5 同档，§18.7）⇒「关窗即散」那颗体验说法以此为准（这是 §21.7 那颗拍板的材料，⛔ 是结论）。
 - 出机三道：宿主注入 CSP；<c>WebResourceRequested</c>（现读那颗 filter 连 iframe 的 <c>Document</c> 请求都盖得住，§18.1）；<c>esm.sh</c> 永久 451 当最后一道——<b>⛔ 因为「配了那颗全局」就摘掉它</b>（形1′：那颗兜底永远排在名单最后，§19.2）；片16 补一颗：菜单那一路<b>⛔ 查动作注册表</b>（<c>executeAction</c> 收的是对象本身）⇒「同名 <c>registerAction</c> 改道菜单行」⛔ 成立——接管要么走 <c>UIOptions</c>（<c>canvasActions</c> 深合并、逐颗关），要么走宿主自排 <c>MainMenu</c>（§二十五.1／.3）。
@@ -1445,3 +1447,46 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 ### 26.5 这一腿欠的（⛔ 混进已读）
 
 ①palette 脸面（真键 Ctrl+/ 或真鼠标）；②宿主自己的行在 ja 下的三语（本腿只量了 zh 的对照）；③外链三颗／Reset 在「关 prop＋换表」之后的真机照片（属落地批）。
+
+## 二十七、片26 落地腿（三颗数开闸＋宿主那颗写闸＋只生一次的那棵根）：崩后那块板真回到屏幕，而盘上那份⛔ 再没被空场景盖掉（批次 Phase C 片26，2026-10-18·落地＋真机读数，⛔ 语言表⛔ 装机链）
+
+### 27.1 现场：三跑各把盘上那份盖成一颗空档（那颗档本身是证据）
+
+| 那一跑 | 开闸那颗回话的形状 | 崩前盘上 | 崩后盘上 | 退路 |
+| --- | --- | --- | --- | --- |
+| 05:52（修之前） | <b>无参</b>的 <c>board.loaded</c> | 2608 字节／2 元素 | <b>241／0</b> | 只剩 <c>.bak</c>（只留最近一份） |
+| 06:15（带两颗数，口径还错） | <c>want=4／loaded=4／canvas=4</c>"全等" | 4936／4 | <b>241／0</b> | 同上 |
+| 06:22（口径已对，真因未改） | <c>want=1／loaded=1／canvas=1</c> 全等 | 1441／1 | <b>241／0</b> | 同上 |
+
+- 三跑的日志里都<b>先</b>有 <c>boards.arm.post via=loaded</c>（距二次 <c>bridge.ready</c> 13 ms／12 ms）<b>再</b>有那一次写盘⇒"开闸那一刻画布上真有那几颗"与"1.5～7 s 后它序列化出 0 颗"是<b>同一跑的两句真话</b>，中间一定有人把树拆了。
+- 屏幕那两路（<c>PrintWindow(PW_RENDERFULLCONTENT)</c> ＋ 从屏幕 DC <c>BitBlt</c> 那块矩形）在同一时刻各拍一张：06:22 那一跑 t+2／t+4／t+8 两路都读到<b>暗=0</b>（白）；修后两跑 t+2 仍白，<b>t+4／t+8 两路读回崩前那一帧</b>（暗 1497 与 1632，sha 与 base 同一颗 <c>ff97b73e575e</c>／<c>6db104bded20</c>）。
+- ⚠ 仪器口径的两条老实话（正本 <c>bin/WI86/readings_26.txt</c> 第五块）：A／B 两路的 <b>sha ⛔ 能互相比</b>（两条路径各自编码），可比的只有"有没有内容"那一维；"与崩前同一颗 sha"这一次⛔ 当旧帧疑——同一时刻<b>两路都</b>读到 0、随后又<b>两路都</b>读回那一颗，换过内容再换回来才叫回来了（旧帧读不出中间那颗 0，名册 <b>333</b> 的那把尺这次是反着用的）。
+
+### 27.2 开闸那句从此<b>带数</b>：协议加一颗进向命令，判据住在 Core
+
+- <c>BridgeProtocol</c>：进向名单加 <c>board.loaded</c>（<c>elements</c>／<c>canvas</c>），<c>RequiredFields</c> 同批加两颗⇒<b>一颗不给数的 <c>board.loaded</c> 是 <c>MissingField</c>，⛔ 是"它解掉了"</b>。那颗 <c>BoardEnvelope</c> 交 <c>int?</c> 两颗（读不到就 <c>null</c>，⛔ 折成 0）。
+- <c>BoardPolicy.CountWritableElements</c>＝<b>会被写回盘上的那几颗</b>（跳 <c>isDeleted:true</c>）；读不懂（半截档／⛔ 那颗键／根⛔ 是对象）交 <c>null</c>。这颗口径的来历就是 06:15 那一跑：页面前一版把 <c>canvas</c> 取成 <c>getSceneElementsIncludingDeleted</c>，而序列化器走 <c>getSceneElements</c>⇒<b>两颗⛔ 同口径的数比 equality＝闸门看着在挡、其实挡的是另一件事</b>（§21.2 那颗旋钮表早把带删除的那颗出口列进「⛔ 用」并写了理由，<b>表上写着⛔ 用⛔ 等于落地不会破</b>）。
+- <c>ShouldArmAfterLoad(want, loaded, canvas)</c>＝三颗全等；<b>任一颗认不出＝⛔ 开闸</b>（读不懂时唯一安全的动作是不写）。空板（0／0／0）算"回到了那块板"，⛔ 因此⛔ 写。
+- ⚠ 这颗判据的证人第一版<b>测了⛔ 那一半</b>：九行断言把 null 全摆在另两颗非零的位置上，于是"把 null 折成 0"那颗坏<b>全绿</b>（台架 A3 臂把它撞出来）⇒补的那一行是 <c>ShouldArmAfterLoad(null, 0, 0)</c> 仍⛔ 开（＝"我读不懂"与"这块板是空的"在另两颗都是 0 时才分不开）。
+
+### 27.3 真因＝同一颗 <c>#root</c> 上第二棵 React 根（这颗由量得，⛔ 由推理得）
+
+- 现场形状：<c>rerenderWith()</c> 每次都 <c>L.createRoot(box).render(...)</c>，而 <c>bridge.ready</c> 那一刻 <c>theme.set</c>／<c>lang.set</c>／<c>feature.flags</c> 三颗初始值连着发出去⇒恢复那一趟<b>至少拆树两次</b>；React 18 只让最后一棵赢下那块 DOM，每挂一次＝一块全新的空画板，宿主刚递进去的那块被拆掉，随后被序列化回盘。
+- 修＝<b>那棵根只生一次、后续都往它 render</b>（<c>if (!root) root = L.createRoot(box);</c>），三处设值共用 <c>rerenderWith</c>，首挂载也从它走（<c>rerenderWith({});</c>）。
+- 为什么这一颗非⛔ 由闸门拦住：闸门只能证明"递进去那一刻"画布上有那块板；拆树发生在<b>之后</b>，且⛔ 报错、⛔ 抛、⛔ 上屏。⇒本仓那条口径的形状：<b>静默的坏比坏本身更坏</b>，而<b>拦住它的两道闸要分开放</b>（§27.4）。
+
+### 27.4 两道闸门的形状（主闸⛔ 装在页面上）
+
+- 页面那道 <c>hostArmed</c> 只包得住<b>停笔</b>一路（它写在 <c>onChange</c> 里）；<b>失焦</b>与<b>关窗</b>两拍是宿主问、页面答（<c>export.pick</c>→<c>runExport</c>→<c>deliver</c>），那条路上⛔ 有对方那道 if——写盘的笔本来就握在宿主手里。
+- 宿主那颗 <c>_autosaveArmed</c>：<b>每一趟 <c>bridge.ready</c> 重新闩上</b>（新页面必须重新证明自己）；没开闸之前交回的场景字节一律 <c>boards.scene.write.refused notArmed</c> 拒掉——⛔ 落盘，也⛔ 记进 <c>_seenScene</c>（记了＝下一趟恢复会把这块空场景当"见过的那一份"递回画布）。
+- 判据排在<b>档位分流之后</b>⇒png／svg 那两族一次性产物⛔ 被它挡；拒的那一支照样 <c>FinishClosingFlush()</c>⇒⛔ 让关窗那一拍白等满 <c>CloseFlushBudgetMs</c>（拒掉也是答案）。
+- 证人与台架：本批新增 8 格（Core 纯函数 2＋协议 3 行 InlineData＋1 格，UI 形状 4 格）；台架 <c>bin/WI86/bench_26.py</c> r2＝M0 全绿／12 臂 BAD 0／被红过的格 8/8／还原核对 True。
+- ⚠ <b>⛔ 验过的那一档（如实登记）</b>：<c>boards.arm.refused</c> 与 <c>boards.scene.write.refused</c> 这两条<b>拒</b>的路径本批在真机上一次也没撞到过（修完真因之后本就该撞不到）⇒它们只有形状证人与纯函数证人，那条静默面登记成 <b>P-224</b>。
+
+### 27.5 这一腿欠的（⛔ 混进已读）
+
+- <b>P-224</b>（开放，本批登记）：拒那一刻⛔ 只写日志＝这块板从此不再落盘而屏幕上⛔ 一句话；连同崩后 t+2 那 ≈2 s 白帧（§21.5 那句"⛔ 许静默白屏"剩下的那一半）一起做。默认处置＝<b>(B) 先重试一次递档 ＋ (A) 仍不对就在画板窗里给一句话加一颗按钮</b>。
+- <b>P-220</b>：从主窗退出走 <c>Environment.Exit(0)</c>，⛔ 经过各扇窗的 <c>Closing</c>⇒那一途上"关窗前那一拍"一次也走不到（先给画板窗一位主人）。
+- <b>P-219</b>：导出落点归属还没裁（png／svg 接进来那一批先裁再写）。
+- 「未保存离开＝就地三颗按钮」照旧欠着；那颗 <c>.bak</c> <b>只留最近一份</b>这件事⛔ 因 P-224 的 (C) 出路而变（那条出路本批⛔ 取）。
+- ⚛ 本批⛔ 量过的分支：多块板同开、跨机器（别的 GPU／DPI／系统缩放）、深色主题下面板与白帧的观感、以及把 <c>feature.flags</c> 真开起来那一档。
