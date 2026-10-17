@@ -109,8 +109,8 @@ action 注册表实测 44 个（前两轮普查逐条在列），按族归并：
 **坑1 · "1:1"口径无治理** —— 验收必翻案。措辞钉死为"编辑器功能 1:1、产品外壳按 D 表"，写进任务书本档和验收，三处一致。
 **坑2 · WebView2 = 新运行时但文档叙事当旧件** —— 本项目实测零引用；"RSS 有 WebView2 先例"是浏览器扩展的事实混入（本分析自己差点顺手写成"复用既有"——已在本会话内实抓自纠，**教训**：集成叙事先实查两仓）。落地批的 csproj diff 会第一次引入该包，review 时按"新运行时引入"重量级过。
 **坑3 · TTD/PublishLibrary 的 fetch 在关不掉的版本上静默死亡** —— 关法以 spike 实测为准 + 按钮摘除双保险；"点了没反应 30 秒"是本仓定性过的坏。
-**坑4 · 字体 esm.sh 远程回退（实测硬编码，fonts/ExcalidrawFontFace.ts:24）** —— `createUrls` 本地 URL 在前回退在后，但**打包后 import.meta.env.PKG_* 缺失时回退变 latest 远程**。处置：构建时注入 PKG_NAME/VERSION（或 patch 掉回退）；spike 必须做**断网全字体验证**（中/英/emoji/手写体逐族，含 Xiaolai 中文断网）。
-**坑5 · woff2 子集化 wasm 也是 fetch 加载（subset/woff2/woff2-bindings.ts 实测）** —— 子集化管线断网失效=字体回退+首屏字形突变。处置同坑4：wasm 随包 + 加载路径本地化核验（该 wasm 是 Emscripten 产物，URL 可配置性 spike 实证）。
+**坑4 · 字体 esm.sh 远程回退（实测硬编码，fonts/ExcalidrawFontFace.ts:24）** —— `createUrls` 本地 URL 在前回退在后，但**打包后 import.meta.env.PKG_* 缺失时回退变 latest 远程**。处置：构建时注入 PKG_NAME/VERSION（或 patch 掉回退）；spike 必须做**断网全字体验证**（中/英/emoji/手写体逐族，含 Xiaolai 中文断网）。〔片9 更正 那颗基座的因果与第一颗出路〕先读官方全局 <c>window.EXCALIDRAW_ASSET_PATH</c>（字符串／数组），再把 <c>ASSETS_FALLBACK_URL</c>＝<c>https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/</c> <b>永远追加成最后一颗候选</b>（<c>createUrls</c> 函数体逐字见 §19.1；随包 dist 在 <c>dev/chunk-3KPV5WBD.js:4926～4951</c>，我自己那颗 min 同段在 <c>@2272572</c>）。⛔ 人配基座时名单里<b>只有那颗 CDN</b>——这才是默认坏法（r3／r5 引擎原话 <c>Failed to load font "16px Virgil, Segoe UI Emoji" from urls "https://esm.sh/…"</c>，urls 后面就一颗）。那句「<c>import.meta.env.PKG_*</c> 缺失时回退变 latest 远程」在这份包里兑现⛔：我钉的这颗 dist 现读带版本 <c>@0.18.0</c>。处置第一颗＝宿主页面一行 <c>window.EXCALIDRAW_ASSET_PATH="/"</c>（那颗包 <c>README.md:24</c> 逐字给的就是这一行）＋<c>dist/prod/fonts</c> 随包；构建期注入 PKG_NAME/VERSION 或 patch 回退降为第二颗。
+**坑5 · woff2 子集化 wasm 也是 fetch 加载（subset/woff2/woff2-bindings.ts 实测）** —— 子集化管线断网失效=字体回退+首屏字形突变。处置同坑4：wasm 随包 + 加载路径本地化核验（该 wasm 是 Emscripten 产物，URL 可配置性 spike 实证）。〔片9 更正 那句在我钉的这颗 <c>0.18.0</c> 随包 dist 里兑现⛔〕整棵 <c>dist</c> 走一遍 <c>.wasm</c> 档 <b>0</b> 颗；两颗 wasm 以 base64 活在 <c>prod/chunk-EIO257PC.js</c>（1 824 966 字节）里，解码后 <b>727 188</b>／<b>590 664</b> 字节，magic 四颗字节都是 <c>00 61 73 6d</c>；子集化那颗的点火点吃的是内联字节（min <c>@2073652</c>：<c>WebAssembly.instantiate(那颗base64解出的buffer)</c>，出口形状 <c>{subset:…}</c>）⇒「wasm 随包」这一格由「它本来就在 JS 里」兑现。r5 里 <c>WebAssembly.instantiate</c> 0 次＝它<b>没被叫到</b>（它排在「字体字节取到」之后，§19.2），⛔ 等于「断网时它坏」。读数正本＝<c>bin/WI83/spike2c_probe_83bc.txt</c> ②／③ 段。
 **坑6 · 字体授权未核完** —— 11 族里 Virgil/Excalifont/Lilita/Cascadia/Xiaolai/Assistant/Nunito…许可证不一（Xiaolai 是 OFL、Cascadia MIT 可再查）；**代码 MIT 不含资产授权**；随包分发前逐族写 NOTICE（桌面仓库有 NOTICE 先例=WordList.Dic 那一族惯例）；Emoji 目录实测 0KB（可能是索引样式声明）——spike 核实它到底是什么，别默认中文 emoji 能画。
 **坑7 · Xiaolai 单族 12.4MB 的体积决策** —— 不打=中文手绘观感降级为系统字体（用户拿它就是因为中文好看）；打=dist 从 ~2MB 级跳到 ~15MB 级（未实测 bundle 总量，**数字要实测后才许写**）。倾向打但列为 §九决策 4。
 **坑8 · 内存红线（铁律①）** —— WebView2 进程树驻留是常态。硬约束：画板窗**按需建窗、关窗即 Dispose environment/Process.Kill 兜底实测进程数归零**；默认功能关=零资源。这条要进验收（任务书既有横切第 8 类"功能默认关零资源"的直接适用）；"关窗后 msedgewebview2 还活着"的坑在别的项目是常客。userDataFolder 强制改道 %LOCALAPPDATA%\StarMark\wbview2（默认跟随 exe 目录=开发态可写性雷——本仓 NuGet/安装目录两类事故的镜像）。
@@ -786,11 +786,11 @@ Xiaolai 随包那一颗的代价现在有三段，⛔ 只第一段是体积：
 | 被拦的族（r3 那 17 颗点名） | Virgil／Cascadia／Excalifont／<b>Xiaolai×3 分片</b>／Nunito／Liberation／Lilita／ComicShanns，另 7 颗走 <c>XmlHttpRequest</c> 重试 |
 | 断网下真落地的族 | <b>只有 Assistant</b>（3 颗本地 woff2＝<c>status 200</c>）；<c>document.fonts</c> 其余全 <c>unloaded</c>，逐族 <c>document.fonts.load()</c> 的 <c>matched=0</c> |
 | 白底照片那一格 | <c>out_r3/shots/r3_a_scene.png</c>：矩形与箭头是手绘味（roughjs 在 bundle 里），<b>六行「永字八法 Abc 123」全是系统兜底字</b>⇒ 手写体这一格断网即灭 |
-| ⚠ 漏到出口外面 | 断网下 <c>exportToSvg</c> 交出的那段 SVG 里仍写着 <c>https://esm.sh/…Virgil-Regular.woff2</c>（r5 现读 <c>remoteCount=2</c>／<c>dataUri=0</c>／<c>fontFace=1</c>）⇒<b>对方打开那张 SVG 会自己去请 esm.sh</b> |
+| ⚠ 漏到出口外面 | 断网下 <c>exportToSvg</c> 交出的那段 SVG 里仍写着 <c>https://esm.sh/…Virgil-Regular.woff2</c>（r5 现读 <c>remoteCount=2</c>／<c>dataUri=0</c>／<c>fontFace=1</c>）⇒<b>对方打开那张 SVG 会自己去请 esm.sh</b>   〔片9 更正那颗因果〕它⛔ 是「导出总会带一条远程引用」：链＝<c>toCSS</c>（<c>chunk:4856</c>）→<c>getContent</c> 逐颗候选取（<c>:4872～4888</c>，<c>fetchFont</c> 带 <c>cache:"force-cache"</c> 与 <c>Accept: font/woff2</c>）→<b>全部取不到才</b> <c>return this.urls[this.urls.length-1].toString()</c>（<c>:4893</c>）＝把最后那颗兜底 CDN 当正文写出去。本地基座接通⇒那颗函数交 base64 子集⇒<c>dataUri</c> ⛔ 再是 0（源码判，§19.5 第①臂才兑现）。 |
 
 ⇒ <b>形1（本腿新撞，进 §五 续排的候选）</b>：那颗包里<b>⛔ 带</b> <c>esm.sh</c> 那颗基座，也<b>⛔ 是</b> <c>index.css</c> 写的——它在 JS 里（<c>fonts.css</c> 之外的一颗运行时回退）。
 后果两档：<b>①</b> 用户机器断网／⛔ 联网⇒画板手写体与中文手写体全灭（＝§十 第一格现读不通过）；<b>②</b> 导出的 SVG 带着那条远程引用出机（＝§十四 那句「静态命中⛔ 等于出机」在这一臂又兑现一次，而且这次是<b>会替我们出机</b>的那一类）。
-⇒ 出路三颗（都归打包／落地批，本腿⛔ 试）：把那颗基座改成本地（换 <c>fonts.css</c> 与那颗运行时常量）、或整族预载进 <c>document.fonts</c>、或在宿主侧把 <c>esm.sh</c> 永久 451 并接受「断网即兜底字」这一档观感。<b>§九 决策 3（Xiaolai 随包⛔ 随包）在这一格上⛔ 够：随了包也还要那颗运行时基座改口。</b>
+⇒ 出路（<b>片9 按那颗包自己的源码重排</b>，逐字行号在 §十九）：<b>①官方那颗全局</b> <c>window.EXCALIDRAW_ASSET_PATH</c>——那颗包 <c>README.md</c>「Self-hosting fonts」一节（<c>:19／:21／:24</c>）逐字给的就是它，形状＝一行 <c>&lt;script&gt;window.EXCALIDRAW_ASSET_PATH = "/";&lt;/script&gt;</c>；语义现读 <c>createUrls</c>＝配的那颗基座排<b>前</b>、<c>esm.sh</c> 永远追加成<b>最后</b>一颗 ⇒ <b>①⛔ 改包、⛔ 预载、⛔ 451</b>，代价＝宿主 HTML 多一行＋那颗 <c>fonts/</c> 目录必须随包（两颗<b>必须一起</b>：全局⛔ 等于断网，本地缺件时那颗兜底照样被请＝一次真出机）。<b>②</b>整族预载进 <c>document.fonts</c>、<b>③</b>打包期换那颗运行时常量、<b>④</b>宿主侧把 <c>esm.sh</c> 永久 451 并接受「断网即兜底字」——三颗全降为①失效时的备选。<b>§九 决策 3（Xiaolai 随包⛔ 随包）在这一格上仍⛔ 够，但改口：随包＋那颗全局＝两颗一起才兑现；上一版那句「随了包也还要那颗运行时基座改口」⛔ 成立——那颗常量本来就是兜底，配了全局就轮不到它。</b>
 
 ### 18.3 ② wasm 那半格，撞出来的是<b>一堵 4 MB 的墙</b>
 
@@ -798,13 +798,13 @@ Xiaolai 随包那一颗的代价现在有三段，⛔ 只第一段是体积：
 |---|---|
 | 那颗 3 600×3 600 噪声 PNG | <b>20 298 916</b> 字节（≈19.4 MiB；我那句 <c>over20MB</c> 按 20 MiB 判⇒报 False，口径以颗字节为准） |
 | 拖进去之后屏幕上出现什么 | 一颗居中 <b>Error</b> 卡：<c>File is too big. Maximum allowed size is 4MB.</c>（<c>out_r5/shots/r5_after_drop.png</c>）＋背景压暗 |
-| 减重管线跑到没 | ⛔ 到（闸门在减重<b>之前</b>）；但 <c>WebAssembly.compile(bytes)</c> 现读 <b>2 次</b>⇒<b>pica 那颗 wasm 是 base64 内联、断网可用</b>（⛔ 远程 .wasm 请求） |
+| 减重管线跑到没 | <b>跑到</b>〔片9 就地更正：这一格上一版把「⛔ 到」与「compile 2 次」写进了同一行的两个半句，我读前半⛔ 读后半〕那颗闸门在减重<b>之后</b>：<c>dev/index.js:28411</c> 先 <c>resizeImageFile(imageFile,{maxWidthOrHeight:1440})</c>，<c>:28420</c> 才 <c>if(imageFile.size&gt;4*1024*1024) throw</c>（两颗常数原名 <c>DEFAULT_MAX_IMAGE_WIDTH_OR_HEIGHT</c>／<c>MAX_ALLOWED_FILE_BYTES</c>，定义在 <c>dev/chunk-3KPV5WBD.js:322／:323</c>）。而我<b>自己在 r5 就录了它跑过</b>：<c>attempts[2]/[3]=wasm.compile</c>（t=16 104／16 105 ms），同一把全局尺在更早那格 <c>export-svg-detail</c> 读到 <c>wasmNow=0</c> ⇒ 那两次落在那两格之间＝那颗拖放路径里；min 里 <c>WebAssembly.compile</c> 只有两种调用形状（<c>@2093525／@2128643</c>），同属一颗内部标签写着 <c>mathlib</c>、由 <c>onmessage</c>＋<c>OffscreenCanvas</c> 驱动的模块＝pica 那颗，base64 内联⇒<b>断网可用、⛔ 远程 .wasm 请求</b> |
 | 那颗常量在包里长什么样 | <c>Ine=4*1024*1024</c>（<c>dist/spike1.min.js</c> 现读 1 次）；<b>⛔ 任何 prop／env 出口</b> |
 | 那句正文进没进语言表 | <c>fileTooBig</c> 在 bundle 里出现 <b>55</b> 次＝55 份语言表各一颗（引擎自己按 <c>langCode</c> 念，⛔ 走我的表） |
 
-⇒ <b>形2</b>：StarMark 那条「截图／贴图进画板」的集成路线，在默认包下会被这堵墙挡在门外——<b>4K 全屏一张 PNG 常&gt;4 MB</b>，而那颗闸门⛔ 出口、⛔ 配置、也⛔ 走减重。
-⇒ 出路三颗（下一腿该判的就是这颗，⛔ 等他）：①<b>宿主侧先降</b>（交进画板前先缩到 &lt;4 MB 或转 JPEG，尺寸与格式由我定＝那颗「路径/命名由 C# 定」的同类）；②打包期<b>换那颗常数</b>（一次改一颗，代价＝与上游漂移，§坑16 那一族）；③那条路⛔ 走引擎文件入口，改走「画板背景／贴图」那颗⛔ 经闸的通道。
-⇒ §十 点验单那句「拖 20 MB 图→减重管线 wasm 生效」<b>现读⛔ 成立</b>：那颗管线在这种尺寸下根本没被叫到。
+⇒ <b>形2</b>：StarMark 那条「截图／贴图进画板」的集成路线，在默认包下会被这堵墙挡在门外——<b>4K 全屏一张 PNG 常&gt;4 MB</b>，而那颗闸门⛔ 出口、⛔ 配置〔片9 更正：上一版这颗「也⛔ 走减重」是错的——它就排在减重之后，见本节那颗表第一行与 §19.3〕。 〔片9 同段补一颗边界〕那颗 resize 对 <b>SVG 原样返回</b>（<c>dev/chunk-3KPV5WBD.js:24819～24821</c>），且输出 <c>type</c> 沿用原档（<c>:24846</c>）⇒ 拖 PNG 进去不会自动转 JPEG 减重。
+⇒ 出口（<b>片9 按源码重排，代价从低到高</b>）：<b>①</b>罩着那颗闸门的整块 <c>if</c> 有现成出口——<c>dev/index.js:28409</c> <c>if(!this.files[fileId]?.dataURL)</c>：宿主<b>自己缩好、自己编成 <c>dataURL</c> 交进 <c>files</c></b> ⇒ 减重与闸门<b>一起跳过</b>（那颗 <c>fileId</c> 可由 prop <c>generateIdForFile</c> 影响，<c>:28399</c>）；源码判，§19.5 那一臂才兑现，代价＝跳过引擎那颗 1440 之后<b>尺寸上限得我自己给</b>，否则原图整颗进场景。<b>②</b>⛔ 动任何东西、直接拖——引擎那颗 1440 已把多数照片味压进闸内（待量）。<b>③</b>打包期换那颗常数（一次改一颗，代价＝与上游漂移，§坑16 那一族）。<b>④</b>那条路⛔ 走引擎文件入口，改走「画板背景／贴图」那颗⛔ 经闸的通道。<b>两颗排障形状（本腿新撞）</b>：那颗 resize 抛错只 <c>console.error("Error trying to resizing image file on insertion",…)</c>（<c>:28415</c>）⇒ 原图裸着去撞闸门，屏幕上那句「too big」有可能是「解码失败」；<c>resizeImageFile</c> 对 SVG 原样返回 ⇒ 那颗也直接撞闸门。
+⇒ §十 点验单那句「拖 20 MB 图→减重管线 wasm 生效」——〔片9 就地更正〕<b>那颗管线有被叫到</b>（r5 同一格里 <c>wasm.compile</c> 2 次，而 r3 那颗 <c>image-paste</c> 格交回 <c>wasmCalls=[]</c>、<c>filesAfter=0</c>＝那一条压根没进插入链），它只是<b>压不动</b>那颗噪声图；那句「生效」要靠一颗<b>可压缩</b>的图才量得出（§19.5 第②臂），⛔ 是这一颗。上一版那句「根本没被叫到」是错的。
 
 ### 18.4 ③ 出口三法：两成一吊，而且「档名」⛔ 归网页
 
@@ -867,11 +867,11 @@ Xiaolai 随包那一颗的代价现在有三段，⛔ 只第一段是体积：
 
 ### 18.9 §八 Spike 批与 §十 点验单：这一腿交掉哪几格、还欠哪几格
 
-<b>交掉</b>：0① 运行时探测＋环境释放（18.7，含正件）；0② 字体/wasm 断网全验（18.2／18.3，<b>结论是「⛔ 通过」两颗缺陷形状</b>）；0③ 出口 3 法各试（18.4，两成一吊）；0④ TTD／Publish 关按钮有效性（18.5，<c>aiEnabled</c>／<c>canvasActions</c> 都管⛔ 到那几行）；0⑤ 桥往返时延（18.6）；§17.4 那颗拦截点（18.1，含 iframe Document）；§十 的「userData 改道」「关窗进程树归零」「旧 embeddable ⛔ 加载远程（iframe 被拦后是颗空框，<b> 警告文案要我们自己写</b>）」三格。
+<b>交掉</b>：0① 运行时探测＋环境释放（18.7，含正件）；0② 字体/wasm 断网全验（18.2／18.3，<b>结论是「⛔ 通过」两颗缺陷形状</b>）；0③ 出口 3 法各试（18.4，两成一吊）；0④ TTD／Publish 关按钮有效性（18.5，<c>aiEnabled</c>／<c>canvasActions</c> 都管⛔ 到那几行）；0⑤ 桥往返时延（18.6）；§17.4 那颗拦截点（18.1，含 iframe Document）；§十 的「userData 改道」「关窗进程树归零」「旧 embeddable ⛔ 加载远程（iframe 被拦后是颗空框，<b> 警告文案要我们自己写</b>）」三格。 〔片9：18.3 那一半的因果已就地更正（那颗闸门在减重<b>之后</b>、那颗管线在 r5 真跑过 2 次），形2 收窄与四颗出口见 §十九；那颗 <c>woff2.wasm</c> 的「断网坏没坏」也在 §19.4 换成两颗更准的问题〕
 
 <b>还欠（⛔ 从表里消失）</b>：
 - <b>观感／口径</b>：菜单展开态那张照片（我这把截图尺⛔ 拍得到弹层，见 18.7 第 2 条的副作用）；手写体断网那两档的<b>肉眼定论</b>；「默认 Key ⛔ 配时那颗按钮是不是死按钮」。
-- <b>机制</b>：那颗 4 MB 墙的三颗出路选哪颗（18.3）；<c>esm.sh</c> 基座改口那三颗（18.2）；<c>woff2.wasm</c> 那颗子集化开关<b>本腿没找到点它的那颗按钮</b>（⇒「断网时它坏没坏」未判定）；<c>onChange</c> 实参位与那颗图数据多大（18.8 第 4 条）。
+- <b>机制</b>：那颗 4 MB 墙的三颗出路选哪颗（18.3）；<c>esm.sh</c> 基座改口那三颗（18.2）；<c>woff2.wasm</c> 那颗子集化开关<b>本腿没找到点它的那颗按钮</b>（⇒「断网时它坏没坏」未判定）；<c>onChange</c> 实参位与那颗图数据多大（18.8 第 4 条）。 〔片9 换了一茬：前两颗由 §十九 换成「一颗有官方出处的全局＋四颗出口并排」；那颗 <c>woff2.wasm</c> 拆成两问——<b>断网编不编得好＝编</b>（包内 <c>.wasm</c> 0 颗、base64 内联，§19.4），<b>出没出过字节＝还没被叫到</b>（排在字体字节取到之后，与 §19.5 第①臂同跑判掉）；剩下 <c>onChange</c> 那颗仍欠〕
 - <b>多窗</b>：两块板窗开同一颗档的冲突表（§12.2）——那是<b>存储接管</b>那一格，⛔ 属本腿。
 
 ### 18.10 对 §八 批形与 §九 决策的位置
@@ -880,3 +880,122 @@ Xiaolai 随包那一颗的代价现在有三段，⛔ 只第一段是体积：
 - 但 18.2／18.3 那两颗形状<b>排在架构批之前</b>：一颗决定「字体到底带什么、基座改到哪儿」，一颗决定「图进画板那条路走⛔ 走得通」——两颗都是<b>架构输入</b>，⛔ 是文案。⇒ 下一腿＝<b>Spike-2 裁决腿</b>：把「4 MB 三出路」与「esm.sh 三出路」各做一颗<b>最小可测臂</b>（仍⛔ 产品码），拿到数字再进架构批。
 - §九 决策 3（Xiaolai 随⛔ 随包）现读<b>加了一条前提</b>：随包⛔ 等于能用，那颗运行时基座还得改口；决策 4（AI／TTD 带⛔ 带）加了一条：<b>屏上确有一颗能开出那四行的按钮</b>（title 现读「More tools」），而摘它⛔ 归 <c>aiEnabled</c> 管（现读 delta=0）。
 - 本腿⛔ 动过：产品源码、那颗 <c>excalidraw</c> 树、系统 PATH、网络配置、那颗 <c>待决策事项.md</c> 账本。三颗形状（形1／形2／形3）<b>登记在本节</b>，进不进 §五 坑表与账本，等架构批一起排。
+
+## 十九、Spike-2 裁决腿（源码面）：那颗包里早就写好的开关，和三处我自己写反的句（批次 Phase C 片9，2026-10-17·⛔ 起窗的只读源码腿，⛔ 产品码⛔ 建工程⛔ 改系统 PATH⛔ 拔网⛔ 装工具链⛔ 表⛔ 账本）
+
+> 尺与正本＝<c>bin/WI83/spike2_83az.py</c> → <c>spike2_probe_83az.txt</c>（资产基座那面：那颗全局的 4 处命中、回退那颗常量、<c>createUrls</c> 函数体逐字、那颗包里的 <c>./fonts/</c> 资产串）；
+> <c>bin/WI83/spike2b_83ba.py</c> → <c>spike2_probe2_83ba.txt</c>（4 MB 那堵闸门的<b>括号嵌套</b>＋<c>fileTooBig</c> 那颗正文在 min 里的 55 处＝55 份语言表）；
+> <c>bin/WI83/spike2c_83bc.py</c> → <c>spike2c_probe_83bc.txt</c>（那颗 wasm 的<b>归因</b>＝r3／r5 同一把全局尺的两次读数；整棵 <c>dist</c> 的 <c>.wasm</c> 普查；min 里 20 处 <c>WebAssembly.*</c> 调用点逐个打上下文）。
+> 被查的两颗档＝<b>上游那颗包</b>（<c>@excalidraw/excalidraw@0.18.0</c> 的 <c>dist/dev/</c> 未混淆那一面，加那颗包自己的 <c>README.md</c>）与<b>我自己那颗 Spike bundle</b>（<c>bin/WI83/npm0e/build/dist/spike1.min.js</c>，8 376 283 字节；那颗 sha 与 §17.6 冻结一致，片8 <c>spike1b_prep_83ap.txt</c> 复称过）。两颗互证的用处：未混淆面给我的是<b>原名</b>（<c>MAX_ALLOWED_FILE_BYTES</c>／<c>DEFAULT_MAX_IMAGE_WIDTH_OR_HEIGHT</c>／<c>LOCAL_FONT_PROTOCOL</c>／<c>normalizeBaseUrl</c>），我那颗 min 只给我偏移——同一形状在两处都读到才算数。
+> ⚠ 这一腿<b>没起窗</b>：动手前最后两把 <c>GetLastInputInfo</c> 都是 <b>0.0 秒</b>（他在用电脑）⇒ 需要那颗窗的两格（19.5）登记成「待跑」，⛔ 拿「源码说会这样」冒充「量到它这样」。
+
+### 19.0 形状：只问两颗问题，三处答案全打在我自己 §十八／§五 那几句上
+
+| 我写的 | 那颗包现读的 | 落在哪儿 |
+|---|---|---|
+| 18.2 出路①「把那颗基座改成本地（换 <c>fonts.css</c> 与那颗运行时常量）」 | 包里躺着一颗<b>官方全局</b> <c>window.EXCALIDRAW_ASSET_PATH</c>，<c>README.md</c>「Self-hosting fonts」一节逐字给了那一行 ⇒ ⛔ 换文件、⛔ 改常量 | §18.2 与 §五 坑4（就地更正） |
+| 18.3 那格「减重管线跑到没＝⛔ 到（闸门在减重<b>之前</b>）」＋末行「那颗管线在这种尺寸下根本没被叫到」 | 顺序<b>相反</b>：<c>dev/index.js:28411</c> 先压到 1440，<c>:28420</c> 才量 4 MB；而我<b>自己在 r5 就录了它跑过</b> | §18.3（就地更正）＋§十 那一格 |
+| §五 坑5「woff2 子集化 wasm 也是 fetch 加载＝断网即失效」 | 整棵 <c>dist</c> 里 <c>.wasm</c> 档 <b>0</b> 颗，两颗 wasm 以 base64 活在 JS 里 | §五 坑5（就地更正）＋19.4 |
+
+⇒ 三处都⛔ 是被测对象，都是<b>我</b>：①「读到关键字就当成读到顺序」——那颗包名与那颗顺序我各记过一遍，却⛔ 把它们放进同一句里比；②<b>同一行里自己打自己</b>——「⛔ 到」与「compile 2 次」写进同一格的两个半句，我读前半⛔ 读后半；③<b>把上游早先的形状当现读</b>——坑5 那句来自读 <c>woff2-bindings.ts</c> 的印象，这一腿才真去数那颗包里有几颗 <c>.wasm</c>。三条进 <c>docs/踩坑记录.md</c>（收口腿）。
+
+### 19.1 那颗资产基座：<c>createUrls</c> 的四档出口与那颗全局的语义、时机、射程
+
+出处：<c>dist/dev/chunk-3KPV5WBD.js:4926～4951</c>（未混淆那颗名 <c>ExcalidrawFontFace.createUrls</c>）；我那颗 min 同段在 <c>@2272572</c>，体长 466 字节、括号配平闭于 <c>@2273050</c>，两处<b>分支序列一致</b>。
+
+函数体（<b>分支与顺序逐字</b>；行内有缩写、注释是我加的；完整原文＝正本 ③ 段）：
+
+```js
+static createUrls(uri) {
+  if (uri.startsWith("data"))  return [uri];                       // ① 自己就是正文
+  if (uri.startsWith(LOCAL_FONT_PROTOCOL)) return [];               // ② "local:"（:4619）＝⛔ 请任何人
+  if (uri.startsWith("http"))  return [new URL(uri)];               // ③ 绝对 URL
+  const assetUrl = uri.replace(/^\/+/, ""); const urls = [];          // ④ 其余＝随包那几族全走这档
+  if (typeof window.EXCALIDRAW_ASSET_PATH === "string") { urls.push(new URL(assetUrl, normalizeBaseUrl(…))) }
+  else if (Array.isArray(window.EXCALIDRAW_ASSET_PATH)) { forEach(path => urls.push(…)) }
+  urls.push(new URL(assetUrl, _ExcalidrawFontFace.ASSETS_FALLBACK_URL));   // :4949 兜底永远最后
+  return urls;
+}
+// :4978  ASSETS_FALLBACK_URL = `https://esm.sh/${PKG_NAME?`${PKG_NAME}@${PKG_VERSION}`:"@excalidraw/excalidraw"}/dist/prod/`
+```
+
+| 现读 | 数 |
+|---|---|
+| 那颗全局在 min 里的命中 | <b>4</b> 处，全在同一颗 <c>createUrls</c> 里（<c>@2272742／2272810／2272880／2272911</c>）⇒ 它是<b>唯一</b>消费点，⛔ 第二处偷偷读 |
+| <b>读取时机</b> | <c>new ExcalidrawFontFace(family, uri, descriptors)</c> 的构造函数里（<c>:4842</c>）＝<b>建那颗对象时</b>才读，⛔ 模块顶层一次性 ⇒ 宿主在 <c>&lt;script type=module&gt;</c> 之前那句全局就够（README 给的形状正是那颗一行） |
+| <b>那颗全局可以是相对</b> | <c>normalizeBaseUrl</c>（<c>:4966～4976</c>）：对 <c>/^\.?\//</c> 的串按 <c>window.location.origin</c> 解析，再补一颗尾斜杠 ⇒ 在 <c>SetVirtualHostNameToFolderMapping</c> 那颗虚拟站上写 <c>"/"</c> 就正指我那份 <c>www/</c> 根 |
+| <b>可以是数组</b> | 逐颗 push 进候选（多基座＝多颗按序尝试，<c>getContent</c> 的注释原文「from first to last, treated as fallbacks」<c>:4868</c>） |
+| 那 17 颗被拦的 URL 出自哪一档 | 全出自第④档（<c>./fonts/<族>/<档>.woff2</c> ⇒ 拼到兜底基座上），与 §18.2 那颗表一致 |
+| 走第②档的字族 | <c>local: true</c> 那两颗：<c>Helvetica</c>（<c>:4570</c>）与 <c>Segoe UI Emoji</c>（<c>:4608</c>）⇒ 它们<b>⛔ 候选</b>，全靠系统里那颗；引擎那句原话里的字体栈 <c>"16px Virgil, Segoe UI Emoji"</c> 正是这一档的读者 |
+| <b>射程</b> | ⛔ 管 <c>index.css</c> 里那 4 颗 <c>@font-face</c>（全相对、走 CSS 那条）⇒ §18.2 表第一行与「断网下真落地的族只有 Assistant（3 颗本地 woff2＝200）」那格<b>照旧成立</b>，那颗全局动⛔ 了它 |
+
+⇒ <b>那颗包里早就写好的开关</b>：<c>README.md:17～25</c>「#### Self-hosting fonts」三行逐字——「By default, Excalidraw will try to download all the used fonts from the [CDN](https://esm.run/@excalidraw/excalidraw/dist/prod)」／「you'll have to copy the content of the folder <c>…/dist/prod/fonts</c> to the path where your assets should be served from … you should also set <c>window.EXCALIDRAW_ASSET_PATH</c> to the very same path」／「<c>&lt;script&gt;window.EXCALIDRAW_ASSET_PATH = "/";&lt;/script&gt;</c>」。<b>两颗一起</b>（拷 <c>fonts/</c> ＋ 设全局）是那颗包<b>自己要求的</b>装法，⛔ 我发明的组合。⚠ 那颗 README 写的主机名是 <c>esm.run</c>，代码那颗常量拼的是 <c>esm.sh</c>（我 r3／r5 被拦的 URL 现读 <c>esm.sh</c>）⇒ 以代码为准，那颗文档句只当出处。
+
+### 19.2 那条「SVG 里写着 esm.sh」的真实因果（比 §18.2 那一版硬一档）
+
+链：<c>toCSS(chars)</c>（<c>:4856</c>，那颗 <c>unicodeRange</c> 命中才继续，否则 <c>undefined</c>）→ <c>getContent(codepoints)</c>（<c>:4872</c>）→ 逐颗候选 <c>fetchFont</c>（<c>:4895</c>：<c>fetch(url,{cache:"force-cache",headers:{Accept:"font/woff2"}})</c>，非 2xx 就 throw）→ 取到才 <c>subsetWoff2GlyphsByCodepoints</c> 交 base64（<c>:4879</c>）→ <b>循环走完还没取到</b>才 <c>console.error("Failed to fetch font family …",JSON.stringify(errorMessages))</c> ＋ <c>return urls[last].toString()</c>（<c>:4889～4893</c>）。
+
+⇒ r5 那格 <c>remoteCount=2／dataUri=0／fontFace=1</c> 的形状因此有了准确读法：<b>「所有候选都落空，于是把最后一颗候选（＝那颗兜底 CDN）当正文写进 SVG」</b>，⛔ 是「导出总会挂一条远程引用」。
+⇒ 于是 19.1 那颗开关<b>一颗顶两档后果</b>：本地基座取得到 ⇒ ①画板手写体与中文手写体活（§十 第一格），②那颗导出交 base64 子集 ⇒ 那张 SVG ⛔ 再带远程引用（§十四 那条「静态命中⛔ 等于出机」在这一臂由同颗开关堵住，而且是以<b>⛔ 出机</b>的方式堵）。
+⇒ <b>⚠ 但两颗必须一起，且那颗兜底⛔ 消失</b>：<c>esm.sh</c> 永远排在名单最后，本地缺一颗档／虚拟站根指错／那颗 <c>fonts/</c> 没进包 ⇒ 那一次请求<b>真的替我们出机</b>。⇒ 这条进 §五 续排（形1′），宿主侧那颗 451 仍是最后一道，⛔ 因为「配了全局」就摘掉。
+
+### 19.3 那堵 4 MB 的墙：罩着它的那颗 <c>if</c> 比墙本身更该记住
+
+逐字（<c>dist/dev/index.js:28378</c> 起的那颗 <c>initializeImage</c>；我那颗 min 同段在 <c>@8263778</c>，括号嵌套逐字一致）：
+
+```js
+const fileId = await (this.props.generateIdForFile?.(imageFile) || generateIdFromFile(imageFile));   // :28399
+const existingFileData = this.files[fileId];                        // :28408
+if (!existingFileData?.dataURL) {                                   // :28409  ← 整块由这颗 if 罩住
+  try { imageFile = await resizeImageFile(imageFile, { maxWidthOrHeight: DEFAULT_MAX_IMAGE_WIDTH_OR_HEIGHT }); }  // :28411  减重在前（1440）
+  catch (error) { console.error("Error trying to resizing image file on insertion", error); }                     // :28415  只进 console
+  if (imageFile.size > MAX_ALLOWED_FILE_BYTES) {                    // :28420  ← 闸门在后（4*1024*1024）
+    throw new Error(t("errors.fileTooBig", { maxSize: `${Math.trunc(MAX_ALLOWED_FILE_BYTES/1024/1024)}MB` })); }
+}                                                                   // :28427
+const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // :28433  已有就⛔ 再编码
+```
+
+| # | 由这颗顺序得出的判断 | 状态 |
+|---|---|---|
+| 1 | 那颗闸门量的是<b>减重之后</b>的字节 ⇒ §18.3 上一版「闸门在减重之前」错 | 已就地更正 |
+| 2 | 那颗管线在 r5 <b>真跑过</b>：同一格 <c>wasm.compile</c> 2 次（t=16 104／16 105 ms），更早那格 <c>wasmNow=0</c>；r3 那颗 <c>image-paste</c> 格 <c>wasmCalls=[]</c> ＋ <c>filesAfter=0</c> ⇒ paste 那条没进插入链，drop 那条进了 | 已就地更正（归因见表下） |
+| 3 | <c>dataURL</c> 那条出口：只要有，减重<b>与</b>闸门一起跳过 ⇒ 宿主自缩自编是包里现成形状（那颗 <c>fileId</c> 还归 prop 管） | <b>源码判，待 §19.5 第②臂</b> |
+| 4 | resize 抛错只 <c>console.error</c> ⇒ 原图裸着撞闸门：屏幕上那句「too big」可能是「解码失败」 | 排障形状，进 §五 候选（形4） |
+| 5 | <c>resizeImageFile</c> 对 SVG <b>原样返回</b>（<c>dev/chunk-3KPV5WBD.js:24819～24821</c>）；输出 <c>type</c> 沿用原档（<c>:24846</c>）⇒ PNG 拖进去<b>⛔ 转 JPEG</b>，压不动就是压不动 | 同上 |
+
+第 2 行的<b>归因</b>（⛔ 停在「compile 了两次」）：min 里 <c>WebAssembly.compile</c> 只有两种调用形状（<c>@2093525</c> 与 <c>@2128643</c>），两处都属于一颗内部标签写着 <c>mathlib</c>、由 <c>onmessage</c>＋<c>OffscreenCanvas</c> 驱动的模块（<c>@2090663／@2091316</c> 一带），且我读到它的构造参数原文是 <c>pica({features:["js","wasm"]})</c>（<c>@2598589</c>）⇒ 那两次是 <b>pica 那颗减重的 wasm 在编译</b>，与「resize 跑到」同向；两处形状一样＝主线程与 worker 各一份，这份证据⛔ 判「跑在哪个线程上」，那一格本腿⛔ 判。
+
+### 19.4 那颗 wasm 的资产面（顺手把 §五 坑5 那句判掉一半）
+
+| 现读 | 数 |
+|---|---|
+| 整棵 <c>…/excalidraw/dist</c> 里的 <c>.wasm</c> 档 | <b>0</b> 颗（<c>os.walk</c> 全树计数，正本 ② 段） |
+| <c>prod/chunk-EIO257PC.js</c>（1 824 966 字节）里的 base64 大块 | 2 颗：解码后 <b>727 188</b>／<b>590 664</b> 字节，magic 四颗字节 <c>00 61 73 6d</c> |
+| 我那颗 min 的同两处 | <c>@251353</c>（969 587→727 188）与 <c>@1286017</c>（787 554→590 664）＝<b>同两颗模块</b>，尺寸逐颗对上 |
+| 子集化那颗的点火点 | <c>WebAssembly.instantiate(D0i)</c>（min <c>@2073652</c>，紧跟它 base64 尾部；出口形状 <c>{subset:(a,s)=>b0i.subset(i,n,a,s)}</c>，同段还有 <c>{Subset:"SUBSET"}</c> 那颗命令枚举）⇒ <b>吃内联字节，⛔ 远程请求</b> |
+| r5 里 <c>wasm.instantiate</c> 的颗数 | <b>0</b>（<c>attemptsSummary.byVia={"fetch":1,"fetch:ERR":1,"wasm.compile":2}</c>）⇒ 子集化那颗<b>从没被叫到</b>：它排在「字体字节取到」之后（19.2），而那次一颗字体都没取到 |
+
+⇒ <b>§五 坑5 那句「woff2 子集化 wasm 也是 fetch 加载」在我钉的这颗 <c>0.18.0</c> 随包 dist 里兑现⛔</b>：它⛔ 靠一颗远程 <c>.wasm</c> 活着。
+⇒ <b>§18.9 那颗「woff2.wasm 断网时坏没坏」的未判定</b>由这一腿换成两颗更准的问题：<b>(a) 断网编不编得好＝编</b>（base64 内联，同形状的 pica 那颗在断网下真编译了 2 次）；<b>(b) 出没出过字节＝还没被叫到</b>，这一格与 §19.5 第①臂<b>同一次跑</b>就判掉（⛔ 另起一跑）。
+⇒ ⚠ 一颗我⛔ 判的：那两颗 727 188／590 664 字节里<b>哪一颗是子集化、另一颗归谁</b>——我只证到「紧跟第二颗 base64 尾部的是那颗 <c>{subset:…}</c> 入口」，第一颗的归属本腿⛔ 判，登记成候选而⛔ 写成结论。
+
+### 19.5 待跑那一臂（两格；源码⛔ 等于兑现，欠的是那颗窗）
+
+| 臂 | 形状（全在片8 那套现成仪器里，⛔ 新工具⛔ 改包⛔ 产品码） | 判什么 | 现读 |
+|---|---|---|---|
+| ① | 同一份页两跑：<c>window.EXCALIDRAW_ASSET_PATH="/"</c> 设／⛔ 设，其余全同（那颗 451 拦截照旧、字体逐族点名照旧） | 断网下手写体与中文手写体上不上屏（§十 第一格）；<c>dataUri</c> 从 0 变不变；引擎原话里 <c>from urls […]</c> 的名单从 1 颗变 2 颗；<c>WebAssembly.instantiate</c> 起没起＝19.4(b) | ⛔ 跑 |
+| ② | 三跑各拖一颗：<b>StarMark 自己截的一张 4K 照片味 PNG</b>／我那颗 3 600×3 600 <b>噪声</b> PNG／第三跑＝宿主先把图缩到 ≤1440 并编成 <c>dataURL</c> 交进 <c>files</c> | 1440 之后照片味那颗进不进 4 MB（＝形2 到底挡谁）；<c>dataURL</c> 那一臂是不是真把 <c>:28409</c> 那整块跳过；顺带把「尺寸上限归谁」量成数字 | ⛔ 跑 |
+| 闸门 | 起窗前一把 <c>GetLastInputInfo</c>（本腿最后两把＝<b>0.0 秒</b>⇒⛔ 起窗）；那颗 exe 只活在 <c>bin/</c>（整棵在 <c>.gitignore</c> 内⇒仓⛔ 涨），跑完自己关 | — | — |
+
+⇒ 这两臂<b>属 Spike-2 的后半，⛔ 属落地批</b>：第①臂＝<c>www/index3.html</c> 里加那一行全局；第②臂＝递两颗不同熵的 PNG 进那颗现成页。<b>§十九 全部结论到这两臂跑完才许升「已兑现」</b>；在此之前 §19.1～19.4 是<b>源码面</b>，18.2／18.3 是<b>真机面</b>，两面对着看⛔ 混成一格。
+
+### 19.6 这一腿交掉／新开／改口的账
+
+- <b>交掉</b>：§18.9 那句「<c>esm.sh</c> 基座改口那三颗」换成一颗有官方出处的开关＋一颗必须配套的随包动作（19.1／19.2）；「那颗 4 MB 墙的三颗出路选哪颗」换成四颗出口并排＋一颗源码指出的现成出口（19.3）；§五 坑4／坑5 各就地更正一句；§十 那句「拖 20 MB 图→减重管线 wasm 生效」的因果改口。
+- <b>新开（进 §五 续排，等架构批一起点名）</b>：<b>形1′</b>＝那颗全局⛔ 等于断网（兜底 CDN 永远排最后，本地缺件即出机）；<b>形4</b>＝那颗 resize 的 <c>catch</c> 把「解码失败」报成「文件太大」；<b>形5</b>＝<c>dataURL</c> 那条出口同时跳过减重⇒宿主自缩时<b>尺寸上限得自己给</b>，否则原图整颗进场景（体积／内存／导出体积三头都吃）。
+- <b>§九 决策 3 改口</b>：那颗「Xiaolai 随⛔ 随包」不再欠「还要改那颗运行时常量」——随包＋那颗全局＝两颗一起就兑现。决策 4 ⛔ 动（仍欠「屏上那颗按钮」那一格）。
+- <b>§八／§十二 的位置</b>：那一行全局进<b>落地批清单</b>（宿主 HTML 那一颗，与 §12 那颗虚拟站同名同根）；「两颗必须一起」进<b>架构批</b>那张资产／存储表；三颗形状（形1′／形4／形5）进 §五 续排。下一腿按 §八 该是<b>架构批</b>，而 §19.5 那两臂＝<b>架构批之前最后一次起窗</b>（同片8 那颗一次性宿主，⛔ 新仪器）。
+
+### 19.7 本腿⛔ 动过／⛔ 跑过
+
+⛔ 动过：产品源码、那颗 <c>excalidraw</c> 树、语言表、<c>待决策事项.md</c>、系统 PATH、网络配置。⛔ 起窗（⇒ 19.5 两格登记「待跑」而⛔ 「已通过」）。⛔ 装东西、⛔ 新引包（三把尺都是仓内 python，读的是片6／片7 已落的那两颗档）。⛔ 留改坏的源码：本腿唯一改过的文件是 <c>docs/excalidraw整合可行性深析.md</c> 自己，且改动＝就地更正＋新增一节，⛔ 删别行。
