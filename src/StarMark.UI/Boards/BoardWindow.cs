@@ -4,6 +4,7 @@ using System.IO;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.Web.WebView2.Core;
 using StarMark.Core.Boards;
 
@@ -38,6 +39,16 @@ namespace StarMark.UI.Boards;
 /// 宿主拿自己递进去的那颗数对完才递 <c>autosave.arm</c>，并打开<b>自己这一侧</b>那颗写闸
 /// （<c>_autosaveArmed</c>，失焦／关窗那两拍由它挡）。改这一手的因由＝真机量到的<b>那颗数据丢失</b>（P-223）：
 /// 重载之后页面那句"载完了"是真递出来的、画布却是空的，而盘上那块板随后被盖成 0 元素。</para>
+/// <para><b>片27＝那道闸门不再只说话给日志听</b>（P-224）：拒一次先<b>自己再递一次档</b>
+/// （额度＝<see cref="BoardPolicy.ArmRetryBudget"/>，一次），仍对不上才开口，而开口那一句⛔ 只住在日志里——
+/// 画布右下那块面板当场说"这块板没能回到画布上／这一扇已停止保存"，并给一颗<b>另存一份到别处</b>的按钮
+/// （宿主自己写盘，⛔ 走 web 侧；系统"另存为"起不来就退到导出目录并把那条路径念给用户）。
+/// 同批把§21.5 剩下那半也接上：决定动手恢复的那两档（重载／重建控件）当场贴<b>"这块板正在恢复"</b>，
+/// 重建那一趟换的是 <see cref="_stage"/> 里的孩子而⛔ 重指 <c>Content</c>（否则面板连话一起被摘走），
+/// 三圈用尽那档（<c>boards.recover.givenup</c>）当场关掉写闸并上屏那一句＋那颗按钮；
+/// <b>关窗那一拍超时</b>走右下角那张卡（窗在这一拍开头就 Hide 了，面板⛔ 来得及看见）。
+/// ⚠ 残留：那块面板的<b>脸面</b>（灰底黑字、它压住画布右下角那一带）⛔ 屏幕量过；
+/// 那颗按钮真机也⛔ 按过——拒闸门在真机一次也没撞到（见片26 的如实登记），本批只补了形状证人与纯函数证人。</para>
 /// <para>⚠ 已知绕过（归 P-220）：从<b>主窗</b>退出那一途读到的出口是 <c>Environment.Exit(0)</c>，
 /// 它⛔ 经过各扇窗的 <c>Closing</c>，所以那一途上这拍一次也走不到。</para>
 /// </summary>
@@ -99,14 +110,37 @@ public sealed class BoardWindow : Window
     /// </summary>
     private bool _autosaveArmed;
 
+    /// <summary>这一趟载档被拒过几次（额度＝<see cref="BoardPolicy.ArmRetryBudget"/>；开闸成功就归零）。</summary>
+    private int _armTries;
+
+    /// <summary>画布与那块面板同住的一层（<see cref="Content"/> 只许有一个主人：重建控件那一趟换的是这层里的孩子）。</summary>
+    private readonly Grid _stage;
+    private Border? _notice;
+    private TextBlock? _noticeTitle;
+    private TextBlock? _noticeBody;
+    private Button? _noticeButton;
+
+    /// <summary>那块面板此刻说的那一句住在表里的哪一颗键（null＝没在说话）。<b>换语言那一拍按它重贴</b>（机制 (C)）。</summary>
+    private string? _noticeKey;
+
+    /// <summary>那颗"另存一份到别处"的按钮这这一刻许不许按（另存正进行中＝⛔ 再按一次，那是第二份写入）。</summary>
+    private bool _copying;
+
+    /// <summary>另存到了哪儿（那句"已另存到 {0}"的槽；⛔ 进表，因为它是<b>数据</b>而⛔ 句子）。</summary>
+    private string? _copyPath;
+
     public BoardWindow()
     {
         _boardId = BoardPolicy.NewSceneId(DateTimeOffset.Now, Random.Shared.Next(0, 0x10000));
         Title = "StarMark Boards";
         _web = NewWeb();
-        Content = _web;
+        _stage = BuildStage();
+        Content = _stage;
         Closed += (_, _) => OnClosed();
         AppWindow.Closing += OnAppWindowClosing;
+        // 换语言那一刻，那块正开着的面板要跟着换话（⛔ 冻在第一趟的语言上——它说的可是"你的板没在保存"）。
+        // 订阅挂在构造、摘在 <see cref="OnClosed"/>：静态事件上不摘＝这一窗的元素永远活着（P-198 那一族同一颗规矩）。
+        StarMark.Abstractions.I18n.Locale.Changed += OnLocaleChanged;
         // 失焦那一拍（§21.3 四拍其二）：向页面索取一份场景快照。⛔ 在这里判"要不要写"——
         // 写不写由 Core 的档位分流说了算，这一处只负责"该问一次了"。
         Activated += (_, e) =>
@@ -218,8 +252,20 @@ public sealed class BoardWindow : Window
                 {
                     StarMark.Abstractions.StarLog.Warn(
                         "boards.arm.refused want=" + want + " loaded=" + envelope.Elements + " canvas=" + envelope.Canvas
-                        + " id=" + _boardId);
+                        + " id=" + _boardId + " tries=" + _armTries);
                     Reply(envelope.Cmd, envelope.Id, ok: false, err: "arm-refused");
+                    // 先自己再递一次（那是一句自愈），额度用完了才开口：⛔ 一拒就喊，也把"其实再递一次就好"那种一次性时序
+                    // 报成坏掉；而⛔ 一直递＝把同一块空画布反复刷给用户看。两条都⛔ 把决定推给用户（重启／看日志）。
+                    if (BoardPolicy.ShouldRetryArm(_armTries) && _seenScene is { Length: > 0 })
+                    {
+                        _armTries++;
+                        StarMark.Abstractions.StarLog.Warn("boards.arm.retry n=" + _armTries + " id=" + _boardId);
+                        PostBoardLoad();
+                    }
+                    else
+                    {
+                        ShowArmStuckNotice();
+                    }
                 }
                 break;
             case "open.external":
@@ -268,6 +314,8 @@ public sealed class BoardWindow : Window
                 StarMark.Abstractions.StarLog.Warn(
                     "boards.scene.write.refused notArmed bytes=" + bytes.Length + " id=" + _boardId);
                 Reply(envelope.Cmd, envelope.Id, ok: false, err: "not-armed");
+                // 这一路与"停笔那一拍没开闸"是同一条静默面，而它更坏：用户已经画下的那几笔<b>一颗也没落盘</b>。
+                ShowArmStuckNotice();
                 FinishClosingFlush();   // 关窗那一拍等的是"这一问有答案"，拒掉也是答案——⛔ 让用户白等那两秒
                 return;
             }
@@ -322,16 +370,20 @@ public sealed class BoardWindow : Window
         // （它自己才知道落没落），新板＝当场开闸。⚠ 两条路都得发出去：漏发＝这一扇永远⛔ 写，
         // 那是把 P-221 换成一条更静的坏；而"没落地就开闸"＝两跑各自量到的那颗数据丢失
         // （片25 挂载那一拍：4 元素→241 字节／0 元素；片26 重载那一拍：2608 字节／2 元素→241 字节／0 元素）。
-        if (_seenScene is { Length: > 0 } bytes)
-        {
-            PostOutbound("board.load", Envelope("board.load", "h3",
-                JsonString("bytes") + ":" + JsonString(Convert.ToBase64String(bytes)) + ","
-                + JsonString("id") + ":" + JsonString(_boardId)));
-        }
-        else
-        {
-            ArmIdleBeat("no-scene");
-        }
+        if (_seenScene is { Length: > 0 }) PostBoardLoad();
+        else ArmIdleBeat("no-scene");
+    }
+
+    /// <summary>
+    /// 把"宿主见过的那一份"递进画布（首开、崩溃重建、开闸被拒后的那一次重试，<b>三条路共用这一颗形状</b>——
+    /// 两份递档代码＝第二个主人，其中一份忘了递档是本仓定死的第一号坏法）。
+    /// </summary>
+    private void PostBoardLoad()
+    {
+        if (_seenScene is not { Length: > 0 } bytes) return;
+        PostOutbound("board.load", Envelope("board.load", "h3",
+            JsonString("bytes") + ":" + JsonString(Convert.ToBase64String(bytes)) + ","
+            + JsonString("id") + ":" + JsonString(_boardId)));
     }
 
     /// <summary>
@@ -342,8 +394,179 @@ public sealed class BoardWindow : Window
     private void ArmIdleBeat(string via, string evidence = "")
     {
         _autosaveArmed = true;
+        _armTries = 0;                 // 开过闸，这一趟的额度就没意义了：下一次拒是新的一趟（⛔ 让旧额度累积）
+        HideNotice();                  // "正在恢复"／"这一扇已停止保存"那两句都退场——它们说的已经不是事实
         StarMark.Abstractions.StarLog.Info("boards.arm.post via=" + via + evidence + " id=" + _boardId);
         PostOutbound("autosave.arm", Envelope("autosave.arm", "h5", string.Empty));
+    }
+
+    /// <summary>那一扇画板窗的右下那块面板：画布之上唯一的一颗主人（本方法把它排在 web 之后＝压在画布上）。</summary>
+    private Grid BuildStage()
+    {
+        _noticeTitle = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 13,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            Visibility = Visibility.Collapsed,
+        };
+        _noticeBody = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 13,
+            MaxWidth = 420,
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+        };
+        _noticeButton = new Button
+        {
+            Content = Word("boards.saveCopyAction"),
+            Margin = new Thickness(0, 8, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Visibility = Visibility.Collapsed,
+        };
+        _noticeButton.Click += async (_, _) => await CopySeenSceneAsideAsync();
+        var panel = new StackPanel { Margin = new Thickness(14, 10, 14, 10) };
+        panel.Children.Add(_noticeTitle);
+        panel.Children.Add(_noticeBody);
+        panel.Children.Add(_noticeButton);
+        // 那块面板的底色与字色都<b>钉死</b>：画布那一侧永远是白板（theme.set 现在交的是 light），
+        // 而一扇窗里两套深浅色同时说话就是 WI-81 那族"点了白色整扇看不见"的形状——两边都不跟着主题走，最坏也只是普通灰底。
+        _notice = new Border
+        {
+            Child = panel,
+            Visibility = Visibility.Collapsed,
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(245, 250, 250, 250)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 178, 178, 178)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, 16, 16),
+        };
+        var stage = new Grid();
+        stage.Children.Add(_web);
+        stage.Children.Add(_notice);
+        return stage;
+    }
+
+    /// <summary>崩那一拍决定要动手（重载或重建）：那 2 s 的白帧从此有句话（§21.5"⛔ 许静默白屏"剩下的那一半）。</summary>
+    private void ShowRecoveringNotice() => ShowNotice("boards.recoveringBody", titled: false, offerCopy: false);
+
+    /// <summary>那颗写闸拒到底了：把"这一扇不再落盘"说出来，并把唯一还能救的那一份递给用户（P-224 的 (A)）。</summary>
+    private void ShowArmStuckNotice()
+        => ShowNotice("boards.stuckBody", titled: true, offerCopy: _seenScene is { Length: > 0 });
+
+    private void ShowNotice(string bodyKey, bool titled, bool offerCopy)
+    {
+        _noticeKey = bodyKey;
+        if (_notice is null) return;         // 编译期要的那颗判定：面板由构造里的 BuildStage 造好，实际⛔ 为空
+        _noticeTitle!.Visibility = titled ? Visibility.Visible : Visibility.Collapsed;
+        _noticeButton!.Visibility = offerCopy ? Visibility.Visible : Visibility.Collapsed;
+        PasteNotice();
+        _notice.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>面板收起来（开闸成功＝那句坏话已经不是事实）。按钮上的"另存中"一并退掉。</summary>
+    private void HideNotice()
+    {
+        _noticeKey = null;
+        _copying = false;
+        if (_notice is not null) _notice.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// 按当前语言把面板上那两行重贴一次（<see cref="StarMark.Abstractions.I18n.Locale.Changed"/> 那一拍也走它）。
+    /// <para>那颗"另存到 &lt;路径&gt;"的槽交的是<b>数据</b>，所以它进 <c>Fmt</c> 的实参；⛔ 在这里拼成品句（那是第二个措辞出处）。</para>
+    /// </summary>
+    private void PasteNotice()
+    {
+        if (_noticeBody is null || _noticeTitle is null) return;
+        // 那颗按钮上的话也一起重贴：它是构造时冻进去的一串字，⛔ 比面板上那两行晚一步换语言（P-175 那一族的第三种脸）。
+        if (_noticeButton is { } button) button.Content = Word("boards.saveCopyAction");
+        switch (_noticeKey)
+        {
+            case "boards.recoveringBody":
+                _noticeBody.Text = Word("boards.recoveringBody");
+                break;
+            case "boards.stuckBody":
+                _noticeTitle.Text = Word("boards.stuckTitle");
+                _noticeBody.Text = Word("boards.stuckBody");
+                break;
+            case "boards.copySavedBody":
+                _noticeTitle.Text = Word("boards.stuckTitle");
+                _noticeBody.Text = Phrase("boards.copySavedBody", _copyPath ?? string.Empty);
+                break;
+            case "boards.copyFailedBody":
+                _noticeTitle.Text = Word("boards.stuckTitle");
+                _noticeBody.Text = Word("boards.copyFailedBody");
+                break;
+            default:
+                return;
+        }
+    }
+
+    /// <summary>表里那一句按当前语言取词（一处限定名，⛔ 在每颗调用点重抄一遍全限定）。</summary>
+    private static string Word(string key) => StarMark.Abstractions.I18n.Locale.T(key);
+
+    /// <summary>带一颗实参的那一句（那颗路径是<b>数据</b>，进槽而⛔ 拼成品句）。</summary>
+    private static string Phrase(string key, object? argument)
+        => StarMark.Abstractions.I18n.Locale.Fmt(key, argument);
+
+    private void OnLocaleChanged() => PasteNotice();
+
+    /// <summary>
+    /// 那颗按钮的活：把手上<b>见过的那一份</b>交出去——先问系统"另存为"，宿主调不通（提权跨完整性级别只是其中一种成因）
+    /// 就退到导出目录并把那颗路径说给用户（⛔ 因为对话框起不来就把这事推回给用户，那是 P-54 定性过的坏）。
+    /// </summary>
+    private async System.Threading.Tasks.Task CopySeenSceneAsideAsync()
+    {
+        if (_copying || _seenScene is not { Length: > 0 } bytes) return;
+        _copying = true;
+        _noticeButton!.IsEnabled = false;
+        try
+        {
+            var name = BoardPolicy.SceneFileName(_boardId);
+            var target = await PickSavePathAsync(name);
+            if (target is null) return;                     // 用户自己取消的：面板留着，他还能再按
+            System.IO.File.WriteAllBytes(target, bytes);
+            _copyPath = target;
+            ShowNotice("boards.copySavedBody", titled: true, offerCopy: true);
+            StarMark.Abstractions.StarLog.Info("boards.scene.copied to=" + target + " id=" + _boardId);
+        }
+        catch (Exception ex)
+        {
+            // 原因进日志，屏幕上只说"没写成、还能再试"：把 ex.Message 摊到面板上＝把一句没人能读的英文异常当用户出口。
+            StarMark.Abstractions.StarLog.Warn("boards.scene.copy.failed: " + ex.GetType().Name + " " + ex.Message);
+            ShowNotice("boards.copyFailedBody", titled: true, offerCopy: true);
+        }
+        finally
+        {
+            _copying = false;
+            if (_noticeButton is not null) _noticeButton.IsEnabled = true;
+        }
+    }
+
+    /// <summary>问系统"另存为"要写到哪儿；宿主不可用或用户挑不了就退到导出目录（那条路⛔ 需要对话框活着）。</summary>
+    private async System.Threading.Tasks.Task<string?> PickSavePathAsync(string suggestedName)
+    {
+        try
+        {
+            var picker = new Windows.Storage.Pickers.FileSavePicker();
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, Helpers.WindowInterop.GetHwnd(this));
+            picker.SuggestedFileName = System.IO.Path.GetFileNameWithoutExtension(suggestedName);
+            picker.DefaultFileExtension = BoardPolicy.SceneExtension;
+            picker.FileTypeChoices.Add(BoardPolicy.SceneExtension, new[] { BoardPolicy.SceneExtension });
+            var file = await picker.PickSaveFileAsync();
+            if (file is not null) return file.Path;
+        }
+        catch (Exception ex)
+        {
+            StarMark.Abstractions.StarLog.Warn("boards.copy.pick.failed: " + ex.GetType().Name);
+        }
+        System.IO.Directory.CreateDirectory(ExportsDirectory);
+        return System.IO.Path.Combine(ExportsDirectory,
+            _boardId + "-copy-" + BoardPolicy.FormatStamp(DateTimeOffset.Now) + BoardPolicy.SceneExtension);
     }
 
     /// <summary>向页面索取一份场景快照（四拍里能问的那两拍走这里；页面侧回 <c>export.bytes</c>＋<c>kind:"scene"</c>）。</summary>
@@ -376,7 +599,15 @@ public sealed class BoardWindow : Window
         RequestSceneSnapshot(BoardPolicy.SaveBeat.ClosingWindow);
         var budget = System.Threading.Tasks.Task.Delay(BoardPolicy.CloseFlushBudgetMs);
         if (await System.Threading.Tasks.Task.WhenAny(landed.Task, budget) != landed.Task)
+        {
             StarMark.Abstractions.StarLog.Warn("boards.close.flush.timeout ms=" + BoardPolicy.CloseFlushBudgetMs);
+            // 这一句只能走右下角那张卡：窗在这一拍开头就 Hide 了，画板里那块面板⛔ 来得及给用户看见。
+            // 卡也没贴上屏幕时（非 UI 线程／建窗失败）日志已经在那儿了——兜底链⛔ 再往上叠一句假话。
+            if (!Services.NoticeCard.Show(
+                    StarMark.Abstractions.I18n.LocMessage.Of("boards.closeFlushTitle"),
+                    StarMark.Abstractions.I18n.LocMessage.Of("boards.closeFlushBody")))
+                StarMark.Abstractions.StarLog.Warn("boards.close.flush.notice.notShown id=" + _boardId);
+        }
         _closingLanded = null;
         Close();
     }
@@ -399,13 +630,20 @@ public sealed class BoardWindow : Window
         if (_tearingDown || tier == BoardPolicy.FailureRecovery.ReportOnly) return;
         if (tier == BoardPolicy.FailureRecovery.ReloadPage)
         {
-            _web.CoreWebView2?.Reload();     // 控件还在：重载那一扇页，bridge.ready 会再来一次
+            // 那句"正在恢复"只在这一下真的递出去了才贴：那颗 `?.` 短路＝什么都没问，
+            // 而贴一句做不完的承诺比一句白话更坏（用户会等一个不会来的画板）。
+            var view = _web.CoreWebView2;
+            if (view is not null) { view.Reload(); ShowRecoveringNotice(); }
             return;
         }
         if (_recovering) return;             // 两颗控件抢同一扇窗＝更坏的现场
         if (_recreateTries >= BoardPolicy.MaxRecreatePerWindow)
         {
             StarMark.Abstractions.StarLog.Warn("boards.recover.givenup tries=" + _recreateTries);
+            // 这一档就是§21.5 里那句"⛔ 许静默白屏"最直的一次：往后这块板确实再也好不了。
+            // 于是把那颗写闸也当场关掉（这一趟交回来的字节再也没人证明过它回到过这块板）并把手上那份递给用户。
+            _autosaveArmed = false;
+            ShowArmStuckNotice();
             return;
         }
         _recreateTries++;
@@ -417,11 +655,17 @@ public sealed class BoardWindow : Window
     /// 官方表对那一档写的是"要重建一颗 WebView 才恢复得了"：换掉控件、走同一条 <see cref="OpenAsync"/>。
     /// <para>旧那颗自己已经进了 Closed 态（doc 逐字），这里⛔ 再 Close 它一次，也⛔ 对着它 Navigate；
     /// 恢复带着 <see cref="_seenScene"/>，所以用户看到的⛔ 是白屏，而是他刚才那块板。</para>
+    /// <para><b>换的是 <see cref="_stage"/> 里的孩子，⛔ 重指 <c>Content</c></b>：那块面板住在同一层里，
+    /// 重指一次就把它连话一起摘了——而这一刻正是要它说话的时候（片27 给§21.5 的那半）。
+    /// 插在 index 0 是让它继续当<b>画布那一位</b>：面板永远压在画布之上。</para>
     /// </summary>
     private void RecoverByRecreatingWeb()
     {
+        var old = _web;
         _web = NewWeb();
-        Content = _web;
+        _stage.Children.Remove(old);
+        _stage.Children.Insert(0, _web);
+        ShowRecoveringNotice();
         _ = OpenRecoverAsync();
     }
 
@@ -456,6 +700,8 @@ public sealed class BoardWindow : Window
     {
         // 决策 2「关窗即散」：页面侧收尾在 web 半边；宿主半边这里拆干净（最后一扇走＝浏览器进程树散）。
         _tearingDown = true;
+        // 那颗静态事件也一起摘：留着它，每开一扇已关的画板窗都会被"换语言"那一拍叫一次（订阅手臂成对，P-198 那把尺管的正是这一族）。
+        StarMark.Abstractions.I18n.Locale.Changed -= OnLocaleChanged;
         if (_web.CoreWebView2 is not null)
         {
             _web.CoreWebView2.WebMessageReceived -= OnWebMessageReceived;

@@ -161,9 +161,13 @@ public sealed class BoardWindowBridgeGateTests
     public void TheRecoveredPageGetsTheSceneTheHostHasSeenNotAnEmptyBoard()
     {
         var cs = ReadRepo(WindowCs);
-        Assert.Contains("if (_seenScene is { Length: > 0 } bytes)", cs, StringComparison.Ordinal);
+        // 片27 把递档抽成一颗共用的 <c>PostBoardLoad</c>：这一格问的两件事因此分开钉——
+        // ready 那一拍"见过一份就递一份"，而那颗方法自己拒收空的那一份（⛔ 把空字节当一块板递进画布）。
+        Assert.Contains("if (_seenScene is { Length: > 0 }) PostBoardLoad();", cs, StringComparison.Ordinal);
+        Assert.Contains("if (_seenScene is not { Length: > 0 } bytes) return;", cs, StringComparison.Ordinal);
         Assert.Contains("RecoverByRecreatingWeb", cs, StringComparison.Ordinal);
-        Assert.Contains("_web.CoreWebView2?.Reload()", cs, StringComparison.Ordinal);
+        // 片27 起，重载那一手是"先取核、核在才 Reload"，而那句"正在恢复"只跟着真递出去的那一下（?. 短路＝贴一句做不完的假话）
+        Assert.Contains("if (view is not null) { view.Reload(); ShowRecoveringNotice(); }", cs, StringComparison.Ordinal);
         Assert.Equal(1, Count(cs, "private async System.Threading.Tasks.Task OpenAsync("));
         Assert.Contains("await OpenAsync(_seenScene)",
             SourceGate.MethodBody(cs, "Task OpenRecoverAsync"), StringComparison.Ordinal);
@@ -218,7 +222,11 @@ public sealed class BoardWindowBridgeGateTests
 
         var cs = ReadRepo(WindowCs);
         var body = SourceGate.MethodBody(cs, "void OnBridgeReady");
-        Assert.Contains("PostOutbound(\"board.load\"", body, StringComparison.Ordinal);
+        // 片27 把"递档"抽成一颗共用的 <c>PostBoardLoad</c>（首开／重建／重试三趟共用一份形状）：
+        // 这一句因此改问两件事——ready 那一拍确实叫了它，而那颗出向话住在它那里（⛔ 删断言，改锚）。
+        Assert.Contains("PostBoardLoad();", body, StringComparison.Ordinal);
+        Assert.Contains("PostOutbound(\"board.load\"",
+            SourceGate.MethodBody(cs, "void PostBoardLoad"), StringComparison.Ordinal);
         Assert.DoesNotContain("autosave.arm", body, StringComparison.Ordinal);     // (丙)⛔ 同拍开闸
         Assert.Contains("ArmIdleBeat(\"no-scene\")", body, StringComparison.Ordinal);  // (乙)新板那一途
         var inbound = SourceGate.MethodBody(cs, "void OnWebMessageReceived");
@@ -245,7 +253,8 @@ public sealed class BoardWindowBridgeGateTests
     {
         var raw = ReadRepo(WindowCs);
         var code = SourceGate.Code(raw);
-        Assert.Equal(4, Count(code, "_autosaveArmed"));             // 一颗声明＋闩上＋开闸＋一读
+        // 片27 多出第五处＝三圈用尽那一档当场把闸也关掉（那一趟再没人证明过它回到过这块板）
+        Assert.Equal(5, Count(code, "_autosaveArmed"));             // 一颗声明＋闩上＋开闸＋一读＋givenup 关闸
         Assert.Contains("_autosaveArmed = false;",
             SourceGate.MethodBody(raw, "void OnBridgeReady"), StringComparison.Ordinal);
         Assert.Contains("_autosaveArmed = true;",
@@ -299,5 +308,111 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Equal(0, Count(js, "L.createRoot(box).render"));
         Assert.Equal(1, Count(js, ".render(L.React.createElement(L.Excalidraw"));
         Assert.Contains("rerenderWith({});", js, StringComparison.Ordinal);             // 出生那一挂走同一个主人
+    }
+
+    // ────────── 片27：那道闸门不再只说话给日志听（P-224）＋恢复期⛔ 再静默 ──────────
+
+    /// <summary>
+    /// 载档被拒那一拍：先<b>自己再递一次</b>（一句自愈），额度用尽了才开口，而那句话⛔ 只住在日志里。
+    /// <para>为什么先重试再开口：片26 现场那三跑里"再递一次就好"是一次性时序故障的形状，一拒就喊会把没坏的板报成坏了；
+    /// 而⛔ 一直递下去是另一头的坏——同一块空画布反复刷给用户看。额度＝1 由 Core 的
+    /// <see cref="BoardPolicy.ShouldRetryArm"/> 说了算，UI 档里连那颗常数都⛔ 许再问一次（第二主人）。</para>
+    /// <para>开口那一支的三颗形状各钉一处：停笔那一路拒到底／宿主自己挡下的那次场景写／三圈用尽那档。
+    /// 面板上那颗"另存一份到别处"只在<b>手上有字节</b>时才亮——给用户一颗按了没用的按钮，是本仓定性过的坏。</para>
+    /// </summary>
+    [Fact]
+    public void ARefusedArmIsRetriedOnceAndThenSpeaksOnTheBoard()
+    {
+        var raw = ReadRepo(WindowCs);
+        var code = SourceGate.Code(raw);
+        var inbound = SourceGate.MethodBody(raw, "void OnWebMessageReceived");
+        // 那颗额度⛔ 搬进这一档：判据的主人住 Core，UI 只问"还要不要再递"
+        Assert.Equal(0, Count(code, "ArmRetryBudget"));
+        Assert.Equal(1, BoardPolicy.ArmRetryBudget);                                   // 正件：主人那里它还在
+        Assert.Contains("BoardPolicy.ShouldRetryArm(_armTries) && _seenScene is { Length: > 0 }",
+            inbound, StringComparison.Ordinal);
+        // 再递一次走的是与首开<b>同一颗</b>形状（两份开场代码＝第二个主人），而这一趟的计数当场自增、开过闸就归零
+        Assert.Contains("PostBoardLoad();", inbound, StringComparison.Ordinal);
+        Assert.Equal(3, Count(code, "PostBoardLoad("));                                // 一颗定义＋首开与重试两颗调用
+        Assert.Equal(1, Count(code, "_armTries++"));
+        Assert.Contains("_armTries = 0;", SourceGate.MethodBody(raw, "void ArmIdleBeat"), StringComparison.Ordinal);
+        // 拒到底才上屏，且三处出口共用同一颗面板
+        Assert.Contains("ShowArmStuckNotice();", inbound, StringComparison.Ordinal);
+        Assert.Equal(3, Count(code, "ShowArmStuckNotice();"));
+        Assert.Contains("ShowArmStuckNotice();", SourceGate.MethodBody(raw, "void HandleExportBytes"), StringComparison.Ordinal);
+        var stuck = SourceGate.MethodBody(raw, "void ShowArmStuckNotice");
+        Assert.Contains("offerCopy: _seenScene is { Length: > 0 }", stuck, StringComparison.Ordinal);
+        Assert.Contains("titled: true", stuck, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// §21.5 剩下那半：崩那一拍与关窗超时那一条⛔ 再静默。
+    /// <para>决定动手的两档（重载／重建控件）当场贴"这块板正在恢复"，而那一句只跟着<b>真递出去</b>的那一下；
+    /// 三圈用尽那一档反过来——它把写闸当场关掉并说"这块板没能回到画布上"＋给那颗按钮（往后确实再也好不了）。</para>
+    /// <para><c>_stage.Children</c> 那一对钉的是<b>窗的内容只许有一个主人</b>：从前重建那一趟写 <c>Content = _web</c>，
+    /// 重指一次就把那块面板连话一起摘走——而那一刻正是要它说话的时候。
+    /// 插回 <c>index 0</c> 是让它继续当画布那一位（面板永远压在画布之上）。</para>
+    /// <para>关窗超时那一句走右下角那张卡：窗在那一拍开头就 <c>Hide()</c> 了，画板里的面板⛔ 来得及给用户看见。
+    /// 卡自己也没贴上屏幕时（非 UI 线程／建窗失败）日志留一行可查的 <c>notice.notShown</c>——⛔ 让"提醒已发出"替一条没人看见的坏话打掩护。</para>
+    /// </summary>
+    [Fact]
+    public void TheRecoveryAndCloseBeatsNeverStaySilent()
+    {
+        var raw = ReadRepo(WindowCs);
+        var code = SourceGate.Code(raw);
+        var fail = SourceGate.MethodBody(raw, "void OnProcessFailed");
+        Assert.Equal(2, Count(code, "ShowRecoveringNotice();"));                        // 重载＋重建两档
+        Assert.Contains("if (view is not null) { view.Reload(); ShowRecoveringNotice(); }", fail, StringComparison.Ordinal);
+        Assert.Contains("ShowArmStuckNotice();", fail, StringComparison.Ordinal);        // 三圈用尽＝说得出"往后也不再落盘"
+        Assert.Contains("_autosaveArmed = false;", fail, StringComparison.Ordinal);
+        var rec = SourceGate.MethodBody(raw, "void RecoverByRecreatingWeb");
+        Assert.Contains("_stage.Children.Remove(old);", rec, StringComparison.Ordinal);
+        Assert.Contains("_stage.Children.Insert(0, _web);", rec, StringComparison.Ordinal);
+        Assert.Equal(0, Count(code, "Content = _web"));                                 // ⛔ 第二颗主人：重指 Content＝把面板连话一起摘走
+        Assert.Equal(1, Count(code, "Content = _stage"));                               // 正件：指一次，就在构造里
+        var flush = SourceGate.MethodBody(raw, "Task FlushThenCloseAsync");
+        Assert.Contains("NoticeCard.Show(", flush, StringComparison.Ordinal);
+        Assert.Contains("boards.closeFlushTitle", flush, StringComparison.Ordinal);
+        Assert.Contains("boards.closeFlushBody", flush, StringComparison.Ordinal);
+        Assert.Contains("boards.close.flush.notice.notShown", flush, StringComparison.Ordinal);
+        // 那颗静态事件成对（窗关了不摘＝这一窗的元素永远活着）
+        Assert.Equal(1, Count(code, "Locale.Changed += OnLocaleChanged"));
+        Assert.Contains("Locale.Changed -= OnLocaleChanged",
+            SourceGate.MethodBody(raw, "void OnClosed"), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 那块面板说的话全部住在表里，并且<b>换语言那一刻跟着换</b>。
+    /// <para>这一格里最要紧的是那颗按钮：它的字是<b>构造时</b>一次性冻进去的 <c>Content</c>，
+    /// 重贴只贴两行正文就会留下"句子换了语言、按钮还留着旧语言"那种半中半英的脸（P-175 那一族的第三种形状）。</para>
+    /// <para>禁项读的是<b>抹掉注释后的方法体</b>：doc-comment 里那句"从前这里写的是…"是给人的理由，⛔ 当第二个出口数
+    /// （规则 #131 同族）。开闸那一刻 <c>HideNotice();</c> 也钉一次——那句坏话还留着，就是一句当场可见的假话。</para>
+    /// </summary>
+    [Fact]
+    public void ThePanelSpeaksOnlyWordsFromTheTableAndRedrawsThemOnLocaleChange()
+    {
+        var raw = ReadRepo(WindowCs);
+        var code = SourceGate.Code(raw);
+        Assert.Contains("private void OnLocaleChanged() => PasteNotice();", code, StringComparison.Ordinal);
+        Assert.Equal(2, Count(code, "PasteNotice();"));             // ShowNotice 那一拍＋换语言那一拍（两颗都归同一位主人）
+        Assert.Equal(1, Count(code, "HideNotice();"));                                  // 开闸＝那句坏话已经不是事实
+        // 唯一的取词出口：两颗工厂各一处，调用点⛔ 重抄全限定名
+        Assert.Equal(1, Count(code, "private static string Word(string key) => StarMark.Abstractions.I18n.Locale.T(key);"));
+        Assert.Equal(1, Count(code, "Locale.T("));
+        Assert.Equal(1, Count(code, "Locale.Fmt("));
+        // 那颗按钮上的话也在重贴之列
+        Assert.Contains("button.Content = Word(\"boards.saveCopyAction\");",
+            SourceGate.MethodBody(code, "void PasteNotice"), StringComparison.Ordinal);
+        // 面板那一路⛔ 一句硬编码的字（字只许住在表里，屏幕那一路⛔ 拼成品句）
+        foreach (var sig in new[]
+        {
+            "Grid BuildStage", "void ShowNotice", "void HideNotice", "void PasteNotice",
+            "void ShowRecoveringNotice", "void ShowArmStuckNotice", "void OnLocaleChanged",
+        })
+        {
+            var leftovers = SourceGate.Cjk.Matches(SourceGate.MethodBody(code, sig))
+                .Cast<System.Text.RegularExpressions.Match>().Select(m => m.Value).ToList();
+            Assert.True(leftovers.Count == 0, "面板那一路出现了硬编码的字：" + sig + " → " + string.Join("／", leftovers));
+        }
     }
 }

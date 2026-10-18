@@ -319,6 +319,27 @@ public sealed class BoardPolicyTests
         Assert.False(BoardPolicy.ShouldArmAfterLoad(null, 0, 0));
     }
 
+    /// <summary>
+    /// 拒过一次的档还许不许<b>再递一次</b>（片27＝P-224 那半句自愈的额度）。
+    /// <para><b>额度为什么是 1 而⛔ 更多</b>：片26 现场里"再递一次就好"的形状＝一次性时序故障，
+    /// 递两次与递一次在这一档上等价；而 2、3、4 圈是那条<b>不需要谁帮忙就会一直跑</b>的循环
+    /// （同一块空画布反复刷给用户看，每一圈还往盘上问一次）。同一颗口径住在 <see cref="MaxRecreatePerWindow"/> 那一族：
+    /// 给一次改错的机会，再多就没有一颗自愈能修的东西了。</para>
+    /// <para><b>认不出的那颗数（负）＝⛔ 再递</b>：读不懂时唯一安全的动作是停下来开口，而不是继续试。
+    /// 这一档与 <see cref="ShouldRetryArm"/> 的"越界也绿"是两种坏：把 -1 当 0 会多递一次，
+    /// 把 5 当"还没到 1"会让那一圈永远跑下去。</para>
+    /// </summary>
+    [Fact]
+    public void OneRetryOnlyAndAnUnrecognisedCountDoesNotBuyAnotherTrip()
+    {
+        Assert.Equal(1, BoardPolicy.ArmRetryBudget);
+        Assert.True(BoardPolicy.ShouldRetryArm(0));            // 第一次拒：还有额度，自己再递一次
+        Assert.False(BoardPolicy.ShouldRetryArm(1));           // 额度用尽：这一趟⛔ 再递，该开口了
+        Assert.False(BoardPolicy.ShouldRetryArm(2));           // 越界⛔ 绕回真
+        Assert.False(BoardPolicy.ShouldRetryArm(int.MaxValue));
+        Assert.False(BoardPolicy.ShouldRetryArm(-1));          // 认不出＝⛔ 再递（与"读不懂就不写"同一颗口径）
+    }
+
     private static byte[] Utf8(string s) => System.Text.Encoding.UTF8.GetBytes(s);
 
     /// <summary>外层一颗、里面套三颗——这颗形状用来钉"数的是外层"。</summary>

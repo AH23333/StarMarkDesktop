@@ -184,6 +184,17 @@ public static class BoardPolicy
         => want is int w && loaded == w && canvas == w;
 
     /// <summary>
+    /// 开闸被拒之后，还许<b>再递几次档</b>（片27 给 P-224 的那一次自愈）。
+    /// <para>为什么只有 1 颗：拒的那一格通常是"载档那一拍没落地"这一类<b>一次性的时序</b>，再递一次就过得去；
+    /// 而一颗真坏掉的运行时多递几次只是把同一块空画布多刷几遍，代价落在用户的眼上。额度用完还是对不上，
+    /// 程序手上就⛔ 剩"再来一次"了——那时唯一诚实的动作是<b>把这一扇不再落盘说出来，并给一颗出口</b>（⛔ "重启一次看看"）。</para>
+    /// </summary>
+    public const int ArmRetryBudget = 1;
+
+    /// <summary>这一趟已经拒过 <paramref name="tries"/> 次，还许不许再递一次档（认不出来的颗数＝⛔ 再递，同"读不懂就不写"那条口径）。</summary>
+    public static bool ShouldRetryArm(int tries) => tries >= 0 && tries < ArmRetryBudget;
+
+    /// <summary>
     /// 一扇画板窗在它那一生里最多<b>重建</b>几次控件（片24）。
     /// <para>为什么要有这一颗数：那颗运行时真坏掉的机器上，"重建→立刻又死"是一条<b>不需要谁帮忙就会一直跑</b>的循环，
     /// 每一圈还往日志里写一行——用户看到的是那扇窗既⛔ 恢复也⛔ 关掉。三圈的口径＝"给他一次改错的机会，再加两次"，

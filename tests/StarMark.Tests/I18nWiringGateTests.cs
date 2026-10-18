@@ -1289,6 +1289,7 @@ public sealed class I18nWiringGateTests
         // 每一位主人各点一次名（⛔ 只钉计数：多一处时那一行要红得说出是谁——批次 WI-60 那第九处就是这么被看见的）
         Assert.Equal(new[]
         {
+            "src/StarMark.UI/Boards/BoardWindow.cs",
             "src/StarMark.UI/Helpers/LocText.cs",
             "src/StarMark.UI/Views/ActivityPage.xaml.cs",
             "src/StarMark.UI/Views/CalcWidget.xaml.cs",
@@ -1302,6 +1303,16 @@ public sealed class I18nWiringGateTests
             "src/StarMark.UI/Views/WidgetAppearanceEditor.cs",
             "src/StarMark.UI/Views/WorldClockWidget.xaml.cs",
         }, subscribers);
+
+        // 画板那一扇（Phase C 片27）：它挂的是<b>自己造的那块面板</b>，⛔ 在 LocText 那份名单里——
+        // 面板上那两行是宿主按那颗 <c>_noticeKey</c> 现取词的（机制 (C)），换语言那一刻不重贴就会留下
+        // "句子换了语言、按钮还留着旧语言"那种半中半英的脸；而它说的可是"这一扇已停止保存"，
+        // 冻在一句用户读不懂的坏话上＝把一句实话换成一条新的坏。订阅挂构造、摘在 Closed（P-198 那把尺管的正是这一族）。
+        var board = Code(ReadRepoFile("src/StarMark.UI/Boards/BoardWindow.cs"));
+        Assert.Contains("Locale.Changed += OnLocaleChanged;", board, StringComparison.Ordinal);
+        Assert.Contains("Locale.Changed -= OnLocaleChanged;", board, StringComparison.Ordinal);
+        Assert.DoesNotContain("Navigate", MethodBody(board, "void PasteNotice"), StringComparison.Ordinal);
+        Assert.DoesNotContain("new Microsoft.UI.Xaml.Controls.WebView2", MethodBody(board, "void PasteNotice"), StringComparison.Ordinal);
 
         var reapply = MethodBody(Code(ReadRepoFile(LocTextCs)), "private static void ReapplyAll");
         Assert.DoesNotContain("new ", reapply, StringComparison.Ordinal);        // 重贴不等于重建

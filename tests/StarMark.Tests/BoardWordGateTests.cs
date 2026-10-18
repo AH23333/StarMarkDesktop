@@ -1,0 +1,126 @@
+#nullable enable
+using System;
+using System.Linq;
+using StarMark.Abstractions.I18n;
+using Xunit;
+using static StarMark.Tests.SourceGate;
+
+namespace StarMark.Tests;
+
+/// <summary>
+/// 画板那一路「这一扇现在对你说了什么」那一族的形状闸门（Phase C 片27·P-224 落地腿）。
+/// <para>P-223 那道闸门修完之后，它拒绝得对，却<b>只对日志说话</b>：屏幕上是一块静止的画布，
+/// 而那块板已经不再落盘了——用户能看见的唯一事实是"画上去的东西没了"。§21.5 那句"⛔ 许静默白屏"
+/// 剩下的正是这一半：崩后那 ≈2 s 的白帧与拒到底之后的那块静止画布，都得<b>当场有句话</b>。</para>
+/// <para>所以这一颗闸门守的是四件事：①那八句新话<b>住在表里且各一处主人</b>（⛔ 在代码里再拼一份成品句）；
+/// ②三语各说各的（en 列⛔ 一个汉字，ja 列⛔ 照抄中文）；③那颗"已另存到 &lt;路径&gt;"的<b>槽数＝代码实际递出的实参数</b>
+/// （槽多了少了都⛔ 崩，屏幕上是一句话里凭空少一段路径）；④同一颗键两次渲染跟着两次语言走（行为，
+/// ①②③全绿而它红＝键进了表而那句话⛔ 会换语言）。</para>
+/// <para>⚠ 与那一族旧话（<c>boards.openFailedTitle</c>／<c>boards.openFailedBody</c>）一起数：本档钉的是<b>整族</b>，
+/// 下一批往这一族加一句而没在这儿登记，那颗总数就会红——这一族最坏的坏法是"加了一句话没人守它换语言"。</para>
+/// </summary>
+[Collection("LocaleGlobal")]
+public sealed class BoardWordGateTests : IDisposable
+{
+    private const string WindowCs = "src/StarMark.UI/Boards/BoardWindow.cs";
+    private const string Table = "src/StarMark.Abstractions/I18n/UiStrings.cs";
+
+    /// <summary>片27 落表的那八颗（面板上的两句＋那颗按钮＋另存的两种结果＋恢复那一句＋关窗超时那两句）。</summary>
+    private static readonly string[] Panel =
+    [
+        "boards.recoveringBody", "boards.stuckTitle", "boards.stuckBody", "boards.saveCopyAction",
+        "boards.copySavedBody", "boards.copyFailedBody", "boards.closeFlushTitle", "boards.closeFlushBody",
+    ];
+
+    private readonly AppLanguage _before = Locale.Current;
+
+    public void Dispose() => Locale.TrySet(_before);
+
+    /// <summary>①八颗逐颗点名：表里<b>恰好一行</b>、画板那一档<b>至少问一次</b>。
+    /// ⛔ 一颗进了表而屏幕上没人念（死键＝下一批以为这一族已经翻好了），也⛔ 有名字没行（运行时念出那颗键名本身）。
+    /// 语料⛔ 把表自己算进去（规则 #95/#102：那一句在表里，"有没有人问"就会被它自己满足）。</summary>
+    [Fact]
+    public void EveryPanelSentenceHasOneRowAndSomebodyAsksForIt()
+    {
+        foreach (var key in Panel)
+        {
+            Assert.Equal(1, Count(ReadRepoFile(Table), "new Entry(\"" + key + "\""));
+            Assert.True(Count(ReadRepoFile(WindowCs), "\"" + key + "\"") >= 1, "这颗键没人念：" + key);
+        }
+        // 正件：同一把尺在同一跑里读得到那两颗<b>本批没动</b>的旧话（它们的主人在别档，⛔ 被算成死键）
+        var corpus = string.Join("\n", ReadRepoUnder("src")
+            .Where(f => !f.RelativePath.EndsWith("UiStrings.cs", StringComparison.Ordinal))
+            .Select(f => f.Text));
+        Assert.True(Count(corpus, "boards.openFailedTitle") >= 1);
+        Assert.Equal(0, Count(corpus, "new Entry(\"boards.stuckBody\""));   // ⛔ 把表自己算进语料：这一问在语料里必须是 0
+    }
+
+    /// <summary>②三列各说各的：en 列一颗 CJK 也⛔ 有，ja 列⛔ 与中文逐字相同。
+    /// <para>通用那颗 <c>I18nContractTests</c> 管整张表，这一格管<b>这一族</b>：本批那八颗里任何一列留空或照抄，
+    /// 屏幕上就是"英文界面念出中文"或"日文界面念出中文"那两种被点验过的坏。</para></summary>
+    [Fact]
+    public void TheThreeColumnsSayThreeDifferentThings()
+    {
+        foreach (var key in Panel)
+        {
+            Assert.True(UiStrings.TryGet(key, out var row), "表里没有这颗键：" + key);
+            Assert.False(string.IsNullOrWhiteSpace(row.Zh) || string.IsNullOrWhiteSpace(row.En)
+                || string.IsNullOrWhiteSpace(row.Ja), key + " 有一列是空的");
+            Assert.Empty(Cjk.Matches(row.En).Cast<System.Text.RegularExpressions.Match>());
+            Assert.False(row.Ja == row.Zh, key + " 的日文列照抄了中文");
+            Assert.False(row.En == row.Zh, key + " 的英文列照抄了中文");
+        }
+    }
+
+    /// <summary>③槽数＝实参数。那颗"已另存到 {0}"递的是<b>路径</b>（数据），所以它进实参而⛔ 拼进句子；
+    /// 其余七颗⛔ 带槽——代码那一路也⛔ 给它们递实参（递了＝屏幕上多一颗没人念的数）。
+    /// <para>这一半是这套机制独有的错法：实参与槽对不上时⛔ 崩，而是一句话里凭空少一段路。</para></summary>
+    [Fact]
+    public void TheSlotCountEqualsWhatThePanelHandsOver()
+    {
+        Assert.Equal(1, RowSlots("boards.copySavedBody"));
+        Assert.Contains("Phrase(\"boards.copySavedBody\", _copyPath ?? string.Empty);",
+            Code(ReadRepoFile(WindowCs)), StringComparison.Ordinal);
+        foreach (var key in Panel.Where(k => k != "boards.copySavedBody"))
+        {
+            Assert.Equal(0, RowSlots(key));
+            Assert.Equal(0, Count(Code(ReadRepoFile(WindowCs)), "Phrase(\"" + key + "\""));
+        }
+        // 那颗提示卡走的也是同一颗口径：两句都⛔ 带槽，所以 LocMessage.Of 只收键
+        foreach (var (key, args, _) in KeyedCallSites(Code(ReadRepoFile(WindowCs))))
+            Assert.Equal(RowSlots(key), args);
+    }
+
+    /// <summary>④行为格：同一颗键两次渲染跟着两次语言走，而那颗槽里的<b>实参留着不动</b>。
+    /// 这一格是 P-224 的本体——那句"这一扇已停止保存"必须在用户换语言那一刻换成他能读的那一句，
+    /// 否则坏话还挂着，只是换了一种他⛔ 读得懂的字。</summary>
+    [Fact]
+    public void ThePanelSentencesAreWordedAtPasteTime()
+    {
+        Assert.True(Locale.TrySet(AppLanguage.English));
+        var en = Locale.Fmt("boards.copySavedBody", @"D:\boards\copy-1.excalidraw");
+        Assert.True(Locale.TrySet(AppLanguage.Chinese));
+        var zh = Locale.Fmt("boards.copySavedBody", @"D:\boards\copy-1.excalidraw");
+
+        Assert.Contains("Saved a copy to D:\\boards\\copy-1.excalidraw", en, StringComparison.Ordinal);
+        Assert.Contains("已另存到 D:\\boards\\copy-1.excalidraw", zh, StringComparison.Ordinal);
+        Assert.True(Locale.TrySet(AppLanguage.Japanese));
+        Assert.Contains("コピーを保存しました", Locale.T("boards.copySavedBody"), StringComparison.Ordinal);
+        Assert.DoesNotContain("{0}", Locale.T("boards.stuckBody"), StringComparison.Ordinal);   // 那颗没槽的句⛔ 留一颗空洞
+    }
+
+    /// <summary>⑤整族总数现读：这一族<b>十</b>颗（本批八颗＋片21 那两颗开窗失败的旧话）。
+    /// <para>钉总数而⛔ 钉"至少"：下一批往这一族加一句而不带证人，这一格就会红——而那一颗新句子的换语言，
+    /// 是这一族最容易漏的那一半（P-175 那一族在三扇宿主上各漏过一次）。</para></summary>
+    [Fact]
+    public void TheBoardFamilyHasExactlyTenRowsAndTheyAreNamed()
+    {
+        var keys = UiStrings.All.Select(e => e.Key)
+            .Where(k => k.StartsWith("boards.", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(10, keys.Length);
+        Assert.Equal(Panel.Length + 2, keys.Length);                          // 本批八颗＋两颗旧话
+        foreach (var key in Panel) Assert.Contains(key, keys);
+        Assert.Contains("boards.openFailedTitle", keys);
+        Assert.Contains("boards.openFailedBody", keys);
+    }
+}
