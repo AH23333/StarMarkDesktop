@@ -152,6 +152,29 @@ public sealed class LocalPathResolutionGateTests
     public static TheoryData<string, string> ActionHostData()
         => Hosts(ActionHosts.Select(h => (h.Path, h.Signature)));
 
+    /// <summary>
+    /// <b>P-236：那颗类的射程口径只许说在一处，且⛔ 许再把"本地路径"写进自己的射程</b>。
+    /// <para>这一族的坏法⛔ 是判据错，是<b>注释把⛔ 认的输入写成自己收的输入</b>：
+    /// <c>LauncherEx</c> 的类注释曾举着"本地路径（文件／文件夹）"当例子，而它底下那颗还原判据的入口条件是
+    /// <c>file://</c> 前缀——照着那颗注释写新宿主的人，得到的是一句"图已不在本机"＋桌面多开一颗<b>主文件夹</b>窗
+    /// （真机读数 <c>bin/WI91/readings_39_183824.txt</c>；事实那一半由
+    /// <c>LocalPathResolutionTests.ABareDiskPathIsNotWhatThisJudgeAcceptsEvenWhenTheFileIsReallyThere</c> 钉着，
+    /// 那句"闸门确实放裸路径过去"由同档下一颗钉着——三颗一起读才说得出真因在哪一处）。</para>
+    /// <para>⚠ 这一格<b>故意⛔ 去 grep 调用点的实参名字</b>：<c>vm.Uri</c>／<c>envelope.Url</c> 那种形状既⛔ 证明不了
+    /// 传进来的真是 URI，也抓不住一颗真叫 <c>path</c> 而内容是 URI 的串（名册 347：⛔ 用语法形状代替"谁有资格说"）。
+    /// 八处调用点的<b>逐处定性</b>记在《开发进度报告》Phase C 片42 那一节。</para>
+    /// </summary>
+    [Fact]
+    public void TheScopeOfLauncherExIsStatedOnceAndNoLongerPromisesBarePaths()
+    {
+        var raw = ReadRepoFile("src/StarMark.UI/Helpers/LauncherEx.cs");
+        Assert.Equal(0, Count(raw, "本地路径（文件"));              // 那句把射程说大了的旧措辞⛔ 许回来
+        Assert.Equal(1, Count(raw, "⛔ 在本类的射程里"));           // 完整口径只在一处（类文件头）
+        Assert.Equal(1, Count(raw, "裸磁盘路径⛔ 在射程内"));       // 方法那一处只指回它，⛔ 重抄整段
+        Assert.True(Count(raw, "LocalFileIdentity.UriForPath") >= 1);   // 给"手上只有磁盘路径"的人一颗现成的主人
+        Assert.Contains("readings_39_183824", raw, StringComparison.Ordinal);   // 那次改口带着它的读数出处（UK／UL 那条口径）
+    }
+
     public static TheoryData<string, string> TitleHostData()
         => Hosts(TitleHosts.Select(h => (h.Path, h.Signature)));
 

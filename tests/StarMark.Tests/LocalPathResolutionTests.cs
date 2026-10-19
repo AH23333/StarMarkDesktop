@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Xunit;
 using StarMark.Abstractions;
 
@@ -295,5 +296,56 @@ public sealed class LocalPathResolutionTests
     {
         const string unc = @"\\server\share";
         Assert.Equal(unc, LocalFileIdentity.DisplayPath("file://server/share", p => p == unc));
+    }
+
+    /// <summary>
+    /// <b>裸磁盘路径⛔ 是这颗判据认得的输入</b>（P-236 那一格的事实半边）。
+    /// <para>夹具按<b>真实规模</b>摆：一颗盘上真放着、目录名带空格、文件名带空格与裸 <c>#</c> 与中文的档，
+    /// 加它所在的那颗目录（画板那颗「打开所在文件夹」递的就是目录）。
+    /// 直接把手里那一串<b>路径</b>递进来 ⇒ 两格候选都是空串、当场 false；同一颗档先经
+    /// <see cref="LocalFileIdentity.UriForPath"/> 包一层 ⇒ true 且还原出的正是那一颗。</para>
+    /// <para>这一格钉的是 <c>LauncherEx</c> 文件头那次改口的<b>事实</b>：那条"本地路径（文件／文件夹）"的旧注释
+    /// 之所以是缺陷，⛔ 因为协议闸门拦住了裸路径（下一格钉的就是"闸门确实放它过去"），
+    /// 而因为<b>还原这一问的入口条件就是 <c>file://</c> 前缀</b>——于是裸路径一路走到 <c>MissingOnDisk</c> 那句坏话，
+    /// 屏幕上还多开一颗主文件夹窗（真机读数 <c>bin/WI91/readings_39_183824.txt</c>）。注释坏了不会红，用例坏了会红（#179）。</para>
+    /// </summary>
+    [Fact]
+    public void ABareDiskPathIsNotWhatThisJudgeAcceptsEvenWhenTheFileIsReallyThere()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "StarMark P-236 " + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var file = Path.Combine(dir, "画板 副本 #1.excalidraw");
+            File.WriteAllText(file, "{\"type\":\"excalidraw\"}");
+            Func<string, bool> exists = p => File.Exists(p) || Directory.Exists(p);
+            Assert.True(File.Exists(file) && Directory.Exists(dir), "夹具本身没摆起来＝这一跑什么都没测");
+
+            Assert.Equal((string.Empty, string.Empty), LocalFileIdentity.PathCandidates(file));
+            Assert.False(LocalFileIdentity.TryExistingPath(file, exists, out var bare));
+            Assert.Equal(string.Empty, bare);                       // ⛔ 许凭空造一条"看起来像"的路径
+
+            Assert.True(LocalFileIdentity.TryExistingPath(LocalFileIdentity.UriForPath(file), exists, out var viaFile));
+            Assert.Equal(file, viaFile);
+            Assert.True(LocalFileIdentity.TryExistingPath(LocalFileIdentity.UriForPath(dir), exists, out var viaDir));
+            Assert.Equal(dir, viaDir);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// 上一格的正件：<b>协议闸门确实放裸路径过去</b>（<c>new Uri("D:\\x")</c> 在 Windows 上就解析成 <c>file:</c>）。
+    /// <para>两颗一起读才说出真因：能走到"文件已删"那句，说明它过了闸门；它过得了闸门而还原不回来，
+    /// 说明收窄的那一处在还原判据的入口条件上，⛔ 在安全闸门上。⛔ 把这一格当"闸门该改"的证据。</para>
+    /// </summary>
+    [Fact]
+    public void TheSchemeGateLetsABareRootedPathThroughOnPurpose()
+    {
+        Assert.True(LaunchGuard.IsAllowedScheme(@"D:\boards\copy-1.excalidraw"));
+        Assert.Equal(Uri.UriSchemeFile, new Uri(@"D:\boards\copy-1.excalidraw").Scheme);
+        Assert.True(Path.IsPathRooted(@"D:\boards\copy-1.excalidraw"));
     }
 }

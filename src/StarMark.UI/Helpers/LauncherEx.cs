@@ -9,14 +9,24 @@ using StarMark.Abstractions;
 namespace StarMark.UI.Helpers;
 
 /// <summary>
-/// 统一打开条目 URI 的助手。集中处理 file:// 与 http(s):// 的差异：
+/// 统一打开条目<b>地址</b>的助手——收的是<b>绝对 URI 形态</b>的串（<c>file://…</c>／<c>http(s)://…</c>），按协议分流：
 /// <list type="bullet">
-///   <item>本地路径（文件 / 文件夹 / <c>.exe</c> / <c>.lnk</c>）经 <see cref="Process"/> 的
+///   <item><c>file://</c>（本机文件／文件夹，含 <c>.exe</c>／<c>.lnk</c>）经 <see cref="Process"/> 的
 ///   <c>UseShellExecute=true</c>（＝资源管理器双击），这是唯一能真正启动应用的托管途径；
 ///   <see cref="Launcher.LaunchFileAsync"/> 被 WinRT 拒启可执行文件、<see cref="Launcher.LaunchUriAsync"/>
 ///   对 <c>file://</c> 静默失效，二者都不能用来"打开应用"。</item>
 ///   <item>网页 URI 用 <see cref="Launcher.LaunchUriAsync"/>。</item>
 /// </list>
+/// <para><b>裸磁盘路径（没有 <c>file://</c> 前缀的 <c>D:\dir</c> 那一类）⛔ 在本类的射程里</b>（P-236 改口，2026-10-19）。
+/// 这条注释以前把"本地路径"整个写成了自己的射程，那是说大了：协议闸门确实放裸路径过去
+/// （<c>new Uri("D:\\x")</c> 在 Windows 上解析成 <c>file:</c>），可还原那一问归
+/// <see cref="LocalFileIdentity.TryExistingPath"/>——它的入口条件就是 <c>file://</c> 前缀，裸路径两格候选都是空串，
+/// 于是当场判成"这一台机器上已经没有这个文件了"，再退化成 <see cref="Launcher.LaunchUriAsync"/>。
+/// 真机上那一发的读数＝一句与事实无关的坏话＋桌面多开一颗<b>主文件夹</b>窗
+/// （<c>bin/WI91/readings_39_183824.txt</c> 逐字为证；<c>LocalPathResolutionTests</c> 里那格行为用例钉着同一件事）。</para>
+/// <para>⇒ 手上只有磁盘路径的宿主，先经 <see cref="LocalFileIdentity.UriForPath"/> 拼成 URI 再递进来
+/// （画板那颗「打开所在文件夹」就是这么走的，见 ✅P-219）。要不要反过来让本类就地收裸路径＝另一颗契约决定，
+/// 那要连 <see cref="OpenFailure.MissingOnDisk"/> 那句的措辞一起改，⛔ 半件。</para>
 /// 快捷启动格与搜索结果组件共用，避免重复逻辑。
 /// </summary>
 public static class LauncherEx
@@ -39,6 +49,10 @@ public static class LauncherEx
 
     /// <summary>
     /// 打开并回报<b>坏在哪一步</b>＋能直接显示的那句话。
+    /// <para><paramref name="uri"/> 收<b>绝对 URI 形态</b>（<c>file://…</c>／<c>http(s)://…</c>）；
+    /// 裸磁盘路径⛔ 在射程内——它过得去协议闸门却⛔ 进不了 <see cref="LocalFileIdentity.TryExistingPath"/>，
+    /// 最后落在 <see cref="OpenFailure.MissingOnDisk"/> 那一句上。只有磁盘路径就先经
+    /// <see cref="LocalFileIdentity.UriForPath"/> 拼一颗 URI（本类文件头那段是完整口径）。</para>
     /// <para>为什么要有这个出口：这条路径上有五种"点了什么都没发生"（地址是空的、协议被闸门挡下、
     /// 认不出是完整地址、本地文件已删、系统里没有能处理这个协议的程序），原来四种只写日志。
     /// RSS 页点条目跳文章就落在这条路上——按"不返回话"的那种用法（本类曾有的一颗 <c>OpenAsync</c>，
