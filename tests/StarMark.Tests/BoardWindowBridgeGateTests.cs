@@ -411,6 +411,10 @@ public sealed class BoardWindowBridgeGateTests
     /// <para>真机两臂<b>改前</b>（同一份码、同一起点、新板）：<c>bin/WI90/readings_30_board_pre.txt</c> 盘上多出
     /// <c>…-be4b.excalidraw</c>（241 字节），<c>bin/WI90/readings_30_main_pre.txt</c> 那颗板<b>压根没落盘</b>
     /// （只有 <c>bridge.ready</c>／<c>arm.post</c>，收尾之后进程 1 秒内退完）。<b>改后</b>同一腿重跑（<c>readings_30_main_post.txt</c>）读到 <c>boards.close.flush.exit … landed=True</c>、盘上多那颗新档。</para>
+    /// <para>⚠ 改后那一发落到盘的是<b>空板</b>（<c>hasScene=False</c>、元素 0 颗）⇒它只证"这一拍跑了"，⛔ 证"最后几笔没丢"。
+    /// 那一格由<b>片31</b> 补量（✅P-229）：接住那颗 2 元素种子档＋当场拉一笔＋抬笔 0.08 s 关主窗 ⇒
+    /// <c>858/2 颗 → 2708/3 颗</c>，新进那颗是 <c>freedraw</c> 且包围盒对上这一笔的折算（<c>readings_31_main_115116.txt</c>）。
+    /// 形状证人⛔ 能钉这一格（它要的是真鼠标＋真进程），所以这一格里最要紧的一句是：<b>那颗 <c>landed=True</c> 单独不算验过</b>。</para>
     /// <para>形状＝名册 <c>BoardsWindows</c> 由收尾链<b>第一步</b>请一次（排在关组件之前＝那颗 5 秒硬退出看门狗
     /// 只剩后面那一段要抢），两条来路<b>共用同一颗</b>有界等待（两份等待代码＝第二个主人），
     /// 名册<b>并发</b>等（⛔ 逐扇串：N 扇就把那颗预算乘 N）。</para>

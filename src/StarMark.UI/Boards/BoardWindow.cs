@@ -56,7 +56,13 @@ namespace StarMark.UI.Boards;
 /// 宿主那条收尾链（<c>ExitApp</c>）在第一步请一次，两条来路共用同一颗有界等待（<see cref="FlushSnapshotAsync"/>）。
 /// 两臂<b>改前</b>的正本＝<c>bin/WI90/readings_30_board_pre.txt</c>／<c>readings_30_main_pre.txt</c>（旧码在成功那一发⛔ 说话，所以那两份只有档名册这一把尺）；<b>改后</b>同一腿重跑＝<c>readings_30_main_post.txt</c>：盘上多 <c>…-065c</c> 那份，而日志有了
 /// <c>boards.close.flush.exit … landed=True</c>（本批起两条来路<b>各有一句</b>落地话，⛔ 再只在超时时才吭声）。
-/// ⚠ 还欠（<c>P-229</c>）：那一发落到盘的是<b>空板</b>（<c>hasScene=False</c>、元素 0 颗）⇒「最后几笔跟着退出一起进盘」那一格还⛔ 有读数；多块板同开那一发照旧在深析 §27.5 那颗 ⚛ 名单里。</para>
+/// <b>片31 把那一格补量了（✅P-229）</b>：同一块板先接住那颗 2 元素种子档（<c>STARMARK_START_BOARD=last</c>，
+/// ready 那行逐字 <c>hasScene=True</c>），在画布上拉一笔，抬笔 <b>0.08 s</b> 之后关<b>主窗</b>（那颗停笔去抖＝1.5 s，
+/// 这一发⛔ 等满它）⇒盘上那颗档由 <c>858 字节／2 颗</c> 变成 <c>2708／3 颗</c>，新进那颗逐字 <c>freedraw</c>、
+/// 包围盒 <c>316×105</c>＝我这一笔按那颗窗口（1440×879）折算的数——⛔ 只念那颗 <c>landed=True</c>：
+/// 它为真也可能是"盘上本来就是它"那一档。正本＝<c>bin/WI90/readings_31_main_115116.txt</c>，
+/// 对照臂（同一份脚本、走 <c>flush.window</c>）＝<c>readings_31_board_115054.txt</c>。
+/// ⚠ 还欠的那一格换了名字：多块板同开那一发照旧在深析 §27.5 那颗 ⚛ 名单里。</para>
 /// </summary>
 public sealed class BoardWindow : Window
 {
