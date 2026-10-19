@@ -51,9 +51,15 @@ public static class UserDataPaths
     /// </summary>
     public static string Subdirectory(string name) => Path.Combine(RootDirectory(), name);
 
-    private static string InRoot(string fileName) => Path.Combine(RootDirectory(), fileName);
-
-    private static string RootDirectory()
+    /// <summary>
+    /// 用户数据那棵根<b>有没有</b>被环境变量改道；没改道就交 null（片39）。
+    /// <para>为什么要单独问这一格：仓里另有一族产物（画板导出与那颗救回来的副本）平时<b>⛔ 住在这棵根下面</b>，
+    /// 而一旦改道，它必须跟着走——否则一次沙盒取证就往用户真目录里写东西（批次 SS 撞过的同一族）。
+    /// 让它自己读那两颗环境变量＝第二份改道规则；所以这里把<b>同一颗规则</b>的答案递出去。
+    /// ⚠ 没改道时交 null 而⛔ 交 <c>%APPDATA%\StarMark</c>：那一棵是"程序内部档"的根，
+    /// 产物族需要的是「有没有被改道」这一颗<b>信号</b>，⛔ 是"默认落哪一棵"（那一句归 <c>BoardPolicy.ExportsFolder</c> 裁）。</para>
+    /// </summary>
+    public static string? RedirectedDataRoot()
     {
         var settingsOverride = Environment.GetEnvironmentVariable(SettingsVariable);
         if (!string.IsNullOrWhiteSpace(settingsOverride))
@@ -66,8 +72,12 @@ public static class UserDataPaths
             if (!string.IsNullOrWhiteSpace(dir)) return dir;
         }
 
-        return AppDataDirectory();
+        return null;
     }
+
+    private static string InRoot(string fileName) => Path.Combine(RootDirectory(), fileName);
+
+    private static string RootDirectory() => RedirectedDataRoot() ?? AppDataDirectory();
 
     private static string AppDataDirectory()
         => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

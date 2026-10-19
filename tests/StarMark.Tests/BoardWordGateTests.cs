@@ -24,13 +24,16 @@ public sealed class BoardWordGateTests : IDisposable
 {
     private const string WindowCs = "src/StarMark.UI/Boards/BoardWindow.cs";
     private const string Table = "src/StarMark.Abstractions/I18n/UiStrings.cs";
+    private const string Core = "src/StarMark.Core/Boards/BoardPolicy.cs";
 
-    /// <summary>面板上那些话的名单：片27 落表的八颗＋片34 那颗「交的是手里那一份、⛔ 是屏幕上那块」（共九颗）。另存的两种结果各一颗，而那颗带槽的从此有两颗。</summary>
+    /// <summary>面板上那些话的名单：片27 落表的八颗＋片34 那颗「交的是手里那一份、⛔ 是屏幕上那块」＋
+    /// 片39 那两颗（那颗「打开所在文件夹」与它坏掉时那一句）＝十一颗。另存的两种结果各一颗，而那颗带槽的从此有三颗。</summary>
     private static readonly string[] Panel =
     [
         "boards.recoveringBody", "boards.stuckTitle", "boards.stuckBody", "boards.saveCopyAction",
         "boards.copySavedBody", "boards.copySavedStaleBody", "boards.copyFailedBody",
         "boards.closeFlushTitle", "boards.closeFlushBody",
+        "boards.openFolderAction", "boards.openFolderFailedBody",
     ];
 
     private readonly AppLanguage _before = Locale.Current;
@@ -79,13 +82,17 @@ public sealed class BoardWordGateTests : IDisposable
     [Fact]
     public void TheSlotCountEqualsWhatThePanelHandsOver()
     {
-        foreach (var keyed in new[] { "boards.copySavedBody", "boards.copySavedStaleBody" })
+        foreach (var keyed in new[]
+        {
+            "boards.copySavedBody", "boards.copySavedStaleBody", "boards.openFolderFailedBody",
+        })
         {
             Assert.Equal(1, RowSlots(keyed));
             Assert.Contains("Phrase(\"" + keyed + "\", _copyPath ?? string.Empty);",
                 Code(ReadRepoFile(WindowCs)), StringComparison.Ordinal);
         }
-        foreach (var key in Panel.Where(k => k != "boards.copySavedBody" && k != "boards.copySavedStaleBody"))
+        foreach (var key in Panel.Where(k => k != "boards.copySavedBody" && k != "boards.copySavedStaleBody"
+                     && k != "boards.openFolderFailedBody"))
         {
             Assert.Equal(0, RowSlots(key));
             Assert.Equal(0, Count(Code(ReadRepoFile(WindowCs)), "Phrase(\"" + key + "\""));
@@ -113,22 +120,22 @@ public sealed class BoardWordGateTests : IDisposable
         Assert.DoesNotContain("{0}", Locale.T("boards.stuckBody"), StringComparison.Ordinal);   // 那颗没槽的句⛔ 留一颗空洞
     }
 
-    /// <summary>⑤整族总数现读：这一族<b>十一</b>颗（面板那九颗＋片21 那两颗开窗失败的旧话）。
+    /// <summary>⑤整族总数现读：这一族<b>十三</b>颗（面板那十一颗＋片21 那两颗开窗失败的旧话）。
     /// <para>钉总数而⛔ 钉"至少"：下一批往这一族加一句而不带证人，这一格就会红——而那一颗新句子的换语言，
     /// 是这一族最容易漏的那一半（P-175 那一族在三扇宿主上各漏过一次）。</para></summary>
     [Fact]
-    public void TheBoardFamilyHasExactlyElevenRowsAndTheyAreNamed()
+    public void TheBoardFamilyHasExactlyThirteenRowsAndTheyAreNamed()
     {
         var keys = UiStrings.All.Select(e => e.Key)
             .Where(k => k.StartsWith("boards.", StringComparison.Ordinal)).ToArray();
-        Assert.Equal(11, keys.Length);
-        Assert.Equal(Panel.Length + 2, keys.Length);                           // 面板那九颗＋两颗旧话
+        Assert.Equal(13, keys.Length);
+        Assert.Equal(Panel.Length + 2, keys.Length);                           // 面板那十一颗＋两颗旧话
         foreach (var key in Panel) Assert.Contains(key, keys);
         Assert.Contains("boards.openFailedTitle", keys);
         Assert.Contains("boards.openFailedBody", keys);
     }
 
-    /// <summary>⑥那一屏上<b>唯一可点</b>的控件⛔ 只钉面板的字色——三样一起钉，且禁项与正件在同一次比较里。
+    /// <summary>⑥那一屏上<b>可点</b>的控件⛔ 只钉面板的字色——三样一起钉，且禁项与正件在同一次比较里。
     /// <para>这一格是<b>量出来的</b>，⛔ 推理出来的：2026-10-19 片28 把那道写闸的拒绝造出现场（只改沙盒副本里
     /// 那颗 <c>board.loaded</c> 的回话，宿主那一侧⛔ 动一个字），日志逐字为证
     /// <c>boards.arm.refused want=2 loaded=3 canvas=2 tries=0</c> → <c>boards.arm.retry n=1</c> → 再拒 <c>tries=1</c>；
@@ -137,19 +144,33 @@ public sealed class BoardWordGateTests : IDisposable
     /// ⇒ <b>白字画在 #fafafa 面板上＝那颗按钮在屏幕上是隐形的</b>。形状证人五格全绿而它看不见——
     /// 这正是片26／片27 两批登记为"⛔ 验到"的那一格，兑现的方式是它真是一条缺陷。</para>
     /// <para>所以这一格钉的⛔ 是"有这颗按钮"（那颗形状证人早就绿了），而是<b>它自己把字色钉死</b>：
-    /// 面板那两行的黑字与那颗按钮的黑字按<b>同一颗尺</b>数（3 颗），底色与描边各一颗；
+    /// 面板那两行的黑字与那颗按钮的黑字按<b>同一颗尺</b>数，底色与描边各一颗；
     /// 同一次比较里放禁项（<c>ThemeResource</c>＝跟着主题走的那一类写法必须为 0），
-    /// 于是那三个 1 与那个 0 互为正负件（⛔ 一把只数 0 的尺）。</para></summary>
+    /// 于是那些 1 与那个 0 互为正负件（⛔ 一把只数 0 的尺）。</para>
+    /// <para><b>片39 把计数从 3／1／1 抬到 4／2／2</b>：这一屏上从此有<b>两颗</b>可点的（另存＋打开所在文件夹），
+    /// 而"隐形"那一族⛔ 因为多加了一颗就自己退场——新加的那颗同样⛔ 跟着主题走，所以黑字、底色、描边各多一颗。</para></summary>
     [Fact]
     public void TheOnlyActionableControlPinsItsOwnColors()
     {
         var body = MethodBody(Code(ReadRepoFile(WindowCs)), "private Grid BuildStage");
-        // 三颗黑字：标题／正文／那颗按钮（片27 只钉了前两颗 ⇒ 第三颗吃主题刷＝白字）
-        Assert.Equal(3, Count(body, "Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black)"));
-        Assert.Equal(1, Count(body, "Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255))"));
-        Assert.Equal(1, Count(body, "BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130))"));
-        // 禁项：这一族⛔ 用"跟着主题走"的那一类刷子（面板与按钮两边都钉死，见 §27.6）
+        // 四颗黑字：标题／正文／两颗按钮（片27 只钉了前两颗 ⇒ 第三颗吃主题刷＝白字）
+        Assert.Equal(4, Count(body, "Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black)"));
+        Assert.Equal(2, Count(body, "Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255))"));
+        Assert.Equal(2, Count(body, "BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130))"));
+        // 禁项：这一族⛔ 用"跟着主题走"的那一类刷子（面板与两颗按钮都不跟着走，见 §27.6）
         Assert.Equal(0, Count(body, "ThemeResource"));
         Assert.Equal(0, Count(body, "Application.Current.Resources["));
+    }
+
+    /// <summary>⑦那颗<b>目录名</b>⛔ 进表（片39）。它是身份而⛔ 是措辞：一句上屏话换三种语言就变出三颗目录，
+    /// 用户反而一颗都找不到；而名字一旦同时住在表里与 Core 里，改一处就分岔。
+    /// <para>同一条口径仓里已有先例：<c>图片\StarMark 截图</c> 那两颗字也⛔ 跟着语言走。</para></summary>
+    [Fact]
+    public void TheProductFolderNameIsAnIdentityNotASentence()
+    {
+        var table = ReadRepoFile(Table);
+        Assert.Equal(0, Count(table, "StarMark 画板"));
+        // 名字只许住在 Core 那一处（UI 与表都⛔ 再抄一遍）
+        Assert.Equal(1, Count(SourceGate.Code(ReadRepoFile(Core)), "StarMark 画板"));
     }
 }

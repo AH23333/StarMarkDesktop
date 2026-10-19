@@ -607,11 +607,74 @@ public sealed class BoardWindowBridgeGateTests
         {
             "Grid BuildStage", "void ShowNotice", "void HideNotice", "void PasteNotice",
             "void ShowRecoveringNotice", "void ShowArmStuckNotice", "void OnLocaleChanged",
+            "Task OpenCopyFolderAsync", "bool CanOpenCopyFolder",
         })
         {
             var leftovers = SourceGate.Cjk.Matches(SourceGate.MethodBody(code, sig))
                 .Cast<System.Text.RegularExpressions.Match>().Select(m => m.Value).ToList();
             Assert.True(leftovers.Count == 0, "面板那一路出现了硬编码的字：" + sig + " → " + string.Join("／", leftovers));
         }
+    }
+
+    /// <summary>片39＝P-219 的上屏出口：念出路径之外再给一颗能点的「打开所在文件夹」，五格一起钉。
+    /// <para>① 那颗按钮的<b>资格</b>＝"屏幕上那一句认定盘上放着一颗副本"，而这一问只许有一颗主人
+    /// （一处声明＋一处守卫＋一处可见性＝三处引用，⛔ 第四处再 switch 一遍键名）；
+    /// ② "打开失败"那一句<b>也算</b>：坏的是开目录那一手，副本确实写成了，那一刻用户要的正是再点一次
+    /// （摘掉按钮＝把作业推回给他＝P-54 定过的坏法）；而"正在恢复"／"已停止保存"／"没能写到那个位置"三句
+    /// ⛔ 认定副本存在，挂着那颗按钮＝让他点出一颗⛔ 存在的档；
+    /// ③ 可见性与话都由 <c>PasteNotice</c> 算（换语言那一拍只走它、⛔ 重走 ShowNotice——片34 漏掉的就是那一拍）；
+    /// ④ 这一屏上现在有两颗可点的，片28 量到的"白字画在灰底上"⛔ 许只修一颗；
+    /// ⑤ 动作走本机路径那一族的唯一出口，⛔ 在画板这一档再拼一遍 explorer 命令行。</para></summary>
+    [Fact]
+    public void TheFolderExitAppearsOnlyWhileASentenceClaimsACopyLanded()
+    {
+        var raw = ReadRepo(WindowCs);
+        var code = SourceGate.Code(raw);
+        // ① 那几种"按了那颗按钮之后的结果"只许有一份名单，两颗问法都从它派生
+        var outcomes = SourceGate.Between(code, "string[] CopyOutcomeKeys", "];");
+        Assert.Equal(4, Count(outcomes, "\"boards."));   // 那颗名单⛔ 只许装这四种下落（多一颗＝把旧话当成新事实）
+        foreach (var landed in new[]
+        {
+            "boards.copySavedBody", "boards.copySavedStaleBody", "boards.openFolderFailedBody", "boards.copyFailedBody",
+        })
+            Assert.Contains(landed, outcomes, StringComparison.Ordinal);
+        // ② 那颗按钮的资格＝"名单之内"且⛔ 是"没写成"那一句，而它⛔ 自己再列一遍键名（两处各列＝迟早只补一处）
+        var can = SourceGate.MethodBody(code, "bool CanOpenCopyFolder");
+        Assert.Equal(3, Count(code, "CanOpenCopyFolder"));
+        Assert.Equal(3, Count(code, "NoticeSaysCopyOutcome"));
+        Assert.Contains("_copyPath is not null", can, StringComparison.Ordinal);
+        Assert.Contains("NoticeSaysCopyOutcome", can, StringComparison.Ordinal);
+        Assert.Contains("\"boards.copyFailedBody\"", can, StringComparison.Ordinal);
+        Assert.Contains("&& _noticeKey != \"boards.copyFailedBody\";", can, StringComparison.Ordinal);
+        // ③ 同一件旧话⛔ 许把新事实顶掉（片39 真机量到的那一发：拒话重贴盖掉「已另存到 …」＋那颗新按钮跟着退场）
+        var got = SourceGate.MethodBody(raw, "void HandleExportBytes");
+        Assert.Contains("if (!NoticeSaysCopyOutcome) ShowArmStuckNotice();", got, StringComparison.Ordinal);
+        // ④ 那颗按钮⛔ 在场＝用户可以再看一次；摘掉它＝把作业推回给他（P-54 定过的坏法）
+        Assert.Equal(1, Count(outcomes, "boards.openFolderFailedBody"));
+
+        Assert.Equal(1, Count(code, "folder.Visibility = CanOpenCopyFolder ?"));
+        Assert.Contains("folder.Content = Word(\"boards.openFolderAction\");",
+            SourceGate.MethodBody(code, "void PasteNotice"), StringComparison.Ordinal);
+        Assert.Contains("Phrase(\"boards.openFolderFailedBody\", _copyPath ?? string.Empty);",
+            SourceGate.MethodBody(code, "void PasteNotice"), StringComparison.Ordinal);
+
+        var stage = SourceGate.MethodBody(code, "private Grid BuildStage");
+        // （那颗按钮⛔ 跟着主题走这一格住在 BoardWordGateTests 那颗色尺里：一把尺只量一次，⛔ 两处各数一遍。）
+        Assert.Contains("panel.Children.Add(_noticeFolderButton);", stage, StringComparison.Ordinal);
+
+        var open = SourceGate.MethodBody(raw, "Task OpenCopyFolderAsync");
+        // 动作走本机路径那一族的唯一出口，⛔ 在画板这一档再拼一遍 explorer 命令行；
+        // ⚠ 而递进去的必须是<b>一颗 URI</b>：那颗还原判据只认 file:// 前缀，裸磁盘路径两格候选都是空串⇒
+        // 退化成"图已不在本机"那句坏话＋桌面多开一颗 Explorer <b>主文件夹</b>窗（2026-10-19 真机读数逐字为证：
+        // <c>boards.folder.opened … result=failed</c>・<c>title='主文件夹 - 文件资源管理器'</c>·正本 readings_39_183824）。
+        Assert.Contains("Helpers.LauncherEx.TryOpenAsync(StarMark.Abstractions.LocalFileIdentity.UriForPath(folder))",
+            open, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryOpenAsync(folder)", open, StringComparison.Ordinal);
+        Assert.Contains("ShowNotice(\"boards.openFolderFailedBody\", titled: true, offerCopy: true);",
+            open, StringComparison.Ordinal);
+        Assert.Equal(0, Count(code, "explorer.exe"));
+        // 那一发要有记录，而<b>原因</b>也得进得去（P-56 口径：只报"坏了"下一跑说不出是谁坏的）
+        Assert.Contains("boards.folder.opened", open, StringComparison.Ordinal);
+        Assert.Contains("why=", open, StringComparison.Ordinal);
     }
 }

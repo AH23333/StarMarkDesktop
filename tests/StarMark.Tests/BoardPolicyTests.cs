@@ -470,4 +470,20 @@ public sealed class BoardPolicyTests
 
     /// <summary>外层一颗、里面套三颗——这颗形状用来钉"数的是外层"。</summary>
     private static byte[] nestedOne() => Utf8("{\"elements\":[{\"elements\":[1,2,3]}]}");
+
+    /// <summary>
+    /// 用户<b>产物</b>那颗目录的主人（P-219 的 (A) 落地腿）。三臂各自只被一种坏打红：
+    /// ① 平时进图片那一族、目录名<b>逐字</b>钉（那是身份：改名＝换一颗目录，用户按这两个词找东西）；
+    /// ② 那颗根被改道⇒跟着走（沙盒取证往他真图片目录里写一颗＝批次 SS 撞过的那一族）；
+    /// ③ 同一跑里两臂<b>必须不相等</b>——把 <c>??</c> 两边对调，①照样绿而②③当场红（名册 296：禁项判据要自带正件）。
+    /// </summary>
+    [Fact]
+    public void ProductsFollowTheRedirectedRootAndOtherwiseThePicturesFamily()
+    {
+        const string pictures = @"C:\Users\me\Pictures";
+        Assert.Equal(@"C:\Users\me\Pictures\StarMark 画板", BoardPolicy.ExportsFolder(pictures, null));
+        Assert.Equal(@"D:\sandbox\root\StarMark 画板", BoardPolicy.ExportsFolder(pictures, @"D:\sandbox\root"));
+        Assert.Equal("StarMark 画板", BoardPolicy.ExportsDirectoryName);
+        Assert.NotEqual(BoardPolicy.ExportsFolder(pictures, null), BoardPolicy.ExportsFolder(pictures, @"D:\sandbox\root"));
+    }
 }

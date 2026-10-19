@@ -274,18 +274,29 @@ public sealed class BoardSceneStoreGateTests
     }
 
     /// <summary>
-    /// ⑫ 落点那颗⛔ 许有第二主人（片23）：板档目录与导出目录都问 <c>UserDataPaths</c> 要那颗根，
+    /// ⑫ 落点那颗⛔ 许有第二主人（片23）：板档目录问 <c>UserDataPaths</c> 要那颗根，导出那一族问它要那颗<b>改道信号</b>，
     /// 画板那一族的档里⛔ 再拼一遍 <c>%APPDATA%\StarMark</c>。
     /// <para>为什么值得单独钉：那份"settings 变量 ＞ db 变量 ＞ 真目录"的优先规则原本只管五份档，而画板档住在它外面——
     /// 沙盒取证一跑就把他真目录里那颗 <c>boards\</c> 写脏，而"⛔ 只在我电脑上能跑"是本仓定性过多次的那类坏
-    /// （批次 SS 撞出来的正是同一族）。那颗导出目录挂在板目录之下：根只有一位主人，切 <c>exports\</c> 这一刀归窗口。</para>
+    /// （批次 SS 撞出来的正是同一族）。<b>片39 改口的那半句</b>：那颗导出目录不再挂在板目录之下——"根只有一位主人"
+    /// 这一条⛔ 变，变的是「用户的产物进哪一族」从此归 <c>BoardPolicy.ExportsFolder</c> 裁（进图片那一族，
+    /// 因为他找得到的地方才是落点＝P-219），窗口只把两棵现成的根递进去。板档与产物从此两族、两个主人。</para>
     /// <para>⚠ 禁项读<b>抹掉注释后</b>的代码：本族档里"为什么⛔ 自己拼"那句说明本来就要提到那颗根（#190 那一族）。</para>
     /// </summary>
     [Fact]
     public void TheBoardRootComesFromTheOneOwnerOfTheUserDataDirectory()
     {
         Assert.Contains("UserDataPaths.Subdirectory(\"boards\")", Store, StringComparison.Ordinal);
-        Assert.Contains("Path.Combine(BoardSceneStore.Folder, \"exports\")", WindowCs, StringComparison.Ordinal);
+        // 片39（P-219 落地腿）：产物那颗目录的「进哪一族」搬到 Core 裁，窗口只交两棵现成的根。
+        // 旧形状（板目录下面切 exports）⛔ 许回来——它把用户的产物埋进漫游数据目录，正是本条登记的那颗坏。
+        Assert.Contains("BoardPolicy.ExportsFolder(", WindowCs, StringComparison.Ordinal);
+        Assert.Contains("UserDataPaths.RedirectedDataRoot()", WindowCs, StringComparison.Ordinal);
+        Assert.DoesNotContain("BoardSceneStore.Folder, \"exports\"", WindowCs, StringComparison.Ordinal);
+        Assert.Equal(0, Count(SourceGate.Code(WindowCs), "\"exports\""));
+        // ⛔ 层次倒挂：Core 那颗判据⛔ 自己认特殊目录，正如它⛔ 认 WebView2 那颗 enum（两棵根归宿主取）
+        var core = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.Core/Boards/BoardPolicy.cs"));
+        Assert.Equal(0, Count(core, "GetFolderPath"));
+        Assert.Equal(0, Count(core, "SpecialFolder"));
         Assert.Equal(1, Count(SourceGate.Code(Store), "\"boards\""));      // 那颗子目录名只许出现一次
         Assert.DoesNotContain("GetFolderPath", SourceGate.Code(Store), StringComparison.Ordinal);
         // 窗口只许在板目录下面再切一刀：它一旦自己写 "boards"，那位主人就变两颗（改名时只改得动一处）

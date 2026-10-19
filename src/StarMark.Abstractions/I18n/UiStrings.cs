@@ -2670,6 +2670,9 @@ public static class UiStrings
         new Entry("boards.copySavedBody", "已另存到 {0}", "Saved a copy to {0}", "次の場所にコピーを保存しました：{0}"),
         new Entry("boards.copySavedStaleBody", "已另存到 {0}（这是上一次成功保存的版本，之后画的笔迹没有包含在内）", "Saved a copy to {0} (the last version that saved successfully; strokes drawn after it are not included)", "{0} にコピーを保存しました（最後に正常保存された版で、その後に描いた線は含まれていません）"),
         new Entry("boards.copyFailedBody", "没能写到那个位置，可以再试一次。", "That copy did not land; you can try again.", "その場所へのコピーに失敗しました。もう一度試せます。"),
+        // 片39＝P-219 那半句「界面上⛔ 出口告诉用户文件在哪」的落地腿：那句"已另存到 <路径>"旁边给一颗能点的。
+        new Entry("boards.openFolderAction", "打开所在文件夹", "Open the folder", "フォルダーを開く"),
+        new Entry("boards.openFolderFailedBody", "没能打开那颗文件夹，那份副本还在：{0}", "The folder did not open; the copy is still at {0}", "フォルダーを開けませんでしたが、コピーは {0} に残っています"),
         new Entry("boards.closeFlushTitle", "这块板的最后一笔没能等到", "The last strokes did not arrive in time", "最後の操作を待てませんでした"),
         new Entry("boards.closeFlushBody", "关窗那一拍画板没交回最后那份，窗口已经关闭。盘上留下的是之前那一份，最后几笔可能没进去；原因在日志里。", "The board did not hand back its last snapshot before the window closed, so the file on disk is the previous one and the last few strokes may be missing. Details are in the log.", "ウィンドウを閉じる際に最後のスナップショットが返らなかったため、ディスクには一つ前の版が残りました。最後の操作が含まれていない可能性があります。詳細はログにあります。"),
         new Entry("tray.pinsShowHideNone", "显示 / 收起所有贴图（当前没有贴图）", "Show or collapse all pins (none right now)", "すべてのピンを表示／収納（現在 0 枚）"),

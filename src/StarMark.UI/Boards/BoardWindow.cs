@@ -90,11 +90,14 @@ public sealed class BoardWindow : Window
     /// <summary>userDataFolder 那条改道（v1 §坑8）：钉在 <c>%LOCALAPPDATA%</c> 之下。</summary>
     public const string UserDataFolderRelative = @"StarMark\wbview2";
 
-    /// <summary>导出产物那颗落点（硬线①：落点由 C# 定，web 侧只交字节）。
-    /// <para>它<b>住在板档目录之下</b>：那颗根只许有一位主人（<see cref="BoardSceneStore.Folder"/>），
-    /// 这里只负责在它下面再切一颗 <c>exports\</c>——自己再拼一遍 <c>%APPDATA%\StarMark</c> 就是第二主人，
-    /// 而那份抄本⛔ 认沙盒改道（片23 归一的就是这一族）。</para></summary>
-    public static string ExportsDirectory => Path.Combine(BoardSceneStore.Folder, "exports");
+    /// <summary>导出产物与那颗救回来的副本落进哪一颗目录（硬线①：落点由 C# 定，web 侧只交字节；P-219 的裁决＝进「图片」那一族）。
+    /// <para><b>规则住 <see cref="BoardPolicy.ExportsFolder"/>，这里只把两棵现成的根递进去</b>：特殊目录与那颗改道信号
+    /// 都是宿主这一侧的事实（Core⛔ 认 <c>%APPDATA%</c>，同它⛔ 认 WebView2 那颗 enum 一个口径）。
+    /// 片23 那一版切成 <c>BoardSceneStore.Folder\exports</c> 修的是"根只许一位主人"，但它把<b>产物</b>与
+    /// <b>程序内部档</b>排在同一棵树下⇒用户在图片目录里翻不到自己刚救回来的那一份（P-219 登记的就是这一格）。</para></summary>
+    public static string ExportsDirectory => BoardPolicy.ExportsFolder(
+        Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+        StarMark.Abstractions.UserDataPaths.RedirectedDataRoot());
 
     private Microsoft.UI.Xaml.Controls.WebView2 _web;
     private string _boardId;
@@ -172,6 +175,9 @@ public sealed class BoardWindow : Window
     private TextBlock? _noticeTitle;
     private TextBlock? _noticeBody;
     private Button? _noticeButton;
+
+    /// <summary>那颗「打开所在文件夹」（片39＝P-219 的上屏出口）：它只跟着"盘上真有一颗副本"那几句话出现。</summary>
+    private Button? _noticeFolderButton;
 
     /// <summary>那块面板此刻说的那一句住在表里的哪一颗键（null＝没在说话）。<b>换语言那一拍按它重贴</b>（机制 (C)）。</summary>
     private string? _noticeKey;
@@ -379,7 +385,10 @@ public sealed class BoardWindow : Window
                 _closingRefused = _closingLanded is not null;      // 只有那一问在等时才配改它（与那颗 same= 一问一复位同口径）
                 Reply(envelope.Cmd, envelope.Id, ok: false, err: "not-armed");
                 // 这一路与"停笔那一拍没开闸"是同一条静默面，而它更坏：用户已经画下的那几笔<b>一颗也没落盘</b>。
-                ShowArmStuckNotice();
+                // ⚠ 而<b>同一件旧话不许把新事实顶掉</b>（片39 真机量到的那一发）：那颗「打开所在文件夹」按成功之后
+                // 同一拍里这次失焦又撞开一次写闸拒⇒「这一扇已停止保存」整句盖掉「已另存到 &lt;路径&gt;」、
+                // 那颗新按钮跟着退场＝用户刚拿到的那条出口从屏幕上消失（正本 readings_39_184213）。
+                if (!NoticeSaysCopyOutcome) ShowArmStuckNotice();
                 FinishClosingFlush();   // 关窗那一拍等的是"这一问有答案"，拒掉也是答案——⛔ 让用户白等那两秒
                 return;
             }
@@ -505,10 +514,25 @@ public sealed class BoardWindow : Window
             BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
         };
         _noticeButton.Click += async (_, _) => await CopySeenSceneAsideAsync();
+        // 片39＝P-219 那句「界面上⛔ 一颗出口告诉用户文件在哪」的落地腿：路径念出来之外，再给一颗能点的。
+        // ⚠ 它⛔ 是"顺手加的一颗按钮"：片28 量到过这一屏上那颗按钮"白字画在灰底上＝看不见"，
+        // 而这一扇窗上现在<b>有两颗</b>可点的，所以三样（字色／底色／描边）照样各钉一遍，⛔ 跟着主题走。
+        _noticeFolderButton = new Button
+        {
+            Content = Word("boards.openFolderAction"),
+            Margin = new Thickness(0, 8, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Visibility = Visibility.Collapsed,
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
+        };
+        _noticeFolderButton.Click += async (_, _) => await OpenCopyFolderAsync();
         var panel = new StackPanel { Margin = new Thickness(14, 10, 14, 10) };
         panel.Children.Add(_noticeTitle);
         panel.Children.Add(_noticeBody);
         panel.Children.Add(_noticeButton);
+        panel.Children.Add(_noticeFolderButton);
         // 那块面板的底色与字色都<b>钉死</b>：画布那一侧永远是白板（theme.set 现在交的是 light），
         // 而一扇窗里两套深浅色同时说话就是 WI-81 那族"点了白色整扇看不见"的形状——两边都不跟着主题走，最坏也只是普通灰底。
         _notice = new Border
@@ -563,6 +587,13 @@ public sealed class BoardWindow : Window
         if (_noticeBody is null || _noticeTitle is null) return;
         // 那颗按钮上的话也一起重贴：它是构造时冻进去的一串字，⛔ 比面板上那两行晚一步换语言（P-175 那一族的第三种脸）。
         if (_noticeButton is { } button) button.Content = Word("boards.saveCopyAction");
+        // 那颗「打开所在文件夹」与它的可见性也归这一拍算：换语言只走 PasteNotice、⛔ 重走 ShowNotice
+        //（片34 那颗按钮上的话漏掉的就是同一拍——两颗按钮同一条口径，⛔ 一颗重贴一颗冻着）。
+        if (_noticeFolderButton is { } folder)
+        {
+            folder.Content = Word("boards.openFolderAction");
+            folder.Visibility = CanOpenCopyFolder ? Visibility.Visible : Visibility.Collapsed;
+        }
         switch (_noticeKey)
         {
             case "boards.recoveringBody":
@@ -585,6 +616,12 @@ public sealed class BoardWindow : Window
             case "boards.copyFailedBody":
                 _noticeTitle.Text = Word("boards.stuckTitle");
                 _noticeBody.Text = Word("boards.copyFailedBody");
+                break;
+            case "boards.openFolderFailedBody":
+                // 坏的是"开那颗目录"这一手，⛔ 是那块板存不下来——标题留着说的是同一件事实（写闸还拒着），
+                // 而那颗「打开所在文件夹」⛔ 跟着摘掉：摘了就等于让用户⛔ 能再点一次（P-54 定过的坏法）。
+                _noticeTitle.Text = Word("boards.stuckTitle");
+                _noticeBody.Text = Phrase("boards.openFolderFailedBody", _copyPath ?? string.Empty);
                 break;
             default:
                 return;
@@ -640,6 +677,48 @@ public sealed class BoardWindow : Window
             _copying = false;
             if (_noticeButton is not null) _noticeButton.IsEnabled = true;
         }
+    }
+
+    /// <summary>
+    /// 屏幕上那一句是不是<b>认定盘上已经放着一颗副本</b>——那颗「打开所在文件夹」的唯一资格（一句话一个出处，
+    /// ShowNotice 与换语言那一拍都问它，⛔ 两处各 switch 一遍键名）。
+    /// <para>"打开失败"那一句也算：它说的是<b>开目录</b>那一手坏了，副本本身确实写成了，而那一刻用户要的正是<b>再点一次</b>；
+    /// "没能写到那个位置"那一句⛔ 算（那一刻没东西可点开）。反过来，"正在恢复"／"这一扇已停止保存"那两句
+    /// ⛔ 认定任何副本存在（那时一颗都还没写），挂着那颗按钮＝让他点出一颗⛔ 存在的档。</para>
+    /// </summary>
+    private bool CanOpenCopyFolder => _copyPath is not null && NoticeSaysCopyOutcome
+                                      && _noticeKey != "boards.copyFailedBody";
+
+    /// <summary>那颗「另存」按下去之后屏幕上可能挂着的<b>那几种结果</b>（一句一个下落）。
+    /// 这一串是<b>唯一那份名单</b>：上面两颗问法都从它派生——同一串键名两处各列一遍＝迟早只补一处。</summary>
+    private static readonly string[] CopyOutcomeKeys =
+    [
+        "boards.copySavedBody", "boards.copySavedStaleBody", "boards.openFolderFailedBody", "boards.copyFailedBody",
+    ];
+
+    /// <summary>屏幕上那一句是不是<b>按了那颗按钮之后的结果</b>。它比"这一扇已停止保存"那句<b>新</b>：
+    /// 说的是刚刚发生的一件事，而那句旧话每一拍重贴说的还是同一件早就说过的事（片39 真机量到的那一发：
+    /// 拒话重贴把「已另存到 &lt;路径&gt;」整句顶掉、那颗「打开所在文件夹」跟着退场）。</summary>
+    private bool NoticeSaysCopyOutcome => Array.IndexOf(CopyOutcomeKeys, _noticeKey!) >= 0;
+
+    /// <summary>
+    /// 打开那颗装着副本的目录（P-219 那三行里那颗 (B) 的出口：念出路径之外，再给一颗能点的）。
+    /// <para>动作走 <see cref="Helpers.LauncherEx"/>（本机路径那一族的唯一出口，⛔ 在这里再拼一遍 explorer 命令行），
+    /// ⛔ 静默：开不成就把面板那句话换成"没能打开、副本还在 &lt;路径&gt;"，那颗按钮留着可再点（P-54：⛔ 把作业推回给用户）。</para>
+    /// </summary>
+    private async System.Threading.Tasks.Task OpenCopyFolderAsync()
+    {
+        if (!CanOpenCopyFolder) return;                       // 那颗按钮本⛔ 在场：这一问就是它不在场时的形状
+        var folder = Path.GetDirectoryName(_copyPath) ?? _copyPath!;   // 取不出上一格就拿这一颗本身（一颗档的路径也开得出它自己）
+        // ⚠ 那颗 URI 是<b>递进去的形态</b>，⛔ 是宿主自己拼着玩的：LauncherEx 底下那颗还原判据只认 <c>file://</c> 前缀，
+        // 裸磁盘路径递进去两格候选都是空串⇒走"URI 激活＋图已不在本机"那一支，屏幕上得到一句与事实无关的坏话，
+        // 而桌面上还多开一颗 Explorer <b>主文件夹</b>窗（2026-10-19 真机读数逐字为证：result=failed・title='主文件夹 - 文件资源管理器'）。
+        // 拼那颗 URI 的主人＝<c>LocalFileIdentity.UriForPath</c>，这里⛔ 再写一遍前缀（两类生产者的口径归它）。
+        var message = await Helpers.LauncherEx.TryOpenAsync(StarMark.Abstractions.LocalFileIdentity.UriForPath(folder));
+        // 失败那一句的<b>原因</b>进日志（P-56 口径：只报"坏了"说不清是谁坏的），屏幕上说的是人能读的那一句。
+        StarMark.Abstractions.StarLog.Info("boards.folder.opened " + (message is null ? "ok" : "failed")
+            + " path=" + folder + (message is null ? "" : " why=" + message));
+        if (message is not null) ShowNotice("boards.openFolderFailedBody", titled: true, offerCopy: true);
     }
 
     /// <summary>

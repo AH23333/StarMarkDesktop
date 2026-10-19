@@ -11,7 +11,9 @@ namespace StarMark.Core.Boards;
 /// "载档与桥回写算⛔ 算一次用户动作"那颗裁决。三样东西刻意<b>⛔ 在这里出现</b>：
 /// ① 我们自己给的图片字节上限（那条"内嵌 base64 之后档体积 ↔ 图张数"的曲线<b>还没量</b>，
 /// 先写常数＝把猜测当判据；见 §21.7 与 <see cref="ImageCeilingsMeasured"/>）；
-/// ② 落点目录（片23 起那颗根归 <c>UserDataPaths</c>，UI 侧只问它要那颗子目录；那颗路径⛔ 是判据）；
+/// ② 那颗<b>成品路径</b>（片23 起根归 <c>UserDataPaths</c>，UI 侧只问它要那颗子目录）。<b>片39 给这一条改口</b>：
+///    本档现在裁「<b>用户的产物进哪一族</b>」（<see cref="ExportsFolder"/>），但两棵根由宿主递进来——
+///    本档⛔ 自己读环境变量、⛔ 认 <c>%APPDATA%</c>／<c>%USERPROFILE%</c>（层次倒挂，同它⛔ 认 WebView2 那颗 enum）；
 /// ③ 上屏的句子（一律交 <c>LocMessage</c>，本档⛔ 成品字＝P-193/P-194 那条口径）。
 /// </para>
 /// </summary>
@@ -400,6 +402,26 @@ public static class BoardPolicy
             if (!Uri.IsHexDigit(s[i])) return false;
         return true;
     }
+
+    /// <summary>导出产物与救回来的副本那颗目录的<b>名字</b>（一片档名，⛔ 一句上屏话）。</summary>
+    public const string ExportsDirectoryName = "StarMark 画板";
+
+    /// <summary>
+    /// 用户<b>产物</b>（导出的字节、那颗"另存一份到别处"的兜底副本）落进哪一颗目录——P-219 那颗裁决的落地腿。
+    /// <para>两条规则挤在一颗判据里：<b>①平时进「图片」那一族</b>，与同仓那颗截图目录（<c>图片\StarMark 截图</c>）
+    /// 同一个主人。理由⛔ 是"看起来整齐"，而是本仓定性过多次的那句话：<b>用户的产物必须落在他找得到的地方，
+    /// 取不到就是程序的事</b>（P-53／P-54 那一句的两半）。片23 那一版把它切成 <c>板档目录\exports</c>——
+    /// 那颗"根只许一位主人"的正解顺手把<b>产物</b>与<b>程序内部档</b>排到了同一棵树下，而用户在图片目录里翻不到自己刚救回来的那一份。
+    /// <b>②那颗根被环境变量改道时跟着改道</b>（沙盒取证、单测改道），⛔ 往用户真目录里写一颗——
+    /// 批次 SS 撞过的正是"抄本⛔ 认改道"那一族。</para>
+    /// <para><b>②排在①之前</b>：那棵根一旦改道，"用户找得到的地方"就是那一棵；这时候还去拼图片目录＝把取证写进真档。
+    /// <paramref name="picturesRoot"/> 与 <paramref name="redirectedDataRoot"/> 都由宿主取：Core⛔ 认特殊目录，
+    /// 正如它⛔ 认 <c>%APPDATA%</c>，这里只裁「拿哪一棵、怎么拼」。</para>
+    /// <para>那颗目录名<b>⛔ 跟着界面语言变</b>（所以它进本档而⛔ 进表）：一句上屏话换三种语言＝三颗目录，
+    /// 用户反而一颗都找不到；名字在这里是<b>身份</b>，⛔ 措辞。同仓那颗截图目录也是这一个口径。</para>
+    /// </summary>
+    public static string ExportsFolder(string picturesRoot, string? redirectedDataRoot)
+        => System.IO.Path.Combine(redirectedDataRoot ?? picturesRoot, ExportsDirectoryName);
 
     /// <summary>一颗板的档名（<c>&lt;id&gt;.excalidraw</c>）。</summary>
     public static string SceneFileName(string id) => Require(id) + SceneExtension;

@@ -183,4 +183,69 @@ public sealed class UserDataPathsTests
         }
         finally { Restore(saved); }
     }
+
+    /// <summary>
+    /// 那颗「有没有被改道」的信号（片39 为产物那一族新开的出口）：没改道交 <b>null</b>，⛔ 把真目录当改道结果递出去。
+    /// <para>为什么值得单独钉：那一棵 <c>%APPDATA%\StarMark</c> 是<b>程序内部档</b>的根，而画板那颗产物目录平时
+    /// 住的⛔ 是它。把"默认落哪一棵"混进这颗信号，UI 那边就分不出"该跟着改道"与"该进图片目录"这两件事。</para>
+    /// </summary>
+    [Fact]
+    public void TheRedirectSignalSaysNothingWhenNothingWasRedirected()
+    {
+        var saved = Capture();
+        try
+        {
+            Environment.SetEnvironmentVariable(UserDataPaths.SettingsVariable, null);
+            Environment.SetEnvironmentVariable(UserDataPaths.DatabaseVariable, null);
+
+            Assert.Null(UserDataPaths.RedirectedDataRoot());
+            var appData = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppConstants.AppName);
+            Assert.Equal(Path.Combine(appData, "boards"), UserDataPaths.Subdirectory("boards"));
+        }
+        finally { Restore(saved); }
+    }
+
+    /// <summary>
+    /// 那颗信号与 <see cref="UserDataPaths.Subdirectory"/> 同住一颗优先规则（settings ＞ db ＞ 真目录）。
+    /// <para>这一族最坏的坏法不是它报错，而是它<b>安静地写到真目录去</b>：那份抄本⛔ 认改道（批次 SS 的原件就是
+    /// <c>GitHubOptions</c> 漏了 db 那一档）。这里连"settings 赢过 db"那一臂一起钉——两条各测一件事，
+    /// 而把优先规则抄第二份时，两臂里至少有一颗会红。</para>
+    /// </summary>
+    [Fact]
+    public void TheRedirectSignalAndTheSubdirectoryShareOnePrecedenceRule()
+    {
+        var saved = Capture();
+        try
+        {
+            var dir = Path.Combine(Path.GetTempPath(), $"udp_signal_{Guid.NewGuid():N}");
+            Environment.SetEnvironmentVariable(UserDataPaths.SettingsVariable, null);
+            Environment.SetEnvironmentVariable(UserDataPaths.DatabaseVariable, Path.Combine(dir, "starmark.db"));
+
+            Assert.Equal(dir, UserDataPaths.RedirectedDataRoot());
+            Assert.Equal(Path.Combine(dir, "boards"), UserDataPaths.Subdirectory("boards"));
+
+            Environment.SetEnvironmentVariable(UserDataPaths.SettingsVariable, Path.Combine(dir, "settings.json"));
+            Environment.SetEnvironmentVariable(UserDataPaths.DatabaseVariable, Path.Combine(dir, "other", "starmark.db"));
+            Assert.Equal(dir, UserDataPaths.RedirectedDataRoot());
+        }
+        finally { Restore(saved); }
+    }
+
+    /// <summary>那颗优先规则只许有一颗主人：把"settings 给整条路径、db 给目录"那段<b>读法</b>抄第二份，
+    /// 比"变量名出现在第二个文件里"更常发生也⛔ 被上一格扫到（上一格只认文件，而抄本就在同一档里）。
+    /// <para>⚠ 这里⛔ 数 <c>GetEnvironmentVariable(...)</c> 那一串：那颗变量本来就有正当的第二读者
+    /// （<c>Database()</c> 与 <c>Settings()</c> 各读自己那一颗），按它数会把合法读法当抄本——本批第一跑就是这么红的，
+    /// 于是改成钉<b>那段解析读法的那一行</b>只许出现一次＋那棵根＝「信号 ?? 真目录」一条路。</para></summary>
+    [Fact]
+    public void ThePrecedenceRuleIsReadExactlyOnceInsideTheOwner()
+    {
+        var code = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.Abstractions/UserDataPaths.cs"));
+        Assert.Equal(1, SourceGate.Count(code, "Path.GetDirectoryName(settingsOverride)"));
+        // ⛔ 数 <c>GetEnvironmentVariable(DatabaseVariable)</c> 那一串：主库档自己认那颗变量，
+        // 那是<b>另一件事</b>（一处读法≠一份优先规则），按它数会把合法读者算成抄本（本批第一跑红的就是这一格）。
+        // 那棵根＝「改道信号 ?? 真目录」，⛔ 第三条路（把那段 if 抄回 RootDirectory 就是第二条路）
+        Assert.Contains("private static string RootDirectory() => RedirectedDataRoot() ?? AppDataDirectory();",
+            code, StringComparison.Ordinal);
+    }
 }
