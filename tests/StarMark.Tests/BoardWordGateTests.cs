@@ -123,4 +123,29 @@ public sealed class BoardWordGateTests : IDisposable
         Assert.Contains("boards.openFailedTitle", keys);
         Assert.Contains("boards.openFailedBody", keys);
     }
+
+    /// <summary>⑥那一屏上<b>唯一可点</b>的控件⛔ 只钉面板的字色——三样一起钉，且禁项与正件在同一次比较里。
+    /// <para>这一格是<b>量出来的</b>，⛔ 推理出来的：2026-10-19 片28 把那道写闸的拒绝造出现场（只改沙盒副本里
+    /// 那颗 <c>board.loaded</c> 的回话，宿主那一侧⛔ 动一个字），日志逐字为证
+    /// <c>boards.arm.refused want=2 loaded=3 canvas=2 tries=0</c> → <c>boards.arm.retry n=1</c> → 再拒 <c>tries=1</c>；
+    /// 同一张 PrintWindow 上标题那一行有 <b>10.3%</b> 深色像素（＝两行正文真的上了屏），
+    /// 而那颗按钮整框 <b>122×32 最暗只到 #fafafa</b>、标签框里 14% 的像素是 <b>#ffffff</b>
+    /// ⇒ <b>白字画在 #fafafa 面板上＝那颗按钮在屏幕上是隐形的</b>。形状证人五格全绿而它看不见——
+    /// 这正是片26／片27 两批登记为"⛔ 验到"的那一格，兑现的方式是它真是一条缺陷。</para>
+    /// <para>所以这一格钉的⛔ 是"有这颗按钮"（那颗形状证人早就绿了），而是<b>它自己把字色钉死</b>：
+    /// 面板那两行的黑字与那颗按钮的黑字按<b>同一颗尺</b>数（3 颗），底色与描边各一颗；
+    /// 同一次比较里放禁项（<c>ThemeResource</c>＝跟着主题走的那一类写法必须为 0），
+    /// 于是那三个 1 与那个 0 互为正负件（⛔ 一把只数 0 的尺）。</para></summary>
+    [Fact]
+    public void TheOnlyActionableControlPinsItsOwnColors()
+    {
+        var body = MethodBody(Code(ReadRepoFile(WindowCs)), "private Grid BuildStage");
+        // 三颗黑字：标题／正文／那颗按钮（片27 只钉了前两颗 ⇒ 第三颗吃主题刷＝白字）
+        Assert.Equal(3, Count(body, "Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black)"));
+        Assert.Equal(1, Count(body, "Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255))"));
+        Assert.Equal(1, Count(body, "BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130))"));
+        // 禁项：这一族⛔ 用"跟着主题走"的那一类刷子（面板与按钮两边都钉死，见 §27.6）
+        Assert.Equal(0, Count(body, "ThemeResource"));
+        Assert.Equal(0, Count(body, "Application.Current.Resources["));
+    }
 }

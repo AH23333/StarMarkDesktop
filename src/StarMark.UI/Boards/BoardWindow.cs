@@ -424,6 +424,13 @@ public sealed class BoardWindow : Window
             Margin = new Thickness(0, 8, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Left,
             Visibility = Visibility.Collapsed,
+            // ⚠ 这一颗⛔ 只钉面板：2026-10-19 真机读数（§27.6 那条"⛔ 验到"当场兑现）——面板两行黑字量得到
+            // （标题那一行 10.3% 深色像素），而那颗按钮整框最暗只到 #fafafa、字是 #ffffff ⇒ <b>白字画在灰底上＝看不见</b>。
+            // 它是这一屏上唯一可点的那一颗，"看得见"是它存在的最低条件 ⇒ 底色／字色／描边三样一起钉死，
+            // 与面板同一条口径：两边都⛔ 跟着主题走。
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
         };
         _noticeButton.Click += async (_, _) => await CopySeenSceneAsideAsync();
         var panel = new StackPanel { Margin = new Thickness(14, 10, 14, 10) };
