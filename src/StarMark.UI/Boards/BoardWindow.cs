@@ -179,6 +179,16 @@ public sealed class BoardWindow : Window
     /// <summary>那颗「打开所在文件夹」（片39＝P-219 的上屏出口）：它只跟着"盘上真有一颗副本"那几句话出现。</summary>
     private Button? _noticeFolderButton;
 
+    /// <summary>片40＝关窗那一拍被拒之后，屏幕上除了「另存」还须给「要留」与「要走」两颗（<see cref="_closeRevived"/> 为真才在场）。</summary>
+    private Button? _noticeStayButton;
+
+    /// <summary>那颗「仍然离开」：用户当场决定不救、直接关这扇（⛔ 让他去猜"再点一次×就退"那颗隐藏出口）。</summary>
+    private Button? _noticeLeaveButton;
+
+    /// <summary>这一拍用户按过×、而那次关窗被写闸拒⇒窗被亮回来。两颗「继续编辑／仍然离开」只在这格在场：
+    /// 没被关过＝⛔ 有话要说"走还是留"（停笔那一拍的拒只配「另存」）。</summary>
+    private bool _closeRevived;
+
     /// <summary>那块面板此刻说的那一句住在表里的哪一颗键（null＝没在说话）。<b>换语言那一拍按它重贴</b>（机制 (C)）。</summary>
     private string? _noticeKey;
 
@@ -476,6 +486,7 @@ public sealed class BoardWindow : Window
         _autosaveArmed = true;
         _armTries = 0;                 // 开过闸，这一趟的额度就没意义了：下一次拒是新的一趟（⛔ 让旧额度累积）
         _refusedScene = null;          // 开过闸＝从这一刻起交回来的每一份都进 _seenScene，那颗可疑候选⛔ 再配在场
+        _closeRevived = false;         // 这一扇能存了＝"走还是留"那一问当场作废（⛔ 让下一次换语言把两颗按钮又贴回来）
         HideNotice();                  // "正在恢复"／"这一扇已停止保存"那两句都退场——它们说的已经不是事实
         StarMark.Abstractions.StarLog.Info("boards.arm.post via=" + via + evidence + " id=" + _boardId);
         PostOutbound("autosave.arm", Envelope("autosave.arm", "h5", string.Empty));
@@ -528,11 +539,37 @@ public sealed class BoardWindow : Window
             BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
         };
         _noticeFolderButton.Click += async (_, _) => await OpenCopyFolderAsync();
+        // 片40＝被关过又被亮回来的那一格：走／留都得就地给一颗。三样颜色照旧各钉一遍（这一屏上现在有四颗可点的，
+        // 那颗"白字画在灰底上＝看不见"的尺从片28 起每加一颗都要重新量，⛔ 让新按钮吃主题刷）。
+        _noticeStayButton = new Button
+        {
+            Content = Word("boards.stayAction"),
+            Margin = new Thickness(0, 8, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Visibility = Visibility.Collapsed,
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
+        };
+        _noticeStayButton.Click += (_, _) => StayOnBoard();
+        _noticeLeaveButton = new Button
+        {
+            Content = Word("boards.leaveAction"),
+            Margin = new Thickness(0, 8, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Visibility = Visibility.Collapsed,
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
+        };
+        _noticeLeaveButton.Click += (_, _) => LeaveAnyway();
         var panel = new StackPanel { Margin = new Thickness(14, 10, 14, 10) };
         panel.Children.Add(_noticeTitle);
         panel.Children.Add(_noticeBody);
         panel.Children.Add(_noticeButton);
         panel.Children.Add(_noticeFolderButton);
+        panel.Children.Add(_noticeStayButton);
+        panel.Children.Add(_noticeLeaveButton);
         // 那块面板的底色与字色都<b>钉死</b>：画布那一侧永远是白板（theme.set 现在交的是 light），
         // 而一扇窗里两套深浅色同时说话就是 WI-81 那族"点了白色整扇看不见"的形状——两边都不跟着主题走，最坏也只是普通灰底。
         _notice = new Border
@@ -593,6 +630,18 @@ public sealed class BoardWindow : Window
         {
             folder.Content = Word("boards.openFolderAction");
             folder.Visibility = CanOpenCopyFolder ? Visibility.Visible : Visibility.Collapsed;
+        }
+        // 那颗「继续编辑／仍然离开」也归这一拍算：可见性只由 _closeRevived 一处定（⛔ 在 ShowNotice 里各写一遍＝第二个主人），
+        // 换语言那一拍只走 PasteNotice、⛔ 重走 ShowNotice（与那颗「打开所在文件夹」同一条口径，片34 漏的就是这一拍）。
+        if (_noticeStayButton is { } stay)
+        {
+            stay.Content = Word("boards.stayAction");
+            stay.Visibility = _closeRevived ? Visibility.Visible : Visibility.Collapsed;
+        }
+        if (_noticeLeaveButton is { } leave)
+        {
+            leave.Content = Word("boards.leaveAction");
+            leave.Visibility = _closeRevived ? Visibility.Visible : Visibility.Collapsed;
         }
         switch (_noticeKey)
         {
@@ -813,9 +862,35 @@ public sealed class BoardWindow : Window
         {
             AppWindow.Show();
             Activate();                     // Show 只管回可见；那颗按钮要点得中，得让这扇窗回到他眼前
+            // 片40：这一格是唯一"用户已经按过×、事情悬在这里"的时刻——走／留都得当场给一颗，⛔ 让他去猜"再点一次×就退"那颗隐藏出口。
+            // 那颗面板此刻挂的是 stuckBody（关窗那一拍里贴上的），这里只补两颗按钮的在场资格（可见性只由 _closeRevived 一处算）。
+            _closeRevived = true;
+            PasteNotice();
             StarMark.Abstractions.StarLog.Info("boards.close.revive on=refused id=" + _boardId);
             return;
         }
+        Close();
+    }
+
+    /// <summary>
+    /// 「继续编辑」＝撤销这一拍关窗：面板收起、那颗窗回到正常待命（下一次按×重新走一遍有界等待，
+    /// 而不是被这一拍的 <c>_closeFlushDone</c> 直接放行）。这一扇的写闸照旧没开（那句"已停止保存"说的还是事实），
+    /// 但⛔ 让面板一直盖着画布——他要的若是"我先不关"，程序就给他"不关"，⛔ 逼他先救一份才能脱身（P-54）。
+    /// </summary>
+    private void StayOnBoard()
+    {
+        _closeRevived = false;
+        _closeFlushDone = false;            // 撤销这一拍：下次按×重新问一次，别把这次被拒当成"已经拦过了"
+        _tearingDown = false;               // 恢复正常的进程失效重建（这一趟页还活着，⛔ 再拿"正在拆"挡着它）
+        HideNotice();
+        StarMark.Abstractions.StarLog.Info("boards.close.stay id=" + _boardId);
+    }
+
+    /// <summary>「仍然离开」＝用户当场决定不救、直接关这扇。<c>_closeFlushDone</c> 已置真，这一次 <c>Close()</c>
+    /// 走到 <see cref="OnAppWindowClosing"/> 会直接放行（⛔ 第二拦），那几笔按他说的丢下——救的出口（另存）他刚看得见、刚被自己否掉。</summary>
+    private void LeaveAnyway()
+    {
+        StarMark.Abstractions.StarLog.Info("boards.close.leave id=" + _boardId);
         Close();
     }
 

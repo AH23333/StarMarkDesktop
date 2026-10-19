@@ -593,8 +593,8 @@ public sealed class BoardWindowBridgeGateTests
         var raw = ReadRepo(WindowCs);
         var code = SourceGate.Code(raw);
         Assert.Contains("private void OnLocaleChanged() => PasteNotice();", code, StringComparison.Ordinal);
-        Assert.Equal(2, Count(code, "PasteNotice();"));             // ShowNotice 那一拍＋换语言那一拍（两颗都归同一位主人）
-        Assert.Equal(1, Count(code, "HideNotice();"));                                  // 开闸＝那句坏话已经不是事实
+        Assert.Equal(3, Count(code, "PasteNotice();"));             // ShowNotice 那一拍＋换语言那一拍＋被拒亮回那一拍补两颗新按钮（三处都只⛔ 调那颗主人，⛔ 各写一遍可见性）
+        Assert.Equal(2, Count(code, "HideNotice();"));              // 收起面板只此一颗主人，两处正当调用：开闸成功（坏话不再是事实）＋片40「继续编辑」撤销这一拍（⛔ 第二份收起实现）
         // 唯一的取词出口：两颗工厂各一处，调用点⛔ 重抄全限定名
         Assert.Equal(1, Count(code, "private static string Word(string key) => StarMark.Abstractions.I18n.Locale.T(key);"));
         Assert.Equal(1, Count(code, "Locale.T("));
@@ -608,6 +608,7 @@ public sealed class BoardWindowBridgeGateTests
             "Grid BuildStage", "void ShowNotice", "void HideNotice", "void PasteNotice",
             "void ShowRecoveringNotice", "void ShowArmStuckNotice", "void OnLocaleChanged",
             "Task OpenCopyFolderAsync", "bool CanOpenCopyFolder",
+            "void StayOnBoard", "void LeaveAnyway",
         })
         {
             var leftovers = SourceGate.Cjk.Matches(SourceGate.MethodBody(code, sig))
@@ -676,5 +677,48 @@ public sealed class BoardWindowBridgeGateTests
         // 那一发要有记录，而<b>原因</b>也得进得去（P-56 口径：只报"坏了"下一跑说不出是谁坏的）
         Assert.Contains("boards.folder.opened", open, StringComparison.Ordinal);
         Assert.Contains("why=", open, StringComparison.Ordinal);
+    }
+
+    /// <summary>片40＝被关过一次又被亮回来的那一格，走／留都得就地有颗按钮（P-54：⛔ 把"再点一次×就退"这种隐藏出口推回给用户）。
+    /// <para>① 两颗按钮（「继续编辑」「仍然离开」）各由 <c>BuildStage</c> add 一遍；
+    /// ② 它们的可见性<b>只由一颗 <c>_closeRevived</c> 一处算</b>（两颗各一条 <c>? _closeRevived</c>，⛔ 别处再判一遍＝第二个主人）；
+    /// ③ 全档只有一处把 <c>_closeRevived</c> 置真＝<c>FlushThenCloseAsync</c> 那颗被拒分支（停笔那一拍撞见的拒⛔ 算"用户按过×"，
+    /// 那一格只配「另存」，挂"走／留"＝把一件没发生过的事当成就悬在那儿）；
+    /// ④「继续编辑」撤销这一拍：面板收起＋<c>_closeFlushDone=false</c>（下次×重新问一遍，别把这次被拒当"已经拦过"）＋恢复 <c>_tearingDown</c>；
+    /// ⑤「仍然离开」当场 <c>Close()</c>（第二拦由 <c>_closeFlushDone</c> 放行），并留一行读数；
+    /// ⑥ 开闸成功那一拍把这一问作废（<c>_closeRevived=false</c>），⛔ 让下次换语言把两颗按钮贴回一块已经能存的板。</para></summary>
+    [Fact]
+    public void TheLeaveAndStayChoicesAppearOnlyWhereACloseWasRefused()
+    {
+        var raw = ReadRepo(WindowCs);
+        var code = SourceGate.Code(raw);
+        // ① 两颗都在场（BuildStage 各 add 一遍）
+        var stage = SourceGate.MethodBody(code, "private Grid BuildStage");
+        Assert.Contains("panel.Children.Add(_noticeStayButton);", stage, StringComparison.Ordinal);
+        Assert.Contains("panel.Children.Add(_noticeLeaveButton);", stage, StringComparison.Ordinal);
+        // ② 那颗主人＝PasteNotice：两颗各重贴一次字、各按 _closeRevived 算一次可见性
+        var paste = SourceGate.MethodBody(code, "void PasteNotice");
+        Assert.Contains("stay.Content = Word(\"boards.stayAction\");", paste, StringComparison.Ordinal);
+        Assert.Contains("leave.Content = Word(\"boards.leaveAction\");", paste, StringComparison.Ordinal);
+        Assert.Equal(1, Count(code, "stay.Visibility = _closeRevived ?"));
+        Assert.Equal(1, Count(code, "leave.Visibility = _closeRevived ?"));
+        // ③ 唯一置真的那一处＝被拒亮回分支；这一拍还须补一次 PasteNotice 才让两颗当场现身
+        var revive = SourceGate.MethodBody(code, "Task FlushThenCloseAsync");
+        Assert.Contains("_closeRevived = true;", revive, StringComparison.Ordinal);
+        Assert.Contains("PasteNotice();", revive, StringComparison.Ordinal);
+        Assert.Equal(1, Count(code, "_closeRevived = true"));
+        // ④「继续编辑」＝撤销这一拍（三样复位）
+        var stay = SourceGate.MethodBody(code, "void StayOnBoard");
+        Assert.Contains("_closeFlushDone = false;", stay, StringComparison.Ordinal);
+        Assert.Contains("_tearingDown = false;", stay, StringComparison.Ordinal);
+        Assert.Contains("_closeRevived = false;", stay, StringComparison.Ordinal);
+        Assert.Contains("HideNotice();", stay, StringComparison.Ordinal);
+        // ⑤「仍然离开」＝当场 Close＋留一行读数（⛔ 自己再拼一份退出链）
+        var leave = SourceGate.MethodBody(code, "void LeaveAnyway");
+        Assert.Contains("Close();", leave, StringComparison.Ordinal);
+        Assert.Contains("boards.close.leave", leave, StringComparison.Ordinal);
+        // ⑥ 开闸成功＝这一问作废
+        Assert.Contains("_closeRevived = false;",
+            SourceGate.MethodBody(code, "void ArmIdleBeat"), StringComparison.Ordinal);
     }
 }
