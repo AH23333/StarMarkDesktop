@@ -108,7 +108,10 @@ public sealed class BoardWindowBridgeGateTests
     /// <para>为什么要有这一颗钩子：§21.3 那四拍要的真机入口是"一块板上正在画"，而托盘那颗图标在 UIA 里
     /// 探不到（现读：Shell_TrayWnd 子树 3 颗节点、0 颗有名按钮；那颗溢出岛 0 颗节点）——把"人手点一下"
     /// 当验收条件＝本仓定性过的坏。⛔ 因此另起一份开场代码：这一格里那颗 <c>OpenBoardsWindowAsync(</c>
-    /// 在主窗档里只许出现一次（＝一颗调用），定义与另两颗调用都住在托盘那一档。</para>
+    /// 在主窗档里只许出现一次（＝一颗调用，多扇那一档住在 <c>foreach</c> 里），定义与另两颗调用都住在托盘那一档。</para>
+    /// <para><b>片32 加的那一档</b>＝逗号列表一次开多扇（<c>new,new</c>）：退出那一拍走<b>并发</b>等，
+    /// 而两扇同时开着才有"总时长由最坏那一扇决定"这颗读数。取值仍是闭集——<c>last</c> 只许单独写
+    /// （两扇续同一颗档＝两个主人抢一份盘），认不出的写法<b>一扇也⛔ 开</b>并留一行日志（⛔ 静默半开）。</para>
     /// </summary>
     [Fact]
     public void TheDevHookStartsABoardThroughTheTraysOpener()
@@ -119,8 +122,13 @@ public sealed class BoardWindowBridgeGateTests
         // ⚠ 钉<b>整行</b>字面量：台架的 A2 臂（把取值集合放宽成 "new"｜"last"｜"resume"）证明
         //   两颗 Assert.Contains 对"多一颗档位"是瞎的——那句前缀照样命中＝一颗恒绿断言（坑表 #695 同族）。
         Assert.Contains(
-            "if (startBoard is \"new\" or \"last\") _ = OpenBoardsWindowAsync(resumeLast: startBoard == \"last\");",
+            "if (wants.Length > 0 && wants.All(w => w == \"new\" || (w == \"last\" && wants.Length == 1)))",
             main, StringComparison.Ordinal);
+        Assert.Contains(
+            "foreach (var want in wants) _ = OpenBoardsWindowAsync(resumeLast: want == \"last\");",
+            main, StringComparison.Ordinal);
+        Assert.Contains("StarLog.Warn(\"boards.dev.start.unknown value=\" + startBoard)", main, StringComparison.Ordinal);
+        Assert.DoesNotContain("startBoard is \"new\" or \"last\"", main, StringComparison.Ordinal);   // 那颗单值旧写法已被取代
         Assert.Equal(1, Count(main, "OpenBoardsWindowAsync("));                    // 主窗档里只有那一颗调用
         Assert.DoesNotContain("new StarMark.UI.Boards.BoardWindow()", main, StringComparison.Ordinal);
         Assert.Equal(1, Count(tray, "private async System.Threading.Tasks.Task OpenBoardsWindowAsync(bool resumeLast)"));
@@ -445,6 +453,74 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Equal(0, Count(reg, "foreach"));
         Assert.Contains("await Task.WhenAll(waits)", reg, StringComparison.Ordinal);
         Assert.Contains("lock (_open) _open.Clear();", reg, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 片32：<b>每一扇各自报一颗"这一拍我等了多久"</b>（<c>tookMs=</c>）。
+    /// <para>为什么这一格值得单独钉：名册那一趟走的是<b>并发</b>等，"总时长＝最坏那一扇而⛔ 各扇之和"
+    /// 是这句设计的全部理由。可只有那颗<b>总</b>时长在日志里时，这句话⛔ 有读数能撑住——两扇各 10 ms 与
+    /// 两扇各 2 s 撞在同一个总数上（那是坑表 #696 那一族：由总量倒推）。所以耗时必须<b>按扇</b>报。</para>
+    /// <para>那颗 <c>tookMs</c> 与超时那句里的 <c>ms=</c> 各说一件事（前者＝这一发<b>用掉的</b>，
+    /// 后者＝那颗<b>预算</b>）：两个名字撞在一起＝"用完了预算"与"用了 2 秒"读起来一模一样。</para>
+    /// </summary>
+    [Fact]
+    public void EachBoardReportsItsOwnWaitOnTheCloseBeat()
+    {
+        var raw = ReadRepo(WindowCs);
+        var flush = SourceGate.MethodBody(raw, "Task<bool> FlushSnapshotAsync");
+        Assert.Contains("var started = System.Diagnostics.Stopwatch.GetTimestamp();", flush, StringComparison.Ordinal);
+        Assert.Contains("\" tookMs=\" + ElapsedMs(started)", flush, StringComparison.Ordinal);
+        Assert.Equal(1, Count(flush, "tookMs"));                                   // 一句里报一次，两条来路共用那一颗
+        Assert.Contains("boards.close.flush.timeout ms=", flush, StringComparison.Ordinal);   // 那颗预算仍只由超时那句报
+        Assert.Contains("(System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000 / System.Diagnostics.Stopwatch.Frequency",
+            SourceGate.Code(raw), StringComparison.Ordinal);                       // 刻度换算住在⛔ 日志拼接里
+    }
+
+    /// <summary>
+    /// 片32 那一格<b>真正修掉</b>的东西：抬笔后马上关窗时，那一拍问早了——页面此刻交回的是<b>还没有那一笔</b>的场景。
+    /// <para>读数（两扇同开、各一笔再各补一笔，正本 <c>bin/WI90/readings_32_main_*</c>）：
+    /// 抬笔后 0～20 ms 关窗＝<b>最后画那一扇的那一笔进不了盘</b>，而两颗 <c>landed=True</c> 与"落地 2 扇"照样报好话；
+    /// 40／80／150／250／300 ms 各一跑＝两颗档都对上自己那两笔。门槛落在 20～40 ms 之间，
+    /// 所以那一拍<b>先让 150 ms 再开口</b>（约四倍余量，且⛔ 动那颗 2 s 预算的语义：预算量的还是"问出去之后等多久"）。</para>
+    /// <para>这一格钉的是<b>顺序</b>而⛔ 只是"有没有这一段延时"：把 Delay 挪到 <c>RequestSceneSnapshot</c> 之后
+    /// 等于什么都没改（问已经问出去了），而两颗行都照样在档里。所以用 index 比先后。</para>
+    /// <para>那颗 150 是<b>量出来的</b>，所以也钉死：改这颗数必须带着新读数一起来（与 <c>CloseFlushBudgetMs</c> 同理，
+    /// 并要维持"让的那段⛔ 超过等的那段"——否则那一拍的预算被自己前面那段吃掉）。</para>
+    /// </summary>
+    [Fact]
+    public void TheCloseBeatLetsThePenReachThePageBeforeItAsks()
+    {
+        Assert.True(BoardPolicy.CloseFlushGraceMs < BoardPolicy.CloseFlushBudgetMs,
+            "让的那段⛔ 能超过等的那段：预算就没意义了");
+        Assert.Equal(150, BoardPolicy.CloseFlushGraceMs);
+        var flush = SourceGate.MethodBody(ReadRepo(WindowCs), "Task<bool> FlushSnapshotAsync");
+        var grace = flush.IndexOf("await System.Threading.Tasks.Task.Delay(BoardPolicy.CloseFlushGraceMs);",
+            StringComparison.Ordinal);
+        var ask = flush.IndexOf("RequestSceneSnapshot(BoardPolicy.SaveBeat.ClosingWindow);", StringComparison.Ordinal);
+        Assert.True(grace >= 0 && ask >= 0 && grace < ask,
+            "那一段让必须发生在开口<b>之前</b>（挪到问之后＝白等，那一笔照样进不了这份快照）");
+        Assert.Equal(1, Count(flush, "CloseFlushGraceMs"));                          // 一颗数只许有一个主人
+    }
+
+    /// <summary>
+    /// 片32：那一行要<b>说得出它是不是只看到旧账</b>（<c>same=</c>）。
+    /// <para>起因＝本批那颗缺陷正是被 <c>landed=True</c> 掩盖的：页面交回一份与盘上逐字相同的旧场景时，
+    /// 宿主走 <c>DiskAlreadyHolds</c> 那一档，"落地"与"什么都没新落"读起来一模一样（片31 记过这一族，那时无读数）。
+    /// 有了这一列，真机跑次里 <c>landed=True same=True</c> 与 <c>same=False</c> 分得开——前者才是"那一拍交回旧账"的脸。</para>
+    /// <para>那颗赋值只许在<b>这一问还开着</b>时改（<c>_closingLanded is not null</c>）：停笔／失焦那一拍也常撞到同件，
+    /// 让它们一起拨＝把一次无关的等价写说成那一拍读了旧账。开局复位一次，⛔ 让上一问的脸活到下一问。</para>
+    /// </summary>
+    [Fact]
+    public void TheCloseBeatSaysWhetherThePageGaveBackSomethingNew()
+    {
+        var raw = ReadRepo(WindowCs);
+        var flush = SourceGate.MethodBody(raw, "Task<bool> FlushSnapshotAsync");
+        Assert.Contains("\" same=\" + _closingSameAsDisk", flush, StringComparison.Ordinal);
+        Assert.Equal(1, Count(flush, " same="));
+        Assert.Contains("_closingSameAsDisk = false;", flush, StringComparison.Ordinal);   // 一问一复位
+        var got = SourceGate.MethodBody(raw, "void HandleExportBytes");
+        Assert.Contains("_closingSameAsDisk = _closingLanded is not null;", got, StringComparison.Ordinal);
+        Assert.Equal(1, Count(got, "_closingSameAsDisk"));                            // 只有那一问在等时才配改它
     }
 
     /// <summary>

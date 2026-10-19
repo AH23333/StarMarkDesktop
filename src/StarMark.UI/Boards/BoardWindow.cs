@@ -61,8 +61,21 @@ namespace StarMark.UI.Boards;
 /// 这一发⛔ 等满它）⇒盘上那颗档由 <c>858 字节／2 颗</c> 变成 <c>2708／3 颗</c>，新进那颗逐字 <c>freedraw</c>、
 /// 包围盒 <c>316×105</c>＝我这一笔按那颗窗口（1440×879）折算的数——⛔ 只念那颗 <c>landed=True</c>：
 /// 它为真也可能是"盘上本来就是它"那一档。正本＝<c>bin/WI90/readings_31_main_115116.txt</c>，
-/// 对照臂（同一份脚本、走 <c>flush.window</c>）＝<c>readings_31_board_115054.txt</c>。
-/// ⚠ 还欠的那一格换了名字：多块板同开那一发照旧在深析 §27.5 那颗 ⚛ 名单里。</para>
+/// 对照臂（同一份脚本、走 <c>flush.window</c>）＝<c>readings_31_board_115054.txt</c>。</para>
+/// <para><b>片32 补上那颗 ⚛ 的第一格，并顺手量到一颗真缺陷（✅P-230）</b>：钩子改收多颗写法
+/// （<c>STARMARK_START_BOARD=new,new</c>）⇒两扇同开、各一笔再各补一笔，然后<b>立刻</b>关<b>主窗</b>。
+/// 名册那一趟<b>两扇都落地</b>＝<c>落地 2 扇</c>＋逐扇各报一颗 <c>tookMs</c>；那句"并发等＝最坏那一扇决定总时长"
+/// 第一次有读数（<c>readings_32_main_125501.txt</c>：总 <b>163 ms</b> ↔ 最坏 <b>153</b> ↔ 之和 <b>305</b>，复跑 125541 同形）。
+/// 而<b>改前那两跑</b>（<c>readings_32_main_123806.txt</c>／<c>124513.txt</c>）里，最后画那一扇的<b>那一笔没进盘</b>
+/// （那颗档停在 1444 字节／freedraw 1 颗），两句 <c>landed=True tookMs=[13, 13]／[15, 15]</c> 却一切正常＝
+/// 抬笔后 <b>0～20 ms</b> 内问，那一下输入还排在"系统队列→宿主→浏览器进程→渲染进程"那条链上，页面交回的是<b>还没有那一笔</b>的旧场景，
+/// 而宿主那一侧<b>听不出新旧</b>（源码对得上：<c>DiskAlreadyHolds</c> 那一支把"落地"与"什么都没新落"写成同一句话；
+/// 改前那两跑读不到 <c>same=</c> 这一列＝它是本批补的，所以"那一发走的就是这一支"在改前读数里⛔ 单独点过名），
+/// 于是那一行连"读到的是旧账"都说不出口。
+/// 门槛量在 20～40 ms 之间（40／80／150／250／300 ms 各一跑全进），settle 臂（⛔ 关窗、只等那一拍自己落盘）
+/// 先证明那一笔<b>画得上</b>（0.25 s／1.77 s 两颗都进）⇒修法＝开口前先让 <see cref="BoardPolicy.CloseFlushGraceMs"/>，
+/// 两条来路共用同一颗 <see cref="FlushSnapshotAsync"/>；改后"抬笔即关"两跑各 2/2（最后那一扇逐字 <c>same=False tookMs=153</c>）。
+/// ⚠ 这一手把丢笔压到量不到的档，⛔ 是"保证渲染进程收下了"——页面没有"我处理到第几笔"可问，宿主也⛔ 知道这块板上有几笔。</para>
 /// </summary>
 public sealed class BoardWindow : Window
 {
@@ -102,6 +115,15 @@ public sealed class BoardWindow : Window
 
     /// <summary>关窗那一拍在等的这份快照：页面交回来（写成功、写失败、还是"一个字节都没变"）那一刻结掉。</summary>
     private System.Threading.Tasks.TaskCompletionSource<bool>? _closingLanded;
+
+    /// <summary>
+    /// 那一拍等回来的那份字节<b>是不是盘上本来就有</b>（只进日志，判据住 <c>BoardPolicy.DiskAlreadyHolds</c>）。
+    /// <para>为什么要单独报这一颗：<c>landed=True</c> 有三种真法（片31 记过一次），其中"盘上本来就是它"与"把同件又写一遍"
+    /// 本来就长得一样，所以一份<b>还没有那一笔的旧场景</b>在<b>抬笔后立刻关窗</b>时也说成落地成功
+    /// （片32 量到：隔 0～20 ms 关＝丢最后那一笔，而两颗 <c>landed=True</c> 都报好话——改前那两跑读不到 <c>same=</c> 这一列，
+    /// "丢笔那一发走的到底是哪一档"在它们里⛔ 单独读数）。这一颗把那一下从"看不见的同件"变成日志里读得出的一列。</para>
+    /// </summary>
+    private bool _closingSameAsDisk;
 
     /// <summary>恢复开的那一趟跑没跑完（两趟同时开着＝两颗控件抢同一扇窗）。</summary>
     private bool _recovering;
@@ -340,6 +362,9 @@ public sealed class BoardWindow : Window
             // 动一次盘就多滚一次 .bak，而滚的那一下把上一份「真正不同」的退路顶成了同件。
             if (BoardPolicy.DiskAlreadyHolds(_lastWritten, bytes))
             {
+                // 只有"这一份字节正是关窗那一拍在等的那一份"才配记进那一行：停笔／失焦那一拍也常撞到同件，
+                // 让它们把这一列拨成 true＝把一次无关的等价写说成"那一拍读到旧账"。
+                _closingSameAsDisk = _closingLanded is not null;
                 Reply(envelope.Cmd, envelope.Id, ok: true);
                 FinishClosingFlush();
                 return;
@@ -657,20 +682,27 @@ public sealed class BoardWindow : Window
     }
 
     /// <summary>
-    /// 关窗那一拍真正做的事：向页面索取一份快照并<b>有界</b>等它落地，返回落地与否（写成功、
-    /// 盘上本来就是它，都算落地）。用户那一拍与退出那一拍<b>共用这一颗</b>（两份等待代码＝第二个主人）。
+    /// 关窗那一拍真正做的事：<b>先让出 <see cref="BoardPolicy.CloseFlushGraceMs"/></b>，再向页面索取一份快照并<b>有界</b>等它落地，
+    /// 返回落地与否（写成功、盘上本来就是它，都算落地）。用户那一拍与退出那一拍<b>共用这一颗</b>（两份等待代码＝第二个主人）。
+    /// <para>那一小段"让"⛔ 是礼节，它顶着的是一件真事：抬笔后马上关窗时，那一下输入还在这条链上
+    /// （系统队列→宿主→浏览器进程→渲染进程），页面此刻交回的是<b>没有那一笔的</b>场景。片32 量到的门槛在 20～40 ms 之间，
+    /// 所以这里付 150 ms 换"最后一笔也在盘上"——窗已经 Hide，这段钟用户看不见，而丢的那一笔他看得见（在下一块板上）。</para>
     /// </summary>
     private async System.Threading.Tasks.Task<bool> FlushSnapshotAsync(string origin, bool notice)
     {
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
         var landed = new System.Threading.Tasks.TaskCompletionSource<bool>(
             System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
         _closingLanded = landed;
+        _closingSameAsDisk = false;
+        await System.Threading.Tasks.Task.Delay(BoardPolicy.CloseFlushGraceMs);
         RequestSceneSnapshot(BoardPolicy.SaveBeat.ClosingWindow);
         var budget = System.Threading.Tasks.Task.Delay(BoardPolicy.CloseFlushBudgetMs);
         var done = await System.Threading.Tasks.Task.WhenAny(landed.Task, budget) == landed.Task;
         _closingLanded = null;
         StarMark.Abstractions.StarLog.Info(
-            "boards.close.flush." + origin + " id=" + _boardId + " landed=" + done);
+            "boards.close.flush." + origin + " id=" + _boardId + " landed=" + done
+            + " same=" + _closingSameAsDisk + " tookMs=" + ElapsedMs(started));
         if (done) return true;
         StarMark.Abstractions.StarLog.Warn(
             "boards.close.flush.timeout ms=" + BoardPolicy.CloseFlushBudgetMs + " origin=" + origin);
@@ -683,6 +715,14 @@ public sealed class BoardWindow : Window
             StarMark.Abstractions.StarLog.Warn("boards.close.flush.notice.notShown id=" + _boardId);
         return false;
     }
+
+    /// <summary>
+    /// 这一扇在那一拍里<b>实际</b>等了多久（毫秒，向下取整）。名册那一趟是<b>并发</b>等的，
+    /// 所以"总时长＝最坏那一扇"这句话只有每颗各报一个数时才量得出来——⛔ 由总量倒推（坑表 #696 同族）。
+    /// 那颗 <c>tookMs</c> 与超时那句里的 <c>ms=</c>⛔ 是同一颗数：后者是<b>预算</b>，前者是<b>这一发用掉的</b>。
+    /// </summary>
+    private static long ElapsedMs(long started)
+        => (System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000 / System.Diagnostics.Stopwatch.Frequency;
 
     /// <summary>那份快照有答案了（写进盘、盘上本来就是它、还是写不进去）：结掉关窗那一拍的等待。</summary>
     private void FinishClosingFlush() => _closingLanded?.TrySetResult(true);

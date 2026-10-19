@@ -146,12 +146,19 @@ public sealed partial class MainWindow : Window
             });
         }
 
-        // 开发辅助：启动即起画板窗（STARMARK_START_BOARD＝new｜last）。§21.3 那四拍里"崩那一拍"与"关窗那一拍"
-        // 只有源码读数，而它们要的真机入口是"一块板上正在画"。托盘那两颗入口在 UIA 里探不到（现读：
-        // Shell_TrayWnd 子树 3 颗节点、0 颗有名按钮；那颗溢出岛 0 颗节点）⇒ 取证按不到那颗图标。
-        // ⛔ 在这里另起一份开场代码（第二主人）：交回给托盘那两颗入口共用的同一条 OpenBoardsWindowAsync。
+        // 开发辅助：启动即起画板窗（<c>STARMARK_START_BOARD</c>＝<c>last</c>，或一颗／多颗 <c>new</c>＝每颗一扇新板）。
+        // §21.3 那四拍里"崩那一拍"与"关窗那一拍"只有源码读数，而它们要的真机入口是"一块板上正在画"。
+        // 托盘那两颗入口在 UIA 里探不到（现读：Shell_TrayWnd 子树 3 颗节点、0 颗有名按钮；那颗溢出岛 0 颗节点）⇒ 取证按不到那颗图标。
+        // 多颗 <c>new</c> 那一档是片32 加的：退出那一拍走<b>并发</b>等（<c>BoardsWindows.FlushAllForExitAsync</c>），
+        // 而它至今只有<b>单扇</b>读数——⛔ 同时开着两扇，"最坏那一扇决定总时长"就只是句推测。
+        // ⛔ 在这里另起一份开场代码（第二主人）：每一颗都交回托盘那两颗入口共用的同一条 OpenBoardsWindowAsync。
         var startBoard = Environment.GetEnvironmentVariable("STARMARK_START_BOARD");
-        if (startBoard is "new" or "last") _ = OpenBoardsWindowAsync(resumeLast: startBoard == "last");
+        var wants = startBoard?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                               ?? Array.Empty<string>();
+        if (wants.Length > 0 && wants.All(w => w == "new" || (w == "last" && wants.Length == 1)))
+            foreach (var want in wants) _ = OpenBoardsWindowAsync(resumeLast: want == "last");
+        else if (wants.Length > 0)
+            StarLog.Warn("boards.dev.start.unknown value=" + startBoard);      // 认不出的写法＝一扇也⛔ 开，只留一行话
 
         SetupDiag();
 
