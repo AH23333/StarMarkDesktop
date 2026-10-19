@@ -234,13 +234,16 @@ public sealed class BoardWindow : Window
     /// <summary>
     /// 接着开那颗已有的板：先按 id 把档读进内存，等 <c>bridge.ready</c> 那一刻再递给页面。
     /// <para>顺序是反不得的：桥没通就发 <c>board.load</c>，页面侧那位 <c>API</c> 还是 null，
-    /// 场景就永远进不去（而宿主这边一句错都⛔ 报）。档读不到＝退回新板，⛔ 弹"档不见了"那种废话。</para>
-    /// <para>从 <c>.bak</c> 捡回来的那一档⛔ 点亮脏位：主档位置上是空的，所以"盘上已经有了"那句⛔ 成立，
-    /// 得让第一拍把主档补回去（否则那颗板在 <see cref="BoardSceneStore.LatestSceneId"/> 那一问里始终是缺的）。</para>
+    /// 场景就永远进不去（而宿主这边一句错都⛔ 报）。两颗档都拿不出能打开的一份＝退回新板，⛔ 弹"档不见了"那种废话。</para>
+    /// <para>从 <c>.bak</c> 捡回来的那一档⛔ 点亮脏位：盘上的<b>主档位置当⛔ 一份档</b>（没了，或还在却是 0 字节／半颗——
+    /// 后者由片43 把这一头接通），所以"盘上已经有了"那句⛔ 成立，得让第一拍把主档补回去
+    /// （否则那颗板在 <see cref="BoardSceneStore.LatestSceneId"/> 那一问里始终是缺的）。
+    /// ⚠ 「读出来的是⛔ 是能打开的一份」这一问归存储那颗形状判据，这里⛔ 再判一遍字节数
+    /// （原来这里挂着半句 <c>bytes.Length == 0</c>＝把"读出一颗垃圾"当场折成"这颗板不存在"，正是另起新板那一步）。</para>
     /// </summary>
     public System.Threading.Tasks.Task OpenSceneAsync(string sceneId)
     {
-        if (!BoardSceneStore.TryLoad(sceneId, out var bytes, out var fromBackup) || bytes.Length == 0) return OpenNewAsync();
+        if (!BoardSceneStore.TryLoad(sceneId, out var bytes, out var fromBackup)) return OpenNewAsync();
         _boardId = sceneId;
         _lastWritten = fromBackup ? null : bytes;
         return OpenAsync(bytes);

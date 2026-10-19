@@ -87,29 +87,42 @@ public static class BoardSceneStore
     }
 
     /// <summary>
-    /// 读这颗板的档：主档在就用主档，主档没了退到 <c>.bak</c>。
+    /// 读这颗板的档：主档还认得出是一颗档就用主档，否则退到 <c>.bak</c>（退路也认不出才说"这颗板没有能打开的一份"）。
     /// <para>这颗退路是有读者的：上一份刚被滚走、新那份还没改名的那一瞬间进程没了，
     /// 用户重开时看到的应该是<b>还能打开的那一份</b>，而⛔ 是"这颗板不存在"。</para>
+    /// <para><b>片43 补上的那一半（P-238）：退路的存在⛔ 等于退路读得到。</b>这一头原来只问「主档在⛔ 在」，
+    /// 而盘上出事的形状恰恰是「主档在、却是 0 字节／半颗」（同步工具的占位档／磁盘满时那次改名／用户从别处拷一颗空档进来——
+    /// 与 ✅P-234 登记的是同一批门路）。那种形状下这一头返回"读到了"，调用方把空串当成"这颗板不存在"而<b>另起一颗新板</b>，
+    /// 紧挨着它那颗还能打开的 <c>.bak</c> 一次也没被问过（真机逐字＝<c>bin/WI91/readings_38b_174633.txt</c>：
+    /// <c>via=no-scene</c>，我摆那颗档名⛔ 出现在任何一发里）。⇒ 滚那一头的「该不该留」由片38 收干净了，
+    /// 载入这一头的「该拿哪一份」由本批收，整颗交回 Core 的 <see cref="BoardPolicy.PickReadableScene"/>：
+    /// 本档只负责把盘上那两颗读给它看，⛔ 自己再判一遍形状／空（那才是第二个主人）。</para>
     /// <para><paramref name="fromBackup"/> 交回的是"读到的是<em>哪一颗</em>文件"这件事实：退到 <c>.bak</c> 那一刻，
-    /// 盘上的<b>主档位置是空的</b>——调用方若把这份字节当成"盘上已经有了"（<see cref="BoardPolicy.DiskAlreadyHolds"/>），
-    /// 一颗"打开看看、没动"的板就永远补不回主档，而 <see cref="LatestSceneId"/> 只认主档。</para>
+    /// 盘上的<b>主档位置当⛔ 一份档</b>——调用方若把这份字节当成"盘上已经有了"（<see cref="BoardPolicy.DiskAlreadyHolds"/>），
+    /// 一颗"打开看看、没动"的板就永远补不回主档，而 <see cref="LatestSceneId"/> 只认主档。
+    /// 补回去那一发⛔ 会顶掉这条退路：滚那一头认得出那颗垃圾主档⛔ 配滚（✅P-234），两片正好咬合。</para>
     /// </summary>
     public static bool TryLoad(string? sceneId, out byte[] bytes, out bool fromBackup)
     {
         bytes = Array.Empty<byte>();
         fromBackup = false;
         if (sceneId is null || !BoardPolicy.IsSceneId(sceneId)) return false;
-        try
+        var main = PathOf(sceneId);
+        byte[]? onMain = null;
+        if (System.IO.File.Exists(main))
         {
-            var main = PathOf(sceneId);
-            if (System.IO.File.Exists(main)) { bytes = System.IO.File.ReadAllBytes(main); return true; }
-            var backup = BackupPathOf(sceneId);
-            if (!System.IO.File.Exists(backup)) return false;
-            bytes = System.IO.File.ReadAllBytes(backup);
-            fromBackup = true;
-            return true;
+            onMain = ReadIfExists(main);
+            // 主档在、却一颗字节都读不出（被人攥着／正在改名的那一瞬间）：这一发⛔ 退到 .bak。
+            // 那颗退路按定义是上一版，把它当这一版递出去、再让第一拍写回＝用旧的一份盖掉一份可能更新的主档。
+            if (onMain is null) return false;
         }
-        catch (Exception) { return false; }
+        // 「该拿哪一份」整颗交 Core；这一头只决定<b>要不要再去读第二颗档</b>（⛔ 每拍都读两颗）。
+        // ⚠ 本批第一跑正是这句写歪（只在「主档⛔ 存在」时才去读退路），被真机腿当场打回（坋格=3：宿主照旧另起一颗新板）。
+        // 把判据搬进可测那一层，<b>⛔</b> 等于调用那一头自动正确（坑表 #803）。
+        var onBackup = onMain is null || BoardPolicy.LooksLikeSceneDoc(onMain)
+            ? null
+            : ReadIfExists(BackupPathOf(sceneId));
+        return BoardPolicy.PickReadableScene(onMain, onBackup, out bytes, out fromBackup);
     }
 
     /// <summary>

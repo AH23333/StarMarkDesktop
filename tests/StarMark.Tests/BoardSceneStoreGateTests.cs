@@ -112,10 +112,19 @@ public sealed class BoardSceneStoreGateTests
     {
         var save = Between(Store, "public static bool TrySave", "public static bool TryLoad");
         Assert.Contains("BoardPolicy.BackupRollNeeded(ReadIfExists(main), bytes)", save, StringComparison.Ordinal);
-        // 片38（P-234）：那颗「盘上那份还是不是一颗档」也归 Core——存储这一档⛔ 自己再判一遍形状／空，那是第二个主人。
+        // 片38（P-234）：那颗「盘上那份还是不是一颗档」也归 Core——滚那一头⛔ 在存储里再判一遍形状／空，那是第二个主人。
         // ⚠ 禁项读的是<b>抹掉注释后</b>的代码：本批那句说明本来就要提到那颗判据的名字（名册 308 那一族）。
-        Assert.DoesNotContain("LooksLikeSceneDoc", SourceGate.Code(Store), StringComparison.Ordinal);
+        // ⚠ 片43（P-238）把那棵判据也接到载入那一头，所以「整档⛔ 出现」那颗从严尺已经⛔ 是「存储⛔ 自己判」——
+        // 真正要钉的是<b>两件事各归一处</b>：滚那一块内⛔ 判形状（它问的是 <c>BackupRollNeeded</c>），
+        // 而<b>括弧／留白那套形状规则</b>整档只许问 Core 那颗（问一次＝一份主档，问两次＝再加一份退路）。
+        // 片43 第二刀改口：存储现在<b>会</b>问一次那颗形状尺——问的是「还要⛔ 要去读第二颗档吗」这件 IO 决定，
+        // 而⛔ 是「拿哪一份」（那颗决定整颗交 Core）。要禁的是<b>重写括弧规则</b>，所以下面两颗禁项照旧从严。
+        Assert.Equal(1, Count(SourceGate.Code(Store), "BoardPolicy.LooksLikeSceneDoc"));
+        Assert.DoesNotContain("PickReadableScene", SourceGate.Code(save), StringComparison.Ordinal);   // 滚那一块只问滚
         Assert.DoesNotContain("Length >", SourceGate.Code(Store), StringComparison.Ordinal);
+        Assert.Equal(1, Count(SourceGate.Code(Store), "BoardPolicy.PickReadableScene"));               // 该拿哪一份只问一次
+        Assert.DoesNotContain("'{'", SourceGate.Code(Store), StringComparison.Ordinal);   // 括弧⛔ 在存储里再写一遍
+        Assert.DoesNotContain("IsPadding", SourceGate.Code(Store), StringComparison.Ordinal);
         Assert.Contains("private static bool IsPadding", SourceGate.Code(BoardPolicySrc), StringComparison.Ordinal);  // 那颗形状判据的主人只有 Core
         Assert.Equal(1, Count(save, "rolledBackup = true;"));              // 只有真滚了那一支才点亮
         Assert.Contains("out bool rolledBackup", Store, StringComparison.Ordinal);
@@ -128,8 +137,11 @@ public sealed class BoardSceneStoreGateTests
     }
 
     /// <summary>
-    /// ④ 读的那条退路：主档没了要退到 <c>.bak</c>，两颗都没了才说"没有这颗板"。
+    /// ④ 读的那条退路：主档<b>还认得出是一颗档</b>才用主档，否则退到 <c>.bak</c>，两颗都认不出才说"这颗板没有能打开的一份"。
     /// <para>"最近一块板"按<em>盘上的修改时间</em>算（⛔ 另存一份"最近"指针＝第二个主人，档删了它还指着）。</para>
+    /// <para><b>片43（P-238）补的那一半</b>：这一头原来只问「主档在⛔ 在」，于是「主档还在却是 0 字节／半颗」那一档里，
+    /// 唯一那条还能打开的退路一次也没被问过（宿主另起一颗新板＝真机读数 <c>bin/WI91/readings_38b_174633.txt</c>）。
+    /// 那颗形状问句必须<b>两颗档都问到</b>：只问主档＝退路是垃圾时照样递给页面；一颗都不问＝回到本批改前。</para>
     /// </summary>
     [Fact]
     public void TheLoadFallsBackToTheBackupAndTheLatestIsReadFromDisk()
@@ -137,6 +149,16 @@ public sealed class BoardSceneStoreGateTests
         var load = Between(Store, "public static bool TryLoad", "public static string? LatestSceneId");
         Assert.Contains("PathOf(sceneId)", load, StringComparison.Ordinal);
         Assert.Contains("BackupPathOf(sceneId)", load, StringComparison.Ordinal);
+        Assert.Contains("BoardPolicy.PickReadableScene(", load, StringComparison.Ordinal);
+        Assert.Contains("ReadIfExists(BackupPathOf(sceneId))", load, StringComparison.Ordinal);
+        // 退路那一读要挂在「主档认不出是一颗档」上，⛔ 是「主档⛔ 存在」（本批第一跑就写歪在这一点，坑表 #803）
+        Assert.Contains("|| BoardPolicy.LooksLikeSceneDoc(onMain)", load, StringComparison.Ordinal);
+        // 顺序也是判据：主档读得出却⛔ 是一颗档时，退路才配被读；而「一颗字节都读不出」⛔ 退到上一版
+        Assert.Contains("if (onMain is null) return false;", load, StringComparison.Ordinal);
+        Assert.True(load.IndexOf("if (onMain is null) return false;", StringComparison.Ordinal)
+                    < load.IndexOf("PickReadableScene", StringComparison.Ordinal),
+            "主档读不出却继续往下走＝拿一颗<b>看不见</b>的盘去换一份可能更旧的退路");
+        Assert.DoesNotContain("ReadAllBytes(main)) { bytes", load, StringComparison.Ordinal);   // 「在就交出去」那颗旧形状⛔ 许回来
         var latest = Between(Store, "public static string? LatestSceneId", "public const string TempSuffix");
         Assert.Contains("BoardPolicy.IsSceneFileName(name)", latest, StringComparison.Ordinal);   // .bak／.tmp ⛔ 算一颗板
         Assert.Contains("GetLastWriteTimeUtc(file)", latest, StringComparison.Ordinal);
@@ -266,11 +288,19 @@ public sealed class BoardSceneStoreGateTests
         Assert.Equal(1, Count(WindowCs, "_lastWritten = bytes;"));
 
         Assert.Contains("_lastWritten = null;", WindowCs, StringComparison.Ordinal);   // 新板：第一拍必写
-        Assert.Contains("if (!BoardSceneStore.TryLoad(sceneId, out var bytes, out var fromBackup) || bytes.Length == 0) return OpenNewAsync();",
+        // 片43（P-238）：这里原来挂着半句 <c>|| bytes.Length == 0</c>＝把「读出一颗垃圾」当场折成「这颗板不存在」，
+        // 于是另起一颗新板、盘上那颗还能打开的退路⛔ 被问过。「什么算能打开的一份」只许有存储那一颗主人，
+        // 窗口这一头⛔ 再判一遍字节数（第二主人一旦成形，两头的判据迟早分岔——而分岔的脸是"那块板没了"）。
+        Assert.Contains("if (!BoardSceneStore.TryLoad(sceneId, out var bytes, out var fromBackup)) return OpenNewAsync();",
             WindowCs, StringComparison.Ordinal);
+        // ⚠ 这颗禁项读<b>抹掉注释后</b>的代码：本条登记那颗坏就免不了要提那句旧形状（名册 308／483 那一族，
+        // 片38 在同一颗档里立过同一条口径）——要禁的是<b>可执行码里再判一遍字节数</b>，⛔ 是注释里提它。
+        Assert.DoesNotContain("bytes.Length == 0", SourceGate.Code(WindowCs), StringComparison.Ordinal);
         Assert.Contains("_lastWritten = fromBackup ? null : bytes", WindowCs, StringComparison.Ordinal);
         Assert.Contains("out bool fromBackup", Store, StringComparison.Ordinal);
-        Assert.Equal(1, Count(Store, "fromBackup = true;"));
+        // 片43：那颗"读到的是哪一颗文件"的旗现在由 Core 那颗取档判据交回，存储这一头⛔ 再自己点亮一次
+        // （自己点＝第二个主人：它会跟着存储的分支跑，而分支早就⛔ 是「什么算能打开的一份」的定义处）。
+        Assert.Equal(0, Count(Store, "fromBackup = true;"));
     }
 
     /// <summary>

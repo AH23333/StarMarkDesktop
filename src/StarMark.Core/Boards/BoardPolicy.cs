@@ -105,11 +105,11 @@ public static class BoardPolicy
 
     /// <summary>
     /// 那串字节<b>还认得出是一颗板档</b>吗（片38；只问形状，⛔ 解析内容）。
-    /// <para><b>为什么只问首尾</b>：这颗判据要答的不是「这份档能不能载入」（那是 <c>TryLoad</c> 之后引擎的事），
-    /// 而是「拿它去顶掉唯一那条退路<b>划不划算</b>」。一颗连 JSON 对象那两个括弧都凑不齐的字节串——0 字节、
-    /// 截在半路、被人塞了别的东西——当退路＝下次真出事时那一头也是死的；而凑齐了括弧的档哪怕内容坏，
-    /// 也还是<b>引擎自己写出去的那一颗档的形状</b>，留着比留一颗空档强。⛔ 在这里跑解析器：那颗判据的代价是
-    /// 每拍都要读一遍盘，而「能不能载入」这件事只有真出事那一拍才需要答案。</para>
+    /// <para><b>为什么只问首尾</b>：这颗判据要答的是「这串字节还认不认得出<b>是引擎自己写出去的那一颗档的形状</b>」——
+    /// 滚那一头拿它判「拿它去顶掉唯一那条退路<b>划不划算</b>」（片38），载入那一头拿它判「这一份⛔ 配递给页面」
+    /// （片43／P-238：主档还在却是 0 字节／半颗时，旧形状把「读出一颗垃圾」折成「这颗板不存在」，于是另起一颗新板）。
+    /// 两头共用同一颗判据＝「什么算一颗档」只许一个出处；而⛔ 在这里跑解析器：那颗判据的代价是每拍都要读一遍盘，
+    /// 「内容坏到引擎解不开」那一问归页面那一次 <c>board.loaded</c> 的计数（对不上就走写闸拒那一族，✅P-224／✅P-237）。</para>
     /// <para>空／null／只有一个括弧＝认不出。首尾之外的那点空白（<c>\n</c>／<c>\t</c>／<c>\r</c>／空格）跳过——
     /// 序列化器自己⛔ 在两头留白，留白⛔ 是坏形状的理由。</para>
     /// <para>⚠ <b>量不到的那一维</b>：两颗档拼成一串（首尾括弧都在）判得出「还是档」而判不出「只有一颗」——
@@ -124,6 +124,37 @@ public static class BoardPolicy
         while (first < last && IsPadding(bytes[first])) first++;
         while (last > first && IsPadding(bytes[last])) last--;
         return bytes[first] == StartOfDoc && bytes[last] == EndOfDoc;
+    }
+
+    /// <summary>
+    /// 盘上那两颗档里，<b>哪一份配当这块板递出去</b>（片43＝P-238；纯函数，读盘那一手归存储）。
+    /// <para>改前的形状是「主档<b>存在</b>就交主档」，于是「主档还在、却当⛔ 一份档」（0 字节／截在半路／被人塞了别的）
+    /// 那一档里，调用方把读回来的空串折成"这颗板不存在"而<b>另起一颗新板</b>——盘上唯一那份还能打开的
+    /// <c>.bak</c> 一次也没被问过（真机逐字＝<c>bin/WI91/readings_38b_174633.txt</c>：<c>via=no-scene</c>、
+    /// 我摆那颗档名⛔ 出现在任何一发里、那颗退路 sha 一字未动）。✅P-234 保住的是「⛔ 把退路滚成垃圾」，
+    /// 本颗保住的是「<b>退路读得到头</b>」：同一条线上两半，缺哪一半那颗退路都不值钱。</para>
+    /// <para>主档优先是刻意的：退路按定义是<b>上一版</b>，一颗好主档⛔ 被自己的 <c>.bak</c> 顶掉
+    /// （<paramref name="fromBackup"/> 为真时调用方会把脏位清空、第一拍把这一份补回主档位置，见 ✅P-223 那一条线）。</para>
+    /// <para>两颗都认不出＝交回 <c>false</c>（这一颗板在盘上没有能打开的一份），⛔ 在这里猜"半颗档里也许还有东西"：
+    /// 那等于把一份引擎解不开的字节递给页面，症状会从"这块板没了"变成"这块板打不开又⛔ 说为什么"。</para>
+    /// </summary>
+    public static bool PickReadableScene(byte[]? main, byte[]? backup, out byte[] bytes, out bool fromBackup)
+    {
+        if (LooksLikeSceneDoc(main))
+        {
+            bytes = main!;
+            fromBackup = false;
+            return true;
+        }
+        if (LooksLikeSceneDoc(backup))
+        {
+            bytes = backup!;
+            fromBackup = true;
+            return true;
+        }
+        bytes = Array.Empty<byte>();
+        fromBackup = false;
+        return false;
     }
 
     private const byte StartOfDoc = (byte)'{';
