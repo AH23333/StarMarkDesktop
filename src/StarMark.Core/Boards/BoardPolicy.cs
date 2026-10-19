@@ -194,6 +194,29 @@ public static class BoardPolicy
     /// <summary>这一趟已经拒过 <paramref name="tries"/> 次，还许不许再递一次档（认不出来的颗数＝⛔ 再递，同"读不懂就不写"那条口径）。</summary>
     public static bool ShouldRetryArm(int tries) => tries >= 0 && tries < ArmRetryBudget;
 
+    /// <summary>那颗"另存一份到别处"问完系统之后，宿主手里剩下的三种结果（片29·P-226）。</summary>
+    public enum CopyPick
+    {
+        /// <summary>用户挑了一颗路径：照他挑的那颗写。</summary>
+        Chosen,
+        /// <summary>用户在那颗框里选了取消／把那颗框关了：<b>什么都不写</b>——他没要一份副本，替他写一颗就是越权。</summary>
+        Declined,
+        /// <summary>那颗框起不来（提权跨完整性级别只是其中一种成因）：退到导出目录，⛔ 把这事推回给用户（P-54 口径）。</summary>
+        Unavailable,
+    }
+
+    /// <summary>
+    /// 把"那颗框的结果"分成三档。<b>交回 <c>null</c> 有两种成因而⛔ 一种脸</b>：用户取消／宿主起不了框都长同一颗样，
+    /// 而这一侧唯一分得开的信号是<b>它有没有抛</b>：抛了＝<see cref="CopyPick.Unavailable"/>，⛔ 抛而没路径＝<see cref="CopyPick.Declined"/>。
+    /// <para>为什么这一刀要落在纯函数里（片28 那腿的真机读数才把它逼出来）：取消那一发在盘上写出了 858 字节的一份副本，
+    /// 屏幕上还念了一句"已另存到 …"——两种 <c>null</c> 走同一条兜底路＝用户点"取消"却得到一颗他没要的档＋一句与事实不符的话。</para>
+    /// </summary>
+    public static CopyPick ClassifyCopyPick(bool pickerThrew, string? pickedPath)
+        => pickerThrew ? CopyPick.Unavailable : pickedPath is not null ? CopyPick.Chosen : CopyPick.Declined;
+
+    /// <summary>这一档结果许不许往盘上写一份（⛔ 挑的＝⛔ 写；那句"已另存到 …"只许跟着真写了的那一次说）。</summary>
+    public static bool ShouldWriteCopy(CopyPick pick) => pick != CopyPick.Declined;
+
     /// <summary>
     /// 一扇画板窗在它那一生里最多<b>重建</b>几次控件（片24）。
     /// <para>为什么要有这一颗数：那颗运行时真坏掉的机器上，"重建→立刻又死"是一条<b>不需要谁帮忙就会一直跑</b>的循环，

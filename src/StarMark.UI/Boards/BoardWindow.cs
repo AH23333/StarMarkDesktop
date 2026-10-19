@@ -523,8 +523,9 @@ public sealed class BoardWindow : Window
     private void OnLocaleChanged() => PasteNotice();
 
     /// <summary>
-    /// 那颗按钮的活：把手上<b>见过的那一份</b>交出去——先问系统"另存为"，宿主调不通（提权跨完整性级别只是其中一种成因）
-    /// 就退到导出目录并把那颗路径说给用户（⛔ 因为对话框起不来就把这事推回给用户，那是 P-54 定性过的坏）。
+    /// 那颗按钮的活：把手上<b>见过的那一份</b>交出去——先问系统"另存为"；用户挑了照他挑的写，
+    /// 他取消就<b>什么都不写</b>（面板留着、那颗按钮还能再按），只有宿主调不通那颗框才退到导出目录
+    /// 并把那颗路径说给用户（⛔ 因为对话框起不来就把这事推回给用户，那是 P-54 定性过的坏）。
     /// </summary>
     private async System.Threading.Tasks.Task CopySeenSceneAsideAsync()
     {
@@ -554,9 +555,14 @@ public sealed class BoardWindow : Window
         }
     }
 
-    /// <summary>问系统"另存为"要写到哪儿；宿主不可用或用户挑不了就退到导出目录（那条路⛔ 需要对话框活着）。</summary>
+    /// <summary>
+    /// 问系统"另存为"要写到哪儿。分流只认 <c>BoardPolicy.ClassifyCopyPick</c> 那一颗判据（片28 的真机读数把它逼出来的）：
+    /// <b>用户取消＝什么都不写</b>，只有"那颗框起不来"才退到导出目录（⛔ 因为对话框起不来就把这事推回给用户＝P-54）。
+    /// </summary>
     private async System.Threading.Tasks.Task<string?> PickSavePathAsync(string suggestedName)
     {
+        string? picked = null;
+        var threw = false;
         try
         {
             var picker = new Windows.Storage.Pickers.FileSavePicker();
@@ -565,12 +571,21 @@ public sealed class BoardWindow : Window
             picker.DefaultFileExtension = BoardPolicy.SceneExtension;
             picker.FileTypeChoices.Add(BoardPolicy.SceneExtension, new[] { BoardPolicy.SceneExtension });
             var file = await picker.PickSaveFileAsync();
-            if (file is not null) return file.Path;
+            picked = file?.Path;
         }
         catch (Exception ex)
         {
+            threw = true;
             StarMark.Abstractions.StarLog.Warn("boards.copy.pick.failed: " + ex.GetType().Name);
         }
+        var pick = BoardPolicy.ClassifyCopyPick(threw, picked);
+        if (!BoardPolicy.ShouldWriteCopy(pick))
+        {
+            // 那一问要有记录（⛔ 让"发生了什么"只剩一颗空盘），而屏上留着那句"可以先另存一份到别处"＋那颗还能再按的按钮。
+            StarMark.Abstractions.StarLog.Info("boards.copy.declined id=" + _boardId);
+            return null;
+        }
+        if (pick == BoardPolicy.CopyPick.Chosen) return picked;
         System.IO.Directory.CreateDirectory(ExportsDirectory);
         return System.IO.Path.Combine(ExportsDirectory,
             _boardId + "-copy-" + BoardPolicy.FormatStamp(DateTimeOffset.Now) + BoardPolicy.SceneExtension);

@@ -342,6 +342,26 @@ public sealed class BoardPolicyTests
 
     private static byte[] Utf8(string s) => System.Text.Encoding.UTF8.GetBytes(s);
 
+    /// <summary>
+    /// 那颗"另存一份到别处"问完系统之后的三档（片28 的真机读数逼出来的口径）。
+    /// <para>坏的形状是<b>两种 null 走同一条兜底路</b>：用户在那颗框里点【取消】，交回的是 <c>null</c>，
+    /// 宿主那颗框起不来时交回的也是 <c>null</c>（或干脆抛）——旧代码对这两样一律退到导出目录，
+    /// 于是"取消"也写出一份 858 字节的档，屏幕上还念一句"已另存到 …"。
+    /// 这一侧唯一分得开的信号是<b>它有没有抛</b>，所以那颗判据住这里而⛔ 写在 UI 的 if 里。</para>
+    /// </summary>
+    [Fact]
+    public void ADeclinedSaveDialogIsNotTreatedAsAnUnavailableOne()
+    {
+        Assert.Equal(BoardPolicy.CopyPick.Chosen, BoardPolicy.ClassifyCopyPick(false, "D:\\a.excalidraw"));
+        Assert.Equal(BoardPolicy.CopyPick.Declined, BoardPolicy.ClassifyCopyPick(false, null));
+        Assert.Equal(BoardPolicy.CopyPick.Unavailable, BoardPolicy.ClassifyCopyPick(true, null));
+        // 两颗信号同时到（⛔ 真会撞见）：抛了就说那颗框没活成，⛔ 因为"手里还有一颗路径"就把它读成用户挑的
+        Assert.Equal(BoardPolicy.CopyPick.Unavailable, BoardPolicy.ClassifyCopyPick(true, "D:\\a.excalidraw"));
+        Assert.False(BoardPolicy.ShouldWriteCopy(BoardPolicy.CopyPick.Declined));   // 正件：取消＝⛔ 写
+        Assert.True(BoardPolicy.ShouldWriteCopy(BoardPolicy.CopyPick.Chosen));
+        Assert.True(BoardPolicy.ShouldWriteCopy(BoardPolicy.CopyPick.Unavailable));  // 框起不来仍要有出口（P-54）
+    }
+
     /// <summary>外层一颗、里面套三颗——这颗形状用来钉"数的是外层"。</summary>
     private static byte[] nestedOne() => Utf8("{\"elements\":[{\"elements\":[1,2,3]}]}");
 }

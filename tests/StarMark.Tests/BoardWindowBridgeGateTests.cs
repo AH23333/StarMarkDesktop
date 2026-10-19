@@ -346,6 +346,29 @@ public sealed class BoardWindowBridgeGateTests
     }
 
     /// <summary>
+    /// 那颗"另存一份到别处"按下去之后的三档<b>各走各的路</b>（片28 那腿的读数把这一刀逼出来的：
+    /// 用 <c>WM_CLOSE</c> 真把那颗框关了之后，盘上多出一份 858 字节的副本、屏幕上念出"已另存到 …"，而用户点的是【取消】）。
+    /// <para>写不写这一笔交 Core 那颗判据（<c>BoardPolicy.ClassifyCopyPick</c>／<c>ShouldWriteCopy</c>），UI 只认它的三档；
+    /// 那句"已另存到 …"从此只跟着<b>真写了</b>的那一次说。</para>
+    /// </summary>
+    [Fact]
+    public void ADeclinedCopyWritesNothingWhileAnUnavailablePickerStillFallsBack()
+    {
+        var raw = ReadRepo(WindowCs);
+        var pick = SourceGate.MethodBody(raw, "Task<string?> PickSavePathAsync");
+        var copy = SourceGate.MethodBody(raw, "Task CopySeenSceneAsideAsync");
+        Assert.Contains("BoardPolicy.ClassifyCopyPick(threw, picked)", pick, StringComparison.Ordinal);
+        Assert.Contains("BoardPolicy.ShouldWriteCopy(pick)", pick, StringComparison.Ordinal);
+        // 旧形状⛔ 许回来：null 一路落到兜底那两行＝取消也写一份（那颗 if 正是本批量到的那颗坏）
+        Assert.DoesNotContain("if (file is not null) return file.Path;", pick, StringComparison.Ordinal);
+        Assert.Contains("boards.copy.declined", pick, StringComparison.Ordinal);
+        // 兜底那颗建目录只许活在一支里，且全档一颗（两处主人＝迟早只补一颗）
+        Assert.Equal(1, Count(pick, "CreateDirectory(ExportsDirectory)"));
+        Assert.Contains("if (target is null) return;", copy, StringComparison.Ordinal);
+        Assert.Contains("boards.scene.copied", copy, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// §21.5 剩下那半：崩那一拍与关窗超时那一条⛔ 再静默。
     /// <para>决定动手的两档（重载／重建控件）当场贴"这块板正在恢复"，而那一句只跟着<b>真递出去</b>的那一下；
     /// 三圈用尽那一档反过来——它把写闸当场关掉并说"这块板没能回到画布上"＋给那颗按钮（往后确实再也好不了）。</para>
