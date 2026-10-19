@@ -25,11 +25,12 @@ public sealed class BoardWordGateTests : IDisposable
     private const string WindowCs = "src/StarMark.UI/Boards/BoardWindow.cs";
     private const string Table = "src/StarMark.Abstractions/I18n/UiStrings.cs";
 
-    /// <summary>片27 落表的那八颗（面板上的两句＋那颗按钮＋另存的两种结果＋恢复那一句＋关窗超时那两句）。</summary>
+    /// <summary>面板上那些话的名单：片27 落表的八颗＋片34 那颗「交的是手里那一份、⛔ 是屏幕上那块」（共九颗）。另存的两种结果各一颗，而那颗带槽的从此有两颗。</summary>
     private static readonly string[] Panel =
     [
         "boards.recoveringBody", "boards.stuckTitle", "boards.stuckBody", "boards.saveCopyAction",
-        "boards.copySavedBody", "boards.copyFailedBody", "boards.closeFlushTitle", "boards.closeFlushBody",
+        "boards.copySavedBody", "boards.copySavedStaleBody", "boards.copyFailedBody",
+        "boards.closeFlushTitle", "boards.closeFlushBody",
     ];
 
     private readonly AppLanguage _before = Locale.Current;
@@ -78,10 +79,13 @@ public sealed class BoardWordGateTests : IDisposable
     [Fact]
     public void TheSlotCountEqualsWhatThePanelHandsOver()
     {
-        Assert.Equal(1, RowSlots("boards.copySavedBody"));
-        Assert.Contains("Phrase(\"boards.copySavedBody\", _copyPath ?? string.Empty);",
-            Code(ReadRepoFile(WindowCs)), StringComparison.Ordinal);
-        foreach (var key in Panel.Where(k => k != "boards.copySavedBody"))
+        foreach (var keyed in new[] { "boards.copySavedBody", "boards.copySavedStaleBody" })
+        {
+            Assert.Equal(1, RowSlots(keyed));
+            Assert.Contains("Phrase(\"" + keyed + "\", _copyPath ?? string.Empty);",
+                Code(ReadRepoFile(WindowCs)), StringComparison.Ordinal);
+        }
+        foreach (var key in Panel.Where(k => k != "boards.copySavedBody" && k != "boards.copySavedStaleBody"))
         {
             Assert.Equal(0, RowSlots(key));
             Assert.Equal(0, Count(Code(ReadRepoFile(WindowCs)), "Phrase(\"" + key + "\""));
@@ -109,16 +113,16 @@ public sealed class BoardWordGateTests : IDisposable
         Assert.DoesNotContain("{0}", Locale.T("boards.stuckBody"), StringComparison.Ordinal);   // 那颗没槽的句⛔ 留一颗空洞
     }
 
-    /// <summary>⑤整族总数现读：这一族<b>十</b>颗（本批八颗＋片21 那两颗开窗失败的旧话）。
+    /// <summary>⑤整族总数现读：这一族<b>十一</b>颗（面板那九颗＋片21 那两颗开窗失败的旧话）。
     /// <para>钉总数而⛔ 钉"至少"：下一批往这一族加一句而不带证人，这一格就会红——而那一颗新句子的换语言，
     /// 是这一族最容易漏的那一半（P-175 那一族在三扇宿主上各漏过一次）。</para></summary>
     [Fact]
-    public void TheBoardFamilyHasExactlyTenRowsAndTheyAreNamed()
+    public void TheBoardFamilyHasExactlyElevenRowsAndTheyAreNamed()
     {
         var keys = UiStrings.All.Select(e => e.Key)
             .Where(k => k.StartsWith("boards.", StringComparison.Ordinal)).ToArray();
-        Assert.Equal(10, keys.Length);
-        Assert.Equal(Panel.Length + 2, keys.Length);                          // 本批八颗＋两颗旧话
+        Assert.Equal(11, keys.Length);
+        Assert.Equal(Panel.Length + 2, keys.Length);                           // 面板那九颗＋两颗旧话
         foreach (var key in Panel) Assert.Contains(key, keys);
         Assert.Contains("boards.openFailedTitle", keys);
         Assert.Contains("boards.openFailedBody", keys);

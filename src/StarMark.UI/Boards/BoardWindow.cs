@@ -102,6 +102,12 @@ public sealed class BoardWindow : Window
     /// 这一颗问"重建起来该把什么放回去"。写失败的字节<b>也算见过</b>——用户那几笔不该因为盘上付不进就凭空退场。</para></summary>
     private byte[]? _seenScene;
 
+    /// <summary>写闸<b>拒掉</b>的最近一份场景（片33 量到的那一格：面板起来之后用户画的那一笔，只有这一颗里有）。
+    /// <para>它⛔ 进 <see cref="_seenScene"/> 的那条恢复路——那是 P-223 定死过的坏法（把白屏当"见过的那一份"递回画布）。
+    /// 它只有一个消费者：那颗"另存一份到别处"，而且要先过 <see cref="BoardPolicy.ScreenSceneIsWorthSaving"/>；
+    /// 开了闸就当场清掉（那一刻起手里那份就是最新的，这一颗可疑的旧账⛔ 再配当候选）。</para></summary>
+    private byte[]? _refusedScene;
+
     /// <summary>盘上主档那一刻是哪些字节（只有宿主自己写得动它，所以这一份状态有唯一主人）。
     /// null＝这扇窗还没写过、也没<b>从主档</b>载过（新板，或档是从 <c>.bak</c> 捡回来的）。</summary>
     private byte[]? _lastWritten;
@@ -350,6 +356,11 @@ public sealed class BoardWindow : Window
             {
                 StarMark.Abstractions.StarLog.Warn(
                     "boards.scene.write.refused notArmed bytes=" + bytes.Length + " id=" + _boardId);
+                // 拒掉⛔ 等于"那几笔没发生"：片33 坏臂逐字读到用户那一笔只走到这一行之前
+                // （<c>boards.scene.write.refused notArmed bytes=2810</c>），而那颗按钮当时交出去的是载入那一份
+                // （858 字节／2 颗可写元素）。这里单独留一份给那颗按钮，⛔ 动 _seenScene／⛔ 动盘上主档：
+                // P-223 那条"把空场景当见过的那一份递回画布"的路照旧关门——上面那半段注释说的就是它，⛔ 因为这一颗而改口。
+                _refusedScene = bytes;
                 Reply(envelope.Cmd, envelope.Id, ok: false, err: "not-armed");
                 // 这一路与"停笔那一拍没开闸"是同一条静默面，而它更坏：用户已经画下的那几笔<b>一颗也没落盘</b>。
                 ShowArmStuckNotice();
@@ -435,6 +446,7 @@ public sealed class BoardWindow : Window
     {
         _autosaveArmed = true;
         _armTries = 0;                 // 开过闸，这一趟的额度就没意义了：下一次拒是新的一趟（⛔ 让旧额度累积）
+        _refusedScene = null;          // 开过闸＝从这一刻起交回来的每一份都进 _seenScene，那颗可疑候选⛔ 再配在场
         HideNotice();                  // "正在恢复"／"这一扇已停止保存"那两句都退场——它们说的已经不是事实
         StarMark.Abstractions.StarLog.Info("boards.arm.post via=" + via + evidence + " id=" + _boardId);
         PostOutbound("autosave.arm", Envelope("autosave.arm", "h5", string.Empty));
@@ -544,6 +556,12 @@ public sealed class BoardWindow : Window
                 _noticeTitle.Text = Word("boards.stuckTitle");
                 _noticeBody.Text = Phrase("boards.copySavedBody", _copyPath ?? string.Empty);
                 break;
+            case "boards.copySavedStaleBody":
+                // 屏幕上那块⛔ 是交出去的那一块（那一颗可疑字节没过判据）⇒ 这句话必须自己说清楚，
+                // ⛔ 让用户以为刚画的笔迹已经保住了（片33 坏臂量到的就是这一格）。
+                _noticeTitle.Text = Word("boards.stuckTitle");
+                _noticeBody.Text = Phrase("boards.copySavedStaleBody", _copyPath ?? string.Empty);
+                break;
             case "boards.copyFailedBody":
                 _noticeTitle.Text = Word("boards.stuckTitle");
                 _noticeBody.Text = Word("boards.copyFailedBody");
@@ -563,13 +581,18 @@ public sealed class BoardWindow : Window
     private void OnLocaleChanged() => PasteNotice();
 
     /// <summary>
-    /// 那颗按钮的活：把手上<b>见过的那一份</b>交出去——先问系统"另存为"；用户挑了照他挑的写，
+    /// 那颗按钮的活：把<b>此刻救得回来的那一份</b>交出去——屏幕上那块过了
+    /// <see cref="BoardPolicy.ScreenSceneIsWorthSaving"/> 就交那块，否则退回手里那份，而退回那一句
+    /// 必须自己说清楚（⛔ 让用户以为刚画的笔迹已经保住了）；先问系统"另存为"；用户挑了照他挑的写，
     /// 他取消就<b>什么都不写</b>（面板留着、那颗按钮还能再按），只有宿主调不通那颗框才退到导出目录
     /// 并把那颗路径说给用户（⛔ 因为对话框起不来就把这事推回给用户，那是 P-54 定性过的坏）。
     /// </summary>
     private async System.Threading.Tasks.Task CopySeenSceneAsideAsync()
     {
-        if (_copying || _seenScene is not { Length: > 0 } bytes) return;
+        if (_copying || _seenScene is not { Length: > 0 } loaded) return;
+        // 交哪一份由那颗判据定（片33 两臂成对量到的：面板起来之后画的那一笔只在被拒的那一份里）。
+        // ⛔ 动盘上主档：选出来这一份只写用户挑的那颗新档。
+        var bytes = BoardPolicy.ScreenSceneIsWorthSaving(loaded, _refusedScene) ? _refusedScene! : loaded;
         _copying = true;
         _noticeButton!.IsEnabled = false;
         try
@@ -579,8 +602,12 @@ public sealed class BoardWindow : Window
             if (target is null) return;                     // 用户自己取消的：面板留着，他还能再按
             System.IO.File.WriteAllBytes(target, bytes);
             _copyPath = target;
-            ShowNotice("boards.copySavedBody", titled: true, offerCopy: true);
-            StarMark.Abstractions.StarLog.Info("boards.scene.copied to=" + target + " id=" + _boardId);
+            ShowNotice(ReferenceEquals(bytes, loaded) ? "boards.copySavedStaleBody" : "boards.copySavedBody",
+                titled: true, offerCopy: true);
+            // 那颗 scene 列说的是"交出去的是哪一份"：screen＝屏幕上那块（含面板起来之后画的笔迹），
+            // loaded＝那颗可疑字节没过判据（多半是空画布）而退回手里那份——读数的分岔就靠这一列对回来。
+            StarMark.Abstractions.StarLog.Info("boards.scene.copied to=" + target + " id=" + _boardId
+                + " scene=" + (ReferenceEquals(bytes, loaded) ? "loaded" : "screen") + " bytes=" + bytes.Length);
         }
         catch (Exception ex)
         {

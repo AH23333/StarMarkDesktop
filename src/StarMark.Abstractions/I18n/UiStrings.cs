@@ -2668,6 +2668,7 @@ public static class UiStrings
         new Entry("boards.stuckBody", "为避免把空板写回盘上，这一扇已停止保存。可以先另存一份到别处；原因在日志里。", "To keep an empty canvas from overwriting the file, this window stopped saving. You can save a copy elsewhere first; the reason is in the log.", "空のキャンバスがファイルを上書きしないよう、このウィンドウは保存を停止しました。まず別の場所にコピーを保存できます。原因はログにあります。"),
         new Entry("boards.saveCopyAction", "另存一份到别处", "Save a copy elsewhere", "別の場所にコピーを保存"),
         new Entry("boards.copySavedBody", "已另存到 {0}", "Saved a copy to {0}", "次の場所にコピーを保存しました：{0}"),
+        new Entry("boards.copySavedStaleBody", "已另存到 {0}（这是上一次成功保存的版本，之后画的笔迹没有包含在内）", "Saved a copy to {0} (the last version that saved successfully; strokes drawn after it are not included)", "{0} にコピーを保存しました（最後に正常保存された版で、その後に描いた線は含まれていません）"),
         new Entry("boards.copyFailedBody", "没能写到那个位置，可以再试一次。", "That copy did not land; you can try again.", "その場所へのコピーに失敗しました。もう一度試せます。"),
         new Entry("boards.closeFlushTitle", "这块板的最后一笔没能等到", "The last strokes did not arrive in time", "最後の操作を待てませんでした"),
         new Entry("boards.closeFlushBody", "关窗那一拍画板没交回最后那份，窗口已经关闭。盘上留下的是之前那一份，最后几笔可能没进去；原因在日志里。", "The board did not hand back its last snapshot before the window closed, so the file on disk is the previous one and the last few strokes may be missing. Details are in the log.", "ウィンドウを閉じる際に最後のスナップショットが返らなかったため、ディスクには一つ前の版が残りました。最後の操作が含まれていない可能性があります。詳細はログにあります。"),

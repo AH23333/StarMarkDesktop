@@ -340,6 +340,41 @@ public sealed class BoardPolicyTests
         Assert.False(BoardPolicy.ShouldRetryArm(-1));          // 认不出＝⛔ 再递（与"读不懂就不写"同一颗口径）
     }
 
+    /// <summary>片33 两臂成对量到的那一格钉成判据：那颗「另存一份到别处」到底交哪一份。
+    /// <para>真读数：闸开那一臂同一双腿把主档推成 3 颗可写元素（2809 字节）；闸关那一臂里那一笔只走到
+    /// <c>boards.scene.write.refused notArmed bytes=2810</c> 就被退回，而那颗按钮当时交出去的是 2 颗／858 字节
+    /// ＝载入那一份，屏幕上却念「已另存到 &lt;路径&gt;」。少的那一格正是用户刚画上去的那一笔。</para>
+    /// <para>所以那一颗可疑字节只有一种资格：<b>数得出颗数、那颗数⛔ 是零、而且⛔ 比手里那份少</b>。
+    /// 空画布（P-223 那颗形状：2608 字节／2 元素→241 字节／0 元素）与读不懂的形状一律输——
+    /// 把白屏当救命档递出去，比少一笔更坏。同数也交屏幕上那一份：那是用户看得见的那一块。</para></summary>
+    [Theory]
+    [InlineData(0, 2, false)]     // 空画布 vs 手里两颗：交⛔ 那块
+    [InlineData(1, 0, true)]      // 手里那份读不出颗数，而屏幕有一颗：交屏幕上那块
+    [InlineData(2, 2, true)]      // 同数＝屏幕上那块
+    [InlineData(1, 2, false)]     // 屏幕上少了一颗（多半⛔ 回到那块板）：交⛔ 那块
+    [InlineData(3, 2, true)]      // 面板起来之后画的那一笔：这一颗才配救
+    public void TheRescueCopyTakesTheScreenSceneOnlyWhenItIsNotShorterThanWhatWeHold(int screen, int loaded, bool want)
+        => Assert.Equal(want, BoardPolicy.ScreenSceneIsWorthSaving(Scene(loaded), Scene(screen)));
+
+    /// <summary>读不懂／空的那一颗一律⛔ 配当救生档：交出去那一份必须数得出颗数（⛔ 把 null 折成 0 再去赢）。</summary>
+    [Fact]
+    public void TheRescueCopyRefusesASceneItCannotCount()
+    {
+        Assert.False(BoardPolicy.ScreenSceneIsWorthSaving(Scene(2), null));
+        Assert.False(BoardPolicy.ScreenSceneIsWorthSaving(Scene(2), Utf8("")));
+        Assert.False(BoardPolicy.ScreenSceneIsWorthSaving(Scene(2), Utf8("not json")));
+        Assert.False(BoardPolicy.ScreenSceneIsWorthSaving(Scene(2), Utf8("{\"elements\":null}")));
+        Assert.True(BoardPolicy.ScreenSceneIsWorthSaving(null, Scene(1)));       // 手里⛔ 有档＝屏幕上那颗是唯一候选
+    }
+
+    /// <summary>那颗场景的夹具：n 颗<b>没被标删</b>的可写元素（与 <c>CountWritableElements</c> 同口径）。</summary>
+    private static byte[] Scene(int n)
+    {
+        var items = "";
+        for (var i = 0; i < n; i++) items += (i == 0 ? "" : ",") + "{\"isDeleted\":false}";
+        return Utf8("{\"elements\":[" + items + "]}");
+    }
+
     private static byte[] Utf8(string s) => System.Text.Encoding.UTF8.GetBytes(s);
 
     /// <summary>

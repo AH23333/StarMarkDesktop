@@ -188,6 +188,26 @@ public static class BoardPolicy
     }
 
     /// <summary>
+    /// 那颗"另存一份到别处"该交哪一份：手里那份（<c>loaded</c>＝宿主见过、也是盘上主档那一份），
+    /// 还是写闸拒掉的那一份（<c>refused</c>＝用户此刻屏幕上那块）。
+    /// <para><b>为什么会有这一问</b>：片33 两臂成对量到的——同一双腿在画布上拖一道，闸开那一臂把主档推成
+    /// 3 颗可写元素（2809 字节），闸关那一臂里那一笔只走到 <c>boards.scene.write.refused notArmed bytes=2810</c>
+    /// 就被退回去，而那颗按钮当时交出去的是 <b>2 颗／858 字节</b>＝载入那一份，屏幕上却说"已另存到 &lt;路径&gt;"。
+    /// 少的正是用户刚画上去的那一笔。</para>
+    /// <para><b>为什么⛔ 无条件要那一颗</b>：它是闸门判定"这一趟页面⛔ 回到了宿主给它的那块板"之后才交回的字节，
+    /// P-223 量到的那颗形状（2608 字节／2 元素→241 字节／0 元素）就是它。所以这一颗只有一种资格：
+    /// <b>数得出颗数、那颗数⛔ 是零、而且⛔ 比手里那份少</b>——空画布与读不懂的形状永远输，
+    /// "同数或更多"才赢（同数时也交屏幕上那一份：那是用户看得见的那一块）。</para>
+    /// <para>交出去也⛔ 动主档：这一份只写用户挑的那颗新档（<see cref="SceneFileName"/> 那条路⛔ 走它）。</para>
+    /// </summary>
+    public static bool ScreenSceneIsWorthSaving(byte[]? loaded, byte[]? refused)
+    {
+        var screen = CountWritableElements(refused);
+        if (screen is null or 0) return false;
+        return screen.Value >= (CountWritableElements(loaded) ?? 0);
+    }
+
+    /// <summary>
     /// 载档那一拍页面报回的两颗数，够不够宿主开那道闸（片26 给 P-223 的修法）。
     /// <para><b>要挡的现场是真机量到的那一颗</b>：崩溃重载之后 <c>loadFromBlob</c> 的 promise 解掉了、页面照实回话，
     /// 而画布交不出可写的那几颗——盘上那块 4 元素／4936 字节的板，8 s 内被盖成 0 元素／241 字节（<c>.bak</c> 只剩一份）。</para>

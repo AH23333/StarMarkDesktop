@@ -522,6 +522,26 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Contains("_closingSameAsDisk = _closingLanded is not null;", got, StringComparison.Ordinal);
         Assert.Equal(1, Count(got, "_closingSameAsDisk"));                            // 只有那一问在等时才配改它
     }
+    /// <summary>片33 坏臂量到的那一格钉成形状证人（P-227 的落地腿）：被写闸拒掉的那一份<b>只</b>喂那颗「另存一份到别处」。
+    /// <para>四格一起钉：① 那一颗赋值只在拒的那一支里；② 开闸那一刻清掉它（手里那份已是最新，那颗可疑候选⛔ 再配在场）；
+    /// ③ 选哪一份由 Core 那颗判据定，而屏幕上那句跟着分岔走（退回手里那份时必须说出「之后画的笔迹没包含」＝措辞与实现对齐）；
+    /// ④ <c>_seenScene</c> 的主人仍只有两处（开场递档＋开了闸之后交回）——恢复那条路⛔ 认这一颗，那是 P-223 定死过的坏法。</para></summary>
+    [Fact]
+    public void TheRefusedSceneFeedsOnlyTheRescueCopyAndTheSentenceSaysWhichOneLanded()
+    {
+        var raw = ReadRepo(WindowCs);
+        var refused = SourceGate.MethodBody(raw, "void HandleExportBytes");
+        Assert.Contains("_refusedScene = bytes;", refused, StringComparison.Ordinal);
+        Assert.Contains("private byte[]? _refusedScene;", SourceGate.Code(raw), StringComparison.Ordinal);
+        Assert.Contains("_refusedScene = null;", SourceGate.MethodBody(raw, "void ArmIdleBeat"), StringComparison.Ordinal);
+        var copy = SourceGate.MethodBody(raw, "Task CopySeenSceneAsideAsync");
+        Assert.Contains("BoardPolicy.ScreenSceneIsWorthSaving(loaded, _refusedScene)", copy, StringComparison.Ordinal);
+        Assert.Contains("? \"boards.copySavedStaleBody\" : \"boards.copySavedBody\"", copy, StringComparison.Ordinal);
+        Assert.Contains("scene=\" + (ReferenceEquals(bytes, loaded) ? \"loaded\" : \"screen\")", copy, StringComparison.Ordinal);
+        Assert.Equal(1, Count(copy, "File.WriteAllBytes("));                    // 只写用户挑的那颗新档，⛔ 动主档
+        Assert.Equal(2, Count(SourceGate.Code(raw), "_seenScene = "));          // 开场＋开闸之后，⛔ 第三个写主
+    }
+
 
     /// <summary>
     /// 那块面板说的话全部住在表里，并且<b>换语言那一刻跟着换</b>。
