@@ -90,8 +90,35 @@ public sealed class BoardSceneStoreGateTests
         var move = save.IndexOf("File.Move(temp, main, overwrite: true)", StringComparison.Ordinal);
         Assert.True(0 < roll && roll < temp && temp < move,
             "写盘三处的先后＝滚→临时件→改名，现在是 roll=" + roll + " temp=" + temp + " move=" + move);
+        // 片37：那颗门必须<b>排在滚之前</b>（写在后面就只是句说明，一发也拦不住），而且整段只许滚一次
+        Assert.True(save.IndexOf("BoardPolicy.BackupRollNeeded", StringComparison.Ordinal) < roll,
+            "滚之前没问盘上那份＝那颗判据只是墙上的一张纸");
+        Assert.Equal(1, Count(save, "File.Copy(main, BackupPathOf(sceneId), overwrite: true)"));
+        Assert.Contains("private static byte[]? ReadIfExists", save, StringComparison.Ordinal);   // 读盘那一手的主人也在这一档
         Assert.Contains("catch (Exception ex)", save, StringComparison.Ordinal);
         Assert.DoesNotContain("throw", save, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// ⑭ 两颗「同不同」各管一路（片37）：内存里那份 <c>_lastWritten</c> 只管<b>要不要写</b>（⑪ 那一格），
+    /// 盘上那份只管<b>要不要滚</b>（本格）。本批修掉的正是把前者当后者那一格——它在两扇同开／外部改档／
+    /// 写失败重试三档里落后于盘，于是一发与盘上同件的写照样滚 <c>.bak</c>，把唯一那条「真正不同」的退路顶成同件。
+    /// <para><b>两颗各钉正件</b>（名册 296）：那颗 <c>rolledBackup</c> 由存储交回（UI ⛔ 再摸一遍盘＝第二个主人），
+    /// 而且必须<b>真的上日志</b>——只动盘、日志里一颗读数都不留，下一批就没法问「那一发滚了没有」（片29 那条同一条线）。</para>
+    /// </summary>
+    [Fact]
+    public void TheRollDecisionIsTakenAgainstTheDiskNotTheHostMemory()
+    {
+        var save = Between(Store, "public static bool TrySave", "public static bool TryLoad");
+        Assert.Contains("BoardPolicy.BackupRollNeeded(ReadIfExists(main), bytes)", save, StringComparison.Ordinal);
+        Assert.Equal(1, Count(save, "rolledBackup = true;"));              // 只有真滚了那一支才点亮
+        Assert.Contains("out bool rolledBackup", Store, StringComparison.Ordinal);
+        Assert.Contains("+ \" rolled=\" + rolledBackup", WindowCs, StringComparison.Ordinal);
+        var saved = Between(WindowCs,
+            "if (BoardSceneStore.TrySave(_boardId, bytes, out var fault, out var rolledBackup))", "boards.scene.save.failed");
+        Assert.Contains("StarLog.Info(\"boards.scene.saved id=", saved, StringComparison.Ordinal);
+        Assert.True(saved.IndexOf("StarLog.Info") < saved.IndexOf("Reply(envelope.Cmd, envelope.Id, ok: true);"),
+            "日志排在回话之后＝那一拍死在回话里时这一行⛔ 出现，盘上动过什么就没人知道了");
     }
 
     /// <summary>
@@ -164,7 +191,7 @@ public sealed class BoardSceneStoreGateTests
     public void TheHostRoutesSceneBytesAndAsksOnlyAfterTheBridgeIsUp()
     {
         Assert.Contains("BridgeProtocol.LandsInSceneArchive(envelope.Kind)", WindowCs, StringComparison.Ordinal);
-        Assert.Contains("BoardSceneStore.TrySave(_boardId, bytes, out var fault)", WindowCs, StringComparison.Ordinal);
+        Assert.Contains("BoardSceneStore.TrySave(_boardId, bytes, out var fault, out var rolledBackup)", WindowCs, StringComparison.Ordinal);
         Assert.Contains("save-failed", WindowCs, StringComparison.Ordinal);                 // 写不成要回一颗可上屏的故障名
         var ask = Between(WindowCs, "private void RequestSceneSnapshot", "private static string Envelope");
         Assert.Contains("if (!_bridgeReady) return;", ask, StringComparison.Ordinal);
@@ -227,7 +254,7 @@ public sealed class BoardSceneStoreGateTests
         // 收尾那颗锚点取的是"写失败"那一句<b>消息名</b>而⛔ 那颗通用的 <c>StarLog.Warn</c>：
         // 片26 在同一个方法里多加了一颗 Warn（写闸拒的那一行），按"文件里第一颗 Warn"切就切到邻居那一行去了
         // （名册 313 那一族：一把按前缀数手臂的旧闸门被同前缀的新成员扫进——要改的是问法，⛔ 放宽判据）。
-        var success = Between(WindowCs, "if (BoardSceneStore.TrySave(_boardId, bytes, out var fault))",
+        var success = Between(WindowCs, "if (BoardSceneStore.TrySave(_boardId, bytes, out var fault, out var rolledBackup))",
             "boards.scene.save.failed");
         Assert.Contains("_lastWritten = bytes;", success, StringComparison.Ordinal);   // 只有真写成的那一支点亮
         Assert.Equal(1, Count(WindowCs, "_lastWritten = bytes;"));

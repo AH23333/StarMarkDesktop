@@ -397,6 +397,40 @@ public sealed class BoardPolicyTests
         Assert.True(BoardPolicy.ShouldWriteCopy(BoardPolicy.CopyPick.Unavailable));  // 框起不来仍要有出口（P-54）
     }
 
+    /// <summary>
+    /// 滚 <c>.bak</c> 那颗判据缺的是哪一半（片37）：一发与<b>盘上那颗主档</b>同件的写⛔ 滚——滚完 <c>.bak</c>
+    /// 与新主档同件，那条退路等于没有。它⛔ 能被 <see cref="BoardPolicy.DiskAlreadyHolds"/> 顶替：那颗比的是
+    /// <b>宿主内存里</b>「我上次写出去的字节」，而内存那份在两扇同开／外部改档／写失败重试三档里落后于盘。
+    /// 两颗各管一路（要不要写／要不要滚）。
+    /// </summary>
+    [Theory]
+    [InlineData(-1, 2, false)]     // null＝主档不存在，或读不到（被人攥着／那颗 .tmp 正在改名）：没有东西可滚
+    [InlineData(2, 2, false)]      // 盘上就是这一份：滚一发同件＝把唯一那条「真正不同」的退路顶掉
+    [InlineData(1, 2, true)]       // 真的多了一颗元素：这一发要把上一版留在 .bak
+    [InlineData(2, 1, true)]       // 画小了／删了一颗也照滚（"变小"由那颗写闸与 <c>ScreenSceneIsWorthSaving</c> 管，⛔ 归这颗）
+    [InlineData(0, 2, true)]       // 盘上是一颗空档：空的那一份照样是退路（把"空"顶掉＝一次误判就再也没得回）
+    public void ARollThatWouldOnlyDuplicateTheFallbackIsSkipped(int onDisk, int incoming, bool expected)
+        => Assert.Equal(expected, BoardPolicy.BackupRollNeeded(SceneOrNull(onDisk), Scene(incoming)));
+
+    /// <summary>
+    /// 那颗判据是<b>逐颗</b>比字节而⛔ 比长度（名册 349 那一族：那颗坏只在其余条件全真那一档露脸）。
+    /// <para>两臂各钉一头：<b>等长而异</b>＝必须滚（只看长度的判据在这里会⛔ 滚，用户当场少一条退路）；
+    /// <b>等长而异颗内容相同</b>＝⛔ 滚（正件，证这把尺真的分得开"同件"与"看着一样长"）。</para>
+    /// </summary>
+    [Fact]
+    public void EqualLengthDifferentBytesStillRollsTheBackup()
+    {
+        var onDisk = Scene(2);
+        var incoming = (byte[])onDisk.Clone();
+        incoming[^2] = (byte)(incoming[^2] ^ 0x20);             // 一颗字节之差、长度照旧＝这把尺的靶子
+        Assert.Equal(onDisk.Length, incoming.Length);
+        Assert.True(BoardPolicy.BackupRollNeeded(onDisk, incoming));
+        Assert.False(BoardPolicy.BackupRollNeeded(incoming, incoming));
+        Assert.True(BoardPolicy.BackupRollNeeded(onDisk, Array.Empty<byte>()));   // 空来件也照滚：⛔ 拿"我要写空"当"不必留退路"
+    }
+
+    private static byte[]? SceneOrNull(int n) => n < 0 ? null : Scene(n);
+
     /// <summary>外层一颗、里面套三颗——这颗形状用来钉"数的是外层"。</summary>
     private static byte[] nestedOne() => Utf8("{\"elements\":[{\"elements\":[1,2,3]}]}");
 }

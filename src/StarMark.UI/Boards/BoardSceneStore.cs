@@ -15,7 +15,8 @@ namespace StarMark.UI.Boards;
 /// 但那颗<b>根</b>照旧问 <see cref="UserDataPaths"/>（片23：落点规则只许一颗主人，沙盒改道才带得动画板档）。
 /// </para>
 /// <para>
-/// <b>写的那条顺序是有原因的</b>：先把现档滚成 <c>.bak</c>（只留最近一份），再把新字节写进 <c>*.tmp</c>，
+/// <b>写的那条顺序是有原因的</b>：先把现档滚成 <c>.bak</c>（只留最近一份，而且<b>那一发与盘上同件的写⛔ 滚</b>——
+/// 滚下去只会把唯一那条「真正不同」的退路顶成同件，判据在 <see cref="BoardPolicy.BackupRollNeeded"/>，片37），再把新字节写进 <c>*.tmp</c>，
 /// 最后同卷改名盖过去。进程死在任何一步，盘上留下的都是「上一份完整档 ＋ 至多一颗临时件」，
 /// 而⛔ 是「主档被截成半颗」——本仓那条「读档⛔ 截零」的旧规矩在这里的同一条线。
 /// </para>
@@ -39,9 +40,10 @@ public static class BoardSceneStore
     /// <para>那颗 id 先过 <see cref="BoardPolicy.IsSceneId"/>：形状不对就连名字都不拼——
     /// 这条桥的字节来自 web 侧，而"哪颗板"这件事必须由宿主的身份判据说了算（⛔ 拿内容当身份）。</para>
     /// </summary>
-    public static bool TrySave(string? sceneId, byte[] bytes, out string? fault)
+    public static bool TrySave(string? sceneId, byte[] bytes, out string? fault, out bool rolledBackup)
     {
         fault = null;
+        rolledBackup = false;
         if (sceneId is null || !BoardPolicy.IsSceneId(sceneId))
         {
             fault = "bad-id";
@@ -51,8 +53,14 @@ public static class BoardSceneStore
         {
             System.IO.Directory.CreateDirectory(Folder);
             var main = PathOf(sceneId);
-            if (System.IO.File.Exists(main))
+            // 滚之前先问<b>盘上那份</b>（判据住 Core，片37）：宿主内存里那份「我上次写了什么」会落后于盘
+            // （两扇同开同一颗板／外部同步工具改了档／上一发写失败之后重试），而一发与盘上同件的写滚下去
+            // 只会把唯一那条「真正不同」的退路顶成同件——退路当场少一条，而且少的是唯一那条。
+            if (BoardPolicy.BackupRollNeeded(ReadIfExists(main), bytes))
+            {
                 System.IO.File.Copy(main, BackupPathOf(sceneId), overwrite: true);
+                rolledBackup = true;
+            }
             var temp = main + TempSuffix;
             System.IO.File.WriteAllBytes(temp, bytes);
             System.IO.File.Move(temp, main, overwrite: true);
@@ -63,6 +71,16 @@ public static class BoardSceneStore
             fault = ex.GetType().Name;
             return false;
         }
+    }
+
+    /// <summary>
+    /// 盘上那份主档（不存在＝null；读不动＝也 null：被人攥着，或那颗 <c>.tmp</c> 正在改名的那一瞬间）。⛔ 抛。
+    /// <para>这一颗只服务一个问句——「滚了会不会白丢一条退路」——所以它⛔ 参与载入，也不交回给调用方当事实。</para>
+    /// </summary>
+    private static byte[]? ReadIfExists(string path)
+    {
+        try { return System.IO.File.Exists(path) ? System.IO.File.ReadAllBytes(path) : null; }
+        catch (Exception) { return null; }
     }
 
     /// <summary>

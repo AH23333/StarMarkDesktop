@@ -83,6 +83,20 @@ public static class BoardPolicy
         => lastWritten is not null && lastWritten.AsSpan().SequenceEqual(next);
 
     /// <summary>
+    /// 滚<b>这一次</b> <see cref="BackupSuffix"/> 会不会白丢一条退路（片37；§21.4 那颗脏位缺的另一半）。
+    /// <para><see cref="DiskAlreadyHolds"/> 比的是<b>宿主内存里</b>那份「我上次写出去的字节」，而盘上那颗主档由不得它：
+    /// 两扇同开同一颗板（片32 量过那张形状）、外部同步工具改档、上一发写失败之后重试——这三档里内存那份都落后于盘。
+    /// 于是照样会滚一发「其实与盘上同件」的写：<c>.bak</c> 被顶成与新主档同一份，
+    /// 上面那句<b>「退路当场少一条」</b>说的正是这件事——当时只堵了内存那一路，盘上那一路照旧漏。</para>
+    /// <para><c>onDisk</c> 为 null＝主档不存在<b>或读不到</b>：读不到就判不了，而这一发的写多半也成不了
+    /// （同一颗文件被人攥着），⛔ 拿一颗读不到的盘去顶掉唯一那条「真正不同」的退路。
+    /// 与来件逐颗相等＝滚完 <c>.bak</c> 与新主档同件＝那条退路等于没有 ⇒ ⛔ 滚。其余照旧滚（这才是「上一份」）。</para>
+    /// <para>判据住 Core＝「要不要动用户数据」这件事⛔ 由 UI 再算一遍；存储那一档只负责把盘上那份读给它看。</para>
+    /// </summary>
+    public static bool BackupRollNeeded(byte[]? onDisk, byte[] incoming)
+        => onDisk is not null && !onDisk.AsSpan().SequenceEqual(incoming);
+
+    /// <summary>
     /// 主干名里那颗时刻的格式（<c>yyMMdd-HHmmss</c> 那一颗形状，本地时刻）。
     /// <para><b>写成 <c>yyMMdd-HHmmss</c> 而不是直觉的 <c>yymmdd</c></b>：.NET 的自定义格式里
     /// <c>mm</c> 恒为<b>分钟</b>、月份只有 <c>MM</c>——那颗形状要的是"年月日-时分秒"，

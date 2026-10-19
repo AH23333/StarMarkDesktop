@@ -396,9 +396,13 @@ public sealed class BoardWindow : Window
                 FinishClosingFlush();
                 return;
             }
-            if (BoardSceneStore.TrySave(_boardId, bytes, out var fault))
+            if (BoardSceneStore.TrySave(_boardId, bytes, out var fault, out var rolledBackup))
             {
                 _lastWritten = bytes;   // 这一刻起盘上主档就是这份字节
+                // 这一行报的是<b>盘上发生了什么</b>（片37）：滚没滚那颗 <c>.bak</c> 决定用户手里还有没有一条
+                // 「真正不同」的退路，而「写成功了」那一句听不出这一格——同件的写照样成功，照旧会把退路顶掉。
+                StarMark.Abstractions.StarLog.Info("boards.scene.saved id=" + _boardId
+                    + " bytes=" + bytes.Length + " rolled=" + rolledBackup);
                 Reply(envelope.Cmd, envelope.Id, ok: true);
             }
             else
