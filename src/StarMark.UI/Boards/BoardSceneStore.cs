@@ -53,9 +53,12 @@ public static class BoardSceneStore
         {
             System.IO.Directory.CreateDirectory(Folder);
             var main = PathOf(sceneId);
-            // 滚之前先问<b>盘上那份</b>（判据住 Core，片37）：宿主内存里那份「我上次写了什么」会落后于盘
+            // 滚之前先问<b>盘上那份</b>（判据住 Core，片37／片38）：宿主内存里那份「我上次写了什么」会落后于盘
             // （两扇同开同一颗板／外部同步工具改了档／上一发写失败之后重试），而一发与盘上同件的写滚下去
             // 只会把唯一那条「真正不同」的退路顶成同件——退路当场少一条，而且少的是唯一那条。
+            // 片38 补的是同一条线上的另一半：盘上那份<b>读得出却⛔ 是一颗档</b>（0 字节／截在半路）时它与来件当然不同，
+            // 照滚＝把还能打开的那颗 .bak 顶成垃圾——那颗「该不该留」的形状判据也住在 Core（LooksLikeSceneDoc），
+            // 存储这一档⛔ 自己再判一遍「长不长得像一颗档」（那才是第二个主人）。
             if (BoardPolicy.BackupRollNeeded(ReadIfExists(main), bytes))
             {
                 System.IO.File.Copy(main, BackupPathOf(sceneId), overwrite: true);

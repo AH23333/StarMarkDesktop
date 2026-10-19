@@ -431,6 +431,43 @@ public sealed class BoardPolicyTests
 
     private static byte[]? SceneOrNull(int n) => n < 0 ? null : Scene(n);
 
+    /// <summary>
+    /// 那颗滚 <c>.bak</c> 的判据缺的第二半（片38＝P-234）：盘上那份<b>读得出来却⛔ 是一颗档</b>时，
+    /// 它与来件当然「不同」，于是照滚——而这一滚把唯一那条<b>还能打开</b>的 <c>.bak</c> 顶成垃圾。
+    /// <para>三臂各钉一头，两颗正件都在里面：0 字节⛔ 滚／截掉尾括弧（半颗）⛔ 滚／形状齐全又不同<b>照滚</b>。
+    /// ⚠ 那颗「半颗」用 <c>Scene(2)[..^1]</c> 造：序列化器写出去的那颗档尾括弧是最后一颗字节，
+    /// 抹掉它就得到一颗「读得出、却⛔ 是档」的字节串——比手打一串乱码更接近出事那一拍的真形状。</para>
+    /// </summary>
+    [Fact]
+    public void AGarbageMainFileIsNotWorthRollingOverTheFallback()
+    {
+        var incoming = Scene(3);
+        Assert.False(BoardPolicy.BackupRollNeeded(Array.Empty<byte>(), incoming));       // 0 字节：滚出去＝把退路换成空
+        Assert.False(BoardPolicy.BackupRollNeeded(Scene(2)[..^1], incoming));             // 截在半路：滚出去＝把退路换成半颗
+        Assert.False(BoardPolicy.BackupRollNeeded(Utf8("{\"elements\":[{\"isDeleted\":false"), incoming));   // 另一颗截法：尾括弧还没写下来
+        Assert.True(BoardPolicy.BackupRollNeeded(Scene(2), incoming));                    // 正件：形状齐全、又真的不同＝照滚
+    }
+
+    /// <summary>
+    /// <see cref="BoardPolicy.LooksLikeSceneDoc"/> 那颗形状判据自己的臂（⛔ 解 JSON，只问首尾那两个括弧）。
+    /// <para>两颗<b>正件</b>各在头尾（名册 296：禁项判据必须自带正件）：<c>{}</c> 那颗空档形状也是档（留着比留一颗空字节强），
+    /// 两头留白也还是档（序列化器⛔ 在两头留白，留白⛔ 是坏形状的理由）。负件＝null／0 字节／单颗括弧／只有头／只有尾。</para>
+    /// <para>⚠ <b>那颗尺量不到的那一维也钉在这里</b>：两颗档拼成一串（<c>{"a":1}{"b":2}</c>）首尾括弧齐全＝判「还是档」。
+    /// 要判它得真去配一遍括弧（＝在这里跑解析器，而这颗判据每拍都要读盘），而那一串的出现只有<b>外部拼接</b>一种门路，
+    /// 漏判的代价＝那一发照滚＝退路换成那颗拼错的档（⛔ 比改成「读不通就不滚」更坏的那一侧）。⇒ 记进 ✅P-234 那颗边界。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(null, false)]                 // ⛔ 存在（或读不到）＝认不出
+    [InlineData("", false)]                   // 0 字节
+    [InlineData("{}", true)]                  // 空档也是档
+    [InlineData("  {\"a\":1}\n", true)]        // 两头留白
+    [InlineData("{", false)]                   // 单颗字节凑不出两颗括弧
+    [InlineData("{\"a\":1", false)]            // 缺尾＝截在半路
+    [InlineData("\"a\":1}", false)]            // 缺头＝被人塞了别的东西
+    [InlineData("{\"a\":1}{\"b\":2}", true)]   // ⚠ 两颗拼在一起＝这把尺量不到（首尾括弧都在），上面那段说的就是这一臂
+    public void TheShapeJudgeReadsBracesAndNothingElse(string? text, bool expected)
+        => Assert.Equal(expected, BoardPolicy.LooksLikeSceneDoc(text is null ? null : Utf8(text)));
+
     /// <summary>外层一颗、里面套三颗——这颗形状用来钉"数的是外层"。</summary>
     private static byte[] nestedOne() => Utf8("{\"elements\":[{\"elements\":[1,2,3]}]}");
 }

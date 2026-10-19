@@ -91,10 +91,44 @@ public static class BoardPolicy
     /// <para><c>onDisk</c> 为 null＝主档不存在<b>或读不到</b>：读不到就判不了，而这一发的写多半也成不了
     /// （同一颗文件被人攥着），⛔ 拿一颗读不到的盘去顶掉唯一那条「真正不同」的退路。
     /// 与来件逐颗相等＝滚完 <c>.bak</c> 与新主档同件＝那条退路等于没有 ⇒ ⛔ 滚。其余照旧滚（这才是「上一份」）。</para>
+    /// <para><b>片38 补上的另一半（P-234）</b>：光问「同不同」还不够，还得问<b>盘上那份还认不认得出是一颗板档</b>——
+    /// 一颗 0 字节／半颗（截在 JSON 对象中间）的主档与来件<b>当然</b>不同，于是照滚，
+    /// 而这一滚把唯一那条<b>还能打开</b>的 <c>.bak</c> 顶成了垃圾：<c>TryLoad</c> 的退路读的正是它。
+    /// 「退路当场少一条」这句话在同一发上第二次成立，片37 只堵了第一次那一半。
+    /// ⚠ 那颗形状判据＝<see cref="LooksLikeSceneDoc"/>，它⛔ 解 JSON——这颗只问「首尾那两个括弧还在不在」。</para>
     /// <para>判据住 Core＝「要不要动用户数据」这件事⛔ 由 UI 再算一遍；存储那一档只负责把盘上那份读给它看。</para>
     /// </summary>
     public static bool BackupRollNeeded(byte[]? onDisk, byte[] incoming)
-        => onDisk is not null && !onDisk.AsSpan().SequenceEqual(incoming);
+        => onDisk is { Length: > 0 } && LooksLikeSceneDoc(onDisk) && !onDisk.AsSpan().SequenceEqual(incoming);
+
+    /// <summary>
+    /// 那串字节<b>还认得出是一颗板档</b>吗（片38；只问形状，⛔ 解析内容）。
+    /// <para><b>为什么只问首尾</b>：这颗判据要答的不是「这份档能不能载入」（那是 <c>TryLoad</c> 之后引擎的事），
+    /// 而是「拿它去顶掉唯一那条退路<b>划不划算</b>」。一颗连 JSON 对象那两个括弧都凑不齐的字节串——0 字节、
+    /// 截在半路、被人塞了别的东西——当退路＝下次真出事时那一头也是死的；而凑齐了括弧的档哪怕内容坏，
+    /// 也还是<b>引擎自己写出去的那一颗档的形状</b>，留着比留一颗空档强。⛔ 在这里跑解析器：那颗判据的代价是
+    /// 每拍都要读一遍盘，而「能不能载入」这件事只有真出事那一拍才需要答案。</para>
+    /// <para>空／null／只有一个括弧＝认不出。首尾之外的那点空白（<c>\n</c>／<c>\t</c>／<c>\r</c>／空格）跳过——
+    /// 序列化器自己⛔ 在两头留白，留白⛔ 是坏形状的理由。</para>
+    /// <para>⚠ <b>量不到的那一维</b>：两颗档拼成一串（首尾括弧都在）判得出「还是档」而判不出「只有一颗」——
+    /// 要判那颗得真去配一遍括弧（＝每拍读盘时跑一次解析）。那颗门路只有外部拼接一种，而漏判的代价只是「那一发照旧滚」
+    /// ＝<b>回到本批改前的行为</b>，⛔ 是比改前更坏的新行为。⇒ 这一维<b>明知而⛔ 堵</b>，记进账本那条边界。</para>
+    /// </summary>
+    public static bool LooksLikeSceneDoc(byte[]? bytes)
+    {
+        if (bytes is null or { Length: 0 }) return false;
+        var first = 0;
+        var last = bytes.Length - 1;
+        while (first < last && IsPadding(bytes[first])) first++;
+        while (last > first && IsPadding(bytes[last])) last--;
+        return bytes[first] == StartOfDoc && bytes[last] == EndOfDoc;
+    }
+
+    private const byte StartOfDoc = (byte)'{';
+    private const byte EndOfDoc = (byte)'}';
+
+    /// <summary>那颗档头尾允许的那四颗空白（⛔ 认全 <c>char.IsWhiteSpace</c>：那颗认 Unicode 空白，而这里要的只是序列化器会写的那四颗）。</summary>
+    private static bool IsPadding(byte b) => b is (byte)' ' or (byte)'\t' or (byte)'\n' or (byte)'\r';
 
     /// <summary>
     /// 主干名里那颗时刻的格式（<c>yyMMdd-HHmmss</c> 那一颗形状，本地时刻）。

@@ -21,6 +21,7 @@ public sealed class BoardSceneStoreGateTests
     private static readonly string RepoRoot = FindRoot();
     private static readonly string Js = Read("tools/boards/board-bridge.js");
     private static readonly string Store = Read("src/StarMark.UI/Boards/BoardSceneStore.cs");
+    private static readonly string BoardPolicySrc = Read("src/StarMark.Core/Boards/BoardPolicy.cs");
     private static readonly string WindowCs = Read("src/StarMark.UI/Boards/BoardWindow.cs");
     private static readonly string Envelope = Read("src/StarMark.UI/Boards/BoardEnvelope.cs");
     private static readonly string Tray = Read("src/StarMark.UI/MainWindow.Tray.cs");
@@ -111,6 +112,11 @@ public sealed class BoardSceneStoreGateTests
     {
         var save = Between(Store, "public static bool TrySave", "public static bool TryLoad");
         Assert.Contains("BoardPolicy.BackupRollNeeded(ReadIfExists(main), bytes)", save, StringComparison.Ordinal);
+        // 片38（P-234）：那颗「盘上那份还是不是一颗档」也归 Core——存储这一档⛔ 自己再判一遍形状／空，那是第二个主人。
+        // ⚠ 禁项读的是<b>抹掉注释后</b>的代码：本批那句说明本来就要提到那颗判据的名字（名册 308 那一族）。
+        Assert.DoesNotContain("LooksLikeSceneDoc", SourceGate.Code(Store), StringComparison.Ordinal);
+        Assert.DoesNotContain("Length >", SourceGate.Code(Store), StringComparison.Ordinal);
+        Assert.Contains("private static bool IsPadding", SourceGate.Code(BoardPolicySrc), StringComparison.Ordinal);  // 那颗形状判据的主人只有 Core
         Assert.Equal(1, Count(save, "rolledBackup = true;"));              // 只有真滚了那一支才点亮
         Assert.Contains("out bool rolledBackup", Store, StringComparison.Ordinal);
         Assert.Contains("+ \" rolled=\" + rolledBackup", WindowCs, StringComparison.Ordinal);
