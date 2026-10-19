@@ -28,6 +28,8 @@ namespace StarMark.UI.Boards;
 /// <para><b>§21.3 那四拍都接上了线</b>。剩下那两拍各自能做的事⛔ 一样：
 /// <b>关窗</b>那一拍走 <c>AppWindow.Closing</c>——拦一次、窗先 Hide（用户⛔ 等那两秒）、向页面索取一份快照并<b>有界</b>等它落地
 /// （<see cref="BoardPolicy.CloseFlushBudgetMs"/>），到点照样关（⛔ 把用户的退出键抵押给一颗卡住的网页）；
+/// <b>可那一拍撞见的是"页面交回了、而被写闸拒掉"，⛔ 关</b>——那颗窗先 Hide 了，把那两行字留在藏着的窗上＝一句没人看得见的坏话，
+/// 所以把它亮回屏幕、让用户当场看得见那句、按得动那颗「另存一份到别处」（片35；他再点一次×就是他的决定）；
 /// <b>渲染进程挂了</b>那一拍<b>问不到</b>任何东西（页面已死，<see cref="BoardPolicy.BeatCanAskForSnapshot"/> 就为此而住 Core），
 /// 它的活是按档恢复（<see cref="BoardPolicy.RecoveryForFailure"/>：重建控件／重载／只上报）＋ 桥第二次 ready 时把
 /// <em>宿主见过的那一份</em>递回去——重载之后⛔ 许回到空板，也⛔ 许静默白屏（§21.5）。</para>
@@ -115,6 +117,17 @@ public sealed class BoardWindow : Window
 
     /// <summary>关窗那一拍已经拦过一次（第二拍照常走下去——⛔ 让那扇窗永远关不掉）。</summary>
     private bool _closeFlushDone;
+
+    /// <summary>
+    /// 关窗那一拍等回来的那份字节是<b>被写闸拒掉的</b>（而⛔ "页面压根没回答"）。
+    /// <para>这两件事从前长得一样：拒的那一支也算"这一问有答案"（<see cref="FinishClosingFlush"/> 当场结掉等待，
+    /// ⛔ 让用户白等那两秒），于是 <c>landed=True</c> 与"那颗窗已经 Hide 了"拼在一起＝
+    /// 用户画的那几笔一颗也没落盘，而屏幕上<b>一句也⛔</b>——那句坏话（<c>boards.stuckBody</c> 那两行＋那颗「另存一份到别处」）
+    /// 贴在一颗藏着的面板上（P-224／P-227 那一族的第三种脸：话是真的，宿主⛔ 在场）。</para>
+    /// <para>这颗数只有一位消费者：<see cref="FlushThenCloseAsync"/> 拿它决定"关掉"还是"把窗亮回来"。
+    /// 一问一复位（与 <see cref="_closingSameAsDisk"/> 同一颗口径），⛔ 让上一拍的旧账替这一拍说话。</para>
+    /// </summary>
+    private bool _closingRefused;
 
     /// <summary>已进入拆窗过程（含那次有界等待）：这一段时间里来的进程失效消息<b>只上报</b>，⛔ 再往一颗正在拆的窗上重建控件。</summary>
     private bool _tearingDown;
@@ -361,6 +374,9 @@ public sealed class BoardWindow : Window
                 // （858 字节／2 颗可写元素）。这里单独留一份给那颗按钮，⛔ 动 _seenScene／⛔ 动盘上主档：
                 // P-223 那条"把空场景当见过的那一份递回画布"的路照旧关门——上面那半段注释说的就是它，⛔ 因为这一颗而改口。
                 _refusedScene = bytes;
+                // 这一拍如果正被关窗那一拍等着，"拒"与"没回答"对那颗等待是同一颗答案，对用户却是两回事：
+                // 前者那几笔<b>确实一颗也没进盘</b>，而那句话必须让他看见（见 <see cref="_closingRefused"/>）。
+                _closingRefused = _closingLanded is not null;      // 只有那一问在等时才配改它（与那颗 same= 一问一复位同口径）
                 Reply(envelope.Cmd, envelope.Id, ok: false, err: "not-armed");
                 // 这一路与"停笔那一拍没开闸"是同一条静默面，而它更坏：用户已经画下的那几笔<b>一颗也没落盘</b>。
                 ShowArmStuckNotice();
@@ -705,6 +721,18 @@ public sealed class BoardWindow : Window
     private async System.Threading.Tasks.Task FlushThenCloseAsync()
     {
         await FlushSnapshotAsync("window", notice: true);
+        // 那一拍撞见的若是"页面交回了、而被写闸拒掉"（⛔ "两秒内压根没回答"——后者已经走右下角那颗卡），
+        // 那几笔一颗也没进盘，而此刻那颗窗是<b>藏着的</b>：面板上那两行字与那颗「另存一份到别处」贴在一颗⛔ 看得见的窗上＝
+        // 一句没人能看见的坏话。⇒ 这一支⛔ 关：把窗亮回来，让用户当场看见那句话、当场按那颗按钮（片34 那颗候选字节正是它能救的东西）。
+        // 他要是还想关，再点一次×就是他的决定——_closeFlushDone 已经挡掉第二拦，那颗窗这一回直接退。
+        // ⚠ _tearingDown 照旧留着：这一趟之后那颗页已经证明"交回的字节⛔ 可信"，为它重建一扇⛔ 听过这句话的新窗反而误导。
+        if (_closingRefused)
+        {
+            AppWindow.Show();
+            Activate();                     // Show 只管回可见；那颗按钮要点得中，得让这扇窗回到他眼前
+            StarMark.Abstractions.StarLog.Info("boards.close.revive on=refused id=" + _boardId);
+            return;
+        }
         Close();
     }
 
@@ -722,6 +750,7 @@ public sealed class BoardWindow : Window
             System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
         _closingLanded = landed;
         _closingSameAsDisk = false;
+        _closingRefused = false;          // 一问一复位：⛔ 让上一拍的"被拒"替这一拍说话
         await System.Threading.Tasks.Task.Delay(BoardPolicy.CloseFlushGraceMs);
         RequestSceneSnapshot(BoardPolicy.SaveBeat.ClosingWindow);
         var budget = System.Threading.Tasks.Task.Delay(BoardPolicy.CloseFlushBudgetMs);

@@ -543,6 +543,43 @@ public sealed class BoardWindowBridgeGateTests
     }
 
 
+    /// <summary>片35：用户关窗那一拍撞见<b>写闸拒</b>时，那颗窗必须亮回屏幕上（⛔ 带着那句没人看得见的话退场）。
+    /// <para>坏的形状是"<c>landed=True</c> 有两种真法"里最坏那一种：拒掉也算答案（片27 为了⛔ 让用户白等两秒定的），
+    /// 于是那一拍醒来就 <c>Close()</c>——而那两行字与那颗「另存一份到别处」贴在<b>一颗已经 Hide 的窗</b>上
+    /// （P-224／P-227 那一族的第三种脸：话是真的，宿主⛔ 在场）。</para>
+    /// <para>四格一起钉：① 那颗标志<b>只在拒的那一支</b>里、而且<b>只有那一问在等时</b>才配改（一问一复位，与 <c>same=</c> 同口径）；
+    /// ② 它排在 <c>FinishClosingFlush()</c> <b>之前</b>——那一拍随时会醒，醒了就得读到这一拍的账；
+    /// ③ 每一拍起手清一次（⛔ 让上一拍的"被拒"替这一拍说话）；④ 关窗那一手的分岔：被拒⇒<c>Show</c>＋<c>Activate</c>＋一句日志就 <c>return</c>，
+    /// 其余照旧 <c>Close()</c> 且<b>只有一颗</b>（那颗超时那一支⛔ 改道，它已经走右下角那张卡）。</para></summary>
+    [Fact]
+    public void TheCloseBeatBringsTheWindowBackWhenWhatCameWasARefusal()
+    {
+        var raw = ReadRepo(WindowCs);
+        // 那颗计数读的是<b>抹掉注释后的方法体</b>：我给那一支写的 doc-comment 里提了那颗字段的名，
+        // 拿原文数就会把"给人看的理由"数成第二个出口（规则 #131 同族，与那颗面板格同一条口径）。
+        var got = SourceGate.MethodBody(SourceGate.Code(raw), "void HandleExportBytes");
+        Assert.Contains("_closingRefused = _closingLanded is not null;", got, StringComparison.Ordinal);
+        Assert.Equal(1, Count(got, "_closingRefused"));                                  // 只有那一问在等时才配改它
+        Assert.True(got.IndexOf("_closingRefused", StringComparison.Ordinal)
+                    < got.IndexOf("FinishClosingFlush();", StringComparison.Ordinal),     // 拒的那一支排在最前＝第一颗结掉等待
+                    "那颗标志排在结掉等待之后＝那一拍先醒了，读到的还是上一拍的旧账");
+        Assert.Contains("_closingRefused = false;",
+            SourceGate.MethodBody(SourceGate.Code(raw), "Task<bool> FlushSnapshotAsync"), StringComparison.Ordinal);   // 一问一复位
+        var close = SourceGate.MethodBody(SourceGate.Code(raw), "Task FlushThenCloseAsync");
+        Assert.Contains("if (_closingRefused)", close, StringComparison.Ordinal);
+        Assert.Contains("AppWindow.Show();", close, StringComparison.Ordinal);
+        Assert.Contains("Activate();", close, StringComparison.Ordinal);                  // Show 只管回可见，那颗按钮要点得中
+        Assert.Contains("boards.close.revive on=refused id=", close, StringComparison.Ordinal);
+        Assert.True(close.IndexOf("if (_closingRefused", StringComparison.Ordinal) < close.IndexOf("Close();", StringComparison.Ordinal),
+            "分岔⛔ 排在关之前＝那句坏话又挂在一颗藏着的窗上");
+        Assert.Contains("return;", close, StringComparison.Ordinal);                     // 那颗分岔得<b>走掉</b>：只亮不回＝照样关
+        Assert.True(close.IndexOf("return;", StringComparison.Ordinal) < close.IndexOf("Close();", StringComparison.Ordinal),
+            "那颗 return 排在关之后＝亮回来又立刻关掉＝这一格⛔ 有牙");
+        Assert.Equal(1, Count(close, "Close();"));                                        // ⛔ 多一颗出口，也⛔ 把超时那一支一起改了
+        Assert.Equal(4, Count(SourceGate.Code(raw), "_closingRefused"));                  // 声明／那一支／复位／分岔，⛔ 第五颗主人
+    }
+
+
     /// <summary>
     /// 那块面板说的话全部住在表里，并且<b>换语言那一刻跟着换</b>。
     /// <para>这一格里最要紧的是那颗按钮：它的字是<b>构造时</b>一次性冻进去的 <c>Content</c>，
