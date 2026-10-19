@@ -187,7 +187,7 @@ public sealed class ThemeAccentWordGateTests : IDisposable
         Assert.Equal(1, Count(xaml, "ViewModel.ThemeAccentColor, Mode=TwoWay"));
         Assert.Equal(1, Count(xaml, "ViewModel.ThemeAccentBrush, Mode=OneWay"));
         Assert.Equal(0, Count(xaml, "ViewModel.ThemeAccentBrush, Mode=TwoWay"));        // 那颗是读数⛔ 是入口
-        Assert.Equal(2, Count(xaml, "ViewModel.CustomAccentVisible, Mode=OneWay"));      // 取色格＋预览方块同进同退
+        Assert.Equal(3, Count(xaml, "ViewModel.CustomAccentVisible, Mode=OneWay"));      // 取色格＋白衬＋那颗串同进同退（P-215 加的两颗都跟着那一档）
 
         var vm = Code(ReadRepoFile(ViewModel));
         Assert.Equal(1, Count(vm, "private int _accentIndex"));

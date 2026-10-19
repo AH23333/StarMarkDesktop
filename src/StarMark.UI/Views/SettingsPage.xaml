@@ -154,11 +154,23 @@
                                                  Visibility="{x:Bind ViewModel.CustomAccentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}"
                                                  Color="{x:Bind ViewModel.ThemeAccentColor, Mode=TwoWay}"/>
                                     <!-- 那颗预览方块：选完得看见自己点的是哪颗（润色器自己不带预览格，⛔ 让用户猜）。
-                                         它自己⛔ 写宽度——那一颗宽由上面那格给（同批⛔ 两处各写一个数）。 -->
-                                    <Rectangle Height="26" RadiusX="4" RadiusY="4"
-                                               Stroke="{ThemeResource CardStrokeColorDefaultBrush}" StrokeThickness="1"
+                                         它自己⛔ 写宽度——那一颗宽由上面那格给（同批⛔ 两处各写一个数）。
+                                         ⚠ 那颗方块⛔ 直接压在卡背上：深色卡现读 #4c4a48 压在 #2c2c2c 上逐通道只差 32⇒
+                                         肉眼认不出那到底是颗什么颜色（✅P-214 量到的正是这一条的下半）。
+                                         下面那块中性白＝用户逐字给的口径「取色时使用白色背景进行衬托，方便识别颜色」，
+                                         而它<b>故意</b>走字面 White 而⛔ ThemeResource：那层衬要跟主题一起变黑的话，
+                                         深色主题下这一格就回到「方块压在暗底上」那颗坏的原样（P-215）。 -->
+                                    <Border Background="White" CornerRadius="6" Padding="6"
+                                            Visibility="{x:Bind ViewModel.CustomAccentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                                        <Rectangle Height="26" RadiusX="4" RadiusY="4"
+                                                   Stroke="{ThemeResource CardStrokeColorDefaultBrush}" StrokeThickness="1"
+                                                   Fill="{x:Bind ViewModel.ThemeAccentBrush, Mode=OneWay}"/>
+                                    </Border>
+                                    <!-- 那颗 hex＝同一条读数的另一种念法（纯白压在白衬上仍然糊，而串永远读得清）。
+                                         它是<b>读数</b>而⛔ 句子⇒⛔ 进语言表、⛔ 另算一遍：串只由 AppPalette.ToHexText 一颗给。 -->
+                                    <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                Visibility="{x:Bind ViewModel.CustomAccentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}"
-                                               Fill="{x:Bind ViewModel.ThemeAccentBrush, Mode=OneWay}"/>
+                                               Text="{x:Bind ViewModel.ThemeAccentHex, Mode=OneWay}"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>

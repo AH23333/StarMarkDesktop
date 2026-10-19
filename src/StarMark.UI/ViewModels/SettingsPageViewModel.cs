@@ -68,8 +68,14 @@ public partial class SettingsPageViewModel : ObservableObject
     /// </summary>
     public Microsoft.UI.Xaml.Media.SolidColorBrush ThemeAccentBrush => new(ThemeAccentColor);
 
+    /// <summary>那颗方块的<b>同一条读数</b>换成文字：深色卡上纯色方块压暗底认不出（P-215），而纯白染料连白衬都会糊平等。</summary>
+    public string ThemeAccentHex => AppPalette.ToHexText(ThemeAccentColor);
+
     partial void OnThemeAccentColorChanged(Windows.UI.Color value)
-        => OnPropertyChanged(nameof(ThemeAccentBrush));
+    {
+        OnPropertyChanged(nameof(ThemeAccentBrush));
+        OnPropertyChanged(nameof(ThemeAccentHex));   // ⛔ 只notify一颗：那颗串会冻在上一个颜色上
+    }
 
     partial void OnAccentIndexChanged(int value) => OnPropertyChanged(nameof(CustomAccentVisible));
 
