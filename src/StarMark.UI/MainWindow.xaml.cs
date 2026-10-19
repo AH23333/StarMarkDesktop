@@ -18,6 +18,7 @@ using StarMark.Core.Widgets;
 using StarMark.Integrations.SystemTray;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
+using StarMark.UI.Boards;
 using WinUIEx;
 using StarMark.UI.ViewModels;
 using StarMark.UI.Views;
@@ -206,11 +207,22 @@ public sealed partial class MainWindow : Window
     private async void ExitApp()
     {
         _allowExit = true;
-        StarLog.Info("退出：开始收尾（停同步 → 关组件 → 停采集 → 摘托盘 → 结束进程）");
+        StarLog.Info("退出：开始收尾（画板 → 停同步 → 关组件 → 停采集 → 摘托盘 → 结束进程）");
         // 硬退出保险：收尾里任何一步卡住（22 个组件窗口的关闭，只要有一个不返回就够）都会让进程留在
         // "托盘图标已经没了、StarMark.UI.exe 还在锁着 dll" 这个状态。这条后台线程不参与任何业务，
         // 正常路径会自己走到最后那句 Environment.Exit，它只在 5 秒后替用户把话说完。
         new Thread(() => { Thread.Sleep(5000); Environment.Exit(0); }) { IsBackground = true }.Start();
+        // P-220：下面那句 `Environment.Exit(0)` 走的是硬退——它⛔ 经过任何一扇窗的 `AppWindow.Closing`，
+        // 所以画板窗那一拍（§21.3 之四）在退出这条路上一次也跑不到（片30 真机两臂量到：同一份码、同一起点，
+        // 关画板窗那一臂盘上多出那颗档，关主窗这一臂那颗板压根没落盘）。名册在 `BoardsWindows`，
+        // 登记的手腕由每扇窗自己在构造／Closed 上配平。放在链首＝看门狗那 5 秒里最贵的一段先付掉，
+        // 而每扇各自有界（`BoardPolicy.CloseFlushBudgetMs`）且<b>并发</b>等——N 扇也还是那 2 秒。
+        try
+        {
+            var landed = await BoardsWindows.FlushAllForExitAsync();
+            StarLog.Info("退出：画板窗那一拍落地 " + landed + " 扇");
+        }
+        catch (Exception ex) { StarLog.Error("退出：画板窗那一拍失败（不影响结束进程）", ex); }
         _dataSync?.Dispose();
         try { await _widgetManager.ShutdownAllAsync(); }
         catch (Exception ex) { StarLog.Error("关闭桌面组件失败", ex); }

@@ -26,6 +26,7 @@ public sealed class BoardWindowBridgeGateTests
     private const string BridgeJs = "tools/boards/board-bridge.js";
     private const string BoardHtml = "tools/boards/board.html";
     private const string WindowCs = "src/StarMark.UI/Boards/BoardWindow.cs";
+    private const string RegistryCs = "src/StarMark.UI/Boards/BoardsWindows.cs";
     private const string MainCs = "src/StarMark.UI/MainWindow.xaml.cs";
     private const string TrayCs = "src/StarMark.UI/MainWindow.Tray.cs";
 
@@ -393,7 +394,7 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Contains("_stage.Children.Insert(0, _web);", rec, StringComparison.Ordinal);
         Assert.Equal(0, Count(code, "Content = _web"));                                 // ⛔ 第二颗主人：重指 Content＝把面板连话一起摘走
         Assert.Equal(1, Count(code, "Content = _stage"));                               // 正件：指一次，就在构造里
-        var flush = SourceGate.MethodBody(raw, "Task FlushThenCloseAsync");
+        var flush = SourceGate.MethodBody(raw, "Task<bool> FlushSnapshotAsync(string origin");
         Assert.Contains("NoticeCard.Show(", flush, StringComparison.Ordinal);
         Assert.Contains("boards.closeFlushTitle", flush, StringComparison.Ordinal);
         Assert.Contains("boards.closeFlushBody", flush, StringComparison.Ordinal);
@@ -402,6 +403,44 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Equal(1, Count(code, "Locale.Changed += OnLocaleChanged"));
         Assert.Contains("Locale.Changed -= OnLocaleChanged",
             SourceGate.MethodBody(raw, "void OnClosed"), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// P-220（片30）：<b>退出那一拍</b>也要问一次画板窗——收尾最后那句 <c>Environment.Exit(0)</c>
+    /// ⛔ 经过任何一扇窗的 <c>AppWindow.Closing</c>，所以"用户关窗"那条路上的有界等待在这条路上一次也跑不到。
+    /// <para>真机两臂<b>改前</b>（同一份码、同一起点、新板）：<c>bin/WI90/readings_30_board_pre.txt</c> 盘上多出
+    /// <c>…-be4b.excalidraw</c>（241 字节），<c>bin/WI90/readings_30_main_pre.txt</c> 那颗板<b>压根没落盘</b>
+    /// （只有 <c>bridge.ready</c>／<c>arm.post</c>，收尾之后进程 1 秒内退完）。<b>改后</b>同一腿重跑（<c>readings_30_main_post.txt</c>）读到 <c>boards.close.flush.exit … landed=True</c>、盘上多那颗新档。</para>
+    /// <para>形状＝名册 <c>BoardsWindows</c> 由收尾链<b>第一步</b>请一次（排在关组件之前＝那颗 5 秒硬退出看门狗
+    /// 只剩后面那一段要抢），两条来路<b>共用同一颗</b>有界等待（两份等待代码＝第二个主人），
+    /// 名册<b>并发</b>等（⛔ 逐扇串：N 扇就把那颗预算乘 N）。</para>
+    /// </summary>
+    [Fact]
+    public void TheExitPathFlushesEveryOpenBoardBeforeTheProcessEnds()
+    {
+        var win = ReadRepo(WindowCs);
+        var code = SourceGate.Code(win);
+        var exit = SourceGate.MethodBody(ReadRepo(MainCs), "private async void ExitApp()");
+        Assert.Contains("await BoardsWindows.FlushAllForExitAsync();", exit, StringComparison.Ordinal);
+        Assert.True(exit.IndexOf("FlushAllForExitAsync", StringComparison.Ordinal)
+                    < exit.IndexOf("ShutdownAllAsync", StringComparison.Ordinal),
+            "画板那一拍排到关组件之后＝它可能被那颗 5 秒看门狗砍掉");
+        // 登记的手臂成对：名册上留一颗已关的窗＝退出时会去问一颗没桥的窗
+        Assert.Equal(1, Count(code, "BoardsWindows.Add(this);"));
+        Assert.Equal(1, Count(code, "BoardsWindows.Remove(this);"));
+        Assert.Contains("BoardsWindows.Add(this);", SourceGate.MethodBody(win, "public BoardWindow()"), StringComparison.Ordinal);
+        Assert.Contains("BoardsWindows.Remove(this);", SourceGate.MethodBody(win, "void OnClosed"), StringComparison.Ordinal);
+        // 两条来路共用一颗：那份快照只许问一次、那颗预算只许等一次，差别只在 notice 那一面
+        Assert.Equal(1, Count(code, "RequestSceneSnapshot(BoardPolicy.SaveBeat.ClosingWindow);"));
+        Assert.Equal(1, Count(code, "Task.Delay(BoardPolicy.CloseFlushBudgetMs)"));
+        Assert.Contains("FlushSnapshotAsync(\"exit\", notice: false)", code, StringComparison.Ordinal);
+        Assert.Contains("FlushSnapshotAsync(\"window\", notice: true)", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("NoticeCard.Show(", SourceGate.MethodBody(win, "Task<bool> FlushForExitAsync"), StringComparison.Ordinal);
+        // 名册那一头：⛔ 逐扇串（一句 foreach 一次 await＝把那颗预算乘上扇数）
+        var reg = SourceGate.Code(ReadRepo(RegistryCs));
+        Assert.Equal(0, Count(reg, "foreach"));
+        Assert.Contains("await Task.WhenAll(waits)", reg, StringComparison.Ordinal);
+        Assert.Contains("lock (_open) _open.Clear();", reg, StringComparison.Ordinal);
     }
 
     /// <summary>

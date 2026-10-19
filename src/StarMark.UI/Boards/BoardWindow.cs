@@ -49,8 +49,14 @@ namespace StarMark.UI.Boards;
 /// <b>关窗那一拍超时</b>走右下角那张卡（窗在这一拍开头就 Hide 了，面板⛔ 来得及看见）。
 /// ⚠ 残留：那块面板的<b>脸面</b>（灰底黑字、它压住画布右下角那一带）⛔ 屏幕量过；
 /// 那颗按钮真机也⛔ 按过——拒闸门在真机一次也没撞到（见片26 的如实登记），本批只补了形状证人与纯函数证人。</para>
-/// <para>⚠ 已知绕过（归 P-220）：从<b>主窗</b>退出那一途读到的出口是 <c>Environment.Exit(0)</c>，
-/// 它⛔ 经过各扇窗的 <c>Closing</c>，所以那一途上这拍一次也走不到。</para>
+/// <para>⚠ 已修（P-220＝片30）：从<b>主窗</b>退出那一途的出口确实是 <c>Environment.Exit(0)</c>，它⛔ 经过各扇窗的
+/// <c>Closing</c>——真机两臂量到（同一份码、同一起点）：关画板窗那一臂盘上多出那颗档（<c>…-be4b</c>，241 字节），
+/// 而关主窗那一臂（托盘两颗开关都关着）<b>那颗板压根没落盘</b>（<c>…-26bf</c> 只有 <c>bridge.ready</c>／
+/// <c>arm.post</c> 两行，收尾之后进程 1 秒内退完）。修法＝<see cref="BoardsWindows"/> 那份名册由
+/// 宿主那条收尾链（<c>ExitApp</c>）在第一步请一次，两条来路共用同一颗有界等待（<see cref="FlushSnapshotAsync"/>）。
+/// 两臂<b>改前</b>的正本＝<c>bin/WI90/readings_30_board_pre.txt</c>／<c>readings_30_main_pre.txt</c>（旧码在成功那一发⛔ 说话，所以那两份只有档名册这一把尺）；<b>改后</b>同一腿重跑＝<c>readings_30_main_post.txt</c>：盘上多 <c>…-065c</c> 那份，而日志有了
+/// <c>boards.close.flush.exit … landed=True</c>（本批起两条来路<b>各有一句</b>落地话，⛔ 再只在超时时才吭声）。
+/// ⚠ 还欠（<c>P-229</c>）：那一发落到盘的是<b>空板</b>（<c>hasScene=False</c>、元素 0 颗）⇒「最后几笔跟着退出一起进盘」那一格还⛔ 有读数；多块板同开那一发照旧在深析 §27.5 那颗 ⚛ 名单里。</para>
 /// </summary>
 public sealed class BoardWindow : Window
 {
@@ -138,6 +144,9 @@ public sealed class BoardWindow : Window
         Content = _stage;
         Closed += (_, _) => OnClosed();
         AppWindow.Closing += OnAppWindowClosing;
+        // 名册那一头也在这里挂上：退出那一拍（`Environment.Exit` 那一步⛔ 经过任何一扇窗的 Closing）
+        // 只有先知道有哪几扇开着，才问得到。摘在 <see cref="OnClosed"/>——与那颗静态事件同一副对子。
+        BoardsWindows.Add(this);
         // 换语言那一刻，那块正开着的面板要跟着换话（⛔ 冻在第一趟的语言上——它说的可是"你的板没在保存"）。
         // 订阅挂在构造、摘在 <see cref="OnClosed"/>：静态事件上不摘＝这一窗的元素永远活着（P-198 那一族同一颗规矩）。
         StarMark.Abstractions.I18n.Locale.Changed += OnLocaleChanged;
@@ -613,25 +622,60 @@ public sealed class BoardWindow : Window
         _ = FlushThenCloseAsync();
     }
 
+    /// <summary>
+    /// 主人（<see cref="BoardsWindows"/>）在<b>退出那一拍</b>请这一次：与用户自己关窗走同一颗有界等待
+    /// （<see cref="FlushSnapshotAsync"/>），差别只有两条——⛔ 拦下关闭（进程马上就没了，拦它没有意义），
+    /// 也⛔ 往屏幕贴那张卡（整条链正在往下走，那张卡既⛔ 来得及被看见，还可能把退出拖住）。
+    /// <para>返回＝那一份有没有落地。抛了也⛔ 带走退出链：这里就地兜住，只往日志说话。</para>
+    /// </summary>
+    public async System.Threading.Tasks.Task<bool> FlushForExitAsync()
+    {
+        if (_closeFlushDone || !_bridgeReady) return false;     // 用户那一拍已经跑过／桥没通＝问不到东西
+        _closeFlushDone = true;
+        _tearingDown = true;
+        try
+        {
+            return await FlushSnapshotAsync("exit", notice: false);
+        }
+        catch (System.Exception ex)
+        {
+            StarMark.Abstractions.StarLog.Warn("boards.close.flush.failed: " + ex.GetType().Name);
+            return false;
+        }
+    }
+
     private async System.Threading.Tasks.Task FlushThenCloseAsync()
+    {
+        await FlushSnapshotAsync("window", notice: true);
+        Close();
+    }
+
+    /// <summary>
+    /// 关窗那一拍真正做的事：向页面索取一份快照并<b>有界</b>等它落地，返回落地与否（写成功、
+    /// 盘上本来就是它，都算落地）。用户那一拍与退出那一拍<b>共用这一颗</b>（两份等待代码＝第二个主人）。
+    /// </summary>
+    private async System.Threading.Tasks.Task<bool> FlushSnapshotAsync(string origin, bool notice)
     {
         var landed = new System.Threading.Tasks.TaskCompletionSource<bool>(
             System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
         _closingLanded = landed;
         RequestSceneSnapshot(BoardPolicy.SaveBeat.ClosingWindow);
         var budget = System.Threading.Tasks.Task.Delay(BoardPolicy.CloseFlushBudgetMs);
-        if (await System.Threading.Tasks.Task.WhenAny(landed.Task, budget) != landed.Task)
-        {
-            StarMark.Abstractions.StarLog.Warn("boards.close.flush.timeout ms=" + BoardPolicy.CloseFlushBudgetMs);
-            // 这一句只能走右下角那张卡：窗在这一拍开头就 Hide 了，画板里那块面板⛔ 来得及给用户看见。
-            // 卡也没贴上屏幕时（非 UI 线程／建窗失败）日志已经在那儿了——兜底链⛔ 再往上叠一句假话。
-            if (!Services.NoticeCard.Show(
-                    StarMark.Abstractions.I18n.LocMessage.Of("boards.closeFlushTitle"),
-                    StarMark.Abstractions.I18n.LocMessage.Of("boards.closeFlushBody")))
-                StarMark.Abstractions.StarLog.Warn("boards.close.flush.notice.notShown id=" + _boardId);
-        }
+        var done = await System.Threading.Tasks.Task.WhenAny(landed.Task, budget) == landed.Task;
         _closingLanded = null;
-        Close();
+        StarMark.Abstractions.StarLog.Info(
+            "boards.close.flush." + origin + " id=" + _boardId + " landed=" + done);
+        if (done) return true;
+        StarMark.Abstractions.StarLog.Warn(
+            "boards.close.flush.timeout ms=" + BoardPolicy.CloseFlushBudgetMs + " origin=" + origin);
+        if (!notice) return false;
+        // 这一句只能走右下角那张卡：窗在这一拍开头就 Hide 了，画板里那块面板⛔ 来得及给用户看见。
+        // 卡也没贴上屏幕时（非 UI 线程／建窗失败）日志已经在那儿了——兜底链⛔ 再往上叠一句假话。
+        if (!Services.NoticeCard.Show(
+                StarMark.Abstractions.I18n.LocMessage.Of("boards.closeFlushTitle"),
+                StarMark.Abstractions.I18n.LocMessage.Of("boards.closeFlushBody")))
+            StarMark.Abstractions.StarLog.Warn("boards.close.flush.notice.notShown id=" + _boardId);
+        return false;
     }
 
     /// <summary>那份快照有答案了（写进盘、盘上本来就是它、还是写不进去）：结掉关窗那一拍的等待。</summary>
@@ -722,6 +766,7 @@ public sealed class BoardWindow : Window
     {
         // 决策 2「关窗即散」：页面侧收尾在 web 半边；宿主半边这里拆干净（最后一扇走＝浏览器进程树散）。
         _tearingDown = true;
+        BoardsWindows.Remove(this);                       // 与构造里那颗 Add 成对（名册上留一颗已关的窗＝退出时会去问一颗没桥的窗）
         // 那颗静态事件也一起摘：留着它，每开一扇已关的画板窗都会被"换语言"那一拍叫一次（订阅手臂成对，P-198 那把尺管的正是这一族）。
         StarMark.Abstractions.I18n.Locale.Changed -= OnLocaleChanged;
         if (_web.CoreWebView2 is not null)
