@@ -26,6 +26,7 @@ public sealed class BoardWindowBridgeGateTests
     private const string BridgeJs = "tools/boards/board-bridge.js";
     private const string BoardHtml = "tools/boards/board.html";
     private const string WindowCs = "src/StarMark.UI/Boards/BoardWindow.cs";
+    private const string EnvelopeCs = "src/StarMark.UI/Boards/BoardEnvelope.cs";
     private const string RegistryCs = "src/StarMark.UI/Boards/BoardsWindows.cs";
     private const string MainCs = "src/StarMark.UI/MainWindow.xaml.cs";
     private const string TrayCs = "src/StarMark.UI/MainWindow.Tray.cs";
@@ -40,6 +41,8 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Equal(0, Count(js, "postIn(\"paste.query\""));
         Assert.Equal(0, Count(js, "postIn(\"pin.request\""));
         Assert.Equal(0, Count(js, "postIn(\"background.request\""));
+        // 片56：那句 nack 走的是 send（一颗信封形状⛔ 走 postIn 那颗 args 包装），所以它单独数一遍
+        Assert.Equal(1, Count(js, "cmd: \"bridge.reply\""));
         // 出向五颗：页面侧逐颗处理（case 逐颗一处）
         foreach (var name in BridgeProtocol.OutboundEvents)
             Assert.Equal(1, Count(js, "case \"" + name + "\""));
@@ -53,6 +56,12 @@ public sealed class BoardWindowBridgeGateTests
         foreach (System.Text.RegularExpressions.Match m in matches)
             Assert.True(BridgeProtocol.IsKnownName(m.Groups[1].Value, BridgeProtocol.Direction.Inbound),
                 "页面侧出现了名单外的 cmd：" + m.Groups[1].Value);
+        // ⚠ 那颗 send 绕开 postIn，从前这把尺就看不见它（名册 552 的另一半：尺的射程⛔ 等于要覆盖的面）
+        var bare = System.Text.RegularExpressions.Regex.Matches(js, "cmd:\\s*\"([^\"]+)\"");
+        Assert.True(bare.Count > 0, "这把尺要是⛔ 命中任何东西，它就是聋的（那颗 nack 的名字被改走也照样绿）");
+        foreach (System.Text.RegularExpressions.Match m in bare)
+            Assert.True(BridgeProtocol.IsKnownName(m.Groups[1].Value, BridgeProtocol.Direction.Inbound),
+                "页面侧那颗裸 cmd ⛔ 在进向名单里：" + m.Groups[1].Value);
     }
 
     [Fact]
@@ -96,10 +105,11 @@ public sealed class BoardWindowBridgeGateTests
         Assert.DoesNotContain("string[] InboundCommands", cs, StringComparison.Ordinal);
         Assert.DoesNotContain("string[] OutboundEvents", cs, StringComparison.Ordinal);
         Assert.DoesNotContain("InboundFields =", cs, StringComparison.Ordinal);
-        // 三颗已放行的行为分支在；未接线的三颗走 default 的 not-wired
+        // 已放行的行为分支各在（片56 起四颗）；未接线的三颗走 default 的 not-wired
         Assert.Contains("case \"bridge.ready\"", cs, StringComparison.Ordinal);
         Assert.Contains("case \"open.external\"", cs, StringComparison.Ordinal);
         Assert.Contains("case \"export.bytes\"", cs, StringComparison.Ordinal);
+        Assert.Contains("case \"bridge.reply\"", cs, StringComparison.Ordinal);   // 片56：那句 nack 从此有主人
         Assert.Contains("not-wired", cs, StringComparison.Ordinal);
     }
 
@@ -618,6 +628,8 @@ public sealed class BoardWindowBridgeGateTests
             // 片54 那一行：两颗入口与那句落点都只许念表里的键（硬编码的字在这里＝下一批换语言时它不动）
             "void PasteBar", "void ExportImageButton", "void ReportExport", "Task OpenExportedFolderAsync",
             "Task<bool> OpenFolderAroundAsync",
+            // 片56 那两拍：nack 与那颗预算都只换那句话，字⛔ 许自己长在代码里
+            "void HandleBridgeReply", "Task WatchExportAnswerAsync",
         })
         {
             var leftovers = SourceGate.Cjk.Matches(SourceGate.MethodBody(code, sig))
@@ -831,5 +843,94 @@ public sealed class BoardWindowBridgeGateTests
         Assert.True(bytes.IndexOf("UniqueExportName", StringComparison.Ordinal)
                     < bytes.IndexOf("File.WriteAllBytes(target, bytes);", StringComparison.Ordinal),
                     "先定名再写：名⛔ 定就先写＝同名那一颗还是会被盖掉");
+    }
+
+    // ────────── 片56：那一发导出问出去之后，两条下落都得有主人（P-244） ──────────
+
+    /// <summary>页面那一半：<b>档位决定交回什么形状</b>，而链上每一环都得把那颗 promise 交回去。
+    /// <para>四格分岔，缺任一格都只修了一半：① svg 那一支⛔ 再向一颗 DOM 节点要 <c>arrayBuffer</c>
+    /// （现读类型＝<c>Promise&lt;SVGSVGElement&gt;</c>），改法是照引擎自己那一路取 <c>outerHTML</c> 再包一颗 Blob；
+    /// ② 那颗 <c>return</c> 排在 <c>arrayBuffer</c> 那一环之前——从前它写在 then 里而没 return，
+    /// 于是那一环一旦抛就永远走不到 <c>.catch</c>，而 <c>.catch</c> 那句 send 是宿主唯一的回音；
+    /// ③ 整颗 <c>runExport</c> 另包一层 try，那是"API 还没起来"那一档<b>同步</b>抛的出口（它连 promise 都没生出来）；
+    /// ④ 那颗 send 的两颗字段搬进 <c>args</c>＝它从此过同一道白名单门（⛔ 挂在顶层＝绕开门）。
+    /// ⚠ 这里钉的是<b>写法</b>；"那一发真落盘了吗"⛔ 是形状量得到的，归真机腿那一跑。</para></summary>
+    [Fact]
+    public void ThePageBranchesByKindAndCarriesEveryFailureBack()
+    {
+        var js = ReadRepo(BridgeJs);
+        // ① 现读的引擎口径逐字：outerHTML ＋ 那颗 MIME（⛔ 自己另发明一副序列化）
+        Assert.Contains("L.exportToSvg(opts).then(function (node) { return new Blob([node.outerHTML], { type: \"image/svg+xml\" }); })",
+            js, StringComparison.Ordinal);
+        Assert.Contains(": L.exportToBlob(opts);", js, StringComparison.Ordinal);
+        // ② 每一环把 promise 交回去：旧形状（arrayBuffer 包在 then 里而没 return）⛔ 许回来
+        Assert.Contains("toBlob.then(function (blob) { return blob.arrayBuffer(); })", js, StringComparison.Ordinal);
+        Assert.Equal(0, Count(js, "blob.arrayBuffer().then"));
+        Assert.Equal(1, Count(js, "toBlob.then("));
+        // ③ 同步抛的那一档也有出口：外层那颗 try 的 catch 里就是一句 send（两颗 send：一颗在 .catch、一颗在这里）
+        Assert.Equal(2, Count(js, "send(replyId, false, \"export-failed\")"));
+        Assert.Contains("} catch (e) {\n      send(replyId, false, \"export-failed\");", js, StringComparison.Ordinal);
+        // ④ 那颗 nack 的两颗字段住在 args 里（名单门只看得进 args）
+        Assert.Contains("args: { ok: ok, err: err || null }", js, StringComparison.Ordinal);
+        Assert.Equal(0, Count(js, "id: id, ok: ok"));
+    }
+
+    /// <summary>宿主那一半：nack 有主人、那颗问有预算、而那一闩只由一颗收口处放开。
+    /// <para>① 名字在册之后还⛔ 许"收到而不动"：switch 那一格得指到一颗真读 <c>ok</c> 的主人，
+    /// 而<b>认不出的</b>与<b>迟到的</b>两档都收手（<c>Ok is not false || !_exporting</c>）；
+    /// ② 那颗预算只住 Core：UI 档里再写一遍那颗数＝第二个主人（与 <c>CloseFlushBudgetMs</c> 同一条口径，
+    /// 所以三颗数一起钉：档里读不到 5000、主人那里读得到、且它确实大于关窗那一拍的预算）；
+    /// ③ 那颗闹钟比的是<b>两颗</b>：代次认得"问的是哪一发"，那颗闩认得"那一发还没结"——
+    /// 只比闩就会让第一发的闹钟把第二发判死（<see cref="BoardWindow"/> 那颗 <c>_exportGen</c> 的注释说的正是这件事）；
+    /// ④ 放开那一闩的地方全档只有两处（收口那颗＋ready 重闩），开口处一颗；
+    /// ⑤ 那句 nack ⛔ 回 ack（页面那侧⛔ 读者），也⛔ 动盘上任何东西。</para></summary>
+    [Fact]
+    public void TheHostReadsTheNackAndBoundsTheAsk()
+    {
+        var code = SourceGate.Code(ReadRepo(WindowCs));
+        var nack = SourceGate.MethodBody(code, "void HandleBridgeReply");
+        Assert.Contains("HandleBridgeReply(envelope);", code, StringComparison.Ordinal);
+        Assert.Contains("if (envelope.Ok is not false || !_exporting) return;", nack, StringComparison.Ordinal);
+        Assert.Contains("boards.export.nack err=", nack, StringComparison.Ordinal);
+        Assert.Contains("envelope.Err ?? \"unknown\"", nack, StringComparison.Ordinal);
+        Assert.Contains("ReportExport(\"boards.exportFailedBody\", null);", nack, StringComparison.Ordinal);
+        Assert.Equal(0, Count(nack, "PostWebMessageAsJson"));             // ⛔ 回一句 ack：页面那侧⛔ 读者
+        Assert.Equal(0, Count(nack, "File."));                            // 那一拍⛔ 动盘上任何东西
+
+        var watch = SourceGate.MethodBody(code, "Task WatchExportAnswerAsync");
+        Assert.Contains("await System.Threading.Tasks.Task.Delay(BoardPolicy.ExportAnswerBudgetMs);", watch, StringComparison.Ordinal);
+        Assert.Contains("if (gen != _exportGen || !_exporting || _tearingDown) return;", watch, StringComparison.Ordinal);
+        Assert.Contains("boards.export.stalled ms=", watch, StringComparison.Ordinal);
+        Assert.Contains("ReportExport(\"boards.exportFailedBody\", null);", watch, StringComparison.Ordinal);
+        Assert.Equal(1, Count(code, "Task.Delay(BoardPolicy.ExportAnswerBudgetMs)"));
+        Assert.Equal(0, Count(code, "5000"));                             // 那颗数⛔ 在这档里再出现一次
+        Assert.Equal(5000, BoardPolicy.ExportAnswerBudgetMs);             // 正件：主人那里它还在
+        Assert.True(BoardPolicy.ExportAnswerBudgetMs > BoardPolicy.CloseFlushBudgetMs,
+            "图那一发要过渲染器，那颗预算⛔ 能短过关窗那一拍");
+
+        var ask = SourceGate.MethodBody(code, "void ExportImageButton");
+        Assert.Contains("_exportGen++;", ask, StringComparison.Ordinal);
+        Assert.Contains("_ = WatchExportAnswerAsync(_exportGen);", ask, StringComparison.Ordinal);
+        Assert.Equal(1, Count(code, "_exportGen++"));                     // 那位计数只许有一个写主
+        Assert.Equal(1, Count(code, "private int _exportGen;"));
+        Assert.Equal(2, Count(code, "_exporting = false;"));              // 收口那颗＋ready 重闩
+        Assert.Equal(1, Count(code, "_exporting = true;"));               // 只有开口那一拍
+    }
+
+    /// <summary>那颗 <c>ok</c> 只认真布尔：认不出＝null，⛔ 替页面猜一句它没说的话。
+    /// <para>为什么单独钉这颗读法：nack 的两种"没内容"（那颗键缺失、那颗键是颗字符串"false"）在屏幕上
+    /// 都该长成"什么都没发生"（由那颗预算兜底），而被猜成 <c>false</c> 就直接念一句坏话、
+    /// 被猜成 <c>true</c> 就把那一发悄悄放过（片33 那族"null 折成 0"的另一副脸）。</para></summary>
+    [Fact]
+    public void TheEnvelopeReadsTheNackFieldsWithoutGuessing()
+    {
+        var code = SourceGate.Code(ReadRepo(EnvelopeCs));
+        Assert.Contains("Ok = ArgBool(\"ok\"),", code, StringComparison.Ordinal);
+        Assert.Contains("Err = Arg(\"err\"),", code, StringComparison.Ordinal);
+        Assert.Contains("v.ValueKind is JsonValueKind.True or JsonValueKind.False ? v.GetBoolean() : null",
+            code, StringComparison.Ordinal);
+        Assert.Equal(1, Count(code, "bool? ArgBool"));
+        Assert.Equal(0, Count(code, "bool.Parse"));
+        Assert.Equal(0, Count(code, "Convert.ToBoolean"));
     }
 }

@@ -27,10 +27,15 @@ public static class BridgeProtocol
     /// <summary>信封里那颗 <c>v</c> 的本命值（§12.1 定形，v1 未改）。</summary>
     public const int Version = 1;
 
-    /// <summary>JS→C# 的七颗命令名。颗数由证人钉住（<c>BoardBridgeProtocolTests</c> ①）。</summary>
+    /// <summary>JS→C# 的八颗命令名。颗数由证人钉住（<c>BoardBridgeProtocolTests</c> ①）。
+    /// <para><b>片56 补上的那颗 <c>bridge.reply</c>＝页面答宿主问的那一路</b>（账本 P-244）：
+    /// 它早就在发（<c>board-bridge.js</c> 的 <c>send()</c>），而⛔ 在册⇒每一句"这一办发不出去"都死在
+    /// <see cref="Check"/> 的名字闸门上（<c>fault:UnknownName</c>），连 switch 都走不到＝
+    /// 一颗坏掉的那一发既⛔ 落盘、也⛔ 说出去、还⛔ 放开那颗可点位。</para></summary>
     public static readonly string[] InboundCommands =
     [
         "bridge.ready", "board.loaded", "paste.query", "export.bytes", "pin.request", "background.request", "open.external",
+        "bridge.reply",
     ];
 
     /// <summary>C#→JS 的六颗事件名。</summary>
@@ -58,6 +63,9 @@ public static class BridgeProtocol
             ["pin.request"] = ["token"],
             ["background.request"] = [],
             ["open.external"] = ["url"],
+            // 页面答宿主的那一句：那颗 ok 是<b>这一办发出去了的判断</b>，那颗 err 只进日志（⛔ 上屏＝P-193 那条口径，
+            // 屏幕上说的是"没能存成"那一句，字住表里）。
+            ["bridge.reply"] = ["ok", "err"],
         };
 
     /// <summary>C#→JS 那六颗事件的允许字段（同一道门，方向反过来也要有主人）。</summary>
@@ -170,6 +178,9 @@ public static class BridgeProtocol
         // 而闸门要的是"画布上真有宿主递进去那块板"（片26 量到的那颗坏就坏在这句话是空的）。
         "board.loaded" => ["elements", "canvas"],
         "export.pick" => ["kind"],
+        // 那句 nack 必带那颗 ok：一句⛔ 内容的 ack 既⛔ 许被读成"办成了"，也⛔ 许被读成"办不成"——
+        // 两种都替用户做了一次没问过的决定（片56；缺了这一道门，UI 侧就只能猜那颗 null）。
+        "bridge.reply" => ["ok"],
         _ => null,
     };
 

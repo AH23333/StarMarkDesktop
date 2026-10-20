@@ -22,6 +22,11 @@ public readonly struct BoardEnvelope
     public string? Shape { get; init; }
     public string? Token { get; init; }
 
+    /// <summary>那颗 <c>bridge.reply</c> 的两颗字段：那一发到底办没办成（认不出＝null，⛔ 替它猜一颗 false／true），
+    /// 与办不成时页面给的那颗故障名（只进日志，⛔ 上屏——屏幕那句住在表里）。</summary>
+    public bool? Ok { get; init; }
+    public string? Err { get; init; }
+
     /// <summary><c>board.loaded</c> 那两颗数：档里读到几颗元素／画布上当场几颗。认不出（缺键、非数）＝null。</summary>
     public int? Elements { get; init; }
     public int? Canvas { get; init; }
@@ -48,6 +53,11 @@ public readonly struct BoardEnvelope
             int? ArgInt(string name)
                 => root.TryGetProperty("args", out var a) && a.ValueKind == JsonValueKind.Object
                     && a.TryGetProperty(name, out var v) && v.TryGetInt32(out var n) ? n : null;
+            // 那颗 ok 只认真布尔：字符串 "false" 与数字 0 都算"认不出"（null），⛔ 替页面猜一句它没说的话
+            bool? ArgBool(string name)
+                => root.TryGetProperty("args", out var a) && a.ValueKind == JsonValueKind.Object
+                    && a.TryGetProperty(name, out var v)
+                    && v.ValueKind is JsonValueKind.True or JsonValueKind.False ? v.GetBoolean() : null;
             var version = root.TryGetProperty("v", out var vv) && vv.TryGetInt32(out var i) ? i : int.MinValue;
             return new BoardEnvelope
             {
@@ -62,6 +72,8 @@ public readonly struct BoardEnvelope
                 Token = Arg("token"),
                 Elements = ArgInt("elements"),
                 Canvas = ArgInt("canvas"),
+                Ok = ArgBool("ok"),
+                Err = Arg("err"),
                 ArgKeys = keys,
             };
         }

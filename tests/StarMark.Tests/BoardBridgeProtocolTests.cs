@@ -20,16 +20,20 @@ public sealed class BoardBridgeProtocolTests
     // ────────── ① 两份名单自己先要闭合 ──────────
 
     /// <summary>
-    /// 七颗进、六颗出，且<b>每颗在册的名字都有一份字段表、每份字段表都对应一颗在册的名字</b>。
+    /// 八颗进、六颗出，且<b>每颗在册的名字都有一份字段表、每份字段表都对应一颗在册的名字</b>。
     /// <para>双向对账的原因：只查"名单里有 6 颗"会放过"新增一颗命令却忘了给字段表"——
     /// 那种消息在 <see cref="BridgeProtocol.Check"/> 里会当场 <c>KeyNotFoundException</c>，
     /// 而抛出去到 UI 侧就是"点了没反应"（本仓定性过的坏）。</para>
+    /// <para><b>片56 多的那颗 <c>bridge.reply</c></b>＝页面答宿主问的那一路（账本 P-244）：它早就在发而⛔ 在册，
+    /// 于是每一句 nack 死在名字闸门，连 switch 都走不到。这颗钉子同时是<b>颗数的脸</b>——
+    /// 名单从七颗变八颗必须由这一格说一次，⛔ 由下一批"顺手补上"。</para>
     /// </summary>
     [Fact]
     public void BothListsAreClosedOverTheirOwnFieldTables()
     {
         Assert.Equal(
-            ["bridge.ready", "board.loaded", "paste.query", Export, "pin.request", "background.request", "open.external"],
+            ["bridge.ready", "board.loaded", "paste.query", Export, "pin.request", "background.request", "open.external",
+             "bridge.reply"],
             BridgeProtocol.InboundCommands);
         Assert.Equal(
             ["board.load", "theme.set", "lang.set", "feature.flags", "export.pick", "autosave.arm"],
@@ -161,6 +165,7 @@ public sealed class BoardBridgeProtocolTests
     [InlineData("board.loaded", new string[0])]                   // 片26 第一版的形状：那句话本身⛔ 带数
     [InlineData("board.loaded", new string[] { "elements" })]     // 报了档里几颗，没报案布上几颗
     [InlineData("board.loaded", new string[] { "canvas" })]
+    [InlineData("bridge.reply", new string[0])]                    // 片56：一句没内容的 ack（两种下落都⛔ 许替用户猜）
     public void MissingRequiredArgumentIsItsOwnFault(string name, string[] keys)
     {
         var (allowed, fault) = BridgeProtocol.Check(BridgeProtocol.Version, name, keys);
@@ -250,6 +255,30 @@ public sealed class BoardBridgeProtocolTests
             BridgeProtocol.Direction.Outbound).Allowed);
         Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, "theme.set", new[] { "theme" },
             BridgeProtocol.Direction.Outbound).Allowed);
+    }
+
+    // ────────── ④b 那句 nack 进得来（片56＝P-244 的第二处） ──────────
+
+    /// <summary>
+    /// 页面那句"那一办发不出去"到底通不通这道门。
+    /// <para><b>这一格钉的是改前那件事</b>：那颗名字⛔ 在册 ⇒ <see cref="Check"/> 一律拒成
+    /// <c>UnknownName</c>，nack 连 UI 那一格都走不到（把 <c>InboundCommands</c> 里那颗删掉，第一行当场红）。
+    /// 四种下落各给一颗：带 <c>ok</c> ＝通；只带 <c>ok</c> 也通（那颗 <c>err</c> 是可选的——页面只在真有一句故障名时带）；
+    /// ⛔ 带 <c>ok</c> ＝<c>MissingField</c>；多一颗没列的键＝<c>UnexpectedField</c>（硬线②）；
+    /// 从<b>出向</b>递进来＝<c>UnknownName</c>（宿主没理由把一句 nack 递给页面，那颗名字只住进向那一侧）。</para>
+    /// </summary>
+    [Fact]
+    public void TheNackPassesTheGateOnlyInItsOwnShape()
+    {
+        Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, "bridge.reply", new[] { "ok", "err" }).Allowed);
+        Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, "bridge.reply", new[] { "ok" }).Allowed);
+        Assert.Equal(BridgeProtocol.Fault.MissingField,
+            BridgeProtocol.Check(BridgeProtocol.Version, "bridge.reply", new[] { "err" }).Reason);
+        Assert.Equal(BridgeProtocol.Fault.UnexpectedField,
+            BridgeProtocol.Check(BridgeProtocol.Version, "bridge.reply", new[] { "ok", "path" }).Reason);
+        Assert.Equal(BridgeProtocol.Fault.UnknownName,
+            BridgeProtocol.Check(BridgeProtocol.Version, "bridge.reply", new[] { "ok" },
+                BridgeProtocol.Direction.Outbound).Reason);
     }
 
     // ────────── ⑤ 档名：路径永远进不来 ──────────

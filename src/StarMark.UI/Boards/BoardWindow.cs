@@ -18,8 +18,9 @@ namespace StarMark.UI.Boards;
 /// <c>%LOCALAPPDATA%\StarMark\wbview2</c>（v1 §坑8 那条改道）。</para>
 /// <para><b>默认关</b>：本窗没有常驻入口，只有显式 <see cref="OpenNewAsync"/>／<see cref="OpenSceneAsync"/>；
 /// 托盘那两颗（续上一块／新起一块）由接线批那颗总开关收放（本档⛔ 自己挂上去——"找不到人接又自己冒出来"是第二主人）。</para>
-/// <para><b>回路现状</b>：bridge.ready／open.external／export.bytes 三颗全通；
-/// paste.query／pin.request／background.request 回 <c>not-wired</c>——判定归各自批次（⛔ 假 allow）。</para>
+/// <para><b>回路现状（片56 现读）</b>：进向八颗里 <c>bridge.ready</c>／<c>board.loaded</c>／<c>open.external</c>／
+/// <c>export.bytes</c>／<c>bridge.reply</c> 五颗有主人；<c>paste.query</c>／<c>pin.request</c>／<c>background.request</c>
+/// 三颗回 <c>not-wired</c>——判定归各自批次（⛔ 假 allow）。</para>
 /// <para><b>落盘与载入（片21＝§21.3）</b>：页面侧停笔 <see cref="BoardPolicy.AutosaveIdleMs"/> 毫秒自己交一份
 /// 场景 JSON（<c>export.bytes</c>＋<c>kind:"scene"</c>，⛔ 新名字），宿主失焦那一拍再索取一次（<c>export.pick</c>）；
 /// 字节经 <see cref="BridgeProtocol.LandsInSceneArchive"/> 分流进板档目录，png／svg 仍进导出目录。
@@ -249,6 +250,13 @@ public sealed class BoardWindow : Window
     /// 跑的那一发点得亮＝他会连按出两发，屏幕上两句话抢同一颗落点）。</summary>
     private bool _exporting;
 
+    /// <summary>那一发导出问出去的第几<b>代</b>（片56＝P-244 的第三处：那颗预算的闹钟只认自己那一代）。
+    /// <para>为什么⛔ 只看那颗 <see cref="_exporting"/>：它是一颗<b>共用的闩</b>。第一发早就结掉了、第二发正跑着时，
+    /// 第一发那颗还在睡的闹钟醒来会读到"还在跑"＝把<b>别人那一发</b>判成没回音，当场放开那一闩、
+    /// 还把第二发的回音变成一句没人听的坏话（片32 那族"上一问的脸活到下一问"的另一副脸）。
+    /// 写它只有一处＝<see cref="ExportImageButton"/> 每次开口自增；闹钟那一拍比对它，⛔ 动盘上任何东西。</para></summary>
+    private int _exportGen;
+
     /// <summary>右上角那一行（导出那两颗入口＋那颗落点的话）：它⛔ 是那块面板的零件——面板只在有事要说时才在场，
     /// 而"我刚导出那张图，它落在哪儿"每一次都要有答案。</summary>
     private StackPanel? _bar;
@@ -475,6 +483,9 @@ public sealed class BoardWindow : Window
             case "export.bytes":
                 HandleExportBytes(envelope);
                 break;
+            case "bridge.reply":
+                HandleBridgeReply(envelope);
+                break;
             default:
                 // paste.query / pin.request / background.request：回路通了、判定归各自批次（⛔ 假 allow）
                 Reply(envelope.Cmd, envelope.Id, ok: false, err: "not-wired");
@@ -593,9 +604,52 @@ public sealed class BoardWindow : Window
         ReportExport("boards.exportSavedBody", target);
     }
 
+    /// <summary>
+    /// 页面那句"那一办发不出去"的<b>唯一读者</b>（片56＝P-244 的第二处）。
+    /// <para>改前的形状＝这颗名字压根⛔ 在进向名单里，于是每一句 nack 都死在 <see cref="BridgeProtocol.Check"/>
+    /// 的名字闸门（<c>fault:UnknownName</c>），连这一格都走不到。后果⛔ 只是"少一句解释"，而是<b>那一闩永远不放开</b>：
+    /// 真机逐字（正本 <c>bin/WI95/readings_55_171814.txt</c>）＝按下去之后第 26 行那颗「导出 SVG」<c>可点=False</c>、
+    /// 第 29 行 <c>最后一按 8.00 秒落=空</c>、第 32 行连那颗「导出 PNG」也 <c>可点=False</c>——一发坏掉把同一行两颗入口一起关死。</para>
+    /// <para><b>只在"还等着"时开口</b>：那颗 <c>_exporting</c> 已经放开＝这一问早就由那两份字节（或那颗预算）结掉了，
+    /// 迟到的一句 nack⛔ 许再替它说一遍（否则就是把同一件坏话贴到用户下一次尝试的落点上，片32 那族"上一问的脸活到下一问"）。</para>
+    /// <para>⚠ 认不出的那颗 <c>ok</c>（null）与 <c>ok=True</c> 一律不动：<b>现读页面侧只在办不成时出声</b>
+    /// （成功那一路交的是 <c>export.bytes</c>）。这里⛔ 为那颗还不存在的"办成了"写一臂——恒不执行的一格会把
+    /// 坏掉的那一支衬得像已经有人管（名册 466 那一问）。同样⛔ 回一句 ack：那句话在页面侧⛔ 有读者
+    /// （<c>onOut</c> 的 default 只 break），多一颗没人读的键正是硬线②挡的那类东西。</para>
+    /// </summary>
+    private void HandleBridgeReply(BoardEnvelope envelope)
+    {
+        if (envelope.Ok is not false || !_exporting) return;
+        StarMark.Abstractions.StarLog.Warn(
+            "boards.export.nack err=" + (envelope.Err ?? "unknown") + " id=" + _boardId);
+        ReportExport("boards.exportFailedBody", null);   // 那句话＋那颗闩＋那颗闹钟，都由同一颗主人结掉
+    }
+
+    /// <summary>
+    /// 那一发导出问出去之后<b>最多等这么久</b>（片56＝P-244 的第三处：一句⛔ 回音的话⛔ 许把两颗入口长关）。
+    /// <para>为什么⛔ 只靠那颗 nack 就够：nack 只覆盖"页面知道自己抛了"那两档。还有两条路一句也发不出来——
+    /// 页面那颗 React 树整个没了（渲染进程挂了那一拍之后）、以及消息在半路丢。到那时屏幕上留的仍然是
+    /// "点了没反应"加两颗永远点不亮的入口，而用户手上没有一颗自愈的按钮。</para>
+    /// <para>醒来先比两颗：<see cref="_exportGen"/> 认得"问的是哪一发"，<c>_exporting</c> 认得"那一发还没结"。
+    /// 窗已经拆了（<c>_tearingDown</c>）就一句话也⛔ 说——那一拍连表面都没了。</para>
+    /// <para>⚠ 这一手⛔ 改盘上任何东西：它只放开那一闩并换一句话。所以<b>迟到的成功照样算数</b>——
+    /// 那份字节若真回来了，<see cref="HandleExportBytes"/> 会把那句改回"已存到"并重新给那颗出口按钮，
+    /// 日志里 <c>boards.export.stalled</c> 与 <c>boards.export.saved</c> 两行前后排着，就是这一格的真面目。</para>
+    /// </summary>
+    private async System.Threading.Tasks.Task WatchExportAnswerAsync(int gen)
+    {
+        await System.Threading.Tasks.Task.Delay(BoardPolicy.ExportAnswerBudgetMs);
+        if (gen != _exportGen || !_exporting || _tearingDown) return;
+        StarMark.Abstractions.StarLog.Warn(
+            "boards.export.stalled ms=" + BoardPolicy.ExportAnswerBudgetMs + " gen=" + gen + " id=" + _boardId);
+        ReportExport("boards.exportFailedBody", null);
+    }
+
     /// <summary>右上角那一行报一句落点（成功＝连那颗档一起记，失败＝只换话、那颗上一次真落盘的档⛔ 被顶掉）。
     /// <para>那颗 <c>landed</c> 只许由<b>真写成</b>的那一路给：<see cref="_exportPath"/> 是那颗
-    /// 「打开所在文件夹」的唯一资格，写了这颗就得保证盘上真有它（P-219 那句"界面上要给出口"的另一半）。</para></summary>
+    /// 「打开所在文件夹」的唯一资格，写了这颗就得保证盘上真有它（P-219 那句"界面上要给出口"的另一半）。</para>
+    /// <para>片56 起它同时是那一闩的<b>唯一收口处</b>：三条下落（字节真回来／页面说一句办不成／那颗预算到点）
+    /// 都走这一颗，所以"放开那两颗入口"这件事⛔ 长在第二个地方——改前的坏正是它只长在"字节真回来"那一支。</para></summary>
     private void ReportExport(string outcomeKey, string? landed)
     {
         if (landed is not null) _exportPath = landed;
@@ -635,14 +689,19 @@ public sealed class BoardWindow : Window
     /// 而这一处⛔ 判"该不该让他点"——那颗闸由 <see cref="PasteBar"/> 按两列事实算，这里只挡已经排上的第二发。
     /// <para>字节不在这里拿：页面把 blob 编成 base64 交回 <c>export.bytes</c>，落盘与那句话都在
     /// <see cref="HandleExportBytes"/> 那一头＝一次一问一答，⛔ 在这里等一颗不知道会不会来的回音。</para>
+    /// <para>片56 起这一处还管<b>那一问的两条下落</b>：办不成了由页面说一句 nack（<see cref="HandleBridgeReply"/>），
+    /// 一句也⛔ 说的则由那颗预算到点结掉（<see cref="WatchExportAnswerAsync"/>）——<b>开口之前</b>把代次记下，
+    /// 这一处是那颗计数唯一的主人。</para>
     /// </summary>
     private void ExportImageButton(string kind)
     {
         if (!_bridgeReady || _exporting) return;
         if (!BridgeProtocol.IsKnownExportKind(kind)) return;      // ⛔ 在册的档位⛔ 发（⛔ 由这里替页面猜一档）
         _exporting = true;
+        _exportGen++;
         PasteBar();
         PostExportPick(kind);
+        _ = WatchExportAnswerAsync(_exportGen);
     }
 
     /// <summary>那颗 <c>export.pick</c> 信封的唯一发送处（四拍里那两拍索取板档、右上角那一行索取图＝同一颗形状，⛔ 两处各拼一遍）。</summary>

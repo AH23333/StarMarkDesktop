@@ -1,6 +1,6 @@
 /* 画板桥的页面侧（Phase C 片19＝最小回路；片21＝存储适配器那一半，深析 §21.3 逐条落码）。
    名单的唯一主人＝Core 的 BridgeProtocol；本档每颗名字逐字照抄，闸门测试逐颗对账。
-   七颗进（postIn 逐颗一处）＋六颗出（case 逐颗一处）——多写的名字闸门会红。
+   八颗进（postIn 那七颗逐颗一处＋send 那颗 bridge.reply）＋六颗出（case 逐颗一处）——多写的名字闸门会红。
    ⚠ 那颗 AUTOSAVE_MS 与 Core 的 BoardPolicy.AutosaveIdleMs 是同一个数的两颗持有者（跨语言）：
    等值由 BoardSceneStoreGateTests 现读对账，改一颗不动另一颗＝那一格红。 */
 (function () {
@@ -40,7 +40,7 @@
   }
   function send(id, ok, err) {
     if (!HOST) return;
-    HOST.postMessage({ v: 1, cmd: "bridge.reply", id: id, ok: ok, err: err || null });
+    HOST.postMessage({ v: 1, cmd: "bridge.reply", id: id, args: { ok: ok, err: err || null } });
   }
 
   function b64FromBytes(bytes) {
@@ -209,28 +209,37 @@
     };
   }
 
+  /* 那一发交回<b>什么形状</b>，由档位分岔（片56＝P-244 的第一处）。
+     ⚠ 现读那颗类型（随包的 dist/types/utils/export.d.ts 逐字）＝`exportToSvg(...) => Promise<SVGSVGElement>`——
+     它交回的是<b>一颗 DOM 节点</b>，而⛔ 是一颗 Blob，所以⛔ 能跟 png 那一路共用 `blob.arrayBuffer()`：
+     那是向一颗节点从没有的方法要东西，抛出来的错既进⛔ deliver 也进⛔ send＝屏幕上从此再没这一发的下落。
+     换成字节这一步<b>逐字照抄引擎自己那一路</b>（现读随包 bundle 的导出分支：svg 那一支拿的是
+     `new Blob([那颗节点的 outerHTML], {type: MIME_TYPES.svg})`，而 MIME_TYPES.svg＝"image/svg+xml"）：
+     取 outerHTML、按那颗 MIME 包一颗 Blob，剩下的字节转换仍走 png 那一趟<b>同一个</b>出口（⛔ 两份编码）。
+     ⚠ 链上每一环都得<b>把 promise 交回去</b>：从前那颗 arrayBuffer 写在 then 里而没 return，
+     它一旦抛就永远走不到 .catch——而 .catch 那句 send 正是宿主唯一的"这一发办不成"的回音。
+     那颗 send 现只在<b>办不成</b>时出声（成功那一路交的是 export.bytes），宿主那头的对应主人见 BoardWindow。 */
   function runExport(kind, skipInliningFonts, replyId) {
-    if (kind === "scene") {
-      try {
+    try {
+      if (kind === "scene") {
         deliver(sceneBytesB64(), kind, boardName());
-      } catch (err) {
-        send(replyId, false, "export-failed");
+        return;
       }
-      return;
+      var opts = {
+        elements: API.getSceneElements(),
+        appState: API.getAppState(),
+        files: API.getFiles(),
+        skipInliningFonts: !!skipInliningFonts
+      };
+      var toBlob = kind === "svg"
+        ? L.exportToSvg(opts).then(function (node) { return new Blob([node.outerHTML], { type: "image/svg+xml" }); })
+        : L.exportToBlob(opts);
+      toBlob.then(function (blob) { return blob.arrayBuffer(); })
+        .then(function (buf) { deliver(b64FromBytes(new Uint8Array(buf)), kind, boardName()); })
+        .catch(function () { send(replyId, false, "export-failed"); });
+    } catch (e) {
+      send(replyId, false, "export-failed");
     }
-    var isSvg = kind === "svg";
-    var fn = isSvg ? L.exportToSvg : L.exportToBlob;
-    var opts = {
-      elements: API.getSceneElements(),
-      appState: API.getAppState(),
-      files: API.getFiles(),
-      skipInliningFonts: !!skipInliningFonts
-    };
-    fn(opts).then(function (blob) {
-      blob.arrayBuffer().then(function (buf) {
-        deliver(b64FromBytes(new Uint8Array(buf)), kind, boardName());
-      });
-    }).catch(function () { send(replyId, false, "export-failed"); });
   }
 
   if (HOST) {
