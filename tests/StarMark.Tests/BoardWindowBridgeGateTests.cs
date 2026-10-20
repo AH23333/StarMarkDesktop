@@ -105,12 +105,14 @@ public sealed class BoardWindowBridgeGateTests
         Assert.DoesNotContain("string[] InboundCommands", cs, StringComparison.Ordinal);
         Assert.DoesNotContain("string[] OutboundEvents", cs, StringComparison.Ordinal);
         Assert.DoesNotContain("InboundFields =", cs, StringComparison.Ordinal);
-        // 已放行的行为分支各在（片56 起四颗）；未接线的三颗走 default 的 not-wired
+        // 已放行的行为分支各在（片56 起五颗）；未接线的三颗走 default 那一格——它<b>只留一行痕</b>（片57＝P-245 撤掉那句回话之后）
         Assert.Contains("case \"bridge.ready\"", cs, StringComparison.Ordinal);
         Assert.Contains("case \"open.external\"", cs, StringComparison.Ordinal);
         Assert.Contains("case \"export.bytes\"", cs, StringComparison.Ordinal);
         Assert.Contains("case \"bridge.reply\"", cs, StringComparison.Ordinal);   // 片56：那句 nack 从此有主人
-        Assert.Contains("not-wired", cs, StringComparison.Ordinal);
+        // ⚠ 这一格读的是<b>抹掉注释后</b>的代码：那颗标签在类文档里也出现一次（讲的就是这一族），
+        // 按原文数会让"撤掉那一行痕"这一臂照旧绿＝名册 496 那一族（要改的是问法，⛔ 放宽判据）。
+        Assert.Contains("not-wired", SourceGate.Code(cs), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -791,7 +793,7 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Contains("File.WriteAllBytes(target, bytes);", bytes, StringComparison.Ordinal);
         Assert.Contains("catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)",
             bytes, StringComparison.Ordinal);                                    // ⛔ 静默：写不进要说得出
-        Assert.Contains("err: \"write-failed\"", bytes, StringComparison.Ordinal);
+        Assert.Contains("StarLog.Warn(\"boards.export.failed kind=\"", bytes, StringComparison.Ordinal);
         foreach (var column in new[] { "kind=", "bytes=", "to=", "why=" })
             Assert.Contains(column, bytes, StringComparison.Ordinal);
         Assert.Contains("ReportExport(\"boards.exportSavedBody\", target);", bytes, StringComparison.Ordinal);
@@ -838,7 +840,11 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Contains("candidate => File.Exists(Path.Combine(ExportsDirectory, candidate))", bytes, StringComparison.Ordinal);
         Assert.Contains("if (name is null)", bytes, StringComparison.Ordinal);
         Assert.Contains("why=NameTaken", bytes, StringComparison.Ordinal);
-        Assert.Contains("err: \"name-taken\"", bytes, StringComparison.Ordinal);
+        // 名占满那一拍<b>⛔ 走到写盘那一句</b>：它念那句坏话之前就 return（从前这一格钉的是那句回话的故障名，
+        // 而那句回话页面压根⛔ 听——改钉它真正守的那一维＝⛔ 拿别人的那颗档去盖）
+        Assert.True(bytes.IndexOf("ReportExport(\"boards.exportFailedBody\", null);", StringComparison.Ordinal)
+                    < bytes.IndexOf("var target = Path.Combine(ExportsDirectory, name);", StringComparison.Ordinal),
+            "名占满那一拍的坏话排在拼落点之后＝那一拍已经走到写盘那一路了");
         Assert.Equal(1, Count(bytes, "File.WriteAllBytes(target, bytes);"));
         Assert.True(bytes.IndexOf("UniqueExportName", StringComparison.Ordinal)
                     < bytes.IndexOf("File.WriteAllBytes(target, bytes);", StringComparison.Ordinal),
@@ -932,5 +938,41 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Equal(1, Count(code, "bool? ArgBool"));
         Assert.Equal(0, Count(code, "bool.Parse"));
         Assert.Equal(0, Count(code, "Convert.ToBoolean"));
+    }
+
+    /// <summary>片57＝P-245：宿主→页面只剩<b>一颗过门的门</b>，那 16 句没人听的回话整族撤掉。
+    /// <para>改前的形状＝那颗 <c>Reply</c> 工厂直接 post，把<b>进向那颗名</b>原样当出向名字用，
+    /// 而 <c>OutboundEvents</c> 那六颗⛔ 包含它——出向那道门（<c>Check</c> 的 <c>Direction.Outbound</c>）
+    /// 在这条路上压根⛔ 被问；页面那一头的 <c>onOut</c> 认得的也就是那六颗，多出来的一律落 <c>default: break</c>
+    /// ⇒ 十六句全部静默丢掉（正本 <c>bin/WI97/probe57_readers_out.txt</c>：监听器一颗、switch 一颗、代码里裸 post 两颗）。</para>
+    /// <para>⚠ 这一格为什么⛔ 只是"少一句解释"而值得动：<b>留着出口＝下一批把它读成"这条路已接通"</b>
+    /// （RV-2 那颗先例，与名册 533「只改口＝死代码＋恒绿证人」同一问）。撤掉之后每一条被拒的路都还留一行痕，
+    /// 而<b>被拒的那两颗名字（cmd 与 URL）⛔ 进日志</b>——日志伪造那一族（P-13）守的正是"把外人给的字符串念出去"。</para></summary>
+    [Fact]
+    public void TheHostHasExactlyOneDoorToThePage()
+    {
+        var code = SourceGate.Code(ReadRepo(WindowCs));
+        // ① 那颗回话：工厂、调用点、命名实参那三种形状都该是零颗
+        Assert.Equal(0, Count(code, "Reply(envelope.Cmd"));
+        Assert.DoesNotContain("private void Reply(", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("err: \"", code, StringComparison.Ordinal);
+        // ② 裸 post 只许一颗，且它就住在那颗门里、排在出向门之后（存在与顺序两颗分开写＝名册 447）
+        Assert.Equal(1, Count(code, "PostWebMessageAsJson"));
+        var door = SourceGate.MethodBody(code, "public void PostOutbound");
+        Assert.Contains("PostWebMessageAsJson", door, StringComparison.Ordinal);
+        Assert.Contains("BridgeProtocol.Direction.Outbound", door, StringComparison.Ordinal);   // 问⛔ 是那一侧的名单＝门形在、牙没了
+        Assert.True(door.IndexOf("BridgeProtocol.Check(", StringComparison.Ordinal)
+                    < door.IndexOf("PostWebMessageAsJson", StringComparison.Ordinal),
+            "先 post 再问门＝那颗门⛔ 守得住任何东西");
+        // ③ 撤掉回话的那些拍子逐颗留痕（⛔ 静默），且痕里⛔ 念被拒的那颗名字
+        foreach (var trace in new[] { "boards.bridge.rejected", "boards.open.rejected", "boards.open.accepted",
+                    "boards.cmd.not-wired", "boards.export.kind.unknown", "boards.export.decode.failed",
+                    "boards.scene.unchanged" })
+            Assert.Contains(trace, code, StringComparison.Ordinal);
+        var openBlock = SourceGate.Between(code, "case \"open.external\"", "case \"export.bytes\"");
+        Assert.Equal(2, Count(openBlock, "StarLog"));
+        foreach (var line in openBlock.Split('\n'))
+            if (line.Contains("StarLog", StringComparison.Ordinal))
+                Assert.DoesNotContain("envelope.Url", line, StringComparison.Ordinal);   // 那颗 URL 正是被拒的那一颗
     }
 }

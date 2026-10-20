@@ -18,9 +18,10 @@ namespace StarMark.UI.Boards;
 /// <c>%LOCALAPPDATA%\StarMark\wbview2</c>（v1 §坑8 那条改道）。</para>
 /// <para><b>默认关</b>：本窗没有常驻入口，只有显式 <see cref="OpenNewAsync"/>／<see cref="OpenSceneAsync"/>；
 /// 托盘那两颗（续上一块／新起一块）由接线批那颗总开关收放（本档⛔ 自己挂上去——"找不到人接又自己冒出来"是第二主人）。</para>
-/// <para><b>回路现状（片56 现读）</b>：进向八颗里 <c>bridge.ready</c>／<c>board.loaded</c>／<c>open.external</c>／
+/// <para><b>回路现状（片57 现读）</b>：进向八颗里 <c>bridge.ready</c>／<c>board.loaded</c>／<c>open.external</c>／
 /// <c>export.bytes</c>／<c>bridge.reply</c> 五颗有主人；<c>paste.query</c>／<c>pin.request</c>／<c>background.request</c>
-/// 三颗回 <c>not-wired</c>——判定归各自批次（⛔ 假 allow）。</para>
+/// 三颗还没接线——宿主只往日志里落一行痕（<c>boards.cmd.not-wired</c>），判定归各自批次（⛔ 假 allow）。
+/// 那一族从前还各回一句"收到／没收"，而页面那颗听众压根⛔ 存在（P-245 撤掉的就是它：宿主→页面只剩那颗过门的门）。</para>
 /// <para><b>落盘与载入（片21＝§21.3）</b>：页面侧停笔 <see cref="BoardPolicy.AutosaveIdleMs"/> 毫秒自己交一份
 /// 场景 JSON（<c>export.bytes</c>＋<c>kind:"scene"</c>，⛔ 新名字），宿主失焦那一拍再索取一次（<c>export.pick</c>）；
 /// 字节经 <see cref="BridgeProtocol.LandsInSceneArchive"/> 分流进板档目录，png／svg 仍进导出目录。
@@ -431,7 +432,9 @@ public sealed class BoardWindow : Window
             envelope.Version, envelope.Cmd, envelope.ArgKeys, BridgeProtocol.Direction.Inbound);
         if (!allowed)
         {
-            Reply(envelope.Cmd, envelope.Id, ok: false, err: "fault:" + fault);
+            // 名单外的名字／坏形状只留一行痕：宿主→页面那一路⛔ 有一句"回话"的立锥之地（P-245 撤掉的就是那一族）。
+            // ⛔ 把 <c>envelope.Cmd</c> 递进日志——这颗名字正是被拒的那一颗，由页面说了算（日志伪造那一族，P-13）。
+            StarMark.Abstractions.StarLog.Warn("boards.bridge.rejected fault=" + fault + " id=" + _boardId);
             return;
         }
 
@@ -439,8 +442,7 @@ public sealed class BoardWindow : Window
         {
             case "bridge.ready":
                 _bridgeReady = true;
-                Reply(envelope.Cmd, envelope.Id, ok: true);
-                OnBridgeReady();
+                OnBridgeReady();          // 那一行痕在它里面（seq／id／hasScene）
                 break;
             case "board.loaded":
                 // 页面报"那份档落进画布了"＋两颗数。开闸只认<b>数</b>：宿主递进去几颗、档里读到几颗、画布上现在几颗，
@@ -448,7 +450,6 @@ public sealed class BoardWindow : Window
                 var want = BoardPolicy.CountWritableElements(_seenScene);
                 if (BoardPolicy.ShouldArmAfterLoad(want, envelope.Elements, envelope.Canvas))
                 {
-                    Reply(envelope.Cmd, envelope.Id, ok: true);
                     ArmIdleBeat("loaded", " want=" + want + " loaded=" + envelope.Elements + " canvas=" + envelope.Canvas);
                 }
                 else
@@ -456,7 +457,6 @@ public sealed class BoardWindow : Window
                     StarMark.Abstractions.StarLog.Warn(
                         "boards.arm.refused want=" + want + " loaded=" + envelope.Elements + " canvas=" + envelope.Canvas
                         + " id=" + _boardId + " tries=" + _armTries);
-                    Reply(envelope.Cmd, envelope.Id, ok: false, err: "arm-refused");
                     // 先自己再递一次（那是一句自愈），额度用完了才开口：⛔ 一拒就喊，也把"其实再递一次就好"那种一次性时序
                     // 报成坏掉；而⛔ 一直递＝把同一块空画布反复刷给用户看。两条都⛔ 把决定推给用户（重启／看日志）。
                     if (BoardPolicy.ShouldRetryArm(_armTries) && _seenScene is { Length: > 0 })
@@ -474,10 +474,11 @@ public sealed class BoardWindow : Window
             case "open.external":
                 if (!BridgeProtocol.IsSafeExternalUrl(envelope.Url))
                 {
-                    Reply(envelope.Cmd, envelope.Id, ok: false, err: "url-rejected");
+                    // ⛔ 把那颗 URL 递进日志：它正是被拒的那一颗，可能带查询串里的凭据（BJ 那一族）。
+                    StarMark.Abstractions.StarLog.Warn("boards.open.rejected id=" + _boardId);
                     break;
                 }
-                Reply(envelope.Cmd, envelope.Id, ok: true);
+                StarMark.Abstractions.StarLog.Info("boards.open.accepted id=" + _boardId);
                 _ = Helpers.LauncherEx.TryOpenAsync(envelope.Url);
                 break;
             case "export.bytes":
@@ -487,8 +488,10 @@ public sealed class BoardWindow : Window
                 HandleBridgeReply(envelope);
                 break;
             default:
-                // paste.query / pin.request / background.request：回路通了、判定归各自批次（⛔ 假 allow）
-                Reply(envelope.Cmd, envelope.Id, ok: false, err: "not-wired");
+                // paste.query / pin.request / background.request：名字过了门、回路却还没接（⛔ 假 allow）。
+                // 这颗名进日志是安全的（它已过名字闸门＝集合由我们定死）；等各自批次落地时要给的是一颗
+                // <b>登记进出向名单的回话</b>，⛔ 再拿一句没人听的出去（P-245 定案那一笔）。
+                StarMark.Abstractions.StarLog.Warn("boards.cmd.not-wired cmd=" + envelope.Cmd + " id=" + _boardId);
                 break;
         }
     }
@@ -497,14 +500,16 @@ public sealed class BoardWindow : Window
     {
         if (!BridgeProtocol.IsKnownExportKind(envelope.Kind))
         {
-            Reply(envelope.Cmd, envelope.Id, ok: false, err: "fault:UnknownName");
+            // ⛔ 念出那颗档位：它正是名单外的哪一颗，由页面说了算。
+            StarMark.Abstractions.StarLog.Warn("boards.export.kind.unknown id=" + _boardId);
             return;
         }
         byte[] bytes;
         try { bytes = Convert.FromBase64String(envelope.Bytes ?? string.Empty); }
         catch (FormatException)
         {
-            Reply(envelope.Cmd, envelope.Id, ok: false, err: "bridge-broken");
+            StarMark.Abstractions.StarLog.Warn(
+                "boards.export.decode.failed b64Len=" + (envelope.Bytes?.Length ?? 0) + " id=" + _boardId);
             return;
         }
         // 那颗档位决定落点（判据住 Core）：scene＝这颗板的本体→板档目录、档名＝那颗 id、滚 .bak；
@@ -527,7 +532,6 @@ public sealed class BoardWindow : Window
                 // 这一拍如果正被关窗那一拍等着，"拒"与"没回答"对那颗等待是同一颗答案，对用户却是两回事：
                 // 前者那几笔<b>确实一颗也没进盘</b>，而那句话必须让他看见（见 <see cref="_closingRefused"/>）。
                 _closingRefused = _closingLanded is not null;      // 只有那一问在等时才配改它（与那颗 same= 一问一复位同口径）
-                Reply(envelope.Cmd, envelope.Id, ok: false, err: "not-armed");
                 // 这一路与"停笔那一拍没开闸"是同一条静默面，而它更坏：用户已经画下的那几笔<b>一颗也没落盘</b>。
                 // ⚠ 而<b>同一件旧话不许把新事实顶掉</b>（片39 真机量到的那一发）：那颗「打开所在文件夹」按成功之后
                 // 同一拍里这次失焦又撞开一次写闸拒⇒「这一扇已停止保存」整句盖掉「已另存到 &lt;路径&gt;」、
@@ -545,7 +549,9 @@ public sealed class BoardWindow : Window
                 // 只有"这一份字节正是关窗那一拍在等的那一份"才配记进那一行：停笔／失焦那一拍也常撞到同件，
                 // 让它们把这一列拨成 true＝把一次无关的等价写说成"那一拍读到旧账"。
                 _closingSameAsDisk = _closingLanded is not null;
-                Reply(envelope.Cmd, envelope.Id, ok: true);
+                // 这一拍从前只由那句回话留下痕迹（而它⛔ 有读者）：不动盘也是宿主做过的一颗决定，得有痕。
+                StarMark.Abstractions.StarLog.Info("boards.scene.unchanged bytes=" + bytes.Length
+                    + " id=" + _boardId + " closing=" + (_closingLanded is not null));
                 FinishClosingFlush();
                 return;
             }
@@ -556,12 +562,10 @@ public sealed class BoardWindow : Window
                 // 「真正不同」的退路，而「写成功了」那一句听不出这一格——同件的写照样成功，照旧会把退路顶掉。
                 StarMark.Abstractions.StarLog.Info("boards.scene.saved id=" + _boardId
                     + " bytes=" + bytes.Length + " rolled=" + rolledBackup);
-                Reply(envelope.Cmd, envelope.Id, ok: true);
             }
             else
             {
                 StarMark.Abstractions.StarLog.Warn("boards.scene.save.failed: " + fault);
-                Reply(envelope.Cmd, envelope.Id, ok: false, err: "save-failed");
             }
             // 关窗那一拍等的就是"这一问有答案了"，而⛔ 是"答案是好听的那颗"：写失败也当场结掉，
             // 让用户再等满那两秒⛔ 能多换回一个字节。
@@ -578,7 +582,6 @@ public sealed class BoardWindow : Window
             // ⛔ 硬写＝把别人写好的东西抹掉，也⛔ 许让那句"已存到"指着别人的那颗档（P-243）。
             StarMark.Abstractions.StarLog.Warn("boards.export.failed kind=" + envelope.Kind
                 + " bytes=" + bytes.Length + " why=NameTaken id=" + _boardId);
-            Reply(envelope.Cmd, envelope.Id, ok: false, err: "name-taken");
             ReportExport("boards.exportFailedBody", null);
             return;
         }
@@ -594,13 +597,11 @@ public sealed class BoardWindow : Window
             // ⛔ 在这里 ShowNotice：那块面板此刻可能正挂着"这一扇已停止保存"，一句坏话⛔ 有权把另一句更坏的顶掉。
             StarMark.Abstractions.StarLog.Warn("boards.export.failed kind=" + envelope.Kind
                 + " to=" + target + " bytes=" + bytes.Length + " why=" + ex.GetType().Name + " id=" + _boardId);
-            Reply(envelope.Cmd, envelope.Id, ok: false, err: "write-failed");
             ReportExport("boards.exportFailedBody", null);
             return;
         }
         StarMark.Abstractions.StarLog.Info("boards.export.saved kind=" + envelope.Kind
             + " bytes=" + bytes.Length + " to=" + target + " id=" + _boardId);
-        Reply(envelope.Cmd, envelope.Id, ok: true);
         ReportExport("boards.exportSavedBody", target);
     }
 
@@ -1437,16 +1438,6 @@ public sealed class BoardWindow : Window
         => "{" + JsonString("v") + ":1," + JsonString("cmd") + ":" + JsonString(cmd)
            + "," + JsonString("id") + ":" + JsonString(id)
            + "," + JsonString("args") + ":{" + argsJson + "}}";
-
-    private void Reply(string? cmd, string? id, bool ok, string? err = null)
-    {
-        if (_web.CoreWebView2 is null) return;
-        var errPart = err is null ? string.Empty : "," + JsonString("err") + ":" + JsonString(err);
-        var json = """{"v":1,""" + JsonString("cmd") + ":" + JsonString(cmd)
-                   + "," + JsonString("id") + ":" + JsonString(id)
-                   + "," + JsonString("ok") + ":" + (ok ? "true" : "false") + errPart + "}";
-        _web.CoreWebView2.PostWebMessageAsJson(json);
-    }
 
     private static string JsonString(string? s) => System.Text.Json.JsonSerializer.Serialize(s);
 

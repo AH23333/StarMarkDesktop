@@ -130,10 +130,14 @@ public sealed class BoardSceneStoreGateTests
         Assert.Contains("out bool rolledBackup", Store, StringComparison.Ordinal);
         Assert.Contains("+ \" rolled=\" + rolledBackup", WindowCs, StringComparison.Ordinal);
         var saved = Between(WindowCs,
-            "if (BoardSceneStore.TrySave(_boardId, bytes, out var fault, out var rolledBackup))", "boards.scene.save.failed");
+            "if (BoardSceneStore.TrySave(_boardId, bytes, out var fault, out var rolledBackup))",
+            "var name = BridgeProtocol.UniqueExportName(");
         Assert.Contains("StarLog.Info(\"boards.scene.saved id=", saved, StringComparison.Ordinal);
-        Assert.True(saved.IndexOf("StarLog.Info") < saved.IndexOf("Reply(envelope.Cmd, envelope.Id, ok: true);"),
-            "日志排在回话之后＝那一拍死在回话里时这一行⛔ 出现，盘上动过什么就没人知道了");
+        // 片57（P-245）之前这一格钉的是「日志排在回话之前」，而那句回话页面压根⛔ 听——排序的意义在<b>痕要早于结掉那一问</b>，
+        // 所以把同一颗排序改钉到真的会走掉的那一跳上：那一拍死在 FinishClosingFlush 里时，这一行还得在。
+        Assert.True(saved.IndexOf("StarLog.Info") < saved.IndexOf("FinishClosingFlush();"),
+            "日志排在结掉那一问之后＝那一拍死在结掉那一手里时这一行⛔ 出现，盘上动过什么就没人知道了");
+        Assert.Equal(0, Count(saved, "Reply("));                       // 那颗回话整族撤掉（⛔ 留一颗没人读的出口）
     }
 
     /// <summary>
@@ -221,7 +225,7 @@ public sealed class BoardSceneStoreGateTests
     {
         Assert.Contains("BridgeProtocol.LandsInSceneArchive(envelope.Kind)", WindowCs, StringComparison.Ordinal);
         Assert.Contains("BoardSceneStore.TrySave(_boardId, bytes, out var fault, out var rolledBackup)", WindowCs, StringComparison.Ordinal);
-        Assert.Contains("save-failed", WindowCs, StringComparison.Ordinal);                 // 写不成要回一颗可上屏的故障名
+        Assert.Contains("boards.scene.save.failed", WindowCs, StringComparison.Ordinal);      // 写不成要留下一行读得到的痕
         var ask = Between(WindowCs, "private void RequestSceneSnapshot", "private static string Envelope");
         Assert.Contains("if (!_bridgeReady) return;", ask, StringComparison.Ordinal);
         // 片54：那一问的<b>形状</b>搬进唯一那颗发送处（scene 与右上角那两档图共用一颗＝⛔ 两处各拼一遍信封）。
@@ -289,7 +293,8 @@ public sealed class BoardSceneStoreGateTests
     {
         Assert.Contains("if (BoardPolicy.DiskAlreadyHolds(_lastWritten, bytes))", WindowCs, StringComparison.Ordinal);
         var gate = Between(WindowCs, "if (BoardPolicy.DiskAlreadyHolds", "if (BoardSceneStore.TrySave");
-        Assert.Contains("Reply(envelope.Cmd, envelope.Id, ok: true);", gate, StringComparison.Ordinal);
+        Assert.Contains("boards.scene.unchanged bytes=", gate, StringComparison.Ordinal);   // 不动盘也是宿主做过的一颗决定
+        Assert.Equal(0, Count(gate, "Reply("));                       // 片57（P-245）：那一拍⛔ 再往页面丢一句没人听的回话
         Assert.Contains("return;", gate, StringComparison.Ordinal);
         Assert.DoesNotContain("TrySave", gate, StringComparison.Ordinal);
 
