@@ -14,8 +14,9 @@ namespace StarMark.Core.Boards;
 ///    于是上限住进 <see cref="SceneBytesCeilingBytes"/>，每一颗数字的出处写在那一段里
 ///    （正本 <c>bin/WI98/readings_58z_ladder2_221131.txt</c>），闸门同时换成
 ///    「自给的上限必须带一句盘上真有的正本」（<c>EverySelfGivenCeilingCitesAReadingThatExists</c>）。
-///    ⚠ 它<b>只</b>覆盖「字节」那一半：长边（画板里一张图多大像素）今天还是⛔ 量过，
-///    本档至今只放着引擎自报的那两颗（名字里就写着 <c>EngineReported</c>）；
+///    ⚠ 它<b>只</b>覆盖「字节」那一半：长边（画板里一张图多大像素）由片60 现读判掉了——那颗数在引擎侧有主人，
+///    而读它的那条路被我们自己那颗 <c>tools:{image:false}</c> 整体关掉（见两颗 <c>EngineReported*</c> 那两段），
+///    本档因此照旧只放着引擎自报的那两颗（名字里就写着 <c>EngineReported</c>）；
 /// ② 那颗<b>成品路径</b>（片23 起根归 <c>UserDataPaths</c>，UI 侧只问它要那颗子目录）。<b>片39 给这一条改口</b>：
 ///    本档现在裁「<b>用户的产物进哪一族</b>」（<see cref="ExportsFolder"/>），但两棵根由宿主递进来——
 ///    本档⛔ 自己读环境变量、⛔ 认 <c>%APPDATA%</c>／<c>%USERPROFILE%</c>（层次倒挂，同它⛔ 认 WebView2 那颗 enum）；
@@ -27,11 +28,32 @@ public static class BoardPolicy
     /// <summary>随包那颗引擎的减重长边（<b>现读</b>：<c>DEFAULT_MAX_IMAGE_WIDTH_OR_HEIGHT</c>，
     /// 定义在 <c>dist/dev/chunk-3KPV5WBD.js:322</c>＝1440）。<b>它是引擎那侧的读数，⛔ 我们给的上限</b>——
     /// 记在这里只为排障时对得上号（§19.3 那颗"too big 其实是解码失败"的形状就靠它对账）。</summary>
+    /// <para><b>片60 把它射程的两头都读了一遍</b>（随包 <c>assets/boards/excalidraw.min.js</c>＝4 878 772 颗字节，
+    /// sha 前缀 <c>923fa221d0a4fc22</c>；正本 <c>bin/WI98/readings_60_bundle_r2_001740.txt</c> 与
+    /// <c>bin/WI98/readings_60c_bundle_002145.txt</c>）：那颗数在<b>成品 bundle</b> 里逐字只 1 处声明
+    /// （<c>,px=1440</c>，offset 2166993），而唯一读它的消费点在 <c>initializeImage</c> 体里
+    /// （<c>maxWidthOrHeight:px</c>，offset 4768057）；那条路只有一颗调用（<c>initializeImage(</c>，offset 4769096）
+    /// ＝<c>insertImageElement</c>，而它起手先问 <c>isToolSupported("image")</c>
+    /// （定义逐字 <c>this.props.UIOptions.tools?.[E]!==!1</c>，offset 4734622）——我们桥里
+    /// <c>assets/boards/board-bridge.js:207</c> 递的正是 <c>tools: { image: false }</c>
+    /// ⇒ <b>这一颗数今天在产品里一颗也不咬</b>：粘贴／拖放／工具条那三处入口一并被同一颗开关挡在外
+    /// （开关关着的那颗屏幕正件＝<c>bin/WI83/spike1b/out_r9a/cells.json</c>，工具条 32→30 少 <c>toolbar-image</c>）。
+    /// ⚠ 那颗开关的第二把扳机＝桥里 <c>case "feature.flags"</c>（<c>board-bridge.js:152</c>）：那一手交的是
+    /// <b>整颗 UIOptions 替换</b>而⛔ 合并，宿主今天一颗也不发（名字只在 <see cref="BridgeProtocol"/> 的名册里）。</para>
     public const int EngineReportedLongEdgePx = 1440;
 
     /// <summary>随包那颗引擎的字节闸门（<b>现读</b>：<c>MAX_ALLOWED_FILE_BYTES</c>＝<c>4*1024*1024</c>，
     /// 同档 <c>:323</c>；那颗 <c>dist/spike1.min.js</c> 里逐字 <c>Ine=4*1024*1024</c>，⛔ 任何 prop 出口）。
     /// 同样⛔ 是我们自己给的上限。</summary>
+    /// <para><b>片60 补上它在成品里的那一手</b>（同一颗 bundle，正本 <c>bin/WI98/readings_60_bundle_r2_001740.txt</c>）：
+    /// <c>,Vw=4*1024*1024</c> 声明在 offset 2167001，判据在 <c>initializeImage</c> 体里
+    /// <c>if(E.size>Vw)throw new Error(b("errors.fileTooBig",{maxSize:...}))</c>，
+    /// ⚠ <b>次序是先按 <see cref="EngineReportedLongEdgePx"/> 压、压完才判字节</b>（压失败只 <c>console.error</c>
+    /// 之后拿原颗去过判据；<c>svg</c> 那一支整支⛔ 过这两道；同一颗 id 已在 <c>this.files</c> 里带 <c>dataURL</c> 时两道全跳）。
+    /// 它跟 <see cref="SceneBytesCeilingBytes"/> ⛔ 是一回事：那颗管「一张图」且住在我们走不到的路上，
+    /// 这颗自给的管「一发整档」。而<b>我们自己的载档那一路</b>（载入三步 → <c>addFiles</c> → <c>addMissingFiles</c>）
+    /// ⛔ 经过这两道＝档里那颗图字节照原样进出（片13 那条斜率量的正是这条路），所以给 <c>ImageCeilingsMeasured</c>
+    /// 对账时⛔ 要拿引擎那两句冒充宿主的代价。</para>
     public const long EngineReportedFileCeilingBytes = 4L * 1024 * 1024;
 
     /// <summary>
@@ -50,7 +72,11 @@ public static class BoardPolicy
     /// <para>⚠ 三处口径⛔ 许混着读：① 改前是<b>停笔</b>那一拍、改后是<b>关窗</b>那一拍，两列数⛔ 是同一拍；
     /// ② 改后那一拍按住界面的 86.7 ms（8 MiB）比改前那 100.5 只降了一截——因为留下来的主要是<b>解码</b>
     /// 与那颗 base64 字符串过桥，⛔ 是写盘（写盘已经不在 UI 线程上，见 <c>SceneBytesCeilingBytes</c> 那一段）；
-    /// ③ 长边那一半还是⛔ 量过，引擎自报的 1440 与 4 MB 照旧只是<b>对账用的读数</b>（上面两颗 <c>EngineReported*</c>）。</para>
+    /// ③ <b>长边那一半今天有了源码读数</b>（片60，⛔ 屏幕读数）：引擎自报的 1440 与 4 MB 照旧只是<b>对账用的读数</b>
+    /// （上面两颗 <c>EngineReported*</c> 那两段写着它们的 offset 与唯一消费点），而片60 现读到的是
+    /// <b>那两道住在 <c>initializeImage</c> 里、那条路被我们自家 <c>tools:{image:false}</c> 整体关掉</b>
+    /// ⇒ 界面上今天唯一管得住一张图的还是下面这颗 <c>SceneBytesCeilingBytes</c>；
+    /// ⚠ 「粘贴一张图会不会撞上引擎那句 <c>Images are disabled.</c>」<b>⛔ 上过量</b>（真机那三臂被第 0 道核对拦下＝欠项）。</para>
     /// </summary>
     public const bool ImageCeilingsMeasured = true;
 
@@ -77,7 +103,12 @@ public static class BoardPolicy
     /// 屏幕上说哪句话由宿主那一头按档位分流（scene＝「这一扇已停止保存」那一族，png／svg＝「没能存成」那一族）。
     /// ⚠ <b>欠项（片59 更新）</b>：① 改后<b>停笔</b>那一拍已用同一把尺重测（<c>readings_59_idle2M_234456.txt</c>：
     /// 2 MiB 那一发 <c>WM_NULL</c> 最慢 <b>3.7 ms</b>，痕 <c>tid=2 onUi=True closing=False</c>，对照改前失焦那一拍 41.2 ms）；
-    /// ② <b>真贴几张图</b>会不会撞上这颗上限仍⛔ 摆过现场（这里全是 <c>customData.pad</c> 垫出来的无图板）；
+    /// ② <b>真贴几张图</b>会不会撞上这颗上限仍⛔ 摆过现场（这里全是 <c>customData.pad</c> 垫出来的无图板）——
+    ///    片60 现读到那条<b>摆出现场</b>的路今天根本走不到：用户能贴图的三处入口（粘贴／拖放／工具条那颗）
+    ///    全被桥里 <c>tools: { image: false }</c>（<c>board-bridge.js:207</c>）挡在 <c>isToolSupported("image")</c> 外，
+    ///    而<b>发向</b>名册里唯一能把它翻回来的那颗 <c>feature.flags</c> 今天<b>一颗也没有发过</b>
+    ///    （<c>BoardWindow.cs</c> 里 <c>PostOutbound</c> 现读五颗＝export.pick／theme.set／lang.set／board.load／autosave.arm，
+    ///    名册第六颗⛔ 主人）⇒ 这一格今天的真形状是「带图的板只能来自外来档或手改的档」，⛔ 是「量到了但不卡」；
     /// ③ 被这颗闸门拒掉的那一发如果正撞关窗那一拍，痕仍报 <c>landed=True</c>，而屏幕上那句话贴在正被 <c>Hide()</c> 的窗上
     /// ——那一拍它⛔ 来得及被看见＝<b>账本 P-247</b>，结案前必须量。</para>
     /// </summary>
