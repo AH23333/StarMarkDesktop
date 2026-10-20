@@ -273,8 +273,9 @@ public sealed class BoardSceneStoreGateTests
         // 片54：那一发导出的产物同一颗问法——页面递上来的那颗显示名（"我的板"）⛔ 许当产物档名的主人：
         // 产物落进的是<b>用户的</b>图片目录，"哪一块板、什么时候"才是那颗名字要说的话（宿主那一颗主干名）。
         // 而产物那一路现在由宿主自己发起（右上角那一行），⛔ 再由一颗下载事件替它判档（真机读数＝那颗事件不响，
-        // 正本 bin/WI93/readings_54_134804.txt＋log54_forensics.txt），所以 ExportStem() 只剩一颗定义＋一路调用。
-        Assert.Equal(2, Count(WindowCs, "ExportStem()"));
+        // 正本 bin/WI93/readings_54_134804.txt＋log54_forensics.txt），所以 ExportStem() 只剩一颗定义＋两路调用
+        // （片55 起那两路＝同名判据的<b>原型根</b>与<b>兜底根</b>，两支都由同一颗上游收名，⛔ 在调用点各拼一遍 id＋时刻）。
+        Assert.Equal(3, Count(WindowCs, "ExportStem()"));
     }
 
     /// <summary>

@@ -86,12 +86,13 @@ namespace StarMark.UI.Boards;
 /// ——同一把尺同一跑读得到 <c>boards.nav.done</c>／<c>boards.bridge.ready</c>／<c>boards.arm.post</c> 各一行（尺⛔ 聋），
 /// 被测那颗 dll 与装配那颗逐字相等（沙盒⛔ 是旧二进制）。
 /// 现读那颗引擎的 <c>saveAs</c> 说的是另一句话：那颗模块选择器在<b>顶层文档</b>里有 <c>showOpenFilePicker</c> 时
-/// 走的是 <c>window.showSaveFilePicker</c> 那一支（<c>excalidraw.min.js</c> 偏移 245263 与 4871061 两段逐字），
+/// 走的是 <c>window.showSaveFilePicker</c> 那一支（<c>excalidraw.min.js</c> 现读 4878772 颗字节里那颗调用逐字只 1 处＝偏移 245263），
 /// <b>压根⛔ 是下载</b>⇒宿主订不到，也改不动它的落点。
 /// ⇒按账本 P-240 ②那句<b>原话</b>动手（我中途改的那一次口已撤回）：引擎那颗框连同开它的那两颗名字一起关到⛔ 通
 /// （<c>board-bridge.js</c> 现读 <c>export:false</c>＋<c>saveAsImage:false</c>，随包资产走片18 那颗闸门重冻），
 /// 出口换成宿主这一扇右上角那一行：<c>export.pick</c> 带 <c>kind＝png／svg</c> → 页面交字节 →
-/// <see cref="HandleExportBytes"/> 落产物目录（档名＝<see cref="ExportStem"/>），而那句"已存到 &lt;路径&gt;"与那句"没能存成"
+/// <see cref="HandleExportBytes"/> 落产物目录（档名＝<see cref="ExportStem"/> 兜底，盘上已有同一颗就添 <c>-2</c>／<c>-3</c>＝
+/// <see cref="StarMark.Core.Boards.BridgeProtocol.UniqueExportName"/>，⛔ 盖掉上一颗＝账本 P-243），而那句"已存到 &lt;路径&gt;"与那句"没能存成"
 /// 由<b>那一行自己</b>说（<see cref="PasteBar"/>）：它⛔ 走那块面板，因为面板此刻可能正挂着"这一扇已停止保存"，
 /// 一句好消息⛔ 有权把那句坏话顶掉（片39 真机量到的那一发就是这一族）。</para>
 /// <para>⚠ 那颗框里的四颗旋钮（背景／深色模式／包含画布数据／缩放 1×2×3×）跟着关掉了＝导出按 appState 默认走（1×、带背景）；
@@ -556,7 +557,20 @@ public sealed class BoardWindow : Window
             FinishClosingFlush();
             return;
         }
-        var name = BridgeProtocol.SanitizeExportName(envelope.Suggested, ExportStem(), envelope.Kind);
+        var name = BridgeProtocol.UniqueExportName(
+            BridgeProtocol.SanitizeExportName(envelope.Suggested, ExportStem(), envelope.Kind),
+            candidate => File.Exists(Path.Combine(ExportsDirectory, candidate)),
+            BridgeProtocol.SanitizeExportName(null, ExportStem(), envelope.Kind));
+        if (name is null)
+        {
+            // 带序号的那一族连兜底名一起被占满（同板同秒连按到底才摆得出这一档）。
+            // ⛔ 硬写＝把别人写好的东西抹掉，也⛔ 许让那句"已存到"指着别人的那颗档（P-243）。
+            StarMark.Abstractions.StarLog.Warn("boards.export.failed kind=" + envelope.Kind
+                + " bytes=" + bytes.Length + " why=NameTaken id=" + _boardId);
+            Reply(envelope.Cmd, envelope.Id, ok: false, err: "name-taken");
+            ReportExport("boards.exportFailedBody", null);
+            return;
+        }
         var target = Path.Combine(ExportsDirectory, name);
         try
         {

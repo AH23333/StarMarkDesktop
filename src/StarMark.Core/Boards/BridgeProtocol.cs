@@ -210,6 +210,65 @@ public static class BridgeProtocol
     public static bool IsKnownExportKind(string? kind)
         => !string.IsNullOrEmpty(kind) && Array.IndexOf(ExportKinds, kind!) >= 0;
 
+    /// <summary>同一颗主干名最多往尾巴上添几颗序号就去换兜底名（换完再数同样这么多颗）。</summary>
+    public const int UniqueTrials = 64;
+
+    /// <summary>
+    /// 同名⛔ 盖：那一族已经被占了就往尾巴上添 <c>-2</c>／<c>-3</c>…，添满 <see cref="UniqueTrials"/> 颗换带时刻的兜底名再数一遍，
+    /// 还满就交回 <c>null</c>＝这一发⛔ 落（调用方宁可说不出去，也⛔ 许悄悄把别人写好的东西抹掉）。
+    /// <para><b>为什么判据住在 Core</b>：这一问决定"盘上会不会少一颗档"，而测试工程⛔ 引用 <c>StarMark.UI</c>
+    /// ⇒只有搬进来才量得到（片43 那颗 <c>PickReadableScene</c> 走的是同一条路）。</para>
+    /// <para><b>「有没有」由调用方递一把问句进来</b>：本类⛔ 碰文件系统——纯函数才摆得出"整目录都被占满"那一档。</para>
+    /// </summary>
+    /// <param name="name">已过 <see cref="SanitizeExportName"/> 的裸文件名（扩展名⛔ 在这里动）。</param>
+    /// <param name="exists">问"这颗裸名在落点目录里已经有一颗了吗"。</param>
+    /// <param name="fallbackName">带时刻的兜底名（撞满那一族时换它，它自己再撞就在它尾巴上继续添）。</param>
+    public static string? UniqueExportName(string name, Func<string, bool> exists, string fallbackName)
+    {
+        foreach (var candidate in ExportNameCandidates(name, fallbackName))
+            if (!exists(candidate))
+                return candidate;
+        return null;
+    }
+
+    /// <summary>
+    /// 候选那一串＝<c>name</c>、<c>name-2</c>…<c>name-65</c>，再 <c>fallback</c>、<c>fallback-2</c>…。
+    /// <para>两颗根都要数，⛔ 只数第一颗：盘上可能本来就有一颗人写的 <c>板子-2.png</c>——
+    /// 从 <c>板子.png</c> 添出来的下一颗正好撞上它，那就又回到"悄悄盖掉别人的东西"。
+    /// <see cref="StringComparer.OrdinalIgnoreCase"/> 是因为 NTFS 认⛔ 大小写。</para>
+    /// </summary>
+    public static IEnumerable<string> ExportNameCandidates(string name, string fallbackName)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var root in new[] { name, fallbackName })
+        {
+            if (string.IsNullOrEmpty(root)) continue;
+            if (!seen.Add(root)) continue;          // 兜底恰好等于原名＝⛔ 报两遍同一颗
+            yield return root;
+            for (var n = 2; n <= UniqueTrials + 1; n++)
+            {
+                var candidate = WithSequenceSuffix(root, n);
+                if (candidate.Length == 0 || !seen.Add(candidate)) continue;
+                yield return candidate;
+            }
+        }
+    }
+
+    /// <summary>把序号添在最后一段扩展名之前，并让主干（含序号）⛔ 超 <see cref="MaxStemLength"/>；
+    /// Windows 还不许一颗档名以 <c>.</c> 或空格收尾，所以截完之后要 <c>TrimEnd</c> 一次。</summary>
+    private static string WithSequenceSuffix(string name, int n)
+    {
+        var stem = System.IO.Path.GetFileNameWithoutExtension(name);
+        var ext = System.IO.Path.GetExtension(name);
+        var suffix = "-" + n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var stem2 = stem.Length + suffix.Length > MaxStemLength
+            ? stem[..(MaxStemLength - suffix.Length)]
+            : stem;
+        stem2 = stem2.TrimEnd('.', ' ');
+        if (stem2.Length == 0) return string.Empty;
+        return stem2 + suffix + ext;
+    }
+
     /// <summary>
     /// 那颗档位递上来的字节<b>该落哪儿</b>——<c>scene</c> 落板档目录（一颗板一颗档，档名＝那颗 id，⛔ 时刻前缀），
     /// 其余（png／svg）落导出目录（一次一份，名字带时刻）。

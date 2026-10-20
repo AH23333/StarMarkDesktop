@@ -752,7 +752,9 @@ public sealed class BoardWindowBridgeGateTests
     /// ④ 那句"已存到"只跟着 <c>Completed</c>（⛔ 在字节还在路上那一刻说话），而"没写成"那一句也必须有（摘掉默认 UI 之后
     /// 屏幕上再没别人说这一手的下落＝把"点了没反应"留在屏幕上，§坑13 第一工程风险）；
     /// ⑤ 产物目录那颗 <c>CreateDirectory</c> 全档只许一位主人（P-241 的③件）；
-    /// ⑥ 名字的主人只有一颗：<c>ExportStem()</c> 被两路各问一次，⛔ 在两支里各拼一遍 <c>id + 时刻</c>。</para></summary>
+    /// ⑥ 名字的主人只有一颗：<c>ExportStem()</c> 被两路各问一次，⛔ 在两支里各拼一遍 <c>id + 时刻</c>；
+    /// ⑦（片55＝P-243）那一发落不下去时⛔ 许盖掉上一颗：档名唯一主人＝<c>BridgeProtocol.UniqueExportName</c>，
+    /// 写盘那一手排在它之后，交回 <c>null</c> 那一支必须走"没能存成"那一句。</para></summary>
     [Fact]
     public void TheExportLandsWhereTheHostSaysWhileTheEngineDialogStaysShut()
     {
@@ -816,6 +818,18 @@ public sealed class BoardWindowBridgeGateTests
         // ⑥ 那颗目录与那颗名字各只有一位主人（②那一路删掉之后，调用点各少一颗）
         Assert.Equal(1, Count(code, "Directory.CreateDirectory(ExportsDirectory)"));
         Assert.Equal(2, Count(code, "EnsureExports();"));
-        Assert.Equal(2, Count(code, "ExportStem()"));
+        Assert.Equal(3, Count(code, "ExportStem()"));        // 声明一颗＋收名两路（原型与兜底根）＝片55 起的形状
+
+        // ⑦ 同名⛔ 盖（片55＝P-243）：那一颗档名的唯一主人＝Core 那颗纯函数，写盘那一手排在它之后
+        Assert.Equal(1, Count(code, "BridgeProtocol.UniqueExportName("));
+        // "盘上有没有"那一问只许递给 File.Exists（NTFS 认⛔ 大小写＝同一颗名）；换成自己列目录再比串＝第二个主人
+        Assert.Contains("candidate => File.Exists(Path.Combine(ExportsDirectory, candidate))", bytes, StringComparison.Ordinal);
+        Assert.Contains("if (name is null)", bytes, StringComparison.Ordinal);
+        Assert.Contains("why=NameTaken", bytes, StringComparison.Ordinal);
+        Assert.Contains("err: \"name-taken\"", bytes, StringComparison.Ordinal);
+        Assert.Equal(1, Count(bytes, "File.WriteAllBytes(target, bytes);"));
+        Assert.True(bytes.IndexOf("UniqueExportName", StringComparison.Ordinal)
+                    < bytes.IndexOf("File.WriteAllBytes(target, bytes);", StringComparison.Ordinal),
+                    "先定名再写：名⛔ 定就先写＝同名那一颗还是会被盖掉");
     }
 }
