@@ -224,7 +224,14 @@ public sealed class BoardSceneStoreGateTests
         Assert.Contains("save-failed", WindowCs, StringComparison.Ordinal);                 // 写不成要回一颗可上屏的故障名
         var ask = Between(WindowCs, "private void RequestSceneSnapshot", "private static string Envelope");
         Assert.Contains("if (!_bridgeReady) return;", ask, StringComparison.Ordinal);
-        Assert.Contains("JsonString(\"kind\") + \":\" + JsonString(\"scene\")", ask, StringComparison.Ordinal);
+        // 片54：那一问的<b>形状</b>搬进唯一那颗发送处（scene 与右上角那两档图共用一颗＝⛔ 两处各拼一遍信封）。
+        // ⚠ 搬进可测那一层⛔ 等于那一头自动正确：png／svg 那一路真能不能落盘，归真机腿那一跑（账本 P-240 的②）。
+        Assert.Contains("PostExportPick(\"scene\");", ask, StringComparison.Ordinal);
+        // ⚠ 这里⛔ 再切"那颗方法到下一颗 <c>/// &lt;summary&gt;</c>"的片：本档那颗 Between 的终点锚只往<b>后</b>找，
+        // 而新搬出去的那颗方法紧跟的是别的方法的文档片（切不齐＝抛，名册 447 的另一副脸）⇒按<b>整档</b>数那颗形状：全档只许一次。
+        Assert.Contains("JsonString(\"kind\") + \":\" + JsonString(kind)", WindowCs, StringComparison.Ordinal);
+        Assert.Equal(1, Count(WindowCs, "JsonString(\"kind\") + \":\" + JsonString(kind)"));
+        Assert.Equal(1, Count(WindowCs, "PostOutbound(\"export.pick\""));      // 一颗形状只许有一位主人
         // 片24：那一次索取现在<b>点名是哪一拍</b>（Core 判这一拍问得到问不到，UI 侧⛔ 自己猜）
         Assert.Contains("WindowActivationState.Deactivated) RequestSceneSnapshot(BoardPolicy.SaveBeat.LosingFocus);",
             WindowCs, StringComparison.Ordinal);
@@ -259,10 +266,15 @@ public sealed class BoardSceneStoreGateTests
         Assert.Contains("API.getAppState()", nameReader, StringComparison.Ordinal);   // 读的是那颗字段本尊
         Assert.DoesNotContain("getName(", nameReader, StringComparison.Ordinal);
 
-        Assert.Contains("BridgeProtocol.SanitizeExportName(envelope.Suggested, stem, envelope.Kind)",
+        Assert.Contains("BridgeProtocol.SanitizeExportName(envelope.Suggested, ExportStem(), envelope.Kind)",
             WindowCs, StringComparison.Ordinal);
-        var sceneBranch = Between(WindowCs, "if (BridgeProtocol.LandsInSceneArchive(envelope.Kind)", "var stem =");
+        var sceneBranch = Between(WindowCs, "if (BridgeProtocol.LandsInSceneArchive(envelope.Kind)", "var name =");
         Assert.DoesNotContain("Suggested", sceneBranch, StringComparison.Ordinal);     // 板档档名⛔ 跟着显示名走
+        // 片54：那一发导出的产物同一颗问法——页面递上来的那颗显示名（"我的板"）⛔ 许当产物档名的主人：
+        // 产物落进的是<b>用户的</b>图片目录，"哪一块板、什么时候"才是那颗名字要说的话（宿主那一颗主干名）。
+        // 而产物那一路现在由宿主自己发起（右上角那一行），⛔ 再由一颗下载事件替它判档（真机读数＝那颗事件不响，
+        // 正本 bin/WI93/readings_54_134804.txt＋log54_forensics.txt），所以 ExportStem() 只剩一颗定义＋一路调用。
+        Assert.Equal(2, Count(WindowCs, "ExportStem()"));
     }
 
     /// <summary>

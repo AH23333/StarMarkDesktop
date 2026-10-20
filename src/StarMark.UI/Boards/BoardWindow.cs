@@ -78,6 +78,24 @@ namespace StarMark.UI.Boards;
 /// 先证明那一笔<b>画得上</b>（0.25 s／1.77 s 两颗都进）⇒修法＝开口前先让 <see cref="BoardPolicy.CloseFlushGraceMs"/>，
 /// 两条来路共用同一颗 <see cref="FlushSnapshotAsync"/>；改后"抬笔即关"两跑各 2/2（最后那一扇逐字 <c>same=False tookMs=153</c>）。
 /// ⚠ 这一手把丢笔压到量不到的档，⛔ 是"保证渲染进程收下了"——页面没有"我处理到第几笔"可问，宿主也⛔ 知道这块板上有几笔。</para>
+/// <para><b>片54＝那一发导出的出口收进宿主（P-240 的②）</b>：片53 量到那颗「导出图片」⛔ 是死的、按下去真落盘
+/// （正本 <c>readings_51e_123104</c>：系统「另存为」里按 PNG⇒t=0.5 s 落档 2203 颗字节），而<b>落点与命名归那颗框</b>。
+/// 本批第一版照 §21.4 的思路去<b>接管那颗下载</b>（订 <c>DownloadStarting</c>、改 <c>ResultFilePath</c>、<c>Handled＝true</c>），
+/// 真机一跑当场把它否掉（正本 <c>bin/WI93/readings_54_134804.txt</c>＋<c>bin/WI93/log54_forensics.txt</c>）：
+/// 那颗 <c>#32770「另存为」960x600</c> 照样起来，而<b>整份日志里 <c>boards.download</c> 零行</b>
+/// ——同一把尺同一跑读得到 <c>boards.nav.done</c>／<c>boards.bridge.ready</c>／<c>boards.arm.post</c> 各一行（尺⛔ 聋），
+/// 被测那颗 dll 与装配那颗逐字相等（沙盒⛔ 是旧二进制）。
+/// 现读那颗引擎的 <c>saveAs</c> 说的是另一句话：那颗模块选择器在<b>顶层文档</b>里有 <c>showOpenFilePicker</c> 时
+/// 走的是 <c>window.showSaveFilePicker</c> 那一支（<c>excalidraw.min.js</c> 偏移 245263 与 4871061 两段逐字），
+/// <b>压根⛔ 是下载</b>⇒宿主订不到，也改不动它的落点。
+/// ⇒按账本 P-240 ②那句<b>原话</b>动手（我中途改的那一次口已撤回）：引擎那颗框连同开它的那两颗名字一起关到⛔ 通
+/// （<c>board-bridge.js</c> 现读 <c>export:false</c>＋<c>saveAsImage:false</c>，随包资产走片18 那颗闸门重冻），
+/// 出口换成宿主这一扇右上角那一行：<c>export.pick</c> 带 <c>kind＝png／svg</c> → 页面交字节 →
+/// <see cref="HandleExportBytes"/> 落产物目录（档名＝<see cref="ExportStem"/>），而那句"已存到 &lt;路径&gt;"与那句"没能存成"
+/// 由<b>那一行自己</b>说（<see cref="PasteBar"/>）：它⛔ 走那块面板，因为面板此刻可能正挂着"这一扇已停止保存"，
+/// 一句好消息⛔ 有权把那句坏话顶掉（片39 真机量到的那一发就是这一族）。</para>
+/// <para>⚠ 那颗框里的四颗旋钮（背景／深色模式／包含画布数据／缩放 1×2×3×）跟着关掉了＝导出按 appState 默认走（1×、带背景）；
+/// 要不要在宿主侧重造，归账本新立的那一颗（⛔ 在这一批顺手补，也⛔ 静默当它不存在）。</para>
 /// </summary>
 public sealed class BoardWindow : Window
 {
@@ -211,8 +229,33 @@ public sealed class BoardWindow : Window
     /// <summary>那颗"另存一份到别处"的按钮这这一刻许不许按（另存正进行中＝⛔ 再按一次，那是第二份写入）。</summary>
     private bool _copying;
 
-    /// <summary>另存到了哪儿（那句"已另存到 {0}"的槽；⛔ 进表，因为它是<b>数据</b>而⛔ 句子）。</summary>
-    private string? _copyPath;
+    /// <summary>面板上那句"已另存到 &lt;路径&gt;"指的<b>那颗档</b>（生产者⛔ 一处：那颗「另存一份到别处」）。
+    /// <para>⛔ 进表，因为它是<b>数据</b>而⛔ 句子（P-193 那条口径）。那一发导出的产物⛔ 写这一颗——它住在右上角
+    /// 那一行里（<see cref="_exportPath"/>）：两块表面各说各的档，⛔ 让一句好消息把面板上那句"这一扇已停止保存"顶掉
+    /// （片39 真机量到的就是这一族：旧话把新事实盖掉、那颗出口跟着退场）。</para></summary>
+    private string? _savedPath;
+
+    /// <summary>右上角那一行<b>最近真落盘</b>的那颗产物（那句"已存到"与那颗「打开所在文件夹」共用的唯一答案）。
+    /// <para>它⛔ 是"最近一次尝试"：失败⛔ 覆盖它（盘上那一颗还在，用户照样点得开），⛔ 跟着换板清掉——
+    /// 那颗档名里带着它所属那块板的 id（<see cref="ExportStem"/>），说的就是"哪一块板的哪一刻"。</para></summary>
+    private string? _exportPath;
+
+    /// <summary>右上角那一行此刻挂着的<b>那一句住在表里的哪颗键</b>（null＝还没导出过）。
+    /// <para>记<b>键</b>而⛔ 记成品串：换语言那一拍要按它重贴（机制 (C)），而那颗路径是实参、⛔ 是句子。</para></summary>
+    private string? _exportOutcomeKey;
+
+    /// <summary>那一行正有一发导出在跑（与 <see cref="_copying"/>／<see cref="_retrying"/> 同一副规矩：
+    /// 跑的那一发点得亮＝他会连按出两发，屏幕上两句话抢同一颗落点）。</summary>
+    private bool _exporting;
+
+    /// <summary>右上角那一行（导出那两颗入口＋那颗落点的话）：它⛔ 是那块面板的零件——面板只在有事要说时才在场，
+    /// 而"我刚导出那张图，它落在哪儿"每一次都要有答案。</summary>
+    private StackPanel? _bar;
+
+    private Button? _barPngButton;
+    private Button? _barSvgButton;
+    private Button? _barFolderButton;
+    private TextBlock? _barStatus;
 
     public BoardWindow()
     {
@@ -344,6 +387,9 @@ public sealed class BoardWindow : Window
         _web.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
         _web.CoreWebView2.NavigationCompleted -= OnNavigationCompleted;
         _web.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
+        // ⛔ 在这里订 <c>DownloadStarting</c> 去接管那一发导出（本批第一版试过，被真机当场否掉）：
+        // 那颗引擎的 saveAs 走的是 <c>window.showSaveFilePicker</c>，压根⛔ 是下载——那颗事件一颗也不响，
+        // 逐字读数见类文档那段（正本 readings_54_134804＋log54_forensics）。
         _web.CoreWebView2.Navigate("https://" + VirtualHostName + "/" + BoardPageName);
     }
 
@@ -474,7 +520,7 @@ public sealed class BoardWindow : Window
                 // ⚠ 而<b>同一件旧话不许把新事实顶掉</b>（片39 真机量到的那一发）：那颗「打开所在文件夹」按成功之后
                 // 同一拍里这次失焦又撞开一次写闸拒⇒「这一扇已停止保存」整句盖掉「已另存到 &lt;路径&gt;」、
                 // 那颗新按钮跟着退场＝用户刚拿到的那条出口从屏幕上消失（正本 readings_39_184213）。
-                if (!NoticeSaysCopyOutcome) ShowArmStuckNotice();
+                if (!NoticeSaysFileOutcome) ShowArmStuckNotice();
                 FinishClosingFlush();   // 关窗那一拍等的是"这一问有答案"，拒掉也是答案——⛔ 让用户白等那两秒
                 return;
             }
@@ -510,18 +556,113 @@ public sealed class BoardWindow : Window
             FinishClosingFlush();
             return;
         }
-        var stem = _boardId + "-" + BoardPolicy.FormatStamp(DateTime.Now);
-        var name = BridgeProtocol.SanitizeExportName(envelope.Suggested, stem, envelope.Kind);
-        Directory.CreateDirectory(ExportsDirectory);
-        File.WriteAllBytes(Path.Combine(ExportsDirectory, name), bytes);
+        var name = BridgeProtocol.SanitizeExportName(envelope.Suggested, ExportStem(), envelope.Kind);
+        var target = Path.Combine(ExportsDirectory, name);
+        try
+        {
+            EnsureExports();
+            File.WriteAllBytes(target, bytes);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 坏的那一路⛔ 静默（右上角那一行此刻就是这一手唯一的脸），原因进日志（P-56 口径）。
+            // ⛔ 在这里 ShowNotice：那块面板此刻可能正挂着"这一扇已停止保存"，一句坏话⛔ 有权把另一句更坏的顶掉。
+            StarMark.Abstractions.StarLog.Warn("boards.export.failed kind=" + envelope.Kind
+                + " to=" + target + " bytes=" + bytes.Length + " why=" + ex.GetType().Name + " id=" + _boardId);
+            Reply(envelope.Cmd, envelope.Id, ok: false, err: "write-failed");
+            ReportExport("boards.exportFailedBody", null);
+            return;
+        }
+        StarMark.Abstractions.StarLog.Info("boards.export.saved kind=" + envelope.Kind
+            + " bytes=" + bytes.Length + " to=" + target + " id=" + _boardId);
         Reply(envelope.Cmd, envelope.Id, ok: true);
+        ReportExport("boards.exportSavedBody", target);
     }
 
+    /// <summary>右上角那一行报一句落点（成功＝连那颗档一起记，失败＝只换话、那颗上一次真落盘的档⛔ 被顶掉）。
+    /// <para>那颗 <c>landed</c> 只许由<b>真写成</b>的那一路给：<see cref="_exportPath"/> 是那颗
+    /// 「打开所在文件夹」的唯一资格，写了这颗就得保证盘上真有它（P-219 那句"界面上要给出口"的另一半）。</para></summary>
+    private void ReportExport(string outcomeKey, string? landed)
+    {
+        if (landed is not null) _exportPath = landed;
+        _exportOutcomeKey = outcomeKey;
+        _exporting = false;
+        PasteBar();
+    }
+
+    /// <summary>
+    /// 右上角那一行按当前语言重贴（那颗按钮上的字与那句落点都归这一拍；换语言⛔ 走 <see cref="PasteNotice"/> 以外的那条路＝
+    /// P-175 那一族"一颗重贴一颗冻着"的第三种脸）。
+    /// <para>两颗入口的可点状态由<b>两颗</b>事实决定：桥通不通（⛔ 通就发问＝发进一颗没人听的口子）、
+    /// 这一发是不是正在跑（跑的时候点得亮＝两发抢同一刻的落点）。这里⛔ 判"该不该看得见"：那一行永远在场，
+    /// 因为它说的是"我刚点的那一下怎么样了"。</para>
+    /// </summary>
+    private void PasteBar()
+    {
+        if (_barStatus is null || _barPngButton is null || _barSvgButton is null || _barFolderButton is null) return;
+        var live = _bridgeReady && !_exporting;
+        _barPngButton.Content = Word("boards.exportPngAction");
+        _barSvgButton.Content = Word("boards.exportSvgAction");
+        _barPngButton.IsEnabled = live;
+        _barSvgButton.IsEnabled = live;
+        _barFolderButton.Content = Word("boards.openFolderAction");
+        _barFolderButton.IsEnabled = _exportPath is not null;
+        _barStatus.Text = _exportOutcomeKey switch
+        {
+            "boards.exportSavedBody" => Phrase("boards.exportSavedBody", _exportPath ?? string.Empty),
+            "boards.exportFailedBody" => Word("boards.exportFailedBody"),
+            "boards.openFolderFailedBody" => Phrase("boards.openFolderFailedBody", _exportPath ?? string.Empty),
+            _ => string.Empty,
+        };
+    }
+
+    /// <summary>
+    /// 那一发导出：<b>宿主问、页面答、宿主写</b>（账本 P-240 的②）。档位只有在册那两档，
+    /// 而这一处⛔ 判"该不该让他点"——那颗闸由 <see cref="PasteBar"/> 按两列事实算，这里只挡已经排上的第二发。
+    /// <para>字节不在这里拿：页面把 blob 编成 base64 交回 <c>export.bytes</c>，落盘与那句话都在
+    /// <see cref="HandleExportBytes"/> 那一头＝一次一问一答，⛔ 在这里等一颗不知道会不会来的回音。</para>
+    /// </summary>
+    private void ExportImageButton(string kind)
+    {
+        if (!_bridgeReady || _exporting) return;
+        if (!BridgeProtocol.IsKnownExportKind(kind)) return;      // ⛔ 在册的档位⛔ 发（⛔ 由这里替页面猜一档）
+        _exporting = true;
+        PasteBar();
+        PostExportPick(kind);
+    }
+
+    /// <summary>那颗 <c>export.pick</c> 信封的唯一发送处（四拍里那两拍索取板档、右上角那一行索取图＝同一颗形状，⛔ 两处各拼一遍）。</summary>
+    private void PostExportPick(string kind)
+        => PostOutbound("export.pick", Envelope("export.pick", "h4", JsonString("kind") + ":" + JsonString(kind)));
+
+    /// <summary>导出产物那颗档的主干名（唯一主人：桥那一路与那一发下载共用）。
+    /// <para>⛔ 跟着那块板的<b>显示名</b>走：名字在这里是身份（哪一块、什么时候），⛔ 措辞——
+    /// 显示名住在场景档里（✅P-218 那条定案），宿主⛔ 替它另存一份，也⛔ 拿它当产物档名（§18.4 现读：
+    /// 那颗 <c>a.download</c> 交上来的本来就是颗 <c>blob:</c> 的 UUID）。</para></summary>
+    private string ExportStem() => _boardId + "-" + BoardPolicy.FormatStamp(DateTimeOffset.Now);
+
+    /// <summary>产物目录先存在再写（P-241 的③件）：这一档里那颗 <c>CreateDirectory</c> 只许出现一次＝一位主人。
+    /// <para>⚠ 这一手收的是"谁说了算"，⛔ 省掉那颗系统调用——每一次写还是各要一次（要省它得改成 latch，
+    /// 而 latch 会把"目录被用户删掉之后再也写不进"变成新坏，P-45 那一族的口径今天没到那一档）。</para></summary>
+    private static void EnsureExports() => Directory.CreateDirectory(ExportsDirectory);
+
+    /// <summary>
+    /// 那一发导出的<b>落点与命名归宿主</b>（片54＝P-240 的②）：字节由页面交回（<c>export.pick</c>→<c>export.bytes</c>），
+    /// 写盘与那句话都在 <see cref="HandleExportBytes"/> 与 <see cref="PasteBar"/> 这两处，引擎那颗框连同开它的那两颗名字一起关到⛔ 通。
+    /// <para>本批第一版在这里订过 <c>DownloadStarting</c>（改 <c>ResultFilePath</c>＋<c>Handled＝true</c>），被真机当场否掉：
+    /// 那颗 <c>#32770「另存为」</c>照样起来、而那颗事件一颗也没响（逐字与那份"尺不聋"的正见类文档那一段）。
+    /// ⛔ 留那段代码"以后也许用得上"——它今天没有任何一条路走得到（随包那一路走的是 <c>showSaveFilePicker</c>），
+    /// 而订了接管一颗事件＝把用户挑的落点改成宿主挑的，那是<b>拿到了却没问过</b>的一手。</para>
+    /// </summary>
     private void OnBridgeReady()
     {
         _readySeq++;
         // 新页面诞生＝写闸重新闩上：这一趟的证据要由这一趟的 board.loaded 重新给（崩之前开过闸⛔ 顶这一趟）。
         _autosaveArmed = false;
+        // 那一行"还在导出"那一闩也在这里放开：页面没了＝那一问永远不会有回音，而⛔ 让两颗入口永远点不亮＝
+        // 把一次崩溃变成"那扇窗再也导不出图"（P-226 那条"按下去要有回音"的下游，与 <see cref="_retrying"/> 同一副规矩）。
+        _exporting = false;
+        PasteBar();
         // 片26 诊断面（P-222）：崩之后那两条恢复路都停在同一颗白帧，而"后一手真发出去了"与"页面真回来了"
         // 是两件事。这一行＋下面那颗 nav.done 各给一次读数，才把"Reload 选了错的一手"与"重载回来了却没载档"
         // 判得开（⛔ 靠猜换手）。
@@ -614,7 +755,7 @@ public sealed class BoardWindow : Window
             Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
             BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
         };
-        _noticeFolderButton.Click += async (_, _) => await OpenCopyFolderAsync();
+        _noticeFolderButton.Click += async (_, _) => await OpenSavedFolderAsync();
         // 片40＝被关过又被亮回来的那一格：走／留都得就地给一颗。三样颜色照旧各钉一遍（这一屏上现在有四颗可点的，
         // 那颗"白字画在灰底上＝看不见"的尺从片28 起每加一颗都要重新量，⛔ 让新按钮吃主题刷）。
         _noticeStayButton = new Button
@@ -686,9 +827,69 @@ public sealed class BoardWindow : Window
             VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(0, 0, 16, 16),
         };
+        // 片54＝那一发导出的两颗入口＋那句落点（账本 P-240 的②：引擎那颗框关到⛔ 通之后，这一行就是唯一的一条路）。
+        // ⚠ 它⛔ 住在那块面板里：面板只在有事要说时才在场，而"我刚点的那一下怎么样了"每一发都要有答案——
+        // 而那块面板此刻可能正挂着"这一扇已停止保存"，一句好消息⛔ 有权把那句坏话顶掉（片39 真机量到的正是这一族）。
+        // 三样颜色照旧各钉一遍（片28 那把"白字画在灰底上＝看不见"的尺：这一屏上现在多了三颗可点的控件）。
+        _barPngButton = new Button
+        {
+            Content = Word("boards.exportPngAction"),
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
+        };
+        _barPngButton.Click += (_, _) => ExportImageButton("png");
+        _barSvgButton = new Button
+        {
+            Content = Word("boards.exportSvgAction"),
+            Margin = new Thickness(6, 0, 0, 0),
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
+        };
+        _barSvgButton.Click += (_, _) => ExportImageButton("svg");
+        // 那颗「打开所在文件夹」在这一行里<b>永远在场</b>，只是盘上还没落东西时点不亮：
+        // 藏起来＝"这台程序没有这功能"，而它其实只是"这一刻还没有东西可开"（片33 那颗可点状态那一格的同一条口径）。
+        _barFolderButton = new Button
+        {
+            Content = Word("boards.openFolderAction"),
+            Margin = new Thickness(6, 0, 0, 0),
+            IsEnabled = false,
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
+        };
+        _barFolderButton.Click += async (_, _) => await OpenExportedFolderAsync();
+        _barStatus = new TextBlock
+        {
+            Text = string.Empty,
+            FontSize = 12,
+            MaxWidth = 420,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0),
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+        };
+        var barRow = new StackPanel { Orientation = Orientation.Horizontal };
+        barRow.Children.Add(_barPngButton);
+        barRow.Children.Add(_barSvgButton);
+        barRow.Children.Add(_barFolderButton);
+        _bar = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 8, 12, 0),
+            Padding = new Thickness(8, 6, 8, 6),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(232, 250, 250, 250)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 178, 178, 178)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+        };
+        _bar.Children.Add(barRow);
+        _bar.Children.Add(_barStatus);
         var stage = new Grid();
         stage.Children.Add(_web);
         stage.Children.Add(_notice);
+        stage.Children.Add(_bar);
         return stage;
     }
 
@@ -731,7 +932,7 @@ public sealed class BoardWindow : Window
         if (_noticeFolderButton is { } folder)
         {
             folder.Content = Word("boards.openFolderAction");
-            folder.Visibility = CanOpenCopyFolder ? Visibility.Visible : Visibility.Collapsed;
+            folder.Visibility = CanOpenSavedFolder ? Visibility.Visible : Visibility.Collapsed;
         }
         // 那颗「继续编辑／仍然离开」也归这一拍算：可见性只由 _closeRevived 一处定（⛔ 在 ShowNotice 里各写一遍＝第二个主人），
         // 换语言那一拍只走 PasteNotice、⛔ 重走 ShowNotice（与那颗「打开所在文件夹」同一条口径，片34 漏的就是这一拍）。
@@ -775,13 +976,13 @@ public sealed class BoardWindow : Window
                 break;
             case "boards.copySavedBody":
                 _noticeTitle.Text = Word("boards.stuckTitle");
-                _noticeBody.Text = Phrase("boards.copySavedBody", _copyPath ?? string.Empty);
+                _noticeBody.Text = Phrase("boards.copySavedBody", _savedPath ?? string.Empty);
                 break;
             case "boards.copySavedStaleBody":
                 // 屏幕上那块⛔ 是交出去的那一块（那一颗可疑字节没过判据）⇒ 这句话必须自己说清楚，
                 // ⛔ 让用户以为刚画的笔迹已经保住了（片33 坏臂量到的就是这一格）。
                 _noticeTitle.Text = Word("boards.stuckTitle");
-                _noticeBody.Text = Phrase("boards.copySavedStaleBody", _copyPath ?? string.Empty);
+                _noticeBody.Text = Phrase("boards.copySavedStaleBody", _savedPath ?? string.Empty);
                 break;
             case "boards.copyFailedBody":
                 _noticeTitle.Text = Word("boards.stuckTitle");
@@ -791,7 +992,7 @@ public sealed class BoardWindow : Window
                 // 坏的是"开那颗目录"这一手，⛔ 是那块板存不下来——标题留着说的是同一件事实（写闸还拒着），
                 // 而那颗「打开所在文件夹」⛔ 跟着摘掉：摘了就等于让用户⛔ 能再点一次（P-54 定过的坏法）。
                 _noticeTitle.Text = Word("boards.stuckTitle");
-                _noticeBody.Text = Phrase("boards.openFolderFailedBody", _copyPath ?? string.Empty);
+                _noticeBody.Text = Phrase("boards.openFolderFailedBody", _savedPath ?? string.Empty);
                 break;
             default:
                 return;
@@ -805,7 +1006,13 @@ public sealed class BoardWindow : Window
     private static string Phrase(string key, object? argument)
         => StarMark.Abstractions.I18n.Locale.Fmt(key, argument);
 
-    private void OnLocaleChanged() => PasteNotice();
+    /// <summary>换语言那一拍：那块面板与那一行<b>两处都要重贴</b>（片54 起这一扇上有两块会说汉语的表面；
+    /// 只搬一处＝P-175 那一族"一颗重贴一颗冻着"的第三种脸，而那一行⛔ 在面板的名单里）。</summary>
+    private void OnLocaleChanged()
+    {
+        PasteNotice();
+        PasteBar();
+    }
 
     /// <summary>
     /// 那颗按钮的活：把<b>此刻救得回来的那一份</b>交出去——屏幕上那块过了
@@ -828,7 +1035,7 @@ public sealed class BoardWindow : Window
             var target = await PickSavePathAsync(name);
             if (target is null) return;                     // 用户自己取消的：面板留着，他还能再按
             System.IO.File.WriteAllBytes(target, bytes);
-            _copyPath = target;
+            _savedPath = target;
             ShowNotice(ReferenceEquals(bytes, loaded) ? "boards.copySavedStaleBody" : "boards.copySavedBody",
                 titled: true, offerCopy: true);
             // 那颗 scene 列说的是"交出去的是哪一份"：screen＝屏幕上那块（含面板起来之后画的笔迹），
@@ -850,45 +1057,72 @@ public sealed class BoardWindow : Window
     }
 
     /// <summary>
-    /// 屏幕上那一句是不是<b>认定盘上已经放着一颗副本</b>——那颗「打开所在文件夹」的唯一资格（一句话一个出处，
+    /// 面板上那一句是不是<b>认定盘上已经放着一颗档</b>——那颗「打开所在文件夹」的唯一资格（一句话一个出处，
     /// ShowNotice 与换语言那一拍都问它，⛔ 两处各 switch 一遍键名）。
-    /// <para>"打开失败"那一句也算：它说的是<b>开目录</b>那一手坏了，副本本身确实写成了，而那一刻用户要的正是<b>再点一次</b>；
-    /// "没能写到那个位置"那一句⛔ 算（那一刻没东西可点开）。反过来，"正在恢复"／"这一扇已停止保存"那两句
-    /// ⛔ 认定任何副本存在（那时一颗都还没写），挂着那颗按钮＝让他点出一颗⛔ 存在的档。</para>
+    /// <para>"打开失败"那一句也算：它说的是<b>开目录</b>那一手坏了，档本身确实写成了，而那一刻用户要的正是<b>再点一次</b>；
+    /// 那一句"没写成"（<see cref="NoLandedFileKeys"/>）⛔ 算（那一刻没东西可点开）。反过来，"正在恢复"／"这一扇已停止保存"
+    /// 那两句⛔ 认定任何档存在（那时一颗都还没写），挂着那颗按钮＝让他点出一颗⛔ 存在的档。</para>
+    /// <para>片54 之后那一发导出的产物⛔ 进这一问：它由右上角那一行自己说（<see cref="PasteBar"/>），
+    /// 资格只看 <see cref="_exportPath"/>——两块表面各数各的档，⛔ 混成一颗。</para>
     /// </summary>
-    private bool CanOpenCopyFolder => _copyPath is not null && NoticeSaysCopyOutcome
-                                      && _noticeKey != "boards.copyFailedBody";
+    private bool CanOpenSavedFolder => _savedPath is not null && NoticeSaysFileOutcome
+                                      && Array.IndexOf(NoLandedFileKeys, _noticeKey!) < 0;
 
-    /// <summary>那颗「另存」按下去之后屏幕上可能挂着的<b>那几种结果</b>（一句一个下落）。
-    /// 这一串是<b>唯一那份名单</b>：上面两颗问法都从它派生——同一串键名两处各列一遍＝迟早只补一处。</summary>
-    private static readonly string[] CopyOutcomeKeys =
+    /// <summary>面板上挂着的那一句<b>可能是哪几种结果</b>（一句一个下落）。
+    /// 这一串是<b>唯一那份名单</b>：两颗问法（"是不是那一手的结果"与"盘上有没有档"）都从它派生——
+    /// 同一串键名两处各列一遍＝迟早只补一处。</summary>
+    private static readonly string[] FileOutcomeKeys =
     [
         "boards.copySavedBody", "boards.copySavedStaleBody", "boards.openFolderFailedBody", "boards.copyFailedBody",
     ];
 
-    /// <summary>屏幕上那一句是不是<b>按了那颗按钮之后的结果</b>。它比"这一扇已停止保存"那句<b>新</b>：
+    /// <summary>上面那串名单里<b>盘上压根没落档</b>的那一句（"没能写到那个位置"）。
+    /// <para>它属于"按了之后有回音"那一族，⛔"那儿有一颗档"那一族——两颗问法⛔ 能共用一份名单，
+    /// 否则那颗「打开所在文件夹」会指着一颗⛔ 存在的档（P-219 那句"界面上要给出口"的反面）。</para></summary>
+    private static readonly string[] NoLandedFileKeys = ["boards.copyFailedBody"];
+
+    /// <summary>屏幕上那一句是不是<b>那几种结果之一</b>。它比"这一扇已停止保存"那句<b>新</b>：
     /// 说的是刚刚发生的一件事，而那句旧话每一拍重贴说的还是同一件早就说过的事（片39 真机量到的那一发：
     /// 拒话重贴把「已另存到 &lt;路径&gt;」整句顶掉、那颗「打开所在文件夹」跟着退场）。</summary>
-    private bool NoticeSaysCopyOutcome => Array.IndexOf(CopyOutcomeKeys, _noticeKey!) >= 0;
+    private bool NoticeSaysFileOutcome => Array.IndexOf(FileOutcomeKeys, _noticeKey!) >= 0;
 
     /// <summary>
-    /// 打开那颗装着副本的目录（P-219 那三行里那颗 (B) 的出口：念出路径之外，再给一颗能点的）。
-    /// <para>动作走 <see cref="Helpers.LauncherEx"/>（本机路径那一族的唯一出口，⛔ 在这里再拼一遍 explorer 命令行），
-    /// ⛔ 静默：开不成就把面板那句话换成"没能打开、副本还在 &lt;路径&gt;"，那颗按钮留着可再点（P-54：⛔ 把作业推回给用户）。</para>
+    /// 「打开所在文件夹」那<b>一颗</b>动作（两块表面共用：面板那颗按钮、右上角那一行那颗）。
+    /// <para>动作走 <see cref="Helpers.LauncherEx"/>（本机路径那一族的唯一出口，⛔ 在这里再拼一遍 explorer 命令行）。
+    /// ⚠ 那颗 URI 是<b>递进去的形态</b>，⛔ 是宿主自己拼着玩的：LauncherEx 底下那颗还原判据只认 <c>file://</c> 前缀，
+    /// 裸磁盘路径递进去两格候选都是空串⇒走"URI 激活＋图已不在本机"那一支，屏幕上得到一句与事实无关的坏话，
+    /// 而桌面上还多开一颗 Explorer <b>主文件夹</b>窗（2026-10-19 真机读数逐字为证：result=failed・title='主文件夹 - 文件资源管理器'）。
+    /// 拼那颗 URI 的主人＝<c>LocalFileIdentity.UriForPath</c>，这里⛔ 再写一遍前缀（两类生产者的口径归它）。</para>
+    /// <para>交回一颗"开成了没"：坏话由<b>哪一块表面</b>说、怎么说，归各自那一拍（⛔ 在这里替两块 surface 选一句），
+    /// 原因进日志（P-56 口径：只报"坏了"下一批说不出是谁坏的）。</para>
     /// </summary>
-    private async System.Threading.Tasks.Task OpenCopyFolderAsync()
+    private async System.Threading.Tasks.Task<bool> OpenFolderAroundAsync(string path)
     {
-        if (!CanOpenCopyFolder) return;                       // 那颗按钮本⛔ 在场：这一问就是它不在场时的形状
-        var folder = Path.GetDirectoryName(_copyPath) ?? _copyPath!;   // 取不出上一格就拿这一颗本身（一颗档的路径也开得出它自己）
-        // ⚠ 那颗 URI 是<b>递进去的形态</b>，⛔ 是宿主自己拼着玩的：LauncherEx 底下那颗还原判据只认 <c>file://</c> 前缀，
-        // 裸磁盘路径递进去两格候选都是空串⇒走"URI 激活＋图已不在本机"那一支，屏幕上得到一句与事实无关的坏话，
-        // 而桌面上还多开一颗 Explorer <b>主文件夹</b>窗（2026-10-19 真机读数逐字为证：result=failed・title='主文件夹 - 文件资源管理器'）。
-        // 拼那颗 URI 的主人＝<c>LocalFileIdentity.UriForPath</c>，这里⛔ 再写一遍前缀（两类生产者的口径归它）。
+        var folder = Path.GetDirectoryName(path) ?? path;   // 取不出上一格就拿这一颗本身（一颗档的路径也开得出它自己）
         var message = await Helpers.LauncherEx.TryOpenAsync(StarMark.Abstractions.LocalFileIdentity.UriForPath(folder));
-        // 失败那一句的<b>原因</b>进日志（P-56 口径：只报"坏了"说不清是谁坏的），屏幕上说的是人能读的那一句。
         StarMark.Abstractions.StarLog.Info("boards.folder.opened " + (message is null ? "ok" : "failed")
             + " path=" + folder + (message is null ? "" : " why=" + message));
-        if (message is not null) ShowNotice("boards.openFolderFailedBody", titled: true, offerCopy: true);
+        return message is null;
+    }
+
+    /// <summary>面板那颗「打开所在文件夹」（P-219 那三行里那颗 (B) 的出口：念出路径之外，再给一颗能点的）。
+    /// <para>⛔ 静默：开不成就把面板那句话换成"没能打开、副本还在 &lt;路径&gt;"，那颗按钮留着可再点（P-54：⛔ 把作业推回给用户）。</para></summary>
+    private async System.Threading.Tasks.Task OpenSavedFolderAsync()
+    {
+        if (!CanOpenSavedFolder) return;                       // 那颗按钮本⛔ 在场：这一问就是它不在场时的形状
+        if (await OpenFolderAroundAsync(_savedPath!)) return;
+        ShowNotice("boards.openFolderFailedBody", titled: true, offerCopy: true);
+    }
+
+    /// <summary>右上角那一行那颗「打开所在文件夹」（那一发导出的产物）。
+    /// <para>坏话写给<b>那一行自己</b>：面板此刻可能正挂着另一件事，而那一行说的就是"刚那一下"（片39 那一族的口径）。
+    /// ⛔ 因为开目录坏了就把 <see cref="_exportPath"/> 清掉——那颗档还在盘上，他还能再点一次。</para></summary>
+    private async System.Threading.Tasks.Task OpenExportedFolderAsync()
+    {
+        if (_exportPath is not { } path) return;               // 盘上还没落过一颗＝那颗按钮本⛔ 亮
+        if (await OpenFolderAroundAsync(path)) return;
+        _exportOutcomeKey = "boards.openFolderFailedBody";
+        PasteBar();
     }
 
     /// <summary>
@@ -922,7 +1156,7 @@ public sealed class BoardWindow : Window
             return null;
         }
         if (pick == BoardPolicy.CopyPick.Chosen) return picked;
-        System.IO.Directory.CreateDirectory(ExportsDirectory);
+        EnsureExports();
         return System.IO.Path.Combine(ExportsDirectory,
             _boardId + "-copy-" + BoardPolicy.FormatStamp(DateTimeOffset.Now) + BoardPolicy.SceneExtension);
     }
@@ -932,7 +1166,7 @@ public sealed class BoardWindow : Window
     {
         if (!_bridgeReady) return;                                    // 桥没通就索取＝发进一颗没人听的口子（回音都⛔ 有）
         if (!BoardPolicy.BeatCanAskForSnapshot(beat)) return;         // 崩那一拍：页面已经死了，问也问不到东西
-        PostOutbound("export.pick", Envelope("export.pick", "h4", JsonString("kind") + ":" + JsonString("scene")));
+        PostExportPick("scene");
     }
 
     /// <summary>

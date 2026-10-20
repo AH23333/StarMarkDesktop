@@ -2688,6 +2688,14 @@ public static class UiStrings
         new Entry("boards.blockedBody", "那颗档还在盘上，只是一个字节也读不出来——多半是别的程序正攥着它，或刚存上的那份还在改名。可以再试一次，也可以先开一块新板；那颗档一个字节也不会被动过。", "The file is still on disk, but not a byte of it can be read right now — another program is probably holding it, or the save that just ran is still renaming it. Try again, or start a new board first; that file will not be touched.", "ファイルはディスク上に残っていますが、今 1 バイトも読み出せません。別のプログラムが占有しているか、直前の保存の名前変更が終わっていないようです。もう一度試すか、先に新しいボードを開いてください。そのファイルは変更されません。"),
         new Entry("boards.retryAction", "再试一次", "Try again", "もう一度試す"),
         new Entry("boards.freshBoardAction", "先开一块新板", "Start a new board", "新しいボードを開く"),
+        // 片54＝那一发导出的出口收进宿主（P-240 的②）：引擎那颗「导出图片」框连同开它的那两颗名字一起关到⛔ 通，
+        // 换来的那一行<b>永远</b>摆在画板窗右上角——它⛔ 住在那块面板里：面板只在有事要说时才在场，而每一发导出都要有下落。
+        // 那两行话⛔ 是装饰：摘掉默认 UI 之后，屏幕上再没有别人会说"这一张图落到哪儿了"。
+        // ⛔ 与那颗「另存一份到别处」共用那一句：那两句挂的标题是"这块板没能回到画布上"，而这一路说的⛔ 是同一件事。
+        new Entry("boards.exportPngAction", "导出 PNG", "Export PNG", "PNG として出力"),
+        new Entry("boards.exportSvgAction", "导出 SVG", "Export SVG", "SVG として出力"),
+        new Entry("boards.exportSavedBody", "已存到 {0}", "Saved to {0}", "{0} に保存しました"),
+        new Entry("boards.exportFailedBody", "那颗导出没能存成，可以再导出一次；原因在日志里。", "That export did not land; you can export again. The reason is in the log.", "出力を保存できませんでした。もう一度出力できます。原因はログにあります。"),
         new Entry("tray.pinsShowHideNone", "显示 / 收起所有贴图（当前没有贴图）", "Show or collapse all pins (none right now)", "すべてのピンを表示／収納（現在 0 枚）"),
         new Entry("tray.pinsShowAll", "显示所有贴图", "Show all pins", "すべてのピンを表示"),
         new Entry("tray.pinsHideAll", "收起所有贴图", "Collapse all pins", "すべてのピンを収納"),

@@ -371,8 +371,9 @@ public sealed class BoardWindowBridgeGateTests
         // 旧形状⛔ 许回来：null 一路落到兜底那两行＝取消也写一份（那颗 if 正是本批量到的那颗坏）
         Assert.DoesNotContain("if (file is not null) return file.Path;", pick, StringComparison.Ordinal);
         Assert.Contains("boards.copy.declined", pick, StringComparison.Ordinal);
-        // 兜底那颗建目录只许活在一支里，且全档一颗（两处主人＝迟早只补一颗）
-        Assert.Equal(1, Count(pick, "CreateDirectory(ExportsDirectory)"));
+        // 兜底那颗建目录：片54 起这一档里 <c>CreateDirectory</c> 只许有一位主人（<c>EnsureExports</c>），
+        // 所以这一支只认它一次；"全档只许一处真调用"那一格住在片54 那颗新尺里（一把尺只量一次）。
+        Assert.Equal(1, Count(pick, "EnsureExports();"));
         Assert.Contains("if (target is null) return;", copy, StringComparison.Ordinal);
         Assert.Contains("boards.scene.copied", copy, StringComparison.Ordinal);
     }
@@ -592,8 +593,11 @@ public sealed class BoardWindowBridgeGateTests
     {
         var raw = ReadRepo(WindowCs);
         var code = SourceGate.Code(raw);
-        Assert.Contains("private void OnLocaleChanged() => PasteNotice();", code, StringComparison.Ordinal);
+        Assert.Contains("private void OnLocaleChanged()", code, StringComparison.Ordinal);
         Assert.Equal(5, Count(code, "PasteNotice();"));             // ShowNotice 那一拍＋换语言那一拍＋被拒亮回那一拍补两颗新按钮＋片49 那颗「再试一次」跑前跑后各一次（五处都只⛔ 调那颗主人，⛔ 各写一遍可见性）
+        // 片54：那一行是第二块会说汉语的表面，它那颗主人同样只许被数得清的那几处调（多一处＝第二副措辞出处）。
+        // 五处＝开场那一拍（放开"还在导出"那一闩）＋交回字节那一拍＋按下去那一拍＋换语言那一拍＋开目录坏了那一拍。
+        Assert.Equal(5, Count(code, "PasteBar();"));
         Assert.Equal(4, Count(code, "HideNotice();"));              // 收起面板只此一颗主人，四处正当调用：开闸成功（坏话不再是事实）＋片40「继续编辑」撤销这一拍＋片49 那两颗（重试终于读到了／他决定先开一块新板）
         // 唯一的取词出口：两颗工厂各一处，调用点⛔ 重抄全限定名
         Assert.Equal(1, Count(code, "private static string Word(string key) => StarMark.Abstractions.I18n.Locale.T(key);"));
@@ -607,10 +611,13 @@ public sealed class BoardWindowBridgeGateTests
         {
             "Grid BuildStage", "void ShowNotice", "void HideNotice", "void PasteNotice",
             "void ShowRecoveringNotice", "void ShowArmStuckNotice", "void OnLocaleChanged",
-            "Task OpenCopyFolderAsync", "bool CanOpenCopyFolder",
+            "Task OpenSavedFolderAsync", "bool CanOpenSavedFolder",
             "void StayOnBoard", "void LeaveAnyway",
             // 片49 那三颗：坏话的上屏出口与它的两颗按钮都在这条线上（⛔ 在这里拼一句中文）
             "Task OpenSceneAsync", "Task RetryBlockedSceneAsync", "void StartFreshBoard",
+            // 片54 那一行：两颗入口与那句落点都只许念表里的键（硬编码的字在这里＝下一批换语言时它不动）
+            "void PasteBar", "void ExportImageButton", "void ReportExport", "Task OpenExportedFolderAsync",
+            "Task<bool> OpenFolderAroundAsync",
         })
         {
             var leftovers = SourceGate.Cjk.Matches(SourceGate.MethodBody(code, sig))
@@ -629,56 +636,68 @@ public sealed class BoardWindowBridgeGateTests
     /// ④ 这一屏上现在有两颗可点的，片28 量到的"白字画在灰底上"⛔ 许只修一颗；
     /// ⑤ 动作走本机路径那一族的唯一出口，⛔ 在画板这一档再拼一遍 explorer 命令行。</para></summary>
     [Fact]
-    public void TheFolderExitAppearsOnlyWhileASentenceClaimsACopyLanded()
+    public void TheFolderExitAppearsOnlyWhileASentenceClaimsAFileLanded()
     {
         var raw = ReadRepo(WindowCs);
         var code = SourceGate.Code(raw);
-        // ① 那几种"按了那颗按钮之后的结果"只许有一份名单，两颗问法都从它派生
-        var outcomes = SourceGate.Between(code, "string[] CopyOutcomeKeys", "];");
-        Assert.Equal(4, Count(outcomes, "\"boards."));   // 那颗名单⛔ 只许装这四种下落（多一颗＝把旧话当成新事实）
+        // ① 那几种"屏幕上挂着的是某一手的下落"只许有一份名单，两颗问法都从它派生
+        var outcomes = SourceGate.Between(code, "string[] FileOutcomeKeys", "];");
+        // 片54 之后那一发导出的下落⛔ 进这一问（它由右上角那一行自己说）：这一族还是那颗「另存」的四种下落。
+        // 多一颗＝把旧话当成新事实；少一颗＝下一批加了一句而这两问都听不见。
+        Assert.Equal(4, Count(outcomes, "\"boards."));
         foreach (var landed in new[]
         {
             "boards.copySavedBody", "boards.copySavedStaleBody", "boards.openFolderFailedBody", "boards.copyFailedBody",
         })
             Assert.Contains(landed, outcomes, StringComparison.Ordinal);
-        // ② 那颗按钮的资格＝"名单之内"且⛔ 是"没写成"那一句，而它⛔ 自己再列一遍键名（两处各列＝迟早只补一处）
-        var can = SourceGate.MethodBody(code, "bool CanOpenCopyFolder");
-        Assert.Equal(3, Count(code, "CanOpenCopyFolder"));
-        Assert.Equal(3, Count(code, "NoticeSaysCopyOutcome"));
-        Assert.Contains("_copyPath is not null", can, StringComparison.Ordinal);
-        Assert.Contains("NoticeSaysCopyOutcome", can, StringComparison.Ordinal);
-        Assert.Contains("\"boards.copyFailedBody\"", can, StringComparison.Ordinal);
-        Assert.Contains("&& _noticeKey != \"boards.copyFailedBody\";", can, StringComparison.Ordinal);
+        Assert.Equal(0, Count(outcomes, "boards.export"));      // 那两句住在另一块表面，混进来＝两颗按钮抢一句下落
+        // ② 那颗按钮的资格＝"名单之内"且"那一句认定盘上真有一颗档"，而它⛔ 自己再列一遍键名（两处各列＝迟早只补一处）
+        var can = SourceGate.MethodBody(code, "bool CanOpenSavedFolder");
+        Assert.Equal(3, Count(code, "CanOpenSavedFolder"));
+        Assert.Equal(3, Count(code, "NoticeSaysFileOutcome"));
+        Assert.Contains("_savedPath is not null", can, StringComparison.Ordinal);
+        Assert.Contains("NoticeSaysFileOutcome", can, StringComparison.Ordinal);
+        // 那一句"没写成"⛔ 认定档存在，而它⛔ 能从那份名单里被忘掉（忘掉＝那颗按钮指着⛔ 存在的档）⇒名单另有一对子守这一维
+        var noLanded = SourceGate.Between(code, "string[] NoLandedFileKeys", "];");
+        Assert.Equal(1, Count(noLanded, "\"boards."));
+        Assert.Contains("boards.copyFailedBody", noLanded, StringComparison.Ordinal);
+        Assert.Contains("Array.IndexOf(NoLandedFileKeys, _noticeKey!) < 0;", can, StringComparison.Ordinal);
         // ③ 同一件旧话⛔ 许把新事实顶掉（片39 真机量到的那一发：拒话重贴盖掉「已另存到 …」＋那颗新按钮跟着退场）
         var got = SourceGate.MethodBody(raw, "void HandleExportBytes");
-        Assert.Contains("if (!NoticeSaysCopyOutcome) ShowArmStuckNotice();", got, StringComparison.Ordinal);
+        Assert.Contains("if (!NoticeSaysFileOutcome) ShowArmStuckNotice();", got, StringComparison.Ordinal);
         // ④ 那颗按钮⛔ 在场＝用户可以再看一次；摘掉它＝把作业推回给他（P-54 定过的坏法）
         Assert.Equal(1, Count(outcomes, "boards.openFolderFailedBody"));
 
-        Assert.Equal(1, Count(code, "folder.Visibility = CanOpenCopyFolder ?"));
+        Assert.Equal(1, Count(code, "folder.Visibility = CanOpenSavedFolder ?"));
         Assert.Contains("folder.Content = Word(\"boards.openFolderAction\");",
             SourceGate.MethodBody(code, "void PasteNotice"), StringComparison.Ordinal);
-        Assert.Contains("Phrase(\"boards.openFolderFailedBody\", _copyPath ?? string.Empty);",
+        Assert.Contains("Phrase(\"boards.openFolderFailedBody\", _savedPath ?? string.Empty);",
             SourceGate.MethodBody(code, "void PasteNotice"), StringComparison.Ordinal);
 
         var stage = SourceGate.MethodBody(code, "private Grid BuildStage");
         // （那颗按钮⛔ 跟着主题走这一格住在 BoardWordGateTests 那颗色尺里：一把尺只量一次，⛔ 两处各数一遍。）
         Assert.Contains("panel.Children.Add(_noticeFolderButton);", stage, StringComparison.Ordinal);
 
-        var open = SourceGate.MethodBody(raw, "Task OpenCopyFolderAsync");
+        // 片54：那颗动作收进一块表面⛔ 许有第二份——两块表面（面板与右上角那一行）共用 <c>OpenFolderAroundAsync</c> 这一颗。
+        var around = SourceGate.MethodBody(raw, "Task<bool> OpenFolderAroundAsync");
         // 动作走本机路径那一族的唯一出口，⛔ 在画板这一档再拼一遍 explorer 命令行；
         // ⚠ 而递进去的必须是<b>一颗 URI</b>：那颗还原判据只认 file:// 前缀，裸磁盘路径两格候选都是空串⇒
         // 退化成"图已不在本机"那句坏话＋桌面多开一颗 Explorer <b>主文件夹</b>窗（2026-10-19 真机读数逐字为证：
         // <c>boards.folder.opened … result=failed</c>・<c>title='主文件夹 - 文件资源管理器'</c>·正本 readings_39_183824）。
         Assert.Contains("Helpers.LauncherEx.TryOpenAsync(StarMark.Abstractions.LocalFileIdentity.UriForPath(folder))",
-            open, StringComparison.Ordinal);
-        Assert.DoesNotContain("TryOpenAsync(folder)", open, StringComparison.Ordinal);
+            around, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryOpenAsync(folder)", around, StringComparison.Ordinal);
+        Assert.Equal(1, Count(code, "Helpers.LauncherEx.TryOpenAsync(StarMark.Abstractions.LocalFileIdentity.UriForPath"));
+        // 那一发要有记录，而<b>原因</b>也得进得去（P-56 口径：只报"坏了"下一跑说不出是谁坏的）
+        Assert.Contains("boards.folder.opened", around, StringComparison.Ordinal);
+        Assert.Contains("why=", around, StringComparison.Ordinal);
+        // 坏话由各自那一块表面说（⛔ 在这颗共用动作里替两块 surface 选一句）
+        var open = SourceGate.MethodBody(raw, "Task OpenSavedFolderAsync");
+        Assert.Contains("if (!CanOpenSavedFolder) return;", open, StringComparison.Ordinal);
         Assert.Contains("ShowNotice(\"boards.openFolderFailedBody\", titled: true, offerCopy: true);",
             open, StringComparison.Ordinal);
+        Assert.DoesNotContain("LauncherEx", open, StringComparison.Ordinal);
         Assert.Equal(0, Count(code, "explorer.exe"));
-        // 那一发要有记录，而<b>原因</b>也得进得去（P-56 口径：只报"坏了"下一跑说不出是谁坏的）
-        Assert.Contains("boards.folder.opened", open, StringComparison.Ordinal);
-        Assert.Contains("why=", open, StringComparison.Ordinal);
     }
 
     /// <summary>片40＝被关过一次又被亮回来的那一格，走／留都得就地有颗按钮（P-54：⛔ 把"再点一次×就退"这种隐藏出口推回给用户）。
@@ -722,5 +741,81 @@ public sealed class BoardWindowBridgeGateTests
         // ⑥ 开闸成功＝这一问作废
         Assert.Contains("_closeRevived = false;",
             SourceGate.MethodBody(code, "void ArmIdleBeat"), StringComparison.Ordinal);
+    }
+
+    /// <summary>片54＝那一发导出的落点归宿主（P-240 的②），六格一起钉。
+    /// <para>① 那颗订阅<b>排在 Navigate 之前</b>，并与那三颗同一副先摘再挂（重建控件那一趟⛔ 两颗订阅，
+    /// 而 Navigate 之后才起来的那一发下载如果没人接＝那颗框照旧起来，本批修的正是它）；
+    /// ② <b>认不出档位＝一颗也不碰</b>：判据交 <c>null</c> 那一支必须当场收手，⛔ 因为我不认得就替它决定落点；
+    /// ③ 落点与命名交宿主＝<c>ResultFilePath</c> 由 <c>ExportsDirectory</c> ＋ <c>SanitizeExportName</c> 拼，
+    /// <c>Handled = true</c> 摘掉那颗系统框（这两颗一起才叫"改口"：只改落点⛔ 改命名＝那位主人还在浏览器手里）；
+    /// ④ 那句"已存到"只跟着 <c>Completed</c>（⛔ 在字节还在路上那一刻说话），而"没写成"那一句也必须有（摘掉默认 UI 之后
+    /// 屏幕上再没别人说这一手的下落＝把"点了没反应"留在屏幕上，§坑13 第一工程风险）；
+    /// ⑤ 产物目录那颗 <c>CreateDirectory</c> 全档只许一位主人（P-241 的③件）；
+    /// ⑥ 名字的主人只有一颗：<c>ExportStem()</c> 被两路各问一次，⛔ 在两支里各拼一遍 <c>id + 时刻</c>。</para></summary>
+    [Fact]
+    public void TheExportLandsWhereTheHostSaysWhileTheEngineDialogStaysShut()
+    {
+        var raw = ReadRepo(WindowCs);
+        var code = SourceGate.Code(raw);
+        // ① 那颗接管下载的尝试⛔ 许留下："订了而永远不响"＝一颗没人读得到的分支（真机读数见类文档那段）。
+        Assert.Equal(0, Count(code, "DownloadStarting"));
+        Assert.Equal(0, Count(code, "CoreWebView2DownloadOperation"));
+
+        // ② 引擎那颗框与开它的那两颗名字一起关到⛔ 通（⛔ 只关一半＝面板没了、快捷键照旧起那颗框）
+        var js = ReadRepo(BridgeJs);
+        Assert.Contains("export: false,", js, StringComparison.Ordinal);
+        Assert.Contains("saveAsImage: false,", js, StringComparison.Ordinal);
+        Assert.Equal(0, Count(js, "saveFileToDisk"));     // 那颗旋钮随整颗框一起退场（留着＝第二副口径）
+
+        // ③ 那一发落点与命名归宿主：字节到手之后先拼名字、再建目录、再写，两拍下落各有读数
+        var bytes = SourceGate.MethodBody(code, "void HandleExportBytes");
+        Assert.Contains("BridgeProtocol.SanitizeExportName(envelope.Suggested, ExportStem(), envelope.Kind)",
+            bytes, StringComparison.Ordinal);
+        Assert.Contains("var target = Path.Combine(ExportsDirectory, name);", bytes, StringComparison.Ordinal);
+        Assert.Contains("EnsureExports();", bytes, StringComparison.Ordinal);
+        Assert.Contains("File.WriteAllBytes(target, bytes);", bytes, StringComparison.Ordinal);
+        Assert.Contains("catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)",
+            bytes, StringComparison.Ordinal);                                    // ⛔ 静默：写不进要说得出
+        Assert.Contains("err: \"write-failed\"", bytes, StringComparison.Ordinal);
+        foreach (var column in new[] { "kind=", "bytes=", "to=", "why=" })
+            Assert.Contains(column, bytes, StringComparison.Ordinal);
+        Assert.Contains("ReportExport(\"boards.exportSavedBody\", target);", bytes, StringComparison.Ordinal);
+        Assert.Contains("ReportExport(\"boards.exportFailedBody\", null);", bytes, StringComparison.Ordinal);
+        // 那句"已存到"排在真写成之后（⛔ 排在按下去那一拍）：两颗 ReportExport 都在写盘那句之后
+        Assert.True(bytes.IndexOf("File.WriteAllBytes(target, bytes);", StringComparison.Ordinal)
+            < bytes.IndexOf("ReportExport(\"boards.exportSavedBody\", target);", StringComparison.Ordinal),
+            "那句成功话排在写盘之前＝还没落盘就告诉用户它落好了");
+
+        // ④ 右上角那一行的三颗脸：两颗入口只问那两档，那颗出口只认"真落盘的那一颗"
+        var bar = SourceGate.MethodBody(code, "void PasteBar");
+        Assert.Contains("Word(\"boards.exportPngAction\")", bar, StringComparison.Ordinal);
+        Assert.Contains("Word(\"boards.exportSvgAction\")", bar, StringComparison.Ordinal);
+        Assert.Contains("Word(\"boards.openFolderAction\")", bar, StringComparison.Ordinal);
+        Assert.Contains("_barFolderButton.IsEnabled = _exportPath is not null;", bar, StringComparison.Ordinal);
+        Assert.Contains("_exportPath ?? string.Empty", bar, StringComparison.Ordinal);   // 那颗路径是实参，⛔ 拼成品句
+        Assert.Equal(0, Count(bar, "Locale.T("));                                        // 只许念表里的键
+        // 那一行⛔ 去动那块面板：面板可能正挂着"这一扇已停止保存"，一句好消息没资格把它顶掉（片39 那一族）
+        Assert.DoesNotContain("ShowNotice", bar, StringComparison.Ordinal);
+        // 那一行的在场资格：换语言那一拍两处都重贴（⛔ 一颗重贴一颗冻着＝P-175 那一族的第三种脸）
+        var locale = SourceGate.MethodBody(code, "void OnLocaleChanged");
+        Assert.Contains("PasteNotice();", locale, StringComparison.Ordinal);
+        Assert.Contains("PasteBar();", locale, StringComparison.Ordinal);
+
+        // ⑤ 那一问的唯一发送处：宿主侧只许一颗 export.pick 的形状（scene 与那两档图共用它，⛔ 两处各拼一遍）
+        Assert.Equal(1, Count(code, "PostOutbound(\"export.pick\""));
+        Assert.Contains("PostExportPick(\"scene\");", code, StringComparison.Ordinal);
+        Assert.Contains("PostExportPick(kind);", code, StringComparison.Ordinal);
+        Assert.Equal(3, Count(code, "PostExportPick("));      // 定义一颗＋两颗调用点，多一处＝第二个形状
+        Assert.Contains("ExportImageButton(\"png\")", code, StringComparison.Ordinal);
+        Assert.Contains("ExportImageButton(\"svg\")", code, StringComparison.Ordinal);
+        var ask = SourceGate.MethodBody(code, "void ExportImageButton");
+        Assert.Contains("if (!_bridgeReady || _exporting) return;", ask, StringComparison.Ordinal);
+        Assert.Contains("if (!BridgeProtocol.IsKnownExportKind(kind)) return;", ask, StringComparison.Ordinal);
+
+        // ⑥ 那颗目录与那颗名字各只有一位主人（②那一路删掉之后，调用点各少一颗）
+        Assert.Equal(1, Count(code, "Directory.CreateDirectory(ExportsDirectory)"));
+        Assert.Equal(2, Count(code, "EnsureExports();"));
+        Assert.Equal(2, Count(code, "ExportStem()"));
     }
 }

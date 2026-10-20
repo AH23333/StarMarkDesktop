@@ -190,7 +190,16 @@
         canvasActions: {
           loadScene: false,
           saveToActiveFile: false,
-          export: { saveFileToDisk: false },
+          /* 片54 真机读数把这颗关掉了（正本 bin/WI93/readings_54_134804.txt＋log54_forensics.txt）：
+             那颗「导出图片」框按下去之后起的是<b>系统「另存为」</b>（#32770），而宿主订的那颗下载事件
+             当天<b>一颗也没响</b>（整份日志 boards.download 零行，同一份日志里 boards.nav 20 行＝尺不聋）——
+             现读那颗引擎的 saveAs 走的是 window.showSaveFilePicker（那颗模块选择器在顶层文档里有
+             showOpenFilePicker 时优先选 FSA 那一支），所以<b>落点与命名归浏览器</b>，宿主拦不到。
+             ⇒ 出口收进宿主（账本 P-240 的②）：那颗框与开它的那颗按钮一起关到⛔ 通。
+             ⚠ 那四颗旋钮（背景／深色模式／包含画布数据／缩放 1×2×3×）就住在那颗框里，关掉它＝导出按
+             appState 的默认值走（1×、带背景）；要不要在宿主侧重造，归账本另立的一颗，⛔ 在这里顺手补。 */
+          export: false,
+          saveAsImage: false,
           clearCanvas: false,
           changeViewBackgroundColor: false,
           toggleTheme: false

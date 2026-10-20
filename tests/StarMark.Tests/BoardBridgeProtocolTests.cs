@@ -376,4 +376,13 @@ public sealed class BoardBridgeProtocolTests
         Assert.True(BridgeProtocol.IsKnownPasteShape("spreadsheet"));
         Assert.False(BridgeProtocol.IsKnownPasteShape("image"));   // 图那一档⛔ 在这四档里（§20.3 现读那四档）
     }
+
+    // ────────── ⑦ 那一发导出的落点（片54＝P-240 的②） ──────────
+    // 本批第一版在这里排过一臂 15 格的表，钉的是"从下载报的 mime／档名判出档位"（ExportKindForDownload）。
+    // 那颗判据随产品代码一起删了：真机量到那一发压根⛔ 是下载（引擎那颗 saveAs 走 showSaveFilePicker），
+    // 逐字读数＝正本 bin/WI93/readings_54_134804.txt＋bin/WI93/log54_forensics.txt（boards.download 零行，
+    // 而同一把尺读得到 boards.nav／bridge.ready／arm.post＝尺⛔ 聋）。
+    // 还留在链路上的那几件事（档位→后缀→档名、每档各有后缀、坏名字也交得出可用的一颗）
+    // 由上面 §⑤ 那三格钉着，⛔ 在这里再列一遍同一串期望（两颗名单迟早只补一处）。
+
 }
