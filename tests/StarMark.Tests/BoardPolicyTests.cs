@@ -222,14 +222,62 @@ public sealed class BoardPolicyTests
         Assert.DoesNotContain(BoardPolicy.Capture.Eventualy, outcomes);
     }
 
-    // ────────── ⑧ 两颗引擎读数⛔ 是我们的上限 ──────────
+    // ────────── ⑧ 两颗引擎读数⛔ 是我们的上限；那颗旗现在轮到"必须带正本" ──────────
 
+    /// <summary>
+    /// 引擎自报的两颗数逐字在册（对账用），而那颗 <c>ImageCeilingsMeasured</c> 片58 翻成 true＝
+    /// 「<b>字节</b>那一半在真机上量过了」。<b>⚠ 它⛔ 说长边量过</b>：那一半今天还是⛔ 读数，
+    /// 所以这颗旗的读法只许是"字节"而⛔ 是"尺寸"（名字是历史遗留，改口要连闸门一起改，本批⛔ 改）。
+    /// </summary>
     [Fact]
     public void EngineNumbersAreRecordedVerbatimAndFlaggedAsNotOurs()
     {
         Assert.Equal(1440, BoardPolicy.EngineReportedLongEdgePx);
         Assert.Equal(4L * 1024 * 1024, BoardPolicy.EngineReportedFileCeilingBytes);
-        Assert.False(BoardPolicy.ImageCeilingsMeasured);        // 那条曲线量到之前，这颗旗⛔ 许翻
+        Assert.True(BoardPolicy.ImageCeilingsMeasured);   // 片58 量到：正本 bin/WI98/readings_58z_ladder2_221131.txt
+    }
+
+    // ────────── ⑧b 那颗进向上限＝量到的档位，边界要逐颗说清（片58＝P-241 的②件） ──────────
+
+    /// <summary>
+    /// <b>颗数⛔ 是这颗数推出来的，是从那份正本里读回来的</b>：四档盘上真字节 67133／2098752／8390209／26216001，
+    /// 每颗换成 base64 的字符串长度＝<c>ceil(bytes/3)*4</c>（编码那一头的形状），再喂给这颗判据。
+    /// <para>正件落在我要测的那一维（名册 349）：<b>放行的必须是量过还留得住余量的那一档之下，
+    /// 拒掉的必须包含我自己量到的那颗 8 MiB 正件</b>——上限⛔ 高过手里最贵的读数，这条判据才叫"有出处"。
+    /// 边界那颗（<c>11184811</c>↔<c>11184812</c>）钉的是"⛔ 扫填充"那颗上界的代价：它最多多算 2 颗字节，
+    /// 于是<b>恰好 8 MiB 那一发被误拒</b>（8388608 编出来是 <c>11184812</c>，上界算成 8388609）。
+    /// ⛔ 把这颗误拒藏起来：它写在 <c>SceneBytesCeilingBytes</c> 的注释里，这一格把它钉在数上。</para>
+    /// </summary>
+    [Fact]
+    public void TheInboundCeilingRefusesEveryStepTheLadderMeasuredAsTooExpensive()
+    {
+        Assert.Equal(8L * 1024 * 1024, BoardPolicy.SceneBytesCeilingBytes);
+
+        // 那颗上界的形状：每 4 颗字符换 3 颗字节，尾上⛔ 扫填充⇒最多多算 2 颗
+        Assert.Equal(0, BoardPolicy.InboundDecodedBytesUpperBound(0));
+        Assert.Equal(0, BoardPolicy.InboundDecodedBytesUpperBound(3));    // 连一颗整组都凑不齐
+        Assert.Equal(3, BoardPolicy.InboundDecodedBytesUpperBound(4));
+        Assert.Equal(3, BoardPolicy.InboundDecodedBytesUpperBound(7));    // 上界⛔ 因尾字符而多算
+        Assert.Equal(6, BoardPolicy.InboundDecodedBytesUpperBound(8));
+
+        // 正本四档（盘上真字节 → base64 颗数 → 这颗判据的下落）
+        Assert.Equal(67134, BoardPolicy.InboundDecodedBytesUpperBound(89512));           // 67133 B，tookMs=182 → 放行
+        Assert.False(BoardPolicy.InboundBytesOverCeiling(89512));
+        Assert.Equal(2098752, BoardPolicy.InboundDecodedBytesUpperBound(2798336));     // 2 MiB 那档，tookMs=305
+        Assert.False(BoardPolicy.InboundBytesOverCeiling(2798336));
+        Assert.Equal(8390211, BoardPolicy.InboundDecodedBytesUpperBound(11186948));    // 8 MiB 那档＝8390209 B＋1601 骨架
+        Assert.True(BoardPolicy.InboundBytesOverCeiling(11186948));                    // ⚠ 量到过的那一档及其以上：拒
+        Assert.Equal(26216001, BoardPolicy.InboundDecodedBytesUpperBound(34954668));   // 25 MiB 那档，tookMs=1769＝预算的 88%
+        Assert.True(BoardPolicy.InboundBytesOverCeiling(34954668));
+
+        // 那颗边界：多出来的 1 颗字节就是"⛔ 扫填充"的价钱
+        Assert.Equal(8388606, BoardPolicy.InboundDecodedBytesUpperBound(11184811));
+        Assert.False(BoardPolicy.InboundBytesOverCeiling(11184811));
+        Assert.Equal(8388609, BoardPolicy.InboundDecodedBytesUpperBound(11184812));
+        Assert.True(BoardPolicy.InboundBytesOverCeiling(11184812));
+
+        // 空与零⛔ 算超（否则页面递回一颗 null 就把这一扇判成"超限"）
+        Assert.False(BoardPolicy.InboundBytesOverCeiling(0));
     }
 
     // ────────── ⑨ 那颗脏位＝字节对差（片22＝§21.4） ──────────

@@ -36,10 +36,29 @@ public static class BoardSceneStore
         => Path.Combine(Folder, BoardPolicy.SceneFileName(sceneId));
 
     /// <summary>
+    /// 已经确认过存在的那棵板档目录（片58＝P-241 的③件＝P-45 那一族在这一档里的第二格）。
+    /// <para>改前的形状是<b>每一拍写之前先 <c>Directory.CreateDirectory</c> 一次</b>：同一个存在性被反复问几千次。
+    /// 现在只问一次；而读到 <c>DirectoryNotFoundException</c> 就把这一格退回去——目录被别人搬走时程序自己
+    /// 下一拍重建，⛔ 永久失败，也⛔ 要用户做任何事（P-54 那条口径）。</para>
+    /// <para><b>缓存那颗目录名而⛔ 缓存一颗 bool</b>：<see cref="Folder"/> 的根会随设置档改道
+    /// （单测与「换落点」那一拍都走这一路），bool 会把「换了另一棵根」读成「已确认」＝那一发又摸不到盘了。</para></summary>
+    private static string? _folderReady;
+
+    /// <summary>
     /// 写这颗板的档。<b>⛔ 抛</b>：失败回 <c>false</c> ＋故障名（调用方负责上屏与日志）。
     /// <para>那颗 id 先过 <see cref="BoardPolicy.IsSceneId"/>：形状不对就连名字都不拼——
     /// 这条桥的字节来自 web 侧，而"哪颗板"这件事必须由宿主的身份判据说了算（⛔ 拿内容当身份）。</para>
     /// </summary>
+    /// <summary>
+    /// 那颗「同一瞬间只许一发摸盘」的闩（片58＝P-241 的①件<b>跟着欠的那一半</b>，本批量出来才补）。
+    /// <para><b>为什么本批新起它</b>：改前那一发写盘同步跑在<b>唯一那颗 UI 线程</b>上，于是「两扇窗同开同一颗板」
+    /// 那种现场天然被排了队（片32 量的正是它）。把写手交进线程池之后，那一颗排队没了主人——
+    /// 同一颗 <c>&lt;主档&gt;.tmp</c> 会被两发同时踩：一发改名成功、另一发还攥着半颗，盘上最后是哪一份没人说得出。</para>
+    /// <para>⚠ 这一颗管的是<b>同一瞬间</b>，⛔ 是「谁后写」——那一维归每扇窗自己那颗串行闸门（在 <c>BoardWindow</c> 那一档）。
+    /// 闩住在<b>档的主人</b>这一档而⛔ 窗那一档：窗会换（重建控件那一趟换新的一扇），那颗文件⛔ 换主人。</para>
+    /// </summary>
+    private static readonly object WriteGate = new();
+
     public static bool TrySave(string? sceneId, byte[] bytes, out string? fault, out bool rolledBackup)
     {
         fault = null;
@@ -49,9 +68,21 @@ public static class BoardSceneStore
             fault = "bad-id";
             return false;
         }
+        lock (WriteGate) { return WriteOnce(sceneId, bytes, out fault, out rolledBackup); }
+    }
+
+    /// <summary>那一发写盘的<b>全部摸盘动作</b>（只许在 <see cref="WriteGate"/> 里被叫到）：确认目录 → 问盘上那份 → 滚 → 写 <c>.tmp</c> → 改名。</summary>
+    private static bool WriteOnce(string sceneId, byte[] bytes, out string? fault, out bool rolledBackup)
+    {
+        fault = null;
+        rolledBackup = false;
         try
         {
-            System.IO.Directory.CreateDirectory(Folder);
+            if (_folderReady != Folder)
+            {
+                System.IO.Directory.CreateDirectory(Folder);
+                _folderReady = Folder;   // 认的是那颗目录名，理由住在 <see cref="_folderReady"/> 那里
+            }
             var main = PathOf(sceneId);
             // 滚之前先问<b>盘上那份</b>（判据住 Core，片37／片38）：宿主内存里那份「我上次写了什么」会落后于盘
             // （两扇同开同一颗板／外部同步工具改了档／上一发写失败之后重试），而一发与盘上同件的写滚下去
@@ -68,6 +99,12 @@ public static class BoardSceneStore
             System.IO.File.WriteAllBytes(temp, bytes);
             System.IO.File.Move(temp, main, overwrite: true);
             return true;
+        }
+        catch (System.IO.DirectoryNotFoundException ex)
+        {
+            _folderReady = null;         // 那棵目录被搬走／被删了：下一拍重新确认，⛔ 把这次失败锁死（P-54 口径）
+            fault = ex.GetType().Name;
+            return false;
         }
         catch (Exception ex)
         {

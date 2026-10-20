@@ -199,9 +199,9 @@ public sealed class BoardWindowBridgeGateTests
     /// <summary>
     /// 关窗那一拍的等待<b>有界</b>、等的是"这一问有答案"而⛔"答案好听"，而且到点会说话。
     /// <para>那颗毫秒数只许住在主人那里（UI 档里再写一遍 2000＝第二主人，改的人只改得动一处）；
-    /// 三处 <c>FinishClosingFlush();</c> 分别对应"盘上本来就是它"、"这一问交回答案了（写成功还是写失败都算）"
-    /// 与片26 新加的那一颗"这一问被写闸拒了"——
-    /// 少了前者那次关不掉，少了后者那颗写失败要用户白等两秒。</para>
+    /// 四处 <c>FinishClosingFlush();</c> 分别对应"盘上本来就是它"、"这一问被写闸拒了"（片26），
+    /// 与片58 落地那一格里<b>各走一支</b>的两颗——"那一发写手抛了"与"那一发真落进盘（或写不成）"。
+    /// 少了前者那次关不掉，少了后两颗那颗写失败／那一发抛了要用户白等两秒。</para>
     /// </summary>
     [Fact]
     public void TheCloseFlushIsBoundedAndSaysWhenItGaveUp()
@@ -211,7 +211,7 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Contains("BoardPolicy.CloseFlushBudgetMs", code, StringComparison.Ordinal);
         Assert.Equal(0, Count(code, "2000"));                       // 那颗数⛔ 在这档里再出现一次
         Assert.Equal(2000, BoardPolicy.CloseFlushBudgetMs);         // 正件：主人那里它还在
-        Assert.Equal(3, Count(code, "FinishClosingFlush();"));      // 片26 多出的那一处＝"这一问被写闸拒了"也是答案
+        Assert.Equal(5, Count(code, "FinishClosingFlush();"));      // 片58②：超限那一支也答了那一问（写闸拒／没变／超限／抛／落地＝五支，⛔ 第六支＝有人白等）
         Assert.Contains("AppWindow.Hide()", code, StringComparison.Ordinal);
         Assert.Contains("boards.close.flush.timeout", raw, StringComparison.Ordinal);
         Assert.Contains("_recovering", code, StringComparison.Ordinal);   // 两颗控件抢同一扇窗＝更坏的现场
@@ -290,7 +290,7 @@ public sealed class BoardWindowBridgeGateTests
         Assert.True(export.IndexOf("LandsInSceneArchive", StringComparison.Ordinal)
                     < export.IndexOf("if (!_autosaveArmed)", StringComparison.Ordinal));
         Assert.Contains("boards.scene.write.refused", raw, StringComparison.Ordinal);
-        Assert.Equal(3, Count(code, "FinishClosingFlush();"));      // 拒掉也是答案：⛔ 让关窗那一拍白等满预算
+        Assert.Equal(5, Count(code, "FinishClosingFlush();"));      // 颗数与「各归哪一支」由上面那格钉住；这里问的是搬进线程池之后⛔ 多出一位主人
     }
 
     /// <summary>
@@ -359,7 +359,9 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Contains("_armTries = 0;", SourceGate.MethodBody(raw, "void ArmIdleBeat"), StringComparison.Ordinal);
         // 拒到底才上屏，且三处出口共用同一颗面板
         Assert.Contains("ShowArmStuckNotice();", inbound, StringComparison.Ordinal);
-        Assert.Equal(3, Count(code, "ShowArmStuckNotice();"));
+        // 片58② 起是四处：递档失败到底／写闸拒／<b>超限那一发</b>／重造失败——同一块面板⛔ 许再发明一句话，
+        // 也⛔ 许少一处（少一处＝那一路又回到静默，P-53 那一族）。逐颗点名由各自那一格钉住。
+        Assert.Equal(4, Count(code, "ShowArmStuckNotice();"));
         Assert.Contains("ShowArmStuckNotice();", SourceGate.MethodBody(raw, "void HandleExportBytes"), StringComparison.Ordinal);
         var stuck = SourceGate.MethodBody(raw, "void ShowArmStuckNotice");
         Assert.Contains("offerCopy: _seenScene is { Length: > 0 }", stuck, StringComparison.Ordinal);
@@ -589,7 +591,7 @@ public sealed class BoardWindowBridgeGateTests
         Assert.True(close.IndexOf("return;", StringComparison.Ordinal) < close.IndexOf("Close();", StringComparison.Ordinal),
             "那颗 return 排在关之后＝亮回来又立刻关掉＝这一格⛔ 有牙");
         Assert.Equal(1, Count(close, "Close();"));                                        // ⛔ 多一颗出口，也⛔ 把超时那一支一起改了
-        Assert.Equal(4, Count(SourceGate.Code(raw), "_closingRefused"));                  // 声明／那一支／复位／分岔，⛔ 第五颗主人
+        Assert.Equal(5, Count(SourceGate.Code(raw), "_closingRefused"));                // 声明／写闸拒那一支／<b>超限那一支</b>／复位／分岔（片58② 起五颗，⛔ 第六颗主人）
     }
 
 
@@ -668,7 +670,8 @@ public sealed class BoardWindowBridgeGateTests
         // ② 那颗按钮的资格＝"名单之内"且"那一句认定盘上真有一颗档"，而它⛔ 自己再列一遍键名（两处各列＝迟早只补一处）
         var can = SourceGate.MethodBody(code, "bool CanOpenSavedFolder");
         Assert.Equal(3, Count(code, "CanOpenSavedFolder"));
-        Assert.Equal(3, Count(code, "NoticeSaysFileOutcome"));
+        // 片58② 起四颗：定义／写闸拒那一支的"⛔ 用旧话顶掉新事实"／<b>超限那一支同一颗问法</b>／那颗按钮的资格
+        Assert.Equal(4, Count(code, "NoticeSaysFileOutcome"));
         Assert.Contains("_savedPath is not null", can, StringComparison.Ordinal);
         Assert.Contains("NoticeSaysFileOutcome", can, StringComparison.Ordinal);
         // 那一句"没写成"⛔ 认定档存在，而它⛔ 能从那份名单里被忘掉（忘掉＝那颗按钮指着⛔ 存在的档）⇒名单另有一对子守这一维
@@ -974,5 +977,120 @@ public sealed class BoardWindowBridgeGateTests
         foreach (var line in openBlock.Split('\n'))
             if (line.Contains("StarLog", StringComparison.Ordinal))
                 Assert.DoesNotContain("envelope.Url", line, StringComparison.Ordinal);   // 那颗 URL 正是被拒的那一颗
+    }
+
+    /// <summary>片58＝P-241 的①件：那一发<b>整档写盘摸盘的活</b>离 UI 线程，<b>判据</b>留在 UI 线程。
+    /// <para><b>为什么非搬不可（真机读数）</b>：尺＝<c>SendMessageTimeoutW(WM_NULL)</c> 的往返＝那一拍里 UI 线程
+    /// 真正不肯收活的长度。改前（停笔／失焦那一拍，正本 <c>bin/WI98/readings_58_r4_210541.txt</c>）
+    /// <b>67131 B → 15.6 ms｜2098752 B → 41.2｜8390208 B → 100.5</b>（同档三拍 115.7／100.5／99.8），
+    /// 而工作集在一拍里跳 <b>550.3→622.4 MB（+72.1）</b>；</para>
+    /// <para>改后（同一把尺挂在<b>关窗</b>那一拍，正本 <c>bin/WI98/readings_58z_ladder2_221131.txt</c>，四档 BAD=0）
+    /// <b>67133 B → 15.1 ms｜2098752 B → 45.4｜8390209 B → 86.7｜26216001 B → 273.6</b>，
+    /// 宿主自己报的 <c>tookMs</c> <b>182／305／631／1769</b>，那一行痕逐字 <c>tid=2 onUi=True closing=True</c>。
+    /// ⚠ 三处口径⛔ 许混：<b>其一</b>，两跑⛔ 是同一拍（失焦↔关窗，后者多一段 grace），能并排的只有
+    /// 「同一次整发写在 UI 线程不肯收活这一维上量到多少毫秒」那一列——而它只降了一截（8 MiB：100.5→86.7），
+    /// 因为留在 UI 线程上的是<b>解码与那颗 base64 过桥</b>，那正是②件要拦的那一手；
+    /// <b>其二</b>，这一族最早那一跑（<c>readings_58z_212332.txt</c>）痕里印的是 <c>offUi=True</c>——那颗常量
+    /// <b>⛔ 是读数</b>（由我打死在码里、什么也没量），本批换成 <c>tid=</c>＋<c>onUi=</c> 两颗当场算出来的数，
+    /// 下面(丙)那两行为此配了一颗禁项断言；
+    /// <b>其三</b>，<c>tid=2 onUi=True</c> 证的是<b>续体回到 UI 线程</b>（判据那一半照旧），
+    /// 而「摸盘那一发⛔ 在 UI 线程上」今天只有两样东西撑着：形状（(甲)(乙)：全档一处 <c>TrySave</c>
+    /// ＋<c>TaskScheduler.Default</c>）与那颗一致性（25 MiB 那一拍整拍 1769 ms、UI 只拒收 273.6 ms）。
+    /// <b>⛔ 写进发布说明</b>：改后<b>停笔</b>那一拍用同一把尺重测，还没有。</para>
+    /// <para>四半各钉一件事，缺一半都算没修：<b>(甲)</b> 那一档里⛔ 再直接摸盘（否则那一刀压根⛔ 搬）；
+    /// <b>(乙)</b> 两发⛔ 许同时踩同一颗 <c>.tmp</c>（串行闸门由我们钉住，改前由 UI 线程替你排的队），
+    /// 且写手⛔ 许排回 UI 线程；<b>(丙)</b> 那一发抛了也⛔ 许静默（P-53 那一族）；
+    /// <b>(丁)</b>「这一问有人在等」必须<b>交出去那一刻</b>就认——续体回来时那颗位已被关窗那一拍清掉了。</para></summary>
+    [Fact]
+    public void TheSceneWriteLeavesTheUiThreadButItsJudgmentsStayOnIt()
+    {
+        var code = SourceGate.Code(ReadRepo(WindowCs));
+        var export = SourceGate.MethodBody(code, "void HandleExportBytes");
+        var queue = SourceGate.MethodBody(code, "Task<SceneWrite> QueueSceneWrite");
+        var settle = SourceGate.MethodBody(code, "Task SettleSceneWriteAsync");
+
+        // (甲) 摸盘那一发搬出了那一档：全档只许在写手那一格里出现一次
+        Assert.DoesNotContain("BoardSceneStore.TrySave", export, StringComparison.Ordinal);
+        Assert.Equal(1, Count(code, "BoardSceneStore.TrySave("));
+        Assert.Contains("BoardSceneStore.TrySave(_boardId, bytes, out var fault, out var rolledBackup)", queue, StringComparison.Ordinal);
+
+        // (乙) 串行：这一发排在上一发后面，下一发再排在<b>这一发</b>后面（那颗临时件只有一颗，两发同时写＝互相踩）
+        Assert.Contains("_sceneGate.ContinueWith", queue, StringComparison.Ordinal);
+        Assert.Contains("_sceneGate = run.ContinueWith", queue, StringComparison.Ordinal);
+        Assert.Contains("TaskScheduler.Default", queue, StringComparison.Ordinal);   // ⛔ 排回 UI 线程＝那样等于没搬
+        Assert.Equal(0, Count(queue, "DispatcherQueue"));
+
+        // (丙) 抛了也要留下一行痕（只念类型：那颗 message 里可能带路径与外人的字＝P-13 那条 CWE-117 的口径）
+        Assert.Contains("boards.scene.write.threw type=", settle, StringComparison.Ordinal);
+        Assert.Contains("ex.GetType().Name", settle, StringComparison.Ordinal);
+        // ⚠ 那一发「离没离开 UI 线程」⛔ 许写成一颗由我打死的常量当证据：那一列必须由当场那颗线程号算出来。
+        Assert.Contains("tid=\" + Environment.CurrentManagedThreadId", settle, StringComparison.Ordinal);
+        Assert.Contains("onUi=\" + (Environment.CurrentManagedThreadId == _uiThreadId)", settle, StringComparison.Ordinal);
+        Assert.DoesNotContain("offUi=True", code, StringComparison.Ordinal);   // 那颗写死的常量⛔ 许再回来冒充读数
+        Assert.Contains("if (closingBeat) FinishClosingFlush();", settle, StringComparison.Ordinal);
+
+        // (丁) 交出去那一刻抄下来的那颗位（⛔ 在续体里现问：那时它已经被清掉了）
+        Assert.True(export.IndexOf("var closingBeat = _closingLanded is not null;", StringComparison.Ordinal)
+                    < export.IndexOf("_ = SettleSceneWriteAsync(QueueSceneWrite(bytes), closingBeat);", StringComparison.Ordinal),
+            "现问那颗位＝那一拍先醒了、这一发回来读到的是「没人等」＝那句 landed 与它后面的收尾一起歪");
+
+        // 正件：判据照旧住在 UI 线程那一侧（⛔ 顺手把写闸搬走＝把 ✅P-223 换一副坏）
+        Assert.Contains("if (!_autosaveArmed)", export, StringComparison.Ordinal);
+        Assert.Contains("if (BoardPolicy.DiskAlreadyHolds(_lastWritten, bytes))", export, StringComparison.Ordinal);
+        Assert.Contains("_seenScene = bytes;", export, StringComparison.Ordinal);
+    }
+
+    /// <summary>片58＝P-241 的②件：那一发进向字节<b>在解之前</b>按上限判，而那颗数字⛔ 住在宿主这一侧。
+    /// <para><b>为什么"解之前"是这一格的全部意义</b>：<c>Convert.FromBase64String</c> 跑在 UI 线程上，
+    /// 「解出来才知道多大」＝那一手的付担已经交了——真机上 25 MiB 那一发即便写盘已经离开 UI 线程，
+    /// UI 线程照旧不肯收活 <b>273.6 ms</b>（正本 <c>bin/WI98/readings_58z_ladder2_221131.txt</c>；
+    /// 那颗上限的三条出处在 <c>BoardPolicy.SceneBytesCeilingBytes</c> 的注释里）。</para>
+    /// <para>四半：<b>(甲)</b> 问排在解之前，且全档只有一颗解码的门（多一颗＝多一处⛔ 带判据的入口）；
+    /// <b>(乙)</b> 拒掉那一发⛔ 进盘、⛔ 进 <c>_seenScene</c>／<c>_refusedScene</c>（要它就得先解＝这一刀省的正是那一手），
+    /// 也⛔ 静默；<b>(丙)</b> 两句分流——scene 说「这一扇已停止保存」那一族，png／svg 说「没能存成」那一族，
+    /// 而说后者那一支必须<b>先返回</b>，否则同一发撞见两句话互相顶掉；
+    /// <b>(丁)</b> 那一拍有人在等时，"拒"也要把它放行（P-54 那条口径：⛔ 把用户的退出键抵押给一发字节）。</para></summary>
+    [Fact]
+    public void TheInboundEnvelopeIsJudgedBeforeItIsDecoded()
+    {
+        var code = SourceGate.Code(ReadRepo(WindowCs));
+        var export = SourceGate.MethodBody(code, "void HandleExportBytes");
+        var refuse = SourceGate.MethodBody(code, "void RefuseOversizedEnvelope");
+
+        // (甲) 那颗问排在解之前——两颗都要在，⛔ 只钉顺序（缺席的 IndexOf 返回 -1＝恒真，名册 447）
+        Assert.Contains("BoardPolicy.InboundBytesOverCeiling(envelope.Bytes?.Length ?? 0)", export, StringComparison.Ordinal);
+        Assert.Contains("Convert.FromBase64String", export, StringComparison.Ordinal);
+        Assert.True(export.IndexOf("InboundBytesOverCeiling", StringComparison.Ordinal)
+                    < export.IndexOf("Convert.FromBase64String", StringComparison.Ordinal),
+            "解出来才问＝那一手的付担已经压在 UI 线程上了，这一刀压根⛔ 落地");
+        Assert.Equal(1, Count(code, "Convert.FromBase64String"));   // 全档一颗解码的门
+
+        // (乙) 拒掉那一发：只留一行痕，⛔ 摸盘、⛔ 记进手里那两份
+        Assert.Contains("boards.scene.inbound.too-big", refuse, StringComparison.Ordinal);
+        Assert.Equal(0, Count(refuse, "BoardSceneStore"));
+        Assert.Equal(0, Count(refuse, "_seenScene"));
+        Assert.Equal(0, Count(refuse, "_refusedScene"));
+        Assert.Equal(0, Count(refuse, "QueueSceneWrite"));
+
+        // (丙) 两句分流：png／svg 那一支说完"没能存成"就走，⛔ 再顶上一句"已停止保存"
+        Assert.Contains("if (!BridgeProtocol.LandsInSceneArchive(envelope.Kind))", refuse, StringComparison.Ordinal);
+        Assert.Contains("ReportExport(\"boards.exportFailedBody\", null);", refuse, StringComparison.Ordinal);
+        Assert.Equal(1, Count(refuse, "return;"));            // 那一支得<b>走掉</b>：说了两句＝用户以为这块板停了，而它其实⛔ 超限
+        Assert.True(refuse.IndexOf("ReportExport(\"boards.exportFailedBody\", null);", StringComparison.Ordinal)
+                    < refuse.IndexOf("ShowArmStuckNotice();", StringComparison.Ordinal),
+            "两支说同一句话＝超限那张 png 被说成\"这一扇停止保存\"，用户会去等一颗根本不会再来的自动落盘");
+
+        // (丁) 有人在等就得放行那一拍（与「写闸拒」那一格同一颗答案）
+        Assert.Contains("_closingRefused = _closingLanded is not null;", refuse, StringComparison.Ordinal);
+        Assert.Contains("FinishClosingFlush();", refuse, StringComparison.Ordinal);
+
+        // 那颗数字⛔ 在这里第二份：宿主只问判据，上限住 Core
+        Assert.Equal(0, Count(code, "8L * 1024 * 1024"));
+        Assert.Equal(0, Count(code, "SceneBytesCeilingBytes ="));
+        Assert.Equal(1, Count(code, "InboundBytesOverCeiling("));
+
+        // 正件：没过上限那一发照旧走原路（⛔ 因为新加的门把合法那档一起挡在门外）
+        Assert.Contains("if (BridgeProtocol.LandsInSceneArchive(envelope.Kind))", export, StringComparison.Ordinal);
+        Assert.Contains("_ = SettleSceneWriteAsync(QueueSceneWrite(bytes), closingBeat);", export, StringComparison.Ordinal);
     }
 }

@@ -9,8 +9,13 @@ namespace StarMark.Core.Boards;
 /// <para>
 /// 这里只住<b>已经判过的事</b>：档名形状、一颗板一颗档的对应、四拍 autosave、
 /// "载档与桥回写算⛔ 算一次用户动作"那颗裁决。三样东西刻意<b>⛔ 在这里出现</b>：
-/// ① 我们自己给的图片字节上限（那条"内嵌 base64 之后档体积 ↔ 图张数"的曲线<b>还没量</b>，
-/// 先写常数＝把猜测当判据；见 §21.7 与 <see cref="ImageCeilingsMeasured"/>）；
+/// ① 那颗<b>自给</b>的字节上限：片58 之前它⛔ 存在，而"没量过"这件事由 <see cref="ImageCeilingsMeasured"/>
+///    押着闸门（判据里⛔ 许出现猜测的数字）。片58 在真机上把「档体积 ↔ 那一拍按住界面多久」量出来了，
+///    于是上限住进 <see cref="SceneBytesCeilingBytes"/>，每一颗数字的出处写在那一段里
+///    （正本 <c>bin/WI98/readings_58z_ladder2_221131.txt</c>），闸门同时换成
+///    「自给的上限必须带一句盘上真有的正本」（<c>EverySelfGivenCeilingCitesAReadingThatExists</c>）。
+///    ⚠ 它<b>只</b>覆盖「字节」那一半：长边（画板里一张图多大像素）今天还是⛔ 量过，
+///    本档至今只放着引擎自报的那两颗（名字里就写着 <c>EngineReported</c>）；
 /// ② 那颗<b>成品路径</b>（片23 起根归 <c>UserDataPaths</c>，UI 侧只问它要那颗子目录）。<b>片39 给这一条改口</b>：
 ///    本档现在裁「<b>用户的产物进哪一族</b>」（<see cref="ExportsFolder"/>），但两棵根由宿主递进来——
 ///    本档⛔ 自己读环境变量、⛔ 认 <c>%APPDATA%</c>／<c>%USERPROFILE%</c>（层次倒挂，同它⛔ 认 WebView2 那颗 enum）；
@@ -30,11 +35,49 @@ public static class BoardPolicy
     public const long EngineReportedFileCeilingBytes = 4L * 1024 * 1024;
 
     /// <summary>
-    /// 「我们自己给的那两颗图片上限（长边与字节）量过没有」。false 时闸门 ③ 钉住"本档一颗自定的数字都⛔ 许出现"。
-    /// <para>翻成 true 的唯一入口＝把 §21.7 那条欠的曲线量出来（一张 4K 照片味 PNG 进画板之后，
-    /// 那颗 <c>.excalidraw</c> 到底多大、几张能撑爆），然后写在这里并同步 <c>docs/excalidraw整合可行性深析.md</c>。</para>
+    /// 「我们自己给的那颗字节上限量过没有」。翻成 true 之后，本档里每一颗<b>自给</b>的尺寸上限都得带一句
+    /// 「读数出自哪一份正本」，而那颗正本<b>真在盘上</b>（守它的是 <c>EverySelfGivenCeilingCitesAReadingThatExists</c>）。
+    /// <para>翻起来那一笔＝片58：档体积 ↔ 那一拍按住 UI 线程多久，这条曲线在真机上量出来了
+    /// （尺＝<c>SendMessageTimeoutW(WM_NULL)</c> 的往返＋宿主自己报的那一列 <c>tookMs</c>）：
+    /// <b>改前</b>（停笔那一拍、写⛔ 离开 UI 线程）<c>bin/WI98/readings_58_r4_210541.txt</c>
+    /// ＝ 67131 B→15.6 ms／2098752 B→41.2／8390208 B→100.5（同档三拍 115.7／100.5／99.8）；
+    /// <b>改后</b>（关窗那一拍）<c>bin/WI98/readings_58z_ladder2_221131.txt</c>
+    /// ＝ 67133 B→15.1／2098752 B→45.4／8390209 B→86.7／26216001 B→273.6 ms，
+    /// 宿主那一拍 <c>tookMs</c> <b>182／305／631／1769</b>（四档逐字 <c>tid=2 onUi=True closing=True</c>）。</para>
+    /// <para>⚠ 三处口径⛔ 许混着读：① 改前是<b>停笔</b>那一拍、改后是<b>关窗</b>那一拍，两列数⛔ 是同一拍；
+    /// ② 改后那一拍按住界面的 86.7 ms（8 MiB）比改前那 100.5 只降了一截——因为留下来的主要是<b>解码</b>
+    /// 与那颗 base64 字符串过桥，⛔ 是写盘（写盘已经不在 UI 线程上，见 <c>SceneBytesCeilingBytes</c> 那一段）；
+    /// ③ 长边那一半还是⛔ 量过，引擎自报的 1440 与 4 MB 照旧只是<b>对账用的读数</b>（上面两颗 <c>EngineReported*</c>）。</para>
     /// </summary>
-    public const bool ImageCeilingsMeasured = false;
+    public const bool ImageCeilingsMeasured = true;
+
+    /// <summary>
+    /// 一发<b>进向</b>字节的上限（base64 解<b>出来</b>之后允许多大；片58＝P-241 的②件）。
+    /// <para><b>这颗数⛔ 是我拍的，三条都在正本 <c>bin/WI98/readings_58z_ladder2_221131.txt</c> 里</b>
+    /// （四档按住界面 15.1／45.4／86.7／273.6 ms，对宿主自己报的 <c>tookMs</c> 182／305／631／1769）：
+    /// ① 8 MiB 那一档盘上真字节 <b>8390209</b>（＝8 MiB ＋ 1601 颗 JSON 骨架）整发落地 <c>tookMs=631</c>
+    /// ≈ <see cref="CloseFlushBudgetMs"/>（2000）的三分之一——余量留得住；
+    /// ② 下一档 25 MiB 已经 <c>1769</c>＝预算的 88%，再往上就开始<b>丢用户那几笔</b>（那一拍等不到答案，
+    /// 窗照样关，而那发⛔ 进盘）；
+    /// ③ <b>解码那一半挪不走</b>：base64 过桥与 <c>Convert.FromBase64String</c> 照旧压在 UI 线程上
+    /// （写盘已经离开它，见 <c>BoardWindow.QueueSceneWrite</c>），所以撞上限那一发必须<b>在解之前</b>拦下。
+    /// <b>取 8 MiB＝量到的档位里最后一颗还留得住余量的，并且把它当成上界⛔ 当成下界</b>：
+    /// 那颗 8390209 的正件<b>比这里高 1601 颗字节，因此它今天被拒</b>——被拒的是"量到过的那一档及其以上"，
+    /// 放进来的每一发都⛔ 贵过我手里最贵的那颗读数，⛔ 反过来拿那颗贴着预算的 25 MiB 当上限。</para>
+    /// <para>⚠ 两处口径：① <see cref="InboundDecodedBytesUpperBound"/> ⛔ 扫填充，边界上最多多算 2 颗字节
+    /// （＝恰好 8 MiB 那一发被判超时），在这颗量级上是 0.00002% 的误拒，换掉它要的是"解之前就得判完"；
+    /// ② <c>tookMs</c> 是"从交出去到落地"整拍的墙钟，最慢那一列是"UI 线程拒收工作多久"，两列都⛔ 等于"写盘花了多久"。
+    /// 屏幕上说哪句话由宿主那一头按档位分流（scene＝「这一扇已停止保存」那一族，png／svg＝「没能存成」那一族）。
+    /// ⚠ <b>欠项</b>：改后<b>停笔</b>那一拍的 UI 阻塞还没用同一把尺重测过（今天量到的是关窗那一拍）。</para>
+    /// </summary>
+    public const long SceneBytesCeilingBytes = 8L * 1024 * 1024;
+
+    /// <summary>那一发 base64 交回的字符串<b>至多</b>解出多少字节（上界：⛔ 扫填充，因此最多多算 2 颗字节）。</summary>
+    public static long InboundDecodedBytesUpperBound(int base64Length) => (long)(base64Length / 4) * 3;
+
+    /// <summary>那一发进向字节超上限了吗——<b>解之前</b>问（「解出来才知道」＝那一手的付担已经压在 UI 线程上了）。</summary>
+    public static bool InboundBytesOverCeiling(int base64Length)
+        => InboundDecodedBytesUpperBound(base64Length) > SceneBytesCeilingBytes;
 
     /// <summary>一颗板的档后缀（一颗档一板；图以内嵌 base64 跟着走，§21.3 那颗裁决）。</summary>
     public const string SceneExtension = ".excalidraw";

@@ -505,6 +505,14 @@ public sealed class BoardWindow : Window
             return;
         }
         byte[] bytes;
+        // 那颗上限先问，且<b>排在解它之前</b>（片58＝P-241 的②件）：解 base64 那一手本身就跑在 UI 线程上，
+        // 「解出来才知道多大」＝那一手的付担已经交了——25 MiB 那一发实测按住界面 273.6 ms（正本见
+        // <see cref="StarMark.Core.Boards.BoardPolicy.SceneBytesCeilingBytes"/> 那一段）。
+        if (BoardPolicy.InboundBytesOverCeiling(envelope.Bytes?.Length ?? 0))
+        {
+            RefuseOversizedEnvelope(envelope);
+            return;
+        }
         try { bytes = Convert.FromBase64String(envelope.Bytes ?? string.Empty); }
         catch (FormatException)
         {
@@ -555,21 +563,17 @@ public sealed class BoardWindow : Window
                 FinishClosingFlush();
                 return;
             }
-            if (BoardSceneStore.TrySave(_boardId, bytes, out var fault, out var rolledBackup))
-            {
-                _lastWritten = bytes;   // 这一刻起盘上主档就是这份字节
-                // 这一行报的是<b>盘上发生了什么</b>（片37）：滚没滚那颗 <c>.bak</c> 决定用户手里还有没有一条
-                // 「真正不同」的退路，而「写成功了」那一句听不出这一格——同件的写照样成功，照旧会把退路顶掉。
-                StarMark.Abstractions.StarLog.Info("boards.scene.saved id=" + _boardId
-                    + " bytes=" + bytes.Length + " rolled=" + rolledBackup);
-            }
-            else
-            {
-                StarMark.Abstractions.StarLog.Warn("boards.scene.save.failed: " + fault);
-            }
-            // 关窗那一拍等的就是"这一问有答案了"，而⛔ 是"答案是好听的那颗"：写失败也当场结掉，
-            // 让用户再等满那两秒⛔ 能多换回一个字节。
-            FinishClosingFlush();
+            // 那一发摸盘的活（读盘上那份＋滚 <c>.bak</c>＋写 <c>.tmp</c>＋改名）交进线程池（片58＝P-241 的①件）。
+            // 改前的形状是<b>同步 I/O 跑在 UI 线程上</b>，而停笔那一拍每 1.5 s 就来一回。<b>真机量到的代价</b>（正本
+            // <c>bin/WI98/readings_58_r4_*.txt</c>；尺＝<c>SendMessageTimeoutW(WM_NULL)</c> 的往返＝那一拍里 UI 线程
+            // 真正不肯收活的长度）：<b>67 KB → 15.6 ms｜2 MB → 41 ms｜8 MB → 100～116 ms</b>，而工作集在一拍里跳 <b>+72 MB</b>。
+            // ⚠ 那些颗数里<b>还⛔ 算上引擎那一侧的 serialize</b>——真带图的板按片13 那条曲线（照片 1440 每张 +0.32 MiB／
+            // 噪声 1440 每张 +9.08 MiB）轻易几十 MB，那一档宿主同样得整发同步付。
+            // ⚠ 这一刀搬的<b>⛔ 是判据</b>：写闸（<see cref="_autosaveArmed"/>）、那颗脏位
+            // （<see cref="BoardPolicy.DiskAlreadyHolds"/>）与三行痕的分支选择照旧留在 UI 线程
+            // （账本 P-241① 那句「⛔ 顺手把写闸搬走＝把 ✅P-223 换一副坏」）。
+            var closingBeat = _closingLanded is not null;   // 当场抄下来：续体回来时那一颗位已被关窗那一拍清掉
+            _ = SettleSceneWriteAsync(QueueSceneWrite(bytes), closingBeat);
             return;
         }
         var name = BridgeProtocol.UniqueExportName(
@@ -603,6 +607,124 @@ public sealed class BoardWindow : Window
         StarMark.Abstractions.StarLog.Info("boards.export.saved kind=" + envelope.Kind
             + " bytes=" + bytes.Length + " to=" + target + " id=" + _boardId);
         ReportExport("boards.exportSavedBody", target);
+    }
+
+    /// <summary>
+    /// 造这扇窗那一手所在的<b>托管线程号</b>（⛔ 是一颗由 UI 那边递进来的数，当场读一次）。
+    /// <para>它只有一位消费者：落地那一格那行痕里的 <c>onUi=</c> 那一列。<b>为什么非要量这一颗</b>：
+    /// 把写盘交进线程池之后，那句「续体会回到 UI 线程的消息泵」本来只是我按框架习惯做的<b>推断</b>，
+    /// 而推断⛔ 能写进日志当读数（坑表那条「注释里的『实测』也要先有读数」）——
+    /// 那一列读的是<b>真发生的那一下</b>：续体真回到建控件树那一颗线程上吗。</para></summary>
+    private readonly int _uiThreadId = Environment.CurrentManagedThreadId;
+
+    /// <summary>
+    /// 那一发整档写的<b>串行闸门</b>（片58＝P-241 的①件）。
+    /// <para><b>为什么必须有这一颗</b>：<c>BoardSceneStore</c> 那颗临时件的档名是 <c>&lt;主档&gt;.tmp</c>——
+    /// <b>同一颗板上两发同时在写</b>就是互相踩同一颗临时件（那一次改名会盖掉对方还没写完的一份）。
+    /// 改前那一形状由 UI 线程<b>替你</b>排了队（同步写＝天然串行），搬进线程池之后这颗顺序必须由我们自己钉住。</para>
+    /// <para><b>丢掉中间那一发为什⛔ 丢东西</b>：每一发交回的都是<b>整块板的快照</b>而⛔ 增量，后一发覆盖前一发的内容
+    /// ⛔ 丢那一笔，丢掉的只有「同一块板再写一遍」那次 I/O。<b>而最后一拍⛔ 会被丢</b>——它的等待方
+    /// （<see cref="FlushSnapshotAsync"/>）就在下面那一格里等它<b>真的</b>落地，所以 <c>landed=True</c> 的老意思一个字节也⛔ 改。</para>
+    /// </summary>
+    private System.Threading.Tasks.Task _sceneGate = System.Threading.Tasks.Task.CompletedTask;
+
+    /// <summary>那一发写盘的三种下落（只有「真写成」那一发才配把脏位往前推）。</summary>
+    private readonly record struct SceneWrite(bool Ok, string? Fault, bool RolledBackup, byte[] Bytes);
+
+    /// <summary>
+    /// 那一发交回的字节<b>过上限</b>：⛔ 解它，也⛔ 让它静默（片58＝P-241 的②件）。
+    /// <para><b>两种档位各说各的<b>已有</b>那句话</b>（本批⛔ 添一颗键：那两句都住在画板那一族的名册里，
+    /// 由 <c>BoardWordGateTests.TheBoardFamilyHasExactlyTwentyThreeRowsAndTheyAreNamed</c> 逐颗点名钉住）：
+    /// scene＝这一扇的自动保存对这一发起停了＝片27 那句「这一扇已停止保存」＋那颗「另存一份到别处」；
+    /// png／svg＝那一发导出没成＝片54 那句「没能存成，原因在日志里」。⚠ 两句都是<b>真话</b>：
+    /// 前者确实停了（这块板超限期间不再自动落盘），后者确实没落盘。</para>
+    /// <para><b>那颗按钮交出去的是手里那份而⛔ 这一发</b>：过限的字节⛔ 进 <c>_refusedScene</c>（要它就得先解＝
+    /// 这一刀省的正是那一手），于是 <see cref="CopySeenSceneAsideAsync"/> 那格会挑载入那一份，
+    /// 而那句成功话用的是 <c>boards.copySavedStaleBody</c>——<b>它本来就明说交的是旧的那一份</b>，⛔ 把这事说成"你的笔迹保住了"。</para>
+    /// </summary>
+    private void RefuseOversizedEnvelope(BoardEnvelope envelope)
+    {
+        var b64 = envelope.Bytes?.Length ?? 0;
+        // ⚠ 那颗 kind 已过枚举闸门（<see cref="BridgeProtocol.IsKnownExportKind"/>），所以念得出而⛔ 是外人给的串。
+        StarMark.Abstractions.StarLog.Warn("boards.scene.inbound.too-big b64=" + b64
+            + " decoded~=" + BoardPolicy.InboundDecodedBytesUpperBound(b64)
+            + " ceiling=" + BoardPolicy.SceneBytesCeilingBytes
+            + " kind=" + envelope.Kind + " id=" + _boardId);
+        if (!BridgeProtocol.LandsInSceneArchive(envelope.Kind))
+        {
+            ReportExport("boards.exportFailedBody", null);   // 那一发导出的三件收口（那句／那颗闩／那颗闹钟）同一位主人
+            return;
+        }
+        // 过限与「写闸没开」对那一拍是同一颗答案：拒。而⛔ 把这一发记进 _seenScene（P-223 定死过的坏法）——
+        // 那份字节压根没被解出来，它连"宿主见过的那一块板"都⛔ 是。
+        _closingRefused = _closingLanded is not null;
+        if (!NoticeSaysFileOutcome) ShowArmStuckNotice();
+        FinishClosingFlush();
+    }
+
+    /// <summary>把那一发摸盘的活交进线程池，排在<b>上一发后面</b>（串行，理由见 <see cref="_sceneGate"/>）。
+    /// <para>判据要的「盘上那一份」由 <c>TrySave</c> 自己在<b>写的那一刻</b>读——改前也是在那一刻读，所以
+    /// 「该不该滚 <c>.bak</c>」这一问的口径⛔ 变（✅P-234 那两半原样生效，包括「盘上那份读不出是一颗档⛔ 滚」）。</para></summary>
+    private System.Threading.Tasks.Task<SceneWrite> QueueSceneWrite(byte[] bytes)
+    {
+        var run = _sceneGate.ContinueWith(_ =>
+        {
+            var ok = BoardSceneStore.TrySave(_boardId, bytes, out var fault, out var rolledBackup);
+            return new SceneWrite(ok, fault, rolledBackup, bytes);
+        }, System.Threading.CancellationToken.None,
+           System.Threading.Tasks.TaskContinuationOptions.None,
+           System.Threading.Tasks.TaskScheduler.Default);
+        _sceneGate = run.ContinueWith(_ => { });    // 下一发排在它后面；这一句⛔ 把结果再排回 UI 线程＝那样等于没搬
+        return run;
+    }
+
+    /// <summary>
+    /// 那一发落地之后回 UI 线程收尾：脏位只由<b>真写成</b>的那一发推，痕照旧逐颗留，
+    /// 而关窗那一拍的等待<b>到这一格才结</b>——「字节真的在盘上了」才是那句 <c>landed</c>。
+    /// <para><b>为什⛔ 怕「两发的收尾互踩」</b>：写由 <see cref="_sceneGate"/> 串行⇒完成顺序＝交出去的顺序；
+    /// <b>再加上</b>每一发的续体真排回同一颗 UI 线程的消息泵（FIFO），才有「<b>最后落笔的那一发最后写脏位</b>」这一句。
+    /// ⚠ 后面那一半<b>今天还没读数</b>：它由那一行痕里的 <c>onUi=</c> 那一列报（那颗数＝<see cref="_uiThreadId"/> 对当场那颗线程号），
+    /// 下一跑真机读数才能把它从推断换成读数。要是那一列读回 <c>False</c>，这一格就得重做——
+    /// 脏位与那颗等待由各线程池的续体各写各的，「最后一发最后落」这句⛔ 成立。</para>
+    /// <para>这条推理⛔ 靠「我觉得 await 会回来」：把脏位交回<b>发出去</b>那一拍、或把 <c>FinishClosingFlush()</c>
+    /// 提到写<b>之前</b>，两样都必须有证人当场响（<c>BoardWindowBridgeGateTests</c> 那一格＋<c>bench_58.py</c> 九臂，
+    /// 正本 <c>bin/WI98/bench58_console_r1.txt</c>＝臂 9／BAD 0）。</para>
+    /// <para>⚠ <b>进程退出时还在排队的那一发</b>：写本身仍是「先 <c>.tmp</c> 后改名」，死在半路留下的是一颗废弃临时件
+    /// ＋一份完整主档——✅P-223 那套原子性⛔ 因为换了线程就消失（<c>BoardSceneStore</c> 档头那段「写的顺序是有原因的」）。</para>
+    /// </summary>
+    private async System.Threading.Tasks.Task SettleSceneWriteAsync(System.Threading.Tasks.Task<SceneWrite> write, bool closingBeat)
+    {
+        SceneWrite done;
+        try
+        {
+            done = await write;
+        }
+        catch (System.Exception ex)
+        {
+            // 写手抛了＝这一发既没进盘也没留下一句话——正是本仓定性过的那类坏（P-53：写盘失败⛔ 静默）。
+            // 只念故障类型：那颗 message 里可能带路径与外人的字（P-13 那条 CWE-117 的口径）。
+            StarMark.Abstractions.StarLog.Warn("boards.scene.write.threw type=" + ex.GetType().Name + " id=" + _boardId);
+            if (closingBeat) FinishClosingFlush();
+            return;
+        }
+
+        if (done.Ok)
+        {
+            _lastWritten = done.Bytes;   // 这一刻起盘上主档就是这份字节（⛔ 在「发出去」时就当已经写了）
+            // <c>onUi=</c> 那一列才是「那一发真离过 UI 线程、续体又真回来了」的读数（⛔ 由我写死一颗 <c>True</c> 冒充证据）。
+            StarMark.Abstractions.StarLog.Info("boards.scene.saved id=" + _boardId
+                + " bytes=" + done.Bytes.Length + " rolled=" + done.RolledBackup
+                + " tid=" + Environment.CurrentManagedThreadId
+                + " onUi=" + (Environment.CurrentManagedThreadId == _uiThreadId)
+                + " closing=" + closingBeat);
+        }
+        else
+        {
+            StarMark.Abstractions.StarLog.Warn("boards.scene.save.failed: " + done.Fault
+                + " tid=" + Environment.CurrentManagedThreadId
+                + " onUi=" + (Environment.CurrentManagedThreadId == _uiThreadId));
+        }
+        if (closingBeat) FinishClosingFlush();       // 那一拍的等待由「交出去」挪到「真落地」
     }
 
     /// <summary>

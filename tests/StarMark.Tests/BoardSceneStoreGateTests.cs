@@ -128,14 +128,17 @@ public sealed class BoardSceneStoreGateTests
         Assert.Contains("private static bool IsPadding", SourceGate.Code(BoardPolicySrc), StringComparison.Ordinal);  // 那颗形状判据的主人只有 Core
         Assert.Equal(1, Count(save, "rolledBackup = true;"));              // 只有真滚了那一支才点亮
         Assert.Contains("out bool rolledBackup", Store, StringComparison.Ordinal);
-        Assert.Contains("+ \" rolled=\" + rolledBackup", WindowCs, StringComparison.Ordinal);
-        var saved = Between(WindowCs,
-            "if (BoardSceneStore.TrySave(_boardId, bytes, out var fault, out var rolledBackup))",
-            "var name = BridgeProtocol.UniqueExportName(");
+        Assert.Contains("+ \" rolled=\" + done.RolledBackup", WindowCs, StringComparison.Ordinal);
+        // 片58（P-241 的①件）：那一发摸盘的活搬进线程池之后，「滚没滚」与那行痕⛔ 再不住在 HandleExportBytes 里，
+        // 而住在<b>那一发落地之后</b>那一格⇒切片改按那颗方法名取（⛔ 再从整档里按邻居行找，名册 520 那一族）。
+        var saved = SourceGate.MethodBody(WindowCs, "Task SettleSceneWriteAsync");
         Assert.Contains("StarLog.Info(\"boards.scene.saved id=", saved, StringComparison.Ordinal);
         // 片57（P-245）之前这一格钉的是「日志排在回话之前」，而那句回话页面压根⛔ 听——排序的意义在<b>痕要早于结掉那一问</b>，
         // 所以把同一颗排序改钉到真的会走掉的那一跳上：那一拍死在 FinishClosingFlush 里时，这一行还得在。
-        Assert.True(saved.IndexOf("StarLog.Info") < saved.IndexOf("FinishClosingFlush();"),
+        // ⚠ 取<b>最后一颗</b>：那一格里有两颗 FinishClosingFlush（写手抛了的那一支也⛔ 许让用户白等），
+        //   成功那一支的痕只许排在<b>它自己那一颗</b>之前——按第一颗比会拿 catch 那一支的结掉当尺（名册 467 那一族）。
+        Assert.Equal(2, Count(saved, "FinishClosingFlush();"));        // 两支各结一次：抛了也⛔ 白等
+        Assert.True(saved.IndexOf("StarLog.Info") < saved.LastIndexOf("FinishClosingFlush();"),
             "日志排在结掉那一问之后＝那一拍死在结掉那一手里时这一行⛔ 出现，盘上动过什么就没人知道了");
         Assert.Equal(0, Count(saved, "Reply("));                       // 那颗回话整族撤掉（⛔ 留一颗没人读的出口）
     }
@@ -292,7 +295,9 @@ public sealed class BoardSceneStoreGateTests
     public void TheUnchangedSceneNeitherWritesNorRollsTheBackup()
     {
         Assert.Contains("if (BoardPolicy.DiskAlreadyHolds(_lastWritten, bytes))", WindowCs, StringComparison.Ordinal);
-        var gate = Between(WindowCs, "if (BoardPolicy.DiskAlreadyHolds", "if (BoardSceneStore.TrySave");
+        // 片58：那颗闸门后面紧跟的不再是一发同步写，而是<b>把那一发交出去</b>那一行⇒尾锚跟着改（⛔ 放宽：问的还是「交出去之前先问盘」）。
+        var gate = Between(WindowCs, "if (BoardPolicy.DiskAlreadyHolds",
+            "_ = SettleSceneWriteAsync(QueueSceneWrite(bytes), closingBeat);");
         Assert.Contains("boards.scene.unchanged bytes=", gate, StringComparison.Ordinal);   // 不动盘也是宿主做过的一颗决定
         Assert.Equal(0, Count(gate, "Reply("));                       // 片57（P-245）：那一拍⛔ 再往页面丢一句没人听的回话
         Assert.Contains("return;", gate, StringComparison.Ordinal);
@@ -301,10 +306,16 @@ public sealed class BoardSceneStoreGateTests
         // 收尾那颗锚点取的是"写失败"那一句<b>消息名</b>而⛔ 那颗通用的 <c>StarLog.Warn</c>：
         // 片26 在同一个方法里多加了一颗 Warn（写闸拒的那一行），按"文件里第一颗 Warn"切就切到邻居那一行去了
         // （名册 313 那一族：一把按前缀数手臂的旧闸门被同前缀的新成员扫进——要改的是问法，⛔ 放宽判据）。
-        var success = Between(WindowCs, "if (BoardSceneStore.TrySave(_boardId, bytes, out var fault, out var rolledBackup))",
-            "boards.scene.save.failed");
-        Assert.Contains("_lastWritten = bytes;", success, StringComparison.Ordinal);   // 只有真写成的那一支点亮
-        Assert.Equal(1, Count(WindowCs, "_lastWritten = bytes;"));
+        // 片58：那两支现在住在<b>落地那一格</b>里（写手交回的三种下落各走一支），切片跟着搬主人。
+        var settle = SourceGate.MethodBody(WindowCs, "Task SettleSceneWriteAsync");
+        var success = Between(settle, "if (done.Ok)", "boards.scene.save.failed");
+        Assert.Contains("_lastWritten = done.Bytes;", success, StringComparison.Ordinal);   // 只有真写成的那一支点亮
+        Assert.Equal(1, Count(WindowCs, "_lastWritten = done.Bytes;"));
+        Assert.Equal(0, Count(WindowCs, "_lastWritten = bytes;"));     // 旧形状⛔ 许回来：那一发还没落盘就把脏位推上去＝下一拍据此⛔ 动盘
+        Assert.Contains("done = await write;", settle, StringComparison.Ordinal);   // 存在与顺序两颗分开写（名册 447）
+        Assert.True(settle.IndexOf("done = await write;", StringComparison.Ordinal)
+                    < settle.IndexOf("_lastWritten = done.Bytes;", StringComparison.Ordinal),
+            "脏位排在等那一发之前＝把「还没落盘」说成「盘上就是它」，下一拍照那句⛔ 动盘＝丢用户那一笔");
 
         Assert.Contains("_lastWritten = null;", WindowCs, StringComparison.Ordinal);   // 新板：第一拍必写
         // 片43（P-238）：这里原来挂着半句 <c>|| bytes.Length == 0</c>＝把「读出一颗垃圾」当场折成「这颗板不存在」，
@@ -380,5 +391,59 @@ public sealed class BoardSceneStoreGateTests
         Assert.DoesNotContain("sessionId", SourceGate.Code(Envelope), StringComparison.Ordinal);
         Assert.DoesNotContain("SessionId", SourceGate.Code(Envelope), StringComparison.Ordinal);
         Assert.Contains("sessionId", Js, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// ⑭ 片58＝P-241 的③件：那棵板档目录<b>只确认一次</b>，而「目录被人搬走」那一种坏⛔ 静默、也⛔ 锁死。
+    /// <para>改前的形状是每一发写之前先 <c>Directory.CreateDirectory(Folder)</c> 一次：停笔那一拍每 1.5 s 来一回，
+    /// 同一个存在性被问几千遍（P-45 那一族在这一档里的第二格，第一格是片54 那颗 <c>ExportsDirectory</c>）。</para>
+    /// <para><b>缓存的是那颗目录名而⛔ 一颗 bool</b>：那颗存储的根会改道（设置档与单测都走这一路），
+    /// bool 会把「换了一棵新根」读成「已确认」⇒那一发从此永远摸不到盘，而屏幕上说的是「画板自己把我画的东西弄丢了」。
+    /// <b>读到 <c>DirectoryNotFoundException</c> 就退回这一格</b>＝程序自己下一拍重建，⛔ 要用户做任何事（P-54 那条口径）。</para>
+    /// </summary>
+    [Fact]
+    public void TheBoardFolderIsConfirmedOnceAndSelfHealsWhenItVanishes()
+    {
+        var code = SourceGate.Code(Store);
+        Assert.Equal(1, Count(code, "Directory.CreateDirectory(Folder)"));   // 一位主人：⛔ 载入那一头再建一遍
+        Assert.Contains("if (_folderReady != Folder)", code, StringComparison.Ordinal);   // 存在与顺序两颗分开写（名册 447）
+        Assert.True(code.IndexOf("if (_folderReady != Folder)", StringComparison.Ordinal)
+                    < code.IndexOf("Directory.CreateDirectory(Folder)", StringComparison.Ordinal),
+            "建目录排在闸门之前＝每一拍照样摸一遍盘，那一刀压根⛔ 搬");
+        Assert.Contains("_folderReady = Folder;", code, StringComparison.Ordinal);
+        Assert.Contains("_folderReady = null;", code, StringComparison.Ordinal);   // 自愈：下一拍重新确认
+        Assert.DoesNotContain("_folderReady = true", code, StringComparison.Ordinal);   // ⛔ 缓存一颗 bool（根改道就读成已确认）
+        Assert.Contains("catch (System.IO.DirectoryNotFoundException ex)", code, StringComparison.Ordinal);
+        Assert.True(code.IndexOf("catch (System.IO.DirectoryNotFoundException", StringComparison.Ordinal)
+                    < code.IndexOf("catch (Exception ex)", StringComparison.Ordinal),
+            "那颗专用 catch 排在通用兜底之后＝永远走不到＝那一格又退化成「一句也⛔」");
+    }
+
+    /// <summary>
+    /// ⑮ 片58＝P-241 的①件<b>跟着欠的那一半</b>：同一瞬间只许一发摸盘（两扇窗同开同一颗板时，那颗 <c>.tmp</c> 只许有一位主人）。
+    /// <para><b>为什么这一格是本批新起的</b>：那一发写盘从前同步跑在唯一那颗 UI 线程上，「两发互相排队」是<b>白捡的</b>
+    /// （片32 量的那副现场就是这么天然没出事）；把写手交进线程池之后，那颗排队没了主人＝A 改名成功、B 还攥着半颗
+    /// <c>&lt;主档&gt;.tmp</c>，盘上最后是哪一份没人说得出。⚠ 所以这一颗尺问的是<b>形状</b>（闩在不在、写手只从闩里叫得到吗），
+    /// <b>⛔ 是「两发真互斥」</b>——后者只有真机两拍同开才量得出，已记欠项，⛔ 拿本格当它量过了。</para>
+    /// </summary>
+    [Fact]
+    public void TheStoreLetsOnlyOneWriterTouchTheDisk()
+    {
+        var code = SourceGate.Code(Store);
+        var save = Between(Store, "public static bool TrySave", "private static bool WriteOnce");
+        Assert.Contains("lock (WriteGate)", save, StringComparison.Ordinal);
+        Assert.Contains("return WriteOnce(sceneId, bytes, out fault, out rolledBackup);", save, StringComparison.Ordinal);
+        Assert.Equal(1, Count(code, "private static readonly object WriteGate"));      // 一位主人
+        // 定义一颗＋闩里那一颗调用＝两颗；冒出第三颗＝有人绕过闩直接摸盘（那才是本格要抓的坏）
+        Assert.Equal(2, Count(code, "WriteOnce("));
+        // ⛔ 把那颗「谁后写」的顺序也算进这一颗闩：顺序归每扇窗自己那道闸门（两件事两位主人）
+        Assert.Contains("lock (WriteGate)", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("Monitor.Enter", code, StringComparison.Ordinal);        // ⛔ 第二副锁的形状
+        // ⚠ 那颗闩会不会把 UI 线程拖住？由「调用点只有一颗、而它在写手那一格里」决定，⛔ 是「我觉得没人这么叫」。
+        // 全仓普查（名册 424：动作尺要落在真会走到的那一族上——多一颗调用点＝那一格⛔ 成立）：
+        var sites = SourceGate.ReadRepoUnder("src")
+            .Where(x => SourceGate.Code(x.Text).Contains("BoardSceneStore.TrySave(", StringComparison.Ordinal))
+            .Select(x => x.RelativePath).ToList();
+        Assert.Equal(new[] { "src/StarMark.UI/Boards/BoardWindow.cs" }, sites);
     }
 }

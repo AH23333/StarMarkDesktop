@@ -14,7 +14,7 @@ namespace StarMark.Tests;
 /// 行为由 <see cref="BoardBridgeProtocolTests"/> 与 <see cref="BoardPolicyTests"/> 真测；这里四格都是形状：
 /// ① 保留名表⛔ 许被抄第二份（抄了就会有两套"合法档名"互相认不出）；
 /// ② 桥的名字只许住在一颗文件里（接线批若把命令名抄进 UI，越权面就有两处可改）；
-/// ③ 那颗"我们自定的图片字节／长边上限"<b>还没量</b>，所以判据里⛔ 许出现它——出现即红（防把猜测当判据）；
+/// ③ 我们自己给的任何尺寸上限都得<b>带一句真存在的出处</b>（片58 之前那颗曲线还没量，那颗闸门问的是"⛔ 许有"）；
 /// ④ <c>Fault</c> 的每颗成员都得真被 <c>Check</c> 返回过（本批删掉的就是这颗形状：一句"外链被拒"的故障名
 /// 从无生产者，而 UI 那边读不到它＝P-212 那一族在同一批里又长了一颗）。
 /// </para>
@@ -93,29 +93,65 @@ public sealed class BoardBridgeShapeGateTests
         Assert.DoesNotContain("src/StarMark.Core/Boards/BoardPolicy.cs", codeHolders);
     }
 
-    // ────────── ③ 还没量的东西⛔ 许先发明 ──────────
+    // ────────── ③ 自给的上限必须带着出处（片58 之前：⛔ 许有；之后：⛔ 许⛔ 带读数） ──────────
 
     /// <summary>
-    /// <c>BoardPolicy.cs</c> 里<b>⛔ 一颗"我们自己给的图片上限"</b>。
-    /// <para>那颗包里现读的两颗（1440 长边／4 MB 字节）名字都以 <c>EngineReported</c> 开头——它们是
-    /// <b>引擎那侧的读数</b>，写在判据里只为排障对账（§19.3 那句"too big 其实可能是解码失败"就靠它对上号）。
-    /// 而"宿主自己缩到多大、内嵌 base64 之后一颗板档允许多大"这条曲线<b>还没量</b>（v1 §21.3／§21.7）：
-    /// 先写一颗常数＝把猜测当判据，也是本仓定性过两次的那类坏（<c>TextScale</c> 那句"范围建议 0.7–1.5"⛔ 存在过）。</para>
-    /// <para>翻这条红法⛔ 是删掉 <c>ImageCeilingsMeasured</c> 那颗旗（下面同时钉它还在）：
-    /// 唯一出路是把 §19.5 第②臂那条曲线量出来，再带着数字来改这条。</para>
+    /// <c>BoardPolicy.cs</c> 里每一颗<b>我们自己给</b>的尺寸上限，都必须带一句「读数出自哪一份正本」，
+    /// 而那颗正本<b>真在盘上</b>。
+    /// <para>片12 立这一格时它问的是「还没量的东西⛔ 许先发明」（名单里一颗也⛔ 许有）；片58 把那条曲线量出来了，
+    /// 于是问法换成它<b>一直想问的那一句</b>：数字得有出处。两颗引擎自报的读数（1440 长边／4 MB 字节）照旧
+    /// 以 <c>EngineReported</c> 命名并被排除在外——它们是<b>对方</b>的读数，写在判据里只为排障对账。</para>
+    /// <para>⚠ 这一格⛔ 再钉 <c>ImageCeilingsMeasured == false</c>：那颗旗今天翻成 true，而它仍是这颗常数的
+    /// 资格闸门（<c>BoardPolicyTests</c> 那一格现在钉 <c>True</c>，⛔ 允许谁偷偷翻回去）。
+    /// 删掉那颗旗⛔ 是出路——出路是给那颗常数配一句真存在的出处（名册 425：禁项判据必须自带正件）。</para>
     /// </summary>
     [Fact]
-    public void NoSelfInventedImageCeilingExistsYet()
+    public void EverySelfGivenCeilingCitesAReadingThatExists()
     {
-        var code = Code(JudgeFile);
+        var raw = ReadRepoFile(JudgeFile);      // 读<b>原文</b>：那颗出处写在常数的注释里，抹掉注释就把它一起删了
+        var code = Code(JudgeFile);             // 抹掉注释的那一份只用来抓<b>声明</b>，出处要到原文里找
         var offenders = CeilingNames(code);
-
-        Assert.True(offenders.Count == 0,
-            "那颗⛔ 还没量的上限被写成了常数（先量再写）：\n" + string.Join("\n", offenders));
-
-        // 两颗引擎读数照旧在，且名字带来源（⛔ 改名成我们的样子）
+        // 反空转（名册 444／451）：名单空＝这把尺今天量不到任何东西，得响，而⛔ 是"绿灯"
+        Assert.True(offenders.Count >= 1,
+            "本档一颗自给上限也没有＝这颗尺瞎了（片58 起 SceneBytesCeilingBytes 应在名单里）");
+        foreach (var name in offenders)
+        {
+            // 出处只许写在<b>那一颗常数自己那块注释</b>里：取声明之上连着的 <c>///</c> 那一整块，
+            // ⛔ 用"往上数 N 颗字符"那种窗口（上一颗常数的出处会替它说话＝射程宽过那一枚，名册 424／461）
+            var lines = raw.Replace("\r\n", "\n").Split('\n');
+            var at = -1;
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (!Regex.IsMatch(lines[i], @"^\s*public const (int|long) " + name + @"\s*=")) continue;
+                at = i;
+                break;
+            }
+            Assert.True(at >= 0, $"找不到那颗上限的声明：{name}");
+            var head = new List<string>();
+            for (var j = at - 1; j >= 0 && lines[j].TrimStart().StartsWith("///", System.StringComparison.Ordinal); j--)
+                head.Insert(0, lines[j]);
+            Assert.True(head.Count > 0, $"{name} 连一块注释也没有＝那颗数压根没出处");
+            var cited = Regex.Matches(string.Join("\n", head), @"bin/WI\d+/[\w.\-]*\*?[\w.\-]*\.txt")
+                .Select(m => m.Value).ToList();
+            Assert.True(cited.Count > 0, $"{name} 那颗数没写出处（正本档名）＝又回到「把猜测当判据」那一族");
+            Assert.True(cited.Any(ReadingExists),
+                $"{name} 写的出处在盘上找不到：{string.Join("／", cited)}");
+        }
+        // 两颗引擎读数照旧在，且名字带来源（⛔ 改名成我们的样子＝把它们冒充成我们量过的）
         Assert.Equal(2, Regex.Matches(code, @"public const (int|long) EngineReported\w+").Count);
-        Assert.Contains("ImageCeilingsMeasured = false", code, System.StringComparison.Ordinal);
+        Assert.Contains("ImageCeilingsMeasured = true", code, System.StringComparison.Ordinal);
+    }
+
+    /// <summary>那颗正本（档名里可带 <c>*</c>）在盘上有没有——「出处」⛔ 是一句写着的假话。</summary>
+    private static bool ReadingExists(string relative)
+    {
+        var path = relative.Replace('/', System.IO.Path.DirectorySeparatorChar);
+        var root = RepoRoot();
+        if (!path.Contains('*')) return System.IO.File.Exists(System.IO.Path.Combine(root, path));
+        var dir = System.IO.Path.GetDirectoryName(path) ?? string.Empty;
+        var pattern = System.IO.Path.GetFileName(path);
+        var full = System.IO.Path.Combine(root, dir);
+        return System.IO.Directory.Exists(full) && System.IO.Directory.GetFiles(full, pattern).Length > 0;
     }
 
     /// <summary>
