@@ -2682,6 +2682,12 @@ public static class UiStrings
         new Entry("boards.leaveAction", "仍然离开", "Leave anyway", "それでも閉じる"),
         new Entry("boards.closeFlushTitle", "这块板的最后一笔没能等到", "The last strokes did not arrive in time", "最後の操作を待てませんでした"),
         new Entry("boards.closeFlushBody", "关窗那一拍画板没交回最后那份，窗口已经关闭。盘上留下的是之前那一份，最后几笔可能没进去；原因在日志里。", "The board did not hand back its last snapshot before the window closed, so the file on disk is the previous one and the last few strokes may be missing. Details are in the log.", "ウィンドウを閉じる際に最後のスナップショットが返らなかったため、ディスクには一つ前の版が残りました。最後の操作が含まれていない可能性があります。詳細はログにあります。"),
+        // 片49＝P-239：那颗档位置在盘上、却一颗字节也读不出来。⛔ 把它折成"这块板没了"再静默另起一块空画布，
+        // 也⛔ 只把"请稍后重试"交给用户——重试那一手程序自己做得到（P-54），做不到的那一档才开口，开口就给两颗按钮。
+        new Entry("boards.blockedTitle", "这块板现在打不开", "This board cannot be opened right now", "このボードは今開けません"),
+        new Entry("boards.blockedBody", "那颗档还在盘上，只是一个字节也读不出来——多半是别的程序正攥着它，或刚存上的那份还在改名。可以再试一次，也可以先开一块新板；那颗档一个字节也不会被动过。", "The file is still on disk, but not a byte of it can be read right now — another program is probably holding it, or the save that just ran is still renaming it. Try again, or start a new board first; that file will not be touched.", "ファイルはディスク上に残っていますが、今 1 バイトも読み出せません。別のプログラムが占有しているか、直前の保存の名前変更が終わっていないようです。もう一度試すか、先に新しいボードを開いてください。そのファイルは変更されません。"),
+        new Entry("boards.retryAction", "再试一次", "Try again", "もう一度試す"),
+        new Entry("boards.freshBoardAction", "先开一块新板", "Start a new board", "新しいボードを開く"),
         new Entry("tray.pinsShowHideNone", "显示 / 收起所有贴图（当前没有贴图）", "Show or collapse all pins (none right now)", "すべてのピンを表示／収納（現在 0 枚）"),
         new Entry("tray.pinsShowAll", "显示所有贴图", "Show all pins", "すべてのピンを表示"),
         new Entry("tray.pinsHideAll", "收起所有贴图", "Collapse all pins", "すべてのピンを収納"),

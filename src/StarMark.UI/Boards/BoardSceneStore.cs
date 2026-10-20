@@ -101,20 +101,27 @@ public static class BoardSceneStore
     /// 盘上的<b>主档位置当⛔ 一份档</b>——调用方若把这份字节当成"盘上已经有了"（<see cref="BoardPolicy.DiskAlreadyHolds"/>），
     /// 一颗"打开看看、没动"的板就永远补不回主档，而 <see cref="LatestSceneId"/> 只认主档。
     /// 补回去那一发⛔ 会顶掉这条退路：滚那一头认得出那颗垃圾主档⛔ 配滚（✅P-234），两片正好咬合。</para>
+    /// <para><paramref name="blocked"/> 交回的是"读不到"分<b>哪一族</b>（片49＝P-239）：<b>主档位置在、却一颗字节也拿不出</b>
+    /// （被人攥着／自家那次改名正在半路）才为真。从前两族折成同一颗 <c>false</c>，调用方只能一起处理，
+    /// 于是把"现在拿不出来"也当成了"没有这颗档"：屏幕上是一块空画布，而盘上那块板⛔ 动过一个字节，
+    /// 用户⛔ 知道是自己的板没了两颗、还是别人的程序正攥着它。判据本身住 <see cref="BoardPolicy.SceneFileIsBlocked"/>，
+    /// 本档只把盘上问到的两颗事实（在不在、读到些啥）递给它。</para>
     /// </summary>
-    public static bool TryLoad(string? sceneId, out byte[] bytes, out bool fromBackup)
+    public static bool TryLoad(string? sceneId, out byte[] bytes, out bool fromBackup, out bool blocked)
     {
         bytes = Array.Empty<byte>();
         fromBackup = false;
+        blocked = false;
         if (sceneId is null || !BoardPolicy.IsSceneId(sceneId)) return false;
         var main = PathOf(sceneId);
         byte[]? onMain = null;
         if (System.IO.File.Exists(main))
         {
             onMain = ReadIfExists(main);
+            blocked = BoardPolicy.SceneFileIsBlocked(true, onMain);
             // 主档在、却一颗字节都读不出（被人攥着／正在改名的那一瞬间）：这一发⛔ 退到 .bak。
             // 那颗退路按定义是上一版，把它当这一版递出去、再让第一拍写回＝用旧的一份盖掉一份可能更新的主档。
-            if (onMain is null) return false;
+            if (blocked) return false;
         }
         // 「该拿哪一份」整颗交 Core；这一头只决定<b>要不要再去读第二颗档</b>（⛔ 每拍都读两颗）。
         // ⚠ 本批第一跑正是这句写歪（只在「主档⛔ 存在」时才去读退路），被真机腿当场打回（坋格=3：宿主照旧另起一颗新板）。

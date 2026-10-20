@@ -593,8 +593,8 @@ public sealed class BoardWindowBridgeGateTests
         var raw = ReadRepo(WindowCs);
         var code = SourceGate.Code(raw);
         Assert.Contains("private void OnLocaleChanged() => PasteNotice();", code, StringComparison.Ordinal);
-        Assert.Equal(3, Count(code, "PasteNotice();"));             // ShowNotice 那一拍＋换语言那一拍＋被拒亮回那一拍补两颗新按钮（三处都只⛔ 调那颗主人，⛔ 各写一遍可见性）
-        Assert.Equal(2, Count(code, "HideNotice();"));              // 收起面板只此一颗主人，两处正当调用：开闸成功（坏话不再是事实）＋片40「继续编辑」撤销这一拍（⛔ 第二份收起实现）
+        Assert.Equal(5, Count(code, "PasteNotice();"));             // ShowNotice 那一拍＋换语言那一拍＋被拒亮回那一拍补两颗新按钮＋片49 那颗「再试一次」跑前跑后各一次（五处都只⛔ 调那颗主人，⛔ 各写一遍可见性）
+        Assert.Equal(4, Count(code, "HideNotice();"));              // 收起面板只此一颗主人，四处正当调用：开闸成功（坏话不再是事实）＋片40「继续编辑」撤销这一拍＋片49 那两颗（重试终于读到了／他决定先开一块新板）
         // 唯一的取词出口：两颗工厂各一处，调用点⛔ 重抄全限定名
         Assert.Equal(1, Count(code, "private static string Word(string key) => StarMark.Abstractions.I18n.Locale.T(key);"));
         Assert.Equal(1, Count(code, "Locale.T("));
@@ -609,6 +609,8 @@ public sealed class BoardWindowBridgeGateTests
             "void ShowRecoveringNotice", "void ShowArmStuckNotice", "void OnLocaleChanged",
             "Task OpenCopyFolderAsync", "bool CanOpenCopyFolder",
             "void StayOnBoard", "void LeaveAnyway",
+            // 片49 那三颗：坏话的上屏出口与它的两颗按钮都在这条线上（⛔ 在这里拼一句中文）
+            "Task OpenSceneAsync", "Task RetryBlockedSceneAsync", "void StartFreshBoard",
         })
         {
             var leftovers = SourceGate.Cjk.Matches(SourceGate.MethodBody(code, sig))

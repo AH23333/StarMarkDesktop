@@ -160,6 +160,31 @@ public static class BoardPolicy
     private const byte StartOfDoc = (byte)'{';
     private const byte EndOfDoc = (byte)'}';
 
+    /// <summary>
+    /// 那颗档<b>位置在盘上、却一颗字节也拿不出</b>（P-239）——别的程序攥着它，或自家那次 <c>File.Move</c> 正在改名的瞬间。
+    /// <para>为什么单独问这一颗：存储那一只读盘的手把「没这颗档」与「有这颗档却读不动」都折成 <c>null</c>，
+    /// 于是载入那一头把两者说成同一句话——「这块板没了」——再当场<b>另起一块新板</b>。用户看到的是空画布，
+    /// 而盘上那块板一颗没动；他⛔ 知道是自家的板还是别人的板。这一颗把两件事分开：<paramref name="present"/> 且
+    /// <paramref name="bytes"/> 为 null ⇒ 这不是"没有板"，是"这块板现在拿不出来"。</para>
+    /// <para>那颗判定住 Core 而⛔ 住在存储里：存储那一手只管"读到什么"（读不到就是 null，它⛔ 猜原因），
+    /// 而"两件事该分开说"是<b>措辞与出口</b>那一层的判据——放错层就没人量得到（测试工程⛔ 引用 <c>StarMark.UI</c>）。</para>
+    /// <para>⚠ 它认的只有"拿不出字节"那一档：<b>档在、读得到、却当⛔ 是一颗档</b>（0 字节／截在半路）归
+    /// <see cref="PickReadableScene"/>（✅P-238），那一档有自己的那句话，⛔ 混进这颗里（混了＝两句措辞共用一颗判据，
+    /// 改一句必染另一句）。</para>
+    /// </summary>
+    public static bool SceneFileIsBlocked(bool present, byte[]? bytes) => present && bytes is null;
+
+    /// <summary>
+    /// 载入撞见那颗闸门时，<b>宿主自己</b>先重试几回（含头一发）、隔多久。
+    /// <para>为什么由宿主重试而⛔ 把"请稍后重试"写在屏幕上让用户按（P-54 定过的口径）：撞见的那两档门路
+    /// ——别人正攥着那颗档、自家那次改名正在半路——按秒就退了，一发重试就能救回来；而让用户去按那颗按钮，
+    /// 是把程序自己做得到的一件事转成他的操作步数。</para>
+    /// <para>颗数与间隔写在 Core：⛔ 住在调用点，否则下一扇窗各抄一份"我觉得三回够了"（这一族的前例＝
+    /// <see cref="ArmRetryBudget"/>、<see cref="CloseFlushBudgetMs"/> 都在 Core）。</para>
+    /// </summary>
+    public const int LoadRetryTries = 3;
+    public const int LoadRetryDelayMs = 200;
+
     /// <summary>那颗档头尾允许的那四颗空白（⛔ 认全 <c>char.IsWhiteSpace</c>：那颗认 Unicode 空白，而这里要的只是序列化器会写的那四颗）。</summary>
     private static bool IsPadding(byte b) => b is (byte)' ' or (byte)'\t' or (byte)'\n' or (byte)'\r';
 

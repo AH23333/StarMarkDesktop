@@ -102,6 +102,17 @@ public sealed class BoardWindow : Window
     private Microsoft.UI.Xaml.Controls.WebView2 _web;
     private string _boardId;
 
+    /// <summary>
+    /// 这一扇撞过、而<b>此刻还拿不出来</b>的那颗档（片49＝P-239）。
+    /// <para>它是面板上那两颗按钮的唯一在场资格（<see cref="PasteNotice"/> 只读这一颗，⛔ 在 <c>ShowNotice</c>
+    /// 与换语言那一拍各写一遍可见性＝第二个主人）。载入成功、改开新板、换了一颗档都当场清掉：
+    /// 挂着不清＝下一句别的坏话（"这一扇已停止保存"）会连带把「再试一次」贴回屏幕，而那一刻⛔ 没有东西可试。</para>
+    /// </summary>
+    private string? _blockedSceneId;
+
+    /// <summary>那颗「再试一次」正在跑（与 <see cref="_copying"/> 同一副规矩：跑的时候按钮点得着＝他会连按，两发重试各自开场）。</summary>
+    private bool _retrying;
+
     /// <summary>宿主<b>见过</b>的最近一份完整场景字节——桥每 ready 一次（首开、崩溃重载）就递它进画板。
     /// <para>它与 <see cref="_lastWritten"/> 问的⛔ 是同一件事：那一颗问"盘上主档此刻是哪份"（脏位归它），
     /// 这一颗问"重建起来该把什么放回去"。写失败的字节<b>也算见过</b>——用户那几笔不该因为盘上付不进就凭空退场。</para></summary>
@@ -185,6 +196,11 @@ public sealed class BoardWindow : Window
     /// <summary>那颗「仍然离开」：用户当场决定不救、直接关这扇（⛔ 让他去猜"再点一次×就退"那颗隐藏出口）。</summary>
     private Button? _noticeLeaveButton;
 
+    /// <summary>片49＝那颗档现在拿不出来那一句的两颗按钮（<see cref="_blockedSceneId"/> 不为空才在场）：
+    /// 「再试一次」与「先开一块新板」。</summary>
+    private Button? _noticeRetryButton;
+    private Button? _noticeFreshButton;
+
     /// <summary>这一拍用户按过×、而那次关窗被写闸拒⇒窗被亮回来。两颗「继续编辑／仍然离开」只在这格在场：
     /// 没被关过＝⛔ 有话要说"走还是留"（停笔那一拍的拒只配「另存」）。</summary>
     private bool _closeRevived;
@@ -227,6 +243,7 @@ public sealed class BoardWindow : Window
     /// <summary>起一扇新板（没带任何档）。</summary>
     public System.Threading.Tasks.Task OpenNewAsync()
     {
+        _blockedSceneId = null;   // 这一扇现在说的是"一块新板"：那颗拿不出来的档⛔ 再挂在面板上（两颗按钮的资格只由它算）
         _lastWritten = null;   // 盘上还没有这颗板的档：第一拍照常规写，别把"还没写过"读成"已经一样"
         return OpenAsync(null);
     }
@@ -234,19 +251,75 @@ public sealed class BoardWindow : Window
     /// <summary>
     /// 接着开那颗已有的板：先按 id 把档读进内存，等 <c>bridge.ready</c> 那一刻再递给页面。
     /// <para>顺序是反不得的：桥没通就发 <c>board.load</c>，页面侧那位 <c>API</c> 还是 null，
-    /// 场景就永远进不去（而宿主这边一句错都⛔ 报）。两颗档都拿不出能打开的一份＝退回新板，⛔ 弹"档不见了"那种废话。</para>
+    /// 场景就永远进不去（而宿主这边一句错都⛔ 报）。</para>
+    /// <para>读不到分<b>两族</b>（片49＝P-239，从前折成同一颗 <c>false</c>）：
+    /// <b>「⛔ 有这颗档」</b>＝照旧退回新板（托盘那句"续上最近一块"本来就该容得下"一块也没有"）；
+    /// <b>「这颗档现在拿不出来」</b>＝先<b>宿主自己</b>重试几回（额度＝<see cref="BoardPolicy.LoadRetryTries"/>），
+    /// 撞见的那两档门路（别人正攥着、自家那次改名正在半路）按秒就退，一发重试就救得回来——
+    /// 把"请稍后重试"写在屏幕上让他按，是程序自己做得到的一件事转成他的操作步数（P-54 定过的坏法）。
+    /// 重试到点还是拿不出来，才<b>把这一扇停在面板上</b>：说一句他读得懂的话，给两颗他按得动的按钮，
+    /// 而⛔ 另起一块空画布当作那份档没了（那是 P-239 那句坏话的本体：屏幕上"我的板空了"，盘上一颗字节也⛔ 动）。</para>
+    /// <para>停在面板上＝这一趟<b>压根没开页面</b>，所以那颗「再试一次」接回来的画布一定是空的：
+    /// 接档⛔ 顶掉任何用户笔迹——这一点由"没开页面"保证，而⛔ 由一句"看着像是空的"猜。</para>
     /// <para>从 <c>.bak</c> 捡回来的那一档⛔ 点亮脏位：盘上的<b>主档位置当⛔ 一份档</b>（没了，或还在却是 0 字节／半颗——
     /// 后者由片43 把这一头接通），所以"盘上已经有了"那句⛔ 成立，得让第一拍把主档补回去
     /// （否则那颗板在 <see cref="BoardSceneStore.LatestSceneId"/> 那一问里始终是缺的）。
     /// ⚠ 「读出来的是⛔ 是能打开的一份」这一问归存储那颗形状判据，这里⛔ 再判一遍字节数
     /// （原来这里挂着半句 <c>bytes.Length == 0</c>＝把"读出一颗垃圾"当场折成"这颗板不存在"，正是另起新板那一步）。</para>
     /// </summary>
-    public System.Threading.Tasks.Task OpenSceneAsync(string sceneId)
+    public async System.Threading.Tasks.Task OpenSceneAsync(string sceneId)
     {
-        if (!BoardSceneStore.TryLoad(sceneId, out var bytes, out var fromBackup)) return OpenNewAsync();
-        _boardId = sceneId;
-        _lastWritten = fromBackup ? null : bytes;
-        return OpenAsync(bytes);
+        for (var attempt = 1; ; attempt++)
+        {
+            if (BoardSceneStore.TryLoad(sceneId, out var bytes, out var fromBackup, out var blocked))
+            {
+                _blockedSceneId = null;
+                _boardId = sceneId;
+                _lastWritten = fromBackup ? null : bytes;
+                HideNotice();      // 那句"现在打不开"已经不是事实；递档那一拍要出问题会说它自己的那句话
+                await OpenAsync(bytes);
+                return;
+            }
+            if (!blocked) { await OpenNewAsync(); return; }      // 真没有这颗板：照旧静默新起一块
+            if (attempt >= BoardPolicy.LoadRetryTries)
+            {
+                _blockedSceneId = sceneId;
+                StarMark.Abstractions.StarLog.Warn(
+                    "boards.scene.blocked id=" + sceneId + " tries=" + attempt
+                    + " gapMs=" + BoardPolicy.LoadRetryDelayMs);
+                ShowNotice("boards.blockedBody", titled: true, offerCopy: false);
+                return;
+            }
+            StarMark.Abstractions.StarLog.Info(
+                "boards.scene.blocked.retry n=" + attempt + " id=" + sceneId);
+            await System.Threading.Tasks.Task.Delay(BoardPolicy.LoadRetryDelayMs);
+        }
+    }
+
+    /// <summary>
+    /// 那颗「再试一次」：走的就是开场那一条（两份重试代码＝第二个主人，其中一份忘了收面板是本仓定死的那类坏）。
+    /// <para>按下去必须有回音（P-226 同一条口径）：那颗闸 <see cref="_retrying"/> 让按钮在跑的这一发里点不亮，
+    /// 跑完无论成没成都把它放开——⛔ 让一句"还在试"永远挂着。</para>
+    /// </summary>
+    private async System.Threading.Tasks.Task RetryBlockedSceneAsync()
+    {
+        if (_retrying || _blockedSceneId is not { } sceneId) return;
+        _retrying = true;
+        PasteNotice();
+        try { await OpenSceneAsync(sceneId); }
+        finally { _retrying = false; PasteNotice(); }
+    }
+
+    /// <summary>
+    /// 那颗「先开一块新板」：他不等了，就给他一块能使的板——新板用的是这一扇自己那颗新 id，
+    /// 盘上那颗拿不出来的档<b>一个字节也⛔ 动</b>（它连被打开都没被打开），下一趟照样接得回去。
+    /// </summary>
+    private void StartFreshBoard()
+    {
+        if (_blockedSceneId is not { } sceneId) return;
+        StarMark.Abstractions.StarLog.Info("boards.scene.fresh insteadOf=" + sceneId + " id=" + _boardId);
+        _ = OpenNewAsync();
+        HideNotice();
     }
 
     /// <summary>那条唯一的"开一扇页"的路：首开与崩溃后的重建都走它（两份开场代码＝第二个主人）。</summary>
@@ -566,6 +639,30 @@ public sealed class BoardWindow : Window
             BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
         };
         _noticeLeaveButton.Click += (_, _) => LeaveAnyway();
+        // 片49＝那颗档现在拿不出来那一句的两颗。三样颜色照旧各钉一遍（⛔ 跟着主题走）：
+        // 这一族每加一颗可点的控件，"白字画在灰底上＝看不见"那把尺就得重新量一次（片28 量到的正是这一格）。
+        _noticeRetryButton = new Button
+        {
+            Content = Word("boards.retryAction"),
+            Margin = new Thickness(0, 8, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Visibility = Visibility.Collapsed,
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
+        };
+        _noticeRetryButton.Click += (_, _) => _ = RetryBlockedSceneAsync();
+        _noticeFreshButton = new Button
+        {
+            Content = Word("boards.freshBoardAction"),
+            Margin = new Thickness(0, 8, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Visibility = Visibility.Collapsed,
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
+        };
+        _noticeFreshButton.Click += (_, _) => StartFreshBoard();
         var panel = new StackPanel { Margin = new Thickness(14, 10, 14, 10) };
         panel.Children.Add(_noticeTitle);
         panel.Children.Add(_noticeBody);
@@ -573,6 +670,8 @@ public sealed class BoardWindow : Window
         panel.Children.Add(_noticeFolderButton);
         panel.Children.Add(_noticeStayButton);
         panel.Children.Add(_noticeLeaveButton);
+        panel.Children.Add(_noticeRetryButton);
+        panel.Children.Add(_noticeFreshButton);
         // 那块面板的底色与字色都<b>钉死</b>：画布那一侧永远是白板（theme.set 现在交的是 light），
         // 而一扇窗里两套深浅色同时说话就是 WI-81 那族"点了白色整扇看不见"的形状——两边都不跟着主题走，最坏也只是普通灰底。
         _notice = new Border
@@ -646,10 +745,29 @@ public sealed class BoardWindow : Window
             leave.Content = Word("boards.leaveAction");
             leave.Visibility = _closeRevived ? Visibility.Visible : Visibility.Collapsed;
         }
+        // 片49 那两颗也归这一拍算：在场资格只有 <see cref="_blockedSceneId"/> 一颗（⛔ 在 ShowNotice 里再写一遍＝第二个主人）。
+        // 那颗「再试一次」把"正在跑"也念进这里——跑的那一发它点不亮，用户才⛔ 连按出两发开场（P-226 那条"按下去要有回音"）。
+        if (_noticeRetryButton is { } retry)
+        {
+            retry.Content = Word("boards.retryAction");
+            retry.Visibility = _blockedSceneId is null ? Visibility.Collapsed : Visibility.Visible;
+            retry.IsEnabled = !_retrying;
+        }
+        if (_noticeFreshButton is { } fresh)
+        {
+            fresh.Content = Word("boards.freshBoardAction");
+            fresh.Visibility = _blockedSceneId is null ? Visibility.Collapsed : Visibility.Visible;
+        }
         switch (_noticeKey)
         {
             case "boards.recoveringBody":
                 _noticeBody.Text = Word("boards.recoveringBody");
+                break;
+            case "boards.blockedBody":
+                // 那句"拿不出来"必须说清两件事：盘上那颗档⛔ 没了、这一发⛔ 动过它——
+                // 用户听到"打不开"时默认想的是"我的板丢了"（P-239 登记的就是这一格误会）。
+                _noticeTitle.Text = Word("boards.blockedTitle");
+                _noticeBody.Text = Word("boards.blockedBody");
                 break;
             case "boards.stuckBody":
                 _noticeTitle.Text = Word("boards.stuckTitle");

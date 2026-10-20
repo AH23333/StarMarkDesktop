@@ -154,8 +154,9 @@ public sealed class BoardSceneStoreGateTests
         // 退路那一读要挂在「主档认不出是一颗档」上，⛔ 是「主档⛔ 存在」（本批第一跑就写歪在这一点，坑表 #803）
         Assert.Contains("|| BoardPolicy.LooksLikeSceneDoc(onMain)", load, StringComparison.Ordinal);
         // 顺序也是判据：主档读得出却⛔ 是一颗档时，退路才配被读；而「一颗字节都读不出」⛔ 退到上一版
-        Assert.Contains("if (onMain is null) return false;", load, StringComparison.Ordinal);
-        Assert.True(load.IndexOf("if (onMain is null) return false;", StringComparison.Ordinal)
+        // 片49（P-239）把那一支改写成那颗三态旗：⛔ 换形状（照样是"读不出就当场收手"），换的是它<b>说得出是哪一族</b>。
+        Assert.Contains("if (blocked) return false;", load, StringComparison.Ordinal);
+        Assert.True(load.IndexOf("if (blocked) return false;", StringComparison.Ordinal)
                     < load.IndexOf("PickReadableScene", StringComparison.Ordinal),
             "主档读不出却继续往下走＝拿一颗<b>看不见</b>的盘去换一份可能更旧的退路");
         Assert.DoesNotContain("ReadAllBytes(main)) { bytes", load, StringComparison.Ordinal);   // 「在就交出去」那颗旧形状⛔ 许回来
@@ -291,13 +292,16 @@ public sealed class BoardSceneStoreGateTests
         // 片43（P-238）：这里原来挂着半句 <c>|| bytes.Length == 0</c>＝把「读出一颗垃圾」当场折成「这颗板不存在」，
         // 于是另起一颗新板、盘上那颗还能打开的退路⛔ 被问过。「什么算能打开的一份」只许有存储那一颗主人，
         // 窗口这一头⛔ 再判一遍字节数（第二主人一旦成形，两头的判据迟早分岔——而分岔的脸是"那块板没了"）。
-        Assert.Contains("if (!BoardSceneStore.TryLoad(sceneId, out var bytes, out var fromBackup)) return OpenNewAsync();",
+        // 片49（P-239）在同一行上补了另一半：那颗 <c>false</c> 从前还同时说着「这颗档现在拿不出来」，
+        // 于是那句坏话被折成「这块板没了」，屏幕上又是一块空画布。现在三态各走各的一支（钉的是实参形状，⛔ 变量名）。
+        Assert.Contains("if (BoardSceneStore.TryLoad(sceneId, out var bytes, out var fromBackup, out var blocked))",
             WindowCs, StringComparison.Ordinal);
         // ⚠ 这颗禁项读<b>抹掉注释后</b>的代码：本条登记那颗坏就免不了要提那句旧形状（名册 308／483 那一族，
         // 片38 在同一颗档里立过同一条口径）——要禁的是<b>可执行码里再判一遍字节数</b>，⛔ 是注释里提它。
         Assert.DoesNotContain("bytes.Length == 0", SourceGate.Code(WindowCs), StringComparison.Ordinal);
         Assert.Contains("_lastWritten = fromBackup ? null : bytes", WindowCs, StringComparison.Ordinal);
         Assert.Contains("out bool fromBackup", Store, StringComparison.Ordinal);
+        Assert.Contains("out bool blocked", Store, StringComparison.Ordinal);
         // 片43：那颗"读到的是哪一颗文件"的旗现在由 Core 那颗取档判据交回，存储这一头⛔ 再自己点亮一次
         // （自己点＝第二个主人：它会跟着存储的分支跑，而分支早就⛔ 是「什么算能打开的一份」的定义处）。
         Assert.Equal(0, Count(Store, "fromBackup = true;"));
