@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Feed;
 using StarMark.Abstractions.Text;
 using StarMark.Abstractions.I18n;
 using StarMark.Integrations.Clipboard;
@@ -112,7 +113,11 @@ public sealed class RssClient : IDisposable
         }
         catch (Exception ex)
         {
-            return new RssFetchResult(RssFetchStatus.Failure, null, null, null, LocMessage.Of("rss.fetch.transportError", ex.Message));
+            // ⛔ 把 <c>ex.Message</c> 递上屏（P-216）：那串字是 Winsock／系统错误表给的，跟着<b>系统语言</b>走，
+            // 界面换成英文它就一个字都不变——正本现场是「Failed: Fetching this source failed: 由于目标计算机积极拒绝…」。
+            // 屏幕上只念按异常类型选出的那一句（<see cref="RssTransportReason"/>），原文进日志。
+            StarLog.Warn($"订阅源抓取失败：{RssTransportReason.Detail(ex)}");
+            return new RssFetchResult(RssFetchStatus.Failure, null, null, null, RssTransportReason.Classify(ex));
         }
     }
 
