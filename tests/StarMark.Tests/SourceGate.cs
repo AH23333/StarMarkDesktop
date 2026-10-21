@@ -187,6 +187,66 @@ internal static class SourceGate
     }
 
     /// <summary>
+    /// <c>baseProps()</c> 返回的那颗对象里，这一条落在第几层花括号（1＝与 <c>excalidrawAPI</c>／<c>onChange</c>
+    /// 同层＝Excalidraw 的<b>顶层 prop</b>）。⛔ 拿缩进当层级（格式化一遍就假失败），也⛔ 只问「那串在不在档里」
+    /// （挪进 <c>UIOptions</c> 照样「在」，而引擎读的是顶层那颗＝静默失效）。片67 造、片68 起两位读者共用。
+    /// </summary>
+    internal static int JsBraceDepthInBaseProps(string stripped, string token)
+    {
+        var fn = stripped.IndexOf("function baseProps()", StringComparison.Ordinal);
+        Assert.True(fn >= 0, "baseProps() 找不到了（改名／换写法要连这一格一起改）");
+        var open = stripped.IndexOf("return {", fn, StringComparison.Ordinal);
+        Assert.True(open >= 0, "baseProps() 里那颗返回对象字面量找不到了");
+        var at = stripped.IndexOf(token, open, StringComparison.Ordinal);
+        var depth = 0;
+        for (var i = open; i < stripped.Length; i++)
+        {
+            if (i == at) return depth;
+            var c = stripped[i];
+            if (c == '{') depth++;
+            else if (c == '}' && --depth == 0)
+                throw new InvalidOperationException("「" + token + "」落在 baseProps() 返回的对象之外（at=" + at + "）");
+        }
+        throw new InvalidOperationException("baseProps() 那颗对象没收尾（花括号数不齐）");
+    }
+
+    /// <summary>抹掉 JS 注释与字符串字面量、<b>长度不变</b>（保住索引，好让上面那颗尺按位置数层）。
+    /// 换行留着：行号形状与原文一致，报错时人对得上现场。</summary>
+    internal static string StripJsCommentsAndStrings(string text)
+    {
+        var sb = new System.Text.StringBuilder(text.Length);
+        for (var i = 0; i < text.Length;)
+        {
+            var c = text[i];
+            if (c == '/' && i + 1 < text.Length && text[i + 1] == '/')
+            {
+                while (i < text.Length && text[i] != '\n') { sb.Append(' '); i++; }
+                continue;
+            }
+            if (c == '/' && i + 1 < text.Length && text[i + 1] == '*')
+            {
+                while (i < text.Length && !(text[i] == '*' && i + 1 < text.Length && text[i + 1] == '/'))
+                { sb.Append(text[i] == '\n' ? '\n' : ' '); i++; }
+                sb.Append("  "); i += 2;
+                continue;
+            }
+            if (c is '"' or '\'' or '`')
+            {
+                sb.Append(' '); i++;
+                while (i < text.Length && text[i] != c)
+                {
+                    if (text[i] == '\\') { sb.Append(' '); i++; }
+                    sb.Append(text[i] == '\n' ? '\n' : ' '); i++;
+                }
+                if (i < text.Length) { sb.Append(' '); i++; }
+                continue;
+            }
+            sb.Append(c); i++;
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// 表里那一行的<b>槽数</b>（三列里出现过的占位符编号去重）。读不到那颗键就当场抛——
     /// 「表里没有这颗键」正是要被看见的那件事，⛔ 让它退回 0。
     /// </summary>

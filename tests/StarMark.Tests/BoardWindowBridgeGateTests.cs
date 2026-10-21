@@ -35,9 +35,10 @@ public sealed class BoardWindowBridgeGateTests
     public void BridgeJsSpeaksTheWiredSubsetOfTheProtocol()
     {
         var js = ReadRepo(BridgeJs);
-        // 片19 最小回路：页面侧只会喊它真正实现了的那两颗；其余三颗 ⛔ 假喊（宿主回 not-wired）
+        // 页面侧只会喊它真正实现了的那四颗（片68 补上 open.external 的发话人）；其余三颗 ⛔ 假喊（宿主回 not-wired）
         Assert.Equal(1, Count(js, "postIn(\"bridge.ready\""));
         Assert.Equal(1, Count(js, "postIn(\"export.bytes\""));
+        Assert.Equal(1, Count(js, "postIn(\"open.external\""));
         Assert.Equal(0, Count(js, "postIn(\"paste.query\""));
         Assert.Equal(0, Count(js, "postIn(\"pin.request\""));
         Assert.Equal(0, Count(js, "postIn(\"background.request\""));

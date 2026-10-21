@@ -18,9 +18,12 @@ namespace StarMark.UI.Boards;
 /// <c>%LOCALAPPDATA%\StarMark\wbview2</c>（v1 §坑8 那条改道）。</para>
 /// <para><b>默认关</b>：本窗没有常驻入口，只有显式 <see cref="OpenNewAsync"/>／<see cref="OpenSceneAsync"/>；
 /// 托盘那两颗（续上一块／新起一块）由接线批那颗总开关收放（本档⛔ 自己挂上去——"找不到人接又自己冒出来"是第二主人）。</para>
-/// <para><b>回路现状（片57 现读）</b>：进向八颗里 <c>bridge.ready</c>／<c>board.loaded</c>／<c>open.external</c>／
+/// <para><b>回路现状（片57 现读・片68 补发话人）</b>：进向八颗里 <c>bridge.ready</c>／<c>board.loaded</c>／<c>open.external</c>／
 /// <c>export.bytes</c>／<c>bridge.reply</c> 五颗有主人；<c>paste.query</c>／<c>pin.request</c>／<c>background.request</c>
 /// 三颗还没接线——宿主只往日志里落一行痕（<c>boards.cmd.not-wired</c>），判定归各自批次（⛔ 假 allow）。
+/// ⚠「有主人」这句话说的是<b>宿主那一侧有 case</b>，⛔ 等于那颗名字两头都通：<c>open.external</c> 从片57 起就
+/// 只有这一半，页面一颗也不发（发话人由片68 补上＝桥里那颗 <c>onLinkOpen</c>，见
+/// <c>BoardLinkGateTests.PageHandsTheLinkClickToTheHost</c>）。「名字在册⛔ 等于这条路通」＝§28.2 那句口径的正件。
 /// 那一族从前还各回一句"收到／没收"，而页面那颗听众压根⛔ 存在（P-245 撤掉的就是它：宿主→页面只剩那颗过门的门）。</para>
 /// <para><b>落盘与载入（片21＝§21.3）</b>：页面侧停笔 <see cref="BoardPolicy.AutosaveIdleMs"/> 毫秒自己交一份
 /// 场景 JSON（<c>export.bytes</c>＋<c>kind:"scene"</c>，⛔ 新名字），宿主失焦那一拍再索取一次（<c>export.pick</c>）；
@@ -540,7 +543,9 @@ public sealed class BoardWindow : Window
                     break;
                 }
                 StarMark.Abstractions.StarLog.Info("boards.open.accepted id=" + _boardId);
-                _ = Helpers.LauncherEx.TryOpenAsync(envelope.Url);
+                // 那一手到底开没开成要留下话（名册 422 那一族：⛔ 把动作尺的正件丢了）——从前这里 _ = 一发就完事，
+                // 「系统里没有能处理 http 的默认程序」与「开成了」在痕上长同一张脸。上屏那一句还欠着（见账本 P-249 后半）。
+                _ = ReportExternalOpenAsync(envelope.Url);
                 break;
             case "export.bytes":
                 HandleExportBytes(envelope);
@@ -1412,6 +1417,22 @@ public sealed class BoardWindow : Window
     /// 说的是刚刚发生的一件事，而那句旧话每一拍重贴说的还是同一件早就说过的事（片39 真机量到的那一发：
     /// 拒话重贴把「已另存到 &lt;路径&gt;」整句顶掉、那颗「打开所在文件夹」跟着退场）。</summary>
     private bool NoticeSaysFileOutcome => Array.IndexOf(FileOutcomeKeys, _noticeKey!) >= 0;
+
+    /// <summary>
+    /// 那一发外链交回宿主之后的下落：<b>开成了还是没开成，各留一行痕</b>（兄弟出口 <see cref="OpenFolderAroundAsync"/> 同形状）。
+    /// <para>为什么要有这一颗：<see cref="Helpers.LauncherEx.TryOpenAsync"/> 交回的是"到底开没开成"那句话，
+    /// 而它从前在这里被 <c>_ =</c> 直接扔掉＝"浏览器没注册 http 处理程序"与"开成了"在日志里长同一张脸，
+    /// 下一批只能靠猜（P-56 那条口径：只报"坏了"说不出是谁坏的，反过来"什么都不报"也说不出是没坏）。</para>
+    /// <para>那颗 URL 本身⛔ 递进日志（P-30：查询串里可能带凭据），递的是 LauncherEx 那句<b>与它无关</b>的原因。
+    /// 把那句话送上屏还欠着：屏幕上那颗面板一位主人，要挤进去得先定归属（账本 P-249 后半）。</para>
+    /// </summary>
+    private async System.Threading.Tasks.Task ReportExternalOpenAsync(string? url)
+    {
+        var why = await Helpers.LauncherEx.TryOpenAsync(url);
+        // 两句各写<b>整颗</b>前缀（⛔ 拼成 "boards.open." + 那颗脸）：在日志与代码里都能一次 grep 中同一句话
+        if (why is null) StarMark.Abstractions.StarLog.Info("boards.open.opened id=" + _boardId);
+        else StarMark.Abstractions.StarLog.Info("boards.open.failed id=" + _boardId + " why=" + why);
+    }
 
     /// <summary>
     /// 「打开所在文件夹」那<b>一颗</b>动作（两块表面共用：面板那颗按钮、右上角那一行那颗）。

@@ -1,6 +1,8 @@
 /* 画板桥的页面侧（Phase C 片19＝最小回路；片21＝存储适配器那一半，深析 §21.3 逐条落码）。
    名单的唯一主人＝Core 的 BridgeProtocol；本档每颗名字逐字照抄，闸门测试逐颗对账。
-   八颗进（postIn 那七颗逐颗一处＋send 那颗 bridge.reply）＋六颗出（case 逐颗一处）——多写的名字闸门会红。
+   名单在册八颗，页面今天真喊四颗（postIn 逐颗一处＝bridge.ready／board.loaded／export.bytes／open.external）
+   ＋send 那颗 bridge.reply；另三颗（paste.query／pin.request／background.request）名字过了门而回路还没接＝
+   证人逐颗钉 0。六颗出（case 逐颗一处）——多写的名字闸门会红，少写的也会。
    ⚠ 那颗 AUTOSAVE_MS 与 Core 的 BoardPolicy.AutosaveIdleMs 是同一个数的两颗持有者（跨语言）：
    等值由 BoardSceneStoreGateTests 现读对账，改一颗不动另一颗＝那一格红。 */
 (function () {
@@ -213,7 +215,28 @@
          于是档里带的远程 iframe <b>⛔ 会被渲染</b>。⚠ 交的是 boolean 那一档（包里逐字五档：boolean／
          字符串数组／RegExp／RegExp 数组／函数），交 false＝全拒；宿主那侧的 CSP／<c>WebResourceRequested</c>
          是<b>第二道</b>，⛔ 拿「引擎认这颗开关」当作⛔ 需要第二道（形1′ 那句：兜底永远排在名单最后）。 */
-      validateEmbeddable: false
+      validateEmbeddable: false,
+      /* 账本 P-249＝§28.5 那句「<c>open.external</c> 反过来：宿主有 case 而页面一颗也不发」的落地腿。
+         现读随包 bundle：那颗链接只留<b>一处</b> <c>window.open(</c>，逐字形状＝
+         <c>this.props.onLinkOpen&&(D=ip("excalidraw-link",E.nativeEvent),this.props.onLinkOpen({...this.hitLinkElement,link:d},D)),
+         !D?.defaultPrevented&&{…window.open(void 0,h)}</c>；而那颗气泡（选中一颗带链接的元素就弹出来那颗）里的
+         <c>&lt;a&gt;</c> 问的是同一样东西（<c>h.defaultPrevented&&D.preventDefault()</c>）。
+         ⇒ 交回 undefined 时<b>两处都走引擎默认</b>，而默认那两支我们都付不起：
+         ① <c>_blank</c> 那一支要一颗新窗，本窗⛔ 订 <c>NewWindowRequested</c>（现读 0 处），
+            那一手交回什么我们⛔ 读过＝⛔ 能替它下结论（名册 584：常数有主人⛔ 等于那条路走得到，反过来也一样）；
+         ② <c>kF</c> 认「含本站 origin 或以 / 开头」，那一支交的是 <c>_self</c>＝<b>拿 about:blank 换掉这一页</b>，
+            画布连同没存的那笔一起没了（片26 那颗根的量级）。
+         那颗递给 onLinkOpen 的东西是<b>一颗没上过树的 CustomEvent</b>（工厂逐字 <c>cancelable:!0</c>），
+         所以 <c>preventDefault()</c> 只翻 <c>defaultPrevented</c> 那一维＝引擎正好问那一维。
+         拦下来之后⛔ 由本页猜起哪个程序：判据与打开都归宿主（硬线③＝<c>BridgeProtocol.IsSafeExternalUrl</c>
+         只认 http(s)、要有机名、⛔ 带 userinfo，再由 <c>LauncherEx</c> 收绝对 URI 形态那一颗）。
+         ⚠ 这颗与上面那颗同族＝<b>顶层</b> prop（名册 622：名字在档里⛔ 等于在引擎读的那一层）。 */
+      onLinkOpen: function (element, event) {
+        var url = element && element.link;
+        if (!url) return;                    // 那颗元素本来⛔ 带链接＝这一支与本页无关，别替它拦
+        event.preventDefault();
+        postIn("open.external", { url: String(url) });
+      }
     };
   }
 
