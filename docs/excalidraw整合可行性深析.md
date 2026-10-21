@@ -1537,7 +1537,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 
 - <b>进向</b>（<c>BridgeProtocol.cs:37</c> 那一行）八颗。v1 那张表写了六颗，后来加了两颗：<c>board.loaded</c>（片26 那颗带数的开闸回音）与 <c>bridge.reply</c>（片56 给「这一发发得出去吗」配的回音）。
   今天<b>页面真发的</b>四颗：<c>bridge.reply</c>（<c>board-bridge.js:43</c>）／<c>export.bytes</c>（<c>:67</c>）／<c>board.loaded</c>（<c>:131</c>）／<c>bridge.ready</c>（<c>:263</c>）。
-  <c>open.external</c> 反过来：<b>宿主有 case（<c>BoardWindow.cs:495</c>）而页面一颗也没发</b>。剩下三颗（<c>paste.query</c>／<c>pin.request</c>／<c>background.request</c>）过了名字门、也⛔ 有主人，宿主只落一行痕 <c>boards.cmd.not-wired</c>（<c>:515</c>）＝v1 那句「⛔ 假 allow」今天兑现着。
+  <c>open.external</c> 反过来：<b>宿主有 case 而页面一颗也没发</b>〔片68 就地更正：那一颗 case 现在<b>两头都通了</b>——桥补上那颗顶层 <c>onLinkOpen</c>，宿主那格把「开没开成」念成一行痕；见 §三十与本档 §29.5 那颗名册的下游〕。剩下三颗（<c>paste.query</c>／<c>pin.request</c>／<c>background.request</c>）过了名字门、也⛔ 有主人，宿主只落一行痕 <c>boards.cmd.not-wired</c>（<c>:515</c>）＝v1 那句「⛔ 假 allow」今天兑现着。
 - <b>出向</b>（<c>BridgeProtocol.cs:44</c>）六颗。v1 那张表写了四颗，后来加了 <c>autosave.arm</c>（片24）与那颗回音的分流。<c>export.pick</c>（<c>:895</c>）／<c>theme.set</c>／<c>lang.set</c>／<c>board.load</c>／<c>autosave.arm</c>（<c>:971</c>）五颗真发；<b><c>feature.flags</c> 在册而宿主 0 处发</b>。
 - <b>字段</b>：<c>export.pick</c> 从 v1 那两颗变<b>四颗</b>（<c>kind</c>／<c>skipInliningFonts</c>／<c>exportScale</c>／<c>exportBackground</c>，<c>:82</c>＝片64 那两档交回用户）；v1 原本写在 <c>export.bytes</c> 里那颗「会话 id」由片23 摘掉（没人读）。
 
@@ -1664,3 +1664,59 @@ A1 把值翻成 <c>true</c> ⇒ 只红「值那一格」；A2 在 <c>UIOptions</
 - <b>弹窗那一族</b>（<c>NewWindowRequested</c>）本批没碰：它该与 CSP 同一批装，因为两颗都⛔ 起窗判不了「挡错了什么」。
 - 那颗 <c>validateEmbeddable</c> 的<b>屏幕脸</b>（打开一张带远程 iframe 的样档，看引擎那句 <c>toast.unableToEmbed</c> 上不上屏）⛔ 拍——
   源码与包内消费点已判到，屏幕上那句照旧欠。
+
+
+## 三十、片68 落地腿（2026-10-21·改码批·⛔ 起窗）＝画板上那条链接的两半：页面把点击递给宿主，宿主把开没开成念出来
+
+- <b>这一节问的是什么</b>：§28.5 那句「<c>open.external</c> 反过来＝宿主有 case 而页面一颗也不发」只说了<b>半句</b>。
+  它⛔ 回答「用户点一条链接会怎样」，而今天的答案是<b>点了什么也不发生</b>——本批把那一支读到底、再接上。
+### 30.1 那颗坏长什么样（三处随包现读）
+  ① 引擎那颗链接只留<b>一处</b>开窗：assets/boards/excalidraw.min.js:467 逐字 <c>let h=kF(d)?"_self":"_blank",w=window.open(void 0,h);w&&(w.opener=null,w.location=d)</c>，
+     而<b>本窗⛔ 订 <c>NewWindowRequested</c></b>（<c>src/StarMark.UI/Boards/BoardWindow.cs</c> 现读 <b>0 处</b>）⇒那一手交回什么由 WebView2 定，我们⛔ 读过＝⛔ 能替它下结论；
+  ② 更坏的那一支在同一段里：那颗 <c>kF</c>（assets/boards/excalidraw.min.js:55）认「含本站 origin 或以 <c>/</c> 开头」，那一支交的是 <c>_self</c>＝<b>拿 about:blank 换掉这一页</b>，
+     画布连同没存的那笔一起没了（与片26 那颗「换根拆树」同一个量级的坏，只是入口换成了一颗链接）；
+  ③ 那颗链接气泡（选中一颗<b>带链接的元素</b>就自己弹出来那一张）里的 <c>&lt;a&gt;</c> 走的是同一样东西（assets/boards/excalidraw.min.js:457，
+     <c>h.defaultPrevented&&D.preventDefault()</c>）⇒拦不住它时<b>连 preventDefault 都⛔ 有人问</b>。
+  ⇒ 三档「点了没反应」在这里合成一颗缺陷（账本 P-249）；而 VQ 那一族那句「对账能力从未存在」在这一支上的脸是：<b>痕里一颗也没</b>。
+### 30.2 拦下来为什么必须排在递出去之前：那颗递给 <c>onLinkOpen</c> 的东西是<b>一颗没上过树</b>的 <c>CustomEvent</c>
+  （工厂逐字 assets/boards/excalidraw.min.js:37＝<c>cancelable:!0</c>），<c>preventDefault()</c> 只翻 <c>defaultPrevented</c> 那一维，
+  而引擎两处消费点问的<b>正是</b>那一维（画布那一支 <c>!D?.defaultPrevented</c>／气泡那一支 <c>assets/boards/excalidraw.min.js:457</c>）。
+  先递后拦＝那一发已经走完了默认那两支。所以那颗钩子写成三行（tools/boards/board-bridge.js:234）：<b>拿链接 → 拦 → 递</b>，
+  它与 <c>tools/boards/board-bridge.js:218</c> 同族＝都住在 <c>baseProps()</c> 的<b>顶层</b>（名册 622 那一族第二次用：名字在档里⛔ 等于在引擎读的那一层），
+  没带链接的元素<b>当场返回</b>⛔ 替它做主（那颗钩被两处消费点共用，无差别拦＝把别的分支一起闷掉）。
+### 30.3 页面⛔ 决定起哪个程序，也⛔ 自己判协议：递出去的是那颗 <c>url</c>，字段名的主人是
+  <c>src/StarMark.Core/Boards/BridgeProtocol.cs:65</c>；判据的主人 <c>src/StarMark.Core/Boards/BridgeProtocol.cs:306</c>（只认 http/https、要有机名、⛔ 带 userinfo）；解出那颗字段的人
+  <c>src/StarMark.UI/Boards/BoardEnvelope.cs:70</c>；真正起浏览器的是 <c>src/StarMark.UI/Helpers/LauncherEx.cs:112</c> 那一句的<b>反面</b>（开成了交回 <c>null</c>）。
+  ⚠ 现读两份桥：<c>window.open</c> 原文命中 <b>4</b> 处，抹掉注释那一副读法剩 <b>0</b> 处
+  （原文那几颗全住在注释里＝正当摘引引擎原文，坑表 #858）；那颗钩子 <b>1</b> 处——
+  「页面上有没有第二扇开出去的出口」这件事从今天起<b>有证人</b>（<c>tests/StarMark.Tests/BoardLinkGateTests.cs:50</c>）。
+### 30.4 宿主那一格补上的第二半：从前那里写的是 <c>_ = Helpers.LauncherEx.TryOpenAsync(envelope.Url);</c>——
+  那颗返回值里住着的正是「系统里没有能打开这个地址的默认程序」这句话，被扔掉之后，
+  <b>「开成了」与「压根没程序能开」在痕上长同一张脸</b>（名册 422 那句「⛔ 把动作尺的正件丢了」在本仓的另一副脸）。
+  现在那里递 <c>src/StarMark.UI/Boards/BoardWindow.cs:548</c> 给 <c>src/StarMark.UI/Boards/BoardWindow.cs:1429</c>：三张脸各一行痕（<c>accepted</c>／<c>opened</c>／<c>failed why=…</c>），
+  与兄弟出口 <c>OpenFolderAroundAsync</c> 同形状。⚠ 痕里<b>⛔ 带那颗 URL 本身</b>（P-30：查询串里可能挂着凭据），
+  念出来的是那句与它无关的原因。
+### 30.5 还欠什么：① <b>上屏那一句</b>——屏幕上那颗面板<b>一位主人</b>（现读 <c>ShowNotice(</c> <b>7</b> 颗＝一颗定义＋其余调用、
+  身份只由那颗 <c>_noticeKey</c> 定（现读 <b>6</b> 处提及）），
+  拿「那条链接没能打开」去挤掉「这一扇已停止保存」＝拿次要的话盖掉更要紧的那句（片39 那颗正件），
+  要做得先定归属，且那颗键要<b>三语各填一行</b>；本批⛔ 动语言表。② <b>真机那一拍</b>——本批⛔ 起窗：现读 idle=<b>19.6</b> 秒・
+  输入桌面=<b>Default</b>・前台窗那颗进程=<b>msedge.exe</b>（三颗都在正本 <c>bin/WI98/probe68_idle_r2.txt</c> 里，
+  判据写在那颗探针自己的文件头），「点一条链 → 浏览器起不起」照旧⛔ 读数（见 30.7）。③ <c>NewWindowRequested</c> 与第一道 CSP（<c>board.html</c>）照旧⛔ 装，
+  它们与 P-248 那道<b>同一批</b>裁。
+### 30.6 读数（正本一列⛔ 少一颗）
+
+| 哪一把尺 | 现读 | 正本 |
+|---|---|---|
+| 产品重编（<c>dotnet build StarMark.sln -p:Platform=x64</c>） | 0 警告／0 错误 | <c>bin/WI98/build68_r3.txt</c> |
+| 那颗新证人＋邻族定向（<c>--no-build</c>） | 56 通过／0 失败，8 s | <c>bin/WI98/test68_target_r4.txt</c> |
+| 反向台架 | 9 臂・10 处改・BAD=0（M0 73） | <c>bin/WI98/bench68_console_r4.txt</c> |
+| 全量 | 6439 通过／0 失败，10 m 47 s | <c>bin/WI98/test68_full_r1.txt</c> |
+| 两份桥 <c>node --check</c> | rc=0／rc=0 | <c>bin/WI98/nodecheck68_r1.txt</c> |
+| 随包重冻（官方那颗 <c>tools/boards/stage-assets.py</c>） | 搬 140 颗；bundle 4878772／sha <c>923fa221…</c> <b>与改前一颗也没变</b> | <c>bin/WI98/stage68_r1.txt</c> |
+| 随包清单里那颗桥 | 18733 颗字节／sha <c>0aa5d8e1f6ff…</c>（改前 16338／<c>c37e39b12148…</c>） | <c>assets/boards/manifest.json</c> ↔ <c>git show HEAD:</c> |
+| 页面真发的进向名 | board.loaded／bridge.ready／export.bytes／open.external（另三颗在册而⛔ 接线＝证人钉 0） | 成品现读 |
+| <c>NewWindowRequested</c> 在宿主里 | <b>0 处</b>＝那一半照旧⛔ 装 | 成品现读 |
+
+### 30.7 欠项（精确到一格）：真机腿那一跑＝开一扇画板 → 给一颗元素挂上 <c>https://example.com</c> → 点它，
+  要读到 ①宿主痕里 <c>boards.open.accepted</c> 紧跟 <c>boards.open.opened</c>（⛔ 是 <c>failed</c>）②默认浏览器真起了一扇
+  ③画布<b>还在</b>（那一支 <c>_self</c> 换页的路被拦掉的正面证据）。三条同一次跑，缺一条就记欠项而⛔ 写进发布说明。
