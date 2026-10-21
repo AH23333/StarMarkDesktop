@@ -1720,3 +1720,66 @@ A1 把值翻成 <c>true</c> ⇒ 只红「值那一格」；A2 在 <c>UIOptions</
 ### 30.7 欠项（精确到一格）：真机腿那一跑＝开一扇画板 → 给一颗元素挂上 <c>https://example.com</c> → 点它，
   要读到 ①宿主痕里 <c>boards.open.accepted</c> 紧跟 <c>boards.open.opened</c>（⛔ 是 <c>failed</c>）②默认浏览器真起了一扇
   ③画布<b>还在</b>（那一支 <c>_self</c> 换页的路被拦掉的正面证据）。三条同一次跑，缺一条就记欠项而⛔ 写进发布说明。
+
+
+## 三十一、片69 落地腿（2026-10-21·改码批·⛔ 起窗）＝P-248 的后半：那颗名册由一颗<b>不占屏幕</b>的隐藏宿主量到了，于是出站观察者翻成 deny，并补上另两颗门
+
+### 31.1 这一刀为什么现在敢做：「⛔ 起窗量不到」那句已经不成立
+片67 把 (B) 那道拆成两拍的理由写得很直白——「随包那棵树靠不靠外站⛔ 读数，拿写死名单去挡没读数的路＝画布白屏」。
+卡住的是<b>量</b>：真机那条腿要先过第 0 道核对（他此刻在不在用电脑），而本批现场三颗读数（idle=19.6 秒／输入桌面=Default／
+前台窗进程 msedge.exe，正本 <c>bin/WI98/probe68_idle_r2.txt</c>）说<b>占用中</b>。
+⇒ 换仪器不换判据：<c>bin/WI83/spike1b</c> 那颗一次性宿主加了三颗旋钮（<c>--hidden 1</c>／<c>--scene</c>／<c>--ping</c>），
+窗在 <c>(-32000,-32000)</c>、<c>Opacity=0</c>、<c>ShowWithoutActivation</c>，而 <c>Shot()</c> 里那颗 <c>TopMost/Activate</c>
+在隐藏模式下<b>⛔ 做</b>（否则就成了一座抢别人桌面的尺，硬令）；读数全靠 <c>CapturePreviewAsync</c>（它⛔ 需要焦点）
+＋页面自己那份 DOM／网络时间线。⇒ 整批⛔ 抢屏幕、⛔ 合成一次输入，产物全在 D 盘（同一句硬令也管我仪器造的档）。
+
+### 31.2 名册：两把尺各数一遍，值相等
+| 那一跑 | 观察者（宿主侧） | 页面自己那份时间线 | 那颗预览帧 |
+| --- | --- | --- | --- |
+| 对照（⛔ 我自递那颗外呼，<c>roster69_r4</c>） | <c>blocked=0 allowed=0</c> 名单空 | 页面 <c>res</c> 总 <b>8</b> 颗，全数住 <c>appassets.local</c>，外站 <b>0</b> 颗 | 有像素（33855 颗字节＝隐藏式宿主渲染得到） |
+| 名册（递一颗 <c>http://localhost:8099</c>，<c>roster69_r3</c>） | <c>blocked=1</c> 名单 <c>localhost</c> | 随包 <b>8</b> 颗，<c>res</c> 总 9 颗＝多出来那一颗正是我自递的 | ⛔ 另记（那颗 sha 由下面那一跑说） |
+| 三颗门（<c>roster69_r7</c>） | <c>blocked=2</c>（我那发＋那颗被 Cancel 的导航） | 同上一跑 | 挡前后<b>同一颗</b> sha <c>906c709ccbc3</c>／2 块画布＝⛔ 白屏 |
+
+⇒ <b>随包那棵树今天一颗外呼也没发</b>。这颗「0」⛔ 是单看计数：计数为 0 有两种相反读法（树没外呼／这把尺聋），
+所以先给尺配正件（下一节），再由<b>页面自己</b>那份 <c>performance</c> 独立数一遍——两把尺同值才落成读数。
+
+### 31.3 ⚠ 一处现读推翻一处我自己写过的假设：那颗映射按<b>站名</b>劫持，方案⛔ 再进判据
+正件那一跑（<c>roster69_ctl3</c>）我把宿主指向一颗<b>真</b> HTTP 站 <c>http://127.0.0.1:8099/ctl.html</c>，而 <c>--www</c> 指向<b>另一颗</b>目录。
+读回的 <c>document.title</c> 是 <b>SPIKE69-FOLDER</b>——那一颗档只住在 <c>--www</c> 那颗目录里，那颗真服务器整跑一颗请求也没记。
+⇒ <c>SetVirtualHostNameToFolderMapping</c> 按<b>站名</b>劫持，<b>方案与端口都让路</b>；而这类被供的请求<b>压根进不了</b> <c>WebResourceRequested</c>
+（两跑的 <c>allowed</c> 都是 0）。后果有二，都在本批落了：
+① 分类判据 <c>BoardsAssetPolicy.IsLocalAssetUri</c> <b>⛔ 再比方案</b>（片67 那颗 <c>AssetUriScheme</c> 比较是没量过的假设）——
+   认方案会把一颗<b>本地供的</b>请求判进外呼那一档，翻成 deny 之后＝宿主自己把画布挡白；那颗常量留着并改口成「开场该钉哪个方案」的主人。
+② 反过来，「挡会不会连随包资产一起挡」这句<b>由读数答</b>：随包那八颗进不了这把尺，所以那颗桩<b>动不到画布本体</b>。
+证人那颗「方案不对⇒⛔ 本地」的断言随之翻案（档名一起改），并补 <c>http://站名</c>／<c>站名:端口</c> 两颗同族形状。
+
+### 31.4 三颗门，一颗判据
+| 门 | 订在哪 | 挡的那一手 | 痕（⛔ 带那颗 URL／路径） |
+| --- | --- | --- | --- |
+| 出站资源 | <c>WebResourceRequested</c>（片67 已订） | 交一颗空体 <c>451</c> 桩（现读出口 1 处） | <c>boards.net.foreign … denied=</c>（那颗计数是本批新加的第四颗） |
+| 页开新窗 | <c>NewWindowRequested</c>（现读订阅 1 处） | <c>Handled=true</c>，一颗窗也不给开 | <c>boards.newwindow.blocked n= initiated= id=</c> |
+| 顶帧导航 | <c>NavigationStarting</c>（现读订阅 1 处） | <c>Cancel=true</c> | <c>boards.nav.blocked n= target= id=</c>（<c>target</c> 只有方案＋主机名） |
+「该不该挡」三处共用 Core 那颗 <c>IsOutboundDenyUri</c>＝解得出、⛔ 本地、⛔ 内嵌；<b>解不出的一律⛔ 挡</b>——
+拿一颗读不懂的串去挡一条也许本机的导航，代价是画布白屏而收益一句也没有，而它照旧进名册由痕说。
+那颗 451（而⛔ 403）的理由是可分辨：真机那一跑要能分清「这颗宿主挡的」与「那颗站自己拒的」。
+⚠ 那颗顶帧门挡下之后，引擎自己会回一行 <c>nav.done ok=False err=OperationCanceled</c>——这一行是<b>闸门在干活</b>，⛔ 读成画布坏了。
+
+### 31.5 还欠什么（精确到一格）
+① <b>第一道 CSP（<c>assets/boards/board.html</c>）照旧⛔ 注入</b>：它要的是「注入之后画布还起不起得来」那一判（那颗 bundle 里有内联脚本与
+   <c>data:</c> 图，判错＝白屏），而这一判由 DOM／像素说话——隐藏宿主已经能给帧与 DOM，但 CSP 的<b>形状</b>还没定，先不猜。
+② <b>产品那一副投影的桩落⛔ 落得到页面＝未验证</b>：仪器这侧（<c>lib_manual/netcoreapp3.0</c>）那颗工厂收 <c>System.IO.Stream</c>，
+   产品这侧（同一颗包 1.0.3719.77 的 <c>.winmd</c> 投影）收 <c>IRandomAccessStream</c>。本批量到的是「桩这一手落得到页面」（451／0 颗字），
+   投影形状只由编译钉住。点验单：起一扇产品画板窗 → 让页面发一颗外呼（沙盒副本里把 <c>index.css</c> 某颗 <c>url()</c> 指向一颗本机站即可）→
+   读 <c>boards.net.foreign … denied=1</c> 且画布还在。⛔ 拿这句进发布说明。
+③ P-249 那两半（上屏那句＋真机那一拍）照旧欠，与本条共用那条真机腿。
+
+### 31.6 读数与正本（一列⛔ 少一颗）
+| 那一格 | 现读 | 正本 |
+| --- | --- | --- |
+| 编译 | 0 警告／0 错误 | <c>bin/WI98/build69_r3.txt</c> |
+| 定向（<c>FullyQualifiedName~Board</c>） | 926 颗通过 | <c>bin/WI98/test69_target_r1.txt</c> |
+| 全量 | 6444 颗通过／红 0 | <c>bin/WI98/test69_full_r1.txt</c> |
+| 反向台架 | 臂=14｜BAD=0 | <c>bin/WI98/bench69_digest.txt</c> |
+| 那颗名册只读尺 | BAD=0 | <c>bin/WI98/roster69_digest.txt</c> |
+| 隐藏宿主那一族 | 4 跑（各带 <c>host_log.jsonl</c>＋帧） | <c>bin/WI98/roster69_*</c> |
+| 那颗证人档 | 14 格 | <c>tests/StarMark.Tests/BoardNetBoundaryGateTests.cs</c> |
