@@ -109,8 +109,14 @@ public static class BoardPolicy
     ///    而<b>发向</b>名册里唯一能把它翻回来的那颗 <c>feature.flags</c> 今天<b>一颗也没有发过</b>
     ///    （<c>BoardWindow.cs</c> 里 <c>PostOutbound</c> 现读五颗＝export.pick／theme.set／lang.set／board.load／autosave.arm，
     ///    名册第六颗⛔ 主人）⇒ 这一格今天的真形状是「带图的板只能来自外来档或手改的档」，⛔ 是「量到了但不卡」；
-    /// ③ 被这颗闸门拒掉的那一发如果正撞关窗那一拍，痕仍报 <c>landed=True</c>，而屏幕上那句话贴在正被 <c>Hide()</c> 的窗上
-    /// ——那一拍它⛔ 来得及被看见＝<b>账本 P-247</b>，结案前必须量。</para>
+    /// ③ 被这颗闸门拒掉的那一发正撞<b>用户关窗</b>那一拍，片61 量到了（<c>readings_61_big_r3.txt</c>：
+    ///    同一档 <c>WM_CLOSE</c> ⇒ 痕逐字 <c>boards.close.flush.window … landed=True refused=True same=False tookMs=577</c>，
+    ///    那一发 <c>b64=11186948 decoded~=8390211</c> 被拦在解之前，<c>scene.saved</c> 一行也没有，而盘上那颗档
+    ///    <b>890→890 字节</b>＝拒⛔ 等于清空；<c>boards.close.revive on=refused</c> 一行在场，且同一拍之后那颗画板窗
+    ///    <b>仍在可见顶层窗名单里</b>＝那句「这一扇已停止保存」有扇在场的窗挂着，⛔ 贴在正被拆的窗上＝<b>账本 P-247 那一半</b>）。
+    ///    同一拍的另一档（2 MiB，⛔ 超限）当那颗新列的<b>反空转正件</b>（<c>readings_61_small_r2.txt</c>：
+    ///    <c>landed=True refused=False tookMs=152</c>＋<c>bytes=2098752</c> 真落了一发，而那颗窗⛔ 再出现在名单里＝照常关成）
+    ///    ——只有 <c>True</c> 一种读法的一列⛔ 是读数。</para>
     /// </summary>
     public const long SceneBytesCeilingBytes = 8L * 1024 * 1024;
 

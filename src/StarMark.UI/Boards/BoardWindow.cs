@@ -59,7 +59,9 @@ namespace StarMark.UI.Boards;
 /// <c>arm.post</c> 两行，收尾之后进程 1 秒内退完）。修法＝<see cref="BoardsWindows"/> 那份名册由
 /// 宿主那条收尾链（<c>ExitApp</c>）在第一步请一次，两条来路共用同一颗有界等待（<see cref="FlushSnapshotAsync"/>）。
 /// 两臂<b>改前</b>的正本＝<c>bin/WI90/readings_30_board_pre.txt</c>／<c>readings_30_main_pre.txt</c>（旧码在成功那一发⛔ 说话，所以那两份只有档名册这一把尺）；<b>改后</b>同一腿重跑＝<c>readings_30_main_post.txt</c>：盘上多 <c>…-065c</c> 那份，而日志有了
-/// <c>boards.close.flush.exit … landed=True</c>（本批起两条来路<b>各有一句</b>落地话，⛔ 再只在超时时才吭声）。
+/// <c>boards.close.flush.exit … landed=True</c>（本批起两条来路<b>各有一句</b>落地话，⛔ 再只在超时时才吭声；
+/// 片61 起那一行还带一列 <c>refused=</c>——那颗 <c>landed=</c> 问的从来只是「页面回没回话」，「那一份进没进盘」由新列与
+/// <see cref="FlushForExitAsync"/> 交回的那颗 bool 说，见 P-247）。
 /// <b>片31 把那一格补量了（✅P-229）</b>：同一块板先接住那颗 2 元素种子档（<c>STARMARK_START_BOARD=last</c>，
 /// ready 那行逐字 <c>hasScene=True</c>），在画布上拉一笔，抬笔 <b>0.08 s</b> 之后关<b>主窗</b>（那颗停笔去抖＝1.5 s，
 /// 这一发⛔ 等满它）⇒盘上那颗档由 <c>858 字节／2 颗</c> 变成 <c>2708／3 颗</c>，新进那颗逐字 <c>freedraw</c>、
@@ -1382,8 +1384,16 @@ public sealed class BoardWindow : Window
     /// <summary>
     /// 主人（<see cref="BoardsWindows"/>）在<b>退出那一拍</b>请这一次：与用户自己关窗走同一颗有界等待
     /// （<see cref="FlushSnapshotAsync"/>），差别只有两条——⛔ 拦下关闭（进程马上就没了，拦它没有意义），
-    /// 也⛔ 往屏幕贴那张卡（整条链正在往下走，那张卡既⛔ 来得及被看见，还可能把退出拖住）。
-    /// <para>返回＝那一份有没有落地。抛了也⛔ 带走退出链：这里就地兜住，只往日志说话。</para>
+    /// 也⛔ 在<b>那一问超时</b>那一支往屏幕贴右下角那张卡（整条链正在往下走，那张卡既⛔ 来得及被看见，还可能把退出拖住）。
+    /// <para>⚠ <c>notice</c> 那颗参数的射程只到<b>超时那一支</b>：被写闸拒掉那一发走的是
+    /// <see cref="RefuseOversizedEnvelope"/>，它⛔ 认这一拍由谁请的，所以画板里那块面板（<see cref="ShowArmStuckNotice"/>）
+    /// <b>两拍都贴</b>。用户那一拍贴得有意义（片35／40 那条：那一支⛔ 关窗，把窗亮回来让他当场看见）；
+    /// 退出那一拍贴在一颗马上随进程没掉的窗上＝那一格的在场只许由那一行痕的 <c>refused=True</c> 说，⛔ 说成"他看见了"。</para>
+    /// <para><b>返回＝那一份有没有落地</b>——片61 把这一句从「那一问有回音」收紧成它本来想说的那件事：
+    /// 被写闸拒掉的那一发（<c>refused=True</c>）一颗字节也没进盘，交回 <c>false</c>。
+    /// 起因＝片59 量到的那张脸：痕 <c>landed=True</c> 而盘上停在上一份那颗档，主窗那句「落地 N 扇」照样报好话（P-247）。
+    /// 那颗 <c>landed=</c> 的老语义⛔ 动（它问的是「页面回没回话」），分家由新加那一列 <c>refused=</c> 说。
+    /// 抛了也⛔ 带走退出链：这里就地兜住，只往日志说话。</para>
     /// </summary>
     public async System.Threading.Tasks.Task<bool> FlushForExitAsync()
     {
@@ -1392,7 +1402,8 @@ public sealed class BoardWindow : Window
         _tearingDown = true;
         try
         {
-            return await FlushSnapshotAsync("exit", notice: false);
+            var done = await FlushSnapshotAsync("exit", notice: false);
+            return done && !_closingRefused;        // 有回音⛔ 等于落了地：拒掉的那一发算没落地（主窗那句计数由这一颗说话）
         }
         catch (System.Exception ex)
         {
@@ -1467,7 +1478,8 @@ public sealed class BoardWindow : Window
         _closingLanded = null;
         StarMark.Abstractions.StarLog.Info(
             "boards.close.flush." + origin + " id=" + _boardId + " landed=" + done
-            + " same=" + _closingSameAsDisk + " tookMs=" + ElapsedMs(started));
+            + " refused=" + _closingRefused + " same=" + _closingSameAsDisk
+            + " tookMs=" + ElapsedMs(started));
         if (done) return true;
         StarMark.Abstractions.StarLog.Warn(
             "boards.close.flush.timeout ms=" + BoardPolicy.CloseFlushBudgetMs + " origin=" + origin);

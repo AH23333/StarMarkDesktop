@@ -591,7 +591,38 @@ public sealed class BoardWindowBridgeGateTests
         Assert.True(close.IndexOf("return;", StringComparison.Ordinal) < close.IndexOf("Close();", StringComparison.Ordinal),
             "那颗 return 排在关之后＝亮回来又立刻关掉＝这一格⛔ 有牙");
         Assert.Equal(1, Count(close, "Close();"));                                        // ⛔ 多一颗出口，也⛔ 把超时那一支一起改了
-        Assert.Equal(5, Count(SourceGate.Code(raw), "_closingRefused"));                // 声明／写闸拒那一支／<b>超限那一支</b>／复位／分岔（片58② 起五颗，⛔ 第六颗主人）
+        // 片61 起七颗：声明／写闸拒那一支／超限那一支／复位／分岔／<b>那一行痕里那列 refused=</b>／<b>退出那一拍的 return</b>
+        Assert.Equal(7, Count(SourceGate.Code(raw), "_closingRefused"));                // ⛔ 第八颗主人（每加一处都要逐颗点名，⛔ 放宽谓词）
+    }
+
+    /// <summary>片61＝P-247 那一半：<b>那一问有回音</b>与<b>那一份落了地</b>是两颗问题，那行痕与主窗那句计数⛔ 许再混着报。
+    /// <para>起因＝片59 真机量到的那张脸：痕 <c>landed=True</c>／<c>scene.saved 行数=0</c>／盘上停在<b>上一份</b>那颗档，
+    /// 而主窗那句「退出：画板窗那一拍落地 N 扇」照旧把被拒的那一发算成好话（<c>MainWindow.xaml.cs</c> 那一行读的就是这颗 bool）。</para>
+    /// <para>改法两粒，各钉一排：① 那一行痕补一列 <c>refused=</c>——那颗 <c>landed=</c> 的老语义<b>一个字节⛔ 动</b>
+    /// （它问的是「页面回没回话」，片27 为了⛔ 让用户白等两秒定的），分家由新那一列说；② <b>退出那一拍交回的 bool</b>
+    /// 改成「真落了地」＝<c>done &amp;&amp; !_closingRefused</c>，那颗 bool 只有一位消费者（那句计数），所以这一改⛔ 牵连别处。</para>
+    /// <para>⚠ 这一格⛔ 钉「屏幕上那句话来不来得及被看见」——那一问归
+    /// <see cref="TheCloseBeatBringsTheWindowBackWhenWhatCameWasARefusal"/>（用户按×那一拍亮回那颗窗）与片41 的真机读数；
+    /// 退出那一拍本来就⛔ 贴卡（<c>notice:false</c>，见那颗禁项格），它的话只在日志里。</para></summary>
+    [Fact]
+    public void TheCloseFlushLineTellsEchoApartFromLanding()
+    {
+        var raw = ReadRepo(WindowCs);
+        var flush = SourceGate.MethodBody(SourceGate.Code(raw), "Task<bool> FlushSnapshotAsync");
+        Assert.Contains("\" refused=\" + _closingRefused", flush, StringComparison.Ordinal);
+        Assert.Equal(1, Count(flush, " refused="));                     // 那颗字只有那一行痕念它＝⛔ 第二个措辞出处
+        var atLanded = flush.IndexOf("landed=", StringComparison.Ordinal);
+        var atRefused = flush.IndexOf(" refused=", StringComparison.Ordinal);
+        var atSame = flush.IndexOf(" same=", StringComparison.Ordinal);
+        Assert.True(atLanded >= 0 && atRefused > atLanded && atSame > atRefused,
+            "那三列⛔ 按 landed→refused→same 排＝读痕的人按位置对不上（真机那份正本的口径）");
+        Assert.Contains("landed=\" + done", flush, StringComparison.Ordinal);    // 那颗老字照旧只由「有没有回音」决定（⛔ 顺手改它的语义）
+
+        var exit = SourceGate.MethodBody(SourceGate.Code(raw), "Task<bool> FlushForExitAsync");
+        Assert.Contains("return done && !_closingRefused;", exit, StringComparison.Ordinal);
+        Assert.Equal(1, Count(exit, "!_closingRefused"));               // 只有那颗计数由它说话
+        Assert.DoesNotContain("NoticeCard.Show(", exit, StringComparison.Ordinal);   // 退出那一拍照旧⛔ 贴卡（P-220 定过的）
+        Assert.DoesNotContain("Close();", exit, StringComparison.Ordinal);           // 也⛔ 拦关闭：进程马上就没了
     }
 
 
