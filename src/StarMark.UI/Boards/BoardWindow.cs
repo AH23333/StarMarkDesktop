@@ -418,6 +418,13 @@ public sealed class BoardWindow : Window
         _web.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
         _web.CoreWebView2.NavigationCompleted -= OnNavigationCompleted;
         _web.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
+        // 账本 P-248 那道「第二道」的<b>前半</b>：先量「这一扇页今天到底外呼谁」——这颗观察者只记⛔ 挡。
+        // 为什么⛔ 一上来就挡（安全＞稳定＞性能，挡似乎更"安全"）：随包那棵树到底靠不靠一颗外站，本批⛔ 起窗量不到
+        // （桌面被占），而拿一颗写死的白名单去挡一条<b>没读数</b>的路＝把画布白屏的风险换成一句安心话。
+        // ⇒ 现读名单到手之后翻成 deny（那一翻的判据住在 <see cref="BoardsAssetPolicy.IsLocalAssetUri"/>，已备好）。
+        _web.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
+        _web.CoreWebView2.WebResourceRequested -= OnWebResourceRequested;
+        _web.CoreWebView2.WebResourceRequested += OnWebResourceRequested;
         // ⛔ 在这里订 <c>DownloadStarting</c> 去接管那一发导出（本批第一版试过，被真机当场否掉）：
         // 那颗引擎的 saveAs 走的是 <c>window.showSaveFilePicker</c>，压根⛔ 是下载——那颗事件一颗也不响，
         // 逐字读数见类文档那段（正本 readings_54_134804＋log54_forensics）。
@@ -431,6 +438,39 @@ public sealed class BoardWindow : Window
     private void OnNavigationCompleted(CoreWebView2 sender, CoreWebView2NavigationCompletedEventArgs e)
         => StarMark.Abstractions.StarLog.Info(
             "boards.nav.done seq=" + _readySeq + " ok=" + e.IsSuccess + " err=" + e.WebErrorStatus + " src=" + sender.Source);
+
+    /// <summary>这一扇页外呼过的<b>不同目标</b>（方案＋主机名，⛔ 路径）——只用来节流那颗痕：一颗目标只念一行。</summary>
+    private readonly HashSet<string> _netTargets = new(StringComparer.OrdinalIgnoreCase);
+    private int _netLocal, _netInline, _netForeign;
+
+    /// <summary>
+    /// 那颗出站观察者（账本 P-248 的第一半）：数「读了随包那一份」「压根⛔ 出机」「读了别处」三颗数，
+    /// 每颗<b>新</b>外呼目标落一行 <c>boards.net.foreign</c> 并把三颗数一起带上（⛔ 只念外呼那一颗：
+    /// 一颗 <c>local=0</c> 的名册说明这把尺压根没开火，而那和「这页只出机」在单看外呼数时同一个脸）。
+    /// ⛔ 在此处判「该不该挡」——判据的主人在
+    /// <see cref="BoardsAssetPolicy.IsLocalAssetUri"/>，本方法只照它分类（⛔ 在 UI 里再写一份方案／主机比较＝第二个主人）。
+    /// </summary>
+    private void OnWebResourceRequested(CoreWebView2 sender, CoreWebView2WebResourceRequestedEventArgs e)
+    {
+        var raw = e.Request?.Uri;
+        Uri? uri = raw is not null && Uri.TryCreate(raw, UriKind.Absolute, out var parsed) ? parsed : null;
+        if (BoardsAssetPolicy.IsLocalAssetUri(uri, VirtualHostName))
+        {
+            _netLocal++;
+            return;
+        }
+        if (BoardsAssetPolicy.IsInlineUri(uri))
+        {
+            _netInline++;
+            return;
+        }
+        _netForeign++;
+        var target = BoardsAssetPolicy.DescribeRequestTarget(uri);
+        if (_netTargets.Add(target))
+            StarMark.Abstractions.StarLog.Warn(
+                "boards.net.foreign n=" + _netForeign + " target=" + target
+                + " local=" + _netLocal + " inline=" + _netInline + " id=" + _boardId);
+    }
 
     /// <summary>桥是否已就绪（页面递过 <c>bridge.ready</c>）。</summary>
     public bool BridgeReady => _bridgeReady;

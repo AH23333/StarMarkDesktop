@@ -41,6 +41,42 @@ public static class BoardsAssetPolicy
     /// <summary>中文手写体族名（档 5＝Excalifont 的中文回退，§24.2）。</summary>
     public const string XiaolaiFamilyName = "Xiaolai";
 
+    /// <summary>随包资产那颗虚拟站的方案名（宿主把整棵树钉在 <c>https://&lt;虚拟站&gt;/…</c>；
+    /// 名字的主人是 <c>BoardWindow.VirtualHostName</c>，本类只认方案）。账本 P-248 用得到它。</summary>
+    public const string AssetUriScheme = "https";
+
+    /// <summary>
+    /// 「这一发外呼是不是只读我们随包的那一份」（账本 <b>P-248</b>：v1 §21.5 那道「宿主订出站事件」的判据主人）。
+    /// <para>
+    /// 判的只有<b>方案＋主机名</b>两颗：随包资产全部走那颗虚拟站映射，所以一颗<b>真</b>的本地请求长这样
+    /// <c>https://appassets.local/fonts/…</c>；任何<b>别的</b>主机（<c>esm.sh</c>、<c>fonts.gstatic.com</c>、
+    /// 一颗档里带的远程 iframe）都是<b>假</b>。⛔ 看路径——路径归随包清单管（<c>ManifestFileName</c> 那一族），
+    /// 在这里比一次＝第二个主人。
+    /// </para>
+    /// <para>⚠ 那颗虚拟站的名字由调用方递进来（UI 那颗常量是它唯一的主人），⛔ 在这里抄一份：抄了就出现两颗名字，
+    /// 换名字那一批只改一处而这里静默失真（与「名字比射程大」那颗 P-246 同族）。</para>
+    /// </summary>
+    public static bool IsLocalAssetUri(Uri? uri, string virtualHostName)
+        => uri is not null
+           && string.Equals(uri.Scheme, AssetUriScheme, StringComparison.OrdinalIgnoreCase)
+           && virtualHostName.Length > 0
+           && string.Equals(uri.Host, virtualHostName, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>那四颗「压根⛔ 走网络」的方案：<c>data</c>／<c>blob</c>／<c>about</c>／<c>filesystem</c>。
+    /// 它们既⛔ 是随包那一份、也⛔ 是一次出机外呼，所以在 P-248 那把尺里自成一档——
+    /// ⚠ 混进「外呼」那一档，下一批就拿着被污染的名册去翻 deny，而 <c>data:</c> 正是引擎画布上那些图的形状
+    /// （片21 的存储口径＝内嵌 base64），挡了＝白屏。</summary>
+    public static readonly string[] InlineUriSchemes = { "data", "blob", "about", "filesystem" };
+
+    /// <summary>「这一发压根⛔ 出机」（理由见 <see cref="InlineUriSchemes"/>）。</summary>
+    public static bool IsInlineUri(Uri? uri)
+        => uri is not null && Array.IndexOf(InlineUriSchemes, uri.Scheme) >= 0;
+
+    /// <summary>那颗痕里该念的目标：<b>只有方案＋主机名</b>——路径与 query 是用户数据（一颗远程档名进了日志＝
+    /// 把「他打开过哪张图」写进一台人看的文件，P-13/P-193 那条口径），而主机名⛔ 会带换行（<c>Uri</c> 解析不过）。</summary>
+    public static string DescribeRequestTarget(Uri? uri)
+        => uri is null ? "(无)" : uri.Scheme + "://" + uri.Host;
+
     /// <summary>决策 4（§九〔裁决 2026-10-17·代裁〕）的摘除标记：stub 里那颗报错串的前缀。
     /// bundle 里必须能搜到它（＝mermaid 那颗插件确实被 alias 摘了）。</summary>
     public const string MermaidStubMarker = "StarMarkBoards.mermaidStub";

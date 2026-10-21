@@ -206,7 +206,14 @@
           toggleTheme: false
         },
         tools: { image: false }
-      }
+      },
+      /* 那颗官方闸门（账本 P-248／深析 §21.0 第 7 行 v1 早就写了「落地＝那颗 prop 交 false」，今天才落）：
+         现读随包 bundle 两处消费点——`this.props.validateEmbeddable` 与 `$s(D, i.validateEmbeddable)`：
+         判不过时引擎自己走 `toast.unableToEmbed` 那条，把那颗 <c>embeddable</c> 元素的远程链接判成无效，
+         于是档里带的远程 iframe <b>⛔ 会被渲染</b>。⚠ 交的是 boolean 那一档（包里逐字五档：boolean／
+         字符串数组／RegExp／RegExp 数组／函数），交 false＝全拒；宿主那侧的 CSP／<c>WebResourceRequested</c>
+         是<b>第二道</b>，⛔ 拿「引擎认这颗开关」当作⛔ 需要第二道（形1′ 那句：兜底永远排在名单最后）。 */
+      validateEmbeddable: false
     };
   }
 
