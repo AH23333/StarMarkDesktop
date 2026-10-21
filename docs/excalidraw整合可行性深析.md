@@ -1765,8 +1765,9 @@ A1 把值翻成 <c>true</c> ⇒ 只红「值那一格」；A2 在 <c>UIOptions</
 ⚠ 那颗顶帧门挡下之后，引擎自己会回一行 <c>nav.done ok=False err=OperationCanceled</c>——这一行是<b>闸门在干活</b>，⛔ 读成画布坏了。
 
 ### 31.5 还欠什么（精确到一格）
-① <b>第一道 CSP（<c>assets/boards/board.html</c>）照旧⛔ 注入</b>：它要的是「注入之后画布还起不起得来」那一判（那颗 bundle 里有内联脚本与
-   <c>data:</c> 图，判错＝白屏），而这一判由 DOM／像素说话——隐藏宿主已经能给帧与 DOM，但 CSP 的<b>形状</b>还没定，先不猜。
+① <b>第一道 CSP（<c>assets/boards/board.html</c>）照旧⛔ 注入</b>：它要的是「注入之后画布还起不起得来」那一判——<b>判据与那颗形状都由片70 量出来了</b>（六臂表在 §三十二：
+   资源那一族一挂上，页面<b>多</b>发 230 颗外站字体请求而基线是 0 颗；只管 frame／object／base／form 那一颗则<b>逐颗同形</b>）。
+   ⇒ 形状＝<c>frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'</c>，落地归片71（本腿⛔ 动一行业务码）。
 ② <b>产品那一副投影的桩落⛔ 落得到页面＝未验证</b>：仪器这侧（<c>lib_manual/netcoreapp3.0</c>）那颗工厂收 <c>System.IO.Stream</c>，
    产品这侧（同一颗包 1.0.3719.77 的 <c>.winmd</c> 投影）收 <c>IRandomAccessStream</c>。本批量到的是「桩这一手落得到页面」（451／0 颗字），
    投影形状只由编译钉住。点验单：起一扇产品画板窗 → 让页面发一颗外呼（沙盒副本里把 <c>index.css</c> 某颗 <c>url()</c> 指向一颗本机站即可）→
@@ -1783,3 +1784,55 @@ A1 把值翻成 <c>true</c> ⇒ 只红「值那一格」；A2 在 <c>UIOptions</
 | 那颗名册只读尺 | BAD=0 | <c>bin/WI98/roster69_digest.txt</c> |
 | 隐藏宿主那一族 | 4 跑（各带 <c>host_log.jsonl</c>＋帧） | <c>bin/WI98/roster69_*</c> |
 | 那颗证人档 | 14 格 | <c>tests/StarMark.Tests/BoardNetBoundaryGateTests.cs</c> |
+
+
+## 三十二、片70 读数腿（2026-10-21·⛔ 动一行业务码・⛔ 起窗·隐藏宿主六臂）＝第一道 CSP 那颗<b>形状</b>不再靠猜，而"再严一点"被读数反着打
+
+### 32.1 这一腿补的是哪一句
+§31.5 第① 行写的是「CSP 的<b>形状</b>还没定，先不猜」，卡住的还是<b>量</b>。片69 那台不占屏幕的隐藏宿主今天能给了：
+把随包那一棵树（<c>assets/boards</c>，21 行／里面 CSP 颗数现读 <b>0</b>）由一颗真 HTTP 站供起来，
+挂六种策略各跑一次，读<b>页面自己那份时间线＋DOM＋那颗预览帧 sha</b>，违反名单由<b>宿主注入</b>的那段脚本收
+（<c>AddScriptToExecuteOnDocumentCreatedAsync</c>）——⛔ 写进那份页里：页里那段内联脚本<b>正是可能被挡的那一发</b>，用它当听众＝听众先被判死。
+
+### 32.2 六臂（一臂一颗策略，其余两颗全同）
+| 臂 | 挂的那一句 | 违反 | 页面 <c>res</c> 总 | 那颗帧 | 画布／API／桥 |
+| --- | --- | --- | --- | --- | --- |
+| A | ⛔ 挂（基线） | 0 | 7 | <c>184e33dcb65b</c> | 2／真／真 |
+| B | 候选：资源全收紧（<c>default-src 'none'</c> ＋ 逐维放行） | 230 | 237（外站 <b>230</b> 颗） | <c>184e33dcb65b</c> | 2／真／真 |
+| C | B 去掉 <c>script-src</c> 那颗 <c>'unsafe-inline'</c> | 231 | 237（外站 <b>230</b> 颗） | <c>184e33dcb65b</c> | 2／真／真 |
+| D | B 去掉 <c>style-src</c> 那颗 <c>'unsafe-inline'</c> | 231 | 237（外站 <b>230</b> 颗） | <c>ab9e3b65bf4e</c>（≠A） | 2／真／真 |
+| E | 只写 <c>default-src 'self'</c> | 236 | 241（外站 <b>230</b> 颗） | <c>ab9e3b65bf4e</c>（≠A） | 2／真／真 |
+| G | <b>只管那一族</b>：<c>frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'</c> | 0 | 7 | <c>184e33dcb65b</c>（＝A） | 2／真／真 |
+
+（那颗「违反」列的<b>总数</b>以 <c>violN</c> 为准；名单每臂只留前 8 颗，"按维分布"是那 8 颗的分布——⛔ 把它当总数。）
+
+### 32.3 三条结论（每条只说这一跑量到的）
+① <b>G 那一颗可装</b>：帧 sha 与基线<b>同一颗</b>、请求颗数<b>相等</b>（7↔7）、一颗违反也没报。
+   它关掉的正是 §21.5 那句"档里那颗元素想去哪"的三条路：远程 iframe（<c>frame-src</c>）、<c>object</c>／<c>embed</c>、
+   改写基址（<c>base-uri</c>）与表单外递（<c>form-action</c>）；而<b>四者都不在页要用的那一族里</b>。
+② <b>「再严一点」是反的</b>：挂上资源那一族的<b>四臂</b>（B／C／D／E）各让页面发出 <b>230／230／230／230</b> 颗
+   <c>esm.sh</c> 字体请求，而基线（A／G）是 <b>0</b> 颗——
+   挂上资源那一族之后，页面<b>多</b>要出去，⛔ 少要。安全判据在这里得按两列各量一遍：它挡住了哪条路、它又新开了哪条路。
+   ⚠ 这一跑的因果只到「相关」为止：能证的是「一挂上就多发」，⛔ 是「为什么」——要答"为什么"得读那颗 bundle 的字体装载分支，归片71。
+③ <b>内联那一族是承重的</b>：C 报出 <c>script-src-elem</c>、D 报出 <c>style-src-elem</c>，而 E 只写了一颗 <c>default-src 'self'</c>
+   就同时管住两者（名单里两者各有）并<b>换了画面</b>（帧 <c>ab9e3b65bf4e</c>≠<c>184e33dcb65b</c>）。⇒ 页有内联脚本与内联样式，这是形状事实。
+
+### 32.4 为什么⛔ 由宿主注入（这一句现在也有读数了）
+片69 那两跑读回 <c>allowed=0</c>：随包那一棵树由 <c>SetVirtualHostNameToFolderMapping</c> 供，<b>压根进不了</b> <c>WebResourceRequested</c>
+⇒ 宿主<b>没有</b>那一发可以加头的时机。所以第一道 CSP 只能<b>由页自己带</b>（<c>meta http-equiv</c>），
+落在 <c>assets/boards/board.html</c> 那一棵随包资产里——它就是一次<b>重冻</b>（那颗清单里 board.html 的字节数与 sha 要跟着改口，
+连带片67 那句「<c>feature.flags</c> 交的是整张 <c>UIOptions</c> 替换、将来要配「带全」的形状证人」一起办）。本腿⛔ 动一行业务码，只把形状定下来。
+
+### 32.5 还欠什么（精确到一格）
+① <b>产品那条路（虚站映射供的页）挂上 CSP 之后是否照样同形＝登记「未验证」</b>：本腿走的是真 HTTP 站（那颗映射⛔ 让宿主加头，见 §32.4），
+   两者渲染路径同源但供法不同。点验单：片71 落地后起一扇产品画板窗 → 读那颗页里 meta 生效（<c>document.securityPolicy</c>⛔ 必有，
+   改读「页面发出外呼时<b>被挡且画布还在</b>」）＋帧与今天的 <c>184e33dcb65b</c> 同形。
+② 上面②那一跑「为什么一挂上就多发」的机制读码（那颗 bundle 的字体分支）。
+③ P-249 那两半＋「产品那副投影的桩」照旧欠，与 P-248 共用那条真机腿。
+
+### 32.6 读数与正本
+| 那一格 | 现读 | 正本 |
+| --- | --- | --- |
+| 六臂只读尺 | BAD=0 | <c>bin/WI98/csp70_digest.txt</c> |
+| 隐藏宿主那一族 | 6 跑（各带 <c>host_log.jsonl</c>＋帧） | <c>bin/WI98/csp70_*</c> |
+| 那颗仪器重编 | 1 警告／0 错误（CS8632 那一颗在仪器那侧，产品那颗 sln 本批⛔ 重编＝⛔ 动业务码） | <c>bin/WI98/build70_spike_r1.txt</c> |
