@@ -2694,7 +2694,16 @@ public static class UiStrings
         // ⛔ 与那颗「另存一份到别处」共用那一句：那两句挂的标题是"这块板没能回到画布上"，而这一路说的⛔ 是同一件事。
         new Entry("boards.exportPngAction", "导出 PNG", "Export PNG", "PNG として出力"),
         new Entry("boards.exportSvgAction", "导出 SVG", "Export SVG", "SVG として出力"),
-        new Entry("boards.exportSavedBody", "已存到 {0}", "Saved to {0}", "{0} に保存しました"),
+        // 片64＝那两档交回用户（P-242 的落地腿）：引擎自家那颗缩放⛔ 是常数，它是
+        // `cd.includes(devicePixelRatio)?devicePixelRatio:1`（cd=[1,2,3]，三处 offset 见 Core 那颗注释与
+        // bin/WI98/readings_62_bundle_r2.txt）＝今天它由<b>那台显示器的缩放</b>定，而屏幕上那句话⛔ 说过它。
+        // 所以这里给两颗扳机（名单的主人＝BoardPolicy.ExportScales），并让那句"已存到"带上<b>这一发真用的</b>两档。
+        // ⚠ 两颗都走那颗已钉死三样颜色的 Button（⛔ 下拉／⛔ 复选框）：那一行上可点的控件由同一把尺数着（见 BoardWordGateTests ⑥）。
+        new Entry("boards.exportScaleAction", "缩放 {0}", "Scale {0}", "拡大率 {0}"),
+        new Entry("boards.exportBackgroundAction", "背景 {0}", "Background {0}", "背景色 {0}"),
+        new Entry("boards.exportOn", "开", "On", "オン"),
+        new Entry("boards.exportOff", "关", "Off", "オフ"),
+        new Entry("boards.exportSavedBody", "已存到 {0}（{1}、{2}）", "Saved to {0} ({1}, {2})", "{0} に保存しました（{1}・{2}）"),
         new Entry("boards.exportFailedBody", "那颗导出没能存成，可以再导出一次；原因在日志里。", "That export did not land; you can export again. The reason is in the log.", "出力を保存できませんでした。もう一度出力できます。原因はログにあります。"),
         new Entry("tray.pinsShowHideNone", "显示 / 收起所有贴图（当前没有贴图）", "Show or collapse all pins (none right now)", "すべてのピンを表示／収納（現在 0 枚）"),
         new Entry("tray.pinsShowAll", "显示所有贴图", "Show all pins", "すべてのピンを表示"),

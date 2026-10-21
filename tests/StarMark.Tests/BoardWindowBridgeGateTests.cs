@@ -641,8 +641,9 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Contains("private void OnLocaleChanged()", code, StringComparison.Ordinal);
         Assert.Equal(5, Count(code, "PasteNotice();"));             // ShowNotice 那一拍＋换语言那一拍＋被拒亮回那一拍补两颗新按钮＋片49 那颗「再试一次」跑前跑后各一次（五处都只⛔ 调那颗主人，⛔ 各写一遍可见性）
         // 片54：那一行是第二块会说汉语的表面，它那颗主人同样只许被数得清的那几处调（多一处＝第二副措辞出处）。
-        // 五处＝开场那一拍（放开"还在导出"那一闩）＋交回字节那一拍＋按下去那一拍＋换语言那一拍＋开目录坏了那一拍。
-        Assert.Equal(5, Count(code, "PasteBar();"));
+        // 七颗＝开场那一拍（放开"还在导出"那一闩）＋交回字节那一拍＋按下去那一拍＋换语言那一拍＋开目录坏了那一拍
+        //        ＋<b>片64 那两颗扳机各一颗</b>（挑完缩放／翻完开关当场改那行字，⛔ 等下一次导出才回音）。
+        Assert.Equal(7, Count(code, "PasteBar();"));
         Assert.Equal(4, Count(code, "HideNotice();"));              // 收起面板只此一颗主人，四处正当调用：开闸成功（坏话不再是事实）＋片40「继续编辑」撤销这一拍＋片49 那两颗（重试终于读到了／他决定先开一块新板）
         // 唯一的取词出口：两颗工厂各一处，调用点⛔ 重抄全限定名
         Assert.Equal(1, Count(code, "private static string Word(string key) => StarMark.Abstractions.I18n.Locale.T(key);"));
@@ -665,6 +666,8 @@ public sealed class BoardWindowBridgeGateTests
             "Task<bool> OpenFolderAroundAsync",
             // 片56 那两拍：nack 与那颗预算都只换那句话，字⛔ 许自己长在代码里
             "void HandleBridgeReply", "Task WatchExportAnswerAsync",
+            // 片64 那两颗扳机：翻一档／换一态都只改那颗字段再重贴，字⛔ 许长在代码里（"×" 是记号而⛔ 是句子）
+            "void CycleExportScale", "void ToggleExportBackground", "string ScaleToken",
         })
         {
             var leftovers = SourceGate.Cjk.Matches(SourceGate.MethodBody(code, sig))
@@ -883,6 +886,70 @@ public sealed class BoardWindowBridgeGateTests
         Assert.True(bytes.IndexOf("UniqueExportName", StringComparison.Ordinal)
                     < bytes.IndexOf("File.WriteAllBytes(target, bytes);", StringComparison.Ordinal),
                     "先定名再写：名⛔ 定就先写＝同名那一颗还是会被盖掉");
+    }
+
+    /// <summary>片64＝那两档交回用户（账本 P-242 的落地腿）。八格一起钉，缺一格都只是修了一半。
+    /// <para>① <b>名单只有一位主人</b>：桥里那份 JS 字面必须与 <see cref="BoardPolicy.ExportScales"/> 现读相等——
+    /// 页面读不到 C#，所以那里⛔ 得再抄一份数字，而"两份名单"迟早分岔（往名单加一颗 4 而只改 Core，
+    /// 屏幕上那颗按钮会出现 4×、递进桥里却被当作⛔ 认的值丢掉＝一句话替用户决定了他挑的那一档）；
+    /// ② 那颗 <c>appState</c> 从此是<b>这一发的副本</b>（<c>Object.assign({}, …, prefs)</c>），旧形状（直接交
+    /// <c>API.getAppState()</c>）必须为 0 颗——那是 P-242 记下"尺寸由那台机器定"的那一手；
+    /// ③ 禁项：<b>⛔ 写回引擎活着那份 appState</b>。片62 的处置原本点名 <c>setAppState</c>，片63 现读否掉：
+    /// 那颗名字在随包档里 24 颗命中＝<b>18 颗属性形状／0 颗方法调用</b>，它⛔ 在那颗对外对象里（坑表 #851）。
+    /// 今天这一格的绿＝"名字没出现"，而它守的是"别照着那颗名字再写一遍"；
+    /// ④⑤ 两档都<b>不认就不并</b>（沿引擎默认），且 scene 那一发提前 return、永远⛔ 读它们；
+    /// ⑥⑦ 宿主那一路只有一颗形状、两颗值都从手里那两颗字段来；
+    /// ⑧ 两颗扳机在右上角那一行<b>永远在场</b>，⛔ 跟着"这一发正在跑"那闩关（挑档是宿主自己的事）。</para></summary>
+    [Fact]
+    public void TheTwoExportKnobsRideThatOneAskAndMergeOnlyIntoItsOwnOpts()
+    {
+        var js = ReadRepo(BridgeJs);                       // 那颗扫描器是照 C# 写的，页面那一档⛔ 交给它（本档同一口径）
+        var code = SourceGate.Code(ReadRepo(WindowCs));
+
+        // ① 名单：桥里那一串逐字由 Core 现读拼出（这里⛔ 写 1／2／3 三颗数字＝第二个主人）
+        var guard = "if (scale === " + string.Join(" || scale === ", BoardPolicy.ExportScales)
+                    + ") prefs.exportScale = scale;";
+        Assert.Contains(guard, js, StringComparison.Ordinal);
+        Assert.Contains("if (background === true || background === false) prefs.exportBackground = background;",
+            js, StringComparison.Ordinal);
+
+        // ② 那一发的 opts 带的是副本（旧形状一颗也不许留）
+        Assert.Contains("appState: Object.assign({}, API.getAppState(), prefs),", js, StringComparison.Ordinal);
+        Assert.Equal(0, Count(js, "appState: API.getAppState(),"));
+        Assert.Equal(1, Count(js, "var prefs = {};"));
+
+        // ③ 那颗引擎内部的 prop⛔ 许再被点名（片63 现读：它在对外对象里根本没有）
+        Assert.Equal(0, Count(js, "setAppState"));
+
+        // ④⑤ 值只从 args 来；scene 那一发⛔ 经过那颗 opts
+        Assert.Contains("runExport(m.args && m.args.kind, m.args && m.args.skipInliningFonts, m.id,", js, StringComparison.Ordinal);
+        Assert.Contains("m.args && m.args.exportScale, m.args && m.args.exportBackground);", js, StringComparison.Ordinal);
+        Assert.Equal(1, Count(js, "m.args.exportScale"));
+        Assert.Equal(1, Count(js, "m.args.exportBackground"));
+        Assert.True(js.IndexOf("if (kind === \"scene\")", StringComparison.Ordinal)
+                    < js.IndexOf("var opts = {", StringComparison.Ordinal),
+                    "scene 那一支排在那颗 opts 之后＝板档那一路也会被这两档碰");
+
+        // ⑥⑦ 宿主那一路：一颗形状、两颗值都取自手里那两颗字段
+        Assert.Equal(1, Count(code, "Envelope(\"export.pick\", \"h4\""));
+        Assert.Contains("JsonString(\"exportScale\") + \":\" + _exportScale + \",\"", code, StringComparison.Ordinal);
+        Assert.Contains("JsonString(\"exportBackground\") + \":\" + (_exportBackground ? \"true\" : \"false\")",
+            code, StringComparison.Ordinal);
+        // 那两档从此<b>住在出向名册里</b>：⛔ 登记＝宿主自己拼的信封被那道静默的门挡下（两颗按钮点了没反应）
+        Assert.Contains("exportScale", string.Join(",", BridgeProtocol.OutboundFields["export.pick"]),
+            StringComparison.Ordinal);
+        Assert.Contains("exportBackground", string.Join(",", BridgeProtocol.OutboundFields["export.pick"]),
+            StringComparison.Ordinal);
+
+        // ⑧ 两颗扳机各 add 一遍，且⛔ 跟着那一闩关
+        var stage = SourceGate.MethodBody(code, "private Grid BuildStage");
+        Assert.Contains("barRow.Children.Add(_barScaleButton);", stage, StringComparison.Ordinal);
+        Assert.Contains("barRow.Children.Add(_barBackgroundButton);", stage, StringComparison.Ordinal);
+        var bar = SourceGate.MethodBody(code, "void PasteBar");
+        Assert.Equal(0, Count(bar, "_barScaleButton.IsEnabled"));
+        Assert.Equal(0, Count(bar, "_barBackgroundButton.IsEnabled"));
+        Assert.Contains("_barScaleButton.Click += (_, _) => CycleExportScale();", code, StringComparison.Ordinal);
+        Assert.Contains("_barBackgroundButton.Click += (_, _) => ToggleExportBackground();", code, StringComparison.Ordinal);
     }
 
     // ────────── 片56：那一发导出问出去之后，两条下落都得有主人（P-244） ──────────

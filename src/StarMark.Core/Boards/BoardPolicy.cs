@@ -120,6 +120,34 @@ public static class BoardPolicy
     /// </summary>
     public const long SceneBytesCeilingBytes = 8L * 1024 * 1024;
 
+    /// <summary>导出那两档的<b>名单与默认</b>（片64＝P-242 落地腿）。
+    /// <para>名单就是引擎自家那份 <c>cd=[1,2,3]</c>；那颗缩放若⛔ 递给它，引擎按
+    /// <c>cd.includes(devicePixelRatio)?devicePixelRatio:1</c> 算＝<b>跟着那台机器的 DPR 走</b>，
+    /// 于是同一块板在 100% 与 200% 两块屏上导出两张不一样大的图。所以这里给一颗写死的默认（1×）：
+    /// 尺寸由<b>这一发挑的档</b>定，而不由那台显示器的缩放定。
+    /// 上面那两截逐字与三处 offset（2166977／2168217／2169095）都在 <c>bin/WI98/readings_62_bundle_r2.txt</c>
+    /// 那份正本里躺着（随包档 4878772 颗字节／sha 前 12 颗 <c>923fa221d0a4</c>）。</para></summary>
+    public static readonly int[] ExportScales = { 1, 2, 3 };
+
+    /// <summary>没挑过缩放时用它。⛔ 取"沿引擎那颗默认"——那正是 P-242 记下的那颗缺陷的形状。</summary>
+    public const int ExportScaleDefault = 1;
+
+    /// <summary>那颗背景开关的默认：引擎自家 <c>exportBackground:!0</c>（offset 2169095 现读）＝开着，这里与它对齐。</summary>
+    public const bool ExportBackgroundDefault = true;
+
+    /// <summary>这颗缩放在册吗。名单唯一的主人就是 <see cref="ExportScales"/>，⛔ 在别处再抄一遍那三颗数字。</summary>
+    public static bool IsKnownExportScale(int scale) => System.Array.IndexOf(ExportScales, scale) >= 0;
+
+    /// <summary>那颗缩放按钮按下去之后的<b>下一档</b>（走完名单回第一档）。
+    /// <para>判据住在这里而⛔ 长在 UI 那一档：测试工程⛔ 能引用 <c>StarMark.UI</c>，那颗循环只有落到这里才量得到
+    /// （片43 那颗 <c>PickReadableScene</c> 同一条口径）。<b>认不出来的当前值</b>（外部改坏、或加档位时漏改一处）
+    /// 回第一档——⛔ 把一颗屏幕上点不出来的野值留在原地。</para></summary>
+    public static int NextExportScale(int current)
+    {
+        var at = System.Array.IndexOf(ExportScales, current);
+        return at < 0 || at + 1 >= ExportScales.Length ? ExportScales[0] : ExportScales[at + 1];
+    }
+
     /// <summary>那一发 base64 交回的字符串<b>至多</b>解出多少字节（上界：⛔ 扫填充，因此最多多算 2 颗字节）。</summary>
     public static long InboundDecodedBytesUpperBound(int base64Length) => (long)(base64Length / 4) * 3;
 

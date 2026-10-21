@@ -153,7 +153,8 @@
         applyProp(function () { rerenderWith({ UIOptions: m.args && m.args.uiOptions }); });
         break;
       case "export.pick":
-        runExport(m.args && m.args.kind, m.args && m.args.skipInliningFonts, m.id);
+        runExport(m.args && m.args.kind, m.args && m.args.skipInliningFonts, m.id,
+                  m.args && m.args.exportScale, m.args && m.args.exportBackground);
         break;
       case "autosave.arm":
         hostArmed = true;
@@ -219,7 +220,13 @@
      ⚠ 链上每一环都得<b>把 promise 交回去</b>：从前那颗 arrayBuffer 写在 then 里而没 return，
      它一旦抛就永远走不到 .catch——而 .catch 那句 send 正是宿主唯一的"这一发办不成"的回音。
      那颗 send 现只在<b>办不成</b>时出声（成功那一路交的是 export.bytes），宿主那头的对应主人见 BoardWindow。 */
-  function runExport(kind, skipInliningFonts, replyId) {
+  function runExport(kind, skipInliningFonts, replyId, scale, background) {
+    // 那两档（缩放／背景）由宿主右上角那一行给，名单的主人是那颗下拉（1／2／3）。这里⛔ 认就沿引擎那颗默认，
+    // 并且<b>只并进这一发的 opts</b>：⛔ 写回引擎活着的那份 appState（那会改用户屏上引擎自己的导出面板，
+    // 也会把"这一发用了什么"混进面板状态里）。引擎自家那颗导出对话框合并的正是同一手。
+    var prefs = {};
+    if (scale === 1 || scale === 2 || scale === 3) prefs.exportScale = scale;
+    if (background === true || background === false) prefs.exportBackground = background;
     try {
       if (kind === "scene") {
         deliver(sceneBytesB64(), kind, boardName());
@@ -227,7 +234,7 @@
       }
       var opts = {
         elements: API.getSceneElements(),
-        appState: API.getAppState(),
+        appState: Object.assign({}, API.getAppState(), prefs),
         files: API.getFiles(),
         skipInliningFonts: !!skipInliningFonts
       };

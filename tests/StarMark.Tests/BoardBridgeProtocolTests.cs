@@ -223,6 +223,22 @@ public sealed class BoardBridgeProtocolTests
             BridgeProtocol.Direction.Outbound).Allowed);
         Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, "export.pick",
             new[] { "kind", "skipInliningFonts" }, BridgeProtocol.Direction.Outbound).Allowed);
+        // 片64＝那两档交回用户（P-242 落地腿）。⚠ 这里加的⛔ 是"方便"，是<b>那道静默的门</b>：
+        // 宿主自己拼的信封若带一颗没登记的键，<c>PostOutbound</c> 读到一个 <c>allowed=false</c> 就<b>一颗字节也不发</b>，
+        // 屏幕上没有任何一句坏话（那正是片54 关引擎那颗框之后⛔ 许留下的形状）。
+        Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, "export.pick",
+            new[] { "kind", "exportScale", "exportBackground" }, BridgeProtocol.Direction.Outbound).Allowed);
+        // 禁项与正件同一跑：那两颗<b>逐字</b>在册，换个写法（多一颗 s／大小写不同）就拒
+        Assert.Equal(BridgeProtocol.Fault.UnexpectedField,
+            BridgeProtocol.Check(BridgeProtocol.Version, "export.pick", new[] { "kind", "exportScales" },
+                BridgeProtocol.Direction.Outbound).Reason);
+        Assert.Equal(BridgeProtocol.Fault.UnexpectedField,
+            BridgeProtocol.Check(BridgeProtocol.Version, "export.pick", new[] { "kind", "ExportBackground" },
+                BridgeProtocol.Direction.Outbound).Reason);
+        // scene 那一发⛔ 用不上那两档（桥在 <c>kind==="scene"</c> 那一支提前 return），登记成可选而⛔ 必带：
+        // 四拍里索取板档那两拍⛔ 因此被自己新加的字段挡住（MissingField 那一道只认 kind）
+        Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, "export.pick", new[] { "kind" },
+            BridgeProtocol.Direction.Outbound).Allowed);
         // 三颗无必需项的事件：递上那颗值就通（这道门⛔ 顺手扩到它们＝第二份判据）
         foreach (var (name, key) in new[] { ("theme.set", "theme"), ("lang.set", "langCode"),
                                             ("feature.flags", "uiOptions") })

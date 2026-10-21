@@ -76,7 +76,10 @@ public static class BridgeProtocol
             ["theme.set"] = ["theme"],
             ["lang.set"] = ["langCode"],
             ["feature.flags"] = ["uiOptions"],
-            ["export.pick"] = ["kind", "skipInliningFonts"],
+            // 片64＝P-242 那两档交回用户：那两颗从此<b>住在这道门里</b>。⚠ 忘在这里登记＝宿主自己拼的信封被
+            // <see cref="Check"/> 判成 UnexpectedField，而 <c>PostOutbound</c> 那句 <c>if (!allowed) return;</c>
+            // <b>一声也不响</b>＝两颗导出按钮从此点了没反应（片56 那颗 <c>bridge.reply</c> 的死法是同一族的另一副脸）。
+            ["export.pick"] = ["kind", "skipInliningFonts", "exportScale", "exportBackground"],
             // 宿主递给页面的"载档那一拍已过"：无参（它报的是时刻，不是东西）。
             ["autosave.arm"] = [],
         };

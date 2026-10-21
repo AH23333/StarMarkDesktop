@@ -249,6 +249,23 @@ public sealed class BoardWindow : Window
     /// <para>记<b>键</b>而⛔ 记成品串：换语言那一拍要按它重贴（机制 (C)），而那颗路径是实参、⛔ 是句子。</para></summary>
     private string? _exportOutcomeKey;
 
+    /// <summary>那一发导出<b>用户挑的</b>缩放档（名单唯一的主人＝<see cref="BoardPolicy.ExportScales"/>）。
+    /// <para>为什么这里要有一颗自己的值：引擎那颗默认⛔ 是常数，它按
+    /// <c>cd.includes(devicePixelRatio)?devicePixelRatio:1</c> 算（随包档 offset 2166977／2168217 现读）
+    /// ＝同一块板在 100% 与 200% 两块屏上导两张不一样大的图，而屏幕上那句"已存到"从未说过它＝账本 P-242。
+    /// 今天这一档<b>由用户挑、每一发都递进去</b>，所以那台显示器的缩放⛔ 再替他的图定尺寸。</para></summary>
+    private int _exportScale = BoardPolicy.ExportScaleDefault;
+
+    /// <summary>那一发导出<b>用户挑的</b>那颗背景开关（默认与引擎自家 <c>exportBackground:!0</c> 对齐＝开着）。</summary>
+    private bool _exportBackground = BoardPolicy.ExportBackgroundDefault;
+
+    /// <summary><b>那一发问出去的</b>两档（开口那一刻记下，供屏幕上那句"已存到"念）。
+    /// <para>⛔ 直接念 <see cref="_exportScale"/>／<see cref="_exportBackground"/>：那句话讲的是<b>已经落在盘上的那张图</b>，
+    /// 而他会在那一发还跑着的时候改挑档——念手里那颗＝指着一张 1× 的图说它是 2×（片32 那族"上一问的脸活到下一问"的另一副脸）。
+    /// 写它只有一处＝<see cref="ExportImageButton"/> 开口之前，与那颗 <see cref="_exportGen"/> 同一拍。</para></summary>
+    private int _sentScale = BoardPolicy.ExportScaleDefault;
+    private bool _sentBackground = BoardPolicy.ExportBackgroundDefault;
+
     /// <summary>那一行正有一发导出在跑（与 <see cref="_copying"/>／<see cref="_retrying"/> 同一副规矩：
     /// 跑的那一发点得亮＝他会连按出两发，屏幕上两句话抢同一颗落点）。</summary>
     private bool _exporting;
@@ -266,6 +283,8 @@ public sealed class BoardWindow : Window
 
     private Button? _barPngButton;
     private Button? _barSvgButton;
+    private Button? _barScaleButton;
+    private Button? _barBackgroundButton;
     private Button? _barFolderButton;
     private TextBlock? _barStatus;
 
@@ -607,7 +626,8 @@ public sealed class BoardWindow : Window
             return;
         }
         StarMark.Abstractions.StarLog.Info("boards.export.saved kind=" + envelope.Kind
-            + " bytes=" + bytes.Length + " to=" + target + " id=" + _boardId);
+            + " bytes=" + bytes.Length + " scale=" + _sentScale + " background=" + _sentBackground
+            + " to=" + target + " id=" + _boardId);
         ReportExport("boards.exportSavedBody", target);
     }
 
@@ -792,21 +812,58 @@ public sealed class BoardWindow : Window
     /// </summary>
     private void PasteBar()
     {
-        if (_barStatus is null || _barPngButton is null || _barSvgButton is null || _barFolderButton is null) return;
+        if (_barStatus is null || _barPngButton is null || _barSvgButton is null
+            || _barScaleButton is null || _barBackgroundButton is null || _barFolderButton is null) return;
         var live = _bridgeReady && !_exporting;
         _barPngButton.Content = Word("boards.exportPngAction");
         _barSvgButton.Content = Word("boards.exportSvgAction");
         _barPngButton.IsEnabled = live;
         _barSvgButton.IsEnabled = live;
+        // 那两颗扳机⛔ 跟着 live 那一闩一起关：挑档是宿主自己的事，桥还没通也照样能先挑好；
+        // 把它们点不亮＝把"这一刻还没通"变成"这台程序没有这两颗旋钮"（片33 那颗可点状态的同一条口径）。
+        _barScaleButton.Content = Phrase("boards.exportScaleAction", ScaleToken(_exportScale));
+        _barBackgroundButton.Content = Phrase("boards.exportBackgroundAction", Word(BackgroundKey(_exportBackground)));
         _barFolderButton.Content = Word("boards.openFolderAction");
         _barFolderButton.IsEnabled = _exportPath is not null;
         _barStatus.Text = _exportOutcomeKey switch
         {
-            "boards.exportSavedBody" => Phrase("boards.exportSavedBody", _exportPath ?? string.Empty),
+            // 那句"已存到"从此<b>带上那一发真用的两档</b>（P-242：从前它只说路径，而那张图的尺寸由那台机器的缩放定）。
+            // 念的是 <see cref="_sentScale"/>／<see cref="_sentBackground"/>＝问出去那一刻记下的那两颗，⛔ 手里此刻那颗。
+            "boards.exportSavedBody" => Phrase("boards.exportSavedBody", _exportPath ?? string.Empty,
+                Phrase("boards.exportScaleAction", ScaleToken(_sentScale)),
+                Phrase("boards.exportBackgroundAction", Word(BackgroundKey(_sentBackground)))),
             "boards.exportFailedBody" => Word("boards.exportFailedBody"),
             "boards.openFolderFailedBody" => Phrase("boards.openFolderFailedBody", _exportPath ?? string.Empty),
             _ => string.Empty,
         };
+    }
+
+    /// <summary>那颗缩放念出来的样子（<c>2×</c>＝数字＋乘号，⛔ 跟着语言走，所以它是<b>数据</b>而⛔ 是一句表里的话）。
+    /// <para>与 <see cref="BoardPolicy.ExportScales"/> 同一颗主人：数字来自名单，这里只加那颗记号。</para></summary>
+    private static string ScaleToken(int scale) => scale + "×";
+
+    /// <summary>那颗开关此刻念哪颗键（<c>开</c>／<c>关</c> 是措辞⇒进表，⛔ 在这里写死汉字）。</summary>
+    private static string BackgroundKey(bool on) => on ? "boards.exportOn" : "boards.exportOff";
+
+    /// <summary>那一发导出<b>问出去之前</b>把两档记下：屏幕上那句话、那行日志、那颗回音都念这一份（见 <see cref="_sentScale"/>）。</summary>
+    private void RememberSentExportKnobs()
+    {
+        _sentScale = _exportScale;
+        _sentBackground = _exportBackground;
+    }
+
+    /// <summary>那颗缩放按钮的活：按名单<b>循环</b>一档（1×→2×→3×→1×）。循环那一步的判据住 Core（<see cref="BoardPolicy.NextExportScale"/>）。</summary>
+    private void CycleExportScale()
+    {
+        _exportScale = BoardPolicy.NextExportScale(_exportScale);
+        PasteBar();
+    }
+
+    /// <summary>那颗背景按钮的活：翻那颗开关（默认与引擎自家 <c>exportBackground:!0</c> 对齐＝开着）。</summary>
+    private void ToggleExportBackground()
+    {
+        _exportBackground = !_exportBackground;
+        PasteBar();
     }
 
     /// <summary>
@@ -824,14 +881,21 @@ public sealed class BoardWindow : Window
         if (!BridgeProtocol.IsKnownExportKind(kind)) return;      // ⛔ 在册的档位⛔ 发（⛔ 由这里替页面猜一档）
         _exporting = true;
         _exportGen++;
+        RememberSentExportKnobs();                                // 开口之前记：那一发用的两档从此⛔ 跟着他后来的挑法改口
         PasteBar();
         PostExportPick(kind);
         _ = WatchExportAnswerAsync(_exportGen);
     }
 
-    /// <summary>那颗 <c>export.pick</c> 信封的唯一发送处（四拍里那两拍索取板档、右上角那一行索取图＝同一颗形状，⛔ 两处各拼一遍）。</summary>
+    /// <summary>那颗 <c>export.pick</c> 信封的唯一发送处（四拍里那两拍索取板档、右上角那一行索取图＝同一颗形状，⛔ 两处各拼一遍）。
+    /// <para>片64 起这里同时递<b>那一发挑的两档</b>：缩放（在册名单 <see cref="BoardPolicy.ExportScales"/>）与那颗背景开关。
+    /// ⚠ 这两颗字段住在 <c>args</c> 而⛔ 需进向名册——那颗名字闸门只查 <c>cmd</c>，字段归<b>对面</b>那一路自己认
+    /// （片56 那颗 <c>bridge.reply</c> 同一条口径），而页面侧认不出的值一律回退到引擎自家那颗默认（见桥里 <c>runExport</c>）。</para></summary>
     private void PostExportPick(string kind)
-        => PostOutbound("export.pick", Envelope("export.pick", "h4", JsonString("kind") + ":" + JsonString(kind)));
+        => PostOutbound("export.pick", Envelope("export.pick", "h4",
+            JsonString("kind") + ":" + JsonString(kind) + ","
+            + JsonString("exportScale") + ":" + _exportScale + ","
+            + JsonString("exportBackground") + ":" + (_exportBackground ? "true" : "false")));
 
     /// <summary>导出产物那颗档的主干名（唯一主人：桥那一路与那一发下载共用）。
     /// <para>⛔ 跟着那块板的<b>显示名</b>走：名字在这里是身份（哪一块、什么时候），⛔ 措辞——
@@ -1029,9 +1093,30 @@ public sealed class BoardWindow : Window
         // ⚠ 它⛔ 住在那块面板里：面板只在有事要说时才在场，而"我刚点的那一下怎么样了"每一发都要有答案——
         // 而那块面板此刻可能正挂着"这一扇已停止保存"，一句好消息⛔ 有权把那句坏话顶掉（片39 真机量到的正是这一族）。
         // 三样颜色照旧各钉一遍（片28 那把"白字画在灰底上＝看不见"的尺：这一屏上现在多了三颗可点的控件）。
+        // 片64＝那两档交回用户（P-242 的落地腿）。⚠ 它们走的是那颗<b>已经量过的 Button</b>，而⛔ 下拉、⛔ 复选框：
+        // 这一行上每一颗可点的控件都由同一副"钉死三样颜色"的配方撑住（那颗尺同时钉 ThemeResource 计数为 0），
+        // 而下拉与复选框的字色由那颗主题模板给＝深色主题下把白字贴到这块白底上＝片27／28 那一族"看不见"的下游。
+        _barScaleButton = new Button
+        {
+            Content = Phrase("boards.exportScaleAction", ScaleToken(_exportScale)),
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
+        };
+        _barScaleButton.Click += (_, _) => CycleExportScale();
+        _barBackgroundButton = new Button
+        {
+            Content = Phrase("boards.exportBackgroundAction", Word(BackgroundKey(_exportBackground))),
+            Margin = new Thickness(6, 0, 0, 0),
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
+        };
+        _barBackgroundButton.Click += (_, _) => ToggleExportBackground();
         _barPngButton = new Button
         {
             Content = Word("boards.exportPngAction"),
+            Margin = new Thickness(6, 0, 0, 0),
             Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
             Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
             BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
@@ -1068,6 +1153,8 @@ public sealed class BoardWindow : Window
             Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
         };
         var barRow = new StackPanel { Orientation = Orientation.Horizontal };
+        barRow.Children.Add(_barScaleButton);
+        barRow.Children.Add(_barBackgroundButton);
         barRow.Children.Add(_barPngButton);
         barRow.Children.Add(_barSvgButton);
         barRow.Children.Add(_barFolderButton);
@@ -1200,9 +1287,11 @@ public sealed class BoardWindow : Window
     /// <summary>表里那一句按当前语言取词（一处限定名，⛔ 在每颗调用点重抄一遍全限定）。</summary>
     private static string Word(string key) => StarMark.Abstractions.I18n.Locale.T(key);
 
-    /// <summary>带一颗实参的那一句（那颗路径是<b>数据</b>，进槽而⛔ 拼成品句）。</summary>
-    private static string Phrase(string key, object? argument)
-        => StarMark.Abstractions.I18n.Locale.Fmt(key, argument);
+    /// <summary>带读数的句子（那颗路径与那两档念法是<b>数据</b>，进槽而⛔ 拼成品句）。
+    /// <para>形参收成 <c>params</c>：片64 那句"已存到"从此有三颗实参（路径＋缩放＋背景），
+    /// 而各语言那一行必须给同一组编号——那条口径由 <c>I18nContractTests</c> 逐行比对钉住。</para></summary>
+    private static string Phrase(string key, params object?[] arguments)
+        => StarMark.Abstractions.I18n.Locale.Fmt(key, arguments);
 
     /// <summary>换语言那一拍：那块面板与那一行<b>两处都要重贴</b>（片54 起这一扇上有两块会说汉语的表面；
     /// 只搬一处＝P-175 那一族"一颗重贴一颗冻着"的第三种脸，而那一行⛔ 在面板的名单里）。</summary>

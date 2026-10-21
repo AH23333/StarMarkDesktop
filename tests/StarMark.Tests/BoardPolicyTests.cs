@@ -534,4 +534,72 @@ public sealed class BoardPolicyTests
         Assert.Equal("StarMark 画板", BoardPolicy.ExportsDirectoryName);
         Assert.NotEqual(BoardPolicy.ExportsFolder(pictures, null), BoardPolicy.ExportsFolder(pictures, @"D:\sandbox\root"));
     }
+
+    // ────────── 片64：导出那两档的名单、默认与那颗循环（P-242 的落地腿） ──────────
+
+    /// <summary>
+    /// 那颗缩放名单逐颗点名＋四颗边界。它⛔ 由这里发明：就是随包引擎档里那颗 <c>cd=[1,2,3]</c>
+    /// （offset 2166977 现读，正本 <c>bin/WI98/readings_62_bundle_r2.txt</c>）。
+    /// <para>②那一臂钉的是"越界的一律不认"：引擎自己付得起 4 倍（<c>exportScale</c> 是颗自由数），
+    /// 但屏幕上那颗按钮只有三档可回音——认下递来的一颗野值＝那句话念一个用户挑不出来的数。
+    /// 桥那一头的同名单位一份 JS 字面量（页面读不到 C#），它由 <c>BoardWindowBridgeGateTests</c> 按<b>逐字</b>对账。</para>
+    /// </summary>
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(2, true)]
+    [InlineData(3, true)]
+    [InlineData(0, false)]
+    [InlineData(-1, false)]
+    [InlineData(4, false)]
+    [InlineData(200, false)]
+    public void OnlyThoseThreeExportScalesAreOnTheRoster(int scale, bool known)
+        => Assert.Equal(known, BoardPolicy.IsKnownExportScale(scale));
+
+    /// <summary>那颗名单自己的形状：三颗、严格递增、⛔ 重复，而那颗默认得<b>住在名单里</b>。
+    /// <para>递增与去重复归那颗循环按钮：名单里出现两颗同值＝按一次屏幕上的字变了而档位没变；
+    /// 默认那颗⛔ 在册＝第一行念着一颗点不出来的数（③那一臂与 ② 那一臂各打一种坏）。</para></summary>
+    [Fact]
+    public void TheExportScaleRosterIsOrderedDistinctAndCarriesItsOwnDefault()
+    {
+        Assert.Equal(new[] { 1, 2, 3 }, BoardPolicy.ExportScales);
+        for (var i = 1; i < BoardPolicy.ExportScales.Length; i++)
+            Assert.True(BoardPolicy.ExportScales[i] > BoardPolicy.ExportScales[i - 1], "名单没按顺序排：" + i);
+        Assert.Equal(3, BoardPolicy.ExportScales.Distinct().Count());
+        Assert.Contains(BoardPolicy.ExportScaleDefault, BoardPolicy.ExportScales);
+        Assert.True(BoardPolicy.IsKnownExportScale(BoardPolicy.ExportScaleDefault));
+    }
+
+    /// <summary>那颗循环：1×→2×→3×→<b>1×</b>（走完名单回首档），而<b>认不出的当前值也回首档</b>。
+    /// <para>⚠ 这一格量的是"那一按之后屏幕上是什么"，而⛔ 是"有没有报错"：把 <c>at + 1</c> 写成 <c>at</c>
+    /// 或把回绕那支删掉，屏幕上会出现一颗不在名单里的数、或那颗按钮按下去不再有任何变化（名册 349：
+    /// 新证人要测我要判的那一半）。认不出那一臂的期望⛔ 是"抛"——这里⛔ 取模、⛔ 猜，只回首档。</para></summary>
+    [Theory]
+    [InlineData(1, 2)]
+    [InlineData(2, 3)]
+    [InlineData(3, 1)]
+    [InlineData(0, 1)]
+    [InlineData(-7, 1)]
+    [InlineData(9, 1)]
+    public void TheScaleButtonCyclesThroughTheRosterAndFallsBackToItsHead(int current, int next)
+        => Assert.Equal(next, BoardPolicy.NextExportScale(current));
+
+    /// <summary>那颗循环走完一整圈回<b>原位</b>（三档按三下＝同一档）。
+    /// <para>这一臂不是把上一条再跑一遍：它钉的是"圈"闭合，而上一条只钉相邻两两之间。
+    /// 把回绕改成 <c>ExportScales.Length - 1</c>（停在末档）时逐对那三臂全绿，而这一臂红。</para></summary>
+    [Fact]
+    public void ThreeClicksOnTheScaleButtonComeBackToWhereTheyStarted()
+    {
+        var at = BoardPolicy.ExportScaleDefault;
+        for (var i = 0; i < BoardPolicy.ExportScales.Length; i++) at = BoardPolicy.NextExportScale(at);
+        Assert.Equal(BoardPolicy.ExportScaleDefault, at);
+    }
+
+    /// <summary>两档的默认各钉一颗：缩放＝<b>1×</b>（⛔ 沿引擎那颗"跟着那台机器的 DPR 走"，那正是 P-242 记下的形状），
+    /// 背景＝<b>开着</b>（与引擎自家 <c>exportBackground:!0</c> 对齐＝不改用户今天看到的成品）。</summary>
+    [Fact]
+    public void TheTwoExportDefaultsAreOneScaleAndBackgroundOn()
+    {
+        Assert.Equal(1, BoardPolicy.ExportScaleDefault);
+        Assert.True(BoardPolicy.ExportBackgroundDefault);
+    }
 }
