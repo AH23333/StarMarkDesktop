@@ -1099,7 +1099,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 
 > 这一腿新读的四把尺与正本＝<c>bin/WI83/spike4_83bw.py</c>→<c>spike4_probe_83bw.txt</c>（types 里那几颗签名的逐字）；<c>spike4b_83bx.py</c>→<c>spike4b_probe_83bx.txt</c>（props 那几颗钩＋导出／载入的形参）；<c>spike4c_83by.py</c>→<c>spike4c_probe_83by.txt</c>（<c>UnsubscribeCallback</c>＋那颗 api 类型体整颗＋运行时 25 颗键）；<c>spike4d_83bz.py</c>→<c>spike4d_probe_83bz.txt</c>（<c>emitter.d.ts</c> 整档＋包自己那份 <c>useEmitter</c> 的正件）。
 > 语料＝同一颗 <c>@excalidraw/excalidraw@0.18.0/dist</c>：<c>types/</c> 361 档 <b>1 139 905 字符</b>（字符⛔ 字节，名册 328 那一族），其中 <c>types/excalidraw/types.d.ts</c> 一颗 26 215 字符；<c>dev/index.js</c> 那颗运行时同片10 那颗。
-> ⚠ 这一腿<b>⛔ 起窗</b>：起窗第 0 道核对现读 <c>GetLastInputInfo</c> 闲置 <b>0.2 秒</b>（他在用电脑）⇒ §19.5 那两臂照旧挂「待跑」，本节所有「待量」都照实留着。
+> ⚠ 这一腿<b>⛔ 起窗</b>：起窗第 0 道核对现读 <c>GetLastInputInfo</c> 闲置 <b>0.2 秒</b>（他在用电脑）⇒ §19.5 那两臂照旧挂「待跑」，本节所有「待量」都照实留着。〔片66 就地更正：那句话在本节写成时是真的，今天第①臂已由片13 量到（§二十二.1），第②臂的<b>前提</b>由片60 判掉（见 §二十八.1）——「⛔ 跑」与「前提消失」是两件事，别把它们读成同一颗欠项。〕
 > v1 只做一件事：<b>把 §十二 每一颗名字换成包里读到的真名，并把「谁负责哪一格」写成一颗能直接开工的形状</b>。本节里出现的每颗形参与键名，在上面四份正本里都有逐字行；⛔ 一颗是我发明的。
 
 ### 21.0 形状：v0 那节的哪几颗被现读改掉了
@@ -1198,7 +1198,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 - <b>归他三颗（口径与观感）</b>：§九 决策 2 生命周期档位（材料＝960 ms 首帧＋关窗归零可复现）；决策 3 Xiaolai 随⛔ 随包（209 分片／12.08 MB，且「随包＋那颗全局」两颗一起，§19.6 已改口）；决策 4 TTD／mermaid（那颗 alias stub 臂省 <b>41.8%＝3 497 832 颗字节</b>，代价＝「mermaid→画板」还能不能用⛔ 判，§17.3／§17.7）。
 - <b>窗口面四颗（我跑，归我）</b>：§19.5 两臂；- <b>窗口面四颗（我跑，归我）</b>：<b>【片15 追记：四颗全部已跑完，读数在 §二十二 与 §二十三】</b>——其中 native FS 那颗的读数是<b>「门是开的」</b>（§二十二.6）⇒ 接管表要加一行「⛔ 管住网页自己那颗 picker」。原四颗：§19.5 两臂；<c>nativeFileSystemSupported</c> 在 WebView2 的分支（§20.6）；那颗 <c>skipInliningFonts</c> 的效果（§21.1 最后一行给它留的档）；菜单展开态那张照片（§18.5 那颗截图尺副作用）。
 - <b>⛔ 量的一颗（写清楚，别当成设计）</b>：内嵌 base64 之后「一颗板多大 ↔ 几张图」的曲线——本节只<b>定了方向</b>（内嵌），上限那颗数<b>欠着</b>，代码批第一刀补。上限那颗数<b>欠着</b>，代码批第一刀补。<b>【片15 改口】</b>曲线已在片13 量出（§二十二.3），欠的变成两颗：<b>容差</b>（允许多大，归他）与<b>「打到没随包的字」那一档的现场</b>（归我，要先定一张常用字表）。
-- <b>v1 状态＝待评审</b>。评审过之前，§八 的第 2～6 批一颗⛔ 开工；评审后<b>第一颗交付＝§21.6 那张随包／接线清单</b>（宿主 HTML 那一行全局＋那颗虚拟站＋三道出机），⛔ 是 UI。
+- <b>v1 状态＝待评审</b>〔片66 就地更正：这一行与本节 :1098 那句「已代裁开建」互相打脸，本档里那句旧话⛔ 删、只在这里改口：<b>v1 的状态＝已代裁开建，且片12～片65 已把它逐段落成代码</b>；今天看 v1 请以 §二十八 那份对账为准〕。评审过之前，§八 的第 2～6 批一颗⛔ 开工；评审后<b>第一颗交付＝§21.6 那张随包／接线清单</b>（宿主 HTML 那一行全局＋那颗虚拟站＋三道出机），⛔ 是 UI。
 
 ## 二十二、Spike-1b 第二腿（起窗现读 r6＋r7）：那颗 asset 开关一臂之差＝导出档自不自足、档体积↔图张数那条直线、中文在画布上认的是系统字面（批次 Phase C 片13，2026-10-17·一次性起窗＋只读取数，⛔ 产品码⛔ 建工程⛔ 改系统 PATH⛔ 装工具链⛔ 表⛔ 账本）
 
@@ -1517,4 +1517,67 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 【片59 追记·那颗上限的真机形状】两拍都量到<b>拒</b>：停笔那一拍 <c>too-big b64=11187060 decoded~=8390295 ceiling=8388608 kind=scene</c>（正本 <c>bin/WI98/readings_59_idle_234308.txt</c>）；关窗那一拍同一档 <c>scene.saved 行数=0</c> 而盘上那颗档停在 <c>890</c> 字节＝上一份没被盖（§21.7 那句「拒掉⛔ 等于清空」现在有了读数）。同一跑另量到两件事：① 停笔那一拍<b>不需要宿主请</b>（<c>asks=0</c> 而写照样落地）＝§22.4 那条「谁开的口」从此可由档内回读；② 痕里那颗 <c>landed=True</c> 在拒掉那一支仍报「落了地」——一句话两件事，另立 P-247。
 ⚠ 还有一条要写进 §22.3 的口径：片58 那四档梯子的<b>后两档</b>（8 MiB／25 MiB）今天由成品<b>复测为拒</b>，那一跑跑的是一颗<b>闸门还没生效的 Core</b>（沙盒对账当时只比 <c>StarMark.UI.dll</c>＝坑表 #841）。「长边」那一半照旧⛔ 读数：随包 bundle 里 <c>resizeImage</c>／<c>4194304</c>／<c>naturalWidth</c> 三处同名命中经逐处读上下文分别是提示句、React 优先级位、pica（导出缩放）——<b>命中⛔ 等于命中对的那处</b>（#842），P-246 继续开放。
 
-【片60 追记·插图那一路的<b>可达性</b>（§21.7／§25.4 的补半·⛔ 起窗）】随包 bundle（4878772 颗字节／sha <c>923fa221d0a4fc22</c>）现读：那颗 <c>,px=1440</c> 与 <c>,Vw=4*1024*1024</c> 各只一颗声明（offset 2166993／2167001），<b>唯一</b>读它的消费点在 <c>initializeImage</c> 体里（offset 4768057，次序＝<b>先 pica 压长边、再判字节</b>；压失败只 <c>console.error</c> 后拿原颗过判据；<c>svg</c> 整支⛔ 过这两道；同 id 已有 <c>dataURL</c> 时两道全跳）。而 <c>initializeImage(</c> 的调用全档<b>只有一颗</b>（offset 4769096）＝<c>insertImageElement</c>，它起手 <c>if(!this.isToolSupported("image"))</c>，判据逐字 <c>this.props.UIOptions.tools?.[E]!==!1</c>（offset 4734622）⇒ 我们桥里那颗 <c>tools: { image: false }</c>（<c>board-bridge.js:207</c>，§25.4 那臂 32→30 的量到它）<b>把整条插档路关掉</b>：粘贴（4718099）／拖放（4773570）／工具条那颗按钮三处入口一并挡住，屏幕上那句话是引擎自家的 <c>Images are disabled.</c>。<b>对整合方案的意义</b>：①「贴图进画板」⛔ 是"引擎不支持"，是<b>我们自己关掉了那颗工具</b>——将来要接（P-242 那一族）就同时接上 1440 长边与 4 MiB 每张这两道，而宿主那颗 8 MiB 管的是「一发整档」，两颗口径⛔ 是一回事；② 我们<b>载档那一路</b>（载入三步 → <c>addFiles</c> → <c>addMissingFiles</c>）⛔ 经这两道＝档里的图字节照原样进出（片13 那条直线量的正是这条路）；③ 那颗开关的第二把扳机＝<c>case "feature.flags"</c>（<c>board-bridge.js:152</c>）交的是<b>整颗 UIOptions 替换</b>而⛔ 合并，宿主今天 0 处发（名字住在 <c>BridgeProtocol.cs:44／:78</c>）——将来任何"递半张表"的写法都会顺手把 <c>tools.image</c> 翻回来，那颗字段必须每次带全。正本：<c>bin/WI98/readings_60_bundle_r2_001740.txt</c>／<c>readings_60b_bundle_002040.txt</c>／<c>readings_60c_bundle_002145.txt</c>；结案口径＝账本 ✅P-246。
+【片60 追记·插图那一路的<b>可达性</b>（§21.7／§25.4 的补半·⛔ 起窗）】随包 bundle（4878772 颗字节／sha <c>923fa221d0a4fc22</c>）现读：那颗 <c>,px=1440</c> 与 <c>,Vw=4*1024*1024</c> 各只一颗声明（offset 2166993／2167001），<b>唯一</b>读它的消费点在 <c>initializeImage</c> 体里（offset 4768057，次序＝<b>先 pica 压长边、再判字节</b>；压失败只 <c>console.error</c> 后拿原颗过判据；<c>svg</c> 整支⛔ 过这两道；同 id 已有 <c>dataURL</c> 时两道全跳）。而 <c>initializeImage(</c> 的调用全档<b>只有一颗</b>（offset 4769096）＝<c>insertImageElement</c>，它起手 <c>if(!this.isToolSupported("image"))</c>，判据逐字 <c>this.props.UIOptions.tools?.[E]!==!1</c>（offset 4734622）⇒ 我们桥里那颗 <c>tools: { image: false }</c>（<c>board-bridge.js:208</c>〔片66 现读：那颗开关从 207 挪到 208，因为片64 在 <c>baseProps</c> 里多写了两颗旋钮〕，§25.4 那臂 32→30 的量到它）<b>把整条插档路关掉</b>：粘贴（4718099）／拖放（4773570）／工具条那颗按钮三处入口一并挡住，屏幕上那句话是引擎自家的 <c>Images are disabled.</c>。<b>对整合方案的意义</b>：①「贴图进画板」⛔ 是"引擎不支持"，是<b>我们自己关掉了那颗工具</b>——将来要接（P-242 那一族）就同时接上 1440 长边与 4 MiB 每张这两道，而宿主那颗 8 MiB 管的是「一发整档」，两颗口径⛔ 是一回事；② 我们<b>载档那一路</b>（载入三步 → <c>addFiles</c> → <c>addMissingFiles</c>）⛔ 经这两道＝档里的图字节照原样进出（片13 那条直线量的正是这条路）；③ 那颗开关的第二把扳机＝<c>case "feature.flags"</c>（<c>board-bridge.js:152</c>）交的是<b>整颗 UIOptions 替换</b>而⛔ 合并，宿主今天 0 处发（名字住在 <c>BridgeProtocol.cs:44／:78</c>）——将来任何"递半张表"的写法都会顺手把 <c>tools.image</c> 翻回来，那颗字段必须每次带全。正本：<c>bin/WI98/readings_60_bundle_r2_001740.txt</c>／<c>readings_60b_bundle_002040.txt</c>／<c>readings_60c_bundle_002145.txt</c>；结案口径＝账本 ✅P-246。
+
+## 二十八、片66 对账腿（2026-10-21·⛔ 起窗⛔ 动一行业务码⛔ 动语言表⛔ 动随包资产）：§二十一 那份 v1 与<b>今天真跑着的那份代码</b>逐条对一遍
+
+> 这一腿⛔ 评价设计好坏，只做一件事——把「<b>v1 说要什么</b>」与「<b>盘上那份代码现在是什么</b>」并排写清楚，每颗结论给一个我能<b>现读</b>的行号（正本＝<c>bin/WI98/fix66_docs.py</c> 里那张 <c>CITE</c> 表，收口那颗只读尺 <c>bin/WI98/vdoc_66.py</c> 逐颗回读那一行确认真的含着那颗字）。
+> 三处<b>同档自相矛盾／行号漂移</b>已在原句就地补〔片66 就地更正〕，旧话⛔ 删（那是历史，删了下一位读者就查不到我什么时候说错过）：v1 状态那颗（:1098 说「已代裁开建」、:1201 还写「待评审」）、§19.5 那两臂那颗（:1102）、§二十七 末那颗 <c>board-bridge.js:207</c>。
+
+### 28.1 §19.5 那两臂今天各在哪一格里
+
+| 臂 | v1 挂的状态 | 今天 | 凭什么 |
+|---|---|---|---|
+| ①（<c>EXCALIDRAW_ASSET_PATH</c> 设／⛔ 设两跑） | ⛔ 跑 | <b>已跑</b> | 片13 那一腿就是这两臂（§二十二.1），读数在 §二十二；那颗全局今天写死在 <c>board.html</c> 里、在 bundle <b>之前</b>落 |
+| ②（拖一颗 4K 照片味 PNG 进去，量 1440 之后进不进 4 MB） | ⛔ 跑 | <b>前提消失</b> | 桥的 <c>baseProps</c> 交 <c>tools: { image: false }</c>（<c>board-bridge.js:208</c>），引擎那颗 <c>isToolSupported("image")</c> 一假⇒粘贴／拖放／工具条那颗按钮<b>三处入口一并挡住</b>（§二十七 末那颗真机读数是 <c>Images are disabled.</c>） |
+
+⚠ 「前提消失」与「⛔ 跑」⛔ 是同一颗欠项：前者要说清<b>是谁把它关着的、什么时候会被翻开</b>。那颗开关是<b>我们自己</b>交的，而 <c>feature.flags</c> 交的是<b>整颗 UIOptions 替换</b>（<c>board-bridge.js:152</c>）⇒宿主今天一颗也没发（0 处），将来谁「递半张表」就会顺手把 <c>tools.image</c> 翻回真——那一臂随之重新变成「⛔ 跑」。
+
+### 28.2 §21.1 那两张名单换成现状（进向 8／出向 6，字段各有一颗主人）
+
+- <b>进向</b>（<c>BridgeProtocol.cs:37</c> 那一行）八颗。v1 那张表写了六颗，后来加了两颗：<c>board.loaded</c>（片26 那颗带数的开闸回音）与 <c>bridge.reply</c>（片56 给「这一发发得出去吗」配的回音）。
+  今天<b>页面真发的</b>四颗：<c>bridge.reply</c>（<c>board-bridge.js:43</c>）／<c>export.bytes</c>（<c>:67</c>）／<c>board.loaded</c>（<c>:131</c>）／<c>bridge.ready</c>（<c>:263</c>）。
+  <c>open.external</c> 反过来：<b>宿主有 case（<c>BoardWindow.cs:495</c>）而页面一颗也没发</b>。剩下三颗（<c>paste.query</c>／<c>pin.request</c>／<c>background.request</c>）过了名字门、也⛔ 有主人，宿主只落一行痕 <c>boards.cmd.not-wired</c>（<c>:515</c>）＝v1 那句「⛔ 假 allow」今天兑现着。
+- <b>出向</b>（<c>BridgeProtocol.cs:44</c>）六颗。v1 那张表写了四颗，后来加了 <c>autosave.arm</c>（片24）与那颗回音的分流。<c>export.pick</c>（<c>:895</c>）／<c>theme.set</c>／<c>lang.set</c>／<c>board.load</c>／<c>autosave.arm</c>（<c>:971</c>）五颗真发；<b><c>feature.flags</c> 在册而宿主 0 处发</b>。
+- <b>字段</b>：<c>export.pick</c> 从 v1 那两颗变<b>四颗</b>（<c>kind</c>／<c>skipInliningFonts</c>／<c>exportScale</c>／<c>exportBackground</c>，<c>:82</c>＝片64 那两档交回用户）；v1 原本写在 <c>export.bytes</c> 里那颗「会话 id」由片23 摘掉（没人读）。
+
+⇒ 一句口径：<b>名字在册⛔ 等于这条路通</b>。协议那张名单今天比回路宽出一颗（四颗⛔ 发话人＋一颗⛔ 主人也⛔ 消费），那是<b>故意的</b>——先登记再接线，接线那颗批次⛔ 许自己往门里塞新名字（硬线②那道门读的就是这张表）。
+
+### 28.3 §21.1 那六条硬线逐条现状（落地 2／换形状 2／前提消失 2）
+
+| 硬线 | 今天 | 现读凭据 |
+|---|---|---|
+| ① 路径永远⛔ 进 <c>args</c> | <b>落地</b> | 名单里一颗路径键也没；名字一律过 <c>SanitizeExportName</c> 再拼，落点由宿主定 |
+| ② 命令名＋字段名两张白名单（多一颗键就拒） | <b>落地</b> | 进向那道在分发之前（<c>BoardWindow.cs</c> 的 <c>Check</c>→<c>switch</c>）；出向反过来也有一道，不过就<b>一颗字节也⛔ 发</b>（<c>PostWebMessageAsJson</c> 只 1 处，<c>:446</c>） |
+| ③ <c>cmd</c>↔<c>id</c> 配对表只活宿主一侧；超时＝报错、⛔ 静默重试第二次副作用 | <b>换形状</b> | 今天<b>没有</b> id→回调那张表：<c>BoardEnvelope.Id</c> 解出来而⛔ 读者。取而代之的是<b>单槽闩</b>（<c>_exporting</c>＋<c>_exportGen</c> 代次号）与那一发的预算 <c>ExportAnswerBudgetMs</c>（<c>WatchExportAnswerAsync</c>，<c>:784</c>）；到点只报错、确实⛔ 重发第二发 ⇒ 那句「⛔ 静默重试」兑现，那句「配对表」⛔ 存在 |
+| ④ ⛔ 拿桥当第二条数据通道 | <b>落地一半</b> | 字节走「一次一问」那一臂、且<b>解码之前</b>先问上限；「控制消息按亚毫秒算」那颗预算<b>只住在本档正文里</b>——代码⛔ 那颗常数也⛔ 那把尺 |
+| ⑤ <c>onPaste</c> 那颗钩⛔ 许抛、拒必须显式返 <c>false</c> | <b>前提消失</b> | 桥里⛔ 装 <c>onPaste</c>（0 处），paste 走引擎默认；那颗「宿主自己 catch 成 deny」今天⛔ 需要也⛔ 存在（要等 <c>paste.query</c> 接线那一批，与 §28.2 那三颗一起裁） |
+| ⑥ 五颗订阅的退订句柄存进会话表，<c>Closed</c> 里逐颗调 | <b>前提消失</b> | 页面<b>⛔ 走 <c>api</c> 订阅</b>：唯一那颗 <c>onChange</c> 是 React 的 <b>prop</b>（<c>board-bridge.js:179</c>），没句柄可存。宿主侧只摘<b>自己</b>那三颗事件＋那颗语言事件，再 <c>_web.Close()</c>（<c>:1680</c>）⇒ §21.6 那格「摘完之后⛔ 再收到桥消息」今天<b>⛔ 对手</b>（⛔ 是「过了」，是「没东西可摘」） |
+
+### 28.4 §21.6 那张点验单八格现状（照实标 ⛔ 量／前提消失，⛔ 混进「已通过」）
+
+- <b>导出四路</b>：今天<b>三路</b>——png／svg 两颗按钮 + <c>scene</c>（四拍里那一路）；<b>「复制为图」⛔ 接</b>（<c>exportToClipboard</c> 只在 <c>tools/boards/entry.js</c> 里被 re-export，0 处调用）。
+- <b>桥越权</b>：路径那格、命令名那格<b>有证人</b>；v1 新加的那格「伪造 <c>paste.query</c> 的 data 形状」今天只对着一颗⛔ 消费的判定函数红（§28.3 ⑤）；<b>iframe／embeddable url 那格⛔ 证人</b>——见 §28.5。
+- <b>旧 embeddable 场景打开⛔ 加载远程</b>：<b>⛔ 落地</b>。<c>validateEmbeddable</c> 在桥的 props 里 0 处（v1 §21.0 第 7 行那句「那颗 prop 交 <c>false</c>」今天没写）。
+- <b>场景回环→undo 栈清空</b>：<c>captureUpdate: NEVER</c> 落地（载档那一路）；<c>history.clear</c> <b>⛔ 调用点</b>——「栈干净」今天由「一板一窗、每扇新页」间接兑现，⛔ 是那颗旋钮动过。
+- <b>关窗 60 秒进程树=0／userData 落点</b>：落点那颗钉子落地并有证人；<b>60 秒那格在产品窗上⛔ 量过</b>（v1 自己写了「⛔ 拿片8 那跑顶替」，这句照旧算欠项）；§21.5 那句「兜底＝按自己 pid 的子树清 <c>msedgewebview2</c>」<b>⛔ 落</b>（那一族档里 0 处）。
+- <b>F1／全局键共存</b>：<b>⛔ 有码证、⛔ 读数</b>（画板那一路压根碰⛔ 着键盘；全局键住在主窗那颗 <c>RegisterHotKey</c>）。这一格与 §28.5 那颗一起排真机腿。
+- <b>多板窗同文件</b>：片32 量过两扇同开那一臂（✅P-230 那一节），冲突表行为＝聚焦已有那扇，v0 那句没改。
+- <b>TTD／AI／Publish 那颗按钮在包内不存在或摘除</b>：随包资产冻结批（片18）＋接管表（§25）已经把菜单交给宿主自排，引擎那颗 <c>registerAction</c> 我们⛔ 用——这一格算<b>间接兑现</b>，屏幕上那颗「不存在」⛔ 单独拍过。
+
+### 28.5 本腿新撞的一颗（⛔ 混进上面那些「⛔ 落地」）：<b>出机三道今天只落了一道</b>
+
+v1 §21.5 写「出机三道：宿主注入 CSP；<c>WebResourceRequested</c>；<c>esm.sh</c> 永久 451 当最后一道」。现读：
+
+- <b>第一道 ⛔</b>：<c>board.html</c> 整档 21 行，<b>CSP／<c>sandbox</c> 0 处</b>（一句 <c>window.EXCALIDRAW_ASSET_PATH = "/"</c> 加两颗 <c><script></c>）。
+- <b>第二道 ⛔</b>：画板那一路的档里 <c>WebResourceRequested</c>／<c>NewWindowRequested</c> <b>0 处</b>；唯一那颗出站约束是<b>名字</b>给 <c>open.external</c> 的那颗 http(s) 白名单（而它今天⛔ 发话人）。
+- <b>第三道 在</b>：随包资产走那颗虚拟站映射（<c>SetVirtualHostNameToFolderMapping</c>，<c>BoardWindow.cs:412</c>），字体／locales 因此⛔ 打外网（§二十二.1 量的正是这一颗）。
+- 引擎那颗官方闸门 <c>validateEmbeddable</c> 也<b>⛔ 交</b>（§28.4）。
+
+<b>可达性我这一腿判⛔ 了</b>：这一批⛔ 起窗，而「载一颗带 <c>embeddable</c> 元素的样档，看它请⛔ 请远程 URL」必须由那颗真机臂量。⛔ 拿「闸门没装」冒充「已经被人穿过」，也⛔ 拿「今天没人走得到」冒充「⛔ 需要装」——本仓唯一挡着远程那一路的，今天只有<b>那颗 <c>tools.image</c> 开关管⛔ 着 embeddable</b>（两颗⛔ 是同一颗旋钮）。⇒ 登记 <b>P-248（开放）</b>，处置＝官方那颗 prop 交 <c>false</c> ＋ 宿主订 <c>WebResourceRequested</c>／<c>NewWindowRequested</c> 白名单（两道一起做才算结），结案入口＝那一跑真载一颗样档并读那颗网络计数。
+
+### 28.6 这一腿欠的（⛔ 混进已读）
+
+- §28.4 那三格「⛔ 量」（关窗 60 秒・F1 共存・那颗「屏幕上⛔ 存在」的逐颗照片）照旧欠，全部要那颗窗，与 P-242／P-247 排同一条真机腿。
+- <c>feature.flags</c> 与「整颗替换 vs 合并」那颗形状，本腿只在源码里判到「宿主 0 处发」；<b>谁会发、发半张表会怎样</b>还没量。
+- 本批账本加减＝<b>新立 1（P-248）／结案 0</b>；计数器与真开放那颗数由只读尺 <c>bin/WI98/vdoc_66.py</c> 现取（⛔ 从上一批抄）。
