@@ -1558,7 +1558,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 
 - <b>导出四路</b>：今天<b>三路</b>——png／svg 两颗按钮 + <c>scene</c>（四拍里那一路）；<b>「复制为图」⛔ 接</b>（<c>exportToClipboard</c> 只在 <c>tools/boards/entry.js</c> 里被 re-export，0 处调用）。
 - <b>桥越权</b>：路径那格、命令名那格<b>有证人</b>；v1 新加的那格「伪造 <c>paste.query</c> 的 data 形状」今天只对着一颗⛔ 消费的判定函数红（§28.3 ⑤）；<b>iframe／embeddable url 那格⛔ 证人</b>——见 §28.5。
-- <b>旧 embeddable 场景打开⛔ 加载远程</b>：<b>⛔ 落地</b>。<c>validateEmbeddable</c> 在桥的 props 里 0 处（v1 §21.0 第 7 行那句「那颗 prop 交 <c>false</c>」今天没写）。
+- <b>旧 embeddable 场景打开⛔ 加载远程</b>：<b>⛔ 落地</b>〔片67 就地更正：这一格已落<b>能机检的那半</b>，屏幕上那句 <c>toast.unableToEmbed</c> 照旧欠拍＝§二十九.7〕。<c>validateEmbeddable</c> 在桥的 props 里 0 处（v1 §21.0 第 7 行那句「那颗 prop 交 <c>false</c>」今天没写）。
 - <b>场景回环→undo 栈清空</b>：<c>captureUpdate: NEVER</c> 落地（载档那一路）；<c>history.clear</c> <b>⛔ 调用点</b>——「栈干净」今天由「一板一窗、每扇新页」间接兑现，⛔ 是那颗旋钮动过。
 - <b>关窗 60 秒进程树=0／userData 落点</b>：落点那颗钉子落地并有证人；<b>60 秒那格在产品窗上⛔ 量过</b>（v1 自己写了「⛔ 拿片8 那跑顶替」，这句照旧算欠项）；§21.5 那句「兜底＝按自己 pid 的子树清 <c>msedgewebview2</c>」<b>⛔ 落</b>（那一族档里 0 处）。
 - <b>F1／全局键共存</b>：<b>⛔ 有码证、⛔ 读数</b>（画板那一路压根碰⛔ 着键盘；全局键住在主窗那颗 <c>RegisterHotKey</c>）。这一格与 §28.5 那颗一起排真机腿。
@@ -1570,9 +1570,9 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 v1 §21.5 写「出机三道：宿主注入 CSP；<c>WebResourceRequested</c>；<c>esm.sh</c> 永久 451 当最后一道」。现读：
 
 - <b>第一道 ⛔</b>：<c>board.html</c> 整档 21 行，<b>CSP／<c>sandbox</c> 0 处</b>（一句 <c>window.EXCALIDRAW_ASSET_PATH = "/"</c> 加两颗 <c><script></c>）。
-- <b>第二道 ⛔</b>：画板那一路的档里 <c>WebResourceRequested</c>／<c>NewWindowRequested</c> <b>0 处</b>；唯一那颗出站约束是<b>名字</b>给 <c>open.external</c> 的那颗 http(s) 白名单（而它今天⛔ 发话人）。
+- <b>第二道 ⛔</b>：画板那一路的档里 <c>WebResourceRequested</c>／<c>NewWindowRequested</c> <b>0 处</b>；〔片67 就地更正：<c>WebResourceRequested</c> 已订上，但那是颗<b>只数⛔ 挡</b>的观察者（§二十九.4），<c>NewWindowRequested</c> 照旧 0 处⇒这一道仍算⛔ 落〕；唯一那颗出站约束是<b>名字</b>给 <c>open.external</c> 的那颗 http(s) 白名单（而它今天⛔ 发话人）。
 - <b>第三道 在</b>：随包资产走那颗虚拟站映射（<c>SetVirtualHostNameToFolderMapping</c>，<c>BoardWindow.cs:412</c>），字体／locales 因此⛔ 打外网（§二十二.1 量的正是这一颗）。
-- 引擎那颗官方闸门 <c>validateEmbeddable</c> 也<b>⛔ 交</b>（§28.4）。
+- 引擎那颗官方闸门 <c>validateEmbeddable</c> 也<b>⛔ 交</b>（§28.4）。〔片67 就地更正：今天交了 <c>false</c>，且钉的是它住在 <c>baseProps()</c> 的<b>顶层</b>那一层（§二十九.2）；本行写成时是真的，留着当反面教材——那句「⛔ 交」正是那一腿现读出来的〕。
 
 <b>可达性我这一腿判⛔ 了</b>：这一批⛔ 起窗，而「载一颗带 <c>embeddable</c> 元素的样档，看它请⛔ 请远程 URL」必须由那颗真机臂量。⛔ 拿「闸门没装」冒充「已经被人穿过」，也⛔ 拿「今天没人走得到」冒充「⛔ 需要装」——本仓唯一挡着远程那一路的，今天只有<b>那颗 <c>tools.image</c> 开关管⛔ 着 embeddable</b>（两颗⛔ 是同一颗旋钮）。⇒ 登记 <b>P-248（开放）</b>，处置＝官方那颗 prop 交 <c>false</c> ＋ 宿主订 <c>WebResourceRequested</c>／<c>NewWindowRequested</c> 白名单（两道一起做才算结），结案入口＝那一跑真载一颗样档并读那颗网络计数。
 
@@ -1581,3 +1581,86 @@ v1 §21.5 写「出机三道：宿主注入 CSP；<c>WebResourceRequested</c>；
 - §28.4 那三格「⛔ 量」（关窗 60 秒・F1 共存・那颗「屏幕上⛔ 存在」的逐颗照片）照旧欠，全部要那颗窗，与 P-242／P-247 排同一条真机腿。
 - <c>feature.flags</c> 与「整颗替换 vs 合并」那颗形状，本腿只在源码里判到「宿主 0 处发」；<b>谁会发、发半张表会怎样</b>还没量。
 - 本批账本加减＝<b>新立 1（P-248）／结案 0</b>；计数器与真开放那颗数由只读尺 <c>bin/WI98/vdoc_66.py</c> 现取（⛔ 从上一批抄）。
+
+## 二十九、片67 落地腿（2026-10-21·改码批·⛔ 起窗）：P-248 那两道里<b>今天能机检的那半</b>落了，读数那半照旧欠着
+
+> 这一批⛔ 评价「该不该挡」，只做一件能做的事：把<b>不需要读数就成立</b>的那两处装上（引擎自家那颗 prop・宿主那颗分类判据），
+> 再装上<b>会产出读数的那把尺</b>（一颗只数不挡的出站观察者）。挡住那一步<b>故意留在下一批</b>——理由写在 §29.4。
+
+### 29.1 三处各改了哪一行（位置由脚本现取，尺 <c>vdoc_67.py</c> 再复算一遍）
+
+| 层 | 今天多出来的东西 | 现读位置 | 为什么放这一层 |
+|---|---|---|---|
+| 页面（随包桥） | <c>validateEmbeddable: false</c> 作为 <c>baseProps()</c> 的<b>顶层 prop</b> | <c>tools/boards/board-bridge.js:216</c>（随包那份 <c>assets/boards/board-bridge.js:216</c>，两颗由片21 那颗漂移证人钉成同一份字节） | 判不过时引擎自己走 <c>toast.unableToEmbed</c>，档里那颗远程 iframe ⛔ 被渲染（v1 §21.0 第 7 行早就这么写） |
+| Core（判据） | 一颗方案常数＋<b>三档</b>分类：随包／压根⛔ 出机／别处 | <c>src/StarMark.Core/Boards/BoardsAssetPolicy.cs:46</c>・<c>src/StarMark.Core/Boards/BoardsAssetPolicy.cs:59</c>・<c>src/StarMark.Core/Boards/BoardsAssetPolicy.cs:69</c>・<c>src/StarMark.Core/Boards/BoardsAssetPolicy.cs:72</c>・<c>src/StarMark.Core/Boards/BoardsAssetPolicy.cs:77</c> | 「这一发算哪一档」是<b>判据</b>，宿主只照它分类；名字（那颗虚拟站）⛔ 进 Core＝第二份主人（证人第五格扫全档） |
+| 宿主（订阅） | <c>AddWebResourceRequestedFilter("*", All)</c> ＋那颗观察者，排在 <c>Navigate</c> <b>之前</b> | <c>src/StarMark.UI/Boards/BoardWindow.cs:425</c>・<c>src/StarMark.UI/Boards/BoardWindow.cs:427</c>・<c>src/StarMark.UI/Boards/BoardWindow.cs:453</c>（那颗起页在 <c>src/StarMark.UI/Boards/BoardWindow.cs:431</c>） | 先订再看：晚一行的那一发出机根本进不了尺，而那份名册正是下一批翻 deny 的唯一依据 |
+
+那颗痕今天长这样（一颗<b>新</b>目标只念一行，三颗计数各有一条出口）：<c>boards.net.foreign n=・target=&lt;方案+主机&gt;・local=・inline=・id=</c>（<c>src/StarMark.UI/Boards/BoardWindow.cs:471</c>）。
+
+### 29.2 那颗引擎 prop：钉的是<b>层</b>，⛔ 是「串在不在」
+
+包里的消费点两处（片66 现读，本批重跑照旧）：<c>this.props.validateEmbeddable</c> 与 <c>$s(D, i.validateEmbeddable)</c>，
+判不过走 <c>toast.unableToEmbed</c>。它交的是 boolean 那一档（包里逐字五档：boolean／字符串数组／RegExp／RegExp 数组／函数），
+交 <c>false</c>＝全拒。
+
+证人因此⛔ 只问「档里有没有那颗串」，而是<b>数花括号层数</b>：那颗 prop 必须与 <c>excalidrawAPI</c>／<c>onChange</c>
+同层（第 1 层），而 <c>UIOptions</c> 里那些在第 2 层往下。台架两臂各打红一颗（正本 <c>bin/WI98/bench67_console_r1.txt</c>）：
+A1 把值翻成 <c>true</c> ⇒ 只红「值那一格」；A2 在 <c>UIOptions</c> 里多塞一颗<b>同名而嵌在里层</b>的 prop（顶层那颗与那句 <c>: false</c> 照旧在场）
+⇒ 只红「层那一格」而「值那一格」照旧绿。<b>少了 A2 这一臂，「层」那一格只是我数出来的一句自证。</b>
+
+⚠ 这颗开关<b>管的是</b>那颗 prop 认不认远程 iframe，⛔ 等于「宿主⛔ 需要第二道」——v1 那句「兜底永远排在名单最后」照旧成立（§29.5）。
+
+### 29.3 三档⛔ 够，第四档才是这一批的坏
+
+最初那版只分「随包／别处」两档，一跑就把 <c>data:</c> 记进了「别处」。这一族的后果不是多一行痕，而是<b>下一批照那份名册翻 deny 时画布白屏</b>：
+片21 定的存储口径＝<b>内嵌 base64</b>，画布上那些图今天全都是 <c>data:image/…</c>（§28.1 那颗 <c>tools.image</c> 关的是「用户往里拖图」那颗入口，
+⛔ 是「档里那些图怎么表示」）。所以那张名单是<b>三档</b>（<c>src/StarMark.Core/Boards/BoardsAssetPolicy.cs:69</c>），且配一颗<b>禁项格</b>：<c>InlineUriSchemes</c> 里⛔ 许出现
+<c>https</c>／<c>http</c>／<c>ws</c>／<c>wss</c>（台架 A6 就往那里塞一颗 <c>https</c>，那一格响）。
+
+同族第二颗：⛔ 一颗计数只加不念。<c>local</c> 那一颗在最初的写法里进不了那句痕＝死出口（片23 摘 <c>sessionId</c> 那一族换了个身体）；
+今天三颗一起念，因为「名册里一颗也没有」有两种脸（这页真⛔ 外呼・这把尺压根没开火），只看 <c>n=</c> 分不开（台架 A10 删掉那颗槽，证人响）。
+同族第三颗：那颗虚拟站的<b>名字</b>今天仍只有一位主人（<c>src/StarMark.UI/Boards/BoardWindow.cs:108</c>）——Core 那颗判据收实参、证人在全仓 <c>src</c> 里扫那颗串，
+多一处写死的名字＝换名字那一批只改一处而另一处静默失真（台架 A11 就是往宿主里塞一份 <c>uri.Host ==</c>）。
+
+### 29.4 为什么这一批<b>只量</b>⛔ 挡（安全＞稳定＞性能 这一次怎么落地）
+
+「挡」看着更安全，但它要一颗<b>白名单</b>，而白名单的每一项都要有读数。本批⛔ 起窗（桌面被他的窗占住，见 §29.7），
+所以随包那棵树到底靠不靠一颗外站，今天<b>⛔ 知道</b>。拿一颗写死的名单去挡一条没读数的路＝把「画布白屏」的风险换成一句安心话，
+而这一族坏在本仓有个名字：名册 347／349「解析器恰好拒⛔ 当地基」。⇒ 这一批交出的只有<b>会读数的那把尺</b>＋<b>判据</b>；
+<c>e.Handled</c>／<c>e.Response</c> 一颗也⛔ 有，证人第七格钉的就是这件事（台架 A9 塞一手 <c>Handled = true</c>，那一格响）。
+
+⚠ 这<b>⛔ 是</b>把 P-248 那条处置里否掉的 (C)「先量可达性再决定」翻回来。那颗量的是「<b>档里那颗远程 iframe 真请得到吗</b>」，
+要造一颗风险样档摆到屏幕上⇒照旧⛔ 取，且它仍是本条的<b>结案入口</b>；本批量的是另一颗问题——「<b>我们自家那页合法依赖谁</b>」，
+纯观察、⛔ 需要任何样档。⇒ 被拆开的只有 (B) 那一刀：「先订上并读数」与「再照名单翻 deny」两拍；名单到手前，
+那道闸门的<b>形状</b>（三档分类＋唯一主人＋三颗计数各有出口）今天已经全部到位并可证。
+
+### 29.5 P-248 还剩什么（<b>照旧开放</b>，结案入口没挪）
+
+- <b>第一道</b>：<c>board.html</c> 今天 21 行，<c>CSP</c>／<c>sandbox</c> 现读 <b>0 处</b>⇒仍⛔ 注入。
+  ⚠ 这一颗照旧欠着而<b>⛔ 单独补</b>：CSP 写歪（少一颗 <c>worker-src</c>／<c>blob:</c>）会把那颗 wasm 与那些 <c>data:</c> 图一起没，
+  而「写歪了」这件事<b>只有起窗量得到</b>⇒它与 (B) 那一翻该排同一条腿（名单到手 ⇒ CSP 与 deny 一起改 ⇒ 同一条腿验「挡对了什么・没挡错什么」）。
+- <b>第二道</b>：那颗观察者<b>在场而⛔ 挡</b>（§29.4）；<c>NewWindowRequested</c> 照旧 0 处（弹窗那一族今天只有「宿主只开白名单里的 http(s)」那半在守）。
+- <b>读数</b>：<c>boards.net.foreign</c> 一颗也⛔ 取过——那一跑要那颗窗。
+- <b>可达性</b>：档里带 <c>embeddable</c> 的样档到底请⛔ 请远程 URL，仍欠（与 P-242／P-247 排同一条真机腿）。
+⇒ 本批账本加减＝<b>新立 0／结案 0</b>；P-248 的处置从「两道一起做」推进到「两道各落了能机检的那半」，计数器三串由成品现读（见那颗只读尺）。
+
+### 29.6 读数表（每颗数带正本，⛔ 由我这句话担保）
+
+| 那颗数 | 现读 | 正本 |
+|---|---|---|
+| 那颗桥的字节 | 15493 → <b>16338</b> 颗字节（清单 sha <c>c37e39b12148…</c>） | <c>bin/WI98/stage67_r1.txt</c>＋<c>git show HEAD:assets/boards/manifest.json</c> |
+| 那两份 JS 的语法 | <c>node --check</c> 源件 rc=<b>0</b>・随包件 rc=<b>0</b> | <c>bin/WI98/nodecheck67_r1.txt</c> |
+| 那颗 bundle | <b>4878772</b> 颗字节（本批⛔ 重打包＝与 HEAD 那颗逐颗相等） | 同上 |
+| 随包整棵树 | 140 颗／11.29 MB | <c>bin/WI98/stage67_r1.txt</c> |
+| 编译 | <b>0 警告／0 错误</b> | <c>bin/WI98/build67_r1.txt</c> |
+| 那颗新证人定向 | <b>9</b> 颗通过（9 格：LocalAssetUriAcceptsOurVirtualHostInAnyCaseAndAnyPath／LocalAssetUriRefusesOtherHostsOtherSchemesAndLookAlikes／InlineSchemesAreTheirOwnClassNeitherLocalNorForeign／TraceTargetCarriesSchemeAndHostOnlyNeverAPath／TheVirtualHostNameHasExactlyOneOwnerInTheProduct／HostSubscribesTheObserverBeforeItNavigates／ObserverCountsThreeClassesAndBlocksNothing／BridgeTurnsOffTheEngineEmbeddableValidator／ThatValidatorSitsAtTheTopLevelOfBaseProps） | <c>bin/WI98/test67_target_r2.txt</c> |
+| 反向台架 | <b>11 臂｜BAD=0／0</b>（M0 改前 912 颗绿） | <c>bin/WI98/bench67_console_r1.txt</c>・<c>bench67_console_r2.txt</c> |
+| 全量 | <b>6430／6430（失败 0）</b>，耗时 14 m 17 s | <c>bin/WI98/test67_full_r1.txt</c> |
+
+### 29.7 这一腿欠的（⛔ 混进已读）
+
+- <b>那颗观察者的一次真读数</b>：开着画板走一遍（含打开一张带 <c>data:</c> 图的旧板），把 <c>local=</c>／<c>inline=</c>／<c>target=</c> 三列取到手——
+  那是下一批翻 deny 的唯一入口，也是 P-248 的后半。今天桌面被占，⛔ 绕、⛔ 抢（名册 521 那一族），记欠项。
+- <b>弹窗那一族</b>（<c>NewWindowRequested</c>）本批没碰：它该与 CSP 同一批装，因为两颗都⛔ 起窗判不了「挡错了什么」。
+- 那颗 <c>validateEmbeddable</c> 的<b>屏幕脸</b>（打开一张带远程 iframe 的样档，看引擎那句 <c>toast.unableToEmbed</c> 上不上屏）⛔ 拍——
+  源码与包内消费点已判到，屏幕上那句照旧欠。
