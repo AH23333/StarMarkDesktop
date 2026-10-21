@@ -7,7 +7,7 @@ namespace StarMark.Abstractions;
 /// 给人看的<b>数字</b>读数，<b>全应用唯一出处</b>（批次 RZ，P-122 的另一半 / 与 <see cref="DateTimeText"/> 平级）。
 /// <para>
 /// RY 收了日期那半，这条收数字那半，而<b>前提不是照搬 RY 的结论</b>：本批先拿七种文化实测了一遍
-/// （<c>NumberTextTests.ImplicitNumericFormatting_…</c>），结果是——
+/// （<c>NumberTextTests.WhichShapesActuallyMove</c>），结果是——
 /// <b>只有会出现"小数点 / 千分位 / 百分号"的格式才会变</b>：
 /// <code>de-DE</code> 把 1234.5 打成 <c>1234,5</c>、把 1234567 打成 <c>1.234.567</c>（点当分组）、把 15% 打成 <c>15 %</c>；
 /// <code>ar-SA</code>/<code>ar-EG</code> 用 <c>٫</c> 与 <c>٬</c> 还把百分号换成 <c>٪</c>；

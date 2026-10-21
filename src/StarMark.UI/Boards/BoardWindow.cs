@@ -656,7 +656,7 @@ public sealed class BoardWindow : Window
     /// <summary>
     /// 那一发交回的字节<b>过上限</b>：⛔ 解它，也⛔ 让它静默（片58＝P-241 的②件）。
     /// <para><b>两种档位各说各的<b>已有</b>那句话</b>（本批⛔ 添一颗键：那两句都住在画板那一族的名册里，
-    /// 由 <c>BoardWordGateTests.TheBoardFamilyHasExactlyTwentyThreeRowsAndTheyAreNamed</c> 逐颗点名钉住）：
+    /// 由 <c>BoardWordGateTests.TheBoardFamilyHasExactlyTwentySevenRowsAndTheyAreNamed</c> 逐颗点名钉住）：
     /// scene＝这一扇的自动保存对这一发起停了＝片27 那句「这一扇已停止保存」＋那颗「另存一份到别处」；
     /// png／svg＝那一发导出没成＝片54 那句「没能存成，原因在日志里」。⚠ 两句都是<b>真话</b>：
     /// 前者确实停了（这块板超限期间不再自动落盘），后者确实没落盘。</para>
