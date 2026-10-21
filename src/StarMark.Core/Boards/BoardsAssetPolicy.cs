@@ -42,25 +42,46 @@ public static class BoardsAssetPolicy
     public const string XiaolaiFamilyName = "Xiaolai";
 
     /// <summary>随包资产那颗虚拟站的方案名（宿主把整棵树钉在 <c>https://&lt;虚拟站&gt;/…</c>；
-    /// 名字的主人是 <c>BoardWindow.VirtualHostName</c>，本类只认方案）。账本 P-248 用得到它。</summary>
+    /// 名字的主人是 <c>BoardWindow.VirtualHostName</c>，本类只认方案）。账本 P-248 用得到它。
+    /// ⚠ 片69 起这颗常量<b>⛔ 再参与判据</b>（<see cref="IsLocalAssetUri"/> 只比站名）——留着是因为它是
+    /// 「宿主开场那一发该钉哪个方案」的那句话的主人（<c>BoardWindow.OpenAsync</c> 拼 URL 用的就是它），
+    /// ⛔ 因为它在分类那一面没了消费者就把「该用哪个方案」这句一并删掉。</summary>
     public const string AssetUriScheme = "https";
 
     /// <summary>
-    /// 「这一发外呼是不是只读我们随包的那一份」（账本 <b>P-248</b>：v1 §21.5 那道「宿主订出站事件」的判据主人）。
+    /// 「这一发压根⛔ 走出这台机器」（账本 <b>P-248</b> 后半那颗判据的主人；片69 现读改口）。
     /// <para>
-    /// 判的只有<b>方案＋主机名</b>两颗：随包资产全部走那颗虚拟站映射，所以一颗<b>真</b>的本地请求长这样
+    /// 判的只有<b>站名</b>一颗：随包资产全部走那颗虚拟站映射，所以一颗<b>真</b>的本地请求长这样
     /// <c>https://appassets.local/fonts/…</c>；任何<b>别的</b>主机（<c>esm.sh</c>、<c>fonts.gstatic.com</c>、
     /// 一颗档里带的远程 iframe）都是<b>假</b>。⛔ 看路径——路径归随包清单管（<c>ManifestFileName</c> 那一族），
     /// 在这里比一次＝第二个主人。
+    /// </para>
+    /// <para>
+    /// <b>⛔ 再比方案（片68 之前它比，那是一颗没量过的假设）</b>：隐藏宿主那一跑量到那颗映射是按<b>站名</b>劫持的——
+    /// 我把 <c>http://127.0.0.1:8099/ctl.html</c>（<b>真 http、带端口</b>）递给宿主，页面读回的是
+    /// <c>--www</c> 目录里那一棵档（正本 <c>roster69_ctl3</c> 的 <c>dom</c> 行 <c>SPIKE69-FOLDER</c>＋那颗
+    /// 内容差＝由档名分家，⛔ 靠"服务器没记"那种负证据），而那颗真服务器一颗请求也没记。
+    /// ⇒ 认方案会把一颗<b>由本地供的</b>那一发判进外呼那一档；把它翻成 deny 就＝宿主自己把画布挡白。
     /// </para>
     /// <para>⚠ 那颗虚拟站的名字由调用方递进来（UI 那颗常量是它唯一的主人），⛔ 在这里抄一份：抄了就出现两颗名字，
     /// 换名字那一批只改一处而这里静默失真（与「名字比射程大」那颗 P-246 同族）。</para>
     /// </summary>
     public static bool IsLocalAssetUri(Uri? uri, string virtualHostName)
         => uri is not null
-           && string.Equals(uri.Scheme, AssetUriScheme, StringComparison.OrdinalIgnoreCase)
            && virtualHostName.Length > 0
            && string.Equals(uri.Host, virtualHostName, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 「这一发该挡」（账本 <b>P-248</b> 后半）：外呼那一档<b>且解得出那颗串</b>。
+    /// <para>
+    /// 解不出（<c>null</c>）的一律<b>⛔ 挡</b>：那颗串读不懂时「它也许是本地那一份」这句话我没能判掉，
+    /// 而挡错的代价是画布白屏、不挡的代价是那一名照旧进名册由痕说——安全＞稳定那一序在这里给的是<b>不挡</b>，
+    /// 因为「挡住一颗本就本地的请求」是这一批唯一能自己造出来的坏。
+    /// </para>
+    /// <para>⛔ 在 UI 里再写一份「非本地且非内嵌」的比较：那颗分档由本类说，宿主只负责照它落桩。</para>
+    /// </summary>
+    public static bool IsOutboundDenyUri(Uri? uri, string virtualHostName)
+        => uri is not null && !IsLocalAssetUri(uri, virtualHostName) && !IsInlineUri(uri);
 
     /// <summary>那四颗「压根⛔ 走网络」的方案：<c>data</c>／<c>blob</c>／<c>about</c>／<c>filesystem</c>。
     /// 它们既⛔ 是随包那一份、也⛔ 是一次出机外呼，所以在 P-248 那把尺里自成一档——

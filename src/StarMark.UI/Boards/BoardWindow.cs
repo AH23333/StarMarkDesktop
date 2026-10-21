@@ -421,13 +421,22 @@ public sealed class BoardWindow : Window
         _web.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
         _web.CoreWebView2.NavigationCompleted -= OnNavigationCompleted;
         _web.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
-        // 账本 P-248 那道「第二道」的<b>前半</b>：先量「这一扇页今天到底外呼谁」——这颗观察者只记⛔ 挡。
-        // 为什么⛔ 一上来就挡（安全＞稳定＞性能，挡似乎更"安全"）：随包那棵树到底靠不靠一颗外站，本批⛔ 起窗量不到
-        // （桌面被占），而拿一颗写死的白名单去挡一条<b>没读数</b>的路＝把画布白屏的风险换成一句安心话。
-        // ⇒ 现读名单到手之后翻成 deny（那一翻的判据住在 <see cref="BoardsAssetPolicy.IsLocalAssetUri"/>，已备好）。
+        // 账本 P-248 那道「第二道」的<b>后半</b>（片69 翻成 deny；前半＝片67 那颗只记⛔ 挡的观察者）。
+        // 为什么这一翻现在<b>敢</b>做，而片67 不敢：那颗名册由一颗<b>不占屏幕</b>的隐藏宿主量到了
+        // （正本 bin/WI98/roster69_r4／roster69_r3 两跑＋那颗正件 roster69_ctl3），三颗数一起说：
+        // ① 随包那一族的 8 颗全住 <c>https://appassets.local</c>；② 树自己发的外呼 <b>0</b> 颗；
+        // ③ 而"挡"这一手<b>确实落得到页面</b>——同一台本机服务器两种写法，被放行的那颗⛔ 经观察者（那颗虚站映射
+        //   按<b>站名</b>劫持，连 <c>http://127.0.0.1:8099</c> 都由目录供），被拦的那颗读回 <c>451</c>。
+        // ⚠ ③ 的另一半就是<b>⛔ 白屏</b>那半句的根据：随包那八颗压根进不了这把尺，所以这颗桩<b>动不到画布本体</b>。
         _web.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
         _web.CoreWebView2.WebResourceRequested -= OnWebResourceRequested;
         _web.CoreWebView2.WebResourceRequested += OnWebResourceRequested;
+        // 同一批（P-248 后半）另两颗：页要<b>开新窗</b>（<c>window.open</c>／<c>target=_blank</c>）与顶帧要<b>导航去别处</b>。
+        // ⛔ 只订那颗出站事件就以为边界齐了——那两条路各自有自己的事件，一颗也不经 <c>WebResourceRequested</c>。
+        _web.CoreWebView2.NewWindowRequested -= OnNewWindowRequested;
+        _web.CoreWebView2.NewWindowRequested += OnNewWindowRequested;
+        _web.CoreWebView2.NavigationStarting -= OnNavigationStarting;
+        _web.CoreWebView2.NavigationStarting += OnNavigationStarting;
         // ⛔ 在这里订 <c>DownloadStarting</c> 去接管那一发导出（本批第一版试过，被真机当场否掉）：
         // 那颗引擎的 saveAs 走的是 <c>window.showSaveFilePicker</c>，压根⛔ 是下载——那颗事件一颗也不响，
         // 逐字读数见类文档那段（正本 readings_54_134804＋log54_forensics）。
@@ -444,14 +453,19 @@ public sealed class BoardWindow : Window
 
     /// <summary>这一扇页外呼过的<b>不同目标</b>（方案＋主机名，⛔ 路径）——只用来节流那颗痕：一颗目标只念一行。</summary>
     private readonly HashSet<string> _netTargets = new(StringComparer.OrdinalIgnoreCase);
-    private int _netLocal, _netInline, _netForeign;
+    private int _netLocal, _netInline, _netForeign, _netDenied;
+    private int _newWindowBlocked, _navBlocked;
+
+    /// <summary>那颗桩顶出去的状态码（账本 P-248 后半）。<b>451 而⛔ 403</b> 的理由不是语义，是<b>可分辨</b>：
+    /// 真机那一跑要能分清「这颗宿主挡的」与「那颗站自己拒的」，两颗同码就只能猜（片69 正件那条臂读回的正是这颗 451）。</summary>
+    private const int BlockedResponseStatus = 451;
 
     /// <summary>
-    /// 那颗出站观察者（账本 P-248 的第一半）：数「读了随包那一份」「压根⛔ 出机」「读了别处」三颗数，
-    /// 每颗<b>新</b>外呼目标落一行 <c>boards.net.foreign</c> 并把三颗数一起带上（⛔ 只念外呼那一颗：
+    /// 那颗出站观察者（账本 P-248）：数「读了随包那一份」「压根⛔ 出机」「读了别处」「被这颗挡下」四颗数，
+    /// 每颗<b>新</b>外呼目标落一行 <c>boards.net.foreign</c> 并把四颗数一起带上（⛔ 只念外呼那一颗：
     /// 一颗 <c>local=0</c> 的名册说明这把尺压根没开火，而那和「这页只出机」在单看外呼数时同一个脸）。
-    /// ⛔ 在此处判「该不该挡」——判据的主人在
-    /// <see cref="BoardsAssetPolicy.IsLocalAssetUri"/>，本方法只照它分类（⛔ 在 UI 里再写一份方案／主机比较＝第二个主人）。
+    /// 该不该挡<b>⛔ 在此处判</b>——判据的主人住在
+    /// <see cref="BoardsAssetPolicy.IsOutboundDenyUri"/>，本方法只照它分类并落桩（⛔ 在 UI 里再写一份方案／主机比较＝第二个主人）。
     /// </summary>
     private void OnWebResourceRequested(CoreWebView2 sender, CoreWebView2WebResourceRequestedEventArgs e)
     {
@@ -469,10 +483,52 @@ public sealed class BoardWindow : Window
         }
         _netForeign++;
         var target = BoardsAssetPolicy.DescribeRequestTarget(uri);
+        if (BoardsAssetPolicy.IsOutboundDenyUri(uri, VirtualHostName))
+        {
+            // 空体那一颗桩替掉真答案（片69 正件量到它落得到页面：那颗读回 451、正文 0 颗字）。
+            // ⛔ 在这里兜一颗 try：挡失败了也得上屏——静默兜住＝让"挡"这句话替一件没发生的事作证（P-13 那一族）。
+            _netDenied++;
+            e.Response = sender.Environment.CreateWebResourceResponse(
+                new Windows.Storage.Streams.InMemoryRandomAccessStream(),
+                BlockedResponseStatus, "Blocked By StarMark", "Content-Length: 0\r\n");
+        }
         if (_netTargets.Add(target))
             StarMark.Abstractions.StarLog.Warn(
                 "boards.net.foreign n=" + _netForeign + " target=" + target
-                + " local=" + _netLocal + " inline=" + _netInline + " id=" + _boardId);
+                + " local=" + _netLocal + " inline=" + _netInline + " denied=" + _netDenied + " id=" + _boardId);
+    }
+
+    /// <summary>
+    /// 页要开一颗<b>新窗</b>（<c>window.open</c>／<c>target=_blank</c>）：一律 <c>Handled</c>，一颗也不给它开
+    /// （账本 P-248 后半第二颗；那颗画布上带链接的档由 <c>open.external</c> 交宿主开，见片68）。
+    /// ⛔ 把 <c>e.Uri</c> 递进日志——那颗串由页面说了算，且带着他点过哪条链接的隐私（P-13/P-193 同一条口径）。
+    /// </summary>
+    private void OnNewWindowRequested(CoreWebView2 sender, CoreWebView2NewWindowRequestedEventArgs e)
+    {
+        e.Handled = true;
+        _newWindowBlocked++;
+        StarMark.Abstractions.StarLog.Warn(
+            "boards.newwindow.blocked n=" + _newWindowBlocked + " initiated=" + e.IsUserInitiated + " id=" + _boardId);
+    }
+
+    /// <summary>
+    /// <b>顶帧</b>要导航去<b>别处</b>（<c>location = …</c>／表单提交）：照那颗出站判据取消——画布被换成一颗外站
+    /// 之后桥就死了，而那颗桥是这扇窗唯一的用处（账本 P-248 后半第三颗）。
+    /// <para>放行那一支<b>⛔</b> 留痕：每一趟开场都走它（<c>Navigate</c> 那一发），落行＝把噪声写成读数。
+    /// 口径与观察者<b>同一颗判据</b>（<see cref="BoardsAssetPolicy.IsOutboundDenyUri"/>）：
+    /// 随包那一份、压根⛔ 出机的那一颗（<c>about:blank</c> 就在这一档，控件起步要用它）、以及读不懂的那颗串都放行——
+    /// ⛔ 拿一颗读不懂的串去挡一条也许本机的导航，代价是画布白屏。</para>
+    /// </summary>
+    private void OnNavigationStarting(CoreWebView2 sender, CoreWebView2NavigationStartingEventArgs e)
+    {
+        var raw = e.Uri;
+        Uri? uri = raw is not null && Uri.TryCreate(raw, UriKind.Absolute, out var parsed) ? parsed : null;
+        if (!BoardsAssetPolicy.IsOutboundDenyUri(uri, VirtualHostName)) return;
+        e.Cancel = true;
+        _navBlocked++;
+        StarMark.Abstractions.StarLog.Warn(
+            "boards.nav.blocked n=" + _navBlocked
+            + " target=" + BoardsAssetPolicy.DescribeRequestTarget(uri) + " id=" + _boardId);
     }
 
     /// <summary>桥是否已就绪（页面递过 <c>bridge.ready</c>）。</summary>

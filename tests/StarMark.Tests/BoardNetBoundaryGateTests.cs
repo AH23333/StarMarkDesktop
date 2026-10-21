@@ -7,13 +7,15 @@ using Xunit;
 namespace StarMark.Tests;
 
 /// <summary>
-/// 画板那一扇页的<b>出机边界</b>闸门（Phase C <b>片67</b>＝账本 <b>P-248</b> 的前半）。
+/// 画板那一扇页的<b>出机边界</b>闸门（Phase C <b>片67</b>＝账本 <b>P-248</b> 的前半・<b>片69</b>＝后半）。
 /// <para>三档各钉一面：① <b>页面</b>把引擎自家那颗 <c>validateEmbeddable</c> 交 <c>false</c>（钉它住在<b>顶层 prop</b>
 /// 那一层，而不是「串在档里某处」——挪进 <c>UIOptions</c> 里照样搜得到而引擎读不到＝静默失效）；
-/// ② <b>Core</b> 那颗分类判据（本地／压根不出机／别处），带逐颗相反下落；
-/// ③ <b>宿主</b>那一侧的订阅形状：先订再看、三颗计数各有出口、且<b>只量不挡</b>（挡不挡的下一翻要等真机名册）。
+/// ② <b>Core</b> 那颗分类判据（本地／压根不出机／别处／该不该挡），带逐颗相反下落；
+/// ③ <b>宿主</b>那一侧的订阅形状：三颗门各有主人（出站桩・新窗・顶帧导航）、先订再看、计数各有出口。
 /// </para>
-/// <para>⚠ 本批⛔ 起窗（桌面被占），所以「这页今天到底外呼谁」还是<b>欠读数</b>；这里能机检的只有形状与判据。</para>
+/// <para>⚠ 片69 改口两处：<b>「只量⛔ 挡」</b>那句随名册落地一起退场（读数正本 <c>bin/WI98/roster69_r4</c>・
+/// <c>roster69_r3</c>・正件 <c>roster69_ctl3</c>），而那颗分类判据<b>⛔ 再比方案</b>——那颗虚站映射按<b>站名</b>
+/// 劫持，带端口带 http 也算本地供（由目录里那颗<b>独有</b>档名读回，⛔ 靠"服务器没记"那种负证据）。</para>
 /// </summary>
 public sealed class BoardNetBoundaryGateTests
 {
@@ -45,19 +47,49 @@ public sealed class BoardNetBoundaryGateTests
         Assert.True(BoardsAssetPolicy.IsLocalAssetUri(U($"https://{h}/fonts/Virgil/YvN.woff2"), h));
         // 方案与主机名都⛔ 区分大小写（<c>Uri</c> 自己会归一，但判据⛔ 依赖它归一＝换一颗解析器就漂）
         Assert.True(BoardsAssetPolicy.IsLocalAssetUri(U($"HTTPS://{h.ToUpperInvariant()}/x"), h));
+        // 片69 现读补的两颗<b>同族形状</b>（名字里那颗 InAnyCase 涵盖不到它们，而它们正是那颗映射的射程）：
+        Assert.True(BoardsAssetPolicy.IsLocalAssetUri(U($"http://{h}/board.html"), h));
+        Assert.True(BoardsAssetPolicy.IsLocalAssetUri(U($"https://{h}:8443/board.html"), h));
     }
 
     [Fact]
-    public void LocalAssetUriRefusesOtherHostsOtherSchemesAndLookAlikes()
+    public void LocalAssetUriRefusesOtherHostsAndLookAlikesNotSchemes()
     {
         var h = VirtualHost;
-        Assert.False(BoardsAssetPolicy.IsLocalAssetUri(U($"http://{h}/board.html"), h));         // 方案不对
         Assert.False(BoardsAssetPolicy.IsLocalAssetUri(U("https://esm.sh/react"), h));            // 别的主机
         Assert.False(BoardsAssetPolicy.IsLocalAssetUri(U($"https://{h}.cdn.example.com/x"), h));  // 后缀冒充
         Assert.False(BoardsAssetPolicy.IsLocalAssetUri(U($"https://evil-{h}/x"), h));            // 前缀冒充
         Assert.False(BoardsAssetPolicy.IsLocalAssetUri(U("https://example.com/x"), h));
-        Assert.False(BoardsAssetPolicy.IsLocalAssetUri(null, h));                               // 解不出＝⛔ 本地（观察者那一头另有一档）
+        Assert.False(BoardsAssetPolicy.IsLocalAssetUri(null, h));                               // 解不出＝⛔ 本地（挡不挡那一档另说）
         Assert.False(BoardsAssetPolicy.IsLocalAssetUri(U("https://x/y"), ""));                    // 没给名字⇒一颗也⛔ 算本地
+        // ⚠ 「方案不对」那一颗<b>已由片69 的读数撤掉</b>（<c>http://127.0.0.1:8099</c> 那颗真请求由那颗映射按<b>站名</b>
+        // 供的档＝目录里独有那颗档名读回）。这里⛔ 再钉它一次，是因为<b>钉错了的那一句</b>比没钉更贵：
+        // 它会在下一次换宿主时把「本地供」判成「外站」，然后由那颗桩把画布挡白。
+    }
+
+    [Fact]
+    public void OutboundDenyCoversExactlyTheForeignClassAndNothingElse()
+    {
+        var h = VirtualHost;
+        Assert.True(BoardsAssetPolicy.IsOutboundDenyUri(U("https://esm.sh/react"), h));            // 该挡
+        Assert.True(BoardsAssetPolicy.IsOutboundDenyUri(U($"http://{h}.cdn.example.com/x"), h));   // 后缀冒充也挡（⛔ 认它是本地）
+        Assert.False(BoardsAssetPolicy.IsOutboundDenyUri(U($"https://{h}/board.html"), h));        // 随包那一份
+        Assert.False(BoardsAssetPolicy.IsOutboundDenyUri(U($"http://{h}:8443/x"), h));             // 同上一档（片69 读数）
+        foreach (var scheme in BoardsAssetPolicy.InlineUriSchemes)
+            Assert.False(BoardsAssetPolicy.IsOutboundDenyUri(U($"{scheme}:something"), h), scheme + " 压根⛔ 出机⇒⛔ 挡");
+        // ⛔ 拿一颗读不懂的串去挡一条也许本机的请求：代价是画布白屏，而收益一句也没有
+        Assert.False(BoardsAssetPolicy.IsOutboundDenyUri(null, h));
+        // 名字给空＝一颗也⛔ 算本地⇒外呼全数挡（fail-closed 那一侧，与 <c>IsLocalAssetUri</c> 同向；那颗名字由宿主常量给，⛔ 会空）
+        Assert.True(BoardsAssetPolicy.IsOutboundDenyUri(U("https://example.com/x"), ""));
+        // 三档<b>互斥</b>且<b>齐覆盖</b>一颗真 URL：漏一档＝计数互相偷数，多一档＝名册读不出脸
+        foreach (var s in new[] { $"https://{h}/a", "data:text/html,x", "https://esm.sh/y" })
+        {
+            var u = U(s);
+            int hits = (BoardsAssetPolicy.IsLocalAssetUri(u, h) ? 1 : 0)
+                       + (BoardsAssetPolicy.IsInlineUri(u) ? 1 : 0)
+                       + (BoardsAssetPolicy.IsOutboundDenyUri(u, h) ? 1 : 0);
+            Assert.Equal(1, hits);
+        }
     }
 
     [Fact]
@@ -114,23 +146,78 @@ public sealed class BoardNetBoundaryGateTests
     }
 
     [Fact]
-    public void ObserverCountsThreeClassesAndBlocksNothing()
+    public void ObserverCountsFourClassesAndDeniesTheForeignOne()
     {
         var body = SourceGate.MethodBody(WindowCs, "private void OnWebResourceRequested");
-        // 三颗计数各有一条上屏出口（⛔ 一颗只加不念的死计数＝片23 摘 sessionId 那一族）
-        foreach (var needle in new[] { "_netLocal++", "_netInline++", "_netForeign++" })
+        // 四颗计数各有一条上屏出口（⛔ 一颗只加不念的死计数＝片23 摘 sessionId 那一族）
+        foreach (var needle in new[] { "_netLocal++", "_netInline++", "_netForeign++", "_netDenied++" })
             Assert.Equal(1, SourceGate.Count(body, needle));
-        foreach (var slot in new[] { "n=\" + _netForeign", "local=\" + _netLocal", "inline=\" + _netInline" })
+        foreach (var slot in new[] { "n=\" + _netForeign", "local=\" + _netLocal", "inline=\" + _netInline", "denied=\" + _netDenied" })
             Assert.Contains(slot, body, StringComparison.Ordinal);
-        // 这一批只量⛔ 挡：挡的那一翻要等真机名册（本批⛔ 起窗⇒欠读数）
-        Assert.DoesNotContain(".Handled", body);
-        Assert.DoesNotContain("e.Response", body);
-        Assert.DoesNotContain("Cancel", body);
+        // 片69 那一翻：挡的出口要<b>在</b>，且只由那颗 Core 判据开关（⛔ 在 UI 里另写一份「非本地且非内嵌」）
+        Assert.Contains("BoardsAssetPolicy.IsOutboundDenyUri(uri, VirtualHostName)", body, StringComparison.Ordinal);
+        Assert.Contains("e.Response = sender.Environment.CreateWebResourceResponse(", body, StringComparison.Ordinal);
+        Assert.Equal(1, SourceGate.Count(body, "e.Response"));
+        Assert.Equal(1, SourceGate.Count(body, "_netDenied++"));
         // 分类照 Core 那颗判据，⛔ 在 UI 里再写一份方案／主机比较（第二个主人＝换判据时静默分岔）
         Assert.Contains("BoardsAssetPolicy.IsLocalAssetUri(uri, VirtualHostName)", body, StringComparison.Ordinal);
         Assert.Contains("BoardsAssetPolicy.IsInlineUri(uri)", body, StringComparison.Ordinal);
         Assert.DoesNotContain("uri.Scheme ==", body, StringComparison.Ordinal);
         Assert.DoesNotContain("uri.Host ==", body, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Handled", body);   // 那颗门⛔ 归这颗方法管（订错地方＝两格各挡一半）
+        Assert.DoesNotContain("Cancel", body);
+    }
+
+    [Fact]
+    public void StatusConstantIsFourFiftyOneAndNamedOnceUsedOnce()
+    {
+        var code = SourceGate.Code(WindowCs);
+        Assert.Equal(1, SourceGate.Count(code, "const int BlockedResponseStatus = 451;"));
+        Assert.Equal(1, SourceGate.Count(code, "BlockedResponseStatus, \"Blocked By StarMark\""));
+        // ⛔ 有第二颗写死的码混进那一族（403 是"站自己拒"那一族，混了就分不开）
+        Assert.DoesNotContain("403", code);
+    }
+
+    [Fact]
+    public void HostSubscribesBothNewGatesBeforeItNavigates()
+    {
+        var code = SourceGate.Code(WindowCs);
+        var navigate = code.IndexOf("_web.CoreWebView2.Navigate(", StringComparison.Ordinal);
+        Assert.True(navigate > 0, "宿主那颗 <c>Navigate</c> 找不到了＝顺序断言的锚点没了");
+        foreach (var pair in new[] { "NewWindowRequested", "NavigationStarting" })
+        {
+            Assert.Equal(1, SourceGate.Count(code, pair + " -= On" + pair));
+            Assert.Equal(1, SourceGate.Count(code, pair + " += On" + pair));
+            Assert.True(code.IndexOf(pair + " += On" + pair, StringComparison.Ordinal) < navigate,
+                pair + " 排在 <c>Navigate</c> 之后＝第一发根本进不了那颗门");
+        }
+    }
+
+    [Fact]
+    public void NewWindowGateHandlesEveryCallAndNeverNarratesTheUrl()
+    {
+        var body = SourceGate.MethodBody(WindowCs, "private void OnNewWindowRequested");
+        Assert.Contains("e.Handled = true;", body, StringComparison.Ordinal);
+        Assert.Equal(1, SourceGate.Count(body, "_newWindowBlocked++"));
+        Assert.Contains("\"boards.newwindow.blocked n=\" + _newWindowBlocked", body, StringComparison.Ordinal);
+        Assert.Contains("+ \" initiated=\" + e.IsUserInitiated", body, StringComparison.Ordinal);
+        // ⛔ 那颗串进日志：它由页面说了算（P-13 那一族），又带着「他刚点过哪条链接」（P-193 那一族）
+        Assert.Equal(0, SourceGate.Count(body, "e.Uri"));
+    }
+
+    [Fact]
+    public void NavigationGateCancelsOnlyForeignAndReadsTheUrlJustOnce()
+    {
+        var body = SourceGate.MethodBody(WindowCs, "private void OnNavigationStarting");
+        Assert.Contains("BoardsAssetPolicy.IsOutboundDenyUri(uri, VirtualHostName)", body, StringComparison.Ordinal);
+        Assert.Contains("e.Cancel = true;", body, StringComparison.Ordinal);
+        Assert.Equal(1, SourceGate.Count(body, "_navBlocked++"));
+        Assert.Contains("\"boards.nav.blocked n=\" + _navBlocked", body, StringComparison.Ordinal);
+        // 那颗串只许被<b>读</b>一次（拿去解析），⛔ 第二次＝进了痕
+        Assert.Equal(1, SourceGate.Count(body, "e.Uri"));
+        // 放行那一支⛔ 留痕（每一趟开场都要走它一次，落行＝把噪声写成读数）
+        Assert.True(body.IndexOf("return;", StringComparison.Ordinal) < body.IndexOf("e.Cancel = true;", StringComparison.Ordinal),
+            "那颗门先挡再放行＝开场那一发也留下一行，读数里分不清哪一行是他按的");
     }
 
     [Fact]
