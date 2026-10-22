@@ -179,12 +179,14 @@ public sealed class BoardNetBoundaryGateTests
     }
 
     [Fact]
-    public void HostSubscribesBothNewGatesBeforeItNavigates()
+    public void HostSubscribesEveryGateBeforeItNavigates()
     {
         var code = SourceGate.Code(WindowCs);
         var navigate = code.IndexOf("_web.CoreWebView2.Navigate(", StringComparison.Ordinal);
         Assert.True(navigate > 0, "宿主那颗 <c>Navigate</c> 找不到了＝顺序断言的锚点没了");
-        foreach (var pair in new[] { "NewWindowRequested", "NavigationStarting" })
+        // 三颗一对：新窗／顶帧／<b>子帧</b>（P-252）。那颗帧名里含 <c>NavigationStarting</c> 那一串，
+        // 而计数用的是「事件 <c>+= On</c> 处理器」整颗串＝两颗不同形，⛔ 会互相顶掉（此处按整串数）。
+        foreach (var pair in new[] { "NewWindowRequested", "NavigationStarting", "FrameNavigationStarting" })
         {
             Assert.Equal(1, SourceGate.Count(code, pair + " -= On" + pair));
             Assert.Equal(1, SourceGate.Count(code, pair + " += On" + pair));
@@ -218,6 +220,29 @@ public sealed class BoardNetBoundaryGateTests
         // 放行那一支⛔ 留痕（每一趟开场都要走它一次，落行＝把噪声写成读数）
         Assert.True(body.IndexOf("return;", StringComparison.Ordinal) < body.IndexOf("e.Cancel = true;", StringComparison.Ordinal),
             "那颗门先挡再放行＝开场那一发也留下一行，读数里分不清哪一行是他按的");
+    }
+
+    /// <summary>
+    /// 子帧那一头（账本 P-252）：顶帧那颗闸门<b>管不到</b> <c>iframe</c>——片72 臂 D 现读「摘掉 CSP 递一颗远程
+    /// iframe，宿主观察者一颗也没听到」＝那一路连听到都⛔ 听到。口径逐条照 <see cref="NavigationGateCancelsOnlyForeignAndReadsTheUrlJustOnce"/>。
+    /// </summary>
+    [Fact]
+    public void FrameGateCancelsForeignSubframesAndNarratesNothing()
+    {
+        var body = SourceGate.MethodBody(WindowCs, "private void OnFrameNavigationStarting");
+        Assert.Contains("BoardsAssetPolicy.IsOutboundDenyUri(uri, VirtualHostName)", body, StringComparison.Ordinal);
+        Assert.Contains("e.Cancel = true;", body, StringComparison.Ordinal);
+        Assert.Equal(1, SourceGate.Count(body, "_frameNavBlocked++"));
+        Assert.Contains("\"boards.frame.nav.blocked n=\" + _frameNavBlocked", body, StringComparison.Ordinal);
+        // 那颗串只许被<b>读</b>一次（拿去解析），⛔ 第二次＝进了痕
+        Assert.Equal(1, SourceGate.Count(body, "e.Uri"));
+        // ⛔ 那颗<b>帧名</b>进痕：它跟那颗串一样由页面说了算，且是页面自己起的一个名（P-13／P-193 同一条口径）
+        Assert.Equal(0, SourceGate.Count(body, "e.Name"));
+        // 放行那一支⛔ 留痕：开场那一发子帧（<c>about:blank</c>）与本机 iframe 每一趟都要走它
+        // ⚠ 顺序断言⛔ 能自己兜存在：<c>IndexOf("return;")</c> 缺席时交回 -1，而 -1 ⛔ 小于任何下标＝那颗格恒绿
+        Assert.Equal(1, SourceGate.Count(body, "return;"));
+        Assert.True(body.IndexOf("return;", StringComparison.Ordinal) < body.IndexOf("e.Cancel = true;", StringComparison.Ordinal),
+            "那颗门先挡再放行＝开场那一发也落一行，读数里分不清哪一行是他按的");
     }
 
     [Fact]

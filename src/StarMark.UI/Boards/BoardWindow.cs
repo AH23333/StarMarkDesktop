@@ -437,6 +437,10 @@ public sealed class BoardWindow : Window
         _web.CoreWebView2.NewWindowRequested += OnNewWindowRequested;
         _web.CoreWebView2.NavigationStarting -= OnNavigationStarting;
         _web.CoreWebView2.NavigationStarting += OnNavigationStarting;
+        // 同一族还剩<b>子帧</b>那一头（账本 P-252）：顶帧那颗闸门压根管不到 <c>iframe</c>——片72 臂 D 现读
+        // 「摘掉 CSP 往画布递一颗远程 iframe，宿主观察者一颗也没听到」＝那一路连<b>听到</b>都⛔ 听到。
+        _web.CoreWebView2.FrameNavigationStarting -= OnFrameNavigationStarting;
+        _web.CoreWebView2.FrameNavigationStarting += OnFrameNavigationStarting;
         // ⛔ 在这里订 <c>DownloadStarting</c> 去接管那一发导出（本批第一版试过，被真机当场否掉）：
         // 那颗引擎的 saveAs 走的是 <c>window.showSaveFilePicker</c>，压根⛔ 是下载——那颗事件一颗也不响，
         // 逐字读数见类文档那段（正本 readings_54_134804＋log54_forensics）。
@@ -454,7 +458,7 @@ public sealed class BoardWindow : Window
     /// <summary>这一扇页外呼过的<b>不同目标</b>（方案＋主机名，⛔ 路径）——只用来节流那颗痕：一颗目标只念一行。</summary>
     private readonly HashSet<string> _netTargets = new(StringComparer.OrdinalIgnoreCase);
     private int _netLocal, _netInline, _netForeign, _netDenied;
-    private int _newWindowBlocked, _navBlocked;
+    private int _newWindowBlocked, _navBlocked, _frameNavBlocked;
 
     /// <summary>那颗桩顶出去的状态码（账本 P-248 后半）。<b>451 而⛔ 403</b> 的理由不是语义，是<b>可分辨</b>：
     /// 真机那一跑要能分清「这颗宿主挡的」与「那颗站自己拒的」，两颗同码就只能猜（片69 正件那条臂读回的正是这颗 451）。</summary>
@@ -533,6 +537,27 @@ public sealed class BoardWindow : Window
 
     /// <summary>桥是否已就绪（页面递过 <c>bridge.ready</c>）。</summary>
     public bool BridgeReady => _bridgeReady;
+
+    /// <summary>
+    /// <b>子帧</b>要导航去<b>别处</b>（画布上那颗 <c>embeddable</c> 元素／档里带的 <c>iframe</c>）——
+    /// 上一那颗顶帧闸门<b>压根管不到它</b>：账本 P-252 的读数就是「摘掉 CSP 递一颗远程 iframe，宿主观察者一颗也没听到」。
+    /// <para>口径照 <see cref="OnNavigationStarting"/> 逐条搬：同一颗出站判据（<see cref="BoardsAssetPolicy.IsOutboundDenyUri"/>）、
+    /// 那颗串只<b>读</b>一次且⛔ 进日志（它由页面说了算；<c>e.Name</c> 那一项更是页面起的，⛔ 落痕）、
+    /// 放行那一支⛔ 留痕（<c>about:blank</c> 与本机 iframe 每一趟开场都要走它，控件起步与画布自己的子帧都在这一档）。
+    /// ⚠ 这一手<b>翻成 deny</b>（⛔ 只记）：远程 iframe 带进来的不是画布的承重件（随包那八颗全住虚站），
+    /// 而第一道 CSP 早已把 <c>frame-src</c> 关到⛔ 通——这一颗是<b>页⛔ 再带 CSP 时</b>的那道退路。</para>
+    /// </summary>
+    private void OnFrameNavigationStarting(CoreWebView2 sender, CoreWebView2NavigationStartingEventArgs e)
+    {
+        var raw = e.Uri;
+        Uri? uri = raw is not null && Uri.TryCreate(raw, UriKind.Absolute, out var parsed) ? parsed : null;
+        if (!BoardsAssetPolicy.IsOutboundDenyUri(uri, VirtualHostName)) return;
+        e.Cancel = true;
+        _frameNavBlocked++;
+        StarMark.Abstractions.StarLog.Warn(
+            "boards.frame.nav.blocked n=" + _frameNavBlocked
+            + " target=" + BoardsAssetPolicy.DescribeRequestTarget(uri) + " id=" + _boardId);
+    }
 
     /// <summary>宿主主动发那颗 C#→JS 事件（键集先过 <see cref="BridgeProtocol.Check"/> 的出向门）。</summary>
     public void PostOutbound(string name, string json)
