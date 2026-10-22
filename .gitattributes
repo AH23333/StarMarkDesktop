@@ -1,0 +1,6 @@
+# 随包那颗资产树⛔ 许任何换行转换：清单（manifest.json）里那颗 sha256 与 bytes 是按<b>盘上字节</b>算的，
+# 而本机 core.autocrlf=true 且此前没有这颗档 ⇒ 一颗新克隆会把四颗文本资产落成 CRLF 而逐颗对不上
+# （2026-10-22 现读：board.html 577↔556・board-bridge.js 19029↔18733・excalidraw.min.js 4879492↔4878772・index.css 144690↔144689＝BoardsAssetGateTests 必红）。
+# 口径：冻结树与它的主人在<b>字节面</b>上同源，所以这里关掉转换而⛔ 把清单改成"容忍两种行尾"。
+assets/boards/** -text
+tools/boards/** -text
