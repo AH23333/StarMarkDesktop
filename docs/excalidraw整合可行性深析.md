@@ -2008,3 +2008,94 @@ A1 把值翻成 <c>true</c> ⇒ 只红「值那一格」；A2 在 <c>UIOptions</
 
 画布上那颗 <c>iframe</c> 元素若指向<b>远程</b>站：从前只有页带那颗 <c>frame-src 'none'</c> 挡着（页⛔ 唯一一份＝一改动就整条敞），现在宿主这一道也挡、且留一行痕。若指向<b>同源</b>文档：行为⛔ 变（这道门按同一颗判据放行虚站），但那一半还欠 36.5 那颗读数。PNG／SVG 那颗导出缩放与本批无关（片73～74 已结案）。
 
+
+## 三十七、片76 读码＋补测腿（2026-10-22·§35.6 那一问问到了主人・17 颗形状各钉一行・九臂反向台架顺手量到一颗冗余）
+
+### 37.1 那一问从哪来（§35.6 留下的那颗形状）
+
+定位腿那一跑（正本 <c>bin/WI98/cap74_console_r2.txt</c>）臂 B 落出的档名现读 <c>-rx3-2.png</c>、臂 C 现读 <c>-rx3-3.png</c>＝<b>两颗都以 <c>-</c> 开头</b>。那两臂是<b>仪器自己</b>把页面侧的名字改成 <c>boardName() + "-rx" + scale</c> 造出来的形状，而那块板 <c>appState.name</c> 是空串。同一把尺在修后那一跑（<c>bin/WI98/cap64_console_r3.txt</c>）量到产品那一路落的是 <c>261019-140038-a1b2-261022-102955.png</c>＝由宿主的兜底名起的。§36 之后留下的那一问是：<b>页面递上来的那颗 <c>suggested</c> 在拼进落盘名之前，有没有主人，主人管不管得住空串／怪串</b>——当时还把主人猜成了 <c>BoardPolicy</c>。
+
+### 37.2 主人现读＝一颗・调用点一颗・§35.6 那句猜测在这一格更正
+
+读码到调用点：<c>BoardWindow.cs</c> 里 <c>HandleExportBytes</c> 那一手是<b>两道门套在一起</b>，盘上逐字（现读 4 行）：
+
+    var name = BridgeProtocol.UniqueExportName(
+        BridgeProtocol.SanitizeExportName(envelope.Suggested, ExportStem(), envelope.Kind),
+        candidate => File.Exists(Path.Combine(ExportsDirectory, candidate)),
+        BridgeProtocol.SanitizeExportName(null, ExportStem(), envelope.Kind));
+
+两颗门都住在 <c>src/StarMark.Core/Boards/BridgeProtocol.cs</c>（片55 那条线）。<b>⚠ 一处更正</b>：§35.6 写的「归档名那颗主人（<c>BoardPolicy</c>・片55 那条线）」里，<b>片55 那条线对，那颗类名错</b>——消毒的主人叫 <c>BridgeProtocol</c>，<c>BoardPolicy</c> 管的是画板档自己的落点与写闸。消毒本体现读 17 行：
+
+    public static string SanitizeExportName(string? suggested, string fallbackStem, string? kind)
+        {
+            var name = (suggested ?? string.Empty).Trim();
+            // 只取最后一段：`..\..\evil.png`、`D:/a/b/evil2.png` 到这儿都只剩 `evil.png`
+            name = System.IO.Path.GetFileName(name.Replace('\\', '/'));
+    
+            var stem = System.IO.Path.GetFileNameWithoutExtension(name);
+            var ext = ExtensionForKind(kind) ?? ".png";
+    
+            if (string.IsNullOrWhiteSpace(stem)
+                || stem!.Length > MaxStemLength
+                || Files.DeviceNamePolicy.IsReservedStem(stem)
+                || stem.IndexOfAny(InvalidFileNameChars) >= 0)
+                stem = fallbackStem;
+    
+            return stem + ext;
+        }
+
+⇒ 那一问的答案：<b>有主人，且只有一道门，四支判据＋「只取最后一段」全在这一道门里</b>；递上来的 <c>suggested</c> 先过它、再过同名不盖那颗 <c>UniqueExportName</c>，所以「先消毒后编号」那颗顺序（片55 的旧证人 <c>SanitizingComesBeforeNumbering</c>）也管着这一族。<b>本批⛔ 改一行业务码</b>——读数没指到任何缺陷。
+
+### 37.3 17 颗形状各钉一行（证人 <c>EveryShapeOfSuggestedComesBackAsAWriteablePlainName</c>）
+
+新增那颗 Theory 把「页面能递出什么形状」列成 17 行，两列逐字取自 <c>tests/StarMark.Tests/BoardExportNameTests.cs</c>（实参字面照源码原文，含 <c>@</c> 前缀与转义）：
+
+| 递上来的 <c>suggested</c> | 交回 |
+| --- | --- |
+| `null` | `"FB-STEM.png"` |
+| `""` | `"FB-STEM.png"` |
+| `"   "` | `"FB-STEM.png"` |
+| `"/"` | `"FB-STEM.png"` |
+| `"CON"` | `"FB-STEM.png"` |
+| `"nul.txt"` | `"FB-STEM.png"` |
+| `"a:b.png"` | `"b.png"` |
+| `"板子:副本.png"` | `"FB-STEM.png"` |
+| `@"a""b.png"` | `"FB-STEM.png"` |
+| `"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.png"` | `"FB-STEM.png"` |
+| `"-rx3"` | `"-rx3.png"` |
+| `"...png"` | `"...png"` |
+| `"..\\..\\evil.png"` | `"evil.png"` |
+| `"D:/a/b/evil2.png"` | `"evil2.png"` |
+| `"我的 板 v2.final.png"` | `"我的 板 v2.final.png"` |
+| `"evil.PNG"` | `"evil.png"` |
+| `"%2e%2e%2f"` | `"%2e%2e%2f.png"` |
+
+每行不只钉 <c>Assert.Equal</c>，还六道<b>与实参无关</b>的尺当场复称：交回的⛔ 空、扩展名＝档位那颗、⛔ 一颗非法字符、<c>GetFileName(name) == name</c>（⛔ 带目录＝⛔ 落在落点之外）、主干⛔ 超 <c>96</c> 颗、主干⛔ 是设备名。定向那一跑（那颗档整档）现读 <b>失败 0／通过 34／总计 34</b>。
+
+两颗值得一提的形状：<c>"a:b.png"</c> 交回 <c>b.png</c> 而 <c>"板子:副本.png"</c> 交回兜底名——同一颗冒号，<b>.NET 先按「驱动器相对路径」把单颗字母加冒号认成盘符</b>，于是「丢目录」那一支先赢过「非法字符」那一支；前缀⛔ 是单颗字母时盘符那一支不成立，冒号才落到非法字符那一支。两颗都落在同一句口径上（裸名・可写・⛔ 出落点），所以本批把<b>先后</b>钉成读数而⛔ 改行为。另一颗 <c>"-rx3"</c> 交回 <c>-rx3.png</c>＝<b>原样留</b>：Windows 里 <c>-</c> ⛔ 是非法字符，而这一路把档名递给 <c>Path.Combine</c> ＋ <c>File.WriteAllBytes</c>，⛔ 递给任何命令行 ⇒ 没需要再加一道「不许以 - 开头」的门（§35.6 那个形状不是缺陷，这一格结案）。
+
+### 37.4 九臂反向台架（<c>bin/WI98/bench_76.py</c>・只改 <c>BridgeProtocol.cs</c>・每臂带 build・收口按字节还原）
+
+| 臂与那一手 | 红了几颗 | 针脚 | 红的是哪几颗形状（红行逐字） |
+| --- | --- | --- | --- |
+| M0 原样（整表按现读交回） | 红 0 颗（期望 0） | 针脚 无 | — |
+| M1 摘掉「空与只有空白」那一支 | 红 4 颗（期望 4） | 针脚 无 | suggested: "   ", expected: "FB-STEM.png"；suggested: "", expected: "FB-STEM.png"；suggested: "/", expected: "FB-STEM.png"；suggested: null, expected: "FB-STEM.png" |
+| M2 摘掉那颗设备名那一支 | 红 2 颗（期望 2） | 针脚 无 | suggested: "CON", expected: "FB-STEM.png"；suggested: "nul.txt", expected: "FB-STEM.png" |
+| M3 摘掉那颗非法字符那一支 | 红 2 颗（期望 2） | 针脚 无 | suggested: "a\"b.png", expected: "FB-STEM.png"；suggested: "板子:副本.png", expected: "FB-STEM.png" |
+| M4 摘掉那颗超长那一支 | 红 1 颗（期望 1） | 针脚 无 | suggested: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"···, expected: "FB-STEM.png" |
+| M5 摘掉「只取最后一段」那一手（射程读数＝整表⛔ 红：下一行那颗 GetFileNameWithoutExtension 自己就丢目录） | 红 0 颗（期望 0） | 针脚 无 | — |
+| M6 改口：以 - 开头也换兜底（今天⛔ 这么做） | 红 1 颗（期望 1） | 针脚 无 | suggested: "-rx3", expected: "-rx3.png" |
+| M7 把那颗扩展名改成从递上来的串取（口径⪡只从档位取⪢） | 红 9 颗（期望 9） | 针脚 无 | suggested: "   ", expected: "FB-STEM.png"；suggested: "", expected: "FB-STEM.png"；suggested: "%2e%2e%2f", expected: "%2e%2e%2f.png"；suggested: "-rx3", expected: "-rx3.png"；suggested: "/", expected: "FB-STEM.png"；suggested: "CON", expected: "FB-STEM.png"；suggested: "evil.PNG", expected: "evil.png"；suggested: "nul.txt", expected: "FB-STEM.png"；suggested: null, expected: "FB-STEM.png" |
+| N0 对照件：只改一句无关注释（证人⛔ 红） | 红 0 颗（期望 0） | 针脚 无 | — |
+
+读数：<b>9 臂全对（BAD=0）・9／9</b>，起手那颗 .cs <c>23c8ff113432</c>／19156 颗字节・行尾现读 <c>'\\n'</c>，八 颗锚各命中 1 颗，收口逐字节还原 <c>True</c>，共用 71 秒。各臂红行合起来共 <b>12 颗不同的形状</b>红过（表里另外 <b>5 颗</b>在任何一臂都⛔ 红＝摘掉任何单支仍交回同一颗名，见下面 M5）。⚠ 那颗对照件 <b>N0 只动一句无关注释＝整表⛔ 红</b>，所以这一族⛔ 是「整档一动就响」的噪声尺。
+
+**M5 那一臂交回的是另一类读数：一颗也没红**：摘掉「只取最后一段」那一手（<c>name = Path.GetFileName(name.Replace('\','/'))</c>）之后，17 颗<b>一颗也没红</b>。原因由那颗 .NET 实现交出：<c>Path.GetFileNameWithoutExtension</c> 自己内部就先取最后一段，所以那一行在<b>当前形状下是一颗冗余</b>。处置＝⛔ 删（它是硬线①那句「路径永远进不来」的<b>就地声明</b>，删掉它今天测不出任何变化，明天改了下一行就没人拦得住）、⛔ 当成证人缺位（不变式由输出侧那把尺 <c>GetFileName(name) == name</c> 钉着，那一颗是真判据）、把这一发<b>记成读数</b>写进这里。同一臂也是名册 466「恒不执行的臂＝静默全绿」的另一副脸：<b>臂会执行，只是它改的那一手没有下游</b>。
+
+### 37.5 台架自己坏的三副脸在这一跑都被挡下（⚠ 其中一颗坏的是我）
+
+① 起手那颗「先数表」的尺第一跑现读 <c>21</c> 颗而真表 <c>17</c> 颗——因为它在<b>整档</b>里数 <c>[InlineData(</c>，把邻档 <c>SanitizingComesBeforeNumbering</c> 那 4 颗一起算进我的期望；修法是<b>只在那颗 <c>[Theory]</c> 与它的声明之间数</b>，并配一把「这一段里⛔ 许夹进别的 <c>[Fact]</c>」的边界尺（夹了就⛔ 划界＝当场停手）。② <b>台架把红行截到 150 颗字</b>＝文档腿那把「红行数＝收口颗数」的尺当场响，缺的恰好是那颗 <b>97 颗 <c>x</c></b> 的超长夹具（它本来就是为这一族缺陷造的，先露的是我自己那一颗）＝坑表 #887。③ <b>我把自己的期望改错了方向</b>：M7 那颗真读是 <b>9 颗红</b>，我凭「我以为我看过的那份输出」把那颗<b>本来就对</b>的期望往小改了一回，是盘上那份 <c>bin/WI98/bench76_console.txt</c> 拦住的——<b>「我上一跑看到的」⛔ 等于正本</b>（名册 645 同一条，这一回响在我归责自己那半）。另：判红认的是 <c>失败:</c> 那一族<b>中文</b>收口行（名册 486 那一族在这一批没复发）。
+
+### 37.6 收口读数与那颗待查的下落
+
+全量基线（<c>StarMark.sln -c Debug -p:Platform=x64</c>）现读 <b>失败 0／通过 6469／跳过 0／总计 6469</b>；与上一跑（<c>bin/WI98/full75_console.txt</c> 现读总计 <c>6452</c>）的差＝<b>17 颗</b>＝本批那张表的颗数一起进的全量（成对判据，⛔ 只报「全绿」那一颗尺）。§35.6 那一问在这一格<b>问到主人并结案</b>：⛔ 缺陷、⛔ 改码，欠的只有<b>下一档那颗真正还没主人的东西</b>——P-242 剩下的深色模式与包含画布数据两颗旋钮（照旧开放）。本批<b>加减＝新立 0／结案 0</b>（账本里那颗 ✅P-243 下添一行登记，⛔ 翻它的标题）。
