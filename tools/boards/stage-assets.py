@@ -79,10 +79,15 @@ def main():
         if not os.path.isdir(d):
             raise SystemExit("包 dist 未找到：%s" % d)
 
-    out = args.out
+    out = os.path.abspath(args.out)
+    # ⚠ 那颗<b>顶层目录</b>本身可能正被别的过程握著（本机现读：索引器握过 assets\boards 的句柄，
+    #    于是 <c>shutil.rmtree(out)</c> 整颗死于 WinError 32，而树已被删空＝一半资产没了）。
+    #    口径：只清<b>孩子</b>，顶层目录留著复用（它对本脚本没意义，清单只列档）。
     if os.path.isdir(out):
-        shutil.rmtree(out)
-    os.makedirs(out)
+        for name in os.listdir(out):
+            child = os.path.join(out, name)
+            shutil.rmtree(child) if os.path.isdir(child) else os.remove(child)
+    os.makedirs(out, exist_ok=True)
 
     # 1) bundle：entry + mermaid stub alias（决策 4）。
     #    node 的模块解析从「entry 所在目录」向上找 node_modules ⇒ entry/stub 先落进钉住的 build 树内，编完即删。
