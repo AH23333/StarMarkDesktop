@@ -2142,3 +2142,52 @@ A1 把值翻成 <c>true</c> ⇒ 只红「值那一格」；A2 在 <c>UIOptions</
 修法＝<b>就地并成一颗</b>，两句原文一颗⛔ 丢：那颗标题行取「<c>## ✅P-252（片72 立・<b>片75 结案</b>）＝</c>⟨结案那句⟩（立案那一问＝⟨立案那句⟩）」，旧那一节多余的一颗标题降成正文里的一句粗体「<c>**结案正文（片75・真机・同一把六臂尺）＝⟨结案那句⟩**</c>」。<b>为什么⛔ 直接删掉立案那一问</b>＝那是「当初为什么立它」那条链的唯一落点（名册 446：改写上一批那颗条目时⛔ 把它原本的记号一起抹掉）；而⛔ 留两颗标题＝读数继续说反话。那两句都从<b>盘上现读</b>再拼，⛔ 由我抄（抄一次就⛔ 是那颗 252 的第三次漂移）。
 
 改后那颗尺<b>真跑两次</b>：先把并完那三份字节落成临时件跑一遍（<c>bin/WI98/tmp78_ruler.txt</c>＝<c>VERDICT OK</c>・退出码 <b>0</b>），落盘后再对<b>盘上那份</b>跑一遍＝两份输出<b>逐字相等</b>（正本 <c>bin/WI98/dup78_after.txt</c>）。现读 标题 <b>254</b> ↔ 编号 <b>254</b>；那颗尺从此<b>自带判语与退出码</b>（一颗编号多颗标题＝非 0 退出），下一批可以直接把它挂在链上⛔ 再凭"颗数对得上"当合格读数。计数器 <b>255／带✅119／不带136</b> → <b>254／带✅119／不带135</b>（本批<b>新立 0／结案 0</b>＝纯交账・⛔ 动一行业务码・⛔ 动坑表一颗字）。
+
+## 三十九、片79 读码腿（2026-10-22·P-242 剩下那两颗旋钮<b>读到调用点</b>・⛔ 动一行业务码・⛔ 动随包资产・⛔ 起窗）
+＝那颗「⛔ 交回」的裁决第一次有<b>腿级</b>读数：门在（与缩放／背景同一颗 opts 门）・存储那条腿在本包<b>压根不在</b>・板档那条腿只带四颗・
+唯一剩下的 setter 是引擎注册表里那三颗<b>⛔ keyTest</b> 的动作，而它们的面板只住在那颗已关死的框里。
+
+### 39.1 先说那颗尺
+随包 <c>excalidraw.min.js</c> 现读 4878772 颗字节／sha 923fa221d0a4（与产物树那份逐字节相等=True）・
+复称 <b>34 格・坏格 0 颗</b>（正本 <c>bin/WI98/knob79_console.txt</c>，尺 <c>bin/WI98/knob_79.py</c>）。
+
+### 39.2 门在，而且是同一颗门
+· PNG 那一支逐字（offset 2556185）＝<c>w Error("couldn't export to blob"));t&&u===kA.png&&A.appState?.exportEmbedScene&&(t=await aw({blob:t,metadata:oo(A.elements,A.appSta</c>＝<b>⛔ 只在 png 那一档嵌</b>；
+· SVG 那一支是那颗 public <c>exportToSvg</c>，逐字（offset 2520131）＝<c>,o)try{PfA({metadataElement:h,payload:oo(A,u,e||{},"local")})}</c>；
+· 深色那一颗改的是<b>绘制档</b>（offset 2519120）＝<c>theme:u.exportWithDarkMode?XA.DARK:XA.LIGHT</c>；
+· 出厂默认（offset 2169095）＝<c>exportBackground:!0,exportScale:k5A,exportEmbedScene:!1,exportWithDarkMode:!1</c>＝那两颗恒假。
+⇒ 页侧那颗 opts 的 <c>appState</c>（<c>board-bridge.js</c> 现读 <c>appState: Object.assign({}, API.getAppState(), prefs),</c>）就是门，
+而宿主只递四颗：['kind', 'skipInliningFonts', 'exportScale', 'exportBackground']＝那两颗<b>从来⛔ 由我递</b>，取值＝引擎那份<b>活值</b>。
+
+### 39.3 活值⛔ 来自存储（本包里那条腿压根不在＝片62/64 那句『引擎自己会存、下次带回来』由源码判掉）
+· 那颗三档过滤器 <c>kx</c> 全档调用点 <b>2 颗</b>（@2174739 / @2174761），实参档名现读=['export', 'server']＝<b>⛔ 一处问 browser 那一档</b>；
+· 那颗 localStorage 包装 <c>Ro</c> 的调用点只认 ['MERMAID_TO_EXCALIDRAW', 'PUBLISH_LIBRARY'] 两颗键，而那批键逐字（offset 2167860）=rQ={OAI_API_KEY:"excalidraw-oai-api-key",MERMAID_TO_EXCALIDRAW:"mermaid-to-excalidraw",PUBLISH_LIBRARY:"publish-library-data"}＝里面<b>⛔ 一颗状态键</b>；
+· <c>saveAppState</c> 那颗函数名全档 0 颗（对照 <c>getAppState</c> 11 颗＝那颗尺⛔ 聋）。
+
+### 39.4 活值⛔ 来自板档
+白名单里 <c>export:!0</c> 的键现读=['gridModeEnabled', 'gridSize', 'gridStep', 'viewBackgroundColor']＝与桥里那句注释<b>同形</b>（独立复称一次）；
+那两颗的三档现读＝exportWithDarkMode('0', '1', '1')・exportEmbedScene('0', '1', '1')（三位＝browser/export/server，<c>!0</c>＝真）⇒ <b>export 那一档是假＝进⛔ 了板档</b>，载入那一拍也带不回它们。
+
+### 39.5 唯一剩下的 setter＝注册表那三颗动作・而它们⛔ 键盘可达
+· <c>WRA</c>＝name:['name', 'label', 'trackEvent', 'perform', 'PanelComponent']（offset 4467058）・<c>l3A</c>（offset 4464615）・<c>qRA</c>（offset 4464230）
+  三颗的顶层键<b>全⛔ predicate／⛔ keyTest</b>＝没有键盘那一发，只有那颗框里的 <c>PanelComponent</c>；
+· 对照件：<c>toggleTheme</c> 那颗<b>有</b> predicate（offset 4454855，键=['name', 'label', 'keywords', 'icon', 'viewMode', 'trackEvent', 'perform', 'keyTest', 'predicate']，逐字 <c>predicate:(A,u,e,C)=>!!C.props.UIOptions.canvasActions.toggleTheme</c>）＝同一族里「有判据」与「没判据」两副脸分得开；
+· 命令面板那条腿由源码断：<c>bXA</c>（装那颗 Ctrl+/・Ctrl+Shift+P 监听的那颗组件）按<b>标识符</b>边界全档现读 <b>1 颗＝只有定义处</b>，渲染点 <c>jsx)(bXA</c> <b>0 颗</b>；
+  那颗键形逐字 <c>CcA=A=>!A.altKey&&A[J.CTRL_OR_CMD]&&(A.shiftKey&&A.key.toLowerCase()===J.P||A.key===J.SLASH</c> 确实在包里（⛔ 因为我那把尺聋）⇒ 面板起不来，面板里那颗手写的「Export image」项也就永远轮不到发言；
+  ⚠ 这与片17 那次真机读数（点菜单里那颗 CommandPalette 行→<c>.command-palette-dialog</c> 0 颗）<b>两把尺同向</b>＝§26 欠项① 那一格由此合口。
+
+### 39.6 两道 gate 各归谁＝本批那颗<b>归因更正</b>（新立 P-254）
+· 带四颗旋钮的那颗<b>图片</b>导出框，挂载判据逐字（offset 4656924）＝<c>L=()=>!Q.canvasActions.saveAsImage||u.openDialog?.name!=="imageExport"?null:(0,DA.jsx)(OYA,{elements:B,appState:u,files:e,actionManager</c>＝它问的是 <c>canvasActions.<b>saveAsImage</b></c>；
+· 而 <c>canvasActions.export</c> 关的是<b>另一颗</b>：gate 在 offset 4656769＝<c>k=()=>Q.canvasActions.export?(0,DA.jsx)(hvA,{elements:B,appState:u,files:e,actionManager:A,expor</c>，那颗组件本体读的是 <c>0,ge.jsx)(ge.Fragment,{children:u.openDialog?.name==="jsonEx</c>＝<b>JSON 导出</b>那一颗；
+· 桥里两颗都设了 <c>false</c>（现读 <c>export: false,</c> 与 <c>saveAsImage: false,</c>），所以今天两颗都关着＝<b>结论没变，因果写反了</b>：
+  片54／片64 那句「关掉 <c>canvasActions.export</c> 就把那颗带四颗旋钮的框关到⛔ 通」按源码是⛔ 对的，而那颗证人 <c>BoardWindowBridgeGateTests</c> ② 的注释还写着「⛔ 只关一半＝面板没了、快捷键照旧起那颗框」；
+· 后果不空：将来谁按那句注释「优化」掉 <c>saveAsImage:false</c>（它看起来⛔ 归 export 那一族），那颗框连同它自己的系统「另存为」一起回来＝片53／54 那颗 P-240 的坏重演。
+· 那颗框里确实是四颗旋钮（<c>PYA</c> 那四颗 <c>useState</c> 读的档名现读＝['exportBackground', 'exportWithDarkMode', 'exportEmbedScene', 'exportScale']）。
+
+### 39.7 结案判定（P-242 那一族四颗旋钮的账）
+· 缩放：交回・真机阶梯 120x60 → 360x180（正本 <c>bin/WI98/cap64_console_r3.txt</c>）；
+· 背景：交回・同一颗 1× 两档一对＝开 全透明=0 半透明=0 ↔ 关 全透明=6022 半透明=562（那颗「关」的产物 261019-140038-a1b2-261022-103041.png／120x60／RGBA 颗・7200）；
+· 深色模式／包含画布数据：<b>⛔ 交回</b>・本批由 39.2～39.5 那三条腿证到<b>恒假</b>（⛔ 一条路能把它们拨真）；
+· 复制到剪贴板：照旧维持片54 那颗裁决（覆盖他剪贴板⛔ 可逆）；
+· 宿主⛔ 读过那颗深色档（<c>BoardWindow.cs</c> 里两颗名字各 0 处）而画布恒 light（现读 <c>\"theme\":\"light\"</c>）＝⛔ 存在「屏上深色、导出浅色」那一族错位。
+⇒ 本条<b>结案</b>＝⛔ 缺陷・⛔ 改码；欠的那半转成一颗<b>新条目</b>（P-254＝那颗归因与那颗无人 pin 的挂载判据）。
