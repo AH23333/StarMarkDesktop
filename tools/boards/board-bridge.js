@@ -266,7 +266,16 @@
         elements: API.getSceneElements(),
         appState: Object.assign({}, API.getAppState(), prefs),
         files: API.getFiles(),
-        skipInliningFonts: !!skipInliningFonts
+        skipInliningFonts: !!skipInliningFonts,
+        // ⚠ PNG 那一路的缩放<b>只从这颗来得</b>（现读随包 bundle 里那颗 exportToCanvas 的形参表：它⛔ 收
+        // <c>exportScale</c>，只有连 <c>maxWidthOrHeight</c> 一起给的那一支才回头乘 appState 里那颗；
+        // 没给时尺寸取 <c>getDimensions()</c> 的返回值、系数取其中那颗 <c>scale ?? 1</c>）。
+        // 真机两处同向：三档产物逐颗同宽（bin/WI98/cap64_console_r2.txt），而页面<b>确实收到了档位</b>
+        // （档名念回 rx3，bin/WI98/cap74_console_r2.txt）；在 opts 顶层再放一颗 exportScale 也⛔ 响（同一份臂 C）。
+        // 那颗 SVG 走的是另一颗函数，它读 appState 里那一颗，所以这里⛔ 动它（<c>undefined</c>＝沿引擎默认那颗尺寸）。
+        getDimensions: prefs.exportScale ? function (w, h) {
+          return { width: w * prefs.exportScale, height: h * prefs.exportScale, scale: prefs.exportScale };
+        } : undefined
       };
       var toBlob = kind === "svg"
         ? L.exportToSvg(opts).then(function (node) { return new Blob([node.outerHTML], { type: "image/svg+xml" }); })

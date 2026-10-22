@@ -49,6 +49,25 @@ public sealed class BoardWindowBridgeGateTests
             Assert.Equal(1, Count(js, "case \"" + name + "\""));
     }
 
+    /// <summary>
+    /// 缩放那一档在真机上坏过一次：三档产物<b>逐颗同宽 120</b>（正本 <c>bin/WI98/cap64_console_r2.txt</c>），
+    /// 而页面确实收到了档位（<c>bin/WI98/cap74_console_r2.txt</c> 里那颗档名念回 <c>rx3</c>）。
+    /// 根因由随包 bundle 里那颗 <c>exportToCanvas</c> 的形参表说清：它<b>⛔ 收</b> <c>exportScale</c>，
+    /// 缩放只从 <c>getDimensions()</c> 返回值里那颗 <c>scale</c> 来得（没给时恒 1×）。
+    /// ⇒ 页面那颗 opts 必须走 <c>getDimensions</c> 这一道门；顶层再放一颗<b>没人读的</b> <c>exportScale</c>
+    /// 就是给下一个同坑留位（修好的阶梯 120→240→360，正本 <c>bin/WI98/cap64_console_r3.txt</c>）。
+    /// </summary>
+    [Fact]
+    public void ThePngExportCarriesTheScaleThroughTheOnlyDoorTheEngineReads()
+    {
+        var js = ReadRepo(BridgeJs);
+        Assert.Equal(1, Count(js, "getDimensions: prefs.exportScale ? function (w, h) {"));
+        Assert.Equal(1, Count(js, "return { width: w * prefs.exportScale, height: h * prefs.exportScale, scale: prefs.exportScale };"));
+        // 那颗档位只有一个去处（appState＝SVG 那一路读的），且⛔ 在 opts 顶层再出现一颗同名键
+        Assert.Equal(1, Count(js, "prefs.exportScale = scale;"));
+        Assert.Equal(0, Count(js, "exportScale:"));
+    }
+
     [Fact]
     public void BridgeJsNeverPostsAnUnknownCmdLiteral()
     {
