@@ -1964,3 +1964,47 @@ A1 把值翻成 <c>true</c> ⇒ 只红「值那一格」；A2 在 <c>UIOptions</
 
 臂 B 落出的档名现读 <c>-rx3-2.png</c>＝以 <c>-</c> 开头：宿主把页面递的 <c>suggested</c> 拼进落盘名，空串／怪串那一形状有没有消毒，留给档名那颗主人（<c>BoardPolicy</c>・片55 那条线）下一次读码问；本批⛔ 动它（读数没问完）。
 
+## 三十六、片75 落地腿（2026-10-22·宿主给 frame 那一族补上第二道・「挡得到」有真机痕・「放行」那一支还欠着）
+
+### 36.1 现场：第二道从前只认 <c>img/fetch/字体</c> 那一族
+
+片72 臂 D（正本 <c>bin/WI98/board72_console_r4.txt</c>）递一颗远程 <c>iframe</c>・摘掉那颗 <c>meta</c>，宿主 <c>boards.net.foreign</c> 交回 <b>0 颗</b>，而同跑同尺那颗 <c>img</c>（臂 C）念出 1 颗并回 <c>451</c> ⇒ 那颗观察者<b>听不到 subframe 导航</b>（⛔ 尺聋，是那一族压根⛔ 走这道），于是新立 P-252。本批换一副现场重跑同一把六臂尺（<c>bin/WI98/frame75_evidence_r1.txt</c>・收口 <c>BOARD72 rc=0 坏格=1 臂数=6</c>）：臂 D 这次 <c>probe 行=0・1</c>，而那颗 <c>foreign</c> 仍是 0——多出来的那一行是<b>新那道门自己念的</b>（见 36.4）。
+
+### 36.2 落地（一处・宿主侧・判据口径照顶层那颗）
+
+<c>src/StarMark.UI/Boards/BoardWindow.cs</c> 订阅那颗事件（订那一手逐字 <c>_web.CoreWebView2.FrameNavigationStarting += OnFrameNavigationStarting;</c>；档里那颗事件名现读 5 处＝订・卸・方法名，与 <c>NewWindowRequested</c>／<c>NavigationStarting</c> 排在一起，订之前先摘一次＝可重入），并多一个方法体（逐字取自盘上那份，共 11 行）：
+
+        private void OnFrameNavigationStarting(CoreWebView2 sender, CoreWebView2NavigationStartingEventArgs e)
+    {
+        var raw = e.Uri;
+        Uri? uri = raw is not null && Uri.TryCreate(raw, UriKind.Absolute, out var parsed) ? parsed : null;
+        if (!BoardsAssetPolicy.IsOutboundDenyUri(uri, VirtualHostName)) return;
+        e.Cancel = true;
+        _frameNavBlocked++;
+        StarMark.Abstractions.StarLog.Warn(
+            "boards.frame.nav.blocked n=" + _frameNavBlocked
+            + " target=" + BoardsAssetPolicy.DescribeRequestTarget(uri) + " id=" + _boardId);
+    }
+
+三颗口径写死在证人里：<b>判据同一颗</b>（<c>BoardsAssetPolicy.IsOutboundDenyUri(uri, VirtualHostName)</c>＝与那颗资源级观察者与顶层导航共用一颗出处，⛔ 第二份名单）、<b>⛔ 留放行痕</b>（放行那一支一颗字也⛔ 进日志，痕只给挡下的那一发）、<b>痕里⛔ 念那颗 URL</b>（走 <c>DescribeRequestTarget</c>＝只报方案＋主机名，端口与路径照隐私口径丢掉；那颗 <c>e.Name</c> 也⛔ 递进去——它是页面给的字符串，进日志＝多一处可由页侧控制的字段）。
+
+### 36.3 证人与反向台架
+
+<c>tests/StarMark.Tests/BoardNetBoundaryGateTests.cs</c>：旧格 <c>HostSubscribesEveryGateBeforeItNavigates</c> 的名册加上那颗 <c>FrameNavigationStarting</c>（三颗一起数＝装没装上一把尺问）；新格 <c>FrameGateCancelsForeignSubframesAndNarratesNothing</c> 逐颗钉：那颗判据调用・<c>e.Cancel = true;</c>・计数器恰好一次・痕那句前缀・<c>e.Uri</c> 恰好一次・<c>e.Name</c> 零次・<c>return;</c> 恰好一次且<b>排在</b> <c>e.Cancel</c> <b>之前</b>（放行那一支⛔ 走到挡下的那三行）。台架 <c>bin/WI98/bench_75.py</c>＝<b>7 臂里对了 7／7</b>：M1（摘掉那颗订阅）红在 <c>HostSubscribesEveryGateBeforeItNavigates</c>，M2～M5（取消那一手没了／放行也留痕／把那颗帧名递进痕／计数器加两次）各红在 <c>FrameGateCancelsForeignSubframesAndNarratesNothing</c>，N0（<c>对照件：只改一句无关注释（证人⛔ 红）</c> 那颗对照件）⛔ 红＝证明它⛔ 是「整档一动就响」的噪声尺；收口 <c>与起手逐字节相等=True（sha a6e0b214055b↔a6e0b214055b）</c>。
+
+### 36.4 真机那一发（P-252 的结案读数）
+
+同一颗产品画板窗、同一把六臂尺、装上新装配之后（<c>bin/WI98/frame75_evidence_r1.txt</c>）：
+・<b>臂 D 留痕逐字</b>：<c>[2026-10-22T11:18:02.9723782+08:00] WARN boards.frame.nav.blocked n=1 target=http://probe72.invalid id=261019-140038-a1b2</c>＝整档那一族现读 1 行（那颗计数器 n=1 是<b>一扇窗一个</b>・那颗 id=<c>261019-140038-a1b2</c> 是那一发的画板名＝痕能指回哪一扇窗），对照：<c>boards.net.foreign</c> 4 行・<c>boards.cmd.not-wired</c> 0 行，那颗 <c>target</c> 念的是 <c>http://probe72.invalid</c>＝方案＋主机名那一形状，端口与路径照旧丢掉；
+・<b>挡下⛔ 把画布一起带走</b>：臂 D <c>ready=1・nav.done.ok=['True']・非白 0.0833</c>，基准臂 A <c>ready=1・nav.done.ok=['True']・非白 0.0765</c>＝那颗门只掐frame 那一发，页与树照旧起得来；
+・<b>那颗资源级观察者照旧听不到 frame</b>：臂 D <c>foreign=0・1</c>（同跑臂 C 那颗 <c>img</c> 是 <c>1・1</c>）＝导航级先取消，资源那一发压根没发生＝两道门的<b>先后</b>现在有读数；
+・<b>旧那颗坏格没被我动</b>：臂 E↔F 块差 0／144 块改了・非白 E=0.10897435897435898・F=0.10897435897435898＝与片72 r4 <b>逐字相等</b>（那颗画布上 <c>iframe</c> 元素没渲染＝P-248 的欠格照旧，本批⛔ 拿它说话）。
+
+### 36.5 「放行」那一支：⛔ 拿「没留痕」当正件 ⇒ 另立 P-253
+
+同源那颗（虚站 <c>appassets.local</c> 自己供的文档）过没过去，<b>今天取不到产品读数</b>：放行那一支⛔ 留痕（36.2 那颗口径），所以「blocked=0」同时是「放行了」与「压根没走到」两张脸（名册 422／458：动作尺⛔ 正件・尺聋与挡下了同一个脸）。本批为它写了一把两臂尺 <c>bin/WI98/frame_75.py</c>（臂 G＝同源那颗，臂 H＝外站那颗，<b>同一份注入脚本只差那颗 src</b>；页侧回话借宿主已有那道门 <c>boards.cmd.not-wired cmd=…</c>，⛔ 为仪器为产品新加出口；另配一颗 <c>pin.request</c> 心跳当通道自检），<b>两跑都停在第 0 道核对</b>：r1 现读 <c>离最后一次输入=1375.0 秒・输入桌面=Screen-saver・前台窗=0</c>（屏保后），r2 现读 <c>离最后一次输入=2.5 秒・输入桌面=Default・前台窗=0x100c2</c>（他在用机）⇒ <c>FRAME75 rc=2 坏格=0 臂数=0</c>。⛔ 抢、⛔ 绕，那一格交 P-253。
+
+### 36.6 这颗改动对用户可见行为的影响（裁决口径：安全＞稳定＞性能）
+
+画布上那颗 <c>iframe</c> 元素若指向<b>远程</b>站：从前只有页带那颗 <c>frame-src 'none'</c> 挡着（页⛔ 唯一一份＝一改动就整条敞），现在宿主这一道也挡、且留一行痕。若指向<b>同源</b>文档：行为⛔ 变（这道门按同一颗判据放行虚站），但那一半还欠 36.5 那颗读数。PNG／SVG 那颗导出缩放与本批无关（片73～74 已结案）。
+
