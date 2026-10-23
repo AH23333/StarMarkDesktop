@@ -252,7 +252,7 @@ public sealed class BoardWindow : Window
 
     /// <summary>那两句的计时器（一颗、懒建、只由 <see cref="BoardPolicy.LinkNoticeMs"/> 定时）。
     /// <para>⛔ 每次开口新建一颗：Tick 挂着这一窗，新建而不摘＝每发失败的点击多留一位订阅者（P-198 那一族）。</para></summary>
-    private Microsoft.UI.Dispatching.DispatcherTimer? _linkNoticeTimer;
+    private DispatcherTimer? _linkNoticeTimer;
 
     /// <summary>面板上那句"已另存到 &lt;路径&gt;"指的<b>那颗档</b>（生产者⛔ 一处：那颗「另存一份到别处」）。
     /// <para>⛔ 进表，因为它是<b>数据</b>而⛔ 句子（P-193 那条口径）。那一发导出的产物⛔ 写这一颗——它住在右上角
@@ -1629,10 +1629,12 @@ public sealed class BoardWindow : Window
         _linkNoticeTimer.Start();
     }
 
-    /// <summary>那一颗懒建的计时器：间隔只有 <see cref="BoardPolicy.LinkNoticeMs"/> 一颗出处，响了就去问 <see cref="HideLinkNotice"/>。</summary>
-    private Microsoft.UI.Dispatching.DispatcherTimer NewLinkNoticeTimer()
+    /// <summary>那一颗懒建的计时器：间隔只有 <see cref="BoardPolicy.LinkNoticeMs"/> 一颗出处，响了就去问 <see cref="HideLinkNotice"/>。
+    /// <para>类型名⛔ 带旧 SDK 那颗 Dispatching 命名空间前缀：Windows App SDK 2.3 里 <c>DispatcherTimer</c> 住在
+    /// <c>Microsoft.UI.Xaml</c>（与本档其余那颗定时器同一写法），带旧前缀＝CS0234 编译不过。</para></summary>
+    private DispatcherTimer NewLinkNoticeTimer()
     {
-        var timer = new Microsoft.UI.Dispatching.DispatcherTimer
+        var timer = new DispatcherTimer
         { Interval = TimeSpan.FromMilliseconds(BoardPolicy.LinkNoticeMs) };
         timer.Tick += (_, _) => HideLinkNotice();
         return timer;

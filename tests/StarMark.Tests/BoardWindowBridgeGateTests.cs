@@ -813,7 +813,11 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Equal(1, Count(code, "BoardPolicy.LinkNoticeMs"));
         Assert.Equal(8000, BoardPolicy.LinkNoticeMs);
         // ⑤⑥ 懒建一颗＋拆窗摘掉
-        Assert.Equal(1, Count(code, "new Microsoft.UI.Dispatching.DispatcherTimer"));
+        // ⚠ 那颗类型⛔ 带旧 SDK 的 Dispatching 命名空间前缀：Windows App SDK 2.3 里它住在 Microsoft.UI.Xaml
+        // （本仓其余八处同写法），带前缀＝CS0234 编译不过——而那颗定时器住的这一档⛔ 被测试工程引用，
+        // 只有 `dotnet build` 抓得到（§四百六十九・坑表 #940：定向证人绿⛔ 等于那一刀编译过）。
+        Assert.Equal(1, Count(code, "new DispatcherTimer"));
+        Assert.Equal(0, Count(code, "Microsoft.UI.Dispatching"));
         Assert.Equal(1, Count(code, "_linkNoticeTimer ??= NewLinkNoticeTimer();"));
         Assert.Contains("_linkNoticeTimer?.Stop();", SourceGate.MethodBody(code, "void OnClosed"), StringComparison.Ordinal);
         Assert.Equal(2, Count(code, "_linkNoticeTimer?.Stop();"));    // 收自己那一句＋拆窗那一拍
