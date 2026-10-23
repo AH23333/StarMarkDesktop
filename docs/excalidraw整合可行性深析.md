@@ -109,7 +109,7 @@ action 注册表实测 44 个（前两轮普查逐条在列），按族归并：
 **坑1 · "1:1"口径无治理** —— 验收必翻案。措辞钉死为"编辑器功能 1:1、产品外壳按 D 表"，写进任务书本档和验收，三处一致。
 **坑2 · WebView2 = 新运行时但文档叙事当旧件** —— 本项目实测零引用；"RSS 有 WebView2 先例"是浏览器扩展的事实混入（本分析自己差点顺手写成"复用既有"——已在本会话内实抓自纠，**教训**：集成叙事先实查两仓）。落地批的 csproj diff 会第一次引入该包，review 时按"新运行时引入"重量级过。
 **坑3 · TTD/PublishLibrary 的 fetch 在关不掉的版本上静默死亡** —— 关法以 spike 实测为准 + 按钮摘除双保险；"点了没反应 30 秒"是本仓定性过的坏。
-**坑4 · 字体 esm.sh 远程回退（实测硬编码，fonts/ExcalidrawFontFace.ts:24）** —— `createUrls` 本地 URL 在前回退在后，但**打包后 import.meta.env.PKG_* 缺失时回退变 latest 远程**。处置：构建时注入 PKG_NAME/VERSION（或 patch 掉回退）；spike 必须做**断网全字体验证**（中/英/emoji/手写体逐族，含 Xiaolai 中文断网）。〔片9 更正 那颗基座的因果与第一颗出路〕先读官方全局 <c>window.EXCALIDRAW_ASSET_PATH</c>（字符串／数组），再把 <c>ASSETS_FALLBACK_URL</c>＝<c>https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/</c> <b>永远追加成最后一颗候选</b>（<c>createUrls</c> 函数体逐字见 §19.1；随包 dist 在 <c>dev/chunk-3KPV5WBD.js:4926～4951</c>，我自己那颗 min 同段在 <c>@2272572</c>）。⛔ 人配基座时名单里<b>只有那颗 CDN</b>——这才是默认坏法（r3／r5 引擎原话 <c>Failed to load font "16px Virgil, Segoe UI Emoji" from urls "https://esm.sh/…"</c>，urls 后面就一颗）。那句「<c>import.meta.env.PKG_*</c> 缺失时回退变 latest 远程」在这份包里兑现⛔：我钉的这颗 dist 现读带版本 <c>@0.18.0</c>。处置第一颗＝宿主页面一行 <c>window.EXCALIDRAW_ASSET_PATH="/"</c>（那颗包 <c>README.md:24</c> 逐字给的就是这一行）＋<c>dist/prod/fonts</c> 随包；构建期注入 PKG_NAME/VERSION 或 patch 回退降为第二颗。
+**坑4 · 字体 esm.sh 远程回退（实测硬编码，fonts/ExcalidrawFontFace.ts:24）** —— `createUrls` 本地 URL 在前回退在后，但**打包后 import.meta.env.PKG_* 缺失时回退变 latest 远程**。处置：构建时注入 PKG_NAME/VERSION（或 patch 掉回退）；spike 必须做**断网全字体验证**（中/英/emoji/手写体逐族，含 Xiaolai 中文断网）。〔片9 更正 那颗基座的因果与第一颗出路〕先读官方全局 <c>window.EXCALIDRAW_ASSET_PATH</c>（字符串／数组），再把 <c>ASSETS_FALLBACK_URL</c>＝<c>https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/</c> <b>永远追加成最后一颗候选</b>（<c>createUrls</c> 函数体逐字见 §19.1；随包 dist 在 <c>@excalidraw/excalidraw 0.18.0 的 dist/dev/chunk-3KPV5WBD.js:4926～4951（历史0.18.0；锚 static createUrls(uri) {）</c>，我自己那颗 min 同段在 <c>@2272572</c>）。⛔ 人配基座时名单里<b>只有那颗 CDN</b>——这才是默认坏法（r3／r5 引擎原话 <c>Failed to load font "16px Virgil, Segoe UI Emoji" from urls "https://esm.sh/…"</c>，urls 后面就一颗）。那句「<c>import.meta.env.PKG_*</c> 缺失时回退变 latest 远程」在这份包里兑现⛔：我钉的这颗 dist 现读带版本 <c>@0.18.0</c>。处置第一颗＝宿主页面一行 <c>window.EXCALIDRAW_ASSET_PATH="/"</c>（那颗包 <c>README.md:24</c> 逐字给的就是这一行）＋<c>dist/prod/fonts</c> 随包；构建期注入 PKG_NAME/VERSION 或 patch 回退降为第二颗。
 **坑5 · woff2 子集化 wasm 也是 fetch 加载（subset/woff2/woff2-bindings.ts 实测）** —— 子集化管线断网失效=字体回退+首屏字形突变。处置同坑4：wasm 随包 + 加载路径本地化核验（该 wasm 是 Emscripten 产物，URL 可配置性 spike 实证）。〔片9 更正 那句在我钉的这颗 <c>0.18.0</c> 随包 dist 里兑现⛔〕整棵 <c>dist</c> 走一遍 <c>.wasm</c> 档 <b>0</b> 颗；两颗 wasm 以 base64 活在 <c>prod/chunk-EIO257PC.js</c>（1 824 966 字节）里，解码后 <b>727 188</b>／<b>590 664</b> 字节，magic 四颗字节都是 <c>00 61 73 6d</c>；子集化那颗的点火点吃的是内联字节（min <c>@2073652</c>：<c>WebAssembly.instantiate(那颗base64解出的buffer)</c>，出口形状 <c>{subset:…}</c>）⇒「wasm 随包」这一格由「它本来就在 JS 里」兑现。r5 里 <c>WebAssembly.instantiate</c> 0 次＝它<b>没被叫到</b>（它排在「字体字节取到」之后，§19.2），⛔ 等于「断网时它坏」。读数正本＝<c>bin/WI83/spike2c_probe_83bc.txt</c> ②／③ 段。
 **坑6 · 字体授权未核完** —— 11 族里 Virgil/Excalifont/Lilita/Cascadia/Xiaolai/Assistant/Nunito…许可证不一（Xiaolai 是 OFL、Cascadia MIT 可再查）；**代码 MIT 不含资产授权**；随包分发前逐族写 NOTICE（桌面仓库有 NOTICE 先例=WordList.Dic 那一族惯例）；Emoji 目录实测 0KB（可能是索引样式声明）——spike 核实它到底是什么，别默认中文 emoji 能画。
 **坑7 · Xiaolai 单族 12.4MB 的体积决策** —— 不打=中文手绘观感降级为系统字体（用户拿它就是因为中文好看）；打=dist 从 ~2MB 级跳到 ~15MB 级（未实测 bundle 总量，**数字要实测后才许写**）。倾向打但列为 §九决策 4。
@@ -801,12 +801,12 @@ Xiaolai 随包那一颗的代价现在有三段，⛔ 只第一段是体积：
 |---|---|
 | 那颗 3 600×3 600 噪声 PNG | <b>20 298 916</b> 字节（≈19.4 MiB；我那句 <c>over20MB</c> 按 20 MiB 判⇒报 False，口径以颗字节为准） |
 | 拖进去之后屏幕上出现什么 | 一颗居中 <b>Error</b> 卡：<c>File is too big. Maximum allowed size is 4MB.</c>（<c>out_r5/shots/r5_after_drop.png</c>）＋背景压暗 |
-| 减重管线跑到没 | <b>跑到</b>〔片9 就地更正：这一格上一版把「⛔ 到」与「compile 2 次」写进了同一行的两个半句，我读前半⛔ 读后半〕那颗闸门在减重<b>之后</b>：<c>dev/index.js:28411</c> 先 <c>resizeImageFile(imageFile,{maxWidthOrHeight:1440})</c>，<c>:28420</c> 才 <c>if(imageFile.size&gt;4*1024*1024) throw</c>（两颗常数原名 <c>DEFAULT_MAX_IMAGE_WIDTH_OR_HEIGHT</c>／<c>MAX_ALLOWED_FILE_BYTES</c>，定义在 <c>dev/chunk-3KPV5WBD.js:322／:323</c>）。而我<b>自己在 r5 就录了它跑过</b>：<c>attempts[2]/[3]=wasm.compile</c>（t=16 104／16 105 ms），同一把全局尺在更早那格 <c>export-svg-detail</c> 读到 <c>wasmNow=0</c> ⇒ 那两次落在那两格之间＝那颗拖放路径里；min 里 <c>WebAssembly.compile</c> 只有两种调用形状（<c>@2093525／@2128643</c>），同属一颗内部标签写着 <c>mathlib</c>、由 <c>onmessage</c>＋<c>OffscreenCanvas</c> 驱动的模块＝pica 那颗，base64 内联⇒<b>断网可用、⛔ 远程 .wasm 请求</b> |
+| 减重管线跑到没 | <b>跑到</b>〔片9 就地更正：这一格上一版把「⛔ 到」与「compile 2 次」写进了同一行的两个半句，我读前半⛔ 读后半〕那颗闸门在减重<b>之后</b>：<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:28411（历史0.18.0；锚 imageFile = await resizeImageFile(imageFile, {）</c> 先 <c>resizeImageFile(imageFile,{maxWidthOrHeight:1440})</c>，<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:28420（同一历史包；锚 if (imageFile.size &gt; MAX_ALLOWED_FILE_BYTES) {）</c> 才 <c>if(imageFile.size&gt;4*1024*1024) throw</c>（两颗常数原名 <c>DEFAULT_MAX_IMAGE_WIDTH_OR_HEIGHT</c>／<c>MAX_ALLOWED_FILE_BYTES</c>，定义在 <c>@excalidraw/excalidraw 0.18.0 的 dist/dev/chunk-3KPV5WBD.js:322～323（历史0.18.0；锚 var DEFAULT_MAX_IMAGE_WIDTH_OR_HEIGHT = 1440; ／ var MAX_ALLOWED_FILE_BYTES = 4 * 1024 * 1024;）</c>）。而我<b>自己在 r5 就录了它跑过</b>：<c>attempts[2]/[3]=wasm.compile</c>（t=16 104／16 105 ms），同一把全局尺在更早那格 <c>export-svg-detail</c> 读到 <c>wasmNow=0</c> ⇒ 那两次落在那两格之间＝那颗拖放路径里；min 里 <c>WebAssembly.compile</c> 只有两种调用形状（<c>@2093525／@2128643</c>），同属一颗内部标签写着 <c>mathlib</c>、由 <c>onmessage</c>＋<c>OffscreenCanvas</c> 驱动的模块＝pica 那颗，base64 内联⇒<b>断网可用、⛔ 远程 .wasm 请求</b> |
 | 那颗常量在包里长什么样 | <c>Ine=4*1024*1024</c>（<c>dist/spike1.min.js</c> 现读 1 次）；<b>⛔ 任何 prop／env 出口</b> |
 | 那句正文进没进语言表 | <c>fileTooBig</c> 在 bundle 里出现 <b>55</b> 次＝55 份语言表各一颗（引擎自己按 <c>langCode</c> 念，⛔ 走我的表） |
 
-⇒ <b>形2</b>：StarMark 那条「截图／贴图进画板」的集成路线，在默认包下会被这堵墙挡在门外——<b>4K 全屏一张 PNG 常&gt;4 MB</b>，而那颗闸门⛔ 出口、⛔ 配置〔片9 更正：上一版这颗「也⛔ 走减重」是错的——它就排在减重之后，见本节那颗表第一行与 §19.3〕。 〔片9 同段补一颗边界〕那颗 resize 对 <b>SVG 原样返回</b>（<c>dev/chunk-3KPV5WBD.js:24819～24821</c>），且输出 <c>type</c> 沿用原档（<c>:24846</c>）⇒ 拖 PNG 进去不会自动转 JPEG 减重。
-⇒ 出口（<b>片9 按源码重排，代价从低到高</b>）：<b>①</b>罩着那颗闸门的整块 <c>if</c> 有现成出口——<c>dev/index.js:28409</c> <c>if(!this.files[fileId]?.dataURL)</c>：宿主<b>自己缩好、自己编成 <c>dataURL</c> 交进 <c>files</c></b> ⇒ 减重与闸门<b>一起跳过</b>（那颗 <c>fileId</c> 可由 prop <c>generateIdForFile</c> 影响，<c>:28399</c>）；源码判，§19.5 那一臂才兑现，代价＝跳过引擎那颗 1440 之后<b>尺寸上限得我自己给</b>，否则原图整颗进场景。<b>②</b>⛔ 动任何东西、直接拖——引擎那颗 1440 已把多数照片味压进闸内（待量）。<b>③</b>打包期换那颗常数（一次改一颗，代价＝与上游漂移，§坑16 那一族）。<b>④</b>那条路⛔ 走引擎文件入口，改走「画板背景／贴图」那颗⛔ 经闸的通道。<b>两颗排障形状（本腿新撞）</b>：那颗 resize 抛错只 <c>console.error("Error trying to resizing image file on insertion",…)</c>（<c>:28415</c>）⇒ 原图裸着去撞闸门，屏幕上那句「too big」有可能是「解码失败」；<c>resizeImageFile</c> 对 SVG 原样返回 ⇒ 那颗也直接撞闸门。
+⇒ <b>形2</b>：StarMark 那条「截图／贴图进画板」的集成路线，在默认包下会被这堵墙挡在门外——<b>4K 全屏一张 PNG 常&gt;4 MB</b>，而那颗闸门⛔ 出口、⛔ 配置〔片9 更正：上一版这颗「也⛔ 走减重」是错的——它就排在减重之后，见本节那颗表第一行与 §19.3〕。 〔片9 同段补一颗边界〕那颗 resize 对 <b>SVG 原样返回</b>（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/chunk-3KPV5WBD.js:24819～24821（历史0.18.0；resizeImageFile内锚 if (file2.type === MIME_TYPES.svg) {）</c>），且输出 <c>type</c> 沿用原档（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/chunk-3KPV5WBD.js:24846（同一历史包；锚 type: opts.outputType || file2.type）</c>）⇒ 拖 PNG 进去不会自动转 JPEG 减重。
+⇒ 出口（<b>片9 按源码重排，代价从低到高</b>）：<b>①</b>罩着那颗闸门的整块 <c>if</c> 有现成出口——<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:28408～28409（历史0.18.0；锚 if (!existingFileData?.dataURL) {）</c> <c>if(!this.files[fileId]?.dataURL)</c>：宿主<b>自己缩好、自己编成 <c>dataURL</c> 交进 <c>files</c></b> ⇒ 减重与闸门<b>一起跳过</b>（那颗 <c>fileId</c> 可由 prop <c>generateIdForFile</c> 影响，<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:28399～28401（同一历史包；锚 const fileId = await (this.props.generateIdForFile?.(）</c>）；源码判，§19.5 那一臂才兑现，代价＝跳过引擎那颗 1440 之后<b>尺寸上限得我自己给</b>，否则原图整颗进场景。<b>②</b>⛔ 动任何东西、直接拖——引擎那颗 1440 已把多数照片味压进闸内（待量）。<b>③</b>打包期换那颗常数（一次改一颗，代价＝与上游漂移，§坑16 那一族）。<b>④</b>那条路⛔ 走引擎文件入口，改走「画板背景／贴图」那颗⛔ 经闸的通道。<b>两颗排障形状（本腿新撞）</b>：那颗 resize 抛错只 <c>console.error("Error trying to resizing image file on insertion",…)</c>（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:28415～28418（同一历史包；锚 Error trying to resizing image file on insertion）</c>）⇒ 原图裸着去撞闸门，屏幕上那句「too big」有可能是「解码失败」；<c>resizeImageFile</c> 对 SVG 原样返回 ⇒ 那颗也直接撞闸门。
 ⇒ §十 点验单那句「拖 20 MB 图→减重管线 wasm 生效」——〔片9 就地更正〕<b>那颗管线有被叫到</b>（r5 同一格里 <c>wasm.compile</c> 2 次，而 r3 那颗 <c>image-paste</c> 格交回 <c>wasmCalls=[]</c>、<c>filesAfter=0</c>＝那一条压根没进插入链），它只是<b>压不动</b>那颗噪声图；那句「生效」要靠一颗<b>可压缩</b>的图才量得出（§19.5 第②臂），⛔ 是这一颗。上一版那句「根本没被叫到」是错的。
 
 ### 18.4 ③ 出口三法：两成一吊，而且「档名」⛔ 归网页
@@ -874,7 +874,7 @@ Xiaolai 随包那一颗的代价现在有三段，⛔ 只第一段是体积：
 
 <b>还欠（⛔ 从表里消失）</b>：
 - <b>观感／口径</b>：菜单展开态那张照片（我这把截图尺⛔ 拍得到弹层，见 18.7 第 2 条的副作用）；手写体断网那两档的<b>肉眼定论</b>；「默认 Key ⛔ 配时那颗按钮是不是死按钮」。
-- <b>机制</b>：那颗 4 MB 墙的三颗出路选哪颗（18.3）；<c>esm.sh</c> 基座改口那三颗（18.2）；<c>woff2.wasm</c> 那颗子集化开关<b>本腿没找到点它的那颗按钮</b>（⇒「断网时它坏没坏」未判定）；<c>onChange</c> 实参位与那颗图数据多大（18.8 第 4 条）。 〔片9 换了一茬：前两颗由 §十九 换成「一颗有官方出处的全局＋四颗出口并排」；那颗 <c>woff2.wasm</c> 拆成两问——<b>断网编不编得好＝编</b>（包内 <c>.wasm</c> 0 颗、base64 内联，§19.4），<b>出没出过字节＝还没被叫到</b>（排在字体字节取到之后，与 §19.5 第①臂同跑判掉）；剩下 <c>onChange</c> 那颗仍欠〕 〔片10 又交一格，⛔ 等那颗窗〕<c>onChange</c> 的实参位次<b>源码判完</b>＝<c>(elements, this.state, this.files)</c> 三颗、<c>files</c> 在第 3 位（<c>dev/index.js:1025104</c>）；那颗 <c>ref</c> 的事另有官方出口 <c>excalidrawAPI</c> prop（§20.1）。
+- <b>机制</b>：那颗 4 MB 墙的三颗出路选哪颗（18.3）；<c>esm.sh</c> 基座改口那三颗（18.2）；<c>woff2.wasm</c> 那颗子集化开关<b>本腿没找到点它的那颗按钮</b>（⇒「断网时它坏没坏」未判定）；<c>onChange</c> 实参位与那颗图数据多大（18.8 第 4 条）。 〔片9 换了一茬：前两颗由 §十九 换成「一颗有官方出处的全局＋四颗出口并排」；那颗 <c>woff2.wasm</c> 拆成两问——<b>断网编不编得好＝编</b>（包内 <c>.wasm</c> 0 颗、base64 内联，§19.4），<b>出没出过字节＝还没被叫到</b>（排在字体字节取到之后，与 §19.5 第①臂同跑判掉）；剩下 <c>onChange</c> 那颗仍欠〕 〔片10 又交一格，⛔ 等那颗窗〕<c>onChange</c> 的实参位次<b>源码判完</b>＝<c>(elements, this.state, this.files)</c> 三颗、<c>files</c> 在第 3 位（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:30537（历史0.18.0；锚 this.props.onChange?.(elements, this.state, this.files);；原调查字符偏移@1025104）</c>）；那颗 <c>ref</c> 的事另有官方出口 <c>excalidrawAPI</c> prop（§20.1）。
 - <b>多窗</b>：两块板窗开同一颗档的冲突表（§12.2）——那是<b>存储接管</b>那一格，⛔ 属本腿。
 
 ### 18.10 对 §八 批形与 §九 决策的位置
@@ -897,14 +897,14 @@ Xiaolai 随包那一颗的代价现在有三段，⛔ 只第一段是体积：
 | 我写的 | 那颗包现读的 | 落在哪儿 |
 |---|---|---|
 | 18.2 出路①「把那颗基座改成本地（换 <c>fonts.css</c> 与那颗运行时常量）」 | 包里躺着一颗<b>官方全局</b> <c>window.EXCALIDRAW_ASSET_PATH</c>，<c>README.md</c>「Self-hosting fonts」一节逐字给了那一行 ⇒ ⛔ 换文件、⛔ 改常量 | §18.2 与 §五 坑4（就地更正） |
-| 18.3 那格「减重管线跑到没＝⛔ 到（闸门在减重<b>之前</b>）」＋末行「那颗管线在这种尺寸下根本没被叫到」 | 顺序<b>相反</b>：<c>dev/index.js:28411</c> 先压到 1440，<c>:28420</c> 才量 4 MB；而我<b>自己在 r5 就录了它跑过</b> | §18.3（就地更正）＋§十 那一格 |
+| 18.3 那格「减重管线跑到没＝⛔ 到（闸门在减重<b>之前</b>）」＋末行「那颗管线在这种尺寸下根本没被叫到」 | 顺序<b>相反</b>：<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:28411（历史0.18.0；锚 imageFile = await resizeImageFile(imageFile, {）</c> 先压到 1440，<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:28420（同一历史包；锚 if (imageFile.size &gt; MAX_ALLOWED_FILE_BYTES) {）</c> 才量 4 MB；而我<b>自己在 r5 就录了它跑过</b> | §18.3（就地更正）＋§十 那一格 |
 | §五 坑5「woff2 子集化 wasm 也是 fetch 加载＝断网即失效」 | 整棵 <c>dist</c> 里 <c>.wasm</c> 档 <b>0</b> 颗，两颗 wasm 以 base64 活在 JS 里 | §五 坑5（就地更正）＋19.4 |
 
 ⇒ 三处都⛔ 是被测对象，都是<b>我</b>：①「读到关键字就当成读到顺序」——那颗包名与那颗顺序我各记过一遍，却⛔ 把它们放进同一句里比；②<b>同一行里自己打自己</b>——「⛔ 到」与「compile 2 次」写进同一格的两个半句，我读前半⛔ 读后半；③<b>把上游早先的形状当现读</b>——坑5 那句来自读 <c>woff2-bindings.ts</c> 的印象，这一腿才真去数那颗包里有几颗 <c>.wasm</c>。三条进 <c>docs/踩坑记录.md</c>（收口腿）。（片10 又添一处：我把「关掉引擎的 <c>LocalData</c> 层」写进了 §十二 那条关键设计，而那一片在这颗包里⛔ 存在——先数再设计，见 §20.4。）
 
 ### 19.1 那颗资产基座：<c>createUrls</c> 的四档出口与那颗全局的语义、时机、射程
 
-出处：<c>dist/dev/chunk-3KPV5WBD.js:4926～4951</c>（未混淆那颗名 <c>ExcalidrawFontFace.createUrls</c>）；我那颗 min 同段在 <c>@2272572</c>，体长 466 字节、括号配平闭于 <c>@2273050</c>，两处<b>分支序列一致</b>。
+出处：<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/chunk-3KPV5WBD.js:4926～4951（历史0.18.0；锚 static createUrls(uri) {）</c>（未混淆那颗名 <c>ExcalidrawFontFace.createUrls</c>）；我那颗 min 同段在 <c>@2272572</c>，体长 466 字节、括号配平闭于 <c>@2273050</c>，两处<b>分支序列一致</b>。
 
 函数体（<b>分支与顺序逐字</b>；行内有缩写、注释是我加的；完整原文＝正本 ③ 段）：
 
@@ -944,7 +944,7 @@ static createUrls(uri) {
 
 ### 19.3 那堵 4 MB 的墙：罩着它的那颗 <c>if</c> 比墙本身更该记住
 
-逐字（<c>dist/dev/index.js:28378</c> 起的那颗 <c>initializeImage</c>；我那颗 min 同段在 <c>@8263778</c>，括号嵌套逐字一致）：
+逐字（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:28378（历史0.18.0；锚 __publicField(this, "initializeImage", async ({）</c> 起的那颗 <c>initializeImage</c>；我那颗 min 同段在 <c>@8263778</c>，括号嵌套逐字一致）：
 
 ```js
 const fileId = await (this.props.generateIdForFile?.(imageFile) || generateIdFromFile(imageFile));   // :28399
@@ -964,7 +964,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 | 2 | 那颗管线在 r5 <b>真跑过</b>：同一格 <c>wasm.compile</c> 2 次（t=16 104／16 105 ms），更早那格 <c>wasmNow=0</c>；r3 那颗 <c>image-paste</c> 格 <c>wasmCalls=[]</c> ＋ <c>filesAfter=0</c> ⇒ paste 那条没进插入链，drop 那条进了 | 已就地更正（归因见表下） |
 | 3 | <c>dataURL</c> 那条出口：只要有，减重<b>与</b>闸门一起跳过 ⇒ 宿主自缩自编是包里现成形状（那颗 <c>fileId</c> 还归 prop 管） | <b>源码判，待 §19.5 第②臂</b> |
 | 4 | resize 抛错只 <c>console.error</c> ⇒ 原图裸着撞闸门：屏幕上那句「too big」可能是「解码失败」 | 排障形状，进 §五 候选（形4） |
-| 5 | <c>resizeImageFile</c> 对 SVG <b>原样返回</b>（<c>dev/chunk-3KPV5WBD.js:24819～24821</c>）；输出 <c>type</c> 沿用原档（<c>:24846</c>）⇒ PNG 拖进去<b>⛔ 转 JPEG</b>，压不动就是压不动 | 同上 |
+| 5 | <c>resizeImageFile</c> 对 SVG <b>原样返回</b>（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/chunk-3KPV5WBD.js:24819～24821（历史0.18.0；resizeImageFile内锚 if (file2.type === MIME_TYPES.svg) {）</c>）；输出 <c>type</c> 沿用原档（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/chunk-3KPV5WBD.js:24846（同一历史包；锚 type: opts.outputType || file2.type）</c>）⇒ PNG 拖进去<b>⛔ 转 JPEG</b>，压不动就是压不动 | 同上 |
 
 第 2 行的<b>归因</b>（⛔ 停在「compile 了两次」）：min 里 <c>WebAssembly.compile</c> 只有两种调用形状（<c>@2093525</c> 与 <c>@2128643</c>），两处都属于一颗内部标签写着 <c>mathlib</c>、由 <c>onmessage</c>＋<c>OffscreenCanvas</c> 驱动的模块（<c>@2090663／@2091316</c> 一带），且我读到它的构造参数原文是 <c>pica({features:["js","wasm"]})</c>（<c>@2598589</c>）⇒ 那两次是 <b>pica 那颗减重的 wasm 在编译</b>，与「resize 跑到」同向；两处形状一样＝主线程与 worker 各一份，这份证据⛔ 判「跑在哪个线程上」，那一格本腿⛔ 判。
 
@@ -1021,25 +1021,25 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 | 现读 | 形状 |
 |---|---|
 | 声明（<c>dist/types/excalidraw/types.d.ts</c> 的 <c>ExcalidrawProps</c> 逐字） | <c>excalidrawAPI?: (api: ExcalidrawImperativeAPI) =&gt; void</c> ⇒ <b>⛔ 需要 ref</b>；同档还逐字给着 <c>onChange?: (elements: readonly OrderedExcalidrawElement[], appState: AppState, files: BinaryFiles) =&gt; void</c> |
-| 运行时那颗调用点 | <c>dev/index.js:982392</c> 起：先建一颗 <c>const api = {…}</c>（<c>@981130</c>），再 <c>if (typeof excalidrawAPI === function) { excalidrawAPI(api) } else { console.error(…) }</c> ⇒ <b>传非函数只 console.error</b>，屏幕上⛔ 任何提示（§20.6 那条排障形状） |
+| 运行时那颗调用点 | <c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:29453～29457（历史0.18.0；锚 if (typeof excalidrawAPI === "function") {；原字符偏移@982392）</c> 起：先建一颗 <c>const api = {…}</c>（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:29422（同一历史包；锚 const api = {；原字符偏移@981130）</c>），再 <c>if (typeof excalidrawAPI === function) { excalidrawAPI(api) } else { console.error(…) }</c> ⇒ <b>传非函数只 console.error</b>，屏幕上⛔ 任何提示（§20.6 那条排障形状） |
 | 我片8 的读法 | r1／r2 撞的是「我把 <c>ref</c> 按对象 ref 递，而 <c>Excalidraw</c> 是 <c>Symbol(react.memo)</c> 包一颗函数⇒<c>ref</c> 从没挂上」（名册 332）。当时我改走 <c>initialData</c>＋<c>onChange</c>（⛔ 需要 API），<b>绕对了但⛔ 绕在官方出口上</b>：这颗 prop 一直在 <c>types</c> 里躺着。⇒ 落地批的桥<b>第一选择＝这颗 prop</b>，⛔ 是 <c>ref</c>、⛔ 是 <c>window</c> 上挂野对象。 |
 
 ### 20.2 那张 25 颗旋钮的名单（桥协议的白名单⛔ 用发明的，用现成的）
 
-运行时 <c>api</c> 字面量交出的键（<c>dev/index.js:981130..982392</c> 逐字，共 <b>25</b> 颗）：
+运行时 <c>api</c> 字面量交出的键（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:29422～29453（历史0.18.0；锚 const api = { 至 if (typeof excalidrawAPI === "function") {；原字符范围@981130..982392）</c> 逐字，共 <b>25</b> 颗）：
 
 | 档 | 键 |
 |---|---|
 | 写（宿主→画板） | <c>updateScene</c>、<c>updateLibrary</c>、<c>addFiles</c>、<c>resetScene</c>、<c>scrollToContent</c>、<c>setActiveTool</c>、<c>setCursor</c>、<c>resetCursor</c>、<c>updateFrameRendering</c>、<c>toggleSidebar</c>、<c>setToast</c>、<c>refresh</c>、<c>registerAction</c>、<c>history.clear</c> |
 | 读（宿主问画板要现状） | <c>getSceneElements</c>、<c>getSceneElementsIncludingDeleted</c>、<c>getAppState</c>、<c>getFiles</c>、<c>getName</c>、<c>id</c> |
-| 订阅（画板→宿主） | <c>onChange</c>、<c>onPointerDown</c>、<c>onPointerUp</c>、<c>onScrollChange</c>、<c>onUserFollow</c>（五颗都是 <c>emitter.on</c>，⛔ 一处 unsubscribe 句柄⇒桥要自己摘）  〔片11f <b>更正：这一格我写反了</b>——那颗 <c>on</c> <b>交回退订句柄</b>：<c>types/excalidraw/emitter.d.ts</c> 逐字 <c>on(...): UnsubscribeCallback</c> 且注释原文写着 <i>@returns unsubscribe function</i>，<c>UnsubscribeCallback = () =&gt; void</c>；而那颗 api 是<b>表达式体箭头</b>（<c>onChange: (cb) =&gt; this.onChangeEmitter.on(cb)</c>，<c>dev/index.js:982087</c> 一带）⇒ 句柄一路交给宿主；包<b>自己的</b>那份消费者就是这么用的（<c>hooks/useEmitter.ts</c>：<c>const unsubscribe = emitter.on(...); return () =&gt; { unsubscribe(); };</c>）⇒ 桥<b>⛔ 再造一套摘除</b>，改成「存进会话表、<c>Closed</c> 里逐颗调」（§21.1 硬线⑥）。〕 |
+| 订阅（画板→宿主） | <c>onChange</c>、<c>onPointerDown</c>、<c>onPointerUp</c>、<c>onScrollChange</c>、<c>onUserFollow</c>（五颗都是 <c>emitter.on</c>，⛔ 一处 unsubscribe 句柄⇒桥要自己摘）  〔片11f <b>更正：这一格我写反了</b>——那颗 <c>on</c> <b>交回退订句柄</b>：<c>types/excalidraw/emitter.d.ts</c> 逐字 <c>on(...): UnsubscribeCallback</c> 且注释原文写着 <i>@returns unsubscribe function</i>，<c>UnsubscribeCallback = () =&gt; void</c>；而那颗 api 是<b>表达式体箭头</b>（<c>onChange: (cb) =&gt; this.onChangeEmitter.on(cb)</c>，<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:29447（历史0.18.0；锚 onChangeEmitter.on(cb)；原字符偏移@982087）</c> 一带）⇒ 句柄一路交给宿主；包<b>自己的</b>那份消费者就是这么用的（<c>hooks/useEmitter.ts</c>：<c>const unsubscribe = emitter.on(...); return () =&gt; { unsubscribe(); };</c>）⇒ 桥<b>⛔ 再造一套摘除</b>，改成「存进会话表、<c>Closed</c> 里逐颗调」（§21.1 硬线⑥）。〕 |
 
 ⇒ <b>三颗由此定死的裁决材料</b>：①「保存」⛔ 需要 JS 侧序列化—宿主拿 <c>getSceneElements()</c>＋<c>getAppState()</c>＋<c>getFiles()</c> 自己 <c>serializeAsJSON</c>（那颗函数在 <c>index.d.ts</c> 导出名单里，与 <c>loadFromBlob</c>／<c>restore</c>／<c>reconcileElements</c> 同列）；②「贴图进画板」有官方写面 <c>addFiles</c>（配 §19.3 那颗 <c>dataURL</c> 出口＝两颗都⛔ 走 <c>input</c>）；③<b>订阅那五颗⛔ 带退订句柄</b>⇒关窗时桥若还活着，回调会往已 Disposed 的宿主上打（§十 点验单加一格：关窗后 5 秒内不得再有桥消息）。
 
 ### 20.3 那颗 <c>onChange</c> 是通知，⛔ 是拦截；拦截点是 <c>onPaste</c>
 
-- <c>onChange</c> 的调用点：<c>this.props.onChange?.(elements, this.state, this.files)</c>（<c>dev/index.js:1025104</c>），且同一行之后立刻 <c>this.onChangeEmitter.trigger(…)</c> ⇒ <b>prop 与 api 订阅两条路同时喂</b>，实参同一颗对象；返回值⛔ 看（类型就是 <c>=&gt; void</c>）⇒ <b>想改内容⛔ 靠 <c>onChange</c> 否决</b>，只能回写（<c>updateScene</c>）。
-- <c>onPaste</c> 才是否决口（<c>dev/index.js:832002</c> 逐字）：<c>if (this.props.onPaste) { try { if (await this.props.onPaste(data, event) === false) { return; } } catch (error) { console.error(error) } }</c>。⇒ <b>只有<b>严格等于</b> <c>false</c> 才拦得下</b>（返 <c>true</c>／<c>undefined</c>／什么都不返＝引擎照走），而<b>宿主那颗钩一抛就被 <c>catch</c> 吞掉、默认行为照走（fail-open）</b>。⇒ <b>形状登记（形6）</b>：若「敏感图不进画板」这类策略挂在 <c>onPaste</c>，钩子本体⛔ 许抛、且⛔ 忘记 <c>return false</c>——两颗都是静默放行，屏幕上只会看到「它怎么还是进去了」。
+- <c>onChange</c> 的调用点：<c>this.props.onChange?.(elements, this.state, this.files)</c>（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:30537～30538（历史0.18.0；锚 this.props.onChange?.(elements, this.state, this.files);；原字符偏移@1025104）</c>），且同一行之后立刻 <c>this.onChangeEmitter.trigger(…)</c> ⇒ <b>prop 与 api 订阅两条路同时喂</b>，实参同一颗对象；返回值⛔ 看（类型就是 <c>=&gt; void</c>）⇒ <b>想改内容⛔ 靠 <c>onChange</c> 否决</b>，只能回写（<c>updateScene</c>）。
+- <c>onPaste</c> 才是否决口（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:25507～25515（历史0.18.0；锚 if (this.props.onPaste) {；原字符偏移@832002）</c> 逐字）：<c>if (this.props.onPaste) { try { if (await this.props.onPaste(data, event) === false) { return; } } catch (error) { console.error(error) } }</c>。⇒ <b>只有<b>严格等于</b> <c>false</c> 才拦得下</b>（返 <c>true</c>／<c>undefined</c>／什么都不返＝引擎照走），而<b>宿主那颗钩一抛就被 <c>catch</c> 吞掉、默认行为照走（fail-open）</b>。⇒ <b>形状登记（形6）</b>：若「敏感图不进画板」这类策略挂在 <c>onPaste</c>，钩子本体⛔ 许抛、且⛔ 忘记 <c>return false</c>——两颗都是静默放行，屏幕上只会看到「它怎么还是进去了」。
 - 那颗 <c>data</c> 之后的分支（同段逐字）给了策略的粒度：<c>data.errorMessage</c> → 报错卡；<c>data.spreadsheet && !isPlainPaste</c> → 表格粘贴框；<c>data.elements</c> → 场景片段。⇒ 宿主想「只拦图、⛔ 拦字」要自己辨 <c>data</c> 的形状（这颗⛔ 在 §18 出现过，桥协议里给它留一档）。
 
 ### 20.4 存储面普查：那颗引擎⛔ 写盘（把 §坑11 从猜测换成颗数）
@@ -1050,10 +1050,10 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 | <c>BroadcastChannel</c>（跨标签同步唯一的机制） | <b>0</b> | <b>0</b> |
 | <c>sessionStorage</c> / <c>document.cookie</c> / <c>serviceWorker</c> | 0 / 0 / 0 | 0 / 0 / 0 |
 | <c>caches.</c>（CacheStorage 形状） | 1（一颗同名局部变量，⛔ 网络缓存） | 1 |
-| <c>localStorage</c> | <b>8</b> 处，全在 <c>EditorLocalStorage</c>（<c>index.js:323486</c> 起，四颗静态方法各包一颗 <c>try/catch</c>） | 8 |
+| <c>localStorage</c> | <b>8</b> 处，全在 <c>EditorLocalStorage</c>（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:10241～10278（历史0.18.0；锚 var EditorLocalStorage = class {；原字符偏移@323486）</c> 起，四颗静态方法各包一颗 <c>try/catch</c>） | 8 |
 | <c>navigator.clipboard</c> | 15 处（读写都有＝片8 那颗「无焦点即拒」的那一片） | 15 |
 
-- 引擎<b>实际会写的实名键只有 2 颗</b>：<c>EDITOR_LS_KEYS = { OAI_API_KEY: excalidraw-oai-api-key, MERMAID_TO_EXCALIDRAW: mermaid-to-excalidraw, PUBLISH_LIBRARY: publish-library… }</c>（<c>chunk-3KPV5WBD.js:11500</c>），但<b>调用点只碰后两颗</b>（<c>index.js:329409／331567／333097／593750／599215</c> 共 5 处）；那颗 <c>OAI_API_KEY</c> 在整包里<b>只出现在常量表两处、⛔ 读者⛔ 写者</b>＝一颗死键。
+- 引擎<b>实际会写的实名键只有 2 颗</b>：<c>EDITOR_LS_KEYS = { OAI_API_KEY: excalidraw-oai-api-key, MERMAID_TO_EXCALIDRAW: mermaid-to-excalidraw, PUBLISH_LIBRARY: publish-library… }</c>（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/chunk-3KPV5WBD.js:409～414（历史0.18.0；锚 var EDITOR_LS_KEYS = {；原字符偏移@11500位于表名后缀）</c>），但<b>调用点只碰后两颗</b>（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js（历史0.18.0）：10433～10435／10497／10548／18407～18410／18584；五处锚依次为 EditorLocalStorage.get＋EDITOR_LS_KEYS.PUBLISH_LIBRARY、EditorLocalStorage.delete(EDITOR_LS_KEYS.PUBLISH_LIBRARY)、EditorLocalStorage.set(EDITOR_LS_KEYS.PUBLISH_LIBRARY, libraryData)、EditorLocalStorage.set＋EDITOR_LS_KEYS.MERMAID_TO_EXCALIDRAW、EditorLocalStorage.get(EDITOR_LS_KEYS.MERMAID_TO_EXCALIDRAW)（原字符偏移依次@329409／@331567／@333097／@593750／@599215）</c> 共 5 处）；那颗 <c>OAI_API_KEY</c> 在整包里<b>只出现在常量表两处、⛔ 读者⛔ 写者</b>＝一颗死键。
 - 那颗唯一自带防抖的写盘：<c>debounce(saveMermaidDataToStorage, 300)</c>；另有 <c>SEARCH_DEBOUNCE = 350</c> 与 <c>debounce(setSearchTerm, 20)</c>（⛔ 落盘）。⇒ <b>场景 autosave 在这颗包里⛔ 存在</b>。
 - 与片8 真机互证：r3 那跑「<c>Object.keys(localStorage)</c> 只剩我那颗 marker、<c>engineKeys=[]</c>、<c>IndexedDB</c> 目录 0 颗」（§18.7）——<b>一颗是运行时数、一颗是源码数，两颗对上了</b>。
 ⇒ <b>这一格把 §十二 那条设计改了口径</b>：「web 内⛔ IndexedDB 写——<c>LocalData</c> 层禁用」⛔ 需要禁，它⛔ 在；真正的活是「<b>宿主自己写，且只有宿主一个主人</b>」（少了双主，也少了要并轨的第三套键名）。
@@ -1062,13 +1062,13 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 
 | 现读 | 用途 |
 |---|---|
-| <c>handleKeyboardGlobally?: boolean</c> 的真消费点两处：容器 <c>onKeyDown: this.props.handleKeyboardGlobally ? undefined : this.onKeyDown</c>（<c>index.js:997685</c>）＋ <c>addEventListeners()</c> 里那颗 <c>if (this.props.handleKeyboardGlobally)</c> 门（<c>:1017261</c>） | <b>§坑9（全局键位互杀）有官方出口</b>：关掉它＝画板⛔ 抢 window 级键盘，宿主的全局热键层照常活；默认值现读 <c>false</c>（<c>:1142292</c> 解构处）＝默认就⛔ 抢，那一格比 §坑9 担心的要好 |
-| <c>detectScroll</c> 门在 <c>index.js:1020338</c>（默认 <c>true</c>，<c>:1142267</c>） | 滚轮归属；与那颗 <c>onScrollChange</c> 订阅配成一对（宿主做「画板内滚动⛔ 动外层」那一格） |
-| <c>DEFAULT_UI_OPTIONS</c>（<c>chunk-3KPV5WBD.js:8781</c> 起逐字）＝<c>canvasActions:{changeViewBackgroundColor,clearCanvas,export:{saveFileToDisk},loadScene,saveToActiveFile,toggleTheme:null,saveAsImage}</c> ＋ <c>tools:{image:true}</c> | 摘按钮的正规出口（片8 §18.5 已现读：<c>aiEnabled</c>／<c>canvasActions</c> 管⛔ 到左上那 16 行与「More tools」那 4 行⇒摘除要两颗一起） |
+| <c>handleKeyboardGlobally?: boolean</c> 的真消费点两处：容器 <c>onKeyDown: this.props.handleKeyboardGlobally ? undefined : this.onKeyDown</c>（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:29869（历史0.18.0；锚 onKeyDown: this.props.handleKeyboardGlobally ? void 0 : this.onKeyDown；原字符偏移@997685）</c>）＋ <c>addEventListeners()</c> 里那颗 <c>if (this.props.handleKeyboardGlobally)</c> 门（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:30316～30320（同一历史包；锚 if (this.props.handleKeyboardGlobally) {；原字符偏移@1017261）</c>） | <b>§坑9（全局键位互杀）有官方出口</b>：关掉它＝画板⛔ 抢 window 级键盘，宿主的全局热键层照常活；默认值现读 <c>false</c>（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:32950（同一历史包；锚 handleKeyboardGlobally = false；原字符偏移@1142292）</c> 解构处）＝默认就⛔ 抢，那一格比 §坑9 担心的要好 |
+| <c>detectScroll</c> 门在 <c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:30416～30425（历史0.18.0；锚 if (this.props.detectScroll) {；原字符偏移@1020338）</c>（默认 <c>true</c>，<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/index.js:32949（同一历史包；锚 detectScroll = true；原字符偏移@1142267）</c>） | 滚轮归属；与那颗 <c>onScrollChange</c> 订阅配成一对（宿主做「画板内滚动⛔ 动外层」那一格） |
+| <c>DEFAULT_UI_OPTIONS</c>（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/chunk-3KPV5WBD.js:301～314（历史0.18.0；锚 var DEFAULT_UI_OPTIONS = {；原字符偏移@8781落在302行canvasActions）</c> 起逐字）＝<c>canvasActions:{changeViewBackgroundColor,clearCanvas,export:{saveFileToDisk},loadScene,saveToActiveFile,toggleTheme:null,saveAsImage}</c> ＋ <c>tools:{image:true}</c> | 摘按钮的正规出口（片8 §18.5 已现读：<c>aiEnabled</c>／<c>canvasActions</c> 管⛔ 到左上那 16 行与「More tools」那 4 行⇒摘除要两颗一起） |
 
 ### 20.6 一处⛔ 对齐：那颗 <c>showOpenFilePicker</c>（dev 0 处 vs min 3 处）
 
-现读：dev 语料里只有<b>那颗依赖的名字</b>（<c>chunk-3KPV5WBD.js:719954</c>：<c>import { fileOpen as _fileOpen, fileSave as _fileSave, supported as nativeFileSystemSupported } from browser-fs-access</c>），而 <c>showOpenFilePicker</c> 这串字面量只出现在<b>我那颗 min</b>（3 处，<c>@244657／249405／249439</c>，都在依赖正文里）。
+现读：dev 语料里只有<b>那颗依赖的名字</b>（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/chunk-3KPV5WBD.js:17849～17853（历史0.18.0；锚 supported as nativeFileSystemSupported 及 from "browser-fs-access"；原字符偏移@719954在模块名处）</c>：<c>import { fileOpen as _fileOpen, fileSave as _fileSave, supported as nativeFileSystemSupported } from browser-fs-access</c>），而 <c>showOpenFilePicker</c> 这串字面量只出现在<b>我那颗 min</b>（3 处，<c>@244657／249405／249439</c>，都在依赖正文里）。
 ⇒ 颗数差的解释＝<b>打包形状</b>：esbuild 把 <c>browser-fs-access</c> 整颗打进我那颗 bundle，而未混淆的 dev 分块把那棵依赖留给<b>各自的打包器</b>；这⛔ 是「版本不同」也⛔ 是「上游有两套代码」。
 ⇒ 一条纪律（进坑表）：<b>我那颗 min 与随包 <c>dist</c> 在依赖内联这一维上⛔ 同形</b>⇒凡「字符串在⛔ 在」类判据，两套都要数；而<b>结论只按随包那一套下</b>（落地批走的是那颗 <c>dist</c>），我这颗 bundle 只当交叉证据。
 ⚠ 顺带一格待量（⛔ 属本腿）：那条 <c>nativeFileSystemSupported</c> 分支在 WebView2 里到底走⛔ 走得通（走不通时引擎退回 <c>a.href + click()</c> 那颗下载口＝片8 §18.4 现读「档名⛔ 归网页」那一条）。
@@ -1595,7 +1595,7 @@ v1 §21.5 写「出机三道：宿主注入 CSP；<c>WebResourceRequested</c>；
 | Core（判据） | 一颗方案常数＋<b>三档</b>分类：随包／压根⛔ 出机／别处 | <c>src/StarMark.Core/Boards/BoardsAssetPolicy.cs:46</c>・<c>src/StarMark.Core/Boards/BoardsAssetPolicy.cs:59</c>・<c>src/StarMark.Core/Boards/BoardsAssetPolicy.cs:69</c>・<c>src/StarMark.Core/Boards/BoardsAssetPolicy.cs:72</c>・<c>src/StarMark.Core/Boards/BoardsAssetPolicy.cs:77</c> | 「这一发算哪一档」是<b>判据</b>，宿主只照它分类；名字（那颗虚拟站）⛔ 进 Core＝第二份主人（证人第五格扫全档） |
 | 宿主（订阅） | <c>AddWebResourceRequestedFilter("*", All)</c> ＋那颗观察者，排在 <c>Navigate</c> <b>之前</b> | <c>src/StarMark.UI/Boards/BoardWindow.cs:425</c>・<c>src/StarMark.UI/Boards/BoardWindow.cs:427</c>・<c>src/StarMark.UI/Boards/BoardWindow.cs:453</c>（那颗起页在 <c>src/StarMark.UI/Boards/BoardWindow.cs:431</c>） | 先订再看：晚一行的那一发出机根本进不了尺，而那份名册正是下一批翻 deny 的唯一依据 |
 
-那颗痕今天长这样（一颗<b>新</b>目标只念一行，三颗计数各有一条出口）：<c>boards.net.foreign n=・target=&lt;方案+主机&gt;・local=・inline=・id=</c>（<c>src/StarMark.UI/Boards/BoardWindow.cs:471</c>）。
+那颗痕今天长这样（一颗<b>新</b>目标只念一行，三颗计数各有一条出口）：<c>boards.net.foreign n=・target=&lt;方案+主机&gt;・local=・inline=・id=</c>（<c>片67历史提交 f6ea42aca709ad501badbaf25f6f4f1f9c1a3505 的 src/StarMark.UI/Boards/BoardWindow.cs（OnWebResourceRequested；锚 "boards.net.foreign n=" + _netForeign；当时五槽日志）</c>）。
 
 ### 29.2 那颗引擎 prop：钉的是<b>层</b>，⛔ 是「串在不在」
 
@@ -2360,3 +2360,25 @@ r5 读数：
 
 欠项与新立（P-256）：① 那一跑里除冻结树那一族外还有 <b>1094 颗</b>行号指针指向<b>会改的那些档</b>（.cs/.xaml/自身），现读已坏 <b>130 颗</b>（活档 85・历史快照 40・代码注释 5），那一族⛔ 由冻结树那颗尺管，得另配一颗「按档名解析＋落在有内容那行」的尺；② 裸简写⛔ 有尺（那颗继承判据现读报错一颗：深析 <c>_web.Close()</c> 后头那颗裸号被报成继承 <c>board-bridge.js</c>，实际指的是宿主那一档＝报出的「5 颗」是<b>下界</b>）；③ 快照那 13 颗照旧留着（裁⛔ 回改，理由在上面）；④ 片84 那颗真机 exit 臂照旧欠（本批起手第 0 道核对＝他在用电脑⇒那一腿⛔ 摆）。下一刀＝P-256 那颗①，或他回来时先补片84。
 
+## 四十四、片86 指针腿第二刀：活档里指向<b>本仓那颗会改的源档</b>那 85 处逐颗定性，深析这一头 33 片换成可搜的锚（口径定死・新闸门四格・五臂台架・P-256 照旧开放）
+
+本腿⛔ 动一行业务码，只新增那颗证人档 <c>tests/StarMark.Tests/LivingSourcePointerGateTests.cs</c>。它是 片85 §四十三 那颗 <b>P-256</b> 的 ② 与 ③（活档那一半）：上一刀把<b>随包那颗冻结树</b>（字节由清单钉死、号本来⛔ 会漂）换成锚，本刀换的是<b>会随任何一次合法编辑挪号</b>的那一族。正本全在 <c>bin/WI99/pointer86_r1/</c>（只读普查 <c>inventory-r2.json</c>・三份定性清单 <c>review-ledger-a/b.json</c>／<c>review-deep.json</c>・计划 <c>patches86-plan-r1.txt</c>・落盘与验证 <c>verify-post86-r8.log</c>・闸门名单 <c>gate86.json</c>・台架 <c>bench86-r4r2.log</c>／<c>bench86-r5.log</c>）。
+
+### 44.1 现场：85 处逐颗问完＝改口 66・保留原样 18・归属未定 1
+
+片85 那颗普查给的是<b>形状读数</b>（越界／空行／缺档三档），⛔ 等于「那颗引用坏了」：有的号当时就对、只是<b>那一发后来被合法挪了位</b>；有的是<b>当时的现场记录</b>（本批按口径留着并补上时态）；有的是<b>跨仓或未跟踪</b>那颗包里的一发，本仓压根读不到那颗档。85 处问下来＝<b>改口 66 颗</b>（落进正文 78 片・账本 45／深析 33）・<b>保留原样 18 颗</b>・<b>归属未定 1 颗</b>（那颗号既⛔ 能归给桥也⛔ 能归给宿主，我⛔ 判——那条留在 P-256 的欠项里）。
+
+那颗深析自己的数：按形状现读 <b>22 颗</b>带名指针，其中<b>端点落空 0 颗</b>（本批 33 片把它那一族清空了）；账本那头形状命中 526 颗、端点落空 35 颗。两半合起来 35 颗＝那颗闸门的<b>棘轮基线</b>（改前 75）。
+
+### 44.2 口径（③ 的活档那一半，本批定死）
+
+· 活档正文要指<b>会改的那一档</b>里的某一发，写<b>档名＋那颗逐字锚</b>；行号只留在 <c>bin/**</c> 的正本里。
+· 锚⛔ 许是转述：它必须是<b>那颗档里读得到的字面串</b>，所以本批把它钉在「<b>两边逐字相等</b>」上（正文念它、源档也有它）。
+· 引用住在<b>未跟踪那颗历史 npm 包</b>里的，按<b>包名＋版本</b>认（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/…</c>），⛔ 写本机 <c>bin/WI83/…</c> 那条路径——那条路径随任何一次重装就没了，而包名＋版本是<b>可搜的</b>。
+· 带提交号的历史引用留<b>提交号＋那颗逐字</b>、摘掉会漂的号。
+
+### 44.3 落盘与证人：78 片逐字节核对・新闸门四格各红过一次
+
+落盘腿 <c>apply86_r1.py</c>（默认只预演，<c>--go</c> 才写）四道守卫：每片那颗旧串<b>在它那一行里恰一颗</b>・<b>行尾三族⛔ 动</b>・<b>LF 行数⛔ 动</b>・标题差集只许那两颗已知的 P-256 标题行；写临时档再读回比相等才 <c>os.replace</c>，改前正本留在 <c>pre/</c>。交回 <c>深析｜切片 33 片・字节 213954→217743・行尾三族 (2362, 0, 0)=(2362, 0, 0)・标题差集 0 行</c>。验证腿从 HEAD 那颗 blob 起<b>按偏移从大到小重放</b>再要求整行逐字节相等＝<c>POST86｜切片 78・锚对 57（去重）・BAD=0</c>；「旧串必须消失」那颗判据本批⛔ 用（坑表 #920：有几颗号本来就落得准，改口只是给它补上包身份）。
+
+新闸门四格＋五臂反向台架的读数在 <c>docs/待决策事项.md</c> 那条 P-256 的交账里（禁项 31／锚 57 两边在场／尺自己咬得动＋射程是真的／棘轮 35），本批<b>四格各红过一次</b>；那颗 <c>Resolve</c> 认不到「带目录前缀的简写」这一族射程缺口（现读 8 颗）已写进闸门自己的 <c>remarks</c> 并登记为 P-256 的 ④，⛔ 拿那颗 35 当「活档里再没坏号」。下一刀＝④ 与裸 <c>:行号</c> 那一族（92 颗・⛔ 一把尺看得见）。
