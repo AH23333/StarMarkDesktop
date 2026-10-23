@@ -35,10 +35,10 @@ public static class BoardPolicy
     /// （<c>maxWidthOrHeight:px</c>，offset 4768057）；那条路只有一颗调用（<c>initializeImage(</c>，offset 4769096）
     /// ＝<c>insertImageElement</c>，而它起手先问 <c>isToolSupported("image")</c>
     /// （定义逐字 <c>this.props.UIOptions.tools?.[E]!==!1</c>，offset 4734622）——我们桥里
-    /// <c>assets/boards/board-bridge.js:207</c> 递的正是 <c>tools: { image: false }</c>
+    /// 随包那颗桥（<c>assets/boards/board-bridge.js</c>・与 <c>tools/</c> 那份逐字节相等）递的正是 <c>tools: { image: false }</c>
     /// ⇒ <b>这一颗数今天在产品里一颗也不咬</b>：粘贴／拖放／工具条那三处入口一并被同一颗开关挡在外
     /// （开关关着的那颗屏幕正件＝<c>bin/WI83/spike1b/out_r9a/cells.json</c>，工具条 32→30 少 <c>toolbar-image</c>）。
-    /// ⚠ 那颗开关的第二把扳机＝桥里 <c>case "feature.flags"</c>（<c>board-bridge.js:152</c>）：那一手交的是
+    /// ⚠ 那颗开关的第二把扳机＝桥里那颗 <c>case "feature.flags":</c> 那一手：它交的是
     /// <b>整颗 UIOptions 替换</b>而⛔ 合并，宿主今天一颗也不发（名字只在 <see cref="BridgeProtocol"/> 的名册里）。</para>
     public const int EngineReportedLongEdgePx = 1440;
 
@@ -105,7 +105,7 @@ public static class BoardPolicy
     /// 2 MiB 那一发 <c>WM_NULL</c> 最慢 <b>3.7 ms</b>，痕 <c>tid=2 onUi=True closing=False</c>，对照改前失焦那一拍 41.2 ms）；
     /// ② <b>真贴几张图</b>会不会撞上这颗上限仍⛔ 摆过现场（这里全是 <c>customData.pad</c> 垫出来的无图板）——
     ///    片60 现读到那条<b>摆出现场</b>的路今天根本走不到：用户能贴图的三处入口（粘贴／拖放／工具条那颗）
-    ///    全被桥里 <c>tools: { image: false }</c>（<c>board-bridge.js:207</c>）挡在 <c>isToolSupported("image")</c> 外，
+    ///    全被桥里那颗 <c>tools: { image: false }</c> 挡在 <c>isToolSupported("image")</c> 外，
     ///    而<b>发向</b>名册里唯一能把它翻回来的那颗 <c>feature.flags</c> 今天<b>一颗也没有发过</b>
     ///    （<c>BoardWindow.cs</c> 里 <c>PostOutbound</c> 现读五颗＝export.pick／theme.set／lang.set／board.load／autosave.arm，
     ///    名册第六颗⛔ 主人）⇒ 这一格今天的真形状是「带图的板只能来自外来档或手改的档」，⛔ 是「量到了但不卡」；
