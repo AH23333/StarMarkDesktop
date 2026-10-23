@@ -2213,3 +2213,53 @@ A1 把值翻成 <c>true</c> ⇒ 只红「值那一格」；A2 在 <c>UIOptions</
 - <b>下一条真机腿</b>：URL 型 embeddable 与携带受控本地 HTML 的 iframe 分开造正件；先通过真实载档链并证明处于视口、已经挂载，再记录 src/srcdoc、CSP 违反、宿主 frame 计数与可见反馈。只在隔离副本改变验证开关或页内 CSP，宿主外站保护保持开启。§28.4 的关窗 60 秒进程树、F1 共存、TTD／AI／Publish 缺席照片仍欠，不以本批函数读数抵扣。
 - <b>资产核对</b>：官方命令 <c>python -X utf8 tools/boards/stage-assets.py --out bin/WI98/stage81</c> 先生成隔离树，逐档对账后只同步桥和清单；清单 140 项（连清单共 141 档），其余资产逐字节不变。桥 18112 字节／sha <c>dd780d27061b</c>，tools／assets 两份相等，改前后由同一 esbuild 转换所得可执行代码相等；正本 <c>bin/WI98/stage81_verify.json</c>。
 - <b>代码侧定向</b>：<c>dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -p:Platform=x64 -v m --filter "FullyQualifiedName~BoardsAssetGateTests|FullyQualifiedName~BoardWindowBridgeGateTests|FullyQualifiedName~BoardPageCspGateTests|FullyQualifiedName~LedgerPointerGateTests|FullyQualifiedName~TestPointerGateTests"</c>，失败 0／通过 56／跳过 0／总计 56，EXIT=0（<c>bin/WI98/test81_targeted.txt</c>）。该跑在本批文档回写前执行；文档另按原字节快照核对。本批未重跑全量，也没有 UI 验收结果。
+
+## 四十一、片82 真机腿：画布上那颗 <c>embeddable</c>／<c>iframe</c> 到底挂不挂载、挡在哪一道（八臂＋五臂・BAD=0）
+
+本腿起窗（输入桌面 <c>Default</c>・离最后一次输入 411.0 秒・机上别人的实例 0 颗），八臂各问一件事，只差一颗旋钮、其余逐字节相同；正本 <c>bin/WI99/readings_82_103031.txt</c>・摘要 <c>bin/WI99/board82_digest.txt</c>・判语 <c>bin/WI99/console82_r4.txt</c>（<c>BOARD82 rc=0 坏格=0 臂数=8</c>）。
+
+### 41.1 那把挂载尺先自证（⛔ 拿尺聋当挡下了）
+
+零读数臂 <c>A0</c>（⛔ 画布元素）三根通道各 0 颗、三颗 <c>pin.request</c> 分隔符齐；七臂（<c>A1</c>～<c>A7</c>）的分隔符也各 3 颗＝<b>采样每臂都跑到终点</b>。同一份脚本里那颗选择器，在没有元素的臂读 0、在有元素的臂读 1（<c>A2</c>～<c>A7</c> 各挂载 1 颗）＝那颗尺⛔ 聋，后面的每一句才站得住。三颗数 <c>want=loaded=canvas</c> 在 <c>A0</c> 是 2／2／2、在其余七臂一律 3／3／3＝<b>载档链通</b>（片72 那颗 E/F 的第一个未知数现在有数）。屏幕上八臂非白 0.133～0.252 全过阈 0.02＝画布每臂都起着。
+
+### 41.2 引擎那道门在产品这扇窗的下落（三类元素・两种下落）
+
+- <c>A1</c>（随包桥 <c>validateEmbeddable: false</c> ＋ 同源 <c>embeddable</c>）＝<b>今天产品这一发</b>：DOM 里挂载 0 颗，而元素照旧进了画布（<c>canvas=3</c>）＝片81 读码那句「验证结果为 <c>false</c> 时渲染过滤器跳过它」在真机兑现。
+- <c>A4</c>（随包桥那颗开关不动 ＋ <c>iframe</c> 带 <c>generationData</c>）：挂载 1 颗＝那颗 prop ⛔ 管 <c>iframe</c>，两族在同一颗开关下分岔。
+- <c>A6</c>（随包桥 ＋ <c>iframe</c> 只带 <c>link</c>，<b>逐字复刻片72 那颗 E/F</b>）：挂载 1 颗・正文读不到 0 颗・非白 0.1663（<c>A0</c> 0.1334）・与 <c>A0</c> 块差 25／144 块。⇒ 片72 那句「两臂帧逐块相等（0／144）」⛔ 是「压根没元素」，而是<b>两臂各挂了一颗同样的缺数据错框</b>，那颗相等从一开始就量⛔ 到 CSP。
+- <c>A2</c>↔<c>A3</c> 挂载 1↔1＝摘掉页内那颗 <c>meta</c> ⛔ 改变「元素在不在 DOM」。
+
+### 41.3 「正文读得到」那一列量的是 <c>sandbox</c> 而⛔ 是 CSP（r3 那一判作废）
+
+挂上去的画布框里 <c>opaque</c> 现读 <c>[0, 1, 1, 1, 1, 1, 1]</c>（<c>A1</c>～<c>A7</c>）＝<b>引擎给画布框的 <c>sandbox</c> ⛔ 带 <c>allow-same-origin</c></b>。机制在随包 bundle 里现读（正本 <c>bin/WI99/sandbox_82.json</c>，那颗包 4878772 字节／sha <c>923fa221d0a4</c>）：<c>sandbox:`${E?.sandbox?.allowSameOrigin?"allow-same-origin":""} allow-scripts …`</c>（UTF-16 偏移 4791797・167 字节），而那颗 <c>allowSameOrigin</c> 由一颗写死的主机名单决定（锚 <c>mN=new Set([</c>・UTF-16 偏移 2494871・150 字节・现读 <b>10</b> 颗主机：<c>youtube.com</c>／<c>youtu.be</c>／<c>vimeo.com</c>／<c>player.vimeo.com</c>／<c>figma.com</c>／<c>twitter.com</c>／<c>x.com</c>／<c>*.simplepdf.eu</c>／<c>stackblitz.com</c>／<c>reddit.com</c>）。名单外一律 opaque origin＝<c>contentDocument</c> 当场抛⇒「正文读得到」八臂恒 0。⇒ 那一列<b>量⛔ 到 CSP</b>；r3 把它当成摘 CSP 的差集，那一判在本批作废（<c>bin/WI99/console82_r3.txt</c> 留档，⛔ 删）。
+
+### 41.4 两道门的分工换到「痕迹」那一维度量到了
+
+新臂 <c>A7</c>（外站 <c>embeddable</c>＋桥 <c>true</c>＋<b>CSP 在场</b>）与 <c>A5</c>（同一颗元素＋<b>摘 CSP</b>）各交回同两颗宿主痕：<c>boards.frame.nav.blocked n=1 target=http://probe72.invalid</c> 与那颗 probe 行各 1 颗、<c>foreign=0</c>。⇒ 对画布上那一发，<b>页内那颗 CSP ⛔ 是先手</b>：宿主 <c>FrameNavigationStarting</c> 那道（片75 装上、P-253 已两臂量到的）在 CSP 在场与摘掉两种情况下都当场取消并留痕，而那颗外站一发在八臂一律 <c>foreign=0</c>＝没出机。片72 那句「那一族今天只有页内 CSP 一道」随片75 已过时，本批按读数把口径收窄成「两道门都在，宿主那道先落痕」——⛔ 因此摘掉任何一道（那是把⛔ 量到读成⛔ 需要）。
+
+### 41.5 屏幕上那一格：空框压白底＝糊平，换灰底＋红块正件才量到（r5 五臂）
+
+r4 那一跑 <c>A5</c>（被宿主取消的那一发）与 <c>A0</c>（⛔ 画布元素）的帧<b>只差 1／144 块</b>、非白 0.13381↔0.13341＝分不开。那颗坏在我那把尺：画布本来就是白的，被那颗空框占住的那一块在白底上量不出差异（片46「纯白染料压白衬＝糊平」在屏幕上那副脸——而 r5 现读它⛔ 是白帧，见下面那颗正件）。⇒ 补一跑（<c>bin/WI99/board_82b.py</c>，五臂 <c>B0</c>～<c>B4</c>）：每臂把那块板的 <c>appState.viewBackgroundColor</c> 由种子的 <c>#ffffff</c> 改成 <c>#808080</c>（先问档里那颗背景上不上得了屏），再拿一颗 <c>iframe</c> 带整幅 <c>#ff0033</c> 正文当<b>尺自己的正件</b>——红块先在屏幕上把那一块<b>报出来</b>，然后到同一块去量别的臂。
+
+r5 读数：
+
+- 那颗灰底<b>落了地</b>：种子档里那颗 <c>viewBackgroundColor</c> 现读 <c>#ffffff</c>，每臂改成 <c>#808080</c> 之后，零读数臂 <c>B0</c> 在那一块现读 <b>灰占 1.0000・平均色 (128,128,128)</b>（整帧非白 0.987179↔r4 白底那一跑 0.1334）＝<b>载档那一头，档里那颗背景值真上得了屏</b>。
+- <b>那颗尺自己的正件</b>：<c>B4</c>（<c>iframe</c> 带 <c>#ff0033</c> 整幅正文）屏幕上红块 bbox=(710,151,1126,451)，那一块 416×300・<b>红占 0.9936・平均色 (255,1,52)</b>＝挂上去而带正文的画布框，把<b>那一整块</b>交给自己供。离线那把尺与真机那一跑各算一颗 bbox，左右边界<b>逐颗相等</b>（差 0／0）＝那一块的位置⛔ 是我挑的。
+- <b>那一格的答案（三档下落各是什么颜色）</b>：未挂载（<c>B1</c>・今天产品那一发）那一块平均 <b>(210,210,210)</b>・白占 0.0000・深占 0.0042；挂载而正文没来（<c>B2</c> 同源・<c>B3</c> 外站被宿主取消）两臂那一块都平均 <b>(220,218,219)</b>，且 <c>B2</c>↔<c>B3</c> <b>逐块相等（0／144）</b>；有正文（<c>B4</c>）红占 0.9936。⇒ ①<b>「引擎那颗默认白框」那句措辞按读数改</b>：那一发⛔ 是白，而是<b>浅灰一块</b>（210～220 灰阶）；②「闸门跳过了它」与「挂上去而什么都没来」在那一块上只差 <b>10 颗灰阶</b>（B1↔B2 块差 9／144）＝<b>用户分不开</b>；③真出正文时差得清清楚楚（红占 0.9936）。⇒ 那一发在屏幕上既⛔ 有一句话，也⛔ 有「引擎白框」：那颗<b>没有内容的浅灰块</b>就是用户看到的全部。
+- 与 <c>B0</c> 的块差：B1／B2／B3／B4 各 <b>25／144 块</b>（头几块 (5,2,60)・(6,2,600)・(7,2,600)・(8,2,600)），而<b>整帧非白五臂一律 0.987179</b>＝那颗整帧尺在「多了一颗框」这一维<b>是聋的</b>，只有块内读数分得出来。
+- 卫生：五臂 <c>foreign</c> 一律 0・<c>readable</c> 一律 0・三颗分隔符各齐・<c>B3</c> <c>frame.blocked=1</c> 与那颗 probe 行各 1；他那五份原件 sha 前后没动＝<c>True</c>・那块板逐字节退回种子＝<c>True</c>（元素读回 <c>['rectangle','rectangle']</c>）・沙盒那颗桥收尾 true 0 颗。
+- ⚠ <b>本跑仍欠的那一格</b>：r4 里 <c>A5</c>（外站・摘 CSP）与 <c>A0</c> 只差 1／144，而 <c>A7</c>（外站・CSP 在场）差 25／144——<b>「摘掉 CSP 那一臂在灰底上是什么颜色」这一发 r5 没摆那颗臂</b>（我把臂数收在五臂），照实记欠，⛔ 拿 B2／B3 顶它。
+- <b>跑形真相要说全</b>：r5 那一跑五臂<b>全部跑到终点</b>（臂级 <c>BAD=0</c>）而<b>判语腿崩</b>在我自己那把尺上（把两张档名交给了吃 PIL 图的 <c>C.block_diff</c>＝<c>AttributeError: 'str' object has no attribute 'size'</c>・<c>rc=1</c>），上面对那五块的算术由一颗<b>只读离线尺</b>补算（<c>bin/WI99/measure_82b.py</c>→<c>measure82b_digest.txt</c>・坏格 0・逐张先核对整帧非白与该跑报值<b>逐位相等</b>＝读的是它拍的那一张）。那颗真机脚本同一处已修（改吃 <c>W.crop_diff</c>）＝⛔ 只补正本而把坏的尺留在仓里。
+
+
+### 41.6 §28.4 那三格与仪器自证
+
+- 进程树那一格<b>量到了</b>（唯一入口在本腿）：开着的窗那侧本 pid 子树里 <c>msedgewebview2</c> 现读 <b>6</b> 颗（走过 7 颗进程）＝那把尺开着窗读得到；关窗后逐拍 <c>[(0.0, 0, 1), (3.0, 0, 1)]</c>＝0 颗。数那颗树走 <c>ctypes</c> 的 <c>CreateToolhelp32Snapshot</c> 全子树（这台 OS 已删 <c>wmic</c>，而只数直接孩子会漏掉挂在浏览器根下的 renderer＝名册 422）。
+- F1 共存、那颗按钮不存在的那张照片：本跑⛔ 动，照旧随 P-248 欠着。
+- <c>P82 frames=</c> 那一行屏幕读数在 8 臂的 UIA 原始树里<b>一颗也没读到</b>（每份转储 18 行・rc 一律 0）＝那棵树⛔ 带 web 正文，DOM 读数只能走桥通道那一族（<c>pin.request</c>／<c>paste.query</c>／<c>background.request</c>）。
+- 卫生与安全：八臂 <c>foreign</c> 一律 0・<c>rejected</c> 一律 0；他目录里那五份原件 sha 前后没动＝<c>True</c>；沙盒那颗桥收尾「true 那颗」0 颗；仓里那颗页 <c>4ec8947f619f</c>・桥 <c>dd780d27061b</c> 逐字节没动；本批⛔ 动一行业务码、⛔ 动随包资产、⛔ 动语言表。
+- 三跑各修一颗我自己的坏，正本留着不删：<c>console82_r1_void</c>（采样尺与日志读取时刻赛跑）・<c>console82_r2_guardvoid</c>（唯一性守卫的期望数从改前抄）・<c>console82_r3</c>（「正文读得到」那列被归给 CSP）；坑表 #900～#903。
+
+### 41.7 本腿交回什么、下一刀归谁
+
+交回：画布上那颗元素<b>在不在 DOM</b>（三类元素两种下落）・挡它的是<b>哪一道</b>（宿主那道先落痕）・<b>屏幕上看得见什么</b>（r5）・以及 §28.4 那一格进程树。<b>P-248 照旧开放</b>（结案入口那三格还欠 F1 共存与那颗按钮的照片，而「屏幕上那句话」本腿量到的下落是<b>压根没有那句话</b>＝另立 P-255）。下一刀＝P-255 的处置腿（改措辞／给可见说明，⛔ 动闸门本身）。
