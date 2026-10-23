@@ -242,7 +242,7 @@ Runtime 与 SDK 两样本机都在，所以"新增运行时"的<b>开发态</b>�
 
 ### ⑤ §坑4／§坑5 那两处远程回退：行号漂了，但都还在（且 woff2 那一半有了新答案）
 
-- <c>esm.sh</c> 那颗在 <c>fonts/ExcalidrawFontFace.ts</c> 的<b>第 11 行</b>（<c>ASSETS_FALLBACK_URL</c>），
+- <c>esm.sh</c> 那颗在随包那颗类型声明 <c>bin/WI83/npm0e/pkg/package/dist/types/excalidraw/fonts/ExcalidrawFontFace.d.ts</c> 里逐字写着 <c>private static readonly ASSETS_FALLBACK_URL;</c>（⚠ 旧写法点名的 <c>fonts/ExcalidrawFontFace.ts</c> 是<b>上游源码路径</b>、本仓⛔ 得那颗档；写死基座那一句在 <c>bin/WI83/npm0e/pkg/package/dist/dev/chunk-3KPV5WBD.js</c> 的 <c>__publicField(_ExcalidrawFontFace, "ASSETS_FALLBACK_URL"</c>・那颗 4978 号只留这一份正本），
   本文写的是 <c>:24</c> ⇒ 行号漂（同一颗教训第一次落到<b>另一个仓</b>：名册 <b>315</b>——行号只当导航，身份在那句正文）。
 - <c>woff2</c> 子集那颗：现读 <b>8 处</b>命中在 <c>subset/woff2/woff2-bindings.ts</c>，
   其中 <c>:340 if (Module.wasmBinary)</c> ／ <c>:341 wasmBinary = Module.wasmBinary</c> 说明<b>那一侧支持"直接喂字节"</b>
@@ -966,7 +966,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 | 4 | resize 抛错只 <c>console.error</c> ⇒ 原图裸着撞闸门：屏幕上那句「too big」可能是「解码失败」 | 排障形状，进 §五 候选（形4） |
 | 5 | <c>resizeImageFile</c> 对 SVG <b>原样返回</b>（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/chunk-3KPV5WBD.js:24819～24821（历史0.18.0；resizeImageFile内锚 if (file2.type === MIME_TYPES.svg) {）</c>）；输出 <c>type</c> 沿用原档（<c>@excalidraw/excalidraw 0.18.0 的 dist/dev/chunk-3KPV5WBD.js:24846（同一历史包；锚 type: opts.outputType || file2.type）</c>）⇒ PNG 拖进去<b>⛔ 转 JPEG</b>，压不动就是压不动 | 同上 |
 
-第 2 行的<b>归因</b>（⛔ 停在「compile 了两次」）：min 里 <c>WebAssembly.compile</c> 只有两种调用形状（<c>@2093525</c> 与 <c>@2128643</c>），两处都属于一颗内部标签写着 <c>mathlib</c>、由 <c>onmessage</c>＋<c>OffscreenCanvas</c> 驱动的模块（<c>@2090663／@2091316</c> 一带），且我读到它的构造参数原文是 <c>pica({features:["js","wasm"]})</c>（<c>@2598589</c>）⇒ 那两次是 <b>pica 那颗减重的 wasm 在编译</b>，与「resize 跑到」同向；两处形状一样＝主线程与 worker 各一份，这份证据⛔ 判「跑在哪个线程上」，那一格本腿⛔ 判。
+上面那张「由这颗顺序得出的判断」表里第 2 行那颗<b>归因</b>（⛔ 停在「compile 了两次」）：min 里 <c>WebAssembly.compile</c> 只有两种调用形状（<c>@2093525</c> 与 <c>@2128643</c>），两处都属于一颗内部标签写着 <c>mathlib</c>、由 <c>onmessage</c>＋<c>OffscreenCanvas</c> 驱动的模块（<c>@2090663／@2091316</c> 一带），且我读到它的构造参数原文是 <c>pica({features:["js","wasm"]})</c>（<c>@2598589</c>）⇒ 那两次是 <b>pica 那颗减重的 wasm 在编译</b>，与「resize 跑到」同向；两处形状一样＝主线程与 worker 各一份，这份证据⛔ 判「跑在哪个线程上」，那一格本腿⛔ 判。
 
 ### 19.4 那颗 wasm 的资产面（顺手把 §五 坑5 那句判掉一半）
 

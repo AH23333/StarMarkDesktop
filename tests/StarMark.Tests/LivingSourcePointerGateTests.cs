@@ -188,6 +188,39 @@ public sealed class LivingSourcePointerGateTests
     /// <summary>同一族的<b>歧义</b>那一维：那颗末段在仓里认得到两颗以上＝⛔ 许替正文挑一颗（名册 716），要单列一维钉住。</summary>
     private const int AmbiguousPrefixPointerBaseline = 0;
 
+    /// <summary>散文那一族「第 N 行」（账本 P-256 ⑤・片90）：上面那颗 <see cref="Pointer"/> 要「档名＋冒号＋号」，
+    /// 所以 <c>账本第 2533 行</c>／<c>那颗声明从第 25 行起</c> 这种<b>散文写法</b>整族⛔ 进得了射程——
+    /// 而它指的那一档照样随任何一次合法编辑挪号。本批现读活档 18 颗，逐颗定性成 改口 9・历史 1・结构序号 8。</summary>
+    private static readonly Regex Prose = new(
+        @"第\s*([0-9]+)(?:\s*[-–—~～]\s*[0-9]+)?\s*行", RegexOptions.Compiled);
+
+    /// <summary>那一族里<b>留下来</b>的那三副样子，各由一颗同行念得到的指称解释：那颗小节号（结构）、
+    /// 那句「那一版把出处写成」（历史证据・⛔ 删）、那张表的名字（正文自己说出它指哪张表）。
+    /// ⚠ 判据⛔ 是"认出形状就放过"，而是「那颗号所在那一行必须念得到这里其中一颗」——要新写一颗序号，先把它的指称写出来。</summary>
+    private static readonly string[] ProseMarkers =
+    {
+        "§21.0",
+        "那一版把出处写成",
+        "由这颗顺序得出的判断",
+    };
+
+    /// <summary>本批改口掉的八串旧写法（其中一颗一次抹掉两颗号＝九颗）：⛔ 许再被写回活档。</summary>
+    private static readonly string[] BannedProsePointers =
+    {
+        "批次 WI-2e 的覆盘照片那一节（本文件第 840 行附近）",
+        "⛔ 用那把尺自带的 --expect：它第 68 行还钉着 ✅65a 那年的 168／18",
+        "那颗声明从第 25 行起、第 30 行正是 <c>}) =&gt; Promise&lt;SVGSVGElement&gt;;</c>",
+        "① 账本第 2533 行原写着",
+        "而<b>同一档第 393 行</b>与那颗常数自己的注释",
+        "② 第 2709 行整行住在删除线里（已作废的 384/512/160/128 对比）",
+        "那颗在 <c>fonts/ExcalidrawFontFace.ts</c> 的<b>第 11 行</b>（<c>ASSETS_FALLBACK_URL</c>）",
+        "第 2 行的<b>归因</b>（⛔ 停在「compile 了两次」）",
+    };
+
+    /// <summary>片90 那颗棘轮（P-256 ⑤）：改口前现读 18 颗 → 落盘后这颗数。⚠ 与 <see cref="FallenPointerBaseline"/>
+    /// 那颗 35 <b>各数各的</b>：那一族要「档名＋冒号」，这一族压根⛔ 带档名，两份判据⛔ 能合并成一个数。</summary>
+    private const int ProsePointerBaseline = 10;
+
     private static string RepoRoot()
     {
         var dir = new FileInfo(typeof(LivingSourcePointerGateTests).Assembly.Location).Directory!;
@@ -420,5 +453,91 @@ public sealed class LivingSourcePointerGateTests
             "活档里指向本仓活源档、端点落空的行号指针现读 " + now.Count + " 颗↔片86 收口基线 " + FallenPointerBaseline
             + " 颗（改前 75）。<b>多了</b>＝新写了会漂的号，按口径换成锚；<b>少了</b>＝这一族又修掉了几颗，"
             + "回来把这颗数改小并同批在账本 P-256 报一句——那颗数⛔ 是判据，它只许在真动过时逼我重新对一次账");
+    }
+
+    /// <summary>那一族在活档里的逐颗现场：哪一档・所在那一行・正文念的那一串・那一行有没有带指称。</summary>
+    private static List<(string Doc, int Line, string Spoken, bool Marked)> ProseOccurrences(string text, string rel)
+    {
+        var rows = new List<(string, int, string, bool)>();
+        var lines = text.Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+            foreach (Match m in Prose.Matches(lines[i]))
+                rows.Add((rel, i + 1, m.Value,
+                    ProseMarkers.Any(mk => lines[i].Contains(mk, StringComparison.Ordinal))));
+        return rows;
+    }
+
+    private static List<(string Doc, int Line, string Spoken, bool Marked)> AllProseOccurrences()
+    {
+        var all = new List<(string, int, string, bool)>();
+        foreach (var rel in Living)
+            all.AddRange(ProseOccurrences(Read(rel), rel));
+        return all;
+    }
+
+    /// <summary>那颗禁项判据本体：交回一段正文里在场的禁项串。名单格与「尺自己咬得动」那一格共用同一副眼睛，
+    /// ⛔ 两把各写一遍判据（写两遍就会漂成两种口径，名册 461 那一族）。</summary>
+    private static List<string> BannedProseHits(string text)
+        => BannedProsePointers.Where(old => text.Contains(old, StringComparison.Ordinal)).ToList();
+
+    /// <summary>片90 新格一：九颗已定性的散文行号指针⛔ 许写回（形状与 <see cref="BannedPointers"/> 同一口径：
+    /// 禁<b>那一串写法</b>，⛔ 禁那颗数——历史证据那一族照旧留在正文里）。</summary>
+    [Fact]
+    public void BannedProseLinePointersStayOutOfTheLivingDocs()
+    {
+        foreach (var rel in Living)
+        {
+            var hits = BannedProseHits(Read(rel));
+            Assert.True(hits.Count == 0,
+                rel + " 又把已改口的那颗散文行号指针写回来了：" + string.Join("・", hits)
+                + " ⇒ 那一族的号随任何一次合法编辑挪号，而 <see cref=\"Pointer\"/> 那把尺⛔ 看得见它（P-256 ⑤）");
+        }
+        Assert.True(BannedProsePointers.Length == 8 && ProseMarkers.Length == 3,
+            "那一族的两张名单颗数变了（禁项 " + BannedProsePointers.Length + "・指称 " + ProseMarkers.Length
+            + "）＝射程或口径动过，先回来重跑那颗尺（bin/WI99/p990_r1）再改这里");
+    }
+
+    /// <summary>片90 新格二：留下来的每一颗「第 N 行」必须由<b>同一行</b>念得到的一颗指称解释得了
+    /// （小节号／历史登记／那张表的名字）。新写一颗而不说它指哪一节，这一格当场红。</summary>
+    [Fact]
+    public void EveryProseLinePointerNamesItsReferent()
+    {
+        var unmarked = AllProseOccurrences().Where(r => !r.Marked).ToList();
+        Assert.True(unmarked.Count == 0,
+            "活档正文里现读 " + unmarked.Count + " 颗「第 N 行」而那一行⛔ 带任何指称："
+            + string.Join("・", unmarked.Select(r => r.Doc + ":" + r.Line + r.Spoken).Take(8))
+            + " ⇒ 那种写法要么换成「档名＋逐字锚」（P-256 ③ 那颗口径），要么把它的指称写出来（§x.y／那张表／那句历史登记）");
+    }
+
+    /// <summary>片90 新格三：那把尺自己咬得动，且⛔ 聋——个位那颗号要认得到、带档名那颗号⛔ 重复计、
+    /// 三副正件各放过一颗（同 <see cref="TheRulerItselfBitesAndTheScopeIsReal"/> 的形状）。</summary>
+    [Fact]
+    public void TheProseRulerItselfBites()
+    {
+        Assert.Single(ProseOccurrences("账本第 999 行原写着那句。", "probe"), r => r.Spoken == "第 999 行");
+        Assert.Single(ProseOccurrences("那颗 <c>export.d.ts</c> 第 30 行正是那句。", "probe"),
+                     r => !r.Marked);                                     // 带档名也照抓＝与 <see cref="Pointer"/> 两族⛔ 重叠
+        Assert.Single(ProseOccurrences("第 2 行的归因。", "probe"), r => !r.Marked);   // 个位那颗要认得到（⛔ 只量两位数＝尺聋）
+        Assert.Single(ProseOccurrences("§21.0 第 7 行还专门写那句。", "probe"), r => r.Marked);
+        Assert.Single(ProseOccurrences("上面那张「由这颗顺序得出的判断」表里第 2 行那颗归因。", "probe"), r => r.Marked);
+        Assert.Empty(ProseOccurrences("那一节里第 3 条与第 5 项各说过一次。", "probe"));        // ⛔ 是「行」的就⛔ 抓（正则放宽会红在这里）
+        Assert.Single(BannedProseHits("旧写法照抄一遍：① 账本第 2533 行原写着……"),
+                      old => old.StartsWith("① 账本第 2533"));                                  // 禁项判据本体咬得动
+        Assert.Empty(BannedProseHits("新写法：① 账本 P-116 那条的「依据」行原写着……"));          // 正件＝改口后的那句
+        var now = AllProseOccurrences();
+        Assert.True(now.Count > 0 && now.Any(r => r.Marked),
+            "那一族现读 " + now.Count + " 颗＝那颗尺在活档上恒绿⛔ 可信（名册 485：数东西的尺要配「>0」断言）");
+    }
+
+    /// <summary>片90 新格四：那一族的颗数棘轮（改口前 18 → 落盘后本读数）。</summary>
+    [Fact]
+    public void TheProsePointerCensusIsTheOneThisBatchReconciled()
+    {
+        var now = AllProseOccurrences();
+        Assert.True(now.Count == ProsePointerBaseline,
+            "活档里「第 N 行」那一族现读 " + now.Count + " 颗↔片90 收口基线 " + ProsePointerBaseline
+            + " 颗（改口前 18 颗）。<b>多了</b>＝又写了新的行号式指针；<b>少了</b>＝这一族又修掉了几颗，"
+            + "回来把这颗数改小并同批在账本 P-256 ⑤ 报一句。两颗数各问各的一维，⛔ 与那颗 "
+            + FallenPointerBaseline + " 合并");
     }
 }
