@@ -30,7 +30,8 @@ public sealed class BoardWordGateTests : IDisposable
     /// 片39 那两颗（那颗「打开所在文件夹」与它坏掉时那一句）＋片40 那两颗（「继续编辑」与「仍然离开」）＋
     /// 片49 那四颗（那颗档现在拿不出来那一句的标题、正文与两颗按钮）＋
     /// 片54 那四颗（右上角那一行：两颗入口＋那句"已存到"与那句"没能存成"）＋
-    /// <b>片64 那四颗</b>（那两档交回用户：两颗扳机上的字＋那颗开关的两态）＝廿五颗。
+    /// <b>片64 那四颗</b>（那两档交回用户：两颗扳机上的字＋那颗开关的两态）＋
+    /// <b>片83 那一颗</b>（那一行<b>第二</b>颗读数：那块板上有几颗外部内容永远不会出正文＝账本 P-255）＝廿六颗。
     /// <para>⚠ 这一族⛔ 只数那块面板：片54 起这一扇上有<b>两块</b>会说汉语的表面（面板＋右上角那一行），
     /// 名单钉的是"上屏的字"而⛔"住在哪一块"。另存的两种结果各一颗，带槽的那颗从此有两块表面（见 <see cref="KeyedBar"/>）。</para>
     /// <para>片64 那两颗扳机上的字（「缩放 2×」「背景 开」）与那句落点里念的两档是<b>同一颗键</b>：
@@ -46,6 +47,7 @@ public sealed class BoardWordGateTests : IDisposable
         "boards.exportPngAction", "boards.exportSvgAction",
         "boards.exportSavedBody", "boards.exportFailedBody",
         "boards.exportScaleAction", "boards.exportBackgroundAction", "boards.exportOn", "boards.exportOff",
+        "boards.embedHiddenBody",
     ];
 
     private readonly AppLanguage _before = Locale.Current;
@@ -119,6 +121,9 @@ public sealed class BoardWordGateTests : IDisposable
         ("boards.exportScaleAction", 1, ["Phrase(\"boards.exportScaleAction\", ScaleToken(_exportScale))"]),
         ("boards.exportBackgroundAction", 1,
             ["Phrase(\"boards.exportBackgroundAction\", Word(BackgroundKey(_exportBackground)))"]),
+        // 片83＝那一行第二颗读数：那颗数＝Core 从<b>宿主见过的那一份字节</b>数出来的（账本 P-255）。
+        // 钉这一串逐字是因为它<b>只在一处</b>被贴：换语言那一拍走同一颗 PasteHiddenEmbedNotice（⛔ 第二份措辞、⛔ 第二处拼法）。
+        ("boards.embedHiddenBody", 1, ["Phrase(\"boards.embedHiddenBody\", count)"]),
     ];
 
     [Fact]
@@ -223,16 +228,16 @@ public sealed class BoardWordGateTests : IDisposable
             Locale.Fmt("boards.exportBackgroundAction",
                 Locale.T(background ? "boards.exportOn" : "boards.exportOff")));
 
-    /// <summary>⑤整族总数现读：这一族<b>二十七</b>颗（面板那廿五颗＋片21 那两颗开窗失败的旧话）。
+    /// <summary>⑤整族总数现读：这一族<b>二十八</b>颗（面板那廿六颗＋片21 那两颗开窗失败的旧话）。
     /// <para>钉总数而⛔ 钉"至少"：下一批往这一族加一句而不带证人，这一格就会红——而那一颗新句子的换语言，
     /// 是这一族最容易漏的那一半（P-175 那一族在三扇宿主上各漏过一次）。</para></summary>
     [Fact]
-    public void TheBoardFamilyHasExactlyTwentySevenRowsAndTheyAreNamed()
+    public void TheBoardFamilyHasExactlyTwentyEightRowsAndTheyAreNamed()
     {
         var keys = UiStrings.All.Select(e => e.Key)
             .Where(k => k.StartsWith("boards.", StringComparison.Ordinal)).ToArray();
-        Assert.Equal(27, keys.Length);
-        Assert.Equal(Panel.Length + 2, keys.Length);                           // 上屏那廿五颗＋两颗旧话
+        Assert.Equal(28, keys.Length);
+        Assert.Equal(Panel.Length + 2, keys.Length);                           // 上屏那廿六颗＋两颗旧话
         foreach (var key in Panel) Assert.Contains(key, keys);
         Assert.Contains("boards.openFailedTitle", keys);
         Assert.Contains("boards.openFailedBody", keys);
@@ -251,7 +256,10 @@ public sealed class BoardWordGateTests : IDisposable
     /// 同一次比较里放禁项（<c>ThemeResource</c>＝跟着主题走的那一类写法必须为 0），
     /// 于是那些 1 与那个 0 互为正负件（⛔ 一把只数 0 的尺）。</para>
     /// <para><b>片39 把计数从 3／1／1 抬到 4／2／2，片40 再抬到 6／4／4，片49 再抬到 8／6／6，
-    /// 片54 再抬到 12／9／9，片64 再抬到 14／11／11</b>：这一屏上从此有<b>十一颗</b>可点的
+    /// 片54 再抬到 12／9／9，片64 再抬到 14／11／11，片83 只抬黑字那一颗（15／11／11）</b>：
+    /// 那一行上多了<b>第二颗读数</b>（那块板上有几颗外部内容不会显示・账本 P-255）＝黑字加一颗而⛔ 按钮，
+    /// 所以底色与描边那两列照旧——这一族最阴的坏法是"只抬一列"被读成"尺坏了"，
+    /// 而这里三列各数一遍正好把它说清楚。这一屏上从此有<b>十一颗</b>可点的
     /// （面板那六颗＋右上角那一行的五颗＝两颗入口＋那颗出口＋那两颗扳机），
     /// 而"隐形"那一族⛔ 因为多加一颗就自己退场——每加一颗新按钮，黑字、底色、描边就各多一颗
     /// （十一颗按钮×三样＝33，加标题／正文／那一行那句落点三颗黑字＝黑字 14／底色 11／描边 11）。
@@ -262,8 +270,9 @@ public sealed class BoardWordGateTests : IDisposable
     public void TheOnlyActionableControlPinsItsOwnColors()
     {
         var body = MethodBody(Code(ReadRepoFile(WindowCs)), "private Grid BuildStage");
-        // 十四颗黑字：标题／正文／那一行那句落点＋十一颗按钮（片27 只钉了前两颗 ⇒ 后面每颗都⛔ 吃主题刷＝白字）
-        Assert.Equal(14, Count(body, "Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black)"));
+        // 十五颗黑字：标题／正文／那一行那句落点／那一行第二颗读数（片83）＋十一颗按钮
+        //（片27 只钉了前两颗 ⇒ 后面每颗都⛔ 吃主题刷＝白字）
+        Assert.Equal(15, Count(body, "Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black)"));
         Assert.Equal(11, Count(body, "Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255))"));
         Assert.Equal(11, Count(body, "BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130))"));
         // 禁项：这一族⛔ 用"跟着主题走"的那一类刷子（面板与十一颗按钮都不跟着走，见 §27.6）

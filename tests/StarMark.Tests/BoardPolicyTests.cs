@@ -344,6 +344,60 @@ public sealed class BoardPolicyTests
     }
 
     /// <summary>
+    /// 那颗「画布上有几颗外部内容永远不会出正文」的数（账本 P-255・片82 八臂真机的读数为它作了证）。
+    /// <para><b>正件用引擎自己写得出的那一副形状</b>（名册 492）：一颗 <c>embeddable</c> 带
+    /// <c>link</c>／<c>customData.generationData</c>，与片82 那两臂递进画布的字节同一族字段，
+    /// ⛔ 一颗只剩 <c>{"type":"embeddable"}</c> 的玩具——那把尺过得了而引擎解不开。</para>
+    /// <para><b>两颗数同吃一碗</b>：最后那一格把 <c>CountHiddenEmbeddables</c> 与
+    /// <c>CountWritableElements</c> 在同一份字节上一起问——藏起来的空框<b>照旧进档、照旧算可写</b>
+    /// （真机读数 <c>want=loaded=canvas=3</c> 而 DOM 挂载 0）＝两列必须各报各的，任何一处口径漂了都会当场露脸。</para>
+    /// <para><b>⛔ 数 <c>iframe</c> 那一族</b>：片82 的 A4／A6 两臂量到 <c>iframe</c> 在那颗开关下<b>照挂</b>
+    /// （那颗 prop ⛔ 管它们），把它们算进来＝替用户报一颗根本不存在的空位。
+    /// 倒数第二格专门摆成"整份字节里读得到 embeddable 那一串、而⛔ 任何一颗元素的 <c>type</c> 是它"
+    /// ——那颗 marker 预筛在这一格必须<b>放行到解档那一手</b>，靠 <c>type</c> 判出 0，⛔ 靠预筛读出一颗 0 就算数。</para>
+    /// </summary>
+    [Fact]
+    public void HiddenEmbeddablesAreCountedByTypeWhileLegacyIframesAndDeletedOnesAreNot()
+    {
+        byte[] Embed(string id, bool deleted = false) => Utf8(
+            "{\"elements\":[{\"id\":\"" + id + "\",\"type\":\"embeddable\",\"x\":8,\"y\":8,\"width\":720,\"height\":480,"
+            + "\"angle\":0,\"link\":\"https://example.invalid/a\",\"customData\":{\"generationData\":{\"html\":\"<p>x</p>\"}}"
+            + (deleted ? ",\"isDeleted\":true" : "") + "},{\"id\":\"R1\",\"type\":\"rectangle\",\"x\":1,\"y\":1}]}");
+        Assert.Equal(1, BoardPolicy.CountHiddenEmbeddables(Embed("E1")));           // 一颗外链・一颗矩形
+        var two = Utf8("{\"elements\":["
+            + "{\"type\":\"embeddable\",\"link\":\"https://a.invalid\"},"
+            + "{\"type\":\"embeddable\",\"link\":\"https://b.invalid\",\"isDeleted\":true},"
+            + "{\"type\":\"iframe\",\"customData\":{\"source\":{\"link\":\"embeddable-ish\"}}},"
+            + "{\"type\":\"rectangle\"}]}");
+        Assert.Equal(1, BoardPolicy.CountHiddenEmbeddables(two));                    // 标了删的那颗引擎连框都不画
+        Assert.Equal(3, BoardPolicy.CountWritableElements(two));                      // 同口径：三颗进档（⛔ 删掉的那颗）
+        Assert.Equal(0, BoardPolicy.CountHiddenEmbeddables(                            // marker 在<b>值</b>里而不在 type 上
+            Utf8("{\"elements\":[{\"type\":\"iframe\",\"customData\":{\"kind\":\"embeddable\"}}]}")));
+        Assert.Equal(0, BoardPolicy.CountHiddenEmbeddables(                            // ⛔ 那颗预筛的 0 就当数：这一格得走解档
+            Utf8("{\"elements\":[{\"id\":\"legacy-iframe\",\"type\":\"iframe\",\"link\":\"https://a.invalid\"}]}")));
+        Assert.Equal(0, BoardPolicy.CountHiddenEmbeddables(                            // 认 type 认逐字（Ordinal）
+            Utf8("{\"elements\":[{\"type\":\"Embeddable\"},{\"type\":\"embeddable \"}]}")));
+        Assert.Equal(0, BoardPolicy.CountHiddenEmbeddables(                            // ⛔ 这一族＝干净的 0・⛔ "读不懂"
+            Utf8("{\"elements\":[{\"type\":\"freedraw\",\"points\":[[0,0],[3,5]]}],\"appState\":{\"viewBackgroundColor\":\"#ffffff\"},\"files\":{}}")));
+        Assert.Null(BoardPolicy.CountHiddenEmbeddables(Utf8("not json")));
+        // ⚠ 上面那一格是本批<b>真机之前</b>抓到的一颗真坏：预筛只看"有没有 embeddable 那一串"时，
+        // "not json" 那种坏档被它替着答了一颗 0＝"这块板干净"，而真正的意思是"我读不懂"。
+        // 所以现在预筛<b>先要读到档的骨架</b>才敢替 0 作证——骨架都读不到的，一律往下走解档那一手。
+        Assert.Null(BoardPolicy.CountHiddenEmbeddables(Utf8("{\"elements\":{\"a\":1}}")));           // 有那颗键而⛔ 是数组・且⛔ marker
+        Assert.Null(BoardPolicy.CountHiddenEmbeddables(Utf8("elements:[{\"type\":\"rectangle\"}]")));  // 半截头（连骨架都⛔）＝读不懂
+        Assert.Equal(0, BoardPolicy.CountHiddenEmbeddables(Utf8("{\"elements\":[]}")));                // 干净的一块新板＝0・而⛔ "读不懂"
+        // 那颗数⛔ 依赖紧凑写法：带空格的同一份内容照旧数得出来（预筛读不到骨架时往下走解档，两路都得给同一颗答案）
+        Assert.Equal(1, BoardPolicy.CountHiddenEmbeddables(
+            Utf8("{ \"elements\" : [ { \"type\" : \"embeddable\", \"link\" : \"https://a.invalid\" } ] }")));
+        Assert.Null(BoardPolicy.CountHiddenEmbeddables(Utf8("[{\"type\":\"embeddable\"}]")));      // 根⛔ 是对象
+        Assert.Null(BoardPolicy.CountHiddenEmbeddables(Utf8("{\"embeddable\":1}")));               // ⛔ elements 那一颗
+        Assert.Null(BoardPolicy.CountHiddenEmbeddables(Utf8("{\"elements\":{\"type\":\"embeddable\"}}")));  // 有那颗键而⛔ 是数组
+        Assert.Null(BoardPolicy.CountHiddenEmbeddables(Utf8("{\"elements\":[{\"type\":\"embeddable\"")));    // 半截档＝读不懂，⛔ 说"没藏"
+        Assert.Null(BoardPolicy.CountHiddenEmbeddables(Array.Empty<byte>()));
+        Assert.Null(BoardPolicy.CountHiddenEmbeddables(null));
+    }
+
+    /// <summary>
     /// 开闸要<b>三颗数全等</b>：⛔ "对不上就先信页面"——猜错的代价是拿一块空板盖掉盘上那块好档
     /// （片26 真机量到：崩后重载那一趟页面照实回了话，而盘上那块 4 元素／4936 字节的板被盖成 0 元素／241 字节）。
     /// <para>任一颗认不出（null）也⛔ 开闸：那是"读不懂"，而读不懂时唯一安全的动作是不写。</para>

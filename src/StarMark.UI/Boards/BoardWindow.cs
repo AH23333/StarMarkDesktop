@@ -150,6 +150,14 @@ public sealed class BoardWindow : Window
     /// 开了闸就当场清掉（那一刻起手里那份就是最新的，这一颗可疑的旧账⛔ 再配当候选）。</para></summary>
     private byte[]? _refusedScene;
 
+    /// <summary>此刻那块画布上有几颗<b>永远不会出现正文</b>的外部内容（<c>embeddable</c> 那一族・判据住 Core）。
+    /// <para>它只有一个消费者：那一行「未显示的外部内容：N」。三档下落要分得清——<c>null</c>＝那份字节读不懂
+    /// （⛔ 说"一颗也没藏"）、<c>0</c>＝这块板上确实没有、<c>&gt;0</c>＝真有 N 颗空框在屏幕上没话可说。
+    /// 账本 P-255 量的就是最后那一档：挂载 0 颗而 <c>canvas=3</c>，程序一个字也⛔ 说。</para>
+    /// <para>它由<b>宿主见过的最新那一份字节</b>定（<see cref="OpenAsync"/> 与页面交回那两拍），
+    /// 所以用户删掉那颗外链框之后这一行会自己退场——⛔ 另配一颗"清除"的动作＝第二个主人。</para></summary>
+    private int? _hiddenEmbeddables;
+
     /// <summary>盘上主档那一刻是哪些字节（只有宿主自己写得动它，所以这一份状态有唯一主人）。
     /// null＝这扇窗还没写过、也没<b>从主档</b>载过（新板，或档是从 <c>.bak</c> 捡回来的）。</summary>
     private byte[]? _lastWritten;
@@ -291,6 +299,11 @@ public sealed class BoardWindow : Window
     private Button? _barFolderButton;
     private TextBlock? _barStatus;
 
+    /// <summary>那一行底下第二颗读数：那块板上有几颗外部内容不会显示（P-255・见 <see cref="_hiddenEmbeddables"/>）。
+    /// <para>它⛔ 住在 <see cref="_notice"/> 那块面板里：那一块只有一位（<c>_noticeKey</c>），
+    /// 而它此刻可能正挂着「这一扇已停止保存」——一句中性的说明⛔ 有权把那句坏话顶掉（片39 真机量到的正是这一族）。</para></summary>
+    private TextBlock? _barHiddenEmbeds;
+
     public BoardWindow()
     {
         _boardId = BoardPolicy.NewSceneId(DateTimeOffset.Now, Random.Shared.Next(0, 0x10000));
@@ -403,6 +416,7 @@ public sealed class BoardWindow : Window
     private async System.Threading.Tasks.Task OpenAsync(byte[]? sceneBytes)
     {
         _seenScene = sceneBytes;
+        RememberHiddenEmbeddables(sceneBytes);   // 这块板上有几颗外部内容不会显示（P-255・新板＝⛔ 一颗）
         _bridgeReady = false;   // 每一趟开场都从头算：上一趟的 ready⛔ 顶这一趟的
         var userData = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -671,6 +685,9 @@ public sealed class BoardWindow : Window
         // png／svg＝一次性产物→导出目录、名字带时刻。两族⛔ 共用一份命名规则。
         if (BridgeProtocol.LandsInSceneArchive(envelope.Kind))
         {
+            // 那一行第二颗读数在这里跟上：这一份字节＝用户<b>此刻屏幕上那块</b>，无论下面写闸开不开（P-255）。
+            // 放在写闸判定<b>之前</b>是有意的——拒掉那一臂里用户刚贴的外链照样在屏幕上空着，只说"没存上"⛔ 说"那一块为什么是空的"。
+            RememberHiddenEmbeddables(bytes);
             // 写闸（P-223）：这一趟页面还没证明自己"回到了宿主给它的那块板"，它交回的场景字节就⛔ 许落盘。
             // ⛔ 挡的只是这一族——png／svg 是一次性产物、另起一颗档名，盖不到任何板档（所以那颗门在档位分流之后）。
             // 拒掉的字节也⛔ 记进 _seenScene：记了＝下一趟恢复会把这块空场景当"见过的那一份"递回去，
@@ -782,7 +799,7 @@ public sealed class BoardWindow : Window
     /// <summary>
     /// 那一发交回的字节<b>过上限</b>：⛔ 解它，也⛔ 让它静默（片58＝P-241 的②件）。
     /// <para><b>两种档位各说各的<b>已有</b>那句话</b>（本批⛔ 添一颗键：那两句都住在画板那一族的名册里，
-    /// 由 <c>BoardWordGateTests.TheBoardFamilyHasExactlyTwentySevenRowsAndTheyAreNamed</c> 逐颗点名钉住）：
+    /// 由 <c>BoardWordGateTests.TheBoardFamilyHasExactlyTwentyEightRowsAndTheyAreNamed</c> 逐颗点名钉住）：
     /// scene＝这一扇的自动保存对这一发起停了＝片27 那句「这一扇已停止保存」＋那颗「另存一份到别处」；
     /// png／svg＝那一发导出没成＝片54 那句「没能存成，原因在日志里」。⚠ 两句都是<b>真话</b>：
     /// 前者确实停了（这块板超限期间不再自动落盘），后者确实没落盘。</para>
@@ -962,6 +979,33 @@ public sealed class BoardWindow : Window
             "boards.openFolderFailedBody" => Phrase("boards.openFolderFailedBody", _exportPath ?? string.Empty),
             _ => string.Empty,
         };
+    }
+
+    /// <summary>那一行第二颗读数按当前语言重贴一次（<see cref="StarMark.Abstractions.I18n.Locale.Changed"/> 那一拍与
+    /// "手里那份字节变了"那一拍都走它——片34 那颗按钮上的话漏掉的就是同一拍）。
+    /// <para>那颗数是<b>数据</b>，进 <c>Fmt</c> 的实参，⛔ 在这里拼成品句（与那句"已存到 &lt;路径&gt;"同一条口径）。
+    /// <c>null</c>（那份字节读不懂）与 <c>0</c>（确实没藏）在这一行上说同一种话＝都⛔ 开口：
+    /// "我读不懂这一发交回来的档"是宿主自己的事，进日志（P-193 那条"只进日志⛔ 上屏"的口径），⛔ 拿它吓用户。</para></summary>
+    private void PasteHiddenEmbedNotice()
+    {
+        if (_barHiddenEmbeds is null) return;
+        var count = _hiddenEmbeddables ?? 0;
+        _barHiddenEmbeds.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (count > 0) _barHiddenEmbeds.Text = Phrase("boards.embedHiddenBody", count);
+    }
+
+    /// <summary>那一列数的<b>唯一写处</b>：宿主每见过一份完整场景字节就问一次 Core（开场与页面交回那两拍都走这一颗，
+    /// ⛔ 两处各解一遍档）。读到 0 也照样重贴一次——用户删掉那颗外链框，那一行得当场退场（⛔ 另配一颗"清除"＝第二个主人）。
+    /// <para>痕只在"从读得懂翻成读不懂"那一拍落一次：这一颗住在停笔／失焦那一拍上（每 1.5 秒一回），
+    /// 每次都说＝把同一件坏话刷满日志（P-45 那条节流口径的同一条）。</para></summary>
+    private void RememberHiddenEmbeddables(byte[]? sceneBytes)
+    {
+        var counted = BoardPolicy.CountHiddenEmbeddables(sceneBytes);
+        if (counted is null && _hiddenEmbeddables is not null && sceneBytes is { Length: > 0 })
+            StarMark.Abstractions.StarLog.Warn(
+                "boards.embed.hidden unreadable bytes=" + sceneBytes.Length + " id=" + _boardId);
+        _hiddenEmbeddables = counted;
+        PasteHiddenEmbedNotice();
     }
 
     /// <summary>那颗缩放念出来的样子（<c>2×</c>＝数字＋乘号，⛔ 跟着语言走，所以它是<b>数据</b>而⛔ 是一句表里的话）。
@@ -1278,6 +1322,21 @@ public sealed class BoardWindow : Window
             Margin = new Thickness(0, 4, 0, 0),
             Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
         };
+        // 第二颗读数归第二行（片82 真机量到的那一格＝账本 P-255）：那块板上有几颗外部内容永远不会出正文时，
+        // 屏幕上必须有一句说得清"这一块空的不是坏了，是这一族我们故意不放行"。
+        // ⚠ 它在"没有东西可说"时收起来，而⛔ 像上面那句落点那样留一行空字：那一行说的是"我刚点的那一下怎么样了"，
+        // 每一发都要有答案；这一行说的是"这块板上有没有藏着的空框"，没有的时候念一颗 0 等于替用户造一颗他没问过的坏消息。
+        // 黑字仍按片28 那把尺钉死（⛔ 跟主题走＝深色主题下白字画在白底上＝又隐形一次）。
+        _barHiddenEmbeds = new TextBlock
+        {
+            Text = string.Empty,
+            FontSize = 12,
+            MaxWidth = 420,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0),
+            Visibility = Visibility.Collapsed,
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+        };
         var barRow = new StackPanel { Orientation = Orientation.Horizontal };
         barRow.Children.Add(_barScaleButton);
         barRow.Children.Add(_barBackgroundButton);
@@ -1297,6 +1356,7 @@ public sealed class BoardWindow : Window
         };
         _bar.Children.Add(barRow);
         _bar.Children.Add(_barStatus);
+        _bar.Children.Add(_barHiddenEmbeds);
         var stage = new Grid();
         stage.Children.Add(_web);
         stage.Children.Add(_notice);
@@ -1419,12 +1479,13 @@ public sealed class BoardWindow : Window
     private static string Phrase(string key, params object?[] arguments)
         => StarMark.Abstractions.I18n.Locale.Fmt(key, arguments);
 
-    /// <summary>换语言那一拍：那块面板与那一行<b>两处都要重贴</b>（片54 起这一扇上有两块会说汉语的表面；
-    /// 只搬一处＝P-175 那一族"一颗重贴一颗冻着"的第三种脸，而那一行⛔ 在面板的名单里）。</summary>
+    /// <summary>换语言那一拍：那块面板、那一行落点与那一行第二颗读数<b>三处都要重贴</b>（片54 起这一扇上有两块会说汉语的表面，
+    /// 片83 起那一块上从此有两行；只搬一处＝P-175 那一族"一颗重贴一颗冻着"的第三种脸，而那一行⛔ 在面板的名单里）。</summary>
     private void OnLocaleChanged()
     {
         PasteNotice();
         PasteBar();
+        PasteHiddenEmbedNotice();
     }
 
     /// <summary>

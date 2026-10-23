@@ -874,6 +874,20 @@ public sealed class BoardWindowBridgeGateTests
         var locale = SourceGate.MethodBody(code, "void OnLocaleChanged");
         Assert.Contains("PasteNotice();", locale, StringComparison.Ordinal);
         Assert.Contains("PasteBar();", locale, StringComparison.Ordinal);
+        // 片83＝那一块上有<b>两行</b>读数（那句落点＋「未显示的外部内容：N」・账本 P-255）：第三颗重贴漏掉＝
+        // 换语言那一刻那一行还冻在旧语言里念着一颗数，而这一族的坏法形状证人从来抓不到（只有真机看得见）。
+        Assert.Contains("PasteHiddenEmbedNotice();", locale, StringComparison.Ordinal);
+        // 那一列数的唯一写处＋两颗调用点（开场与页面交回那一拍）：多一处＝第二个地方自己解一遍档
+        Assert.Equal(3, Count(code, "RememberHiddenEmbeddables("));          // 定义一颗＋两调用点
+        Assert.Equal(2, Count(code, "PasteHiddenEmbedNotice();"));            // 两调用点（定义那行⛔ 带分号）
+        Assert.Equal(1, Count(code, "_hiddenEmbeddables = counted;"));
+        Assert.Contains("RememberHiddenEmbeddables(sceneBytes);", code, StringComparison.Ordinal);   // 新板那份＝一颗也读不出
+        Assert.Contains("RememberHiddenEmbeddables(bytes);", code, StringComparison.Ordinal);         // 写闸开不开都说得出口
+        // 那一行的在场资格只由那颗数定（⛔ 第二个主人＝片54 那句"在场资格只有一颗字段"的同一条口径）
+        Assert.Equal(1, Count(code, "_barHiddenEmbeds.Visibility"));
+        // ⛔ 它住进那块面板：面板一位（<c>_noticeKey</c>），一句中性说明没资格把「这一扇已停止保存」顶掉（片39 那一族）
+        Assert.DoesNotContain("ShowNotice",
+            SourceGate.MethodBody(code, "void PasteHiddenEmbedNotice"), StringComparison.Ordinal);
 
         // ⑤ 那一问的唯一发送处：宿主侧只许一颗 export.pick 的形状（scene 与那两档图共用它，⛔ 两处各拼一遍）
         Assert.Equal(1, Count(code, "PostOutbound(\"export.pick\""));

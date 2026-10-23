@@ -427,6 +427,58 @@ public static class BoardPolicy
         catch (Exception) { return null; }   // 半截档／坏编码：这一颗读不懂，交 null（⛔ 当"空的"）
     }
 
+    /// <summary>那颗 <c>embeddable</c> 的类型名（引擎那一侧的字面＝<see cref="CountHiddenEmbeddables"/> 的唯一判据）。</summary>
+    private static ReadOnlySpan<byte> EmbeddableMarker => "embeddable"u8;
+
+    /// <summary>那份档的<b>骨架</b>那一串（键＋冒号＋数组开）——预筛敢替"这颗 0"作证的唯一资格。</summary>
+    private static ReadOnlySpan<byte> ElementsOpened => "\"elements\":["u8;
+
+    /// <summary>
+    /// 那份场景字节里有几颗<b>画布上永远不会出现正文</b>的外部内容（认不出＝null，⛔ 替它猜一颗 0）。
+    /// <para><b>这颗数说的是屏幕上真实的一件事，⛔ 是诊断</b>：随包那颗桥把 <c>validateEmbeddable</c> 设成
+    /// <c>false</c>（P-248 那道引擎侧的闸门），而引擎对<b>结果为 false 的那一颗直接跳过渲染</b>——
+    /// 片82 八臂真机逐臂量到：同源 <c>embeddable</c> 在 DOM 里挂载 <b>0</b> 颗而
+    /// <c>want=loaded=canvas=3</c>＝元素进了档、进了画布，永远交不出一块正文；屏幕上那一块是
+    /// <b>浅灰一块</b>（r5 量到 (210,210,210)）而⛔ 一句说明也没有（账本 P-255）。</para>
+    /// <para><b>只数 <c>embeddable</c> 这一族</b>：同一跑里 <c>iframe</c> 那两族（带 <c>generationData</c>／
+    /// 只带 <c>link</c>）在那颗开关下<b>照挂</b>——那颗 prop ⛔ 管它们（片81 读到・片82 量到）。
+    /// 把 <c>iframe</c> 也数进来＝替用户报一颗根本不存在的空位。</para>
+    /// <para><b>预筛只当加速器，⛔ 当证人</b>：这颗数在停笔／失焦那一拍每 1.5 秒就会被问一次（见 <c>BoardWindow</c>
+    /// 那两调用点），而绝大多数板压根没贴过外链。读到<b>档的骨架</b>（<see cref="ElementsOpened"/>）又读不到
+    /// <see cref="EmbeddableMarker"/>＝那颗 0 是<b>证出来的</b>：UTF-8 里 ASCII 串⛔ 会由多字节序列拼出来，
+    /// 所以整份字节里没有那一串＝没有任何一颗元素的 <c>type</c> 可能是它。骨架都读不到的（坏编码・半截头・
+    /// 带空格的写法）一律往下走解档那一手，让"读不懂"继续交 null——本批那颗证人第一跑就按 <c>"not json"</c>
+    /// 抓到过一颗由预筛替坏档说出来的 0（⛔ 修掉之前把它写进文档＝拿一把会撒谎的尺交差）。</para>
+    /// <para><b>认不出交 null 的三档</b>：不是 JSON・根⛔ 是对象・没有 <c>elements</c> 或那颗⛔ 是数组。
+    /// 与 <see cref="CountWritableElements"/> 同一口径：那一族被 <c>isDeleted:true</c> 标掉的⛔ 算——
+    /// 引擎连框都不画，也就没有"空的框让用户猜"这一说。</para>
+    /// </summary>
+    public static int? CountHiddenEmbeddables(byte[]? utf8Json)
+    {
+        if (utf8Json is not { Length: > 0 }) return null;
+        var raw = utf8Json.AsSpan();
+        if (raw.IndexOf(EmbeddableMarker) < 0 && raw.IndexOf(ElementsOpened) >= 0) return 0;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(utf8Json);
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+            if (!doc.RootElement.TryGetProperty("elements", out var e)) return null;
+            if (e.ValueKind != System.Text.Json.JsonValueKind.Array) return null;
+            var n = 0;
+            foreach (var el in e.EnumerateArray())
+            {
+                if (el.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                if (el.TryGetProperty("isDeleted", out var d) && d.ValueKind == System.Text.Json.JsonValueKind.True)
+                    continue;
+                if (el.TryGetProperty("type", out var t)
+                    && t.ValueKind == System.Text.Json.JsonValueKind.String
+                    && string.Equals(t.GetString(), "embeddable", StringComparison.Ordinal)) n++;
+            }
+            return n;
+        }
+        catch (Exception) { return null; }   // 半截档／坏编码：这一颗读不懂，交 null（⛔ 当"一颗也没藏"）
+    }
+
     /// <summary>
     /// 那颗"另存一份到别处"该交哪一份：手里那份（<c>loaded</c>＝宿主见过、也是盘上主档那一份），
     /// 还是写闸拒掉的那一份（<c>refused</c>＝用户此刻屏幕上那块）。

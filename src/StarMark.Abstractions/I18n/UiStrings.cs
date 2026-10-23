@@ -2705,6 +2705,10 @@ public static class UiStrings
         new Entry("boards.exportOff", "关", "Off", "オフ"),
         new Entry("boards.exportSavedBody", "已存到 {0}（{1}、{2}）", "Saved to {0} ({1}, {2})", "{0} に保存しました（{1}・{2}）"),
         new Entry("boards.exportFailedBody", "那颗导出没能存成，可以再导出一次；原因在日志里。", "That export did not land; you can export again. The reason is in the log.", "出力を保存できませんでした。もう一度出力できます。原因はログにあります。"),
+        // 片83＝账本 P-255 那一格：贴进画布的外链被引擎那道门跳过时，屏幕上原来一个字也⛔ 说（挂载 0 颗而 canvas=3）。
+        // ⚠ 三列都写成"名词：数字"那一副摆法——数子在冒号<b>后面</b>，英文列就⛔ 要在单复数之间选一颗
+        //（片48 为 RSS 那十行定下的同一颗口径：与数量无关的摆法，屏幕上 1 与 2 两档都读得下去）。
+        new Entry("boards.embedHiddenBody", "未显示的外部内容：{0}（画板不放行外链网页）", "Embedded pages not shown: {0} (the board does not allow external pages)", "表示されない外部ページ：{0}（ボードでは外部ページを読み込みません）"),
         new Entry("tray.pinsShowHideNone", "显示 / 收起所有贴图（当前没有贴图）", "Show or collapse all pins (none right now)", "すべてのピンを表示／収納（現在 0 枚）"),
         new Entry("tray.pinsShowAll", "显示所有贴图", "Show all pins", "すべてのピンを表示"),
         new Entry("tray.pinsHideAll", "收起所有贴图", "Collapse all pins", "すべてのピンを収納"),
