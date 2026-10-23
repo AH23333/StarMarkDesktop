@@ -835,7 +835,7 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Equal(0, Count(code, "DownloadStarting"));
         Assert.Equal(0, Count(code, "CoreWebView2DownloadOperation"));
 
-        // ② 引擎那颗框与开它的那两颗名字一起关到⛔ 通（⛔ 只关一半＝面板没了、快捷键照旧起那颗框）
+        // 两个开关不可合并：saveAsImage 关闭图片框，export 关闭 JSON 框。
         var js = ReadRepo(BridgeJs);
         Assert.Contains("export: false,", js, StringComparison.Ordinal);
         Assert.Contains("saveAsImage: false,", js, StringComparison.Ordinal);

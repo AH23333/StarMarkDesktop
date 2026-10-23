@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using StarMark.Core.Boards;
 using Xunit;
 
@@ -138,5 +139,37 @@ public sealed class BoardsAssetGateTests
         Assert.False(BoardsAssetPolicy.IsSafeAssetRelativePath("fonts\\Xiaolai\\a.woff2"));
         Assert.False(BoardsAssetPolicy.IsSafeAssetRelativePath("C:/x.woff2"));
         Assert.False(BoardsAssetPolicy.IsSafeAssetRelativePath("fonts//a.woff2"));
+    }
+
+    [Fact]
+    public void TheTwoExportDialogsAreGatedByTheirOwnKnobs()
+    {
+        var text = File.ReadAllText(Path.Combine(AssetRoot, BoardsAssetPolicy.BundleFileName));
+        const string imageGate =
+            @"(?<![\w$.])[\w$]+=\(\)=>![\w$]+\.canvasActions\.saveAsImage\|\|[\w$]+\.openDialog\?\.name!==""imageExport""\?null:\(0,[\w$]+\.jsx\)\([\w$]+,";
+        const string jsonGate =
+            @"(?<![\w$.])[\w$]+=\(\)=>(?<options>[\w$]+)\.canvasActions\.export\?\(0,[\w$]+\.jsx\)\((?<component>[\w$]+),\{[^{}]*\}\):null(?=[,;])";
+        var imageMatches = Regex.Matches(text, imageGate);
+        var jsonMatches = Regex.Matches(text, jsonGate);
+        Assert.True(imageMatches.Count == 1, "图片框必须由 saveAsImage 与 imageExport 共同控制，关闭时返回 null");
+        Assert.True(jsonMatches.Count == 1, "JSON 组件必须仅在 export 为真时挂载，为假时返回 null");
+        var jsonComponent = jsonMatches[0].Groups["component"].Value;
+
+        // 不解析模板、正则或注释；出现这些语法时拒绝匹配，不能跨到相邻组件借条件。
+        const string bodyPattern = """\{(?>[^{}"'`/]+|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|(?<brace>\{)|(?<-brace>\}))*(?(brace)(?!))\}""";
+        var definitionPattern = @"(?<![\w$.])" + Regex.Escape(jsonComponent)
+            + @"=\(\{elements:[\w$]+,appState:(?<state>[\w$]+),[^{}]*\}\)=>(?<body>" + bodyPattern + ")";
+        var definitions = Regex.Matches(text, definitionPattern, RegexOptions.None, TimeSpan.FromSeconds(5));
+        Assert.True(definitions.Count == 1, jsonComponent + " 必须有唯一且可完整读取的组件定义");
+        var body = definitions[0].Groups["body"].Value;
+        var state = Regex.Escape(definitions[0].Groups["state"].Value);
+        var guard = @"return\(0,[\w$]+\.jsx\)\([\w$]+\.Fragment,\{children:" + state
+            + @"\.openDialog\?\.name===""jsonExport""&&\(0,[\w$]+\.jsx\)\(";
+        Assert.Matches(guard, body);
+        var dialogs = Regex.Matches(body, @"openDialog\?\.name===""([\w$]+)""")
+            .Select(m => m.Groups[1].Value).Distinct().ToArray();
+        Assert.Equal(new[] { "jsonExport" }, dialogs);
+        Assert.DoesNotMatch(@"[\w$]+\.canvasActions\.export\|\|[\w$]+\.openDialog\?\.name!==""imageExport""", text);
+        Assert.DoesNotMatch(@"[\w$]+\.canvasActions\.saveAsImage\?\(0,[\w$]+\.jsx\)\(", text);
     }
 }
