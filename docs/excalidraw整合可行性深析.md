@@ -1558,7 +1558,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 
 - <b>导出四路</b>：今天<b>三路</b>——png／svg 两颗按钮 + <c>scene</c>（四拍里那一路）；<b>「复制为图」⛔ 接</b>（<c>exportToClipboard</c> 只在 <c>tools/boards/entry.js</c> 里被 re-export，0 处调用）。
 - <b>桥越权</b>：路径那格、命令名那格<b>有证人</b>；v1 新加的那格「伪造 <c>paste.query</c> 的 data 形状」今天只对着一颗⛔ 消费的判定函数红（§28.3 ⑤）；<b>iframe／embeddable url 那格⛔ 证人</b>——见 §28.5。
-- <b>旧 embeddable 场景打开⛔ 加载远程</b>：<b>⛔ 落地</b>〔片67 就地更正：这一格已落<b>能机检的那半</b>，屏幕上那句 <c>toast.unableToEmbed</c> 照旧欠拍＝§二十九.7〕。<c>validateEmbeddable</c> 在桥的 props 里 0 处（v1 §21.0 第 7 行那句「那颗 prop 交 <c>false</c>」今天没写）。
+- <b>旧 embeddable 场景打开⛔ 加载远程</b>：<b>⛔ 落地</b>〔片67 已落能机检的那半；片81 更正：仅 URL 型 embeddable 受此验证控制，载档路径不能预设会出现 toast.unableToEmbed，屏幕反馈仍未验证，见 §40.1；下句 0 处是片66 的历史读数〕。<c>validateEmbeddable</c> 在桥的 props 里 0 处（v1 §21.0 第 7 行那句「那颗 prop 交 <c>false</c>」今天没写）。
 - <b>场景回环→undo 栈清空</b>：<c>captureUpdate: NEVER</c> 落地（载档那一路）；<c>history.clear</c> <b>⛔ 调用点</b>——「栈干净」今天由「一板一窗、每扇新页」间接兑现，⛔ 是那颗旋钮动过。
 - <b>关窗 60 秒进程树=0／userData 落点</b>：落点那颗钉子落地并有证人；<b>60 秒那格在产品窗上⛔ 量过</b>（v1 自己写了「⛔ 拿片8 那跑顶替」，这句照旧算欠项）；§21.5 那句「兜底＝按自己 pid 的子树清 <c>msedgewebview2</c>」<b>⛔ 落</b>（那一族档里 0 处）。
 - <b>F1／全局键共存</b>：<b>⛔ 有码证、⛔ 读数</b>（画板那一路压根碰⛔ 着键盘；全局键住在主窗那颗 <c>RegisterHotKey</c>）。这一格与 §28.5 那颗一起排真机腿。
@@ -1591,7 +1591,7 @@ v1 §21.5 写「出机三道：宿主注入 CSP；<c>WebResourceRequested</c>；
 
 | 层 | 今天多出来的东西 | 现读位置 | 为什么放这一层 |
 |---|---|---|---|
-| 页面（随包桥） | <c>validateEmbeddable: false</c> 作为 <c>baseProps()</c> 的<b>顶层 prop</b> | <c>tools/boards/board-bridge.js:216</c>（随包那份 <c>assets/boards/board-bridge.js:216</c>，两颗由片21 那颗漂移证人钉成同一份字节） | 判不过时引擎自己走 <c>toast.unableToEmbed</c>，档里那颗远程 iframe ⛔ 被渲染（v1 §21.0 第 7 行早就这么写） |
+| 页面（随包桥） | <c>validateEmbeddable: false</c> 作为 <c>baseProps()</c> 的<b>顶层 prop</b> | <c>tools/boards/board-bridge.js:216</c>（随包那份 <c>assets/boards/board-bridge.js:216</c>，两颗由片21 那颗漂移证人钉成同一份字节） | 〔片81 更正〕只拒绝 URL 型 embeddable；生成 HTML 的 iframe 不受此 prop 控制；toast.unableToEmbed 属于链接编辑提交，不是载档验证的必经出口（§40.1） |
 | Core（判据） | 一颗方案常数＋<b>三档</b>分类：随包／压根⛔ 出机／别处 | <c>src/StarMark.Core/Boards/BoardsAssetPolicy.cs:46</c>・<c>src/StarMark.Core/Boards/BoardsAssetPolicy.cs:59</c>・<c>src/StarMark.Core/Boards/BoardsAssetPolicy.cs:69</c>・<c>src/StarMark.Core/Boards/BoardsAssetPolicy.cs:72</c>・<c>src/StarMark.Core/Boards/BoardsAssetPolicy.cs:77</c> | 「这一发算哪一档」是<b>判据</b>，宿主只照它分类；名字（那颗虚拟站）⛔ 进 Core＝第二份主人（证人第五格扫全档） |
 | 宿主（订阅） | <c>AddWebResourceRequestedFilter("*", All)</c> ＋那颗观察者，排在 <c>Navigate</c> <b>之前</b> | <c>src/StarMark.UI/Boards/BoardWindow.cs:425</c>・<c>src/StarMark.UI/Boards/BoardWindow.cs:427</c>・<c>src/StarMark.UI/Boards/BoardWindow.cs:453</c>（那颗起页在 <c>src/StarMark.UI/Boards/BoardWindow.cs:431</c>） | 先订再看：晚一行的那一发出机根本进不了尺，而那份名册正是下一批翻 deny 的唯一依据 |
 
@@ -1600,15 +1600,15 @@ v1 §21.5 写「出机三道：宿主注入 CSP；<c>WebResourceRequested</c>；
 ### 29.2 那颗引擎 prop：钉的是<b>层</b>，⛔ 是「串在不在」
 
 包里的消费点两处（片66 现读，本批重跑照旧）：<c>this.props.validateEmbeddable</c> 与 <c>$s(D, i.validateEmbeddable)</c>，
-判不过走 <c>toast.unableToEmbed</c>。它交的是 boolean 那一档（包里逐字五档：boolean／字符串数组／RegExp／RegExp 数组／函数），
-交 <c>false</c>＝全拒。
+〔片81 更正〕两处调用时机不同：载档后更新验证状态；链接编辑提交的拒绝分支才调用 <c>toast.unableToEmbed</c>。它交的是 boolean 那一档（其余支持字符串数组／RegExp／RegExp 数组／函数），
+交 <c>false</c> 拒绝 URL 型 <c>embeddable</c>，不控制生成 HTML 的 <c>iframe</c>。
 
 证人因此⛔ 只问「档里有没有那颗串」，而是<b>数花括号层数</b>：那颗 prop 必须与 <c>excalidrawAPI</c>／<c>onChange</c>
 同层（第 1 层），而 <c>UIOptions</c> 里那些在第 2 层往下。台架两臂各打红一颗（正本 <c>bin/WI98/bench67_console_r1.txt</c>）：
 A1 把值翻成 <c>true</c> ⇒ 只红「值那一格」；A2 在 <c>UIOptions</c> 里多塞一颗<b>同名而嵌在里层</b>的 prop（顶层那颗与那句 <c>: false</c> 照旧在场）
 ⇒ 只红「层那一格」而「值那一格」照旧绿。<b>少了 A2 这一臂，「层」那一格只是我数出来的一句自证。</b>
 
-⚠ 这颗开关<b>管的是</b>那颗 prop 认不认远程 iframe，⛔ 等于「宿主⛔ 需要第二道」——v1 那句「兜底永远排在名单最后」照旧成立（§29.5）。
+⚠ 这颗开关<b>管的是</b> URL 型 embeddable 的验证（片81 按实际消费者更正，不含生成 HTML 的 iframe），⛔ 等于「宿主⛔ 需要第二道」——v1 那句「兜底永远排在名单最后」照旧成立（§29.5）。
 
 ### 29.3 三档⛔ 够，第四档才是这一批的坏
 
@@ -1662,8 +1662,8 @@ A1 把值翻成 <c>true</c> ⇒ 只红「值那一格」；A2 在 <c>UIOptions</
 - <b>那颗观察者的一次真读数</b>：开着画板走一遍（含打开一张带 <c>data:</c> 图的旧板），把 <c>local=</c>／<c>inline=</c>／<c>target=</c> 三列取到手——
   那是下一批翻 deny 的唯一入口，也是 P-248 的后半。今天桌面被占，⛔ 绕、⛔ 抢（名册 521 那一族），记欠项。
 - <b>弹窗那一族</b>（<c>NewWindowRequested</c>）本批没碰：它该与 CSP 同一批装，因为两颗都⛔ 起窗判不了「挡错了什么」。
-- 那颗 <c>validateEmbeddable</c> 的<b>屏幕脸</b>（打开一张带远程 iframe 的样档，看引擎那句 <c>toast.unableToEmbed</c> 上不上屏）⛔ 拍——
-  源码与包内消费点已判到，屏幕上那句照旧欠。
+- 那颗 <c>validateEmbeddable</c> 的<b>屏幕反馈</b>仍未验证。〔片81 更正〕样档必须区分 URL 型 embeddable 与生成 HTML 的 iframe；
+  <c>toast.unableToEmbed</c> 只在链接编辑提交回调内，不能把载档时出现这句提示当作已有源码保证。
 
 
 ## 三十、片68 落地腿（2026-10-21·改码批·⛔ 起窗）＝画板上那条链接的两半：页面把点击递给宿主，宿主把开没开成念出来
@@ -2200,3 +2200,16 @@ A1 把值翻成 <c>true</c> ⇒ 只红「值那一格」；A2 在 <c>UIOptions</
 · <b>随包资产重冻</b>：那颗桥 20812 颗字节／sha 594f1eaba216・清单 <c>manifest.json</c> 由 <c>stage-assets.py</c> 刷新（generatedAtUtc＋那颗桥的 bytes/sha 三行）；  bundle 一颗字节没动（sha 923fa221d0a4 与片79 相等）＝<b>上面那些 offset 照旧有效</b>。
 · ⚠ <b>那颗号的单位</b>（<b>本批先写成 +140／+146 而无读数・复称时按现场改回＝坑表 #896</b>）：随包 bundle 的下标是从 <c>decode("utf-8","replace")</c> 那颗串取的＝<b>按字符数</b>；那颗档非 ASCII 共 74 颗、第一颗在字符下标 2186709、最后一颗在 2546296⇒差那把尺由「那颗号之前跑过几颗非 ASCII」定，<b>⛔ 是两颗常数</b>：本批三处（4600272／4656775／4656930）现算<b>各 +146</b>，片79 正文引过的 2169095／2174739／2174761 <b>差＝0</b>、2519120／2520131 <b>各 +140</b>、2556185 <b>+146</b>。⚠ 拿 <c>grep -b</c>／十六进制工具读数的人要现算 <c>len(text[:off].encode("utf-8"))-off</c>。
 · <b>片80 终检补正</b>：原证人截取 6000 字符，会借到相邻组件的 <c>jsonExport</c>；JSON 正则还会从 <c>!Q.canvasActions.export</c> 内部命中正向后缀。两种变异已用旧装配实际跑出「只有清单红、新证人不红」（<c>bin/WI98/review80_pre_results.json</c>）。改为完整组件体的括号配平与直接返回守卫，并从箭头函数起点钉 JSON 开关的正向条件和 <c>:null</c> 分支；无法解析的模板／正则／注释一律拒绝匹配，不跨组件取证。修后五臂 M1～M5 的失败数依次为 1／2／1／2／2，红名集合全部与预期相等（<c>bin/WI98/review80_post_results.json</c>）；M3 改名正件仍只有清单红。桥注释收成一句职责说明，终版桥 <b>18795 字节／sha b2c8e64bb262</b>，两份逐字节相等；上文 20812／594f1eaba216 属首轮三臂，不是终版资产。终检定向 <b>56/56</b>（<c>bin/WI98/test80_review.txt</c>）；此前全量 <b>6470/6470、EXIT=0</b>（<c>bin/WI98/leg80_full_test_r3.txt</c>）发生在本次测试判据补强之前，不能冒充补强后的全量。问题记入坑表 #898，产品逻辑不变。
+
+## 四十、片81 读码腿：P-248 旧画布正件的类型分叉（不起窗，不结案）
+
+### 40.1 实际消费者与验证边界
+
+- 旧 <c>bin/WI98/board_72.py</c> 的 E/F 向板档写入 <c>type=iframe</c> 与 <c>link</c>，没有生成数据。冻结包 <c>renderEmbeddables</c> 的 iframe 分支读取 <c>customData.generationData</c> 或 <c>magicGenerations</c>，不读取 link；缺数据生成 <c>No generation data</c> 错误 HTML，有完成态 HTML 则交给 <c>srcDoc</c>。所以旧夹具不能充当 URL 出站正件，摘 CSP 或翻验证开关都不能使该分支改读 link；这没有解释旧 E/F 实际 DOM、视口与两张帧相等的全部原因。
+- URL 分支属于 <c>embeddable</c>：<c>updateEmbeddables</c> 仅为此类型调用验证器，<c>false</c> 的结果使渲染过滤器跳过它；iframe 不受此 prop 控制。两类另有可见性／初始化门，离屏且尚未初始化时直接返回，不能用元素已进数组代替已挂载的证据。
+- 整包唯一 <c>toast.unableToEmbed</c> 调用位于链接编辑提交回调，不在载档后的 <c>updateEmbeddables</c> 中。§28.4、§29.1、§29.2、§29.7 与报告片67 的对应句已改口；桥只保留职责说明，产品逻辑未改。
+- <b>函数级读数</b>：<c>node bin/WI98/iframe_81.cjs</c>，正本 <c>bin/WI98/iframe81_functions_r2.json</c>，7 个夹具通过、0 失败。link-only iframe 在验证 false／true 两档均生成错误 HTML；带生成数据的 iframe 在 false 档仍交出原 HTML；embeddable 的 false／true 两档分别为过滤／调用 URL 解析替身；两种未初始化离屏夹具均不生成 iframe JSX，初始化集合也为空。该正本包含完整抽取函数与 UTF-16／字节两种偏移，bundle 为 4878772 字节、sha <c>923fa221d0a4</c>。
+- <b>射程限制</b>：JSX、可见性、URL 解析与部分场景记账使用替身；7 个夹具不是 React/DOM、loadFromBlob/restore、WebView2、CSP、真实请求或屏幕提示的验收。真机前检查得到 <c>Screen-saver</c>，本批没有启动或控制窗口，不绕过屏保；P-248 保持开放。
+- <b>下一条真机腿</b>：URL 型 embeddable 与携带受控本地 HTML 的 iframe 分开造正件；先通过真实载档链并证明处于视口、已经挂载，再记录 src/srcdoc、CSP 违反、宿主 frame 计数与可见反馈。只在隔离副本改变验证开关或页内 CSP，宿主外站保护保持开启。§28.4 的关窗 60 秒进程树、F1 共存、TTD／AI／Publish 缺席照片仍欠，不以本批函数读数抵扣。
+- <b>资产核对</b>：官方命令 <c>python -X utf8 tools/boards/stage-assets.py --out bin/WI98/stage81</c> 先生成隔离树，逐档对账后只同步桥和清单；清单 140 项（连清单共 141 档），其余资产逐字节不变。桥 18112 字节／sha <c>dd780d27061b</c>，tools／assets 两份相等，改前后由同一 esbuild 转换所得可执行代码相等；正本 <c>bin/WI98/stage81_verify.json</c>。
+- <b>代码侧定向</b>：<c>dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -p:Platform=x64 -v m --filter "FullyQualifiedName~BoardsAssetGateTests|FullyQualifiedName~BoardWindowBridgeGateTests|FullyQualifiedName~BoardPageCspGateTests|FullyQualifiedName~LedgerPointerGateTests|FullyQualifiedName~TestPointerGateTests"</c>，失败 0／通过 56／跳过 0／总计 56，EXIT=0（<c>bin/WI98/test81_targeted.txt</c>）。该跑在本批文档回写前执行；文档另按原字节快照核对。本批未重跑全量，也没有 UI 验收结果。
