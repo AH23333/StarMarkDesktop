@@ -245,6 +245,15 @@ public sealed class BoardWindow : Window
     /// <summary>那颗"另存一份到别处"的按钮这这一刻许不许按（另存正进行中＝⛔ 再按一次，那是第二份写入）。</summary>
     private bool _copying;
 
+    /// <summary>那两句"这一发外链没开成"——那块面板上<b>唯二</b>由时长收的话（余下那些都由状态收：
+    /// "已停止保存"在写闸重新开起来之前句句是真，而"这条链没打开"没有"什么时候不再是事实"那一刻）。
+    /// <para>这一串是<b>那颗定时器唯一的名单</b>：收口那一拍问的是它，⛔ 在 Tick 里再 switch 一遍键名（两处各列＝迟早只补一处）。</para></summary>
+    private static readonly string[] LinkNoticeKeys = ["boards.linkBlockedBody", "boards.linkFailedBody"];
+
+    /// <summary>那两句的计时器（一颗、懒建、只由 <see cref="BoardPolicy.LinkNoticeMs"/> 定时）。
+    /// <para>⛔ 每次开口新建一颗：Tick 挂着这一窗，新建而不摘＝每发失败的点击多留一位订阅者（P-198 那一族）。</para></summary>
+    private Microsoft.UI.Dispatching.DispatcherTimer? _linkNoticeTimer;
+
     /// <summary>面板上那句"已另存到 &lt;路径&gt;"指的<b>那颗档</b>（生产者⛔ 一处：那颗「另存一份到别处」）。
     /// <para>⛔ 进表，因为它是<b>数据</b>而⛔ 句子（P-193 那条口径）。那一发导出的产物⛔ 写这一颗——它住在右上角
     /// 那一行里（<see cref="_exportPath"/>）：两块表面各说各的档，⛔ 让一句好消息把面板上那句"这一扇已停止保存"顶掉
@@ -635,11 +644,15 @@ public sealed class BoardWindow : Window
                 {
                     // ⛔ 把那颗 URL 递进日志：它正是被拒的那一颗，可能带查询串里的凭据（BJ 那一族）。
                     StarMark.Abstractions.StarLog.Warn("boards.open.rejected id=" + _boardId);
+                    // 这一支从前只留一行痕：他点了、画板没动、屏幕上⛔ 一个字——那是 P-249 那句
+                    // "点了什么也不发生"的第二副脸（引擎默认那一支由片68 订了听众，这一支是<b>宿主自己</b>拒的，
+                    // 更⛔ 静默：判据在我们的名单里，用户却无从知道那条链为什么不算）。
+                    ShowLinkNotice("boards.linkBlockedBody");
                     break;
                 }
                 StarMark.Abstractions.StarLog.Info("boards.open.accepted id=" + _boardId);
                 // 那一手到底开没开成要留下话（名册 422 那一族：⛔ 把动作尺的正件丢了）——从前这里 _ = 一发就完事，
-                // 「系统里没有能处理 http 的默认程序」与「开成了」在痕上长同一张脸。上屏那一句还欠着（见账本 P-249 后半）。
+                // 「系统里没有能处理 http 的默认程序」与「开成了」在痕上长同一张脸。上屏那一句＝片87 那一刀（账本 P-249 后半）。
                 _ = ReportExternalOpenAsync(envelope.Url);
                 break;
             case "export.bytes":
@@ -799,7 +812,7 @@ public sealed class BoardWindow : Window
     /// <summary>
     /// 那一发交回的字节<b>过上限</b>：⛔ 解它，也⛔ 让它静默（片58＝P-241 的②件）。
     /// <para><b>两种档位各说各的<b>已有</b>那句话</b>（本批⛔ 添一颗键：那两句都住在画板那一族的名册里，
-    /// 由 <c>BoardWordGateTests.TheBoardFamilyHasExactlyTwentyEightRowsAndTheyAreNamed</c> 逐颗点名钉住）：
+    /// 由 <c>BoardWordGateTests.TheBoardFamilyHasExactlyThirtyRowsAndTheyAreNamed</c> 逐颗点名钉住）：
     /// scene＝这一扇的自动保存对这一发起停了＝片27 那句「这一扇已停止保存」＋那颗「另存一份到别处」；
     /// png／svg＝那一发导出没成＝片54 那句「没能存成，原因在日志里」。⚠ 两句都是<b>真话</b>：
     /// 前者确实停了（这块板超限期间不再自动落盘），后者确实没落盘。</para>
@@ -1435,6 +1448,14 @@ public sealed class BoardWindow : Window
             case "boards.recoveringBody":
                 _noticeBody.Text = Word("boards.recoveringBody");
                 break;
+            // 片87 那两句也归这一拍算：都不带标题、不带按钮（那一路说的⛔ 是"盘上有一颗档"），
+            // 而那颗键名同时是那句正文的键——ShowNotice 交的就是它，这里⛔ 再挑一遍措辞（第二个出处）。
+            case "boards.linkBlockedBody":
+                _noticeBody.Text = Word("boards.linkBlockedBody");
+                break;
+            case "boards.linkFailedBody":
+                _noticeBody.Text = Word("boards.linkFailedBody");
+                break;
             case "boards.blockedBody":
                 // 那句"拿不出来"必须说清两件事：盘上那颗档⛔ 没了、这一发⛔ 动过它——
                 // 用户听到"打不开"时默认想的是"我的板丢了"（P-239 登记的就是这一格误会）。
@@ -1566,14 +1587,65 @@ public sealed class BoardWindow : Window
     /// 而它从前在这里被 <c>_ =</c> 直接扔掉＝"浏览器没注册 http 处理程序"与"开成了"在日志里长同一张脸，
     /// 下一批只能靠猜（P-56 那条口径：只报"坏了"说不出是谁坏的，反过来"什么都不报"也说不出是没坏）。</para>
     /// <para>那颗 URL 本身⛔ 递进日志（P-30：查询串里可能带凭据），递的是 LauncherEx 那句<b>与它无关</b>的原因。
-    /// 把那句话送上屏还欠着：屏幕上那颗面板一位主人，要挤进去得先定归属（账本 P-249 后半）。</para>
+    /// 片87 起那一句也<b>上了屏</b>（账本 P-249 后半 (A)）：面板空着才挤得进去，归属规则见 <see cref="ShowLinkNotice"/>。</para>
     /// </summary>
     private async System.Threading.Tasks.Task ReportExternalOpenAsync(string? url)
     {
         var why = await Helpers.LauncherEx.TryOpenAsync(url);
         // 两句各写<b>整颗</b>前缀（⛔ 拼成 "boards.open." + 那颗脸）：在日志与代码里都能一次 grep 中同一句话
-        if (why is null) StarMark.Abstractions.StarLog.Info("boards.open.opened id=" + _boardId);
-        else StarMark.Abstractions.StarLog.Info("boards.open.failed id=" + _boardId + " why=" + why);
+        if (why is null)
+        {
+            StarMark.Abstractions.StarLog.Info("boards.open.opened id=" + _boardId);
+            // 开成了＝上一发那句"没能打开"当场⛔ 是最新的事实：它由这一拍收，⛔ 等那颗定时器（八秒里他可能已经
+            // 连点了两次，第二次成了而屏幕上还挂着"没能打开"＝那句话变成了假话）。
+            HideLinkNotice();
+            return;
+        }
+        StarMark.Abstractions.StarLog.Info("boards.open.failed id=" + _boardId + " why=" + why);
+        ShowLinkNotice("boards.linkFailedBody");
+    }
+
+    /// <summary>
+    /// 那一发外链没开成时把那一句放上那块面板（账本 P-249 后半 (A) 的落地腿）。
+    /// <para><b>归属规则＝面板空着才进</b>：那块面板一位主人，而这一句<b>只在没人说话的时候</b>才挤得进去。
+    /// ⛔ 让"这条链没打开"顶掉"这一扇已停止保存"——后者说的是<b>笔迹有丢的风险</b>，被一句无关的坏话盖掉
+    /// 就等于让他以为那块板存好了（片39／✅P-235 量到的正是"新事实顶掉旧话"与"旧话顶掉新事实"那两副脸，
+    /// 而 P-249 登记的归属问的就是这一格）。没挤进去也⛔ 静默：日志里那一行 <c>boards.notice.held</c>
+    /// 说清"屏幕上为什么没话"，⛔ 让下一批把"没话"读成"没坏"（P-56 那条口径的反面）。</para>
+    /// <para>⛔ 进 <see cref="FileOutcomeKeys"/>：这一句⛔ 认定盘上落了一颗档，那颗「打开所在文件夹」跟着它出场
+    /// 就是指着一颗⛔ 存在的档（片39 定过的那一半）。</para>
+    /// </summary>
+    private void ShowLinkNotice(string bodyKey)
+    {
+        if (_noticeKey is not null)
+        {
+            StarMark.Abstractions.StarLog.Info("boards.notice.held by=" + _noticeKey + " id=" + _boardId);
+            return;
+        }
+        ShowNotice(bodyKey, titled: false, offerCopy: false);
+        // 这一句说的是"刚刚发生的一件事"，没有"什么时候不再是事实"那一刻，所以由时长收（那颗数住在 Core）。
+        _linkNoticeTimer ??= NewLinkNoticeTimer();
+        _linkNoticeTimer.Stop();
+        _linkNoticeTimer.Start();
+    }
+
+    /// <summary>那一颗懒建的计时器：间隔只有 <see cref="BoardPolicy.LinkNoticeMs"/> 一颗出处，响了就去问 <see cref="HideLinkNotice"/>。</summary>
+    private Microsoft.UI.Dispatching.DispatcherTimer NewLinkNoticeTimer()
+    {
+        var timer = new Microsoft.UI.Dispatching.DispatcherTimer
+        { Interval = TimeSpan.FromMilliseconds(BoardPolicy.LinkNoticeMs) };
+        timer.Tick += (_, _) => HideLinkNotice();
+        return timer;
+    }
+
+    /// <summary>收掉<b>自己那两句</b>：面板此刻换了主人就一颗字节也不动——⛔ 拿一句过期的定时去收别人的坏话
+    /// （那一族最坏的形状＝八秒之后「这一扇已停止保存」自己消失了，而写闸还拒着）。
+    /// <para>两路走它：那颗定时器响了，与下一发<b>真开成了</b>（<see cref="ReportExternalOpenAsync"/> 那一支）。</para></summary>
+    private void HideLinkNotice()
+    {
+        if (_noticeKey is null || Array.IndexOf(LinkNoticeKeys, _noticeKey) < 0) return;
+        _linkNoticeTimer?.Stop();
+        HideNotice();
     }
 
     /// <summary>
@@ -1874,6 +1946,9 @@ public sealed class BoardWindow : Window
         BoardsWindows.Remove(this);                       // 与构造里那颗 Add 成对（名册上留一颗已关的窗＝退出时会去问一颗没桥的窗）
         // 那颗静态事件也一起摘：留着它，每开一扇已关的画板窗都会被"换语言"那一拍叫一次（订阅手臂成对，P-198 那把尺管的正是这一族）。
         StarMark.Abstractions.I18n.Locale.Changed -= OnLocaleChanged;
+        // 那颗按时长收的话也一起摘：Tick 挂着这一窗，不摘＝每关一扇画板都留下一位会在八秒后再响一次的订阅者
+        // （与上面那颗静态事件同一副对子，P-198 那把尺管的正是这一族）。
+        _linkNoticeTimer?.Stop();
         if (_web.CoreWebView2 is not null)
         {
             _web.CoreWebView2.WebMessageReceived -= OnWebMessageReceived;

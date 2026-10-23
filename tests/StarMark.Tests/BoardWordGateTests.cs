@@ -30,8 +30,9 @@ public sealed class BoardWordGateTests : IDisposable
     /// 片39 那两颗（那颗「打开所在文件夹」与它坏掉时那一句）＋片40 那两颗（「继续编辑」与「仍然离开」）＋
     /// 片49 那四颗（那颗档现在拿不出来那一句的标题、正文与两颗按钮）＋
     /// 片54 那四颗（右上角那一行：两颗入口＋那句"已存到"与那句"没能存成"）＋
-    /// <b>片64 那四颗</b>（那两档交回用户：两颗扳机上的字＋那颗开关的两态）＋
-    /// <b>片83 那一颗</b>（那一行<b>第二</b>颗读数：那块板上有几颗外部内容永远不会出正文＝账本 P-255）＝廿六颗。
+    /// 片64 那四颗（那两档交回用户：两颗扳机上的字＋那颗开关的两态）＋
+    /// 片83 那一颗（那一行<b>第二</b>颗读数：那块板上有几颗外部内容永远不会出正文＝账本 P-255）＋
+    /// <b>片87 那两颗</b>（那一发外链的两种"没开成"：宿主自己拒的／递出去而系统没开成＝账本 P-249 后半）＝廿八颗。
     /// <para>⚠ 这一族⛔ 只数那块面板：片54 起这一扇上有<b>两块</b>会说汉语的表面（面板＋右上角那一行），
     /// 名单钉的是"上屏的字"而⛔"住在哪一块"。另存的两种结果各一颗，带槽的那颗从此有两块表面（见 <see cref="KeyedBar"/>）。</para>
     /// <para>片64 那两颗扳机上的字（「缩放 2×」「背景 开」）与那句落点里念的两档是<b>同一颗键</b>：
@@ -48,6 +49,7 @@ public sealed class BoardWordGateTests : IDisposable
         "boards.exportSavedBody", "boards.exportFailedBody",
         "boards.exportScaleAction", "boards.exportBackgroundAction", "boards.exportOn", "boards.exportOff",
         "boards.embedHiddenBody",
+        "boards.linkBlockedBody", "boards.linkFailedBody",
     ];
 
     private readonly AppLanguage _before = Locale.Current;
@@ -228,16 +230,16 @@ public sealed class BoardWordGateTests : IDisposable
             Locale.Fmt("boards.exportBackgroundAction",
                 Locale.T(background ? "boards.exportOn" : "boards.exportOff")));
 
-    /// <summary>⑤整族总数现读：这一族<b>二十八</b>颗（面板那廿六颗＋片21 那两颗开窗失败的旧话）。
+    /// <summary>⑤整族总数现读：这一族<b>三十</b>颗（面板那廿八颗＋片21 那两颗开窗失败的旧话）。
     /// <para>钉总数而⛔ 钉"至少"：下一批往这一族加一句而不带证人，这一格就会红——而那一颗新句子的换语言，
     /// 是这一族最容易漏的那一半（P-175 那一族在三扇宿主上各漏过一次）。</para></summary>
     [Fact]
-    public void TheBoardFamilyHasExactlyTwentyEightRowsAndTheyAreNamed()
+    public void TheBoardFamilyHasExactlyThirtyRowsAndTheyAreNamed()
     {
         var keys = UiStrings.All.Select(e => e.Key)
             .Where(k => k.StartsWith("boards.", StringComparison.Ordinal)).ToArray();
-        Assert.Equal(28, keys.Length);
-        Assert.Equal(Panel.Length + 2, keys.Length);                           // 上屏那廿六颗＋两颗旧话
+        Assert.Equal(30, keys.Length);
+        Assert.Equal(Panel.Length + 2, keys.Length);                           // 上屏那廿八颗＋两颗旧话
         foreach (var key in Panel) Assert.Contains(key, keys);
         Assert.Contains("boards.openFailedTitle", keys);
         Assert.Contains("boards.openFailedBody", keys);
@@ -265,7 +267,11 @@ public sealed class BoardWordGateTests : IDisposable
     /// （十一颗按钮×三样＝33，加标题／正文／那一行那句落点三颗黑字＝黑字 14／底色 11／描边 11）。
     /// 新加的那颗同样⛔ 跟着主题走，所以这一格是<b>每加一颗都得跟着改数</b>的那类尺：漏改＝那颗新按钮吃主题刷＝又隐形一次。
     /// ⚠ 片64 那两颗扳机之所以走那颗<b>已钉死的 Button</b>而⛔ 下拉／⛔ 复选框，正是这一格的射程：
-    /// 那两类控件的字色由主题模板给，进不了"这一族⛔ 用跟着主题走的刷子"那条禁项（真机读数欠着，见账本 P-242）。</para></summary>
+    /// 那两类控件的字色由主题模板给，进不了"这一族⛔ 用跟着主题走的刷子"那条禁项（真机读数欠着，见账本 P-242）。</para>
+    /// <para><b>片87 那两句⛔ 动这一格那三颗数</b>：那一发外链的两种"没开成"都走 <c>offerCopy: false</c>，
+    /// 面板上那颗「另存一份到别处」跟着收起、也⛔ 新造控件（归属那一维归 <c>BoardWindowBridgeGateTests</c>）。
+    /// 这一句写在这里是因为这一格是<b>每加一颗都得跟着改数</b>的那类尺：把三列读成"上一批那三颗"而实际多了两颗按钮，
+    /// 就正好漏掉这一族唯一能漏的那一格（名册 435：只抬一列会被读成尺坏了）。</para></summary>
     [Fact]
     public void TheOnlyActionableControlPinsItsOwnColors()
     {

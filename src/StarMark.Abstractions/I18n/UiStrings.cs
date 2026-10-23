@@ -2709,6 +2709,11 @@ public static class UiStrings
         // ⚠ 三列都写成"名词：数字"那一副摆法——数子在冒号<b>后面</b>，英文列就⛔ 要在单复数之间选一颗
         //（片48 为 RSS 那十行定下的同一颗口径：与数量无关的摆法，屏幕上 1 与 2 两档都读得下去）。
         new Entry("boards.embedHiddenBody", "未显示的外部内容：{0}（画板不放行外链网页）", "Embedded pages not shown: {0} (the board does not allow external pages)", "表示されない外部ページ：{0}（ボードでは外部ページを読み込みません）"),
+        // 片87＝P-249 后半那一格（那句"没能打开"从前只进日志）：同一发点击有两种下落，各说各的一句话——
+        // 前者是<b>画板自己没递出去</b>（出路＝改那条链），后者是<b>递出去了而系统没开成</b>（再点一次可能就成）。
+        // 合成一句就会替用户决定他没做的那一手（P-56 那一族：只报"坏了"说不出是谁坏的）。⛔ 带那颗 URL（P-30：查询串里可能有凭据）。
+        new Entry("boards.linkBlockedBody", "画板只放行 http/https 的完整地址，这条链接没递出去。", "The board only passes on complete http/https addresses; that link was not passed on.", "ボードは完全な http/https アドレスだけを転送するため、このリンクは開かれませんでした。"),
+        new Entry("boards.linkFailedBody", "那条链接没能打开，可以再点一次；原因在日志里。", "That link did not open; you can click it again. The reason is in the log.", "そのリンクを開けませんでした。もう一度クリックできます。原因はログにあります。"),
         new Entry("tray.pinsShowHideNone", "显示 / 收起所有贴图（当前没有贴图）", "Show or collapse all pins (none right now)", "すべてのピンを表示／収納（現在 0 枚）"),
         new Entry("tray.pinsShowAll", "显示所有贴图", "Show all pins", "すべてのピンを表示"),
         new Entry("tray.pinsHideAll", "收起所有贴图", "Collapse all pins", "すべてのピンを収納"),
