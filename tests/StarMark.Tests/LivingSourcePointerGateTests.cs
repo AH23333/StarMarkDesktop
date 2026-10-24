@@ -177,8 +177,10 @@ public sealed class LivingSourcePointerGateTests
             (@"src/StarMark.Core/Widgets/WidgetStorage.cs", @"public static WidgetStoreData Normalize(WidgetStoreData? data, bool firstRun = false)"),
     };
 
-    /// <summary>片86 收口时现读的落空残留基线：改前 75 颗 → 改后这颗数。⛔ 是"归零"，是"还剩这一族"的<b>现读证</b>。</summary>
-    private const int FallenPointerBaseline = 35;
+    /// <summary>片86 收口时现读的落空残留基线：改前 75 颗 → 改后这颗数。⛔ 是"归零"，是"还剩这一族"的<b>现读证</b>。
+    /// 片91 又修掉一颗（那颗「剪贴板文案写死三颗数」的登记行把落点写成 <c>…Clipboard.cs:90-91</c>，
+    /// 而批 SE 之后那两行已⛔ 是那句话＝那颗号既漂了又指错了地方，换成正文锚之后这颗数从 35 落到 34）。</summary>
+    private const int FallenPointerBaseline = 34;
 
     /// <summary>片88 第二颗棘轮（P-256 ④）：那颗 <see cref="Resolve"/> 对它交回空的「带目录前缀的简写」那一族。
     /// 换锚前现读 8 颗（正本 <c>bin/WI99/p843_r1/census843-读数.txt</c>）→ 本批逐颗换成正文锚之后这颗数。

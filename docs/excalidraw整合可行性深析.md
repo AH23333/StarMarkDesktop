@@ -25,7 +25,7 @@
 | editor 包本体 | 466 文件 / 135,918 行 | packages/excalidraw |
 | element 包 | 84 文件 / 59,433 行 | packages/element |
 | 注册 action 数 | 44（§二 A 表全列） | packages/excalidraw/actions/ |
-| 随包字体 | 11 族 / 合计 ~12.97MB，**Xiaolai(中文手写) 单族 12.4MB** | fonts/ 目录实测 |
+| 随包字体 | 11 族 / 合计 ~12.97MB，**Xiaolai(中文手写) 单族 12.4MB** | fonts/ 目录实测〔片91 更正：那句量的是<b>上游那颗 npm 包的全集</b>；<b>随包</b>现读 136 颗／6.49 MB（Xiaolai 裁到 111 片／6.07 MB）＝片18 冻结时裁过〕 |
 | editor 内网络出口 | 16 处命中（help 外链×4 / PublishLibrary fetch / TTD fetch / blob 图 fetch / library 导入 fetch / **字体 esm.sh 回退** / **woff2 子集 wasm fetch** / docs 链） | 普查 grep |
 | app 壳服务器件 | firebase.ts(collab) / sentry.ts / AI.tsx / ExcalidrawPlusPromoBanner / share/ / TTDStorage | excalidraw-app |
 | 许可 | 代码 MIT（根 LICENSE 实证）；字体授权逐族核验为**待办**（§坑6） | LICENSE |
@@ -1271,7 +1271,7 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 
 - 同一张照片上：拉丁 <c>Abc 123</c> 是手写体，汉字 <c>永字八法</c> 是<b>系统黑体</b>。字面族状态读数（r7b）＝<c>Assistant/loaded 4</c>、<c>Virgil/loaded 1</c>、<c>Excalifont loaded 1／unloaded 6</c>、<c>Xiaolai unloaded 209</c>（<b>一颗都没拉</b>）。
 - 那颗 <c>document.fonts.check("16px Xiaolai")</c> 回 <b>true</b>，而同一刻那一族 209 面全 <c>unloaded</c> ⇒ 那颗 <c>check()</c> ⛔ 是「这颗字面上了屏没有」的尺（坑表 #666）。
-- 导出的 SVG 里那颗中文文本节点的 <c>font-family</c> 实测＝<c>Virgil, Segoe UI Emoji</c>（<b>⛔ 列 Xiaolai</b>）⇒ 中文在导出面上落到 emoji／系统回退，这一条与 §22.4 那颗 <c>skipInliningFonts</c> 的口径题是同一颗：中文要不要手写体，是<b>随包 209 分片／12.08 MB</b> 那颗决策的内容，现在它有了屏幕证据＋档内证据两行。
+- 导出的 SVG 里那颗中文文本节点的 <c>font-family</c> 实测＝<c>Virgil, Segoe UI Emoji</c>（<b>⛔ 列 Xiaolai</b>）⇒ 中文在导出面上落到 emoji／系统回退，这一条与 §22.4 那颗 <c>skipInliningFonts</c> 的口径题是同一颗：中文要不要手写体，是<b>「随包要不要带全那 209 分片／12.08 MB」（那两颗数是上游全族・随包现读 111 片／6.07 MB，见 §一 与 §23.3）</b> 那颗决策的内容，现在它有了屏幕证据＋档内证据两行。
 
 ### 22.9 这一腿的仪器账（⛔ 产品含义，只登记）
 
