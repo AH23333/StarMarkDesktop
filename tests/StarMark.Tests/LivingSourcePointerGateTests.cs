@@ -228,6 +228,34 @@ public sealed class LivingSourcePointerGateTests
     /// 那颗 35 <b>各数各的</b>：那一族要「档名＋冒号」，这一族压根⛔ 带档名，两份判据⛔ 能合并成一个数。</summary>
     private const int ProsePointerBaseline = 10;
 
+    /// <summary>片94 那把尺（P-256 ⑪③）：正文里那一族 <c>&lt;c&gt;:N［～M］&lt;/c&gt; 裸简写——
+    /// 形状逐字搬 <c>bin/WI99/p994_r1/census94_r2.py</c>（那颗 Python 普查尺，又逐字沿片85 的
+    /// <c>bin/WI99/bare85.py</c>）：A＝带冒号那副；B＝区间那副；裸一颗 <c>&lt;c&gt;4194304&lt;/c&gt;
+    /// 体积读数⛔ 收（⛔ 是行号）。片94 把 82 颗全数定性（继承复称 34・桥侧考古 6・片51 时点现读与深析 :82 各 1・
+    /// §28 过期 5・上游族 27・元语言 6・端点空行 2・账本 :514＝82）之后全数合法留下，只把 §28 那 5 颗过期
+    /// 「现在时」凭据删号留锚（<c>bin/WI99/p994_r1/apply94.py</c>・二进制读写・行尾三族改前后逐项相等）。</summary>
+    private static readonly Regex BareShorthand = new(
+        @"<c>\s*[:：]\s*[0-9]+(?:～[0-9]+)?\s*</c>|<c>\s*[0-9]+(?:～[0-9]+)+\s*</c>",
+        RegexOptions.Compiled);
+
+    /// <summary>片94 收口基线（账本那面）：35 颗全数＝历史登记（片56/57 时点现读，账本 21110 那句
+    /// 「行号只在那个读数时刻有效」罩着）⇒ ⛔ 强改，只钉颗数。正本 <c>bin/WI99/p994_r1/census94-读数-r2.txt</c>。</summary>
+    private const int LedgerBareShorthandBaseline = 35;
+
+    /// <summary>片94 收口基线（深析那面）：改前 21・§28 五颗删号留锚后 16。正本同上。</summary>
+    private const int DeepDiveBareShorthandBaseline = 16;
+
+    /// <summary>逐行数那族裸简写（与那颗 Python 尺同一副真行基：孤立 CR 也是一行）。
+    /// ⛔ 在整段正文上数——正则里 <c>\s</c> 认得换行，整段数会把跨行的形状也咬进来，
+    /// 两把尺就各说各话（名册 461 那一族）。</summary>
+    private static int BareShorthandCount(string text)
+    {
+        var count = 0;
+        foreach (var line in text.Replace("\r", "\n").Split('\n'))
+            count += BareShorthand.Matches(line).Count;
+        return count;
+    }
+
     private static string RepoRoot()
     {
         var dir = new FileInfo(typeof(LivingSourcePointerGateTests).Assembly.Location).Directory!;
@@ -546,5 +574,48 @@ public sealed class LivingSourcePointerGateTests
             + " 颗（改口前 18 颗）。<b>多了</b>＝又写了新的行号式指针；<b>少了</b>＝这一族又修掉了几颗，"
             + "回来把这颗数改小并同批在账本 P-256 ⑤ 报一句。两颗数各问各的一维，⛔ 与那颗 "
             + FallenPointerBaseline + " 合并");
+    }
+
+    /// <summary>片94 新格一：裸简写颗数棘轮（P-256 ⑪③・账本 ⑫）——只钉两面活档
+    /// （报告／坑表按既有射程⛔ 归本条，与 <see cref="Living"/> 同一口径）。
+    /// 82 颗全数定性之后全数合法留下：账本那 35＝历史登记（片56/57 时点现读）；深析那 16 里 §28 那
+    /// 5 颗过期「现在时」凭据已删号留锚。这两颗数只逼对账：多了＝新写了会漂的号；少了＝这一族又修掉几颗。</summary>
+    [Fact]
+    public void TheBareShorthandCensusIsTheOneThisBatchReconciled()
+    {
+        var ledger = BareShorthandCount(Read(Living[0]));
+        var deep = BareShorthandCount(Read(Living[1]));
+        Assert.True(ledger == LedgerBareShorthandBaseline,
+            "账本正文里那族裸简写现读 " + ledger + " 颗↔片94 收口基线 " + LedgerBareShorthandBaseline
+            + " 颗（82 颗全定性・全数合法留下・正本 bin/WI99/p994_r1/census94-读数-r2.txt）。"
+            + "<b>多了</b>＝又写了会随合法编辑漂的号，按 P-256 ③ 的口径换成「档名＋逐字锚」，"
+            + "历史登记那一族照旧合法（账本 21110 那句注解罩着）；<b>少了</b>＝这一族又修掉了几颗，"
+            + "回来把这颗数改小并同批在账本 P-256 ⑫ 报一句——那颗数⛔ 是判据，它只许在真动过时逼我重新对一次账");
+        Assert.True(deep == DeepDiveBareShorthandBaseline,
+            "深析正文里那族裸简写现读 " + deep + " 颗↔片94 收口基线 " + DeepDiveBareShorthandBaseline
+            + " 颗（改前 21・§28 五颗过期「现在时」凭据删号留锚后 16・正本同上）。"
+            + "<b>多了</b>＝又写了会漂的号，换成「档名＋逐字锚」；<b>少了</b>＝回来把这颗数改小并同批报一句。"
+            + "两颗数各问各的一面，⛔ 并成一颗总数——并了就⛔ 知道坏在哪一边");
+    }
+
+    /// <summary>片94 新格二：那把尺自己咬得动——A／B／复合三副要咬，体积读数、裸号、无包裹三副⛔ 咬
+    /// （与 <c>bin/WI99/p994_r1/census94_r2.py</c> 的自证同一副判据）。
+    /// ⚠ 正件串在源码里<b>断成两截拼出来</b>：那颗 Python 普查尺扫 .cs 时连字符串一起咬
+    /// （代码注释那一族现读 4 颗），整副写出来＝自己给自己添一颗假账。</summary>
+    [Fact]
+    public void TheBareShorthandRulerItselfBites()
+    {
+        Assert.Single(BareShorthand.Matches("<c" + ">:131</c>").Cast<Match>());
+        Assert.Single(BareShorthand.Matches("<c" + ">228～233</c>").Cast<Match>());      // 区间那副
+        Assert.Single(BareShorthand.Matches("<c" + ">:4872～4888</c>").Cast<Match>());  // 冒号＋区间复合
+        Assert.Empty(BareShorthand.Matches("<c>4194304</c>").Cast<Match>());             // 体积读数⛔ 收
+        Assert.Empty(BareShorthand.Matches("<c>300</c>").Cast<Match>());                 // 裸号（无冒号无区间）⛔ 收
+        Assert.Empty(BareShorthand.Matches("那颗 :131 就在这。").Cast<Match>());          // 无包裹⛔ 收
+        Assert.Equal(2, BareShorthandCount("<c" + ">:1</c>\r\n<c" + ">:2</c>"));         // 逐行基：两行各一颗
+        Assert.Equal(2, BareShorthandCount("同一行两颗 <c" + ">:3</c> 与 <c" + ">:4</c>"));  // 同行两颗各计
+        var ledger = BareShorthandCount(Read(Living[0]));
+        var deep = BareShorthandCount(Read(Living[1]));
+        Assert.True(ledger > 0 && deep > 0,
+            "两面现读 " + ledger + "／" + deep + " 颗＝那颗尺在活档上恒绿⛔ 可信（名册 485：数东西的尺要配「>0」断言）");
     }
 }
