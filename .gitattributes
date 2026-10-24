@@ -2,5 +2,7 @@
 # 而本机 core.autocrlf=true 且此前没有这颗档 ⇒ 一颗新克隆会把四颗文本资产落成 CRLF 而逐颗对不上
 # （2026-10-22 现读：board.html 577↔556・board-bridge.js 19029↔18733・excalidraw.min.js 4879492↔4878772・index.css 144690↔144689＝BoardsAssetGateTests 必红）。
 # 口径：冻结树与它的主人在<b>字节面</b>上同源，所以这里关掉转换而⛔ 把清单改成"容忍两种行尾"。
+# 口径（P-251 ③）：凡「清单＋字节对账」的资产树，随包之前必须有一把新克隆尺——
+# 那把尺是常跑闸门 BoardsFreshCheckoutFidelityGateTests（git worktree add --detach 新落干净工作树・逐档对 manifest 的 bytes/sha256）。
 assets/boards/** -text
 tools/boards/** -text
