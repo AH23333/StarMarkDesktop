@@ -1537,8 +1537,8 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 
 - <b>进向</b>（<c>BridgeProtocol.cs:37</c> 那一行）八颗。v1 那张表写了六颗，后来加了两颗：<c>board.loaded</c>（片26 那颗带数的开闸回音）与 <c>bridge.reply</c>（片56 给「这一发发得出去吗」配的回音）。
   今天<b>页面真发的</b>四颗：<c>bridge.reply</c>（那颗 <c>cmd: "bridge.reply"</c>）／<c>export.bytes</c>（那颗 <c>postIn("export.bytes"</c>）／<c>board.loaded</c>（那颗 <c>postIn("board.loaded"</c>）／<c>bridge.ready</c>（那颗 <c>postIn("bridge.ready"</c>）。
-  <c>open.external</c> 反过来：<b>宿主有 case 而页面一颗也没发</b>〔片68 就地更正：那一颗 case 现在<b>两头都通了</b>——桥补上那颗顶层 <c>onLinkOpen</c>，宿主那格把「开没开成」念成一行痕；见 §三十与本档 §29.5 那颗名册的下游〕。剩下三颗（<c>paste.query</c>／<c>pin.request</c>／<c>background.request</c>）过了名字门、也⛔ 有主人，宿主只落一行痕 <c>boards.cmd.not-wired</c>（<c>:515</c>）＝v1 那句「⛔ 假 allow」今天兑现着。
-- <b>出向</b>（<c>BridgeProtocol.cs:44</c>）六颗。v1 那张表写了四颗，后来加了 <c>autosave.arm</c>（片24）与那颗回音的分流。<c>export.pick</c>（<c>:895</c>）／<c>theme.set</c>／<c>lang.set</c>／<c>board.load</c>／<c>autosave.arm</c>（<c>:971</c>）五颗真发；<b><c>feature.flags</c> 在册而宿主 0 处发</b>。
+  <c>open.external</c> 反过来：<b>宿主有 case 而页面一颗也没发</b>〔片68 就地更正：那一颗 case 现在<b>两头都通了</b>——桥补上那颗顶层 <c>onLinkOpen</c>，宿主那格把「开没开成」念成一行痕；见 §三十与本档 §29.5 那颗名册的下游〕。剩下三颗（<c>paste.query</c>／<c>pin.request</c>／<c>background.request</c>）过了名字门、也⛔ 有主人，宿主只落一行痕 <c>boards.cmd.not-wired</c>＝v1 那句「⛔ 假 allow」今天兑现着。
+- <b>出向</b>（<c>BridgeProtocol.cs:44</c>）六颗。v1 那张表写了四颗，后来加了 <c>autosave.arm</c>（片24）与那颗回音的分流。<c>export.pick</c>／<c>theme.set</c>／<c>lang.set</c>／<c>board.load</c>／<c>autosave.arm</c>五颗真发；<b><c>feature.flags</c> 在册而宿主 0 处发</b>。
 - <b>字段</b>：<c>export.pick</c> 从 v1 那两颗变<b>四颗</b>（<c>kind</c>／<c>skipInliningFonts</c>／<c>exportScale</c>／<c>exportBackground</c>，<c>:82</c>＝片64 那两档交回用户）；v1 原本写在 <c>export.bytes</c> 里那颗「会话 id」由片23 摘掉（没人读）。
 
 ⇒ 一句口径：<b>名字在册⛔ 等于这条路通</b>。协议那张名单今天比回路宽出一颗（四颗⛔ 发话人＋一颗⛔ 主人也⛔ 消费），那是<b>故意的</b>——先登记再接线，接线那颗批次⛔ 许自己往门里塞新名字（硬线②那道门读的就是这张表）。
@@ -1548,8 +1548,8 @@ const dataURL = this.files[fileId]?.dataURL || await getDataURL(imageFile);  // 
 | 硬线 | 今天 | 现读凭据 |
 |---|---|---|
 | ① 路径永远⛔ 进 <c>args</c> | <b>落地</b> | 名单里一颗路径键也没；名字一律过 <c>SanitizeExportName</c> 再拼，落点由宿主定 |
-| ② 命令名＋字段名两张白名单（多一颗键就拒） | <b>落地</b> | 进向那道在分发之前（<c>BoardWindow.cs</c> 的 <c>Check</c>→<c>switch</c>）；出向反过来也有一道，不过就<b>一颗字节也⛔ 发</b>（<c>PostWebMessageAsJson</c> 只 1 处，<c>:446</c>） |
-| ③ <c>cmd</c>↔<c>id</c> 配对表只活宿主一侧；超时＝报错、⛔ 静默重试第二次副作用 | <b>换形状</b> | 今天<b>没有</b> id→回调那张表：<c>BoardEnvelope.Id</c> 解出来而⛔ 读者。取而代之的是<b>单槽闩</b>（<c>_exporting</c>＋<c>_exportGen</c> 代次号）与那一发的预算 <c>ExportAnswerBudgetMs</c>（<c>WatchExportAnswerAsync</c>，<c>:784</c>）；到点只报错、确实⛔ 重发第二发 ⇒ 那句「⛔ 静默重试」兑现，那句「配对表」⛔ 存在 |
+| ② 命令名＋字段名两张白名单（多一颗键就拒） | <b>落地</b> | 进向那道在分发之前（<c>BoardWindow.cs</c> 的 <c>Check</c>→<c>switch</c>）；出向反过来也有一道，不过就<b>一颗字节也⛔ 发</b>（<c>PostWebMessageAsJson</c> 只 1 处） |
+| ③ <c>cmd</c>↔<c>id</c> 配对表只活宿主一侧；超时＝报错、⛔ 静默重试第二次副作用 | <b>换形状</b> | 今天<b>没有</b> id→回调那张表：<c>BoardEnvelope.Id</c> 解出来而⛔ 读者。取而代之的是<b>单槽闩</b>（<c>_exporting</c>＋<c>_exportGen</c> 代次号）与那一发的预算 <c>ExportAnswerBudgetMs</c>（<c>WatchExportAnswerAsync</c>）；到点只报错、确实⛔ 重发第二发 ⇒ 那句「⛔ 静默重试」兑现，那句「配对表」⛔ 存在 |
 | ④ ⛔ 拿桥当第二条数据通道 | <b>落地一半</b> | 字节走「一次一问」那一臂、且<b>解码之前</b>先问上限；「控制消息按亚毫秒算」那颗预算<b>只住在本档正文里</b>——代码⛔ 那颗常数也⛔ 那把尺 |
 | ⑤ <c>onPaste</c> 那颗钩⛔ 许抛、拒必须显式返 <c>false</c> | <b>前提消失</b> | 桥里⛔ 装 <c>onPaste</c>（0 处），paste 走引擎默认；那颗「宿主自己 catch 成 deny」今天⛔ 需要也⛔ 存在（要等 <c>paste.query</c> 接线那一批，与 §28.2 那三颗一起裁） |
 | ⑥ 五颗订阅的退订句柄存进会话表，<c>Closed</c> 里逐颗调 | <b>前提消失</b> | 页面<b>⛔ 走 <c>api</c> 订阅</b>：唯一那颗 <c>onChange</c> 是 React 的 <b>prop</b>（桥里那颗 <c>onChange: function</c>），没句柄可存。宿主侧只摘<b>自己</b>那三颗事件＋那颗语言事件，再 <c>_web.Close()</c>（<c>BoardWindow.cs</c> 里那颗 <c>Closed</c> 那一手）⇒ §21.6 那格「摘完之后⛔ 再收到桥消息」今天<b>⛔ 对手</b>（⛔ 是「过了」，是「没东西可摘」） |
