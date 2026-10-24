@@ -228,6 +228,21 @@ public sealed class LivingSourcePointerGateTests
     /// 那颗 35 <b>各数各的</b>：那一族要「档名＋冒号」，这一族压根⛔ 带档名，两份判据⛔ 能合并成一个数。</summary>
     private const int ProsePointerBaseline = 10;
 
+    /// <summary>片99 那份第三档名单（P-256 ⑪①・账本 ⑰）：报告／坑表（活档・每批追加 §／坑）＋双库一致性审计（纯 LF・冻结）。
+    /// ⚠ 与 <see cref="Living"/> 那面 <b>各数各的</b>：这面只数第三档散文「第 N 行」那一族的<b>总颗</b>（颗口径・LF 口径），
+    /// ⛔ 问指称——41 颗全是历史叙述（日志／仪器产物的行引句）且全部未带指称，镜像活档那颗「未带指称 0」＝清零要改写历史证据（⛔）。
+    /// ⛔ 与登记读数 35（probe93b 行颗口径・含散文的行数・一行两颗算一）混账——闸门是颗口径（一行两颗算二），两口径⛔ 许互相拿去对账（账本 ⑪③・⑰）。</summary>
+    private static readonly string[] ThirdTier =
+    {
+        "docs/开发进度报告.md",
+        "docs/踩坑记录.md",
+        "docs/双库一致性审计.md",
+    };
+
+    /// <summary>片99 收口基线（用户裁决＝只钉总颗）：报告 17・坑表 24・审计 0（颗口径・LF 口径〔名册 407〕）。
+    /// 正本 <c>bin/WI99/p999_r1/probe99-读数.txt</c>（五段：正本判据现读・daaec63 历史 blob 移植自证对不上 0 格・今日现读・真行切分十格全零差・41 颗逐颗现场）。</summary>
+    private static readonly int[] ThirdTierProseBaseline = { 17, 24, 0 };
+
     /// <summary>片94 那把尺（P-256 ⑪③）：正文里那一族 <c>&lt;c&gt;:N［～M］&lt;/c&gt; 裸简写——
     /// 形状逐字搬 <c>bin/WI99/p994_r1/census94_r2.py</c>（那颗 Python 普查尺，又逐字沿片85 的
     /// <c>bin/WI99/bare85.py</c>）：A＝带冒号那副；B＝区间那副；裸一颗 <c>&lt;c&gt;4194304&lt;/c&gt;
@@ -574,6 +589,27 @@ public sealed class LivingSourcePointerGateTests
             + " 颗（改口前 18 颗）。<b>多了</b>＝又写了新的行号式指针；<b>少了</b>＝这一族又修掉了几颗，"
             + "回来把这颗数改小并同批在账本 P-256 ⑤ 报一句。两颗数各问各的一维，⛔ 与那颗 "
             + FallenPointerBaseline + " 合并");
+    }
+
+    /// <summary>片99 新格：第三档散文「第 N 行」颗数棘轮（P-256 ⑪①・账本 ⑰・用户裁决＝只钉总颗）。
+    /// 报告／坑表虽是活档，这一族却全是历史叙述（41 颗全部未带指称），故只钉总颗、
+    /// ⛔ 镜像活档那颗「未带指称 0」＝清零要改写历史证据。先决「真行切分」已实测消解：
+    /// LF 与真行两口径两族读数十格全零差（正本 <c>bin/WI99/p999_r1/probe99-读数.txt</c>④段）。</summary>
+    [Fact]
+    public void TheThirdTierProseCensusStaysPinned()
+    {
+        for (var i = 0; i < ThirdTier.Length; i++)
+        {
+            var rows = ProseOccurrences(Read(ThirdTier[i]), ThirdTier[i]);
+            Assert.True(rows.Count == ThirdTierProseBaseline[i],
+                ThirdTier[i] + " 里「第 N 行」那一族现读 " + rows.Count + " 颗↔片99 收口基线 "
+                + ThirdTierProseBaseline[i] + " 颗（颗口径・LF 口径〔名册 407〕）。<b>多了</b>＝又写了新的散文行号——"
+                + "先把它的指称写出来（或换成「档名＋逐字锚」）并同批在账本 P-256 ⑰ 报一句；"
+                + "<b>少了</b>＝这一族又修掉了几颗，回来把这颗数改小并同批报一句");
+        }
+        Assert.True(ThirdTier.Length == 3 && ThirdTierProseBaseline.Length == 3,
+            "第三档名单或基线那两行的颗数变了（名单 " + ThirdTier.Length + "・基线 " + ThirdTierProseBaseline.Length
+            + "）＝射程动过，先回来重跑那颗尺（正本 bin/WI99/p999_r1）再改这里");
     }
 
     /// <summary>片94 新格一：裸简写颗数棘轮（P-256 ⑪③・账本 ⑫）——只钉两面活档
