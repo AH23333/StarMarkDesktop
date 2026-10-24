@@ -167,7 +167,7 @@ public sealed class WidgetSnapshotTests : IDisposable
 
     /// <summary>
     /// 契约护栏（DX）：Summary 三插槽各取自**不同**投影——widgets=Entries.Count、local=Σ LocalItems.Count、
-    /// links=Σ Links.Count（<c>WidgetSnapshot.cs:107-109</c>）。既有 <see cref="Summary_CountsWidgetsLocalAndLinks"/>
+    /// links=Σ Links.Count（<c>WidgetSnapshot.cs:125-127</c>）。既有 <see cref="Summary_CountsWidgetsLocalAndLinks"/>
     /// 喂的是全等 2/2/2（QuickLaunch 条目出 2 个 link、Todo 条目出 2 个 local），三值恰好相等 → 若把 local/links
     /// 两插槽表达式**对调**、把某个 Σ **退化**成单条目计数、或误用 Entries.Count 去填第三插槽，输出仍是
     /// "2 · 2 · 2" 而**测不到**（承 DR 输入归一碰撞 / DM 同刻平局 同族「等值掩盖跨源错位」透镜）。本用例刻意让
