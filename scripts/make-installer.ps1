@@ -45,6 +45,11 @@ if (-not (Test-Path -LiteralPath (Join-Path $SourceDir "Updater\StarMark.Updater
     throw "那棵树里没有 Updater\ 整目录（$SourceDir）。少了它，装完之后用户**永远没法自动更新**（UH 那条老账就是这么来的）"
 }
 
+# 装进安装包之前先对一次账（P-209）：zip 与 setup 吃的是同一棵树，树与它的冻结清单对不上，
+# 就是"从哪条路装进来决定了他手上是哪一份字节"——两条路自己都不红，只有这里能拦。
+& (Join-Path $PSScriptRoot "verify-tree.ps1") -TreeDir $SourceDir -ExpectVersion $version
+if (-not $?) { throw "那棵树与它的冻结清单对不上（$SourceDir）——别把对不上的树打进安装包" }
+
 # ---- 1. 找 ISCC ----
 function Find-Iscc {
     param([string]$Hint)

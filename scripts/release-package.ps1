@@ -31,7 +31,7 @@ $version = $matched.Groups[1].Value.Trim()
 $tag = "v$version"                       # 口径：标签 = v + props 那一串（AppVersion 认 v 前缀）
 $zipName = "StarMark-$version-win-x64.zip"   # 名字由版本算，不由这里自由发挥（UpdateAssets.PackageNameFor 同一口径）
 $setupName = "StarMark-$version-setup.exe"   # 第四颗也是同一口径：发布那一侧与 make-installer 各算一次，必须算出同一个名字（有闸门钉着）
-Write-Host "==> 1/5 版本 $version（标签 $tag）" -ForegroundColor Cyan
+Write-Host "==> 1/6 版本 $version（标签 $tag）" -ForegroundColor Cyan
 
 # ---- 2. 一棵干净的树：不带上一版的残渣 ----
 # 逐颗对账能签掉"包里有、清单没列"，但签不掉"这一版其实已经不需要这颗文件了"——
@@ -42,33 +42,40 @@ if ((Split-Path -Leaf $stageParent) -ne "stage") { throw "拒绝删除不在 dis
 if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 
 # 怎么产出这棵树只有 scripts\publish-tree.ps1 那一份（本机装的 publish.ps1 走的是同一颗）。
-Write-Host "==> 2/5 产出一棵干净的树（含 Updater\）" -ForegroundColor Cyan
+Write-Host "==> 2/6 产出一棵干净的树（含 Updater\）" -ForegroundColor Cyan
 & (Join-Path $root "scripts\publish-tree.ps1") -OutDir $stage
 if (-not $?) { throw "产出树失败" }
 
 # ---- 3. zip：树里的东西全进包，路径以树根为基准（清单与摊包两侧都按这个基准算） ----
-Write-Host "==> 3/5 打包 $zipName" -ForegroundColor Cyan
+Write-Host "==> 3/6 打包 $zipName" -ForegroundColor Cyan
 $zipPath = Join-Path $OutDir $zipName
 if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
 Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zipPath -CompressionLevel Optimal
 if (-not $?) { throw "打包失败" }
 
-# ---- 4. setup.exe：同一棵树换个包装，**不重新 publish** ----
+# ---- 4. 树↔冻结清单↔zip 三方对账（P-209）：清单是产树时冻结的，zip 是上一步打的 ----
+# 签名工具只认 zip 里的条目，它拦不住"zip 与树已经不是同一棵"这件事；
+# 而审包那侧认的是 update-manifest.json（由 zip 逐条目算出）——zip 错了，签出去的就是装不上的字节。
+Write-Host "==> 4/6 树↔冻结清单↔zip 三方对账" -ForegroundColor Cyan
+& (Join-Path $root "scripts\verify-tree.ps1") -TreeDir $stage -ExpectVersion $version -ZipPath $zipPath
+if (-not $?) { throw "zip 与冻结清单对不上：这一版不能签——签出去的会是装不上的字节" }
+
+# ---- 5. setup.exe：同一棵树换个包装，**不重新 publish** ----
 # 为什么让它吃第 2 步那棵树而不是自己再产一棵：两处编译必漂移（#189/#193 那一族），
 # 而这里的漂移最阴——zip 与安装包都是"这一版"，里面却不是同一批字节，用户从哪条路装进来决定了他手上是哪一份。
 # ⚠ 这颗**不进清单的 files**：它是首装入口（✅P-166 第三条），自更新仍走 zip＋验签＋事务替换那条链，一行不动。
-Write-Host "==> 4/5 造安装包 $setupName" -ForegroundColor Cyan
+Write-Host "==> 5/6 造安装包 $setupName" -ForegroundColor Cyan
 & (Join-Path $root "scripts\make-installer.ps1") -SourceDir $stage -OutDir $OutDir
 # 这里读 $? 而不是 $LASTEXITCODE：被 & 的是**另一颗 .ps1**，它自己内部的退出码归它管（那里对着 ISCC 查过了），
 # 传回这一侧的只有"抛没抛"。按 $LASTEXITCODE 数会把上一颗原生程序的旧读数当成本步的结果——
 # 那正好是"造包失败却报四颗已就位"的的形状。
 if (-not $?) { throw "造安装包失败：这一版没有首装入口，别当成四颗都齐了" }
 
-# ---- 5. 清单 + 签名：算哈希、签、并用内嵌那把公钥自验一遍 ----
+# ---- 6. 清单 + 签名：算哈希、签、并用内嵌那把公钥自验一遍 ----
 # 私钥刻意不入库，缺省位置 %USERPROFILE%\.starmark\update-signing.pk8.pem。
 # 这一步**拒绝出东西**的两种情况都必须当失败看：私钥与源码里的公钥不是一对（发出去每一版所有安装都拒），
 # 以及包里没有主程序（换完就没有能启动的东西）。
-Write-Host "==> 5/5 签清单" -ForegroundColor Cyan
+Write-Host "==> 6/6 签清单" -ForegroundColor Cyan
 dotnet run --project (Join-Path $root "tools\StarMark.UpdateSigner") -c Release -- $zipPath $version $OutDir
 if ($LASTEXITCODE -ne 0) { throw "签清单失败（退出码 $LASTEXITCODE）：这一版没签出来，别当成发出去了" }
 
