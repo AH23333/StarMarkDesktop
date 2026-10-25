@@ -659,12 +659,15 @@ public sealed class BoardWindowBridgeGateTests
         var raw = ReadRepo(WindowCs);
         var code = SourceGate.Code(raw);
         Assert.Contains("private void OnLocaleChanged()", code, StringComparison.Ordinal);
-        Assert.Equal(5, Count(code, "PasteNotice();"));             // ShowNotice 那一拍＋换语言那一拍＋被拒亮回那一拍补两颗新按钮＋片49 那颗「再试一次」跑前跑后各一次（五处都只⛔ 调那颗主人，⛔ 各写一遍可见性）
+        Assert.Equal(6, Count(code, "PasteNotice();"));             // ShowNotice 那一拍＋换语言那一拍＋被拒亮回那一拍补两颗新按钮＋片49 那颗「再试一次」跑前跑后各一次＋<b>片108 第二行自己那一拍</b>（六处都只⛔ 调那颗主人，⛔ 各写一遍可见性）
         // 片54：那一行是第二块会说汉语的表面，它那颗主人同样只许被数得清的那几处调（多一处＝第二副措辞出处）。
         // 七颗＝开场那一拍（放开"还在导出"那一闩）＋交回字节那一拍＋按下去那一拍＋换语言那一拍＋开目录坏了那一拍
         //        ＋<b>片64 那两颗扳机各一颗</b>（挑完缩放／翻完开关当场改那行字，⛔ 等下一次导出才回音）。
         Assert.Equal(7, Count(code, "PasteBar();"));
-        Assert.Equal(5, Count(code, "HideNotice();"));              // 收起面板只此一颗主人，五处正当调用：开闸成功（坏话不再是事实）＋片40「继续编辑」撤销这一拍＋片49 那两颗（重试终于读到了／他决定先开一块新板）＋<b>片87 那两句按时长收的话</b>（那颗定时器响了、与下一发真开成了）
+        Assert.Equal(4, Count(code, "HideNotice();"));              // 第一行那颗主人四处正当调用：载入成功＋新建那一扇＋开闸成功（坏话不再是事实）＋片40「继续编辑」撤销这一拍。
+        // ⚠ 片108 之前这里是 5 颗：那两句外链坏话按时长收的那一拍走的是 <c>HideNotice()</c>（面板一位主人时它只能整块收），
+        // 今天它有<b>自己那一行</b>⇒收口改叫 <c>HideLinkNotice()</c>（那颗定时器响了、与下一发真开成了＝两处）。
+        // 颗数少一颗⛔ 尺坏了，也⛔ 顺手放宽成"随便几颗"：名册 427——方向性断言要算差集，这一笔的差集写在上面那两行里。
         // 唯一的取词出口：两颗工厂各一处，调用点⛔ 重抄全限定名
         Assert.Equal(1, Count(code, "private static string Word(string key) => StarMark.Abstractions.I18n.Locale.T(key);"));
         Assert.Equal(1, Count(code, "Locale.T("));
@@ -774,38 +777,51 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Equal(0, Count(code, "explorer.exe"));
     }
 
-    /// <summary>片87＝P-249 后半 (A)：那一发外链"没开成"那两句今天<b>上了屏</b>，而归属有证人。八格一起钉。
-    /// <para>① <b>面板空着才进</b>——那颗守卫必须还在，且被挡那一发<b>留一行痕</b>（⛔ 让下一批把"屏幕上没话"读成"没坏"）；
+    /// <summary>片87＝P-249 后半 (A)：那一发外链"没开成"那两句今天<b>上了屏</b>；片108＝P-257 (C) 把归属规则从"面板空着才进"换成<b>一句一行</b>。
+    /// <para>⚠ 这一格换过名字：原名承诺的正是"面板空着才说话"，而那句承诺是 P-257 量到的坏法本身——
+    /// 留着它＝证人的名字与实现相反（措辞与实现对齐＝VP 那笔账）。活档里指原名那三处指针同批改口，
+    /// 而这里⛔ 把那颗旧名当"现存的身份"写下来（片65 那颗 <c>TestPointerGateTests</c> 的射程就是注释里的测试方法名）。</para>
+    /// <para>① <b>第二行归那两句，⛔ 再问第一行挂着谁</b>：那颗守卫整个删掉，"挤不进去"那一支也一起退休——
+    ///    <c>boards.notice.held</c> 在新形状下<b>一颗也不许再响</b>（响＝还剩一句上不了屏），那一发留的是
+    ///    <c>boards.notice.link key=… over=&lt;第一行当时那颗键&gt;</c>（屏幕上两句同屏这件事得有痕可对）；
     /// ② 那两句<b>⛔ 进那颗「打开所在文件夹」的名单</b>（它们⛔ 认定盘上落了一颗档，跟着那颗按钮出场＝指着一颗⛔ 存在的档）；
-    /// ③ 那颗定时器<b>只收自己那两句</b>：它问的是名单，⛔ 在 Tick 里再 switch 一遍键名（两处各列＝迟早只补一处），
-    ///    面板换了主人时它一颗字节也不动（八秒之后「这一扇已停止保存」自己消失＝这一族最坏的坏法）；
+    /// ③ 那颗定时器<b>只收第二行</b>：它问的是名单与 <c>_linkNoticeKey</c>，⛔ 再问第一行、也⛔ 叫第一行那颗主人代它收口
+    ///    （八秒之后「这一扇已停止保存」自己消失＝这一族最坏的坏法），而那块边框只在<b>两行都空着</b>时才跟着收；
     /// ④ 那颗数<b>住在 Core 而⛔ 住在调用点</b>（同 <see cref="BoardPolicy.ArmRetryBudget"/> 那条口径）；
     /// ⑤ 计时器<b>懒建一颗</b>，⛔ 每次开口新建（Tick 挂着这一窗）；
     /// ⑥ 拆窗那一拍<b>摘掉它</b>（P-198 那一族：订阅手臂成对）；
     /// ⑦ 两种下落<b>各叫各的那一句</b>：宿主自己拒的走 <c>linkBlockedBody</c>，递出去而系统没开成走 <c>linkFailedBody</c>，
     ///    而<b>开成了</b>那一发把上一句收掉（同一跑里连点两次，第二次成了而屏幕上还挂着"没能打开"＝那句话变成假话）；
-    /// ⑧ 名单那颗数钉死＝2：下一批给这一族加第三句而没带上归属，这一格就红。</para></summary>
+    /// ⑧ 名单那颗数钉死＝2：下一批给这一族加第三句而没带上归属，这一格就红；
+    /// ⑨ 那块面板<b>两行同住一块边框、各是一层</b>：第一行那一层带着它那六颗出口（⛔ 让第一行收起时出口留在第二行旁边＝
+    ///    那颗按钮指着⛔ 在场的一句话）；而第二行自己带那颗宽度上限（片12 那一格⛔ 因为多了一行就免检）；
+    /// ⑩ 换语言那一拍<b>两行都重贴</b>，且那两句的字只落在<b>第二行那一颗</b> TextBlock 上（写回第一行＝又顶掉旧话）。</para></summary>
     [Fact]
-    public void TheLinkFailureSpeaksOnlyWhileThePanelIsFreeAndRetractsItself()
+    public void TheLinkFailureGetsItsOwnPanelLineAndRetractsItself()
     {
         var raw = ReadRepo(WindowCs);
         var code = SourceGate.Code(raw);
-        // ① 守卫＋那行痕＋那颗按钮的缺席（titled/offerCopy 都⛔ 在场）
+        // ① 那颗「面板空着才进」的守卫⛔ 许回来（P-257 量到的永久静音正是它写的），它留的那行痕也一起退休
         var show = SourceGate.MethodBody(code, "void ShowLinkNotice");
-        Assert.Contains("if (_noticeKey is not null)", show, StringComparison.Ordinal);
-        Assert.Contains("boards.notice.held by=", show, StringComparison.Ordinal);
-        Assert.Contains("ShowNotice(bodyKey, titled: false, offerCopy: false);", show, StringComparison.Ordinal);
+        Assert.Equal(0, Count(show, "ShowNotice("));                 // 第二行⛔ 走第一行那颗主人（走了＝把旧话顶掉）
+        Assert.DoesNotContain("_noticeKey is not null", show, StringComparison.Ordinal);
+        Assert.Equal(0, Count(code, "boards.notice.held"));           // 响＝还剩一句挤不进屏幕＝P-257 结案入口钉的那一颗
+        Assert.Contains("_linkNoticeKey = bodyKey;", show, StringComparison.Ordinal);
+        Assert.Contains("_noticeLinkBody!.Visibility = Visibility.Visible;", show, StringComparison.Ordinal);
+        Assert.Equal(1, Count(code, "boards.notice.link key="));      // 那一发留一行痕：over= 念的是第一行当时挂着谁
         // ② 那两句⛔ 认定档存在：那颗「打开所在文件夹」的名单里一颗也⛔ 许出现它们
         var outcomes = SourceGate.Between(code, "string[] FileOutcomeKeys", "];");
         Assert.Equal(0, Count(outcomes, "boards.link"));
-        // ③⑧ 名单＝唯一那份，颗数钉死；收口那一拍只问它
+        // ③⑧ 名单＝唯一那份，颗数钉死；收口那一拍只问它＋自己那一行的字段
         var roster = SourceGate.Between(code, "string[] LinkNoticeKeys", "];");
         Assert.Equal(2, Count(roster, "\"boards."));
         foreach (var key in new[] { "boards.linkBlockedBody", "boards.linkFailedBody" })
             Assert.Contains(key, roster, StringComparison.Ordinal);
         var hide = SourceGate.MethodBody(code, "void HideLinkNotice");
-        Assert.Contains("Array.IndexOf(LinkNoticeKeys, _noticeKey) < 0", hide, StringComparison.Ordinal);
-        Assert.Contains("HideNotice();", hide, StringComparison.Ordinal);
+        Assert.Contains("Array.IndexOf(LinkNoticeKeys, _linkNoticeKey) < 0", hide, StringComparison.Ordinal);
+        Assert.Equal(0, Count(hide, "HideNotice();"));                // ⛔ 由第一行那颗主人代第二行收口＝第二主人
+        Assert.Contains("if (_noticeLinkBody is { } link) link.Visibility = Visibility.Collapsed;", hide, StringComparison.Ordinal);
+        Assert.Equal(1, Count(code, "_notice.Visibility = _linkNoticeKey is null ? Visibility.Collapsed : Visibility.Visible;"));
         Assert.Equal(2, Count(code, "HideLinkNotice();"));            // 定时器响了＋下一发真开成了（两处都走同一颗主人）
         Assert.Equal(2, Count(code, "LinkNoticeKeys"));               // 声明＋那一问（第三处＝第二个主人）
         // ④ 那颗数只有 Core 一位主人，调用点⛔ 抄一份"我觉得五秒够了"
@@ -829,14 +845,26 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Contains("ShowLinkNotice(\"boards.linkFailedBody\");", reported, StringComparison.Ordinal);
         Assert.Contains("HideLinkNotice();", reported, StringComparison.Ordinal);   // 开成了＝上一句当场不再是最新的事实
         Assert.DoesNotContain("ShowNotice(\"boards", reported, StringComparison.Ordinal);  // ⛔ 在这里再挑一遍措辞（第二个出处）
-        // ③b 那两句的措辞⛔ 在这里拼：面板上那两行由 PasteNotice 现取词（换语言那一拍同一条路）
+        // ⑨ 两行同住一块边框，而第一行那一层连着它那六颗出口（收起第一行＝一起收起）
+        var stage = SourceGate.MethodBody(code, "private Grid BuildStage");
+        Assert.Contains("_noticeMain = panel;", stage, StringComparison.Ordinal);
+        Assert.Contains("rows.Children.Add(_noticeMain);", stage, StringComparison.Ordinal);
+        Assert.Contains("rows.Children.Add(_noticeLinkBody);", stage, StringComparison.Ordinal);
+        Assert.Contains("Child = rows,", stage, StringComparison.Ordinal);
+        // 第二行自己带那颗宽度上限（片12 那一格的射程随新控件一起走，⛔ 让那一行把面板撑宽）
+        var linkBuild = SourceGate.Between(code, "_noticeLinkBody = new TextBlock", "};");
+        Assert.Contains("MaxWidth = 420,", linkBuild, StringComparison.Ordinal);
+        Assert.Contains("TextWrapping = TextWrapping.Wrap,", linkBuild, StringComparison.Ordinal);
+        // ⑩ 那两句的措辞⛔ 在这里拼，而它们只落在<b>第二行</b>那一颗 TextBlock 上（写回第一行＝又把旧话顶掉）
         var paste = SourceGate.MethodBody(code, "void PasteNotice");
+        Assert.Contains("switch (_linkNoticeKey)", paste, StringComparison.Ordinal);
         foreach (var key in new[] { "boards.linkBlockedBody", "boards.linkFailedBody" })
         {
             Assert.Contains("case \"" + key + "\":", paste, StringComparison.Ordinal);
-            Assert.Contains("Word(\"" + key + "\")", paste, StringComparison.Ordinal);
+            Assert.Contains("_noticeLinkBody.Text = Word(\"" + key + "\");", paste, StringComparison.Ordinal);
             Assert.Equal(0, Count(paste, "Phrase(\"" + key + "\""));               // ⛔ 槽：递了＝屏幕上多一颗没人念的数
         }
+        Assert.Equal(0, Count(paste, "_noticeBody.Text = Word(\"boards.link"));   // ⛔ 第一行再收那两句＝P-257 那一格的原样
     }
 
     /// <summary>片40＝被关过一次又被亮回来的那一格，走／留都得就地有颗按钮（P-54：⛔ 把"再点一次×就退"这种隐藏出口推回给用户）。

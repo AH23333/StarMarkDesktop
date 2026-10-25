@@ -276,9 +276,12 @@ public sealed class BoardWordGateTests : IDisposable
     public void TheOnlyActionableControlPinsItsOwnColors()
     {
         var body = MethodBody(Code(ReadRepoFile(WindowCs)), "private Grid BuildStage");
-        // 十五颗黑字：标题／正文／那一行那句落点／那一行第二颗读数（片83）＋十一颗按钮
+        // 十六颗黑字：标题／正文／<b>第二行那一句（片108＝P-257）</b>／那一行那句落点／那一行第二颗读数（片83）＋十一颗按钮
         //（片27 只钉了前两颗 ⇒ 后面每颗都⛔ 吃主题刷＝白字）
-        Assert.Equal(15, Count(body, "Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black)"));
+        // ⚠ 片108 <b>只抬黑字那一列</b>（15→16），底色与描边那两列照旧 11：新加的那一样是<b>一行字</b>而⛔ 一颗按钮，
+        // 所以这一格三列各数一遍正好把这一笔说清楚——名册 435 那一族"只抬一列会被读成尺坏了"在此处是<b>合法形状</b>，
+        // 而判断它合法的依据是"这一屏上可点的控件颗数一颗没变"（面板那六颗＋那一行那五颗＝十一颗照旧）。
+        Assert.Equal(16, Count(body, "Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black)"));
         Assert.Equal(11, Count(body, "Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255))"));
         Assert.Equal(11, Count(body, "BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130))"));
         // 禁项：这一族⛔ 用"跟着主题走"的那一类刷子（面板与十一颗按钮都不跟着走，见 §27.6）

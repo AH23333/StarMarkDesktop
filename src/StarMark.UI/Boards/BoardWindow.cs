@@ -217,9 +217,17 @@ public sealed class BoardWindow : Window
     /// <summary>画布与那块面板同住的一层（<see cref="Content"/> 只许有一个主人：重建控件那一趟换的是这层里的孩子）。</summary>
     private readonly Grid _stage;
     private Border? _notice;
+
+    /// <summary>那块面板的<b>第一行</b>（那句话＋它那六颗出口同住一层）：片108＝P-257 (C) 起那一格有两行，
+    /// 收起第一行＝连同它的出口一起收起，⛔ 把第二行的字与第一行的按钮留在同一块边框里。</summary>
+    private StackPanel? _noticeMain;
     private TextBlock? _noticeTitle;
     private TextBlock? _noticeBody;
     private Button? _noticeButton;
+
+    /// <summary>那块面板的<b>第二行</b>（片108＝P-257 的落地腿）：外链那两句坏话只住这里，
+    /// 所以第一行挂着话时它照样上得了屏——归属规则从"面板空着才进"换成"两行各有主人"。</summary>
+    private TextBlock? _noticeLinkBody;
 
     /// <summary>那颗「打开所在文件夹」（片39＝P-219 的上屏出口）：它只跟着"盘上真有一颗副本"那几句话出现。</summary>
     private Button? _noticeFolderButton;
@@ -239,13 +247,17 @@ public sealed class BoardWindow : Window
     /// 没被关过＝⛔ 有话要说"走还是留"（停笔那一拍的拒只配「另存」）。</summary>
     private bool _closeRevived;
 
-    /// <summary>那块面板此刻说的那一句住在表里的哪一颗键（null＝没在说话）。<b>换语言那一拍按它重贴</b>（机制 (C)）。</summary>
+    /// <summary>那块面板<b>第一行</b>此刻说的那一句住在表里的哪一颗键（null＝那一行空着）。<b>换语言那一拍按它重贴</b>（机制 (C)）。</summary>
     private string? _noticeKey;
+
+    /// <summary>那块面板<b>第二行</b>此刻说的那一颗键（null＝那一行空着）：只由 <see cref="ShowLinkNotice"/> 写、
+    /// 只由 <see cref="HideLinkNotice"/> 收——那一行归外链那两句，⛔ 顶掉第一行也⛔ 被第一行的收口顺带撤掉（片108＝P-257）。</summary>
+    private string? _linkNoticeKey;
 
     /// <summary>那颗"另存一份到别处"的按钮这这一刻许不许按（另存正进行中＝⛔ 再按一次，那是第二份写入）。</summary>
     private bool _copying;
 
-    /// <summary>那两句"这一发外链没开成"——那块面板上<b>唯二</b>由时长收的话（余下那些都由状态收：
+    /// <summary>那两句"这一发外链没开成"——那块面板<b>第二行</b>上由时长收的话（第一行那些都由状态收：
     /// "已停止保存"在写闸重新开起来之前句句是真，而"这条链没打开"没有"什么时候不再是事实"那一刻）。
     /// <para>这一串是<b>那颗定时器唯一的名单</b>：收口那一拍问的是它，⛔ 在 Tick 里再 switch 一遍键名（两处各列＝迟早只补一处）。</para></summary>
     private static readonly string[] LinkNoticeKeys = ["boards.linkBlockedBody", "boards.linkFailedBody"];
@@ -1249,6 +1261,21 @@ public sealed class BoardWindow : Window
             BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
         };
         _noticeFreshButton.Click += (_, _) => StartFreshBoard();
+        // 片108＝P-257 (C) 的落地腿：那块面板从此<b>排两行</b>。第二行只归外链那两句坏话住——
+        // 第一行挂着那句不带计时器的旧话时，「这条链接没递出去」照样上得了屏。
+        // ⛔ 换掉旧话（那是片39 真机量到的"旧话顶掉新事实"那一族）、也⛔ 给它配一颗关闭：
+        // 那句"没能打开"由时长自己退场（名单＝<see cref="LinkNoticeKeys"/>），而第一行由状态收。
+        // 字色与那颗宽度上限照旧各钉一遍：这一屏上多了一行字，片28 那把"白字画在灰底上＝看不见"的尺
+        // 与片12 那颗「浮出长句给宽度上限」的判据都要连着新那一行重新量（⛔ 让第二样撑宽那块面板）。
+        _noticeLinkBody = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 13,
+            MaxWidth = 420,
+            Margin = new Thickness(0, 6, 0, 0),
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            Visibility = Visibility.Collapsed,
+        };
         var panel = new StackPanel { Margin = new Thickness(14, 10, 14, 10) };
         panel.Children.Add(_noticeTitle);
         panel.Children.Add(_noticeBody);
@@ -1260,9 +1287,13 @@ public sealed class BoardWindow : Window
         panel.Children.Add(_noticeFreshButton);
         // 那块面板的底色与字色都<b>钉死</b>：画布那一侧永远是白板（theme.set 现在交的是 light），
         // 而一扇窗里两套深浅色同时说话就是 WI-81 那族"点了白色整扇看不见"的形状——两边都不跟着主题走，最坏也只是普通灰底。
+        _noticeMain = panel;                   // 第一行连同它那六颗出口（收起第一行＝一起收起，⛔ 把按钮留在第二行旁边）
+        var rows = new StackPanel();
+        rows.Children.Add(_noticeMain);
+        rows.Children.Add(_noticeLinkBody);
         _notice = new Border
         {
-            Child = panel,
+            Child = rows,
             Visibility = Visibility.Collapsed,
             Background = new SolidColorBrush(Windows.UI.Color.FromArgb(245, 250, 250, 250)),
             BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 178, 178, 178)),
@@ -1388,18 +1419,23 @@ public sealed class BoardWindow : Window
     {
         _noticeKey = bodyKey;
         if (_notice is null) return;         // 编译期要的那颗判定：面板由构造里的 BuildStage 造好，实际⛔ 为空
+        _noticeMain!.Visibility = Visibility.Visible;   // 第一行自己回场（上一拍可能只因为第二行还挂着字而没整块收过）
         _noticeTitle!.Visibility = titled ? Visibility.Visible : Visibility.Collapsed;
         _noticeButton!.Visibility = offerCopy ? Visibility.Visible : Visibility.Collapsed;
         PasteNotice();
         _notice.Visibility = Visibility.Visible;
     }
 
-    /// <summary>面板收起来（开闸成功＝那句坏话已经不是事实）。按钮上的"另存中"一并退掉。</summary>
+    /// <summary>收起<b>第一行</b>（开闸成功＝那句坏话已经不是事实）：按钮上的"另存中"一并退掉。
+    /// <para>片108＝P-257：那块边框只在第二行也空着时才跟着收——外链那句"这条链没打开"由它自己那颗时长收，
+    /// ⛔ 由第一行的收口顺带撤掉（那是第二个主人）。</para></summary>
     private void HideNotice()
     {
         _noticeKey = null;
         _copying = false;
-        if (_notice is not null) _notice.Visibility = Visibility.Collapsed;
+        if (_notice is null) return;
+        if (_noticeMain is { } main) main.Visibility = Visibility.Collapsed;
+        _notice.Visibility = _linkNoticeKey is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
     /// <summary>
@@ -1408,7 +1444,7 @@ public sealed class BoardWindow : Window
     /// </summary>
     private void PasteNotice()
     {
-        if (_noticeBody is null || _noticeTitle is null) return;
+        if (_noticeBody is null || _noticeTitle is null || _noticeLinkBody is null) return;
         // 那颗按钮上的话也一起重贴：它是构造时冻进去的一串字，⛔ 比面板上那两行晚一步换语言（P-175 那一族的第三种脸）。
         if (_noticeButton is { } button) button.Content = Word("boards.saveCopyAction");
         // 那颗「打开所在文件夹」与它的可见性也归这一拍算：换语言只走 PasteNotice、⛔ 重走 ShowNotice
@@ -1443,18 +1479,21 @@ public sealed class BoardWindow : Window
             fresh.Content = Word("boards.freshBoardAction");
             fresh.Visibility = _blockedSceneId is null ? Visibility.Collapsed : Visibility.Visible;
         }
+        // 第二行（片108＝P-257 (C) 的落地腿）：那两句归 <see cref="_linkNoticeKey"/>，⛔ 再由"面板空不空"决定上不上屏，
+        // 所以换语言那一拍也必须重贴它（与第一行同一条口径）；那颗键名同时是那句正文的键，⛔ 在这里再挑一遍措辞（第二个出处）。
+        switch (_linkNoticeKey)
+        {
+            case "boards.linkBlockedBody":
+                _noticeLinkBody.Text = Word("boards.linkBlockedBody");
+                break;
+            case "boards.linkFailedBody":
+                _noticeLinkBody.Text = Word("boards.linkFailedBody");
+                break;
+        }
         switch (_noticeKey)
         {
             case "boards.recoveringBody":
                 _noticeBody.Text = Word("boards.recoveringBody");
-                break;
-            // 片87 那两句也归这一拍算：都不带标题、不带按钮（那一路说的⛔ 是"盘上有一颗档"），
-            // 而那颗键名同时是那句正文的键——ShowNotice 交的就是它，这里⛔ 再挑一遍措辞（第二个出处）。
-            case "boards.linkBlockedBody":
-                _noticeBody.Text = Word("boards.linkBlockedBody");
-                break;
-            case "boards.linkFailedBody":
-                _noticeBody.Text = Word("boards.linkFailedBody");
                 break;
             case "boards.blockedBody":
                 // 那句"拿不出来"必须说清两件事：盘上那颗档⛔ 没了、这一发⛔ 动过它——
@@ -1587,7 +1626,8 @@ public sealed class BoardWindow : Window
     /// 而它从前在这里被 <c>_ =</c> 直接扔掉＝"浏览器没注册 http 处理程序"与"开成了"在日志里长同一张脸，
     /// 下一批只能靠猜（P-56 那条口径：只报"坏了"说不出是谁坏的，反过来"什么都不报"也说不出是没坏）。</para>
     /// <para>那颗 URL 本身⛔ 递进日志（P-30：查询串里可能带凭据），递的是 LauncherEx 那句<b>与它无关</b>的原因。
-    /// 片87 起那一句也<b>上了屏</b>（账本 P-249 后半 (A)）：面板空着才挤得进去，归属规则见 <see cref="ShowLinkNotice"/>。</para>
+    /// 片87 起那一句也<b>上了屏</b>（账本 P-249 后半 (A)）；片108＝P-257 起它住在面板的<b>第二行</b>，
+    /// 所以第一行挂着话时也照样上得了屏，归属规则见 <see cref="ShowLinkNotice"/>。</para>
     /// </summary>
     private async System.Threading.Tasks.Task ReportExternalOpenAsync(string? url)
     {
@@ -1606,27 +1646,32 @@ public sealed class BoardWindow : Window
     }
 
     /// <summary>
-    /// 那一发外链没开成时把那一句放上那块面板（账本 P-249 后半 (A) 的落地腿）。
-    /// <para><b>归属规则＝面板空着才进</b>：那块面板一位主人，而这一句<b>只在没人说话的时候</b>才挤得进去。
-    /// ⛔ 让"这条链没打开"顶掉"这一扇已停止保存"——后者说的是<b>笔迹有丢的风险</b>，被一句无关的坏话盖掉
-    /// 就等于让他以为那块板存好了（片39／✅P-235 量到的正是"新事实顶掉旧话"与"旧话顶掉新事实"那两副脸，
-    /// 而 P-249 登记的归属问的就是这一格）。没挤进去也⛔ 静默：日志里那一行 <c>boards.notice.held</c>
-    /// 说清"屏幕上为什么没话"，⛔ 让下一批把"没话"读成"没坏"（P-56 那条口径的反面）。</para>
+    /// 那一发外链没开成时把那一句放上那块面板的<b>第二行</b>（账本 P-249 后半 (A) 的上屏腿＋P-257 (C) 的归属腿）。
+    /// <para><b>归属规则＝一句一行、各有主人</b>（片108 改的正是这一格）：这一句⛔ 再挤第一行的位子，
+    /// 所以第一行挂着"这一扇已停止保存"那类<b>不带计时器</b>的旧话时也照样上得了屏。
+    /// ⛔ 回退到"面板空着才进"：片107 真机量到那一格的反面＝占住第一行的那句⛔ 超时、⛔ 一颗撤销，
+    /// 于是那两句坏话<b>永久静音</b>（用户点了没反应，屏幕上说的是上一件早就说过的事・正本
+    /// <c>bin/WI99/p107_r2/board107_r5.txt</c>）。⛔ 让"这条链没打开"顶掉"这一扇已停止保存"——
+    /// 后者说的是<b>笔迹有丢的风险</b>，被一句无关的坏话盖掉就等于让他以为那块板存好了（片39／✅P-235 那一族），
+    /// 而那颗「打开所在文件夹」也跟着第一行退场＝把出口删掉。</para>
+    /// <para>那一发落痕说的是<b>两句同屏</b>这件事：<c>over=</c> 记的就是第一行当时挂着谁，
+    /// ⛔ 让下一批把"屏幕上没话"或"只有一句"读成"没坏"（P-56 那条口径）。</para>
     /// <para>⛔ 进 <see cref="FileOutcomeKeys"/>：这一句⛔ 认定盘上落了一颗档，那颗「打开所在文件夹」跟着它出场
     /// 就是指着一颗⛔ 存在的档（片39 定过的那一半）。</para>
     /// </summary>
     private void ShowLinkNotice(string bodyKey)
     {
-        if (_noticeKey is not null)
-        {
-            StarMark.Abstractions.StarLog.Info("boards.notice.held by=" + _noticeKey + " id=" + _boardId);
-            return;
-        }
-        ShowNotice(bodyKey, titled: false, offerCopy: false);
+        _linkNoticeKey = bodyKey;
+        if (_notice is null) return;         // 编译期要的那颗判定：面板由构造里的 BuildStage 造好，实际⛔ 为空
+        _noticeLinkBody!.Visibility = Visibility.Visible;
+        PasteNotice();
+        _notice.Visibility = Visibility.Visible;
         // 这一句说的是"刚刚发生的一件事"，没有"什么时候不再是事实"那一刻，所以由时长收（那颗数住在 Core）。
         _linkNoticeTimer ??= NewLinkNoticeTimer();
         _linkNoticeTimer.Stop();
         _linkNoticeTimer.Start();
+        StarMark.Abstractions.StarLog.Info("boards.notice.link key=" + bodyKey
+            + " over=" + (_noticeKey ?? "none") + " id=" + _boardId);
     }
 
     /// <summary>那一颗懒建的计时器：间隔只有 <see cref="BoardPolicy.LinkNoticeMs"/> 一颗出处，响了就去问 <see cref="HideLinkNotice"/>。
@@ -1640,14 +1685,17 @@ public sealed class BoardWindow : Window
         return timer;
     }
 
-    /// <summary>收掉<b>自己那两句</b>：面板此刻换了主人就一颗字节也不动——⛔ 拿一句过期的定时去收别人的坏话
-    /// （那一族最坏的形状＝八秒之后「这一扇已停止保存」自己消失了，而写闸还拒着）。
-    /// <para>两路走它：那颗定时器响了，与下一发<b>真开成了</b>（<see cref="ReportExternalOpenAsync"/> 那一支）。</para></summary>
+    /// <summary>收掉<b>第二行那两句</b>：那一行空着就一颗字节也不动，而第一行挂着谁与它无关——
+    /// ⛔ 拿一句过期的定时去收别人的坏话（那一族最坏的形状＝八秒之后「这一扇已停止保存」自己消失了，而写闸还拒着）。
+    /// <para>两路走它：那颗定时器响了，与下一发<b>真开成了</b>（<see cref="ReportExternalOpenAsync"/> 那一支）。
+    /// 那块边框只在两行都空着时才跟着收（片108＝P-257：两行各有主人）。</para></summary>
     private void HideLinkNotice()
     {
-        if (_noticeKey is null || Array.IndexOf(LinkNoticeKeys, _noticeKey) < 0) return;
+        if (_linkNoticeKey is null || Array.IndexOf(LinkNoticeKeys, _linkNoticeKey) < 0) return;
+        _linkNoticeKey = null;
         _linkNoticeTimer?.Stop();
-        HideNotice();
+        if (_noticeLinkBody is { } link) link.Visibility = Visibility.Collapsed;
+        if (_noticeKey is null && _notice is not null) _notice.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
