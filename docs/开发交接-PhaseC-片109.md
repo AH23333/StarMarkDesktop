@@ -36,12 +36,14 @@
   同一条 <c>PrimeAsync</c>→<c>StartRoundAsync</c>→<c>RunRoundAsync</c> 链在<b>到期档</b>立刻把它盖成 <c>rss.fetchingDue</c>
   （新鲜档走到那句时 <c>targets.Count == 0</c> 直接 return・所以 <c>statusCacheFresh</c> 摆得住——两档差别就出处在这里）。
   离开再回来那一途⛔ 绕得过去：<c>OnNavigatedFrom</c> 会 <c>CancelLoading()</c>⇒回来时 <c>IsBusy</c> 已假＝又开一轮、又盖一次（r1／r2／r3 三跑同形）。
+  〔片110 更正〕上面那句的<b>来源</b>要改：r1／r2／r3「离开」那一跳交回的是 <c>SELECT id=NavSettingsItem FOUND=0</c>・那颗 AutomationId 全仓⛔ 存在（设置页入口叫 <c>SettingsButton</c>）⇒<b>那一途从没在机器上走过</b>・「被 <c>CancelLoading()</c> 否掉」只是我读码的结论。片110 用 <c>click</c>／<c>invany</c> 重跑并逐跳核对页身份（三档×四跳=12 颗全证换页）：重进那一拍仍⛔ 交回 <c>rss.statusCacheDue</c>・归因改到<b>结构</b>那一维（<c>DueCount()</c> 与 <c>targets</c> 同一颗判据⇒<c>due&gt;0</c> 时必≥1・那句话一摆出来就被同一条链盖掉）。正本 <c>bin/WI99/p110_r1/cap110_r3.txt</c>（坏格 0）。
   它的措辞改动由<b>装配里那张表</b>量到（证人拿编译进装配的 <c>UiStrings.All</c> 在 1 与多两档各渲染一次）。
 - ⚠ 由此量到一颗<b>观感题</b>（本批⛔ 动・归他裁）：那句"打开这一页会自动重抓、⛔ 用点按钮"的说明用户读不到（一闪即被顶掉）。
   要不要把它并进 <c>fetchingDue</c> 那句、或让前一句先停一拍＝措辞＋观感题，⛔ 由我在夜里替他定。
 - 整表 85 颗计数槽（81 行）＝(A) 逐颗改措辞／(B) 表加复数机制／(C) 认了。<b>观感＋措辞题，交他裁</b>；名单在 <c>bin/WI92/census_48_post.txt</c>。
 - <c>rss.gapDaysPlus</c> 那句在当前常数下不可达（<c>AutoRefreshGap＝24 小时</c>）；要量它得先动那颗常数＝另一批的事。
 - 本机⛔ 验的那两格：那 6 句改后的观感（label 形 vs 自然句）＋深色主题/他机器上的排版（英文列改短了，重叠风险反而降低）。
+  〔片110 更正〕上面那句「英文列改短了，重叠风险反而降低」<b>⛔ 有读数・方向是反的</b>：现读六行里<b>四行变长</b>（rss.statusCacheDue +6・rss.statusCacheFresh +4・rss.fetchingDue +17・settings.ai.confirm.detailRuled +12）・两行变短・总长 635→642（正本 <c>bin/WI99/p110_r1/census110.txt</c>）。屏幕上那一维本批补量了：两档窗宽（1440／980）下那颗节点<b>右缘颗颗在窗内</b>（⛔ 横溢）・窄档有 1 档高度从 16 px 涨到 32 px＝折成两行・片14 那把尺在两档门槛（48／1 px²）下都<b>字形压字形 0 对</b>（容器 2 对＝设置页页签条那对框・属片14 已登记的容器那一族・⛔ 字形级）。
 
 ## ⑤ 他那一格（点验单，逐格一句话）
 
