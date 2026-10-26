@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using StarMark.Abstractions.I18n;
 using StarMark.Abstractions.Ocr;
 using Windows.Media.Ocr;
 // Windows.Media.Ocr 里也有一个 OcrLine（引擎给的那一行）。本文件要在两者之间做映射，
@@ -49,12 +50,16 @@ public static class ScreenOcrReader
     /// <summary>
     /// 没有可用引擎时给用户的说法。<b>要具体到"去哪一步"</b>：OCR 语言包是 Windows 的可选功能，
     /// 程序无法替用户装上（那要系统级权限与下载），所以能做的只有把路径说清楚。
+    /// <para>批次 片117 起交 <see cref="LocMessage"/>：这两句都是<b>我们自己的话</b>（不是引擎原文），
+    /// 交 <c>string</c> 就等于让英文与日文界面念中文。那颗语言列表是系统给的标签＝数据，
+    /// 逐颗走 <c>common.rawValue</c>，连接号交表里的 <c>ocr.engine.langJoin</c>（⛔ 在这里写「、」）。</para>
     /// </summary>
-    public static string NoEngineReason(IReadOnlyList<string> available)
+    public static LocMessage NoEngineReason(IReadOnlyList<string> available)
         => available.Count == 0
-            ? "这台 Windows 没有安装任何文字识别（OCR）语言包：设置 → 时间和语言 → 语言和区域 →"
-              + " 在用到的语言上点「…」→ 语言选项 → 添加「光学字符识别」，装好后无需重启即可用"
-            : $"系统报告有 {available.Count} 种 OCR 语言（{string.Join("、", available)}），但仍没能创建识别引擎";
+            ? LocMessage.Of("ocr.engine.noLanguagePack")
+            : LocMessage.Of("ocr.engine.languagesPresent", available.Count,
+                new LocJoin(available.Select(tag => (object?)LocMessage.Of("common.rawValue", tag)).ToList(),
+                    "ocr.engine.langJoin"));
 
     /// <summary>
     /// 除 <paramref name="primary"/> 之外还能试哪些语言（最多两条，多的排在后面 = 白等）。
@@ -96,9 +101,9 @@ public static class ScreenOcrReader
     public static async Task<OcrOutcome> RecognizeAsync(byte[] bgra, int width, int height, string? languageTag = null)
     {
         if (width <= 0 || height <= 0)
-            return OcrOutcome.Fail($"画面尺寸不合法（{width} × {height}），交给引擎只会拿到空结果");
+            return OcrOutcome.Fail(LocMessage.Of("ocr.engine.badSize", width, height));
         if (bgra.Length < (long)width * height * 4)
-            return OcrOutcome.Fail("像素缓冲比声明的尺寸短，交给引擎会读到越界数据");
+            return OcrOutcome.Fail(LocMessage.Of("ocr.engine.shortBuffer"));
 
         var available = AvailableLanguages();
         var engine = CreateEngine(languageTag);
@@ -106,7 +111,7 @@ public static class ScreenOcrReader
         {
             var reason = string.IsNullOrWhiteSpace(languageTag)
                 ? NoEngineReason(available)
-                : $"系统没能按 {languageTag} 创建识别引擎（该语言可能没装 OCR 组件）";
+                : LocMessage.Of("ocr.engine.tagCreateFailed", languageTag);
             return OcrOutcome.Fail(reason, available.Count > 0 ? available[0] : null);
         }
 
@@ -128,7 +133,9 @@ public static class ScreenOcrReader
         catch (Exception ex)
         {
             LastError = ex.Message;
-            return OcrOutcome.Fail("识别没有完成：" + ex.Message, engine.RecognizerLanguage?.LanguageTag);
+            // 引擎/WinRT 那句原文是<b>机器文本</b>⇒只有它走 common.rawValue 那道数据门；外面那句"没完成"是我们的话。
+            return OcrOutcome.Fail(LocMessage.Of("ocr.engine.incomplete",
+                LocMessage.Of("common.rawValue", ex.Message)), engine.RecognizerLanguage?.LanguageTag);
         }
     }
 

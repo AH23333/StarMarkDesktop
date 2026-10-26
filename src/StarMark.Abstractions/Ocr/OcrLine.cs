@@ -1,5 +1,6 @@
 #nullable enable
 using System.Collections.Generic;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions.Ocr;
 
@@ -15,10 +16,17 @@ namespace StarMark.Abstractions.Ocr;
 /// </summary>
 public sealed record OcrLine(IReadOnlyList<string> Words);
 
-/// <summary>一次识别的结论。<see cref="Error"/> 非空时 <see cref="Lines"/> 不可信。</summary>
-public sealed record OcrOutcome(bool Ok, IReadOnlyList<OcrLine> Lines, string? Error, string? EngineLanguage)
+/// <summary>
+/// 一次识别的结论。<see cref="Error"/> 非空时 <see cref="Lines"/> 不可信。
+/// <para><b>颗类型是 <see cref="LocMessage"/> 而⛔ <c>string</c></b>（批次 片117）：这位主人递的六句原因里
+/// 只有「引擎自己的异常正文」是机器文本，其余五句（去哪装语言包・几种语言在场・尺寸不合法・缓冲不够长・
+/// 按某个语言建不出引擎）都是<b>我们自己写的句子</b>。交 <c>string</c> 时下游只能把它们整个套进
+/// <c>common.rawValue</c> 那道数据门里（<c>OcrPipeline</c> 那一处曾经就这么写），于是英文与日文界面上
+/// 会出现一整句中文。交键＋实参，取词就回到贴上去的那一刻。</para>
+/// </summary>
+public sealed record OcrOutcome(bool Ok, IReadOnlyList<OcrLine> Lines, LocMessage? Error, string? EngineLanguage)
 {
-    public static OcrOutcome Fail(string reason, string? engineLanguage = null)
+    public static OcrOutcome Fail(LocMessage reason, string? engineLanguage = null)
         => new(false, System.Array.Empty<OcrLine>(), reason, engineLanguage);
 
     public static OcrOutcome Success(IReadOnlyList<OcrLine> lines, string? engineLanguage)

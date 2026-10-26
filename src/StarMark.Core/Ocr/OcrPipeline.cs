@@ -58,12 +58,13 @@ public static class OcrPipeline
         OcrImagePrep.StretchContrast(work, workWidth, workHeight);
 
         var first = await ScreenOcrReader.RecognizeAsync(work, workWidth, workHeight);
-        // ✅WI-65 片3 第二刀：引擎那句话是<b>机器文本</b> ⇒ 数据门（common.rawValue）就放在它进来的这一行；
-        // 只有"引擎连原因都没给"时说的才是<b>我们自己的</b>那颗词，那句交键、⛔ 在这里念完。
+        // ✅WI-65 片3 第二刀当时写的是「引擎那句话是机器文本 ⇒ 数据门就放在这一行」。<b>那句归因错了</b>：
+        // 那六颗下落里只有 WinRT 的异常正文是原文，其余五颗（去哪装语言包・几种在场・尺寸不合法・
+        // 缓冲不够长・按那个语言建不出引擎）都是 ScreenOcrReader <b>自己写的句子</b>，套进 common.rawValue
+        // 就等于让英文与日文界面念一整句中文。批次 片117 把那颗出口的类型改成 LocMessage（键＋实参在主人那里给），
+        // 这一行的数据门因此撤掉——只有"引擎连原因都没给"时说的还是我们自己的那颗词。
         if (!first.Ok)
-            return OcrRead.Fail(first.Error is { } engine
-                ? LocMessage.Of("common.rawValue", engine)
-                : LocMessage.Of("ocr.card.noReason"), first.EngineLanguage);
+            return OcrRead.Fail(first.Error ?? LocMessage.Of("ocr.card.noReason"), first.EngineLanguage);
 
         var language = first.EngineLanguage;
         var text = OcrText.Assemble(first.Lines);

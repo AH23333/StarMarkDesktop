@@ -1705,6 +1705,35 @@ public static class UiStrings
         // ⚠ 这一行只是**槽位**，没有词可翻：提示卡的正文从前在 C# 里用 + 拼（「原因」＋「怎么认的」），
         // 语序就被定死在中文那一侧（规则 #100，先例＝rss.statusJoin／clip.usage.line）。✅WI-65 片3 第二刀。
         new Entry("ocr.body.join", "{0}{1}", "{0}{1}", "{0}{1}"),
+        // ===== 识字那一路「为什么没成」那六句（批次 片117，P-192 第三颗）=====
+        // 这六句从前住在 ScreenOcrReader 里写死中文，而下游只有一句 `common.rawValue` 那道数据门——
+        // 数据门只装<b>数据</b>（引擎原文・异常正文・用户内容），装句子就是第二个措辞出处（✅WI-61d 片1 定的口径）。
+        // 于是英文与日文界面上会出现一整句中文，其中「去哪装语言包」那一句正是没装 OCR 组件的用户唯一能照着做的一步。
+        // ⚠ 语言标签（zh-CN 那种）是系统给的数据⇒走 common.rawValue；把它们连起来的顿号⛔ 写死在 C# 里，交 langJoin。
+        new Entry("ocr.engine.noLanguagePack",
+                  "这台 Windows 没有安装任何文字识别（OCR）语言包：设置 → 时间和语言 → 语言和区域 →"
+                  + " 在用到的语言上点「…」→ 语言选项 → 添加「光学字符识别」，装好后无需重启即可用",
+                  "This Windows has no text recognition (OCR) language pack. Settings → Time & language → "
+                  + "Language & region → the “…” beside the language you use → Language options → "
+                  + "add “Optical Character Recognition”; it is usable as soon as it installs, no restart needed",
+                  "この Windows には文字認識（OCR）の言語パックがインストールされていません。設定 → 日時と言語 → "
+                  + "言語と地域 → 使う言語の横の「…」 → 言語のオプション → 「光学文字認識」を追加してください。"
+                  + "インストール後、再起動なしで使えます"),
+        new Entry("ocr.engine.languagesPresent", "系统报告有 {0} 种 OCR 语言（{1}），但仍没能创建识别引擎",
+                  "The system reports {0} OCR language(s) ({1}) but still couldn't create a recognition engine",
+                  "システムには {0} 種類の OCR 言語（{1}）があると報告されていますが、認識エンジンを作成できませんでした"),
+        new Entry("ocr.engine.langJoin", "{0}、{1}", "{0}, {1}", "{0}、{1}"),
+        new Entry("ocr.engine.badSize", "画面尺寸不合法（{0} × {1}），交给引擎只会拿到空结果",
+                  "The image size can't be used ({0} × {1}); the engine would only hand back nothing",
+                  "画像サイズが不正です（{0} × {1}）。エンジンに渡しても空の結果しか返りません"),
+        new Entry("ocr.engine.shortBuffer", "像素缓冲比声明的尺寸短，交给引擎会读到越界数据",
+                  "The pixel buffer is shorter than the size it declares; the engine would read past its end",
+                  "ピクセルバッファが宣言されたサイズより短くなります。エンジンに渡すと範囲外まで読みます"),
+        new Entry("ocr.engine.tagCreateFailed", "系统没能按 {0} 创建识别引擎（该语言可能没装 OCR 组件）",
+                  "The system couldn't build a recognition engine for {0} (that language may have no OCR component)",
+                  "{0} の認識エンジンを作成できませんでした（その言語に OCR コンポーネントが無い可能性があります）"),
+        new Entry("ocr.engine.incomplete", "识别没有完成：{0}",
+                  "Recognition didn't finish: {0}", "認識を完了できませんでした：{0}"),
         // ===== 画笔画具那一族"念给人听的词"（批次 WI-49，P-181）=====
         // ⚠ 这一族从前住在 Core 里写死中文，而**两把旧尺都扫不到它**：供话者名单按文件筛（#375），Core 里没有卡片出口。
         //   工具名与颜色名各只许这一处（画布那条栏与截图那条栏问的是同一张表）；「橡皮不是可绘制的标注」那句

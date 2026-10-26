@@ -294,6 +294,9 @@ public sealed class I18nContractTests : IDisposable
             ["ocr.body.join"] = "纯胶水位「{0}{1}」三列同形：把识字那三张卡的「原因／结果」与「怎么认的」两段连起来的位置，"
                 + "⛔ 在 C# 里拼 +（✅WI-65 片3 第二刀／P-194，与 rss.statusJoin／settings.data.backup.lineJoin／clip.usage.line 同形——"
                 + "语序归那一行自己决定，⛔ 被拼法定死在中文那一侧＝规则 #100）",
+            ["ocr.engine.langJoin"] = "连接符「、」<b>中日同形</b>：日文的中顿号就是同一颗字符（U+3001），en 列是 \", \"——"
+                + "这一行连的是<b>系统报给你的语言标签</b>（zh-CN 那种数据），没有词可翻（✅片117／P-192 第三颗，"
+                + "与 search.tagJoin／settings.ai.groupJoin 同形）。⚠ 交的是 <c>LocJoin</c> 而⛔ 在 C# 里 string.Join 念完＝规则 #100",
             ["search.tagJoin"] = "连接符「 + 」三列同形（en 列也是同一个 ASCII 形状）：搜索页与搜索组件那句「没有同时带 #a + #b 的条目」里连的是"
                 + "<b>用户自己起的标签名</b>，这一行没有词可翻（✅WI-67 片9b／P-188 第五刀，与 capture.bar.nameJoin／settings.ai.groupJoin 同形）。"
                 + "⚠ 交的是 <c>LocJoin</c> 而⛔ 在 C# 里 string.Join 念完：念完那一刻语言就被定死了（规则 #100）",

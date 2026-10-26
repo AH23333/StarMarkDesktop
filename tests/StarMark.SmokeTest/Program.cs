@@ -1056,7 +1056,7 @@ static async Task OcrCheckAsync()
         var crop = StarMark.Integrations.Capture.GdiScreenCapture.Crop(
             new StarMark.Integrations.Capture.FrameCopyRequest(frame, 0, 0, fw, fh));
         var rawFrame = await StarMark.Integrations.Ocr.ScreenOcrReader.RecognizeAsync(crop, fw, fh);
-        if (!rawFrame.Ok) throw new Exception("ScreenOcrReader 没能识别：" + (rawFrame.Error ?? "无原因"));
+        if (!rawFrame.Ok) throw new Exception("ScreenOcrReader 没能识别：" + rawFrame.Error?.Render());
         var rawAssembled = StarMark.Core.Ocr.OcrText.Assemble(rawFrame.Lines);
         if (rawFrame.Lines.Count > 0 && rawAssembled.Length == 0)
             throw new Exception("引擎给了行，拼回来却是空的（拼接判据错了）");

@@ -37,6 +37,7 @@ public sealed class CaptureNoticeWiringGateTests
     private const string OcrReadFile = "src/StarMark.Core/Ocr/OcrRead.cs";
     private const string OcrTextFile = "src/StarMark.Core/Ocr/OcrText.cs";
     private const string OcrPipelineFile = "src/StarMark.Core/Ocr/OcrPipeline.cs";
+    private const string OcrReaderFile = "src/StarMark.Integrations/Ocr/ScreenOcrReader.cs";
     private const string SnapshotPartial = "src/StarMark.UI/Services/CanvasService.Snapshot.cs";
     private const string HostPartial = "src/StarMark.UI/Services/CanvasService.Host.cs";
     private const string Gdi = "src/StarMark.Integrations/Capture/GdiScreenCapture.cs";
@@ -272,6 +273,9 @@ public sealed class CaptureNoticeWiringGateTests
 
     /// <summary>
     /// 识字那一路（批次 WI-46b，P-177 第二刀）：卡上的标题、正文与那行"怎么认的"全部交表。
+    /// <para>批次 片117 起<b>引擎为什么没成</b>那六句也交表（P-192 第三颗）：它们的出处在
+    /// <c>src/StarMark.Integrations/Ocr/ScreenOcrReader.cs</c>，那位主人从前交 <c>string</c> 而下游只有一颗
+    /// 数据门，于是整句中文贴在英文界面上。</para>
     /// <para>⚠ `ocr.card.noReason` 只有<b>一处</b>被问（Core 的 `OcrPipeline`）：✅WI-65 片3 第二刀起 UI 那侧
     /// 不再替它兜底——同一颗键⛔ 两个出处，而"引擎连原因都没给"这件事只由管线那一处回答。</para>
     /// <para>⚠ `ocr.how.*` 这一族的存在理由：从前片段各自开头带一颗全角逗号，"语言没报＋放大了"那一格
@@ -285,6 +289,7 @@ public sealed class CaptureNoticeWiringGateTests
         var text = SourceGate.Code(SourceGate.ReadRepoFile(OcrTextFile));
         var pipe = SourceGate.Code(SourceGate.ReadRepoFile(OcrPipelineFile));
         var overlay = SourceGate.Code(SourceGate.ReadRepoPartials(Overlay));
+        var reader = SourceGate.Code(SourceGate.ReadRepoFile(OcrReaderFile));
 
         // ① 三张失败脸各有话说（引擎坏了／认出个空／写不进剪贴板），成功那一张也要报数
         Assert.Equal(2, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.failedTitle\")"));
@@ -314,11 +319,27 @@ public sealed class CaptureNoticeWiringGateTests
         Assert.Equal(3, SourceGate.Count(svc, "LocMessage.Of(\"ocr.body.join\""));
         Assert.Equal(0, SourceGate.Count(svc, "Locale.T("));
         Assert.Equal(0, SourceGate.Count(svc, "Locale.Fmt("));
-        // ⑤ 引擎自己那句话是机器文本 ⇒ 数据门立在它<b>进来的那一处</b>（Core 的管线），⛔ 留在 UI 的 `??` 里；
-        //    "连原因都没给"这件事从此只由管线那一处回答（同一颗键⛔ 两个出处）
-        Assert.Equal(1, SourceGate.Count(pipe, "LocMessage.Of(\"common.rawValue\", engine)"));
+        // ⑤ 片117 把这一格的归因改口：它原本写「引擎自己那句话是机器文本 ⇒ 数据门立在它进来的那一处」，
+        //    可那颗数据门套住的却是 <b>ScreenOcrReader 自己写的五句中文</b>（去哪装语言包・几种语言在场・
+        //    尺寸不合法・缓冲不够长・按那个语言建不出引擎）——en／ja 界面因此念一整句中文。
+        //    现在主人在自己那一头交「键＋实参」，管线只递不动；覆盖搬去哪＝下面 ⑤-补 那一组钉在 reader 档上。
+        //    ⛔ 把「门上少了颗钉」读成放宽：旧那一颗现在必须是 0 命中，而"连原因都没给"仍只由管线这一处回答。
+        Assert.Equal(0, SourceGate.Count(pipe, "common.rawValue"));
+        Assert.Equal(1, SourceGate.Count(pipe, "first.Error ?? LocMessage.Of(\"ocr.card.noReason\")"));
         Assert.Equal(1, SourceGate.Count(pipe, "LocMessage.Of(\"ocr.card.noReason\")"));
         Assert.Equal(0, SourceGate.Count(svc, "ocr.card.noReason"));
+        // ⑤-补（批次 片117・P-192 第三颗）主人那一侧：五句自己的话交 ocr.engine.*・
+        //    只有 WinRT 的异常正文走数据门（它确实没有句子可交表）・那串语言标签是系统给的数据，
+        //    逐颗走数据门而<b>连接号交表</b>（C# 里⛔ 写死顿号＝规则 #100 那一族）。
+        Assert.Equal(6, SourceGate.Count(reader, "LocMessage.Of(\"ocr.engine."));
+        Assert.Equal(1, SourceGate.Count(reader, "\"ocr.engine.langJoin\""));
+        Assert.Equal(1, SourceGate.Count(reader, "LocMessage.Of(\"common.rawValue\", ex.Message)"));
+        Assert.Equal(1, SourceGate.Count(reader, "new LocJoin("));
+        Assert.Equal(0, SourceGate.Count(reader, "OcrOutcome.Fail(\""));
+        Assert.Equal(0, SourceGate.Count(reader, "OcrOutcome.Fail($\""));
+        foreach (var deadOcr in new[] { "这台 Windows 没有安装任何文字识别", "种 OCR 语言", "画面尺寸不合法",
+                                        "像素缓冲比声明的尺寸短", "创建识别引擎（该语言可能没装", "识别没有完成：" })
+            Assert.DoesNotContain(deadOcr, reader);
         Assert.Equal(1, SourceGate.Count(text, "LocMessage.Of(\"ocr.text.noText\")"));
         // ⑥ 旧句子一概不许回来（带引号的短词同 WI-46a 那条口径：裸词会撞上日志措辞）
         foreach (var dead in new[]
