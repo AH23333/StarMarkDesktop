@@ -51,14 +51,18 @@ public static class ClassifyRules
             && item.Tags is not { Count: > 0 };
 
     /// <summary>内置规则。<b>刻意窄</b>：只钉"来源即类别"与"文档域名"三类，全部取自 §19.2 的例子中
-    /// 现有字段可判的部分——语言级判定（github+C#→["开发","C#"]）要等条目带语言字段再补，
-    /// 现在用标题猜语言错一片的代价高于省下的 token。</summary>
+    /// 现有字段可判的部分——语言级判定（github+C#→["dev","c#"]）要等条目带语言字段再补，
+    /// 现在用标题猜语言错一片的代价高于省下的 token。
+    /// <para><b>标签词始终是英文</b>（✅P-210 他裁「始终为英文」，与 AI 提示词同一批）：标签是分类的工作语言，
+    /// 不随界面语言变。已有库里的中文标签不迁移——「优先沿用已有标签」那一句让 AI 自然向旧词收敛，
+    /// 新库落英文、旧库维持原状。<see cref="ClassifyRule.SourceEquals"/> 匹配的是条目来源数据
+    /// （「本地文件」是 <c>AiClassifyService.NameOf</c> 产出的源名），<b>不是</b>标签词，照旧中文。</para></summary>
     public static readonly IReadOnlyList<ClassifyRule> Defaults = new List<ClassifyRule>
     {
-        new("GitHub", null, new[] { "开发" }),
-        new("本地文件", null, new[] { "本地文件" }),
-        new(null, "docs.microsoft.com", new[] { "文档", "微软" }),
-        new(null, "learn.microsoft.com", new[] { "文档", "微软" }),
+        new("GitHub", null, new[] { "dev" }),
+        new("本地文件", null, new[] { "local files" }),
+        new(null, "docs.microsoft.com", new[] { "docs", "microsoft" }),
+        new(null, "learn.microsoft.com", new[] { "docs", "microsoft" }),
     };
 
     /// <summary>用户自定义规则（JSON 数组，形状与 <see cref="ClassifyRule"/> 一致）。

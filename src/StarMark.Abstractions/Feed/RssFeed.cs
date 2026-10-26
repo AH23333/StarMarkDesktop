@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Linq;
 using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions.Feed;
@@ -99,6 +100,9 @@ public static class RssFolders
     public static string[] PathFor(string? sourceName)
         => string.IsNullOrWhiteSpace(sourceName) ? new[] { Root } : new[] { Root, sourceName.Trim() };
 
-    /// <summary>给人看的那一条路径（"RSS订阅 / 源名"）。文案与真实层级必须同源，否则提示会指一个不存在的路径。</summary>
-    public static string DisplayPath(string? sourceName) => string.Join(" / ", PathFor(sourceName));
+    /// <summary>给人看的那一条路径（根按当前语言念表，源名一级是数据原样保留）。
+    /// 层级仍由 <see cref="PathFor"/> 独家决定，显示那一层交给 <see cref="FolderPathUtil.DisplayName"/>（✅P-210）——
+    /// 所以提示永远指着真实路径，而根那一格随界面语言换话（坑表 #386）。</summary>
+    public static string DisplayPath(string? sourceName)
+        => string.Join(" / ", PathFor(sourceName).Select(FolderPathUtil.DisplayName));
 }

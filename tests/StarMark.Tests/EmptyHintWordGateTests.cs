@@ -254,10 +254,12 @@ public sealed class EmptyHintWordGateTests : IDisposable
         Assert.DoesNotContain("{x:Bind ViewModel.EmptyHint", xaml, StringComparison.Ordinal);
         Assert.Contains(@"x:Name=""EmptyHintText""", xaml, StringComparison.Ordinal);
         // ⛔ 为"这一行空态"再挂一位主人：重贴归 LocText 那份名单。
-        // ⚠ 唯一两处例外＝✅片9c 第三刀给"模板行"挂的那一对（活动页与世界时钟组件各一次挂／一次摘，钉在
+        // ⚠ 例外三处＝①✅片9c 第三刀给"模板行"挂的那一对（活动页与世界时钟组件各一次挂／一次摘，钉在
         //   TemplateRowWordGateTests.EveryNewLocaleOwnerUnsubscribesWhatItSubscribed 与 I18nWiringGateTests 那份主人名单里）：
-        //   行模板上的字⛔ 进得了那颗门（每行一颗、行会重建），只能由宿主逐行重念。
-        Assert.Equal(csRel == ActivityCs || csRel == ClockCs ? 2 : 0, Count(code, "Locale.Changed"));
+        //   行模板上的字⛔ 进得了那颗门（每行一颗、行会重建），只能由宿主逐行重念；
+        //   ②✅P-210 给文件夹树挂的那一对（挂构造／摘 OnNavigatedFrom）：整棵树是代码构建的，伪根名字在
+        //   BuildFolder 那一刻经 FolderPathUtil.DisplayName 现取词，换语言只能重建那棵树（同在 I18nWiring 那份名单里）。
+        Assert.Equal(csRel == ActivityCs || csRel == ClockCs || csRel == FolderCs ? 2 : 0, Count(code, "Locale.Changed"));
     }
 
     /// <summary><b>订阅与摘掉成对</b>（坑表 #386：这一族的失效是挂了没人摘；标签页与文件夹页那颗 VM 是单例，更要成对）。</summary>

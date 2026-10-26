@@ -209,10 +209,11 @@ public partial class ItemCardViewModel : ObservableObject
 
     public string CollectTip => ItemCardPolicy.CollectTipFor(IsRssCandidate, _isCollected, RssFolderPath).Render();
 
-    /// <summary>RSS 候选收藏后的落点（"RSS订阅 / 源名"）。<b>取自这一行自带的 ExtraJson</b>，
-    /// 不另算一遍：提示里说的文件夹与真正写进去的文件夹必须是同一个来源，否则 tooltip 会指一个不存在的路径。</summary>
+    /// <summary>RSS 候选收藏后的落点（根按当前语言念表，源名一级是数据）。<b>取自这一行自带的 ExtraJson</b>，
+    /// 不另算一遍：提示里说的文件夹与真正写进去的文件夹必须是同一个来源，否则 tooltip 会指一个不存在的路径。
+    /// 显示侧统一走 <see cref="FolderPathUtil.DisplayName"/>（✅P-210）：身份留在库里，念出来的是当前语言的话。</summary>
     public string RssFolderPath
-        => string.Join(" / ", FolderPathUtil.BookmarkSegments(_item));
+        => string.Join(" / ", FolderPathUtil.BookmarkSegments(_item).Select(FolderPathUtil.DisplayName));
 
     /// <summary>收藏态回填（两类候选共用这一个状态位；RSS 那边只会由未收过成"已收藏"，不会反向）。</summary>
     public void SetCollected(bool collected)

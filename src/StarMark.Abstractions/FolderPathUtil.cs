@@ -1,20 +1,27 @@
 #nullable enable
 using System.Text.Json;
+using StarMark.Abstractions.Feed;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions;
 
 /// <summary>
 /// 文件夹树分组路径计算（纯函数，便于单元测试）。
 /// 书签 → ExtraJson.BookmarkMeta.FolderPaths（'/' 分隔）；文件 → file:// 目录层级；GitHub/剪贴板 → 伪根分组。
+/// <para><b>六颗伪根的名字是稳定 ASCII id，不是界面话</b>（✅P-210）：这一串会落进库（FolderPaths）、
+/// 做排序（<see cref="RootOrder"/>）与树节点合并的键，全是<b>身份</b>用途——身份里装一门语言，
+/// 换语言那天就多出一批"查无此组"的旧行。显示侧唯一出口是 <see cref="DisplayName"/>：当场念表，
+/// 换语言由订阅 <c>Locale.Changed</c> 的那一页重建树来跟随（坑表 #386）。id 与用户文件夹名撞车
+/// （用户恰好建了名为 <c>clipboard</c> 的文件夹）属于预先存在的同形碰撞——从前的「已置顶」同形状。</para>
 /// </summary>
 public static class FolderPathUtil
 {
-    public const string GitHubGroup = "⭐ GitHub Stars";
-    public const string ClipboardGroup = "📋 剪贴板";
-    public const string PinnedGroup = "📌 已置顶";
-    public const string OtherGroup = "其他";
-    public const string OtherBookmarkGroup = "其他书签";
-    public const string OtherFileGroup = "其他文件";
+    public const string GitHubGroup = "github-stars";
+    public const string ClipboardGroup = "clipboard";
+    public const string PinnedGroup = "pinned";
+    public const string OtherGroup = "other";
+    public const string OtherBookmarkGroup = "other-bookmarks";
+    public const string OtherFileGroup = "other-files";
 
     /// <summary>
     /// 这一行在树里的层级。<paramref name="existsOnDisk"/> 是"哪一格才是真名字"的判据入口
@@ -86,5 +93,24 @@ public static class FolderPathUtil
         OtherFileGroup => 3,
         OtherGroup => 4,
         _ => 100,
+    };
+
+    /// <summary>
+    /// 树上那一格显示的名字（✅P-210 显示侧唯一出口）：六颗伪根 id 与 <see cref="RssFolders.Root"/>
+    /// 交给表按当前语言念；默认臂原样交回——落进来的用户文件夹名（含 RSS 的源名一级）是<b>数据</b>，⛔ 翻。
+    /// <para>取词发生在<b>这一格要贴上屏幕的那一刻</b>，所以换语言重画自然拿到新话（⛔ 缓存进节点）。
+    /// RSS 根是特意的第三种身份：它真的写库（收藏路径第一级），只是显示时念表——零迁移（根照旧叫
+    /// <c>RSS订阅</c>，老收藏一颗不动）。</para>
+    /// </summary>
+    public static string DisplayName(string segment) => segment switch
+    {
+        GitHubGroup => Locale.T("folder.group.githubStars"),
+        ClipboardGroup => Locale.T("folder.group.clipboard"),
+        PinnedGroup => Locale.T("folder.group.pinned"),
+        OtherBookmarkGroup => Locale.T("folder.group.otherBookmarks"),
+        OtherFileGroup => Locale.T("folder.group.otherFiles"),
+        OtherGroup => Locale.T("folder.group.other"),
+        RssFolders.Root => Locale.T("rss.folder.root"),
+        _ => segment,
     };
 }

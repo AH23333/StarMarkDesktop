@@ -79,21 +79,23 @@ public sealed class AiClassifyTests
     {
         var prompt = ClassifyPrompt.SystemPrompt(new[] { "前端", "工具" });
 
-        Assert.Contains("前端、工具", prompt);
-        Assert.Contains("每行一条", prompt);                   // O4 行格式；不写死格式要求，模型会加"好的，下面是结果："
+        Assert.Contains("前端, 工具", prompt);                  // 参考标签仍原样进提示词（库里的词是数据）；连接符随英文协议走 ", "
+        Assert.Contains("one item per line", prompt);           // O4 行格式；不写死格式要求，模型会加"好的，下面是结果："
         Assert.DoesNotContain("只输出一个 JSON 对象", prompt);   // 旧口径不许悄悄回潮（JSON 三态仍是解析兼容层，但提示词不再要求它）
         Assert.DoesNotContain("数据库", prompt);
         // 批次 QA-1：用户抱怨"出一堆各挂一条的标签"，"要能成类"这句必须真的写在提示词里，
         // 而不是只在应用侧偷偷砍——那样模型下一轮还会照旧造专有词。
-        Assert.Contains("1-3 个标签", prompt);
+        Assert.Contains("1-3 tags per item", prompt);
         Assert.DoesNotContain("1-4", prompt);
-        Assert.Contains("至少", prompt);
-        Assert.Contains("宁可少分类", prompt);
+        Assert.Contains("at least 3 items", prompt);
+        Assert.Contains("under-tagging beats one tag per item", prompt);
+        // ✅P-210 他裁「始终为英文」：标签词的工作语言必须显式写在协议里，不许只靠"提示词恰好是英文"暗示。
+        Assert.Contains("Write tags in English", prompt);
     }
 
     [Fact]
     public void EmptyCatalogSaysSoInsteadOfPresentingAnEmptyVocabulary()
-        => Assert.Contains("库里还没有标签", ClassifyPrompt.SystemPrompt(Array.Empty<string>()));
+        => Assert.Contains("The library has no tags yet", ClassifyPrompt.SystemPrompt(Array.Empty<string>()));
 
     [Fact]
     public void ItemLinesStayOnePerItemEvenWithMultilineDescriptions()
@@ -124,7 +126,7 @@ public sealed class AiClassifyTests
 
         // 双口径零漂移（§19.1 落地注）：分批用的 CostOf 永远 ≥ 实际渲染进提示词的字节
         Assert.All(byCount.Concat(byBudget), batch =>
-            Assert.True(ClassifyPrompt.UserPrompt(batch).Length - "按编号逐条给标签：\n".Length
+            Assert.True(ClassifyPrompt.UserPrompt(batch).Length - "Tag each item by number:\n".Length
                         <= batch.Sum(ClassifyPrompt.CostOf),
                 "预算口径与实际载荷分岔——改 ItemLine/CostOf 只改了一处"));
     }

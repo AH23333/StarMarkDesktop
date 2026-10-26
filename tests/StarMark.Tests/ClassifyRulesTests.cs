@@ -31,9 +31,10 @@ public sealed class ClassifyRulesTests
         var (forAi, ruled) = ClassifyRules.Split(items, ClassifyRules.Defaults);
 
         Assert.Equal(new[] { 3L }, forAi.Select(i => i.Id));
-        Assert.Equal(2, ruled.Count);                             // GitHub→开发 与 本地文件→本地文件 都被截胡，不进 AI
-        Assert.Equal(new[] { "开发" }, ruled.Single(r => r.Id == 1).Tags);
-        Assert.Equal(new[] { "本地文件" }, ruled.Single(r => r.Id == 2).Tags);   // 提案形状与 AI 产物完全一致，下游无从分辨来源
+        Assert.Equal(2, ruled.Count);                             // GitHub→dev 与 本地文件→local files 都被截胡，不进 AI
+        // ✅P-210 他裁「始终为英文」：内置标签词改英文；SourceEquals「本地文件」是来源数据（NameOf 产出），照旧中文。
+        Assert.Equal(new[] { "dev" }, ruled.Single(r => r.Id == 1).Tags);
+        Assert.Equal(new[] { "local files" }, ruled.Single(r => r.Id == 2).Tags);   // 提案形状与 AI 产物完全一致，下游无从分辨来源
     }
 
     [Fact]
@@ -42,7 +43,7 @@ public sealed class ClassifyRulesTests
         var (_, ruled) = ClassifyRules.Split(
             new[] { Item(1, "C# 入门 - DOCS.MICROSOFT.COM", "书签", "已有") }, ClassifyRules.Defaults);
         Assert.Single(ruled);
-        Assert.Equal(new[] { "文档", "微软" }, ruled[0].Tags);
+        Assert.Equal(new[] { "docs", "microsoft" }, ruled[0].Tags);
     }
 
     [Fact]

@@ -33,7 +33,13 @@ public sealed partial class FolderTreePage : Page
         ApplyEmptyHint();
         // 主题切换会改变代码构建处的主题画笔解析，需重建以刷新颜色
         ActualThemeChanged += (_, _) => RebuildTree();
+        // 伪根显示名与空态那句一样随语言走（✅P-210）：这一页的树是代码构建的，换语言没人替它重贴，
+        // 所以订阅换语言事件重建（与 ActualThemeChanged 同一形状；节点身份是 ASCII id，重建念的是新话）。
+        Locale.Changed += OnLocaleChanged;
     }
+
+    /// <summary>换语言＝树上每一格的名字按新表重念一遍。只重建，⛔ 重新查库（数据没变，变的是话）。</summary>
+    private void OnLocaleChanged() => RebuildTree();
 
     private void OnEmptyHintChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
@@ -62,6 +68,7 @@ public sealed partial class FolderTreePage : Page
         // 否则死页会持续接收重建事件（重载树、操作已分离的元素），既泄漏又可能在标签变化时崩溃。
         ViewModel.RootsReady -= OnRootsReady;
         ViewModel.PropertyChanged -= OnEmptyHintChanged;
+        Locale.Changed -= OnLocaleChanged;
     }
 
     // ────── 全局标签筛选栏 ──────
@@ -272,7 +279,8 @@ public sealed partial class FolderTreePage : Page
         });
         row.Children.Add(new TextBlock
         {
-            Text = node.Name,
+            // 节点名是身份（ASCII id／用户文件夹名），显示侧唯一出口走 DisplayName 按当前语言念表（✅P-210）。
+            Text = FolderPathUtil.DisplayName(node.Name),
             FontSize = 13,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,

@@ -2,15 +2,20 @@
 using System.Text.Json;
 using Xunit;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Feed;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Tests;
 
 /// <summary>
 /// 文件夹树分组路径纯函数测试（FolderPathUtil）：
-/// 书签层级 / 文件目录 / GitHub / 剪贴板伪根 / 兜底分组。
+/// 书签层级 / 文件目录 / GitHub / 剪贴板伪根 / 兜底分组 / 显示侧 DisplayName（✅P-210）。
 /// </summary>
-public sealed class FolderPathUtilTests
+[Collection("LocaleGlobal")]   // 本批起有一格会当场换语言（DisplayName 那三个证人），⛔ 与别的换语言的证人交错跑
+public sealed class FolderPathUtilTests : IDisposable
 {
+    private readonly AppLanguage _localeBefore = Locale.Current;
+    public void Dispose() => Locale.TrySet(_localeBefore);
     /// <summary>
     /// 这些用例只测字符串分层，一律告诉政策层"盘上什么都没有"
     /// （＝两格都不在时按原始那格分组，与批次 VR 之前的行为逐字一致）。真实磁盘的选择见文件末尾那两格。
@@ -48,14 +53,14 @@ public sealed class FolderPathUtilTests
     public void Bookmark_NoMeta_FallsBackToOtherBookmarks()
     {
         var item = new Item { Type = ItemType.Bookmark };
-        Assert.Equal(new[] { "其他书签" }, FolderPathUtil.BookmarkSegments(item));
+        Assert.Equal(new[] { "other-bookmarks" }, FolderPathUtil.BookmarkSegments(item));
     }
 
     [Fact]
     public void Bookmark_CorruptJson_FallsBackToOtherBookmarks()
     {
         var item = new Item { Type = ItemType.Bookmark, ExtraJson = "{not json" };
-        Assert.Equal(new[] { "其他书签" }, FolderPathUtil.BookmarkSegments(item));
+        Assert.Equal(new[] { "other-bookmarks" }, FolderPathUtil.BookmarkSegments(item));
     }
 
     [Fact]
@@ -66,7 +71,7 @@ public sealed class FolderPathUtilTests
             Type = ItemType.Bookmark,
             ExtraJson = JsonSerializer.Serialize(new BookmarkMeta { FolderPaths = new List<string> { "///" } }),
         };
-        Assert.Equal(new[] { "其他书签" }, FolderPathUtil.BookmarkSegments(item));
+        Assert.Equal(new[] { "other-bookmarks" }, FolderPathUtil.BookmarkSegments(item));
     }
 
     [Fact]
@@ -88,7 +93,7 @@ public sealed class FolderPathUtilTests
     public void File_NonFileUri_FallsBack()
     {
         var item = new Item { Type = ItemType.File, Uri = "https://example.com/x.txt" };
-        Assert.Equal(new[] { "其他文件" }, FolderPathUtil.FileSegments(item, Nowhere));
+        Assert.Equal(new[] { "other-files" }, FolderPathUtil.FileSegments(item, Nowhere));
     }
 
     [Fact]
@@ -107,19 +112,19 @@ public sealed class FolderPathUtilTests
     [Fact]
     public void GitHubStar_PseudoRoot()
     {
-        Assert.Equal(new[] { "⭐ GitHub Stars" }, FolderPathUtil.GetSegments(new Item { Type = ItemType.GitHubStar }, Nowhere));
+        Assert.Equal(new[] { "github-stars" }, FolderPathUtil.GetSegments(new Item { Type = ItemType.GitHubStar }, Nowhere));
     }
 
     [Fact]
     public void Clipboard_PseudoRoot()
     {
-        Assert.Equal(new[] { "📋 剪贴板" }, FolderPathUtil.GetSegments(new Item { Type = ItemType.Clipboard }, Nowhere));
+        Assert.Equal(new[] { "clipboard" }, FolderPathUtil.GetSegments(new Item { Type = ItemType.Clipboard }, Nowhere));
     }
 
     [Fact]
     public void File_NoUri_FallsBackToOtherFiles()
     {
-        Assert.Equal(new[] { "其他文件" }, FolderPathUtil.GetSegments(new Item { Type = ItemType.File }, Nowhere));
+        Assert.Equal(new[] { "other-files" }, FolderPathUtil.GetSegments(new Item { Type = ItemType.File }, Nowhere));
     }
 
     // ───────── DS：未覆盖分支 / 未断言输出值（纯函数契约护栏；重构即回退）─────────
@@ -129,8 +134,8 @@ public sealed class FolderPathUtilTests
     {
         // switch 默认臂（:27 _ => OtherGroup）此前从未被进入——既有仅钉 Bookmark/File/GitHub/Clipboard 四臂。
         // Todo/Note 是统一条目模型下的一等类型，无外部来源分组，须落到单一「其他」伪根。
-        Assert.Equal(new[] { "其他" }, FolderPathUtil.GetSegments(new Item { Type = ItemType.Todo }, Nowhere));
-        Assert.Equal(new[] { "其他" }, FolderPathUtil.GetSegments(new Item { Type = ItemType.Note }, Nowhere));
+        Assert.Equal(new[] { "other" }, FolderPathUtil.GetSegments(new Item { Type = ItemType.Todo }, Nowhere));
+        Assert.Equal(new[] { "other" }, FolderPathUtil.GetSegments(new Item { Type = ItemType.Note }, Nowhere));
     }
 
     [Fact]
@@ -149,7 +154,7 @@ public sealed class FolderPathUtilTests
         // TryPathFromUri 认 "C:" 为合法本地路径（返 true），但 FileSegments 的 segs.Length>=2 门拒单段——
         // 否则丢「文件名」后目录层级为空数组，会破坏 GetSegments 的非空不变式。此 false 落空臂此前未被覆盖。
         var item = new Item { Type = ItemType.File, Uri = "file:///C:" };
-        Assert.Equal(new[] { "其他文件" }, FolderPathUtil.FileSegments(item, Nowhere));
+        Assert.Equal(new[] { "other-files" }, FolderPathUtil.FileSegments(item, Nowhere));
     }
 
     [Fact]
@@ -207,5 +212,46 @@ public sealed class FolderPathUtilTests
         var item = new Item { Type = ItemType.File, Uri = "file:///Q:/Never%20Here/x.md" };
         Assert.Equal(new[] { "Q:", "Never%20Here" },
             FolderPathUtil.FileSegments(item, static p => System.IO.File.Exists(p) || System.IO.Directory.Exists(p)));
+    }
+
+    // ───────── P-210：显示侧唯一出口 DisplayName（身份＝ASCII id／库里的 RSS 根，话在表里按当前语言念）─────────
+
+    [Fact]
+    public void DisplayName_PseudoRootsFollowLocale_NotTheStoredId()
+    {
+        // 身份落盘是 ASCII id，屏幕上那一格念的是表：换语言（TrySet 触发 Changed）后同一 id 念出不同的话。
+        Locale.TrySet(AppLanguage.Chinese);
+        Assert.Equal("⭐ GitHub Stars", FolderPathUtil.DisplayName("github-stars"));
+        Assert.Equal("📋 剪贴板", FolderPathUtil.DisplayName("clipboard"));
+        Assert.Equal("📌 已置顶", FolderPathUtil.DisplayName("pinned"));
+        Assert.Equal("其他书签", FolderPathUtil.DisplayName("other-bookmarks"));
+        Assert.Equal("其他文件", FolderPathUtil.DisplayName("other-files"));
+        Assert.Equal("其他", FolderPathUtil.DisplayName("other"));
+
+        Locale.TrySet(AppLanguage.English);
+        Assert.Equal("⭐ GitHub Stars", FolderPathUtil.DisplayName("github-stars"));
+        Assert.Equal("📋 Clipboard", FolderPathUtil.DisplayName("clipboard"));
+        Assert.Equal("📌 Pinned", FolderPathUtil.DisplayName("pinned"));
+        Assert.Equal("Other bookmarks", FolderPathUtil.DisplayName("other-bookmarks"));
+        Assert.Equal("Other files", FolderPathUtil.DisplayName("other-files"));
+        Assert.Equal("Other", FolderPathUtil.DisplayName("other"));
+    }
+
+    [Fact]
+    public void DisplayName_RssRoot_ReadsTheTableNotOnlyTheStoredLiteral()
+    {
+        // 根在库里钉死「RSS订阅」（RssFolders.Root 零迁移）；显示侧必须经表——英文界面这一格是 "RSS subscriptions"。
+        // 只断中文那一档会与库里的字面量同形，证不出"经表"这一步，所以这里换到英文档断。
+        Locale.TrySet(AppLanguage.English);
+        Assert.Equal("RSS subscriptions", FolderPathUtil.DisplayName(RssFolders.Root));
+    }
+
+    [Fact]
+    public void DisplayName_UserFolderName_IsDataAndPassesThrough()
+    {
+        // 用户文件夹名（含 RSS 收藏的源名一级）是数据：任何语言下原样交回，⛔ 拿去当键查表。
+        Locale.TrySet(AppLanguage.English);
+        Assert.Equal("技术", FolderPathUtil.DisplayName("技术"));
+        Assert.Equal("Some User Folder", FolderPathUtil.DisplayName("Some User Folder"));
     }
 }

@@ -1276,6 +1276,12 @@ public sealed class I18nWiringGateTests
     /// 行模型持 <c>LocMessage</c>＋显示侧 getter 绑 <c>Mode=OneWay</c>＋宿主逐行 <c>Repaste()</c>。
     /// 合法性的另一半与那三扇组件一样：<b>那颗 handler 只重念屏幕上已有的行</b>，⛔ 在回调里查库／打接口／重建集合
     /// （成对摘掉逐档数在 <c>TemplateRowWordGateTests.EveryNewLocaleOwnerUnsubscribesWhatItSubscribed</c>）。</para>
+    /// <para><b>✅P-210 添了文件夹树那一页</b>（<c>FolderTreePage.xaml.cs</c>）：整棵树是<b>代码构建</b>的
+    /// ——每颗节点都是 <c>new</c> 出来的，挂不进模板 <c>i18n:LocText.Key</c> 那份名单；每一格的名字在
+    /// <c>BuildFolder</c> 那一刻经 <c>FolderPathUtil.DisplayName</c> 现取词。换语言那一刻只有重建这一棵树
+    /// 才能让六颗伪根与 RSS 根换话（身份是 ASCII id、排序不变，展开状态由 <c>_expandedPaths</c> 自行复原）。
+    /// 合法性的另一半照旧：订阅挂构造、摘在 <c>OnNavigatedFrom</c>（与 <c>RootsReady</c> 那一对同形状），
+    /// handler 只重建，⛔ 重新查库——语言换了，数据没换。</para>
     /// </summary>
     [Fact]
     public void ExactlyOneSubscriberRenamesTheStringsAndItRebuildsNothing()
@@ -1295,6 +1301,7 @@ public sealed class I18nWiringGateTests
             "src/StarMark.UI/Views/CalcWidget.xaml.cs",
             "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs",
             "src/StarMark.UI/Views/CountdownWidget.xaml.cs",
+            "src/StarMark.UI/Views/FolderTreePage.xaml.cs",
             "src/StarMark.UI/Views/GlanceWidget.xaml.cs",
             "src/StarMark.UI/Views/ItemGridWidget.xaml.cs",
             "src/StarMark.UI/Views/SettingsPage.xaml.cs",
@@ -1387,6 +1394,13 @@ public sealed class I18nWiringGateTests
         Assert.DoesNotContain("ViewModel.Tick", MethodBody(monitor, "private void RepaintWords"),
                               StringComparison.Ordinal);   // 重贴⛔ 顺手再采一次（那会把改口变成"读数失败"）
         Assert.DoesNotContain("LoadDiagnosticsAsync", MethodBody(settings, "void Page_Loaded"), StringComparison.Ordinal);
+        // 文件夹树那一页（✅P-210 那一位主人）：上面那份名单里的一员，判据与各前辈同形——成对、只重建、⛔ 重新查库。
+        var folderTree = Code(ReadRepoFile("src/StarMark.UI/Views/FolderTreePage.xaml.cs"));
+        Assert.Contains("Locale.Changed += OnLocaleChanged;", folderTree, StringComparison.Ordinal);
+        Assert.Contains("Locale.Changed -= OnLocaleChanged;", folderTree, StringComparison.Ordinal);
+        var treeRebuild = MethodBody(folderTree, "private void OnLocaleChanged");
+        Assert.Contains("RebuildTree();", treeRebuild, StringComparison.Ordinal);
+        Assert.DoesNotContain("LoadCommand", treeRebuild, StringComparison.Ordinal);   // 重念⛔ 重新查库：语言换了，数据没换
     }
 
     /// <summary>

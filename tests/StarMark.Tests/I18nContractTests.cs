@@ -304,6 +304,8 @@ public sealed class I18nContractTests : IDisposable
                 + "而「N 月 N 日」在日文里就是同一串字（⛔ 第三副面孔可写），这一行没有词可翻"
                 + "（✅WI-76 相对日期那一族，与 capture.pick.shapeTip／widget.name.dedupSuffix 同形）。"
                 + "⚠ 两颗主人共用这一颗：待办<b>那颗远的截止日</b>与世界时钟那一格<b>月日读数</b>（⛔ 各写一份中文）",
+            ["folder.group.githubStars"] = "伪根显示名「⭐ GitHub Stars」三语同形：GitHub 是专有名词、Stars 是它的术语"
+                + "（与 nav.rss／source.starTip 同族），日文界面也照写星标这一串（✅P-210 文件夹树伪根 id 化那一批）",
         };
 
         var actual = UiStrings.All

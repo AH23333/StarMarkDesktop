@@ -3167,6 +3167,17 @@ public static class UiStrings
                   "選択したタグに該当する項目がありません。上のフィルターバーで外すかクリアしてください"),
         new Entry("page.folder.noRows", "暂无条目，请先同步数据", "No items yet — sync your data first",
                   "項目がありません。まずデータを同期してください"),
+        // ✅P-210：文件夹树六颗伪根的显示名。分组身份是 FolderPathUtil 里的稳定 ASCII id（落盘、排序、合并键），
+        // 显示侧唯一出口是 FolderPathUtil.DisplayName——这一族就是它念的表，换语言由树页订阅 Locale.Changed 重建跟随。
+        // ⚠ zh 列与换 id 之前的屏幕逐字相同：这一批对中文界面零视觉变化（改的是身份，不是话）。
+        new Entry("folder.group.githubStars", "⭐ GitHub Stars", "⭐ GitHub Stars", "⭐ GitHub Stars"),
+        new Entry("folder.group.clipboard", "📋 剪贴板", "📋 Clipboard", "📋 クリップボード"),
+        new Entry("folder.group.pinned", "📌 已置顶", "📌 Pinned", "📌 ピン留め"),
+        new Entry("folder.group.other", "其他", "Other", "その他"),
+        new Entry("folder.group.otherBookmarks", "其他书签", "Other bookmarks", "その他のブックマーク"),
+        new Entry("folder.group.otherFiles", "其他文件", "Other files", "その他のファイル"),
+        // RSS 收藏根的显示名：根本身仍写库为「RSS订阅」（RssFolders.Root 钉死、零迁移），只有显示那一格念这颗键。
+        new Entry("rss.folder.root", "RSS订阅", "RSS subscriptions", "RSS購読"),
         // 世界时钟组件那句空态（⛔ 与「添加时区」那颗占位符合并：一句说没内容、一句说怎么加，各说各的）。
         new Entry("widget.clock.noRows", "还没有点位：用上方下拉添加时区。", "No zones yet — pick one from the dropdown above.",
                   "地点がまだありません——上のドロップダウンでタイムゾーンを追加してください。"),

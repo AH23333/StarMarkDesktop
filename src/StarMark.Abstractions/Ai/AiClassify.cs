@@ -130,29 +130,42 @@ public static class ClassifyPrompt
     public const int DescFallbackChars = 40;
     public const int ThinTitleChars = 12;
 
+    /// <summary>
+    /// 系统段。<b>整段始终是英文，不进表、不随界面语言</b>（✅P-210 他裁「始终为英文」）：
+    /// 提示词是给模型的协议文本，不是界面话——同一批条目在中文界面与英文界面下应当得到同一套分类，
+    /// 且标签词以英文为工作语言（旧库里已有的中文标签由「优先沿用已有标签」那一句自然收敛，库不迁移）。
+    /// 语义规则与中文时代逐条对齐：1-3 标签／短词／同义同词／至少 3 条成类／宁缺毋滥／不重复／不空词。
+    /// </summary>
     public static string SystemPrompt(IReadOnlyList<string> referenceTags)
     {
         var vocabulary = referenceTags is null or { Count: 0 }
-            ? "库里还没有标签，请自行给出简短、可复用的类别名"
-            : "优先从下列已有标签里选，确实不合适才新造：" + string.Join("、", referenceTags.Take(MaxReferenceTags));
+            ? "The library has no tags yet; propose short, reusable category names yourself"
+            : "Prefer the existing tags listed below, and only coin a new one when none of them really fits: "
+              + string.Join(", ", referenceTags.Take(MaxReferenceTags));
 
-        return "你在为一个人的资料库整理标签。" + vocabulary + "。"
-            + "规则：每条给 1-3 个标签；标签 2-6 个字；同一批里相同含义必须用同一个词；"
-            + "标签要能成类：一个标签至少要能套上 3 条条目，只适合一两次的宁可不给，"
-            + "绝不为个别条目造专有词——宁可少分类，也不要一条一个标签；"
-            + "不要重复该条已有的标签；不要给无信息量的词（如\u201c其他\u201d\u201c资料\u201d\u201c重要\u201d）。"
-            + "输出：每行一条，形如「编号: 标签一、标签二」（编号从 1 起，不要解释文字、不要代码围栏）；"
-            + "不需要打标签的条目直接省略那一行。";
+        return "You are tagging items in a personal collection. " + vocabulary + ". "
+            + "Write tags in English. "
+            + "Rules: give 1-3 tags per item; keep each tag short (2-6 characters); "
+            + "the same concept must use the same word across the whole batch; "
+            + "tags must work as categories: a tag should apply to at least 3 items, "
+            + "so if a tag would fit only one or two items, skip it — "
+            + "never coin a term for individual items; under-tagging beats one tag per item. "
+            + "Do not repeat tags the item already has. "
+            + "Do not use uninformative words (like \"other\", \"misc\", \"important\"). "
+            + "Output: one item per line, in the form \"index: tag1, tag2\" "
+            + "(index starts at 1; no explanations, no code fences). "
+            + "Omit the line entirely for items that need no tags.";
     }
 
     /// <summary>一批的正文。<b>编号用条目在批次内的序号而不是数据库 id</b>：数据库 id 常常是九位数，
     /// 模型抄错一位就会指到另一条真实存在的条目上；而序号错位会被"批次外编号一律丢掉"挡住。
     /// 行体与 <see cref="CostOf"/> 共用 <see cref="ItemLine"/>——<b>预算若按另一套口径算，
-    /// 就会出现"检查放行 18K、实际发出去 24K"的双口径漂移</b>（§19.1 落地注钉的就是这里）。</summary>
+    /// 就会出现"检查放行 18K、实际发出去 24K"的双口径漂移</b>（§19.1 落地注钉的就是这里）。
+    /// 表头同样是英文协议文本（✅P-210 他裁），与 <see cref="SystemPrompt"/> 同一批定形。</summary>
     public static string UserPrompt(IReadOnlyList<ClassifyItem> batch)
     {
         var builder = new StringBuilder();
-        builder.Append("按编号逐条给标签：\n");
+        builder.Append("Tag each item by number:\n");
         for (var i = 0; i < batch.Count; i++)
             builder.Append(i + 1).Append(". ").Append(ItemLine(batch[i])).Append('\n');
         return builder.ToString();
