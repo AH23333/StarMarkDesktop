@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using StarMark.Abstractions.Ai;
 using Xunit;
 
 namespace StarMark.Tests;
@@ -185,5 +186,59 @@ public sealed class AiLayerGateTests
         Assert.All(aiProps, name => Assert.StartsWith("Ai", name)); // 同名覆盖那条事故的形状
         // 各自独立＝一格一 key：重名会让两次写互相冲掉（扩展侧那次事故的原形）
         Assert.Equal(aiProps.Count, aiProps.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    private const string Gateway = "src/StarMark.Integrations/Ai/AiGateway.cs";
+    private const string StoreAi = "src/StarMark.UI/Helpers/SettingsStore.Ai.cs";
+
+    /// <summary>
+    /// P-192 本层普查最后一颗的证人（片120）：<c>AiGateway.Of</c> 那句「没有这个通道」是<b>防御臂</b>——
+    /// 它自己⛔ 上屏，但<b>到上屏出口那一途确实存在</b>（两颗调用点都裹在 <c>catch (Exception ex)</c> 里，
+    /// 而 <c>ex.Message</c> 会经 <c>common.rawValue</c> 贴到设置页那一格／提示卡）。
+    /// <para>所以"⛔ 上屏"这句⛔ 是读一句 throw 就能说的，它挂在三扇门上：名册只有两颗通道（枚举两值）、
+    /// 读档那扇用 <c>Enum.IsDefined</c> 挡、界面那扇的实参只可能来自由枚举生成的选择项。
+    /// 钉这三颗是因为<b>它们任一失效，屏幕上就会念一句冻死在旧语言里的话</b>（这一层的原判据）。</para>
+    /// </summary>
+    [Fact]
+    public void TheOnlyUnknownProviderArmCannotBeReachedFromRealInputs()
+    {
+        Assert.Equal(2, Enum.GetValues<AiProviderKind>().Length);       // 名册现读：多一颗通道就要重新问这一问
+        Assert.Equal(new[] { 0, 1 }, Enum.GetValues<AiProviderKind>().Select(k => (int)k).ToArray());
+
+        // 门①：盘上那个数字认不出来就退回默认（⛔ 抛＝设置页还要开得起来）
+        var store = Read(StoreAi);
+        Assert.Contains("var kind = d?.AiProvider is int raw && Enum.IsDefined(typeof(AiProviderKind), raw)", store);
+        Assert.Contains(": AiProviderKind.Ollama;", store);
+        Assert.Contains("d.AiProvider = (int)settings.Provider;", store);   // 写侧只写序号＝与读侧同一颗轴
+
+        // 门②：界面交回来的通道只可能来自由枚举生成的选择项，其余一律默认
+        Assert.Contains("Provider: AiProviderBox.SelectedItem is LocOption { Value: AiProviderKind kind }", Read(Page));
+
+        // 门③：全仓没有把 <c>AiSettings</c> 直接从 JSON 反序列化（那条路会把枚举序号绕过门①）
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar) ||
+                file.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar)) continue;
+            Assert.DoesNotContain("Deserialize<AiSettings>", File.ReadAllText(file));
+        }
+    }
+
+    /// <summary>那颗臂<b>被迫开火时</b>交的是什么（这一格把"测不到的失败模式"换成"测得到的那一半"）：
+    /// 只有 <c>ArgumentOutOfRangeException</c>，句子留在异常里，⛔ 就地念成表里的词——
+    /// 上屏的那一句由调用点的 <c>catch</c> 交给 <c>common.rawValue</c>，即"机器事实照原样贴"（✅P-199 口径）。</summary>
+    [Fact]
+    public void ForcedUnknownProviderThrowsInsteadOfSpeakingATableWord()
+    {
+        using var gateway = new StarMark.Integrations.Ai.AiGateway();
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => gateway.Of((AiProviderKind)7));
+        Assert.Equal("kind", ex.ParamName);
+        Assert.Contains("没有这个通道", ex.Message);
+
+        // 那颗串只有一个出处，且就钉在 throw 那一行（⛔ 第二处写死同一句话）
+        var gw = Read(Gateway);
+        Assert.Equal(1, gw.Split('\n').Count(l => l.Contains("没有这个通道")));
+        Assert.Contains("_ => throw new ArgumentOutOfRangeException(nameof(kind), kind, \"没有这个通道\"),", gw);
+        // 两颗调用点＝这一层唯一能把那句带上屏的两条路（读档那两格各自的话）
+        Assert.Equal(2, gw.Split('\n').Count(l => l.Contains("Of(settings.Provider)")));
     }
 }
