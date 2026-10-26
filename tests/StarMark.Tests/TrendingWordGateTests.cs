@@ -67,7 +67,8 @@ public sealed class TrendingWordGateTests : IDisposable
         //   ⇒ 这一把尺（只认 <c>LocMessage.Of(</c>）少两颗。那颗骨架"两颗槽＝两颗实参"与"套出来的形状"
         //   由 <c>LocFoldGateTests</c> 与本档 <c>TheJoinSkeletonIsTwoSlotsAndNestsInsteadOfConcatenating</c> 钉住＝覆盖搬家，⛔ 少了两颗。
         Assert.Equal(12, SourceGate.KeyedCallSites(CodeOf(FetcherCs)).Select(c => c.Key).Distinct().Count());
-        Assert.Equal(1, SourceGate.KeyedCallSites(CodeOf(ServiceCs)).Select(c => c.Key).Distinct().Count());
+        // 编排那一档只剩一颗：⛔ 用 Assert.Equal(1, …Count())（那颗分析器会报 xUnit2013・且「恰一颗」本就有现成的问法）
+        Assert.Single(SourceGate.KeyedCallSites(CodeOf(ServiceCs)).Select(c => c.Key).Distinct());
 
         // 契约档只许<b>一处</b>取词，而且必须是那颗异常对外的 <c>Message</c>（那一串只进日志，⛔ 上屏幕）：
         // 界面念的是 <c>Reason</c> 那颗键。少了这条豁免，下一批有人把 Message 也键化就会红在仪器上。

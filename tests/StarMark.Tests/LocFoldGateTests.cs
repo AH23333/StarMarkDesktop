@@ -18,7 +18,11 @@ namespace StarMark.Tests;
 /// <para><b>⛔ 并表里的键</b>：现读纯胶水行（≥2 槽、抹掉槽之后三列都不含字母数字与汉字）共 <b>39</b> 颗，
 /// 其中"热榜那条用中文分号、组件那条用顿号、用量面板那颗按语言给三种"是<b>事实而不是分岔</b>；
 /// 把它们并成一颗 <c>common.join</c> 要先定"一句里两件事有几种语气"＝账本明说⛔ 混进交表批次顺手做，本批⛔ 动表。</para>
+/// <para><b>本颗类挂在串行集合 <c>LocaleGlobal</c> 上</b>：下面那一格会按进程级语言（<c>Locale.TrySet</c>），
+/// 而本工程既没有 <c>xunit.runner.json</c> 也没有 assembly 级 <c>CollectionBehavior</c> ⇒ 不挂就是
+/// "并发读到别人那一档语言"的假红（<c>I18nWiringGateTests.EveryLocaleMutatingTestClassIsInTheSerialCollection</c> 现读点名）。</para>
 /// </summary>
+[Collection("LocaleGlobal")]
 public class LocFoldGateTests
 {
     private const string Owner = "src/StarMark.Abstractions/I18n/Locale.cs";
