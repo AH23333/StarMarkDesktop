@@ -383,16 +383,6 @@ public sealed partial class SettingsPage
         // 那句尾巴里点名的那颗按钮⛔ 把名字抄进句子：改了它的说法，这句还在教人点一个不存在的名字。
         LocMessage.Of("settings.ai.result.tail", LocMessage.Of("settings.ai.applyGroup")));
 
-    /// <summary>把一串<b>用户数据</b>（标签名／账本里的功能名）连成一句：连接这件事走键，
-    /// ⛔ 在 C# 里 `string.Join("、", …)`——那是把这一族的标点钉死在中文那一侧（✅WI-60b 同一口径）。</summary>
-    private static LocMessage? Joined(IEnumerable<LocMessage> parts, string joinKey)
-    {
-        LocMessage? acc = null;
-        foreach (var part in parts)
-            acc = acc is null ? part : LocMessage.Of(joinKey, acc, part);
-        return acc;
-    }
-
     private void ShowPlan(ClassifyPlan plan)
     {
         _aiPlan = plan;
@@ -428,10 +418,11 @@ public sealed partial class SettingsPage
     {
         if (sender is not Button { Tag: AiGroupRow row }) return;
         // 只切这一组的条目出去应用；"这一组"是用户点头的单位，不能顺手把别的组也写了
+        // 组里那些标签名连成一句：标点归表（`settings.ai.tagJoin`），n 颗怎么折归 ✅片116／P-196 那位主人。
         await ApplyAsync(new ClassifyPlan(row.Proposals, _aiPlan.CreatedAt),
             LocMessage.Of("settings.ai.applyScopeGroup",
-                Joined(row.Group.Tags.Select(tag => LocMessage.Of("common.rawValue", tag)),
-                    "settings.ai.tagJoin")!));
+                LocMessage.Fold("settings.ai.tagJoin",
+                    row.Group.Tags.Select(tag => LocMessage.Of("common.rawValue", tag)))!));
     }
 
     /// <summary>只应用这一组：把组内条目从总方案里切出来交给服务，应用完再从预览里摘掉。</summary>

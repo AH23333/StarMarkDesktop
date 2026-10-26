@@ -122,10 +122,9 @@ public sealed partial class SettingsPage
                 ? LocMessage.Of("settings.ai.usage.estimated", used.EstimatedCalls)
                 : null;
             var features = used.Calls > 0 && snapshot.ByFeature.Count > 0
-                ? LocMessage.Of("settings.ai.usage.featureBlock", Joined(
+                ? LocMessage.Of("settings.ai.usage.featureBlock", LocMessage.Fold("settings.ai.usage.featureJoin",
                     snapshot.ByFeature.Select(f => LocMessage.Of("common.rawValue",
-                        f.Name + " " + NumberText.Grouped(f.TotalTokens))),
-                    "settings.ai.usage.featureJoin"))
+                        f.Name + " " + NumberText.Grouped(f.TotalTokens)))))
                 : null;
             var verdictLine = verdict.State switch
             {

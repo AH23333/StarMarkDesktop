@@ -218,7 +218,8 @@ public partial class TrendingPageViewModel : ObservableObject
             : age is null ? via : LocMessage.Of("trending.statusViaAge", via, age);
         // Notice 交的是键（批次 WI-58／P-190）：套进外层那句时⛔ 在这里 Render——
         // 抓取可能在中文档、这一句可能在换语言之后才贴，取词必须留在贴上去那一刻。
-        return r.Notice is { } notice ? LocMessage.Of("trending.statusNotice", head, notice) : head;
+        // "这一发到底有没有那句尾巴"归 ✅片116／P-196 那位折叠主人：没有就交回主句本身。
+        return LocMessage.Fold("trending.statusNotice", head, r.Notice);
     }
 
     private void HasRowsChanged() => OnPropertyChanged(nameof(HasRows));

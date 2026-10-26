@@ -67,10 +67,12 @@ public static class RssSourceStatus
     /// 那半句与主句的<b>语序与标点归表</b>：⛔ 在 C# 里用 <c>+</c> 把两句拼成品字——
     /// 拼出来的串把语言定死在拼它那一刻，而那颗胶水键（<c>rss.statusJoin</c>＝<c>{0}{1}</c>，三语逐字相同）
     /// 才是"这两段谁在前"的唯一出处；那半句自带的标点仍住在各句自己的键里（zh「，」／en「, 」／ja「。」）。
-    /// <para>同页表头那句早就是这一颗键的主人（<c>RssPageViewModel</c> 那三处），这里只是不再另写一种拼法。</para>
+    /// <para>同页表头那句早就是这一颗键的主人（<c>RssPageViewModel</c> 那三处），这里只是不再另写一种拼法。
+    /// ✅片116／P-196 起，"缺的那半怎么办"这句规则也不在这里写了——它归 Abstractions 那位折叠主人，
+    /// 这一颗只剩"主句一定在场"这点本地事实（五支手臂都从这里出去，所以留着这个本地名字）。</para>
     /// </summary>
     private static LocMessage Join(LocMessage head, LocMessage? tail)
-        => tail is null ? head : LocMessage.Of("rss.statusJoin", head, tail);
+        => LocMessage.Fold("rss.statusJoin", head, tail);
 
     /// <summary>只在两个数真的不相等时才补那半句（相等时重复一遍数字是噪音）。</summary>
     private static LocMessage? Grew(RssSourceOutcome outcome, int? cachedTotal)

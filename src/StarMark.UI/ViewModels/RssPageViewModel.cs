@@ -337,7 +337,7 @@ public partial class RssPageViewModel : ObservableObject
         // 而"哪几个源没给条目"已经逐行写在标题上了（写在看不见的地方＝给后来人撒假线索）。
         StatusText = saved
             ? Summarise(run, shown, added, auto)
-            : LocMessage.Of("rss.statusJoin", Summarise(run, shown, added, auto), LocMessage.Of("rss.cacheWriteFailed"));
+            : LocMessage.Fold("rss.statusJoin", Summarise(run, shown, added, auto), LocMessage.Of("rss.cacheWriteFailed"));
     }
 
     /// <summary>离开页面只掐掉在途请求：已经抓到的那一轮结果留在单例 VM 上，回来不必重抓。</summary>
@@ -365,15 +365,16 @@ public partial class RssPageViewModel : ObservableObject
     private LocMessage Summarise(RssRunResult run, int shown, int added, bool auto)
     {
         var okCount = run.Outcomes.Count(o => o.Ok);
-        var text = shown == 0
+        var baseLine = shown == 0
             ? LocMessage.Of("rss.summaryNone", run.Outcomes.Count, okCount)
             : auto
                 ? LocMessage.Of("rss.summaryAuto", RssFeedCache.GapMessage, run.Outcomes.Count, added, shown)
                 : LocMessage.Of("rss.summaryManual", shown, okCount, added);
-        // 附加那两句各是一整行表里的话，用同一个连接句拼：⛔ 不许在这里 += 字符串（那又把语言定死了）。
-        if (run.FailedCount > 0) text = LocMessage.Of("rss.statusJoin", text, LocMessage.Of("rss.summaryFailed", run.FailedCount));
-        if (run.StoppedCount > 0) text = LocMessage.Of("rss.statusJoin", text, LocMessage.Of("rss.summaryStopped", run.StoppedCount));
-        return text;
+        // 附加那两句各是一整行表里的话，缺席就交 null 让主人跳过：⛔ 在这里 += 字符串（那又把语言定死了），
+        // 也⛔ 再写一遍"谁接在谁后面"（✅片116／P-196：折叠只住 Abstractions 那一处）。
+        return LocMessage.Fold("rss.statusJoin", baseLine,
+            run.FailedCount > 0 ? LocMessage.Of("rss.summaryFailed", run.FailedCount) : null,
+            run.StoppedCount > 0 ? LocMessage.Of("rss.summaryStopped", run.StoppedCount) : null);
     }
 
     /// <summary>

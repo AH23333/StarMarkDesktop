@@ -135,8 +135,11 @@ public sealed class MonitorWordGateTests : IDisposable
     /// <b>每一处调用点按代码实给的实参数比槽数</b>（坑表 #393 那颗"屏幕上那一格整空白"的通用版；
     /// 尺⛔ 用正则切跨行调用点——按括号深度走到与 <c>Of(</c> 配对的 <c>)</c>＝公共那颗
     /// <see cref="SourceGate.KeyedCallSites"/>，规则 #86/#155）。
-    /// <para>名单来自现场复算：<b>25 处</b>＝VM 12 ＋ 探针 11 ＋ 声明 2。少一颗（某句话又退回硬写字符串）
-    /// 或多一颗（新增了句子却没比槽）都会在这里红。</para>
+    /// <para>名单来自现场复算：<b>24 处</b>＝VM 11 ＋ 探针 11 ＋ 声明 2。少一颗（某句话又退回硬写字符串）
+    /// 或多一颗（新增了句子却没比槽）都会在这里红。
+    /// ✅片116／P-196 把 VM 那处 <c>Aggregate(… Of("widget.mon.note.join" …))</c> 交给了折叠主人，
+    /// 那颗键从此⛔ 出现在 <c>Of(</c> 名册里（这一把尺只认 <c>LocMessage.Of(</c> 的调用点）——
+    /// 它的"两颗槽＝两颗实参"改由 <c>LocFoldGateTests</c> 逐颗钉（覆盖搬了家，⛔ 就此失踪）。</para>
     /// </summary>
     [Fact]
     public void EveryKeyedCallHandsExactlyTheSlotsItsRowDeclares()
@@ -149,14 +152,17 @@ public sealed class MonitorWordGateTests : IDisposable
                 Assert.True(args == SourceGate.RowSlots(key),
                             $"{rel}:{line} 给 {key} 递了 {args} 颗实参，而表里那颗行有 {SourceGate.RowSlots(key)} 颗槽");
             }
-        Assert.Equal(25, watched);
+        Assert.Equal(24, watched);
     }
 
     /// <summary>
     /// <b>颗数按主人点名</b>（规则 #98/#111：只钉总数抓不到"换了一颗键名"）。
     /// 探针那 11 颗、声明那 2 颗各自<b>恰好一处</b>调用点——同一句原因⛔ 有两个主人；
-    /// VM 那 12 处里 <c>widget.mon.accruing</c> 恰好三处（CPU 第一拍、窗平均还没成形、网速没有基线＝三个臂同一句话），
-    /// 其余九颗各一处。
+    /// VM 那 11 处里 <c>widget.mon.accruing</c> 恰好三处（CPU 第一拍、窗平均还没成形、网速没有基线＝三个臂同一句话），
+    /// 其余八颗各一处。
+    /// <para>✅片116／P-196：这一档从前是 12 处/10 颗——多的那一颗正是 <c>widget.mon.note.join</c> 那颗骨架的
+    /// 手搓折叠，如今它走 <c>LocMessage.Fold</c>（钉在上面那颗 <c>TwoReasonsJoined…</c> 格里），
+    /// 所以本档名册读的是"还剩几处 <c>Of</c>"＝⛔ 把搬家读成句子丢了。</para>
     /// </summary>
     [Fact]
     public void EachReasonHasOneOwnerAndTheNamedRosterStillAddsUp()
@@ -177,8 +183,8 @@ public sealed class MonitorWordGateTests : IDisposable
                      native.Select(c => c.Key).OrderBy(k => k, StringComparer.Ordinal).ToArray());
 
         var vm = SourceGate.KeyedCallSites(CodeOf(VmCs));
-        Assert.Equal(12, vm.Count);
-        Assert.Equal(10, vm.Select(c => c.Key).Distinct().Count());
+        Assert.Equal(11, vm.Count);
+        Assert.Equal(9, vm.Select(c => c.Key).Distinct().Count());
         Assert.Equal(3, vm.Count(c => c.Key == "widget.mon.accruing"));
         Assert.All(vm.Where(c => c.Key != "widget.mon.accruing").Select(c => c.Key).Distinct().ToList(),
                    key => Assert.Equal(1, vm.Count(c => c.Key == key)));
@@ -356,7 +362,11 @@ public sealed class MonitorWordGateTests : IDisposable
 
         Assert.NotEqual(zh, en);
         Assert.Equal(2, SourceGate.RowSlots("widget.mon.note.join"));
-        Assert.Contains(@"LocMessage.Of(""widget.mon.note.join"", head, next)", CodeOf(VmCs), StringComparison.Ordinal);
+        // ✅片116／P-196：那颗 switch（0 颗⇒不说／1 颗⇒原样／n 颗⇒左折）整块交给了折叠主人，
+        // 所以这里钉的是 VM 递出的<b>那一行 Fold</b>，而旧那一形（VM 自己 Aggregate）在本档 0 颗。
+        Assert.Contains(@"LocMessage.Fold(""widget.mon.note.join"", notes)", CodeOf(VmCs), StringComparison.Ordinal);
+        Assert.Equal(0, SourceGate.Count(CodeOf(VmCs), @"LocMessage.Of(""widget.mon.note.join"""));
+        Assert.Equal(0, SourceGate.Count(CodeOf(VmCs), ".Aggregate("));
     }
 
     /// <summary>

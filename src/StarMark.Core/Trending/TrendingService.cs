@@ -83,7 +83,10 @@ public sealed class TrendingService
 
         var wrote = await TryWriteCacheAsync(key, fetched, nowUnix, ct);
         return new TrendingResult(fetched.Repos, fetched.Via, FromCache: false, Stale: false, nowUnix,
-            wrote is null ? fetched.Notice : Combine(fetched.Notice, wrote));
+            // 抓取那句与写缓存那句都可能缺席：谁在场由出场的那位主人折（片116／P-196），这里只说用哪颗骨架。
+            // 交出的仍是<b>键</b>——那颗两槽骨架自己也是表里的一行，所以取词发生在贴上去那一刻（⛔ 在这里拼成品字＝P-190）。
+            wrote is null ? fetched.Notice
+                : LocMessage.Fold("trending.notice.join", new LocMessage?[] { fetched.Notice, wrote }));
     }
 
     /// <summary>
@@ -106,9 +109,4 @@ public sealed class TrendingService
             return LocMessage.Of("trending.notice.write");
         }
     }
-
-    /// <summary>两颗原因连成一句：交的仍是<b>键</b>——连接骨架 <c>trending.notice.join</c> 自己也是表里那颗两槽行，
-    /// 所以这一层套到最外面那句时，取词发生在贴上去的那一刻（⛔ 在这里拼成品字＝P-190 那颗缺陷）。</summary>
-    private static LocMessage Combine(LocMessage? a, LocMessage b) =>
-        a is null ? b : LocMessage.Of("trending.notice.join", a, b);
 }

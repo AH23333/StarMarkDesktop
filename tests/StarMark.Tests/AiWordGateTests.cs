@@ -135,8 +135,8 @@ public sealed class AiWordGateTests : IDisposable
 
     /// <summary>点名形状：<b>名单里已是整颗键</b>（由 <c>table_41</c> 现生成，⛔ 手打也⛔ 在这里再补前缀——
     /// 补了就是 <c>settings.ai.settings.ai.…</c>，而"表里没有这一行"听起来像表漏了）。
-    /// 整颗键连<b>收尾那颗引号</b>一起数——⛔ 只认 <c>LocMessage.Of(</c> 打头：两颗连接键是当<b>形参</b>
-    /// 交给 <c>Joined(…)</c> 的（那里要的是键，不是成品句）。收尾引号也⛔ 省：省了 <c>result.dropped</c>
+    /// 整颗键连<b>收尾那颗引号</b>一起数——⛔ 只认 <c>LocMessage.Of(</c> 打头：两颗连接键是当<b>第一颗实参</b>
+    /// 交给 <c>LocMessage.Fold(…)</c> 的（✅片116／P-196 那位折叠主人；它要的是键，不是成品句）。收尾引号也⛔ 省：省了 <c>result.dropped</c>
     /// 会把 <c>result.droppedWith</c> 也算成自己点的名。（34 就是双引号：⛔ 在本档再叠一层反斜杠转义，
     /// 生成器与 C# 两头都要数引号，本批已经在这里数错过两次。）</summary>
     private static string Of(string key) => (char)34 + key + (char)34;
@@ -185,7 +185,13 @@ public sealed class AiWordGateTests : IDisposable
         Assert.Contains("int limit, Action<LocMessage> onStatus,", CodeOf(Service));
         Assert.Contains("private static LocMessage Describe(OrganiseOutcome outcome)", CodeOf(Ai));
         Assert.Contains("private static LocMessage DescribeFixedBatchLimits()", CodeOf(Ai));
-        Assert.Contains("private static LocMessage? Joined(", CodeOf(Ai));
+        // ✅片116／P-196：这一档原先自己写的那颗私有 <c>Joined(parts, joinKey)</c> 退休了——"n 颗怎么折"只住 Abstractions 那位主人，
+        // 两个调用点改为直接递键。这一格钉的是"这一档⛔ 再有本地折叠"：只问 Fold 在而⛔ 问旧那一形在不在，
+        // 会把搬走一半的写法读成通过（坑表 #1020 那颗"撞对"）。
+        Assert.DoesNotContain("Joined(", CodeOf(Ai), StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Fold(\"settings.ai.tagJoin\"", CodeOf(Ai), StringComparison.Ordinal);
+        Assert.DoesNotContain("Joined(", CodeOf(Usage), StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Fold(\"settings.ai.usage.featureJoin\"", CodeOf(Usage), StringComparison.Ordinal);
         // 「约」那颗词从前坐在数据实参里（`（约 1.2 MB）` 整块交进 deleteBody 的槽）⇒ 换语言它还是中文。
         Assert.Contains("Of(\"settings.engine.sizeApprox\", FileSizeText.Human(bytes))", CodeOf(Engine));
     }

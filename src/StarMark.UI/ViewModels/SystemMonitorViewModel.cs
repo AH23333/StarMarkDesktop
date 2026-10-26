@@ -305,12 +305,9 @@ public sealed partial class SystemMonitorViewModel : ObservableObject
         else if (inbound is null) notes.Add(LocMessage.Of("widget.mon.net.counterReset"));
         // 连接符住在表里（与 ✅WI-58 那颗 `trending.notice.join` 同一口径）：在代码里 `string.Join("；", …)`
         //   那一刻，"两条理由并排"这句话的语言就被定死了，而每一半自己都是会改口的。
-        SetNote(notes.Count switch
-        {
-            0 => null,
-            1 => notes[0],
-            _ => notes.Aggregate((head, next) => LocMessage.Of("widget.mon.note.join", head, next)),
-        });
+        // 至于"三颗、四颗怎么连"＝折叠那一族，✅片116／P-196 起只由 Abstractions 那位主人做：
+        //   0 颗 ⇒ 不说，1 颗 ⇒ 原样那一颗，n 颗 ⇒ 按表里那颗两槽骨架左折。
+        SetNote(LocMessage.Fold("widget.mon.note.join", notes));
     }
 
     private static void Fail(MonitorRow row, LocMessage? reason)

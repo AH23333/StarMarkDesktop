@@ -61,10 +61,13 @@ public sealed class TrendingWordGateTests : IDisposable
         }
 
         // 现场数出来的两颗数（⛔ 把期望改成"实测值"之前先把名单抄出来＝规则 #120）：
-        //   抓取那一档 13 颗键＝fetch.{httpBad,httpStatus,retryFailed,htmlFailed,htmlZero,apiFailed,apiEmpty,
-        //     fallbackApi,bothEmpty,allFailed,tooLarge} ＋ notice.{join,compose}；编排那一档 2 颗＝notice.{write,join}。
-        Assert.Equal(13, SourceGate.KeyedCallSites(CodeOf(FetcherCs)).Select(c => c.Key).Distinct().Count());
-        Assert.Equal(2, SourceGate.KeyedCallSites(CodeOf(ServiceCs)).Select(c => c.Key).Distinct().Count());
+        //   抓取那一档 12 颗键＝fetch.{httpBad,httpStatus,retryFailed,htmlFailed,htmlZero,apiFailed,apiEmpty,
+        //     fallbackApi,bothEmpty,allFailed,tooLarge} ＋ notice.compose；编排那一档 1 颗＝notice.write。
+        // ✅片116／P-196：那颗 <c>notice.join</c> 从前在两边各算一处 <c>Of</c>，如今它是 <c>Fold</c> 的实参
+        //   ⇒ 这一把尺（只认 <c>LocMessage.Of(</c>）少两颗。那颗骨架"两颗槽＝两颗实参"与"套出来的形状"
+        //   由 <c>LocFoldGateTests</c> 与本档 <c>TheJoinSkeletonIsTwoSlotsAndNestsInsteadOfConcatenating</c> 钉住＝覆盖搬家，⛔ 少了两颗。
+        Assert.Equal(12, SourceGate.KeyedCallSites(CodeOf(FetcherCs)).Select(c => c.Key).Distinct().Count());
+        Assert.Equal(1, SourceGate.KeyedCallSites(CodeOf(ServiceCs)).Select(c => c.Key).Distinct().Count());
 
         // 契约档只许<b>一处</b>取词，而且必须是那颗异常对外的 <c>Message</c>（那一串只进日志，⛔ 上屏幕）：
         // 界面念的是 <c>Reason</c> 那颗键。少了这条豁免，下一批有人把 Message 也键化就会红在仪器上。
@@ -196,8 +199,13 @@ public sealed class TrendingWordGateTests : IDisposable
     public void TheJoinSkeletonIsTwoSlotsAndNestsInsteadOfConcatenating()
     {
         Assert.Equal(2, SourceGate.RowSlots("trending.notice.join"));
+        // ✅片116／P-196：这一族两颗骨架键只许从折叠主人 <c>LocMessage.Fold(</c> 递出去，⛔ 再从代码里手搭 <c>Of(</c> 那一形。
+        // 这一格从前只问"那两颗文件里有没有 `LocMessage.Of("trending.notice.join"`"——搬走一半它照绿（另一处二元嵌套还在档里），
+        // 读起来像"闸门过了"而实际什么都没钉住＝坑表 #1020 那颗"撞对"。改成逐档数<b>恰几颗</b>＋旧那一形<b>0 颗</b>。
+        Assert.Equal(2, SourceGate.Count(CodeOf(FetcherCs), "LocMessage.Fold(\"trending.notice.join\""));
+        Assert.Equal(1, SourceGate.Count(CodeOf(ServiceCs), "LocMessage.Fold(\"trending.notice.join\""));
         foreach (var rel in new[] { FetcherCs, ServiceCs })
-            Assert.Contains("LocMessage.Of(\"trending.notice.join\"", CodeOf(rel), StringComparison.Ordinal);
+            Assert.Equal(0, SourceGate.Count(CodeOf(rel), "LocMessage.Of(\"trending.notice.join\""));
 
         Locale.TrySet(AppLanguage.English);
         Assert.Equal("A, B", Locale.Fmt("trending.notice.join", "A", "B"));   // 半角：那颗宽度是这一列的事实
@@ -215,14 +223,16 @@ public sealed class TrendingWordGateTests : IDisposable
     public void BothHostsTakeWordsOnlyAtTheMomentTheyPaint()
     {
         var describe = SourceGate.MethodBody(CodeOf(PageVmCs), "private static LocMessage Describe(TrendingResult r)");
-        Assert.Contains("r.Notice is { } notice", describe, StringComparison.Ordinal);
-        Assert.Contains("LocMessage.Of(\"trending.statusNotice\", head, notice)", describe, StringComparison.Ordinal);
+        Assert.Contains("LocMessage.Fold(\"trending.statusNotice\", head, r.Notice)", describe, StringComparison.Ordinal);
         Assert.Equal(0, SourceGate.Count(describe, ".Render()"));      // 宿主这句交出去时还没取词
+        Assert.Equal(0, SourceGate.Count(describe, "LocMessage.Of(\"trending.statusNotice\""));   // 旧那一形⛔ 留在宿主里
 
         var paint = SourceGate.MethodBody(CodeOf(GlanceCs), "private void PaintTrending()");
         Assert.Contains("if (result.Notice is { } notice) notes.Add(notice);", paint, StringComparison.Ordinal);
-        Assert.Contains("notes.Aggregate((head, next) => LocMessage.Of(\"trending.statusNotice\", head, next)).Render();",
-            paint, StringComparison.Ordinal);
+        // ✅片116／P-196：那一串事实<b>怎么折</b>交给了主人，宿主这一拍剩下的两件事是"贴上去那一刻才取词"与"没话就空着"——
+        // 所以这里钉的是<b>两句各钉一颗事实</b>，⛔ 只钉"这一档里出现了那颗键"。
+        Assert.Contains("var status = LocMessage.Fold(\"trending.statusNotice\", notes);", paint, StringComparison.Ordinal);
+        Assert.Contains("TrendingStatus.Text = status?.Render() ?? string.Empty;", paint, StringComparison.Ordinal);
         Assert.DoesNotContain("Locale.T(\"trending.", paint, StringComparison.Ordinal);
         Assert.DoesNotContain("result.Notice!", paint, StringComparison.Ordinal);   // 成品字段⛔ 再上屏幕
     }

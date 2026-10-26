@@ -381,10 +381,10 @@ public sealed partial class GlanceWidget : UserControl
         // 那几颗事实<b>怎么连</b>也住在表里（`trending.statusNotice`，主窗热榜页念的是同一颗）：
         // 把全角「｜」写死在这一行，英文档就得到"拉丁句子里冒出一颗 CJK 宽度的符号"，
         // 而那一行的英文列本来就是半角竖线——两处各一套＝第二个主人（坑表 #371 那颗分隔符的同族）。
-        TrendingStatus.Text = notes.Count == 0
-            ? string.Empty
-            : notes.Aggregate((head, next) => LocMessage.Of("trending.statusNotice", head, next)).Render();
-        TrendingStatus.Visibility = notes.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // 三颗、四颗<b>连的顺序</b>则归 ✅片116／P-196 那位折叠主人，这里只管"没话可说时那一格空着"。
+        var status = LocMessage.Fold("trending.statusNotice", notes);
+        TrendingStatus.Text = status?.Render() ?? string.Empty;
+        TrendingStatus.Visibility = status is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private Button BuildTrendingRow(StarMark.Abstractions.Trending.TrendingRepo repo,

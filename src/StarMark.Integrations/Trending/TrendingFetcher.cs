@@ -79,7 +79,8 @@ public sealed class TrendingFetcher : ITrendingSource, IDisposable
                 var parsed = TrendingHtmlParser.Parse(body);
                 if (parsed.Count > 0) return new TrendingFetchResult(parsed, TrendingSource.TrendingHtml, notice);
                 var zero = LocMessage.Of("trending.fetch.htmlZero");
-                htmlNotice = notice is null ? zero : LocMessage.Of("trending.notice.join", notice, zero);
+                // 「那一发有没有原因」交给出场的那位主人（片116／P-196）：缺的那半跳过、剩下的按表里那颗骨架左折。
+                htmlNotice = LocMessage.Fold("trending.notice.join", new LocMessage?[] { notice, zero }) ?? zero;
             }
         }
         catch (OperationCanceledException) { throw; }        // 见类注释 ②
@@ -208,10 +209,10 @@ public sealed class TrendingFetcher : ITrendingSource, IDisposable
     /// </summary>
     private static LocMessage Compose(LocMessage headline, params LocMessage?[] notes)
     {
-        var kept = notes.Where(n => n is not null).ToArray();
-        if (kept.Length == 0) return headline;
-        var tail = kept.Aggregate((head, next) => LocMessage.Of("trending.notice.join", head!, next));
-        return LocMessage.Of("trending.notice.compose", headline, tail);
+        // 折叠的语序（左折）与"缺的那几颗跳过"归 Abstractions 那位主人（片116／P-196）：
+        // 这一族只说两件事——用哪颗骨架、一颗都没有时交回主句。
+        var tail = LocMessage.Fold("trending.notice.join", notes);
+        return tail is null ? headline : LocMessage.Of("trending.notice.compose", headline, tail);
     }
 
     public void Dispose()

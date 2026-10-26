@@ -254,7 +254,9 @@ public sealed class GlanceWordGateTests : IDisposable
         // 骨架的主人＝`trending.statusNotice`（主窗热榜页念的是同一颗），它的英文列本来就是半角竖线；
         // 代码里再写一颗全角「｜」＝第二份出处，而且英文句子中间会冒出一颗 CJK 宽度的符号。
         Assert.DoesNotContain("string.Join(\"｜\"", widget, StringComparison.Ordinal);
-        Assert.Contains("LocMessage.Of(\"trending.statusNotice\"", paint, StringComparison.Ordinal);
+        // ✅片116／P-196：这一串事实的折叠归 Abstractions 那位主人 ⇒ 宿主这一行递的是 <c>Fold(</c> 而⛔ 再是手搭的 <c>Of(</c>。
+        Assert.Contains("LocMessage.Fold(\"trending.statusNotice\"", paint, StringComparison.Ordinal);
+        Assert.Equal(0, SourceGate.Count(paint, "LocMessage.Of(\"trending.statusNotice\""));
     }
 
     /// <summary>

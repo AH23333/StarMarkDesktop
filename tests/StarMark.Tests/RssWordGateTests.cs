@@ -60,17 +60,21 @@ public sealed class RssWordGateTests : IDisposable
         Assert.Equal(2, Times(code, "private static LocMessage?"));      // Grew／StillThere＝可空的半句
         Assert.Equal(1, Times(code, "private static LocMessage Join"));
         Assert.Equal(0, Times(code, "Locale.T(") + Times(code, "Locale.Fmt("));
-        Assert.Equal(14, Times(code, "LocMessage.Of("));                 // 正本＝bin/WI65/census_65.txt A.2
+        Assert.Equal(13, Times(code, "LocMessage.Of("));                 // 正本＝bin/WI65/census_65.txt A.2；✅片116 那颗拼接改交 Fold 主人 ⇒ 14−1
         Assert.Equal(0, Times(code, "public static string"));            // ⛔ 留一颗交字符串的出口＝这一行又是半中半英
     }
 
     /// <summary>②那两处「主句＋半句」的拼接归<b>表里那颗纯胶水键</b>：⛔ 在 C# 里用 + 拼成品字
-    /// （拼完的那一刻语言就定死了，而两颗键各自的标点本来是三语各写各的）。</summary>
+    /// （拼完的那一刻语言就定死了，而两颗键各自的标点本来是三语各写各的）。
+    /// <para>✅片116／P-196：连起来那一步的形状（缺的那半跳过、主句打底）也不再写在这里——
+    /// 它归 <c>LocMessage.Fold</c> 那一位主人，所以这一格钉的是<b>递进 Fold 的那颗键</b>，
+    /// 而旧那一形 <c>Of("rss.statusJoin", head, tail)</c> 在本档<b>0 颗</b>（照旧"在档里有一处"就算过＝坑表 #1020 那颗撞对）。</para></summary>
     [Fact]
     public void TheTwoHalvesAreJoinedByTheTableRatherThanByAPlusSign()
     {
         var code = Code(ReadRepoFile(Judge));
-        Assert.Equal(1, Times(code, "LocMessage.Of(\"rss.statusJoin\", head, tail)"));
+        Assert.Equal(1, Times(code, "LocMessage.Fold(\"rss.statusJoin\", head, tail)"));
+        Assert.Equal(0, Times(code, "LocMessage.Of(\"rss.statusJoin\""));
         Assert.Equal(0, Times(code, "\" + StillThere("));
         Assert.Equal(0, Times(code, "\" + Grew("));
         // 那颗胶水键在表里恰好一行（三语逐字相同＝纯胶水，I18nContractTests 名下有白名单）
