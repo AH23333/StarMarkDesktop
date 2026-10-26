@@ -1139,6 +1139,32 @@ public static class UiStrings
         new Entry("clip.status.copied", "已复制到剪贴板：{0}", "Copied to the clipboard: {0}", "クリップボードにコピーしました: {0}"),
         new Entry("clip.status.copyFail", "复制失败：{0}", "Copy failed: {0}", "コピーに失敗しました: {0}"),
         new Entry("clip.status.imgFail", "这张图没能复制出去：{0}", "This image could not be copied out: {0}", "この画像をコピーできませんでした: {0}"),
+        // ===== 剪贴板图片那一路「为什么没成」（批次 片117 第二刀，P-192 第四颗）=====
+        // 这八句从前住在 `ClipboardImageStore` 里写死中文，而两颗卡片出口只有一颗 `common.rawValue` 那道数据门
+        // ——那道门只装<b>数据</b>（用户内容・字节数・系统原文），装句子就是第二个措辞出处（✅WI-61d 片1 的口径）。
+        // ⚠ 中文列⛔ 换措辞：行为档按「不安全／没有文件／超过／解不开」这些词逐颗钉着（`ClipboardCopyImageTests`・
+        //   `ClipboardImageRowTests`），改一颗就红一格——那是刻意的：那句话在屏幕上说得出这件事。
+        new Entry("clip.img.badName", "这一条的文件名不安全或没有文件", "This entry's file name is unsafe or there's no file",
+                  "この項目のファイル名が安全でないか、ファイルがありません"),
+        new Entry("clip.img.noPath", "没有给出文件路径", "No file path was given", "ファイルパスが指定されていません"),
+        new Entry("clip.img.unreadableFile", "文件读不出来（{0}）", "The file couldn't be read ({0})",
+                  "ファイルを読み取れません（{0}）"),
+        new Entry("clip.img.overCap", "这张图 {0} 超过 {1}，位图太大没有复制（与采集侧同一道上限）",
+                  "This image is {0}, past the {1} limit, so no bitmap was copied (the same cap the capture side uses)",
+                  "この画像は {0} で {1} の上限を越えているため、ビットマップはコピーされませんでした（収集側と同じ上限）"),
+        new Entry("clip.img.undecodable", "本机把它解不开（系统没有这种格式的解码器，或文件本身坏了），所以位图没能复制出去",
+                  "This machine can't decode it (no decoder for that format, or the file itself is broken), so the bitmap wasn't copied",
+                  "このパソコンでは解読できません（その形式のデコーダがないか、ファイル自体が壊れています）ので、ビットマップはコピーされませんでした"),
+        new Entry("clip.img.pngStillBad", "转出来的 PNG 仍然读不出", "The converted PNG still can't be read",
+                  "変換後の PNG も読み取れません"),
+        new Entry("clip.img.canceled", "复制已经取消", "The copy was cancelled", "コピーはキャンセルされました"),
+        new Entry("clip.img.notPng", "不是 PNG", "Not a PNG", "PNG ではありません"),
+        // ⚠ 这颗是新立的一道分岔：PNG <b>解码器</b>那十五句（块不完整・缺 IHDR・位深不支持…）按 ✅P-199 的口径
+        // 是<b>给日志的原话</b>，而从前它们被原样递上提示卡——英文界面贴出「块的长度字段与实际字节不符」那种内部话。
+        // 现在屏幕上只说这一句、原话留在日志里（`ClipboardImageStore.TryHandOutPng` 那颗 StarLog.Warn）。
+        new Entry("clip.img.decoderRefused", "这张图的 PNG 结构本机读不出来（细节在这台机器的日志里）",
+                  "This machine can't read this PNG's structure (the detail is in this machine's log)",
+                  "この PNG の構造をこのパソコンは読み取れません（詳細はこのパソコンのログにあります）"),
         new Entry("clip.status.imgCopied", "已把图片复制回剪贴板：{0}（去目标程序按粘贴即可）", "Image back on the clipboard: {0} — paste it in the target app", "画像をクリップボードに戻しました：{0}（貼り付け先でペーストしてください）"),
         new Entry("clip.status.imgCopyFail", "图片复制失败：{0}", "Image copy failed: {0}", "画像のコピーに失敗しました: {0}"),
         new Entry("clip.status.clearFail", "清空失败：{0}（列表未变动，可再点一次）", "Clear failed: {0} — the list is unchanged; you can try again", "消去に失敗しました: {0}（一覧は変更されていません。再試行できます）"),

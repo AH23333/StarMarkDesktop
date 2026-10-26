@@ -139,7 +139,7 @@ public sealed class ClipboardImageRowTests : IDisposable
         File.WriteAllBytes(ClipAssets.FullPathOf("round_trip.png")!, png!);
 
         Assert.True(ClipboardImageStore.TryReadEntryImage(ImageRowNamed("round_trip.png"),
-            out var bytes, out var back, out var why), why ?? "读不出帧");
+            out var bytes, out var back, out var why), why?.Render() ?? "读不出帧");
         Assert.Equal(png, bytes);                                   // 交出去的那份就是文件里的 PNG 字节
         Assert.Equal((8, 6), (back.Width, back.Height));
         Assert.Equal(bgra, back.Bgra);
@@ -181,16 +181,16 @@ public sealed class ClipboardImageRowTests : IDisposable
     {
         // 这一句也是 P3 贴图要用的入口：它给不出帧时必须说得出为什么，否则"贴不出去"是一句猜谜。
         Assert.False(ClipboardImageStore.TryReadEntryFrame(ImageRowNamed("../escape.png"), out _, out var unsafeName));
-        Assert.Contains("不安全", unsafeName, StringComparison.Ordinal);
+        Assert.Contains("不安全", unsafeName!.Render(), StringComparison.Ordinal);
         Assert.False(ClipboardImageStore.TryReadEntryFrame(
             ClipboardEntry.Build("一段文字", "Code", ClipboardEntry.FormatText, At(0)), out _, out var none));
-        Assert.Contains("没有文件", none, StringComparison.Ordinal);
+        Assert.Contains("没有文件", none!.Render(), StringComparison.Ordinal);
         Assert.False(ClipboardImageStore.TryReadEntryFrame(ImageRowNamed("2026-09-28_0915_00000000.png"),
             out _, out var gone));                                  // 合法名字但文件不在：也不是异常，是一句原话
-        Assert.Contains("不在本机", gone, StringComparison.Ordinal);
+        Assert.Contains("不在本机", gone!.Render(), StringComparison.Ordinal);
         // 先 stat 再读：漏那一步，这里交出去的是"文件读不出来（FileNotFoundException）"——
         // _exception 名对用户不是一句原话，而"已经不在这台机器上"是（2d 起两个入口共用同一句）。
-        Assert.DoesNotContain("Exception", gone, StringComparison.Ordinal);
+        Assert.DoesNotContain("Exception", gone!.Render(), StringComparison.Ordinal);
     }
 
     /// <summary>一块"像截图"的像素：逐像素变化的 BGR，alpha 恒 255（剪贴板图没有半透明语义，见 ClipAssets 的 DIB 口径）。</summary>

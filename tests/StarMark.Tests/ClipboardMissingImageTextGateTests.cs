@@ -72,9 +72,10 @@ public sealed class ClipboardMissingImageTextGateTests
     /// <para>⚠ 这一格数的⛔ 是"合数掉了多少"（那是 <c>spoken_65.py</c> 那把尺的活），它钉的是<b>形状</b>：
     /// <c>Locale.T(</c>／<c>Locale.Fmt(</c> 在这两档的代码里一颗都不许留，而那颗 <c>{0}</c> 槽里放的必须是
     /// <c>LocMessage</c>（逐字与"槽里交键"两条真测在 <see cref="ClipboardMissingImageTextTests"/>）。</para>
-    /// <para>⚠ 取词落在<b>宿主那一拍</b>：读取侧那两处 <c>.Render()</c> 也钉在这里——那一条载体
-    /// （<c>ClipboardImageStore</c> 的 reason）同一口气里还装着四句没进表的裸中文（那是 P-192 的账），
-    /// 把它整个换成 <c>LocMessage</c> ＝把另一票的账拖进这一刀＝半搬，所以本批只换到"话由谁决定"为止。</para>
+    /// <para>✅片117 第二刀还清了这里的旧账：读取侧那两处的 reason 已升成 <c>LocMessage</c>，
+    /// 载体那一路不再就地取词（先前它装着四句没进表的裸中文，整档换成 <c>LocMessage</c> ＝把 P-192 的账
+    /// 拖进 WI-65 片5a 那一刀，所以当时只换到"话由谁决定"为止）。本格现在钉的是<b>换完之后</b>的形状，
+    /// 并把<b>旧形状 0 颗</b>同批钉住（搬移不补这一句＝留下一条永远绿不过的旧路）。</para>
     /// </summary>
     [Fact]
     public void ThePolicyLayerHandsOutKeysWhileTheHostsDoTheReading()
@@ -89,8 +90,14 @@ public sealed class ClipboardMissingImageTextGateTests
         Assert.Equal(0, Count(cardPolicy, "Locale.T(") + Count(cardPolicy, "Locale.Fmt("));
         Assert.Equal(1, Count(cardPolicy, "LocMessage.Of(\"card.missRow\""));
 
-        // 宿主侧：读取那两处当场念完再交出（载体还是字符串，理由见上一段），卡片与状态行那两处在 UI 念
-        Assert.Equal(2, Count(Code(ReadRepoFile(Store)), "ClipboardPolicy.MissingFileClause.Render()"));
+        // 宿主侧：读取那两处现在把政策那颗 <c>LocMessage</c> 原样交出去（⛔ 就地取词），
+        // 十句"为什么读不出来"也全部交表——解码器那句原话改交日志（<c>StarLog.Warn</c>），见 TryHandOutPng。
+        var store = Code(ReadRepoFile(Store));
+        Assert.Equal(2, Count(store, "ClipboardPolicy.MissingFileClause"));
+        Assert.Equal(0, Count(store, "ClipboardPolicy.MissingFileClause.Render()"));   // 旧形状不许回来
+        Assert.Equal(0, Count(store, ".Render()"));                                     // 整档都不许就地念
+        Assert.Equal(10, Count(store, "LocMessage.Of(\"clip.img."));
+        Assert.Equal(0, Count(store, "string? reason"));                                 // 载体回到 string ＝话又归代码决定
         // ✅WI-67 片9c 第二刀：那一页的状态行升成 LocMessage ⇒ 宿主⛔ 再当场念（射程已经兑现，本格改口钉"⛔ 就地取词"）。
         Assert.DoesNotContain(".Render()", Code(ReadRepoFile(PageVm)), StringComparison.Ordinal);
         Assert.Contains("StatusText = ClipboardPolicy.DescribeMissingImageForReuse();",

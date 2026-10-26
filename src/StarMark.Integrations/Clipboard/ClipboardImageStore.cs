@@ -9,6 +9,7 @@ using Windows.Storage.Streams;
 using System.Runtime.InteropServices.WindowsRuntime;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Clipboard;
+using StarMark.Abstractions.I18n;
 using StarMark.Integrations.Capture;
 
 namespace StarMark.Integrations.Clipboard;
@@ -188,16 +189,16 @@ public static class ClipboardImageStore
     /// </para>
     /// </summary>
     public static bool TryReadEntryImage(Item item, out byte[]? pngBytes,
-        out ClipboardPayload.ImageFrame frame, out string? reason)
+        out ClipboardPayload.ImageFrame frame, out LocMessage? reason)
     {
         pngBytes = null;
         frame = default;
         reason = null;
         var path = ClipAssets.FullPathOf(ClipboardEntry.FileName(item));
-        if (path is null) { reason = "这一条的文件名不安全或没有文件"; return false; }
+        if (path is null) { reason = LocMessage.Of("clip.img.badName"); return false; }
         // 先 stat 再去读：让 File.ReadAllBytes 抛，交出去的就是"文件读不出来（FileNotFoundException）"
         // 这种系统原话。两句在界面上都像程序坏了，而"这一张已经不在这台机器上"是用户能懂的事实。
-        if (!File.Exists(path)) { reason = ClipboardPolicy.MissingFileClause.Render(); return false; }
+        if (!File.Exists(path)) { reason = ClipboardPolicy.MissingFileClause; return false; }
         try
         {
             return TryHandOutPng(File.ReadAllBytes(path), out pngBytes, out frame, out reason);
@@ -205,7 +206,7 @@ public static class ClipboardImageStore
         catch (Exception ex)
         {
             pngBytes = null;
-            reason = $"文件读不出来（{ex.GetType().Name}）";
+            reason = LocMessage.Of("clip.img.unreadableFile", ex.GetType().Name);
             return false;
         }
     }
@@ -220,18 +221,18 @@ public static class ClipboardImageStore
     /// 两边各算一次就是"复制成功、历史多一条"（同 <see cref="TryReadEntryImage"/> 的理由）。</para>
     /// <para>这一份不写盘、不进历史，只是把用户已有的文件换成位图负载。失败必须带得出原因。</para>
     /// </summary>
-    public static async Task<(byte[]? Png, ClipboardPayload.ImageFrame Frame, string? Reason)>
+    public static async Task<(byte[]? Png, ClipboardPayload.ImageFrame Frame, LocMessage? Reason)>
         TryReadFileAsPngAsync(string? path, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(path)) return (null, default, "没有给出文件路径");
+        if (string.IsNullOrWhiteSpace(path)) return (null, default, LocMessage.Of("clip.img.noPath"));
         try
         {
-            if (!File.Exists(path!)) return (null, default, ClipboardPolicy.MissingFileClause.Render());
+            if (!File.Exists(path!)) return (null, default, ClipboardPolicy.MissingFileClause);
             var size = new FileInfo(path!).Length;
             if (size > ClipboardPolicy.MaxImageBytes)
                 return (null, default,
-                    $"这张图 {ClipAssets.DescribeBytes(size)} 超过 {ClipAssets.DescribeBytes(ClipboardPolicy.MaxImageBytes)}，" +
-                    "位图太大没有复制（与采集侧同一道上限）");
+                    LocMessage.Of("clip.img.overCap",
+                        ClipAssets.DescribeBytes(size), ClipAssets.DescribeBytes(ClipboardPolicy.MaxImageBytes)));
             var bytes = await File.ReadAllBytesAsync(path!, ct).ConfigureAwait(false);
             if (TryHandOutPng(bytes, out var png, out var frame, out _)) return (png, frame, null);
 
@@ -239,14 +240,13 @@ public static class ClipboardImageStore
             // 两种都由转码那一支给出最终说法——解不开的 PNG 重编也解不开，下面的失败原因cover住。
             var transcoded = await EncodePngFromBytesAsync(bytes, ct).ConfigureAwait(false);
             if (transcoded is null)
-                return (null, default,
-                    "本机把它解不开（系统没有这种格式的解码器，或文件本身坏了），所以位图没能复制出去");
+                return (null, default, LocMessage.Of("clip.img.undecodable"));
             return TryHandOutPng(transcoded, out png, out frame, out var why)
                 ? (png, frame, null)
-                : (null, default, $"转出来的 PNG 仍然读不出（{why}）");
+                : (null, default, why ?? LocMessage.Of("clip.img.pngStillBad"));
         }
-        catch (OperationCanceledException) { return (null, default, "复制已经取消"); }
-        catch (Exception ex) { return (null, default, $"文件读不出来（{ex.GetType().Name}）"); }
+        catch (OperationCanceledException) { return (null, default, LocMessage.Of("clip.img.canceled")); }
+        catch (Exception ex) { return (null, default, LocMessage.Of("clip.img.unreadableFile", ex.GetType().Name)); }
     }
 
     /// <summary>
@@ -255,13 +255,21 @@ public static class ClipboardImageStore
     /// 只验魔数会把截断文件当 PNG 交出去，只靠解码则让一份改过头的文件以 PNG 的名义进剪贴板。</para>
     /// </summary>
     private static bool TryHandOutPng(byte[] bytes, out byte[]? png,
-        out ClipboardPayload.ImageFrame frame, out string? reason)
+        out ClipboardPayload.ImageFrame frame, out LocMessage? reason)
     {
         png = null;
         frame = default;
         reason = null;
-        if (!ClipboardPayload.IsPng(bytes)) { reason = "不是 PNG"; return false; }
-        if (!ClipboardPayload.TryDecodePng(bytes, out frame, out reason)) return false;
+        if (!ClipboardPayload.IsPng(bytes)) { reason = LocMessage.Of("clip.img.notPng"); return false; }
+        if (!ClipboardPayload.TryDecodePng(bytes, out frame, out var raw))
+        {
+            // ✅P-199 的口径：解码器那十五句是<b>给日志的原话</b>（"拒收必须出声"），它们讲的都是块结构与位深——
+            // 屏幕那一侧说得出的是"这一张我读不出来"。从前它被原样递上提示卡，于是英文界面贴出
+            // 「块的长度字段与实际字节不符」这种内部话（批次 片117 第二刀）。原话留进日志，⛔ 静默吞掉。
+            StarLog.Warn($"[剪贴板] PNG 解码拒收：{raw}");
+            reason = LocMessage.Of("clip.img.decoderRefused");
+            return false;
+        }
         png = bytes;
         return true;
     }
@@ -301,7 +309,7 @@ public static class ClipboardImageStore
 
     /// <summary>条目 → 它那张 PNG → 归一 BGRA。<b>P3 贴图要的就是这一份</b>：§Q4 终态把这条接口
     /// 冻结在这里，实装接合等标注域 S3 之后（本批一个贴图调用都不接）。</summary>
-    public static bool TryReadEntryFrame(Item item, out ClipboardPayload.ImageFrame frame, out string? reason)
+    public static bool TryReadEntryFrame(Item item, out ClipboardPayload.ImageFrame frame, out LocMessage? reason)
         => TryReadEntryImage(item, out _, out frame, out reason);
 
     /// <summary>字节 → WinRT 内存流。剪贴板只收流引用，不收 <c>byte[]</c>——这一句就是"数据不是路径"的那一步。</summary>

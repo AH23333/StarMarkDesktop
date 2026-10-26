@@ -103,7 +103,7 @@ public sealed class ClipboardCopyImageTests : IDisposable
         var path = Write("a.png", png!);
 
         var (got, frame, why) = await ClipboardImageStore.TryReadFileAsPngAsync(path, CancellationToken.None);
-        Assert.True(ClipboardPayload.IsPng(got), why ?? "交出来的不是 PNG");
+        Assert.True(ClipboardPayload.IsPng(got), why?.Render() ?? "交出来的不是 PNG");
         Assert.Equal(png, got);
         Assert.Equal((9, 5), (frame.Width, frame.Height));
         Assert.Equal(bgra, frame.Bgra);
@@ -119,7 +119,7 @@ public sealed class ClipboardCopyImageTests : IDisposable
         var path = Write("a.bmp", bytes);
 
         var (png, frame, why) = await ClipboardImageStore.TryReadFileAsPngAsync(path, CancellationToken.None);
-        Assert.True(ClipboardPayload.IsPng(png), why ?? "BMP 没能转成 PNG");
+        Assert.True(ClipboardPayload.IsPng(png), why?.Render() ?? "BMP 没能转成 PNG");
         Assert.Equal((w, h), (frame.Width, frame.Height));
         Assert.Equal(ExpectedBgra(w, h, (x, y) => ((byte)(x * 11), (byte)(y * 31), (byte)(x * 5 + y * 7))), frame.Bgra);
 
@@ -139,7 +139,7 @@ public sealed class ClipboardCopyImageTests : IDisposable
         var path = Write("a.jpg", jpeg!);
 
         var (png, frame, why) = await ClipboardImageStore.TryReadFileAsPngAsync(path, CancellationToken.None);
-        Assert.True(ClipboardPayload.IsPng(png), why ?? "JPEG 没能转成 PNG");
+        Assert.True(ClipboardPayload.IsPng(png), why?.Render() ?? "JPEG 没能转成 PNG");
         Assert.Equal((6, 4), (frame.Width, frame.Height));
         Assert.True(ClipboardPayload.TryDecodePng(png!, out var again, out _));
         Assert.Equal(frame.Bgra, again.Bgra);
@@ -159,7 +159,7 @@ public sealed class ClipboardCopyImageTests : IDisposable
         var (w, h) = (5, 5);
         var bytes = Bmp24(w, h, (x, y) => ((byte)(x * 17), (byte)(y * 23), (byte)(x + y)));
         var (_, frame, why) = await ClipboardImageStore.TryReadFileAsPngAsync(Write("echo.bmp", bytes), CancellationToken.None);
-        Assert.True(frame.Width == w && frame.Height == h, why);
+        Assert.True(frame.Width == w && frame.Height == h, why?.Render());
 
         var dedupe = new ClipboardDedupe();
         dedupe.NoteOwnWrite(frame.Bgra, 1_000);
@@ -174,8 +174,8 @@ public sealed class ClipboardCopyImageTests : IDisposable
         var (png, _, why) = await ClipboardImageStore.TryReadFileAsPngAsync(
             Path.Combine(_dir, "gone.png"), CancellationToken.None);
         Assert.Null(png);
-        Assert.Contains("不在本机", why, StringComparison.Ordinal);
-        Assert.DoesNotContain("Exception", why, StringComparison.Ordinal);   // 不是系统原话
+        Assert.Contains("不在本机", why!.Render(), StringComparison.Ordinal);
+        Assert.DoesNotContain("Exception", why!.Render(), StringComparison.Ordinal);   // 不是系统原话
     }
 
     [Theory]
@@ -184,7 +184,7 @@ public sealed class ClipboardCopyImageTests : IDisposable
     {
         var (png, _, why) = await ClipboardImageStore.TryReadFileAsPngAsync(path, CancellationToken.None);
         Assert.Null(png);
-        Assert.Contains("没有给出文件路径", why, StringComparison.Ordinal);
+        Assert.Contains("没有给出文件路径", why!.Render(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public sealed class ClipboardCopyImageTests : IDisposable
         var path = Write("lie.png", System.Text.Encoding.UTF8.GetBytes("这不是一张图"));
         var (png, _, why) = await ClipboardImageStore.TryReadFileAsPngAsync(path, CancellationToken.None);
         Assert.Null(png);
-        Assert.Contains("解不开", why, StringComparison.Ordinal);
+        Assert.Contains("解不开", why!.Render(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -210,7 +210,7 @@ public sealed class ClipboardCopyImageTests : IDisposable
         var cut = png!.AsSpan(0, System.Math.Min(40, png!.Length)).ToArray();
         var (got, _, why) = await ClipboardImageStore.TryReadFileAsPngAsync(Write("cut.png", cut), CancellationToken.None);
         Assert.Null(got);
-        Assert.False(string.IsNullOrEmpty(why));
+        Assert.NotNull(why);   // 片117：那颗现在是 LocMessage?・⛔ 再按字符串判空
     }
 
     [Fact]
@@ -221,8 +221,8 @@ public sealed class ClipboardCopyImageTests : IDisposable
         var bytes = new byte[ClipboardPolicy.MaxImageBytes + 1];
         var (png, _, why) = await ClipboardImageStore.TryReadFileAsPngAsync(Write("big.png", bytes), CancellationToken.None);
         Assert.Null(png);
-        Assert.Contains("超过", why, StringComparison.Ordinal);
-        Assert.Contains("MB", why, StringComparison.Ordinal);
+        Assert.Contains("超过", why!.Render(), StringComparison.Ordinal);
+        Assert.Contains("MB", why!.Render(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -239,7 +239,7 @@ public sealed class ClipboardCopyImageTests : IDisposable
         try
         {
             var row = ImageRowNamed(name);
-            Assert.True(ClipboardImageStore.TryReadEntryImage(row, out var fromEntry, out var f1, out var w1), w1 ?? "");
+            Assert.True(ClipboardImageStore.TryReadEntryImage(row, out var fromEntry, out var f1, out var w1), w1?.Render() ?? "");
             var (fromFile, f2, w2) = await ClipboardImageStore.TryReadFileAsPngAsync(fullPath, CancellationToken.None);
             Assert.Equal(fromEntry, fromFile);
             Assert.Equal(f1.Bgra, f2.Bgra);

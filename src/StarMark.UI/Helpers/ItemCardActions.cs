@@ -218,7 +218,7 @@ public static class ItemCardActions
                 // 坏消息要说得出为什么、并落在用户能做的那件事上（P-54 同口径）：
                 // 只回一句"复制失败"，他只能去猜是程序坏了还是这张图坏了。
                 App.MainWindow?.ShowError(LocMessage.Of("card.copyImage.fail"),
-                    why is { } whyText ? LocMessage.Of("common.rawValue", whyText) : LocMessage.Of("card.image.unreadable"));
+                    why ?? LocMessage.Of("card.image.unreadable"));
                 return;
             }
 
@@ -265,7 +265,7 @@ public static class ItemCardActions
             if (png is null || frame.Width <= 0 || frame.Height <= 0)
             {
                 App.MainWindow?.ShowError(LocMessage.Of("card.pinImage.fail"),
-                    why is { } whyText ? LocMessage.Of("common.rawValue", whyText) : LocMessage.Of("card.image.unreadable"));
+                    why ?? LocMessage.Of("card.image.unreadable"));
                 return;
             }
 
@@ -287,7 +287,7 @@ public static class ItemCardActions
     }
 
     /// <summary>把历史行的读盘入口折成与文件侧同一个形状（两条路的失败都得带得出原因，不能一个抛一个返回）。</summary>
-    private static (byte[]? Png, ClipboardPayload.ImageFrame Frame, string? Reason) ReadEntryImage(ItemCardViewModel vm)
+    private static (byte[]? Png, ClipboardPayload.ImageFrame Frame, LocMessage? Reason) ReadEntryImage(ItemCardViewModel vm)
     {
         var ok = ClipboardImageStore.TryReadEntryImage(vm.GetItem(), out var bytes, out var frame, out var reason);
         return ok ? (bytes, frame, null) : (null, default, reason);
