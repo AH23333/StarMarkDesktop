@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using StarMark.Abstractions.Capture;
 using StarMark.Integrations.Capture;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Core.Capture;
 
@@ -23,9 +24,9 @@ public static class AnnotationPainter
     /// <summary>画完的那份缓冲是新数组；<paramref name="source"/> 保持原样。</summary>
     public static byte[] Render(byte[] source, int width, int height, IReadOnlyList<Annotation> marks)
     {
-        if (width <= 0 || height <= 0) throw new InvalidOperationException($"画面尺寸不合法（{width} × {height}）");
+        if (width <= 0 || height <= 0) throw new CaptureFailureException(LocMessage.Of("capture.canvas.badSize", width, height));
         if (source is null || source.Length < (long)width * height * 4)
-            throw new InvalidOperationException("像素缓冲比声明的尺寸短，画上去会越界");
+            throw new CaptureFailureException(LocMessage.Of("capture.pixel.bufferShort"));
         var output = (byte[])source.Clone();
         foreach (var mark in marks) Paint(output, width, height, mark);
         return output;
@@ -40,7 +41,7 @@ public static class AnnotationPainter
     /// </summary>
     public static void Paint(byte[] bgra, int width, int height, Annotation mark)
     {
-        if (mark.Problem() is { } problem) throw new InvalidOperationException(problem.Render());
+        if (mark.Problem() is { } problem) throw new CaptureFailureException(problem);
         var color = mark.EffectiveColorBgra;
         var radius = Radius(mark);
         // 变换（旋转/缩放）在这里落地一次：绘制、选择框、命中测试读的都是同一组点，

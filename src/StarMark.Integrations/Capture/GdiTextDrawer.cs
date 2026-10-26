@@ -1,6 +1,8 @@
 #nullable enable
 using System;
 using System.Runtime.InteropServices;
+using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Integrations.Capture;
 
@@ -43,9 +45,9 @@ public static class GdiTextDrawer
         string text, int fontHeight, int colorBgra, double rotation = 0d)
     {
         if (bgra is null || width <= 0 || height <= 0 || bgra.Length < (long)width * height * 4)
-            throw new ArgumentException("像素缓冲比声明的尺寸短，画上去会越界", nameof(bgra));
+            throw new CaptureFailureException(LocMessage.Of("capture.pixel.bufferShort"), nameof(bgra));
         if (string.IsNullOrEmpty(text)) return;
-        if (fontHeight < 1) throw new InvalidOperationException("文字高度至少 1 像素");
+        if (fontHeight < 1) throw new CaptureFailureException(LocMessage.Of("capture.gdi.fontHeightMin"));
         var lines = LinesOf(text);
         if (TextGeometry.Normalise(rotation) != 0d)
         {
@@ -54,19 +56,19 @@ public static class GdiTextDrawer
         }
 
         var dc = CreateCompatibleDC(IntPtr.Zero);
-        if (dc == IntPtr.Zero) throw new InvalidOperationException("创建内存画布失败（GDI 句柄用尽）");
+        if (dc == IntPtr.Zero) throw new CaptureFailureException(LocMessage.Of("capture.gdi.dcFailed"));
         var font = CreateFont(fontHeight);
         IntPtr oldFont = IntPtr.Zero, dib = IntPtr.Zero, oldObject = IntPtr.Zero, header = IntPtr.Zero;
         var bits = IntPtr.Zero;
         var tile = new byte[0];
         try
         {
-            if (font == IntPtr.Zero) throw new InvalidOperationException("系统没能创建标注用的字体（雅黑与 Segoe UI 都试过）");
+            if (font == IntPtr.Zero) throw new CaptureFailureException(LocMessage.Of("capture.gdi.fontFailed"));
             oldFont = SelectObject(dc, font);
             var lineHeight = LineHeight(dc);
             var (textWidth, textHeight) = ExtentOf(dc, lines, lineHeight);
             if (textWidth <= 0 || textHeight <= 0)
-                throw new InvalidOperationException("量不出这段文字要占多大（GDI 拒绝了这个字体或这段文字）");
+                throw new CaptureFailureException(LocMessage.Of("capture.gdi.measureFailed"));
 
             // 只处理与画布相交的那一块：用户可以把字写到选区外面，那部分应当被切掉而不是越界写
             var left = Math.Max(0, atX);
@@ -80,7 +82,7 @@ public static class GdiTextDrawer
             header = AllocTopDown32Header(tileWidth, tileHeight);
             dib = CreateDIBSection(dc, header, DIB_RGB_COLORS, out bits, IntPtr.Zero, 0);
             if (dib == IntPtr.Zero || bits == IntPtr.Zero)
-                throw new InvalidOperationException("创建文字画布失败（内存不足）");
+                throw new CaptureFailureException(LocMessage.Of("capture.gdi.dibFailed"));
             oldObject = SelectObject(dc, dib);
 
             // 逐行在"GDI 的位图内存"与托管数组之间搬：Marshal.Copy 内部自己 pin，
@@ -99,7 +101,7 @@ public static class GdiTextDrawer
             for (var line = 0; line < lines.Length; line++)
                 if (lines[line].Length > 0 &&
                     !TextOutW(dc, left - atX, top - atY + line * lineHeight, lines[line], lines[line].Length))
-                    throw new InvalidOperationException($"文字没能写出去（Win32 {Marshal.GetLastWin32Error()}）");
+                    throw new CaptureFailureException(LocMessage.Of("capture.gdi.textOutFailed", Marshal.GetLastWin32Error()));
             // GDI 的绘制可以被打批：不刷的话读回来可能是旧的位图内存
             GdiFlush();
 
@@ -134,13 +136,13 @@ public static class GdiTextDrawer
     public static (int Width, int Height) Measure(string text, int fontHeight)
     {
         if (string.IsNullOrEmpty(text)) return (0, 0);
-        if (fontHeight < 1) throw new InvalidOperationException("文字高度至少 1 像素");
+        if (fontHeight < 1) throw new CaptureFailureException(LocMessage.Of("capture.gdi.fontHeightMin"));
         var dc = CreateCompatibleDC(IntPtr.Zero);
-        if (dc == IntPtr.Zero) throw new InvalidOperationException("创建内存画布失败（GDI 句柄用尽）");
+        if (dc == IntPtr.Zero) throw new CaptureFailureException(LocMessage.Of("capture.gdi.dcFailed"));
         var font = CreateFont(fontHeight);
         try
         {
-            if (font == IntPtr.Zero) throw new InvalidOperationException("系统没能创建标注用的字体（雅黑与 Segoe UI 都试过）");
+            if (font == IntPtr.Zero) throw new CaptureFailureException(LocMessage.Of("capture.gdi.fontFailed"));
             var oldFont = SelectObject(dc, font);
             var box = ExtentOf(dc, LinesOf(text), LineHeight(dc));
             SelectObject(dc, oldFont);
@@ -164,7 +166,7 @@ public static class GdiTextDrawer
     {
         const string probe = "Hxg";               // 大写 + 小写 x + 带降部的 g：CellHeight 本来就含这两者
         if (!GetTextExtentPoint32W(dc, probe, probe.Length, out var extent) || extent.cy <= 0)
-            throw new InvalidOperationException("量不出这个字体的行高（GDI 拒绝了探针字符串）");
+            throw new CaptureFailureException(LocMessage.Of("capture.gdi.lineHeightFailed"));
         return extent.cy;
     }
 
@@ -175,10 +177,10 @@ public static class GdiTextDrawer
         {
             if (line.Length == 0) continue;
             if (!GetTextExtentPoint32W(dc, line, line.Length, out var extent) || extent.cx <= 0)
-                throw new InvalidOperationException("量不出这段文字要占多大（GDI 拒绝了这个字体或这段文字）");
+                throw new CaptureFailureException(LocMessage.Of("capture.gdi.measureFailed"));
             widest = Math.Max(widest, extent.cx);
         }
-        if (widest <= 0) throw new InvalidOperationException("量不出这段文字要占多大（每一行都是空的）");
+        if (widest <= 0) throw new CaptureFailureException(LocMessage.Of("capture.gdi.measureAllEmpty"));
         return (widest, lineHeight * lines.Length);
     }
 
@@ -192,7 +194,7 @@ public static class GdiTextDrawer
         int atX, int atY, string[] lines, int fontHeight, int colorBgra, double rotation)
     {
         var dc = CreateCompatibleDC(IntPtr.Zero);
-        if (dc == IntPtr.Zero) throw new InvalidOperationException("创建内存画布失败（GDI 句柄用尽）");
+        if (dc == IntPtr.Zero) throw new CaptureFailureException(LocMessage.Of("capture.gdi.dcFailed"));
         var font = CreateFont(fontHeight, grayscale: true);
         IntPtr dib = IntPtr.Zero, oldObject = IntPtr.Zero, oldFont = IntPtr.Zero, header = IntPtr.Zero;
         var bits = IntPtr.Zero;
@@ -200,7 +202,7 @@ public static class GdiTextDrawer
         int textWidth, textHeight;
         try
         {
-            if (font == IntPtr.Zero) throw new InvalidOperationException("系统没能创建标注用的字体（雅黑与 Segoe UI 都试过）");
+            if (font == IntPtr.Zero) throw new CaptureFailureException(LocMessage.Of("capture.gdi.fontFailed"));
             oldFont = SelectObject(dc, font);
             var lineHeight = LineHeight(dc);
             (textWidth, textHeight) = ExtentOf(dc, lines, lineHeight);
@@ -209,7 +211,7 @@ public static class GdiTextDrawer
             header = AllocTopDown32Header(textWidth, textHeight);
             dib = CreateDIBSection(dc, header, DIB_RGB_COLORS, out bits, IntPtr.Zero, 0);
             if (dib == IntPtr.Zero || bits == IntPtr.Zero)
-                throw new InvalidOperationException("创建文字画布失败（内存不足）");
+                throw new CaptureFailureException(LocMessage.Of("capture.gdi.dibFailed"));
             oldObject = SelectObject(dc, dib);
 
             // 黑底自己清：CreateDIBSection 不承诺位图内存的初值，而"黑＝没墨"是这张覆盖率图的前提
@@ -221,7 +223,7 @@ public static class GdiTextDrawer
             for (var line = 0; line < lines.Length; line++)
                 if (lines[line].Length > 0 &&
                     !TextOutW(dc, 0, line * lineHeight, lines[line], lines[line].Length))
-                    throw new InvalidOperationException($"文字没能写出去（Win32 {Marshal.GetLastWin32Error()}）");
+                    throw new CaptureFailureException(LocMessage.Of("capture.gdi.textOutFailed", Marshal.GetLastWin32Error()));
             GdiFlush();
 
             coverage = new byte[textWidth * textHeight];

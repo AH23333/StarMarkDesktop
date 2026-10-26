@@ -113,7 +113,7 @@ public sealed partial class CaptureOverlayWindow
             catch (Exception ex)
             {
                 StarLog.Error("[CaptureOverlay] 交图前合成标注失败", ex);
-                ShowError(LocMessage.Of("capture.strip.composeFailed", ex.Message));
+                ShowError(LocMessage.Of("capture.strip.composeFailed", CaptureFailureException.ReasonOf(ex)));
                 return null;
             }
         }
@@ -128,7 +128,7 @@ public sealed partial class CaptureOverlayWindow
             catch (Exception ex)
             {
                 StarLog.Error("[CaptureOverlay] 从合成图裁选区失败", ex);
-                ShowError(LocMessage.Of("capture.strip.cropFailed", ex.Message));
+                ShowError(LocMessage.Of("capture.strip.cropFailed", CaptureFailureException.ReasonOf(ex)));
                 return null;
             }
         }

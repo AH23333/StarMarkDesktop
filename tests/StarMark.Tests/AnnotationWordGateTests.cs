@@ -203,8 +203,8 @@ public sealed class AnnotationWordGateTests
     }
 
     /// <summary>
-    /// ⑥ 唯一保持念完的那一处按现场钉死（✅片3）：<c>Paint</c> 用同一句判据填 <c>InvalidOperationException</c>。
-    /// <para>那句话的出口是日志与崩溃转储，<b>没有屏幕宿主</b> ⇒ 当场念完才是对的（那颗归 <b>P-184</b>：
+    /// ⑥ 唯一保持念完的那一处按现场钉死（✅片3）：<c>Paint</c> 用同一句判据填 <c>CaptureFailureException</c>。
+    /// <para>那句异常现在两头都给：屏幕问 <c>Reason</c> 要键，日志与崩溃转储读 <c>Message</c>（<b>念完这一半只服务不上屏的那条出口</b>；从前这里写的「没有屏幕宿主」是错话——拖动预览与合成那一拍都把它送上屏，见 片118）（那颗归 <b>P-184</b>：
     /// ⛔ 为了"进表"而进表）。这一格同时是"把所有 <c>.Render()</c> 一律当泄漏"那种一刀切的反面证人——
     /// 同一颗判据在两条出口上本来就该有两种交法（✅P-191 取 (A) 同一条理由）。</para>
     /// </summary>
@@ -212,7 +212,7 @@ public sealed class AnnotationWordGateTests
     public void TheOnePlaceThatKeepsRenderingTheSentenceIsTheExceptionMessage()
     {
         var painter = SourceGate.Code(SourceGate.ReadRepoFile(Painter));
-        Assert.Contains("throw new InvalidOperationException(problem.Render());", painter);
+        Assert.Contains("throw new CaptureFailureException(problem);", painter);
         Assert.Equal(0, SourceGate.Count(painter, "Locale.T("));
         Assert.Equal(0, SourceGate.Count(painter, "Locale.Fmt("));
     }

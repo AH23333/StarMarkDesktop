@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using StarMark.Abstractions.Capture;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Integrations.Capture;
 
@@ -19,7 +20,7 @@ public static class BitmapTransform
         byte[] src, int width, int height, bool clockwise)
     {
         if (width <= 0 || height <= 0 || src.Length < (long)width * height * 4)
-            throw new ArgumentException("像素缓冲与声明尺寸不符");
+            throw new CaptureFailureException(LocMessage.Of("capture.geom.bufferMismatch"));
 
         var newWidth = height;
         var newHeight = width;
@@ -47,7 +48,7 @@ public static class BitmapTransform
     public static byte[] Flip(byte[] src, int width, int height, bool horizontal)
     {
         if (width <= 0 || height <= 0 || src.Length < (long)width * height * 4)
-            throw new ArgumentException("像素缓冲与声明尺寸不符");
+            throw new CaptureFailureException(LocMessage.Of("capture.geom.bufferMismatch"));
         var dst = new byte[src.Length];
         for (var y = 0; y < height; y++)
         {
@@ -75,12 +76,12 @@ public static class BitmapTransform
         byte[] src, int srcWidth, int srcHeight, int x, int y, int width, int height)
     {
         if (srcWidth <= 0 || srcHeight <= 0 || src.Length < (long)srcWidth * srcHeight * 4)
-            throw new ArgumentException("像素缓冲与声明尺寸不符");
+            throw new CaptureFailureException(LocMessage.Of("capture.geom.bufferMismatch"));
         var left = Math.Clamp(x, 0, srcWidth);
         var top = Math.Clamp(y, 0, srcHeight);
         var w = Math.Clamp(width, 0, srcWidth - left);
         var h = Math.Clamp(height, 0, srcHeight - top);
-        if (w <= 0 || h <= 0) throw new ArgumentException($"裁不出画面（请求 {width}×{height} @({x},{y})，源图 {srcWidth}×{srcHeight}）");
+        if (w <= 0 || h <= 0) throw new CaptureFailureException(LocMessage.Of("capture.geom.cropEmpty", width, height, x, y, srcWidth, srcHeight));
         var dst = new byte[(long)w * h * 4];
         for (var row = 0; row < h; row++)
         {
@@ -98,7 +99,7 @@ public static class BitmapTransform
     public static void DimOutside(byte[] bgra, int width, int height, IntRect hole, byte alpha)
     {
         if (width <= 0 || height <= 0 || bgra.Length < (long)width * height * 4)
-            throw new ArgumentException("像素缓冲与声明尺寸不符");
+            throw new CaptureFailureException(LocMessage.Of("capture.geom.bufferMismatch"));
         var keep = 255 - alpha;
         if (keep <= 0) return;
         var x0 = Math.Clamp(hole.X, 0, width);

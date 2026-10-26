@@ -90,12 +90,12 @@ public sealed class AnnotationPainterTests
     [InlineData(8, 0)]
     [InlineData(-4, 4)]
     public void AbsurdCanvasSizesAreRefused(int width, int height)
-        => Assert.Contains("尺寸不合法", Assert.Throws<InvalidOperationException>(
+        => Assert.Contains("尺寸不合法", Assert.Throws<CaptureFailureException>(
             () => AnnotationPainter.Render(Canvas(4, 4), width, height, Array.Empty<Annotation>())).Message);
 
     [Fact]
     public void ShortBufferIsRefusedInsteadOfReadingPastTheEnd()
-        => Assert.Throws<InvalidOperationException>(() => AnnotationPainter.Render(
+        => Assert.Throws<CaptureFailureException>(() => AnnotationPainter.Render(
             new byte[4 * 4 * 4 - 1], 4, 4, Array.Empty<Annotation>()));
 
     // ────────── 形状 ──────────
@@ -361,7 +361,7 @@ public sealed class AnnotationPainterTests
         var canvas = Canvas(side, side);
         var empty = new Annotation(AnnotationTool.Number, Array.Empty<PixelPoint>(), Red, 15) { Number = 1 };
 
-        var ex = Assert.Throws<InvalidOperationException>(() => AnnotationPainter.Paint(canvas, side, side, empty));
+        var ex = Assert.Throws<CaptureFailureException>(() => AnnotationPainter.Paint(canvas, side, side, empty));
         Assert.Contains("至少需要 1 个点", ex.Message);
         Assert.True(IsBackground(At(canvas, side, 0, 0)), "原点不许落一颗没有归属的墨");
     }
@@ -506,7 +506,7 @@ public sealed class AnnotationPainterTests
     [Fact]
     public void PaintRefusesAnUndrawableAnnotationWithTheModelsReason()
     {
-        var ex = Assert.Throws<InvalidOperationException>(() => AnnotationPainter.Paint(
+        var ex = Assert.Throws<CaptureFailureException>(() => AnnotationPainter.Paint(
             Canvas(8, 8), 8, 8, new Annotation(AnnotationTool.Rectangle, new[] { P00 }, Red, 4)));
         Assert.Contains("矩形", ex.Message);
         Assert.Contains("2 个点", ex.Message);

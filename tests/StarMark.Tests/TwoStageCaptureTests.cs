@@ -258,8 +258,8 @@ public sealed class TwoStageCaptureTests
         var (pixels, cw, ch) = BitmapTransform.Crop(src, 4, 4, 2, 2, 99, 99);
         Assert.Equal((2, 2), (cw, ch));
         // 夹完全空的请求必须抛，不许交一张 0×0 的图
-        Assert.Throws<ArgumentException>(() => BitmapTransform.Crop(src, 4, 4, 4, 4, 2, 2));
-        Assert.Throws<ArgumentException>(() => BitmapTransform.Crop(new byte[3], 4, 4, 0, 0, 1, 1));
+        Assert.Throws<CaptureFailureException>(() => BitmapTransform.Crop(src, 4, 4, 4, 4, 2, 2));
+        Assert.Throws<CaptureFailureException>(() => BitmapTransform.Crop(new byte[3], 4, 4, 0, 0, 1, 1));
     }
 
     /// <summary>DimOutside：洞内一格不动，洞外按 keep 因子变暗，alpha 不许被动过（提交还要靠它不透明）。</summary>
@@ -297,7 +297,7 @@ public sealed class TwoStageCaptureTests
         // 洞比画面大/负原点都不许越界写
         BitmapTransform.DimOutside(bgra, 4, 4, new IntRect(-3, -3, 20, 20), 0x66);
         BitmapTransform.DimOutside(bgra, 4, 4, new IntRect(4, 4, 2, 2), 0x66);
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<CaptureFailureException>(() =>
             BitmapTransform.DimOutside(new byte[3], 4, 4, new IntRect(0, 0, 1, 1), 0x66));
     }
 }
