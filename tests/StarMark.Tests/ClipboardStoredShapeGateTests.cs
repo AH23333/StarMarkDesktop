@@ -16,7 +16,9 @@ namespace StarMark.Tests;
 /// （四颗词「未知来源/N 行/N 字/N+ 字」交显示侧对空值当场念）；② 显示侧三出口
 /// （<c>TitleDisplayOf</c>/<c>SubtitleMessageOf</c>/<c>SubtitleDisplayOf</c>）三语各念一遍，
 /// zh 列与旧库形状<b>逐字相同</b>（中文界面零视觉变化）；③ 建贴同语言（交出去的是键＋实参，
-/// 语言定死在贴上那一刻）；④ 旧形状行照存词照念（⛔ 迁移历史行），他源行/外部库行不受牵连；
+/// 语言定死在贴上那一刻）；④ 旧形状行照存词照念（⛔ 迁移历史行），他源行/外部库行不受牵连
+/// ——<b>片119 改口其中一颗</b>：空副标题的 Ditto 行交 <c>SourceNames</c> 那颗主人念（那句词在表里
+/// 早有唯一主人，源里那份是同一句字的第二主人＝P-192 本层确证上屏的那一颗）；
 /// ⑤ 四判据（搜索强弱/AI 射程/重复组/健康读数）逐颗证明改完仍判同一件事。</para>
 /// <para>这一档挂 <c>[Collection("LocaleGlobal")]</c>：②③会当场换语言，⛔ 与别的换语言的证人交错跑。</para>
 /// </summary>
@@ -30,6 +32,7 @@ public sealed class ClipboardStoredShapeGateTests : IDisposable
     private const string SearchWidget = "src/StarMark.UI/ViewModels/SearchWidgetViewModel.cs";
     private const string GridWidget = "src/StarMark.UI/ViewModels/ItemGridWidgetViewModel.cs";
     private const string Glance = "src/StarMark.UI/Views/GlanceWidget.xaml.cs";
+    private const string DittoSourceFile = "src/StarMark.Integrations/Ditto/DittoSource.cs";
 
     /// <summary>本族 8 颗，逐颗点名（计数型判据抓不到"换名"＝台架规则 #164）。</summary>
     private static readonly string[] Keys =
@@ -175,8 +178,10 @@ public sealed class ClipboardStoredShapeGateTests : IDisposable
 
     /// <summary>
     /// 旧形状行的副标题是<b>用户数据</b>：三语下都照原文念，不重算、不追改——
-    /// 「⛔ 迁移历史行」那条红线。他源行（书签/Star）照原文，空的他源行交 null（调用方自己决定）；
-    /// Ditto 行（type 相同但库是别人的）⛔ 当场算——外部库的词不归我们念。
+    /// 「⛔ 迁移历史行」那条红线。他源行（书签/Star）照原文，空的他源行交 null（调用方自己决定说什么）。
+    /// <b>Ditto 行本批改口</b>（片119）：那句来源名早有唯一主人（<c>source.name.ditto</c>・P-187），
+    /// 源里那颗字面量是同一句字的第二主人，故空副标题的 Ditto 行交那颗主人念——见
+    /// <see cref="DittoRowsSpeakTheSourceNameFromItsOwnOwner"/>。
     /// </summary>
     [Fact]
     public void LegacyRowsKeepTheirStoredWordsAndForeignRowsAreUntouched()
@@ -198,9 +203,32 @@ public sealed class ClipboardStoredShapeGateTests : IDisposable
 
         var foreign = new Item { Type = ItemType.Bookmark, Source = ItemSources.Chrome, Subtitle = string.Empty };
         Assert.Null(ClipboardEntry.SubtitleMessageOf(foreign));
+    }
+
+    /// <summary>
+    /// P-192 本层第一次把「读到赋值处、确证上屏」那一颗落地：Ditto 文本行的副标题原本由源自己
+    /// 写死一句中文（卡片直接念它＝换语言还是中文，且那句话在<b>入库那一刻</b>就冻了）。
+    /// 现在写侧零词入库、显示侧交 <see cref="SourceNames"/> 那颗主人当场念——
+    /// zh 那一发与旧库形状<b>逐字相同</b>（中文界面零视觉变化＝本族底线），en／ja 跟着换。
+    /// </summary>
+    [Fact]
+    public void DittoRowsSpeakTheSourceNameFromItsOwnOwner()
+    {
+        // 写侧：源里那颗第二主人扫不到（整句字面量一颗不剩），改口后的那一行按原文钉住。
+        var source = CodeOf(DittoSourceFile);
+        Assert.Equal(0, Count(source, Quoted("Ditto 剪贴板")));
+        Assert.Equal(1, Count(source, "Subtitle = isFiles ? clip.Files[0] : string.Empty"));
 
         var ditto = new Item { Type = ItemType.Clipboard, Source = ItemSources.Ditto, Subtitle = string.Empty };
-        Assert.Null(ClipboardEntry.SubtitleMessageOf(ditto));
+        Locale.TrySet(AppLanguage.Chinese);
+        Assert.Equal("Ditto 剪贴板", ClipboardEntry.SubtitleDisplayOf(ditto));
+        Locale.TrySet(AppLanguage.English);
+        Assert.Equal("Ditto clipboard", ClipboardEntry.SubtitleDisplayOf(ditto));
+        Locale.TrySet(AppLanguage.Japanese);
+        Assert.Equal("Ditto クリップボード", ClipboardEntry.SubtitleDisplayOf(ditto));
+
+        // 那颗主人自己也问一遍：Ditto 的身份映射的字面键（⛔ 拼接・⛔ 在显示侧手打第二份句子）。
+        Assert.Equal("source.name.ditto", SourceNames.NameKeyOf(ItemSources.Ditto));
     }
 
     // ────────── ⑤ 四判据：改完仍判同一件事 ──────────

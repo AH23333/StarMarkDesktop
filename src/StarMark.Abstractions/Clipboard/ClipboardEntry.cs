@@ -271,11 +271,14 @@ public static class ClipboardEntry
     /// 副标题的显示出口，交<b>还没取词</b>的那一句（谁渲染谁负责时机）。
     /// 库存非空＝旧形状行（或他源行），照原文包进 <c>common.rawValue</c>（⛔ 迁移历史行——已存的词是用户数据）；
     /// 空＋内置剪贴板行＝按中性数键当场拼（见 <see cref="DescribeSubtitle"/>）；
+    /// 空＋Ditto 行＝念 <see cref="SourceNames"/> 那颗主人（那句来源名本来就登记在表里，
+    /// 本批把 <c>DittoSource</c> 里剩下的第二份并回来＝P-192 本层第一颗确证上屏的落地）；
     /// 其余 null＝不是这一族的行，调用方自己决定说什么。
     /// </summary>
     public static LocMessage? SubtitleMessageOf(Item item)
     {
         if (item.Subtitle.Length > 0) return LocMessage.Of("common.rawValue", item.Subtitle);
+        if (item.Source == ItemSources.Ditto) return SourceNames.NameOf(item.Source);
         if (item.Type != ItemType.Clipboard || item.Source != ItemSources.Clipboard) return null;
         return DescribeSubtitle(item);
     }

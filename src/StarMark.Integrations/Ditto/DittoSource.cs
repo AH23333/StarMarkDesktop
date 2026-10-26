@@ -179,7 +179,10 @@ public sealed class DittoSource : IItemSource
             Source = ItemSources.Ditto,
             SourceId = $"ditto:{clip.Id}",
             Title = isFiles ? string.Join(", ", clip.Files.Take(1)) : firstLine,
-            Subtitle = isFiles ? clip.Files[0] : "Ditto 剪贴板",
+            // 文本行的副标题一颗字都不存：那句「Ditto 剪贴板」的主人住在表里（<c>source.name.ditto</c>・
+            // P-187 删掉各源自写的中文常量就是为了这颗），这里存一份就是第二主人，而且存进去的那一刻就冻了语言。
+            // 文件行照存路径——那是中性事实，⛔ 语言内容（口径同 ✅P-199）。
+            Subtitle = isFiles ? clip.Files[0] : string.Empty,
             Uri = isFiles ? ToFileUri(clip.Files[0]) : string.Empty,
             SearchText = isFiles ? string.Join("\n", clip.Files) + "\n" + text : text,
             CreatedAt = clip.Date,
