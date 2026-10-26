@@ -17,9 +17,23 @@ public partial class ItemCardViewModel : ObservableObject
 {
     private readonly Item _item;
 
+    // ✅P-199：副标题那句「还没取词的话」构造时算一次（键＋实参，语言中立）——写进 getter
+    // 就是每格都重解一遍 extra_json，历史页一次摆几百张（同 IsClipboardImageRow 的 remarks）。
+    private readonly LocMessage? _subtitleMessage;
+
     public long Id => _item.Id;
-    public string Title => _item.Title;
-    public string Subtitle => _item.Subtitle;
+
+    /// <summary>标题格。✅P-199（他裁 (A)）：新写的行不再把「图片」兜底冻进 <c>items.title</c>；
+    /// 空标题的图片行在这里<b>当场</b>念键（建贴那一刻的语言）。判据用构造时算好的
+    /// <see cref="IsClipboardImageRow"/>，⛔ 为这一格再调显示出口解一遍 <c>extra_json</c>。</summary>
+    public string Title => !string.IsNullOrEmpty(_item.Title) ? _item.Title
+        : IsClipboardImageRow ? Locale.T("clip.title.image")
+        : _item.Title;
+
+    /// <summary>副标题格。✅P-199：库存非空照原文（含旧形状行，⛔ 迁移）；空＋剪贴板行＝
+    /// <see cref="_subtitleMessage"/> 那颗 LocMessage 在这一格被念出来那一刻取词。
+    /// 口径同 <see cref="StarLabel"/>：卡片住在绑定行里，换语言不追改，但念的是当下语言。</summary>
+    public string Subtitle => _subtitleMessage?.Render() ?? string.Empty;
     public string Uri => _item.Uri;
 
     /// <summary>
@@ -341,6 +355,7 @@ public partial class ItemCardViewModel : ObservableObject
         var built = BuildClipboardThumb(flaggedMissing);
         ClipboardThumb = built.Thumb;
         ClipboardImageMissing = flaggedMissing || built.FileAbsent;
+        _subtitleMessage = ClipboardEntry.SubtitleMessageOf(item);
     }
 
     public void SetHidden(bool value) => IsHidden = value;

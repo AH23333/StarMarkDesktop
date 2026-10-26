@@ -201,7 +201,7 @@ public static partial class ClipboardPayload
 
     /// <summary>
     /// <c>CF_DIB</c> / <c>CF_DIBV5</c> 的字节 → <see cref="ImageFrame"/>；失败时 <paramref name="reason"/>
-    /// 是给状态行与日志用的原话（"拒收必须出声"沿用 F10 那条口径）。
+    /// 是给日志用的原话（"拒收必须出声"沿用 F10 那条口径；✅P-199 改口：原注释许的「状态行」从未存在）。
     /// <para>
     /// 头部每个字段的读法都有"错了不崩但画面错"的余地，逐条列在这里：
     /// ① <c>biHeight</c> 的<b>符号</b>才是行序（负＝自上而下，截屏类给的多半是负的；取绝对值之后必须记住原始符号）；

@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Clipboard;
 using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
@@ -450,18 +451,21 @@ public sealed partial class GlanceWidget : UserControl
     }
 
     private static Button BuildItemButton(Item item)
-    {        var panel = new StackPanel { Spacing = 2 };
+    {        // ✅P-199：标题/副标题走显示出口——常看列表那道 file:// Uri 过滤拦不住剪贴板图片行，
+        // 新写的行副标题是空串，四颗词（来源/行数/字数/体积）由这一格当场念，⛔ 空着不解释。
+        var subtitle = ClipboardEntry.SubtitleDisplayOf(item);
+        var panel = new StackPanel { Spacing = 2 };
         panel.Children.Add(new TextBlock
         {
-            Text = item.Title,
+            Text = ClipboardEntry.TitleDisplayOf(item),
             FontSize = 12,
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
-        if (!string.IsNullOrWhiteSpace(item.Subtitle))
+        if (!string.IsNullOrWhiteSpace(subtitle))
         {
             panel.Children.Add(new TextBlock
             {
-                Text = item.Subtitle,
+                Text = subtitle,
                 FontSize = 10,
                 Opacity = 0.6,
                 TextTrimming = TextTrimming.CharacterEllipsis,

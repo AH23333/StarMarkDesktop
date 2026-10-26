@@ -98,9 +98,10 @@ public sealed class ClipboardCleanupBodyWordGateTests : IDisposable
         Assert.Empty(ScreenWords(MethodBody(CodeOf(Assets), "public static LocMessage CleanupConfirmBody(")));
         Assert.Empty(ScreenWords(MethodBody(CodeOf(ViewModel), "private async Task CleanClipboardAssetsAsync()")));
 
-        // 同一把尺在这一档的<b>别处</b>仍读得到字：剩下那一颗是 DescribeTitle 的兜底字（归 P-199）。
-        // ⚠ 那颗 1 是✅WI-64 片2 搬完七句之后的<b>现读</b>；它变成 0 的那天＝P-199 落了地，这一行要跟着改口径。
-        Assert.Single(ScreenWords(CodeOf(Assets)));
+        // ✅P-199 落地：DescribeTitle 的兜底字归零（交空串，「图片」由显示侧念键）——整档归零，
+        // "零"在这里是正判据：再冒出一颗屏幕字就是回归。归零这一问的分母由
+        // ClipboardAssetsWordGateTests ①那格出（ClipboardPolicy 的 9 片段），⛔ 在本格再数一遍（规则 #86）。
+        Assert.Empty(ScreenWords(CodeOf(Assets)));
     }
 
     // ────────── ② 形状禁项：交出身份，取词只在宿主那一拍 ──────────

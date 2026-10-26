@@ -38,8 +38,8 @@ public static partial class ClipboardPayload
     public const long MaxDecodedBytes = 256L * 1024 * 1024;
 
     /// <summary>
-    /// PNG 字节 → <see cref="ImageFrame"/>。失败时 <paramref name="reason"/> 是给状态行与日志的原话
-    /// （"拒收必须出声"沿用 F10 那条口径），且<b>每一种"看着能解其实错位"的形状都在这里被挡</b>：
+    /// PNG 字节 → <see cref="ImageFrame"/>。失败时 <paramref name="reason"/> 是给日志的原话
+    /// （"拒收必须出声"沿用 F10 那条口径；✅P-199 改口：原注释许的「状态行」从未存在），且<b>每一种"看着能解其实错位"的形状都在这里被挡</b>：
     /// 隔行（Adam7）、非 8/16 位深、索引图没有调色板、调色板索引越界、IDAT 解出来长度不符
     /// （行数/行跨距算错时最常见的症状）。
     /// </summary>

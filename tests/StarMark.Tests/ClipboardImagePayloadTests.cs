@@ -502,7 +502,9 @@ public sealed class ClipboardImagePayloadTests
     public void ImageTitleIsTheGeometry()
     {
         Assert.Equal("1920×1080", ClipAssets.DescribeTitle(1920, 1080));
-        Assert.Equal("图片", ClipAssets.DescribeTitle(0, 0));        // 尺寸读不出来时也不许空着
+        // ✅P-199（他裁 (A)）：尺寸读不出来时交空串——「图片」那颗词由显示侧对空标题当场
+        // 念键（clip.title.image），⛔ 冻进 items.title（那一行会活过用户换语言的那一天）。
+        Assert.Equal(string.Empty, ClipAssets.DescribeTitle(0, 0));
     }
 
     [Fact]

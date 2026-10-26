@@ -142,7 +142,8 @@ public sealed class ClipboardImageCaptureTests : IDisposable
         Assert.Equal(new Uri(Path.Combine(ClipAssets.Folder, "a.png")).AbsoluteUri, item.Uri);
         Assert.Equal(string.Empty, item.Description);            // 正文在文件里，库里不存第二份
         Assert.Equal("3840×2160", item.Title);
-        Assert.Contains("4 MB", item.Subtitle);
+        // ✅P-199：来源/几何/体积那半句交显示侧当场念（clip.sub.image），库里只留空串。
+        Assert.Equal(string.Empty, item.Subtitle);
         Assert.Equal(ClipboardEntry.FormatImage, ClipboardEntry.Format(item));
         Assert.Equal((3840, 2160), ClipboardEntry.ImageSize(item));
         Assert.Equal(4_194_304, ClipboardEntry.ImageBytes(item));

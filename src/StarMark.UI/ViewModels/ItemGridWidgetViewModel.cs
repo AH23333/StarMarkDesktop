@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Clipboard;
 using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
@@ -155,7 +156,9 @@ public sealed class ItemGridWidgetViewModel
             };
 
             var rows = items
-                .Select(it => new ItemRowItem(it.Id, it.Title, it.Subtitle, it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId))
+                // ✅P-199：标题/副标题走显示出口（空值当场念中性数键），⛔ 再把库里的原文当屏幕话——
+                // 新写的剪贴板行副标题是空串，念的活在这一格干（库存非空照原文＝旧形状行不受影响）。
+                .Select(it => new ItemRowItem(it.Id, ClipboardEntry.TitleDisplayOf(it), ClipboardEntry.SubtitleDisplayOf(it), it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId))
                 .ToList();
             ApplyRows(rows);
         }

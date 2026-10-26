@@ -102,7 +102,9 @@ public static class ClipboardPolicy
     /// ② 尺寸下限；③ 来源排除（密码管理器在前台时同样不记，与文本共用 <see cref="IsExcludedApp"/>）。
     /// <para><b>图片内容一律不做敏感检查</b>——这不是遗漏而是 §3-Q3 的裁决：文本能扫卡号/私钥/JWT，
     /// 图片扫不了，所以采集默认关，并在设置页开关旁原话写明"开启即包含一切屏幕内容"。
-    /// 拒绝时 <paramref name="reason"/> 是给状态行与日志看的原话（"哑丢弃是缺陷"，同 F10）。</para>
+    /// 拒绝时 <paramref name="reason"/> 是给日志看的原话（"哑丢弃是缺陷"，同 F10）。✅P-199 改口：
+    /// 原注释许了「状态行」——那道出口从未存在（图片采集是连续背景动作，每次拒绝都上一屏就是噪点），
+    /// 拒绝理由的活只有日志这一份。</para>
     /// </summary>
     public static bool ShouldRecordImage(int width, int height, long bytes, string? foregroundProcessName,
         out string? reason)

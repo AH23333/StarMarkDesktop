@@ -306,6 +306,14 @@ public sealed class I18nContractTests : IDisposable
                 + "⚠ 两颗主人共用这一颗：待办<b>那颗远的截止日</b>与世界时钟那一格<b>月日读数</b>（⛔ 各写一份中文）",
             ["folder.group.githubStars"] = "伪根显示名「⭐ GitHub Stars」三语同形：GitHub 是专有名词、Stars 是它的术语"
                 + "（与 nav.rss／source.starTip 同族），日文界面也照写星标这一串（✅P-210 文件夹树伪根 id 化那一批）",
+            ["clip.sub.text1"] = "纯骨架「{0} · {1}」三列同形：副题那一发「来源 · 多少字」的分隔位（✅WI-64c 片114／P-199 显示侧当场念，"
+                + "与 card.title.withCategory 同形——「·」也是语言内容，⛔ 在 C# 里拼）；{1} 交的是 clip.sub.chars 那颗词",
+            ["clip.sub.text2"] = "纯骨架「{0} · {1} · {2}」三列同形：副题那一发「来源 · 几行 · 多少字」（✅WI-64c 片114／P-199，与 clip.sub.text1 同形）；"
+                + "{1} 交 clip.sub.lines、{2} 交 clip.sub.chars／clip.sub.charsMore",
+            ["clip.sub.lines"] = "「{0} 行」中日同形：日文量词也写「行」（en 列走 label 形 \"Lines: {0}\"——复数闸门家法），"
+                + "与 calc.cat.speed 那类「日文照汉字写」同族（✅WI-64c 片114／P-199）",
+            ["clip.sub.image"] = "纯骨架「{0} · {1}×{2} · {3}」三列同形：来源、几何、体积全是中性事实，「·」与「×」都是记号不是词"
+                + "（✅WI-64c 片114／P-199，与 clip.sub.text1 同形）；{3} 交的是字节数那颗读数",
         };
 
         var actual = UiStrings.All

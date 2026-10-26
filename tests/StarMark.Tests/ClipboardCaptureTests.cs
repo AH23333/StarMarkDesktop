@@ -132,11 +132,14 @@ public sealed class ClipboardCaptureTests : IDisposable
     [Fact]
     public async Task UnknownForegroundApp_IsAllowedButLabeled()
     {
-        // 取不到前台进程名不能成为"整条历史不记"的理由——但也不能显示成"来源可信"，故标"未知来源"。
+        // 取不到前台进程名不能成为"整条历史不记"的理由——但也不能显示成"来源可信"。
+        // ✅P-199：那颗「未知来源」不再写进 items.subtitle（库里只存中性形状），
+        // 显示侧对空副标题当场念（clip.sub.unknown，三语读数在 ClipboardStoredShapeGateTests）；
+        // 本格只钉"记了＋库里零词"。
         var item = await Cap(new ClipboardDedupe(), "来源不明的一段内容", app: null);
 
         Assert.NotNull(item);
-        Assert.Contains("未知来源", item!.Subtitle);
+        Assert.Equal(string.Empty, item!.Subtitle);
     }
 
     [Fact]

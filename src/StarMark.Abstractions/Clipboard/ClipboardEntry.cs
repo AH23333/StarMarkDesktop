@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Nodes;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions.Clipboard;
 
@@ -23,6 +24,7 @@ public static class ClipboardEntry
     private const string CopyCountKey = "clipCopyCount";
     private const string TruncatedKey = "clipTruncated";
     private const string FullLengthKey = "clipFullLength";
+    private const string LinesKey = "clipLines";
     private const string WidthKey = "clipWidth";
     private const string HeightKey = "clipHeight";
     private const string BytesKey = "clipBytes";
@@ -62,22 +64,25 @@ public static class ClipboardEntry
             Source = ItemSources.Clipboard,
             SourceId = ClipboardPolicy.BuildSourceId(normalized),   // 键用<b>全文</b>归一结果，不含截断
             Title = ClipboardPolicy.BuildTitle(body),
-            Subtitle = BuildSubtitle(sourceApp, normalized, truncated),
+            // ✅P-199（他裁 (A)：库里只存中性形状，片114 落地）：副标题那四颗词
+            // （「未知来源/N 行/N 字/N+ 字」）是界面语言，⛔ 再冻进 items.subtitle——交显示侧
+            // 对空副标题当场念（SubtitleMessageOf）。新行零词入库；旧形状行照存原文
+            // （⛔ 迁移历史行），显示侧库存优先照念。
+            Subtitle = string.Empty,
             Uri = string.Empty,                                     // 本地内容无可打开 URI；点击=复制回剪贴板
             Description = body,
             CreatedAt = now.ToUnixTimeSeconds(),
             UpdatedAt = now.ToUnixTimeSeconds(),
-            ExtraJson = Write(null, sourceApp, format, 1, truncated, normalized.Length),
+            ExtraJson = Write(null, sourceApp, format, 1, truncated, normalized.Length,
+                truncated ? CountLines(normalized) : 0),
         };
     }
 
-    private static string BuildSubtitle(string? sourceApp, string text, bool truncated)
+    private static int CountLines(string text)
     {
         var lines = 1;
         foreach (var c in text) if (c == '\n') lines++;
-        var where = string.IsNullOrWhiteSpace(sourceApp) ? "未知来源" : ClipboardPolicy.CollapseControlChars(sourceApp!);
-        var size = truncated ? $"{text.Length}+ 字" : $"{text.Length} 字";
-        return lines > 1 ? $"{where} · {lines} 行 · {size}" : $"{where} · {size}";
+        return lines;
     }
 
     /// <summary>
@@ -93,12 +98,13 @@ public static class ClipboardEntry
             Source = ItemSources.Clipboard,
             SourceId = sourceId,
             Title = ClipAssets.DescribeTitle(meta.Width, meta.Height),
-            Subtitle = BuildImageSubtitle(sourceApp, meta),
+            // ✅P-199：同 Build——副标题交显示侧当场念（SubtitleMessageOf），库里只留空串。
+            Subtitle = string.Empty,
             Uri = UriOf(meta.MainName),                               // 见 UriOf：图片行的"可打开的东西"就是那张 PNG
             Description = string.Empty,                             // 正文在文件里，库里不存第二份
             CreatedAt = now.ToUnixTimeSeconds(),
             UpdatedAt = now.ToUnixTimeSeconds(),
-            ExtraJson = Write(null, sourceApp, FormatImage, 1, false, 0, meta),
+            ExtraJson = Write(null, sourceApp, FormatImage, 1, false, 0, 0, meta),
         };
 
     /// <summary>
@@ -119,14 +125,8 @@ public static class ClipboardEntry
     /// <summary>合并后的 extra 决定地址：<b>名字被回放换掉时 Uri 必须跟着换</b>，否则预览指向一个不存在的文件。</summary>
     public static string UriOfMerged(string? mergedExtraJson) => UriOf(NameOf(mergedExtraJson, FileKey));
 
-    private static string BuildImageSubtitle(string? sourceApp, ImageMeta meta)
-    {
-        var where = string.IsNullOrWhiteSpace(sourceApp) ? "未知来源" : ClipboardPolicy.CollapseControlChars(sourceApp!);
-        return $"{where} · {meta.Width}×{meta.Height} · {ClipAssets.DescribeBytes(meta.Bytes)}";
-    }
-
     private static string Write(string? existingJson, string? sourceApp, string format, long copyCount,
-        bool truncated, int fullLength, ImageMeta? image = null)
+        bool truncated, int fullLength, int fullLines, ImageMeta? image = null)
     {
         var node = Parse(existingJson);
         if (!string.IsNullOrWhiteSpace(sourceApp)) node[AppKey] = ClipboardPolicy.CollapseControlChars(sourceApp!);
@@ -136,12 +136,17 @@ public static class ClipboardEntry
         {
             node[TruncatedKey] = true;
             node[FullLengthKey] = fullLength;
+            // ✅P-199：截断前行数与 clipFullLength 同生同清（镜像那颗裁决）：显示侧要念「N 行」，
+            // 而正文只剩前 32 KB，数正文数不出原文的行数。缺键即回落到数正文（缺字段即默认值，零迁移）。
+            if (fullLines > 0) node[LinesKey] = fullLines;
+            else node.Remove(LinesKey);
         }
         else
         {
             // 没截断就把旧标记清掉（而不是写成 JSON null）：留着"已截断"会让 UI 永远挂着半句假话。
             node.Remove(TruncatedKey);
             node.Remove(FullLengthKey);
+            node.Remove(LinesKey);
         }
         if (image is { } m)
         {
@@ -198,7 +203,7 @@ public static class ClipboardEntry
     /// </summary>
     public static string MergeForReplay(string? existingExtraJson, Item draft, long copyCount)
         => Write(existingExtraJson, App(draft), Format(draft), copyCount, IsTruncated(draft), FullLength(draft),
-            ImageOf(draft));
+            FullLines(draft), ImageOf(draft));
 
     /// <summary>条目格式（<see cref="FormatText"/> / <see cref="FormatFiles"/> / <see cref="FormatImage"/>；未知旧数据按文本）。</summary>
     public static string Format(Item item) => FormatOf(item.ExtraJson);
@@ -233,6 +238,76 @@ public static class ClipboardEntry
             return Parse(item.ExtraJson)?[FullLengthKey]?.GetValue<int>() ?? 0;
         }
         catch { return 0; }
+    }
+
+    /// <summary>
+    /// 截断前原文的行数（<c>clipLines</c>，与 <see cref="FullLength"/> 同一颗裁决：只在截断时落库）。
+    /// 未被截断/坏数据 ⇒ 0：显示侧回落到数正文——没截断时正文就是全文，行数一样。
+    /// </summary>
+    public static int FullLines(Item item)
+    {
+        if (!IsTruncated(item)) return 0;
+        try
+        {
+            return Parse(item.ExtraJson)?[LinesKey]?.GetValue<int>() ?? 0;
+        }
+        catch { return 0; }
+    }
+
+    // ==================== 显示出口（✅P-199 他裁 (A)：库里只存中性形状） ====================
+
+    /// <summary>
+    /// 标题格的显示出口。库存非空照原文——<see cref="ClipboardPolicy.BuildTitle"/> 折出来的首行
+    /// 与图片行的 <c>W×H</c> 本来就是中性形状，照旧落库照旧念；空标题＋图片行是当年那颗「图片」
+    /// 兜底的替代口：<b>当场</b>念 <c>clip.title.image</c>（建贴那一刻的语言，⛔ 冻进 items.title）。
+    /// 其余空标题照空串回去。
+    /// </summary>
+    public static string TitleDisplayOf(Item item)
+        => !string.IsNullOrEmpty(item.Title) ? item.Title
+        : IsImageOf(item.ExtraJson) ? Locale.T("clip.title.image")
+        : item.Title;
+
+    /// <summary>
+    /// 副标题的显示出口，交<b>还没取词</b>的那一句（谁渲染谁负责时机）。
+    /// 库存非空＝旧形状行（或他源行），照原文包进 <c>common.rawValue</c>（⛔ 迁移历史行——已存的词是用户数据）；
+    /// 空＋内置剪贴板行＝按中性数键当场拼（见 <see cref="DescribeSubtitle"/>）；
+    /// 其余 null＝不是这一族的行，调用方自己决定说什么。
+    /// </summary>
+    public static LocMessage? SubtitleMessageOf(Item item)
+    {
+        if (item.Subtitle.Length > 0) return LocMessage.Of("common.rawValue", item.Subtitle);
+        if (item.Type != ItemType.Clipboard || item.Source != ItemSources.Clipboard) return null;
+        return DescribeSubtitle(item);
+    }
+
+    /// <summary>副标题的纯文本出口（当场取词）。日志/通知/一次性格子用；常驻屏幕路径优先
+    /// <see cref="SubtitleMessageOf"/>（交键＋实参，换语言重贴跟着换）。</summary>
+    public static string SubtitleDisplayOf(Item item) => SubtitleMessageOf(item)?.Render() ?? string.Empty;
+
+    private static LocMessage DescribeSubtitle(Item item)
+    {
+        // 「来源」那半句：应用名是中性事实（控制符折掉照念）；没取到才念「未知来源」那颗键——
+        // 旧形状把这颗词写死进库，换语言就成了外文界面里的一行中文。
+        var where = App(item) is { } app
+            ? LocMessage.Of("common.rawValue", ClipboardPolicy.CollapseControlChars(app))
+            : LocMessage.Of("clip.sub.unknown");
+        if (IsImageOf(item.ExtraJson))
+        {
+            var (w, h) = ImageSize(item);
+            return LocMessage.Of("clip.sub.image", where, w, h,
+                LocMessage.Of("common.rawValue", ClipAssets.DescribeBytes(ImageBytes(item))));
+        }
+        var body = item.Description ?? string.Empty;
+        var truncated = IsTruncated(item);
+        // 截断时行数读 clipLines（正文只剩前 32 KB，数不出原文的行数）；没截断时正文就是全文，数它。
+        // 坏数据（标着截断却没有 clipLines）回落到数正文——缺字段即默认值。
+        var lines = truncated ? FullLines(item) : CountLines(body);
+        if (lines <= 0) lines = 1;                      // 正文空也⛔ 把「0 行」念出去
+        var chars = truncated ? FullLength(item) : body.Length;
+        var charsMsg = LocMessage.Of(truncated ? "clip.sub.charsMore" : "clip.sub.chars", chars);
+        return lines > 1
+            ? LocMessage.Of("clip.sub.text2", where, LocMessage.Of("clip.sub.lines", lines), charsMsg)
+            : LocMessage.Of("clip.sub.text1", where, charsMsg);
     }
 
     // ==================== 图片条目的负载 ====================

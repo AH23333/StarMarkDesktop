@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Clipboard;
 using StarMark.Abstractions.I18n;
 using StarMark.Core.Search;
 
@@ -217,7 +218,7 @@ public sealed class SearchWidgetViewModel
                         new BrowseFilter { Sort = Sort == "name" ? "name" : "recent", Limit = 60 }, ct);
                     if (ct.IsCancellationRequested) return;
                     foreach (var it in recent)
-                        Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId));
+                        Results.Add(new SearchResultItem(it.Id, ClipboardEntry.TitleDisplayOf(it), ClipboardEntry.SubtitleDisplayOf(it), it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId));
                     ResetSelectionAfterPopulate();
                 }
                 // 有货可看时那句空态⛔ 上屏（视图按 Results.Count 决定这一格可见性），所以这里交 null 而⛔ 再造一颗"最近条目"。
@@ -233,7 +234,7 @@ public sealed class SearchWidgetViewModel
                 var result = await _search.SearchAsync(q, new SearchFilter { Tags = selected, MaxResults = 200, Sort = Sort }, ct);
                 if (ct.IsCancellationRequested) return;   // 已被更新的搜索取代，丢弃本次结果（即便 provider 未提前中断）
                 foreach (var it in result.Items)
-                    Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId));
+                    Results.Add(new SearchResultItem(it.Id, ClipboardEntry.TitleDisplayOf(it), ClipboardEntry.SubtitleDisplayOf(it), it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId));
                 ResetSelectionAfterPopulate();
                 EmptyHint = EmptyMessageFor(q, selected);
                 return;
@@ -254,7 +255,7 @@ public sealed class SearchWidgetViewModel
             }
             if (ct.IsCancellationRequested) return;
             foreach (var it in items)
-                Results.Add(new SearchResultItem(it.Id, it.Title, it.Subtitle, it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId));
+                Results.Add(new SearchResultItem(it.Id, ClipboardEntry.TitleDisplayOf(it), ClipboardEntry.SubtitleDisplayOf(it), it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId));
             ResetSelectionAfterPopulate();
             EmptyHint = EmptyMessageFor(q, selected);
         }

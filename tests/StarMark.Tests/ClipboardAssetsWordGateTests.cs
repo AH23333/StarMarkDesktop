@@ -68,9 +68,9 @@ public sealed class ClipboardAssetsWordGateTests : IDisposable
     /// 片1 那四颗供话者的<b>方法体</b>里一颗屏幕字都不剩；同一把尺在同一档的<b>别处</b>必须量得出字。
     /// <para>为什么按方法体而⛔ 整档（与 <c>BackupWordGateTests</c> 那格不同）：✅WI-64 片1 只搬了三颗，
     /// 同档的 <c>CleanupConfirmBody</c> 当时是<b>片2</b> 的射程。✅WI-64 片2 落完后那颗也归了零
-    /// （它由 <c>ClipboardCleanupBodyWordGateTests</c> 钉，⛔ 在本格再数一遍＝规则 #86），
-    /// 整档剩下的<b>一颗</b>是 <c>DescribeTitle</c> 那颗兜底字——✅WI-64c 判它归 <b>P-199</b>（成品字写进
-    /// <c>items.title</c>），⛔ 在本批射程。</para>
+    /// （它由 <c>ClipboardCleanupBodyWordGateTests</c> 钉，⛔ 在本格再数一遍＝规则 #86）。
+    /// ✅P-199 落地后 <c>DescribeTitle</c> 那颗兜底字也归了零（交空串，「图片」由显示侧念键）：
+    /// ClipAssets 整档现读<b>零片段</b>——下面那格把"零"钉成正判据，这一问的对照分母全落在 ClipboardPolicy。</para>
     /// <para>归零那颗问⛔ 没有分母就读不成证据（规则 #188：一把静默读成 0 的尺比红更危险）。</para>
     /// </summary>
     [Fact]
@@ -88,15 +88,15 @@ public sealed class ClipboardAssetsWordGateTests : IDisposable
             Assert.Empty(ScreenWords(body));
         }
 
-        // 分母：同一把尺在同一个文件里仍扫得到字。两串都是<b>红字自己报的数</b>而⛔ 手打（规则 #476）。
-        // ✅WI-64 片1 第一跑把阈值写成 10、现场报 9；✅WI-64 片2 搬完那七句后 ClipAssets <b>现读 1 片段</b>
-        //   （就是上面那段说的 <c>DescribeTitle</c> 兜底字）。那颗 1 是本批<b>搬字搬出来的</b>，⛔ 当成"放宽判据"——
-        //   这一问的对照宽度今天由 ClipboardPolicy 那 9 片段出：那四发拒绝理由只进日志（✅WI-64c 判定），
-        //   ⛔ 会随哪一批搬字归零，所以它当分母当得稳。两串⛔ 与"整档汉字行"那把尺互读（口径不同＝坑表 #423）。
+        // 分母：✅P-199 落地后 ClipAssets 整档归零（DescribeTitle 兜底交了空串，「图片」由显示侧念键）——
+        // "零"在这里是正判据：再冒出一颗屏幕字就是回归。这一问的对照宽度全由 ClipboardPolicy 出：
+        // 那四发拒绝理由只进日志（✅WI-64c 判定），⛔ 会随哪一批搬字归零，所以它当分母当得稳。
+        // 数字⛔ 手打（规则 #476）；两串⛔ 与"整档汉字行"那把尺互读（口径不同＝坑表 #423）。
         var restAssets = ScreenWords(CodeOf(Assets));
         var restPolicy = ScreenWords(CodeOf(Policy));
-        Assert.True(restAssets.Count >= 1 && restPolicy.Count >= 9,
-            $"对照分母不够宽：ClipAssets {restAssets.Count}／ClipboardPolicy {restPolicy.Count} 片段"
+        Assert.Empty(restAssets);
+        Assert.True(restPolicy.Count >= 9,
+            $"对照分母不够宽：ClipboardPolicy {restPolicy.Count} 片段"
             + "——这把尺⛔ 扫得到东西，上面那些 0 不算证据");
     }
 

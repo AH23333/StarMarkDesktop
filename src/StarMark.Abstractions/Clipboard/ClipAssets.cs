@@ -266,9 +266,17 @@ public static class ClipAssets
     /// </summary>
     public static string DescribeBytes(long bytes) => FileSizeText.Human(bytes);
 
-    /// <summary>图片条目的标题（§1b 裁决：尺寸本身就是要说给用户看的第一个事实）。</summary>
+    /// <summary>
+    /// 图片条目的标题（§1b 裁决：尺寸本身就是要说给用户看的第一个事实）。
+    /// <para>✅P-199（他裁 (A)：库里只存中性形状）：<c>W×H</c> 本来就是中性形状，照旧落库；
+    /// 读不出尺寸时交<b>空串</b>而⛔ 「图片」——那颗词由显示侧对空标题念键
+    /// （<c>ClipboardEntry.TitleDisplayOf</c>）。在写入侧取词只是把「当初那一门语言」冻进
+    /// <c>items.title</c>，那一行会活过用户换语言的那一天（同族先例＝✅P-186「身份⛔ 念出来的名字」）。
+    /// 采集链上这颗兜底其实到不了：门禁先按 <see cref="ClipboardPolicy.MinImageEdge"/> 挡掉了
+    /// 宽高不足的帧，走到这里的只有手改过 <c>extra_json</c> 的行——防御臂也⛔ 留词。</para>
+    /// </summary>
     public static string DescribeTitle(int width, int height)
-        => width > 0 && height > 0 ? $"{width}×{height}" : "图片";
+        => width > 0 && height > 0 ? $"{width}×{height}" : string.Empty;
 
     // ==================== 启动对账（§3-Q6 三分类） ====================
 

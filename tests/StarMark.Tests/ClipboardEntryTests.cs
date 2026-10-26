@@ -72,15 +72,38 @@ public sealed class ClipboardEntryTests
     }
 
     [Fact]
-    public void Build_SubtitleCarriesAppAndShape()
+    public void Build_SubtitleStaysEmptySoTheDisplaySideSpeaks()
     {
+        // ✅P-199（他裁 (A)：库里只存中性形状）：四颗词（「未知来源/N 行/N 字/N+ 字」）由显示侧
+        // 对空副标题当场念（ClipboardStoredShapeGateTests 钉三语读数），写侧一颗都不落库——
+        // 落库就是把「当初那一门语言」冻进 items.subtitle，那一行会活过用户换语言的那一天。
         var oneLine = Build("abcdefgh", app: "Code");
-        Assert.Contains("Code", oneLine.Subtitle);
-        Assert.Contains("8 字", oneLine.Subtitle);
+        Assert.Equal(string.Empty, oneLine.Subtitle);
 
         var multi = Build("a1\nb2\nc3", app: null);
-        Assert.Contains("3 行", multi.Subtitle);
-        Assert.Contains("未知来源", multi.Subtitle);            // 取不到前台进程也要说清楚，不能留空
+        Assert.Equal(string.Empty, multi.Subtitle);
+    }
+
+    [Fact]
+    public void Build_TruncatedMultiLine_RecordsFullLineCountForTheDisplaySide()
+    {
+        // ✅P-199：截断时 clipLines 与 clipFullLength 同生同清——正文只剩前 32 KB，
+        // 显示侧要念「N 行」只能靠这颗中性数键（缺键即回落到数正文，零迁移）。
+        var original = string.Join("\n", Enumerable.Range(1, 9).Select(i => new string('m', ClipboardPolicy.MaxStoredChars / 3)));
+        var item = Build(original);
+
+        Assert.True(ClipboardEntry.IsTruncated(item));
+        Assert.Equal(9, ClipboardEntry.FullLines(item));
+        Assert.Equal(original.Length, ClipboardEntry.FullLength(item));
+    }
+
+    [Fact]
+    public void Build_NotTruncated_ReportsZeroFullLengthAndLines()
+    {
+        var item = Build("正常长度的一段文本");
+        Assert.False(ClipboardEntry.IsTruncated(item));
+        Assert.Equal(0, ClipboardEntry.FullLength(item));
+        Assert.Equal(0, ClipboardEntry.FullLines(item));       // 没截断就整颗清掉，不留半句假话
     }
 
     [Fact]
@@ -119,6 +142,7 @@ public sealed class ClipboardEntryTests
         Assert.Equal("edge", ClipboardEntry.App(probe));                                   // 来源刷新到最后一次
         Assert.False(ClipboardEntry.IsTruncated(probe));                                   // 旧截断标记必须清掉
         Assert.Equal(0, ClipboardEntry.FullLength(probe));
+        Assert.Equal(0, ClipboardEntry.FullLines(probe));                                  // 截断前行数跟着同清（✅P-199）
         Assert.Equal(42, JsonNode.Parse(merged)![ "mine"]!.GetValue<int>());               // 未知键不被抹掉
     }
 

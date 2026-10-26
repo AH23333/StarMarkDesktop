@@ -1167,6 +1167,21 @@ public static class UiStrings
         new Entry("clip.intake.off", "图片采集未开启：只记录文本与文件列表。", "Image capture is off: only text and file lists are recorded.", "画像収集はオフ：テキストとファイル一覧のみ記録します。"),
         new Entry("clip.intake.paused", "图片采集已打开，但剪贴板历史总开关没开（或监听没建立）——现在一条图片都不会记录。", "Image capture is on, but the clipboard-history master switch is off (or the listener never started) — no image will be recorded right now.", "画像収集はオンですが、クリップボード履歴の親スイッチがオフ（または監視未開始）です——現在画像は 1 件も記録されません。"),
         new Entry("clip.intake.on", "已开启：复制到的图片会存成 PNG，并预生成 {0}px 缩略图。单张超过 {1} 或短边小于 {2}px 的不收；密码管理器在前台时一律不收。", "On: copied images are stored as PNG with a {0}px thumbnail generated up front. Anything over {1} per image, or shorter than {2}px on its short side, is skipped; so is anything copied while a password manager is in the foreground.", "オン：コピーした画像は PNG で保存し、{0}px のサムネイルを先に作ります。1 枚 {1} を超える場合や短辺が {2}px 未満の場合は保存せず、パスワードマネージャーが前面のときも保存しません。"),
+        // ✅P-199（他裁 (A)：库里只存中性形状，片114 落地）：剪贴板卡片副标题那四颗词
+        // （「未知来源/N 行/N 字/N+ 字」）与图片行空标题那颗「图片」不再由写侧冻进 items.title/subtitle，
+        // 交显示侧（ClipboardEntry.SubtitleMessageOf/TitleDisplayOf）对空值当场念——建贴那一刻是什么语言，
+        // 屏幕上就是什么语言。骨架键三列同形（{0} 的个数与位置逐列一致，占位符闸门钉着）；
+        // 「·」分隔符写在骨架列里（⛔ 在 C# 里拼）。zh 列与旧库形状逐字相同：中文界面零视觉变化。
+        // en 的行数/字数两行走 label 形（"Lines: {0}"／"Chars: {0}"）：槽后紧跟复数正是复数闸门
+        // （RssPluralGate 那把尺）猎的「1 lines」缺陷形，片48 起家法＝名词收进 label（"Entries fetched: {0}"）。
+        new Entry("clip.title.image", "图片", "Image", "画像"),
+        new Entry("clip.sub.unknown", "未知来源", "Unknown source", "取得元不明"),
+        new Entry("clip.sub.text1", "{0} · {1}", "{0} · {1}", "{0} · {1}"),
+        new Entry("clip.sub.text2", "{0} · {1} · {2}", "{0} · {1} · {2}", "{0} · {1} · {2}"),
+        new Entry("clip.sub.lines", "{0} 行", "Lines: {0}", "{0} 行"),
+        new Entry("clip.sub.chars", "{0} 字", "Chars: {0}", "{0} 文字"),
+        new Entry("clip.sub.charsMore", "{0}+ 字", "Chars: {0}+", "{0}+ 文字"),
+        new Entry("clip.sub.image", "{0} · {1}×{2} · {3}", "{0} · {1}×{2} · {3}", "{0} · {1}×{2} · {3}"),
         // 今日速览的月题（批次 WI-31，P-172 收官）：主行与月历头部**同一个键**——此前两处各写一份
         // $"{年}年{月}月"，正是"同一句话两个主人"的现行案。en 走"2026/10"：不补零、不造 12 颗月名装平行
         //（组件位读得出就够；带格式的 {1:00} 会让占位符闸门眼盲——形状守闸门的，不是反过来）。
