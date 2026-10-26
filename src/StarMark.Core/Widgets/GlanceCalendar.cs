@@ -21,8 +21,11 @@ namespace StarMark.Core.Widgets;
 /// </para>
 /// <para>
 /// "第几个星期几"那一类（美国 Memorial Day／日本 成人の日）是<b>规则</b>，⛔ 抄某一年的日历。
-/// ⚠ 日本的春分／秋分与節分<b>本批没排</b>：那几天要天文公式才算得准，系数拿不到第二处读数去校——
-/// 写错了屏幕上就是"距某节日还差一天"的假话（欠项登记在账本 P-186 那一节）。
+/// ⚠ 反过来，日本的春分／秋分<b>就是</b>抄那一年日历的那一类：那两天的日号由天文时刻定（1948 年那部法律
+/// 写的是「春分の日／秋分の日」而不是一颗日期），所以它们走 <see cref="JapanEquinoxDays"/> 那张官制年表，
+/// 年表覆盖不到的年份一律不出——写错了屏幕上就是"距某节日还差一天"的假话（口径见账本 P-189）。
+/// <b>節分仍欠</b>：它＝「立春前一日」，而本仓拿不到立春那颗的第二处读数（寿星公式的立春系数连 2020・2024
+/// 这几年自己就读错），故⛔ 排・⛔ 用裸公式顶上。
 /// </para>
 /// </summary>
 public static class GlanceCalendar
@@ -126,7 +129,7 @@ public static class GlanceCalendar
 
     // ─────────────────── 规则表：名字住在表里，这里只排"哪天算" ───────────────────
 
-    private enum RuleKind { Fixed, NthWeekday, LastWeekday, Lunar, EveOfLunarNewYear, Qingming }
+    private enum RuleKind { Fixed, NthWeekday, LastWeekday, Lunar, EveOfLunarNewYear, Qingming, JapanEquinox }
 
     /// <summary>
     /// 一颗节日规则。<see cref="Month"/>／<see cref="Day"/> 在 <see cref="RuleKind.Lunar"/> 那一支装的是
@@ -155,6 +158,12 @@ public static class GlanceCalendar
 
         /// <summary>清明：寿星公式，每年日期浮动，所以它是一条<b>规则</b>而不是一颗固定日期。</summary>
         public static FestivalRule Qingming(string key) => new(key, RuleKind.Qingming, 4, 0, DayOfWeek.Sunday, 0);
+
+        /// <summary>日本の春分の日／秋分の日：月＝3 或 9，日号由 <see cref="TryJapanEquinoxDay"/> 查官制年表。
+        /// 它⛔ 走寿星公式（那条路 2022 春分与 2041 秋分各差一天，见 <c>GlanceCalendarTests</c> 那颗对照格），
+        /// 年表覆盖不到的年份一律<b>永不命中</b>＝宁缺不说假话。</summary>
+        public static FestivalRule JapanEquinox(string key, int month)
+            => new(key, RuleKind.JapanEquinox, month, 0, DayOfWeek.Sunday, 0);
     }
 
 
@@ -219,6 +228,7 @@ public static class GlanceCalendar
         FestivalRule.Fixed("glance.festival.nationFoundingDay", 2, 11),
         FestivalRule.Fixed("glance.festival.emperorsBirthday", 2, 23),
         FestivalRule.Fixed("glance.festival.dollFestival", 3, 3),
+        FestivalRule.JapanEquinox("glance.festival.springEquinoxDay", 3),
         FestivalRule.Fixed("glance.festival.constitutionDay", 5, 3),
         FestivalRule.Fixed("glance.festival.greenDay", 5, 4),
         FestivalRule.Fixed("glance.festival.childrensDay", 5, 5),
@@ -229,6 +239,7 @@ public static class GlanceCalendar
         FestivalRule.Fixed("glance.festival.mountainDay", 8, 11),
         FestivalRule.Fixed("glance.festival.obon", 8, 15),
         FestivalRule.Nth("glance.festival.respectForAgedDay", 9, DayOfWeek.Monday, 3),
+        FestivalRule.JapanEquinox("glance.festival.autumnEquinoxDay", 9),
         FestivalRule.Nth("glance.festival.sportsDay", 10, DayOfWeek.Monday, 2),
         FestivalRule.Fixed("glance.festival.cultureDay", 11, 3),
         FestivalRule.Fixed("glance.festival.labourThanksgivingDay", 11, 23),
@@ -264,6 +275,8 @@ public static class GlanceCalendar
         RuleKind.Lunar => !lunar.IsLeap && lunar.Month == rule.Month && lunar.Day == rule.Day,
         RuleKind.EveOfLunarNewYear => !nextLunar.IsLeap && nextLunar.Month == 1 && nextLunar.Day == 1,
         RuleKind.Qingming => date.Month == 4 && date.Day == GetQingmingDay(date.Year),
+        RuleKind.JapanEquinox => date.Month == rule.Month
+                                 && TryJapanEquinoxDay(date.Year, rule.Month, out var day) && date.Day == day,
         _ => false,
     };
 
@@ -286,6 +299,34 @@ public static class GlanceCalendar
         var shortYear = year % 100;
         var centuryConstant = year < 2000 ? 5.59 : 4.81;
         return (int)Math.Floor(shortYear * 0.2422 + centuryConstant) - (shortYear / 4);
+    }
+
+    /// <summary>国立天文台「何年後かの春分の日・秋分の日」那张予報表（2020～2050，按 JST 那天）。
+    /// 这两颗是日本<b>国民の祝日</b>里唯一日期不固定的，故交<b>年表</b>而不交公式：寿星公式在同一张表上
+    /// 2022 年春分与 2041 年秋分各差一天（那一格由 <c>GlanceCalendarTests</c> 钉着）。</summary>
+    private static readonly (int Year, int SpringDay, int AutumnDay)[] JapanEquinoxDays =
+    [
+        (2020, 20, 22), (2021, 20, 23), (2022, 21, 23), (2023, 21, 23), (2024, 20, 22),
+        (2025, 20, 23), (2026, 20, 23), (2027, 21, 23), (2028, 20, 22), (2029, 20, 23),
+        (2030, 20, 23), (2031, 21, 23), (2032, 20, 22), (2033, 20, 23), (2034, 20, 23),
+        (2035, 21, 23), (2036, 20, 22), (2037, 20, 23), (2038, 20, 23), (2039, 21, 23),
+        (2040, 20, 22), (2041, 20, 23), (2042, 20, 23), (2043, 21, 23), (2044, 20, 22),
+        (2045, 20, 22), (2046, 20, 23), (2047, 21, 23), (2048, 20, 22), (2049, 20, 22),
+        (2050, 20, 23),
+    ];
+
+    /// <summary>那两颗浮动祝日在当年的日号。<b>年表覆盖不到的年份交 false</b>——界面上就那一行不出，
+    /// ⛔ 拿公式外推到 2051 年以后（P-189 的「寧缺毋滥」口径）。</summary>
+    public static bool TryJapanEquinoxDay(int year, int month, out int day)
+    {
+        foreach (var row in JapanEquinoxDays)
+        {
+            if (row.Year != year) continue;
+            day = month == 3 ? row.SpringDay : month == 9 ? row.AutumnDay : 0;
+            return day > 0;
+        }
+        day = 0;
+        return false;
     }
 
     private static readonly string[] LunarMonthNames =

@@ -108,6 +108,74 @@ public sealed class GlanceCalendarTests : IDisposable
         }
     }
 
+    /// <summary>日本那两颗<b>日期不固定</b>的国民の祝日（春分／秋分）：钉的是国立天文台那张年表的原文，
+    /// ⛔ 在测试里再算一遍天文公式（那正是账本 P-189 说的"拿不到第二处读数"的处境）。
+    /// 每格还自证"同月只许一格念这颗键"——把浮动日号写成整月都算，就红在这一句。</summary>
+    [Theory]
+    [InlineData(2020, 3, 20)]
+    [InlineData(2022, 3, 21)]   // ← 公式在这一格读成 20，年表（与真历）是 21
+    [InlineData(2024, 9, 22)]
+    [InlineData(2026, 3, 20)]
+    [InlineData(2026, 9, 23)]
+    [InlineData(2027, 3, 21)]
+    [InlineData(2041, 9, 23)]   // ← 公式在这一格读成 22
+    [InlineData(2050, 9, 23)]
+    public void JapanEquinox_LandsOnTheOfficialTableRow(int year, int month, int day)
+    {
+        Assert.True(GlanceCalendar.TryJapanEquinoxDay(year, month, out var got),
+            $"{year} 年 {month} 月不在年表里＝这颗年表被改短了");
+        Assert.Equal(day, got);
+
+        var key = month == 3 ? "glance.festival.springEquinoxDay" : "glance.festival.autumnEquinoxDay";
+        Locale.TrySet(AppLanguage.Japanese);
+        Assert.Equal(key, GlanceCalendar.FestivalMessage(new DateOnly(year, month, day))?.Key);
+
+        var hits = 0;
+        for (var d = 1; d <= DateTime.DaysInMonth(year, month); d++)
+            if (GlanceCalendar.FestivalMessage(new DateOnly(year, month, d))?.Key == key) hits++;
+        Assert.Equal(1, hits);
+    }
+
+    /// <summary>年表覆盖不到的年份＝<b>那一行不出</b>。这是 P-189 的"寧缺毋滥"那一半：
+    /// ⛔ 拿公式外推到年表之外去说一颗浮动祝日（错了就是屏幕上"距秋分还差一天"的假话）。</summary>
+    [Fact]
+    public void JapanEquinox_OutsideTheTable_ShowsNothingRatherThanAGuess()
+    {
+        Locale.TrySet(AppLanguage.Japanese);
+        Assert.False(GlanceCalendar.TryJapanEquinoxDay(2019, 3, out _));
+        Assert.False(GlanceCalendar.TryJapanEquinoxDay(2051, 9, out _));
+        Assert.Null(GlanceCalendar.FestivalMessage(new DateOnly(2019, 3, 20)));
+        Assert.Null(GlanceCalendar.FestivalMessage(new DateOnly(2051, 9, 22)));
+        Assert.NotNull(GlanceCalendar.FestivalMessage(new DateOnly(2020, 3, 20)));   // 边界内那一格要出
+    }
+
+    /// <summary><b>第二处读数</b>那一格：寿星公式与年表 2020～2050 逐年逐颗对一遍，并把"公式错的正好这两颗"
+    /// 钉死。它⛔ 证明年表是对的（年表的出处是天文台），它证明的是<b>这颗年表有第二处可对</b>、
+    /// 以及"为什么⛔ 用公式上屏"。有人换常数或改年表，这一格当场红。</summary>
+    [Fact]
+    public void JapanEquinox_FormulaDisagreesWithTheTableOnExactlyThoseTwoRows()
+    {
+        var diff = new System.Collections.Generic.List<string>();
+        for (var year = 2020; year <= 2050; year++)
+        {
+            if (Shouxing(year, 20.646) != TableDay(year, 3)) diff.Add(year + " 春分");
+            if (Shouxing(year, 23.042) != TableDay(year, 9)) diff.Add(year + " 秋分");
+        }
+        Assert.Equal(new[] { "2022 春分", "2041 秋分" }, diff);
+    }
+
+    private static int Shouxing(int year, double centuryConstant)
+    {
+        var shortYear = year % 100;
+        return (int)Math.Floor(shortYear * 0.2422 + centuryConstant) - shortYear / 4;
+    }
+
+    private static int TableDay(int year, int month)
+    {
+        Assert.True(GlanceCalendar.TryJapanEquinoxDay(year, month, out var day), $"{year} 年 {month} 月缺行＝年表断档");
+        return day;
+    }
+
     [Fact]
     public void Festival_OrdinaryDay_IsNull()
     {

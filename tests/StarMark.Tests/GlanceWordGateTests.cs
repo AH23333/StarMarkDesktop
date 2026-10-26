@@ -40,14 +40,14 @@ public sealed class GlanceWordGateTests : IDisposable
 
     private static string CodeOf(string rel) => SourceGate.Code(SourceGate.ReadRepoFile(rel));
 
-    /// <summary>本批落表的 6 颗速览句（49 颗节日名不重复列在这里：它们由下面那颗可达性判据逐颗问一遍）。</summary>
+    /// <summary>本批落表的 6 颗速览句（51 颗节日名不重复列在这里：它们由下面那颗可达性判据逐颗问一遍）。</summary>
     private static readonly string[] ShippedSentences =
     [
         "widget.glance.lunarDay", "widget.glance.lunarDayWithFestival", "widget.glance.nextFestival",
         "widget.glance.trending.none", "widget.glance.trending.failed", "widget.glance.trending.rowTip",
     ];
 
-    /// <summary>表里那 49 颗节日键（按表读，⛔ 在本档再抄一份名单——抄的那份会跟着表落后）。</summary>
+    /// <summary>表里那 51 颗节日键（按表读，⛔ 在本档再抄一份名单——抄的那份会跟着表落后）。</summary>
     private static string[] FestivalRows()
         => Regex.Matches(SourceGate.ReadRepoFile("src/StarMark.Abstractions/I18n/UiStrings.cs"),
                 "\"glance\\.festival\\.[A-Za-z0-9]+\"")
@@ -111,7 +111,7 @@ public sealed class GlanceWordGateTests : IDisposable
 
     /// <summary>
     /// <b>双向对账＋逐颗可达</b>（台架规则 #111：键族必须穷举可达性，成串的键名暴露不了"这行永远走不到"）：
-    /// 三档清单跑出来的键集合，必须与表里那 49 行<b>完全相等</b>。
+    /// 三档清单跑出来的键集合，必须与表里那 51 行<b>完全相等</b>。
     /// <para>两个方向各抓一种坏法：表里有、清单排不到＝那一行是死行（改措辞的人会以为它在屏幕上）；
     /// 清单排了、表里没登记＝屏幕上出现 <c>⟨glance.festival.xxx⟩</c>，而<b>通用表闸门看不见</b>——
     /// 它比对的是表里已有的行，不知道有人正在问一颗没登记的。</para>
@@ -120,7 +120,7 @@ public sealed class GlanceWordGateTests : IDisposable
     public void EveryFestivalRowIsReachableAndNothingReachableIsUnlisted()
     {
         var rows = FestivalRows();
-        Assert.Equal(49, rows.Length);   // 本批落表读数（2026-10-09）；⛔ 抄进别的档当判据
+        Assert.Equal(51, rows.Length);   // 本批落表读数（片115・2026-10-26 加两颗日本春分／秋分）；⛔ 抄进别的档当判据
 
         var reached = new HashSet<string>(StringComparer.Ordinal);
         var from = new DateOnly(2024, 1, 1);
@@ -321,7 +321,7 @@ public sealed class GlanceWordGateTests : IDisposable
             "public static string LunarText(DateOnly date)"), StringComparison.Ordinal);
     }
 
-    /// <summary>表里⛔ 有控制字符（换行是布局，不是文案；规则 #100）。49＋6 颗逐颗问。</summary>
+    /// <summary>表里⛔ 有控制字符（换行是布局，不是文案；规则 #100）。51＋6 颗逐颗问。</summary>
     [Fact]
     public void NoRowOfThisBatchCarriesAControlCharacter()
     {
