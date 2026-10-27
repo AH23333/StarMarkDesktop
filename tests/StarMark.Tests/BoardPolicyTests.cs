@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.IO;
 using System.Linq;
 using StarMark.Core.Boards;
 using Xunit;
@@ -574,19 +575,39 @@ public sealed class BoardPolicyTests
     private static byte[] nestedOne() => Utf8("{\"elements\":[{\"elements\":[1,2,3]}]}");
 
     /// <summary>
-    /// 用户<b>产物</b>那颗目录的主人（P-219 的 (A) 落地腿）。三臂各自只被一种坏打红：
-    /// ① 平时进图片那一族、目录名<b>逐字</b>钉（那是身份：改名＝换一颗目录，用户按这两个词找东西）；
-    /// ② 那颗根被改道⇒跟着走（沙盒取证往他真图片目录里写一颗＝批次 SS 撞过的那一族）；
-    /// ③ 同一跑里两臂<b>必须不相等</b>——把 <c>??</c> 两边对调，①照样绿而②③当场红（名册 296：禁项判据要自带正件）。
+    /// 用户<b>产物</b>那颗目录的主人（P-219 的 (A) 落地腿；✅P-259 (B) 重锚：新落点 ASCII 中性名＋旧名册在就续用）。
+    /// 五臂各自只被一种坏打红：① 目录名<b>逐字</b>钉（那是身份：改名＝换一颗目录，用户按这两个词找东西），
+    /// 且是 <b>ASCII</b>——日文／英文用户拿不到他那门话念不出来的目录名；② 那颗根被改道⇒跟着走
+    /// （沙盒取证往他真图片目录里写一颗＝批次 SS 撞过的那一族）；③ 同一跑里两臂<b>必须不相等</b>——
+    /// 把 <c>??</c> 两边对调，①照样绿而②③当场红（名册 296：禁项判据要自带正件）；
+    /// ④ 盘上没有旧名册时新名落在那棵根下；⑤ 旧名册在就<b>续用</b>——目录一换名字＝已有档当场孤儿化（他裁 (B) 的那一半）。
     /// </summary>
     [Fact]
     public void ProductsFollowTheRedirectedRootAndOtherwiseThePicturesFamily()
     {
         const string pictures = @"C:\Users\me\Pictures";
-        Assert.Equal(@"C:\Users\me\Pictures\StarMark 画板", BoardPolicy.ExportsFolder(pictures, null));
-        Assert.Equal(@"D:\sandbox\root\StarMark 画板", BoardPolicy.ExportsFolder(pictures, @"D:\sandbox\root"));
-        Assert.Equal("StarMark 画板", BoardPolicy.ExportsDirectoryName);
+        Assert.Equal(@"C:\Users\me\Pictures\StarMark Exports", BoardPolicy.ExportsFolder(pictures, null));
+        Assert.Equal(@"D:\sandbox\root\StarMark Exports", BoardPolicy.ExportsFolder(pictures, @"D:\sandbox\root"));
+        Assert.Equal("StarMark Exports", BoardPolicy.ExportsDirectoryName);
+        Assert.Equal("StarMark 画板", BoardPolicy.LegacyExportsDirectoryName);
+        Assert.All(BoardPolicy.ExportsDirectoryName, ch => Assert.True(char.IsAscii(ch)));   // 中性名＝ASCII
         Assert.NotEqual(BoardPolicy.ExportsFolder(pictures, null), BoardPolicy.ExportsFolder(pictures, @"D:\sandbox\root"));
+
+        // ④⑤ 盘上两臂（真临时目录）：没有旧名册⇒新名落根；旧名册在⇒续用，⛔ 孤儿化已有档
+        var real = Path.Combine(Path.GetTempPath(), $"bp_exports_{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(real);
+            Assert.Equal(Path.Combine(real, BoardPolicy.ExportsDirectoryName), BoardPolicy.ExportsFolder(real, null));
+            Directory.CreateDirectory(Path.Combine(real, BoardPolicy.LegacyExportsDirectoryName));
+            Assert.Equal(Path.Combine(real, BoardPolicy.LegacyExportsDirectoryName), BoardPolicy.ExportsFolder(real, null));
+        }
+        finally
+        {
+            try { Directory.Delete(real, true); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
     }
 
     // ────────── 片64：导出那两档的名单、默认与那颗循环（P-242 的落地腿） ──────────

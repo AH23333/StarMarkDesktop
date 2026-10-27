@@ -356,4 +356,29 @@ public sealed class CaptureNoticeWiringGateTests
         }
         Assert.DoesNotContain("\"识字\"", read);
     }
+
+    /// <summary>
+    /// ✅P-259 (B) 的截图落地腿：截图那一支的产物目录从前只拼 <c>图片\StarMark 截图</c>
+    /// （那颗改道信号<b>⛔ 参与</b>——一次沙盒取证就往他真图片目录里写一颗 PNG），与画板那一支各走一头。
+    /// 现在两扇共用 <c>UserDataPaths.ProductsDirectory</c> 这一位主人：根认改道・旧名册在就续用・新落点 ASCII 中性名。
+    /// </summary>
+    [Fact]
+    public void TheScreenshotSavePathGoesThroughTheSameProductsDirectoryOwnerAsTheBoard()
+    {
+        var shot = SourceGate.Code(SourceGate.ReadRepoFile(Screenshot));
+        var board = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.Core/Boards/BoardPolicy.cs"));
+
+        // ① 那颗改道信号从此参与（它从前⛔ 参与＝P-259 现场三副口径里漏掉的那一副）
+        Assert.Equal(1, SourceGate.Count(shot, "UserDataPaths.RedirectedDataRoot()"));
+        // ② 落点整颗交唯一主人（⛔ 在这两扇里再各拼一份根＝同一颗根被拼两遍）
+        Assert.Equal(1, SourceGate.Count(shot, "UserDataPaths.ProductsDirectory("));
+        Assert.Equal(1, SourceGate.Count(board, "UserDataPaths.ProductsDirectory("));
+        // ③ 名册两对逐字钉（身份，⛔ 措辞）：新名 ASCII 中性名、旧名续用
+        Assert.Equal(1, SourceGate.Count(shot, "\"StarMark Screenshots\""));
+        Assert.Equal(1, SourceGate.Count(shot, "\"StarMark 截图\""));
+        Assert.Equal(1, SourceGate.Count(board, "\"StarMark Exports\""));
+        Assert.Equal(1, SourceGate.Count(board, "\"StarMark 画板\""));
+        // ④ 那条 inline 落点（MyPictures ＋中文目录名直接 Combine）不许回来
+        Assert.Equal(0, SourceGate.Count(shot, "MyPictures), \"StarMark 截图\""));
+    }
 }

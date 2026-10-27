@@ -660,8 +660,11 @@ public static class BoardPolicy
         return true;
     }
 
-    /// <summary>导出产物与救回来的副本那颗目录的<b>名字</b>（一片档名，⛔ 一句上屏话）。</summary>
-    public const string ExportsDirectoryName = "StarMark 画板";
+    /// <summary>导出产物与救回来的副本那颗目录的<b>名字</b>（一片档名，⛔ 一句上屏话）。✅P-259 (B)：新落点 ASCII 中性名。</summary>
+    public const string ExportsDirectoryName = "StarMark Exports";
+
+    /// <summary>旧的中文名册（✅P-259 (B)：那颗目录在就<b>续用</b>，⛔ 把用户已有的档孤儿化；新旧判据住 <c>UserDataPaths.ProductsDirectory</c>）。</summary>
+    public const string LegacyExportsDirectoryName = "StarMark 画板";
 
     /// <summary>
     /// 用户<b>产物</b>（导出的字节、那颗"另存一份到别处"的兜底副本）落进哪一颗目录——P-219 那颗裁决的落地腿。
@@ -675,10 +678,15 @@ public static class BoardPolicy
     /// <paramref name="picturesRoot"/> 与 <paramref name="redirectedDataRoot"/> 都由宿主取：Core⛔ 认特殊目录，
     /// 正如它⛔ 认 <c>%APPDATA%</c>，这里只裁「拿哪一棵、怎么拼」。</para>
     /// <para>那颗目录名<b>⛔ 跟着界面语言变</b>（所以它进本档而⛔ 进表）：一句上屏话换三种语言＝三颗目录，
-    /// 用户反而一颗都找不到；名字在这里是<b>身份</b>，⛔ 措辞。同仓那颗截图目录也是这一个口径。</para>
+    /// 用户反而一颗都找不到；名字在这里是<b>身份</b>，⛔ 措辞。</para>
+    /// <para><b>✅P-259 (B) 落地后的形状</b>：「拿哪一棵、怎么拼」整颗判据搬去了唯一主人
+    /// <c>UserDataPaths.ProductsDirectory</c>（根认改道・旧名册在就续用・新落点 ASCII 中性名），
+    /// 本方法只把两棵根与那对名字递进去——同仓那颗截图目录走的也是这同一位主人，
+    /// 截图与画板从此<b>各走一头＝同一颗根被拼两遍</b>（结案入口③）。</para>
     /// </summary>
     public static string ExportsFolder(string picturesRoot, string? redirectedDataRoot)
-        => System.IO.Path.Combine(redirectedDataRoot ?? picturesRoot, ExportsDirectoryName);
+        => StarMark.Abstractions.UserDataPaths.ProductsDirectory(
+            picturesRoot, redirectedDataRoot, LegacyExportsDirectoryName, ExportsDirectoryName);
 
     /// <summary>一颗板的档名（<c>&lt;id&gt;.excalidraw</c>）。</summary>
     public static string SceneFileName(string id) => Require(id) + SceneExtension;

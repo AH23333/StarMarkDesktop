@@ -43,6 +43,16 @@ public sealed class UserDataPathsTests
         Environment.SetEnvironmentVariable(UserDataPaths.DatabaseVariable, saved.Db);
     }
 
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
     /// <summary>五份档的名字与所在目录一起钉：少一份、多一份、或某一份跑出这个目录，都是红。</summary>
     [Fact]
     public void AllFiveUserDataFilesSitInTheSameDirectory()
@@ -245,6 +255,48 @@ public sealed class UserDataPathsTests
             Assert.Equal(Path.Combine(appData, "boards"), UserDataPaths.Subdirectory("boards"));
         }
         finally { Restore(saved); }
+    }
+
+    /// <summary>
+    /// 用户的「产物」目录只有这一位主人（✅P-259 (B) 的落地腿）：根认改道・旧的中文名册在就<b>续用</b>・
+    /// 没有旧名册时落 ASCII 中性名。
+    /// <para>缺陷现场（P-259 量到的三副口径）：截图那一支只拼 <c>图片\StarMark 截图</c>——那颗改道信号
+    /// <b>⛔ 参与</b>，一次沙盒取证就往他真图片目录里写一颗 PNG；画板那一支认改道（✅P-219）；
+    /// 剪贴板图片那一支认改道（✅P-258）——而那两颗中文目录名对日文／英文用户都是一颗他念不出来的目录。</para>
+    /// <para>四臂各钉一件事：① 没改道＋没有旧名册＝新名落在图片那一族；② 旧名册在＝<b>续用</b>
+    /// （目录一换名字＝已有档当场孤儿化）；③ 改道＝整颗跟着走（⛔ 指回真目录）；
+    /// ④ 改道＋旧名册在沙盒里＝沙盒里的旧名册照样续用（沙盒里造得出旧现场）。</para>
+    /// </summary>
+    [Fact]
+    public void ProductsDirectoryFollowsTheRedirectKeepsTheLegacyNameAndNeverPointsBack()
+    {
+        var pictures = Path.Combine(Path.GetTempPath(), $"udp_prod_pic_{Guid.NewGuid():N}");
+        var sandbox = Path.Combine(Path.GetTempPath(), $"udp_prod_box_{Guid.NewGuid():N}");
+        try
+        {
+            // ① 没有旧名册：新名（ASCII 中性名）落在递进来的那一棵
+            Assert.Equal(Path.Combine(pictures, "New Name"),
+                UserDataPaths.ProductsDirectory(pictures, null, "旧名册", "New Name"));
+
+            // ② 旧名册在：续用（⛔ 孤儿化已有档——他裁 (B) 的那一半）
+            Directory.CreateDirectory(Path.Combine(pictures, "旧名册"));
+            Assert.Equal(Path.Combine(pictures, "旧名册"),
+                UserDataPaths.ProductsDirectory(pictures, null, "旧名册", "New Name"));
+
+            // ③ 改道：整颗跟着走，⛔ 指回真目录（沙盒取证往他真图片目录里写＝批次 SS 撞过的那一族）
+            Assert.Equal(Path.Combine(sandbox, "New Name"),
+                UserDataPaths.ProductsDirectory(pictures, sandbox, "旧名册", "New Name"));
+
+            // ④ 改道＋旧名册在沙盒里：沙盒里的旧名册照样续用
+            Directory.CreateDirectory(Path.Combine(sandbox, "旧名册"));
+            Assert.Equal(Path.Combine(sandbox, "旧名册"),
+                UserDataPaths.ProductsDirectory(pictures, sandbox, "旧名册", "New Name"));
+        }
+        finally
+        {
+            TryDelete(pictures);
+            TryDelete(sandbox);
+        }
     }
 
     /// <summary>

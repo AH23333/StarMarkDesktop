@@ -278,15 +278,28 @@ public static class ScreenshotService
         }
     }
 
-    /// <summary>把一份 BGRA 画面存成 PNG（同名自动递增，不覆盖上一张）。抬头那颗的规矩同 <see cref="CopyPixelsAsync"/>。</summary>
+    /// <summary>截图那颗产物目录的名字（一片档名，⛔ 一句上屏话）。✅P-259 (B)：新落点 ASCII 中性名。</summary>
+    public const string ScreenshotsDirectoryName = "StarMark Screenshots";
+
+    /// <summary>旧的中文名册（✅P-259 (B)：那颗目录在就<b>续用</b>，⛔ 把用户已有的档孤儿化）。</summary>
+    public const string LegacyScreenshotsDirectoryName = "StarMark 截图";
+
+    /// <summary>
+    /// 把一份 BGRA 画面存成 PNG（同名自动递增，不覆盖上一张）。抬头那颗的规矩同 <see cref="CopyPixelsAsync"/>。
+    /// <para><b>✅P-259 (B) 落地后的形状</b>：落点整颗交 <see cref="UserDataPaths.ProductsDirectory"/>——根认改道
+    /// （那颗信号从前⛔ 参与：一次沙盒取证就往他真图片目录里写一颗 PNG）、旧名册在就续用、新落点 ASCII 中性名；
+    /// 画板那一支（<c>BoardPolicy.ExportsFolder</c>）走的也是这同一位主人，两扇各递自己的名字对。</para>
+    /// </summary>
     public static async System.Threading.Tasks.Task SavePixelsAsync(
         byte[] pixels, int width, int height, LocMessage category)
     {
         string? path = null;
         try
         {
-            var directory = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "StarMark 截图");
+            var directory = UserDataPaths.ProductsDirectory(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+                UserDataPaths.RedirectedDataRoot(),
+                LegacyScreenshotsDirectoryName, ScreenshotsDirectoryName);
             System.IO.Directory.CreateDirectory(directory);
             // 同一秒连按两次也要拿到两个文件：撞名就 (1)(2) 递增，不覆盖上一张
             var index = 0;

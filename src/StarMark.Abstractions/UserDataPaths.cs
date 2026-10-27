@@ -57,7 +57,7 @@ public static class UserDataPaths
     /// 而一旦改道，它必须跟着走——否则一次沙盒取证就往用户真目录里写东西（批次 SS 撞过的同一族）。
     /// 让它自己读那两颗环境变量＝第二份改道规则；所以这里把<b>同一颗规则</b>的答案递出去。
     /// ⚠ 没改道时交 null 而⛔ 交 <c>%APPDATA%\StarMark</c>：那一棵是"程序内部档"的根，
-    /// 产物族需要的是「有没有被改道」这一颗<b>信号</b>，⛔ 是"默认落哪一棵"（那一句归 <c>BoardPolicy.ExportsFolder</c> 裁）。</para>
+    /// 产物族需要的是「有没有被改道」这一颗<b>信号</b>，⛔ 是"默认落哪一棵"（那一句归 <c>ProductsDirectory</c> 裁）。</para>
     /// </summary>
     public static string? RedirectedDataRoot()
     {
@@ -73,6 +73,25 @@ public static class UserDataPaths
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// 用户的<b>产物</b>（截图、画板导出与那颗救回来的副本）落进哪一颗目录——✅P-259 (B) 的落地腿。
+    /// <para>三件事挤在同一颗判据里：<b>①根被改道时跟着走</b>（沙盒取证、单测改道，⛔ 往用户真目录里写——
+    /// 批次 SS 撞过的那一族；截图那一支从前只拼 <c>图片\StarMark 截图</c>，那颗信号<b>⛔ 参与</b>，
+    /// 一次沙盒取证就往他真图片目录里写一颗 PNG）。<b>②旧的名册在就续用</b>：已经在「StarMark 截图」／
+    /// 「StarMark 画板」里的档是用户的东西，目录一换名字＝已有档当场孤儿化。<b>③没有旧名册时落
+    /// <paramref name="newName"/></b>：他裁的 (B)——新落点 ASCII 中性名（目录名是盘上的<b>身份</b>而⛔ 措辞，
+    /// 一句上屏话换三种语言＝三颗目录；日文／英文用户拿不到他那门话念不出来的目录名）。</para>
+    /// <para>名字由各家递进来（截图那对住 <c>ScreenshotService</c>、画板那对住 <c>BoardPolicy</c>），
+    /// 而根的改道信号在这里问——「拿哪一棵、怎么拼」只此一处：截图与画板各走一头＝同一颗根被拼两遍。</para>
+    /// </summary>
+    public static string ProductsDirectory(
+        string picturesRoot, string? redirectedDataRoot, string legacyName, string newName)
+    {
+        var root = redirectedDataRoot ?? picturesRoot;
+        var legacy = Path.Combine(root, legacyName);
+        return Directory.Exists(legacy) ? legacy : Path.Combine(root, newName);
     }
 
     private static string InRoot(string fileName) => Path.Combine(RootDirectory(), fileName);
