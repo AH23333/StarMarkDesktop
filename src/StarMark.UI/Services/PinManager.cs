@@ -160,7 +160,7 @@ public static class PinManager
         if (PinGrouping.LimitProblem(GroupRoster.Count) is { } full)
         {
             // ✅WI-65 片4：那颗判据自己交「键＋实参」⇒ 直接递出去（common.rawValue 那道门只装念完的成品字）。
-            TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.groupFullTitle"),
+            TrayReporter.Report(LocMessage.Of("pin.group.title"), LocMessage.Of("pin.card.groupFullTitle"),
                 full);
             return;
         }
@@ -168,8 +168,8 @@ public static class PinManager
         var group = new PinGroup(++_nextSerial, pin);
         GroupRoster.Add(group);
         StarLog.Info($"[Pin] {group.Name.Render()}＝1 张");
-        TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.groupedTitle"),
-            LocMessage.Of("pin.card.groupedBody", PinGrouping.GroupLabel(group.Name, 1), LocMessage.Of("pin.card.groupCategory")));
+        TrayReporter.Report(LocMessage.Of("pin.group.title"), LocMessage.Of("pin.card.groupedTitle"),
+            LocMessage.Of("pin.card.groupedBody", PinGrouping.GroupLabel(group.Name, 1), LocMessage.Of("pin.group.title")));
     });
 
     /// <summary>把这一张并进已有的一组（先从原来的组里摘出来，组号因此可能变少一行）。</summary>
@@ -179,14 +179,14 @@ public static class PinManager
         if (target is null)
         {
             // 菜单是右键那一刻现取的，走到这里时那一组可能已经被关掉了：说清楚，别让人以为并进去了。
-            TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.groupGoneTitle"),
+            TrayReporter.Report(LocMessage.Of("pin.group.title"), LocMessage.Of("pin.card.groupGoneTitle"),
                 LocMessage.Of("pin.card.goneBeforeBody", PinGrouping.NameOf(serial)));
             return;
         }
         Detach(pin);
         target.Members.Add(pin);
         StarLog.Info($"[Pin] 并入 {target.Name.Render()}＝{target.Members.Count} 张");
-        TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.joinedTitle"),
+        TrayReporter.Report(LocMessage.Of("pin.group.title"), LocMessage.Of("pin.card.joinedTitle"),
             PinGrouping.GroupLabel(target.Name, target.Members.Count));
     });
 
@@ -197,7 +197,7 @@ public static class PinManager
         if (from is null) return;
         Detach(pin);
         StarLog.Info($"[Pin] 已从 {from.Name.Render()} 移出");
-        TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.leftTitle"),
+        TrayReporter.Report(LocMessage.Of("pin.group.title"), LocMessage.Of("pin.card.leftTitle"),
             LocMessage.Of("pin.card.leftBody", from.Name, from.Members.Count));
     });
 
@@ -214,7 +214,7 @@ public static class PinManager
         {
             if (Find(serial) is not { } group)
             {
-                TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.groupGoneTitle"),
+                TrayReporter.Report(LocMessage.Of("pin.group.title"), LocMessage.Of("pin.card.groupGoneTitle"),
                     LocMessage.Of("pin.card.goneOnClickBody", PinGrouping.NameOf(serial)));
                 return;
             }
@@ -244,7 +244,7 @@ public static class PinManager
         }
         Prune();
         StarLog.Info($"[Pin] 已关闭 {group.Name.Render()}（{closed} 张）");
-        TrayReporter.Report(LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.card.groupClosedTitle"),
+        TrayReporter.Report(LocMessage.Of("pin.group.title"), LocMessage.Of("pin.card.groupClosedTitle"),
             PinGrouping.GroupLabel(group.Name, closed));
     }
 

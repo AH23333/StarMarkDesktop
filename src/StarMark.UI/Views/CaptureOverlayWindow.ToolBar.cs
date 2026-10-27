@@ -134,10 +134,12 @@ public sealed partial class CaptureOverlayWindow
             _groupButton.Click += (_, _) => ToggleGroupPicker(_groupButton);
             BarRow.Children.Add(_groupButton);
 
-            // 这颗按下去动的是<b>所有</b>贴图（想只动一组用旁边那颗「组」）。
+            // 这颗按下去动的是<b>所有</b>贴图。只动一组的出口在托盘那一行（那一行叫什么交那颗行名主人——✅P-260：
+            // 从前这句让人「点『组』」，可那颗按钮只有图形一颗面，屏幕上没有任何字念得出这个名字＝指不到东西）。
             // 说明写错范围会让人以为只有自己手上这张被点穿（批次 WF-1 那族极性事故）。
             var through = IconButton(ThroughIcon(), LocMessage.Of("capture.bar.through",
-                CanvasService.BindingText(HotkeyActions.ScreenPinClickThrough)));
+                CanvasService.BindingText(HotkeyActions.ScreenPinClickThrough),
+                LocMessage.Of("pin.group.title")));
             through.Click += Through_Click;
             BarRow.Children.Add(through);
         }
@@ -272,8 +274,8 @@ public sealed partial class CaptureOverlayWindow
     private LocMessage GroupTip()
         => PinManager.GroupOf(this) is { } group
             ? LocMessage.Of("capture.bar.groupIn", group.Name, group.Members.Count,
-                LocMessage.Of("pin.card.groupCategory"))
-            : LocMessage.Of("capture.bar.groupNone", LocMessage.Of("pin.card.groupCategory"));
+                LocMessage.Of("pin.group.title"))
+            : LocMessage.Of("capture.bar.groupNone", LocMessage.Of("pin.group.title"));
 
     /// <summary>
     /// 把"当前用的是哪种图形、哪一支笔"画出来（图标上没有文字，只能靠底色与那颗点说）。

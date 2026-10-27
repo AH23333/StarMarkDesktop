@@ -1599,8 +1599,9 @@ public static class UiStrings
         new Entry("capture.bar.save", "存成 PNG（Ctrl+S）", "Save as PNG (Ctrl+S)", "PNG で保存（Ctrl+S）"),
         new Entry("capture.bar.pin", "钉在桌面上（同 {0}），带上刚画的标注", "Pin it to the desktop (same as {0}), keeping the marks you just drew", "デスクトップに貼り付け（{0} と同じ、描いた注釈付き）"),
         new Entry("capture.bar.ocr", "认出这块画面的文字并复制", "Read the text in this area and copy it", "この範囲の文字を読み取ってコピー"),
-        new Entry("capture.bar.through", "鼠标穿透：让所有贴图都不再收鼠标（再用这一颗或按 {0} 恢复；只动一组请点「组」）",
-            "Click-through: no pin takes the mouse any more (press this again or {0} to hand it back; for a single group use Group)", "マウス透過：すべての貼り付け画像がマウスを受け取らなくなります（もう一度押すか {0} で復帰。1 組だけなら「組」へ）"),
+        new Entry("capture.bar.through", "鼠标穿透：让所有贴图都不再收鼠标（再用这一颗或按 {0} 恢复；只动一组请点托盘「{1}」那一行）",
+            "Click-through: no pin takes the mouse any more (press this again or {0} to hand it back; for a single group open \"{1}\" in the tray)",
+            "マウス透過：すべての貼り付け画像がマウスを受け取らなくなります（もう一度押すか {0} で復帰。1 組だけならトレイの「{1}」を開く）"),
         new Entry("capture.bar.closePin", "关闭这张（Esc）", "Close this pin (Esc)", "この貼り付けを閉じる（Esc）"),
         new Entry("capture.bar.finish", "结束这一屏（Esc）", "Finish this capture (Esc)", "この撮影を終了（Esc）"),
         new Entry("capture.bar.shape", "图形：{0}（点开换{1}；Esc 收笔）", "Shape: {0} (click to switch between {1}; Esc stops)", "図形：{0}（クリックで {1} を選択、Esc で終了）"),
@@ -1857,7 +1858,10 @@ public static class UiStrings
         //   一个词两个出处＝改了其中一处，屏幕上同一族卡的抬头从此各说各话。
         // ⚠ `pin.group.name` 顶掉了从前那颗 `PinGrouping.NamePrefix`：组**身份**是序号，"组 3"只是它的一种念法；
         //   旧写法把念法存进建组那一刻的快照 ⇒ 换语言后托盘与条上那几行仍念旧语言（同形先例＝`hotkey.gate.*`）。
-        new Entry("pin.card.groupCategory", "贴图组", "Pin group", "貼り付けグループ"),
+        // ✅P-260：这颗是「贴图组」这件事<b>唯一的行名</b>——提示卡左上角的抬头、托盘那一行的开头、
+        // 以及四句「在托盘『×』里」指路的话，全从这里取词。从前它是 `pin.card.groupCategory`（只说卡片那头），
+        // 于是句子念『Pin group』／「貼り付けグループ」而屏幕上那一行写着『Pin groups』／「ピングループ」＝指了一条不存在的行。
+        new Entry("pin.group.title", "贴图组", "Pin groups", "ピングループ"),
         new Entry("pin.card.limitTitle", "已达上限", "Limit reached", "上限に達しました"),
         new Entry("pin.card.limitBody", "已经有 {0} 张贴图，最多 {1} 张——先关掉不用的再贴（贴图会把那块画面常驻在内存里）",
                   "There are already {0} pins and {1} is the limit — close one you no longer need (a pin keeps that part of the screen in memory)",
@@ -1880,9 +1884,11 @@ public static class UiStrings
         new Entry("pin.card.groupFullTitle", "不能再分组", "Can't group further", "これ以上グループ化できません"),
         new Entry("pin.card.groupedTitle", "已分组", "Grouped", "グループ化しました"),
         // {0} 交的是 `pin.groupLabel` 拼好的"组 1（1 张）"——"名字后面带张数"这个形状⛔ 再写第二份（托盘那行读的也是它）。
-        new Entry("pin.card.groupedBody", "{0}。托盘「{1}」里能整组隐藏 / 穿透 / 关闭",
-                  "{0}. Under \"{1}\" in the tray you can hide, click-through and close the whole group",
-                  "{0}。トレイの「{1}」でグループごと収納／マウス無視／閉じができます"),
+        // {1} 交 `pin.group.title`＝<b>屏幕上那一行本人的名字</b>（✅P-260：从前这里吃的是卡片抬头那颗键，en／ja 就指错了行）。
+        // ⚠ 那三件事的名字（隐藏／忽略鼠标／关闭）现在仍在这句与 `tray.groupParent` 里各写一份：把它也收成一颗主人要改这句的<b>句型</b>＝措辞题，欠项登记在账本 P-260 末尾。
+        new Entry("pin.card.groupedBody", "{0}。托盘「{1}」里能整组隐藏 / 忽略鼠标 / 关闭",
+                  "{0}. Under \"{1}\" in the tray you can hide / ignore mouse / close the whole group",
+                  "{0}。トレイの「{1}」でグループごと一括収納／マウス無視／閉じができます"),
         new Entry("pin.card.groupGoneTitle", "那一组已经不在了", "That group is gone", "そのグループはありません"),
         // 两行分开的理由＝这句会不会不一样（卷首颗粒度）：并组那条还要说"这张没动过"，托盘那条不必。
         new Entry("pin.card.goneBeforeBody", "{0} 在本次操作前被关掉，这张仍按原样留在桌面上",
@@ -2814,7 +2820,9 @@ public static class UiStrings
         new Entry("tray.autostart", "开机自动启动", "Start with Windows", "Windows 起動時に自動開始"),
         new Entry("tray.hotkeysOn", "全局快捷键已启用", "Global hotkeys enabled", "グローバルホットキー有効"),
         new Entry("tray.checkUpdate", "检查更新", "Check for updates", "更新を確認"),
-        new Entry("tray.groupParent", "贴图组（整组隐藏 / 忽略鼠标 / 关闭）", "Pin groups (hide / ignore mouse / close)", "ピングループ（一括収納／マウス無視／閉じる）"),
+        // 行名那颗槽由 Core 的 `PinGrouping.TrayParentTitle()` 递 `pin.group.title`（✅P-260：那颗名字⛔ 有第二份出处，
+        // 指路的那四句念的也是它）⇒ 改这一行的行名只会改一颗，那四句不会漂成「屏幕上没有的一条」。
+        new Entry("tray.groupParent", "{0}（整组隐藏 / 忽略鼠标 / 关闭）", "{0} (hide / ignore mouse / close)", "{0}（一括収納／マウス無視／閉じる）"),
         new Entry("pin.groupShow", "显示这一组", "Show this group", "このグループを表示"),
         new Entry("pin.groupHide", "隐藏这一组", "Hide this group", "このグループを隠す"),
         new Entry("pin.groupThroughOn", "取消这组忽略鼠标", "Stop ignoring the mouse for this group", "このグループのマウス無視を解除"),

@@ -166,7 +166,7 @@ public sealed class CaptureNoticeWiringGateTests
 
         // ① 抬头两颗（贴图／贴图组）＋那一排的范围名：按主人点名，⛔ 用"汉字总数下降"那种整体口径
         Assert.Equal(8, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.category\")"));
-        Assert.Equal(8, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.groupCategory\")"));   // 7 处 Report + 那句正文里的引用
+        Assert.Equal(8, SourceGate.Count(pin, "LocMessage.Of(\"pin.group.title\")"));   // 7 处 Report 抬头 + 那句正文里的引用（✅P-260：抬头与托盘那一行同名同主人）
         Assert.Equal(2, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.scopeAll\")"));   // ✅片5b：交键，⛔ 当场念完
         // ② 每张卡的标题各有几张脸（少一条＝那条从此静默；"没有可操作的贴图"三处共用一颗）
         //    ✅WI-65 片3 第二刀：那四处把判据自己交的话<b>原样递进卡里</b>（第三个实参就是那颗 <c>none</c>／<c>full</c>），
@@ -211,8 +211,10 @@ public sealed class CaptureNoticeWiringGateTests
         Assert.Equal(0, SourceGate.Count(pin, "Locale.Fmt(\"pin.groupLabel\""));
         Assert.Equal(2, SourceGate.Count(pin, "PinGrouping.NameOf(serial)"));
         // ✅WI-65 片5b 逐字钉「递进槽的是那颗键」：内层名字一旦被当场念完，提示卡就冻在贴出来那一刻（#393／P-196 那一族）
-        Assert.Contains("LocMessage.Of(\"pin.card.groupedBody\", PinGrouping.GroupLabel(group.Name, 1), LocMessage.Of(\"pin.card.groupCategory\"))", pin);
+        Assert.Contains("LocMessage.Of(\"pin.card.groupedBody\", PinGrouping.GroupLabel(group.Name, 1), LocMessage.Of(\"pin.group.title\"))", pin);
         Assert.Contains("PinGrouping.GroupLabel(target.Name, target.Members.Count))", pin);
+        // ✅P-260：那颗指托盘那一行的名字⛔ 再有第二颗主人——旧那颗键（只说卡片那头）不许回来
+        Assert.DoesNotContain("pin.card.groupCategory", pin);
         // ⑥ 旧句子一概不许回来（短词带引号点名：`[Pin] 贴图未能钉住` 那一族是日志措辞，⛔ 上屏）
         foreach (var dead in new[]
         {

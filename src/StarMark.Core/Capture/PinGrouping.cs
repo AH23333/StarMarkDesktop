@@ -48,8 +48,16 @@ public static class PinGrouping
     public static LocMessage? LimitProblem(int currentGroups)
         => currentGroups >= MaxGroups
             ? LocMessage.Of("pin.group.limitBody", MaxGroups,
-                LocMessage.Of("pin.card.groupCategory"), LocMessage.Of("pin.groupClose"))
+                LocMessage.Of("pin.group.title"), LocMessage.Of("pin.groupClose"))
             : null;
+
+    /// <summary>
+    /// 托盘里那一行的<b>完整标题</b>＝那颗行名 + 那三件事（✅P-260）。
+    /// <para>行名的主人只有 <c>pin.group.title</c> 一颗：提示卡左上角的抬头与四句「在托盘『×』里」指路的句子
+    /// 都从它取词。从前这行标题把名字写死在自己正文里（en『Pin groups』），而那四句的槽吃的是卡片抬头那颗键
+    /// （en『Pin group』／ja「貼り付けグループ」↔「ピングループ」）＝<b>句子里指着一条屏幕上不存在的菜单行</b>。</para>
+    /// </summary>
+    public static LocMessage TrayParentTitle() => LocMessage.Of("tray.groupParent", LocMessage.Of("pin.group.title"));
 
     /// <summary>
     /// 第 <paramref name="serial"/> 号组<b>的念法</b>（交<b>还没取词的</b>「键＋实参」）。序号只增不复用：

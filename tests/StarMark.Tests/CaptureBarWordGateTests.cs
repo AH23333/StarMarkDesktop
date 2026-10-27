@@ -82,7 +82,8 @@ public sealed class CaptureBarWordGateTests
             @"LocMessage.Of(""capture.bar.pin"", CanvasService.BindingText(HotkeyActions.ScreenPin))", bar);
         Assert.Contains(
             @"LocMessage.Of(""capture.bar.through"",
-                CanvasService.BindingText(HotkeyActions.ScreenPinClickThrough))", bar);
+                CanvasService.BindingText(HotkeyActions.ScreenPinClickThrough),
+                LocMessage.Of(""pin.group.title""))", bar);
         Assert.Contains(
             @"Locale.Fmt(""pin.bar.through"", CanvasService.BindingText(HotkeyActions.ScreenPinClickThrough))", CodeOf(Pin));
     }
@@ -95,7 +96,7 @@ public sealed class CaptureBarWordGateTests
     public void WordsOwnedElsewhereArePassedInNotRetyped()
     {
         var bar = CodeOf(Bar);
-        Assert.Equal(2, SourceGate.Count(bar, @"LocMessage.Of(""pin.card.groupCategory"")"));
+        Assert.Equal(3, SourceGate.Count(bar, @"LocMessage.Of(""pin.group.title"")"));   // ✅P-260：GroupTip 两枝＋穿透那句指托盘那一行（从前的「组」指不到屏幕上任何字）
         // 图形那一串的名单由那颗主人现给：加一支图形笔时这句话跟着变（⛔ 在 tooltip 里再抄五颗名字）
         Assert.Equal(1, SourceGate.Count(bar, "AnnotationTools.Shapes.Select(static shape => (object?)Annotation.ToolName(shape))"));
         // 档位名从前在这里是<b>第三份</b>字面量（细 / 中 / 粗）⇒ 交表里那颗主人；✅WI-65 片3 进一步：那排名字⛔

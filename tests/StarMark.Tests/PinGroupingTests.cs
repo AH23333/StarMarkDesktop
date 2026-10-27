@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using StarMark.Abstractions.I18n;
 using StarMark.Core.Capture;
 using Xunit;
@@ -121,7 +122,10 @@ public sealed class PinGroupingTests
             var limit = PinGrouping.LimitProblem(PinGrouping.MaxGroups)!.Render();
             Assert.Contains("at most 8 groups", limit);
             Assert.DoesNotContain("贴图组", limit);            // 那句引用的名字也跟着换
-            Assert.Contains(@"""Close this group"" row under ""Pin group""", limit);
+            // ✅P-260 改口这颗旧断言：它从前钉的是『…under "Pin group"』＝<b>屏幕上没有的一行</b>（那一行写的是『Pin groups』）。
+            // 名字收成一颗主人之后，这句念的就是那一行本人——旧的⛔ 回来（新那格《行名只有一颗主人》正钉着这件事）。
+            Assert.Contains(@"""Close this group"" row under ""Pin groups""", limit);
+            Assert.DoesNotContain(@"""Pin group""", limit);
         }
         finally
         {
@@ -159,6 +163,65 @@ public sealed class PinGroupingTests
         finally
         {
             Locale.TrySet(before);
+        }
+    }
+
+    /// <summary>
+    /// ✅P-260：托盘那一行的<b>行名</b>只有一颗主人——那一行的标题里名字是<b>槽</b>，指路的那句话吃的也是同一颗主人的词。
+    /// <para>缺陷现场（片128 的三语屏幕读数）：那一行的标题从前把名字<b>写死</b>在自己正文里（en『Pin groups』／ja『ピングループ』），
+    /// 而那四句「在托盘『×』里」的 × 交的是提示卡抬头那颗键（en『Pin group』／ja「貼り付けグループ」）
+    /// ＝句子里指着一条<b>屏幕上不存在</b>的行。zh 两边恰好同字（贴图组）⇒ 这一族只有把三语并排看才看得见。</para>
+    /// <para>两颗断言各守一半：<b>形状</b>＝那一行的渲染以那颗行名开头（名字一旦被写回正文，这句立刻红）・
+    /// <b>同词</b>＝限流那句渲染出来含那颗行名，且它递给槽的<b>是键而⛔ 成品串</b>（换语言时两句一起换）。
+    /// ⚠ 只钉后者＝两处一起改错也照绿；只钉前者＝句子改去吃另一颗同名不同源的值也照绿。</para>
+    /// </summary>
+    [Fact]
+    public void TheTrayRowNameHasOneOwnerSoThePointingSentenceCannotNameARowThatDoesNotExist()
+    {
+        var before = Locale.Current;
+        try
+        {
+            foreach (var lang in new[] { AppLanguage.Chinese, AppLanguage.English, AppLanguage.Japanese })
+            {
+                Locale.TrySet(lang);
+                var name = LocMessage.Of("pin.group.title").Render();
+                var title = PinGrouping.TrayParentTitle().Render();
+                Assert.StartsWith(name, title);                          // 那一行的开头就是这颗行名（名字在槽里）
+                Assert.NotEqual(name, title);                            // 后面还拖着那三件事＝⛔ 把整颗标题当名字用
+
+                var limit = PinGrouping.LimitProblem(PinGrouping.MaxGroups);
+                Assert.NotNull(limit);
+                Assert.Equal("pin.group.title", Assert.IsType<LocMessage>(limit!.Args![1]).Key);   // 那句吃的是同一颗主人
+                Assert.Contains(name, limit.Render());                   // 渲染出来真念着那一行本人
+                Assert.Equal(title, PinGrouping.TrayParentTitle().Render());
+            }
+        }
+        finally
+        {
+            Locale.TrySet(before);
+        }
+        Assert.Equal(before, Locale.Current);
+    }
+
+    /// <summary>
+    /// ✅P-260 的第二半（表里那一维）：那颗行名<b>在表里</b>就得是槽——把同一颗词写回正文（哪怕字一模一样）也是两份出处。
+    /// <para>上面那颗《行名只有一颗主人》问的是<b>渲染之后</b>两句同不同名；这一颗问的是<b>取词之前</b>那句话里到底有没有
+    /// 偷偷抄过一份。少了这一颗，「把『Pin groups』直接写进 <c>tray.groupParent</c>」照样能让上一颗全绿。</para>
+    /// </summary>
+    [Fact]
+    public void TheTrayRowNameIsASlotInTheTableAndNeverCopiedIntoTheSentences()
+    {
+        var title = UiStrings.All.Single(e => e.Key == "pin.group.title");
+        var parent = UiStrings.All.Single(e => e.Key == "tray.groupParent");
+        Assert.StartsWith("{0}", parent.Zh);
+        Assert.StartsWith("{0} ", parent.En);
+        Assert.StartsWith("{0}", parent.Ja);
+        foreach (var key in new[] { "pin.card.groupedBody", "pin.group.limitBody", "capture.bar.groupIn", "capture.bar.groupNone", "capture.bar.through" })
+        {
+            var row = UiStrings.All.Single(e => e.Key == key);
+            Assert.DoesNotContain(title.Zh, row.Zh);
+            Assert.DoesNotContain(title.En, row.En);
+            Assert.DoesNotContain(title.Ja, row.Ja);
         }
     }
 }

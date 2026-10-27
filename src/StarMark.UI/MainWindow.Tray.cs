@@ -99,7 +99,7 @@ public sealed partial class MainWindow
     {
         var groups = StarMark.UI.Services.PinManager.Groups;
         if (groups.Count == 0) return null;
-        return new TrayHost.TrayCommandItem(Locale.T("tray.groupParent"), TrayGroupParent,
+        return new TrayHost.TrayCommandItem(PinGrouping.TrayParentTitle().Render(), TrayGroupParent,
             Children: groups.Select(group => new TrayHost.TrayCommandItem(
                 PinGrouping.GroupLabel(group.Name, group.Members.Count).Render(), TrayGroupParent,
                 Children:
