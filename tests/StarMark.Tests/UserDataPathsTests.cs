@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using System.Linq;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Clipboard;
 using StarMark.Core.Feed;
 using StarMark.Core.Widgets;
 using StarMark.Integrations.GitHub;
@@ -182,6 +183,46 @@ public sealed class UserDataPathsTests
                 Path.GetDirectoryName(UserDataPaths.Subdirectory("boards")));
         }
         finally { Restore(saved); }
+    }
+
+    /// <summary>
+    /// <b>一颗目录</b>跟着改道走还不够：那一族里还住着一份<b>会被删</b>的档（片122）。
+    /// <para>起因是 P-192 欠的那格屏幕读数——「历史图片行读不出 PNG ⇒ 提示卡上那句为什么」。
+    /// 要造那颗现场，得往<b>沙盒自己那份库</b>插一行、再往它认得的图片目录种一颗非 PNG 字节的档。
+    /// 而 <c>ClipAssets</c> 那棵根当时硬拼 <c>%LOCALAPPDATA%\StarMark</c>，⛔ 认任何一颗环境变量
+    /// ⇒「递进沙盒自己那份库」这句根本走不到：种下去的档与轮转/删除/对账都落在他<b>真图目录</b>里
+    /// ——正是本档开头那颗坑（一份⛔ 认改道的抄本不会报错，它只是永远读写真目录）换了个宿主。</para>
+    /// <para>两臂各钉一件事：<b>没改道时⛔ 搬走</b>（图片目录一旦从 <c>%LOCALAPPDATA%</c> 挪窝，
+    /// 他库里每一行历史图片当场变「已经不在这台机器上」，那是拿修取证伤用户）；
+    /// <b>改道时必须跟着走</b>（这一格才是"取证跑⛔ 再删他真图"的依据——写侧、删侧、对账侧共用同一颗 <see cref="ClipAssets.Folder"/>，
+    /// 所以只要这一颗跟着走，整族一起进来）。</para>
+    /// </summary>
+    [Fact]
+    public void TheClipImageDirectoryTravelsWithTheRedirectButNeverMovesByDefault()
+    {
+        var saved = Capture();
+        var savedOverride = ClipAssets.FolderOverride;
+        try
+        {
+            ClipAssets.FolderOverride = null;
+            var local = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppConstants.AppName);
+
+            Environment.SetEnvironmentVariable(UserDataPaths.SettingsVariable, null);
+            Environment.SetEnvironmentVariable(UserDataPaths.DatabaseVariable, null);
+            Assert.Equal(Path.Combine(local, "clip"), ClipAssets.Folder);
+
+            var dir = Path.Combine(Path.GetTempPath(), $"udp_clip_{Guid.NewGuid():N}");
+            Environment.SetEnvironmentVariable(UserDataPaths.DatabaseVariable, Path.Combine(dir, "starmark.db"));
+            Assert.Equal(Path.Combine(dir, "clip"), ClipAssets.Folder);
+            Assert.False(ClipAssets.Folder.StartsWith(local, StringComparison.OrdinalIgnoreCase),
+                $"改道之后那颗图片目录仍指回真目录：{ClipAssets.Folder}（一次沙盒跑就能轮转／删掉他的真图）");
+        }
+        finally
+        {
+            ClipAssets.FolderOverride = savedOverride;
+            Restore(saved);
+        }
     }
 
     /// <summary>

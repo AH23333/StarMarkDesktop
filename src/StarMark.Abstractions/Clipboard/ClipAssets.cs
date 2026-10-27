@@ -37,12 +37,25 @@ public static class ClipAssets
     /// <summary>文件名里带的哈希位数。<b>只为人类友好</b>；完整性靠条目里的 <c>source_id</c>（真哈希），见 §3-Q6。</summary>
     public const int HashPrefixChars = 8;
 
-    /// <summary>图片目录的绝对路径（<paramref name="storageRoot"/>＝<c>%LOCALAPPDATA%\StarMark</c>）。</summary>
+    /// <summary>图片目录的绝对路径（<paramref name="storageRoot"/>＝<see cref="DefaultStorageRoot"/> 那棵根）。</summary>
     public static string DirectoryFor(string storageRoot) => Path.Combine(storageRoot, FolderName);
 
-    /// <summary>默认存储根（与 <c>logs</c>/<c>sdk</c>/<c>downloads</c> 同一根，同样不加密不藏）。</summary>
-    public static string DefaultStorageRoot => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppConstants.AppName);
+    /// <summary>
+    /// 图片目录住的那棵根：<b>没有改道信号时</b>是 <c>%LOCALAPPDATA%\StarMark</c>（与 <c>logs</c>/<c>sdk</c>/
+    /// <c>downloads</c> 同一根，同样不加密不藏）；<b>有改道信号时</b>跟着那颗根走（<c>UserDataPaths</c> 的
+    /// <c>RedirectedDataRoot</c>，批次 片122）。
+    /// </summary>
+    /// <remarks>
+    /// <para>为什么「跟着走」与「不搬」两半都得钉住：这一族⛔ 只是读一读不够——<b>轮转、清空、删单条、启动对账</b>
+    /// 都问同一颗 <see cref="Folder"/>，所以那颗根一旦落在整套改道约定之外，一次沙盒取证就跑在他的<b>真图目录</b>
+    /// 里的删除路径上（那份抄本不会报错，它只是永远读写真目录——批次 SS 与 片23 撞过的正是同一族；那颗信号本来
+    /// 就是为「这一族该不该跟着走」开的出口，<c>boards</c> 与画板导出两族已经接上，见 片23／片39）。</para>
+    /// <para>反过来，没改道时也⛔ 跟着 <c>Subdirectory</c> 搬进 <c>%APPDATA%</c>：库里存的是<b>相对文件名</b>，
+    /// 目录一挪，每一行历史图片当场变成「已经不在这台机器上」——那是拿修取证伤用户，所以默认落点原样钉死。</para>
+    /// </remarks>
+    public static string DefaultStorageRoot =>
+        UserDataPaths.RedirectedDataRoot() ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppConstants.AppName);
 
     /// <summary>
     /// 测试/诊断用的目录改道。<b>写侧（Integrations）与删侧（Data 的轮转/清空/删单条）必须读同一个字段</b>：
