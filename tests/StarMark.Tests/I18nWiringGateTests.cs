@@ -1478,7 +1478,7 @@ public sealed class I18nWiringGateTests
         Assert.Contains("RememberArgs(element, null);", setter, StringComparison.Ordinal);
         Assert.Contains("element.SetValue(KeyProperty, value);", setter, StringComparison.Ordinal);
 
-        var changed = MethodBody(Code(loc), "private static void OnKeyChanged");
+        var changed = MethodBody(Code(loc), "private static void ApplyKey");
         Assert.Contains("RememberArgs(d, null);", changed, StringComparison.Ordinal);
         // 实参只许有一个读者：搬回依赖属性＝把 WI-2l 那颗启动崩溃请回来（上一格也会同批红）
         Assert.DoesNotContain("GetValue(ArgsProperty", Code(loc), StringComparison.Ordinal);

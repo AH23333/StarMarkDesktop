@@ -164,7 +164,7 @@ public sealed class CanvasBarWordGateTests
         Assert.Contains(@"LocText.SetToolTipKey(button, key, LocMessage.Of(tool.NameKey()))", shapes);
         // 而贴的时候必须真的带上实参（⛔ 回到 Register(..., null)：那颗键还在被问，变的是它收到的实参——
         // 计数型判据抓不到（✅WI-46c 台架 B3 同一条），所以这里钉的是机制那一句）
-        var paste = SourceGate.MethodBody(CodeOf(LocText), "private static void OnToolTipKeyChanged");
+        var paste = SourceGate.MethodBody(CodeOf(LocText), "private static void ApplyToolTipKey");
         Assert.Contains("ToolTipArgStore.TryGetValue(d, out var box)", paste);
         Assert.Contains("Register(d, ToolTipService.ToolTipProperty, key!, args);", paste);
         Assert.Contains("ToolTipService.SetToolTip(d, Text(key!, args));", paste);

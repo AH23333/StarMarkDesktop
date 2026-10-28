@@ -158,7 +158,7 @@ public sealed class DialogWordGateTests
         // 不带读数的那一路也过一次信箱：留着上一句的实参＝下一次换语言按旧读数填空。
         Assert.Equal(2, Times(code, "PlaceholderArgStore.Remove(element);"));
 
-        var callback = SourceGate.MethodBody(code, "private static void OnPlaceholderKeyChanged");
+        var callback = SourceGate.MethodBody(code, "private static void ApplyPlaceholderKey");
         Assert.Contains("var args = PlaceholderArgStore.TryGetValue(d, out var box) ? box.Value : null;", callback);
         Assert.Contains("Register(d, target, key!, args);", callback);
         Assert.Contains("d.SetValue(target, Text(key!, args));", callback);   // 取词＋填空仍走 Text() 那唯一一处
