@@ -290,12 +290,13 @@ public sealed class AnnotationWordGateTests
         // ✅片3 第二刀：这一档<b>整档归零</b>——选区／裁剪那四颗之外，贴图那两颗也交完了
         Assert.Equal(0, SourceGate.Count(geo, "Locale.T("));
         Assert.Equal(0, SourceGate.Count(geo, "Locale.Fmt("));
-        Assert.Equal(4, SourceGate.Count(geo, "LocMessage.Of(\"capture."));
+        Assert.Equal(5, SourceGate.Count(geo, "LocMessage.Of(\"capture."));   // ✅片132：NoRegionProblem 是第五颗
         Assert.Equal(2, SourceGate.Count(geo, "LocMessage.Of(\"pin.card."));
         Assert.Contains("public static LocMessage? SelectionProblem(", geo);
         Assert.Contains("public static LocMessage? CropProblem(", geo);
         Assert.Contains("public static LocMessage? PinLimitProblem(", geo);
         Assert.Contains("public static LocMessage? PinCommandProblem(", geo);
+        Assert.Contains("public static LocMessage NoRegionProblem", geo);
 
         var ink = SourceGate.Code(SourceGate.ReadRepoFile(Ink));
         Assert.Equal(0, SourceGate.Count(ink, "Locale.T("));
