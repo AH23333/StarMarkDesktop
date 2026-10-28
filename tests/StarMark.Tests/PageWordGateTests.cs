@@ -42,6 +42,7 @@ public sealed class PageWordGateTests : IDisposable
         "widget.todo.colorGreen", "widget.todo.colorBlue", "widget.todo.colorPurple",
         "widget.todo.dueClear",
         "widget.ql.dragHint", "widget.ql.elevatedHint",
+        "widget.ql.add.badUri", "widget.ql.add.duplicate", "widget.ql.add.notStored", "widget.ql.add.failed",
         "capture.hintToolbar", "capture.hintPin", "capture.hintOcr", "capture.selectionTip",
         "rss.rowTip",
         "snapshot.detailLinks", "snapshot.detailLocal", "snapshot.detailTag", "snapshot.detailNoData",
@@ -136,6 +137,9 @@ public sealed class PageWordGateTests : IDisposable
         var ql = CodeOf("src/StarMark.UI/Views/QuickLaunchWidget.xaml.cs");
         Assert.Equal(1, Count(ql, "LocText.SetMessage(Hint, LocMessage.Of(\"widget.ql.elevatedHint\"));"));
         Assert.Equal(0, Count(ql, "Hint.Text ="));
+        // ✅片133：那一发没做成时的那一句也走同一颗门（⛔ 直写 Text＝语言冻在按下那一刻）。
+        Assert.Equal(1, Count(ql, "private void SayAddProblem(LocMessage? problem) => LocText.SetMessage(AddProblem, problem);"));
+        Assert.Equal(0, Count(ql, "AddProblem.Text ="));
 
         var shot = CodeOf("src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs");
         // 三档提示各一颗键，全部交进那颗门（⛔ 默认那句留在标记上：那一行元素还要被代码写，挂两颗主人＝换语言盖掉真话）。
@@ -192,6 +196,10 @@ public sealed class PageWordGateTests : IDisposable
     [InlineData("widget.todo.dueClear")]
     [InlineData("widget.ql.dragHint")]
     [InlineData("widget.ql.elevatedHint")]
+    [InlineData("widget.ql.add.badUri")]
+    [InlineData("widget.ql.add.duplicate")]
+    [InlineData("widget.ql.add.notStored")]
+    [InlineData("widget.ql.add.failed")]
     [InlineData("capture.hintToolbar")]
     [InlineData("capture.hintPin")]
     [InlineData("capture.hintOcr")]
@@ -205,9 +213,10 @@ public sealed class PageWordGateTests : IDisposable
     [InlineData("snapshot.detailLine")]
     public void EveryNewWordIsAskedForOnceAndSaysItDifferentlyInEachLanguage(string key)
     {
-        // 35 颗：✅WI-76 把两颗公共的「今天／明天」摘出本档——它们⛔ 只有一个主人（待办筛选＋待办截止读数＋
-        // 世界时钟日签共三处），主人清单由 WorldClockWordGateTests 逐颗数；那颗「清除」仍归本档点。
-        Assert.True(Words.Length == 35, "本档点名的键数与语料那一串必须相等（现在是 " + Words.Length + "）");
+        // 39 颗（✅片133 那四颗「添加」的下落句同批点进来）：✅WI-76 把两颗公共的「今天／明天」摘出本档——
+        // 它们⛔ 只有一个主人（待办筛选＋待办截止读数＋世界时钟日签共三处），主人清单由 WorldClockWordGateTests
+        // 逐颗数；那颗「清除」仍归本档点。
+        Assert.True(Words.Length == 39, "本档点名的键数与语料那一串必须相等（现在是 " + Words.Length + "）");
         Assert.Contains(key, Words, StringComparer.Ordinal);
         // 一颗键一个主人＝<b>代码与标记两边合计恰好一次</b>（⛔ 一句字两个主人，也⛔ 只扫 .cs 把标记那颗读成"没人问"）。
         Assert.Equal(1, Count(AskedCorpus(), @"""" + key + @"""") + Count(AskedMarkup(), @"""" + key + @""""));

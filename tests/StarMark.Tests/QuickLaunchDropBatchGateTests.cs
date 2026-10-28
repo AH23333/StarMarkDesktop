@@ -219,6 +219,44 @@ public sealed class QuickLaunchDropBatchGateTests
         Assert.Contains("净新增入口 {added} 条", picked);
     }
 
+    /// <summary>
+    /// ✅片133：「添加」那一发的两条进路（Enter／那颗按钮）必须汇到<b>同一条</b>出口，三种没做成的下落各说一句上屏话。
+    /// <para>从前 <c>_ = SubmitAddLinkAsync()</c> 把 Enter 那一整个动作丢进 fire-and-forget（里面一抛就没人看），
+    /// 按钮那一途是 <c>async void</c>（一抛就交给分发器）＝同一件事两副脸；而 <c>AddLinkAsync</c> 那颗 bool
+    /// 掉在 <c>await</c> 的返回值里＝净增 0 时表单照样收起、列表没变、屏幕上一个字都没有。</para>
+    /// <para>那症状与 <c>docs/待决策事项.md</c> 的 ✅P-262（截图遮罩「没框就交出去」）完全同形：<b>缺的从来不是文案，
+    /// 是把已有的判断递到界面</b>。这里⛔ 只问形状：那三句话的原文与三语是否各说各的，归
+    /// <see cref="PageWordGateTests"/> 那颗点名的尺判。</para>
+    /// </summary>
+    [Fact]
+    public void TheAddFormSaysWhyNothingGotAddedOnBothRoutes()
+    {
+        var code = ReadRepoFile(WidgetCodeRelativePath);
+
+        // 两条进路都只许指向那一个出口；⛔ 再有一途把那一发丢掉
+        Assert.Contains("if (e.Key == VirtualKey.Enter) SubmitAddLink();", code);
+        Assert.Contains("private void AddLinkSubmit_Click(object sender, RoutedEventArgs e) => SubmitAddLink();", code);
+        Assert.Equal(0, Count(code, "_ = SubmitAddLinkAsync();"));
+        Assert.Contains("private void SayAddProblem(LocMessage? problem) => LocText.SetMessage(AddProblem, problem);", code);
+        Assert.Equal(0, Count(code, "AddProblem.Text ="));
+
+        var submit = MethodBody(code, "private async void SubmitAddLink(");
+        Assert.Contains("await SubmitAddLinkAsync();", submit);
+        Assert.Contains("SayAddProblem(LocMessage.Of(\"widget.ql.add.failed\", LocMessage.Of(\"common.rawValue\", ex.Message)));", submit);
+
+        var body = MethodBody(code, "private async Task SubmitAddLinkAsync()");
+        Assert.Contains("if (!await _manager.AddLinkAsync(", body);         // 那颗 bool 必须被问，⛔ 丢在返回值里
+        Assert.Contains("SayAddProblem(LocMessage.Of(\"widget.ql.add.badUri\"));", body);
+        Assert.Contains("if (raw.Length == 0) return;", body);              // 空手按下＝什么都没问，⛔ 用那句"认不出"吓人
+        // 「已经在这张列表里」与「这条根本没被记下」对用户是两件不同的事：判据当场问屏幕上那一列，⛔ 猜
+        Assert.Contains("ViewModel.HasLink(parsed.AbsoluteUri)", body);
+        Assert.Contains("LocMessage.Of(\"widget.ql.add.duplicate\")", body);
+        Assert.Contains("LocMessage.Of(\"widget.ql.add.notStored\")", body);
+        // 没做成⛔ 收起表单：那句话该挂在用户刚打的那行字底下，收了等于没说 ⇒ 那一行只许住在成功那一支
+        Assert.Equal(1, Count(body, "AddForm.Visibility = Visibility.Collapsed;"));
+        Assert.Equal(1, Count(code, "SayAddProblem(null);"));               // 重新开表先擦掉上一次那句
+    }
+
     private static int Count(string text, string needle) => SourceGate.Count(text, needle);
 
     private static string Between(string text, string from, string to) => SourceGate.Between(text, from, to);

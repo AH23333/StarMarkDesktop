@@ -39,6 +39,10 @@
                 <TextBox x:Name="AddUriBox" i18n:LocText.PlaceholderKey="widget.ql.uriHint"
                          Style="{StaticResource WidgetInputBox}"
                          FontSize="11" Padding="6,4,6,4" KeyDown="AddUriBox_KeyDown"/>
+                <!-- ✅片133：那一发没做成时的那一句就住在刚打的那行字底下（⛔ 只把焦点收回输入格＝屏幕上零线索）。
+                     固定话留空：由代码在按下那一刻交 LocMessage（那颗门才管换语言重贴），标记上⛔ 挂正文键。 -->
+                <TextBlock x:Name="AddProblem" FontSize="10" TextWrapping="Wrap"
+                           Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
                     <Button i18n:LocText.Key="dialog.cancel" Padding="12,3,12,3" Background="Transparent"
                             Click="ToggleAddForm_Click"/>

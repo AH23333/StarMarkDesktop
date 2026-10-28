@@ -53,6 +53,15 @@ public sealed class QuickLaunchWidgetViewModel
     }
 
     /// <summary>
+    /// 屏幕上这一列<b>现在</b>有没有这条地址（同一颗比较键与同一颗文化：落库那条去重用的是 <c>OrdinalIgnoreCase</c>，
+    /// 这里换一颗 comparer 就会与落库判据分岔＝同一件事两处各写一份）。
+    /// <para>问的是<b>显示数据</b>而⛔ 存储：那句「已经在这张列表里了」要对得上用户眼睛看到的那一列；
+    /// 去问存储另一份口径，就会在缓存与屏幕不一致时说出反话。</para>
+    /// </summary>
+    public bool HasLink(string uri)
+        => Links.Any(l => string.Equals(l.Uri, uri, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
     /// 快捷入口 URI 解析（文件 / 文件夹 / 网页 / 裸域名补 https://）。
     /// 同时被快捷启动拖放和"添加"表单复用，避免逻辑分散。
     /// </summary>

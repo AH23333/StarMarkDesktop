@@ -103,21 +103,44 @@ public sealed partial class QuickLaunchWidget : UserControl
             ? Visibility.Collapsed
             : Visibility.Visible;
         if (AddForm.Visibility == Visibility.Visible)
+        {
+            // 上一次那一发为什么没成，与这一次无关：表单重新打开先把那句话擦掉（⛔ 让旧句子挂在新的输入底下）。
+            SayAddProblem(null);
             AddUriBox.Focus(FocusState.Programmatic);
+        }
     }
 
     private void AddUriBox_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Enter) _ = SubmitAddLinkAsync();
+        // 那颗输入格自己的占位话就写着「粘贴后回车」⇒ Enter 是它承诺过的手势，必须与那颗按钮同一条出口。
+        // 从前这条 <c>_ =</c> 把那一发整个丢掉（里面一旦抛，异常从此没人看），按钮那条是 async void（一旦抛就交给分发器）
+        // ＝同一件事在两扇出口长成两副脸。
+        if (e.Key == VirtualKey.Enter) SubmitAddLink();
     }
 
-    private async void AddLinkSubmit_Click(object sender, RoutedEventArgs e) => await SubmitAddLinkAsync();
+    private void AddLinkSubmit_Click(object sender, RoutedEventArgs e) => SubmitAddLink();
+
+    /// <summary>两条进路共用的那一次「交出去」：坏消息说在这一发刚打的那行字底下，⛔ 让异常走出事件处理器。</summary>
+    private async void SubmitAddLink()
+    {
+        try
+        {
+            await SubmitAddLinkAsync();
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("[快捷启动] 添加快捷入口失败", ex);
+            SayAddProblem(LocMessage.Of("widget.ql.add.failed", LocMessage.Of("common.rawValue", ex.Message)));
+        }
+    }
 
     private async Task SubmitAddLinkAsync()
     {
         var raw = (AddUriBox.Text ?? string.Empty).Trim();
+        if (raw.Length == 0) return;      // 空着手按下＝什么都没问，⛔ 用那句"认不出"去吓人
         if (!QuickLaunchWidgetViewModel.TryParseUri(raw, out var parsed) || parsed is null)
         {
+            SayAddProblem(LocMessage.Of("widget.ql.add.badUri"));
             AddUriBox.Focus(FocusState.Programmatic);
             return;
         }
@@ -130,10 +153,22 @@ public sealed partial class QuickLaunchWidget : UserControl
                 ? Path.GetFileName(LocalFileIdentity.PreferredPathFromUri(parsed.AbsoluteUri, LauncherEx.ExistsOnDisk))
                 : parsed.Host;
         }
-        await _manager.AddLinkAsync(_instanceId, name, parsed.AbsoluteUri);
+        // ✅片133：那颗 bool 从前掉在 await 的返回值里＝净增 0 时表单照样收起、列表没变、屏幕上零线索。
+        // 「已经在这张列表里」与「这条根本没被记下」对用户是两件不同的事（前者没丢东西，后者重启就找不到），
+        // 所以话分两句，各问各的下落；⛔ 收起表单——那句该挂在用户刚打的那行字底下，收了等于没说。
+        if (!await _manager.AddLinkAsync(_instanceId, name, parsed.AbsoluteUri))
+        {
+            SayAddProblem(ViewModel.HasLink(parsed.AbsoluteUri)
+                ? LocMessage.Of("widget.ql.add.duplicate")
+                : LocMessage.Of("widget.ql.add.notStored"));
+            return;
+        }
         AddNameBox.Text = AddUriBox.Text = string.Empty;
         AddForm.Visibility = Visibility.Collapsed;
     }
+
+    /// <summary>那一发没做成时的那一句：交的是没取词的 <see cref="LocMessage"/>（换语言那一刻由那颗门重贴），⛔ 直写 Text。</summary>
+    private void SayAddProblem(LocMessage? problem) => LocText.SetMessage(AddProblem, problem);
 
     /// <summary>
     /// 「选择文件…」：一次挑多个，落进与拖放<b>同一对批处理出口</b>。
