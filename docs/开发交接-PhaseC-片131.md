@@ -76,3 +76,12 @@
 6. ⛔ 执行 `D:\StarMarkTmp\p131\stage131.py`／`run131.py`／`uia_131.ps1`／`run_all.cmd`（旧的那几支会动剪贴板、
    改 ACL、删 PNG、走 PowerShell UIA）。
 7. 归他那一半照旧：观感与措辞的点验、✅P-217 那颗 en 复数名单。
+
+## 四、✅P-261 落地腿＋邻族证人改锚（2026-10-28 13:00 收口）
+
+- 落地那一刀只动一颗文件：`src/StarMark.UI/Helpers/LocText.cs` 把「键变了走 `SetValue`、键没变当场自己贴一次」收成一颗共用出口 `SetOrRepaste`，三条带读数的路（`SetKey`／`SetToolTipKey`／`SetPlaceholderKey`）都改走它；三颗属性变更回调改成箭头委托，各把活交给对应的 `ApplyKey`／`ApplyToolTipKey`／`ApplyPlaceholderKey`。取词仍只 `Paste` 那一处。提交＝`b97b97d`。
+- ⚠ 本批自己撞的一次仪器课（＝坑表 #1090）：抽走方法体之后，三格**读那颗回调方法体**的邻族形状证人同时失明（`I18nWiringGateTests`／`CanvasBarWordGateTests`／`DialogWordGateTests`）。报错的脸是 `Assert.Contains() Failure: Sub-string not found`（⛔「锚点命中 0 处」），看着像产品把那句改了。处置＝锚点改到那一臂，受保护的断言逐字留着，「回调→臂」那一跳由新证人 `LocTextRepasteGateTests` 第三格钉住。
+- 真机复称（zh・同一扇复用窗 2099192 连按三发存图）＝三发各念各的档名（124213／124220／124235）⇒ 缺陷那一维量到为止。`capture.card.category` 照旧欠着（悬停说明在合成指针下唤不出＝仪器缺口，⛔ 产品结论）。
+- 读数：重编 0 警告／0 错误；定向〈Loc／画布条／对话框三族＋新证人〉＝通过 104／失败 0；全量＝通过 6593／失败 0／总 6593（14 m 17 s，正本 `D:\StarMarkTmp\p131\full131d-after-reanchor.txt`）。
+- 零泄漏现读（跑完全部测试之后再数一遍）：他那两头 mtime-today 仍为 0（Pictures 205 颗／Local 446 颗／Roaming 7 颗），沙盒产物只进 `D:\StarMarkTmp\p131\sdk-20261028-r5\`。沙盒实例已收（`Stop-Process -Force`，我自己的那颗）。
+- 下一手的入口：① 三语措辞那一半仍归他观感点验（#801 那一格同口径）；② `capture.card.category` 要量到得换一把认得合成悬停的尺（或走 UIA 直接把 `ToolTip` 读出来）；③ 本批没碰的 P-169 剩档与 WI-82 Phase B 照旧排队。
