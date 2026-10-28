@@ -87,6 +87,26 @@ public static class CaptureGeometry
     }
 
     /// <summary>
+    /// 提交那一拍该拿哪一块画面（Enter／Ctrl+C／Ctrl+S 那三颗键、工具条上复制·存图·贴图·识字四颗按钮，
+    /// 以及贴图／识字那两路松手）。两档：<b>拖好的框</b>优先 → 没框但<b>点亮着的那扇窗</b>就用它 → 都没有＝null。
+    /// <para>中间那一档是必须的：提示行那句「点亮框的窗口＝选中」在指针那途早已落成"点一下＝确认这个候选"，
+    /// 而键盘这一发从前只认 <c>_selection</c>，于是屏上连那扇窗的尺寸都念出来了，按下去却整场作废——
+    /// 同一句话两个入口，一个认一个不认。</para>
+    /// <para>交回 null 之后该说什么由 <see cref="NoRegionProblem"/> 定，⛔ 让调用方各写一句。</para>
+    /// </summary>
+    public static IntRect? CommitRegion(IntRect? selection, IntRect? detected)
+        => selection ?? detected;
+
+    /// <summary>
+    /// 一块都拿不到时要挂在角标上的那句（✅P-262）。
+    /// <para>这颗<b>⛔ 许交回 null、⛔ 许被省掉</b>：从前根本没有这颗，界面在"没框"那一枝直接写了
+    /// <c>Settle(null)</c>，于是"按了复制"与"按了取消"落在同一个出口。真机量到的下落是幕布一声不响地消失——
+    /// 无提示卡、无档、剪贴板零写、日志零行（2026-10-28 那一跑：<c>CARD-SEEN False</c>／<c>PNG-AFTER 0</c>／
+    /// <c>TEXTLEN=0</c>）。现在会话留在原地，那句说清为什么，用户接着拖框就行。</para>
+    /// </summary>
+    public static LocMessage NoRegionProblem => LocMessage.Of("capture.select.none");
+
+    /// <summary>
     /// 从已捕获的一帧里裁剪这块选区是否安全（<paramref name="frameBounds"/> 用虚拟桌面坐标，
     /// 因此原点可以是负的）。返回 null＝可裁；裁剪偏移由 <see cref="CropOffset"/> 给出。
     /// <para>✅WI-65 片3：两颗出口都交「键＋实参」——一路挂错误角标、一路进提示卡正文，两边都不许先念完。</para>

@@ -143,6 +143,36 @@ public sealed class CaptureGeometryTests
         Assert.Contains("显示器之外", reason!.Render());
     }
 
+    // ────────── 交出去那一拍拿哪一块（✅P-262） ──────────
+
+    [Fact]
+    public void CommitRegion_PrefersTheDraggedBoxOverTheLitWindow()
+    {
+        var box = new IntRect(100, 100, 300, 200);
+        var lit = new IntRect(0, 0, 800, 600);
+        Assert.Equal(new IntRect?(box), CaptureGeometry.CommitRegion(box, lit));
+    }
+
+    [Fact]
+    public void CommitRegion_TakesTheLitWindowWhileNoBoxExistsYet()
+    {
+        // 提示行那句「点亮框的窗口＝选中」：指针那途"点一下＝确认这个候选"早就认它，
+        // 键盘那一发从前只认 _selection，于是屏上连那扇窗的尺寸都念出来了、按下去却整场作废。
+        var lit = new IntRect(0, 0, 800, 600);
+        Assert.Equal(new IntRect?(lit), CaptureGeometry.CommitRegion(null, lit));
+    }
+
+    [Fact]
+    public void CommitRegion_WithNeitherHasNothingToHandOverButStillHasAReason()
+    {
+        Assert.Null(CaptureGeometry.CommitRegion(null, null));
+        // ✅P-262 那一档的下落：从前是 Settle(null)（和"取消"同一个出口，真机量到幕布一声不响地消失），
+        // 现在必须有事要说、而且要说清下一步做什么（会话留在原地，⛔ 让用户重来一次）。
+        var why = CaptureGeometry.NoRegionProblem.Render();
+        Assert.Contains("还没有选区", why);
+        Assert.Contains("拖动", why);
+    }
+
     [Fact]
     public void FormatSize_HasNoDigitGroupingSeparators()
     {

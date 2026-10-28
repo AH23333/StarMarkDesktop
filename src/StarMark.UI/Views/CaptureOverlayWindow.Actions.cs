@@ -63,10 +63,21 @@ public sealed partial class CaptureOverlayWindow
     {
         // 没按 Enter 就点动作按钮：刚打的那行字要跟着图一起走，而不是被丢掉（四条落点同一条出口）。
         EndTextEditing(commit: true);
-        if (_selection is not { } selection)
+        // ✅P-262：这一发"交出去"从前在没框时直接 <c>Settle(null)</c>——和"取消"落在同一个出口，
+        // 真机量到的是幕布一声不响地消失（无提示卡、无档、剪贴板零写、日志零行）。
+        // 现在先问那颗判据：拖好的框优先，其次点亮着的那扇窗（与指针那途"点一下＝确认候选"同一口径），
+        // 两者都没有才挂角标，会话留在原地让用户接着拖。那句该说什么也归判据那边定，这里不各写一份。
+        if (CaptureGeometry.CommitRegion(_selection, _detected) is not { } selection)
         {
-            Settle(null);
+            ShowError(CaptureGeometry.NoRegionProblem);
             return;
+        }
+        if (_selection is null)
+        {
+            // 认下点亮的那扇窗：裁图与之后每一步读的都是 _selection，⛔ 只让这一发用局部变量。
+            _selection = selection;
+            DrawSelection(selection);
+            HintChip.Visibility = Visibility.Collapsed;
         }
         if (!_pinned && CaptureGeometry.SelectionProblem(selection, _monitor) is { } reason)
         {

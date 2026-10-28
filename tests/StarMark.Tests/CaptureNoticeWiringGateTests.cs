@@ -28,6 +28,7 @@ public sealed class CaptureNoticeWiringGateTests
 {
     private const string Screenshot = "src/StarMark.UI/Services/ScreenshotService.cs";
     private const string Overlay = "src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs";
+    private const string OverlayActions = "src/StarMark.UI/Views/CaptureOverlayWindow.Actions.cs";
     private const string Geometry = "src/StarMark.Core/Capture/CaptureGeometry.cs";
     private const string HotkeyGateFile = "src/StarMark.Core/Hotkeys/HotkeyGate.cs";
     private const string CaptureGateFile = "src/StarMark.Core/Hotkeys/CaptureGate.cs";
@@ -128,7 +129,10 @@ public sealed class CaptureNoticeWiringGateTests
         Assert.Equal(1, SourceGate.Count(geo, "LocMessage.Of(\"capture.select.tooSmall\""));
         Assert.Equal(1, SourceGate.Count(geo, "LocMessage.Of(\"capture.grab.noDisplay\")"));
         Assert.Equal(1, SourceGate.Count(geo, "LocMessage.Of(\"capture.grab.outsideFrame\")"));
-        foreach (var dead in new[] { "选区落在所有显示器之外", "选区太小", "本机没有可用的显示器画面", "选区不在已捕获的画面范围内" })
+        // ✅P-262 那颗新键也住在这一档：一块都拿不到时该说的那句话只许有这一个出处，
+        // 界面那一头⛔ 再各写一份（坑表 #1090 同一族：判据与词分两处，下一手只改一边就自相矛盾）。
+        Assert.Equal(1, SourceGate.Count(geo, "LocMessage.Of(\"capture.select.none\")"));
+        foreach (var dead in new[] { "选区落在所有显示器之外", "选区太小", "本机没有可用的显示器画面", "选区不在已捕获的画面范围内", "还没有选区" })
             Assert.DoesNotContain(dead, geo);
         // ② 两道闸门（截图总开关／画布热键）：✅片3 第二刀起各档两颗键交「键＋实参」，整档一颗当场取词都不留
         var hotkeyGate = SourceGate.Code(SourceGate.ReadRepoFile(HotkeyGateFile));
@@ -145,6 +149,29 @@ public sealed class CaptureNoticeWiringGateTests
         // ⚠ 同档里⛔ 上屏的那一句仍然留在代码里：`throw new ArgumentOutOfRangeException("DPI 缩放因子必须为正")`
         // 是给日志与开发者的参数校验（它一旦说出来就是"程序自己坏了"，⛔ 进表＝让表替 bug 说话）。
         // 同档的贴图上限那两句本批已交表（`pin.card.*`，见 <see cref="PinAndGroupCardsAreTakenFromTheTable"/>）。
+    }
+
+    /// <summary>
+    /// ✅P-262：遮罩窗"交出去"那一拍（Enter 复制／Ctrl+C／Ctrl+S，与工具条四颗按钮同一条出口）
+    /// 在<b>还没框</b>时⛔ 许再走静默收场。
+    /// <para>真机那一跑（2026-10-28，沙盒 zh）量到的下落：幕布一声不响地消失——<c>CARD-SEEN False</c>、
+    /// <c>PNG-AFTER 0</c>、剪贴板 <c>TEXTLEN=0</c>、日志零行，而提示行当时正念着
+    /// 「点亮框的窗口＝选中」与那扇窗的尺寸（<c>960 × 1200</c>）。用户按的是"复制"，得到的是"取消"。</para>
+    /// <para>这一格钉三件事：<b>问的是那颗判据</b>（⛔ 在界面里自己排优先级）、<b>拿不到块要说那句</b>、
+    /// <b>那一枝里⛔ 许出现 Settle(null)</b>。第二条臂（认下点亮的那扇窗）也要落进 <c>_selection</c>，
+    /// 因为裁图与之后每一步读的都是它——只让局部变量用一下，下一刻工具条就找不回那块。</para>
+    /// </summary>
+    [Fact]
+    public void CommittingBeforeABoxExistsSaysWhyInsteadOfEndingTheSession()
+    {
+        var commit = SourceGate.MethodBody(SourceGate.Code(SourceGate.ReadRepoFile(OverlayActions)),
+            "private void Commit(CommitAction action)");
+        Assert.Contains("CaptureGeometry.CommitRegion(_selection, _detected)", commit);
+        Assert.Contains("ShowError(CaptureGeometry.NoRegionProblem)", commit);
+        Assert.Contains("_selection = selection;", commit);
+        Assert.DoesNotContain("Settle(null)", commit);
+        // 那句该说什么归 Core 那颗判据；界面这一头⛔ 自己取词（同一句话两个出处＝迟早只改一边）
+        Assert.Equal(0, SourceGate.Count(commit, "\"capture.select.none\""));
     }
 
     /// <summary>
