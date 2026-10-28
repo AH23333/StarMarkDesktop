@@ -129,7 +129,7 @@ public static class LocText
         // 顺序是有原因的：实参先落，随后那颗键的回调才知道自己要以"带读数"的方式贴；
         // 反过来先设键再设实参，第一次贴上去的就是没填空的句子（界面上是 {0}）。
         RememberArgs(element, args);
-        element.SetValue(KeyProperty, value);
+        SetOrRepaste(element, KeyProperty, GetKey(element), value, ApplyKey);
     }
 
     /// <summary>
@@ -191,7 +191,7 @@ public static class LocText
         // 与正文那一路同序：实参先落，随后那颗键的回调才知道自己要以"带读数"的方式贴。
         if (args is { Length: > 0 }) ToolTipArgStore.AddOrUpdate(element, new ArgsBox(args));
         else ToolTipArgStore.Remove(element);
-        element.SetValue(ToolTipKeyProperty, key);
+        SetOrRepaste(element, ToolTipKeyProperty, GetToolTipKey(element), key, ApplyToolTipKey);
     }
 
     public static string GetToolTipKey(DependencyObject element) => (string)element.GetValue(ToolTipKeyProperty);
@@ -208,7 +208,7 @@ public static class LocText
     {
         if (args is { Length: > 0 }) PlaceholderArgStore.AddOrUpdate(element, new ArgsBox(args));
         else PlaceholderArgStore.Remove(element);
-        element.SetValue(PlaceholderKeyProperty, key);
+        SetOrRepaste(element, PlaceholderKeyProperty, GetPlaceholderKey(element), key, ApplyPlaceholderKey);
     }
 
     public static string GetPlaceholderKey(DependencyObject element) => (string)element.GetValue(PlaceholderKeyProperty);
@@ -238,8 +238,10 @@ public static class LocText
     }
 
     private static void OnKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        => ApplyKey(d, e.NewValue as string);
+
+    private static void ApplyKey(DependencyObject d, string? key)
     {
-        var key = e.NewValue as string;
         if (string.IsNullOrEmpty(key))
         {
             // 键被清空＝这一处不再由表管（状态行回到"没有话要说"）。⚠ 必须把注册项一起摘掉：
@@ -268,6 +270,23 @@ public static class LocText
         target.SetValue(property, string.Empty);
     }
 
+    /// <summary>
+    /// 设那颗「键」附带属性，并保证<b>同键换读数</b>也真贴上去（✅P-261，2026-10-28 真机量到）。
+    /// <para>取词原本只发生在属性变更回调里，而<b>值没变回调就不响</b>：同一扇复用的窗第二次贴同一颗键、
+    /// 换的是实参时，新实参进了信箱却没人去贴，屏幕上留着上一句的成品字。右下角那张提示卡正是这一形——
+    /// 它的抬头与正文永远是同两颗键（<c>card.title.withCategory</c> ＋ <c>common.rawValue</c>），
+    /// 于是同一进程里第二张卡起，「已存图 → 哪颗档」念的是第一张那条路径。
+    /// 这里把「键变了走 SetValue、键没变自己贴一次」收成一处，三条带读数的路共用；
+    /// 取词仍只有 <see cref="Paste"/> 那一处实现（换语言重贴吃的是同一条）。</para>
+    /// </summary>
+    private static void SetOrRepaste(
+        DependencyObject element, DependencyProperty property, string? current, string value,
+        Action<DependencyObject, string?> apply)
+    {
+        if (string.Equals(current, value, StringComparison.Ordinal)) apply(element, value);
+        else element.SetValue(property, value);
+    }
+
     /// <summary>把那句正文的实参记到信箱里（<c>null</c>／空数组＝这一句不带读数，把旧的抹掉）。</summary>
     private static void RememberArgs(DependencyObject element, object?[]? args)
     {
@@ -289,8 +308,10 @@ public static class LocText
         => args is { Length: > 0 } ? Locale.Fmt(key, args) : Locale.T(key);
 
     private static void OnToolTipKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        => ApplyToolTipKey(d, e.NewValue as string);
+
+    private static void ApplyToolTipKey(DependencyObject d, string? key)
     {
-        var key = e.NewValue as string;
         if (string.IsNullOrEmpty(key)) return;
         // 取词＋填空仍走 Text() 那唯一一处（⛔ 在这里再写一份 string.Format）：换语言重贴的是同一条路。
         var args = ToolTipArgStore.TryGetValue(d, out var box) ? box.Value : null;
@@ -299,8 +320,10 @@ public static class LocText
     }
 
     private static void OnPlaceholderKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        => ApplyPlaceholderKey(d, e.NewValue as string);
+
+    private static void ApplyPlaceholderKey(DependencyObject d, string? key)
     {
-        var key = e.NewValue as string;
         if (string.IsNullOrEmpty(key)) return;
         var target = FindProperty(d, "PlaceholderText");
         if (target is null)
