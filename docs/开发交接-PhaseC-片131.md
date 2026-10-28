@@ -37,8 +37,10 @@
 - 遮罩起得来（热键每一跑都开得出）。⚠ 那颗遮罩**不在 `list_windows` 里**，只能从主窗那次 `get_window_state`
   的相关截图拿到它自己的 `window`——上一批据此以为「遮罩自己消失了」，其实是那一颗句柄换了。
 - **键盘递得到**（量到）：在遮罩上按 Escape ⇒ 那一跑之内遮罩就没了（`alive=false`）；`Ctrl+S` 之后同样关掉。
-- **鼠标递不稳**（量到）：SDK 的 `drag` 三回都没产出任何选区；`click` 有时先带一颗 Moved（放大镜＋候选高亮＋`SizeText`
-  念出 1200×877＝那颗候选窗的尺寸），有时**什么 Moved 都不带**（最后一跑：点击之后整棵 UIA 树与点击前逐字相同）。
+- **鼠标递不到**（量到，且已把仪器这一途走到尽头）：`drag`（带／不带 `screenshotId`）、`click`（带／不带）、
+  `activate_window` 之后再 `click`、四个不同点位——遮罩的 `PointerMoved` **偶尔**收得到（放大镜与候选高亮会跟着动，
+  `SizeText` 念出 1200×877＝那颗候选窗的尺寸），而 `PointerPressed`／`Released` **一次都没到**（判据＝`HintText`
+  有没有收起、工具条有没有出现，从未达成）。同一扇窗上键盘却递得到（Escape 当场关・`Ctrl+S` 也走到 `Commit`）。
 - ⚠ **上一批那句「一次普通 click 产出选区」是我读错了**：`SizeText` 会在**只悬停到候选窗**时就出现（`UpdateDetected`
   里就 `DrawSelection(cand)`），它⛔ 等于「选区已确认」。最后一跑按「提示句有没有从『拖动框选…』换成标注态那句」
   复核＝提示句一字未改 ⇒ 那颗 `Ctrl+S` 落进 `Commit` 的 `_selection is null` 分支＝**正当的取消**（`Settle(null)`），
@@ -53,11 +55,19 @@
 
 ## 四、接续顺序（下一腿怎么做才对）
 
-1. **先把选区确认下来**，两条已读码确认的路：
-   (a) 让鼠标先停在某颗候选窗上（要有一颗 Moved）**再**按下＋放开 ⇒ `BeginCandidatePress` 预填＋放开即确认；
-   (b) 按下→移动→放开（真拖框）。SDK 的 `drag` 这一跑⛔ 送出可用的 Moved，所以 (a) 更现实：
-   可以先 `click` 一次（拿候选高亮）→ 再 `click` 同一颗（`再点一次`＝确认）→ 读提示句是否已换成标注态那句 ⇒ 才动 `Ctrl+S`。
-   判据＝**提示句变了** ＋ 工具条那颗独立置顶窗出现（它同样只从主窗的相关截图里看得见）。
+1. **那四颗读数要有人真按一下**（仪器这一途本批已走到尽头，⛔ 再拿同一套动作重跑）：
+   选区只能由「按下→移动→放开」或「在候选窗上按下＋放开」确认，而注入的鼠标按下／放开递不进这扇
+   `WS_EX_NOACTIVATE` 分层遮罩（上一节的读数）。⇒ 存图那两格是**我驱动不到**，⛔ 是产品坏。
+   给他的点验单（三语各两格，每格一句话，约三次真点击）：
+   ① 框一块 → 工具条「存图」（或 `Ctrl+S`）⇒ 右下角那颗卡：抬头＝`capture.card.savedTitle`
+     （zh「已存图」／en『Saved』／ja『保存しました』），正文第一行＝`capture.card.category`
+     （截图／Capture／スクリーンショット），第二行＝`宽 × 高 → 完整路径`；
+   ② 失败那一格：把「StarMark Screenshots」里预测的那颗 PNG 名字**先做成一颗同名目录**（`File.Exists` 为假・
+     `File.Create` 才失败）再走 ① ⇒ 抬头＝`saveFailedTitle`（存图失败／Couldn't save it／保存に失敗しました），
+     正文＝`saveWriteFailed`（zh「写入图片文件时出错（检查磁盘空间与目录权限）」／en『The image file couldn't be
+     written (check disk space and folder permissions)』／**ja 那格本批⛔ 读到，⛔ 照抄**）；
+   ③ 取消那一格已量到：关掉遮罩后目录与 PNG 都不留（沙盒零 PNG・目录未建・他的真 Pictures 今天零新 PNG）。
+   ⚠ 那一格⛔ 用「把根目录做成一颗档」去造——它只会走异常那支，量不到那颗键。
 2. 存图成功那一格：读 `StarMark Screenshots` 里那颗 PNG 的真尺寸＋提示卡那两句（`capture.card.savedTitle`／正文带路径）。
 3. `saveWriteFailed` 造型：在预测的那颗 PNG 路径上**先占一颗同名目录**（`File.Exists` 为假・`File.Create` 才失败），
    ⛔ 用「把根目录做成一颗档」那副造型（它只会走异常那支，量不到那颗键）。
