@@ -27,7 +27,8 @@ public static class StarLog
 
     public static string LogDirectory
         => DirectoryOverride
-           ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppConstants.AppName, "logs");
+           ?? Path.Combine(UserDataPaths.RedirectedDataRoot()
+               ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppConstants.AppName), "logs");
 
     // 锁定 InvariantCulture：th-TH/ar-SA 的 CurrentCulture 用佛历/希吉来历，否则文件名会得到 2569/1447 这类年份，与文档承诺及行内 [O] 时间戳矛盾。
     public static string CurrentLogFile

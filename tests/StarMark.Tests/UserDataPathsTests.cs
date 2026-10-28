@@ -235,6 +235,44 @@ public sealed class UserDataPathsTests
         }
     }
 
+    [Fact]
+    public void LogsFollowTheRedirectPreserveTheirDefaultAndRespectAnExplicitOverride()
+    {
+        var saved = Capture();
+        var savedOverride = StarLog.DirectoryOverride;
+        try
+        {
+            StarLog.DirectoryOverride = null;
+            Environment.SetEnvironmentVariable(UserDataPaths.SettingsVariable, null);
+            Environment.SetEnvironmentVariable(UserDataPaths.DatabaseVariable, null);
+            var local = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppConstants.AppName, "logs");
+            Assert.Equal(local, StarLog.LogDirectory);
+            Assert.Equal(local, Path.GetDirectoryName(StarLog.CurrentLogFile));
+
+            var dir = Path.Combine(Path.GetTempPath(), $"udp_logs_{Guid.NewGuid():N}");
+            Environment.SetEnvironmentVariable(UserDataPaths.DatabaseVariable, Path.Combine(dir, "db", "starmark.db"));
+            Assert.Equal(Path.Combine(dir, "db", "logs"), StarLog.LogDirectory);
+            Assert.Equal(StarLog.LogDirectory, Path.GetDirectoryName(StarLog.CurrentLogFile));
+
+            Environment.SetEnvironmentVariable(UserDataPaths.SettingsVariable, Path.Combine(dir, "settings", "settings.json"));
+            Assert.Equal(Path.Combine(dir, "settings", "logs"), StarLog.LogDirectory);
+            Assert.Equal(StarLog.LogDirectory, Path.GetDirectoryName(StarLog.CurrentLogFile));
+
+            Environment.SetEnvironmentVariable(UserDataPaths.DatabaseVariable, null);
+            Assert.Equal(Path.Combine(dir, "settings", "logs"), StarLog.LogDirectory);
+
+            StarLog.DirectoryOverride = Path.Combine(dir, "explicit");
+            Assert.Equal(StarLog.DirectoryOverride, StarLog.LogDirectory);
+            Assert.Equal(StarLog.DirectoryOverride, Path.GetDirectoryName(StarLog.CurrentLogFile));
+        }
+        finally
+        {
+            StarLog.DirectoryOverride = savedOverride;
+            Restore(saved);
+        }
+    }
+
     /// <summary>
     /// 那颗「有没有被改道」的信号（片39 为产物那一族新开的出口）：没改道交 <b>null</b>，⛔ 把真目录当改道结果递出去。
     /// <para>为什么值得单独钉：那一棵 <c>%APPDATA%\StarMark</c> 是<b>程序内部档</b>的根，而画板那颗产物目录平时
