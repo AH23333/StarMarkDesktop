@@ -22,6 +22,8 @@ namespace StarMark.Tests;
 public sealed class TwoStageCaptureTests
 {
     private const string Overlay = "src/StarMark.UI/Views/CaptureOverlayWindow.xaml.cs";
+    private const string ToolBar = "src/StarMark.UI/Views/CaptureOverlayWindow.ToolBar.cs";
+    private const string CanvasToolbar = "src/StarMark.UI/Views/CanvasToolbarWindow.xaml.cs";
     private const string OverlayXaml = "src/StarMark.UI/Views/CaptureOverlayWindow.xaml";
 
     // ────────── 结构闸门（UI 源码扫描） ──────────
@@ -93,6 +95,44 @@ public sealed class TwoStageCaptureTests
         Assert.Contains("SetBarVisible(true);", enter);
         Assert.DoesNotContain("ActionBar.Visibility", enter);
         Assert.Contains("ToDip(_monitor)", enter);       // 内容层铺满整扇窗，不按选区摆
+    }
+
+    [Fact]
+    public void RegionReleaseAppliesItsOwnPositionBeforeConfirmation()
+    {
+        var released = SourceGate.Code(SourceGate.MethodBody(
+            SourceGate.ReadRepoPartials(Overlay), "private void Root_PointerReleased"));
+        var ordered = new[]
+        {
+            "if (!_awaitingRelease) return;",
+            "var point = e.GetCurrentPoint(Root);",
+            "UpdateRegionDrag(ToPhysical(point.Position.X, point.Position.Y));",
+            "_awaitingRelease = false;",
+            "if (_selection is not { } selection) return;",
+        };
+        var previous = -1;
+        foreach (var statement in ordered)
+        {
+            var index = released.IndexOf(statement, StringComparison.Ordinal);
+            Assert.True(index >= 0, statement);
+            Assert.True(index > previous, statement);
+            previous = index;
+        }
+    }
+
+    [Fact]
+    public void RegionMoveAndReleaseShareClippingAndCandidateJitterRules()
+    {
+        var cs = SourceGate.ReadRepoPartials(Overlay);
+        var moved = SourceGate.Code(SourceGate.MethodBody(cs, "private void Root_PointerMoved"));
+        Assert.Contains("if (!_awaitingRelease) return;", moved);
+        Assert.Contains("UpdateRegionDrag(physical);", moved);
+        var update = SourceGate.Code(SourceGate.MethodBody(cs, "private void UpdateRegionDrag"));
+        Assert.Contains("CaptureGeometry.Normalize(_startPhysical.X, _startPhysical.Y, physical.X, physical.Y)", update);
+        Assert.Contains("CaptureGeometry.Intersect(selection, _monitor) ?? selection", update);
+        Assert.Matches(@"if\s*\(_candidate is not null && normalized.Width < CaptureGeometry.MinSelectionSide\s*&& normalized.Height < CaptureGeometry.MinSelectionSide\) return;", update);
+        Assert.Contains("_selection = normalized;", update);
+        Assert.Contains("DrawSelection(box);", update);
     }
 
     /// <summary>截图态 Esc 两级：拿着笔先收笔（回到可改框的那一态），再按才取消整场。</summary>
@@ -299,5 +339,58 @@ public sealed class TwoStageCaptureTests
         BitmapTransform.DimOutside(bgra, 4, 4, new IntRect(4, 4, 2, 2), 0x66);
         Assert.Throws<CaptureFailureException>(() =>
             BitmapTransform.DimOutside(new byte[3], 4, 4, new IntRect(0, 0, 1, 1), 0x66));
+    }
+
+    /// <summary>
+    /// 那两句（「太小」与「屏外」）在界面上到底问的是哪一块。真机 2026-10-29 13:20 量到：屏幕正中横向拖一条
+    /// 100×0 的细条一路走到裁图才炸（角标念的是「切り出せません…100×0 を要求」），因为两颗读者把 <c>_monitor</c>
+    /// 递给了旧判据里"已相交的那块"那一颗参数——量的是整块屏，永远不"太小"。
+    /// 现在判据自己答那两问（尺寸看选区、屏外才看相交），所以界面<b>照旧交整块屏</b>才是对的形状：钉住这两行，
+    /// 也钉住另一种改法（在调用点先相交＝那颗"屏外"的说法会被顶掉）。
+    /// </summary>
+    [Fact]
+    public void BothSelectionGatesHandTheMonitorAndTheGuardMeasuresTheSelection()
+    {
+        var cs = SourceGate.ReadRepoPartials(Overlay);
+        Assert.Equal(2, SourceGate.Count(cs, "CaptureGeometry.SelectionProblem(selection, _monitor)"));
+        Assert.DoesNotContain("SelectionProblem(selection, CaptureGeometry.Intersect", cs);
+    }
+
+    /// <summary>
+    /// 真机现读：截图工具条那 16 颗按钮在 UIA 树里全是裸「按钮」——图标做面而 <c>Content</c> ⛔ 文本，
+    /// 只挂了 <c>ToolTip</c>（悬停说明⛔ 是可访问名）⇒ 辅助技术指不到任何东西，与 ✅P-260 那句
+    /// 「屏幕上没有任何字念得出这个名字＝指不到东西」同一族。名字必须复用悬停那一句（⛔ 第二份文案），
+    /// 且走同一颗 <c>LocText</c> 名单，换语言才跟着重贴。
+    /// </summary>
+    [Fact]
+    public void BarButtonsExposeTheirTipAsAnAccessibleName()
+    {
+        var cs = SourceGate.Code(SourceGate.ReadRepoFile(ToolBar));
+        Assert.Contains("LocText.SetMessage(button, ToolTipService.ToolTipProperty, tip);", cs);
+        Assert.Contains("LocText.SetMessage(button, AutomationProperties.NameProperty, tip);", cs);
+        Assert.Contains("using Microsoft.UI.Xaml.Automation;", cs);
+    }
+
+    /// <summary>
+    /// 普查（任务 #14）交回的另一宿主：画板工具条那两排纯图标按钮（五颗图形＋那一排色点）同属
+    /// ✅P-265 那一族——<c>Content</c> 是一颗图标或一颗 <c>Border</c>，只挂了 ToolTip ⇒ UIA 里念不出。
+    /// 那颗档自己的注释写着"名字与手势只能靠状态行说"，那说的是<b>肉眼</b>那一半（条子两行高、
+    /// ToolTip 被宿主窗边界钉住）；辅助技术那一半得有自己的名字，否则 Tab 到这儿只念得出"按钮"。
+    /// 名字复用同一颗键（图形那一颗还带嵌套实参），⛔ 立第二份文案。
+    /// <para><b>这颗窗口给的机制⛔ 是 <c>LocText</c></b>：<c>CanvasBarWordGateTests</c> 按整档禁
+    /// <c>LocText.SetMessage</c>（那条线另有判据），而重贴节拍已经由 <c>Locale.Changed += Refresh</c> 送到位
+    /// ⇒ 建条时只登记没渲染的那句（两排各一颗，颗数＝2），取词排在 <c>Refresh</c> 体内那一发。
+    /// 钉子落在<b>体内</b>而不是全档在场：写在构造里＝把字符串提前拼死，换语言它一个字都不动。</para>
+    /// </summary>
+    [Fact]
+    public void CanvasToolbarIconButtonsExposeAnAccessibleNameToo()
+    {
+        var cs = SourceGate.Code(SourceGate.ReadRepoFile(CanvasToolbar));
+        Assert.Equal(2, SourceGate.Count(cs, "_names[button] = LocMessage.Of("));
+        Assert.Contains("_names[button] = LocMessage.Of(colour.NameKey);", cs);
+        Assert.Contains("_names[button] = LocMessage.Of(key, LocMessage.Of(tool.NameKey()));", cs);
+        var refresh = SourceGate.MethodBody(cs, "private void Refresh()");
+        Assert.Equal(1, SourceGate.Count(cs, "AutomationProperties.SetName("));
+        Assert.Contains("AutomationProperties.SetName(button, message.Render());", refresh);
     }
 }

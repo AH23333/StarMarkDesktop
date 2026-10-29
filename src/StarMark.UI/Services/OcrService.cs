@@ -88,7 +88,7 @@ public static class OcrService
     }
 
     /// <summary>写剪贴板。失败必须报出来（用户下一步就是粘贴），不能只记日志。</summary>
-    private static bool TryCopyText(string text, out string? error)
+    private static bool TryCopyText(string text, out LocMessage? error)
     {
         error = null;
         try
@@ -106,7 +106,7 @@ public static class OcrService
         catch (Exception ex)
         {
             StarLog.Error("[Ocr] 写入剪贴板失败", ex);
-            error = ex.Message;
+            error = CaptureFailureException.ReasonOf(ex);
             return false;
         }
     }

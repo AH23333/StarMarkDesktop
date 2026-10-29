@@ -124,23 +124,35 @@ public sealed class CaptureGeometryTests
     public void SelectionProblem_TooSmallSaysWhatToDo()
     {
         var bounds = new IntRect(0, 0, 1920, 1080);
-        var text = CaptureGeometry.SelectionProblem(new IntRect(10, 10, 2, 2), CaptureGeometry.Intersect(new IntRect(10, 10, 2, 2), bounds));
+        var text = CaptureGeometry.SelectionProblem(new IntRect(10, 10, 2, 2), bounds);
         Assert.NotNull(text);
         Assert.Contains("拖动", text!.Render());
 
         // 长条也太小：短边不达标就不该截（用户多半是想框一条线）
-        Assert.NotNull(CaptureGeometry.SelectionProblem(new IntRect(0, 0, 1000, 2),
-            CaptureGeometry.Intersect(new IntRect(0, 0, 1000, 2), bounds)));
-        Assert.Null(CaptureGeometry.SelectionProblem(new IntRect(0, 0, CaptureGeometry.MinSelectionSide, 900),
-            CaptureGeometry.Intersect(new IntRect(0, 0, CaptureGeometry.MinSelectionSide, 900), bounds)));
+        Assert.NotNull(CaptureGeometry.SelectionProblem(new IntRect(0, 0, 1000, 2), bounds));
+        Assert.Null(CaptureGeometry.SelectionProblem(new IntRect(0, 0, CaptureGeometry.MinSelectionSide, 900), bounds));
     }
 
     [Fact]
     public void SelectionProblem_OffScreenIsNotReportedAsTooSmall()
     {
-        var reason = CaptureGeometry.SelectionProblem(new IntRect(5000, 5000, 400, 400), null);
+        var reason = CaptureGeometry.SelectionProblem(new IntRect(5000, 5000, 400, 400), new IntRect(0, 0, 1920, 1080));
         Assert.NotNull(reason);
         Assert.Contains("显示器之外", reason!.Render());
+    }
+
+    /// <summary>
+    /// 真机 2026-10-29 13:20 那一发的形状：在屏幕正中横向拖一条（高 0），旧写法把"与整屏相交"当那颗判据的
+    /// 第一问，于是那条细条既没说"太小"也没被拒在选区阶段，一路走到裁图才炸出「切り出せません（…100×0 を要求）」。
+    /// </summary>
+    [Fact]
+    public void SelectionProblem_ASliverOnScreenSaysTooSmallNotOffScreen()
+    {
+        var reason = CaptureGeometry.SelectionProblem(new IntRect(625, 625, 100, 0), new IntRect(0, 0, 1920, 1200));
+        Assert.NotNull(reason);
+        Assert.Equal("capture.select.tooSmall", reason!.Key);
+        Assert.Contains("100", reason.Render());
+        Assert.DoesNotContain("显示器之外", reason.Render());
     }
 
     // ────────── 交出去那一拍拿哪一块（✅P-262） ──────────

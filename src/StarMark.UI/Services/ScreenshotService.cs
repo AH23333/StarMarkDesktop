@@ -274,7 +274,7 @@ public static class ScreenshotService
         catch (Exception ex)
         {
             StarLog.Error($"[{category}] 复制到剪贴板失败", ex);
-            ReportFor(category, LocMessage.Of("capture.card.copyFailedTitle"), LocMessage.Of("common.rawValue", ex.Message));
+            ReportFor(category, LocMessage.Of("capture.card.copyFailedTitle"), CaptureFailureException.ReasonOf(ex));
         }
     }
 

@@ -207,6 +207,11 @@ public sealed partial class CaptureOverlayWindow
         }
 
         if (!_awaitingRelease) return;
+        UpdateRegionDrag(physical);
+    }
+
+    private void UpdateRegionDrag(PointInt32 physical)
+    {
         var selection = CaptureGeometry.Normalize(_startPhysical.X, _startPhysical.Y, physical.X, physical.Y);
         // 夹回本屏：L1 按"每屏各截各的"处理跨屏拖拽（每屏一个遮罩窗，各拿各的选区，互不合并）
         var normalized = CaptureGeometry.Intersect(selection, _monitor) ?? selection;
@@ -259,6 +264,9 @@ public sealed partial class CaptureOverlayWindow
             return;
         }
         if (!_awaitingRelease) return;
+        // 松开坐标可能先于最后一次移动事件到达，不能用旧预览结算。
+        var point = e.GetCurrentPoint(Root);
+        UpdateRegionDrag(ToPhysical(point.Position.X, point.Position.Y));
         _awaitingRelease = false;
         Root.ReleasePointerCapture(e.Pointer);
         if (_selection is not { } selection) return;

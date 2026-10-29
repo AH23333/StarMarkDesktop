@@ -102,6 +102,13 @@ public static class UiStrings
         new Entry("top.widgetsTip", "桌面组件", "Desktop widgets", "デスクトップウィジェット"),
         new Entry("top.guideTip", "这一页怎么用", "How this page works", "このページの使い方"),
         new Entry("top.showHidden", "显示隐藏", "Show hidden", "非表示を表示"),
+        // 顶栏与筛选那一行在辅助技术里念不出名字的那几颗（✅P-265 同族・片141 屏幕普查现读）。
+        // 屏幕上它们要么只有图标、要么那行字是子元素（按钮的 Name 只从自己的 Content 来），
+        // 所以这三句是<b>屏幕外</b>那一行字：短、说清"这一按/这一格是干什么的"，⛔ 抄悬停说明的长句。
+        new Entry("top.themeLabel", "切换主题", "Switch theme", "テーマを切り替え"),
+        new Entry("top.sortLabel", "排序方式", "Sort by", "並び順"),
+        new Entry("top.kindFilterLabel", "文件类型筛选", "File types", "ファイル形式"),
+        new Entry("top.searchLangLabel", "仓库语言筛选", "Repository language", "リポジトリ言語"),
 
         // ===== 搜索框与工具栏 =====
         new Entry("search.placeholder",
@@ -1511,6 +1518,10 @@ public static class UiStrings
         new Entry("capture.card.disabledTitle", "截屏功能已关闭", "Screen capture is turned off", "スクリーンショット機能はオフです"),
         new Entry("capture.card.failedTitle", "截图失败", "Capture failed", "スクリーンショットに失敗しました"),
         new Entry("capture.card.copyFailedTitle", "复制失败", "Copy failed", "コピーに失敗しました"),
+        new Entry("capture.clipboard.cannotOpen", "暂时无法打开剪贴板（0x800401D0）",
+                  "The clipboard couldn't be opened (0x800401D0)", "クリップボードを開けませんでした（0x800401D0）"),
+        new Entry("capture.error.noMessage", "系统未提供错误原因（错误代码 {0}）",
+                  "The system provided no error details (error code {0})", "システムからエラーの詳細が返されませんでした（エラーコード {0}）"),
         new Entry("capture.card.encodeFailed", "把画面编成图片时失败", "The image couldn't be encoded", "画像をエンコードできませんでした"),
         new Entry("capture.card.copiedTitle", "已复制", "Copied", "コピーしました"),
         new Entry("capture.card.copiedBody", "{0} 的画面已进剪贴板", "{0} is on the clipboard", "{0} をクリップボードにコピーしました"),

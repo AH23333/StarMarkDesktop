@@ -308,6 +308,7 @@ public sealed class DialogWordGateTests
         Assert.Equal(0, Times(CodeOf(ShotCs), "LocMessage.Of(\"common.rawValue\""));    // 画布那三张卡的正文现在交「键＋实参」
         Assert.Equal(0, Times(CodeOf(ShotCs), "Locale.T("));                            // 那一档⛔ 再当场念表里的键
         Assert.Equal(2, Times(CodeOf(PinCs), "LocMessage.Of(\"common.rawValue\""));     // 剩下的两颗＝尺寸读数与 ex.Message＝数据
-        Assert.Equal(5, Times(CodeOf(ScreenCs), "LocMessage.Of(\"common.rawValue\""));  // 剩下的五颗＝异常正文与像素读数＝数据
+        Assert.Equal(4, Times(CodeOf(ScreenCs), "LocMessage.Of(\"common.rawValue\""));  // 复制失败交键，剩下三颗异常正文与一颗像素读数
+        Assert.Equal(1, Times(CodeOf(ScreenCs), "CaptureFailureException.ReasonOf(ex)"));
     }
 }

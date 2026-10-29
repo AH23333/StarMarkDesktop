@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Linq;
+using System.Runtime.InteropServices;
 using StarMark.Abstractions.Capture;
 using StarMark.Abstractions.I18n;
 using Xunit;
@@ -185,5 +186,110 @@ public sealed class CaptureReasonGateTests : IDisposable
         var fallback = CaptureFailureException.ReasonOf(foreign);
         Assert.Equal("common.rawValue", fallback.Key);
         Assert.Equal(new object?[] { "boom" }, fallback.Args);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("\t")]
+    [InlineData("Cannot open clipboard")]
+    public void ClipboardOpenFailureUsesALocalizedReason(string message)
+    {
+        var reason = CaptureFailureException.ReasonOf(new COMException(message, unchecked((int)0x800401D0)));
+        Assert.Equal("capture.clipboard.cannotOpen", reason.Key);
+        Assert.Null(reason.Args);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" \r\n\t")]
+    public void EmptyForeignFailureKeepsItsErrorCode(string message)
+    {
+        var reason = CaptureFailureException.ReasonOf(new COMException(message, unchecked((int)0x80004005)));
+        Assert.Equal("capture.error.noMessage", reason.Key);
+        Assert.Equal(new object?[] { "0x80004005" }, reason.Args);
+        Assert.Contains("0x80004005", reason.Render());
+    }
+
+    [Theory]
+    [InlineData(AppLanguage.Chinese, "暂时无法打开剪贴板（0x800401D0）", "系统未提供错误原因（错误代码 0x80004005）")]
+    [InlineData(AppLanguage.English, "The clipboard couldn't be opened (0x800401D0)", "The system provided no error details (error code 0x80004005)")]
+    [InlineData(AppLanguage.Japanese, "クリップボードを開けませんでした（0x800401D0）", "システムからエラーの詳細が返されませんでした（エラーコード 0x80004005）")]
+    public void ClipboardFailureReasonsTranslateWhenRendered(AppLanguage language, string expected, string noMessage)
+    {
+        var reason = CaptureFailureException.ReasonOf(new COMException("", unchecked((int)0x800401D0)));
+        var unknown = CaptureFailureException.ReasonOf(new COMException("", unchecked((int)0x80004005)));
+        var ocr = LocMessage.Of("ocr.card.copyFailedBody", 12, reason);
+        Locale.TrySet(language);
+        Assert.Equal(language, Locale.Current);
+        Assert.Equal(expected, reason.Render());
+        Assert.Equal(noMessage, unknown.Render());
+        Assert.Contains(expected, ocr.Render());
+        Assert.NotNull(ocr.Args);
+        Assert.Same(reason, ocr.Args[1]);
+    }
+
+    [Fact]
+    public void ClipboardWriteHostsPreserveTheReasonKey()
+    {
+        var screenshot = SourceGate.Code(SourceGate.MethodBody(
+            SourceGate.ReadRepoFile("src/StarMark.UI/Services/ScreenshotService.cs"), "public static async System.Threading.Tasks.Task CopyPixelsAsync"));
+        Assert.Contains("ReportFor(category, LocMessage.Of(\"capture.card.copyFailedTitle\"), CaptureFailureException.ReasonOf(ex));", screenshot);
+        var ocr = Code("src/StarMark.UI/Services/OcrService.cs");
+        Assert.Contains("private static bool TryCopyText(string text, out LocMessage? error)", ocr);
+        Assert.Contains("error = CaptureFailureException.ReasonOf(ex);", ocr);
+        Assert.Contains("LocMessage.Of(\"ocr.card.copyFailedBody\", read.Chars, copyError)", ocr);
+        Assert.DoesNotContain("error = ex.Message;", ocr);
+    }
+
+    private const string CanvasWindow = "src/StarMark.Integrations/Canvas/LayeredCanvasWindow.cs";
+    private const string Geometry = "src/StarMark.Core/Capture/CaptureGeometry.cs";
+    private const string Gdi = "src/StarMark.Integrations/Capture/GdiScreenCapture.cs";
+    private const string ScreenSvc = "src/StarMark.UI/Services/ScreenshotService.cs";
+    private const string Snapshot = "src/StarMark.UI/Services/CanvasService.Snapshot.cs";
+
+    /// <summary>
+    /// 「编不成图」那颗正文（<c>capture.card.encodeFailed</c>）的调用点射程（Phase C 片137）。
+    /// <para>这一格从前<b>只有话没有证人</b>：真机上要把那句贴上去，只能靠临时改产品码把编码器强行交
+    /// <c>null</c>（读数在 <c>D:\StarMarkTmp\p137\encode-failed-*-patched.png</c>）。本条把"到底有哪几处会调它、
+    /// 每一处靠哪道守卫保证宽高≥1且缓冲恰好 w·h·4"落成<b>会红的钉子</b>：有人新开一条 <c>CopyPixelsAsync</c> 入口、
+    /// 或拆掉下面任何一道守卫，这里当场红——那句词的"普通操作走不到"从此有来历，⛔ 是一句我相信。</para>
+    /// </summary>
+    [Fact]
+    public void EncodeFailureArmCallSitesAreTheThreeGuardedOnes()
+    {
+        var callSites = SourceGate.ReadRepoUnder("src")
+            .Select(f => (Path: f.RelativePath.Replace('\\', '/'), Code: SourceGate.Code(f.Text)))
+            .Where(f => f.Code.Contains("CopyPixelsAsync("))
+            .ToDictionary(f => f.Path, f => f.Code, StringComparer.Ordinal);
+        Assert.Equal(
+            new[] { Snapshot, ScreenSvc, "src/StarMark.UI/Views/CaptureOverlayWindow.Actions.cs" },
+            callSites.Keys.OrderBy(k => k, StringComparer.Ordinal).ToArray());
+        Assert.Contains("_ = ScreenshotService.CopyPixelsAsync(final.Pixels, final.Width, final.Height, category);", callSites["src/StarMark.UI/Views/CaptureOverlayWindow.Actions.cs"]);
+        Assert.Contains("? CopyPixelsAsync(crop.Pixels, crop.Width, crop.Height, LocMessage.Of(\"capture.card.category\"))", callSites[ScreenSvc]);
+        Assert.Contains("ScreenshotService.CopyPixelsAsync(shot.Pixels, shot.Width, shot.Height,", callSites[Snapshot]);
+
+        // 三道"宽高与缓冲"的守卫，一颗⛔ 不许少：交图前合成／裁图／画布建窗。
+        Assert.Contains("if (width <= 0 || height <= 0) throw new CaptureFailureException(LocMessage.Of(\"capture.canvas.badSize\", width, height));", Code(Painter));
+        Assert.Contains("if (w <= 0 || h <= 0) throw new CaptureFailureException(LocMessage.Of(\"capture.geom.cropEmpty\", width, height, x, y, srcWidth, srcHeight));", Code(Transform));
+        Assert.Contains("if (boundsPhys.Width <= 0 || boundsPhys.Height <= 0)", Code(CanvasWindow));
+        // 缓冲由被问的那颗档自己按 w·h·4 现配＝"短缓冲"这一维⛔ 是调用方能凑出来的形状。
+        Assert.Contains("var pixels = new byte[width * height * 4];", Code(Gdi));
+        Assert.Contains("var pixels = new byte[request.Width * request.Height * 4];", Code(Gdi));
+        // 截图态那一路的宽高下限与"交集不足一个像素就交回 null"。
+        Assert.Contains("public const int MinSelectionSide = 3;", Code(Geometry));
+        Assert.Contains("if (selection.Width < MinSelectionSide || selection.Height < MinSelectionSide)", Code(Geometry));
+        Assert.Contains("if (right <= left || bottom <= top) return null;", Code(Geometry));
+    }
+
+    /// <summary>⛔ 死尺：上面那条抽取对已知形状必须命中一次，而注释里那颗冒充的串⛔ 算调用点。</summary>
+    [Fact]
+    public void TheEncodeFailureRulerItselfBitesOnAKnownShape()
+    {
+        var sample = SourceGate.Code("void A() { ScreenshotService.CopyPixelsAsync(p, w, h, c); } // CopyPixelsAsync( 在注释里不算");
+        Assert.Contains("CopyPixelsAsync(p, w, h, c)", sample);
+        Assert.DoesNotContain("在注释里不算", sample);
+        Assert.Equal(1, SourceGate.Count(Code("src/StarMark.UI/Views/CaptureOverlayWindow.Actions.cs"), "CopyPixelsAsync("));
+        foreach (var rel in new[] { Painter, Transform, CanvasWindow, Gdi, Geometry, Snapshot, ScreenSvc })
+            Assert.True(Code(rel).Length > 500, rel + " 现读⛔ 像一份真档＝那颗「守卫在场」的断言⛔ 可信");
     }
 }

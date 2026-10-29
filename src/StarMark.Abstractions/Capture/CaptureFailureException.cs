@@ -21,11 +21,13 @@ public sealed class CaptureFailureException(LocMessage reason, string? paramName
     /// <summary>原来 ArgumentException 带的参数名：日志与转储里还得看得见。</summary>
     public string? ParamName { get; } = paramName;
 
-    /// <summary>
-    /// 屏幕上那句「为什么」只许由这里决定怎么交：自家的异常把 <see cref="Reason"/> 原样递上屏，
-    /// 别人的异常（WinRT、GDI 之外那些系统异常）才走数据门那颗 <c>common.rawValue</c>——它们确实没有句子可交表。
-    /// <para>一颗主人而不是每个 catch 各写一遍三元表达式：后者正是 P-196 数过的那种「同一条规则抄第二、第三份」。</para>
-    /// </summary>
-    public static LocMessage ReasonOf(Exception ex) =>
-        ex is CaptureFailureException failure ? failure.Reason : LocMessage.Of("common.rawValue", ex.Message);
+    // WinRT 的剪贴板异常可能没有 Message，不能让失败卡只剩标题。
+    public static LocMessage ReasonOf(Exception ex)
+    {
+        if (ex is CaptureFailureException failure) return failure.Reason;
+        if (ex.HResult == unchecked((int)0x800401D0)) return LocMessage.Of("capture.clipboard.cannotOpen");
+        return string.IsNullOrWhiteSpace(ex.Message)
+            ? LocMessage.Of("capture.error.noMessage", $"0x{ex.HResult:X8}")
+            : LocMessage.Of("common.rawValue", ex.Message);
+    }
 }

@@ -73,16 +73,18 @@ public static class CaptureGeometry
 
     /// <summary>
     /// 选区能不能用。返回 null＝可以；否则是<b>给界面直接显示的那句话</b>（词在语言表里，批次 WI-46a）。
-    /// <para>注意"超出可截范围"不当错误处理：跨屏拖选时选区大半在屏外是正常操作，
-    /// 交得上一块就行，所以这里只拦"与可截范围完全不相交"和"太小"。</para>
+    /// <para><b>两问各答各的，⛔ 混用量</b>：「太小」量的是<b>选区自己</b>那两条边——真机量到旧写法拿
+    /// <paramref name="monitorBounds"/> 去量，于是屏幕正中一条 100×0 的横细条（用户就是想框一条线）
+    /// 一路被判据放行，到裁图那一步才炸；「屏外」才量相交。</para>
+    /// <para>注意"超出可截范围"不当错误处理：跨屏拖选时选区大半在屏外是正常操作，交得上一块就行，
+    /// 所以这里只拦"与可截范围完全不相交"和"太小"。</para>
     /// <para>✅WI-65 片3：交「键＋实参」——那句挂在错误角标上，会一直挂到下一次落笔为止。</para>
     /// </summary>
-    public static LocMessage? SelectionProblem(IntRect selection, IntRect? intersectedBounds)
+    public static LocMessage? SelectionProblem(IntRect selection, IntRect monitorBounds)
     {
-        if (intersectedBounds is null) return LocMessage.Of("capture.select.offscreen");
-        var box = intersectedBounds.Value;
-        if (box.Width < MinSelectionSide || box.Height < MinSelectionSide)
-            return LocMessage.Of("capture.select.tooSmall", box.Width, box.Height);
+        if (selection.Width < MinSelectionSide || selection.Height < MinSelectionSide)
+            return LocMessage.Of("capture.select.tooSmall", selection.Width, selection.Height);
+        if (Intersect(selection, monitorBounds) is null) return LocMessage.Of("capture.select.offscreen");
         return null;
     }
 
