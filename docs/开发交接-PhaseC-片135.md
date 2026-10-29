@@ -26,3 +26,201 @@
 - zh『这组忽略鼠标』是『取消这组忽略鼠标』的子串 ⇒ 菜单行判定一律行集精确匹配，包含式会假命中。
 - 负见证在空读数上会空真 ⇒ 判定带非空守卫（读空时负见证不许算中）。
 - 读数档名全带 135 后缀，⛔ 覆写片128 旧档；门 0 连趟未过时守门器只静候重试，⛔ 抢跑。
+
+## 五、片136 接续抽验（2026-10-29，七键仍未收回）
+
+- 接手核对：本轮起手与测试结束均为 `main`／`fb98c167b5760f4b842bacf6e71c330bd3c4e879`，工作树当时干净；另一个 StarMark 会话最近六次续接均失败且无工具调用，查询时无活动轮次、排队或后台代理。这不代表其全部历史无人接手。
+- 本轮明确构建：`dotnet build StarMark.sln -c Debug -p:Platform=x64 --no-restore`，0 警告／0 错误，48.51 秒；随后运行下列定向命令，68 通过／0 失败／0 跳过。未跑全量或变异台架，未改产品源码。
+- 沙盒：数据库与设置分别通过 `STARMARK_DB_PATH`、`STARMARK_SETTINGS_PATH` 指向 `D:\StarMarkTmp\p136`；剪贴板文字／图片采集、自动备份、开机加载组件、本地搜索及自动更新检查关闭。仅在此沙盒切换三语，启动 PID 8144；关闭主窗后进程已退出，同名 `StarMark.UI` 进程数为 0。
+- 无选区抽验：英文 `Ctrl+S`、中文 `Enter`、日文 `Ctrl+C` 各一组，都在仍存活的遮罩上读到 `ErrorText`；原始 UIA 正本为 `D:\StarMarkTmp\p136\keyboard-evidence.json`。这只是三组样本，不是三语乘三键九格全覆盖，也不属于上面七颗 `capture.card` 的新增覆盖。
+- 拖框前置未通过：三次 SDK `drag` 跨两次截图会话均未形成有效选区，重观察与点击也未使选区成立；尚无证据区分产品、自动化输入或环境原因，不能归因于用户干扰。本轮未进入复制／存图／OCR 的成功出口；未做剪贴板与真实图片目录的前后见证，不宣称已证实零泄漏。
+- 七键前置分开记：`copiedTitle`／`copiedBody` 需有效像素编码并写入剪贴板成功；`categoryOcr` 由截图编辑器的 OCR 出口传入。`disabledTitle` 虽有服务闸门，但关闭总开关后托盘三入口被滤掉、对应热键不注册，普通入口不能据此造出该卡，排队／竞态未验证。`encodeFailed` 只对应编码函数因非正尺寸或短缓冲返回 `null`；实际编码异常重新抛出，走 `copyFailedTitle` 加异常正文，不能混算。`failedTitle` 的抓屏、监视器、建窗或裁图故障均未实造。
+- 分支证据：`src/StarMark.UI/Services/ScreenshotService.cs`、`src/StarMark.UI/Views/CaptureOverlayWindow.Actions.cs`、`src/StarMark.Integrations/Capture/GdiScreenCapture.cs`、`src/StarMark.UI/MainWindow.Tray.cs`、`src/StarMark.UI/Helpers/SettingsStore.Hotkeys.cs`。以上是源码前置，不是故障分支已上屏的证明。
+- 本轮严格覆盖仍为 28／35，未见 7；下一步先取得可靠的有效选区，再补复制与 OCR 真机证据。此次仅向本交接追加读数，未提交、未推送，HEAD 与未推 304 不变；前文片135读数保留原批次归属。
+
+定向命令（在 StarMarkDesktop 根目录）：
+
+```text
+dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 --no-build --no-restore --filter "FullyQualifiedName~CaptureGeometryTests|FullyQualifiedName~CaptureNoticeWiringGateTests|FullyQualifiedName~CaptureReasonGateTests" --logger "trx;LogFileName=capture-regression136.trx" --results-directory "D:/StarMarkTmp/p136"
+```
+
+结果正本：`D:\StarMarkTmp\p136\capture-regression136.trx`。本轮 `--no-build` 使用的是上述本轮成功构建后的同一棵源码，不能将这个前提省略后套用于旧产物。
+
+## 六、片137 接续（2026-10-29・拖框释放终点＋空正文修复＋copyFailedTitle 三语收回）
+
+- 接手核对：起手与收口均为 `main`／`fb98c167b5760f4b842bacf6e71c330bd3c4e879`；查询会话列表时另两颗 StarMark 会话（「StarMarkDesktop前端代码审查报告」「深度自检项目代码」）皆 `cold`・无活动轮次、无排队、无后台代理，本仓工作树只有本会话这一族改动。这不代表其全部历史无人接手。
+- <b>拖框释放终点（产品腿）</b>：`src/StarMark.UI/Views/CaptureOverlayWindow.Pointer.cs` 那颗 `Root_PointerReleased` 从前清 `_awaitingRelease` 时用的是<b>最后一次移动事件</b>留下的预览——仪器正本 `D:\StarMarkTmp\p137\pointer-events.txt` 现读 PRESS／MOVE＝(594,625) 而 RELEASE＝(938,828)、`_selection` 仍 0×0。修法＝把归一化／夹回本屏／候选微抖动／画选区那一段抽成 `UpdateRegionDrag`，移动与松开<b>共用同一颗</b>，松开前先按本次释放坐标结算一次。两枚接线证人 `RegionReleaseAppliesItsOwnPositionBeforeConfirmation`／`RegionMoveAndReleaseShareClippingAndCandidateJitterRules` 先红（`release-red.trx`＝2 格全红），撤掉四行临时诊断后 `dotnet build StarMark.sln -c Debug -p:Platform=x64 --no-restore` 0 警告／0 错误 28.99 秒，定向 110 通过／0 失败／0 跳过（正本 `D:\StarMarkTmp\p137\capture-regression137.trx`）。真机正／反向拖框各 344 × 203，`Ctrl+S` 实际落盘两张：`StarMark 2026-10-29 110606.png`（824 字节・344×203・sha256 `2f086c1112a07dae3e0aab0b9022eed7c0ff538ef988bbb90f5636e5188a8a7c`）与 `StarMark 2026-10-29 110753.png`（124434 字节・1200×877・sha256 `a0cbca11c1459c64347c1a35eabc568d3af7ba095abab5913693925d196a0465`）。<b>后一张是微拖后真的保存成功，⛔ 记成「无选区拒绝」的正件</b>；那颗候选点击／微抖动的行为仍未判定。
+- <b>失败卡正文空白（产品腿）</b>：独占剪贴板时 `Clipboard.SetContent` 抛的是 HRESULT `0x800401D0` 的 COMException 而 <c>Message</c> 为空，旧 `ReasonOf` 把别人的异常一律塞进 `common.rawValue` ⇒ 卡只剩标题（缺陷图 `D:\StarMarkTmp\p137\copy-failed-ja.png`・324×89・正文那一行什么都没有）。`src/StarMark.Abstractions/Capture/CaptureFailureException.cs` 的 `ReasonOf` 就地收三档：自家异常原样递 `Reason`・`0x800401D0` 交新键 `capture.clipboard.cannotOpen`・其余正文空白交新键 `capture.error.noMessage` 并带 `0x{HResult:X8}`，非空正文照旧走 `common.rawValue`。两颗新键⛔ 进那 35 颗分母。`ScreenshotService.CopyPixelsAsync` 与 `OcrService.TryCopyText` 两出口同批改用 `ReasonOf`，OCR 那颗 `out` 从 `string?` 换成 `LocMessage?` ⇒ 换语言重贴时嵌套那句跟着换。九格先红（`clipboard-reason-red.trx`＝9 格全红），solution 构建 0 警告／0 错误 64.94 秒后定向 133 通过／1 失败——那颗红是 `DialogWordGateTests` 旧计数 `rawValue` 5 颗（迁移后实际 4 颗），精确改 4 并补钉 `ReasonOf` 一颗，⛔ 放宽判据；改口后 `clipboard-reason-green-v2.trx`＝<b>134 通过／0 失败／0 跳过</b>。首跑那颗红留在 `clipboard-reason-green.trx` 里，⛔ 用文件名抹掉它。
+- <b>真机腿（三语 × 两出口）</b>：图片复制失败卡与「识字成功→写剪贴板失败」卡都在屏幕上真的贴过并被独立读回——`copy-failed-ja-fixed-v4.png`（324×107）・`copy-failed-zh-fixed.png`（324×90）・`copy-failed-en-fixed.png`（324×90）；`ocr-copy-failed-en-fixed.png`（324×124）・`ocr-copy-failed-zh-fixed.png`（324×107）・`ocr-copy-failed-ja-fixed.png`（324×143）。OCR 那三发实认 66／28／37 字（en／zh／ja），只算「那句正文真的上屏」，⛔ 当识别准确率验收。日志逐条对齐：11:52:10／11:52:56／11:53:43 三发各有 `[Ocr] 写入剪贴板失败`＋完整本地化句子＋提示卡矩形；11:40:49／11:41:56／11:43:39／11:45:03 四发是图片出口。UI 读数正本 `D:\StarMarkTmp\p137\ui-evidence.json`＝20 条・标识 20 颗不重复・每条那颗 `image` 现读都在盘上。
+- <b>覆盖账严格复称</b>：名册仍 35 颗——片136 收尾 28／未见 7；本片 `capture.card.categoryOcr` +1＝29、`capture.card.copyFailedTitle` +1＝<b>30／未见 5</b>（`copiedTitle`／`copiedBody`／`disabledTitle`／`encodeFailed`／`failedTitle`）。历史原文照旧不动。
+- <b>零泄漏核对</b>：`clipboard-pre.json` 现读 6 颗格式；本片五把独占（`clipboard-hold-ja-fixed-v3`／`-v4`／`clipboard-hold-zh-fixed`／`clipboard-hold-en-fixed`／`clipboard-hold-ocr-fixed`）每把 `before == after` 且都等于 pre，stdout 全部 `HELD … CLOSED`・退出码 0；收摊再拍 `clipboard-post.json`＝6 颗格式・与 pre <b>逐颗摘要相等</b>。OCR 那一把改用 `hold-process` 模式（等 PID 16720 自己退出才松手），理由＝`OcrPipeline.ReadAsync` 全程没有超时上限，45 秒定长锁可能在识别还没写完时先释放、让下一次写覆盖用户原剪贴板。沙盒数据库／设置分别走 `STARMARK_DB_PATH`／`STARMARK_SETTINGS_PATH` 指 `D:\StarMarkTmp\p137`，四把写／删开关照旧关着；`Alt+F4` 正常退出（日志「===== StarMark 进程退出 pid=16720 =====」），收口 `Get-CimInstance` 现读 `StarMark.UI.exe` 进程数＝<b>0</b>，沙盒设置现读 `UiLanguageCode=ja`。
+- <b>行尾三族（⛔ 拿 `git diff` 当尺）</b>：`numstat`＝交接档 19/0・`CaptureFailureException.cs` 9/7・`UiStrings.cs` 4/0・`OcrService.cs` 2/2・`ScreenshotService.cs` 1/1・`CaptureOverlayWindow.Pointer.cs` 8/0・`CaptureReasonGateTests.cs` 54/0・`DialogWordGateTests.cs` 2/1・`TwoStageCaptureTests.cs` 38/0。盘上现读（CRLF／LF-only／孤CR）：`CaptureFailureException.cs` 33/0/0（改前 31/0/0）・`UiStrings.cs` 0/3400/0（改前 0/3396/0）・`OcrService.cs` 0/113/0（改前同）・`ScreenshotService.cs` 379/0/0（改前同）・`CaptureOverlayWindow.Pointer.cs` 0/489/0（改前 0/481/0）・`CaptureReasonGateTests.cs` 243/0/0（改前 189/0/0）・`DialogWordGateTests.cs` 0/314/0・`TwoStageCaptureTests.cs` 0/341/0（后两颗改前未记）。本档只追加，删除列＝0。`git diff --check` 对报告那 14 行报 trailing whitespace＝那颗档在 HEAD 里按<b>字节</b>存（blob 现读 CRLF 21626・孤CR 55828・LF-only 24），每一行 CRLF 都被那颗尺读成行尾空白——片135 那次提交同形 24 行（`git diff --check HEAD~1 HEAD -- docs/开发进度报告.md`），⛔ 归责我这一批；交接档那颗走换行归一（HEAD blob＝LF 28・CRLF 0），同一条 `--check` 对它零命中。
+- <b>文档四闸门</b>＝通过 23／失败 0／跳过 0 <b>五回全中</b>（追加交接前 `D:\StarMarkTmp\p137\docgates137.trx`・追加交接后 `docgates137-post.trx`・追加报告 §五百一十八后 `docgates137-report.trx`・收口最后一跑 `docgates137-final.trx`・两处改口之后再对盘上最终形状跑一回 `docgates137-close.trx`），filter 原文沿用 `D:\StarMarkTmp\p128\docgates135.py` 那四颗 `LedgerPointerGateTests`／`LedgerStatusNarrationGateTests`／`LivingSourcePointerGateTests`／`FrozenTreePointerGateTests`，⛔ 从「23」倒推身份；五跑都用 `--no-build`，前提＝本轮 solution 构建已成功。
+- <b>报告腿</b>：`docs/开发进度报告.md` §五百一十八纯追加（节间一颗 `\r\n\r\n`・`numstat`＝14/0・字节 2846183→2855562・CRLF 21626→21640・LF-only 24 与孤CR 55828 一字未动・sha256 `af8f493095c1306b876e1a84223daaa77425e20aa135afe4fbbf06a697dbb2ef`）。账本 `docs/待决策事项.md` 本批一字未动（现读 1790877 字节・CRLF 8469・LF-only 96・孤CR 13390・sha256 `5d03532a863efa2119393ca80994c126c526109cd8123a83970cd25aa96542ad`＝片135 落盘后那颗），本批新立 0／结案 0 ⇒ 计数器四串⛔ 重跑、⛔ 报新数。
+- <b>欠着与边界</b>：`copiedTitle`／`copiedBody` 要真写成功才能收，而本片全程占着剪贴板＝一次都写不进去（⛔ 为收两颗键去覆用户手上的东西）；`disabledTitle` 关总开关后托盘三入口被滤掉、对应热键不注册，普通入口造不出那张卡；`encodeFailed` 只对应 `EncodePngAsync` 因非正尺寸／短缓冲返回 `null`，真编码异常重新抛出走 `copyFailedTitle`；`failedTitle` 的抓屏／监视器／建窗／裁图故障均未实造。观感点验照旧归他，#744（WI-82 Phase B 剩余）也归他。
+- <b>提交</b>：本批＝产品五档＋测试三档＋本交接档，照旧<b>未提交、未推送</b>（未推 304＝本轮 `git rev-list --count origin/main..HEAD` 现读），⛔ push。
+
+## 七、片137 仪器那一笔（⛔ 产品结论，只欠我自己）
+
+- <b>观察范围会替我造出「没上屏」的假象</b>：主窗不压住右下角那块时，`get_window_state` 连着三跑只回主窗；把主窗拖到 originX465／originY309 之后，同一颗失败出口立刻带回独立提示卡窗（id 787836・标题随语言变）。所以「SDK 没返回那张卡」⛔ 等于「产品没贴上屏幕」——产品侧的凭据是日志里那颗矩形（`1580,1077 324x107` 一族），缺席的枚举只说明我的观察范围不够。本条未查 SDK 内部实现，⛔ 把它写成 SDK 缺陷。
+- <b>按图标位置猜那颗按钮＝会点错</b>：我先按像素猜「识字」，实际点中「贴图」（日志 `[Pin] Pinned：366 × 79`），已 `Alt+F4` 收掉那一颗、该发⛔ 计入 OCR 证据。改法＝先现读 `CaptureOverlayWindow.ToolBar.cs` 的入列顺序（copy→save→ocr，`_pinned` 分支还会多插一颗组按钮），再按那颗顺序定位。
+- <b>仪器报错不等于动作没发生</b>：`node_repl` 两次把 `await nodeRepl` 读成 `awaitnodeRepl` 抛 ReferenceError，而 `Ctrl+C` 与 `get_window_state` 其实已经跑完、状态里就有那张卡。⛔ 重放复制（那会再点一次产品出口），改在下一 cell 取<b>已捕获</b>的 `state.screenshots` 单独 save＋emit。
+- <b>独占锁的时长要由被等那件事的上限定</b：OCR 链没有超时上限 ⇒ 定长 45 秒的锁是拿我的预算去赌产品的耗时；改成等目标进程退出才释放，锁的边界就跟着真实生命周期走。
+- <b>读数档名全带 137 后缀</b>，⛔ 覆写片128／片136 旧档；`--no-build` 那一句的前提（本轮已成功构建同一棵树）要一起写，⛔ 摘掉前提套旧产物。
+
+## 八、片137 补刀（他点头放开剪贴板之后・copiedTitle／copiedBody 三语收回・覆盖账 30→32／未见 5→3）
+
+- <b>这一发为什么归他点头</b>：`copiedTitle`／`copiedBody` 是剩下五颗里唯一「普通操作就能收到」的一对，但它要求截图<b>真的写进剪贴板成功一次</b>＝顶掉他手上那 6 颗格式（含 Chromium 两颗内部格式＋文字＋图片），而探针只存 sha256 摘要、⛔ 落正文＝顶掉之后我没法还原。我把这一格交给他选，他选的是「<b>允许真写一次（推荐）</b>」那一颗（我给的问题句逐字＝「要不要做这一发？」）。⇒ 这一笔是<b>他批准的覆写</b>，⛔ 写成「零泄漏」，也⛔ 外推成「他批准我以后任何覆写」。
+- <b>量到的</b>：同一块选区 401 × 59 三语各一发，卡都是 324×90・都落在 `1580,1094`。逐字——ja「スクリーンショット · コピーしました」／「401 × 59 をクリップボードにコピーしました」（日志 12:17:36.9001234）・zh「截图 · 已复制」／「401 × 59 的画面已进剪贴板」（12:18:19.7153280）・en「Capture · Copied」／「401 × 59 is on the clipboard」（12:18:49.6369264）。图片正本 `D:\StarMarkTmp\p137\copied-ja.png`／`copied-zh.png`／`copied-en.png` 三张各自独立读回，日志三行三发一一对上；UI 正本 `ui-evidence.json`＝<b>23 条・标识 23 颗不重复・每条 `image` 现读都在盘上</b>。
+- <b>覆盖账（本节为准）</b>：名册 35 颗——「六」那一节收尾是 30／未见 5（那是当时那一拍的读数，原文照旧不动），本节 +2＝<b>32／未见 3</b>，剩 `capture.card.disabledTitle`／`encodeFailed`／`failedTitle`。那三颗的前置照旧写在「二、欠着与边界」与「六」最后那颗 bullet 里（关总开关后托盘三入口被滤＋热键不注册／`EncodePngAsync` 返回 `null` 才叫编码失败／抓屏・监视器・建窗・裁图故障未实造）。
+- <b>剪贴板这一笔的账</b>：点头之前先拍 `clipboard-pre2.json`＝6 颗格式・与本片起手那份 `clipboard-pre.json` <b>逐颗摘要相等</b>；三发真写之后 `clipboard-after-copied.json`＝6 颗格式＝`DataObject`＋`Preferred DropEffect`＋CF_BITMAP(2) 401×59・1 位面・32bpp・widthBytes 1604＋`Ole Private Data`＋CF_DIB(8) 94688 字节（sha256 `a06a355d…bdd0fd02`）＋CF_DIBV5(17) 94772 字节（sha256 `7eb24d9f…c9c31fb2`）。⇒ 他原来那 6 颗（13／Chromium RFH token／Chromium URL／16／1／7）<b>确认已被这张 PNG 顶掉</b>，这条就是那句「⛔ 为收两颗键去覆用户手上的东西」被解开之后的样子。
+- <b>仪器那一笔（两颗，⛔ 产品结论）</b>：① 旧探针 `clipboard_probe.py` 那颗 `snapshot()` <b>只认 HGLOBAL</b>，而真写之后剪贴板里那颗 CF_BITMAP（format 2）⛔ 是 HGLOBAL ⇒ 当场 `RuntimeError: Format 2 is not readable as HGLOBAL`・退出码 1、证据档⛔ 落（那颗「输出档已存在即拒跑」＋「崩在写盘之前」的形状救了我一次：⛔ 留下半截假证据）。另造 `clipboard_probe2-137.py`＝逐格式先试 HGLOBAL 摘要、试不到再按 GDI 对象读宽高／位面／位深／widthBytes，⛔ 把「我这把尺读不到」写成「屏幕上／剪贴板里没有」。② 沙盒主窗 origin 621,465 时提示卡整块落在窗内 ⇒ `get_window_state(main)` 一次就带回独立卡窗（id 1705358），与「七」那颗观察范围同一族——那颗尺的射程由窗口位置决定，⛔ 由「没返回」推「没上屏」。
+- <b>收口</b>：沙盒这颗 PID 16156（`STARMARK_DB_PATH`／`STARMARK_SETTINGS_PATH` 指 `D:\StarMarkTmp\p137`）`Alt+F4` 正常退出・`list_windows` 现读该 app 窗口 0 颗・`Get-CimInstance` 现读 `StarMark.UI.exe` 进程数＝<b>0</b>；文档四闸门在补刀之后再跑一回＝通过 23／失败 0／跳过 0（正本 `D:\StarMarkTmp\p137\docgates137-copied.trx`）；HEAD 仍 `fb98c167b5760f4b842bacf6e71c330bd3c4e879`・未推 304・<b>⛔ 提交、⛔ push</b>。
+
+## 九、片137 补丁门腿（临时改产品码造出那三颗故障分支・收完就地还原并复称）
+
+- <b>为什么只能这么量</b>：`encodeFailed`／`disabledTitle`／`failedTitle` 三颗按「六」与「二」的口径普通操作摆不出来（编码函数只有非正尺寸／短缓冲才交 `null`・关总开关后热键不注册且托盘三入口被滤・抓屏／监视器／建窗／裁图故障没实造过）。这一腿用<b>临时补丁构建</b>把那一支的门强行打开，只为量「那句词能不能上屏」。<b>⛔ 这一腿⛔ 证真实可达性</b>：那三颗在真实操作里走不走得到，照旧登记未验证，⛔ 把补丁门读数写进发布说明。
+- <b>三臂的形状与读数</b>（每臂三语各一张卡・九张图全部本地独立读回・日志逐发对上）：
+  · <b>encodeFailed</b>＝在 `GdiScreenCapture.EncodePngAsync` 首行之后插一颗魔数臂（`width == 401 && height == 59` 直接交 `null`），走的是真实那颗「编码器交 `null`」的同一个返回口，只是触发条件是我塞的。选区 401 × 59（UIA `SizeText` 现读同值）⇒ 卡 324×90／324×90／324×90：en「Capture · Copy failed／The image couldn't be encoded」（12:24:40.7584132）・zh「截图 · 复制失败／把画面编成图片时失败」（12:25:36.5077925）・ja「スクリーンショット · コピーに失敗しました／画像をエンコードできませんでした」（12:26:02.0460110）。正本 `encode-failed-{en,zh,ja}-patched.png`・那一跑装配 `StarMark.Integrations.dll` sha256 前缀 `03d6bec3`（构建时刻 12:23:03）。
+  · <b>disabledTitle</b>＝在 `ScreenshotService.Start` 那颗 `CaptureGate.BlockOf(...)` 之后加一颗环境变量臂（`STARMARK_P137_FORCE=disabled` 时把结果强改成 `CaptureBlock.Disabled`），下面那句 `Report` 与 `CaptureGate.ReasonFor` 一个字没动。卡 324×143／107／107：ja「スクリーンショット · スクリーンショット機能はオフです／先に設定 → 拡張機能 で「スクリーンショット（キャプチャ／貼り付け／文字起こし）」をオンにしてください」（12:28:23.2149612）・en「Capture · Screen capture is turned off／First turn on Screenshot (capture / pin / OCR) in Settings → Extensions」（12:28:46.2306903）・zh「截图 · 截屏功能已关闭／要先在 设置 → 拓展功能 里打开「截屏（截图 / 贴图 / 识字）」」（12:29:06.8153461）。正本 `disabled-{ja,en,zh}-patched.png`。
+  · <b>failedTitle</b>＝把那颗 `if (!captured.Ok || captured.Frame is not { } frame)` 多挂一条 `|| STARMARK_P137_FORCE == "grabfail"`。<b>⚠ 这一臂的正文⛔ 等于真实抓屏故障的正文</b>：`Grab()` 其实成功了、`captured.Error` 是 `null`，所以那句走的是兜底那颗 `capture.grab.noFrame`＝zh「系统没有返回画面」／en「The system returned no image」／ja「システムが画像を返しませんでした」；真实故障时那句由抓屏器自己交「键＋实参」。卡 324×90／90／109（12:29:46.2888499／12:30:09.2559235／12:30:32.5669296）。正本 `failed-{zh,en,ja}-patched.png`。
+- <b>覆盖账怎么记（⛔ 与真实读数同账）</b>：名册 35 颗——真实操作收到的仍是 <b>32 颗</b>；这三颗记成「<b>补丁门已上屏・真实可达性未验证</b>」，⛔ 写「35／未见 0」。下一手要翻这一格，得先把那三支的真实入口做出来（或在点验单上明写「只能靠补丁门量」），⛔ 拿这一腿当结案。
+- <b>还原复称（这一腿最重要的一颗闸）</b>：跑完三臂就地把两颗档改回去——`GdiScreenCapture.cs` 盘上现读 sha256 `bfb1bec138b4c292574e6a0a15e3446c9638f653125e12929cfde799dc067657`＝补丁前基线<b>逐字节相等</b>（CRLF 259→258・LF-only 0・孤CR 0）；`ScreenshotService.cs` sha256 `d4fb4aa7ac928778874ef04cc5557da9532ee64e023a6d10dad02a4e55a46e3e`＝补丁前基线相等（CRLF 381→379）。残留扫描：`TEMP-P137`／`STARMARK_P137_FORCE`／`block137` 在 `src/**/*.cs` ripgrep <b>零命中</b>（⚠ 第一回我用递归 `grep -rn` 扫 `src tests tools`，被 `bin`／`obj` 里的生成副本拖到超时——那颗尺⛔ 会自己筛构建目录，改用带 glob 的尺）。还原后重建 solution＝0 警告／0 错误 29.78 秒，定向证人 `restored-137.trx`＝<b>134 通过／0 失败／0 跳过</b>（两档 `git diff --numstat` 回到本批其余改动之内）。
+- <b>沙盒三跑</b>：PID 12628（魔数臂）／11108（`disabled`）／7808（`grabfail`），数据库与设置仍指 `D:\StarMarkTmp\p137`，四把写／删开关照旧关着；三跑都 `Alt+F4` 正常退出、`list_windows` 现读该 app 窗口 0 颗、`Get-Process StarMark.UI` 计数 0。UI 正本 `ui-evidence.json`＝<b>32 条・标识全不重复・每条 `image` 现读都在盘上</b>（其中 9 条带 `-patched` 尾缀＝这一腿）。
+- <b>仪器那一笔</b>：① 提示卡那颗复用窗只在<b>主窗压住右下角那块</b>时才被 `get_window_state` 带回来——本腿先把主窗拖到 originX825／663 与 744／444 再按 F1，九发一次都没漏；② 按钮一律按 UIA 身份点（`ID: SettingsButton`／`ID: LanguageSelect` 现读那颗 index 再点），语言弹层按那颗 200×180 独立窗的截图像素选行，⛔ 再按图标位置猜；③ 一次 `computer.click` 落在 (1103,20) 实际打开了「使用说明」弹层（那颗 `？`），Esc 收掉后改用元素身份——像素猜按钮这件事本批犯过两次，第二次才改成现读。
+
+## 十、片137 可达性腿（把「键未摘而开关已关」那一格从⛔ 量过翻成量到了）
+
+- <b>为什么这一腿值得单独跑</b>：「九」把 `disabledTitle` 记成「补丁门已上屏・真实可达性未验证」，而「能不能不靠补丁走到那一支」这件事本批一直⛔ 量过——账本里那颗欠项写的就是「开关改动那一拍会不会留下『键未摘而开关已关』的窗口・⛔ 量过」。这一格用还原后的构建就能量，⛔ 留在「未验证」里＝把我的懒惰写成产品的边界。
+- <b>读数（正本 `D:\StarMarkTmp\p137\reachability137-读数.txt`）</b>：宿主＝本批还原后重建的那颗装配（`StarMark.UI.exe` mtime 12:34:06・PID 4084・<b>⛔ 任何环境变量门</b>）。① 基线：按 F1 ⇒ `get_window_state` 带回 `WinUI Desktop` 遮罩（键在册）。② 在 设置 → 拓展功能 把那颗截屏开关关掉（取法＝现读 UIA：`ID: CaptureStatusText` 那颗<b>前面</b>那颗 `切换开关`，⛔ 按像素猜），状态句当场转成「オフ：切り出しを開始する 3 つのキーはシステムに登録されず（F1、F3、未割り当て は前面のウィンドウに戻ります）、トレイの 3 項目も消えます。既にデスクトップに貼った画像は無傷で…」。③ <b>再按 F1 ⇒ `get_window_state` 只回 `StarMark` 一颗窗</b>：遮罩没起、提示卡也没出；日志 12:38:17～12:39:05 那三行「设置已保存」之间<b>一颗 `[Screenshot]` 都没有</b>＝`Start()` 根本没被叫到。④ 再开回来：状态句转「オン：切り取り F1・貼り画像 F3・文字認識 未割り当て（これは現在本当に効いているキー割り当て…）」⇒ F1 遮罩再次起（<b>双向都活</b>，⛔ 只量一个方向就下结论）。
+- <b>判语（⛔ 产品结论，只欠我自己那一半）</b>：`CaptureGate.RegistersHotkey` 与 `ShowsTrayItem` 是<b>同一颗判据、两个读者</b>，而两个读者都在设置保存那一拍现投影 ⇒ <b>稳态下 `capture.card.disabledTitle` 没有入口</b>，那句词只能靠补丁门量到。这一格从此前的「⛔ 量过」翻成「<b>量到了・结论＝无入口</b>」；「九」那句「真实可达性未验证」对这颗键而言现在有了具体形状＝<b>已量到无入口</b>，⛔ 再写成一句空欠项。
+- <b>要翻这一格得先定产品取向（归他）</b>：要么给一条「关着也注册」的哑键——设计注释明确反对（F1／F3 是裸功能键，替一个关掉的功能继续占着＝所有软件永久失去 Help／截图键，比「按了没反应」更糟）；要么就像现在这样把解释留在设置页那颗状态句里（它已经把「去哪打开・哪些键会还给系统」讲清）。我这一腿⛔ 替他裁这一条，只把「有没有入口」这件事量成读数。
+- <b>沙盒还原</b>：`CaptureEnabled` 现读 `True`（关掉又开回来了）、`EnableTray=False`、`MinimizeToTray=False`、`UiLanguageCode=ja`；PID 4084 `Alt+F4` 正常退出、`Get-Process StarMark.UI` 计数 0。产品源码这一腿<b>一个字没动</b>（`git status` 仍只有本批那 10 颗改动），文档四闸门＝通过 23／失败 0／跳过 0（正本 `D:\StarMarkTmp\p137\docgates137-reachability.trx`）。
+
+## 十一、片137 账本回写（那颗「⛔ 量过」的欠项现在有形状了）
+
+- <b>动了哪一档</b>：`docs/待决策事项.md` 里 <c>P-194</c> 那一节的那颗子行「顺手挖到的一格欠项」之后，<b>就地插一颗同形子行</b>（`  · ` 起首・一行），写「片137 把那一格量到了」＋四件事：基线 F1 起遮罩・关掉开关后 <c>CaptureStatusText</c> 那句当场转・再按 F1 屏幕上什么都没发生（日志连一颗 <c>[Screenshot]</c> 都没有）・再开回来又起（双向）。结论收窄成「<b>稳态与改动那一拍都没有入口</b>」，并把「要把它变成用户真能看见的一句话」显式交成产品取向（哑键 vs. 设置页状态句），⛔ 我替这一格裁。
+- <b>插法的闸门</b>：锚＝那颗子行句尾的原文（现读整档 <b>恰一颗</b>）＋锚后两颗字节必须是 <c>CRLF</c>；插入体由 <c>D:\StarMarkTmp\p137\ledger137-insert.md</c> 那份 LF 草稿转成 CRLF 后<b>按字节</b>拼（⛔ 文本模式重写整档——那颗档三族行尾并存：CRLF 8469・LF-only 96・孤CR 13390）。复称＝改后 CRLF 8470（＋1）・LF-only 96（等）・孤CR 13390（等）・`git diff --numstat`＝<b>1／0</b>（只增不减）・锚仍恰一颗・新行恰一颗；新档 sha256 `ca4916bafe2fc835e12f926f3de4c1c3979ab34fab5ce8fa5f68efb0e239099b`。
+- <b>本笔新立 0／结案 0</b> ⇒ 账本计数器四串⛔ 重跑也⛔ 报新数（那颗尺的读数归它自己的批次）；文档四闸门＝通过 23／失败 0／跳过 0（正本 <c>D:\StarMarkTmp\p137\docgates137-ledger.trx</c>・那一跑读的是盘上最终形状，含本节与报告那四条追加）。⛔ 提交、⛔ push（未推 304・HEAD `fb98c167b5760f4b842bacf6e71c330bd3c4e879`）。
+
+## 十二、片137 编码臂腿（把「普通操作走不到」从一句我相信落成一把会红的尺）
+
+- <b>这一腿问的是什么</b>：「九」把 `encodeFailed`／`failedTitle` 记成「补丁门已上屏・真实可达性未验证」，「十」把 `disabledTitle` 量成了「稳态与改动那一拍都没有入口」。剩下这两颗⛔ 是真机能摆的（摆出来要拆掉一道守卫），所以这一腿换成<b>读码＋证人尺</b>：先追清「到底有哪几处会把像素交给那颗编码器」，再把这件事钉成有人改坏就红。
+- <b>读码追到的调用点（三处・⛔ 两处）</b>：`CaptureOverlayWindow.Actions.cs` 那颗 `Commit(CommitAction.Copy)` 交 `final.Width, final.Height`（`FinalPixels()` 三条返回路）、`ScreenshotService.CopySelectionAsync` 交 `crop.Width, crop.Height`（`TryCrop` 的裁块）、以及<b>先前一直没算进来的一颗</b>＝`CanvasService.SnapshotToClipboard` 交 `shot.Width, shot.Height`（画布快照・category 是 `settings.extend.canvasTitle`）。三处的宽高与缓冲各由这些守卫兜着：`AnnotationPainter.Render` 的 `if (width <= 0 || height <= 0) throw new CaptureFailureException(LocMessage.Of("capture.canvas.badSize", width, height));`、`BitmapTransform.Crop` 的 `if (w <= 0 || h <= 0) throw ... "capture.geom.cropEmpty"`、`LayeredCanvasWindow` 构造函数那颗 `if (boundsPhys.Width <= 0 || boundsPhys.Height <= 0)`（`Width`／`Height` 是 get-only・建完就⛔ 会变），缓冲则一律由被问的那颗档自己按 `width * height * 4` 现配（`GdiScreenCapture` 那两处分配点），截图态的宽高下限另有 `MinSelectionSide = 3` 与 `Intersect` 那句 `if (right <= left || bottom <= top) return null;`。⇒ <b>结论：`encodeFailed` 结构不可达</b>，它是防御枝而⛔ 一条有人能走到的路。
+- <b>落的两把证人</b>（`tests/StarMark.Tests/CaptureReasonGateTests.cs`・定向集从 134 变 <b>136</b>）：`EncodeFailureArmCallSitesAreTheThreeGuardedOnes`（用 `SourceGate.ReadRepoUnder("src")` 现读「哪几颗档里有 `CopyPixelsAsync(`」并把那颗<b>档名集合</b>钉成三颗，再逐颗钉上面那些守卫原文）＋`TheEncodeFailureRulerItselfBitesOnAKnownShape`（⛔ 死尺：注入一颗已知调用形状必须命中、注释里那颗冒充的串必须被抹掉、被问的七颗档现读都⛔ 像空档）。
+- <b>变异臂两颗（新尺首跑全绿⛔ 算证过）</b>：M1＝把 `AnnotationPainter.Render` 那颗 `badSize` 守卫从盘上删掉 ⇒ 红的正中 `EncodeFailureArmCallSitesAreTheThreeGuardedOnes`，另一颗照绿（维度分得开・正本 `D:\StarMarkTmp\p137\encode-arm-m1.trx`）；M2＝在 `OcrService.cs` 里加一颗假调用点 ⇒ 同一颗尺红在 `Assert.Equal() Failure: Collections differ`（集合那一维真的在数・正本 `encode-arm-m2.trx`）。正件首跑 `encode-arm-green.trx`＝2／0，两臂还原重建后 `encode-arm-final.trx`＝<b>136／0／0</b>。
+- ⚠ <b>这一腿最痛的一课（还原判据＝sha 逐字节相等）</b>：M2 的落地脚本用 `ob[:-1] + decoy + "}\n"` 拼档尾，多塞出一颗 `}`；还原时只按原样删掉 decoy ⇒ 盘上 sha 停在 `f92269e2…` 而⛔ 等于基线 `d18fd367…`，靠<b>改前先记 sha・改后再复称</b>当场抓回（补一刀去掉那颗多余括号才回到基线）。M1 更阴：删掉守卫后把同一行插回 `var output = ...` 之前，句子一字不差、功能等价，但守卫的<b>顺序</b>变了 ⇒ sha `431afd4f…` ⛔ 等于基线 `7f9c4a43…`，最后用 `git show HEAD:` 的字节写回才对上。⇒ 「看起来一样」「能编译」「测试全绿」三样都⛔ 是还原的凭据，<b>只有 sha 相等是</b>；变异臂的还原腿一律「改前记 sha → 改 → 跑 → 还原 → 复称必须等于那颗记下的数」。
+- <b>`failedTitle` 那一颗的读数形状（⛔ 真机・⛔ 补丁）</b>：它的三条出口都是<b>需要外部故障</b>那一类——`GdiScreenCapture.CaptureVirtualScreen` 有八颗失败返回（`capture.grab.zeroSize`／`tooLarge`／`noScreenDc`／`noMemoryDc`／`noBitmap`／`blitFailed`／`readPixelsFailed`／`failed`）、`WindowInterop.ListMonitors()` 交回空表、以及建 `CaptureOverlayWindow` 抛异常那一条。正常桌面会话里用户操作⛔ 能叫到它们（拔屏／分辨率切换／GDI 资源耗尽才算），本机⛔ 实造 ⇒ 这颗键的"真实可达"记成「<b>代码上可达・需外部故障・⛔ 本机实造</b>」，而「九」那张补丁卡量到的正文是兜底那颗 `capture.grab.noFrame`（`Grab()` 其实成功、`Error` 为 `null`），两件事⛔ 混写。
+- <b>覆盖账照旧口径</b>：真实操作收到 <b>32</b> 颗；`encodeFailed`＝结构不可达（现在有一把尺守着）、`disabledTitle`＝已量到无入口、`failedTitle`＝可达但需外部故障——三颗都⛔ 算「真实上屏过」，补丁门那九张卡单独记档。
+- <b>收口</b>：solution 重建 0 警告／0 错误 40.43 秒；`git status` 仍只有本批那 11 颗改动（`AnnotationPainter.cs` 与 `OcrService.cs` 都回到各自基线字节）；文档四闸门＝通过 23／失败 0／跳过 0（正本 `D:\StarMarkTmp\p137\docgates137-encodearm.trx`）；HEAD 仍 `fb98c167b5760f4b842bacf6e71c330bd3c4e879`・未推 304・⛔ 提交 ⛔ push。
+
+## 十三、片138 选区判据腿（「太小」那句为什么从没响过——答案是一颗参数递错了）
+
+- <b>这一腿干了什么</b>：把片137 挂着的那句"`capture.select.tooSmall` 整条账本命中 0 次"从"仪器摆不出"翻成<b>产品缺陷＋已修</b>（✅P-264），并顺手判掉同一枝里那句"候选微抖动仍未判定"。
+- <b>破局那一发手势长什么样（下一手要复现照这个来）</b>：⛔ 需要亚像素控制——只要<b>横向拖一条</b>（起点与终点同一行）就得到一条高 0 的选区。仪器换算现读：主窗/遮罩那颗截图 1228×768 对应物理 1920×1200 ⇒ 图像 1 px＝物理 1.5625 px，所以图像 (400,400)→(464,400) 就是物理 (625,625) 起点、100×0 那一条（产品自己的角标把这两个数念了出来，⛔ 我算的第二真源）。
+- <b>修完之后哪里变了</b>：不对称细条（一边 ≥3、一边 <3）在<b>松开那一拍</b>就被 `ShowError` 挡下并挂角标；两边都 <3 仍走"按在候选上＝确认候选／按在空白＝静默清掉"那一枝（注释里那句分工照旧成立，真机读回 `SizeText`＝候选窗自己的尺寸）。提交那一拍（`Actions.cs`）现在也真会拒——两颗读者一字未动，是判据学会了看选区自己。
+- <b>⛔ 别再把"全量全绿"当这一格的凭据</b>：这一格坏在<b>读者怎么递参</b>，而单测一直按契约递对的参数 ⇒ 6615 全绿与它⛔ 相关。新钉的那颗 `TwoStageCaptureTests.BothSelectionGatesHandTheMonitorAndTheGuardMeasuresTheSelection` 才是这一维的证人；改这两行调用点必红。
+- <b>两颗仪器雷（本批现场踩到，下一手先读这两条）</b>：
+  · <b>绿的那棵树⛔ 等于屏幕上那棵树</b>：改完 Core 只跑 `dotnet test` 会绿（它测自己那份拷贝），而 UI 输出树里那颗 `StarMark.Core.dll` 还是旧的（本批现读 `49ba83ae`・12:54 ↔ 已修 `c622f0ac`・13:24）⇒ 起沙盒前必须整解决方案重编，并<b>逐颗比 UI 输出树里那颗依赖 dll 的 sha == src 输出那颗</b>。同族第四犯（前三次见名册 435／480／799）。
+  · <b>`list_windows` 会漏掉遮罩那扇窗</b>：F1 之后 SDK 只回主窗，我差点判成"热键没生效"；用 `EnumWindows` 现读那颗 pid 的可见顶层窗才看到 1920×1200 那一扇（hwnd 每跑都变，取号⛔ 猜）。⇒ 量遮罩之前先 EnumWindows 拿 hwnd，再 `get_window`＋`get_window_state`（坐标输入之前必须先取一次 state，否则 SDK 直接拒）。
+- <b>还欠的（⛔ 假装收完）</b>：① `capture.select.offscreen` 仍⛔ 真机量到——它的前置是"与整块屏完全不相交"，而释放前选区已被 `Intersect(…, _monitor)` 夹回本屏 ⇒ 代码上可达・真机摆不出・⛔ 本机实造，与 `encodeFailed` 同格处置；② 多屏那一途（跨屏拖选、每屏各起一扇遮罩）本批⛔ 碰——本机只有一块 DISPLAY1；③ 那两句的<b>观感</b>（措辞那颗「的」与"松开就响"的手感）归他点验，我⛔ 改语言表原文。
+- <b>本批读数</b>：先红 `toosmall137-red.trx` 3／1 → 改后 `toosmall137-green.trx` 112／0／0；解决方案重编 0 警告／0 错误 33.09 秒；账本计数尺双跑 264/139/125 → 265/140/125（VERDICT OK）；沙盒三跑 pid 3060／5232／20008 全部 `Alt+F4` 退出、进程数 0、窗口数 0；读数正本 `D:\StarMarkTmp\p137\toosmall139-读数.txt`。
+
+- <b>全量收口</b>：`dotnet test StarMark.sln -c Debug -p:Platform=x64 --no-restore` ＝ <b>6617 通过／0 失败／0 跳过</b>（16 m 56 s・正本 `D:\StarMarkTmp\p137\fullclose138.trx`），基线 6615（片137 收口那颗）⇒ 差 +2 恰＝本批两颗新证人。⚠ 顺序：全量跑在文档三档最后追加<b>之前</b>，文档那一维由四闸门 23 格在追加之后单独复称（`docgates138-close.trx`）——下一手要拿"全量＋文档改动同一棵树"的读数，得再跑一次全量。
+
+- <b>修完之后那颗正向对照（⛔ 让「改了判据」停在「没把正常操作一起改坏」这一步）</b>：同一具沙盒（pid 6436・已修那颗 `StarMark.Core.dll`）再走一发正常拖框：图像 (300,250)→(500,400)＝200×150 图像像素＝物理 313×234，`Ctrl+S` 之后日志 `[截图] 已存图：313 × 234` ＋ `[提示卡] 已贴上屏幕：截图 · 已存图（1580,1077 324x107）`，而落盘那颗 PNG 的 IHDR 现读<b>313 × 234</b>（两颗通道各数一次：日志那句与档头字节）。⇒ 正常选区照旧交得出去・缩放换算与产品自己念出来的数对上（图像 1 px＝物理 1.5625 px）。⚠ 另两格本具沙盒⛔ 摆得出：跨屏「大半在屏外」那一档（本机只有一块 DISPLAY1，指针出不了屏）与贴图态那条细条（要走 `Commit` 那颗 `!_pinned` 分支，本批⛔ 量）⇒ 照旧登记⛔ 真机读数，⛔ 拿单测绿顶掉。正本 `D:\StarMarkTmp\p138\regress-normal-selection-读数.txt`。
+
+- <b>贴图态那一腿的半格读数（⛔ 把仪器的 limit 写成产品的错）</b>：F3 起贴图模式遮罩→拖一条正常框→松手，日志「[贴图] 已钉住：313 × 234（共 1 张，上限 12 张）」＋「贴图 · 已钉住」卡上屏，`EnumWindows` 现读那扇贴图窗矩形＝<b>(469,391) 313×234</b>＝释放那一块的原样（图像 300→469・250→391）⇒ 松手即钉那一途按 placement 精确落位，本批改的那颗守卫⛔ 伤到它（贴图态走 `!_pinned` 另一颗门）。另半格⛔ 判定：贴图 body 上「未拿笔拖动＝移动整张」（`Pin.cs` 与 `Pointer.cs` 两处注释都这么声明）我两发 drag （快・慢各一发）之后贴图矩形两次现读⛔ 动、截图里也⛔ 有笔迹——但<b>⛔ 就此判产品</b>：那扇窗是我用 `EnumWindows` 拿到的 hwnd 手工绑给 SDK 的（`list_windows` 认不到它，见上「两颗仪器雷」第二条），随后同一扇窗上 `click` 先报 `call get_window_state before issuing coordinate input`、显式带 `screenshotId` 又报 `unknown screenshotId` ⇒ <b>我那两发输入到底有没有落到这扇窗⛔ 证成</b>。已排除两条：贴图窗 exstyle＝`0x80`（只 TOOLWINDOW・⛔ WS_EX_TRANSPARENT）⇒ ⛔ 鼠标穿透；截图⛔ 有笔迹 ⇒ ⛔ 默认亮了笔。⇒ 这一格照旧登记⛔ 真机读数（观感类，归他点验最省），⛔ 立缺陷、⛔ 进发布说明。可复用一条：<b>手工 `get_window(hwnd)` 绑来的窗可以读、⛔ 可靠写</b>——要往某扇窗打坐标，先问它在不在 SDK 的注册表里（＝`list_windows` 认得它吗）。正本 `D:\StarMarkTmp\p138\pinmode138-读数.txt`。
+
+## 十四、片138 可访问名腿（截图工具条那 16 颗按钮第一次念得出自己是谁・✅P-265）
+
+- <b>为什么会撞上</b>：想量 PU（标注越框被裁）就得"按名字指到那颗画笔"，而 UIA 树里工具条 16 颗全是裸「按钮」——图标做 `Content`、只挂了 `ToolTip`。⇒ 下一手⛔ 想按名字点工具条，先确认这颗已办（本批）。
+- <b>改了什么（只一行＋一颗 using）</b>：`CaptureOverlayWindow.ToolBar.cs` 的 `IconButton` 里，挂完 `ToolTipService.ToolTipProperty` 之后，把<b>同一颗</b> `tip` 再挂一次 `AutomationProperties.NameProperty`。⇒ 名字与悬停说明⛔ 两份文案；走 `LocText` 那份名单，换语言跟着重贴（真机 zh 跑念出的就是 zh 整句）。
+- <b>下一手要接着办的两格（都在本档别处也挂了号）</b>：① 其余代码建的图标按钮（画布工具条、设置页那几排）同病嫌疑——现读口径＝`grep -rn "AutomationProperties" src/StarMark.UI --include=*.cs`（改前零命中），办之前先量"哪几排在 UIA 里念不出"，⛔ 凭档名猜；② PU 那一格要真机判，得<b>先按一次弹层把它关掉再画</b>（点工具那颗会开颜色／粗细栏，第一发按下被 light-dismiss 吞掉），且⛔ 把 Ctrl+S 排在补画之前（提交会关窗，hwnd 当场失效）。
+- <b>仪器课（本腿三颗，都已进名册）</b>：`SourceGate.Code(x)` 收的是<b>文件正文</b>⛔ 路径（我把路径递进去，断言扫了那颗路径串，红得⛔ 代表产品）；变异臂还原只认 sha 逐字节（`12dc6cf5b81cf0c7…` 前后相等才算）；整解决方案重编＋比对 UI 输出树里那颗依赖 dll 的 sha，才允许起沙盒。
+- <b>读数</b>：0 警告／0 错误 16.51 秒・定向 23／0（`a11y138-green2.trx`）・变异臂 1／22（`a11y138-mut.trx`）・真机前后各一跑（改前树＝裸「按钮」×16，改后＝16 颗各有整句名）・沙盒两跑退出后 `StarMark.UI` 进程数 0。正本 `D:\StarMarkTmp\p138\a11y138-读数.txt`。
+
+## 十五、片139 画板工具条那一排（✅P-265 普查交回的第二宿主・两处各一行・真机 29 颗念得出）
+
+- <b>普查怎么做的（下一手照这个口径，⛔ 起窗猜）</b>：现读代码里所有「用代码造出来的按钮」的 `Content` 是什么——带文本的（`MainWindow.Status.cs` 那颗、`BoardWindow.cs` 那五颗 `Word(...)`）名字白送；纯图标的才要办。结果只剩画板那两排：`CanvasToolbarWindow.xaml.cs` 的 `BuildShapeButtons`（五颗图形）与那一排色点（`Content` 是一颗圆 `Border`）。
+- <b>已一并办到的（⛔ 再去找第二出口）</b>：截图那三排选择栏（图形栏／颜色点／粗细点）在 `CaptureOverlayWindow.Pickers.cs` 里，走的是<b>同一颗</b> `IconButton` 工厂 ⇒ ✅P-265 那一行已经覆盖它们。
+- <b>改法与那颗坑</b>（<b>本节这条已被片140 改口</b>：这颗窗口⛔ 挂 `LocText.SetMessage`，那版被自家闸门 `CanvasBarWordGateTests` 全档禁掉；现在写的是「两处各登记键＋没渲染的实参，取词落在 `Refresh` 体内」）；图形那句的实参里嵌着工具名 ⇒ <b>必须交没渲染的那颗 `LocMessage`</b>，交成品字符串就是「换语言它一个字都⛔ 动」（✅WI-36／✅P-181 同一条口径，本批是它第三次咬人）。
+- <b>真机口径</b>：改后 29 颗逐颗念得出（正本 `D:\StarMarkTmp\p138\canvas-a11y-139-读数.txt`）；改前那一半在片140 <b>补上了，而且⛔ 动 HEAD 树</b>：把取词那一行就地摘掉重编＝改前那一版的形状，UIA 现读 29 颗里恰 11 颗名字空（五颗图形＋六颗色点）；还原重编＝0 颗空 ⇒ 两半各有一跑、同一把尺。
+- <b>起画布的前置（省下一手一次空跑）</b>：沙盒那颗 `CanvasEnabled` 默认在<b>副本</b>里是 false，不改它 Ctrl+Alt+D 只会回一句「屏幕画布已关闭」（那颗键是 `canvas.notice.boardClosedTitle`／`boardClosedBody`，本批顺带量到它真上屏说话）；改的是 `D:\StarMarkTmp\p137\settings.json`，他真设置档⛔ 动。
+- <b>还欠的</b>：任务 #13（PU 那一格・⛔ 本具仪器在标注阶段建不起一笔，「撤销」三跑都照旧 disabled，正本 `D:\StarMarkTmp\p138\pu138-读数.txt`）・任务 #16（画板那块「写闸拒了」面板的三语逐字・只改沙盒副本里那颗 `board.loaded` 的回话，⛔ 动产品源码）。
+
+## 十六、片140 画板工具条那一排的机制改口＋前后复称（自家闸门否掉第一版・同一把尺改前后各一跑・活口换语言四跑）
+
+- <b>改口</b>：第十五节那两行 `LocText.SetMessage(button, 名字属性, …)` 被 `CanvasBarWordGateTests` 按整档禁掉 ⇒ ⛔ 放宽闸门，按它指出的机制重写：建条时登记「键＋没渲染的实参」两颗，取词落在 `Refresh` 体内那一发 `AutomationProperties.SetName(button, message.Render())`（这颗窗口的重贴节拍已经是 `Locale.Changed += Refresh`）。
+- <b>证人跟着改口・两臂各红一颗</b>：登记颗数恰二・全档那颗名字调用恰一・且<b>必须落在 `Refresh` 体内</b>。臂一＝摘掉取词那一行 ⇒ 1 失败／23 通过；臂二＝把同一行挪进构造期（全档颗数照旧一颗）⇒ 也红，红在体内那一颗。两跑后按字节还原（sha 逐位相同・numstat 删除列 0）。
+- <b>仪器那一笔（省下一手一次空跑）</b>：这扇窗用 Windows 自带的 UIA 客户端程序集就能读（PowerShell `Add-Type`），⛔ 装任何第三方件；两个坑：①画板工具条是 `WS_EX_TOOLWINDOW`（扩展样式 0x88）⇒ Computer Use 的名册不带它（`list_windows` 只回主窗、`get_window` 报句柄失效）；②UIA 自己报的句柄≠`EnumWindows` 那颗（现读 1574402 对 0x180602），拿后者 `FromHandle` 必抛 `ElementNotAvailable` ⇒ 先按 RawViewWalker 遍历桌面 children、用类名 `WinUIDesktopWin32WindowClass` ＋名字认出那扇窗再下钻。换语言那一发同理：按 `AutomationId=LanguageSelect` 认那颗组合框，<b>按序号</b>选条目（把中文词写在命令行会被 PS 5.1 按 ANSI 拆）。
+- <b>读数</b>：改前（就地摘掉取词那一行重编）＝29 颗里恰 11 颗名字空（五颗图形＋六颗色点），还原重编＝0 颗空；活口 zh→en→ja→zh 四跑每次 29 颗一颗不落，英文态条子自己变宽 1099×90 → 1302×106。定向 103／0／0・整解决方案重编 0 警告／0 错误・沙盒退出后窗口 0 进程 0・正本 `D:\StarMarkTmp\p139\canvas-a11y-140-读数.txt`。
+- <b>还欠的</b>：任务 #13（PU 那一格・⛔ 本具仪器在标注阶段建不起一笔）・任务 #16（画板那块「写闸拒了」面板三语逐字）・任务 #17（`canvas.notice.boardClosedTitle`／`boardClosedBody` 三语逐字・零补丁，把沙盒副本那颗 `CanvasEnabled` 折回 false 就走到）。
+
+- <b>片140 收口读数</b>：`dotnet test` 带 `--logger` 那一跑（trx 名 `fullclose140b.trx`）＝ 失败 0／通过 6619／总计 6619（474.8 秒・trx 逐颗清点 Passed 6619／Failed 0／NotExecuted 0／Skipped 0），正本 `D:\StarMarkTmp\p140\fullclose140b.trx`。⚠ <b>两半分开记</b>：这一跑的读数出自<b>写下本条之前</b>的那棵树（代码已定稿、文档还没有这一条）；本条落盘后重跑的是<b>文档闸门那一档</b>，颗数与结果记在 `D:\StarMarkTmp\p139\canvas-a11y-140-读数.txt` 档尾，⛔ 把「全量 0 红」说成覆盖了改文档之后的树。
+
+## 十七、片140 零补丁收「屏幕画布已关闭」三语逐字（任务 #17 结案・成对判据自己算・提示窗正文住在子 bridge 窗）
+
+- 走法：把我那副本 `CanvasEnabled` 折回 false（三语各起一颗设置副本，⛔ 动他真档）→ 一发 Ctrl+Alt+D → 后台 watcher 盯那颗提示窗<b>可见性 False→True 那一翻</b>就抓 UIA 正文（那颗提示 10 秒自己消失、分两次工具调用一定扑空）。
+- 三语逐字已收（见报告第五百二十三那条，正文与 `UiStrings.cs` 现读渲染<b>九格全对</b>；两臂验尺：跨语言比⇒3 红、换实参⇒1 红）。顺带收到那颗提示自己的第三行 `card.hint.plain`（三语各一颗，停留秒数那颗槽填的是 `KeepSeconds`＝10）。
+- 仪器那一笔：①顶层句柄 `FromHandle` 对提示窗只回一颗空 Pane，正文在子窗 `Microsoft.UI.Content.DesktopChildSiteBridge` 上；②本机 python 的 `SendInput`（键）打不动那颗全局热键——`rc=1`、`sizeof(INPUT)` 修成 40、前台已确认、两侧都 Medium，而 Computer Use 同一发打得动 ⇒ 这条⛔ 是产品结论，是<b>我这具仪器的边界</b>，任务 #19 起手前先解决它。
+- 收口：三跑各退出后进程数 0・`StarMark*` 计数 0・⛔ 改产品源码⛔ 动真设置档・正本 `D:\StarMarkTmp\p140\boardclosed-140-读数.txt`。
+- <b>还欠的</b>：任务 #13／#19（PU 那一格——真鼠标注入这条新腿先要过 `SendInput` 那颗）、任务 #16（画板「写闸拒了」面板三语逐字・只改沙盒装配里那颗 `board.loaded` 的回话）。
+
+## 十八、片140 画板「写闸拒了」面板三语逐字（任务 #16 结案・临时补丁门只改装配副本・九格成对）
+
+- 走法（下一手照这个）：`patch_bridge_gate.py patch` 只把<b>装配副本</b> `Assets/Boards/board-bridge.js` 那句 `board.loaded` 回话改成 `elements: writable + 1` ⇒ 宿主三颗数对不上；`board_leg.py` 用 `STARMARK_START_BOARD=last` 起画板窗（托盘那一条 `OpenBoardsWindowAsync`，⛔ 另起主人）；额度＝`BoardPolicy.ArmRetryBudget = 1` ⇒ 拒两次就开口。跑完 `restore`，sha 逐位复称相等。
+- 三语逐字已收（三串 × 三语＝9 格全对，正本 `D:\StarMarkTmp\p140\stuck-screen-140.json`；机制与读数正文见报告第五百二十四）。
+- ⚠ 一颗⛔ 写成缺陷的读数：UIA 树里那三行各重列 5 次（连 web 侧五颗按钮一起重）＝同一子树被多个宿主层重列，屏幕上只有一颗面板（截图为证）⇒ 「树里数到几颗」⛔ 等于「屏幕上有几颗」。
+- 仪器那一笔：①这扇窗的 XAML 正文只有 Computer Use 那把 UIA 尺读得到，我这侧 .NET Framework 客户端读顶层与子 bridge 都只回空 Pane；②沙盒日志目录跟着设置副本的数据根走（`StarLog.LogDirectory` ← `RedirectedDataRoot()`）⇒ 换副本目录就要换找日志的地方，『没日志』先怀疑自己的指针。
+- <b>还欠的</b>：任务 #13／#19（PU 那一格——先过 `SendInput`(键) 那颗边界）、观感点验与 #744 归他。
+
+## 十九、片140 PU（标注越出选区）那一格量到了（任务 #13／#19 结案・真鼠标＋UIA 按名字 armed・两半各一把尺）
+
+- 换掉的两个零件：①注入<b>鼠标</b>走我这侧 `SendInput`（绝对坐标＋`MOUSEEVENTF_VIRTUALDESK`，按下→逐步移动→放开，完事把光标还回原处）——片138 那句「分层遮罩上按下／放开递不到」⛔ 再当通则用，这次三发三中；②armed 那颗笔改 <b>UIA 按名字前缀 Invoke</b>（`uia_press.ps1 -PrefixCodepoints 753b,7b14`），⛔ 摸坐标点图标。
+- 判据两半：屏幕上＝沿预测线逐列问<b>暗红</b>（遮罩把框外那半压到约 60% 亮度：(139,10,21) vs 笔色 (232,17,35)），命中 202 列、上下平移 60 像素的两条对照带各 0 列；导出＝同选区两跑逐像素差 151 颗，全在框内那一段（x149..199／y49..61），两颗都 200×150 ⇒ 越出去那半不进导出（按「导出＝选区那块」的既有口径）。
+- ⚠ 两颗差点写错的判词（都靠对照救回）：①第一版按「亮红」数框外 ⇒ 报「0 颗＝没画」；②单看一张时框内那颗 y125..138 的红块被当成笔画，两跑相同才认出是背景。⇒ 读数册里把「我认的是哪副颜色」写清。
+- 结论：批次 PU 那句「标注可以越出选区」在输入与显示两半成立，只有导出按设计裁掉 ⇒ ⛔ 新缺陷、⛔ 新 P 号；越出去那半只以暗红出现这一观感归他点验。
+- <b>还欠的</b>：只剩归他的两格（观感点验・#744）与 push 授权；仪器边界那两条（`SendInput`(键) 打不动全局热键・画板窗 XAML 只有 Computer Use 那把 UIA 尺读得到）已记进片140 仪器课。
+
+## 二十、片141 主窗六颗念不出名字的控件（✅P-266・屏幕级普查尺立案・LocText 新添 NameKey）
+
+- <b>这把尺下一批接着用</b>：`unnamed_census`（桌面 RawView＋按 rect 去重＋两把筛子各报颗数）与 `names_check`（按 AutomationId 逐颗念出 Name）都在 p141；改前 6／改后 0 两份读数与三语活口读数在同一颗读数册里。
+- <b>机制</b>：`LocText.NameKey` 落点写死 <c>AutomationProperties.NameProperty</c>，取词只有 `Paste` 那一处，摘键走 `Drop`（⛔ 只清字留着注册项）。⚠ 那颗档是 <b>CRLF</b>、`MainWindow.xaml` 是 <b>LF-only</b>——变异臂的锚点两颗都要按各自行尾写，颗数守卫要问的是「⛔ 混进第二族」而⛔「那一族颗数相等」（我这两条各误挡一次）。
+- <b>一颗增量教训</b>：`dotnet build StarMark.sln` 报「成功」而那颗新测试档⛔ 进装配（筛子跑出来是「没有匹配的用例」）⇒ 新加测试档后必须 `--list-tests` 数一颗，或定向跑那一颗名字；绿 build⛔ 等于新档编译进去了。
+- <b>还欠的</b>：设置八页那 13 颗 Name（下一批）；归他的两格（观感点验・#744）与 push 授权。
+## 二十一、片142 设置页十八颗念不出名字的控件借名落地（✅P-267・三语活口复称・一把旧普查尺改口）
+
+- <b>这一批做了什么</b>：`SettingsPage.xaml` 里 18 颗可交互元素（六颗有名字的下拉・七根滑杆・三颗无名下拉・两颗 NumberBox）
+  各在自己那一行尾部借到<b>该行标题已在用的那颗键</b>（`LocText.NameKey`），整批⛔ 新增表行・⛔ 新增行（numstat 18／18）。
+  新证人 `SettingsNameKeyGateTests`（逐颗配对＋整页颗数 18＋本页⛔ 字面 AutomationProperties.Name）；
+  两臂变异各红在该管那一维并逐字节还原。
+- <b>真机怎么复称的</b>：沙盒＋主窗最大化，zh／en／ja 三跑各 rows=292・unnamed=33・infinite_dropped=35，
+  那 18 颗（加 AI 页两颗＝20）三语各自念话、配不上对 0・空名 0・三语同形 0；
+  两根自定义预算滑杆靠把性能模式选到「自定义」当场摆出来⇒ 本批⛔ 留「现场摆不出」那一格。
+- <b>⚠ 一把旧尺改口（读下一批之前先看这条）</b>：片141 那两把普查尺对 ±∞ rect 会把<b>上一颗元素的 rect</b> 带进落盘、
+  再被去重吞掉真命中（实测 327＝292＋35）⇒ 那份「念不出名字」清单<b>只漏报⛔ 误报</b>；
+  「主窗六颗→0」那条另由逐颗打印 Name 的正尺撑账，⛔ 受影响。后继尺自报漏掉颗数。
+- <b>还欠的</b>：屏幕上剩那 <b>33</b> 颗行按钮（热键页 16＋组件页 17，主人是行模板）＝下一刀，
+  开工前先现读那一族的模板与行模型交不交出「标题的那颗键」；归他的两格（观感点验・#744）与 push 授权。
+
+- <b>批末收口（片142）</b>：全量 6624／6624・账本计数器 268／143／125（VERDICT OK）・证人档改口后复跑六档 118 格全绿・HEAD fb98c16・未推 304・⛔ commit／⛔ push・StarMark 进程 0。
+## 二十二、片143 代码建的那 33 颗 Expander 抬头借名落地（✅P-268・八页归零・新立 P-269）
+
+- <b>这一批做了什么</b>：新增一颗扩展方法（<code>src/StarMark.UI/Helpers/ExpanderTitleName.cs</code>）把
+  Expander 的可访问名交给 <code>LocText.NameKey</code>，热键页与组件页两颗建造处各改<b>结尾那一行</b>
+  （<code>}.TitleNamed(抬头那颗键)</code>）⇒ 八张设置页"念不出名字的可交互元素"从 <b>33 颗</b>降到 <b>0</b>，
+  三语（zh／en／ja）各 rows=290・unnamed=0・infinite_dropped=35。整批⛔ 新增表行・⛔ 第二份文案・⛔ 动行数
+  （两颗建造档 numstat 各 1／1，行数 546／234 一字不动）。
+- <b>⚠ 记下一把尺的射程</b>：那颗行号棘轮只问"端点在不在文件里"。第一版插了 4~5 行，它报的数从 32 <b>掉到 31</b>
+  而⛔ 涨红＝另有几颗号漂到别的正文上却照旧存在。⇒ 换成"⛔ 动行数"的形状，两档先还原（sha 逐字节对过本轮记录的改前值）再落。
+  下一批要往<b>有行号引用</b>的档里加行之前，先问这一句。
+- 证人三格 <code>tests/StarMark.Tests/ExpanderNameKeyGateTests.cs</code>（配对・两颗宿主・全仓那颗 SetNameKey 只一处）
+  ＋变异臂两臂各红在该管那一维，还原后逐字节相等。邻域 10 档 168 格全绿。
+- <b>新立 P-269（开放）</b>：设置页「更新说明」那颗 XAML Expander 挂着 <code>LocText.Key</code>，按取词落点的候选顺序
+  会贴中它的 <b>Content</b>（同有 Header）⇒ 抬头念不念得出／正文有没有被那句顶掉，<b>欠真机读数</b>；
+  这一批试了一发「立即检查」，那一发没带回可读正文、元素在 UIA 树外 ⇒ 三个问句一条都答不了。点验单在 P-269 那条里，
+  ⛔ 没有读数就改形状。
+- <b>还欠的</b>：归他的两格（观感点验・#744）与 push 授权；批末收口颗数见下面那条。
+
+- <b>批末收口（片143）</b>：全量 6627／6627・账本计数器 270／144／126（VERDICT OK）・真机三语各 rows=290・unnamed=0・infinite_dropped=35・HEAD fb98c16・未推 304・⛔ commit／⛔ push・StarMark 进程 0。批内两颗改口记在报告第五百二十八那颗收口读数里（开放项⛔ 戴✅・账本正文⛔ 写带点命名空间）。下一格＝P-269（那颗 XAML Expander 的落点，欠真机读数・点验单在账本里）。
