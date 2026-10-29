@@ -45,16 +45,19 @@ public sealed class ThemeAccentWordGateTests : IDisposable
             .Where(f => !f.RelativePath.EndsWith("UiStrings.cs", StringComparison.Ordinal))
             .Sum(f => Count(Code(f.Text), quoted));
 
-    /// <summary>① 四颗新键：表里各一行、代码与标记合计各一个主人，三语各说各的。</summary>
+    /// <summary>① 四颗新键：表里各一行、代码与标记合计各一个<b>可见</b>主人，三语各说各的。
+    /// <para>⚠ 那颗数是<b>读者名单</b>，按名册 305 那一族的口径只管改数、⛔ 放宽判据：
+    /// <c>accentTitle</c> 从 1 涨到 2 是多了一颗合法读者——那颗下拉的可访问名（批次 Phase C 片142 借名，
+    /// 屏幕上仍只有一处念这句话，⛔ 第二份文案）。再加读者时同批改这颗数与这段分布。</para></summary>
     [Theory]
-    [InlineData("settings.general.accentTitle")]
-    [InlineData("settings.general.accentSystemAccent")]
-    [InlineData("settings.general.accentCustom")]
-    [InlineData("settings.general.accentScope")]
-    public void EachNewWordHasOneOwnerAndSaysItDifferentlyInEachLanguage(string key)
+    [InlineData("settings.general.accentTitle", 2)]     // ①标题那一格 ②AccentSelect 的可访问名（借同一颗键）
+    [InlineData("settings.general.accentSystemAccent", 1)]
+    [InlineData("settings.general.accentCustom", 1)]
+    [InlineData("settings.general.accentScope", 1)]
+    public void EachNewWordHasOneOwnerAndSaysItDifferentlyInEachLanguage(string key, int readers)
     {
         var quoted = "\"" + key + "\"";
-        Assert.Equal(1, AsksInCode(quoted) + Count(ReadRepoFile(Page), quoted));
+        Assert.Equal(readers, AsksInCode(quoted) + Count(ReadRepoFile(Page), quoted));
         Assert.Equal(1, Count(ReadRepoFile(Table), "new Entry(\"" + key + "\""));
 
         Assert.True(UiStrings.TryGet(key, out var row), "表里没有这颗键：" + key);

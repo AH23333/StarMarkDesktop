@@ -156,7 +156,7 @@ public sealed partial class SettingsPage
                 Margin = new Thickness(0, 0, 0, 4),
                 // 一律收起：计数已写在标题上，展开后才出现实例行——这正是"不要始终显示所有实例"的落点。
                 IsExpanded = false,
-            });
+            }.TitleNamed(WidgetStorage.KindTitleKey(kind)));
         }
     }
 

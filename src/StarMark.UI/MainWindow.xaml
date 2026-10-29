@@ -40,7 +40,8 @@
                 </StackPanel>
 
                 <StackPanel x:Name="TopBarButtons" Grid.Column="2" Orientation="Horizontal" Spacing="6">
-                    <Button x:Name="SyncButton" Style="{StaticResource SecondaryButton}" Click="SyncButton_Click">
+                    <Button x:Name="SyncButton" Style="{StaticResource SecondaryButton}"
+                            i18n:LocText.NameKey="top.sync" Click="SyncButton_Click">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <ProgressRing x:Name="SyncProgress" Width="12" Height="12" IsActive="False" Visibility="Collapsed"/>
                             <TextBlock i18n:LocText.Key="top.sync"/>
@@ -50,11 +51,13 @@
                          大账号/慢网下要几十秒到几分钟）。只在同步中出现的取消键（P-55）。 -->
                     <Button x:Name="SyncCancelButton" Style="{StaticResource SecondaryButton}" i18n:LocText.Key="top.syncCancel"
                             Click="SyncCancelButton_Click" Visibility="Collapsed"/>
-                    <Button x:Name="ThemeButton" Style="{StaticResource SecondaryButton}" Click="ThemeButton_Click">
+                    <Button x:Name="ThemeButton" Style="{StaticResource SecondaryButton}"
+                            i18n:LocText.NameKey="top.themeLabel" Click="ThemeButton_Click">
                         <FontIcon x:Name="ThemeIcon" Glyph="&#xE895;" FontSize="14"/>
                     </Button>
                     <Button x:Name="WidgetsButton" Style="{StaticResource SecondaryButton}"
-                            i18n:LocText.ToolTipKey="top.widgetsTip" Click="WidgetsButton_Click">
+                            i18n:LocText.ToolTipKey="top.widgetsTip" i18n:LocText.NameKey="top.widgetsTip"
+                            Click="WidgetsButton_Click">
                         <FontIcon Glyph="&#xE710;" FontSize="14"/>
                     </Button>
                     <!-- 「？」说的是**当前这一页**（批次 VC-3）。刻意做成顶栏一颗而不是每页塞一颗：
@@ -91,6 +94,7 @@
                  ⛔ 不在这里列 <ComboBoxItem>：闭着的那一格显示的是选中那一刻从 Content 抄走的快照，
                  换语言时它不会跟着改口（批次 WI-2c 治的就是这一处）。 -->
             <ComboBox x:Name="SortCombo" MinWidth="90" SelectedIndex="0"
+                      i18n:LocText.NameKey="top.sortLabel"
                       SelectionChanged="SortCombo_SelectionChanged"
                       ItemsSource="{x:Bind SortOptions, Mode=OneTime}"
                       ItemTemplate="{StaticResource LocOptionTemplate}"/>
@@ -118,7 +122,7 @@
             <!-- 这颗按钮的字面<b>只有 MainWindow.Search.cs 一个主人</b>：它随"选中了几个类型"变
                  （"类型筛选 · N"），标记上挂静态键＝换语言那一刻把带值的句子盖回光杆那句（#295）。 -->
             <Button x:Name="FileKindButton" FontSize="12" Padding="8,4"
-                    i18n:LocText.ToolTipKey="kind.buttonTip">
+                    i18n:LocText.ToolTipKey="kind.buttonTip" i18n:LocText.NameKey="top.kindFilterLabel">
                 <Button.Flyout>
                     <Flyout>
                         <StackPanel Spacing="4" MinWidth="176">
@@ -166,6 +170,7 @@
             <ComboBox x:Name="LanguageCombo" MinWidth="116" FontSize="12"
                       i18n:LocText.PlaceholderKey="searchLang.placeholder"
                       i18n:LocText.ToolTipKey="searchLang.tip"
+                      i18n:LocText.NameKey="top.searchLangLabel"
                       ItemTemplate="{StaticResource LocOptionTemplate}"
                       SelectionChanged="LanguageCombo_SelectionChanged"/>
 

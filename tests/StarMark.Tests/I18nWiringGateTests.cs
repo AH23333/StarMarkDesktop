@@ -1426,7 +1426,11 @@ public sealed class I18nWiringGateTests
         // ⛔ 窗口标题<b>也没有</b>加成第六颗：WinUI 3 的 <c>Window</c> 不是 <c>DependencyObject</c>，
         // 附带属性根本贴不上去（它走 <c>LocText</c> 的第二张名单，见
         // <see cref="TheWidgetTitleHasOneIconOwnerAndFollowsTheLanguage"/> 与坑表 #338）。
-        Assert.Equal(5, Count(loc, "DependencyProperty.RegisterAttached"));
+        // <b>批次片141（✅P-266）真添了第六颗：`NameKey`</b>——它⛔ 是上面那两种被否的形状：
+        // 类型是 <c>string</c>（投得到 WinRT，⛔ 数组那颗的原生访问违例那一族）、挂在元素上（⛔ 窗口），
+        // 落点写死 <c>AutomationProperties.NameProperty</c>，取词仍然只走 <c>Paste</c> 那一处。
+        // 真机三语各一跑起得来、六颗名字现场跟着语言改口＝这颗数从 5 改 6 是<b>被量过</b>才改的（⛔ 为了让改动便宜）。
+        Assert.Equal(6, Count(loc, "DependencyProperty.RegisterAttached"));
         Assert.Contains("FindProperty(d, \"PlaceholderText\")", loc, StringComparison.Ordinal);
     }
 

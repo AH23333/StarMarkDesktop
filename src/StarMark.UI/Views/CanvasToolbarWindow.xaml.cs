@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -40,6 +41,14 @@ public sealed partial class CanvasToolbarWindow : Window
     /// <summary>图形那几颗：按 <see cref="CanvasTools.Shapes"/> 生成。换工具时亮哪一颗只认这张表，
     /// 不在界面里另列一份工具清单（否则"条上有这颗、点下去走的却是另一支"只有真机才看得见）。</summary>
     private readonly Dictionary<CanvasTool, Button> _shapeButtons = new();
+
+    /// <summary>
+    /// 纯图标那两排（五颗图形＋一排色点）在 UIA 里的名字：建条时只<b>记下「键＋没渲染的实参」</b>，
+    /// 取词发生在 <see cref="Refresh"/> 那一拍。这颗窗口⛔ 挂 <c>LocText</c>
+    /// （<c>CanvasBarWordGateTests.TheStatusLineRewordsItselfAtTheMomentItChanges</c> 钉着：
+    /// 挂上来只会多几条贴不出去的空壳），而换语言的重贴已由 <c>Locale.Changed += Refresh</c> 送到位。
+    /// </summary>
+    private readonly Dictionary<Button, LocMessage> _names = new();
 
     private IntRect _screen;
     private double _scale = 1d;
@@ -260,6 +269,9 @@ public sealed partial class CanvasToolbarWindow : Window
             // 颜色名交的是<b>键</b>（✅P-181 那颗 NameKey）：tooltip 是常驻的，换语言由 LocText 重贴。
             // 从前这里贴的是 `colour.Name`——那一刻拼好的字符串，之后换语言它一个字都不动。
             LocText.SetToolTipKey(button, colour.NameKey);
+            // 色点是纯图标（一颗圆 Border 做面）⇒ 辅助技术里念不出"这是哪一颗颜色"（✅P-265 同族）。
+            // 这里只<b>记下没渲染的那句</b>，取词排在 Refresh 那一拍——这颗窗口⛔ 挂 LocText.SetMessage。
+            _names[button] = LocMessage.Of(colour.NameKey);
             button.Click += Colour_Click;
             _colourButtons.Add(button);
             ColourPalette.Children.Add(button);
@@ -303,6 +315,11 @@ public sealed partial class CanvasToolbarWindow : Window
             // 而状态行是悬停那一刻现拼的（它的节拍就是它的重贴，⛔ 挂 LocText）。
             var key = ShapeHintKey(tool);
             LocText.SetToolTipKey(button, key, LocMessage.Of(tool.NameKey()));
+            // 上面那段注释说"名字与手势只能靠状态行说"——那说的是<b>肉眼</b>那一半（条子只有两行高、
+            // ToolTip 被宿主窗边界钉住）。辅助技术那一半⛔ 跟着这条走：这颗按钮在 UIA 里得有自己的名字，
+            // 否则 Tab 到这儿只念得出"按钮"。同一颗键、同一份实参，⛔ 立第二份文案（✅P-265 同族）。
+            // 建条时只登记，取词排在 Refresh（这颗窗口⛔ 挂 LocText.SetMessage，见 <see cref="_names"/>）。
+            _names[button] = LocMessage.Of(key, LocMessage.Of(tool.NameKey()));
             button.PointerEntered += (_, _) => ShowHint(Locale.Fmt(key, tool.Name()));
             button.PointerExited += (_, _) => HideHint();
             button.Click += Shape_Click;
@@ -393,6 +410,9 @@ public sealed partial class CanvasToolbarWindow : Window
         Highlight(KeysButton, CanvasService.IsHotkeyPanelOpen, strong: false);
         for (var index = 0; index < _colourButtons.Count; index++)
             _colourButtons[index].Background = index == CanvasService.ColorIndex ? ActiveBrush : IdleBrush;
+        // 图标按钮的 UIA 名字在这一拍取词：状态行每次变化现拼，这一拍同时是这颗窗口的重贴节拍，
+        // 换语言（Locale.Changed += Refresh）跟着它走 ⇒ ⛔ 另挂 LocText 也做得到「换了语言，名字跟着换」。
+        foreach (var (button, message) in _names) AutomationProperties.SetName(button, message.Render());
 
         // 状态行要说清"现在这一按会发生什么"——三态最容易混的就是这里
         Status.Text = StatusText();

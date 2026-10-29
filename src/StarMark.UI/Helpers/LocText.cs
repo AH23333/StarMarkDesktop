@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using StarMark.Abstractions;
@@ -116,6 +117,19 @@ public static class LocText
     public static readonly DependencyProperty OffContentKeyProperty = DependencyProperty.RegisterAttached(
         "OffContentKey", typeof(string), typeof(LocText), new PropertyMetadata(null, OnOffContentKeyChanged));
 
+    /// <summary>
+    /// 元素在<b>辅助技术里</b>被念出来的那个名字（落点＝<c>AutomationProperties.NameProperty</c>）。
+    /// <para>为什么单开一颗而⛔ 让 <see cref="KeyProperty"/> 顺路处理：<see cref="ResolveTextProperty"/>
+    /// 找的是<b>屏幕上</b>那行字（Text→Content→Header→…），而图标做面的按钮压根没有那一行——
+    /// 于是它既⛔ 被写进正文，也⛔ 被念出名字（✅P-265 真机量到的正是这一格：16 颗在 UIA 里全是裸「按钮」）。
+    /// 两颗属性各管一头：屏幕上那颗字照旧，屏幕外那个名字由这一颗供，且⛔ 立第二份文案
+    /// （挂的常是同一颗键：悬停说明与名字说的是同一件事，见 ✅P-265 那颗工厂）。</para>
+    /// <para>这一颗⛔ 带读数：名字要短，而带读数的句子（嵌着别的按钮名那种）现量都落在悬停说明与状态行上；
+    /// 真要带的那天再照 <see cref="SetToolTipKey(DependencyObject,string,params object?[])"/> 那条信箱形状补。</para>
+    /// </summary>
+    public static readonly DependencyProperty NameKeyProperty = DependencyProperty.RegisterAttached(
+        "NameKey", typeof(string), typeof(LocText), new PropertyMetadata(null, OnNameKeyChanged));
+
     public static void SetKey(DependencyObject element, string value)
     {
         // 不带读数的那一路也要过一次信箱：留着上一句的实参＝下一次换语言按旧读数填空。
@@ -220,6 +234,10 @@ public static class LocText
     public static void SetOffContentKey(DependencyObject element, string value) => element.SetValue(OffContentKeyProperty, value);
 
     public static string GetOffContentKey(DependencyObject element) => (string)element.GetValue(OffContentKeyProperty);
+
+    public static void SetNameKey(DependencyObject element, string value) => element.SetValue(NameKeyProperty, value);
+
+    public static string GetNameKey(DependencyObject element) => (string)element.GetValue(NameKeyProperty);
 
     /// <summary>
     /// 把<b>窗口标题</b>（Alt+Tab 与任务栏读的那一颗）交进重贴名单（批次 WI-36）。
@@ -342,6 +360,22 @@ public static class LocText
 
     private static void OnOffContentKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         => PasteOntoNamedProperty(d, e.NewValue as string, "OffContent");
+
+    /// <summary>
+    /// 名字那一路：取词与换语言重贴吃的还是 <see cref="Paste"/> 那一处，只是落点是
+    /// <c>AutomationProperties.NameProperty</c>（屏幕外那一行字，⛔ 参与 <see cref="ResolveTextProperty"/> 那颗挑选）。
+    /// </summary>
+    private static void OnNameKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var key = e.NewValue as string;
+        if (string.IsNullOrEmpty(key))
+        {
+            // 键被摘＝名字一起抹掉并退出重贴名单：只清屏幕上的字而留着注册项，下一次换语言会把上一版名字贴回来。
+            Drop(d, AutomationProperties.NameProperty);
+            return;
+        }
+        Paste(d, AutomationProperties.NameProperty, key, null);
+    }
 
     /// <summary>把一句键贴到<b>点名要的那一颗</b>属性上（不像 <see cref="ResolveTextProperty"/> 那样去挑）。</summary>
     private static void PasteOntoNamedProperty(DependencyObject d, string? key, string propertyName)

@@ -103,7 +103,10 @@ public sealed class WidgetAppearanceReachGateTests
         // 摘了描边仍然读得出，所以⛔ 一起改；这颗数＝1 是"⛔ 再给一颗无色板的按钮用透明边框"的射程。
         Assert.Equal(1, Count(code, "BorderBrush = new SolidColorBrush(Colors.Transparent)"));
         var quoted = "\"settings.widgets.opacityLabel\"";
-        Assert.Equal(1, Count(ReadRepoFile(Page), quoted));
+        // 2 ＝ ①设置页那一行的标题 ②那颗滑杆的可访问名（片142 借同一颗键，⛔ 第二份文案）。
+        // ⚠ 名册 305 那一族：多出来的那颗是同一族写法⇒ 改这颗数并写下分布，⛔ 放宽判据。
+        //    逐扇那颗（组件外观编辑器里的滑杆）走下面的 code 那颗数，它自己只许问一次。
+        Assert.Equal(2, Count(ReadRepoFile(Page), quoted));
         Assert.Equal(1, Count(code, quoted));
     }
 }

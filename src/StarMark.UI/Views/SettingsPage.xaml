@@ -123,7 +123,7 @@
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                 <TextBlock Grid.Column="0" i18n:LocText.Key="settings.general.themeTitle"
                                            Style="{StaticResource SettingTitle}" Margin="0" VerticalAlignment="Center"/>
-                                <ComboBox Grid.Column="1" x:Name="ThemeSelect" MinWidth="180"
+                                <ComboBox Grid.Column="1" x:Name="ThemeSelect" MinWidth="180" i18n:LocText.NameKey="settings.general.themeTitle"
                                           SelectedIndex="{x:Bind ViewModel.ThemeIndex, Mode=TwoWay}"
                                           ItemsSource="{x:Bind ThemeOptions, Mode=OneTime}"
                                           ItemTemplate="{StaticResource LocOptionTemplate}"/>
@@ -138,7 +138,7 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <TextBlock Grid.Column="0" i18n:LocText.Key="settings.general.accentTitle"
                                                Style="{StaticResource SettingTitle}" Margin="0" VerticalAlignment="Center"/>
-                                    <ComboBox Grid.Column="1" x:Name="AccentSelect" MinWidth="180"
+                                    <ComboBox Grid.Column="1" x:Name="AccentSelect" MinWidth="180" i18n:LocText.NameKey="settings.general.accentTitle"
                                               SelectedIndex="{x:Bind ViewModel.AccentIndex, Mode=TwoWay}"
                                               ItemsSource="{x:Bind AccentOptions, Mode=OneTime}"
                                               ItemTemplate="{StaticResource LocOptionTemplate}"/>
@@ -184,7 +184,7 @@
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                 <TextBlock Grid.Column="0" i18n:LocText.Key="settings.languageTitle"
                                            Style="{StaticResource SettingTitle}" Margin="0" VerticalAlignment="Center"/>
-                                <ComboBox Grid.Column="1" x:Name="LanguageSelect" MinWidth="180"
+                                <ComboBox Grid.Column="1" x:Name="LanguageSelect" MinWidth="180" i18n:LocText.NameKey="settings.languageTitle"
                                           SelectionChanged="LanguageSelect_SelectionChanged"
                                           ItemsSource="{x:Bind LanguageOptions, Mode=OneTime}"
                                           ItemTemplate="{StaticResource LocOptionTemplate}"/>
@@ -205,7 +205,7 @@
                                     </StackPanel>
                                     <!-- 顺序即枚举值，与「组件材质」一致：0=亚克力(薄) 1=云母 2=实色 3=云母Alt 4=亚克力(厚) 5=纯色；
                                          清单住在 SettingsPage.Options.cs 的 MaterialOptions（两颗下拉共用一份措辞，坑表 #290） -->
-                                    <ComboBox Grid.Column="1" x:Name="MainBackdropSelect" MinWidth="200"
+                                    <ComboBox Grid.Column="1" x:Name="MainBackdropSelect" MinWidth="200" i18n:LocText.NameKey="settings.general.mainBackdrop"
                                               SelectedIndex="{x:Bind ViewModel.MainWindowBackdropIndex, Mode=TwoWay}"
                                               ItemsSource="{x:Bind MaterialOptions, Mode=OneTime}"
                                               ItemTemplate="{StaticResource LocOptionTemplate}"/>
@@ -217,7 +217,7 @@
                                         <TextBlock i18n:LocText.Key="settings.shared.opacityScope" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
-                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.OpacityFloor, Mode=OneTime}"
+                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.OpacityFloor, Mode=OneTime}" i18n:LocText.NameKey="settings.general.mainOpacity"
                                                 Maximum="{x:Bind ViewModel.OpacityCeiling, Mode=OneTime}"
                                                 StepFrequency="{x:Bind ViewModel.OpacityStep, Mode=OneTime}" Width="150"
                                                 Value="{x:Bind ViewModel.MainWindowOpacity, Mode=TwoWay}"/>
@@ -341,7 +341,7 @@
                                 <!-- 这一版的更新说明（批次 VX）：正文由对方写、只在真的问过一次的这一场里给看，
                                      不落设置档（所以重开程序这一格是收着的，再点一次「立即检查」就回来）。
                                      排在按钮之后：别让刚点过的那一排跟着长高往下跳。 -->
-                                <Expander x:Name="UpdateNotesExpander" i18n:LocText.Key="settings.general.releaseNotes"
+                                <Expander x:Name="UpdateNotesExpander" i18n:LocText.Key="settings.general.releaseNotes" i18n:LocText.NameKey="settings.general.releaseNotes"
                                           Visibility="Collapsed"
                                           HorizontalAlignment="Stretch">
                                     <ScrollViewer MaxHeight="260" VerticalScrollBarVisibility="Auto">
@@ -581,7 +581,7 @@
                                     </StackPanel>
                                     <!-- 顺序即枚举值：0=亚克力(薄) 1=云母 2=实色 3=云母Alt 4=亚克力(厚) 5=纯色，追加新项不影响已保存的设置；
                                          措辞与「主窗口材质」同一份清单（⛔ 不许在这里再列六行同义键，坑表 #290） -->
-                                    <ComboBox Grid.Column="1" x:Name="WidgetBackdropSelect" MinWidth="200"
+                                    <ComboBox Grid.Column="1" x:Name="WidgetBackdropSelect" MinWidth="200" i18n:LocText.NameKey="settings.widgets.materialLabel"
                                               SelectedIndex="{x:Bind ViewModel.BackdropIndex, Mode=TwoWay}"
                                               ItemsSource="{x:Bind MaterialOptions, Mode=OneTime}"
                                               ItemTemplate="{StaticResource LocOptionTemplate}"/>
@@ -593,7 +593,7 @@
                                         <TextBlock i18n:LocText.Key="settings.shared.opacityScope" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
-                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.OpacityFloor, Mode=OneTime}"
+                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.OpacityFloor, Mode=OneTime}" i18n:LocText.NameKey="settings.widgets.opacityLabel"
                                                 Maximum="{x:Bind ViewModel.OpacityCeiling, Mode=OneTime}"
                                                 StepFrequency="{x:Bind ViewModel.OpacityStep, Mode=OneTime}" Width="150"
                                                 Value="{x:Bind ViewModel.WidgetOpacity, Mode=TwoWay}"/>
@@ -621,7 +621,7 @@
                                         <TextBlock i18n:LocText.Key="settings.widgets.snapStrengthNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
-                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.SnapStrengthFloor, Mode=OneTime}"
+                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.SnapStrengthFloor, Mode=OneTime}" i18n:LocText.NameKey="settings.widgets.snapStrengthLabel"
                                                 Maximum="{x:Bind ViewModel.SnapStrengthCeiling, Mode=OneTime}"
                                                 StepFrequency="{x:Bind ViewModel.SnapStrengthStep, Mode=OneTime}" Width="150"
                                                 Value="{x:Bind ViewModel.SnapStrength, Mode=TwoWay}"/>
@@ -637,7 +637,7 @@
                                         <TextBlock i18n:LocText.Key="settings.widgets.snapSpacingNote" Style="{StaticResource SettingRowText}"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
-                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.SnapSpacingFloor, Mode=OneTime}"
+                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.SnapSpacingFloor, Mode=OneTime}" i18n:LocText.NameKey="settings.widgets.snapSpacingLabel"
                                                 Maximum="{x:Bind ViewModel.SnapSpacingCeiling, Mode=OneTime}"
                                                 StepFrequency="{x:Bind ViewModel.SnapSpacingStep, Mode=OneTime}" Width="150"
                                                 Value="{x:Bind ViewModel.SnapSpacing, Mode=TwoWay}"/>
@@ -657,7 +657,7 @@
                                            Style="{StaticResource SettingRowText}"/>
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                     <TextBlock Grid.Column="0" i18n:LocText.Key="settings.widgets.perfLabel" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
-                                    <ComboBox Grid.Column="1" x:Name="PerformanceSelect" MinWidth="200"
+                                    <ComboBox Grid.Column="1" x:Name="PerformanceSelect" MinWidth="200" i18n:LocText.NameKey="settings.widgets.perfLabel"
                                               SelectedIndex="{x:Bind ViewModel.PerformanceModeIndex, Mode=TwoWay}"
                                               ItemsSource="{x:Bind PerformanceOptions, Mode=OneTime}"
                                               ItemTemplate="{StaticResource LocOptionTemplate}"/>
@@ -671,7 +671,7 @@
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
                                         <!-- 范围与步进绑判据（批次 SA，P-123 第 3 条）：这里曾写死 32–2048 / 16–1024，
                              而仓储允许到 4096 ⇒ 存档里合法且在生效的预算在这根条子上表达不出来。 -->
-                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.BudgetMbFloor, Mode=OneTime}"
+                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.BudgetMbFloor, Mode=OneTime}" i18n:LocText.NameKey="settings.widgets.budgetLabel"
                                                 Maximum="{x:Bind ViewModel.BudgetMbCeiling, Mode=OneTime}"
                                                 StepFrequency="{x:Bind ViewModel.BudgetMbStep, Mode=OneTime}" Width="150"
                                                 Value="{x:Bind ViewModel.CacheBudgetMb, Mode=TwoWay}"/>
@@ -686,7 +686,7 @@
                                         <TextBlock i18n:LocText.Key="settings.widgets.cacheLabel"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
-                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.CacheCountFloor, Mode=OneTime}"
+                                        <Slider Grid.Column="0" Minimum="{x:Bind ViewModel.CacheCountFloor, Mode=OneTime}" i18n:LocText.NameKey="settings.widgets.cacheLabel"
                                                 Maximum="{x:Bind ViewModel.CacheCountCeiling, Mode=OneTime}"
                                                 StepFrequency="{x:Bind ViewModel.CacheCountStep, Mode=OneTime}" Width="150"
                                                 Value="{x:Bind ViewModel.MaxCacheCount, Mode=TwoWay}"/>
@@ -942,7 +942,7 @@
                                                    Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                     </StackPanel>
                                     <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" MinWidth="220">
-                                        <Slider Grid.Column="0" Minimum="40" Maximum="400" StepFrequency="10" Width="150"
+                                        <Slider Grid.Column="0" Minimum="40" Maximum="400" StepFrequency="10" Width="150" i18n:LocText.NameKey="settings.extend.glowTitle"
                                                 Value="{x:Bind ViewModel.CursorCircleRadiusDip, Mode=TwoWay}"/>
                                         <TextBlock Grid.Column="1" VerticalAlignment="Center" Width="60"
                                                    Text="{x:Bind ViewModel.CursorCircleRadiusText, Mode=OneWay}"
@@ -1063,7 +1063,7 @@
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"
                                                i18n:LocText.Key="settings.data.autoBackupInterval"/>
-                                    <ComboBox Grid.Column="1" MinWidth="120" VerticalAlignment="Center"
+                                    <ComboBox Grid.Column="1" MinWidth="120" VerticalAlignment="Center" i18n:LocText.NameKey="settings.data.autoBackupInterval"
                                               i18n:LocText.ToolTipKey="settings.data.autoBackupIntervalTip"
                                               ItemsSource="{x:Bind ViewModel.AutoBackupIntervalOptions, Mode=OneTime}"
                                               ItemTemplate="{StaticResource LocOptionTemplate}"
@@ -1182,7 +1182,7 @@
                                         <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
                                                    i18n:LocText.Key="settings.data.imageMaxNote"/>
                                     </StackPanel>
-                                    <NumberBox Grid.Column="1" Width="128" VerticalAlignment="Center" FontSize="12"
+                                    <NumberBox Grid.Column="1" Width="128" VerticalAlignment="Center" FontSize="12" i18n:LocText.NameKey="settings.data.imageMax"
                                                Minimum="10" Maximum="2000" SmallChange="10" LargeChange="50"
                                                SpinButtonPlacementMode="Compact"
                                                Value="{x:Bind ViewModel.ClipboardImageMaxValue, Mode=TwoWay}"/>
@@ -1193,7 +1193,7 @@
                                         <TextBlock Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
                                                    i18n:LocText.Key="settings.data.textMaxNote"/>
                                     </StackPanel>
-                                    <NumberBox Grid.Column="1" Width="128" VerticalAlignment="Center" FontSize="12"
+                                    <NumberBox Grid.Column="1" Width="128" VerticalAlignment="Center" FontSize="12" i18n:LocText.NameKey="settings.data.textMax"
                                                Minimum="10" Maximum="10000" SmallChange="50" LargeChange="100"
                                                SpinButtonPlacementMode="Compact"
                                                Value="{x:Bind ViewModel.ClipboardTextMaxValue, Mode=TwoWay}"/>
@@ -1244,7 +1244,7 @@
                                         <TextBlock i18n:LocText.Key="settings.health.eyeRestInterval"/>
                                         <TextBlock i18n:LocText.Key="settings.health.eyeRestIntervalNote" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                     </StackPanel>
-                                    <ComboBox Grid.Column="1" MinWidth="120" VerticalAlignment="Center"
+                                    <ComboBox Grid.Column="1" MinWidth="120" VerticalAlignment="Center" i18n:LocText.NameKey="settings.health.eyeRestInterval"
                                               ItemsSource="{x:Bind ViewModel.EyeRestIntervalOptions, Mode=OneTime}"
                                               ItemTemplate="{StaticResource LocOptionTemplate}"
                                               SelectedIndex="{x:Bind ViewModel.EyeRestIntervalIndex, Mode=TwoWay}"/>
@@ -1253,7 +1253,7 @@
                                     <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock i18n:LocText.Key="settings.health.eyeRestNotice"/>
                                     </StackPanel>
-                                    <ComboBox Grid.Column="1" MinWidth="250" MaxWidth="320" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                    <ComboBox Grid.Column="1" MinWidth="250" MaxWidth="320" VerticalAlignment="Center" HorizontalAlignment="Right" i18n:LocText.NameKey="settings.health.eyeRestNotice"
                                               ItemsSource="{x:Bind ViewModel.EyeRestNoticeOptions, Mode=OneTime}"
                                               ItemTemplate="{StaticResource LocOptionTemplate}"
                                               SelectedIndex="{x:Bind ViewModel.EyeRestNoticeIndex, Mode=TwoWay}"/>

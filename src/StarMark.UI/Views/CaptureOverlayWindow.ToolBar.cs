@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
@@ -179,6 +180,10 @@ public sealed partial class CaptureOverlayWindow
             VerticalAlignment = VerticalAlignment.Center,
         };
         LocText.SetMessage(button, ToolTipService.ToolTipProperty, tip);
+        // 图标做面＝那颗按钮在 UIA 里⛔ 任何可访问名（真机现读：条上 16 颗在树里全是裸「按钮」），
+        // 辅助技术指不到东西——与 ✅P-260 那句「屏幕上没有任何字念得出这个名字＝指不到东西」同一族。
+        // 名字复用上面那一句（⛔ 立第二份文案），走同一颗 LocText 名单 ⇒ 换语言跟着重贴。
+        LocText.SetMessage(button, AutomationProperties.NameProperty, tip);
         // 悬停说明<b>不写进条子</b>（用户裁决）：那一行几百像素宽，而窗宽＝内容宽，
         // 悬停哪颗整条就变宽、边缘跟着跑（贴图态那颗条子因此跳位置）。
         // 文案仍然只有一份，就是上面 ToolTip 那一句（选区阶段那扇全屏窗里它本来就显示得下）。

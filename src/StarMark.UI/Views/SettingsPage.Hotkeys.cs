@@ -149,7 +149,7 @@ public sealed partial class SettingsPage
             // 一律折叠：进这一页不等于"要看这两类"。原先每次点「快捷键」都把「主界面」「组件总控」摊开，
             // 用户要看的在底下、却先被两屏不相关的行顶下去（展开与否是用户的事）。
             IsExpanded = false,
-        };
+        }.TitleNamed(HotkeyActions.CategoryTitleKey(category));
     }
 
     /// <summary>把「同一组合绑定了多个动作」就地标注到每一行（不弹窗，用户可直接忽略）。</summary>
