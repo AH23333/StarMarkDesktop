@@ -42,6 +42,7 @@ public sealed class ItemTypeGlyphGateTests
     [InlineData(ItemType.Clipboard, "📋")]
     [InlineData(ItemType.Todo, "✅")]
     [InlineData(ItemType.Note, "📝")]
+    [InlineData(ItemType.Board, "🎨")]
     public void GlyphOf_PinsTheCanonicalIconPerType(ItemType type, string expected)
         => Assert.Equal(expected, ItemCardPolicy.GlyphOf(type));
 

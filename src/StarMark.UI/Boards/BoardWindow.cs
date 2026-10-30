@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.IO;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -824,7 +825,7 @@ public sealed class BoardWindow : Window
     /// <summary>
     /// 那一发交回的字节<b>过上限</b>：⛔ 解它，也⛔ 让它静默（片58＝P-241 的②件）。
     /// <para><b>两种档位各说各的<b>已有</b>那句话</b>（本批⛔ 添一颗键：那两句都住在画板那一族的名册里，
-    /// 由 <c>BoardWordGateTests.TheBoardFamilyHasExactlyThirtyRowsAndTheyAreNamed</c> 逐颗点名钉住）：
+    /// 由 <c>BoardWordGateTests.TheBoardFamilyHasExactlyThirtyOneRowsAndTheyAreNamed</c> 逐颗点名钉住）：
     /// scene＝这一扇的自动保存对这一发起停了＝片27 那句「这一扇已停止保存」＋那颗「另存一份到别处」；
     /// png／svg＝那一发导出没成＝片54 那句「没能存成，原因在日志里」。⚠ 两句都是<b>真话</b>：
     /// 前者确实停了（这块板超限期间不再自动落盘），后者确实没落盘。</para>
@@ -854,12 +855,17 @@ public sealed class BoardWindow : Window
 
     /// <summary>把那一发摸盘的活交进线程池，排在<b>上一发后面</b>（串行，理由见 <see cref="_sceneGate"/>）。
     /// <para>判据要的「盘上那一份」由 <c>TrySave</c> 自己在<b>写的那一刻</b>读——改前也是在那一刻读，所以
-    /// 「该不该滚 <c>.bak</c>」这一问的口径⛔ 变（✅P-234 那两半原样生效，包括「盘上那份读不出是一颗档⛔ 滚」）。</para></summary>
+    /// 「该不该滚 <c>.bak</c>」这一问的口径⛔ 变（✅P-234 那两半原样生效，包括「盘上那份读不出是一颗档⛔ 滚」）。</para>
+    /// <para><b>片146 在这一发后面又接了一手</b>：写成之后把那块板的正文补进收藏系统那一行
+    /// （<see cref="BoardSceneIndex.RegisterAfterSave"/>）。它排在<b>同一颗串行闸里</b>而⛔ 另起一圈：
+    /// 两发写盘互踩已经是要命的事，两发「写库」互踩是同一颗坏换了个地方。⚠ 它⛔ 在 <c>run</c> 的返回值里——
+    /// 那颗 <c>Ok</c> 说的是「用户的笔迹在不在盘上」，索引件没跟上⛔ 配把它拧成 false（详见那一档）。</para></summary>
     private System.Threading.Tasks.Task<SceneWrite> QueueSceneWrite(byte[] bytes)
     {
         var run = _sceneGate.ContinueWith(_ =>
         {
             var ok = BoardSceneStore.TrySave(_boardId, bytes, out var fault, out var rolledBackup);
+            if (ok) BoardSceneIndex.RegisterAfterSave(_boardId!, bytes);
             return new SceneWrite(ok, fault, rolledBackup, bytes);
         }, System.Threading.CancellationToken.None,
            System.Threading.Tasks.TaskContinuationOptions.None,
@@ -1092,6 +1098,53 @@ public sealed class BoardWindow : Window
             + JsonString("exportScale") + ":" + _exportScale + ","
             + JsonString("exportBackground") + ":" + (_exportBackground ? "true" : "false")));
 
+    /// <summary>
+    /// 把一张图放上<b>这一块板</b>——<c>image.insert</c> 的唯一发送处（深析 §四 那三格共用的那一个出口）。
+    /// <para>四问在这一侧问完，一问不过就交回<b>那一问的名字</b>并留一行痕，屏幕上那句由调用方说
+    /// （三条入口各有各的出口，见 <see cref="BridgeProtocol.Insert"/>）：
+    /// ① 桥通没通（没通就发＝发进一颗没人听的口子，连回音都⛔ 有——片56 那条口径）；
+    /// ② 那颗 MIME 够不够格（名单住 Core，⛔ 由调用方自报）；
+    /// ③ 那颗 dataURL 装不装得下（与写闸同一颗上限，见 <see cref="BoardPolicy.InjectedDataUrlOverCeiling"/>）；
+    /// ④ 字节与那两颗数是不是正数。</para>
+    /// <para>交回 <see cref="BridgeProtocol.Insert.Posted"/> 只说"那一发递出去了"，⛔ 说"盘上有了"：落盘归页面那一趟 autosave 与宿主那道写闸，
+    /// 写闸拒了自有一套话（P-223 那一族）。⚠ 日志里⛔ 出现那颗 MIME——它来自调用方，
+    /// 而日志伪造那一族（P-13）守的正是"把没判定过的串念成正文"这一手。</para>
+    /// </summary>
+    public BridgeProtocol.Insert TryInsertImage(byte[] imageBytes, string mimeType, int width, int height)
+    {
+        if (_tearingDown || !_bridgeReady)
+        {
+            StarMark.Abstractions.StarLog.Warn("boards.insert.no-bridge id=" + _boardId);
+            return BridgeProtocol.Insert.NoBridge;
+        }
+        if (!BridgeProtocol.IsInjectableImageMime(mimeType))
+        {
+            StarMark.Abstractions.StarLog.Warn("boards.insert.mime.rejected id=" + _boardId);
+            return BridgeProtocol.Insert.BadMime;
+        }
+        if (imageBytes is null || imageBytes.Length == 0 || width <= 0 || height <= 0)
+        {
+            StarMark.Abstractions.StarLog.Warn(
+                "boards.insert.bad-shape w=" + width + " h=" + height + " id=" + _boardId);
+            return BridgeProtocol.Insert.BadShape;
+        }
+        var dataUrl = BridgeProtocol.DataUrlOf(mimeType, imageBytes);
+        if (BoardPolicy.InjectedDataUrlOverCeiling(dataUrl.Length))
+        {
+            StarMark.Abstractions.StarLog.Warn(
+                "boards.insert.over-ceiling bytes=" + imageBytes.Length + " id=" + _boardId);
+            return BridgeProtocol.Insert.OverCeiling;
+        }
+        PostOutbound("image.insert", Envelope("image.insert", "h6",
+            JsonString("dataUrl") + ":" + JsonString(dataUrl) + ","
+            + JsonString("mimeType") + ":" + JsonString(mimeType) + ","
+            + JsonString("width") + ":" + width + ","
+            + JsonString("height") + ":" + height));
+        StarMark.Abstractions.StarLog.Info(
+            "boards.insert.posted bytes=" + imageBytes.Length + " w=" + width + " h=" + height + " id=" + _boardId);
+        return BridgeProtocol.Insert.Posted;
+    }
+
     /// <summary>导出产物那颗档的主干名（唯一主人：桥那一路与那一发下载共用）。
     /// <para>⛔ 跟着那块板的<b>显示名</b>走：名字在这里是身份（哪一块、什么时候），⛔ 措辞——
     /// 显示名住在场景档里（✅P-218 那条定案），宿主⛔ 替它另存一份，也⛔ 拿它当产物档名（§18.4 现读：
@@ -1125,9 +1178,9 @@ public sealed class BoardWindow : Window
         // 判得开（⛔ 靠猜换手）。
         StarMark.Abstractions.StarLog.Info(
             "boards.bridge.ready seq=" + _readySeq + " id=" + _boardId + " hasScene=" + (_seenScene is { Length: > 0 }));
-        // 三颗初始值（§21.5）：宿主是它们的主人；占位档先发中性值，接设置面归后续批次。
-        PostOutbound("theme.set", Envelope("theme.set", "h1", "\"theme\":\"light\""));
-        PostOutbound("lang.set", Envelope("lang.set", "h2", "\"langCode\":\"zh-CN\""));
+        // 三颗初始值（§21.5）：宿主是它们的主人。主题与语言这一拍<b>递的是此刻的真值</b>（片147）——
+        // 改前这两颗发的是硬编码占位（浅色＋中文），深色主题／英文／日文用户打开画板看到的仍是浅色中文。
+        ReapplyAppearance();
         // 首开与崩溃重载共用这一条：这一刻才把档递进去（早一步页面那位 API 还没起来，晚一步没有读者）。
         // 见过一份就递一份——§21.5 那句「重载之后⛔ 许回到空板」要的正是这一颗。
         // 停笔那一拍的闸门由"档到底落没落进画布"那<b>三颗数</b>开（P-221→P-223）。有档可载＝等页面回 board.loaded
@@ -1541,11 +1594,40 @@ public sealed class BoardWindow : Window
 
     /// <summary>换语言那一拍：那块面板、那一行落点与那一行第二颗读数<b>三处都要重贴</b>（片54 起这一扇上有两块会说汉语的表面，
     /// 片83 起那一块上从此有两行；只搬一处＝P-175 那一族"一颗重贴一颗冻着"的第三种脸，而那一行⛔ 在面板的名单里）。</summary>
+    /// <summary>
+    /// 把<b>此刻</b>的主题与界面语言递给引擎——那两颗 outbound 的<b>唯一发送处</b>
+    /// （Phase C 片147＝集成矩阵「设置同步（主题／语言）」那一格的后半）。
+    /// <para>改前的形状是两颗硬编码占位值（浅色＋<c>zh-CN</c>，注释自己写"接设置面归后续批次"）：
+    /// 深色主题／英文／日文用户打开画板，引擎仍按浅色中文渲染，而屏幕上那扇窗看起来"一切正常"——
+    /// 与本仓定性过的"全绿而功能坏"同族，差别只在那一族有人配证人、这一格没人配。</para>
+    /// <para>三个调用点：桥起来那一拍（<see cref="OnBridgeReady"/>——页面那位 prop 主人这一刻才存在）、
+    /// 换语言那一刻（<see cref="OnLocaleChanged"/>）、换主题那一刻（由主窗 <c>RefreshAppearance</c>
+    /// 经 <see cref="BoardsWindows.ReapplyAppearance"/> 名册叫到，与 <c>CenteredDialog.ApplyThemeToOpenDialogs</c>
+    /// 同一副规矩：独立窗不继承主窗主题，得有人显式推一次）。</para>
+    /// <para>两颗值的<b>主人都不在这一格</b>："偏好落成浅还是深"归 <c>ThemeManager.ResolveEffectiveTheme</c>
+    /// （含 Default 跟随系统那一档），"引擎认哪串字面"归 <c>BoardPolicy.EngineThemeName</c>／
+    /// <c>EngineLangCode</c>。这里只把两边接起来，⛔ 自己判、⛔ 自己拼字面。</para>
+    /// </summary>
+    public void ReapplyAppearance()
+    {
+        // 桥没通就发＝发进一颗没人听的口子（连"发没发出去"都⛔ 有回音，与那颗 RequestSceneSnapshot 同一道闸门）。
+        if (!_bridgeReady || _tearingDown) return;
+        var pref = App.Services.GetRequiredService<StarMark.UI.Helpers.SettingsStore>().LoadTheme();
+        var dark = StarMark.UI.Helpers.ThemeManager.ResolveEffectiveTheme(pref) == Microsoft.UI.Xaml.ElementTheme.Dark;
+        PostOutbound("theme.set", Envelope("theme.set", "h1",
+            "\"theme\":" + JsonString(BoardPolicy.EngineThemeName(dark))));
+        PostOutbound("lang.set", Envelope("lang.set", "h2",
+            "\"langCode\":" + JsonString(BoardPolicy.EngineLangCode(StarMark.Abstractions.I18n.Locale.Current))));
+    }
+
     private void OnLocaleChanged()
     {
         PasteNotice();
         PasteBar();
         PasteHiddenEmbedNotice();
+        // 换语言那一刻，画布上那套引擎的标签也要跟着重贴（§23.1 真机量过：那颗 prop 换的那一刻
+        // 在同一颗实例上真实重贴，⛔ 需要重挂）——面板那三句是我们自己的话，上面三行管它们。
+        ReapplyAppearance();
     }
 
     /// <summary>

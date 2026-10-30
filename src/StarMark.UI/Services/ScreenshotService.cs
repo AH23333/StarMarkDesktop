@@ -278,6 +278,48 @@ public static class ScreenshotService
         }
     }
 
+    /// <summary>
+    /// 把一份已经是「最终样子」的画面放上<b>画板</b>（深析 §四 第1行那一格：截图冻帧 → 画板）。
+    /// <para>与 <see cref="CopyPixelsAsync"/> 同一份 PNG 编码器、同一副回报（抬头那颗"谁在说话"必传）：
+    /// 这一路的产物与那一路逐字节同形，只是落点换成那扇窗——⛔ 为它再写一份"从像素到 PNG"的旁路实现
+    /// （那颗 <c>ClipboardImageStore.EncodePngAsync</c> 是仓里唯一交回 <c>byte[]</c> 的那一颗，名字带着出处，
+    /// 用的却是同一颗 <c>GdiScreenCapture</c> 编码器）。</para>
+    /// <para>那句下落由 <see cref="StarMark.Core.Boards.BridgeProtocol.Insert"/> 那一颗决定：
+    /// "这张太大"与"画板压根没起来"⛔ 折成同一句（用户对着这两副脸要做的下一手不同）。</para>
+    /// </summary>
+    public static async System.Threading.Tasks.Task SendPixelsToBoardAsync(
+        byte[] pixels, int width, int height, LocMessage category)
+    {
+        try
+        {
+            var png = await StarMark.Integrations.Clipboard.ClipboardImageStore.EncodePngAsync(
+                pixels, width, height, System.Threading.CancellationToken.None);
+            if (png is null)
+            {
+                ReportFor(category, LocMessage.Of("capture.card.boardFailedTitle"),
+                    LocMessage.Of("capture.card.encodeFailed"));
+                return;
+            }
+            var verdict = await Boards.BoardsWindows.SendImageAsync(png, "image/png", width, height);
+            if (verdict == StarMark.Core.Boards.BridgeProtocol.Insert.Posted)
+            {
+                ReportFor(category, LocMessage.Of("capture.card.boardedTitle"),
+                    LocMessage.Of("capture.card.boardedBody", CaptureGeometry.FormatSize(width, height)));
+                return;
+            }
+            ReportFor(category, LocMessage.Of("capture.card.boardFailedTitle"),
+                verdict == StarMark.Core.Boards.BridgeProtocol.Insert.OverCeiling
+                    ? LocMessage.Of("boards.insertTooBigBody")
+                    : LocMessage.Of("capture.card.boardFailedBody"));
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error($"[{category}] 放上画板失败", ex);
+            ReportFor(category, LocMessage.Of("capture.card.boardFailedTitle"),
+                CaptureFailureException.ReasonOf(ex));
+        }
+    }
+
     /// <summary>截图那颗产物目录的名字（一片档名，⛔ 一句上屏话）。✅P-259 (B)：新落点 ASCII 中性名。</summary>
     public const string ScreenshotsDirectoryName = "StarMark Screenshots";
 

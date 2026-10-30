@@ -44,6 +44,8 @@ public sealed partial class CaptureOverlayWindow
 
     private void Ocr_Click(object sender, RoutedEventArgs e) => Commit(CommitAction.Ocr);
 
+    private void Board_Click(object sender, RoutedEventArgs e) => Commit(CommitAction.Board);
+
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
         if (_pinned) Close();          // 贴图态的 ✕＝关闭这张图（与 Esc 同一件事）
@@ -52,16 +54,16 @@ public sealed partial class CaptureOverlayWindow
 
     private void Through_Click(object sender, RoutedEventArgs e) => PinManager.ToggleClickThrough();
 
-    private enum CommitAction { Copy, Save, Pin, Ocr }
+    private enum CommitAction { Copy, Save, Pin, Ocr, Board }
 
     /// <summary>
-    /// 提交这一屏的选区：复制、存图、钉住，或认字并复制文字。四个落点交的都是<b>带上标注的那一份画面</b>。
+    /// 提交这一屏的选区：复制、存图、钉住、认字并复制文字，或把那一份画面放上画板。五个落点交的都是<b>带上标注的那一份画面</b>。
     /// 先算好像素再 Settle：服务收到结果就会关掉所有遮罩窗（包括本窗），
     /// 反过来先干活会让用户在裁图期间还被困在暗幕里。
     /// </summary>
     private void Commit(CommitAction action)
     {
-        // 没按 Enter 就点动作按钮：刚打的那行字要跟着图一起走，而不是被丢掉（四条落点同一条出口）。
+        // 没按 Enter 就点动作按钮：刚打的那行字要跟着图一起走，而不是被丢掉（五条落点同一条出口）。
         EndTextEditing(commit: true);
         // ✅P-262：这一发"交出去"从前在没框时直接 <c>Settle(null)</c>——和"取消"落在同一个出口，
         // 真机量到的是幕布一声不响地消失（无提示卡、无档、剪贴板零写、日志零行）。
@@ -99,6 +101,11 @@ public sealed partial class CaptureOverlayWindow
             case CommitAction.Ocr:
                 _ = OcrService.CopyTextFromPixelsAsync(final.Pixels, final.Width, final.Height,
                     _pinned ? LocMessage.Of("pin.card.categoryOcr") : LocMessage.Of("capture.card.categoryOcr"));
+                break;
+            case CommitAction.Board:
+                // 第五颗落点：交的还是同一份画面，只是落点换成那扇窗。Settle 已经跑在前面（上面那句
+                // "先算好像素再 Settle"），所以那扇画板窗起来时暗幕已经散了。
+                _ = ScreenshotService.SendPixelsToBoardAsync(final.Pixels, final.Width, final.Height, category);
                 break;
             default: ScreenshotService.PinPixels(final.Pixels, final.Width, final.Height, selection); break;
         }

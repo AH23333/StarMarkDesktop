@@ -309,7 +309,11 @@ public sealed class BackupWordGateTests : IDisposable
                 LocMessage.Of("settings.data.backup.clipCarried", 5, 3,
                     LocMessage.Of("settings.data.backup.clipSkipped", 2), null,
                     LocMessage.Of("settings.data.backup.clipRowsMissing", 1)),
-                null),
+                null,
+                // 片146 起那颗外层句子多一颗槽＝画板那一族的话。这一格是全家唯一"整棵嵌套树真取一次词"的证人，
+                // 所以新句子必须一起进来：⛔ 进＝换语言时那一档会不会冻在旧语言上，今天没人量过。
+                LocMessage.Of("settings.data.backup.restoredBoards", 2, 1, 1,
+                    LocMessage.Of("settings.data.backup.restoredBoardsFailed", 1))),
             "C:\\snap.zip");
 
         var languages = new[] { AppLanguage.Chinese, AppLanguage.English, AppLanguage.Japanese };
@@ -349,7 +353,10 @@ public sealed class BackupWordGateTests : IDisposable
         Assert.Equal(1, Times(ui, Of("backup.lineJoin")));
         Assert.Contains("private static LocMessage Stack(LocMessage head, LocMessage? tail, string gap = \"\\n\")",
             ui, StringComparison.Ordinal);
-        Assert.Equal(7, Times(ui, "Stack("));      // 声明那颗＋现场六处调用（bin/WI62/pins_62.txt 现读）
+        // 声明那颗＋现场七处调用（bin/WI62/pins_62.txt 现读＝6 处；片146 起多一处：
+        // 导入确认框那句"带几块板"与"带几张图"各是一句话，两族并成一颗数会把"三块板四张图"说成"七个附件"，
+        // 用户就没法在点下去之前核对自己那几块板跟没跟过去——加的是<b>一件事实</b>而⛔ 一行小字）
+        Assert.Equal(8, Times(ui, "Stack("));
 
         foreach (var language in new[] { AppLanguage.Chinese, AppLanguage.English, AppLanguage.Japanese })
         {

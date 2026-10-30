@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- 设置页八颗分类标签的样式（全应用只有那一颗 TabView，故放在应用级字典里）。
+         两件事：① 分类标签不可关闭（无关闭符号）；② 八颗<b>选中高亮底部一律直边</b>。
+
+         为什么要自己接一颗模板：框架那份 TabViewItem 模板（本项目引用的 Microsoft.WindowsAppSDK 里
+         TargetType="controls:TabViewItem" 那一节）在选中态收起 BottomBorderLine，改由
+         SelectedBackgroundPath（几何取自 TabViewTemplateSettings.TabGeometry、Margin="-4,0"）
+         画那颗"浏览器标签"，再配两颗 4×4 的 Left/RightRadiusRenderArc。那颗根 Grid 写着
+         UseLayoutRounding="False"，而 SizeToContent 下每颗宽度是文字量出来的小数像素
+         ⇒ 八颗里四颗把那道下沿"脚"吸附出来、四颗抹平（2026-10-30 逐行量边界坐实：
+         直＝常规／AI 增强／数据／健康与诊断，弧＝使用说明／桌面工具（组件）／拓展功能／快捷键）。
+         外面⛔ 一颗属性能关它（把 CornerRadius 下半截给 0 实测⛔ 退，已试过并回退）。
+
+         这一份照抄那一节，只摘掉那三块零件：选中态改由 TabContainer 自己上底色，
+         上半截 8 圆角照旧、下半截 0 ⇒ 八颗同一直边。
+
+         ⚠ 三处故意不照抄（第一版照抄直接把八颗整条打死——真机量到设置页只剩标题与「返回」，内容区全空，
+         而编译 0 错误 0 警告，只有屏幕上看得见）：
+         ① UseSystemFocusVisuals 与 ② CloseIconStates 那组里两颗内边距，原模板吃的是 StaticResource
+         （TabViewItemHeaderPaddingWith/WithoutCloseButton 住在框架字典的非主题那半，我们这份档里
+         ThemeResource ⛔ 认、StaticResource 也⛔ 够着）⇒ 整组不要，改把"⛔ 关闭钮"那档内边距按原值
+         8,3,8,3 直接写在 TabContainer 上；③ 关闭那颗 Button 与它的 setter 一起不要（八颗 IsClosable=False）。
+
+         ⚠ 维护账：升级 WindowsAppSDK 时这一节要对着新模板再看一眼。
+         证人：tests/StarMark.Tests/SettingsTabHighlightGateTests.cs。 -->
+    <Style TargetType="TabViewItem">
+        <Setter Property="IsClosable" Value="False"/>
+        <Setter Property="Background" Value="{ThemeResource TabViewItemHeaderBackground}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="MinHeight" Value="{ThemeResource TabViewItemMinHeight}"/>
+        <Setter Property="BorderThickness" Value="{ThemeResource TabViewItemBorderThickness}"/>
+        <Setter Property="BorderBrush" Value="{ThemeResource TabViewItemBorderBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabViewItem">
+                    <Grid x:Name="LayoutRoot" Padding="{TemplateBinding Padding}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition x:Name="LeftColumn" Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition x:Name="RightColumn" Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal"/>
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="TabContainer.Background" Value="{ThemeResource TabViewItemHeaderBackgroundPointerOver}"/>
+                                        <Setter Target="ContentPresenter.Foreground" Value="{ThemeResource TabViewItemHeaderForegroundPointerOver}"/>
+                                        <Setter Target="IconControl.Foreground" Value="{ThemeResource TabViewItemIconForegroundPointerOver}"/>
+                                        <Setter Target="TabSeparator.Opacity" Value="0"/>
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="TabContainer.Background" Value="{ThemeResource TabViewItemHeaderBackgroundPressed}"/>
+                                        <Setter Target="ContentPresenter.Foreground" Value="{ThemeResource TabViewItemHeaderForegroundPressed}"/>
+                                        <Setter Target="IconControl.Foreground" Value="{ThemeResource TabViewItemIconForegroundPressed}"/>
+                                        <Setter Target="TabSeparator.Opacity" Value="0"/>
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Selected">
+                                    <VisualState.Setters>
+                                        <Setter Target="BottomBorderLine.Visibility" Value="Collapsed"/>
+                                        <Setter Target="TabContainer.Background" Value="{ThemeResource TabViewItemHeaderBackgroundSelected}"/>
+                                        <Setter Target="TabContainer.Margin" Value="{ThemeResource TabViewSelectedItemHeaderMargin}"/>
+                                        <Setter Target="TabContainer.BorderBrush" Value="{ThemeResource TabViewSelectedItemBorderBrush}"/>
+                                        <Setter Target="TabContainer.BorderThickness" Value="{ThemeResource TabViewSelectedItemBorderThickness}"/>
+                                        <Setter Target="ContentPresenter.Foreground" Value="{ThemeResource TabViewItemHeaderForegroundSelected}"/>
+                                        <Setter Target="IconControl.Foreground" Value="{ThemeResource TabViewItemIconForegroundSelected}"/>
+                                        <Setter Target="LayoutRoot.Background" Value="Transparent"/>
+                                        <Setter Target="ContentPresenter.FontWeight" Value="SemiBold"/>
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="PointerOverSelected">
+                                    <VisualState.Setters>
+                                        <Setter Target="BottomBorderLine.Visibility" Value="Collapsed"/>
+                                        <Setter Target="TabContainer.Background" Value="{ThemeResource TabViewItemHeaderBackgroundSelected}"/>
+                                        <Setter Target="TabContainer.Margin" Value="{ThemeResource TabViewSelectedItemHeaderMargin}"/>
+                                        <Setter Target="TabContainer.BorderBrush" Value="{ThemeResource TabViewSelectedItemBorderBrush}"/>
+                                        <Setter Target="TabContainer.BorderThickness" Value="{ThemeResource TabViewSelectedItemBorderThickness}"/>
+                                        <Setter Target="ContentPresenter.Foreground" Value="{ThemeResource TabViewItemHeaderForegroundSelected}"/>
+                                        <Setter Target="IconControl.Foreground" Value="{ThemeResource TabViewItemIconForegroundSelected}"/>
+                                        <Setter Target="LayoutRoot.Background" Value="Transparent"/>
+                                        <Setter Target="ContentPresenter.FontWeight" Value="SemiBold"/>
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="PressedSelected">
+                                    <VisualState.Setters>
+                                        <Setter Target="BottomBorderLine.Visibility" Value="Collapsed"/>
+                                        <Setter Target="TabContainer.Background" Value="{ThemeResource TabViewItemHeaderBackgroundSelected}"/>
+                                        <Setter Target="TabContainer.Margin" Value="{ThemeResource TabViewSelectedItemHeaderMargin}"/>
+                                        <Setter Target="TabContainer.BorderBrush" Value="{ThemeResource TabViewSelectedItemBorderBrush}"/>
+                                        <Setter Target="TabContainer.BorderThickness" Value="{ThemeResource TabViewSelectedItemBorderThickness}"/>
+                                        <Setter Target="ContentPresenter.Foreground" Value="{ThemeResource TabViewItemHeaderForegroundSelected}"/>
+                                        <Setter Target="IconControl.Foreground" Value="{ThemeResource TabViewItemIconForegroundSelected}"/>
+                                        <Setter Target="LayoutRoot.Background" Value="Transparent"/>
+                                        <Setter Target="ContentPresenter.FontWeight" Value="SemiBold"/>
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="TabContainer.Background" Value="{ThemeResource TabViewItemHeaderBackgroundDisabled}"/>
+                                        <Setter Target="IconControl.Foreground" Value="{ThemeResource TabViewItemHeaderForegroundDisabled}"/>
+                                        <Setter Target="ContentPresenter.Foreground" Value="{ThemeResource TabViewItemHeaderForegroundDisabled}"/>
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                            <VisualStateGroup x:Name="IconStates">
+                                <VisualState x:Name="Icon"/>
+                                <VisualState x:Name="NoIcon">
+                                    <VisualState.Setters>
+                                        <Setter Target="IconBox.Visibility" Value="Collapsed"/>
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                            <VisualStateGroup x:Name="TabWidthModes">
+                                <VisualState x:Name="StandardWidth"/>
+                                <VisualState x:Name="Compact">
+                                    <VisualState.Setters>
+                                        <Setter Target="IconBox.Margin" Value="0,0,0,0"/>
+                                        <Setter Target="ContentPresenter.Visibility" Value="Collapsed"/>
+                                        <Setter Target="IconColumn.Width" Value="{ThemeResource TabViewItemHeaderIconSize}"/>
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+
+                        <Border x:Name="BottomBorderLine" Background="{ThemeResource TabViewBorderBrush}" Height="1"
+                                Grid.ColumnSpan="3" VerticalAlignment="Bottom"/>
+                        <Border x:Name="TabSeparator" HorizontalAlignment="Right" Width="1" Grid.Column="1"
+                                Background="{ThemeResource TabViewItemSeparator}" Margin="{ThemeResource TabViewItemSeparatorMargin}"/>
+                        <Grid x:Name="TabContainer" Grid.Column="1" Background="{TemplateBinding Background}"
+                              BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                              Control.IsTemplateFocusTarget="True" Padding="8,3,8,3"
+                              CornerRadius="8,8,0,0" FocusVisualMargin="{TemplateBinding FocusVisualMargin}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition x:Name="IconColumn" Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Viewbox x:Name="IconBox" MaxWidth="{ThemeResource TabViewItemHeaderIconSize}"
+                                     MaxHeight="{ThemeResource TabViewItemHeaderIconSize}" Margin="{ThemeResource TabViewItemHeaderIconMargin}">
+                                <ContentControl x:Name="IconControl"
+                                                Content="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=TabViewTemplateSettings.IconElement}"
+                                                IsTabStop="False" Foreground="{ThemeResource TabViewItemIconForeground}" HighContrastAdjustment="None"/>
+                            </Viewbox>
+                            <ContentPresenter x:Name="ContentPresenter" Grid.Column="1"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" Content=""
+                                              ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                              ContentTransitions="{TemplateBinding ContentTransitions}"
+                                              FontWeight="{TemplateBinding FontWeight}"
+                                              FontSize="{ThemeResource TabViewItemHeaderFontSize}"
+                                              Foreground="{ThemeResource TabViewItemHeaderForeground}"
+                                              OpticalMarginAlignment="TrimSideBearings" HighContrastAdjustment="None"/>
+                        </Grid>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

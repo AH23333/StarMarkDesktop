@@ -62,21 +62,6 @@ public partial class SettingsPageViewModel : ObservableObject
     /// <summary>只有「自定义颜色」那一档才摊开取色器——随系统时摊着它＝一个动了什么都不改变的旋钮。</summary>
     public bool CustomAccentVisible => AccentIndex == 1;
 
-    /// <summary>取色器旁边那颗预览方块：画笔由<b>当前那颗颜色</b>现场算，⛔ 再写一份写死的蓝。
-    /// <para>润色器（ColorSpectrum）自己不带预览格，而这一格要回答的是"我刚点的到底是哪颗"。</para>
-    /// <para>走 OneWay：它是<b>读数</b>，编辑入口只有润色器那一格（每个可写设置⛔ 第二处编辑入口，✅SettingsTaxonomyGateTests 同一口径）。</para>
-    /// </summary>
-    public Microsoft.UI.Xaml.Media.SolidColorBrush ThemeAccentBrush => new(ThemeAccentColor);
-
-    /// <summary>那颗方块的<b>同一条读数</b>换成文字：深色卡上纯色方块压暗底认不出（P-215），而纯白染料连白衬都会糊平等。</summary>
-    public string ThemeAccentHex => AppPalette.ToHexText(ThemeAccentColor);
-
-    partial void OnThemeAccentColorChanged(Windows.UI.Color value)
-    {
-        OnPropertyChanged(nameof(ThemeAccentBrush));
-        OnPropertyChanged(nameof(ThemeAccentHex));   // ⛔ 只notify一颗：那颗串会冻在上一个颜色上
-    }
-
     partial void OnAccentIndexChanged(int value) => OnPropertyChanged(nameof(CustomAccentVisible));
 
     /// <summary>
@@ -524,8 +509,7 @@ public partial class SettingsPageViewModel : ObservableObject
             // 发现设置全回退。日志不是用户能看到的反馈面，故这里把"未落盘"当成保存失败呈现，
             // 也不再谎报已保存。本次会话内的即时应用照旧生效（改动已体现在内存与界面上）。
             var writeError = _settings.LastWriteError;
-            // 运行期那颗缓存跟着落盘那一刻走（⛔ 让读者各读各的：材质与那三颗强调笔光只问这一颗）。
-            var accentChanged = ThemeAccent.Custom != AppPalette.ParseArgb(accentText);
+            // 保存后同步自定义背景色缓存，供主窗口与组件材质刷新使用。
             ThemeAccent.Apply(accentText);
 
             if (writeError is null)
@@ -545,7 +529,6 @@ public partial class SettingsPageViewModel : ObservableObject
             {
                 if (App.MainWindow != null)
                 {
-                    Helpers.ThemeManager.Apply(App.MainWindow, theme);
                     App.MainWindow.RefreshThemeIcon(theme);
                 }
             });
@@ -555,20 +538,11 @@ public partial class SettingsPageViewModel : ObservableObject
             {
                 App.MainWindow?.DispatcherQueue.TryEnqueue(() =>
                 {
-                    // 染料<b>真的换了</b>那一拍才惊动：把框架那一族 SystemAccentColor* 换掉，再让每扇窗
-                    // 把 {ThemeResource} 重解一遍（批次 WI-82·P-213——ThemeBrush 只管代码取画笔那几处，
-                    // 控件内部样式与 XAML 里直接取的那三处问的是这一族）。⛔ 每根滑杆都翻一次主题＝肉眼可见的闪。
-                    if (accentChanged)
-                    {
-                        Helpers.AccentResourceSync.Apply(Helpers.ThemeAccent.Custom);
-                        if (App.MainWindow is { } main) Helpers.AccentResourceSync.Retheme(main);
-                    }
                     App.MainWindow?.RefreshAppearance();
                     if (App.Services.GetRequiredService<StarMark.UI.Services.WidgetManager>()
                         is StarMark.UI.Services.WidgetManager mgr)
                     {
                         _ = mgr.RefreshAppearanceAsync();
-                        if (accentChanged) _ = mgr.RethemeAccentsAsync();
                     }
                 });
             }

@@ -124,9 +124,14 @@ public sealed partial class CaptureOverlayWindow
         }
         var ocr = IconButton(OcrIcon(), LocMessage.Of("capture.bar.ocr"));
         ocr.Click += Ocr_Click;
+        // 放上画板那一路（深析 §四 第1行）：交的是同一份带标注的画面，只是落点换成那扇窗。
+        // 贴图态也摆这一颗——那张图本来就还能拿去接着标，与「复制／存图／识字」在两种态下同一条规矩。
+        var toBoard = IconButton(BoardIcon(), LocMessage.Of("capture.bar.board"));
+        toBoard.Click += Board_Click;
         BarRow.Children.Add(_copyButton);
         BarRow.Children.Add(save);
         BarRow.Children.Add(ocr);
+        BarRow.Children.Add(toBoard);
         if (_pinned)
         {
             // 「组」只在这条带子上出现：能无歧义说清"哪一张"的地方就是这一张自己的条子，
@@ -419,6 +424,12 @@ public sealed partial class CaptureOverlayWindow
 
     private static UIElement OcrIcon() => BarGlyphs.Icon(
         BarGlyphs.Ring(Ink, 2.5, 2.5, 8, 8, 1.6), BarGlyphs.Seg(Ink, 9.8, 9.8, 14, 14, 1.8));
+
+    /// <summary>放上画板那颗：一块边框（那扇窗）里一道折线（接着要画的东西）。</summary>
+    private static UIElement BoardIcon() => BarGlyphs.Icon(
+        BarGlyphs.Out(Ink, 1.5, 3, 13, 9.5, 1.3),
+        BarGlyphs.Seg(InkDim, 4, 9.5, 6.8, 6, 1.4), BarGlyphs.Seg(InkDim, 6.8, 6, 9.6, 8.5, 1.4),
+        BarGlyphs.Seg(InkDim, 9.6, 8.5, 11.8, 5.5, 1.4));
 
     private int ColourBgra => Annotation.Palette[Math.Clamp(_colourIndex, 0, Annotation.Palette.Count - 1)].Bgra;
 

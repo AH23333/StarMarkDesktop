@@ -184,20 +184,6 @@ public sealed partial class WidgetManager
     });
 
     /// <summary>
-    /// 「主题色＝自定义」换了那一拍：让每扇组件窗把 <c>{ThemeResource}</c> 重解一遍（批次 WI-82·P-213）。
-    /// <para>与 <see cref="RefreshAppearanceAsync"/> 分两颗：那颗只重挂材质与表面（代码侧画笔），
-    /// 而组件标题栏那排控件的内部样式问的是框架那一族颜色资源——不重解主题它就一直念系统那颗蓝。</para>
-    /// </summary>
-    public Task RethemeAccentsAsync() => OnUiAsync(() =>
-    {
-        foreach (var w in _windows.Values.ToList())
-        {
-            try { w.RethemeAccent(); }
-            catch (Exception ex) { StarLog.Error("重解组件强调色失败", ex); }
-        }
-    });
-
-    /// <summary>
     /// 主窗口切换主题后，把所有已打开的组件窗口的主题偏好同步过去并重挂材质。
     /// 组件是独立窗口，主界面 <c>ThemeManager.Apply</c> 不会自动传导，必须显式广播，
     /// 否则组件主题始终停留在各自的旧主题（或 Default=跟随系统），与主界面不同步。

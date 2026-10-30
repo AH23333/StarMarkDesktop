@@ -27,10 +27,9 @@
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
-        <!-- 设置页分类标签不可关闭（无关闭符号） -->
-        <Style TargetType="TabViewItem">
-            <Setter Property="IsClosable" Value="False"/>
-        </Style>
+        <!-- 分类标签那颗隐式样式（不可关闭＋选中高亮底部一律直边）住在应用级字典
+             Themes/SettingsTabStyle.xaml。这里⛔ 再留一份同名样式：隐式样式⛔ 合并，
+             页内只要挂着一条 TargetType="TabViewItem"，应用级那一份就整条吃不到。 -->
 
         <!-- 快捷键单行模板（按分类折叠到多级菜单中复用） -->
         <DataTemplate x:Key="HotkeyRowTemplate" x:DataType="local:HotkeyRow">
@@ -108,8 +107,7 @@
         <TabView x:Name="SettingsTabs" Grid.Row="1"
                  Margin="24,12,24,0"
                  IsAddTabButtonVisible="False"
-                 TabWidthMode="SizeToContent"
-                 Background="Transparent">
+                 TabWidthMode="SizeToContent">
 
             <!-- ============ 常规 ============ -->
             <TabViewItem x:Name="TabGeneral" Tag="general" i18n:LocText.Key="settings.tab.general">
@@ -145,34 +143,12 @@
                                 </Grid>
                                 <TextBlock i18n:LocText.Key="settings.general.accentScope"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
-                                <!-- ⛔ 在这里再列一排颜色按钮：「组件外观」编辑器那排的主人是那颗编辑器，
-                                     这一格要的是<b>任意一颗</b>，所以用ColorSpectrum 那一格（无正文＝⛔ 新键，坑表 #276 那一族⛔ 复发）。
-                                     两颗同住一个左对齐的容器，且宽度只由选取器那一格给：批次 WI-82 片6 量到它自己保方
-                                     （声明 220x140 ⇒ 现读 140x140），而那颗方块带着 220 在 Stretch 下居中⇒ 左缘差 222 px。 -->
-                                <StackPanel HorizontalAlignment="Left" Spacing="10">
-                                    <ColorSpectrum x:Name="AccentSpectrum" Width="140" Height="140"
-                                                 Visibility="{x:Bind ViewModel.CustomAccentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}"
-                                                 Color="{x:Bind ViewModel.ThemeAccentColor, Mode=TwoWay}"/>
-                                    <!-- 那颗预览方块：选完得看见自己点的是哪颗（润色器自己不带预览格，⛔ 让用户猜）。
-                                         它自己⛔ 写宽度——那一颗宽由上面那格给（同批⛔ 两处各写一个数）。
-                                         ⚠ 那颗方块⛔ 直接压在卡背上：深色卡现读 #4c4a48 压在 #2c2c2c 上逐通道只差 32⇒
-                                         肉眼认不出那到底是颗什么颜色（✅P-214 量到的正是这一条的下半）。
-                                         下面那块中性白＝用户逐字给的口径「取色时使用白色背景进行衬托，方便识别颜色」，
-                                         而它<b>故意</b>走字面 White 而⛔ ThemeResource：那层衬要跟主题一起变黑的话，
-                                         深色主题下这一格就回到「方块压在暗底上」那颗坏的原样（P-215）。 -->
-                                    <Border Background="White" CornerRadius="6" Padding="6"
-                                            Visibility="{x:Bind ViewModel.CustomAccentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
-                                        <Rectangle Height="26" RadiusX="4" RadiusY="4"
-                                                   Stroke="{ThemeResource CardStrokeColorDefaultBrush}" StrokeThickness="1"
-                                                   Fill="{x:Bind ViewModel.ThemeAccentBrush, Mode=OneWay}"/>
-                                    </Border>
-                                    <!-- 那颗 hex＝同一条读数的另一种念法（纯白压在白衬上仍然糊，而串永远读得清）。
-                                         它是<b>读数</b>而⛔ 句子⇒⛔ 进语言表、⛔ 另算一遍：串只由 AppPalette.ToHexText 一颗给。 -->
-                                    <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                               Visibility="{x:Bind ViewModel.CustomAccentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}"
-                                               Text="{x:Bind ViewModel.ThemeAccentHex, Mode=OneWay}"/>
-                                </StackPanel>
-                            </StackPanel>
+                                <!-- 片144：这一格与「组件外观」编辑器共用同一颗取色器面板（ColorPickerPane：
+                                     预设色板＋SV 方图＋色相条），由代码在 BuildAccentPane 里挂进来。
+                                     旧取色格与白衬预览、hex 读数随同一批拆除——点选反馈由面板
+                                     上那排高亮与方图指示自己给；「随系统」那一档仍由上面那颗下拉管。 -->
+                                <StackPanel x:Name="AccentPaneHost" HorizontalAlignment="Left" Spacing="8"
+                                            Visibility="{x:Bind ViewModel.CustomAccentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>                            </StackPanel>
                         </Border>
 
                         <!-- 界面语言（批次 WI-1）。

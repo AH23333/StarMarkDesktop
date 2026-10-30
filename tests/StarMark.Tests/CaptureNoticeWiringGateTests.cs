@@ -56,7 +56,9 @@ public sealed class CaptureNoticeWiringGateTests
         Assert.Equal(5, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.failedTitle\")"));
         Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.disabledTitle\")"));
         Assert.Equal(2, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.copyFailedTitle\")"));
-        Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.encodeFailed\")"));
+        // 1→2＝片148 的出口增长：放上画板那一格（SendPixelsToBoardAsync）把像素编不成 PNG 时
+        // 与截图那一发共用同一句坏话——同一张失败脸一颗键，语义单位各记一次。
+        Assert.Equal(2, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.encodeFailed\")"));
         Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.copiedTitle\")"));
         Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.copiedBody\""));
         Assert.Equal(2, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.saveFailedTitle\")"));

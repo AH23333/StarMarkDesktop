@@ -307,13 +307,8 @@ public partial class App : Application
             // 应用级主题（必须在首个窗口创建前设置）
             ThemeManager.ApplyAppLevelTheme(fileSettings.LoadTheme());
 
-            // 主题色＝自定义时那颗必须在下第一颗笔光之前定好（批次 WI-81）：晚一步的表现不是「晚一点才变」，
-            // 而是首屏按系统那颗染一遍、再重染一遍，而组件窗是在后面建的——两边观感不同步（✅WI-1 同一口径）。
+            // 自定义背景色在首个窗口创建前初始化，避免首屏先按系统色着色再刷新。
             Helpers.ThemeAccent.Apply(fileSettings.LoadThemeAccent());
-            // 同一拍把那颗染料交给<b>框架自己那一族颜色资源</b>（批次 WI-82·P-213）：控件内部样式
-            // （开关/滑杆/进度条/勾选/焦点框）与 XAML 里按 {ThemeResource} 取的那几处问的是 SystemAccentColor*，
-            // 晚一步的表现与上面那句一样——首屏按系统那颗染一遍、再重染一遍。
-            Helpers.AccentResourceSync.Apply(Helpers.ThemeAccent.Custom);
 
             // 2. 执行数据库迁移
             Services.GetRequiredService<StarMark.Data.MigrationRunner>().EnsureSchema();
@@ -394,6 +389,21 @@ public partial class App : Application
                 await Task.Delay(3000);
                 await StarMark.Integrations.Clipboard.ClipboardAssetAudit
                     .RunAsync(Services.GetRequiredService<IItemRepository>(), CancellationToken.None);
+            });
+
+            // 3.2c 画板正文回填（Phase C 片146＝集成矩阵「场景 → 可检索」那一行的前半）。
+            // 为什么⛔ 只接"从现在起写的那一发"：本批之前落盘的那几十颗板压根没进过库，用户手上的旧板
+            // 照样搜不到——那一行要交付的正是"图第一次能被收藏系统检索"，旧板不在内就是没交付。
+            // 让开首屏那几秒、且排在剪贴板对账后面：那些写会与首屏的读抢同一把库写锁（3.2b 那句理由在这一格同样成立，
+            // 两批挤在同一秒就是互相抢锁）。⛔ 设关：它是索引件的重建，⛔ 是一件用户可以关掉的特性。
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(6000);
+                try { await StarMark.UI.Boards.BoardSceneIndex.BackfillAsync(CancellationToken.None); }
+                catch (Exception bex)
+                {
+                    StarLog.Warn("boards.index.backfill.failed " + bex.GetType().Name + " " + bex.Message);
+                }
             });
 
             // 3.3 护眼 / 休息提醒（默认关）：开着才挂那张 15 秒的节拍表。表挂在主窗的 DispatcherQueue 上，

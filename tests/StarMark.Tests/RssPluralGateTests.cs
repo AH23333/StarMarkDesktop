@@ -166,7 +166,11 @@ public class RssPluralGateTests
     [Fact]
     public void TheBeVerbRulerIsNotDeafAndCountsTheWholeTable()
     {
-        const int FrozenBeVerbCandidates = 14;   // 本格自己现读（2026-10-25・片109 收掉 4 颗之后）
+        // 本格自己现读（2026-10-25・片109 收掉 4 颗之后＝14；片146 给备份链加那句"还带 N 块画板"，
+        // 它的英文列里有一句 "they are written back into the board folder"＝第 15 颗候选。
+        // 片148 给「放上画板」那句 "{0} is now on a board"（{0}＝"谁在说话"那一格的固定名，⛔ 随槽变）＝第 16 颗候选。
+        // ⚠ 这颗数是<b>候选颗数</b>而⛔ 判据：它只在这一族又长／又缩时逼我重新看一遍那张表（名册 418 那一族自指的数）。
+        const int FrozenBeVerbCandidates = 16;
         Assert.Single(BeVerb.Matches("{0} feeds, {1} enabled; {2} are overdue by more than {3}."));
         Assert.Empty(BeVerb.Matches("Feeds: {0}, enabled: {1}. Overdue by more than {3}: {2} — re-fetched automatically."));
         var hits = UiStrings.All.Sum(e => BeVerb.Matches(e.En).Count);

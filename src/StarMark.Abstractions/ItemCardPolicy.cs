@@ -136,6 +136,7 @@ public static class ItemCardPolicy
         ItemType.Clipboard => "📋",
         ItemType.Todo => "✅",
         ItemType.Note => "📝",
+        ItemType.Board => "🎨",
         // 兜底不许长得像任何一种"用户状态"：旧的两张组件表用 📌，于是漏补臂的类型在界面上看起来像被置顶了——
         // 一个假信号比一个中性点难发现得多。走到这里只可能是库里存着本二进制不认识的类型序号（降级打开新库）。
         _ => "•",

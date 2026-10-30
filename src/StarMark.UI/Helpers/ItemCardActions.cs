@@ -50,6 +50,20 @@ public static class ItemCardActions
             // 剪贴板条目没有可启动的目标，对它"打开"＝把正文复制回剪贴板。各页/组件都从这一个入口进来，
             // 所以在这里收口一次即可；否则搜索页右键一条剪贴板记录点"打开"会静默无事发生。
             if (ClipboardPolicy.OpensAsCopy(item.Type, item.Uri)) { CopyUri(new ItemCardViewModel(item)); return; }
+            // 一块板「点开这一行」＝把那块板请回画布。⛔ 走下面那一路：那颗 <c>.excalidraw</c> 交给系统关联
+            // 程序，今天端出来的是记事本里一屏 JSON——用户要的是画布上那块板（片146＝「场景 → 可检索」那行的后半：
+            // 搜到了还得点得开）。判据在 Core 的 BoardPolicy.OpensAsScene，起窗与托盘那两颗入口同一颗主人。
+            if (StarMark.Core.Boards.BoardPolicy.OpensAsScene(item.Type))
+            {
+                try { await StarMark.UI.Boards.BoardsWindows.OpenSceneAsync(item.SourceId); }
+                catch (Exception ex)
+                {
+                    StarLog.Warn("boards.open.failed: " + ex.Message);
+                    App.MainWindow?.ShowError(LocMessage.Of("boards.openFailedTitle"),
+                        LocMessage.Of("boards.openFailedBody"));
+                }
+                return;
+            }
             if (!string.IsNullOrEmpty(item.Uri))
                 ReportOpenFailure(item.Id, await LauncherEx.TryOpenDetailedAsync(item.Uri));
         }
@@ -283,6 +297,45 @@ public static class ItemCardActions
         {
             StarLog.Error($"剪贴板图片贴到桌面失败 (id={vm.Id}, uri={vm.Uri})", ex);
             App.MainWindow?.ShowError(LocMessage.Of("card.pinImage.fail"), LocMessage.Of("common.rawValue", ex.Message));
+        }
+    }
+
+    /// <summary>把一条图片历史／图片文件放上<b>画板</b>（深析 §四 第4行：剪贴板图 → 素材／背景）。
+    /// <para>与 <see cref="PinImageToDesktop"/> 共用同一个读与同一套"读不出"的说法，差别只在落点：
+    /// 那一路要拿尺寸算摆放（所以它灰掉时把原因写在标题上），这一路交的是<b>档本体那串 PNG 字节</b>——
+    /// 摆在眼前这一眼的正中由画板自己算，宿主⛔ 替它挑位置。</para>
+    /// <para>成功⛔ 另报一句：那一扇窗开起来（或眼前那块板上多出一张图）本身就是回执，再补一张卡＝同一件事两种措辞
+    /// （与那一路把成功交给 PinManager 同一口径）。失败必须说出来，且说的是<b>哪一问没过</b>：
+    /// "这张太大"与"画板压根没起来"在用户那边是两件不同的下一手。</para></summary>
+    public static async void SendImageToBoard(ItemCardViewModel vm)
+    {
+        try
+        {
+            var (png, frame, why) = vm.IsClipboardImageRow
+                ? await Task.Run(() => ReadEntryImage(vm), CancellationToken.None)
+                : await Task.Run(() => ClipboardImageStore.TryReadFileAsPngAsync(
+                    LocalFileIdentity.TryExistingPath(vm.Uri, LauncherEx.ExistsOnDisk, out var localPath) ? localPath : null,
+                    CancellationToken.None), CancellationToken.None);
+
+            if (png is null || frame.Width <= 0 || frame.Height <= 0)
+            {
+                App.MainWindow?.ShowError(LocMessage.Of("capture.card.boardFailedTitle"),
+                    why ?? LocMessage.Of("card.image.unreadable"));
+                return;
+            }
+
+            var verdict = await Boards.BoardsWindows.SendImageAsync(png, "image/png", frame.Width, frame.Height);
+            if (verdict == StarMark.Core.Boards.BridgeProtocol.Insert.Posted) return;
+            App.MainWindow?.ShowError(LocMessage.Of("capture.card.boardFailedTitle"),
+                verdict == StarMark.Core.Boards.BridgeProtocol.Insert.OverCeiling
+                    ? LocMessage.Of("boards.insertTooBigBody")
+                    : LocMessage.Of("capture.card.boardFailedBody"));
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error($"剪贴板图片放上画板失败 (id={vm.Id}, uri={vm.Uri})", ex);
+            App.MainWindow?.ShowError(LocMessage.Of("capture.card.boardFailedTitle"),
+                LocMessage.Of("common.rawValue", ex.Message));
         }
     }
 

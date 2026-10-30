@@ -84,7 +84,7 @@ public sealed class SettingsNameKeyGateTests
         foreach (var (tag, anchor, key) in Censused)
         {
             var matches = Regex.Matches(page, "<" + tag + "\\b[^>]*?" + Regex.Escape(anchor) + "[^>]*?>", RegexOptions.Singleline);
-            Assert.Equal(1, matches.Count);                       // 锚认不真＝这一格先红，⛔ 让 NameKey 落在错的那一颗上
+            Assert.Single(matches);                       // 锚认不真＝这一格先红，⛔ 让 NameKey 落在错的那一颗上
             Assert.True(matches[0].Value.Contains("i18n:LocText.NameKey=\"" + key + "\"", StringComparison.Ordinal),
                 $"{tag}（{anchor}）没借到 {key}——屏幕普查里它又是一颗念不出名字的裸控件");
             Assert.Contains("i18n:LocText.Key=\"" + key + "\"", page, StringComparison.Ordinal);

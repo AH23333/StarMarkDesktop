@@ -53,6 +53,9 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     /// <summary>录制/清除后尚未保存（未生效）的快捷键改动。</summary>
     private bool _hotkeysDirty;
 
+    /// <summary>「主题色 · 自定义」那一格的取色器面板（构造完成前为 null）。</summary>
+    private ColorPickerPane? _accentPane;
+
     public ObservableCollection<HotkeyRow> HotkeyRowsItems { get; } = new();
     public ObservableCollection<WidgetLayoutRow> LayoutRowsItems { get; } = new();
 
@@ -75,6 +78,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         _hkHook.KeyUp += OnHookKeyUp;       // 修饰键抬起时回显同步
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;  // 实时生效：属性变更去抖落盘
         LoadFromStoreSilently();
+        BuildAccentPane();      // 「主题色」那一格：与组件「外观」编辑器共用同一颗取色器（片144）
         ApplyEyeRestMessages();   // 回灌出来的那两句也要当场贴上去（换语言重贴走同一条门，见下面那颗方法）
         ApplyExtensionStatuses(); // 「拓展功能」那一屏的七行同理：VM 交的是身份，贴上屏幕才取词
         ApplyDataStatuses();      // 「数据」那一屏的五行同理（批次 WI-61c）
@@ -180,6 +184,9 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         // 全由 VM 交「键＋实参」过来，取词发生在贴上去这一刻。
         if (e.PropertyName is nameof(SettingsPageViewModel.UpdateStatus))
             ApplyUpdateStatus();
+        // 「主题色」那一格：VM 那颗颜色被写回（装载／换档）时同步取色器面板的高亮与指示（片144）
+        if (e.PropertyName is nameof(SettingsPageViewModel.ThemeAccentColor))
+            _accentPane?.SyncTo(ViewModel.ThemeAccentColor);
         if (_suppressSave || string.IsNullOrEmpty(e.PropertyName)) return;
         // 健康度/备份/诊断等异步展示态不参与保存，避免加载过程中反复写盘
         if (IsDisplayOnlyProperty(e.PropertyName)) return;
@@ -258,6 +265,25 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         LocText.SetMessage(ClipboardImageStatusText, ViewModel.ClipboardImageStatus);
         LocText.SetMessage(ClipboardUsageText, ViewModel.ClipboardUsage);
         LocText.SetMessage(SaveErrorMessageText, ViewModel.SaveErrorMessage);
+    }
+
+    /// <summary>
+    /// 「主题色 · 自定义」那一格的取色器（片144）：与组件「外观」编辑器共用同一颗 <see cref="ColorPickerPane"/>。
+    /// <para>面板交两块内容（预设色板＋SV 方图／色相条），挂进 AccentPaneHost；点定 ⇒ 写进
+    /// <see cref="SettingsPageViewModel.ThemeAccentColor"/>，实时生效与落盘走本页既有那条去抖链。
+    /// 「随系统」那一档由上面的下拉管，所以这里不带「跟随全局」钮。</para>
+    /// </summary>
+    private void BuildAccentPane()
+    {
+        var pane = new ColorPickerPane(showFollowGlobal: false);
+        AccentPaneHost.Children.Add(pane.Swatches);
+        AccentPaneHost.Children.Add(pane.Gradient);
+        pane.Picked += c =>
+        {
+            if (c is { } v) ViewModel.ThemeAccentColor = v;
+        };
+        pane.SyncTo(ViewModel.ThemeAccentColor);
+        _accentPane = pane;
     }
 
     private static bool IsDisplayOnlyProperty(string name)

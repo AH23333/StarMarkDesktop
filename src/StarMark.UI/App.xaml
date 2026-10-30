@@ -10,6 +10,8 @@
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
                 <ResourceDictionary Source="Themes/StarMarkTheme.xaml" />
+                <!-- 设置页那八颗分类标签的样式（含"选中高亮底部一律直边"那颗接过来的模板）。 -->
+                <ResourceDictionary Source="Themes/SettingsTabStyle.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <helpers:BoolToVisibilityConverter x:Key="BoolToVis"/>
             <helpers:InverseBoolConverter x:Key="InverseBool"/>

@@ -49,16 +49,18 @@ public sealed partial class MainWindow
 
     private void SetSourceButtonsHighlight(string source)
     {
-        // 主题感知解析（§3.1）：应用级资源在窗口创建后冻结，运行期切主题会拿到错误主题的画笔
+        // 按实际主题取画笔，选中字色按强调底色判定。
         var accent = ThemeBrush.For(RootGrid.ActualTheme, "AccentFillColorDefaultBrush");
         var muted = ThemeBrush.For(RootGrid.ActualTheme, "TextFillColorSecondaryBrush");
-        var white = new SolidColorBrush(Colors.White);
+        var onAccent = accent is SolidColorBrush accentBrush
+            ? new SolidColorBrush(StarMark.Core.Appearance.SurfaceReadability.ReadableOn(accentBrush.Color))
+            : ThemeBrush.For(RootGrid.ActualTheme, "TextOnAccentFillColorPrimaryBrush");
         foreach (var (btn, tag) in new[]
                  { (SourceAll, "all"), (SourceStar, "star"), (SourceBookmark, "bookmark"), (SourceFile, "file") })
         {
             var selected = tag == source;
             btn.Background = selected ? accent : new SolidColorBrush(Colors.Transparent);
-            btn.Foreground = selected ? white : muted;
+            btn.Foreground = selected ? onAccent : muted;
         }
     }
 

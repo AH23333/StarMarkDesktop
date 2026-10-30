@@ -483,9 +483,15 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Contains("FlushSnapshotAsync(\"exit\", notice: false)", code, StringComparison.Ordinal);
         Assert.Contains("FlushSnapshotAsync(\"window\", notice: true)", code, StringComparison.Ordinal);
         Assert.DoesNotContain("NoticeCard.Show(", SourceGate.MethodBody(win, "Task<bool> FlushForExitAsync"), StringComparison.Ordinal);
-        // 名册那一头：⛔ 逐扇串（一句 foreach 一次 await＝把那颗预算乘上扇数）
+        // 名册那一头：⛔ 逐扇串（一句 foreach 一次 await＝把那颗预算乘上扇数）。
+        // 片147 把那一句收窄到<b>那颗方法自己体内</b>：原形状数整档的 "foreach"，于是名册后来加的
+        // 任何一趟"同步、逐扇、⛔ 等"的循环（换主题那一拍）都会撞红——那条问句问的是
+        // "退出那一拍的预算会不会被扇数乘起来"，⛔ 是"名册里⛔ 许有循环"。
+        // 收窄之后原判据不减一分：那颗并发的事实由下面那颗 WhenAll 正件钉住。
         var reg = SourceGate.Code(ReadRepo(RegistryCs));
-        Assert.Equal(0, Count(reg, "foreach"));
+        var flushBeat = SourceGate.MethodBody(reg, "public static async Task<int> FlushAllForExitAsync()");
+        Assert.Equal(0, SourceGate.Count(flushBeat, "foreach"));
+        Assert.Contains("Task.WhenAll", flushBeat, StringComparison.Ordinal);
         Assert.Contains("await Task.WhenAll(waits)", reg, StringComparison.Ordinal);
         Assert.Contains("lock (_open) _open.Clear();", reg, StringComparison.Ordinal);
     }

@@ -23,6 +23,7 @@ namespace StarMark.Tests;
 public sealed class WidgetAppearanceWordGateTests
 {
     private const string Editor = "src/StarMark.UI/Views/WidgetAppearanceEditor.cs";
+    private const string Pane = "src/StarMark.UI/Views/ColorPickerPane.cs";
     private const string Dialog = "src/StarMark.UI/Helpers/CenteredDialog.cs";
     private const string Options = "src/StarMark.UI/Views/SettingsPage.Options.cs";
     private const string SnapshotPage = "src/StarMark.UI/Views/SnapshotPage.xaml.cs";
@@ -110,8 +111,8 @@ public sealed class WidgetAppearanceWordGateTests
         // 那四句现在是"交键"（工厂在建窗那一刻贴），⛔ 再按 Locale.T 数＝永远读不到；颗数一颗没少。
         Assert.Equal(4, Count(code, @"LocMessage.Of(""widget.appearance.cancelConfirm"));
         Assert.Equal(1, Count(code, @"Locale.T(""widget.appearance.scaleDefault"""));
-        Assert.Equal(2, Count(code, @"Locale.T(""widget.appearance.followGlobal"""));
-        Assert.Equal(1, Count(code, @"Locale.T(nameKey)"));
+        Assert.Equal(1, Count(code, @"Locale.T(""widget.appearance.followGlobal"""));   // 片144：另一颗随色板迁进面板，交键走 LocText（面板建一次常驻）
+        Assert.Equal(0, Count(code, @"Locale.T(nameKey)"));   // 名字随预设条整段迁进面板：面板里是 LocText.SetKey，编辑器里这形已灭
         // 一次性对话框⛔ 是 LocText 的宿主：那一族只在 LocText.Set 那一臂出现，这里按整档数一颗都不许多。
         Assert.Equal(3, Count(code, "LocText.SetKey("));
 
@@ -164,10 +165,27 @@ public sealed class WidgetAppearanceWordGateTests
     [Fact]
     public void TheSwatchStripKeepsHexAsIdentityAndTheTableAsName()
     {
-        var block = Between(CodeOf(Editor), "(string NameKey, string Hex)[] Palette", "};");
+        var block = Between(CodeOf(Pane), "(string NameKey, string Hex)[] Palette", "};");   // 片144：色板随取色器整颗迁进面板
         Assert.Equal(11, Regex.Matches(block, @"anno\.color\.\w+").Count);
         Assert.Equal(11, Regex.Matches(block, @"""#FF[0-9A-F]{6}""").Count);
         Assert.Empty(Cjk.Matches(block));
+    }
+
+    /// <summary>
+    /// 片144：面板（<c>ColorPickerPane</c>）自己⛔ 留一颗汉字面字、⛔ 订阅 <c>Locale.Changed</c>——
+    /// 它建一次常驻，字全交键走 <c>LocText</c> 重贴（正文与 tooltip 同键），换语言的重贴由
+    /// LocText 那份名单负责（WI-44／WI-45 那条判据落到这颗新宿主上）。
+    /// </summary>
+    [Fact]
+    public void ThePickerPaneCarriesNoWordsAndNoSubscriptionOfItsOwn()
+    {
+        var code = CodeOf(Pane);
+        var left = CjkLines(code);
+        Assert.True(left.Length == 0, $"面板里还有 {left.Length} 行屏幕字没交表：\n  " + string.Join("\n  ", left));
+        Assert.Equal(0, Count(code, "Locale.T("));
+        Assert.Equal(0, Count(code, "Locale.Changed"));
+        Assert.Equal(1, Count(code, "LocText.SetKey("));
+        Assert.Equal(1, Count(code, "LocText.SetToolTipKey("));
     }
 
     /// <summary>
@@ -177,7 +195,7 @@ public sealed class WidgetAppearanceWordGateTests
     [Fact]
     public void EveryRowThisBatchShippedIsActuallyAskedFor()
     {
-        var asked = CodeOf(Editor) + CodeOf(Dialog);
+        var asked = CodeOf(Editor) + CodeOf(Dialog) + CodeOf(Pane);   // 片144：anno.color.* 那五颗与 followGlobal 的色板钮住进面板
         var keys = new[]
         {
             "dialog.ok", "dialog.gotIt",

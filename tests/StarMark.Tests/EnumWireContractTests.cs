@@ -25,6 +25,7 @@ public class EnumWireContractTests
     [InlineData(ItemType.Clipboard, 3)]
     [InlineData(ItemType.Todo, 4)]
     [InlineData(ItemType.Note, 5)]
+    [InlineData(ItemType.Board, 6)]
     public void ItemType_PersistedByNumberOrdinal_IsFrozen(ItemType type, int expected)
         => Assert.Equal(expected, (int)type);
 
@@ -32,7 +33,8 @@ public class EnumWireContractTests
     public void ItemType_HasNoGap_AndIsFullyEnumerated()
     {
         var ordinals = Enum.GetValues<ItemType>().Select(t => (int)t).OrderBy(x => x);
-        Assert.Equal(new[] { 0, 1, 2, 3, 4, 5 }, ordinals);
+        // 那颗数组是"旧备份读回来不会被重映射"的正件本身：0～5 逐位不动，片146 只往尾上接了一颗 6。
+        Assert.Equal(new[] { 0, 1, 2, 3, 4, 5, 6 }, ordinals);
     }
 
     /// <summary>直接锁真实线格式：备份序列化器（无枚举转换器）必须把 Type 写成整数。</summary>

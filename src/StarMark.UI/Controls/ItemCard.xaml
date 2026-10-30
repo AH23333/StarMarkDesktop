@@ -35,6 +35,12 @@
                                 Click="Menu_PinToDesktop"
                                 IsEnabled="{x:Bind ViewModel.CanPinAsImage, Mode=OneWay}"
                                 Visibility="{x:Bind ViewModel.CanCopyAsImage, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                <!-- 「放到画板上」（深析 §四 第4行）：同一颗判据、第三条出口——不经剪贴板、也不钉在桌面上，
+                     把这张图交给那扇窗接着圈注。这一颗⛔ 跟着「贴到桌面」那样灰着并写原因：
+                     那一路灰它是因为要拿尺寸算摆放，而这一路的摆放由画板自己算（落在眼前这一眼的正中），
+                     "这张的像素这会儿还在不在"那一问只有读盘那一步答得准——点下去拿不到就当场说一句带原因的话。 -->
+                <MenuFlyoutItem local:LocText.Key="card.menu.toBoard" Click="Menu_SendToBoard"
+                                Visibility="{x:Bind ViewModel.CanCopyAsImage, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                 <!-- RSS 候选不给预览（用户裁决：点条目直接跳文章，正文解析暂不做）；判据与操作栏那颗按钮同一个属性 -->
                 <MenuFlyoutItem local:LocText.Key="card.menu.preview" Click="Preview_Click"
                                 Visibility="{x:Bind ViewModel.ShowsPreview, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>

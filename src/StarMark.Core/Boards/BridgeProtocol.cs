@@ -38,10 +38,14 @@ public static class BridgeProtocol
         "bridge.reply",
     ];
 
-    /// <summary>C#→JS 的六颗事件名。</summary>
+    /// <summary>C#→JS 的七颗事件名。<b>颗数的脸</b>：片148 多出来的那颗 <c>image.insert</c> 是矩阵第1／3／4行共用的
+    /// 唯一注入出口（深析 §四），名单从六颗变七颗由证人 <c>BothListsAreClosedOverTheirOwnFieldTables</c> 说一次，
+    /// ⛔ 由下一批"顺手补上"——漏登记的死法与片56 那颗 <c>bridge.reply</c> 一模一样：
+    /// <see cref="Check"/> 判成 UnexpectedField／UnknownName，而 <c>PostOutbound</c> 那句 <c>if (!allowed) return;</c>
+    /// 一声不响＝用户点了「放到画板」而屏幕上什么也没多出来。</summary>
     public static readonly string[] OutboundEvents =
     [
-        "board.load", "theme.set", "lang.set", "feature.flags", "export.pick", "autosave.arm",
+        "board.load", "theme.set", "lang.set", "feature.flags", "export.pick", "autosave.arm", "image.insert",
     ];
 
     /// <summary>
@@ -82,6 +86,12 @@ public static class BridgeProtocol
             ["export.pick"] = ["kind", "skipInliningFonts", "exportScale", "exportBackground"],
             // 宿主递给页面的"载档那一拍已过"：无参（它报的是时刻，不是东西）。
             ["autosave.arm"] = [],
+            // 宿主往那块板上放<b>一张图</b>（矩阵第1／3／4行共用的唯一出口）。四颗必带：
+            // 那颗 dataUrl 是本体，mimeType 由宿主按白名单认（⛔ 由调用方自报），两颗数是交出去的那对尺寸。
+            // ⚠ 页面造那颗 <c>files</c> 值时<b>必须把 id 写进值里</b>：引擎那句 addMissingFiles 逐条按 <c>s.id</c> 记账，
+            // 而页面递的是"只取值"那一族——值里没 id 就记到 <c>undefined</c> 键下，元素按 <c>fileId</c> 永远查不到，
+            // 屏幕上只剩灰色占位框（2026-10-30 两发真机读数，正本 <c>bin/WI99/p148_image_route_readings.txt</c>；账本 P-274）。
+            ["image.insert"] = ["dataUrl", "mimeType", "width", "height"],
         };
 
     /// <summary>拒的原因。UI 侧拿这颗枚举去配表里的键（⛔ 在这里念成品句，也⛔ 静默吞）。</summary>
@@ -108,6 +118,27 @@ public static class BridgeProtocol
         Outbound,
     }
 
+    /// <summary>
+    /// 递一张图上画板那一路的<b>下落</b>（<c>image.insert</c> 那一发到底怎么了）。
+    /// <para>为什么交一颗枚举而⛔ 一颗 bool：一颗 bool 把"这张图太大"与"画板压根没起来"折成同一句话，
+    /// 而用户对着这两副脸要做的下一手完全不同（前者换一张小的，后者什么都不用做——那一发本来就没动盘）。
+    /// 为什么住在 Core：这一列与那四问一一对应，而四问的判据都在这里（名单／上限／形状），
+    /// 把答案搬去 UI 就会长成第二份"哪一问没过"的表。</para>
+    /// </summary>
+    public enum Insert
+    {
+        /// <summary>那一发真递出去了（⛔ 等于盘上已经有了——落盘归页面那趟 autosave 与宿主那道写闸）。</summary>
+        Posted,
+        /// <summary>桥没通／那一扇窗到点也没诞生：递出去也没人听（片56 那条口径）。</summary>
+        NoBridge,
+        /// <summary>那颗 MIME 不在名单里（<see cref="InjectableImageMimes"/>）。</summary>
+        BadMime,
+        /// <summary>字节空、或那两颗数⛔ 是正数：形状本身不对。</summary>
+        BadShape,
+        /// <summary>装不进一块板（与写闸同一颗上限，见 <c>BoardPolicy.InjectedDataUrlOverCeiling</c>）。</summary>
+        OverCeiling,
+    }
+
     /// <summary>那颗 <c>export.bytes</c>／<c>export.pick</c> 里的档位枚举（逐字＝v1 §21.1 那一列）。</summary>
     public static readonly string[] ExportKinds = ["png", "svg", "scene"];
 
@@ -128,6 +159,34 @@ public static class BridgeProtocol
 
     /// <summary>那颗 <c>paste.query</c> 递的 <c>data</c> 形状标签（§20.3 现读那四档）。</summary>
     public static readonly string[] PasteShapes = ["elements", "spreadsheet", "text", "errorMessage"];
+
+    /// <summary>
+    /// 宿主肯往画板上放的那几种图（<c>image.insert</c> 那颗 <c>mimeType</c> 的唯一合格集合）。
+    /// <para><b>为什么⛔ 收调用方自报的那颗串</b>：这一问决定"画板上会不会出现一张引擎解不开的图"，
+    /// 而调用方有三支（截图链／剪贴板历史／画板自己的导出），它们各自编码时用的名字写法不一（<c>image/jpg</c> 那一族）。
+    /// 名单外一律拒并给可见回执，⛔ 硬着头皮递上去让用户对着一块灰框猜。</para>
+    /// <para><b>为什么⛔ 带 <c>image/svg+xml</c></b>：SVG 是能带脚本的一种图。引擎那一侧读不读、怎么洗，
+    /// 本轮没读过随包那份实现（名册 422 那一族：⛔ 替没读过的分支下结论），所以先不放——
+    /// 要放的话连那颗 <c>SceneBytesCeilingBytes</c> 一起重量，属另一批。</para>
+    /// </summary>
+    public static readonly string[] InjectableImageMimes = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+    /// <summary>那颗 MIME 是否够格进画板（大小写敏感＝Ordinal；写法不对的调用方在<b>自己</b>那一侧就该改对）。</summary>
+    public static bool IsInjectableImageMime(string? mimeType)
+        => !string.IsNullOrEmpty(mimeType) && Array.IndexOf(InjectableImageMimes, mimeType!) >= 0;
+
+    /// <summary>
+    /// 把一颗图的本体收成引擎那颗 <c>files{}</c> 认的 dataURL（<c>image.insert</c> 的 <c>dataUrl</c>）。
+    /// <para>住 Core 的理由与名单同一颗：那一串的形状由<b>引擎</b>定（<c>data:&lt;mime&gt;;base64,&lt;b64&gt;</c>），
+    /// 三支调用方各拼一遍＝三份可以各自拼错的形状，而拼错的脸是"点了没反应"。</para>
+    /// </summary>
+    public static string DataUrlOf(string mimeType, byte[] bytes)
+    {
+        if (!IsInjectableImageMime(mimeType))
+            throw new ArgumentException("不可注入的 MIME：" + mimeType, nameof(mimeType));
+        ArgumentNullException.ThrowIfNull(bytes);
+        return "data:" + mimeType + ";base64," + Convert.ToBase64String(bytes);
+    }
 
     /// <summary>名字是否在册（按方向取那张名单；大小写敏感＝Ordinal，防 <c>EXPORT.BYTES</c> 混进来）。</summary>
     public static bool IsKnownName(string? name, Direction direction)
@@ -181,6 +240,9 @@ public static class BridgeProtocol
         // 而闸门要的是"画布上真有宿主递进去那块板"（片26 量到的那颗坏就坏在这句话是空的）。
         "board.loaded" => ["elements", "canvas"],
         "export.pick" => ["kind"],
+        // 注入那一张图：四颗一颗也⛔ 少——少 dataUrl＝一张空图，少 mimeType＝页面只能猜，
+        // 少那两颗数＝引擎按 0×0 摆位（点了没反应那一族的另一副脸）。
+        "image.insert" => ["dataUrl", "mimeType", "width", "height"],
         // 那句 nack 必带那颗 ok：一句⛔ 内容的 ack 既⛔ 许被读成"办成了"，也⛔ 许被读成"办不成"——
         // 两种都替用户做了一次没问过的决定（片56；缺了这一道门，UI 侧就只能猜那颗 null）。
         "bridge.reply" => ["ok"],

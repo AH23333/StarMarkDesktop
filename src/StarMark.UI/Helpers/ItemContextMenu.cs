@@ -88,6 +88,10 @@ internal static class ItemContextMenu
             pin.IsEnabled = vm.CanPinAsImage;
             flyout.Items.Add(pin);
         }
+        // 「放到画板上」（深析 §四 第4行）：第三条出口，与前两颗共用同一颗判据。
+        // 顺序与主窗卡片逐字一致（那条"两处菜单不许各排各的"由 ClipboardCopyImageGateTests 钉着）。
+        if (vm.CanCopyAsImage)
+            flyout.Items.Add(Item(Locale.T("card.menu.toBoard"), (_, _) => ItemCardActions.SendImageToBoard(vm)));
         // 预览与卡片上那颗 🔎 读同一个判据（RSS 候选不给：点条目直接跳文章，正文解析暂不做）
         if (vm.ShowsPreview)
             flyout.Items.Add(Item(Locale.T("card.menu.preview"), async (_, _) => await PreviewAsync(vm, root)));

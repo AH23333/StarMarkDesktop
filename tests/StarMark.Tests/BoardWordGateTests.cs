@@ -230,19 +230,21 @@ public sealed class BoardWordGateTests : IDisposable
             Locale.Fmt("boards.exportBackgroundAction",
                 Locale.T(background ? "boards.exportOn" : "boards.exportOff")));
 
-    /// <summary>⑤整族总数现读：这一族<b>三十</b>颗（面板那廿八颗＋片21 那两颗开窗失败的旧话）。
+    /// <summary>⑤整族总数现读：这一族<b>三十一</b>颗（面板那廿八颗＋片21 那两颗开窗失败的旧话＋片148 那一句「装不下」）。
     /// <para>钉总数而⛔ 钉"至少"：下一批往这一族加一句而不带证人，这一格就会红——而那一颗新句子的换语言，
     /// 是这一族最容易漏的那一半（P-175 那一族在三扇宿主上各漏过一次）。</para></summary>
     [Fact]
-    public void TheBoardFamilyHasExactlyThirtyRowsAndTheyAreNamed()
+    public void TheBoardFamilyHasExactlyThirtyOneRowsAndTheyAreNamed()
     {
         var keys = UiStrings.All.Select(e => e.Key)
             .Where(k => k.StartsWith("boards.", StringComparison.Ordinal)).ToArray();
-        Assert.Equal(30, keys.Length);
-        Assert.Equal(Panel.Length + 2, keys.Length);                           // 上屏那廿八颗＋两颗旧话
+        Assert.Equal(31, keys.Length);
+        Assert.Equal(Panel.Length + 3, keys.Length);                          // 上屏那廿八颗＋两颗旧话＋片148 那一句「装不下」
         foreach (var key in Panel) Assert.Contains(key, keys);
         Assert.Contains("boards.openFailedTitle", keys);
         Assert.Contains("boards.openFailedBody", keys);
+        // 片148＝图进画板那一发的上限坏话（两颗发送口各念一次，⛔ 住这扇面板里 ⇒ ⛔ 进 Panel 那张名单）
+        Assert.Contains("boards.insertTooBigBody", keys);
     }
 
     /// <summary>⑥那一屏上<b>可点</b>的控件⛔ 只钉面板的字色——三样一起钉，且禁项与正件在同一次比较里。

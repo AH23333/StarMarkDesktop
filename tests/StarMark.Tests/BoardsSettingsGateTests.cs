@@ -95,8 +95,11 @@ public sealed class BoardsSettingsGateTests
         // 两颗入口分岔只由那颗实参命名（⛔ 两个 case 各写一套起窗代码＝第二主人）
         Assert.Contains("OpenBoardsWindowAsync(resumeLast: true)", t, StringComparison.Ordinal);
         Assert.Contains("OpenBoardsWindowAsync(resumeLast: false)", t, StringComparison.Ordinal);
-        Assert.Contains("new StarMark.UI.Boards.BoardWindow();", t, StringComparison.Ordinal);
-        Assert.Contains("await win.OpenNewAsync();", t, StringComparison.Ordinal);
+        // 片146：建那一扇搬进唯一主人 BoardsWindows（托盘两颗入口＋收藏系统点开一块板共用一趟起窗）；
+        // 本档仍要点名"托盘那一路真的走到起窗"，只是点的从"新建"换成"请那一颗主人"。
+        Assert.Contains("BoardsWindows.OpenSceneAsync(", t, StringComparison.Ordinal);
+        Assert.Contains("new BoardWindow();",
+            SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.UI/Boards/BoardsWindows.cs")), StringComparison.Ordinal);
         // 起窗失败必须有可见原因（「点了没反应」＝本仓定性过的坏）
         Assert.Contains("ShowNotice(LocMessage.Of(\"boards.openFailedTitle\"), LocMessage.Of(\"boards.openFailedBody\"));", t, StringComparison.Ordinal);
     }

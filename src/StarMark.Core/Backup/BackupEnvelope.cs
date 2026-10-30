@@ -109,6 +109,15 @@ public sealed class RestoreResult
 
     /// <summary>写失败的个数（磁盘、权限写不进去）。与"跳过"必须分开：一句"已恢复"会把失败说成一件好事。</summary>
     public int ClipImagesFailed { get; init; }
+
+    /// <summary>从包里解回板档目录的画板块数（Phase C 片146；三颗数分开报与图片那一族同一口径）。</summary>
+    public int BoardsRestored { get; init; }
+
+    /// <summary>没动的块数：本机已有同名的那块（⛔ 覆盖用户今天画的板）与"那颗档名过不了形状判据"都算在这里。</summary>
+    public int BoardsSkipped { get; init; }
+
+    /// <summary>写不进的块数（磁盘、权限）。与"没动"必须分开报。</summary>
+    public int BoardsFailed { get; init; }
 }
 
 /// <summary>

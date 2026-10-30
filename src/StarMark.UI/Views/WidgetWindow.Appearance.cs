@@ -315,18 +315,6 @@ public sealed partial class WidgetWindow
     }
 
     /// <summary>
-    /// 「主题色＝自定义」换了那一拍，让这一扇把 <c>{ThemeResource}</c> 重解一遍
-    /// （批次 WI-82·P-213：这一扇标题栏那排控件的内部样式问的是框架那族 <c>SystemAccentColor*</c>，
-    /// 只重挂材质（<see cref="RefreshAppearance"/>）⛔ 会动到它）。
-    /// </summary>
-    public void RethemeAccent()
-    {
-        if (!_styled) return;
-        AccentResourceSync.Retheme(this);
-        RefreshAppearance();
-    }
-
-    /// <summary>
     /// 主窗口切换主题后，把同一主题偏好下发到本组件并立即重挂材质/表面。
     /// 组件是独立窗口，主窗口 <c>ThemeManager.Apply</c> 不会自动传导；若只改材质而不改主题，
     /// 组件的 <see cref="RefreshAppearance"/> 仍会用旧的实际主题 → 组件主题与主界面不同步。

@@ -188,16 +188,15 @@ public sealed partial class MainWindow
     /// <summary>
     /// 画板那扇窗。<paramref name="resumeLast"/>＝真时接着画最近动过的那块板（盘上没档就自己退成新板），
     /// 假时永远新起一块。起窗失败必须有可见原因（「点了没反应」是本仓定性过的坏），提示卡＋日志双出口。
+    /// <para>起窗本身（建那一扇→载那颗档→摆到前台）归 <c>BoardsWindows.OpenSceneAsync</c> 那颗唯一主人——
+    /// 片146 起了第二处调用点（从收藏系统点开一块板），那一趟⛔ 再抄一遍这三行。</para>
     /// </summary>
     private async System.Threading.Tasks.Task OpenBoardsWindowAsync(bool resumeLast)
     {
         try
         {
-            var win = new StarMark.UI.Boards.BoardWindow();
-            var last = resumeLast ? StarMark.UI.Boards.BoardSceneStore.LatestSceneId() : null;
-            if (last is null) await win.OpenNewAsync();
-            else await win.OpenSceneAsync(last);
-            win.Activate();
+            await StarMark.UI.Boards.BoardsWindows.OpenSceneAsync(
+                resumeLast ? StarMark.UI.Boards.BoardSceneStore.LatestSceneId() : null);
         }
         catch (Exception ex)
         {

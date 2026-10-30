@@ -186,7 +186,7 @@ public sealed partial class SettingsPage
                 : null;
             if (written is not null)
             {
-                // 那一行的四个读数各是一句独立的话（外层句子留三颗可选槽，没出现的那一档交 null＝格式化时那一格自己变空）；
+                // 那一行的五颗读数各是一句独立的话（外层句子留四颗可选槽，没出现的那一档交 null＝格式化时那一格自己变空）；
                 // 字节数与路径都是<b>数据</b> ⇒ 走实参（✅P-178 口径，⛔ 抄进句子）。
                 ViewModel.BackupStatus = LocMessage.Of(
                     "settings.data.backup.exportedWith", written.Path, written.ItemCount,
@@ -195,7 +195,12 @@ public sealed partial class SettingsPage
                             StarMark.Abstractions.Clipboard.ClipAssets.DescribeBytes(written.ClipImageBytes))
                         : LocMessage.Of("settings.data.backup.exportedNoImages"),
                     written.MissingImages > 0 ? LocMessage.Of("settings.data.backup.exportedMissing", written.MissingImages) : null,
-                    written.FailedImages > 0 ? LocMessage.Of("settings.data.backup.exportedFailed", written.FailedImages) : null);
+                    written.FailedImages > 0 ? LocMessage.Of("settings.data.backup.exportedFailed", written.FailedImages) : null,
+                    // 画板那一族单独一颗槽（片146）：把"三块板四张图"说成"带了 7 个附件"，用户就没法核对自己那几块板跟没跟过去。
+                    written.Boards > 0
+                        ? LocMessage.Of("settings.data.backup.exportedBoards", written.Boards,
+                            StarMark.Abstractions.Clipboard.ClipAssets.DescribeBytes(written.BoardBytes))
+                        : null);
             }
             else
             {
@@ -336,20 +341,27 @@ public sealed partial class SettingsPage
         // 三选一场景（合并导入 / 覆盖导入 / 取消）用 ShowContentAsync 的 primary+secondary 双按钮。
         // 附件张数：确认框上那句"这份还带 N 张图"必须来自包本身，而不是清单里的条目数——
         // 后者会说"带了"而其实一张都没进包。只读中央目录，不解压，故留在 UI 线程上是几毫秒的事。
+        // 画板那一族（片146）另起一句、各报各的数：把"三块板四张图"并成"七个附件"，
+        // 用户就没法在点下去之前核对自己那几块板跟没跟过去；而"没带图片"那句在只带板时照旧是真话。
         var clipCount = BackupContainer.CountClipEntries(source);
+        var boardCount = BackupContainer.CountBoardEntries(source);
+        var attachmentsNote = Stack(
+            clipCount > 0
+                ? LocMessage.Of("settings.data.backup.carriesImages", clipCount)
+                : LocMessage.Of("settings.data.backup.noImages"),
+            boardCount > 0 ? LocMessage.Of("settings.data.backup.carriesBoards", boardCount) : null);
         var guideBlock = Stack(
             LocMessage.Of("settings.data.backup.mergeLine"),
             Stack(LocMessage.Of("settings.data.backup.replaceLine"), LocMessage.Of("settings.data.backup.snapshotLine")));
-        var body = Stack(summaryBlock,
-            Stack(guideBlock, clipCount > 0
-                ? LocMessage.Of("settings.data.backup.carriesImages", clipCount)
-                : LocMessage.Of("settings.data.backup.noImages"), "\n\n"), "\n\n");
+        var body = Stack(summaryBlock, Stack(guideBlock, attachmentsNote, "\n\n"), "\n\n");
         var detailBlock = new TextBlock { TextWrapping = TextWrapping.Wrap };
         // 交身份给 LocText 那颗门而不是先 Render 成字符串：这张窗开着的时候换语言，那一格才跟着重贴（坑表 #276 那一族）。
         LocText.SetMessage(detailBlock, body);
         var choice = await CenteredDialog.ShowContentAsync(
             LocMessage.Of("settings.data.importBackupTitle"), detailBlock, owner: App.MainWindow, dedupeKey: "importbackup",
-            width: 480, height: 340,
+            // 340 → 380：片146 给这一格加了那句"还带 N 块画板"，真机读到那句被裁在窗沿外
+            // （正文最后一行只露出半截，用户看不到"包里有几块板会回来"这件事就白说）。
+            width: 480, height: 380,
             primaryText: LocMessage.Of("settings.data.importMerge"),
             secondaryText: LocMessage.Of("settings.data.importOverwrite"),
             cancelText: LocMessage.Of("dialog.cancel"));
@@ -368,5 +380,21 @@ public sealed partial class SettingsPage
             ? LocMessage.Of("settings.data.backup.withSnapshot", rr.Message, rr.SnapshotPath)
             : LocMessage.Of("settings.data.backup.importFailed", rr.Message);
         ViewModel.RefreshBackups();     // 这次恢复留下的快照要立刻可见——它就是"撤销"的入口
+
+        // 恢复把画板写回盘上之后，那几块板的<b>索引件</b>当场补一遍（片146：矩阵那一行的前半与后半在这一格咬合）。
+        // ⛔ 等下次开机才补：用户刚导完就去搜那块板，"要重启才搜得到"会被当成缺陷（P-53 那句"坏话要说在用户能做的那件事上"的反面＝
+        // 一件本来能当场办成的事被排到了下次启动）。那颗回填是幂等的，⛔ 需要"哪几块"的名单。
+        if (rr.Success && rr.BoardsRestored > 0)
+        {
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                try { await StarMark.UI.Boards.BoardSceneIndex.BackfillAsync(CancellationToken.None); }
+                catch (Exception bex)
+                {
+                    StarMark.Abstractions.StarLog.Warn(
+                        "boards.index.backfill.after-import " + bex.GetType().Name + " " + bex.Message);
+                }
+            });
+        }
     }
 }

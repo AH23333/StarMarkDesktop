@@ -101,7 +101,7 @@ public sealed class TestPointerGateTests
     {
         var cites = Citations();
         Assert.Contains(cites, c => c.File == "src/StarMark.UI/Boards/BoardWindow.cs"
-            && c.TestClass == "BoardWordGateTests" && c.Method == "TheBoardFamilyHasExactlyThirtyRowsAndTheyAreNamed");
+            && c.TestClass == "BoardWordGateTests" && c.Method == "TheBoardFamilyHasExactlyThirtyOneRowsAndTheyAreNamed");
         Assert.Contains(cites, c => c.File == "src/StarMark.Abstractions/NumberText.cs"
             && c.TestClass == "NumberTextTests" && c.Method == "WhichShapesActuallyMove");
         Assert.DoesNotContain("TwentyThreeRows", ReadRepoFile("src/StarMark.UI/Boards/BoardWindow.cs"), StringComparison.Ordinal);

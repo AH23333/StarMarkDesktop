@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using System.Linq;
 using Xunit;
 using static StarMark.Tests.SourceGate;
 
@@ -20,6 +19,7 @@ namespace StarMark.Tests;
 public sealed class WidgetAppearanceReachGateTests
 {
     private const string Editor = "src/StarMark.UI/Views/WidgetAppearanceEditor.cs";
+    private const string Pane = "src/StarMark.UI/Views/ColorPickerPane.cs";
     private const string Window = "src/StarMark.UI/Views/WidgetWindow.Appearance.cs";
     private const string Helper = "src/StarMark.UI/Helpers/WidgetAppearance.cs";
     private const string Storage = "src/StarMark.Core/Widgets/WidgetStorage.cs";
@@ -73,32 +73,35 @@ public sealed class WidgetAppearanceReachGateTests
         Assert.Equal(1, Count(code, "ApplyTextScale(panel, _textScale)"));   // 缩放仍只管内容区
     }
 
-    /// <summary>
-    /// ④"点了底色之后字念黑还是白"那颗判据只许住在 Core：UI 侧⛔ 自己拍阈值、⛔ 第二处取色。
-    /// </summary>
     [Fact]
     public void TheAutoTextDecisionLivesInCoreOnly()
     {
         Assert.Equal(1, Count(ReadRepoFile(Readability), "public static Color ReadableOn(Color surface)"));
-        var asks = ReadRepoUnder("src")
-            .Where(f => !f.RelativePath.EndsWith("SurfaceReadability.cs", StringComparison.Ordinal))
-            .Sum(f => Count(Code(f.Text), "SurfaceReadability.ReadableOn("));
-        Assert.Equal(1, asks);                                    // 唯一的提问者＝WidgetAppearance.AutoForeground
-        Assert.Equal(1, Count(Code(ReadRepoFile(Helper)), "SurfaceReadability.BaseFor("));
+        var helper = MethodBody(Code(ReadRepoFile(Helper)), "public static Windows.UI.Color? AutoForeground(");
+        Assert.Contains("return SurfaceReadability.ReadableOn(surface);", helper, StringComparison.Ordinal);
+        Assert.Contains("SurfaceReadability.BaseFor(dark)", helper, StringComparison.Ordinal);
+        var swatch = MethodBody(Code(ReadRepoFile(Pane)), "private static Button MakeSwatchButton");
+        Assert.Contains("SurfaceReadability.ReadableOn(b.Color)", swatch, StringComparison.Ordinal);
         Assert.Equal(1, Count(Code(ReadRepoFile(Window)), "WidgetAppearance.AutoForeground("));
     }
 
     /// <summary>
     /// ⑤色板那一排的描边常驻：⛔ 用 Transparent 当"未选中"，那颗「白」在浅色卡片上会连形状一起消失。
+    /// <para>片144 起描边与高亮那颗性格住进面板（<c>ColorPickerPane</c> 的 <c>SwatchStroke</c>／<c>Highlight</c>），
+    /// 编辑器三颗对象按钮的高亮也走同一颗——⛔ 第二处描边算法。</para>
     /// <para>顺带钉一句"⛔ 为这颗旋钮另立新词"：逐扇那颗不透明度与设置页那一行念的是同一件事，
     /// 共用 <c>settings.widgets.opacityLabel</c> 那颗键（一句字一个主人，两处在问）。</para>
     /// </summary>
     [Fact]
     public void SwatchesKeepAVisibleEdgeAndTheNewSliderReusesTheExistingWord()
     {
+        var pane = Code(ReadRepoFile(Pane));
+        Assert.Contains("private static Brush SwatchStroke(ElementTheme theme)", pane, StringComparison.Ordinal);
+        Assert.Equal(1, Count(pane, "BorderBrush = SwatchStroke(theme)"));   // 摘高亮也走那颗描边（片144：性格只此一处）
+        Assert.Equal(1, Count(pane, "\"AccentFillColorDefaultBrush\""));      // 高亮＝强调色描边，⛔ 另立新画笔
+        Assert.Equal(1, Count(pane, "Fill = new SolidColorBrush(Colors.Transparent)"));   // SV 指示那颗：透明底只是让渐变透出，形状由描边给
         var code = Code(ReadRepoFile(Editor));
-        Assert.Equal(2, Count(code, "BorderBrush = SwatchStroke()"));   // 建按钮 + 摘高亮，两处都走那颗描边
-        Assert.Equal(3, Count(code, "SwatchStroke()"));                 // 上面两处 + 它自己的定义
+        Assert.Equal(1, Count(code, "ColorPickerPane.Highlight("));           // 三颗对象按钮的高亮走面板那同一颗
         // 全档只剩一处 Transparent：那是「背景色/文本色/边框色」三颗<b>对象按钮</b>——它们自带字，
         // 摘了描边仍然读得出，所以⛔ 一起改；这颗数＝1 是"⛔ 再给一颗无色板的按钮用透明边框"的射程。
         Assert.Equal(1, Count(code, "BorderBrush = new SolidColorBrush(Colors.Transparent)"));

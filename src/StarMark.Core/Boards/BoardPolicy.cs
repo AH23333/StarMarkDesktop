@@ -155,11 +155,28 @@ public static class BoardPolicy
     public static bool InboundBytesOverCeiling(int base64Length)
         => InboundDecodedBytesUpperBound(base64Length) > SceneBytesCeilingBytes;
 
+    /// <summary>
+    /// 宿主往画板上<b>放一张图</b>时，那颗 dataURL 递出去之前先问一次装不装得下——用的还是
+    /// <see cref="SceneBytesCeilingBytes"/> 那一颗数，⛔ 另配一颗。
+    /// <para>理由不是省事：那张图落进画布之后走的<b>正是同一道写闸</b>（它变成场景档里那颗 <c>files</c> 的本体，
+    /// 由停笔那一拍的 <c>export.bytes</c> 交回来）。那里拒、这里放行＝用户在画布上看得到一张盘上永远存不下的图，
+    /// 下一拍吃一句"没能存成"；那里放行、这里拒＝一道⛔ 存在的门。同一颗上限问两次才是同一件事。</para>
+    /// </summary>
+    public static bool InjectedDataUrlOverCeiling(int dataUrlLength)
+        => InboundBytesOverCeiling(dataUrlLength);
+
     /// <summary>一颗板的档后缀（一颗档一板；图以内嵌 base64 跟着走，§21.3 那颗裁决）。</summary>
     public const string SceneExtension = ".excalidraw";
 
     /// <summary>上一份的形状：只留最近一颗，⛔ 滚动多份（v1 §21.3 那句"另存一颗 <c>.bak</c>"）。</summary>
     public const string BackupSuffix = ".bak";
+
+    /// <summary>
+    /// 那颗"写到一半"的临时件后缀（<c>.tmp</c>）。片146 把它从 <c>BoardSceneStore</c> 搬下来：那一族档名
+    /// （<see cref="SceneExtension"/>／<see cref="BackupSuffix"/>／这颗）从此同住一位主人——
+    /// 备份还原那一头（Core）写那块板也要走"临时件＋同卷改名"，而 Core 够不到 UI，名字再抄一遍就是第二主人。
+    /// </summary>
+    public const string SceneTempSuffix = ".tmp";
 
     /// <summary>停笔多久算"这一笔收了"（autosave 那一拍，毫秒）。v1 §21.3 定 1.5 s。</summary>
     public const int AutosaveIdleMs = 1500;
@@ -691,6 +708,18 @@ public static class BoardPolicy
     /// <summary>一颗板的档名（<c>&lt;id&gt;.excalidraw</c>）。</summary>
     public static string SceneFileName(string id) => Require(id) + SceneExtension;
 
+    /// <summary>
+    /// 板档那棵目录的<b>成品路径</b>（根照旧归 <c>UserDataPaths</c>：设置变量 ＞ db 变量 ＞ 真目录，那颗优先规则只许一颗主人）。
+    /// <para><b>片146 把这一颗从 UI 的 <c>BoardSceneStore.Folder</c> 搬下来</b>：备份链（Core）要与写入（UI）问同一棵树，
+    /// 而 Core 够不到 UI ⇒ 要么在 Core 再拼一遍那颗子目录名（第二主人，坏法＝导出带一棵、载入读另一棵），
+    /// 要么把落点搬进两边都够得着的那一层。改的是<b>住哪一档</b>，⛔ 是<b>谁定的规则</b>——片23 那句"根只许一位主人"照旧由
+    /// <c>UserDataPaths</c> 兑现，本颗只是把它下面那一段名字接过来（<see cref="BoardsDirectoryName"/>）。</para>
+    /// </summary>
+    public static string ScenesFolder() => StarMark.Abstractions.UserDataPaths.Subdirectory(BoardsDirectoryName);
+
+    /// <summary>那颗板在盘上的路径（只算名字，⛔ 摸盘；那颗 id 先过 <see cref="IsSceneId"/>）。</summary>
+    public static string ScenePath(string id) => System.IO.Path.Combine(ScenesFolder(), SceneFileName(id));
+
     /// <summary>上一份的档名（<c>&lt;id&gt;.excalidraw.bak</c>）。</summary>
     public static string BackupFileName(string id) => SceneFileName(id) + BackupSuffix;
 
@@ -706,6 +735,130 @@ public static class BoardPolicy
         => fileName is not null
            && fileName.EndsWith(SceneExtension + BackupSuffix, StringComparison.OrdinalIgnoreCase)
            && IsSceneId(fileName[..^(SceneExtension.Length + BackupSuffix.Length)]);
+
+    /// <summary>
+    /// 板档那棵子目录的<b>名字</b>（<c>boards\</c>）。
+    /// <para>片23 定的是「落点只许一颗主人」＝<c>UserDataPaths.Subdirectory</c>；本颗管的是它下面那一段
+    /// <b>叫什么</b>。改前那一段逐字住在 <c>BoardSceneStore.Folder</c> 里，而片146 的备份链第二调用点
+    /// 也要问同一棵树——两处各写一份 <c>"boards"</c> 就是「导出带 boards\、载入读 boards\」这种分岔的温床
+    /// （同仓那颗 <see cref="ExportsDirectoryName"/> 走的也是这一条：名字在这里，根交宿主）。</para>
+    /// <para>它⛔ 是上屏话（本档③那条口径）：名字在这里是<b>身份</b>，换语言就换目录＝用户已有的板全孤儿。</para>
+    /// </summary>
+    public const string BoardsDirectoryName = "boards";
+
+    /// <summary>
+    /// 那块板的<b>正文</b>抽出来进全文索引时的长度上限（UTF-16 单元数）。
+    /// <para>那颗 8 MiB 的 <see cref="SceneBytesCeilingBytes"/> 管的是「一发交回来的字节」（片58 真机那张梯子），
+    /// 它<b>⛔ 给出「档里最多能有多少个字」</b>——把整档全写成文字是合法形状，而那一列要整块进 FTS5：
+    /// ⛔ 一颗列长上限＝一块板能把索引撑到几 MB。取舍的现场依据＝<c>bin/WI99/p146_digest_len_readings.txt</c>
+    /// （真机那块板：档 1186 字节／正文 10 字符／落库后 <c>search_text</c> 61 字符）——4000 取在观察值之上两个数量级，
+    /// 它⛔ 会咬到任何一块真画过字的板。⚠ 这颗数是<b>工程取舍</b>而⛔ 是"用户最多写多少字"的现场事实：
+    /// 那一问现场量不到，本颗只保证索引列不会为一块病态板无限长；超出就地截断，⛔ 省略号
+    /// （那三个字符会进索引，而这一列从来⛔ 直接上屏——卡片上说的是 <c>ItemCardPolicy.TruncatedTitle</c>）。</para>
+    /// </summary>
+    public const int SceneTextDigestMaxChars = 4000;
+
+    /// <summary>
+    /// 那块板上<b>用户打得出来的字</b>（顺序＝档里 <c>elements</c> 数组的顺序；读不到交 <b>null</b>，
+    /// 板真的没字交 <b>空串</b>——这两档必须分开，理由与 <see cref="CountWritableElements"/> 同一句：
+    /// 把"我读不懂"折成"这块板是空的"＝让一块有字的板在收藏系统里查无此板，还一句谎也不说）。
+    /// <para><b>口径三档，逐档都有出处</b>：① 只吃 <c>type:"text"</c> 那一族，取 <c>originalText</c>、
+    /// 读不到才退 <c>text</c>。现读随包那颗引擎（<c>assets/boards/excalidraw.min.js</c>・sha 前缀
+    /// <c>923fa221d0a4fc22</c>・4 878 772 颗字节）：它自己算"画布上要落哪些字形"那颗
+    /// <c>getCharsPerFamily</c>（声明 offset 2384664）也是逐颗只读 <c>originalText</c>（那一手 offset 2387145＝
+    /// <c>for(let B of C.originalText)</c>），两颗数因此同吃一碗。
+    /// 箭头／连线的标签<b>不需要另开一条路</b>——那颗标签本身就是一颗 <c>type:"text"</c> 元素，
+    /// 由 <c>containerId</c> 指回宿主（同一颗 bundle 里 <c>containerId</c> 69 处、<c>getContainerElement</c> 8 处）。
+    /// ② 另吃 <c>type:"frame"</c>／<c>"magicframe"</c> 的 <c>name</c>：那颗名字是用户在画框上打的字，
+    /// 而引擎自己把它当<b>元素数据</b>序列化（同一颗 bundle：<c>case"magicframe":case"frame":
+    /// return ia(A,{name:A.name??null})</c>，offset 2543038）——⛔ 进这一串＝"给画框起了名字的那块板查不到"。
+    /// ③ 被 <c>isDeleted:true</c> 标掉的一律不进，与 <see cref="CountWritableElements"/>／
+    /// <see cref="CountHiddenEmbeddables"/> 同口径（画布上看不见的字⛔ 配说成"这块板讲了什么"）。</para>
+    /// <para><b>⛔ 吃的那些</b>：形状／箭头本身没有文字属性；<c>link</c> 是 URL 而⛔ 正文（要搜链接归链接那一族）；
+    /// <c>appState</c> 里 <c>viewBackgroundColor</c> 那类是画布设置⛔ 用户写的字。</para>
+    /// <para>超 <see cref="SceneTextDigestMaxChars"/> 就地截断，⛔ 补省略号（那三个字符会进索引，
+    /// 而这一列从来⛔ 直接上屏——卡片上说的是 <see cref="StarMark.Abstractions.ItemCardPolicy.TruncatedTitle"/>）。</para>
+    /// </summary>
+    public static string? SceneTextDigest(byte[]? utf8Json)
+    {
+        if (utf8Json is not { Length: > 0 }) return null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(utf8Json);
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+            if (!doc.RootElement.TryGetProperty("elements", out var e)) return null;
+            if (e.ValueKind != System.Text.Json.JsonValueKind.Array) return null;
+            var sb = new System.Text.StringBuilder();
+            foreach (var el in e.EnumerateArray())
+            {
+                if (el.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                if (el.TryGetProperty("isDeleted", out var d) && d.ValueKind == System.Text.Json.JsonValueKind.True)
+                    continue;
+                if (!el.TryGetProperty("type", out var t) || t.ValueKind != System.Text.Json.JsonValueKind.String)
+                    continue;
+                var text = t.GetString() switch
+                {
+                    "text" => ReadTrimmedString(el, "originalText") ?? ReadTrimmedString(el, "text"),
+                    "frame" or "magicframe" => ReadTrimmedString(el, "name"),
+                    _ => null,
+                };
+                if (text is null) continue;
+                if (sb.Length > 0) sb.Append(' ');
+                sb.Append(text);
+                if (sb.Length >= SceneTextDigestMaxChars) break;   // 一颗元素就能越过上限：越过就收手，⛔ 再解后面的
+            }
+            return sb.Length > SceneTextDigestMaxChars ? sb.ToString(0, SceneTextDigestMaxChars) : sb.ToString();
+        }
+        catch (Exception) { return null; }   // 半截档／坏编码：读不懂，交 null（⛔ 当"没字"）
+    }
+
+    /// <summary>那颗键上的字符串（缺键／⛔ 是串／全空白都交 null——空白进索引只会撑大那一列而一句也搜不到）。</summary>
+    private static string? ReadTrimmedString(System.Text.Json.JsonElement el, string name)
+    {
+        if (!el.TryGetProperty(name, out var v) || v.ValueKind != System.Text.Json.JsonValueKind.String) return null;
+        var s = v.GetString();
+        return string.IsNullOrWhiteSpace(s) ? null : s!.Trim();
+    }
+
+    /// <summary>
+    /// 「点开这一行」对一块板意味着什么＝<b>把那块板请回画布</b>（而⛔ 把那颗 <c>.excalidraw</c>
+    /// 丢给系统关联程序——那一路今天交出去的是记事本里一屏 JSON，用户要的是那块板）。
+    /// <para>与 <c>ClipboardPolicy.OpensAsCopy</c> 同一族：「类型决定打开这一行的走法」这件事⛔ 由调用方
+    /// 各判一遍，那里是这颗判据的正件（片146＝集成矩阵那一行的第二条腿）。</para>
+    /// </summary>
+    public static bool OpensAsScene(StarMark.Abstractions.ItemType type)
+        => type == StarMark.Abstractions.ItemType.Board;
+
+    /// <summary>
+    /// 引擎那颗 <c>theme</c> prop 认的两个字面值（<b>只认这颗方法交回的这两串</b>）。
+    /// <para>参数是 <b>bool</b> 而⛔ <c>ElementTheme</c>：本档⛔ 认框架那颗 enum（档头②那条口径，
+    /// 与它⛔ 认 WebView2 那颗同一副规矩）。"偏好到底落成浅还是深"那一问有现成的主人
+    /// （<c>ThemeManager.ResolveEffectiveTheme</c>，含"Default 跟随系统"那一档），UI 侧算完把结论递进来。</para>
+    /// </summary>
+    public static string EngineThemeName(bool isDark) => isDark ? "dark" : "light";
+
+    /// <summary>
+    /// 引擎那颗 <c>langCode</c> prop 认的代码（<b>全程序唯一一处「我们的语言 → 引擎语言」的映射</b>）。
+    /// <para>为什么⛔ 直接用 <c>AppLanguages.CodeOf</c> 那三串（<c>zh</c>／<c>en</c>／<c>ja</c>）：那颗引擎要的是
+    /// 它自己语言表里的键，而中文那颗是带地区的 <c>zh-CN</c>——§22.7 那臂真机量到的正是这一串
+    /// （递 <c>zh-CN</c> ⇒ 静态条上 35 颗标签里 34 颗变中文）。两颗代码不同源，混用＝画板⛔ 跟着界面语言。</para>
+    /// <para>⚠ <b>射程（三颗都是真机现读，不是猜）</b>：<c>zh-CN</c> 与 <c>en</c> 由片147 那趟真机腿读到
+    /// （画布上那句引擎自己的提示从「要移动画布…」换成 "To move canvas…"）；<c>ja</c> <b>量过并且被读数否掉</b>——
+    /// 递 <c>ja</c> 之后引擎那一句仍是英文，而那颗 bundle 里的语言表用的键是 <c>ja-JP</c>
+    /// （同一颗表里 <c>zh-CN</c>／<c>ja-JP</c> 成对）。⇒ 认不出的代码会<b>静默退回默认语言</b>：
+    /// 那一族坏法没有红、没有痕，只有"看着像没翻译"，所以这颗映射⛔ 许照抄 <c>AppLanguages.CodeOf</c>。</para>
+    /// <para>新增一格而这里没配＝抛（与 <c>AppLanguages.CodeOf</c> 同一副规矩：那一族"漏补臂"的坏
+    /// 在界面上看起来只是"没翻译"，最难发现）。</para>
+    /// </summary>
+    public static string EngineLangCode(StarMark.Abstractions.I18n.AppLanguage language)
+        => language switch
+        {
+            StarMark.Abstractions.I18n.AppLanguage.Chinese => "zh-CN",
+            StarMark.Abstractions.I18n.AppLanguage.English => "en",
+            StarMark.Abstractions.I18n.AppLanguage.Japanese => "ja-JP",
+            _ => throw new ArgumentOutOfRangeException(nameof(language), language,
+                "新增一格语言而引擎那颗映射没配，就该红在这里"),
+        };
 
     private static string Require(string id)
     {

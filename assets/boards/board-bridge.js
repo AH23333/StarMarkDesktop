@@ -2,7 +2,7 @@
    名单的唯一主人＝Core 的 BridgeProtocol；本档每颗名字逐字照抄，闸门测试逐颗对账。
    名单在册八颗，页面今天真喊四颗（postIn 逐颗一处＝bridge.ready／board.loaded／export.bytes／open.external）
    ＋send 那颗 bridge.reply；另三颗（paste.query／pin.request／background.request）名字过了门而回路还没接＝
-   证人逐颗钉 0。六颗出（case 逐颗一处）——多写的名字闸门会红，少写的也会。
+   证人逐颗钉 0。七颗出（case 逐颗一处）——多写的名字闸门会红，少写的也会。
    ⚠ 那颗 AUTOSAVE_MS 与 Core 的 BoardPolicy.AutosaveIdleMs 是同一个数的两颗持有者（跨语言）：
    等值由 BoardSceneStoreGateTests 现读对账，改一颗不动另一颗＝那一格红。 */
 (function () {
@@ -133,6 +133,64 @@
       postIn("board.loaded", { elements: writable, canvas: onCanvas });
     }).catch(function () { /* 载入失败＝档留在宿主，重开窗再来（§坑10 那条由宿主侧管）；⛔ 开闸 */ });
   }
+  /* 宿主放上那块板的一张图（深析 §四 那三格共用的唯一注入出口＝image.insert）。
+     ⚠ 那颗 files 的<b>值里必须带 id</b>：引擎那句 addMissingFiles 逐条按 s.id 记账，而这里递的是"只取值"那一族，
+     值里没 id 就记到 undefined 那颗键下，元素按 fileId 永远查不到＝屏幕上只剩一块灰色占位框，
+     而且宿主那一趟 autosave 写回时那颗 file 因为"没人引用"被整颗跳掉（图连本体一起没了）。
+     2026-10-30 两发真机读数把这两副脸分开量清了，正本 bin/WI99/p148_image_route_readings.txt，账本 P-274。 */
+  var insertSeq = 0;
+  var INDEX_DIGITS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+  /* 引擎那套位序是"同前缀比尾数"的字符串序，所以往<b>最大那颗</b>后面接一颗有两条路：
+     尾数没到顶＝把最后一颗进一；尾数已到顶＝添一颗最小的（前缀关系本身就严格更大）。
+     认不出来的字符⛔ 猜——交回空串，调用方那一发就不做（做了＝一颗排不进队的元素）。 */
+  function nextIndexAfter(highest) {
+    if (!highest) return "a0";
+    var pos = INDEX_DIGITS.indexOf(highest.charAt(highest.length - 1));
+    if (pos < 0) return "";
+    if (pos < INDEX_DIGITS.length - 1)
+      return highest.slice(0, highest.length - 1) + INDEX_DIGITS.charAt(pos + 1);
+    return highest + INDEX_DIGITS.charAt(0);
+  }
+
+  function applyImageInsert(a) {
+    if (!API || !a) return;
+    var mime = String(a.mimeType || "");
+    var data = String(a.dataUrl || "");
+    var w = Math.round(Number(a.width));
+    var h = Math.round(Number(a.height));
+    if (!data || !(w > 0) || !(h > 0)) return;      // 形状不对＝这一发⛔ 做（宿主那侧已经按名单拒过一遍了）
+    var els = API.getSceneElements();
+    var highest = "";
+    for (var i = 0; i < els.length; i++) if (els[i].index > highest) highest = els[i].index;
+    var index = nextIndexAfter(highest);
+    if (!index) return;
+    var now = Date.now();
+    insertSeq += 1;
+    var fid = "host-" + now.toString(36) + "-" + insertSeq.toString(36);
+    API.addFiles([{ id: fid, mimeType: mime, dataURL: data, created: now, lastAccessed: now }]);
+    var st = API.getAppState();
+    var zoom = (st.zoom && st.zoom.value) || 1;
+    // 摆在这一眼的正中：屏幕坐标＝(场景坐标＋scrollX)×zoom，反解就是下面那两行。
+    var x = window.innerWidth / 2 / zoom - (st.scrollX || 0) - w / 2;
+    var y = window.innerHeight / 2 / zoom - (st.scrollY || 0) - h / 2;
+    API.updateScene({
+      elements: els.concat([{
+        id: fid + "-el", type: "image", x: x, y: y, width: w, height: h, angle: 0,
+        strokeColor: "transparent", backgroundColor: "transparent", fillStyle: "solid",
+        strokeWidth: 2, strokeStyle: "solid", roughness: 0, opacity: 100,
+        groupIds: [], frameId: null, index: index, roundness: null,
+        seed: Math.floor(Math.random() * 2147483647), version: 1,
+        versionNonce: Math.floor(Math.random() * 2147483647), isDeleted: false,
+        boundElements: null, updated: now, link: null, locked: false,
+        status: "saved", fileId: fid, scale: [1, 1], crop: null
+      }]),
+      // 这一发是<b>用户点出来的一次编辑</b>，要进撤销栈（⛔ ALWAYS 换成 NEVER：那张图撤不掉）。
+      captureUpdate: L.CaptureUpdateAction.ALWAYS
+    });
+    scheduleSave();
+  }
+
   function applyProp(rerender) {
     if (!API) return;
     rerender();
@@ -160,6 +218,9 @@
         break;
       case "autosave.arm":
         hostArmed = true;
+        break;
+      case "image.insert":
+        applyImageInsert(m.args);
         break;
       default:
         break;

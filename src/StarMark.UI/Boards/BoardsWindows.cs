@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using StarMark.Core.Boards;
 
 namespace StarMark.UI.Boards;
 
@@ -33,6 +34,79 @@ public static class BoardsWindows
     public static int OpenCount
     {
         get { lock (_open) return _open.Count; }
+    }
+
+    /// <summary>
+    /// 起一扇画板窗——<b>起窗那几处的唯一主人</b>（托盘那两颗「续上一块／新起一块」／片146 从收藏系统
+    /// 点开一块板那一路）。
+    /// <para><paramref name="sceneId"/> 交 null＝新起一块。两档挤在同一颗方法里是<b>事实</b>而⛔ 巧合：
+    /// 「续上一块」读盘上最近动过的那颗档，读不到就是 null，用户手上的表现本来同一副（一块空板）。</para>
+    /// <para>这一颗⛔ 兜异常、也⛔ 配一句上屏话：坏消息由各自入口按各自的出口说（托盘那张通知卡／
+    /// 卡片那条"打不开这一行"的回报）。把句子收进这里＝名册档成了第二主人。</para>
+    /// </summary>
+    public static async Task OpenSceneAsync(string? sceneId)
+    {
+        var win = new BoardWindow();
+        if (sceneId is null) await win.OpenNewAsync();
+        else await win.OpenSceneAsync(sceneId);
+        win.Activate();
+    }
+
+    /// <summary>
+    /// 把一张图放上<b>某一块板</b>——深析 §四 那两格（截图冻帧／剪贴板历史图）共用的唯一入口。
+    /// <para><b>挑哪一块</b>：名册里有桥已经通着的那扇就用它（图落在用户眼前那块板上）；一块也没有就
+    /// <b>新起一块</b>——那正是这两格的用法（"把这张图拿去标"）。⛔ 回一句"请先自己开一块画板"：
+    /// 把程序该做的那一步支使给用户，本仓一贯算缺陷。</para>
+    /// <para>新起那一扇要等页面诞生，等的是 <see cref="BoardPolicy.ExportAnswerBudgetMs"/> 那颗预算——
+    /// 问的是同一件事（桥那侧多久该回话），⛔ 在这里另配一颗新数。<b>逐拍再问</b>而⛔ 一次快照定终身：
+    /// 那扇窗是它自己构造时登记进名册的，起窗与登记之间隔着一次异步。</para>
+    /// <para>交回的是<b>那一问的名字</b>（<see cref="BridgeProtocol.Insert"/>）：⛔ 到点没通／形状不对／装不下
+    /// 三副脸在屏幕上要说的话不同，折成一颗 bool 就是把"这张太大"与"画板压根没起来"念成同一句。
+    /// 那句坏话由<b>调用方</b>按各自的出口说，这一颗只报事实（与 <see cref="OpenSceneAsync"/> 同一副规矩）。</para>
+    /// </summary>
+    public static async Task<BridgeProtocol.Insert> SendImageAsync(
+        byte[] imageBytes, string mimeType, int width, int height)
+    {
+        BoardWindow? PickReady()
+        {
+            lock (_open)
+            {
+                for (var i = _open.Count - 1; i >= 0; i--)
+                    if (_open[i].BridgeReady) return _open[i];
+            }
+            return null;
+        }
+
+        if (PickReady() is { } existing) return existing.TryInsertImage(imageBytes, mimeType, width, height);
+
+        await OpenSceneAsync(null);
+        var deadline = System.Environment.TickCount64 + BoardPolicy.ExportAnswerBudgetMs;
+        while (System.Environment.TickCount64 < deadline)
+        {
+            await Task.Delay(100);
+            if (PickReady() is { } fresh) return fresh.TryInsertImage(imageBytes, mimeType, width, height);
+        }
+        StarMark.Abstractions.StarLog.Warn(
+            "boards.insert.no-window ms=" + BoardPolicy.ExportAnswerBudgetMs);
+        return BridgeProtocol.Insert.NoBridge;
+    }
+
+    /// <summary>
+    /// 换主题那一刻把<b>每一扇</b>开着的画板窗推一次（片147＝矩阵「设置同步」那一格）。
+    /// <para>为什么必须由主窗那一拍叫进来：画板是独立窗，<b>⛔ 继承主窗主题</b>——
+    /// 与 <c>CenteredDialog.ApplyThemeToOpenDialogs</c> 完全同一副理由、同一副规矩（名册在这儿，
+    /// 所以退出那一拍问得到，主题那一拍也叫得到）。</para>
+    /// <para>逐扇⛔ 抛：一扇桥没通⛔ 配带走其余几扇的重贴（那颗 <c>ReapplyAppearance</c> 自己会先看闸门）。</para>
+    /// </summary>
+    public static void ReapplyAppearance()
+    {
+        BoardWindow[] windows;
+        lock (_open) windows = _open.ToArray();
+        foreach (var w in windows)
+        {
+            try { w.ReapplyAppearance(); }
+            catch (Exception ex) { StarMark.Abstractions.StarLog.Warn("boards.appearance.failed " + ex.GetType().Name); }
+        }
     }
 
     /// <summary>

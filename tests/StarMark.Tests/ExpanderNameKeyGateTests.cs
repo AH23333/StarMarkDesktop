@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Xml.Linq;
 using Xunit;
 using static StarMark.Tests.SourceGate;
 
@@ -23,6 +24,8 @@ public sealed class ExpanderNameKeyGateTests
     private const string HotkeysCs = "src/StarMark.UI/Views/SettingsPage.Hotkeys.cs";
     private const string WidgetsCs = "src/StarMark.UI/Views/SettingsPage.Widgets.cs";
     private const string HelperCs = "src/StarMark.UI/Helpers/ExpanderTitleName.cs";
+    private const string SettingsXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
+    private const string LocTextCs = "src/StarMark.UI/Helpers/LocText.cs";
 
     /// <summary>
     /// 热键页那颗分类 Expander：标题与可访问名<b>同出一颗键的取法</b>，且两处都在同一个方法体里。
@@ -71,5 +74,46 @@ public sealed class ExpanderNameKeyGateTests
         }
         Assert.Equal(1, pastes);
         Assert.Equal(2, hosts);
+    }
+
+    /// <summary>
+    /// 设置页那颗「这一版的更新说明」（✅P-269・片145 真机读数结案・只留形状守卫）。
+    /// <para>
+    /// 立案那一问是<b>落点</b>：<c>LocText.Key</c> 走 <c>ResolveTextProperty</c> 的
+    /// <c>Text→Content→Header→…</c> 次序，而 <c>Expander</c> 同有 Content（正文容器）与 Header。
+    /// 沙盒读数（<c>STARMARK_FAKE_NOTES</c> 那颗临时门摆出那一格，量完已逐字节撤净）：
+    /// ①抬头念得出也<b>看得见</b>那句——UIA 里是 <c>按钮 这一版的更新说明 ID: UpdateNotesExpander</c>
+    /// ＋子节点 <c>文本 这一版的更新说明</c>；②展开后正文是<b>说明全文</b>（<c>窗格 FAKE-BODY-7741…</c>），
+    /// 没被抬头那句顶掉；③换语言那一刻重贴<b>只换抬头</b>（→<c>What's in this release</c>），
+    /// 正文一字未动。⇒ 三问都是"本来就对"，这一颗就地结案，下面钉的是让它可以不对的那三处形状。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void TheReleaseNotesExpanderPutsTheSentenceInTheHeaderAndKeepsTheBodyApart()
+    {
+        XNamespace ui = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace i18n = "using:StarMark.UI.Helpers";
+        const string notesKey = "settings.general.releaseNotes";
+
+        var page = XDocument.Parse(ReadRepoFile(SettingsXaml));
+        var expander = Assert.Single(page.Descendants(ui + "Expander"),
+            e => (string?)e.Attribute(x + "Name") == "UpdateNotesExpander");
+        // 屏幕上那行字与辅助技术里那个名字共用同一颗键（⛔ 第二份文案）。
+        Assert.Equal(notesKey, (string?)expander.Attribute(i18n + "LocText.Key"));
+        Assert.Equal(notesKey, (string?)expander.Attribute(i18n + "LocText.NameKey"));
+        // 抬头⛔ 另写死一份：那句字只由那颗键贴上去（写了死字，换语言就只剩那一半是活的）。
+        Assert.Empty(expander.Elements(ui + "Expander.Header"));
+
+        // 正文只有一个主人：Content 里那颗 TextBlock 绑的就是 ViewModel.ReleaseNotesText。
+        var body = Assert.Single(expander.Descendants(ui + "TextBlock"));
+        Assert.Contains("ViewModel.ReleaseNotesText", (string?)body.Attribute("Text") ?? string.Empty,
+            StringComparison.Ordinal);
+        Assert.Contains("Mode=OneWay", (string?)body.Attribute("Text") ?? string.Empty, StringComparison.Ordinal);
+
+        // 让上面两行成立的那条规矩：有 Header 的元素⛔ 碰 Content。摘掉它，正文容器就会被抬头那句吃掉。
+        var locText = Code(ReadRepoFile(LocTextCs));
+        Assert.Contains("""if (name == "Content" && hasHeader) continue;""", locText, StringComparison.Ordinal);
+        Assert.Contains("var hasHeader = FindProperty(target, \"Header\") is not null;", locText, StringComparison.Ordinal);
     }
 }

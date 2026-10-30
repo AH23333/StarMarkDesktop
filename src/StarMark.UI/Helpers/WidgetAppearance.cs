@@ -266,14 +266,20 @@ public static class WidgetAppearance
     /// 主窗口的表面画笔。未开启材质（实色 None）时铺主题实色；开启后与组件走同一套表面色兜底
     /// （正常路径下 RootGrid 会被置透明让整窗背衬透出，见 MainWindow.RefreshAppearance）。
     /// <paramref name="opacityOverride"/> = 主窗口自己的不透明度（独立于组件）。
+    /// <paramref name="tintOverride"/> = 主题色染料（片144）：实色那一腿也铺染料，与组件 SurfaceBrush(None+tint) 同源。
     /// </summary>
-    public static Brush MainWindowSurfaceBrush(ElementTheme theme, WidgetBackdropKind kind, bool translucent, double? opacityOverride = null)
+    public static Brush MainWindowSurfaceBrush(ElementTheme theme, WidgetBackdropKind kind, bool translucent, double? opacityOverride = null, Windows.UI.Color? tintOverride = null)
     {
         if (!translucent)
+        {
+            // 染料在：实色那一腿也铺染料（片144），路由 SurfaceBrush（None+tint ⇒ 染料原色全 alpha），与组件同源。
+            if (tintOverride is { } tint)
+                return SurfaceBrush(theme, WidgetBackdropKind.None, 1.0, tint);
             return ThemeBrush.For(theme, "ApplicationPageBackgroundThemeBrush")
                    ?? SurfaceBrush(theme, WidgetBackdropKind.None, 1.0);
+        }
 
-        return SurfaceBrush(theme, kind, opacityOverride);
+        return SurfaceBrush(theme, kind, opacityOverride, tintOverride);
     }
 
     /// <summary>解析 #RRGGBB / #AARRGGBB 为实色画笔；格式非法或空返回 null（调用方据此回退主题）。</summary>

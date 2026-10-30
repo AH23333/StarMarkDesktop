@@ -20,7 +20,7 @@ public sealed class BoardBridgeProtocolTests
     // ────────── ① 两份名单自己先要闭合 ──────────
 
     /// <summary>
-    /// 八颗进、六颗出，且<b>每颗在册的名字都有一份字段表、每份字段表都对应一颗在册的名字</b>。
+    /// 八颗进、七颗出，且<b>每颗在册的名字都有一份字段表、每份字段表都对应一颗在册的名字</b>。
     /// <para>双向对账的原因：只查"名单里有 6 颗"会放过"新增一颗命令却忘了给字段表"——
     /// 那种消息在 <see cref="BridgeProtocol.Check"/> 里会当场 <c>KeyNotFoundException</c>，
     /// 而抛出去到 UI 侧就是"点了没反应"（本仓定性过的坏）。</para>
@@ -36,7 +36,7 @@ public sealed class BoardBridgeProtocolTests
              "bridge.reply"],
             BridgeProtocol.InboundCommands);
         Assert.Equal(
-            ["board.load", "theme.set", "lang.set", "feature.flags", "export.pick", "autosave.arm"],
+            ["board.load", "theme.set", "lang.set", "feature.flags", "export.pick", "autosave.arm", "image.insert"],
             BridgeProtocol.OutboundEvents);
 
         Assert.Equal(BridgeProtocol.InboundCommands.Length, BridgeProtocol.InboundFields.Count);
@@ -251,6 +251,19 @@ public sealed class BoardBridgeProtocolTests
             BridgeProtocol.Direction.Outbound).Allowed);
         Assert.Equal(BridgeProtocol.Fault.UnexpectedField,
             BridgeProtocol.Check(BridgeProtocol.Version, "autosave.arm", new[] { "id" },
+                BridgeProtocol.Direction.Outbound).Reason);
+
+        // image.insert（片148＝图进画板那一发）：四颗键全是必带——少一颗（有图没尺寸）现场就是
+        // "点了「放到画板上」、画布上什么都没多"；多一颗没列的键照旧整条拒（硬线②）。
+        Assert.Equal(BridgeProtocol.Fault.MissingField,
+            BridgeProtocol.Check(BridgeProtocol.Version, "image.insert",
+                new[] { "dataUrl", "mimeType", "width" }, BridgeProtocol.Direction.Outbound).Reason);
+        Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, "image.insert",
+            new[] { "dataUrl", "mimeType", "width", "height" },
+            BridgeProtocol.Direction.Outbound).Allowed);
+        Assert.Equal(BridgeProtocol.Fault.UnexpectedField,
+            BridgeProtocol.Check(BridgeProtocol.Version, "image.insert",
+                new[] { "dataUrl", "mimeType", "width", "height", "token" },
                 BridgeProtocol.Direction.Outbound).Reason);
     }
 

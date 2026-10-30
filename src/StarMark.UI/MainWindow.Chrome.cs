@@ -46,18 +46,21 @@ public sealed partial class MainWindow
         SizeChanged += (_, _) => ApplyDragRects();
     }
 
-    /// <summary>
-    /// 系统标题栏按钮（最小化 / 窗口化 / 关闭）的悬停与按下高亮。
-    /// 之前三个按钮的 Hover/Pressed 背景被写死为 <see cref="Colors.Transparent"/>，导致悬停无反馈；
-    /// 这里按当前主题给出低透明度中性色（浅色压暗、深色提亮），让悬停/按下有可见高亮，对齐 WinUI 原生标题栏。
-    /// 主题切换时调用，保证深浅色下都正确。
-    /// </summary>
+    /// <summary>系统标题栏按钮的字色与交互高亮跟随主窗口的有效主题。</summary>
     private void ApplyTitleBarButtonColors()
     {
         try
         {
             var titleBar = AppWindow.TitleBar;
-            var isDark = TargetTheme(_themePref) == ElementTheme.Dark;
+            var theme = RootGrid.RequestedTheme;
+            if (theme == ElementTheme.Default) theme = RootGrid.ActualTheme;
+            if (theme == ElementTheme.Default) theme = TargetTheme(_themePref);
+            var isDark = theme == ElementTheme.Dark;
+            var foreground = isDark ? Colors.White : Colors.Black;
+            titleBar.ButtonForegroundColor = foreground;
+            titleBar.ButtonHoverForegroundColor = foreground;
+            titleBar.ButtonPressedForegroundColor = foreground;
+            titleBar.ButtonInactiveForegroundColor = Windows.UI.Color.FromArgb(0x99, foreground.R, foreground.G, foreground.B);
             titleBar.ButtonHoverBackgroundColor = isDark
                 ? Windows.UI.Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)   // 深色：约 20% 白
                 : Windows.UI.Color.FromArgb(0x1F, 0x00, 0x00, 0x00);   // 浅色：约 12% 黑

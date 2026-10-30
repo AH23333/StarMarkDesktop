@@ -68,11 +68,15 @@ public sealed class BoardSceneStoreGateTests
     [Fact]
     public void TheStoreNeverInventsItsOwnFileNames()
     {
-        Assert.Contains("BoardPolicy.SceneFileName(sceneId)", Store, StringComparison.Ordinal);
+        // 片146：那颗"档在哪"整颗交 Core（<c>BoardPolicy.ScenePath</c>＝落点＋档名同一位主人），本档只转发
+        Assert.Contains("PathOf(string sceneId) => BoardPolicy.ScenePath(sceneId)", Store, StringComparison.Ordinal);
+        Assert.Contains("ScenePath(string id) => System.IO.Path.Combine(ScenesFolder(), SceneFileName(id))",
+            SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.Core/Boards/BoardPolicy.cs")), StringComparison.Ordinal);
         Assert.Contains("BoardPolicy.BackupFileName(sceneId)", Store, StringComparison.Ordinal);
         Assert.DoesNotContain("\".excalidraw\"", Store, StringComparison.Ordinal);
         Assert.DoesNotContain("\".bak\"", Store, StringComparison.Ordinal);
-        // 那颗 .tmp 的尾名只许有一颗主人：一颗声明＋一处拼名字（⛔ 数"出现了几次"——那颗数把注释也算进去了）
+        Assert.DoesNotContain("\".tmp\"", Store, StringComparison.Ordinal);   // 那颗尾名的主人也在 Core（备份还原要用同一族）
+        // 那颗 .tmp 的尾名只许有一颗主人：一颗转发＋一处拼名字（⛔ 数"出现了几次"——那颗数把注释也算进去了）
         Assert.Equal(1, Count(Store, "public const string TempSuffix"));
         Assert.Equal(1, Count(Store, "main + TempSuffix"));
     }
@@ -242,7 +246,12 @@ public sealed class BoardSceneStoreGateTests
         // 片24：那一次索取现在<b>点名是哪一拍</b>（Core 判这一拍问得到问不到，UI 侧⛔ 自己猜）
         Assert.Contains("WindowActivationState.Deactivated) RequestSceneSnapshot(BoardPolicy.SaveBeat.LosingFocus);",
             WindowCs, StringComparison.Ordinal);
-        Assert.Contains("await win.OpenSceneAsync(last)", Tray, StringComparison.Ordinal);
+        // 片146 起「建一扇→载那颗档→摆到前台」搬进唯一主人 <c>BoardsWindows.OpenSceneAsync</c>
+        // （第二处调用点＝从收藏系统点开一块板；两处各写一遍＝改一处漏一处）。
+        // 那颗"载哪一块板"照旧要点名，只是点的档换了。
+        Assert.Contains("BoardsWindows.OpenSceneAsync(", Tray, StringComparison.Ordinal);
+        Assert.Contains("await win.OpenSceneAsync(sceneId)",
+            SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.UI/Boards/BoardsWindows.cs")), StringComparison.Ordinal);
     }
 
     /// <summary>⑨ 托盘那一族：画板的两颗入口共用一位开关（关掉＝两颗一起没，⛔ 留一颗"点得出却没有板可开"）。</summary>
@@ -349,7 +358,11 @@ public sealed class BoardSceneStoreGateTests
     [Fact]
     public void TheBoardRootComesFromTheOneOwnerOfTheUserDataDirectory()
     {
-        Assert.Contains("UserDataPaths.Subdirectory(\"boards\")", Store, StringComparison.Ordinal);
+        // 片146：那颗<b>成品落点</b>整颗搬进 Core 的 BoardPolicy.ScenesFolder——备份链（Core）要与写入（UI）
+        // 问同一棵树，而 Core 够不到本档。改的是"住哪一档"，⛔ 是"谁定规则"：根照旧只归 UserDataPaths 一位主人。
+        Assert.Contains("Folder => BoardPolicy.ScenesFolder()", Store, StringComparison.Ordinal);
+        Assert.Contains("ScenesFolder() => StarMark.Abstractions.UserDataPaths.Subdirectory(BoardsDirectoryName)",
+            SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.Core/Boards/BoardPolicy.cs")), StringComparison.Ordinal);
         // 片39（P-219 落地腿）：产物那颗目录的「进哪一族」搬到 Core 裁，窗口只交两棵现成的根。
         // 旧形状（板目录下面切 exports）⛔ 许回来——它把用户的产物埋进漫游数据目录，正是本条登记的那颗坏。
         Assert.Contains("BoardPolicy.ExportsFolder(", WindowCs, StringComparison.Ordinal);
@@ -360,7 +373,8 @@ public sealed class BoardSceneStoreGateTests
         var core = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.Core/Boards/BoardPolicy.cs"));
         Assert.Equal(0, Count(core, "GetFolderPath"));
         Assert.Equal(0, Count(core, "SpecialFolder"));
-        Assert.Equal(1, Count(SourceGate.Code(Store), "\"boards\""));      // 那颗子目录名只许出现一次
+        Assert.Equal(0, Count(SourceGate.Code(Store), "\"boards\""));      // 那颗子目录名在本档一次也不许出现（主人是 Core）
+        Assert.Equal(1, Count(core, "\"boards\""));                        // 全仓只许那一颗声明
         Assert.DoesNotContain("GetFolderPath", SourceGate.Code(Store), StringComparison.Ordinal);
         // 窗口只许在板目录下面再切一刀：它一旦自己写 "boards"，那位主人就变两颗（改名时只改得动一处）
         Assert.DoesNotContain("\"boards\"", SourceGate.Code(WindowCs), StringComparison.Ordinal);

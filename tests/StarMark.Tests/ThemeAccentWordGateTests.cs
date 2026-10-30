@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using StarMark.Abstractions;
 using StarMark.Abstractions.I18n;
 using StarMark.Core.Appearance;
@@ -34,6 +35,9 @@ public sealed class ThemeAccentWordGateTests : IDisposable
     private const string ThemeBrushCs = "src/StarMark.UI/Helpers/ThemeBrush.cs";
     private const string WidgetAppearanceCs = "src/StarMark.UI/Helpers/WidgetAppearance.cs";
     private const string WidgetWindow = "src/StarMark.UI/Views/WidgetWindow.Appearance.cs";
+    private const string MainWindowThemeCs = "src/StarMark.UI/MainWindow.Theme.cs";
+    private const string Editor = "src/StarMark.UI/Views/WidgetAppearanceEditor.cs";
+    private const string PageCs = "src/StarMark.UI/Views/SettingsPage.xaml.cs";
     private const string ThemeXaml = "src/StarMark.UI/Themes/StarMarkTheme.xaml";
 
     private readonly AppLanguage _before = Locale.Current;
@@ -135,62 +139,90 @@ public sealed class ThemeAccentWordGateTests : IDisposable
         Assert.Contains("backdropOwnsSurface", code, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// ⑤ 那颗自定义色<b>只有一个写的人</b>（落盘那一刻），读者只有两处（背衬染料 + 强调画笔）。
-    /// <para>⛔ 让读者每次去读 settings.json：材质套用是启动头号嫌疑，画笔解析里加一次整档反序列化
-    /// 就是给首屏加钱（性能纪律）。</para>
-    /// </summary>
+    /// <summary>自定义色在启动与保存时更新缓存，只有组件与主窗背景读取它，画笔解析不读设置。</summary>
     [Fact]
-    public void TheCustomAccentHasOneWriterAndTwoReaders()
+    public void TheCustomAccentHasTwoApplySitesAndOnlyBackgroundReaders()
     {
         Assert.Equal(2, ReadRepoUnder("src").Sum(f => Count(Code(f.Text), "ThemeAccent.Apply(")));
         Assert.Contains("Helpers.ThemeAccent.Apply(fileSettings.LoadThemeAccent());", Code(ReadRepoFile(App)),
-            StringComparison.Ordinal);                              // 首个窗口之前
+            StringComparison.Ordinal);
         Assert.Contains("ThemeAccent.Apply(accentText);", Code(ReadRepoFile(ViewModel)), StringComparison.Ordinal);
 
-        Assert.Equal(1, Count(Code(ReadRepoFile(WidgetAppearanceCs)), "AppPalette.ResolveAccent("));
-        Assert.Equal(1, Count(Code(ReadRepoFile(ThemeBrushCs)), "ThemeAccent.Custom"));
+        var appearance = Code(ReadRepoFile(WidgetAppearanceCs));
+        Assert.Equal(1, Count(appearance, "AppPalette.ResolveAccent("));
+        Assert.Contains("AppPalette.ResolveAccent(ThemeAccent.Custom, Windows.UI.Color.FromArgb(c.A, c.R, c.G, c.B))", appearance, StringComparison.Ordinal);
+        Assert.Contains("ThemeAccent.Custom ?? MaterialTint.FallbackAccent", appearance, StringComparison.Ordinal);
+        Assert.DoesNotContain("ThemeAccent.Custom", Code(ReadRepoFile(ThemeBrushCs)), StringComparison.Ordinal);
+        Assert.Equal(1, Count(Code(ReadRepoFile(MainWindowThemeCs)), "ThemeAccent.Custom"));
+        Assert.Equal(new[] { WidgetAppearanceCs, MainWindowThemeCs }, ReadRepoUnder("src")
+            .Where(f => Code(f.Text).Contains("ThemeAccent.Custom", StringComparison.Ordinal))
+            .Select(f => f.RelativePath).OrderBy(p => p, StringComparer.Ordinal).ToArray());
         Assert.Contains("AppPalette.ParseArgb(hexFromSettings)", Code(ReadRepoFile(ThemeAccentCs)), StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// ⑥ 强调色那一族画笔的<b>覆盖点只有一处</b>：XAML 里那两颗写死的蓝（浅／深各一行）仍是
-    /// "随系统"那一档的出处，代码侧那颗覆盖只认那三颗键，且淡底的浓淡只换 alpha（那颗判据住在 Core）。
-    /// </summary>
+    /// <summary>按钮与选项画笔只查主题字典，不再从自定义背景色派生或覆盖。</summary>
     [Fact]
-    public void TheAccentBrushFamilyIsOverriddenFromOnePlace()
+    public void TheAccentBrushFamilyComesOnlyFromThemeDictionaries()
     {
         var brush = Code(ReadRepoFile(ThemeBrushCs));
-        var block = Between(brush, "AccentKeys =", "}");
-        foreach (var key in new[] { "AppAccentBrush", "AppAccentSoftBrush", "WidgetDropHintBrush" })
+        foreach (var forbidden in new[] { "ThemeAccent", "AccentKeys", "AccentDerived", "AppPalette.", "AccentResourceSync", "new SolidColorBrush", "LoadThemeAccent" })
+            Assert.DoesNotContain(forbidden, brush, StringComparison.Ordinal);
+        Assert.DoesNotContain("FromArgb(0x1A", brush, StringComparison.Ordinal);
+
+        var forTheme = MethodBody(brush, "public static Brush? For(ElementTheme theme, string key)");
+        Assert.Contains("theme == ElementTheme.Dark", forTheme, StringComparison.Ordinal);
+        Assert.Contains("theme == ElementTheme.Default && ThemeManager.IsSystemDark()", forTheme, StringComparison.Ordinal);
+        Assert.Contains("return Resolve(dark, key);", forTheme, StringComparison.Ordinal);
+        Assert.Contains("LightKeys = { \"Light\" };", brush, StringComparison.Ordinal);
+        Assert.Contains("DarkKeys = { \"Dark\", \"Default\" };", brush, StringComparison.Ordinal);
+
+        var resolve = MethodBody(brush, "public static Brush? Resolve(bool dark, string key)");
+        Assert.Contains("var themeKeys = dark ? DarkKeys : LightKeys;", resolve, StringComparison.Ordinal);
+        Assert.Contains("var app = Application.Current.Resources;", resolve, StringComparison.Ordinal);
+        Assert.Contains("foreach(varthemeKeyinthemeKeys){if(FindInDict(app,themeKey,key,outvarbrush))returnbrush;" +
+            "foreach(varmdinapp.MergedDictionaries)if(FindInDict(md,themeKey,key,outbrush))returnbrush;}",
+            Regex.Replace(resolve, @"\s+", ""), StringComparison.Ordinal);
+        Assert.Contains("if (app.TryGetValue(key, out var fallback) && fallback is Brush fb) return fb;", resolve, StringComparison.Ordinal);
+        var find = MethodBody(brush, "private static bool FindInDict(");
+        Assert.Contains("dict.ThemeDictionaries.TryGetValue(themeKey, out var themeObj)", find, StringComparison.Ordinal);
+        Assert.Contains("themeObj is ResourceDictionary themeDict", find, StringComparison.Ordinal);
+        Assert.Contains("themeDict.TryGetValue(key, out var v)", find, StringComparison.Ordinal);
+        Assert.Contains("v is Brush b", find, StringComparison.Ordinal);
+        Assert.Contains("brush = b;", find, StringComparison.Ordinal);
+        Assert.Contains("foreach (var md in dict.MergedDictionaries)", find, StringComparison.Ordinal);
+        Assert.Contains("if (FindInDict(md, themeKey, key, out brush)) return true;", find, StringComparison.Ordinal);
+
+        var xaml = ReadRepoFile(ThemeXaml);
+        var light = Between(xaml, "<ResourceDictionary x:Key=\"Light\">", "</ResourceDictionary>");
+        var dark = Between(xaml, "<ResourceDictionary x:Key=\"Dark\">", "</ResourceDictionary>");
+        foreach (var (key, lightColor, darkColor) in new[]
         {
-            Assert.Contains("\"" + key + "\"", block, StringComparison.Ordinal);
-            Assert.Equal(2, Count(ReadRepoFile(ThemeXaml), "x:Key=\"" + key + "\""));   // Light＋Dark
-            // 覆盖满不满，问的是"还有谁绕开这颗门自己拿"：这三颗在 XAML 里只定义、没人按键取⇒ 只有代码这一条路。
-            Assert.Equal(0, Count(ReadRepoFile(ThemeXaml), "{ThemeResource " + key + "}"));
+            ("AppAccentBrush", "#0067C0", "#4CC2FF"),
+            ("AppAccentSoftBrush", "#1A0067C0", "#2E4CC2FF"),
+            ("WidgetDropHintBrush", "#330067C0", "#334CC2FF"),
+        })
+        {
+            Assert.Equal(2, Count(xaml, "x:Key=\"" + key + "\""));
+            Assert.Contains($"<SolidColorBrush x:Key=\"{key}\" Color=\"{lightColor}\"/>", light, StringComparison.Ordinal);
+            Assert.Contains($"<SolidColorBrush x:Key=\"{key}\" Color=\"{darkColor}\"/>", dark, StringComparison.Ordinal);
+            Assert.DoesNotContain("\"" + key + "\"", brush, StringComparison.Ordinal);
+            Assert.Equal(0, Count(xaml, "{ThemeResource " + key + "}"));
         }
-        Assert.Equal(1, Count(brush, "AccentKeys.Contains"));
-        Assert.Contains("AppPalette.Soft(", brush, StringComparison.Ordinal);
-        Assert.DoesNotContain("FromArgb(0x1A", brush);               // ⛔ 在画笔侧再写一份 alpha
-        // 第四颗是这颗门的<b>射程边界</b>，不是它的成就：那颗画笔住在 WinUI 自己的字典里，
-        // XAML 侧按 <c>{ThemeResource}</c> 直接取（实测三处＝ItemCard／StarMarkTheme／SettingsPage），
-        // 那条路不经过这里⇒ 自定义色今天管不到它们，控件内部那颗蓝同理（记在 P-213）。
-        // 这三处颗数钉在这里，是为了"半覆盖"这件事有一个会响的地方，⛔ 让注释把它说成已经全覆盖。
-        Assert.Contains("\"AccentFillColorDefaultBrush\"", block, StringComparison.Ordinal);
-        Assert.Equal(3, new[] { "src/StarMark.UI/Controls/ItemCard.xaml", ThemeXaml, "src/StarMark.UI/Views/SettingsPage.xaml" }
+        Assert.DoesNotContain("\"AccentFillColorDefaultBrush\"", brush, StringComparison.Ordinal);
+        Assert.Equal(3, new[] { "src/StarMark.UI/Controls/ItemCard.xaml", ThemeXaml, Page }
             .Sum(f => Count(ReadRepoFile(f), "{ThemeResource AccentFillColorDefaultBrush}")));
     }
 
-    /// <summary>⑦ 设置页那一行：一个编辑入口、一颗读数，⛔ 两处编辑同一颗量。</summary>
+    /// <summary>⑦ 设置页那一行：一个编辑入口（片144 起＝代码侧那颗面板），读数与白衬已灭，⛔ 两处编辑同一颗量。</summary>
     [Fact]
     public void TheAccentSettingHasExactlyOneEditorAndItsReadingIsReadOnly()
     {
         var xaml = ReadRepoFile(Page);
         Assert.Equal(1, Count(xaml, "ViewModel.AccentIndex, Mode=TwoWay"));
-        Assert.Equal(1, Count(xaml, "ViewModel.ThemeAccentColor, Mode=TwoWay"));
-        Assert.Equal(1, Count(xaml, "ViewModel.ThemeAccentBrush, Mode=OneWay"));
+        Assert.Equal(0, Count(xaml, "ViewModel.ThemeAccentColor, Mode=TwoWay"));         // 片144：TwoWay 旧入口随旧润色器拆除，编辑入口改走代码侧的 ColorPickerPane
+        Assert.Equal(0, Count(xaml, "ViewModel.ThemeAccentBrush, Mode=OneWay"));         // 那颗预览方块已灭（AccentPaneGateTests ② 钉着）
         Assert.Equal(0, Count(xaml, "ViewModel.ThemeAccentBrush, Mode=TwoWay"));        // 那颗是读数⛔ 是入口
-        Assert.Equal(3, Count(xaml, "ViewModel.CustomAccentVisible, Mode=OneWay"));      // 取色格＋白衬＋那颗串同进同退（P-215 加的两颗都跟着那一档）
+        Assert.Equal(1, Count(xaml, "ViewModel.CustomAccentVisible, Mode=OneWay"));      // 只剩宿主容器那一颗（白衬与那颗串已灭）
 
         var vm = Code(ReadRepoFile(ViewModel));
         Assert.Equal(1, Count(vm, "private int _accentIndex"));
@@ -211,26 +243,172 @@ public sealed class ThemeAccentWordGateTests : IDisposable
     }
 
     /// <summary>
-    /// ⑨ 取色器与那颗预览方块<b>同一根左轨、同一个宽</b>：批次 WI-82 片6 在屏幕上量到那颗润色器自己保方
-    /// （档上声明 220x140 ⇒ 现读 140x140），而方块带着 220 在 Stretch 下居中 ⇒ 两者左缘差 222 px，
-    /// 卡片右半 523 px 全空。现在那颗方块⛔ 再写一份宽度（宽只有一个主人＝上面那一格），两颗同住左对齐的容器。
-    /// <para>⚠ 这一格钉的是<b>形状</b>：那两个数在屏幕上实现成什么，只有那一跑量得到（<c>bin/WI82/measure_82s.py</c>）。</para>
+    /// ⑨ 片144 起「主题色 · 自定义」那一格与组件「外观」编辑器<b>共用同一颗取色器面板</b>
+    /// （<c>ColorPickerPane</c>）：旧那颗保方润色器（220x140 ⇒ 现读 140x140、左缘差 222 px 那颗形状）
+    /// 随白衬预览与 hex 读数一起拆除，这一格从此钉「同一颗面板」本身而不是两颗各自的几何。
+    /// <para>编辑器带「跟随全局」钮（覆盖值 null 那一档得有一颗按钮可点）；设置页不带——
+    /// 「随系统」由上面那颗下拉管。宿主各自决定摆位，面板只交内容⛔ 交版式。</para>
     /// </summary>
     [Fact]
-    public void TheSwatchSharesThePickersLeftEdgeAndItsWidth()
+    public void BothHostsMountTheSamePickerPane()
     {
-        var panel = Between(ReadRepoFile(Page),
-            "<StackPanel HorizontalAlignment=\"Left\" Spacing=\"10\">", "</StackPanel>");
-        Assert.Contains("x:Name=\"AccentSpectrum\"", panel, StringComparison.Ordinal);
-        Assert.Contains("ViewModel.ThemeAccentBrush, Mode=OneWay", panel, StringComparison.Ordinal);
+        Assert.Equal(1, Count(Code(ReadRepoFile(Editor)), "new ColorPickerPane(showFollowGlobal: true)"));
+        Assert.Equal(1, Count(Code(ReadRepoFile(PageCs)), "new ColorPickerPane(showFollowGlobal: false)"));
+    }
 
-        var picker = Between(panel, "<ColorSpectrum", "/>");
-        Assert.Equal(1, Count(picker, "Width=\"140\""));        // 声明与实现同一颗数（它保方）
-        Assert.Equal(1, Count(picker, "Height=\"140\""));
-        Assert.Equal(0, Count(picker, "HorizontalAlignment=")); // 归属由那一格给，⛔ 两处各说一遍
+    /// <summary>
+    /// ⑩ 片144：设了自定义主题色时<b>主窗口表面也吃同一颗染料</b>——从前只有组件吃 AccentColor，
+    /// 主窗实色永远灰白/灰黑。背衬腿（ApplyBackdrop）、实色腿（None 分支）、兜底腿（MainWindowSurfaceBrush）
+    /// 都带上它，与组件那一侧同一判据；None＋tint 走 SurfaceBrush 铺染料原色（alpha FF），与组件实色那一档逐位同。
+    /// </summary>
+    [Fact]
+    public void TheMainWindowSurfaceAlsoTakesTheCustomTint()
+    {
+        var theme = MethodBody(Code(ReadRepoFile(MainWindowThemeCs)), "public void RefreshAppearance()");
+        Assert.Equal(1, Count(theme, "var customTint = ThemeAccent.Custom;"));
+        Assert.Contains("var kind = _settings.LoadMainWindowBackdrop();", theme, StringComparison.Ordinal);
+        Assert.Contains("var opacity = _settings.LoadMainWindowOpacity();", theme, StringComparison.Ordinal);
+        Assert.Equal(1, Count(theme, "customTint is { } tint"));
+        Assert.Equal(1, Count(theme, "FromArgb(0xFF, tint.R, tint.G, tint.B)"));
+        Assert.Equal(1, Count(theme, "0xF3, 0xF3, 0xF3"));
+        Assert.Equal(1, Count(theme, "0x20, 0x20, 0x20"));
+        Assert.Contains("WidgetAppearance.ApplyBackdrop(this, kind, opacity, baseTheme, customTint);", theme, StringComparison.Ordinal);
+        Assert.Contains("WidgetAppearance.MainWindowSurfaceBrush(baseTheme, kind, translucent, opacity, customTint);", theme, StringComparison.Ordinal);
+        var helper = Code(ReadRepoFile(WidgetAppearanceCs));
+        Assert.Equal(1, Count(helper, "public static Brush MainWindowSurfaceBrush(ElementTheme theme, WidgetBackdropKind kind, bool translucent, double? opacityOverride = null, Windows.UI.Color? tintOverride = null)"));
+        Assert.Equal(1, Count(helper, "tintOverride is { } tint"));
+        Assert.Equal(1, Count(helper, "SurfaceBrush(theme, WidgetBackdropKind.None, 1.0, tint)"));
+        Assert.Equal(1, Count(helper, "SurfaceBrush(theme, kind, opacityOverride, tintOverride)"));
+    }
 
-        var swatch = Between(panel, "<Rectangle", "/>");
-        Assert.Equal(0, Count(swatch, "Width="));               // ⛔ 第二份宽度
-        Assert.Equal(1, Count(swatch, "Height=\"26\""));
+    [Fact]
+    public void MainWindowRequestedThemeComesOnlyFromThePreferenceNotTheCustomTint()
+    {
+        var body = MethodBody(Code(ReadRepoFile(MainWindowThemeCs)), "public void RefreshAppearance()");
+        var compact = Regex.Replace(body, @"\s+", "");
+        Assert.Contains("var baseTheme = TargetTheme(_themePref);", body, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"(?:^|[;{}])\s*baseTheme\s*=(?!=)", body);
+        Assert.Contains("if(RootGrid.RequestedTheme!=baseTheme)RootGrid.RequestedTheme=baseTheme;", compact, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(compact, @"RootGrid\.RequestedTheme=(?!=)"));
+        Assert.DoesNotContain("AutoForeground", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("effectiveTheme", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("RootGrid.ActualTheme", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("SaveTheme", body, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"\b_themePref\s*=(?!=)", body);
+        Assert.Contains("CenteredDialog.ApplyThemeToOpenDialogs(_themePref);", body, StringComparison.Ordinal);
+        Assert.Contains("if(_refreshingAppearance)return;_refreshingAppearance=true;try{", compact, StringComparison.Ordinal);
+        Assert.Contains("finally{_refreshingAppearance=false;}", compact, StringComparison.Ordinal);
+        Assert.Contains("ApplyTitleBarButtonColors();", body, StringComparison.Ordinal);
+        Assert.Contains("SetSourceButtonsHighlight(_currentSource);", body, StringComparison.Ordinal);
+        Assert.Contains("SetStatusDot(_statusKind);", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 控件区⛔ 再铺一层我发明的底板：主题管按钮与选项的深浅（控件自己的主题画笔本来就够），自定义色只管背景。
+    /// <para>
+    /// 片145 一度加过三处卡片色背板（主窗一整条 <c>ControlSurface</c> ＋ 设置页标题条 ＋ 标签条），
+    /// 真机上它把自定义色挤成窗边一条缝，用户裁"越做越差"⇒ 撤干净。这一格钉的就是那三处⛔ 许回来。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void TheControlAreaKeepsNoInventedBackingSoTheCustomColorStaysTheBackground()
+    {
+        XNamespace ui = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        const string cardBackground = "{ThemeResource CardBackgroundFillColorDefaultBrush}";
+
+        var mainSource = ReadRepoFile("src/StarMark.UI/MainWindow.xaml");
+        var main = XDocument.Parse(mainSource);
+        var root = Assert.Single(main.Root!.Elements(ui + "Grid"),
+            e => (string?)e.Attribute(x + "Name") == "RootGrid");
+        var rows = Assert.Single(root.Elements(ui + "Grid.RowDefinitions"));
+        Assert.Equal(6, rows.Elements(ui + "RowDefinition").Count());
+        Assert.DoesNotContain("ControlSurface", mainSource, StringComparison.Ordinal);
+        Assert.DoesNotContain(cardBackground, mainSource, StringComparison.Ordinal);
+        // 顶栏那一层用的是工程原有的层色画笔，⛔ 换成品145 那颗卡片背板。
+        var topBar = Assert.Single(root.Elements(ui + "Border"),
+            e => (string?)e.Attribute(x + "Name") == "TopBar");
+        Assert.Equal("{ThemeResource LayerFillColorDefaultBrush}", (string?)topBar.Attribute("Background"));
+        var content = Assert.Single(root.Elements(ui + "Frame"),
+            e => (string?)e.Attribute(x + "Name") == "ContentFrame");
+        Assert.Equal("5", (string?)content.Attribute("Grid.Row"));
+
+        var settingsSource = ReadRepoFile(Page);
+        Assert.DoesNotContain(cardBackground, settingsSource, StringComparison.Ordinal);
+        var settings = XDocument.Parse(settingsSource);
+        var settingsRoot = Assert.Single(settings.Root!.Elements(ui + "Grid"));
+        Assert.Equal("Transparent", (string?)settingsRoot.Attribute("Background"));
+        var header = Assert.Single(settingsRoot.Elements(ui + "Grid"),
+            e => (string?)e.Attribute("Grid.Row") == "0");
+        Assert.Equal("24,12,24,0", (string?)header.Attribute("Margin"));
+        Assert.Null(header.Attribute("Background"));
+        var tabs = Assert.Single(settingsRoot.Elements(ui + "TabView"),
+            e => (string?)e.Attribute(x + "Name") == "SettingsTabs");
+        Assert.Equal("1", (string?)tabs.Attribute("Grid.Row"));
+        Assert.Null(tabs.Attribute("Background"));
+    }
+
+    [Theory]
+    [InlineData("private void ApplyThemePreference(ThemePreference pref)", true)]
+    [InlineData("public void RefreshThemeIcon(ThemePreference pref)", false)]
+    public void MainWindowThemeEntriesRefreshWithoutApplyingTheBaseThemeFirst(string signature, bool persists)
+    {
+        var body = MethodBody(Code(ReadRepoFile(MainWindowThemeCs)), signature);
+        Assert.DoesNotContain("ThemeManager.Apply(", Regex.Replace(body, @"\s+", ""), StringComparison.Ordinal);
+        Assert.Contains("_themePref = pref;", body, StringComparison.Ordinal);
+        Assert.Contains("UpdateThemeIcon();", body, StringComparison.Ordinal);
+        Assert.Contains("RefreshAppearance();", body, StringComparison.Ordinal);
+        Assert.Contains("ApplyTitleBarButtonColors();", body, StringComparison.Ordinal);
+        Assert.Contains("_widgetManager.ApplyThemeToAllAsync(pref);", body, StringComparison.Ordinal);
+        if (persists)
+        {
+            Assert.Contains("_settings.SaveTheme(pref);", body, StringComparison.Ordinal);
+            Assert.Contains("ThemePreferenceQuickSwitched?.Invoke(pref);", body, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void SettingsSaveRefreshesBackgroundAndThemeWithoutAccentOverridesOrRetheming()
+    {
+        var body = MethodBody(Code(ReadRepoFile(ViewModel)), "private void Save()");
+        var compact = Regex.Replace(body, @"\s+", "");
+        Assert.DoesNotContain("ThemeManager.Apply(App.MainWindow,", compact, StringComparison.Ordinal);
+        foreach (var forbidden in new[] { "AccentResourceSync", "Retheme", "accentChanged", "SystemAccentColor", "RequestedTheme" })
+            Assert.DoesNotContain(forbidden, body, StringComparison.Ordinal);
+        Assert.Contains("_settings.SaveTheme(theme);", body, StringComparison.Ordinal);
+        Assert.Contains("_settings.SaveThemeAccent(accentText);", body, StringComparison.Ordinal);
+        Assert.Contains("ThemeAccent.Apply(accentText);", body, StringComparison.Ordinal);
+        Assert.Contains("_settings.SaveWidgetBackdrop((WidgetBackdropKind)BackdropIndex);", body, StringComparison.Ordinal);
+        Assert.Contains("_settings.SaveWidgetOpacity(WidgetOpacity);", body, StringComparison.Ordinal);
+        Assert.Contains("_settings.SaveMainWindowBackdrop((WidgetBackdropKind)MainWindowBackdropIndex);", body, StringComparison.Ordinal);
+        Assert.Contains("_settings.SaveMainWindowOpacity(MainWindowOpacity);", body, StringComparison.Ordinal);
+        Assert.Contains("App.MainWindow?.DispatcherQueue.TryEnqueue(", body, StringComparison.Ordinal);
+        Assert.Contains("App.MainWindow.RefreshThemeIcon(theme);", body, StringComparison.Ordinal);
+        Assert.Contains("App.MainWindow?.RefreshAppearance();", body, StringComparison.Ordinal);
+        Assert.Contains("mgr.RefreshAppearanceAsync();", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NativeTitleButtonsFollowTheRequestedThemeInEveryForegroundState()
+    {
+        var body = MethodBody(Code(ReadRepoFile("src/StarMark.UI/MainWindow.Chrome.cs")), "private void ApplyTitleBarButtonColors()");
+        Assert.Contains("var theme = RootGrid.RequestedTheme;", body, StringComparison.Ordinal);
+        Assert.Contains("var isDark = theme == ElementTheme.Dark;", body, StringComparison.Ordinal);
+        Assert.Contains("var foreground = isDark ? Colors.White : Colors.Black;", body, StringComparison.Ordinal);
+        foreach (var state in new[] { "ButtonForegroundColor", "ButtonHoverForegroundColor", "ButtonPressedForegroundColor" })
+            Assert.Contains($"titleBar.{state} = foreground;", body, StringComparison.Ordinal);
+        Assert.Contains("titleBar.ButtonInactiveForegroundColor = Windows.UI.Color.FromArgb(0x99, foreground.R, foreground.G, foreground.B);", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SelectedSourceTextContrastsWithItsActualAccentBrush()
+    {
+        var body = MethodBody(Code(ReadRepoFile("src/StarMark.UI/MainWindow.Status.cs")), "private void SetSourceButtonsHighlight(string source)");
+        Assert.Contains("var accent = ThemeBrush.For(RootGrid.ActualTheme, \"AccentFillColorDefaultBrush\");", body, StringComparison.Ordinal);
+        Assert.Contains("accent is SolidColorBrush accentBrush", body, StringComparison.Ordinal);
+        Assert.Contains("SurfaceReadability.ReadableOn(accentBrush.Color)", body, StringComparison.Ordinal);
+        Assert.Contains("btn.Background = selected ? accent :", body, StringComparison.Ordinal);
+        Assert.Contains("btn.Foreground = selected ? onAccent : muted;", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Colors.White", body, StringComparison.Ordinal);
     }
 }

@@ -98,9 +98,12 @@ public sealed class ClipboardBackupAttachmentGateTests
     {
         // 决议写的是 zip(store)。这里钉"每一处建条目都显式写了 NoCompression"：
         // 漏一处就退化成默认 Optimal——功能一样、看不出来，只是导出变成一场 CPU 活。
-        var write = MethodBody(ReadRepoFile(Container), "public static async Task<(int Count, long Bytes)> WriteAsync");
-        Assert.Equal(2, Count(write, "CompressionLevel.NoCompression"));   // 清单一条 + 附件各一条，两处都写死
-        Assert.Equal(2, Count(write, "CreateEntry"));                       // 建条目的地方只有这两处，没有第三张清单
+        // 片146 起包里有两族附件（clip/ 与 boards/），建条目的地方因此是三处：漏写第三颗＝那块板被 deflate 一遍，
+        // 而那颗⛔ 报错，只是导出变慢。
+        var write = MethodBody(ReadRepoFile(Container),
+            "public static async Task<(int Clips, long ClipBytes, int Boards, long BoardBytes)> WriteAsync");
+        Assert.Equal(3, Count(write, "CompressionLevel.NoCompression"));   // 清单一条 + 两族附件各一条
+        Assert.Equal(3, Count(write, "CreateEntry"));                       // 建条目的地方只有这三处，没有第三张清单
         Assert.DoesNotContain("CompressionLevel.Optimal", ReadRepoFile(Container));
         Assert.DoesNotContain("CompressionLevel.Fastest", ReadRepoFile(Container));
     }

@@ -54,12 +54,25 @@ public sealed class BackupService
         _repo = repo;
     }
 
-    /// <summary>自动快照目录（恢复前快照、日后可能的定时备份都放这里）。</summary>
+    /// <summary>
+    /// 自动快照目录（恢复前快照、每日自动件都放这里）。
+    /// <para><b>那颗根被环境变量改道时跟着走</b>（Phase C 片146 补的洞）：这一颗从前只拼 <c>%LOCALAPPDATA%</c>，
+    /// 于是一次沙盒取证——哪怕数据库、设置、日志、画板档全都指到了别处——仍会往用户真的备份目录里
+    /// 落一颗 <c>pre-restore-*.json</c> 与 <c>auto-*.json</c>。坏的不是那几 KB，而是他打开「本机备份」那一列
+    /// 会看到两份<b>来自空库</b>的"备份"，其中一份还长得像他自己那份的回滚点（真读数：片146 那一跑留下
+    /// <c>auto-20261030-074809.json</c> 1 434 字节与 <c>pre-restore-20261030-080716.json</c> 952 字节，
+    /// 两份都由取证进程写出、事后手工清掉）。这与批次 SS 定性过的那一族同一条线：<b>改道带不走的那一份不会报错，
+    /// 它只是永远写进真目录</b>。</para>
+    /// <para>没改道时照旧落 <c>%LOCALAPPDATA%\StarMark\backups</c>：那是用户手上已有的落点，
+    /// ⛔ 为了"统一"把他的备份目录搬到 <c>%APPDATA%</c> 去（那等于替他移动数据）。</para>
+    /// </summary>
     public static string SnapshotDirectory
     {
         get
         {
             if (SnapshotDirectoryOverride is not null) return SnapshotDirectoryOverride;
+            var redirected = StarMark.Abstractions.UserDataPaths.RedirectedDataRoot();
+            if (redirected is not null) return Path.Combine(redirected, "backups");
             var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             return Path.Combine(local, StarMark.Abstractions.AppConstants.AppName, "backups");
         }
@@ -102,24 +115,64 @@ public sealed class BackupService
     {
         var env = await ExportAsync(ct);
         var (names, missing, plannedFailed) = ClipboardImageStore.PlanBackup(env.Payload.Items);
+        var sceneNames = PlanBoardScenes();
         var json = SerializeEnvelope(env);
-        var target = AgreeExtensionWithContent(path, names.Count > 0);
-        if (names.Count == 0)
+        // 载体跟着内容走这件事从此<b>一次判定</b>而不是两遍：改前那句 <c>names.Count > 0</c> 在两处各问一次，
+        // 片146 加进画板这一族后，任何一处漏改都会写出一颗"叫 .json 的 zip"或"叫 .zip 的纯清单"——
+        // 而这两个坏法档头那句注释已经各自定性过一次。
+        var carries = names.Count > 0 || sceneNames.Count > 0;
+        var target = AgreeExtensionWithContent(path, carries);
+        if (!carries)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             await File.WriteAllTextAsync(target, json, ct);
-            return new BackupExport(target, env.Payload.Items.Count, 0, 0, missing, plannedFailed);
+            return new BackupExport(target, env.Payload.Items.Count, 0, 0, 0, 0, missing, plannedFailed);
         }
-        var (carried, carriedBytes) = await BackupContainer.WriteAsync(target, json, names, ct);
+        var (carried, carriedBytes, boards, boardBytes) =
+            await BackupContainer.WriteAsync(target, json, names, sceneNames, ct);
         // 计划要带、结果没进包的那些（此刻正被别的程序独占、或刚被删掉）并进"没能带上"这一档：
         // 报出去的张数与字节都只算真在包里的，两个数说的是同一份东西。
-        return new BackupExport(target, env.Payload.Items.Count, carried, carriedBytes, missing,
+        return new BackupExport(target, env.Payload.Items.Count, carried, carriedBytes, boards, boardBytes, missing,
             plannedFailed + names.Count - carried);
     }
 
-    /// <summary>一次带附件导出的事实：实际写到哪儿、装了多少条、带了几张图、多少字节、几张没带上。</summary>
+    /// <summary>
+    /// 盘上那棵 <c>boards\</c> 里有几颗板该跟这一份走（Phase C 片146＝「场景 → 备份链」那一行）。
+    /// <para>它⛔ 问库而只问盘：那颗档自己在盘上就是事实——库里那一行是它的索引件（片146 前半），
+    /// 索引件缺了⛔ 影响"这块板该不该备份"。</para>
+    /// <para>只带主档：<c>.bak</c> 与 <c>*.tmp</c> 由 <see cref="StarMark.Core.Boards.BoardPolicy.IsSceneFileName"/>
+    /// 挡在外面（退路那份归退路；半途那一颗压根不算一块板）。那颗目录整个盘不起来＝这一份不带画板并留一行痕：
+    /// 导出这一路⛔ 因为一棵子目录失败而整份失败（条目与笔记才是不可重建的部分）。</para>
+    /// <para>序按档名逐字节排（⛔ 用枚举顺序当判据——那颗数要能被别人复算）。</para>
+    /// </summary>
+    private static IReadOnlyList<string> PlanBoardScenes()
+    {
+        try
+        {
+            var folder = StarMark.Core.Boards.BoardPolicy.ScenesFolder();
+            if (!Directory.Exists(folder)) return Array.Empty<string>();
+            var list = new List<string>();
+            foreach (var file in Directory.EnumerateFiles(folder))
+                if (StarMark.Core.Boards.BoardPolicy.IsSceneFileName(Path.GetFileName(file)))
+                    list.Add(Path.GetFileName(file)!);
+            list.Sort(StringComparer.Ordinal.Compare);
+            return list;
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn("备份导出：板档目录盘不起来（这一份就不带画板）：" + ex.GetType().Name + " " + ex.Message);
+            return Array.Empty<string>();
+        }
+    }
+
+    /// <summary>
+    /// 一次带附件导出的事实：实际写到哪儿、装了多少条、带了几张图／多少字节、带了几块板／多少字节、几张没带上。
+    /// <para>画板那两颗数<b>单独成对</b>而⛔ 并进图片那一对：那两族是不同的东西，一句"带了 7 个附件"
+    /// 会把"三块板四张图"说成一件用户没法核对的事。</para>
+    /// </summary>
     public sealed record BackupExport(
-        string Path, int ItemCount, int ClipImages, long ClipImageBytes, int MissingImages, int FailedImages);
+        string Path, int ItemCount, int ClipImages, long ClipImageBytes,
+        int Boards, long BoardBytes, int MissingImages, int FailedImages);
 
     /// <summary>
     /// 写<b>不带附件</b>的备份（恢复前快照、每日自动件、以及"开关关着导出的那一份"）。
@@ -128,20 +181,22 @@ public sealed class BackupService
     public async Task<string> ExportToFileAsync(string path, CancellationToken ct = default)
     {
         var env = await ExportAsync(ct);
-        var target = AgreeExtensionWithContent(path, carriesImages: false);
+        var target = AgreeExtensionWithContent(path, carries: false);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         await File.WriteAllTextAsync(target, SerializeEnvelope(env), ct);
         return target;
     }
 
     /// <summary>
-    /// 扩展名跟着内容走：带图片本体的那份是 <c>.zip</c>，纯清单那份不许占着 <c>.zip</c> 这个名字。
+    /// 扩展名跟着内容走：带附件本体（图片／画板）的那份是 <c>.zip</c>，纯清单那份不许占着 <c>.zip</c> 这个名字。
     /// <para>两个方向都要改：<b>一个叫 <c>.zip</c> 的 JSON</b>（开关开着但本机一张图都没有、或用户在开关关着时
     /// 手输了 <c>x.zip</c>）会被下一个拿它的人按压缩包去读，而读它的人正是本程序的导入路径——
     /// 报出来的是"这个备份包打不开"，让人以为文件坏了，其实只是名字错了。</para>
+    /// <para>片146 起那颗参数叫 <c>carries</c> 而⛔ <c>carriesImages</c>：画板也走这一道门，
+    /// 名字留在"图片"会让下一个加第三族的人以为这颗只管图。</para>
     /// </summary>
-    private static string AgreeExtensionWithContent(string path, bool carriesImages)
-        => BackupContainer.IsContainer(path) == carriesImages
+    private static string AgreeExtensionWithContent(string path, bool carries)
+        => BackupContainer.IsContainer(path) == carries
             ? path
             : BackupContainer.SwapExtension(path);
 
@@ -280,6 +335,13 @@ public sealed class BackupService
                 ? (Written: 0, Skipped: 0, Failed: 0, PackageEntries: 0, RowsWithoutPicture: 0, Opened: true)
                 : await ExtractClipImagesAsync(p.Items, attachmentSourcePath, ct);
 
+            // 画板那一族（片146）与 clip 排在同一拍，而判据各自独立：clip 那份要先算"这一份备份里的条目
+            // 认领哪些文件名"，那块板的身份<b>就是那颗档名</b>（盘上有什么就带什么），⛔ 需要名单。
+            // 它因此⛔ 受"条目落库了没"影响——排在这里只为两族各摸一次盘，⛔ 各摸两遍。
+            var boards = attachmentSourcePath is null
+                ? (Written: 0, Skipped: 0, Failed: 0, Carried: 0, Opened: true)
+                : await BackupContainer.ExtractBoardsAsync(attachmentSourcePath, ct);
+
             // 还原走的是批量 DELETE + INSERT（绕开 ItemRepository 各写方法的 Notify），
 
             // 而 ReindexAllSearchTextAsync 的注释约定「调用方收尾统一刷新」——
@@ -321,12 +383,21 @@ public sealed class BackupService
                 _ => LocMessage.Of("settings.data.backup.clipManifestOnly", clipImageCount),
             };
 
+            // 画板那一句（片146）只按<b>这一份包里到底带没带</b>来说：没带就一句也不提（⛔ 说"没恢复"，
+            // 那是对文件内容的断言，而包里压根没那一族）。带了就把三个数分开报——"本机已有同名的没动"
+            // 与"写不进"必须分得开，否则用户分不清"我的板都回来了"与"一块也没回来"（clip 那族同一口径）。
+            var boardsNote = boards.Carried > 0
+                ? LocMessage.Of("settings.data.backup.restoredBoards",
+                    boards.Carried, boards.Written, boards.Skipped,
+                    boards.Failed > 0 ? LocMessage.Of("settings.data.backup.restoredBoardsFailed", boards.Failed) : null)
+                : (LocMessage?)null;
+
             return new RestoreResult
             {
                 Success = true,
                 Message = LocMessage.Of(
                     mode == RestoreMode.Replace ? "settings.data.backup.restoredReplace" : "settings.data.backup.restoredMerge",
-                    p.Items.Count, widgetsNote, clipImageNote),
+                    p.Items.Count, widgetsNote, clipImageNote, boardsNote),
                 SnapshotPath = snapshotPath,
                 ItemsRestored = p.Items.Count,
                 UserStatesRestored = p.UserState.Count,
@@ -336,6 +407,9 @@ public sealed class BackupService
                 ClipImagesRestored = clip.Written,
                 ClipImagesSkipped = clip.Skipped,
                 ClipImagesFailed = clip.Failed,
+                BoardsRestored = boards.Written,
+                BoardsSkipped = boards.Skipped,
+                BoardsFailed = boards.Failed,
             };
         }
         catch (Exception ex)

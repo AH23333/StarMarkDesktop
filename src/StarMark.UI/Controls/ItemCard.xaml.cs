@@ -145,6 +145,13 @@ public sealed partial class ItemCard : UserControl
         if (ViewModel != null) ItemCardActions.PinImageToDesktop(ViewModel);
     }
 
+    /// <summary>「放到画板上」（深析 §四 第4行）：与上面两颗同一条自包含规矩——卡片被十余处复用，
+    /// 走页面事件必有某一处"菜单里有、点了没反应"。成功⛔ 另报一句：那扇窗自己开起来就是回执。</summary>
+    private void Menu_SendToBoard(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel != null) ItemCardActions.SendImageToBoard(ViewModel);
+    }
+
     /// <summary>热榜行的 ⭐Star（图标按钮与右键菜单同一实现）。动作结果由宿主订阅 NoticeRaised 显示。</summary>
     private async void Star_Click(object sender, RoutedEventArgs e)
     {

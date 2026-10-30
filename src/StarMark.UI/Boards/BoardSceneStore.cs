@@ -28,12 +28,13 @@ public static class BoardSceneStore
     /// <summary>板档目录（<c>boards\</c> 那一颗子目录，根由 <see cref="UserDataPaths"/> 给；
     /// 导出物另住在它下面的 <c>exports\</c>，两族不同主人）。
     /// <para>本档⛔ 自己拼 <c>%APPDATA%\StarMark</c>：那份优先规则（settings 变量 ＞ db 变量 ＞ 真目录）
-    /// 只许有一颗主人，抄第二份的那一族不会报错，它只是<b>永远写到真目录去</b>（批次 SS 那颗坑的同一条线）。</para></summary>
-    public static string Folder => UserDataPaths.Subdirectory("boards");
+    /// 只许有一颗主人，抄第二份的那一族不会报错，它只是<b>永远写到真目录去</b>（批次 SS 那颗坑的同一条线）。</para>
+    /// <para>片146 起那颗<b>成品路径</b>整颗交 <see cref="BoardPolicy.ScenesFolder"/>：备份链（Core）要与写入（UI）
+    /// 问同一棵树，而 Core 够不到本档——那颗落点因此搬到了两边都够得着的一层，根照旧归 <see cref="UserDataPaths"/>。</para></summary>
+    public static string Folder => BoardPolicy.ScenesFolder();
 
     /// <summary>那颗 id 的档在哪（只算名字，⛔ 摸盘）。</summary>
-    public static string PathOf(string sceneId)
-        => Path.Combine(Folder, BoardPolicy.SceneFileName(sceneId));
+    public static string PathOf(string sceneId) => BoardPolicy.ScenePath(sceneId);
 
     /// <summary>
     /// 已经确认过存在的那棵板档目录（片58＝P-241 的③件＝P-45 那一族在这一档里的第二格）。
@@ -198,8 +199,10 @@ public static class BoardSceneStore
         catch (Exception) { return null; }
     }
 
-    /// <summary>那颗 .tmp 的尾名（对账那一族按它认"半途而废的那一颗"；这里给主人，⛔ 各处各写一份）。</summary>
-    public const string TempSuffix = ".tmp";
+    /// <summary>那颗 .tmp 的尾名（对账那一族按它认"半途而废的那一颗"）。
+    /// 片146 起那颗名字的主人在 <see cref="BoardPolicy.SceneTempSuffix"/>——备份还原写那块板也要走同一族，
+    /// 而 Core 够不到本档；这里留一颗转发，⛔ 各处各写一份。</summary>
+    public const string TempSuffix = BoardPolicy.SceneTempSuffix;
 
     private static string BackupPathOf(string sceneId)
         => Path.Combine(Folder, BoardPolicy.BackupFileName(sceneId));

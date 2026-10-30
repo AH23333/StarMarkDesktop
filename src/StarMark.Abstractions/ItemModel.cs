@@ -23,6 +23,12 @@ public enum ItemType
     Todo = 4,
     /// <summary>本地随记（不入任何外部源，统一条目模型下的本地内容）。</summary>
     Note = 5,
+    /// <summary>
+    /// 一块画板（excalidraw 那颗场景档）。与 <see cref="Note"/> 同族＝本机内容、⛔ 来自任何外部源，
+    /// 但它的身分⛔ 「本库的一行」而<b>盘上那颗档</b>：这一行是那颗档的<b>索引件</b>（Phase C 片146＝
+    /// 集成矩阵「场景 → 可检索」那一行）。
+    /// </summary>
+    Board = 6,
 }
 
 /// <summary>条目来源标识。每个来源对应一个 IItemSource 实现。</summary>
@@ -38,6 +44,13 @@ public static class ItemSources
     public const string Clipboard = "clipboard";
     /// <summary>本地内容来源（待办/随记）。不入任何 IItemSource，永不参与同步。</summary>
     public const string Local = "local";
+    /// <summary>
+    /// 画板（Phase C 片146＝集成矩阵「场景 → 可检索」那一行）。与 <see cref="Clipboard"/>／
+    /// <see cref="Local"/> 同族：⛔ 是任何 <c>IItemSource</c>、永不参与来源同步——那颗板的正身是盘上
+    /// <c>boards\&lt;id&gt;.excalidraw</c>，这一行只是它的<b>索引件</b>（随时能由那颗档重算，
+    /// 所以它进不了备份里"不可重建"那一族）。
+    /// </summary>
+    public const string Board = "board";
     /// <summary>
     /// GitHub 热榜候选（外部数据，<b>默认不入库</b>）。它不是 IItemSource，也不写 items 表：
     /// 界面用它作"这一行来自热榜"的标记，所有会写主库的动作都必须对它关闭。
