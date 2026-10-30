@@ -261,3 +261,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - <b>还欠的</b>：P-273 那一臂真机（问法在上面）・P-275 三链真机走查・归他的两格（观感点验・#744）与 push 授权。
 
 - <b>批末收口（片148）</b>：全量 6692／6692（16 m 46 s）・邻域 314／314（64.8 s）・账本计数器 276／148／128（VERDICT OK）・真开放 P-273／P-274／P-275・HEAD 35645ff・未推 307・本批收口后分码腿／文档腿两笔提交（⛔ push）・StarMark 进程 0。
+## 二十八、片150 P-275 真机三链走查收官：image.insert 四通道读数齐＋坑表 #1105
+
+- <b>这一批做了什么</b>：P-275 欠的真机走查补齐——沙盒 bin6（HEAD 74c1f85 建物含三链终码）＋空根 data6，每跑第 0 道（他人实例 0＋GetLastInputInfo）后动 SendInput／UIA；三条入口（卡上菜单／右键镜像／截图浮条）各按四通道（屏幕位图／盘上 scene 往返／日志／成功卡）收数；读数正本 bin/WI99/p150_walk_readings.txt（证据帧在 D:\StarMarkTmp\p150\・⛔ 提交）；账本 P-275 就地结案（276／149／127 VERDICT OK・docgates 四尺 PASS）。
+- <b>三链读数一句话版</b>：链一＋链二——测试图 160×100 经『放到画板上』两入口上画布，magenta=13076・bbox 落画布正中（两颗同位叠放），scene 1802→3359 B／files 带 id＋dataURL，两发 insert.posted bytes=422＋scene.saved，成功沉默；链三——托盘菜单（rows=31・index=5）→拖框 672×422→toBoard，第三颗 (376,209) 视口正中盖住前两颗（magenta 13076→1288，残余＝捕获区自带缩略图切片），insert.posted bytes=21449，成功卡『截图 · 已放上画板』『672 × 422 的画面已放上画板』。
+- <b>仪器课（#1105＋一颗只登记）</b>：①SetForegroundWindow 返回 True≠真到前台——链一首截经 Boards rect 截到主窗缩略图（z 序假象）；取证口径＝SetFG→GetForegroundWindow 验回执→再截（坑表 #1105）。②浮条 toBoard UIA 名字前缀命中的是内层图标元素（27×23）无 InvokePattern——改真点击元素中心 (1010,742)（P-265 若指外层按钮则两说不矛盾，只记读数）。
+- <b>还欠的</b>：P-273 那一臂（画板前台且无截图会话时按 F1／F3／F4／F5：问 (a) StarMark 动作起没起（应当起）(b) 画布有没有同时做事——(b) 为真才接会话态摘挂，为假就地结案）・P-274 改口条・归他的两格（观感点验・#744）与 push 授权。
+
+- <b>批末收口（片150）</b>：走查零码改・账本计数器 276／149／127（VERDICT OK・docgates 四尺 PASS）・真开放 P-273／P-274・HEAD 74c1f85（文档腿提交前一刻）・未推 309・本批文档腿一笔提交・⛔ push。
