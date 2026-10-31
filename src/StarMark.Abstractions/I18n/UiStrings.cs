@@ -1625,6 +1625,9 @@ public static class UiStrings
         new Entry("capture.bar.pin", "钉在桌面上（同 {0}），带上刚画的标注", "Pin it to the desktop (same as {0}), keeping the marks you just drew", "デスクトップに貼り付け（{0} と同じ、描いた注釈付き）"),
         new Entry("capture.bar.ocr", "认出这块画面的文字并复制", "Read the text in this area and copy it", "この範囲の文字を読み取ってコピー"),
         new Entry("capture.bar.board", "把带标注的画面放上画板，接着圈注、缩放、写字", "Put the annotated image on a board to keep marking, zooming and writing on it", "注釈入りの画像をキャンバスに載せて、そのまま注釈・拡大・文字入力できます"),
+        // 快画条上那颗（深析 §四 最后一格）：标签只两个汉字——那条按实测长，多一段就要从 ✕ 那颗出口身上挤
+        new Entry("canvas.btn.toBoard", "画板", "Board", "キャンバス"),
+        new Entry("canvas.bar.tip.toBoard", "把笔迹那一块放上画板，板上的墨原样留着", "Send the inked area to a board; the marks stay on the canvas", "線を描いた部分だけをキャンバスに送り、板の落書きはそのまま残ります"),
         new Entry("capture.bar.through", "鼠标穿透：让所有贴图都不再收鼠标（再用这一颗或按 {0} 恢复；只动一组请点托盘「{1}」那一行）",
             "Click-through: no pin takes the mouse any more (press this again or {0} to hand it back; for a single group open \"{1}\" in the tray)",
             "マウス透過：すべての貼り付け画像がマウスを受け取らなくなります（もう一度押すか {0} で復帰。1 組だけならトレイの「{1}」を開く）"),
@@ -2823,6 +2826,10 @@ public static class UiStrings
         // ⛔ 与那颗「另存一份到别处」共用那一句：那两句挂的标题是"这块板没能回到画布上"，而这一路说的⛔ 是同一件事。
         new Entry("boards.exportPngAction", "导出 PNG", "Export PNG", "PNG として出力"),
         new Entry("boards.exportSvgAction", "导出 SVG", "Export SVG", "SVG として出力"),
+        // 片150 按 P-212 口径摘掉过这两颗孤儿键（那时"板贴桌面"只有句子、没有码）；片151 带着读者一起回来：
+        // 读者＝画板右上角那颗 <c>_barPinButton</c> 与它落点那句话（<c>BoardWindow.PasteBar</c> 的 switch 认那颗键）。
+        new Entry("boards.pinAction", "贴到桌面", "Pin to the desktop", "デスクトップに貼り付け"),
+        new Entry("boards.pinnedBody", "这块板已贴到桌面", "This board is now pinned to the desktop", "このキャンバスをデスクトップに貼り付けました"),
         // 那句"太大"⛔ 报那颗上限的数字：8 MiB 住在 Core 那一颗常量里，把它抄进句子＝第二颗持有者
         // （换一颗数时屏幕上那句会先于判据说谎）。字节数进日志，屏幕上只说装不下。
         new Entry("boards.insertTooBigBody", "那张图太大，这块板装不下；你手上那份原图一个字节也没动", "That image is too big for a board; the copy you already have was not touched", "その画像は大きすぎてキャンバスに載せられません。手元のコピーは変更されていません"),
