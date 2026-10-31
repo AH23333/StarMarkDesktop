@@ -59,6 +59,37 @@ public static partial class CanvasService
             new IntRect(shot.Screen.X + region.X, shot.Screen.Y + region.Y, region.Width, region.Height));
     }
 
+    /// <summary>
+    /// 把板子上<b>笔迹那一块</b>放上画板（深析 §四 最后一格：Board(画布)快照 → 图元素）。
+    /// <para>裁的是 <see cref="SnapshotToPin"/> 同一刀、同一颗 <c>CanvasSnapshotMath.FrameOf</c>——
+    /// ⛔ 为这一格另算一遍"哪一块有墨"（那是第二真值，两把尺迟早分岔）。摆位交出去之后归画板：
+    /// 它落在眼前这一眼的正中，宿主⛔ 替它挑位置（与截图链／剪贴板那两条入口同一副规矩）。</para>
+    /// <para>板子上那一份墨<b>原样留着</b>（同一句 2026-09-29 裁决：这是复制一份出去，不是收走）。</para>
+    /// <para>两块墨都没有时⛔ 这里说"没东西可放"的下一手是别的：那一问的答案与贴图那一路同一颗
+    /// （<c>canvas.shot.noInk</c> 那句里嵌着的是用户<b>当前实际绑着</b>的那颗截图键），⛔ 另配一句。</para>
+    /// </summary>
+    public static void SnapshotToBoard()
+    {
+        var shot = Compose();
+        if (!shot.Ok)
+        {
+            Report(LocMessage.Of("capture.card.boardFailedTitle"), shot.Reason!);
+            return;
+        }
+        if (shot.Ink.IsEmpty)
+        {
+            Report(LocMessage.Of("capture.card.boardFailedTitle"),
+                LocMessage.Of("canvas.shot.noInk", BindingText(HotkeyActions.ScreenCapture)));
+            return;
+        }
+        var padding = (int)Math.Round(CanvasSnapshotMath.PaddingDip * shot.Scale);
+        var region = CanvasSnapshotMath.FrameOf(shot.Ink, shot.Width, shot.Height, padding);
+        _ = ScreenshotService.SendPixelsToBoardAsync(
+            CanvasSnapshotMath.CropBgra(shot.Pixels, shot.Width, shot.Height, region),
+            region.Width, region.Height,
+            LocMessage.Of("settings.extend.canvasTitle"));
+    }
+
     /// <summary>把"屏幕 + 笔迹"合成一张交给剪贴板。<b>整幅交出去</b>（与存图同口径：留档的是一整页）。</summary>
     public static void SnapshotToClipboard()
     {

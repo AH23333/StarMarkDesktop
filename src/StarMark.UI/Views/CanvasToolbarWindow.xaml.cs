@@ -223,6 +223,9 @@ public sealed partial class CanvasToolbarWindow : Window
 
     private void Pin_Click(object sender, RoutedEventArgs e) => CanvasService.SnapshotToPin();
 
+    /// <summary>「画板」：把笔迹那一块放上画板（与「贴图」裁同一刀，只是落点换成那扇窗）。</summary>
+    private void ToBoard_Click(object sender, RoutedEventArgs e) => CanvasService.SnapshotToBoard();
+
     private void Save_Click(object sender, RoutedEventArgs e) => CanvasService.SavePng();
 
     private void Copy_Click(object sender, RoutedEventArgs e) => CanvasService.SnapshotToClipboard();

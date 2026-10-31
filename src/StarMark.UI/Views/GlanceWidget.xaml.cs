@@ -80,11 +80,14 @@ public sealed partial class GlanceWidget : UserControl
     /// 重贴只做"按新语言把同一批读数与已经拿到手的那份数据再铺一遍"：⛔ 建窗口、⛔ 落盘、⛔ 打接口、⛔ 读设置档。
     /// 月历开着时圆点也要重画——"哪天算节日"的清单按语言各排一张（批次 WI-56／P-186），
     /// 那一档没排的那几天就不该在英文界面的月历上亮点。
+    /// <para>「常看」那一列从 ✅P-284 起也在这一拍里：它每行的两颗字是装载那一刻当场折好的成品字，
+    /// 片157 真机就地 en→ja 量到栏头念「よく見る」而同一行仍念 <c>Image</c>／<c>Unknown source</c>。</para>
     /// </summary>
     private void RebuildWords()
     {
         RefreshDate();
         if (_calendarOpen) RebuildCalendar();
+        if (_lastRecent.Count > 0) PaintItems();
         if (TrendingBlock.Visibility == Visibility.Visible) PaintTrending();
     }
 
@@ -291,6 +294,7 @@ public sealed partial class GlanceWidget : UserControl
     {
         if (_repo is null)
         {
+            _lastRecent = new List<Item>();
             ShowEmpty(true);
             return;
         }
@@ -298,19 +302,34 @@ public sealed partial class GlanceWidget : UserControl
         try
         {
             var items = await _repo.GetRecentAsync(ItemLimit, CancellationToken.None);
-            ItemsHost.Children.Clear();
-            foreach (var item in items)
-            {
-                if (string.IsNullOrWhiteSpace(item.Uri)) continue;
-                ItemsHost.Children.Add(BuildItemButton(item));
-            }
-            ShowEmpty(ItemsHost.Children.Count == 0);
+            _lastRecent = items;
+            PaintItems();
         }
         catch (Exception ex)
         {
             StarLog.Error("今日速览加载常看条目失败", ex);
+            _lastRecent = new List<Item>();
             ShowEmpty(true);
         }
+    }
+
+    /// <summary>上一轮取回的那一份条目：换语言那一刻<b>照这一份</b>重念行上的两颗显示出口（✅P-284），⛔ 再打一次库。</summary>
+    private IReadOnlyList<Item> _lastRecent = Array.Empty<Item>();
+
+    /// <summary>
+    /// 把「常看」那一列按 <see cref="_lastRecent"/> 重铺一遍：装载与换语言重贴共用这一颗 ⇒ ⛔ 第二份念法。
+    /// <para>那一行上的两颗字（标题／副标题）是当场折进 <see cref="Button"/> 里的一块面板，⛔ 进 LocText 名单
+    /// （行数不定、行随数据重建，与活动流那几行同一族理由 ✅WI-40-3b）⇒ 由本组件自己重念。</para>
+    /// </summary>
+    private void PaintItems()
+    {
+        ItemsHost.Children.Clear();
+        foreach (var item in _lastRecent)
+        {
+            if (string.IsNullOrWhiteSpace(item.Uri)) continue;
+            ItemsHost.Children.Add(BuildItemButton(item));
+        }
+        ShowEmpty(ItemsHost.Children.Count == 0);
     }
 
     // ==================== GitHub 热榜块（批次 KH）====================

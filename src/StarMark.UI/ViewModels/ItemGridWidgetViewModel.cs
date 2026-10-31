@@ -57,6 +57,9 @@ public sealed class ItemGridWidgetViewModel
     /// <summary>加载闸门：广播与用户操作可能同时触发，串行化避免重复打库。</summary>
     private readonly SemaphoreSlim _loadGate = new(1, 1);
 
+    /// <summary>上一次装载的那份 <c>Item</c>：换语言那一刻只重念显示出口，⛔ 再打一次库。</summary>
+    private IReadOnlyList<Item> _lastItems = new List<Item>();
+
     public ItemGridMode Mode { get; }
 
     public ObservableCollection<ItemRowItem> Items { get; } = new();
@@ -137,6 +140,7 @@ public sealed class ItemGridWidgetViewModel
             if (Mode == ItemGridMode.Activity)
             {
                 var recs = await _repo.GetActivityAsync(200, CancellationToken.None);
+                _lastItems = Array.Empty<Item>();   // 这一格的行不住在 Items 里：清掉，免得重念时把条目插回去
                 ApplyEvents(recs);
                 return;
             }
@@ -155,12 +159,8 @@ public sealed class ItemGridWidgetViewModel
                 _ => Array.Empty<Item>(),
             };
 
-            var rows = items
-                // ✅P-199：标题/副标题走显示出口（空值当场念中性数键），⛔ 再把库里的原文当屏幕话——
-                // 新写的剪贴板行副标题是空串，念的活在这一格干（库存非空照原文＝旧形状行不受影响）。
-                .Select(it => new ItemRowItem(it.Id, ClipboardEntry.TitleDisplayOf(it), ClipboardEntry.SubtitleDisplayOf(it), it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId))
-                .ToList();
-            ApplyRows(rows);
+            _lastItems = items;
+            ApplyRows(MapRows(items));
         }
         catch (Exception ex)
         {
@@ -171,6 +171,24 @@ public sealed class ItemGridWidgetViewModel
             _loadGate.Release();
         }
     }
+
+    /// <summary>把库里那一份变成行（标题／副标题走显示出口＝当场念那颗键，✅P-199）。</summary>
+    private static List<ItemRowItem> MapRows(IReadOnlyList<Item> items) => items
+        // ✅P-199：标题/副标题走显示出口（空值当场念中性数键），⛔ 再把库里的原文当屏幕话——
+        // 新写的剪贴板行副标题是空串，念的活在这一格干（库存非空照原文＝旧形状行不受影响）。
+        .Select(it => new ItemRowItem(it.Id, ClipboardEntry.TitleDisplayOf(it), ClipboardEntry.SubtitleDisplayOf(it), it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId))
+        .ToList();
+
+    /// <summary>
+    /// 换语言那一刻重念<b>条目那几行</b>的标题与副标题。
+    /// <para>这一族的形状：行的两个槽位在装载那一刻就被 <c>TitleDisplayOf</c>／<c>SubtitleDisplayOf</c>
+    /// 折成了成品字（空标题的图片行念的是「Image」那一类中性词，副标题里那个连接号也来自表），
+    /// 而组件活在换语言之后——片155 真机就地 en→ja 读到：同一格里标题「クリップボード」改了口，
+    /// 行里那两颗仍念 <c>Image</c>。</para>
+    /// <para>只重念、⛔ 再打库：库里那份还在 <c>_lastItems</c> 里（语言换了，数据没换——与文件夹树那一位主人
+    /// 同一条判据）；落点走现成的 <c>ApplyRows</c>，那颗是按 id 做最小差异的 ⇒ 换语言⛔ 让整格闪一次白（#51 那条）。</para>
+    /// </summary>
+    public void ReresolveDisplay() => ApplyRows(MapRows(_lastItems));
 
     /// <summary>
     /// 把 <see cref="Items"/> 增量对齐到查询结果。

@@ -63,7 +63,11 @@
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="vm:TodoRow">
-                    <Grid Margin="0,1,0,1" ColumnSpacing="2">
+                    <!-- 行本体在可达性树里原本念成记录整份的 ToString()（片153 真机读到那一串
+                         "TodoRow { Id = 9, Text = …, Done = False, DueTs = 1793462400, … }"）：读屏的人先听见
+                         字段名与序号，才轮到这一行真正要说的那件事。名字交回条目自己——
+                         换语言重算是"替换整颗行"（ViewModel.ReresolveDueTexts），所以这颗一次性绑定跟着换。 -->
+                    <Grid Margin="0,1,0,1" ColumnSpacing="2" AutomationProperties.Name="{x:Bind Text}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>

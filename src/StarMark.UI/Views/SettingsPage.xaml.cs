@@ -342,6 +342,12 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         // 「上一次同步」那一行（GitHub 卡）：换语言回同一颗汇总重贴，另外还挂"每一发跑完"那颗事件（机制 (C)·第五位宿主，P-212 走 B 的后半）。
         Locale.Changed -= RepasteSyncStatus;
         Locale.Changed += RepasteSyncStatus;
+        // 「桌面工具」那一栏的<b>布局行名</b>住在行模型的 string 槽里（`WidgetLayoutRow.Name` 当场 Render 过），
+        // 而那一列只在进页那一刻建（OnNavigatedTo）——在同一页里换语言再点回这一栏，读到的仍是上一门语言
+        // （片154 真机：栏目头「レイアウト方案」改了口，那一行还是 `Unnamed layout`）。
+        // 挂在同一颗成对块里（⛔ 为这件事再开第十位主人），重建只读内存里那份布局表、⛔ 回库⛔ 落盘。
+        Locale.Changed -= BuildLayoutRows;
+        Locale.Changed += BuildLayoutRows;
         SubscribeSyncStatus();
         if (App.Services.GetRequiredService<HotkeyService>() is not { } svc) return;
         // 本页可能被反复导航回来：先退再订，避免同一个处理器挂多份（一份事件 → N 次重建 UI）。
@@ -363,6 +369,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         Locale.Changed -= RepasteBackupRows;            // 同上：备份那一列的三颗显示属性也一起摘
         Locale.Changed -= ViewModel.PaintHealthReadouts; // 同上：健康那一栏那几行的重贴手臂一起摘
         Locale.Changed -= RepasteSyncStatus;            // 同上：GitHub 卡那行「上一次同步」的重贴手臂一起摘
+        Locale.Changed -= BuildLayoutRows;              // 同上：布局那一列的行名重算手臂一起摘（这颗页会被反复导航）
         UnsubscribeSyncStatus();                        // 同上：那颗 SyncCompleted 事件也成对摘（这颗服务是单例，挂着就是每进一次页多一份）
         if (App.Services.GetRequiredService<HotkeyService>() is { } svc)
             svc.RegistrationStateFlushed -= OnRegistrationStateFlushed;

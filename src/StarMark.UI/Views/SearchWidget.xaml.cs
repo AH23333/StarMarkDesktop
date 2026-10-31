@@ -11,6 +11,7 @@ using Windows.Foundation;
 using Windows.System;
 using StarMark.Core.Search;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 using StarMark.UI.ViewModels;
@@ -37,7 +38,15 @@ public sealed partial class SearchWidget : UserControl
         _ = ViewModel.LoadTagsAsync();
         // 打开组件即展示最近条目（空态浏览），而不是先给用户一页「无结果」。
         _ = ViewModel.RunSearchAsync();
+        // 结果那两列（标题／副标题）是行模型里的成品字，⛔ 进 LocText 名单（行数不定、每轮搜索整列重建）
+        // ⇒ 换语言这一刻由这一格按<b>已经在手的那一份</b>重念（✅P-283）。挂在构造、摘在 Unloaded：
+        // 组件窗会被关掉，静态事件上不摘＝那一窗的行永远挂着（坑表 #386 那一族）。
+        Locale.Changed += ReresolveRows;
+        Unloaded += (_, _) => Locale.Changed -= ReresolveRows;
     }
+
+    /// <summary>换语言那一刻重念结果那两列（⛔ 在这里重新发起一次搜索——那一趟含实时源，语言换了命中的条目没换）。</summary>
+    private void ReresolveRows() => ViewModel.ReresolveDisplay();
 
     /// <summary>
     /// 宿主那一拍：VM 交回的「键＋实参」由 <see cref="LocText.SetMessage"/> 贴，⛔ 再写一次 <c>EmptyHint.Text =</c>——

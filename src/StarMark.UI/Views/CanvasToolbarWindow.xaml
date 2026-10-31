@@ -53,6 +53,11 @@
                 <StackPanel x:Name="ShapeRow" Orientation="Horizontal" Spacing="6"/>
                 <Button x:Name="HaloButton" Click="Halo_Click" i18n:LocText.Key="canvas.btn.halo"/>
                 <Button x:Name="PinButton" Click="Pin_Click" i18n:LocText.Key="pin.card.category"/>
+                <!-- 放上画板（深析 §四 那张矩阵最后一格）：交的是同一块笔迹那一块，只是落点换成那扇窗。
+                     紧跟「贴图」而⛔ 挨着「存图／复制」——那两颗与贴图同族（都是"把这一份交出去"），
+                     而它与贴图最像（裁的是同一刀）。标签只两个汉字：条子按实测长，超出屏宽就要从 ✕ 身上挤。 -->
+                <Button x:Name="ToBoardButton" Click="ToBoard_Click" i18n:LocText.Key="canvas.btn.toBoard"
+                        i18n:LocText.ToolTipKey="canvas.bar.tip.toBoard"/>
                 <Button Click="Save_Click" i18n:LocText.Key="canvas.btn.save"/>
                 <Button Click="Copy_Click" i18n:LocText.Key="canvas.btn.copy"/>
                 <Button x:Name="KeysButton" Content="⌨" Click="Keys_Click" MinWidth="0"

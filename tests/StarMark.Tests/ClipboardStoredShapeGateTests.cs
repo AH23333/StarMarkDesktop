@@ -348,15 +348,18 @@ public sealed class ClipboardStoredShapeGateTests : IDisposable
     // ────────── ⑦ 出口 census：每个显示宿主都走共享出口 ──────────
 
     /// <summary>
-    /// 卡片那一族全走 <see cref="ItemCardViewModel"/>（构造时算一次）；三个非卡片出口
-    /// （搜索组件三处、条目格一处、今日速览一处）各自接线。写侧那对同族函数已删——
-    /// 重命名回归会在这里红。数字⛔ 手打（规则 #476）。
+    /// 卡片那一族全走 <see cref="ItemCardViewModel"/>（构造时算一次）；三个非卡片出口各走一颗共享出口。
+    /// 写侧那对同族函数已删——重命名回归会在这里红。数字⛔ 手打（规则 #476）。
+    /// <para>搜索组件那一档从 <b>3 颗</b>并成 <b>1 颗</b>（批次 Phase C 片156・✅P-283）：三条路径从前各写一份映射，
+    /// 换语言重算要复用同一份念法就得先并成一颗主人——"这一族三条路各接了线"这一维现在由
+    /// <c>I18nWiringGateTests.TheQuickSearchRowsAreReReadFromTheBatchAlreadyOnScreen</c> 钉（那颗==1 就是这里这颗），
+    /// 本尺那一维＝"这一档用的还是共享出口、⛔ 自己手写第二份字"。</para>
     /// </summary>
     [Fact]
     public void EveryDisplayHostUsesTheSharedExits()
     {
         Assert.Equal(1, Count(CodeOf(Card), "ClipboardEntry.SubtitleMessageOf("));
-        Assert.Equal(3, Count(CodeOf(SearchWidget), "ClipboardEntry.SubtitleDisplayOf("));
+        Assert.Equal(1, Count(CodeOf(SearchWidget), "ClipboardEntry.SubtitleDisplayOf("));
         Assert.Equal(1, Count(CodeOf(GridWidget), "ClipboardEntry.SubtitleDisplayOf("));
         Assert.Equal(1, Count(CodeOf(Glance), "ClipboardEntry.SubtitleDisplayOf("));
 

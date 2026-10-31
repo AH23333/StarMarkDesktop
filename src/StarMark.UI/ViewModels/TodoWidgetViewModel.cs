@@ -169,6 +169,26 @@ public sealed class TodoWidgetViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 换语言那一刻把<b>截止那一列</b>按今天重算一遍。<para>那一列是行模型里的成品字（<see cref="TodoRow.DueText"/>
+    /// 持 <c>string</c>），装载之后没人再念它：片153 真机 en→ja 就地切档，同一扇窗里标题、三颗筛选按钮、
+    /// 输入框提示与统计那句全改了口，只有那三行仍停在 <c>Tomorrow / Today / 2 days overdue</c>。
+    /// 组件活在桌面上好几天，"下一次整表重读"可能就是明天。</para>
+    /// <para>只换真的变了话的那一行——集合里 Replace 一颗就重画一行，无谓重排会撞上拖拽排序那条闸门。
+    /// 与 <c>WorldClockViewModel.ReresolveNames</c>（✅WI-76）同型：交身份的归身份，冻成品的归重算。</para>
+    /// </summary>
+    public void ReresolveDueTexts() => RunOnUi(() =>
+    {
+        var now = DateTimeOffset.Now;
+        for (var i = 0; i < Visible.Count; i++)
+        {
+            var row = Visible[i];
+            var text = LocalItemState.DescribeDue(row.DueTs, now);
+            if (!string.Equals(row.DueText, text, StringComparison.Ordinal))
+                Visible[i] = row with { DueText = text };
+        }
+    });
+
+    /// <summary>
     /// 按当前筛选重建可见集合并刷新计数。
     /// 三个计数属性由 <see cref="ObservableObject"/> 的 <see cref="OnPropertyChanged(string)"/> 显式推送 ——
     /// XAML 侧必须写 <c>Mode=OneWay</c>，默认的 OneTime 不会订阅 INPC（项目已踩过两次）。

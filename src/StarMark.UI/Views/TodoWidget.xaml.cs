@@ -53,12 +53,17 @@ public sealed partial class TodoWidget : UserControl
         // 不设闸门就会把每次增删都变成一轮全表写（卡顿来源）。
         TodoList.DragItemsStarting += (_, _) => ViewModel.BeginReorder();
 
+        // 截止那一列冻在装载那一刻（行模型持 string）⇒ 换语言这一刻逐行重算（片153 真机读到它停在上一门语言）。
+        Locale.Changed += ReresolveDueColumn;
         Unloaded += (_, _) =>
         {
+            Locale.Changed -= ReresolveDueColumn;
             ViewModel.DismissUndo();
             ViewModel.Dispose();
         };
     }
+
+    private void ReresolveDueColumn() => ViewModel.ReresolveDueTexts();
 
     private void SyncChrome()
     {

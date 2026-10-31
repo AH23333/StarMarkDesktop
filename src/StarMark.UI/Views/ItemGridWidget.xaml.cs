@@ -57,12 +57,17 @@ public sealed partial class ItemGridWidget : UserControl
 
         // 活动流那些行的事件名同样⛔ 进 LocText 名单（行数不定、行会重建）⇒ 由组件自己逐行重念（✅WI-40-3b）。
         Locale.Changed += RepasteEventRows;
+        // 条目那几行（标签格／剪贴板格／置顶格）的标题与副标题是行模型里的成品字，同一族理由由这一格重念（✅P-282）。
+        Locale.Changed += ReresolveItemRows;
         // 卸载即退订数据广播：组件会被反复创建/销毁，留着订阅会白跑数据库查询。
-        Unloaded += (_, _) => { ViewModel.Dispose(); Locale.Changed -= RepasteEventRows; };
+        Unloaded += (_, _) => { ViewModel.Dispose(); Locale.Changed -= RepasteEventRows; Locale.Changed -= ReresolveItemRows; };
     }
 
     /// <summary>换语言那一刻：这一格活动流每一行的事件名各重念一次。</summary>
     private void RepasteEventRows() { foreach (var row in ViewModel.Events) row.Repaste(); }
+
+    /// <summary>换语言那一刻：条目那几行按库里<b>已经在手的那一份</b>重念标题与副标题（⛔ 再打库、⛔ 整格闪白）。</summary>
+    private void ReresolveItemRows() => ViewModel.ReresolveDisplay();
 
     private void UpdateEmptyHint()
     {

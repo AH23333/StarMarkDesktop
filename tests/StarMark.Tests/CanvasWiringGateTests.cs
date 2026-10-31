@@ -1529,7 +1529,9 @@ public sealed class CanvasWiringGateTests
         })
             Assert.DoesNotContain(dead, all);
         // ③ 功能名与托盘那一项各只有一个出处：句子交位置，名字由调用点把表里那两颗递进来（#353 同族）
-        Assert.Equal(6, SourceGate.Count(all, "LocMessage.Of(\"settings.extend.canvasTitle\")"));
+        // 6→7＝片151 第四条落点（放上画板）也要说"谁在说话"，它与前四条共用那颗功能名——
+        // ⛔ 为那一路新配一颗"画布→画板"的名字（同一块板上的墨，交去哪都该报同一个来源）。
+        Assert.Equal(7, SourceGate.Count(all, "LocMessage.Of(\"settings.extend.canvasTitle\")"));
         Assert.Equal(1, SourceGate.Count(all, "LocMessage.Of(\"tray.canvas\")"));
     }
 

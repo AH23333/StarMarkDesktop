@@ -310,12 +310,21 @@ public sealed class BoardWindow : Window
     /// 写它只有一处＝<see cref="ExportImageButton"/> 每次开口自增；闹钟那一拍比对它，⛔ 动盘上任何东西。</para></summary>
     private int _exportGen;
 
+    /// <summary>那一发 PNG 的<b>落点是桌面</b>而⛔ 导出目录（片148＝深析 §四 第2行：画板导出 → 贴桌面）。
+    /// <para>为什么是一颗位而⛔ 另起一条"直接贴"的路：那一发要的字节由页面现算（缩放与那颗背景开关都归它），
+    /// 宿主这侧⛔ 那份画面的第二份实现——所以问同一发，只在字节回来那一刻分岔。</para>
+    /// <para>⚠ 它由 <see cref="ReportExport"/> 清掉，而⛔ 由"字节回来"那一支清：三条下落（真回来／页面说办不成／
+    /// 预算到点）都要过那一处收口。留在原地＝下一发按「导出 PNG」时悄悄贴到桌面上，
+    /// 而那颗按钮上的字说的是"存成一张档"（S1 那条口径：会改状态的收尾，最后一步要重读）。</para></summary>
+    private bool _exportPins;
+
     /// <summary>右上角那一行（导出那两颗入口＋那颗落点的话）：它⛔ 是那块面板的零件——面板只在有事要说时才在场，
     /// 而"我刚导出那张图，它落在哪儿"每一次都要有答案。</summary>
     private StackPanel? _bar;
 
     private Button? _barPngButton;
     private Button? _barSvgButton;
+    private Button? _barPinButton;
     private Button? _barScaleButton;
     private Button? _barBackgroundButton;
     private Button? _barFolderButton;
@@ -766,6 +775,13 @@ public sealed class BoardWindow : Window
             _ = SettleSceneWriteAsync(QueueSceneWrite(bytes), closingBeat);
             return;
         }
+        // 落点是桌面那一支（片148＝深析 §四 第2行）：问的是同一发字节，只是它⛔ 进导出目录、也⛔ 参与
+        // 「打开所在文件夹」那颗资格（下面那一路的 landed 由真写成文件的那一支给）。
+        if (_exportPins && BridgeProtocol.ExtensionForKind(envelope.Kind) == ".png")
+        {
+            PinExportedPng(bytes);
+            return;
+        }
         var name = BridgeProtocol.UniqueExportName(
             BridgeProtocol.SanitizeExportName(envelope.Suggested, ExportStem(), envelope.Kind),
             candidate => File.Exists(Path.Combine(ExportsDirectory, candidate)),
@@ -801,6 +817,34 @@ public sealed class BoardWindow : Window
     }
 
     /// <summary>
+    /// 把那一发 PNG 贴上桌面（片148＝深析 §四 第2行：画板导出 → 贴桌面）。
+    /// <para>解码吃仓里那一颗<b>纯托管</b> PNG 解码器（<c>ClipboardPayload.TryDecodePng</c>），⛔ 为这一格
+    /// 另写一份"从 PNG 到 BGRA"；摆位与剪贴板那张图贴桌面共用同一条判据（<c>ItemCardPolicy.CenteredPlacement</c>：
+    /// 光标所在屏工作区居中，探不到就老实退回 (0,0) 并留一行痕——那张窗仍可拖走，而拒绝执行没有第二次机会）。</para>
+    /// <para>解不开＝右上角那一行走"没能弄成"那一句，⛔ 静默：那串字节是页面刚交回来的，用户有权知道它没落地。
+    /// "共几张、上限几张"那句由 <c>PinManager</c> 的通知卡统一说，这里再报一遍＝同一件事两种措辞。</para>
+    /// </summary>
+    private void PinExportedPng(byte[] png)
+    {
+        if (!StarMark.Abstractions.Clipboard.ClipboardPayload.TryDecodePng(png, out var frame, out var whyNot))
+        {
+            StarMark.Abstractions.StarLog.Warn("boards.pin.decode.failed bytes=" + png.Length
+                + " why=" + whyNot + " id=" + _boardId);
+            ReportExport("boards.exportFailedBody", null);
+            return;
+        }
+        var work = StarMark.UI.Helpers.WindowInterop.MonitorWorkAreaAtCursor()?.Work;
+        if (work is null) StarMark.Abstractions.StarLog.Info("boards.pin.no-cursor-monitor id=" + _boardId);
+        var placement = StarMark.Abstractions.ItemCardPolicy.CenteredPlacement(
+            work?.X ?? 0, work?.Y ?? 0, work?.Width ?? frame.Width, work?.Height ?? frame.Height,
+            frame.Width, frame.Height);
+        StarMark.UI.Services.ScreenshotService.PinPixels(frame.Bgra, frame.Width, frame.Height, placement);
+        StarMark.Abstractions.StarLog.Info("boards.pin.sent bytes=" + png.Length
+            + " w=" + frame.Width + " h=" + frame.Height + " id=" + _boardId);
+        ReportExport("boards.pinnedBody", null);
+    }
+
+    /// <summary>
     /// 造这扇窗那一手所在的<b>托管线程号</b>（⛔ 是一颗由 UI 那边递进来的数，当场读一次）。
     /// <para>它只有一位消费者：落地那一格那行痕里的 <c>onUi=</c> 那一列。<b>为什么非要量这一颗</b>：
     /// 把写盘交进线程池之后，那句「续体会回到 UI 线程的消息泵」本来只是我按框架习惯做的<b>推断</b>，
@@ -825,7 +869,7 @@ public sealed class BoardWindow : Window
     /// <summary>
     /// 那一发交回的字节<b>过上限</b>：⛔ 解它，也⛔ 让它静默（片58＝P-241 的②件）。
     /// <para><b>两种档位各说各的<b>已有</b>那句话</b>（本批⛔ 添一颗键：那两句都住在画板那一族的名册里，
-    /// 由 <c>BoardWordGateTests.TheBoardFamilyHasExactlyThirtyOneRowsAndTheyAreNamed</c> 逐颗点名钉住）：
+    /// 由 <c>BoardWordGateTests.TheBoardFamilyHasExactlyThirtyThreeRowsAndTheyAreNamed</c> 逐颗点名钉住）：
     /// scene＝这一扇的自动保存对这一发起停了＝片27 那句「这一扇已停止保存」＋那颗「另存一份到别处」；
     /// png／svg＝那一发导出没成＝片54 那句「没能存成，原因在日志里」。⚠ 两句都是<b>真话</b>：
     /// 前者确实停了（这块板超限期间不再自动落盘），后者确实没落盘。</para>
@@ -974,6 +1018,8 @@ public sealed class BoardWindow : Window
         if (landed is not null) _exportPath = landed;
         _exportOutcomeKey = outcomeKey;
         _exporting = false;
+        // 那颗落点位跟这一闩一起结：三条下落都走这一处，所以"这一发是贴到桌面"⛔ 活到下一发（见那颗位的注释）。
+        _exportPins = false;
         PasteBar();
     }
 
@@ -987,12 +1033,17 @@ public sealed class BoardWindow : Window
     private void PasteBar()
     {
         if (_barStatus is null || _barPngButton is null || _barSvgButton is null
-            || _barScaleButton is null || _barBackgroundButton is null || _barFolderButton is null) return;
+            || _barScaleButton is null || _barBackgroundButton is null || _barFolderButton is null
+            || _barPinButton is null) return;
         var live = _bridgeReady && !_exporting;
         _barPngButton.Content = Word("boards.exportPngAction");
         _barSvgButton.Content = Word("boards.exportSvgAction");
         _barPngButton.IsEnabled = live;
         _barSvgButton.IsEnabled = live;
+        // 「贴到桌面」与「导出 PNG」吃同一发问、同一副闸：它是那颗 PNG 的<b>另一种下落</b>，⛔ 是第三条档位
+        // （档位名单归 BridgeProtocol.ExportKinds，那里多一颗才是真多一种产物）。
+        _barPinButton.Content = Word("boards.pinAction");
+        _barPinButton.IsEnabled = live;
         // 那两颗扳机⛔ 跟着 live 那一闩一起关：挑档是宿主自己的事，桥还没通也照样能先挑好；
         // 把它们点不亮＝把"这一刻还没通"变成"这台程序没有这两颗旋钮"（片33 那颗可点状态的同一条口径）。
         _barScaleButton.Content = Phrase("boards.exportScaleAction", ScaleToken(_exportScale));
@@ -1007,6 +1058,9 @@ public sealed class BoardWindow : Window
                 Phrase("boards.exportScaleAction", ScaleToken(_sentScale)),
                 Phrase("boards.exportBackgroundAction", Word(BackgroundKey(_sentBackground)))),
             "boards.exportFailedBody" => Word("boards.exportFailedBody"),
+            // 那一发没落文件，所以它⛔ 带路径：「打开所在文件夹」那颗照旧指着上一次真写成档的那一份
+            //（那颗资格的唯一写处在上面，⛔ 在这里给）。
+            "boards.pinnedBody" => Word("boards.pinnedBody"),
             "boards.openFolderFailedBody" => Phrase("boards.openFolderFailedBody", _exportPath ?? string.Empty),
             _ => string.Empty,
         };
@@ -1076,11 +1130,13 @@ public sealed class BoardWindow : Window
     /// 一句也⛔ 说的则由那颗预算到点结掉（<see cref="WatchExportAnswerAsync"/>）——<b>开口之前</b>把代次记下，
     /// 这一处是那颗计数唯一的主人。</para>
     /// </summary>
-    private void ExportImageButton(string kind)
+    private void ExportImageButton(string kind, bool pinsInsteadOfSave = false)
     {
         if (!_bridgeReady || _exporting) return;
         if (!BridgeProtocol.IsKnownExportKind(kind)) return;      // ⛔ 在册的档位⛔ 发（⛔ 由这里替页面猜一档）
         _exporting = true;
+        // 那颗落点位只在"这一发真按的是那颗贴到桌面"时立起来；档位⛔ 是 png 就⛔ 立（SVG 那条路没有像素）。
+        _exportPins = pinsInsteadOfSave && kind == "png";
         _exportGen++;
         RememberSentExportKnobs();                                // 开口之前记：那一发用的两档从此⛔ 跟着他后来的挑法改口
         PasteBar();
@@ -1389,6 +1445,17 @@ public sealed class BoardWindow : Window
             BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
         };
         _barPngButton.Click += (_, _) => ExportImageButton("png");
+        // 「贴到桌面」（片148＝深析 §四 第2行）紧跟在「导出 PNG」后面：它俩是同一发的两种下落，
+        // 中间插进那颗 SVG 会让人以为这一颗也产一张档。三样颜色照旧各钉一遍（同上面那几颗的理由）。
+        _barPinButton = new Button
+        {
+            Content = Word("boards.pinAction"),
+            Margin = new Thickness(6, 0, 0, 0),
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
+        };
+        _barPinButton.Click += (_, _) => ExportImageButton("png", pinsInsteadOfSave: true);
         _barSvgButton = new Button
         {
             Content = Word("boards.exportSvgAction"),
@@ -1438,6 +1505,7 @@ public sealed class BoardWindow : Window
         barRow.Children.Add(_barScaleButton);
         barRow.Children.Add(_barBackgroundButton);
         barRow.Children.Add(_barPngButton);
+        barRow.Children.Add(_barPinButton);
         barRow.Children.Add(_barSvgButton);
         barRow.Children.Add(_barFolderButton);
         _bar = new StackPanel

@@ -1304,8 +1304,10 @@ public sealed class I18nWiringGateTests
             "src/StarMark.UI/Views/FolderTreePage.xaml.cs",
             "src/StarMark.UI/Views/GlanceWidget.xaml.cs",
             "src/StarMark.UI/Views/ItemGridWidget.xaml.cs",
+            "src/StarMark.UI/Views/SearchWidget.xaml.cs",
             "src/StarMark.UI/Views/SettingsPage.xaml.cs",
             "src/StarMark.UI/Views/SystemMonitorWidget.xaml.cs",
+            "src/StarMark.UI/Views/TodoWidget.xaml.cs",
             "src/StarMark.UI/Views/WeatherWidget.xaml.cs",
             "src/StarMark.UI/Views/WidgetAppearanceEditor.cs",
             "src/StarMark.UI/Views/WorldClockWidget.xaml.cs",
@@ -1401,6 +1403,21 @@ public sealed class I18nWiringGateTests
         var treeRebuild = MethodBody(folderTree, "private void OnLocaleChanged");
         Assert.Contains("RebuildTree();", treeRebuild, StringComparison.Ordinal);
         Assert.DoesNotContain("LoadCommand", treeRebuild, StringComparison.Ordinal);   // 重念⛔ 重新查库：语言换了，数据没换
+        // 待办那扇组件（✅P-279，第十位主人）：截止那一列住在<b>行模型的 string 槽</b>里（`TodoRow.DueText`），
+        // 既⛔ 在 LocText 那份名单上（元素是 DataTemplate 生成的），也⛔ 等得到"下一次整表重读"——
+        // 组件活在桌面上好几天，真机就地切档读到的是同一扇窗里别的字全改口、只有那三行停在旧语言（正本
+        // bin/WI99/p153_todowidget_row_readings.txt）。与八位前辈同形的三条：成对摘挂、⛔ 顺手回库、⛔ 顺手落盘。
+        var todo = Code(ReadRepoFile("src/StarMark.UI/Views/TodoWidget.xaml.cs"));
+        Assert.Contains("Locale.Changed += ReresolveDueColumn;", todo, StringComparison.Ordinal);
+        Assert.Contains("Locale.Changed -= ReresolveDueColumn;", todo, StringComparison.Ordinal);
+        var todoRebuild = MethodBody(todo, "private void ReresolveDueColumn");
+        Assert.Contains("ViewModel.ReresolveDueTexts()", todoRebuild, StringComparison.Ordinal);
+        Assert.DoesNotContain("LoadAsync", todoRebuild, StringComparison.Ordinal);            // ⛔ 借重贴之名回库里再捞一遍
+        Assert.DoesNotContain("InitializeComponent", todoRebuild, StringComparison.Ordinal);  // ⛔ 顺手重建整棵可视树
+        var todoVm = MethodBody(Code(ReadRepoFile("src/StarMark.UI/ViewModels/TodoWidgetViewModel.cs")),
+                                "public void ReresolveDueTexts");
+        Assert.DoesNotContain("UpsertLocalItemAsync", todoVm, StringComparison.Ordinal);      // ⛔ 换语言写用户的档
+        Assert.DoesNotContain("ReorderLocalItemsAsync", todoVm, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -1647,16 +1664,33 @@ public sealed class I18nWiringGateTests
         Assert.DoesNotContain(".Render()", rss, StringComparison.Ordinal);       // 界面那一路一个都不许先取词
     }
     /// <summary>
-    /// 第六族（控件库自带无障碍名，P-169 ㊼/#298）的机制账：应用级覆盖件存在、三档语言码齐全、
-    /// 启动与切换两颗接线都在且**跟着 TrySet 走**（写在 TrySet 之前＝覆盖读旧语言，白设）。
-    /// 真机那九行是否真改口由 bin/WI34 的树转储给数——本格只钉代码形状（#287：屏幕的字归屏幕的尺）。
+    /// 第六族（控件库自带无障碍名，P-169 ㊼/#298）的机制账：应用级覆盖件存在、<b>两副语言码各三档齐全</b>、
+    /// 启动与切换两颗接线都在且<b>跟着 TrySet 走</b>（写在 TrySet 之前＝覆盖读旧语言，白设）。
+    /// <para>片152 翻案：WI-34 只试了正门与旧 MRT 两条链就结案"机制不可得"，而第三条链
+    /// （Win32 进程/线程首选 UI 语言）在真机是<b>活的</b>——滚动条五颗部件名与弹出窗口两颗宿主名在英文档下改口。
+    /// 所以这一格从此钉的不再只是"件在不在"，而是<b>那条活着的链没被人当死代码摘掉</b>：
+    /// 只留正门那一颗 <c>PrimaryLanguageOverride</c> 的文件看起来"与 WI-34 的结案一致"，
+    /// 而一致的是错的结论（名册"⛔ 让一次巧合冒充一次修复"的反向版本：也⛔ 让一句写错的结案把已生效的修法再摘一次）。</para>
+    /// <para>数字框名里那句"最小/最大"今天仍随系统语言（同一棵树上量到的），未试的候选与不做的理由写在件上。</para>
     /// </summary>
     [Fact]
     public void TheFrameworkLanguageChainIsAlignedWithOurTable()
     {
         var ov = Code(ReadRepoFile("src/StarMark.UI/Helpers/UiLanguageOverride.cs"));
+        // 链①：活着的那条，两样零件一颗都⛔ 许少（设进程表＋设线程语言档，后者要读回相等才算咬住）
+        Assert.Contains("SetProcessPreferredUILanguages", ov, StringComparison.Ordinal);
+        Assert.Contains("SetThreadUILanguage", ov, StringComparison.Ordinal);
+        Assert.Contains("Win32PreferredUiLanguage", ov, StringComparison.Ordinal);
+        // 语言表是双零结尾——只补一颗时那颗 API 照样返回 true 而表是空的（片152 现场撞过）
+        Assert.Contains("win32Tag + \"\\0\\0\"", ov, StringComparison.Ordinal);
+        // ⛔ 线程首选语言表又长回来：片152 真机试过（thread=True 且进程表读回确是 en-US），
+        // 四颗 NumberBox 名里那句「最小/最大」照旧不动 ⇒ 死路只留判词，不留调用的死代码（同 WI-34 对 ResourceContext 的处置）。
+        Assert.DoesNotContain("SetThreadPreferredUILanguages", ov, StringComparison.Ordinal);
+        // 链②：正门仍试（它是报警器，不是主修）
         Assert.Contains("PrimaryLanguageOverride", ov, StringComparison.Ordinal);
         foreach (var code in new[] { "\"zh-Hans\"", "\"ja\"", "\"en\"" })
+            Assert.Contains(code, ov, StringComparison.Ordinal);
+        foreach (var code in new[] { "\"zh-CN\"", "\"ja-JP\"", "\"en-US\"" })
             Assert.Contains(code, ov, StringComparison.Ordinal);
         foreach (var file in new[] { "src/StarMark.UI/App.xaml.cs", "src/StarMark.UI/Views/SettingsPage.I18n.cs" })
         {
@@ -1665,6 +1699,215 @@ public sealed class I18nWiringGateTests
             var apply = body.IndexOf("UiLanguageOverride.Apply()", StringComparison.Ordinal);
             Assert.True(set >= 0 && apply > set, file + "：必须 TrySet 之后接 Apply（先覆盖后定档＝读旧语言）");
         }
+    }
+
+    /// <summary>
+    /// 待办组件那一列的截止标注住在<b>行模型的 string 里</b>（<c>TodoRow.DueText</c>），因此它⛔ 在
+    /// <c>LocText</c> 那棵树上——换语言那一刻唯一能救它的主人＝逐行重算（P-194 那一族在屏幕上的形状：
+    /// 片153 真机 en→ja 就地切档，同一扇窗里标题、三颗筛选、输入框提示与统计那句全改了口，
+    /// 只有那三行仍停在 <c>Tomorrow / Today / 2 days overdue</c>；组件活在桌面上好几天，
+    /// "等下一次整表重读"可能就是明天）。
+    /// <para>三头钉：① 视图那颗订阅与退订<b>成对</b>在场（漏退＝换语言时给已销毁的组件重画，表现是偶发崩溃
+    /// 而不是"看着不对"）；② 重算⛔ 另抄一份措辞，必从 <c>BuildRow</c> 同一颗
+    /// <c>LocalItemState.DescribeDue</c> 取（一句字一个主人——那颗计数钉到 2 就是这件事）；
+    /// ③ 只换真的变了话的那一行（<c>Visible[i] = row with</c>）——集合 Replace 一颗就重画一行，
+    /// 而无谓重排会撞上视图上那颗拖拽闸门。</para>
+    /// </summary>
+    [Fact]
+    public void TheFrozenDueColumnIsReComputedWhenTheLanguageChanges()
+    {
+        var view = Code(ReadRepoFile("src/StarMark.UI/Views/TodoWidget.xaml.cs"));
+        Assert.Contains("Locale.Changed += ReresolveDueColumn;", view, StringComparison.Ordinal);
+        Assert.Contains("Locale.Changed -= ReresolveDueColumn;", view, StringComparison.Ordinal);
+        Assert.Contains("private void ReresolveDueColumn() => ViewModel.ReresolveDueTexts();", view, StringComparison.Ordinal);
+        var vm = Code(ReadRepoFile("src/StarMark.UI/ViewModels/TodoWidgetViewModel.cs"));
+        Assert.Contains("public void ReresolveDueTexts() => RunOnUi(() =>", vm, StringComparison.Ordinal);
+        Assert.Equal(2, Count(vm, "LocalItemState.DescribeDue("));   // BuildRow 与重算同一颗主人
+        Assert.Contains("Visible[i] = row with { DueText = text };", vm, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 待办那一行在可达性树里念的是<b>条目自己</b>，⛔ 整份记录（片153 真机：容器没名字时 UIA 退回
+    /// <c>TodoRow.ToString()</c>，读屏的人先听见 <c>TodoRow { Id = 9, Text = …, Done = False,
+    /// DueTs = 1793462400, Order = -3 }</c> 才轮到那件事本身）。
+    /// <para>两颗⛔ 的写法各钉一颗反件，因为它们是"看着也能修好"的那两种：<b>ItemContainerStyle 里的
+    /// <c>Setter Property="AutomationProperties.Name"</c></b>——本批真机试过，容器照旧念 ToString（无效改动，
+    /// 留着＝下一位以为这条路通了）；<b>覆写 <c>ToString()</c></b>——会把调试与日志里那份整行 dump 一起改掉，
+    /// 那是它自己的用途。正件只有一处：模板根那颗 <c>x:Bind</c> 的名字，而它跟着语言重算换的是整颗行对象。</para>
+    /// </summary>
+    [Fact]
+    public void TheTodoRowIsNamedByItsOwnTextInTheAutomationTree()
+    {
+        var xaml = ReadRepoFile("src/StarMark.UI/Views/TodoWidget.xaml");
+        Assert.Contains("AutomationProperties.Name=\"{x:Bind Text}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Setter Property=\"AutomationProperties.Name\"", xaml, StringComparison.Ordinal);
+        var vm = Code(ReadRepoFile("src/StarMark.UI/ViewModels/TodoWidgetViewModel.cs"));
+        Assert.DoesNotContain("public override string ToString()", vm, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 设置页「桌面工具」那一栏的<b>布局行名</b>：那一列只在<b>进页那一刻</b>建（`OnNavigatedTo`→`BuildLayoutRows`），
+    /// 而行模型持的是当场 Render 出来的 <c>string</c> ⇒ 在同一次访问里换语言再点回这一栏，读到的是上一门语言。
+    /// <para>片154 真机那一发是这条判断的<b>唯一</b>证词（同一进程、不重启、⛔ 重新导航）：栏目头
+    /// 「レイアウト方案」改了口，那一行仍念 <c>Unnamed layout</c>；补上订阅之后同一发读到 <c>無名のレイアウト</c>。
+    /// 换语言的入口就在同一页的另一栏里（那颗下拉），所以"先离开再进来"是用户被迫做的动作，⛔ 自愈机制。</para>
+    /// <para>钉三件事：① 挂与摘成对（本页那颗 Loaded 用"先退再订"的老形状，Unloaded 里必须再摘一次——
+    /// 这颗页会被反复导航回来，挂着＝每进一次多一份重算手臂，坑表 #386 那一族）；
+    /// ② 重算那一颗只读内存里那份布局表（⛔ 回库、⛔ 顺手落盘）；
+    /// ③ 快照页那一列<b>不用</b>补——它的行在 <c>OnNavigatedTo</c> 里建，而全仓没有任何 <c>NavigationCacheMode</c>
+    /// ⇒ 进一次建一次，换语言后再进去必然是新语言。③ 这一半是<b>结构</b>判据：哪天有人开了页缓存，那颗断言就红，
+    /// 红的意思＝这一族要重新读一次屏（⛔ 让结构事实悄悄过期）。</para>
+    /// </summary>
+    [Fact]
+    public void TheLayoutRowNameIsRebuiltInsideOneSettingsPageVisit()
+    {
+        var page = Code(ReadRepoFile("src/StarMark.UI/Views/SettingsPage.xaml.cs"));
+        Assert.Contains("Locale.Changed += BuildLayoutRows;", page, StringComparison.Ordinal);
+        Assert.Equal(2, Count(page, "Locale.Changed -= BuildLayoutRows;"));   // Loaded 里先退＋Unloaded 里摘
+        Assert.Contains("Locale.Changed -= BuildLayoutRows;",
+                         MethodBody(page, "private void Page_Unloaded"), StringComparison.Ordinal);
+        var widgetsPartial = Code(ReadRepoFile("src/StarMark.UI/Views/SettingsPage.Widgets.cs"));
+        var rebuildBody = MethodBody(widgetsPartial, "private void BuildLayoutRows");
+        Assert.DoesNotContain("LoadAsync", rebuildBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("Save", rebuildBody, StringComparison.Ordinal);   // ⛔ 换语言写用户的档
+
+        var snap = Code(ReadRepoFile("src/StarMark.UI/Views/SnapshotPage.xaml.cs"));
+        Assert.Contains("BuildRows();", MethodBody(snap, "protected override void OnNavigatedTo"), StringComparison.Ordinal);
+        Assert.DoesNotContain("Locale.Changed", snap, StringComparison.Ordinal);   // 这一列⛔ 需要重贴手臂：进一次建一次
+        Assert.DoesNotContain("NavigationCacheMode",
+            string.Join("\n", ReadRepoUnder("src/StarMark.UI").Select(f => f.Text)), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 条目格（标签／剪贴板／置顶那一格）的<b>行标题与行副标题</b>也是行模型里的成品字——
+    /// 那一格只把活动流那几行接过重贴（✅WI-40-3b），条目这一半漏了。
+    /// <para>片155 真机就地 en→ja（沙盒里 seeded 一颗剪贴板格＋一行"空标题的图片行"）：
+    /// 组件标题「クリップボード」改了口，而那一行仍念 <c>Image</c> ⇒ 挂上重念手臂后同一发读到 <c>画像</c>
+    /// （副标题那一串三列同形、本来就不改口，逐字对照见 <c>UiStrings</c> 的 <c>clip.sub.image</c>）。</para>
+    /// <para>钉四件事：① 挂摘成对；② 重念那颗⛔ 打库（⛔ 借重贴之名再查一遍——语言换了，数据没换）；
+    /// ③ 落点走现成的按 id 最小差异那颗（<c>ApplyRows</c>），⛔ Clear 重建：换语言不该让常驻桌面的一格闪白；
+    /// ④ 活动流那一支早退时必须把内存里那份条目清掉——两种格共用同一个 <c>Items</c> 集合语义，
+    /// 留着上一模式的条目会在换语言那一刻被插回去（这颗形状就是那条失效的保险）。</para>
+    /// </summary>
+    [Fact]
+    public void TheItemGridRowsAreReReadFromTheCopyAlreadyInMemory()
+    {
+        var view = Code(ReadRepoFile("src/StarMark.UI/Views/ItemGridWidget.xaml.cs"));
+        Assert.Contains("Locale.Changed += ReresolveItemRows;", view, StringComparison.Ordinal);
+        Assert.Contains("Locale.Changed -= ReresolveItemRows;", view, StringComparison.Ordinal);
+        Assert.Contains("private void ReresolveItemRows() => ViewModel.ReresolveDisplay();", view, StringComparison.Ordinal);
+        var vm = Code(ReadRepoFile("src/StarMark.UI/ViewModels/ItemGridWidgetViewModel.cs"));
+        var reresolve = MethodBody(vm, "public void ReresolveDisplay");
+        Assert.Contains("ApplyRows(MapRows(_lastItems))", reresolve, StringComparison.Ordinal);   // 最小差异，⛔ Clear
+        Assert.DoesNotContain("LoadAsync", reresolve, StringComparison.Ordinal);                   // ⛔ 再打一次库
+        Assert.DoesNotContain("Clear()", reresolve, StringComparison.Ordinal);
+        Assert.Contains("IReadOnlyList<Item> _lastItems = new List<Item>();", vm, StringComparison.Ordinal);
+        Assert.Equal(1, Count(vm, "_lastItems = Array.Empty<Item>();"));   // 活动流那一支早退时清掉（唯一一处）
+        Assert.Contains("_lastItems = items;", vm, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 快捷搜索那一格的<b>结果行</b>（✅P-283）：与条目格同一族——两颗显示出口在结果落地那一刻折成成品字，
+    /// 而 <c>SearchResultItem</c> 的 <c>Title</c>／<c>Subtitle</c> 是<b>只读</b>槽（连 INPC 都没有，
+    /// ⛔ 有人报它）。片156 真机就地 en→ja：那一格里标题、输入框提示、那颗按钮、排序标签、键位提示、
+    /// 标签行与「結果」全改了口，只有结果那两行仍念 <c>Image</c>；补手臂后同一发读到 <c>画像</c>
+    /// （同一批结果⛔ 重新搜索，行还是那几行）。
+    /// <para>这一格比条目格多钉一颗：<b>那一处映射只许一个主人</b>。三条路径（空态浏览／统一搜索／无 SearchService 的兜底）
+    /// 从前各写一份 <c>new SearchResultItem(it.Id, TitleDisplayOf(it), …)</c>——换语言重算要复用同一份念法，
+    /// 三份里改一份就是"三条路里有一条照旧"。现在三处都走 <c>RowOf</c>，那颗计数==1 就是这件事；
+    /// 顺带⛔ 在重算那一拍里重新发起搜索（那一趟含 Everything 实时源）与 <c>Clear()</c>（会吃掉用户的选中位置）。</para>
+    /// </summary>
+    [Fact]
+    public void TheQuickSearchRowsAreReReadFromTheBatchAlreadyOnScreen()
+    {
+        var view = Code(ReadRepoFile("src/StarMark.UI/Views/SearchWidget.xaml.cs"));
+        Assert.Contains("Locale.Changed += ReresolveRows;", view, StringComparison.Ordinal);
+        Assert.Contains("Locale.Changed -= ReresolveRows;", view, StringComparison.Ordinal);
+        Assert.Contains("private void ReresolveRows() => ViewModel.ReresolveDisplay();", view, StringComparison.Ordinal);
+        var vm = Code(ReadRepoFile("src/StarMark.UI/ViewModels/SearchWidgetViewModel.cs"));
+        Assert.Equal(1, Count(vm, "ClipboardEntry.TitleDisplayOf("));      // 三处映射并成一颗主人
+        Assert.Equal(1, Count(vm, "ClipboardEntry.SubtitleDisplayOf("));
+        Assert.Contains("Results.Add(PushRow(it));", vm, StringComparison.Ordinal);
+        Assert.Contains("_rowsSource.Clear();", vm, StringComparison.Ordinal);
+        var body = MethodBody(vm, "public void ReresolveDisplay");
+        Assert.Contains("RowOf(_rowsSource[i])", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Results.Clear()", body, StringComparison.Ordinal);   // ⛔ 吃掉选中与滚动位置
+        Assert.DoesNotContain("RunSearchAsync", body, StringComparison.Ordinal);    // ⛔ 借重念之名再打一轮（含实时源）
+        Assert.DoesNotContain("SearchAsync", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 今日速览「常看条目」那一列（✅P-284＝P-280 那处的第五格）：与前四格同一族——行上那两颗字在装载那一刻
+    /// 由 <c>BuildItemButton</c> 当场折进面板，而这一格的重贴那一拍从前只做三件事（日期／月历／热榜），
+    /// 于是栏头改了口而同一行照旧。片157 真机就地 en→ja 读到 <c>よく見る</c> 配 <c>Image</c>／<c>Unknown source</c>，
+    /// 同一进程里 ✅P-282／✅P-283 修过的那两格、同一颗 seeded 行已念 <c>画像</c>／<c>取得元不明</c>。
+    /// <para>钉的是这一族的不变量：<b>那一列只许一个画法</b>（<c>PaintItems</c>），装载与重贴共用它；重算那一拍
+    /// ⛔ 再打库。两颗槽里<b>副标题那一槽才是生产形状上也会变口的</b>——新写的图片行标题＝宽高串（中性），
+    /// 只有没取到来源应用名时副标题念 <c>clip.sub.unknown</c>＝会变口的词，所以这颗证人问的是"两颗槽由同一拍重念"，
+    /// ⛔ 是"标题翻没翻"。</para>
+    /// <para>⚠ 这一批给这颗档<b>⛔ 新增挂摘手臂</b>：它本来就是 <c>Locale.Changed</c> 的主人，只是把第四拍接进
+    /// 现成的那颗 handler ⇒ 订阅合数与名单颗数照旧（那颗分母尺这一批⛔ 动）。</para>
+    /// </summary>
+    [Fact]
+    public void TheGlanceFrequentColumnIsReReadFromTheBatchAlreadyOnScreen()
+    {
+        var view = Code(ReadRepoFile("src/StarMark.UI/Views/GlanceWidget.xaml.cs"));
+        Assert.Equal(1, Count(view, "ItemsHost.Children.Add("));        // 那一列只许一个画法
+        Assert.Equal(1, Count(view, "ItemsHost.Children.Clear();"));
+        Assert.Equal(1, Count(view, "ClipboardEntry.TitleDisplayOf("));
+        Assert.Equal(1, Count(view, "ClipboardEntry.SubtitleDisplayOf("));
+        Assert.Equal(1, Count(view, "GetRecentAsync"));                 // 打库只许在装载那一拍
+        Assert.Contains("_lastRecent = items;", view, StringComparison.Ordinal);
+        // 那颗清场计数==2 之所以量得准，是因为声明那一颗写的是 Array.Empty（与两支清场的字面不同）：
+        // 上一版把声明也写成 new List<Item>()，这一颗就数到 3——把多的那一颗交回形状钉住，⛔ 靠"知道它多一颗"。
+        Assert.Contains("IReadOnlyList<Item> _lastRecent = Array.Empty<Item>();", view, StringComparison.Ordinal);
+        Assert.Equal(2, Count(view, "_lastRecent = new List<Item>();"));   // 无仓储／抛异常两支都要清场
+        var repaint = MethodBody(view, "private void PaintItems");
+        Assert.Contains("ShowEmpty(ItemsHost.Children.Count == 0);", repaint, StringComparison.Ordinal);
+        var words = MethodBody(view, "private void RebuildWords");
+        Assert.Contains("_lastRecent.Count > 0) PaintItems();", words, StringComparison.Ordinal);
+        Assert.Contains("PaintTrending();", words, StringComparison.Ordinal);      // 第三拍⛔ 被这一批挤掉
+        Assert.DoesNotContain("GetRecentAsync", words, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 诊断面板「你刚才跑的那次含不含最新改动」那一格（✅P-285・P-194 普查里最后一处上屏形状）。
+    /// <para>它的实参是<b>采集那一刻</b>折好的成品字（<c>DiagnosticEntry.Fact(BuildInfo.Display)</c>），
+    /// 而换语言那一刻 <c>PaintDiagnostics</c> 只重念外层那颗 <c>diag.fact</c>＝内层不再重算。
+    /// 屏幕上分不出来，靠的是<b>两颗事实</b>：① 那句正常文本走 <c>DateTimeText.Minute</c>＝<b>不变文化</b>的数字串，
+    /// 换语言本来就是同一串；② 外层 <c>diag.fact</c> 三列同形（<c>"{0}"</c>）。会变口的那句只有
+    /// <b>「读不到可执行文件的写入时间」</b>那一支（<c>diag.value.buildUnknown</c>），而正常桌面启动摆不出这一支
+    /// ⇒ 本批⛔ 改产品代码、⛔ 写"已实测"，只把<b>那两颗事实钉成会红的断言</b>：
+    /// 谁把 <c>Minute</c> 改成分语言格式、或把 <c>diag.fact</c> 三列改成不一样、或把兜底那句改回写死，
+    /// 屏幕上立刻多一行停在旧语言的句子，而这一格先红。</para>
+    /// </summary>
+    [Fact]
+    public void TheDiagnosticsBuildCellFreezesOnlyLanguageNeutralText()
+    {
+        var info = Code(ReadRepoFile("src/StarMark.Abstractions/BuildInfo.cs"));
+        Assert.Contains("? DateTimeText.Minute(time)", info, StringComparison.Ordinal);            // 正常支：不变文化那一颗
+        Assert.Contains(": Locale.T(\"diag.value.buildUnknown\");", info, StringComparison.Ordinal);  // 兜底支交表念（✅WI-57 那条口径）
+
+        var dt = Code(ReadRepoFile("src/StarMark.Abstractions/DateTimeText.cs"));
+        foreach (var name in new[] { "public static string Minute(DateTime value)", "public static string Minute(DateTimeOffset value)" })
+        {
+            var body = MethodBody(dt, name);
+            Assert.Contains("CultureInfo.InvariantCulture", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("CurrentCulture", body, StringComparison.Ordinal);   // 改成随语言＝这一格先红，逼一次真机重测
+        }
+
+        var table = ReadRepoFile("src/StarMark.Abstractions/I18n/UiStrings.cs");
+        var line = table.Split('\n').First(l => l.Contains("\"diag.fact\""));
+        var cols = line.Split(new[] { "\"{0}\"" }, StringSplitOptions.None);
+        Assert.Equal(4, cols.Length);   // 那颗键的三列都是 "{0}"（一行四段＝三个分隔符）：一旦哪一列改成别的东西，内层冻字就看得见
+        Assert.Contains("new Entry(\"diag.fact\", \"{0}\", \"{0}\", \"{0}\")", table, StringComparison.Ordinal);
+
+        var svc = Code(ReadRepoFile("src/StarMark.Core/Diagnostics/DiagnosticsService.cs"));
+        Assert.Contains("DiagnosticEntry.Fact(StarMark.Abstractions.BuildInfo.Display)", svc, StringComparison.Ordinal);
+        var paint = MethodBody(ReadRepoFile("src/StarMark.UI/ViewModels/SettingsPageViewModel.Health.cs"), "public void PaintDiagnostics");
+        Assert.Contains("e.Label.Render()", paint, StringComparison.Ordinal);      // 唯一取词点：采集与换语言两条路都走这里
+        Assert.Contains("e.Value.Render()", paint, StringComparison.Ordinal);
+        Assert.DoesNotContain("CollectAsync", paint, StringComparison.Ordinal);      // 重念那一拍⛔ 重采集
     }
 
     /// <summary>

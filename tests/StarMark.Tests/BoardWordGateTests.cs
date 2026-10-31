@@ -230,21 +230,26 @@ public sealed class BoardWordGateTests : IDisposable
             Locale.Fmt("boards.exportBackgroundAction",
                 Locale.T(background ? "boards.exportOn" : "boards.exportOff")));
 
-    /// <summary>⑤整族总数现读：这一族<b>三十一</b>颗（面板那廿八颗＋片21 那两颗开窗失败的旧话＋片148 那一句「装不下」）。
+    /// <summary>⑤整族总数现读：这一族<b>三十三</b>颗（面板那廿八颗＋片21 那两颗开窗失败的旧话＋片148 那一句「装不下」
+    /// ＋片151 那两颗「贴到桌面」——那两颗在片150 被当孤儿摘过，摘与回的经过写在下面那颗方法上）。
     /// <para>钉总数而⛔ 钉"至少"：下一批往这一族加一句而不带证人，这一格就会红——而那一颗新句子的换语言，
     /// 是这一族最容易漏的那一半（P-175 那一族在三扇宿主上各漏过一次）。</para></summary>
     [Fact]
-    public void TheBoardFamilyHasExactlyThirtyOneRowsAndTheyAreNamed()
+    public void TheBoardFamilyHasExactlyThirtyThreeRowsAndTheyAreNamed()
     {
         var keys = UiStrings.All.Select(e => e.Key)
             .Where(k => k.StartsWith("boards.", StringComparison.Ordinal)).ToArray();
-        Assert.Equal(31, keys.Length);
-        Assert.Equal(Panel.Length + 3, keys.Length);                          // 上屏那廿八颗＋两颗旧话＋片148 那一句「装不下」
+        Assert.Equal(33, keys.Length);
+        Assert.Equal(Panel.Length + 5, keys.Length);   // 廿八颗面板＋两颗旧话＋「装不下」＋片151 那两颗「贴到桌面」
         foreach (var key in Panel) Assert.Contains(key, keys);
         Assert.Contains("boards.openFailedTitle", keys);
         Assert.Contains("boards.openFailedBody", keys);
         // 片148＝图进画板那一发的上限坏话（两颗发送口各念一次，⛔ 住这扇面板里 ⇒ ⛔ 进 Panel 那张名单）
         Assert.Contains("boards.insertTooBigBody", keys);
+        // 片151＝第五颗出口（那颗按钮上的字与它落点那句话）。片150 曾按 P-212 把这两颗当孤儿摘掉（句子先于码落地），
+        // 这一批带着读者一起回来——这一格就是"读者在不在"那颗证人：摘时掉两颗，回来时得涨两颗，中间那档⛔ 许留在表里。
+        Assert.Contains("boards.pinAction", keys);
+        Assert.Contains("boards.pinnedBody", keys);
     }
 
     /// <summary>⑥那一屏上<b>可点</b>的控件⛔ 只钉面板的字色——三样一起钉，且禁项与正件在同一次比较里。
@@ -283,10 +288,13 @@ public sealed class BoardWordGateTests : IDisposable
         // ⚠ 片108 <b>只抬黑字那一列</b>（15→16），底色与描边那两列照旧 11：新加的那一样是<b>一行字</b>而⛔ 一颗按钮，
         // 所以这一格三列各数一遍正好把这一笔说清楚——名册 435 那一族"只抬一列会被读成尺坏了"在此处是<b>合法形状</b>，
         // 而判断它合法的依据是"这一屏上可点的控件颗数一颗没变"（面板那六颗＋那一行那五颗＝十一颗照旧）。
-        Assert.Equal(16, Count(body, "Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black)"));
-        Assert.Equal(11, Count(body, "Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255))"));
-        Assert.Equal(11, Count(body, "BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130))"));
-        // 禁项：这一族⛔ 用"跟着主题走"的那一类刷子（面板与十一颗按钮都不跟着走，见 §27.6）
+        // 片151＝那一行上<b>多了一颗可点的</b>（「贴到桌面」），所以三列各加一颗：黑字 16→17、底色 11→12、描边 11→12。
+        // 这一笔⛔ 是"只抬一列"那一族（上面片108 那一格抬的是一行字），也⛔ 许只抬一列——漏任何一列＝那颗新按钮
+        // 有一样颜色吃主题刷＝片27／28 那把尺量的"白字画在白底上"在这一屏上再来一次。
+        Assert.Equal(17, Count(body, "Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black)"));
+        Assert.Equal(12, Count(body, "Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255))"));
+        Assert.Equal(12, Count(body, "BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130))"));
+        // 禁项：这一族⛔ 用"跟着主题走"的那一类刷子（面板与十二颗按钮都不跟着走，见 §27.6）
         Assert.Equal(0, Count(body, "ThemeResource"));
         Assert.Equal(0, Count(body, "Application.Current.Resources["));
     }

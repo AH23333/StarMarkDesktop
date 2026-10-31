@@ -129,6 +129,43 @@ public sealed class SearchWidgetViewModel
         if (Results.Count > 0) SetSelected(0);
     }
 
+    /// <summary>
+    /// 结果行的<b>唯一映射</b>：两颗显示出口（标题／副标题）当场按当时的语言念（✅P-199 同一条口径），
+    /// 装载与换语言重算共用这一颗 ⇒ ⛔ 第二份写法。
+    /// <para>类型名写全（⛔ 用省略写法 <c>new(...)</c>）：图标槽位那颗尺（<c>ItemTypeGlyphGateTests</c>）
+    /// 是按"类型名＋左括号"找构造点的，省掉类型名＝把它的构造点藏走。注释里也⛔ 把那串字面量重打一遍——
+    /// 那颗尺读的是整档原文（⛔ 先抹注释），一句注释就能给它造出一颗假构造点。</para>
+    /// </summary>
+    private static SearchResultItem RowOf(Item it) => new SearchResultItem(
+        it.Id, ClipboardEntry.TitleDisplayOf(it), ClipboardEntry.SubtitleDisplayOf(it),
+        it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId);
+
+    /// <summary>上一轮那批 <see cref="Item"/>：换语言那一刻按原顺序重念两颗显示出口，⛔ 再打一次库。</summary>
+    private readonly List<Item> _rowsSource = new();
+
+    private SearchResultItem PushRow(Item it)
+    {
+        _rowsSource.Add(it);
+        return RowOf(it);
+    }
+
+    /// <summary>
+    /// 换语言那一刻：把结果那一列按<b>已经在手的那一份</b>逐行重念标题与副标题。
+    /// <para>片156 真机就地 en→ja 读到：那一格里标题、输入框提示、那颗按钮、排序标签、键位提示、
+    /// 「タグ」与「結果」全改了口，只有结果那两行仍念 <c>Image</c>——它们住在
+    /// <see cref="SearchResultItem"/> 的只读字符串槽里（不是 INPC，⛔ 有人报它）。</para>
+    /// <para>按索引替换而⛔ <c>Clear()</c>：那颗会吃掉用户的选中位置，也让整列闪一次白；
+    /// 也⛔ 在这里重新发起一次搜索（语言换了，命中的那批条目没换，而那一趟含实时源）。</para>
+    /// </summary>
+    public void ReresolveDisplay()
+    {
+        for (var i = 0; i < Results.Count && i < _rowsSource.Count; i++)
+        {
+            var fresh = RowOf(_rowsSource[i]);
+            if (!Equals(Results[i], fresh)) Results[i] = fresh;
+        }
+    }
+
     public SearchWidgetViewModel(IItemRepository? repo, SearchService? search = null)
     {
         _repo = repo;
@@ -198,6 +235,7 @@ public sealed class SearchWidgetViewModel
         var ct = cts.Token;
 
         Results.Clear();
+        _rowsSource.Clear();   // 与结果同生同灭：换语言重算按索引配这一份
         _selectedIndex = -1;
         IsBrowsing = false;
         var selected = Tags.Where(t => t.Selected).Select(t => t.Name).ToList();
@@ -218,7 +256,7 @@ public sealed class SearchWidgetViewModel
                         new BrowseFilter { Sort = Sort == "name" ? "name" : "recent", Limit = 60 }, ct);
                     if (ct.IsCancellationRequested) return;
                     foreach (var it in recent)
-                        Results.Add(new SearchResultItem(it.Id, ClipboardEntry.TitleDisplayOf(it), ClipboardEntry.SubtitleDisplayOf(it), it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId));
+                        Results.Add(PushRow(it));
                     ResetSelectionAfterPopulate();
                 }
                 // 有货可看时那句空态⛔ 上屏（视图按 Results.Count 决定这一格可见性），所以这里交 null 而⛔ 再造一颗"最近条目"。
@@ -234,7 +272,7 @@ public sealed class SearchWidgetViewModel
                 var result = await _search.SearchAsync(q, new SearchFilter { Tags = selected, MaxResults = 200, Sort = Sort }, ct);
                 if (ct.IsCancellationRequested) return;   // 已被更新的搜索取代，丢弃本次结果（即便 provider 未提前中断）
                 foreach (var it in result.Items)
-                    Results.Add(new SearchResultItem(it.Id, ClipboardEntry.TitleDisplayOf(it), ClipboardEntry.SubtitleDisplayOf(it), it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId));
+                    Results.Add(PushRow(it));
                 ResetSelectionAfterPopulate();
                 EmptyHint = EmptyMessageFor(q, selected);
                 return;
@@ -255,7 +293,7 @@ public sealed class SearchWidgetViewModel
             }
             if (ct.IsCancellationRequested) return;
             foreach (var it in items)
-                Results.Add(new SearchResultItem(it.Id, ClipboardEntry.TitleDisplayOf(it), ClipboardEntry.SubtitleDisplayOf(it), it.Uri, ItemCardPolicy.GlyphOf(it.Type), it.Type, it.Source, it.SourceId));
+                Results.Add(PushRow(it));
             ResetSelectionAfterPopulate();
             EmptyHint = EmptyMessageFor(q, selected);
         }

@@ -86,10 +86,16 @@ public sealed class LocaleSubscriptionPairGateTests
         // ⇒ 44|19|25|14 → 46|20|26|15。
         // 前两次同形状的各补过一次分母（同一档里加手臂，⛔ 档数不变）：批次 WI-82 片2（设置页"上一次同步"那行，挂 1／摘 2）
         // 与批次 WI-68（"健康"那一栏）。
+        // ✅P-279（片153）给待办那扇组件挂了一组成对手臂（挂 1＝构造／摘 1＝Unloaded），同一形状第三整档
+        // ⇒ 46|20|26|15 → 48|21|27|16；✅P-281（片154）给设置页那一栏补了一拍重算（本页早就是主人，
+        // 这一处按本页惯例＝Loaded 里"先退再订"两颗＋Unloaded 再摘一颗 ⇒ 挂 +1／摘 +2）→ 51|22|29|16；
+        // ✅P-282（片155）给条目格补了第二对手臂（挂 1＝构造／摘 1＝卸载那颗 lambda 里，⛔ 新开一档）→ 53|23|30|16；
+        // ✅P-283（片156）给快捷搜索那一格补了一对（挂 1＝构造／摘 1＝Unloaded，<b>多出一整档</b>）→ <b>55|24|31|17</b>。
+        // ⚠ 这几串都是<b>现读</b>（Actual 那一份），⛔ 预测。
         // ⚠ 这颗闸门⛔ 在本族的定向过滤器里 ⇒ 只要动了订阅手臂，收口必须跑全量（上一批就是这么静默漏过一次，
         // 名册 288 第④条）。四串合成<b>一条</b>断言：红了就把"该是多少"与"现在是多少"两边整串一起报出来，
         // ⛔ 撞一次改一次（那要重编四回）。
-        Assert.Equal("46|20|26|15",
+        Assert.Equal("55|24|31|17",
             $"{pts.Count}|{pts.Count(p => p.Sign == "+")}|{pts.Count(p => p.Sign == "-")}|{pts.Select(p => p.File).Distinct().Count()}");
         Assert.All(pts, p => Assert.True(p.Sign is "+" or "-", "符号只可能是这两颗之一"));
     }
@@ -133,7 +139,7 @@ public sealed class LocaleSubscriptionPairGateTests
     }
 
     /// <summary>
-    /// ⑤<b>这一批的主角</b>：同一行里两种符号那 <b>4</b> 颗必须读成<b>摘</b>，而"挂在 <c>Loaded</c> 那一拍里、与外层 <c>+=</c> 同一行"那 <b>3</b> 颗必须读成<b>挂</b>。
+    /// ⑤<b>这一批的主角</b>：同一行里两种符号那 <b>5</b> 颗必须读成<b>摘</b>，而"挂在 <c>Loaded</c> 那一拍里、与外层 <c>+=</c> 同一行"那 <b>3</b> 颗必须读成<b>挂</b>。
     /// <para>旧普查就是把前者读成挂，于是"6 档只见挂不见摘"这份名单凭空出现（坑表 <b>#455</b>）——
     /// 这一格不给它第二次机会：两种形状各按现读的颗数钉住（<c>bin/WI404/pair_404.txt</c>），且<b>没有一行</b>既算挂又算摘。
     /// ⚠ 第三颗档（<c>WeatherWidget.xaml.cs</c>）是<b>另一形状</b>：<c>Loaded += (_, _) =&gt; { … }</c> 的<b>块体</b>里单行挂，
@@ -146,7 +152,8 @@ public sealed class LocaleSubscriptionPairGateTests
         var subLines = pts.Where(p => LambdaSub.IsMatch(p.Line)).ToList();
         var unsubLines = pts.Where(p => LambdaUnsub.IsMatch(p.Line)).ToList();
         Assert.Equal(3, subLines.Count);
-        Assert.Equal(4, unsubLines.Count);
+        // ✅P-283（片156）快捷搜索那一格补了一对：Unloaded 那颗是单行 lambda 里带 -= ⇒ 本行 4 → 5
+        Assert.Equal(5, unsubLines.Count);
         Assert.All(subLines, p => Assert.Equal("+", p.Sign));
         Assert.All(unsubLines, p => Assert.Equal("-", p.Sign));
         // 一行只归一边：同档同行的两颗形状⛔ 混（把"摘"当"挂"用的那次就是这么错的）
@@ -161,7 +168,7 @@ public sealed class LocaleSubscriptionPairGateTests
         var files = pts.Where(p => LambdaSub.IsMatch(p.Line) || LambdaUnsub.IsMatch(p.Line))
             .Select(p => p.File).Distinct(StringComparer.Ordinal)
             .OrderBy(f => f, StringComparer.Ordinal).ToList();
-        Assert.Equal(4, files.Count);
+        Assert.Equal(5, files.Count);   // 同一批：SearchWidget.xaml.cs 进了这一族（挂 1／摘 1）
         foreach (var file in files)
         {
             var d = pts.Where(p => p.File == file).ToList();

@@ -69,12 +69,14 @@ public sealed class CanvasSnapshotPinGateTests
     }
 
     /// <summary>
-    /// 三条落点读同一份像素（<c>Compose()</c> 只有一处），但<b>只有贴图裁</b>：
-    /// 复制／存图交出去的是一整页（留档要看整块板子的上下文），这是本批唯一的有意分岔。
-    /// 不钉住它，下一轮就会有人把三条"顺手统一"成裁的（或反过来说服用户整屏才对）。
+    /// 四条落点读同一份像素（<c>Compose()</c> 只有一处），<b>裁那一刀的有两支</b>：贴图与放上画板——
+    /// 片151 加后者时钉的是"<b>两支点同一颗 <c>FrameOf</c></b>"，而⛔ 各算一遍"哪一块有墨"
+    /// （两把尺迟早分岔，那正是这一族最容易长出来的第二真值）。
+    /// 复制／存图仍交一整页（留档要看整块板子的上下文），那一半是有意分岔：
+    /// 不钉住它，下一轮就会有人把四条"顺手统一"成裁的（或反过来说服用户整屏才对）。
     /// </summary>
     [Fact]
-    public void OnlyThePinCrops_CopyAndSaveStillHandOverTheWholeFrame()
+    public void TwoLandingsCropOnTheSameJudgement_CopyAndSaveStillHandOverTheWholeFrame()
     {
         var service = SourceGate.ReadRepoPartials(Service);
         foreach (var anchor in new[] { "public static void SnapshotToClipboard()", "public static void SavePng()" })
@@ -85,8 +87,16 @@ public sealed class CanvasSnapshotPinGateTests
             Assert.DoesNotContain("FrameOf", body);
             Assert.Contains("shot.Pixels, shot.Width, shot.Height", body);
         }
-        // 合成的入口只有一处：三条落点各调一次，别处不许再起一份"怎么合成"
-        Assert.Equal(3, SourceGate.Count(service, "Compose();"));
+        // 裁的那两支：同一颗 FrameOf、同一颗 PaddingDip，⛔ 一支用 DIP 另一支用像素
+        foreach (var anchor in new[] { "public static void SnapshotToPin()", "public static void SnapshotToBoard()" })
+        {
+            var body = SourceGate.MethodBody(service, anchor);
+            Assert.Contains("CanvasSnapshotMath.FrameOf(shot.Ink, shot.Width, shot.Height, padding)", body);
+            Assert.Contains("CanvasSnapshotMath.PaddingDip * shot.Scale", body);
+            Assert.Contains("CanvasSnapshotMath.CropBgra(", body);
+        }
+        // 合成的入口只有一处：四条落点各调一次，别处不许再起一份"怎么合成"
+        Assert.Equal(4, SourceGate.Count(service, "Compose();"));
     }
 
     /// <summary>

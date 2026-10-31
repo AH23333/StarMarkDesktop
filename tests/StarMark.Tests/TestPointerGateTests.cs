@@ -100,8 +100,14 @@ public sealed class TestPointerGateTests
     public static void TheTwoPointersThatBrokeAreStillPointing()
     {
         var cites = Citations();
+        // 那颗证人问的是"这一族那颗数落在这颗证人身上、而引用它的注释跟着改名走"——
+        // ⛔ 把<b>名字里那颗数字</b>抄进墓碑：那颗方法的名字带着行数（31→33 是片151 加了两颗键），
+        // 每加一颗句子就得来动这块墓碑一次，而"引用没跟上"那一维早由
+        // <see cref="EveryTestNameCitationInSourceResolvesToARealTestMethod"/> 逐颗扫过（片151 真机就是这么抓红的：
+        // 改了名没改注释，那颗尺当场报一颗不存在的证人）。这里只钉"这一族那颗行数的证人确实被引用着"。
         Assert.Contains(cites, c => c.File == "src/StarMark.UI/Boards/BoardWindow.cs"
-            && c.TestClass == "BoardWordGateTests" && c.Method == "TheBoardFamilyHasExactlyThirtyOneRowsAndTheyAreNamed");
+            && c.TestClass == "BoardWordGateTests"
+            && c.Method.StartsWith("TheBoardFamilyHasExactly", StringComparison.Ordinal));
         Assert.Contains(cites, c => c.File == "src/StarMark.Abstractions/NumberText.cs"
             && c.TestClass == "NumberTextTests" && c.Method == "WhichShapesActuallyMove");
         Assert.DoesNotContain("TwentyThreeRows", ReadRepoFile("src/StarMark.UI/Boards/BoardWindow.cs"), StringComparison.Ordinal);
