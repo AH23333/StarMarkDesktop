@@ -367,3 +367,12 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：定向 74／74・docgates 26/26（x64）・全量 6716／6716（x64・19 m 7 s）・计数器 285／163／122 VERDICT OK。
 - 下一刀：本链后台可动项清零——余开放 P-192（非本机可动＝Ditto 副标题、无 OCR 包机器、造不出的防御臂）与 #575（三语覆盘需真机＝用户占机）；待用户裁决或释放机器。⛔ commit（片161 文档腿未领）、push（未推 314）。
 
+## 四十三、片162 P-192 结案入口①量到：授权装 Ditto・装机路径 bug 修掉・三语真机读数（未结案）
+
+- 装机：winget 3.25.113.0；库 %APPDATA%\Ditto\Ditto.db（一次现值原样重设零损失触发落行）。
+- 修复：候选表领头改装机现形（Ditto 目录下 Ditto.db・两根目录）＋旧形照留；FindDbPath 取第一存在；三档注释改口；证人 Candidates_LeadWithTheShapeTodaysInstallerActuallyWrites；定向九族 68／68（x64）。
+- 三语读数：zh『Ditto 剪贴板』／en『Ditto clipboard』／ja『Ditto クリップボード』・每跑同步 1 秒・剪贴板伪根计数 (1)・副标题命中恰 1；正本 D:\StarMarkTmp\p162\measure_zh.txt／measure_en.txt／measure_ja.txt。
+- 剪贴板纪律：真剪贴板内容一字未进证据档（长度＋sha256 前缀 49・76f51a2ea66c・三跑同值）。
+- 读数：docgates 26/26（x64・正本 D:\StarMarkTmp\p162\docgates162.txt）・计数器 285／163／122 VERDICT OK（0 立 0 结）；P-192 ⛔ 翻牌（剩 ⑴⑵⑶ 三臂皆非本机可动）。
+- 下一刀：余开放 P-192 三防御臂与 #575（三语覆盘需真机＝用户占机）。⛔ commit（片162 未领）、push（未推 316）。
+
