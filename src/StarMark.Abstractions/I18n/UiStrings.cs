@@ -1267,6 +1267,7 @@ public static class UiStrings
         new Entry("glance.festival.thanksgiving", "感恩节", "Thanksgiving", "感謝祭"),
         new Entry("glance.festival.newYearsEve", "公历除夕", "New Year's Eve", "大みそか"),
         new Entry("glance.festival.comingOfAgeDay", "成人节", "Coming of Age Day", "成人の日"),
+        new Entry("glance.festival.setsubun", "节分", "Setsubun", "節分"),
         new Entry("glance.festival.nationFoundingDay", "建国纪念日", "National Foundation Day", "建国記念の日"),
         new Entry("glance.festival.springEquinoxDay", "春分日", "Vernal Equinox Day", "春分の日"),
         new Entry("glance.festival.autumnEquinoxDay", "秋分日", "Autumnal Equinox Day", "秋分の日"),

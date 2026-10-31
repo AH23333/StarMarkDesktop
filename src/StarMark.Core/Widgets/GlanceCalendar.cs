@@ -24,9 +24,10 @@ namespace StarMark.Core.Widgets;
 /// ⚠ 反过来，日本的春分／秋分<b>就是</b>抄那一年日历的那一类：那两天的日号由天文时刻定（1948 年那部法律
 /// 写的是「春分の日／秋分の日」而不是一颗日期），所以它们走 <see cref="JapanEquinoxDays"/> 那张官制年表，
 /// 年表覆盖不到的年份一律不出——写错了屏幕上就是"距某节日还差一天"的假话（口径见账本 P-189）。
-/// <b>節分仍欠</b>：它＝「立春前一日」，而本仓拿不到立春那颗的第二处读数（寿星公式的立春系数连 2020・2024
-/// 这几年自己就读错），故⛔ 排・⛔ 用裸公式顶上。
-/// </para>
+    /// 節分（片161・P-189 落地）与那两颗同族：官方暦要項每年 2 月只公布翌年，本仓取到的官方年页只覆盖
+    /// 2020～2027，故它走 <see cref="JapanSetsubunDays"/> 那张官制年表（「節分」行与「立春」行同页互证 8/8），
+    /// 2028 起（官方数据出现前）一律不出——⛔ 拿寿星公式的立春系数外推（它连 2020・2024 的立春自己都读错）。
+    /// </para>
 /// </summary>
 public static class GlanceCalendar
 {
@@ -129,7 +130,7 @@ public static class GlanceCalendar
 
     // ─────────────────── 规则表：名字住在表里，这里只排"哪天算" ───────────────────
 
-    private enum RuleKind { Fixed, NthWeekday, LastWeekday, Lunar, EveOfLunarNewYear, Qingming, JapanEquinox }
+    private enum RuleKind { Fixed, NthWeekday, LastWeekday, Lunar, EveOfLunarNewYear, Qingming, JapanEquinox, JapanSetsubun }
 
     /// <summary>
     /// 一颗节日规则。<see cref="Month"/>／<see cref="Day"/> 在 <see cref="RuleKind.Lunar"/> 那一支装的是
@@ -164,6 +165,12 @@ public static class GlanceCalendar
         /// 年表覆盖不到的年份一律<b>永不命中</b>＝宁缺不说假话。</summary>
         public static FestivalRule JapanEquinox(string key, int month)
             => new(key, RuleKind.JapanEquinox, month, 0, DayOfWeek.Sunday, 0);
+
+        /// <summary>節分（立春前一日）：日号由 <see cref="TryJapanSetsubunDay"/> 查官制年表（暦要項各年
+        /// 「節分」行）。官方年页只到 2027，覆盖不到的年份<b>永不命中</b>——⛔ 拿寿星公式的立春系数外推
+        /// （它连 2020・2024 的立春都读错，这正是这一颗此前一直⛔ 排的原因）。</summary>
+        public static FestivalRule JapanSetsubun(string key)
+            => new(key, RuleKind.JapanSetsubun, 2, 0, DayOfWeek.Sunday, 0);
     }
 
 
@@ -225,6 +232,7 @@ public static class GlanceCalendar
     [
         FestivalRule.Fixed("glance.festival.newYear", 1, 1),
         FestivalRule.Nth("glance.festival.comingOfAgeDay", 1, DayOfWeek.Monday, 2),
+        FestivalRule.JapanSetsubun("glance.festival.setsubun"),
         FestivalRule.Fixed("glance.festival.nationFoundingDay", 2, 11),
         FestivalRule.Fixed("glance.festival.emperorsBirthday", 2, 23),
         FestivalRule.Fixed("glance.festival.dollFestival", 3, 3),
@@ -277,6 +285,8 @@ public static class GlanceCalendar
         RuleKind.Qingming => date.Month == 4 && date.Day == GetQingmingDay(date.Year),
         RuleKind.JapanEquinox => date.Month == rule.Month
                                  && TryJapanEquinoxDay(date.Year, rule.Month, out var day) && date.Day == day,
+        RuleKind.JapanSetsubun => date.Month == 2
+                                 && TryJapanSetsubunDay(date.Year, out var setsubunDay) && date.Day == setsubunDay,
         _ => false,
     };
 
@@ -323,6 +333,28 @@ public static class GlanceCalendar
         {
             if (row.Year != year) continue;
             day = month == 3 ? row.SpringDay : month == 9 ? row.AutumnDay : 0;
+            return day > 0;
+        }
+        day = 0;
+        return false;
+    }
+
+    /// <summary>国立天文台暦要項各年「節分」行（2020～2027）。節分＝立春前一日，与同一批年页里的
+    /// 「立春」行逐年互证 8/8（片161 取数腿，`D:\StarMarkTmp\p161\fetch161.txt`）。官方每年 2 月
+    /// 只公布翌年暦要項，故这张表止于 2027。</summary>
+    private static readonly (int Year, int Day)[] JapanSetsubunDays =
+    [
+        (2020, 3), (2021, 2), (2022, 3), (2023, 3), (2024, 3), (2025, 2), (2026, 3), (2027, 3),
+    ];
+
+    /// <summary>節分在当年的日号。<b>年表覆盖不到的年份交 false</b>——界面上就那一行不出，
+    /// ⛔ 拿寿星公式的立春系数外推（与春分／秋分同一条「寧缺毋滥」口径，P-189）。</summary>
+    public static bool TryJapanSetsubunDay(int year, out int day)
+    {
+        foreach (var row in JapanSetsubunDays)
+        {
+            if (row.Year != year) continue;
+            day = row.Day;
             return day > 0;
         }
         day = 0;

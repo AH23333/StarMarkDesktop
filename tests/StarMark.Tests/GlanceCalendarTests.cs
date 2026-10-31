@@ -176,6 +176,67 @@ public sealed class GlanceCalendarTests : IDisposable
         return day;
     }
 
+    /// <summary>
+    /// 節分（立春前一日，片161・P-189）：钉的是国立天文台暦要項各年「節分」行的原文——
+    /// 官方年页只覆盖 2020～2027（暦要項每年 2 月只公布翌年），表外＝不出，⛔ 在测试里拿公式再算一遍
+    /// （寿星公式的立春系数连 2020・2024 都读错，这正是这一颗此前一直⛔ 排的原因）。
+    /// </summary>
+    [Theory]
+    [InlineData(2020, 2, 3)]
+    [InlineData(2021, 2, 2)]   // 124 年ぶりの 2 月 2 日（官方 topics「節分の日が動き出す」钉的同一年）
+    [InlineData(2022, 2, 3)]
+    [InlineData(2024, 2, 3)]
+    [InlineData(2025, 2, 2)]
+    [InlineData(2026, 2, 3)]
+    [InlineData(2027, 2, 3)]
+    public void Setsubun_LandsOnTheOfficialTableRow(int year, int month, int day)
+    {
+        Assert.True(GlanceCalendar.TryJapanSetsubunDay(year, out var got),
+            $"{year} 年不在年表里＝这颗年表被改短了");
+        Assert.Equal(day, got);
+
+        Locale.TrySet(AppLanguage.Japanese);
+        Assert.Equal("glance.festival.setsubun", GlanceCalendar.FestivalMessage(new DateOnly(year, month, day))?.Key);
+
+        var hits = 0;
+        for (var d = 1; d <= DateTime.DaysInMonth(year, month); d++)
+            if (GlanceCalendar.FestivalMessage(new DateOnly(year, month, d))?.Key == "glance.festival.setsubun") hits++;
+        Assert.Equal(1, hits);
+    }
+
+    /// <summary>官方年页覆盖不到的年份（2028 起）＝<b>那一行不出</b>：与春分／秋分同一条「寧缺毋滥」——
+    /// 節分那句「2 月 3 日」的定见在 2021・2025 那两年本来就是错的，表外再拿公式外推只会更假。</summary>
+    [Fact]
+    public void Setsubun_OutsideTheTable_ShowsNothingRatherThanAGuess()
+    {
+        Locale.TrySet(AppLanguage.Japanese);
+        Assert.False(GlanceCalendar.TryJapanSetsubunDay(2019, out _));
+        Assert.False(GlanceCalendar.TryJapanSetsubunDay(2028, out _));
+        Assert.Null(GlanceCalendar.FestivalMessage(new DateOnly(2028, 2, 3)));
+        Assert.NotNull(GlanceCalendar.FestivalMessage(new DateOnly(2027, 2, 3)));   // 边界内那一格要出
+    }
+
+    /// <summary>
+    /// <b>第二处读数</b>那一格（P-189 的口径：两处读数一起对才允许上屏）：節分表的第二处读数＝
+    /// 同一批官方年页里的「立春」行，经官方规则「立春が定まれば節分もその前日として定まる」
+    /// （暦計算室 topics「節分の日が動き出す」）逐年互证——有人改短或改错節分年表，这一格当场红。
+    /// </summary>
+    [Fact]
+    public void Setsubun_RowIsAlwaysTheDayBeforeTheOfficialRisshun()
+    {
+        var risshun = new System.Collections.Generic.Dictionary<int, int>
+        {
+            [2020] = 4, [2021] = 3, [2022] = 4, [2023] = 4,
+            [2024] = 4, [2025] = 3, [2026] = 4, [2027] = 4,
+        };
+        foreach (var row in risshun)
+        {
+            Assert.True(GlanceCalendar.TryJapanSetsubunDay(row.Key, out var setsubunDay),
+                row.Key + " 年缺行＝節分年表断档");
+            Assert.Equal(row.Value - 1, setsubunDay);
+        }
+    }
+
     [Fact]
     public void Festival_OrdinaryDay_IsNull()
     {
