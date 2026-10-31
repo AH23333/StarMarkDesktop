@@ -269,3 +269,77 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - <b>还欠的</b>：P-273 那一臂（画板前台且无截图会话时按 F1／F3／F4／F5：问 (a) StarMark 动作起没起（应当起）(b) 画布有没有同时做事——(b) 为真才接会话态摘挂，为假就地结案）・P-274 改口条・归他的两格（观感点验・#744）与 push 授权。
 
 - <b>批末收口（片150）</b>：走查零码改・账本计数器 276／149／127（VERDICT OK・docgates 四尺 PASS）・真开放 P-273／P-274・HEAD 74c1f85（文档腿提交前一刻）・未推 309・本批文档腿一笔提交・⛔ push。
+## 二十九、片151 ✅P-276：画板导出 PNG → 贴桌面（同一发两种下落）＋坑表 #1106
+
+- 沙盒：`D:\StarMarkTmp\p151\bin`＝本工作树 `dotnet build -p:Platform=x64` 产物<b>整份新拷</b>（⛔ 复用上一批 bin5——名册 435 那一族"沙盒产物树随 build 更新＝重跑测的还是旧二进制"）；数据根 `data`（拷自 p146\data5）；第 0 道＝他人实例 0 颗＋`GetLastInputInfo` 1244 s；PID 5664；收摊 REMAIN=0、EnumWindows 现读 StarMark/Boards 标题窗 0 颗。
+- 三读一句话版：读一＝那一行上第五颗按钮在场且排在 PNG 与 SVG 之间（ja 念「デスクトップに貼り付け」・左界 1010→775 px・与引擎工具条各在一层）；读二＝点它 → 桌面正中起贴图窗＋`boards.pin.sent bytes=9989 w=400 h=180` 一颗＋导出目录零颗＋「打开所在文件夹」照旧点不亮；读三＝再点「PNG として出力」→ `boards.export.saved kind=png bytes=9989` 一颗＋目录恰好一颗＋贴图名册没多第二张＋那句落点回到 `exportSavedBody`。
+- 本批唯一要紧的一格：那颗落点位清在 `ReportExport`（三条下落的共同收口处）而⛔ 清在成功那一支；证人三面钉死。
+- **坑表 #1106**：往 `switch` 的枚举里加一臂，第一件事是问 `default:` 现在替谁干活。截图浮条「放上画板」第一版接在 switch 外面，而那颗 switch 的 `default:` 是「钉到桌面」——点一次得到两张落点（画板一张＋桌面一张）。全绿时是坏的：台架不覆盖 UI 分派，抓到它只靠"写完照读一遍那张表"。口径：能落成"每一臂各有自己的 case"就⛔ 让任何一臂住在 default 里，正件逐字钉 `case CommitAction.Board:` 在场。
+- **只登记（⛔ 进坑表编号的一课）**：Computer Use 返回图的尺寸⛔ 等于显示尺寸——按显示坐标 (1305,78) 递点击报 `coordinate is outside the current target window bounds`，现读返回图 1255×768（显示 1792×1024，系数 0.700）。口径＝坐标一律按<b>当场那颗返回图</b>的 width/height 换算后再递。
+## 三十、片151 第二腿 ✅P-277：快画快照 → 画板（深析 §四 八格全落）＋一条"注释⛔ 替读数背书"
+
+- 沙盒：同一副 p151 树（本工作树 build 产物整份新拷）。Ctrl+Alt+D 起画布（canvas.toggle 默认绑法）→ 点「マウス透過」收穿透 → 真鼠标拖两笔 → UIA Invoke 那颗「キャンバス」。收摊点「✕ 終了」→ Stop-Process REMAIN=0 → EnumWindows 现读 0 颗 StarMark/Canvas 标题窗。
+- 四通道：条子 rect (192,20)-(1727,126)（宽 1535／屏 1920・✕ 出口右界 1717・新按钮 rect 1341,30 94×32 夹在貼り付け与画像保存之间）；日志 insert.posted bytes=25447 w=457 h=357；盘上那块板 2514→37444・rolled=True；屏幕上那块板多出一张"红叉叠真实桌面"，玻璃上两笔原样在。
+- **一颗尺的形状**：数装配里的字符串要按被数那一物的形状认——方法名在 #Strings 堆里是 UTF-8，字符串字面量是 UTF-16。拿 UTF-16 去数 <code>SnapshotToBoard</code> 得 0，据此会误判"新代码没进装配"；两头各数一遍才说"在不在"。
+- 一颗只登记：真鼠标点击那颗按钮⛔ 动、日志零行，UIA Invoke 当场中（P-265／#1105 同族）。取证先走 Invoke。
+## 三十一、片151 第三腿 ✅P-273：引擎快捷键整张表抄完・F1～F5 一颗也没有（八格全落）
+
+- 取证路：STARMARK_START_BOARD=new 起一块空板 → 点画板窗右下角那颗「?」（UIA 里无名 ⇒ 按返回图坐标 (0.973,0.955) 点）→ 帮助框「キーボードショートカット」三屏滚到底逐颗抄 → 收摊 Stop-Process REMAIN=0、EnumWindows 0 颗。
+- 结论：函数键只有 PgUp／PgDn；F1～F5 一颗也没有 ⇒ 那一臂读数为假 ⇒ 按该条自己写的收口口径结案，⛔ 建"画板前台摘全局键"那台机器。
+- 顺带：面板里「画像を挿入」的键帽 9 是灰的＝引擎自标不可用，与 tools:{image:false} 源码读数在屏幕上对上；宿主注入那一路照走 ⇒ 两件事⛔ 互相牵连（P-274 改判又多一个通道）。
+- 一颗⛔ 翻前案的仪器读数：WebView2 里<b>引擎自己的 DOM 节点在 UIA 树上无名</b>（宿主那六颗按钮反倒有名）⇒ 凡要点引擎内部控件，只能按<b>返回图坐标</b>递，⛔ element_index；这与 #1105（SetFG True≠真前台）同一族——可见⛔ 等于可寻。
+## 三十二、片152 ✅P-278：第六族翻案（第三条链活着・六格归零・四颗数字框名量尽）＋坑表 #1107
+
+- 沙盒：同一副 p151 树（本工作树 build 产物整份新拷两次・第二次为线程档那一发实验）。第 0 道＝他人实例 0 颗、IDLE_SEC=201.4；PID 28132(ja)→26828(en)→1704(en)；日志走沙盒数据根 D:\StarMarkTmp\p151\data\logs（他那颗真日志目录最新仍是 20261027＝⛔ 被碰）。
+- 取证腿：settings.json 里 UiLanguageCode 切 en → 重启 → sweep.ps1 逐档（tabs 八格／nav 六页／all 全部顶层窗）现读每个元素自己的 Name，按 CJK 判红；osAids 那五颗（SystemMenuBar／Minimize／Maximize／Close／Item 1）另桶＝Windows 自己的字，⛔ 记在应用账上。
+- 正件（链跟自表走）：ja 档 [ポップアップ] 一颗；反件（链⛔ 管到的）：四颗 NumberBox 名里 最小/最大 一字不改，且是在 thread=True procList=en-US 那一拍之后复称的。
+- **坑表 #1107**：⚠ 分类器的形状⛔ 是事实——同一把 CJK 尺在 ja 档报 71～117 颗"残留"，其实那一屏本来就该是日文（0x4E00–0x9FFF 把汉字一并算进去）。换语言档复称之前先问"这一档里 CJK 本来该是几颗"，并且给那一档另找一颗<b>只属于该语言</b>的形状当正件（这里是片假名那颗），⛔ 拿中日同形那颗（[垂直]）充数。同一族还有一发：GetProcessPreferredUILanguages 按三参声明 ⇒ 读回 0 颗，据此几乎写下"表是空的"；那颗 API 的真签名是四参，0 是我的仪器坏。
+- 一颗闸门形状：撤下的实验⛔ 只留判词——Assert.DoesNotContain("SetThreadPreferredUILanguages") 与 WI-34 对 ResourceContext 的处置同形（死路连"试一下"的死代码都不留）。
+## 三十三、片153 ✅P-279＋P-280：待办那一行的两处屏幕读数（截止列冻在装载・行名念整份记录）＋坑表 #1108（UIA 根窗的孩子⛔ 是全集）
+
+- 沙盒：同一副 p151 树，本轮三次整份新拷（修前／Fix A／Fix A＋B）。第 0 道＝他人实例 0 颗、IDLE_SEC=201.4；PID 27828→2600→21468→27736；收摊 REMAIN=0、EnumWindows ENUM_ROWS=0。
+- 夹具：`D:\StarMarkTmp\p153\seed153.py` 往沙盒 widgets.json 加一颗 Kind 1 待办组件、库里插三条本地待办（截止 −2／0／+1 天，`extra_json` 的 `due` 走 `LocalItemState` 那颗键）；改前那份留 `widgets.json.pre-p153.bak`。⛔ 动他的真库与真设置；这颗夹具⛔ 清掉，留给下一把复称同一族（P-280 那四处的点验单直接用得上）。
+- 就地切档的腿：`switch153.ps1`（UIA 打开设置页 → `LanguageSelect` 那颗 `ExpandCollapse` → 选中「日本語」）。⛔ 重启进程去读——重启会把"重算"与"重新装载"混成一件事，那一发证⛔ 了换语言那一刻的行为。
+- **坑表 #1108**：可达性普查⛔ 拿 `AutomationElement.RootElement` 的孩子当全集。组件窗是 `WS_EX_TOOLWINDOW`（Win32 现读 `ex=128`），控制视图与<b>原始视图</b>两路都数不到它，主窗的 `Descendants` 里 `ControlType.Window` 也是 0 颗——而进程日志写着「桌面组件恢复（2 个实例）」并提交了首个组合窗。入口＝`EnumWindows` 按 pid 收 hwnd → `AutomationElement.FromHandle(hwnd)`。同一族第二次记（名册旧那条是 Computer Use SDK 的窗枚举），差别在这回连 UIA 自己的原始视图也聋。
+- 一颗形状的账（仪器编码）：PowerShell 默认 OEM 码页重定向出来的读数档里，日文正文是坏字节——同一发读数用 `[Console]::OutputEncoding=UTF8` 再收一次才可逐字引用；报"改口了"之前先问"我这那份文件能不能解码"。
+- 尺的口径：`bin/WI61b2/spoken_61b2.py` 两列从此共用 `code_lines()`（跳行注释），念键那一列从前不跳 ⇒ 四档各多算一颗；期望全部交命令行（`--expect=50/12 --policy=14`），⛔ 把跑次-specific 的数焊回档里。
+- 两颗假修法各留一颗反件：容器 Style 里的 `AutomationProperties.Name` Setter（真机＝无效，`DoesNotContain` 钉住）、覆写 `TodoRow.ToString()`（会连带改掉日志里那份整行 dump）。正件住模板根 `{x:Bind Text}`。
+## 三十五、片154 ✅P-281：设置页那一栏的布局行名（同一次访问里换语言停在上一门）＋一颗"没拷树就复称"的坑
+
+- 沙盒：p151 树，本轮两次整份新拷；PID 28152；收摊 REMAIN=0。夹具 `D:\StarMarkTmp\p154\seed154.py`＝widgets.json 的 Layouts/Snapshots 各加一颗 <code>Name:""</code>（让派生名上场），改前留 `widgets.json.pre-p154.bak`。
+- 腿（三条脚本各一件事）：`opentab154.ps1` 开设置页并选栏 → `tab154.ps1 -Aid TabGeneral/TabWidgets` <b>按 AutomationId</b> 选栏（名字是本地化的，切档后就⛔ 认得了）→ `switch154.ps1` 只动那颗下拉 → `dumpmain154.ps1` 只读⛔ 导航。⚠ 在已经开着设置页时再点 `SettingsButton`＝把页切回主窗，那一发表现为 `NO_LANGUAGE_COMBO`。
+- 正件：修前栏目头 `レイアウト方案` 而那一行 `Unnamed layout`（同发其余全日文＝对照形状）；修后同一发行念 `無名のレイアウト`。⛔ 重启、⛔ 重新导航那一页，否则"重算"与"重装"混成一件事。
+- **坑（⛔ 占号轴，与 #1108 同批不同事）**：修前那一发其实跑的是<b>上一份装配</b>——我只编译没 `cp` 到沙盒树就复称，差点把"改了⛔ 生效"记进正本。硬动作：**复称链固定成 build → cp → launch → 读**，缺一环就⛔ 报"修后照旧"。
+- 第三格（快照页）⛔ 屏幕读数、由结构答：`SnapshotPage` 构造函数与 `OnNavigatedTo` 各 `BuildRows();`，而全仓⛔ 一处 `NavigationCacheMode` ⇒ 每次进入重建；这颗结构事实由证人里那条"全层⛔ 出现 NavigationCacheMode"钉住（开了缓存就红）。⚠ 沙盒里两次想从设置页直接跳「快照」那一格都没成（页面开着时 `NavSnapshotItem` ⛔ 在树里），所以这一格⛔ 写成读数。
+## 三十六、片155 ✅P-282：条目格那几行的标题冻在装载那一刻（同进程就地切档・修后读到 画像）
+
+- 沙盒：p151 树，整份新拷一次（复称链 build→cp→launch→读，⛔ 再断一环）；PID 5552；收摊 REMAIN=0。
+- 夹具 <code>D:\StarMarkTmp\p155\seed155.py</code>：widgets.json 加一颗 Kind 6（剪贴板格）＋库里插一行 <code>type='clipboard'／source='clipboard'／title=''</code> 且 <code>extra_json</code> 标 <code>clipFormat=image, clipWidth=640, clipHeight=360, clipBytes=45000, clipApp=p155-fixture</code>。⛔ 动真剪贴板、⛔ 开采集器——念的活在这一格，库里那条只是记录。改前那份＝<code>widgets.json.pre-p155.bak</code>。
+- 前后读数：修前 <code>WidgetTitle</code> 已念「クリップボード」而行念 <code>Image</code>（同拍待办窗三行已是 <code>明日／今日／2日超過</code>＝对照形状）；修后同一发行念 <code>画像</code>。⚠ 副标题三列同形 ⇒ 它不改口⛔ 是证据（同一条 MapRows 重念过两颗）。
+- 一颗形状的账（这一族⛔ 进 LocText 名单时怎么写守卫）：条目行与活动行同为"行数不定、随数据重建"，但重念法不同——活动行模型自带 <code>Repaste()</code>，条目行要回源头（<code>MapRows</code> 一颗把两处映射并起来，装载与重念共用）。落点必走 <code>ApplyRows</code>（按 id 最小差异），⛔ Clear 重建：常驻桌面的一格换语言闪白是新造的一条坏。
+- 活动流那一支早退时必须 <code>_lastItems = Array.Empty&lt;Item&gt;()</code>：两种格共用一套 <code>Items</code> 语义，留着上一模式那份会在换语言那一刻被插回屏上（这颗清场由证人计数钉住）。
+## 三十七、片156 ✅P-283：快捷搜索那一格的结果行（三处映射并成一颗主人・按索引替换）＋坑表 #1109／#1110
+
+- 形状与前三批同一族（行模型持成品字），只是宿主换成那颗<b>每格自建 VM</b> 的组件：三条搜索路径各写一份映射 ⇒ 本批并成一颗 <code>RowOf</code>＋<code>PushRow</code> 记账 <code>_rowsSource</code>，对外 <code>ReresolveDisplay()</code> 按索引替换（⛔ <code>Clear()</code>：吃掉选中位置；⛔ 再发起搜索：那一趟含 Everything 实时源）。视图一对挂摘手臂（挂＝构造／摘＝<code>Unloaded</code>）。
+- 取证腿：沙盒数据根 <code>D:\StarMarkTmp\p151\data</code>（沿用片151 那棵树，复称链 build→cp→launch→读）；widgets.json 加 Kind 4 与 Kind 9 两颗组件，改前那份留 <code>widgets.json.pre-p156.bak</code>；库里 seeded 那颗空标题图片行沿用片155 那颗（id 10）。正本 <code>bin/WI99/p156_quicksearch_row_readings.txt</code>。
+- 下一把（第五处＝速览「常看条目」那一列）的欠项写在 P-280：先造一条<b>能进那一列</b>的行——⚠ 先前那句「画板行把它挤出去」归因错了，现读＝那一列开头有道「uri 空即跳过」的筛子，而新写的图片行标题＝宽高串、uri＝那张 PNG 的地址（只有宽或高缺时标题才回空串）⇒ 夹具要照新形状造：<code>uri</code> 指一颗<b>真实存在</b>的 PNG（缺文件会被启动对账打上"图已不在"那一档，屏上念的就⛔ 是这一族要问的字）、标题留空、来源应用名也⛔ 带（那样副标题那一槽念的是会变口的键）⇒ 同一发同时问两颗。再问同一发就地切档改不改口；在那之前⛔ 写成缺陷、⛔ 顺手照前四处改。
+- **坑表 #1109**：待裁清单里那颗宿主的<b>名字</b>也是抄写通路——上一批把①的后半写成「搜索那一页・VM 是单例」，本批逐调用点现读：两颗显示出口在那颗页的 VM 里 0 处命中，宿主其实是快捷搜索那一格（每格自建 VM）。**Why**：归属词是从上一批的叙述抄的，⛔ 从代码读；错一格会把下一批的取证腿领去开不该开的窗，本批就因为先数那颗页多花一趟。**How to apply**：清单里"哪一屏／哪一格／哪颗 VM"这类词，落笔与接手时各用一次调用点普查现读；发现上一批写错就地更正并同批记坑。
+- **坑表 #1110**：搜索类取证的<b>两颗前置</b>——直接插库的行进不了全文索引（那颗搜索走 <code>items_fts</code> 的 <code>MATCH</code>），要 <code>VALUES('rebuild')</code>；写进输入框后那颗框的回读值报空，而结果真出来了。**Why**：两者都会把"夹具／注入没生效"读成"应用坏了"。**How to apply**：插库后先 rebuild 再取证；判断"有没有输进去"⛔ 问那颗框自己的 Value，要问被问对象（结果列表有没有行数）。
+
+## 三十八、片157 ✅P-284＋P-280 摘牌：速览「常看条目」那一列（一颗画法・重贴补第四拍）＋坑表 #1113／#1114／#1115／#1116
+
+- 形状与前四格同一族，但宿主是<b>code-behind 自己折行</b>的那一族（⛔ 是 VM 里的行模型）：装载那一拍把两颗显示出口当场折进 <code>Button</code> 里的一块面板，而重贴那一拍只做日期／月历／热榜三件事 ⇒ 栏头改口、行照旧。修法＝抽一颗 <code>PaintItems()</code> 给装载与重贴共用，并把上一轮取回的那份持在 <code>_lastRecent</code>（换语言那一刻按那一份重铺，⛔ 再打库）。
+- ⚠ 这一批⛔ 动订阅：那颗档早就是 <code>Locale.Changed</code> 的主人，只往现成 handler 里加一拍 ⇒ 那颗分母尺与两族名单颗数⛔ 变（55|24|31|17）。以后判断"这批要不要补分母"先问<b>有没有新挂一颗手臂</b>，⛔ 问"这批是不是同一族"。
+- 夹具形状这一格是现读换来的（⛔ 沿用上一批那颗行）：那一列有道「uri 空即跳过」的筛子＋新行标题＝宽高串 ⇒ 旧形状进不来、新形状问不到。下一把若要量<b>别的</b>宿主上同一族，照这条问三件事：那道筛子拦不拦、那颗槽在真实形状里到底会不会变口、以及那一行会不会被别的规则改写成第三种话（"图已不在"那一档）。
+- **坑表 #1113**：沙盒启动⛔ 手写。那颗改道信号是<b>两颗环境变量</b>（settings・db），仓边／仪器目录早有现成的启动档带着它们；我这次自己写了一发 <code>Start-Process</code>，漏了 ⇒ 进程读他真目录并把 <code>settings.json</code> 写回真档（语言被改成 en・已按原值改回 zh・原值证据＝那进程自己在真日志写的 zh-CN）。**Why**：⛔ 带改道信号＝⛔ 是"这次运气好没写坏"，而是<b>整个会话都在他的真数据上跑</b>。**How to apply**：任何真机取证一律走那颗 fail-closed 的启动档（目标⛔ 在仪器根下→拒・两颗档不在场→拒・启动后在沙盒日志里读不到"自己那一跑 pid 的会话行"→杀掉再拒）；正件＝沙盒日志里那一行，⛔ 是"窗口起来了"。
+- **坑表 #1114**：计数证人⛔ 让"声明那一颗"混进数。<code>Assert.Equal(2, Count(view, "_lastRecent = new List&lt;Item&gt;();"))</code> 现读 3＝字段声明也写了同一种字面。**Why**：那颗计数问的是"两支清场都在"，被声明顶高一位就永远看不出少写一支。**How to apply**：给那颗数的字面留一种<b>只有那两支用得上的形状</b>（这里把声明改成 <code>Array.Empty&lt;Item&gt;()</code>），并<b>把多的那一颗单独钉住</b>（同批加一颗断言钉声明那一句）。
+- **坑表 #1115**：注释里⛔ 重打被尺扫描的字面量。为解释"类型名要写全"，我把 <code>new SearchResultItem(</code> 原样写进 XML 注释，而那颗按字面找构造点的尺读<b>整档原文、⛔ 抹注释</b> ⇒ 当场多出一颗"实参只有 1 段"的假构造点，把尺染红。**Why**：注释对读者是解释，对那把尺是正文。**How to apply**：要指那串字面就换成"类型名＋左括号"这种⛔ 构成同一形状的写法；新加解释后先跑<b>那把被解释的尺</b>，别等全量。
+- **坑表 #1116**：⛔ 拿代码注释当盘上的事实。读 <code>WidgetStorage.Load</code> 看到那颗 Save 只写在"档不在场"那一支，就该推"普通启动⛔ 写 widgets.json"——而他真目录那颗档的 mtime 明明动了。两发对照实验（沙盒连起两次、⛔ 点任何东西）量到 <b>mtime 动、size 与 sha256 不动</b> ⇒ 结论＝应用自己会按原字节重写，"重写"与"改内容"是两件事。**How to apply**：推论与盘不符时，以盘为准并<b>造一发不需要精密控制的对照</b>；报"我没改他东西"要分两层：内容层（sha）与在场层（mtime）。
+
+## 三十九、片158 ✅P-196 裁・结案（⛔ 动代码的裁决腿）＋坑表 #1117
+
+- 这一批的产出＝<b>一句话裁决</b>：胶水键族"机制一份"已由片116 落地并钉住（`LocMessage.Fold`＋`LocFoldGateTests`），剩下的"表里三行要不要并成一行"是<b>产品语气</b>——按"⛔ 扰正常使用"那条界裁成⛔ 并，本条摘牌。并键的代价现读给死：英文界面 `settings.ai.usage.featureJoin` 用分号、`trending.notice.join` 用逗号，日文用顿号 vs 分号 ⇒ 并了就会改屏幕上看得见的标点。
+- ⚠ 裁决⛔ 等于把话写死：那颗 `TheGlueKeysThemselvesAreNotMergedByThisBatch`（住在 `LocFoldGateTests`）今天仍钉着"这三行没并"＝哪天有人顺手并了，它会红并逼他回来改这条裁决（⛔ 靠正文里那句话守）。
+- 下一把的入口⛔ 在本条：普查那条线（P-194）今天三层现读 <b>12 档／50 处</b>，逐颗定性里剩下的"上屏而⛔ 重贴"那一族才是活口子（RSS 页那行 tooltip 的<b>实参</b>是当场念成的成品字＝外层会重贴、内层⛔ 会＝半句旧话）。跑法照 P-280 那五格的样板：先一发真机读数定裁，再决定改哪一层。
+- **坑表 #1117**：数"同形有几颗"⛔ 按名字 grep，要先问<b>正文那颗数的是哪一维</b>。表里名字带 `join` 的 6 行 vs 本条登记的 3 颗——差的 3 行交的是裸标点（⛔ 带槽），还有 `ocr.body.join` 是 `{0}{1}`（无标点）。**Why**：按名字数会把"形状⛔ 同"的行算进来，再拿那个数去说"登记时数错了"＝改动一条本来正确的正文。**How to apply**：给那一族写死形状判据（两颗槽・三列只换那颗标点），并在正文里把形状与颗数一同留下；颗数差只是线索，结论要读产那句话的那把尺。
+
