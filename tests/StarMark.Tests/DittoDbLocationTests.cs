@@ -6,9 +6,9 @@ using Xunit;
 namespace StarMark.Tests;
 
 /// <summary>
-/// Ditto 数据库<b>位置探测</b>测试。Ditto 没有单一约定路径（安装版在 %APPDATA%\Ditto\DB、
-/// 便携版在 exe 旁边、也有人把数据目录放到 %LOCALAPPDATA%），只探一条等于"在我这台机器上能跑"，
-/// 所以「候选集形状」与「取第一个真实存在的」这两件事都要被钉住。
+/// Ditto 数据库<b>位置探测</b>测试。Ditto 没有单一约定路径（装机版 3.25 实测落 %APPDATA%\Ditto\Ditto.db、
+/// 老文档形在 %APPDATA%\Ditto\DB、便携版在 exe 旁边、也有人把数据目录放到 %LOCALAPPDATA%），
+/// 只探一条等于"在我这台机器上能跑"，所以「候选集形状」与「取第一个真实存在的」这两件事都要被钉住。
 /// </summary>
 public sealed class DittoDbLocationTests
 {
@@ -19,12 +19,35 @@ public sealed class DittoDbLocationTests
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
-        Assert.Equal(Path.Combine(appData, "Ditto", "DB", "DittoDB.db"), list[0]);
+        // 装机版现状形（Ditto 3.25.113.0・2026-10-31 授权装机实测）排最前——它才是今天的装机默认
+        Assert.Equal(Path.Combine(appData, "Ditto", "Ditto.db"), list[0]);
+        // 老文档形照留：旧安装的库还落在那两处
+        Assert.Contains(Path.Combine(appData, "Ditto", "DB", "DittoDB.db"), list);
         Assert.Contains(Path.Combine(appData, "Ditto", "DittoDB.db"), list);
         if (!string.Equals(appData, local, StringComparison.OrdinalIgnoreCase))
-            Assert.Contains(Path.Combine(local, "Ditto", "DB", "DittoDB.db"), list);
+            Assert.Contains(Path.Combine(local, "Ditto", "Ditto.db"), list);
         // 去重：两个 SpecialFolder 在被重定向的机器上会相等，重复项只会让提示变啰嗦
         Assert.Equal(list.Count, list.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
+    /// <summary>
+    /// P-192 结案入口①那次授权装机（winget・Ditto 3.25.113.0）量出来的事实：装机版把库落在
+    /// <c>%APPDATA%\Ditto\Ditto.db</c>——没有 <c>DB\</c> 子目录、名里没有 <c>DB</c>。旧候选表整张按
+    /// <c>DittoDB.db</c> 探，结果<b>装着 Ditto 也永远"不可用"</b>（那颗副标题根本不会上屏）。
+    /// 钉住：候选表必须认得这张现形，且两颗根目录各自由它领头
+    /// （FindDbPath 取第一个存在的——今天的装机默认优先）。
+    /// </summary>
+    [Fact]
+    public void Candidates_LeadWithTheShapeTodaysInstallerActuallyWrites()
+    {
+        var list = DittoSource.CandidateDbPaths();
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        Assert.Equal(Path.Combine(appData, "Ditto", "Ditto.db"), list[0]);
+        if (!string.Equals(appData, local, StringComparison.OrdinalIgnoreCase))
+            Assert.Equal(Path.Combine(local, "Ditto", "Ditto.db"),
+                list.First(p => p.StartsWith(local, StringComparison.OrdinalIgnoreCase)));
     }
 
     [Fact]

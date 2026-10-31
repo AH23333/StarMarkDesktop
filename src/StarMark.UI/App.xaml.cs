@@ -231,7 +231,7 @@ public partial class App : Application
         services.AddSingleton<StarMark.Integrations.Bookmarks.EdgeBookmarksSource>();
         services.AddSingleton<IItemSource>(sp => sp.GetRequiredService<StarMark.Integrations.Bookmarks.EdgeBookmarksSource>());
 
-        // Ditto 剪贴板源（直读 DittoDB.db）
+        // Ditto 剪贴板源（直读 Ditto 的剪贴板库）
         services.AddSingleton<StarMark.Integrations.Ditto.DittoSource>();
         services.AddSingleton<IItemSource>(sp => sp.GetRequiredService<StarMark.Integrations.Ditto.DittoSource>());
 

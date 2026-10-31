@@ -5,7 +5,7 @@ using StarMark.Abstractions.I18n;
 namespace StarMark.Integrations.Ditto;
 
 /// <summary>
-/// Ditto 剪贴板源：直读 %APPDATA%\Ditto\DB\DittoDB.db（只读）。
+/// Ditto 剪贴板源：直读 Ditto 的剪贴板库（只读；装机版 3.25 实测落 %APPDATA%\Ditto\Ditto.db・旧形与便携形见候选表）。
 /// 文本剪贴板 → Clipboard 条目；文件剪贴板（CF_HDROP）→ 取第一个文件做副标题与 Uri。
 /// </summary>
 public sealed class DittoSource : IItemSource
@@ -76,10 +76,12 @@ public sealed class DittoSource : IItemSource
     }
 
     /// <summary>
-    /// Ditto 数据库的候选位置。<b>Ditto 没有单一约定路径</b>：安装版默认在
-    /// <c>%APPDATA%\Ditto\DB\DittoDB.db</c>，但便携版把库放在 <c>Ditto.exe</c> 旁边（<c>DB\</c> 或同目录），
-    /// 也有人把数据目录指到 <c>%LOCALAPPDATA%</c>。只探一条等于"在我这台机器上能跑"，
-    /// 所以这里把已知形态都列出来，由 <see cref="FindDbPath"/> 取第一个真实存在的。
+    /// Ditto 数据库的候选位置。<b>Ditto 没有单一约定路径</b>：装机版（3.25.113.0・2026-10-31 授权装机实测）
+    /// 把库落在 <c>%APPDATA%\Ditto\Ditto.db</c>（无 <c>DB\</c> 子目录・名里没有 <c>DB</c>），老文档形是
+    /// <c>%APPDATA%\Ditto\DB\DittoDB.db</c>，便携版把库放在 <c>Ditto.exe</c> 旁边，也有人把数据目录指到
+    /// <c>%LOCALAPPDATA%</c>。只探一条等于"在我这台机器上能跑"——旧表整张只认 <c>DittoDB.db</c> 那一族，
+    /// 结果装着 Ditto 也永远"不可用"（P-192 结案入口①授权装机量出来的）。所以这里把已知形态都列出来，
+    /// 由 <see cref="FindDbPath"/> 取第一个真实存在的。
     /// </summary>
     public static IReadOnlyList<string> CandidateDbPaths()
     {
@@ -92,6 +94,7 @@ public sealed class DittoSource : IItemSource
         foreach (var root in roots)
         {
             if (string.IsNullOrEmpty(root)) continue;
+            list.Add(Path.Combine(root, "Ditto", "Ditto.db"));
             list.Add(Path.Combine(root, "Ditto", "DB", "DittoDB.db"));
             list.Add(Path.Combine(root, "Ditto", "DittoDB.db"));
         }
@@ -99,11 +102,12 @@ public sealed class DittoSource : IItemSource
         return list.Where(p => p.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    /// <summary>便携版：正在运行的 Ditto.exe 所在目录下的 <c>DB\DittoDB.db</c> 或 <c>DittoDB.db</c>。</summary>
+    /// <summary>便携版：正在运行的 Ditto.exe 所在目录下的 <c>Ditto.db</c>、<c>DB\DittoDB.db</c> 或 <c>DittoDB.db</c>。</summary>
     private static IEnumerable<string> PortableDbPaths()
     {
         foreach (var dir in RunningDittoDirectories())
         {
+            yield return Path.Combine(dir, "Ditto.db");
             yield return Path.Combine(dir, "DB", "DittoDB.db");
             yield return Path.Combine(dir, "DittoDB.db");
         }

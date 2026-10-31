@@ -6,7 +6,7 @@ using StarMark.Integrations.Clipboard;
 namespace StarMark.Integrations.Ditto;
 
 /// <summary>
-/// 一条 Ditto 剪贴板记录（读自 DittoDB.db 的 Main 表）。
+/// 一条 Ditto 剪贴板记录（读自 Ditto 库的 Main 表）。
 /// </summary>
 public sealed class DittoClip
 {
@@ -21,7 +21,8 @@ public sealed class DittoClip
 /// <summary>
 /// Ditto 剪贴板数据库读取器。
 ///
-/// 直读 %APPDATA%\Ditto\DB\DittoDB.db（只读）。已对照 Ditto 源码（src/DatabaseUtilities.cpp、
+/// 直读 Ditto 的剪贴板库（只读；路径由 DittoSource 的候选表探测——装机版 3.25 实测落 %APPDATA%\Ditto\Ditto.db）。
+/// 已对照 Ditto 源码（src/DatabaseUtilities.cpp、
 /// src/Clip.cpp）确认 schema：
 ///   Main(lID INTEGER PK, lDate INTEGER, mText TEXT, bIsGroup INTEGER, lParentID INTEGER, ..., lastPasteDate INTEGER)
 ///   Data(lID PK, lParentID INTEGER, strClipBoardFormat TEXT, ooData BLOB)
