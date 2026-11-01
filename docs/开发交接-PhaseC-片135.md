@@ -509,3 +509,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - docgates 26/26（正本 D:\StarMarkTmp\p164\docgates183.txt）；计数器 285／210／75 VERDICT OK（0 立 0 结）。
 - 连落 20 刀收官（下一批另立）。⛔ push（未推 338）・HEAD b16ab58。
 
+## 六十五、片184 P-51/P-52 记账滞后翻牌（用户拍板收两颗）
+
+- P-51 ✅：body 随 HB（`5b33cfd`）＋BK 改判（`ee8a589`：总开关＋间隔 6／24／72／168 小时）早已落地・标题补 ✅；P-52 ✅：body 随 GY（`38c5304`：`preemptPrevious`・后台索引不被前台键入取消）落地・标题补 ✅——两颗正文一字未动・配套测试在册。
+- P-52 真机验收项留正文：开启本地磁盘搜索后看「索引进库」条目数与目录内文件数量级相符。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates184.txt）；计数器 285／212／73 VERDICT OK（✅+2）；census 30。
+- 下一刀：B 类码修批开批分诊（tags= 无真机标记的候选约 13 颗逐颗读体定批）。⛔ push（未推 339）・HEAD 22b211e。
+
