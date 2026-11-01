@@ -202,7 +202,14 @@ public sealed class LivingSourcePointerGateTests
     /// 处置按 P-256 ③＝<b>删号留锚</b>（<c>case "CF_TEXT"</c> 与 <c>ClipboardPayload.DecodeText</c> 两锚照旧在档）；
     /// 另一串 CS 复验里的 FillData 旧区间反撞成非空（现读整颗含着 FillData）＝#1020 那句「巧合」的
     /// 另一副脸（⛔ 算成修复・⛔ 动它）。基线按闸门交回的那颗读数改小・⛔ 手打（正本 D:\StarMarkTmp\p162\diffcensus162.txt）。</para>
-    private const int FallenPointerBaseline = 30;
+    /// <para><b>片187 再落两颗（30 → 28）・来历＝语言比较改道平移行号（#1020 第五次・⛔ 读成"这一族又修好了"）</b>：
+    /// 本批把搜索/浏览两腿的语言比较改 trim+NOCASE（P-8 (A) 结案）⇒ 那颗 partial 档行号整体平移：
+    /// 账本里两串 P-33 时代指向它的旧号（66-67）恰好从「压在空行＝落空」变成「压在谓词行＝非空」，
+    /// 而它们<b>本来就没对着</b>正文所句的那处截断点（那处今天住在 innerTail 那一行）。
+    /// 处置按 P-256 ③＝<b>删号留锚</b>（两处旧号删掉・锚改念那一行读得到的 <c>var innerTail = relevanceFirst</c>）。
+    /// 差集由一把只读复称尺对 HEAD 的 blob 与盘上各跑一遍点到名（正本 D:\StarMarkTmp\p164\diffcensus187.txt）。
+    /// 基线按闸门交回的那颗读数改小・⛔ 手打。</para>
+    private const int FallenPointerBaseline = 28;
 
     /// <summary>片88 第二颗棘轮（P-256 ④）：那颗 <see cref="Resolve"/> 对它交回空的「带目录前缀的简写」那一族。
     /// 换锚前现读 8 颗（正本 <c>bin/WI99/p843_r1/census843-读数.txt</c>）→ 本批逐颗换成正文锚之后这颗数。

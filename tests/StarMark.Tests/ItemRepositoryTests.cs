@@ -654,6 +654,49 @@ public sealed class ItemRepositoryTests : IDisposable
         Assert.Equal("Python Star", only.Title);
     }
 
+    // ===== P-8 (A)：语言筛选三处口径对齐（SQL trim+NOCASE vs 下拉归一值）=====
+
+    [Fact]
+    public async Task SearchAsync_LanguageFilter_MatchesNonCanonicalCaseInDb()
+    {
+        // 下拉给 LanguageCatalog 归一值（"c++"→"C++"），库里原样存 API 回传串
+        //（EnsureLanguage 对已带 Language 键的 extra_json 原样返回）——旧 SQL 用 BINARY = 比较
+        // ⇒ 点开 "C++" 选项 0 结果。(A) 改 trim + NOCASE 后同语言必须命中。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "o/cpp",
+                       Title = "widget native repo", Uri = "https://github.com/o/cpp",
+                       ExtraJson = """{"Language":"c++"}""" },
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "o/rs",
+                       Title = "widget rust repo", Uri = "https://github.com/o/rs",
+                       ExtraJson = """{"Language":"Rust"}""" },
+        }, CancellationToken.None);
+
+        var cpp = await repo.SearchAsync("widget",
+            new SearchFilter { Language = "C++", MaxResults = 10 }, CancellationToken.None);
+        Assert.Contains(cpp.Items, i => i.SourceId == "o/cpp");      // 归一值命中非规范大小写存量
+        Assert.DoesNotContain(cpp.Items, i => i.SourceId == "o/rs"); // 护栏：别的语言照旧筛掉
+    }
+
+    [Fact]
+    public async Task GetAllAsync_LanguageFilter_MatchesCaseAndWhitespaceVariantsInDb()
+    {
+        // 浏览腿同一口径：库里 " PYTHON "（非规范大小写＋空白）对着下拉 "Python"（归一＋trim）
+        // 也要命中——trim 与 NOCASE 两半各管一头。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "o/py",
+                       Title = "widget python repo", Uri = "https://github.com/o/py",
+                       ExtraJson = """{"Language":" PYTHON "}""" },
+        }, CancellationToken.None);
+
+        var items = await repo.GetAllAsync(new BrowseFilter { Language = "Python", Limit = 10 }, CancellationToken.None);
+        var only = Assert.Single(items);
+        Assert.Equal("o/py", only.SourceId);
+    }
+
     [Fact]
     public async Task GetStarLanguages_OnlyFromStarItems_NormalizesRetainsAndOrders()
     {

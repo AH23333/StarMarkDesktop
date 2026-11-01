@@ -110,7 +110,9 @@ public sealed partial class ItemRepository
             // 语言下拉的语义是「按编程语言筛选 star」（见 LanguageDetector / FolderTreePage 注释）。
             // 但 LanguageDetector.EnsureLanguage 会给任意来源（含本地文件/书签）按扩展名兜底打 Language，
             // 「所有来源」视图下若不加 type 闸门，一个 .py 本地文件会冒充 Python star 混入结果集。
-            where.Add($"(i.type = 'githubstar' AND json_extract({ExtraJsonGuard.Safe("i.extra_json")}, '$.Language') = @lang)");
+            // P-8 (A)：比较改 trim + NOCASE——下拉给归一值（"C++"），库里原样存 API 回传串（"c++"），
+            // BINARY = 会让该选项 0 结果；与关键词搜索腿、内存兜底三处口径一致。
+            where.Add($"(i.type = 'githubstar' AND trim(json_extract({ExtraJsonGuard.Safe("i.extra_json")}, '$.Language')) COLLATE NOCASE = trim(@lang))");
 
         // 标签过滤：AND 语义（必须同时具备全部标签）。
         // 原实现用 `JOIN + t.name IN (...) + GROUP BY` 实际是 OR —— 多选标签时结果反而变多，

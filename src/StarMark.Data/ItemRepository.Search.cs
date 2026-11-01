@@ -50,6 +50,9 @@ public sealed partial class ItemRepository
         // 语言闸门只约束 GitHubStar：LanguageDetector.EnsureLanguage 会给任意来源（含本地文件）
         // 按扩展名兜底打 Language，所以 @lang 若不加豁免，选中语言就会把已入库的本地文件行
         // 一起筛掉（.mp3 被当成"非 C#"消失）。产品口径：语言对本地文件无效，见 SearchService 同类豁免。
+        // P-8 (A)：比较口径与下拉对齐——下拉给的是 LanguageCatalog 归一值（"c++"→"C++"），库里却
+        // 原样存 API 回传串（EnsureLanguage 对已带 Language 键的 extra_json 原样返回），旧 BINARY =
+        // 会把非规范大小写的存量筛成 0 结果；trim + NOCASE 后与内存兜底（OrdinalIgnoreCase）三处一致。
         //
         // P-49 修复：**所有谓词都在 LIMIT 之前生效**。原写法把 type/lang/hidden/标签谓词留在外层
         // WHERE，而 LIMIT 在 CTE 内先按相关度截断 ⇒ 被过滤掉的行照样占名额：结果页偏短，分页时
@@ -61,7 +64,8 @@ public sealed partial class ItemRepository
               AND (@type_filter IS NULL OR i.type = @type_filter)
               AND (@stars_min IS NULL OR i.stars_count >= @stars_min)
               AND (@date_from IS NULL OR i.updated_at >= @date_from)
-              AND (@lang IS NULL OR i.type = 'file' OR json_extract({ExtraJsonGuard.Safe("i.extra_json")}, '$.Language') = @lang)
+              AND (@lang IS NULL OR i.type = 'file'
+                   OR trim(json_extract({ExtraJsonGuard.Safe("i.extra_json")}, '$.Language')) COLLATE NOCASE = trim(@lang))
               AND (@include_hidden = 1 OR i.hidden = 0)"
             + BuildTagClause(filter.Tags, "i");
 

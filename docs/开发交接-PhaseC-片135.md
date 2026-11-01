@@ -530,3 +530,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - docgates 26/26（正本 D:\StarMarkTmp\p164\docgates186.txt）；计数器 285／217／68 VERDICT OK（✅+1）；census 30。
 - 下一刀：片187＝P-8 (A) 语言筛选 SQL 语言比较归一。⛔ push（未推 341）・HEAD 9a5ca05。
 
+## 六十八、片187 真码修批第 2/6 刀：P-8 (A) 语言筛选 SQL 比较与下拉归一值三处口径对齐
+
+- 修法：关键词搜索腿＋浏览腿两处 SQL 语言比较由 BINARY 原样相等改 trim + NOCASE——库里原样存的非规范大小写语言串不再被下拉归一值筛成 0 结果；与内存兜底三处口径一致；type 闸门与本地文件豁免原样保留。
+- 证人测 2 条：搜索腿归一值命中非规范大小写存量（护栏：别的语言照旧筛掉）・浏览腿大小写＋空白变体命中；相关三套件定向 64/64（x64）。
+- LivingSourcePointer 落空棘轮 30→28（#1020 第五次）：两串 P-33 旧号（ItemRepository.Search.cs:66-67）反撞非空＝本就没对着所句处，删号留锚（锚念 var innerTail = relevanceFirst）；正本 D:\StarMarkTmp\p164\diffcensus187.txt。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates187.txt）；计数器 285／218／67 VERDICT OK（✅+1）；census 28。
+- 下一刀：片188＝P-9 (A) 备份还原计数诚实化（两 Import 回传实命中行数・虚报改告警）。⛔ push（未推 342）・HEAD 773487c。
+
