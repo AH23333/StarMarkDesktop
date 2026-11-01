@@ -482,3 +482,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - docgates 26/26（正本 D:\StarMarkTmp\p164\docgates179.txt）；计数器 285／208／77 VERDICT OK（✅+1）。
 - 下一刀：片180 浪二码修腿⑫（P-129）。⛔ push（未推 334）・HEAD 73bfe8f。
 
+## 六十一、片180 浪二码修腿⑫：P-129 判据能力边界翻牌（连落 20 刀第 17 刀）
+
+- 按默认处置结案（不付编译器级成本）：① NumberText 类注释互指在册；② FloatHoleGateTests 钉可判定半边（地板断言 ≥800・实测 1287 孔 0 违规）；③ 升级条件不撤：真查出分岔 ⇒ 升级活缺陷再谈类型级检查。「变量名那一格」仍是边界（SG2 台架量过全绿），默认不为其付 Roslyn 成本。数字闸门三套定向 56/56（x64）；本刀零码改零测改。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates180.txt）；计数器 285／209／76 VERDICT OK（✅+1）。
+- 下一刀：片181 浪二码修腿⑬（P-171・浪二最后一颗）。⛔ push（未推 335）・HEAD 773d134。
+
