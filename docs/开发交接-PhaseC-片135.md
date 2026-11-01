@@ -414,3 +414,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 浪一（结案腿）至此收官：33 颗已决欠账经片164–168 五刀全数翻牌・计数器 285／196／89 VERDICT OK（✅+5 本刀）。读数：docgates 26/26（x64・正本 D:\StarMarkTmp\p164\docgates168.txt）。
 - 下一刀：片169 转浪二码修腿第 1 刀（P-3 ActivityKind 兜底色）。⛔ push（未推 323）・HEAD b8d250e。
 
+## 五十、片169 浪二码修腿①：P-3 ActivityKind 未映射缺中性兜底色——按 (B) 口径落地（连落 20 刀第 6 刀）
+
+- 活动归类 switch 兜底臂「其余全算增」改归中性 Neutral（灰）——11 档全显枚举、不新增 ActivityKind 成员、三色一分未动；转换器中性档解析 SystemFillColorNeutralBrush、外层回落同改中性。
+- 守门：ActivityNeutralFallbackGateTests 三例（全显枚举／兜底不冒充增／三色不动）3/3；UI 编译 0 警 0 错（x64）；docgates 26/26（正本 D:\StarMarkTmp\p164\docgates169.txt）；计数器 285／197／88 VERDICT OK（✅+1）。
+- 下一刀：片170 浪二码修腿②（P-13 StarLog CR/LF 剥离）。⛔ push（未推 324）・HEAD 2616c7f。
+

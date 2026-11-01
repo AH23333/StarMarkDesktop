@@ -14,6 +14,10 @@ namespace StarMark.UI.Helpers;
 /// 与三色设计对不上（用户实测指出）。
 /// </para>
 /// 主题感知解析：IValueConverter 拿不到元素，按主窗当前暗色态从 ThemeDictionaries 取（同其余主题画笔用法）。
+/// <para>
+/// P-3 兜底：未映射的 ActivityKind（将来新增成员）归 <see cref="ActivityChange.Neutral"/>，
+/// 解析到中性灰 SystemFillColorNeutralBrush——不冒充增删改三色。
+/// </para>
 /// </summary>
 public sealed class ActivityChangeToBrushConverter : IValueConverter
 {
@@ -25,9 +29,10 @@ public sealed class ActivityChangeToBrushConverter : IValueConverter
             {
                 ActivityChange.Removed => "SystemFillColorCriticalBrush",
                 ActivityChange.Modified => "SystemFillColorCautionBrush",
+                ActivityChange.Neutral => "SystemFillColorNeutralBrush",
                 _ => "SystemFillColorSuccessBrush",
             }
-            : "SystemFillColorSuccessBrush";
+            : "SystemFillColorNeutralBrush";
         return ThemeBrush.Resolve(dark, key) ?? new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
 

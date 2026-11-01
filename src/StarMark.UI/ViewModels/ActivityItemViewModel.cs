@@ -12,6 +12,9 @@ public enum ActivityChange
     Added,
     Removed,
     Modified,
+
+    /// <summary>P-3 兜底：未映射的 ActivityKind（将来新增成员）归这里＝中性灰，不冒充增删改。</summary>
+    Neutral,
 }
 
 /// <summary>
@@ -93,6 +96,9 @@ public sealed partial class ActivityItemViewModel : ObservableObject
         ActivityKind.ItemModify => ActivityChange.Modified,
         ActivityKind.StarRemove or ActivityKind.BookmarkRemove or ActivityKind.FileRemove
             or ActivityKind.ClipRemove or ActivityKind.ItemDelete => ActivityChange.Removed,
-        _ => ActivityChange.Added,   // 各 *Add 与 ItemAdd
+        ActivityKind.StarAdd or ActivityKind.BookmarkAdd or ActivityKind.FileAdd
+            or ActivityKind.ClipAdd or ActivityKind.ItemAdd => ActivityChange.Added,
+        // P-3（(B) 口径，不新增 ActivityKind 成员）：未映射/将来新增的 kind 兜中性，不再冒充「增」。
+        _ => ActivityChange.Neutral,
     };
 }
