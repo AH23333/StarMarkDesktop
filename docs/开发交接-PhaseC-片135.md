@@ -433,3 +433,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 挤落修复：R7 快照表两颗行号指针被本刀插行挤落（落空棘轮 30→32 红）→ 删号留锚（P-15/P-40 两行）回 30。
 - 下一刀：片172 浪二码修腿④（P-20 ParseDropFiles 符号翻转）。⛔ push（未推 326）・HEAD bacd5cd。
 
+## 五十三、片172 浪二码修腿④：P-20 符号翻转翻牌（连落 20 刀第 9 刀）
+
+- P-13 先例再现：R7 盘点已判前提消失——解析体随批次 IC（`b1e486c`）搬家＋pFiles 先在 uint 域夹住再强转 int，符号翻转与上界两路皆死；守门测（uint.MaxValue→空表不抛等三例）同册；解析族定向 31/31（x64）。
+- 残渣（pFiles<20 读头部垃圾串）有界不抛・维持 CS 判定不动；本刀零码改零测改・正文一字未动；docgates 26/26（正本 D:\StarMarkTmp\p164\docgates172.txt）；计数器 285／200／85 VERDICT OK（✅+1）。
+- 下一刀：片173 浪二码修腿⑤（P-27 代理对护栏）。⛔ push（未推 327）・HEAD e598dd3。
+
