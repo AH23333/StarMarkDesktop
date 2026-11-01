@@ -463,3 +463,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - docgates 26/26（正本 D:\StarMarkTmp\p164\docgates176.txt）；计数器 285／205／80 VERDICT OK（✅+1）。
 - 下一刀：片177 浪二码修腿⑨（P-103 单实例残留）。⛔ push（未推 331）・HEAD 073ad53。
 
+## 五十八、片177 浪二码修腿⑨：P-103 单实例残留窄缝翻牌（连落 20 刀第 14 刀）
+
+- 取向 (C) 已定在册且由现役代码实现：窄缝分支带原因退出并落日志（宁可一次「双击没反应」也不结束还在显示东西的进程）；绊线行「但按标题没能唤起它的窗口」在役＝重开条件第一现场已在岗；判定逻辑 InstanceHandoffTests 定向 14/14（x64）；单实例整体＝互斥体（b010498）＋属主校验＋残留回收三臂。重开条件不撤：日志出现那一行 ⇒ 落 (A)；伴随「组件在但点不到」⇒ 升级 (B)+(A)。本刀零码改零测改。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates177.txt）；计数器 285／206／79 VERDICT OK（✅+1）。
+- 下一刀：片178 浪二码修腿⑩（P-121）。⛔ push（未推 332）・HEAD 7fc010b。
+
