@@ -553,3 +553,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 顺手收两笔：账本 P-200 三颗 MakeUniqueName 调用点指针行移改对（census 29→28）；片173 漏挪的 EllipsisFamily 名单补记（AiClassify.cs 挪进改道名单・8→9 家・8/8 绿）。
 - 下一刀：片190＝P-38 (A) SourceSyncResult 三态＋展示层着色（SyncCoordinator）。⛔ push（未推 344）・HEAD 54d51c5。
 
+## 七十一、片190 真码修批第 5/6 刀：P-38 (A) SourceSyncResult 三态＋展示层着色——「不可用」不再与「同步成功」同形
+
+- 修法：「不可用」照旧记 `Success=true`，第三态另立门户——`SourceSyncResult` 增 `Skipped` 旗与现算 `Status`（成功/跳过/失败三分，不落库不存档）；协调器双读数 `FailedCount`/`SkippedCount` 各走各的挑行手臂，跳过源逐颗列名，「为什么没参与」复用既有「源不可用」键；状态页着色三分：全绿照旧・有败照旧红・无败有跳走中性灰卡（表添一键「部分源未参与本轮同步」）。
+- 证人测 3 条＋接线闸门 4 条（`Status` 现算不存档・跳过旗只在不可用分支抬・灰卡只在无败有跳时接线・表键三列互异零槽）；定向 274/274・全量 6747/6747（x64）。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates190.txt）；计数器 285／221／64 VERDICT OK（✅+1）；census 28。
+- 顺手收两笔：账本 13 颗行号指针行移改对（census 29→28）；交接档工作树行尾回掣 CRLF（片189 补记脚本写飞成 LF・仓库 blob 无恙）。
+- 下一刀：片191＝P-31 (A)+(C) 写事务 `BEGIN IMMEDIATE`＋重入闸门（DbConnectionFactory＋事务点）。⛔ push（未推 345）・HEAD b1ff80e。
+

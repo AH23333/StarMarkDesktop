@@ -43,6 +43,10 @@ public sealed class SyncCoordinator
                 {
                     SourceId = source.SourceId,
                     Success = true,
+                    // P-38 (A)：Success 那颗布尔语义一字未动（你从未启用的源不该每轮刷红），
+                    // 但「没参与」与「拉了且成功」从这一刀起是两颗状态——第三态交展示层着色，
+                    // ⛔ 让谁去读 Error 里那句话猜「这算不算成功」。
+                    Skipped = true,
                     PulledCount = 0,
                     Error = LocMessage.Of("sync.src.unavailable"),
                 });
@@ -167,6 +171,9 @@ public sealed class SyncSummary
 
     public int TotalPulled => Sources.Sum(s => s.PulledCount);
     public int FailedCount => Sources.Count(s => !s.Success);
+    /// <summary>没参与的源几颗（P-38 (A)）：不可用被跳过的那些——既⛔ 计进失败、也⛔ 与「拉了且成功」
+    /// 同形。主窗那张灰卡的判据读的就是它。</summary>
+    public int SkippedCount => Sources.Count(s => s.Skipped);
 
     /// <summary>
     /// 这一次同步的<b>那句汇总话（还没取词）</b>：键＋读数交出去，由界面在贴上去的那一刻按当时的语言取词
@@ -189,13 +196,26 @@ public sealed class SyncSummary
     /// 源名交的是 <see cref="SourceNames.NameOf"/> 那颗 <see cref="LocMessage"/>，⛔ 在这里念成中文：
     /// 嵌套的那一句要到贴上去那一刻才按当时的语言取词（✅WI-57／P-187）。</para>
     /// </summary>
-    /// <remarks>没有失败源时返回 null：调用方⛔ 拿一颗"空"去顶在一句已完成的消息下面。</remarks>
-    public LocMessage? FailureLines(string gap = "\n")
+    /// <remarks>没有失败源时返回 null：调用方⛔ 拿一颗"空"去顶在一句已完成的消息下面。
+    /// 行怎么挑、怎么接住住在 <see cref="LinesWhere"/> 那条共用手臂里——跳过名单那一半
+    /// （<see cref="SkippedLines"/>）与它同一条手臂，键与接合子只有一份主人。</remarks>
+    public LocMessage? FailureLines(string gap = "\n") => LinesWhere(s => !s.Success, gap);
+
+    /// <summary>被跳过的那几源<b>逐源一行「谁＋为什么没参与」</b>（P-38 (A)）：主窗那张灰卡的正文。
+    /// <para>「为什么没参与」复用不可用那颗键——跳过⛔ 是一种新的失败原因，不该另造一句对不上账的话；
+    /// 行与行的接法与 <see cref="FailureLines"/> 完全同一条手臂，只有挑哪几行那颗谓词不同。</para></summary>
+    /// <remarks>没有跳过的源时返回 null：调用方⛔ 拿一颗"空"去顶在标题下面。</remarks>
+    public LocMessage? SkippedLines(string gap = "\n") => LinesWhere(s => s.Skipped, gap);
+
+    /// <summary>逐源挑行的共用手臂（P-38 (A) 把它从 <see cref="FailureLines"/> 里请出来）：
+    /// 行＝<c>sync.src.line</c>（源名＋原因），行与行＝<c>sync.src.lineJoin</c>——两颗键、两次取词
+    /// 都只有这一处主人（#161 那族：多一份实现＝多一处能各自被改坏的正文）。</summary>
+    private LocMessage? LinesWhere(Func<SourceSyncResult, bool> pick, string gap)
     {
         LocMessage? body = null;
         foreach (var s in Sources)
         {
-            if (s.Success) continue;
+            if (!pick(s)) continue;
             var line = LocMessage.Of("sync.src.line", SourceNames.NameOf(s.SourceId), s.Error);
             body = body is null ? line : LocMessage.Of("sync.src.lineJoin", body, line, gap);
         }
@@ -228,6 +248,10 @@ public sealed class SourceSyncResult
     // 要给人看的那一句按 SourceId 现取（SourceNames.NameOf）；这一份只服务汇总与控制台，身份就够了。
     public string SourceId { get; init; } = string.Empty;
     public bool Success { get; init; }
+    /// <summary>这一源这一轮<b>没参与</b>（不可用被跳过）。P-38 (A)：<see cref="Success"/> 维持 true 不动
+    /// （你从未启用的源不该每轮刷红），「没参与」与「拉了且成功」的界线由这颗旗划——三态读数见
+    /// <see cref="Status"/>。</summary>
+    public bool Skipped { get; init; }
     public int PulledCount { get; init; }
     /// <summary>
     /// 这一源<b>为什么</b>没成（键＋实参，⛔ 成品字）。批次 WI-81／P-212 走 B 把它从 <c>string</c> 升上来的：
@@ -237,4 +261,26 @@ public sealed class SourceSyncResult
     public LocMessage? Error { get; init; }
     /// <summary>P1-4 错误分类，便于 UI 给出针对性引导。</summary>
     public SourceSyncErrorKind ErrorKind { get; init; } = SourceSyncErrorKind.Unknown;
+
+    /// <summary>三态读数（P-38 (A)）：<b>现算</b>而非存档——<see cref="SourceSyncStatus.Failed"/> ⇔
+    /// <c>!Success</c>、<see cref="SourceSyncStatus.Skipped"/> ⇔ <see cref="Skipped"/>、其余＝
+    /// <see cref="SourceSyncStatus.Succeeded"/>，三颗永远同口供（存一份就可能分岔：一颗说跳过、一颗说成功）。</summary>
+    public SourceSyncStatus Status => !Success ? SourceSyncStatus.Failed
+        : Skipped ? SourceSyncStatus.Skipped
+        : SourceSyncStatus.Succeeded;
+}
+
+/// <summary>
+/// 单源那一轮的三态（P-38 (A)）。<see cref="SourceSyncResult.Success"/> 那颗布尔的<b>语义一字未动</b>
+/// （跳过仍记 true——你从未启用的源不该每轮刷红）；这一档只是把「没参与」从「拉了且成功」里分出来，
+/// 交展示层分别着色，⛔ 让谁靠读 <see cref="SourceSyncResult.Error"/> 那句话去猜。
+/// </summary>
+public enum SourceSyncStatus
+{
+    /// <summary>拉了（哪怕零新增）且没出错。</summary>
+    Succeeded,
+    /// <summary>源不可用（未配置或依赖未运行）——没参与这一轮，也不是故障。</summary>
+    Skipped,
+    /// <summary>该源这一轮没成（<c>Success = false</c>）。</summary>
+    Failed,
 }

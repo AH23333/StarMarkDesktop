@@ -140,7 +140,18 @@ public sealed partial class MainWindow
                 // 程序能做的动作不许写成用户作业），所以卡不自动收走，等它被按下或被关掉。
                 if (summary.FailedCount == 0)
                 {
-                    ShowInfoBar(InfoBarSeverity.Success, LocMessage.Of("top.syncDoneTitle"), null, 6500);
+                    if (summary.SkippedCount == 0)
+                    {
+                        ShowInfoBar(InfoBarSeverity.Success, LocMessage.Of("top.syncDoneTitle"), null, 6500);
+                    }
+                    else
+                    {
+                        // P-38 (A)：没失败、但有源没参与（未配置/依赖没跑）——既⛔ 顶着绿卡说"全部完成"
+                        // （那正是从前那颗缺陷：跳过与「拉了且成功」同形），也⛔ 刷红吓人（把 Success 改
+                        // false 的那条路就错在这里——你从未启用的源不该每轮报警）。灰卡逐源说清谁没参与。
+                        ShowInfoBar(InfoBarSeverity.Informational, LocMessage.Of("top.syncSkippedTitle"),
+                            summary.SkippedLines(), 6500);
+                    }
                 }
                 else
                 {

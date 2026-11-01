@@ -55,6 +55,9 @@ public static class UiStrings
             "Sync partially failed: {0} items ok · {1} sources failed · {2}ms",
             "同期は一部失敗：成功 {0} 件 · 失敗 {1} 源 · {2}ms"),
         new Entry("top.syncDoneTitle", "索引同步完成", "Index sync finished", "索引の同期が完了しました"),
+        // P-38 (A)：没失败、但有源没参与（未配置/依赖没跑）那张灰卡的标题——既不报喜也不报忧。
+        new Entry("top.syncSkippedTitle", "部分源未参与本轮同步",
+            "Some sources skipped this sync", "一部のソースはこの同期に参加していません"),
         new Entry("top.syncFailedTitle", "同步失败", "Sync failed", "同期に失敗"),
         new Entry("top.syncCancelledTitle", "已取消同步", "Sync cancelled", "同期をキャンセルしました"),
         new Entry("top.syncCancelledBody", "已取消同步：已拉完的源已入库，未拉完的下次同步继续补齐。",
