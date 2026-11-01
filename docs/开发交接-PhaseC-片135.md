@@ -495,3 +495,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - docgates 26/26（正本 D:\StarMarkTmp\p164\docgates181.txt）；计数器 285／210／75 VERDICT OK（✅+1）。
 - 下一刀：片182 浪三①（C/D 类挂账注＋20 刀对账收尾）。⛔ push（未推 336）・HEAD 28c834c。
 
+## 六十三、片182 浪三①：C 类挂账注 11 颗（连落 20 刀第 19 刀）
+
+- C 类 11 颗逐颗挂账注已插各节标题行后（P-24/46/85/90/95/98/99/102/112/145/153）——等待条件逐颗转述、重开/翻案条件原样在册、题行不翻牌；引擎新加 NOTES 腿（不翻牌插注・同一套五词形/第N行/占位符/仓档名自检）。
+- D 类批量盘点：余开放 75＝C 类 11＋⛔挡 4（P-56/170/172/192）＋既有积压 60（长期/架构/性能/产品/热榜/i18n 铺开）——普查正本 D:\StarMarkTmp\p164\open_census.txt；P-51/P-52 维持原状待拍板。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates182.txt）；计数器 285／210／75 VERDICT OK（0 立 0 结）；census 30。
+- 下一刀：片183 浪三②（20 刀对账收官）。⛔ push（未推 337）・HEAD 18318e1。
+
