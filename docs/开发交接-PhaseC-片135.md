@@ -402,3 +402,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：docgates 26/26（x64・正本 D:\StarMarkTmp\p164\docgates166.txt）・计数器 285／184／101 VERDICT OK（✅+7）・零码腿。
 - 下一刀：片167 浪一结案腿④（P-104/109/113/114/115/124/156）。⛔ push（未推 321）・HEAD 540ee56。
 
+## 四十八、片167 浪一结案腿④：作废/改判/说明书七颗欠账翻牌（P-104/109/113/114/115/124/156・连落 20 刀第 4 刀）
+
+- 七颗作废/改判/已落地而从未 ✅ 的欠账翻牌——P-104/109/113/114/115/124/156；各节重开/翻案条件留册・正文一字未动；点验四证人全过（PinWindow 机制零残留・ClampNotice・NormalizeTimeoutSeconds・丢弃回报重载守门）。
+- 读数：docgates 26/26（x64・正本 D:\StarMarkTmp\p164\docgates167.txt）・计数器 285／191／94 VERDICT OK（✅+7）・零码腿。
+- 下一刀：片168 浪一结案腿⑤（P-62b/66/101/108/61）。⛔ push（未推 322）・HEAD a236929。
+
