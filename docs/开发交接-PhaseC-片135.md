@@ -502,3 +502,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - docgates 26/26（正本 D:\StarMarkTmp\p164\docgates182.txt）；计数器 285／210／75 VERDICT OK（0 立 0 结）；census 30。
 - 下一刀：片183 浪三②（20 刀对账收官）。⛔ push（未推 337）・HEAD 18318e1。
 
+## 六十四、片183 浪三②收官：20 刀对账全绿（连落 20 刀第 20 刀・收官）
+
+- 对账器 recon183 十四验项全 PASS（正本 D:\StarMarkTmp\p164\recon183.txt）：20 笔 commit（164–182 十九笔在链按序＋本刀一笔）／报告节 §550–§五六九恰 20／交接节 §四十五–§六十四恰 20／翻牌 47/47 逐锚 ✅ 在位（浪一 33＋浪二 14・原锚归零）／挂账注 11/11 未翻／算术 163+47=210・122−47=75（起点 §549 在册・标题恒 285）／docgates 逐刀档在盘／census 30 恒定。
+- 三浪合账：浪一 33 翻牌（5 刀）／浪二 14 颗码修或翻牌（13 刀・含扩展仓 e1015f9）／浪三 11 注＋对账（2 刀）；余开放 75 三层账在册（C 11 注／⛔挡 4／积压 60）・P-51/P-52 待拍板・C 类逐颗等用户/真机。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates183.txt）；计数器 285／210／75 VERDICT OK（0 立 0 结）。
+- 连落 20 刀收官（下一批另立）。⛔ push（未推 338）・HEAD b16ab58。
+
