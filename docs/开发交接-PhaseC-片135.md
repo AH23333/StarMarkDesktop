@@ -457,3 +457,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - docgates 26/26（正本 D:\StarMarkTmp\p164\docgates175.txt）；计数器 285／204／81 VERDICT OK（✅+1）。
 - 下一刀：片176 浪二码修腿⑧（P-53 设置写盘失败隐身）。⛔ push（未推 330）・HEAD 73bb1df。
 
+## 五十七、片176 浪二码修腿⑧：P-53 设置写盘失败隐身翻牌（连落 20 刀第 13 刀）
+
+- 随 HC `d04fcdf` 落地：LastWriteError（成功复位・同锁）→ 保存二选一（Info 复位／HasSaveError＋语言键红字常驻标题下方）；死代码绑活；不阻止关页不弹模态；日志不再谎报。词闸门定向 9/9（x64）；本刀零码改零测改。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates176.txt）；计数器 285／205／80 VERDICT OK（✅+1）。
+- 下一刀：片177 浪二码修腿⑨（P-103 单实例残留）。⛔ push（未推 331）・HEAD 073ad53。
+
