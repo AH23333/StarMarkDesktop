@@ -420,3 +420,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 守门：ActivityNeutralFallbackGateTests 三例（全显枚举／兜底不冒充增／三色不动）3/3；UI 编译 0 警 0 错（x64）；docgates 26/26（正本 D:\StarMarkTmp\p164\docgates169.txt）；计数器 285／197／88 VERDICT OK（✅+1）。
 - 下一刀：片170 浪二码修腿②（P-13 StarLog CR/LF 剥离）。⛔ push（未推 324）・HEAD 2616c7f。
 
+## 五十一、片170 浪二腿②：P-13 StarLog CR/LF 日志伪造翻牌（连落 20 刀第 7 刀）
+
+- P-13 读节发现已是 CD 批（2026-09-21・02a8edd）按 (A1) 落地的存量——标题没翻＝「改掉了没回写」欠账；点验四证人（commit 在链・SanitizeMessage／StackTail 在仓・InternalsVisibleTo 在册・StarLogTests 13 例）全过后翻牌结案，正文一字未动。
+- 读数：docgates 26/26（x64・正本 D:\StarMarkTmp\p164\docgates170.txt）・计数器 285／198／87 VERDICT OK（✅+1）・零码腿。
+- 下一刀：片171 浪二码修腿（P-15 AddTagAsync 标签首尾空白）。⛔ push（未推 325）・HEAD 414dc76。
+
