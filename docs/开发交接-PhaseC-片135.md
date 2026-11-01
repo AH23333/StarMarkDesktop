@@ -384,3 +384,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：docgates 26/26（x64・正本 D:\StarMarkTmp\p163\docgates163.txt）・计数器 285／163／122 VERDICT OK（0 立 0 结）・本批零码腿。
 - 下一刀：余开放 P-192（⑴⑵⑶ 皆非本机可动）。⛔ commit（片163 未领）、push（未推 318）・HEAD 0d44830。
 
+## 四十五、片164 浪一结案腿①：产品取舍七颗「批次内已决」欠账翻牌（P-74/75/76/77/78/79/81・连落 20 刀第 1 刀）
+
+- 三浪排已授权（commit 逐刀自动・⛔ push 照旧）：本刀把正文已载终断而从未 ✅ 的七颗产品取舍翻牌——P-74/75/76/77/78/79/81；各节重开条件留册・正文一字未动；点验四证人全过（DittoDbLocationTests・零 TimestampConverter 残留・TryCopyText・MyPictures 两处）。
+- 读数：docgates 26/26（x64・正本 D:\StarMarkTmp\p164\docgates164.txt）・计数器 285／170／115 VERDICT OK（✅+7）・零码腿。
+- 下一刀：片165 浪一结案腿②（P-87/88/91/92/94/96/100）。⛔ push（未推 319）・HEAD b549b6f。
+
