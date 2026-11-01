@@ -269,7 +269,7 @@ public static class ClipboardPolicy
             return normalizedText;
         }
         truncated = true;
-        return normalizedText[..MaxStoredChars];
+        return TextTrim.Cut(normalizedText, MaxStoredChars);
     }
 
     // ==================== 条目动作口径 ====================

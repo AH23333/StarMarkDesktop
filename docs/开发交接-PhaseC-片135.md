@@ -439,3 +439,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 残渣（pFiles<20 读头部垃圾串）有界不抛・维持 CS 判定不动；本刀零码改零测改・正文一字未动；docgates 26/26（正本 D:\StarMarkTmp\p164\docgates172.txt）；计数器 285／200／85 VERDICT OK（✅+1）。
 - 下一刀：片173 浪二码修腿⑤（P-27 代理对护栏）。⛔ push（未推 327）・HEAD e598dd3。
 
+## 五十四、片173 浪二码修腿⑤：P-27 代理对截断护栏收口（连落 20 刀第 10 刀）
+
+- 旧账五处全闭环（SB/SC 合流 TextTrim・RV 删托盘通知出口・ETag 明示绕行）；本刀补收横向复现三颗漏网：标签收口・整理行体・超长正文截断改道 TextTrim.Cut/Ellipsize（三处单行替换・零行移）。
+- 守门：TextTrimTests 补改道宿主行为测两例（行体/标签/正文截断退一格・截后必无未配对代理）；定向五类 162/162（x64）；docgates 26/26（正本 D:\StarMarkTmp\p164\docgates173.txt）；计数器 285／201／84 VERDICT OK（✅+1）。
+- 下一刀：片174 浪二码修腿⑥（P-39/P-55 HttpClient 超时同根）。⛔ push（未推 328）・HEAD b03a7dc。
+

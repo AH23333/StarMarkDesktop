@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Xunit;
 using StarMark.Abstractions;
+using StarMark.Abstractions.Ai;
 using StarMark.Abstractions.Clipboard;
 using StarMark.Core.Feed;
 using StarMark.Core.Ocr;
@@ -145,6 +146,30 @@ public sealed class TextTrimTests
         Assert.EndsWith("…", summary, StringComparison.Ordinal);
         Assert.False(summary.TrimEnd('…').EndsWith(" ", StringComparison.Ordinal), "尾巴上的空白该被 TrimEnd 掉（SC 之前也是这个读数）");
         Assert.Equal(0, Unpaired(summary));
+    }
+
+    /// <summary>AI 整理那两把（片173 改道）：行体与标签都不许把一枚 emoji 劈成半枚送进提示词。</summary>
+    [Fact]
+    public void AiClassify_NeverSendsHalfAnEmojiIntoThePrompt()
+    {
+        var line = ClassifyPrompt.ItemLine(new ClassifyItem(1, A(39) + Cat + "xyz", null, null, "test", Array.Empty<string>()));
+        Assert.Equal(A(39) + "…", line);                 // 第 40 枚是高代理 ⇒ 退一格再补省略号
+        Assert.Equal(0, Unpaired(line));
+
+        var tag = TagText.Normalize(A(23) + Cat + A(9))!;   // 24 枚上限正压在代理对中间
+        Assert.Equal(A(23), tag);
+        Assert.Equal(0, Unpaired(tag));
+    }
+
+    /// <summary>超长正文那把（片173 改道）：截断边界退在代理对之前，库存里不许出现未配对代理。</summary>
+    [Fact]
+    public void ClipboardBodyTruncate_BacksOffBeforeThePair()
+    {
+        var body = A(ClipboardPolicy.MaxStoredChars - 1) + Cat + A(9);
+        var stored = ClipboardPolicy.Truncate(body, out var truncated);
+        Assert.True(truncated);
+        Assert.Equal(ClipboardPolicy.MaxStoredChars - 1, stored.Length);
+        Assert.Equal(0, Unpaired(stored));
     }
 
     /// <summary>

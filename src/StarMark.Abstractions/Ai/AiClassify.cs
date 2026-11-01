@@ -55,7 +55,7 @@ public static class TagText
         var text = builder.ToString();
         // 只剩符号的东西（"—"、"「"）当标签既搜不到也没法读
         if (!text.Any(char.IsLetterOrDigit)) return null;
-        if (text.Length > MaxLength) text = text[..MaxLength].Trim();
+        if (text.Length > MaxLength) text = TextTrim.Cut(text, MaxLength).Trim();
         return text.Length == 0 ? null : text;
     }
 
@@ -190,7 +190,7 @@ public static class ClassifyPrompt
     private static string OneLine(string? text, int max)
     {
         var flat = FlatOf(text);
-        return flat.Length <= max ? flat : flat[..max] + "…";
+        return TextTrim.Ellipsize(flat, max);
     }
 
     private static string FlatOf(string? text)
