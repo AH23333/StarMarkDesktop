@@ -390,3 +390,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：docgates 26/26（x64・正本 D:\StarMarkTmp\p164\docgates164.txt）・计数器 285／170／115 VERDICT OK（✅+7）・零码腿。
 - 下一刀：片165 浪一结案腿②（P-87/88/91/92/94/96/100）。⛔ push（未推 319）・HEAD b549b6f。
 
+## 四十六、片165 浪一结案腿②：AI/RSS/性能取舍七颗「已决」欠账翻牌（P-87/88/91/92/94/96/100・连落 20 刀第 2 刀）
+
+- 七颗「已决」从未 ✅ 的欠账翻牌——P-87/88/91/92/94/96/100；各节重开条件留册・正文一字未动；点验三证人全过（SourcesAreFetchedConcurrentlyButBounded・GetCollectedRssLinksAsync 三处贯通・MaxParallel=4）。
+- 读数：docgates 26/26（x64・正本 D:\StarMarkTmp\p164\docgates165.txt）・计数器 285／177／108 VERDICT OK（✅+7）・零码腿。
+- 下一刀：片166 浪一结案腿③（P-83/84/97/106/107/110/111）。⛔ push（未推 320）・HEAD 7f2d313。
+
