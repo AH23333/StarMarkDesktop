@@ -408,3 +408,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：docgates 26/26（x64・正本 D:\StarMarkTmp\p164\docgates167.txt）・计数器 285／191／94 VERDICT OK（✅+7）・零码腿。
 - 下一刀：片168 浪一结案腿⑤（P-62b/66/101/108/61）。⛔ push（未推 322）・HEAD a236929。
 
+## 四十九、片168 浪一结案腿⑤收官：已闭环/定案/改判残尾五颗翻牌（P-61/62b/66/101/108・连落 20 刀第 5 刀）
+
+- 五颗已闭环/已定案/改判结案欠账翻牌——P-61/62b/66/101/108；各节重开/验收条件留册・正文一字未动；点验五证人全过（三笔历史 commit 85a0f9a・27bbc8a・8ae41f0＋TrayWidgetMenuTests／首启种子两测试／targets 覆盖／提权守门测试・src 零 DPAPI）。
+- 浪一（结案腿）至此收官：33 颗已决欠账经片164–168 五刀全数翻牌・计数器 285／196／89 VERDICT OK（✅+5 本刀）。读数：docgates 26/26（x64・正本 D:\StarMarkTmp\p164\docgates168.txt）。
+- 下一刀：片169 转浪二码修腿第 1 刀（P-3 ActivityKind 兜底色）。⛔ push（未推 323）・HEAD b8d250e。
+
