@@ -488,3 +488,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - docgates 26/26（正本 D:\StarMarkTmp\p164\docgates180.txt）；计数器 285／209／76 VERDICT OK（✅+1）。
 - 下一刀：片181 浪二码修腿⑬（P-171・浪二最后一颗）。⛔ push（未推 335）・HEAD 773d134。
 
+## 六十二、片181 浪二码修腿⑬（浪二收官）：P-171 文案写死条数翻牌（连落 20 刀第 18 刀）
+
+- P-171 选项 C 兑现：证人 TheCaptureToggleSentencesNameTheSameCountTheGateLists——从发起框选判据现场数名单，托盘配对表与状态行实参同一份；短句与开关两句数词逐语相符、占位符逐语零起连续；⛔ 不把 3 抄进判据（#289 口径）。反向台架两格各红一次。canvasInShotNote 半边已删数（表里无数字）无需证人。重开条件在册：入口增删 ⇒ 证人红 ⇒ 句子与数词表人手同步改；B 路线落地 ⇒ 证人按新机制改写。
+- I18nWiringGateTests 定向 94／94（x64・证人前 93）；本刀只加一颗测试・零产品码改。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates181.txt）；计数器 285／210／75 VERDICT OK（✅+1）。
+- 下一刀：片182 浪三①（C/D 类挂账注＋20 刀对账收尾）。⛔ push（未推 336）・HEAD 28c834c。
+

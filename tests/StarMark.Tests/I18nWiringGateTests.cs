@@ -519,6 +519,67 @@ public sealed class I18nWiringGateTests
     }
 
     /// <summary>
+    /// 截屏总开关那几句里的<b>数与两份名单必须是同一个数</b>（P-171 选项 C 的兑现：句子保留数字，
+    /// 配一颗会红的绑定——下一次给「发起框选」加一条入口，这三句当场红，而不是屏幕上挂着
+    /// 写着三、实际收了四的假话）。
+    /// <para>数住两处：<c>CaptureGate.IsSelectionAction</c> 的 pattern（热键注册与托盘显隐共用的判据）
+    /// 与托盘那张配对表。证人从这两支<b>现场数出条数</b>，要求两边是同一份名单、状态行实参也是它，
+    /// 再要求三句文案（短说明＋开／关两句状态行）的占位符个数、三语数词与它逐字相符。
+    /// ⛔ 不把 3 抄进判据当第三个出处——数由名单算出，词由数词表译出（坑表 #289 口径）。</para>
+    /// </summary>
+    [Fact]
+    public void TheCaptureToggleSentencesNameTheSameCountTheGateLists()
+    {
+        var gate = Code(ReadRepoFile("src/StarMark.Core/Hotkeys/CaptureGate.cs"));
+        var selection = Regex.Matches(Between(gate, "IsSelectionAction(string action)", ";"), @"HotkeyActions\.(\w+)")
+            .Cast<Match>().Select(m => m.Groups[1].Value).ToList();
+        Assert.True(selection.Count >= 1, "IsSelectionAction 的 pattern 里一条动作都没认到——抽取器没跑对，先修这一格");
+
+        var tray = Code(ReadRepoFile("src/StarMark.UI/MainWindow.Tray.cs"));
+        var paired = Regex.Matches(Between(tray, "CaptureEntries", "};"), @"\((?:HotkeyActions\.(\w+)), Tray\w+\)")
+            .Cast<Match>().Select(m => m.Groups[1].Value).ToList();
+        Assert.Equal(selection.Count, paired.Count);
+        Assert.True(selection.ToHashSet(StringComparer.Ordinal).SetEquals(paired),
+            "Core 判据与托盘配对表不是同一份名单——热键摘了托盘还留着（或反之），那是看得见点不动的残骸");
+
+        var vm = Code(ReadRepoFile("src/StarMark.UI/ViewModels/SettingsPageViewModel.Capture.cs"));
+        var passed = Regex.Matches(Between(vm, "LocMessage? BuildCaptureStatus()", "}"), @"HotkeyText\(HotkeyActions\.(\w+)\)")
+            .Cast<Match>().Select(m => m.Groups[1].Value).ToList();
+        Assert.True(selection.ToHashSet(StringComparer.Ordinal).SetEquals(passed),
+            "状态行的键位实参不是发起框选那份名单——句子里的键位与真实收放的键位分岔了");
+
+        var n = selection.Count;
+        // 数词表只译得到十以内：名单长过它 ⇒ 句子与这颗证人都得人手改，不许让句子悄悄变假话
+        var zhNum = new[] { "一", "两", "三", "四", "五", "六", "七", "八", "九", "十" };
+        var enWord = new[] { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten" };
+        Assert.InRange(n, 1, zhNum.Length);
+        var (zh, en) = (zhNum[n - 1], enWord[n - 1]);
+
+        var note = UiStrings.All.Single(e => e.Key == "settings.extend.captureNote");
+        Assert.Matches(new Regex(zh + "条"), note.Zh);
+        Assert.Matches(new Regex(@"\b" + en + @"\b", RegexOptions.IgnoreCase), note.En);
+        Assert.Matches(new Regex(n + @"\s*つ"), note.Ja);
+
+        foreach (var key in new[] { "settings.extend.captureOn", "settings.extend.captureOff" })
+        {
+            var row = UiStrings.All.Single(e => e.Key == key);
+            foreach (var text in new[] { row.Zh, row.En, row.Ja })
+            {
+                var holes = Regex.Matches(text, @"\{(\d)\}").Cast<Match>()
+                    .Select(m => int.Parse(m.Groups[1].Value)).Distinct().OrderBy(v => v).ToList();
+                Assert.Equal(Enumerable.Range(0, n), holes);
+            }
+        }
+
+        var off = UiStrings.All.Single(e => e.Key == "settings.extend.captureOff");
+        Assert.Matches(new Regex(zh + "条"), off.Zh);
+        Assert.Matches(new Regex(zh + "项"), off.Zh);
+        Assert.Equal(2, Regex.Matches(off.En, @"\b" + en + @"\b", RegexOptions.IgnoreCase).Count);
+        Assert.Matches(new Regex(n + @"\s*つ"), off.Ja);
+        Assert.Matches(new Regex(n + @"\s*項目"), off.Ja);
+    }
+
+    /// <summary>
     /// 「测试连接」那颗按钮的<b>忙闲两句都走键</b>（坑表 #276 在「AI 增强」这一栏的第二次兑现）。
     /// <para>写成 <c>Content = "取消"</c> 的那一版，红脸的时刻是"抓取期间换一下语言"：
     /// <c>LocText</c> 按标记里那颗"空闲"键把按钮重贴成"测试连接"——一件还在跑的事被界面改了口，
