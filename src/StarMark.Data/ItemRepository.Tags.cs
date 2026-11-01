@@ -63,6 +63,15 @@ public sealed partial class ItemRepository
 
     public async Task<bool> AddTagAsync(long itemId, string tagName, CancellationToken ct)
     {
+        // P-15（AW 批发现 F-3）：与兄弟写入路径（快照循环／备份导入）同口径——先归一再落库。
+        // 全空白＝拒（false＝没变化，不广播），带首尾空白折成净名，
+        // 防"别的写入器永不复用、UI 也搜不到"的孤儿标签行。
+        if (string.IsNullOrWhiteSpace(tagName))
+        {
+            return false;
+        }
+        tagName = tagName.Trim();
+
         using var conn = _factory.Open();
         using var tx = conn.BeginTransaction();
 

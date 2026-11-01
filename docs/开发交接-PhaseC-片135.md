@@ -426,3 +426,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：docgates 26/26（x64・正本 D:\StarMarkTmp\p164\docgates170.txt）・计数器 285／198／87 VERDICT OK（✅+1）・零码腿。
 - 下一刀：片171 浪二码修腿（P-15 AddTagAsync 标签首尾空白）。⛔ push（未推 325）・HEAD 414dc76。
 
+## 五十二、片171 浪二码修腿③：P-15 AddTagAsync 归一守卫落地（连落 20 刀第 8 刀）
+
+- AddTagAsync 顶部加兄弟路径同口径守卫：全空白＝拒（false＝没变化・不广播）、带首尾空白折净名再落库；签名不动・UI 现路径零行为变化（TagEditor 本就 trim 拒空）・守的是未来非 UI 直调者。
+- 守门：StateWriteRowTests 补两例（空白名折净名＋同挂报没变化／全空白 no-op 且 tags 表零行）；标签族定向 46/46（x64）；docgates 26/26（正本 D:\StarMarkTmp\p164\docgates171.txt）；计数器 285／199／86 VERDICT OK（✅+1）。
+- 挤落修复：R7 快照表两颗行号指针被本刀插行挤落（落空棘轮 30→32 红）→ 删号留锚（P-15/P-40 两行）回 30。
+- 下一刀：片172 浪二码修腿④（P-20 ParseDropFiles 符号翻转）。⛔ push（未推 326）・HEAD bacd5cd。
+

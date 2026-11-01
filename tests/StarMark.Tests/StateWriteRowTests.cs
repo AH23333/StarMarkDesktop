@@ -171,6 +171,33 @@ public sealed class StateWriteRowTests : IDisposable
     }
 
     [Fact]
+    public async Task AddTagTrimsSurroundingWhitespaceIntoTheCanonicalName()
+    {
+        // P-15（AW 批发现 F-3）：标签写入身份先归一再落库——"  work  " 折成 "work"，
+        // 不再制造"别的写入器永不复用、UI 也搜不到"的孤儿标签行。
+        var id = await NewItemAsync();
+        Assert.True(await _repo.AddTagAsync(id, "  work  ", CancellationToken.None));
+
+        Assert.Equal(1, Scalar("SELECT COUNT(*) FROM tags WHERE name = 'work';"));
+        Assert.Equal(0, Scalar("SELECT COUNT(*) FROM tags WHERE name != 'work';"));
+
+        StartTally();
+        Assert.False(await _repo.AddTagAsync(id, "work", CancellationToken.None));   // 归一后与本名同挂＝没变化
+        Assert.Equal(0, _broadcasts);
+    }
+
+    [Fact]
+    public async Task AddTagOnAWhitespaceOnlyNameIsANoOpThatLeavesNoTagRowBehind()
+    {
+        var id = await NewItemAsync();
+        StartTally();
+
+        Assert.False(await _repo.AddTagAsync(id, "   ", CancellationToken.None));   // 全空白＝拒，不是落一颗空名标签
+        Assert.Equal(0, _broadcasts);
+        Assert.Equal(0, Scalar("SELECT COUNT(*) FROM tags;"));                     // 表里一颗都没有
+    }
+
+    [Fact]
     public async Task RemoveTagOnAnExistingLinkLandsAndOnAnAbsentLinkIsSilentlyFalse()
     {
         var id = await NewItemAsync();
