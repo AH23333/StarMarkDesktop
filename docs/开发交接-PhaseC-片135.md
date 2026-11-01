@@ -445,3 +445,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 守门：TextTrimTests 补改道宿主行为测两例（行体/标签/正文截断退一格・截后必无未配对代理）；定向五类 162/162（x64）；docgates 26/26（正本 D:\StarMarkTmp\p164\docgates173.txt）；计数器 285／201／84 VERDICT OK（✅+1）。
 - 下一刀：片174 浪二码修腿⑥（P-39/P-55 HttpClient 超时同根）。⛔ push（未推 328）・HEAD b03a7dc。
 
+## 五十五、片174 浪二码修腿⑥：P-39/P-55 超时与可取消双翻牌（连落 20 刀第 11 刀）
+
+- 同根两颗（Timeout 不设＋同步不可取消）两半皆已落地：GZ `fced27c`（自建分支 20 秒）＋HF `839bbcf`（顶栏取消入口・取消与失败分开报・取消轮回滚 ETag 检查点・删第二条不可取消同步路径）；守门定向 11/11（x64）；本刀零码改零测改・只补标题记账滞后。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates174.txt）；计数器 285／203／82 VERDICT OK（✅+2）。
+- 下一刀：片175 浪二码修腿⑦（P-50 Downloads 目录）。⛔ push（未推 329）・HEAD e5cb9a8。
+
