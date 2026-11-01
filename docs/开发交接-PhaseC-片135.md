@@ -376,3 +376,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：docgates 26/26（x64・正本 D:\StarMarkTmp\p162\docgates162.txt）・计数器 285／163／122 VERDICT OK（0 立 0 结）；P-192 ⛔ 翻牌（剩 ⑴⑵⑶ 三臂皆非本机可动）。
 - 下一刀：余开放 P-192 三防御臂与 #575（三语覆盘需真机＝用户占机）。⛔ commit（片162 未领）、push（未推 316）。
 
+## 四十四、片163 #575 三语覆盘收官：速览那一屏三语真机逐字全绿・透窗污染堵死・热榜双原因格挂账
+
+- 三跑：zh 29 步／28.8 s・en 28 步／28.1 s・ja 42 步／52.6 s（freshStart 各起・Profile-{zh,en,ja}・库零行・Kind=9 @60,60 320x400）；标题／节令行／观测集／导航／CAL 行廓三语各正；正本 D:\StarMarkTmp\p163\ev\readout163_zh.txt／readout163_en.txt／readout163_ja.txt。
+- 透窗污染堵死：初跑 8 格假阳性（6/7/12/13/19/20/27/28）⇒ parkmain 挪主窗 (-2400,-2400)（rect≠组件矩形过滤）＋backing163 垫 RGB(38,38,39) 实底窗（z 序紧贴・⛔ 抢前台）⇒ 假阳性归零・三语全绿；仪器顺修两 bug（补 BOM＝#1119 同款再犯・$h/$H 改 $bh）・烟测 v2 全绿（EnumWindows 按 pid 验 rect・杀后 IsWindow=False）；坑表 #1121／#1122。
+- 热榜双原因格挂账（报告 §四百九十九 ①②③ 同例・归他・真机才判）：两腿各 200（github_trending 1.99 s・api_search 0.87 s）＋库可写＝现场造不出；P-189／P-196 账本补记已落；报告 §四百九十七 ① 20 号就地更正 21 号（官制年表 2027 春分＝3 月 21 日・实测 d21 亮 d20 ⛔）。
+- 读数：docgates 26/26（x64・正本 D:\StarMarkTmp\p163\docgates163.txt）・计数器 285／163／122 VERDICT OK（0 立 0 结）・本批零码腿。
+- 下一刀：余开放 P-192（⑴⑵⑶ 皆非本机可动）。⛔ commit（片163 未领）、push（未推 318）・HEAD 0d44830。
+
