@@ -2,6 +2,7 @@
 using Microsoft.UI.Dispatching;
 using Windows.Graphics;
 using StarMark.Abstractions;
+using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
 using StarMark.UI.Views;
@@ -31,6 +32,7 @@ public sealed partial class WidgetManager
     /// </summary>
     public Task<WidgetLayout?> SaveCurrentLayoutAsync(string name) => OnUiAsync(() =>
     {
+        LastPersistError = null;
         var data = _storage.Load();
         var entries = new List<WidgetLayoutEntry>();
         var perKind = new Dictionary<WidgetKind, int>();
@@ -60,16 +62,32 @@ public sealed partial class WidgetManager
             CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
             Entries = entries,
         };
-        _storage.SaveLayout(layout);
+        // SaveLayout 没写进磁盘时交回 null（P-16）：此刻照旧发 LayoutsChanged 并返回内存里的
+        // layout 就是谎报——它只在缓存里，重启后布局列表里不会有它。
+        if (_storage.SaveLayout(layout) is null)
+        {
+            StarLog.Error($"保存布局未落盘（写盘失败或被占用）：{name}");
+            LastPersistError = LocMessage.Of("widget.persist.notSavedBody");
+            return null;
+        }
         LayoutsChanged?.Invoke();
         return layout;
     });
 
-    /// <summary>删除一套布局方案。</summary>
+    /// <summary>删除一套布局方案。返回 false ＝没删掉：要么本来就没有（静默照旧），要么有但没写进磁盘
+    /// （此时 <see cref="LastPersistError"/> 非空——缓存里删了、盘上还在，重启后会回来，P-16）。</summary>
     public Task<bool> DeleteLayoutAsync(string layoutId) => OnUiAsync(() =>
     {
+        LastPersistError = null;
+        // 删前先记「它本来在不在」：Delete 动的是缓存对象，删后再回头查只会假「没找到」。
+        var existed = _storage.FindLayout(layoutId) is not null;
         var removed = _storage.DeleteLayout(layoutId);
         if (removed) LayoutsChanged?.Invoke();
+        else if (existed)
+        {
+            StarLog.Error($"删除布局未落盘（写盘失败或被占用）：{layoutId}");
+            LastPersistError = LocMessage.Of("widget.persist.notDeletedBody");
+        }
         return removed;
     });
 

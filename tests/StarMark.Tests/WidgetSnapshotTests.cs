@@ -62,7 +62,7 @@ public sealed class WidgetSnapshotTests : IDisposable
             },
         };
 
-        var returned = store.AppendSnapshot(snap);
+        var returned = store.AppendSnapshot(snap)!;
         var reloaded = store.FindSnapshot(returned.Id);
 
         Assert.NotNull(reloaded);
@@ -109,8 +109,8 @@ public sealed class WidgetSnapshotTests : IDisposable
     {
         var store = Store();
         store.AppendSnapshot(new WidgetSnapshot { Name = "备份", CreatedAt = 1 });
-        var second = store.AppendSnapshot(new WidgetSnapshot { Name = "备份", CreatedAt = 2 });
-        var third = store.AppendSnapshot(new WidgetSnapshot { Name = "备份", CreatedAt = 3 });
+        var second = store.AppendSnapshot(new WidgetSnapshot { Name = "备份", CreatedAt = 2 })!;
+        var third = store.AppendSnapshot(new WidgetSnapshot { Name = "备份", CreatedAt = 3 })!;
 
         Assert.Equal("备份", store.GetSnapshots().First(s => s.CreatedAt == 1).Name);
         Assert.Equal("备份 (2)", second.Name);
@@ -133,7 +133,7 @@ public sealed class WidgetSnapshotTests : IDisposable
     public void DeleteSnapshot_RemovesOnlyTarget()
     {
         var store = Store();
-        var a = store.AppendSnapshot(new WidgetSnapshot { Name = "A", CreatedAt = 1 });
+        var a = store.AppendSnapshot(new WidgetSnapshot { Name = "A", CreatedAt = 1 })!;
         store.AppendSnapshot(new WidgetSnapshot { Name = "B", CreatedAt = 2 });
 
         Assert.True(store.DeleteSnapshot(a.Id));
@@ -280,7 +280,7 @@ public sealed class WidgetSnapshotTests : IDisposable
             },
         };
 
-        var reloaded = store.FindSnapshot(store.AppendSnapshot(snap).Id);
+        var reloaded = store.FindSnapshot(store.AppendSnapshot(snap)!.Id);
         var it = Assert.Single(Assert.Single(reloaded!.Entries).LocalItems);
         Assert.Equal("副", it.Subtitle);
         Assert.Equal("u", it.Uri);

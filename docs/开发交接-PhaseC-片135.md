@@ -545,3 +545,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - docgates 26/26（正本 D:\StarMarkTmp\p164\docgates188.txt）；计数器 285／219／66 VERDICT OK（✅+1）；census 28。
 - 下一刀：片189＝P-16 (A) WidgetStorage.Save→bool＋四封装透传失败＋UI 失败提示。⛔ push（未推 343）・HEAD ec8a5ae。
 
+## 七十、片189 真码修批第 4/6 刀：P-16 (A) WidgetStorage 四封装透传未落盘＋UI 失败提示——null/false 不再冒充成功
+
+- 修法：四个 CRUD 封装按 Save 实情报数（存布局/追加快照没落盘交回 null・删布局/删快照透传落盘结果）；Manager 五条存删出口先清后记「没写进磁盘」那句身份；三页四宿主凭它分辨「没有内容」与「没写进磁盘」，后者明说「改动未保存」；表添三键。
+- 证人测 4 条＋接线闸门 3 条（四封装透传・五出口清记与四宿主计数・表三键恰一行且四列齐）；Widget 全滤定向 280/280（x64）。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates189.txt）；计数器 285／220／65 VERDICT OK（✅+1）；census 28。
+- 顺手收两笔：账本 P-200 三颗 MakeUniqueName 调用点指针行移改对（census 29→28）；片173 漏挪的 EllipsisFamily 名单补记（AiClassify.cs 挪进改道名单・8→9 家・8/8 绿）。
+- 下一刀：片190＝P-38 (A) SourceSyncResult 三态＋展示层着色（SyncCoordinator）。⛔ push（未推 344）・HEAD 54d51c5。
+

@@ -208,7 +208,10 @@ public sealed partial class SettingsPage
             primaryText: LocMessage.Of("dialog.delete"), cancelText: LocMessage.Of("dialog.cancel"),
             owner: App.MainWindow, dedupeKey: $"deletelayout:{id}");
         if (!confirm) return;
-        await mgr.DeleteLayoutAsync(id);
+        // 删了却没写进磁盘＝缓存里没了、重启后会回来（P-16），必须明说；
+        // 本来就没有＝布局列表已无此行，静默照旧。
+        if (!await mgr.DeleteLayoutAsync(id) && mgr.LastPersistError is { } why)
+            await CenteredDialog.MessageAsync(LocMessage.Of("widget.persist.notSavedTitle"), why, owner: App.MainWindow);
     }
 
     // ==================== 快捷键录制 ====================

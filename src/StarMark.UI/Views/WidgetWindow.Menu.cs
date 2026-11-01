@@ -359,7 +359,14 @@ public sealed partial class WidgetWindow
         {
             var saved = await _manager.CaptureSnapshotAsync(name);
             if (saved is null)
-                await ShowTipAsync(LocMessage.Of("widget.menu.noneWidgets"), LocMessage.Of("widget.menu.noSnapshotContent"));
+            {
+                // 两义分辨（P-16）：null 既可能是「当前没有组件」，也可能是「有、但没写进磁盘」——
+                // 凭 Manager 交回的那句身份分辨，⛔ 拿「没有组件」搪塞写盘失败。
+                if (_manager.LastPersistError is { } why)
+                    await ShowTipAsync(LocMessage.Of("widget.persist.notSavedTitle"), why);
+                else
+                    await ShowTipAsync(LocMessage.Of("widget.menu.noneWidgets"), LocMessage.Of("widget.menu.noSnapshotContent"));
+            }
             else
                 await ShowTipAsync(LocMessage.Of("widget.menu.snapshotSaved"),
                     LocMessage.Of("widget.menu.snapshotSavedBody",
@@ -393,7 +400,13 @@ public sealed partial class WidgetWindow
 
         var saved = await _manager.SaveCurrentLayoutAsync(name);
         if (saved is null)
-            await ShowTipAsync(LocMessage.Of("widget.menu.noneVisible"), LocMessage.Of("widget.menu.noLayoutContent"));
+        {
+            // 两义分辨（P-16）：null 既可能是「当前没有可见组件」，也可能是「有、但没写进磁盘」。
+            if (_manager.LastPersistError is { } why)
+                await ShowTipAsync(LocMessage.Of("widget.persist.notSavedTitle"), why);
+            else
+                await ShowTipAsync(LocMessage.Of("widget.menu.noneVisible"), LocMessage.Of("widget.menu.noLayoutContent"));
+        }
     }
 
     private async System.Threading.Tasks.Task ShowTipAsync(LocMessage title, LocMessage message)

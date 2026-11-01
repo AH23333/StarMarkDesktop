@@ -730,8 +730,10 @@ public sealed class WidgetStorage
     }
 
     /// <summary>新增或覆盖同名布局（按 Id 判定）；返回归一后的最终名称（没起名就是空串，屏幕上那句由
-    /// <see cref="WidgetDisplayName"/> 现算——⛔ 把这句当"能直接上屏的名字"用）。</summary>
-    public string SaveLayout(WidgetLayout layout)
+    /// <see cref="WidgetDisplayName"/> 现算——⛔ 把这句当"能直接上屏的名字"用）。
+    /// <para><b>没写进磁盘时返回 null</b>（P-16：降级闩跳过写盘与写盘失败皆然）——文档承诺的
+    /// "返回去重后的最终名称"只在真的落了盘时成立，跳过时交出去的名字就是冒充。</para></summary>
+    public string? SaveLayout(WidgetLayout layout)
     {
         lock (_gate)
         {
@@ -740,12 +742,12 @@ public sealed class WidgetStorage
             var existing = layouts.FirstOrDefault(l => l.Id == layout.Id);
             if (existing is not null) layouts.Remove(existing);
             layouts.Add(layout);
-            this.Save(data);
-            return layout.Name;
+            return this.Save(data) ? layout.Name : null;
         }
     }
 
-    /// <summary>删除布局；返回是否删除成功。</summary>
+    /// <summary>删除布局；返回是否删除成功＝内存里删掉了<b>且已落盘</b>（P-16：没写进磁盘不算删成——
+    /// 恒报 true 是一句谎话，重启后它还在就是铁证）。</summary>
     public bool DeleteLayout(string id)
     {
         lock (_gate)
@@ -755,8 +757,7 @@ public sealed class WidgetStorage
             var target = layouts.FirstOrDefault(l => l.Id == id);
             if (target is null) return false;
             layouts.Remove(target);
-            this.Save(data);
-            return true;
+            return this.Save(data);
         }
     }
 
@@ -780,8 +781,10 @@ public sealed class WidgetStorage
     /// <summary>
     /// 追加一个快照点（**不可变**：永不按 Id 覆盖既有点）。
     /// 非空名自动去重、Id 冲突时重新生成后追加；返回落盘后的快照（含最终名称，没起名就是空串）。
+    /// <para><b>没写进磁盘时返回 null</b>（P-16）：降级闩跳过写盘与写盘失败时，「落盘后的快照」并不存在，
+    /// 旧注释自称的那句在这里本来就是假的。</para>
     /// </summary>
-    public WidgetSnapshot AppendSnapshot(WidgetSnapshot snapshot)
+    public WidgetSnapshot? AppendSnapshot(WidgetSnapshot snapshot)
     {
         lock (_gate)
         {
@@ -794,12 +797,12 @@ public sealed class WidgetStorage
 
             snapshot.Name = WidgetSnapshotCollection.MakeUniqueName(snaps, snapshot.Name);
             snaps.Add(snapshot);
-            this.Save(data);   // Save→Normalize 会补全排序/去重，返回的 snapshot 即最终落盘对象
-            return snapshot;
+            return this.Save(data) ? snapshot : null;   // Save→Normalize 会补全排序/去重，返回的 snapshot 即最终落盘对象
         }
     }
 
-    /// <summary>删除快照点；返回是否删除成功。</summary>
+    /// <summary>删除快照点；返回是否删除成功＝内存里删掉了<b>且已落盘</b>（P-16：用户「删除快照」
+    /// 看到已删、重启后又回来，正是当年登记本条的那一幕）。</summary>
     public bool DeleteSnapshot(string id)
     {
         lock (_gate)
@@ -809,8 +812,7 @@ public sealed class WidgetStorage
             var target = snaps.FirstOrDefault(s => s.Id == id);
             if (target is null) return false;
             snaps.Remove(target);
-            this.Save(data);
-            return true;
+            return this.Save(data);
         }
     }
 }

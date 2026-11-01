@@ -2670,6 +2670,17 @@ public static class UiStrings
         new Entry("widget.menu.snapshotFailed", "保存快照失败", "Saving the snapshot failed", "スナップショットの保存に失敗しました"),
         new Entry("widget.menu.snapshotFailedBody", "读取组件数据时出错，快照未保存：{0}",
             "Widget data could not be read, so nothing was saved: {0}", "ウィジェットのデータ読み取りに失敗したため、保存されませんでした：{0}"),
+        // 存/删没写进磁盘的那几句（P-16）：WidgetManager.LastPersistError 交的是这几颗的身份，
+        // 三页四宿主（组件右键两条、快照页提取/删除、设置页删布局）凭它分辨「没有内容」与「没写进磁盘」。
+        new Entry("widget.persist.notSavedTitle", "改动未保存", "Your changes were not saved", "変更は保存されていません"),
+        new Entry("widget.persist.notSavedBody",
+            "改动没有写进磁盘（文件可能被 OneDrive、杀毒软件或其他程序占用）。请重试，或关掉占用它的程序后再试。",
+            "The change never reached the disk (the file may be held by OneDrive, antivirus, or another program). Please try again, or close the program holding it first.",
+            "変更はディスクに書き込まれていません（ファイルが OneDrive・ウイルス対策ソフトなどに占有されている可能性があります）。もう一度試すか、占有しているプログラムを閉じてからお試しください。"),
+        new Entry("widget.persist.notDeletedBody",
+            "删除没有写进磁盘（文件可能被 OneDrive、杀毒软件或其他程序占用）。现在看着已删，重启后它还会回来。请重试，或关掉占用它的程序后再试。",
+            "The deletion never reached the disk (the file may be held by OneDrive, antivirus, or another program). It looks gone now, but it will come back after a restart. Please try again, or close the program holding it first.",
+            "削除はディスクに書き込まれていません（ファイルが OneDrive・ウイルス対策ソフトなどに占有されている可能性があります）。今は消えたように見えますが、再起動すると戻ってきます。もう一度試すか、占有しているプログラムを閉じてからお試しください。"),
         new Entry("widget.menu.renameTitle", "重命名组件", "Rename this widget", "ウィジェットの名前を変更"),
         new Entry("widget.menu.renameBody", "给这个组件取个名字（留空则恢复默认名称「{0}」）。",
             "Give this widget a name (leave it empty to restore the default “{0}”).",

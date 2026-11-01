@@ -162,8 +162,14 @@ public sealed partial class SnapshotPage : Page, INotifyPropertyChanged
 
         var layout = await mgr.ExtractLayoutFromSnapshotAsync(id, name);
         if (layout is null)
-            await CenteredDialog.MessageAsync(LocMessage.Of("snapshot.noneToExtractTitle"),
-                LocMessage.Of("snapshot.noneToExtractBody"), owner: App.MainWindow);
+        {
+            // 两义分辨（P-16）：null 既可能是「快照里没有可提取的条目」，也可能是「提取了、但没写进磁盘」。
+            if (mgr.LastPersistError is { } why)
+                await CenteredDialog.MessageAsync(LocMessage.Of("widget.persist.notSavedTitle"), why, owner: App.MainWindow);
+            else
+                await CenteredDialog.MessageAsync(LocMessage.Of("snapshot.noneToExtractTitle"),
+                    LocMessage.Of("snapshot.noneToExtractBody"), owner: App.MainWindow);
+        }
     }
 
     private async void Apply_Click(object sender, RoutedEventArgs e)
@@ -206,6 +212,9 @@ public sealed partial class SnapshotPage : Page, INotifyPropertyChanged
             dedupeKey: $"deletesnapshot:{id}");
         if (!confirm) return;
 
-        await mgr.DeleteSnapshotAsync(id);
+        // 删了却没写进磁盘＝缓存里没了、重启后会回来（P-16），必须明说；
+        // 本来就没有＝列表已无此行，静默照旧。
+        if (!await mgr.DeleteSnapshotAsync(id) && mgr.LastPersistError is { } why)
+            await CenteredDialog.MessageAsync(LocMessage.Of("widget.persist.notSavedTitle"), why, owner: App.MainWindow);
     }
 }

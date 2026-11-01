@@ -9,8 +9,8 @@ namespace StarMark.Tests;
 
 /// <summary>
 /// 批次 SC 的形状闸门：全仓"切片＋省略号"只许住在 <see cref="StarMark.Abstractions.TextTrim"/>，
-/// 剩下两处是<b>点名的有意分岔</b>（P-130）。
-/// <para>③ 是正向凭据：改道过的八家宿主每家都必须写着 <c>TextTrim.</c> 且不再匹配该形状——
+/// 剩下一处是<b>点名的有意分岔</b>（P-130）。
+/// <para>③ 是正向凭据：改道过的九家宿主每家都必须写着 <c>TextTrim.</c> 且不再匹配该形状——
 /// 少了这一条，①的"只剩两处"就可能只是"扫描器没扫到"（#161）。
 /// ④ 明写这条正则<b>看不见</b>哪种写法：累加式（<c>OcrText.Preview</c>）由行为测兜（#193）。</para>
 /// </summary>
@@ -18,10 +18,9 @@ public sealed class EllipsisFamilyGateTests
 {
     private const string JudgeFile = "src/StarMark.Abstractions/TextTrim.cs";
 
-    /// <summary>两处有意保留的"自己切"：各自的理由写在被点名的文件里。</summary>
+    /// <summary>一处有意保留的"自己切"：理由写在被点名的文件里。</summary>
     private static readonly string[] KnownExceptions =
     {
-        "src/StarMark.Abstractions/Ai/AiClassify.cs",        // 输出喂模型，不是给人看的读数
         "src/StarMark.Core/Diagnostics/DiagnosticsService.cs", // 中间省略（头…尾），与尾部截断不是一种语义；输入是 ASCII ETag
     };
 
@@ -31,6 +30,7 @@ public sealed class EllipsisFamilyGateTests
         "src/StarMark.Abstractions/ItemCardPolicy.cs",
         "src/StarMark.Integrations/Bookmarks/BrowserBookmarksSource.cs",   // 批次 WI-57：那句"找过哪条路径"从这里切（上游那颗出口已改交键，⛔ 再切句子）
         "src/StarMark.Abstractions/Ai/AiFailures.cs",
+        "src/StarMark.Abstractions/Ai/AiClassify.cs",                     // 片173 补收（TagText 标签收口/OneLine 行体改道 TextTrim）却漏挪本名单，片189 全量跑撞见后补记
         "src/StarMark.Abstractions/Clipboard/ClipboardPolicy.cs",
         "src/StarMark.Core/Feed/RssParser.cs",
         "src/StarMark.Core/Widgets/AlarmPolicy.cs",
@@ -50,7 +50,7 @@ public sealed class EllipsisFamilyGateTests
 
         Assert.True(hits.Count == 0, "又有地方自己\"切片＋省略号\"了（该调 TextTrim.Ellipsize / Cut）：\n" + string.Join("\n", hits));
 
-        // 那两处必须还在、且只有这两处：有人顺手把它们也改了，就该回来更新本条（而不是让闸门悄悄变宽）
+        // 那一处必须还在、且只有这一处：有人顺手把它也改了，就该回来更新本条（而不是让闸门悄悄变宽）
         var exceptions = FormatScanner.SourcesUnder("src", JudgeFile)
             .Where(f => KnownExceptions.Any(e => f.Path.EndsWith(e, StringComparison.Ordinal)))
             .SelectMany(f => SplitLines(f.Code).Where(l => FormatScanner.HandRolledEllipsis.IsMatch(l)).Select(l => f.Path))
@@ -82,7 +82,7 @@ public sealed class EllipsisFamilyGateTests
             if (SplitLines(code).Any(l => FormatScanner.HandRolledEllipsis.IsMatch(l))) missing.Add($"{file}：还在自己切片补省略号");
         }
 
-        Assert.Equal(8, ConvertedHosts.Length);                     // 名单不许悄悄变短（改了名/删了文件都会红在这里）
+        Assert.Equal(9, ConvertedHosts.Length);                     // 名单不许悄悄变短（改了名/删了文件都会红在这里）
         Assert.True(missing.Count == 0, "改道名单里有宿主不走了：\n" + string.Join("\n", missing));
     }
 

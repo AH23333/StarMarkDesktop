@@ -76,6 +76,7 @@ public sealed partial class WidgetManager
     /// </summary>
     public async Task<WidgetSnapshot?> CaptureSnapshotAsync(string name)
     {
+        LastPersistError = null;
         var (snapshot, instanceIds) = await OnUiAsync(() => BuildSnapshotShell(name));
         if (snapshot.Entries.Count == 0) return null;
 
@@ -96,7 +97,13 @@ public sealed partial class WidgetManager
 
         // AppendSnapshot 内部走 Load→改→Save；与窗口拖动时的 PersistBounds 同写一份磁盘，
         // 必须在 UI 线程串行执行，否则并发改写会丢失其中一方的更新。
+        // 没写进磁盘时它交回 null（P-16）：这里绝不能拿「已捕获的内存快照」冒充落盘产物交出去。
         var saved = await OnUiAsync(() => _storage.AppendSnapshot(snapshot));
+        if (saved is null)
+        {
+            StarLog.Error($"保存快照未落盘（写盘失败或被占用）：{name}");
+            LastPersistError = LocMessage.Of("widget.persist.notSavedBody");
+        }
         SnapshotsChanged?.Invoke();
         return saved;
     }
@@ -109,6 +116,14 @@ public sealed partial class WidgetManager
     /// 组件右键那条提示）各自从这一颗取词，⛔ 在这里就把句子念成成品字。</para>
     /// </summary>
     public LocMessage? LastApplyError { get; private set; }
+
+    /// <summary>
+    /// 最近一次布局/快照「存或删没写进磁盘」的那句身份（写进去了或没有东西可存＝null，随每次存删出口刷新）。
+    /// <para>底层四个 CRUD 封装从前恒报成功——降级闩跳过写盘、写盘失败都一样，用户存完就以为已经备份、
+    /// 删完就以为已经删掉，重启后才见分晓（P-16）。现在封装改按实情交 null/false，宿主凭这一颗分辨
+    /// 「没有内容」（照旧那句 none*）与「没写进磁盘」（明说未保存），⛔ 在这里就把句子念成成品字。</para>
+    /// </summary>
+    public LocMessage? LastPersistError { get; private set; }
 
     /// <summary>
     /// 应用快照 = 回到那一刻（Replace）：先自动留一个「应用前」回滚点，再落位布局 + 写回配置数据 + 还原本地条目。
@@ -185,11 +200,20 @@ public sealed partial class WidgetManager
         return true;
     }
 
-    /// <summary>删除快照点。</summary>
+    /// <summary>删除快照点。返回 false ＝没删掉：要么本来就没有（静默照旧），要么有但没写进磁盘
+    /// （此时 <see cref="LastPersistError"/> 非空——缓存里删了、盘上还在，重启后会回来，P-16）。</summary>
     public Task<bool> DeleteSnapshotAsync(string snapshotId) => OnUiAsync(() =>
     {
+        LastPersistError = null;
+        // 删前先记「它本来在不在」：Delete 动的是缓存对象，删后再回头查只会假「没找到」。
+        var existed = _storage.FindSnapshot(snapshotId) is not null;
         var removed = _storage.DeleteSnapshot(snapshotId);
         if (removed) SnapshotsChanged?.Invoke();
+        else if (existed)
+        {
+            StarLog.Error($"删除快照未落盘（写盘失败或被占用）：{snapshotId}");
+            LastPersistError = LocMessage.Of("widget.persist.notDeletedBody");
+        }
         return removed;
     });
 
@@ -200,6 +224,7 @@ public sealed partial class WidgetManager
     /// </summary>
     public Task<WidgetLayout?> ExtractLayoutFromSnapshotAsync(string snapshotId, string layoutName) => OnUiAsync(() =>
     {
+        LastPersistError = null;
         var snapshot = _storage.FindSnapshot(snapshotId);
         if (snapshot is null || snapshot.Entries.Count == 0) return null;
 
@@ -216,7 +241,14 @@ public sealed partial class WidgetManager
                 Topmost = e.Topmost, Appearance = e.Appearance,
             }).ToList(),
         };
-        _storage.SaveLayout(layout);
+        // SaveLayout 没写进磁盘时交回 null（P-16）：此刻返回「提取成的那份布局」就是谎报——
+        // 它只改了缓存，重启后布局列表里不会有它。
+        if (_storage.SaveLayout(layout) is null)
+        {
+            StarLog.Error($"从快照提取布局未落盘（写盘失败或被占用）：{snapshotId}");
+            LastPersistError = LocMessage.Of("widget.persist.notSavedBody");
+            return null;
+        }
         LayoutsChanged?.Invoke();
         return layout;
     });

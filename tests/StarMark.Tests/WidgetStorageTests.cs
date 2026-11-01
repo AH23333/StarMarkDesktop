@@ -485,5 +485,89 @@ public sealed class WidgetStorageTests : IDisposable
         Assert.Null(data.Notes);
         Assert.Null(data.Links);
     }
+
+    // ── P-16：四个 CRUD 封装按实情报数——降级闩/写盘失败下不再拿 null/true 冒充成功 ──
+    // 旧实现四条出口恒报成功：SaveLayout/AppendSnapshot 吞掉 Save 的 false 照样交回「已存好的对象」，
+    // Delete* 删完缓存就 return true——盘上一字未动，重启后一切照旧；上层据此报「已保存/已删除」全是谎报。
+
+    [Fact]
+    public void SaveLayout_UnderDegradedLatch_ReturnsNull_NotAFakeName()
+    {
+        // FileShare.None 独占：Load 读不到 → 降级 → Save 被拒。旧实现仍交回 "工作" 冒充已保存。
+        StartWithEmptyExistingConfig();
+        var store = Store();
+        string? fake;
+        using (var hold = new FileStream(_path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            Assert.Empty(store.GetLayouts());                       // 读到被占用 → 降级、返回空
+            fake = store.SaveLayout(new WidgetLayout
+            {
+                Name = "工作",
+                Entries = { new WidgetLayoutEntry { Kind = WidgetKind.Clock, X = 1, Y = 2, Width = 3, Height = 4 } },
+            });
+        }
+        Assert.Null(fake);                                          // 没写进磁盘就不许说存成了
+        // 盘上确实没有：另起一颗新 Store 直读磁盘——旧实例的缓存指着自己刚 mutate 过的对象，
+        // 照它读就是假「已存」；中文键名也会被 JSON 转义成 \uXXXX，⛔ 拿裸文本 Contains 断言。
+        Assert.Empty(Store().GetLayouts());
+    }
+
+    [Fact]
+    public void AppendSnapshot_UnderDegradedLatch_ReturnsNull_NotAFakeSnapshot()
+    {
+        StartWithEmptyExistingConfig();
+        var store = Store();
+        WidgetSnapshot? fake;
+        using (var hold = new FileStream(_path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            Assert.Empty(store.GetSnapshots());                     // 读到被占用 → 降级、返回空
+            fake = store.AppendSnapshot(new WidgetSnapshot { Name = "上线前", CreatedAt = 1 });
+        }
+        Assert.Null(fake);
+        Assert.Empty(Store().GetSnapshots());                       // 新实例直读磁盘，盘上确实没有
+    }
+
+    [Fact]
+    public void DeleteLayout_WhenWriteFails_ReturnsFalse_AndDiskKeepsIt()
+    {
+        // FileShare.Read：Load 读得到（非降级）、Save 的搬移必失败——模拟 OneDrive/杀软短锁 widgets.json。
+        // 旧实现删完缓存 return true，用户看着「已删除」，重启后布局原样回来。
+        StartWithEmptyExistingConfig();
+        var seeder = Store();
+        var layout = new WidgetLayout
+        {
+            Name = "要删的",
+            Entries = { new WidgetLayoutEntry { Kind = WidgetKind.Clock, X = 1, Y = 2, Width = 3, Height = 4 } },
+        };
+        Assert.Equal("要删的", seeder.SaveLayout(layout));          // 种子落盘
+        Assert.Single(seeder.GetLayouts());
+
+        var store = Store();
+        using (var hold = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            Assert.False(store.DeleteLayout(layout.Id));            // 旧实现恒 true
+        }
+        // 盘上还在＝重启后它会回来。⛔ 读 store 自己：Save 失败时缓存仍指内存里那份「已删」对象。
+        Assert.Equal(layout.Id, Assert.Single(Store().GetLayouts()).Id);
+        Assert.False(File.Exists(_path + ".tmp"));                  // 失败路径不留残渣
+    }
+
+    [Fact]
+    public void DeleteSnapshot_WhenWriteFails_ReturnsFalse_AndDiskKeepsIt()
+    {
+        StartWithEmptyExistingConfig();
+        var seeder = Store();
+        var snap = new WidgetSnapshot { Name = "回不去的点", CreatedAt = 1 };
+        Assert.NotNull(seeder.AppendSnapshot(snap));                // 种子落盘
+        Assert.Single(seeder.GetSnapshots());
+
+        var store = Store();
+        using (var hold = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            Assert.False(store.DeleteSnapshot(snap.Id));            // 旧实现恒 true
+        }
+        Assert.Equal(snap.Id, Assert.Single(Store().GetSnapshots()).Id);
+        Assert.False(File.Exists(_path + ".tmp"));                  // 失败路径不留残渣
+    }
 }
 
