@@ -469,3 +469,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - docgates 26/26（正本 D:\StarMarkTmp\p164\docgates177.txt）；计数器 285／206／79 VERDICT OK（✅+1）。
 - 下一刀：片178 浪二码修腿⑩（P-121）。⛔ push（未推 332）・HEAD 7fc010b。
 
+## 五十九、片178 浪二码修腿⑩：P-121 剩余半边 AI 请求超时翻牌（连落 20 刀第 15 刀）
+
+- 扩展仓 `e1015f9`：三 chat 路径挂 180 s 请求超时（与桌面 180 s/批 同数对齐）；超时 ⇒ AiTimeoutError（ai.timeout・按失败处理）；暂停 ⇒ AbortError 透传照旧优雅暂停；Ollama 超时不再误报「无法连接」。扩展侧五格新测・npm test 150/150（+5）・tsc 通过。reconcileStars 半已闭（UN・`28c9e31`）⇒ 两半皆闭整体结案。
+- 坑与修：扩展仓用户预暂存的 README/package.json 首提被裹挟（6 档）——软重置拆开重提为恰 4 档・用户两档回暂存区原状；该仓 git status 首列 M＝已暂存，add 前必须先看有没有别人的暂存。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates178.txt）；计数器 285／207／78 VERDICT OK（✅+1）。
+- 下一刀：片179 浪二码修腿⑪（P-125）。⛔ push（未推 333）・HEAD f8e5f99。
+
