@@ -516,3 +516,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - docgates 26/26（正本 D:\StarMarkTmp\p164\docgates184.txt）；计数器 285／212／73 VERDICT OK（✅+2）；census 30。
 - 下一刀：B 类码修批开批分诊（tags= 无真机标记的候选约 13 颗逐颗读体定批）。⛔ push（未推 339）・HEAD 22b211e。
 
+## 六十六、片185 B 类码修批分诊腿：四颗记账滞后翻牌（P-12/P-49/P-54/P-56）
+
+- 分诊结论（13 颗候选逐颗读体）：记账滞后翻牌 4 颗（本刀：P-12/P-49 前提消失・P-54/P-56 落地未翻）＋真码修待拍板 6 颗（P-8 (A)／P-9 (A)／P-16 (A)／P-22 (B)／P-31 (A)+(C)／P-38 (A)——正文各带建议）＋产品拍板 2 颗（P-4／P-58）＋不动留痕 4 颗（P-23/P-120/P-126/P-139）＋挂账维持 1 颗（P-112 片182 注准确）。
+- 翻牌 4 颗：P-12/P-49 前提消失（GQ `03e78d6`・R7 盘点在册）・P-54（HD `bc1e847`）・P-56（HG `b17e242`）——正文一字未动。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates185.txt）；计数器 285／216／69 VERDICT OK（✅+4）；census 30。
+- 下一刀：等用户对 6 颗真码修逐颗拍板（P-8/P-9/P-16/P-22/P-31/P-38）后分刀落。⛔ push（未推 340）・HEAD 6798e5b。
+
