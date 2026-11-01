@@ -451,3 +451,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - docgates 26/26（正本 D:\StarMarkTmp\p164\docgates174.txt）；计数器 285／203／82 VERDICT OK（✅+2）。
 - 下一刀：片175 浪二码修腿⑦（P-50 Downloads 目录）。⛔ push（未推 329）・HEAD e5cb9a8。
 
+## 五十六、片175 浪二码修腿⑦：P-50 下载目录两段归宿翻牌（连落 20 刀第 12 刀）
+
+- 两段归宿：HA `c35ac63` 按 (B) 落地（OneDrive 三形态＋AddIfUsable）→ VQ `4038e15` 按用户裁决把「索引进库」整条链拆掉（Everything 只留实时搜索・三件套卡片移除）；守门 StaleFileRowGateTests 钉拆后形状・定向 24/24（x64）；本刀零码改零测改。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates175.txt）；计数器 285／204／81 VERDICT OK（✅+1）。
+- 下一刀：片176 浪二码修腿⑧（P-53 设置写盘失败隐身）。⛔ push（未推 330）・HEAD 73bb1df。
+
