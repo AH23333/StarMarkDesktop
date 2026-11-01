@@ -538,3 +538,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - docgates 26/26（正本 D:\StarMarkTmp\p164\docgates187.txt）；计数器 285／218／67 VERDICT OK（✅+1）；census 28。
 - 下一刀：片188＝P-9 (A) 备份还原计数诚实化（两 Import 回传实命中行数・虚报改告警）。⛔ push（未推 342）・HEAD 773487c。
 
+## 六十九、片188 真码修批第 3/6 刀：P-9 (A) 备份还原计数诚实化——两 Import 回传实命中・虚报改告警
+
+- 修法：用户状态/条目-标签关联两个 Import 回传实命中数（接口 Task 改 Task<long>），RestoreResult 按实命中填、实命中小于提供数时 StarLog.Warn 还原告警；关联按「对上了（含已在）」数——幂等重跑不算失配；UPDATE/INSERT 写入语义一字未动。
+- 证人测 3 条：两 Import 回传实命中（0 行如实回 0・幂等重跑不假 0）・用户状态键漂移照实少报・关联键漂移照实少报；BackupServiceTests 定向 26/26（x64）。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates188.txt）；计数器 285／219／66 VERDICT OK（✅+1）；census 28。
+- 下一刀：片189＝P-16 (A) WidgetStorage.Save→bool＋四封装透传失败＋UI 失败提示。⛔ push（未推 343）・HEAD ec8a5ae。
+

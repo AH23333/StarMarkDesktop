@@ -698,4 +698,83 @@ public sealed class BackupServiceTests : IDisposable
         var tags = await dst.Items.GetTagsForItemAsync(item.Id, CancellationToken.None);
         Assert.Equal("标签Z", Assert.Single(tags));    // 有效关联仍在
     }
+
+    /// <summary>
+    /// P-9（计数诚实性）证人测①：两个 Import 方法回传实命中数——UPDATE 0 行 / INSERT…SELECT 0 行
+    /// 都得如实回，调用方（BackupService）据此告警；键漂移的那颗不许混进「已恢复」。
+    /// </summary>
+    [Fact]
+    public async Task ImportUserStateAndLinks_ReturnActualHits_NotProvidedCounts()
+    {
+        var ctx = Seed(_db1);
+        var item = await UpsertAsync(ctx.Items, "test", "s1", "带状态条目");
+        await ctx.Items.AddTagAsync(item.Id, "重要", CancellationToken.None);
+        var repo = new BackupRepository(ctx.Factory);
+
+        // 用户状态：一条命中、一条键漂移（条目导入侧会 Normalize source_id，老备份的原始键可能 0 命中）
+        var states = new[]
+        {
+            new UserStateRecord("test", "s1", true, false, "命中笔记"),
+            new UserStateRecord("test", "no-such-key", false, true, "漂移键笔记"),
+        };
+        Assert.Equal(1, await repo.ImportUserStateAsync(states, CancellationToken.None));
+
+        // 关联：一条对上（新插入）、一条条目对不上
+        var links = new[]
+        {
+            new ItemTagLink("test", "s1", "重要"),
+            new ItemTagLink("test", "no-such-key", "重要"),
+        };
+        Assert.Equal(1, await repo.ImportItemTagLinksAsync(links, CancellationToken.None));
+
+        // 幂等重跑：已在的关联由 NOT EXISTS 挡下，仍算「对上了」——按插入行数回传会满盘假 0
+        Assert.Equal(1, await repo.ImportItemTagLinksAsync(links, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// P-9 证人测②：RestoreAsync 的 UserStatesRestored 按<b>实命中</b>汇报——备份里两条用户状态一条命中、
+    /// 一条键没对上任何条目时，旧口径虚报 2；修后报 1，命中那条照常生效。
+    /// </summary>
+    [Fact]
+    public async Task Restore_UserStateKeyDrift_CountsActualHits_NotProvidedCount()
+    {
+        var dst = Seed(_db2);
+        var env = new BackupEnvelope();
+        env.Payload.Items.Add(new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "k1", Title = "对得上的条目", Uri = "https://example.com/k1", CreatedAt = 1000 });
+        env.Payload.UserState.Add(new UserStateRecord("test", "k1", false, true, "命中笔记"));
+        env.Payload.UserState.Add(new UserStateRecord("test", "drifted-key", true, false, "漂移键笔记"));   // 库里没有这条条目
+
+        var rr = await dst.Backup.RestoreAsync(env, RestoreMode.Merge, null, CancellationToken.None);
+
+        Assert.True(rr.Success);
+        Assert.Equal(1, rr.UserStatesRestored);   // 实命中 1，不是提供数 2（旧口径在此虚报）
+        var item = Assert.Single(await dst.Items.GetAllAsync(new BrowseFilter { IncludeHidden = true, Limit = 1000 }, CancellationToken.None));
+        Assert.Equal("命中笔记", item.Notes);
+        Assert.True(item.Pinned);                 // 命中那条照常生效
+    }
+
+    /// <summary>
+    /// P-9 证人测③：LinksRestored 按「对上了（含已在）」汇报——键漂移的关联如实少报；
+    /// 而同一份备份在 Merge 下整档重跑（文档口径的常规操作）不许因 NOT EXISTS 幂等挡下插入
+    /// 就把「已在」数成失配（按插入行数回传会满盘假 0＋假告警）。
+    /// </summary>
+    [Fact]
+    public async Task Restore_LinkKeyDrift_CountsResolved_AlreadyLinkedRerunStaysHonest()
+    {
+        var dst = Seed(_db2);
+        var env = new BackupEnvelope();
+        env.Payload.Items.Add(new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "k1", Title = "带标签条目", Uri = "https://example.com/k1", CreatedAt = 1000 });
+        env.Payload.Tags.Add(new TagRecord("重要", null, null));
+        env.Payload.ItemTags.Add(new ItemTagLink("test", "k1", "重要"));
+        env.Payload.ItemTags.Add(new ItemTagLink("test", "drifted-key", "重要"));   // 条目对不上
+
+        var rr = await dst.Backup.RestoreAsync(env, RestoreMode.Merge, null, CancellationToken.None);
+        Assert.True(rr.Success);
+        Assert.Equal(1, rr.LinksRestored);          // 对上 1、漂移 1——如实，不虚报 2
+
+        // 整档幂等重跑：那条已在的关联不许变成「0 恢复」
+        var rr2 = await dst.Backup.RestoreAsync(env, RestoreMode.Merge, null, CancellationToken.None);
+        Assert.True(rr2.Success);
+        Assert.Equal(1, rr2.LinksRestored);
+    }
 }

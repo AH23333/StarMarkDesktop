@@ -312,9 +312,16 @@ public sealed class BackupService
             }
 
             await _repo.ImportItemsAsync(p.Items, ct);
-            await _repo.ImportUserStateAsync(p.UserState, ct);
+            // P-9（计数诚实性）：用户状态/关联改回传**实命中数**，RestoreResult 与日志都按实命中说话——
+            // 旧口径把「0 命中」也报成「已恢复 N 条」，跨归一规则版本的老备份（键漂移）静默丢笔记无人知。
+            // 告警只在「实命中 < 提供数」时落日志；根因修（还原侧也 Normalize 匹配键）是 (B)，动语义须另议。
+            long userStatesHit = await _repo.ImportUserStateAsync(p.UserState, ct);
             await _repo.ImportTagsAsync(p.Tags, ct);
-            await _repo.ImportItemTagLinksAsync(p.ItemTags, ct);
+            long linksHit = await _repo.ImportItemTagLinksAsync(p.ItemTags, ct);
+            if (userStatesHit < p.UserState.Count)
+                StarLog.Warn($"还原告警（P-9）：{p.UserState.Count - userStatesHit} 条用户状态（隐藏/置顶/笔记）没对上任何条目——备份可能来自另一套归一规则版本");
+            if (linksHit < p.ItemTags.Count)
+                StarLog.Warn($"还原告警（P-9）：{p.ItemTags.Count - linksHit} 条条目-标签关联没对上任何条目/标签——备份可能来自另一套归一规则版本");
 
             // 所有导入落库后做一次「全表」search_text 重算 + FTS rebuild（复用迁移里的同一口径）。
             // 覆盖两类缺失：① 导出条目不带 Tags，按标签词的全文检索需要把标签名烘进 search_text；
@@ -400,9 +407,10 @@ public sealed class BackupService
                     p.Items.Count, widgetsNote, clipImageNote, boardsNote),
                 SnapshotPath = snapshotPath,
                 ItemsRestored = p.Items.Count,
-                UserStatesRestored = p.UserState.Count,
+                // P-9：按实命中数汇报，0 命中不再冒充「已恢复」
+                UserStatesRestored = (int)Math.Min(userStatesHit, int.MaxValue),
                 TagsRestored = p.Tags.Count,
-                LinksRestored = p.ItemTags.Count,
+                LinksRestored = (int)Math.Min(linksHit, int.MaxValue),
                 WidgetsRestored = widgetsRestored,
                 ClipImagesRestored = clip.Written,
                 ClipImagesSkipped = clip.Skipped,

@@ -50,14 +50,14 @@ public interface IBackupRepository
     /// <summary>Upsert 条目（按 source+source_id）。会重算 search_text，CJK 展开自动生效。</summary>
     Task ImportItemsAsync(IReadOnlyList<Item> items, CancellationToken ct);
 
-    /// <summary>按 (source, source_id) 覆盖 hidden / pinned / notes。</summary>
-    Task ImportUserStateAsync(IReadOnlyList<UserStateRecord> states, CancellationToken ct);
+    /// <summary>按 (source, source_id) 覆盖 hidden / pinned / notes。回传 UPDATE 实际命中数——小于提供数＝备份里的键没对上任何条目（P-9）。</summary>
+    Task<long> ImportUserStateAsync(IReadOnlyList<UserStateRecord> states, CancellationToken ct);
 
     /// <summary>写入标签定义（已存在则保留，仅补缺失项）。</summary>
     Task ImportTagsAsync(IReadOnlyList<TagRecord> tags, CancellationToken ct);
 
-    /// <summary>重建条目—标签关联。Merge 模式为「追加」，Replace 模式需先调 ClearItemTagLinksAsync。</summary>
-    Task ImportItemTagLinksAsync(IReadOnlyList<ItemTagLink> links, CancellationToken ct);
+    /// <summary>重建条目—标签关联。Merge 模式为「追加」，Replace 模式需先调 ClearItemTagLinksAsync。回传「对上了」的关联数——含关联已在的（幂等重跑不算失配）；小于提供数＝有条目/标签没对上（P-9）。</summary>
+    Task<long> ImportItemTagLinksAsync(IReadOnlyList<ItemTagLink> links, CancellationToken ct);
 
     /// <summary>
     /// 还原收尾：全表重算 <c>search_text</c> 并对 FTS5 rebuild。既把标签名补进带标签行的全文索引

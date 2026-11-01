@@ -113,9 +113,12 @@ public sealed class BackupRepository : IBackupRepository
         }
     }
 
-    public Task ImportUserStateAsync(IReadOnlyList<UserStateRecord> states, CancellationToken ct)
+    // P-9（计数诚实性）：回传 UPDATE 实际命中行数——0 命中＝备份里的 (source, source_id) 没对上任何条目
+    // （条目导入侧 UpsertOne 会重 Normalize source_id，跨归一规则版本的老备份因此可能失配）。
+    // 本方法不改写入语义；失配由调用方按「实命中 < 提供数」告警（BackupService），根因修是 (B) 另议。
+    public Task<long> ImportUserStateAsync(IReadOnlyList<UserStateRecord> states, CancellationToken ct)
     {
-        if (states.Count == 0) return Task.CompletedTask;
+        if (states.Count == 0) return Task.FromResult(0L);
         using var conn = _factory.Open();
         using var tx = conn.BeginTransaction();
         using var cmd = conn.CreateCommand();
@@ -128,6 +131,7 @@ public sealed class BackupRepository : IBackupRepository
         var pNotes = cmd.Parameters.Add("@notes", SqliteType.Text);
         var pSrc = cmd.Parameters.Add("@src", SqliteType.Text);
         var pSid = cmd.Parameters.Add("@sid", SqliteType.Text);
+        long hit = 0;
 
         foreach (var s in states)
         {
@@ -136,10 +140,10 @@ public sealed class BackupRepository : IBackupRepository
             pNotes.Value = (object?)s.Notes ?? DBNull.Value;
             pSrc.Value = s.Source;
             pSid.Value = s.SourceId;
-            cmd.ExecuteNonQuery();
+            hit += cmd.ExecuteNonQuery();
         }
         tx.Commit();
-        return Task.CompletedTask;
+        return Task.FromResult(hit);
     }
 
     public Task ImportTagsAsync(IReadOnlyList<TagRecord> tags, CancellationToken ct)
@@ -174,9 +178,12 @@ public sealed class BackupRepository : IBackupRepository
         return Task.CompletedTask;
     }
 
-    public Task ImportItemTagLinksAsync(IReadOnlyList<ItemTagLink> links, CancellationToken ct)
+    // P-9（计数诚实性）：回传「对上了」的关联数——含关联已在的（NOT EXISTS 幂等挡下的那一半也算对上），
+    // 只有条目/标签任一没对上的才不计入。若按插入行数回传，同一份备份在 Merge 下重跑会满盘「0 恢复」
+    // 假告警（幂等重跑是文档口径的常规操作）；若按提供数回传，键漂移又变回静默虚报。
+    public Task<long> ImportItemTagLinksAsync(IReadOnlyList<ItemTagLink> links, CancellationToken ct)
     {
-        if (links.Count == 0) return Task.CompletedTask;
+        if (links.Count == 0) return Task.FromResult(0L);
         using var conn = _factory.Open();
         using var tx = conn.BeginTransaction();
         using var cmd = conn.CreateCommand();
@@ -187,11 +194,20 @@ public sealed class BackupRepository : IBackupRepository
              WHERE i.source = @src AND IFNULL(i.source_id, '') = @sid
                AND t.name = @tag
                AND NOT EXISTS (SELECT 1 FROM item_tags x WHERE x.item_id = i.id AND x.tag_id = t.id);";
+        using var probe = conn.CreateCommand();
+        // 0 插入有两种来历：关联已在（幂等重跑）或键没对上（P-9 要数的）。一次 EXISTS 分开：
+        probe.CommandText = @"
+            SELECT EXISTS(SELECT 1 FROM items i, tags t
+                           WHERE i.source = @src AND IFNULL(i.source_id, '') = @sid AND t.name = @tag);";
         var pSrc = cmd.Parameters.Add("@src", SqliteType.Text);
         var pSid = cmd.Parameters.Add("@sid", SqliteType.Text);
         var pTag = cmd.Parameters.Add("@tag", SqliteType.Text);
         var pNow = cmd.Parameters.Add("@now", SqliteType.Integer);
+        var qSrc = probe.Parameters.Add("@src", SqliteType.Text);
+        var qSid = probe.Parameters.Add("@sid", SqliteType.Text);
+        var qTag = probe.Parameters.Add("@tag", SqliteType.Text);
         long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        long resolved = 0;
 
         foreach (var l in links)
         {
@@ -200,10 +216,18 @@ public sealed class BackupRepository : IBackupRepository
             pSid.Value = l.SourceId;
             pTag.Value = l.TagName.Trim();
             pNow.Value = now;
-            cmd.ExecuteNonQuery();
+            if (cmd.ExecuteNonQuery() > 0)
+            {
+                resolved++;
+                continue;
+            }
+            qSrc.Value = l.Source;
+            qSid.Value = l.SourceId;
+            qTag.Value = l.TagName.Trim();
+            if (Convert.ToInt64(probe.ExecuteScalar()) == 1L) resolved++;
         }
         tx.Commit();
-        return Task.CompletedTask;
+        return Task.FromResult(resolved);
     }
 
     public Task ReindexAllSearchTextAsync(CancellationToken ct)
