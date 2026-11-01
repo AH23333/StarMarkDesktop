@@ -523,3 +523,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - docgates 26/26（正本 D:\StarMarkTmp\p164\docgates185.txt）；计数器 285／216／69 VERDICT OK（✅+4）；census 30。
 - 下一刀：等用户对 6 颗真码修逐颗拍板（P-8/P-9/P-16/P-22/P-31/P-38）后分刀落。⛔ push（未推 340）・HEAD 6798e5b。
 
+## 六十七、片186 真码修批第 1/6 刀：P-22 (B) 搜索去重键对齐存储层 BINARY 不变式
+
+- 修法：统一搜索合并去重单比较器拆双集合——file 键（file:// 归一本地路径）忽略大小写不变（Windows 路径口径）；其余 URI 与 source|source_id 回退键改 Ordinal 对齐存储层 BINARY；库里仅路径大小写不同的两条 http 行不再被搜索吞一条。
+- 证人测 3 条：http 大小写兄弟都活・file 大小写塌一・真同条 http 仍去重；SearchServiceTests 定向 16/16（x64）。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates186.txt）；计数器 285／217／68 VERDICT OK（✅+1）；census 30。
+- 下一刀：片187＝P-8 (A) 语言筛选 SQL 语言比较归一。⛔ push（未推 341）・HEAD 9a5ca05。
+

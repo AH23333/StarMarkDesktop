@@ -390,4 +390,63 @@ public sealed class SearchServiceTests : IDisposable
         Assert.Equal(4, page.Items.Count);
         Assert.False(page.HasMore);
     }
+
+    // ===== P-22 (B)：搜索去重键对齐存储层 BINARY 不变式 =====
+
+    [Fact]
+    public async Task Dedup_HttpUrisDifferingOnlyInPathCase_BothSurvive()
+    {
+        // 存储层 UNIQUE(source,source_id) 是 BINARY：仅路径大小写不同的两个 http URI 在库里
+        // 是两条、浏览可见。旧实现用单一 OrdinalIgnoreCase 去重 ⇒ 搜索里吞掉一条
+        // （「列表里有、搜不到」的自相矛盾）。(B) 把 http 分支收到 Ordinal 后两条都必须活着。
+        var repo = new ItemRepository(_factory);   // 空库 → 结果全来自实时源
+        var upper = new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "o/Docs",
+                               Title = "widget docs repo", Uri = "https://github.com/o/Docs" };
+        var lower = new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "o/docs",
+                               Title = "widget docs repo", Uri = "https://github.com/o/docs" };
+        var svc = new SearchService(repo, new IItemSource[] { new StubSource(new[] { upper, lower }) });
+
+        var result = await svc.SearchAsync("widget",
+            new SearchFilter { MaxResults = 10 }, CancellationToken.None);
+        Assert.Equal(2, result.Items.Count);       // 两条都在：与存储层 BINARY 不变式一致
+        Assert.Contains(result.Items, i => i.Uri == "https://github.com/o/Docs");
+        Assert.Contains(result.Items, i => i.Uri == "https://github.com/o/docs");
+    }
+
+    [Fact]
+    public async Task Dedup_FileUrisDifferingOnlyInCase_CollapseToOne()
+    {
+        // file 键仍是忽略大小写：DB 的 file:///D:/x 与 Everything 的 file://D:/x（同一文件、
+        // 串面不同）必须塌成一条——这是当年用 OrdinalIgnoreCase 唯一正确的分支，
+        // 收紧 http 分支不得误伤它。
+        var repo = new ItemRepository(_factory);
+        var fromDb = new Item { Type = ItemType.File, Source = ItemSources.FileSystem, SourceId = "f1",
+                                Title = "widget 报告.docx", Subtitle = @"D:\docs",
+                                Uri = "file:///D:/docs/widget 报告.docx" };
+        var fromEverything = new Item { Type = ItemType.File, Source = ItemSources.FileSystem, SourceId = "f2",
+                                        Title = "widget 报告.docx", Subtitle = @"D:\docs",
+                                        Uri = "file://D:/DOCS/widget 报告.docx" };
+        var svc = new SearchService(repo, new IItemSource[] { new StubSource(new[] { fromDb, fromEverything }) });
+
+        var result = await svc.SearchAsync("widget",
+            new SearchFilter { MaxResults = 10 }, CancellationToken.None);
+        Assert.Single(result.Items);               // 同一文件只出现一次
+    }
+
+    [Fact]
+    public async Task Dedup_IdenticalHttpUriStillCollapses()
+    {
+        // 护栏：(B) 只是把 http 分支的比较器对齐到 BINARY，不是关掉去重——
+        // 真同一条 http URI（库行 + 实时源行各回一次）仍须塌成一条。
+        var repo = new ItemRepository(_factory);
+        var fromDb = new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "o/x",
+                                Title = "widget repo", Uri = "https://github.com/o/x" };
+        var fromLive = new Item { Type = ItemType.GitHubStar, Source = ItemSources.GitHub, SourceId = "o/x",
+                                  Title = "widget repo", Uri = "https://github.com/o/x" };
+        var svc = new SearchService(repo, new IItemSource[] { new StubSource(new[] { fromDb, fromLive }) });
+
+        var result = await svc.SearchAsync("widget",
+            new SearchFilter { MaxResults = 10 }, CancellationToken.None);
+        Assert.Single(result.Items);
+    }
 }

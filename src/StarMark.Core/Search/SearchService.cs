@@ -100,12 +100,29 @@ public sealed class SearchService
         // 合并 + 去重（按归一后的 URI 或 source+source_id）。
         // file:// 必须先归一到本地路径：DB 侧存 file:///D:/x、Everything 侧给 file://D:/x，
         // 二者作为原始串不等，会让同一文件在合并结果里出现两遍。
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // 键的比较器按分支定（P-22 (B)）：file 键是本地路径，Windows 不区分大小写，忽略大小写去重是对的；
+        // http(s)/starmark 等其余 URI 与 source|source_id 回退键与存储层 UNIQUE(source,source_id) 的
+        // BINARY 不变式对齐（Ordinal）——库里存两条仅路径大小写不同的行时，搜索吞掉一条
+        // 就是「列表里有、搜不到」的自相矛盾。
+        var seenFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenRest = new HashSet<string>(StringComparer.Ordinal);
         var merged = new List<Item>();
         foreach (var item in ftsResult.Items.Concat(realTimeResults))
         {
-            var key = string.IsNullOrEmpty(item.Uri) ? $"{item.Source}|{item.SourceId}" : CanonicalizeUri(item.Uri);
-            if (seen.Add(key))
+            bool added;
+            if (string.IsNullOrEmpty(item.Uri))
+            {
+                added = seenRest.Add($"{item.Source}|{item.SourceId}");
+            }
+            else if (item.Uri.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+            {
+                added = seenFile.Add(CanonicalizeUri(item.Uri));
+            }
+            else
+            {
+                added = seenRest.Add(item.Uri);
+            }
+            if (added)
             {
                 merged.Add(item);
             }
