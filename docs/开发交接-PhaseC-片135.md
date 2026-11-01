@@ -476,3 +476,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - docgates 26/26（正本 D:\StarMarkTmp\p164\docgates178.txt）；计数器 285／207／78 VERDICT OK（✅+1）。
 - 下一刀：片179 浪二码修腿⑪（P-125）。⛔ push（未推 333）・HEAD f8e5f99。
 
+## 六十、片179 浪二码修腿⑪：P-125 第四条阈值无数据出口翻牌（连落 20 刀第 16 刀）
+
+- 按默认处置 A（先不记）结案：schema 零 new_tags・ClassifyRunner newTags 内存即弃・冒烟工具第四条如实「本档测不到」——三证在册；账本定向 16/16（x64）。重开条件不撤：aiusage 报出前三条任何越线（尤其 estimated 占比 > 50%）⇒ 按 C 落一列，不用 B。本刀零码改零测改。
+- docgates 26/26（正本 D:\StarMarkTmp\p164\docgates179.txt）；计数器 285／208／77 VERDICT OK（✅+1）。
+- 下一刀：片180 浪二码修腿⑫（P-129）。⛔ push（未推 334）・HEAD 73bfe8f。
+
