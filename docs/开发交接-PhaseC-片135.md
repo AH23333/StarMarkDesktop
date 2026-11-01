@@ -396,3 +396,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：docgates 26/26（x64・正本 D:\StarMarkTmp\p164\docgates165.txt）・计数器 285／177／108 VERDICT OK（✅+7）・零码腿。
 - 下一刀：片166 浪一结案腿③（P-83/84/97/106/107/110/111）。⛔ push（未推 320）・HEAD 7f2d313。
 
+## 四十七、片166 浪一结案腿③：标注/屏幕取舍七颗「已决」欠账翻牌（P-83/84/97/106/107/110/111・连落 20 刀第 3 刀）
+
+- 七颗「已决」从未 ✅ 的欠账翻牌——P-83/84/97/106/107/110/111；各节重开条件留册・正文一字未动；点验三证人全过（RotatedTextBoundsCoverEveryPixelItPaints 五角度・GdiTextDrawer.DrawRotated・CursorCircleRadiusDip 读写链贯通）。
+- 读数：docgates 26/26（x64・正本 D:\StarMarkTmp\p164\docgates166.txt）・计数器 285／184／101 VERDICT OK（✅+7）・零码腿。
+- 下一刀：片167 浪一结案腿④（P-104/109/113/114/115/124/156）。⛔ push（未推 321）・HEAD 540ee56。
+
