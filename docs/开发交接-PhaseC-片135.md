@@ -561,3 +561,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 顺手收两笔：账本 13 颗行号指针行移改对（census 29→28）；交接档工作树行尾回掣 CRLF（片189 补记脚本写飞成 LF・仓库 blob 无恙）。
 - 下一刀：片191＝P-31 (A)+(C) 写事务 `BEGIN IMMEDIATE`＋重入闸门（DbConnectionFactory＋事务点）。⛔ push（未推 345）・HEAD b1ff80e。
 
+## 七十二、片191 真码修批第 6/6 刀（收口）：P-31 (A)+(C) 写事务 `BEGIN IMMEDIATE`＋同步重入排队闸门
+
+- 修法 (A)：`DbConnectionFactory` 增 `ImmediateTxn` 与 `BeginImmediate`——18 处写事务从 deferred `BeginTransaction()` 换 `BEGIN IMMEDIATE`，删 19 行「开事务后手工挂 `conn.Transaction`」旁路；写锁在 `BEGIN` 那一拍占住——`SQLITE_BUSY_SNAPSHOT`(517) 的「读后升级」窗口根除，`busy_timeout` 只管真等待。
+- 修法 (C)：`SyncAllAsync` 装排队闸门 `SemaphoreSlim(1,1)`——门口 `ThrowIfCancellationRequested()` 回绝已取消令牌（`OperationCanceledException` 本型与「闸没等到」的 `TaskCanceledException` 分口径）、闸被占留排队日志、`WaitAsync` 排队・`try/finally Release`；体抽 `SyncAllCoreAsync`。
+- 证人测 6 条＋被牵动 3 测随行；定向 280/280・全量 6753/6753（x64）；docgates 26/26（正本 D:\StarMarkTmp\p164\docgates191.txt）；计数器 285／222／63 VERDICT OK（✅+1）；census 27。
+- 顺手：账本 7 处行号指针 +29 改对；对账表旧区间反撞非空＝#1020 第六次（census 28→27）。
+- 下一刀：真码修批六刀收口。对账表那片冻结快照攒了本批六刀的行移，下一轮对账刷新优先；其余挂账照账本名册。⛔ push（未推 346）・HEAD b1c29f1。
+

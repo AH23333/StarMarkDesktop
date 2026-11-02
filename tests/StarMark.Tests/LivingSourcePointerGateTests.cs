@@ -209,7 +209,14 @@ public sealed class LivingSourcePointerGateTests
     /// 处置按 P-256 ③＝<b>删号留锚</b>（两处旧号删掉・锚改念那一行读得到的 <c>var innerTail = relevanceFirst</c>）。
     /// 差集由一把只读复称尺对 HEAD 的 blob 与盘上各跑一遍点到名（正本 D:\StarMarkTmp\p164\diffcensus187.txt）。
     /// 基线按闸门交回的那颗读数改小・⛔ 手打。</para>
-    private const int FallenPointerBaseline = 28;
+    /// <para><b>片191 再落一颗（28 → 27）・来历＝同步重入闸门平移行号（#1020 第六次・⛔ 读成"这一族又修好了"）</b>：
+    /// 本批给那颗同步协调器装排队闸门并抽出体（P-31 (C)）⇒ 那颗协调器档行号整体平移。
+    /// 差集由一把只读复称尺对 HEAD 的 blob 与盘上各跑一遍点到名（正本 D:\StarMarkTmp\p164\diffcensus191.txt）：
+    /// HEAD 态 28 颗・盘上态 28 颗＝一落一愈恰好相抵・别无增减。
+    /// 三族处置：正文被本批挤歪的号按 +29 就地改对（不进净账）；对账表快照整片冻结 ⛔ 动；
+    /// 那颗旧区间本来压着落空・被本批新加的门口检查顶上后反撞非空＝#1020 那句「巧合」的第六副脸
+    /// （⛔ 算成修复・⛔ 动它）⇒ 净颗数 27。基线按闸门交回的那颗读数改小・⛔ 手打。</para>
+    private const int FallenPointerBaseline = 27;
 
     /// <summary>片88 第二颗棘轮（P-256 ④）：那颗 <see cref="Resolve"/> 对它交回空的「带目录前缀的简写」那一族。
     /// 换锚前现读 8 颗（正本 <c>bin/WI99/p843_r1/census843-读数.txt</c>）→ 本批逐颗换成正文锚之后这颗数。

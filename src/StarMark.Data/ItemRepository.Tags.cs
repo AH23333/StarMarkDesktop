@@ -73,7 +73,7 @@ public sealed partial class ItemRepository
         tagName = tagName.Trim();
 
         using var conn = _factory.Open();
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
 
         // 获取或创建标签
         long tagId;
@@ -157,14 +157,13 @@ public sealed partial class ItemRepository
 
         var ids = wanted.Keys.ToList();
         using var conn = _factory.Open();
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
 
         // ① 一次读回这批条目已有的标签（大小写不敏感比对用）
         var existing = new Dictionary<long, HashSet<string>>();
         foreach (var chunk in Chunks(ids))
         {
             using var read = conn.CreateCommand();
-            read.Transaction = tx;
             read.CommandText = @$"
                 SELECT it.item_id, t.name FROM item_tags it JOIN tags t ON t.id = it.tag_id
                 WHERE it.item_id IN ({InParams(chunk, read)});";
@@ -192,7 +191,6 @@ public sealed partial class ItemRepository
         foreach (var chunk in Chunks(additions.Keys.ToList()))
         {
             using var read = conn.CreateCommand();
-            read.Transaction = tx;
             read.CommandText = @$"
                 SELECT id, title, uri, source, source_id, description, notes FROM items
                 WHERE id IN ({InParams(chunk, read)});";
@@ -216,7 +214,6 @@ public sealed partial class ItemRepository
         foreach (var chunk in Chunks(neededNames))
         {
             using var find = conn.CreateCommand();
-            find.Transaction = tx;
             find.CommandText = $"SELECT id, name FROM tags WHERE name COLLATE NOCASE IN ({InParams(chunk, find, "tn")});";
             await using var r = await find.ExecuteReaderAsync(ct);
             while (await r.ReadAsync(ct)) tagIds[r.GetString(1)] = r.GetInt64(0);
@@ -226,7 +223,6 @@ public sealed partial class ItemRepository
         {
             if (tagIds.ContainsKey(name)) continue;
             using var create = conn.CreateCommand();
-            create.Transaction = tx;
             create.CommandText = "INSERT INTO tags(name, created_at) VALUES(@name, @now) RETURNING id;";
             create.Parameters.AddWithValue("@name", name);
             create.Parameters.AddWithValue("@now", now);
@@ -239,7 +235,6 @@ public sealed partial class ItemRepository
             foreach (var name in names)
             {
                 using var link = conn.CreateCommand();
-                link.Transaction = tx;
                 link.CommandText = "INSERT OR IGNORE INTO item_tags(item_id, tag_id, created_at) VALUES(@item, @tag, @now);";
                 link.Parameters.AddWithValue("@item", id);
                 link.Parameters.AddWithValue("@tag", tagIds[name]);
@@ -299,14 +294,13 @@ public sealed partial class ItemRepository
     /// <summary>批量写活动流水。<b>与 <see cref="LogActivityOnConnection"/> 同一套环形缓冲口径</b>（只留最近 500 条），
     /// 区别只在于一次多行 INSERT、最后裁剪一次，而不是每条都数一遍总数。</summary>
     private static async Task LogActivitiesOnConnection(
-        SqliteConnection conn, SqliteTransaction tx,
+        SqliteConnection conn, ImmediateTxn tx,
         IReadOnlyList<(ActivityKind Kind, string? Key, string Title, string? Uri)> rows, CancellationToken ct)
     {
         for (var start = 0; start < rows.Count; start += InChunkSize)
         {
             var slice = rows.Skip(start).Take(InChunkSize).ToList();
             using var insert = conn.CreateCommand();
-            insert.Transaction = tx;
             var valueGroups = new List<string>(slice.Count);
             for (var i = 0; i < slice.Count; i++)
             {
@@ -322,12 +316,10 @@ public sealed partial class ItemRepository
         }
 
         using var countCmd = conn.CreateCommand();
-        countCmd.Transaction = tx;
         countCmd.CommandText = "SELECT COUNT(*) - 500 FROM activity;";
         var overflow = Convert.ToInt64(await countCmd.ExecuteScalarAsync(ct));
         if (overflow <= 0) return;
         using var prune = conn.CreateCommand();
-        prune.Transaction = tx;
         prune.CommandText = "DELETE FROM activity WHERE id IN (SELECT id FROM activity ORDER BY at ASC, id ASC LIMIT @n);";
         prune.Parameters.AddWithValue("@n", overflow);
         await prune.ExecuteNonQueryAsync(ct);
@@ -341,7 +333,7 @@ public sealed partial class ItemRepository
     {
         if (events is not { Count: > 0 }) return;             // 空批不开库：没有"什么都没记"还要惊动组件的道理
         using var conn = _factory.Open();
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
         var rows = new List<(ActivityKind Kind, string? Key, string Title, string? Uri)>(events.Count);
         foreach (var e in events) rows.Add((e.Kind, e.ItemKey, e.Title, e.Uri));
         await LogActivitiesOnConnection(conn, tx, rows, ct);
@@ -393,7 +385,7 @@ public sealed partial class ItemRepository
         }
 
         using var conn = _factory.Open();
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
 
         var row = await ReadItemShellAsync(conn, tx, itemId, ct);
         if (row is null) return TagEditResult.Unchanged;      // 条目已经不在了：编辑动作没有落点
@@ -422,10 +414,9 @@ public sealed partial class ItemRepository
 
     /// <summary>条目上那几个"重建索引/记活动"要用的字段，一次读回。</summary>
     private static async Task<(string Title, string? Description, string? Notes, string? Uri, string Source, string SourceId)?>
-        ReadItemShellAsync(SqliteConnection conn, SqliteTransaction tx, long itemId, CancellationToken ct)
+        ReadItemShellAsync(SqliteConnection conn, ImmediateTxn tx, long itemId, CancellationToken ct)
     {
         using var cmd = conn.CreateCommand();
-        cmd.Transaction = tx;
         cmd.CommandText = "SELECT title, description, notes, uri, source, source_id FROM items WHERE id = @id;";
         cmd.Parameters.AddWithValue("@id", itemId);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -440,10 +431,9 @@ public sealed partial class ItemRepository
     }
 
     private static async Task<List<string>> ReadTagNamesAsync(
-        SqliteConnection conn, SqliteTransaction tx, long itemId, CancellationToken ct)
+        SqliteConnection conn, ImmediateTxn tx, long itemId, CancellationToken ct)
     {
         using var cmd = conn.CreateCommand();
-        cmd.Transaction = tx;
         cmd.CommandText = @"
             SELECT t.name FROM item_tags it JOIN tags t ON t.id = it.tag_id
             WHERE it.item_id = @id ORDER BY t.name;";
@@ -457,10 +447,9 @@ public sealed partial class ItemRepository
     /// <summary>解绑一批标签。<b>只删关联、不删 tags 行</b>：与 <see cref="RemoveTagAsync"/> 同口径
     /// （全库没有 DELETE FROM tags，孤儿由 GetAllTagsAsync 的 INNER JOIN 挡掉）。</summary>
     private static async Task DetachTagsAsync(
-        SqliteConnection conn, SqliteTransaction tx, long itemId, IReadOnlyList<string> names, CancellationToken ct)
+        SqliteConnection conn, ImmediateTxn tx, long itemId, IReadOnlyList<string> names, CancellationToken ct)
     {
         using var cmd = conn.CreateCommand();
-        cmd.Transaction = tx;
         cmd.CommandText = $@"
             DELETE FROM item_tags
             WHERE item_id = @item
@@ -471,7 +460,7 @@ public sealed partial class ItemRepository
 
     /// <summary>挂上一批标签：名字已存在的复用同一行（NOCASE），缺的才建。</summary>
     private static async Task AttachTagsAsync(
-        SqliteConnection conn, SqliteTransaction tx, long itemId, IReadOnlyList<string> names, CancellationToken ct)
+        SqliteConnection conn, ImmediateTxn tx, long itemId, IReadOnlyList<string> names, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         foreach (var name in names)
@@ -479,7 +468,6 @@ public sealed partial class ItemRepository
             long tagId;
             using (var find = conn.CreateCommand())
             {
-                find.Transaction = tx;
                 find.CommandText = "SELECT id FROM tags WHERE name = @name COLLATE NOCASE;";
                 find.Parameters.AddWithValue("@name", name);
                 var existing = await find.ExecuteScalarAsync(ct);
@@ -487,7 +475,6 @@ public sealed partial class ItemRepository
                 else
                 {
                     using var create = conn.CreateCommand();
-                    create.Transaction = tx;
                     create.CommandText = "INSERT INTO tags(name, created_at) VALUES(@name, @now) RETURNING id;";
                     create.Parameters.AddWithValue("@name", name);
                     create.Parameters.AddWithValue("@now", now);
@@ -496,7 +483,6 @@ public sealed partial class ItemRepository
             }
 
             using var link = conn.CreateCommand();
-            link.Transaction = tx;
             link.CommandText = "INSERT OR IGNORE INTO item_tags(item_id, tag_id, created_at) VALUES(@item, @tag, @now);";
             link.Parameters.AddWithValue("@item", itemId);
             link.Parameters.AddWithValue("@tag", tagId);
@@ -519,13 +505,12 @@ public sealed partial class ItemRepository
         if (ids.Count == 0) return 0;
 
         using var conn = _factory.Open();
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
 
         var current = new Dictionary<long, string?>();
         foreach (var chunk in Chunks(ids))
         {
             using var read = conn.CreateCommand();
-            read.Transaction = tx;
             read.CommandText = $"SELECT id, extra_json FROM items WHERE id IN ({InParams(chunk, read, "ro")});";
             await using var reader = await read.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
@@ -545,7 +530,6 @@ public sealed partial class ItemRepository
             if (string.Equals(probe.ExtraJson, extraJson, StringComparison.Ordinal)) continue;
 
             using var upd = conn.CreateCommand();
-            upd.Transaction = tx;
             upd.CommandText = "UPDATE items SET extra_json = @extra, updated_at = @at WHERE id = @id;";
             upd.Parameters.AddWithValue("@extra", (object?)probe.ExtraJson ?? DBNull.Value);
             upd.Parameters.AddWithValue("@at", now);

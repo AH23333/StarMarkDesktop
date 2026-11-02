@@ -120,7 +120,7 @@ public sealed class BackupRepository : IBackupRepository
     {
         if (states.Count == 0) return Task.FromResult(0L);
         using var conn = _factory.Open();
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
             UPDATE items
@@ -150,7 +150,7 @@ public sealed class BackupRepository : IBackupRepository
     {
         if (tags.Count == 0) return Task.CompletedTask;
         using var conn = _factory.Open();
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
         using var cmd = conn.CreateCommand();
         // name 上已有 UNIQUE COLLATE NOCASE；已存在则只补 color/extra_json 的空缺
         cmd.CommandText = @"
@@ -185,7 +185,7 @@ public sealed class BackupRepository : IBackupRepository
     {
         if (links.Count == 0) return Task.FromResult(0L);
         using var conn = _factory.Open();
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
             INSERT INTO item_tags(item_id, tag_id, created_at)

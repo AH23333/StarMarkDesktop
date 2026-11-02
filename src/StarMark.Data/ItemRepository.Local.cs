@@ -77,10 +77,9 @@ public sealed partial class ItemRepository
     /// 不限定的话，一个来自别处的 id 就能被组件改走一整行。
     /// </summary>
     private static async Task<Item?> ReadLocalItemAsync(
-        SqliteConnection conn, SqliteTransaction? tx, long id, ItemType type, CancellationToken ct)
+        SqliteConnection conn, ImmediateTxn? tx, long id, ItemType type, CancellationToken ct)
     {
         using var cmd = conn.CreateCommand();
-        if (tx is not null) cmd.Transaction = tx;
         cmd.CommandText = @"
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
@@ -138,14 +137,13 @@ public sealed partial class ItemRepository
     {
         if (id <= 0) return null;
         using var conn = _factory.Open();
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
 
         var row = await ReadLocalItemAsync(conn, tx, id, type, ct);
         if (row is null) return null;
 
         using (var del = conn.CreateCommand())
         {
-            del.Transaction = tx;
             del.CommandText = "DELETE FROM items WHERE id = @id AND source = @source AND type = @type;";
             del.Parameters.AddWithValue("@id", id);
             del.Parameters.AddWithValue("@source", ItemSources.Local);
@@ -202,7 +200,7 @@ public sealed partial class ItemRepository
         using var conn = _factory.Open();
         // 带上活动时开一个事务：写条目与记活动要么都成立、要么都不成立。
         // 不带活动时不开（一次写入本来就是一条语句，BEGIN/COMMIT 只是白付两次往返）。
-        using SqliteTransaction? tx = activity is null ? null : conn.BeginTransaction();
+        using ImmediateTxn? tx = activity is null ? null : conn.BeginImmediate();
         using var cmd = conn.CreateCommand();
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         // search_text 口径与 UpsertOne / ReplaceLocalItemsForInstanceAsync 完全一致（title + description +
@@ -294,7 +292,7 @@ public sealed partial class ItemRepository
         if (string.IsNullOrWhiteSpace(draft.SourceId)) return draft;   // 没键就没法幂等，直接放弃这条
 
         using var conn = _factory.Open();
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
 
         // ① 读旧行：次数要累加、用户状态要原样带回去
         string? existingExtra = null;
@@ -565,13 +563,12 @@ public sealed partial class ItemRepository
     {
         if (itemIds is null || itemIds.Count == 0) return 0;
         using var conn = _factory.Open();
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
         var removed = 0;
         foreach (var id in itemIds)
         {
             ct.ThrowIfCancellationRequested();
             using var cmd = conn.CreateCommand();
-            cmd.Transaction = tx;
             cmd.CommandText = "DELETE FROM items WHERE id = @id AND type = @type AND source IN (@fs, @local);";
             cmd.Parameters.AddWithValue("@id", id);
             cmd.Parameters.AddWithValue("@type", ItemType.File.ToString().ToLowerInvariant());

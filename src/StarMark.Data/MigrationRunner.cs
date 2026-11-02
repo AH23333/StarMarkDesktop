@@ -116,7 +116,7 @@ public sealed class MigrationRunner
             }
         }
 
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
         using (var upd = conn.CreateCommand())
         {
             upd.CommandText = "UPDATE items SET search_text = @t WHERE id = @id;";
@@ -205,7 +205,7 @@ public sealed class MigrationRunner
         if (groups.Count == 0) return;
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
         foreach (var g in groups)
         {
             // keeper = 最早 created_at（并列取最小 id），其余为待删除的重复项

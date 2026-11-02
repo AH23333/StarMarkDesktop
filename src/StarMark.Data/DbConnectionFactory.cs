@@ -84,3 +84,80 @@ public sealed class DbActivityCounter
         return this;
     }
 }
+
+/// <summary>
+/// 裸 <c>BEGIN IMMEDIATE</c> 的写事务包装（P-31 (A)）。
+/// <para>
+/// 为什么不用 <c>SqliteConnection.BeginTransaction</c>：它发的 <c>BEGIN</c>（DEFERRED）把写锁推迟到
+/// <b>第一条写语句</b>才去占。「先读后写」的事务（同步 upsert／打标签那一族）在升级写锁那一刻若撞上
+/// 另一连接的活跃写事务，得到的是 <c>BUSY_SNAPSHOT(517)</c>——那是<b>永不可重试成功</b>的错误：
+/// 快照已定，等再久也升不上去，busy_timeout 对这条路径不构成上界。IMMEDIATE 在 BEGIN 那一刻就占住
+/// 写锁：真有竞争时退化为有意义的 <c>BUSY(5)</c>（对方一提交就让路，busy_timeout 排得住队），
+/// 517 从根上不再出现。
+/// </para>
+/// <para>
+/// 为什么是裸 SQL 而不是 provider 事务：Microsoft.Data.Sqlite 的 <c>BeginTransaction</c> 没有
+/// immediate 重载。SQLite 的事务本就是<b>连接级</b>的——裸 BEGIN 之后这条连接上的命令自动在事务里
+/// （provider 对 <c>cmd.Transaction</c> 的要求只是它自己的簿记），既有「事务内命令不设 Transaction」
+/// 的路径（<c>UpsertAsync</c>→<c>UpsertOne</c>）就是这一事实的活证人。
+/// </para>
+/// </summary>
+public sealed class ImmediateTxn : IDisposable
+{
+    private readonly SqliteConnection _conn;
+    private bool _finished;
+
+    internal ImmediateTxn(SqliteConnection conn)
+    {
+        _conn = conn;
+        Exec("BEGIN IMMEDIATE");
+    }
+
+    /// <summary>提交。SQLite 是本地执行，没有真正的异步——异步包装只为与既有调用点同形。</summary>
+    public void Commit()
+    {
+        Exec("COMMIT");
+        _finished = true;
+    }
+
+    public Task CommitAsync(CancellationToken ct = default)
+    {
+        Commit();
+        return Task.CompletedTask;
+    }
+
+    public void Rollback()
+    {
+        Exec("ROLLBACK");
+        _finished = true;
+    }
+
+    public Task RollbackAsync(CancellationToken ct = default)
+    {
+        Rollback();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>未提交就走到 Dispose（异常上抛／早退）＝整笔回滚：半截事务要是提交出去，比「白写一次」
+    /// 坏一个量级——调用方按「已失败」收场，库里却留着半成品。</summary>
+    public void Dispose()
+    {
+        if (_finished) return;
+        try { Rollback(); }
+        catch (SqliteException) { }   // 回滚本身失败（连接已坏）时不再叠一层异常盖掉原始错误
+    }
+
+    private void Exec(string sql)
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+}
+
+public static class ImmediateTxnExtensions
+{
+    /// <summary>在这条连接上开一个 IMMEDIATE 写事务（P-31 (A)）：BEGIN 那一刻就占住写锁，
+    /// 「先读后写」的事务从此不会升级成 BUSY_SNAPSHOT(517)。</summary>
+    public static ImmediateTxn BeginImmediate(this SqliteConnection conn) => new(conn);
+}

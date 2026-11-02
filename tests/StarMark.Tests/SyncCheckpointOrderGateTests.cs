@@ -43,8 +43,10 @@ public sealed class SyncCheckpointOrderGateTests
     [Fact]
     public void CoordinatorCommitsTheCheckpointAfterTheUpsert()
     {
+        // P-31 (C)（片191）把拉取/落库/提交那圈循环搬进了 SyncAllCoreAsync——SyncAllAsync 本体
+        // 只剩重入闸门（占闸→放闸），所以这道锚跟着搬：次序本身一字未动，只是住址换了。
         var body = SourceGate.Code(SourceGate.MethodBody(
-            SourceGate.ReadRepoFile(Coordinator), "public async Task<SyncSummary> SyncAllAsync"));
+            SourceGate.ReadRepoFile(Coordinator), "private async Task<SyncSummary> SyncAllCoreAsync"));
 
         Assert.Contains("await source.FetchAsync(new SyncContext(), ct)", body, StringComparison.Ordinal);
         Assert.Contains("await _repository.UpsertAsync(syncable, ct)", body, StringComparison.Ordinal);

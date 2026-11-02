@@ -39,7 +39,7 @@ public sealed partial class ItemRepository
     {
         if (items.Count == 0) return;
         using var conn = _factory.Open();
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
 
         foreach (var item in items)
         {
@@ -62,7 +62,7 @@ public sealed partial class ItemRepository
         if (string.IsNullOrEmpty(item.Source) || string.IsNullOrEmpty(item.SourceId)) return 0;
 
         using var conn = _factory.Open();
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
         await UpsertOne(conn, item, ct);
         await tx.CommitAsync(ct);
         DataChangeHub.Notify();   // 记录后置顶/标签/搜索等组件实时跟上
@@ -91,7 +91,7 @@ public sealed partial class ItemRepository
         if (writable.Count == 0) return 0;               // 整批都没业务键：不开库、不通知
 
         using var conn = _factory.Open();
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
         foreach (var item in writable) await UpsertOne(conn, item, ct);
         await tx.CommitAsync(ct);
         DataChangeHub.Notify();   // 整批一次：置顶/标签/搜索等组件跟着刷一遍，而不是 N 遍

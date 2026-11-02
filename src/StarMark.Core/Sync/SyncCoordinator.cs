@@ -17,6 +17,8 @@ public sealed class SyncCoordinator
 {
     private readonly IItemRepository _repository;
     private readonly IReadOnlyList<IItemSource> _sources;
+    /// <summary>重入闸（P-31 (C)）：一轮同步没收尾时，后来的调用<b>排队</b>而不是并发跑、也不是丢弃。</summary>
+    private readonly SemaphoreSlim _syncGate = new(1, 1);
 
     public SyncCoordinator(IItemRepository repository, IEnumerable<IItemSource> sources)
     {
@@ -26,8 +28,35 @@ public sealed class SyncCoordinator
 
     /// <summary>
     /// 执行一次全量同步。每个源拉取后立即 upsert（避免缓存全部结果占用内存）。
+    /// <para>
+    /// P-31 (C)：重入＝<b>排队</b>。上一轮还没收尾时再点一次同步，这一轮在闸外等它收尾、然后自己跑——
+    /// 每个请求都被兑现（丢弃的话「点了同步没反应」就成了偶发且无从解释），并发跑则两头读改写同一批行。
+    /// 排队的那一轮也吃取消（<c>WaitAsync</c> 挂着令牌：调用方一取消就撤队，⛔ 傻等）；闸的收与放
+    /// 都在 <c>finally</c> 里对齐——任何一条出口都不许把闸卡死，卡死等于从此再也同步不了。
+    /// </para>
     /// </summary>
     public async Task<SyncSummary> SyncAllAsync(CancellationToken ct)
+    {
+        // 门口先回绝已取消的令牌：ThrowIfCancellationRequested 抛的正是 OperationCanceledException 本型；
+        // ⛔ 让它走到下面 WaitAsync——那里抛的是子类 TaskCanceledException，「整轮被取消」与「闸没等到」
+        // 两种口径就分不开了（取消的那一发不该被当成一次同步结果，见 LastSummary 的注）。
+        ct.ThrowIfCancellationRequested();
+        // 预检只探不占（⛔ Wait(0)：那会真的把闸拿到手，随后的 WaitAsync 就成了自己等自己）：
+        // 闸被占＝本轮要排队，留一行可观测的日志——用户侧的症状是「连点了两次」，日志得能看出第二次在等。
+        if (_syncGate.CurrentCount == 0)
+            StarLog.Info("另一轮同步尚未收尾，本轮排队等候…");
+        await _syncGate.WaitAsync(ct);
+        try
+        {
+            return await SyncAllCoreAsync(ct);
+        }
+        finally
+        {
+            _syncGate.Release();
+        }
+    }
+
+    private async Task<SyncSummary> SyncAllCoreAsync(CancellationToken ct)
     {
         var sw = Stopwatch.StartNew();
         var results = new List<SourceSyncResult>();

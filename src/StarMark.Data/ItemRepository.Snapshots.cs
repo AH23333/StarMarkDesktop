@@ -47,7 +47,7 @@ public sealed partial class ItemRepository
     {
         if (string.IsNullOrEmpty(instanceId)) return;
         using var conn = _factory.Open();
-        using var tx = conn.BeginTransaction();
+        using var tx = conn.BeginImmediate();
 
         // 1) 前缀删除本实例既有本地条目（连带 item_tags 级联）。只动本实例，其它实例不受影响。
         using (var del = conn.CreateCommand())
