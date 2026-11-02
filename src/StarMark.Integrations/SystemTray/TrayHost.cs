@@ -67,36 +67,42 @@ public sealed class TrayHost : IDisposable
     private IntPtr _hwnd;
     private IntPtr _hIcon;
     private bool _added;
-    private WndProcDelegate? _wndProc;
-    private GCHandle _selfHandle;
+
+    /// <summary>托盘那颗消息-only 窗口的类名（全进程一个，注册见 <see cref="EnsureClassRegistered"/>）。</summary>
+    private const string ClassName = "StarMarkTrayMessageWindow";
+
+    /// <summary><c>ERROR_CLASS_ALREADY_EXISTS</c>：第二次注册同名类时唯一的"不是失败"分支（复用，⛔ 抢）。</summary>
+    private const int ERROR_CLASS_ALREADY_EXISTS = 1410;
+
+    /// <summary>类只注册一次；委托由静态字段保活——非托管侧只持函数指针，委托一旦被 GC 就是野指针回调。</summary>
+    private static WndProcDelegate? _sharedProc;
+    private static ushort _classAtom;
+
+    /// <summary>
+    /// 当前唯一的派发目标。<b>刻意不走 <c>GWL_USERDATA</c></b>：那颗原生偏移在 SDK 头文件里有两种并存写法，
+    /// 取错了既不编译报错也不抛异常，只会让 WndProc 永远读到 0（<c>ClipboardWatcher</c> 卷首那条同一族）。
+    /// <para>为什么这一格非静态不可：类名固定，第二次 <c>RegisterClassExW</c> 一律以
+    /// <c>ERROR_CLASS_ALREADY_EXISTS</c> 失败，类里留着的仍是<b>第一颗</b>委托——于是第二轮新建的托盘窗口
+    /// 把消息全发给上一轮那个实例（托盘「关→开」之后右键就没菜单，而屏幕上看不出任何异常）。
+    /// 现在类只注册一次、派发只看 <see cref="_current"/>，每次 <see cref="Initialize"/> 只是换目标。</para>
+    /// </summary>
+    private static TrayHost? _current;
 
     public bool Initialize()
     {
         try
         {
-            _wndProc = WndProc;
-            var className = "StarMarkTrayMessageWindow";
+            EnsureClassRegistered();
             var hInstance = GetModuleHandleW(null);
-
-            var wndClass = new WNDCLASSEX
-            {
-                cbSize = (uint)Marshal.SizeOf<WNDCLASSEX>(),
-                lpfnWndProc = _wndProc,
-                hInstance = hInstance,
-                lpszClassName = className,
-                hCursor = LoadCursorW(IntPtr.Zero, IDC_ARROW),
-            };
-            RegisterClassExW(ref wndClass);
+            _current = this;
 
             _hwnd = CreateWindowExW(
-                0, className, "StarMark Tray Host", 0,
+                0, ClassName, "StarMark Tray Host", 0,
                 0, 0, 0, 0, HWND_MESSAGE, IntPtr.Zero, hInstance, IntPtr.Zero);
-
-            _selfHandle = GCHandle.Alloc(this);
-            SetWindowLongPtrW(_hwnd, GWL_USERDATA, GCHandle.ToIntPtr(_selfHandle));
 
             _hIcon = LoadTrayIcon();
             var data = new NOTIFYICONDATA
+
             {
                 cbSize = (uint)Marshal.SizeOf<NOTIFYICONDATA>(),
                 hWnd = _hwnd,
@@ -138,6 +144,40 @@ public sealed class TrayHost : IDisposable
     /// <summary>本次右键实际渲染出来的宿主命令（点击时用行号回查其 Tag）。</summary>
     private readonly List<TrayCommandItem> _hostCommands = new();
 
+    /// <summary>
+    /// 托盘窗口类<b>全进程只注册一次</b>（批次 P-32 ①：以前每次 <c>Initialize</c> 都重注册一次同名类，
+    /// 而第二次一律以 <c>ERROR_CLASS_ALREADY_EXISTS</c> 静默失败——类里留着的是<b>第一颗</b>委托，
+    /// 于是第二轮的托盘窗口把消息全发给上一轮那个实例）。沿用 <c>ClipboardWatcher</c> 那颗已修好的形状。
+    /// </summary>
+    private static void EnsureClassRegistered()
+    {
+        if (_classAtom != 0) return;
+
+        _sharedProc ??= WndProcStatic;
+        var wndClass = new WNDCLASSEX
+        {
+            cbSize = (uint)Marshal.SizeOf<WNDCLASSEX>(),
+            lpfnWndProc = _sharedProc,
+            hInstance = GetModuleHandleW(null),
+            lpszClassName = ClassName,
+            hCursor = LoadCursorW(IntPtr.Zero, IDC_ARROW),
+        };
+        _classAtom = RegisterClassExW(ref wndClass);
+        if (_classAtom != 0) return;
+
+        // 1410：本轮之前已有别处注册过（同一进程内"托盘关→开"就是这一支）——复用即可，
+        // 因为类里那份委托是静态派发入口，⛔ 绑某个实例。别的失败码说实话：宁可抛，也不带着没注册的类去建窗口。
+        var err = Marshal.GetLastWin32Error();
+        if (err != ERROR_CLASS_ALREADY_EXISTS)
+            throw new System.ComponentModel.Win32Exception(err, "注册托盘消息窗口类失败");
+        StarLog.Info("[TrayHost] 托盘窗口类已在场（1410）：复用现有类，派发目标换成本轮实例");
+    }
+
+    /// <summary>类里唯一那份入口：按 <see cref="_current"/> 派发给本轮实例；没有实例时交回默认处理。</summary>
+    private static IntPtr WndProcStatic(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+        => _current is { } host ? host.WndProc(hWnd, msg, wParam, lParam)
+                                : DefWindowProcW(hWnd, msg, wParam, lParam);
+
     private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
         // 原生 WNDPROC 反调托管代码：异常从这儿穿出去既不经 UI 调度器、也不经 DispatcherQueue，
@@ -147,7 +187,9 @@ public sealed class TrayHost : IDisposable
         {
             if (msg == WM_DESTROY)
             {
-                if (_selfHandle.IsAllocated) _selfHandle.Free();
+                // 只摘自己那颗目标：两轮实例交叠时（旧的还没摘、新的已挂上）这条守卫是唯一防线。
+                // ⛔ 在这里再调 DestroyWindow——对同一个句柄二次销毁 Win32 直接返回失败（同一族先例见剪贴板监听窗）。
+                if (ReferenceEquals(_current, this)) _current = null;
                 return IntPtr.Zero;
             }
 
@@ -312,6 +354,9 @@ public sealed class TrayHost : IDisposable
                 DestroyWindow(_hwnd);
                 _hwnd = IntPtr.Zero;
             }
+            // 派发目标也要摘：WM_DESTROY 那一支已经摘过一次，这里兜的是 Initialize 中途失败、
+            // 窗口压根没建成（于是永远不会有 WM_DESTROY）那一支——不摘就是"静态目标指着一个已 Dispose 的实例"。
+            if (ReferenceEquals(_current, this)) _current = null;
         }
         catch (Exception ex) { StarLog.Warn($"[TrayHost] Dispose 异常: {ex.Message}"); }
     }

@@ -528,7 +528,8 @@ static byte[] BuildDropFiles(string path)
 static void TraySmokeCheck()
 {
     Trace.Listeners.Add(new TextWriterTraceListener(Console.Out));
-    using var host = new StarMark.Integrations.SystemTray.TrayHost();
+    var host = new StarMark.Integrations.SystemTray.TrayHost();   // 下面显式 Dispose：它当"第一轮"，第二轮才是这一格要量的东西
+
     var ok = host.Initialize();
     Console.WriteLine($"Tray host available: {ok}");
     if (!ok) throw new Exception("托盘宿主初始化失败");
@@ -540,6 +541,27 @@ static void TraySmokeCheck()
     // 什么都不显示，所以"冒烟打印 ok"从来不是证据；提醒改由 UI 侧那张右下角提示卡承担，
     // 判据是窗口的实际矩形（冒烟程序没有 UI 线程与窗口，验不了，也不该假装验了）。
     Console.WriteLine("Notification exit owned by NoticeCard in StarMark.UI (not covered by this smoke check)");
+
+    // ===== 第二轮的派发归属（批次 P-32 ①的实测腿）=====
+    // 上面那颗 host 现在就当"第一轮"：Dispose 之后再建第二轮，然后往第二轮的窗口发一次左键。
+    // 旧的形状下类里留的是第一轮那份绑实例的委托 ⇒ 这一发会落到已经 Dispose 的第一轮实例上，
+    // 第二轮的 ShowRequested 一次都不响（屏幕上正是"托盘在、右键没菜单"那一族，只是这里用左键量）。
+    // 拿私有字段 _hwnd 用反射：冒烟程序读一个句柄，⛔ 为此在产品 API 上开一颗"给测试用"的口子。
+    host.Dispose();
+    using var second = new StarMark.Integrations.SystemTray.TrayHost();
+    if (!second.Initialize()) throw new Exception("第二轮托盘宿主初始化失败");
+    var secondSaw = 0;
+    second.ShowRequested += () => secondSaw++;
+    var hwnd2 = (IntPtr)(second.GetType()
+        .GetField("_hwnd", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+        .GetValue(second)!);
+    if (hwnd2 == IntPtr.Zero) throw new Exception("第二轮那颗窗口句柄没建起来（这一发测不了派发归属）");
+    _ = TrayProbeNative.SendMessageW(hwnd2,
+        StarMark.Integrations.SystemTray.NativeMethods.TRAY_CALLBACK, IntPtr.Zero,
+        new IntPtr(StarMark.Integrations.SystemTray.NativeMethods.WM_LBUTTONUP));
+    Console.WriteLine($"Round-2 routing: 第二轮实例收到 {secondSaw} 次（该 1）");
+    if (secondSaw != 1) throw new Exception("托盘第二轮的派发送进了上一轮的实例——P-32 ①那一族仍在");
+
     Console.WriteLine("DONE");
 }
 
@@ -1840,3 +1862,9 @@ internal static class OcrSmokeNative
         byte[] bits, IntPtr bmi, uint usage);
 }
 
+/// <summary>冒烟程序自己要的那一颗：发一条消息给刚建起来的托盘窗口（Integrations 那份互操作表里没有 SendMessage）。</summary>
+internal static class TrayProbeNative
+{
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    public static extern IntPtr SendMessageW(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+}
