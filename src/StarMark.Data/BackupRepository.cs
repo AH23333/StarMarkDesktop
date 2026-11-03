@@ -113,9 +113,10 @@ public sealed class BackupRepository : IBackupRepository
         }
     }
 
-    // P-9（计数诚实性）：回传 UPDATE 实际命中行数——0 命中＝备份里的 (source, source_id) 没对上任何条目
-    // （条目导入侧 UpsertOne 会重 Normalize source_id，跨归一规则版本的老备份因此可能失配）。
-    // 本方法不改写入语义；失配由调用方按「实命中 < 提供数」告警（BackupService），根因修是 (B) 另议。
+    // P-9（计数诚实性）：回传 UPDATE 实际命中行数——0 命中＝备份里的 (source, source_id) 没对上任何条目。
+    // P-9(B)（片199）：查找键先跑与 UpsertOne 同一个 UriNormalizer.Normalize 再匹配——条目导入侧落库的是
+    // 归一后的键，跨归一规则版本的老备份（键是旧规则导出的）若按原始键裸匹配会 0 命中、状态静默丢；
+    // 归一后与写入口径一致即照常命中。非 http(s) 键（文件哈希、短 id）Normalize 原样返回，行为不变。
     public Task<long> ImportUserStateAsync(IReadOnlyList<UserStateRecord> states, CancellationToken ct)
     {
         if (states.Count == 0) return Task.FromResult(0L);
@@ -139,7 +140,7 @@ public sealed class BackupRepository : IBackupRepository
             pPinned.Value = s.Pinned ? 1L : 0L;
             pNotes.Value = (object?)s.Notes ?? DBNull.Value;
             pSrc.Value = s.Source;
-            pSid.Value = s.SourceId;
+            pSid.Value = UriNormalizer.Normalize(s.SourceId);
             hit += cmd.ExecuteNonQuery();
         }
         tx.Commit();
@@ -181,6 +182,9 @@ public sealed class BackupRepository : IBackupRepository
     // P-9（计数诚实性）：回传「对上了」的关联数——含关联已在的（NOT EXISTS 幂等挡下的那一半也算对上），
     // 只有条目/标签任一没对上的才不计入。若按插入行数回传，同一份备份在 Merge 下重跑会满盘「0 恢复」
     // 假告警（幂等重跑是文档口径的常规操作）；若按提供数回传，键漂移又变回静默虚报。
+    // P-9(B)（片199）：@sid 与 ImportUserStateAsync 同款先 Normalize——条目行落库键是归一后的，
+    // 老备份导出的原始键按裸匹配会静默 0 行；probe（探「已在/没对上」）必须与 INSERT 用同一颗归一键，
+    // 两把尺子不一致会把「其实对上了」误判成失配。
     public Task<long> ImportItemTagLinksAsync(IReadOnlyList<ItemTagLink> links, CancellationToken ct)
     {
         if (links.Count == 0) return Task.FromResult(0L);
@@ -212,8 +216,9 @@ public sealed class BackupRepository : IBackupRepository
         foreach (var l in links)
         {
             if (string.IsNullOrWhiteSpace(l.TagName)) continue;
+            var sid = UriNormalizer.Normalize(l.SourceId);
             pSrc.Value = l.Source;
-            pSid.Value = l.SourceId;
+            pSid.Value = sid;
             pTag.Value = l.TagName.Trim();
             pNow.Value = now;
             if (cmd.ExecuteNonQuery() > 0)
@@ -222,7 +227,7 @@ public sealed class BackupRepository : IBackupRepository
                 continue;
             }
             qSrc.Value = l.Source;
-            qSid.Value = l.SourceId;
+            qSid.Value = sid;
             qTag.Value = l.TagName.Trim();
             if (Convert.ToInt64(probe.ExecuteScalar()) == 1L) resolved++;
         }

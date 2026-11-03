@@ -644,3 +644,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - ⚠ 仪器坑 #1139（排队）：cmd「echo EXITCODE=%ERRORLEVEL%&gt;&gt; file」的「0&gt;&gt;」绑 fd 0 重定向，EXITCODE 行不落档（197/198 同病）——判绿认汇总行「已通过! 失败: 0」，修法「&gt;&gt;file echo …」前置重定向。
 - ⚠ 工作树里已躺着 199 的码（趁 198 套跑预落）：<code>BackupRepository.cs</code> 两处 Normalize＋<code>BackupServiceTests.cs</code> 证人测④⑤——接手 199 时那两档是<b>已改未测</b>态，先跑 gate199 再动账本。
 - 下一刀：片199＝P-9(B)（期全量 6779）；其后片200＝P-58 信封上浮（设计定案在册）・片201＝P-145 (A) 验签钉哈希；真机批授权已给（P-112＋P-32 托盘点验＋P-46 (A) 取证＋P-85/95/102 观感截图）。⛔ push（未推 6）。
+
+## 八十、片199 P-9 (B)：还原侧查找键与条目写入口径归一（证人测④⑤・坑表 #1139 落）
+
+- 接手第一步照旧现读编号轴：报告到五百八十五、坑表到 #1139；本批＝P-9 (B) 根因修（用户裁决原话「其他均允许」·2026-11-03——覆盖 11-01 只授权 (A) 那笔）。
+- 码两处：<code>ImportUserStateAsync</code> @sid 先 <code>Normalize</code>（<code>BackupRepository.cs:143</code>）・<code>ImportItemTagLinksAsync</code> INSERT 与 probe 共用同一颗归一 sid（<code>:219</code>）——两把尺子同一颗键；非 http(s) 键原样透传。证人测④⑤用 www.github.com→github.com 漂移键：先自证写侧归一前提（<code>item.SourceId</code> 断言）再断言还原命中（修前 0）＋幂等重跑不假 0。
+- 读数：门测 28/28（gate199.txt）・全量 6779/6779（testfull199.out）・census 24・计数器 285/226/59（±0・不翻题行——P-9 片188 已 ✅，本批只补 (B) bullet）・docgates 26/26（docgates199.txt）。
+- 坑表 #1139：cmd「echo EXITCODE=%ERRORLEVEL%&gt;&gt; file」的「0&gt;&gt;」绑 fd 0——EXITCODE 行不落档（197/198 同病）；判绿认汇总行「已通过! 失败: 0」；修法「&gt;&gt;file echo …」前置重定向（testfull199.cmd 起启用）。
+- 下一刀：片200＝P-58 信封上浮（设计定案在册：<code>FetchResult</code> 信封・GitHubClient <code>LastFetchTruncated</code>・UiStrings <code>top.syncDoneTruncated/top.syncTruncatedTitle/sync.src.truncated</code> 三语・InfoBar 截断走 Informational・<code>SyncCheckpointOrderGateTests:28</code> 锚随签改）；其后片201＝P-145 (A) 验签钉哈希；真机批（P-112＋P-32 托盘点验＋P-46 (A) 取证＋P-85/95/102 观感截图）授权已给。⛔ push（未推 7）。

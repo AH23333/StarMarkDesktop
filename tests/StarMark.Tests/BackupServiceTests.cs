@@ -777,4 +777,56 @@ public sealed class BackupServiceTests : IDisposable
         Assert.True(rr2.Success);
         Assert.Equal(1, rr2.LinksRestored);
     }
+
+    /// <summary>
+    /// P-9 证人测④（(B) 根因修，片199）：跨归一规则的老备份——用户状态带的是**旧规则下导出的键**
+    /// （RW www 折叠前的 `https://www.github.com/owner/repo`），条目导入侧 UpsertOne 会把它归一成
+    /// 新键 `https://github.com/owner/repo` 落库；用户状态查找若按原始键裸匹配（修前）即 0 命中、
+    /// hidden/置顶/笔记静默丢。修后还原侧对 @sid 跑同一个 <see cref="UriNormalizer.Normalize"/> 再匹配——
+    /// 老键照常命中新键行。
+    /// </summary>
+    [Fact]
+    public async Task ImportUserState_OldBackupKey_HitsAcrossNormalizeRuleChange()
+    {
+        var ctx = Seed(_db1);
+        // 条目按当前规则导入：www 形老键被 UpsertOne 归一成主域形落库（写侧归一在位＝本测前提自证）
+        var item = await UpsertAsync(ctx.Items, "github", "https://www.github.com/owner/repo", "跨规则条目");
+        Assert.Equal("https://github.com/owner/repo", item.SourceId);
+
+        var repo = new BackupRepository(ctx.Factory);
+        // 老备份导出的用户状态仍是老键（导出侧只 IFNULL、不归一）
+        var states = new[] { new UserStateRecord("github", "https://www.github.com/owner/repo", true, false, "跨规则笔记") };
+        Assert.Equal(1, await repo.ImportUserStateAsync(states, CancellationToken.None));   // 修前这里 0 命中
+
+        var rows = await ctx.Items.GetAllAsync(new BrowseFilter { IncludeHidden = true, Limit = 1000 }, CancellationToken.None);
+        var row = Assert.Single(rows);
+        Assert.True(row.Hidden);
+        Assert.False(row.Pinned);
+        Assert.Equal("跨规则笔记", row.Notes);
+    }
+
+    /// <summary>
+    /// P-9 证人测⑤（(B) 根因修，片199）：同款漂移键走条目-标签关联——INSERT…SELECT 与 probe
+    /// 必须用<b>同一颗</b>归一键：INSERT 侧归一、probe 侧仍裸键的话，老备份的关联会被误判成
+    /// 「没对上」而少报；两侧都归一才与条目写入口径一致。
+    /// </summary>
+    [Fact]
+    public async Task ImportItemTagLinks_OldBackupKey_HitsAcrossNormalizeRuleChange()
+    {
+        var ctx = Seed(_db1);
+        var item = await UpsertAsync(ctx.Items, "github", "https://www.github.com/owner/repo", "跨规则条目");
+        Assert.Equal("https://github.com/owner/repo", item.SourceId);
+
+        var repo = new BackupRepository(ctx.Factory);
+        await repo.ImportTagsAsync(new[] { new TagRecord("重要", null, null) }, CancellationToken.None);
+
+        var links = new[] { new ItemTagLink("github", "https://www.github.com/owner/repo", "重要") };
+        Assert.Equal(1, await repo.ImportItemTagLinksAsync(links, CancellationToken.None));   // 修前 0（条目对不上）
+
+        // 幂等重跑：probe 用同一颗归一键，「已在」不许被数成失配
+        Assert.Equal(1, await repo.ImportItemTagLinksAsync(links, CancellationToken.None));
+
+        var tags = await ctx.Items.GetTagsForItemAsync(item.Id, CancellationToken.None);
+        Assert.Equal("重要", Assert.Single(tags));
+    }
 }
