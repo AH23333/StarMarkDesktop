@@ -147,25 +147,30 @@ public sealed class DittoSource : IItemSource
 
     public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
         // 「立即同步」由 UI 线程一路 await 到这里，而下面读的是 Ditto 的 SQLite 文件（同步实现，
-        // 且可能被 Ditto 自身持写锁）——留在调用线程上就是一次点击冻一次。
+        // 且可能被 Ditto 自身持写锁）——留在调用线程上就是一次点击冻一次。令牌一并交给 <c>Task.Run</c>：
+        // <b>已取消的一轮从此⛔ 起</b>，⛔ 只把底下那颗同步读搬到池上、由调用方独自等。
         => Task.Run(() =>
         {
-            var clip = ReadAsync(r => r.ReadRecent(MaxSync), ct);
+            var clip = ReadAsync(r => r.ReadRecent(MaxSync, ct), ct);
             if (clip.Count == 0) return (IReadOnlyList<Item>)Array.Empty<Item>();
             return clip.Select(Map).ToList();
-        });
+        }, ct);
 
     public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct)
-    {
-        var matched = ReadAsync(r =>
-            string.IsNullOrWhiteSpace(query)
-                ? r.ReadRecent(Math.Max(1, filter.MaxResults))
-                : r.Search(query, Math.Max(1, filter.MaxResults)), ct);
-        return Task.FromResult<IReadOnlyList<Item>>(matched.Select(Map).ToList());
-    }
+        // 两颗公共出口一副规则（旧写法在这里是「Task 形・同步体」：它把同步读留在<b>调用线程</b>上，
+        // 今天没冻到 UI 只因为 <c>SearchService</c> 那侧替它包了 <c>Task.Run</c>——⛔ 让一颗公共形状
+        // 的成败挂在别人的调用点上）。令牌交到底层那颗 LIKE 扫描的循环边界上，掐中就停手。
+        => Task.Run(() =>
+        {
+            var matched = ReadAsync(r => string.IsNullOrWhiteSpace(query)
+                ? r.ReadRecent(Math.Max(1, filter.MaxResults), ct)
+                : r.Search(query, Math.Max(1, filter.MaxResults), ct), ct);
+            return (IReadOnlyList<Item>)matched.Select(Map).ToList();
+        }, ct);
 
     private List<DittoClip> ReadAsync(Func<DittoDatabaseReader, List<DittoClip>> query, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();   // 门口先回绝：下面那颗 IsAvailable 是"枚举进程＋读别的进程模块"的探测税
         if (!IsAvailable) return new List<DittoClip>();
         using var reader = new DittoDatabaseReader(_dbPath!);
         return reader.IsOpen ? query(reader) : new List<DittoClip>();

@@ -222,7 +222,16 @@ public sealed class LivingSourcePointerGateTests
     /// 点到名（正本 D:\StarMarkTmp\p164\diffcensus192.txt）：改前 27 颗・改后 26 颗・唯一差额＝对账表
     /// P-57 行那颗旧引指向空白段、整行改写后落进该落的段落＝本刀真修（本轮码零改动，两读数间唯一变量＝
     /// 对账表本身）。基线按那把尺交回的读数改小・⛔ 手打。</para>
-    private const int FallenPointerBaseline = 26;
+    /// <para><b>片194 再落两颗（26 → 24）・来历＝Ditto 取消守卫平移行号（#1020 第七次・⛔ 读成"这一族又修好了"）</b>：
+    /// 本批给 <c>DittoDatabaseReader.ReadRecent</c>／<c>Search</c> 各加两道循环守卫与一道"掐中上抛"、
+    /// 并给 <c>DittoSource</c> 两颗公共出口统一成 <c>Task.Run(…, ct)</c>（P-32 站点②）⇒ 那两档行号整体平移。
+    /// 差集由那把只读复称尺分两步点到名（正本 <c>D:\StarMarkTmp\p194\diffcensus194.txt</c>）：
+    /// 码两档落位（账本未动）现读 25 颗：① P-26 那串指向 <c>ReadRecent</c> 尾部兜错的旧号（<c>:91-95</c>）
+    /// 被平移<b>压进空行＝真落空</b>，本批按口径<b>删号留锚</b>（锚念"两颗查询各自尾部那道 <c>catch { result.Clear(); }</c>"）
+    /// ＝自造自收（净±0）；② 同一族里 <c>ParseDropFiles</c> 时代那两串旧区间（P-20 注记与对账表那格・<c>211-219</c>）
+    /// 被加行<b>反撞非空</b>＝第六副脸的同一形状，本批没把它算成修复，而是照 ① 同一口径把号删掉
+    /// （⛔ 让一颗压在无关正文上的号冒充活着）⇒ 净账少两颗。基线按闸门交回的那颗读数改小・⛔ 手打。</para>
+    private const int FallenPointerBaseline = 24;
 
     /// <summary>片88 第二颗棘轮（P-256 ④）：那颗 <see cref="Resolve"/> 对它交回空的「带目录前缀的简写」那一族。
     /// 换锚前现读 8 颗（正本 <c>bin/WI99/p843_r1/census843-读数.txt</c>）→ 本批逐颗换成正文锚之后这颗数。

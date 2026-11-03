@@ -50,8 +50,13 @@ public sealed class DittoDatabaseReader : IDisposable
 
     public bool IsOpen => _connection != null;
 
-    /// <summary>读取最近若干条非分组剪贴板记录（按复制时间倒序）。</summary>
-    public List<DittoClip> ReadRecent(int limit)
+    /// <summary>
+    /// 读取最近若干条非分组剪贴板记录（按复制时间倒序）。
+    /// <para><paramref name="ct"/> 掐在两颗循环的边界上（逐行取回、逐颗补附件），掐中<b>上抛</b>而⛔ 落进
+    /// 下面那颗"查询失败就交空表"的兜错——被取消的一次读若降级成空表，在调用方看来自洽，
+    /// 而 <c>SyncCoordinator</c> 会把它记成 <c>Success=true, PulledCount=0</c>（P-28 点名的正是这一族）。</para>
+    /// </summary>
+    public List<DittoClip> ReadRecent(int limit, CancellationToken ct = default)
     {
         var result = new List<DittoClip>();
         if (_connection == null) return result;
@@ -75,6 +80,7 @@ public sealed class DittoDatabaseReader : IDisposable
             {
                 while (reader.Read())
                 {
+                    ct.ThrowIfCancellationRequested();
                     var clip = new DittoClip
                     {
                         Id = reader.GetInt64(0),
@@ -87,9 +93,9 @@ public sealed class DittoDatabaseReader : IDisposable
                 }
             }
 
-            foreach (var clip in result)
-                FillData(clip);
+            foreach (var clip in result) { ct.ThrowIfCancellationRequested(); FillData(clip); }
         }
+        catch (OperationCanceledException) { throw; }
         catch
         {
             result.Clear();
@@ -97,8 +103,14 @@ public sealed class DittoDatabaseReader : IDisposable
         return result;
     }
 
-    /// <summary>在剪贴板文本/标题上做 LIKE 检索（不区分大小写）。</summary>
-    public List<DittoClip> Search(string query, int limit)
+    /// <summary>
+    /// 在剪贴板文本/标题上做 LIKE 检索（不区分大小写）。
+    /// <para>这一颗的<b>逐行取回就是 Ditto 库上的全表 <c>LIKE '%…%'</c> 扫描</b>（无索引可依），而实时搜索
+    /// 逐按键发一次、上一发会被取消（<c>SearchService</c> 交 <c>Task.Run(…, ct)</c> 并 <c>WaitAsync(ct)</c>）——
+    /// 令牌不接进这颗循环时，"取消"只解了调用方的等，那轮扫描仍会在池线程上跑到完：每次键入都留下一条
+    /// 在跑的整表扫描。同 <see cref="ReadRecent"/>：<b>掐中上抛</b>，⛔ 降级成空表。</para>
+    /// </summary>
+    public List<DittoClip> Search(string query, int limit, CancellationToken ct = default)
     {
         var result = new List<DittoClip>();
         if (_connection == null) return result;
@@ -120,6 +132,7 @@ public sealed class DittoDatabaseReader : IDisposable
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
+                ct.ThrowIfCancellationRequested();
                 result.Add(new DittoClip
                 {
                     Id = reader.GetInt64(0),
@@ -129,9 +142,9 @@ public sealed class DittoDatabaseReader : IDisposable
                 });
             }
 
-            foreach (var clip in result)
-                FillData(clip);
+            foreach (var clip in result) { ct.ThrowIfCancellationRequested(); FillData(clip); }
         }
+        catch (OperationCanceledException) { throw; }
         catch
         {
             result.Clear();
