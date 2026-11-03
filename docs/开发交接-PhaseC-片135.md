@@ -669,3 +669,13 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 途中坑：WinVerifyTrust 第三参＝WINTRUST_DATA（内含 union choice 指到 FILE_INFO）⛔ 直传 FILE_INFO——直传则错误码随内存布局漂移且照常返回（三探针同错・坑表 #1140）；正件夹具用内嵌 Authenticode 的（coreclr.dll），System32 系列多为 catalog 签名。
 - 读数：gate201 67/67・全量 6795/6795（testfull201.out・EXITCODE=0・16 m 36 s＝6783＋12）・census 21（census_post201.txt・零指针改动）・计数器 285/227/58 VERDICT OK（P-145 账本子节不进计数器）・docgates 26/26（docgates201.txt）。
 - 下一刀：真机批（P-145 真机配合：装／不装 Everything 各跑一遍＋P-112 截屏开关＋P-32 托盘点验＋P-46 (A) 取证＋P-85/95/102 观感截图）。⛔ push（未推 9）。
+
+## 八十三、片202 真机批收口：六题行齐翻（P-85/95/98/102/105/112）＋P-145 两腿三真缺陷交修批＋新登记 P-285～P-288（坑表 #1141～#1149）
+
+- 接手第一步照旧现读编号轴：报告到五百八十七、交接到八十二、坑表到 #1140；本批＝真机批收口（零码改・纯文档批・全量免跑承片201 6795/6795）。
+- 观感四颗（P-95 纯图标／P-85 抗锯齿／P-102 缩放把手／P-98 Snipaste 手感）用户裁决「符合预期」齐翻 ✅；P-105「工具条不会缩小・当前效果就可以」⇒ (A) 现状收口（⚠ 正文 fit 那句与真机现读的出入照实记档・不充当重开）；P-112「不收」转正式口径。
+- P-145 两腿读数全对（真 DLL 验签=0・CN=voidtools PTY LTD・zip 非 PE 正常・装好那腿端到端查询通・用户机三件哈希与备份一致）＋三真缺陷交修批：①验签握锁 0x80092003 假阴性（先松手再验）②同锁 File.Delete 被吞＝「已删」说谎（删除核销）③EnableAsync 丢 SDK 臂结果（接回去向）；题行仍不翻——(A) 运维口径归用户。
+- 新登记 P-285～P-288：Boards 顶栏遮挡（建议收菜单）・BoardsEnabled 关不关画板窗（读码坐实）・语言不跟随画板（订阅链通・断点待定位）・Snipaste 口径钉死＋显式「选择」工具＋工具条视觉精修。
+- 坑表 #1141～#1149 九枚落踩坑记录（验签握锁假阴性＋同锁删除说谎／EnableAsync 丢弃／Win11 XAML 任务栏 RawViewWalker＋溢出浮层／auto-hide 唤栏 ~0.9 s／主窗隐藏 rect=∞／WinRT 前台静默／#32768 UIA 0 项／PS int 先算后拼／无 BOM CJK 码点 -join）。
+- 读数：docgates202 26/26・census 21（±0）・计数器 289/233/56 VERDICT OK（带 ✅ 227→233・新立 4）。⛔ push（未推 11）。
+- 下一刀：三缺陷修批（P-145 链路三处）→ 画板批（P-285～P-288）；P-145 题行翻不翻归用户拍板。
