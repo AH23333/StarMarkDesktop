@@ -627,3 +627,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - ⛔ 把 IsLocalOnlyPath 的 URI 分支当用户路径判据：真实链路里它收到的是 TryExistingPath 还原后的路径（两斜杠 file://C:/x 走 raw 格＝盘符形态照旧放行）；URI 分支拒 host「C」是纵深防御按决策表 host 规则的字面执行（坑表 #1138）。
 - 🔶 同面未动：打开/预览/拖出/失联扫描四处仍可触 UNC 读（决策正本只圈「打开位置」）——要收先回决策方正本另立条目，⛔ 接手顺手收。
 - 下一刀：片197＝qoder「片195（P-64）」码五档移植＋报文 §583/交接七十八（期全量 6776）。
+
+## 七十八、片197 P-64：「这一行没写进去」得当面说出来——抛异常那一支接上 0 行那一支的同一颗出口
+
+- 接手第一步照旧现读编号轴：报告到五百八十三、坑表到 #1138；本批＝qoder「片195（P-64）」移植到合并线＝片197（四刀最后一刀），其快照 docs 止于 P-48 批 ⇒ 本篇由我新写；快照六档 sha256 逐一过 manifest_final.txt。
+- 这一刀动了五颗码档＋一颗新测档：StateWriteNotice（+WriteFailed・与 RowGone 分立）、UiStrings（+state.writeFailed 三语两槽）、HiddenPageViewModel／ItemCardActions（四颗「单行状态写」宿主的 catch 接 ShowError——先当面说、再记日志）、新档 HiddenRestoreNoticeGateTests（5 颗・挂 LocaleGlobal 串行集）；门测 5/5・全量 6776/6776（gate197.txt・testfull197.out 在 p194）。
+- ⚠ 修法没落「常驻状态位」那形：四颗宿主全接 0 行那一支早有的右下角提示条（同一颗 ShowError）——⛔ 同一颗失败在两处宿主各一副样式；账本 P-64 题行转 ✅（片197 落），「属 UI 装配内改动、不可机检」那半句已过期（5 颗门测就是机检）。
+- ⚠ ItemCardActions 快照基线早于片196：只取其三颗 catch 增量，L4 三闸（IsLocalOnlyPath→拒引号→磁盘存在）与 OpenLocation 内联注①②③原样保留——读这档时 ⛔ 拿快照对整档 diff；HiddenPageViewModel／UiStrings 与快照字节相同（3482／512405），SmokeTest 免移植。
+- 下一刀：四刀移植线到此收口——无排队刀；P-4/P-58/P-9(B)/C 类挂账/P-112 归用户定夺。⛔ push（未推 5）。

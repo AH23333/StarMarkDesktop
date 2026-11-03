@@ -394,6 +394,10 @@ public static class ItemCardActions
         }
         catch (Exception ex)
         {
+            // 抛异常＝旗标那列没动 ⇒ 翻回原样交给界面自己（vm 未被写过，UI 照旧），并把原因当面说出来。
+            // 动作词按<b>当前</b>状态反推：现在仍写着"已置顶"＝他刚才点的是「取消置顶」。
+            var word = LocMessage.Of(vm.IsPinned ? "card.pin.unpin" : "card.pin.pin");
+            App.MainWindow?.ShowError(StateWriteNotice.Title(word), StateWriteNotice.WriteFailed(word, ex.Message));
             StarLog.Error($"置顶切换失败 (id={vm.Id})", ex);
         }
     }
@@ -439,6 +443,10 @@ public static class ItemCardActions
         }
         catch (Exception ex)
         {
+            // 笔记写不进去＝笔记框照旧（上面那颗 ApplyNotes 没跑到），但这句话⛔ 只进日志：
+            // 用户刚点过"保存"，屏幕得告诉他这一笔没落上（同 0 行那一支一颗出口、同一族措辞）。
+            var word = LocMessage.Of("card.note.save");
+            App.MainWindow?.ShowError(StateWriteNotice.Title(word), StateWriteNotice.WriteFailed(word, ex.Message));
             StarLog.Error($"编辑笔记失败 (id={vm.Id})", ex);
         }
     }
@@ -505,6 +513,10 @@ public static class ItemCardActions
         }
         catch (Exception ex)
         {
+            // 抛异常＝库里那一行照旧 ⇒ 回传"未改变"，也把这句当面说出来（与上面那颗 0 行同一颗出口、同一族措辞）。
+            // 动作词按<b>当前</b>状态反推：旗标现在仍写着"已隐藏"＝他刚才点的是「显示」，反之亦然。
+            var word = LocMessage.Of(vm.IsHidden ? "card.hide.show" : "card.hide.hide");
+            App.MainWindow?.ShowError(StateWriteNotice.Title(word), StateWriteNotice.WriteFailed(word, ex.Message));
             StarLog.Error($"切换隐藏状态失败 (id={vm.Id})", ex);
             return vm.IsHidden;
         }

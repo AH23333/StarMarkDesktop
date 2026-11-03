@@ -1090,6 +1090,7 @@ public static class UiStrings
         new Entry("dialog.close", "关闭", "Close", "閉じる"),
         new Entry("state.title", "{0}没生效", "{0} didn't take effect", "{0}は反映されませんでした"),
         new Entry("state.rowGone", "{0}没落上去：这条已经不在这台机器的库里了（可能在别处被删掉）。刷新这一页就能看到它的现状。", "{0} didn't stick: this row is no longer in this machine's library (it may have been deleted elsewhere). Refresh this page to see its current state.", "{0}は反映されませんでした：この行はこの端末のライブラリにありません（別の場所で削除された可能性があります）。ページを更新すると現状がわかります。"),
+        new Entry("state.writeFailed", "{0}没落上去：这台机器刚才写不进去（{1}）。这一条还留在原处，稍后再点一次就行。", "{0} didn't stick: this machine couldn't write just now ({1}). The row is unchanged — try again in a moment.", "{0}は反映されませんでした：ただ今この端末に書き込めませんでした（{1}）。この行はそのままです。少ししてもう一度お試しください。"),
         new Entry("card.menu.openLoc", "打开所在位置", "Open location", "場所を開く"),
         new Entry("card.menu.copyImage", "复制图片", "Copy image", "画像をコピー"),
         new Entry("card.menu.toBoard", "放到画板上", "Send to a board", "キャンバスに載せる"),

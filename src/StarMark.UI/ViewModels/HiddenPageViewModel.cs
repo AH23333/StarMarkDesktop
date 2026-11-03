@@ -70,8 +70,11 @@ public partial class HiddenPageViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            // 该页没有状态行可写原因（EmptyHint 只在空列表时可见），所以这里只保证"不骗人"；
-            // 可见原因属该页 UI 增强，已单独登记待决策。
+            // 抛异常＝库里那一行没动 ⇒ 行⛔ 从列表里摘（上面那句"落库成功才摘"是同一条判据的另一半）。
+            // 可见原因走与 0 行那一支<b>同一颗出口</b>（右下角提示条）：P-64 要的是"原因得当面说出来"，
+            // ⛔ 再给这一页长一行自定义状态位——那会变成同一颗失败在同一个应用里有两副面孔。
+            var word = LocMessage.Of("card.restore.word");
+            App.MainWindow?.ShowError(StateWriteNotice.Title(word), StateWriteNotice.WriteFailed(word, ex.Message));
             StarLog.Error($"还原隐藏条目失败 (id={item.Id})", ex);
         }
     }

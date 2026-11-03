@@ -30,4 +30,17 @@ public static class StateWriteNotice
     /// </summary>
     public static LocMessage RowGone(LocMessage action) =>
         LocMessage.Of("state.rowGone", action);
+
+    /// <summary>
+    /// 正文：<b>写这一行时抛了异常</b>（SQLite 忙／盘上出错）——与 <see cref="RowGone"/> 是<b>两种下落</b>：
+    /// 那颗是"库里已经没有这一行"，这一颗是"这一行还在原处，只是这一次没写进去"。
+    /// <para>为什么值得单独一句、而⛔ 复用 <see cref="RowGone"/>：那句让用户"刷新这一页"（行确实没了），
+    /// 这句要说的是"条目未变动，稍后再点一次"——把两者并成一句，等于在一种下落里给用户错的下一步。
+    /// 同一条口径也解释了为什么这一族⛔ 在页面上再长出自定义样式：<c>HiddenPage</c> 与
+    /// <c>ItemCardActions</c> 两处宿主都走同一颗 <c>ShowError</c>（P-64 要的就是"原因得当面说出来"，
+    /// 而<b>不是</b>"再多一行状态位"——那两处今天已经有右下角提示条这一颗出口）。</para>
+    /// </summary>
+    /// <param name="reason">异常交回的<b>语言中性事实</b>（<c>ex.Message</c>），不是要翻译的句子。</param>
+    public static LocMessage WriteFailed(LocMessage action, string reason) =>
+        LocMessage.Of("state.writeFailed", action, reason);
 }
