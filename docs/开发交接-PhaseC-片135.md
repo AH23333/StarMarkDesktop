@@ -606,3 +606,17 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 〔并轨补记〕本批＝qoder「片193（Ditto）」移植到合并线＝片194；其坑表 #1128-#1132 已按其正文落进踩坑记录（批次标 片194・2026-11-02）。其「棘轮 27→26・〔片193 追加〕・计数器 285/222/63・文档尺 35/35」等读数属其时间线；合并线对应＝26→24・〔片194 追加〕・285/223/62・docgates 26/26（那步 27→26＝我片192 对账刷新轮先落过）。合并线读数：Ditto 一族 36/36・census 24・全量 6763/6763（24.8 min・x64）・⛔ push（未推 1）。
 - 下一刀：片195＝qoder「片194（P-48）」移植＝真机读数定裁的纯文档批——每键重绘只有一发采样宽・列表只 realize 12 张，读数三件（最坏一次 UIA 读 16~27 ms・realize 12 张・帧差 t=333 那一发 24/120）＋翻案阈值三格写进账本 P-48，⛔ 只写「看着不卡」（坑表 #1133-#1137）；不碰码、免全量。
 
+## 七十六、片195 P-48 真机读数定裁：每键重绘只有一发采样宽・列表只 realize 12 张（＋坑表 #1133～#1137）
+
+- 接手第一步照旧现读编号轴：报告到五百八十、交接到七十五、坑表到 #1132；本批＝qoder「片194（P-48）」移植到合并线＝<b>片195</b>（纯文档批・码零改动・免全量），正文只改刀号・本行换我方轴，仪器目录与读数正本照其时间线保名（`p194`＝其号・`readings194`＝其正本・`seed194.py` 其造・⛔ 改名）。
+- 这一刀的产出是<b>“不动”，但要把“不动”量出来</b>：读数三件（最坏一次 UIA 读 16~27 ms・realize 12 张・帧差 t=333 那一发 24/120）＋翻案阈值三格写进账本 P-48，⛔ 只写“看着不卡”。
+- 借这一批把“屏幕计数尺⛔ 靠猜”立住：<code>ItemCard.xaml</code> 没有 <code>AutomationProperties</code> ⇒ 先跑 ControlType 直方图认形状（Button 101・Text 77・Pane 6…），再决定按什么数卡；帧差尺另配一颗<b>有卡／无卡</b>正件对照（19/120），否则 0 读数分不清“没动”与“看不见”。
+- **坑表 #1133**：帧取样要盖住<b>被测量的窗口</b>。第一版只在 +150／+230／+930 ms 取样，报 0/400＝看着像“没有闪烁”——真相是合并窗 150 ms ＋搜索＋重绑落在 T0+~330 ms，三发全在窗外。改成一发 60 ms 的时间序列才拿到那一发。<b>How to apply:</b> 时间类判据先确认取样窗覆盖被测量的整段，再用“结果集真会变”的正件对照验尺不聋。
+- **坑表 #1134**：<code>AutomationElement.Get(i)</code> <b>是 1-based</b>。我用 0-based 循环 ⇒ 交出 188 行<b>全空</b>读数（CT／NAME／RID 皆空）＝仪器聋，⛔ 是被测者空。改 <code>foreach ($e in $all)</code> 直接迭代。<b>How to apply:</b> 任何“逐颗读 UIA”的新尺，第一跑要先看到已知存在的元素（如 <code>SearchBox</code>）非空。
+- **坑表 #1135**：从 PowerShell 5.1 订阅 UIA <code>StructureChanged</code> 收不到任何事件（计数器恒 0），而 <code>RemoveAutomationEventHandler</code> 也⛔ 是 <code>AutomationElement</code> 的方法 ⇒ 这条路<b>现场摆不出</b>。脚本自己报了 <code>INSTRUMENT_DEAF_ABORT_READINGS_INVALID</code> 并作废全部读数。<b>How to apply:</b> 换测量学（帧差＋忙碌下限），并把“臂摆不出”显式写成一行读数，⛔ 留一句“以后再说”。
+- **坑表 #1136**：这套 WinUI3 栈里 <code>$e.Current.RuntimeId</code> 读回 <b>null</b>（<code>.GetType()</code> 抛 InvokeMethodOnNull）⇒ “同一颗卡换了容器没有”⛔ 能用身份量。要问容器生命周期，只能改问可见扰动窗口或 UI 线程忙碌下限。
+- **坑表 #1137**：<code>.ps1</code> 里写 CJK 查询（无 BOM）被 PS 5.1 按 ANSI 解 ⇒ 送到应用的是坏码 ⇒ 搜索<b>合法地 0 命中</b>、realized=0，看着像“应用搜不到”。同一族第三犯（#1108／#1121）。<b>How to apply:</b> 屏幕探针一律 ASCII-only，要中文语料就写进 seed 库里那条。
+
+- 〔并轨补记〕本批＝qoder「片194（P-48）」移植到合并线＝片195（纯文档批）；其坑表 #1133-#1137 已按其正文落进踩坑记录（批次标 片195・2026-11-03）。合并线读数：census 24（±0）・计数器 285/223/62 VERDICT OK・docgates 26/26・全量免跑（承片194 6763/6763・码零改动）・⛔ push（未推 3）。
+- 下一刀：片196＝L4《file:// UNC 凭据泄漏》实现批（决策方 2026-11-03 定案＝cb0533e：LaunchGuard 增本地性判定与 IsSafeShellSelectTarget 双闸串联・门测八颗・⛔ 占 P 号・计数器 ⛔ 动）；其后片197＝qoder「片195（P-64）」码五档移植。
+
