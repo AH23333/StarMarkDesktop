@@ -151,9 +151,11 @@ public static class ItemCardActions
             if (!vm.HasOpenLocation) return;
             // 还原规则（两类互补的 file:// 生产者）归 LocalFileIdentity 一颗，别再在这里只写一半：
             // 只试原始形态时，剪贴板图片行那类 percent 编码的 Uri 会还原成带 %XX 的假路径 ⇒ 磁盘上不存在 ⇒ 静默不定位。
-            // 本宿主的判定留在本地：① 不含引号（这条启动点不经 LaunchGuard.IsAllowedScheme，路径直拼进 explorer.exe
+            // 本宿主的判定留在本地：① 只在本地命名空间（UNC/设备路径在解析那一刻就让 Windows 发起 SMB 并出示
+            // NTLM 凭据——被污染备份/快照的 uri 点一下「打开位置」即出网，决策 L4 拒、映射盘符照旧放）；
+            // ② 不含引号（这条启动点不经 LaunchGuard.IsAllowedScheme，路径直拼进 explorer.exe
             // 命令行、被子进程重切参数；被污染备份/快照的 uri 可携双引号越界注入额外参数 → 任意本地程序被执行）；
-            // ② 磁盘上真有这个东西（合法「打开所在位置」恒满足；对已删除/伪造路径 explorer 本就无意义）。
+            // ③ 磁盘上真有这个东西（合法「打开所在位置」恒满足；对已删除/伪造路径 explorer 本就无意义）。
             if (!LocalFileIdentity.TryExistingPath(vm.Uri, IsShellSelectTarget, out var localPath)) return;
             System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{localPath}\"");
         }
@@ -587,10 +589,16 @@ public static class ItemCardActions
     }
 
     /// <summary>
-    /// 「打开所在位置」的宿主判定：<b>两个候选都要过这两道</b>——
-    /// ① <see cref="LaunchGuard.IsSafeShellSelectTarget"/>（这条启动点不经协议白名单，路径直拼进
+    /// 「打开所在位置」的宿主判定：<b>两个候选都要过这三道</b>——
+    /// ① <see cref="LaunchGuard.IsLocalOnlyPath"/>（UNC/设备命名空间在解析那一刻就让 Windows 发起
+    ///    SMB 协商并向对方主机出示 NTLM 凭据——被污染备份/快照的 uri 点一下「打开位置」即出网，
+    ///    决策 L4：拒网络命名空间、留本地盘符，含用户显式映射的 <c>Z:\</c>）；
+    /// ② <see cref="LaunchGuard.IsSafeShellSelectTarget"/>（这条启动点不经协议白名单，路径直拼进
     ///    <c>explorer.exe</c> 命令行、被子进程重切参数 → 含引号者可越界注入额外参数）；
-    /// ② 磁盘上真有这个东西（对已删除／伪造路径，explorer 本就无意义）——"在不在"问 <see cref="LauncherEx.ExistsOnDisk"/> 那颗唯一出处。
+    /// ③ 磁盘上真有这个东西（对已删除／伪造路径，explorer 本就无意义）——"在不在"问 <see cref="LauncherEx.ExistsOnDisk"/> 那颗唯一出处。
     /// </summary>
-    private static bool IsShellSelectTarget(string path) => LaunchGuard.IsSafeShellSelectTarget(path) && LauncherEx.ExistsOnDisk(path);
+    private static bool IsShellSelectTarget(string path)
+        => LaunchGuard.IsLocalOnlyPath(path)
+        && LaunchGuard.IsSafeShellSelectTarget(path)
+        && LauncherEx.ExistsOnDisk(path);
 }

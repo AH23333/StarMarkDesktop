@@ -620,3 +620,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 〔并轨补记〕本批＝qoder「片194（P-48）」移植到合并线＝片195（纯文档批）；其坑表 #1133-#1137 已按其正文落进踩坑记录（批次标 片195・2026-11-03）。合并线读数：census 24（±0）・计数器 285/223/62 VERDICT OK・docgates 26/26・全量免跑（承片194 6763/6763・码零改动）・⛔ push（未推 3）。
 - 下一刀：片196＝L4《file:// UNC 凭据泄漏》实现批（决策方 2026-11-03 定案＝cb0533e：LaunchGuard 增本地性判定与 IsSafeShellSelectTarget 双闸串联・门测八颗・⛔ 占 P 号・计数器 ⛔ 动）；其后片197＝qoder「片195（P-64）」码五档移植。
 
+## 七十七、片196 决策 L4：UNC 凭据泄漏落地
+
+- 接手第一步照旧现读编号轴：账本档尾 📌 决策笔（L4・cb0533e）＋决策正本 docs/决策-L4-UNC凭据泄漏.md——门测八颗表就是验收表，正本「状态」已改「已实现（片196）」。
+- 这一刀动了三颗码档：LaunchGuard.cs（IsLocalOnlyPath＋档头销账）、ItemCardActions.cs（IsShellSelectTarget 三闸串联）、LaunchGuardTests.cs（+8）；全量 6771/6771（gate196.txt・testfull196.out 在 p194）。
+- ⛔ 把 IsLocalOnlyPath 的 URI 分支当用户路径判据：真实链路里它收到的是 TryExistingPath 还原后的路径（两斜杠 file://C:/x 走 raw 格＝盘符形态照旧放行）；URI 分支拒 host「C」是纵深防御按决策表 host 规则的字面执行（坑表 #1138）。
+- 🔶 同面未动：打开/预览/拖出/失联扫描四处仍可触 UNC 读（决策正本只圈「打开位置」）——要收先回决策方正本另立条目，⛔ 接手顺手收。
+- 下一刀：片197＝qoder「片195（P-64）」码五档移植＋报文 §583/交接七十八（期全量 6776）。

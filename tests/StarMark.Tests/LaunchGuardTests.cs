@@ -66,4 +66,23 @@ public sealed class LaunchGuardTests
 
     [Fact]
     public void ShellSelectTargetNull_ReturnsFalse() => Assert.False(LaunchGuard.IsSafeShellSelectTarget(null));
+
+    // 决策 L4（docs/决策-L4-UNC凭据泄漏.md）：UNC/设备命名空间在路径被解析的那一刻就让 Windows 主动发起
+    // SMB 协商并向对方主机出示 NTLM 凭据——被污染备份/快照里的 uri 点一下「打开位置」即出网，不需要执行任何东西。
+    // 口径＝默认拒绝、显式路径放行：误拒代价＝改用映射盘（一步）；误放代价＝凭据泄漏（不可撤销）。
+    [Theory]
+    [InlineData(@"\\server\share\doc.txt")]                 // 裸 UNC
+    [InlineData(@"//server/share/doc.txt")]                 // 正斜杠 UNC
+    [InlineData("file://evil-host/share/payload.exe")]      // file://host（host 非空且非 localhost）
+    [InlineData(@"\\.\PhysicalDrive0")]                     // \\.\ 设备命名空间
+    [InlineData(@"\\?\UNC\server\share\doc.txt")]           // \\?\UNC\（UNC 的显式长路径形态）
+    public void NetworkAndDeviceNamespaces_ReturnFalse(string path)
+        => Assert.False(LaunchGuard.IsLocalOnlyPath(path));
+
+    [Theory]
+    [InlineData(@"C:\Users\me\Docs\report.pdf")]            // 盘符路径
+    [InlineData(@"\\?\C:\very long\path\报告.txt")]         // \\?\C:\ 本地长路径（\\?\ 仅后接盘符时放）
+    [InlineData(@"Z:\mapped\share\doc.txt")]                // 用户显式映射的盘符：凭据走既有会话，照旧放行
+    public void DriveLetterAndMappedDrivePaths_ReturnTrue(string path)
+        => Assert.True(LaunchGuard.IsLocalOnlyPath(path));
 }
