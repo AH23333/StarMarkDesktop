@@ -660,3 +660,12 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 测面：TriState 10 Facts（含行为④⑤与灰卡形状③两颗新钉）、ReasonWord 15 键、CheckpointOrder／StaleFileRow 锚随签改、测桩/调用 15 处信封化（LazyClient 假源补 <code>Assert.False(fetch.Truncated)</code>）。
 - 读数：gate200 325/325・gate200b 57/57・全量 6783/6783（testfull200.out・EXITCODE=0）・census 21（对账刷新轮 #1020 第八次：四串换号・三串自然愈合・p164/diffcensus200.txt・闸基线 24→21）・计数器 285/227/58（P-58 翻 ✅）・docgates 26/26（docgates200.txt）。
 - 下一刀：片201＝P-145 (A) 下载验签钉哈希（安装器 Everything-1.4.1.1028.x64-Setup.exe・便携包 1024 双钉 SHA-256・SDK 滚动走 WinVerifyTrust＋Subject 含 voidtools）；其后真机批（P-112＋P-32 托盘点验＋P-46 (A) 取证＋P-85/95/102 观感截图）。⛔ push（未推 8）。
+
+## 八十二、片201 P-145 (A)：Everything 下载点验——两包钉 SHA-256＋SDK 验 voidtools 签名，三臂 fail 一律删净降级
+
+- 接手第一步照旧现读编号轴：报告到五百八十七、坑表到 #1140；本批＝P-145 (A) 下载点验（P-29 纵深缺口里「未校验原生 DLL 就地加载」那半），P-145 题行未翻——重开条件里真机配合（装／不装 Everything 各跑一遍）那半留真机批。
+- 生产面：新档 <code>EverythingDownloadTrust</code>——<code>InstallerSha256</code>（874e87dc…8149）／<code>PortableZipSha256</code>（4be08517…e8f5）双钉常量（2026-11-03 官网实测・升级版本号时随 URL 一起换钉）；<code>VerifySha256</code>（大小写不敏感・兜安装器臂非原子直写截断）；<code>IsAuthenticodeTrusted</code>（WinVerifyTrust・UI_NONE＋REVOKE_NONE・VERIFY 后 CLOSE 收状态句柄）；<code>IsVoidtoolsSigned</code>（链验过＋Subject 含 voidtools）；internal <code>TryGetSignerSubject</code>（CryptographicException→null）。<code>EverythingQueryQueue</code> 三臂：安装器臂哈希不过＝删包＋false（验在 Process.Start 前）；SDK 臂验签不过＝删 DLL 与 zip（留缓存＝下次 File.Exists 跳过验签・必须删净）＋false；便携包臂缓存同验・不过＝删包＋null。三臂 fail 全走「删净＋日志＋降级」。
+- 测面：<code>EverythingDownloadTrustTests</code> 十二格（行为六＋形状六；正件＝coreclr.dll 内嵌签——notepad 是 catalog 签名文件模式不认；形状钉：双钉 64-hex・哈希/URL 全 src 单出处・三验点在位・WinVerifyTrust 声明恰一处）。
+- 途中坑：WinVerifyTrust 第三参＝WINTRUST_DATA（内含 union choice 指到 FILE_INFO）⛔ 直传 FILE_INFO——直传则错误码随内存布局漂移且照常返回（三探针同错・坑表 #1140）；正件夹具用内嵌 Authenticode 的（coreclr.dll），System32 系列多为 catalog 签名。
+- 读数：gate201 67/67・全量 6795/6795（testfull201.out・EXITCODE=0・16 m 36 s＝6783＋12）・census 21（census_post201.txt・零指针改动）・计数器 285/227/58 VERDICT OK（P-145 账本子节不进计数器）・docgates 26/26（docgates201.txt）。
+- 下一刀：真机批（P-145 真机配合：装／不装 Everything 各跑一遍＋P-112 截屏开关＋P-32 托盘点验＋P-46 (A) 取证＋P-85/95/102 观感截图）。⛔ push（未推 9）。

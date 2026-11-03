@@ -216,6 +216,16 @@ public sealed class EverythingSource : IItemSource
             using var dst = File.Create(sdkPath);
             src.CopyTo(dst);
 
+            // P-145 (A)：SDK zip 是滚动的，钉不住字节——验解出 DLL 的 Authenticode 且签名者是 voidtools
+            // （内容会滚、签名者不会滚）。不过＝删净退出：可疑 DLL 留在缓存目录＝下次 File.Exists 直接跳过验签。
+            if (!EverythingDownloadTrust.IsVoidtoolsSigned(sdkPath))
+            {
+                try { File.Delete(sdkPath); } catch { }
+                try { if (File.Exists(zip)) File.Delete(zip); } catch { }
+                StarLog.Error("Everything SDK 解出的 Everything64.dll 未过 voidtools 签名验签（已删 DLL 与 zip，本轮降级为无本地文件实时搜索）。");
+                return false;
+            }
+
             StarLog.Info("Everything SDK 下载完成。");
             // 上面 :154 的首次尝试已把 _sdkLoadError 置位；不清标记，紧随其后的 EnsureSdkLoaded 会短路返回 false，
             // 刚下载好的 DLL 在本进程永不被加载（须重启）。清后再试。
@@ -271,6 +281,15 @@ public sealed class EverythingSource : IItemSource
                 using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(5) };
                 var bytes = await http.GetByteArrayAsync(InstallerUrl);
                 await File.WriteAllBytesAsync(installer, bytes);
+            }
+
+            // P-145 (A)：下载点验——哈希不过＝删包走人。这臂同时兜住上面那笔非原子直写的截断包
+            // （半截文件 ⇒ 哈希必不匹配 ⇒ 删 ⇒ 下次重下），绝不让「看起来是安装器」的文件进 Process.Start。
+            if (!EverythingDownloadTrust.VerifySha256(installer, EverythingDownloadTrust.InstallerSha256))
+            {
+                try { if (File.Exists(installer)) File.Delete(installer); } catch { }
+                StarLog.Error("Everything 安装包哈希不匹配（下载点验未过，已删包，本轮降级为无本地文件实时搜索）。");
+                return false;
             }
 
             var psi = new System.Diagnostics.ProcessStartInfo
@@ -487,6 +506,14 @@ public sealed class EverythingSource : IItemSource
             {
                 using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(5) };
                 await DownloadAtomicAsync(http, PortableZipUrl, zip, ct);
+            }
+            // P-145 (A)：下载点验——哈希不过＝删包走人（缓存里那颗同样要过：原子写防得住半截，
+            // 防不住「上一次就被投毒」）。URL 带版本号 ⇒ 内容钉死成哈希是稳的。
+            if (!EverythingDownloadTrust.VerifySha256(zip, EverythingDownloadTrust.PortableZipSha256))
+            {
+                try { File.Delete(zip); } catch { }
+                StarLog.Error("Everything 便携包哈希不匹配（下载点验未过，已删包，本轮降级为无本地文件实时搜索）。");
+                return null;
             }
             using (var archive = OpenCachedZip(zip))
             {
