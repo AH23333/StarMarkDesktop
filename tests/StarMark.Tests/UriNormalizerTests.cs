@@ -165,6 +165,29 @@ public sealed class UriNormalizerTests
         foreach (var k in keys) Assert.Equal(k, UriNormalizer.Normalize(k));   // 幂等
     }
 
+    /// <summary>
+    /// 片198（P-4 定案）：用户裁决取 (B)「维持现状——参数按原序保留，顺序变体不归一为同串」
+    /// （原话「p4：B」，2026-11-03）。这条测是**定案的证人**：P-4 挂账期那句
+    /// 「无测试锁定保序」自此收口——谁把 (B) 翻掉（改成按 key 排序、或重排存活参数），
+    /// 下面三组断言当场红。翻案须连同账本 P-4 的定案 bullet 一起翻。
+    /// </summary>
+    [Fact]
+    public void Normalize_PreservesQueryParamOrder()
+    {
+        // 保序重建：存活参数按原顺序拼回，不排序。
+        Assert.Equal("https://example.com/p?a=1&b=2", UriNormalizer.Normalize("https://example.com/p?a=1&b=2"));
+        Assert.Equal("https://example.com/p?b=2&a=1", UriNormalizer.Normalize("https://example.com/p?b=2&a=1"));
+
+        // (B) 的代价被明示接受：仅参数顺序不同的两条**不**归一为同一键（P-4 裁决即此）。
+        Assert.NotEqual(
+            UriNormalizer.Normalize("https://example.com/p?a=1&b=2"),
+            UriNormalizer.Normalize("https://example.com/p?b=2&a=1"));
+
+        // 剥追踪参数时存活者的相对顺序也保持原序（不因剥除而重排）。
+        Assert.Equal("https://example.com/p?b=2&a=1",
+            UriNormalizer.Normalize("https://example.com/p?b=2&utm_source=x&a=1"));
+    }
+
     [Theory]
     [InlineData("http://www.github.com/", "https://github.com/")]
     [InlineData("https://github.com", "https://github.com/")]

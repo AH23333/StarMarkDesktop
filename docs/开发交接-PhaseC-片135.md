@@ -635,3 +635,12 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - ⚠ 修法没落「常驻状态位」那形：四颗宿主全接 0 行那一支早有的右下角提示条（同一颗 ShowError）——⛔ 同一颗失败在两处宿主各一副样式；账本 P-64 题行转 ✅（片197 落），「属 UI 装配内改动、不可机检」那半句已过期（5 颗门测就是机检）。
 - ⚠ ItemCardActions 快照基线早于片196：只取其三颗 catch 增量，L4 三闸（IsLocalOnlyPath→拒引号→磁盘存在）与 OpenLocation 内联注①②③原样保留——读这档时 ⛔ 拿快照对整档 diff；HiddenPageViewModel／UiStrings 与快照字节相同（3482／512405），SmokeTest 免移植。
 - 下一刀：四刀移植线到此收口——无排队刀；P-4/P-58/P-9(B)/C 类挂账/P-112 归用户定夺。⛔ push（未推 5）。
+
+## 七十九、片198 P-4 定案 (B)＋P-24 确认 (A)：两颗题行齐翻 ✅（用户裁决批）
+
+- 接手第一步照旧现读编号轴：报告到五百八十四、坑表到 #1138（#1139 已排队随片199 落）；本批＝用户裁决批（原话「p4：B，其他均允许，你现在就可以真机测试」·2026-11-03）。
+- P-4＝(B) 维持现状：参数原序保留即最终口径，同一资源仅参数顺序不同的两条被接受为两行；证人测 <code>Normalize_PreservesQueryParamOrder</code> 钉保序（谁排序谁红）；翻案条件＝真机读到裂行证据再按 (A) 配全库 source_id 重算迁移。P-24＝(A) 确认：保留字按普通词字面匹配、空格词隐式 AND、不实现布尔算符即最终口径（码零改动・BC-2 已配测）。
+- 读数：门测 UriNormalizerTests 37/37・全量 6777/6777・census 24・计数器 285/226/59（两题行齐翻：带 ✅ 224→226／不带 61→59）・docgates 26/26。
+- ⚠ 仪器坑 #1139（排队）：cmd「echo EXITCODE=%ERRORLEVEL%&gt;&gt; file」的「0&gt;&gt;」绑 fd 0 重定向，EXITCODE 行不落档（197/198 同病）——判绿认汇总行「已通过! 失败: 0」，修法「&gt;&gt;file echo …」前置重定向。
+- ⚠ 工作树里已躺着 199 的码（趁 198 套跑预落）：<code>BackupRepository.cs</code> 两处 Normalize＋<code>BackupServiceTests.cs</code> 证人测④⑤——接手 199 时那两档是<b>已改未测</b>态，先跑 gate199 再动账本。
+- 下一刀：片199＝P-9(B)（期全量 6779）；其后片200＝P-58 信封上浮（设计定案在册）・片201＝P-145 (A) 验签钉哈希；真机批授权已给（P-112＋P-32 托盘点验＋P-46 (A) 取证＋P-85/95/102 观感截图）。⛔ push（未推 6）。
