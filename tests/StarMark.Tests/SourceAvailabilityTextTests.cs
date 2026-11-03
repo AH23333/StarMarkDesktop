@@ -29,8 +29,8 @@ public sealed class SourceAvailabilityTextTests
     {
         public string SourceId => "bare";
         public bool IsAvailable => false;
-        public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
-            => Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
+        public Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct)
+            => Task.FromResult(new FetchResult(Array.Empty<Item>(), false));
         public Task<IReadOnlyList<Item>> SearchAsync(string q, SearchFilter f, CancellationToken ct)
             => Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
     }

@@ -31,13 +31,13 @@ public sealed class SyncReasonWordGateTests : IDisposable
     private const string Status = "src/StarMark.UI/MainWindow.Status.cs";
     private const string Table = "src/StarMark.Abstractions/I18n/UiStrings.cs";
 
-    /// <summary>本批交表的 12 颗：10 颗 sync.src.* ＋顶栏那张卡的标题与那颗就地按钮。</summary>
+    /// <summary>这扇闸守的 15 颗：11 颗 sync.src.* ＋顶栏那张卡的两对标题/那句汇总与那颗就地按钮。</summary>
     private static readonly string[] NewKeys =
     [
         "sync.src.unavailable", "sync.src.timeout", "sync.src.auth", "sync.src.rateLimit",
         "sync.src.forbidden", "sync.src.server", "sync.src.githubOther", "sync.src.other",
-        "sync.src.line", "sync.src.lineJoin",
-        "top.syncPartialTitle", "top.syncFixToken",
+        "sync.src.line", "sync.src.lineJoin", "sync.src.truncated",
+        "top.syncPartialTitle", "top.syncFixToken", "top.syncDoneTruncated", "top.syncTruncatedTitle",
     ];
 
     /// <summary>两颗<b>刻意同形</b>的胶水位：它们连的是别人的读数，没有词可翻（理由登记在
@@ -70,10 +70,10 @@ public sealed class SyncReasonWordGateTests : IDisposable
         Assert.Equal(1, Count(code, "public LocMessage? Error { get; init; }"));
         Assert.Equal(0, Count(code, "public string? Error"));
         Assert.Equal(0, Count(code, "Error = \""));                    // 成品中文直接赋值＝这一族回来的形状
-        Assert.Equal(10, Count(code, "LocMessage.Of(\"sync.src."));    // 八颗原因＋两颗胶水位
+        Assert.Equal(11, Count(code, "LocMessage.Of(\"sync.src."));    // 九颗原因＋两颗胶水位（P-58 起＋「没拉全」那颗）
         var keys = KeyedCallSites(code).Select(s => s.Key)
             .Where(k => k.StartsWith("sync.src.", StringComparison.Ordinal)).ToList();
-        Assert.Equal(10, keys.Distinct(StringComparer.Ordinal).Count());   // 一颗键只说一句事实
+        Assert.Equal(11, keys.Distinct(StringComparer.Ordinal).Count());   // 一颗键只说一句事实
     }
 
     /// <summary>⑨句厂里⛔ 提前把套着的那句念完。这颗与①<b>分家是分意的</b>：①数"出口交什么型"，
@@ -85,12 +85,12 @@ public sealed class SyncReasonWordGateTests : IDisposable
         var code = Code(ReadRepoFile(Coord));
         Assert.Equal(0, Count(code, "Error?.Render()"));                                  // 原因先在 Core 念完＝P-212 本体
         Assert.Equal(0, Count(code, "SourceNames.NameOf(s.SourceId).Render()"));           // 源名那一槽同理（✅WI-57／P-187）
-        Assert.Equal(1, Count(code, "SourceNames.NameOf(s.SourceId), s.Error"));           // 正件：两颗都还是对象
+        Assert.Equal(1, Count(code, "SourceNames.NameOf(s.SourceId), reason(s)"));         // 正件：两颗都还是对象
     }
 
-    /// <summary>②12 颗新句：表里各一颗、代码里各一处主人（⛔ 第二处），而<b>槽数＝实参数</b>。</summary>
+    /// <summary>②15 颗句：表里各一颗、代码里各一处主人（⛔ 第二处），而<b>槽数＝实参数</b>。</summary>
     [Fact]
-    public void TheTwelveSentencesLiveInTheTableEachWithOneOwner()
+    public void TheFifteenSentencesLiveInTheTableEachWithOneOwner()
     {
         foreach (var key in NewKeys)
         {
@@ -204,10 +204,10 @@ public sealed class SyncReasonWordGateTests : IDisposable
         Assert.Equal(1, Count(code, "LocMessage.Of(\"top.syncFixToken\")"));
     }
 
-    /// <summary>⑧十句有词的话三语互异，两颗胶水位则是<b>点名的同形</b>：它们的形状逐颗钉死，
+    /// <summary>⑧十三句有词的话三语互异，两颗胶水位则是<b>点名的同形</b>：它们的形状逐颗钉死，
     /// 换语言时变的只有里面那两颗读数。</summary>
     [Fact]
-    public void TheTenWordsDifferPerLanguageAndTheTwoSkeletonsArePinned()
+    public void TheThirteenWordsDifferPerLanguageAndTheTwoSkeletonsArePinned()
     {
         foreach (var key in NewKeys.Where(k => !Skeletons.Contains(k, StringComparer.Ordinal)))
         {

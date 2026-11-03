@@ -59,7 +59,7 @@ public class EverythingSourceTests
         // 而同步完无条件弹一句「索引同步完成」）。本源现在只服务实时搜索，FetchAsync 恒空。
         // 这条断言是 ItemCardPolicy.CanDeletePermanently 放开文件行的前提：删了不会被同步拉回来。
         var source = new EverythingSource(new EverythingQueryQueue(), new FileIndexOptions { Enabled = true });
-        Assert.Empty(await source.FetchAsync(new SyncContext(), CancellationToken.None));
+        Assert.Empty((await source.FetchAsync(new SyncContext(), CancellationToken.None)).Items);
     }
 
     [Fact]

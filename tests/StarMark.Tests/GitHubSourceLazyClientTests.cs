@@ -80,9 +80,10 @@ public sealed class GitHubSourceLazyClientTests : IDisposable
         Assert.False(source.IsAvailable);
         Assert.Equal(0, builds);                                   // 光是"问可用性"不许建客户端
 
-        var items = await source.FetchAsync(new SyncContext(), CancellationToken.None);
+        var fetch = await source.FetchAsync(new SyncContext(), CancellationToken.None);
 
-        Assert.Empty(items);
+        Assert.Empty(fetch.Items);
+        Assert.False(fetch.Truncated);
         Assert.Equal(0, builds);
     }
 

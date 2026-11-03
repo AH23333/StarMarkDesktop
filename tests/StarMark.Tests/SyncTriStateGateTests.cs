@@ -21,8 +21,11 @@ namespace StarMark.Tests;
 /// 修法走 (A)：<see cref="SourceSyncResult.Success"/> 语义一字未动（跳过仍记 true——你从未启用的源
 /// 不该每轮刷红），第三态由 <see cref="SourceSyncResult.Skipped"/> 那颗旗＋<see cref="SourceSyncResult.Status"/>
 /// 那颗现算读数交给展示层：没失败、但没全参与＝灰卡逐源说清谁没参与，既不报喜也不报忧。</para>
-/// <para>前三格是行为证人（真协调器＋临时库＋假源，口径同 <see cref="SyncCoordinatorTests"/>）；
-/// 后四格钉形状（测试工程引用不到 UI，只能按源码形状钉——坑表 #1020）。断言全部落在键与实参的
+/// <para>P-58 起同一张卡多了<b>第二份名单</b>：被拉取预算掐断的源（<see cref="SourceSyncResult.Truncated"/>）
+/// 照旧 Success＝true，但「没拉全」有自己的旗、自己的名单（<see cref="SyncSummary.TruncatedLines"/>）、
+/// 自己那句汇总话——⛔ 再顶着「同步完成」。行为④⑤与形状⑤是它的证人与闸。</para>
+/// <para>前五格是行为证人（真协调器＋临时库＋假源，口径同 <see cref="SyncCoordinatorTests"/>）；
+/// 后五格钉形状（测试工程引用不到 UI，只能按源码形状钉——坑表 #1020）。断言全部落在键与实参的
 /// <b>身份</b>上，⛔ Render 后对句子——换语言重念那一片是 <see cref="SyncReasonWordGateTests"/> ③④
 /// 的射程（与本档共用的正是同一条手臂），这里不重复它，也因此⛔ 挂 <c>LocaleGlobal</c> 那颗收集。</para>
 /// </summary>
@@ -54,12 +57,13 @@ public sealed class SyncTriStateGateTests : IDisposable
         public bool Available { get; init; } = true;
         public IReadOnlyList<Item>? Result { get; init; }
         public Exception? Throw { get; init; }
+        public bool Truncated { get; init; }   // P-58：假信封上那颗「没拉全」旗，由证④⑤举起
 
         public bool IsAvailable => Available;
-        public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
+        public Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct)
         {
             if (Throw != null) throw Throw;
-            return Task.FromResult(Result ?? Array.Empty<Item>());
+            return Task.FromResult(new FetchResult(Result ?? Array.Empty<Item>(), Truncated));
         }
         public Task CommitCheckpointAsync(CancellationToken ct) => Task.CompletedTask;
         public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct)
@@ -137,6 +141,46 @@ public sealed class SyncTriStateGateTests : IDisposable
         Assert.DoesNotContain("boom", summary.SkippedLines()!.Render(), StringComparison.Ordinal);
     }
 
+    /// <summary>行为④（P-58）：被预算掐断的那一轮——拉到的那批照常落库（Success 照旧、Status 照旧
+    /// Succeeded），但「没拉全」从此有自己的旗、自己的名单、自己的那句汇总话，⛔ 再顶着「同步完成」。</summary>
+    [Fact]
+    public async Task TheTruncatedSourceStaysSucceededButIsCalledOut()
+    {
+        var summary = await Coordinator(
+            new FakeSource { SourceId = "capped", DisplayName = "Capped",
+                Result = new[] { ItemFile("capped") }, Truncated = true })
+            .SyncAllAsync(CancellationToken.None);
+
+        Assert.Equal(0, summary.FailedCount);
+        Assert.Equal(1, summary.TruncatedCount);
+        var row = Assert.Single(summary.Sources);
+        Assert.True(row.Success);                            // 拉到的那批是真的——「没拉全」⛔ 冒充失败
+        Assert.False(row.Skipped);
+        Assert.Equal(SourceSyncStatus.Succeeded, row.Status);
+        Assert.Null(summary.FailureLines());                 // 没失败却有失败名单＝替好结果道歉
+        Assert.Null(summary.SkippedLines());                 // 没跳过却有跳过名单＝多报一颗没参与的源
+
+        var lines = summary.TruncatedLines();
+        Assert.NotNull(lines);                               // 也⛔ 静默：谁没拉全，逐源一行
+        Assert.True(lines is { Key: "sync.src.line" });      // 一颗被掐的源＝一行，行形与另两份名单同源
+        Assert.True(lines.Args?[1] is LocMessage { Key: "sync.src.truncated" });   // 「为什么」念表里那颗键
+        Assert.True(summary.Message() is { Key: "top.syncDoneTruncated" });        // 汇总话说得清「有源没拉全」
+    }
+
+    /// <summary>行为⑤（P-58）：没被掐断的一轮照旧——新名单是加法，⛔ 改写旧读数：
+    /// 名单空、汇总话照旧那句「同步完成」。</summary>
+    [Fact]
+    public async Task ThePlainRunKeepsSayingPlainDone()
+    {
+        var summary = await Coordinator(
+            new FakeSource { SourceId = "good", DisplayName = "Good", Result = new[] { ItemFile("good") } })
+            .SyncAllAsync(CancellationToken.None);
+
+        Assert.Equal(0, summary.TruncatedCount);
+        Assert.Null(summary.TruncatedLines());
+        Assert.True(summary.Message() is { Key: "top.syncDone" });
+    }
+
     /// <summary>形状①：三态读数是<b>现算</b>的（<see cref="SourceSyncResult.Status"/>），⛔ 存档——
     /// 存了就有两份真值，一颗说跳过、一颗说成功。三条臂由两颗布尔唯一决定。</summary>
     [Fact]
@@ -163,21 +207,35 @@ public sealed class SyncTriStateGateTests : IDisposable
         Assert.Equal(1, Count(code, "Skipped = true,"));
         Assert.Equal(1, Count(code, "public bool Skipped { get; init; }"));
         Assert.Equal(1, Count(code, "public int SkippedCount => Sources.Count(s => s.Skipped)"));
-        // 逐源挑行的手臂只有一条：跳过名单与失败名单共用它，键与接合子各只有一处主人（坑表 #161）。
+        // 逐源挑行的手臂只有一条：三份名单共用它，键与接合子各只有一处主人（坑表 #161）。
         Assert.Equal(1, Count(code, "private LocMessage? LinesWhere("));
-        Assert.Equal(2, Count(code, "=> LinesWhere("));
+        Assert.Equal(3, Count(code, "=> LinesWhere("));
         Assert.Equal(1, Count(code, "public LocMessage? SkippedLines("));
     }
 
-    /// <summary>形状③：主窗那张卡的判据与正文——灰卡只在「没失败、但有源没参与」那一格出现；
-    /// 行分隔那颗布局留在 Core 的默认实参里（规则 #100，口径同失败名单那半张）。</summary>
+    /// <summary>形状②′（P-58）：那颗「没拉全」旗同样只在信封那一臂举起——四条 catch 与不可用那一支
+    /// 都⛔ 顺手举它（「没拉全」是拉到之后的事实，失败/跳过的那一轮谈不上「拉全没有」）。</summary>
     [Fact]
-    public void TheGreyCardIsWiredOnlyWhenNothingFailedAndSomethingWasSkipped()
+    public void TheTruncatedFlagIsRaisedOnlyByTheEnvelope()
+    {
+        var code = Code(ReadRepoFile(Coord));
+        Assert.Equal(1, Count(code, "public bool Truncated { get; init; }"));
+        Assert.Equal(1, Count(code, "public int TruncatedCount => Sources.Count(s => s.Truncated)"));
+        Assert.Equal(1, Count(code, "public LocMessage? TruncatedLines("));
+        Assert.Equal(1, Count(code, "Truncated = fetch.Truncated,"));   // 唯一举起的那一臂：信封带来的那颗
+    }
+
+    /// <summary>形状③（P-58 起含第二份名单）：主窗那张卡的判据与正文——绿卡只在「两份名单都空」
+    /// 那一格出现；行分隔那颗布局留在 Core 的默认实参里（规则 #100，口径同失败名单那半张）。</summary>
+    [Fact]
+    public void TheGreenCardIsWiredOnlyWhenBothRostersAreEmpty()
     {
         var code = Code(ReadRepoFile(Status));
-        Assert.Equal(1, Count(code, "summary.SkippedCount == 0"));
-        Assert.Equal(1, Count(code, "InfoBarSeverity.Informational, LocMessage.Of(\"top.syncSkippedTitle\")"));
-        Assert.Equal(1, Count(code, "summary.SkippedLines()"));
+        Assert.Equal(1, Count(code, "var skipped = summary.SkippedLines();"));
+        Assert.Equal(1, Count(code, "var truncated = summary.TruncatedLines();"));
+        Assert.Equal(1, Count(code, "skipped is null && truncated is null"));   // 绿卡的判据＝两份名单
+        Assert.Equal(1, Count(code, "summary.SkippedOrTruncatedLines()"));      // 合订正文住 Core，主窗只递话
+        Assert.Equal(0, Count(code, "sync.src.lineJoin"));   // 布局键只许 Core 一处取词（#161）——主窗再取就是第二主人
         Assert.Equal(0, Count(code, "summary.SkippedLines(\""));   // gap 是布局：一处默认实参就够，⛔ 进表
     }
 
@@ -189,6 +247,16 @@ public sealed class SyncTriStateGateTests : IDisposable
         Assert.True(UiStrings.TryGet("top.syncSkippedTitle", out var row));
         Assert.True(row.Zh != row.En && row.En != row.Ja && row.Zh != row.Ja);
         Assert.Equal(0, RowSlots("top.syncSkippedTitle"));
+    }
+
+    /// <summary>形状⑤（P-58）：「没拉全」那张卡的标题三语互异、零槽——口径对齐④那颗（不带读数）。</summary>
+    [Fact]
+    public void TheTruncatedTitleLivesInTheTableWithDistinctColumnsAndNoSlots()
+    {
+        Assert.Equal(1, Count(ReadRepoFile(Table), "new Entry(\"top.syncTruncatedTitle\""));
+        Assert.True(UiStrings.TryGet("top.syncTruncatedTitle", out var row));
+        Assert.True(row.Zh != row.En && row.En != row.Ja && row.Zh != row.Ja);
+        Assert.Equal(0, RowSlots("top.syncTruncatedTitle"));
     }
 
     private static Item ItemFile(string source)

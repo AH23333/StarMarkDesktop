@@ -188,8 +188,9 @@ public sealed class StaleFileRowGateTests
     public void TheBulkIndexingProducerIsGoneWhileLiveSearchStays()
     {
         var everything = Code(ReadRepoFile(Everything));
-        // 钉的是"这一臂不再扫任何东西"，不钉它用哪种写法交回空集合（台架 SP2 钉这一条）
-        var body = MethodBody(everything, "public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)");
+        // 钉的是"这一臂不再扫任何东西"，不钉它用哪种写法交回空集合（台架 SP2 钉这一条）；
+        // P-58 起这一臂的回执换成信封（FetchResult），空载荷照旧一颗词都不带。
+        var body = MethodBody(everything, "public Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct)");
         Assert.Equal(0, Count(body, "QueryAsync"));                       // 不发 IPC 查询
         Assert.DoesNotContain("foreach", body, StringComparison.Ordinal);   // 不逐目录遍历
         Assert.DoesNotContain("Roots", body, StringComparison.Ordinal);

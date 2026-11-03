@@ -652,3 +652,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：门测 28/28（gate199.txt）・全量 6779/6779（testfull199.out）・census 24・计数器 285/226/59（±0・不翻题行——P-9 片188 已 ✅，本批只补 (B) bullet）・docgates 26/26（docgates199.txt）。
 - 坑表 #1139：cmd「echo EXITCODE=%ERRORLEVEL%&gt;&gt; file」的「0&gt;&gt;」绑 fd 0——EXITCODE 行不落档（197/198 同病）；判绿认汇总行「已通过! 失败: 0」；修法「&gt;&gt;file echo …」前置重定向（testfull199.cmd 起启用）。
 - 下一刀：片200＝P-58 信封上浮（设计定案在册：<code>FetchResult</code> 信封・GitHubClient <code>LastFetchTruncated</code>・UiStrings <code>top.syncDoneTruncated/top.syncTruncatedTitle/sync.src.truncated</code> 三语・InfoBar 截断走 Informational・<code>SyncCheckpointOrderGateTests:28</code> 锚随签改）；其后片201＝P-145 (A) 验签钉哈希；真机批（P-112＋P-32 托盘点验＋P-46 (A) 取证＋P-85/95/102 观感截图）授权已给。⛔ push（未推 7）。
+
+## 八十一、片200 P-58：Truncated 信封上浮——超限那轮从日志抬到汇总句与灰卡（对账刷新轮 census 24→21）
+
+- 接手第一步照旧现读编号轴：报告到五百八十六、坑表到 #1139；本批＝P-58 信封上浮（P-57 (A) 落码时截断只到日志，本批整链抬到界面），P-58 题行随本批翻 ✅。
+- 生产面：<code>IItemSource.FetchAsync</code> 回执＝<code>FetchResult</code> 信封（载荷＋<code>Truncated</code> 旗・<code>Full()</code> 给本地源）；<code>GitHubClient.LastFetchTruncated</code>（<code>GetAllStarredAsync</code> 内收旗・truncated 臂复位检查点后举旗＋Warn）；<code>GitHubSource</code> 同一拍读走；Ditto／Everything／Bookmarks 交 <code>Full</code>；<code>SyncSummary</code> 三链（top.syncPartial＞top.syncDoneTruncated＞top.syncDone）＋<code>TruncatedCount</code>／<code>TruncatedLines()</code>＋灰卡合订 <code>SkippedOrTruncatedLines()</code>（<code>lineJoin</code> 全 src 一处取词——主窗自取会红 ReasonWord ②，本批已收）；UiStrings 三键（<code>top.syncDoneTruncated</code> 3 槽英文 label 形・<code>top.syncTruncatedTitle</code>／<code>sync.src.truncated</code> 0 槽）。
+- 测面：TriState 10 Facts（含行为④⑤与灰卡形状③两颗新钉）、ReasonWord 15 键、CheckpointOrder／StaleFileRow 锚随签改、测桩/调用 15 处信封化（LazyClient 假源补 <code>Assert.False(fetch.Truncated)</code>）。
+- 读数：gate200 325/325・gate200b 57/57・全量 6783/6783（testfull200.out・EXITCODE=0）・census 21（对账刷新轮 #1020 第八次：四串换号・三串自然愈合・p164/diffcensus200.txt・闸基线 24→21）・计数器 285/227/58（P-58 翻 ✅）・docgates 26/26（docgates200.txt）。
+- 下一刀：片201＝P-145 (A) 下载验签钉哈希（安装器 Everything-1.4.1.1028.x64-Setup.exe・便携包 1024 双钉 SHA-256・SDK 滚动走 WinVerifyTrust＋Subject 含 voidtools）；其后真机批（P-112＋P-32 托盘点验＋P-46 (A) 取证＋P-85/95/102 观感截图）。⛔ push（未推 8）。

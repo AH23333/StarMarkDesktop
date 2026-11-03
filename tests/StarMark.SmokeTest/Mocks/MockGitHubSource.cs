@@ -52,8 +52,8 @@ public sealed class MockGitHubSource : IItemSource
     public string DisplayName => "Mock GitHub Stars";
     public bool IsAvailable => true;
 
-    public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
-        => Task.FromResult<IReadOnlyList<Item>>(_mockItems);
+    public Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct)
+        => Task.FromResult(new FetchResult(_mockItems, false));
 
     public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());

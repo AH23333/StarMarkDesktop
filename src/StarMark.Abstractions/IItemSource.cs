@@ -33,8 +33,16 @@ public interface IItemSource
     /// </summary>
     LocMessage? AvailabilityHint => null;
 
-    /// <summary>从源拉取全量条目，写入 items 表。同步协调器调用。</summary>
-    Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct);
+    /// <summary>
+    /// 从源拉取全量条目，写入 items 表。同步协调器调用。
+    /// <para>
+    /// <b>回执是信封不是裸列表（P-58）</b>：载荷之外，「这一轮被预算掐断、没拉全」那颗旗
+    /// 跟着同一只信封走（<see cref="FetchResult.Truncated"/>）。旧签名只交列表 ⇒ 那颗旗没有出口，
+    /// 界面上那句「同步完成」对超限用户是一句对不上账的话——数据面（预算复位）P-57 先落，
+    /// 文案面靠这只信封把信号带到汇总那一段。
+    /// </para>
+    /// </summary>
+    Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct);
 
     /// <summary>
     /// <b>载荷已经落库</b>，源可以提交自己的检查点了（ETag / 游标那一类）。默认什么都不做。
@@ -56,6 +64,25 @@ public interface IItemSource
     /// <param name="query">关键词。</param>
     /// <param name="filter">过滤条件（类型、来源、数值范围）。</param>
     Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct);
+}
+
+/// <summary>
+/// <see cref="IItemSource.FetchAsync"/> 的回执信封（P-58）：载荷之外再带一颗「这一轮没拉全」的旗。
+/// <para>
+/// 为什么是信封而<b>不是</b>源上一颗可查属性：读属性那一拍与拉取那一拍分开，中间任何一次新的拉取
+/// （哪怕来自另一颗线程上的调用方）都能把旗翻面，读到的就不知是哪一轮的；旗跟着那一轮的载荷
+/// 装在同一只信封里，两份永远同源。信封优于源上挂可变旗，正如检查点优于挂在客户端上的游标。
+/// </para>
+/// <para>
+/// 今天唯一举旗的成因是 GitHub 那颗拉取预算（<c>GitHubClient.MaxStarredItems</c>，P-57 落的那条腿）；
+/// 本地三颗源恒 <see cref="Truncated"/> = false。新源若有同族成因，在自己那只信封上举旗即可，
+/// 协调器到文案的那条链不用再动。
+/// </para>
+/// </summary>
+public sealed record FetchResult(IReadOnlyList<Item> Items, bool Truncated)
+{
+    /// <summary>没被掐断的一轮的惯用形：本地三颗源与测试桩都从这一颗进。</summary>
+    public static FetchResult Full(IReadOnlyList<Item> items) => new(items, false);
 }
 
 /// <summary>同步上下文，承载增量同步所需的检查点状态。</summary>

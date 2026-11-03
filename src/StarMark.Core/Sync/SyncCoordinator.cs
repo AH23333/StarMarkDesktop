@@ -84,7 +84,8 @@ public sealed class SyncCoordinator
 
             try
             {
-                var items = await source.FetchAsync(new SyncContext(), ct);
+                var fetch = await source.FetchAsync(new SyncContext(), ct);
+                var items = fetch.Items;
                 if (items.Count > 0)
                 {
                     // 防御：本地条目（待办/随记，source=local）永不参与同步覆盖。
@@ -103,6 +104,9 @@ public sealed class SyncCoordinator
                     SourceId = source.SourceId,
                     Success = true,
                     PulledCount = items.Count,
+                    // P-58：信封上那颗「这一轮没拉全」跟着载荷进结果。它与 Success 正交——拉到的
+                    // 那批确实都进库了（Success 照旧 true），「没拉全」由文案那一链（Message／灰卡）自己说。
+                    Truncated = fetch.Truncated,
                 });
             }
             // 单源内部超时（HttpClient 抛的 TaskCanceledException 是 OperationCanceledException 子类）
@@ -203,16 +207,24 @@ public sealed class SyncSummary
     /// <summary>没参与的源几颗（P-38 (A)）：不可用被跳过的那些——既⛔ 计进失败、也⛔ 与「拉了且成功」
     /// 同形。主窗那张灰卡的判据读的就是它。</summary>
     public int SkippedCount => Sources.Count(s => s.Skipped);
+    /// <summary>「拉了但没拉全」的源几颗（P-58）：被各自那颗拉取预算掐断的那批（今天只有 GitHub）。
+    /// 与 <see cref="SkippedCount"/> 同一族正交读数——<see cref="SourceSyncResult.Success"/> 照旧 true，
+    /// 它只负责把「没拉全」从日志浮到汇总那句话与灰卡，⛔ 顶替失败那颗数。</summary>
+    public int TruncatedCount => Sources.Count(s => s.Truncated);
 
     /// <summary>
     /// 这一次同步的<b>那句汇总话（还没取词）</b>：键＋读数交出去，由界面在贴上去的那一刻按当时的语言取词
     /// （批次 WI-2m；口径同 <see cref="LocMessage"/>——在这里先 Render 一次＝外层跟着语言翻、
     /// 这一行留在中文，屏幕上就是半中半英，且换语言那一刻没人重贴）。
+    /// <para>P-58 起是三链：失败优先（对不上账最重的那句），没失败但有源没拉全时说清
+    /// 「几个源没拉全」（<c>top.syncDoneTruncated</c>），两样都没有才落回那句「同步完成」。</para>
     /// </summary>
     public LocMessage Message()
-        => FailedCount == 0
-            ? LocMessage.Of("top.syncDone", TotalPulled, ElapsedMs)
-            : LocMessage.Of("top.syncPartial", TotalPulled, FailedCount, ElapsedMs);
+        => FailedCount > 0
+            ? LocMessage.Of("top.syncPartial", TotalPulled, FailedCount, ElapsedMs)
+            : TruncatedCount > 0
+                ? LocMessage.Of("top.syncDoneTruncated", TotalPulled, TruncatedCount, ElapsedMs)
+                : LocMessage.Of("top.syncDone", TotalPulled, ElapsedMs);
 
     /// <summary>
     /// 失败的那几源<b>逐源一行「谁＋为什么」</b>（批次 WI-81，P-212 走 B 那一头）。
@@ -228,28 +240,56 @@ public sealed class SyncSummary
     /// <remarks>没有失败源时返回 null：调用方⛔ 拿一颗"空"去顶在一句已完成的消息下面。
     /// 行怎么挑、怎么接住住在 <see cref="LinesWhere"/> 那条共用手臂里——跳过名单那一半
     /// （<see cref="SkippedLines"/>）与它同一条手臂，键与接合子只有一份主人。</remarks>
-    public LocMessage? FailureLines(string gap = "\n") => LinesWhere(s => !s.Success, gap);
+    public LocMessage? FailureLines(string gap = "\n") => LinesWhere(s => !s.Success, s => s.Error, gap);
 
     /// <summary>被跳过的那几源<b>逐源一行「谁＋为什么没参与」</b>（P-38 (A)）：主窗那张灰卡的正文。
     /// <para>「为什么没参与」复用不可用那颗键——跳过⛔ 是一种新的失败原因，不该另造一句对不上账的话；
     /// 行与行的接法与 <see cref="FailureLines"/> 完全同一条手臂，只有挑哪几行那颗谓词不同。</para></summary>
     /// <remarks>没有跳过的源时返回 null：调用方⛔ 拿一颗"空"去顶在标题下面。</remarks>
-    public LocMessage? SkippedLines(string gap = "\n") => LinesWhere(s => s.Skipped, gap);
+    public LocMessage? SkippedLines(string gap = "\n") => LinesWhere(s => s.Skipped, s => s.Error, gap);
+
+    /// <summary>没拉全的那几源<b>逐源一行「谁＋上限那句话」</b>（P-58）：主窗那张灰卡的第二份名单。
+    /// <para>这一行的「为什么」不读 <see cref="SourceSyncResult.Error"/>——没拉全不是失败，
+    /// <c>Error</c> 在这一格里是 null；那颗键（<c>sync.src.truncated</c>）说的是「这一轮被预算掐断」
+    /// 这个事实，对每一颗被掐的源都成立，所以整份名单共用同一次取词（词在表里，⛔ 在这里拼成品字）。</para></summary>
+    /// <remarks>没有没拉全的源时返回 null：调用方⛔ 拿一颗"空"去顶在标题下面。</remarks>
+    public LocMessage? TruncatedLines(string gap = "\n")
+        => LinesWhere(s => s.Truncated, _ => LocMessage.Of("sync.src.truncated"), gap);
+
+    /// <summary>灰卡那份<b>合订正文</b>（P-58）：跳过与没拉全两份名单哪份在念哪份，两份同场时接成一块。
+    /// <para>合订住在 Core 而不住在主窗：<c>sync.src.lineJoin</c> 那颗布局键全 src 只许一处取词
+    /// （#161 那族——主窗自己再取一次，就是给「两块怎么接」留了第二处能各自被改坏的主人）。</para></summary>
+    /// <remarks>两份名单都空时返回 null——调用方先各自问过 <see cref="SkippedLines"/>／
+    /// <see cref="TruncatedLines"/> 再进来（绿卡判据与标题挑选都要那两颗 null 读数，合订不替它们做主）。</remarks>
+    public LocMessage? SkippedOrTruncatedLines(string gap = "\n")
+    {
+        var skipped = SkippedLines(gap);
+        var truncated = TruncatedLines(gap);
+        return skipped is null ? truncated : truncated is null ? skipped : Join(skipped, truncated, gap);
+    }
 
     /// <summary>逐源挑行的共用手臂（P-38 (A) 把它从 <see cref="FailureLines"/> 里请出来）：
-    /// 行＝<c>sync.src.line</c>（源名＋原因），行与行＝<c>sync.src.lineJoin</c>——两颗键、两次取词
-    /// 都只有这一处主人（#161 那族：多一份实现＝多一处能各自被改坏的正文）。</summary>
-    private LocMessage? LinesWhere(Func<SourceSyncResult, bool> pick, string gap)
+    /// 行＝<c>sync.src.line</c>（源名＋原因），行与行＝<see cref="Join"/>——行那颗键在这里取词，
+    /// 接合那颗只有 <see cref="Join"/> 一处主人（#161 那族：多一份实现＝多一处能各自被改坏的正文）。
+    /// <para>P-58 起那颗「原因」由调用方递进来（<paramref name="reason"/>）：失败/跳过名单念
+    /// <see cref="SourceSyncResult.Error"/>，没拉全名单念表里那颗键——同一行形状，各自的原因。</para></summary>
+    private LocMessage? LinesWhere(Func<SourceSyncResult, bool> pick, Func<SourceSyncResult, object?> reason, string gap)
     {
         LocMessage? body = null;
         foreach (var s in Sources)
         {
             if (!pick(s)) continue;
-            var line = LocMessage.Of("sync.src.line", SourceNames.NameOf(s.SourceId), s.Error);
-            body = body is null ? line : LocMessage.Of("sync.src.lineJoin", body, line, gap);
+            var line = LocMessage.Of("sync.src.line", SourceNames.NameOf(s.SourceId), reason(s));
+            body = body is null ? line : Join(body, line, gap);
         }
         return body;
     }
+
+    /// <summary>两块正文接成一块：<c>sync.src.lineJoin</c> 全 src 唯一取词处（名单内的行与行、
+    /// 两份名单彼此，接的都是这一颗；<paramref name="gap"/> 当实参进它的 <c>{2}</c> 槽——
+    /// 是布局而⛔ 进表，规则 #100，先例＝<c>clip.clean.lineJoin</c>／<c>settings.data.backup.lineJoin</c>）。</summary>
+    private static LocMessage Join(LocMessage first, LocMessage second, string gap)
+        => LocMessage.Of("sync.src.lineJoin", first, second, gap);
 }
 
 /// <summary>
@@ -282,6 +322,11 @@ public sealed class SourceSyncResult
     /// <see cref="Status"/>。</summary>
     public bool Skipped { get; init; }
     public int PulledCount { get; init; }
+    /// <summary>这一源这一轮<b>被预算掐断、没拉全</b>（P-58）：载荷照常落库，<see cref="Success"/> 照旧 true，
+    /// <see cref="Error"/> 照旧 null——「没拉全」⛔ 混进那两格里说（拉到的那批是真的成功，
+    /// 塞进 Error 则成了第三种失败）。这颗旗由 <c>FetchResult.Truncated</c> 那只信封带上来，
+    /// 读者＝<see cref="SyncSummary.TruncatedCount"/>／<see cref="SyncSummary.TruncatedLines"/>。</summary>
+    public bool Truncated { get; init; }
     /// <summary>
     /// 这一源<b>为什么</b>没成（键＋实参，⛔ 成品字）。批次 WI-81／P-212 走 B 把它从 <c>string</c> 升上来的：
     /// 从前这里住的是「拉取超时或被取消（未中断其余源）」那种写死的中文，而屏幕上那一行只报颗数——

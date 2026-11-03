@@ -242,7 +242,7 @@ public sealed class GitHubCancelSafetyTests : IDisposable
         var client = new GitHubClient(Options(3), new HttpClient(new FakeGitHub(perPage: 3, lastPage: 2)));
         await using var source = new GitHubSource(Options(3), repo, client);
 
-        var items = await source.FetchAsync(new SyncContext(), CancellationToken.None);
+        var items = (await source.FetchAsync(new SyncContext(), CancellationToken.None)).Items;
 
         Assert.Equal(5, items.Count);                                   // 载荷拉到了，但这一轮还没资格留下检查点
         Assert.Null(await repo.GetSyncStateAsync("github:etag", CancellationToken.None));
@@ -274,7 +274,7 @@ public sealed class GitHubCancelSafetyTests : IDisposable
         var client = new GitHubClient(Options(3), new HttpClient(new FakeGitHub(perPage: 3, lastPage: 2)));
         await using var source = new GitHubSource(Options(3), repo, client);
 
-        var items = await source.FetchAsync(new SyncContext(), cts.Token);
+        var items = (await source.FetchAsync(new SyncContext(), cts.Token)).Items;
         await source.CommitCheckpointAsync(cts.Token);
 
         Assert.Equal(5, items.Count);
@@ -296,7 +296,7 @@ public sealed class GitHubCancelSafetyTests : IDisposable
             new HttpClient(new FakeGitHub(perPage: 3, lastPage: 2, withEtag: false)));
         await using var source = new GitHubSource(Options(3), repo, client);
 
-        var items = await source.FetchAsync(new SyncContext(), CancellationToken.None);
+        var items = (await source.FetchAsync(new SyncContext(), CancellationToken.None)).Items;
         await source.CommitCheckpointAsync(CancellationToken.None);
 
         Assert.Equal(5, items.Count);

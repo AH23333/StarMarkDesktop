@@ -471,7 +471,7 @@ static async Task DittoCheckAsync()
     // 2. FetchAsync 全量拉取
     var source = new StarMark.Integrations.Ditto.DittoSource(dbPath);
     Console.WriteLine($"Ditto IsAvailable: {source.IsAvailable}");
-    var items = await source.FetchAsync(new StarMark.Abstractions.SyncContext(), CancellationToken.None);
+    var items = (await source.FetchAsync(new StarMark.Abstractions.SyncContext(), CancellationToken.None)).Items;
     foreach (var it in items)
         Console.WriteLine($"  [{it.Type}] {it.Title} | {it.Subtitle} | uri={it.Uri}");
     if (items.Count != 2) throw new Exception($"Ditto 应返回 2 条非分组记录，实际 {items.Count}");

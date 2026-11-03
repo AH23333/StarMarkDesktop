@@ -39,7 +39,7 @@ public sealed class SearchServiceTests : IDisposable
         public string SourceId => "stub";
         public string DisplayName => "stub";
         public bool IsAvailable => true;
-        public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct) => Task.FromResult(_items);
+        public Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct) => Task.FromResult(new FetchResult(_items, false));
         public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct) => Task.FromResult(_items);
     }
 
@@ -208,7 +208,7 @@ public sealed class SearchServiceTests : IDisposable
         public string SourceId => "echo";
         public string DisplayName => "echo";
         public bool IsAvailable => true;
-        public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct) => Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
+        public Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct) => Task.FromResult(new FetchResult(Array.Empty<Item>(), false));
         public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct)
         {
             LastQuery = StarMark.Abstractions.FileKindQuery.Compose(query, filter.FileQueryFragments);
@@ -289,8 +289,8 @@ public sealed class SearchServiceTests : IDisposable
         public string SourceId => "filesystem";
         public string DisplayName => "paged";
         public bool IsAvailable => true;
-        public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
-            => Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
+        public Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct)
+            => Task.FromResult(new FetchResult(Array.Empty<Item>(), false));
         public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct)
         {
             IReadOnlyList<Item> hits = Enumerable.Range(0, Math.Min(_total, filter.MaxResults))

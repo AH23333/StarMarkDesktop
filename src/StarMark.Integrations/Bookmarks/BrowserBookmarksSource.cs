@@ -81,15 +81,16 @@ public abstract class BrowserBookmarksSource : IItemSource
         }
     }
 
-    public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
+    public Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct)
         // 书签文件常有数 MB：File.ReadAllText + JSON 解析 + 全量映射都是同步的，而点「立即同步」
         // 是从 UI 线程一路 await 下来的 ⇒ 不 offload 就是点一下冻一下。
         // 有意不把 ct 传给 Task.Run：本方法的契约是"任何情况下都不抛，只返回空"。
+        // 回执走信封（P-58）：本源没有拉取预算，Truncated 恒 false。
         => Task.Run(() =>
         {
             try
             {
-                if (!IsAvailable) return Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
+                if (!IsAvailable) return FetchResult.Full(Array.Empty<Item>());
                 var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 var items = new List<Item>();
                 // 逐个 profile 读：某一个文件损坏/被占用只跳过它，不牵连其余（旧写法一份坏
@@ -110,12 +111,12 @@ public abstract class BrowserBookmarksSource : IItemSource
                         StarLog.Warn($"读取浏览器书签失败，跳过该 profile（{file}）：{ex.Message}");
                     }
                 }
-                return Task.FromResult<IReadOnlyList<Item>>(items);
+                return new FetchResult(items, false);
             }
             catch (Exception ex)
             {
                 StarLog.Warn($"同步 {SourceId} 书签出错，本次返回空（{_bookmarksPath}）：{ex.Message}");
-                return Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
+                return FetchResult.Full(Array.Empty<Item>());
             }
         });
 

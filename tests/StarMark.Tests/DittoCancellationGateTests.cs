@@ -145,7 +145,7 @@ public sealed class DittoCancellationGateTests : IDisposable
     {
         var source = new DittoSource(_dbPath);
 
-        var fetched = await source.FetchAsync(new SyncContext(), CancellationToken.None);
+        var fetched = (await source.FetchAsync(new SyncContext(), CancellationToken.None)).Items;
         Assert.Equal(2, fetched.Count);
 
         var hits = await source.SearchAsync("STARMARK", new SearchFilter { MaxResults = 10 }, CancellationToken.None);

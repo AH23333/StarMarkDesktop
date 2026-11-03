@@ -145,15 +145,17 @@ public sealed class DittoSource : IItemSource
         return candidates.Count > 0 ? candidates[0] : null;
     }
 
-    public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
+    public Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct)
         // 「立即同步」由 UI 线程一路 await 到这里，而下面读的是 Ditto 的 SQLite 文件（同步实现，
         // 且可能被 Ditto 自身持写锁）——留在调用线程上就是一次点击冻一次。令牌一并交给 <c>Task.Run</c>：
         // <b>已取消的一轮从此⛔ 起</b>，⛔ 只把底下那颗同步读搬到池上、由调用方独自等。
+        // 回执走信封（P-58）：本源没有拉取预算，Truncated 恒 false。
         => Task.Run(() =>
         {
             var clip = ReadAsync(r => r.ReadRecent(MaxSync, ct), ct);
-            if (clip.Count == 0) return (IReadOnlyList<Item>)Array.Empty<Item>();
-            return clip.Select(Map).ToList();
+            return clip.Count == 0
+                ? FetchResult.Full(Array.Empty<Item>())
+                : new FetchResult(clip.Select(Map).ToList(), false);
         }, ct);
 
     public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct)

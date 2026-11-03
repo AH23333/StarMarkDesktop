@@ -39,10 +39,10 @@ public sealed class SyncCoordinatorTests : IDisposable
         public bool? PayloadWasInDbAtCommit { get; private set; }
 
         public bool IsAvailable => Available;
-        public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
+        public Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct)
         {
             if (Throw != null) throw Throw;
-            return Task.FromResult(Result ?? Array.Empty<Item>());
+            return Task.FromResult(new FetchResult(Result ?? Array.Empty<Item>(), false));
         }
 
         public async Task CommitCheckpointAsync(CancellationToken ct)

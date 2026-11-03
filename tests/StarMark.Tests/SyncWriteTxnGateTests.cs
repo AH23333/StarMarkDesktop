@@ -204,7 +204,7 @@ public sealed class SyncWriteTxnGateTests : IDisposable
 
         public bool IsAvailable => true;
 
-        public async Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
+        public async Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct)
         {
             lock (_lk)
             {
@@ -221,7 +221,7 @@ public sealed class SyncWriteTxnGateTests : IDisposable
             {
                 lock (_lk) _concurrent--;
             }
-            return Array.Empty<Item>();
+            return new FetchResult(Array.Empty<Item>(), false);
         }
 
         public Task CommitCheckpointAsync(CancellationToken ct) => Task.CompletedTask;

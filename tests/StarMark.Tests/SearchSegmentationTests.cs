@@ -221,7 +221,7 @@ public sealed class SearchSegmentationTests : IDisposable
         public string SourceId { get; }
         public string DisplayName => SourceId;
         public bool IsAvailable => true;
-        public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct) => Task.FromResult(_items);
+        public Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct) => Task.FromResult(new FetchResult(_items, false));
         public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct) => Task.FromResult(_items);
     }
 }

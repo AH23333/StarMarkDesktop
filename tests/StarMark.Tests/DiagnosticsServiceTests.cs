@@ -139,8 +139,8 @@ public sealed class DiagnosticsServiceTests : IDisposable
         public bool IsAvailable => _available;
         public LocMessage? AvailabilityHint => _available ? null : LocMessage.Of("source.hint.ditto", "某条路径");
         public void Unavailable() => _available = false;
-        public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
-            => Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
+        public Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct)
+            => Task.FromResult(new FetchResult(Array.Empty<Item>(), false));
         public Task<IReadOnlyList<Item>> SearchAsync(string q, SearchFilter f, CancellationToken ct)
             => Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
     }

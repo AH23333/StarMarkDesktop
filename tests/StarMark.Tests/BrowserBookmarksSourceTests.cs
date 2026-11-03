@@ -60,7 +60,7 @@ public sealed class BrowserBookmarksSourceTests : IDisposable
         var source = new EdgeBookmarksSource(WriteTempBookmarks(ValidJson));
         Assert.True(source.IsAvailable);                 // File.Exists 闸门
 
-        var items = await source.FetchAsync(new SyncContext(), CancellationToken.None);
+        var items = (await source.FetchAsync(new SyncContext(), CancellationToken.None)).Items;
 
         Assert.Equal(3, items.Count);                     // 跨三棵根树汇聚全部 url
         Assert.All(items, i => Assert.Equal("edge", i.Source));   // SourceId 实参须逐条写入（写错即此挂）
@@ -70,8 +70,8 @@ public sealed class BrowserBookmarksSourceTests : IDisposable
     [Fact]
     public async Task Fetch_DelegatesItemShapingToFactory_UriPreservedAndTitleFallsBackToUrl()
     {
-        var items = await new EdgeBookmarksSource(WriteTempBookmarks(ValidJson))
-            .FetchAsync(new SyncContext(), CancellationToken.None);
+        var items = (await new EdgeBookmarksSource(WriteTempBookmarks(ValidJson))
+            .FetchAsync(new SyncContext(), CancellationToken.None)).Items;
 
         var gh = Assert.Single(items, i => i.Uri == "https://github.com/");   // Uri 保留原始串（不吞锚点/深链）
         Assert.Equal("GitHub", gh.Title);
@@ -87,7 +87,7 @@ public sealed class BrowserBookmarksSourceTests : IDisposable
         var source = new EdgeBookmarksSource(Path.Combine(Path.GetTempPath(), "starmark-nope-" + Guid.NewGuid().ToString("N") + ".json"));
         Assert.False(source.IsAvailable);
 
-        Assert.Empty(await source.FetchAsync(new SyncContext(), CancellationToken.None));
+        Assert.Empty((await source.FetchAsync(new SyncContext(), CancellationToken.None)).Items);
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public sealed class BrowserBookmarksSourceTests : IDisposable
         var source = new EdgeBookmarksSource(WriteTempBookmarks("{ this is ] not valid json"));
         Assert.True(source.IsAvailable);                 // 文件确实在（走解析而非缺失闸门）
 
-        Assert.Empty(await source.FetchAsync(new SyncContext(), CancellationToken.None));
+        Assert.Empty((await source.FetchAsync(new SyncContext(), CancellationToken.None)).Items);
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public sealed class BrowserBookmarksSourceTests : IDisposable
         Assert.Equal(which, source.SourceId);
 
         if (which == "edge")   // Chrome 无路径注入构造器，端到端注入仅对 Edge 验；Chrome 仅钉常量与映射一致
-            Assert.All(await source.FetchAsync(new SyncContext(), CancellationToken.None), i => Assert.Equal(which, i.Source));
+            Assert.All((await source.FetchAsync(new SyncContext(), CancellationToken.None)).Items, i => Assert.Equal(which, i.Source));
     }
 
     /// <summary>
@@ -149,8 +149,8 @@ public sealed class BrowserBookmarksSourceTests : IDisposable
         var defaultPath = WriteProfileBookmarks("Default", ValidJson);
         WriteProfileBookmarksFrom(defaultPath, "Profile 1", SecondProfileJson);
 
-        var items = await new EdgeBookmarksSource(defaultPath)
-            .FetchAsync(new SyncContext(), CancellationToken.None);
+        var items = (await new EdgeBookmarksSource(defaultPath)
+            .FetchAsync(new SyncContext(), CancellationToken.None)).Items;
 
         Assert.Equal(4, items.Count);                                  // 3（Default）+ 1（Profile 1）
         Assert.Contains(items, i => i.Uri == "https://work.example/intranet");
@@ -164,8 +164,8 @@ public sealed class BrowserBookmarksSourceTests : IDisposable
         var defaultPath = WriteProfileBookmarks("Default", ValidJson);
         WriteProfileBookmarksFrom(defaultPath, "Profile 9", "{ 这不是 JSON ");
 
-        var items = await new EdgeBookmarksSource(defaultPath)
-            .FetchAsync(new SyncContext(), CancellationToken.None);
+        var items = (await new EdgeBookmarksSource(defaultPath)
+            .FetchAsync(new SyncContext(), CancellationToken.None)).Items;
 
         Assert.Equal(3, items.Count);
     }
@@ -178,8 +178,8 @@ public sealed class BrowserBookmarksSourceTests : IDisposable
         WriteProfileBookmarksFrom(defaultPath, "System Profile", SecondProfileJson);
         WriteProfileBookmarksFrom(defaultPath, "Profile 1", SecondProfileJson);
 
-        var items = await new EdgeBookmarksSource(defaultPath)
-            .FetchAsync(new SyncContext(), CancellationToken.None);
+        var items = (await new EdgeBookmarksSource(defaultPath)
+            .FetchAsync(new SyncContext(), CancellationToken.None)).Items;
 
         Assert.Equal(4, items.Count);   // 3 + 仅 Profile 1 那 1 条
     }

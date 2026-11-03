@@ -159,9 +159,10 @@ public sealed class EverythingSource : IItemSource
     /// <b>库里剩下的文件行只可能来自用户自己登记的</b>（「记录到本地」／拖入快捷启动即入库），
     /// 所以那些行现在删得掉、也不会"删了又被拉回来"——这正是 <c>ItemCardPolicy.CanDeletePermanently</c>
     /// 放开文件行的前提，谁把这半截接回来就必须同时把那里改回去。</para>
+    /// <para>回执走信封（P-58）：恒空载荷＋Truncated 恒 false——这颗源没有拉取预算，谈不上「没拉全」。</para>
     /// </summary>
-    public Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
-        => Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
+    public Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct)
+        => Task.FromResult(FetchResult.Full(Array.Empty<Item>()));
 
     public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct)
     {

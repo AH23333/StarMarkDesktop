@@ -54,6 +54,17 @@ public sealed class GitHubClient : IDisposable
     /// </summary>
     public string? CachedETag { get; set; }
 
+    /// <summary>
+    /// 上一轮 <see cref="GetAllStarredAsync"/> 是否被 <see cref="MaxStarredItems"/> 预算掐断（P-57 落的那条腿，
+    /// P-58 把它带出客户端：只记进日志的那半句算不上"说到做到"，超限用户在界面上听到的还得是
+    /// 「没拉全」而不是「同步完成」）。
+    /// <para>与 <see cref="CachedETag"/> 住在一起是因为同一副先例——"跑完才成立的那颗读数"可以挂在客户端上
+    /// （由它的复位纪律保证不被误读）。但它是<b>一轮一清的旗</b>而非可推进的检查点：入口先收旗、
+    /// 掐断那一臂才举旗，<c>GitHubSource.FetchAsync</c> 在拉取返回的同一拍把它装进
+    /// <c>FetchResult</c> 那只信封——晚于这一拍来读的人，读到的就不知是哪一轮的旗。</para>
+    /// </summary>
+    public bool LastFetchTruncated { get; private set; }
+
     public GitHubClient(GitHubOptions options, HttpClient? http = null)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
@@ -147,6 +158,7 @@ public sealed class GitHubClient : IDisposable
         if (!IsConfigured) return Array.Empty<GitHubStarApiModel>();
 
         var etagBefore = CachedETag;   // 本轮开始前的检查点：未完成的一轮不得推进它
+        LastFetchTruncated = false;    // 入口先收旗（P-58）：这颗读数只描述"这一轮"，不叠上一轮的残影
         var all = new List<GitHubStarApiModel>();
         var page = 1;
         // 安全上限按"条目数"而非"固定页数"封顶。过去 maxPages 固定 50，使真实上限 = 50 × _perPage，
@@ -182,6 +194,7 @@ public sealed class GitHubClient : IDisposable
             // 页 1 带回的 ETag 描述的是**全量**列表，把它留在原地，下一轮就会 If-None-Match 命中 304 直接返回空
             // ⇒ 第 5001 条起连"再试一次"的机会都没有。复位之后至少每轮都重拉前 5000 条（HTTP 请求数与今天一样）。
             CachedETag = etagBefore;
+            LastFetchTruncated = true;   // P-58：给信封留的本轮记号——预算掐断要从日志浮到界面（GitHubSource.FetchAsync 读走）
             StarLog.Warn($"GitHub star 数已达 {maxItems} 条上限，本轮只导入前 {maxItems} 条，其余未拉取"
                          + "（不是同步失败：下一次同步会重拉这一批）");
         }

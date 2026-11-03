@@ -25,7 +25,7 @@ public sealed class SyncCheckpointOrderGateTests
     public void FetchMustNotWriteCheckpoints_CommitMust()
     {
         var file = SourceGate.ReadRepoFile(Source);
-        var fetch = SourceGate.Code(SourceGate.MethodBody(file, "public async Task<IReadOnlyList<Item>> FetchAsync"));
+        var fetch = SourceGate.Code(SourceGate.MethodBody(file, "public async Task<FetchResult> FetchAsync"));
         var commit = SourceGate.Code(SourceGate.MethodBody(file, "public async Task CommitCheckpointAsync"));
 
         // 拉取里一次都不许写 sync_state：写了就是"载荷还没进库，检查点先进了"。

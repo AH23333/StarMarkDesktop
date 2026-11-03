@@ -54,10 +54,20 @@ public static class UiStrings
         new Entry("top.syncPartial", "同步部分失败: 成功 {0} 条 · 失败 {1} 源 · {2}ms",
             "Sync partially failed: {0} items ok · {1} sources failed · {2}ms",
             "同期は一部失敗：成功 {0} 件 · 失敗 {1} 源 · {2}ms"),
+        // P-58：三链的中间那一环——没失败、但有源被拉取预算掐断（今天只有 GitHub 那颗）。句子形状
+        // 对齐上面两颗（读数之间用 · 接），「未拉全」⛔ 念成失败，也⛔ 装作上面第一颗的「完成」。
+        new Entry("top.syncDoneTruncated", "同步完成: {0} 条 · {1} 个源未拉全 · {2}ms",
+            "Sync done: items {0} · sources not fully pulled: {1} · {2}ms",
+            "同期完了: {0} 件 · {1} 源は全件を取得していません · {2}ms"),
         new Entry("top.syncDoneTitle", "索引同步完成", "Index sync finished", "索引の同期が完了しました"),
         // P-38 (A)：没失败、但有源没参与（未配置/依赖没跑）那张灰卡的标题——既不报喜也不报忧。
         new Entry("top.syncSkippedTitle", "部分源未参与本轮同步",
             "Some sources skipped this sync", "一部のソースはこの同期に参加していません"),
+        // P-58：没失败、但有源被拉取预算掐断那张卡的标题——同一张灰卡的第二种名单，
+        // 口径对齐上面那颗（不报忧也⛔ 报喜：「没拉全」是事实，不是故障）。
+        new Entry("top.syncTruncatedTitle", "部分源到达拉取上限，本轮未拉全",
+            "Some sources hit the pull cap and were not fully fetched",
+            "一部のソースが取得上限に達し、全件を取得していません"),
         new Entry("top.syncFailedTitle", "同步失败", "Sync failed", "同期に失敗"),
         new Entry("top.syncCancelledTitle", "已取消同步", "Sync cancelled", "同期をキャンセルしました"),
         new Entry("top.syncCancelledBody", "已取消同步：已拉完的源已入库，未拉完的下次同步继续补齐。",
@@ -88,6 +98,11 @@ public static class UiStrings
         new Entry("sync.src.githubOther", "GitHub 请求失败：{0}",
             "GitHub request failed: {0}", "GitHub リクエスト失敗：{0}"),
         new Entry("sync.src.other", "出错：{0}", "Error: {0}", "エラー：{0}"),
+        // P-58：没拉全那一行的「为什么」——对每一颗被预算掐断的源都成立，整份名单共用这一颗键
+        //（各自的上限数不同，念出来只会让每一行都不一样，而「其余未导入」才是用户要做的事）。
+        new Entry("sync.src.truncated", "条目数到达拉取上限，这一轮没有拉全（其余未导入）",
+            "The item cap was hit - this round did not pull everything (the rest were not imported)",
+            "件数が取得上限に達したため、この周回は全件を取得していません（残りは未取り込み）"),
         // 「谁」与「为什么」连起来的那一行，以及行与行之间那颗位置：语序归这两行自己决定（⛔ 在 C# 里拼 +）。
         new Entry("sync.src.line", "{0}：{1}", "{0}: {1}", "{0}：{1}"),
         new Entry("sync.src.lineJoin", "{0}{2}{1}", "{0}{2}{1}", "{0}{2}{1}"),

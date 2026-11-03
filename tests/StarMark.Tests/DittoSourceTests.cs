@@ -33,7 +33,7 @@ public sealed class DittoSourceTests : IDisposable
         var source = new DittoSource(_dbPath);
         Assert.True(source.IsAvailable);
 
-        var items = await source.FetchAsync(new SyncContext(), CancellationToken.None);
+        var items = (await source.FetchAsync(new SyncContext(), CancellationToken.None)).Items;
 
         // ditto:1(0) / ditto:2(0) / ditto:4(NULL) / ditto:5(0) 为非分组，ditto:3(1) 为分组被排除
         Assert.Equal(4, items.Count);
@@ -50,7 +50,7 @@ public sealed class DittoSourceTests : IDisposable
     {
         // 回归 AJ-2：多行正文的第 2 行关键词必须在 Description（可入库索引字段），而非仅落在被忽略的 SearchText。
         var source = new DittoSource(_dbPath);
-        var items = await source.FetchAsync(new SyncContext(), CancellationToken.None);
+        var items = (await source.FetchAsync(new SyncContext(), CancellationToken.None)).Items;
 
         var multi = Assert.Single(items, i => i.SourceId == "ditto:5");
         Assert.Equal("剪贴板标题行", multi.Title);                       // Title 仅首行
@@ -71,7 +71,7 @@ public sealed class DittoSourceTests : IDisposable
             var repo = new ItemRepository(factory);
 
             var source = new DittoSource(_dbPath);
-            var items = await source.FetchAsync(new SyncContext(), CancellationToken.None);
+            var items = (await source.FetchAsync(new SyncContext(), CancellationToken.None)).Items;
             await repo.UpsertAsync(items, CancellationToken.None);
 
             var hits = await repo.SearchAsync("ZEBRA", new SearchFilter { MaxResults = 10 }, CancellationToken.None);
@@ -87,7 +87,7 @@ public sealed class DittoSourceTests : IDisposable
     public async Task FetchAsync_TextClipTitleMatchesUnicodeText()
     {
         var source = new DittoSource(_dbPath);
-        var items = await source.FetchAsync(new SyncContext(), CancellationToken.None);
+        var items = (await source.FetchAsync(new SyncContext(), CancellationToken.None)).Items;
 
         var text = Assert.Single(items, i => i.SourceId == "ditto:1");
         Assert.Equal("Hello StarMark 剪贴板集成测试", text.Title);

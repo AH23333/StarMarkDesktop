@@ -99,17 +99,23 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
     /// 下一轮首页带 <c>If-None-Match</c> 命中 304 ⇒ 返回零条 ⇒ 那批新 Star 再也不会被拉回来，
     /// 直到用户的 starred 列表再次变动产生新 ETag。
     /// </para>
+    /// <para>
+    /// <b>回执是信封（P-58）</b>：载荷之外把「这一轮被预算掐断」那颗旗（<c>GitHubClient.LastFetchTruncated</c>）
+    /// 在拉取返回的同一拍读走、装进 <c>FetchResult.Truncated</c>——慢一拍再读客户端属性，
+    /// 中间任何一次新拉取都可能已把旗收走，读到的就不知是哪一轮的。
+    /// </para>
     /// </summary>
-    public async Task<IReadOnlyList<Item>> FetchAsync(SyncContext ctx, CancellationToken ct)
+    public async Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct)
     {
         _pendingCheckpoint = null;      // 上一轮没提交成的（崩溃/异常）一律不带进这一轮：宁可重复提交，不可提交空结果
-        if (!IsAvailable) return Array.Empty<Item>();
+        if (!IsAvailable) return FetchResult.Full(Array.Empty<Item>());
 
         // P1-4：载入上次 ETag，用于条件请求（命中 304 直接短路整轮拉取）
         var priorEtag = await _repository.GetSyncStateAsync("github:etag", ct);
         if (!string.IsNullOrEmpty(priorEtag)) Client.CachedETag = priorEtag;
 
         var repos = await Client.GetAllStarredAsync(ct);
+        var truncated = Client.LastFetchTruncated;   // P-58：同一拍读走装进信封——这颗旗只描述刚刚那一轮
 
         // P1-4：整轮跑完才暂存 etag + last_synced_at（落库交给 CommitCheckpointAsync，见上面②）
         _pendingCheckpoint = Client.CachedETag is { Length: > 0 } freshEtag
@@ -117,14 +123,12 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
             : (null, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
         var now = _pendingCheckpoint.Value.At;
 
-        if (repos.Count == 0) return Array.Empty<Item>();
-
         var items = new List<Item>(repos.Count);
         foreach (var repo in repos)
         {
             items.Add(MapToItem(repo, now));
         }
-        return items;
+        return new FetchResult(items, truncated);
     }
 
     /// <summary>
