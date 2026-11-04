@@ -191,9 +191,17 @@
     scheduleSave();
   }
 
-  function applyProp(rerender) {
+  /* 那三颗外观 prop（theme／langCode／UIOptions）各自记住最后一次递进来的值（片205＝深浅色那副真机脸的真因）：
+     从前每一发都只带自己那一颗键重挂一遍，而重挂那一挂的 props 每次都从 baseProps() 重新拼——
+     后到的那发把先到那发刚挂上去的兄弟键抹掉了（宿主 bridge.ready 那一拍先发 theme.set 再发 lang.set，
+     末了那一挂上只剩 langCode 一颗：深色用户的画布恒浅色；中文用户的语言码碰巧同默认值，连「没跟」都看不出来）。
+     记住的这一份每次整份并进去：谁后到都抹不掉谁先到。 */
+  var stickyProps = {};
+
+  function applyProp(extra) {
     if (!API) return;
-    rerender();
+    Object.keys(extra).forEach(function (k) { stickyProps[k] = extra[k]; });
+    rerenderWith(stickyProps);
   }
 
   function onOut(e) {
@@ -204,13 +212,13 @@
         applyBoardLoad(m.args && m.args.bytes);
         break;
       case "theme.set":
-        applyProp(function () { rerenderWith({ theme: m.args && m.args.theme }); });
+        applyProp({ theme: m.args && m.args.theme });
         break;
       case "lang.set":
-        applyProp(function () { rerenderWith({ langCode: m.args && m.args.langCode }); });
+        applyProp({ langCode: m.args && m.args.langCode });
         break;
       case "feature.flags":
-        applyProp(function () { rerenderWith({ UIOptions: m.args && m.args.uiOptions }); });
+        applyProp({ UIOptions: m.args && m.args.uiOptions });
         break;
       case "export.pick":
         runExport(m.args && m.args.kind, m.args && m.args.skipInliningFonts, m.id,

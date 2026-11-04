@@ -1714,9 +1714,27 @@ public sealed class BoardWindow : Window
 
     private void OnLocaleChanged()
     {
-        PasteNotice();
-        PasteBar();
-        PasteHiddenEmbedNotice();
+        // 片205＝P-287 的入口读数：这一行在日志里＝这一扇的订阅活着、换语言那一拍真的进来了
+        //（日志里没有它＝断点在这一扇上游——多播链那一头由 Locale 的逐户隔离留痕接手定界）。
+        StarMark.Abstractions.StarLog.Info("boards.locale.tap id=" + _boardId);
+        // 三颗重贴逐颗兜（片205）：一颗抛了⛔ 配把 lang.set 那一发也带走——真机量到的正是这副脸
+        //（主窗换了、这扇一动不动，日志里连 boards.lang.push 那一行都没有）。兜住的那颗只留一行痕，
+        // 根因另立一案修，⛔ 在换语言这一拍里滚雪球。
+        try { PasteNotice(); }
+        catch (System.Exception ex)
+        {
+            StarMark.Abstractions.StarLog.Warn("boards.locale.paste.threw part=notice type=" + ex.GetType().Name + " id=" + _boardId);
+        }
+        try { PasteBar(); }
+        catch (System.Exception ex)
+        {
+            StarMark.Abstractions.StarLog.Warn("boards.locale.paste.threw part=bar type=" + ex.GetType().Name + " id=" + _boardId);
+        }
+        try { PasteHiddenEmbedNotice(); }
+        catch (System.Exception ex)
+        {
+            StarMark.Abstractions.StarLog.Warn("boards.locale.paste.threw part=hidden type=" + ex.GetType().Name + " id=" + _boardId);
+        }
         // 换语言那一刻，画布上那套引擎的标签也要跟着重贴（§23.1 真机量过：那颗 prop 换的那一刻
         // 在同一颗实例上真实重贴，⛔ 需要重挂）——面板那三句是我们自己的话，上面三行管它们。
         ReapplyAppearance();

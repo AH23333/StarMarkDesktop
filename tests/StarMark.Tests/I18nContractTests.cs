@@ -526,6 +526,36 @@ public sealed class I18nContractTests : IDisposable
         }
     }
 
+    /// <summary>链上<b>任何一户抛了，⛔ 许把它后面的户整批掐哑</b>（片205＝P-287 真机定界后的行为闸）。
+    /// <para>那一拍是 <c>Changed?.Invoke()</c> 多播链：订户二十几户（主窗、托盘、各页、画板窗——
+    /// 画板窗开窗才订＝链尾）。真机量到的脸：主窗换了语言、画板窗一动不动——链上哪一户早抛了，
+    /// 排它后面的户整批收不到。这一格钉修法：逐户喊、逐户兜——抛了的那户留一行痕（订阅全是我们自己的码，
+    /// 读得起也查得到），后面的户照常收到。抛的根因由那行痕另立一案，⛔ 在这一拍里滚雪球。</para>
+    /// <para>行为闸而⛔ 形状闸：<c>Changed?.Invoke()</c> 那一手在这颗 Fact 手里量得出来——
+    /// 先订一户会抛的、再订一户数数的，换语言那一拍过后数数那户必须数到一。</para></summary>
+    [Fact]
+    public void OneThrowingSubscriberMustNotSilenceTheRestOfTheChain()
+    {
+        var badRan = false;
+        var goodHeard = 0;
+        void BadSubscriber() { badRan = true; throw new InvalidOperationException("订户自己坏了，⛔ 配带累邻居"); }
+        void GoodSubscriber() => goodHeard++;
+        Locale.Changed += BadSubscriber;
+        Locale.Changed += GoodSubscriber;
+        try
+        {
+            var other = Locale.Current == AppLanguage.Chinese ? AppLanguage.English : AppLanguage.Chinese;
+            Assert.True(Locale.TrySet(other), "换成另一门语言必须报告变了");
+            Assert.True(badRan, "会抛的那一户必须真的被喊到（否则这颗闸量的是别的东西）");
+            Assert.True(goodHeard == 1, "排在抛户后面的订户必须照常收到那一拍");
+        }
+        finally
+        {
+            Locale.Changed -= BadSubscriber;
+            Locale.Changed -= GoodSubscriber;
+        }
+    }
+
     /// <summary>同一句界面文案在<b>每一列</b>里都取得到，而且<b>换语言当场就换词</b>（不需要重建元素）。</summary>
     [Fact]
     public void TheSameKeyAnswersInEveryLanguageAndChangesAtOnce()

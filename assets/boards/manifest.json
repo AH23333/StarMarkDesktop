@@ -12,8 +12,8 @@
  "files": [
   {
    "path": "board-bridge.js",
-   "bytes": 21660,
-   "sha256": "469a9c7534184cb15d6f1ce7b8289a91586a32b03b445ce2407ec06840d388c5"
+   "bytes": 22345,
+   "sha256": "802656cafc89be09056f821089707a1c609795fa544c48505a46c3d034cdfba4"
   },
   {
    "path": "board.html",

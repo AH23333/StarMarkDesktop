@@ -693,3 +693,13 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - ①P-285：BuildStage「⋯」收合钮默认收起・点翻板（U+22EF 语言中立・色尺 18/13/13・六 add 顺序不动）；②P-286：名册 CloseAll（锁开窗集合快照、逐扇 Close＝各自关窗协商・单扇失败记 Warn）＋开关变更处理在刷托盘后挂「关＝逐扇收」；③P-287：ReapplyAppearance 加 <code>boards.lang.push code=…</code> 发侧读数日志（有而没换＝桥/引擎・缺＝宿主）；条目保持开放待真机；④P-288：activeTool=selection 待 bundle 快证；两建议归后续批；条目保持开放；⑤P-289：读档判据倒置修（is { } d && … == true）＋闸门整形钉死（禁项读抹注释后代码）。
 - 测面四闸：BoardsSettings（加强＋新 Fact）・BoardAppearance（改名＋新 Fact）・BoardWindowBridge（新 Fact）・BoardWord（色尺 18/13/13）；读数：gate204 1142/1142・全量 6802/6802・docgates204 26/26・census 21（±0）・计数器 290/236/54 VERDICT OK。⛔ push（未推 13）。
 - 下一刀：用户手测三步（P-285 观感／P-286 关开关收窗／P-287 真机切语言读日志定界）→ 按读数定 P-287 断点或结案。
+
+## 八十六、片205 画板批：深浅色真因修（页侧粘性 props・坑 #1151）＋P-287 换语言链双修（开放待复测）＋P-290 同板去重新立同批结案＋P-285 侧查注（归片206）
+
+- 接手第一步照旧现读编号轴：报告到五百九十、交接到八十五、坑表到 #1150、账本到 P-289；本批＝画板批（码改四档＋闸门两档；新立 P-290 同批结案）。
+- ①深浅色真因：页侧每一发外观消息只带自己那一颗键、从 baseProps() 重拼一挂 props——后发抹先发（末挂只剩 langCode ⇒ 恒浅色）；修＝粘性档 stickyProps 整份并挂（board-bridge.js 双份同步＋manifest 条目更新）。
+- ②P-287 双修（待复测）：Locale 多播改逐户喊逐户兜（抛户留痕 <code>locale.changed.subscriber.threw</code>・根因另立一案）；画板窗入口读数 <code>boards.locale.tap</code>＋三颗重贴逐颗兜（<code>boards.locale.paste.threw</code>）。复测三层日志定界：链抛痕／入口读数／发侧读数。
+- ③P-290：同板连点两下＝双引擎冷启卡顿＋双写同一档；名册先查后起（lock (_open)・FirstOrDefault・Activate＋dedupe 留痕）；新起⛔ 去重。
+- ④P-285 侧查注（归片206）：菜单 DOM 读数齐（main-menu-trigger・dropdown-menu-group・dropdown-menu-item base・portal 挂 body＝MutationObserver）；注入落点＝桥侧＋两颗新协议名（export.request／scale.request）。
+- 测面：BoardAppearance 三新 Fact＋I18nContract 一行为 Fact（OneThrowingSubscriberMustNotSilenceTheRestOfTheChain）；读数：gate205 1188/1188・全量 6806/6806・docgates205 26/26・census 21（±0）・计数器 291/237/54 VERDICT OK。⛔ push（未推 14）。
+- 下一刀：用户复测四步（深色开板／切语言读三层日志／同板连点／看 134604 笔迹）→ 按读数定 P-287 翻牌或续修；片206＝菜单注入重做（协议名＋桥 MutationObserver）。

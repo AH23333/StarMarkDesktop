@@ -41,11 +41,25 @@ public static class BoardsWindows
     /// 点开一块板那一路）。
     /// <para><paramref name="sceneId"/> 交 null＝新起一块。两档挤在同一颗方法里是<b>事实</b>而⛔ 巧合：
     /// 「续上一块」读盘上最近动过的那颗档，读不到就是 null，用户手上的表现本来同一副（一块空板）。</para>
+    /// <para><b>同一颗板只开一扇</b>（片205）：名册里已有那颗 id 的窗就把它带到眼前——再起一扇＝
+    /// 两颗引擎各自冷启（真机量到的卡顿）＋两扇各往同一颗档里写。新起那一档（<paramref name="sceneId"/>
+    /// 交 null）⛔ 参加去重：「新起一块」每一拍都该是一块新板。</para>
     /// <para>这一颗⛔ 兜异常、也⛔ 配一句上屏话：坏消息由各自入口按各自的出口说（托盘那张通知卡／
     /// 卡片那条"打不开这一行"的回报）。把句子收进这里＝名册档成了第二主人。</para>
     /// </summary>
     public static async Task OpenSceneAsync(string? sceneId)
     {
+        if (sceneId is { Length: > 0 } id)
+        {
+            BoardWindow? already;
+            lock (_open) already = _open.FirstOrDefault(w => w.BoardId == id);
+            if (already is not null)
+            {
+                StarMark.Abstractions.StarLog.Info("boards.scene.dedupe id=" + id);
+                already.Activate();
+                return;
+            }
+        }
         var win = new BoardWindow();
         if (sceneId is null) await win.OpenNewAsync();
         else await win.OpenSceneAsync(sceneId);

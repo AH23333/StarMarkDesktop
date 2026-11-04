@@ -18,6 +18,7 @@ public sealed class BoardAppearanceGateTests
 {
     private const string WindowPath = "src/StarMark.UI/Boards/BoardWindow.cs";
     private const string RosterPath = "src/StarMark.UI/Boards/BoardsWindows.cs";
+    private const string BridgeJsPath = "tools/boards/board-bridge.js";
     private const string ThemePath = "src/StarMark.UI/MainWindow.Theme.cs";
     private const string PolicyPath = "src/StarMark.Core/Boards/BoardPolicy.cs";
 
@@ -160,5 +161,63 @@ public sealed class BoardAppearanceGateTests
             policy, StringComparison.Ordinal);
         // ⛔ 层次倒挂：Core 那颗判据⛔ 认框架那颗 enum（档头②那条口径）
         Assert.Equal(0, SourceGate.Count(policy, "ElementTheme"));
+    }
+
+    // ─────────────── ⑤ 片205：深浅色真因（页侧重挂抹兄弟键）＋换语言链逐户隔离＋同板去重 ───────────────
+
+    /// <summary>深浅色那副真机脸的真因住在页侧（片205 定界）：宿主 bridge.ready 那一拍先发 theme.set
+    /// 再发 lang.set，而页侧从前每一发都只带自己那一颗键重挂一遍、重挂的 props 每次从 baseProps() 重拼——
+    /// 后到的那发把先到那发刚挂上去的兄弟键抹掉（末了那一挂上只剩 langCode：深色用户恒浅色，
+    /// 中文用户的语言码碰巧同默认值连「没跟」都看不出）。这一格钉修法：三颗外观 prop 记进一份粘性档，
+    /// 每一发整份并进去重挂——谁后到都抹不掉谁先到。</summary>
+    [Fact]
+    public void ThePageKeepsEveryAppearancePropAcrossRerenders()
+    {
+        var js = SourceGate.ReadRepoFile(BridgeJsPath);
+        Assert.Contains("var stickyProps = {};", js, StringComparison.Ordinal);
+        Assert.Equal(1, SourceGate.Count(js, "rerenderWith(stickyProps)"));
+        // 旧形状⛔ 许回来：单键重挂＝每一发把兄弟键抹掉
+        Assert.DoesNotContain("rerenderWith({ theme:", js, StringComparison.Ordinal);
+        Assert.DoesNotContain("rerenderWith({ langCode:", js, StringComparison.Ordinal);
+    }
+
+    /// <summary>换语言那一拍：入口留读数＋三颗重贴逐颗兜（P-287 真机定界后的修法）——
+    /// 链上任何一颗抛了⛔ 配把 lang.set 那一发也带走（真机脸：主窗换了、画板窗一动不动，
+    /// 日志里连 boards.lang.push 那一行都没有）。入口那行把「订阅活着、这一拍真的进来了」留在日志里，
+    /// 三颗 catch 把抛点收窄到户；三颗重贴的字面调用语句照旧在场（闸门连它们的计数一起钉）。</summary>
+    [Fact]
+    public void TheLanguageBeatIsTappedLoggedAndNeverTakenDownByOneStuckPaste()
+    {
+        var raw = SourceGate.ReadRepoFile(WindowPath);
+        var locale = SourceGate.MethodBody(raw, "private void OnLocaleChanged()");
+        Assert.Equal(1, SourceGate.Count(locale, "boards.locale.tap id="));
+        Assert.Equal(3, SourceGate.Count(locale, "catch (System.Exception"));
+        Assert.Equal(3, SourceGate.Count(locale, "boards.locale.paste.threw part="));
+        // 三颗重贴都照贴，而 lang.set 那一发排在三颗之后（一颗被兜住了⛔ 配把那一发也带走）
+        Assert.True(locale.IndexOf("PasteNotice();", StringComparison.Ordinal)
+                    < locale.IndexOf("ReapplyAppearance();", StringComparison.Ordinal),
+            "重贴排在 lang.set 之后＝重贴那一户的坏把该发的也带走了");
+        Assert.True(locale.IndexOf("PasteHiddenEmbedNotice();", StringComparison.Ordinal)
+                    < locale.IndexOf("ReapplyAppearance();", StringComparison.Ordinal),
+            "第三颗重贴排在 lang.set 之后＝同一颗坏");
+    }
+
+    /// <summary>同一颗板只开一扇（片205：真机量到同板连点两下＝两颗引擎各自冷启的卡顿＋两扇各往
+    /// 同一颗档里写）：名册里已有那颗 id 的窗就带到眼前，⛔ 再起第二扇。去重排在起窗之前；
+    /// 新起那一档（sceneId 交 null）⛔ 参加去重——「新起一块」每一拍都该是一块新板。</summary>
+    [Fact]
+    public void OpeningTheSameSceneTwiceBringsItsOneWindowToFrontInsteadOfASecondEngine()
+    {
+        var raw = SourceGate.ReadRepoFile(RosterPath);
+        var open = SourceGate.MethodBody(raw, "public static async Task OpenSceneAsync(string? sceneId)");
+        Assert.Contains("lock (_open)", open, StringComparison.Ordinal);
+        Assert.Contains("FirstOrDefault(w => w.BoardId == id)", open, StringComparison.Ordinal);
+        Assert.Contains("boards.scene.dedupe id=", open, StringComparison.Ordinal);
+        Assert.Contains("already.Activate();", open, StringComparison.Ordinal);
+        // 先查再起（去重排在造窗之前），而新起那一臂照旧走到造窗那一句
+        Assert.True(open.IndexOf("FirstOrDefault", StringComparison.Ordinal)
+                    < open.IndexOf("new BoardWindow()", StringComparison.Ordinal),
+            "去重排在造窗之后＝第二扇已经起来了才想起去查");
+        Assert.Contains("if (sceneId is null) await win.OpenNewAsync();", open, StringComparison.Ordinal);
     }
 }

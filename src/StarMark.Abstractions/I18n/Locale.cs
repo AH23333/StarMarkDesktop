@@ -128,8 +128,33 @@ public static class Locale
             if (_current == next) return false;
             _current = next;
         }
-        Changed?.Invoke();
+        RaiseChanged();
         return true;
+    }
+
+    /// <summary>
+    /// 逐户喊那一拍（片205＝P-287 真机定界后的修法）。
+    /// <para>订阅方二十几户（主窗、托盘、各颗窗件、各页、画板窗——画板窗开窗那一刻才订＝链尾），
+    /// 而 <c>Changed?.Invoke()</c> 那一手是多播链：链上任何一户抛了，排在它后面的户整批收不到。
+    /// 真机量到的正是这副脸：主窗换了语言、画板窗一动不动，连那一发 <c>lang.set</c> 都没发出去。</para>
+    /// <para>所以这里逐户喊、逐户兜：抛了的那一户留一行痕（念那户的方法与异常类型——订阅全是我们自己的码，
+    /// 读得起也查得到），后面那些户照常收到。抛的根因由那行痕另立一案，⛔ 在这一拍里滚雪球
+    /// （重试／上屏都⛔ 是这一颗的事）。</para>
+    /// </summary>
+    private static void RaiseChanged()
+    {
+        var handlers = Changed?.GetInvocationList();
+        if (handlers is null) return;
+        foreach (var handler in handlers)
+        {
+            try { ((Action)handler)(); }
+            catch (Exception ex)
+            {
+                StarLog.Warn("locale.changed.subscriber.threw subscriber="
+                    + handler.Method.DeclaringType?.Name + "." + handler.Method.Name
+                    + " type=" + ex.GetType().Name);
+            }
+        }
     }
 
     /// <summary>取一句界面文案。<b>键没登记</b>不抛也不装没看见：屏幕上出现 <c>⟨nav.tree⟩</c> 这种形状，
