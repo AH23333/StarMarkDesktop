@@ -123,18 +123,25 @@ public class BoardLinkGateTests
         Assert.Equal(2, SourceGate.Count(body, "id=\" + _boardId"));
     }
 
-    /// <summary>⑦ 文件头那句"真喊几颗"要跟得上页面真喊的颗数——它是正文里数自家列表的那颗数（名册 555）。</summary>
+    /// <summary>⑦ 文件头那句"真喊几颗"要跟得上页面真喊的颗数——它是正文里数自家列表的那颗数（名册 555）。
+    /// <para>片206＝P-285 重做：引擎主菜单那一组的四颗索取上路（<c>export.request</c>／<c>pin.request</c>／
+    /// <c>scale.request</c>／<c>background.request</c>），真喊的从四颗变八颗；在册而⛔ 接线的只剩
+    /// <c>paste.query</c> 那一颗。</para></summary>
     [Fact]
     public void TheBridgeHeaderCountsWhatThePageActuallySends()
     {
         var names = Regex.Matches(Js, "postIn\\(\"([a-z.]+)\"")
             .Select(m => m.Groups[1].Value).Distinct().OrderBy(x => x, StringComparer.Ordinal).ToArray();
-        Assert.Equal(["board.loaded", "bridge.ready", "export.bytes", "open.external"], names);
-        // 文件头那句颗数与它后面那份名单＝正文里数自家列表的那颗数（名册 555）⇒钉<b>整行字面量</b>，
+        Assert.Equal(
+            ["background.request", "board.loaded", "bridge.ready", "export.bytes", "export.request", "open.external",
+             "pin.request", "scale.request"], names);
+        // 文件头那句颗数与它后面那份名单＝正文里数自家列表的那颗数（名册 555）⇒钉<b>整段字面量</b>，
         // 加一颗真发的而⛔ 改口＝上面那颗红；改了措辞＝这一颗红（两颗各守一头，⛔ 拿阿拉伯数字去解析汉字那颗数）
-        Assert.Contains("真喊四颗（postIn 逐颗一处＝bridge.ready／board.loaded／export.bytes／open.external）", Js, StringComparison.Ordinal);
-        // 在册而⛔ 接线的三颗逐颗点名（这句⛔ 是"还有三颗"，列错了当场红）
-        foreach (var idle in new[] { "paste.query", "pin.request", "background.request" })
+        Assert.Contains(
+            "名单在册十颗，页面今天真喊八颗（postIn 逐颗一处＝bridge.ready／board.loaded／export.bytes／\n   open.external／export.request／pin.request／scale.request／background.request——后四颗＝片206\n   引擎主菜单那一组的索取）＋send 那颗 bridge.reply",
+            Js, StringComparison.Ordinal);
+        // 在册而⛔ 接线的那一颗逐颗点名（这句⛔ 是"还有几颗"，列错了当场红）
+        foreach (var idle in new[] { "paste.query" })
             Assert.DoesNotContain("postIn(\"" + idle + "\"", Js, StringComparison.Ordinal);
     }
 

@@ -125,9 +125,12 @@ public static class BoardsWindows
 
     /// <summary>
     /// 开关 OFF 那一拍（片204＝P-286 处置①）：把<b>每一扇</b>开着的画板窗收一遍。
-    /// <para>收＝<see cref="BoardWindow.Close"/> 那套既有协商：拦一次→Hide→冲写→被拒那一支
-    /// 自己把窗亮回并贴上「另存／继续编辑」那块面板——"收前问一句要不要存"这一问由每扇窗
-    /// 自己的关窗路问，这里⛔ 另起一份"直接拆"的捷径（拆＝把没落盘的那几笔连问都不问就丢掉，
+    /// <para>⚠ 片206＝P-286 修法：从前这里调 <see cref="BoardWindow.Close"/>，赌的是"代码关窗
+    /// 也走 AppWindow.Closing 那套既有协商"——片205 真机钉死那一条<b>⛔ 成立</b>（WinUI 里代码那一记
+    /// Close ⛔ 响 Closing），板子连问都没被问就没了＝静默关窗那一案的根因。现在每一扇都走
+    /// <see cref="BoardWindow.CloseThroughNegotiation"/>：桥活着就与按×同一副「藏→问→真关」，
+    /// 被拒那一支自己把窗亮回并贴上「另存／继续编辑」那块面板——"收前问一句要不要存"这一问
+    /// 由每扇窗自己的关窗路问，这里⛔ 另起一份"直接拆"的捷径（拆＝把没落盘的那几笔连问都不问就丢掉，
     /// 正是这一格要堵的坏）。用户在那一支选「继续编辑」＝他的决定：那扇窗留在名册里照旧活着。</para>
     /// <para>快照后逐扇收（收的那一拍里名册会被 <c>OnClosed</c> 动——成行的窗自己摘自己，
     /// ⛔ 边收边遍历活名册）；逐扇兜异常（与 <see cref="ReapplyAppearance"/> 同一副规矩）：
@@ -139,7 +142,7 @@ public static class BoardsWindows
         lock (_open) windows = _open.ToArray();
         foreach (var w in windows)
         {
-            try { w.Close(); }
+            try { w.CloseThroughNegotiation(); }
             catch (System.Exception ex)
             {
                 StarMark.Abstractions.StarLog.Warn("boards.close-all.failed " + ex.GetType().Name);

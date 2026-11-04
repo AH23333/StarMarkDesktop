@@ -80,11 +80,13 @@ public sealed class BoardsSettingsGateTests
             "收窗排在存设置/刷托盘之前＝半路红一扇窗丢了状态");
         // OFF 那一臂才动窗：ON 侧开关只说"从今往后的入口"，⛔ 顺手拆已开的窗
         Assert.Contains("if (!value)", vm, StringComparison.Ordinal);
-        // 名册是收窗的唯一主人：快照后逐扇 Close()＋逐扇兜异常（一扇收不掉⛔ 配带走其余几扇）
+        // 名册是收窗的唯一主人：快照后逐扇 CloseThroughNegotiation()＋逐扇兜异常（一扇收不掉⛔ 配带走其余几扇）。
+        // ⚠ 片206＝P-286 修法：从前这里钉 w.Close()，赌的是"代码关窗也走 AppWindow.Closing 那套协商"——
+        // 片205 真机钉死那一条⛔ 成立（WinUI 里代码那一记 Close ⛔ 响 Closing），板子连问都没被问就没了＝静默关窗。
         var roster = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.UI/Boards/BoardsWindows.cs"));
         var close = SourceGate.MethodBody(roster, "public static void CloseAll()");
         Assert.Contains("lock (_open) windows = _open.ToArray();", close, StringComparison.Ordinal);
-        Assert.Contains("w.Close();", close, StringComparison.Ordinal);
+        Assert.Contains("w.CloseThroughNegotiation();", close, StringComparison.Ordinal);
         Assert.Contains("catch", close, StringComparison.Ordinal);
     }
 

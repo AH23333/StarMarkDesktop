@@ -27,25 +27,31 @@ public static class BridgeProtocol
     /// <summary>信封里那颗 <c>v</c> 的本命值（§12.1 定形，v1 未改）。</summary>
     public const int Version = 1;
 
-    /// <summary>JS→C# 的八颗命令名。颗数由证人钉住（<c>BoardBridgeProtocolTests</c> ①）。
-    /// <para><b>片56 补上的那颗 <c>bridge.reply</c>＝页面答宿主问的那一路</b>（账本 P-244）：
+    /// <summary>JS→C# 的十颗命令名。颗数由证人钉住（<c>BoardBridgeProtocolTests</c> ①）。
+    /// <para><b>片56 补上的那颗 <c>bridge.reply</c>>＝页面答宿主问的那一路</b>（账本 P-244）：
     /// 它早就在发（<c>board-bridge.js</c> 的 <c>send()</c>），而⛔ 在册⇒每一句"这一办发不出去"都死在
     /// <see cref="Check"/> 的名字闸门上（<c>fault:UnknownName</c>），连 switch 都走不到＝
-    /// 一颗坏掉的那一发既⛔ 落盘、也⛔ 说出去、还⛔ 放开那颗可点位。</para></summary>
+    /// 一颗坏掉的那一发既⛔ 落盘、也⛔ 说出去、还⛔ 放开那颗可点位。</para>
+    /// <para><b>片206 补上的那两颗 <c>export.request</c>／<c>scale.request</c></b>（P-285 重做）：引擎主菜单
+    /// 那一组递进来的索取——前者带档位要一张图，后者翻那一档缩放（<c>pin.request</c>／<c>background.request</c>
+    /// 早在册，这一批才真有页面喊它们）。</para></summary>
     public static readonly string[] InboundCommands =
     [
-        "bridge.ready", "board.loaded", "paste.query", "export.bytes", "pin.request", "background.request", "open.external",
+        "bridge.ready", "board.loaded", "paste.query", "export.bytes", "export.request", "pin.request", "scale.request",
+        "background.request", "open.external",
         "bridge.reply",
     ];
 
-    /// <summary>C#→JS 的七颗事件名。<b>颗数的脸</b>：片148 多出来的那颗 <c>image.insert</c> 是矩阵第1／3／4行共用的
+    /// <summary>C#→JS 的八颗事件名。<b>颗数的脸</b>：片148 多出来的那颗 <c>image.insert</c> 是矩阵第1／3／4行共用的
     /// 唯一注入出口（深析 §四），名单从六颗变七颗由证人 <c>BothListsAreClosedOverTheirOwnFieldTables</c> 说一次，
     /// ⛔ 由下一批"顺手补上"——漏登记的死法与片56 那颗 <c>bridge.reply</c> 一模一样：
     /// <see cref="Check"/> 判成 UnexpectedField／UnknownName，而 <c>PostOutbound</c> 那句 <c>if (!allowed) return;</c>
-    /// 一声不响＝用户点了「放到画板」而屏幕上什么也没多出来。</summary>
+    /// 一声不响＝用户点了「放到画板」而屏幕上什么也没多出来。
+    /// <para><b>片206 多出来的那颗 <c>menu.set</c></b>（P-285 重做）：宿主往引擎主菜单那一组里推字与亮态——
+    /// 五个动作搬进引擎自己的菜单之后，那一组上的话由宿主整份替换（半份推送＝菜单冻在旧话上）。</para></summary>
     public static readonly string[] OutboundEvents =
     [
-        "board.load", "theme.set", "lang.set", "feature.flags", "export.pick", "autosave.arm", "image.insert",
+        "board.load", "theme.set", "lang.set", "feature.flags", "export.pick", "autosave.arm", "image.insert", "menu.set",
     ];
 
     /// <summary>
@@ -64,7 +70,12 @@ public static class BridgeProtocol
             ["board.loaded"] = ["elements", "canvas"],
             ["paste.query"] = ["shape", "bytes"],
             ["export.bytes"] = ["bytes", "kind", "suggested"],
-            ["pin.request"] = ["token"],
+            // 引擎主菜单那一组的索取（片206＝P-285 重做）：带档位要一张图（只在册且⛔ 落板档的那两档接）。
+            ["export.request"] = ["kind"],
+            // 「贴到桌面」：片206 把那颗从未存在过的 token 字段摘掉——页面从没递过它，
+            // 名单上的键＝越权面（硬线②），养一颗没人发的键就是给越权留缝。
+            ["pin.request"] = [],
+            ["scale.request"] = [],
             ["background.request"] = [],
             ["open.external"] = ["url"],
             // 页面答宿主的那一句：那颗 ok 是<b>这一办发出去了的判断</b>，那颗 err 只进日志（⛔ 上屏＝P-193 那条口径，
@@ -88,10 +99,13 @@ public static class BridgeProtocol
             ["autosave.arm"] = [],
             // 宿主往那块板上放<b>一张图</b>（矩阵第1／3／4行共用的唯一出口）。四颗必带：
             // 那颗 dataUrl 是本体，mimeType 由宿主按白名单认（⛔ 由调用方自报），两颗数是交出去的那对尺寸。
-            // ⚠ 页面造那颗 <c>files</c> 值时<b>必须把 id 写进值里</b>：引擎那句 addMissingFiles 逐条按 <c>s.id</c> 记账，
-            // 而页面递的是"只取值"那一族——值里没 id 就记到 <c>undefined</c> 键下，元素按 <c>fileId</c> 永远查不到，
-            // 屏幕上只剩灰色占位框（2026-10-30 两发真机读数，正本 <c>bin/WI99/p148_image_route_readings.txt</c>；账本 P-274）。
+            // ⚠ 页面造那颗 <c>files</c> 值时<b>必须把 id 写进值里</b>：引擎那句 addMissingFiles 逐条按 s.id 记账，
+            // 而页面递的是"只取值"那一族——值里没 id 就记到 undefined 键下，元素按 fileId 永远查不到，
+            // 屏幕上只剩灰色占位框（2026-10-30 两发真机读数，正本 bin/WI99/p148_image_route_readings.txt；账本 P-274）。
             ["image.insert"] = ["dataUrl", "mimeType", "width", "height"],
+            // 引擎主菜单那一组的字与亮态（片206＝P-285 重做）：六颗全必带＝宿主每一推都是整份替换，
+            // 半份推送会把菜单上那一组冻在旧话上（换语言那一拍漏一颗＝那一项还念旧语言）。
+            ["menu.set"] = ["png", "svg", "pin", "scale", "background", "busy"],
         };
 
     /// <summary>拒的原因。UI 侧拿这颗枚举去配表里的键（⛔ 在这里念成品句，也⛔ 静默吞）。</summary>
@@ -232,7 +246,9 @@ public static class BridgeProtocol
     private static string[]? RequiredFields(string name) => name switch
     {
         "export.bytes" => ["bytes", "kind"],
-        "pin.request" => ["token"],
+        // 引擎主菜单那一组的索取（片206＝P-285 重做）：要哪一档得自己说——缺了那一颗键
+        // 宿主只能猜，而"猜档位"正是硬线②不许的那一手。
+        "export.request" => ["kind"],
         "open.external" => ["url"],
         "paste.query" => ["shape"],
         "board.load" => ["bytes", "id"],
@@ -246,6 +262,8 @@ public static class BridgeProtocol
         // 那句 nack 必带那颗 ok：一句⛔ 内容的 ack 既⛔ 许被读成"办成了"，也⛔ 许被读成"办不成"——
         // 两种都替用户做了一次没问过的决定（片56；缺了这一道门，UI 侧就只能猜那颗 null）。
         "bridge.reply" => ["ok"],
+        // 那一推必是整份（片206＝P-285 重做）：六颗键少一颗＝菜单上那一组冻在上一推的话上。
+        "menu.set" => ["png", "svg", "pin", "scale", "background", "busy"],
         _ => null,
     };
 

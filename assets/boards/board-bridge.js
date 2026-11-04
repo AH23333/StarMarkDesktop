@@ -1,8 +1,9 @@
 /* 画板桥的页面侧（Phase C 片19＝最小回路；片21＝存储适配器那一半，深析 §21.3 逐条落码）。
    名单的唯一主人＝Core 的 BridgeProtocol；本档每颗名字逐字照抄，闸门测试逐颗对账。
-   名单在册八颗，页面今天真喊四颗（postIn 逐颗一处＝bridge.ready／board.loaded／export.bytes／open.external）
-   ＋send 那颗 bridge.reply；另三颗（paste.query／pin.request／background.request）名字过了门而回路还没接＝
-   证人逐颗钉 0。七颗出（case 逐颗一处）——多写的名字闸门会红，少写的也会。
+   名单在册十颗，页面今天真喊八颗（postIn 逐颗一处＝bridge.ready／board.loaded／export.bytes／
+   open.external／export.request／pin.request／scale.request／background.request——后四颗＝片206
+   引擎主菜单那一组的索取）＋send 那颗 bridge.reply；paste.query 名字过了门而回路还没接＝证人钉 0。
+   八颗出（case 逐颗一处）——多写的名字闸门会红，少写的也会。
    ⚠ 那颗 AUTOSAVE_MS 与 Core 的 BoardPolicy.AutosaveIdleMs 是同一个数的两颗持有者（跨语言）：
    等值由 BoardSceneStoreGateTests 现读对账，改一颗不动另一颗＝那一格红。 */
 (function () {
@@ -110,7 +111,12 @@
      第三步⛔ 省：SceneData 逐字⛔ files 字段，图不补回去＝一张白板配一堆"缺图"的方框。 */
   function applyBoardLoad(bytesB64) {
     var blob = new Blob([bytesFromB64(bytesB64)], { type: "application/json" });
-    L.loadFromBlob(blob).then(function (scene) {
+    /* 片206＝深色用户开旧板仍见一屏浅色（账本侧查注定的根因）：loadFromBlob 那颗第二参是
+       "缺键时拿哪一份 appState 补"的兜底，只递一颗时引擎按它自家那份恒 light 的默认补 ⇒
+       主题那颗键每一趟载档都被兜底顶回浅色。递引擎此刻活着的那一份＝主题跟着现状走；
+       档里自己的键（网格那族＋画布底色）照旧由场景档赢。 */
+    var live = API && API.getAppState ? API.getAppState() : null;
+    L.loadFromBlob(blob, live).then(function (scene) {
       var els = scene.elements || [];
       var writable = 0;
       for (var i = 0; i < els.length; i++) { if (!els[i].isDeleted) writable += 1; }
@@ -204,6 +210,83 @@
     rerenderWith(stickyProps);
   }
 
+  /* ───────── 引擎主菜单里那一组（片206＝P-285 重做） ─────────
+     从前右上角那一排动作按钮整条压在引擎自己的工具条上（片204 真机量到：遮住、关不掉、挪不开），
+     收进「⋯」只是把遮挡折起来，工具条上仍多一块宿主表面。这一版把五个动作搬进引擎那颗主菜单：
+     深浅色由引擎自己的模板给，宿主侧那一排钉死三色的配方整排退役。机制＝MutationObserver 钉
+     document.body（引擎那颗菜单按需挂进应用 DOM 而⛔ 走 body portal），挂进来那一刻往里注入一组。
+     幂等＝那颗标记属性查重；注入项是我们自己的节点，React 的 onSelect 听不见 ⇒ 点进去由本页
+     postIn 对应那一颗索取，再替用户把扳手钮合上（外来节点关不掉宿主菜单）。 */
+  var menuState = { png: "", svg: "", pin: "", scale: "", background: "", busy: false };
+  var MENU_GROUP_MARK = "data-starmark-menu";
+  var MENU_ITEM_ORDER = ["png", "pin", "svg", "scale", "background"];
+
+  function closeHostMenu() {
+    var trigger = document.querySelector('[data-testid="main-menu-trigger"]');
+    if (trigger) trigger.click();
+  }
+
+  function menuAction(key) {
+    if (key === "png" || key === "svg") postIn("export.request", { kind: key });
+    else if (key === "pin") postIn("pin.request", {});
+    else if (key === "scale") postIn("scale.request", {});
+    else if (key === "background") postIn("background.request", {});
+  }
+
+  function buildMenuItem(key) {
+    var item = document.createElement("button");
+    item.type = "button";
+    item.className = "dropdown-menu-item";
+    item.setAttribute("data-starmark-item", key);
+    item.textContent = menuState[key];
+    // busy 那一闩只压三颗动作（两颗导出＋贴桌面：连按＝两发抢同一刻的落点）；
+    // 两颗旋钮照旧点得动——挑档是宿主自己的事，⛔ 跟着"这一发正在跑"一起关。
+    item.disabled = menuState.busy && (key === "png" || key === "svg" || key === "pin");
+    item.addEventListener("click", function () {
+      menuAction(key);
+      closeHostMenu();
+    });
+    return item;
+  }
+
+  function injectMenuGroup() {
+    var menu = document.querySelector('[data-testid="dropdown-menu"]');
+    if (!menu) return;
+    var host = menu.querySelector(".dropdown-menu-container") || menu;
+    if (host.querySelector("[" + MENU_GROUP_MARK + "]")) return;    // 幂等：这一组已经在了
+    var group = document.createElement("div");
+    group.className = "dropdown-menu-group";
+    group.setAttribute(MENU_GROUP_MARK, "1");
+    var title = document.createElement("div");
+    title.className = "dropdown-menu-group-title";
+    title.textContent = "StarMark";
+    group.appendChild(title);
+    for (var i = 0; i < MENU_ITEM_ORDER.length; i++) group.appendChild(buildMenuItem(MENU_ITEM_ORDER[i]));
+    host.appendChild(group);
+  }
+
+  function refreshMenuGroup() {
+    var menu = document.querySelector('[data-testid="dropdown-menu"]');
+    if (!menu) return;
+    var items = menu.querySelectorAll("[data-starmark-item]");
+    for (var i = 0; i < items.length; i++) {
+      var key = items[i].getAttribute("data-starmark-item");
+      items[i].textContent = menuState[key];
+      items[i].disabled = menuState.busy && (key === "png" || key === "svg" || key === "pin");
+    }
+  }
+
+  function applyMenuSet(a) {
+    if (!a) return;
+    menuState.png = String(a.png || "");
+    menuState.svg = String(a.svg || "");
+    menuState.pin = String(a.pin || "");
+    menuState.scale = String(a.scale || "");
+    menuState.background = String(a.background || "");
+    menuState.busy = !!a.busy;
+    refreshMenuGroup();      // 菜单正开着就地在位刷新；关着＝状态存好，下一开注入时用
+  }
+
   function onOut(e) {
     var m = e.data;
     if (!m || m.v !== 1) return;
@@ -229,6 +312,9 @@
         break;
       case "image.insert":
         applyImageInsert(m.args);
+        break;
+      case "menu.set":
+        applyMenuSet(m.args);
         break;
       default:
         break;
@@ -348,6 +434,23 @@
   if (HOST) {
     window.chrome.webview.addEventListener("message", onOut);
   }
+
+  // 引擎那颗主菜单按需挂进应用 DOM：挂进来那一拍注入那一组（菜单每一次重挂都会重新注入＝
+  // 幂等查重挡住重复；组被引擎拆掉也会随下一挂回来）。
+  new MutationObserver(function (muts) {
+    for (var i = 0; i < muts.length; i++) {
+      var added = muts[i].addedNodes;
+      for (var j = 0; j < added.length; j++) {
+        var node = added[j];
+        if (node.nodeType !== 1) continue;
+        if ((node.getAttribute && node.getAttribute("data-testid") === "dropdown-menu")
+            || (node.querySelector && node.querySelector('[data-testid="dropdown-menu"]'))) {
+          injectMenuGroup();
+          return;
+        }
+      }
+    }
+  }).observe(document.body, { childList: true, subtree: true });
 
   // 第一次挂＝这颗根的出生；此后 theme／lang／feature 那三颗都在<b>同一棵</b>根上重挂（rerenderWith）。
   rerenderWith({});

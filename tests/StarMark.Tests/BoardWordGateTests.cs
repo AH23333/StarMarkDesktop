@@ -119,7 +119,7 @@ public sealed class BoardWordGateTests : IDisposable
             "Phrase(\"boards.exportBackgroundAction\", Word(BackgroundKey(_sentBackground))))",
         ]),
         ("boards.openFolderFailedBody", 1, ["Phrase(\"boards.openFolderFailedBody\", _exportPath ?? string.Empty)"]),
-        // 两颗扳机自己那行字：念的是<b>手里此刻</b>那颗（⛔ 是 _sent*——它们说的是"下一次会用什么"）
+        // 引擎主菜单上那两行字：念的是<b>手里此刻</b>那颗（⛔ 是 _sent*——它们说的是"下一次会用什么"）
         ("boards.exportScaleAction", 1, ["Phrase(\"boards.exportScaleAction\", ScaleToken(_exportScale))"]),
         ("boards.exportBackgroundAction", 1,
             ["Phrase(\"boards.exportBackgroundAction\", Word(BackgroundKey(_exportBackground)))"]),
@@ -171,10 +171,11 @@ public sealed class BoardWordGateTests : IDisposable
         Assert.Equal(1, Count(code, "RememberSentExportKnobs();"));                    // 只许一位主人
         Assert.Equal(1, Count(code, "_sentScale = _exportScale;"));
         Assert.Equal(1, Count(code, "_sentBackground = _exportBackground;"));
-        // 两列字段各归各的表面：扳机念手里那颗、落点念问出去那颗，两边都⛔ 空转成一颗字段
-        Assert.Equal(2, Count(code, "ScaleToken(_exportScale)"));
+        // 两列字段各归各的读者：引擎主菜单那一推念手里那颗、落点念问出去那颗，两边都⛔ 空转成一颗字段
+        // （片206 起念手里那颗的读者只剩 PushMenuLabels 那一处——右上角那一排宿主自绘的动作钮已整排退役）
+        Assert.Equal(1, Count(code, "ScaleToken(_exportScale)"));
         Assert.Equal(1, Count(code, "ScaleToken(_sentScale)"));
-        Assert.Equal(2, Count(code, "BackgroundKey(_exportBackground)"));
+        Assert.Equal(1, Count(code, "BackgroundKey(_exportBackground)"));
         Assert.Equal(1, Count(code, "BackgroundKey(_sentBackground)"));
         // 那颗缩放只由那颗循环改、那颗开关只由那颗翻改变（⛔ 别处再写一遍＝第二个主人）
         Assert.Equal(1, Count(code, "_exportScale = BoardPolicy.NextExportScale(_exportScale);"));
@@ -278,7 +279,12 @@ public sealed class BoardWordGateTests : IDisposable
     /// <para><b>片87 那两句⛔ 动这一格那三颗数</b>：那一发外链的两种"没开成"都走 <c>offerCopy: false</c>，
     /// 面板上那颗「另存一份到别处」跟着收起、也⛔ 新造控件（归属那一维归 <c>BoardWindowBridgeGateTests</c>）。
     /// 这一句写在这里是因为这一格是<b>每加一颗都得跟着改数</b>的那类尺：把三列读成"上一批那三颗"而实际多了两颗按钮，
-    /// 就正好漏掉这一族唯一能漏的那一格（名册 435：只抬一列会被读成尺坏了）。</para></summary>
+    /// 就正好漏掉这一族唯一能漏的那一格（名册 435：只抬一列会被读成尺坏了）。</para>
+    /// <para><b>片206 把计数从 18／13／13 降到 12／7／7</b>＝P-285 重做：右上角那一排宿主自绘的动作按钮
+    /// 整排退役（五颗动作钮＋那颗「⋯」收合钮），五个动作搬进<b>引擎自己的主菜单</b>——那一组的字由
+    /// <c>menu.set</c> 那一推递（递的是字串，⛔ 是刷子）、色由引擎自己的模板给，都出了这三列的射程。
+    /// 剩下的七颗＝面板那六颗＋那一行上那颗出口；这一格是"每减一颗也得跟着改数"的那类尺——
+    /// 漏减＝尺去数一颗已经⛔ 在场上的控件（那一排已拆，它的三色跟着退役）。</para></summary>
     [Fact]
     public void TheOnlyActionableControlPinsItsOwnColors()
     {
@@ -294,10 +300,16 @@ public sealed class BoardWordGateTests : IDisposable
         // 片204＝那一行前头又多了一颗可点的（「⋯」收合钮・P-285：那一排动作按钮默认收起、点了才摊开），
         // 三列再各加一颗：黑字 17→18、底色 12→13、描边 12→13。这一颗是按钮而⛔ 一行字，所以⛔ 是"只抬一列"
         // 那一族；它念的是语言中立的一颗字符（⛔ 表里的键），三语同一副脸——板上键族那颗 33 ⛔ 因它动。
-        Assert.Equal(18, Count(body, "Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black)"));
-        Assert.Equal(13, Count(body, "Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255))"));
-        Assert.Equal(13, Count(body, "BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130))"));
-        // 禁项：这一族⛔ 用"跟着主题走"的那一类刷子（面板与十三颗按钮都不跟着走，见 §27.6）
+        // 片206＝P-285 重做：那一排宿主自绘的动作钮整排退役（五颗动作钮＋那颗「⋯」收合钮＝六颗×三样），
+        // 五个动作搬进<b>引擎自己的主菜单</b>——那一组的字由 menu.set 那一推递（递的是字串，⛔ 是刷子），
+        // 色由引擎自己的模板给，都出了这三列的射程。三列各删六颗：黑字 18→12、底色 13→7、描边 13→7；
+        // 剩下的七颗＝面板那六颗＋那一行上那颗出口（「打开所在文件夹」），而那五行黑字
+        // （标题／正文／第二行／落点／第二颗读数）照旧在场——这一格是"每减一颗也得跟着改数"的那类尺：
+        // 漏减＝尺去数一颗已经⛔ 在场上的控件（那一排已拆，它的三色跟着退役）。
+        Assert.Equal(12, Count(body, "Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black)"));
+        Assert.Equal(7, Count(body, "Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255))"));
+        Assert.Equal(7, Count(body, "BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130))"));
+        // 禁项：这一族⛔ 用"跟着主题走"的那一类刷子（面板与七颗按钮都不跟着走，见 §27.6）
         Assert.Equal(0, Count(body, "ThemeResource"));
         Assert.Equal(0, Count(body, "Application.Current.Resources["));
     }

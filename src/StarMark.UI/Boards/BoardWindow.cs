@@ -318,15 +318,11 @@ public sealed class BoardWindow : Window
     /// 而那颗按钮上的字说的是"存成一张档"（S1 那条口径：会改状态的收尾，最后一步要重读）。</para></summary>
     private bool _exportPins;
 
-    /// <summary>右上角那一行（导出那两颗入口＋那颗落点的话）：它⛔ 是那块面板的零件——面板只在有事要说时才在场，
-    /// 而"我刚导出那张图，它落在哪儿"每一次都要有答案。</summary>
+    /// <summary>右上角那一行（那颗「打开所在文件夹」＋那句落点的话）：它⛔ 是那块面板的零件——面板只在有事要说时才在场，
+    /// 而"我刚导出那张图，它落在哪儿"每一次都要有答案。<b>片206＝P-285 重做</b>：五个动作搬进引擎自己的主菜单
+    /// 之后，这一块上剩下的都⛔ 是动作（一颗出口＋两行读数），动作的字与亮态由 <see cref="PushMenuLabels"/> 那一推递。</summary>
     private StackPanel? _bar;
 
-    private Button? _barPngButton;
-    private Button? _barSvgButton;
-    private Button? _barPinButton;
-    private Button? _barScaleButton;
-    private Button? _barBackgroundButton;
     private Button? _barFolderButton;
     private TextBlock? _barStatus;
 
@@ -683,9 +679,31 @@ public sealed class BoardWindow : Window
             case "bridge.reply":
                 HandleBridgeReply(envelope);
                 break;
+            // ───────── 片206＝P-285 重做：引擎主菜单那一组的四颗索取 ─────────
+            case "export.request":
+                // 档位由页面递，而这里只接「在册且⛔ 落板档」的那一档（png／svg）：scene 走它自己的四拍
+                // （索取／写闸／滚 .bak），⛔ 由菜单绕进去；判据用既有那两颗谓词的组合，⛔ 另列一份清单。
+                var kind = envelope.Kind ?? string.Empty;
+                if (!BridgeProtocol.IsKnownExportKind(kind) || BridgeProtocol.LandsInSceneArchive(kind))
+                {
+                    StarMark.Abstractions.StarLog.Warn("boards.menu.kind.rejected id=" + _boardId);
+                    break;
+                }
+                ExportImageButton(kind);
+                break;
+            case "pin.request":
+                // 「贴到桌面」与「导出 PNG」吃同一发问、同一副闸（片148 起的口径照旧）：它是那颗 PNG 的另一种下落。
+                ExportImageButton("png", pinsInsteadOfSave: true);
+                break;
+            case "scale.request":
+                CycleExportScale();
+                break;
+            case "background.request":
+                ToggleExportBackground();
+                break;
             default:
-                // paste.query / pin.request / background.request：名字过了门、回路却还没接（⛔ 假 allow）。
-                // 这颗名进日志是安全的（它已过名字闸门＝集合由我们定死）；等各自批次落地时要给的是一颗
+                // paste.query：名字过了门、回路却还没接（⛔ 假 allow）。
+                // 这颗名进日志是安全的（它已过名字闸门＝集合由我们定死）；等那一批落地时要给的是一颗
                 // <b>登记进出向名单的回话</b>，⛔ 再拿一句没人听的出去（P-245 定案那一笔）。
                 StarMark.Abstractions.StarLog.Warn("boards.cmd.not-wired cmd=" + envelope.Cmd + " id=" + _boardId);
                 break;
@@ -1024,30 +1042,15 @@ public sealed class BoardWindow : Window
     }
 
     /// <summary>
-    /// 右上角那一行按当前语言重贴（那颗按钮上的字与那句落点都归这一拍；换语言⛔ 走 <see cref="PasteNotice"/> 以外的那条路＝
+    /// 右上角那一行按当前语言重贴（那颗出口上的字与那句落点都归这一拍；换语言⛔ 走 <see cref="PasteNotice"/> 以外的那条路＝
     /// P-175 那一族"一颗重贴一颗冻着"的第三种脸）。
-    /// <para>两颗入口的可点状态由<b>两颗</b>事实决定：桥通不通（⛔ 通就发问＝发进一颗没人听的口子）、
-    /// 这一发是不是正在跑（跑的时候点得亮＝两发抢同一刻的落点）。这里⛔ 判"该不该看得见"：那一行永远在场，
-    /// 因为它说的是"我刚点的那一下怎么样了"。</para>
+    /// <para><b>片206＝P-285 重做</b>：五个动作搬进引擎主菜单之后，这一块上只剩<b>一颗出口＋一句读数</b>——
+    /// 出口说的是"上一次真写成档的那一份在哪儿"，读数说的是"我刚点的那一下怎么样了"，两样都⛔ 是动作。
+    /// 动作的字与亮态由 <see cref="PushMenuLabels"/> 那一推接手，那一行永远在场。</para>
     /// </summary>
     private void PasteBar()
     {
-        if (_barStatus is null || _barPngButton is null || _barSvgButton is null
-            || _barScaleButton is null || _barBackgroundButton is null || _barFolderButton is null
-            || _barPinButton is null) return;
-        var live = _bridgeReady && !_exporting;
-        _barPngButton.Content = Word("boards.exportPngAction");
-        _barSvgButton.Content = Word("boards.exportSvgAction");
-        _barPngButton.IsEnabled = live;
-        _barSvgButton.IsEnabled = live;
-        // 「贴到桌面」与「导出 PNG」吃同一发问、同一副闸：它是那颗 PNG 的<b>另一种下落</b>，⛔ 是第三条档位
-        // （档位名单归 BridgeProtocol.ExportKinds，那里多一颗才是真多一种产物）。
-        _barPinButton.Content = Word("boards.pinAction");
-        _barPinButton.IsEnabled = live;
-        // 那两颗扳机⛔ 跟着 live 那一闩一起关：挑档是宿主自己的事，桥还没通也照样能先挑好；
-        // 把它们点不亮＝把"这一刻还没通"变成"这台程序没有这两颗旋钮"（片33 那颗可点状态的同一条口径）。
-        _barScaleButton.Content = Phrase("boards.exportScaleAction", ScaleToken(_exportScale));
-        _barBackgroundButton.Content = Phrase("boards.exportBackgroundAction", Word(BackgroundKey(_exportBackground)));
+        if (_barStatus is null || _barFolderButton is null) return;
         _barFolderButton.Content = Word("boards.openFolderAction");
         _barFolderButton.IsEnabled = _exportPath is not null;
         _barStatus.Text = _exportOutcomeKey switch
@@ -1064,6 +1067,27 @@ public sealed class BoardWindow : Window
             "boards.openFolderFailedBody" => Phrase("boards.openFolderFailedBody", _exportPath ?? string.Empty),
             _ => string.Empty,
         };
+        PushMenuLabels();
+    }
+
+    /// <summary>
+    /// 引擎主菜单那一组的字与亮态整份推过去（片206＝P-285 重做）。<b>每一次都是整份</b>——六颗少一颗＝
+    /// 菜单上那一项冻在上一推的话上（换语言那一拍漏一颗＝那一项还念旧语言），所以这里⛔ 挑"变了才推"。
+    /// <para>亮态只压三颗动作（两颗导出＋贴桌面：busy 时点得亮＝两发抢同一刻的落点）；那两颗旋钮照旧亮着——
+    /// 挑档是宿主自己的事，⛔ 跟着"这一发正在跑"一起关。桥⛔ 通就整推跳过（发进一颗没人听的口子），
+    /// 等下一次 <see cref="PasteBar"/> 补上。</para>
+    /// </summary>
+    private void PushMenuLabels()
+    {
+        if (!_bridgeReady || _tearingDown) return;
+        PostOutbound("menu.set", Envelope("menu.set", "h7",
+            JsonString("png") + ":" + JsonString(Word("boards.exportPngAction")) + ","
+            + JsonString("svg") + ":" + JsonString(Word("boards.exportSvgAction")) + ","
+            + JsonString("pin") + ":" + JsonString(Word("boards.pinAction")) + ","
+            + JsonString("scale") + ":" + JsonString(Phrase("boards.exportScaleAction", ScaleToken(_exportScale))) + ","
+            + JsonString("background") + ":"
+            + JsonString(Phrase("boards.exportBackgroundAction", Word(BackgroundKey(_exportBackground)))) + ","
+            + JsonString("busy") + ":" + (_exporting ? "true" : "false")));
     }
 
     /// <summary>那一行第二颗读数按当前语言重贴一次（<see cref="StarMark.Abstractions.I18n.Locale.Changed"/> 那一拍与
@@ -1412,65 +1436,18 @@ public sealed class BoardWindow : Window
             VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(0, 0, 16, 16),
         };
-        // 片54＝那一发导出的两颗入口＋那句落点（账本 P-240 的②：引擎那颗框关到⛔ 通之后，这一行就是唯一的一条路）。
+        // 片54＝那一发导出的落点读数（账本 P-240 的②：引擎那颗框关到⛔ 通之后，这一行就是唯一的一条路）。
         // ⚠ 它⛔ 住在那块面板里：面板只在有事要说时才在场，而"我刚点的那一下怎么样了"每一发都要有答案——
         // 而那块面板此刻可能正挂着"这一扇已停止保存"，一句好消息⛔ 有权把那句坏话顶掉（片39 真机量到的正是这一族）。
-        // 三样颜色照旧各钉一遍（片28 那把"白字画在灰底上＝看不见"的尺：这一屏上现在多了三颗可点的控件）。
-        // 片64＝那两档交回用户（P-242 的落地腿）。⚠ 它们走的是那颗<b>已经量过的 Button</b>，而⛔ 下拉、⛔ 复选框：
-        // 这一行上每一颗可点的控件都由同一副"钉死三样颜色"的配方撑住（那颗尺同时钉 ThemeResource 计数为 0），
-        // 而下拉与复选框的字色由那颗主题模板给＝深色主题下把白字贴到这块白底上＝片27／28 那一族"看不见"的下游。
-        _barScaleButton = new Button
-        {
-            Content = Phrase("boards.exportScaleAction", ScaleToken(_exportScale)),
-            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
-            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
-        };
-        _barScaleButton.Click += (_, _) => CycleExportScale();
-        _barBackgroundButton = new Button
-        {
-            Content = Phrase("boards.exportBackgroundAction", Word(BackgroundKey(_exportBackground))),
-            Margin = new Thickness(6, 0, 0, 0),
-            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
-            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
-        };
-        _barBackgroundButton.Click += (_, _) => ToggleExportBackground();
-        _barPngButton = new Button
-        {
-            Content = Word("boards.exportPngAction"),
-            Margin = new Thickness(6, 0, 0, 0),
-            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
-            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
-        };
-        _barPngButton.Click += (_, _) => ExportImageButton("png");
-        // 「贴到桌面」（片148＝深析 §四 第2行）紧跟在「导出 PNG」后面：它俩是同一发的两种下落，
-        // 中间插进那颗 SVG 会让人以为这一颗也产一张档。三样颜色照旧各钉一遍（同上面那几颗的理由）。
-        _barPinButton = new Button
-        {
-            Content = Word("boards.pinAction"),
-            Margin = new Thickness(6, 0, 0, 0),
-            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
-            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
-        };
-        _barPinButton.Click += (_, _) => ExportImageButton("png", pinsInsteadOfSave: true);
-        _barSvgButton = new Button
-        {
-            Content = Word("boards.exportSvgAction"),
-            Margin = new Thickness(6, 0, 0, 0),
-            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
-            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
-        };
-        _barSvgButton.Click += (_, _) => ExportImageButton("svg");
-        // 那颗「打开所在文件夹」在这一行里<b>永远在场</b>，只是盘上还没落东西时点不亮：
+        // <b>片206＝P-285 重做</b>：五个动作搬进引擎自己的主菜单（那一组的字与亮态由 PushMenuLabels 那一推递），
+        // 这一版那颗「⋯」收合钮与那一排钉死三色的按钮整排退役；这一块上剩的都⛔ 是动作——
+        // 一颗出口（它说的是"上一次真写成档的那一份在哪儿"）＋两行读数。剩下这几样的三样颜色照旧各钉一遍
+        // （片28 那把"白字画在灰底上＝看不见"的尺）。
+        // 那颗「打开所在文件夹」在这一块上<b>永远在场</b>，只是盘上还没落东西时点不亮：
         // 藏起来＝"这台程序没有这功能"，而它其实只是"这一刻还没有东西可开"（片33 那颗可点状态那一格的同一条口径）。
         _barFolderButton = new Button
         {
             Content = Word("boards.openFolderAction"),
-            Margin = new Thickness(6, 0, 0, 0),
             IsEnabled = false,
             Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
             Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
@@ -1501,30 +1478,6 @@ public sealed class BoardWindow : Window
             Visibility = Visibility.Collapsed,
             Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
         };
-        var barRow = new StackPanel { Orientation = Orientation.Horizontal };
-        barRow.Children.Add(_barScaleButton);
-        barRow.Children.Add(_barBackgroundButton);
-        barRow.Children.Add(_barPngButton);
-        barRow.Children.Add(_barPinButton);
-        barRow.Children.Add(_barSvgButton);
-        barRow.Children.Add(_barFolderButton);
-        // 片204＝P-285：那一排永远摊开的按钮整条压在引擎自己的工具条上（用户真机量到：遮住、
-        // 关不掉、挪不开）。收法＝一颗「⋯」收合钮：那一排默认收起、点了才摊开；两行读数
-        // （那句落点与那句「未显示的外部内容」）照旧摊在外面——它们是"刚才那一发怎么样了"与
-        // "这块板有没有藏着空框"的答案，⛔ 跟着动作按钮一起藏。⚠ 那颗钮念的是一颗语言中立的
-        // 字符而⛔ 表里那颗键：三语用户念它同一副脸，也没有要翻译的词（那一排里每颗按钮
-        // 自己的字照旧走 Word/Phrase）。三样颜色照旧各钉一遍（同排那六颗的同一副配方）。
-        var barMenuButton = new Button
-        {
-            Content = "⋯",
-            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
-            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
-        };
-        barMenuButton.Click += (_, _) =>
-            barRow.Visibility = barRow.Visibility == Visibility.Visible
-                ? Visibility.Collapsed : Visibility.Visible;
-        barRow.Visibility = Visibility.Collapsed;
         _bar = new StackPanel
         {
             HorizontalAlignment = HorizontalAlignment.Right,
@@ -1536,8 +1489,7 @@ public sealed class BoardWindow : Window
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
         };
-        _bar.Children.Add(barMenuButton);
-        _bar.Children.Add(barRow);
+        _bar.Children.Add(_barFolderButton);
         _bar.Children.Add(_barStatus);
         _bar.Children.Add(_barHiddenEmbeds);
         var stage = new Grid();
@@ -1975,16 +1927,42 @@ public sealed class BoardWindow : Window
 
     /// <summary>
     /// 关窗那一拍（§21.3 四拍其四）：拦一次→Hide→索取快照→<b>有界</b>等它落地→真关。
-    /// <para>拦一次就够：第二次拍照常走下去，否则那颗等待本身变成"那扇窗关不掉"。</para>
+    /// <para>拦一次就够：第二次拍照常走下去，否则那颗等待本身变成"那扇窗关不掉"。
+    /// 身体挪进 <see cref="BeginCloseFlush"/>（片206＝P-286：代码里那一记 <c>Close()</c>
+    /// <b>⛔ 响</b> <c>AppWindow.Closing</c>——WinUI 那两套关窗各响各的钟，走协商的路都从这里进）。</para>
     /// </summary>
     private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
         _tearingDown = true;                  // 从这里起的进程失效消息只上报，⛔ 再往拆着的窗上重建控件
         if (_closeFlushDone || !_bridgeReady) return;
-        _closeFlushDone = true;
         args.Cancel = true;
+        BeginCloseFlush();
+    }
+
+    /// <summary>「先藏后问再关」那三步的公共身体（片206＝P-286 抽出）：用户按×那一拍与
+    /// <see cref="CloseThroughNegotiation"/> 那一记代码关窗走同一副，差的那一记 <c>args.Cancel</c>
+    /// 由各自那一拍先按下（代码那一记根本没有 Closing 那一响可拦）。</summary>
+    private void BeginCloseFlush()
+    {
+        if (_closeFlushDone) return;
+        _closeFlushDone = true;
         AppWindow.Hide();                     // 视觉上先退场：那两秒⛔ 挂在用户的手指上
         _ = FlushThenCloseAsync();
+    }
+
+    /// <summary>代码侧的关窗入口（片206＝P-286）：WinUI 里代码调 <see cref="Window.Close"/> 那一记
+    /// <b>⛔ 响</b> <c>AppWindow.Closing</c>（片205 已在真机上钉死）——从前的调用方以为"Close 自带那套协商"，
+    /// 实际上板子连问都没被问就没了（静默关窗那一案的根因）。这一记把协商补回来：
+    /// 桥活着就走与按×同一副的「藏→问→真关」，桥没通／已经冲过水就直接退。</summary>
+    public void CloseThroughNegotiation()
+    {
+        _tearingDown = true;
+        if (_closeFlushDone || !_bridgeReady)
+        {
+            Close();
+            return;
+        }
+        BeginCloseFlush();
     }
 
     /// <summary>

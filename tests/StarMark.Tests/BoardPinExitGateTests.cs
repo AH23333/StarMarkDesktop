@@ -27,26 +27,29 @@ public sealed class BoardPinExitGateTests
     // ─────────────── ① 那颗入口本身在不在、通不通 ───────────────
 
     /// <summary>
-    /// 第五颗出口三处都要在：造那一行、按下去问那一发、以及右上角那句落点的话。
-    /// <para>摆位钉在「导出 PNG」与「导出 SVG」<b>之间</b>：它与前者是同一发的两种下落，
-    /// 中间插进那颗 SVG 会让人以为这一颗也产一张档（两处菜单各排各的＝ClipIMG 那一族的老脸）。</para>
+    /// 第五颗出口三处都要在：接进向那一颗 case、按下去问那一发、以及那一推里那句落点的话。
+    /// <para>片206＝P-285 重做：那颗按钮从右上角那一行退役，搬进引擎主菜单——「贴到桌面」与「导出 PNG」
+    /// 仍是同一发的两种下落，所以它在那颗顺序数组里紧跟「导出 PNG」（中间插进那颗 SVG 会让人以为
+    /// 这一颗也产一张档——ClipIMG 那一族的老脸）。</para>
     /// </summary>
     [Fact]
     public void TheFifthExitIsWiredAtAllThreePlaces()
     {
         var code = Code;
+        var inbound = SourceGate.MethodBody(code, "void OnWebMessageReceived");
         Assert.Contains(
-            "_barPinButton.Click += (_, _) => ExportImageButton(\"png\", pinsInsteadOfSave: true);",
-            code, StringComparison.Ordinal);
-        Assert.Contains("_barPinButton.Content = Word(\"boards.pinAction\");", code, StringComparison.Ordinal);
-        Assert.Contains("_barPinButton.IsEnabled = live;", code, StringComparison.Ordinal);
-        Assert.Contains("_barPinButton is null", code, StringComparison.Ordinal);   // 重贴那一拍的闸门也认得它
-
-        var pngAt = code.IndexOf("barRow.Children.Add(_barPngButton);", StringComparison.Ordinal);
-        var pinAt = code.IndexOf("barRow.Children.Add(_barPinButton);", StringComparison.Ordinal);
-        var svgAt = code.IndexOf("barRow.Children.Add(_barSvgButton);", StringComparison.Ordinal);
-        Assert.True(pngAt > 0 && pinAt > pngAt && svgAt > pinAt,
-            "那一行上的顺序必须是 PNG → 贴到桌面 → SVG（同一发的两种下落要挨着）");
+            "ExportImageButton(\"png\", pinsInsteadOfSave: true);",
+            inbound, StringComparison.Ordinal);
+        Assert.Contains("case \"pin.request\":", inbound, StringComparison.Ordinal);
+        var menu = SourceGate.MethodBody(code, "void PushMenuLabels");
+        Assert.Contains("Word(\"boards.pinAction\")", menu, StringComparison.Ordinal);
+        Assert.Contains("ReportExport(\"boards.pinnedBody\", null);", code, StringComparison.Ordinal);
+        // 桥里那一组：顺序数组里「贴到桌面」紧跟「导出 PNG」，点了走 menuAction 那颗分派器
+        var js = SourceGate.ReadRepoFile("tools/boards/board-bridge.js");
+        var orderAt = js.IndexOf("var MENU_ITEM_ORDER = [\"png\", \"pin\",", StringComparison.Ordinal);
+        Assert.True(orderAt > 0, "那一颗顺序数组不在了＝那一组的长法没了主人");
+        Assert.Contains("postIn(\"pin.request\", {})", js, StringComparison.Ordinal);
+        Assert.Contains("menuAction(key);", js, StringComparison.Ordinal);
     }
 
     /// <summary>那两颗键重新有读者了（片150 摘孤儿键时说的就是"等有了读者再一起回来"）。</summary>

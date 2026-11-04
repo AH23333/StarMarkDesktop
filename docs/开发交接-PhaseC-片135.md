@@ -703,3 +703,14 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - ④P-285 侧查注（归片206）：菜单 DOM 读数齐（main-menu-trigger・dropdown-menu-group・dropdown-menu-item base・portal 挂 body＝MutationObserver）；注入落点＝桥侧＋两颗新协议名（export.request／scale.request）。
 - 测面：BoardAppearance 三新 Fact＋I18nContract 一行为 Fact（OneThrowingSubscriberMustNotSilenceTheRestOfTheChain）；读数：gate205 1188/1188・全量 6806/6806・docgates205 26/26・census 21（±0）・计数器 291/237/54 VERDICT OK。⛔ push（未推 14）。
 - 下一刀：用户复测四步（深色开板／切语言读三层日志／同板连点／看 134604 笔迹）→ 按读数定 P-287 翻牌或续修；片206＝菜单注入重做（协议名＋桥 MutationObserver）。
+
+## 八十七、片206 画板批：P-285 重做结案（五动作搬进引擎主菜单・协议进 10／出 8）＋P-287 真机复测翻牌＋P-291 装载路活态新立同批修结案＋P-292 代码关窗协商新立同批修结案（坑 #1152）
+
+- 接手第一步照旧现读编号轴：报告到五百九十一、交接到八十六、坑表到 #1151、账本到 P-290；本批＝画板批（码改六档＋测试面六档；新立 P-291／P-292 同批结案）。
+- ①P-285 重做：五颗动作搬进引擎主菜单（扳手钮底下・组题 StarMark）——桥侧 MutationObserver 兜挂点＋标记属性查重＋五项序 png→pin→svg→scale→background＋点完替用户合扳手钮；宿主四颗新 case＋PushMenuLabels 六键整推（半份＝菜单冻在旧话上）；协议进 8→10／出 7→8（export.request〔必带 kind〕／scale.request 进向・menu.set 出向）；色尺 18/13/13→12/7/7；侧查注挂点（⛔ body portal・按需挂应用 DOM）／方向两处就地更正。
+- ②P-287 翻牌 ✅：真机开着画板就地切语言、画布跟着换（片205 双修后链路通）；三层定界日志口径留档。
+- ③P-291：深色开旧板仍白＝装载那一拍只递一颗参、缺了「缺键拿哪一份 appState 兜」那颗第二参（引擎按自家恒 light 默认补）；修＝现读活 appState 递进去；装载路那一行未另立闸、归下一批画板闸补钉。
+- ④P-292（坑 #1152）：WinUI 代码调 Window.Close() 不响 AppWindow.Closing（两套关窗各响各的钟）——关开关那条臂静默关窗；修＝BeginCloseFlush 公共身体＋CloseThroughNegotiation（桥活＝与按×同一副・桥死直接关）＋名册逐扇改道；LeaveAnyway 注释因果链被证伪（行为碰巧无恙・归下批读码对齐）。
+- 测面六档：BoardWindowBridgeGate（TheBarRow 整格换成 TheEngineMainMenu 九格＋NeverInvent 四新 case＋ThePanelSpeaks 签名＋TheExportLands ④⑤＋TheTwoExportKnobs ⑧＋排序错误消息修）・BoardBridgeProtocol（名单 10/8＋③ kind 化＋新 TheMenuRequestFamily）・BoardWordGate（色尺 12/7/7＋两 token 各 2→1＋doc 段）・BoardPinExitGate（TheFifthExitIsWiredAtAllThreePlaces 重写）・BoardsSettingsGate（CloseAll 体钉改道）・BoardLinkGate（⑦重写：八颗数组＋头注三行整段＋idle 只剩 paste.query）。
+- 读数：gate206 1189/1189（2 m 3 s）・全量 6807/6807（17 m 29 s）・docgates206 26/26（p206/docgates206.txt）・census 26→21（五颗旧指针顶漂＝删号留锚就地更正）・计数器 293/240/53 VERDICT OK（题行 291→293・结案 237→240・开放 54→53）。⛔ push（未推 15）。
+- 下一刀：用户手测三步（深色开旧板／关开关看那一问／引擎菜单五动作观感）；P-288 两愿、P-291 装载路补钉、LeaveAnyway 注释对齐归后续批。
