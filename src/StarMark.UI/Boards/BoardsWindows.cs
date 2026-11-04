@@ -110,6 +110,30 @@ public static class BoardsWindows
     }
 
     /// <summary>
+    /// 开关 OFF 那一拍（片204＝P-286 处置①）：把<b>每一扇</b>开着的画板窗收一遍。
+    /// <para>收＝<see cref="BoardWindow.Close"/> 那套既有协商：拦一次→Hide→冲写→被拒那一支
+    /// 自己把窗亮回并贴上「另存／继续编辑」那块面板——"收前问一句要不要存"这一问由每扇窗
+    /// 自己的关窗路问，这里⛔ 另起一份"直接拆"的捷径（拆＝把没落盘的那几笔连问都不问就丢掉，
+    /// 正是这一格要堵的坏）。用户在那一支选「继续编辑」＝他的决定：那扇窗留在名册里照旧活着。</para>
+    /// <para>快照后逐扇收（收的那一拍里名册会被 <c>OnClosed</c> 动——成行的窗自己摘自己，
+    /// ⛔ 边收边遍历活名册）；逐扇兜异常（与 <see cref="ReapplyAppearance"/> 同一副规矩）：
+    /// 一扇收掉⛔ 配带走其余几扇。</para>
+    /// </summary>
+    public static void CloseAll()
+    {
+        BoardWindow[] windows;
+        lock (_open) windows = _open.ToArray();
+        foreach (var w in windows)
+        {
+            try { w.Close(); }
+            catch (System.Exception ex)
+            {
+                StarMark.Abstractions.StarLog.Warn("boards.close-all.failed " + ex.GetType().Name);
+            }
+        }
+    }
+
+    /// <summary>
     /// 退出那一拍：请每一扇画板窗把"关窗前那一份"交回来，<b>并发</b>等它们各自的预算用完。
     /// <para>并发而⛔ 逐扇串起来＝最坏那一扇决定总时长：每颗的额度都是 <see cref="BoardPolicy.CloseFlushBudgetMs"/>，
     /// N 扇也还是那 2 秒，而收尾链上挂着一颗<b>5 秒的硬退出看门狗</b>（<c>MainWindow.ExitApp</c>）——

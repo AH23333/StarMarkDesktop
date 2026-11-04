@@ -686,3 +686,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - ①先松手再验：块形 using 收干净写句柄与 ZipArchive 读锁再验签（原先 using var 跨验签＝0x80092003 假阴性・删 zip 从未真成过）；②删除核销：TryDelete（Delete 后 File.Exists 复核）三臂失败路径全走它、真实结果进日志；③EnableAsync 块体化＋<code>sdkReady && ownedRunning</code> 合取・未就绪打 Warn（设置页调用方本就吃 Failed 态，零 UI 改动）。
 - 测面 <code>EverythingDownloadTrustTests</code> 12→16 格（行为⑦＋形状⑤′⑦⑧⑨）；读数：gate203 71/71・全量 6799/6799（＝6795＋4・18 m 28 s）・docgates203 26/26・census 21（±0）・计数器 289/233/56 VERDICT OK（持平）。⛔ push（未推 12）。
 - 下一刀：画板批（P-285～P-288 一族）；P-145 题行翻不翻仍归用户拍板。
+
+## 八十五、片204 画板批：P-285 收合钮＋P-286 关开关逐窗收＋P-287 发侧读数日志（开放）＋P-288 核对注（开放）＋P-289 倒置判据新立同批结案（坑 #1150）
+
+- 接手第一步照旧现读编号轴：报告到五百八十九、交接到八十四、坑表到 #1149；本批＝画板批（码改五档＋闸门四档；新立 P-289 同批结案）。
+- ①P-285：BuildStage「⋯」收合钮默认收起・点翻板（U+22EF 语言中立・色尺 18/13/13・六 add 顺序不动）；②P-286：名册 CloseAll（锁开窗集合快照、逐扇 Close＝各自关窗协商・单扇失败记 Warn）＋开关变更处理在刷托盘后挂「关＝逐扇收」；③P-287：ReapplyAppearance 加 <code>boards.lang.push code=…</code> 发侧读数日志（有而没换＝桥/引擎・缺＝宿主）；条目保持开放待真机；④P-288：activeTool=selection 待 bundle 快证；两建议归后续批；条目保持开放；⑤P-289：读档判据倒置修（is { } d && … == true）＋闸门整形钉死（禁项读抹注释后代码）。
+- 测面四闸：BoardsSettings（加强＋新 Fact）・BoardAppearance（改名＋新 Fact）・BoardWindowBridge（新 Fact）・BoardWord（色尺 18/13/13）；读数：gate204 1142/1142・全量 6802/6802・docgates204 26/26・census 21（±0）・计数器 290/236/54 VERDICT OK。⛔ push（未推 13）。
+- 下一刀：用户手测三步（P-285 观感／P-286 关开关收窗／P-287 真机切语言读日志定界）→ 按读数定 P-287 断点或结案。

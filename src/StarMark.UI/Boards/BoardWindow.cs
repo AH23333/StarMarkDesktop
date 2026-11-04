@@ -1508,6 +1508,23 @@ public sealed class BoardWindow : Window
         barRow.Children.Add(_barPinButton);
         barRow.Children.Add(_barSvgButton);
         barRow.Children.Add(_barFolderButton);
+        // 片204＝P-285：那一排永远摊开的按钮整条压在引擎自己的工具条上（用户真机量到：遮住、
+        // 关不掉、挪不开）。收法＝一颗「⋯」收合钮：那一排默认收起、点了才摊开；两行读数
+        // （那句落点与那句「未显示的外部内容」）照旧摊在外面——它们是"刚才那一发怎么样了"与
+        // "这块板有没有藏着空框"的答案，⛔ 跟着动作按钮一起藏。⚠ 那颗钮念的是一颗语言中立的
+        // 字符而⛔ 表里那颗键：三语用户念它同一副脸，也没有要翻译的词（那一排里每颗按钮
+        // 自己的字照旧走 Word/Phrase）。三样颜色照旧各钉一遍（同排那六颗的同一副配方）。
+        var barMenuButton = new Button
+        {
+            Content = "⋯",
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
+        };
+        barMenuButton.Click += (_, _) =>
+            barRow.Visibility = barRow.Visibility == Visibility.Visible
+                ? Visibility.Collapsed : Visibility.Visible;
+        barRow.Visibility = Visibility.Collapsed;
         _bar = new StackPanel
         {
             HorizontalAlignment = HorizontalAlignment.Right,
@@ -1519,6 +1536,7 @@ public sealed class BoardWindow : Window
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
         };
+        _bar.Children.Add(barMenuButton);
         _bar.Children.Add(barRow);
         _bar.Children.Add(_barStatus);
         _bar.Children.Add(_barHiddenEmbeds);
@@ -1682,6 +1700,12 @@ public sealed class BoardWindow : Window
         if (!_bridgeReady || _tearingDown) return;
         var pref = App.Services.GetRequiredService<StarMark.UI.Helpers.SettingsStore>().LoadTheme();
         var dark = StarMark.UI.Helpers.ThemeManager.ResolveEffectiveTheme(pref) == Microsoft.UI.Xaml.ElementTheme.Dark;
+        // 片204＝P-287 的发侧读数位：宿主订阅→lang.set→桥侧同一棵根重渲染→引擎按 langCode prop
+        // 变更惰量加载内嵌 locale，六环静态全通（片204 侧查到底）；用户量到的「不跟」断点只能真机定界。
+        // 这一行把实际递给 WebView2 的那串语言码留在日志里——复现那趟对着它读（日志对着而画布没换＝
+        // 断点在桥/引擎侧；日志里就没有那一行＝断点在宿主侧），⛔ 在复现之前猜着改。
+        StarMark.Abstractions.StarLog.Info("boards.lang.push code="
+            + BoardPolicy.EngineLangCode(StarMark.Abstractions.I18n.Locale.Current));
         PostOutbound("theme.set", Envelope("theme.set", "h1",
             "\"theme\":" + JsonString(BoardPolicy.EngineThemeName(dark))));
         PostOutbound("lang.set", Envelope("lang.set", "h2",

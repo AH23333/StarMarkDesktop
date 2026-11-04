@@ -113,9 +113,11 @@ public sealed class BoardAppearanceGateTests
         Assert.Contains("catch", push, StringComparison.Ordinal);   // 逐扇兜异常：一扇桥没通⛔ 配带走其余几扇
     }
 
-    /// <summary>那颗名册的读法⛔ 许漏掉"画板"这一族——它现在管三件事：退出、起窗、重贴外观。</summary>
+    /// <summary>那颗名册的读法⛔ 许漏掉"画板"这一族——它管四件事：退出、起窗、重贴外观、收窗（片204 起）。
+    /// <para>⚠ 这一格原名念的是三件事：收窗那一颗（<c>CloseAll</c>＝开关 OFF 那一拍）进来之后名与实分了家，
+    /// 本批连名一起改（措辞与实现对齐那笔账）；全仓无别处引用旧名，改名零牵连。</para></summary>
     [Fact]
-    public void TheRosterStillOwnsExactlyTheThreeThingsItWasMadeFor()
+    public void TheRosterOwnsExactlyItsFourJobs()
     {
         var roster = SourceGate.Code(SourceGate.ReadRepoFile(RosterPath));
         Assert.Contains("public static void Add(BoardWindow window)", roster, StringComparison.Ordinal);
@@ -123,12 +125,29 @@ public sealed class BoardAppearanceGateTests
         Assert.Contains("public static async Task OpenSceneAsync(string? sceneId)", roster, StringComparison.Ordinal);
         Assert.Contains("public static async Task<int> FlushAllForExitAsync()", roster, StringComparison.Ordinal);
         Assert.Contains("public static void ReapplyAppearance()", roster, StringComparison.Ordinal);
+        Assert.Contains("public static void CloseAll()", roster, StringComparison.Ordinal);
         // 起窗⛔ 许有两处各写一遍（托盘那两颗入口与收藏系统那一行共用这一颗）
         var offenders = SourceGate.ReadRepoUnder("src/StarMark.UI")
             .Where(f => SourceGate.Code(f.Text).Contains("new BoardWindow()", StringComparison.Ordinal)
                      && !f.RelativePath.EndsWith("BoardsWindows.cs", StringComparison.Ordinal))
             .Select(f => f.RelativePath).ToList();
         Assert.Empty(offenders);
+    }
+
+    /// <summary>片204＝P-287 的发侧读数位：设置页换语言→宿主订阅→桥同根重渲→引擎按 langCode 惰量加载内嵌 locale，
+    /// 六环静态全通；而用户真机量到的「画布上的字没跟着换」断点只能真机定界。所以 <c>ReapplyAppearance</c> 每一发
+    /// 都把<b>实际递出去的那串语言码</b>留在日志里：复现那一趟对着它读——日志对着而画布没换＝断点在桥/引擎侧；
+    /// 日志里缺这一行＝断点在宿主侧。⛔ 在复现之前猜着改（这一格钉的是「读数在场」，⛔ 是答案）。</summary>
+    [Fact]
+    public void EveryAppearancePushLeavesTheLanguageCodeInTheLog()
+    {
+        var push = SourceGate.MethodBody(SourceGate.Code(SourceGate.ReadRepoFile(WindowPath)),
+            "public void ReapplyAppearance()");
+        Assert.Equal(1, SourceGate.Count(push, "boards.lang.push code="));
+        Assert.Contains("StarLog.Info(\"boards.lang.push code=\"", push, StringComparison.Ordinal);
+        // 读数念的必须是真递给引擎的那颗判据（发出去的与写进日志的＝同一颗值），而⛔ 自己再拼一串
+        Assert.Contains("BoardPolicy.EngineLangCode(StarMark.Abstractions.I18n.Locale.Current)",
+            push, StringComparison.Ordinal);
     }
 
     /// <summary>那颗判据住 Core 而⛔ 住 UI（同"引擎认哪串字面"那一族：它是引擎的事实，⛔ 是我们的措辞）。</summary>

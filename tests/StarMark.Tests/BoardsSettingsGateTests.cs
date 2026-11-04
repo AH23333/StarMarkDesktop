@@ -48,9 +48,44 @@ public sealed class BoardsSettingsGateTests
         Assert.Contains("public bool? BoardsEnabled { get; set; }", main, StringComparison.Ordinal);
         var boards = ReadRepo(StoreBoards);
         // 默认关的形状＝「== true」判等：没表过态（null）落 false。写成 "!= false" 就是把默认翻成开。
+        // ⚠ 下面那条禁项读的是<b>抹掉注释后</b>的那一份（#123／#131 同族）：片204 起那颗档的 doc 注释
+        // 引用「!= false」那颗旧比较子是为了讲清倒置的来历，按原文数会把给人看的理由数成第二个出口。
+        var boardsCode = SourceGate.Code(boards);
         Assert.Contains("d.BoardsEnabled == true", boards, StringComparison.Ordinal);
         Assert.Contains("d.BoardsEnabled = enabled;", boards, StringComparison.Ordinal);
-        Assert.DoesNotContain("!= false", boards, StringComparison.Ordinal);
+        Assert.DoesNotContain("!= false", boardsCode, StringComparison.Ordinal);
+        // 片204＝P-289（本批新立同批结案）：那句判据曾经整颗倒置——旧文是「Load() is not { } d || …」，
+        // 那是 Capture 那颗「默认开」的句式（文件缺失回 null 那一臂交 true），照抄过来只翻了比较子
+        // 而⛔ 翻句式 ⇒ 未表过态＝开，与档头注、本闸门名与片20 提交语三处口径全部相反，而上面那三行
+        // 「== true／!= false」的碎片判据全绿（那颗比较子确实在、确实没写成 != false——倒置住在句式里）。
+        // 所以这里把<b>整颗形状</b>钉死：默认关＝is { } d && … == true（null 那一臂交 false），
+        // 而默认开的句式在那颗档里一颗也不许再出现。
+        // ⚠ 两条禁项读的都是上面那份<b>抹掉注释后</b>的代码（#123／#131 同族）：那颗档的 doc 注释
+        // 引用旧倒置句式是为了讲清为什么倒着——按原文数会把给人看的理由算成第二个出口。
+        Assert.Contains("Load() is { } d && d.BoardsEnabled == true", boardsCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("is not { } d ||", boardsCode, StringComparison.Ordinal);
+    }
+
+    /// <summary>片204＝P-286 处置①：开关 OFF ⇒ 已开的画板窗跟着收（关功能就该把它的窗收走，
+    /// 留着开着的窗＝开关在说谎）。收＝每扇窗自己的那套关窗协商（拦一次→藏→冲写→被拒那一支
+    /// 亮回「另存／继续编辑」面板＝「收前问一句要不要存」），⛔ 另起一份"直接拆"的捷径。</summary>
+    [Fact]
+    public void SwitchOffAsksEveryOpenBoardToCloseThroughItsOwnNegotiation()
+    {
+        var vm = ReadRepo(VmBoards);
+        Assert.Contains("StarMark.UI.Boards.BoardsWindows.CloseAll();", vm, StringComparison.Ordinal);
+        // 收窗那一拍排在存设置与刷托盘之后（先落盘再动窗）
+        Assert.True(vm.IndexOf("App.MainWindow?.ApplyTraySettings();", StringComparison.Ordinal)
+                    < vm.IndexOf("StarMark.UI.Boards.BoardsWindows.CloseAll();", StringComparison.Ordinal),
+            "收窗排在存设置/刷托盘之前＝半路红一扇窗丢了状态");
+        // OFF 那一臂才动窗：ON 侧开关只说"从今往后的入口"，⛔ 顺手拆已开的窗
+        Assert.Contains("if (!value)", vm, StringComparison.Ordinal);
+        // 名册是收窗的唯一主人：快照后逐扇 Close()＋逐扇兜异常（一扇收不掉⛔ 配带走其余几扇）
+        var roster = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.UI/Boards/BoardsWindows.cs"));
+        var close = SourceGate.MethodBody(roster, "public static void CloseAll()");
+        Assert.Contains("lock (_open) windows = _open.ToArray();", close, StringComparison.Ordinal);
+        Assert.Contains("w.Close();", close, StringComparison.Ordinal);
+        Assert.Contains("catch", close, StringComparison.Ordinal);
     }
 
     [Fact]

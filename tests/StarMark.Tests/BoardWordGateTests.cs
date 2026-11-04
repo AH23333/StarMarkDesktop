@@ -291,10 +291,13 @@ public sealed class BoardWordGateTests : IDisposable
         // 片151＝那一行上<b>多了一颗可点的</b>（「贴到桌面」），所以三列各加一颗：黑字 16→17、底色 11→12、描边 11→12。
         // 这一笔⛔ 是"只抬一列"那一族（上面片108 那一格抬的是一行字），也⛔ 许只抬一列——漏任何一列＝那颗新按钮
         // 有一样颜色吃主题刷＝片27／28 那把尺量的"白字画在白底上"在这一屏上再来一次。
-        Assert.Equal(17, Count(body, "Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black)"));
-        Assert.Equal(12, Count(body, "Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255))"));
-        Assert.Equal(12, Count(body, "BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130))"));
-        // 禁项：这一族⛔ 用"跟着主题走"的那一类刷子（面板与十二颗按钮都不跟着走，见 §27.6）
+        // 片204＝那一行前头又多了一颗可点的（「⋯」收合钮・P-285：那一排动作按钮默认收起、点了才摊开），
+        // 三列再各加一颗：黑字 17→18、底色 12→13、描边 12→13。这一颗是按钮而⛔ 一行字，所以⛔ 是"只抬一列"
+        // 那一族；它念的是语言中立的一颗字符（⛔ 表里的键），三语同一副脸——板上键族那颗 33 ⛔ 因它动。
+        Assert.Equal(18, Count(body, "Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black)"));
+        Assert.Equal(13, Count(body, "Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255))"));
+        Assert.Equal(13, Count(body, "BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130))"));
+        // 禁项：这一族⛔ 用"跟着主题走"的那一类刷子（面板与十三颗按钮都不跟着走，见 §27.6）
         Assert.Equal(0, Count(body, "ThemeResource"));
         Assert.Equal(0, Count(body, "Application.Current.Resources["));
     }

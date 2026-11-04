@@ -1088,6 +1088,46 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Contains("_barBackgroundButton.Click += (_, _) => ToggleExportBackground();", code, StringComparison.Ordinal);
     }
 
+    /// <summary>片204＝P-285：那一排永远摊开的按钮整条压在引擎自己的工具条上（用户真机量到：遮住、关不掉、挪不开）。
+    /// 收法＝右上角那块加一颗「⋯」收合钮：动作按钮那一排默认收起、点了才摊开。六格一起钉：
+    /// <para>① 那一排默认收起（<c>Visibility.Collapsed</c> 那一句在 BuildStage 里恰一颗——多一颗＝那一排的
+    /// 可见性另有第二处在自己算＝第二个主人）；</para>
+    /// <para>② 翻板只由那颗钮自己的 <c>Click</c> 一处写；</para>
+    /// <para>③ 那颗钮排进 <c>_bar</c> 而<b>排在那一排之前</b>（收起之后仍点得到摊开它的那颗手）；</para>
+    /// <para>④ 那六颗动作钮照旧全住那一排里（<c>barRow.Children.Add</c> 恰六颗——挪出一颗＝那一颗不再跟着收）；
+    /// 而两行读数照旧直接摊在外面（它们是"刚才那一发怎么样了"与"这块板有没有藏着空框"的答案，
+    /// 跟着动作按钮一起藏＝收起之后整块屏幕聋了）；</para>
+    /// <para>⑤ 那颗钮念的是语言中立的一颗字符而⛔ 表里那颗键：三语用户念它同一副脸，也没有要翻译的词
+    /// （那一排里每颗按钮自己的字照旧走 Word/Phrase；板上键族那颗 33 ⛔ 因它动）。</para>
+    /// <para>⚠ 它的三样颜色住在 <c>BoardWordGateTests</c> 那颗色尺里：一把尺只量一次，⛔ 两处各数一遍。</para></summary>
+    [Fact]
+    public void TheBarRowStartsFoldedBehindItsOwnToggle()
+    {
+        var raw = ReadRepo(WindowCs);
+        var code = SourceGate.Code(raw);
+        var stage = SourceGate.MethodBody(code, "private Grid BuildStage");
+        // ① 默认收起恰一处（多一颗＝另有第二处在算那一排的可见性＝第二个主人）
+        Assert.Equal(1, Count(stage, "barRow.Visibility = Visibility.Collapsed;"));
+        // ② 翻板串：那颗钮的 Click 是唯一翻它的手
+        Assert.Contains("barRow.Visibility = barRow.Visibility == Visibility.Visible", stage, StringComparison.Ordinal);
+        // ③ 那颗钮进 _bar 且排在那一排之前（收起之后仍点得到摊开它的那颗手）
+        Assert.Contains("var barMenuButton = new Button", stage, StringComparison.Ordinal);
+        Assert.True(stage.IndexOf("_bar.Children.Add(barMenuButton);", StringComparison.Ordinal)
+                    < stage.IndexOf("_bar.Children.Add(barRow);", StringComparison.Ordinal),
+            "收合钮排在那一排之后＝收起之后没有东西能把它摊回来");
+        // ④ 六颗动作钮照旧全住那一排（挪出一颗＝那一颗不再跟着收），两行读数照旧直接进 _bar
+        Assert.Equal(6, Count(stage, "barRow.Children.Add("));
+        Assert.True(stage.IndexOf("_bar.Children.Add(barRow);", StringComparison.Ordinal)
+                    < stage.IndexOf("_bar.Children.Add(_barStatus);", StringComparison.Ordinal),
+            "那一排排在那两行读数之后＝读数跟着那一排一起被挪了位置");
+        Assert.Contains("_bar.Children.Add(_barStatus);", stage, StringComparison.Ordinal);
+        Assert.Contains("_bar.Children.Add(_barHiddenEmbeds);", stage, StringComparison.Ordinal);
+        // ⑤ 语言中立的那颗字符（⛔ 表里的键）
+        Assert.Contains("Content = \"⋯\",", stage, StringComparison.Ordinal);
+        var table = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.Abstractions/I18n/UiStrings.cs"));
+        Assert.Equal(0, Count(table, "⋯"));
+    }
+
     // ────────── 片56：那一发导出问出去之后，两条下落都得有主人（P-244） ──────────
 
     /// <summary>页面那一半：<b>档位决定交回什么形状</b>，而链上每一环都得把那颗 promise 交回去。

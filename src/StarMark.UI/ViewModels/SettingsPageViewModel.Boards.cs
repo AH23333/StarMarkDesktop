@@ -21,5 +21,10 @@ public partial class SettingsPageViewModel
         _settings.SaveBoardsEnabled(value);
         // 托盘当场跟着改：不重启（Capture/Rss 同一口径——多一步就算缺陷）。
         App.MainWindow?.ApplyTraySettings();
+        // 片204＝P-286 处置①：开关 OFF ⇒ 已开的画板窗跟着收（关功能就该把它的窗收走，
+        // 留着开着的窗＝开关在说谎）。收＝每扇窗自己的那套关窗协商（拦一次→藏→冲写→被拒
+        // 那一支亮回「另存／继续编辑」面板＝「收前问一句要不要存」），主人是名册那一颗。
+        // ON 那一臂⛔ 动已开的窗：开关只说"从今往后的入口"，已开的窗照旧活着。
+        if (!value) StarMark.UI.Boards.BoardsWindows.CloseAll();
     }
 }
