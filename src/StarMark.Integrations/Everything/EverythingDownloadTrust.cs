@@ -45,6 +45,19 @@ public static class EverythingDownloadTrust
     }
 
     /// <summary>
+    /// 删除核销（坑 #1141）：<c>File.Delete</c> 之后用 <c>File.Exists</c> 复核——「调了」≠「成了」
+    /// （与 #1127「UPDATE 要报 rowcount」同族）。返回<b>此刻文件是否已不在</b>：
+    /// true＝删净或本来就没有；false＝被占用／删不动。调用方把真实结果写进日志，⛔ 无条件照写「已删」。
+    /// </summary>
+    internal static bool TryDelete(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return !File.Exists(path);
+    }
+
+    /// <summary>
     /// WinVerifyTrust 验 Authenticode 证书链（不做签名者身份检查——「是谁签的」由
     /// <see cref="IsVoidtoolsSigned"/> 那层加）。无签名 / 链验失败 / 文件损坏均返回 false。
     /// <para>撤销检查刻意关死（<c>WTD_REVOKE_NONE</c>）：开着时每次验签都去抓 CRL/OCSP，

@@ -203,26 +203,34 @@ public sealed class EverythingSource : IItemSource
                 await DownloadAtomicAsync(http, SdkZipUrl, zip, CancellationToken.None);
             }
 
-            using var archive = OpenCachedZip(zip);
-            var entry = archive.Entries.FirstOrDefault(e =>
-                string.Equals(e.Name, "Everything64.dll", StringComparison.OrdinalIgnoreCase));
-            if (entry is null)
+            // 先松手再验（坑 #1141）：从验签那一刻起，DLL 与 zip 都必须没人握着——
+            // 握着自己没关的写句柄去 WinVerifyTrust，系统按「文件被占用」报 0x80092003＝假阴性；
+            // ZipArchive 是同一把锁：它的读句柄不收干净，下面失败臂里删 zip 必被吞。
+            using (var archive = OpenCachedZip(zip))
             {
-                StarLog.Error("Everything SDK zip 中未找到 Everything64.dll。");
-                return false;
-            }
+                var entry = archive.Entries.FirstOrDefault(e =>
+                    string.Equals(e.Name, "Everything64.dll", StringComparison.OrdinalIgnoreCase));
+                if (entry is null)
+                {
+                    StarLog.Error("Everything SDK zip 中未找到 Everything64.dll。");
+                    return false;
+                }
 
-            using var src = entry.Open();
-            using var dst = File.Create(sdkPath);
-            src.CopyTo(dst);
+                using (var src = entry.Open())
+                using (var dst = File.Create(sdkPath))
+                {
+                    src.CopyTo(dst);
+                }
+            }
 
             // P-145 (A)：SDK zip 是滚动的，钉不住字节——验解出 DLL 的 Authenticode 且签名者是 voidtools
             // （内容会滚、签名者不会滚）。不过＝删净退出：可疑 DLL 留在缓存目录＝下次 File.Exists 直接跳过验签。
             if (!EverythingDownloadTrust.IsVoidtoolsSigned(sdkPath))
             {
-                try { File.Delete(sdkPath); } catch { }
-                try { if (File.Exists(zip)) File.Delete(zip); } catch { }
-                StarLog.Error("Everything SDK 解出的 Everything64.dll 未过 voidtools 签名验签（已删 DLL 与 zip，本轮降级为无本地文件实时搜索）。");
+                // 删除核销（坑 #1141）：Delete 被吞不算删了——真实结果进日志，⛔ 照写「已删」。
+                var dllGone = EverythingDownloadTrust.TryDelete(sdkPath);
+                var zipGone = EverythingDownloadTrust.TryDelete(zip);
+                StarLog.Error($"Everything SDK 解出的 Everything64.dll 未过 voidtools 签名验签（DLL已删={dllGone} · zip已删={zipGone}，本轮降级为无本地文件实时搜索）。");
                 return false;
             }
 
@@ -287,8 +295,9 @@ public sealed class EverythingSource : IItemSource
             // （半截文件 ⇒ 哈希必不匹配 ⇒ 删 ⇒ 下次重下），绝不让「看起来是安装器」的文件进 Process.Start。
             if (!EverythingDownloadTrust.VerifySha256(installer, EverythingDownloadTrust.InstallerSha256))
             {
-                try { if (File.Exists(installer)) File.Delete(installer); } catch { }
-                StarLog.Error("Everything 安装包哈希不匹配（下载点验未过，已删包，本轮降级为无本地文件实时搜索）。");
+                // 删除核销（坑 #1141）：真实结果进日志，⛔ 照写「已删包」。
+                var gone = EverythingDownloadTrust.TryDelete(installer);
+                StarLog.Error($"Everything 安装包哈希不匹配（下载点验未过，包已删={gone}，本轮降级为无本地文件实时搜索）。");
                 return false;
             }
 
@@ -323,13 +332,21 @@ public sealed class EverythingSource : IItemSource
     /// 不再依赖/探测用户机上那只（可能不应答 IPC 的）第三方 Everything，也不再装 Session-0「Everything 服务」。
     /// </summary>
     public Task<LocalDiskSearchEnableOutcome> EnableAsync(CancellationToken ct)
+    {
         // 同 EnsureReadyAsync：这段全是阻塞式系统调用，而它是设置页开关的直接 await 目标。
-        => Task.Run(async () =>
+        return Task.Run(async () =>
         {
-            await EnsureSdkReadyAsync().ConfigureAwait(false);   // 下载 / 加载 SDK DLL（不提权）
-            var ok = await EnsureOwnedRunningAsync(ct).ConfigureAwait(false);
-            return ok ? LocalDiskSearchEnableOutcome.Ready : LocalDiskSearchEnableOutcome.Failed;
+            // 两臂的结果都要有去向（坑 #1142）：SDK 臂验过了没接回就绪＝「验过了」与「就绪了」断链，
+            // 丢弃那一臂的 bool 是静默半瘫，比抛异常更难查。
+            var sdkReady = await EnsureSdkReadyAsync().ConfigureAwait(false);
+            var ownedRunning = await EnsureOwnedRunningAsync(ct).ConfigureAwait(false);
+            if (!(sdkReady && ownedRunning))
+                StarLog.Warn($"本地磁盘搜索开启未就绪：SDK就绪={sdkReady} · 自带实例接管={ownedRunning}");
+            return sdkReady && ownedRunning
+                ? LocalDiskSearchEnableOutcome.Ready
+                : LocalDiskSearchEnableOutcome.Failed;
         }, ct);
+    }
 
     // ===== C′：StarMark 自带 standard Everything（显式自有路径 + 接管默认实例）=====
     // 动机：用户机上的第三方 Everything repack（如强制提权的 Lite 版）不对外应答标准 SDK IPC，且运行/注册表探测
@@ -511,8 +528,9 @@ public sealed class EverythingSource : IItemSource
             // 防不住「上一次就被投毒」）。URL 带版本号 ⇒ 内容钉死成哈希是稳的。
             if (!EverythingDownloadTrust.VerifySha256(zip, EverythingDownloadTrust.PortableZipSha256))
             {
-                try { File.Delete(zip); } catch { }
-                StarLog.Error("Everything 便携包哈希不匹配（下载点验未过，已删包，本轮降级为无本地文件实时搜索）。");
+                // 删除核销（坑 #1141）：真实结果进日志，⛔ 照写「已删包」。
+                var gone = EverythingDownloadTrust.TryDelete(zip);
+                StarLog.Error($"Everything 便携包哈希不匹配（下载点验未过，包已删={gone}，本轮降级为无本地文件实时搜索）。");
                 return null;
             }
             using (var archive = OpenCachedZip(zip))
@@ -525,7 +543,7 @@ public sealed class EverythingSource : IItemSource
                         entry.ExtractToFile(Path.Combine(OwnedDir, name), overwrite: true);
                 }
             }
-            try { File.Delete(zip); } catch { }
+            try { EverythingDownloadTrust.TryDelete(zip); } catch { }   // 解压完清包：删不掉留着也无害（哈希已过，下次照验）
 
             if (File.Exists(OwnedExePath))
             {

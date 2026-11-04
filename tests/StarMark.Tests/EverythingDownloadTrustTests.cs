@@ -16,9 +16,11 @@ namespace StarMark.Tests;
 /// 中间任何一环（投毒镜像、CDN 错件、非原子写的截断包）都能把一颗「看起来是 Everything」的
 /// 可执行文件送进 <c>Process.Start</c>，而全库没有任何一路读数能分辨「下到的是不是 voidtools 发的那颗」。</para>
 /// <para>修法走 (A)：URL 带版本号的两包<b>硬钉 SHA-256</b>（内容钉死）；滚动的 SDK zip 验解出 DLL 的
-/// Authenticode 且签名者是 voidtools（「内容会滚、签名者不会滚」）。前六格是行为证人
-/// （不依赖网络：微软内嵌签的 coreclr.dll 当正件、无签名临时文件当负件）；后六格钉形状——
-/// 哈希 64-hex、每颗哈希／每条 URL 恰一处出处、三处下载点验签在位且在 <c>Process.Start</c> 之前。</para>
+/// Authenticode 且签名者是 voidtools（「内容会滚、签名者不会滚」）。行为①～⑥＋形状①～④⑥ 钉的是这一层。</para>
+/// <para>片203 修批（P-145 真机三缺陷，坑 #1141/#1142）：行为⑦＋形状⑤′⑦⑧⑨——「先松手再验」
+/// （验签那一刻起 DLL 与 zip 都没人握着，⛔ 握着写句柄去 <c>WinVerifyTrust</c>＝0x80092003 假阴性）、
+/// 「删除核销」（<c>TryDelete</c> 复核「此刻在不在」，三臂日志 ⛔ 无条件照写「已删」）、
+/// EnableAsync 两臂结果都接回就绪（丢弃 SDK 臂＝「验过了」与「就绪了」断链）。</para>
 /// </summary>
 public sealed class EverythingDownloadTrustTests : IDisposable
 {
@@ -117,6 +119,22 @@ public sealed class EverythingDownloadTrustTests : IDisposable
         Assert.Null(EverythingDownloadTrust.TryGetSignerSubject(TempFile(Guid.NewGuid().ToByteArray())));
     }
 
+    /// <summary>行为⑦（坑 #1141）：删除核销的三态读数——被握着删不动＝如实回 false（⛔ 假报「已删」）、
+    /// 松手后删净＝true、本来就不存在＝true（「此刻不在」就是目标态）。</summary>
+    [Fact]
+    public void TryDeleteReportsWhetherTheFileIsReallyGone()
+    {
+        var held = TempFile("held"u8.ToArray());
+        using (File.Open(held, FileMode.Open, FileAccess.Read, FileShare.None))   // 同锁现场：删不动的那一把
+        {
+            Assert.False(EverythingDownloadTrust.TryDelete(held));
+            Assert.True(File.Exists(held));
+        }
+        Assert.True(EverythingDownloadTrust.TryDelete(held));                     // 松手后删净
+        Assert.False(File.Exists(held));
+        Assert.True(EverythingDownloadTrust.TryDelete(Path.Combine(_tmp, "never-existed.bin")));
+    }
+
     /// <summary>形状①：两颗钉住的哈希都得是 64 位 hex——写漏/写歪一位（63 位、带空格）在这里现形。</summary>
     [Fact]
     public void TheTwoPinnedHashesAreSixtyFourHexDigits()
@@ -161,14 +179,17 @@ public sealed class EverythingDownloadTrustTests : IDisposable
             "安装器的哈希验必须排在 ProcessStartInfo 之前");
     }
 
-    /// <summary>形状⑤：SDK 那臂删净才走——验不过时 DLL 与 zip 都得删（可疑 DLL 留在缓存目录＝
+    /// <summary>形状⑤（坑 #1141 改口径）：SDK 那臂删净才走——验不过时 DLL 与 zip 都得<b>删除核销</b>：
+    /// <c>TryDelete</c> 回「此刻在不在」，⛔ 裸 <c>File.Delete</c> 被吞（可疑 DLL 留在缓存目录＝
     /// 下次 <c>File.Exists</c> 直接跳过下载与验签，点验被自己的缓存短路）。</summary>
     [Fact]
     public void TheSdkArmDeletesBothTheDllAndTheZipOnTrustFailure()
     {
         var arm = MethodBody(ReadRepoFile(QueuePath), "public async Task<bool> EnsureSdkReadyAsync()");
-        Assert.Contains("File.Delete(sdkPath)", arm, StringComparison.Ordinal);
-        Assert.Contains("File.Delete(zip)", arm, StringComparison.Ordinal);
+        Assert.Contains("EverythingDownloadTrust.TryDelete(sdkPath)", arm, StringComparison.Ordinal);
+        Assert.Contains("EverythingDownloadTrust.TryDelete(zip)", arm, StringComparison.Ordinal);
+        Assert.DoesNotContain("File.Delete(sdkPath)", arm, StringComparison.Ordinal);
+        Assert.DoesNotContain("File.Delete(zip)", arm, StringComparison.Ordinal);
     }
 
     /// <summary>形状⑥：WinVerifyTrust 的 P/Invoke 声明恰一处——第二份声明＝第二颗 GUID/布局，
@@ -177,5 +198,47 @@ public sealed class EverythingDownloadTrustTests : IDisposable
     public void WinVerifyTrustIsDeclaredExactlyOnce()
     {
         Assert.Equal(1, Count(Code(ReadRepoFile(TrustPath)), "private static extern int WinVerifyTrust("));
+    }
+
+    /// <summary>形状⑦（坑 #1141）：SDK 臂「先松手再验」——写 DLL 的 <c>File.Create</c> 句柄与
+    /// ZipArchive 握 zip 的读句柄都必须收在 using <b>块</b>里、收在验签之前；
+    /// ⛔ <c>using var</c> 跨过 <c>IsVoidtoolsSigned</c>：握着自己没关的句柄去验，
+    /// 系统按「文件被占用」回 0x80092003＝假阴性。</summary>
+    [Fact]
+    public void TheSdkArmReleasesEveryHandleBeforeVerifying()
+    {
+        var arm = MethodBody(ReadRepoFile(QueuePath), "public async Task<bool> EnsureSdkReadyAsync()");
+        Assert.Equal(1, Count(arm, "using (var archive = OpenCachedZip(zip))"));
+        Assert.Equal(0, Count(arm, "using var archive = OpenCachedZip(zip)"));
+        Assert.Equal(1, Count(arm, "using (var dst = File.Create(sdkPath))"));
+        Assert.Equal(0, Count(arm, "using var dst = File.Create"));
+    }
+
+    /// <summary>形状⑧（坑 #1141）：删除核销铺满三臂——安装器／便携包臂的失败路径同样走
+    /// <c>TryDelete</c>，⛔ 裸 <c>File.Delete</c> 被吞后又无条件写「已删包」。</summary>
+    [Fact]
+    public void TheInstallerAndPortableArmsAlsoDeleteWithVerification()
+    {
+        var code = ReadRepoFile(QueuePath);
+        var installerArm = MethodBody(code, "public async Task<bool> EnsureEverythingInstalledAsync()");
+        var portableArm = MethodBody(code, "private static async Task<string?> EnsureOwnedEverythingAsync(CancellationToken ct)");
+
+        Assert.Contains("EverythingDownloadTrust.TryDelete(installer)", installerArm, StringComparison.Ordinal);
+        Assert.DoesNotContain("File.Delete(installer)", installerArm, StringComparison.Ordinal);
+        Assert.Equal(2, Count(portableArm, "EverythingDownloadTrust.TryDelete(zip)"));   // 失败臂核销＋解压完清包
+        Assert.DoesNotContain("File.Delete(zip)", portableArm, StringComparison.Ordinal);
+    }
+
+    /// <summary>形状⑨（坑 #1142）：EnableAsync 两臂的结果都接回就绪——SDK 臂验过了没接上＝
+    /// 「验过了」与「就绪了」断链；丢弃那一臂的 bool 是静默半瘫，比抛异常更难查。</summary>
+    [Fact]
+    public void EnableAsyncWiresBothArmResultsIntoTheOutcome()
+    {
+        var body = MethodBody(ReadRepoFile(QueuePath),
+            "public Task<LocalDiskSearchEnableOutcome> EnableAsync(CancellationToken ct)");
+        Assert.Equal(1, Count(body, "EnsureSdkReadyAsync"));   // ⛔ 回到「await 完不接回」的旧病
+        Assert.Contains("var sdkReady = await EnsureSdkReadyAsync().ConfigureAwait(false);", body, StringComparison.Ordinal);
+        Assert.Contains("var ownedRunning = await EnsureOwnedRunningAsync(ct).ConfigureAwait(false);", body, StringComparison.Ordinal);
+        Assert.Contains("sdkReady && ownedRunning", body, StringComparison.Ordinal);
     }
 }

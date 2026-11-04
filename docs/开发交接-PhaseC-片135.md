@@ -679,3 +679,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 坑表 #1141～#1149 九枚落踩坑记录（验签握锁假阴性＋同锁删除说谎／EnableAsync 丢弃／Win11 XAML 任务栏 RawViewWalker＋溢出浮层／auto-hide 唤栏 ~0.9 s／主窗隐藏 rect=∞／WinRT 前台静默／#32768 UIA 0 项／PS int 先算后拼／无 BOM CJK 码点 -join）。
 - 读数：docgates202 26/26・census 21（±0）・计数器 289/233/56 VERDICT OK（带 ✅ 227→233・新立 4）。⛔ push（未推 11）。
 - 下一刀：三缺陷修批（P-145 链路三处）→ 画板批（P-285～P-288）；P-145 题行翻不翻归用户拍板。
+
+## 八十四、片203 P-145 三真缺陷修批：先松手再验＋删除核销＋EnableAsync 两臂接回就绪（坑 #1141/#1142 落地）
+
+- 接手第一步照旧现读编号轴：报告到五百八十八、交接到八十三、坑表到 #1149；本批＝三缺陷修批（码改两档：<code>EverythingDownloadTrust</code> 新 TryDelete・<code>EverythingQueryQueue</code> SDK/安装器/便携包三臂＋EnableAsync）。
+- ①先松手再验：块形 using 收干净写句柄与 ZipArchive 读锁再验签（原先 using var 跨验签＝0x80092003 假阴性・删 zip 从未真成过）；②删除核销：TryDelete（Delete 后 File.Exists 复核）三臂失败路径全走它、真实结果进日志；③EnableAsync 块体化＋<code>sdkReady && ownedRunning</code> 合取・未就绪打 Warn（设置页调用方本就吃 Failed 态，零 UI 改动）。
+- 测面 <code>EverythingDownloadTrustTests</code> 12→16 格（行为⑦＋形状⑤′⑦⑧⑨）；读数：gate203 71/71・全量 6799/6799（＝6795＋4・18 m 28 s）・docgates203 26/26・census 21（±0）・计数器 289/233/56 VERDICT OK（持平）。⛔ push（未推 12）。
+- 下一刀：画板批（P-285～P-288 一族）；P-145 题行翻不翻仍归用户拍板。
