@@ -26,10 +26,20 @@ public sealed partial class SettingsStore
 {
 
     /// <summary>读出 AI 通道配置。<b>档位序号认不出来时退回默认而不是抛</b>：这一格是用户可手改的
-    /// JSON 数字，写错一个数字不该让设置页打不开。</summary>
+    /// JSON 数字，写错一个数字不该让设置页打不开。
+    /// <para>Key 那一格与 github.json 的 PAT 同一口径（P-89，与 P-30 同刀）：密文→解密；
+    /// <b>明文→原样可用</b>（旧版明文档的回落），且明文档在这一次读取里当场升级改写成密文档。</para></summary>
     public AiSettings LoadAiSettings()
     {
         var d = Load();
+        var storedKey = d?.AiApiKey;
+        if (d is not null && !string.IsNullOrEmpty(storedKey) && !SecretProtector.IsCipher(storedKey))
+        {
+            // 首读透明升级：明文档当场改写成密文档（写盘失败由 SaveCore 记日志并回传 LastWriteError，
+            // 这里不拦读取——档还在明文里，下次读取再试）。
+            d.AiApiKey = SecretProtector.Protect(storedKey);
+            Save(d);
+        }
         var kind = d?.AiProvider is int raw && Enum.IsDefined(typeof(AiProviderKind), raw)
             ? (AiProviderKind)raw
             : AiProviderKind.Ollama;
@@ -37,7 +47,7 @@ public sealed partial class SettingsStore
             Enabled: d?.AiEnabled == true,
             Provider: kind,
             Model: d?.AiModel,
-            ApiKey: d?.AiApiKey,
+            ApiKey: SecretProtector.Unprotect(storedKey),
             OllamaBaseUrl: d?.AiOllamaBaseUrl,
             BaseUrl: d?.AiBaseUrl,
             ClassifyModel: d?.AiClassifyModel);
@@ -47,14 +57,17 @@ public sealed partial class SettingsStore
     /// （通道换了，Key 与地址的必填性跟着变），分开写会出现"Ollama 却带着 https 校验"的中间态。
     /// <para>注意：全组语义意味着<b>调用方交回来的必须是自己读到的完整一份</b>——界面少一格，
     /// 保存时就会把那一格清零（"改了没落盘"最难自查的一种）。「分类模型」现在有输入格了，
-    /// 但它必须由 <see cref="ReadAiSettings"/> 一并读回来，不许在保存路径上补第二个事实源。</para></summary>
+    /// 但它必须由 <see cref="ReadAiSettings"/> 一并读回来，不许在保存路径上补第二个事实源。</para>
+    /// <para>Key 落盘前过 <see cref="SecretProtector"/>（P-89）：交进来的必须是明文（界面读出的
+    /// 就是明文），封好才写档——这里做的是「明文→密文」那半条，⛔ 不接受已封好的串，
+    /// 封两遍会把「解不开」写进档里。</para></summary>
     public void SaveAiSettings(AiSettings settings)
     {
         var d = Load() ?? new SettingsData();
         d.AiEnabled = settings.Enabled;
         d.AiProvider = (int)settings.Provider;
         d.AiModel = string.IsNullOrWhiteSpace(settings.Model) ? null : settings.Model.Trim();
-        d.AiApiKey = string.IsNullOrWhiteSpace(settings.ApiKey) ? null : settings.ApiKey.Trim();
+        d.AiApiKey = string.IsNullOrWhiteSpace(settings.ApiKey) ? null : SecretProtector.Protect(settings.ApiKey.Trim());
         d.AiOllamaBaseUrl = string.IsNullOrWhiteSpace(settings.OllamaBaseUrl) ? null : settings.OllamaBaseUrl.Trim();
         d.AiBaseUrl = string.IsNullOrWhiteSpace(settings.BaseUrl) ? null : settings.BaseUrl.Trim();
         d.AiClassifyModel = string.IsNullOrWhiteSpace(settings.ClassifyModel) ? null : settings.ClassifyModel.Trim();

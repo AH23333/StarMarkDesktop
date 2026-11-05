@@ -38,7 +38,9 @@ public sealed class GitHubOptions
     /// </summary>
     public static string DefaultConfigPath => StarMark.Abstractions.UserDataPaths.Sibling("github.json");
 
-    /// <summary>从文件加载配置。文件不存在则返回空对象。</summary>
+    /// <summary>从文件加载配置。文件不存在则返回空对象。
+    /// <para>Token 那一格（P-30）：密文→解密；<b>明文→原样可用</b>（旧版明文档的回落），且明文档
+    /// 在这一次读取里<b>当场升级改写成密文档</b>——用户不需要知道有这一步，下次打开也不是明文。</para></summary>
     public static GitHubOptions Load(string? path = null)
     {
         var p = path ?? DefaultConfigPath;
@@ -47,7 +49,24 @@ public sealed class GitHubOptions
         try
         {
             var json = File.ReadAllText(p);
-            return System.Text.Json.JsonSerializer.Deserialize<GitHubOptions>(json) ?? new GitHubOptions();
+            var loaded = System.Text.Json.JsonSerializer.Deserialize<GitHubOptions>(json) ?? new GitHubOptions();
+            var stored = loaded.Token;
+            loaded.Token = StarMark.Abstractions.SecretProtector.Unprotect(stored);
+            if (!string.IsNullOrEmpty(stored) && !StarMark.Abstractions.SecretProtector.IsCipher(stored))
+            {
+                // 首读透明升级：明文档当场改写成密文档（loaded.Token 此刻已是明文，Save 会重新封好）。
+                // 升级是尽力而为——失败不拦读取（下次再试），但要出一声：用户的 PAT 一直躺在明文里
+                // 而日志一句不提，就是「已修复」没有证人的那半截（#231 那一族）。
+                try
+                {
+                    loaded.Save(p);
+                }
+                catch (Exception ex)
+                {
+                    StarMark.Abstractions.StarLog.Warn($"github.json 明文档透明升级失败（下次读取再试）：{ex.Message}");
+                }
+            }
+            return loaded;
         }
         catch
         {
@@ -55,12 +74,23 @@ public sealed class GitHubOptions
         }
     }
 
-    /// <summary>保存配置到文件（先写临时文件再原子替换，避免崩溃/占用把含 PAT 的配置截断）。</summary>
+    /// <summary>保存配置到文件（先写临时文件再原子替换，避免崩溃/占用把含 PAT 的配置截断）。
+    /// <para>落盘的 Token 一律走 <see cref="StarMark.Abstractions.SecretProtector"/> 密文（P-30）：
+    /// 内存里这份仍是明文，调用方读到的与从前完全一样。序列化用「影子副本」而不是先把
+    /// <c>this.Token</c> 换成密文再改回来——后者中途抛异常会把密文留在调用方手里那份配置上，
+    /// 保存这个动作顺手改了别人读数，两边从此分岔。</para></summary>
     public void Save(string? path = null)
     {
         var p = path ?? DefaultConfigPath;
         Directory.CreateDirectory(Path.GetDirectoryName(p)!);
-        var json = System.Text.Json.JsonSerializer.Serialize(this, new System.Text.Json.JsonSerializerOptions
+        var onDisk = new GitHubOptions
+        {
+            Token = StarMark.Abstractions.SecretProtector.Protect(Token),
+            SyncIntervalSeconds = SyncIntervalSeconds,
+            PageSize = PageSize,
+            Username = Username,
+        };
+        var json = System.Text.Json.JsonSerializer.Serialize(onDisk, new System.Text.Json.JsonSerializerOptions
         {
             WriteIndented = true,
         });

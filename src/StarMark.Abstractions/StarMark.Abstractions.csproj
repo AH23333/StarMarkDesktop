@@ -12,6 +12,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="StarMark.Tests" />
+    <!-- SecretProtector（P-30/P-89）的 DPAPI 封装：.NET 9 起由 NuGet 包提供（Windows 原生，无第三方）。 -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.0.0" />
   </ItemGroup>
 
 </Project>

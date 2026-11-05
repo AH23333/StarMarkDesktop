@@ -749,3 +749,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 拍板结果全在账本（每颗条目头一颗〔片210〕注记）：工程刀队列（已授权/已拍板）＝P-30+89 DPAPI（优先）→ C 组性能批（P-45/43/48/23/36/47）→ P-28B′＋P-44 → P-26A → P-25+57A → P-34B → P-59 加「📋」档 → P-5 落地 → P-6A → P-7A → P-126 先A；功能刀队列＝P-293 GLM 真测链路（P-30 先行）→ P-294 AI 仪表盘 → P-63 剪贴板浮层 → P-80 贴图保留 → P-82 语言选择器 → P-93 拖放回执（性能批后・参考 deskbox）→ P-120 扩展仓修（已授权）；P-46 维持现行、(B) 否决，已翻牌。
 - 读数：docgates210 26/26；census 21（＝基线）；计数器 295/252/43 VERDICT OK；坑表零动（无新坑）；产品码零改动。
 - 下一刀：P-30+89 DPAPI 封装（A 案已备好：明文回落＋首读透明升级＋机检判据）。⛔ push（未推 19）。
+
+## 九十二、片211 P-30+89 落地：github.json 的 PAT 与 settings.json 的 AI Key 走同一颗 DPAPI 封装（SecretProtector・明文回落＋首读透明升级・解不开当「没配」）
+
+- 接手第一步照旧现读编号轴：报告到五百九十七、交接到九十二、坑表到 #1154（本批零动）、账本到 P-294；计数器现读＝295/254/41（bin/WI37C/count_ledger.py 现跑・VERDICT OK）。
+- 事实源：src/StarMark.Abstractions/SecretProtector.cs（「dpapi1:」哨兵・Protect/Unprotect/IsCipher）＋GitHubOptions.Save 影子副本落密文・Load 回落＋升级＋SettingsStore.Ai.cs 的 SaveAiSettings/LoadAiSettings 同口径；包＝System.Security.Cryptography.ProtectedData 9.0.0（Abstractions）；证人＝SecretAtRestGateTests 8 测（含「影子副本逐格对账」「封装出口恰一对」两颗源码闸）。
+- 存量档语义：旧明文档首读当场升级为密文档（不丢同档字段）；跨机器/跨账号拷档解不开→当没配（重填）；真档升级在应用下次读取时自动发生，无需手动迁移。
+- 读数：全量 6846/6846（基线 6838＋新 8）；docgates211 26/26；census 21（＝基线）；坑表零动（无新坑）；产品码＝5 文件（新增 SecretProtector.cs／SecretAtRestGateTests.cs；改 Abstractions.csproj／GitHubOptions.cs／SettingsStore.Ai.cs）。
+- 下一刀：C 组性能批（P-45/43/48/23/36/47，均已授权）。⛔ push（未推 20）。
