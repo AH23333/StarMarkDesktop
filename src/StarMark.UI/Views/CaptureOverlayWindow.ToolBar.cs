@@ -20,8 +20,6 @@ using StarMark.Core.Hotkeys;
 using StarMark.Integrations.Capture;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
-using Windows.Foundation;
-using Windows.Graphics;
 using Windows.System;
 using Windows.UI;
 // "按下这一想改什么"的枚举归模型（Core.Capture）所有：判定与取值同源，界面不再自己列一份
@@ -397,11 +395,8 @@ public sealed partial class CaptureOverlayWindow
         AnnotationTool.Line => BarGlyphs.LineGlyph(Ink),
         AnnotationTool.PolyLine => BarGlyphs.PolyLineGlyph(Ink),
         AnnotationTool.Arrow => BarGlyphs.ArrowGlyph(Ink),
-        AnnotationTool.Pen => BarGlyphs.Icon(
-            BarGlyphs.Curve(Ink, (2.5, 13), (5.5, 6.5), (8.5, 10.5), (13.5, 2.5))),
-        AnnotationTool.Highlighter => BarGlyphs.Icon(                             // 粗而半透明的一横
-            BarGlyphs.Fill(new SolidColorBrush(Color.FromArgb(0x88, 0xFF, 0xFF, 0xFF)), 2.5, 6.5, 11, 5.5),
-            BarGlyphs.Seg(InkDim, 2.5, 13.5, 13.5, 13.5, 1.2)),
+        AnnotationTool.Pen => BarGlyphs.PenGlyph(Ink),
+        AnnotationTool.Highlighter => BarGlyphs.HighlighterGlyph(InkDim),     // 粗而半透明的一横（笔身是形状的一部分）
         AnnotationTool.Mosaic => BarGlyphs.Icon(                                 // 2×2 格子
             BarGlyphs.Fill(Ink, 2.5, 2.5, 5, 5), BarGlyphs.Fill(InkDim, 8, 2.5, 5, 5),
             BarGlyphs.Fill(InkDim, 2.5, 8, 5, 5), BarGlyphs.Fill(Ink, 8, 8, 5, 5)),
@@ -410,9 +405,7 @@ public sealed partial class CaptureOverlayWindow
             BarGlyphs.Curve(Ink, (2.5, 13), (8, 2.5), (13.5, 13)), BarGlyphs.Seg(Ink, 5, 9.5, 11, 9.5)),
         AnnotationTool.Number => BarGlyphs.Icon(BarGlyphs.Ring(Ink, 3, 3, 10, 10, 1.6),   // 圆里一个 1：序号工具
             BarGlyphs.Seg(Ink, 8, 5.5, 8, 11), BarGlyphs.Seg(Ink, 6.8, 6.6, 8, 5.5)),
-        AnnotationTool.Eraser => BarGlyphs.Icon(                                 // 倾斜的橡皮块＋中间一道分界线
-            BarGlyphs.Seg(Ink, 5, 5, 11, 5), BarGlyphs.Seg(Ink, 11, 5, 12.5, 11), BarGlyphs.Seg(Ink, 12.5, 11, 6.5, 11),
-            BarGlyphs.Seg(Ink, 6.5, 11, 5, 5), BarGlyphs.Seg(Ink, 5.7, 8, 11.8, 8)),
+        AnnotationTool.Eraser => BarGlyphs.EraserGlyph(Ink),                     // 倾斜的橡皮块＋中间一道分界线
         _ => BarGlyphs.RectangleGlyph(Ink),
     };
 
@@ -420,34 +413,19 @@ public sealed partial class CaptureOverlayWindow
     private UIElement BrushIcon() => DotIcon(ColourBgra, selected: false,
         diameter: 3 + Math.Clamp(_weightIndex, 0, Annotation.ThicknessSteps.Length - 1) * 3);
 
-    /// <summary>撤销 / 重做：同一支箭头只差方向（形状不一样就会被看成两个不同的动作）。</summary>
-    private static UIElement ArrowIcon(bool left)
-    {
-        double X(double v) => left ? v : BarGlyphs.Side - v;
-        return BarGlyphs.Icon(BarGlyphs.Seg(Ink, X(13), 8, X(3.5), 8),
-            BarGlyphs.Seg(Ink, X(3.5), 8, X(7.5), 4.2), BarGlyphs.Seg(Ink, X(3.5), 8, X(7.5), 11.8));
-    }
+    /// <summary>撤销 / 重做：同一支箭头只差方向（形状不一样就会被看成两个不同的动作）。
+    /// 几何住在 <see cref="BarGlyphs"/>（两条工具条共库），这里只递这条带的墨色。</summary>
+    private static UIElement ArrowIcon(bool left) => BarGlyphs.UndoGlyph(Ink, left);
 
-    private static UIElement EraserIcon()
-        => BarGlyphs.Icon(BarGlyphs.Placed(new Polygon
-        {
-            Fill = InkDim,
-            Points = new PointCollection { new(3, 12), new(9, 12), new(13.5, 4), new(7.5, 3) },
-        }, 0, 0), BarGlyphs.Seg(InkDim, 3, 13.5, 13.5, 13.5, 1.2));
+    /// <summary>「清空」那颗：一块橡皮擦过、留下一道底线（与橡皮工具那颗刻意不同形）。</summary>
+    private static UIElement EraserIcon() => BarGlyphs.ClearGlyph(InkDim);
 
     /// <summary>「选择」那颗（P-288）：一支带尾巴的光标箭头。与「箭头笔」（一条斜线＋开口头）
     /// 刻意不同形：那颗是"画一根箭头"，这颗是"我指东西"——条上没有文字，撞了形就等于摆两颗猜不出作用的按钮。</summary>
-    private static UIElement SelectIcon() => BarGlyphs.Icon(BarGlyphs.Placed(new Polygon
-    {
-        Fill = Ink,
-        Points = new PointCollection { new(2.5, 1.5), new(2.5, 12.5), new(5.3, 9.9),
-            new(7.4, 14.2), new(9.4, 13.2), new(7.2, 9), new(11, 9) },
-    }, 0, 0));
+    private static UIElement SelectIcon() => BarGlyphs.SelectGlyph(Ink);
 
-    private static UIElement CrossIcon() => BarGlyphs.Icon(
-        BarGlyphs.Seg(Ink, 3.5, 3.5, 12.5, 12.5), BarGlyphs.Seg(Ink, 12.5, 3.5, 3.5, 12.5));
+    private static UIElement CrossIcon() => BarGlyphs.CrossGlyph(Ink);
 
-    /// <summary>穿透那颗：一个方框被一支箭头穿过——"鼠标会从它身上走过去"这件事得看得出来。</summary>
     /// <summary>
     /// 「组」那颗：上面两块小图、下面一道把它们拢在一起的托架。
     /// <para>刻意与「打码」（2×2 实心格）和「复制」（两个描边方框错位）都不同形——这条带子上撞了形状
@@ -458,29 +436,20 @@ public sealed partial class CaptureOverlayWindow
         BarGlyphs.Seg(Ink, 4.7, 8, 4.7, 10.5, 1.2), BarGlyphs.Seg(Ink, 11.2, 8, 11.2, 10.5, 1.2),
         BarGlyphs.Seg(Ink, 4.7, 10.5, 11.2, 10.5, 1.2));
 
-    private static UIElement ThroughIcon() => BarGlyphs.Icon(
-        BarGlyphs.Ring(Ink, 4.5, 3, 8.5, 9, 1.4), BarGlyphs.Seg(Ink, 1.5, 14, 14.5, 1.5, 1.8),
-        BarGlyphs.Seg(Ink, 10.5, 1.5, 14.5, 1.5, 1.8), BarGlyphs.Seg(Ink, 14.5, 1.5, 14.5, 5.5, 1.8));
+    /// <summary>穿透那颗：一个方框被一支箭头穿过——"鼠标会从它身上走过去"这件事得看得出来。</summary>
+    private static UIElement ThroughIcon() => BarGlyphs.ThroughGlyph(Ink);
 
-    private static UIElement CopyIcon()
-        => BarGlyphs.Icon(BarGlyphs.Out(InkDim, 2, 2.5, 8, 9, 1.3), BarGlyphs.Out(Ink, 6, 5, 8, 9, 1.3));
+    private static UIElement CopyIcon() => BarGlyphs.CopyGlyph(Ink, InkDim);
 
-    private static UIElement SaveIcon()
-        => BarGlyphs.Icon(BarGlyphs.Seg(Ink, 8, 1.5, 8, 9.5), BarGlyphs.Seg(Ink, 8, 9.5, 4.8, 6.3),
-            BarGlyphs.Seg(Ink, 8, 9.5, 11.2, 6.3), BarGlyphs.Seg(Ink, 2.5, 13, 13.5, 13));
+    private static UIElement SaveIcon() => BarGlyphs.SaveGlyph(Ink);
 
-    private static UIElement PinIcon()
-        => BarGlyphs.Icon(BarGlyphs.Ring(Ink, 4.5, 2, 7, 5.5), BarGlyphs.Seg(Ink, 8, 7.5, 8, 13.5),
-            BarGlyphs.Seg(Ink, 5, 13.5, 11, 13.5));
+    private static UIElement PinIcon() => BarGlyphs.PinGlyph(Ink);
 
     private static UIElement OcrIcon() => BarGlyphs.Icon(
         BarGlyphs.Ring(Ink, 2.5, 2.5, 8, 8, 1.6), BarGlyphs.Seg(Ink, 9.8, 9.8, 14, 14, 1.8));
 
     /// <summary>放上画板那颗：一块边框（那扇窗）里一道折线（接着要画的东西）。</summary>
-    private static UIElement BoardIcon() => BarGlyphs.Icon(
-        BarGlyphs.Out(Ink, 1.5, 3, 13, 9.5, 1.3),
-        BarGlyphs.Seg(InkDim, 4, 9.5, 6.8, 6, 1.4), BarGlyphs.Seg(InkDim, 6.8, 6, 9.6, 8.5, 1.4),
-        BarGlyphs.Seg(InkDim, 9.6, 8.5, 11.8, 5.5, 1.4));
+    private static UIElement BoardIcon() => BarGlyphs.BoardGlyph(Ink, InkDim);
 
     private int ColourBgra => Annotation.Palette[Math.Clamp(_colourIndex, 0, Annotation.Palette.Count - 1)].Bgra;
 

@@ -1714,7 +1714,8 @@ public sealed class CanvasWiringGateTests
 
     /// <summary>
     /// <b>给"守门本身"作的保</b>（承 <c>WidgetGeometryPersistGateTests.TheWidgetWindowGatesReadEveryPartialFile</c>）：
-    /// 批次 S4-⑦ 把画布编排按访问面拆成 <c>CanvasService.*.cs</c> 八份分段之后，读法一旦退回单个文件，
+    /// 批次 S4-⑦ 把画布编排按访问面拆成 <c>CanvasService.*.cs</c> 分段之后（P-288 又拆出「选择」那一段），
+    /// 读法一旦退回单个文件，
     /// 这里几十条"锚点必须命中 1 处"的守门会<b>静默永远扫不到</b>（禁项类守门尤其危险——扫不到就等于通过）。
     /// <para>所以逐个分段各钉一个代表声明：文件怎么搬，读整套时必须还看得见。搬走某一段时这条会红，
     /// 提醒改的是守门的读法而不是把判据放宽。</para>
@@ -1728,8 +1729,9 @@ public sealed class CanvasWiringGateTests
         Assert.Contains("public static bool OpenBoardHost()", all);                     // Host
         Assert.Contains("public static void ToggleHalo()", all);                        // Control
         Assert.Contains("private static void Recomposite(Screen screen", all);          // Editing
-        Assert.Contains("private static void PollPress(int cursorX, int cursorY)", all); // Pointer
+        Assert.Contains("private static void PollPress(int cursorX, int cursorY)", all);// Pointer
         Assert.Contains("private static void Flush(Screen screen)", all);               // Frame
+        Assert.Contains("private static void DropSelection()", all);                    // Select
         Assert.Contains("private static Shot Compose()", all);                          // Snapshot
         Assert.Contains("private static void RequireRunning(string whatKey, Action run)", all); // Hotkey
         Assert.Contains("private static void ShowToolbar()", all);                      // Strip

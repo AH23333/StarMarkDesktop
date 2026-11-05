@@ -30,6 +30,8 @@ public static partial class CanvasService
     /// </summary>
     public static void Undo()
     {
+        // 撤销之后选中集里的实例就不在模型里了：框必须跟着走，不能画一个不存在的东西
+        DropSelection();
         if (_polyPoints is { } open)
         {
             // 勾到一半时"撤销"退的是<b>最后一个顶点</b>，不是板上那条旧笔迹：
@@ -63,6 +65,8 @@ public static partial class CanvasService
     /// </summary>
     public static void Redo()
     {
+        // 与 Undo 同一个理由：重做回来的是新实例，旧选中集比对不上就成了空框
+        DropSelection();
         var target = Screens.Where(s => s.Ink.CanRedo)
             .OrderByDescending(s => s.Ink.NextOrder)
             .FirstOrDefault();
@@ -75,6 +79,7 @@ public static partial class CanvasService
     public static void ClearAll()
     {
         CancelOpenPolyLine();               // 勾到一半的折线不能被"清空"顺手提交出去
+        DropSelection();                    // 被选中的那几条也没了，框不能留在一个空板上
         foreach (var screen in Screens)
         {
             // 连手上那条一起丢：清空之后鼠标还动着的话，那条"幽灵笔迹"会在清完的板子上补出一截
@@ -105,12 +110,20 @@ public static partial class CanvasService
     /// </summary>
     public static void Escape() => AnnotationHub.EscapeBoard();
 
-    /// <summary>Esc 的第一级：收掉手上那半件事（勾到一半的折线），板子继续开着。</summary>
+    /// <summary>Esc 的第一级：收掉手上那半件事（勾到一半的折线、选中的那组），板子继续开着。</summary>
     public static void CloseWorkInProgress()
     {
-        if (_polyPoints is null) return;
-        FinishOpenPolyLine();
-        RaiseStateChanged();
+        if (_polyPoints is not null)
+        {
+            FinishOpenPolyLine();
+            RaiseStateChanged();
+            return;
+        }
+        if (_selected is { Count: > 0 } || _bandTo is not null)
+        {
+            DropSelection();
+            RaiseStateChanged();
+        }
     }
 
     /// <summary>
@@ -143,7 +156,16 @@ public static partial class CanvasService
     {
         var marks = screen.Ink.Marks;
         var strokes = new List<CanvasStroke>(marks.Count);
-        for (var i = 0; i < marks.Count; i++) strokes.Add(CanvasStroke.FromAnnotation(marks[i]));
+        for (var i = 0; i < marks.Count; i++)
+        {
+            // 拖动中的那几条按偏移画（墨跟手走）：偏移只在拖动期间非零，落定时
+            // ReplaceMany 把它写回模型、归零——同一份墨从头到尾只有一个真值
+            if (screen == _selectScreen && (_selectOffset.X != 0 || _selectOffset.Y != 0)
+                && _selected is { } picked && picked.Contains(marks[i]))
+                strokes.Add(CanvasStroke.FromAnnotation(marks[i].MovedBy(_selectOffset.X, _selectOffset.Y)));
+            else
+                strokes.Add(CanvasStroke.FromAnnotation(marks[i]));
+        }
         return strokes;
     }
 
@@ -157,6 +179,9 @@ public static partial class CanvasService
             FinishPress(_pressScreen);
             EndTemporaryPress();
         }
+        // 「选择」手上那一按也在这里收口：换工具、换粗细、开穿透之前把拖动落定，
+        // 不收的话那一笔会接到新设置上（与上面那批同一个理由）
+        if (_press is Press.SelectMove or Press.SelectBand) FinishPress(_pressScreen);
         // 折线单独收：它按定义就是"跨按还开着"的那一条，上面那个 switch 只收了手上这一段
         FinishOpenPolyLine();
         var changed = false;

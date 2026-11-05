@@ -13,9 +13,27 @@
         ⚠ 四句说明（白板／幕布／光晕／贴图那四颗）嵌着<b>别的按钮的名字</b>，XAML 里递不出实参
           （标记扩展只能给键）⇒ 那四颗的 ToolTip 一律挪到 code-behind 用 `LocText.SetToolTipKey(el, key, args)`，
           XAML 里⛔ 留一份"没有实参的同款句子"——那会把 {0} 原样贴到屏幕上。
-        ⚠ 三支笔与三档档位名的主人是 Core 的词厂（✅P-181），这里挂的是<b>那两颗键</b>，⛔ 第六份字面量。
+        ⚠ 三支笔与三档档位名的主人是 Core 的词厂（✅P-181），这里挂的是<b>那几颗键</b>
+          （笔作悬停说明、档位作正文），⛔ 第六份字面量。
+
+        P-288 图标化：这一排的动作按钮全部换成记号（几何住在 BarGlyphs，与截图/贴图那条共库），
+        正文由 code-behind 贴图标；名字与说明只剩悬停说明与状态行两条出口。
+        仍是文字的只有三档粗细——那三颗是"档位"不是"动作"，字本身就是刻度。
     -->
     <Grid x:Name="Root" Background="#F21E1E1E" RequestedTheme="Dark">
+        <Grid.Resources>
+            <!-- 图标按钮的统一尺寸：与代码生成的那两排（图形／色点）同一颗数，几排才对得齐 -->
+            <Style x:Key="IconButton" TargetType="Button">
+                <Setter Property="Width" Value="27"/>
+                <Setter Property="Height" Value="23"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="MinWidth" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="3"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+        </Grid.Resources>
         <StackPanel Spacing="6" Padding="10">
             <StackPanel Orientation="Horizontal" Spacing="6">
                 <!-- 拖动落点：整条窗跟着走，笔迹不受影响（分层窗自己不动） -->
@@ -23,25 +41,9 @@
                         VerticalAlignment="Center" i18n:LocText.ToolTipKey="canvas.bar.tip.grip">
                     <TextBlock Text="⋮⋮" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
-                <Button x:Name="PenButton" Click="Pen_Click" i18n:LocText.Key="anno.tool.pen"/>
-                <Button x:Name="MarkerButton" Click="Marker_Click" i18n:LocText.Key="anno.tool.highlighter"/>
-                <Button x:Name="EraserButton" Click="Eraser_Click" i18n:LocText.Key="anno.tool.eraser"/>
-                <!-- 措辞要说准：撤销退的是"最后落的那一笔"，多屏时它可能不在鼠标所在那块屏上
-                     （从前这里写"这一块屏"，而代码早已改成按全机序号挑——屏幕说明与行为不一致＝用户以为撤错了东西）。 -->
-                <Button Click="Undo_Click" i18n:LocText.Key="canvas.btn.undo"
-                        i18n:LocText.ToolTipKey="canvas.bar.tip.undo"/>
-                <Button Click="Redo_Click" i18n:LocText.Key="canvas.btn.redo"
-                        i18n:LocText.ToolTipKey="canvas.bar.tip.redo"/>
-                <Button Click="Clear_Click" i18n:LocText.Key="canvas.btn.clear"/>
-                <Button x:Name="ThroughButton" Click="Through_Click" i18n:LocText.Key="canvas.btn.through"
-                        i18n:LocText.ToolTipKey="canvas.bar.tip.through"/>
-                <!-- 白板底：这块玻璃底下换成不透明白（演示/讲解用）。措辞要说清它与「穿透」互相拦着，
-                     否则"点了穿透没反应"只剩一种解释＝软件坏了。
-                     ⚠ 这句的 ToolTip 在 code-behind 里挂（它嵌着另外三颗按钮的名字，实参⛔ 抄在句子里）。 -->
-                <Button x:Name="BoardButton" Click="Board_Click" i18n:LocText.Key="canvas.btn.board"/>
-                <!-- 幕布：整屏压暗、只留鼠标那一圈亮。与白板互斥（背景只有一个真值），所以点它会把白板关掉。
-                     ToolTip 同上：在 code-behind 挂。 -->
-                <Button x:Name="CurtainButton" Click="Curtain_Click" i18n:LocText.Key="canvas.btn.curtain"/>
+                <!-- 「选择」：框选／点选笔迹那一态（按住选中笔迹可拖动）。再点一次退出，与三支笔同一交互语言 -->
+                <Button x:Name="SelectButton" Style="{StaticResource IconButton}" Click="Select_Click"
+                        i18n:LocText.ToolTipKey="canvas.bar.tip.select"/>
                 <!--
                     五种图形（发起人点名"给画布加图形编辑"，并要求用图标而不是汉字）。
                     这一段整排由代码按 Core 的 CanvasTools.Shapes 生成：
@@ -51,18 +53,46 @@
                        五颗下来就是把 ✕（唯一的鼠标出口之一）挤出客户区的那种宽度。
                 -->
                 <StackPanel x:Name="ShapeRow" Orientation="Horizontal" Spacing="6"/>
-                <Button x:Name="HaloButton" Click="Halo_Click" i18n:LocText.Key="canvas.btn.halo"/>
-                <Button x:Name="PinButton" Click="Pin_Click" i18n:LocText.Key="pin.card.category"/>
+                <!-- 三支笔：名字的主人是 Core 的词厂（✅P-181），记号与截图/贴图那条共库 -->
+                <Button x:Name="PenButton" Style="{StaticResource IconButton}" Click="Pen_Click"
+                        i18n:LocText.ToolTipKey="anno.tool.pen"/>
+                <Button x:Name="MarkerButton" Style="{StaticResource IconButton}" Click="Marker_Click"
+                        i18n:LocText.ToolTipKey="anno.tool.highlighter"/>
+                <Button x:Name="EraserButton" Style="{StaticResource IconButton}" Click="Eraser_Click"
+                        i18n:LocText.ToolTipKey="anno.tool.eraser"/>
+                <!-- 措辞要说准：撤销退的是"最后落的那一笔"，多屏时它可能不在鼠标所在那块屏上
+                     （从前这里写"这一块屏"，而代码早已改成按全机序号挑——屏幕说明与行为不一致＝用户以为撤错了东西）。 -->
+                <Button x:Name="UndoButton" Style="{StaticResource IconButton}" Click="Undo_Click"
+                        i18n:LocText.ToolTipKey="canvas.bar.tip.undo"/>
+                <Button x:Name="RedoButton" Style="{StaticResource IconButton}" Click="Redo_Click"
+                        i18n:LocText.ToolTipKey="canvas.bar.tip.redo"/>
+                <Button x:Name="ClearButton" Style="{StaticResource IconButton}" Click="Clear_Click"
+                        i18n:LocText.ToolTipKey="canvas.bar.tip.clear"/>
+                <Button x:Name="ThroughButton" Style="{StaticResource IconButton}" Click="Through_Click"
+                        i18n:LocText.ToolTipKey="canvas.bar.tip.through"/>
+                <!-- 白板底：这块玻璃底下换成不透明白（演示/讲解用）。措辞要说清它与「穿透」互相拦着，
+                     否则"点了穿透没反应"只剩一种解释＝软件坏了。
+                     ⚠ 这句的 ToolTip 在 code-behind 里挂（它嵌着另外几颗按钮的名字，实参⛔ 抄在句子里）。 -->
+                <Button x:Name="BoardButton" Style="{StaticResource IconButton}" Click="Board_Click"/>
+                <!-- 幕布：整屏压暗、只留鼠标那一圈亮。与白板互斥（背景只有一个真值），所以点它会把白板关掉。
+                     ToolTip 同上：在 code-behind 挂。 -->
+                <Button x:Name="CurtainButton" Style="{StaticResource IconButton}" Click="Curtain_Click"/>
+                <!-- 光晕（批次 RN 收成两档）：ToolTip 同上，在 code-behind 挂 -->
+                <Button x:Name="HaloButton" Style="{StaticResource IconButton}" Click="Halo_Click"/>
+                <Button x:Name="CopyButton" Style="{StaticResource IconButton}" Click="Copy_Click"
+                        i18n:LocText.ToolTipKey="canvas.bar.tip.copy"/>
+                <Button x:Name="SaveButton" Style="{StaticResource IconButton}" Click="Save_Click"
+                        i18n:LocText.ToolTipKey="canvas.bar.tip.save"/>
+                <Button x:Name="PinButton" Style="{StaticResource IconButton}" Click="Pin_Click"/>
                 <!-- 放上画板（深析 §四 那张矩阵最后一格）：交的是同一块笔迹那一块，只是落点换成那扇窗。
                      紧跟「贴图」而⛔ 挨着「存图／复制」——那两颗与贴图同族（都是"把这一份交出去"），
-                     而它与贴图最像（裁的是同一刀）。标签只两个汉字：条子按实测长，超出屏宽就要从 ✕ 身上挤。 -->
-                <Button x:Name="ToBoardButton" Click="ToBoard_Click" i18n:LocText.Key="canvas.btn.toBoard"
+                     而它与贴图最像（裁的是同一刀）。 -->
+                <Button x:Name="ToBoardButton" Style="{StaticResource IconButton}" Click="ToBoard_Click"
                         i18n:LocText.ToolTipKey="canvas.bar.tip.toBoard"/>
-                <Button Click="Save_Click" i18n:LocText.Key="canvas.btn.save"/>
-                <Button Click="Copy_Click" i18n:LocText.Key="canvas.btn.copy"/>
-                <Button x:Name="KeysButton" Content="⌨" Click="Keys_Click" MinWidth="0"
+                <Button x:Name="KeysButton" Style="{StaticResource IconButton}" Content="⌨" Click="Keys_Click"
                         i18n:LocText.ToolTipKey="canvas.bar.tip.keys"/>
-                <Button x:Name="CloseButton" Click="Close_Click" i18n:LocText.Key="canvas.btn.exit"/>
+                <Button x:Name="CloseButton" Style="{StaticResource IconButton}" Click="Close_Click"
+                        i18n:LocText.ToolTipKey="canvas.bar.tip.exit"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="6">
                 <Border x:Name="ColourRow" Background="#22FFFFFF" Padding="4,2">

@@ -124,7 +124,7 @@ public static partial class CanvasService
     /// 所以"荧光笔按住即画 / Ctrl+Alt 快速圈画"只能由帧循环轮询按键状态发现，
     /// 发现后临时摘掉穿透、自己补一次 SetCapture，抬起再恢复。
     /// </summary>
-    private enum Press { None, Drawing, Ephemeral, QuickPen, Shape, PolyLine }
+    private enum Press { None, Drawing, Ephemeral, QuickPen, Shape, PolyLine, SelectMove, SelectBand }
 
     private static Press _press;
 
@@ -142,6 +142,25 @@ public static partial class CanvasService
     private static int _polyColour;
     private static int _polyWidth;
 
+    /// <summary>「选择」工具在场吗。在场时按下走选／拖，不在场才落墨（P-288）。</summary>
+    private static bool _selectTool;
+
+    /// <summary>
+    /// 选中的那几条（<b>按实例存</b>，不存下标：撤销／清空之后下标会失效，实例比对天然免疫）。
+    /// 连同各自的包围盒与所属屏构成一套状态，收发都在 Select 那一段。
+    /// </summary>
+    private static IReadOnlyList<Annotation>? _selected;
+    private static List<IntRect>? _selectionBoxes;
+    private static Screen? _selectScreen;
+
+    /// <summary>拖动的起点与当前偏移（本屏物理像素）。偏移只在拖动期间非零，落定即归零。</summary>
+    private static PixelPoint _selectOrigin;
+    private static PixelPoint _selectOffset;
+
+    /// <summary>橡皮筋的两端（本屏物理像素）。_bandTo 为 null＝没有橡皮筋。</summary>
+    private static PixelPoint _bandFrom;
+    private static PixelPoint? _bandTo;
+
     /// <summary>手上有笔时它属于哪块屏（抬起/读态收尾都要用它，光标可能已经飘到别的屏）。</summary>
     private static Screen? _pressScreen;
 
@@ -154,8 +173,8 @@ public static partial class CanvasService
     /// <summary>手上正有一笔吗（每帧验层要跳过它：那一笔已经归画布画完）。</summary>
     public static bool PressInFlight => _press != Press.None;
 
-    /// <summary>有没有"半件事"在场（勾到一半的折线）——Esc 的第一级退的就是它。</summary>
-    public static bool HasWorkInProgress => _polyPoints is { Count: > 0 };
+    /// <summary>有没有"半件事"在场（勾到一半的折线、选中的那组）——Esc 的第一级退的就是它。</summary>
+    public static bool HasWorkInProgress => _polyPoints is { Count: > 0 } || _selected is { Count: > 0 };
 
     public static CanvasTool Tool => _tool;
 

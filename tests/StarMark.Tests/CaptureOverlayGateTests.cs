@@ -822,6 +822,9 @@ public sealed class CaptureOverlayGateTests
     /// <para>这条的症状不是崩，而是"同一个工具在两条上长得不一样"——用户在一边认得的记号，
     /// 到另一边换了画法；两份各自都能编译、各自的测全绿（WM/WQ 都记过分岔的代价）。
     /// 所以钉的是"定义只在一处"，不是"两边数字刚好相同"：数字相同也救不了下一次只改一边。</para>
+    /// <para>P-288 工具条图标化之后共库的不止那五个形状：<b>整排动作记号一并收编</b>——
+    /// 条上没有文字，同一颗动作两条换了画法，用户在一边认得的记号到另一边就猜不出作用
+    /// （同一族分岔的账，只是这次先收进来、不许再分岔）。</para>
     /// </summary>
     [Fact]
     public void TheTwoBarsShareOneGlyphLibrary()
@@ -841,7 +844,12 @@ public sealed class CaptureOverlayGateTests
             Assert.Equal(0, SourceGate.Count(canvas, primitive));
         }
 
-        foreach (var glyph in new[] { "RectangleGlyph", "EllipseGlyph", "LineGlyph", "PolyLineGlyph", "ArrowGlyph" })
+        foreach (var glyph in new[]
+                 {
+                     "RectangleGlyph", "EllipseGlyph", "LineGlyph", "PolyLineGlyph", "ArrowGlyph",
+                     "SelectGlyph", "PenGlyph", "HighlighterGlyph", "EraserGlyph", "ClearGlyph",
+                     "UndoGlyph", "ThroughGlyph", "CopyGlyph", "SaveGlyph", "PinGlyph", "CrossGlyph", "BoardGlyph",
+                 })
         {
             Assert.Equal(1, SourceGate.Count(glyphs, $"public static UIElement {glyph}("));
             Assert.Contains($"BarGlyphs.{glyph}(", capture);      // 两条都真的走到同一颗，不是各写一份同样的数字

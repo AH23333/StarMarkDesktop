@@ -34,6 +34,9 @@ public static partial class CanvasService
     public static void SelectTool(CanvasTool tool)
     {
         CommitOpenStroke();                       // 先收手上那条：不然它会接到新工具的设置上
+        // 点哪支笔都等于离开「选择」：选中框交掉，之后按下重新落墨
+        _selectTool = false;
+        DropSelection();
         _tool = tool;
         // 2026-09-27 用户改判：<b>换工具不再翻穿透态</b>（从前选荧光笔留在穿透、选画笔进绘制，是 §16.5.2
         // 的"零摩擦"，也是"点一下工具结果鼠标归属变了"的来源）。要画就用那颗「穿透」按钮或 canvas.through
@@ -51,6 +54,12 @@ public static partial class CanvasService
     /// <summary>再点当前选中的笔＝收笔回穿透态（与截图/贴图那条"再点取消选择"同一交互语言）。</summary>
     public static void ToggleTool(CanvasTool tool)
     {
+        // 「选择」在场时点哪支笔都是"换到那支笔"（顺带离开「选择」），不判"再点取消"
+        if (_selectTool)
+        {
+            SelectTool(tool);
+            return;
+        }
         // 换工具本身不再改穿透态（见 SelectTool）；这里只剩"再点当前那一支＝取消选择"，
         // 它等价于把鼠标还给下层应用——所以仍然是一次真正的会话事件，不是特例。
         if (_tool == tool && !ClickThroughHere) AnnotationHub.Raise(SessionEvent.GivePointerBack);

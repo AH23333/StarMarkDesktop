@@ -56,9 +56,22 @@ public sealed partial class CaptureOverlayWindow
         // 选择工具亮着（P-288 建议一）：每一次按下都做整场命中——点哪条选哪条是它的本职，
         // 隐性那套（没亮它）仍只在已有选中时测脚下那一条。
         var hadSelection = _selected is { } i && i < _history.Count;
-        var index = hadSelection && !_selectTool
-            ? _selected
-            : AnnotationPainter.HitTest(_history.Marks, local, SlopInSource(SelectionSlop));
+        // 选择工具亮着时，选中那条的<b>把手先于整场命中</b>被接住：旋转把手悬在框外
+        //（<see cref="RotateHandle"/> 往上抬 Lift 那一截），整场 HitTest 只测标注本体，
+        // 永远够不到那颗点——不先接住，按把手那一按就漏成拖框（真机反馈"有把手但没法选中旋转"）。
+        // 只认 Rotate/Scale 两档：把手是选中那条的专属区；框内（Move）仍放行给整场命中，
+        // 保住"点哪条选哪条"（上面盖着别的条时选得到上面那条）。组选没有把手，这一测只在单选时做。
+        int? index = null;
+        if (_selectTool && hadSelection && _selected is int heldIndex && _selectedMany is not { Count: > 1 })
+        {
+            var held = _history.Marks[heldIndex];
+            if (held.GrabAt(local, RotateHandle(held), SlopInSource(MoveSlop)) is Grab.Rotate or Grab.Scale)
+                index = heldIndex;
+        }
+        if (index is null)
+            index = hadSelection && !_selectTool
+                ? _selected
+                : AnnotationPainter.HitTest(_history.Marks, local, SlopInSource(SelectionSlop));
         if (index is not { } idx) return false;
         var mark = _history.Marks[idx];
 

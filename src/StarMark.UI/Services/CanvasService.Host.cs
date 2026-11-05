@@ -169,6 +169,15 @@ public static partial class CanvasService
         // 勾到一半的折线随窗口一起忘掉：层都没了，还留着点引用就是把已释放的对象留在静态字段上
         _polyPoints = null;
         _polyScreen = null;
+        // 「选择」那一套同样直接归零（不走 DropSelection：它要提交的那几块缓冲正在被拆）
+        _selectTool = false;
+        _selected = null;
+        _selectionBoxes = null;
+        _selectScreen = null;
+        _selectOrigin = default;
+        _selectOffset = default;
+        _bandFrom = default;
+        _bandTo = null;
         AnnotationHub.QuickPressInFlight = false;
         StarLog.Info("[Canvas] 画布模式关闭");
     }

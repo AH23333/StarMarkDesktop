@@ -43,8 +43,10 @@ public sealed partial class CanvasToolbarWindow : Window
     private readonly Dictionary<CanvasTool, Button> _shapeButtons = new();
 
     /// <summary>
-    /// 纯图标那两排（五颗图形＋一排色点）在 UIA 里的名字：建条时只<b>记下「键＋没渲染的实参」</b>，
-    /// 取词发生在 <see cref="Refresh"/> 那一拍。这颗窗口⛔ 挂 <c>LocText</c>
+    /// 条上纯图标的那一批（图形、色点，以及 P-288 图标化后的整排动作钮）在 UIA 里的名字：
+    /// 图标做面 ⇒ <c>Content</c> 里没有字，名字复用悬停说明那一句（⛔ 第二份文案）。
+    /// 建条时只<b>记下「键＋没渲染的实参」</b>，取词发生在 <see cref="Refresh"/> 那一拍。
+    /// 这颗窗口⛔ 挂 <c>LocText</c>
     /// （<c>CanvasBarWordGateTests.TheStatusLineRewordsItselfAtTheMomentItChanges</c> 钉着：
     /// 挂上来只会多几条贴不出去的空壳），而换语言的重贴已由 <c>Locale.Changed += Refresh</c> 送到位。
     /// </summary>
@@ -63,6 +65,7 @@ public sealed partial class CanvasToolbarWindow : Window
         WindowInterop.RemoveDefaultWindowFrame(this);
         BuildPalette();
         BuildShapeButtons();
+        BuildActionIcons();
         BuildEmbeddedNameTooltips();
         // 状态回报是"按钮哪个亮着"这件事的唯一出口：画布那边改了，条子必须跟着改
         CanvasService.StateChanged += Refresh;
@@ -183,6 +186,10 @@ public sealed partial class CanvasToolbarWindow : Window
 
     // ────────── 动作 ──────────
 
+    /// <summary>「选择」：框选／点选已有笔迹的那一态（选中可拖动、可整组带走）。与三支笔同一交互语言：
+    /// 再点一次退出。选中集与框选手势都住在 CanvasService，条子只负责亮哪一颗。</summary>
+    private void Select_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleSelectTool();
+
     // 三支笔都走 ToggleTool：再点当前这支＝收笔回穿透态（与截图/贴图那条"再点取消选择"同一交互语言）
     private void Pen_Click(object sender, RoutedEventArgs e) => CanvasService.ToggleTool(CanvasTool.Pen);
 
@@ -284,10 +291,9 @@ public sealed partial class CanvasToolbarWindow : Window
     /// <summary>
     /// 图形那几颗按钮：整排由 <see cref="CanvasTools.Shapes"/> 生成，一颗都不在 XAML 里写。
     /// <para>
-    /// <b>为什么只有这一段是图标、三支笔仍旧是汉字</b>：发起人点名的就是"图形编辑功能使用图标"，
-    /// 而图形这一段确实该换——五种图形若各占两个汉字，条子要长出十个字的宽度，
-    /// 而 <see cref="FallbackWidthDip"/> 之外的宽度是从 ✕ 那颗出口身上挤的。
-    /// 画笔／荧光笔／橡皮那三颗一字不差、且是全条最常被点的，留着字比留着一个需要认的记号好认。
+    /// <b>P-288 之后整排动作钮都是图标</b>（其余那些见 <see cref="BuildActionIcons"/>），这一段照旧由模型生成：
+    /// 名字只有一处出处（XAML 里调不到方法，写死就是第二份事实）；加一种图形不用改两处，
+    /// 也不会出现"条上有这颗、点下去走的是笔"。
     /// </para>
     /// <para>
     /// <b>图标上没有文字，所以名字与手势只能靠状态行说</b>：条子只有两行高，而 WinUI 3 把 ToolTip
@@ -365,16 +371,25 @@ public sealed partial class CanvasToolbarWindow : Window
     /// <c>LocText.ToolTipKey</c>——标记扩展只能给键、递不出实参，那样屏幕上会露出字面的 <c>{0}</c>。
     /// <para>实参一律交<b>没渲染的</b> <see cref="LocMessage"/>：改天有人把那颗按钮改成「透传」或「白版」，
     /// 这四句话跟着换；把名字抄在句子里就是留四份会过期的假话（✅P-178／#373 同一族）。</para>
+    /// <para>P-288 图标化之后这四颗也没有字了：UIA 名字与悬停说明<b>同一句</b>（⛔ 第二份文案），
+    /// 同键同参登记进 <see cref="_names"/>，取词照旧排在 <see cref="Refresh"/> 那一拍。</para>
     /// </summary>
     private void BuildEmbeddedNameTooltips()
     {
         LocText.SetToolTipKey(BoardButton, "canvas.bar.tip.board",
             LocMessage.Of("canvas.btn.board"), LocMessage.Of("pin.card.category"),
             LocMessage.Of("canvas.btn.save"), LocMessage.Of("canvas.btn.through"));
+        _names[BoardButton] = LocMessage.Of("canvas.bar.tip.board",
+            LocMessage.Of("canvas.btn.board"), LocMessage.Of("pin.card.category"),
+            LocMessage.Of("canvas.btn.save"), LocMessage.Of("canvas.btn.through"));
         LocText.SetToolTipKey(CurtainButton, "canvas.bar.tip.curtain",
             LocMessage.Of("canvas.btn.curtain"), LocMessage.Of("canvas.btn.through"));
+        _names[CurtainButton] = LocMessage.Of("canvas.bar.tip.curtain",
+            LocMessage.Of("canvas.btn.curtain"), LocMessage.Of("canvas.btn.through"));
         LocText.SetToolTipKey(HaloButton, "canvas.bar.tip.halo", LocMessage.Of("canvas.btn.curtain"));
+        _names[HaloButton] = LocMessage.Of("canvas.bar.tip.halo", LocMessage.Of("canvas.btn.curtain"));
         LocText.SetToolTipKey(PinButton, "canvas.bar.tip.pin", LocMessage.Of("capture.card.category"));
+        _names[PinButton] = LocMessage.Of("canvas.bar.tip.pin", LocMessage.Of("capture.card.category"));
     }
 
     // ────────── 图标：矢量图元画的，不用字体字形 ──────────
@@ -384,6 +399,10 @@ public sealed partial class CanvasToolbarWindow : Window
     // 不用图标字形的理由也同一条：缺字会显示成方块，而"这五种图形到底长什么样"得能当场逐个核对。
 
     private static readonly SolidColorBrush IconInk = new(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF));
+
+    /// <summary>图标里的弱墨：双色记号的第二色（托底、淡形那一层），比主墨淡一档——
+    /// 一颗记号里两档墨才分得清"面"与"衬"（截图那条同一口径）。</summary>
+    private static readonly SolidColorBrush IconDim = new(Color.FromArgb(0x77, 0xFF, 0xFF, 0xFF));
 
     private static UIElement ShapeIcon(CanvasTool tool) => tool switch
     {
@@ -395,14 +414,69 @@ public sealed partial class CanvasToolbarWindow : Window
         _ => BarGlyphs.RectangleGlyph(IconInk),
     };
 
+    /// <summary>
+    /// P-288 图标化：XAML 里那排动作钮全部换成记号，面在这里贴。
+    /// 几何一律走 <see cref="BarGlyphs"/>（与截图/贴图那条共库——同族动作两个画法就是批次 WS 算过的分岔），
+    /// 每颗顺带把 UIA 名字登记进 <see cref="_names"/>：图标做面 ⇒ 名字复用悬停说明那一句（⛔ 第二份文案）。
+    /// </summary>
+    private void BuildActionIcons()
+    {
+        Iconize(SelectButton, BarGlyphs.SelectGlyph(IconInk), "canvas.bar.tip.select");
+        Iconize(PenButton, BarGlyphs.PenGlyph(IconInk), "anno.tool.pen");
+        Iconize(MarkerButton, BarGlyphs.HighlighterGlyph(IconDim), "anno.tool.highlighter");
+        Iconize(EraserButton, BarGlyphs.EraserGlyph(IconInk), "anno.tool.eraser");
+        Iconize(UndoButton, BarGlyphs.UndoGlyph(IconInk, left: true), "canvas.bar.tip.undo");
+        Iconize(RedoButton, BarGlyphs.UndoGlyph(IconInk, left: false), "canvas.bar.tip.redo");
+        Iconize(ClearButton, BarGlyphs.ClearGlyph(IconDim), "canvas.bar.tip.clear");
+        Iconize(ThroughButton, BarGlyphs.ThroughGlyph(IconInk), "canvas.bar.tip.through");
+        Iconize(CopyButton, BarGlyphs.CopyGlyph(IconInk, IconDim), "canvas.bar.tip.copy");
+        Iconize(SaveButton, BarGlyphs.SaveGlyph(IconInk), "canvas.bar.tip.save");
+        Iconize(ToBoardButton, BarGlyphs.BoardGlyph(IconInk, IconDim), "canvas.bar.tip.toBoard");
+        Iconize(CloseButton, BarGlyphs.CrossGlyph(IconInk), "canvas.bar.tip.exit");
+        // 嵌参那四颗（白底／幕布／光晕／贴图）的说明在 BuildEmbeddedNameTooltips 挂（句子嵌着别的按钮名字），
+        // 这里只补面；记号仍走共库，只是那几颗动作截图那条没有，形状就落在本地。
+        BoardButton.Content = BoardBackdropIcon();
+        CurtainButton.Content = CurtainBackdropIcon();
+        HaloButton.Content = HaloIcon();
+        PinButton.Content = BarGlyphs.PinGlyph(IconInk);
+        // 「⌨」是一颗记号不是词（⛔ 进表），正文留在 XAML，名字登记那颗说明键
+        _names[KeysButton] = LocMessage.Of("canvas.bar.tip.keys");
+    }
+
+    /// <summary>贴面＋登记名字，一颗记号两件事（面给肉眼，键给辅助技术——同一句，两处取词同一拍）。</summary>
+    private void Iconize(Button target, UIElement icon, string nameKey)
+    {
+        target.Content = icon;
+        _names[target] = LocMessage.Of(nameKey);
+    }
+
+    /// <summary>白底：近实心的一块白板＋弱墨描边——那扇"整屏换成白底"的背景。</summary>
+    private static UIElement BoardBackdropIcon() => BarGlyphs.Icon(
+        BarGlyphs.Fill(new SolidColorBrush(Color.FromArgb(0xF2, 0xFF, 0xFF, 0xFF)), 3, 3, 10, 10),
+        BarGlyphs.Out(IconDim, 3, 3, 10, 10, 1));
+
+    /// <summary>幕布：弱墨压暗的一块，中间留主墨的一圈亮——"只亮鼠标周围一圈"说的就是那一圈。</summary>
+    private static UIElement CurtainBackdropIcon() => BarGlyphs.Icon(
+        BarGlyphs.Fill(IconDim, 2.5, 2.5, 11, 11),
+        BarGlyphs.Ring(IconInk, 6, 6, 4.5, 4.5, 1.4));
+
+    /// <summary>光晕：主墨一圈、更外一圈更淡的光——两圈同心才是"跟着光标的一团光"。</summary>
+    private static UIElement HaloIcon() => BarGlyphs.Icon(
+        BarGlyphs.Ring(IconInk, 4, 4, 8, 8, 1.5),
+        BarGlyphs.Ring(IconDim, 1.5, 1.5, 13, 13, 1.1));
+
     private void Refresh()
     {
         // 按钮高亮只反映"现在是哪一个"，不反映悬停：两套状态画在一起就分不清了
-        Highlight(PenButton, CanvasService.Tool == CanvasTool.Pen);
-        Highlight(MarkerButton, CanvasService.Tool == CanvasTool.Highlighter);
-        Highlight(EraserButton, CanvasService.Tool == CanvasTool.Eraser);
+        var selecting = CanvasService.IsSelectTool;
+        Highlight(SelectButton, selecting);
+        // 「选择」亮着时笔／形那几颗都让位：那是"选已有笔迹"的一态，
+        // 同一拍再亮一支笔就成了两个状态机（§3.3 那句"UI 是投影"的反面教材）
+        Highlight(PenButton, !selecting && CanvasService.Tool == CanvasTool.Pen);
+        Highlight(MarkerButton, !selecting && CanvasService.Tool == CanvasTool.Highlighter);
+        Highlight(EraserButton, !selecting && CanvasService.Tool == CanvasTool.Eraser);
         // 图形那颗不在这张硬编码清单里：按模型逐颗比，加一种图形不会漏亮
-        foreach (var (tool, button) in _shapeButtons) Highlight(button, CanvasService.Tool == tool);
+        foreach (var (tool, button) in _shapeButtons) Highlight(button, !selecting && CanvasService.Tool == tool);
         Highlight(ThinButton, CanvasService.WidthStep == 0);
         Highlight(MediumButton, CanvasService.WidthStep == 1);
         Highlight(ThickButton, CanvasService.WidthStep == 2);
@@ -436,6 +510,12 @@ public sealed partial class CanvasToolbarWindow : Window
         // 而不是那行常态说明（下一次自己动工具/穿透时这句话就翻篇）
         // 让位原因是状态机的输出（"为什么交回了鼠标"是会话这件事的一部分），不是画布宿主的私事。
         if (AnnotationHub.Notice is { } note) return note.Render();
+        // 「选择」是唯一一支不落墨的：先说它，不然"亮着的还是那支笔、怎么拖出个框"
+        // 就只剩"软件坏了"一种解释（选中的笔迹能不能拖、怎么框，都写在那两句里）
+        if (CanvasService.IsSelectTool)
+            return CanvasService.IsClickThrough
+                ? Locale.Fmt("canvas.status.selectThrough", Locale.T("canvas.btn.through"))
+                : Locale.Fmt("canvas.status.select");
         var tool = CanvasService.Tool;
         // 光晕只有两档（批次 RN，用户裁），开没开由那颗按钮的亮灭说——状态行不再写它：
         // 这行是「按了会发生什么」的唯一说明，多挂一段就少一段看得清的空间（幕布那句留着，它改的是半屏内容）。

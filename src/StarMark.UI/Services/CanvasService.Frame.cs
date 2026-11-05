@@ -129,6 +129,8 @@ public static partial class CanvasService
         // 叠在荧光段之后，与松手之后它作为一条持久笔迹所处的顺序一致（同一帧里不会跳色）。
         if (screen.Trail.Preview is { } preview)
             CanvasCompositor.PaintClipped(screen.Window.Pixels, width, height, preview, rect);
+        // 选中框与橡皮筋：不进持久层，只在提交缓冲上现画（快照、存图、贴图都不带走它）
+        PaintSelectionChrome(screen, rect);
         if (screen.GlowAt is { } glow)
             CanvasCompositor.PaintGlow(screen.Window.Pixels, width, height, glow,
                 screen.GlowRadius, screen.Trail.HaloColorBgra);

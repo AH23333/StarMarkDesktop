@@ -38,6 +38,12 @@ public static partial class CanvasService
                 "[Canvas] 绘制态收到落在工具条矩形内的按下：画布没有接这一按（下一次点击会归条子）", windowMs: 5_000);
             return;
         }
+        // 「选择」在场时按下不落墨：点选／框选／拖动全走那一段（P-288）
+        if (_selectTool)
+        {
+            BeginSelectPress(screen, pointer.At);
+            return;
+        }
         BeginPress(screen, pointer.At, _tool switch
         {
             CanvasTool.Highlighter => Press.Ephemeral,
@@ -99,6 +105,17 @@ public static partial class CanvasService
 
     private static void OnMoved(Screen screen, CanvasPointer pointer)
     {
+        // 「选择」的两种拖动各自整支接管：节流、脏区、提交都归那一段管
+        if (_press == Press.SelectMove)
+        {
+            DragSelection(screen, pointer.At);
+            return;
+        }
+        if (_press == Press.SelectBand)
+        {
+            DragBand(screen, pointer.At);
+            return;
+        }
         var now = Environment.TickCount64;
         var dirty = false;
         if (_press == Press.Ephemeral)
@@ -168,6 +185,17 @@ public static partial class CanvasService
             if (preview is not null) screen.Ink.Add(preview.ToAnnotation());
             Recomposite(screen);
             Flush(screen);
+        }
+        else if (_press == Press.SelectMove)
+        {
+            // 键盘链（换工具、开穿透）把拖动收口时没有"松手那一点"，落在上一拍：
+            // 模型里写回的就是屏幕上正显示的那一拍，不会跳
+            CommitSelectionMove(screen, at ?? new PixelPoint(
+                _selectOrigin.X + _selectOffset.X, _selectOrigin.Y + _selectOffset.Y));
+        }
+        else if (_press == Press.SelectBand)
+        {
+            CommitBand(screen);
         }
         else
         {

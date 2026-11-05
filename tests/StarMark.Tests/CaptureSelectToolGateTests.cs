@@ -85,6 +85,23 @@ public sealed class CaptureSelectToolGateTests
     }
 
     /// <summary>
+    /// 选择工具亮着时，选中那条的<b>旋转/缩放把手先于整场命中</b>被接住：旋转把手悬在框外
+    ///（<c>RotateHandle</c> 往上抬的那一截），整场 HitTest 只测标注本体，永远够不到它——
+    /// 不先接住，按把手那一按就漏成拖框（真机反馈"有把手但没法选中旋转"）。
+    /// 只认 Rotate/Scale 两档（把手是选中那条的专属区，框内 Move 仍归整场命中）；
+    /// 组选没有把手，这一测只在单选时做。
+    /// </summary>
+    [Fact]
+    public void TheHeldMarksHandlesWinThePressBeforeTheFullHitTest()
+    {
+        var grab = SourceGate.MethodBody(OverlayCs(), "private bool TryBeginGrab");
+        Assert.Contains("_selectedMany is not { Count: > 1 }", grab);
+        Assert.Contains("Grab.Rotate or Grab.Scale", grab);
+        // 接住之后与隐性那条同路：把手命中也要真抓（GrabAt/捕获指针），不许只改选中
+        Assert.Contains("_grab = mark.GrabAt(local, RotateHandle(mark), SlopInSource(MoveSlop));", grab);
+    }
+
+    /// <summary>
     /// 拖框松手按 <see cref="CaptureGeometry.Overlaps"/> 结算成三档：0 条丢选中、1 条塌成单选、
     /// ≥2 条成组（主选＝最上面那条）。命中判据在模型里，界面不自己写"碰到没有"。
     /// </summary>

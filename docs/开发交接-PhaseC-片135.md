@@ -725,3 +725,13 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 测试面：新档 CaptureSelectToolGateTests（11 格）＋InkDocTests／CaptureGeometryTests 各 +2＋CaptureOverlayGateTests／PinEditTests／TwoStageCaptureTests 锚点消歧＋CaptureReasonGateTests 宿主计数钉 4（批量与单条共用 ShowResizeFailed）＋CaptureNoticeWiring resizeFailed 恰 1 恢复＋画板腿四档随协议 11／8・menu.set 十键整形。
 - 读数：build207 0 错 0 警；gate207 1189/1189；gate207cap 545/545（17 m 10 s・过滤器补 CaptureNoticeWiring）；全量 6822/6822（22 m 22 s・TEMP 重定向 D 盘后）；docgates207 26/26；census 21；计数器 293/241/52 VERDICT OK（结案 240→241・开放 53→52）。
 - 下一刀：用户手测四步（①画板右上角无白条＋引擎主菜单六项含「打开所在文件夹」；②截图链选择钮点选／拖框圈组／组拖组删；③Esc 三级退选＋多选提示条；④工具条观感）；P-291 装载路那一行补钉仍归后续批。⛔ push（未推 16）。
+
+## 八十九、片208 画布侧对标批：P-288 画布「选择」工具（CanvasService.Select.cs 新分段・点选/框选/组拖一步历史・选中框只进提交缓冲・逐边裁剪）＋画布工具条图标化（BarGlyphs 共库 17・Iconize 窄路・取词表 7 退役 7 新增）＋旋转把手修复（TryBeginGrab 把手先测・坑 #1154 MethodBody 切片带签名行）
+
+- 接手第一步照旧现读编号轴：报告到五百九十四、交接到八十九、坑表到 #1154、账本到 P-292；本批单腿＝P-288 画布侧（「选择」＋工具条图标化）＋旋转把手顺带修；码改 18 档＋新档 2（CanvasService.Select.cs・CanvasSelectGateTests.cs）。
+- 画布「选择」：UI-only _selectTool 一盏灯（⛔ CanvasTool 枚举加名）＋选中集按实例存＋橡皮筋 _bandTo；点选问 AnnotationPainter.HitTest（容差 8）・命中已选组＝拖整组・空白拖＝框选；组拖节流重烤持久层（墨跟手走）・松手 ReplaceMany 一步历史；空框取消（余像连同脏区由 DropSelection 收——先清 _bandTo 会滞留一帧）；选中框与橡皮筋只画提交缓冲（持久层之上・光晕之前）＝快照/存图/贴图不带；画进 clip 四条边各自求交（⛔ box∩clip 再画交边——clip 常只盖中间会画假线漏真边）；Undo/Redo/ClearAll 先 DropSelection 兜陈旧实例；Esc 第一级认选中那组（CloseWorkInProgress）。
+- 图标化：BarGlyphs 共库 5 形状＋12 动作记号（17 glyph・两宿主共用）；XAML 动作钮全换记号・Iconize 一条窄路贴面＋登记无障碍名（每颗只交键）・免挂说明只 Board/Curtain/Halo/Pin 四颗；取词表 7 退役 7 新增（canvas.btn.{toBoard,undo,redo,clear,halo,copy,exit} 退役・canvas.bar.tip.{select,clear,copy,save,exit}＋canvas.status.{select,selectThrough} 新进・board/through/curtain/save 仍在岗）。
+- 旋转把手（截图链）：TryBeginGrab 先测选中条把手再落全档命中——按把手那一按就是旋转，不再被全档命中截走；证人 TheHeldMarksHandlesWinThePressBeforeTheFullHitTest（gaterotate 94/94 先行）。
+- 闸门面：新档 CanvasSelectGateTests（14 格）＋CanvasBarWordGateTests 事实②③重写（下界 20・免挂四颗）＋CanvasWiringGateTests 名单扩 10＋TwoStageCaptureTests Iconize 钉＋CaptureOverlayGateTests 共库 5→17＋CaptureSelectToolGateTests 把手 Fact＋RssPluralGateTests BeVerb 16→17（新英文行 {0} is active＝按钮名固定格⛔ 随槽变）；坑 #1154＝MethodBody 切片带签名行（“第一句必须是 X”先跳开括号——InnerBody helper・SourceGate 本体不动）。
+- 读数：build208 0 错 6 警（存量分析器警非本批引入）；gaterotate 94/94；gate208 157/157；全量 6837/6837（testfull208b.out・14 m 3 s・TEMP 重定向 D 盘）；docgates208 26/26；census 21（P-111 行内号换号 175-177→195-197 后回基线）；计数器 293/241/52 VERDICT OK。
+- 下一刀：用户手测五步（①画布「选择」钮点选/框选/组拖・Esc 或再点取消；②Ctrl+Z 一步整组回原位；③图标化工具条＋状态行「选择中…」；④选中状态下存图/复制产物不带蓝框；⑤截图链旋转把手那一按就是旋转）；P-291 装载路那一行补钉仍归后续批。⛔ push（未推 17）。

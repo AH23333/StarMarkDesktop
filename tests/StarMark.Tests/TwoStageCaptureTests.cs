@@ -377,9 +377,12 @@ public sealed class TwoStageCaptureTests
     /// 那颗档自己的注释写着"名字与手势只能靠状态行说"，那说的是<b>肉眼</b>那一半（条子两行高、
     /// ToolTip 被宿主窗边界钉住）；辅助技术那一半得有自己的名字，否则 Tab 到这儿只念得出"按钮"。
     /// 名字复用同一颗键（图形那一颗还带嵌套实参），⛔ 立第二份文案。
+    /// <para>P-288 图标化把 XAML 里那排动作钮也换成了记号：它们走同一条登记路——<c>Iconize</c>
+    /// 一处实现（贴面＋登记名字），每颗只交键；嵌参那四颗与「⌨」照旧各自登记，
+    /// 整档取词仍排在 <c>Refresh</c> 体内那一发。</para>
     /// <para><b>这颗窗口给的机制⛔ 是 <c>LocText</c></b>：<c>CanvasBarWordGateTests</c> 按整档禁
     /// <c>LocText.SetMessage</c>（那条线另有判据），而重贴节拍已经由 <c>Locale.Changed += Refresh</c> 送到位
-    /// ⇒ 建条时只登记没渲染的那句（两排各一颗，颗数＝2），取词排在 <c>Refresh</c> 体内那一发。
+    /// ⇒ 建条时只登记没渲染的那句，取词排在 <c>Refresh</c> 体内那一发。
     /// 钉子落在<b>体内</b>而不是全档在场：写在构造里＝把字符串提前拼死，换语言它一个字都不动。</para>
     /// </summary>
     [Fact]
@@ -392,5 +395,13 @@ public sealed class TwoStageCaptureTests
         var refresh = SourceGate.MethodBody(cs, "private void Refresh()");
         Assert.Equal(1, SourceGate.Count(cs, "AutomationProperties.SetName("));
         Assert.Contains("AutomationProperties.SetName(button, message.Render());", refresh);
+        // P-288：整排动作钮一条窄路——贴面＋登记名字一处实现，每颗只交键（嵌参那四颗与「⌨」不在这一排里）
+        var build = SourceGate.MethodBody(cs, "private void BuildActionIcons()");
+        Assert.Equal(12, SourceGate.Count(build, "Iconize("));
+        var iconize = SourceGate.MethodBody(cs, "private void Iconize(Button target, UIElement icon, string nameKey)");
+        Assert.Contains("target.Content = icon;", iconize);
+        Assert.Contains("_names[target] = LocMessage.Of(nameKey);", iconize);
+        // 「⌨」是记号不是词，名字登记的还是那颗说明键（⛔ 第二份文案）
+        Assert.Contains("_names[KeysButton] = LocMessage.Of(\"canvas.bar.tip.keys\");", cs);
     }
 }

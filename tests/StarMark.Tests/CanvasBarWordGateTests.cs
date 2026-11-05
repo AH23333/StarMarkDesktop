@@ -66,18 +66,25 @@ public sealed class CanvasBarWordGateTests
     }
 
     /// <summary>
-    /// 标记里每一颗按钮的<b>名字只能由那颗键给</b>：正文一颗键、说明一颗键，<c>Content=""</c> 与
-    /// <c>ToolTipService.ToolTip=""</c> 那两条旧出口在这一档一律关掉。
+    /// 标记里每一颗按钮的<b>名字只能由那颗键给</b>：P-288 图标化之后动作钮只剩说明那颗键
+    /// （正文换成了记号），档位钮仍是正文一颗键。<c>Content=""</c> 与 <c>ToolTipService.ToolTip=""</c>
+    /// 那两条旧出口在这一档一律关掉。
     /// <para>唯一的例外是「⌨」那颗：它的正文是一个<b>记号</b>不是词（⛔ 进表——表里存的是给人读的话，
     /// 不是键帽图形），但它同样必须挂着那颗说明键。</para>
+    /// <para>免挂 XAML 的只许嵌参那四颗（白板／幕布／光晕／贴图）：它们的说明嵌着别的按钮的名字，
+    /// 标记扩展递不出实参，只能由 code-behind 挂（判据见
+    /// <see cref="TooltipsThatQuoteAnotherButtonPassKeysNotWords"/>）——这里钉的是
+    /// "那四颗必须真的有人在 code-behind 挂"，别的地方少一颗键，名字就再没有出处。</para>
     /// </summary>
     [Fact]
     public void EveryButtonOnTheBarGetsItsWordFromAKey()
     {
         var xaml = XamlMarkup();
         var buttons = Regex.Matches(xaml, @"<Button[^>]*>", RegexOptions.Singleline);
-        // 下界防"整排被删空"（本批现场 15 颗：三支笔＋撤销/重做/清屏/穿透/白板/幕布/光晕/贴图/存图/复制/⌨/✕）
-        Assert.True(buttons.Count >= 15, $"这一档只数到 {buttons.Count} 颗按钮，标记大概被截断了");
+        // 下界防"整排被删空"（P-288 图标化后现场 20 颗：选择＋三支笔＋撤销/重做/清屏/穿透/白板/幕布/光晕/
+        // 复制/存图/贴图/放上画板/⌨/✕＋三档粗细）
+        Assert.True(buttons.Count >= 20, $"这一档只数到 {buttons.Count} 颗按钮，标记大概被截断了");
+        var embedded = new HashSet<string>(StringComparer.Ordinal);
         foreach (var match in buttons.Cast<Match>())
         {
             var tag = match.Value;
@@ -88,8 +95,20 @@ public sealed class CanvasBarWordGateTests
             }
             Assert.True(!tag.Contains("Content=\"", StringComparison.Ordinal),
                 $"标记里又写了正文面字：{tag.Trim()}");
-            Assert.Contains("i18n:LocText.Key=", tag, StringComparison.Ordinal);
+            if (tag.Contains("i18n:LocText.ToolTipKey=", StringComparison.Ordinal) ||
+                tag.Contains("i18n:LocText.Key=", StringComparison.Ordinal))
+                continue;
+            // 没挂键的只许是嵌参那四颗（说明在 code-behind 挂）
+            var name = Regex.Match(tag, "x:Name=\"(\\w+)\"").Groups[1].Value;
+            Assert.True(name is "BoardButton" or "CurtainButton" or "HaloButton" or "PinButton",
+                $"这颗按钮一颗键都没挂，也不在嵌参那四颗里：{tag.Trim()}");
+            embedded.Add(name);
         }
+        Assert.Equal(4, embedded.Count);
+        // 那四颗免挂的必须真的有人在 code-behind 挂（句子嵌着实参）
+        var build = SourceGate.MethodBody(CodeOf(Code), "private void BuildEmbeddedNameTooltips()");
+        foreach (var name in embedded)
+            Assert.Contains($"LocText.SetToolTipKey({name},", build);
         // 那条旧路（附带属性直接挂一句话）换语言不重贴 ⇒ 在这一档整条关掉
         Assert.DoesNotContain("ToolTipService.ToolTip=", xaml);
     }
@@ -98,21 +117,26 @@ public sealed class CanvasBarWordGateTests
     /// <b>别人已经管着的名字，这一档只借不抄</b>：三支笔与三档档位名的主人是 Core 的词厂（✅P-181），
     /// 「贴图」那颗的名字主人是贴图那张卡。⛔ 给它们另开一颗 <c>canvas.btn.*</c> 行——
     /// 那正是"同一个东西在两条栏上叫法不一样"的起点（WI-49 并句之前的真症状）。
+    /// <para>P-288 图标化把三支笔的键从正文位挪到悬停位（正文换成了记号）；三档粗细仍是文字
+    /// ——那三颗是"档位"不是"动作"，字本身就是刻度。「贴图」那颗免挂 XAML（嵌参那四颗之一），
+    /// 名字进的是 code-behind 那两处（悬停说明与 UIA 名同一颗键，⛔ 第二份文案）。</para>
     /// </summary>
     [Fact]
     public void WordsOwnedElsewhereAreBorrowedNotRetyped()
     {
         var xaml = XamlMarkup();
-        foreach (var key in new[]
-                 {
-                     "anno.tool.pen", "anno.tool.highlighter", "anno.tool.eraser",
-                     "anno.thickness.thin", "anno.thickness.medium", "anno.thickness.thick",
-                     "pin.card.category",
-                 })
+        foreach (var key in new[] { "anno.tool.pen", "anno.tool.highlighter", "anno.tool.eraser" })
+        {
+            Assert.Equal(1, SourceGate.Count(xaml, $"i18n:LocText.ToolTipKey=\"{key}\""));
+            Assert.Contains(UiStrings.Keys(), k => k == key);
+        }
+        foreach (var key in new[] { "anno.thickness.thin", "anno.thickness.medium", "anno.thickness.thick" })
         {
             Assert.Equal(1, SourceGate.Count(xaml, $"i18n:LocText.Key=\"{key}\""));
             Assert.Contains(UiStrings.Keys(), k => k == key);
         }
+        Assert.Equal(2, SourceGate.Count(CodeOf(Code), "LocMessage.Of(\"pin.card.category\")"));
+        Assert.Contains(UiStrings.Keys(), k => k == "pin.card.category");
         // 一般式（台架规则 #131）：⛔ 只钉"上次那种写法"——这一族的借名一律不许在画布前缀下再立一行
         foreach (var dup in new[] { "pen", "marker", "highlighter", "eraser", "thin", "medium", "thick", "pin" })
         {
