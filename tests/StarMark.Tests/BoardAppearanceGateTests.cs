@@ -220,4 +220,23 @@ public sealed class BoardAppearanceGateTests
             "去重排在造窗之后＝第二扇已经起来了才想起去查");
         Assert.Contains("if (sceneId is null) await win.OpenNewAsync();", open, StringComparison.Ordinal);
     }
+
+    // ─────────────── ⑥ 片209：P-291 装载路补钉（片206 修了行为、当批未立闸） ───────────────
+
+    /// <summary>装载那一拍的兜底递的是<b>引擎此刻活着的那一份 appState</b>（P-291・片206 修）：
+    /// <c>loadFromBlob</c> 的第二参是「档里缺的键拿哪一份补」——只递一颗参时引擎按它自家那份
+    /// 恒 light 的默认补，深色用户开旧板每一趟载档都被兜底顶回浅色。片206 修了行为、当批未立闸
+    /// （账本侧明写「归下一批画板闸补钉」＝本格）；这一格钉的正是那颗第二参——
+    /// 单参形状回来＝深色用户的板开始悄悄变白，而其余每一格都照绿。</summary>
+    [Fact]
+    public void TheLoadFallsBackToTheLiveAppStateForKeysTheSceneFileDoesNotCarry()
+    {
+        var js = SourceGate.ReadRepoFile(BridgeJsPath);
+        // 兜底取的是引擎现读那一份（API 在就问它，⛔ 宿主自己另拼一份假活态）
+        Assert.Equal(1, SourceGate.Count(js, "var live = API && API.getAppState ? API.getAppState() : null;"));
+        // 那一颗第二参真递进去了（档里自己的键照旧由场景档赢＝引擎侧行为，闸外）
+        Assert.Equal(1, SourceGate.Count(js, "L.loadFromBlob(blob, live)"));
+        // 单参形状⛔ 许回来：回来＝缺键全按引擎默认补（P-291 的根因原样复活）
+        Assert.DoesNotContain("L.loadFromBlob(blob)", js, StringComparison.Ordinal);
+    }
 }

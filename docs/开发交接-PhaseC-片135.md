@@ -735,3 +735,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 闸门面：新档 CanvasSelectGateTests（14 格）＋CanvasBarWordGateTests 事实②③重写（下界 20・免挂四颗）＋CanvasWiringGateTests 名单扩 10＋TwoStageCaptureTests Iconize 钉＋CaptureOverlayGateTests 共库 5→17＋CaptureSelectToolGateTests 把手 Fact＋RssPluralGateTests BeVerb 16→17（新英文行 {0} is active＝按钮名固定格⛔ 随槽变）；坑 #1154＝MethodBody 切片带签名行（“第一句必须是 X”先跳开括号——InnerBody helper・SourceGate 本体不动）。
 - 读数：build208 0 错 6 警（存量分析器警非本批引入）；gaterotate 94/94；gate208 157/157；全量 6837/6837（testfull208b.out・14 m 3 s・TEMP 重定向 D 盘）；docgates208 26/26；census 21（P-111 行内号换号 175-177→195-197 后回基线）；计数器 293/241/52 VERDICT OK。
 - 下一刀：用户手测五步（①画布「选择」钮点选/框选/组拖・Esc 或再点取消；②Ctrl+Z 一步整组回原位；③图标化工具条＋状态行「选择中…」；④选中状态下存图/复制产物不带蓝框；⑤截图链旋转把手那一按就是旋转）；P-291 装载路那一行补钉仍归后续批。⛔ push（未推 17）。
+
+## 九十、片209 P-291 装载路补钉批：片206 修了 applyBoardLoad 兜底递活态 appState 那一行、当批未立闸——本批补上（BoardAppearanceGateTests 新格 TheLoadFallsBackToTheLiveAppStateForKeysTheSceneFileDoesNotCarry・三钉：兜底行取引擎现读恰 1・第二参递进去恰 1・单参形状禁回），产品码零改动纯闸批
+
+- 接手第一步照旧现读编号轴：报告到五百九十五、交接到九十、坑表到 #1154（本批零动）、账本到 P-292；本批单腿＝P-291 装载路补钉（账本 P-291 条目「归下一批画板闸补钉」那句的下一批＝本批，已落地）。顺带记档：P-288 画布侧用户手测通过（选择／图标化／切语言／截图链四绿；Ctrl+Alt+U 键位与存图落点两问均系既有设计——画布全局撤销键＝Ctrl+Alt+U ⛔ Ctrl+Z・存图不弹框直落图片库 StarMark Screenshots 名册）。
+- 补的钉：单参形状 L.loadFromBlob(blob) 悄悄回来时从前全仓无一格会红（片206 修了行为、当批未立闸）；现在三钉齐——var live = API && API.getAppState ? API.getAppState() : null; 恰 1（⛔ 宿主另拼假活态）、L.loadFromBlob(blob, live) 恰 1、单参形状禁回（回来＝P-291 根因原样复活）。档里自己的键由场景档赢＝引擎侧行为，闸外；桥双份同步照旧有闸（BoardSceneStoreGateTests ⑦，本批零改动照绿）。
+- 读数：gate209 190/190（Board 族十档过滤）；全量 6838/6838（testfull209.out・21 m 4 s・EXITCODE=0・TEMP 重定向 D 盘）＝6837＋1（新格）；产品码零改动、坑表零动（无新坑）。
+- 下一刀：无排队刀——账本开放条目逐颗核对后按用户定夺。⛔ push（未推 18）。
