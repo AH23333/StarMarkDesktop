@@ -147,7 +147,8 @@ public sealed class PinEditTests
     public void EveryPaintSizesOffTheBaseBuffer_NotTheSelection()
     {
         var cs = SourceGate.ReadRepoPartials(Overlay);
-        foreach (var method in new[] { "private void Rebake()", "private byte[]? UnderDragBuffer", "private void DragTo" })
+        // P-288 起批量那条链也烤进缓冲（UnderDragBufferMany/DragManyTo），一并纳入同一条判据
+        foreach (var method in new[] { "private void Rebake()", "private byte[]? UnderDragBuffer(", "private byte[]? UnderDragBufferMany(", "private void DragTo", "private void DragManyTo" })
             Assert.Contains("_contentWidth, _contentHeight", SourceGate.MethodBody(cs, method));
         Assert.DoesNotContain("Render(basePixels, selection.Width", cs);
         Assert.DoesNotContain("(scratch, selection.Width", cs);

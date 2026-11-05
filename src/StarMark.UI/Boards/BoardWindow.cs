@@ -318,18 +318,10 @@ public sealed class BoardWindow : Window
     /// 而那颗按钮上的字说的是"存成一张档"（S1 那条口径：会改状态的收尾，最后一步要重读）。</para></summary>
     private bool _exportPins;
 
-    /// <summary>右上角那一行（那颗「打开所在文件夹」＋那句落点的话）：它⛔ 是那块面板的零件——面板只在有事要说时才在场，
-    /// 而"我刚导出那张图，它落在哪儿"每一次都要有答案。<b>片206＝P-285 重做</b>：五个动作搬进引擎自己的主菜单
-    /// 之后，这一块上剩下的都⛔ 是动作（一颗出口＋两行读数），动作的字与亮态由 <see cref="PushMenuLabels"/> 那一推递。</summary>
-    private StackPanel? _bar;
-
-    private Button? _barFolderButton;
-    private TextBlock? _barStatus;
-
-    /// <summary>那一行底下第二颗读数：那块板上有几颗外部内容不会显示（P-255・见 <see cref="_hiddenEmbeddables"/>）。
-    /// <para>它⛔ 住在 <see cref="_notice"/> 那块面板里：那一块只有一位（<c>_noticeKey</c>），
-    /// 而它此刻可能正挂着「这一扇已停止保存」——一句中性的说明⛔ 有权把那句坏话顶掉（片39 真机量到的正是这一族）。</para></summary>
-    private TextBlock? _barHiddenEmbeds;
+    /// <summary>右上角那一行白条（那颗「打开所在文件夹」＋两行读数）：<b>片207＝P-285 残余，整块退役</b>。
+    /// 三样都搬进引擎自己的主菜单那一组——出口是第六颗动作项（<c>folder.request</c> 那颗索取），
+    /// 两行读数做成只读行；字、亮态与在不在场全由 <see cref="PushMenuLabels"/> 那一推（<c>menu.set</c>）整份递。
+    /// 这一窗的表面从此只剩两块：引擎那块画布与 <see cref="_notice"/> 那块面板（面板有话要说时才在场）。</summary>
 
     public BoardWindow()
     {
@@ -701,6 +693,12 @@ public sealed class BoardWindow : Window
             case "background.request":
                 ToggleExportBackground();
                 break;
+            // 片207＝P-285 残余：那颗「打开所在文件夹」从退役的白条搬进引擎主菜单那一组。
+            // 资格（盘上有没有上一次真写成的那一份）由那一推里的 folderEnabled 递——
+            // 这里只管点下去那一手；开不成的坏话写回那句落点（status），⛔ 在这里另起一句。
+            case "folder.request":
+                _ = OpenExportedFolderAsync();
+                break;
             default:
                 // paste.query：名字过了门、回路却还没接（⛔ 假 allow）。
                 // 这颗名进日志是安全的（它已过名字闸门＝集合由我们定死）；等那一批落地时要给的是一颗
@@ -1042,44 +1040,46 @@ public sealed class BoardWindow : Window
     }
 
     /// <summary>
-    /// 右上角那一行按当前语言重贴（那颗出口上的字与那句落点都归这一拍；换语言⛔ 走 <see cref="PasteNotice"/> 以外的那条路＝
+    /// 那句落点按当前语言重算并重推（换语言⛔ 走 <see cref="PasteNotice"/> 以外的那条路＝
     /// P-175 那一族"一颗重贴一颗冻着"的第三种脸）。
-    /// <para><b>片206＝P-285 重做</b>：五个动作搬进引擎主菜单之后，这一块上只剩<b>一颗出口＋一句读数</b>——
-    /// 出口说的是"上一次真写成档的那一份在哪儿"，读数说的是"我刚点的那一下怎么样了"，两样都⛔ 是动作。
-    /// 动作的字与亮态由 <see cref="PushMenuLabels"/> 那一推接手，那一行永远在场。</para>
+    /// <para><b>片207＝P-285 残余</b>：右上角那一行白条整块退役，这一颗不再碰任何控件——
+    /// 出口（folder）、资格（folderEnabled）与那句落点（status）全走 <see cref="PushMenuLabels"/>
+    /// 那一推，由引擎主菜单那一组念。名字留着：七颗调用点说的都是"那块表面的状态变了"。</para>
     /// </summary>
     private void PasteBar()
     {
-        if (_barStatus is null || _barFolderButton is null) return;
-        _barFolderButton.Content = Word("boards.openFolderAction");
-        _barFolderButton.IsEnabled = _exportPath is not null;
-        _barStatus.Text = _exportOutcomeKey switch
+        PushMenuLabels();
+    }
+
+    /// <summary>
+    /// 引擎主菜单那一组的字与亮态整份推过去（片206＝P-285 重做・片207 扩到十颗）。<b>每一次都是整份</b>——
+    /// 十颗少一颗＝菜单上那一项冻在上一推的话上（换语言那一拍漏一颗＝那一项还念旧语言），所以这里⛔ 挑"变了才推"。
+    /// <para>亮态只压三颗动作（两颗导出＋贴桌面：busy 时点得亮＝两发抢同一刻的落点）；那两颗旋钮照旧亮着——
+    /// 挑档是宿主自己的事，⛔ 跟着"这一发正在跑"一起关。那颗出口的资格只认"真落盘的那一颗"
+    /// （<c>_exportPath</c> 唯一写处在 <see cref="ReportExport"/>——开口说"能开"之前盘上就得真有它）。
+    /// 桥⛔ 通就整推跳过（发进一颗没人听的口子），等下一次 <see cref="PasteBar"/> 补上。</para>
+    /// </summary>
+    private void PushMenuLabels()
+    {
+        if (!_bridgeReady || _tearingDown) return;
+        // 那句落点（片207 起住进菜单里那行只读行）：四颗下落各念各的那一句，没导出过＝空串＝整行收起。
+        // 那句"已存到"从此<b>带上那一发真用的两档</b>（P-242）：念的是 <see cref="_sentScale"/>／
+        // <see cref="_sentBackground"/>＝问出去那一刻记下的那两颗，⛔ 手里此刻那颗。
+        var status = _exportOutcomeKey switch
         {
-            // 那句"已存到"从此<b>带上那一发真用的两档</b>（P-242：从前它只说路径，而那张图的尺寸由那台机器的缩放定）。
-            // 念的是 <see cref="_sentScale"/>／<see cref="_sentBackground"/>＝问出去那一刻记下的那两颗，⛔ 手里此刻那颗。
             "boards.exportSavedBody" => Phrase("boards.exportSavedBody", _exportPath ?? string.Empty,
                 Phrase("boards.exportScaleAction", ScaleToken(_sentScale)),
                 Phrase("boards.exportBackgroundAction", Word(BackgroundKey(_sentBackground)))),
             "boards.exportFailedBody" => Word("boards.exportFailedBody"),
-            // 那一发没落文件，所以它⛔ 带路径：「打开所在文件夹」那颗照旧指着上一次真写成档的那一份
+            // 那一发没落文件，所以它⛔ 带路径：那颗出口照旧指着上一次真写成档的那一份
             //（那颗资格的唯一写处在上面，⛔ 在这里给）。
             "boards.pinnedBody" => Word("boards.pinnedBody"),
             "boards.openFolderFailedBody" => Phrase("boards.openFolderFailedBody", _exportPath ?? string.Empty),
             _ => string.Empty,
         };
-        PushMenuLabels();
-    }
-
-    /// <summary>
-    /// 引擎主菜单那一组的字与亮态整份推过去（片206＝P-285 重做）。<b>每一次都是整份</b>——六颗少一颗＝
-    /// 菜单上那一项冻在上一推的话上（换语言那一拍漏一颗＝那一项还念旧语言），所以这里⛔ 挑"变了才推"。
-    /// <para>亮态只压三颗动作（两颗导出＋贴桌面：busy 时点得亮＝两发抢同一刻的落点）；那两颗旋钮照旧亮着——
-    /// 挑档是宿主自己的事，⛔ 跟着"这一发正在跑"一起关。桥⛔ 通就整推跳过（发进一颗没人听的口子），
-    /// 等下一次 <see cref="PasteBar"/> 补上。</para>
-    /// </summary>
-    private void PushMenuLabels()
-    {
-        if (!_bridgeReady || _tearingDown) return;
+        // 第二行只读读数（P-255）：那块板上有几颗外部内容不会显示。0 或读不懂＝空串＝整行收起
+        //（"我读不懂这一发交回来的档"是宿主自己的事，进日志，⛔ 拿它吓用户）。
+        var count = _hiddenEmbeddables ?? 0;
         PostOutbound("menu.set", Envelope("menu.set", "h7",
             JsonString("png") + ":" + JsonString(Word("boards.exportPngAction")) + ","
             + JsonString("svg") + ":" + JsonString(Word("boards.exportSvgAction")) + ","
@@ -1087,20 +1087,25 @@ public sealed class BoardWindow : Window
             + JsonString("scale") + ":" + JsonString(Phrase("boards.exportScaleAction", ScaleToken(_exportScale))) + ","
             + JsonString("background") + ":"
             + JsonString(Phrase("boards.exportBackgroundAction", Word(BackgroundKey(_exportBackground)))) + ","
-            + JsonString("busy") + ":" + (_exporting ? "true" : "false")));
+            + JsonString("folder") + ":" + JsonString(Word("boards.openFolderAction")) + ","
+            + JsonString("busy") + ":" + (_exporting ? "true" : "false") + ","
+            + JsonString("folderEnabled") + ":" + (_exportPath is not null ? "true" : "false") + ","
+            + JsonString("status") + ":" + JsonString(status) + ","
+            + JsonString("hidden") + ":"
+            + JsonString(count > 0 ? Phrase("boards.embedHiddenBody", count) : string.Empty)));
     }
 
-    /// <summary>那一行第二颗读数按当前语言重贴一次（<see cref="StarMark.Abstractions.I18n.Locale.Changed"/> 那一拍与
+    /// <summary>那一行第二颗读数按当前语言重算并重推一次（<see cref="StarMark.Abstractions.I18n.Locale.Changed"/> 那一拍与
     /// "手里那份字节变了"那一拍都走它——片34 那颗按钮上的话漏掉的就是同一拍）。
-    /// <para>那颗数是<b>数据</b>，进 <c>Fmt</c> 的实参，⛔ 在这里拼成品句（与那句"已存到 &lt;路径&gt;"同一条口径）。
+    /// <para><b>片207＝P-285 残余</b>：这一颗不再碰任何控件——那颗数是<b>数据</b>，进 <c>Fmt</c> 的实参，
+    /// 由 <see cref="PushMenuLabels"/> 那一推递给引擎主菜单里那行只读行（<c>hidden</c>）。
     /// <c>null</c>（那份字节读不懂）与 <c>0</c>（确实没藏）在这一行上说同一种话＝都⛔ 开口：
-    /// "我读不懂这一发交回来的档"是宿主自己的事，进日志（P-193 那条"只进日志⛔ 上屏"的口径），⛔ 拿它吓用户。</para></summary>
+    /// "我读不懂这一发交回来的档"是宿主自己的事，进日志（P-193 那条"只进日志⛔ 上屏"的口径），⛔ 拿它吓用户。
+    /// 它⛔ 搬进 <see cref="_notice"/> 那块面板：那一块只有一位（<c>_noticeKey</c>），一句中性说明⛔ 有权把
+    /// 挂着的那句坏话顶掉（片39 真机量到的正是这一族）。名字留着：两颗调用点说的都是"那行读数该重算了"。</para></summary>
     private void PasteHiddenEmbedNotice()
     {
-        if (_barHiddenEmbeds is null) return;
-        var count = _hiddenEmbeddables ?? 0;
-        _barHiddenEmbeds.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (count > 0) _barHiddenEmbeds.Text = Phrase("boards.embedHiddenBody", count);
+        PushMenuLabels();
     }
 
     /// <summary>那一列数的<b>唯一写处</b>：宿主每见过一份完整场景字节就问一次 Core（开场与页面交回那两拍都走这一颗，
@@ -1436,66 +1441,16 @@ public sealed class BoardWindow : Window
             VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(0, 0, 16, 16),
         };
-        // 片54＝那一发导出的落点读数（账本 P-240 的②：引擎那颗框关到⛔ 通之后，这一行就是唯一的一条路）。
-        // ⚠ 它⛔ 住在那块面板里：面板只在有事要说时才在场，而"我刚点的那一下怎么样了"每一发都要有答案——
-        // 而那块面板此刻可能正挂着"这一扇已停止保存"，一句好消息⛔ 有权把那句坏话顶掉（片39 真机量到的正是这一族）。
-        // <b>片206＝P-285 重做</b>：五个动作搬进引擎自己的主菜单（那一组的字与亮态由 PushMenuLabels 那一推递），
-        // 这一版那颗「⋯」收合钮与那一排钉死三色的按钮整排退役；这一块上剩的都⛔ 是动作——
-        // 一颗出口（它说的是"上一次真写成档的那一份在哪儿"）＋两行读数。剩下这几样的三样颜色照旧各钉一遍
-        // （片28 那把"白字画在灰底上＝看不见"的尺）。
-        // 那颗「打开所在文件夹」在这一块上<b>永远在场</b>，只是盘上还没落东西时点不亮：
+        // 片207＝P-285 残余：右上角那一行白条整块退役。从前它承载三样（那颗「打开所在文件夹」出口＋
+        // 那句落点读数＋「未显示的外部内容」那行读数），片206 把五个动作搬进引擎主菜单之后，
+        // 这三样成了画布上仅剩的一块宿主自绘表面——真机量到它压在引擎自己的工具条上（遮挡那一族的最后一角）。
+        // 三样搬进引擎主菜单那一组（出口＝第六颗动作项，两行读数＝只读行），字、亮态与在场全由
+        // PushMenuLabels 那一推（menu.set）整份递，深浅色由引擎自己的模板给。
+        // 那颗「打开所在文件夹」在菜单上<b>永远在场</b>，只是盘上还没落东西时点不亮（folderEnabled）：
         // 藏起来＝"这台程序没有这功能"，而它其实只是"这一刻还没有东西可开"（片33 那颗可点状态那一格的同一条口径）。
-        _barFolderButton = new Button
-        {
-            Content = Word("boards.openFolderAction"),
-            IsEnabled = false,
-            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255)),
-            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 130, 130)),
-        };
-        _barFolderButton.Click += async (_, _) => await OpenExportedFolderAsync();
-        _barStatus = new TextBlock
-        {
-            Text = string.Empty,
-            FontSize = 12,
-            MaxWidth = 420,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 4, 0, 0),
-            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
-        };
-        // 第二颗读数归第二行（片82 真机量到的那一格＝账本 P-255）：那块板上有几颗外部内容永远不会出正文时，
-        // 屏幕上必须有一句说得清"这一块空的不是坏了，是这一族我们故意不放行"。
-        // ⚠ 它在"没有东西可说"时收起来，而⛔ 像上面那句落点那样留一行空字：那一行说的是"我刚点的那一下怎么样了"，
-        // 每一发都要有答案；这一行说的是"这块板上有没有藏着的空框"，没有的时候念一颗 0 等于替用户造一颗他没问过的坏消息。
-        // 黑字仍按片28 那把尺钉死（⛔ 跟主题走＝深色主题下白字画在白底上＝又隐形一次）。
-        _barHiddenEmbeds = new TextBlock
-        {
-            Text = string.Empty,
-            FontSize = 12,
-            MaxWidth = 420,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 4, 0, 0),
-            Visibility = Visibility.Collapsed,
-            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black),
-        };
-        _bar = new StackPanel
-        {
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 8, 12, 0),
-            Padding = new Thickness(8, 6, 8, 6),
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(232, 250, 250, 250)),
-            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(200, 178, 178, 178)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-        };
-        _bar.Children.Add(_barFolderButton);
-        _bar.Children.Add(_barStatus);
-        _bar.Children.Add(_barHiddenEmbeds);
         var stage = new Grid();
         stage.Children.Add(_web);
         stage.Children.Add(_notice);
-        stage.Children.Add(_bar);
         return stage;
     }
 
@@ -1870,8 +1825,8 @@ public sealed class BoardWindow : Window
         ShowNotice("boards.openFolderFailedBody", titled: true, offerCopy: true);
     }
 
-    /// <summary>右上角那一行那颗「打开所在文件夹」（那一发导出的产物）。
-    /// <para>坏话写给<b>那一行自己</b>：面板此刻可能正挂着另一件事，而那一行说的就是"刚那一下"（片39 那一族的口径）。
+    /// <summary>引擎主菜单里那颗「打开所在文件夹」（那一发导出的产物；片207 起从退役的白条搬进菜单那一组）。
+    /// <para>坏话写给<b>那句落点自己</b>（status 那行只读行）：面板此刻可能正挂着另一件事，而那句落点说的就是"刚那一下"（片39 那一族的口径）。
     /// ⛔ 因为开目录坏了就把 <see cref="_exportPath"/> 清掉——那颗档还在盘上，他还能再点一次。</para></summary>
     private async System.Threading.Tasks.Task OpenExportedFolderAsync()
     {
@@ -2032,8 +1987,11 @@ public sealed class BoardWindow : Window
         StarMark.Abstractions.StarLog.Info("boards.close.stay id=" + _boardId);
     }
 
-    /// <summary>「仍然离开」＝用户当场决定不救、直接关这扇。<c>_closeFlushDone</c> 已置真，这一次 <c>Close()</c>
-    /// 走到 <see cref="OnAppWindowClosing"/> 会直接放行（⛔ 第二拦），那几笔按他说的丢下——救的出口（另存）他刚看得见、刚被自己否掉。</summary>
+    /// <summary>「仍然离开」＝用户当场决定不救、直接关这扇。这一记 <c>Close()</c> 走的是代码关窗直通路——
+    /// ⛔ 不路过 <see cref="OnAppWindowClosing"/> 那口钟（那口钟只在用户按×那一响上真过＝平台事实，坑表 #1152），
+    /// 所以「第二拦」在这条路上无从谈起；窗直接关掉，那几笔按他说的丢下——救的出口（另存）他刚看得见、刚被自己否掉。
+    /// （旧注「<c>_closeFlushDone</c> 已置真、走到 Closing 被直接放行」的因果链已被那口钟证伪：这一记根本不响它，
+    /// 行为碰巧无恙＝窗照样关掉；本条只对齐口径，行为不动。）</summary>
     private void LeaveAnyway()
     {
         StarMark.Abstractions.StarLog.Info("boards.close.leave id=" + _boardId);

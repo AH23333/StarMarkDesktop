@@ -161,7 +161,7 @@
             x:Name="ActionBar"
             Background="#EE202020"
             CornerRadius="5"
-            Padding="4,3,4,3"
+            Padding="5,3,5,3"
             HorizontalAlignment="Left"
             VerticalAlignment="Top"
             Visibility="Collapsed">
@@ -170,7 +170,7 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-                <StackPanel x:Name="BarRow" Grid.Row="0" Orientation="Horizontal" Spacing="2"/>
+                <StackPanel x:Name="BarRow" Grid.Row="0" Orientation="Horizontal" Spacing="3"/>
                 <ContentPresenter x:Name="BarPicker" Grid.Row="1" Visibility="Collapsed"/>
             </Grid>
         </Border>
@@ -205,6 +205,8 @@
         <!--
             选中某条标注后才现身的一句说明。放在这里而不是 ToolTip：把手怎么用法只有"正握着它的人"需要知道，
             而遮罩窗上悬停到一颗 6 像素的方块才看得到提示，等于没有提示（真机反复反馈"以为功能没做"）。
+            两句话各一颗 TextBlock、互斥显隐（P-288 的批量选）：单选那句挂静态键（批次 WI-67 片9c 的口径），
+            带条数的那句由代码贴——静态键那一颗的正文只有一个出处，⛔ 再在代码里问同一颗键（一颗键一个主人）。
         -->
         <Border
             x:Name="SelectionTip"
@@ -215,10 +217,18 @@
             VerticalAlignment="Bottom"
             Margin="0,0,0,20"
             Visibility="Collapsed">
-            <TextBlock
-                FontSize="12"
-                Foreground="#FFFFFFFF"
-                i18n:LocText.Key="capture.selectionTip"/>
+            <StackPanel>
+                <TextBlock
+                    x:Name="SelectionText"
+                    FontSize="12"
+                    Foreground="#FFFFFFFF"
+                    i18n:LocText.Key="capture.selectionTip"/>
+                <TextBlock
+                    x:Name="SelectionTextMany"
+                    FontSize="12"
+                    Foreground="#FFFFFFFF"
+                    Visibility="Collapsed"/>
+            </StackPanel>
         </Border>
 
         <!-- Snipaste 式像素放大镜：放大 15×15 源像素，每像素 10 物理像素，自带像素网格与十字线；

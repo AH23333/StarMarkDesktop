@@ -223,6 +223,49 @@ public sealed class InkDocTests
         Assert.Equal(5, history.Marks[0].Points[0].Y);
     }
 
+    // ────────── 批量改一组（P-288 选择工具的落定口） ──────────
+
+    [Fact]
+    public void ReplaceManyLandsAWholeGroupAsOneUndoStep()
+    {
+        var history = new InkDoc(Sheet);
+        history.Add(Mark(1));
+        history.Add(Mark(2));
+        history.Add(Mark(3));
+
+        history.ReplaceMany(new[]
+        {
+            (0, history.Marks[0].MovedBy(10, 0)),
+            (2, history.Marks[2].MovedBy(0, 10)),
+        });
+        Assert.Equal(11, history.Marks[0].Points[0].X);
+        Assert.Equal(2, history.Marks[1].Points[0].X);
+        Assert.Equal(10, history.Marks[2].Points[0].Y);
+
+        // 挪一组＝一步：撤销一按整组回原位。逐条 ReplaceAt 会拆成两步，
+        // 撤一次只回来一条、屏幕上剩半组——那就是"拖框圈一组"独有的半截缺陷。
+        Assert.True(history.Undo());
+        Assert.Equal(1, history.Marks[0].Points[0].X);
+        Assert.All(history.Marks, m => Assert.Equal(0, m.Points[0].Y));
+    }
+
+    [Fact]
+    public void ReplaceManySkipsExpiredIndicesAndAddsNoEmptyStep()
+    {
+        var history = new InkDoc(Sheet);
+        history.Add(Mark(1));
+        history.Undo();                                 // 下标 0 已过期（当前一份是空的）
+
+        history.ReplaceMany(new[] { (0, Mark(2)), (-1, Mark(3)) });
+        Assert.Empty(history.Marks);
+        Assert.False(history.CanUndo, "一条都没换成不该制造一步空历史");
+
+        history.Add(Mark(1));
+        Assert.True(history.Undo());                            // 撤掉刚画那条，历史又见底
+        history.ReplaceMany(Array.Empty<(int Index, Annotation Mark)>());
+        Assert.False(history.CanUndo, "空清单不该制造一步空历史");
+    }
+
     // ────────── 落笔序号（§7：撤销要跨叠比"谁最后落"） ──────────
 
     [Fact]

@@ -71,11 +71,11 @@ public sealed partial class CaptureOverlayWindow
         if (_annotating) Rebake();      // 压暗烤在合成图里：方向键挪了框就要跟着重烤（离散按键，不必节流）
     }
 
-    /// <summary>标注阶段的方向键：移动选中的那条标注（plain 1px，Shift 10px）。</summary>
+    /// <summary>标注阶段的方向键：移动选中的那条标注（plain 1px，Shift 10px）。
+    /// 批量选中的一组（P-288 建议一）一起微调，<see cref="InkDoc.ReplaceMany"/> 一步落定——
+    /// 逐条落会拆成 N 步，"按住 Shift 挪一组、撤销一按只回来一条"就是那半截组。</summary>
     private void NudgeSelectedMark(VirtualKey key, bool big)
     {
-        if (_selected is not int idx || idx < 0 || idx >= _history.Count) return;
-        var mark = _history.Marks[idx];
         // 步长按<b>屏幕</b>像素定再换算进底图：贴图缩到 0.2× 时 1 个底图像素只有 0.2 个屏幕像素，
         // 按一下方向键几乎看不见动（Snipaste 的手感是"按一下动一格"）；放大 5× 时反过来会窜格。
         var step = SlopInSource(big ? 10 : 1);
@@ -92,6 +92,23 @@ public sealed partial class CaptureOverlayWindow
             _ => 0,
         };
         if (dx == 0 && dy == 0) return;
+        if (_selectedMany is { Count: > 1 } many)
+        {
+            var pairs = new List<(int Index, Annotation Mark)>();
+            foreach (var index in many)
+            {
+                if (index < 0 || index >= _history.Count) continue;
+                pairs.Add((index, _history.Marks[index].MovedBy(dx, dy)));
+            }
+            if (pairs.Count > 0)
+            {
+                _history.ReplaceMany(pairs);
+                Rebake();
+            }
+            return;
+        }
+        if (_selected is not int idx || idx < 0 || idx >= _history.Count) return;
+        var mark = _history.Marks[idx];
         _history.ReplaceAt(idx, mark.MovedBy(dx, dy));
         Rebake();
     }

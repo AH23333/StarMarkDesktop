@@ -27,18 +27,20 @@ public static class BridgeProtocol
     /// <summary>信封里那颗 <c>v</c> 的本命值（§12.1 定形，v1 未改）。</summary>
     public const int Version = 1;
 
-    /// <summary>JS→C# 的十颗命令名。颗数由证人钉住（<c>BoardBridgeProtocolTests</c> ①）。
+    /// <summary>JS→C# 的十一颗命令名。颗数由证人钉住（<c>BoardBridgeProtocolTests</c> ①）。
     /// <para><b>片56 补上的那颗 <c>bridge.reply</c>>＝页面答宿主问的那一路</b>（账本 P-244）：
     /// 它早就在发（<c>board-bridge.js</c> 的 <c>send()</c>），而⛔ 在册⇒每一句"这一办发不出去"都死在
     /// <see cref="Check"/> 的名字闸门上（<c>fault:UnknownName</c>），连 switch 都走不到＝
     /// 一颗坏掉的那一发既⛔ 落盘、也⛔ 说出去、还⛔ 放开那颗可点位。</para>
     /// <para><b>片206 补上的那两颗 <c>export.request</c>／<c>scale.request</c></b>（P-285 重做）：引擎主菜单
     /// 那一组递进来的索取——前者带档位要一张图，后者翻那一档缩放（<c>pin.request</c>／<c>background.request</c>
-    /// 早在册，这一批才真有页面喊它们）。</para></summary>
+    /// 早在册，这一批才真有页面喊它们）。</para>
+    /// <para><b>片207 补上的那颗 <c>folder.request</c></b>（P-285 残余）：右上角那一行白条退役，
+    /// 那颗「打开所在文件夹」搬进引擎主菜单——菜单那一颗点了要能开目录，名字就得先过这道闸。</para></summary>
     public static readonly string[] InboundCommands =
     [
         "bridge.ready", "board.loaded", "paste.query", "export.bytes", "export.request", "pin.request", "scale.request",
-        "background.request", "open.external",
+        "background.request", "folder.request", "open.external",
         "bridge.reply",
     ];
 
@@ -77,6 +79,9 @@ public static class BridgeProtocol
             ["pin.request"] = [],
             ["scale.request"] = [],
             ["background.request"] = [],
+            // 片207＝P-285 残余：那一行白条退役，那颗「打开所在文件夹」搬进引擎主菜单——
+            // 它说的是"上一次真写成的那一份在哪儿"，资格（盘上有没有那一颗）由宿主在那一推里递。
+            ["folder.request"] = [],
             ["open.external"] = ["url"],
             // 页面答宿主的那一句：那颗 ok 是<b>这一办发出去了的判断</b>，那颗 err 只进日志（⛔ 上屏＝P-193 那条口径，
             // 屏幕上说的是"没能存成"那一句，字住表里）。
@@ -103,9 +108,11 @@ public static class BridgeProtocol
             // 而页面递的是"只取值"那一族——值里没 id 就记到 undefined 键下，元素按 fileId 永远查不到，
             // 屏幕上只剩灰色占位框（2026-10-30 两发真机读数，正本 bin/WI99/p148_image_route_readings.txt；账本 P-274）。
             ["image.insert"] = ["dataUrl", "mimeType", "width", "height"],
-            // 引擎主菜单那一组的字与亮态（片206＝P-285 重做）：六颗全必带＝宿主每一推都是整份替换，
-            // 半份推送会把菜单上那一组冻在旧话上（换语言那一拍漏一颗＝那一项还念旧语言）。
-            ["menu.set"] = ["png", "svg", "pin", "scale", "background", "busy"],
+            // 引擎主菜单那一组的字与亮态（片206＝P-285 重做・片207 扩到十颗）：十颗全必带＝宿主每一推都是
+            // 整份替换，半份推送会把菜单上那一组冻在旧话上（换语言那一拍漏一颗＝那一项还念旧语言）。
+            // 片207 多的那四颗＝白条三样搬进菜单（folder 那颗出口＋两行读数 status／hidden）与那颗资格
+            // （folderEnabled＝盘上有没有上一次真写成的那一份）。
+            ["menu.set"] = ["png", "svg", "pin", "scale", "background", "folder", "busy", "folderEnabled", "status", "hidden"],
         };
 
     /// <summary>拒的原因。UI 侧拿这颗枚举去配表里的键（⛔ 在这里念成品句，也⛔ 静默吞）。</summary>
@@ -262,8 +269,8 @@ public static class BridgeProtocol
         // 那句 nack 必带那颗 ok：一句⛔ 内容的 ack 既⛔ 许被读成"办成了"，也⛔ 许被读成"办不成"——
         // 两种都替用户做了一次没问过的决定（片56；缺了这一道门，UI 侧就只能猜那颗 null）。
         "bridge.reply" => ["ok"],
-        // 那一推必是整份（片206＝P-285 重做）：六颗键少一颗＝菜单上那一组冻在上一推的话上。
-        "menu.set" => ["png", "svg", "pin", "scale", "background", "busy"],
+        // 那一推必是整份（片206＝P-285 重做・片207 扩到十颗）：十颗键少一颗＝菜单上那一组冻在上一推的话上。
+        "menu.set" => ["png", "svg", "pin", "scale", "background", "folder", "busy", "folderEnabled", "status", "hidden"],
         _ => null,
     };
 

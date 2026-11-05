@@ -714,3 +714,14 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 测面六档：BoardWindowBridgeGate（TheBarRow 整格换成 TheEngineMainMenu 九格＋NeverInvent 四新 case＋ThePanelSpeaks 签名＋TheExportLands ④⑤＋TheTwoExportKnobs ⑧＋排序错误消息修）・BoardBridgeProtocol（名单 10/8＋③ kind 化＋新 TheMenuRequestFamily）・BoardWordGate（色尺 12/7/7＋两 token 各 2→1＋doc 段）・BoardPinExitGate（TheFifthExitIsWiredAtAllThreePlaces 重写）・BoardsSettingsGate（CloseAll 体钉改道）・BoardLinkGate（⑦重写：八颗数组＋头注三行整段＋idle 只剩 paste.query）。
 - 读数：gate206 1189/1189（2 m 3 s）・全量 6807/6807（17 m 29 s）・docgates206 26/26（p206/docgates206.txt）・census 26→21（五颗旧指针顶漂＝删号留锚就地更正）・计数器 293/240/53 VERDICT OK（题行 291→293・结案 237→240・开放 54→53）。⛔ push（未推 15）。
 - 下一刀：用户手测三步（深色开旧板／关开关看那一问／引擎菜单五动作观感）；P-288 两愿、P-291 装载路补钉、LeaveAnyway 注释对齐归后续批。
+
+## 八十八、片207 画板＋截图批：P-285 白条残余收进（folder.request 进 11・menu.set 扩十键・注入项双类内芯就地修）＋P-288 两愿落地结案（显式「选择」工具・组选组动组删・工具条精修）＋P-292 LeaveAnyway 注释读码对齐（坑 #1153 全量假红）
+
+- 接手第一步照旧现读编号轴：报告到五百九十三、交接到八十八、坑表到 #1153、账本到 P-292；本批两腿（画板腿＝P-285 白条残余；截图腿＝P-288 两愿）＋P-292 读码对齐；码改 15 档＋测试面 10 档＋新档 1。
+- 画板腿（P-285 白条残余）：右上角那一行白条整块退役——「打开所在文件夹」收进引擎主菜单第六颗动作项（folder.request・Inbound 10→11・资格 folderEnabled 只认 _exportPath 真落盘的那一份），两行读数（status／hidden）做成只读行挂同一组（空话＝整行收起）；menu.set 六键→十键整推；注入项就地修双类 dropdown-menu-item dropdown-menu-item-base＋__text 内芯（真机量到的黑字小号脸）。
+- 截图腿建议一（显式「选择」工具）：工具条 BarRow 首位新「选择」钮（UI-only _selectTool・⛔ AnnotationTool 枚举加名・与 SetTool 互斥・光标 Arrow）；点选单条／拖框圈一组（band 三件套・主选 hits[^1]）；组拖每帧整块重画＋节流、松手 ReplaceMany 一步历史（组删／方向键组臂同口径）；Esc 三级（组→单→无）；与「点住即拖」并存——选择态点回文字那条＝松手进文字编辑；多选提示条 capture.selectionTipMany 三语在表。
+- 截图腿建议二（工具条精修）：BarNormal 0x00 透明（悬停态走 WinUI 默认模板 PointerOver＝绕开 PointerEntered += 封锁）、CornerRadius 4、Separator Height 15 居中、按钮 Padding 5,3,5,3、BarRow Spacing 3——不改语义不增按钮。
+- P-292 读码对齐（行为不动）：LeaveAnyway doc 注释改口——那一记 Close() 走代码关窗直通路、⛔ 不路过 OnAppWindowClosing 那口钟（#1152 平台事实），「第二拦」无从谈起；旧注因果链已证伪、只对齐口径；闸门只钉方法体、doc 改口不破钉。
+- 测试面：新档 CaptureSelectToolGateTests（11 格）＋InkDocTests／CaptureGeometryTests 各 +2＋CaptureOverlayGateTests／PinEditTests／TwoStageCaptureTests 锚点消歧＋CaptureReasonGateTests 宿主计数钉 4（批量与单条共用 ShowResizeFailed）＋CaptureNoticeWiring resizeFailed 恰 1 恢复＋画板腿四档随协议 11／8・menu.set 十键整形。
+- 读数：build207 0 错 0 警；gate207 1189/1189；gate207cap 545/545（17 m 10 s・过滤器补 CaptureNoticeWiring）；全量 6822/6822（22 m 22 s・TEMP 重定向 D 盘后）；docgates207 26/26；census 21；计数器 293/241/52 VERDICT OK（结案 240→241・开放 53→52）。
+- 下一刀：用户手测四步（①画板右上角无白条＋引擎主菜单六项含「打开所在文件夹」；②截图链选择钮点选／拖框圈组／组拖组删；③Esc 三级退选＋多选提示条；④工具条观感）；P-291 装载路那一行补钉仍归后续批。⛔ push（未推 16）。

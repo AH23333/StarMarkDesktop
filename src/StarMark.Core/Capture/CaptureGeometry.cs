@@ -269,6 +269,16 @@ public static class CaptureGeometry
     }
 
     /// <summary>
+    /// 两个矩形有没有重叠的部分——拖框批量选（P-288 的选择工具）的命中判据：
+    /// 框<b>碰到</b>某条标注的界框就算圈到，贴边扫过也算，与 <see cref="SelectionEdgeAt"/> 的
+    /// "点在框内"不同口径（批量选要的是"圈到就是"，不是"整个装进去"）。
+    /// 宽或高为 0 的矩形与谁都不重叠：点一下没拖成框，不该顺手圈走脚下的东西。
+    /// </summary>
+    public static bool Overlaps(IntRect a, IntRect b)
+        => a.Width > 0 && a.Height > 0 && b.Width > 0 && b.Height > 0
+            && a.X < b.Right && b.X < a.Right && a.Y < b.Bottom && b.Y < a.Bottom;
+
+    /// <summary>
     /// 移动选区：<b>由"按下时的矩形 + 总位移"直接算</b>，不累加每帧增量（贴图拖动那条抖动教训同一口径），
     /// 且整块不许离开工作区——选区决定截到哪块画面，出一半屏就等于把已画的标注丢到看不见的地方。
     /// </summary>

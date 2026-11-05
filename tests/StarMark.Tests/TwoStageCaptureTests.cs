@@ -222,7 +222,7 @@ public sealed class TwoStageCaptureTests
         Assert.Contains("AnnotationPainter.HitTest(_history.Marks, local, SlopInSource(SelectionSlop))", grab);
         Assert.Contains("fresh", grab);      // 首次选中与"点回去改字"是两回事
         // 文字"再点一次才进编辑"：首次选中的那一按松手不许直接弹输入框
-        var end = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay), "private void EndDrag");
+        var end = SourceGate.MethodBody(SourceGate.ReadRepoPartials(Overlay), "private void EndDrag(");
         Assert.Contains("!fresh && grab == Grab.Move && original.Tool == AnnotationTool.Text", end);
     }
 

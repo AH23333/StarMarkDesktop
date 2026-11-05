@@ -492,7 +492,8 @@ public sealed class CaptureOverlayGateTests
         // 界面里不再有任何按可变字段分支的拖动算式
         Assert.DoesNotContain("switch (_grab", cs);
         var dragTo = SourceGate.MethodBody(cs, "private void DragTo");
-        var end = SourceGate.MethodBody(cs, "private void EndDrag");
+        // 带左括号消歧：P-288 起同文件还有一颗 EndDragMany（组拖动松手），不带括号会撞前缀
+        var end = SourceGate.MethodBody(cs, "private void EndDrag(");
         Assert.Contains("original.DraggedBy(_dragAnchor, local, _grab)", dragTo);
         // 松手这一步用的必须是"清掉之前抄下来的那份"——原地读 _grab 就是这条缺陷的原件
         Assert.Contains("var grab = _grab;", end);
@@ -514,7 +515,7 @@ public sealed class CaptureOverlayGateTests
         var stroke = SourceGate.MethodBody(cs, "private void BeginStroke");
         Assert.Contains("_history.Marks[index].Tool == AnnotationTool.Text", stroke);
         Assert.Contains("BeginTextEdit(local, _history.Marks[index], index)", stroke);
-        var end = SourceGate.MethodBody(cs, "private void EndDrag");
+        var end = SourceGate.MethodBody(cs, "private void EndDrag(");
         Assert.Contains("grab == Grab.Move && original.Tool == AnnotationTool.Text", end);
         Assert.Contains("BeginTextEdit(_dragAnchor, original, i)", end);
         // 落笔那一步对"改旧字"是替换而不是新增；删空了就是删掉那条（留一条没字的标注只会让人以为卡住）

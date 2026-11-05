@@ -101,6 +101,7 @@ public sealed class CaptureReasonGateTests : IDisposable
     public void TheHostsAskTheOneOwner()
     {
         // 三档⛔ 两档：宿主名单以前按"这一刀改过的档"列，漏了 Pin 那一档里那颗打码预览的框。
+        // P-288 批量拖动与单条拖动共用同一颗宿主（Selection.cs 的 ShowResizeFailed——键与取原因各恰 1）。
         var hosts = Code(Actions) + Code(Selection) + Code(Pin);
         Assert.Equal(4, SourceGate.Count(hosts, "CaptureFailureException.ReasonOf(ex)"));
         // 旧形状的锚点必须把键串那颗收尾双引号一起咬住：⛔ 写成「键名, ex.Message」——那种 needle

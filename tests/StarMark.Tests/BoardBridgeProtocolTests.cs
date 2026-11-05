@@ -20,7 +20,7 @@ public sealed class BoardBridgeProtocolTests
     // ────────── ① 两份名单自己先要闭合 ──────────
 
     /// <summary>
-    /// 十颗进、八颗出，且<b>每颗在册的名字都有一份字段表、每份字段表都对应一颗在册的名字</b>。
+    /// 十一颗进、八颗出，且<b>每颗在册的名字都有一份字段表、每份字段表都对应一颗在册的名字</b>。
     /// <para>双向对账的原因：只查"名单里有 6 颗"会放过"新增一颗命令却忘了给字段表"——
     /// 那种消息在 <see cref="BridgeProtocol.Check"/> 里会当场 <c>KeyNotFoundException</c>，
     /// 而抛出去到 UI 侧就是"点了没反应"（本仓定性过的坏）。</para>
@@ -30,13 +30,15 @@ public sealed class BoardBridgeProtocolTests
     /// <para><b>片206 多的那三颗</b>：进向 <c>export.request</c>／<c>scale.request</c>（P-285 重做：引擎主菜单
     /// 那一组的索取），出向 <c>menu.set</c>（那一组的字与亮态）。颗数的脸同一把尺：八颗变十颗、
     /// 七颗变八颗都由这一格说一次。</para>
+    /// <para><b>片207 多的那颗 <c>folder.request</c></b>（P-285 残余）：那一行白条退役，那颗「打开所在文件夹」
+    /// 搬进引擎主菜单——十颗变十一颗由这一格说一次。</para>
     /// </summary>
     [Fact]
     public void BothListsAreClosedOverTheirOwnFieldTables()
     {
         Assert.Equal(
             ["bridge.ready", "board.loaded", "paste.query", Export, "export.request", "pin.request", "scale.request",
-             "background.request", "open.external", "bridge.reply"],
+             "background.request", "folder.request", "open.external", "bridge.reply"],
             BridgeProtocol.InboundCommands);
         Assert.Equal(
             ["board.load", "theme.set", "lang.set", "feature.flags", "export.pick", "autosave.arm", "image.insert",
@@ -317,10 +319,11 @@ public sealed class BoardBridgeProtocolTests
     // ────────── ④c 引擎主菜单那一组的协议面（片206＝P-285 重做） ──────────
 
     /// <summary>
-    /// 四颗索取＋那一推（<c>menu.set</c>）各自的形状，与页面真正递的对得上。
-    /// <para>四颗索取里只有 <c>export.request</c> 带那颗档位——其余三颗无参（<c>pin.request</c> 从前那颗
-    /// <c>token</c> 随片206 摘掉：页面从没递过它，名单上的键＝越权面，养一颗没人发的键就是给越权留缝）。
-    /// 那一推六颗全必带＝宿主每一推都是<b>整份替换</b>，半份推送会把菜单上那一组冻在旧话上
+    /// 五颗索取＋那一推（<c>menu.set</c>）各自的形状，与页面真正递的对得上。
+    /// <para>五颗索取里只有 <c>export.request</c> 带那颗档位——其余四颗无参（<c>pin.request</c> 从前那颗
+    /// <c>token</c> 随片206 摘掉：页面从没递过它，名单上的键＝越权面，养一颗没人发的键就是给越权留缝；
+    /// 片207 多的那颗 <c>folder.request</c> 同一副形状——开目录那一手不带参数，资格由宿主在那一推里递）。
+    /// 那一推十颗全必带＝宿主每一推都是<b>整份替换</b>，半份推送会把菜单上那一组冻在旧话上
     /// （缺 busy＝那一闩永远合不上，三颗动作从此点不亮；换语言那一拍漏一颗＝那一项还念旧语言）。</para>
     /// </summary>
     [Fact]
@@ -332,8 +335,8 @@ public sealed class BoardBridgeProtocolTests
         Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, "export.request", new[] { "kind" }).Allowed);
         Assert.Equal(BridgeProtocol.Fault.UnexpectedField,
             BridgeProtocol.Check(BridgeProtocol.Version, "export.request", new[] { "kind", "token" }).Reason);
-        // 三颗无参索取：空 args 必通，多一颗键必拒
-        foreach (var name in new[] { "pin.request", "scale.request", "background.request" })
+        // 四颗无参索取：空 args 必通，多一颗键必拒（片207 起 folder.request 也在这一族里）
+        foreach (var name in new[] { "pin.request", "scale.request", "background.request", "folder.request" })
         {
             Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, name, Array.Empty<string>()).Allowed,
                 name + " 空参没过门");
@@ -342,16 +345,20 @@ public sealed class BoardBridgeProtocolTests
         }
         // 那颗从未被页面递过的 token：pin.request 的字段表从此一颗也不许剩
         Assert.Empty(BridgeProtocol.InboundFields["pin.request"]);
-        // menu.set（出向）：六颗全必带＝整份替换，少一颗＝菜单冻在旧话上
-        var six = new[] { "png", "svg", "pin", "scale", "background", "busy" };
-        Assert.Equal(six, BridgeProtocol.OutboundFields["menu.set"]);
-        Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, "menu.set", six,
+        // menu.set（出向）：十颗全必带＝整份替换，少一颗＝菜单冻在旧话上
+        // （片207 起那十颗＝六颗动作的字＋busy 闩＋出口的资格 folderEnabled＋两行只读读数 status／hidden）
+        var ten = new[]
+        {
+            "png", "svg", "pin", "scale", "background", "folder", "busy", "folderEnabled", "status", "hidden",
+        };
+        Assert.Equal(ten, BridgeProtocol.OutboundFields["menu.set"]);
+        Assert.True(BridgeProtocol.Check(BridgeProtocol.Version, "menu.set", ten,
             BridgeProtocol.Direction.Outbound).Allowed);
         Assert.Equal(BridgeProtocol.Fault.MissingField,
             BridgeProtocol.Check(BridgeProtocol.Version, "menu.set",
-                six.Where(k => k != "busy").ToArray(), BridgeProtocol.Direction.Outbound).Reason);
+                ten.Where(k => k != "busy").ToArray(), BridgeProtocol.Direction.Outbound).Reason);
         Assert.Equal(BridgeProtocol.Fault.UnexpectedField,
-            BridgeProtocol.Check(BridgeProtocol.Version, "menu.set", six.Append("token").ToArray(),
+            BridgeProtocol.Check(BridgeProtocol.Version, "menu.set", ten.Append("token").ToArray(),
                 BridgeProtocol.Direction.Outbound).Reason);
     }
 

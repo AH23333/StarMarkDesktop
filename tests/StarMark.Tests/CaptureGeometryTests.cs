@@ -65,6 +65,39 @@ public sealed class CaptureGeometryTests
         Assert.True(clipped.Right <= bounds.Right && clipped.Bottom <= bounds.Bottom);
     }
 
+    // ────────── 拖框批量选的命中判据（P-288 选择工具） ──────────
+
+    [Fact]
+    public void Overlaps_TouchingCountsButDegenerateBoxesNeverDo()
+    {
+        var mark = new IntRect(100, 100, 40, 20);
+        // 圈到就是：框碰到标注的界框（含只扫过一角、贴着边掠过）都算选中
+        Assert.True(CaptureGeometry.Overlaps(new IntRect(110, 105, 60, 60), mark));
+        Assert.True(CaptureGeometry.Overlaps(new IntRect(120, 90, 10, 15), mark));     // 只圈住左上一角
+        Assert.True(CaptureGeometry.Overlaps(new IntRect(80, 118, 300, 5), mark));     // 贴着下边掠过
+        Assert.True(CaptureGeometry.Overlaps(mark, mark));                             // 与自己重合
+        // 恰好挨着不重叠：边贴边＝没圈到（与 Intersect 的"零面积＝不相交"同一口径）
+        Assert.False(CaptureGeometry.Overlaps(new IntRect(140, 100, 50, 50), mark));
+        Assert.False(CaptureGeometry.Overlaps(new IntRect(0, 0, 100, 500), mark));
+        // 宽或高为 0 的框（点一下没拖成）谁也不圈
+        Assert.False(CaptureGeometry.Overlaps(new IntRect(100, 100, 0, 20), mark));
+        Assert.False(CaptureGeometry.Overlaps(new IntRect(100, 100, 40, 0), mark));
+        Assert.False(CaptureGeometry.Overlaps(new IntRect(100, 100, 0, 0), mark));
+    }
+
+    [Fact]
+    public void Overlaps_HandlesNegativeOriginAndEveryDragDirection()
+    {
+        // 副屏在主屏左边：框与标注的坐标都是负的，判据照常成立
+        var mark = new IntRect(-1900, -200, 100, 50);
+        Assert.True(CaptureGeometry.Overlaps(new IntRect(-1850, -180, 30, 30), mark));
+        Assert.False(CaptureGeometry.Overlaps(new IntRect(-1750, -200, 50, 50), mark));
+        // 从右下往左上拖出来的框与反向拖是同一个矩形（Normalize 之后才进来，这里只验判据本身方向无关）
+        var band = new IntRect(-1880, -190, 60, 40);
+        Assert.True(CaptureGeometry.Overlaps(mark, band));
+        Assert.True(CaptureGeometry.Overlaps(band, mark));                             // 判据对称
+    }
+
     // ────────── DIP ⇄ 物理像素 ──────────
 
     [Fact]

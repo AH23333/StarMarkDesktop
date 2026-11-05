@@ -1,8 +1,9 @@
 /* 画板桥的页面侧（Phase C 片19＝最小回路；片21＝存储适配器那一半，深析 §21.3 逐条落码）。
    名单的唯一主人＝Core 的 BridgeProtocol；本档每颗名字逐字照抄，闸门测试逐颗对账。
-   名单在册十颗，页面今天真喊八颗（postIn 逐颗一处＝bridge.ready／board.loaded／export.bytes／
-   open.external／export.request／pin.request／scale.request／background.request——后四颗＝片206
-   引擎主菜单那一组的索取）＋send 那颗 bridge.reply；paste.query 名字过了门而回路还没接＝证人钉 0。
+   名单在册十一颗，页面今天真喊九颗（postIn 逐颗一处＝bridge.ready／board.loaded／export.bytes／
+   open.external／export.request／pin.request／scale.request／background.request／folder.request——
+   后五颗＝片206 引擎主菜单那一组的索取，末颗＝片207 白条退役后那颗「打开所在文件夹」的出口）
+   ＋send 那颗 bridge.reply；paste.query 名字过了门而回路还没接＝证人钉 0。
    八颗出（case 逐颗一处）——多写的名字闸门会红，少写的也会。
    ⚠ 那颗 AUTOSAVE_MS 与 Core 的 BoardPolicy.AutosaveIdleMs 是同一个数的两颗持有者（跨语言）：
    等值由 BoardSceneStoreGateTests 现读对账，改一颗不动另一颗＝那一格红。 */
@@ -210,16 +211,23 @@
     rerenderWith(stickyProps);
   }
 
-  /* ───────── 引擎主菜单里那一组（片206＝P-285 重做） ─────────
+  /* ───────── 引擎主菜单里那一组（片206＝P-285 重做・片207＝P-285 残余） ─────────
      从前右上角那一排动作按钮整条压在引擎自己的工具条上（片204 真机量到：遮住、关不掉、挪不开），
-     收进「⋯」只是把遮挡折起来，工具条上仍多一块宿主表面。这一版把五个动作搬进引擎那颗主菜单：
-     深浅色由引擎自己的模板给，宿主侧那一排钉死三色的配方整排退役。机制＝MutationObserver 钉
-     document.body（引擎那颗菜单按需挂进应用 DOM 而⛔ 走 body portal），挂进来那一刻往里注入一组。
-     幂等＝那颗标记属性查重；注入项是我们自己的节点，React 的 onSelect 听不见 ⇒ 点进去由本页
-     postIn 对应那一颗索取，再替用户把扳手钮合上（外来节点关不掉宿主菜单）。 */
-  var menuState = { png: "", svg: "", pin: "", scale: "", background: "", busy: false };
+     收进「⋯」只是把遮挡折起来，工具条上仍多一块宿主表面。片206 把五个动作搬进引擎那颗主菜单；
+     片207 把右上角那一行白条整块退役——那颗「打开所在文件夹」出口与两行读数（那句落点／
+     「未显示的外部内容」）也搬进同一组：出口是第六颗动作项，两行读数做成只读行（div 而⛔ button，
+     免掉悬停那张脸）。深浅色由引擎自己的模板给，宿主侧那一排钉死三色的配方整排退役。
+     机制＝MutationObserver 钉 document.body（引擎那颗菜单按需挂进应用 DOM 而⛔ 走 body portal），
+     挂进来那一刻往里注入一组。幂等＝那颗标记属性查重；注入项是我们自己的节点，React 的 onSelect
+     听不见 ⇒ 点进去由本页 postIn 对应那一颗索取，再替用户把扳手钮合上（外来节点关不掉宿主菜单）。 */
+  var menuState = {
+    png: "", svg: "", pin: "", scale: "", background: "", folder: "",
+    busy: false, folderEnabled: false, status: "", hidden: "",
+  };
   var MENU_GROUP_MARK = "data-starmark-menu";
-  var MENU_ITEM_ORDER = ["png", "pin", "svg", "scale", "background"];
+  var MENU_ITEM_ORDER = ["png", "pin", "svg", "scale", "background", "folder"];
+  // 两行读数（片207）：⛔ 是动作——一颗都点不进去，只在有话要说时在场（空话＝整行收起）。
+  var MENU_INFO_ORDER = ["status", "hidden"];
 
   function closeHostMenu() {
     var trigger = document.querySelector('[data-testid="main-menu-trigger"]');
@@ -231,22 +239,43 @@
     else if (key === "pin") postIn("pin.request", {});
     else if (key === "scale") postIn("scale.request", {});
     else if (key === "background") postIn("background.request", {});
+    else if (key === "folder") postIn("folder.request", {});
   }
 
+  // 引擎自己的菜单项长的是两颗类＋三段内芯（__icon／__text／__shortcut）——只挂 dropdown-menu-item
+  // 而缺 -base 那一颗＝字色／字号／弹性全丢（真机量到的那副黑字小号的脸）。宿主注入项照同一副长法：
+  // 双类都挂，内芯给 __text 那一段。
   function buildMenuItem(key) {
     var item = document.createElement("button");
     item.type = "button";
-    item.className = "dropdown-menu-item";
+    item.className = "dropdown-menu-item dropdown-menu-item-base";
     item.setAttribute("data-starmark-item", key);
-    item.textContent = menuState[key];
+    var text = document.createElement("div");
+    text.className = "dropdown-menu-item__text";
+    text.textContent = menuState[key];
+    item.appendChild(text);
     // busy 那一闩只压三颗动作（两颗导出＋贴桌面：连按＝两发抢同一刻的落点）；
     // 两颗旋钮照旧点得动——挑档是宿主自己的事，⛔ 跟着"这一发正在跑"一起关。
-    item.disabled = menuState.busy && (key === "png" || key === "svg" || key === "pin");
+    // 那颗出口只在"上一次真写成的那一份"不在盘上时点不亮（folderEnabled 由宿主递）。
+    item.disabled = (menuState.busy && (key === "png" || key === "svg" || key === "pin"))
+      || (key === "folder" && !menuState.folderEnabled);
     item.addEventListener("click", function () {
       menuAction(key);
       closeHostMenu();
     });
     return item;
+  }
+
+  function buildInfoRow(key) {
+    var row = document.createElement("div");
+    row.className = "dropdown-menu-item-base";
+    row.setAttribute("data-starmark-info", key);
+    var text = document.createElement("div");
+    text.className = "dropdown-menu-item__text";
+    text.textContent = menuState[key];
+    row.appendChild(text);
+    if (!menuState[key]) row.style.display = "none";   // 空话＝整行收起，⛔ 念一颗 0 等于替用户造一颗他没问过的消息
+    return row;
   }
 
   function injectMenuGroup() {
@@ -262,6 +291,7 @@
     title.textContent = "StarMark";
     group.appendChild(title);
     for (var i = 0; i < MENU_ITEM_ORDER.length; i++) group.appendChild(buildMenuItem(MENU_ITEM_ORDER[i]));
+    for (var j = 0; j < MENU_INFO_ORDER.length; j++) group.appendChild(buildInfoRow(MENU_INFO_ORDER[j]));
     host.appendChild(group);
   }
 
@@ -271,8 +301,17 @@
     var items = menu.querySelectorAll("[data-starmark-item]");
     for (var i = 0; i < items.length; i++) {
       var key = items[i].getAttribute("data-starmark-item");
-      items[i].textContent = menuState[key];
-      items[i].disabled = menuState.busy && (key === "png" || key === "svg" || key === "pin");
+      var text = items[i].querySelector(".dropdown-menu-item__text");
+      if (text) text.textContent = menuState[key];
+      items[i].disabled = (menuState.busy && (key === "png" || key === "svg" || key === "pin"))
+        || (key === "folder" && !menuState.folderEnabled);
+    }
+    var infos = menu.querySelectorAll("[data-starmark-info]");
+    for (var j = 0; j < infos.length; j++) {
+      var infoKey = infos[j].getAttribute("data-starmark-info");
+      var infoText = infos[j].querySelector(".dropdown-menu-item__text");
+      if (infoText) infoText.textContent = menuState[infoKey];
+      infos[j].style.display = menuState[infoKey] ? "" : "none";
     }
   }
 
@@ -283,7 +322,11 @@
     menuState.pin = String(a.pin || "");
     menuState.scale = String(a.scale || "");
     menuState.background = String(a.background || "");
+    menuState.folder = String(a.folder || "");
     menuState.busy = !!a.busy;
+    menuState.folderEnabled = !!a.folderEnabled;
+    menuState.status = String(a.status || "");
+    menuState.hidden = String(a.hidden || "");
     refreshMenuGroup();      // 菜单正开着就地在位刷新；关着＝状态存好，下一开注入时用
   }
 

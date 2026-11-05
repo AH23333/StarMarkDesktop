@@ -211,7 +211,10 @@ public sealed partial class CaptureOverlayWindow
         var shape = OverSelectedMark();
         if (shape is null)
         {
-            if (!_annotating || Armed) shape = InputSystemCursorShape.Cross;
+            // 选择工具亮着（P-288 建议一）：没落在标注上的悬停一律普通箭头——这一按是"指"，
+            // 不是画（十字准线）也不是挪框（十字箭头）。光标形状是"我在哪一态"的唯一信号。
+            if (_selectTool) shape = InputSystemCursorShape.Arrow;
+            else if (!_annotating || Armed) shape = InputSystemCursorShape.Cross;
             else if (_selection is { } box)
             {
                 shape = CaptureGeometry.SelectionEdgeAt(box, AsPixel(physical), SelectionSlop) switch

@@ -170,6 +170,17 @@ public sealed partial class CaptureOverlayWindow : Window
     private byte[]? _dragCanvas;              // 每帧复用：_underDrag 的副本 + 预览那一条
     private Grab _grab;                        // Grab ＝ 别名的 AnnotationGrab（判定与取值都在模型一处）
 
+    // ── 显式选择工具（P-288 建议一：与"点住即拖"并存的显式选择态）──
+    // 它<b>不是 AnnotationTool</b>：那颗枚举归模型，每一项都要产标注，"选择"不产——
+    // 塞进去等于给模型添一支画不出东西的笔。所以这里是界面自己的开关，与 _tool 互斥。
+    private bool _selectTool;                  // 选择工具亮着：点哪条选哪条，空白处拖框圈一组
+    private List<int>? _selectedMany;          // 拖框圈到的那组下标（历史一变就作废，DropSelection 一并清）
+    private List<Annotation>? _dragManyOriginal;   // 组拖动按下时的原样（松手 ReplaceMany 一步落定）
+    private byte[]? _underDragMany;            // 组拖动那张底：底图 + 除这组之外的全部标注（一次算好）
+    private bool _bandDragging;                // 正在拖框圈选
+    private PixelPoint _bandStart;             // 框的起点（标注坐标系）
+    private PixelPoint _bandNow;               // 框拖到哪儿（逐帧更新）
+
     /// <summary>"点一下"要不要算选中脚下那条的容差（<b>屏幕像素</b>，进模型前按 <see cref="_sourceScale"/> 换算）。
     /// 比把手小：点是打在形状上，不是打在小方块上。
     /// <para>角点/把手的容差不在这里——那一条跟着形状尺寸收缩，住在模型里（<c>Annotation.HandleSlopFor</c>），

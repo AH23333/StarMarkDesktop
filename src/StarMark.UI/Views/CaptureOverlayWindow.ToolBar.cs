@@ -47,12 +47,16 @@ public sealed partial class CaptureOverlayWindow
     /// 跟着系统主题走会在浅色模式下把按钮刷成白底，图标就糊在底上了。</summary>
     private static readonly Brush Ink = new SolidColorBrush(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF));
     private static readonly Brush InkDim = new SolidColorBrush(Color.FromArgb(0x77, 0xFF, 0xFF, 0xFF));
-    private static readonly Brush BarNormal = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
+    // P-288 建议二：静止态那一层 0x22 白洗底撤掉——按钮平时融进条底，悬停的反馈交回给
+    // 按钮模板自带的 PointerOver 那一层（系统亚光填充），哪颗亮就是真的指在哪颗上。
+    // 图标自身带 0xE6 浓度的墨，不靠底色也认得出；选中态仍是 BarChecked 那颗蓝。
+    private static readonly Brush BarNormal = new SolidColorBrush(Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF));
     private static readonly Brush BarChecked = new SolidColorBrush(Color.FromArgb(0x66, 0x4C, 0xA0, 0xFF));
 
     /// <summary>浮层里圆点用的实心白（<see cref="Ink"/> 是画笔，带浓度，点出来会像"没选中"）。</summary>
     private static readonly int SolidWhite = Annotation.Opaque(0xFF, 0xFF, 0xFF);
 
+    private Button _selectButton = null!;      // 「选择」那颗（P-288 建议一，条上第一颗）
     private Button _shapeButton = null!;
     private readonly List<Button> _brushButtons = new();
     private Button _brushButton = null!;
@@ -79,6 +83,13 @@ public sealed partial class CaptureOverlayWindow
     /// </summary>
     private void BuildToolBar()
     {
+        // 「选择」（P-288 建议一）：与"点住即拖"并存的显式选择工具——点哪条选哪条，
+        // 空白处拖框圈一组；再点一次收起（与"再点当前笔＝收笔"同一手感，批次 WD-6）。
+        _selectButton = IconButton(SelectIcon(), LocMessage.Of("capture.bar.select"));
+        _selectButton.Click += SelectTool_Click;
+        BarRow.Children.Add(_selectButton);
+        BarRow.Children.Add(Separator());
+
         _shapeButton = IconButton(ToolIcon(AnnotationTool.Rectangle), ShapeTip());
         _shapeButton.Click += (_, _) => ShowShapePicker(_shapeButton);
         BarRow.Children.Add(_shapeButton);
@@ -157,9 +168,13 @@ public sealed partial class CaptureOverlayWindow
         SyncTools();
     }
 
+    // P-288 建议二：分隔线从"随内容拉伸的整条"收成定高的竖杠，垂直居中在按钮行里——
+    // 从前它上下顶到条的边（Margin 之外没有高度约束），两条之间的空隙看着比按钮间距还宽。
     private static Border Separator() => new()
     {
         Width = 1,
+        Height = 15,
+        VerticalAlignment = VerticalAlignment.Center,
         Background = new SolidColorBrush(Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF)),
         Margin = new Thickness(3, 2, 3, 2),
     };
@@ -181,7 +196,7 @@ public sealed partial class CaptureOverlayWindow
             Margin = new Thickness(0),
             Background = BarNormal,
             BorderThickness = new Thickness(0),
-            CornerRadius = new CornerRadius(3),
+            CornerRadius = new CornerRadius(4),
             VerticalAlignment = VerticalAlignment.Center,
         };
         LocText.SetMessage(button, ToolTipService.ToolTipProperty, tip);
@@ -226,12 +241,35 @@ public sealed partial class CaptureOverlayWindow
         EndTextEditing(commit: true);
         FinishPolyLine(commit: true);
         _tool = tool;
+        // 拿笔即收选择工具（P-288）：两者互斥，同时亮着＝"这一按是画还是选"屏幕上说不清。
+        _selectTool = false;
         // 收笔那一按必须连那一栏一起收掉：以前 Esc 之后 Flyout 会"点到外面自己没"，
         // 现在那一栏是条子的一部分，不显式收就会一直占着第二行。
         if (tool is null) HidePicker();
         SyncTools();
         ApplyCursor();
     }
+
+    /// <summary>
+    /// 亮/收「选择」工具（P-288 建议一，学 Excalidraw 的显式选择）。与 <see cref="SetTool"/> 同一收尾
+    /// （落字、收折线、重贴状态、换光标），只是不开笔、也不弹任何选择栏。
+    /// 收起时把框选中的那组一起丢掉：组的下标随历史作废，<see cref="DropSelection"/> 是唯一出口。
+    /// </summary>
+    private void SetSelectTool(bool armed)
+    {
+        EndTextEditing(commit: true);
+        FinishPolyLine(commit: true);
+        _tool = null;
+        _selectTool = armed;
+        if (armed) HidePicker();
+        else DropSelection();
+        SyncTools();
+        ApplyCursor();
+    }
+
+    /// <summary>再点一次＝收起（与"再点当前那支笔＝收笔"同一手感，批次 WD-6）。</summary>
+    private void SelectTool_Click(object sender, RoutedEventArgs e)
+        => SetSelectTool(!_selectTool);
 
     /// <summary>
     /// 光标跟着"这一按是画还是改框"走：<b>没选工具＝十字箭头</b>（用户要的"进入拖动模式"的可见信号），
@@ -253,7 +291,9 @@ public sealed partial class CaptureOverlayWindow
             _ => null,
         };
         Root.Cursor = Microsoft.UI.Input.InputSystemCursor.Create(
-            shape ?? (Armed ? InputSystemCursorShape.Cross : InputSystemCursorShape.SizeAll));
+            shape ?? (Armed ? InputSystemCursorShape.Cross
+                : _selectTool ? InputSystemCursorShape.Arrow
+                : InputSystemCursorShape.SizeAll));
     }
 
     /// <summary>「图形」那颗此刻的说明（✅WI-65 片3：交「键＋实参」，嵌在句子里的那两颗名字⛔ 先念完）。</summary>
@@ -300,6 +340,8 @@ public sealed partial class CaptureOverlayWindow
         // 没选工具时图形那颗不许看起来"被选中"：底色是这条链上唯一的"我在哪一态"信号
         _shapeButton.Background = _tool is { } armed && AnnotationTools.IsShapeTool(armed) ? BarChecked : BarNormal;
         LocText.SetMessage(_shapeButton, ToolTipService.ToolTipProperty, ShapeTip());
+        // 「选择」那颗同理（P-288）：亮着＝BarChecked，收起＝与其它未选按钮同一副面孔
+        _selectButton.Background = _selectTool ? BarChecked : BarNormal;
         foreach (var button in _brushButtons)
             button.Background = (AnnotationTool)button.Tag! == _tool ? BarChecked : BarNormal;
         _brushButton.Content = BrushIcon();
@@ -392,6 +434,15 @@ public sealed partial class CaptureOverlayWindow
             Fill = InkDim,
             Points = new PointCollection { new(3, 12), new(9, 12), new(13.5, 4), new(7.5, 3) },
         }, 0, 0), BarGlyphs.Seg(InkDim, 3, 13.5, 13.5, 13.5, 1.2));
+
+    /// <summary>「选择」那颗（P-288）：一支带尾巴的光标箭头。与「箭头笔」（一条斜线＋开口头）
+    /// 刻意不同形：那颗是"画一根箭头"，这颗是"我指东西"——条上没有文字，撞了形就等于摆两颗猜不出作用的按钮。</summary>
+    private static UIElement SelectIcon() => BarGlyphs.Icon(BarGlyphs.Placed(new Polygon
+    {
+        Fill = Ink,
+        Points = new PointCollection { new(2.5, 1.5), new(2.5, 12.5), new(5.3, 9.9),
+            new(7.4, 14.2), new(9.4, 13.2), new(7.2, 9), new(11, 9) },
+    }, 0, 0));
 
     private static UIElement CrossIcon() => BarGlyphs.Icon(
         BarGlyphs.Seg(Ink, 3.5, 3.5, 12.5, 12.5), BarGlyphs.Seg(Ink, 12.5, 3.5, 3.5, 12.5));

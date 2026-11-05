@@ -53,18 +53,40 @@ public sealed partial class CaptureOverlayWindow
         if (_editingText || _polyLine is not null) return false;
         // 批次 PV（真机反馈"点击已编辑内容要能直接选中"）：没有选中也先做命中测试——
         // 点在已画的那条上＝选中并抓住它；点在空白处才放行给"挪框"。
-        var fresh = !(_selected is { } i && i < _history.Count);
-        var index = fresh
-            ? AnnotationPainter.HitTest(_history.Marks, local, SlopInSource(SelectionSlop))
-            : _selected;
+        // 选择工具亮着（P-288 建议一）：每一次按下都做整场命中——点哪条选哪条是它的本职，
+        // 隐性那套（没亮它）仍只在已有选中时测脚下那一条。
+        var hadSelection = _selected is { } i && i < _history.Count;
+        var index = hadSelection && !_selectTool
+            ? _selected
+            : AnnotationPainter.HitTest(_history.Marks, local, SlopInSource(SelectionSlop));
         if (index is not { } idx) return false;
         var mark = _history.Marks[idx];
+
+        // 批量选中的一员（P-288 建议一）：这一抓动的是<b>整组</b>——组的待遇只有一起挪
+        //（与一起删、方向键一起微调），把手/缩放/旋转是单条待遇，按在组员身上一律按"挪整组"解释。
+        if (_selectTool && _selectedMany is { Count: > 1 } group && group.Contains(idx))
+        {
+            _selectedMany = group.Where(v => v >= 0 && v < _history.Count).ToList();
+            _dragManyOriginal = _selectedMany.Select(v => _history.Marks[v]).ToList();
+            _dragAnchor = local;
+            _dragLast = local;
+            _underDragMany = UnderDragBufferMany(_selectedMany);
+            _dragCanvas = _underDragMany is { } underMany ? (byte[])underMany.Clone() : null;
+            Root.CapturePointer(pointer);
+            DrawSelectionHandles();
+            return true;
+        }
+        // 点在组外的那一条上：这组让位给这一条（单选的待遇都在它身上）。
+        if (_selectTool && _selectedMany is not null) _selectedMany = null;
 
         _grab = mark.GrabAt(local, RotateHandle(mark), SlopInSource(MoveSlop));
         if (_grab == Grab.None) return false;
 
         // 按的是某一头的把手 ⇒ 钉住的那一点改到<b>对面</b>那头（模型算，界面不猜）：
         // 否则绕字块中心缩放会把左上角一起推出去，真机反馈就是"一缩放整行字和它的框都跑了"。
+        // 「首次选中」：这一按之前脚下这条还不是选中那条。选择工具点回当前这条＝不是首次
+        // （松手要能进文字编辑，与"点住即拖"同一待遇）；点中另一条＝首次（换人了）。
+        var fresh = _selectTool ? !(hadSelection && _selected == idx) : !hadSelection;
         _grabFresh = fresh;
         _selected = idx;
         _dragOriginal = _grab == Grab.Scale ? mark.WithScalePivotTowards(local) : mark;
@@ -116,6 +138,9 @@ public sealed partial class CaptureOverlayWindow
     private void DragTo(PixelPoint local)
     {
         _dragLast = local;
+        // 组拖动（P-288）走它自己那条每帧路径：底是"除这一组之外"算好的那一张，
+        // 与单条同口径（一次整块复制＋逐条重画），只是"那一条"换成"那一组"。
+        if (_dragManyOriginal is not null) { DragManyTo(local); return; }
         if (_dragOriginal is not { } original || _grab == Grab.None) return;
         var preview = original.DraggedBy(_dragAnchor, local, _grab);
         if (_dragCanvas is { } canvas && _underDrag is { } under
@@ -128,8 +153,7 @@ public sealed partial class CaptureOverlayWindow
             }
             catch (Exception ex)
             {
-                // 预览画不出来不当场说，用户就要到松手才发现这一改是坏的
-                ShowError(LocMessage.Of("capture.strip.resizeFailed", CaptureFailureException.ReasonOf(ex)));
+                ShowResizeFailed(ex);
                 return;
             }
             // 截图态的拖动底是整帧缓冲，逐事件上传会跟不上手：节流到 ~60fps，
@@ -181,6 +205,150 @@ public sealed partial class CaptureOverlayWindow
     }
 
     /// <summary>
+    /// 组拖动那张底：底图＋除这一组之外的全部标注（P-288，与 <see cref="UnderDragBuffer"/> 同一口径）：
+    /// 按下那一下算一次，之后每帧只做一次整块复制＋逐条重画。
+    /// </summary>
+    private byte[]? UnderDragBufferMany(IReadOnlyList<int> excluding)
+    {
+        if (_base is not { } basePixels) return null;
+        var skip = new HashSet<int>(excluding);
+        var rest = _history.Marks.Where((_, i) => !skip.Contains(i)).ToList();
+        try { return AnnotationPainter.Render(basePixels, _contentWidth, _contentHeight, rest); }
+        catch (Exception ex)
+        {
+            StarLog.Error("[CaptureOverlay] 组拖动底图准备失败", ex);
+            return null;
+        }
+    }
+
+    /// <summary>单条拖动（<see cref="DragTo"/>）与组拖动（<see cref="DragManyTo"/>）共用的那一句
+    /// "这一改画不出来"——键与取原因各只念一次，两条路共一颗宿主（CaptureNoticeWiring 钉的恰 1）。</summary>
+    private void ShowResizeFailed(Exception ex)
+    {
+        // 预览画不出来不当场说，用户就要到松手才发现这一改是坏的
+        ShowError(LocMessage.Of("capture.strip.resizeFailed", CaptureFailureException.ReasonOf(ex)));
+    }
+
+    /// <summary>组拖动每一帧（P-288）：一次整块复制＋逐条重画＋同一套 ~60fps 节流，
+    /// 与单条 <see cref="DragTo"/> 同一口径，只是预览那"一条"换成"一组"。</summary>
+    private void DragManyTo(PixelPoint local)
+    {
+        if (_selectedMany is not { Count: > 1 } many || _dragManyOriginal is not { } originals) return;
+        if (_underDragMany is { } under && _dragCanvas is { } canvas && _preview is { } previewBitmap)
+        {
+            Buffer.BlockCopy(under, 0, canvas, 0, under.Length);
+            try
+            {
+                for (var i = 0; i < originals.Count; i++)
+                    AnnotationPainter.Paint(canvas, _contentWidth, _contentHeight,
+                        originals[i].DraggedBy(_dragAnchor, local, Grab.Move));
+            }
+            catch (Exception ex)
+            {
+                ShowResizeFailed(ex);
+                return;
+            }
+            if (Environment.TickCount64 - _lastDragPaint >= 16)
+            {
+                _lastDragPaint = Environment.TickCount64;
+                using (var stream = previewBitmap.PixelBuffer.AsStream())
+                    stream.Write(canvas, 0, canvas.Length);
+                previewBitmap.Invalidate();
+            }
+        }
+        DrawSelectionHandles();
+    }
+
+    /// <summary>组拖动松手：整组一次落定（<see cref="InkDoc.ReplaceMany"/>，一步历史）。
+    /// 没真的动过就不制造一步空历史，这组选中也不丢。</summary>
+    private void EndDragMany()
+    {
+        var originals = _dragManyOriginal;
+        var indices = _selectedMany;
+        var anchor = _dragAnchor;
+        var last = _dragLast;
+        _dragManyOriginal = null;
+        _underDragMany = null;
+        _dragCanvas = null;
+        if (originals is not { } group || indices is not { Count: > 1 } many)
+        {
+            DrawSelectionHandles();
+            return;
+        }
+        var moved = false;
+        var pairs = new List<(int Index, Annotation Mark)>();
+        for (var i = 0; i < group.Count && i < many.Count; i++)
+        {
+            if (many[i] < 0 || many[i] >= _history.Count) continue;
+            var result = group[i].DraggedBy(anchor, last, Grab.Move);
+            if (result != group[i]) moved = true;
+            pairs.Add((many[i], result));
+        }
+        if (moved)
+        {
+            _history.ReplaceMany(pairs);
+            Rebake();
+        }
+        DrawSelectionHandles();
+    }
+
+    // ────────── 拖框批量选（P-288 建议一：选择工具亮着、这一按没落在任何标注上） ──────────
+
+    /// <summary>开始拖框：框记在标注坐标系里（起点＝这一按），随手的预览画在 LiveLayer。
+    /// 框<b>可以越出选区</b>——批次 PU 起标注本来就能画在外面，圈它的框自然也圈得到外面。</summary>
+    private void BeginBandDrag(PointInt32 physical, Pointer pointer)
+    {
+        _bandDragging = true;
+        _bandStart = ToLocal(physical);
+        _bandNow = _bandStart;
+        Root.CapturePointer(pointer);
+    }
+
+    /// <summary>拖框的当前矩形（标注坐标系，两角归一）。</summary>
+    private IntRect BandRect()
+        => CaptureGeometry.Normalize(_bandStart.X, _bandStart.Y, _bandNow.X, _bandNow.Y);
+
+    private void BandDragTo(PointInt32 physical)
+    {
+        if (!_bandDragging) return;
+        _bandNow = ToLocal(physical);
+        var band = BandRect();
+        var (left, top) = LocalToDip(new PixelPoint(band.X, band.Y));
+        var (right, bottom) = LocalToDip(new PixelPoint(band.Right, band.Bottom));
+        LiveLayer.Children.Clear();
+        LiveLayer.Children.Add(BarGlyphs.Out(InkDim, left, top, Math.Max(1, right - left), Math.Max(1, bottom - top)));
+    }
+
+    /// <summary>
+    /// 松开拖框：框碰到的标注全进这一组（<see cref="CaptureGeometry.Overlaps"/>——圈到就是，贴边扫过也算）。
+    /// 0 条＝丢选中；1 条＝塌成单选（把手、缩放、旋转这些单条待遇都在）；≥2 条＝一组，
+    /// 主选＝最上面那条（后画的盖在先画的上面），组待遇＝一起挪、一起删、方向键一起微调。
+    /// </summary>
+    private void EndBandDrag()
+    {
+        _bandDragging = false;
+        var band = BandRect();
+        var hits = new List<int>();
+        for (var i = 0; i < _history.Count; i++)
+            if (CaptureGeometry.Overlaps(band, _history.Marks[i].Bounds())) hits.Add(i);
+        if (hits.Count == 0)
+        {
+            DropSelection();
+            return;
+        }
+        if (hits.Count == 1)
+        {
+            _selected = hits[0];
+            _selectedMany = null;
+            DrawSelectionHandles();
+            return;
+        }
+        _selectedMany = hits;
+        _selected = hits[^1];               // 主选＝最上面那条
+        DrawSelectionHandles();
+    }
+
+    /// <summary>
     /// 选择框 + 把手。传 <paramref name="mark"/> 时画的是"正在拖的那一条"的新位置。
     /// <para>名字刻意与 <see cref="DrawSelection(IntRect)"/> 分开：那个画的是"框选出来的哪一块"，
     /// 这个画的是"选中的哪一条标注"，两件事共用一个名字迟早会有人调错。</para>
@@ -188,6 +356,15 @@ public sealed partial class CaptureOverlayWindow
     private void DrawSelectionHandles(Annotation? mark = null)
     {
         LiveLayer.Children.Clear();           // 先清再画：把手只有几颗，叠两层就会糊成一团黑方块
+        // 批量选的那一组（P-288 建议一）：只画逐条的界框＋带条数的那句说明。把手/✕ 一概不给——
+        // 缩放、旋转、改字是单条待遇，画在组上点不动，就是第二份事实。
+        if (mark is null && _selectedMany is { Count: > 1 } many)
+        {
+            DrawManySelectionBoxes((_dragManyOriginal is { } originals
+                ? originals.Select(original => original.DraggedBy(_dragAnchor, _dragLast, Grab.Move))
+                : many.Where(v => v >= 0 && v < _history.Count).Select(v => _history.Marks[v])).ToList());
+            return;
+        }
         mark ??= Selected;
         if (mark is null)
         {
@@ -217,7 +394,30 @@ public sealed partial class CaptureOverlayWindow
             TextDeleteButton.Visibility = Visibility.Visible;
         }
         else TextDeleteButton.Visibility = Visibility.Collapsed;
+        // 单选那句回来了：批量那句（SelectionTextMany）收起、静态键那颗现身——
+        // 两颗互斥显隐，一颗键一个主人（P-288：批量选的条数由代码贴，单选的说明仍是静态那颗）。
+        SelectionTextMany.Visibility = Visibility.Collapsed;
+        SelectionText.Visibility = Visibility.Visible;
         SelectionTip.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>批量选中的那一组画出来（P-288 建议一）：逐条界框（全用同一副实线）＋带条数的那句。
+    /// 拖动中传"这一帧"的那份（<see cref="DragManyTo"/> 每帧重算），静止时传历史里那份。</summary>
+    private void DrawManySelectionBoxes(IReadOnlyList<Annotation> marks)
+    {
+        foreach (var annotation in marks)
+        {
+            var box = annotation.Bounds();
+            var (left, top) = LocalToDip(new PixelPoint(box.X, box.Y));
+            var (right, bottom) = LocalToDip(new PixelPoint(box.Right, box.Bottom));
+            LiveLayer.Children.Add(BarGlyphs.Out(Ink, left, top, Math.Max(1, right - left), Math.Max(1, bottom - top)));
+        }
+        TextDeleteButton.Visibility = Visibility.Collapsed;
+        SelectionText.Visibility = Visibility.Collapsed;
+        SelectionTextMany.Visibility = Visibility.Visible;
+        SelectionTip.Visibility = Visibility.Visible;
+        LocText.SetMessage(SelectionTextMany, TextBlock.TextProperty,
+            LocMessage.Of("capture.selectionTipMany", marks.Count));
     }
 
     /// <summary>
@@ -231,6 +431,11 @@ public sealed partial class CaptureOverlayWindow
         if (_editingText && _editingIndex is not null) EndTextEditing(commit: false);
         _editingIndex = null;
         _selected = null;
+        // 批量选（P-288）：那组跟着一起丢——下标随历史移动，留着就指着别人；拖框进行中也一并收
+        _selectedMany = null;
+        _dragManyOriginal = null;
+        _underDragMany = null;
+        _bandDragging = false;
         _grab = Grab.None;
         _grabFresh = false;
         _dragOriginal = null;
@@ -255,9 +460,26 @@ public sealed partial class CaptureOverlayWindow
         DrawSelectionHandles();               // 没点中时它也负责把手与说明一起收掉
     }
 
-    /// <summary>删掉选中的那一条（Delete / Backspace）。算一步，撤销能拿回来。</summary>
+    /// <summary>删掉选中的那一条（Delete / Backspace）。算一步，撤销能拿回来。
+    /// 批量选中的一组（P-288）＝橡皮的口径：BeginErase/ApplyErase/EndErase，
+    /// 一次拖拭（这里换成一次按键）只算一步，撤销一按整组回来。</summary>
     private void DeleteSelected()
     {
+        if (_selectedMany is { Count: > 1 } many)
+        {
+            var removed = new HashSet<Annotation>();
+            foreach (var at in many)
+                if (at >= 0 && at < _history.Count) removed.Add(_history.Marks[at]);
+            if (removed.Count > 0)
+            {
+                _history.BeginErase();
+                _history.ApplyErase(removed);
+                _history.EndErase();
+            }
+            DropSelection();
+            Rebake();
+            return;
+        }
         if (_selected is not { } index) return;
         _history.RemoveAt(index);
         DropSelection();

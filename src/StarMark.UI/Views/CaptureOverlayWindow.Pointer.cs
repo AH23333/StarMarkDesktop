@@ -57,6 +57,17 @@ public sealed partial class CaptureOverlayWindow
             }
         }
 
+        // ── ①½ 选择工具亮着（P-288 建议一，学 Excalidraw 的显式选择）：这一按只做选择——
+        // 落在标注上＝抓住它（批量选中的一员＝挪整组），落在空白＝拖框圈一组。
+        // 框可以越出选区（批次 PU 起标注本来就能画在外面）；贴图态点空白也不再移动整张图——
+        // 想挪图先收起选择工具（再点它一下或 Esc），显式开关与隐性"点住即拖"并存、互不抢道。
+        if (_mode == CaptureMode.Toolbar && _selectTool)
+        {
+            if (_base is not null && TryBeginGrab(ToLocal(physical), e.Pointer)) return;
+            BeginBandDrag(physical, e.Pointer);
+            return;
+        }
+
         // ── ② 框内：没拿笔先问是不是抓已画的那条（点住就拖，一次成），拿笔就是落笔。
         if (_mode == CaptureMode.Toolbar && _base is not null && InsideSelection(physical))
         {
@@ -168,6 +179,18 @@ public sealed partial class CaptureOverlayWindow
         var physical = ToPhysical(point.Position.X, point.Position.Y);
 
         if (_erasing) { EraseTo(ToLocal(physical)); return; }
+        // 组拖动（P-288）：整组跟着手的每帧路径；拖框批量选同理——两条都在单条拖动之前问，
+        // 它们与 _dragOriginal 互斥（组的按下不走单条那一套缓冲）。
+        if (_dragManyOriginal is not null)
+        {
+            DragManyTo(ToLocal(physical));
+            return;
+        }
+        if (_bandDragging)
+        {
+            BandDragTo(physical);
+            return;
+        }
         if (_dragOriginal is not null)
         {
             DragTo(ToLocal(physical));
@@ -241,6 +264,19 @@ public sealed partial class CaptureOverlayWindow
         if (_erasing)
         {
             EndEraseStroke();
+            Root.ReleasePointerCapture(e.Pointer);
+            return;
+        }
+        // 组拖动松手＝整组一步落定（P-288）；拖框松手＝按框结算这组。都在单条那条链之前收。
+        if (_dragManyOriginal is not null)
+        {
+            EndDragMany();
+            Root.ReleasePointerCapture(e.Pointer);
+            return;
+        }
+        if (_bandDragging)
+        {
+            EndBandDrag();
             Root.ReleasePointerCapture(e.Pointer);
             return;
         }
@@ -384,13 +420,16 @@ public sealed partial class CaptureOverlayWindow
                 e.Handled = true;
                 // 贴图态 Esc 分两级：有选中的标注先丢选中（顺手改的取消不伤画面），再按才关这张——
                 // 关闭会连没烤出去的标注一起丢，一次误按全没是最贵的出口。
-                // 截图态同样两级（批次 PU）：拿着笔先收笔回到改框那一态，再按才取消整场。
+                // 截图态同样分级（批次 PU）：拿着笔先收笔回到改框那一态，再按才取消整场；
+                // 选择工具亮着（P-288）先收它，再按才轮到笔与整场——一次误按收掉一层，不跳底。
                 if (_pinned)
                 {
                     if (_selected is not null) DropSelection();
+                    else if (_selectTool) SetSelectTool(false);
                     else Close();
                 }
                 else if (Armed) SetTool(null);
+                else if (_selectTool) SetSelectTool(false);
                 else Settle(null);
                 break;
             case VirtualKey.Enter:

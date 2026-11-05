@@ -98,6 +98,27 @@ public sealed class InkDoc
     }
 
     /// <summary>
+    /// 把好几条一次换掉——批量选中一组之后挪动 / 方向键微调的落定（P-288 的选择工具）。
+    /// <para><b>只算一步</b>：逐条调 <see cref="ReplaceAt"/> 会把"挪一组"拆成 N 步历史，
+    /// 撤销一按只收回一条、半组留在原地——"擦一次只撤一次"（<see cref="EndErase"/>）是同一条规矩。</para>
+    /// <para>下标越界（撤销之后旧下标失效是常态）逐条静默跳过；一条都没换成则不入栈——
+    /// 与 <see cref="Clear"/> 同一口径：一次空操作不该变成一步空历史。</para>
+    /// </summary>
+    public void ReplaceMany(IReadOnlyList<(int Index, Annotation Mark)> pairs)
+    {
+        if (pairs.Count == 0) return;
+        var next = Marks.ToList();
+        var changed = false;
+        foreach (var (index, mark) in pairs)
+        {
+            if (index < 0 || index >= next.Count) continue;
+            next[index] = mark;
+            changed = true;
+        }
+        if (changed) Push(next);
+    }
+
+    /// <summary>
     /// 把所有标注整体平移（改选区位置/大小之后，标注要跟着画面走，不能留在旧坐标上跑偏）。
     /// <para><b>刻意不制造一步历史</b>：改的是"取景框"，不是任何一条标注——挪一下框就该能撤销的话，
     /// 撤销栈里根本没有存框的几何，弹回去的只有标注，那会是"标注在、框不在"的半吊子状态。

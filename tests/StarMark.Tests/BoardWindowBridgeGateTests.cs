@@ -35,8 +35,9 @@ public sealed class BoardWindowBridgeGateTests
     public void BridgeJsSpeaksTheWiredSubsetOfTheProtocol()
     {
         var js = ReadRepo(BridgeJs);
-        // 页面侧只会喊它真正实现了的那七颗（片68 补上 open.external 的发话人；
-        // 片206＝P-285 重做再补引擎主菜单那一组的四颗索取）；剩下那颗 paste.query ⛔ 假喊（宿主回 not-wired）
+        // 页面侧只会喊它真正实现了的那九颗（片68 补上 open.external 的发话人；
+        // 片206＝P-285 重做再补引擎主菜单那一组的四颗索取；片207 又补白条退役后那颗 folder.request）；
+        // 剩下那颗 paste.query ⛔ 假喊（宿主回 not-wired）
         Assert.Equal(1, Count(js, "postIn(\"bridge.ready\""));
         Assert.Equal(1, Count(js, "postIn(\"export.bytes\""));
         Assert.Equal(1, Count(js, "postIn(\"open.external\""));
@@ -46,6 +47,8 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Equal(1, Count(js, "postIn(\"pin.request\", {})"));
         Assert.Equal(1, Count(js, "postIn(\"scale.request\", {})"));
         Assert.Equal(1, Count(js, "postIn(\"background.request\", {})"));
+        // ── 片207：白条退役，那颗「打开所在文件夹」的出口也走 menuAction 那颗分派器 ──
+        Assert.Equal(1, Count(js, "postIn(\"folder.request\", {})"));
         // 片56：那句 nack 走的是 send（一颗信封形状⛔ 走 postIn 那颗 args 包装），所以它单独数一遍
         Assert.Equal(1, Count(js, "cmd: \"bridge.reply\""));
         // 出向八颗：页面侧逐颗处理（case 逐颗一处）
@@ -129,7 +132,7 @@ public sealed class BoardWindowBridgeGateTests
         Assert.DoesNotContain("string[] InboundCommands", cs, StringComparison.Ordinal);
         Assert.DoesNotContain("string[] OutboundEvents", cs, StringComparison.Ordinal);
         Assert.DoesNotContain("InboundFields =", cs, StringComparison.Ordinal);
-        // 已放行的行为分支各在（片206 起九颗）；未接线的那颗（paste.query）走 default 那一格——它<b>只留一行痕</b>（片57＝P-245 撤掉那句回话之后）
+        // 已放行的行为分支各在（片207 起十颗）；未接线的那颗（paste.query）走 default 那一格——它<b>只留一行痕</b>（片57＝P-245 撤掉那句回话之后）
         Assert.Contains("case \"bridge.ready\"", cs, StringComparison.Ordinal);
         Assert.Contains("case \"open.external\"", cs, StringComparison.Ordinal);
         Assert.Contains("case \"export.bytes\"", cs, StringComparison.Ordinal);
@@ -139,6 +142,8 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Contains("case \"pin.request\"", cs, StringComparison.Ordinal);
         Assert.Contains("case \"scale.request\"", cs, StringComparison.Ordinal);
         Assert.Contains("case \"background.request\"", cs, StringComparison.Ordinal);
+        // 片207＝P-285 残余：白条退役后那颗「打开所在文件夹」的出口也接一颗 case
+        Assert.Contains("case \"folder.request\"", cs, StringComparison.Ordinal);
         // ⚠ 这一格读的是<b>抹掉注释后</b>的代码：那颗标签在类文档里也出现一次（讲的就是这一族），
         // 按原文数会让"撤掉那一行痕"这一臂照旧绿＝名册 496 那一族（要改的是问法，⛔ 放宽判据）。
         Assert.Contains("not-wired", SourceGate.Code(cs), StringComparison.Ordinal);
@@ -971,20 +976,22 @@ public sealed class BoardWindowBridgeGateTests
             < bytes.IndexOf("ReportExport(\"boards.exportSavedBody\", target);", StringComparison.Ordinal),
             "那句成功话排在写盘之前＝还没落盘就告诉用户它落好了");
 
-        // ④ 右上角那一行（片206＝P-285 重做之后那一块上剩的都⛔ 是动作）：那颗出口只认"真落盘的那一颗"，
-        // 而五个动作的字与亮态归 menu.set 那一推（PushMenuLabels——正件由 ⑧ 与片151 那档钉）
-        var bar = SourceGate.MethodBody(code, "void PasteBar");
-        Assert.Contains("Word(\"boards.openFolderAction\")", bar, StringComparison.Ordinal);
-        Assert.Contains("_barFolderButton.IsEnabled = _exportPath is not null;", bar, StringComparison.Ordinal);
-        Assert.Contains("_exportPath ?? string.Empty", bar, StringComparison.Ordinal);   // 那颗路径是实参，⛔ 拼成品句
-        Assert.Equal(0, Count(bar, "Locale.T("));                                        // 只许念表里的键
-        // 那一行⛔ 去动那块面板：面板可能正挂着"这一扇已停止保存"，一句好消息没资格把它顶掉（片39 那一族）
-        Assert.DoesNotContain("ShowNotice", bar, StringComparison.Ordinal);
-        // 那一行的在场资格：换语言那一拍两处都重贴（⛔ 一颗重贴一颗冻着＝P-175 那一族的第三种脸）
+        // ④ 那颗「打开所在文件夹」与那句落点（片207＝P-285 残余之后都住在引擎主菜单那一组里）：
+        // 那颗出口只认"真落盘的那一颗"（folderEnabled 由 _exportPath 那一问给），
+        // 而六个动作的字与亮态归 menu.set 那一推（PushMenuLabels——正件由 ⑧ 与片151 那档钉）
+        var menu = SourceGate.MethodBody(code, "void PushMenuLabels");
+        Assert.Contains("Word(\"boards.openFolderAction\")", menu, StringComparison.Ordinal);
+        Assert.Contains("JsonString(\"folderEnabled\") + \":\" + (_exportPath is not null ? \"true\" : \"false\")",
+            menu, StringComparison.Ordinal);
+        Assert.Contains("_exportPath ?? string.Empty", menu, StringComparison.Ordinal);   // 那颗路径是实参，⛔ 拼成品句
+        Assert.Equal(0, Count(menu, "Locale.T("));                                        // 只许念表里的键
+        // 那一组⛔ 去动那块面板：面板可能正挂着"这一扇已停止保存"，一句好消息没资格把它顶掉（片39 那一族）
+        Assert.DoesNotContain("ShowNotice", menu, StringComparison.Ordinal);
+        // 那一组的在场资格：换语言那一拍两处都重贴（⛔ 一颗重贴一颗冻着＝P-175 那一族的第三种脸）
         var locale = SourceGate.MethodBody(code, "void OnLocaleChanged");
         Assert.Contains("PasteNotice();", locale, StringComparison.Ordinal);
         Assert.Contains("PasteBar();", locale, StringComparison.Ordinal);
-        // 片83＝那一块上有<b>两行</b>读数（那句落点＋「未显示的外部内容：N」・账本 P-255）：第三颗重贴漏掉＝
+        // 片83＝那一组里有<b>两行</b>读数（那句落点＋「未显示的外部内容：N」・账本 P-255）：第三颗重贴漏掉＝
         // 换语言那一刻那一行还冻在旧语言里念着一颗数，而这一族的坏法形状证人从来抓不到（只有真机看得见）。
         Assert.Contains("PasteHiddenEmbedNotice();", locale, StringComparison.Ordinal);
         // 那一列数的唯一写处＋两颗调用点（开场与页面交回那一拍）：多一处＝第二个地方自己解一遍档
@@ -993,8 +1000,10 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Equal(1, Count(code, "_hiddenEmbeddables = counted;"));
         Assert.Contains("RememberHiddenEmbeddables(sceneBytes);", code, StringComparison.Ordinal);   // 新板那份＝一颗也读不出
         Assert.Contains("RememberHiddenEmbeddables(bytes);", code, StringComparison.Ordinal);         // 写闸开不开都说得出口
-        // 那一行的在场资格只由那颗数定（⛔ 第二个主人＝片54 那句"在场资格只有一颗字段"的同一条口径）
-        Assert.Equal(1, Count(code, "_barHiddenEmbeds.Visibility"));
+        // 那行读数的在场资格只由那颗数定（片207 起由那一推里的 hidden 键递：0／读不懂＝空串＝整行收起，
+        // ⛔ 第二个主人＝片54 那句"在场资格只有一颗字段"的同一条口径）
+        Assert.Contains("JsonString(count > 0 ? Phrase(\"boards.embedHiddenBody\", count) : string.Empty)",
+            menu, StringComparison.Ordinal);
         // ⛔ 它住进那块面板：面板一位（<c>_noticeKey</c>），一句中性说明没资格把「这一扇已停止保存」顶掉（片39 那一族）
         Assert.DoesNotContain("ShowNotice",
             SourceGate.MethodBody(code, "void PasteHiddenEmbedNotice"), StringComparison.Ordinal);
@@ -1102,26 +1111,32 @@ public sealed class BoardWindowBridgeGateTests
             menu, StringComparison.Ordinal);
     }
 
-    /// <summary>片206＝P-285 重做：右上角那一排宿主自绘的动作按钮整排退役（片204 量到它压在引擎工具条上：
-    /// 遮住、关不掉、挪不开；收进「⋯」只是把遮挡折起来），五个动作搬进<b>引擎自己的主菜单</b>。九格一起钉：
+    /// <summary>片206＝P-285 重做＋<b>片207＝P-285 残余</b>：右上角那一排宿主自绘的动作按钮（片206）与那一行
+    /// 白条（片207：那颗「打开所在文件夹」出口＋两行读数）先后整块退役，搬进<b>引擎自己的主菜单</b>。
+    /// 十格一起钉：
     /// <para>① 旧形状一颗不许留：那一排（barRow）、那颗「⋯」收合钮（barMenuButton）、五颗自绘按钮
-    /// （_barPngButton／_barSvgButton／_barPinButton／_barScaleButton／_barBackgroundButton）整族清零——
+    /// （_barPngButton／_barSvgButton／_barPinButton／_barScaleButton／_barBackgroundButton）与
+    /// 白条那四颗字段（_bar／_barFolderButton／_barStatus／_barHiddenEmbeds）整族清零——
     /// 留一颗＝那一颗还压在引擎自己的工具条上；</para>
-    /// <para>② 那一块上剩的都⛔ 是动作：那颗出口（「打开所在文件夹」）＋两行读数直接进 _bar（恰三颗孩子，顺序钉死）；</para>
+    /// <para>② 舞台上只剩两块表面（引擎那块画布＋_notice 那块面板），stage 恰两颗孩子；</para>
     /// <para>③ 注入幂等由那颗标记属性查重，而挂进来那一拍由 MutationObserver 钉 document.body 钉住
     /// （引擎那颗菜单按需挂进应用 DOM，⛔ 走 body portal——挂进来那一刻注入，组被引擎拆掉也随下一挂回来）；</para>
-    /// <para>④ 五颗动作的顺序由那一颗数组钉死：png → pin → svg → scale → background（「贴到桌面」与「导出 PNG」
-    /// 是同一发的两种下落要挨着，中间插进 SVG 会让人以为它也产一张档）；</para>
+    /// <para>④ 六颗动作的顺序由那一颗数组钉死：png → pin → svg → scale → background → folder（「贴到桌面」与
+    /// 「导出 PNG」是同一发的两种下落要挨着，中间插进 SVG 会让人以为它也产一张档；那颗出口垫底＝
+    /// 它说的是"上一次落的东西在哪儿"而⛔ "下一张怎么出"）；</para>
     /// <para>⑤ 注入项点击后 postIn 对应那一颗索取，再替用户把扳手钮合上（外来节点关不掉宿主菜单）；</para>
     /// <para>⑥ 那一组的标题念的是语言中立的 StarMark（⛔ 表里的键）；</para>
     /// <para>⑦ busy 那一闩只压三颗动作（两颗导出＋贴桌面：连按＝两发抢同一刻的落点），两颗旋钮照旧点得动
-    /// （挑档是宿主自己的事，⛔ 跟着"这一发正在跑"一起关）；</para>
+    /// （挑档是宿主自己的事，⛔ 跟着"这一发正在跑"一起关）；那颗出口只认 folderEnabled；</para>
     /// <para>⑧ 页面那一侧 <c>case "menu.set"</c> 恰一处（那一推唯一的读者）；</para>
-    /// <para>⑨ 表里⛔ 为那颗「⋯」长出键族（那一排退役＝那颗字符跟着退役）。</para>
-    /// <para>⚠ 深浅色由引擎自己的模板给：宿主侧那一排钉死三色的配方整排退役＝<c>BoardWordGateTests</c>
-    /// 那颗色尺同批各删六颗（18→12／13→7／13→7），⛔ 在这里再数一遍颜色。</para></summary>
+    /// <para>⑨ 表里⛔ 为那颗「⋯」长出键族（那一排退役＝那颗字符跟着退役）；</para>
+    /// <para>⑩ 注入项照引擎自己那副长法（双类＋<c>__text</c> 内芯——只挂 dropdown-menu-item 而缺
+    /// -base＝字色／字号全丢＝黑字小号那张脸），而两行读数是只读行（div 而⛔ button，免悬停）；
+    /// 宿主侧那颗 <c>folder.request</c> 的 case 接 OpenExportedFolderAsync。</para>
+    /// <para>⚠ 深浅色由引擎自己的模板给：宿主侧钉死三色的配方整排退役＝<c>BoardWordGateTests</c>
+    /// 那颗色尺同批各删三颗（12→9／7→6／7→6），⛔ 在这里再数一遍颜色。</para></summary>
     [Fact]
-    public void TheEngineMainMenuCarriesTheFiveActionsInstead()
+    public void TheEngineMainMenuCarriesTheSixActionsInstead()
     {
         var raw = ReadRepo(WindowCs);
         var code = SourceGate.Code(raw);
@@ -1134,22 +1149,23 @@ public sealed class BoardWindowBridgeGateTests
         Assert.Equal(0, Count(code, "_barPinButton"));
         Assert.Equal(0, Count(code, "_barScaleButton"));
         Assert.Equal(0, Count(code, "_barBackgroundButton"));
+        Assert.Equal(0, Count(code, "_bar"));
+        Assert.Equal(0, Count(code, "_barFolderButton"));
+        Assert.Equal(0, Count(code, "_barStatus"));
+        Assert.Equal(0, Count(code, "_barHiddenEmbeds"));
         Assert.Equal(0, Count(stage, "Content = \"⋯\","));
-        // ② 那一块上剩的都⛔ 是动作：恰三颗孩子（那颗出口＋两行读数），顺序也钉死
-        Assert.Equal(3, Count(stage, "_bar.Children.Add("));
-        Assert.True(stage.IndexOf("_bar.Children.Add(_barFolderButton);", StringComparison.Ordinal)
-                    < stage.IndexOf("_bar.Children.Add(_barStatus);", StringComparison.Ordinal),
-            "那颗出口排到了那行读数之后＝可点的那颗被一行字挡住");
-        Assert.True(stage.IndexOf("_bar.Children.Add(_barStatus);", StringComparison.Ordinal)
-                    < stage.IndexOf("_bar.Children.Add(_barHiddenEmbeds);", StringComparison.Ordinal),
-            "两行读数换了位置＝那句落点与那句「未显示的外部内容」各自的主人对不上");
+        // ② 舞台上只剩两块表面：引擎那块画布＋_notice 那块面板（白条退役＝第三块表面清零）
+        Assert.Equal(2, Count(stage, "stage.Children.Add("));
+        Assert.True(stage.IndexOf("stage.Children.Add(_web);", StringComparison.Ordinal)
+                    < stage.IndexOf("stage.Children.Add(_notice);", StringComparison.Ordinal),
+            "画布排到面板之后＝那块浮层把整块画布挡在底下");
         // ③ 幂等注入：标记属性查重＋观察器钉 document.body（引擎那颗菜单按需挂进应用 DOM）
         var js = ReadRepo(BridgeJs);
         Assert.Contains("var MENU_GROUP_MARK = \"data-starmark-menu\";", js, StringComparison.Ordinal);
         Assert.Contains(".observe(document.body, { childList: true, subtree: true });", js, StringComparison.Ordinal);
         Assert.Contains(".dropdown-menu-container", js, StringComparison.Ordinal);
-        // ④ 五颗动作的顺序由那一颗数组钉死（「贴到桌面」紧跟「导出 PNG」）
-        Assert.Contains("var MENU_ITEM_ORDER = [\"png\", \"pin\", \"svg\", \"scale\", \"background\"];",
+        // ④ 六颗动作的顺序由那一颗数组钉死（那颗出口垫底）
+        Assert.Contains("var MENU_ITEM_ORDER = [\"png\", \"pin\", \"svg\", \"scale\", \"background\", \"folder\"];",
             js, StringComparison.Ordinal);
         // ⑤ 注入项点击后：postIn 对应那一颗索取＋替用户把扳手钮合上（外来节点关不掉宿主菜单）
         Assert.Contains("menuAction(key);", js, StringComparison.Ordinal);
@@ -1158,14 +1174,24 @@ public sealed class BoardWindowBridgeGateTests
             js, StringComparison.Ordinal);
         // ⑥ 那一组的标题念的是语言中立的 StarMark（⛔ 表里的键）
         Assert.Contains("title.textContent = \"StarMark\";", js, StringComparison.Ordinal);
-        // ⑦ busy 那一闩只压三颗动作，两颗旋钮照旧点得动
+        // ⑦ busy 那一闩只压三颗动作，两颗旋钮照旧点得动；那颗出口只认 folderEnabled
         Assert.Contains("menuState.busy && (key === \"png\" || key === \"svg\" || key === \"pin\")",
             js, StringComparison.Ordinal);
+        Assert.Contains("key === \"folder\" && !menuState.folderEnabled", js, StringComparison.Ordinal);
         // ⑧ 页面那一侧那一颗 case 恰一处
         Assert.Equal(1, Count(js, "case \"menu.set\":"));
         // ⑨ 表里⛔ 为那颗「⋯」长出键族
         var table = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.Abstractions/I18n/UiStrings.cs"));
         Assert.Equal(0, Count(table, "⋯"));
+        // ⑩ 注入项照引擎那副长法（双类＋__text 内芯），两行读数是只读行；宿主侧那颗 case 接开目录那一手
+        Assert.Contains("item.className = \"dropdown-menu-item dropdown-menu-item-base\";", js, StringComparison.Ordinal);
+        Assert.Contains("text.className = \"dropdown-menu-item__text\";", js, StringComparison.Ordinal);
+        Assert.Contains("var MENU_INFO_ORDER = [\"status\", \"hidden\"];", js, StringComparison.Ordinal);
+        Assert.Contains("function buildInfoRow(key)", js, StringComparison.Ordinal);
+        Assert.Contains("row.className = \"dropdown-menu-item-base\";", js, StringComparison.Ordinal);
+        var inbound = SourceGate.MethodBody(code, "void OnWebMessageReceived");
+        Assert.Contains("case \"folder.request\":", inbound, StringComparison.Ordinal);
+        Assert.Contains("_ = OpenExportedFolderAsync();", inbound, StringComparison.Ordinal);
     }
 
     // ────────── 片56：那一发导出问出去之后，两条下落都得有主人（P-244） ──────────
