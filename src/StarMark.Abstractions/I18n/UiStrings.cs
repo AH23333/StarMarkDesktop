@@ -139,11 +139,12 @@ public static class UiStrings
             "搜索本地文件 / Star / 书签… 支持 ext: size: dm: folder:  (↑↓ 选择 · Enter 打开 · Ctrl+Enter 位置)",
             "Search local files / Stars / bookmarks… supports ext: size: dm: folder:  (↑↓ select · Enter open · Ctrl+Enter location)", "ローカルファイル / Star / ブックマークを検索… ext: size: dm: folder: に対応（↑↓ 選択 · Enter 開く · Ctrl+Enter 場所）"),
         new Entry("sort.recent", "最近", "Recent", "最近"),
-        new Entry("sort.starred", "Star 最近推送", "Star · latest push", "Star · 最新の push 順"),
-        // 这一句是「档名说的排序键」与「数据里真正的排序键」之间唯一的现场解释（P-6），
-        // 所以两列都必须说出 push：只翻档名、把这句留在中文，英文界面就只剩一个看不懂的词。
-        new Entry("sort.starredTip", "按仓库最后一次 push 排（不是“我点 Star 的时间”——那个值 API 默认不回传）",
-            "Sorted by the repo's last push — not when you starred it (the API doesn't return that by default)", "リポジトリ最後の push 順（「Star を押した時刻」ではありません——この値は API が既定で返しません）"),
+        new Entry("sort.starred", "最近 Star", "Recently starred", "最近の Star 順"),
+        // 「档名说的排序键」与「数据里真正的排序键」必须一起走（P-6A 收口）：starred_at 真值
+        // 已由 star+json 信封取回（客户端请求级 Accept 讲价），这一格说回「最近 Star」——
+        // 哪天数据腿退化回 push 时间，GitHubTruthInLabelingGateTests 当场红。
+        new Entry("sort.starredTip", "按你在 GitHub 点 Star 的时间排（star+json 信封里的真 starred_at）",
+            "Sorted by when you starred each repo on GitHub", "GitHub で Star を押した時刻順"),
         new Entry("sort.collected", "最近收藏", "Recently collected", "最近ブックマーク"),
         new Entry("sort.stars", "Stars 数", "Star count", "Stars 数"),
         new Entry("sort.name", "名称", "Name", "名前"),
@@ -152,6 +153,7 @@ public static class UiStrings
         new Entry("source.starTip", "Star", "Star", "Star"),
         new Entry("source.bookmarkTip", "收藏夹", "Bookmarks", "ブックマーク"),
         new Entry("source.fileTip", "本地文件（需先在设置开启本地磁盘搜索）", "Local files (turn on local disk search in Settings first)", "ローカルファイル（先に設定でローカルディスク検索を有効にする必要があります）"),
+        new Entry("source.clipboardTip", "剪贴板历史", "Clipboard history", "クリップボード履歴"),
 
         // ===== 搜索页与搜索组件那一族（批次 WI-67 片9b·P-188 第五刀）=====
         // 空态那几句从前由 VM 当场拼成中文串；现在交「键＋实参」，命中数与关键词都留在槽里。

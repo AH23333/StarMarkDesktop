@@ -48,7 +48,8 @@ public sealed class GitHubClientTests
     public async Task Success_StoresEtagAndParsesItems()
     {
         const string etag = "\"etag-new\"";
-        var json = "[{\"id\":1,\"full_name\":\"owner/repo\",\"language\":\"C#\",\"stargazers_count\":42}]";
+        // P-6A：/user/starred 假桩一律用 star+json 信封形（{"starred_at":…,"repo":{…}}）。
+        var json = "[{\"starred_at\":\"2024-05-01T12:00:00Z\",\"repo\":{\"id\":1,\"full_name\":\"owner/repo\",\"language\":\"C#\",\"stargazers_count\":42}}]";
         var handler = new ScriptedHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Headers = { ETag = new EntityTagHeaderValue(etag) },
@@ -63,6 +64,7 @@ public sealed class GitHubClientTests
 
         Assert.Single(all);
         Assert.Equal("owner/repo", all[0].FullName);
+        Assert.Equal("2024-05-01T12:00:00Z", all[0].StarredAtRaw);   // P-6A：信封解开、真值盖进了模型
         Assert.Equal(etag, client.CachedETag); // 首页 ETag 已刷新
     }
 
@@ -154,11 +156,13 @@ public sealed class GitHubClientTests
 
     private static string RepoArray(int count, int idOffset)
     {
+        // P-6A：假桩与真实 Accept 讲价结果同形——star+json 信封（starred_at＋内嵌 repo）。
         var sb = new StringBuilder("[");
         for (int i = 0; i < count; i++)
         {
             if (i > 0) sb.Append(',');
-            sb.Append("{\"id\":").Append(idOffset + i).Append(",\"full_name\":\"o/r").Append(idOffset + i).Append("\"}");
+            sb.Append("{\"starred_at\":\"2024-05-01T12:00:00Z\",\"repo\":{\"id\":").Append(idOffset + i)
+              .Append(",\"full_name\":\"o/r").Append(idOffset + i).Append("\"}}");
         }
         return sb.Append(']').ToString();
     }
@@ -288,6 +292,57 @@ public sealed class GitHubClientTests
         await client.GetStarredPageAsync(1, CancellationToken.None);
 
         Assert.Equal(expectedPerPage, sent);
+    }
+
+    // ---- 片214·P-6A：star+json 信封（starred_at 真值）的请求腿与解析腿 ----
+
+    [Fact]
+    public async Task GetStarredPageAsync_SendsStarPlusJsonAccept_ExactlyOncePerRequest()
+    {
+        // starred_at 真值靠请求级 Accept 讲价，外发头恰为 star+json 这一颗——ctor 补进
+        // DefaultRequestHeaders 的 vnd.github+json 只在请求缺席 Accept 时才合并进来；
+        // 若哪天两组被合并、star+json 被挤到第二位，GitHub 的内容协商就可能退回裸 repo 数组，
+        // 这颗断言就是为那种合并病准备的（外发现场由 handler 作证，不是推断）。
+        string? accept = null;
+        var handler = new ScriptedHandler(req =>
+        {
+            accept = string.Join(", ", req.Headers.Accept.Select(h => h.MediaType));
+            return OkJson("[]");
+        });
+        using var client = new GitHubClient(ConfiguredOptions(), new HttpClient(handler));
+
+        await client.GetStarredPageAsync(1, CancellationToken.None);
+
+        Assert.Equal("application/vnd.github.star+json", accept);
+    }
+
+    [Fact]
+    public async Task GetStarredPageAsync_ParsesEnvelope_AndStampsStarredAtRaw()
+    {
+        const string starredAt = "2026-02-03T04:05:06Z";
+        var json = $"[{{\"starred_at\":\"{starredAt}\",\"repo\":{{\"id\":7,\"full_name\":\"o/r7\"}}}}]";
+        var handler = new ScriptedHandler(_ => OkJson(json));
+        using var client = new GitHubClient(ConfiguredOptions(), new HttpClient(handler));
+
+        var page = await client.GetStarredPageAsync(1, CancellationToken.None);
+
+        Assert.Single(page);
+        Assert.Equal("o/r7", page[0].FullName);
+        Assert.Equal(starredAt, page[0].StarredAtRaw);
+    }
+
+    [Fact]
+    public async Task GetStarredPageAsync_EnvelopeWithoutRepo_ThrowsLoudly()
+    {
+        // 响应形状与 Accept 不符（中间盒剥头、GitHub 退回裸 repo 数组）→ 抛而不是静默吞成"少一批"：
+        // 裸数组解进信封是 Repo=null，必须当场炸给界面。
+        var json = "[{\"id\":1,\"full_name\":\"owner/repo\"}]";
+        var handler = new ScriptedHandler(_ => OkJson(json));
+        using var client = new GitHubClient(ConfiguredOptions(), new HttpClient(handler));
+
+        var ex = await Assert.ThrowsAsync<GitHubApiException>(
+            () => client.GetStarredPageAsync(1, CancellationToken.None));
+        Assert.Equal(GitHubErrorKind.Unknown, ex.Kind);
     }
 
     // ---- 片212·P-23：注入 HttpClient 的所有权与头的幂等 ----

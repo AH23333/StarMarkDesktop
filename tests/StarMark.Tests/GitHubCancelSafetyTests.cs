@@ -85,8 +85,9 @@ public sealed class GitHubCancelSafetyTests : IDisposable
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized));
 
             var count = _lastPage == page ? _perPage - 1 : _perPage;
+            // P-6A：假桩与真实 Accept 讲价结果同形——star+json 信封（starred_at＋内嵌 repo）。
             var json = "[" + string.Join(",", Enumerable.Range(0, count)
-                .Select(i => $$"""{"id":{{page * 100000 + i}},"full_name":"o/r{{page}}_{{i}}"}""")) + "]";
+                .Select(i => $$$"""{"starred_at":"2024-05-01T12:00:00Z","repo":{"id":{{{page * 100000 + i}}},"full_name":"o/r{{{page}}}_{{{i}}}"}}""")) + "]";
             var resp = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json"),

@@ -402,6 +402,14 @@ public sealed class TodoWidgetViewModel : ObservableObject
         snapshot.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         // 撤销删除 = 条目回到库中 → 同一事务里记「新增」（绿）。#51。
         await _repo!.UpsertLocalItemAsync(snapshot, CancellationToken.None, ActivityKind.ItemAdd);
+        // P-7（片210 拍 A）：撤销要忠实回挂。重插只写 items 行（标签词仅拼进 search_text），
+        // item_tags 挂接已随删除 CASCADE 走了、pinned 也不在 INSERT 列里；
+        // 真实行 id 由 RETURNING 盖回了 snapshot.Id，这里按它把快照记着的标签与置顶挂回新行。
+        if (snapshot.Tags.Count > 0)
+            foreach (var tag in snapshot.Tags)
+                await _repo.AddTagAsync(snapshot.Id, tag, CancellationToken.None);
+        if (snapshot.Pinned)
+            await _repo.SetPinnedAsync(snapshot.Id, true, CancellationToken.None);
         await LoadAsync();
     });
 

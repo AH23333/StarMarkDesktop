@@ -43,8 +43,9 @@ public sealed partial class ItemRepository
             "recent" => $"i.updated_at DESC, {tieBreak}",
             // 最近 Star：GitHubStar 用 extra_json 的 starredAt（无则退回 updated_at）。
             "starred" => $"COALESCE(CAST(json_extract({ExtraJsonGuard.Safe("i.extra_json")}, '$.StarredAt') AS INTEGER), i.updated_at) DESC, {tieBreak}",
-            // 最近收藏：条目入库时间。
-            "collected" => $"i.created_at DESC, {tieBreak}",
+            // 最近收藏：入库时刻（P-34B 改读 synced_at 首见，conflict 臂不再刷；空则退 created_at，
+            // 与浏览模式 ItemRepository.Items 同口径）。
+            "collected" => $"COALESCE(i.synced_at, i.created_at) DESC, {tieBreak}",
             _ => tieBreak,
         };
         // 语言闸门只约束 GitHubStar：LanguageDetector.EnsureLanguage 会给任意来源（含本地文件）

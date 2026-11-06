@@ -600,21 +600,47 @@ public sealed class ItemRepositoryTests : IDisposable
     // ===== 批次 AZ：浏览模式 GetAllAsync 排序分支 / 语言闸门回归 =====
 
     [Fact]
-    public async Task GetAllAsync_SortCollected_OrdersByCreatedAtDesc()
+    public async Task GetAllAsync_SortCollected_OrdersBySyncedAtDesc()
     {
         // AZ-1：主窗工具栏「最近收藏」经 BrowseFilter.Sort="collected" 直达 GetAllAsync，
-        // 旧 switch 只有 stars/name/recent → 落 default 变成「最近更新」。用 created/updated 反向
-        // 排列钉死：collected 必须按 created_at DESC，而非 updated_at DESC。
+        // 旧 switch 只有 stars/name/recent → 落 default 变成「最近更新」。
+        // P-34B（片210 拍板）：「最近收藏」＝入库时刻——collected 改读 synced_at（首见），
+        // 与 created_at/updated_at 反向排列钉死；不落 synced_at 的条目（本地/老行）退 created_at 兜底。
         var repo = new ItemRepository(_factory);
         await repo.UpsertAsync(new[]
         {
-            new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "c1", Title = "早收藏", CreatedAt = 100, UpdatedAt = 300 },
-            new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "c2", Title = "中收藏", CreatedAt = 200, UpdatedAt = 200 },
-            new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "c3", Title = "晚收藏", CreatedAt = 300, UpdatedAt = 100 },
+            new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "c1", Title = "早收藏", CreatedAt = 100, UpdatedAt = 300, SyncedAt = 100 },
+            new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "c2", Title = "中收藏", CreatedAt = 200, UpdatedAt = 200, SyncedAt = 200 },
+            new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "c3", Title = "晚收藏", CreatedAt = 300, UpdatedAt = 100, SyncedAt = 300 },
+            new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "c4", Title = "无同步老行", CreatedAt = 150, UpdatedAt = 150 },
         }, CancellationToken.None);
 
         var items = await repo.GetAllAsync(new BrowseFilter { Sort = "collected", Limit = 10 }, CancellationToken.None);
-        Assert.Equal(new[] { "晚收藏", "中收藏", "早收藏" }, items.Select(i => i.Title).ToArray());
+        Assert.Equal(new[] { "晚收藏", "中收藏", "无同步老行", "早收藏" }, items.Select(i => i.Title).ToArray());
+    }
+
+    [Fact]
+    public async Task UpsertAsync_ReSync_DoesNotBumpSyncedAt()
+    {
+        // P-34B 的承重腿：synced_at＝入库时刻（首见）。upsert 的 conflict 臂若照旧刷
+        // excluded.synced_at，每轮全量重拉会把全库刷成同一拍——「最近收藏」排序与「新增趋势」
+        // 随之塌掉（片210 拍板改读 synced_at，读码坐实这一臂必须一并收掉）。updated_at 照旧刷新。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "keep", Title = "首见", CreatedAt = 100, UpdatedAt = 100, SyncedAt = 100 },
+        }, CancellationToken.None);
+
+        // 下一轮全量同步：同一条目带新 synced_at 再来（MapToItem 每轮写 now）——首见拍不得被顶掉。
+        await repo.UpsertAsync(new[]
+        {
+            new Item { Type = ItemType.Bookmark, Source = "test", SourceId = "keep", Title = "首见", CreatedAt = 100, UpdatedAt = 500, SyncedAt = 999 },
+        }, CancellationToken.None);
+
+        var items = await repo.GetAllAsync(new BrowseFilter { Limit = 10 }, CancellationToken.None);
+        var kept = Assert.Single(items, i => i.SourceId == "keep");
+        Assert.Equal(100, kept.SyncedAt);
+        Assert.Equal(500, kept.UpdatedAt);
     }
 
     [Fact]

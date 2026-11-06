@@ -149,4 +149,34 @@ public sealed class TodoWriterWiringGateTests
         Assert.Contains("LocalItemState.DayOffsetStartUnix(DateTimeOffset.Now, dayOffset.Value)", vm);
         Assert.DoesNotContain("DateTimeOffset.Now.AddDays(", vm);             // 定长 24 小时会跳错日历日（P-37）
     }
+
+    /// <summary>
+    /// P-7（片210 拍 (A)、片214 落地）：撤销必须<b>忠实回挂</b>——重插那条 upsert 只写 items 行
+    /// （标签词仅拼进 search_text），item_tags 挂接已随删除 CASCADE 走了、pinned 也不在 INSERT 列里；
+    /// 所以撤销得在 upsert 拿回真实行 id 之后把快照记着的标签逐个挂回、置顶照实恢复。
+    /// 这里钉 VM 侧的接线与顺序；数据层三颗前提（快照读齐／id 盖回／挂接可复原）由
+    /// <see cref="LocalItemUndoRoundTripTests"/> 守。
+    /// </summary>
+    [Fact]
+    public void UndoReattachesSnapshotTagsAndPinnedOnTheRowIdTheUpsertHandedBack()
+    {
+        // Between 而不是 MethodBody：这颗方法是「=> GuardAsync(async () => { … })」的多行表达式体，
+        // MethodBody 的第一个分号行口径会截在 lambda 体内的第一条语句上。
+        var body = SourceGate.Between(VmCode(), "public Task UndoDeleteAsync", "public void DismissUndo");
+
+        // ① 顺序：先重插（RETURNING 把真实行 id 盖回快照）、后挂标签——反了就是把标签挂到旧 id／0 上
+        var upsertAt = body.IndexOf("UpsertLocalItemAsync(", StringComparison.Ordinal);
+        Assert.True(upsertAt >= 0, "撤销路径里找不到重插那一步（UpsertLocalItemAsync）——快照回库没了");
+        Assert.True(body.IndexOf("AddTagAsync(", StringComparison.Ordinal) > upsertAt,
+            "标签回挂必须发生在重插之后：先拿回真实行 id 才有得挂（P-7）");
+        Assert.True(body.IndexOf("SetPinnedAsync(", StringComparison.Ordinal) > upsertAt,
+            "置顶恢复必须发生在重插之后：行还没回库就置顶＝白写（P-7）");
+
+        // ② 标签来自快照、逐个挂到同一颗快照对象盖回的真实 id 上（不是删除前的旧 id，更不是硬编码）
+        Assert.Matches(@"foreach\s*\(\s*var\s+\w+\s+in\s+\w+\.Tags\s*\)", body);
+        Assert.Matches(@"AddTagAsync\(\s*\w+\.Id\s*,", body);
+
+        // ③ 置顶照实恢复：upsert 的 INSERT 列不含 pinned，不补这笔撤销就把置顶丢了
+        Assert.Matches(@"SetPinnedAsync\(\s*\w+\.Id\s*,\s*true", body);
+    }
 }

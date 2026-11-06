@@ -162,7 +162,9 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
     /// <summary>GitHub REST API repo 模型 → StarMark Item。<c>internal</c> 仅为可机检单测（StarMark.Tests 已 InternalsVisibleTo）。</summary>
     internal static Item MapToItem(GitHubStarApiModel repo, long now)
     {
-        var starredAt = ParseUnixTime(repo.PushedAt) ?? now;
+        // P-6A：StarredAt 用信封里那颗真 starred_at（用户点 Star 的时刻，客户端解 star+json 信封后
+        // 盖进 StarredAtRaw）；缺/坏退 now，不再借 pushed_at——排序键被 push 时间顶替那件事就此收口。
+        var starredAt = ParseUnixTime(repo.StarredAtRaw) ?? now;
         var updatedAt = ParseUnixTime(repo.UpdatedAt) ?? ParseUnixTime(repo.PushedAt) ?? now;
         var createdAt = ParseUnixTime(repo.CreatedAt) ?? now;
 

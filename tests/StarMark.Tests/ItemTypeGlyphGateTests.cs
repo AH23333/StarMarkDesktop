@@ -226,7 +226,7 @@ public sealed class ItemTypeGlyphGateTests
     }
 
     /// <summary>
-    /// 主窗来源分段控件是这一事实的<b>第四个</b>出处（XAML 里写死的 <c>Content="📁"</c> 那三颗）。
+    /// 主窗来源分段控件是这一事实的出处之一（XAML 里写死的 <c>Content="📁"</c>／<c>"📋"</c> 那几颗）。
     /// 它不该改成代码生成（一颗筛选按钮而已），但必须与判据逐字相等：
     /// 否则哪天调整图标，行首换了、分段控件还留着旧的，用户按 📁 筛出的条目行首写着 📄。
     /// </summary>
@@ -234,6 +234,7 @@ public sealed class ItemTypeGlyphGateTests
     [InlineData("SourceStar", ItemType.GitHubStar)]
     [InlineData("SourceBookmark", ItemType.Bookmark)]
     [InlineData("SourceFile", ItemType.File)]
+    [InlineData("SourceClipboard", ItemType.Clipboard)]
     public void SourceFilterChipMatchesThePolicyGlyphForTheSameClass(string buttonName, ItemType type)
     {
         var xaml = ReadRepoFile(MainWindowXaml);

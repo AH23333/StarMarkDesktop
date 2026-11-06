@@ -79,7 +79,9 @@ public sealed class GitHubStarExtraTests
 
         Assert.Equal(0, SourceGate.Count(source, "Deserialize<GitHubStarMeta>"));
         Assert.Contains("GitHubStarExtra.TryRead(item)", source);
-        Assert.Contains("foreach (var (item, meta) in parsed)", source);
+        // 趋势环仍从 parsed 取值（P-34B 起元组元素改名 _：anchor 改走 AnchorDate(item, clock)，不再读 meta）。
+        // 钉形状不钉名——别让"另起一遍解析"从元素改名这类噪声里溜回来。
+        Assert.Contains("in parsed)", source);
     }
 
     [Theory]

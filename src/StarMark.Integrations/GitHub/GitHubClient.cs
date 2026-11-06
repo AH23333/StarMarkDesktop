@@ -120,7 +120,9 @@ public sealed class GitHubClient : IDisposable
     /// <summary>
     /// 拉取当前用户 starred 仓库列表（分页）。
     /// 对应 GitHubStarMeta 字段：full_name / language / stargazers_count / topics / archived / homepage / html_url
-    /// starred_at 由 Link header 不可用，需要从 /user/starred 的 header 中读 pushed_at 替代。
+    /// starred_at 真值来自 <c>Accept: application/vnd.github.star+json</c> 的<b>信封</b>（P-6A）：
+    /// 响应是 <c>[{"starred_at":…,"repo":{…}}]</c>，这里解开信封、把 starred_at 盖进
+    /// <see cref="GitHubStarApiModel.StarredAtRaw"/> 后照旧返回 repo 模型列表——信封对调用方透明。
     /// </summary>
     /// <param name="page">页码（1 起始）。</param>
     /// <param name="ct">取消令牌。</param>
@@ -131,6 +133,11 @@ public sealed class GitHubClient : IDisposable
 
         var url = $"{ApiBase}/user/starred?per_page={_perPage}&page={page}";
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        // P-6A：starred_at 真值要拿 star+json 信封才肯给。这颗 Accept 挂在<b>请求级</b>而非
+        // DefaultRequestHeaders——那颗头全体请求共享，动它会连 GetLoginAsync 等一起改掉；
+        // 而默认头只在请求<b>缺席</b>该头时才合并进来（HttpClient 不合并两组值），外发恰为这一颗
+        // （GitHubTruthInLabelingGateTests ⑤ 与客户端测各钉一头）。
+        req.Headers.Accept.ParseAdd("application/vnd.github.star+json");
         // P1-4 条件请求：仅首页带 If-None-Match，命中 304 可省掉整轮拉取
         if (page == 1 && !string.IsNullOrEmpty(CachedETag))
         {
@@ -151,11 +158,20 @@ public sealed class GitHubClient : IDisposable
         if (page == 1 && resp.Headers.ETag is { } etag)
             CachedETag = etag.Tag;
 
-        var list = await resp.Content.ReadFromJsonAsync<List<GitHubStarApiModel>>(JsonOpts, ct)
-                   ?? new List<GitHubStarApiModel>();
-
-        // 遍历每条记录的 starred_at 需要单独 API 调用，过于昂贵。
-        // 改为从 pushed_at 推断（最近一次 push，用作 updated_at 即可）。
+        var envelopes = await resp.Content.ReadFromJsonAsync<List<GitHubStarEnvelopeApiModel>>(JsonOpts, ct)
+                        ?? new List<GitHubStarEnvelopeApiModel>();
+        var list = new List<GitHubStarApiModel>(envelopes.Count);
+        foreach (var envelope in envelopes)
+        {
+            // 信封里缺 repo＝响应形状与 star+json 的 Accept 不符（中间盒剥了请求头、GitHub 退回
+            // 裸 repo 数组等）。静默跳过会把"形状不对"吞成"少了一批数据"，抛出去让界面报错——
+            // 报错比悄悄少一批好。
+            var repo = envelope.Repo
+                ?? throw new GitHubApiException(GitHubErrorKind.Unknown,
+                    "GitHub star+json 响应的信封里缺 repo（响应形状与请求的 Accept 头不符）");
+            repo.StarredAtRaw = envelope.StarredAt;
+            list.Add(repo);
+        }
         return list;
     }
 
@@ -357,8 +373,24 @@ public sealed class GitHubStarApiModel
     public string CreatedAt { get; set; } = string.Empty;
     public string? UpdatedAt { get; set; }
 
+    /// <summary>star+json 信封里那颗真 starred_at（P-6A）＝用户点 Star 的时刻。
+    /// 不是 repo JSON 自带字段——只在 <see cref="GetStarredPageAsync"/> 解信封时回填；
+    /// 消费端是 <c>GitHubSource.MapToItem</c>（「最近 Star」那格排序的真值腿）。</summary>
+    public string? StarredAtRaw { get; set; }
+
     /// <summary>Owner login，仅在 topics 子对象里有用。</summary>
     public GitHubOwnerApiModel? Owner { get; set; }
+}
+
+/// <summary>
+/// GET /user/starred 在 <c>Accept: application/vnd.github.star+json</c> 下的<b>信封行</b>（P-6A）：
+/// starred_at＝用户点 Star 的时刻（真值），repo＝原 repo 模型原样内嵌。
+/// 仅 <see cref="GitHubClient.GetStarredPageAsync"/> 内部解包，不外流。
+/// </summary>
+public sealed class GitHubStarEnvelopeApiModel
+{
+    public string? StarredAt { get; set; }
+    public GitHubStarApiModel? Repo { get; set; }
 }
 
 public sealed class GitHubOwnerApiModel

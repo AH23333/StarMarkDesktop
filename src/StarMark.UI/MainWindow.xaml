@@ -115,6 +115,12 @@
                     <Button x:Name="SourceFile" Content="📁" Click="SourceFilter_Click" Tag="file"
                             i18n:LocText.ToolTipKey="source.fileTip"
                             Background="Transparent" BorderThickness="0" Padding="10,4"/>
+                    <!-- P-59：剪贴板历史也是 items 表的一等条目，却没有一档能把它摘出去——
+                         第 5 档「📋」落到已有 TypeFilter（i.type=3），零 SQL 新增。图标＝ItemCardPolicy.GlyphOf
+                         那颗唯一判据（闸测 ItemTypeGlyphGateTests 逐字钉住）。 -->
+                    <Button x:Name="SourceClipboard" Content="📋" Click="SourceFilter_Click" Tag="clipboard"
+                            i18n:LocText.ToolTipKey="source.clipboardTip"
+                            Background="Transparent" BorderThickness="0" Padding="10,4"/>
                 </StackPanel>
             </Border>
 

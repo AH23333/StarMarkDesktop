@@ -788,12 +788,13 @@ public sealed class I18nWiringGateTests
 
     /// <summary>
     /// 第一里程碑<b>铺到哪一行、故意留在哪一行</b>，都要当场看得见。
-    /// <para>三个数字是现场量出来的（主窗标记：正文键 <b>26</b>／提示键 8／占位符键 2；批次 WI-2c 之前是
+    /// <para>三个数字是现场量出来的（主窗标记：正文键 <b>26</b>／提示键 9／占位符键 2；批次 WI-2c 之前是
     /// 31／9／2，少掉的那 5＋1 颗是排序档——选项改成"数据项＋模板"之后它们住在
     /// <c>MainWindow.Search.cs</c> 的 <c>SortOptions</c> 里，所以这一格同批补了一条<b>配对账</b>：
     /// 标记里少的颗数必须等于代码里多的颗数，⛔ 不许"搬着搬着少了一颗"。
     /// 批次 WI-2n 又收掉一颗（<c>FileKindButton</c>：它的字面随"选中了几个类型"变，改由代码交键＝
     /// <see cref="AWiredElementNeverGetsItsPropertyWrittenFromCodeToo"/> 抓出来的第 3 颗两个主人）⇒ 27 → 26。
+    /// 片214·P-59 又铺进一颗（来源段第 5 档「📋」的 <c>source.clipboardTip</c>）⇒ 提示键 8 → 9。
     /// 把它们钉住不是为了一次改文案就要来改判据，而是因为"覆盖面"这件事本身只有数字能证——
     /// <c>settings.languageNote</c> 那句"这一版只覆盖主界面骨架"是产品对用户的承诺，它得有一个对应的数。）</para>
     /// <para>曾经剩下那一颗 <c>Text="索引就绪"</c> 是<b>登记在案的缺口</b>（不是漏翻）：那颗状态是代码在写的
@@ -807,7 +808,7 @@ public sealed class I18nWiringGateTests
     {
         var xaml = ReadRepoFile(MainWindowXaml);
         Assert.Equal(26, Count(xaml, "i18n:LocText.Key=\""));
-        Assert.Equal(8, Count(xaml, "i18n:LocText.ToolTipKey=\""));
+        Assert.Equal(9, Count(xaml, "i18n:LocText.ToolTipKey=\""));
         Assert.Equal(2, Count(xaml, "i18n:LocText.PlaceholderKey=\""));
         Assert.Equal(1, Count(xaml, "xmlns:i18n="));
 

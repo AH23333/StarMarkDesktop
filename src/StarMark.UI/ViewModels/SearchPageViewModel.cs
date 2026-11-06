@@ -280,6 +280,8 @@ public partial class SearchPageViewModel : ObservableObject
                 "star" => ItemType.GitHubStar,
                 "bookmark" => ItemType.Bookmark,
                 "file" => ItemType.File,
+                // P-59：剪贴板历史复用 items 表，这档落到已有 ItemType.Clipboard（i.type=3），零 SQL 新增
+                "clipboard" => ItemType.Clipboard,
                 _ => null,
             },
             Sort = CurrentSort,
@@ -475,6 +477,7 @@ public partial class SearchPageViewModel : ObservableObject
             {
                 "star" => "githubstar",
                 "bookmark" => "bookmark",
+                "clipboard" => "clipboard",   // P-59：浏览模式同样吃这档（GetAllAsync 的 TypeFilter 原样透传）
                 _ => null,
             };
             var filter = new BrowseFilter

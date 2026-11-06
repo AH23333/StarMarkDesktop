@@ -208,6 +208,24 @@ public sealed class InsightsServiceTests
     }
 
     [Fact]
+    public void NewTrend_StarCollectedToday_CountsToday_EvenForAncientRepo()
+    {
+        // P-34B（片210 拍板）主诉：今天收藏一个 2011 年建的老仓库，旧锚（StarredAt＝源侧 star 时刻、
+        // CreatedAt＝仓库创建）把它落进历史桶、今日柱恒为 0；入库锚（SyncedAt 首见）让它落进今天。
+        var ancient = new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero).ToUnixTimeSeconds();
+        var items = new List<Item>
+        {
+            MakeItem("ancient repo", ItemType.GitHubStar, createdAt: ancient, updatedAt: ancient,
+                extraJson: JsonSerializer.Serialize(new GitHubStarMeta { StarredAt = ancient })),
+        };
+        items[0].SyncedAt = FixedNow().ToUnixTimeSeconds();
+
+        var r = InsightsService.BuildHealthReport(items, days: 14, now: FixedNow);
+
+        Assert.Equal(1, r.NewTrend.Sum(t => t.Count));   // 旧锚下此值为 0（落 2011 年历史桶）
+    }
+
+    [Fact]
     public void Duplicates_CrossOwnerSameTitle_DifferentUri_AreNotGrouped()
     {
         // 两个不同 owner 的仓库，标题同为 "{Repo} · {Language}"（NormalizeTitle 后同为 "tool rust"），Uri 不同。

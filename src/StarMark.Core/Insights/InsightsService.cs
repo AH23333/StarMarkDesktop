@@ -129,9 +129,9 @@ public static class InsightsService
             trendIndex[key] = trend.Count;
             trend.Add(new DateCount { Date = day.ToString("MM-dd", CultureInfo.InvariantCulture), Count = 0 });
         }
-        foreach (var (item, meta) in parsed)
+        foreach (var (item, _) in parsed)
         {
-            var key = AnchorDate(item, meta, clock).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var key = AnchorDate(item, clock).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             if (trendIndex.TryGetValue(key, out var idx))
                 trend[idx] = new DateCount { Date = trend[idx].Date, Count = trend[idx].Count + 1 };
         }
@@ -213,13 +213,15 @@ public static class InsightsService
     }
 
     /// <summary>
-    /// 新增归属日期：GitHubStar 用 starredAt（否则 createdAt），其它类型用 createdAt。
-    /// <paramref name="meta"/> 由调用侧一次解析好传进来（<see cref="GitHubStarExtra.TryRead"/>），
-    /// 这里不再碰 JSON——整表统计里每条二次反序列化是白花的钱。
+    /// 新增归属日期＝<b>入库时刻</b>（P-34B·片210 拍板）：优先 <see cref="Item.SyncedAt"/>（首见拍，
+    /// upsert 的 conflict 臂不再刷新它），空则退 <c>CreatedAt</c>（本地条目与可空老行）——
+    /// 与 collected 排序两条 SQL 的 <c>COALESCE(i.synced_at, i.created_at)</c> 同口径。
+    /// <para>旧锚点（StarredAt／CreatedAt）装的是<b>源对象自身时刻</b>（仓库 star／创建时间），
+    /// 今天的收藏会落进历史桶、今日柱恒为 0——那正是 P-34 登记的缺陷。</para>
     /// </summary>
-    private static DateTime AnchorDate(Item item, GitHubStarMeta? meta, Func<DateTimeOffset> clock)
+    private static DateTime AnchorDate(Item item, Func<DateTimeOffset> clock)
     {
-        var anchorSec = meta?.StarredAt ?? item.CreatedAt;
+        var anchorSec = item.SyncedAt ?? item.CreatedAt;
         // FromUnixTimeSeconds 只接受 [-62135596800, 253402300799]；越界值（毫秒级/荒谬 long，
         // 手改或坏备份可注入）会抛 ArgumentOutOfRangeException，且趋势循环无 try 包裹 → 整份报告崩。
         // 落回条目入库时间；若 created_at 本身也被污染则退到 Unix 纪元，绝不抛出。

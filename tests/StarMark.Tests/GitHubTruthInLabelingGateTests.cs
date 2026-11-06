@@ -8,13 +8,14 @@ using static StarMark.Tests.SourceGate;
 namespace StarMark.Tests;
 
 /// <summary>
-/// star 这一族"<b>说出去的话</b>"必须与实现对得上（批次 VP，账本 P-6／P-57／P-58）。
+/// star 这一族"<b>说出去的话</b>"必须与实现对得上（批次 VP 立闸，账本 P-6／P-57／P-58；片214·P-6A 收口）。
 /// <para>
-/// 两处都不是数据面缺陷，而是"数据面已经这样了，话却说得比实现满"：
-/// ① 排序档那颗写着「最近 Star」，实际排的是<b>仓库最后一次 push</b>（<c>GitHubSource.MapToItem</c>
-///   把 <c>StarredAt</c> 填成 <c>repo.PushedAt</c>）——老仓库被新近 Star 会排到很后面，那句话对它是假话；
-/// ② 一轮被 5000 条预算掐断时，旧写法既不说"只导入了前 5000 条"，又把页 1 带回的 ETag 留在原地
-///   ⇒ 下一轮 304 短路，第 5001 条<b>永远拉不到</b>（P-57 那个漏臂；P-58 要的正是"修数据面必须同时改文案"）。
+/// ① 排序档那句「最近 Star」：数据腿 P-6A 起取的是 star+json 信封里的<b>真 starred_at</b>
+///   （用户点 Star 的时刻），话与数据自此对上——这条闸门从此转为<b>守势</b>：
+///   哪条腿退化（取值退回 pushed_at、标签改口、SQL 换键），这里都会红。
+/// ② 一轮被 5000 条预算掐断时，必须复位 ETag 检查点＋把「没拉全」说出去——旧写法既不说
+///   "只导入了前 5000 条"，又把页 1 带回的 ETag 留在原地 ⇒ 下一轮 304 短路，第 5001 条<b>永远拉不到</b>
+///   （P-57 那个漏臂；P-58 要的正是"修数据面必须同时改文案"）。
 /// </para>
 /// <para>
 /// 判据一律<b>钉形状不钉措辞的具体字</b>的地方就钉形状：标签里必须出现真正的排序键字样、封顶那一臂必须
@@ -35,14 +36,13 @@ public sealed class GitHubTruthInLabelingGateTests
     }
 
     /// <summary>
-    /// 「那一档叫什么」＝<b>它实际按什么排</b>。这条链有三环，缺一环那句标签就成了假话：
-    /// 档名 <c>starred</c> → SQL 按 <c>$.StarredAt</c> 排 → 而 <c>StarredAt</c> 填的是 <c>repo.PushedAt</c>。
-    /// <para>三环都当<b>前提</b>钉住：<b>哪天真去取 starred_at（P-6 的选项 A），这一格会红——那是故意的</b>。
-    /// 数据变准确的同一天，才轮得到把标签改回"最近 Star"；只改标签不改数据，才是这条闸门要拦的方向。</para>
+    /// 「那一档叫什么」＝<b>它实际按什么排</b>。这条链 P-6A 起是五环，断哪环那句标签都成假话：
+    /// 档名 <c>starred</c> → SQL 按 <c>$.StarredAt</c> 排 → <c>StarredAt</c> 填信封里的真 starred_at
+    /// → 而那颗真值靠请求级 star+json Accept 讲价（客户端解信封盖进 <c>StarredAtRaw</c>）。
+    /// <para>五环全钉住，这条闸门从此守势：<b>只改标签不改数据</b>（或反过来）都会当场红。</para>
     /// <para>批次 WI-1 之后 XAML 里不再有那句中文，它只许指向表里那颗键，所以这一格分成两段：
     /// <b>接线</b>（那一档确实从表里取词，而不是自带一份字面量）＋ <b>内容</b>（表里<b>两种说法</b>都得
-    /// 说出真正的排序键）。第二段是净增的覆盖面：原来只查中文那一列，将来补译文时把英文写成
-    /// "Recently starred"，这里就会红。</para>
+    /// 说出真正的排序键）。</para>
     /// </summary>
     [Fact]
     public void TheStarSortTierIsNamedAfterWhatItActuallySortsBy()
@@ -59,14 +59,13 @@ public sealed class GitHubTruthInLabelingGateTests
         Assert.Contains("\"starred\"", tier.Value, System.StringComparison.Ordinal);
         Assert.Contains("tipKey: \"sort.starredTip\"", tier.Value, System.StringComparison.Ordinal);
 
-        // ② 内容：两种说法都说出 push，且都不说"最近 Star"
+        // ② 内容：两种说法都得说出真正的排序键——「最近 Star」（P-6A 起是数据真相，不再是愿景）
         var label = Entry("sort.starred");
-        Assert.Contains("推送", label.Zh, System.StringComparison.Ordinal);
-        Assert.Contains("push", label.En, System.StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("最近 Star", label.Zh, System.StringComparison.Ordinal);
+        Assert.Contains("最近 Star", label.Zh, System.StringComparison.Ordinal);
+        Assert.Contains("starred", label.En, System.StringComparison.OrdinalIgnoreCase);
         var tip = Entry("sort.starredTip");
-        Assert.Contains("push", tip.Zh, System.StringComparison.Ordinal);
-        Assert.Contains("push", tip.En, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Star", tip.Zh, System.StringComparison.Ordinal);
+        Assert.Contains("starred", tip.En, System.StringComparison.OrdinalIgnoreCase);
 
         // ③ 那一档排的确实是 StarredAt（浏览与搜索两条 SQL 都得是，否则"档名"与"排序键"在两条路径上分岔）
         foreach (var repo in new[] { "src/StarMark.Data/ItemRepository.Search.cs", "src/StarMark.Data/ItemRepository.Items.cs" })
@@ -76,10 +75,18 @@ public sealed class GitHubTruthInLabelingGateTests
             Assert.Equal(1, Count(sql, "'$.StarredAt'"));
         }
 
-        // ④ 而 StarredAt 今天装的是 push 时间（改这条代码的人请连同上面几句一起改，别只改标签）
+        // ④ 而 StarredAt 今天装的是信封里的真 starred_at（star+json，P-6A）——只改标签不改数据
+        // 是这条闸门要拦的方向；反过来把取值退回 PushedAt，这里与②一起红。
         var mapped = Code(ReadRepoFile(Source));
-        Assert.Contains("var starredAt = ParseUnixTime(repo.PushedAt) ?? now;", mapped, System.StringComparison.Ordinal);
+        Assert.Contains("var starredAt = ParseUnixTime(repo.StarredAtRaw) ?? now;", mapped, System.StringComparison.Ordinal);
         Assert.Contains("StarredAt = starredAt,", mapped, System.StringComparison.Ordinal);
+
+        // ⑤ 信封腿（P-6A 新增）：请求级 star+json Accept ＋ 解信封盖真值——这条腿断了，
+        // ④ 读到的就是空值退 now，「最近 Star」名存实亡。
+        var pageBody = MethodBody(Code(ReadRepoFile(Client)),
+            "public async Task<IReadOnlyList<GitHubStarApiModel>> GetStarredPageAsync");
+        Assert.Contains("application/vnd.github.star+json", pageBody, System.StringComparison.Ordinal);
+        Assert.Contains("repo.StarredAtRaw = envelope.StarredAt;", pageBody, System.StringComparison.Ordinal);
     }
 
     /// <summary>

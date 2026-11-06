@@ -22,6 +22,7 @@ public sealed class GitHubSourceTests
         string pushedAt = "2023-05-17T09:00:00Z",
         string createdAt = "2011-01-26T19:01:12Z",
         string? updatedAt = "2024-02-01T10:00:00Z",
+        string? starredAtRaw = null,
         string? description = "A description",
         List<string>? topics = null,
         string? ownerLogin = "octocat") => new()
@@ -33,6 +34,7 @@ public sealed class GitHubSourceTests
         PushedAt = pushedAt,
         CreatedAt = createdAt,
         UpdatedAt = updatedAt,
+        StarredAtRaw = starredAtRaw,
         Description = description,
         Topics = topics ?? new(),
         HtmlUrl = "https://github.com/" + fullName,
@@ -137,13 +139,21 @@ public sealed class GitHubSourceTests
     }
 
     [Fact]
-    public void MapToItem_StarredAtCurrentlyMirrorsPushedAt()
+    public void MapToItem_StarredAtUsesEnvelopeTruth_WhenPresent()
     {
-        // 【钉当前近似·见待决策 P-6】现网用 Accept=…github+json 拿不到 per-item starred_at，
-        // 故 extra_json.StarredAt 现被 repo.PushedAt 填充（"最近 Star"排序实为按仓库 push 时间）。
-        // 本测锁定**当前行为**；若日后按 P-6 选 (A) 改取真 starred_at，此断言应随之更新——失败即提醒同步该决策。
-        var item = GitHubSource.MapToItem(Repo(pushedAt: "2023-05-17T09:00:00Z"), Now);
-        Assert.Contains("\"StarredAt\":1684314000", item.ExtraJson);
+        // 【P-6A 已落地】star+json 信封的 starred_at＝用户点 Star 的时刻（真值），
+        // pushed_at 降为 updated 族的兜底，不再顶替排序键。
+        var item = GitHubSource.MapToItem(Repo(starredAtRaw: "2026-02-03T04:05:06Z",
+            pushedAt: "2023-05-17T09:00:00Z"), Now);
+        Assert.Contains("\"StarredAt\":1770091506", item.ExtraJson); // 2026-02-03T04:05:06Z
+    }
+
+    [Fact]
+    public void MapToItem_StarredAtFallsBackToNow_WhenEnvelopeMissing()
+    {
+        // 信封缺/坏 → now（不再退 pushed_at）：兜底层不许把排序键悄悄换回仓库 push 时间。
+        var item = GitHubSource.MapToItem(Repo(starredAtRaw: null, pushedAt: "2023-05-17T09:00:00Z"), Now);
+        Assert.Contains($"\"StarredAt\":{Now}", item.ExtraJson);
     }
 
     [Fact]

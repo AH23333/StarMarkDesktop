@@ -56,7 +56,7 @@ public sealed partial class MainWindow
             ? new SolidColorBrush(StarMark.Core.Appearance.SurfaceReadability.ReadableOn(accentBrush.Color))
             : ThemeBrush.For(RootGrid.ActualTheme, "TextOnAccentFillColorPrimaryBrush");
         foreach (var (btn, tag) in new[]
-                 { (SourceAll, "all"), (SourceStar, "star"), (SourceBookmark, "bookmark"), (SourceFile, "file") })
+                 { (SourceAll, "all"), (SourceStar, "star"), (SourceBookmark, "bookmark"), (SourceFile, "file"), (SourceClipboard, "clipboard") })
         {
             var selected = tag == source;
             btn.Background = selected ? accent : new SolidColorBrush(Colors.Transparent);

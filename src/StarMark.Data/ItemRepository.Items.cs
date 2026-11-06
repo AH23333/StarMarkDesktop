@@ -123,9 +123,11 @@ public sealed partial class ItemRepository
             "stars" => "i.pinned DESC, i.stars_count DESC NULLS LAST",
             "name" => "i.pinned DESC, i.title COLLATE NOCASE ASC",
             // 最近 Star / 最近收藏：与 SearchAsync 的同名分支口径一致（starredAt 取 extra_json，无则退
-            // updated_at；collected 取入库时间）。此前浏览模式漏了这两支，落入 default 变成「最近更新」。
+            // updated_at）。此前浏览模式漏了这两支，落入 default 变成「最近更新」。
+            // P-34B：「最近收藏」＝入库时刻——collected 改读 synced_at（首见；upsert 的 conflict 臂不再刷它，
+            // 见 ItemRepository.UpsertOne），本地条目不落 synced_at、老行可空，退 created_at 兜底。
             "starred" => $"i.pinned DESC, COALESCE(CAST(json_extract({ExtraJsonGuard.Safe("i.extra_json")}, '$.StarredAt') AS INTEGER), i.updated_at) DESC",
-            "collected" => "i.pinned DESC, i.created_at DESC",
+            "collected" => "i.pinned DESC, COALESCE(i.synced_at, i.created_at) DESC",
             "recent" or _ => "i.pinned DESC, i.updated_at DESC",
         };
 

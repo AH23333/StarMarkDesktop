@@ -785,3 +785,17 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：全量 6880/6880（基线 6865＋新 15・20 m 42 s）；docgates213 47/47（EXITCODE=0）；census 19（＝片213 新基线）；坑表 +1（#1155 PS 5.1 UTF8 WriteAllText 带 BOM）；产品码＝16 src＋9 tests（新增 SourceReadFailureGateTests／ClipboardCopyLinkGateTests・改 7）＋四活档。
 
 - 下一刀：片214＝P-5B/P-6A/P-25+57A/P-7A/P-34B（队列次位）。⛔ push（未推 22）。
+
+## 九十五、片214 GitHub 取真 starred_at、collected 改读 synced_at、剪贴板第 5 档、撤销回挂标签与置顶（P-6A/P-34B/P-59/P-7A/P-25＋57A/P-126A 七颗翻牌）
+
+- 接手第一步照旧现读编号轴：报告到六百、交接到九十五、坑表到 #1156、账本到 P-295（本轮无新立账・七颗翻牌 ✅：P-6/P-7/P-25/P-34/P-57/P-59/P-126）；计数器现读＝296/270/26（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK）。
+
+- 事实源：GitHubClient.GetStarredPageAsync（请求级 Accept: application/vnd.github.star+json・[{starred_at, repo}] 信封・缺 repo 抛 GitHubApiException・StarredAtRaw）＋GitHubSource.MapToItem（ParseUnixTime(repo.StarredAtRaw) ?? now・弃 pushed_at 代理）＋UiStrings sort.starred/starredTip＋IItemSource.Sort 口径注释；ItemRepository upsert ON CONFLICT 臂不刷 synced_at＋Items/Search 两处 COALESCE(i.synced_at, i.created_at) DESC＋InsightsService.AnchorDate (Item, clock) 读 SyncedAt ?? CreatedAt；MainWindow.xaml SourceClipboard＋SetSourceButtonsHighlight 第 5 对＋SearchPageViewModel 两映射（"clipboard" => ItemType.Clipboard・浏览模式同口透传）＋source.clipboardTip；TodoWidgetViewModel.UndoDeleteAsync（AddTagAsync 逐个回挂＋SetPinnedAsync・按 RETURNING 盖回 id）＋新档 LocalItemUndoRoundTripTests＋TodoWriterWiringGateTests 新 Fact。
+
+- 行为语义：「最近 Star」按用户点 Star 时刻排序（换 media type 令 ETag 换血→首轮全量重拉一次属预期）；「最近收藏」与新增趋势按本地入库时刻（首见钉住・存量行尖峰随 14 天窗口滚出）；来源段第 5 档「📋」摘出剪贴板；待办删除→撤销回挂标签与置顶；5000 封顶轮复位 ETag＋带条数 Warn＋灰卡「没拉全」名单＝截断全链可见。
+
+- 闸测须知（再动须同步）：GitHubTruthInLabelingGateTests 现五环（标签↔数据两向都拦）；GitHubCancelSafetyTests/GitHubClientPagingTests 假桩信封用 $$$""" 裸串（CS9007 坑 #1156）；LivingSourcePointerGateTests RewrittenAnchors 65 颗两颗换新锚（starred_at 真值来自／application/vnd.github.star+json）；I18nWiringGateTests 提示键 9（source.clipboardTip）；TodoWriterWiringGateTests 撤销闸用 SourceGate.Between 截段（多行 lambda 表达式体⛔ MethodBody）；census 基线 19 保平（出典 LivingSourcePointerGateTests 片213 para 不动）。
+
+- 读数：build 0 错；全量 6890/6890（片213 6880→6890・24 m 36 s）；docgates214 47/47（EXITCODE=0）；census 19（保平）；计数器 296/270/26 VERDICT OK（七颗翻牌・未标记 33→26）；坑表 +1（#1156）。
+
+- 下一刀：片215＝P-5B stale 位（v7 版本化迁移 ALTER TABLE items ADD COLUMN stale INTEGER NOT NULL DEFAULT 0＋ColumnExists 幂等守卫＋CurrentVersion 6→7；VQ 模板「先报条数再删、删完重扫」；可对账源＝书签族（真全量），GitHub(5000 顶)/Ditto(MaxSync=500)/Everything(分页) ⛔；stale 位写入者只有扫描按钮与同步对账）。⛔ push（未推 22）。

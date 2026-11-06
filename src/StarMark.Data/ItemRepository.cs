@@ -117,7 +117,10 @@ public sealed partial class ItemRepository : IItemRepository
         // 统一以 extra_json.Language 落盘，供主界面语言下拉过滤。
         item.ExtraJson = LanguageDetector.EnsureLanguage(item.ExtraJson, item.Uri, item.Title, item.Description);
 
-        // UPSERT（基于 source+source_id 唯一索引）；UPDATE 集不包含 hidden/pinned/notes
+        // UPSERT（基于 source+source_id 唯一索引）；UPDATE 集不包含 hidden/pinned/notes，
+        // 也不含 synced_at（P-34B）：synced_at＝入库时刻（首见），conflict 臂若照旧刷 excluded.synced_at，
+        // 每轮全量重拉会把全库刷成同一拍——「最近收藏」排序与 Insights「新增趋势」随之塌掉
+        // （两条 collected SQL 与 AnchorDate 已改读它，见 ItemRepository.Items/Search 与 InsightsService）。
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
             INSERT INTO items (type, source, source_id, title, subtitle, uri,
@@ -136,7 +139,6 @@ public sealed partial class ItemRepository : IItemRepository
                 stars_count = excluded.stars_count,
                 file_size = excluded.file_size,
                 updated_at = excluded.updated_at,
-                synced_at = excluded.synced_at,
                 extra_json = excluded.extra_json
             RETURNING id;";
         cmd.Parameters.AddWithValue("@type", item.Type.ToString().ToLowerInvariant());
