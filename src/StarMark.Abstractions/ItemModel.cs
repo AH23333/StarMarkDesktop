@@ -118,6 +118,15 @@ public sealed class Item
     /// <summary>用户置顶（deskbox 式快速访问）。用户状态：同步不覆盖。</summary>
     public bool Pinned { get; set; }
 
+    /// <summary>
+    /// 源侧失联标记（片215·P-5B）：来源清单里已经没有它、但行还留着——书签在浏览器里被删了、
+    /// Star 取消了，下一轮同步对账（<see cref="IItemRepository.ReconcileStaleAsync"/>）置位；
+    /// 回归时同一轮对账清位。界面读它把卡片标灰（「这条在源头已经不在」），⛔ 参与任何删除决策。
+    /// 与 <see cref="Hidden"/>/<see cref="Pinned"/> 同列一族，但主人不同：那两颗是用户状态（同步不覆盖），
+    /// 这颗是<b>对账状态</b>——每轮全量同步按源侧清单现算，用户改不了它。
+    /// </summary>
+    public bool Stale { get; set; }
+
     public string? Notes { get; set; }
 
     /// <summary>标签集合。UI 展示时由 JOIN 聚合得到。</summary>

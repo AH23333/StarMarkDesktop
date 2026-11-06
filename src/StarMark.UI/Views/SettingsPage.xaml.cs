@@ -166,7 +166,8 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
                          or nameof(SettingsPageViewModel.CanvasStatus)
                          or nameof(SettingsPageViewModel.CaptureStatus)
                          or nameof(SettingsPageViewModel.LocalDiskSearchStatus)
-                         or nameof(SettingsPageViewModel.MissingFileRowsStatus))
+                         or nameof(SettingsPageViewModel.MissingFileRowsStatus)
+                         or nameof(SettingsPageViewModel.StaleBookmarksStatus))
             ApplyExtensionStatuses();
         // 「数据」那一屏的六行同理：一颗变了就把**六行一起重贴**（第一批＝批次 WI-61c 那五行，第六行＝WI-62 的备份回执）。
         // 这一屏互相解释的话比拓展功能那一屏更明显——「自动备份」那行说"多久一份、能回到几天前"，
@@ -220,6 +221,8 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         LocText.SetMessage(CaptureStatusText, ViewModel.CaptureStatus);
         LocText.SetMessage(LocalDiskSearchStatusText, ViewModel.LocalDiskSearchStatus);
         LocText.SetMessage(MissingFileRowsStatusText, ViewModel.MissingFileRowsStatus);
+        // 失联书签那一行（片215·P-5B）与上面几行同一张卡区、同一条门：键＋读数进来，这里贴。
+        LocText.SetMessage(StaleBookmarksStatusText, ViewModel.StaleBookmarksStatus);
     }
 
     /// <summary>

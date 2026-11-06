@@ -239,4 +239,52 @@ public sealed class MigrationRunnerTests : IDisposable
         Assert.Equal(fileKey, Scalar<string>("SELECT source_id FROM items WHERE id=2;"));
         Assert.Equal(2, Scalar<long>("SELECT COUNT(*) FROM items;"));   // 没被错并
     }
+
+    /// <summary>
+    /// 片215·P-5B 的 v7：给<b>旧二进制建的库</b>补 <c>items.stale</c> 列。
+    /// <c>Schema.sql</c> 的 <c>CREATE TABLE IF NOT EXISTS</c> 不会给已存在的表补列——
+    /// 旧库升级这条路只能靠 MigrateV7 的 ALTER。存量行补列后必须是 0（一个不标）：
+    /// 升级那一刻谁也不「失联」，失联要等下一轮同步对账亲口说。
+    /// <para>
+    /// 老库的造法：先建一座<b>新形状</b>的库，再 <c>ALTER TABLE … DROP COLUMN stale</c>
+    /// 人为退回 v6 的形状（比手写旧 DDL 逼真：FTS 触发器、索引、其余列与真实 v6 库一致，
+    /// 也不会造出「行在库、FTS 没那行」这种真实库不存在的形状——那会让 MigrateV3 的
+    /// UPDATE 触发 FTS delete 报 malformed）。
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void EnsureSchema_MigrateV7_AddsStaleColumnToPreV7Databases()
+    {
+        new MigrationRunner(_factory).EnsureSchema();                      // 新形状建库
+        Exec("ALTER TABLE items DROP COLUMN stale;");                      // 退回 v6：只剩 stale 没补
+        Exec(@"INSERT INTO items(id,type,source,source_id,title,search_text,created_at,updated_at,hidden,pinned,notes)
+               VALUES(1,'bookmark','chrome','k1','A','A',100,100,1,1,'存量笔记');");
+
+        WriteVersion(6);
+        new MigrationRunner(_factory).EnsureSchema();                      // v6 → v7：只有 MigrateV7 该跑
+
+        Assert.Equal(MigrationRunner.CurrentVersion, ReadVersion());
+        Assert.Equal(0, Scalar<long>("SELECT stale FROM items WHERE id=1;"));          // 存量行一个不标
+        Assert.Equal(1, Scalar<long>("SELECT hidden FROM items WHERE id=1;"));         // 用户状态原样
+        Assert.Equal("存量笔记", Scalar<string>("SELECT notes FROM items WHERE id=1;"));
+
+        // 幂等：再跑一遍不许动（ColumnExists 守卫；没有守卫的第二次 ALTER 会直接炸库）
+        new MigrationRunner(_factory).EnsureSchema();
+        Assert.Equal(0, Scalar<long>("SELECT stale FROM items WHERE id=1;"));
+        Assert.Equal(MigrationRunner.CurrentVersion, ReadVersion());
+    }
+
+    /// <summary>
+    /// v7 的另一半：新库的 stale 列随 <c>Schema.sql</c> 出生（双轨），不写这列的新行默认 0。
+    /// </summary>
+    [Fact]
+    public void EnsureSchema_FreshDb_StaleColumnShipsWithSchemaSql()
+    {
+        new MigrationRunner(_factory).EnsureSchema();
+        Exec(@"INSERT INTO items(id,type,source,source_id,title,search_text,created_at,updated_at)
+               VALUES(1,'bookmark','chrome','k1','A','A',1,1);");
+
+        Assert.Equal(MigrationRunner.CurrentVersion, ReadVersion());
+        Assert.Equal(0, Scalar<long>("SELECT stale FROM items WHERE id=1;"));
+    }
 }

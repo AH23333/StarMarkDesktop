@@ -99,6 +99,22 @@ public sealed class SyncCoordinator
                 // 提交失败会让这一轮被记成"该源失败"，代价只是下一轮多拉一次，不会少数据。
                 await source.CommitCheckpointAsync(ct);
                 StarLog.Info($"源 {source.SourceId} 拉取 {items.Count} 条");
+                // 失联对账（片215·P-5B）：源声明「我的全量清单足以对账」（SupportsStaleReconciliation）
+                // 且这一轮没被预算掐断（!Truncated），才按现值清单把「源里已经没有」的旧行标灰
+                // （置/清 items.stale，回归时同一轮 CASE 清位）。两道闸缺一不可：截断的清单
+                // 当对账依据会把首页之外的合法历史批量误标（账本护栏③）。
+                // 顺序放在检查点之后：对账不是这一轮的既定产出，崩在它身上不该连坐已落库的载荷与检查点。
+                if (source.SupportsStaleReconciliation && !fetch.Truncated)
+                {
+                    var present = items.Where(i => i.Source != ItemSources.Local).ToList();
+                    foreach (var group in present.GroupBy(i => i.Type))
+                    {
+                        var newlyStale = await _repository.ReconcileStaleAsync(source.SourceId, group.Key,
+                            group.Select(i => i.SourceId).Distinct().ToList(), ct);
+                        if (newlyStale > 0)
+                            StarLog.Info($"源 {source.SourceId} 对账：{newlyStale} 条旧条目已不在源清单中，标为失联");
+                    }
+                }
                 results.Add(new SourceSyncResult
                 {
                     SourceId = source.SourceId,

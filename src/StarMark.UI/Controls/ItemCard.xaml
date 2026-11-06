@@ -12,7 +12,11 @@
         <local:BoolToVisibilityConverter x:Key="BoolToVis"/>
     </UserControl.Resources>
 
-    <Border Style="{StaticResource Card}">
+    <!-- 失联行整卡压暗（片215·P-5B）：源头清单里已经没有它，行留着（标签/笔记还在），
+         压暗 + 一句 tooltip 说清「为什么这张是灰的」；正常卡 Opacity=1、无 tooltip。 -->
+    <Border Style="{StaticResource Card}"
+            Opacity="{x:Bind ViewModel.IsStale, Mode=OneWay, Converter={StaticResource BoolToOpacity}}"
+            ToolTipService.ToolTip="{x:Bind ViewModel.StaleTip, Mode=OneWay}">
         <Border.Transitions>
             <TransitionCollection>
                 <EntranceThemeTransition FromVerticalOffset="14" IsStaggeringEnabled="False"/>

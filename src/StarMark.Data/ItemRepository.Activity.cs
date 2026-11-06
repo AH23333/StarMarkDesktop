@@ -170,6 +170,9 @@ public sealed partial class ItemRepository
             // SELECT 列序：14 = hidden，15 = pinned，16 = notes，17 = tag_names
             Pinned = reader.FieldCount > 15 && !reader.IsDBNull(15) && reader.GetInt64(15) != 0,
             Notes = reader.FieldCount > 16 && !reader.IsDBNull(16) ? reader.GetString(16) : null,
+            // 18 = stale（片215·P-5B）：只有渲染用的 SELECT（GetAll/Search/GetById/…）把它带在
+            // tag_names 后面；没带的读路径自动落 false——防御式读，加列不漂移。
+            Stale = reader.FieldCount > 18 && !reader.IsDBNull(18) && reader.GetInt64(18) != 0,
         };
 
         // 标签：char(31)（单元分隔符，正常标签名不含）分隔的字符串 → List<string>

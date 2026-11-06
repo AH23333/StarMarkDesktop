@@ -95,7 +95,8 @@ public sealed partial class ItemRepository
                    i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
                    (SELECT GROUP_CONCAT(t.name, char(31)) FROM item_tags it
                     JOIN tags t ON t.id = it.tag_id
-                    WHERE it.item_id = i.id) AS tag_names
+                    WHERE it.item_id = i.id) AS tag_names,
+                   i.stale
             FROM fts_hits f
             JOIN items i ON i.id = f.rowid
             GROUP BY i.id

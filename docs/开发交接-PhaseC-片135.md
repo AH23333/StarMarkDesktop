@@ -799,3 +799,17 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：build 0 错；全量 6890/6890（片213 6880→6890・24 m 36 s）；docgates214 47/47（EXITCODE=0）；census 19（保平）；计数器 296/270/26 VERDICT OK（七颗翻牌・未标记 33→26）；坑表 +1（#1156）。
 
 - 下一刀：片215＝P-5B stale 位（v7 版本化迁移 ALTER TABLE items ADD COLUMN stale INTEGER NOT NULL DEFAULT 0＋ColumnExists 幂等守卫＋CurrentVersion 6→7；VQ 模板「先报条数再删、删完重扫」；可对账源＝书签族（真全量），GitHub(5000 顶)/Ditto(MaxSync=500)/Everything(分页) ⛔；stale 位写入者只有扫描按钮与同步对账）。⛔ push（未推 22）。
+
+## 九十六、片215 stale 位软删对账：Schema v7 双轨迁移・双门对账・灰卡・一键清（P-5 一颗翻牌）
+
+- 接手第一步照旧现读编号轴：报告到六百零一、交接到九十六、坑表到 #1157、账本到 P-295（本轮无新立账・一颗翻牌 ✅：P-5）；计数器现读＝296/271/25（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・未标记 26→25）。
+
+- 事实源：`ItemRepository.Stale.cs`（与同目录其余 `ItemRepository.*.cs` 是同一个类 partial——按 SQLite 访问面分文件，不是一个新抽象层；`ReconcileStaleAsync`/`CountStaleAsync`/`DeleteStaleAsync`）；`MigrationRunner`（`CurrentVersion` 7・`MigrateV7`・`ColumnExists` 幂等）；`Schema.sql`（新库直带 stale 列）；`SyncCoordinator.cs:107` 对账双门（`source.SupportsStaleReconciliation && !fetch.Truncated`）・`IItemSource.cs:87` 默认 false・`BrowserBookmarksSource.cs:69` 唯一 opt-in；`ItemCardViewModel` `IsStale`（:299）/`StaleTip`（:303）＋`BoolToOpacityConverter`（0.55）；`SettingsPageViewModel.StaleBookmarks.cs`（`RefreshStaleBookmarksAsync` 计数/重扫・`CleanStaleBookmarksAsync` 报条数→确认→删→重扫）；7 颗新 i18n 键（6 颗 settings.extend.stale*＋`card.tip.stale`）。
+
+- 行为语义：浏览器删书签→下一轮同步该行标灰（tooltip「这条在来源清单里已经不在…」）・搜索照旧搜得着；书签在浏览器里恢复→下一轮同步清位回正常；GitHub（5000 顶）／Ditto（`MaxSync`）／Everything（分页）一律不进对账（双门拦）——「这次没出现」在截断源那里不等于「上游删了」；local 的 RSS 收藏书签永不被对账置位（作用域排除）；设置卡清理先居中报条数、确认框明说标签与笔记会一并删、删完重扫；`stale` 位写入者只有对账与一键清两个，`UpsertOne` 永不写这列。
+
+- 闸测须知（再动须同步）：`StaleBookmarkGateTests` 十事实（`staleNote` 键==0 反拦——说明行刻意没有，谁加回来先撞 `SettingsNoteTrimGateTests` 长度再撞这里）；`SyncWriteTxnGateTests` 写事务总钉 20；`RssPluralGateTests` 冻结 94（{0} 后禁相邻裸复数名词——staleCount 走 label 形先例）；`SettingsDataWordGateTests` `SetMessage` 总钉 19；`SettingsNoteTrimGateTests` 697 字/41 行（预算 700・`ZhCapPerNote`=26）；`MigrationRunnerTests` 老库测试须走 DROP COLUMN 模拟（坑 #1157）；`SyncCoordinatorTests` `FakeSource` 两钮（`TruncatedFlag`/`Reconciles`）；census 基线 19 保平。
+
+- 读数：build 0 错；全量 6911/6911（片214 6890→6911・23 m 39 s）；docgates215 47/47；census 19；计数器 296/271/25 VERDICT OK；坑表 #1157 止。
+
+- 下一刀：真机验两批——片214 三项（P-6A 带 Token ETag 换血・P-59 来源段第 5 档「📋」・P-7A 删除待办后撤销回挂标签与置顶）＋片215 一项（浏览器删书签→同步→卡片变灰→设置卡计数＋一键清全链）；之后的刀待拍。⛔ push（未推 23）。

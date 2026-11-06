@@ -35,6 +35,7 @@ public sealed class MigrationRunner
         if (version < 4) MigrateV4(conn);
         if (version < 5) MigrateV5(conn);
         if (version < 6) MigrateV6(conn);
+        if (version < 7) MigrateV7(conn);
 
         // 只在真正向前迁移后才推进版本号。若库里存的版本已高于本二进制（应用降级：
         // 新版建库后回退到旧版），无条件写回 CurrentVersion 会把 schema_version 倒拨，
@@ -42,7 +43,7 @@ public sealed class MigrationRunner
         if (version < CurrentVersion) WriteSchemaVersion(conn, CurrentVersion);
     }
 
-    public const int CurrentVersion = 6;
+    public const int CurrentVersion = 7;
 
     private static int ReadSchemaVersion(Microsoft.Data.Sqlite.SqliteConnection conn)
     {
@@ -179,6 +180,20 @@ public sealed class MigrationRunner
     {
         MergeByNormalizedKey(conn, onlyCollidingGroups: false);
         RebuildSearchTextAndIndex(conn);
+    }
+
+    /// <summary>
+    /// v7：items.stale（片215·P-5B）。来源清单里已没有它、但行还留着的「失联」标记——
+    /// 同步对账（<c>ItemRepository.ReconcileStaleAsync</c>）负责置位/清位，界面上标灰展示。
+    /// 新行一律默认 0（在册）；<c>UpsertOne</c> 不写这列，书签回归时靠同一轮对账的 CASE 清位。
+    /// ALTER 仅在列缺失时执行，幂等（口径同 <see cref="MigrateV2"/> 的 pinned）。
+    /// </summary>
+    private static void MigrateV7(Microsoft.Data.Sqlite.SqliteConnection conn)
+    {
+        if (ColumnExists(conn, "items", "stale")) return;
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "ALTER TABLE items ADD COLUMN stale INTEGER NOT NULL DEFAULT 0;";
+        cmd.ExecuteNonQuery();
     }
 
     /// <summary>

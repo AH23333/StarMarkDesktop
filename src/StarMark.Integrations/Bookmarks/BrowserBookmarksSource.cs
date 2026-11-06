@@ -60,6 +60,14 @@ public abstract class BrowserBookmarksSource : IItemSource
 
     public bool IsAvailable => Sources().Any(File.Exists);
 
+    /// <summary>
+    /// 书签清单<b>没有拉取预算、每一轮都是完整清单</b>，所以有资格举手当对账依据（片215·P-5B）：
+    /// 同步协调器据此把「浏览器里已经删掉」的旧行标上失联（标灰），回归时同一轮清位。
+    /// 截断那道副门对书签族恒放行（<see cref="FetchResult.Truncated"/> 恒 false），留着它是给
+    /// 未来带预算的源看的。
+    /// </summary>
+    public bool SupportsStaleReconciliation => true;
+
     /// <summary>这里的「可用」靠<b>本机数据文件在场</b>成立（书签 JSON 找到了才谈得上读），与"配没配"那族事实无关（片212·P-47）。</summary>
     public SourceAvailabilityKind AvailabilityKind => SourceAvailabilityKind.FilePresent;
 

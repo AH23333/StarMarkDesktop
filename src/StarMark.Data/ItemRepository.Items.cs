@@ -27,7 +27,8 @@ public sealed partial class ItemRepository
                    i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
                    (SELECT GROUP_CONCAT(t.name, char(31)) FROM item_tags it
                     JOIN tags t ON t.id = it.tag_id
-                    WHERE it.item_id = i.id) AS tag_names
+                    WHERE it.item_id = i.id) AS tag_names,
+                   i.stale
             FROM items i
             WHERE i.id = @id;";
         cmd.Parameters.AddWithValue("@id", id);
@@ -137,7 +138,8 @@ public sealed partial class ItemRepository
                    i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
                    (SELECT GROUP_CONCAT(t2.name, char(31)) FROM item_tags it2
                     JOIN tags t2 ON t2.id = it2.tag_id
-                    WHERE it2.item_id = i.id) AS tag_names
+                    WHERE it2.item_id = i.id) AS tag_names,
+                   i.stale
             FROM items i
             WHERE {string.Join(" AND ", where)}{BuildTagClause(filter.TagFilters, "i")}
             GROUP BY i.id
@@ -190,7 +192,8 @@ public sealed partial class ItemRepository
             SELECT i.id, i.type, i.source, i.source_id, i.title, i.subtitle, i.uri,
                    i.description, i.stars_count, i.file_size, i.created_at, i.updated_at,
                    i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
-                   NULL AS tag_names
+                   NULL AS tag_names,
+                   i.stale
             FROM items i
             WHERE i.hidden = 0
               AND i.type IN ({string.Join(",", placeholders)})
@@ -214,7 +217,8 @@ public sealed partial class ItemRepository
                    i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
                    (SELECT GROUP_CONCAT(t.name, char(31)) FROM item_tags it
                     JOIN tags t ON t.id = it.tag_id
-                    WHERE it.item_id = i.id) AS tag_names
+                    WHERE it.item_id = i.id) AS tag_names,
+                   i.stale
             FROM items i WHERE i.hidden = 1 ORDER BY i.updated_at DESC;";
         var items = new List<Item>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -246,7 +250,8 @@ public sealed partial class ItemRepository
                    i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
                    (SELECT GROUP_CONCAT(t.name, char(31)) FROM item_tags it
                     JOIN tags t ON t.id = it.tag_id
-                    WHERE it.item_id = i.id) AS tag_names
+                    WHERE it.item_id = i.id) AS tag_names,
+                   i.stale
             FROM items i WHERE i.hidden = 0
             ORDER BY i.updated_at DESC LIMIT @limit;";
         cmd.Parameters.AddWithValue("@limit", limit);
@@ -267,7 +272,8 @@ public sealed partial class ItemRepository
                    i.synced_at, i.extra_json, i.hidden, i.pinned, i.notes,
                    (SELECT GROUP_CONCAT(t.name, char(31)) FROM item_tags it
                     JOIN tags t ON t.id = it.tag_id
-                    WHERE it.item_id = i.id) AS tag_names
+                    WHERE it.item_id = i.id) AS tag_names,
+                   i.stale
             FROM items i WHERE i.hidden = 0 AND i.pinned = 1
             ORDER BY i.updated_at DESC LIMIT @limit;";
         cmd.Parameters.AddWithValue("@limit", limit);

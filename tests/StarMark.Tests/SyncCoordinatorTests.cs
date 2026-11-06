@@ -32,6 +32,11 @@ public sealed class SyncCoordinatorTests : IDisposable
         public bool Available { get; init; } = true;
         public IReadOnlyList<Item>? Result { get; set; }
         public Exception? Throw { get; init; }
+        /// <summary>这一轮信封上的「没拉全」旗（P-58 那颗的测试旋钮；默认 false＝拉全了）。</summary>
+        public bool TruncatedFlag { get; init; }
+        /// <summary>覆写 <c>IItemSource.SupportsStaleReconciliation</c>（片215·P-5B）：默认 false＝这颗源不参与失联对账。</summary>
+        public bool Reconciles { get; init; }
+        public bool SupportsStaleReconciliation => Reconciles;
 
         /// <summary>提交检查点时问一句"载荷那时在库里了吗"（P-19 钉的就是这个次序）。</summary>
         public Func<Task<bool>>? PayloadIsInDb { get; set; }
@@ -42,7 +47,7 @@ public sealed class SyncCoordinatorTests : IDisposable
         public Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct)
         {
             if (Throw != null) throw Throw;
-            return Task.FromResult(new FetchResult(Result ?? Array.Empty<Item>(), false));
+            return Task.FromResult(new FetchResult(Result ?? Array.Empty<Item>(), TruncatedFlag));
         }
 
         public async Task CommitCheckpointAsync(CancellationToken ct)
@@ -318,6 +323,71 @@ public sealed class SyncCoordinatorTests : IDisposable
         Assert.Contains("boom", lines.Render(), StringComparison.Ordinal);
     }
 
+    // ─────────────── 片215·P-5B：检查点提交之后才对账，且要过两道门 ───────────────
+
+    [Fact]
+    public async Task SyncAll_WhenSourceDeclaresFullList_ReconcilesStaleRows()
+    {
+        // 库里先有一颗源里已经没有的旧书签（模拟用户在浏览器里删掉的那颗）；
+        // 源声明「我给的是全量清单」⇒ 同步完之后那颗旧书签要被打上失联标，而新拉的这颗不能陪绑。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item
+            {
+                Type = ItemType.Bookmark, Source = "fake", SourceId = "old",
+                Title = "已在浏览器里删掉的书签", CreatedAt = FixedTime(), UpdatedAt = FixedTime(),
+            },
+        }, CancellationToken.None);
+        var source = new FakeSource
+        {
+            SourceId = "fake",
+            DisplayName = "Fake",
+            Reconciles = true,
+            Result = new[] { new Item { Type = ItemType.Bookmark, Source = "fake", SourceId = "new", Title = "新书签" } },
+        };
+        var coordinator = new SyncCoordinator(repo, new[] { source });
+
+        await coordinator.SyncAllAsync(CancellationToken.None);
+
+        Assert.Equal(1, await repo.CountStaleAsync(CancellationToken.None));
+        var all = await repo.GetAllAsync(new BrowseFilter { Limit = 100 }, CancellationToken.None);
+        Assert.Equal(2, all.Count);
+        Assert.True(all.Single(i => i.SourceId == "old").Stale, "旧书签没被标灰");
+        Assert.False(all.Single(i => i.SourceId == "new").Stale, "这一轮新拉的书签被误标了");
+    }
+
+    [Fact]
+    public async Task SyncAll_ReconcileRequiresBothGates_SupportAndUntruncated()
+    {
+        // 双门钉死：源不声明全量（SupportsStaleReconciliation=false）⇒ 不对账；
+        // 声明了但这一轮没拉全（Truncated=true）⇒ 同样不对账。
+        // 反面各自的代价都在 P-5 账本 L977：拿残清单当全量，首页之外的历史全成误标。
+        var repo = new ItemRepository(_factory);
+        await repo.UpsertAsync(new[]
+        {
+            new Item
+            {
+                Type = ItemType.Bookmark, Source = "quiet", SourceId = "old",
+                Title = "旧书签", CreatedAt = FixedTime(), UpdatedAt = FixedTime(),
+            },
+        }, CancellationToken.None);
+
+        var silent = new FakeSource { SourceId = "quiet", DisplayName = "Quiet" };   // 不声明（默认 false）
+        await new SyncCoordinator(repo, new[] { silent }).SyncAllAsync(CancellationToken.None);
+        Assert.Equal(0, await repo.CountStaleAsync(CancellationToken.None));
+
+        var truncated = new FakeSource
+        {
+            SourceId = "quiet", DisplayName = "Trunc", Reconciles = true, TruncatedFlag = true,
+        };
+        await new SyncCoordinator(repo, new[] { truncated }).SyncAllAsync(CancellationToken.None);
+        Assert.Equal(0, await repo.CountStaleAsync(CancellationToken.None));
+    }
+
     private static Item ItemFile(string source)
         => new() { Type = ItemType.File, Source = source, SourceId = "a", Title = "T" };
+
+    private static long FixedTime()
+        => new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
 }

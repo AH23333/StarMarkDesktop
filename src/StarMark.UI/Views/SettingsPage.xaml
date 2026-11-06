@@ -847,6 +847,27 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- 失联书签（片215·P-5B）：浏览器里删掉的书签行不跟着消失——标签/笔记还挂着，
+                             同步对账只标灰不删；这一卡报条数、给那一键，真删由用户按。
+                             说明行刻意没有：该说的两件事各有出处——「标灰展示」在状态行，
+                             「标签与笔记会一并删掉」在确认框；设置页说明族的预算不收新行。
+                             按钮名与磁盘卡共用一颗键（同一动作、同一句话），正文各自立键。 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock i18n:LocText.Key="settings.extend.staleTitle" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <!-- 这句话的可见性只管"有没有话要说"（含数失败那句），不跟"有没有可删的行"绑 -->
+                                    <TextBlock Grid.Column="0" x:Name="StaleBookmarksStatusText"
+                                               Style="{StaticResource SettingRowText}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                               Visibility="{x:Bind ViewModel.HasStaleBookmarksNotice, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                                    <Button Grid.Column="1" i18n:LocText.Key="settings.extend.cleanMissing" VerticalAlignment="Center"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Command="{x:Bind ViewModel.CleanStaleBookmarksCommand}"
+                                            Visibility="{x:Bind ViewModel.HasStaleBookmarks, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
                         <!--
                             截屏总开关（批次 RP）：发起人点名"需要将截屏功能总开关放入拓展功能设置页"。
                             这条只管"<b>能不能再发起一次框选</b>"：那三条入口的热键与托盘项一起收，

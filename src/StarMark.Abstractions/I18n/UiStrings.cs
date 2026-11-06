@@ -643,6 +643,18 @@ public static class UiStrings
             "{0} stored local-file paths are no longer on this machine (moved, deleted, or the drive is unplugged) — {1}.",
             "ライブラリのローカルファイルのパス {0} 件がこのマシンに見当たりません（移動・削除されたか、そのドライブが今刺さっていない）——{1}。"),
         new Entry("settings.extend.missingScanFailed", "扫描失败：{0}", "Scan failed: {0}", "走査に失敗：{0}"),
+        // 失联书签那一卡（片215·P-5B）：状态行交条数与去向。说明行⛔ 没给——设置页说明族的
+        // 中文预算只剩个位数余量（SettingsNoteTrimGateTests），而该说的两件事各有出处：
+        // 「标灰展示」在下面这颗状态行里；「标签与笔记会一并删掉」在确认框（staleCleanBody）里。
+        new Entry("settings.extend.staleTitle", "失联的书签行", "Orphaned bookmark rows", "行方不明のブックマーク行"),
+        new Entry("settings.extend.staleCount", "有 {0} 条书签在来源里已经不在（标灰展示）。",
+            "Bookmarks no longer in their source: {0} (shown dimmed).", "{0} 件のブックマークがソースに存在しません（薄表示）。"),
+        new Entry("settings.extend.staleNone", "现在没有失联的书签行。", "No orphaned bookmark rows right now.", "今、行方不明のブックマーク行はありません。"),
+        new Entry("settings.extend.staleCleanBody", "将从库中删掉 {0} 条来源里已经没有的书签行；这些行上挂的标签与笔记会一并删掉。",
+            "This removes {0} bookmark rows that are no longer in their source. Tags and notes attached to them go too.",
+            "ソースに存在しないブックマーク行を {0} 件、ライブラリから削除します。それらに付いたタグとメモも一緒に消えます。"),
+        new Entry("settings.extend.staleClearedBody", "删掉了 {0} 条失联书签行。", "Removed {0} orphaned bookmark rows.", "行方不明のブックマーク行を {0} 件削除しました。"),
+        new Entry("settings.extend.staleCountFailed", "统计失败：{0}", "Count failed: {0}", "集計に失敗：{0}"),
         // RSS 那一栏的<b>动作回执</b>（同一颗状态行：开关讲的是"这一栏开没开"，添加/移除讲的是"刚刚那一下成了没"）
         new Entry("settings.extend.rssAddBad", "没能添加：{0}", "Not added: {0}", "追加できませんでした：{0}"),
         new Entry("settings.extend.rssDuplicated", "这个地址已经在列表里了，不必重复添加", "That address is already in the list — no need to add it twice", "そのアドレスはもう一覧にあります。同じものを二度追加する必要はありません"),
@@ -1126,6 +1138,9 @@ public static class UiStrings
         new Entry("card.menu.sendTo", "发送到桌面 · 快捷启动", "Send to desktop · Quick launch", "デスクトップへ送る · クイック起動"),
         new Entry("card.menu.focus", "开始专注这一项", "Focus on this item", "この項目に集中する"),
         new Entry("card.tip.pinned", "已置顶", "Pinned", "ピン留め済み"),
+        new Entry("card.tip.stale", "这条在来源清单里已经不在（可能已被删除），清理入口在「设置 → 拓展功能」",
+            "No longer in its source (it may have been deleted); clean them up in Settings → Extensions",
+            "ソースに存在しません（削除された可能性があります）。「設定 → 拡張機能」から一括削除できます"),
         new Entry("card.tip.size", "文件大小", "File size", "ファイルサイズ"),
         new Entry("card.tip.tagOpen", "查看该标签的全部条目", "Show items with this tag", "このタグの項目を表示"),
         new Entry("card.tip.tagRemove", "移除标签", "Remove tag", "タグを削除"),

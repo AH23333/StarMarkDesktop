@@ -69,6 +69,23 @@ public interface IItemSource
     /// </summary>
     Task CommitCheckpointAsync(CancellationToken ct) => Task.CompletedTask;
 
+    /// <summary>
+    /// 这颗源的<b>全量拉取清单能不能当对账依据</b>（片215·P-5B）：能，同步协调器就在落库之后
+    /// 按它把「源里已经没有」的旧行标上失联（<c>items.stale</c>，界面标灰）；不能，就一根指头都不碰。
+    /// <para>
+    /// 为什么默认 false 而不是谁都能对账：<b>「拉到了 N 条」与「源里一共只有这 N 条」不是同一句话</b>——
+    /// 有拉取预算的源（GitHub 的 5000 顶）被掐断时，首页之外的合法历史会被当成失联行批量标灰
+    /// （账本护栏③的原话：截断源做全量对账会误删首页之外的合法历史）。只有「没有预算、
+    /// 每一轮都是完整清单」的源（书签族）才有资格举手。
+    /// </para>
+    /// <para>
+    /// 走默认实现（与 <see cref="AvailabilityKind"/> 同一条路子）：既有源与测试桩都可以不动，
+    /// 愿意担这份责任的源各自覆写。第二道闸（<see cref="FetchResult.Truncated"/>）由协调器现查，
+    /// 两道闸都过才对账——源举手了但那一轮仍被掐断（未来的书签预算）时也不误标。
+    /// </para>
+    /// </summary>
+    bool SupportsStaleReconciliation => false;
+
     /// <summary>从源实时搜索（不依赖 SQLite）。供统一搜索跨源混排使用。</summary>
     /// <param name="query">关键词。</param>
     /// <param name="filter">过滤条件（类型、来源、数值范围）。</param>

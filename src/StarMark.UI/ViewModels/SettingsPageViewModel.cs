@@ -387,6 +387,10 @@ public partial class SettingsPageViewModel : ObservableObject
         _suppressLocalDiskApply = false;
         RefreshLocalDiskSearchState();
 
+        // 失联书签那一格的读数（片215·P-5B）：fire-and-forget——数数不许挡着设置页出来；
+        // 计数本身住在 StaleBookmarks 那个分部里，这里只挂进页时机（每次进设置页都现数）。
+        _ = RefreshStaleBookmarksAsync();
+
         // 剪贴板历史：进页面只回灌状态，<b>不因为"显示"而去建监听窗口</b>；
         // 但"开关开着却没在记录"必须一眼看得见，否则用户会一直以为历史在长。
         _suppressClipboardApply = true;

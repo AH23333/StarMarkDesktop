@@ -82,6 +82,7 @@ public partial class ItemCardViewModel : ObservableObject
            && _item.UpdatedAt == other.UpdatedAt
            && _item.Hidden == other.Hidden
            && _item.Pinned == other.Pinned
+           && _item.Stale == other.Stale
            && TagsMatch(_item.Tags, other.Tags);
 
     /// <summary>标签逐颗序敏感比较（<see cref="SameDisplayContent"/> 的那一格）。</summary>
@@ -290,6 +291,16 @@ public partial class ItemCardViewModel : ObservableObject
     public void RaiseCollectRequested() => CollectRequested?.Invoke(this);
 
     public string SourceIcon => ItemCardPolicy.GlyphOf(Type);
+
+    // ────────── 失联行（片215·P-5B）──────────
+
+    /// <summary>这条在源头（书签/Star 的来源清单）里已经不在了。卡片整卡压暗照常显示——
+    /// 删由用户在设置页那一键决定，这里只说清「你看到的这条是个背影」。</summary>
+    public bool IsStale => _item.Stale;
+
+    /// <summary>失联卡的 tooltip：<b>只有失联时才有话</b>（null＝不给 tooltip，别让每张正常卡
+    /// 都背一句与它无关的解释）。句子住在表里（<c>card.tip.stale</c>），这一格被念到才取词。</summary>
+    public string? StaleTip => IsStale ? Locale.T("card.tip.stale") : null;
 
     /// <summary>更新时间（热榜候选不显示：它们没有"本机更新时间"，缺省 0 会印成 1970-01-01）。</summary>
     public string RelativeTime => ItemCardPolicy.ShowsTimeAndStarsLines(IsTrendingRepo, IsRssCandidate)

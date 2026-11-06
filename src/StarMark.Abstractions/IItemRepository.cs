@@ -177,6 +177,23 @@ public interface IItemRepository
     Task<int> DeleteFileEntriesAsync(IReadOnlyList<long> itemIds, CancellationToken ct = default);
 
     /// <summary>
+    /// 按源侧现值清单对账「失联」标记（片215·P-5B）：<paramref name="presentSourceIds"/> 里没有的行
+    /// 置 stale=1、重新出现的清回 0，返回<b>这次新标</b>的行数。作用域（source＋type）在实现里写进 SQL。
+    /// <para>为什么要对账而不是同步时顺手删：旧行身上挂着用户的标签与笔记，「源里没了」与「该删」
+    /// 不是同一件事（账本 P-5 拍 (B)「标灰＋一键清」——程序挑出来、说清楚，删不删用户按）。</para>
+    /// </summary>
+    Task<int> ReconcileStaleAsync(string source, ItemType type, IReadOnlyList<string> presentSourceIds, CancellationToken ct = default);
+
+    /// <summary>数一遍「失联的书签行」（设置页那张卡的读数）。</summary>
+    Task<int> CountStaleAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// 一键清掉「失联的书签行」，返回真正删掉的行数。只删对账标过的那一族
+    /// （stale=1 且 type='bookmark'），其余一律不碰。
+    /// </summary>
+    Task<int> DeleteStaleAsync(CancellationToken ct = default);
+
+    /// <summary>
     /// 列出<b>所有</b>图片行的文件名与缺失标记，供启动对账（§3-Q6 三分类）使用。
     /// <para>实现必须无行数窗口：借一个带 limit 的查询来对账，窗口外的行会被当成"没人认领的文件"，
     /// 于是本来完好的目录被报成一堆孤儿。也只需文件名——把正文捞进来是白付的内存。</para>
