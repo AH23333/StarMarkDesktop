@@ -1281,6 +1281,44 @@ public sealed class I18nWiringGateTests
     }
 
     /// <summary>
+    /// ✅P-170（批次 WI-2g）：语言写入必须<b>自带取证</b>。那一笔没复现的沙盒 zh→en 写入发生时
+    /// 没有一行日志可查——"谁在什么状态下写了什么、生效了没有"全判不了。
+    /// <para>取证行必须<b>先于</b>写入（写途中抛了也要留下"当时想写什么"），把旧值→新值、下拉与页面
+    /// 状态、<c>TrySet</c> 回值一并记下；规则 74：拿到下一笔读数之前 ⛔ 顺手加任何护栏。</para>
+    /// <para>同时钉死"全仓写入者只有这一处"：第二处 <c>SetUiLanguageCode</c> 调用点出现时，
+    /// 它必须自觉补取证，而不是静默绕过这一份——本门直接红给它看。</para>
+    /// </summary>
+    [Fact]
+    public void LanguageWritesCarryForensicEvidence()
+    {
+        var handler = MethodBody(Code(ReadRepoFile(SettingsI18nCs)), "private void LanguageSelect_SelectionChanged");
+        var evidence = handler.IndexOf("界面语言写入取证", StringComparison.Ordinal);
+        var save = handler.IndexOf("SetUiLanguageCode(", StringComparison.Ordinal);
+        var applied = handler.IndexOf("界面语言生效取证", StringComparison.Ordinal);
+        Assert.True(evidence >= 0 && save > evidence,
+            $"取证行必须先于写入（写抛了也要留下当时想写什么）：{handler}");
+        Assert.True(applied > save, $"生效取证必须排在写入之后（记的是 TrySet 回值）：{handler}");
+        Assert.Contains("TrySet={switched}", handler, StringComparison.Ordinal);   // 生效与否要记
+        Assert.Contains("SelectedIndex=", handler, StringComparison.Ordinal);      // 下拉当时的状态
+        Assert.Contains("页面已加载=", handler, StringComparison.Ordinal);         // 页面铺出来没有
+
+        // 全仓（src 下全部 .cs）对 SetUiLanguageCode( 的引用只许两处：定义＋这一手。
+        var references = ReadRepoUnder("src")
+            .Select(f => (f.RelativePath, Hits: Count(f.Text, "SetUiLanguageCode(")))
+            .Where(f => f.Hits > 0)
+            .OrderBy(f => f.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            new[]
+            {
+                "src/StarMark.UI/Helpers/SettingsStore.I18n.cs",     // 定义
+                "src/StarMark.UI/Views/SettingsPage.I18n.cs",        // 唯一调用
+            },
+            references.Select(f => f.RelativePath).ToArray());
+        Assert.Equal(new[] { 1, 1 }, references.Select(f => f.Hits).ToArray());
+    }
+
+    /// <summary>
     /// 设置档里那一格<b>存的是语言代码，不是它在下拉里的位置</b>。
     /// <para>按序号存的那一份今天完全能用，坏法是明天的：<c>Pickable</c> 中间插进日文，所有已存的
     /// <c>1</c> 就安静地指向了另一门语言——<b>没有异常、没有日志、界面看着也自洽</b>。

@@ -849,3 +849,15 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：build 0 错 0 警（7 警全在未触碰旧档，非本刀引入）；定向 313/313；全量 6935/6935（12 m 22 s）；docgates218 47/47（翻牌后复测）；census 19；flipcheck PASS（加行 2 行 0 禁词・whole-档 128 同态）；计数器 296/280/16 VERDICT OK。
 
 - 下一刀：队列清理第四刀＝P-170 取证日志（选项 A・零行为改动）→P-43 widgets 半边→P-293 GLM 远程 API（key 落盘沿 P-30 DPAPI 口径）→P-63 默认键先问。⛔ push（未推 26）。
+
+## 一百、片219 队列清理第四刀：P-170 语言写入取证落地（选项 A・零行为改动・拿到读数之前不猜因）
+
+- 接手第一步照旧现读编号轴：报告到六百零五、交接到一百、坑表到 #1157（本轮无新增）、账本到 P-295（本轮无新立账・一颗翻牌 ✅：P-170）；计数器现读＝296/281/15（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・未标记 16→15）。
+
+- P-170 实现锚（供复核，全部在仓）：SettingsPage 的 I18n 分部那一手（LanguageSelect_SelectionChanged）守卫后两行取证——「写入取证」＝旧值 LoadUiLanguageCode→新值・SelectedIndex・增删项计数・IsLoaded（先于 SetUiLanguageCode）；「生效取证」＝Locale.TrySet 回值（后于写入）；零行为改动（TrySet 回值接进变量・读旧值走既有读路径）；闸门证人＝I18nWiringGateTests.LanguageWritesCarryForensicEvidence（三序两态＋SetUiLanguageCode 全仓名册恰两处：定义＋这一手）。
+
+- 真机统一测清单（P-170 项，随片214–218 那批一起测）：① 进设置页动那颗语言下拉→日志里两行取证（写入：旧→新・状态；生效：TrySet 回值）当场可查；② 账本那笔沙盒 zh→en 写入若再现→按取证行判「谁在什么状态下写什么」，再定 B 护栏要不要；③ 沙盒（STARMARK_DB_PATH 重定向）与真机两份日志对照答「是否只在沙盒发生」；④ 改完语言退出重启→设置档与界面语言一致（P-168 族回归）。
+
+- 读数：build 0 错（7 警全旧档既有，非本刀引入）；定向 318/318（十四族闸，`gates219.txt`）；全量 6936/6936（13 m 11 s，`full219.txt`）；docgates219 47/47（翻牌后复测）；census 19；flipcheck PASS（加行 2 行 0 禁词・whole-档 128 同态）；计数器 296/281/15 VERDICT OK。
+
+- 下一刀：队列清理第五刀＝P-43 widgets 半边→P-293 GLM 远程 API（key 落盘沿 P-30 DPAPI 口径）→P-63 默认键先问→P-93。⛔ push（未推 27）。

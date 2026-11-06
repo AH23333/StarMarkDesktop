@@ -82,8 +82,15 @@ public sealed partial class SettingsPage
     {
         if (_applyingLanguageChoice) return;
         var code = LanguageSelect.SelectedItem is LocOption option ? option.Value as string : null;
-        App.Services.GetRequiredService<SettingsStore>().SetUiLanguageCode(code);
-        Locale.TrySet(Locale.Resolve(code, AppLanguages.SystemLanguageTags()));
+        // ✅P-170 取证（选项 A）：那笔没复现的沙盒 zh→en 写入发生时没有任何日志可查，"谁在什么状态下写了什么"
+        // 判不了（规则 74：没拿到读数不许猜因）。这两行不改任何行为，只把事实记下来：旧值→新值、下拉与页面
+        // 的状态、生效与否；拿到下一笔读数之前 ⛔ 顺手加任何护栏。
+        var store = App.Services.GetRequiredService<SettingsStore>();
+        StarMark.Abstractions.StarLog.Info($"[设置页] 界面语言写入取证：{store.LoadUiLanguageCode() ?? "跟随系统"} → {code ?? "跟随系统"}" +
+            $"（SelectedIndex={LanguageSelect.SelectedIndex}，新增项={e.AddedItems.Count}，移除项={e.RemovedItems.Count}，页面已加载={IsLoaded}）");
+        store.SetUiLanguageCode(code);
+        var switched = Locale.TrySet(Locale.Resolve(code, AppLanguages.SystemLanguageTags()));
+        StarMark.Abstractions.StarLog.Info($"[设置页] 界面语言生效取证：TrySet={switched}（{(code is null ? "跟随系统" : code)}）");
             UiLanguageOverride.Apply();   // 同一次用户动作里把框架链也带上（WI-34）；已铺出的树不追改，重进页现取——绑定族同一口径
     }
 }
