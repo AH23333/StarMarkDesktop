@@ -203,6 +203,14 @@ public sealed class AiLayerTests
     public void TagLessModelNamesMatchTheirFamily(string configured, string available, bool found)
         => Assert.Equal(found, AiWire.ListsModel(configured, new[] { available }));
 
+    [Theory]
+    [InlineData("glm-5.3-flash", "glm-5.3-flash", true)]     // 真 GLM 真测的形状：远程名没有标签段（P-293）
+    [InlineData("GLM-5.3-Flash", "glm-5.3-flash", true)]     // 大小写不敏感照旧
+    [InlineData("gpt-4o", "gpt-4o-mini", false)]             // 前缀相同不算：远程名的精确是真精确
+    [InlineData("qwen2.5", "qwen2.5:latest", true)]          // Ollama 的 :latest 宽容不因这次收窄而丢
+    public void RemoteColonlessNamesMatchExactlyBeforeTagTolerance(string configured, string available, bool found)
+        => Assert.Equal(found, AiWire.ListsModel(configured, new[] { available }));
+
     [Fact]
     public void EmptyModelListIsSaidOutLoud()
     {

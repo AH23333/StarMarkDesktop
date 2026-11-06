@@ -188,6 +188,8 @@ public static class AiWire
     }
 
     /// <summary>配置的模型名在服务侧列表里有没有。
+    /// <para><b>先按原样精确对一次</b>：OpenAI 兼容端点的模型名（<c>glm-5.3-flash</c>）没有标签段，
+    /// 无脑补 <c>:latest</c> 会造出一个谁也不认的名字，于是真 GLM 真测里「列表里明明有」被报成没有（P-293）。</para>
     /// <para><b>唯一的宽容是"没写标签就补 <c>:latest</c>"，因为那正是 Ollama 自己做的解析</b>——
     /// 这里多宽一分，界面就会对一个其实调不通的名字打 ✓（填 <c>qwen2.5</c> 而本机只有 <c>qwen2.5:7b</c>
     /// 是真的会失败的，家族名相同不算数）。</para></summary>
@@ -195,6 +197,8 @@ public static class AiWire
     {
         var want = configured?.Trim();
         if (string.IsNullOrEmpty(want) || available.Count == 0) return false;
+        if (available.Any(name => string.Equals(name.Trim(), want, StringComparison.OrdinalIgnoreCase)))
+            return true;
         if (!want.Contains(':')) want += ":latest";
         return available.Any(name => string.Equals(name.Trim(), want, StringComparison.OrdinalIgnoreCase));
     }

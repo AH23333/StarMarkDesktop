@@ -873,3 +873,15 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：build 0 错（7 警全旧档既有，非本刀引入）；定向 282/282（Widget 族，`gates220.txt`）；全量 6937/6937（15 m 38 s，`full220.txt`）；docgates220 47/47（翻牌后复测）；census 19；flipcheck PASS（加行 2 行 0 禁词・whole-档 128 同态）；计数器 296/282/14 VERDICT OK。
 
 - 下一刀：队列清理第六刀＝P-293 GLM 远程 API（key 落盘沿 P-30 DPAPI 口径）→P-63 默认键先问→P-93。⛔ push（未推 28）。
+
+## 一百零二、片221 队列清理第六刀：P-293 远程 GLM 真测链路收口（真测全绿・ListsModel :latest 误补已修）
+
+- 接手第一步照旧现读编号轴：报告到六百零七、交接到一百零二、坑表到 #1157（本轮无新增）、账本到 P-295（本轮无新立账・一颗翻牌 ✅：P-293）；计数器现读＝296/283/13（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・未标记 14→13）。
+
+- P-293 实现锚（供复核，全部在仓）：远程通道＝OpenAiCompatibleProvider＋AiGateway.Of；key 落盘＝SettingsStore.Ai→SecretProtector DPAPI（片211）；本刀改动＝AiWire.ListsModel（Abstractions：先按原样精确对一次，:latest 宽容只留无标签名兜底）＋AiLayerTests.RemoteColonlessNamesMatchExactlyBeforeTagTolerance（4 例）。真测 harness 在仓外（GlmProbe console 工程，⛔ 进仓），可照片221 报告那段重建。
+
+- 统一测清单（P-293 项）：设置页 AI 栏启用远程模式——Provider 选 OpenAI 兼容・BaseUrl 填 open.bigmodel.cn/api/paas/v4・Model 填 glm-5.3-flash（glm-4-flash 已退役）・ApiKey 填那颗 .env 里的值；点「测试连接」看 probe 绿（应报「模型在服务侧列表里」）；再跑一次真实「整理/摘要」看中文往返与耗时；顺手确认 key 落盘后设置档里是 DPAPI 哨兵而非明文。
+
+- 读数：build 0 错；定向 967/967（Ai 超集闸，`gates221.txt`）＋新 Theory 4/4；全量 6941/6941（12 m 58 s，`full221.txt`）；docgates221 47/47（翻牌后复测）；census 19；flipcheck PASS（加行 2 行 0 禁词）；计数器 296/283/13 VERDICT OK。
+
+- 下一刀：队列清理第七刀＝P-63 默认键先问（动工前先问用户默认键方案）→P-93。⛔ push（未推 29）。
