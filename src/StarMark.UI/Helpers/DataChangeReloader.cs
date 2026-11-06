@@ -20,7 +20,7 @@ namespace StarMark.UI.Helpers;
 /// </summary>
 public sealed class DataChangeReloader : IDisposable
 {
-    private readonly Action _handler;               // 强持有，防止委托被回收导致订阅失效
+    private readonly Action<DataChangeKind> _handler;   // 强持有，防止委托被回收导致订阅失效
     private readonly IDisposable _subscription;
     private readonly DispatcherQueue _queue;
     private readonly DispatcherQueueTimer _timer;
@@ -32,7 +32,11 @@ public sealed class DataChangeReloader : IDisposable
     /// <param name="reload">真正执行的重载（会在 UI 线程上被调用）。</param>
     /// <param name="debounceMs">合并窗口。批量写入时只跑最后一次。</param>
     /// <param name="maxWaitMs">最长合并窗口：自首次通知起超过它就不再往后推（见 ③）。</param>
-    public DataChangeReloader(Func<Task> reload, int debounceMs = 250, int maxWaitMs = 1500)
+    /// <param name="interests">关心哪几族变更（✅P-44）。默认只收 <see cref="DataChangeKind.Items"/>：
+    /// 绝大多数订阅者重载的是条目数据，「设置」族广播不该把它们惊动；要全收的（如热榜显隐取决于设置）
+    /// 显式传 <see cref="DataChangeKind.All"/>。</param>
+    public DataChangeReloader(Func<Task> reload, int debounceMs = 250, int maxWaitMs = 1500,
+        DataChangeKind interests = DataChangeKind.Items)
     {
         _reload = reload;
         _maxWaitMs = Math.Max(debounceMs, maxWaitMs);
@@ -44,10 +48,10 @@ public sealed class DataChangeReloader : IDisposable
         _timer.Tick += Timer_Tick;
 
         _handler = OnDataChanged;
-        _subscription = DataChangeHub.Subscribe(_handler);
+        _subscription = DataChangeHub.Subscribe(_handler, interests);
     }
 
-    private void OnDataChanged()
+    private void OnDataChanged(DataChangeKind kind)
     {
         // 通知可能来自任意线程（仓储跑在线程池上）。DispatcherQueueTimer 是套间亲和对象，
         // 不能跨线程直接 Start —— 用 TryEnqueue 切回 UI 线程再起表。

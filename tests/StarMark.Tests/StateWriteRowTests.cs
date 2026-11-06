@@ -26,8 +26,9 @@ public sealed class StateWriteRowTests : IDisposable
     private readonly DbConnectionFactory _factory;
     private readonly ItemRepository _repo;
 
-    /// <summary>广播计数器。<b>必须强持委托</b>：<see cref="DataChangeHub"/> 弱引用它，被回收就等于没订阅。</summary>
-    private Action _tallyHandler = null!;
+    /// <summary>广播计数器。<b>必须强持委托</b>：<see cref="DataChangeHub"/> 弱引用它，被回收就等于没订阅。
+    /// ✅P-44 起处理器带 <see cref="DataChangeKind"/> 参数（本档只数次数，族用 <c>_</c> 收下）。</summary>
+    private Action<DataChangeKind> _tallyHandler = null!;
     private int _broadcasts;
 
     public StateWriteRowTests()
@@ -58,8 +59,8 @@ public sealed class StateWriteRowTests : IDisposable
     private void StartTally()
     {
         _broadcasts = 0;
-        _tallyHandler = () => Interlocked.Increment(ref _broadcasts);
-        DataChangeHub.Subscribe(_tallyHandler);
+        _tallyHandler = _ => Interlocked.Increment(ref _broadcasts);
+        DataChangeHub.Subscribe(_tallyHandler, DataChangeKind.Items);
     }
 
     /// <summary>库里那一行还回得来吗（用来确认"写没落到行上"与"内容确实没变"是同一件事）。</summary>

@@ -47,8 +47,9 @@ public sealed class StateWriteRowGateTests
         Assert.Contains("return true;", body, StringComparison.Ordinal);                // 落到了也有自己的出口
 
         // 广播必须在"0 行就退出"那句之后：从前这里是"写完就 Notify"，0 行也照样惊动所有组件。
+        // ✅P-44：Notify 带「条目」族——仓储的这些写改的都是条目数据。
         Assert.True(body.IndexOf("return false;", StringComparison.Ordinal)
-                    < body.IndexOf("DataChangeHub.Notify();", StringComparison.Ordinal),
+                    < body.IndexOf("DataChangeHub.Notify(DataChangeKind.Items);", StringComparison.Ordinal),
             "Notify 又跑回行数守卫之前了＝0 行也在广播");
     }
 

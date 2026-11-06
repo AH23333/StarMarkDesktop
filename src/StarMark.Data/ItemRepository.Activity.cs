@@ -22,7 +22,7 @@ public sealed partial class ItemRepository
     {
         using var conn = _factory.Open();
         await LogActivityOnConnection(conn, kind, itemKey, title, uri, ct);
-        DataChangeHub.Notify();   // 活动事件本身也是「数据」：让常驻的最近活动格即时跟上（与业务写各自的 Notify 叠加，重载有去抖）
+        DataChangeHub.Notify(DataChangeKind.Items);   // 活动事件本身也是「数据」：让常驻的最近活动格即时跟上（与业务写各自的 Notify 叠加，重载有去抖）
     }
 
     /// <summary>在给定连接上写入活动事件（供 <see cref="UpsertOne"/> 在已有事务内复用连接）。</summary>

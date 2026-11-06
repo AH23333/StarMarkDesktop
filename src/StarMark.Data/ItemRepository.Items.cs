@@ -47,7 +47,7 @@ public sealed partial class ItemRepository
         }
 
         await tx.CommitAsync(ct);
-        DataChangeHub.Notify();   // 主界面/同步写入后，桌面组件要跟着变
+        DataChangeHub.Notify(DataChangeKind.Items);   // 主界面/同步写入后，桌面组件要跟着变
     }
 
     /// <summary>
@@ -65,7 +65,7 @@ public sealed partial class ItemRepository
         using var tx = conn.BeginImmediate();
         await UpsertOne(conn, item, ct);
         await tx.CommitAsync(ct);
-        DataChangeHub.Notify();   // 记录后置顶/标签/搜索等组件实时跟上
+        DataChangeHub.Notify(DataChangeKind.Items);   // 记录后置顶/标签/搜索等组件实时跟上
         return item.Id;
     }
 
@@ -94,7 +94,7 @@ public sealed partial class ItemRepository
         using var tx = conn.BeginImmediate();
         foreach (var item in writable) await UpsertOne(conn, item, ct);
         await tx.CommitAsync(ct);
-        DataChangeHub.Notify();   // 整批一次：置顶/标签/搜索等组件跟着刷一遍，而不是 N 遍
+        DataChangeHub.Notify(DataChangeKind.Items);   // 整批一次：置顶/标签/搜索等组件跟着刷一遍，而不是 N 遍
         return writable.Count;
     }
 
@@ -230,7 +230,7 @@ public sealed partial class ItemRepository
         cmd.Parameters.AddWithValue("@id", itemId);
         var rows = await cmd.ExecuteNonQueryAsync(ct);
         if (rows == 0) { LogNoRowLanded("隐藏状态", $"id={itemId}"); return false; }   // P-40：库里没那一行，别翻旗也别广播
-        DataChangeHub.Notify();
+        DataChangeHub.Notify(DataChangeKind.Items);
         return true;
     }
 

@@ -771,3 +771,17 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：全量 6865/6865（基线 6846＋新 19）；docgates212 26/26（47/47）；census 20（＝新基线）；坑表零动（无新坑）；产品码＝18 src＋8 tests（新增 BackupCancelGateTests／SearchResultsMinimalDiffGateTests・改 6）＋四活档（本批账本含两颗指针修与 P-256 追加）。
 
 - 下一刀：P-28B′＋P-44（队列次位）。⛔ push（未推 20）。
+
+## 九十四、片213 源读失败分级（SourceReadException）、DataChangeHub interests 分发、速览复制链接不点写（P-28B′/P-44/P-26/P-295 翻牌）
+
+- 接手第一步照旧现读编号轴：报告到五百九十九、交接到九十四、坑表到 #1155、账本到 P-295；计数器现读＝296/263/33（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK）。
+
+- 事实源：src/StarMark.Abstractions/IItemSource.cs 尾部 SourceReadException（message＋inner 两 ctor）＋DittoDatabaseReader（busy_timeout=5000・连接 Dispose 后置 null・两颗查询吞空改抛）＋BrowserBookmarksSource.FetchAsync（attempted/failed/lastError 计数・全败才抛・部分失败跳过＋Warn）＋SyncCoordinator（catch SourceReadException 排 GitHubApiException 后・ErrorKind=Read・sync.src.read zh/en/ja）＋新 SourceReadFailureGateTests；DataChangeKind [Flags]（None/Items/Settings/All）＋Subscribe(callback, interests) hub 侧过滤（默认 All）＋Notify(kind) 必填＋25 处调用站点＋DataChangeHubTests 重写 8 测；ItemCardActions.CopyUri(vm)——GlanceWidget 的 Card_CopyRequested 改走它、XAML 接线不动＋新 ClipboardCopyLinkGateTests。
+
+- 行为语义：「读失败」（库坏/被独占）与「还没写完/未配置」分级——后者照旧宽松交空；书签源全败才抛、部分失败跳过；速览点「复制链接」只复制不点写，点卡片本体仍 ReuseAsync；hub 按 interests 分发——DataChangeReloader 默认订 Items、GlanceWidget 唯一 interests All 全收、Canvas 热榜速览开关唯一 Notify(Settings) 源。
+
+- 闸测须知（再动须同步）：DittoCancellationGateTests 已改口（result.Clear 计 0・throw new SourceReadException 计 2）；SourceReadFailureGateTests 形状闸（busy_timeout 恰 1・吞空 Clear 恰 0・改抛恰 2・catch 次序 github<read<blanket）；DataChangeHubTests 钉 Subscribe 过滤/默认 All/Notify 必填；StateWriteRowTests/StateWriteRowGateTests/BackupCancelGateTests 字面串随 Notify 签名；SyncReasonWordGateTests NewKeys 16（含 sync.src.read・计数 12）；ClipboardCopyLinkGateTests 钉「Card_CopyRequested 不许再接回 ReuseAsync」；census 新基线 19（片213 20→19・出典在 LivingSourcePointerGateTests 片213 para＋账本 P-256 报备）。
+
+- 读数：全量 6880/6880（基线 6865＋新 15・20 m 42 s）；docgates213 47/47（EXITCODE=0）；census 19（＝片213 新基线）；坑表 +1（#1155 PS 5.1 UTF8 WriteAllText 带 BOM）；产品码＝16 src＋9 tests（新增 SourceReadFailureGateTests／ClipboardCopyLinkGateTests・改 7）＋四活档。
+
+- 下一刀：片214＝P-5B/P-6A/P-25+57A/P-7A/P-34B（队列次位）。⛔ push（未推 22）。

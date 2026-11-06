@@ -247,7 +247,16 @@ public sealed class LivingSourcePointerGateTests
     /// ③ P-23 条目自己那串念 <c>GitHubClient.cs</c> 的旧号恰随重写落回正文＝自然愈合而非修，
     /// 本批没把它算成修复，只在 P-256 报一句 ⇒ 净账少一颗（22 现读 − 修复 2 ＝ 20）。
     /// 基线按闸门交回的那颗读数改小・⛔ 手打。</para>
-    private const int FallenPointerBaseline = 20;
+    /// <para><b>片213 再落一颗（20 → 19）・来历＝Ditto 吞空改抛与通知带 kind 平移行号（#1020 第十次・⛔ 读成“这一族又修好了”）</b>：
+    /// 本批把 <c>DittoDatabaseReader</c> 两颗查询的吞空 catch 改抛 <c>SourceReadException</c>（P-28B′ 落地）＋
+    /// <c>DataChangeHub.Notify</c> 带 kind 重写与 <c>GlanceWidget</c> 订阅行加 interests（P-44 落地）⇒ 三档行号平移。
+    /// 差集由那把只读复称尺对拍 HEAD 快照与改后各跑一遍点到名（正本 <c>D:\StarMarkTmp\p213\diffcensus213.txt</c>・
+    /// HEAD 态 20 颗・改后现读 21 颗＝一愈两落）：① P-44 定位行念 <c>DataChangeHub.cs</c> 旧 Notify 区的号与
+    /// SX 嫌疑清单行念 <c>GlanceWidget.xaml.cs</c> 农历段的号双双被平移压进空行＝真落空，本批按口径<b>换号重指</b>
+    /// （各指改后新区间）；② 另一串念 <c>DittoDatabaseReader.cs</c> 旧区间的号恰随改码落回正文＝自然愈合而非修，
+    /// 本批没把它算成修复，只在 P-256 报一句 ⇒ 净账少一颗（21 现读 − 换号 2 ＝ 19）。
+    /// 基线按闸门交回的那颗读数改小・⛔ 手打。</para>
+    private const int FallenPointerBaseline = 19;
 
     /// <summary>片88 第二颗棘轮（P-256 ④）：那颗 <see cref="Resolve"/> 对它交回空的「带目录前缀的简写」那一族。
     /// 换锚前现读 8 颗（正本 <c>bin/WI99/p843_r1/census843-读数.txt</c>）→ 本批逐颗换成正文锚之后这颗数。

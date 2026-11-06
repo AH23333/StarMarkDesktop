@@ -1,5 +1,6 @@
 #nullable enable
 using Microsoft.Data.Sqlite;
+using StarMark.Abstractions;
 using StarMark.Abstractions.Clipboard;
 using StarMark.Integrations.Clipboard;
 
@@ -40,10 +41,21 @@ public sealed class DittoDatabaseReader : IDisposable
         {
             _connection = new SqliteConnection($"Data Source={dbPath};Mode=ReadOnly;Cache=Shared");
             _connection.Open();
+            // ✅P-28B′：Ditto 正在写库的那一瞬，读侧会撞 SQLITE_BUSY。给 5 秒等锁窗口
+            //（与主库 DbConnectionFactory 同一口径）：一瞬撞锁不再被读成"这一轮读失败"，
+            // 真等不到锁才轮到下面两颗读法去抛 SourceReadException。
+            using (var pragma = _connection.CreateCommand())
+            {
+                pragma.CommandText = "PRAGMA busy_timeout=5000;";
+                pragma.ExecuteNonQuery();
+            }
         }
         catch
         {
-            // Ditto 可能正占用独占锁，视为不可读
+            // 这一站保持宽松（P-28B′ 的分工）：打不开（不存在/损坏/被独占）视作
+            // "本机没有可读的 Ditto 库"，IsOpen=false 让调用方走"未配置"那条路，
+            // ⛔ 把装机差异读成同步故障。
+            _connection?.Dispose();
             _connection = null;
         }
     }
@@ -52,9 +64,12 @@ public sealed class DittoDatabaseReader : IDisposable
 
     /// <summary>
     /// 读取最近若干条非分组剪贴板记录（按复制时间倒序）。
-    /// <para><paramref name="ct"/> 掐在两颗循环的边界上（逐行取回、逐颗补附件），掐中<b>上抛</b>而⛔ 落进
-    /// 下面那颗"查询失败就交空表"的兜错——被取消的一次读若降级成空表，在调用方看来自洽，
-    /// 而 <c>SyncCoordinator</c> 会把它记成 <c>Success=true, PulledCount=0</c>（P-28 点名的正是这一族）。</para>
+    /// <para><paramref name="ct"/> 掐在两颗循环的边界上（逐行取回、逐颗补附件），掐中<b>上抛</b>——
+    /// 被取消的一次读若降级成空表，在调用方看来自洽，而 <c>SyncCoordinator</c> 会把它记成
+    /// <c>Success=true, PulledCount=0</c>（P-28 点名的正是这一族）。</para>
+    /// <para>✅P-28B′：其余读取失败（等锁超时、schema 异变）同样<b>上抛</b>——包成
+    /// <see cref="SourceReadException"/> 交给 <c>SyncCoordinator</c> 记「这一源读取失败」，
+    /// ⛔ 再吞成空表冒充"读到了零条"。</para>
     /// </summary>
     public List<DittoClip> ReadRecent(int limit, CancellationToken ct = default)
     {
@@ -96,9 +111,9 @@ public sealed class DittoDatabaseReader : IDisposable
             foreach (var clip in result) { ct.ThrowIfCancellationRequested(); FillData(clip); }
         }
         catch (OperationCanceledException) { throw; }
-        catch
+        catch (Exception ex)
         {
-            result.Clear();
+            throw new SourceReadException("读取 Ditto 剪贴板库失败（ReadRecent）", ex);
         }
         return result;
     }
@@ -108,7 +123,9 @@ public sealed class DittoDatabaseReader : IDisposable
     /// <para>这一颗的<b>逐行取回就是 Ditto 库上的全表 <c>LIKE '%…%'</c> 扫描</b>（无索引可依），而实时搜索
     /// 逐按键发一次、上一发会被取消（<c>SearchService</c> 交 <c>Task.Run(…, ct)</c> 并 <c>WaitAsync(ct)</c>）——
     /// 令牌不接进这颗循环时，"取消"只解了调用方的等，那轮扫描仍会在池线程上跑到完：每次键入都留下一条
-    /// 在跑的整表扫描。同 <see cref="ReadRecent"/>：<b>掐中上抛</b>，⛔ 降级成空表。</para>
+    /// 在跑的整表扫描。同 <see cref="ReadRecent"/>：<b>掐中上抛</b>。</para>
+    /// <para>✅P-28B′：其余读取失败同样上抛（<see cref="SourceReadException"/>），⛔ 吞成空表——
+    /// 搜索腿的调用方（<c>SearchService</c>）对每条腿各有容错，真失败记降级日志而不是装作"没搜到"。</para>
     /// </summary>
     public List<DittoClip> Search(string query, int limit, CancellationToken ct = default)
     {
@@ -145,9 +162,9 @@ public sealed class DittoDatabaseReader : IDisposable
             foreach (var clip in result) { ct.ThrowIfCancellationRequested(); FillData(clip); }
         }
         catch (OperationCanceledException) { throw; }
-        catch
+        catch (Exception ex)
         {
-            result.Clear();
+            throw new SourceReadException("检索 Ditto 剪贴板库失败（Search）", ex);
         }
         return result;
     }

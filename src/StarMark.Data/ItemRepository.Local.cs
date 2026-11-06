@@ -155,7 +155,7 @@ public sealed partial class ItemRepository
             await LogActivitiesOnConnection(conn, tx, new[] { ActivityRow(kind, row) }, ct);
 
         await tx.CommitAsync(ct);
-        DataChangeHub.Notify();
+        DataChangeHub.Notify(DataChangeKind.Items);
         return row;
     }
 
@@ -185,7 +185,7 @@ public sealed partial class ItemRepository
         }
         if (rows == 0) return false;          // 没删到＝这一键本来就不在库里（幂等）：不碰 clip 目录、也不广播（P-40）
         TryDeleteClipFiles(new[] { extra });
-        DataChangeHub.Notify();
+        DataChangeHub.Notify(DataChangeKind.Items);
         return true;
     }
 
@@ -252,7 +252,7 @@ public sealed partial class ItemRepository
         if (activity is { } kind)
             await LogActivitiesOnConnection(conn, tx!, new[] { ActivityRow(kind, item) }, ct);
         if (tx is not null) await tx.CommitAsync(ct);
-        DataChangeHub.Notify();
+        DataChangeHub.Notify(DataChangeKind.Items);
     }
 
     /// <summary>
@@ -382,7 +382,7 @@ public sealed partial class ItemRepository
         // 文件删除放在提交<b>之后</b>（先读到的名字还攥在手里）：反过来做的话，提交一旦失败回滚，
         // 就成了"行还在、文件已经没了"——那正是 §3-Q6 第一类里最不该由我们自己造成的一种。
         if (isImage) TryDeleteClipFiles(prunedExtras);
-        DataChangeHub.Notify();
+        DataChangeHub.Notify(DataChangeKind.Items);
 
         draft.Id = id;
         draft.ExtraJson = extraJson;
@@ -505,7 +505,7 @@ public sealed partial class ItemRepository
             deleted = await cmd.ExecuteNonQueryAsync(ct);
         }
         TryDeleteClipFiles(imageExtras);
-        DataChangeHub.Notify();
+        DataChangeHub.Notify(DataChangeKind.Items);
         return deleted;
     }
 
@@ -542,7 +542,7 @@ public sealed partial class ItemRepository
             // 一行没删掉（0 行＝那条本来就不在）时<b>不碰文件</b>：那种文件是没有行认领的孤儿，
             // 归 §3-Q6 第二类，只能由对账数出来给用户一个"清理孤儿"的按钮，不该由这次点击顺手删。
             TryDeleteClipFiles(new[] { extra });
-            DataChangeHub.Notify();
+            DataChangeHub.Notify(DataChangeKind.Items);
         }
         return removed > 0;
     }
@@ -577,7 +577,7 @@ public sealed partial class ItemRepository
             removed += await cmd.ExecuteNonQueryAsync(ct);
         }
         await tx.CommitAsync(ct);
-        if (removed > 0) DataChangeHub.Notify();   // 摘掉的行要立刻从树／组件里消失，否则看起来像"没删掉"
+        if (removed > 0) DataChangeHub.Notify(DataChangeKind.Items);   // 摘掉的行要立刻从树／组件里消失，否则看起来像"没删掉"
         return removed;
     }
 
@@ -641,7 +641,7 @@ public sealed partial class ItemRepository
         cmd.Parameters.AddWithValue("@source", ItemSources.Clipboard);
 
         var rows = await cmd.ExecuteNonQueryAsync(ct);
-        if (rows > 0) DataChangeHub.Notify();
+        if (rows > 0) DataChangeHub.Notify(DataChangeKind.Items);
         return rows;
     }
 

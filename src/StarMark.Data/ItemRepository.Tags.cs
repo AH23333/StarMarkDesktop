@@ -121,7 +121,7 @@ public sealed partial class ItemRepository
         await RebuildSearchTextAsync(conn, itemId, ct);
 
         await tx.CommitAsync(ct);
-        DataChangeHub.Notify();
+        DataChangeHub.Notify(DataChangeKind.Items);
         return true;
     }
 
@@ -263,7 +263,7 @@ public sealed partial class ItemRepository
         await LogActivitiesOnConnection(conn, tx, activityRows, ct);
 
         await tx.CommitAsync(ct);
-        DataChangeHub.Notify();       // 整批只通知一次：每条都通知会让所有常驻组件各重读一遍库
+        DataChangeHub.Notify(DataChangeKind.Items);       // 整批只通知一次：每条都通知会让所有常驻组件各重读一遍库
         return live.Count;
     }
 
@@ -338,7 +338,7 @@ public sealed partial class ItemRepository
         foreach (var e in events) rows.Add((e.Kind, e.ItemKey, e.Title, e.Uri));
         await LogActivitiesOnConnection(conn, tx, rows, ct);
         await tx.CommitAsync(ct);
-        DataChangeHub.Notify();   // 活动事件本身也是「数据」：让常驻的最近活动格即时跟上，整批一次
+        DataChangeHub.Notify(DataChangeKind.Items);   // 活动事件本身也是「数据」：让常驻的最近活动格即时跟上，整批一次
     }
 
     public async Task<bool> RemoveTagAsync(long itemId, string tagName, CancellationToken ct)
@@ -355,7 +355,7 @@ public sealed partial class ItemRepository
         if (rows == 0) return false;      // 那个挂接本来就不在（或标签名不存在）：没变化，不重建索引也不广播（P-40）
         // 删标签同样影响 search_text（标签词应随之从索引移除）。
         await RebuildSearchTextAsync(conn, itemId, ct);
-        DataChangeHub.Notify();
+        DataChangeHub.Notify(DataChangeKind.Items);
         return true;
     }
 
@@ -408,7 +408,7 @@ public sealed partial class ItemRepository
             row.Value.Source + ":" + row.Value.SourceId, row.Value.Title, row.Value.Uri, ct);
 
         await tx.CommitAsync(ct);
-        DataChangeHub.Notify();
+        DataChangeHub.Notify(DataChangeKind.Items);
         return new TagEditResult(true, added.Count, removed.Count, finalTags);
     }
 
@@ -540,7 +540,7 @@ public sealed partial class ItemRepository
 
         if (changed == 0) return 0;                                       // 拖回原位：不写、不通知
         await tx.CommitAsync(ct);
-        DataChangeHub.Notify();                                           // 整批一次：待办组件与列表各自重读一遍就够
+        DataChangeHub.Notify(DataChangeKind.Items);                                           // 整批一次：待办组件与列表各自重读一遍就够
         return changed;
     }
 
@@ -574,7 +574,7 @@ public sealed partial class ItemRepository
             return false;
         }
         await RebuildSearchTextAsync(conn, itemId, ct);
-        DataChangeHub.Notify();
+        DataChangeHub.Notify(DataChangeKind.Items);
         return true;
     }
 
@@ -648,7 +648,7 @@ public sealed partial class ItemRepository
             LogNoRowLanded("置顶", $"id={itemId}");
             return false;
         }
-        DataChangeHub.Notify();   // 置顶条目组件、快捷启动格都靠这条实时跟上
+        DataChangeHub.Notify(DataChangeKind.Items);   // 置顶条目组件、快捷启动格都靠这条实时跟上
         return true;
     }
 

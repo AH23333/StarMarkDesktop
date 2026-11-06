@@ -62,7 +62,9 @@ public sealed partial class GlanceWidget : UserControl
         Loaded += (_, _) =>
         {
             // Loaded 可能被多次触发（组件窗口反复显示），同步器只建一次，否则会重复订阅。
-            _sync ??= new DataChangeReloader(ReloadAsync);
+            // ✅P-44：全收（Items＋Settings）——热榜块的显隐跟着「热榜速览」那颗开关走，
+            // 开关属于设置族；其余订阅者默认只收条目族，这颗是唯一要听设置的。
+            _sync ??= new DataChangeReloader(ReloadAsync, interests: DataChangeKind.All);
             // 动作结果先退再订：没有这一步，窗口每次隐藏/显示都会多挂一份同一个委托。
             Helpers.TrendingItemActions.NoticeRaised -= OnTrendingNotice;
             Helpers.TrendingItemActions.NoticeRaised += OnTrendingNotice;

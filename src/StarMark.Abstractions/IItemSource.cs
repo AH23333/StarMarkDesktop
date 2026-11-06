@@ -198,3 +198,25 @@ public sealed class SearchFilter
         FileQueryFragments = FileQueryFragments,
     };
 }
+
+/// <summary>
+/// 「这一轮读取源数据失败」的可识别异常（P-28B′）：Ditto 的库被独占、书签文件正被浏览器写入
+/// 这类<b>源侧读取故障</b>由实现抛出，<c>SyncCoordinator</c> 据此把这一轮记成
+/// 「源读取失败」而不是笼统的「同步内部故障」——用户在汇总行看到的是「哪个源读不出来」，
+/// 而不是一句对不上账的「同步完成」或「未知错误」。
+/// <para>
+/// 为什么住在这一档：抛它的（Integrations 的源实现）与接它的（Core 的协调器）中间隔着
+/// 依赖方向 <c>Core → Integrations → Abstractions</c>，两边同时可见的只有 Abstractions。
+/// </para>
+/// <para>
+/// 与 <see cref="OperationCanceledException"/> 的分工：取消不是故障，协调器对 OCE 走
+/// rethrow／静默两条既有路；只有<b>真读取失败</b>才包成本异常往上递。
+/// </para>
+/// </summary>
+public sealed class SourceReadException : Exception
+{
+    public SourceReadException(string message, Exception inner)
+        : base(message, inner)
+    {
+    }
+}

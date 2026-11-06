@@ -98,6 +98,12 @@ public static class UiStrings
         new Entry("sync.src.githubOther", "GitHub 请求失败：{0}",
             "GitHub request failed: {0}", "GitHub リクエスト失敗：{0}"),
         new Entry("sync.src.other", "出错：{0}", "Error: {0}", "エラー：{0}"),
+        // ✅P-28B′：源侧「这一轮没读出来」——Ditto 库被独占、在场书签文件全数读败那一族。
+        // 与 other 的分工：other 说「同步逻辑出错了」（把底层异常念出来），这一颗说「数据文件
+        // 读不出来」（外部事实，与 GitHubApiException 那一族同类）⇒ 没有槽：底层机器话留在日志。
+        new Entry("sync.src.read", "读取源数据失败（文件被占用或锁住）——稍后再试一次",
+            "Could not read this source's data (its file was locked or busy) - try syncing again a little later",
+            "ソースデータの読み取りに失敗しました（ファイルが使用中かロックされています）。少し後に再同期してください"),
         // P-58：没拉全那一行的「为什么」——对每一颗被预算掐断的源都成立，整份名单共用这一颗键
         //（各自的上限数不同，念出来只会让每一行都不一样，而「其余未导入」才是用户要做的事）。
         new Entry("sync.src.truncated", "条目数到达拉取上限，这一轮没有拉全（其余未导入）",

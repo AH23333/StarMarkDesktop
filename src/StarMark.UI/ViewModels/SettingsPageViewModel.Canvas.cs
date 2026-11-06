@@ -87,6 +87,8 @@ public partial class SettingsPageViewModel
             ? LocMessage.Of("settings.extend.glanceOnStatus")
             : LocMessage.Of("settings.extend.glanceOffStatus");
         // 组件即时跟上：这条广播就是各组件"数据变了重载一次"的既有通道，不必等重启、也不新写一套通知。
-        StarMark.Abstractions.DataChangeHub.Notify();
+        // ✅P-44：这颗开关属于「设置」族——条目数据没变，声明了只收 Items 的订阅者不该被惊动；
+        // 组件里听设置的就是今日速览那颗（热榜块显隐跟着它走），由它自己声明全收。
+        StarMark.Abstractions.DataChangeHub.Notify(StarMark.Abstractions.DataChangeKind.Settings);
     }
 }

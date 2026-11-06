@@ -414,7 +414,7 @@ public sealed class BackupService
             // 但 SettingsPage 的调用方只更新了一行状态文本、并未刷新任何界面/组件。
             // 这里在成功返回前补一次广播：主界面计数/列表页与各组件的 DataChangeReloader 才会去抖重载，
             // 否则还原后满屏仍是旧数据（要重启才更新）。
-            DataChangeHub.Notify();
+            DataChangeHub.Notify(DataChangeKind.Items);
 
             // 备份里带了组件数据却写盘失败时，若仍返回纯成功文案就是「假成功」——调用方
             // (SettingsPage) 只把 rr.Message 显示到状态栏、并不单独呈现 WidgetsRestored，
@@ -485,7 +485,7 @@ public sealed class BackupService
             // ⛔ 假装原子：明说「停在半路」，并把回滚入口（快照路径）递给用户；
             // 已落库的那半截也要广播一次刷新——屏幕停在取消前的旧数据上，用户会以为「其实什么都没发生」。
             StarLog.Info($"恢复被取消（停在半路，快照可回滚：{snapshotPath}）");
-            DataChangeHub.Notify();
+            DataChangeHub.Notify(DataChangeKind.Items);
             return CancelledResult(snapshotPath);
         }
         catch (Exception ex)

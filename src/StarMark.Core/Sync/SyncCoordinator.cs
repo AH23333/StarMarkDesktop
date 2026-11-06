@@ -149,6 +149,23 @@ public sealed class SyncCoordinator
                     ErrorKind = kind,
                 });
             }
+            catch (SourceReadException srex)
+            {
+                // ✅P-28B′：源侧「读不到」的可识别失败（Ditto 库被独占、在场书签文件全数读败）——
+                // 必须排在下面那颗兜底 Exception 之前、又与 GitHubApiException 并列：兜底那颗念的是
+                // 「同步内部故障」（软件的错），这一颗说的是「这颗源的数据这一轮没读出来」（外部的错），
+                // 用户据此知道下一步是「去把 Ditto 开着／稍后再试」，而不是「软件坏了」。
+                // 底层那颗真异常留在日志里（inner 那句机器话不上屏幕，口径同 GitHubApiException 那条）。
+                StarLog.Error($"源 {source.SourceId} 读取数据失败: {srex.InnerException?.Message ?? srex.Message}");
+                results.Add(new SourceSyncResult
+                {
+                    SourceId = source.SourceId,
+                    Success = false,
+                    PulledCount = 0,
+                    Error = LocMessage.Of("sync.src.read"),
+                    ErrorKind = SourceSyncErrorKind.Read,
+                });
+            }
             catch (Exception ex)
             {
                 StarLog.Error($"源 {source.SourceId} 同步失败: {ex.Message}");
@@ -308,6 +325,9 @@ public enum SourceSyncErrorKind
     Forbidden,
     /// <summary>服务端异常（5xx）。</summary>
     Server,
+    /// <summary>源侧读取失败（P-28B′）：数据文件被独占/锁住/读不出——不是同步逻辑的错，
+    /// 是「这颗源这一轮没读出来」；界面那句「稍后再试/去把对应程序开着」指的就是这一档。</summary>
+    Read,
 }
 
 /// <summary>单个源的同步结果。</summary>

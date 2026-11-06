@@ -108,7 +108,7 @@ public sealed partial class ItemRepository
         }
 
         await tx.CommitAsync(ct);
-        DataChangeHub.Notify();
+        DataChangeHub.Notify(DataChangeKind.Items);
     }
 
     /// <summary>取或建标签并按 (item_id, tag_id) 幂等关联。在调用方的事务连接内执行（自动 enlist）。</summary>

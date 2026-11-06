@@ -87,40 +87,50 @@ public abstract class BrowserBookmarksSource : IItemSource
     public Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct)
         // 书签文件常有数 MB：File.ReadAllText + JSON 解析 + 全量映射都是同步的，而点「立即同步」
         // 是从 UI 线程一路 await 下来的 ⇒ 不 offload 就是点一下冻一下。
-        // 有意不把 ct 传给 Task.Run：本方法的契约是"任何情况下都不抛，只返回空"。
+        // 有意不把 ct 传给 Task.Run：书签的读与解析不可中断，取消语义由调用方（WaitAsync）承担。
+        // ✅P-28B′：契约从「任何情况下都不抛，只返回空」改成「读得到就交数据、在场文件全数读败
+        // 就抛 SourceReadException」——吞成空表会在汇总里冒充「成功导入零条」，
+        // 协调器要的是「这颗源读取失败」那句真话。「未配置」（一个文件都不在场）仍交空：那是装机差异，
+        // 不是故障。
         // 回执走信封（P-58）：本源没有拉取预算，Truncated 恒 false。
         => Task.Run(() =>
         {
-            try
+            if (!IsAvailable) return FetchResult.Full(Array.Empty<Item>());
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var items = new List<Item>();
+            var attempted = 0;
+            var failed = 0;
+            Exception? lastError = null;
+            // 逐个 profile 读：某一个文件损坏/被占用只跳过它，不牵连其余（旧写法一份坏
+            // Bookmarks 会让整台机器的书签一条都不进，且只留一行日志）。
+            // 跨 profile 的同一 URL 由 SourceId=归一 URL 天然合并，不会互相覆盖成丢条目。
+            foreach (var file in Sources())
             {
-                if (!IsAvailable) return FetchResult.Full(Array.Empty<Item>());
-                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                var items = new List<Item>();
-                // 逐个 profile 读：某一个文件损坏/被占用只跳过它，不牵连其余（旧写法一份坏
-                // Bookmarks 会让整台机器的书签一条都不进，且只留一行日志）。
-                // 跨 profile 的同一 URL 由 SourceId=归一 URL 天然合并，不会互相覆盖成丢条目。
-                foreach (var file in Sources())
+                if (!File.Exists(file)) continue;
+                attempted++;
+                try
                 {
-                    if (!File.Exists(file)) continue;
-                    try
-                    {
-                        items.AddRange(BookmarksFileParser.ParseFile(file)
-                            .Select(e => BookmarkItemFactory.MapItem(e, SourceId, now)));
-                    }
-                    catch (Exception ex)
-                    {
-                        // 必须留痕——否则「整份书签一条没导入」会毫无日志地静默发生
-                        // （历史上解析器抛 InvalidOperationException 就被无声吞掉过）。
-                        StarLog.Warn($"读取浏览器书签失败，跳过该 profile（{file}）：{ex.Message}");
-                    }
+                    items.AddRange(BookmarksFileParser.ParseFile(file)
+                        .Select(e => BookmarkItemFactory.MapItem(e, SourceId, now)));
                 }
-                return new FetchResult(items, false);
+                catch (Exception ex)
+                {
+                    // 必须留痕——否则「整份书签一条没导入」会毫无日志地静默发生
+                    // （历史上解析器抛 InvalidOperationException 就被无声吞掉过）。
+                    failed++;
+                    lastError = ex;
+                    StarLog.Warn($"读取浏览器书签失败，跳过该 profile（{file}）：{ex.Message}");
+                }
             }
-            catch (Exception ex)
-            {
-                StarLog.Warn($"同步 {SourceId} 书签出错，本次返回空（{_bookmarksPath}）：{ex.Message}");
-                return FetchResult.Full(Array.Empty<Item>());
-            }
+            // ✅P-28B′：在场的书签文件全数读败（浏览器正写、文件被锁、权限被收）＝这一轮
+            // 一条书签都没读到。交空表会让「账号上明明有书签」在汇总里念成「成功导入零条」，
+            // 所以改抛 SourceReadException，由 SyncCoordinator 记成这一源的「读取失败」。
+            // （部分失败仍走上面的跳过＋日志：好的 profile 照常交，⛔ 一颗坏文件连累整台机器。）
+            if (attempted > 0 && failed == attempted && lastError is not null)
+                throw new SourceReadException(
+                    $"读取 {SourceId} 书签失败：{attempted} 个书签文件全部读取失败（{_bookmarksPath}）",
+                    lastError);
+            return new FetchResult(items, false);
         });
 
     public Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct)

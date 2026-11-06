@@ -63,7 +63,7 @@ public sealed class BackupCancelGateTests
         // 恢复的两段取消臂按「走到哪一步」分档交键。
         Assert.Contains("settings.data.backup.cancelledBefore", svc, StringComparison.Ordinal);
         Assert.Contains("settings.data.backup.cancelledMid", svc, StringComparison.Ordinal);
-        Assert.Contains("DataChangeHub.Notify()", svc, StringComparison.Ordinal);   // 停在半路也要刷新：屏幕⛔ 停在取消前的旧数据上
+        Assert.Contains("DataChangeHub.Notify(DataChangeKind.Items)", svc, StringComparison.Ordinal);   // 停在半路也要刷新（✅P-44：条目族）：屏幕⛔ 停在取消前的旧数据上
 
         var envelope = SourceGate.ReadRepoFile(Envelope);
         Assert.Contains("public bool Cancelled { get; init; }", envelope, StringComparison.Ordinal);

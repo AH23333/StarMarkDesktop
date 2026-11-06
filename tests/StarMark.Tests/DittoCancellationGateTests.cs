@@ -18,8 +18,9 @@ namespace StarMark.Tests;
 /// <para>修法沿用仓里那一族已有形状（<c>SyncCoordinator</c>／<c>ItemRepository.Local</c>／<c>RssPageViewModel</c>
 /// 都在循环边界 <c>ct.ThrowIfCancellationRequested()</c>，而 <c>catch (OperationCanceledException) { throw; }</c>
 /// 本仓有二十来处）：两颗公共出口一副规则（都 <c>Task.Run(…, ct)</c>・令牌下传到两颗查询）・
-/// 掐中<b>上抛</b>。那颗「查询出错就交空表」的兜错<b>必须放行取消</b>：否则被掐掉的一次读降级成空表，
-/// 在调用方看来自洽，而 <c>SyncCoordinator</c> 会记成 <c>Success=true, PulledCount=0</c>——正是 P-28 点名的那一族。</para>
+/// 掐中<b>上抛</b>。那颗「查询出错就交空表」的兜错自 P-28B′ 起<b>整个拆掉</b>：吞成空表在调用方看来自洽，
+/// 而 <c>SyncCoordinator</c> 会记成 <c>Success=true, PulledCount=0</c>（P-28 点名的那一族）——
+/// 现在查询真失败改抛 <c>SourceReadException</c>，协调器把这一源记成「读取失败」。</para>
 /// <para>两把尺各问一维：① 源码尺问"这一族现在长什么样"（两颗出口各带令牌・假异步那形⛔ 长回来）；
 /// ② 运行时尺问"掐下去真的会停手、而⛔ 掐的时候照旧读得到"。少了②，①就只是一段会说谎的注释。</para>
 /// <para>夹具自建一份小库，⛔ 往 <c>DittoSourceTests</c> 的共享夹具里加行（那条夹具的计数读数会被每一行
@@ -87,8 +88,9 @@ public sealed class DittoCancellationGateTests : IDisposable
 
         Assert.Equal(2, Count(src, "CancellationToken ct = default)"));                 // 两颗查询各收一份
         Assert.Equal(4, Count(src, "ct.ThrowIfCancellationRequested();"));               // 每颗各两道：逐行取回＋逐颗补附件
-        Assert.Equal(2, Count(src, "catch (OperationCanceledException) { throw; }"));    // 掐中上抛，走在兜错之前
-        Assert.Equal(2, Count(src, "result.Clear();"));                                  // 兜错照旧只管"查询真失败"
+        Assert.Equal(2, Count(src, "catch (OperationCanceledException) { throw; }"));    // 掐中上抛，走在抛失败之前
+        Assert.Equal(0, Count(src, "result.Clear();"));                                  // ✅P-28B′：读失败⛔ 再降级成空表（P-28 那一族）
+        Assert.Equal(2, Count(src, "throw new SourceReadException("));                   // 查询真失败改抛：协调器据此记「这一源读取失败」
     }
 
     // ==================== ② 运行时尺：掐下去真停手・没掐时照旧读得到 ====================

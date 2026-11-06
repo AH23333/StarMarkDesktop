@@ -68,7 +68,10 @@ public sealed partial class ClipboardPage : Page
             await ViewModel.ReuseAsync(vm);
     }
 
-    private async void Card_CopyRequested(object? sender, ItemCardViewModel vm) => await ViewModel.ReuseAsync(vm);
+    // ✅P-295：「复制链接」菜单＝把这一条的 URI 原样复制走（ItemCardActions.CopyUri），
+    // ⛔ 再走 ReuseAsync——那是「再复制一次这条剪贴板记录」的动作（点卡片本体），
+    // 两条路各自做什么就在这里分清；菜单语义与主窗条目卡同款。
+    private void Card_CopyRequested(object? sender, ItemCardViewModel vm) => ItemCardActions.CopyUri(vm);
 
     private void Card_PinRequested(object? sender, ItemCardViewModel vm) => ItemCardActions.TogglePin(vm);
     // ToggleHidden 返回 Task<bool>（要等落库才知道隐藏/显示是否生效），其余是 async void 的即发即忘动作。
