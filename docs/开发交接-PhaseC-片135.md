@@ -813,3 +813,15 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：build 0 错；全量 6911/6911（片214 6890→6911・23 m 39 s）；docgates215 47/47；census 19；计数器 296/271/25 VERDICT OK；坑表 #1157 止。
 
 - 下一刀：真机验两批——片214 三项（P-6A 带 Token ETag 换血・P-59 来源段第 5 档「📋」・P-7A 删除待办后撤销回挂标签与置顶）＋片215 一项（浏览器删书签→同步→卡片变灰→设置卡计数＋一键清全链）；之后的刀待拍。⛔ push（未推 23）。
+
+## 九十七、片216 队列清理第一刀：热榜六颗点验翻牌＋P-139 收口（七颗翻牌・零码改）
+
+- 接手第一步照旧现读编号轴：报告到六百零二、交接到九十七、坑表到 #1157（本轮无新增）、账本到 P-295（本轮无新立账・七颗翻牌 ✅：P-67/P-68/P-69/P-70/P-71/P-72/P-139）；计数器现读＝296/278/18（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・未标记 25→18）。
+
+- 队列清理总口径（用户指示「继续，我暂不测试，你清空队列后我统一测试」）：未标记 18 颗分诊——落刀队列：P-43（widgets 半边：PersistBounds/EndCoordinatedMove/ApplyGeometryCore 循环内落盘・牵 P-16/P-40 时序）、P-63（全局热键唤起剪贴板选择器浮层・默认键先问用户）、P-80（贴图跨会话持久化：PNG 落盘＋元数据＋启动重建・上限 12 张）、P-82（识字识别语言选择器：候选取自 AvailableRecognizerLanguages・默认用户配置语言・按截图/识字分别记住・空文案带当前语言）、P-93（拖放回执・落地口径在册・deskbox 路径待用户）、P-120（扩展仓 classify.ts 截断加可见提示・仓路径待定位）、P-170（选项 A：语言写入点补取证日志・零行为改动）、P-293（GLM 远程 API 真测链路・P-30 DPAPI 前置已随片211 落地・key 落盘沿 P-89 口径）、P-168/169/172/192（i18n 大工单按批）；挂起队列：P-2（Everything FL 真机）、P-73（热榜两行观感・蓝图 §10 ⑩）、P-90（GLM 真测后再感受）、P-147（用户离线备份私钥）、P-153（两处藏条观感一句话）、P-294（仪表盘细案待拍板）。
+
+- 本刀点验锚（供复核，全部在仓）：`App.xaml.cs` 热榜 DI（`GetSyncStateAsync`/`SetSyncStateAsync`・`trending:` 前缀）；`Integrations/Trending/TrendingFetcher`（tokenProvider 现取）；`MainWindow.ApplyTrendingNavVisibility`；`SettingsPageViewModel.Canvas.cs` 的 `AskTrendingGlanceAsync`；`SettingsStore.Feeds.cs` 的 `LoadTrendingEnabled`（`Load() is { } d && d.TrendingEnabled == true`＝默认关）；`TrendingService` 的 `IsSameLocalDay`；`BackupEnvelope.cs` 的 `BackupPayload`（items/userState/tags/itemTags/widgetsJson 五样）；批次 KK `22bfa74`（热榜语言下拉摘除）；`SettingsStore.Performance.cs` 的 `LoadWidgetsLoadOnStartup`/`SaveWidgetsLoadOnStartup`；`WidgetManager.Lifecycle.cs` 的 `ShowNow`。
+
+- 读数：docgates216 47/47；census 19；flipcheck PASS（加行 14 行 0 禁词・whole 128 同态）；计数器 296/278/18 VERDICT OK。
+
+- 下一刀：队列清理第二刀＝P-82 识字「识别语言」选择器（实现口径＝重开条件行：候选取自 `AvailableRecognizerLanguages`、默认仍是用户配置语言、按截图/识字分别记住、「这块画面里没有认出文字」文案改带当前语言）；P-293 GLM 远程 API 随后（P-89 注记在册：key 落盘沿 P-30 DPAPI 口径）。⛔ push（未推 24）。
